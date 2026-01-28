@@ -1,0 +1,56 @@
+{
+    "name": "@hai/db",
+    "version": "0.1.0",
+    "description": "Drizzle ORM 多数据库支持 (SQLite/PostgreSQL/MySQL)",
+    "type": "module",
+    "exports": {
+        ".": {
+            "types": "./dist/index.d.ts",
+            "import": "./dist/index.js"
+        },
+        "./schema": {
+            "types": "./dist/schema.d.ts",
+            "import": "./dist/schema.js"
+        },
+        "./migrate": {
+            "types": "./dist/migrate.d.ts",
+            "import": "./dist/migrate.js"
+        }
+    },
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "files": [
+        "dist"
+    ],
+    "scripts": {
+        "build": "tsup",
+        "dev": "tsup --watch",
+        "test": "vitest run",
+        "test:watch": "vitest",
+        "typecheck": "tsc --noEmit",
+        "lint": "eslint src",
+        "clean": "rimraf dist .turbo"
+    },
+    "dependencies": {
+        "@hai/core": "workspace:*",
+        "@hai/config": "workspace:*",
+        "drizzle-orm": "catalog:",
+        "better-sqlite3": "catalog:"
+    },
+    "optionalDependencies": {
+        "postgres": "catalog:",
+        "mysql2": "catalog:"
+    },
+    "devDependencies": {
+        "@types/better-sqlite3": "catalog:",
+        "@types/node": "catalog:",
+        "drizzle-kit": "catalog:",
+        "rimraf": "catalog:",
+        "tsup": "catalog:",
+        "typescript": "catalog:",
+        "vitest": "catalog:"
+    },
+    "peerDependencies": {
+        "typescript": ">=5.0.0"
+    }
+}

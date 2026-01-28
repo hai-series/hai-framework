@@ -1,0 +1,107 @@
+@import 'tailwindcss';
+@plugin "daisyui";
+
+/* DaisyUI 主题配置 */
+@theme {
+    /* 自定义颜色 */
+    --color-brand: oklch(0.6 0.2 275);
+}
+
+/* 自定义滚动条 */
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: oklch(0.7 0 0 / 0.3);
+    border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: oklch(0.6 0 0 / 0.5);
+}
+
+/* 平滑滚动 */
+html {
+    scroll-behavior: smooth;
+}
+
+/* 表单焦点样式 */
+.input:focus,
+.select:focus,
+.textarea:focus {
+    outline: none;
+    box-shadow: 0 0 0 2px oklch(var(--p) / 0.2);
+}
+
+/* 卡片悬停效果 */
+.card {
+    transition: box-shadow 0.2s ease;
+}
+
+.card:hover {
+    box-shadow: 0 4px 12px -2px oklch(0 0 0 / 0.1);
+}
+
+/* 按钮过渡 */
+.btn {
+    transition: all 0.2s ease;
+}
+
+/* 动画 */
+@keyframes slide-in-from-right {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+@keyframes slide-in-from-left {
+    from {
+        transform: translateX(-100%);
+        opacity: 0;
+    }
+
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+@keyframes fade-in {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+.animate-in {
+    animation-duration: 0.3s;
+    animation-timing-function: ease-out;
+    animation-fill-mode: both;
+}
+
+.slide-in-from-right {
+    animation-name: slide-in-from-right;
+}
+
+.slide-in-from-left {
+    animation-name: slide-in-from-left;
+}
+
+.fade-in {
+    animation-name: fade-in;
+}

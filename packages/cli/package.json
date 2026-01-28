@@ -1,0 +1,53 @@
+{
+    "name": "@hai/cli",
+    "version": "0.1.0",
+    "description": "hai Admin Framework CLI - 项目脚手架和代码生成器",
+    "type": "module",
+    "bin": {
+        "hai": "./dist/index.js"
+    },
+    "exports": {
+        ".": {
+            "types": "./dist/index.d.ts",
+            "import": "./dist/index.js"
+        }
+    },
+    "files": [
+        "dist",
+        "templates"
+    ],
+    "scripts": {
+        "build": "tsup",
+        "dev": "tsup --watch",
+        "lint": "eslint .",
+        "test": "vitest run",
+        "test:watch": "vitest",
+        "clean": "rimraf dist .turbo"
+    },
+    "dependencies": {
+        "@hai/core": "workspace:*",
+        "@hai/config": "workspace:*",
+        "cac": "catalog:",
+        "chalk": "catalog:",
+        "prompts": "catalog:",
+        "ora": "catalog:",
+        "fs-extra": "catalog:",
+        "glob": "catalog:",
+        "handlebars": "catalog:"
+    },
+    "devDependencies": {
+        "@types/fs-extra": "catalog:",
+        "@types/node": "catalog:",
+        "@types/prompts": "catalog:",
+        "rimraf": "catalog:",
+        "typescript": "catalog:",
+        "tsup": "catalog:",
+        "vitest": "catalog:"
+    },
+    "keywords": [
+        "hai",
+        "cli",
+        "scaffold",
+        "generator"
+    ]
+}

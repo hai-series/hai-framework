@@ -1,0 +1,404 @@
+# hai Admin Framework - AI 构建指南
+
+> 这是一个 AI-First 的全栈管理后台框架，专为 AI 助手构建企业级管理应用而设计。
+
+## 框架定位
+
+hai Admin Framework 是专为 AI 编程助手设计的框架，核心目标：
+- **AI 可理解**: 类型完整、文档清晰、约定优于配置
+- **快速构建**: 从零到生产级管理后台只需几分钟
+- **企业级能力**: 认证授权、AI 集成、数据库、存储一应俱全
+
+## 技术栈
+
+- **前端**: Svelte 5 (Runes) + SvelteKit 2 + TailwindCSS + DaisyUI
+- **后端**: SvelteKit Server + TypeScript
+- **数据库**: Drizzle ORM (SQLite/PostgreSQL/MySQL)
+- **AI**: OpenAI/Anthropic SDK, LangChain
+- **构建**: pnpm + Turbo + Vite
+
+## 模块架构
+
+```
+@hai/core       核心工具（Result、错误处理、依赖注入、工具函数）
+@hai/config     配置管理（环境变量、分层配置、类型安全）
+@hai/crypto     加密模块（密码哈希、JWT、加解密）
+@hai/db         数据库抽象（Drizzle ORM、迁移、事务）
+@hai/auth       认证授权（JWT、RBAC、会话管理）
+@hai/ai         AI 集成（LLM 调用、提示词管理、流式响应）
+@hai/skills     技能系统（工具定义、MCP 集成、Agent）
+@hai/mcp        MCP 协议（Model Context Protocol 服务端/客户端）
+@hai/storage    存储抽象（本地文件、S3、OSS）
+@hai/kit        SvelteKit 集成（Hooks、中间件、守卫）
+@hai/ui         UI 组件库（Svelte 5 Runes 组件）
+@hai/cli        脚手架工具（项目生成、代码生成）
+```
+
+## 快速开始
+
+### 1. 创建新项目
+
+```bash
+# 使用 CLI 创建项目
+pnpm create hai my-admin
+
+# 或克隆模板
+git clone https://github.com/200hub/hai-framework
+cd hai-framework/apps/admin-console
+pnpm install
+```
+
+### 2. 配置环境
+
+```bash
+# .env
+DATABASE_URL=file:./data/app.db
+JWT_SECRET=your-secret-key
+OPENAI_API_KEY=sk-xxx
+```
+
+### 3. 启动开发
+
+```bash
+pnpm dev
+```
+
+## 核心模式
+
+### Result 模式（错误处理）
+
+```typescript
+import { ok, err, type Result } from '@hai/core'
+
+async function createUser(data: UserInput): Promise<Result<User, AppError>> {
+  // 验证
+  if (!data.email) {
+    return err(AppError.validation('邮箱不能为空'))
+  }
+  
+  // 执行业务逻辑
+  const user = await db.insert(users).values(data).returning()
+  return ok(user)
+}
+
+// 使用
+const result = await createUser(input)
+if (result.ok) {
+  console.log(result.value) // User
+} else {
+  console.error(result.error) // AppError
+}
+```
+
+### 配置管理
+
+```typescript
+import { defineConfig } from '@hai/config'
+
+// config/app.ts
+export const appConfig = defineConfig({
+  name: { default: 'My App' },
+  port: { default: 3000, env: 'PORT' },
+  database: {
+    url: { required: true, env: 'DATABASE_URL' },
+    maxConnections: { default: 10 },
+  },
+})
+
+// 使用
+const config = appConfig.load()
+console.log(config.database.url)
+```
+
+### 认证守卫
+
+```typescript
+// src/hooks.server.ts
+import { authHook } from '@hai/kit'
+
+export const handle = authHook({
+  publicPaths: ['/login', '/register', '/api/health'],
+  loginPath: '/login',
+})
+
+// 路由中获取用户
+export const load = async ({ locals }) => {
+  const user = locals.user // 已认证用户
+  return { user }
+}
+```
+
+### AI 调用
+
+```typescript
+import { createAI } from '@hai/ai'
+
+const ai = createAI({
+  provider: 'openai',
+  model: 'gpt-4o',
+})
+
+// 简单调用
+const response = await ai.chat('你好')
+
+// 流式响应
+for await (const chunk of ai.stream('讲个故事')) {
+  process.stdout.write(chunk)
+}
+
+// 结构化输出
+const result = await ai.structured(
+  '分析这段代码的问题',
+  z.object({
+    issues: z.array(z.object({
+      severity: z.enum(['critical', 'high', 'medium', 'low']),
+      description: z.string(),
+      suggestion: z.string(),
+    })),
+    score: z.number(),
+  })
+)
+```
+
+### 数据库操作
+
+```typescript
+import { createDB, defineSchema } from '@hai/db'
+import { text, integer } from 'drizzle-orm/sqlite-core'
+
+// 定义 Schema
+export const users = defineSchema('users', {
+  id: text('id').primaryKey(),
+  email: text('email').unique().notNull(),
+  name: text('name'),
+  createdAt: integer('created_at', { mode: 'timestamp' }).default(Date.now()),
+})
+
+// 使用
+const db = createDB({ url: 'file:./app.db' })
+
+// 查询
+const allUsers = await db.select().from(users)
+const user = await db.select().from(users).where(eq(users.id, 'xxx'))
+
+// 插入
+await db.insert(users).values({ id: 'xxx', email: 'a@b.com' })
+
+// 更新
+await db.update(users).set({ name: '新名字' }).where(eq(users.id, 'xxx'))
+
+// 事务
+await db.transaction(async (tx) => {
+  await tx.insert(users).values(...)
+  await tx.insert(logs).values(...)
+})
+```
+
+### UI 组件
+
+```svelte
+<script>
+  import { Button, Card, Input, Modal, DataTable, PageHeader } from '@hai/ui'
+  
+  let showModal = $state(false)
+  let users = $state([])
+</script>
+
+<PageHeader title="用户管理">
+  {#snippet actions()}
+    <Button onclick={() => showModal = true}>新建用户</Button>
+  {/snippet}
+</PageHeader>
+
+<Card>
+  <DataTable 
+    data={users}
+    columns={[
+      { key: 'name', label: '姓名' },
+      { key: 'email', label: '邮箱' },
+    ]}
+    keyField="id"
+  >
+    {#snippet actions(user)}
+      <Button size="xs" onclick={() => edit(user)}>编辑</Button>
+    {/snippet}
+  </DataTable>
+</Card>
+
+<Modal bind:open={showModal} title="新建用户">
+  <Input label="姓名" bind:value={name} />
+  <Input label="邮箱" bind:value={email} type="email" />
+</Modal>
+```
+
+## 目录结构约定
+
+```
+my-admin/
+├── src/
+│   ├── lib/
+│   │   ├── components/     # 业务组件
+│   │   ├── services/       # 业务逻辑
+│   │   ├── stores/         # 状态管理
+│   │   └── utils/          # 工具函数
+│   ├── routes/
+│   │   ├── (app)/          # 需要认证的路由
+│   │   │   ├── users/      # 用户管理
+│   │   │   ├── settings/   # 设置页面
+│   │   │   └── +layout.svelte
+│   │   ├── (auth)/         # 认证相关
+│   │   │   ├── login/
+│   │   │   └── register/
+│   │   ├── api/            # API 路由
+│   │   │   └── v1/
+│   │   └── +layout.svelte
+│   └── hooks.server.ts     # 服务端钩子
+├── drizzle/                # 数据库迁移
+├── static/                 # 静态资源
+├── .env                    # 环境变量
+└── package.json
+```
+
+## 最佳实践
+
+### 1. 类型优先
+
+所有数据结构必须有 TypeScript 类型定义：
+
+```typescript
+// types.ts
+export interface User {
+  id: string
+  email: string
+  name: string | null
+  role: 'admin' | 'user'
+  createdAt: Date
+}
+
+export interface CreateUserInput {
+  email: string
+  name?: string
+  password: string
+}
+```
+
+### 2. 服务层分离
+
+业务逻辑放在服务层，路由只做数据传递：
+
+```typescript
+// lib/services/user.service.ts
+export class UserService {
+  async create(input: CreateUserInput): Promise<Result<User, AppError>> {
+    // 业务逻辑
+  }
+  
+  async findById(id: string): Promise<User | null> {
+    // 查询逻辑
+  }
+}
+
+// routes/api/users/+server.ts
+export const POST = async ({ request }) => {
+  const input = await request.json()
+  const result = await userService.create(input)
+  
+  if (!result.ok) {
+    return json({ error: result.error }, { status: 400 })
+  }
+  
+  return json({ data: result.value })
+}
+```
+
+### 3. 响应式状态 (Svelte 5 Runes)
+
+```svelte
+<script>
+  // 使用 $state 替代 let
+  let count = $state(0)
+  
+  // 使用 $derived 替代 $:
+  let doubled = $derived(count * 2)
+  
+  // 使用 $effect 替代 $:
+  $effect(() => {
+    console.log('count changed:', count)
+  })
+</script>
+```
+
+### 4. 表单验证
+
+使用 Zod 进行验证：
+
+```typescript
+import { z } from 'zod'
+
+const createUserSchema = z.object({
+  email: z.string().email('邮箱格式不正确'),
+  name: z.string().min(2, '姓名至少2个字符').optional(),
+  password: z.string().min(8, '密码至少8个字符'),
+})
+
+// 使用
+const result = createUserSchema.safeParse(input)
+if (!result.success) {
+  return err(AppError.validation(result.error.message))
+}
+```
+
+## 常见任务
+
+### 添加新的管理页面
+
+1. 创建路由: `src/routes/(app)/新页面/+page.svelte`
+2. 添加服务: `src/lib/services/新服务.service.ts`
+3. 添加类型: `src/lib/types/新类型.ts`
+4. 添加导航: 在 Sidebar 中添加链接
+
+### 添加 API 端点
+
+1. 创建文件: `src/routes/api/v1/资源/+server.ts`
+2. 实现 GET/POST/PUT/DELETE
+3. 使用 Result 模式处理错误
+
+### 添加数据库表
+
+1. 在 `drizzle/schema.ts` 定义表结构
+2. 运行 `pnpm db:generate` 生成迁移
+3. 运行 `pnpm db:migrate` 执行迁移
+
+### 添加 AI 功能
+
+1. 配置 API Key: `.env` 中设置 `OPENAI_API_KEY`
+2. 创建 AI 服务: 使用 `@hai/ai` 的 `createAI`
+3. 实现流式响应: 使用 `ai.stream()` 配合 SSE
+
+## 部署
+
+### Docker 部署
+
+```dockerfile
+FROM node:20-alpine
+WORKDIR /app
+COPY . .
+RUN pnpm install --frozen-lockfile
+RUN pnpm build
+EXPOSE 3000
+CMD ["node", "build"]
+```
+
+### Vercel 部署
+
+```bash
+pnpm add -D @sveltejs/adapter-vercel
+# 修改 svelte.config.js 使用 adapter-vercel
+vercel deploy
+```
+
+## 获取帮助
+
+- 文档: https://hai-framework.dev
+- GitHub: https://github.com/200hub/hai-framework
+- 示例: apps/admin-console

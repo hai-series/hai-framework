@@ -1,0 +1,53 @@
+{
+    "name": "@hai/kit",
+    "version": "0.1.0",
+    "description": "hai Admin Framework - SvelteKit 集成",
+    "type": "module",
+    "exports": {
+        ".": {
+            "types": "./dist/index.d.ts",
+            "import": "./dist/index.js"
+        },
+        "./hooks": {
+            "types": "./dist/hooks/index.d.ts",
+            "import": "./dist/hooks/index.js"
+        },
+        "./middleware": {
+            "types": "./dist/middleware/index.d.ts",
+            "import": "./dist/middleware/index.js"
+        },
+        "./guards": {
+            "types": "./dist/guards/index.d.ts",
+            "import": "./dist/guards/index.js"
+        }
+    },
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "files": [
+        "dist"
+    ],
+    "scripts": {
+        "build": "tsup",
+        "dev": "tsup --watch",
+        "test": "vitest run",
+        "test:watch": "vitest",
+        "typecheck": "tsc --noEmit",
+        "clean": "rimraf dist .turbo"
+    },
+    "dependencies": {
+        "@hai/core": "workspace:*",
+        "@hai/config": "workspace:*",
+        "@hai/auth": "workspace:*"
+    },
+    "devDependencies": {
+        "@sveltejs/kit": "catalog:",
+        "@types/node": "catalog:",
+        "rimraf": "catalog:",
+        "typescript": "catalog:",
+        "tsup": "catalog:",
+        "vitest": "catalog:"
+    },
+    "peerDependencies": {
+        "@sveltejs/kit": "catalog:"
+    }
+}

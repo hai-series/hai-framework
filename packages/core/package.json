@@ -1,0 +1,63 @@
+{
+    "name": "@hai/core",
+    "version": "0.1.0",
+    "type": "module",
+    "description": "hai Admin Framework - Core utilities and types",
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "exports": {
+        ".": {
+            "types": "./dist/index.d.ts",
+            "import": "./dist/index.js"
+        },
+        "./result": {
+            "types": "./dist/result.d.ts",
+            "import": "./dist/result.js"
+        },
+        "./error": {
+            "types": "./dist/error.d.ts",
+            "import": "./dist/error.js"
+        },
+        "./di": {
+            "types": "./dist/di.d.ts",
+            "import": "./dist/di.js"
+        },
+        "./logger": {
+            "types": "./dist/logger.d.ts",
+            "import": "./dist/logger.js"
+        },
+        "./utils": {
+            "types": "./dist/utils.d.ts",
+            "import": "./dist/utils.js"
+        }
+    },
+    "files": [
+        "dist"
+    ],
+    "scripts": {
+        "build": "tsup",
+        "dev": "tsup --watch",
+        "lint": "eslint src",
+        "lint:fix": "eslint src --fix",
+        "test": "vitest run",
+        "test:watch": "vitest",
+        "test:coverage": "vitest run --coverage",
+        "typecheck": "tsc --noEmit",
+        "clean": "rimraf dist .turbo"
+    },
+    "dependencies": {
+        "pino": "catalog:",
+        "nanoid": "catalog:"
+    },
+    "devDependencies": {
+        "@types/node": "catalog:",
+        "pino-pretty": "catalog:",
+        "rimraf": "catalog:",
+        "tsup": "catalog:",
+        "typescript": "catalog:",
+        "vitest": "catalog:"
+    },
+    "peerDependencies": {
+        "typescript": ">=5.0.0"
+    }
+}

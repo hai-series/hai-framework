@@ -1,0 +1,40 @@
+{
+    "name": "@hai/storage",
+    "version": "0.1.0",
+    "description": "hai Admin Framework - 存储抽象层",
+    "type": "module",
+    "exports": {
+        ".": {
+            "types": "./dist/index.d.ts",
+            "import": "./dist/index.js"
+        }
+    },
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "files": [
+        "dist"
+    ],
+    "scripts": {
+        "build": "tsup",
+        "dev": "tsup --watch",
+        "test": "vitest run",
+        "test:watch": "vitest",
+        "typecheck": "tsc --noEmit",
+        "clean": "rimraf dist .turbo"
+    },
+    "dependencies": {
+        "@hai/core": "workspace:*",
+        "@hai/config": "workspace:*",
+        "@hai/crypto": "workspace:*"
+    },
+    "devDependencies": {
+        "@types/node": "catalog:",
+        "rimraf": "catalog:",
+        "typescript": "catalog:",
+        "tsup": "catalog:",
+        "vitest": "catalog:"
+    },
+    "peerDependencies": {
+        "zod": "catalog:"
+    }
+}

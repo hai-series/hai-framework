@@ -1,0 +1,47 @@
+{
+    "name": "hai-framework",
+    "version": "0.1.0",
+    "private": true,
+    "type": "module",
+    "description": "hai Admin Framework - AI-Native, Configuration-Driven, Security-First",
+    "author": "200hub",
+    "license": "MIT",
+    "engines": {
+        "node": ">=20.0.0",
+        "pnpm": ">=9.0.0"
+    },
+    "packageManager": "pnpm@9.15.0",
+    "scripts": {
+        "build": "turbo run build",
+        "dev": "turbo run dev",
+        "lint": "turbo run lint",
+        "lint:fix": "turbo run lint:fix",
+        "test": "turbo run test",
+        "test:coverage": "turbo run test:coverage",
+        "typecheck": "turbo run typecheck",
+        "clean": "turbo run clean && rimraf node_modules .turbo",
+        "format": "prettier --write .",
+        "prepare": "husky || true"
+    },
+    "devDependencies": {
+        "@antfu/eslint-config": "catalog:",
+        "@changesets/cli": "catalog:",
+        "@types/node": "catalog:",
+        "eslint": "catalog:",
+        "husky": "catalog:",
+        "lint-staged": "catalog:",
+        "prettier": "catalog:",
+        "rimraf": "catalog:",
+        "turbo": "catalog:",
+        "typescript": "catalog:",
+        "vitest": "catalog:"
+    },
+    "lint-staged": {
+        "*.{js,ts,svelte}": [
+            "eslint --fix"
+        ],
+        "*.{json,md,yml,yaml}": [
+            "prettier --write"
+        ]
+    }
+}

@@ -1,0 +1,51 @@
+{
+    "name": "@hai/auth",
+    "version": "0.1.0",
+    "description": "认证模块 - Session/JWT/E2EE 登录",
+    "type": "module",
+    "exports": {
+        ".": {
+            "types": "./dist/index.d.ts",
+            "import": "./dist/index.js"
+        },
+        "./session": {
+            "types": "./dist/session.d.ts",
+            "import": "./dist/session.js"
+        },
+        "./e2ee": {
+            "types": "./dist/e2ee.d.ts",
+            "import": "./dist/e2ee.js"
+        }
+    },
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "files": [
+        "dist"
+    ],
+    "scripts": {
+        "build": "tsup",
+        "dev": "tsup --watch",
+        "test": "vitest run",
+        "test:watch": "vitest",
+        "typecheck": "tsc --noEmit",
+        "lint": "eslint src",
+        "clean": "rimraf dist .turbo"
+    },
+    "dependencies": {
+        "@hai/core": "workspace:*",
+        "@hai/config": "workspace:*",
+        "@hai/crypto": "workspace:*",
+        "@hai/db": "workspace:*",
+        "jose": "catalog:"
+    },
+    "devDependencies": {
+        "@types/node": "catalog:",
+        "rimraf": "catalog:",
+        "tsup": "catalog:",
+        "typescript": "catalog:",
+        "vitest": "catalog:"
+    },
+    "peerDependencies": {
+        "typescript": ">=5.0.0"
+    }
+}
