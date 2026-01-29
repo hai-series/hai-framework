@@ -1,56 +1,56 @@
 {
-    "$schema": "https://turbo.build/schema.json",
-    "ui": "tui",
-    "tasks": {
-        "build": {
-            "dependsOn": [
-                "^build"
-            ],
-            "outputs": [
-                "dist/**",
-                ".svelte-kit/**"
-            ],
-            "cache": true
-        },
-        "dev": {
-            "dependsOn": [
-                "^build"
-            ],
-            "persistent": true,
-            "cache": false
-        },
-        "lint": {
-            "dependsOn": [
-                "^build"
-            ],
-            "cache": true
-        },
-        "lint:fix": {
-            "dependsOn": [
-                "^build"
-            ],
-            "cache": false
-        },
-        "test": {
-            "dependsOn": [
-                "^build"
-            ],
-            "cache": true
-        },
-        "test:coverage": {
-            "dependsOn": [
-                "^build"
-            ],
-            "cache": false
-        },
-        "typecheck": {
-            "dependsOn": [
-                "^build"
-            ],
-            "cache": true
-        },
-        "clean": {
-            "cache": false
-        }
+  "$schema": "https://turbo.build/schema.json",
+  "ui": "tui",
+  "tasks": {
+    "build": {
+      "dependsOn": [
+        "^build"
+      ],
+      "outputs": [
+        "dist/**",
+        ".svelte-kit/**"
+      ],
+      "cache": true
+    },
+    "dev": {
+      "dependsOn": [
+        "^build"
+      ],
+      "persistent": true,
+      "cache": false
+    },
+    "lint": {
+      "dependsOn": [
+        "^build"
+      ],
+      "cache": true
+    },
+    "lint:fix": {
+      "dependsOn": [
+        "^build"
+      ],
+      "cache": false
+    },
+    "test": {
+      "dependsOn": [
+        "^build"
+      ],
+      "cache": true
+    },
+    "test:coverage": {
+      "dependsOn": [
+        "^build"
+      ],
+      "cache": false
+    },
+    "typecheck": {
+      "dependsOn": [
+        "^build"
+      ],
+      "cache": true
+    },
+    "clean": {
+      "cache": false
     }
+  }
 }

@@ -27,28 +27,28 @@ import { storage } from '@hai/storage'
 
 // 1. 初始化存储（S3）
 await storage.init({
-    type: 's3',
-    bucket: 'my-bucket',
-    region: 'us-east-1',
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
+  type: 's3',
+  bucket: 'my-bucket',
+  region: 'us-east-1',
+  accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
+  secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
 })
 
 // 或者使用本地存储
 await storage.init({
-    type: 'local',
-    root: '/data/uploads',
+  type: 'local',
+  root: '/data/uploads',
 })
 
 // 2. 上传文件
 await storage.file.put('uploads/image.png', imageBuffer, {
-    contentType: 'image/png',
+  contentType: 'image/png',
 })
 
 // 3. 下载文件
 const result = await storage.file.get('uploads/image.png')
 if (result.success) {
-    const data = result.data
+  const data = result.data
 }
 
 // 4. 列出文件
@@ -56,13 +56,13 @@ const list = await storage.dir.list({ prefix: 'uploads/' })
 
 // 5. 生成签名 URL（前端直接下载）
 const downloadUrl = await storage.presign.getUrl('uploads/image.png', {
-    expiresIn: 3600  // 1小时有效期
+  expiresIn: 3600 // 1小时有效期
 })
 
 // 6. 生成上传签名 URL（前端直接上传）
 const uploadUrl = await storage.presign.putUrl('uploads/new-file.png', {
-    contentType: 'image/png',
-    expiresIn: 3600
+  contentType: 'image/png',
+  expiresIn: 3600
 })
 
 // 7. 关闭连接
@@ -72,27 +72,27 @@ await storage.close()
 ### 前端使用
 
 ```typescript
-import { uploadWithPresignedUrl, downloadAndSave } from '@hai/storage/client'
+import { downloadAndSave, uploadWithPresignedUrl } from '@hai/storage/client'
 
 // 获取签名 URL（从后端 API）
 const response = await fetch('/api/storage/presign', {
-    method: 'POST',
-    body: JSON.stringify({ key: 'uploads/image.png', contentType: 'image/png' })
+  method: 'POST',
+  body: JSON.stringify({ key: 'uploads/image.png', contentType: 'image/png' })
 })
 const { uploadUrl, downloadUrl } = await response.json()
 
 // 上传文件（支持进度回调）
 const file = document.getElementById('fileInput').files[0]
 const result = await uploadWithPresignedUrl(uploadUrl, file, {
-    contentType: 'image/png',
-    onProgress: (progress) => {
-        // 在此更新进度条：progress.percent
-    }
+  contentType: 'image/png',
+  onProgress: (progress) => {
+    // 在此更新进度条：progress.percent
+  }
 })
 
 // 下载文件
 await downloadAndSave(downloadUrl, {
-    filename: 'downloaded-image.png'
+  filename: 'downloaded-image.png'
 })
 ```
 
@@ -103,35 +103,35 @@ await downloadAndSave(downloadUrl, {
 ```typescript
 // S3 配置
 await storage.init({
-    type: 's3',
-    bucket: 'my-bucket',
-    region: 'us-east-1',
-    accessKeyId: 'xxx',
-    secretAccessKey: 'xxx',
-    // 可选配置
-    endpoint: 'http://localhost:9000',  // MinIO 等自定义端点
-    forcePathStyle: true,               // 某些 S3 兼容服务需要
-    prefix: 'app/',                     // 路径前缀
-    publicUrl: 'https://cdn.example.com', // 公开访问 URL
+  type: 's3',
+  bucket: 'my-bucket',
+  region: 'us-east-1',
+  accessKeyId: 'xxx',
+  secretAccessKey: 'xxx',
+  // 可选配置
+  endpoint: 'http://localhost:9000', // MinIO 等自定义端点
+  forcePathStyle: true, // 某些 S3 兼容服务需要
+  prefix: 'app/', // 路径前缀
+  publicUrl: 'https://cdn.example.com', // 公开访问 URL
 })
 
 // MinIO 配置示例
 await storage.init({
-    type: 's3',
-    bucket: 'my-bucket',
-    region: 'us-east-1',
-    endpoint: 'http://localhost:9000',
-    accessKeyId: 'minioadmin',
-    secretAccessKey: 'minioadmin',
-    forcePathStyle: true,
+  type: 's3',
+  bucket: 'my-bucket',
+  region: 'us-east-1',
+  endpoint: 'http://localhost:9000',
+  accessKeyId: 'minioadmin',
+  secretAccessKey: 'minioadmin',
+  forcePathStyle: true,
 })
 
 // 本地存储配置
 await storage.init({
-    type: 'local',
-    root: '/data/uploads',
-    directoryMode: 0o755,  // 目录权限
-    fileMode: 0o644,       // 文件权限
+  type: 'local',
+  root: '/data/uploads',
+  directoryMode: 0o755, // 目录权限
+  fileMode: 0o644, // 文件权限
 })
 ```
 
@@ -166,12 +166,12 @@ await storage.init({
 
 ```typescript
 import {
-    uploadWithPresignedUrl,
-    downloadWithPresignedUrl,
-    downloadAndSave,
-    getFileExtension,
-    getMimeType,
-    formatFileSize,
+  downloadAndSave,
+  downloadWithPresignedUrl,
+  formatFileSize,
+  getFileExtension,
+  getMimeType,
+  uploadWithPresignedUrl,
 } from '@hai/storage/client'
 ```
 
@@ -183,11 +183,12 @@ import {
 const result = await storage.file.get('image.png')
 
 if (result.success) {
-    // result.data 是文件内容
-    // 使用 result.data
-} else {
-    // result.error 是错误信息
-    // 处理错误：根据 result.error.code / message 做兜底
+  // result.data 是文件内容
+  // 使用 result.data
+}
+else {
+  // result.error 是错误信息
+  // 处理错误：根据 result.error.code / message 做兜底
 }
 ```
 
@@ -208,16 +209,16 @@ if (result.success) {
 
 ```typescript
 import type {
-    StorageConfig,
-    S3Config,
-    FileMetadata,
-    ListResult,
-    UploadOptions,
-    DownloadOptions,
-    PresignOptions,
-    PresignUploadOptions,
-    StorageService,
-    StorageError,
+  DownloadOptions,
+  FileMetadata,
+  ListResult,
+  PresignOptions,
+  PresignUploadOptions,
+  S3Config,
+  StorageConfig,
+  StorageError,
+  StorageService,
+  UploadOptions,
 } from '@hai/storage'
 ```
 
@@ -230,11 +231,11 @@ import { StorageConfigSchema } from '@hai/storage'
 
 // 校验配置
 const config = StorageConfigSchema.parse({
-    type: 's3',
-    bucket: 'my-bucket',
-    region: 'us-east-1',
-    accessKeyId: 'xxx',
-    secretAccessKey: 'xxx',
+  type: 's3',
+  bucket: 'my-bucket',
+  region: 'us-east-1',
+  accessKeyId: 'xxx',
+  secretAccessKey: 'xxx',
 })
 ```
 

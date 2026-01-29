@@ -212,5 +212,8 @@ export const CacheConfigSchema = z.object({
   silent: z.boolean().default(false),
 })
 
-/** 缓存配置类型 */
+/** 缓存配置类型（parse 后的完整配置） */
 export type CacheConfig = z.infer<typeof CacheConfigSchema>
+
+/** 缓存配置输入类型（parse 前，允许省略带默认值的字段） */
+export type CacheConfigInput = z.input<typeof CacheConfigSchema>

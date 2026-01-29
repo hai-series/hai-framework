@@ -1,50 +1,50 @@
 {
-    "name": "admin-console",
-    "version": "0.1.0",
-    "private": true,
-    "description": "hai Admin Framework - 管理控制台示例应用",
-    "type": "module",
-    "scripts": {
-        "dev": "vite dev",
-        "build": "vite build",
-        "preview": "vite preview",
-        "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
-        "lint": "eslint .",
-        "test": "vitest run",
-        "test:watch": "vitest",
-        "clean": "rimraf .svelte-kit build .turbo"
-    },
-    "dependencies": {
-        "@hai/core": "workspace:*",
-        "@hai/crypto": "workspace:*",
-        "@hai/db": "workspace:*",
-        "@hai/iam": "workspace:*",
-        "@hai/ai": "workspace:*",
-        "@hai/storage": "workspace:*",
-        "@hai/ui": "workspace:*",
-        "zod": "catalog:"
-    },
-    "devDependencies": {
-        "@iconify-json/tabler": "catalog:",
-        "@iconify/tailwind": "catalog:",
-        "@sveltejs/adapter-auto": "catalog:",
-        "@sveltejs/kit": "catalog:",
-        "@sveltejs/vite-plugin-svelte": "catalog:",
-        "@tailwindcss/vite": "catalog:",
-        "@types/node": "catalog:",
-        "daisyui": "catalog:",
-        "rimraf": "catalog:",
-        "svelte": "catalog:",
-        "svelte-check": "catalog:",
-        "tailwindcss": "catalog:",
-        "typescript": "catalog:",
-        "vite": "catalog:",
-        "vitest": "catalog:"
-    },
-    "keywords": [
-        "hai",
-        "admin",
-        "sveltekit",
-        "svelte5"
-    ]
+  "name": "admin-console",
+  "type": "module",
+  "version": "0.1.0",
+  "private": true,
+  "description": "hai Admin Framework - 管理控制台示例应用",
+  "keywords": [
+    "hai",
+    "admin",
+    "sveltekit",
+    "svelte5"
+  ],
+  "scripts": {
+    "dev": "vite dev",
+    "build": "vite build",
+    "preview": "vite preview",
+    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "clean": "rimraf .svelte-kit build .turbo"
+  },
+  "dependencies": {
+    "@hai/ai": "workspace:*",
+    "@hai/core": "workspace:*",
+    "@hai/crypto": "workspace:*",
+    "@hai/db": "workspace:*",
+    "@hai/iam": "workspace:*",
+    "@hai/storage": "workspace:*",
+    "@hai/ui": "workspace:*",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@iconify-json/tabler": "catalog:",
+    "@iconify/tailwind": "catalog:",
+    "@sveltejs/adapter-auto": "catalog:",
+    "@sveltejs/kit": "catalog:",
+    "@sveltejs/vite-plugin-svelte": "catalog:",
+    "@tailwindcss/vite": "catalog:",
+    "@types/node": "catalog:",
+    "daisyui": "catalog:",
+    "rimraf": "catalog:",
+    "svelte": "catalog:",
+    "svelte-check": "catalog:",
+    "tailwindcss": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vitest": "catalog:"
+  }
 }

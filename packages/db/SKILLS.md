@@ -21,38 +21,39 @@ db.init({ type: 'sqlite', database: ':memory:' })
 
 // PostgreSQL（仅支持异步）
 db.init({
-    type: 'postgresql',
-    url: 'postgres://user:pass@localhost:5432/mydb'
+  type: 'postgresql',
+  url: 'postgres://user:pass@localhost:5432/mydb'
 })
 db.init({
-    type: 'postgresql',
-    host: 'localhost',
-    port: 5432,
-    database: 'mydb',
-    user: 'admin',
-    password: 'secret',
-    pool: { max: 20 }
+  type: 'postgresql',
+  host: 'localhost',
+  port: 5432,
+  database: 'mydb',
+  user: 'admin',
+  password: 'secret',
+  pool: { max: 20 }
 })
 
 // MySQL（仅支持异步）
 db.init({
-    type: 'mysql',
-    url: 'mysql://user:pass@localhost:3306/mydb'
+  type: 'mysql',
+  url: 'mysql://user:pass@localhost:3306/mydb'
 })
 db.init({
-    type: 'mysql',
-    host: 'localhost',
-    port: 3306,
-    database: 'mydb',
-    user: 'admin',
-    password: 'secret',
-    mysql: { charset: 'utf8mb4' }
+  type: 'mysql',
+  host: 'localhost',
+  port: 3306,
+  database: 'mydb',
+  user: 'admin',
+  password: 'secret',
+  mysql: { charset: 'utf8mb4' }
 })
 
 // 关闭
 db.close()
 ```
-```
+
+````
 
 ### DDL 操作 (db.ddl)
 
@@ -88,17 +89,17 @@ db.ddl.dropIndex('idx_email')
 
 // 原始 DDL
 db.ddl.raw('CREATE VIEW active_users AS SELECT * FROM users WHERE is_active = 1')
-```
+````
 
 ### SQL 操作 (db.sql)
 
 ```ts
 // 查询多行
-const users = db.sql.query<{ id: number; name: string }>('SELECT * FROM users')
+const users = db.sql.query<{ id: number, name: string }>('SELECT * FROM users')
 const active = db.sql.query('SELECT * FROM users WHERE is_active = ?', [true])
 
 // 查询单行
-const user = db.sql.get<{ id: number; name: string }>('SELECT * FROM users WHERE id = ?', [1])
+const user = db.sql.get<{ id: number, name: string }>('SELECT * FROM users WHERE id = ?', [1])
 
 // 执行 INSERT/UPDATE/DELETE
 const insertResult = db.sql.execute('INSERT INTO users (name, email) VALUES (?, ?)', ['张三', 'test@example.com'])
@@ -107,9 +108,9 @@ const deleteResult = db.sql.execute('DELETE FROM users WHERE id = ?', [1])
 
 // 批量执行
 db.sql.batch([
-    { sql: 'INSERT INTO users (name) VALUES (?)', params: ['用户1'] },
-    { sql: 'INSERT INTO users (name) VALUES (?)', params: ['用户2'] },
-    { sql: 'INSERT INTO users (name) VALUES (?)', params: ['用户3'] }
+  { sql: 'INSERT INTO users (name) VALUES (?)', params: ['用户1'] },
+  { sql: 'INSERT INTO users (name) VALUES (?)', params: ['用户2'] },
+  { sql: 'INSERT INTO users (name) VALUES (?)', params: ['用户3'] }
 ])
 ```
 
@@ -118,18 +119,18 @@ db.sql.batch([
 ```ts
 // 同步事务（仅 SQLite 支持）
 const result = db.tx((tx) => {
-    tx.execute('UPDATE accounts SET balance = balance - ? WHERE id = ?', [100, 1])
-    tx.execute('UPDATE accounts SET balance = balance + ? WHERE id = ?', [100, 2])
-    return tx.get('SELECT balance FROM accounts WHERE id = ?', [2])
+  tx.execute('UPDATE accounts SET balance = balance - ? WHERE id = ?', [100, 1])
+  tx.execute('UPDATE accounts SET balance = balance + ? WHERE id = ?', [100, 2])
+  return tx.get('SELECT balance FROM accounts WHERE id = ?', [2])
 })
 
 // 异步事务（PostgreSQL/MySQL 必须使用，SQLite 也可用）
 // 注意：事务内的所有操作都需要 await
 const asyncResult = await db.txAsync(async (tx) => {
-    await tx.execute('INSERT INTO logs (message) VALUES (?)', ['开始'])
-    await someAsyncOperation()
-    await tx.execute('INSERT INTO logs (message) VALUES (?)', ['完成'])
-    return await tx.query('SELECT * FROM logs')
+  await tx.execute('INSERT INTO logs (message) VALUES (?)', ['开始'])
+  await someAsyncOperation()
+  await tx.execute('INSERT INTO logs (message) VALUES (?)', ['完成'])
+  return await tx.query('SELECT * FROM logs')
 })
 ```
 
@@ -137,40 +138,40 @@ const asyncResult = await db.txAsync(async (tx) => {
 
 | 特性                    | SQLite | PostgreSQL | MySQL |
 | ----------------------- | ------ | ---------- | ----- |
-| 同步事务 `db.tx()`      | ✅      | ❌          | ❌     |
-| 异步事务 `db.txAsync()` | ✅      | ✅          | ✅     |
-| 同步 SQL `db.sql.*`     | ✅      | ❌          | ❌     |
-| 连接池                  | ❌      | ✅          | ✅     |
-| 内存数据库              | ✅      | ❌          | ❌     |
+| 同步事务 `db.tx()`      | ✅     | ❌         | ❌    |
+| 异步事务 `db.txAsync()` | ✅     | ✅         | ✅    |
+| 同步 SQL `db.sql.*`     | ✅     | ❌         | ❌    |
+| 连接池                  | ❌     | ✅         | ✅    |
+| 内存数据库              | ✅     | ❌         | ❌    |
 
 ## 统一配置结构
 
 ```ts
 interface DbConfig {
-    type: 'sqlite' | 'postgresql' | 'mysql'
-    
-    // 连接（二选一）
-    url?: string                    // 连接字符串
-    host?: string                   // 主机
-    port?: number                   // 端口
-    database: string                // 数据库名/文件路径
-    user?: string                   // 用户名
-    password?: string               // 密码
-    
-    // 通用选项
-    ssl?: boolean | 'require' | 'prefer' | 'allow' | 'disable'
-    pool?: PoolConfig               // 连接池
-    
-    // 数据库特定选项
-    sqlite?: { walMode?: boolean; readonly?: boolean }
-    mysql?: { charset?: string }
+  type: 'sqlite' | 'postgresql' | 'mysql'
+
+  // 连接（二选一）
+  url?: string // 连接字符串
+  host?: string // 主机
+  port?: number // 端口
+  database: string // 数据库名/文件路径
+  user?: string // 用户名
+  password?: string // 密码
+
+  // 通用选项
+  ssl?: boolean | 'require' | 'prefer' | 'allow' | 'disable'
+  pool?: PoolConfig // 连接池
+
+  // 数据库特定选项
+  sqlite?: { walMode?: boolean, readonly?: boolean }
+  mysql?: { charset?: string }
 }
 
 interface PoolConfig {
-    min?: number                    // 最小连接数
-    max?: number                    // 最大连接数（默认 10）
-    idleTimeout?: number            // 空闲超时（毫秒）
-    acquireTimeout?: number         // 获取连接超时（毫秒）
+  min?: number // 最小连接数
+  max?: number // 最大连接数（默认 10）
+  idleTimeout?: number // 空闲超时（毫秒）
+  acquireTimeout?: number // 获取连接超时（毫秒）
 }
 ```
 
@@ -180,13 +181,13 @@ interface PoolConfig {
 type ColumnType = 'TEXT' | 'INTEGER' | 'REAL' | 'BLOB' | 'BOOLEAN' | 'TIMESTAMP' | 'JSON'
 
 interface ColumnDef {
-    type: ColumnType
-    primaryKey?: boolean
-    autoIncrement?: boolean
-    notNull?: boolean
-    unique?: boolean
-    defaultValue?: unknown
-    references?: { table: string; column: string }
+  type: ColumnType
+  primaryKey?: boolean
+  autoIncrement?: boolean
+  notNull?: boolean
+  unique?: boolean
+  defaultValue?: unknown
+  references?: { table: string, column: string }
 }
 ```
 
@@ -196,27 +197,27 @@ interface ColumnDef {
 
 ```ts
 interface Result<T, E> {
-    success: boolean
-    data?: T
-    error?: E
+  success: boolean
+  data?: T
+  error?: E
 }
 
 interface DbError {
-    code: DbErrorCode      // 数字类型错误码
-    message: string
-    cause?: unknown
+  code: DbErrorCode // 数字类型错误码
+  message: string
+  cause?: unknown
 }
 
 // 错误码常量（数字类型 3000-3999）
 const DbErrorCode = {
-    CONNECTION_FAILED: 3000,    // 数据库连接失败
-    QUERY_FAILED: 3001,         // 查询执行失败
-    CONSTRAINT_VIOLATION: 3002, // 约束违反
-    TRANSACTION_FAILED: 3003,   // 事务执行失败
-    NOT_INITIALIZED: 3010,      // 数据库未初始化
-    DDL_FAILED: 3011,           // DDL 操作失败
-    UNSUPPORTED_TYPE: 3012,     // 不支持的操作
-    CONFIG_ERROR: 3013          // 配置错误
+  CONNECTION_FAILED: 3000, // 数据库连接失败
+  QUERY_FAILED: 3001, // 查询执行失败
+  CONSTRAINT_VIOLATION: 3002, // 约束违反
+  TRANSACTION_FAILED: 3003, // 事务执行失败
+  NOT_INITIALIZED: 3010, // 数据库未初始化
+  DDL_FAILED: 3011, // DDL 操作失败
+  UNSUPPORTED_TYPE: 3012, // 不支持的操作
+  CONFIG_ERROR: 3013 // 配置错误
 } as const
 ```
 
@@ -226,9 +227,10 @@ const DbErrorCode = {
 // 标准使用
 const result = db.sql.query('SELECT * FROM users')
 if (result.success) {
-    // 使用 result.data
-} else {
-    // 处理错误：result.error.message
+  // 使用 result.data
+}
+else {
+  // 处理错误：result.error.message
 }
 
 // 解构使用
@@ -236,7 +238,7 @@ const { success, data, error } = db.sql.get('SELECT * FROM users WHERE id = ?', 
 
 // 错误码判断
 if (!result.success && result.error.code === DbErrorCode.NOT_INITIALIZED) {
-    // 处理错误：请先调用 initDB()
+  // 处理错误：请先调用 initDB()
 }
 ```
 

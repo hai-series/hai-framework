@@ -7,7 +7,7 @@
  */
 
 import type { Handle, RequestEvent } from '@sveltejs/kit'
-import type { HookConfig, Middleware, MiddlewareContext, SessionData, GuardConfig, GuardResult } from '../types.js'
+import type { GuardConfig, GuardResult, HookConfig, Middleware, MiddlewareContext, SessionData } from '../types.js'
 
 /**
  * 生成唯一 ID
@@ -20,7 +20,7 @@ function generateId(prefix: string): string {
 
 /**
  * 创建 hai handle hook
- * 
+ *
  * @param config - hook 配置
  */
 export function createHandle(config: HookConfig = {}): Handle {
@@ -60,7 +60,7 @@ export function createHandle(config: HookConfig = {}): Handle {
 
         if (sessionToken) {
           session = await validateSession(sessionToken) ?? undefined
-            ; (event.locals as any).session = session
+          ; (event.locals as any).session = session
         }
       }
 
@@ -231,7 +231,7 @@ export function sequence(...handles: Handle[]): Handle {
       const handle = handles[i]
       const nextResolve = currentResolve
 
-      currentResolve = (event) => handle({ event, resolve: nextResolve })
+      currentResolve = event => handle({ event, resolve: nextResolve })
     }
 
     return currentResolve(event)

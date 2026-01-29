@@ -3,7 +3,7 @@
  * @hai/ai - 工具调用
  * =============================================================================
  * 提供 LLM 工具调用的定义和执行功能
- * 
+ *
  * 特性:
  * - Zod schema 类型推断
  * - 工具注册
@@ -13,17 +13,17 @@
  */
 
 import type { Result } from '@hai/core'
-import { createLogger, err, ok } from '@hai/core'
 import type { z } from 'zod'
-import type { ToolDefinition, ToolCall, ToolMessage } from './ai-types.js'
+import type { ToolCall, ToolDefinition, ToolMessage } from './ai-types.js'
+import { createLogger, err, ok } from '@hai/core'
 
 const logger = createLogger({ name: '@hai/ai.tools' })
 
 /**
  * 工具错误类型
  */
-export type ToolErrorType =
-    | 'TOOL_NOT_FOUND'
+export type ToolErrorType
+  = | 'TOOL_NOT_FOUND'
     | 'VALIDATION_FAILED'
     | 'EXECUTION_FAILED'
     | 'TIMEOUT'
@@ -32,47 +32,47 @@ export type ToolErrorType =
  * 工具错误
  */
 export interface ToolError {
-    type: ToolErrorType
-    message: string
-    toolName?: string
+  type: ToolErrorType
+  message: string
+  toolName?: string
 }
 
 /**
  * 工具定义选项
  */
 export interface DefineToolOptions<TInput, TOutput> {
-    /** 工具名称 */
-    name: string
-    /** 工具描述 */
-    description: string
-    /** 输入参数 schema (Zod) */
-    parameters: z.ZodType<TInput>
-    /** 工具处理函数 */
-    handler: (input: TInput) => Promise<TOutput> | TOutput
+  /** 工具名称 */
+  name: string
+  /** 工具描述 */
+  description: string
+  /** 输入参数 schema (Zod) */
+  parameters: z.ZodType<TInput>
+  /** 工具处理函数 */
+  handler: (input: TInput) => Promise<TOutput> | TOutput
 }
 
 /**
  * 工具实例
  */
 export interface Tool<TInput = unknown, TOutput = unknown> {
-    /** 工具名称 */
-    name: string
-    /** 工具描述 */
-    description: string
-    /** 输入参数 schema */
-    parameters: z.ZodType<TInput>
-    /** 执行工具 */
-    execute: (input: TInput) => Promise<Result<TOutput, ToolError>>
-    /** 转换为 OpenAI 工具定义 */
-    toDefinition: () => ToolDefinition
+  /** 工具名称 */
+  name: string
+  /** 工具描述 */
+  description: string
+  /** 输入参数 schema */
+  parameters: z.ZodType<TInput>
+  /** 执行工具 */
+  execute: (input: TInput) => Promise<Result<TOutput, ToolError>>
+  /** 转换为 OpenAI 工具定义 */
+  toDefinition: () => ToolDefinition
 }
 
 /**
  * 定义工具
- * 
+ *
  * @param options - 工具选项
  * @returns 工具实例
- * 
+ *
  * @example
  * ```ts
  * const weatherTool = defineTool({
@@ -89,250 +89,250 @@ export interface Tool<TInput = unknown, TOutput = unknown> {
  * ```
  */
 export function defineTool<TInput, TOutput>(
-    options: DefineToolOptions<TInput, TOutput>,
+  options: DefineToolOptions<TInput, TOutput>,
 ): Tool<TInput, TOutput> {
-    const { name, description, parameters, handler } = options
+  const { name, description, parameters, handler } = options
 
-    return {
-        name,
-        description,
-        parameters,
+  return {
+    name,
+    description,
+    parameters,
 
-        async execute(input: TInput): Promise<Result<TOutput, ToolError>> {
-            try {
-                // 验证输入
-                const parseResult = parameters.safeParse(input)
+    async execute(input: TInput): Promise<Result<TOutput, ToolError>> {
+      try {
+        // 验证输入
+        const parseResult = parameters.safeParse(input)
 
-                if (!parseResult.success) {
-                    logger.warn('Tool input validation failed', {
-                        toolName: name,
-                        issues: parseResult.error.issues,
-                    })
-                    return err({
-                        type: 'VALIDATION_FAILED',
-                        message: parseResult.error.message,
-                        toolName: name,
-                    })
-                }
+        if (!parseResult.success) {
+          logger.warn('Tool input validation failed', {
+            toolName: name,
+            issues: parseResult.error.issues,
+          })
+          return err({
+            type: 'VALIDATION_FAILED',
+            message: parseResult.error.message,
+            toolName: name,
+          })
+        }
 
-                // 执行工具
-                const output = await handler(parseResult.data)
+        // 执行工具
+        const output = await handler(parseResult.data)
 
-                return ok(output)
-            }
-            catch (error) {
-                logger.error('Tool execution failed', {
-                    toolName: name,
-                    error: error instanceof Error ? error.message : String(error),
-                })
-                return err({
-                    type: 'EXECUTION_FAILED',
-                    message: error instanceof Error ? error.message : String(error),
-                    toolName: name,
-                })
-            }
+        return ok(output)
+      }
+      catch (error) {
+        logger.error('Tool execution failed', {
+          toolName: name,
+          error: error instanceof Error ? error.message : String(error),
+        })
+        return err({
+          type: 'EXECUTION_FAILED',
+          message: error instanceof Error ? error.message : String(error),
+          toolName: name,
+        })
+      }
+    },
+
+    toDefinition(): ToolDefinition {
+      return {
+        type: 'function',
+        function: {
+          name,
+          description,
+          parameters: zodToJsonSchema(parameters),
         },
-
-        toDefinition(): ToolDefinition {
-            return {
-                type: 'function',
-                function: {
-                    name,
-                    description,
-                    parameters: zodToJsonSchema(parameters),
-                },
-            }
-        },
-    }
+      }
+    },
+  }
 }
 
 /**
  * 工具注册表
  */
 export class ToolRegistry {
-    private tools: Map<string, Tool> = new Map()
+  private tools: Map<string, Tool> = new Map()
 
-    /**
-     * 注册工具
-     * 
-     * @param tool - 工具实例
-     */
-    register<TInput, TOutput>(tool: Tool<TInput, TOutput>): this {
-        if (this.tools.has(tool.name)) {
-            logger.warn('Overwriting existing tool', { toolName: tool.name })
-        }
-
-        this.tools.set(tool.name, tool as Tool)
-        logger.info('Tool registered', { toolName: tool.name })
-
-        return this
+  /**
+   * 注册工具
+   *
+   * @param tool - 工具实例
+   */
+  register<TInput, TOutput>(tool: Tool<TInput, TOutput>): this {
+    if (this.tools.has(tool.name)) {
+      logger.warn('Overwriting existing tool', { toolName: tool.name })
     }
 
-    /**
-     * 批量注册工具
-     * 
-     * @param tools - 工具数组
-     */
-    registerMany(tools: Tool<unknown, unknown>[]): this {
-        for (const tool of tools) {
-            this.register(tool)
-        }
-        return this
+    this.tools.set(tool.name, tool as Tool)
+    logger.info('Tool registered', { toolName: tool.name })
+
+    return this
+  }
+
+  /**
+   * 批量注册工具
+   *
+   * @param tools - 工具数组
+   */
+  registerMany(tools: Tool<unknown, unknown>[]): this {
+    for (const tool of tools) {
+      this.register(tool)
+    }
+    return this
+  }
+
+  /**
+   * 注销工具
+   *
+   * @param name - 工具名称
+   */
+  unregister(name: string): boolean {
+    const deleted = this.tools.delete(name)
+    if (deleted) {
+      logger.info('Tool unregistered', { toolName: name })
+    }
+    return deleted
+  }
+
+  /**
+   * 获取工具
+   *
+   * @param name - 工具名称
+   */
+  get(name: string): Tool | undefined {
+    return this.tools.get(name)
+  }
+
+  /**
+   * 检查工具是否存在
+   *
+   * @param name - 工具名称
+   */
+  has(name: string): boolean {
+    return this.tools.has(name)
+  }
+
+  /**
+   * 获取所有工具名称
+   */
+  getNames(): string[] {
+    return Array.from(this.tools.keys())
+  }
+
+  /**
+   * 获取所有工具定义
+   */
+  getDefinitions(): ToolDefinition[] {
+    return Array.from(this.tools.values()).map(tool => tool.toDefinition())
+  }
+
+  /**
+   * 执行工具调用
+   *
+   * @param toolCall - 工具调用
+   */
+  async execute(toolCall: ToolCall): Promise<Result<ToolMessage, ToolError>> {
+    const tool = this.tools.get(toolCall.function.name)
+
+    if (!tool) {
+      return err({
+        type: 'TOOL_NOT_FOUND',
+        message: `Tool '${toolCall.function.name}' not found`,
+        toolName: toolCall.function.name,
+      })
     }
 
-    /**
-     * 注销工具
-     * 
-     * @param name - 工具名称
-     */
-    unregister(name: string): boolean {
-        const deleted = this.tools.delete(name)
-        if (deleted) {
-            logger.info('Tool unregistered', { toolName: name })
-        }
-        return deleted
+    // 解析参数
+    let args: unknown
+    try {
+      args = JSON.parse(toolCall.function.arguments)
+    }
+    catch {
+      return err({
+        type: 'VALIDATION_FAILED',
+        message: 'Invalid JSON in tool call arguments',
+        toolName: toolCall.function.name,
+      })
     }
 
-    /**
-     * 获取工具
-     * 
-     * @param name - 工具名称
-     */
-    get(name: string): Tool | undefined {
-        return this.tools.get(name)
+    // 执行工具
+    const result = await tool.execute(args)
+
+    if (!result.success) {
+      return result as Result<ToolMessage, ToolError>
     }
 
-    /**
-     * 检查工具是否存在
-     * 
-     * @param name - 工具名称
-     */
-    has(name: string): boolean {
-        return this.tools.has(name)
-    }
+    // 构建工具消息
+    const content = typeof result.data === 'string'
+      ? result.data
+      : JSON.stringify(result.data)
 
-    /**
-     * 获取所有工具名称
-     */
-    getNames(): string[] {
-        return Array.from(this.tools.keys())
-    }
+    return ok({
+      role: 'tool',
+      content,
+      tool_call_id: toolCall.id,
+    })
+  }
 
-    /**
-     * 获取所有工具定义
-     */
-    getDefinitions(): ToolDefinition[] {
-        return Array.from(this.tools.values()).map(tool => tool.toDefinition())
-    }
+  /**
+   * 批量执行工具调用
+   *
+   * @param toolCalls - 工具调用数组
+   * @param options - 执行选项
+   */
+  async executeAll(
+    toolCalls: ToolCall[],
+    options: { parallel?: boolean } = {},
+  ): Promise<Result<ToolMessage[], ToolError>> {
+    const { parallel = true } = options
+    const messages: ToolMessage[] = []
 
-    /**
-     * 执行工具调用
-     * 
-     * @param toolCall - 工具调用
-     */
-    async execute(toolCall: ToolCall): Promise<Result<ToolMessage, ToolError>> {
-        const tool = this.tools.get(toolCall.function.name)
+    if (parallel) {
+      // 并行执行
+      const results = await Promise.all(
+        toolCalls.map(tc => this.execute(tc)),
+      )
 
-        if (!tool) {
-            return err({
-                type: 'TOOL_NOT_FOUND',
-                message: `Tool '${toolCall.function.name}' not found`,
-                toolName: toolCall.function.name,
-            })
-        }
-
-        // 解析参数
-        let args: unknown
-        try {
-            args = JSON.parse(toolCall.function.arguments)
-        }
-        catch {
-            return err({
-                type: 'VALIDATION_FAILED',
-                message: 'Invalid JSON in tool call arguments',
-                toolName: toolCall.function.name,
-            })
-        }
-
-        // 执行工具
-        const result = await tool.execute(args)
-
+      for (const result of results) {
         if (!result.success) {
-            return result as Result<ToolMessage, ToolError>
+          return result as Result<ToolMessage[], ToolError>
         }
-
-        // 构建工具消息
-        const content = typeof result.data === 'string'
-            ? result.data
-            : JSON.stringify(result.data)
-
-        return ok({
-            role: 'tool',
-            content,
-            tool_call_id: toolCall.id,
-        })
+        messages.push(result.data)
+      }
     }
-
-    /**
-     * 批量执行工具调用
-     * 
-     * @param toolCalls - 工具调用数组
-     * @param options - 执行选项
-     */
-    async executeAll(
-        toolCalls: ToolCall[],
-        options: { parallel?: boolean } = {},
-    ): Promise<Result<ToolMessage[], ToolError>> {
-        const { parallel = true } = options
-        const messages: ToolMessage[] = []
-
-        if (parallel) {
-            // 并行执行
-            const results = await Promise.all(
-                toolCalls.map(tc => this.execute(tc)),
-            )
-
-            for (const result of results) {
-                if (!result.success) {
-                    return result as Result<ToolMessage[], ToolError>
-                }
-                messages.push(result.data)
-            }
+    else {
+      // 顺序执行
+      for (const toolCall of toolCalls) {
+        const result = await this.execute(toolCall)
+        if (!result.success) {
+          return result as Result<ToolMessage[], ToolError>
         }
-        else {
-            // 顺序执行
-            for (const toolCall of toolCalls) {
-                const result = await this.execute(toolCall)
-                if (!result.success) {
-                    return result as Result<ToolMessage[], ToolError>
-                }
-                messages.push(result.data)
-            }
-        }
-
-        return ok(messages)
+        messages.push(result.data)
+      }
     }
 
-    /**
-     * 清空所有工具
-     */
-    clear(): void {
-        this.tools.clear()
-    }
+    return ok(messages)
+  }
 
-    /**
-     * 获取工具数量
-     */
-    get size(): number {
-        return this.tools.size
-    }
+  /**
+   * 清空所有工具
+   */
+  clear(): void {
+    this.tools.clear()
+  }
+
+  /**
+   * 获取工具数量
+   */
+  get size(): number {
+    return this.tools.size
+  }
 }
 
 /**
  * 创建工具注册表
  */
 export function createToolRegistry(): ToolRegistry {
-    return new ToolRegistry()
+  return new ToolRegistry()
 }
 
 /**
@@ -340,158 +340,158 @@ export function createToolRegistry(): ToolRegistry {
  * 简化实现，支持常用类型
  */
 function zodToJsonSchema(schema: z.ZodType): Record<string, unknown> {
-    // 使用 Zod 内置的 _def 来获取类型信息
-    const def = (schema as unknown as { _def: { typeName: string } })._def
+  // 使用 Zod 内置的 _def 来获取类型信息
+  const def = (schema as unknown as { _def: { typeName: string } })._def
 
-    switch (def.typeName) {
-        case 'ZodString':
-            return buildStringSchema(def)
-        case 'ZodNumber':
-            return buildNumberSchema(def)
-        case 'ZodBoolean':
-            return { type: 'boolean' }
-        case 'ZodArray':
-            return {
-                type: 'array',
-                items: zodToJsonSchema((def as unknown as { type: z.ZodType }).type),
-            }
-        case 'ZodObject':
-            return buildObjectSchema(def)
-        case 'ZodEnum':
-            return {
-                type: 'string',
-                enum: (def as unknown as { values: string[] }).values,
-            }
-        case 'ZodOptional':
-            return zodToJsonSchema((def as unknown as { innerType: z.ZodType }).innerType)
-        case 'ZodNullable':
-            return {
-                anyOf: [
-                    zodToJsonSchema((def as unknown as { innerType: z.ZodType }).innerType),
-                    { type: 'null' },
-                ],
-            }
-        case 'ZodDefault':
-            return {
-                ...zodToJsonSchema((def as unknown as { innerType: z.ZodType }).innerType),
-                default: (def as unknown as { defaultValue: () => unknown }).defaultValue(),
-            }
-        case 'ZodUnion':
-            return {
-                anyOf: (def as unknown as { options: z.ZodType[] }).options.map(opt => zodToJsonSchema(opt)),
-            }
-        case 'ZodLiteral':
-            return {
-                const: (def as unknown as { value: unknown }).value,
-            }
-        default:
-            // 回退到基本对象类型
-            return { type: 'object' }
-    }
+  switch (def.typeName) {
+    case 'ZodString':
+      return buildStringSchema(def)
+    case 'ZodNumber':
+      return buildNumberSchema(def)
+    case 'ZodBoolean':
+      return { type: 'boolean' }
+    case 'ZodArray':
+      return {
+        type: 'array',
+        items: zodToJsonSchema((def as unknown as { type: z.ZodType }).type),
+      }
+    case 'ZodObject':
+      return buildObjectSchema(def)
+    case 'ZodEnum':
+      return {
+        type: 'string',
+        enum: (def as unknown as { values: string[] }).values,
+      }
+    case 'ZodOptional':
+      return zodToJsonSchema((def as unknown as { innerType: z.ZodType }).innerType)
+    case 'ZodNullable':
+      return {
+        anyOf: [
+          zodToJsonSchema((def as unknown as { innerType: z.ZodType }).innerType),
+          { type: 'null' },
+        ],
+      }
+    case 'ZodDefault':
+      return {
+        ...zodToJsonSchema((def as unknown as { innerType: z.ZodType }).innerType),
+        default: (def as unknown as { defaultValue: () => unknown }).defaultValue(),
+      }
+    case 'ZodUnion':
+      return {
+        anyOf: (def as unknown as { options: z.ZodType[] }).options.map(opt => zodToJsonSchema(opt)),
+      }
+    case 'ZodLiteral':
+      return {
+        const: (def as unknown as { value: unknown }).value,
+      }
+    default:
+      // 回退到基本对象类型
+      return { type: 'object' }
+  }
 }
 
 /**
  * 构建字符串 schema
  */
-type ZodCheck = {
-    kind: string
-    value?: number
-    regex?: RegExp
+interface ZodCheck {
+  kind: string
+  value?: number
+  regex?: RegExp
 }
 
-type ZodDefWithChecks = {
-    checks?: ZodCheck[]
-    description?: string
+interface ZodDefWithChecks {
+  checks?: ZodCheck[]
+  description?: string
 }
 
-function buildStringSchema(def: { checks?: ZodCheck[]; description?: string }): Record<string, unknown> {
-    const schema: Record<string, unknown> = { type: 'string' }
+function buildStringSchema(def: { checks?: ZodCheck[], description?: string }): Record<string, unknown> {
+  const schema: Record<string, unknown> = { type: 'string' }
 
-    if (def.checks) {
-        for (const check of def.checks) {
-            if (check.kind === 'min') {
-                schema.minLength = check.value
-            }
-            else if (check.kind === 'max') {
-                schema.maxLength = check.value
-            }
-            else if (check.kind === 'regex') {
-                schema.pattern = check.regex.source
-            }
-            else if (check.kind === 'email') {
-                schema.format = 'email'
-            }
-            else if (check.kind === 'url') {
-                schema.format = 'uri'
-            }
-        }
+  if (def.checks) {
+    for (const check of def.checks) {
+      if (check.kind === 'min') {
+        schema.minLength = check.value
+      }
+      else if (check.kind === 'max') {
+        schema.maxLength = check.value
+      }
+      else if (check.kind === 'regex') {
+        schema.pattern = check.regex.source
+      }
+      else if (check.kind === 'email') {
+        schema.format = 'email'
+      }
+      else if (check.kind === 'url') {
+        schema.format = 'uri'
+      }
     }
+  }
 
-    // 获取描述
-    if (def.description) {
-        schema.description = def.description
-    }
+  // 获取描述
+  if (def.description) {
+    schema.description = def.description
+  }
 
-    return schema
+  return schema
 }
 
 /**
  * 构建数字 schema
  */
-function buildNumberSchema(def: { checks?: ZodCheck[]; description?: string }): Record<string, unknown> {
-    const schema: Record<string, unknown> = { type: 'number' }
+function buildNumberSchema(def: { checks?: ZodCheck[], description?: string }): Record<string, unknown> {
+  const schema: Record<string, unknown> = { type: 'number' }
 
-    if (def.checks) {
-        for (const check of def.checks) {
-            if (check.kind === 'min') {
-                schema.minimum = check.value
-            }
-            else if (check.kind === 'max') {
-                schema.maximum = check.value
-            }
-            else if (check.kind === 'int') {
-                schema.type = 'integer'
-            }
-        }
+  if (def.checks) {
+    for (const check of def.checks) {
+      if (check.kind === 'min') {
+        schema.minimum = check.value
+      }
+      else if (check.kind === 'max') {
+        schema.maximum = check.value
+      }
+      else if (check.kind === 'int') {
+        schema.type = 'integer'
+      }
     }
+  }
 
-    if (def.description) {
-        schema.description = def.description
-    }
+  if (def.description) {
+    schema.description = def.description
+  }
 
-    return schema
+  return schema
 }
 
 /**
  * 构建对象 schema
  */
-function buildObjectSchema(def: { shape: () => Record<string, unknown>; description?: string }): Record<string, unknown> {
-    const properties: Record<string, unknown> = {}
-    const required: string[] = []
+function buildObjectSchema(def: { shape: () => Record<string, unknown>, description?: string }): Record<string, unknown> {
+  const properties: Record<string, unknown> = {}
+  const required: string[] = []
 
-    for (const [key, value] of Object.entries(def.shape())) {
-        const valueSchema = value as unknown as z.ZodType
-        properties[key] = zodToJsonSchema(valueSchema)
+  for (const [key, value] of Object.entries(def.shape())) {
+    const valueSchema = value as unknown as z.ZodType
+    properties[key] = zodToJsonSchema(valueSchema)
 
-        // 检查是否必需
-        const valueDef = (valueSchema as unknown as { _def: { typeName: string } })._def
-        if (valueDef.typeName !== 'ZodOptional' && valueDef.typeName !== 'ZodDefault') {
-            required.push(key)
-        }
+    // 检查是否必需
+    const valueDef = (valueSchema as unknown as { _def: { typeName: string } })._def
+    if (valueDef.typeName !== 'ZodOptional' && valueDef.typeName !== 'ZodDefault') {
+      required.push(key)
     }
+  }
 
-    const schema: Record<string, unknown> = {
-        type: 'object',
-        properties,
-    }
+  const schema: Record<string, unknown> = {
+    type: 'object',
+    properties,
+  }
 
-    if (required.length > 0) {
-        schema.required = required
-    }
+  if (required.length > 0) {
+    schema.required = required
+  }
 
-    if (def.description) {
-        schema.description = def.description
-    }
+  if (def.description) {
+    schema.description = def.description
+  }
 
-    return schema
+  return schema
 }

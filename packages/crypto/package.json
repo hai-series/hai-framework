@@ -1,39 +1,39 @@
 {
-    "name": "@hai/crypto",
-    "version": "0.1.0",
-    "license": "Apache-2.0",
-    "description": "国密算法 (SM2/SM3/SM4) 和密码哈希",
-    "type": "module",
-    "main": "./dist/index.js",
-    "types": "./dist/index.d.ts",
-    "exports": {
-        ".": {
-            "types": "./dist/index.d.ts",
-            "import": "./dist/index.js"
-        }
-    },
-    "files": [
-        "dist"
-    ],
-    "scripts": {
-        "build": "tsup",
-        "dev": "tsup --watch",
-        "test": "vitest run",
-        "test:watch": "vitest",
-        "typecheck": "tsc --noEmit",
-        "lint": "eslint src",
-        "clean": "rimraf dist .turbo"
-    },
-    "dependencies": {
-        "@hai/core": "workspace:*",
-        "sm-crypto": "catalog:",
-        "@noble/hashes": "catalog:"
-    },
-    "devDependencies": {
-        "@types/node": "catalog:",
-        "rimraf": "catalog:",
-        "tsup": "catalog:",
-        "typescript": "catalog:",
-        "vitest": "catalog:"
+  "name": "@hai/crypto",
+  "type": "module",
+  "version": "0.1.0",
+  "description": "国密算法 (SM2/SM3/SM4) 和密码哈希",
+  "license": "Apache-2.0",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
     }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src",
+    "clean": "rimraf dist .turbo"
+  },
+  "dependencies": {
+    "@hai/core": "workspace:*",
+    "@noble/hashes": "catalog:",
+    "sm-crypto": "catalog:"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "rimraf": "catalog:",
+    "tsup": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
 }

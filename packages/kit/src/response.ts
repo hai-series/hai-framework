@@ -17,7 +17,7 @@ export function ok<T>(data: T, requestId?: string): Response {
     data,
     requestId,
   }
-  
+
   return new Response(JSON.stringify(response), {
     status: 200,
     headers: { 'Content-Type': 'application/json' },
@@ -33,7 +33,7 @@ export function created<T>(data: T, requestId?: string): Response {
     data,
     requestId,
   }
-  
+
   return new Response(JSON.stringify(response), {
     status: 201,
     headers: { 'Content-Type': 'application/json' },
@@ -66,7 +66,7 @@ export function error(
     },
     requestId,
   }
-  
+
   return new Response(JSON.stringify(response), {
     status,
     headers: { 'Content-Type': 'application/json' },
@@ -112,7 +112,7 @@ export function conflict(message: string, requestId?: string): Response {
  * 创建 422 Unprocessable Entity 响应（验证错误）
  */
 export function validationError(
-  errors: Array<{ field: string; message: string }>,
+  errors: Array<{ field: string, message: string }>,
   requestId?: string,
 ): Response {
   return error('VALIDATION_ERROR', 'Validation failed', 422, requestId, { errors })

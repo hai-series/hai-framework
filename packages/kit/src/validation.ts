@@ -18,9 +18,9 @@ export async function validateForm<T extends z.ZodType>(
 ): Promise<FormValidationResult<z.infer<T>>> {
   try {
     const contentType = request.headers.get('content-type') ?? ''
-    
+
     let data: unknown
-    
+
     if (contentType.includes('application/json')) {
       data = await request.json()
     }
@@ -34,9 +34,9 @@ export async function validateForm<T extends z.ZodType>(
         errors: [{ field: '_', message: 'Unsupported content type' }],
       }
     }
-    
+
     const result = schema.safeParse(data)
-    
+
     if (result.success) {
       return {
         valid: true,
@@ -44,12 +44,12 @@ export async function validateForm<T extends z.ZodType>(
         errors: [],
       }
     }
-    
+
     const errors: FormError[] = result.error.errors.map(err => ({
       field: err.path.join('.'),
       message: err.message,
     }))
-    
+
     return {
       valid: false,
       errors,
@@ -72,7 +72,7 @@ export function validateQuery<T extends z.ZodType>(
 ): FormValidationResult<z.infer<T>> {
   const data = Object.fromEntries(url.searchParams)
   const result = schema.safeParse(data)
-  
+
   if (result.success) {
     return {
       valid: true,
@@ -80,12 +80,12 @@ export function validateQuery<T extends z.ZodType>(
       errors: [],
     }
   }
-  
+
   const errors: FormError[] = result.error.errors.map(err => ({
     field: err.path.join('.'),
     message: err.message,
   }))
-  
+
   return {
     valid: false,
     errors,
@@ -100,7 +100,7 @@ export function validateParams<T extends z.ZodType>(
   schema: T,
 ): FormValidationResult<z.infer<T>> {
   const result = schema.safeParse(params)
-  
+
   if (result.success) {
     return {
       valid: true,
@@ -108,12 +108,12 @@ export function validateParams<T extends z.ZodType>(
       errors: [],
     }
   }
-  
+
   const errors: FormError[] = result.error.errors.map(err => ({
     field: err.path.join('.'),
     message: err.message,
   }))
-  
+
   return {
     valid: false,
     errors,

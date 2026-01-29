@@ -1,48 +1,48 @@
 {
-    "name": "@hai/db",
-    "version": "0.1.0",
-    "license": "Apache-2.0",
-    "description": "关系型数据库访问模块 (SQLite/PostgreSQL/MySQL)",
-    "type": "module",
-    "main": "./dist/index.js",
-    "types": "./dist/index.d.ts",
-    "exports": {
-        ".": {
-            "types": "./dist/index.d.ts",
-            "import": "./dist/index.js"
-        }
-    },
-    "files": [
-        "dist"
-    ],
-    "scripts": {
-        "build": "tsup",
-        "dev": "tsup --watch",
-        "test": "vitest run",
-        "test:watch": "vitest",
-        "test:container": "vitest run --testTimeout=120000 tests/postgres.test.ts tests/mysql.test.ts",
-        "typecheck": "tsc --noEmit",
-        "lint": "eslint src",
-        "lint:fix": "eslint src --fix",
-        "clean": "rimraf dist .turbo"
-    },
-    "dependencies": {
-        "@hai/core": "workspace:*",
-        "better-sqlite3": "catalog:",
-        "zod": "catalog:"
-    },
-    "optionalDependencies": {
-        "pg": "catalog:",
-        "mysql2": "catalog:"
-    },
-    "devDependencies": {
-        "@types/better-sqlite3": "catalog:",
-        "@types/node": "catalog:",
-        "@types/pg": "catalog:",
-        "rimraf": "catalog:",
-        "testcontainers": "catalog:",
-        "tsup": "catalog:",
-        "typescript": "catalog:",
-        "vitest": "catalog:"
+  "name": "@hai/db",
+  "type": "module",
+  "version": "0.1.0",
+  "description": "关系型数据库访问模块 (SQLite/PostgreSQL/MySQL)",
+  "license": "Apache-2.0",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
     }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:container": "vitest run --testTimeout=120000 tests/postgres.test.ts tests/mysql.test.ts",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "clean": "rimraf dist .turbo"
+  },
+  "dependencies": {
+    "@hai/core": "workspace:*",
+    "better-sqlite3": "catalog:",
+    "zod": "catalog:"
+  },
+  "optionalDependencies": {
+    "mysql2": "catalog:",
+    "pg": "catalog:"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "catalog:",
+    "@types/node": "catalog:",
+    "@types/pg": "catalog:",
+    "rimraf": "catalog:",
+    "testcontainers": "catalog:",
+    "tsup": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
 }

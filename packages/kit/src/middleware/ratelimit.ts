@@ -28,7 +28,7 @@ export function rateLimitMiddleware(config: RateLimitConfig): Middleware {
   const {
     windowMs,
     maxRequests,
-    keyGenerator = (event) => event.getClientAddress?.() ?? 'unknown',
+    keyGenerator = event => event.getClientAddress?.() ?? 'unknown',
     onLimitReached,
   } = config
 

@@ -10,7 +10,7 @@ import type { Size, Variant } from './types.js'
 
 /**
  * 合并类名
- * 
+ *
  * @param classes - 类名列表
  * @returns 合并后的类名字符串
  */
@@ -62,7 +62,8 @@ export const sizeClasses: Record<Size, string> = {
  * 获取尺寸类名
  */
 export function getSizeClass(size: Size, prefix = 'btn'): string {
-  if (size === 'md') return ''
+  if (size === 'md')
+    return ''
   return `${prefix}-${size}`
 }
 

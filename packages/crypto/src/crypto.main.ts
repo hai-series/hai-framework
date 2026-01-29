@@ -7,26 +7,26 @@
  */
 
 import type {
-    CryptoConfig,
-    CryptoService,
-    PasswordProvider,
-    SM2Provider,
-    SM3Provider,
-    SM4Provider,
+  CryptoConfig,
+  CryptoService,
+  PasswordProvider,
+  SM2Provider,
+  SM3Provider,
+  SM4Provider,
 } from './crypto-types.js'
 
+import { createHaiPasswordProvider } from './provider/hai/crypto-hai-password.js'
 import { createHaiSM2Provider } from './provider/hai/crypto-hai-sm2.js'
 import { createHaiSM3Provider } from './provider/hai/crypto-hai-sm3.js'
 import { createHaiSM4Provider } from './provider/hai/crypto-hai-sm4.js'
-import { createHaiPasswordProvider } from './provider/hai/crypto-hai-password.js'
 
 // =============================================================================
 // 默认配置
 // =============================================================================
 
 const defaultConfig: CryptoConfig = {
-    provider: 'hai',
-    defaultAlgorithm: 'sm',
+  provider: 'hai',
+  defaultAlgorithm: 'sm',
 }
 
 // =============================================================================
@@ -44,56 +44,56 @@ let passwordProvider: PasswordProvider | null = null
 // =============================================================================
 
 function createSM2Provider(config: CryptoConfig): SM2Provider {
-    switch (config.provider) {
-        case 'hai':
-            return createHaiSM2Provider()
-        case 'webcrypto':
-        case 'node':
-        case 'custom':
-            // 可扩展其他实现
-            return createHaiSM2Provider()
-        default:
-            return createHaiSM2Provider()
-    }
+  switch (config.provider) {
+    case 'hai':
+      return createHaiSM2Provider()
+    case 'webcrypto':
+    case 'node':
+    case 'custom':
+      // 可扩展其他实现
+      return createHaiSM2Provider()
+    default:
+      return createHaiSM2Provider()
+  }
 }
 
 function createSM3Provider(config: CryptoConfig): SM3Provider {
-    switch (config.provider) {
-        case 'hai':
-            return createHaiSM3Provider()
-        case 'webcrypto':
-        case 'node':
-        case 'custom':
-            return createHaiSM3Provider()
-        default:
-            return createHaiSM3Provider()
-    }
+  switch (config.provider) {
+    case 'hai':
+      return createHaiSM3Provider()
+    case 'webcrypto':
+    case 'node':
+    case 'custom':
+      return createHaiSM3Provider()
+    default:
+      return createHaiSM3Provider()
+  }
 }
 
 function createSM4Provider(config: CryptoConfig): SM4Provider {
-    switch (config.provider) {
-        case 'hai':
-            return createHaiSM4Provider()
-        case 'webcrypto':
-        case 'node':
-        case 'custom':
-            return createHaiSM4Provider()
-        default:
-            return createHaiSM4Provider()
-    }
+  switch (config.provider) {
+    case 'hai':
+      return createHaiSM4Provider()
+    case 'webcrypto':
+    case 'node':
+    case 'custom':
+      return createHaiSM4Provider()
+    default:
+      return createHaiSM4Provider()
+  }
 }
 
 function createPasswordProvider(config: CryptoConfig): PasswordProvider {
-    switch (config.provider) {
-        case 'hai':
-            return createHaiPasswordProvider()
-        case 'webcrypto':
-        case 'node':
-        case 'custom':
-            return createHaiPasswordProvider()
-        default:
-            return createHaiPasswordProvider()
-    }
+  switch (config.provider) {
+    case 'hai':
+      return createHaiPasswordProvider()
+    case 'webcrypto':
+    case 'node':
+    case 'custom':
+      return createHaiPasswordProvider()
+    default:
+      return createHaiPasswordProvider()
+  }
 }
 
 // =============================================================================
@@ -101,18 +101,18 @@ function createPasswordProvider(config: CryptoConfig): PasswordProvider {
 // =============================================================================
 
 function ensureInitialized() {
-    if (!sm2Provider) {
-        sm2Provider = createSM2Provider(currentConfig)
-    }
-    if (!sm3Provider) {
-        sm3Provider = createSM3Provider(currentConfig)
-    }
-    if (!sm4Provider) {
-        sm4Provider = createSM4Provider(currentConfig)
-    }
-    if (!passwordProvider) {
-        passwordProvider = createPasswordProvider(currentConfig)
-    }
+  if (!sm2Provider) {
+    sm2Provider = createSM2Provider(currentConfig)
+  }
+  if (!sm3Provider) {
+    sm3Provider = createSM3Provider(currentConfig)
+  }
+  if (!sm4Provider) {
+    sm4Provider = createSM4Provider(currentConfig)
+  }
+  if (!passwordProvider) {
+    passwordProvider = createPasswordProvider(currentConfig)
+  }
 }
 
 // =============================================================================
@@ -143,41 +143,41 @@ function ensureInitialized() {
  * ```
  */
 export const crypto: CryptoService = {
-    get sm2(): SM2Provider {
-        ensureInitialized()
-        return sm2Provider!
-    },
+  get sm2(): SM2Provider {
+    ensureInitialized()
+    return sm2Provider!
+  },
 
-    get sm3(): SM3Provider {
-        ensureInitialized()
-        return sm3Provider!
-    },
+  get sm3(): SM3Provider {
+    ensureInitialized()
+    return sm3Provider!
+  },
 
-    get sm4(): SM4Provider {
-        ensureInitialized()
-        return sm4Provider!
-    },
+  get sm4(): SM4Provider {
+    ensureInitialized()
+    return sm4Provider!
+  },
 
-    get password(): PasswordProvider {
-        ensureInitialized()
-        return passwordProvider!
-    },
+  get password(): PasswordProvider {
+    ensureInitialized()
+    return passwordProvider!
+  },
 
-    get config(): CryptoConfig {
-        return { ...currentConfig }
-    },
+  get config(): CryptoConfig {
+    return { ...currentConfig }
+  },
 
-    async init(config?: Partial<CryptoConfig>): Promise<void> {
-        if (config) {
-            currentConfig = { ...defaultConfig, ...config }
-        }
+  async init(config?: Partial<CryptoConfig>): Promise<void> {
+    if (config) {
+      currentConfig = { ...defaultConfig, ...config }
+    }
 
-        // 重新创建 providers
-        sm2Provider = createSM2Provider(currentConfig)
-        sm3Provider = createSM3Provider(currentConfig)
-        sm4Provider = createSM4Provider(currentConfig)
-        passwordProvider = createPasswordProvider(currentConfig)
-    },
+    // 重新创建 providers
+    sm2Provider = createSM2Provider(currentConfig)
+    sm3Provider = createSM3Provider(currentConfig)
+    sm4Provider = createSM4Provider(currentConfig)
+    passwordProvider = createPasswordProvider(currentConfig)
+  },
 }
 
 // =============================================================================
@@ -188,22 +188,22 @@ export const crypto: CryptoService = {
  * 创建新的加密服务实例
  */
 export function createCryptoService(config?: Partial<CryptoConfig>): CryptoService {
-    const serviceConfig: CryptoConfig = { ...defaultConfig, ...config }
-    const sm2 = createSM2Provider(serviceConfig)
-    const sm3 = createSM3Provider(serviceConfig)
-    const sm4 = createSM4Provider(serviceConfig)
-    const password = createPasswordProvider(serviceConfig)
+  const serviceConfig: CryptoConfig = { ...defaultConfig, ...config }
+  const sm2 = createSM2Provider(serviceConfig)
+  const sm3 = createSM3Provider(serviceConfig)
+  const sm4 = createSM4Provider(serviceConfig)
+  const password = createPasswordProvider(serviceConfig)
 
-    return {
-        sm2,
-        sm3,
-        sm4,
-        password,
-        config: serviceConfig,
-        async init(newConfig?: Partial<CryptoConfig>): Promise<void> {
-            if (newConfig) {
-                Object.assign(serviceConfig, newConfig)
-            }
-        },
-    }
+  return {
+    sm2,
+    sm3,
+    sm4,
+    password,
+    config: serviceConfig,
+    async init(newConfig?: Partial<CryptoConfig>): Promise<void> {
+      if (newConfig) {
+        Object.assign(serviceConfig, newConfig)
+      }
+    },
+  }
 }

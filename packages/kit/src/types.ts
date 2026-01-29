@@ -6,8 +6,7 @@
  * =============================================================================
  */
 
-import type { Cookies, RequestEvent, Handle } from '@sveltejs/kit'
-import type { Result } from '@hai/core'
+import type { RequestEvent } from '@sveltejs/kit'
 
 /**
  * 用户会话数据

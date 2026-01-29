@@ -53,6 +53,7 @@
 import type { Result } from '@hai/core'
 import type {
   CacheConfig,
+  CacheConfigInput,
   CacheError,
   CacheProvider,
   CacheService,
@@ -198,7 +199,7 @@ export const cache: CacheService = {
   // -------------------------------------------------------------------------
   // 初始化
   // -------------------------------------------------------------------------
-  async init(config: CacheConfig): Promise<Result<void, CacheError>> {
+  async init(config: CacheConfigInput): Promise<Result<void, CacheError>> {
     // 如果已经初始化，先关闭
     if (currentProvider) {
       await currentProvider.close()

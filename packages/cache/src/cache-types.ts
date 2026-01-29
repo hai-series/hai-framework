@@ -29,13 +29,13 @@
  */
 
 import type { Result } from '@hai/core'
-import type { CacheConfig, CacheErrorCodeType } from './cache-config.js'
+import type { CacheConfig, CacheConfigInput, CacheErrorCodeType } from './cache-config.js'
 
 // =============================================================================
 // 重新导出配置类型（方便使用）
 // =============================================================================
 
-export type { CacheConfig, CacheErrorCodeType, CacheType, RedisClusterNode, RedisSentinelConfig } from './cache-config.js'
+export type { CacheConfig, CacheConfigInput, CacheErrorCodeType, CacheType, RedisClusterNode, RedisSentinelConfig } from './cache-config.js'
 export { CacheConfigSchema, CacheErrorCode, CacheTypeSchema } from './cache-config.js'
 
 // =============================================================================
@@ -615,7 +615,7 @@ export interface ZSetOperations {
  */
 export interface CacheService extends CacheOperations {
   /** 初始化缓存连接 */
-  init: (config: CacheConfig) => Promise<Result<void, CacheError>>
+  init: (config: CacheConfigInput) => Promise<Result<void, CacheError>>
   /** Hash 操作 */
   hash: HashOperations
   /** List 操作 */

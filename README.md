@@ -23,15 +23,15 @@
 
 | 包名           | 描述                                                | 状态 |
 | -------------- | --------------------------------------------------- | ---- |
-| `@hai/core`    | 核心模块：Result 类型、Schema、日志、配置、Provider | ✅    |
-| `@hai/crypto`  | 加密模块：SM2/SM3/SM4 国密算法、Argon2 密码哈希     | ✅    |
-| `@hai/db`      | 数据库：Drizzle ORM、连接管理、迁移工具             | ✅    |
-| `@hai/iam`     | 身份与访问管理：认证、授权、会话、OAuth             | ✅    |
-| `@hai/ai`      | AI 集成：LLM 适配器、MCP 协议、技能系统             | ✅    |
-| `@hai/storage` | 文件存储：本地、S3/OSS/COS 云存储                   | ✅    |
-| `@hai/ui`      | UI 组件：20+ Svelte 5 组件，表单、表格、弹窗等      | ✅    |
-| `@hai/kit`     | SvelteKit 集成：Handle Hook、中间件、守卫           | ✅    |
-| `@hai/cli`     | CLI 工具：项目脚手架、代码生成器                    | ✅    |
+| `@hai/core`    | 核心模块：Result 类型、Schema、日志、配置、Provider | ✅   |
+| `@hai/crypto`  | 加密模块：SM2/SM3/SM4 国密算法、Argon2 密码哈希     | ✅   |
+| `@hai/db`      | 数据库：Drizzle ORM、连接管理、迁移工具             | ✅   |
+| `@hai/iam`     | 身份与访问管理：认证、授权、会话、OAuth             | ✅   |
+| `@hai/ai`      | AI 集成：LLM 适配器、MCP 协议、技能系统             | ✅   |
+| `@hai/storage` | 文件存储：本地、S3/OSS/COS 云存储                   | ✅   |
+| `@hai/ui`      | UI 组件：20+ Svelte 5 组件，表单、表格、弹窗等      | ✅   |
+| `@hai/kit`     | SvelteKit 集成：Handle Hook、中间件、守卫           | ✅   |
+| `@hai/cli`     | CLI 工具：项目脚手架、代码生成器                    | ✅   |
 
 ## 🏗️ 架构特性
 
@@ -102,11 +102,12 @@ console.log(config.app.name)
 ### 错误处理
 
 ```typescript
-import { Ok, Err, fromPromise } from '@hai/core'
+import { Err, fromPromise, Ok } from '@hai/core'
 
 // Result 类型
 function divide(a: number, b: number): Result<number, string> {
-  if (b === 0) return Err('Division by zero')
+  if (b === 0)
+    return Err('Division by zero')
   return Ok(a / b)
 }
 
@@ -124,7 +125,7 @@ const result = divide(10, 2)
 
 ```typescript
 // src/hooks.server.ts
-import { createHandle, authGuard, rateLimitMiddleware } from '@hai/kit'
+import { authGuard, createHandle, rateLimitMiddleware } from '@hai/kit'
 
 export const handle = createHandle({
   logging: true,
@@ -142,7 +143,7 @@ export const handle = createHandle({
 ```svelte
 <script lang="ts">
   import { Button, Input, Modal } from '@hai/ui'
-  
+
   let open = $state(false)
   let name = $state('')
 </script>
@@ -161,8 +162,8 @@ export const handle = createHandle({
 ### AI 技能
 
 ```typescript
-import { z } from 'zod'
 import { ai, defineSkill } from '@hai/ai'
+import { z } from 'zod'
 
 const searchSkill = defineSkill({
   name: 'search',

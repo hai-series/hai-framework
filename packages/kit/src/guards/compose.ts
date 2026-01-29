@@ -15,12 +15,12 @@ export function allGuards(...guards: RouteGuard[]): RouteGuard {
   return async (event, session): Promise<GuardResult> => {
     for (const guard of guards) {
       const result = await guard(event, session)
-      
+
       if (!result.allowed) {
         return result
       }
     }
-    
+
     return { allowed: true }
   }
 }
@@ -31,17 +31,17 @@ export function allGuards(...guards: RouteGuard[]): RouteGuard {
 export function anyGuard(...guards: RouteGuard[]): RouteGuard {
   return async (event, session): Promise<GuardResult> => {
     let lastResult: GuardResult = { allowed: false, message: 'No guards passed' }
-    
+
     for (const guard of guards) {
       const result = await guard(event, session)
-      
+
       if (result.allowed) {
         return result
       }
-      
+
       lastResult = result
     }
-    
+
     return lastResult
   }
 }
@@ -49,10 +49,10 @@ export function anyGuard(...guards: RouteGuard[]): RouteGuard {
 /**
  * 取反守卫
  */
-export function notGuard(guard: RouteGuard, options: { redirect?: string; message?: string } = {}): RouteGuard {
+export function notGuard(guard: RouteGuard, options: { redirect?: string, message?: string } = {}): RouteGuard {
   return async (event, session): Promise<GuardResult> => {
     const result = await guard(event, session)
-    
+
     if (result.allowed) {
       return {
         allowed: false,
@@ -60,7 +60,7 @@ export function notGuard(guard: RouteGuard, options: { redirect?: string; messag
         message: options.message ?? 'Access denied',
       }
     }
-    
+
     return { allowed: true }
   }
 }
@@ -74,11 +74,11 @@ export function conditionalGuard(
 ): RouteGuard {
   return async (event, session): Promise<GuardResult> => {
     const shouldApply = await condition(event, session)
-    
+
     if (!shouldApply) {
       return { allowed: true }
     }
-    
+
     return guard(event, session)
   }
 }

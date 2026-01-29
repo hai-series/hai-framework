@@ -6,7 +6,7 @@
  * =============================================================================
  */
 
-import type { GuardResult, RouteGuard, SessionData } from '../types.js'
+import type { GuardResult, RouteGuard } from '../types.js'
 
 /**
  * 角色守卫配置
@@ -27,7 +27,7 @@ export interface RoleGuardConfig {
  */
 export function roleGuard(config: RoleGuardConfig): RouteGuard {
   const { roles, requireAll = false, forbiddenUrl = '/403', apiMode = false } = config
-  
+
   return (event, session): GuardResult => {
     if (!session) {
       return {
@@ -36,13 +36,13 @@ export function roleGuard(config: RoleGuardConfig): RouteGuard {
         status: 401,
       }
     }
-    
+
     const userRoles = session.roles ?? []
-    
+
     const hasRole = requireAll
       ? roles.every(role => userRoles.includes(role))
       : roles.some(role => userRoles.includes(role))
-    
+
     if (!hasRole) {
       if (apiMode) {
         return {
@@ -51,13 +51,13 @@ export function roleGuard(config: RoleGuardConfig): RouteGuard {
           status: 403,
         }
       }
-      
+
       return {
         allowed: false,
         redirect: forbiddenUrl,
       }
     }
-    
+
     return { allowed: true }
   }
 }

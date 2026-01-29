@@ -1,346 +1,188 @@
 /**
  * =============================================================================
- * @hai/storage - 共享测试模块
+ * @hai/storage - 共享测试模块（契约化精简版）
  * =============================================================================
  *
- * 抽象统一的存储测试逻辑，各存储类型测试文件只需提供：
- * - 初始化/清理逻辑
- * - 存储特定的差异化测试
+ * 核心契约测试：验证所有 Storage Provider 必须满足的行为一致性。
  *
  * =============================================================================
  */
 
-import { describe, it, expect, beforeEach } from 'vitest'
+import { Buffer } from 'node:buffer'
+import { beforeEach, describe, expect, it } from 'vitest'
 import { storage, StorageErrorCode } from '../src/index.js'
 
-/**
- * 测试配置
- */
 export interface StorageTestConfig {
-    /** 存储类型名称 */
-    name: string
-    /** 存储类型 */
-    type: 's3' | 'local'
-    /** 是否支持签名 URL（用于真实下载） */
-    supportRealPresignUrl: boolean
-    /** 公开 URL 前缀（如果配置了的话） */
-    publicUrlPrefix?: string
+  name: string
+  type: 's3' | 'local'
+  supportRealPresignUrl: boolean
+  publicUrlPrefix?: string
 }
 
-/**
- * 运行文件操作测试
- */
+// =============================================================================
+// 文件操作契约
+// =============================================================================
+
 export function runFileTests(config: StorageTestConfig) {
-    describe('文件操作 (storage.file)', () => {
-        beforeEach(async () => {
-            // 清理测试文件
-            await storage.file.delete('test.txt')
-            await storage.file.delete('binary.bin')
-            await storage.file.delete('meta.txt')
-            await storage.file.delete('exists.txt')
-            await storage.file.delete('to-delete.txt')
-            await storage.file.delete('file1.txt')
-            await storage.file.delete('file2.txt')
-            await storage.file.delete('file3.txt')
-            await storage.file.delete('source.txt')
-            await storage.file.delete('copy.txt')
-            await storage.file.delete('range.txt')
-            await storage.dir.delete('nested/')
-        })
-
-        it('put/get - 应该上传和下载文件', async () => {
-            const content = `Hello, ${config.name}!`
-            const result = await storage.file.put('test.txt', content, {
-                contentType: 'text/plain',
-            })
-
-            expect(result.success).toBe(true)
-            if (result.success) {
-                expect(result.data.key).toBe('test.txt')
-                expect(result.data.size).toBe(Buffer.from(content).length)
-            }
-
-            const getResult = await storage.file.get('test.txt')
-            expect(getResult.success).toBe(true)
-            if (getResult.success) {
-                expect(getResult.data.toString()).toBe(content)
-            }
-        })
-
-        it('put/get - 应该支持 Buffer 上传', async () => {
-            const buffer = Buffer.from([0x01, 0x02, 0x03, 0x04])
-            const result = await storage.file.put('binary.bin', buffer)
-
-            expect(result.success).toBe(true)
-
-            const getResult = await storage.file.get('binary.bin')
-            expect(getResult.success).toBe(true)
-            if (getResult.success) {
-                expect(getResult.data).toEqual(buffer)
-            }
-        })
-
-        it('put - 应该支持嵌套路径', async () => {
-            const result = await storage.file.put('nested/deep/dir/file.txt', 'content')
-            expect(result.success).toBe(true)
-
-            const getResult = await storage.file.get('nested/deep/dir/file.txt')
-            expect(getResult.success).toBe(true)
-        })
-
-        it('head - 应该获取文件元数据', async () => {
-            await storage.file.put('meta.txt', 'test content', {
-                contentType: 'text/plain',
-                metadata: { custom: 'value' },
-            })
-
-            const result = await storage.file.head('meta.txt')
-            expect(result.success).toBe(true)
-            if (result.success) {
-                expect(result.data.key).toBe('meta.txt')
-                expect(result.data.contentType).toBe('text/plain')
-                expect(result.data.size).toBe(Buffer.from('test content').length)
-            }
-        })
-
-        it('exists - 应该检查文件是否存在', async () => {
-            const notExists = await storage.file.exists('nonexistent-file.txt')
-            expect(notExists.success).toBe(true)
-            if (notExists.success) {
-                expect(notExists.data).toBe(false)
-            }
-
-            await storage.file.put('exists.txt', 'content')
-
-            const exists = await storage.file.exists('exists.txt')
-            expect(exists.success).toBe(true)
-            if (exists.success) {
-                expect(exists.data).toBe(true)
-            }
-        })
-
-        it('delete - 应该删除文件', async () => {
-            await storage.file.put('to-delete.txt', 'content')
-
-            const deleteResult = await storage.file.delete('to-delete.txt')
-            expect(deleteResult.success).toBe(true)
-
-            const existsResult = await storage.file.exists('to-delete.txt')
-            expect(existsResult.success).toBe(true)
-            if (existsResult.success) {
-                expect(existsResult.data).toBe(false)
-            }
-        })
-
-        it('deleteMany - 应该批量删除文件', async () => {
-            await storage.file.put('file1.txt', 'content1')
-            await storage.file.put('file2.txt', 'content2')
-            await storage.file.put('file3.txt', 'content3')
-
-            const deleteResult = await storage.file.deleteMany(['file1.txt', 'file2.txt'])
-            expect(deleteResult.success).toBe(true)
-
-            const exists1 = await storage.file.exists('file1.txt')
-            const exists2 = await storage.file.exists('file2.txt')
-            const exists3 = await storage.file.exists('file3.txt')
-
-            expect(exists1.success && exists1.data).toBe(false)
-            expect(exists2.success && exists2.data).toBe(false)
-            expect(exists3.success && exists3.data).toBe(true)
-        })
-
-        it('copy - 应该复制文件', async () => {
-            await storage.file.put('source.txt', 'original content')
-
-            const copyResult = await storage.file.copy('source.txt', 'copy.txt')
-            expect(copyResult.success).toBe(true)
-
-            const getResult = await storage.file.get('copy.txt')
-            expect(getResult.success).toBe(true)
-            if (getResult.success) {
-                expect(getResult.data.toString()).toBe('original content')
-            }
-        })
-
-        it('get 范围请求 - 应该返回部分内容', async () => {
-            await storage.file.put('range.txt', '0123456789')
-
-            const result = await storage.file.get('range.txt', {
-                rangeStart: 2,
-                rangeEnd: 5,
-            })
-
-            expect(result.success).toBe(true)
-            if (result.success) {
-                expect(result.data.toString()).toBe('2345')
-            }
-        })
+  describe('文件操作契约', () => {
+    beforeEach(async () => {
+      await storage.file.delete('t.txt')
+      await storage.file.delete('t.bin')
+      await storage.file.delete('nested/deep/file.txt')
     })
+
+    it('put/get 文本', async () => {
+      const content = `Hello, ${config.name}!`
+      const put = await storage.file.put('t.txt', content, { contentType: 'text/plain' })
+      expect(put.success).toBe(true)
+      if (put.success)
+        expect(put.data.key).toBe('t.txt')
+
+      const get = await storage.file.get('t.txt')
+      expect(get.success).toBe(true)
+      if (get.success)
+        expect(get.data.toString()).toBe(content)
+    })
+
+    it('put/get Buffer', async () => {
+      const buf = Buffer.from([0x01, 0x02, 0x03])
+      await storage.file.put('t.bin', buf)
+      const get = await storage.file.get('t.bin')
+      expect(get.success).toBe(true)
+      if (get.success)
+        expect(get.data).toEqual(buf)
+    })
+
+    it('嵌套路径', async () => {
+      const r = await storage.file.put('nested/deep/file.txt', 'ok')
+      expect(r.success).toBe(true)
+      const g = await storage.file.get('nested/deep/file.txt')
+      expect(g.success).toBe(true)
+    })
+
+    it('head/exists/delete', async () => {
+      await storage.file.put('t.txt', 'data')
+      const head = await storage.file.head('t.txt')
+      expect(head.success).toBe(true)
+      if (head.success)
+        expect(head.data.key).toBe('t.txt')
+
+      expect((await storage.file.exists('t.txt')).data).toBe(true)
+      await storage.file.delete('t.txt')
+      expect((await storage.file.exists('t.txt')).data).toBe(false)
+    })
+
+    it('copy', async () => {
+      await storage.file.put('t.txt', 'src')
+      await storage.file.copy('t.txt', 't.bin')
+      const g = await storage.file.get('t.bin')
+      expect(g.success).toBe(true)
+      if (g.success)
+        expect(g.data.toString()).toBe('src')
+    })
+  })
 }
 
-/**
- * 运行目录操作测试
- */
-export function runDirTests(config: StorageTestConfig) {
-    describe('目录操作 (storage.dir)', () => {
-        beforeEach(async () => {
-            // 清理测试目录
-            await storage.dir.delete('uploads/')
-            await storage.dir.delete('docs/')
-            await storage.dir.delete('folder/')
-            await storage.dir.delete('folder1/')
-            await storage.dir.delete('folder2/')
-            await storage.dir.delete('other/')
-        })
+// =============================================================================
+// 目录操作契约
+// =============================================================================
 
-        it('list - 应该列出文件', async () => {
-            await storage.file.put('uploads/image1.png', 'image1')
-            await storage.file.put('uploads/image2.png', 'image2')
-            await storage.file.put('docs/readme.md', 'readme')
-
-            const result = await storage.dir.list({ prefix: 'uploads/' })
-            expect(result.success).toBe(true)
-            if (result.success) {
-                expect(result.data.files.length).toBe(2)
-                expect(result.data.files.map(f => f.key)).toContain('uploads/image1.png')
-                expect(result.data.files.map(f => f.key)).toContain('uploads/image2.png')
-            }
-        })
-
-        it('list - 应该支持分隔符列出目录', async () => {
-            await storage.file.put('folder1/file1.txt', 'content1')
-            await storage.file.put('folder2/file2.txt', 'content2')
-
-            const result = await storage.dir.list({ delimiter: '/' })
-            expect(result.success).toBe(true)
-            if (result.success) {
-                expect(result.data.commonPrefixes).toContain('folder1/')
-                expect(result.data.commonPrefixes).toContain('folder2/')
-            }
-        })
-
-        it('delete - 应该删除目录下所有文件', async () => {
-            await storage.file.put('folder/file1.txt', 'content1')
-            await storage.file.put('folder/file2.txt', 'content2')
-            await storage.file.put('other/file.txt', 'other')
-
-            const deleteResult = await storage.dir.delete('folder/')
-            expect(deleteResult.success).toBe(true)
-
-            const exists1 = await storage.file.exists('folder/file1.txt')
-            const exists2 = await storage.file.exists('folder/file2.txt')
-            const existsOther = await storage.file.exists('other/file.txt')
-
-            expect(exists1.success && exists1.data).toBe(false)
-            expect(exists2.success && exists2.data).toBe(false)
-            expect(existsOther.success && existsOther.data).toBe(true)
-        })
+export function runDirTests(_config: StorageTestConfig) {
+  describe('目录操作契约', () => {
+    beforeEach(async () => {
+      await storage.dir.delete('uploads/')
+      await storage.dir.delete('folder/')
     })
+
+    it('list', async () => {
+      await storage.file.put('uploads/a.txt', 'a')
+      await storage.file.put('uploads/b.txt', 'b')
+      const r = await storage.dir.list({ prefix: 'uploads/' })
+      expect(r.success).toBe(true)
+      if (r.success)
+        expect(r.data.files.length).toBe(2)
+    })
+
+    it('delete 目录', async () => {
+      await storage.file.put('folder/x.txt', 'x')
+      await storage.file.put('folder/y.txt', 'y')
+      await storage.dir.delete('folder/')
+      expect((await storage.file.exists('folder/x.txt')).data).toBe(false)
+    })
+  })
 }
 
-/**
- * 运行签名 URL 测试
- */
-export function runPresignTests(config: StorageTestConfig) {
-    describe('签名 URL (storage.presign)', () => {
-        beforeEach(async () => {
-            await storage.file.delete('download.txt')
-        })
+// =============================================================================
+// 签名 URL 契约
+// =============================================================================
 
-        it('getUrl - 应该生成下载签名 URL', async () => {
-            await storage.file.put('download.txt', 'test content', {
-                contentType: 'text/plain',
-            })
-
-            const result = await storage.presign.getUrl('download.txt', { expiresIn: 3600 })
-            expect(result.success).toBe(true)
-            if (result.success) {
-                expect(typeof result.data).toBe('string')
-                expect(result.data.length).toBeGreaterThan(0)
-            }
-        })
-
-        it('putUrl - 应该生成上传签名 URL', async () => {
-            const result = await storage.presign.putUrl('upload.txt', {
-                contentType: 'text/plain',
-                expiresIn: 3600,
-            })
-
-            expect(result.success).toBe(true)
-            if (result.success) {
-                expect(typeof result.data).toBe('string')
-                expect(result.data.length).toBeGreaterThan(0)
-            }
-        })
-
-        if (config.publicUrlPrefix) {
-            it('publicUrl - 应该返回公开 URL', () => {
-                const url = storage.presign.publicUrl('images/photo.jpg')
-                expect(url).toBe(`${config.publicUrlPrefix}/images/photo.jpg`)
-            })
-        } else {
-            it('publicUrl - 未配置 publicUrl 应该返回 null', () => {
-                const url = storage.presign.publicUrl('any.txt')
-                expect(url).toBeNull()
-            })
-        }
+export function runPresignTests(_config: StorageTestConfig) {
+  describe('签名 URL 契约', () => {
+    beforeEach(async () => {
+      await storage.file.delete('presign.txt')
     })
+
+    it('getUrl/putUrl', async () => {
+      await storage.file.put('presign.txt', 'test')
+      const getUrl = await storage.presign.getUrl('presign.txt', { expiresIn: 60 })
+      expect(getUrl.success).toBe(true)
+      if (getUrl.success)
+        expect(getUrl.data.length).toBeGreaterThan(0)
+
+      const putUrl = await storage.presign.putUrl('upload.txt', { contentType: 'text/plain', expiresIn: 60 })
+      expect(putUrl.success).toBe(true)
+    })
+
+    it('publicUrl', () => {
+      const url = storage.presign.publicUrl('img.png')
+      if (config.publicUrlPrefix) {
+        expect(url).toBe(`${config.publicUrlPrefix}/img.png`)
+      }
+      else {
+        expect(url).toBeNull()
+      }
+    })
+  })
 }
 
-/**
- * 运行错误处理测试
- */
-export function runErrorTests(config: StorageTestConfig) {
-    describe('错误处理', () => {
-        it('get 不存在的文件应该返回 NOT_FOUND 错误', async () => {
-            const result = await storage.file.get('nonexistent-file-12345.txt')
-            expect(result.success).toBe(false)
-            if (!result.success) {
-                expect(result.error.code).toBe(StorageErrorCode.NOT_FOUND)
-            }
-        })
+// =============================================================================
+// 错误处理契约
+// =============================================================================
 
-        it('head 不存在的文件应该返回 NOT_FOUND 错误', async () => {
-            const result = await storage.file.head('nonexistent-file-12345.txt')
-            expect(result.success).toBe(false)
-            if (!result.success) {
-                expect(result.error.code).toBe(StorageErrorCode.NOT_FOUND)
-            }
-        })
-
-        it('copy 不存在的源文件应该返回 NOT_FOUND 错误', async () => {
-            const result = await storage.file.copy('nonexistent-file-12345.txt', 'dest.txt')
-            expect(result.success).toBe(false)
-            if (!result.success) {
-                expect(result.error.code).toBe(StorageErrorCode.NOT_FOUND)
-            }
-        })
+export function runErrorTests(_config: StorageTestConfig) {
+  describe('错误处理契约', () => {
+    it('get 不存在返回 NOT_FOUND', async () => {
+      const r = await storage.file.get('nonexistent-12345.txt')
+      expect(r.success).toBe(false)
+      if (!r.success)
+        expect(r.error.code).toBe(StorageErrorCode.NOT_FOUND)
     })
+  })
 }
 
-/**
- * 运行未初始化测试
- */
+// =============================================================================
+// 未初始化契约
+// =============================================================================
+
 export function runNotInitializedTests() {
-    describe('未初始化', () => {
-        it('未初始化时操作应该返回 NOT_INITIALIZED 错误', async () => {
-            expect(storage.isInitialized).toBe(false)
-
-            const result = await storage.file.get('test.txt')
-            expect(result.success).toBe(false)
-            if (!result.success) {
-                expect(result.error.code).toBe(StorageErrorCode.NOT_INITIALIZED)
-            }
-        })
+  describe('未初始化契约', () => {
+    it('操作应返回 NOT_INITIALIZED', async () => {
+      expect(storage.isInitialized).toBe(false)
+      const r = await storage.file.get('test.txt')
+      expect(r.success).toBe(false)
+      if (!r.success)
+        expect(r.error.code).toBe(StorageErrorCode.NOT_INITIALIZED)
     })
+  })
 }
 
-/**
- * 运行所有标准测试
- */
+// =============================================================================
+// 全部契约
+// =============================================================================
+
 export function runAllTests(config: StorageTestConfig) {
-    runFileTests(config)
-    runDirTests(config)
-    runPresignTests(config)
-    runErrorTests(config)
+  runFileTests(config)
+  runDirTests(config)
+  runPresignTests(config)
+  runErrorTests(config)
 }

@@ -9,41 +9,6 @@
  * =============================================================================
  */
 
-// 类型
-export type {
-  AlertProps,
-  Alignment,
-  AvatarProps,
-  BadgeProps,
-  BreadcrumbItem,
-  BreadcrumbProps,
-  ButtonProps,
-  CardProps,
-  CheckboxProps,
-  DrawerProps,
-  DropdownItem,
-  DropdownProps,
-  InputProps,
-  ModalProps,
-  PaginationProps,
-  Position,
-  ProgressProps,
-  RadioProps,
-  SelectOption,
-  SelectProps,
-  Size,
-  SpinnerProps,
-  SwitchProps,
-  TableColumn,
-  TableProps,
-  TabItem,
-  TabsProps,
-  TextareaProps,
-  ToastProps,
-  TooltipProps,
-  Variant,
-} from './types.js'
-
 // 组件
 export {
   Alert,
@@ -71,6 +36,41 @@ export {
 
 // Toast 状态
 export { toast, type ToastItem } from './toast.svelte.js'
+
+// 类型
+export type {
+  AlertProps,
+  Alignment,
+  AvatarProps,
+  BadgeProps,
+  BreadcrumbItem,
+  BreadcrumbProps,
+  ButtonProps,
+  CardProps,
+  CheckboxProps,
+  DrawerProps,
+  DropdownItem,
+  DropdownProps,
+  InputProps,
+  ModalProps,
+  PaginationProps,
+  Position,
+  ProgressProps,
+  RadioProps,
+  SelectOption,
+  SelectProps,
+  Size,
+  SpinnerProps,
+  SwitchProps,
+  TabItem,
+  TableColumn,
+  TableProps,
+  TabsProps,
+  TextareaProps,
+  ToastProps,
+  TooltipProps,
+  Variant,
+} from './types.js'
 
 // 工具
 export {

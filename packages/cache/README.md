@@ -27,21 +27,21 @@ pnpm add @hai/cache
 ### 1. 初始化缓存
 
 ```ts
-import { cache, initCache, closeCache } from '@hai/cache'
+import { cache, closeCache, initCache } from '@hai/cache'
 
 // Redis 单机模式
 await initCache({
-    type: 'redis',
-    host: 'localhost',
-    port: 6379,
-    password: 'secret',  // 可选
-    db: 0                // 可选，默认 0
+  type: 'redis',
+  host: 'localhost',
+  port: 6379,
+  password: 'secret', // 可选
+  db: 0 // 可选，默认 0
 })
 
 // 或使用 URL
 await initCache({
-    type: 'redis',
-    url: 'redis://:password@localhost:6379/0'
+  type: 'redis',
+  url: 'redis://:password@localhost:6379/0'
 })
 ```
 
@@ -52,9 +52,9 @@ await initCache({
 await cache.set('user:1', { name: '张三', age: 25 }, { ex: 3600 })
 
 // 获取值
-const result = await cache.get<{ name: string; age: number }>('user:1')
+const result = await cache.get<{ name: string, age: number }>('user:1')
 if (result.success && result.data) {
-    // 使用 result.data
+  // 使用 result.data
 }
 
 // 删除键
@@ -116,20 +116,16 @@ const isMember = await cache.set_.sismember('tags', 'redis')
 const members = await cache.set_.smembers<string>('tags')
 
 // 集合运算
-await cache.set_.sinter<string>('tags1', 'tags2')  // 交集
-await cache.set_.sunion<string>('tags1', 'tags2')  // 并集
-await cache.set_.sdiff<string>('tags1', 'tags2')   // 差集
+await cache.set_.sinter<string>('tags1', 'tags2') // 交集
+await cache.set_.sunion<string>('tags1', 'tags2') // 并集
+await cache.set_.sdiff<string>('tags1', 'tags2') // 差集
 ```
 
 ### 6. SortedSet 操作
 
 ```ts
 // 添加成员（排行榜）
-await cache.zset.zadd('leaderboard', 
-    { score: 1000, member: 'player1' },
-    { score: 800, member: 'player2' },
-    { score: 1200, member: 'player3' }
-)
+await cache.zset.zadd('leaderboard', { score: 1000, member: 'player1' }, { score: 800, member: 'player2' }, { score: 1200, member: 'player3' })
 
 // 获取排行榜（从高到低）
 const top10 = await cache.zset.zrevrange('leaderboard', 0, 9, true)
@@ -152,7 +148,7 @@ await closeCache()
 
 ## API 参考
 
-### 基础操作 (cache.*)
+### 基础操作 (cache.\*)
 
 | 方法                        | 说明               |
 | --------------------------- | ------------------ |
@@ -174,7 +170,7 @@ await closeCache()
 | `scan(cursor, options?)`    | 扫描键             |
 | `type(key)`                 | 获取值类型         |
 
-### Hash 操作 (cache.hash.*)
+### Hash 操作 (cache.hash.\*)
 
 | 方法                             | 说明             |
 | -------------------------------- | ---------------- |
@@ -190,7 +186,7 @@ await closeCache()
 | `hmget<T>(key, ...fields)`       | 批量获取字段值   |
 | `hincrBy(key, field, increment)` | 字段自增         |
 
-### List 操作 (cache.list.*)
+### List 操作 (cache.list.\*)
 
 | 方法                          | 说明             |
 | ----------------------------- | ---------------- |
@@ -206,7 +202,7 @@ await closeCache()
 | `blpop<T>(timeout, ...keys)`  | 阻塞式左侧弹出   |
 | `brpop<T>(timeout, ...keys)`  | 阻塞式右侧弹出   |
 
-### Set 操作 (cache.set_.*)
+### Set 操作 (cache.set\_.\*)
 
 | 方法                          | 说明           |
 | ----------------------------- | -------------- |
@@ -221,7 +217,7 @@ await closeCache()
 | `sunion<T>(...keys)`          | 集合并集       |
 | `sdiff<T>(...keys)`           | 集合差集       |
 
-### SortedSet 操作 (cache.zset.*)
+### SortedSet 操作 (cache.zset.\*)
 
 | 方法                                       | 说明                     |
 | ------------------------------------------ | ------------------------ |
@@ -243,33 +239,33 @@ await closeCache()
 
 ```ts
 interface CacheConfig {
-    type: 'redis'
-    
-    // 连接配置（多种方式）
-    url?: string                    // 连接 URL
-    host?: string                   // 主机（默认 localhost）
-    port?: number                   // 端口（默认 6379）
-    password?: string               // 密码
-    db?: number                     // 数据库索引（默认 0）
-    
-    // 集群模式
-    cluster?: Array<{ host: string; port: number }>
-    
-    // 哨兵模式
-    sentinel?: {
-        sentinels: Array<{ host: string; port: number }>
-        name: string
-    }
-    
-    // 通用选项
-    connectTimeout?: number         // 连接超时（默认 10000）
-    commandTimeout?: number         // 命令超时（默认 5000）
-    keyPrefix?: string              // 键前缀
-    tls?: boolean                   // 是否启用 TLS
-    maxRetries?: number             // 最大重试次数（默认 3）
-    retryDelay?: number             // 重试延迟（默认 50）
-    readOnly?: boolean              // 只读模式
-    silent?: boolean                // 静默模式
+  type: 'redis'
+
+  // 连接配置（多种方式）
+  url?: string // 连接 URL
+  host?: string // 主机（默认 localhost）
+  port?: number // 端口（默认 6379）
+  password?: string // 密码
+  db?: number // 数据库索引（默认 0）
+
+  // 集群模式
+  cluster?: Array<{ host: string, port: number }>
+
+  // 哨兵模式
+  sentinel?: {
+    sentinels: Array<{ host: string, port: number }>
+    name: string
+  }
+
+  // 通用选项
+  connectTimeout?: number // 连接超时（默认 10000）
+  commandTimeout?: number // 命令超时（默认 5000）
+  keyPrefix?: string // 键前缀
+  tls?: boolean // 是否启用 TLS
+  maxRetries?: number // 最大重试次数（默认 3）
+  retryDelay?: number // 重试延迟（默认 50）
+  readOnly?: boolean // 只读模式
+  silent?: boolean // 静默模式
 }
 ```
 
@@ -283,22 +279,23 @@ import { cache, CacheErrorCode } from '@hai/cache'
 const result = await cache.get('key')
 
 if (result.success) {
-    // 使用 result.data
-} else {
-    // 处理错误：result.error.message
-    
-    // 根据错误码处理
-    switch (result.error.code) {
-        case CacheErrorCode.NOT_INITIALIZED:
-            // 处理错误：请先调用 initCache()
-            break
-        case CacheErrorCode.CONNECTION_FAILED:
-            // 处理错误：Redis 连接失败
-            break
-        case CacheErrorCode.OPERATION_FAILED:
-            // 处理错误：操作执行失败
-            break
-    }
+  // 使用 result.data
+}
+else {
+  // 处理错误：result.error.message
+
+  // 根据错误码处理
+  switch (result.error.code) {
+    case CacheErrorCode.NOT_INITIALIZED:
+      // 处理错误：请先调用 initCache()
+      break
+    case CacheErrorCode.CONNECTION_FAILED:
+      // 处理错误：Redis 连接失败
+      break
+    case CacheErrorCode.OPERATION_FAILED:
+      // 处理错误：操作执行失败
+      break
+  }
 }
 ```
 

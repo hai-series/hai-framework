@@ -6,7 +6,7 @@
  * =============================================================================
  */
 
-import type { GuardResult, RouteGuard, SessionData } from '../types.js'
+import type { GuardResult, RouteGuard } from '../types.js'
 
 /**
  * 认证守卫配置
@@ -23,7 +23,7 @@ export interface AuthGuardConfig {
  */
 export function authGuard(config: AuthGuardConfig = {}): RouteGuard {
   const { loginUrl = '/login', apiMode = false } = config
-  
+
   return (event, session): GuardResult => {
     if (!session) {
       if (apiMode) {
@@ -33,16 +33,16 @@ export function authGuard(config: AuthGuardConfig = {}): RouteGuard {
           status: 401,
         }
       }
-      
+
       // 保存原始 URL 用于登录后重定向
       const returnUrl = encodeURIComponent(event.url.pathname + event.url.search)
-      
+
       return {
         allowed: false,
         redirect: `${loginUrl}?returnUrl=${returnUrl}`,
       }
     }
-    
+
     return { allowed: true }
   }
 }

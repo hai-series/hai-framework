@@ -1,60 +1,60 @@
 {
-    "name": "@hai/core",
-    "version": "0.1.0",
-    "license": "Apache-2.0",
-    "type": "module",
-    "description": "hai Admin Framework - Core utilities, types and functions",
-    "main": "./dist/index.js",
-    "types": "./dist/index.d.ts",
-    "exports": {
-        ".": {
-            "types": "./dist/index.d.ts",
-            "browser": "./dist/browser.js",
-            "node": "./dist/node.js",
-            "default": "./dist/index.js"
-        },
-        "./node": {
-            "types": "./dist/node.d.ts",
-            "import": "./dist/node.js"
-        },
-        "./browser": {
-            "types": "./dist/browser.d.ts",
-            "import": "./dist/browser.js"
-        }
+  "name": "@hai/core",
+  "type": "module",
+  "version": "0.1.0",
+  "description": "hai Admin Framework - Core utilities, types and functions",
+  "license": "Apache-2.0",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "browser": "./dist/browser.js",
+      "node": "./dist/node.js",
+      "default": "./dist/index.js"
     },
-    "files": [
-        "dist"
-    ],
-    "scripts": {
-        "build": "tsup",
-        "dev": "tsup --watch",
-        "test": "vitest run",
-        "test:watch": "vitest",
-        "test:coverage": "vitest run --coverage",
-        "typecheck": "tsc --noEmit",
-        "lint": "eslint src",
-        "lint:fix": "eslint src --fix",
-        "clean": "rimraf dist .turbo"
+    "./node": {
+      "types": "./dist/node.d.ts",
+      "import": "./dist/node.js"
     },
-    "dependencies": {
-        "nanoid": "catalog:",
-        "zod": "catalog:"
-    },
-    "optionalDependencies": {
-        "loglevel": "catalog:",
-        "pino": "catalog:",
-        "yaml": "catalog:"
-    },
-    "devDependencies": {
-        "@types/node": "catalog:",
-        "eslint-plugin-format": "^1.3.1",
-        "loglevel": "catalog:",
-        "pino": "catalog:",
-        "pino-pretty": "catalog:",
-        "rimraf": "catalog:",
-        "tsup": "catalog:",
-        "typescript": "catalog:",
-        "vitest": "catalog:",
-        "yaml": "catalog:"
+    "./browser": {
+      "types": "./dist/browser.d.ts",
+      "import": "./dist/browser.js"
     }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "clean": "rimraf dist .turbo"
+  },
+  "dependencies": {
+    "nanoid": "catalog:",
+    "zod": "catalog:"
+  },
+  "optionalDependencies": {
+    "loglevel": "catalog:",
+    "pino": "catalog:",
+    "yaml": "catalog:"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "eslint-plugin-format": "catalog:",
+    "loglevel": "catalog:",
+    "pino": "catalog:",
+    "pino-pretty": "catalog:",
+    "rimraf": "catalog:",
+    "tsup": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:",
+    "yaml": "catalog:"
+  }
 }

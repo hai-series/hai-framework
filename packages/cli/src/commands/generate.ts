@@ -4,12 +4,12 @@
  * =============================================================================
  */
 
+import type { GenerateOptions, GeneratorType, TemplateContext } from '../types.js'
 import path from 'node:path'
 import chalk from 'chalk'
 import ora from 'ora'
 import prompts from 'prompts'
-import type { GenerateOptions, GeneratorType, TemplateContext } from '../types.js'
-import { createTemplateContext, writeFile, fileExists } from '../utils.js'
+import { createTemplateContext, writeFile } from '../utils.js'
 import { detectProject } from './create.js'
 
 /**
@@ -90,7 +90,7 @@ export async function generate(options: GenerateOptions): Promise<void> {
     console.log(chalk.green('✔ 生成完成！'))
     console.log()
     console.log('创建的文件:')
-    files.forEach(file => {
+    files.forEach((file) => {
       console.log(chalk.cyan(`  ${path.relative(cwd, file)}`))
     })
     console.log()
@@ -126,7 +126,8 @@ async function resolveGenerateOptions(options: GenerateOptions): Promise<Require
       name: 'name',
       message: '名称:',
       validate: (value: string) => {
-        if (!value.trim()) return '名称不能为空'
+        if (!value.trim())
+          return '名称不能为空'
         return true
       },
     })

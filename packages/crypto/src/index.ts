@@ -4,14 +4,14 @@
  * =============================================================================
  */
 
-// 统一服务入口
-export { crypto, createCryptoService } from './crypto.main.js'
-
 // 类型定义
 export type * from './crypto-types.js'
 
+// 统一服务入口
+export { createCryptoService, crypto } from './crypto.main.js'
+
+export { createHaiPasswordProvider } from './provider/hai/crypto-hai-password.js'
 // HAI Provider 实现
 export { createHaiSM2Provider } from './provider/hai/crypto-hai-sm2.js'
 export { createHaiSM3Provider } from './provider/hai/crypto-hai-sm3.js'
 export { createHaiSM4Provider } from './provider/hai/crypto-hai-sm4.js'
-export { createHaiPasswordProvider } from './provider/hai/crypto-hai-password.js'

@@ -60,12 +60,12 @@ export { DbConfigSchema, DbErrorCode, DbTypeSchema, PoolConfigSchema } from './d
  * ```
  */
 export interface DbError {
-    /** 错误码（数值，参见 DbErrorCode） */
-    code: DbErrorCodeType
-    /** 错误消息 */
-    message: string
-    /** 原始错误（可选） */
-    cause?: unknown
+  /** 错误码（数值，参见 DbErrorCode） */
+  code: DbErrorCodeType
+  /** 错误消息 */
+  message: string
+  /** 原始错误（可选） */
+  cause?: unknown
 }
 
 // =============================================================================
@@ -88,7 +88,7 @@ export interface DbError {
  * | JSON       | TEXT    | JSONB            | JSON       |
  */
 export type ColumnType
-    = | 'TEXT'
+  = | 'TEXT'
     | 'INTEGER'
     | 'REAL'
     | 'BLOB'
@@ -123,29 +123,29 @@ export type ColumnType
  * ```
  */
 export interface ColumnDef {
-    /** 列数据类型 */
-    type: ColumnType
-    /** 是否为主键 */
-    primaryKey?: boolean
-    /** 是否自增（仅主键有效） */
-    autoIncrement?: boolean
-    /** 是否非空 */
-    notNull?: boolean
-    /** 默认值（支持字符串、数字、布尔、null） */
-    defaultValue?: string | number | boolean | null
-    /** 是否唯一 */
-    unique?: boolean
-    /** 外键引用 */
-    references?: {
-        /** 引用的表名 */
-        table: string
-        /** 引用的列名 */
-        column: string
-        /** 删除时的行为 */
-        onDelete?: 'CASCADE' | 'SET NULL' | 'RESTRICT' | 'NO ACTION'
-        /** 更新时的行为 */
-        onUpdate?: 'CASCADE' | 'SET NULL' | 'RESTRICT' | 'NO ACTION'
-    }
+  /** 列数据类型 */
+  type: ColumnType
+  /** 是否为主键 */
+  primaryKey?: boolean
+  /** 是否自增（仅主键有效） */
+  autoIncrement?: boolean
+  /** 是否非空 */
+  notNull?: boolean
+  /** 默认值（支持字符串、数字、布尔、null） */
+  defaultValue?: string | number | boolean | null
+  /** 是否唯一 */
+  unique?: boolean
+  /** 外键引用 */
+  references?: {
+    /** 引用的表名 */
+    table: string
+    /** 引用的列名 */
+    column: string
+    /** 删除时的行为 */
+    onDelete?: 'CASCADE' | 'SET NULL' | 'RESTRICT' | 'NO ACTION'
+    /** 更新时的行为 */
+    onUpdate?: 'CASCADE' | 'SET NULL' | 'RESTRICT' | 'NO ACTION'
+  }
 }
 
 /**
@@ -162,7 +162,7 @@ export interface ColumnDef {
  * ```
  */
 export interface TableDef {
-    [columnName: string]: ColumnDef
+  [columnName: string]: ColumnDef
 }
 
 /**
@@ -187,12 +187,12 @@ export interface TableDef {
  * ```
  */
 export interface IndexDef {
-    /** 索引包含的列 */
-    columns: string[]
-    /** 是否为唯一索引 */
-    unique?: boolean
-    /** 索引条件（WHERE 子句，用于部分索引） */
-    where?: string
+  /** 索引包含的列 */
+  columns: string[]
+  /** 是否为唯一索引 */
+  unique?: boolean
+  /** 索引条件（WHERE 子句，用于部分索引） */
+  where?: string
 }
 
 // =============================================================================
@@ -219,63 +219,63 @@ export interface IndexDef {
  * ```
  */
 export interface DdlOperations {
-    /**
-     * 创建表
-     * @param tableName - 表名
-     * @param columns - 列定义
-     * @param ifNotExists - 是否使用 IF NOT EXISTS（默认 true）
-     */
-    createTable: (tableName: string, columns: TableDef, ifNotExists?: boolean) => Result<void, DbError>
+  /**
+   * 创建表
+   * @param tableName - 表名
+   * @param columns - 列定义
+   * @param ifNotExists - 是否使用 IF NOT EXISTS（默认 true）
+   */
+  createTable: (tableName: string, columns: TableDef, ifNotExists?: boolean) => Result<void, DbError>
 
-    /**
-     * 删除表
-     * @param tableName - 表名
-     * @param ifExists - 是否使用 IF EXISTS（默认 true）
-     */
-    dropTable: (tableName: string, ifExists?: boolean) => Result<void, DbError>
+  /**
+   * 删除表
+   * @param tableName - 表名
+   * @param ifExists - 是否使用 IF EXISTS（默认 true）
+   */
+  dropTable: (tableName: string, ifExists?: boolean) => Result<void, DbError>
 
-    /**
-     * 添加列
-     * @param tableName - 表名
-     * @param columnName - 列名
-     * @param columnDef - 列定义
-     */
-    addColumn: (tableName: string, columnName: string, columnDef: ColumnDef) => Result<void, DbError>
+  /**
+   * 添加列
+   * @param tableName - 表名
+   * @param columnName - 列名
+   * @param columnDef - 列定义
+   */
+  addColumn: (tableName: string, columnName: string, columnDef: ColumnDef) => Result<void, DbError>
 
-    /**
-     * 删除列
-     * @param tableName - 表名
-     * @param columnName - 列名
-     */
-    dropColumn: (tableName: string, columnName: string) => Result<void, DbError>
+  /**
+   * 删除列
+   * @param tableName - 表名
+   * @param columnName - 列名
+   */
+  dropColumn: (tableName: string, columnName: string) => Result<void, DbError>
 
-    /**
-     * 重命名表
-     * @param oldName - 原表名
-     * @param newName - 新表名
-     */
-    renameTable: (oldName: string, newName: string) => Result<void, DbError>
+  /**
+   * 重命名表
+   * @param oldName - 原表名
+   * @param newName - 新表名
+   */
+  renameTable: (oldName: string, newName: string) => Result<void, DbError>
 
-    /**
-     * 创建索引
-     * @param tableName - 表名
-     * @param indexName - 索引名
-     * @param indexDef - 索引定义
-     */
-    createIndex: (tableName: string, indexName: string, indexDef: IndexDef) => Result<void, DbError>
+  /**
+   * 创建索引
+   * @param tableName - 表名
+   * @param indexName - 索引名
+   * @param indexDef - 索引定义
+   */
+  createIndex: (tableName: string, indexName: string, indexDef: IndexDef) => Result<void, DbError>
 
-    /**
-     * 删除索引
-     * @param indexName - 索引名
-     * @param ifExists - 是否使用 IF EXISTS（默认 true）
-     */
-    dropIndex: (indexName: string, ifExists?: boolean) => Result<void, DbError>
+  /**
+   * 删除索引
+   * @param indexName - 索引名
+   * @param ifExists - 是否使用 IF EXISTS（默认 true）
+   */
+  dropIndex: (indexName: string, ifExists?: boolean) => Result<void, DbError>
 
-    /**
-     * 执行原始 DDL SQL
-     * @param sql - DDL SQL 语句
-     */
-    raw: (sql: string) => Result<void, DbError>
+  /**
+   * 执行原始 DDL SQL
+   * @param sql - DDL SQL 语句
+   */
+  raw: (sql: string) => Result<void, DbError>
 }
 
 // =============================================================================
@@ -293,10 +293,10 @@ export type QueryRow = Record<string, unknown>
  * INSERT/UPDATE/DELETE 操作返回的结果。
  */
 export interface ExecuteResult {
-    /** 影响的行数 */
-    changes: number
-    /** 最后插入的行 ID（仅 INSERT 时有效） */
-    lastInsertRowid?: number | bigint
+  /** 影响的行数 */
+  changes: number
+  /** 最后插入的行 ID（仅 INSERT 时有效） */
+  lastInsertRowid?: number | bigint
 }
 
 /**
@@ -321,35 +321,35 @@ export interface ExecuteResult {
  * ```
  */
 export interface SqlOperations {
-    /**
-     * 查询多行
-     * @param sql - SQL 查询语句
-     * @param params - 参数列表（使用 ? 占位符）
-     * @returns 查询结果数组
-     */
-    query: <T = QueryRow>(sql: string, params?: unknown[]) => Result<T[], DbError>
+  /**
+   * 查询多行
+   * @param sql - SQL 查询语句
+   * @param params - 参数列表（使用 ? 占位符）
+   * @returns 查询结果数组
+   */
+  query: <T = QueryRow>(sql: string, params?: unknown[]) => Result<T[], DbError>
 
-    /**
-     * 查询单行
-     * @param sql - SQL 查询语句
-     * @param params - 参数列表
-     * @returns 单行结果或 null
-     */
-    get: <T = QueryRow>(sql: string, params?: unknown[]) => Result<T | null, DbError>
+  /**
+   * 查询单行
+   * @param sql - SQL 查询语句
+   * @param params - 参数列表
+   * @returns 单行结果或 null
+   */
+  get: <T = QueryRow>(sql: string, params?: unknown[]) => Result<T | null, DbError>
 
-    /**
-     * 执行修改语句（INSERT/UPDATE/DELETE）
-     * @param sql - SQL 语句
-     * @param params - 参数列表
-     * @returns 执行结果（影响行数、最后插入 ID）
-     */
-    execute: (sql: string, params?: unknown[]) => Result<ExecuteResult, DbError>
+  /**
+   * 执行修改语句（INSERT/UPDATE/DELETE）
+   * @param sql - SQL 语句
+   * @param params - 参数列表
+   * @returns 执行结果（影响行数、最后插入 ID）
+   */
+  execute: (sql: string, params?: unknown[]) => Result<ExecuteResult, DbError>
 
-    /**
-     * 批量执行多条语句（在同一事务中）
-     * @param statements - SQL 语句数组
-     */
-    batch: (statements: Array<{ sql: string, params?: unknown[] }>) => Result<void, DbError>
+  /**
+   * 批量执行多条语句（在同一事务中）
+   * @param statements - SQL 语句数组
+   */
+  batch: (statements: Array<{ sql: string, params?: unknown[] }>) => Result<void, DbError>
 }
 
 // =============================================================================
@@ -380,12 +380,12 @@ export interface SqlOperations {
  * ```
  */
 export interface TxOperations {
-    /** 查询多行 */
-    query: <T = QueryRow>(sql: string, params?: unknown[]) => T[]
-    /** 查询单行 */
-    get: <T = QueryRow>(sql: string, params?: unknown[]) => T | null
-    /** 执行修改 */
-    execute: (sql: string, params?: unknown[]) => ExecuteResult
+  /** 查询多行 */
+  query: <T = QueryRow>(sql: string, params?: unknown[]) => T[]
+  /** 查询单行 */
+  get: <T = QueryRow>(sql: string, params?: unknown[]) => T | null
+  /** 执行修改 */
+  execute: (sql: string, params?: unknown[]) => ExecuteResult
 }
 
 /**
@@ -428,48 +428,48 @@ export type TxCallback<T> = (tx: TxOperations) => T
  * ```
  */
 export interface DbService {
-    /**
-     * 初始化数据库连接
-     *
-     * @param config - 数据库配置
-     * @returns 初始化结果
-     */
-    init: (config: DbConfigInput) => Result<void, DbError>
+  /**
+   * 初始化数据库连接
+   *
+   * @param config - 数据库配置
+   * @returns 初始化结果
+   */
+  init: (config: DbConfigInput) => Result<void, DbError>
 
-    /** DDL 操作（表结构管理） */
-    readonly ddl: DdlOperations
+  /** DDL 操作（表结构管理） */
+  readonly ddl: DdlOperations
 
-    /** SQL 操作（数据查询和修改） */
-    readonly sql: SqlOperations
+  /** SQL 操作（数据查询和修改） */
+  readonly sql: SqlOperations
 
-    /**
-     * 执行同步事务
-     *
-     * 注意：仅 SQLite 支持同步事务，PostgreSQL/MySQL 请使用 txAsync()
-     *
-     * @param fn - 事务回调函数
-     * @returns 事务执行结果
-     */
-    tx: <T>(fn: TxCallback<T>) => Result<T, DbError>
+  /**
+   * 执行同步事务
+   *
+   * 注意：仅 SQLite 支持同步事务，PostgreSQL/MySQL 请使用 txAsync()
+   *
+   * @param fn - 事务回调函数
+   * @returns 事务执行结果
+   */
+  tx: <T>(fn: TxCallback<T>) => Result<T, DbError>
 
-    /**
-     * 执行异步事务
-     *
-     * 适用于所有数据库类型，推荐用于 PostgreSQL/MySQL。
-     *
-     * @param fn - 异步事务回调函数
-     * @returns 事务执行结果
-     */
-    txAsync: <T>(fn: (tx: TxOperations) => Promise<T>) => Promise<Result<T, DbError>>
+  /**
+   * 执行异步事务
+   *
+   * 适用于所有数据库类型，推荐用于 PostgreSQL/MySQL。
+   *
+   * @param fn - 异步事务回调函数
+   * @returns 事务执行结果
+   */
+  txAsync: <T>(fn: (tx: TxOperations) => Promise<T>) => Promise<Result<T, DbError>>
 
-    /** 当前数据库配置（未初始化时为 null） */
-    readonly config: DbConfig | null
+  /** 当前数据库配置（未初始化时为 null） */
+  readonly config: DbConfig | null
 
-    /** 是否已初始化 */
-    readonly isInitialized: boolean
+  /** 是否已初始化 */
+  readonly isInitialized: boolean
 
-    /** 关闭数据库连接 */
-    close: () => void
+  /** 关闭数据库连接 */
+  close: () => void
 }
 
 // =============================================================================
@@ -483,18 +483,18 @@ export interface DbService {
  * 每个数据库类型（SQLite、PostgreSQL、MySQL）都有对应的 Provider 实现。
  */
 export interface DbProvider {
-    /** 连接数据库 */
-    connect: (config: DbConfig) => Result<void, DbError>
-    /** 关闭连接 */
-    close: () => void
-    /** 是否已连接 */
-    isConnected: () => boolean
-    /** DDL 操作 */
-    ddl: DdlOperations
-    /** SQL 操作 */
-    sql: SqlOperations
-    /** 同步事务 */
-    tx: <T>(fn: TxCallback<T>) => Result<T, DbError>
-    /** 异步事务 */
-    txAsync: <T>(fn: (tx: TxOperations) => Promise<T>) => Promise<Result<T, DbError>>
+  /** 连接数据库 */
+  connect: (config: DbConfig) => Result<void, DbError>
+  /** 关闭连接 */
+  close: () => void
+  /** 是否已连接 */
+  isConnected: () => boolean
+  /** DDL 操作 */
+  ddl: DdlOperations
+  /** SQL 操作 */
+  sql: SqlOperations
+  /** 同步事务 */
+  tx: <T>(fn: TxCallback<T>) => Result<T, DbError>
+  /** 异步事务 */
+  txAsync: <T>(fn: (tx: TxOperations) => Promise<T>) => Promise<Result<T, DbError>>
 }

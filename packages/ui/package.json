@@ -1,50 +1,50 @@
 {
-    "name": "@hai/ui",
-    "version": "0.1.0",
-    "license": "Apache-2.0",
-    "description": "hai Admin Framework - UI 组件库 (Svelte 5 Runes)",
-    "type": "module",
-    "svelte": "./dist/index.js",
-    "exports": {
-        ".": {
-            "types": "./dist/index.d.ts",
-            "svelte": "./dist/index.js",
-            "import": "./dist/index.js"
-        },
-        "./components/*": {
-            "types": "./dist/components/*.d.ts",
-            "svelte": "./dist/components/*.js",
-            "import": "./dist/components/*.js"
-        }
+  "name": "@hai/ui",
+  "type": "module",
+  "version": "0.1.0",
+  "description": "hai Admin Framework - UI 组件库 (Svelte 5 Runes)",
+  "license": "Apache-2.0",
+  "svelte": "./dist/index.js",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "svelte": "./dist/index.js",
+      "import": "./dist/index.js"
     },
-    "main": "./dist/index.js",
-    "types": "./dist/index.d.ts",
-    "files": [
-        "dist"
-    ],
-    "scripts": {
-        "build": "svelte-package -i src/lib",
-        "dev": "svelte-package -i src/lib --watch",
-        "check": "svelte-check --tsconfig ./tsconfig.json",
-        "test": "vitest run",
-        "test:watch": "vitest",
-        "clean": "rimraf dist .turbo"
-    },
-    "dependencies": {
-        "@hai/core": "workspace:*"
-    },
-    "devDependencies": {
-        "@sveltejs/package": "catalog:",
-        "@sveltejs/vite-plugin-svelte": "catalog:",
-        "@types/node": "catalog:",
-        "rimraf": "catalog:",
-        "svelte": "catalog:",
-        "svelte-check": "catalog:",
-        "typescript": "catalog:",
-        "vite": "catalog:",
-        "vitest": "catalog:"
-    },
-    "peerDependencies": {
-        "svelte": "^5.0.0"
+    "./components/*": {
+      "types": "./dist/components/*.d.ts",
+      "svelte": "./dist/components/*.js",
+      "import": "./dist/components/*.js"
     }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "svelte-package -i src/lib",
+    "dev": "svelte-package -i src/lib --watch",
+    "check": "svelte-check --tsconfig ./tsconfig.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "clean": "rimraf dist .turbo"
+  },
+  "peerDependencies": {
+    "svelte": "^5.0.0"
+  },
+  "dependencies": {
+    "@hai/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@sveltejs/package": "catalog:",
+    "@sveltejs/vite-plugin-svelte": "catalog:",
+    "@types/node": "catalog:",
+    "rimraf": "catalog:",
+    "svelte": "catalog:",
+    "svelte-check": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vitest": "catalog:"
+  }
 }

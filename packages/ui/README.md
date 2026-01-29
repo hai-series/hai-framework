@@ -11,6 +11,7 @@ pnpm add @hai/ui
 ## 组件清单
 
 ### 基础组件
+
 | 组件       | 描述     | 主要属性                                 |
 | ---------- | -------- | ---------------------------------------- |
 | `Button`   | 按钮     | `variant`, `size`, `loading`, `disabled` |
@@ -21,6 +22,7 @@ pnpm add @hai/ui
 | `Switch`   | 开关     | `checked`, `label`                       |
 
 ### 数据展示
+
 | 组件            | 描述         | 主要属性                                            |
 | --------------- | ------------ | --------------------------------------------------- |
 | `Card`          | 卡片容器     | `title`, `padding`, `header`, `footer`, `actions`   |
@@ -33,6 +35,7 @@ pnpm add @hai/ui
 | `SeverityBadge` | 严重程度标签 | `type` (critical/high/medium/low), `size`           |
 
 ### 导航组件
+
 | 组件         | 描述     | 主要属性                                |
 | ------------ | -------- | --------------------------------------- |
 | `Breadcrumb` | 面包屑   | `items`                                 |
@@ -41,6 +44,7 @@ pnpm add @hai/ui
 | `Dropdown`   | 下拉菜单 | `items`, `trigger`                      |
 
 ### 反馈组件
+
 | 组件             | 描述     | 主要属性                                      |
 | ---------------- | -------- | --------------------------------------------- |
 | `Modal`          | 模态框   | `open`, `title`, `size`, `closable`, `footer` |
@@ -52,6 +56,7 @@ pnpm add @hai/ui
 | `Spinner`        | 加载动画 | `size`                                        |
 
 ### 业务组件
+
 | 组件            | 描述         | 主要属性                                  |
 | --------------- | ------------ | ----------------------------------------- |
 | `PageHeader`    | 页面头部     | `title`, `description`, `actions`         |
@@ -60,6 +65,7 @@ pnpm add @hai/ui
 | `SettingsModal` | 设置模态框   | `open`, `currentLanguage`, `currentTheme` |
 
 ### 设置组件
+
 | 组件             | 描述     | 主要属性                                   |
 | ---------------- | -------- | ------------------------------------------ |
 | `LanguageSwitch` | 语言切换 | `currentLanguage`, `languages`, `onchange` |
@@ -71,28 +77,28 @@ pnpm add @hai/ui
 
 ```svelte
 <script>
-  import { 
-    PageHeader, Card, DataTable, Button, 
-    Modal, Input, Select, Toast 
+  import {
+    PageHeader, Card, DataTable, Button,
+    Modal, Input, Select, Toast
   } from '@hai/ui'
-  
+
   let items = $state([])
   let showCreateModal = $state(false)
   let showEditModal = $state(false)
   let selectedItem = $state(null)
   let loading = $state(false)
   let toasts = $state([])
-  
+
   // 表单数据
   let formData = $state({ name: '', type: '' })
-  
+
   // 表格列配置
   const columns = [
     { key: 'name', label: '名称' },
     { key: 'type', label: '类型' },
     { key: 'createdAt', label: '创建时间' },
   ]
-  
+
   async function handleCreate() {
     loading = true
     try {
@@ -121,7 +127,7 @@ pnpm add @hai/ui
 </PageHeader>
 
 <Card>
-  <DataTable 
+  <DataTable
     data={items}
     {columns}
     keyField="id"
@@ -142,7 +148,7 @@ pnpm add @hai/ui
 <Modal bind:open={showCreateModal} title="新建项目">
   <form onsubmit={(e) => { e.preventDefault(); handleCreate() }} class='space-y-4'>
     <Input label="名称" bind:value={formData.name} required />
-    <Select 
+    <Select
       label="类型"
       bind:value={formData.type}
       options={[
@@ -158,7 +164,7 @@ pnpm add @hai/ui
 </Modal>
 
 <!-- 全局通知 -->
-<Toast 
+<Toast
   messages={toasts}
   ondismiss={(id) => toasts = toasts.filter(t => t.id !== id)}
 />

@@ -6,7 +6,7 @@
  * =============================================================================
  */
 
-import type { GuardResult, RouteGuard, SessionData } from '../types.js'
+import type { GuardResult, RouteGuard } from '../types.js'
 
 /**
  * 权限守卫配置
@@ -27,7 +27,7 @@ export interface PermissionGuardConfig {
  */
 export function permissionGuard(config: PermissionGuardConfig): RouteGuard {
   const { permissions, requireAll = false, forbiddenUrl = '/403', apiMode = false } = config
-  
+
   return (event, session): GuardResult => {
     if (!session) {
       return {
@@ -36,14 +36,14 @@ export function permissionGuard(config: PermissionGuardConfig): RouteGuard {
         status: 401,
       }
     }
-    
+
     const userPermissions = session.permissions ?? []
-    
+
     // 支持通配符权限，如 admin:* 匹配 admin:read, admin:write 等
     const hasPermission = requireAll
       ? permissions.every(perm => matchPermission(perm, userPermissions))
       : permissions.some(perm => matchPermission(perm, userPermissions))
-    
+
     if (!hasPermission) {
       if (apiMode) {
         return {
@@ -52,13 +52,13 @@ export function permissionGuard(config: PermissionGuardConfig): RouteGuard {
           status: 403,
         }
       }
-      
+
       return {
         allowed: false,
         redirect: forbiddenUrl,
       }
     }
-    
+
     return { allowed: true }
   }
 }
@@ -75,12 +75,12 @@ function matchPermission(required: string, userPermissions: string[]): boolean {
     if (userPerm === required) {
       return true
     }
-    
+
     // 用户有超级权限
     if (userPerm === '*') {
       return true
     }
-    
+
     // 通配符匹配
     if (userPerm.endsWith(':*')) {
       const prefix = userPerm.slice(0, -1) // 移除 *
@@ -89,6 +89,6 @@ function matchPermission(required: string, userPermissions: string[]): boolean {
       }
     }
   }
-  
+
   return false
 }

@@ -5,6 +5,6 @@
  */
 
 export { authGuard, type AuthGuardConfig } from './auth.js'
-export { roleGuard, type RoleGuardConfig } from './role.js'
+export { allGuards, anyGuard, conditionalGuard, notGuard } from './compose.js'
 export { permissionGuard, type PermissionGuardConfig } from './permission.js'
-export { allGuards, anyGuard, notGuard, conditionalGuard } from './compose.js'
+export { roleGuard, type RoleGuardConfig } from './role.js'

@@ -6,7 +6,7 @@
  * =============================================================================
  */
 
-import type { Middleware, CsrfConfig } from '../types.js'
+import type { CsrfConfig, Middleware } from '../types.js'
 
 /**
  * 生成唯一 ID

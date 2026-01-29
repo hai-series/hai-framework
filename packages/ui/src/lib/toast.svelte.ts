@@ -6,7 +6,7 @@
  * =============================================================================
  */
 
-import type { ToastProps, Variant } from './types.js'
+import type { ToastProps } from './types.js'
 
 /**
  * Toast 项
@@ -20,7 +20,7 @@ export interface ToastItem extends ToastProps {
  */
 class ToastState {
   items = $state<ToastItem[]>([])
-  
+
   /**
    * 添加 Toast
    */
@@ -33,48 +33,48 @@ class ToastState {
       position: props.position ?? 'top-right',
       dismissible: props.dismissible ?? true,
     }
-    
+
     this.items = [...this.items, item]
-    
+
     // 自动关闭
     if (item.duration > 0) {
       setTimeout(() => {
         this.remove(id)
       }, item.duration)
     }
-    
+
     return id
   }
-  
+
   /**
    * 移除 Toast
    */
   remove(id: string): void {
     this.items = this.items.filter(item => item.id !== id)
   }
-  
+
   /**
    * 清空所有 Toast
    */
   clear(): void {
     this.items = []
   }
-  
+
   /**
    * 快捷方法
    */
   success(message: string, duration?: number): string {
     return this.add({ message, variant: 'success', duration })
   }
-  
+
   error(message: string, duration?: number): string {
     return this.add({ message, variant: 'error', duration })
   }
-  
+
   warning(message: string, duration?: number): string {
     return this.add({ message, variant: 'warning', duration })
   }
-  
+
   info(message: string, duration?: number): string {
     return this.add({ message, variant: 'info', duration })
   }

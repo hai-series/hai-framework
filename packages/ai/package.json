@@ -1,38 +1,38 @@
 {
-    "name": "@hai/ai",
-    "version": "0.1.0",
-    "license": "Apache-2.0",
-    "description": "hai Admin Framework - AI 模块（LLM、MCP、技能、提示词、工具调用）",
-    "type": "module",
-    "main": "./dist/index.js",
-    "types": "./dist/index.d.ts",
-    "exports": {
-        ".": {
-            "types": "./dist/index.d.ts",
-            "import": "./dist/index.js"
-        }
-    },
-    "files": [
-        "dist"
-    ],
-    "scripts": {
-        "build": "tsup",
-        "dev": "tsup --watch",
-        "test": "vitest run",
-        "test:watch": "vitest",
-        "typecheck": "tsc --noEmit",
-        "clean": "rimraf dist .turbo"
-    },
-    "dependencies": {
-        "@hai/core": "workspace:*",
-        "@modelcontextprotocol/sdk": "catalog:",
-        "openai": "catalog:"
-    },
-    "devDependencies": {
-        "@types/node": "catalog:",
-        "rimraf": "catalog:",
-        "typescript": "catalog:",
-        "tsup": "catalog:",
-        "vitest": "catalog:"
+  "name": "@hai/ai",
+  "type": "module",
+  "version": "0.1.0",
+  "description": "hai Admin Framework - AI 模块（LLM、MCP、技能、提示词、工具调用）",
+  "license": "Apache-2.0",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
     }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "clean": "rimraf dist .turbo"
+  },
+  "dependencies": {
+    "@hai/core": "workspace:*",
+    "@modelcontextprotocol/sdk": "catalog:",
+    "openai": "catalog:"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "rimraf": "catalog:",
+    "tsup": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
 }

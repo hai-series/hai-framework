@@ -8,10 +8,10 @@
 import type { Options } from 'tsup'
 
 export const baseConfig: Options = {
-    format: ['esm'],
-    dts: true,
-    clean: true,
-    sourcemap: true,
-    treeshake: true,
-    target: 'node20',
+  format: ['esm'],
+  dts: true,
+  clean: true,
+  sourcemap: true,
+  treeshake: true,
+  target: 'node20',
 }

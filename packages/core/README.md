@@ -30,8 +30,8 @@ import { core, initCore } from '@hai/core'
 
 // 初始化（可选）
 initCore({
-  silent: false,  // 是否静默启动
-  configs: [      // 配置文件列表（Node.js）
+  silent: false, // 是否静默启动
+  configs: [ // 配置文件列表（Node.js）
     { path: './config/_app.yml', schema: AppConfigSchema, key: 'app' }
   ]
 })
@@ -41,16 +41,16 @@ core.logger.info('应用启动', { version: '1.0.0' })
 core.logger.error('发生错误', { error: 'Connection failed' })
 
 // ID 生成
-const myId = core.id.generate()         // 'V1StGXR8_Z5jdHi6B-myT'
-const shortId = core.id.short()         // 'dV3f2a9Km'
-const traceId = core.id.trace()         // 'trace-V1StGXR8_Z5jdHi6B-myT'
-const uuid = core.id.uuid()             // 'f47ac10b-58cc-4372-a567-0e02b2c3d479'
+const myId = core.id.generate() // 'V1StGXR8_Z5jdHi6B-myT'
+const shortId = core.id.short() // 'dV3f2a9Km'
+const traceId = core.id.trace() // 'trace-V1StGXR8_Z5jdHi6B-myT'
+const uuid = core.id.uuid() // 'f47ac10b-58cc-4372-a567-0e02b2c3d479'
 
 // 类型检查
-core.type.isDefined(value)    // 非 null/undefined 检查
-core.type.isObject(value)     // 对象检查（排除数组）
-core.type.isFunction(value)   // 函数检查
-core.type.isPromise(value)    // Promise 检查
+core.type.isDefined(value) // 非 null/undefined 检查
+core.type.isObject(value) // 对象检查（排除数组）
+core.type.isFunction(value) // 函数检查
+core.type.isPromise(value) // Promise 检查
 
 // 对象操作
 const cloned = core.object.deepClone(obj)
@@ -59,15 +59,15 @@ const picked = core.object.pick(obj, ['name', 'email'])
 const omitted = core.object.omit(obj, ['password'])
 
 // 字符串操作
-core.string.capitalize('hello')         // 'Hello'
-core.string.kebabCase('helloWorld')     // 'hello-world'
-core.string.camelCase('hello-world')    // 'helloWorld'
-core.string.truncate('hello world', 5)  // 'hello...'
+core.string.capitalize('hello') // 'Hello'
+core.string.kebabCase('helloWorld') // 'hello-world'
+core.string.camelCase('hello-world') // 'helloWorld'
+core.string.truncate('hello world', 5) // 'hello...'
 
 // 数组操作
-core.array.unique([1, 1, 2, 3])           // [1, 2, 3]
+core.array.unique([1, 1, 2, 3]) // [1, 2, 3]
 core.array.groupBy(users, u => u.role)
-core.array.chunk([1, 2, 3, 4, 5], 2)      // [[1,2], [3,4], [5]]
+core.array.chunk([1, 2, 3, 4, 5], 2) // [[1,2], [3,4], [5]]
 
 // 异步操作
 await core.async.delay(1000)
@@ -75,8 +75,8 @@ await core.async.withTimeout(fetch('/api'), 5000)
 await core.async.retry(() => fetch('/api'), { maxRetries: 3 })
 
 // 时间操作
-core.time.formatDate(new Date())    // '2024-01-15'
-core.time.timeAgo(someDate)         // '5分钟前'
+core.time.formatDate(new Date()) // '2024-01-15'
+core.time.timeAgo(someDate) // '5分钟前'
 ```
 
 ## Result 类型
@@ -84,7 +84,8 @@ core.time.timeAgo(someDate)         // '5分钟前'
 函数式错误处理，避免 try-catch 的嵌套：
 
 ```typescript
-import { core, ok, err, type Result } from '@hai/core'
+import type { Result } from '@hai/core'
+import { core, err, ok } from '@hai/core'
 
 // 定义返回 Result 的函数
 function divide(a: number, b: number): Result<number, string> {
@@ -99,7 +100,8 @@ const result = divide(10, 2)
 
 if (result.success) {
   core.logger.info(`Result: ${result.data}`) // 5
-} else {
+}
+else {
   core.logger.error(`Error: ${result.error}`)
 }
 ```
@@ -109,8 +111,7 @@ if (result.success) {
 ### 加载配置文件
 
 ```typescript
-import { core } from '@hai/core'
-import { AppConfigSchema } from '@hai/core'
+import { AppConfigSchema, core } from '@hai/core'
 
 // 加载单个配置文件
 const result = core.config.load('app', './config/_app.yml', AppConfigSchema)
@@ -133,12 +134,12 @@ core.config.onChange('app', (newConfig) => {
 
 ```typescript
 import {
-  AppConfigSchema,      // 应用配置
-  AIConfigSchema,       // AI 配置
-  DbConfigSchema,       // 数据库配置
-  IAMConfigSchema,      // 身份认证配置
-  StorageConfigSchema,  // 存储配置
-  CryptoConfigSchema,   // 加密配置
+  AIConfigSchema, // AI 配置
+  AppConfigSchema, // 应用配置
+  CryptoConfigSchema, // 加密配置
+  DbConfigSchema, // 数据库配置
+  IAMConfigSchema, // 身份认证配置
+  StorageConfigSchema, // 存储配置
 } from '@hai/core'
 ```
 
@@ -188,17 +189,17 @@ core.setLogLevel('warn')
 | 6000-6999 | 加密   | ENCRYPT_FAILED, DECRYPT_FAILED     |
 
 ```typescript
-import { CommonErrorCode, ConfigErrorCode, AuthErrorCode } from '@hai/core'
+import { AuthErrorCode, CommonErrorCode, ConfigErrorCode } from '@hai/core'
 
 // 通用错误
-CommonErrorCode.UNKNOWN        // 1000
-CommonErrorCode.VALIDATION     // 1001
-CommonErrorCode.NOT_FOUND      // 1002
+CommonErrorCode.UNKNOWN // 1000
+CommonErrorCode.VALIDATION // 1001
+CommonErrorCode.NOT_FOUND // 1002
 
 // 配置错误
-ConfigErrorCode.FILE_NOT_FOUND    // 1100
-ConfigErrorCode.PARSE_ERROR       // 1101
-ConfigErrorCode.VALIDATION_ERROR  // 1102
+ConfigErrorCode.FILE_NOT_FOUND // 1100
+ConfigErrorCode.PARSE_ERROR // 1101
+ConfigErrorCode.VALIDATION_ERROR // 1102
 ```
 
 ## API 参考
@@ -372,9 +373,9 @@ core.logger.info('Hello from browser')
 ## 与其他 @hai 模块集成
 
 ```typescript
+import { ai } from '@hai/ai'
 import { core } from '@hai/core'
 import { crypto } from '@hai/crypto'
-import { ai } from '@hai/ai'
 
 // 所有模块共享 core 的 Result 类型和工具
 const result = await crypto.password.hash('secret')

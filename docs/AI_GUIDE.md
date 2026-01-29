@@ -5,7 +5,7 @@
 ### Result 类型（错误处理）
 
 ```typescript
-import { ok, err, Result, AppError } from '@hai/core'
+import { AppError, err, ok, Result } from '@hai/core'
 
 // 成功
 function getUser(): Result<User, AppError> {
@@ -21,7 +21,8 @@ function getUser(): Result<User, AppError> {
 const result = getUser()
 if (result.ok) {
   console.log(result.value) // User
-} else {
+}
+else {
   console.log(result.error.code, result.error.message)
 }
 
@@ -48,7 +49,7 @@ AppError.create('CUSTOM_ERROR', '自定义错误消息', { extra: 'data' })
 ### 依赖注入
 
 ```typescript
-import { Container, injectable, inject } from '@hai/core'
+import { Container, inject, injectable } from '@hai/core'
 
 @injectable()
 class UserRepository {
@@ -58,7 +59,7 @@ class UserRepository {
 @injectable()
 class UserService {
   constructor(@inject(UserRepository) private repo: UserRepository) {}
-  
+
   async getUser(id: string) {
     return this.repo.find(id)
   }
@@ -75,20 +76,20 @@ const service = container.resolve(UserService)
 ### 工具函数
 
 ```typescript
-import { 
-  generateId,      // 生成 nanoid
-  sleep,           // 延迟执行
-  retry,           // 重试机制
-  debounce,        // 防抖
-  throttle,        // 节流
-  deepClone,       // 深拷贝
-  pick,            // 选取属性
-  omit,            // 排除属性
+import {
+  debounce, // 防抖
+  deepClone, // 深拷贝
+  generateId, // 生成 nanoid
+  omit, // 排除属性
+  pick, // 选取属性
+  retry, // 重试机制
+  sleep, // 延迟执行
+  throttle, // 节流
 } from '@hai/core'
 
 // 使用
-const id = generateId()                    // 'V1StGXR8_Z5jdHi6B-myT'
-await sleep(1000)                          // 等待 1 秒
+const id = generateId() // 'V1StGXR8_Z5jdHi6B-myT'
+await sleep(1000) // 等待 1 秒
 await retry(() => fetch(url), { times: 3 }) // 重试 3 次
 ```
 
@@ -104,19 +105,19 @@ import { defineConfig } from '@hai/core'
 export const appConfig = defineConfig({
   // 简单配置
   name: { default: 'My App' },
-  
+
   // 从环境变量读取
   port: { default: 3000, env: 'PORT' },
-  
+
   // 必填配置
   secret: { required: true, env: 'SECRET' },
-  
+
   // 嵌套配置
   database: {
     url: { required: true, env: 'DATABASE_URL' },
     pool: { default: 10 },
   },
-  
+
   // 数组配置
   allowedOrigins: { default: ['http://localhost:3000'] },
 })
@@ -172,7 +173,7 @@ const payload = await verifyJWT(token, 'secret-key')
 ### 加解密
 
 ```typescript
-import { encrypt, decrypt, generateKey } from '@hai/crypto'
+import { decrypt, encrypt, generateKey } from '@hai/crypto'
 
 const key = generateKey()
 const encrypted = encrypt('敏感数据', key)
@@ -202,7 +203,7 @@ const db = createDB({ url: 'mysql://user:pass@host/db' })
 
 ```typescript
 import { defineSchema } from '@hai/db'
-import { text, integer, real } from 'drizzle-orm/sqlite-core'
+import { integer, real, text } from 'drizzle-orm/sqlite-core'
 
 export const users = defineSchema('users', {
   id: text('id').primaryKey(),
@@ -224,7 +225,7 @@ export const posts = defineSchema('posts', {
 ### CRUD 操作
 
 ```typescript
-import { eq, like, and, or, desc } from 'drizzle-orm'
+import { and, desc, eq, like, or } from 'drizzle-orm'
 
 // 查询全部
 const allUsers = await db.select().from(users)
@@ -398,9 +399,9 @@ for await (const chunk of ai.stream('写一首诗')) {
 }
 
 // 在 SvelteKit 中使用
-export const GET = async () => {
+export async function GET() {
   const stream = ai.stream('讲个故事')
-  
+
   return new Response(
     new ReadableStream({
       async start(controller) {
@@ -463,7 +464,7 @@ console.log(result.issues)
 <Input label="密码" type="password" bind:value={password} error={errors.password} />
 
 <!-- 下拉选择 -->
-<Select 
+<Select
   label="角色"
   bind:value={role}
   options={[
@@ -531,7 +532,7 @@ console.log(result.issues)
 ```svelte
 <script>
   import { Modal, Alert, Toast, Spinner } from '@hai/ui'
-  
+
   let showModal = $state(false)
   let toasts = $state([])
 </script>
@@ -550,7 +551,7 @@ console.log(result.issues)
 <Alert variant="error">发生错误：{errorMessage}</Alert>
 
 <!-- 全局通知 -->
-<Toast 
+<Toast
   messages={toasts}
   ondismiss={(id) => toasts = toasts.filter(t => t.id !== id)}
 />
@@ -583,13 +584,13 @@ console.log(result.issues)
 ]} />
 
 <!-- 标签页 -->
-<Tabs 
+<Tabs
   items={['基本信息', '安全设置', '操作日志']}
   bind:activeIndex={activeTab}
 />
 
 <!-- 分页 -->
-<Pagination 
+<Pagination
   currentPage={page}
   totalPages={totalPages}
   onchange={(p) => page = p}
@@ -618,9 +619,9 @@ export const handle = authHook({
 ### API 中间件
 
 ```typescript
+import { withAuth, withValidation } from '@hai/kit'
 // src/routes/api/users/+server.ts
 import { json } from '@sveltejs/kit'
-import { withAuth, withValidation } from '@hai/kit'
 
 // 需要认证
 export const GET = withAuth(async ({ locals }) => {

@@ -202,8 +202,11 @@ export const StorageConfigSchema = z.discriminatedUnion('type', [
   LocalConfigSchema,
 ])
 
-/** 存储配置类型 */
+/** 存储配置类型（parse 后的完整配置） */
 export type StorageConfig = z.infer<typeof StorageConfigSchema>
+
+/** 存储配置输入类型（parse 前，允许省略带默认值的字段） */
+export type StorageConfigInput = z.input<typeof StorageConfigSchema>
 
 // =============================================================================
 // 签名 URL 配置

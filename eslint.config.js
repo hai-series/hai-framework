@@ -12,12 +12,12 @@
 import antfu from '@antfu/eslint-config'
 
 export default antfu({
-    // 格式化器（CSS/HTML/Markdown）
-    formatters: true,
+  // 格式化器（CSS/HTML/Markdown）
+  formatters: true,
 
-    // 扩展默认忽略（node_modules/dist 等已内置）
-    ignores: [
-        '**/.svelte-kit/**',
-        '**/build/**',
-    ],
+  // 扩展默认忽略（node_modules/dist 等已内置）
+  ignores: [
+    '**/.svelte-kit/**',
+    '**/build/**',
+  ],
 })

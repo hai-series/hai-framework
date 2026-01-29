@@ -11,8 +11,8 @@
 import { defineWorkspace } from 'vitest/config'
 
 export default defineWorkspace([
-    // 核心包测试
-    'packages/*/vitest.config.ts',
-    // 应用测试
-    'apps/*/vitest.config.ts',
+  // 核心包测试
+  'packages/*/vitest.config.ts',
+  // 应用测试
+  'apps/*/vitest.config.ts',
 ])

@@ -59,15 +59,15 @@
 
 import type { Result } from '@hai/core'
 import type {
-    DbConfig,
-    DbConfigInput,
-    DbError,
-    DbProvider,
-    DbService,
-    DdlOperations,
-    SqlOperations,
-    TxCallback,
-    TxOperations,
+  DbConfig,
+  DbConfigInput,
+  DbError,
+  DbProvider,
+  DbService,
+  DdlOperations,
+  SqlOperations,
+  TxCallback,
+  TxOperations,
 } from './db-types.js'
 
 import { err } from '@hai/core'
@@ -100,16 +100,16 @@ let currentConfig: DbConfig | null = null
  * @throws 不支持的数据库类型时抛出错误
  */
 function createProvider(config: DbConfig): DbProvider {
-    switch (config.type) {
-        case 'sqlite':
-            return createSqliteProvider()
-        case 'postgresql':
-            return createPostgresProvider()
-        case 'mysql':
-            return createMysqlProvider()
-        default:
-            throw new Error(`Unsupported database type: ${config.type}`)
-    }
+  switch (config.type) {
+    case 'sqlite':
+      return createSqliteProvider()
+    case 'postgresql':
+      return createPostgresProvider()
+    case 'mysql':
+      return createMysqlProvider()
+    default:
+      throw new Error(`Unsupported database type: ${config.type}`)
+  }
 }
 
 // =============================================================================
@@ -120,30 +120,30 @@ function createProvider(config: DbConfig): DbProvider {
  * 创建未初始化错误
  */
 function notInitializedError(): DbError {
-    return {
-        code: DbErrorCode.NOT_INITIALIZED,
-        message: 'Database not initialized. Call db.init() first.',
-    }
+  return {
+    code: DbErrorCode.NOT_INITIALIZED,
+    message: 'Database not initialized. Call db.init() first.',
+  }
 }
 
 /** 未初始化时的 DDL 操作占位 */
 const notInitializedDdl: DdlOperations = {
-    createTable: () => err(notInitializedError()),
-    dropTable: () => err(notInitializedError()),
-    addColumn: () => err(notInitializedError()),
-    dropColumn: () => err(notInitializedError()),
-    renameTable: () => err(notInitializedError()),
-    createIndex: () => err(notInitializedError()),
-    dropIndex: () => err(notInitializedError()),
-    raw: () => err(notInitializedError()),
+  createTable: () => err(notInitializedError()),
+  dropTable: () => err(notInitializedError()),
+  addColumn: () => err(notInitializedError()),
+  dropColumn: () => err(notInitializedError()),
+  renameTable: () => err(notInitializedError()),
+  createIndex: () => err(notInitializedError()),
+  dropIndex: () => err(notInitializedError()),
+  raw: () => err(notInitializedError()),
 }
 
 /** 未初始化时的 SQL 操作占位 */
 const notInitializedSql: SqlOperations = {
-    query: () => err(notInitializedError()),
-    get: () => err(notInitializedError()),
-    execute: () => err(notInitializedError()),
-    batch: () => err(notInitializedError()),
+  query: () => err(notInitializedError()),
+  get: () => err(notInitializedError()),
+  execute: () => err(notInitializedError()),
+  batch: () => err(notInitializedError()),
 }
 
 // =============================================================================
@@ -192,82 +192,82 @@ const notInitializedSql: SqlOperations = {
  * ```
  */
 export const db: DbService = {
-    /** 初始化数据库连接 */
-    init(config: DbConfigInput): Result<void, DbError> {
-        // 关闭现有连接（如果存在）
-        if (currentProvider) {
-            currentProvider.close()
-            currentProvider = null
-            currentConfig = null
-        }
+  /** 初始化数据库连接 */
+  init(config: DbConfigInput): Result<void, DbError> {
+    // 关闭现有连接（如果存在）
+    if (currentProvider) {
+      currentProvider.close()
+      currentProvider = null
+      currentConfig = null
+    }
 
-        try {
-            // 运行时校验并补齐默认值（如 host、pool 等）
-            const normalizedConfig = DbConfigSchema.parse(config)
+    try {
+      // 运行时校验并补齐默认值（如 host、pool 等）
+      const normalizedConfig = DbConfigSchema.parse(config)
 
-            // 创建对应类型的 Provider
-            currentProvider = createProvider(normalizedConfig)
+      // 创建对应类型的 Provider
+      currentProvider = createProvider(normalizedConfig)
 
-            // 连接数据库
-            const result = currentProvider.connect(normalizedConfig)
+      // 连接数据库
+      const result = currentProvider.connect(normalizedConfig)
 
-            if (result.success) {
-                currentConfig = normalizedConfig
-            }
+      if (result.success) {
+        currentConfig = normalizedConfig
+      }
 
-            return result
-        }
-        catch (error) {
-            return err({
-                code: DbErrorCode.CONNECTION_FAILED,
-                message: `Failed to initialize database: ${error}`,
-                cause: error,
-            })
-        }
-    },
+      return result
+    }
+    catch (error) {
+      return err({
+        code: DbErrorCode.CONNECTION_FAILED,
+        message: `Failed to initialize database: ${error}`,
+        cause: error,
+      })
+    }
+  },
 
-    /** 获取 DDL 操作接口 */
-    get ddl(): DdlOperations {
-        return currentProvider?.ddl ?? notInitializedDdl
-    },
+  /** 获取 DDL 操作接口 */
+  get ddl(): DdlOperations {
+    return currentProvider?.ddl ?? notInitializedDdl
+  },
 
-    /** 获取 SQL 操作接口 */
-    get sql(): SqlOperations {
-        return currentProvider?.sql ?? notInitializedSql
-    },
+  /** 获取 SQL 操作接口 */
+  get sql(): SqlOperations {
+    return currentProvider?.sql ?? notInitializedSql
+  },
 
-    /** 执行同步事务 */
-    tx<T>(fn: TxCallback<T>): Result<T, DbError> {
-        if (!currentProvider) {
-            return err(notInitializedError())
-        }
-        return currentProvider.tx(fn)
-    },
+  /** 执行同步事务 */
+  tx<T>(fn: TxCallback<T>): Result<T, DbError> {
+    if (!currentProvider) {
+      return err(notInitializedError())
+    }
+    return currentProvider.tx(fn)
+  },
 
-    /** 执行异步事务 */
-    txAsync<T>(fn: (tx: TxOperations) => Promise<T>): Promise<Result<T, DbError>> {
-        if (!currentProvider) {
-            return Promise.resolve(err(notInitializedError()))
-        }
-        return currentProvider.txAsync(fn)
-    },
+  /** 执行异步事务 */
+  txAsync<T>(fn: (tx: TxOperations) => Promise<T>): Promise<Result<T, DbError>> {
+    if (!currentProvider) {
+      return Promise.resolve(err(notInitializedError()))
+    }
+    return currentProvider.txAsync(fn)
+  },
 
-    /** 获取当前配置 */
-    get config(): DbConfig | null {
-        return currentConfig
-    },
+  /** 获取当前配置 */
+  get config(): DbConfig | null {
+    return currentConfig
+  },
 
-    /** 检查是否已初始化 */
-    get isInitialized(): boolean {
-        return currentProvider !== null && currentProvider.isConnected()
-    },
+  /** 检查是否已初始化 */
+  get isInitialized(): boolean {
+    return currentProvider !== null && currentProvider.isConnected()
+  },
 
-    /** 关闭数据库连接 */
-    close(): void {
-        if (currentProvider) {
-            currentProvider.close()
-            currentProvider = null
-            currentConfig = null
-        }
-    },
+  /** 关闭数据库连接 */
+  close(): void {
+    if (currentProvider) {
+      currentProvider.close()
+      currentProvider = null
+      currentConfig = null
+    }
+  },
 }
