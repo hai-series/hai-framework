@@ -14,7 +14,6 @@ import {
     CommonErrorCode,
     ConfigErrorCode,
     AuthErrorCode,
-    DbErrorCode,
     AIErrorCode,
     StorageErrorCode,
     CryptoErrorCode,
@@ -179,7 +178,7 @@ describe('错误码', () => {
 
     it('should have correct domain-specific error codes', () => {
         expect(AuthErrorCode.INVALID_CREDENTIALS).toBeGreaterThanOrEqual(2000)
-        expect(DbErrorCode.CONNECTION_FAILED).toBeGreaterThanOrEqual(3000)
+        // DbErrorCode moved to @hai/db
         expect(AIErrorCode.API_ERROR).toBeGreaterThanOrEqual(4000)
         expect(StorageErrorCode.FILE_NOT_FOUND).toBeGreaterThanOrEqual(5000)
         expect(CryptoErrorCode.ENCRYPT_FAILED).toBeGreaterThanOrEqual(6000)

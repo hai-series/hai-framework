@@ -17,9 +17,9 @@ import {
     IdConfigSchema,
     FeaturesConfigSchema,
     AppConfigSchema,
-} from '../../src/config/core-config-app.js'
+} from '../../src/core-config.js'
 
-describe('core-config-app', () => {
+describe('core-config', () => {
     describe('错误码', () => {
         describe('CommonErrorCode', () => {
             it('应有正确的错误码范围 (1000-1099)', () => {

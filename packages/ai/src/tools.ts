@@ -13,9 +13,11 @@
  */
 
 import type { Result } from '@hai/core'
-import { err, ok } from '@hai/core'
+import { createLogger, err, ok } from '@hai/core'
 import type { z } from 'zod'
-import type { ToolDefinition, ToolCall, ToolMessage } from './types.js'
+import type { ToolDefinition, ToolCall, ToolMessage } from './ai-types.js'
+
+const logger = createLogger({ name: '@hai/ai.tools' })
 
 /**
  * 工具错误类型
@@ -102,9 +104,10 @@ export function defineTool<TInput, TOutput>(
                 const parseResult = parameters.safeParse(input)
 
                 if (!parseResult.success) {
-                    console.warn(
-                        JSON.stringify({ toolName: name, errors: parseResult.error.errors, message: 'Tool input validation failed' }),
-                    )
+                    logger.warn('Tool input validation failed', {
+                        toolName: name,
+                        issues: parseResult.error.issues,
+                    })
                     return err({
                         type: 'VALIDATION_FAILED',
                         message: parseResult.error.message,
@@ -118,7 +121,10 @@ export function defineTool<TInput, TOutput>(
                 return ok(output)
             }
             catch (error) {
-                console.error(JSON.stringify({ toolName: name, error: error instanceof Error ? error.message : error, message: 'Tool execution failed' }))
+                logger.error('Tool execution failed', {
+                    toolName: name,
+                    error: error instanceof Error ? error.message : String(error),
+                })
                 return err({
                     type: 'EXECUTION_FAILED',
                     message: error instanceof Error ? error.message : String(error),
@@ -153,11 +159,11 @@ export class ToolRegistry {
      */
     register<TInput, TOutput>(tool: Tool<TInput, TOutput>): this {
         if (this.tools.has(tool.name)) {
-            logger.warn({ toolName: tool.name }, 'Overwriting existing tool')
+            logger.warn('Overwriting existing tool', { toolName: tool.name })
         }
 
         this.tools.set(tool.name, tool as Tool)
-        logger.info({ toolName: tool.name }, 'Tool registered')
+        logger.info('Tool registered', { toolName: tool.name })
 
         return this
     }
@@ -167,8 +173,7 @@ export class ToolRegistry {
      * 
      * @param tools - 工具数组
      */
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    registerMany(tools: Tool<any, any>[]): this {
+    registerMany(tools: Tool<unknown, unknown>[]): this {
         for (const tool of tools) {
             this.register(tool)
         }
@@ -183,7 +188,7 @@ export class ToolRegistry {
     unregister(name: string): boolean {
         const deleted = this.tools.delete(name)
         if (deleted) {
-            logger.info({ toolName: name }, 'Tool unregistered')
+            logger.info('Tool unregistered', { toolName: name })
         }
         return deleted
     }
@@ -336,7 +341,7 @@ export function createToolRegistry(): ToolRegistry {
  */
 function zodToJsonSchema(schema: z.ZodType): Record<string, unknown> {
     // 使用 Zod 内置的 _def 来获取类型信息
-    const def = (schema as any)._def
+    const def = (schema as unknown as { _def: { typeName: string } })._def
 
     switch (def.typeName) {
         case 'ZodString':
@@ -348,36 +353,36 @@ function zodToJsonSchema(schema: z.ZodType): Record<string, unknown> {
         case 'ZodArray':
             return {
                 type: 'array',
-                items: zodToJsonSchema(def.type),
+                items: zodToJsonSchema((def as unknown as { type: z.ZodType }).type),
             }
         case 'ZodObject':
             return buildObjectSchema(def)
         case 'ZodEnum':
             return {
                 type: 'string',
-                enum: def.values,
+                enum: (def as unknown as { values: string[] }).values,
             }
         case 'ZodOptional':
-            return zodToJsonSchema(def.innerType)
+            return zodToJsonSchema((def as unknown as { innerType: z.ZodType }).innerType)
         case 'ZodNullable':
             return {
                 anyOf: [
-                    zodToJsonSchema(def.innerType),
+                    zodToJsonSchema((def as unknown as { innerType: z.ZodType }).innerType),
                     { type: 'null' },
                 ],
             }
         case 'ZodDefault':
             return {
-                ...zodToJsonSchema(def.innerType),
-                default: def.defaultValue(),
+                ...zodToJsonSchema((def as unknown as { innerType: z.ZodType }).innerType),
+                default: (def as unknown as { defaultValue: () => unknown }).defaultValue(),
             }
         case 'ZodUnion':
             return {
-                anyOf: def.options.map((opt: z.ZodType) => zodToJsonSchema(opt)),
+                anyOf: (def as unknown as { options: z.ZodType[] }).options.map(opt => zodToJsonSchema(opt)),
             }
         case 'ZodLiteral':
             return {
-                const: def.value,
+                const: (def as unknown as { value: unknown }).value,
             }
         default:
             // 回退到基本对象类型
@@ -388,7 +393,18 @@ function zodToJsonSchema(schema: z.ZodType): Record<string, unknown> {
 /**
  * 构建字符串 schema
  */
-function buildStringSchema(def: any): Record<string, unknown> {
+type ZodCheck = {
+    kind: string
+    value?: number
+    regex?: RegExp
+}
+
+type ZodDefWithChecks = {
+    checks?: ZodCheck[]
+    description?: string
+}
+
+function buildStringSchema(def: { checks?: ZodCheck[]; description?: string }): Record<string, unknown> {
     const schema: Record<string, unknown> = { type: 'string' }
 
     if (def.checks) {
@@ -422,7 +438,7 @@ function buildStringSchema(def: any): Record<string, unknown> {
 /**
  * 构建数字 schema
  */
-function buildNumberSchema(def: any): Record<string, unknown> {
+function buildNumberSchema(def: { checks?: ZodCheck[]; description?: string }): Record<string, unknown> {
     const schema: Record<string, unknown> = { type: 'number' }
 
     if (def.checks) {
@@ -449,15 +465,16 @@ function buildNumberSchema(def: any): Record<string, unknown> {
 /**
  * 构建对象 schema
  */
-function buildObjectSchema(def: any): Record<string, unknown> {
+function buildObjectSchema(def: { shape: () => Record<string, unknown>; description?: string }): Record<string, unknown> {
     const properties: Record<string, unknown> = {}
     const required: string[] = []
 
     for (const [key, value] of Object.entries(def.shape())) {
-        properties[key] = zodToJsonSchema(value as z.ZodType)
+        const valueSchema = value as unknown as z.ZodType
+        properties[key] = zodToJsonSchema(valueSchema)
 
         // 检查是否必需
-        const valueDef = (value as any)._def
+        const valueDef = (valueSchema as unknown as { _def: { typeName: string } })._def
         if (valueDef.typeName !== 'ZodOptional' && valueDef.typeName !== 'ZodDefault') {
             required.push(key)
         }

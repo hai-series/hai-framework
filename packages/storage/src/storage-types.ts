@@ -2,316 +2,326 @@
  * =============================================================================
  * @hai/storage - 类型定义
  * =============================================================================
- * 定义存储模块的所有接口和类型
+ *
+ * 本文件定义存储模块的核心接口和类型（非配置相关）。
+ * 配置相关类型请从 storage-config.ts 导入。
+ *
+ * 包含：
+ * - 错误类型（StorageError）
+ * - 文件元数据（FileMetadata）
+ * - 列表结果（ListResult）
+ * - 文件操作接口（FileOperations）
+ * - 目录操作接口（DirOperations）
+ * - 签名 URL 操作接口（PresignOperations）
+ * - 存储服务接口（StorageService）
+ * - Provider 接口（StorageProvider）
+ *
+ * @example
+ * ```ts
+ * import type { StorageService, FileMetadata } from '@hai/storage'
+ *
+ * // 文件元数据
+ * const metadata: FileMetadata = {
+ *     key: 'uploads/image.png',
+ *     size: 1024,
+ *     contentType: 'image/png',
+ *     lastModified: new Date(),
+ *     etag: '"abc123"'
+ * }
+ * ```
+ *
+ * @module storage-types
  * =============================================================================
  */
 
 import type { Result } from '@hai/core'
+import type { Buffer } from 'node:buffer'
+import type { PresignOptions, PresignUploadOptions, StorageConfig, StorageErrorCodeType } from './storage-config.js'
 
 // =============================================================================
-// Provider 定义
+// 重新导出配置类型（方便使用）
 // =============================================================================
 
-/**
- * 存储服务提供者类型
- */
-export type StorageProvider = 'hai' | 'supabase' | 'firebase' | 's3' | 'gcs' | 'azure' | 'custom'
-
-/**
- * 存储驱动类型
- */
-export type StorageDriverType = 'local' | 'memory' | 's3' | 'gcs' | 'azure'
-
-/**
- * 存储服务配置
- */
-export interface StorageServiceConfig {
-    /** 提供者类型 */
-    provider: StorageProvider
-    /** 驱动类型 */
-    driver: StorageDriverType
-    /** 驱动配置 */
-    options: LocalStorageOptions | MemoryStorageOptions | S3StorageOptions
-    /** 默认加密配置 */
-    defaultEncryption?: EncryptionOptions
-    /** 自定义配置 */
-    custom?: Record<string, unknown>
-}
+export * from './storage-config.js'
 
 // =============================================================================
 // 错误类型
 // =============================================================================
 
 /**
- * 存储错误类型
- */
-export type StorageErrorType =
-    | 'NOT_FOUND'
-    | 'ALREADY_EXISTS'
-    | 'PERMISSION_DENIED'
-    | 'QUOTA_EXCEEDED'
-    | 'INVALID_PATH'
-    | 'IO_ERROR'
-    | 'NETWORK_ERROR'
-    | 'ENCRYPTION_ERROR'
-    | 'PROVIDER_NOT_FOUND'
-
-/**
- * 存储错误
+ * 存储错误接口
+ *
+ * 所有存储操作返回的错误都遵循此接口。
+ *
+ * @example
+ * ```ts
+ * const result = await storage.file.get('image.png')
+ * if (!result.success) {
+ *     const error: StorageError = result.error
+ *     // 处理错误：根据 error.code / error.message 做兜底
+ * }
+ * ```
  */
 export interface StorageError {
-    type: StorageErrorType
-    message: string
-    path?: string
+  /** 错误码（数值，参见 StorageErrorCode） */
+  code: StorageErrorCodeType
+  /** 错误消息 */
+  message: string
+  /** 相关的文件路径/键 */
+  key?: string
+  /** 原始错误（可选） */
+  cause?: unknown
 }
 
 // =============================================================================
-// 元数据类型
+// 文件元数据
 // =============================================================================
 
 /**
- * 文件元数据
+ * 文件元数据接口
+ *
+ * 表示存储中文件的元数据信息。
  */
 export interface FileMetadata {
-    /** 文件路径 */
-    path: string
-    /** 文件名 */
-    name: string
-    /** 文件大小 (bytes) */
-    size: number
-    /** MIME 类型 */
-    mimeType: string
-    /** 创建时间 */
-    createdAt: Date
-    /** 修改时间 */
-    updatedAt: Date
-    /** ETag */
-    etag?: string
-    /** 自定义元数据 */
-    customMetadata?: Record<string, string>
+  /** 文件键/路径 */
+  key: string
+  /** 文件大小（bytes） */
+  size: number
+  /** 内容类型（MIME） */
+  contentType: string
+  /** 最后修改时间 */
+  lastModified: Date
+  /** ETag（用于缓存验证） */
+  etag?: string
+  /** 自定义元数据 */
+  metadata?: Record<string, string>
 }
-
-/**
- * 目录元数据
- */
-export interface DirectoryMetadata {
-    /** 目录路径 */
-    path: string
-    /** 目录名 */
-    name: string
-    /** 创建时间 */
-    createdAt: Date
-}
-
-// =============================================================================
-// 操作选项类型
-// =============================================================================
 
 /**
  * 列表选项
  */
 export interface ListOptions {
-    /** 前缀过滤 */
-    prefix?: string
-    /** 分页游标 */
-    cursor?: string
-    /** 每页数量 */
-    limit?: number
-    /** 是否递归 */
-    recursive?: boolean
+  /** 前缀过滤 */
+  prefix?: string
+  /** 分页标记（从上次结果获取） */
+  continuationToken?: string
+  /** 每页最大数量 */
+  maxKeys?: number
+  /** 分隔符（用于模拟目录结构） */
+  delimiter?: string
 }
 
 /**
  * 列表结果
  */
 export interface ListResult {
-    /** 文件列表 */
-    files: FileMetadata[]
-    /** 目录列表 */
-    directories: DirectoryMetadata[]
-    /** 下一页游标 */
-    nextCursor?: string
-    /** 是否有更多 */
-    hasMore: boolean
+  /** 文件列表 */
+  files: FileMetadata[]
+  /** 公共前缀（模拟目录） */
+  commonPrefixes: string[]
+  /** 下一页标记 */
+  nextContinuationToken?: string
+  /** 是否被截断（还有更多） */
+  isTruncated: boolean
 }
+
+// =============================================================================
+// 上传下载选项
+// =============================================================================
 
 /**
  * 上传选项
  */
 export interface UploadOptions {
-    /** 自定义元数据 */
-    metadata?: Record<string, string>
-    /** MIME 类型 */
-    contentType?: string
-    /** 加密选项 */
-    encryption?: EncryptionOptions
-    /** 是否覆盖 */
-    overwrite?: boolean
+  /** 内容类型 */
+  contentType?: string
+  /** 自定义元数据 */
+  metadata?: Record<string, string>
+  /** 缓存控制 */
+  cacheControl?: string
+  /** 内容处置 */
+  contentDisposition?: string
 }
 
 /**
  * 下载选项
  */
 export interface DownloadOptions {
-    /** 范围起始 (bytes) */
-    rangeStart?: number
-    /** 范围结束 (bytes) */
-    rangeEnd?: number
-    /** 解密选项 */
-    encryption?: EncryptionOptions
-}
-
-/**
- * 加密选项
- */
-export interface EncryptionOptions {
-    /** 是否启用加密 */
-    enabled: boolean
-    /** 加密密钥 (SM4) */
-    key?: string
+  /** 范围起始（bytes） */
+  rangeStart?: number
+  /** 范围结束（bytes） */
+  rangeEnd?: number
 }
 
 /**
  * 复制选项
  */
 export interface CopyOptions {
-    /** 是否覆盖目标 */
-    overwrite?: boolean
-    /** 保留元数据 */
-    preserveMetadata?: boolean
-}
-
-/**
- * 移动选项
- */
-export interface MoveOptions {
-    /** 是否覆盖目标 */
-    overwrite?: boolean
-}
-
-/**
- * URL 签名选项
- */
-export interface SignedUrlOptions {
-    /** 过期时间 (秒) */
-    expiresIn: number
-    /** HTTP 方法 */
-    method?: 'GET' | 'PUT'
-    /** Content-Type (PUT 时) */
-    contentType?: string
+  /** 目标内容类型 */
+  contentType?: string
+  /** 目标元数据 */
+  metadata?: Record<string, string>
 }
 
 // =============================================================================
-// 驱动配置类型
+// 操作接口
 // =============================================================================
 
 /**
- * 本地存储配置
+ * 文件操作接口
+ *
+ * 提供文件的读写操作。
  */
-export interface LocalStorageOptions {
-    /** 根目录 */
-    root: string
-    /** 创建目录权限 */
-    directoryMode?: number
-    /** 创建文件权限 */
-    fileMode?: number
+export interface FileOperations {
+  /**
+   * 上传文件
+   *
+   * @param key - 文件键/路径
+   * @param data - 文件内容（Buffer、Uint8Array 或字符串）
+   * @param options - 上传选项
+   * @returns 上传结果包含文件元数据
+   */
+  put: (key: string, data: Buffer | Uint8Array | string, options?: UploadOptions) => Promise<Result<FileMetadata, StorageError>>
+
+  /**
+   * 下载文件
+   *
+   * @param key - 文件键/路径
+   * @param options - 下载选项
+   * @returns 文件内容
+   */
+  get: (key: string, options?: DownloadOptions) => Promise<Result<Buffer, StorageError>>
+
+  /**
+   * 获取文件元数据
+   *
+   * @param key - 文件键/路径
+   * @returns 文件元数据
+   */
+  head: (key: string) => Promise<Result<FileMetadata, StorageError>>
+
+  /**
+   * 检查文件是否存在
+   *
+   * @param key - 文件键/路径
+   * @returns 是否存在
+   */
+  exists: (key: string) => Promise<Result<boolean, StorageError>>
+
+  /**
+   * 删除文件
+   *
+   * @param key - 文件键/路径
+   * @returns 删除结果
+   */
+  delete: (key: string) => Promise<Result<void, StorageError>>
+
+  /**
+   * 批量删除文件
+   *
+   * @param keys - 文件键/路径列表
+   * @returns 删除结果
+   */
+  deleteMany: (keys: string[]) => Promise<Result<void, StorageError>>
+
+  /**
+   * 复制文件
+   *
+   * @param sourceKey - 源文件键
+   * @param destKey - 目标文件键
+   * @param options - 复制选项
+   * @returns 目标文件元数据
+   */
+  copy: (sourceKey: string, destKey: string, options?: CopyOptions) => Promise<Result<FileMetadata, StorageError>>
 }
 
 /**
- * 内存存储配置
+ * 目录操作接口
+ *
+ * 提供目录（前缀）的列表操作。
  */
-export interface MemoryStorageOptions {
-    /** 最大大小 (bytes) */
-    maxSize?: number
+export interface DirOperations {
+  /**
+   * 列出目录内容
+   *
+   * @param options - 列表选项
+   * @returns 文件和目录列表
+   */
+  list: (options?: ListOptions) => Promise<Result<ListResult, StorageError>>
+
+  /**
+   * 删除目录（删除指定前缀下的所有文件）
+   *
+   * @param prefix - 目录前缀
+   * @returns 删除结果
+   */
+  delete: (prefix: string) => Promise<Result<void, StorageError>>
 }
 
 /**
- * S3 存储配置
+ * 签名 URL 操作接口
+ *
+ * 提供生成临时授权 URL 的功能，支持前端直接上传下载。
  */
-export interface S3StorageOptions {
-    /** 存储桶名称 */
-    bucket: string
-    /** 区域 */
-    region: string
-    /** 端点 (可选，用于 MinIO 等) */
-    endpoint?: string
-    /** Access Key ID */
-    accessKeyId: string
-    /** Secret Access Key */
-    secretAccessKey: string
-    /** 路径前缀 */
-    prefix?: string
-    /** 强制路径风格 */
-    forcePathStyle?: boolean
-}
+export interface PresignOperations {
+  /**
+   * 生成下载签名 URL
+   *
+   * @param key - 文件键/路径
+   * @param options - 签名选项
+   * @returns 签名 URL
+   */
+  getUrl: (key: string, options?: PresignOptions) => Promise<Result<string, StorageError>>
 
-/**
- * 存储配置（传统格式，向后兼容）
- */
-export interface StorageConfig {
-    /** 存储驱动类型 */
-    driver: 'local' | 'memory' | 's3'
-    /** 驱动配置 */
-    options: LocalStorageOptions | MemoryStorageOptions | S3StorageOptions
-    /** 默认加密配置 */
-    defaultEncryption?: EncryptionOptions
+  /**
+   * 生成上传签名 URL
+   *
+   * @param key - 文件键/路径
+   * @param options - 上传签名选项
+   * @returns 签名 URL
+   */
+  putUrl: (key: string, options?: PresignUploadOptions) => Promise<Result<string, StorageError>>
+
+  /**
+   * 获取公开访问 URL（如果配置了 publicUrl）
+   *
+   * @param key - 文件键/路径
+   * @returns 公开 URL，如果未配置 publicUrl 则返回 null
+   */
+  publicUrl: (key: string) => string | null
 }
 
 // =============================================================================
-// 驱动接口
+// 存储服务接口
 // =============================================================================
 
 /**
- * 存储驱动接口
+ * 存储服务接口
+ *
+ * 统一的存储访问入口，提供以下功能：
+ * - `storage.init()` - 初始化存储连接
+ * - `storage.close()` - 关闭连接
+ * - `storage.file` - 文件操作
+ * - `storage.dir` - 目录操作
+ * - `storage.presign` - 签名 URL 操作（用于前端直接上传下载）
+ * - `storage.config` - 当前配置
+ * - `storage.isInitialized` - 初始化状态
  */
-export interface StorageDriver {
-    /** 驱动名称 */
-    readonly name: string
-
-    /** 检查文件是否存在 */
-    exists(path: string): Promise<Result<boolean, StorageError>>
-
-    /** 获取文件元数据 */
-    getMetadata(path: string): Promise<Result<FileMetadata, StorageError>>
-
-    /** 读取文件 */
-    read(path: string, options?: DownloadOptions): Promise<Result<Uint8Array, StorageError>>
-
-    /** 读取文件为文本 */
-    readText(path: string, encoding?: BufferEncoding): Promise<Result<string, StorageError>>
-
-    /** 读取文件为 JSON */
-    readJson<T = unknown>(path: string): Promise<Result<T, StorageError>>
-
-    /** 写入文件 */
-    write(path: string, data: Uint8Array | string, options?: UploadOptions): Promise<Result<FileMetadata, StorageError>>
-
-    /** 写入 JSON 文件 */
-    writeJson(path: string, data: unknown, options?: UploadOptions): Promise<Result<FileMetadata, StorageError>>
-
-    /** 追加内容 */
-    append(path: string, data: Uint8Array | string): Promise<Result<void, StorageError>>
-
-    /** 删除文件 */
-    delete(path: string): Promise<Result<void, StorageError>>
-
-    /** 复制文件 */
-    copy(source: string, destination: string, options?: CopyOptions): Promise<Result<FileMetadata, StorageError>>
-
-    /** 移动文件 */
-    move(source: string, destination: string, options?: MoveOptions): Promise<Result<FileMetadata, StorageError>>
-
-    /** 列出目录内容 */
-    list(path: string, options?: ListOptions): Promise<Result<ListResult, StorageError>>
-
-    /** 创建目录 */
-    createDirectory(path: string): Promise<Result<void, StorageError>>
-
-    /** 删除目录 */
-    deleteDirectory(path: string, recursive?: boolean): Promise<Result<void, StorageError>>
-
-    /** 生成签名 URL */
-    getSignedUrl?(path: string, options: SignedUrlOptions): Promise<Result<string, StorageError>>
+export interface StorageService {
+  /** 文件操作 */
+  readonly file: FileOperations
+  /** 目录操作 */
+  readonly dir: DirOperations
+  /** 签名 URL 操作 */
+  readonly presign: PresignOperations
+  /** 当前配置 */
+  readonly config: StorageConfig | null
+  /** 是否已初始化 */
+  readonly isInitialized: boolean
+  /** 初始化存储连接 */
+  init: (config: StorageConfig) => Promise<Result<void, StorageError>>
+  /** 关闭连接 */
+  close: () => Promise<void>
 }
 
 // =============================================================================
@@ -319,73 +329,87 @@ export interface StorageDriver {
 // =============================================================================
 
 /**
- * 文件操作 Provider
+ * 存储 Provider 接口
+ *
+ * 由各具体存储实现（S3、Local、Memory）实现此接口。
  */
-export interface FileProvider {
-    /** 检查文件是否存在 */
-    exists(path: string): Promise<Result<boolean, StorageError>>
-    /** 获取文件元数据 */
-    getMetadata(path: string): Promise<Result<FileMetadata, StorageError>>
-    /** 读取文件 */
-    read(path: string, options?: DownloadOptions): Promise<Result<Uint8Array, StorageError>>
-    /** 读取文件为文本 */
-    readText(path: string, encoding?: BufferEncoding): Promise<Result<string, StorageError>>
-    /** 读取文件为 JSON */
-    readJson<T = unknown>(path: string): Promise<Result<T, StorageError>>
-    /** 写入文件 */
-    write(path: string, data: Uint8Array | string, options?: UploadOptions): Promise<Result<FileMetadata, StorageError>>
-    /** 写入 JSON 文件 */
-    writeJson(path: string, data: unknown, options?: UploadOptions): Promise<Result<FileMetadata, StorageError>>
-    /** 追加内容 */
-    append(path: string, data: Uint8Array | string): Promise<Result<void, StorageError>>
-    /** 删除文件 */
-    delete(path: string): Promise<Result<void, StorageError>>
-    /** 复制文件 */
-    copy(source: string, destination: string, options?: CopyOptions): Promise<Result<FileMetadata, StorageError>>
-    /** 移动文件 */
-    move(source: string, destination: string, options?: MoveOptions): Promise<Result<FileMetadata, StorageError>>
-}
+export interface StorageProvider {
+  /** Provider 名称 */
+  readonly name: string
 
-/**
- * 目录操作 Provider
- */
-export interface DirectoryProvider {
-    /** 列出目录内容 */
-    list(path: string, options?: ListOptions): Promise<Result<ListResult, StorageError>>
-    /** 创建目录 */
-    create(path: string): Promise<Result<void, StorageError>>
-    /** 删除目录 */
-    delete(path: string, recursive?: boolean): Promise<Result<void, StorageError>>
-}
+  /** 文件操作 */
+  readonly file: FileOperations
 
-/**
- * URL Provider
- */
-export interface UrlProvider {
-    /** 生成签名 URL */
-    getSignedUrl(path: string, options: SignedUrlOptions): Promise<Result<string, StorageError>>
-    /** 获取公共 URL */
-    getPublicUrl?(path: string): string
+  /** 目录操作 */
+  readonly dir: DirOperations
+
+  /** 签名 URL 操作 */
+  readonly presign: PresignOperations
+
+  /**
+   * 初始化连接
+   *
+   * @param config - 存储配置
+   */
+  connect: (config: StorageConfig) => Promise<Result<void, StorageError>>
+
+  /**
+   * 关闭连接
+   */
+  close: () => Promise<void>
+
+  /**
+   * 检查是否已连接
+   */
+  isConnected: () => boolean
 }
 
 // =============================================================================
-// 统一存储服务接口
+// 前端客户端类型
 // =============================================================================
 
 /**
- * 统一存储服务
+ * 前端存储客户端接口
+ *
+ * 用于前端通过签名 URL 直接上传下载文件。
  */
-export interface StorageService {
-    /** 文件操作 */
-    readonly file: FileProvider
-    /** 目录操作 */
-    readonly dir: DirectoryProvider
-    /** URL 操作 */
-    readonly url: UrlProvider
-    /** 底层驱动 */
-    readonly driver: StorageDriver
-    /** 当前配置 */
-    readonly config: StorageServiceConfig
-    /** 初始化 */
-    init(config?: Partial<StorageServiceConfig>): Promise<void>
+export interface StorageClientOptions {
+  /** 后端 API 基础 URL */
+  apiBaseUrl: string
+  /** 获取 access token 的函数 */
+  getAccessToken?: () => string | Promise<string>
+}
+
+/**
+ * 上传进度回调
+ */
+export interface UploadProgress {
+  /** 已上传字节数 */
+  loaded: number
+  /** 总字节数 */
+  total: number
+  /** 进度百分比 (0-100) */
+  percent: number
+}
+
+/**
+ * 前端上传选项
+ */
+export interface ClientUploadOptions {
+  /** 内容类型 */
+  contentType?: string
+  /** 进度回调 */
+  onProgress?: (progress: UploadProgress) => void
+  /** AbortController 用于取消上传 */
+  abortController?: AbortController
+}
+
+/**
+ * 前端下载选项
+ */
+export interface ClientDownloadOptions {
+  /** 保存的文件名 */
+  filename?: string
+  /** AbortController 用于取消下载 */
+  abortController?: AbortController
 }

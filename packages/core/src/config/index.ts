@@ -6,21 +6,17 @@
  * =============================================================================
  */
 
-// 应用配置
-export * from './core-config-app.js'
-
-// IAM 配置
-export * from './core-config-iam.js'
-
-// 数据库配置
-export * from './core-config-db.js'
+// 核心配置（日志、ID、应用、错误码）
+export * from '../core-config.js'
 
 // AI 配置
 export * from './core-config-ai.js'
 
-// 存储配置
-export * from './core-config-storage.js'
-
 // 加密配置
 export * from './core-config-crypto.js'
 
+// IAM 配置
+export * from './core-config-iam.js'
+
+// 存储配置
+export * from './core-config-storage.js'

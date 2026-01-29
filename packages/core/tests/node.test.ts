@@ -111,7 +111,10 @@ port: 3000
         const result = core.config.load('test', testFile, TestSchema)
         expect(result.success).toBe(true)
 
-        unlinkSync(testFile)
+        // Windows / CI 场景下可能会出现文件已被提前清理的情况，避免 cleanup 抛错导致用例失败
+        if (existsSync(testFile)) {
+            unlinkSync(testFile)
+        }
     })
 
     it('should load and validate config', () => {
@@ -131,7 +134,10 @@ port: 8080
         const cfg = core.config.get('app')
         expect(cfg).toEqual({ name: 'my-app', port: 8080 })
 
-        unlinkSync(testFile)
+        // Windows / CI 场景下可能会出现文件已被提前清理的情况，避免 cleanup 抛错导致用例失败
+        if (existsSync(testFile)) {
+            unlinkSync(testFile)
+        }
     })
 
     it('should cache config after load', () => {
@@ -146,7 +152,10 @@ port: 8080
         const cfg2 = core.config.get('cached')
         expect(cfg1).toBe(cfg2)
 
-        unlinkSync(testFile)
+        // Windows / CI 场景下可能会出现文件已被提前清理的情况，避免 cleanup 抛错导致用例失败
+        if (existsSync(testFile)) {
+            unlinkSync(testFile)
+        }
     })
 
     it('should return error for non-existent file', () => {
@@ -175,6 +184,10 @@ withDefault: \${MISSING:default-value}
         expect(cfg?.withDefault).toBe('default-value')
 
         delete process.env.TEST_VAR
-        unlinkSync(testFile)
+
+        // Windows / CI 场景下可能会出现文件已被提前清理的情况，避免 cleanup 抛错导致用例失败
+        if (existsSync(testFile)) {
+            unlinkSync(testFile)
+        }
     })
 })

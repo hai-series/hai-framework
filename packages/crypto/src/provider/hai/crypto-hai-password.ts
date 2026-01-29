@@ -8,8 +8,8 @@
 
 import type { Result } from '@hai/core'
 import { err, ok } from '@hai/core'
-import { argon2id } from '@noble/hashes/argon2'
-import { randomBytes } from '@noble/hashes/utils'
+import { argon2id } from '@noble/hashes/argon2.js'
+import { randomBytes } from '@noble/hashes/utils.js'
 
 import type {
     Argon2Options,

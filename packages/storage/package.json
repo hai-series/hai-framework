@@ -2,12 +2,16 @@
     "name": "@hai/storage",
     "version": "0.1.0",
     "license": "Apache-2.0",
-    "description": "hai Admin Framework - 存储抽象层",
+    "description": "hai Admin Framework - 对象存储服务（S3 协议）",
     "type": "module",
     "exports": {
         ".": {
             "types": "./dist/index.d.ts",
             "import": "./dist/index.js"
+        },
+        "./client": {
+            "types": "./dist/storage-client.d.ts",
+            "import": "./dist/storage-client.js"
         }
     },
     "main": "./dist/index.js",
@@ -18,20 +22,28 @@
     "scripts": {
         "build": "tsup",
         "dev": "tsup --watch",
-        "test": "vitest run",
+        "test": "vitest run tests/local.test.ts",
         "test:watch": "vitest",
+        "test:container": "vitest run --testTimeout=120000 tests/s3.test.ts",
+        "test:all": "vitest run --testTimeout=120000",
         "typecheck": "tsc --noEmit",
+        "lint": "eslint src",
+        "lint:fix": "eslint src --fix",
         "clean": "rimraf dist .turbo"
     },
     "dependencies": {
         "@hai/core": "workspace:*",
-        "@hai/crypto": "workspace:*"
+        "@aws-sdk/client-s3": "catalog:",
+        "@aws-sdk/s3-request-presigner": "catalog:",
+        "@aws-sdk/lib-storage": "catalog:",
+        "zod": "catalog:"
     },
     "devDependencies": {
         "@types/node": "catalog:",
         "rimraf": "catalog:",
         "typescript": "catalog:",
         "tsup": "catalog:",
-        "vitest": "catalog:"
+        "vitest": "catalog:",
+        "testcontainers": "catalog:"
     }
 }

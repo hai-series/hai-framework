@@ -84,7 +84,7 @@ core.time.timeAgo(someDate)         // '5分钟前'
 函数式错误处理，避免 try-catch 的嵌套：
 
 ```typescript
-import { ok, err, type Result } from '@hai/core'
+import { core, ok, err, type Result } from '@hai/core'
 
 // 定义返回 Result 的函数
 function divide(a: number, b: number): Result<number, string> {
@@ -98,9 +98,9 @@ function divide(a: number, b: number): Result<number, string> {
 const result = divide(10, 2)
 
 if (result.success) {
-  console.log('Result:', result.data) // 5
+  core.logger.info(`Result: ${result.data}`) // 5
 } else {
-  console.log('Error:', result.error)
+  core.logger.error(`Error: ${result.error}`)
 }
 ```
 
@@ -115,7 +115,7 @@ import { AppConfigSchema } from '@hai/core'
 // 加载单个配置文件
 const result = core.config.load('app', './config/_app.yml', AppConfigSchema)
 if (result.success) {
-  console.log('App config loaded')
+  core.logger.info('App config loaded')
 }
 
 // 获取已加载的配置
@@ -123,7 +123,7 @@ const appConfig = core.config.get('app')
 
 // 监听配置变更
 core.config.onChange('app', (newConfig) => {
-  console.log('Config changed:', newConfig)
+  core.logger.info('Config changed', { config: newConfig })
 })
 ```
 

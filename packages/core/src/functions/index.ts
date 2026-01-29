@@ -6,8 +6,8 @@
  * =============================================================================
  */
 
-// ID 生成
-export * from './core-function-id.js'
-
 // 配置管理（Node.js 专用，浏览器环境下会抛出错误）
 export * from './core-function-config.js'
+
+// ID 生成
+export * from './core-function-id.js'

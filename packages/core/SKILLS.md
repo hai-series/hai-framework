@@ -80,7 +80,7 @@ core.config.clear()          // 清空所有
 
 // 监听变更
 core.config.onChange('app', (newConfig) => {
-  console.log('配置已更新', newConfig)
+  // 在此处理配置变更（例如：热更新某些运行时参数）
 })
 ```
 
@@ -180,7 +180,7 @@ core.time.endOfDay(date)                // 当天 23:59:59
 ## Result 类型
 
 ```typescript
-import { ok, err, type Result } from '@hai/core'
+import { core, ok, err, type Result } from '@hai/core'
 
 function divide(a: number, b: number): Result<number, string> {
   if (b === 0) return err('除数不能为零')
@@ -189,9 +189,9 @@ function divide(a: number, b: number): Result<number, string> {
 
 const result = divide(10, 2)
 if (result.success) {
-  console.log(result.data)  // 5
+  core.logger.info(`Result: ${result.data}`)  // 5
 } else {
-  console.log(result.error)
+  core.logger.error(`Error: ${result.error}`)
 }
 ```
 

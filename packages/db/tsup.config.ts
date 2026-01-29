@@ -4,5 +4,5 @@ import { baseConfig } from '../tsup.base'
 export default defineConfig({
     ...baseConfig,
     entry: ['src/index.ts'],
-    external: ['@hai/core', 'better-sqlite3', 'postgres', 'mysql2'],
+    external: ['@hai/core', 'better-sqlite3', 'pg', 'mysql2'],
 })

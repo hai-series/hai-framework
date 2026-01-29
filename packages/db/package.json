@@ -2,7 +2,7 @@
     "name": "@hai/db",
     "version": "0.1.0",
     "license": "Apache-2.0",
-    "description": "Drizzle ORM 多数据库支持 (SQLite/PostgreSQL/MySQL)",
+    "description": "关系型数据库访问模块 (SQLite/PostgreSQL/MySQL)",
     "type": "module",
     "main": "./dist/index.js",
     "types": "./dist/index.d.ts",
@@ -20,24 +20,27 @@
         "dev": "tsup --watch",
         "test": "vitest run",
         "test:watch": "vitest",
+        "test:container": "vitest run --testTimeout=120000 tests/postgres.test.ts tests/mysql.test.ts",
         "typecheck": "tsc --noEmit",
         "lint": "eslint src",
+        "lint:fix": "eslint src --fix",
         "clean": "rimraf dist .turbo"
     },
     "dependencies": {
         "@hai/core": "workspace:*",
-        "drizzle-orm": "catalog:",
-        "better-sqlite3": "catalog:"
+        "better-sqlite3": "catalog:",
+        "zod": "catalog:"
     },
     "optionalDependencies": {
-        "postgres": "catalog:",
+        "pg": "catalog:",
         "mysql2": "catalog:"
     },
     "devDependencies": {
         "@types/better-sqlite3": "catalog:",
         "@types/node": "catalog:",
-        "drizzle-kit": "catalog:",
+        "@types/pg": "catalog:",
         "rimraf": "catalog:",
+        "testcontainers": "catalog:",
         "tsup": "catalog:",
         "typescript": "catalog:",
         "vitest": "catalog:"

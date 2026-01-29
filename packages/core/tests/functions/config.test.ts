@@ -16,7 +16,7 @@ import {
     unwatchConfig,
     isWatchingConfig,
 } from '../../src/functions/core-function-config.js'
-import { ConfigErrorCode } from '../../src/config/core-config-app.js'
+import { ConfigErrorCode } from '../../src/core-config.js'
 
 const testDir = join(process.cwd(), '.test-config')
 const testFile = join(testDir, 'test.yml')

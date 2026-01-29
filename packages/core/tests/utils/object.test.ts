@@ -84,8 +84,8 @@ describe('core-util-object', () => {
         })
 
         it('应忽略不存在的键', () => {
-            const obj = { a: 1, b: 2 }
-            const result = pick(obj, ['a', 'd'] as any)
+            const obj: Record<string, number> = { a: 1, b: 2 }
+            const result = pick(obj, ['a', 'd'])
 
             expect(result).toEqual({ a: 1 })
         })
