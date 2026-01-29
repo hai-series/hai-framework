@@ -1,32 +1,17 @@
 {
     "name": "@hai/crypto",
     "version": "0.1.0",
+    "license": "Apache-2.0",
     "description": "国密算法 (SM2/SM3/SM4) 和密码哈希",
     "type": "module",
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts",
     "exports": {
         ".": {
             "types": "./dist/index.d.ts",
             "import": "./dist/index.js"
-        },
-        "./sm2": {
-            "types": "./dist/sm2.d.ts",
-            "import": "./dist/sm2.js"
-        },
-        "./sm3": {
-            "types": "./dist/sm3.d.ts",
-            "import": "./dist/sm3.js"
-        },
-        "./sm4": {
-            "types": "./dist/sm4.d.ts",
-            "import": "./dist/sm4.js"
-        },
-        "./password": {
-            "types": "./dist/password.d.ts",
-            "import": "./dist/password.js"
         }
     },
-    "main": "./dist/index.js",
-    "types": "./dist/index.d.ts",
     "files": [
         "dist"
     ],
@@ -50,8 +35,5 @@
         "tsup": "catalog:",
         "typescript": "catalog:",
         "vitest": "catalog:"
-    },
-    "peerDependencies": {
-        "typescript": ">=5.0.0"
     }
 }

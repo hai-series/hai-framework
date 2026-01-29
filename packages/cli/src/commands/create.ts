@@ -2,35 +2,101 @@
  * =============================================================================
  * @hai/cli - 项目创建命令
  * =============================================================================
+ * 类似 SvelteKit 的交互式项目创建
+ * 
+ * 使用: pnpm hai create my-admin-system
+ * =============================================================================
  */
 
 import path from 'node:path'
 import { execSync } from 'node:child_process'
-import fs from 'fs-extra'
+import fse from 'fs-extra'
 import chalk from 'chalk'
 import ora from 'ora'
 import prompts from 'prompts'
-import type { CreateProjectOptions, ProjectInfo } from '../types.js'
-import { createTemplateContext, renderTemplate, writeFile, fileExists, detectPackageManager } from '../utils.js'
+import type { CreateProjectOptions, ProjectInfo, FeatureId, FeatureDefinition } from '../types.js'
+import { createTemplateContext, writeFile, fileExists, detectPackageManager } from '../utils.js'
+
+/**
+ * 功能定义
+ */
+const FEATURES: Record<FeatureId, FeatureDefinition> = {
+    iam: {
+        id: 'iam',
+        name: '身份与访问管理',
+        description: 'Session/JWT 会话管理、RBAC 权限控制、OAuth',
+        packages: ['@hai/iam'],
+        dependencies: ['crypto'],
+    },
+    db: {
+        id: 'db',
+        name: '数据库',
+        description: 'Drizzle ORM 多数据库支持 (SQLite/PostgreSQL/MySQL)',
+        packages: ['@hai/db'],
+    },
+    ai: {
+        id: 'ai',
+        name: 'AI 集成',
+        description: 'LLM 适配器、MCP 协议、技能系统、流式响应',
+        packages: ['@hai/ai'],
+    },
+    storage: {
+        id: 'storage',
+        name: '文件存储',
+        description: '本地存储、S3/OSS/COS 云存储',
+        packages: ['@hai/storage'],
+    },
+    crypto: {
+        id: 'crypto',
+        name: '加密模块',
+        description: '国密 SM2/SM3/SM4、Argon2 密码哈希',
+        packages: ['@hai/crypto'],
+    },
+    // 兼容性别名
+    auth: {
+        id: 'auth',
+        name: '认证授权（别名）',
+        description: '已合并到 iam 模块',
+        packages: ['@hai/iam'],
+        dependencies: ['crypto'],
+    },
+    mcp: {
+        id: 'mcp',
+        name: 'MCP 协议（别名）',
+        description: '已合并到 ai 模块',
+        packages: ['@hai/ai'],
+    },
+    skills: {
+        id: 'skills',
+        name: '技能系统（别名）',
+        description: '已合并到 ai 模块',
+        packages: ['@hai/ai'],
+    },
+}
 
 /**
  * 项目模板定义
  */
 const PROJECT_TEMPLATES = {
-    default: {
-        name: 'default',
-        description: '标准模板，包含基础功能',
-        features: ['auth', 'ui', 'api'],
-    },
     minimal: {
         name: 'minimal',
-        description: '最小模板，仅包含核心功能',
-        features: ['core'],
+        description: '最小模板 - 仅核心功能',
+        features: [] as FeatureId[],
+    },
+    default: {
+        name: 'default',
+        description: '标准模板 - IAM + 数据库',
+        features: ['iam', 'db', 'crypto'] as FeatureId[],
     },
     full: {
         name: 'full',
-        description: '完整模板，包含所有功能',
-        features: ['auth', 'ui', 'api', 'ai', 'storage', 'mcp'],
+        description: '完整模板 - 所有功能',
+        features: ['iam', 'db', 'crypto', 'ai', 'storage'] as FeatureId[],
+    },
+    custom: {
+        name: 'custom',
+        description: '自定义 - 选择需要的功能',
+        features: [] as FeatureId[],
     },
 }
 
@@ -59,11 +125,11 @@ export async function createProject(options: CreateProjectOptions): Promise<void
                 return
             }
 
-            await fs.remove(projectPath)
+            await fse.remove(projectPath)
         }
 
         spinner.start('创建项目目录...')
-        await fs.ensureDir(projectPath)
+        await fse.ensureDir(projectPath)
         spinner.succeed()
 
         // 生成项目文件
@@ -111,14 +177,20 @@ export async function createProject(options: CreateProjectOptions): Promise<void
  * 解析选项（交互式）
  */
 async function resolveOptions(options: CreateProjectOptions): Promise<Required<CreateProjectOptions>> {
+    console.log()
+    console.log(chalk.bold.cyan('  🚀 hai Admin Framework'))
+    console.log(chalk.gray('     AI-Native · Configuration-Driven · Security-First'))
+    console.log()
+
     const questions: prompts.PromptObject[] = []
 
+    // 项目名称
     if (!options.name) {
         questions.push({
             type: 'text',
             name: 'name',
             message: '项目名称:',
-            initial: 'my-hai-app',
+            initial: 'my-admin-app',
             validate: (value: string) => {
                 if (!value.trim()) return '项目名称不能为空'
                 if (!/^[a-z0-9-]+$/.test(value)) return '项目名称只能包含小写字母、数字和连字符'
@@ -127,63 +199,165 @@ async function resolveOptions(options: CreateProjectOptions): Promise<Required<C
         })
     }
 
+    // 模板选择
     if (!options.template) {
         questions.push({
             type: 'select',
             name: 'template',
             message: '选择模板:',
             choices: Object.values(PROJECT_TEMPLATES).map(t => ({
-                title: `${t.name} - ${t.description}`,
+                title: `${chalk.bold(t.name.padEnd(10))} ${chalk.gray(t.description)}`,
                 value: t.name,
             })),
-            initial: 0,
+            initial: 1, // default
         })
     }
 
-    if (options.install === undefined) {
-        questions.push({
+    // 先获取模板选择
+    const templateAnswers = questions.length > 0 ? await prompts(questions, {
+        onCancel: () => {
+            console.log(chalk.red('\n已取消'))
+            process.exit(1)
+        },
+    }) : {}
+
+    const selectedTemplate = options.template || templateAnswers.template || 'default'
+
+    // 功能选择（仅在 custom 模板时显示）
+    let selectedFeatures: FeatureId[] = []
+
+    if (selectedTemplate === 'custom' && !options.features) {
+        const featureChoices = Object.values(FEATURES).map(f => ({
+            title: `${chalk.bold(f.name.padEnd(10))} ${chalk.gray(f.description)}`,
+            value: f.id,
+            selected: ['auth', 'db', 'crypto'].includes(f.id), // 默认选中常用功能
+        }))
+
+        const { features } = await prompts({
+            type: 'multiselect',
+            name: 'features',
+            message: '选择功能 (空格选择，回车确认):',
+            choices: featureChoices,
+            hint: '- 空格选择，回车确认',
+            instructions: false,
+        }, {
+            onCancel: () => {
+                console.log(chalk.red('\n已取消'))
+                process.exit(1)
+            },
+        })
+
+        selectedFeatures = features || []
+
+        // 自动添加依赖功能
+        selectedFeatures = resolveFeatureDependencies(selectedFeatures)
+    } else if (selectedTemplate !== 'custom') {
+        selectedFeatures = PROJECT_TEMPLATES[selectedTemplate as keyof typeof PROJECT_TEMPLATES].features
+    }
+
+    // 示例代码选项
+    let addExamples = options.examples
+    if (addExamples === undefined) {
+        const { examples } = await prompts({
             type: 'confirm',
-            name: 'install',
-            message: '是否安装依赖?',
+            name: 'examples',
+            message: '是否添加示例代码?',
             initial: true,
+        }, {
+            onCancel: () => {
+                console.log(chalk.red('\n已取消'))
+                process.exit(1)
+            },
         })
+        addExamples = examples
     }
 
-    if (!options.packageManager) {
-        const detected = await detectPackageManager(options.cwd ?? '.')
-        questions.push({
+    // 包管理器
+    const detected = await detectPackageManager(options.cwd ?? '.')
+    let packageManager = options.packageManager
+    if (!packageManager) {
+        const { pm } = await prompts({
             type: 'select',
-            name: 'packageManager',
+            name: 'pm',
             message: '包管理器:',
             choices: [
-                { title: 'pnpm', value: 'pnpm' },
+                { title: 'pnpm (推荐)', value: 'pnpm' },
                 { title: 'npm', value: 'npm' },
                 { title: 'yarn', value: 'yarn' },
             ],
             initial: detected === 'pnpm' ? 0 : detected === 'npm' ? 1 : 2,
+        }, {
+            onCancel: () => {
+                console.log(chalk.red('\n已取消'))
+                process.exit(1)
+            },
         })
+        packageManager = pm
     }
 
-    if (options.git === undefined) {
-        questions.push({
+    // 安装依赖
+    let install = options.install
+    if (install === undefined) {
+        const { doInstall } = await prompts({
             type: 'confirm',
-            name: 'git',
+            name: 'doInstall',
+            message: '是否安装依赖?',
+            initial: true,
+        }, {
+            onCancel: () => {
+                console.log(chalk.red('\n已取消'))
+                process.exit(1)
+            },
+        })
+        install = doInstall
+    }
+
+    // Git 初始化
+    let git = options.git
+    if (git === undefined) {
+        const { initGit } = await prompts({
+            type: 'confirm',
+            name: 'initGit',
             message: '是否初始化 Git?',
             initial: true,
+        }, {
+            onCancel: () => {
+                console.log(chalk.red('\n已取消'))
+                process.exit(1)
+            },
         })
+        git = initGit
     }
 
-    const answers = questions.length > 0 ? await prompts(questions) : {}
-
     return {
-        name: options.name || answers.name,
-        template: options.template || answers.template || 'default',
-        install: options.install ?? answers.install ?? true,
-        packageManager: options.packageManager || answers.packageManager || 'pnpm',
-        git: options.git ?? answers.git ?? true,
+        name: options.name || templateAnswers.name,
+        template: (selectedTemplate || 'default') as CreateProjectOptions['template'],
+        features: selectedFeatures,
+        examples: addExamples ?? true,
+        install: install ?? true,
+        packageManager: packageManager || 'pnpm',
+        git: git ?? true,
         verbose: options.verbose ?? false,
         cwd: options.cwd ?? '.',
     }
+}
+
+/**
+ * 解析功能依赖
+ */
+function resolveFeatureDependencies(features: FeatureId[]): FeatureId[] {
+    const result = new Set(features)
+
+    for (const featureId of features) {
+        const feature = FEATURES[featureId]
+        if (feature.dependencies) {
+            for (const dep of feature.dependencies) {
+                result.add(dep)
+            }
+        }
+    }
+
+    return Array.from(result)
 }
 
 /**
@@ -193,17 +367,30 @@ async function generateProjectFiles(
     projectPath: string,
     options: Required<CreateProjectOptions>,
 ): Promise<void> {
-    const context = createTemplateContext(options.name, {
+    // 创建模板上下文（用于后续生成示例代码）
+    const _context = createTemplateContext(options.name, {
         projectName: options.name,
         template: options.template,
+        features: options.features,
+        examples: options.examples,
         year: new Date().getFullYear(),
     })
+
+    // 收集需要的包
+    const featurePackages: Record<string, string> = {}
+    for (const featureId of options.features || []) {
+        const feature = FEATURES[featureId]
+        for (const pkg of feature.packages) {
+            featurePackages[pkg] = 'workspace:*'
+        }
+    }
 
     // package.json
     const packageJson = {
         name: options.name,
         version: '0.0.1',
         private: true,
+        license: 'Apache-2.0',
         type: 'module',
         scripts: {
             dev: 'vite dev',
@@ -214,10 +401,12 @@ async function generateProjectFiles(
             test: 'vitest run',
         },
         dependencies: {
+            // 核心包（始终需要）
             '@hai/core': 'workspace:*',
-            '@hai/config': 'workspace:*',
             '@hai/kit': 'workspace:*',
             '@hai/ui': 'workspace:*',
+            // 根据选择的功能添加包
+            ...featurePackages,
         },
         devDependencies: {
             '@sveltejs/adapter-auto': '^3.0.0',
@@ -228,27 +417,9 @@ async function generateProjectFiles(
             typescript: '^5.7.0',
             vite: '^6.0.0',
             vitest: '^2.0.0',
+            tailwindcss: '^4.0.0',
+            daisyui: '^5.0.0',
         },
-    }
-
-    // 根据模板添加额外依赖
-    if (options.template === 'full') {
-        Object.assign(packageJson.dependencies, {
-            '@hai/auth': 'workspace:*',
-            '@hai/db': 'workspace:*',
-            '@hai/crypto': 'workspace:*',
-            '@hai/ai': 'workspace:*',
-            '@hai/skills': 'workspace:*',
-            '@hai/mcp': 'workspace:*',
-            '@hai/storage': 'workspace:*',
-        })
-    }
-    else if (options.template === 'default') {
-        Object.assign(packageJson.dependencies, {
-            '@hai/auth': 'workspace:*',
-            '@hai/db': 'workspace:*',
-            '@hai/crypto': 'workspace:*',
-        })
     }
 
     await writeFile(
@@ -437,7 +608,7 @@ ${options.packageManager} preview
     await writeFile(path.join(projectPath, 'README.md'), readme)
 
     // static/favicon.png (空占位)
-    await fs.ensureDir(path.join(projectPath, 'static'))
+    await fse.ensureDir(path.join(projectPath, 'static'))
 }
 
 /**
@@ -465,7 +636,7 @@ export async function detectProject(cwd: string): Promise<ProjectInfo | null> {
     }
 
     try {
-        const pkg = await fs.readJson(pkgPath)
+        const pkg = await fse.readJson(pkgPath)
         const deps = { ...pkg.dependencies, ...pkg.devDependencies }
 
         const haiPackages = Object.keys(deps).filter(name => name.startsWith('@hai/'))

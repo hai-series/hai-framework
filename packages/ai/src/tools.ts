@@ -13,11 +13,9 @@
  */
 
 import type { Result } from '@hai/core'
-import { createLogger, err, ok, generateId } from '@hai/core'
+import { err, ok } from '@hai/core'
 import type { z } from 'zod'
 import type { ToolDefinition, ToolCall, ToolMessage } from './types.js'
-
-const logger = createLogger({ name: 'ai-tools' })
 
 /**
  * 工具错误类型
@@ -104,9 +102,8 @@ export function defineTool<TInput, TOutput>(
                 const parseResult = parameters.safeParse(input)
 
                 if (!parseResult.success) {
-                    logger.warn(
-                        { toolName: name, errors: parseResult.error.errors },
-                        'Tool input validation failed',
+                    console.warn(
+                        JSON.stringify({ toolName: name, errors: parseResult.error.errors, message: 'Tool input validation failed' }),
                     )
                     return err({
                         type: 'VALIDATION_FAILED',
@@ -116,14 +113,12 @@ export function defineTool<TInput, TOutput>(
                 }
 
                 // 执行工具
-                logger.debug({ toolName: name }, 'Executing tool')
                 const output = await handler(parseResult.data)
-                logger.debug({ toolName: name }, 'Tool executed successfully')
 
                 return ok(output)
             }
             catch (error) {
-                logger.error({ toolName: name, error }, 'Tool execution failed')
+                console.error(JSON.stringify({ toolName: name, error: error instanceof Error ? error.message : error, message: 'Tool execution failed' }))
                 return err({
                     type: 'EXECUTION_FAILED',
                     message: error instanceof Error ? error.message : String(error),
@@ -172,7 +167,8 @@ export class ToolRegistry {
      * 
      * @param tools - 工具数组
      */
-    registerMany(tools: Tool[]): this {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    registerMany(tools: Tool<any, any>[]): this {
         for (const tool of tools) {
             this.register(tool)
         }
@@ -256,14 +252,14 @@ export class ToolRegistry {
         // 执行工具
         const result = await tool.execute(args)
 
-        if (!result.ok) {
+        if (!result.success) {
             return result as Result<ToolMessage, ToolError>
         }
 
         // 构建工具消息
-        const content = typeof result.value === 'string'
-            ? result.value
-            : JSON.stringify(result.value)
+        const content = typeof result.data === 'string'
+            ? result.data
+            : JSON.stringify(result.data)
 
         return ok({
             role: 'tool',
@@ -292,20 +288,20 @@ export class ToolRegistry {
             )
 
             for (const result of results) {
-                if (!result.ok) {
+                if (!result.success) {
                     return result as Result<ToolMessage[], ToolError>
                 }
-                messages.push(result.value)
+                messages.push(result.data)
             }
         }
         else {
             // 顺序执行
             for (const toolCall of toolCalls) {
                 const result = await this.execute(toolCall)
-                if (!result.ok) {
+                if (!result.success) {
                     return result as Result<ToolMessage[], ToolError>
                 }
-                messages.push(result.value)
+                messages.push(result.data)
             }
         }
 
@@ -317,7 +313,6 @@ export class ToolRegistry {
      */
     clear(): void {
         this.tools.clear()
-        logger.info('All tools cleared')
     }
 
     /**

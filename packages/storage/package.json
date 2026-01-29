@@ -1,6 +1,7 @@
 {
     "name": "@hai/storage",
     "version": "0.1.0",
+    "license": "Apache-2.0",
     "description": "hai Admin Framework - 存储抽象层",
     "type": "module",
     "exports": {
@@ -24,7 +25,6 @@
     },
     "dependencies": {
         "@hai/core": "workspace:*",
-        "@hai/config": "workspace:*",
         "@hai/crypto": "workspace:*"
     },
     "devDependencies": {
@@ -33,8 +33,5 @@
         "typescript": "catalog:",
         "tsup": "catalog:",
         "vitest": "catalog:"
-    },
-    "peerDependencies": {
-        "zod": "catalog:"
     }
 }

@@ -1,71 +1,16 @@
 /**
  * =============================================================================
- * @hai/ai - 主入口
- * =============================================================================
- * AI 模块，提供:
- * - LLM 适配器（OpenAI 兼容）
- * - 流式响应处理
- * - 工具调用
+ * @hai/ai - AI 集成（LLM、MCP、技能）
  * =============================================================================
  */
 
-// 类型
-export type {
-    MessageRole,
-    TextContent,
-    ImageContent,
-    MessageContent,
-    SystemMessage,
-    UserMessage,
-    AssistantMessage,
-    ToolMessage,
-    ToolCall,
-    ChatMessage,
-    ToolDefinition,
-    ChatCompletionRequest,
-    TokenUsage,
-    ChatCompletionChoice,
-    ChatCompletionResponse,
-    ChatCompletionDelta,
-    ChatCompletionChunk,
-    EmbeddingRequest,
-    EmbeddingResponse,
-    ModelInfo,
-    ModelListResponse,
-} from './types.js'
+// 统一服务入口
+export { ai, createAIService } from './ai.main.js'
 
-// LLM 适配器
-export {
-    createLLMAdapter,
-    createOpenAIAdapter,
-    LLMAdapter,
-    type AdapterOptions,
-    type AIError,
-    type AIErrorType,
-    type ProviderConfig,
-} from './adapter.js'
+// 类型定义
+export type * from './ai-types.js'
 
-// 流式响应
-export {
-    collectStream,
-    createSSEDecoder,
-    createSSEReadableStream,
-    createStreamProcessor,
-    encodeSSE,
-    parseSSEStream,
-    SSEDecoder,
-    StreamProcessor,
-    type SSEEvent,
-    type StreamAccumulator,
-} from './stream.js'
-
-// 工具调用
-export {
-    createToolRegistry,
-    defineTool,
-    ToolRegistry,
-    type DefineToolOptions,
-    type Tool,
-    type ToolError,
-    type ToolErrorType,
-} from './tools.js'
+// HAI Provider 实现
+export { createHaiLLMProvider } from './provider/hai/ai-hai-llm.js'
+export { createHaiMCPProvider } from './provider/hai/ai-hai-mcp.js'
+export { createHaiSkillsProvider, defineSkill } from './provider/hai/ai-hai-skills.js'

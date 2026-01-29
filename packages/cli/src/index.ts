@@ -13,7 +13,7 @@
 import { cac } from 'cac'
 import chalk from 'chalk'
 import { createProject, generate } from './commands/index.js'
-import type { CreateProjectOptions, GenerateOptions, GeneratorType } from './types.js'
+import type { CreateProjectOptions, GeneratorType } from './types.js'
 
 // CLI 版本
 const VERSION = '0.0.1'
@@ -28,15 +28,25 @@ cli.option('-C, --cwd <path>', '工作目录')
 // 创建项目命令
 cli
     .command('create [name]', '创建新的 hai 项目')
-    .option('-t, --template <template>', '项目模板 (default, minimal, full)')
+    .option('-t, --template <template>', '项目模板 (minimal, default, full, custom)')
+    .option('-f, --features <features>', '功能列表 (逗号分隔: auth,db,ai,storage,mcp,crypto,skills)')
+    .option('--examples', '添加示例代码')
+    .option('--no-examples', '不添加示例代码')
     .option('--no-install', '不安装依赖')
     .option('-p, --package-manager <pm>', '包管理器 (pnpm, npm, yarn)')
     .option('--no-git', '不初始化 Git')
     .action(async (name: string | undefined, options: Record<string, unknown>) => {
         try {
+            // 解析功能列表
+            const features = typeof options.features === 'string'
+                ? options.features.split(',').map(f => f.trim()) as CreateProjectOptions['features']
+                : undefined
+
             await createProject({
                 name: name ?? '',
                 template: options.template as CreateProjectOptions['template'],
+                features,
+                examples: options.examples as boolean,
                 install: options.install as boolean,
                 packageManager: options.packageManager as CreateProjectOptions['packageManager'],
                 git: options.git as boolean,

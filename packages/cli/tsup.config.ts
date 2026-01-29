@@ -1,30 +1,10 @@
-/**
- * =============================================================================
- * @hai/cli - tsup 构建配置
- * =============================================================================
- */
-
 import { defineConfig } from 'tsup'
+import { baseConfig } from '../tsup.base'
 
 export default defineConfig({
-    entry: [
-        'src/index.ts',
-        'src/types.ts',
-        'src/utils.ts',
-        'src/commands/index.ts',
-        'src/commands/create.ts',
-        'src/commands/generate.ts',
-    ],
-    format: ['esm'],
-    dts: false,
-    clean: true,
-    sourcemap: true,
-    minify: false,
-    target: 'node20',
-    external: [
-        '@hai/core',
-        '@hai/config',
-    ],
+    ...baseConfig,
+    entry: ['src/index.ts'],
+    external: ['@hai/core'],
     banner: {
         js: '#!/usr/bin/env node',
     },

@@ -1,28 +1,17 @@
 {
     "name": "@hai/kit",
     "version": "0.1.0",
+    "license": "Apache-2.0",
     "description": "hai Admin Framework - SvelteKit 集成",
     "type": "module",
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts",
     "exports": {
         ".": {
             "types": "./dist/index.d.ts",
             "import": "./dist/index.js"
-        },
-        "./hooks": {
-            "types": "./dist/hooks/index.d.ts",
-            "import": "./dist/hooks/index.js"
-        },
-        "./middleware": {
-            "types": "./dist/middleware/index.d.ts",
-            "import": "./dist/middleware/index.js"
-        },
-        "./guards": {
-            "types": "./dist/guards/index.d.ts",
-            "import": "./dist/guards/index.js"
         }
     },
-    "main": "./dist/index.js",
-    "types": "./dist/index.d.ts",
     "files": [
         "dist"
     ],
@@ -36,8 +25,7 @@
     },
     "dependencies": {
         "@hai/core": "workspace:*",
-        "@hai/config": "workspace:*",
-        "@hai/auth": "workspace:*"
+        "@hai/iam": "workspace:*"
     },
     "devDependencies": {
         "@sveltejs/kit": "catalog:",
@@ -48,6 +36,6 @@
         "vitest": "catalog:"
     },
     "peerDependencies": {
-        "@sveltejs/kit": "catalog:"
+        "@sveltejs/kit": "^2.0.0"
     }
 }

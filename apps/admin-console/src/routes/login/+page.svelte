@@ -51,6 +51,9 @@
           
           if (result.type === 'failure') {
             error = result.data?.message ?? '登录失败'
+          } else if (result.type === 'redirect') {
+            // 登录成功，跟随重定向
+            await update()
           } else {
             await update()
           }

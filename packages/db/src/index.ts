@@ -1,44 +1,19 @@
 /**
  * =============================================================================
- * @hai/db - 主入口
- * =============================================================================
- * 数据库模块，提供:
- * - 多数据库支持 (SQLite/PostgreSQL/MySQL)
- * - 连接管理
- * - 数据迁移
- * - Repository 模式
+ * @hai/db - 数据库模块
  * =============================================================================
  */
 
-// 连接管理
-export {
-    ConnectionManager,
-    createConnection,
-    getConnectionManager,
-    type DbConnection,
-    type DbError,
-    type DbErrorType,
-    type DbInstance,
-    type MysqlConnection,
-    type PostgresConnection,
-    type SqliteConnection,
-} from './connection.js'
+// 统一服务入口
+export { db, createDbService } from './db.main.js'
 
-// 迁移工具
-export {
-    createMigrationManager,
-    MigrationManager,
-    type Migration,
-} from './migrate.js'
+// 类型定义
+export type * from './db-types.js'
 
-// Repository
-export {
-    BaseRepository,
-    type PaginatedResult,
-    type PaginationParams,
-    type RepositoryError,
-    type RepositoryErrorType,
-} from './repository.js'
+// HAI Provider 实现
+export { createHaiConnectionProvider } from './provider/hai/db-hai-connection.js'
+export { createHaiMigrationProvider } from './provider/hai/db-hai-migration.js'
+export { createHaiQueryProvider } from './provider/hai/db-hai-query.js'
 
-// Re-export Drizzle utilities
+// Drizzle ORM 工具
 export { eq, and, or, sql, desc, asc, like, isNull, isNotNull } from 'drizzle-orm'

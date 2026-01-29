@@ -1,27 +1,15 @@
 {
     "name": "@hai/ai",
     "version": "0.1.0",
-    "description": "hai Admin Framework - AI 模块（LLM 适配器、流式响应、工具调用）",
+    "license": "Apache-2.0",
+    "description": "hai Admin Framework - AI 模块（LLM、MCP、技能、提示词、工具调用）",
     "type": "module",
     "main": "./dist/index.js",
-    "module": "./dist/index.js",
     "types": "./dist/index.d.ts",
     "exports": {
         ".": {
             "types": "./dist/index.d.ts",
             "import": "./dist/index.js"
-        },
-        "./adapter": {
-            "types": "./dist/adapter.d.ts",
-            "import": "./dist/adapter.js"
-        },
-        "./stream": {
-            "types": "./dist/stream.d.ts",
-            "import": "./dist/stream.js"
-        },
-        "./tools": {
-            "types": "./dist/tools.d.ts",
-            "import": "./dist/tools.js"
         }
     },
     "files": [
@@ -37,7 +25,7 @@
     },
     "dependencies": {
         "@hai/core": "workspace:*",
-        "@hai/config": "workspace:*",
+        "@modelcontextprotocol/sdk": "catalog:",
         "openai": "catalog:"
     },
     "devDependencies": {
@@ -46,8 +34,5 @@
         "typescript": "catalog:",
         "tsup": "catalog:",
         "vitest": "catalog:"
-    },
-    "peerDependencies": {
-        "zod": "catalog:"
     }
 }

@@ -1,24 +1,17 @@
 {
     "name": "@hai/db",
     "version": "0.1.0",
+    "license": "Apache-2.0",
     "description": "Drizzle ORM 多数据库支持 (SQLite/PostgreSQL/MySQL)",
     "type": "module",
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts",
     "exports": {
         ".": {
             "types": "./dist/index.d.ts",
             "import": "./dist/index.js"
-        },
-        "./schema": {
-            "types": "./dist/schema.d.ts",
-            "import": "./dist/schema.js"
-        },
-        "./migrate": {
-            "types": "./dist/migrate.d.ts",
-            "import": "./dist/migrate.js"
         }
     },
-    "main": "./dist/index.js",
-    "types": "./dist/index.d.ts",
     "files": [
         "dist"
     ],
@@ -33,7 +26,6 @@
     },
     "dependencies": {
         "@hai/core": "workspace:*",
-        "@hai/config": "workspace:*",
         "drizzle-orm": "catalog:",
         "better-sqlite3": "catalog:"
     },
@@ -49,8 +41,5 @@
         "tsup": "catalog:",
         "typescript": "catalog:",
         "vitest": "catalog:"
-    },
-    "peerDependencies": {
-        "typescript": ">=5.0.0"
     }
 }

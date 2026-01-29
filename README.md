@@ -23,18 +23,31 @@
 
 | 包名           | 描述                                                | 状态 |
 | -------------- | --------------------------------------------------- | ---- |
-| `@hai/core`    | 核心工具：Result 类型、错误处理、DI、日志、工具函数 | ✅    |
-| `@hai/config`  | 配置管理：Zod Schema、YAML 加载、环境变量           | ✅    |
+| `@hai/core`    | 核心模块：Result 类型、Schema、日志、配置、Provider | ✅    |
 | `@hai/crypto`  | 加密模块：SM2/SM3/SM4 国密算法、Argon2 密码哈希     | ✅    |
 | `@hai/db`      | 数据库：Drizzle ORM、连接管理、迁移工具             | ✅    |
-| `@hai/auth`    | 认证授权：会话管理、E2EE 登录、JWT                  | ✅    |
-| `@hai/ai`      | AI 集成：OpenAI 兼容适配器、流处理、工具调用        | ✅    |
-| `@hai/skills`  | 技能系统：技能定义、注册、管道组合                  | ✅    |
-| `@hai/mcp`     | MCP 协议：服务端、客户端、工具/资源/提示            | ✅    |
-| `@hai/storage` | 文件存储：本地、内存驱动，存储管理器                | ✅    |
+| `@hai/iam`     | 身份与访问管理：认证、授权、会话、OAuth             | ✅    |
+| `@hai/ai`      | AI 集成：LLM 适配器、MCP 协议、技能系统             | ✅    |
+| `@hai/storage` | 文件存储：本地、S3/OSS/COS 云存储                   | ✅    |
 | `@hai/ui`      | UI 组件：20+ Svelte 5 组件，表单、表格、弹窗等      | ✅    |
 | `@hai/kit`     | SvelteKit 集成：Handle Hook、中间件、守卫           | ✅    |
 | `@hai/cli`     | CLI 工具：项目脚手架、代码生成器                    | ✅    |
+
+## 🏗️ 架构特性
+
+hai Framework 采用**能力聚合 + Provider 模式**，支持多种后端服务：
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                    hai Framework                        │
+├─────────────────────────────────────────────────────────┤
+│  @hai/iam          @hai/ai           @hai/storage       │
+│  ├─ hai (默认)     ├─ hai (默认)     ├─ hai (默认)      │
+│  ├─ firebase       ├─ openai         ├─ s3              │
+│  ├─ supabase       ├─ anthropic      ├─ oss             │
+│  └─ auth0          └─ google         └─ cos             │
+└─────────────────────────────────────────────────────────┘
+```
 
 ## 🚀 快速开始
 
@@ -61,11 +74,11 @@ pnpm dev
 
 ```bash
 # 安装核心包
-pnpm add @hai/core @hai/config @hai/kit @hai/ui
+pnpm add @hai/core @hai/kit @hai/ui
 
 # 安装可选包
-pnpm add @hai/auth @hai/db @hai/crypto  # 认证和数据库
-pnpm add @hai/ai @hai/skills @hai/mcp   # AI 能力
+pnpm add @hai/iam @hai/db @hai/crypto   # IAM 和数据库
+pnpm add @hai/ai                         # AI 能力（含 LLM、MCP、技能）
 pnpm add @hai/storage                    # 文件存储
 ```
 
@@ -79,10 +92,10 @@ app:
   name: ${APP_NAME:my-app}
   port: ${PORT:3000}
 
-// 使用配置
-import { loadConfig, appSchema } from '@hai/config'
+// 使用配置（Node.js 环境）
+import { loadConfig, AppConfigSchema } from '@hai/core/node'
 
-const config = await loadConfig('config/app.yml', appSchema)
+const config = await loadConfig('config/app.yml', AppConfigSchema)
 console.log(config.app.name)
 ```
 
@@ -149,21 +162,20 @@ export const handle = createHandle({
 
 ```typescript
 import { z } from 'zod'
-import { defineSkill, SkillRegistry } from '@hai/skills'
+import { ai, defineSkill } from '@hai/ai'
 
 const searchSkill = defineSkill({
   name: 'search',
   description: '搜索内容',
-  schema: z.object({
-    query: z.string().describe('搜索关键词'),
-  }),
-  handler: async ({ query }) => {
+  execute: async ({ query }, context) => {
     // 执行搜索
-    return { results: [] }
+    return { success: true, data: { results: [] } }
   },
 })
 
-const registry = new SkillRegistry()
+// 注册并执行技能
+ai.skills.register(searchSkill)
+const result = await ai.skills.execute('search', { query: 'hello' })
 registry.register(searchSkill)
 ```
 
@@ -192,20 +204,18 @@ hai g:api users
 ```
 hai-framework/
 ├── packages/
-│   ├── core/       # 核心工具
-│   ├── config/     # 配置管理
-│   ├── crypto/     # 加密模块
-│   ├── db/         # 数据库
-│   ├── auth/       # 认证授权
-│   ├── ai/         # AI 集成
-│   ├── skills/     # 技能系统
-│   ├── mcp/        # MCP 协议
-│   ├── storage/    # 文件存储
-│   ├── ui/         # UI 组件
-│   ├── kit/        # SvelteKit 集成
-│   └── cli/        # CLI 工具
+│   ├── core/       # 核心工具（Result类型、错误处理、DI、日志）
+│   ├── config/     # 配置管理（Zod Schema、YAML、环境变量）
+│   ├── crypto/     # 加密模块（SM2/SM3/SM4、Argon2）
+│   ├── db/         # 数据库（Drizzle ORM、迁移、Repository）
+│   ├── iam/        # 身份与访问管理（认证、授权、会话、OAuth）
+│   ├── ai/         # AI 集成（LLM、MCP、技能系统）
+│   ├── storage/    # 文件存储（本地、内存、S3/OSS/COS）
+│   ├── ui/         # UI 组件（Svelte 5 Runes）
+│   ├── kit/        # SvelteKit 集成（Handle、中间件、守卫）
+│   └── cli/        # CLI 工具（脚手架、代码生成）
 ├── apps/
-│   └── admin-console/  # 示例应用
+│   └── app/        # 示例应用
 ├── pnpm-workspace.yaml
 ├── turbo.json
 └── package.json
@@ -258,7 +268,7 @@ pnpm --filter admin-console dev
 
 ## 📄 License
 
-MIT © 2024 hai Admin Framework
+Apache License 2.0 © 2026 hai Admin Framework
 
 ---
 

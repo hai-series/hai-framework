@@ -1,6 +1,7 @@
 {
     "name": "@hai/ui",
     "version": "0.1.0",
+    "license": "Apache-2.0",
     "description": "hai Admin Framework - UI 组件库 (Svelte 5 Runes)",
     "type": "module",
     "svelte": "./dist/index.js",
@@ -44,6 +45,6 @@
         "vitest": "catalog:"
     },
     "peerDependencies": {
-        "svelte": "catalog:"
+        "svelte": "^5.0.0"
     }
 }

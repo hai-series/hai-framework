@@ -21,17 +21,48 @@ hai Admin Framework 是专为 AI 编程助手设计的框架，核心目标：
 
 ```
 @hai/core       核心工具（Result、错误处理、依赖注入、工具函数）
-@hai/config     配置管理（环境变量、分层配置、类型安全）
+@hai/core     配置管理（环境变量、分层配置、类型安全）
 @hai/crypto     加密模块（密码哈希、JWT、加解密）
 @hai/db         数据库抽象（Drizzle ORM、迁移、事务）
-@hai/auth       认证授权（JWT、RBAC、会话管理）
-@hai/ai         AI 集成（LLM 调用、提示词管理、流式响应）
-@hai/skills     技能系统（工具定义、MCP 集成、Agent）
-@hai/mcp        MCP 协议（Model Context Protocol 服务端/客户端）
-@hai/storage    存储抽象（本地文件、S3、OSS）
+@hai/iam        身份与访问管理（认证、授权、会话、OAuth）
+@hai/ai         AI 集成（LLM、MCP 协议、技能系统、流式响应）
+@hai/storage    存储抽象（本地文件、S3、OSS、COS）
 @hai/kit        SvelteKit 集成（Hooks、中间件、守卫）
 @hai/ui         UI 组件库（Svelte 5 Runes 组件）
 @hai/cli        脚手架工具（项目生成、代码生成）
+```
+
+## 架构特性：能力聚合 + Provider 模式
+
+hai Framework 采用能力聚合架构，每个模块都支持多种 Provider：
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                    hai Framework                        │
+├─────────────────────────────────────────────────────────┤
+│  @hai/iam          @hai/ai           @hai/storage       │
+│  ├─ hai (默认)     ├─ hai (默认)     ├─ hai (默认)      │
+│  ├─ firebase       ├─ openai         ├─ s3              │
+│  ├─ supabase       ├─ anthropic      ├─ oss             │
+│  ├─ auth0          ├─ google         ├─ cos             │
+│  └─ custom         └─ custom         └─ custom          │
+└─────────────────────────────────────────────────────────┘
+```
+
+使用方式:
+```typescript
+import { iam } from '@hai/iam'
+import { ai } from '@hai/ai'
+
+// 配置使用 hai 默认 provider（或其他 provider）
+iam.configure({ provider: 'hai' })
+ai.configure({ provider: 'hai' })
+
+// 统一 API 访问
+await iam.ident.login({ identifier: 'user', password: 'pass' })
+await iam.authz.checkPermission(ctx, 'users:read')
+await ai.llm.chat({ model: 'gpt-4', messages: [...] })
+await ai.skills.execute('translate', { text: 'hello', to: 'zh' })
 ```
 
 ## 快速开始
@@ -39,12 +70,29 @@ hai Admin Framework 是专为 AI 编程助手设计的框架，核心目标：
 ### 1. 创建新项目
 
 ```bash
-# 使用 CLI 创建项目
-pnpm create hai my-admin
+# 全局安装 CLI
+pnpm add -g @hai/cli
 
-# 或克隆模板
-git clone https://github.com/200hub/hai-framework
-cd hai-framework/apps/admin-console
+# 创建项目（交互式选择功能）
+pnpm hai create my-admin-app
+
+# 或使用命令行参数
+pnpm hai create my-admin-app --template full --examples
+
+# 选项说明:
+# -t, --template <template>  项目模板 (minimal, default, full, custom)
+# -f, --features <features>  功能列表 (iam,db,ai,storage,crypto)
+# --examples                 添加示例代码
+# --no-install              不安装依赖
+# -p, --package-manager <pm> 包管理器 (pnpm, npm, yarn)
+```
+
+也可以克隆示例项目:
+
+```bash
+# 克隆 app 示例
+git clone https://github.com/200hub/hai-framework-app
+cd hai-framework-app
 pnpm install
 ```
 
@@ -55,6 +103,8 @@ pnpm install
 DATABASE_URL=file:./data/app.db
 JWT_SECRET=your-secret-key
 OPENAI_API_KEY=sk-xxx
+HAI_LOG_LEVEL=info        # 日志级别
+HAI_LOG_FORMAT=logfmt     # 日志格式 (logfmt/json)
 ```
 
 ### 3. 启动开发
@@ -93,7 +143,7 @@ if (result.ok) {
 ### 配置管理
 
 ```typescript
-import { defineConfig } from '@hai/config'
+import { defineConfig } from '@hai/core'
 
 // config/app.ts
 export const appConfig = defineConfig({

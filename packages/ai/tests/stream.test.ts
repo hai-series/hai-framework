@@ -12,8 +12,8 @@ import {
     collectStream,
     createStreamProcessor,
     createSSEDecoder,
-    type ChatCompletionChunk,
 } from '../src/stream.js'
+import type { ChatCompletionChunk } from '../src/types.js'
 
 describe('StreamProcessor', () => {
     let processor: StreamProcessor

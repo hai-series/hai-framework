@@ -1,6 +1,7 @@
 {
     "name": "@hai/cli",
     "version": "0.1.0",
+    "license": "Apache-2.0",
     "description": "hai Admin Framework CLI - 项目脚手架和代码生成器",
     "type": "module",
     "bin": {
@@ -26,7 +27,6 @@
     },
     "dependencies": {
         "@hai/core": "workspace:*",
-        "@hai/config": "workspace:*",
         "cac": "catalog:",
         "chalk": "catalog:",
         "prompts": "catalog:",

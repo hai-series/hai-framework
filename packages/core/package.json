@@ -1,34 +1,25 @@
 {
     "name": "@hai/core",
     "version": "0.1.0",
+    "license": "Apache-2.0",
     "type": "module",
-    "description": "hai Admin Framework - Core utilities and types",
+    "description": "hai Admin Framework - Core utilities, types and functions",
     "main": "./dist/index.js",
     "types": "./dist/index.d.ts",
     "exports": {
         ".": {
             "types": "./dist/index.d.ts",
-            "import": "./dist/index.js"
+            "browser": "./dist/browser.js",
+            "node": "./dist/node.js",
+            "default": "./dist/index.js"
         },
-        "./result": {
-            "types": "./dist/result.d.ts",
-            "import": "./dist/result.js"
+        "./node": {
+            "types": "./dist/node.d.ts",
+            "import": "./dist/node.js"
         },
-        "./error": {
-            "types": "./dist/error.d.ts",
-            "import": "./dist/error.js"
-        },
-        "./di": {
-            "types": "./dist/di.d.ts",
-            "import": "./dist/di.js"
-        },
-        "./logger": {
-            "types": "./dist/logger.d.ts",
-            "import": "./dist/logger.js"
-        },
-        "./utils": {
-            "types": "./dist/utils.d.ts",
-            "import": "./dist/utils.js"
+        "./browser": {
+            "types": "./dist/browser.d.ts",
+            "import": "./dist/browser.js"
         }
     },
     "files": [
@@ -46,18 +37,23 @@
         "clean": "rimraf dist .turbo"
     },
     "dependencies": {
+        "nanoid": "catalog:",
+        "zod": "catalog:"
+    },
+    "optionalDependencies": {
         "pino": "catalog:",
-        "nanoid": "catalog:"
+        "yaml": "catalog:",
+        "loglevel": "catalog:"
     },
     "devDependencies": {
         "@types/node": "catalog:",
+        "pino": "catalog:",
         "pino-pretty": "catalog:",
+        "yaml": "catalog:",
+        "loglevel": "catalog:",
         "rimraf": "catalog:",
         "tsup": "catalog:",
         "typescript": "catalog:",
         "vitest": "catalog:"
-    },
-    "peerDependencies": {
-        "typescript": ">=5.0.0"
     }
 }

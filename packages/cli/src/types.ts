@@ -5,6 +5,36 @@
  */
 
 /**
+ * 可选功能
+ */
+export type FeatureId =
+    | 'iam'        // 身份与访问管理（新）
+    | 'db'         // 数据库
+    | 'ai'         // AI 集成（含 MCP、技能）
+    | 'storage'    // 文件存储
+    | 'crypto'     // 加密模块
+    // 兼容性别名
+    | 'auth'       // 认证授权 → iam
+    | 'mcp'        // MCP 协议 → ai
+    | 'skills'     // 技能系统 → ai
+
+/**
+ * 功能定义
+ */
+export interface FeatureDefinition {
+    /** 功能 ID */
+    id: FeatureId
+    /** 功能名称 */
+    name: string
+    /** 功能描述 */
+    description: string
+    /** 依赖的其他功能 */
+    dependencies?: FeatureId[]
+    /** 对应的 @hai/* 包 */
+    packages: string[]
+}
+
+/**
  * CLI 全局选项
  */
 export interface GlobalOptions {
@@ -21,7 +51,11 @@ export interface CreateProjectOptions extends GlobalOptions {
     /** 项目名称 */
     name: string
     /** 项目模板 */
-    template?: 'default' | 'minimal' | 'full'
+    template?: 'default' | 'minimal' | 'full' | 'custom'
+    /** 选择的功能 */
+    features?: FeatureId[]
+    /** 是否添加示例代码 */
+    examples?: boolean
     /** 是否安装依赖 */
     install?: boolean
     /** 包管理器 */

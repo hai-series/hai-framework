@@ -10,9 +10,8 @@ import {
     defineTool,
     createToolRegistry,
     ToolRegistry,
-    type Tool,
-    type ToolCall,
 } from '../src/tools.js'
+import type { ToolCall } from '../src/types.js'
 
 describe('defineTool', () => {
     it('应该创建工具实例', () => {

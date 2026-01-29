@@ -1,15 +1,4 @@
-/**
- * =============================================================================
- * @hai/kit - vitest 配置
- * =============================================================================
- */
+import { mergeConfig } from 'vitest/config'
+import { baseTestConfig } from '../vitest.base'
 
-import { defineConfig } from 'vitest/config'
-
-export default defineConfig({
-  test: {
-    globals: true,
-    environment: 'node',
-    include: ['tests/**/*.test.ts'],
-  },
-})
+export default mergeConfig(baseTestConfig, {})

@@ -6,10 +6,16 @@
  * =============================================================================
  */
 
-import { createLogger, generateId } from '@hai/core'
 import type { Middleware, CsrfConfig } from '../types.js'
 
-const logger = createLogger({ name: 'kit-csrf' })
+/**
+ * 生成唯一 ID
+ */
+function generateId(prefix: string): string {
+  const timestamp = Date.now().toString(36)
+  const random = Math.random().toString(36).substring(2, 8)
+  return `${prefix}_${timestamp}${random}`
+}
 
 /**
  * 默认 CSRF 配置
@@ -25,24 +31,24 @@ const defaultConfig: Required<CsrfConfig> = {
  */
 export function csrfMiddleware(config: CsrfConfig = {}): Middleware {
   const mergedConfig = { ...defaultConfig, ...config }
-  
+
   return async (context, next) => {
     const { event, requestId } = context
     const { cookieName, headerName, exclude } = mergedConfig
-    
+
     // 检查是否排除
     const pathname = event.url.pathname
     if (exclude.some(pattern => matchPath(pathname, pattern))) {
       return next()
     }
-    
+
     // 安全方法不需要验证
     const safeMethod = ['GET', 'HEAD', 'OPTIONS'].includes(event.request.method)
-    
+
     if (safeMethod) {
       // 确保有 CSRF token
       let token = event.cookies.get(cookieName)
-      
+
       if (!token) {
         token = generateId('csrf')
         event.cookies.set(cookieName, token, {
@@ -52,17 +58,17 @@ export function csrfMiddleware(config: CsrfConfig = {}): Middleware {
           secure: event.url.protocol === 'https:',
         })
       }
-      
+
       return next()
     }
-    
+
     // 验证 CSRF token
     const cookieToken = event.cookies.get(cookieName)
     const headerToken = event.request.headers.get(headerName)
-    
+
     if (!cookieToken || !headerToken || cookieToken !== headerToken) {
-      logger.warn({ requestId, pathname }, 'CSRF token validation failed')
-      
+      console.warn(JSON.stringify({ requestId, pathname, message: 'CSRF token validation failed' }))
+
       return new Response(
         JSON.stringify({
           success: false,
@@ -78,7 +84,7 @@ export function csrfMiddleware(config: CsrfConfig = {}): Middleware {
         },
       )
     }
-    
+
     return next()
   }
 }

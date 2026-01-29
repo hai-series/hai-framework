@@ -5,7 +5,7 @@
     "type": "module",
     "description": "hai Admin Framework - AI-Native, Configuration-Driven, Security-First",
     "author": "200hub",
-    "license": "MIT",
+    "license": "Apache-2.0",
     "engines": {
         "node": ">=20.0.0",
         "pnpm": ">=9.0.0"
@@ -20,7 +20,7 @@
         "test:coverage": "turbo run test:coverage",
         "typecheck": "turbo run typecheck",
         "clean": "turbo run clean && rimraf node_modules .turbo",
-        "format": "prettier --write .",
+        "format": "eslint --fix .",
         "prepare": "husky || true"
     },
     "devDependencies": {
@@ -30,18 +30,14 @@
         "eslint": "catalog:",
         "husky": "catalog:",
         "lint-staged": "catalog:",
-        "prettier": "catalog:",
         "rimraf": "catalog:",
         "turbo": "catalog:",
         "typescript": "catalog:",
         "vitest": "catalog:"
     },
     "lint-staged": {
-        "*.{js,ts,svelte}": [
+        "*.{js,ts,svelte,json,md,yml,yaml}": [
             "eslint --fix"
-        ],
-        "*.{json,md,yml,yaml}": [
-            "prettier --write"
         ]
     }
 }

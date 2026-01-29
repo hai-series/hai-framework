@@ -13,8 +13,10 @@ import type { Handle } from '@sveltejs/kit'
  * 模拟会话验证（实际项目应从数据库/Redis获取）
  */
 async function validateSession(token: string) {
+    console.log('[validateSession] token:', token)
     // TODO: 实际项目中应验证 session token
     if (token === 'demo-session') {
+        console.log('[validateSession] valid session')
         return {
             userId: 'user_001',
             username: 'admin',
@@ -22,6 +24,7 @@ async function validateSession(token: string) {
             permissions: ['*'],
         }
     }
+    console.log('[validateSession] invalid session')
     return null
 }
 

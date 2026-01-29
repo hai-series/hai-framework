@@ -94,12 +94,12 @@ await retry(() => fetch(url), { times: 3 }) // 重试 3 次
 
 ---
 
-## @hai/config - 配置模块
+## @hai/core - 配置模块
 
 ### 定义配置
 
 ```typescript
-import { defineConfig } from '@hai/config'
+import { defineConfig } from '@hai/core'
 
 export const appConfig = defineConfig({
   // 简单配置

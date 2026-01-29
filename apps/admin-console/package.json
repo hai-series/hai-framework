@@ -16,15 +16,11 @@
     },
     "dependencies": {
         "@hai/core": "workspace:*",
-        "@hai/config": "workspace:*",
         "@hai/crypto": "workspace:*",
         "@hai/db": "workspace:*",
-        "@hai/auth": "workspace:*",
+        "@hai/iam": "workspace:*",
         "@hai/ai": "workspace:*",
-        "@hai/skills": "workspace:*",
-        "@hai/mcp": "workspace:*",
         "@hai/storage": "workspace:*",
-        "@hai/kit": "workspace:*",
         "@hai/ui": "workspace:*",
         "zod": "catalog:"
     },

@@ -1,0 +1,40 @@
+{
+    "name": "@hai/iam",
+    "version": "0.1.0",
+    "license": "Apache-2.0",
+    "description": "身份与访问管理模块 - Identity & Access Management",
+    "type": "module",
+    "exports": {
+        ".": {
+            "types": "./dist/index.d.ts",
+            "import": "./dist/index.js"
+        }
+    },
+    "main": "./dist/index.js",
+    "types": "./dist/index.d.ts",
+    "files": [
+        "dist"
+    ],
+    "scripts": {
+        "build": "tsup",
+        "dev": "tsup --watch",
+        "test": "vitest run",
+        "test:watch": "vitest",
+        "typecheck": "tsc --noEmit",
+        "lint": "eslint src",
+        "clean": "rimraf dist .turbo"
+    },
+    "dependencies": {
+        "@hai/core": "workspace:*",
+        "@hai/crypto": "workspace:*",
+        "@hai/db": "workspace:*",
+        "jose": "catalog:"
+    },
+    "devDependencies": {
+        "@types/node": "catalog:",
+        "rimraf": "catalog:",
+        "tsup": "catalog:",
+        "typescript": "catalog:",
+        "vitest": "catalog:"
+    }
+}

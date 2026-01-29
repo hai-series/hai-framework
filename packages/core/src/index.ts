@@ -1,107 +1,45 @@
 /**
  * =============================================================================
- * @hai/core - 主入口
+ * @hai/core - 统一入口
  * =============================================================================
- * hai Admin Framework 核心模块
+ * 根据运行环境自动选择实现：
+ * - Node.js：使用 pino 日志，支持配置文件加载
+ * - 浏览器：使用 loglevel 日志
  * 
- * @packageDocumentation
- * @module @hai/core
+ * 通过 package.json exports 条件自动选择：
+ * - "browser" -> ./dist/browser.js
+ * - "default" -> ./dist/node.js
+ * 
+ * 所有功能统一通过 core 对象访问：
+ * - core.logger - 日志
+ * - core.id - ID 生成
+ * - core.config - 配置管理（仅 Node.js）
+ * - core.type - 类型检查
+ * - core.object - 对象操作
+ * - core.string - 字符串操作
+ * - core.array - 数组操作
+ * - core.async - 异步工具
+ * - core.time - 时间工具
+ * 
+ * @example
+ * ```ts
+ * import { core, initCore } from '@hai/core'
+ * import type { Result, Logger } from '@hai/core'
+ * import { AppConfigSchema, CommonErrorCode } from '@hai/core'
+ * 
+ * // 日志
+ * core.logger.info('Hello')
+ * 
+ * // ID 生成
+ * const myId = core.id.generate()
+ * 
+ * // 工具函数
+ * core.type.isDefined(value)
+ * core.object.deepMerge(a, b)
+ * ```
  * =============================================================================
  */
 
-// Result 类型
-export {
-    type Result,
-    Ok,
-    Err,
-    ok,
-    err,
-    isOk,
-    isErr,
-    fromPromise,
-    fromThrowable,
-    all,
-    any,
-    type MatchHandlers,
-} from './result.js'
-
-// 错误处理
-export {
-    AppError,
-    ErrorCode,
-    type ErrorDetails,
-    type SerializedError,
-    validationError,
-    notFoundError,
-    unauthenticatedError,
-    unauthorizedError,
-    internalError,
-} from './error.js'
-
-// 依赖注入
-export {
-    Container,
-    type Lifetime,
-    type ServiceToken,
-    type ServiceMap,
-    getContainer,
-    setContainer,
-    resetContainer,
-    createToken,
-    CONFIG_TOKEN,
-    LOGGER_TOKEN,
-    DATABASE_TOKEN,
-    CACHE_TOKEN,
-    AUTH_TOKEN,
-    AI_TOKEN,
-    STORAGE_TOKEN,
-} from './di.js'
-
-// 日志
-export {
-    type Logger,
-    type LogLevel,
-    type LoggerOptions,
-    type LogContext,
-    createLogger,
-    getLogger,
-    setLogger,
-    createModuleLogger,
-    createRequestLogger,
-    serializeError,
-} from './logger.js'
-
-// 工具函数
-export {
-    // ID 生成
-    generateId,
-    generateShortId,
-    generateTraceId,
-    generateRequestId,
-    // 类型工具
-    isDefined,
-    isObject,
-    isFunction,
-    isPromise,
-    // 对象工具
-    deepClone,
-    deepMerge,
-    pick,
-    omit,
-    // 字符串工具
-    capitalize,
-    kebabCase,
-    camelCase,
-    truncate,
-    // 数组工具
-    unique,
-    groupBy,
-    chunk,
-    // 异步工具
-    delay,
-    withTimeout,
-    retry,
-    // 时间工具
-    formatDate,
-    timeAgo,
-} from './utils.js'
+// 重导出 Node.js 版本作为默认
+// 浏览器环境通过 package.json exports 条件选择 browser.ts
+export * from './core-index.node.js'

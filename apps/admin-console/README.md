@@ -1,13 +1,13 @@
 # hai Admin Console
 
-> 基于 hai Admin Framework 构建的现代化管理后台应用
+> 基于 hai Admin Framework 构建的现代化管理后台示例应用
 
 [![GitHub](https://img.shields.io/badge/GitHub-200hub/hai--framework--admin--console-blue)](https://github.com/200hub/hai-framework-admin-console)
-[![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
+[![License](https://img.shields.io/badge/License-Apache%202.0-green)](LICENSE)
 
 ## ✨ 特性
 
-- 🎨 **现代化 UI** - 基于 Svelte 5 Runes + TailwindCSS + DaisyUI
+- 🎨 **现代化 UI** - 基于 Svelte 5 Runes + TailwindCSS v4 + DaisyUI v5
 - 🔐 **完整认证** - JWT 认证、角色权限、会话管理
 - 📊 **数据管理** - CRUD 操作、搜索过滤、分页排序
 - 🌍 **国际化** - 中英文切换支持
@@ -17,7 +17,23 @@
 
 ## 🚀 快速开始
 
-### 作为独立项目使用
+### 方式一：使用 CLI 创建（推荐）
+
+```bash
+# 安装 CLI
+pnpm add -g @hai/cli
+
+# 创建新项目（交互式选择功能）
+pnpm hai create my-admin-app
+
+# 进入项目目录
+cd my-admin-app
+
+# 启动开发服务器
+pnpm dev
+```
+
+### 方式二：克隆本仓库
 
 ```bash
 # 克隆仓库
@@ -35,7 +51,7 @@ cp .env.example .env
 pnpm dev
 ```
 
-### 作为 hai-framework 的子应用
+### 方式三：作为 hai-framework monorepo 的子应用
 
 ```bash
 # 在 hai-framework 根目录
@@ -57,7 +73,7 @@ pnpm dev
 ## 🛠️ 技术栈
 
 - **前端框架**: Svelte 5 + SvelteKit 2
-- **样式**: TailwindCSS 3 + DaisyUI 4
+- **样式**: TailwindCSS v4 + DaisyUI v5
 - **语言**: TypeScript 5.7+
 - **构建工具**: Vite 6
 - **包管理**: pnpm
@@ -68,8 +84,9 @@ pnpm dev
 ```
 src/
 ├── app.html              # HTML 模板
+├── app.css               # 全局样式（TailwindCSS v4）
 ├── app.d.ts              # 全局类型声明
-├── hooks.server.ts       # 服务端钩子（认证）
+├── hooks.server.ts       # 服务端钩子（认证、日志）
 ├── lib/
 │   ├── components/       # 业务组件
 │   │   ├── layout/       # 布局组件
@@ -100,6 +117,8 @@ src/
 DATABASE_URL=file:./data/app.db    # 数据库连接
 JWT_SECRET=your-secret-key          # JWT 密钥
 OPENAI_API_KEY=sk-xxx               # OpenAI API Key (可选)
+HAI_LOG_LEVEL=info                  # 日志级别
+HAI_LOG_FORMAT=logfmt               # 日志格式 (logfmt/json)
 ```
 
 ## 🧪 开发命令
@@ -124,10 +143,10 @@ pnpm test         # 运行测试
 
 此应用依赖以下 @hai/* 包：
 
-- `@hai/core` - 核心工具（Result、错误处理）
-- `@hai/config` - 配置管理
-- `@hai/crypto` - 加密模块
-- `@hai/db` - 数据库抽象
+- `@hai/core` - 核心工具（Result、错误处理、日志）
+- `@hai/core` - 配置管理
+- `@hai/crypto` - 加密模块（SM2/SM3/SM4、Argon2）
+- `@hai/db` - 数据库抽象（Drizzle ORM）
 - `@hai/auth` - 认证授权
 - `@hai/ai` - AI 集成
 - `@hai/kit` - SvelteKit 集成
@@ -141,14 +160,4 @@ pnpm test         # 运行测试
 
 ## 📄 许可证
 
-MIT License © 2024 [200hub](https://github.com/200hub)
-    │   ├── users/            # 用户管理
-    │   ├── roles/            # 角色管理
-    │   ├── logs/             # 系统日志
-    │   └── settings/         # 系统设置
-    └── api/              # API 端点
-```
-
-## License
-
-MIT
+Apache License 2.0 © 2024 [200hub](https://github.com/200hub)

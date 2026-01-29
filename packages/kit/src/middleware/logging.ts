@@ -6,10 +6,7 @@
  * =============================================================================
  */
 
-import { createLogger } from '@hai/core'
 import type { Middleware } from '../types.js'
-
-const logger = createLogger({ name: 'kit-logging' })
 
 /**
  * 日志中间件配置
@@ -28,11 +25,11 @@ export interface LoggingMiddlewareConfig {
  */
 export function loggingMiddleware(config: LoggingMiddlewareConfig = {}): Middleware {
   const { logBody = false, logResponse = false, redactFields = ['password', 'token', 'secret'] } = config
-  
+
   return async (context, next) => {
     const { event, requestId } = context
     const startTime = Date.now()
-    
+
     const logData: Record<string, unknown> = {
       requestId,
       method: event.request.method,
@@ -41,7 +38,7 @@ export function loggingMiddleware(config: LoggingMiddlewareConfig = {}): Middlew
       userAgent: event.request.headers.get('user-agent'),
       ip: event.getClientAddress?.() ?? 'unknown',
     }
-    
+
     if (logBody && event.request.method !== 'GET') {
       try {
         const clonedRequest = event.request.clone()
@@ -52,25 +49,25 @@ export function loggingMiddleware(config: LoggingMiddlewareConfig = {}): Middlew
         // 忽略非 JSON 请求体
       }
     }
-    
-    logger.info(logData, 'Incoming request')
-    
+
+    console.log(JSON.stringify({ ...logData, message: 'Incoming request' }))
+
     const response = await next()
-    
+
     const duration = Date.now() - startTime
-    
+
     const responseLogData: Record<string, unknown> = {
       requestId,
       status: response.status,
       duration,
     }
-    
+
     if (logResponse) {
       responseLogData.headers = Object.fromEntries(response.headers)
     }
-    
-    logger.info(responseLogData, 'Request completed')
-    
+
+    console.log(JSON.stringify({ ...responseLogData, message: 'Request completed' }))
+
     return response
   }
 }
@@ -82,13 +79,13 @@ function redactObject(obj: unknown, fields: string[]): unknown {
   if (typeof obj !== 'object' || obj === null) {
     return obj
   }
-  
+
   if (Array.isArray(obj)) {
     return obj.map(item => redactObject(item, fields))
   }
-  
+
   const result: Record<string, unknown> = {}
-  
+
   for (const [key, value] of Object.entries(obj)) {
     if (fields.includes(key.toLowerCase())) {
       result[key] = '[REDACTED]'
@@ -100,6 +97,6 @@ function redactObject(obj: unknown, fields: string[]): unknown {
       result[key] = value
     }
   }
-  
+
   return result
 }
