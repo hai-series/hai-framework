@@ -1,56 +1,99 @@
 /**
  * =============================================================================
- * @hai/ai - 统一类型定义
+ * @hai/ai - 类型定义
  * =============================================================================
- * AI 模块所有子模块的类型定义
+ *
+ * 本文件定义 AI 模块的核心接口和类型（非配置相关）。
+ * 配置相关类型请从 ai-config.ts 导入。
+ *
+ * 包含：
+ * - 错误类型（AIError）
+ * - LLM 消息与响应类型
+ * - MCP 相关类型
+ * - 技能相关类型
+ * - 工具相关类型
+ * - Provider 接口
+ * - 服务接口
+ *
+ * @example
+ * ```ts
+ * import type { AIService, ChatMessage, LLMProvider } from '@hai/ai'
+ *
+ * // 使用聊天消息类型
+ * const messages: ChatMessage[] = [
+ *     { role: 'system', content: '你是一个助手' },
+ *     { role: 'user', content: '你好' }
+ * ]
+ * ```
+ *
+ * @module ai-types
  * =============================================================================
  */
+
+import type { Result } from '@hai/core'
+import type {
+  AIConfig,
+  AIConfigInput,
+  AIErrorCodeType,
+  MCPServerCapabilities,
+} from './ai-config.js'
 
 // =============================================================================
-// AI 提供者类型
+// 重新导出配置类型（方便使用）
+// =============================================================================
+
+export type {
+  AIConfig,
+  AIConfigInput,
+  AIErrorCodeType,
+  AIProvider,
+  LLMConfig,
+  MCPClientConfig,
+  MCPConfig,
+  MCPServerCapabilities,
+  MCPServerConfig,
+} from './ai-config.js'
+
+export {
+  AIConfigSchema,
+  AIErrorCode,
+  AIProviderSchema,
+  LLMConfigSchema,
+  MCPClientConfigSchema,
+  MCPConfigSchema,
+  MCPServerCapabilitiesSchema,
+  MCPServerConfigSchema,
+} from './ai-config.js'
+
+// =============================================================================
+// 错误类型
 // =============================================================================
 
 /**
- * AI 提供者类型
- */
-export type AIProvider = 'hai' | 'openai' | 'azure' | 'anthropic' | 'google' | 'custom'
-
-/**
- * AI 错误类型
- */
-export type AIErrorType
-// LLM 错误
-  = | 'API_ERROR'
-    | 'INVALID_REQUEST'
-    | 'RATE_LIMITED'
-    | 'TIMEOUT'
-    | 'MODEL_NOT_FOUND'
-    | 'CONTEXT_LENGTH_EXCEEDED'
-    // MCP 错误
-    | 'MCP_CONNECTION_ERROR'
-    | 'MCP_PROTOCOL_ERROR'
-    | 'MCP_TOOL_ERROR'
-    | 'MCP_RESOURCE_ERROR'
-    // 技能错误
-    | 'SKILL_NOT_FOUND'
-    | 'SKILL_EXECUTION_ERROR'
-    | 'SKILL_VALIDATION_ERROR'
-    // 通用错误
-    | 'CONFIGURATION_ERROR'
-    | 'INTERNAL_ERROR'
-
-/**
- * AI 错误
+ * AI 错误接口
+ *
+ * 所有 AI 操作返回的错误都遵循此接口。
+ *
+ * @example
+ * ```ts
+ * const result = await ai.llm.chat({ messages: [...] })
+ * if (!result.success) {
+ *     const error: AIError = result.error
+ *     // 处理错误：根据 error.code / error.message 做兜底
+ * }
+ * ```
  */
 export interface AIError {
-  type: AIErrorType
+  /** 错误码（数值，参见 AIErrorCode） */
+  code: AIErrorCodeType
+  /** 错误消息 */
   message: string
-  code?: string
+  /** 原始错误（可选） */
   cause?: unknown
 }
 
 // =============================================================================
-// LLM 相关类型
+// LLM 消息类型
 // =============================================================================
 
 /**
@@ -78,7 +121,7 @@ export interface ImageContent {
 }
 
 /**
- * 消息内容
+ * 消息内容（可以是纯文本或混合内容）
  */
 export type MessageContent = string | (TextContent | ImageContent)[]
 
@@ -129,12 +172,16 @@ export interface ToolMessage {
 }
 
 /**
- * 聊天消息
+ * 聊天消息（联合类型）
  */
 export type ChatMessage = SystemMessage | UserMessage | AssistantMessage | ToolMessage
 
+// =============================================================================
+// LLM 请求与响应类型
+// =============================================================================
+
 /**
- * 工具定义
+ * 工具定义（OpenAI 格式）
  */
 export interface ToolDefinition {
   type: 'function'
@@ -149,13 +196,21 @@ export interface ToolDefinition {
  * 聊天完成请求
  */
 export interface ChatCompletionRequest {
-  model: string
+  /** 模型名称 */
+  model?: string
+  /** 消息列表 */
   messages: ChatMessage[]
+  /** 温度参数 */
   temperature?: number
+  /** Top P 采样 */
   top_p?: number
+  /** 最大 Token 数 */
   max_tokens?: number
+  /** 是否流式响应 */
   stream?: boolean
+  /** 工具列表 */
   tools?: ToolDefinition[]
+  /** 工具选择策略 */
   tool_choice?: 'auto' | 'none' | { type: 'function', function: { name: string } }
 }
 
@@ -190,7 +245,7 @@ export interface ChatCompletionResponse {
 }
 
 /**
- * 流式增量
+ * 流式增量内容
  */
 export interface ChatCompletionDelta {
   role?: 'assistant'
@@ -207,7 +262,7 @@ export interface ChatCompletionDelta {
 }
 
 /**
- * 流式块
+ * 流式响应块
  */
 export interface ChatCompletionChunk {
   id: string
@@ -275,7 +330,7 @@ export interface MCPResourceContent {
 }
 
 /**
- * MCP 提示
+ * MCP 提示词
  */
 export interface MCPPrompt {
   name: string
@@ -284,7 +339,7 @@ export interface MCPPrompt {
 }
 
 /**
- * MCP 提示参数
+ * MCP 提示词参数
  */
 export interface MCPPromptArgument {
   name: string
@@ -293,7 +348,7 @@ export interface MCPPromptArgument {
 }
 
 /**
- * MCP 提示消息
+ * MCP 提示词消息
  */
 export interface MCPPromptMessage {
   role: 'user' | 'assistant'
@@ -301,7 +356,7 @@ export interface MCPPromptMessage {
 }
 
 /**
- * MCP 提示内容
+ * MCP 提示词内容
  */
 export interface MCPPromptContent {
   type: 'text' | 'resource'
@@ -312,15 +367,6 @@ export interface MCPPromptContent {
     blob?: string
     mimeType?: string
   }
-}
-
-/**
- * MCP 服务器能力
- */
-export interface MCPServerCapabilities {
-  tools?: boolean
-  resources?: boolean
-  prompts?: boolean
 }
 
 /**
@@ -365,7 +411,7 @@ export interface SkillContext {
 }
 
 /**
- * 技能结果
+ * 技能执行结果
  */
 export interface SkillResult<T = unknown> {
   success: boolean
@@ -382,7 +428,7 @@ export interface Skill<TInput = unknown, TOutput = unknown> {
 }
 
 /**
- * 技能查询
+ * 技能查询条件
  */
 export interface SkillQuery {
   name?: string
@@ -391,68 +437,27 @@ export interface SkillQuery {
 }
 
 // =============================================================================
-// AI 配置
+// Provider 接口
 // =============================================================================
 
 /**
- * LLM 配置
- */
-export interface LLMConfig {
-  provider: AIProvider
-  apiKey?: string
-  baseUrl?: string
-  model?: string
-  maxTokens?: number
-  temperature?: number
-}
-
-/**
- * MCP 服务器配置
- */
-export interface MCPServerConfig {
-  name: string
-  version: string
-  capabilities?: MCPServerCapabilities
-}
-
-/**
- * MCP 客户端配置
- */
-export interface MCPClientConfig {
-  serverUrl?: string
-  timeout?: number
-}
-
-/**
- * AI 模块配置
- */
-export interface AIConfig {
-  provider: AIProvider
-  llm?: LLMConfig
-  mcp?: {
-    server?: MCPServerConfig
-    client?: MCPClientConfig
-  }
-}
-
-// =============================================================================
-// 提供者接口
-// =============================================================================
-
-/**
- * LLM 提供者接口
+ * LLM Provider 接口
+ *
+ * 所有 LLM 提供者必须实现此接口。
  */
 export interface LLMProvider {
   /** 聊天完成 */
-  chat: (request: ChatCompletionRequest) => Promise<import('@hai/core').Result<ChatCompletionResponse, AIError>>
+  chat: (request: ChatCompletionRequest) => Promise<Result<ChatCompletionResponse, AIError>>
   /** 流式聊天完成 */
   chatStream: (request: ChatCompletionRequest) => AsyncIterable<ChatCompletionChunk>
   /** 获取模型列表 */
-  listModels: () => Promise<import('@hai/core').Result<string[], AIError>>
+  listModels: () => Promise<Result<string[], AIError>>
 }
 
 /**
- * MCP 提供者接口
+ * MCP Provider 接口
+ *
+ * 所有 MCP 提供者必须实现此接口。
  */
 export interface MCPProvider {
   /** 注册工具 */
@@ -465,21 +470,23 @@ export interface MCPProvider {
     resource: MCPResource,
     handler: () => Promise<MCPResourceContent>,
   ) => void
-  /** 注册提示 */
+  /** 注册提示词 */
   registerPrompt: (
     prompt: MCPPrompt,
     handler: (args: Record<string, string>) => Promise<MCPPromptMessage[]>,
   ) => void
   /** 调用工具 */
-  callTool: (name: string, args: unknown, context?: MCPContext) => Promise<import('@hai/core').Result<unknown, AIError>>
+  callTool: (name: string, args: unknown, context?: MCPContext) => Promise<Result<unknown, AIError>>
   /** 读取资源 */
-  readResource: (uri: string) => Promise<import('@hai/core').Result<MCPResourceContent, AIError>>
-  /** 获取提示 */
-  getPrompt: (name: string, args: Record<string, string>) => Promise<import('@hai/core').Result<MCPPromptMessage[], AIError>>
+  readResource: (uri: string) => Promise<Result<MCPResourceContent, AIError>>
+  /** 获取提示词 */
+  getPrompt: (name: string, args: Record<string, string>) => Promise<Result<MCPPromptMessage[], AIError>>
 }
 
 /**
- * 技能提供者接口
+ * Skills Provider 接口
+ *
+ * 所有技能提供者必须实现此接口。
  */
 export interface SkillsProvider {
   /** 注册技能 */
@@ -495,21 +502,113 @@ export interface SkillsProvider {
     name: string,
     input: TInput,
     context?: SkillContext,
-  ) => Promise<import('@hai/core').Result<SkillResult<TOutput>, AIError>>
+  ) => Promise<Result<SkillResult<TOutput>, AIError>>
+}
+
+// =============================================================================
+// 服务接口
+// =============================================================================
+
+/**
+ * LLM 操作接口
+ *
+ * 提供对外的 LLM 操作方法。
+ */
+export interface LLMOperations {
+  /** 聊天完成 */
+  chat: (request: ChatCompletionRequest) => Promise<Result<ChatCompletionResponse, AIError>>
+  /** 流式聊天完成 */
+  chatStream: (request: ChatCompletionRequest) => AsyncIterable<ChatCompletionChunk>
+  /** 获取模型列表 */
+  listModels: () => Promise<Result<string[], AIError>>
+}
+
+/**
+ * MCP 操作接口
+ *
+ * 提供对外的 MCP 操作方法。
+ */
+export interface MCPOperations {
+  /** 注册工具 */
+  registerTool: <TInput, TOutput>(
+    definition: MCPToolDefinition,
+    handler: MCPToolHandler<TInput, TOutput>,
+  ) => void
+  /** 注册资源 */
+  registerResource: (
+    resource: MCPResource,
+    handler: () => Promise<MCPResourceContent>,
+  ) => void
+  /** 注册提示词 */
+  registerPrompt: (
+    prompt: MCPPrompt,
+    handler: (args: Record<string, string>) => Promise<MCPPromptMessage[]>,
+  ) => void
+  /** 调用工具 */
+  callTool: (name: string, args: unknown, context?: MCPContext) => Promise<Result<unknown, AIError>>
+  /** 读取资源 */
+  readResource: (uri: string) => Promise<Result<MCPResourceContent, AIError>>
+  /** 获取提示词 */
+  getPrompt: (name: string, args: Record<string, string>) => Promise<Result<MCPPromptMessage[], AIError>>
+}
+
+/**
+ * Skills 操作接口
+ *
+ * 提供对外的技能操作方法。
+ */
+export interface SkillsOperations {
+  /** 注册技能 */
+  register: <TInput, TOutput>(skill: Skill<TInput, TOutput>) => void
+  /** 注销技能 */
+  unregister: (name: string) => void
+  /** 获取技能 */
+  get: (name: string) => Skill | undefined
+  /** 查询技能 */
+  query: (query: SkillQuery) => Skill[]
+  /** 执行技能 */
+  execute: <TInput, TOutput>(
+    name: string,
+    input: TInput,
+    context?: SkillContext,
+  ) => Promise<Result<SkillResult<TOutput>, AIError>>
 }
 
 /**
  * AI 服务接口
+ *
+ * 统一的 AI 服务访问入口。
+ *
+ * @example
+ * ```ts
+ * import { ai } from '@hai/ai'
+ *
+ * // 初始化
+ * ai.init({ llm: { model: 'gpt-4o-mini' } })
+ *
+ * // LLM 调用
+ * const result = await ai.llm.chat({ messages: [...] })
+ *
+ * // MCP 工具调用
+ * await ai.mcp.callTool('search', { query: 'hello' })
+ *
+ * // 关闭
+ * ai.close()
+ * ```
  */
 export interface AIService {
-  /** LLM 服务 */
-  readonly llm: LLMProvider
-  /** MCP 服务 */
-  readonly mcp: MCPProvider
-  /** 技能服务 */
-  readonly skills: SkillsProvider
-  /** 初始化 */
-  initialize: () => Promise<import('@hai/core').Result<void, AIError>>
-  /** 关闭 */
-  shutdown: () => Promise<import('@hai/core').Result<void, AIError>>
+  /** 初始化 AI 服务 */
+  init: (config?: AIConfigInput) => Result<void, AIError>
+  /** LLM 操作接口 */
+  readonly llm: LLMOperations
+  /** MCP 操作接口 */
+  readonly mcp: MCPOperations
+  /** Skills 操作接口 */
+  readonly skills: SkillsOperations
+  /** 获取当前配置 */
+  readonly config: AIConfig | null
+  /** 检查是否已初始化 */
+  readonly isInitialized: boolean
+  /** 关闭 AI 服务 */
+  close: () => void
 }

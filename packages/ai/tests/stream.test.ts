@@ -7,15 +7,15 @@
 import type {
   SSEDecoder,
   StreamProcessor,
-} from '../src/stream.js'
-import type { ChatCompletionChunk } from '../src/types.js'
+} from '../src/ai-stream.js'
+import type { ChatCompletionChunk } from '../src/ai-types.js'
 import { beforeEach, describe, expect, it } from 'vitest'
 import {
   collectStream,
   createSSEDecoder,
   createStreamProcessor,
   encodeSSE,
-} from '../src/stream.js'
+} from '../src/ai-stream.js'
 
 describe('streamProcessor', () => {
   let processor: StreamProcessor
@@ -47,6 +47,7 @@ describe('streamProcessor', () => {
         createChunk({
           tool_calls: [
             {
+              index: 0,
               id: 'call_1',
               type: 'function',
               function: { name: 'get_', arguments: '{"lo' },
@@ -56,6 +57,7 @@ describe('streamProcessor', () => {
         createChunk({
           tool_calls: [
             {
+              index: 0,
               type: 'function',
               function: { name: 'weather', arguments: 'cation":"' },
             },
@@ -64,6 +66,7 @@ describe('streamProcessor', () => {
         createChunk({
           tool_calls: [
             {
+              index: 0,
               type: 'function',
               function: { arguments: 'Beijing"}' },
             },
@@ -108,6 +111,7 @@ describe('streamProcessor', () => {
       processor.process(createChunk({
         tool_calls: [
           {
+            index: 0,
             id: 'call_1',
             type: 'function',
             function: { name: 'test', arguments: '{}' },
@@ -262,6 +266,7 @@ function createChunk(
     role: string
     content: string
     tool_calls: Array<{
+      index: number
       id?: string
       type: 'function'
       function?: { name?: string, arguments?: string }

@@ -6,14 +6,14 @@
 
 import type {
   ToolRegistry,
-} from '../src/tools.js'
-import type { ToolCall } from '../src/types.js'
+} from '../src/ai-tools.js'
+import type { ToolCall } from '../src/ai-types.js'
 import { beforeEach, describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import {
   createToolRegistry,
   defineTool,
-} from '../src/tools.js'
+} from '../src/ai-tools.js'
 
 describe('defineTool', () => {
   it('应该创建工具实例', () => {
@@ -43,9 +43,9 @@ describe('defineTool', () => {
 
       const result = await tool.execute({ message: 'Hello' })
 
-      expect(result.ok).toBe(true)
-      if (result.ok) {
-        expect(result.value).toBe('Hello')
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data).toBe('Hello')
       }
     })
 
@@ -62,8 +62,8 @@ describe('defineTool', () => {
 
       const result = await tool.execute({ a: 'not a number', b: 2 } as any)
 
-      expect(result.ok).toBe(false)
-      if (!result.ok) {
+      expect(result.success).toBe(false)
+      if (!result.success) {
         expect(result.error.type).toBe('VALIDATION_FAILED')
       }
     })
@@ -81,9 +81,9 @@ describe('defineTool', () => {
 
       const result = await tool.execute({})
 
-      expect(result.ok).toBe(true)
-      if (result.ok) {
-        expect(result.value).toBe('done')
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data).toBe('done')
       }
     })
 
@@ -99,8 +99,8 @@ describe('defineTool', () => {
 
       const result = await tool.execute({})
 
-      expect(result.ok).toBe(false)
-      if (!result.ok) {
+      expect(result.success).toBe(false)
+      if (!result.success) {
         expect(result.error.type).toBe('EXECUTION_FAILED')
         expect(result.error.message).toContain('Test error')
       }
@@ -131,6 +131,7 @@ describe('defineTool', () => {
           unit: { type: 'string', enum: ['celsius', 'fahrenheit'] },
         },
         required: ['location'],
+        additionalProperties: false,
       })
     })
 
@@ -286,11 +287,11 @@ describe('toolRegistry', () => {
 
       const result = await registry.execute(toolCall)
 
-      expect(result.ok).toBe(true)
-      if (result.ok) {
-        expect(result.value.role).toBe('tool')
-        expect(result.value.content).toBe('Hello')
-        expect(result.value.tool_call_id).toBe('call_1')
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data.role).toBe('tool')
+        expect(result.data.content).toBe('Hello')
+        expect(result.data.tool_call_id).toBe('call_1')
       }
     })
 
@@ -306,8 +307,8 @@ describe('toolRegistry', () => {
 
       const result = await registry.execute(toolCall)
 
-      expect(result.ok).toBe(false)
-      if (!result.ok) {
+      expect(result.success).toBe(false)
+      if (!result.success) {
         expect(result.error.type).toBe('TOOL_NOT_FOUND')
       }
     })
@@ -324,8 +325,8 @@ describe('toolRegistry', () => {
 
       const result = await registry.execute(toolCall)
 
-      expect(result.ok).toBe(false)
-      if (!result.ok) {
+      expect(result.success).toBe(false)
+      if (!result.success) {
         expect(result.error.type).toBe('VALIDATION_FAILED')
       }
     })
@@ -351,9 +352,9 @@ describe('toolRegistry', () => {
 
       const result = await registry.execute(toolCall)
 
-      expect(result.ok).toBe(true)
-      if (result.ok) {
-        expect(result.value.content).toBe('{"key":"value"}')
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data.content).toBe('{"key":"value"}')
       }
     })
   })
@@ -385,11 +386,11 @@ describe('toolRegistry', () => {
 
       const result = await registry.executeAll(toolCalls)
 
-      expect(result.ok).toBe(true)
-      if (result.ok) {
-        expect(result.value.length).toBe(2)
-        expect(result.value[0].content).toBe('Hello')
-        expect(result.value[1].content).toBe('3')
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data.length).toBe(2)
+        expect(result.data[0].content).toBe('Hello')
+        expect(result.data[1].content).toBe('3')
       }
     })
 
@@ -452,7 +453,7 @@ describe('toolRegistry', () => {
 
       const result = await registry.executeAll(toolCalls)
 
-      expect(result.ok).toBe(false)
+      expect(result.success).toBe(false)
     })
   })
 

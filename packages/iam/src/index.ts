@@ -2,16 +2,44 @@
  * =============================================================================
  * @hai/iam - 身份与访问管理
  * =============================================================================
+ *
+ * 本模块提供完整的身份认证与访问控制能力：
+ * - 多种认证策略：密码、OTP、LDAP、OAuth2
+ * - 会话管理：JWT 无状态 / 有状态会话
+ * - RBAC 授权：角色与权限管理
+ *
+ * @example
+ * ```ts
+ * import { iam } from '@hai/iam'
+ *
+ * // 初始化
+ * await iam.init({ strategies: ['password'] })
+ *
+ * // 注册用户
+ * const user = await iam.user.register({
+ *   username: 'admin',
+ *   email: 'admin@example.com',
+ *   password: 'Password123'
+ * })
+ *
+ * // 登录
+ * const result = await iam.auth.login({
+ *   identifier: 'admin',
+ *   password: 'Password123'
+ * })
+ *
+ * // 关闭
+ * await iam.close()
+ * ```
+ *
+ * @module @hai/iam
  */
 
-// 类型定义
-export type * from './iam-types.js'
+// 配置 Schema（zod）
+export * from './iam-config.js'
 
 // 统一服务入口
-export { createIAMService, iam } from './iam.main.js'
+export * from './iam-main.js'
 
-export { createHaiAuthzProvider } from './provider/hai/iam-hai-authz.js'
-// HAI Provider 实现
-export { createHaiIdentProvider } from './provider/hai/iam-hai-ident.js'
-export { createHaiOAuthProvider } from './provider/hai/iam-hai-oauth.js'
-export { createHaiSessionProvider } from './provider/hai/iam-hai-session.js'
+// 类型定义
+export * from './iam-types.js'

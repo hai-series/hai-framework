@@ -8,6 +8,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./client": {
+      "types": "./dist/client/index.d.ts",
+      "import": "./dist/client/index.js"
     }
   },
   "main": "./dist/index.js",
@@ -25,6 +29,7 @@
     "clean": "rimraf dist .turbo"
   },
   "dependencies": {
+    "@hai/cache": "workspace:*",
     "@hai/core": "workspace:*",
     "@hai/crypto": "workspace:*",
     "@hai/db": "workspace:*",

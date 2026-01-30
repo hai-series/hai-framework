@@ -2,22 +2,49 @@
  * =============================================================================
  * @hai/ai - 工具调用
  * =============================================================================
- * 提供 LLM 工具调用的定义和执行功能
  *
- * 特性:
+ * 提供 LLM 工具调用的定义和执行功能。
+ *
+ * 特性：
  * - Zod schema 类型推断
- * - 工具注册
+ * - 工具注册表
  * - 自动参数验证
  * - 执行追踪
+ *
+ * @example
+ * ```ts
+ * import { defineTool, createToolRegistry } from '@hai/ai'
+ * import { z } from 'zod'
+ *
+ * // 定义工具
+ * const weatherTool = defineTool({
+ *     name: 'get_weather',
+ *     description: '获取天气信息',
+ *     parameters: z.object({
+ *         city: z.string().describe('城市名称'),
+ *     }),
+ *     handler: async ({ city }) => {
+ *         return { temperature: 20, city }
+ *     }
+ * })
+ *
+ * // 创建注册表
+ * const registry = createToolRegistry()
+ * registry.register(weatherTool)
+ *
+ * // 获取工具定义（用于 LLM）
+ * const definitions = registry.getDefinitions()
+ * ```
+ *
+ * @module ai-tools
  * =============================================================================
  */
 
 import type { Result } from '@hai/core'
 import type { z } from 'zod'
 import type { ToolCall, ToolDefinition, ToolMessage } from './ai-types.js'
-import { createLogger, err, ok } from '@hai/core'
-
-const logger = createLogger({ name: '@hai/ai.tools' })
+import { err, ok } from '@hai/core'
+import { z as zod } from 'zod'
 
 /**
  * 工具错误类型
@@ -104,10 +131,6 @@ export function defineTool<TInput, TOutput>(
         const parseResult = parameters.safeParse(input)
 
         if (!parseResult.success) {
-          logger.warn('Tool input validation failed', {
-            toolName: name,
-            issues: parseResult.error.issues,
-          })
           return err({
             type: 'VALIDATION_FAILED',
             message: parseResult.error.message,
@@ -121,10 +144,6 @@ export function defineTool<TInput, TOutput>(
         return ok(output)
       }
       catch (error) {
-        logger.error('Tool execution failed', {
-          toolName: name,
-          error: error instanceof Error ? error.message : String(error),
-        })
         return err({
           type: 'EXECUTION_FAILED',
           message: error instanceof Error ? error.message : String(error),
@@ -158,13 +177,7 @@ export class ToolRegistry {
    * @param tool - 工具实例
    */
   register<TInput, TOutput>(tool: Tool<TInput, TOutput>): this {
-    if (this.tools.has(tool.name)) {
-      logger.warn('Overwriting existing tool', { toolName: tool.name })
-    }
-
     this.tools.set(tool.name, tool as Tool)
-    logger.info('Tool registered', { toolName: tool.name })
-
     return this
   }
 
@@ -186,11 +199,7 @@ export class ToolRegistry {
    * @param name - 工具名称
    */
   unregister(name: string): boolean {
-    const deleted = this.tools.delete(name)
-    if (deleted) {
-      logger.info('Tool unregistered', { toolName: name })
-    }
-    return deleted
+    return this.tools.delete(name)
   }
 
   /**
@@ -278,6 +287,7 @@ export class ToolRegistry {
    *
    * @param toolCalls - 工具调用数组
    * @param options - 执行选项
+   * @param options.parallel - 是否并行执行（默认 true）
    */
   async executeAll(
     toolCalls: ToolCall[],
@@ -335,163 +345,20 @@ export function createToolRegistry(): ToolRegistry {
   return new ToolRegistry()
 }
 
+// =============================================================================
+// Zod to JSON Schema 转换
+// =============================================================================
+
 /**
- * 将 Zod schema 转换为 JSON Schema
- * 简化实现，支持常用类型
+ * 将 Zod schema 转换为 JSON Schema（用于 OpenAI 工具定义）
+ *
+ * 使用 Zod 4.x 内置的 toJSONSchema 方法
  */
 function zodToJsonSchema(schema: z.ZodType): Record<string, unknown> {
-  // 使用 Zod 内置的 _def 来获取类型信息
-  const def = (schema as unknown as { _def: { typeName: string } })._def
+  const jsonSchema = zod.toJSONSchema(schema)
 
-  switch (def.typeName) {
-    case 'ZodString':
-      return buildStringSchema(def)
-    case 'ZodNumber':
-      return buildNumberSchema(def)
-    case 'ZodBoolean':
-      return { type: 'boolean' }
-    case 'ZodArray':
-      return {
-        type: 'array',
-        items: zodToJsonSchema((def as unknown as { type: z.ZodType }).type),
-      }
-    case 'ZodObject':
-      return buildObjectSchema(def)
-    case 'ZodEnum':
-      return {
-        type: 'string',
-        enum: (def as unknown as { values: string[] }).values,
-      }
-    case 'ZodOptional':
-      return zodToJsonSchema((def as unknown as { innerType: z.ZodType }).innerType)
-    case 'ZodNullable':
-      return {
-        anyOf: [
-          zodToJsonSchema((def as unknown as { innerType: z.ZodType }).innerType),
-          { type: 'null' },
-        ],
-      }
-    case 'ZodDefault':
-      return {
-        ...zodToJsonSchema((def as unknown as { innerType: z.ZodType }).innerType),
-        default: (def as unknown as { defaultValue: () => unknown }).defaultValue(),
-      }
-    case 'ZodUnion':
-      return {
-        anyOf: (def as unknown as { options: z.ZodType[] }).options.map(opt => zodToJsonSchema(opt)),
-      }
-    case 'ZodLiteral':
-      return {
-        const: (def as unknown as { value: unknown }).value,
-      }
-    default:
-      // 回退到基本对象类型
-      return { type: 'object' }
-  }
-}
+  // 移除 $schema 字段（OpenAI 不需要）
+  const { $schema: _, ...rest } = jsonSchema as Record<string, unknown>
 
-/**
- * 构建字符串 schema
- */
-interface ZodCheck {
-  kind: string
-  value?: number
-  regex?: RegExp
-}
-
-interface ZodDefWithChecks {
-  checks?: ZodCheck[]
-  description?: string
-}
-
-function buildStringSchema(def: { checks?: ZodCheck[], description?: string }): Record<string, unknown> {
-  const schema: Record<string, unknown> = { type: 'string' }
-
-  if (def.checks) {
-    for (const check of def.checks) {
-      if (check.kind === 'min') {
-        schema.minLength = check.value
-      }
-      else if (check.kind === 'max') {
-        schema.maxLength = check.value
-      }
-      else if (check.kind === 'regex') {
-        schema.pattern = check.regex.source
-      }
-      else if (check.kind === 'email') {
-        schema.format = 'email'
-      }
-      else if (check.kind === 'url') {
-        schema.format = 'uri'
-      }
-    }
-  }
-
-  // 获取描述
-  if (def.description) {
-    schema.description = def.description
-  }
-
-  return schema
-}
-
-/**
- * 构建数字 schema
- */
-function buildNumberSchema(def: { checks?: ZodCheck[], description?: string }): Record<string, unknown> {
-  const schema: Record<string, unknown> = { type: 'number' }
-
-  if (def.checks) {
-    for (const check of def.checks) {
-      if (check.kind === 'min') {
-        schema.minimum = check.value
-      }
-      else if (check.kind === 'max') {
-        schema.maximum = check.value
-      }
-      else if (check.kind === 'int') {
-        schema.type = 'integer'
-      }
-    }
-  }
-
-  if (def.description) {
-    schema.description = def.description
-  }
-
-  return schema
-}
-
-/**
- * 构建对象 schema
- */
-function buildObjectSchema(def: { shape: () => Record<string, unknown>, description?: string }): Record<string, unknown> {
-  const properties: Record<string, unknown> = {}
-  const required: string[] = []
-
-  for (const [key, value] of Object.entries(def.shape())) {
-    const valueSchema = value as unknown as z.ZodType
-    properties[key] = zodToJsonSchema(valueSchema)
-
-    // 检查是否必需
-    const valueDef = (valueSchema as unknown as { _def: { typeName: string } })._def
-    if (valueDef.typeName !== 'ZodOptional' && valueDef.typeName !== 'ZodDefault') {
-      required.push(key)
-    }
-  }
-
-  const schema: Record<string, unknown> = {
-    type: 'object',
-    properties,
-  }
-
-  if (required.length > 0) {
-    schema.required = required
-  }
-
-  if (def.description) {
-    schema.description = def.description
-  }
-
-  return schema
+  return rest
 }

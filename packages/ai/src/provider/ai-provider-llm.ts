@@ -1,8 +1,11 @@
 /**
  * =============================================================================
- * @hai/ai - HAI Provider: LLM
+ * @hai/ai - Provider: LLM
  * =============================================================================
- * HAI 默认 LLM 提供者实现（基于 OpenAI 兼容 API）
+ *
+ * LLM Provider 实现（基于 OpenAI 兼容 API）
+ *
+ * @module ai-provider-llm
  * =============================================================================
  */
 
@@ -14,12 +17,17 @@ import type {
   ChatCompletionRequest,
   ChatCompletionResponse,
   LLMProvider,
-} from '../../ai-types.js'
+} from '../ai-types.js'
+import process from 'node:process'
 import { err, ok } from '@hai/core'
 import OpenAI from 'openai'
 
+import { AIErrorCode } from '../ai-config.js'
+
 /**
- * HAI LLM 提供者实现
+ * HAI LLM Provider 实现
+ *
+ * 基于 OpenAI SDK，支持所有 OpenAI 兼容的 API。
  */
 class HaiLLMProvider implements LLMProvider {
   private client: OpenAI
@@ -31,7 +39,7 @@ class HaiLLMProvider implements LLMProvider {
     this.client = new OpenAI({
       apiKey: config.llm?.apiKey || process.env.OPENAI_API_KEY || '',
       baseURL: config.llm?.baseUrl || process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1',
-      timeout: 60000,
+      timeout: config.llm?.timeout || 60000,
     })
   }
 
@@ -88,6 +96,14 @@ class HaiLLMProvider implements LLMProvider {
         message: {
           role: 'assistant' as const,
           content: choice.message.content || '',
+          tool_calls: choice.message.tool_calls?.map(tc => ({
+            id: tc.id,
+            type: 'function' as const,
+            function: {
+              name: 'function' in tc ? tc.function.name : '',
+              arguments: 'function' in tc ? tc.function.arguments : '',
+            },
+          })),
         },
         finish_reason: (choice.finish_reason || 'stop') as 'stop' | 'length' | 'tool_calls' | 'content_filter',
       })),
@@ -109,7 +125,18 @@ class HaiLLMProvider implements LLMProvider {
         index: choice.index,
         delta: {
           role: choice.delta?.role === 'assistant' ? 'assistant' as const : undefined,
-          content: choice.delta?.content || '',
+          content: choice.delta?.content || undefined,
+          tool_calls: choice.delta?.tool_calls?.map(tc => ({
+            index: tc.index,
+            id: tc.id,
+            type: tc.type as 'function' | undefined,
+            function: tc.function
+              ? {
+                  name: tc.function.name,
+                  arguments: tc.function.arguments,
+                }
+              : undefined,
+          })),
         },
         finish_reason: choice.finish_reason as 'stop' | 'length' | 'tool_calls' | 'content_filter' | null,
       })),
@@ -118,19 +145,47 @@ class HaiLLMProvider implements LLMProvider {
 
   private mapError(error: unknown): AIError {
     if (error instanceof OpenAI.APIError) {
+      // 根据状态码映射错误类型
+      let code: AIError['code'] = AIErrorCode.API_ERROR
+      if (error.status === 429) {
+        code = AIErrorCode.RATE_LIMITED
+      }
+      else if (error.status === 404) {
+        code = AIErrorCode.MODEL_NOT_FOUND
+      }
+      else if (error.status === 400) {
+        code = AIErrorCode.INVALID_REQUEST
+      }
+
       return {
-        type: 'API_ERROR',
+        code,
         message: error.message,
-        code: error.status?.toString(),
+        cause: error,
       }
     }
+
+    if (error instanceof Error && error.name === 'AbortError') {
+      return {
+        code: AIErrorCode.TIMEOUT,
+        message: '请求超时',
+        cause: error,
+      }
+    }
+
     return {
-      type: 'INTERNAL_ERROR',
+      code: AIErrorCode.INTERNAL_ERROR,
       message: error instanceof Error ? error.message : 'Unknown error',
+      cause: error,
     }
   }
 }
 
+/**
+ * 创建 HAI LLM Provider
+ *
+ * @param config - AI 配置
+ * @returns LLM Provider 实例
+ */
 export function createHaiLLMProvider(config: AIConfig): LLMProvider {
   return new HaiLLMProvider(config)
 }

@@ -1,8 +1,11 @@
 /**
  * =============================================================================
- * @hai/ai - HAI Provider: Skills
+ * @hai/ai - Provider: Skills
  * =============================================================================
- * HAI 默认技能提供者实现
+ *
+ * Skills Provider 实现
+ *
+ * @module ai-provider-skills
  * =============================================================================
  */
 
@@ -15,17 +18,21 @@ import type {
   SkillQuery,
   SkillResult,
   SkillsProvider,
-} from '../../ai-types.js'
+} from '../ai-types.js'
 import { err, ok } from '@hai/core'
 
+import { AIErrorCode } from '../ai-config.js'
+
 /**
- * HAI 技能提供者实现
+ * HAI Skills Provider 实现
+ *
+ * 提供技能的注册、查询和执行功能。
  */
 class HaiSkillsProvider implements SkillsProvider {
   private skills: Map<string, Skill> = new Map()
 
   constructor(_config: AIConfig) {
-    // Config reserved for future use
+    // 配置保留供将来使用
   }
 
   register<TInput, TOutput>(skill: Skill<TInput, TOutput>): void {
@@ -46,10 +53,12 @@ class HaiSkillsProvider implements SkillsProvider {
     for (const skill of this.skills.values()) {
       let matches = true
 
+      // 按名称过滤
       if (query.name && !skill.metadata.name.includes(query.name)) {
         matches = false
       }
 
+      // 按标签过滤
       if (query.tags && query.tags.length > 0) {
         const skillTags = skill.metadata.tags || []
         const hasAllTags = query.tags.every((tag: string) => skillTags.includes(tag))
@@ -58,6 +67,7 @@ class HaiSkillsProvider implements SkillsProvider {
         }
       }
 
+      // 按作者过滤
       if (query.author && skill.metadata.author !== query.author) {
         matches = false
       }
@@ -79,8 +89,8 @@ class HaiSkillsProvider implements SkillsProvider {
       const skill = this.skills.get(name)
       if (!skill) {
         return err({
-          type: 'SKILL_NOT_FOUND',
-          message: `Skill '${name}' not found`,
+          code: AIErrorCode.SKILL_NOT_FOUND,
+          message: `技能 '${name}' 未找到`,
         })
       }
 
@@ -93,26 +103,76 @@ class HaiSkillsProvider implements SkillsProvider {
     }
     catch (error) {
       return err({
-        type: 'SKILL_EXECUTION_ERROR',
-        message: `Skill '${name}' execution failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        code: AIErrorCode.SKILL_EXECUTION_ERROR,
+        message: `技能 '${name}' 执行失败：${error instanceof Error ? error.message : 'Unknown error'}`,
         cause: error,
       })
     }
   }
 
+  // =============================================================================
+  // 辅助方法
+  // =============================================================================
+
+  /**
+   * 列出所有技能
+   */
   list(): Skill[] {
     return Array.from(this.skills.values())
   }
 
+  /**
+   * 获取技能数量
+   */
   count(): number {
     return this.skills.size
   }
 
+  /**
+   * 清空所有技能
+   */
   clear(): void {
     this.skills.clear()
   }
 }
 
+/**
+ * 创建 HAI Skills Provider
+ *
+ * @param config - AI 配置
+ * @returns Skills Provider 实例
+ */
+export function createHaiSkillsProvider(config: AIConfig): SkillsProvider {
+  return new HaiSkillsProvider(config)
+}
+
+/**
+ * 定义技能（便捷方法）
+ *
+ * @param options - 技能选项
+ * @param options.name - 技能名称
+ * @param options.description - 技能描述
+ * @param options.version - 技能版本
+ * @param options.tags - 技能标签
+ * @param options.author - 技能作者
+ * @param options.execute - 技能执行函数
+ * @returns 技能定义
+ *
+ * @example
+ * ```ts
+ * const translateSkill = defineSkill({
+ *     name: 'translate',
+ *     description: '翻译文本',
+ *     tags: ['nlp', 'translation'],
+ *     execute: async (input, context) => {
+ *         // 执行翻译逻辑
+ *         return { success: true, data: { translated: '...' } }
+ *     }
+ * })
+ *
+ * ai.skills.register(translateSkill)
+ * ```
+ */
 export function defineSkill<TInput = unknown, TOutput = unknown>(
   options: {
     name: string
@@ -133,8 +193,4 @@ export function defineSkill<TInput = unknown, TOutput = unknown>(
     },
     execute: options.execute,
   }
-}
-
-export function createHaiSkillsProvider(config: AIConfig): SkillsProvider {
-  return new HaiSkillsProvider(config)
 }
