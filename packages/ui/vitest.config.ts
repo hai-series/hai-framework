@@ -11,7 +11,7 @@ export default defineConfig({
   plugins: [svelte({ hot: false })],
   test: {
     globals: true,
-    environment: 'jsdom',
+    environment: 'node', // 纯逻辑测试用 node 环境
     include: ['tests/**/*.test.ts'],
   },
 })

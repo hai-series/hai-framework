@@ -9,7 +9,7 @@
 ## 核心 API
 
 ```ts
-import { ai, AIErrorCode, createToolRegistry, defineTool } from '@hai/ai'
+import { ai, AIErrorCode, defineTool, createToolRegistry } from '@hai/ai'
 ```
 
 ### 初始化与关闭
@@ -103,7 +103,7 @@ const resource = await ai.mcp.readResource('config://app')
 // 注册提示词
 ai.mcp.registerPrompt(
   { name: 'translate', arguments: [{ name: 'text', required: true }] },
-  async args => [{ role: 'user', content: { type: 'text', text: args.text } }]
+  async (args) => [{ role: 'user', content: { type: 'text', text: args.text } }]
 )
 
 // 获取提示词
@@ -150,7 +150,7 @@ ai.skills.unregister('translate')
 ### 工具定义与注册表
 
 ```ts
-import { createToolRegistry, defineTool } from '@hai/ai'
+import { defineTool, createToolRegistry } from '@hai/ai'
 import { z } from 'zod'
 
 // 定义工具（Zod schema 自动转换为 JSON Schema）
@@ -199,7 +199,7 @@ const messages = await registry.executeAll(toolCalls, { parallel: true })
 ### 流处理工具
 
 ```ts
-import { collectStream, createSSEDecoder, createStreamProcessor, encodeSSE } from '@hai/ai'
+import { createStreamProcessor, collectStream, createSSEDecoder, encodeSSE } from '@hai/ai'
 
 // 流处理器
 const processor = createStreamProcessor()
@@ -230,7 +230,7 @@ const encoded = encodeSSE({ data: '{"text":"hello"}' })
 ### 前端客户端
 
 ```ts
-import { collectStreamContent, createAIClient, parseSSE } from '@hai/ai/client'
+import { createAIClient, collectStreamContent, parseSSE } from '@hai/ai/client'
 
 const client = createAIClient({
   baseUrl: '/api/ai',
@@ -243,7 +243,7 @@ const response = await client.chat({ messages })
 
 // 流式
 for await (const chunk of client.chatStream({ messages }, {
-  onProgress: p => console.log(p.content, p.done),
+  onProgress: (p) => console.log(p.content, p.done),
   abortController: new AbortController(),
 })) {
   // 处理 chunk
@@ -259,28 +259,28 @@ const content = await collectStreamContent(client.chatStream({ messages }))
 
 ## 错误码
 
-| 错误码                    | 数值 | 说明           |
-| ------------------------- | ---- | -------------- |
-| `NOT_INITIALIZED`         | 4000 | 服务未初始化   |
-| `CONFIGURATION_ERROR`     | 4001 | 配置错误       |
-| `INTERNAL_ERROR`          | 4002 | 内部错误       |
-| `API_ERROR`               | 4100 | API 调用错误   |
-| `INVALID_REQUEST`         | 4101 | 无效请求       |
-| `RATE_LIMITED`            | 4102 | 速率限制       |
-| `TIMEOUT`                 | 4103 | 请求超时       |
-| `MODEL_NOT_FOUND`         | 4104 | 模型未找到     |
-| `CONTEXT_LENGTH_EXCEEDED` | 4105 | 上下文长度超限 |
-| `MCP_CONNECTION_ERROR`    | 4200 | MCP 连接错误   |
-| `MCP_PROTOCOL_ERROR`      | 4201 | MCP 协议错误   |
-| `MCP_TOOL_ERROR`          | 4202 | MCP 工具错误   |
-| `MCP_RESOURCE_ERROR`      | 4203 | MCP 资源错误   |
-| `SKILL_NOT_FOUND`         | 4300 | 技能未找到     |
-| `SKILL_EXECUTION_ERROR`   | 4301 | 技能执行错误   |
-| `SKILL_VALIDATION_ERROR`  | 4302 | 技能验证错误   |
-| `TOOL_NOT_FOUND`          | 4400 | 工具未找到     |
-| `TOOL_VALIDATION_FAILED`  | 4401 | 工具验证失败   |
-| `TOOL_EXECUTION_FAILED`   | 4402 | 工具执行失败   |
-| `TOOL_TIMEOUT`            | 4403 | 工具超时       |
+| 错误码                    | 数值 | 说明             |
+| ------------------------- | ---- | ---------------- |
+| `NOT_INITIALIZED`         | 4000 | 服务未初始化     |
+| `CONFIGURATION_ERROR`     | 4001 | 配置错误         |
+| `INTERNAL_ERROR`          | 4002 | 内部错误         |
+| `API_ERROR`               | 4100 | API 调用错误     |
+| `INVALID_REQUEST`         | 4101 | 无效请求         |
+| `RATE_LIMITED`            | 4102 | 速率限制         |
+| `TIMEOUT`                 | 4103 | 请求超时         |
+| `MODEL_NOT_FOUND`         | 4104 | 模型未找到       |
+| `CONTEXT_LENGTH_EXCEEDED` | 4105 | 上下文长度超限   |
+| `MCP_CONNECTION_ERROR`    | 4200 | MCP 连接错误     |
+| `MCP_PROTOCOL_ERROR`      | 4201 | MCP 协议错误     |
+| `MCP_TOOL_ERROR`          | 4202 | MCP 工具错误     |
+| `MCP_RESOURCE_ERROR`      | 4203 | MCP 资源错误     |
+| `SKILL_NOT_FOUND`         | 4300 | 技能未找到       |
+| `SKILL_EXECUTION_ERROR`   | 4301 | 技能执行错误     |
+| `SKILL_VALIDATION_ERROR`  | 4302 | 技能验证错误     |
+| `TOOL_NOT_FOUND`          | 4400 | 工具未找到       |
+| `TOOL_VALIDATION_FAILED`  | 4401 | 工具验证失败     |
+| `TOOL_EXECUTION_FAILED`   | 4402 | 工具执行失败     |
+| `TOOL_TIMEOUT`            | 4403 | 工具超时         |
 
 ## 配置 Schema
 

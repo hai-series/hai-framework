@@ -1,0 +1,148 @@
+<!--
+  =============================================================================
+  @hai/ui - Pagination 组件
+  =============================================================================
+  分页组件
+  
+  使用 Svelte 5 Runes ($props, $derived, $bindable)
+  =============================================================================
+-->
+<script lang="ts">
+  import type { PaginationProps } from '../../types.js'
+  import { cn, getSizeClass } from '../../utils.js'
+  
+  let {
+    page = $bindable(1),
+    total,
+    pageSize = 10,
+    size = 'md',
+    showTotal = true,
+    showJumper = false,
+    class: className = '',
+    onchange,
+  }: PaginationProps = $props()
+  
+  // 计算总页数
+  const totalPages = $derived(Math.ceil(total / pageSize))
+  
+  // 生成页码列表
+  const pages = $derived(() => {
+    const result: (number | string)[] = []
+    const maxVisible = 7
+    
+    if (totalPages <= maxVisible) {
+      for (let i = 1; i <= totalPages; i++) {
+        result.push(i)
+      }
+    } else {
+      // 始终显示第一页
+      result.push(1)
+      
+      if (page > 3) {
+        result.push('...')
+      }
+      
+      // 中间页码
+      const start = Math.max(2, page - 1)
+      const end = Math.min(totalPages - 1, page + 1)
+      
+      for (let i = start; i <= end; i++) {
+        result.push(i)
+      }
+      
+      if (page < totalPages - 2) {
+        result.push('...')
+      }
+      
+      // 始终显示最后一页
+      result.push(totalPages)
+    }
+    
+    return result
+  })
+  
+  const joinClass = $derived(
+    cn(
+      'join',
+      className,
+    )
+  )
+  
+  const btnClass = $derived(
+    cn(
+      'join-item btn',
+      getSizeClass(size),
+    )
+  )
+  
+  function goToPage(p: number) {
+    if (p >= 1 && p <= totalPages && p !== page) {
+      page = p
+      onchange?.(p)
+    }
+  }
+  
+  let jumperValue = $state('')
+  
+  function handleJump() {
+    const p = parseInt(jumperValue, 10)
+    if (!isNaN(p)) {
+      goToPage(p)
+      jumperValue = ''
+    }
+  }
+</script>
+
+<div class="flex items-center gap-4">
+  {#if showTotal}
+    <span class="text-sm text-base-content/70">
+      共 {total} 条
+    </span>
+  {/if}
+  
+  <div class={joinClass}>
+    <button
+      class={btnClass}
+      disabled={page === 1}
+      onclick={() => goToPage(page - 1)}
+    >
+      «
+    </button>
+    
+    {#each pages() as p}
+      {#if typeof p === 'number'}
+        <button
+          class={cn(btnClass, page === p && 'btn-active')}
+          onclick={() => goToPage(p)}
+        >
+          {p}
+        </button>
+      {:else}
+        <button class={cn(btnClass, 'btn-disabled')}>...</button>
+      {/if}
+    {/each}
+    
+    <button
+      class={btnClass}
+      disabled={page === totalPages}
+      onclick={() => goToPage(page + 1)}
+    >
+      »
+    </button>
+  </div>
+  
+  {#if showJumper}
+    <div class="flex items-center gap-2">
+      <span class="text-sm">跳转到</span>
+      <input
+        type="number"
+        class="input input-bordered input-sm w-16"
+        min="1"
+        max={totalPages}
+        bind:value={jumperValue}
+        onkeydown={(e) => e.key === 'Enter' && handleJump()}
+      />
+      <span class="text-sm">页</span>
+    </div>
+  {/if}
+</div>

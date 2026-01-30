@@ -8,6 +8,8 @@
  * - 路由守卫
  * - API 响应工具
  * - 表单验证
+ * - 模块集成（IAM/Storage/Cache/Crypto）
+ * - 客户端 Store
  * =============================================================================
  */
 
@@ -73,3 +75,79 @@ export type {
 
 // Validation
 export { validateForm, validateParams, validateQuery } from './validation.js'
+
+// =============================================================================
+// 模块集成（服务端）
+// =============================================================================
+
+// IAM 模块
+export {
+  createIamActions,
+  createIamHandle,
+  requireAuth,
+  requirePermission,
+  requireRole,
+} from './modules/iam/index.js'
+export type {
+  IamActionResult,
+  IamActionsConfig,
+  IamHandleConfig,
+  IamLocals,
+  IamServiceLike,
+  SessionData as IamSessionData,
+  UserData,
+} from './modules/iam/index.js'
+
+// Storage 模块
+export { createStorageEndpoint } from './modules/storage/index.js'
+export type {
+  PresignResult,
+  StorageEndpointConfig,
+  StorageFileItem,
+  StorageServiceLike,
+  StorageUploadResult,
+} from './modules/storage/index.js'
+
+// Cache 模块
+export { createCacheHandle, createCacheUtils } from './modules/cache/index.js'
+export type {
+  CacheHandleConfig,
+  CacheRouteConfig,
+  CacheServiceLike,
+} from './modules/cache/index.js'
+
+// Crypto 模块
+export {
+  createCsrfManager,
+  createEncryptedCookie,
+  signRequest,
+  verifyWebhookSignature,
+} from './modules/crypto/index.js'
+export type {
+  CryptoServiceLike,
+  CsrfConfig as CryptoCSRFConfig,
+  EncryptedCookieConfig,
+  WebhookVerifyConfig,
+} from './modules/crypto/index.js'
+
+// =============================================================================
+// 客户端 Store
+// =============================================================================
+
+export {
+  useIsAuthenticated,
+  useSession,
+  useUpload,
+  useUser,
+} from './client/index.js'
+export type {
+  ClientUser,
+  SessionState,
+  SessionStore,
+  UploadFile,
+  UploadOptions,
+  UploadState,
+  UploadStore,
+  UseSessionOptions,
+  UseUploadOptions,
+} from './client/index.js'

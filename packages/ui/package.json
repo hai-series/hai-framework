@@ -40,6 +40,7 @@
     "@sveltejs/package": "catalog:",
     "@sveltejs/vite-plugin-svelte": "catalog:",
     "@types/node": "catalog:",
+    "jsdom": "^27.4.0",
     "rimraf": "catalog:",
     "svelte": "catalog:",
     "svelte-check": "catalog:",

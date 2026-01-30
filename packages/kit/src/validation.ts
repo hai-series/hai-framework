@@ -45,7 +45,9 @@ export async function validateForm<T extends z.ZodType>(
       }
     }
 
-    const errors: FormError[] = result.error.errors.map(err => ({
+    // zod v4 使用 issues 而不是 errors
+    const issues = (result.error as any).issues ?? (result.error as any).errors ?? []
+    const errors: FormError[] = issues.map((err: any) => ({
       field: err.path.join('.'),
       message: err.message,
     }))
@@ -81,7 +83,9 @@ export function validateQuery<T extends z.ZodType>(
     }
   }
 
-  const errors: FormError[] = result.error.errors.map(err => ({
+  // zod v4 使用 issues 而不是 errors
+  const issues = (result.error as any).issues ?? (result.error as any).errors ?? []
+  const errors: FormError[] = issues.map((err: any) => ({
     field: err.path.join('.'),
     message: err.message,
   }))
@@ -109,7 +113,9 @@ export function validateParams<T extends z.ZodType>(
     }
   }
 
-  const errors: FormError[] = result.error.errors.map(err => ({
+  // zod v4 使用 issues 而不是 errors
+  const issues = (result.error as any).issues ?? (result.error as any).errors ?? []
+  const errors: FormError[] = issues.map((err: any) => ({
     field: err.path.join('.'),
     message: err.message,
   }))

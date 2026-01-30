@@ -192,6 +192,8 @@ export interface RadioProps<T = string> {
   value?: T
   /** 选项 */
   options: SelectOption<T>[]
+  /** 表单字段名称 */
+  name?: string
   /** 尺寸 */
   size?: Size
   /** 是否禁用 */
@@ -551,5 +553,261 @@ export interface DropdownProps {
   /** 选择事件 */
   onselect?: (key: string) => void
   /** 触发元素插槽 */
+  children?: Snippet
+}
+
+// =============================================================================
+// 新增 Base 组件类型
+// =============================================================================
+
+/**
+ * 表单属性
+ */
+export interface FormProps {
+  /** 自定义类名 */
+  class?: string
+  /** 加载状态 */
+  loading?: boolean
+  /** 禁用状态 */
+  disabled?: boolean
+  /** 提交事件 */
+  onsubmit?: (data: Record<string, unknown>) => void | Promise<void>
+  /** 重置事件 */
+  onreset?: () => void
+  /** 错误事件 */
+  onerror?: (error: unknown) => void
+  /** 子内容 */
+  children?: Snippet
+}
+
+/**
+ * 表单字段属性
+ */
+export interface FormFieldProps {
+  /** 标签 */
+  label?: string
+  /** 字段名 */
+  name?: string
+  /** 错误消息 */
+  error?: string
+  /** 提示信息 */
+  hint?: string
+  /** 是否必填 */
+  required?: boolean
+  /** 自定义类名 */
+  class?: string
+  /** 子内容 */
+  children?: Snippet
+}
+
+/**
+ * 骨架屏属性
+ */
+export interface SkeletonProps {
+  /** 变体 */
+  variant?: 'text' | 'title' | 'avatar' | 'thumbnail' | 'button' | 'input'
+  /** 宽度 */
+  width?: string
+  /** 高度 */
+  height?: string
+  /** 是否圆形 */
+  circle?: boolean
+  /** 是否有动画 */
+  animation?: boolean
+  /** 数量 */
+  count?: number
+  /** 自定义类名 */
+  class?: string
+}
+
+/**
+ * 空状态属性
+ */
+export interface EmptyProps {
+  /** 标题 */
+  title?: string
+  /** 描述 */
+  description?: string
+  /** 图标类型 */
+  icon?: 'inbox' | 'search' | 'file' | 'error'
+  /** 尺寸 */
+  size?: Size
+  /** 自定义类名 */
+  class?: string
+  /** 操作按钮插槽 */
+  action?: Snippet
+  /** 自定义图标插槽 */
+  children?: Snippet
+}
+
+/**
+ * 结果页属性
+ */
+export interface ResultProps {
+  /** 状态 */
+  status?: 'success' | 'error' | 'warning' | 'info'
+  /** 标题 */
+  title?: string
+  /** 描述 */
+  description?: string
+  /** 自定义类名 */
+  class?: string
+  /** 自定义图标插槽 */
+  icon?: Snippet
+  /** 操作按钮插槽 */
+  actions?: Snippet
+  /** 额外内容插槽 */
+  children?: Snippet
+}
+
+/**
+ * 确认对话框属性
+ */
+export interface ConfirmProps {
+  /** 是否打开 */
+  open?: boolean
+  /** 标题 */
+  title?: string
+  /** 消息内容 */
+  message?: string
+  /** 确认按钮文本 */
+  confirmText?: string
+  /** 取消按钮文本 */
+  cancelText?: string
+  /** 变体 */
+  variant?: 'default' | 'primary' | 'warning' | 'error'
+  /** 加载状态 */
+  loading?: boolean
+  /** 自定义类名 */
+  class?: string
+  /** 确认事件 */
+  onconfirm?: () => void | Promise<void>
+  /** 取消事件 */
+  oncancel?: () => void
+}
+
+/**
+ * 标签属性
+ */
+export interface TagProps {
+  /** 文本 */
+  text?: string
+  /** 变体 */
+  variant?: Variant
+  /** 尺寸 */
+  size?: Size
+  /** 是否可关闭 */
+  closable?: boolean
+  /** 是否为轮廓样式 */
+  outline?: boolean
+  /** 自定义类名 */
+  class?: string
+  /** 关闭事件 */
+  onclose?: () => void
+  /** 子内容 */
+  children?: Snippet
+}
+
+/**
+ * 标签输入框属性
+ */
+export interface TagInputProps {
+  /** 标签列表 */
+  tags?: string[]
+  /** 占位符 */
+  placeholder?: string
+  /** 最大标签数 */
+  maxTags?: number
+  /** 是否允许重复 */
+  allowDuplicates?: boolean
+  /** 是否禁用 */
+  disabled?: boolean
+  /** 尺寸 */
+  size?: Size
+  /** 自定义类名 */
+  class?: string
+  /** 变化事件 */
+  onchange?: (tags: string[]) => void
+}
+
+/**
+ * 步骤项
+ */
+export interface StepItem {
+  /** 标题 */
+  title: string
+  /** 描述 */
+  description?: string
+  /** 图标 */
+  icon?: string
+}
+
+/**
+ * 步骤条属性
+ */
+export interface StepsProps {
+  /** 步骤列表 */
+  items?: StepItem[]
+  /** 当前步骤 */
+  current?: number
+  /** 方向 */
+  direction?: 'horizontal' | 'vertical'
+  /** 尺寸 */
+  size?: 'xs' | 'sm' | 'md' | 'lg'
+  /** 是否可点击 */
+  clickable?: boolean
+  /** 自定义类名 */
+  class?: string
+  /** 变化事件 */
+  onchange?: (index: number) => void
+}
+
+/**
+ * 图标按钮属性
+ */
+export interface IconButtonProps {
+  /** 图标（HTML/SVG） */
+  icon?: string
+  /** 标签（无障碍） */
+  label?: string
+  /** 提示文本 */
+  tooltip?: string
+  /** 变体 */
+  variant?: Variant
+  /** 尺寸 */
+  size?: Size
+  /** 是否禁用 */
+  disabled?: boolean
+  /** 是否加载中 */
+  loading?: boolean
+  /** 自定义类名 */
+  class?: string
+  /** 点击事件 */
+  onclick?: (e: MouseEvent) => void
+  /** 图标插槽 */
+  children?: Snippet
+}
+
+/**
+ * 弹出层属性
+ */
+export interface PopoverProps {
+  /** 是否打开 */
+  open?: boolean
+  /** 位置 */
+  position?: Position
+  /** 触发方式 */
+  trigger?: 'click' | 'hover'
+  /** 偏移量 */
+  offset?: number
+  /** 自定义类名 */
+  class?: string
+  /** 打开事件 */
+  onopen?: () => void
+  /** 关闭事件 */
+  onclose?: () => void
+  /** 触发器插槽 */
+  triggerContent?: Snippet
+  /** 内容插槽 */
   children?: Snippet
 }

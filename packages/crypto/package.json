@@ -2,7 +2,7 @@
   "name": "@hai/crypto",
   "type": "module",
   "version": "0.1.0",
-  "description": "国密算法 (SM2/SM3/SM4) 和密码哈希",
+  "description": "国密算法 (SM2/SM3/SM4) - 前后端通用",
   "license": "Apache-2.0",
   "exports": {
     ".": {
@@ -26,8 +26,8 @@
   },
   "dependencies": {
     "@hai/core": "workspace:*",
-    "@noble/hashes": "catalog:",
-    "sm-crypto": "catalog:"
+    "sm-crypto": "catalog:",
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@types/node": "catalog:",

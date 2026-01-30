@@ -8,16 +8,6 @@ import type { SessionData } from '../src/types.js'
 import { describe, expect, it, vi } from 'vitest'
 import { createHandle, sequence } from '../src/hooks/index.js'
 
-// Mock @hai/core
-vi.mock('@hai/core', () => ({
-  createLogger: () => ({
-    info: vi.fn(),
-    error: vi.fn(),
-    warn: vi.fn(),
-  }),
-  generateId: (prefix: string) => `${prefix}_test123`,
-}))
-
 /**
  * 创建模拟 RequestEvent
  */
@@ -61,7 +51,7 @@ describe('createHandle', () => {
 
     const response = await handle({ event, resolve })
 
-    expect(response.headers.get('X-Request-Id')).toBe('req_test123')
+    expect(response.headers.get('X-Request-Id')).toMatch(/^req_[a-z0-9]+$/)
     expect(resolve).toHaveBeenCalledWith(event)
   })
 

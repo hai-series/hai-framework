@@ -8,6 +8,26 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./modules/iam": {
+      "types": "./dist/modules/iam/index.d.ts",
+      "import": "./dist/modules/iam/index.js"
+    },
+    "./modules/storage": {
+      "types": "./dist/modules/storage/index.d.ts",
+      "import": "./dist/modules/storage/index.js"
+    },
+    "./modules/cache": {
+      "types": "./dist/modules/cache/index.d.ts",
+      "import": "./dist/modules/cache/index.js"
+    },
+    "./modules/crypto": {
+      "types": "./dist/modules/crypto/index.d.ts",
+      "import": "./dist/modules/crypto/index.js"
+    },
+    "./client": {
+      "types": "./dist/client/index.d.ts",
+      "import": "./dist/client/index.js"
     }
   },
   "main": "./dist/index.js",
@@ -24,7 +44,8 @@
     "clean": "rimraf dist .turbo"
   },
   "peerDependencies": {
-    "@sveltejs/kit": "^2.0.0"
+    "@sveltejs/kit": "^2.0.0",
+    "svelte": "^5.0.0"
   },
   "dependencies": {
     "@hai/core": "workspace:*",
@@ -34,6 +55,7 @@
     "@sveltejs/kit": "catalog:",
     "@types/node": "catalog:",
     "rimraf": "catalog:",
+    "svelte": "catalog:",
     "tsup": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
