@@ -32,9 +32,11 @@ import type {
 
 import { err, ok } from '@hai/core'
 // @ts-expect-error sm-crypto 无类型定义
-import { sm2 } from 'sm-crypto'
+import smCrypto from 'sm-crypto'
 
 import { CryptoErrorCode } from './crypto-config.js'
+
+const { sm2 } = smCrypto
 
 // =============================================================================
 // SM2 算法实现

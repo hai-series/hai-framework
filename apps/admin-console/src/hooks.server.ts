@@ -7,32 +7,49 @@
  */
 
 import type { Handle } from '@sveltejs/kit'
+import { initDatabase } from '$lib/server/database.js'
+import { sessionService, userService } from '$lib/server/services/index.js'
+// @ts-expect-error @hai/kit 暂无类型定义
 import { authGuard, createHandle, loggingMiddleware, rateLimitMiddleware, sequence } from '@hai/kit'
 
+// 初始化数据库
+initDatabase()
+
 /**
- * 模拟会话验证（实际项目应从数据库/Redis获取）
+ * 会话验证 - 从 SQLite 数据库验证 session token
  */
 async function validateSession(token: string) {
-  console.log('[validateSession] token:', token)
-  // TODO: 实际项目中应验证 session token
-  if (token === 'demo-session') {
-    console.log('[validateSession] valid session')
+  try {
+    // 验证会话
+    const session = await sessionService.validate(token)
+    if (!session) {
+      return null
+    }
+
+    // 获取用户信息
+    const user = await userService.getById(session.userId)
+    if (!user || user.status !== 'active') {
+      return null
+    }
+
     return {
-      userId: 'user_001',
-      username: 'admin',
-      roles: ['admin'],
-      permissions: ['*'],
+      userId: user.id,
+      username: user.username,
+      roles: user.roles,
+      permissions: ['*'], // TODO: 从角色权限中获取
     }
   }
-  console.log('[validateSession] invalid session')
-  return null
+  catch (error) {
+    console.error('会话验证失败:', error)
+    return null
+  }
 }
 
 /**
  * hai handle hook
  */
 const haiHandle = createHandle({
-  sessionCookieName: 'hai_session',
+  sessionCookieName: 'session_token',
   validateSession,
   logging: true,
   middleware: [
@@ -45,7 +62,7 @@ const haiHandle = createHandle({
   guards: [
     // 保护 /admin/* 路径
     {
-      guard: authGuard({ loginUrl: '/login' }),
+      guard: authGuard({ loginUrl: '/auth/login' }),
       paths: ['/admin/*'],
       exclude: ['/admin/public/*'],
     },
@@ -56,7 +73,7 @@ const haiHandle = createHandle({
       exclude: ['/api/auth/*', '/api/public/*'],
     },
   ],
-  onError: (error, event) => {
+  onError: (error: unknown, _event: unknown) => {
     console.error('Request error:', error)
 
     return new Response(

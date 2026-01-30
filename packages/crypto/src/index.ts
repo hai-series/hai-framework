@@ -60,5 +60,8 @@ export * from './crypto-config.js'
 // 统一服务入口
 export * from './crypto-main.js'
 
+// 密码哈希提供者
+export * from './crypto-password.js'
+
 // 类型定义
 export * from './crypto-types.js'

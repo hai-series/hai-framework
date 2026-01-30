@@ -36,9 +36,11 @@ import type {
 
 import { err, ok } from '@hai/core'
 // @ts-expect-error sm-crypto 无类型定义
-import { sm3, sm4 } from 'sm-crypto'
+import smCrypto from 'sm-crypto'
 
 import { CryptoErrorCode } from './crypto-config.js'
+
+const { sm3, sm4 } = smCrypto
 
 // =============================================================================
 // SM4 算法实现

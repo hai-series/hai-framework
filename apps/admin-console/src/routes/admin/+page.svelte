@@ -1,298 +1,249 @@
-/**
- * =============================================================================
- * hai Admin Console - 仪表盘
- * =============================================================================
- */
+<!--
+  =============================================================================
+  Admin Console - 仪表盘
+  =============================================================================
+-->
 <script lang="ts">
-  /**
-   * 统计卡片数据
-   */
-  const stats = [
-    { icon: '👥', label: '总用户数', value: '1,234', change: '+12%', positive: true },
-    { icon: '📊', label: '今日访问', value: '5,678', change: '+23%', positive: true },
-    { icon: '💰', label: '本月收入', value: '¥89,012', change: '+8%', positive: true },
-    { icon: '📦', label: '订单数量', value: '456', change: '-3%', positive: false },
-  ]
-  
-  /**
-   * 最近活动
-   */
-  const activities = [
-    { time: '10:30', user: '张三', action: '登录系统', type: 'login' },
-    { time: '10:25', user: '李四', action: '创建订单 #1234', type: 'order' },
-    { time: '10:20', user: '王五', action: '更新用户资料', type: 'update' },
-    { time: '10:15', user: '赵六', action: '上传文件', type: 'upload' },
-    { time: '10:10', user: '钱七', action: '删除记录', type: 'delete' },
-  ]
+  import type { PageData } from './$types'
+
+  interface Props {
+    data: PageData
+  }
+
+  let { data }: Props = $props()
+
+  /** 获取活动图标 */
+  function getActivityIcon(action: string): string {
+    switch (action) {
+      case 'login':
+        return 'icon-[tabler--login]'
+      case 'logout':
+        return 'icon-[tabler--logout]'
+      case 'register':
+        return 'icon-[tabler--user-plus]'
+      case 'create':
+        return 'icon-[tabler--plus]'
+      case 'update':
+        return 'icon-[tabler--edit]'
+      case 'delete':
+        return 'icon-[tabler--trash]'
+      case 'password_reset':
+      case 'password_reset_request':
+        return 'icon-[tabler--key]'
+      default:
+        return 'icon-[tabler--activity]'
+    }
+  }
+
+  /** 获取活动颜色 */
+  function getActivityColor(action: string): string {
+    switch (action) {
+      case 'login':
+      case 'register':
+        return 'text-success'
+      case 'logout':
+        return 'text-warning'
+      case 'delete':
+        return 'text-error'
+      case 'create':
+        return 'text-primary'
+      default:
+        return 'text-base-content/60'
+    }
+  }
+
+  /** 格式化时间 */
+  function formatTime(isoString: string): string {
+    const date = new Date(isoString)
+    const now = new Date()
+    const diff = now.getTime() - date.getTime()
+    
+    if (diff < 60000) return '刚刚'
+    if (diff < 3600000) return `${Math.floor(diff / 60000)} 分钟前`
+    if (diff < 86400000) return `${Math.floor(diff / 3600000)} 小时前`
+    
+    return date.toLocaleDateString('zh-CN', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+  }
+
+  /** 翻译活动动作 */
+  function translateAction(action: string): string {
+    const translations: Record<string, string> = {
+      login: '登录',
+      logout: '登出',
+      register: '注册',
+      create: '创建',
+      read: '查看',
+      update: '更新',
+      delete: '删除',
+      password_reset: '重置密码',
+      password_reset_request: '请求重置密码',
+    }
+    return translations[action] ?? action
+  }
 </script>
 
 <svelte:head>
-  <title>仪表盘 - hai Admin</title>
+  <title>仪表盘 - Admin Console</title>
 </svelte:head>
 
-<div class="dashboard">
-  <h1 class="page-title">仪表盘</h1>
-  
-  <!-- 统计卡片 -->
-  <div class="stats-grid">
-    {#each stats as stat}
-      <div class="stat-card">
-        <div class="stat-icon">{stat.icon}</div>
-        <div class="stat-content">
-          <div class="stat-value">{stat.value}</div>
-          <div class="stat-label">{stat.label}</div>
-        </div>
-        <div class="stat-change" class:positive={stat.positive} class:negative={!stat.positive}>
-          {stat.change}
-        </div>
-      </div>
-    {/each}
+<div class="space-y-6">
+  <!-- 页面标题 -->
+  <div>
+    <h1 class="text-2xl font-bold">仪表盘</h1>
+    <p class="text-base-content/60 mt-1">系统概览与快速入口</p>
   </div>
-  
-  <!-- 内容区 -->
-  <div class="content-grid">
-    <!-- 图表占位 -->
-    <div class="chart-card">
-      <h3 class="card-title">访问趋势</h3>
-      <div class="chart-placeholder">
-        <p>📈 图表区域</p>
-        <p class="placeholder-text">这里可以集成 Chart.js 或 ECharts</p>
-      </div>
-    </div>
-    
-    <!-- 最近活动 -->
-    <div class="activity-card">
-      <h3 class="card-title">最近活动</h3>
-      <div class="activity-list">
-        {#each activities as activity}
-          <div class="activity-item">
-            <div class="activity-time">{activity.time}</div>
-            <div class="activity-content">
-              <span class="activity-user">{activity.user}</span>
-              <span class="activity-action">{activity.action}</span>
-            </div>
-          </div>
-        {/each}
-      </div>
-    </div>
-  </div>
-  
-  <!-- 快速操作 -->
-  <div class="quick-actions">
-    <h3 class="card-title">快速操作</h3>
-    <div class="action-buttons">
-      <a href="/admin/users/new" class="action-btn">
-        <span class="action-icon">➕</span>
-        <span>添加用户</span>
-      </a>
-      <a href="/admin/roles/new" class="action-btn">
-        <span class="action-icon">🔑</span>
-        <span>创建角色</span>
-      </a>
-      <a href="/admin/logs" class="action-btn">
-        <span class="action-icon">📋</span>
-        <span>查看日志</span>
-      </a>
-      <a href="/admin/settings" class="action-btn">
-        <span class="action-icon">⚙️</span>
-        <span>系统设置</span>
-      </a>
-    </div>
-  </div>
-</div>
 
-<style>
-  .dashboard {
-    max-width: 1400px;
-    margin: 0 auto;
-  }
-  
-  .page-title {
-    font-size: 1.5rem;
-    font-weight: 600;
-    margin-bottom: 1.5rem;
-  }
-  
-  /* 统计卡片 */
-  .stats-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-    gap: 1rem;
-    margin-bottom: 1.5rem;
-  }
-  
-  .stat-card {
-    background: white;
-    padding: 1.25rem;
-    border-radius: 0.75rem;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-    display: flex;
-    align-items: center;
-    gap: 1rem;
-  }
-  
-  .stat-icon {
-    font-size: 2rem;
-    background: #f3f4f6;
-    padding: 0.75rem;
-    border-radius: 0.5rem;
-  }
-  
-  .stat-content {
-    flex: 1;
-  }
-  
-  .stat-value {
-    font-size: 1.5rem;
-    font-weight: 700;
-    color: #333;
-  }
-  
-  .stat-label {
-    font-size: 0.875rem;
-    color: #666;
-  }
-  
-  .stat-change {
-    font-size: 0.875rem;
-    font-weight: 500;
-    padding: 0.25rem 0.5rem;
-    border-radius: 0.25rem;
-  }
-  
-  .stat-change.positive {
-    background: #dcfce7;
-    color: #16a34a;
-  }
-  
-  .stat-change.negative {
-    background: #fef2f2;
-    color: #dc2626;
-  }
-  
-  /* 内容网格 */
-  .content-grid {
-    display: grid;
-    grid-template-columns: 2fr 1fr;
-    gap: 1rem;
-    margin-bottom: 1.5rem;
-  }
-  
-  @media (max-width: 1024px) {
-    .content-grid {
-      grid-template-columns: 1fr;
-    }
-  }
-  
-  .card-title {
-    font-size: 1rem;
-    font-weight: 600;
-    margin-bottom: 1rem;
-    color: #333;
-  }
-  
-  /* 图表卡片 */
-  .chart-card {
-    background: white;
-    padding: 1.25rem;
-    border-radius: 0.75rem;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  }
-  
-  .chart-placeholder {
-    height: 300px;
-    background: #f9fafb;
-    border-radius: 0.5rem;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    color: #666;
-  }
-  
-  .chart-placeholder p {
-    font-size: 2rem;
-    margin-bottom: 0.5rem;
-  }
-  
-  .placeholder-text {
-    font-size: 0.875rem !important;
-    color: #999;
-  }
-  
-  /* 活动卡片 */
-  .activity-card {
-    background: white;
-    padding: 1.25rem;
-    border-radius: 0.75rem;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  }
-  
-  .activity-list {
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
-  }
-  
-  .activity-item {
-    display: flex;
-    gap: 1rem;
-    padding: 0.75rem;
-    background: #f9fafb;
-    border-radius: 0.5rem;
-  }
-  
-  .activity-time {
-    font-size: 0.75rem;
-    color: #666;
-    min-width: 50px;
-  }
-  
-  .activity-content {
-    flex: 1;
-    font-size: 0.875rem;
-  }
-  
-  .activity-user {
-    font-weight: 500;
-    margin-right: 0.5rem;
-  }
-  
-  .activity-action {
-    color: #666;
-  }
-  
-  /* 快速操作 */
-  .quick-actions {
-    background: white;
-    padding: 1.25rem;
-    border-radius: 0.75rem;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  }
-  
-  .action-buttons {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 1rem;
-  }
-  
-  .action-btn {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    padding: 0.75rem 1.5rem;
-    background: #f3f4f6;
-    border-radius: 0.5rem;
-    font-size: 0.875rem;
-    font-weight: 500;
-    transition: all 0.2s;
-  }
-  
-  .action-btn:hover {
-    background: #e5e7eb;
-  }
-  
-  .action-icon {
-    font-size: 1.25rem;
-  }
-</style>
+  <!-- 统计卡片 -->
+  <div class="grid gap-4 grid-cols-2 lg:grid-cols-4">
+    <div class="stat bg-base-100 rounded-lg shadow-sm">
+      <div class="stat-figure text-primary">
+        <span class="icon-[tabler--users] size-8"></span>
+      </div>
+      <div class="stat-title">用户总数</div>
+      <div class="stat-value text-primary">{data.stats.userCount}</div>
+      <div class="stat-desc">活跃 {data.stats.activeUsers} 人</div>
+    </div>
+
+    <div class="stat bg-base-100 rounded-lg shadow-sm">
+      <div class="stat-figure text-secondary">
+        <span class="icon-[tabler--shield] size-8"></span>
+      </div>
+      <div class="stat-title">角色数</div>
+      <div class="stat-value text-secondary">{data.stats.roleCount}</div>
+      <div class="stat-desc">权限分组</div>
+    </div>
+
+    <div class="stat bg-base-100 rounded-lg shadow-sm">
+      <div class="stat-figure text-accent">
+        <span class="icon-[tabler--key] size-8"></span>
+      </div>
+      <div class="stat-title">权限数</div>
+      <div class="stat-value text-accent">{data.stats.permissionCount}</div>
+      <div class="stat-desc">细粒度控制</div>
+    </div>
+
+    <div class="stat bg-base-100 rounded-lg shadow-sm">
+      <div class="stat-figure text-info">
+        <span class="icon-[tabler--activity] size-8"></span>
+      </div>
+      <div class="stat-title">近7日活动</div>
+      <div class="stat-value text-info">
+        {data.auditStats.reduce((sum, s) => sum + s.count, 0)}
+      </div>
+      <div class="stat-desc">审计日志</div>
+    </div>
+  </div>
+
+  <!-- 内容区 -->
+  <div class="grid gap-6 lg:grid-cols-3">
+    <!-- 快速入口 -->
+    <div class="card bg-base-100 shadow-sm lg:col-span-1">
+      <div class="card-body">
+        <h2 class="card-title">
+          <span class="icon-[tabler--rocket] size-5"></span>
+          快速入口
+        </h2>
+        <div class="grid grid-cols-2 gap-2 mt-2">
+          <a href="/admin/iam/users" class="btn btn-ghost justify-start gap-2">
+            <span class="icon-[tabler--users] size-5 text-primary"></span>
+            用户管理
+          </a>
+          <a href="/admin/iam/roles" class="btn btn-ghost justify-start gap-2">
+            <span class="icon-[tabler--shield] size-5 text-secondary"></span>
+            角色管理
+          </a>
+          <a href="/admin/iam/permissions" class="btn btn-ghost justify-start gap-2">
+            <span class="icon-[tabler--key] size-5 text-accent"></span>
+            权限管理
+          </a>
+          <a href="/admin/logs" class="btn btn-ghost justify-start gap-2">
+            <span class="icon-[tabler--file-text] size-5 text-info"></span>
+            审计日志
+          </a>
+          <a href="/admin/services/database" class="btn btn-ghost justify-start gap-2">
+            <span class="icon-[tabler--database] size-5 text-warning"></span>
+            数据库
+          </a>
+          <a href="/admin/services/cache" class="btn btn-ghost justify-start gap-2">
+            <span class="icon-[tabler--server] size-5 text-error"></span>
+            缓存
+          </a>
+          <a href="/admin/services/storage" class="btn btn-ghost justify-start gap-2">
+            <span class="icon-[tabler--folder] size-5 text-success"></span>
+            存储
+          </a>
+          <a href="/admin/tools/crypto" class="btn btn-ghost justify-start gap-2">
+            <span class="icon-[tabler--lock] size-5"></span>
+            加密工具
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <!-- 最近活动 -->
+    <div class="card bg-base-100 shadow-sm lg:col-span-2">
+      <div class="card-body">
+        <div class="flex items-center justify-between">
+          <h2 class="card-title">
+            <span class="icon-[tabler--activity] size-5"></span>
+            最近活动
+          </h2>
+          <a href="/admin/logs" class="btn btn-ghost btn-sm">
+            查看全部
+            <span class="icon-[tabler--arrow-right] size-4"></span>
+          </a>
+        </div>
+
+        <div class="divide-y divide-base-content/10 mt-2">
+          {#each data.recentActivity as activity}
+            <div class="flex items-start gap-3 py-3">
+              <div class="flex-shrink-0 w-8 h-8 rounded-full bg-base-200 flex items-center justify-center {getActivityColor(activity.action)}">
+                <span class="{getActivityIcon(activity.action)} size-4"></span>
+              </div>
+              <div class="flex-1 min-w-0">
+                <div class="flex items-center gap-2">
+                  <span class="font-medium">{activity.username ?? '未知用户'}</span>
+                  <span class="text-base-content/60">{translateAction(activity.action)}</span>
+                  <span class="badge badge-ghost badge-sm">{activity.resource}</span>
+                </div>
+                {#if activity.details}
+                  <p class="text-sm text-base-content/50 truncate">
+                    {activity.details}
+                  </p>
+                {/if}
+              </div>
+              <div class="text-sm text-base-content/50 whitespace-nowrap">
+                {formatTime(activity.created_at)}
+              </div>
+            </div>
+          {:else}
+            <div class="py-8 text-center text-base-content/50">
+              暂无活动记录
+            </div>
+          {/each}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 活动统计 -->
+  {#if data.auditStats.length > 0}
+    <div class="card bg-base-100 shadow-sm">
+      <div class="card-body">
+        <h2 class="card-title">
+          <span class="icon-[tabler--chart-bar] size-5"></span>
+          近7日活动统计
+        </h2>
+        <div class="flex flex-wrap gap-4 mt-4">
+          {#each data.auditStats as stat}
+            <div class="flex items-center gap-2 px-4 py-2 bg-base-200/50 rounded-lg">
+              <span class="{getActivityIcon(stat.action)} size-5 {getActivityColor(stat.action)}"></span>
+              <span class="font-medium">{translateAction(stat.action)}</span>
+              <span class="badge badge-primary badge-sm">{stat.count}</span>
+            </div>
+          {/each}
+        </div>
+      </div>
+    </div>
+  {/if}
+</div>

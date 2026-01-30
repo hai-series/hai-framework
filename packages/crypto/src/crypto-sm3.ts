@@ -30,9 +30,11 @@ import type {
 
 import { err, ok } from '@hai/core'
 // @ts-expect-error sm-crypto 无类型定义
-import { sm3 } from 'sm-crypto'
+import smCrypto from 'sm-crypto'
 
 import { CryptoErrorCode } from './crypto-config.js'
+
+const { sm3 } = smCrypto
 
 // =============================================================================
 // SM3 算法实现

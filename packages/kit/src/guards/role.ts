@@ -28,7 +28,7 @@ export interface RoleGuardConfig {
 export function roleGuard(config: RoleGuardConfig): RouteGuard {
   const { roles, requireAll = false, forbiddenUrl = '/403', apiMode = false } = config
 
-  return (event, session): GuardResult => {
+  return (_event, session): GuardResult => {
     if (!session) {
       return {
         allowed: false,

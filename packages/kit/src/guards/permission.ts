@@ -28,7 +28,7 @@ export interface PermissionGuardConfig {
 export function permissionGuard(config: PermissionGuardConfig): RouteGuard {
   const { permissions, requireAll = false, forbiddenUrl = '/403', apiMode = false } = config
 
-  return (event, session): GuardResult => {
+  return (_event, session): GuardResult => {
     if (!session) {
       return {
         allowed: false,

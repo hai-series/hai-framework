@@ -191,7 +191,7 @@ async function executeGuard(
 async function executeMiddlewareChain(
   middleware: Middleware[],
   context: MiddlewareContext,
-  final: () => Promise<Response>,
+  final: () => Response | Promise<Response>,
 ): Promise<Response> {
   if (middleware.length === 0) {
     return final()

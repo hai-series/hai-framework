@@ -5,15 +5,15 @@
  */
 
 import type { RequestHandler } from './$types'
-import { ok } from '@hai/kit'
+import { json } from '@sveltejs/kit'
 
-export const GET: RequestHandler = async ({ locals }) => {
-  return ok(
-    {
+export const GET: RequestHandler = async () => {
+  return json({
+    success: true,
+    data: {
       status: 'healthy',
       timestamp: new Date().toISOString(),
       version: '0.0.1',
     },
-    locals.requestId,
-  )
+  })
 }
