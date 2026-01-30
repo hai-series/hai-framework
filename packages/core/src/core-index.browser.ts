@@ -20,7 +20,7 @@
  * ```ts
  * import { core } from '@hai/core'
  * import type { Result, Logger } from '@hai/core'
- * import { AppConfigSchema, CommonErrorCode } from '@hai/core'
+ * import { CoreConfigSchema, CommonErrorCode } from '@hai/core'
  *
  * // 日志
  * core.logger.info('Hello')
@@ -43,6 +43,9 @@ export * from './core-main.browser.js'
 
 // 类型定义（Result, Logger 等）
 export * from './core-types.js'
+
+// i18n 国际化
+export * from './i18n/index.js'
 
 // =============================================================================
 // 配置加载占位（浏览器环境不支持）

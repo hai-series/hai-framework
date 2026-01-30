@@ -1,0 +1,28 @@
+# =============================================================================
+# Admin Console - 应用配置
+# =============================================================================
+#
+# 此文件定义应用级配置，使用 core.config 加载。
+# 敏感信息（如密钥）应通过环境变量设置。
+# =============================================================================
+
+# 应用信息
+name: hai Admin Console
+version: 0.1.0
+env: ${HAI_ENV:development}
+debug: false
+
+# 时区与语言
+timezone: Asia/Shanghai
+defaultLocale: zh-CN
+supportedLocales:
+  - zh-CN
+  - en-US
+
+# 功能开关
+features:
+  registration: true
+  apiAccess: true
+  aiEnabled: true
+  mcpEnabled: false
+  fileUpload: true

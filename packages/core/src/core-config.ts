@@ -125,13 +125,13 @@ export const FeaturesConfigSchema = z.object({
 export type FeaturesConfig = z.infer<typeof FeaturesConfigSchema>
 
 // =============================================================================
-// 应用配置 Schema
+// Core 配置 Schema
 // =============================================================================
 
 /**
- * 应用配置 Schema
+ * Core 配置 Schema
  */
-export const AppConfigSchema = z.object({
+export const CoreConfigSchema = z.object({
   /** 应用名称 */
   name: z.string().default('hai Admin'),
   /** 应用版本 */
@@ -153,4 +153,4 @@ export const AppConfigSchema = z.object({
   /** 支持的语言 */
   supportedLocales: z.array(z.string()).default(['zh-CN', 'en-US']),
 })
-export type AppConfig = z.infer<typeof AppConfigSchema>
+export type CoreConfig = z.infer<typeof CoreConfigSchema>

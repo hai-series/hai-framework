@@ -128,13 +128,53 @@ export interface ConfigLoadItem<T = unknown> {
   onChange?: (config: T) => void
 }
 
+/**
+ * 内置模块名称与配置文件前缀的映射
+ *
+ * 约定：
+ * - 内置模块配置文件以 `_` 开头，如 `_db.yml`
+ * - 业务配置文件不带前缀，如 `app.yml`
+ */
+export type BuiltinConfigModule = 'core' | 'db' | 'cache' | 'iam' | 'storage' | 'ai' | 'crypto'
+
 /** Core 配置选项 */
 export interface CoreOptions {
   /** 日志配置 */
   logging?: Partial<LoggingConfig>
-  /** 配置文件加载列表（Node.js 专用） */
+  /**
+   * 配置目录（约定优于配置模式）
+   *
+   * 指定后会自动扫描目录中的 yml/yaml 文件：
+   * - `_core.yml` → 使用 CoreConfigSchema
+   * - `_db.yml` → 使用 DbConfigSchema
+   * - `_cache.yml` → 使用 CacheConfigSchema
+   * - `_iam.yml` → 使用 IamConfigSchema
+   * - `app.yml` → key 为 'app'（需提供 schemas）
+   *
+   * @example
+   * ```ts
+   * core.init({ configDir: './config' })
+   * ```
+   */
+  configDir?: string
+  /**
+   * 业务配置的 Schema 映射
+   *
+   * 用于验证非内置模块的配置文件。
+   * key 为文件名（不含扩展名），value 为 Zod Schema。
+   *
+   * @example
+   * ```ts
+   * core.init({
+   *   configDir: './config',
+   *   schemas: { myApp: MyAppConfigSchema }
+   * })
+   * ```
+   */
+  schemas?: Record<string, ZodSchema>
+  /** 配置文件加载列表（显式模式，与 configDir 互斥） */
   configs?: ConfigLoadItem[]
-  /** 是否启用配置文件监听（Node.js 专用，默认 false） */
+  /** 是否启用配置文件监听（默认 false） */
   watchConfig?: boolean
   /** 是否打印启动日志（默认 false） */
   silent?: boolean

@@ -54,6 +54,11 @@
  * ```
  * =============================================================================
  */
+// =============================================================================
+// 自动注册 Schema 到 @hai/core
+// =============================================================================
+import { core } from '@hai/core'
+import { DbConfigSchema } from './db-config.js'
 
 // 配置 Schema（zod）
 export * from './db-config.js'
@@ -63,3 +68,6 @@ export * from './db-main.js'
 
 // 类型定义
 export * from './db-types.js'
+
+// 注册 db 模块的配置 Schema
+core.registerBuiltinSchema('db', DbConfigSchema)

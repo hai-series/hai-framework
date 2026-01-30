@@ -5,7 +5,8 @@
  */
 
 import type { RequestHandler } from '@sveltejs/kit'
-import { audit, passwordResetService, sessionService, userService } from '$lib/server/services/index.js'
+import { audit } from '$lib/server/services/index.js'
+import { iam } from '@hai/iam'
 import { json } from '@sveltejs/kit'
 
 export const POST: RequestHandler = async ({ request, getClientAddress }) => {
@@ -27,30 +28,21 @@ export const POST: RequestHandler = async ({ request, getClientAddress }) => {
       return json({ success: false, error: '两次输入的密码不一致' }, { status: 400 })
     }
 
-    // 验证密码强度
-    if (password.length < 8 || !/[a-z]/i.test(password) || !/\d/.test(password)) {
-      return json({ success: false, error: '密码需至少8位，包含字母和数字' }, { status: 400 })
+    // 使用 IAM 模块确认密码重置
+    const resetResult = await iam.user.confirmPasswordReset(token, password)
+    if (!resetResult.success) {
+      // 根据错误码返回不同响应
+      if (resetResult.error.code === 5105) {
+        return json({ success: false, error: '重置链接无效或已过期' }, { status: 400 })
+      }
+      return json({ success: false, error: resetResult.error.message }, { status: 400 })
     }
-
-    // 验证令牌
-    const userId = await passwordResetService.validate(token)
-    if (!userId) {
-      return json({ success: false, error: '重置链接无效或已过期' }, { status: 400 })
-    }
-
-    // 重置密码
-    await userService.resetPassword(userId, password)
-
-    // 标记令牌已使用
-    await passwordResetService.markUsed(token)
-
-    // 销毁该用户的所有会话（强制重新登录）
-    await sessionService.destroyAllForUser(userId)
 
     // 记录审计日志
     const ip = getClientAddress()
     const ua = request.headers.get('user-agent') ?? undefined
-    await audit.passwordResetComplete(userId, ip, ua)
+    // 因为 token 已用，无法获取 userId，记录 token 信息
+    await audit.passwordResetComplete(token, ip, ua)
 
     return json({ success: true, message: '密码重置成功，请使用新密码登录' })
   }

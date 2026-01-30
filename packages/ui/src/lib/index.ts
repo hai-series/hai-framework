@@ -123,3 +123,66 @@ export {
   sizeClasses,
   variantClasses,
 } from './utils.js'
+
+// =============================================================================
+// i18n 国际化
+// =============================================================================
+
+export {
+  getI18nInstance,
+  getLocale,
+  getSupportedLocales,
+  setLocale,
+  setupI18n,
+  t,
+  useI18n,
+} from './i18n.svelte.js'
+
+export type {
+  I18nConfig,
+  I18nInstance,
+  InterpolationParams,
+  Locale,
+  LocaleInfo,
+} from './i18n.svelte.js'
+
+// =============================================================================
+// 主题配置
+// =============================================================================
+
+export {
+  DARK_THEMES,
+  getAllFontUrls,
+  getThemeFontUrl,
+  getThemeInfo,
+  isDarkTheme,
+  THEME_GROUPS,
+  THEMES,
+} from './theme-config.js'
+
+export type {
+  ThemeGroup,
+  ThemeInfo,
+} from './theme-config.js'
+
+// =============================================================================
+// i18n 国际化
+// =============================================================================
+
+export { uiTranslations } from './i18n-translations.js'
+export {
+  getLocale,
+  getSupportedLocales,
+  initI18n,
+  registerTranslations,
+  setLocale,
+  t,
+  useI18n,
+} from './i18n.svelte.js'
+export type {
+  I18nInitConfig,
+  InterpolationParams,
+  Locale,
+  LocaleInfo,
+  ModuleTranslations,
+} from './i18n.svelte.js'

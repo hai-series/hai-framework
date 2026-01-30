@@ -5,16 +5,26 @@
  */
 
 import type { RequestHandler } from '@sveltejs/kit'
-import { audit, userService } from '$lib/server/services/index.js'
+import { audit } from '$lib/server/services/index.js'
+import { iam } from '@hai/iam'
 import { json } from '@sveltejs/kit'
 
 /**
  * GET /api/iam/users - 获取用户列表
+ *
+ * TODO: 需要在 @hai/iam 中添加用户列表查询功能
+ * 暂时返回空数组
  */
 export const GET: RequestHandler = async () => {
   try {
-    const users = await userService.list()
-    return json({ success: true, data: users })
+    // iam 模块目前没有列表查询功能，返回空数据
+    return json({
+      success: true,
+      data: {
+        users: [],
+        total: 0,
+      },
+    })
   }
   catch (error) {
     console.error('获取用户列表失败:', error)
@@ -28,7 +38,7 @@ export const GET: RequestHandler = async () => {
 export const POST: RequestHandler = async ({ request, locals, getClientAddress }) => {
   try {
     const body = await request.json()
-    const { username, email, password, display_name, status, roles } = body as {
+    const { username, email, password, roles } = body as {
       username: string
       email: string
       password: string
@@ -57,30 +67,26 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
       return json({ success: false, error: '密码至少需要8位' }, { status: 400 })
     }
 
-    // 检查用户名是否已存在
-    const existingByUsername = await userService.getByIdentifier(username)
-    if (existingByUsername) {
-      return json({ success: false, error: '用户名已被使用' }, { status: 409 })
-    }
-
-    // 检查邮箱是否已存在
-    const existingByEmail = await userService.getByIdentifier(email)
-    if (existingByEmail) {
-      return json({ success: false, error: '邮箱已被注册' }, { status: 409 })
-    }
-
-    // 创建用户
-    const user = await userService.create({
+    // 使用 IAM 模块注册用户
+    const registerResult = await iam.user.register({
       username,
       email,
       password,
-      display_name,
-      roles,
     })
 
-    // 如果指定了状态且不是默认的 active，更新状态
-    if (status && status !== 'active') {
-      await userService.update(user.id, { status: status as 'active' | 'inactive' | 'banned' })
+    if (!registerResult.success) {
+      if (registerResult.error.code === 5002 || registerResult.error.code === 5502) {
+        return json({ success: false, error: '用户名或邮箱已被使用' }, { status: 409 })
+      }
+      return json({ success: false, error: registerResult.error.message }, { status: 400 })
+    }
+
+    const user = registerResult.data
+
+    // 分配角色
+    const rolesToAssign = roles?.length ? roles : ['role_user']
+    for (const roleId of rolesToAssign) {
+      await iam.authz.assignRole(user.id, roleId)
     }
 
     // 记录审计日志
@@ -96,8 +102,24 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
       ua,
     )
 
-    const userWithRoles = await userService.getById(user.id)
-    return json({ success: true, data: userWithRoles })
+    // 获取用户角色
+    const rolesResult = await iam.authz.getUserRoles(user.id)
+    const userRoles = rolesResult.success ? rolesResult.data.map(r => r.code) : []
+
+    return json({
+      success: true,
+      data: {
+        id: user.id,
+        username: user.username,
+        email: user.email,
+        display_name: user.displayName,
+        avatar: user.avatarUrl,
+        status: user.enabled ? 'active' : 'inactive',
+        roles: userRoles,
+        created_at: user.createdAt,
+        updated_at: user.updatedAt,
+      },
+    })
   }
   catch (error) {
     console.error('创建用户失败:', error)

@@ -22,17 +22,19 @@
   },
   "dependencies": {
     "@hai/ai": "workspace:*",
+    "@hai/cache": "workspace:*",
     "@hai/core": "workspace:*",
     "@hai/crypto": "workspace:*",
     "@hai/db": "workspace:*",
     "@hai/iam": "workspace:*",
+    "@hai/kit": "workspace:*",
     "@hai/storage": "workspace:*",
     "@hai/ui": "workspace:*",
     "zod": "catalog:"
   },
   "devDependencies": {
     "@iconify-json/tabler": "catalog:",
-    "@iconify/tailwind": "catalog:",
+    "@iconify/tailwind4": "catalog:",
     "@sveltejs/adapter-auto": "catalog:",
     "@sveltejs/kit": "catalog:",
     "@sveltejs/vite-plugin-svelte": "catalog:",

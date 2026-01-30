@@ -285,6 +285,23 @@ export function createDbUserRepository(db: DbService): UserRepository {
       return ok(rowToUser(result.data[0]))
     },
 
+    async findAll(): Promise<Result<StoredUser[], IamError>> {
+      const result = db.sql.query<UserRow>(
+        `SELECT * FROM ${TABLE_NAME} ORDER BY created_at DESC`,
+        [],
+      )
+
+      if (!result.success) {
+        return err({
+          code: IamErrorCode.REPOSITORY_ERROR,
+          message: `查询用户列表失败: ${result.error.message}`,
+          cause: result.error,
+        })
+      }
+
+      return ok(result.data.map(rowToUser))
+    },
+
     async update(id, data): Promise<Result<StoredUser, IamError>> {
       const setClauses: string[] = []
       const values: unknown[] = []

@@ -133,6 +133,28 @@ components/
 | `ResetPasswordForm`  | 重置密码 | `loading`, `error`, `onsubmit`            |
 | `UserProfile`        | 用户资料 | `user`, `editable`, `fields`, `onsubmit`  |
 
+#### IAM 表单使用说明
+
+- `PasswordInput` 推荐使用受控模式（`value` + `oninput`），以保证父组件状态同步。
+- 注册/重置/修改密码表单在比较两次密码时会执行 **NFKC 规范化**，避免兼容字符导致的误判。
+
+示例：
+
+```svelte
+<script>
+  import { PasswordInput } from '@hai/ui'
+
+  let password = $state('')
+</script>
+
+<PasswordInput
+  value={password}
+  oninput={(e) => { password = e.currentTarget.value }}
+  placeholder="请输入密码"
+  showStrength
+/>
+```
+
 #### Storage 存储
 
 | 组件           | 描述     | 主要属性                                       |
@@ -269,12 +291,12 @@ export default {
 组件使用 Iconify (Tabler Icons)，需要安装：
 
 ```bash
-pnpm add -D @iconify/tailwind @iconify-json/tabler
+pnpm add -D @iconify/tailwind4 @iconify-json/tabler
 ```
 
 ```js
 // tailwind.config.js
 plugins: [
-  require('@iconify/tailwind').addIconSelectors(['tabler']),
+  require('@iconify/tailwind4').addIconSelectors(['tabler']),
 ]
 ```

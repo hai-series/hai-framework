@@ -9,10 +9,10 @@
  * import { config } from '@hai/core'
  *
  * // 加载配置
- * const result = config.load('app', './config/app.yml', AppConfigSchema)
+ * const result = config.load('core', './config/_core.yml', CoreConfigSchema)
  *
  * // 获取配置
- * const appConfig = config.get<AppConfig>('app')
+ * const coreConfig = config.get<CoreConfig>('core')
  *
  * // 监听变更
  * config.onChange('app', (cfg) => {

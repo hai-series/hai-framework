@@ -1,0 +1,37 @@
+# =============================================================================
+# Admin Console - IAM 配置
+# =============================================================================
+
+# 认证策略
+strategies:
+  - password
+
+# 密码策略
+password:
+  minLength: 8
+  maxLength: 128
+  requireUppercase: false
+  requireLowercase: false
+  requireNumbers: false
+  requireSymbols: false
+
+# 会话配置
+session:
+  type: jwt
+  jwt:
+    # 密钥（必须通过环境变量设置）
+    secret: ${HAI_SESSION_SECRET}
+    algorithm: HS256
+    # access token 有效期（秒）
+    accessTokenExpiresIn: 900
+    # refresh token 有效期（秒）
+    refreshTokenExpiresIn: 604800
+
+# RBAC 配置
+rbac:
+  defaultRole: user
+  cacheEnabled: true
+  cacheTtl: 300
+
+# 是否自动创建默认数据（角色、权限、admin用户）
+seedDefaultData: true

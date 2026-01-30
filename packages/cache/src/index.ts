@@ -38,6 +38,9 @@
  * =============================================================================
  */
 
+import { core } from '@hai/core'
+import { CacheConfigSchema } from './cache-config.js'
+
 // =============================================================================
 // 导出配置和类型
 // =============================================================================
@@ -53,7 +56,8 @@ export * from './cache-main.js'
 export * from './cache-types.js'
 
 // =============================================================================
-// 导出 Provider（高级用法）
+// 自动注册 Schema 到 @hai/core
 // =============================================================================
 
-export * from './provider/cache-provider-redis.js'
+// 注册 cache 模块的配置 Schema
+core.registerBuiltinSchema('cache', CacheConfigSchema)

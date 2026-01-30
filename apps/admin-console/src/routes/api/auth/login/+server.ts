@@ -5,7 +5,8 @@
  */
 
 import type { RequestHandler } from '@sveltejs/kit'
-import { audit, sessionService, userService } from '$lib/server/services/index.js'
+import { audit } from '$lib/server/services/index.js'
+import { iam } from '@hai/iam'
 import { json } from '@sveltejs/kit'
 
 export const POST: RequestHandler = async ({ request, cookies, getClientAddress }) => {
@@ -18,30 +19,31 @@ export const POST: RequestHandler = async ({ request, cookies, getClientAddress 
       return json({ success: false, error: '请输入用户名/邮箱和密码' }, { status: 400 })
     }
 
-    // 查找用户
-    const user = await userService.getByIdentifier(identifier)
-    if (!user) {
-      return json({ success: false, error: '用户名或密码错误' }, { status: 401 })
+    // 使用 IAM 模块登录
+    const loginResult = await iam.auth.login({ identifier, password })
+    if (!loginResult.success) {
+      // 根据错误码返回不同响应
+      const errorCode = loginResult.error.code
+      // 5001 = INVALID_CREDENTIALS (凭证无效)
+      // 5002 = USER_NOT_FOUND (用户不存在)
+      if (errorCode === 5001 || errorCode === 5002) {
+        return json({ success: false, error: '用户名或密码错误' }, { status: 401 })
+      }
+      // 5003 = USER_DISABLED (用户已禁用)
+      if (errorCode === 5003) {
+        return json({ success: false, error: '账户已被禁用' }, { status: 403 })
+      }
+      // 5004 = USER_LOCKED (用户已锁定)
+      if (errorCode === 5004) {
+        return json({ success: false, error: '账户已被锁定，请稍后重试' }, { status: 403 })
+      }
+      return json({ success: false, error: loginResult.error.message }, { status: 400 })
     }
 
-    // 检查用户状态
-    if (user.status !== 'active') {
-      return json({ success: false, error: '账户已被禁用' }, { status: 403 })
-    }
-
-    // 验证密码
-    const valid = await userService.verifyPassword(user, password)
-    if (!valid) {
-      return json({ success: false, error: '用户名或密码错误' }, { status: 401 })
-    }
-
-    // 创建会话
-    const ip = getClientAddress()
-    const ua = request.headers.get('user-agent') ?? undefined
-    const token = await sessionService.create(user.id, ip, ua)
+    const { user, accessToken } = loginResult.data
 
     // 设置 Cookie
-    cookies.set('session_token', token, {
+    cookies.set('session_token', accessToken, {
       path: '/',
       httpOnly: true,
       // eslint-disable-next-line node/prefer-global/process
@@ -51,10 +53,17 @@ export const POST: RequestHandler = async ({ request, cookies, getClientAddress 
     })
 
     // 记录审计日志
+    const ip = getClientAddress()
+    const ua = request.headers.get('user-agent') ?? undefined
     await audit.login(user.id, ip, ua)
 
-    // 获取用户的角色和权限
-    const { roles, permissions } = await userService.getUserRolesAndPermissions(user.id)
+    // 获取用户角色
+    const rolesResult = await iam.authz.getUserRoles(user.id)
+    const roles = rolesResult.success ? rolesResult.data.map(r => r.code) : []
+
+    // 获取用户权限
+    const permissionsResult = await iam.authz.getUserPermissions(user.id)
+    const permissions = permissionsResult.success ? permissionsResult.data.map(p => p.code) : []
 
     return json({
       success: true,
@@ -62,8 +71,8 @@ export const POST: RequestHandler = async ({ request, cookies, getClientAddress 
         id: user.id,
         username: user.username,
         email: user.email,
-        display_name: user.display_name,
-        avatar: user.avatar,
+        display_name: user.displayName,
+        avatar: user.avatarUrl,
         roles,
         permissions,
       },

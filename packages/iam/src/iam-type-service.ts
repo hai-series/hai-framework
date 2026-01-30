@@ -327,6 +327,11 @@ export interface UserOperations {
   getUser: (userId: string) => Promise<Result<User | null, IamError>>
 
   /**
+   * 获取所有用户列表
+   */
+  listUsers: () => Promise<Result<User[], IamError>>
+
+  /**
    * 更新用户信息
    */
   updateUser: (userId: string, data: Partial<User>) => Promise<Result<User, IamError>>

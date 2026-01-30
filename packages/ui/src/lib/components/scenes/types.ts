@@ -105,6 +105,7 @@ export interface RegisterFormData {
   email?: string
   phone?: string
   password: string
+  confirmPassword?: string
   nickname?: string
 }
 

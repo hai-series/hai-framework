@@ -26,7 +26,7 @@
  * ```ts
  * import { core } from '@hai/core'
  * import type { Result, Logger } from '@hai/core'
- * import { AppConfigSchema, CommonErrorCode } from '@hai/core'
+ * import { CoreConfigSchema, CommonErrorCode } from '@hai/core'
  *
  * // 初始化（可选，Node.js）
  * core.init({ silent: false })

@@ -65,6 +65,11 @@ export interface UserRepository {
   findByIdentifier: (identifier: string) => Promise<Result<StoredUser | null, IamError>>
 
   /**
+   * 获取所有用户列表
+   */
+  findAll: () => Promise<Result<StoredUser[], IamError>>
+
+  /**
    * 更新用户
    */
   update: (id: string, data: Partial<StoredUser>) => Promise<Result<StoredUser, IamError>>

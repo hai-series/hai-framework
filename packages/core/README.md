@@ -32,7 +32,7 @@ import { core, initCore } from '@hai/core'
 initCore({
   silent: false, // 是否静默启动
   configs: [ // 配置文件列表（Node.js）
-    { path: './config/_app.yml', schema: AppConfigSchema, key: 'app' }
+    { path: './config/_core.yml', schema: CoreConfigSchema, key: 'core' }
   ]
 })
 

@@ -437,6 +437,9 @@ export const IamConfigSchema = z.object({
 
   /** 静默模式，不输出日志（默认 false） */
   silent: z.boolean().default(false),
+
+  /** 是否初始化默认角色和权限（默认 true） */
+  seedDefaultData: z.boolean().default(true),
 })
 
 /** IAM 配置类型 */

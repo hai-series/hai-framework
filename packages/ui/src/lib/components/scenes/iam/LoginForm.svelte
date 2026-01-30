@@ -96,7 +96,8 @@
       <span class="label-text">{passwordLabel}</span>
     </label>
     <PasswordInput
-      bind:value={password}
+      value={password}
+      oninput={(e) => { password = e.currentTarget.value }}
       placeholder={passwordPlaceholder}
       {disabled}
       error={errors.password}

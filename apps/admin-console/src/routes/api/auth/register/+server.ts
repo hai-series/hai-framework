@@ -5,7 +5,8 @@
  */
 
 import type { RequestHandler } from '@sveltejs/kit'
-import { audit, sessionService, userService } from '$lib/server/services/index.js'
+import { audit } from '$lib/server/services/index.js'
+import { iam } from '@hai/iam'
 import { json } from '@sveltejs/kit'
 
 export const POST: RequestHandler = async ({ request, cookies, getClientAddress }) => {
@@ -38,42 +39,47 @@ export const POST: RequestHandler = async ({ request, cookies, getClientAddress 
       return json({ success: false, error: '请输入有效的邮箱地址' }, { status: 400 })
     }
 
-    // 验证密码强度（至少8位，包含字母和数字）
-    if (password.length < 8 || !/[a-z]/i.test(password) || !/\d/.test(password)) {
-      return json({ success: false, error: '密码需至少8位，包含字母和数字' }, { status: 400 })
-    }
-
-    // 检查用户名是否已存在
-    const existingByUsername = await userService.getByIdentifier(username)
-    if (existingByUsername) {
-      return json({ success: false, error: '用户名已被使用' }, { status: 409 })
-    }
-
-    // 检查邮箱是否已存在
-    const existingByEmail = await userService.getByIdentifier(email)
-    if (existingByEmail) {
-      return json({ success: false, error: '邮箱已被注册' }, { status: 409 })
-    }
-
-    // 创建用户
-    const user = await userService.create({
+    // 使用 IAM 模块注册用户
+    const registerResult = await iam.user.register({
       username,
       email,
       password,
-      display_name: username,
     })
 
-    // 分配默认角色 (user)
-    await userService.assignRoles(user.id, ['user'])
-    const userWithRoles = await userService.getById(user.id)
+    if (!registerResult.success) {
+      // 根据错误码返回不同响应
+      if (registerResult.error.code === 5002 || registerResult.error.code === 5502) {
+        return json({ success: false, error: '用户名或邮箱已被使用' }, { status: 409 })
+      }
+      return json({ success: false, error: registerResult.error.message }, { status: 400 })
+    }
 
-    // 创建会话
-    const ip = getClientAddress()
-    const ua = request.headers.get('user-agent') ?? undefined
-    const token = await sessionService.create(user.id, ip, ua)
+    const user = registerResult.data
+
+    // 分配默认角色 (user)
+    await iam.authz.assignRole(user.id, 'role_user')
+
+    // 登录获取 token
+    const loginResult = await iam.auth.login({ identifier: username, password })
+    if (!loginResult.success) {
+      // 注册成功但登录失败，返回成功但不设置 cookie
+      return json({
+        success: true,
+        user: {
+          id: user.id,
+          username: user.username,
+          email: user.email,
+          display_name: user.displayName,
+          avatar: user.avatarUrl,
+          roles: ['user'],
+        },
+      })
+    }
+
+    const { accessToken } = loginResult.data
 
     // 设置 Cookie
-    cookies.set('session_token', token, {
+    cookies.set('session_token', accessToken, {
       path: '/',
       httpOnly: true,
       // eslint-disable-next-line node/prefer-global/process
@@ -83,7 +89,13 @@ export const POST: RequestHandler = async ({ request, cookies, getClientAddress 
     })
 
     // 记录审计日志
+    const ip = getClientAddress()
+    const ua = request.headers.get('user-agent') ?? undefined
     await audit.register(user.id, ip, ua)
+
+    // 获取用户角色
+    const rolesResult = await iam.authz.getUserRoles(user.id)
+    const roles = rolesResult.success ? rolesResult.data.map(r => r.code) : ['user']
 
     return json({
       success: true,
@@ -91,9 +103,9 @@ export const POST: RequestHandler = async ({ request, cookies, getClientAddress 
         id: user.id,
         username: user.username,
         email: user.email,
-        display_name: userWithRoles?.display_name,
-        avatar: userWithRoles?.avatar,
-        roles: userWithRoles?.roles ?? [],
+        display_name: user.displayName,
+        avatar: user.avatarUrl,
+        roles,
       },
     })
   }

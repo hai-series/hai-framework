@@ -84,9 +84,10 @@ export type CacheErrorCodeType = (typeof CacheErrorCode)[keyof typeof CacheError
  * 缓存类型枚举
  *
  * 支持的缓存类型：
+ * - `memory` - 内存缓存（仅单进程，适合开发/测试）
  * - `redis` - Redis 缓存（使用 ioredis）
  */
-export const CacheTypeSchema = z.enum(['redis'])
+export const CacheTypeSchema = z.enum(['memory', 'redis'])
 
 /** 缓存类型 */
 export type CacheType = z.infer<typeof CacheTypeSchema>

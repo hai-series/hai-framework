@@ -172,6 +172,15 @@ export function createUserOperations(deps: UserServiceDeps): UserOperations {
       return ok(userResult.data ? toUser(userResult.data) : null)
     },
 
+    async listUsers(): Promise<Result<User[], IamError>> {
+      const usersResult = await userRepository.findAll()
+      if (!usersResult.success) {
+        return usersResult as Result<User[], IamError>
+      }
+
+      return ok(usersResult.data.map(toUser))
+    },
+
     async updateUser(userId: string, data: Partial<User>): Promise<Result<User, IamError>> {
       const updateResult = await userRepository.update(userId, data)
       if (!updateResult.success) {

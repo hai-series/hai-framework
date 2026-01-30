@@ -39,6 +39,9 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
       return json({ success: false, error: '请输入角色名称' }, { status: 400 })
     }
 
+    // 生成角色 code（将名称转为 snake_case）
+    const code = `role_${name.toLowerCase().replace(/\s+/g, '_')}`
+
     // 转换权限名称为 ID
     const permissionIds: string[] = []
     if (permissions?.length) {
@@ -52,6 +55,7 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
 
     // 创建角色
     const role = await roleService.create({
+      code,
       name,
       description,
       permissions: permissionIds,

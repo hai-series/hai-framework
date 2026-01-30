@@ -30,13 +30,22 @@ export function loggingMiddleware(config: LoggingMiddlewareConfig = {}): Middlew
     const { event, requestId } = context
     const startTime = Date.now()
 
+    // 安全获取客户端 IP，处理开发环境下可能的错误
+    let clientIp = 'unknown'
+    try {
+      clientIp = event.getClientAddress?.() ?? 'unknown'
+    }
+    catch {
+      // 开发环境下 getClientAddress 可能抛出错误
+    }
+
     const logData: Record<string, unknown> = {
       requestId,
       method: event.request.method,
       path: event.url.pathname,
       query: Object.fromEntries(event.url.searchParams),
       userAgent: event.request.headers.get('user-agent'),
-      ip: event.getClientAddress?.() ?? 'unknown',
+      ip: clientIp,
     }
 
     if (logBody && event.request.method !== 'GET') {

@@ -1,12 +1,13 @@
 <!--
   hai Admin Console - 后台布局
-  现代化侧边栏 + 顶栏布局，支持响应式和主题切换
+  现代化扁平设计，侧边栏 + 顶栏布局
 -->
 <script lang="ts">
   import type { Snippet } from 'svelte'
   import type { LayoutData } from './$types'
   import { page } from '$app/stores'
   import { goto } from '$app/navigation'
+  import { Avatar } from '@hai/ui'
   
   interface Props {
     data: LayoutData
@@ -14,6 +15,10 @@
   }
   
   let { data, children }: Props = $props()
+  
+  // 从配置获取应用信息
+  const appName = $derived(data.appConfig?.name ?? 'hai Admin')
+  const appVersion = $derived(data.appConfig?.version ?? '0.1.0')
   
   /** 侧边栏收起状态 */
   let sidebarCollapsed = $state(false)
@@ -24,11 +29,31 @@
   /** 用户下拉菜单状态 */
   let userMenuOpen = $state(false)
   
+  // 图标 SVG 映射
+  const icons: Record<string, string> = {
+    dashboard: `<svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" />
+    </svg>`,
+    shield: `<svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
+    </svg>`,
+    grid: `<svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" />
+    </svg>`,
+    file: `<svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+    </svg>`,
+    settings: `<svg fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+      <path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 010 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281z" />
+      <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+    </svg>`,
+  }
+
   /** 主菜单配置 */
   const menuItems = [
-    { icon: 'icon-[tabler--layout-dashboard]', title: '仪表盘', path: '/admin' },
+    { icon: 'dashboard', title: '仪表盘', path: '/admin' },
     {
-      icon: 'icon-[tabler--shield-lock]',
+      icon: 'shield',
       title: '身份与访问',
       path: '/admin/iam',
       children: [
@@ -37,52 +62,41 @@
         { title: '权限管理', path: '/admin/iam/permissions' },
       ],
     },
-    {
-      icon: 'icon-[tabler--database]',
-      title: '数据服务',
-      path: '/admin/services',
-      children: [
-        { title: '数据库', path: '/admin/services/database' },
-        { title: '缓存', path: '/admin/services/cache' },
-        { title: '存储', path: '/admin/services/storage' },
-      ],
-    },
-    {
-      icon: 'icon-[tabler--tools]',
-      title: '开发工具',
-      path: '/admin/tools',
-      children: [
-        { title: '加密工具', path: '/admin/tools/crypto' },
-        { title: 'AI 助手', path: '/admin/tools/ai' },
-      ],
-    },
-    { icon: 'icon-[tabler--components]', title: 'UI 组件库', path: '/admin/ui-gallery' },
-    { icon: 'icon-[tabler--file-text]', title: '审计日志', path: '/admin/logs' },
-    { icon: 'icon-[tabler--settings]', title: '系统设置', path: '/admin/settings' },
+    { icon: 'grid', title: 'UI 组件库', path: '/admin/ui-gallery' },
+    { icon: 'file', title: '审计日志', path: '/admin/logs' },
+    { icon: 'settings', title: '系统设置', path: '/admin/settings' },
   ]
   
   /** 展开的子菜单 */
-  let expandedMenus = $state<Set<string>>(new Set())
+  let expandedMenus = $state<Set<string>>(new Set(['/admin/iam']))
   
   /** 当前路径 */
   const currentPath = $derived($page.url.pathname)
   
   /** 检查是否为当前菜单 */
   function isActive(path: string): boolean {
-    if (path === '/admin') {
-      return currentPath === '/admin'
-    }
+    if (path === '/admin') return currentPath === '/admin'
     return currentPath.startsWith(path)
   }
   
   /** 切换子菜单展开状态 */
-  function toggleSubmenu(path: string) {
-    if (expandedMenus.has(path)) {
-      expandedMenus.delete(path)
+  function toggleSubmenu(event: MouseEvent, path: string) {
+    event.preventDefault()
+    event.stopPropagation()
+    const newSet = new Set(expandedMenus)
+    if (newSet.has(path)) {
+      newSet.delete(path)
     } else {
-      expandedMenus.add(path)
+      newSet.add(path)
     }
-    expandedMenus = new Set(expandedMenus)
+    expandedMenus = newSet
+  }
+  
+  /** 切换侧边栏收起状态 */
+  function toggleSidebar(event: MouseEvent) {
+    event.preventDefault()
+    event.stopPropagation()
+    sidebarCollapsed = !sidebarCollapsed
   }
   
   /** 关闭移动端菜单 */
@@ -90,38 +104,45 @@
     mobileMenuOpen = false
   }
   
+  /** 切换用户菜单 */
+  function toggleUserMenu(event: MouseEvent) {
+    event.preventDefault()
+    event.stopPropagation()
+    userMenuOpen = !userMenuOpen
+  }
+  
   /** 处理登出 */
   async function handleLogout() {
     userMenuOpen = false
     try {
       await fetch('/api/auth/logout', { method: 'POST' })
-    } catch (e) {
+    } catch {
       // 忽略错误
     }
     goto('/auth/login')
   }
-  
-  // 自动展开当前活动的子菜单
-  $effect(() => {
-    for (const item of menuItems) {
-      if (item.children && isActive(item.path)) {
-        expandedMenus.add(item.path)
-      }
+
+  /** 点击外部关闭用户菜单 */
+  function handleDocumentClick(event: MouseEvent) {
+    const target = event.target as HTMLElement
+    if (userMenuOpen && !target.closest('.user-menu-container')) {
+      userMenuOpen = false
     }
-    expandedMenus = new Set(expandedMenus)
-  })
+  }
 </script>
 
+<svelte:document onclick={handleDocumentClick} />
+
 <svelte:head>
-  <title>管理后台 - hai Admin</title>
+  <title>{appName}</title>
 </svelte:head>
 
-<div class="min-h-screen bg-base-200/50">
+<div class="flex h-screen bg-slate-50">
   <!-- 移动端菜单遮罩 -->
   {#if mobileMenuOpen}
     <button
       type="button"
-      class="fixed inset-0 z-40 bg-black/50 lg:hidden"
+      class="fixed inset-0 z-40 bg-black/30 lg:hidden"
       onclick={closeMobileMenu}
       aria-label="关闭菜单"
     ></button>
@@ -129,58 +150,64 @@
   
   <!-- 侧边栏 -->
   <aside
-    class="fixed top-0 left-0 z-50 h-screen bg-base-100 border-r border-base-content/10 shadow-sm
-      transition-all duration-300 ease-in-out
-      {sidebarCollapsed ? 'w-16' : 'w-64'}
+    class="fixed lg:static top-0 left-0 z-50 h-full flex flex-col bg-white border-r border-slate-200
+      transition-all duration-300 ease-out
+      {sidebarCollapsed ? 'w-[72px]' : 'w-[260px]'}
       {mobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}"
   >
     <!-- Logo 区域 -->
-    <div class="h-16 flex items-center gap-3 px-4 border-b border-base-content/10">
-      <div class="size-10 rounded-xl bg-primary/10 flex items-center justify-center">
-        <span class="text-primary font-bold text-xl">h</span>
+    <div class="h-16 flex items-center gap-3 px-4 border-b border-slate-100 shrink-0">
+      <div class="w-10 h-10 rounded-xl bg-indigo-600 flex items-center justify-center shrink-0">
+        <span class="text-white font-bold text-lg">h</span>
       </div>
       {#if !sidebarCollapsed}
-        <span class="text-lg font-semibold">hai Admin</span>
+        <div class="flex flex-col overflow-hidden">
+          <span class="text-base font-semibold text-slate-800 truncate">{appName}</span>
+          <span class="text-xs text-slate-400">v{appVersion}</span>
+        </div>
       {/if}
     </div>
     
     <!-- 导航菜单 -->
-    <nav class="flex-1 py-4 overflow-y-auto">
-      <ul class="menu menu-sm gap-1 px-2">
+    <nav class="flex-1 py-4 overflow-y-auto overflow-x-hidden">
+      <ul class="space-y-1 px-3">
         {#each menuItems as item}
           <li>
             {#if item.children}
               <!-- 有子菜单的项 -->
               <button
                 type="button"
-                class="flex items-center justify-between rounded-lg px-3 py-2.5 transition-colors w-full
+                class="flex items-center w-full rounded-lg px-3 py-2.5 text-left transition-colors
                   {isActive(item.path)
-                    ? 'bg-primary/10 text-primary font-medium'
-                    : 'text-base-content/70 hover:bg-base-200 hover:text-base-content'}"
-                onclick={() => toggleSubmenu(item.path)}
+                    ? 'bg-indigo-50 text-indigo-600'
+                    : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}"
+                onclick={(e) => toggleSubmenu(e, item.path)}
               >
-                <span class="flex items-center gap-3">
-                  <span class="{item.icon} size-5 shrink-0"></span>
-                  {#if !sidebarCollapsed}
-                    <span>{item.title}</span>
-                  {/if}
+                <span class="w-5 h-5 shrink-0">
+                  {@html icons[item.icon] ?? ''}
                 </span>
                 {#if !sidebarCollapsed}
-                  <span class="icon-[tabler--chevron-down] size-4 transition-transform {expandedMenus.has(item.path) ? 'rotate-180' : ''}"></span>
+                  <span class="ml-3 flex-1 font-medium text-sm">{item.title}</span>
+                  <svg 
+                    class="w-4 h-4 transition-transform duration-200 {expandedMenus.has(item.path) ? 'rotate-180' : ''}" 
+                    fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                  >
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                  </svg>
                 {/if}
               </button>
               
               <!-- 子菜单 -->
               {#if !sidebarCollapsed && expandedMenus.has(item.path)}
-                <ul class="menu menu-sm mt-1 ml-4 pl-4 border-l border-base-content/10">
+                <ul class="mt-1 space-y-1 pl-11">
                   {#each item.children as child}
                     <li>
                       <a
                         href={child.path}
-                        class="rounded-lg px-3 py-2 transition-colors
-                          {isActive(child.path)
-                            ? 'bg-primary text-primary-content font-medium'
-                            : 'text-base-content/60 hover:bg-base-200 hover:text-base-content'}"
+                        class="block rounded-lg px-3 py-2 text-sm transition-colors
+                          {currentPath === child.path
+                            ? 'bg-indigo-600 text-white font-medium'
+                            : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900'}"
                         onclick={closeMobileMenu}
                       >
                         {child.title}
@@ -193,15 +220,17 @@
               <!-- 无子菜单的项 -->
               <a
                 href={item.path}
-                class="flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors
+                class="flex items-center rounded-lg px-3 py-2.5 transition-colors
                   {isActive(item.path)
-                    ? 'bg-primary text-primary-content font-medium'
-                    : 'text-base-content/70 hover:bg-base-200 hover:text-base-content'}"
+                    ? 'bg-indigo-600 text-white'
+                    : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'}"
                 onclick={closeMobileMenu}
               >
-                <span class="{item.icon} size-5 shrink-0"></span>
+                <span class="w-5 h-5 shrink-0">
+                  {@html icons[item.icon] ?? ''}
+                </span>
                 {#if !sidebarCollapsed}
-                  <span>{item.title}</span>
+                  <span class="ml-3 font-medium text-sm">{item.title}</span>
                 {/if}
               </a>
             {/if}
@@ -211,99 +240,124 @@
     </nav>
     
     <!-- 侧边栏底部 -->
-    <div class="p-4 border-t border-base-content/10">
+    <div class="p-3 border-t border-slate-100 shrink-0">
       <button
         type="button"
-        class="btn btn-ghost btn-sm w-full justify-start gap-2"
-        onclick={() => sidebarCollapsed = !sidebarCollapsed}
-        aria-label={sidebarCollapsed ? '展开侧边栏' : '收起侧边栏'}
+        class="flex items-center w-full rounded-lg px-3 py-2.5 text-slate-500 hover:bg-slate-50 hover:text-slate-700 transition-colors"
+        onclick={toggleSidebar}
       >
-        <span class="icon-[tabler--layout-sidebar-left-collapse] size-5 {sidebarCollapsed ? 'rotate-180' : ''} transition-transform"></span>
+        <svg 
+          class="w-5 h-5 shrink-0 transition-transform duration-300 {sidebarCollapsed ? 'rotate-180' : ''}" 
+          fill="none" stroke="currentColor" viewBox="0 0 24 24"
+        >
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
+        </svg>
         {#if !sidebarCollapsed}
-          <span>收起菜单</span>
+          <span class="ml-3 text-sm font-medium">收起菜单</span>
         {/if}
       </button>
     </div>
   </aside>
   
   <!-- 主内容区 -->
-  <div
-    class="transition-all duration-300 ease-in-out
-      {sidebarCollapsed ? 'lg:ml-16' : 'lg:ml-64'}"
-  >
+  <div class="flex-1 flex flex-col min-w-0 overflow-hidden">
     <!-- 顶部导航 -->
-    <header class="sticky top-0 z-30 h-16 bg-base-100/95 backdrop-blur border-b border-base-content/10">
+    <header class="h-16 bg-white border-b border-slate-200 shrink-0">
       <div class="h-full flex items-center justify-between px-4 lg:px-6">
         <!-- 左侧：移动端菜单按钮 + 面包屑 -->
         <div class="flex items-center gap-4">
           <button
             type="button"
-            class="btn btn-ghost btn-sm btn-square lg:hidden"
+            class="p-2 rounded-lg text-slate-500 hover:bg-slate-100 lg:hidden"
             onclick={() => mobileMenuOpen = !mobileMenuOpen}
             aria-label="打开菜单"
           >
-            <span class="icon-[tabler--menu-2] size-5"></span>
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
           </button>
           
-          <div class="hidden sm:flex items-center gap-2 text-sm text-base-content/60">
-            <a href="/admin" class="hover:text-base-content transition-colors">首页</a>
-            <span class="icon-[tabler--chevron-right] size-4"></span>
-            <span class="text-base-content font-medium">
+          <nav class="hidden sm:flex items-center gap-2 text-sm">
+            <a href="/admin" class="text-slate-400 hover:text-slate-600">首页</a>
+            <svg class="w-4 h-4 text-slate-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+            </svg>
+            <span class="text-slate-700 font-medium">
               {menuItems.find(item => isActive(item.path))?.title ?? '页面'}
             </span>
-          </div>
+          </nav>
         </div>
         
-        <!-- 右侧：主题切换 + 用户菜单 -->
-        <div class="flex items-center gap-2">
-          <!-- 主题切换 -->
-          <label class="swap swap-rotate btn btn-ghost btn-sm btn-circle">
-            <input type="checkbox" class="theme-controller" value="dark" />
-            <span class="swap-off icon-[tabler--sun] size-5"></span>
-            <span class="swap-on icon-[tabler--moon] size-5"></span>
-          </label>
+        <!-- 右侧：用户菜单 -->
+        <div class="flex items-center gap-3">
+          <!-- 环境标识 -->
+          {#if data.appConfig?.env === 'development'}
+            <span class="hidden sm:inline-flex items-center px-2 py-1 rounded text-xs font-medium bg-amber-100 text-amber-700">
+              开发环境
+            </span>
+          {/if}
           
           <!-- 用户菜单 -->
-          <div class="dropdown dropdown-end">
+          <div class="relative user-menu-container">
             <button
               type="button"
-              class="btn btn-ghost btn-sm gap-2"
-              onclick={() => userMenuOpen = !userMenuOpen}
+              class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-100 transition-colors"
+              onclick={toggleUserMenu}
             >
-              <div class="avatar placeholder">
-                <div class="bg-primary text-primary-content rounded-full w-8">
-                  <span class="text-sm">{(data.user?.username ?? 'G')[0].toUpperCase()}</span>
-                </div>
-              </div>
-              <span class="hidden sm:inline">{data.user?.username ?? 'Guest'}</span>
-              <span class="icon-[tabler--chevron-down] size-4"></span>
+              <Avatar 
+                name={data.user?.username ?? 'Guest'} 
+                size="sm"
+              />
+              <span class="hidden sm:block text-sm font-medium text-slate-700">
+                {data.user?.username ?? 'Guest'}
+              </span>
+              <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+              </svg>
             </button>
             
             {#if userMenuOpen}
-              <ul class="dropdown-content menu bg-base-100 rounded-box shadow-lg border border-base-content/10 w-52 mt-2 p-2 z-50">
-                <li class="menu-title px-2 py-1 text-xs font-semibold text-base-content/50">
-                  {data.user?.username ?? 'Guest'}
-                </li>
-                <li>
-                  <a href="/admin/settings/profile" onclick={() => userMenuOpen = false}>
-                    <span class="icon-[tabler--user] size-4"></span>
+              <div class="absolute right-0 top-full mt-2 w-56 bg-white rounded-xl shadow-lg border border-slate-200 py-1 z-50">
+                <div class="px-4 py-3 border-b border-slate-100">
+                  <p class="text-sm font-medium text-slate-800">{data.user?.username ?? 'Guest'}</p>
+                  <p class="text-xs text-slate-500 mt-0.5">{data.user?.roles?.join(', ') ?? '访客'}</p>
+                </div>
+                <div class="py-1">
+                  <a
+                    href="/admin/profile"
+                    class="flex items-center gap-3 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50"
+                    onclick={(e: MouseEvent) => { userMenuOpen = false }}
+                  >
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                    </svg>
                     个人资料
                   </a>
-                </li>
-                <li>
-                  <a href="/admin/settings" onclick={() => userMenuOpen = false}>
-                    <span class="icon-[tabler--settings] size-4"></span>
+                  <a
+                    href="/admin/settings"
+                    class="flex items-center gap-3 px-4 py-2 text-sm text-slate-600 hover:bg-slate-50"
+                    onclick={(e: MouseEvent) => { userMenuOpen = false }}
+                  >
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                    </svg>
                     系统设置
                   </a>
-                </li>
-                <div class="divider my-1"></div>
-                <li>
-                  <button type="button" onclick={handleLogout} class="text-error">
-                    <span class="icon-[tabler--logout] size-4"></span>
+                </div>
+                <div class="border-t border-slate-100 py-1">
+                  <button
+                    type="button"
+                    onclick={handleLogout}
+                    class="flex items-center gap-3 w-full px-4 py-2 text-sm text-red-600 hover:bg-red-50"
+                  >
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                    </svg>
                     退出登录
                   </button>
-                </li>
-              </ul>
+                </div>
+              </div>
             {/if}
           </div>
         </div>
@@ -311,8 +365,15 @@
     </header>
     
     <!-- 页面内容 -->
-    <main class="p-4 lg:p-6">
+    <main class="flex-1 overflow-auto p-6 bg-slate-50">
       {@render children()}
     </main>
+    
+    <!-- 页脚 -->
+    <footer class="h-12 bg-white border-t border-slate-200 flex items-center justify-center px-6 shrink-0">
+      <p class="text-xs text-slate-400">
+        {appName} v{appVersion} · {data.appConfig?.timezone ?? 'UTC'}
+      </p>
+    </footer>
   </div>
 </div>

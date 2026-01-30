@@ -65,6 +65,7 @@
   
   const innerClass = $derived(
     cn(
+      'flex items-center justify-center',
       typeof size === 'string' && sizeMap[size],
       shape === 'circle' ? 'rounded-full' : 'rounded-lg',
       !src && bgColor(),

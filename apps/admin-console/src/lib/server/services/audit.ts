@@ -5,7 +5,7 @@
  */
 
 import { core } from '@hai/core'
-import { getDb } from '../database.js'
+import { getDb } from '../init.js'
 
 export interface AuditLog {
   id: string

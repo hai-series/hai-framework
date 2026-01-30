@@ -6,10 +6,10 @@
 
 import { describe, expect, it } from 'vitest'
 import {
-  AppConfigSchema,
   // 错误码
   CommonErrorCode,
   ConfigErrorCode,
+  CoreConfigSchema,
   // Schema
   EnvSchema,
   FeaturesConfigSchema,
@@ -153,9 +153,9 @@ describe('core-config', () => {
       })
     })
 
-    describe('appConfigSchema', () => {
+    describe('coreConfigSchema', () => {
       it('应使用默认值', () => {
-        const result = AppConfigSchema.parse({})
+        const result = CoreConfigSchema.parse({})
         expect(result.name).toBe('hai Admin')
         expect(result.version).toBe('0.1.0')
         expect(result.env).toBe('development')
@@ -177,7 +177,7 @@ describe('core-config', () => {
           defaultLocale: 'en-US',
           supportedLocales: ['en-US', 'zh-CN', 'ja-JP'],
         }
-        const result = AppConfigSchema.parse(config)
+        const result = CoreConfigSchema.parse(config)
         expect(result.name).toBe('My App')
         expect(result.env).toBe('production')
         expect(result.logging?.level).toBe('warn')

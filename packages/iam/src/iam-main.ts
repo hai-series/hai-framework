@@ -77,6 +77,7 @@ import type { IamComponents } from './service/iam-service-initializer.js'
 
 import { err, ok } from '@hai/core'
 import { IamConfigSchema, IamErrorCode } from './iam-config.js'
+import { seedIamData } from './iam-database.js'
 import { createAuthOperations } from './service/iam-service-auth.js'
 import {
 
@@ -167,6 +168,7 @@ function createNotInitializedUser(): UserOperations {
     register: async () => err(notInitializedError()),
     getCurrentUser: async () => err(notInitializedError()),
     getUser: async () => err(notInitializedError()),
+    listUsers: async () => err(notInitializedError()),
     updateUser: async () => err(notInitializedError()),
     changePassword: async () => err(notInitializedError()),
     requestPasswordReset: async () => err(notInitializedError()),
@@ -243,13 +245,21 @@ function createIamServiceInstance(): IamService {
         const config = IamConfigSchema.parse(configInput || {})
         state.config = config
 
-        // 初始化组件
+        // 初始化组件（会自动创建表）
         const initResult = initializeComponents({ db, cache, config })
         if (!initResult.success) {
           return initResult
         }
 
         state.components = initResult.data
+
+        // 初始化默认角色和权限数据
+        if (config.seedDefaultData) {
+          const seedResult = await seedIamData(db)
+          if (!seedResult.success) {
+            return seedResult
+          }
+        }
 
         // 创建认证操作
         state.authOperations = createAuthOperations({

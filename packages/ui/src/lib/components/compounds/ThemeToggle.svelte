@@ -4,7 +4,8 @@
 
   @prop {string} currentTheme - 当前主题
   @prop {function} onchange - 主题变更回调
-  @prop {string[]} darkThemes - 被视为暗色的主题列表
+  @prop {string} lightTheme - 亮色主题名称
+  @prop {string} darkTheme - 暗色主题名称
 
   @example
   <ThemeToggle 
@@ -13,24 +14,28 @@
   />
 -->
 <script lang='ts'>
+  import { isDarkTheme } from '../../theme-config.js'
+
   interface Props {
     currentTheme?: string
     onchange?: (theme: string) => void
-    darkThemes?: string[]
+    lightTheme?: string
+    darkTheme?: string
     class?: string
   }
 
   let {
     currentTheme = 'light',
     onchange,
-    darkThemes = ['dark', 'black', 'vscode', 'spotify', 'valorant', 'luxury'],
+    lightTheme = 'light',
+    darkTheme = 'dark',
     class: className = '',
   }: Props = $props()
 
-  const isDark = $derived(darkThemes.includes(currentTheme))
+  const isDark = $derived(isDarkTheme(currentTheme))
 
   function toggleTheme() {
-    const newTheme = isDark ? 'light' : 'dark'
+    const newTheme = isDark ? lightTheme : darkTheme
     onchange?.(newTheme)
   }
 </script>

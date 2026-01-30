@@ -7,36 +7,47 @@
  */
 
 import type { Handle } from '@sveltejs/kit'
-import { initDatabase } from '$lib/server/database.js'
-import { sessionService, userService } from '$lib/server/services/index.js'
-// @ts-expect-error @hai/kit 暂无类型定义
+import { initApp } from '$lib/server/init.js'
+import { iam } from '@hai/iam'
 import { authGuard, createHandle, loggingMiddleware, rateLimitMiddleware, sequence } from '@hai/kit'
 
-// 初始化数据库
-initDatabase()
+// 初始化应用（包含数据库、缓存、IAM 等模块）
+initApp()
 
 /**
- * 会话验证 - 从 SQLite 数据库验证 session token
+ * 会话验证 - 使用 IAM 模块验证 JWT token
  */
 async function validateSession(token: string) {
   try {
-    // 验证会话
-    const session = await sessionService.validate(token)
-    if (!session) {
+    // 验证 token
+    const verifyResult = await iam.auth.verifyToken(token)
+    if (!verifyResult.success) {
       return null
     }
 
+    const userId = verifyResult.data.sub
+
     // 获取用户信息
-    const user = await userService.getById(session.userId)
-    if (!user || user.status !== 'active') {
+    const userResult = await iam.user.getUser(userId)
+    if (!userResult.success || !userResult.data || !userResult.data.enabled) {
       return null
     }
+
+    const user = userResult.data
+
+    // 获取用户角色
+    const rolesResult = await iam.authz.getUserRoles(userId)
+    const roles = rolesResult.success ? rolesResult.data.map(r => r.code) : []
+
+    // 获取用户权限
+    const permissionsResult = await iam.authz.getUserPermissions(userId)
+    const permissions = permissionsResult.success ? permissionsResult.data.map(p => p.code) : []
 
     return {
       userId: user.id,
       username: user.username,
-      roles: user.roles,
-      permissions: ['*'], // TODO: 从角色权限中获取
+      roles,
+      permissions,
     }
   }
   catch (error) {

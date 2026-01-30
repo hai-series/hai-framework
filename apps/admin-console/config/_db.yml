@@ -1,0 +1,15 @@
+# =============================================================================
+# Admin Console - 数据库配置
+# =============================================================================
+
+# 数据库类型: sqlite | postgresql | mysql
+type: ${HAI_DB_TYPE:sqlite}
+
+# SQLite 数据库路径，或 PostgreSQL/MySQL 连接字符串
+database: ${HAI_DB_DATABASE:./data/admin.db}
+
+# PostgreSQL/MySQL 配置（可选）
+# host: ${HAI_DB_HOST:localhost}
+# port: ${HAI_DB_PORT:5432}
+# user: ${HAI_DB_USER:postgres}
+# password: ${HAI_DB_PASSWORD:}

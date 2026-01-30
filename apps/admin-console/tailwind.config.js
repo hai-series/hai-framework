@@ -1,4 +1,3 @@
-import { addIconSelectors } from '@iconify/tailwind'
 import daisyui from 'daisyui'
 
 /** @type {import('tailwindcss').Config} */
@@ -20,7 +19,6 @@ export default {
   },
   plugins: [
     daisyui,
-    addIconSelectors(['tabler']),
   ],
   daisyui: {
     themes: [

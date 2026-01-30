@@ -122,7 +122,7 @@
 
   /** 删除角色 */
   async function handleDelete(role: typeof data.roles[0]) {
-    if (role.is_system) {
+    if (role.isSystem) {
       alert('系统角色不能删除')
       return
     }
@@ -161,7 +161,7 @@
       <p class="text-base-content/60 mt-1">管理系统角色和权限分配</p>
     </div>
     <button type="button" class="btn btn-primary gap-2" onclick={openCreateDialog}>
-      <span class="icon-[tabler--plus] size-5"></span>
+      <span class="iconify tabler--plus size-5"></span>
       新建角色
     </button>
   </div>
@@ -175,7 +175,7 @@
             <div>
               <h3 class="card-title text-lg">
                 {role.name}
-                {#if role.is_system}
+                {#if role.isSystem}
                   <span class="badge badge-outline badge-sm">系统</span>
                 {/if}
               </h3>
@@ -185,19 +185,19 @@
             </div>
             <div class="dropdown dropdown-end">
               <button type="button" class="btn btn-ghost btn-sm btn-square">
-                <span class="icon-[tabler--dots-vertical] size-5"></span>
+                <span class="iconify tabler--dots-vertical size-5"></span>
               </button>
               <ul class="dropdown-content menu bg-base-100 rounded-box shadow-lg border border-base-content/10 w-40 p-2 z-10">
                 <li>
                   <button type="button" onclick={() => openEditDialog(role)}>
-                    <span class="icon-[tabler--edit] size-4"></span>
+                    <span class="iconify tabler--edit size-4"></span>
                     编辑
                   </button>
                 </li>
-                {#if !role.is_system}
+                {#if !role.isSystem}
                   <li>
                     <button type="button" class="text-error" onclick={() => handleDelete(role)}>
-                      <span class="icon-[tabler--trash] size-4"></span>
+                      <span class="iconify tabler--trash size-4"></span>
                       删除
                     </button>
                   </li>
@@ -210,11 +210,11 @@
 
           <div class="flex items-center justify-between text-sm">
             <span class="text-base-content/60">
-              <span class="icon-[tabler--users] size-4 inline-block align-middle mr-1"></span>
+              <span class="iconify tabler--users size-4 inline-block align-middle mr-1"></span>
               {role.userCount} 个用户
             </span>
             <span class="text-base-content/60">
-              <span class="icon-[tabler--key] size-4 inline-block align-middle mr-1"></span>
+              <span class="iconify tabler--key size-4 inline-block align-middle mr-1"></span>
               {role.permissions.length} 个权限
             </span>
           </div>
@@ -246,7 +246,7 @@
       <form onsubmit={handleSubmit} class="space-y-4">
         {#if error}
           <div class="alert alert-error">
-            <span class="icon-[tabler--alert-circle] size-5"></span>
+            <span class="iconify tabler--alert-circle size-5"></span>
             <span>{error}</span>
           </div>
         {/if}
@@ -261,7 +261,7 @@
             class="input input-bordered"
             bind:value={form.name}
             required
-            disabled={submitting || Boolean(editingRole?.is_system)}
+            disabled={submitting || Boolean(editingRole?.isSystem)}
             placeholder="例如：editor, viewer"
           />
         </div>

@@ -1,56 +1,16 @@
 <!--
-  =============================================================================
   Admin Console - 仪表盘
-  =============================================================================
+  现代化设计，使用内联 SVG 图标
 -->
 <script lang="ts">
   import type { PageData } from './$types'
+  import { Card, Badge } from '@hai/ui'
 
   interface Props {
     data: PageData
   }
 
   let { data }: Props = $props()
-
-  /** 获取活动图标 */
-  function getActivityIcon(action: string): string {
-    switch (action) {
-      case 'login':
-        return 'icon-[tabler--login]'
-      case 'logout':
-        return 'icon-[tabler--logout]'
-      case 'register':
-        return 'icon-[tabler--user-plus]'
-      case 'create':
-        return 'icon-[tabler--plus]'
-      case 'update':
-        return 'icon-[tabler--edit]'
-      case 'delete':
-        return 'icon-[tabler--trash]'
-      case 'password_reset':
-      case 'password_reset_request':
-        return 'icon-[tabler--key]'
-      default:
-        return 'icon-[tabler--activity]'
-    }
-  }
-
-  /** 获取活动颜色 */
-  function getActivityColor(action: string): string {
-    switch (action) {
-      case 'login':
-      case 'register':
-        return 'text-success'
-      case 'logout':
-        return 'text-warning'
-      case 'delete':
-        return 'text-error'
-      case 'create':
-        return 'text-primary'
-      default:
-        return 'text-base-content/60'
-    }
-  }
 
   /** 格式化时间 */
   function formatTime(isoString: string): string {
@@ -80,170 +40,229 @@
     }
     return translations[action] ?? action
   }
+  
+  /** 获取活动颜色类 */
+  function getActivityBadgeVariant(action: string): 'success' | 'warning' | 'error' | 'primary' | 'info' {
+    switch (action) {
+      case 'login':
+      case 'register':
+        return 'success'
+      case 'logout':
+        return 'warning'
+      case 'delete':
+        return 'error'
+      case 'create':
+        return 'primary'
+      default:
+        return 'info'
+    }
+  }
 </script>
 
 <svelte:head>
-  <title>仪表盘 - Admin Console</title>
+  <title>仪表盘 - {data.appConfig?.name ?? 'Admin Console'}</title>
 </svelte:head>
 
 <div class="space-y-6">
   <!-- 页面标题 -->
-  <div>
-    <h1 class="text-2xl font-bold">仪表盘</h1>
-    <p class="text-base-content/60 mt-1">系统概览与快速入口</p>
+  <div class="mb-2">
+    <h1 class="text-2xl font-bold text-slate-800">仪表盘</h1>
+    <p class="text-slate-500 mt-1">系统概览与快速入口</p>
   </div>
 
   <!-- 统计卡片 -->
   <div class="grid gap-4 grid-cols-2 lg:grid-cols-4">
-    <div class="stat bg-base-100 rounded-lg shadow-sm">
-      <div class="stat-figure text-primary">
-        <span class="icon-[tabler--users] size-8"></span>
+    <!-- 用户总数 -->
+    <div class="bg-white rounded-xl border border-slate-200 p-5">
+      <div class="flex items-start justify-between">
+        <div>
+          <p class="text-sm font-medium text-slate-500">用户总数</p>
+          <p class="text-3xl font-bold text-indigo-600 mt-1">{data.stats.userCount}</p>
+          <p class="text-xs text-slate-400 mt-1">活跃 {data.stats.activeUsers} 人</p>
+        </div>
+        <div class="w-10 h-10 rounded-lg bg-indigo-100 flex items-center justify-center">
+          <svg class="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />
+          </svg>
+        </div>
       </div>
-      <div class="stat-title">用户总数</div>
-      <div class="stat-value text-primary">{data.stats.userCount}</div>
-      <div class="stat-desc">活跃 {data.stats.activeUsers} 人</div>
     </div>
 
-    <div class="stat bg-base-100 rounded-lg shadow-sm">
-      <div class="stat-figure text-secondary">
-        <span class="icon-[tabler--shield] size-8"></span>
+    <!-- 角色数 -->
+    <div class="bg-white rounded-xl border border-slate-200 p-5">
+      <div class="flex items-start justify-between">
+        <div>
+          <p class="text-sm font-medium text-slate-500">角色数</p>
+          <p class="text-3xl font-bold text-emerald-600 mt-1">{data.stats.roleCount}</p>
+          <p class="text-xs text-slate-400 mt-1">权限分组</p>
+        </div>
+        <div class="w-10 h-10 rounded-lg bg-emerald-100 flex items-center justify-center">
+          <svg class="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
+          </svg>
+        </div>
       </div>
-      <div class="stat-title">角色数</div>
-      <div class="stat-value text-secondary">{data.stats.roleCount}</div>
-      <div class="stat-desc">权限分组</div>
     </div>
 
-    <div class="stat bg-base-100 rounded-lg shadow-sm">
-      <div class="stat-figure text-accent">
-        <span class="icon-[tabler--key] size-8"></span>
+    <!-- 权限数 -->
+    <div class="bg-white rounded-xl border border-slate-200 p-5">
+      <div class="flex items-start justify-between">
+        <div>
+          <p class="text-sm font-medium text-slate-500">权限数</p>
+          <p class="text-3xl font-bold text-amber-600 mt-1">{data.stats.permissionCount}</p>
+          <p class="text-xs text-slate-400 mt-1">细粒度控制</p>
+        </div>
+        <div class="w-10 h-10 rounded-lg bg-amber-100 flex items-center justify-center">
+          <svg class="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 5.25a3 3 0 013 3m3 0a6 6 0 01-7.029 5.912c-.563-.097-1.159.026-1.563.43L10.5 17.25H8.25v2.25H6v2.25H2.25v-2.818c0-.597.237-1.17.659-1.591l6.499-6.499c.404-.404.527-1 .43-1.563A6 6 0 1121.75 8.25z" />
+          </svg>
+        </div>
       </div>
-      <div class="stat-title">权限数</div>
-      <div class="stat-value text-accent">{data.stats.permissionCount}</div>
-      <div class="stat-desc">细粒度控制</div>
     </div>
 
-    <div class="stat bg-base-100 rounded-lg shadow-sm">
-      <div class="stat-figure text-info">
-        <span class="icon-[tabler--activity] size-8"></span>
+    <!-- 近7日活动 -->
+    <div class="bg-white rounded-xl border border-slate-200 p-5">
+      <div class="flex items-start justify-between">
+        <div>
+          <p class="text-sm font-medium text-slate-500">近7日活动</p>
+          <p class="text-3xl font-bold text-sky-600 mt-1">
+            {data.auditStats.reduce((sum, s) => sum + s.count, 0)}
+          </p>
+          <p class="text-xs text-slate-400 mt-1">审计日志</p>
+        </div>
+        <div class="w-10 h-10 rounded-lg bg-sky-100 flex items-center justify-center">
+          <svg class="w-5 h-5 text-sky-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 3v11.25A2.25 2.25 0 006 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0118 16.5h-2.25m-7.5 0h7.5m-7.5 0l-1 3m8.5-3l1 3m0 0l.5 1.5m-.5-1.5h-9.5m0 0l-.5 1.5m.75-9l3-3 2.148 2.148A12.061 12.061 0 0116.5 7.605" />
+          </svg>
+        </div>
       </div>
-      <div class="stat-title">近7日活动</div>
-      <div class="stat-value text-info">
-        {data.auditStats.reduce((sum, s) => sum + s.count, 0)}
-      </div>
-      <div class="stat-desc">审计日志</div>
     </div>
   </div>
 
   <!-- 内容区 -->
   <div class="grid gap-6 lg:grid-cols-3">
     <!-- 快速入口 -->
-    <div class="card bg-base-100 shadow-sm lg:col-span-1">
-      <div class="card-body">
-        <h2 class="card-title">
-          <span class="icon-[tabler--rocket] size-5"></span>
-          快速入口
-        </h2>
-        <div class="grid grid-cols-2 gap-2 mt-2">
-          <a href="/admin/iam/users" class="btn btn-ghost justify-start gap-2">
-            <span class="icon-[tabler--users] size-5 text-primary"></span>
-            用户管理
-          </a>
-          <a href="/admin/iam/roles" class="btn btn-ghost justify-start gap-2">
-            <span class="icon-[tabler--shield] size-5 text-secondary"></span>
-            角色管理
-          </a>
-          <a href="/admin/iam/permissions" class="btn btn-ghost justify-start gap-2">
-            <span class="icon-[tabler--key] size-5 text-accent"></span>
-            权限管理
-          </a>
-          <a href="/admin/logs" class="btn btn-ghost justify-start gap-2">
-            <span class="icon-[tabler--file-text] size-5 text-info"></span>
-            审计日志
-          </a>
-          <a href="/admin/services/database" class="btn btn-ghost justify-start gap-2">
-            <span class="icon-[tabler--database] size-5 text-warning"></span>
-            数据库
-          </a>
-          <a href="/admin/services/cache" class="btn btn-ghost justify-start gap-2">
-            <span class="icon-[tabler--server] size-5 text-error"></span>
-            缓存
-          </a>
-          <a href="/admin/services/storage" class="btn btn-ghost justify-start gap-2">
-            <span class="icon-[tabler--folder] size-5 text-success"></span>
-            存储
-          </a>
-          <a href="/admin/tools/crypto" class="btn btn-ghost justify-start gap-2">
-            <span class="icon-[tabler--lock] size-5"></span>
-            加密工具
-          </a>
-        </div>
+    <Card>
+      <div class="flex items-center gap-2 mb-4">
+        <svg class="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M15.59 14.37a6 6 0 01-5.84 7.38v-4.8m5.84-2.58a14.98 14.98 0 006.16-12.12A14.98 14.98 0 009.631 8.41m5.96 5.96a14.926 14.926 0 01-5.841 2.58m-.119-8.54a6 6 0 00-7.381 5.84h4.8m2.581-5.84a14.927 14.927 0 00-2.58 5.84m2.699 2.7c-.103.021-.207.041-.311.06a15.09 15.09 0 01-2.448-2.448 14.9 14.9 0 01.06-.312m-2.24 2.39a4.493 4.493 0 00-1.757 4.306 4.493 4.493 0 004.306-1.758M16.5 9a1.5 1.5 0 11-3 0 1.5 1.5 0 013 0z" />
+        </svg>
+        <h2 class="text-lg font-semibold text-slate-800">快速入口</h2>
       </div>
-    </div>
+      <div class="grid grid-cols-2 gap-2">
+        <a href="/admin/iam/users" class="flex items-center gap-2 px-3 py-2.5 rounded-lg hover:bg-slate-50 transition-colors">
+          <svg class="w-4 h-4 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />
+          </svg>
+          <span class="text-sm text-slate-700">用户管理</span>
+        </a>
+        <a href="/admin/iam/roles" class="flex items-center gap-2 px-3 py-2.5 rounded-lg hover:bg-slate-50 transition-colors">
+          <svg class="w-4 h-4 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
+          </svg>
+          <span class="text-sm text-slate-700">角色管理</span>
+        </a>
+        <a href="/admin/iam/permissions" class="flex items-center gap-2 px-3 py-2.5 rounded-lg hover:bg-slate-50 transition-colors">
+          <svg class="w-4 h-4 text-amber-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 5.25a3 3 0 013 3m3 0a6 6 0 01-7.029 5.912c-.563-.097-1.159.026-1.563.43L10.5 17.25H8.25v2.25H6v2.25H2.25v-2.818c0-.597.237-1.17.659-1.591l6.499-6.499c.404-.404.527-1 .43-1.563A6 6 0 1121.75 8.25z" />
+          </svg>
+          <span class="text-sm text-slate-700">权限管理</span>
+        </a>
+        <a href="/admin/logs" class="flex items-center gap-2 px-3 py-2.5 rounded-lg hover:bg-slate-50 transition-colors">
+          <svg class="w-4 h-4 text-sky-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m0 12.75h7.5m-7.5 3H12M10.5 2.25H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9z" />
+          </svg>
+          <span class="text-sm text-slate-700">审计日志</span>
+        </a>
+        <a href="/admin/ui-gallery" class="flex items-center gap-2 px-3 py-2.5 rounded-lg hover:bg-slate-50 transition-colors">
+          <svg class="w-4 h-4 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" />
+          </svg>
+          <span class="text-sm text-slate-700">UI 组件库</span>
+        </a>
+        <a href="/admin/settings" class="flex items-center gap-2 px-3 py-2.5 rounded-lg hover:bg-slate-50 transition-colors">
+          <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.24-.438.613-.431.992a6.759 6.759 0 010 .255c-.007.378.138.75.43.99l1.005.828c.424.35.534.954.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.57 6.57 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.992a6.932 6.932 0 010-.255c.007-.378-.138-.75-.43-.99l-1.004-.828a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281z" />
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+          </svg>
+          <span class="text-sm text-slate-700">系统设置</span>
+        </a>
+      </div>
+    </Card>
 
     <!-- 最近活动 -->
-    <div class="card bg-base-100 shadow-sm lg:col-span-2">
-      <div class="card-body">
-        <div class="flex items-center justify-between">
-          <h2 class="card-title">
-            <span class="icon-[tabler--activity] size-5"></span>
-            最近活动
-          </h2>
-          <a href="/admin/logs" class="btn btn-ghost btn-sm">
+    <div class="lg:col-span-2">
+      <Card>
+        <div class="flex items-center justify-between mb-4">
+          <div class="flex items-center gap-2">
+            <svg class="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M3.75 3v11.25A2.25 2.25 0 006 16.5h2.25M3.75 3h-1.5m1.5 0h16.5m0 0h1.5m-1.5 0v11.25A2.25 2.25 0 0118 16.5h-2.25m-7.5 0h7.5m-7.5 0l-1 3m8.5-3l1 3m0 0l.5 1.5m-.5-1.5h-9.5m0 0l-.5 1.5m.75-9l3-3 2.148 2.148A12.061 12.061 0 0116.5 7.605" />
+            </svg>
+            <h2 class="text-lg font-semibold text-slate-800">最近活动</h2>
+          </div>
+          <a href="/admin/logs" class="text-sm text-indigo-600 hover:text-indigo-700 font-medium flex items-center gap-1">
             查看全部
-            <span class="icon-[tabler--arrow-right] size-4"></span>
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+            </svg>
           </a>
         </div>
 
-        <div class="divide-y divide-base-content/10 mt-2">
+        <div class="divide-y divide-slate-100">
           {#each data.recentActivity as activity}
             <div class="flex items-start gap-3 py-3">
-              <div class="flex-shrink-0 w-8 h-8 rounded-full bg-base-200 flex items-center justify-center {getActivityColor(activity.action)}">
-                <span class="{getActivityIcon(activity.action)} size-4"></span>
+              <div class="flex-shrink-0 w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center">
+                <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
+                </svg>
               </div>
               <div class="flex-1 min-w-0">
-                <div class="flex items-center gap-2">
-                  <span class="font-medium">{activity.username ?? '未知用户'}</span>
-                  <span class="text-base-content/60">{translateAction(activity.action)}</span>
-                  <span class="badge badge-ghost badge-sm">{activity.resource}</span>
+                <div class="flex items-center gap-2 flex-wrap">
+                  <span class="font-medium text-slate-800">{activity.username ?? '未知用户'}</span>
+                  <Badge variant={getActivityBadgeVariant(activity.action)} size="sm">
+                    {translateAction(activity.action)}
+                  </Badge>
+                  <span class="text-slate-500 text-sm">{activity.resource}</span>
                 </div>
                 {#if activity.details}
-                  <p class="text-sm text-base-content/50 truncate">
+                  <p class="text-sm text-slate-400 truncate mt-0.5">
                     {activity.details}
                   </p>
                 {/if}
               </div>
-              <div class="text-sm text-base-content/50 whitespace-nowrap">
+              <div class="text-xs text-slate-400 whitespace-nowrap">
                 {formatTime(activity.created_at)}
               </div>
             </div>
           {:else}
-            <div class="py-8 text-center text-base-content/50">
+            <div class="py-8 text-center text-slate-400">
               暂无活动记录
             </div>
           {/each}
         </div>
-      </div>
+      </Card>
     </div>
   </div>
 
   <!-- 活动统计 -->
   {#if data.auditStats.length > 0}
-    <div class="card bg-base-100 shadow-sm">
-      <div class="card-body">
-        <h2 class="card-title">
-          <span class="icon-[tabler--chart-bar] size-5"></span>
-          近7日活动统计
-        </h2>
-        <div class="flex flex-wrap gap-4 mt-4">
-          {#each data.auditStats as stat}
-            <div class="flex items-center gap-2 px-4 py-2 bg-base-200/50 rounded-lg">
-              <span class="{getActivityIcon(stat.action)} size-5 {getActivityColor(stat.action)}"></span>
-              <span class="font-medium">{translateAction(stat.action)}</span>
-              <span class="badge badge-primary badge-sm">{stat.count}</span>
-            </div>
-          {/each}
-        </div>
+    <Card>
+      <div class="flex items-center gap-2 mb-4">
+        <svg class="w-5 h-5 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
+        </svg>
+        <h2 class="text-lg font-semibold text-slate-800">近7日活动统计</h2>
       </div>
-    </div>
+      <div class="flex flex-wrap gap-3">
+        {#each data.auditStats as stat}
+          <div class="flex items-center gap-2 px-4 py-2 bg-slate-50 rounded-lg">
+            <Badge variant={getActivityBadgeVariant(stat.action)}>
+              {translateAction(stat.action)}
+            </Badge>
+            <span class="text-lg font-semibold text-slate-700">{stat.count}</span>
+          </div>
+        {/each}
+      </div>
+    </Card>
   {/if}
 </div>

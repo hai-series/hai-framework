@@ -40,14 +40,18 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
       return json({ success: false, error: '请填写所有必填字段' }, { status: 400 })
     }
 
+    // 生成权限 code
+    const code = `${resource}:${action}`
+
     // 检查权限名称是否已存在
-    const existing = await permissionService.getByName(name)
+    const existing = await permissionService.getByName(code)
     if (existing) {
       return json({ success: false, error: '权限名称已存在' }, { status: 409 })
     }
 
     // 创建权限
     const permission = await permissionService.create({
+      code,
       name,
       description,
       resource,

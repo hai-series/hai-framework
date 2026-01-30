@@ -6,7 +6,7 @@
 
 ```typescript
 import type { Logger, Result } from '@hai/core'
-import { AppConfigSchema, CommonErrorCode, core, err, initCore, ok } from '@hai/core'
+import { CommonErrorCode, core, CoreConfigSchema, err, initCore, ok } from '@hai/core'
 ```
 
 ## 核心 API
@@ -21,7 +21,7 @@ initCore({
   silent: false,
   logging: { level: 'info' },
   configs: [
-    { name: 'app', filePath: './config/app.yml', schema: AppConfigSchema }
+    { name: 'core', filePath: './config/_core.yml', schema: CoreConfigSchema }
   ],
   watchConfig: true,
 })
@@ -65,20 +65,20 @@ core.isValidNanoId(str) // 验证 nanoid
 
 ```typescript
 // 加载配置
-const result = core.config.load('app', './config/app.yml', AppConfigSchema)
+const result = core.config.load('core', './config/_core.yml', CoreConfigSchema)
 
 // 获取配置
-const cfg = core.config.get('app')
-const cfg = core.config.getOrThrow('app') // 不存在则抛出异常
+const cfg = core.config.get('core')
+const cfg = core.config.getOrThrow('core') // 不存在则抛出异常
 
 // 检查/重新加载
-core.config.has('app') // true/false
-core.config.reload('app') // 重新加载
-core.config.keys() // ['app', ...]
+core.config.has('core') // true/false
+core.config.reload('core') // 重新加载
+core.config.keys() // ['core', ...]
 core.config.clear() // 清空所有
 
 // 监听变更
-core.config.onChange('app', (newConfig) => {
+core.config.onChange('core', (newConfig) => {
   // 在此处理配置变更（例如：热更新某些运行时参数）
 })
 ```
@@ -202,7 +202,7 @@ else {
 ```typescript
 import {
   AIConfigSchema,
-  AppConfigSchema,
+  CoreConfigSchema,
   CryptoConfigSchema,
   DbConfigSchema,
   IAMConfigSchema,

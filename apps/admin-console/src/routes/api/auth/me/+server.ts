@@ -5,7 +5,7 @@
  */
 
 import type { RequestHandler } from '@sveltejs/kit'
-import { sessionService, userService } from '$lib/server/services/index.js'
+import { iam } from '@hai/iam'
 import { json } from '@sveltejs/kit'
 
 export const GET: RequestHandler = async ({ cookies }) => {
@@ -16,19 +16,18 @@ export const GET: RequestHandler = async ({ cookies }) => {
       return json({ success: false, user: null })
     }
 
-    // 验证会话
-    const session = await sessionService.validate(token)
-    if (!session) {
+    // 验证令牌获取用户
+    const userResult = await iam.user.getCurrentUser(token)
+    if (!userResult.success) {
       cookies.delete('session_token', { path: '/' })
       return json({ success: false, user: null })
     }
 
-    // 获取用户信息
-    const user = await userService.getById(session.userId)
-    if (!user) {
-      cookies.delete('session_token', { path: '/' })
-      return json({ success: false, user: null })
-    }
+    const user = userResult.data
+
+    // 获取用户角色
+    const rolesResult = await iam.authz.getUserRoles(user.id)
+    const roles = rolesResult.success ? rolesResult.data.map(r => r.code) : []
 
     return json({
       success: true,
@@ -36,9 +35,9 @@ export const GET: RequestHandler = async ({ cookies }) => {
         id: user.id,
         username: user.username,
         email: user.email,
-        display_name: user.display_name,
-        avatar: user.avatar,
-        roles: user.roles,
+        display_name: user.displayName,
+        avatar: user.avatarUrl,
+        roles,
       },
     })
   }

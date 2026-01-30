@@ -92,7 +92,7 @@
   }
 
   /** 删除权限 */
-  async function handleDelete(perm: { id: string; name: string; is_system: number }) {
+  async function handleDelete(perm: { id: string; name: string; is_system: boolean }) {
     if (perm.is_system) {
       alert('系统权限不能删除')
       return
@@ -132,7 +132,7 @@
       <p class="text-base-content/60 mt-1">管理系统权限定义</p>
     </div>
     <button type="button" class="btn btn-primary gap-2" onclick={openCreateDialog}>
-      <span class="icon-[tabler--plus] size-5"></span>
+      <span class="iconify tabler--plus size-5"></span>
       新建权限
     </button>
   </div>
@@ -165,7 +165,7 @@
       <div class="card bg-base-100 shadow-sm">
         <div class="card-body">
           <h3 class="card-title capitalize">
-            <span class="icon-[tabler--folder] size-5"></span>
+            <span class="iconify tabler--folder size-5"></span>
             {resource}
             <span class="badge badge-ghost badge-sm">{perms.length}</span>
           </h3>
@@ -205,7 +205,7 @@
                           class="btn btn-ghost btn-xs text-error"
                           onclick={() => handleDelete(perm)}
                         >
-                          <span class="icon-[tabler--trash] size-4"></span>
+                          <span class="iconify tabler--trash size-4"></span>
                         </button>
                       {/if}
                     </td>
@@ -229,7 +229,7 @@
       <form onsubmit={handleSubmit} class="space-y-4">
         {#if error}
           <div class="alert alert-error">
-            <span class="icon-[tabler--alert-circle] size-5"></span>
+            <span class="iconify tabler--alert-circle size-5"></span>
             <span>{error}</span>
           </div>
         {/if}

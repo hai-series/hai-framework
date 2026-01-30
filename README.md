@@ -87,15 +87,15 @@ pnpm add @hai/storage                    # 文件存储
 ### 配置管理
 
 ```typescript
-// config/app.yml
+// config/_core.yml
 app:
   name: ${APP_NAME:my-app}
   port: ${PORT:3000}
 
 // 使用配置（Node.js 环境）
-import { loadConfig, AppConfigSchema } from '@hai/core/node'
+import { loadConfig, CoreConfigSchema } from '@hai/core/node'
 
-const config = await loadConfig('config/app.yml', AppConfigSchema)
+const config = await loadConfig('config/_core.yml', CoreConfigSchema)
 console.log(config.app.name)
 ```
 

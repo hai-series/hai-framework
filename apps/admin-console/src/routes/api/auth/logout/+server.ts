@@ -5,7 +5,8 @@
  */
 
 import type { RequestHandler } from '@sveltejs/kit'
-import { audit, sessionService } from '$lib/server/services/index.js'
+import { audit } from '$lib/server/services/index.js'
+import { iam } from '@hai/iam'
 import { json } from '@sveltejs/kit'
 
 export const POST: RequestHandler = async ({ cookies, getClientAddress, request }) => {
@@ -13,17 +14,17 @@ export const POST: RequestHandler = async ({ cookies, getClientAddress, request 
     const token = cookies.get('session_token')
 
     if (token) {
-      // 验证会话获取用户 ID
-      const session = await sessionService.validate(token)
-      if (session) {
+      // 验证 token 获取用户 ID
+      const verifyResult = await iam.auth.verifyToken(token)
+      if (verifyResult.success) {
         // 记录审计日志
         const ip = getClientAddress()
         const ua = request.headers.get('user-agent') ?? undefined
-        await audit.logout(session.userId, ip, ua)
+        await audit.logout(verifyResult.data.sub, ip, ua)
       }
 
-      // 销毁会话
-      await sessionService.destroy(token)
+      // 登出（使会话失效）
+      await iam.auth.logout(token)
     }
 
     // 清除 Cookie

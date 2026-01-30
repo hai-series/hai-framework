@@ -2,80 +2,92 @@
  * =============================================================================
  * Admin Console - 角色服务
  * =============================================================================
+ *
+ * 委托给 @hai/iam 的 authz 模块实现角色管理。
+ * =============================================================================
  */
 
-import { core } from '@hai/core'
-import { getDb } from '../database.js'
+import type { Permission, Role } from '@hai/iam'
+import { iam } from '@hai/iam'
 
-export interface Role {
-  id: string
-  name: string
-  description: string | null
-  is_system: number
-  created_at: string
-}
+// =============================================================================
+// 类型定义
+// =============================================================================
 
+/**
+ * 带权限的角色
+ */
 export interface RoleWithPermissions extends Role {
   permissions: string[]
 }
 
+/**
+ * 创建角色输入
+ */
 export interface CreateRoleInput {
+  code: string
   name: string
   description?: string
   permissions?: string[]
 }
 
+/**
+ * 更新角色输入
+ */
 export interface UpdateRoleInput {
   name?: string
   description?: string
   permissions?: string[]
 }
 
+// =============================================================================
+// 角色服务
+// =============================================================================
+
 /**
  * 角色服务
+ *
+ * 所有操作委托给 iam.authz 实现
  */
 export const roleService = {
   /**
    * 创建角色
    */
   async create(input: CreateRoleInput): Promise<RoleWithPermissions> {
-    const db = getDb()
-    const id = core.id.withPrefix('role_')
+    const result = await iam.authz.createRole({
+      code: input.code,
+      name: input.name,
+      description: input.description,
+    })
 
-    const insertResult = db.sql.execute(`INSERT INTO roles (id, name, description) VALUES (?, ?, ?)`, [
-      id,
-      input.name,
-      input.description ?? null,
-    ])
-    if (!insertResult.success) {
-      throw new Error(`创建角色失败: ${insertResult.error.message}`)
+    if (!result.success) {
+      throw new Error(`创建角色失败: ${result.error.message}`)
     }
+
+    const role = result.data
 
     // 分配权限
     if (input.permissions?.length) {
       for (const permId of input.permissions) {
-        db.sql.execute(`INSERT INTO role_permissions (role_id, permission_id) VALUES (?, ?)`, [id, permId])
+        await iam.authz.assignPermissionToRole(role.id, permId)
       }
     }
 
-    const role = await this.getById(id)
-    if (!role) {
-      throw new Error('创建角色后无法获取角色信息')
+    return {
+      ...role,
+      permissions: input.permissions ?? [],
     }
-    return role
   },
 
   /**
    * 根据 ID 获取角色
    */
   async getById(id: string): Promise<RoleWithPermissions | null> {
-    const db = getDb()
-
-    const rolesResult = db.sql.query<Role>(`SELECT * FROM roles WHERE id = ?`, [id])
-    if (!rolesResult.success || !rolesResult.data.length)
+    const result = await iam.authz.getRole(id)
+    if (!result.success || !result.data)
       return null
 
-    const role = rolesResult.data[0]
+    const role = result.data
     const permissions = await this.getRolePermissions(id)
 
     return { ...role, permissions }
@@ -85,15 +97,12 @@ export const roleService = {
    * 获取角色列表
    */
   async list(): Promise<RoleWithPermissions[]> {
-    const db = getDb()
-    const rolesResult = db.sql.query<Role>(`SELECT * FROM roles ORDER BY created_at DESC`)
-
-    if (!rolesResult.success) {
+    const result = await iam.authz.getAllRoles()
+    if (!result.success)
       return []
-    }
 
     return Promise.all(
-      rolesResult.data.map(async (role) => {
+      result.data.map(async (role) => {
         const permissions = await this.getRolePermissions(role.id)
         return { ...role, permissions }
       }),
@@ -104,38 +113,44 @@ export const roleService = {
    * 更新角色
    */
   async update(id: string, input: UpdateRoleInput): Promise<RoleWithPermissions | null> {
-    const db = getDb()
+    // 检查角色是否存在
+    const existing = await this.getById(id)
+    if (!existing)
+      return null
 
     // 检查是否为系统角色
-    const existingResult = db.sql.query<Role>(`SELECT * FROM roles WHERE id = ?`, [id])
-    if (!existingResult.success || !existingResult.data.length)
-      return null
-    if (existingResult.data[0].is_system && input.name) {
+    if (existing.isSystem && input.name) {
       throw new Error('不能修改系统角色名称')
     }
 
-    const fields: string[] = []
-    const values: unknown[] = []
-
-    if (input.name !== undefined) {
-      fields.push('name = ?')
-      values.push(input.name)
-    }
-    if (input.description !== undefined) {
-      fields.push('description = ?')
-      values.push(input.description)
-    }
-
-    if (fields.length > 0) {
-      values.push(id)
-      db.sql.execute(`UPDATE roles SET ${fields.join(', ')} WHERE id = ?`, values)
+    // 更新角色基本信息
+    if (input.name !== undefined || input.description !== undefined) {
+      const updateResult = await iam.authz.updateRole(id, {
+        name: input.name,
+        description: input.description,
+      })
+      if (!updateResult.success) {
+        throw new Error(`更新角色失败: ${updateResult.error.message}`)
+      }
     }
 
     // 更新权限
     if (input.permissions !== undefined) {
-      db.sql.execute(`DELETE FROM role_permissions WHERE role_id = ?`, [id])
+      // 先获取当前权限
+      const currentPermissions = await this.getRolePermissions(id)
+
+      // 移除不在新列表中的权限
+      for (const permId of currentPermissions) {
+        if (!input.permissions.includes(permId)) {
+          await iam.authz.removePermissionFromRole(id, permId)
+        }
+      }
+
+      // 添加新权限
       for (const permId of input.permissions) {
-        db.sql.execute(`INSERT INTO role_permissions (role_id, permission_id) VALUES (?, ?)`, [id, permId])
+        if (!currentPermissions.includes(permId)) {
+          await iam.authz.assignPermissionToRole(id, permId)
+        }
       }
     }
 
@@ -146,40 +161,43 @@ export const roleService = {
    * 删除角色
    */
   async delete(id: string): Promise<boolean> {
-    const db = getDb()
-
     // 检查是否为系统角色
-    const existingResult = db.sql.query<Role>(`SELECT * FROM roles WHERE id = ?`, [id])
-    if (!existingResult.success || !existingResult.data.length)
+    const existing = await this.getById(id)
+    if (!existing)
       return false
-    if (existingResult.data[0].is_system) {
+    if (existing.isSystem) {
       throw new Error('不能删除系统角色')
     }
 
-    const result = db.sql.execute(`DELETE FROM roles WHERE id = ?`, [id])
-    return result.success && result.data.changes > 0
+    const result = await iam.authz.deleteRole(id)
+    return result.success
   },
 
   /**
-   * 获取角色权限
+   * 获取角色权限（权限 ID 列表）
    */
   async getRolePermissions(roleId: string): Promise<string[]> {
-    const db = getDb()
-    const resultsResult = db.sql.query<{ name: string }>(
-      `SELECT p.name FROM permissions p
-       INNER JOIN role_permissions rp ON p.id = rp.permission_id
-       WHERE rp.role_id = ?`,
-      [roleId],
-    )
-    return resultsResult.success ? resultsResult.data.map(r => r.name) : []
+    const result = await iam.authz.getRolePermissions(roleId)
+    if (!result.success)
+      return []
+    return result.data.map(p => p.id)
+  },
+
+  /**
+   * 获取角色权限（完整权限对象）
+   */
+  async getRolePermissionObjects(roleId: string): Promise<Permission[]> {
+    const result = await iam.authz.getRolePermissions(roleId)
+    return result.success ? result.data : []
   },
 
   /**
    * 获取拥有某角色的用户数
+   *
+   * TODO: 需要在 iam.authz 中添加此功能
    */
-  async getUserCount(roleId: string): Promise<number> {
-    const db = getDb()
-    const result = db.sql.query<{ count: number }>(`SELECT COUNT(*) as count FROM user_roles WHERE role_id = ?`, [roleId])
-    return result.success ? (result.data[0]?.count ?? 0) : 0
+  async getUserCount(_roleId: string): Promise<number> {
+    // 暂时返回 0，后续需要在 iam 模块中实现
+    return 0
   },
 }

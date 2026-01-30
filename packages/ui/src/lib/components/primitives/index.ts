@@ -7,9 +7,9 @@
  *
  * 包含：
  * - Button, IconButton - 按钮
- * - Input, Textarea, Select, Checkbox, Switch, Radio - 表单控件
+ * - Input, Textarea, Select, Checkbox, Switch, Radio, Range - 表单控件
  * - Badge, Avatar, Tag - 展示标签
- * - Spinner, Progress - 状态指示
+ * - Spinner, Progress, Rating - 状态指示
  * =============================================================================
  */
 
@@ -25,9 +25,11 @@ export { default as IconButton } from './IconButton.svelte'
 export { default as Input } from './Input.svelte'
 export { default as Progress } from './Progress.svelte'
 export { default as Radio } from './Radio.svelte'
+export { default as Range } from './Range.svelte'
+// 状态指示 / 评分
+export { default as Rating } from './Rating.svelte'
 
 export { default as Select } from './Select.svelte'
-// 状态指示
 export { default as Spinner } from './Spinner.svelte'
 export { default as Switch } from './Switch.svelte'
 

@@ -70,6 +70,7 @@ import { err } from '@hai/core'
 
 import { CacheConfigSchema, CacheErrorCode } from './cache-config.js'
 
+import { createMemoryProvider } from './provider/cache-provider-memory.js'
 import { createRedisProvider } from './provider/cache-provider-redis.js'
 
 // =============================================================================
@@ -95,6 +96,8 @@ let currentConfig: CacheConfig | null = null
  */
 function createProvider(config: CacheConfig): CacheProvider {
   switch (config.type) {
+    case 'memory':
+      return createMemoryProvider()
     case 'redis':
       return createRedisProvider()
     default:

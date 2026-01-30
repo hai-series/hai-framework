@@ -11,6 +11,7 @@
   import type { ChangePasswordFormProps, ChangePasswordFormData } from '../types.js'
   import { cn } from '../../../utils.js'
   import PasswordInput from './PasswordInput.svelte'
+  import { arePasswordsEqual } from './password-utils.js'
   
   let {
     loading = false,
@@ -35,7 +36,7 @@
     )
   )
   
-  const passwordsMatch = $derived(newPassword === confirmPassword)
+  const passwordsMatch = $derived(arePasswordsEqual(newPassword, confirmPassword))
   const canSubmit = $derived(
     (!requireOldPassword || oldPassword) &&
     newPassword &&
@@ -66,7 +67,8 @@
         <span class="label-text">当前密码</span>
       </label>
       <PasswordInput
-        bind:value={oldPassword}
+        value={oldPassword}
+        oninput={(e) => { oldPassword = e.currentTarget.value }}
         placeholder="请输入当前密码"
         {disabled}
         error={errors.oldPassword}
@@ -81,7 +83,8 @@
       <span class="label-text">新密码</span>
     </label>
     <PasswordInput
-      bind:value={newPassword}
+      value={newPassword}
+      oninput={(e) => { newPassword = e.currentTarget.value }}
       placeholder="请输入新密码"
       {disabled}
       error={errors.newPassword}
@@ -96,7 +99,8 @@
       <span class="label-text">确认新密码</span>
     </label>
     <PasswordInput
-      bind:value={confirmPassword}
+      value={confirmPassword}
+      oninput={(e) => { confirmPassword = e.currentTarget.value }}
       placeholder="请再次输入新密码"
       {disabled}
       error={errors.confirmPassword || (!passwordsMatch && confirmPassword ? '两次密码输入不一致' : '')}

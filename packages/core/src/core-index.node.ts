@@ -20,7 +20,7 @@
  * ```ts
  * import { core } from '@hai/core'
  * import type { Result, Logger } from '@hai/core'
- * import { AppConfigSchema, CommonErrorCode } from '@hai/core'
+ * import { CoreConfigSchema, CommonErrorCode } from '@hai/core'
  *
  * // 初始化
  * core.init({ silent: false })
@@ -46,3 +46,6 @@ export * from './core-main.node.js'
 
 // 类型定义（Result, Logger 等）
 export * from './core-types.js'
+
+// i18n 国际化
+export * from './i18n/index.js'
