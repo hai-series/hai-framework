@@ -7,6 +7,7 @@
  */
 
 import type { CsrfConfig, Middleware } from '../types.js'
+import { core } from '@hai/core'
 
 /**
  * 生成唯一 ID
@@ -67,7 +68,7 @@ export function csrfMiddleware(config: CsrfConfig = {}): Middleware {
     const headerToken = event.request.headers.get(headerName)
 
     if (!cookieToken || !headerToken || cookieToken !== headerToken) {
-      console.warn(JSON.stringify({ requestId, pathname, message: 'CSRF token validation failed' }))
+      core.logger.warn('CSRF token validation failed', { requestId, pathname })
 
       return new Response(
         JSON.stringify({

@@ -10,7 +10,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 // 这里测试 toast 的核心逻辑
 
 describe('toastState', () => {
-  let ToastState: any
   let toast: any
 
   beforeEach(async () => {

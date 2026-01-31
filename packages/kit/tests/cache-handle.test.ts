@@ -4,7 +4,7 @@
  * =============================================================================
  */
 
-import type { Handle, RequestEvent } from '@sveltejs/kit'
+import type { RequestEvent } from '@sveltejs/kit'
 import type { CacheHandleConfig } from '../src/modules/cache/cache-types.js'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createCacheHandle, createCacheUtils } from '../src/modules/cache/cache-handle.js'

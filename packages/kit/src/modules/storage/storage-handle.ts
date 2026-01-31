@@ -32,6 +32,7 @@
 
 import type { RequestEvent } from '@sveltejs/kit'
 import type { PresignResult, StorageEndpointConfig, StorageUploadResult } from './storage-types.js'
+import { Buffer } from 'node:buffer'
 import { getKitMessage } from '../../index.js'
 
 /**
@@ -134,7 +135,7 @@ export function createStorageEndpoint(config: StorageEndpointConfig) {
           headers: { 'Content-Type': 'application/json' },
         })
       }
-      catch (error) {
+      catch {
         return new Response(JSON.stringify({ error: getKitMessage('kit_presignUrlFailed') }), {
           status: 500,
           headers: { 'Content-Type': 'application/json' },
@@ -283,7 +284,7 @@ export function createStorageEndpoint(config: StorageEndpointConfig) {
         headers: { 'Content-Type': 'application/json' },
       })
     }
-    catch (error) {
+    catch {
       return new Response(JSON.stringify({ error: getKitMessage('kit_uploadFailed') }), {
         status: 500,
         headers: { 'Content-Type': 'application/json' },

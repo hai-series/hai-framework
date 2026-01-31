@@ -12,8 +12,8 @@
  * =============================================================================
  */
 
-// 场景组件类型
-export * from './types'
+// Crypto 场景组件
+export * from './crypto'
 
 // IAM 场景组件
 export * from './iam'
@@ -21,5 +21,5 @@ export * from './iam'
 // Storage 场景组件
 export * from './storage'
 
-// Crypto 场景组件
-export * from './crypto'
+// 场景组件类型
+export * from './types'

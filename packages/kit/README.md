@@ -165,10 +165,10 @@ export async function POST(event) {
 // src/hooks.server.ts
 import { setAllModulesLocale } from '@hai/kit'
 
-export const handle = async ({ event, resolve }) => {
+export async function handle({ event, resolve }) {
   // 从 cookie 或其他来源获取 locale
   const locale = event.cookies.get('PARAGLIDE_LOCALE') ?? 'zh-CN'
-  
+
   // 一次调用同步所有模块（IAM、DB、Cache 等）
   setAllModulesLocale(locale)
 

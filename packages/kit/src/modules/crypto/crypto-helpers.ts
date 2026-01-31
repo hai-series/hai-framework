@@ -39,6 +39,7 @@ import type {
   EncryptedCookieConfig,
   WebhookVerifyConfig,
 } from './crypto-types.js'
+import { Buffer } from 'node:buffer'
 import { getKitMessage } from '../../index.js'
 
 /**

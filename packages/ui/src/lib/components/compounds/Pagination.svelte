@@ -12,12 +12,8 @@
   import { cn, getSizeClass } from '../../utils.js'
   import Input from '../primitives/Input.svelte'
   
-  // 默认 i18n 文案
-  const defaultLabels = {
-    total: 'Total {count}',
-    jumpTo: 'Go to',
-    page: 'page',
-  }
+  import { m } from '../../messages.js'
+
   
   let {
     page = $bindable(1),
@@ -31,8 +27,7 @@
     onchange,
   }: PaginationProps = $props()
   
-  // 合并后的文案
-  const mergedLabels = $derived({ ...defaultLabels, ...labels })
+  // labels 优先，缺省回退到内置消息 m(...)
   
   // 计算总页数
   const totalPages = $derived(Math.ceil(total / pageSize))
@@ -107,8 +102,8 @@
 
 <div class="flex items-center gap-4">
   {#if showTotal}
-    <span class="text-sm text-base-content/70">
-      {mergedLabels.total.replace('{count}', String(total))}
+      <span class="text-sm text-base-content/70">
+      {(labels.total ?? m('pagination_total')).replace('{count}', String(total))}
     </span>
   {/if}
   
@@ -145,7 +140,7 @@
   
   {#if showJumper}
     <div class="flex items-center gap-2">
-      <span class="text-sm">{mergedLabels.jumpTo}</span>
+      <span class="text-sm">{labels.jumpTo ?? m('pagination_jump_to')}</span>
       <Input
         type="number"
         size="sm"
@@ -155,7 +150,7 @@
         bind:value={jumperValue}
         onkeydown={(e) => e.key === 'Enter' && handleJump()}
       />
-      <span class="text-sm">{mergedLabels.page}</span>
+      <span class="text-sm">{labels.page ?? m('pagination_page')}</span>
     </div>
   {/if}
 </div>

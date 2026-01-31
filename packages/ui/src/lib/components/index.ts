@@ -29,11 +29,11 @@
  * =============================================================================
  */
 
-// 原子组件
-export * from './primitives'
-
 // 组合组件
 export * from './compounds'
+
+// 原子组件
+export * from './primitives'
 
 // 场景组件
 export * from './scenes'

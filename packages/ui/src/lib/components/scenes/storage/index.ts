@@ -12,10 +12,10 @@
  * =============================================================================
  */
 
-// 文件上传
-export { default as FileUpload } from './FileUpload.svelte'
+export { default as AvatarUpload } from './AvatarUpload.svelte'
 export { default as FileList } from './FileList.svelte'
 
+// 文件上传
+export { default as FileUpload } from './FileUpload.svelte'
 // 图片上传
 export { default as ImageUpload } from './ImageUpload.svelte'
-export { default as AvatarUpload } from './AvatarUpload.svelte'

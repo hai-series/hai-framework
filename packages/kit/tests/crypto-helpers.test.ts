@@ -282,7 +282,7 @@ describe('createCsrfManager', () => {
 
     const resolve = vi.fn().mockResolvedValue(new Response('OK'))
 
-    const response = await handle({ event, resolve })
+    const _response = await handle({ event, resolve })
 
     expect(resolve).toHaveBeenCalled()
   })
