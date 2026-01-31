@@ -11,7 +11,7 @@ import type { Snippet } from 'svelte'
 /**
  * 基础变体类型
  */
-export type Variant = 'default' | 'primary' | 'secondary' | 'success' | 'warning' | 'error' | 'info'
+export type Variant = 'default' | 'primary' | 'secondary' | 'success' | 'warning' | 'error' | 'info' | 'ghost' | 'link' | 'outline'
 
 /**
  * 尺寸类型
@@ -78,10 +78,26 @@ export interface InputProps {
   validationMessage?: string
   /** 自定义类名 */
   class?: string
+  /** 元素 ID */
+  id?: string
+  /** 表单字段名 */
+  name?: string
+  /** 自动完成 */
+  autocomplete?: string
+  /** 输入模式验证（正则表达式） */
+  pattern?: string
+  /** 关联的 datalist id */
+  list?: string
+  /** 最小长度 */
+  minlength?: number
+  /** 最大长度 */
+  maxlength?: number
   /** 输入事件 */
   oninput?: (e: Event & { currentTarget: HTMLInputElement }) => void
   /** 变化事件 */
   onchange?: (e: Event & { currentTarget: HTMLInputElement }) => void
+  /** 失效事件（表单验证失败） */
+  oninvalid?: (e: Event & { currentTarget: HTMLInputElement }) => void
 }
 
 /**
@@ -110,6 +126,10 @@ export interface TextareaProps {
   validationMessage?: string
   /** 自定义类名 */
   class?: string
+  /** 元素 ID */
+  id?: string
+  /** 表单字段名 */
+  name?: string
   /** 输入事件 */
   oninput?: (e: Event & { currentTarget: HTMLTextAreaElement }) => void
 }
@@ -132,8 +152,8 @@ export interface SelectOption<T = string> {
 export interface SelectProps<T = string> {
   /** 值 */
   value?: T
-  /** 选项 */
-  options: SelectOption<T>[]
+  /** 选项（使用 options 或 children 二选一） */
+  options?: SelectOption<T>[]
   /** 占位符 */
   placeholder?: string
   /** 尺寸 */
@@ -148,8 +168,12 @@ export interface SelectProps<T = string> {
   validationMessage?: string
   /** 自定义类名 */
   class?: string
+  /** 元素 ID */
+  id?: string
   /** 变化事件 */
   onchange?: (value: T) => void
+  /** 子元素（原生 option 元素） */
+  children?: Snippet
 }
 
 /**
@@ -164,11 +188,13 @@ export interface CheckboxProps {
   size?: Size
   /** 是否禁用 */
   disabled?: boolean
+  /** 是否只读 */
+  readonly?: boolean
   /** 是否不确定状态 */
   indeterminate?: boolean
   /** 自定义类名 */
   class?: string
-  /** 变化事件 */
+  /** 变化事件 - 传递选中状态 */
   onchange?: (checked: boolean) => void
 }
 
@@ -527,10 +553,14 @@ export interface AvatarProps {
   alt?: string
   /** 名称（用于生成首字母） */
   name?: string
+  /** 占位文字（没有图片时显示） */
+  placeholder?: string
   /** 尺寸 */
   size?: Size | number
   /** 形状 */
   shape?: 'circle' | 'square'
+  /** 是否显示边框环 */
+  ring?: boolean
   /** 自定义类名 */
   class?: string
 }
@@ -787,6 +817,8 @@ export interface IconButtonProps {
   icon?: string
   /** 标签（无障碍） */
   label?: string
+  /** aria-label（无障碍标签，别名） */
+  ariaLabel?: string
   /** 提示文本 */
   tooltip?: string
   /** 变体 */

@@ -16,7 +16,6 @@ let deLocalizeUrl: ((url: URL) => URL) | null = null
 
 // 动态导入（仅当生成后可用）
 try {
-  // @ts-expect-error - 生成文件可能不存在
   const paraglideRuntime = await import('$lib/paraglide/runtime.js')
   deLocalizeUrl = paraglideRuntime.deLocalizeUrl
 }

@@ -12,17 +12,7 @@
   import { cn } from '../../../utils.js'
   import PasswordInput from './PasswordInput.svelte'
   import { arePasswordsEqual } from './password-utils.js'
-  
-  // 默认文案
-  const defaultLabels = {
-    oldPassword: 'Current Password',
-    newPassword: 'New Password',
-    confirmPassword: 'Confirm Password',
-    oldPasswordPlaceholder: 'Enter current password',
-    newPasswordPlaceholder: 'Enter new password',
-    confirmPasswordPlaceholder: 'Re-enter new password',
-    passwordMismatch: 'Passwords do not match',
-  }
+  import { m } from '../../../messages.js'
   
   let {
     loading = false,
@@ -30,15 +20,11 @@
     requireOldPassword = true,
     showPasswordStrength = true,
     minPasswordLength = 8,
-    submitText = 'Change Password',
-    labels = {},
+    submitText,
     class: className = '',
     errors = {},
     onsubmit,
   }: ChangePasswordFormProps = $props()
-  
-  // 合并文案
-  const mergedLabels = $derived({ ...defaultLabels, ...labels })
   
   let oldPassword = $state('')
   let newPassword = $state('')
@@ -79,12 +65,12 @@
   {#if requireOldPassword}
     <div class="form-control">
       <label class="label" for="old-password">
-        <span class="label-text">{mergedLabels.oldPassword}</span>
+        <span class="label-text">{m('change_password_old')}</span>
       </label>
       <PasswordInput
         value={oldPassword}
         oninput={(e) => { oldPassword = e.currentTarget.value }}
-        placeholder={mergedLabels.oldPasswordPlaceholder}
+        placeholder={m('change_password_old_placeholder')}
         {disabled}
         error={errors.oldPassword}
         showStrength={false}
@@ -95,12 +81,12 @@
   <!-- 新密码 -->
   <div class="form-control">
     <label class="label" for="new-password">
-      <span class="label-text">{mergedLabels.newPassword}</span>
+      <span class="label-text">{m('change_password_new')}</span>
     </label>
     <PasswordInput
       value={newPassword}
       oninput={(e) => { newPassword = e.currentTarget.value }}
-      placeholder={mergedLabels.newPasswordPlaceholder}
+      placeholder={m('change_password_new_placeholder')}
       {disabled}
       error={errors.newPassword}
       showStrength={showPasswordStrength}
@@ -111,14 +97,14 @@
   <!-- 确认新密码 -->
   <div class="form-control">
     <label class="label" for="confirm-password">
-      <span class="label-text">{mergedLabels.confirmPassword}</span>
+      <span class="label-text">{m('change_password_confirm')}</span>
     </label>
     <PasswordInput
       value={confirmPassword}
       oninput={(e) => { confirmPassword = e.currentTarget.value }}
-      placeholder={mergedLabels.confirmPasswordPlaceholder}
+      placeholder={m('change_password_confirm_placeholder')}
       {disabled}
-      error={errors.confirmPassword || (!passwordsMatch && confirmPassword ? mergedLabels.passwordMismatch : '')}
+      error={errors.confirmPassword || (!passwordsMatch && confirmPassword ? m('change_password_mismatch') : '')}
       showStrength={false}
     />
   </div>
@@ -142,6 +128,6 @@
     {#if loading}
       <span class="loading loading-spinner loading-sm"></span>
     {/if}
-    {submitText}
+    {submitText || m('change_password_submit')}
   </button>
 </form>

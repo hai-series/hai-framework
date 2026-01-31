@@ -26,7 +26,6 @@ let paraglideMiddleware: ((request: Request, callback: (args: { request: Request
 
 // 动态导入 paraglide middleware（仅当生成后可用）
 try {
-  // @ts-expect-error - 生成文件可能不存在
   const paraglideServer = await import('$lib/paraglide/server.js')
   paraglideMiddleware = paraglideServer.paraglideMiddleware
 }

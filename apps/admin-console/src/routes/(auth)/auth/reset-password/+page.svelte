@@ -60,8 +60,6 @@
   <title>{m.auth_reset_password_title()} - Admin Console</title>
 </svelte:head>
 
-<h2 class="text-2xl font-semibold text-center mb-4">{m.auth_reset_password_title()}</h2>
-
 {#if success}
   <Result
     status="success"
@@ -83,42 +81,16 @@
     {/snippet}
   </Result>
 {:else}
-  <p class="text-center text-base-content/60 text-sm mb-6">
-    {m.auth_reset_password_desc()}
-  </p>
-
   <ResetPasswordForm
     {loading}
     {errors}
+    showTitle
+    showDescription
+    showBackLink
     showCode={false}
     showPasswordStrength={true}
     minPasswordLength={8}
-    labels={{
-      newPasswordLabel: m.auth_reset_password_new(),
-      newPasswordPlaceholder: m.auth_reset_password_new_placeholder(),
-      confirmPasswordLabel: m.auth_reset_password_confirm(),
-      confirmPasswordPlaceholder: m.auth_reset_password_confirm_placeholder(),
-    }}
-    strengthLabels={{
-      weak: m.auth_password_weak(),
-      medium: m.auth_password_medium(),
-      strong: m.auth_password_strong(),
-      veryStrong: m.auth_password_very_strong(),
-      label: m.auth_password_strength(),
-    }}
-    toggleLabels={{
-      showPassword: m.auth_show_password(),
-      hidePassword: m.auth_hide_password(),
-    }}
-    validationMessages={{
-      required: m.validation_required(),
-      passwordMismatch: m.auth_password_mismatch(),
-    }}
-    submitText={m.auth_reset_password_submit()}
+    loginUrl="/auth/login"
     onsubmit={handleResetPassword}
   />
-
-  <div class="text-center mt-4 text-sm">
-    <a href="/auth/login" class="link link-primary">← {m.auth_forgot_password_back()}</a>
-  </div>
 {/if}

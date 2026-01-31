@@ -72,7 +72,7 @@ export * from './db-main.js'
 export * from './db-types.js'
 
 // i18n
-export type DbMessageKey = keyof typeof messagesZhCN
+type DbMessageKey = keyof typeof messagesZhCN
 export const { getMessage: getDbMessage, setDefaultLocale: setDbDefaultLocale }
   = core.i18n.createMessageGetter<DbMessageKey>({ 'zh-CN': messagesZhCN, 'en-US': messagesEnUS })
 

@@ -3,6 +3,8 @@
   "compilerOptions": {
     "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
+    "allowJs": true,
+    "checkJs": false,
     "strict": true,
     "verbatimModuleSyntax": true
   },

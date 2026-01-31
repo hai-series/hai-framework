@@ -43,8 +43,6 @@
   <title>{m.auth_forgot_password_title()} - Admin Console</title>
 </svelte:head>
 
-<h2 class="text-2xl font-semibold text-center mb-4">{m.auth_forgot_password_title()}</h2>
-
 {#if success}
   <Result
     status="success"
@@ -56,31 +54,14 @@
     {/snippet}
   </Result>
 {:else}
-  <p class="text-center text-base-content/60 text-sm mb-6">
-    {m.auth_forgot_password_desc()}
-  </p>
-
   <ForgotPasswordForm
     {loading}
     {errors}
+    showTitle
+    showDescription
+    showBackLink
     mode="email"
-    labels={{
-      email: m.auth_email(),
-    }}
-    placeholders={{
-      email: m.auth_email(),
-    }}
-    submitText={m.auth_forgot_password_submit()}
-    validationMessages={{
-      required: m.validation_required(),
-      email: m.validation_email(),
-    }}
+    loginUrl="/auth/login"
     onsubmit={handleForgotPassword}
-  >
-    {#snippet footer()}
-      <div class="text-center mt-4 text-sm">
-        <a href="/auth/login" class="link link-primary">← {m.auth_forgot_password_back()}</a>
-      </div>
-    {/snippet}
-  </ForgotPasswordForm>
+  />
 {/if}

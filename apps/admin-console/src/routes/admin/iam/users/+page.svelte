@@ -5,7 +5,7 @@
 -->
 <script lang="ts">
   import type { PageData } from './$types'
-  import { Card, Avatar, Badge, Button, Modal, PasswordInput } from '@hai/ui'
+  import { Card, Avatar, Badge, Button, Modal, PasswordInput, Input, IconButton, Select, Checkbox } from '@hai/ui'
   import * as m from '$lib/paraglide/messages'
 
   // 定义本地类型（与 page.server.ts 中的 UserData 一致）
@@ -220,13 +220,13 @@
     <div class="p-4">
       <div class="flex flex-col sm:flex-row gap-4">
         <div class="flex-1 relative">
-          <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-base-content/40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-base-content/40 z-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
           </svg>
-          <input
+          <Input
             type="text"
             placeholder={m.iam_users_search_placeholder()}
-            class="w-full pl-10 pr-4 py-2 border border-base-content/20 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent bg-base-100"
+            class="pl-10"
             bind:value={searchQuery}
           />
         </div>
@@ -286,26 +286,23 @@
               </td>
               <td class="px-6 py-4 text-right">
                 <div class="flex justify-end gap-2">
-                  <button
-                    type="button"
-                    class="p-2 text-base-content/40 hover:text-primary hover:bg-primary/10 rounded-lg transition-colors"
+                  <IconButton
+                    variant="ghost"
+                    size="sm"
                     onclick={() => openEditDialog(user)}
-                    title={m.action_edit()}
+                    ariaLabel={m.action_edit()}
                   >
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                    </svg>
-                  </button>
-                  <button
-                    type="button"
-                    class="p-2 text-base-content/40 hover:text-error hover:bg-error/10 rounded-lg transition-colors"
+                    <span class="iconify tabler--edit size-4"></span>
+                  </IconButton>
+                  <IconButton
+                    variant="ghost"
+                    size="sm"
                     onclick={() => handleDelete(user)}
-                    title={m.action_delete()}
+                    ariaLabel={m.action_delete()}
+                    class="hover:text-error"
                   >
-                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                    </svg>
-                  </button>
+                    <span class="iconify tabler--trash size-4"></span>
+                  </IconButton>
                 </div>
               </td>
             </tr>
@@ -349,10 +346,9 @@
           <label class="block text-sm font-medium text-base-content mb-1" for="username">
             {m.iam_users_form_username()} <span class="text-error">*</span>
           </label>
-          <input
+          <Input
             type="text"
             id="username"
-            class="w-full px-3 py-2 border border-base-content/20 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent disabled:bg-base-200 disabled:text-base-content/50 bg-base-100"
             bind:value={form.username}
             required
             disabled={submitting}
@@ -365,10 +361,9 @@
           <label class="block text-sm font-medium text-base-content mb-1" for="email">
             {m.iam_users_form_email()} <span class="text-error">*</span>
           </label>
-          <input
+          <Input
             type="email"
             id="email"
-            class="w-full px-3 py-2 border border-base-content/20 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent disabled:bg-base-200 disabled:text-base-content/50 bg-base-100"
             bind:value={form.email}
             required
             disabled={submitting}
@@ -381,10 +376,9 @@
         <label class="block text-sm font-medium text-base-content mb-1" for="display_name">
           {m.iam_users_form_display_name()}
         </label>
-        <input
+        <Input
           type="text"
           id="display_name"
-          class="w-full px-3 py-2 border border-base-content/20 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent disabled:bg-base-200 disabled:text-base-content/50 bg-base-100"
           bind:value={form.display_name}
           disabled={submitting}
           placeholder="用户的显示名称（可选）"
@@ -405,15 +399,6 @@
             minLength={8}
             showStrength={!editingUser}
             size="sm"
-            labels={{
-              showPassword: m.auth_show_password(),
-              hidePassword: m.auth_hide_password(),
-              strengthLabel: m.auth_password_strength(),
-              strengthWeak: m.auth_password_weak(),
-              strengthFair: m.auth_password_medium(),
-              strengthGood: m.auth_password_strong(),
-              strengthStrong: m.auth_password_very_strong(),
-            }}
           />
         </div>
 
@@ -428,10 +413,6 @@
               required={!editingUser || form.password !== ''}
               disabled={submitting}
               size="sm"
-              labels={{
-                showPassword: m.auth_show_password(),
-                hidePassword: m.auth_hide_password(),
-              }}
             />
           </div>
         {/if}
@@ -442,16 +423,15 @@
         <label class="block text-sm font-medium text-base-content mb-1" for="status">
           {m.iam_users_col_status()}
         </label>
-        <select 
+        <Select 
           id="status" 
-          class="w-full px-3 py-2 border border-base-content/20 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent disabled:bg-base-200 disabled:text-base-content/50 bg-base-100"
           bind:value={form.status} 
           disabled={submitting}
         >
           <option value="active">{m.iam_users_status_active()}</option>
           <option value="inactive">{m.iam_users_status_inactive()}</option>
           <option value="suspended">{m.iam_users_status_disabled()}</option>
-        </select>
+        </Select>
       </div>
 
       <!-- 角色 -->
@@ -462,12 +442,11 @@
         <div class="flex flex-wrap gap-3 p-3 bg-base-200 rounded-lg border border-base-content/10">
           {#each data.roles as role}
             <label class="inline-flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                class="w-4 h-4 text-primary border-base-content/20 rounded focus:ring-primary"
+              <Checkbox
+                size="sm"
                 checked={form.roles.includes(role.name)}
-                onchange={(e) => {
-                  if (e.currentTarget.checked) {
+                onchange={(checked) => {
+                  if (checked) {
                     form.roles = [...form.roles, role.name]
                   } else {
                     form.roles = form.roles.filter((r) => r !== role.name)

@@ -6,26 +6,51 @@
   
   使用 Svelte 5 Runes ($props, $state, $derived)
   图标内嵌在输入框右侧，带分隔线
-  支持自定义验证消息（validationMessage）实现 i18n
+  内置多语言支持，自动跟随全局 locale
   =============================================================================
 -->
 <script lang="ts">
-  import type { PasswordInputProps } from '../types.js'
-  import { cn, getInputSizeClass } from '../../../utils.js'
+  import type { Size } from '../../../types.js'
+  import { cn } from '../../../utils.js'
+  import Progress from '../../primitives/Progress.svelte'
+  import { m } from '../../../messages.js'
   
-  const defaultLabels = {
-    showPassword: 'Show password',
-    hidePassword: 'Hide password',
-    strengthLabel: 'Password strength:',
-    strengthWeak: 'Weak',
-    strengthFair: 'Fair',
-    strengthGood: 'Good',
-    strengthStrong: 'Strong',
+  interface Props {
+    /** 值 */
+    value?: string
+    /** 占位符 */
+    placeholder?: string
+    /** 尺寸 */
+    size?: Size
+    /** 是否禁用 */
+    disabled?: boolean
+    /** 是否只读 */
+    readonly?: boolean
+    /** 是否必填 */
+    required?: boolean
+    /** 错误消息 */
+    error?: string
+    /** 是否显示切换按钮 */
+    showToggle?: boolean
+    /** 是否显示密码强度 */
+    showStrength?: boolean
+    /** 最小长度 */
+    minLength?: number
+    /** 自定义类名 */
+    class?: string
+    /** 输入框引用 */
+    inputRef?: HTMLInputElement
+    /** 输入事件 */
+    oninput?: (e: Event & { currentTarget: HTMLInputElement }) => void
+    /** 变化事件 */
+    onchange?: (e: Event & { currentTarget: HTMLInputElement }) => void
+    /** 无效事件 */
+    oninvalid?: (e: Event & { currentTarget: HTMLInputElement }) => void
   }
   
   let {
     value = $bindable(''),
-    placeholder = 'Enter password',
+    placeholder = '',
     size = 'md',
     disabled = false,
     readonly = false,
@@ -34,18 +59,12 @@
     showToggle = true,
     showStrength = false,
     minLength = 8,
-    labels = {},
     class: className = '',
     inputRef = $bindable<HTMLInputElement | undefined>(),
     oninput,
     onchange,
     oninvalid,
-  }: PasswordInputProps & {
-    inputRef?: HTMLInputElement
-    oninvalid?: (e: Event & { currentTarget: HTMLInputElement }) => void
-  } = $props()
-  
-  const mergedLabels = $derived({ ...defaultLabels, ...labels })
+  }: Props = $props()
   
   let showPassword = $state(false)
   
@@ -82,10 +101,10 @@
     if (/[^a-zA-Z0-9]/.test(value)) score += 1
     
     // 返回强度等级
-    if (score <= 2) return { score: 1, label: mergedLabels.strengthWeak, color: 'bg-error' }
-    if (score <= 4) return { score: 2, label: mergedLabels.strengthFair, color: 'bg-warning' }
-    if (score <= 5) return { score: 3, label: mergedLabels.strengthGood, color: 'bg-success' }
-    return { score: 4, label: mergedLabels.strengthStrong, color: 'bg-primary' }
+    if (score <= 2) return { score: 1, label: m('password_strength_weak'), color: 'bg-error' }
+    if (score <= 4) return { score: 2, label: m('password_strength_fair'), color: 'bg-warning' }
+    if (score <= 5) return { score: 3, label: m('password_strength_good'), color: 'bg-success' }
+    return { score: 4, label: m('password_strength_strong'), color: 'bg-primary' }
   })
   
   function handleInput(e: Event & { currentTarget: HTMLInputElement }) {
@@ -132,22 +151,22 @@
       <!-- 切换按钮 -->
       <button
         type="button"
-        class="flex items-center justify-center w-12 h-full text-base-content/50 hover:text-base-content transition-colors"
+        class="flex items-center justify-center w-10 h-full text-base-content/50 hover:text-base-content transition-colors"
         onclick={togglePassword}
         tabindex="-1"
         {disabled}
-        aria-label={showPassword ? mergedLabels.hidePassword : mergedLabels.showPassword}
+        aria-label={showPassword ? m('password_hide') : m('password_show')}
       >
         {#if showPassword}
           <!-- 眼睛斜杠图标 - 隐藏密码 -->
-          <svg xmlns="http://www.w3.org/2000/svg" class={iconSize} fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M3.98 8.223A10.477 10.477 0 001.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.45 10.45 0 0112 4.5c4.756 0 8.773 3.162 10.065 7.498a10.523 10.523 0 01-4.293 5.774M6.228 6.228L3 3m3.228 3.228l3.65 3.65m7.894 7.894L21 21m-3.228-3.228l-3.65-3.65m0 0a3 3 0 10-4.243-4.243m4.242 4.242L9.88 9.88" />
+          <svg xmlns="http://www.w3.org/2000/svg" class={iconSize} fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M3.98 8.223A10.477 10.477 0 0 0 1.934 12C3.226 16.338 7.244 19.5 12 19.5c.993 0 1.953-.138 2.863-.395M6.228 6.228A10.451 10.451 0 0 1 12 4.5c4.756 0 8.773 3.162 10.065 7.498a10.522 10.522 0 0 1-4.293 5.774M6.228 6.228 3 3m3.228 3.228 3.65 3.65m7.894 7.894L21 21m-3.228-3.228-3.65-3.65m0 0a3 3 0 1 0-4.243-4.243m4.242 4.242L9.88 9.88" />
           </svg>
         {:else}
           <!-- 眼睛图标 - 显示密码 -->
-          <svg xmlns="http://www.w3.org/2000/svg" class={iconSize} fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
-            <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+          <svg xmlns="http://www.w3.org/2000/svg" class={iconSize} fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="1.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M2.036 12.322a1.012 1.012 0 0 1 0-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178Z" />
+            <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
           </svg>
         {/if}
       </button>
@@ -156,18 +175,14 @@
   
   {#if showStrength && value}
     <div class="mt-2">
-      <div class="flex gap-1 mb-1">
-        {#each [1, 2, 3, 4] as level}
-          <div
-            class={cn(
-              'h-1 flex-1 rounded-full',
-              level <= strength.score ? strength.color : 'bg-base-300'
-            )}
-          ></div>
-        {/each}
-      </div>
-      <span class="text-xs text-base-content/60">
-        {mergedLabels.strengthLabel} {strength.label}
+      <Progress 
+        value={strength.score} 
+        max={4} 
+        size="xs" 
+        variant={strength.score <= 1 ? 'error' : strength.score <= 2 ? 'warning' : strength.score <= 3 ? 'success' : 'primary'}
+      />
+      <span class="text-xs text-base-content/60 mt-1 block">
+        {m('password_strength_label')} {strength.label}
       </span>
     </div>
   {/if}

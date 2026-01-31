@@ -91,6 +91,14 @@
 - 所有用户可见字符串必须使用 i18n key（UI 文案、Toast、Alert、标题、按钮、校验提示等）。
 - ❌ 禁止直接修改 `src/lib/paraglide` 生成文件。
 
+### @hai/ui 组件 i18n 规则
+
+- **组件内置翻译**：`@hai/ui` 场景组件（`scenes/`）内置中英文翻译，自动响应全局 locale。
+- **应用层只管页面级文本**：标题、错误提示、导航链接等由应用层 i18n 处理。
+- **不要为 UI 组件传入翻译 props**：组件内部文本由 `@hai/ui` 统一管理。
+- **可选覆盖**：通过 `submitText` 等 props 覆盖特定文本（如需要自定义按钮文字）。
+- 翻译文件位于 `packages/ui/src/lib/messages/{zh-CN,en-US}.json`。
+
 ### 环境变量与密钥
 
 - ❌ 禁止硬编码 API Key / 密钥。

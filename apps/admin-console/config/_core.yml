@@ -12,8 +12,7 @@ version: 0.1.0
 env: ${HAI_ENV:development}
 debug: false
 
-# 时区与语言
-timezone: Asia/Shanghai
+# 语言设置
 defaultLocale: zh-CN
 supportedLocales:
   - zh-CN

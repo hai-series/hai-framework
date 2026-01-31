@@ -10,14 +10,7 @@
 <script lang="ts">
   import type { AvatarUploadProps } from '../types.js'
   import { cn } from '../../../utils.js'
-  
-  const defaultLabels = {
-    avatarAlt: 'Avatar',
-    sizeExceeded: 'Image size exceeds limit (max',
-    invalidType: 'Please select an image file',
-    getUploadUrlFailed: 'Failed to get upload URL',
-    uploadFailed: 'Upload failed',
-  }
+  import { m } from '../../../messages.js'
   
   let {
     value = $bindable(''),
@@ -29,13 +22,10 @@
     presignUrl = '',
     headers = {},
     fallback = '',
-    labels = {},
     class: className = '',
     onchange,
     onerror,
   }: AvatarUploadProps = $props()
-  
-  const mergedLabels = $derived({ ...defaultLabels, ...labels })
   
   let loading = $state(false)
   let inputElement: HTMLInputElement
@@ -70,11 +60,11 @@
   // 验证文件
   function validateFile(file: File): string | null {
     if (file.size > maxSize) {
-      return `${mergedLabels.sizeExceeded} ${formatSize(maxSize)}）`
+      return `${m('avatar_upload_size_exceeded')} ${formatSize(maxSize)}）`
     }
     
     if (!file.type.startsWith('image/')) {
-      return mergedLabels.invalidType
+      return m('avatar_upload_invalid_type')
     }
     
     return null
@@ -110,7 +100,7 @@
         })
         
         if (!presignResponse.ok) {
-          throw new Error(mergedLabels.getUploadUrlFailed)
+          throw new Error(m('avatar_upload_get_url_failed'))
         }
         
         const data = await presignResponse.json()
@@ -128,7 +118,7 @@
       })
       
       if (!response.ok) {
-        throw new Error(mergedLabels.uploadFailed)
+        throw new Error(m('avatar_upload_failed'))
       }
       
       // 获取最终 URL
@@ -146,7 +136,7 @@
       value = finalUrl
       onchange?.(finalUrl)
     } catch (error) {
-      const message = error instanceof Error ? error.message : mergedLabels.uploadFailed
+      const message = error instanceof Error ? error.message : m('avatar_upload_failed')
       onerror?.(message)
     } finally {
       loading = false
@@ -194,7 +184,7 @@
     {#if value}
       <img
         src={value}
-        alt={mergedLabels.avatarAlt}
+        alt={m('avatar_upload_alt')}
         class="w-full h-full object-cover"
       />
     {:else}

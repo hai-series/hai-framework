@@ -286,6 +286,66 @@ export default {
 }
 ```
 
+## 国际化 (i18n)
+
+@hai/ui 采用**组件内置翻译**模式：
+
+- 场景组件（`scenes/`）内置中英文翻译，开箱即用
+- 组件自动响应全局 locale 变化
+- 翻译文件位于 `packages/ui/messages/{zh-CN,en-US}.json`
+
+```svelte
+<script>
+  import { LoginForm } from '@hai/ui'
+</script>
+
+<!-- 无需传入翻译 props，组件自动使用当前 locale -->
+<LoginForm onsubmit={handleLogin} />
+```
+
+应用层只需处理**页面级文本**（标题、错误提示、导航链接等），组件内部文本由 @hai/ui 统一管理。
+
+### createLocaleStore
+
+用于客户端 locale 状态管理，会自动同步到 `@hai/core` 的全局 locale 管理器：
+
+```svelte
+<script>
+  import { createLocaleStore } from '@hai/ui'
+  import { setLocale } from '$lib/paraglide/runtime'
+
+  const localeStore = createLocaleStore()
+</script>
+
+<select
+  value={localeStore.current}
+  onchange={(e) => {
+    localeStore.set(e.currentTarget.value)
+    setLocale(e.currentTarget.value)
+  }}
+>
+  {#each localeStore.supported as l}
+    <option value={l.code}>{l.label}</option>
+  {/each}
+</select>
+```
+
+### 导出的 i18n 工具
+
+```ts
+import {
+  createLocaleStore,    // Svelte 响应式 locale store
+  setGlobalLocale,      // 设置全局 locale（同步所有模块）
+  getGlobalLocale,      // 获取当前全局 locale
+  detectBrowserLocale,  // 检测浏览器语言
+  resolveLocale,        // 解析 locale（支持回退）
+  isLocaleSupported,    // 检查 locale 是否支持
+  interpolate,          // 字符串插值
+  DEFAULT_LOCALE,       // 默认 locale ('zh-CN')
+  DEFAULT_LOCALES,      // 支持的 locale 列表
+} from '@hai/ui'
+```
+
 ## 图标
 
 组件使用 Iconify (Tabler Icons)，需要安装：

@@ -92,7 +92,7 @@ export * from './ai-tools.js'
 export * from './ai-types.js'
 
 // i18n
-export type AiMessageKey = keyof typeof messagesZhCN
+type AiMessageKey = keyof typeof messagesZhCN
 export const { getMessage: getAiMessage, setDefaultLocale: setAiDefaultLocale }
   = core.i18n.createMessageGetter<AiMessageKey>({ 'zh-CN': messagesZhCN, 'en-US': messagesEnUS })
 

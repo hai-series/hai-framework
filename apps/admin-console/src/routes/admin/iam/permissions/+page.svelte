@@ -4,7 +4,7 @@
   =============================================================================
 -->
 <script lang="ts">
-  import { Card, Button, Modal, Badge, IconButton } from '@hai/ui'
+  import { Card, Button, Modal, Badge, IconButton, Input, Textarea } from '@hai/ui'
   import * as m from '$lib/paraglide/messages'
   import type { PageData } from './$types'
 
@@ -236,10 +236,9 @@
         <label class="label" for="resource">
           <span class="label-text">{m.iam_permissions_form_resource()} <span class="text-error">*</span></span>
         </label>
-        <input
+        <Input
           type="text"
           id="resource"
-          class="input input-bordered"
           bind:value={form.resource}
           oninput={updatePermissionName}
           required
@@ -258,10 +257,9 @@
         <label class="label" for="action">
           <span class="label-text">{m.iam_permissions_form_action()} <span class="text-error">*</span></span>
         </label>
-        <input
+        <Input
           type="text"
           id="action"
-          class="input input-bordered"
           bind:value={form.action}
           oninput={updatePermissionName}
           required
@@ -281,10 +279,10 @@
       <label class="label" for="name">
         <span class="label-text">{m.iam_permissions_form_name()} <span class="text-error">*</span></span>
       </label>
-      <input
+      <Input
         type="text"
         id="name"
-        class="input input-bordered font-mono"
+        class="font-mono"
         bind:value={form.name}
         required
         disabled={submitting}
@@ -296,14 +294,13 @@
       <label class="label" for="description">
         <span class="label-text">{m.iam_permissions_form_description()}</span>
       </label>
-      <textarea
+      <Textarea
         id="description"
-        class="textarea textarea-bordered"
         bind:value={form.description}
         disabled={submitting}
         placeholder={m.iam_permissions_form_description_placeholder()}
         rows={2}
-      ></textarea>
+      />
     </div>
 
     <div class="modal-action">

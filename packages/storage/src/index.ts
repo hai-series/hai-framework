@@ -67,7 +67,7 @@ export * from './storage-main.js'
 export * from './storage-types.js'
 
 // i18n
-export type StorageMessageKey = keyof typeof messagesZhCN
+type StorageMessageKey = keyof typeof messagesZhCN
 export const { getMessage: getStorageMessage, setDefaultLocale: setStorageDefaultLocale }
   = core.i18n.createMessageGetter<StorageMessageKey>({ 'zh-CN': messagesZhCN, 'en-US': messagesEnUS })
 

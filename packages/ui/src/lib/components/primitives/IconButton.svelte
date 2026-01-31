@@ -14,6 +14,7 @@
   let {
     icon,
     label = '',
+    ariaLabel = '',
     tooltip = '',
     variant = 'default',
     size = 'md',
@@ -23,6 +24,9 @@
     onclick,
     children,
   }: IconButtonProps = $props()
+  
+  /** 计算最终的 aria-label */
+  const computedAriaLabel = $derived(ariaLabel || label || tooltip)
   
   const buttonClass = $derived(
     cn(
@@ -57,7 +61,7 @@
       type="button"
       class={buttonClass}
       {disabled}
-      aria-label={label || tooltip}
+      aria-label={computedAriaLabel}
       onclick={handleClick}
     >
       {#if loading}
@@ -76,7 +80,7 @@
     type="button"
     class={buttonClass}
     {disabled}
-    aria-label={label}
+    aria-label={computedAriaLabel}
     onclick={handleClick}
   >
     {#if loading}

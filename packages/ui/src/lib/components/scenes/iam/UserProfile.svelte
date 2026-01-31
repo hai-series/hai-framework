@@ -5,38 +5,29 @@
   用户个人信息展示/编辑组件
   
   使用 Svelte 5 Runes ($props, $state, $derived)
+  使用 primitives/compounds 组件：Input, Button, Textarea, Avatar, Alert
   =============================================================================
 -->
 <script lang="ts">
   import type { UserProfileProps, UserProfileField } from '../types.js'
   import { cn } from '../../../utils.js'
-  
-  const defaultLabels = {
-    avatar: 'Avatar',
-    username: 'Username',
-    email: 'Email',
-    nickname: 'Nickname',
-    phone: 'Phone',
-    bio: 'Bio',
-    avatarHint: 'JPG, PNG supported, max 2MB',
-    save: 'Save',
-    cancel: 'Cancel',
-    editProfile: 'Edit Profile',
-  }
+  import Input from '../../primitives/Input.svelte'
+  import Button from '../../primitives/Button.svelte'
+  import Textarea from '../../primitives/Textarea.svelte'
+  import Avatar from '../../primitives/Avatar.svelte'
+  import Alert from '../../compounds/Alert.svelte'
+  import { m } from '../../../messages.js'
   
   let {
     user,
     editable = false,
     loading = false,
     fields = ['avatar', 'username', 'email', 'nickname', 'phone'],
-    labels = {},
     class: className = '',
     errors = {},
     onsubmit,
     onavatarchange,
   }: UserProfileProps = $props()
-  
-  const mergedLabels = $derived({ ...defaultLabels, ...labels })
   
   let editMode = $state(false)
   let formData = $state<Record<string, string>>({})
@@ -61,9 +52,17 @@
     )
   )
   
-  // 通过 mergedLabels 获取字段标签
+  // 获取字段标签
   function getFieldLabel(field: UserProfileField): string {
-    return mergedLabels[field] || field
+    const labelMap: Record<UserProfileField, () => string> = {
+      avatar: () => m('user_profile_avatar'),
+      username: () => m('user_profile_username'),
+      email: () => m('user_profile_email'),
+      nickname: () => m('user_profile_nickname'),
+      phone: () => m('user_profile_phone'),
+      bio: () => m('user_profile_bio'),
+    }
+    return labelMap[field]?.() || field
   }
   
   function startEdit() {
@@ -107,17 +106,13 @@
         {#if field === 'avatar'}
           <!-- 头像 -->
           <div class="flex items-center gap-4">
-            <div class="avatar">
-              <div class="w-20 rounded-full ring ring-primary ring-offset-base-100 ring-offset-2">
-                {#if user?.avatar}
-                  <img src={user.avatar} alt={mergedLabels.avatar} />
-                {:else}
-                  <div class="bg-neutral text-neutral-content flex items-center justify-center text-2xl">
-                    {user?.username?.charAt(0).toUpperCase() || 'U'}
-                  </div>
-                {/if}
-              </div>
-            </div>
+            <Avatar
+              src={user?.avatar}
+              alt={m('user_profile_avatar')}
+              size="lg"
+              ring
+              placeholder={user?.username?.charAt(0).toUpperCase() || 'U'}
+            />
             {#if editable && editMode}
               <div>
                 <input
@@ -126,7 +121,7 @@
                   class="file-input file-input-bordered file-input-sm w-full max-w-xs"
                   onchange={handleAvatarChange}
                 />
-                <p class="text-xs text-base-content/60 mt-1">{mergedLabels.avatarHint}</p>
+                <p class="text-xs text-base-content/60 mt-1">{m('user_profile_avatar_hint')}</p>
               </div>
             {/if}
           </div>
@@ -138,26 +133,21 @@
             </div>
             {#if editMode && field !== 'username'}
               {#if field === 'bio'}
-                <textarea
+                <Textarea
                   name={field}
-                  class={cn('textarea textarea-bordered', errors[field] && 'textarea-error')}
                   rows={3}
                   bind:value={formData[field]}
                   disabled={loading}
-                ></textarea>
+                  error={errors[field]}
+                />
               {:else}
-                <input
+                <Input
                   type={field === 'email' ? 'email' : field === 'phone' ? 'tel' : 'text'}
                   name={field}
-                  class={cn('input input-bordered', errors[field] && 'input-error')}
                   bind:value={formData[field]}
                   disabled={loading}
+                  error={errors[field]}
                 />
-              {/if}
-              {#if errors[field]}
-                <div class="label">
-                  <span class="label-text-alt text-error">{errors[field]}</span>
-                </div>
               {/if}
             {:else}
               <p class="py-2 px-1 text-base-content">
@@ -170,50 +160,42 @@
       
       <!-- 通用错误 -->
       {#if errors.general}
-        <div class="alert alert-error">
-          <span>{errors.general}</span>
-        </div>
+        <Alert variant="error">
+          {errors.general}
+        </Alert>
       {/if}
       
       <!-- 操作按钮 -->
       {#if editable}
         <div class="flex gap-2 pt-4">
           {#if editMode}
-            <button
+            <Button
               type="submit"
-              class="btn btn-primary"
+              variant="primary"
+              {loading}
               disabled={loading}
             >
-              {#if loading}
-                <span class="loading loading-spinner loading-sm"></span>
-              {/if}
-              {mergedLabels.save}
-            </button>
-            <button
+              {m('user_profile_save')}
+            </Button>
+            <Button
               type="button"
-              class="btn btn-ghost"
+              variant="ghost"
               onclick={cancelEdit}
               disabled={loading}
             >
-              {mergedLabels.cancel}
-            </button>
+              {m('user_profile_cancel')}
+            </Button>
           {:else}
-            <button
+            <Button
               type="button"
-              class="btn btn-outline"
+              variant="outline"
               onclick={startEdit}
             >
-              {mergedLabels.editProfile}
-            </button>
+              {m('user_profile_edit')}
+            </Button>
           {/if}
         </div>
       {/if}
     </div>
   </form>
 </div>
-
-<style>
-  .avatar > div {
-    @apply flex items-center justify-center;
-  }
-</style>

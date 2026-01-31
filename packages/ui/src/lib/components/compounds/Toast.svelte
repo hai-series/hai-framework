@@ -2,6 +2,7 @@
   @component Toast
   全局通知组件，在页面右上角显示通知消息。
   支持四种通知类型：success（成功）、error（错误）、warning（警告）、info（信息）。
+  使用 primitives 组件：IconButton
 
   @prop {ToastMessage[]} messages - 通知消息数组
   @prop {function} ondismiss - 关闭通知的回调
@@ -13,6 +14,8 @@
   />
 -->
 <script lang='ts'>
+  import IconButton from '../primitives/IconButton.svelte'
+  
   interface ToastMessage {
     id: string
     type: 'success' | 'error' | 'warning' | 'info'
@@ -50,14 +53,16 @@
         <span class='{typeStyles[notification.type].icon} size-5'></span>
         <span class='flex-1'>{notification.message}</span>
         {#if ondismiss}
-          <button
-            type='button'
-            class='btn btn-ghost btn-xs btn-circle'
+          <IconButton 
+            size="xs" 
+            variant="ghost" 
+            label={closeLabel}
             onclick={() => ondismiss?.(notification.id)}
-            aria-label={closeLabel}
           >
-            <span class='icon-[tabler--x] size-4'></span>
-          </button>
+            {#snippet children()}
+              <span class='icon-[tabler--x] size-4'></span>
+            {/snippet}
+          </IconButton>
         {/if}
       </div>
     {/each}

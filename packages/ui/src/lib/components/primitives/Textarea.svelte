@@ -24,6 +24,8 @@
     error = '',
     validationMessage = '',
     class: className = '',
+    id,
+    name,
     oninput,
   }: TextareaProps = $props()
   
@@ -72,6 +74,8 @@
 <div class="form-control w-full">
   <textarea
     bind:this={textareaRef}
+    {id}
+    {name}
     {placeholder}
     {rows}
     {disabled}

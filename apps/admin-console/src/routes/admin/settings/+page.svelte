@@ -1,12 +1,13 @@
 <!--
   系统设置页面
   - 外观设置：主题选择
-  - 区域设置：时区、语言
+  - 区域设置：语言
   - 系统信息
 -->
 <script lang="ts">
   import type { PageData } from './$types'
   import { LanguageSwitch, ThemeSelector, getThemeFontUrl } from '@hai/ui'
+  import { core } from '@hai/core'
   import { browser } from '$app/environment'
   import { setLocale, getLocale } from '$lib/paraglide/runtime.js'
   import { m } from '$lib/paraglide/messages.js'
@@ -48,8 +49,8 @@
 
   // ========== 语言设置 ==========
   const languages = [
-    { value: 'zh-CN', label: '简体中文', flag: '🇨🇳' },
-    { value: 'en-US', label: 'English', flag: '🇺🇸' },
+    { value: 'zh-CN', label: '简体中文', flag: 'CN' },
+    { value: 'en-US', label: 'English', flag: 'US' },
   ]
   
   let currentLanguage = $state(browser ? getLocale() : 'zh-CN')
@@ -57,29 +58,10 @@
   function handleLanguageChange(lang: string) {
     if (!browser) return
     if (lang === getLocale()) return
-    // setLocale 会设置 cookie 并刷新页面
+    // 同步到 @hai/core 全局 locale（影响所有模块的错误消息等）
+    core.i18n.setGlobalLocale(lang)
+    // setLocale 会设置 cookie 并刷新页面（Paraglide UI 翻译）
     setLocale(lang as 'zh-CN' | 'en-US')
-  }
-
-  // ========== 时区设置 ==========
-  const timezones = $derived([
-    { value: 'Asia/Shanghai', label: m.timezone_shanghai(), city: m.timezone_shanghai_city() },
-    { value: 'America/New_York', label: m.timezone_new_york(), city: m.timezone_new_york_city() },
-    { value: 'America/Los_Angeles', label: m.timezone_los_angeles(), city: m.timezone_los_angeles_city() },
-    { value: 'Europe/London', label: m.timezone_london(), city: m.timezone_london_city() },
-    { value: 'Europe/Paris', label: m.timezone_paris(), city: m.timezone_paris_city() },
-    { value: 'Asia/Tokyo', label: m.timezone_tokyo(), city: m.timezone_tokyo_city() },
-    { value: 'Asia/Singapore', label: m.timezone_singapore(), city: m.timezone_singapore_city() },
-    { value: 'Australia/Sydney', label: m.timezone_sydney(), city: m.timezone_sydney_city() },
-  ])
-  let currentTimezone = $state('Asia/Shanghai')
-  
-  function handleTimezoneChange(event: Event) {
-    const select = event.target as HTMLSelectElement
-    currentTimezone = select.value
-    if (browser) {
-      localStorage.setItem('timezone', currentTimezone)
-    }
   }
 
   // ========== 初始化 ==========
@@ -96,12 +78,6 @@
       
       // 语言从 Paraglide getLocale() 获取
       currentLanguage = getLocale()
-      
-      // 时区初始化
-      const savedTimezone = localStorage.getItem('timezone')
-      if (savedTimezone) {
-        currentTimezone = savedTimezone
-      }
     }
   })
 </script>
@@ -154,25 +130,6 @@
           {languages}
           onchange={handleLanguageChange}
         />
-      </div>
-
-      <div class="divider my-0"></div>
-      
-      <!-- 时区选择 -->
-      <div class="flex items-center justify-between py-3">
-        <div>
-          <p class="font-medium text-base-content">{m.settings_timezone()}</p>
-          <p class="text-sm text-base-content/60">{m.settings_timezone_desc()}</p>
-        </div>
-        <select 
-          class="select select-bordered w-72"
-          value={currentTimezone}
-          onchange={handleTimezoneChange}
-        >
-          {#each timezones as tz}
-            <option value={tz.value}>{tz.city} - {tz.label}</option>
-          {/each}
-        </select>
       </div>
     </div>
   </section>

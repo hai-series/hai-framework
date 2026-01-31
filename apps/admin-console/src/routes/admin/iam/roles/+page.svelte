@@ -5,6 +5,7 @@
 -->
 <script lang="ts">
   import type { PageData } from './$types'
+  import { Card, Button, Modal, Badge, IconButton, Input, Checkbox, Dropdown, Textarea } from '@hai/ui'
 
   interface Props {
     data: PageData
@@ -160,10 +161,10 @@
       <h1 class="text-2xl font-bold">角色管理</h1>
       <p class="text-base-content/60 mt-1">管理系统角色和权限分配</p>
     </div>
-    <button type="button" class="btn btn-primary gap-2" onclick={openCreateDialog}>
+    <Button variant="primary" class="gap-2" onclick={openCreateDialog}>
       <span class="iconify tabler--plus size-5"></span>
       新建角色
-    </button>
+    </Button>
   </div>
 
   <!-- 角色列表 -->
@@ -176,7 +177,7 @@
               <h3 class="card-title text-lg">
                 {role.name}
                 {#if role.isSystem}
-                  <span class="badge badge-outline badge-sm">系统</span>
+                  <Badge variant="default" size="sm" outline>系统</Badge>
                 {/if}
               </h3>
               {#if role.description}
@@ -184,22 +185,22 @@
               {/if}
             </div>
             <div class="dropdown dropdown-end">
-              <button type="button" class="btn btn-ghost btn-sm btn-square">
+              <IconButton variant="ghost" size="sm" ariaLabel="角色操作菜单">
                 <span class="iconify tabler--dots-vertical size-5"></span>
-              </button>
+              </IconButton>
               <ul class="dropdown-content menu bg-base-100 rounded-box shadow-lg border border-base-content/10 w-40 p-2 z-10">
                 <li>
-                  <button type="button" onclick={() => openEditDialog(role)}>
+                  <Button variant="ghost" class="justify-start" onclick={() => openEditDialog(role)}>
                     <span class="iconify tabler--edit size-4"></span>
                     编辑
-                  </button>
+                  </Button>
                 </li>
                 {#if !role.isSystem}
                   <li>
-                    <button type="button" class="text-error" onclick={() => handleDelete(role)}>
+                    <Button variant="ghost" class="justify-start text-error" onclick={() => handleDelete(role)}>
                       <span class="iconify tabler--trash size-4"></span>
                       删除
-                    </button>
+                    </Button>
                   </li>
                 {/if}
               </ul>
@@ -222,10 +223,10 @@
           {#if role.permissions.length > 0}
             <div class="flex flex-wrap gap-1 mt-2">
               {#each role.permissions.slice(0, 5) as perm}
-                <span class="badge badge-ghost badge-sm">{perm}</span>
+                <Badge variant="ghost" size="sm">{perm}</Badge>
               {/each}
               {#if role.permissions.length > 5}
-                <span class="badge badge-ghost badge-sm">+{role.permissions.length - 5}</span>
+                <Badge variant="ghost" size="sm">+{role.permissions.length - 5}</Badge>
               {/if}
             </div>
           {/if}
@@ -255,10 +256,9 @@
           <label class="label" for="name">
             <span class="label-text">角色名称 <span class="text-error">*</span></span>
           </label>
-          <input
+          <Input
             type="text"
             id="name"
-            class="input input-bordered"
             bind:value={form.name}
             required
             disabled={submitting || Boolean(editingRole?.isSystem)}
@@ -270,14 +270,13 @@
           <label class="label" for="description">
             <span class="label-text">描述</span>
           </label>
-          <textarea
+          <Textarea
             id="description"
-            class="textarea textarea-bordered"
             bind:value={form.description}
             disabled={submitting}
             placeholder="角色描述（可选）"
             rows={2}
-          ></textarea>
+          />
         </div>
 
         <div class="form-control">
@@ -296,9 +295,8 @@
                   onclick={() => toggleResourcePermissions(resource, perms)}
                 >
                   <span class="font-medium capitalize">{resource}</span>
-                  <input
-                    type="checkbox"
-                    class="checkbox checkbox-sm"
+                  <Checkbox
+                    size="sm"
                     checked={perms.every((p) => form.permissions.includes(p.name))}
                     readonly
                   />
@@ -306,9 +304,8 @@
                 <div class="px-4 py-2 grid grid-cols-2 gap-2">
                   {#each perms as perm}
                     <label class="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        class="checkbox checkbox-sm"
+                      <Checkbox
+                        size="sm"
                         checked={form.permissions.includes(perm.name)}
                         onchange={() => togglePermission(perm.name)}
                         disabled={submitting}
@@ -323,15 +320,15 @@
         </div>
 
         <div class="modal-action">
-          <button type="button" class="btn btn-ghost" onclick={closeDialog} disabled={submitting}>
+          <Button variant="ghost" type="button" onclick={closeDialog} disabled={submitting}>
             取消
-          </button>
-          <button type="submit" class="btn btn-primary" disabled={submitting}>
+          </Button>
+          <Button variant="primary" type="submit" disabled={submitting}>
             {#if submitting}
               <span class="loading loading-spinner loading-sm"></span>
             {/if}
             {editingRole ? '保存' : '创建'}
-          </button>
+          </Button>
         </div>
       </form>
     </div>

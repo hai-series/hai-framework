@@ -13,7 +13,6 @@ export const load: LayoutServerLoad = async ({ locals }) => {
     name?: string
     version?: string
     env?: string
-    timezone?: string
     defaultLocale?: string
   } | undefined
 
@@ -29,7 +28,6 @@ export const load: LayoutServerLoad = async ({ locals }) => {
       name: coreConfig?.name ?? 'hai Admin Console',
       version: coreConfig?.version ?? '0.1.0',
       env: coreConfig?.env ?? 'development',
-      timezone: coreConfig?.timezone ?? 'Asia/Shanghai',
       locale: coreConfig?.defaultLocale ?? 'zh-CN',
     },
   }

@@ -19,5 +19,6 @@ export default antfu({
   ignores: [
     '**/.svelte-kit/**',
     '**/build/**',
+    '**/paraglide/**', // Paraglide 自动生成的文件
   ],
 })

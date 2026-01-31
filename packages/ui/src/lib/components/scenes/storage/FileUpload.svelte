@@ -5,30 +5,15 @@
   文件上传组件，支持签名 URL 直传和多文件上传
   
   使用 Svelte 5 Runes ($props, $state, $derived)
+  使用 primitives 组件：Progress, IconButton
   =============================================================================
 -->
 <script lang="ts">
   import type { FileUploadProps, UploadFile } from '../types.js'
   import { cn, generateId } from '../../../utils.js'
-  
-  const defaultLabels = {
-    dragHint: 'Drag files here, or',
-    clickToSelect: 'click to select',
-    supportedFormats: 'Supported:',
-    maxFileSize: 'Max size:',
-    maxFilesHint: 'Max',
-    filesUnit: 'files',
-    uploadSuccess: 'Upload successful',
-    uploadFailed: 'Upload failed',
-    networkError: 'Network error',
-    noUploadUrl: 'No upload URL configured',
-    getUploadUrlFailed: 'Failed to get upload URL',
-    fileSizeExceeded: 'File size exceeds limit (max',
-    unsupportedType: 'Unsupported file type',
-    maxFilesExceeded: 'Maximum upload limit:',
-    retry: 'Retry',
-    remove: 'Remove',
-  }
+  import Progress from '../../primitives/Progress.svelte'
+  import IconButton from '../../primitives/IconButton.svelte'
+  import { m } from '../../../messages.js'
   
   let {
     accept = '*',
@@ -42,15 +27,12 @@
     autoUpload = true,
     showList = true,
     dragDrop = true,
-    labels = {},
     class: className = '',
     onchange,
     onupload,
     onerror,
     onremove,
   }: FileUploadProps = $props()
-  
-  const mergedLabels = $derived({ ...defaultLabels, ...labels })
   
   let files = $state<UploadFile[]>([])
   let isDragging = $state(false)
@@ -83,7 +65,7 @@
   // 验证文件
   function validateFile(file: File): string | null {
     if (file.size > maxSize) {
-      return `${mergedLabels.fileSizeExceeded} ${formatSize(maxSize)}）`
+      return `${m('file_upload_size_exceeded')} ${formatSize(maxSize)}）`
     }
     
     if (accept !== '*') {
@@ -102,7 +84,7 @@
       })
       
       if (!isAccepted) {
-        return mergedLabels.unsupportedType
+        return m('file_upload_unsupported_type')
       }
     }
     
@@ -117,7 +99,7 @@
     
     for (const file of Array.from(fileList)) {
       if (files.length + newFiles.length >= maxFiles) {
-        onerror?.(`${mergedLabels.maxFilesExceeded} ${maxFiles} ${mergedLabels.filesUnit}`)
+        onerror?.(`${m('file_upload_max_files_exceeded')} ${maxFiles} ${m('file_upload_files_unit')}`)
         break
       }
       
@@ -151,7 +133,7 @@
   // 上传单个文件
   async function uploadFile(uploadFile: UploadFile) {
     if (!uploadUrl && !presignUrl) {
-      uploadFile.error = mergedLabels.noUploadUrl
+      uploadFile.error = m('file_upload_no_url')
       uploadFile.state = 'error'
       return
     }
@@ -178,7 +160,7 @@
         })
         
         if (!presignResponse.ok) {
-          throw new Error(mergedLabels.getUploadUrlFailed)
+          throw new Error(m('file_upload_get_url_failed'))
         }
         
         const { url } = await presignResponse.json()
@@ -207,11 +189,11 @@
             }
             resolve()
           } else {
-            reject(new Error(`${mergedLabels.uploadFailed}: ${xhr.statusText}`))
+            reject(new Error(`${m('file_upload_failed')}: ${xhr.statusText}`))
           }
         }
         
-        xhr.onerror = () => reject(new Error(mergedLabels.networkError))
+        xhr.onerror = () => reject(new Error(m('file_upload_network_error')))
         
         xhr.open('PUT', targetUrl!)
         xhr.setRequestHeader('Content-Type', uploadFile.type || 'application/octet-stream')
@@ -226,7 +208,7 @@
       onupload?.(uploadFile)
     } catch (error) {
       uploadFile.state = 'error'
-      uploadFile.error = error instanceof Error ? error.message : mergedLabels.uploadFailed
+      uploadFile.error = error instanceof Error ? error.message : m('file_upload_failed')
       onerror?.(uploadFile.error)
     }
     
@@ -326,17 +308,17 @@
       </svg>
       <div class="text-base-content/70">
         {#if dragDrop}
-          <span>{mergedLabels.dragHint}</span>
+          <span>{m('file_upload_drag_hint')}</span>
         {/if}
-        <span class="text-primary">{mergedLabels.clickToSelect}</span>
+        <span class="text-primary">{m('file_upload_click_to_select')}</span>
       </div>
       <div class="text-xs text-base-content/50">
         {#if accept !== '*'}
-          {mergedLabels.supportedFormats} {accept}，
+          {m('file_upload_supported_formats')} {accept}，
         {/if}
-        {mergedLabels.maxFileSize} {formatSize(maxSize)}
+        {m('file_upload_max_size')} {formatSize(maxSize)}
         {#if maxFiles > 1}
-          ，{mergedLabels.maxFilesHint} {maxFiles} {mergedLabels.filesUnit}
+          ，{m('file_upload_max_files_hint')} {maxFiles} {m('file_upload_files_unit')}
         {/if}
       </div>
     </div>
@@ -363,40 +345,44 @@
             
             {#if file.state === 'uploading'}
               <div class="mt-1">
-                <progress class="progress progress-primary w-full h-1" value={file.progress} max="100"></progress>
+                <Progress value={file.progress} max={100} size="xs" />
                 <span class="text-xs text-base-content/50">{file.progress}%</span>
               </div>
             {:else if file.state === 'error'}
               <div class="text-xs text-error mt-1">{file.error}</div>
             {:else if file.state === 'success'}
-              <div class="text-xs text-success mt-1">{mergedLabels.uploadSuccess}</div>
+              <div class="text-xs text-success mt-1">{m('file_upload_success')}</div>
             {/if}
           </div>
           
           <!-- 操作按钮 -->
           <div class="flex gap-1">
             {#if file.state === 'error'}
-              <button
-                type="button"
-                class="btn btn-ghost btn-xs btn-circle"
+              <IconButton
+                size="xs"
+                variant="ghost"
+                label={m('file_upload_retry')}
                 onclick={() => retryUpload(file.id)}
-                aria-label={mergedLabels.retry}
               >
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                </svg>
-              </button>
+                {#snippet children()}
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                {/snippet}
+              </IconButton>
             {/if}
-            <button
-              type="button"
-              class="btn btn-ghost btn-xs btn-circle"
+            <IconButton
+              size="xs"
+              variant="ghost"
+              label={m('file_upload_remove')}
               onclick={() => removeFile(file.id)}
-              aria-label={mergedLabels.remove}
             >
-              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
+              {#snippet children()}
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              {/snippet}
+            </IconButton>
           </div>
         </div>
       {/each}

@@ -15,14 +15,16 @@
   let {
     value = $bindable<T>(),
     options,
-    placeholder = 'Select...',
+    placeholder = '',
     size = 'md',
     disabled = false,
     required = false,
     error = '',
     validationMessage = '',
     class: className = '',
+    id,
     onchange,
+    children,
   }: SelectProps<T> = $props()
   
   let selectRef: HTMLSelectElement | undefined = $state()
@@ -63,6 +65,7 @@
 <div class="form-control w-full">
   <select
     bind:this={selectRef}
+    {id}
     class={selectClass}
     {disabled}
     {required}
@@ -72,15 +75,19 @@
     {#if placeholder}
       <option value="" disabled selected={!value}>{placeholder}</option>
     {/if}
-    {#each options as option}
-      <option
-        value={option.value as string}
-        disabled={option.disabled}
-        selected={value === option.value}
-      >
-        {option.label}
-      </option>
-    {/each}
+    {#if children}
+      {@render children()}
+    {:else if options}
+      {#each options as option}
+        <option
+          value={option.value as string}
+          disabled={option.disabled}
+          selected={value === option.value}
+        >
+          {option.label}
+        </option>
+      {/each}
+    {/if}
   </select>
   {#if error}
     <div class="label">
