@@ -36,6 +36,7 @@ import type {
   ChatCompletionResponse,
   ChatMessage,
 } from './ai-types.js'
+import { getAiMessage } from './index.js'
 
 // =============================================================================
 // 客户端配置
@@ -126,7 +127,7 @@ export class AIClient {
 
     if (!response.ok) {
       const error = await response.text()
-      throw new Error(`AI API 请求失败：${response.status} ${error}`)
+      throw new Error(getAiMessage('ai_apiRequestFailed', undefined, { status: response.status, error }))
     }
 
     return response.json()
@@ -161,12 +162,12 @@ export class AIClient {
 
     if (!response.ok) {
       const error = await response.text()
-      throw new Error(`AI API 请求失败：${response.status} ${error}`)
+      throw new Error(getAiMessage('ai_apiRequestFailed', undefined, { status: response.status, error }))
     }
 
     const reader = response.body?.getReader()
     if (!reader) {
-      throw new Error('响应体不可读')
+      throw new Error(getAiMessage('ai_responseNotReadable'))
     }
 
     const decoder = new TextDecoder()
@@ -354,7 +355,7 @@ export function createAIClient(config: AIClientConfig): AIClient {
 export async function* parseSSE(response: Response): AsyncIterable<string> {
   const reader = response.body?.getReader()
   if (!reader) {
-    throw new Error('响应体不可读')
+    throw new Error(getAiMessage('ai_responseNotReadable'))
   }
 
   const decoder = new TextDecoder()

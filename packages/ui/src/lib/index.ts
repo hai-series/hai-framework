@@ -24,12 +24,79 @@ export * from './components/index.js'
 // Toast 状态
 // =============================================================================
 
+// 场景组件类型
+export type {
+  AvatarUploadProps,
+  ChangePasswordFormData,
+  ChangePasswordFormProps,
+  EncryptedInputProps,
+  FileItem,
+  FileListProps,
+  FileUploadProps,
+  ForgotPasswordFormData,
+  ForgotPasswordFormProps,
+  HashDisplayProps,
+  ImageUploadProps,
+  LoginFormData,
+  LoginFormProps,
+  PasswordInputProps,
+  RegisterField,
+  RegisterFormData,
+  RegisterFormProps,
+  ResetPasswordFormData,
+  ResetPasswordFormProps,
+  SignatureDisplayProps,
+  UploadFile,
+  UploadState,
+  UserProfileData,
+  UserProfileField,
+  UserProfileProps,
+} from './components/scenes/types.js'
+
+// =============================================================================
+// i18n 国际化（Paraglide 辅助工具）
+// =============================================================================
+
+export {
+  createLocaleStore,
+  DEFAULT_LOCALE,
+  DEFAULT_LOCALES,
+  detectBrowserLocale,
+  interpolate,
+  isLocaleSupported,
+  resolveLocale,
+} from './i18n.svelte.js'
+
+export type {
+  InterpolationParams,
+  Locale,
+  LocaleInfo,
+} from './i18n.svelte.js'
+
+// =============================================================================
+// 主题配置
+// =============================================================================
+
+export {
+  DARK_THEMES,
+  getAllFontUrls,
+  getThemeFontUrl,
+  getThemeInfo,
+  isDarkTheme,
+  THEME_GROUPS,
+  THEMES,
+} from './theme-config.js'
+
+export type {
+  ThemeGroup,
+  ThemeInfo,
+} from './theme-config.js'
+
+// =============================================================================
+// Toast
+// =============================================================================
+
 export { toast, type ToastItem } from './toast.svelte.js'
-
-// =============================================================================
-// 类型导出
-// =============================================================================
-
 // 基础类型
 export type {
   AlertProps,
@@ -76,40 +143,6 @@ export type {
   TooltipProps,
   Variant,
 } from './types.js'
-
-// 场景组件类型
-export type {
-  AvatarUploadProps,
-  ChangePasswordFormData,
-  ChangePasswordFormProps,
-  EncryptedInputProps,
-  FileItem,
-  FileListProps,
-  FileUploadProps,
-  ForgotPasswordFormData,
-  ForgotPasswordFormProps,
-  HashDisplayProps,
-  ImageUploadProps,
-  LoginFormData,
-  LoginFormProps,
-  PasswordInputProps,
-  RegisterField,
-  RegisterFormData,
-  RegisterFormProps,
-  ResetPasswordFormData,
-  ResetPasswordFormProps,
-  SignatureDisplayProps,
-  UploadFile,
-  UploadState,
-  UserProfileData,
-  UserProfileField,
-  UserProfileProps,
-} from './components/scenes/types.js'
-
-// =============================================================================
-// 工具函数
-// =============================================================================
-
 export {
   cn,
   generateId,
@@ -123,66 +156,3 @@ export {
   sizeClasses,
   variantClasses,
 } from './utils.js'
-
-// =============================================================================
-// i18n 国际化
-// =============================================================================
-
-export {
-  getI18nInstance,
-  getLocale,
-  getSupportedLocales,
-  setLocale,
-  setupI18n,
-  t,
-  useI18n,
-} from './i18n.svelte.js'
-
-export type {
-  I18nConfig,
-  I18nInstance,
-  InterpolationParams,
-  Locale,
-  LocaleInfo,
-} from './i18n.svelte.js'
-
-// =============================================================================
-// 主题配置
-// =============================================================================
-
-export {
-  DARK_THEMES,
-  getAllFontUrls,
-  getThemeFontUrl,
-  getThemeInfo,
-  isDarkTheme,
-  THEME_GROUPS,
-  THEMES,
-} from './theme-config.js'
-
-export type {
-  ThemeGroup,
-  ThemeInfo,
-} from './theme-config.js'
-
-// =============================================================================
-// i18n 国际化
-// =============================================================================
-
-export { uiTranslations } from './i18n-translations.js'
-export {
-  getLocale,
-  getSupportedLocales,
-  initI18n,
-  registerTranslations,
-  setLocale,
-  t,
-  useI18n,
-} from './i18n.svelte.js'
-export type {
-  I18nInitConfig,
-  InterpolationParams,
-  Locale,
-  LocaleInfo,
-  ModuleTranslations,
-} from './i18n.svelte.js'

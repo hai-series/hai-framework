@@ -15,6 +15,7 @@ import type { DbService } from '@hai/db'
 import type { IamError } from './iam-types.js'
 import { err, ok } from '@hai/core'
 import { IamErrorCode } from './iam-config.js'
+import { getIamMessage } from './index.js'
 
 /**
  * 默认角色
@@ -144,7 +145,7 @@ export async function seedIamData(
   catch (error) {
     return err({
       code: IamErrorCode.REPOSITORY_ERROR,
-      message: '初始化种子数据失败',
+      message: getIamMessage('iam_initSeedDataFailed'),
       cause: error,
     })
   }

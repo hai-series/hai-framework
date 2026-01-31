@@ -22,6 +22,7 @@ import type {
 import { err, ok } from '@hai/core'
 
 import { IamErrorCode } from '../iam-config.js'
+import { getIamMessage } from '../index.js'
 
 /**
  * LDAP 客户端接口
@@ -118,7 +119,7 @@ export function createLdapStrategy(config: LdapStrategyConfig): AuthStrategy {
       if (credentials.type !== 'ldap') {
         return err({
           code: IamErrorCode.INVALID_CREDENTIALS,
-          message: '凭证类型不匹配',
+          message: getIamMessage('iam_credentialTypeMismatch'),
         })
       }
 
@@ -129,7 +130,7 @@ export function createLdapStrategy(config: LdapStrategyConfig): AuthStrategy {
       if (!clientResult.success) {
         return err({
           code: IamErrorCode.LDAP_CONNECTION_FAILED,
-          message: '无法连接到 LDAP 服务器',
+          message: getIamMessage('iam_ldapConnectionFailed'),
           cause: clientResult.error,
         })
       }
@@ -142,7 +143,7 @@ export function createLdapStrategy(config: LdapStrategyConfig): AuthStrategy {
         if (!adminBindResult.success) {
           return err({
             code: IamErrorCode.LDAP_BIND_FAILED,
-            message: 'LDAP 管理员绑定失败',
+            message: getIamMessage('iam_ldapAdminBindFailed'),
             cause: adminBindResult.error,
           })
         }
@@ -158,7 +159,7 @@ export function createLdapStrategy(config: LdapStrategyConfig): AuthStrategy {
         if (!searchResult.success) {
           return err({
             code: IamErrorCode.LDAP_SEARCH_FAILED,
-            message: 'LDAP 搜索失败',
+            message: getIamMessage('iam_ldapSearchFailed'),
             cause: searchResult.error,
           })
         }
@@ -167,7 +168,7 @@ export function createLdapStrategy(config: LdapStrategyConfig): AuthStrategy {
         if (entries.length === 0) {
           return err({
             code: IamErrorCode.USER_NOT_FOUND,
-            message: '用户不存在',
+            message: getIamMessage('iam_userNotExist'),
           })
         }
 
@@ -178,7 +179,7 @@ export function createLdapStrategy(config: LdapStrategyConfig): AuthStrategy {
         if (!userBindResult.success) {
           return err({
             code: IamErrorCode.INVALID_CREDENTIALS,
-            message: '密码错误',
+            message: getIamMessage('iam_passwordWrong'),
           })
         }
 
@@ -251,7 +252,7 @@ export function createLdapStrategy(config: LdapStrategyConfig): AuthStrategy {
         if (!storedUser.enabled) {
           return err({
             code: IamErrorCode.USER_DISABLED,
-            message: '账户已禁用',
+            message: getIamMessage('iam_accountDisabled'),
           })
         }
 

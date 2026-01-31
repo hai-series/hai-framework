@@ -34,6 +34,7 @@ import type {
   UseUploadOptions,
 } from './client-types.js'
 import { derived, get, writable } from 'svelte/store'
+import { getKitMessage } from '../index.js'
 
 /**
  * 创建会话 Store
@@ -246,7 +247,7 @@ export function useUpload(options: UseUploadOptions = {}): UploadStore {
         )
 
         if (!presignResponse.ok) {
-          throw new Error('获取预签名 URL 失败')
+          throw new Error(getKitMessage('kit_presignFetchFailed'))
         }
 
         const presignData = await presignResponse.json()

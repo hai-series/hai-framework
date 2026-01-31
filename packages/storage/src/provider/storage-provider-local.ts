@@ -42,11 +42,12 @@ import type {
 import { Buffer } from 'node:buffer'
 import * as crypto from 'node:crypto'
 import * as fs from 'node:fs'
-
 import * as fsp from 'node:fs/promises'
-import * as path from 'node:path'
 
+import * as path from 'node:path'
 import { err, ok } from '@hai/core'
+
+import { getStorageMessage } from '../index.js'
 
 import { StorageErrorCode } from '../storage-config.js'
 
@@ -81,7 +82,7 @@ function toStorageError(error: unknown, key?: string): StorageError {
   if (e.code === 'ENOSPC') {
     return {
       code: StorageErrorCode.QUOTA_EXCEEDED,
-      message: '磁盘空间不足',
+      message: getStorageMessage('storage_diskSpaceInsufficient'),
       key,
       cause: error,
     }
@@ -161,7 +162,7 @@ function safePath(root: string, key: string): string {
   const realPath = path.resolve(fullPath)
 
   if (!realPath.startsWith(realRoot)) {
-    throw new Error('检测到路径穿越攻击')
+    throw new Error(getStorageMessage('storage_pathTraversal'))
   }
 
   return fullPath
@@ -186,7 +187,7 @@ export function createLocalProvider(): StorageProvider {
 
   function getConfig(): LocalConfig {
     if (!config) {
-      throw new Error('本地存储未初始化')
+      throw new Error(getStorageMessage('storage_localNotInitialized'))
     }
     return config
   }
@@ -561,7 +562,7 @@ export function createLocalProvider(): StorageProvider {
       if (cfg.type !== 'local') {
         return err({
           code: StorageErrorCode.CONFIG_ERROR,
-          message: '配置类型错误：Local provider 仅支持 type=local',
+          message: getStorageMessage('storage_localConfigTypeError'),
         })
       }
 

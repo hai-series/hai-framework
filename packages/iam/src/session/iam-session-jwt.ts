@@ -23,6 +23,7 @@ import { err, ok } from '@hai/core'
 import * as jose from 'jose'
 
 import { IamErrorCode, JwtConfigSchema } from '../iam-config.js'
+import { getIamMessage } from '../index.js'
 
 /**
  * JWT 会话管理器配置
@@ -100,13 +101,13 @@ export function createJwtSessionManager(config: JwtSessionConfig): SessionManage
       if (error instanceof jose.errors.JWTExpired) {
         return err({
           code: IamErrorCode.TOKEN_EXPIRED,
-          message: '令牌已过期',
+          message: getIamMessage('iam_tokenExpired'),
           cause: error,
         })
       }
       return err({
         code: IamErrorCode.TOKEN_INVALID,
-        message: '令牌无效',
+        message: getIamMessage('iam_tokenInvalid'),
         cause: error,
       })
     }
@@ -150,7 +151,7 @@ export function createJwtSessionManager(config: JwtSessionConfig): SessionManage
       catch (error) {
         return err({
           code: IamErrorCode.SESSION_CREATE_FAILED,
-          message: '创建会话失败',
+          message: getIamMessage('iam_createSessionFailed'),
           cause: error,
         })
       }
@@ -197,7 +198,7 @@ export function createJwtSessionManager(config: JwtSessionConfig): SessionManage
       if (payload.type !== 'refresh') {
         return err({
           code: IamErrorCode.TOKEN_INVALID,
-          message: '无效的刷新令牌',
+          message: getIamMessage('iam_invalidRefreshToken'),
         })
       }
 
@@ -226,7 +227,7 @@ export function createJwtSessionManager(config: JwtSessionConfig): SessionManage
       catch (error) {
         return err({
           code: IamErrorCode.TOKEN_REFRESH_FAILED,
-          message: '刷新令牌失败',
+          message: getIamMessage('iam_refreshTokenFailed'),
           cause: error,
         })
       }

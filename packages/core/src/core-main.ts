@@ -15,9 +15,9 @@
  * // ID 生成
  * const myId = core.id.generate()
  *
- * // 国际化
- * core.i18n.register({ module: 'app', translations: { ... } })
- * core.i18n.t('app.greeting', { name: 'World' })
+ * // 国际化工具（显式传 locale）
+ * core.i18n.detectBrowserLocale()
+ * core.i18n.resolveLocale(userLocale)
  *
  * // 工具函数（命名空间方式）
  * core.type.isDefined(value)
@@ -33,7 +33,7 @@
 import type { LoggingConfig } from './core-config.js'
 import type { Logger, LoggerFunctions } from './core-types.js'
 import { id, isValidNanoId, isValidUUID } from './functions/core-function-id.js'
-import { createI18nService } from './i18n/i18n-main.js'
+import * as i18nUtils from './i18n/i18n-utils.js'
 import * as arrayUtils from './utils/core-util-array.js'
 import * as asyncUtils from './utils/core-util-async.js'
 import * as objectUtils from './utils/core-util-object.js'
@@ -52,9 +52,6 @@ import * as typeUtils from './utils/core-util-type.js'
  */
 export function createCore(loggerFns: LoggerFunctions) {
   let cachedLogger: Logger | null = null
-
-  // 创建 i18n 服务单例
-  const i18n = createI18nService()
 
   return {
     // =====================================================================
@@ -85,11 +82,11 @@ export function createCore(loggerFns: LoggerFunctions) {
     getLogLevel: loggerFns.getLogLevel,
 
     // =====================================================================
-    // i18n 国际化
+    // i18n 国际化工具（显式传 locale，不维护全局状态）
     // =====================================================================
 
-    /** 国际化服务 */
-    i18n,
+    /** 国际化工具函数 */
+    i18n: i18nUtils,
 
     // =====================================================================
     // ID

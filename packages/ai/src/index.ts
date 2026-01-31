@@ -57,6 +57,8 @@
 // 自动注册 Schema 到 @hai/core
 // =============================================================================
 import { core } from '@hai/core'
+import messagesEnUS from '../messages/en-US.json'
+import messagesZhCN from '../messages/zh-CN.json'
 import { AIConfigSchema } from './ai-config.js'
 
 // =============================================================================
@@ -88,6 +90,11 @@ export * from './ai-tools.js'
 // =============================================================================
 
 export * from './ai-types.js'
+
+// i18n
+export type AiMessageKey = keyof typeof messagesZhCN
+export const { getMessage: getAiMessage, setDefaultLocale: setAiDefaultLocale }
+  = core.i18n.createMessageGetter<AiMessageKey>({ 'zh-CN': messagesZhCN, 'en-US': messagesEnUS })
 
 // =============================================================================
 // Provider 实现（高级用法）

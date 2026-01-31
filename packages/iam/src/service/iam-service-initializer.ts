@@ -33,6 +33,7 @@ import { createHaiPasswordProvider } from '@hai/crypto'
 
 import { createRbacManager } from '../authz/index.js'
 import { IamErrorCode } from '../iam-config.js'
+import { getIamMessage } from '../index.js'
 import {
   createCachePermissionCache,
   createDbOAuthAccountRepository,
@@ -224,7 +225,7 @@ export function initializeComponents(options: InitOptions): Result<IamComponents
   catch (error) {
     return err({
       code: IamErrorCode.CONFIG_ERROR,
-      message: '初始化组件失败',
+      message: getIamMessage('iam_initComponentFailed'),
       cause: error,
     })
   }

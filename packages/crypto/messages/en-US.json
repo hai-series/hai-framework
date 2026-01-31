@@ -1,0 +1,18 @@
+{
+  "$schema": "https://inlang.com/schema/inlang-message-format",
+  "crypto_sm2PublicKeyInvalid": "Invalid SM2 public key format",
+  "crypto_sm2EncryptEmpty": "SM2 encryption returned empty result",
+  "crypto_sm2PrivateKeyInvalid": "Invalid SM2 private key format",
+  "crypto_sm2DecryptFailed": "SM2 decryption failed or returned invalid result",
+  "crypto_sm2SignEmpty": "SM2 signature returned empty result",
+  "crypto_sm3HashEmpty": "SM3 hash returned empty result",
+  "crypto_sm4KeyInvalid": "SM4 key must be 16 bytes (32 hex characters)",
+  "crypto_sm4CbcNeedIv": "CBC mode requires IV",
+  "crypto_sm4IvInvalid": "SM4 IV must be 16 bytes (32 hex characters)",
+  "crypto_sm4EncryptEmpty": "SM4 encryption returned empty result",
+  "crypto_sm4DecryptFailed": "SM4 decryption failed",
+  "crypto_passwordEmpty": "Password cannot be empty",
+  "crypto_passwordHashEmpty": "Password and hash cannot be empty",
+  "crypto_hashFormatInvalid": "Invalid hash format",
+  "crypto_operationFailed": "Operation failed: {error}"
+}

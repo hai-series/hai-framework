@@ -2,9 +2,22 @@
   "$schema": "https://turbo.build/schema.json",
   "ui": "tui",
   "tasks": {
+    "paraglide:compile": {
+      "dependsOn": [],
+      "outputs": [
+        "src/lib/paraglide/**",
+        "src/i18n/paraglide/**"
+      ],
+      "inputs": [
+        "project.inlang/**",
+        "messages/**"
+      ],
+      "cache": true
+    },
     "build": {
       "dependsOn": [
-        "^build"
+        "^build",
+        "paraglide:compile"
       ],
       "outputs": [
         "dist/**",

@@ -1,0 +1,12 @@
+{
+  "$schema": "https://inlang.com/schema/inlang-message-format",
+  "app_title": "hai Admin Console",
+  "nav_home": "Home",
+  "nav_dashboard": "Dashboard",
+  "nav_settings": "Settings",
+  "nav_users": "User Management",
+  "settings_title": "Settings",
+  "settings_theme": "Theme Settings",
+  "settings_language": "Language Settings",
+  "settings_save": "Save Settings"
+}

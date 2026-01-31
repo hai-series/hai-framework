@@ -26,6 +26,7 @@ import type { PasswordStrategy } from '../strategy/index.js'
 import { err, ok } from '@hai/core'
 
 import { IamErrorCode } from '../iam-config.js'
+import { getIamMessage } from '../index.js'
 import { verifyPassword } from './iam-service-initializer.js'
 
 /**
@@ -92,7 +93,7 @@ export function createUserOperations(deps: UserServiceDeps): UserOperations {
       if (existsResult.success && existsResult.data) {
         return err({
           code: IamErrorCode.USER_ALREADY_EXISTS,
-          message: '用户名已存在',
+          message: getIamMessage('iam_usernameAlreadyExist'),
         })
       }
 
@@ -102,7 +103,7 @@ export function createUserOperations(deps: UserServiceDeps): UserOperations {
         if (emailExistsResult.success && emailExistsResult.data) {
           return err({
             code: IamErrorCode.USER_ALREADY_EXISTS,
-            message: '邮箱已被使用',
+            message: getIamMessage('iam_emailAlreadyUsed'),
           })
         }
       }
@@ -156,7 +157,7 @@ export function createUserOperations(deps: UserServiceDeps): UserOperations {
       if (!userResult.data) {
         return err({
           code: IamErrorCode.USER_NOT_FOUND,
-          message: '用户不存在',
+          message: getIamMessage('iam_userNotExist'),
         })
       }
 
@@ -196,7 +197,7 @@ export function createUserOperations(deps: UserServiceDeps): UserOperations {
       if (!userResult.success || !userResult.data) {
         return err({
           code: IamErrorCode.USER_NOT_FOUND,
-          message: '用户不存在',
+          message: getIamMessage('iam_userNotExist'),
         })
       }
 
@@ -206,7 +207,7 @@ export function createUserOperations(deps: UserServiceDeps): UserOperations {
       if (!user.passwordHash) {
         return err({
           code: IamErrorCode.INVALID_CREDENTIALS,
-          message: '账户未设置密码',
+          message: getIamMessage('iam_accountNoPassword'),
         })
       }
 
@@ -214,7 +215,7 @@ export function createUserOperations(deps: UserServiceDeps): UserOperations {
       if (!verifyResult.success || !verifyResult.data) {
         return err({
           code: IamErrorCode.INVALID_CREDENTIALS,
-          message: '原密码错误',
+          message: getIamMessage('iam_originalPasswordWrong'),
         })
       }
 
@@ -248,7 +249,7 @@ export function createUserOperations(deps: UserServiceDeps): UserOperations {
       // TODO: 实现密码重置确认
       return err({
         code: IamErrorCode.INTERNAL_ERROR,
-        message: '功能暂未实现',
+        message: getIamMessage('iam_featureNotImplemented'),
       })
     },
 

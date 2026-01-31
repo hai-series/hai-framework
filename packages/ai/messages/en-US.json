@@ -1,0 +1,7 @@
+{
+  "$schema": "https://inlang.com/schema/inlang-message-format",
+  "ai_requestTimeout": "Request timeout",
+  "ai_operationFailed": "Operation failed: {error}",
+  "ai_responseNotReadable": "Response body is not readable",
+  "ai_apiRequestFailed": "AI API request failed: {status} {error}"
+}

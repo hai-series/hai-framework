@@ -12,6 +12,7 @@ import type { CryptoError } from './crypto-types.js'
 import { err, ok } from '@hai/core'
 import { CryptoErrorCode } from './crypto-config.js'
 import { createSM3 } from './crypto-sm3.js'
+import { getCryptoMessage } from './index.js'
 
 // =============================================================================
 // 类型定义
@@ -122,7 +123,7 @@ export function createHaiPasswordProvider(config: PasswordProviderConfig = {}): 
         if (!password) {
           return err({
             code: CryptoErrorCode.INVALID_INPUT,
-            message: '密码不能为空',
+            message: getCryptoMessage('crypto_passwordEmpty'),
           })
         }
 
@@ -152,7 +153,7 @@ export function createHaiPasswordProvider(config: PasswordProviderConfig = {}): 
         if (!password || !hash) {
           return err({
             code: CryptoErrorCode.INVALID_INPUT,
-            message: '密码和哈希值不能为空',
+            message: getCryptoMessage('crypto_passwordHashEmpty'),
           })
         }
 
@@ -161,7 +162,7 @@ export function createHaiPasswordProvider(config: PasswordProviderConfig = {}): 
         if (parts.length !== 5 || parts[1] !== 'hai') {
           return err({
             code: CryptoErrorCode.INVALID_INPUT,
-            message: '无效的哈希格式',
+            message: getCryptoMessage('crypto_hashFormatInvalid'),
           })
         }
 
@@ -172,7 +173,7 @@ export function createHaiPasswordProvider(config: PasswordProviderConfig = {}): 
         if (Number.isNaN(storedIterations) || !salt || !storedHash) {
           return err({
             code: CryptoErrorCode.INVALID_INPUT,
-            message: '无效的哈希格式',
+            message: getCryptoMessage('crypto_hashFormatInvalid'),
           })
         }
 

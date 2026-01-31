@@ -39,6 +39,7 @@ import type {
   EncryptedCookieConfig,
   WebhookVerifyConfig,
 } from './crypto-types.js'
+import { getKitMessage } from '../../index.js'
 
 /**
  * 验证 Webhook 签名
@@ -104,7 +105,7 @@ export function createCsrfManager(config: CsrfConfig) {
     async generate(cookies: Cookies): Promise<string> {
       const result = await crypto.random.bytes(tokenLength)
       if (!result.success) {
-        throw new Error('生成 CSRF Token 失败')
+        throw new Error(getKitMessage('kit_csrfTokenFailed'))
       }
 
       const token = Buffer.from(result.data!).toString('hex')
@@ -164,7 +165,7 @@ export function createCsrfManager(config: CsrfConfig) {
 
         const isValid = await this.verify(event)
         if (!isValid) {
-          return new Response('CSRF Token 验证失败', { status: 403 })
+          return new Response(getKitMessage('kit_csrfVerifyFailed'), { status: 403 })
         }
 
         return resolve(event)
@@ -188,7 +189,7 @@ export function createEncryptedCookie(config: EncryptedCookieConfig) {
       const result = await crypto.aes.encrypt(json, encryptionKey)
 
       if (!result.success) {
-        throw new Error('加密失败')
+        throw new Error(getKitMessage('kit_encryptFailed'))
       }
 
       cookies.set(name, result.data!, {

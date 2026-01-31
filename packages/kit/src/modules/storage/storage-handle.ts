@@ -32,6 +32,7 @@
 
 import type { RequestEvent } from '@sveltejs/kit'
 import type { PresignResult, StorageEndpointConfig, StorageUploadResult } from './storage-types.js'
+import { getKitMessage } from '../../index.js'
 
 /**
  * 检查 MIME 类型是否匹配
@@ -82,7 +83,7 @@ export function createStorageEndpoint(config: StorageEndpointConfig) {
    */
   const get = async (event: RequestEvent): Promise<Response> => {
     if (!checkAuth(event)) {
-      return new Response(JSON.stringify({ error: '未授权' }), {
+      return new Response(JSON.stringify({ error: getKitMessage('kit_unauthorized') }), {
         status: 401,
         headers: { 'Content-Type': 'application/json' },
       })
@@ -97,7 +98,7 @@ export function createStorageEndpoint(config: StorageEndpointConfig) {
       const contentType = url.searchParams.get('contentType')
 
       if (!filename) {
-        return new Response(JSON.stringify({ error: '缺少 filename 参数' }), {
+        return new Response(JSON.stringify({ error: getKitMessage('kit_missingFilename') }), {
           status: 400,
           headers: { 'Content-Type': 'application/json' },
         })
@@ -115,7 +116,7 @@ export function createStorageEndpoint(config: StorageEndpointConfig) {
         })
 
         if (!result.success) {
-          return new Response(JSON.stringify({ error: result.error?.message || '生成预签名 URL 失败' }), {
+          return new Response(JSON.stringify({ error: result.error?.message || getKitMessage('kit_presignUrlFailed') }), {
             status: 500,
             headers: { 'Content-Type': 'application/json' },
           })
@@ -134,7 +135,7 @@ export function createStorageEndpoint(config: StorageEndpointConfig) {
         })
       }
       catch (error) {
-        return new Response(JSON.stringify({ error: '生成预签名 URL 失败' }), {
+        return new Response(JSON.stringify({ error: getKitMessage('kit_presignUrlFailed') }), {
           status: 500,
           headers: { 'Content-Type': 'application/json' },
         })
@@ -150,7 +151,7 @@ export function createStorageEndpoint(config: StorageEndpointConfig) {
         const result = await storage.list(bucket, { prefix, maxKeys })
 
         if (!result.success) {
-          return new Response(JSON.stringify({ error: result.error?.message || '获取列表失败' }), {
+          return new Response(JSON.stringify({ error: result.error?.message || getKitMessage('kit_listFailed') }), {
             status: 500,
             headers: { 'Content-Type': 'application/json' },
           })
@@ -162,7 +163,7 @@ export function createStorageEndpoint(config: StorageEndpointConfig) {
         })
       }
       catch {
-        return new Response(JSON.stringify({ error: '获取列表失败' }), {
+        return new Response(JSON.stringify({ error: getKitMessage('kit_listFailed') }), {
           status: 500,
           headers: { 'Content-Type': 'application/json' },
         })
@@ -178,7 +179,7 @@ export function createStorageEndpoint(config: StorageEndpointConfig) {
         })
 
         if (!result.success) {
-          return new Response(JSON.stringify({ error: result.error?.message || '生成下载 URL 失败' }), {
+          return new Response(JSON.stringify({ error: result.error?.message || getKitMessage('kit_downloadUrlFailed') }), {
             status: 500,
             headers: { 'Content-Type': 'application/json' },
           })
@@ -190,14 +191,14 @@ export function createStorageEndpoint(config: StorageEndpointConfig) {
         })
       }
       catch {
-        return new Response(JSON.stringify({ error: '生成下载 URL 失败' }), {
+        return new Response(JSON.stringify({ error: getKitMessage('kit_downloadUrlFailed') }), {
           status: 500,
           headers: { 'Content-Type': 'application/json' },
         })
       }
     }
 
-    return new Response(JSON.stringify({ error: '无效请求' }), {
+    return new Response(JSON.stringify({ error: getKitMessage('kit_invalidRequest') }), {
       status: 400,
       headers: { 'Content-Type': 'application/json' },
     })
@@ -208,7 +209,7 @@ export function createStorageEndpoint(config: StorageEndpointConfig) {
    */
   const post = async (event: RequestEvent): Promise<Response> => {
     if (!checkAuth(event)) {
-      return new Response(JSON.stringify({ error: '未授权' }), {
+      return new Response(JSON.stringify({ error: getKitMessage('kit_unauthorized') }), {
         status: 401,
         headers: { 'Content-Type': 'application/json' },
       })
@@ -219,7 +220,7 @@ export function createStorageEndpoint(config: StorageEndpointConfig) {
       const file = formData.get('file') as File | null
 
       if (!file) {
-        return new Response(JSON.stringify({ error: '缺少文件' }), {
+        return new Response(JSON.stringify({ error: getKitMessage('kit_missingFile') }), {
           status: 400,
           headers: { 'Content-Type': 'application/json' },
         })
@@ -227,7 +228,7 @@ export function createStorageEndpoint(config: StorageEndpointConfig) {
 
       // 检查文件类型
       if (!matchMimeType(file.type, allowedTypes)) {
-        return new Response(JSON.stringify({ error: '不支持的文件类型' }), {
+        return new Response(JSON.stringify({ error: getKitMessage('kit_unsupportedFileType') }), {
           status: 400,
           headers: { 'Content-Type': 'application/json' },
         })
@@ -236,7 +237,7 @@ export function createStorageEndpoint(config: StorageEndpointConfig) {
       // 检查文件大小
       if (file.size > maxFileSize) {
         return new Response(
-          JSON.stringify({ error: `文件大小超过限制 (${Math.round(maxFileSize / 1024 / 1024)}MB)` }),
+          JSON.stringify({ error: getKitMessage('kit_fileSizeExceeded', undefined, { maxSize: Math.round(maxFileSize / 1024 / 1024) }) }),
           {
             status: 400,
             headers: { 'Content-Type': 'application/json' },
@@ -261,7 +262,7 @@ export function createStorageEndpoint(config: StorageEndpointConfig) {
 
       if (!result.success) {
         await onUploadError?.({ error: result.error!, file, event })
-        return new Response(JSON.stringify({ error: result.error?.message || '上传失败' }), {
+        return new Response(JSON.stringify({ error: result.error?.message || getKitMessage('kit_uploadFailed') }), {
           status: 500,
           headers: { 'Content-Type': 'application/json' },
         })
@@ -283,7 +284,7 @@ export function createStorageEndpoint(config: StorageEndpointConfig) {
       })
     }
     catch (error) {
-      return new Response(JSON.stringify({ error: '上传失败' }), {
+      return new Response(JSON.stringify({ error: getKitMessage('kit_uploadFailed') }), {
         status: 500,
         headers: { 'Content-Type': 'application/json' },
       })
@@ -295,7 +296,7 @@ export function createStorageEndpoint(config: StorageEndpointConfig) {
    */
   const del = async (event: RequestEvent): Promise<Response> => {
     if (!checkAuth(event)) {
-      return new Response(JSON.stringify({ error: '未授权' }), {
+      return new Response(JSON.stringify({ error: getKitMessage('kit_unauthorized') }), {
         status: 401,
         headers: { 'Content-Type': 'application/json' },
       })
@@ -304,7 +305,7 @@ export function createStorageEndpoint(config: StorageEndpointConfig) {
     const key = event.url.searchParams.get('key')
 
     if (!key) {
-      return new Response(JSON.stringify({ error: '缺少 key 参数' }), {
+      return new Response(JSON.stringify({ error: getKitMessage('kit_missingKey') }), {
         status: 400,
         headers: { 'Content-Type': 'application/json' },
       })
@@ -314,7 +315,7 @@ export function createStorageEndpoint(config: StorageEndpointConfig) {
       const result = await storage.delete(bucket, key)
 
       if (!result.success) {
-        return new Response(JSON.stringify({ error: result.error?.message || '删除失败' }), {
+        return new Response(JSON.stringify({ error: result.error?.message || getKitMessage('kit_deleteFailed') }), {
           status: 500,
           headers: { 'Content-Type': 'application/json' },
         })
@@ -326,7 +327,7 @@ export function createStorageEndpoint(config: StorageEndpointConfig) {
       })
     }
     catch {
-      return new Response(JSON.stringify({ error: '删除失败' }), {
+      return new Response(JSON.stringify({ error: getKitMessage('kit_deleteFailed') }), {
         status: 500,
         headers: { 'Content-Type': 'application/json' },
       })

@@ -58,6 +58,8 @@
 // 自动注册 Schema 到 @hai/core
 // =============================================================================
 import { core } from '@hai/core'
+import messagesEnUS from '../messages/en-US.json'
+import messagesZhCN from '../messages/zh-CN.json'
 import { CryptoConfigSchema } from './crypto-config.js'
 
 // 配置 Schema（zod）
@@ -71,6 +73,11 @@ export * from './crypto-password.js'
 
 // 类型定义
 export * from './crypto-types.js'
+
+// i18n
+export type CryptoMessageKey = keyof typeof messagesZhCN
+export const { getMessage: getCryptoMessage, setDefaultLocale: setCryptoDefaultLocale }
+  = core.i18n.createMessageGetter<CryptoMessageKey>({ 'zh-CN': messagesZhCN, 'en-US': messagesEnUS })
 
 // 注册 crypto 模块的配置 Schema
 core.registerBuiltinSchema('crypto', CryptoConfigSchema)

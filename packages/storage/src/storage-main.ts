@@ -69,8 +69,9 @@ import type {
 
 import { err } from '@hai/core'
 
-import { createLocalProvider } from './provider/storage-provider-local.js'
+import { getStorageMessage } from './index.js'
 
+import { createLocalProvider } from './provider/storage-provider-local.js'
 import { createS3Provider } from './provider/storage-provider-s3.js'
 import { StorageConfigSchema, StorageErrorCode } from './storage-config.js'
 
@@ -116,7 +117,7 @@ function createProvider(config: StorageConfig): StorageProvider {
 function notInitializedError(): StorageError {
   return {
     code: StorageErrorCode.NOT_INITIALIZED,
-    message: '存储未初始化，请先调用 initStorage()',
+    message: getStorageMessage('storage_notInitialized'),
   }
 }
 

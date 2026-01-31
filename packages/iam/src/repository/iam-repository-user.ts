@@ -14,6 +14,7 @@ import type { DbService } from '@hai/db'
 import type { IamError, StoredUser, UserRepository } from '../iam-types.js'
 import { err, ok } from '@hai/core'
 import { IamErrorCode } from '../iam-config.js'
+import { getIamMessage } from '../index.js'
 
 /**
  * 用户表名
@@ -161,7 +162,7 @@ export function createDbUserRepository(db: DbService): UserRepository {
         if (errorMsg.includes('unique') || errorMsg.includes('duplicate')) {
           return err({
             code: IamErrorCode.USER_ALREADY_EXISTS,
-            message: '用户已存在',
+            message: getIamMessage('iam_userAlreadyExist'),
             cause: result.error,
           })
         }
@@ -371,7 +372,7 @@ export function createDbUserRepository(db: DbService): UserRepository {
           if (!r.data) {
             return err({
               code: IamErrorCode.USER_NOT_FOUND,
-              message: '用户不存在',
+              message: getIamMessage('iam_userNotExist'),
             })
           }
           return ok(r.data)
@@ -399,7 +400,7 @@ export function createDbUserRepository(db: DbService): UserRepository {
       if (result.data.changes === 0) {
         return err({
           code: IamErrorCode.USER_NOT_FOUND,
-          message: '用户不存在',
+          message: getIamMessage('iam_userNotExist'),
         })
       }
 
@@ -409,7 +410,7 @@ export function createDbUserRepository(db: DbService): UserRepository {
       if (!findResult.data) {
         return err({
           code: IamErrorCode.USER_NOT_FOUND,
-          message: '用户不存在',
+          message: getIamMessage('iam_userNotExist'),
         })
       }
 

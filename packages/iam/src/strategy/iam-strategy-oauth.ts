@@ -28,6 +28,7 @@ import type {
 import { err, ok } from '@hai/core'
 
 import { IamErrorCode, OAuthConfigSchema } from '../iam-config.js'
+import { getIamMessage } from '../index.js'
 
 /**
  * OAuth 认证策略配置
@@ -102,7 +103,7 @@ export function createOAuthStrategy(config: OAuthStrategyConfig): OAuthStrategy 
       if (credentials.type !== 'oauth') {
         return err({
           code: IamErrorCode.INVALID_CREDENTIALS,
-          message: '凭证类型不匹配',
+          message: getIamMessage('iam_credentialTypeMismatch'),
         })
       }
 
@@ -127,7 +128,7 @@ export function createOAuthStrategy(config: OAuthStrategyConfig): OAuthStrategy 
       if (!storedState) {
         return err({
           code: IamErrorCode.OAUTH_INVALID_STATE,
-          message: '无效的状态令牌',
+          message: getIamMessage('iam_invalidStateToken'),
         })
       }
 
@@ -135,7 +136,7 @@ export function createOAuthStrategy(config: OAuthStrategyConfig): OAuthStrategy 
         await config.oauthStateStore.delete(state)
         return err({
           code: IamErrorCode.OAUTH_INVALID_STATE,
-          message: '状态令牌已过期',
+          message: getIamMessage('iam_stateTokenExpired'),
         })
       }
 
@@ -225,7 +226,7 @@ export function createOAuthStrategy(config: OAuthStrategyConfig): OAuthStrategy 
       if (!storedUser) {
         return err({
           code: IamErrorCode.USER_NOT_FOUND,
-          message: '用户不存在且未启用自动注册',
+          message: getIamMessage('iam_userNotExistNoAutoRegister'),
         })
       }
 
@@ -233,7 +234,7 @@ export function createOAuthStrategy(config: OAuthStrategyConfig): OAuthStrategy 
       if (!storedUser.enabled) {
         return err({
           code: IamErrorCode.USER_DISABLED,
-          message: '账户已禁用',
+          message: getIamMessage('iam_accountDisabled'),
         })
       }
 
@@ -314,7 +315,7 @@ export function createOAuthStrategy(config: OAuthStrategyConfig): OAuthStrategy 
         if (!response.ok) {
           return err({
             code: IamErrorCode.OAUTH_TOKEN_ERROR,
-            message: '刷新令牌失败',
+            message: getIamMessage('iam_refreshTokenFailed'),
           })
         }
 
@@ -339,7 +340,7 @@ export function createOAuthStrategy(config: OAuthStrategyConfig): OAuthStrategy 
       catch (error) {
         return err({
           code: IamErrorCode.OAUTH_TOKEN_ERROR,
-          message: '刷新令牌请求失败',
+          message: getIamMessage('iam_refreshTokenRequestFailed'),
           cause: error,
         })
       }
@@ -351,7 +352,7 @@ export function createOAuthStrategy(config: OAuthStrategyConfig): OAuthStrategy 
       if (!storedStateResult.success || !storedStateResult.data) {
         return err({
           code: IamErrorCode.OAUTH_INVALID_STATE,
-          message: '无效的状态令牌',
+          message: getIamMessage('iam_invalidStateToken'),
         })
       }
 
@@ -382,7 +383,7 @@ export function createOAuthStrategy(config: OAuthStrategyConfig): OAuthStrategy 
       if (existingResult.success && existingResult.data && existingResult.data.userId !== userId) {
         return err({
           code: IamErrorCode.OAUTH_CALLBACK_ERROR,
-          message: '该 OAuth 账户已被其他用户关联',
+          message: getIamMessage('iam_oauthAccountLinkedByOther'),
         })
       }
 
@@ -428,7 +429,7 @@ async function exchangeCode(provider: OAuthProviderConfig, code: string): Promis
     if (!response.ok) {
       return err({
         code: IamErrorCode.OAUTH_TOKEN_ERROR,
-        message: '交换授权码失败',
+        message: getIamMessage('iam_exchangeCodeFailed'),
       })
     }
 
@@ -453,7 +454,7 @@ async function exchangeCode(provider: OAuthProviderConfig, code: string): Promis
   catch (error) {
     return err({
       code: IamErrorCode.OAUTH_TOKEN_ERROR,
-      message: '令牌请求失败',
+      message: getIamMessage('iam_tokenRequestFailed'),
       cause: error,
     })
   }
@@ -466,7 +467,7 @@ async function fetchUserInfo(provider: OAuthProviderConfig, accessToken: string)
   if (!provider.userInfoUrl) {
     return err({
       code: IamErrorCode.CONFIG_ERROR,
-      message: '未配置用户信息 URL',
+      message: getIamMessage('iam_userInfoUrlNotConfigured'),
     })
   }
 
@@ -481,7 +482,7 @@ async function fetchUserInfo(provider: OAuthProviderConfig, accessToken: string)
     if (!response.ok) {
       return err({
         code: IamErrorCode.OAUTH_TOKEN_ERROR,
-        message: '获取用户信息失败',
+        message: getIamMessage('iam_getUserInfoFailed'),
       })
     }
 
@@ -502,7 +503,7 @@ async function fetchUserInfo(provider: OAuthProviderConfig, accessToken: string)
   catch (error) {
     return err({
       code: IamErrorCode.OAUTH_TOKEN_ERROR,
-      message: '获取用户信息请求失败',
+      message: getIamMessage('iam_getUserInfoRequestFailed'),
       cause: error,
     })
   }

@@ -22,6 +22,7 @@ import type {
 import { err, ok } from '@hai/core'
 
 import { IamErrorCode, PasswordConfigSchema } from '../iam-config.js'
+import { getIamMessage } from '../index.js'
 
 /**
  * 密码认证策略配置
@@ -59,42 +60,42 @@ export function createPasswordStrategy(config: PasswordStrategyConfig): AuthStra
     if (password.length < passwordConfig.minLength) {
       return err({
         code: IamErrorCode.PASSWORD_POLICY_VIOLATION,
-        message: `密码长度至少为 ${passwordConfig.minLength} 个字符`,
+        message: getIamMessage('iam_passwordMinLength', undefined, { minLength: passwordConfig.minLength }),
       })
     }
 
     if (password.length > passwordConfig.maxLength) {
       return err({
         code: IamErrorCode.PASSWORD_POLICY_VIOLATION,
-        message: `密码长度不能超过 ${passwordConfig.maxLength} 个字符`,
+        message: getIamMessage('iam_passwordMaxLength', undefined, { maxLength: passwordConfig.maxLength }),
       })
     }
 
     if (passwordConfig.requireUppercase && !/[A-Z]/.test(password)) {
       return err({
         code: IamErrorCode.PASSWORD_POLICY_VIOLATION,
-        message: '密码必须包含大写字母',
+        message: getIamMessage('iam_passwordNeedUppercase'),
       })
     }
 
     if (passwordConfig.requireLowercase && !/[a-z]/.test(password)) {
       return err({
         code: IamErrorCode.PASSWORD_POLICY_VIOLATION,
-        message: '密码必须包含小写字母',
+        message: getIamMessage('iam_passwordNeedLowercase'),
       })
     }
 
     if (passwordConfig.requireNumber && !/\d/.test(password)) {
       return err({
         code: IamErrorCode.PASSWORD_POLICY_VIOLATION,
-        message: '密码必须包含数字',
+        message: getIamMessage('iam_passwordNeedNumber'),
       })
     }
 
     if (passwordConfig.requireSpecialChar && !/[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(password)) {
       return err({
         code: IamErrorCode.PASSWORD_POLICY_VIOLATION,
-        message: '密码必须包含特殊字符',
+        message: getIamMessage('iam_passwordNeedSpecialChar'),
       })
     }
 
@@ -152,7 +153,7 @@ export function createPasswordStrategy(config: PasswordStrategyConfig): AuthStra
       if (credentials.type !== 'password') {
         return err({
           code: IamErrorCode.INVALID_CREDENTIALS,
-          message: '凭证类型不匹配',
+          message: getIamMessage('iam_credentialTypeMismatch'),
         })
       }
 
@@ -168,7 +169,7 @@ export function createPasswordStrategy(config: PasswordStrategyConfig): AuthStra
       if (!storedUser) {
         return err({
           code: IamErrorCode.USER_NOT_FOUND,
-          message: '用户不存在',
+          message: getIamMessage('iam_userNotExist'),
         })
       }
 
@@ -176,7 +177,7 @@ export function createPasswordStrategy(config: PasswordStrategyConfig): AuthStra
       if (!storedUser.enabled) {
         return err({
           code: IamErrorCode.USER_DISABLED,
-          message: '账户已禁用',
+          message: getIamMessage('iam_accountDisabled'),
         })
       }
 
@@ -184,7 +185,7 @@ export function createPasswordStrategy(config: PasswordStrategyConfig): AuthStra
       if (isAccountLocked(storedUser)) {
         return err({
           code: IamErrorCode.USER_LOCKED,
-          message: '账户已锁定，请稍后重试',
+          message: getIamMessage('iam_accountLocked'),
         })
       }
 
@@ -192,7 +193,7 @@ export function createPasswordStrategy(config: PasswordStrategyConfig): AuthStra
       if (!storedUser.passwordHash) {
         return err({
           code: IamErrorCode.INVALID_CREDENTIALS,
-          message: '账户未设置密码',
+          message: getIamMessage('iam_accountNoPassword'),
         })
       }
 
@@ -218,7 +219,7 @@ export function createPasswordStrategy(config: PasswordStrategyConfig): AuthStra
 
         return err({
           code: IamErrorCode.INVALID_CREDENTIALS,
-          message: '密码错误',
+          message: getIamMessage('iam_passwordWrong'),
         })
       }
 
@@ -226,7 +227,7 @@ export function createPasswordStrategy(config: PasswordStrategyConfig): AuthStra
       if (isPasswordExpired(storedUser)) {
         return err({
           code: IamErrorCode.PASSWORD_EXPIRED,
-          message: '密码已过期，请修改密码',
+          message: getIamMessage('iam_passwordExpired'),
         })
       }
 

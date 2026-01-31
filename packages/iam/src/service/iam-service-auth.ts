@@ -28,6 +28,7 @@ import type { OAuthStrategy, OtpStrategy, PasswordStrategy } from '../strategy/i
 import { err, ok } from '@hai/core'
 
 import { IamErrorCode } from '../iam-config.js'
+import { getIamMessage } from '../index.js'
 
 /**
  * 认证服务依赖
@@ -98,7 +99,7 @@ export function createAuthOperations(deps: AuthServiceDeps): AuthOperations {
       if (!otpStrategy) {
         return err({
           code: IamErrorCode.STRATEGY_NOT_SUPPORTED,
-          message: 'OTP 认证需要配置 OTP 策略',
+          message: getIamMessage('iam_otpStrategyRequired'),
         })
       }
 
@@ -136,7 +137,7 @@ export function createAuthOperations(deps: AuthServiceDeps): AuthOperations {
     async loginWithLdap(_credentials: LdapCredentials): Promise<Result<AuthResult, IamError>> {
       return err({
         code: IamErrorCode.STRATEGY_NOT_SUPPORTED,
-        message: 'LDAP 认证需要配置 LDAP 策略',
+        message: getIamMessage('iam_ldapStrategyRequired'),
       })
     },
 
@@ -144,7 +145,7 @@ export function createAuthOperations(deps: AuthServiceDeps): AuthOperations {
       if (!oauthStrategy) {
         return err({
           code: IamErrorCode.STRATEGY_NOT_SUPPORTED,
-          message: 'OAuth 认证需要配置 OAuth 策略',
+          message: getIamMessage('iam_oauthStrategyRequired'),
         })
       }
 
@@ -163,7 +164,7 @@ export function createAuthOperations(deps: AuthServiceDeps): AuthOperations {
       if (!oauthStrategy) {
         return err({
           code: IamErrorCode.STRATEGY_NOT_SUPPORTED,
-          message: 'OAuth 认证需要配置 OAuth 策略',
+          message: getIamMessage('iam_oauthStrategyRequired'),
         })
       }
 
@@ -219,7 +220,7 @@ export function createAuthOperations(deps: AuthServiceDeps): AuthOperations {
       if (!otpStrategy) {
         return err({
           code: IamErrorCode.STRATEGY_NOT_SUPPORTED,
-          message: 'OTP 需要配置 OTP 策略',
+          message: getIamMessage('iam_otpStrategyRequiredForSend'),
         })
       }
 

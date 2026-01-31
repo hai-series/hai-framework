@@ -5,6 +5,7 @@
  */
 
 import process from 'node:process'
+import { paraglideVitePlugin } from '@inlang/paraglide-js'
 import { sveltekit } from '@sveltejs/kit/vite'
 import tailwindcss from '@tailwindcss/vite'
 import { defineConfig, loadEnv } from 'vite'
@@ -18,6 +19,11 @@ export default defineConfig(({ mode }) => {
     plugins: [
       sveltekit(),
       tailwindcss(),
+      paraglideVitePlugin({
+        project: './project.inlang',
+        outdir: './src/lib/paraglide',
+        strategy: ['url', 'cookie', 'baseLocale'],
+      }),
     ],
     server: {
       port: 5173,

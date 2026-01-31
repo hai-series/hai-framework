@@ -39,6 +39,8 @@
 // 自动注册 Schema 到 @hai/core
 // =============================================================================
 import { core } from '@hai/core'
+import messagesEnUS from '../messages/en-US.json'
+import messagesZhCN from '../messages/zh-CN.json'
 import { IamConfigSchema } from './iam-config.js'
 
 // 配置 Schema（zod）
@@ -52,6 +54,11 @@ export * from './iam-main.js'
 
 // 类型定义
 export * from './iam-types.js'
+
+// i18n
+export type IamMessageKey = keyof typeof messagesZhCN
+export const { getMessage: getIamMessage, setDefaultLocale: setIamDefaultLocale }
+  = core.i18n.createMessageGetter<IamMessageKey>({ 'zh-CN': messagesZhCN, 'en-US': messagesEnUS })
 
 // 注册 iam 模块的配置 Schema
 core.registerBuiltinSchema('iam', IamConfigSchema)

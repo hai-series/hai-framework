@@ -43,6 +43,7 @@ import type {
 import { err, ok } from '@hai/core'
 
 import { DbErrorCode } from '../db-config.js'
+import { getDbMessage } from '../index.js'
 
 // =============================================================================
 // pg 类型定义（避免强依赖）
@@ -173,7 +174,7 @@ export function createPostgresProvider(): DbProvider {
     if (!pool) {
       return err({
         code: DbErrorCode.NOT_INITIALIZED,
-        message: '数据库未初始化，请先调用 initDB()',
+        message: getDbMessage('db_notInitialized'),
       })
     }
     return ok(pool)
@@ -309,28 +310,28 @@ export function createPostgresProvider(): DbProvider {
     query<T>(_sql: string, _params?: unknown[]): Result<T[], DbError> {
       return err({
         code: DbErrorCode.UNSUPPORTED_TYPE,
-        message: 'PostgreSQL 不支持同步的 sql.query()，请使用 txAsync() 替代',
+        message: getDbMessage('db_postgresNotSupportSyncQuery'),
       })
     },
 
     get<T>(_sql: string, _params?: unknown[]): Result<T | null, DbError> {
       return err({
         code: DbErrorCode.UNSUPPORTED_TYPE,
-        message: 'PostgreSQL 不支持同步的 sql.get()，请使用 txAsync() 替代',
+        message: getDbMessage('db_postgresNotSupportSyncGet'),
       })
     },
 
     execute(_sql: string, _params?: unknown[]): Result<ExecuteResult, DbError> {
       return err({
         code: DbErrorCode.UNSUPPORTED_TYPE,
-        message: 'PostgreSQL 不支持同步的 sql.execute()，请使用 txAsync() 替代',
+        message: getDbMessage('db_postgresNotSupportSyncExecute'),
       })
     },
 
     batch(_statements: Array<{ sql: string, params?: unknown[] }>): Result<void, DbError> {
       return err({
         code: DbErrorCode.UNSUPPORTED_TYPE,
-        message: 'PostgreSQL 不支持同步的 sql.batch()，请使用 txAsync() 替代',
+        message: getDbMessage('db_postgresNotSupportSyncBatch'),
       })
     },
   }
@@ -345,7 +346,7 @@ export function createPostgresProvider(): DbProvider {
   function tx<T>(_fn: TxCallback<T>): Result<T, DbError> {
     return err({
       code: DbErrorCode.UNSUPPORTED_TYPE,
-      message: 'PostgreSQL 不支持同步事务 tx()，请使用 txAsync() 替代',
+      message: getDbMessage('db_postgresNotSupportSyncTx'),
     })
   }
 
@@ -376,15 +377,15 @@ export function createPostgresProvider(): DbProvider {
       // 创建同步风格的事务操作对象（会抛出错误提示使用 await）
       const txOps: TxOperations = {
         query<R>(_sqlStr: string, _params?: unknown[]): R[] {
-          throw new Error('PostgreSQL 事务中请使用 await tx.query()')
+          throw new Error(getDbMessage('db_postgresTxQueryHint'))
         },
 
         get<R>(_sqlStr: string, _params?: unknown[]): R | null {
-          throw new Error('PostgreSQL 事务中请使用 await tx.get()')
+          throw new Error(getDbMessage('db_postgresTxGetHint'))
         },
 
         execute(_sqlStr: string, _params?: unknown[]): ExecuteResult {
-          throw new Error('PostgreSQL 事务中请使用 await tx.execute()')
+          throw new Error(getDbMessage('db_postgresTxExecuteHint'))
         },
       }
 
@@ -434,7 +435,7 @@ export function createPostgresProvider(): DbProvider {
       }
       return err({
         code: DbErrorCode.TRANSACTION_FAILED,
-        message: `异步事务执行失败: ${error}`,
+        message: getDbMessage('db_postgresTxFailed', undefined, { error: String(error) }),
         cause: error,
       })
     }
@@ -457,7 +458,7 @@ export function createPostgresProvider(): DbProvider {
       if (config.type !== 'postgresql') {
         return err({
           code: DbErrorCode.UNSUPPORTED_TYPE,
-          message: 'PostgreSQL Provider 仅支持 postgresql 类型',
+          message: getDbMessage('db_postgresOnlyPostgresql'),
         })
       }
 
@@ -485,7 +486,7 @@ export function createPostgresProvider(): DbProvider {
       catch (error) {
         return err({
           code: DbErrorCode.CONNECTION_FAILED,
-          message: `连接 PostgreSQL 失败: ${error}`,
+          message: getDbMessage('db_postgresConnectionFailed', undefined, { error: String(error) }),
           cause: error,
         })
       }

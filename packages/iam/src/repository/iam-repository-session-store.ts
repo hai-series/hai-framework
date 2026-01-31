@@ -16,6 +16,7 @@ import type { IamError, Session } from '../iam-types.js'
 import type { SessionStore } from '../session/iam-session-stateful.js'
 import { err, ok } from '@hai/core'
 import { IamErrorCode } from '../iam-config.js'
+import { getIamMessage } from '../index.js'
 
 // =============================================================================
 // 会话存储表
@@ -190,7 +191,7 @@ export function createDbSessionStore(db: DbService): SessionStore {
       catch {
         return err({
           code: IamErrorCode.REPOSITORY_ERROR,
-          message: '解析会话数据失败',
+          message: getIamMessage('iam_parseSessionDataFailed'),
         })
       }
     },

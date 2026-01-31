@@ -24,6 +24,7 @@ import type {
 import { err, ok } from '@hai/core'
 
 import { IamErrorCode, OtpConfigSchema } from '../iam-config.js'
+import { getIamMessage } from '../index.js'
 
 /**
  * OTP 认证策略配置
@@ -114,7 +115,7 @@ export function createOtpStrategy(config: OtpStrategyConfig): OtpStrategy {
       if (credentials.type !== 'otp') {
         return err({
           code: IamErrorCode.INVALID_CREDENTIALS,
-          message: '凭证类型不匹配',
+          message: getIamMessage('iam_credentialTypeMismatch'),
         })
       }
 
@@ -130,7 +131,7 @@ export function createOtpStrategy(config: OtpStrategyConfig): OtpStrategy {
       if (!storedOtp) {
         return err({
           code: IamErrorCode.OTP_INVALID,
-          message: '验证码不存在或已过期',
+          message: getIamMessage('iam_otpNotExistOrExpired'),
         })
       }
 
@@ -139,7 +140,7 @@ export function createOtpStrategy(config: OtpStrategyConfig): OtpStrategy {
         await config.otpStore.delete(identifier)
         return err({
           code: IamErrorCode.OTP_INVALID,
-          message: '验证码已失效，请重新获取',
+          message: getIamMessage('iam_otpInvalid'),
         })
       }
 
@@ -148,7 +149,7 @@ export function createOtpStrategy(config: OtpStrategyConfig): OtpStrategy {
         await config.otpStore.incrementAttempts(identifier)
         return err({
           code: IamErrorCode.OTP_INVALID,
-          message: '验证码错误',
+          message: getIamMessage('iam_otpWrong'),
         })
       }
 
@@ -183,7 +184,7 @@ export function createOtpStrategy(config: OtpStrategyConfig): OtpStrategy {
       if (!storedUser) {
         return err({
           code: IamErrorCode.USER_NOT_FOUND,
-          message: '用户不存在',
+          message: getIamMessage('iam_userNotExist'),
         })
       }
 
@@ -191,7 +192,7 @@ export function createOtpStrategy(config: OtpStrategyConfig): OtpStrategy {
       if (!storedUser.enabled) {
         return err({
           code: IamErrorCode.USER_DISABLED,
-          message: '账户已禁用',
+          message: getIamMessage('iam_accountDisabled'),
         })
       }
 
@@ -226,7 +227,7 @@ export function createOtpStrategy(config: OtpStrategyConfig): OtpStrategy {
       else {
         return err({
           code: IamErrorCode.INTERNAL_ERROR,
-          message: '不支持的标识符类型或发送方式未配置',
+          message: getIamMessage('iam_identifierTypeNotSupported'),
         })
       }
 

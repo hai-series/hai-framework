@@ -151,3 +151,12 @@ export type {
   UseSessionOptions,
   UseUploadOptions,
 } from './client/index.js'
+
+// i18n
+import { core } from '@hai/core'
+import messagesEnUS from '../messages/en-US.json'
+import messagesZhCN from '../messages/zh-CN.json'
+
+export type KitMessageKey = keyof typeof messagesZhCN
+export const { getMessage: getKitMessage, setDefaultLocale: setKitDefaultLocale }
+  = core.i18n.createMessageGetter<KitMessageKey>({ 'zh-CN': messagesZhCN, 'en-US': messagesEnUS })

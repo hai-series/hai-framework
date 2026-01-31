@@ -25,6 +25,7 @@ import type {
 import { err, ok } from '@hai/core'
 
 import { IamErrorCode, RbacConfigSchema } from '../iam-config.js'
+import { getIamMessage } from '../index.js'
 
 /**
  * 权限缓存接口
@@ -210,7 +211,7 @@ export function createRbacManager(config: RbacManagerConfig): AuthzManager {
       if (!roleExistsResult.data) {
         return err({
           code: IamErrorCode.ROLE_NOT_FOUND,
-          message: '角色不存在',
+          message: getIamMessage('iam_roleNotExist'),
         })
       }
 
@@ -293,7 +294,7 @@ export function createRbacManager(config: RbacManagerConfig): AuthzManager {
       if (!roleResult.data) {
         return err({
           code: IamErrorCode.ROLE_NOT_FOUND,
-          message: '角色不存在',
+          message: getIamMessage('iam_roleNotExist'),
         })
       }
 
@@ -303,7 +304,7 @@ export function createRbacManager(config: RbacManagerConfig): AuthzManager {
       if (!permResult.data) {
         return err({
           code: IamErrorCode.PERMISSION_NOT_FOUND,
-          message: '权限不存在',
+          message: getIamMessage('iam_permissionNotExist'),
         })
       }
 

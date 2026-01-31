@@ -14,6 +14,46 @@ import { authGuard, createHandle, loggingMiddleware, rateLimitMiddleware, sequen
 // 初始化应用（包含数据库、缓存、IAM 等模块）
 initApp()
 
+// =============================================================================
+// Paraglide i18n Middleware
+// =============================================================================
+
+// NOTE: paraglideMiddleware 会在 Paraglide 首次编译后自动生成
+// 在 src/lib/paraglide/server.js 中
+// 首次运行前请先执行 pnpm paraglide:compile 或 pnpm build
+
+let paraglideMiddleware: ((request: Request, callback: (args: { request: Request, locale: string }) => Response | Promise<Response>) => Response | Promise<Response>) | null = null
+
+// 动态导入 paraglide middleware（仅当生成后可用）
+try {
+  // @ts-expect-error - 生成文件可能不存在
+  const paraglideServer = await import('$lib/paraglide/server.js')
+  paraglideMiddleware = paraglideServer.paraglideMiddleware
+}
+catch {
+  // Paraglide 尚未编译，跳过
+  console.warn('[i18n] Paraglide 尚未编译，跳过 i18n middleware')
+}
+
+/**
+ * i18n Handle - 使用 Paraglide middleware 处理语言
+ */
+const i18nHandle: Handle = async ({ event, resolve }) => {
+  if (paraglideMiddleware) {
+    return paraglideMiddleware(event.request, async ({ request: localizedRequest, locale }) => {
+      event.request = localizedRequest
+      return resolve(event, {
+        transformPageChunk: ({ html }) => html.replace('%lang%', locale),
+      })
+    })
+  }
+
+  // Paraglide 未就绪时，使用默认语言
+  return resolve(event, {
+    transformPageChunk: ({ html }) => html.replace('%lang%', 'zh-CN'),
+  })
+}
+
 /**
  * 会话验证 - 使用 IAM 模块验证 JWT token
  */
@@ -103,4 +143,4 @@ const haiHandle = createHandle({
   },
 })
 
-export const handle: Handle = sequence(haiHandle)
+export const handle: Handle = sequence(i18nHandle, haiHandle)

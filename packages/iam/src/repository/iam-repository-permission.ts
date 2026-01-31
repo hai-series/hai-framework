@@ -14,6 +14,7 @@ import type { DbService } from '@hai/db'
 import type { IamError, Permission, PermissionRepository } from '../iam-types.js'
 import { err, ok } from '@hai/core'
 import { IamErrorCode } from '../iam-config.js'
+import { getIamMessage } from '../index.js'
 
 /**
  * 权限表名
@@ -119,7 +120,7 @@ export function createDbPermissionRepository(db: DbService): PermissionRepositor
         if (errorMsg.includes('unique') || errorMsg.includes('duplicate')) {
           return err({
             code: IamErrorCode.PERMISSION_ALREADY_EXISTS,
-            message: '权限已存在',
+            message: getIamMessage('iam_permissionAlreadyExist'),
             cause: result.error,
           })
         }

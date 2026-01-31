@@ -23,6 +23,7 @@ import { err, ok } from '@hai/core'
 import OpenAI from 'openai'
 
 import { AIErrorCode } from '../ai-config.js'
+import { getAiMessage } from '../index.js'
 
 /**
  * HAI LLM Provider 实现
@@ -167,7 +168,7 @@ class HaiLLMProvider implements LLMProvider {
     if (error instanceof Error && error.name === 'AbortError') {
       return {
         code: AIErrorCode.TIMEOUT,
-        message: '请求超时',
+        message: getAiMessage('ai_requestTimeout'),
         cause: error,
       }
     }

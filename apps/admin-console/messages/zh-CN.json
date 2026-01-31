@@ -1,0 +1,12 @@
+{
+  "$schema": "https://inlang.com/schema/inlang-message-format",
+  "app_title": "hai 管理控制台",
+  "nav_home": "首页",
+  "nav_dashboard": "仪表盘",
+  "nav_settings": "设置",
+  "nav_users": "用户管理",
+  "settings_title": "设置",
+  "settings_theme": "主题设置",
+  "settings_language": "语言设置",
+  "settings_save": "保存设置"
+}

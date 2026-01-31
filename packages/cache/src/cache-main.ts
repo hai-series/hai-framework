@@ -69,6 +69,7 @@ import type {
 import { err } from '@hai/core'
 
 import { CacheConfigSchema, CacheErrorCode } from './cache-config.js'
+import { getCacheMessage } from './index.js'
 
 import { createMemoryProvider } from './provider/cache-provider-memory.js'
 import { createRedisProvider } from './provider/cache-provider-redis.js'
@@ -115,7 +116,7 @@ function createProvider(config: CacheConfig): CacheProvider {
 function notInitializedError(): CacheError {
   return {
     code: CacheErrorCode.NOT_INITIALIZED,
-    message: '缓存未初始化，请先调用 cache.init()',
+    message: getCacheMessage('cache_notInitializedMain'),
   }
 }
 

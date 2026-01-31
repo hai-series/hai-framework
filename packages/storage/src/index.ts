@@ -41,6 +41,8 @@
 // 自动注册 Schema 到 @hai/core
 // =============================================================================
 import { core } from '@hai/core'
+import messagesEnUS from '../messages/en-US.json'
+import messagesZhCN from '../messages/zh-CN.json'
 import { StorageConfigSchema } from './storage-config.js'
 
 // =============================================================================
@@ -63,6 +65,11 @@ export * from './storage-main.js'
 // =============================================================================
 
 export * from './storage-types.js'
+
+// i18n
+export type StorageMessageKey = keyof typeof messagesZhCN
+export const { getMessage: getStorageMessage, setDefaultLocale: setStorageDefaultLocale }
+  = core.i18n.createMessageGetter<StorageMessageKey>({ 'zh-CN': messagesZhCN, 'en-US': messagesEnUS })
 
 // 注册 storage 模块的配置 Schema
 core.registerBuiltinSchema('storage', StorageConfigSchema)

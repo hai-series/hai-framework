@@ -17,6 +17,7 @@
     "dist"
   ],
   "scripts": {
+    "paraglide:compile": "paraglide-js compile --project ./project.inlang --outdir ./src/i18n/paraglide",
     "build": "tsup",
     "dev": "tsup --watch",
     "test": "vitest run",
@@ -37,6 +38,7 @@
     "yaml": "catalog:"
   },
   "devDependencies": {
+    "@inlang/paraglide-js": "catalog:",
     "@types/node": "catalog:",
     "eslint-plugin-format": "catalog:",
     "loglevel": "catalog:",

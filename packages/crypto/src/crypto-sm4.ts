@@ -39,6 +39,7 @@ import { err, ok } from '@hai/core'
 import smCrypto from 'sm-crypto'
 
 import { CryptoErrorCode } from './crypto-config.js'
+import { getCryptoMessage } from './index.js'
 
 const { sm3, sm4 } = smCrypto
 
@@ -75,21 +76,21 @@ export function createSM4(): SM4Operations {
       if (!this.isValidKey(key)) {
         return err({
           code: CryptoErrorCode.INVALID_KEY,
-          message: 'SM4 密钥必须为 16 字节（32 个十六进制字符）',
+          message: getCryptoMessage('crypto_sm4KeyInvalid'),
         })
       }
 
       if (mode === 'cbc' && !iv) {
         return err({
           code: CryptoErrorCode.INVALID_IV,
-          message: 'CBC 模式必须提供 IV',
+          message: getCryptoMessage('crypto_sm4CbcNeedIv'),
         })
       }
 
       if (mode === 'cbc' && iv && !this.isValidIV(iv)) {
         return err({
           code: CryptoErrorCode.INVALID_IV,
-          message: 'SM4 IV 必须为 16 字节（32 个十六进制字符）',
+          message: getCryptoMessage('crypto_sm4IvInvalid'),
         })
       }
 
@@ -108,7 +109,7 @@ export function createSM4(): SM4Operations {
         if (!encrypted) {
           return err({
             code: CryptoErrorCode.ENCRYPTION_FAILED,
-            message: 'SM4 加密返回空结果',
+            message: getCryptoMessage('crypto_sm4EncryptEmpty'),
           })
         }
 
@@ -137,14 +138,14 @@ export function createSM4(): SM4Operations {
       if (!this.isValidKey(key)) {
         return err({
           code: CryptoErrorCode.INVALID_KEY,
-          message: 'SM4 密钥必须为 16 字节（32 个十六进制字符）',
+          message: getCryptoMessage('crypto_sm4KeyInvalid'),
         })
       }
 
       if (mode === 'cbc' && !iv) {
         return err({
           code: CryptoErrorCode.INVALID_IV,
-          message: 'CBC 模式必须提供 IV',
+          message: getCryptoMessage('crypto_sm4CbcNeedIv'),
         })
       }
 
@@ -169,7 +170,7 @@ export function createSM4(): SM4Operations {
         if (decrypted === false || decrypted === null || decrypted === undefined) {
           return err({
             code: CryptoErrorCode.DECRYPTION_FAILED,
-            message: 'SM4 解密失败',
+            message: getCryptoMessage('crypto_sm4DecryptFailed'),
           })
         }
 

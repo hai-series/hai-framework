@@ -41,6 +41,7 @@ import { createRequire } from 'node:module'
 import { err, ok } from '@hai/core'
 
 import { DbErrorCode } from '../db-config.js'
+import { getDbMessage } from '../index.js'
 
 const require = createRequire(import.meta.url)
 
@@ -151,7 +152,7 @@ export function createSqliteProvider(): DbProvider {
     if (!database) {
       return err({
         code: DbErrorCode.NOT_INITIALIZED,
-        message: '数据库未初始化，请先调用 initDB()',
+        message: getDbMessage('db_notInitialized'),
       })
     }
     return ok(database)
@@ -572,14 +573,14 @@ export function createSqliteProvider(): DbProvider {
       if (config.type !== 'sqlite') {
         return err({
           code: DbErrorCode.UNSUPPORTED_TYPE,
-          message: 'SQLite Provider 仅支持 sqlite 类型',
+          message: getDbMessage('db_sqliteOnlySqlite'),
         })
       }
 
       if (!config.database) {
         return err({
           code: DbErrorCode.CONFIG_ERROR,
-          message: 'SQLite 需要提供数据库路径（database 字段）',
+          message: getDbMessage('db_sqliteNeedPath'),
         })
       }
 

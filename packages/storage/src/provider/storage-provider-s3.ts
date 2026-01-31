@@ -57,6 +57,7 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 
 import { err, ok } from '@hai/core'
 
+import { getStorageMessage } from '../index.js'
 import { StorageErrorCode } from '../storage-config.js'
 
 // =============================================================================
@@ -91,7 +92,7 @@ function toStorageError(error: unknown, key?: string): StorageError {
   if (e.name === 'NoSuchBucket' || e.Code === 'NoSuchBucket') {
     return {
       code: StorageErrorCode.CONFIG_ERROR,
-      message: '存储桶不存在',
+      message: getStorageMessage('storage_bucketNotExist'),
       cause: error,
     }
   }
@@ -100,7 +101,7 @@ function toStorageError(error: unknown, key?: string): StorageError {
   if (e.name === 'NetworkError' || e.name?.includes('ECONNREFUSED')) {
     return {
       code: StorageErrorCode.NETWORK_ERROR,
-      message: '网络错误',
+      message: getStorageMessage('storage_networkError'),
       cause: error,
     }
   }
@@ -234,7 +235,7 @@ export function createS3Provider(): StorageProvider {
         if (!response.Body) {
           return err({
             code: StorageErrorCode.OPERATION_FAILED,
-            message: '响应体为空',
+            message: getStorageMessage('storage_responseBodyEmpty'),
             key,
           })
         }
@@ -462,7 +463,7 @@ export function createS3Provider(): StorageProvider {
       catch (error) {
         return err({
           code: StorageErrorCode.PRESIGN_FAILED,
-          message: '生成签名 URL 失败',
+          message: getStorageMessage('storage_presignUrlFailed'),
           key,
           cause: error,
         })
@@ -490,7 +491,7 @@ export function createS3Provider(): StorageProvider {
       catch (error) {
         return err({
           code: StorageErrorCode.PRESIGN_FAILED,
-          message: '生成上传签名 URL 失败',
+          message: getStorageMessage('storage_presignUploadUrlFailed'),
           key,
           cause: error,
         })
@@ -522,7 +523,7 @@ export function createS3Provider(): StorageProvider {
       if (cfg.type !== 's3') {
         return err({
           code: StorageErrorCode.CONFIG_ERROR,
-          message: '配置类型错误：S3 provider 仅支持 type=s3',
+          message: getStorageMessage('storage_s3ConfigTypeError'),
         })
       }
 

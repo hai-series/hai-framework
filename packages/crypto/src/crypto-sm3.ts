@@ -33,6 +33,7 @@ import { err, ok } from '@hai/core'
 import smCrypto from 'sm-crypto'
 
 import { CryptoErrorCode } from './crypto-config.js'
+import { getCryptoMessage } from './index.js'
 
 const { sm3 } = smCrypto
 
@@ -74,7 +75,7 @@ export function createSM3(): SM3Operations {
         if (!result) {
           return err({
             code: CryptoErrorCode.HASH_FAILED,
-            message: 'SM3 哈希返回空结果',
+            message: getCryptoMessage('crypto_sm3HashEmpty'),
           })
         }
 

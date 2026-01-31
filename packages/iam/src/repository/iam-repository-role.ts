@@ -14,6 +14,7 @@ import type { DbService } from '@hai/db'
 import type { IamError, Role, RoleRepository } from '../iam-types.js'
 import { err, ok } from '@hai/core'
 import { IamErrorCode } from '../iam-config.js'
+import { getIamMessage } from '../index.js'
 
 /**
  * 角色表名
@@ -115,7 +116,7 @@ export function createDbRoleRepository(db: DbService): RoleRepository {
         if (errorMsg.includes('unique') || errorMsg.includes('duplicate')) {
           return err({
             code: IamErrorCode.ROLE_ALREADY_EXISTS,
-            message: '角色已存在',
+            message: getIamMessage('iam_roleAlreadyExist'),
             cause: result.error,
           })
         }
@@ -221,7 +222,7 @@ export function createDbRoleRepository(db: DbService): RoleRepository {
           if (!r.data) {
             return err({
               code: IamErrorCode.ROLE_NOT_FOUND,
-              message: '角色不存在',
+              message: getIamMessage('iam_roleNotExist'),
             })
           }
           return ok(r.data)
@@ -249,7 +250,7 @@ export function createDbRoleRepository(db: DbService): RoleRepository {
       if (result.data.changes === 0) {
         return err({
           code: IamErrorCode.ROLE_NOT_FOUND,
-          message: '角色不存在',
+          message: getIamMessage('iam_roleNotExist'),
         })
       }
 
@@ -259,7 +260,7 @@ export function createDbRoleRepository(db: DbService): RoleRepository {
       if (!findResult.data) {
         return err({
           code: IamErrorCode.ROLE_NOT_FOUND,
-          message: '角色不存在',
+          message: getIamMessage('iam_roleNotExist'),
         })
       }
 
@@ -272,7 +273,7 @@ export function createDbRoleRepository(db: DbService): RoleRepository {
       if (roleResult.success && roleResult.data?.isSystem) {
         return err({
           code: IamErrorCode.FORBIDDEN,
-          message: '不能删除系统角色',
+          message: getIamMessage('iam_cannotDeleteSystemRole'),
         })
       }
 

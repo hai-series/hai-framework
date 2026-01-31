@@ -11,6 +11,7 @@
     "svelte5"
   ],
   "scripts": {
+    "paraglide:compile": "paraglide-js compile --project ./project.inlang --outdir ./src/lib/paraglide",
     "dev": "vite dev",
     "build": "vite build",
     "preview": "vite preview",
@@ -33,6 +34,7 @@
     "zod": "catalog:"
   },
   "devDependencies": {
+    "@inlang/paraglide-js": "^2.0.0",
     "@iconify-json/tabler": "catalog:",
     "@iconify/tailwind4": "catalog:",
     "@sveltejs/adapter-auto": "catalog:",

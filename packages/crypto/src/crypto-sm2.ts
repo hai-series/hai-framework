@@ -35,6 +35,7 @@ import { err, ok } from '@hai/core'
 import smCrypto from 'sm-crypto'
 
 import { CryptoErrorCode } from './crypto-config.js'
+import { getCryptoMessage } from './index.js'
 
 const { sm2 } = smCrypto
 
@@ -88,7 +89,7 @@ export function createSM2(): SM2Operations {
         if (!encrypted) {
           return err({
             code: CryptoErrorCode.ENCRYPTION_FAILED,
-            message: 'SM2 加密返回空结果',
+            message: getCryptoMessage('crypto_sm2EncryptEmpty'),
           })
         }
 
@@ -117,7 +118,7 @@ export function createSM2(): SM2Operations {
       if (!this.isValidPrivateKey(privateKey)) {
         return err({
           code: CryptoErrorCode.INVALID_KEY,
-          message: '无效的 SM2 私钥格式',
+          message: getCryptoMessage('crypto_sm2PrivateKeyInvalid'),
         })
       }
 
@@ -133,7 +134,7 @@ export function createSM2(): SM2Operations {
         if (decrypted === false || decrypted === null || decrypted === undefined) {
           return err({
             code: CryptoErrorCode.DECRYPTION_FAILED,
-            message: 'SM2 解密失败或返回无效结果',
+            message: getCryptoMessage('crypto_sm2DecryptFailed'),
           })
         }
 
@@ -158,7 +159,7 @@ export function createSM2(): SM2Operations {
       if (!this.isValidPrivateKey(privateKey)) {
         return err({
           code: CryptoErrorCode.INVALID_KEY,
-          message: '无效的 SM2 私钥格式',
+          message: getCryptoMessage('crypto_sm2PrivateKeyInvalid'),
         })
       }
 
@@ -168,7 +169,7 @@ export function createSM2(): SM2Operations {
         if (!signature) {
           return err({
             code: CryptoErrorCode.SIGN_FAILED,
-            message: 'SM2 签名返回空结果',
+            message: getCryptoMessage('crypto_sm2SignEmpty'),
           })
         }
 
@@ -194,7 +195,7 @@ export function createSM2(): SM2Operations {
       if (!this.isValidPublicKey(publicKey)) {
         return err({
           code: CryptoErrorCode.INVALID_KEY,
-          message: '无效的 SM2 公钥格式',
+          message: getCryptoMessage('crypto_sm2PublicKeyInvalid'),
         })
       }
 

@@ -78,6 +78,7 @@ import type { IamComponents } from './service/iam-service-initializer.js'
 import { err, ok } from '@hai/core'
 import { IamConfigSchema, IamErrorCode } from './iam-config.js'
 import { seedIamData } from './iam-database.js'
+import { getIamMessage } from './index.js'
 import { createAuthOperations } from './service/iam-service-auth.js'
 import {
 
@@ -95,7 +96,7 @@ import { createUserOperations } from './service/iam-service-user.js'
 function notInitializedError(): IamError {
   return {
     code: IamErrorCode.NOT_INITIALIZED,
-    message: '未初始化，请先调用 iam.init()',
+    message: getIamMessage('iam_notInitialized'),
   }
 }
 
@@ -285,7 +286,7 @@ function createIamServiceInstance(): IamService {
       catch (error) {
         return err({
           code: IamErrorCode.CONFIG_ERROR,
-          message: '初始化失败',
+          message: getIamMessage('iam_initFailed'),
           cause: error,
         })
       }

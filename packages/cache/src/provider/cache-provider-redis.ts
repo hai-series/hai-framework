@@ -43,6 +43,7 @@ import { core, err, ok } from '@hai/core'
 import Redis from 'ioredis'
 
 import { CacheErrorCode } from '../cache-config.js'
+import { getCacheMessage } from '../index.js'
 
 // =============================================================================
 // Redis Provider 实现
@@ -94,7 +95,7 @@ export function createRedisProvider(): CacheProvider {
     if (!client) {
       return err({
         code: CacheErrorCode.NOT_INITIALIZED,
-        message: '缓存未初始化，请先调用 initCache()',
+        message: getCacheMessage('cache_notInitialized'),
       })
     }
 
@@ -105,7 +106,7 @@ export function createRedisProvider(): CacheProvider {
     catch (error) {
       return err({
         code: CacheErrorCode.OPERATION_FAILED,
-        message: `缓存操作失败: ${error instanceof Error ? error.message : String(error)}`,
+        message: `Cache operation failed: ${error instanceof Error ? error.message : String(error)}`,
         cause: error,
       })
     }

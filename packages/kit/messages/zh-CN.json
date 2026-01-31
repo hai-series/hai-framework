@@ -1,0 +1,19 @@
+{
+  "$schema": "https://inlang.com/schema/inlang-message-format",
+  "kit_unauthorized": "未授权",
+  "kit_missingFilename": "缺少 filename 参数",
+  "kit_presignUrlFailed": "生成预签名 URL 失败",
+  "kit_listFailed": "获取列表失败",
+  "kit_downloadUrlFailed": "生成下载 URL 失败",
+  "kit_invalidRequest": "无效请求",
+  "kit_missingFile": "缺少文件",
+  "kit_unsupportedFileType": "不支持的文件类型",
+  "kit_fileSizeExceeded": "文件大小超过限制 ({maxSize}MB)",
+  "kit_uploadFailed": "上传失败",
+  "kit_missingKey": "缺少 key 参数",
+  "kit_deleteFailed": "删除失败",
+  "kit_csrfTokenFailed": "生成 CSRF Token 失败",
+  "kit_csrfVerifyFailed": "CSRF Token 验证失败",
+  "kit_encryptFailed": "加密失败",
+  "kit_presignFetchFailed": "获取预签名 URL 失败"
+}

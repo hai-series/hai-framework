@@ -44,6 +44,7 @@ import type {
 import { err, ok } from '@hai/core'
 
 import { DbErrorCode } from '../db-config.js'
+import { getDbMessage } from '../index.js'
 
 // =============================================================================
 // mysql2 类型定义（避免强依赖）
@@ -178,7 +179,7 @@ export function createMysqlProvider(): DbProvider {
     if (!pool) {
       return err({
         code: DbErrorCode.NOT_INITIALIZED,
-        message: '数据库未初始化，请先调用 initDB()',
+        message: getDbMessage('db_notInitialized'),
       })
     }
     return ok(pool)
@@ -327,28 +328,28 @@ export function createMysqlProvider(): DbProvider {
     query<T>(_sql: string, _params?: unknown[]): Result<T[], DbError> {
       return err({
         code: DbErrorCode.UNSUPPORTED_TYPE,
-        message: 'MySQL 不支持同步的 sql.query()，请使用 txAsync() 替代',
+        message: getDbMessage('db_mysqlNotSupportSyncQuery'),
       })
     },
 
     get<T>(_sql: string, _params?: unknown[]): Result<T | null, DbError> {
       return err({
         code: DbErrorCode.UNSUPPORTED_TYPE,
-        message: 'MySQL 不支持同步的 sql.get()，请使用 txAsync() 替代',
+        message: getDbMessage('db_mysqlNotSupportSyncGet'),
       })
     },
 
     execute(_sql: string, _params?: unknown[]): Result<ExecuteResult, DbError> {
       return err({
         code: DbErrorCode.UNSUPPORTED_TYPE,
-        message: 'MySQL 不支持同步的 sql.execute()，请使用 txAsync() 替代',
+        message: getDbMessage('db_mysqlNotSupportSyncExecute'),
       })
     },
 
     batch(_statements: Array<{ sql: string, params?: unknown[] }>): Result<void, DbError> {
       return err({
         code: DbErrorCode.UNSUPPORTED_TYPE,
-        message: 'MySQL 不支持同步的 sql.batch()，请使用 txAsync() 替代',
+        message: getDbMessage('db_mysqlNotSupportSyncBatch'),
       })
     },
   }
@@ -363,7 +364,7 @@ export function createMysqlProvider(): DbProvider {
   function tx<T>(_fn: TxCallback<T>): Result<T, DbError> {
     return err({
       code: DbErrorCode.UNSUPPORTED_TYPE,
-      message: 'MySQL 不支持同步事务 tx()，请使用 txAsync() 替代',
+      message: getDbMessage('db_mysqlNotSupportSyncTx'),
     })
   }
 
@@ -416,13 +417,13 @@ export function createMysqlProvider(): DbProvider {
       // 同步风格的接口（会抛出错误提示使用 await）
       const txOps: TxOperations = {
         query<R>(_sqlStr: string, _params?: unknown[]): R[] {
-          throw new Error('MySQL 事务中请使用 await tx.query()')
+          throw new Error(getDbMessage('db_mysqlTxQueryHint'))
         },
         get<R>(_sqlStr: string, _params?: unknown[]): R | null {
-          throw new Error('MySQL 事务中请使用 await tx.get()')
+          throw new Error(getDbMessage('db_mysqlTxGetHint'))
         },
         execute(_sqlStr: string, _params?: unknown[]): ExecuteResult {
-          throw new Error('MySQL 事务中请使用 await tx.execute()')
+          throw new Error(getDbMessage('db_mysqlTxExecuteHint'))
         },
       }
 
@@ -471,7 +472,7 @@ export function createMysqlProvider(): DbProvider {
       if (config.type !== 'mysql') {
         return err({
           code: DbErrorCode.UNSUPPORTED_TYPE,
-          message: 'MySQL Provider 仅支持 mysql 类型',
+          message: getDbMessage('db_mysqlOnlyMysql'),
         })
       }
 
