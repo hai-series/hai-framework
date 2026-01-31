@@ -5,7 +5,7 @@
  */
 
 import type { Cookies, RequestEvent } from '@sveltejs/kit'
-import type { IamActionsConfig, IamHandleConfig, IamLocals } from '../src/modules/iam/iam-types.js'
+import type { IamHandleConfig, IamLocals } from '../src/modules/iam/iam-types.js'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { createIamHandle, requireAuth } from '../src/modules/iam/iam-handle.js'
 

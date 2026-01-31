@@ -334,15 +334,15 @@ export default {
 
 ```ts
 import {
-  createLocaleStore,    // Svelte 响应式 locale store
-  setGlobalLocale,      // 设置全局 locale（同步所有模块）
-  getGlobalLocale,      // 获取当前全局 locale
-  detectBrowserLocale,  // 检测浏览器语言
-  resolveLocale,        // 解析 locale（支持回退）
-  isLocaleSupported,    // 检查 locale 是否支持
-  interpolate,          // 字符串插值
-  DEFAULT_LOCALE,       // 默认 locale ('zh-CN')
-  DEFAULT_LOCALES,      // 支持的 locale 列表
+  createLocaleStore, // Svelte 响应式 locale store
+  DEFAULT_LOCALE, // 默认 locale ('zh-CN')
+  DEFAULT_LOCALES, // 支持的 locale 列表
+  detectBrowserLocale, // 检测浏览器语言
+  getGlobalLocale, // 获取当前全局 locale
+  interpolate, // 字符串插值
+  isLocaleSupported, // 检查 locale 是否支持
+  resolveLocale, // 解析 locale（支持回退）
+  setGlobalLocale, // 设置全局 locale（同步所有模块）
 } from '@hai/ui'
 ```
 

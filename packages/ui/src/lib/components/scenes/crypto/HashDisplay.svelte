@@ -13,10 +13,8 @@
   import { cn } from '../../../utils.js'
   import IconButton from '../../primitives/IconButton.svelte'
   import Badge from '../../primitives/Badge.svelte'
+  import { m } from '../../../messages.js'
   
-  const defaultLabels = {
-    copyHash: 'Copy hash',
-  }
   
   let {
     value = '',
@@ -29,7 +27,7 @@
     class: className = '',
   }: HashDisplayProps = $props()
   
-  const mergedLabels = $derived({ ...defaultLabels, ...labels })
+  
   
   let copied = $state(false)
   
@@ -80,7 +78,7 @@
       <IconButton
         size="xs"
         variant="ghost"
-        label={mergedLabels.copyHash}
+        label={labels.copyHash ?? m('hash_copy')}
         onclick={copyToClipboard}
       >
         {#snippet children()}

@@ -7,6 +7,7 @@
  */
 
 import type { RequestEvent } from '@sveltejs/kit'
+import type { Buffer } from 'node:buffer'
 
 /**
  * Storage 服务接口（简化版，与 @hai/storage 兼容）

@@ -7,6 +7,7 @@
  */
 
 import type { Middleware, RateLimitConfig } from '../types.js'
+import { core } from '@hai/core'
 
 /**
  * 速率限制存储
@@ -72,7 +73,7 @@ export function rateLimitMiddleware(config: RateLimitConfig): Middleware {
     const resetTime = Math.ceil(entry.resetAt / 1000)
 
     if (entry.count > maxRequests) {
-      console.warn(JSON.stringify({ key, requestId, message: 'Rate limit exceeded' }))
+      core.logger.warn('Rate limit exceeded', { key, requestId })
 
       if (onLimitReached) {
         return onLimitReached(event)

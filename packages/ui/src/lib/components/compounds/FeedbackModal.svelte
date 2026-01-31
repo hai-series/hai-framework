@@ -46,26 +46,7 @@
     }
   }
   
-  // 默认文案
-  const defaultLabels: Required<FeedbackLabels> = {
-    title: 'Feedback',
-    description: 'We value your feedback. Please share your thoughts with us.',
-    typeLabel: 'Feedback Type',
-    contentLabel: 'Content',
-    contentPlaceholder: 'Please describe your issue or suggestion in detail...',
-    contactLabel: 'Contact (Optional)',
-    contactPlaceholder: 'Email or phone for us to reply',
-    cancel: 'Cancel',
-    submit: 'Submit Feedback',
-    errorEmpty: 'Please fill in the feedback content',
-    errorSubmit: 'Submission failed, please try again',
-    types: {
-      bug: 'Bug Report',
-      feature: 'Feature Request',
-      question: 'Question',
-      other: 'Other',
-    },
-  }
+  import { m } from '../../messages.js'
 
   interface Props {
     open?: boolean
@@ -75,12 +56,7 @@
 
   let { open = $bindable(false), labels = {}, onsubmit }: Props = $props()
   
-  // 合并文案
-  const mergedLabels = $derived({
-    ...defaultLabels,
-    ...labels,
-    types: { ...defaultLabels.types, ...labels.types },
-  })
+  // 文案优先使用传入的 labels，缺省回退到内置消息 m(...)
 
   let feedbackType = $state<FeedbackType>('bug')
   let description = $state('')
@@ -88,16 +64,16 @@
   let loading = $state(false)
   let error = $state('')
 
-  const typeOptions = $derived<{ value: FeedbackType, label: string }[]>([
-    { value: 'bug', label: mergedLabels.types.bug },
-    { value: 'feature', label: mergedLabels.types.feature },
-    { value: 'question', label: mergedLabels.types.question },
-    { value: 'other', label: mergedLabels.types.other },
-  ])
+  const typeOptions = [
+    { value: 'bug', label: labels.types?.bug ?? m('feedback_type_bug') },
+    { value: 'feature', label: labels.types?.feature ?? m('feedback_type_feature') },
+    { value: 'question', label: labels.types?.question ?? m('feedback_type_question') },
+    { value: 'other', label: labels.types?.other ?? m('feedback_type_other') },
+  ]
 
   async function handleSubmit() {
     if (!description.trim()) {
-      error = mergedLabels.errorEmpty
+      error = labels.errorEmpty ?? m('feedback_error_empty')
       return
     }
 
@@ -113,7 +89,7 @@
       open = false
       resetForm()
     } catch (e) {
-      error = e instanceof Error ? e.message : mergedLabels.errorSubmit
+      error = e instanceof Error ? e.message : (labels.errorSubmit ?? m('feedback_error_submit'))
     } finally {
       loading = false
     }
@@ -127,8 +103,8 @@
   }
 </script>
 
-<Modal bind:open title={mergedLabels.title}>
-  <p class='text-base-content/70 mb-4'>{mergedLabels.description}</p>
+<Modal bind:open title={labels.title ?? m('feedback_title')}>
+  <p class='text-base-content/70 mb-4'>{labels.description ?? m('feedback_description')}</p>
 
   {#if error}
     <div class='alert alert-error mb-4'>
@@ -140,7 +116,7 @@
   <div class='space-y-4'>
     <div class='form-control'>
       <label class='label' for='feedback-type'>
-        <span class='label-text'>{mergedLabels.typeLabel}</span>
+        <span class='label-text'>{labels.typeLabel ?? m('feedback_type_label')}</span>
       </label>
       <select
         id='feedback-type'
@@ -155,25 +131,25 @@
 
     <div class='form-control'>
       <label class='label' for='feedback-desc'>
-        <span class='label-text'>{mergedLabels.contentLabel} <span class='text-error'>*</span></span>
+        <span class='label-text'>{labels.contentLabel ?? m('feedback_content_label')} <span class='text-error'>*</span></span>
       </label>
       <Textarea
         id='feedback-desc'
         class='h-32'
-        placeholder={mergedLabels.contentPlaceholder}
+        placeholder={labels.contentPlaceholder ?? m('feedback_content_placeholder')}
         bind:value={description}
       />
     </div>
 
     <div class='form-control'>
       <label class='label' for='feedback-contact'>
-        <span class='label-text'>{mergedLabels.contactLabel}</span>
+        <span class='label-text'>{labels.contactLabel ?? m('feedback_contact_label')}</span>
       </label>
       <Input
         id='feedback-contact'
         type='text'
         class='w-full'
-        placeholder={mergedLabels.contactPlaceholder}
+        placeholder={labels.contactPlaceholder ?? m('feedback_contact_placeholder')}
         bind:value={contact}
         autocomplete='email'
       />
@@ -182,10 +158,10 @@
 
   {#snippet footer()}
     <button class='btn btn-ghost' type='button' onclick={() => open = false}>
-      {mergedLabels.cancel}
+      {labels.cancel ?? m('feedback_cancel')}
     </button>
     <Button variant='primary' {loading} onclick={handleSubmit}>
-      {mergedLabels.submit}
+      {labels.submit ?? m('feedback_submit')}
     </Button>
   {/snippet}
 </Modal>

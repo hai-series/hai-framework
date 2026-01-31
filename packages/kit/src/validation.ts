@@ -57,7 +57,7 @@ export async function validateForm<T extends z.ZodType>(
       errors,
     }
   }
-  catch (e) {
+  catch {
     return {
       valid: false,
       errors: [{ field: '_', message: 'Failed to parse request body' }],

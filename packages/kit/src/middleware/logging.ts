@@ -7,6 +7,7 @@
  */
 
 import type { Middleware } from '../types.js'
+import { core } from '@hai/core'
 
 /**
  * 日志中间件配置
@@ -59,7 +60,7 @@ export function loggingMiddleware(config: LoggingMiddlewareConfig = {}): Middlew
       }
     }
 
-    console.log(JSON.stringify({ ...logData, message: 'Incoming request' }))
+    core.logger.info('Incoming request', { ...logData })
 
     const response = await next()
 
@@ -75,7 +76,7 @@ export function loggingMiddleware(config: LoggingMiddlewareConfig = {}): Middlew
       responseLogData.headers = Object.fromEntries(response.headers)
     }
 
-    console.log(JSON.stringify({ ...responseLogData, message: 'Request completed' }))
+    core.logger.info('Request completed', { ...responseLogData })
 
     return response
   }

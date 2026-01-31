@@ -7,6 +7,7 @@
  */
 
 import type { Handle, RequestEvent } from '@sveltejs/kit'
+import { core } from '@hai/core'
 import type { GuardConfig, GuardResult, HookConfig, Middleware, MiddlewareContext, SessionData } from '../types.js'
 
 /**
@@ -41,14 +42,11 @@ export function createHandle(config: HookConfig = {}): Handle {
       ; (event.locals as any).requestId = requestId
 
     if (logging) {
-      console.log(
-        JSON.stringify({
-          requestId,
-          method: event.request.method,
-          path: event.url.pathname,
-          message: 'Request started',
-        }),
-      )
+      core.logger.info('Request started', {
+        requestId,
+        method: event.request.method,
+        path: event.url.pathname,
+      })
     }
 
     try {
@@ -112,14 +110,11 @@ export function createHandle(config: HookConfig = {}): Handle {
 
       if (logging) {
         const duration = Date.now() - startTime
-        console.log(
-          JSON.stringify({
-            requestId,
-            status: response.status,
-            duration,
-            message: 'Request completed',
-          }),
-        )
+        core.logger.info('Request completed', {
+          requestId,
+          status: response.status,
+          duration,
+        })
       }
 
       return response
@@ -136,7 +131,7 @@ export function createHandle(config: HookConfig = {}): Handle {
         throw error
       }
 
-      console.error(JSON.stringify({ requestId, error: error instanceof Error ? error.message : error }), 'Request failed')
+      core.logger.error('Request failed', { requestId, error: error instanceof Error ? error.message : error })
 
       if (onError) {
         return onError(error, event)

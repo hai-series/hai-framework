@@ -31,18 +31,9 @@
     class?: string
   }
 
-  // Default labels (English as universal fallback)
-  const defaultLabels: Required<SeverityLabels> = {
-    critical: 'Critical',
-    high: 'High',
-    medium: 'Medium',
-    low: 'Low',
-  }
+  import { m } from '../../messages.js'
 
   let { type, size = 'sm', labels = {}, class: className = '' }: Props = $props()
-
-  // Merge labels
-  const mergedLabels = $derived({ ...defaultLabels, ...labels })
 
   /** Severity style mapping */
   const typeStyles: Record<string, string> = {
@@ -61,5 +52,10 @@
 </script>
 
 <span class='badge {typeStyles[type]} {sizeClasses[size]} {className}'>
-  {mergedLabels[type]}
+  {labels[type] ?? (
+    type === 'critical' ? m('severity_critical') :
+    type === 'high' ? m('severity_high') :
+    type === 'medium' ? m('severity_medium') :
+    m('severity_low')
+  )}
 </span>

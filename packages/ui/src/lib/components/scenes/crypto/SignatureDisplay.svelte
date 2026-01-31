@@ -14,16 +14,7 @@
   import IconButton from '../../primitives/IconButton.svelte'
   import Badge from '../../primitives/Badge.svelte'
   
-  const defaultLabels = {
-    signature: 'Signature',
-    publicKey: 'Public Key',
-    verified: 'Verified',
-    verifyFailed: 'Verification Failed',
-    notVerified: 'Not Verified',
-    noSignature: 'No signature',
-    copySignature: 'Copy signature',
-    copyPublicKey: 'Copy public key',
-  }
+  import { m } from '../../../messages.js'
   
   let {
     signature = '',
@@ -36,7 +27,7 @@
     class: className = '',
   }: SignatureDisplayProps = $props()
   
-  const mergedLabels = $derived({ ...defaultLabels, ...labels })
+  
   
   let copiedSig = $state(false)
   let copiedKey = $state(false)
@@ -50,10 +41,10 @@
   
   const verifyStatusText = $derived(
     verified === true
-      ? mergedLabels.verified
+      ? (labels.verified ?? m('signature_verified'))
       : verified === false
-        ? mergedLabels.verifyFailed
-        : mergedLabels.notVerified
+        ? (labels.verifyFailed ?? m('signature_verify_failed'))
+        : (labels.notVerified ?? m('signature_not_verified'))
   )
   
   async function copySignature() {
@@ -82,7 +73,7 @@
 <div class={containerClass}>
   <!-- 签名状态 -->
   <div class="flex items-center gap-2">
-    <span class="text-sm font-medium">{mergedLabels.signature} ({algorithm})</span>
+    <span class="text-sm font-medium">{labels.signature ?? m('signature_label')} ({algorithm})</span>
     {#if verified !== undefined}
       <Badge size="sm" variant={verified ? 'success' : 'error'}>
         {#if verified}
@@ -102,14 +93,14 @@
   <!-- 签名值 -->
   <div class="bg-base-200 rounded-lg p-3">
     <div class="flex items-start justify-between gap-2">
-      <code class="text-xs font-mono break-all text-base-content/80 flex-1">
-        {signature || mergedLabels.noSignature}
+        <code class="text-xs font-mono break-all text-base-content/80 flex-1">
+        {signature || (labels.noSignature ?? m('signature_no_signature'))}
       </code>
       {#if copyable && signature}
         <IconButton
           size="xs"
           variant="ghost"
-          label={mergedLabels.copySignature}
+          label={labels.copySignature ?? m('signature_copy_signature')}
           onclick={copySignature}
         >
           {#snippet children()}
@@ -131,7 +122,7 @@
   <!-- 公钥（可选） -->
   {#if showPublicKey && publicKey}
     <div>
-      <div class="text-xs text-base-content/60 mb-1">{mergedLabels.publicKey}</div>
+      <div class="text-xs text-base-content/60 mb-1">{labels.publicKey ?? m('signature_public_key')}</div>
       <div class="bg-base-200 rounded-lg p-3">
         <div class="flex items-start justify-between gap-2">
           <code class="text-xs font-mono break-all text-base-content/80 flex-1">
@@ -141,7 +132,7 @@
             <IconButton
               size="xs"
               variant="ghost"
-              label={mergedLabels.copyPublicKey}
+              label={labels.copyPublicKey ?? m('signature_copy_public_key')}
               onclick={copyPublicKey}
             >
               {#snippet children()}
