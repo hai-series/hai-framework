@@ -5,6 +5,7 @@
  */
 
 import type { GenerateOptions, GeneratorType, TemplateContext } from '../types.js'
+import { core } from '@hai/core'
 import path from 'node:path'
 import chalk from 'chalk'
 import ora from 'ora'
@@ -64,7 +65,7 @@ export async function generate(options: GenerateOptions): Promise<void> {
     const project = await detectProject(cwd)
 
     if (!project?.isHaiProject) {
-      console.log(chalk.yellow('警告: 当前目录不是 hai 项目'))
+      core.logger.warn(chalk.yellow('警告: 当前目录不是 hai 项目'))
     }
 
     // 交互式获取选项
@@ -86,18 +87,18 @@ export async function generate(options: GenerateOptions): Promise<void> {
 
     spinner.succeed()
 
-    console.log()
-    console.log(chalk.green('✔ 生成完成！'))
-    console.log()
-    console.log('创建的文件:')
+    core.logger.info('', {})
+    core.logger.info(chalk.green('✔ 生成完成！'))
+    core.logger.info('', {})
+    core.logger.info('创建的文件:')
     files.forEach((file) => {
-      console.log(chalk.cyan(`  ${path.relative(cwd, file)}`))
+      core.logger.info(chalk.cyan(`  ${path.relative(cwd, file)}`))
     })
-    console.log()
+    core.logger.info('', {})
   }
   catch (error) {
     spinner.fail()
-    console.error(chalk.red('生成失败:'), error)
+    core.logger.error(chalk.red('生成失败:'), { error })
     throw error
   }
 }

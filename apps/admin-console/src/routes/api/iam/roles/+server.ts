@@ -7,6 +7,7 @@
 import type { RequestHandler } from '@sveltejs/kit'
 import { audit, permissionService, roleService } from '$lib/server/services/index.js'
 import { json } from '@sveltejs/kit'
+import { core } from '@hai/core'
 
 /**
  * GET /api/iam/roles - 获取角色列表
@@ -17,7 +18,7 @@ export const GET: RequestHandler = async () => {
     return json({ success: true, data: roles })
   }
   catch (error) {
-    console.error('获取角色列表失败:', error)
+    core.logger.error('获取角色列表失败:', { error })
     return json({ success: false, error: '获取角色列表失败' }, { status: 500 })
   }
 }
@@ -77,7 +78,7 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
     return json({ success: true, data: role })
   }
   catch (error) {
-    console.error('创建角色失败:', error)
+    core.logger.error('创建角色失败:', { error })
     return json({ success: false, error: '创建角色失败' }, { status: 500 })
   }
 }

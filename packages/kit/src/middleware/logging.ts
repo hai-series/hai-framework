@@ -60,7 +60,7 @@ export function loggingMiddleware(config: LoggingMiddlewareConfig = {}): Middlew
       }
     }
 
-    core.logger.info('Incoming request', { ...logData })
+    core.logger.trace('Incoming request', { ...logData })
 
     const response = await next()
 
@@ -76,7 +76,7 @@ export function loggingMiddleware(config: LoggingMiddlewareConfig = {}): Middlew
       responseLogData.headers = Object.fromEntries(response.headers)
     }
 
-    core.logger.info('Request completed', { ...responseLogData })
+    core.logger.trace('Request completed', { ...responseLogData })
 
     return response
   }

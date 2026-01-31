@@ -8,6 +8,7 @@ import type { RequestHandler } from '@sveltejs/kit'
 import { audit } from '$lib/server/services/index.js'
 import { iam } from '@hai/iam'
 import { json } from '@sveltejs/kit'
+import { core } from '@hai/core'
 
 /**
  * GET /api/iam/users - 获取用户列表
@@ -27,7 +28,7 @@ export const GET: RequestHandler = async () => {
     })
   }
   catch (error) {
-    console.error('获取用户列表失败:', error)
+    core.logger.error('获取用户列表失败:', { error })
     return json({ success: false, error: '获取用户列表失败' }, { status: 500 })
   }
 }
@@ -122,7 +123,7 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
     })
   }
   catch (error) {
-    console.error('创建用户失败:', error)
+    core.logger.error('创建用户失败:', { error })
     return json({ success: false, error: '创建用户失败' }, { status: 500 })
   }
 }

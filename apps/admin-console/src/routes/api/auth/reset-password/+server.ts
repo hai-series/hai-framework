@@ -6,6 +6,7 @@
 
 import type { RequestHandler } from '@sveltejs/kit'
 import { audit } from '$lib/server/services/index.js'
+import { core } from '@hai/core'
 import { iam } from '@hai/iam'
 import { json } from '@sveltejs/kit'
 
@@ -47,7 +48,7 @@ export const POST: RequestHandler = async ({ request, getClientAddress }) => {
     return json({ success: true, message: '密码重置成功，请使用新密码登录' })
   }
   catch (error) {
-    console.error('重置密码失败:', error)
+    core.logger.error('重置密码失败:', { error })
     return json({ success: false, error: '重置密码失败，请稍后重试' }, { status: 500 })
   }
 }

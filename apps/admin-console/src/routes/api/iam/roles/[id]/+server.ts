@@ -7,6 +7,7 @@
 import type { RequestHandler } from '@sveltejs/kit'
 import { audit, permissionService, roleService } from '$lib/server/services/index.js'
 import { json } from '@sveltejs/kit'
+import { core } from '@hai/core'
 
 /**
  * GET /api/iam/roles/[id] - 获取单个角色
@@ -20,7 +21,7 @@ export const GET: RequestHandler = async ({ params }) => {
     return json({ success: true, data: role })
   }
   catch (error) {
-    console.error('获取角色失败:', error)
+    core.logger.error('获取角色失败:', { error })
     return json({ success: false, error: '获取角色失败' }, { status: 500 })
   }
 }
@@ -79,7 +80,7 @@ export const PUT: RequestHandler = async ({ params, request, locals, getClientAd
     return json({ success: true, data: role })
   }
   catch (error) {
-    console.error('更新角色失败:', error)
+    core.logger.error('更新角色失败:', { error })
     const message = error instanceof Error ? error.message : '更新角色失败'
     return json({ success: false, error: message }, { status: 500 })
   }
@@ -117,7 +118,7 @@ export const DELETE: RequestHandler = async ({ params, locals, request, getClien
     return json({ success: true })
   }
   catch (error) {
-    console.error('删除角色失败:', error)
+    core.logger.error('删除角色失败:', { error })
     const message = error instanceof Error ? error.message : '删除角色失败'
     return json({ success: false, error: message }, { status: 500 })
   }

@@ -8,6 +8,7 @@ import type { RequestHandler } from '@sveltejs/kit'
 import { audit } from '$lib/server/services/index.js'
 import { iam } from '@hai/iam'
 import { json } from '@sveltejs/kit'
+import { core } from '@hai/core'
 
 /**
  * GET /api/iam/users/[id] - 获取单个用户
@@ -41,7 +42,7 @@ export const GET: RequestHandler = async ({ params }) => {
     })
   }
   catch (error) {
-    console.error('获取用户失败:', error)
+    core.logger.error('获取用户失败:', { error })
     return json({ success: false, error: '获取用户失败' }, { status: 500 })
   }
 }
@@ -163,7 +164,7 @@ export const PUT: RequestHandler = async ({ params, request, locals, getClientAd
     })
   }
   catch (error) {
-    console.error('更新用户失败:', error)
+    core.logger.error('更新用户失败:', { error })
     return json({ success: false, error: '更新用户失败' }, { status: 500 })
   }
 }
@@ -211,7 +212,7 @@ export const DELETE: RequestHandler = async ({ params, locals, request, getClien
     return json({ success: true })
   }
   catch (error) {
-    console.error('删除用户失败:', error)
+    core.logger.error('删除用户失败:', { error })
     return json({ success: false, error: '删除用户失败' }, { status: 500 })
   }
 }
