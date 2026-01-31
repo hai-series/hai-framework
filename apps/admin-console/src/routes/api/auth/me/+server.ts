@@ -7,6 +7,7 @@
 import type { RequestHandler } from '@sveltejs/kit'
 import { iam } from '@hai/iam'
 import { json } from '@sveltejs/kit'
+import { core } from '@hai/core'
 
 export const GET: RequestHandler = async ({ cookies }) => {
   try {
@@ -42,7 +43,7 @@ export const GET: RequestHandler = async ({ cookies }) => {
     })
   }
   catch (error) {
-    console.error('获取用户信息失败:', error)
+    core.logger.error('获取用户信息失败:', { error })
     return json({ success: false, user: null }, { status: 500 })
   }
 }

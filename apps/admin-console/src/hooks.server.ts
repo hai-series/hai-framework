@@ -8,6 +8,7 @@
 
 import type { Handle } from '@sveltejs/kit'
 import { initApp } from '$lib/server/init.js'
+import { core } from '@hai/core'
 import { iam } from '@hai/iam'
 import { authGuard, createHandle, loggingMiddleware, rateLimitMiddleware, sequence, setAllModulesLocale } from '@hai/kit'
 
@@ -31,7 +32,7 @@ try {
 }
 catch {
   // Paraglide 尚未编译，跳过
-  console.warn('[i18n] Paraglide 尚未编译，跳过 i18n middleware')
+  core.logger.warn('[i18n] Paraglide 尚未编译，跳过 i18n middleware')
 }
 
 /**
@@ -107,7 +108,7 @@ async function validateSession(token: string) {
     }
   }
   catch (error) {
-    console.error('会话验证失败:', error)
+    core.logger.error('会话验证失败:', { error })
     return null
   }
 }
@@ -141,7 +142,7 @@ const haiHandle = createHandle({
     },
   ],
   onError: (error: unknown, _event: unknown) => {
-    console.error('Request error:', error)
+    core.logger.error('Request error:', { error })
 
     return new Response(
       JSON.stringify({

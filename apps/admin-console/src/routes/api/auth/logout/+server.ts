@@ -6,6 +6,7 @@
 
 import type { RequestHandler } from '@sveltejs/kit'
 import { audit } from '$lib/server/services/index.js'
+import { core } from '@hai/core'
 import { iam } from '@hai/iam'
 import { json } from '@sveltejs/kit'
 
@@ -33,7 +34,7 @@ export const POST: RequestHandler = async ({ cookies, getClientAddress, request 
     return json({ success: true })
   }
   catch (error) {
-    console.error('登出失败:', error)
+    core.logger.error('登出失败:', { error })
     // 即使出错也清除 Cookie
     cookies.delete('session_token', { path: '/' })
     return json({ success: true })

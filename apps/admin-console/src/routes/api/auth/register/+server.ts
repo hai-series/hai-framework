@@ -6,6 +6,7 @@
 
 import type { RequestHandler } from '@sveltejs/kit'
 import { audit } from '$lib/server/services/index.js'
+import { core } from '@hai/core'
 import { iam } from '@hai/iam'
 import { json } from '@sveltejs/kit'
 
@@ -110,7 +111,7 @@ export const POST: RequestHandler = async ({ request, cookies, getClientAddress 
     })
   }
   catch (error) {
-    console.error('注册失败:', error)
+    core.logger.error('注册失败:', { error })
     return json({ success: false, error: '注册失败，请稍后重试' }, { status: 500 })
   }
 }

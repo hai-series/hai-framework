@@ -11,6 +11,7 @@
  */
 
 import type { CreateProjectOptions, GeneratorType } from './types.js'
+import { core } from '@hai/core'
 import { cac } from 'cac'
 import chalk from 'chalk'
 import { createProject, generate } from './commands/index.js'
@@ -121,8 +122,8 @@ cli.parse()
 
 // 无命令时显示帮助
 if (!cli.matchedCommand) {
-  console.log()
-  console.log(chalk.cyan('hai Admin Framework CLI'))
-  console.log()
+  core.logger.info('', {})
+  core.logger.info(chalk.cyan('hai Admin Framework CLI'))
+  core.logger.info('', {})
   cli.outputHelp()
 }

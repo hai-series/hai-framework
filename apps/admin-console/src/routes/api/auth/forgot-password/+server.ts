@@ -8,6 +8,7 @@ import type { RequestHandler } from '@sveltejs/kit'
 import { audit } from '$lib/server/services/index.js'
 import { iam } from '@hai/iam'
 import { json } from '@sveltejs/kit'
+import { core } from '@hai/core'
 
 export const POST: RequestHandler = async ({ request, getClientAddress }) => {
   try {
@@ -33,7 +34,7 @@ export const POST: RequestHandler = async ({ request, getClientAddress }) => {
     return json({ success: true, message: '如果该邮箱已注册，您将收到密码重置邮件' })
   }
   catch (error) {
-    console.error('忘记密码请求失败:', error)
+    core.logger.error('忘记密码请求失败:', { error })
     return json({ success: false, error: '请求失败，请稍后重试' }, { status: 500 })
   }
 }

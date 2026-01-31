@@ -7,6 +7,7 @@
 import type { RequestHandler } from '@sveltejs/kit'
 import { audit, permissionService } from '$lib/server/services/index.js'
 import { json } from '@sveltejs/kit'
+import { core } from '@hai/core'
 
 /**
  * DELETE /api/iam/permissions/[id] - 删除权限
@@ -40,7 +41,7 @@ export const DELETE: RequestHandler = async ({ params, locals, request, getClien
     return json({ success: true })
   }
   catch (error) {
-    console.error('删除权限失败:', error)
+    core.logger.error('删除权限失败:', { error })
     const message = error instanceof Error ? error.message : '删除权限失败'
     return json({ success: false, error: message }, { status: 500 })
   }

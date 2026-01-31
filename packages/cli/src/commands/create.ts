@@ -11,6 +11,7 @@
 import type { CreateProjectOptions, FeatureDefinition, FeatureId, ProjectInfo } from '../types.js'
 import { execSync } from 'node:child_process'
 import path from 'node:path'
+import { core } from '@hai/core'
 import chalk from 'chalk'
 import fse from 'fs-extra'
 import ora from 'ora'
@@ -121,7 +122,7 @@ export async function createProject(options: CreateProjectOptions): Promise<void
       })
 
       if (!overwrite) {
-        console.log(chalk.yellow('已取消'))
+        core.logger.info(chalk.yellow('已取消'))
         return
       }
 
@@ -153,22 +154,22 @@ export async function createProject(options: CreateProjectOptions): Promise<void
     }
 
     // 完成提示
-    console.log()
-    console.log(chalk.green('✔ 项目创建成功！'))
-    console.log()
-    console.log('下一步：')
-    console.log(chalk.cyan(`  cd ${resolvedOptions.name}`))
+    core.logger.info('', {})
+    core.logger.info(chalk.green('✔ 项目创建成功！'))
+    core.logger.info('', {})
+    core.logger.info('下一步：')
+    core.logger.info(chalk.cyan(`  cd ${resolvedOptions.name}`))
 
     if (!resolvedOptions.install) {
-      console.log(chalk.cyan(`  ${resolvedOptions.packageManager} install`))
+      core.logger.info(chalk.cyan(`  ${resolvedOptions.packageManager} install`))
     }
 
-    console.log(chalk.cyan(`  ${resolvedOptions.packageManager} dev`))
-    console.log()
+    core.logger.info(chalk.cyan(`  ${resolvedOptions.packageManager} dev`))
+    core.logger.info('', {})
   }
   catch (error) {
     spinner.fail()
-    console.error(chalk.red('创建项目失败:'), error)
+    core.logger.error(chalk.red('创建项目失败:'), { error })
     throw error
   }
 }
@@ -177,10 +178,10 @@ export async function createProject(options: CreateProjectOptions): Promise<void
  * 解析选项（交互式）
  */
 async function resolveOptions(options: CreateProjectOptions): Promise<Required<CreateProjectOptions>> {
-  console.log()
-  console.log(chalk.bold.cyan('  🚀 hai Admin Framework'))
-  console.log(chalk.gray('     AI-Native · Configuration-Driven · Security-First'))
-  console.log()
+  core.logger.info('', {})
+  core.logger.info(chalk.bold.cyan('  🚀 hai Admin Framework'))
+  core.logger.info(chalk.gray('     AI-Native · Configuration-Driven · Security-First'))
+  core.logger.info('', {})
 
   const questions: prompts.PromptObject[] = []
 
@@ -219,7 +220,7 @@ async function resolveOptions(options: CreateProjectOptions): Promise<Required<C
   const templateAnswers = questions.length > 0
     ? await prompts(questions, {
         onCancel: () => {
-          console.log(chalk.red('\n已取消'))
+          core.logger.info(chalk.red('\n已取消'))
           process.exit(1)
         },
       })
@@ -246,7 +247,7 @@ async function resolveOptions(options: CreateProjectOptions): Promise<Required<C
       instructions: false,
     }, {
       onCancel: () => {
-        console.log(chalk.red('\n已取消'))
+        core.logger.info(chalk.red('\n已取消'))
         process.exit(1)
       },
     })
@@ -270,7 +271,7 @@ async function resolveOptions(options: CreateProjectOptions): Promise<Required<C
       initial: true,
     }, {
       onCancel: () => {
-        console.log(chalk.red('\n已取消'))
+        core.logger.info(chalk.red('\n已取消'))
         process.exit(1)
       },
     })
@@ -293,7 +294,7 @@ async function resolveOptions(options: CreateProjectOptions): Promise<Required<C
       initial: detected === 'pnpm' ? 0 : detected === 'npm' ? 1 : 2,
     }, {
       onCancel: () => {
-        console.log(chalk.red('\n已取消'))
+        core.logger.info(chalk.red('\n已取消'))
         process.exit(1)
       },
     })
@@ -310,7 +311,7 @@ async function resolveOptions(options: CreateProjectOptions): Promise<Required<C
       initial: true,
     }, {
       onCancel: () => {
-        console.log(chalk.red('\n已取消'))
+        core.logger.info(chalk.red('\n已取消'))
         process.exit(1)
       },
     })
@@ -327,7 +328,7 @@ async function resolveOptions(options: CreateProjectOptions): Promise<Required<C
       initial: true,
     }, {
       onCancel: () => {
-        console.log(chalk.red('\n已取消'))
+        core.logger.info(chalk.red('\n已取消'))
         process.exit(1)
       },
     })
@@ -404,12 +405,12 @@ async function generateProjectFiles(
       check: 'svelte-kit sync && svelte-check --tsconfig ./tsconfig.json',
       lint: 'eslint .',
       test: 'vitest run',
-    },
-    dependencies: {
-      // 核心包（始终需要）
-      '@hai/core': 'workspace:*',
-      '@hai/kit': 'workspace:*',
-      '@hai/ui': 'workspace:*',
+    }, {
+      onCancel: () => {
+        core.logger.info(chalk.red('\n已取消'))
+        process.exit(1)
+      },
+    })
       // 根据选择的功能添加包
       ...featurePackages,
     },
