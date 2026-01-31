@@ -5,26 +5,17 @@
  * 国际化工具模块
  *
  * 设计原则：
- * - 显式传 locale：库包不维护全局 locale 状态
+ * - 集中式 locale 管理：通过 core.i18n.localeManager 统一管理全局 locale
+ * - 通过 core.i18n.xxx 访问所有 i18n 功能
  * - Paraglide 优先：翻译由各包的 Paraglide 编译生成
- * - 此模块提供辅助工具函数
  *
- * 注意：createMessageGetter 不直接导出，请通过 core.i18n.createMessageGetter 使用
+ * 使用方式：
+ * - core.i18n.setGlobalLocale('en-US') - 设置全局 locale
+ * - core.i18n.createMessageGetter(messages) - 创建消息获取器（自动订阅 locale 变化）
  * =============================================================================
  */
 
-export {
-  DEFAULT_LOCALE,
-  DEFAULT_LOCALES,
-  detectBrowserLocale,
-  interpolate,
-  isLocaleSupported,
-  resolveLocale,
-} from './i18n-utils.js'
-
-// 内部导出，供 core.i18n 使用
-export { createMessageGetter } from './i18n-utils.js'
-
+// 仅导出类型，函数通过 core.i18n 访问
 export type {
   InterpolationParams,
   Locale,

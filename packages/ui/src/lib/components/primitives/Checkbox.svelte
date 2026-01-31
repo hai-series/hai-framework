@@ -16,6 +16,7 @@
     label = '',
     size = 'md',
     disabled = false,
+    readonly = false,
     indeterminate = false,
     class: className = '',
     onchange,
@@ -32,6 +33,7 @@
   )
   
   function handleChange(e: Event & { currentTarget: HTMLInputElement }) {
+    if (readonly) return
     checked = e.currentTarget.checked
     onchange?.(checked)
   }
@@ -43,7 +45,7 @@
       {id}
       type="checkbox"
       class={checkboxClass}
-      {disabled}
+      disabled={disabled || readonly}
       bind:checked
       bind:indeterminate
       onchange={handleChange}

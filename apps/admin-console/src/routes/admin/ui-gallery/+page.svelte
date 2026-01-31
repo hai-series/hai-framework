@@ -39,16 +39,13 @@
   <!-- 标签切换 -->
   <div class="bg-base-100 rounded-xl border border-base-200 p-1 inline-flex gap-1">
     {#each tabs as tab}
-      <button
-        type="button"
-        class="px-4 py-2 rounded-lg text-sm font-medium transition-colors
-          {activeTab === tab.id 
-            ? 'bg-primary text-primary-content' 
-            : 'text-base-content/70 hover:bg-base-200'}"
+      <Button
+        variant={activeTab === tab.id ? 'primary' : 'ghost'}
+        size="sm"
         onclick={() => activeTab = tab.id}
       >
         {tab.label}
-      </button>
+      </Button>
     {/each}
   </div>
 

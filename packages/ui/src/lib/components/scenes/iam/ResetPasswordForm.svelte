@@ -5,6 +5,7 @@
   重置密码表单组件（配合验证码/链接使用）
   
   使用 Svelte 5 Runes ($props, $state, $derived)
+  使用 primitives/compounds 组件：Input, Button, Alert
   =============================================================================
 -->
 <script lang="ts">
@@ -12,45 +13,26 @@
   import { cn } from '../../../utils.js'
   import PasswordInput from './PasswordInput.svelte'
   import { arePasswordsEqual } from './password-utils.js'
-  
-  const defaultLabels = {
-    codeLabel: 'Verification Code',
-    codePlaceholder: 'Enter verification code',
-    newPasswordLabel: 'New Password',
-    newPasswordPlaceholder: 'Enter new password',
-    confirmPasswordLabel: 'Confirm Password',
-    confirmPasswordPlaceholder: 'Re-enter new password',
-    passwordMismatch: 'Passwords do not match',
-  }
+  import Input from '../../primitives/Input.svelte'
+  import Button from '../../primitives/Button.svelte'
+  import Alert from '../../compounds/Alert.svelte'
+  import { m } from '../../../messages.js'
   
   let {
     loading = false,
     disabled = false,
+    showTitle = false,
+    showDescription = false,
     showCode = true,
     showPasswordStrength = true,
     minPasswordLength = 8,
-    submitText = 'Reset Password',
-    labels = {},
-    strengthLabels = {},
-    toggleLabels = {},
-    validationMessages = {},
+    showBackLink = false,
+    loginUrl = '/login',
+    submitText,
     class: className = '',
     errors = {},
     onsubmit,
   }: ResetPasswordFormProps = $props()
-  
-  const mergedLabels = $derived({ ...defaultLabels, ...labels })
-  
-  // 构建 PasswordInput 的 labels
-  const passwordInputLabels = $derived({
-    showPassword: toggleLabels.showPassword,
-    hidePassword: toggleLabels.hidePassword,
-    strengthLabel: strengthLabels.label,
-    strengthWeak: strengthLabels.weak,
-    strengthFair: strengthLabels.medium,
-    strengthGood: strengthLabels.strong,
-    strengthStrong: strengthLabels.veryStrong,
-  })
   
   let code = $state('')
   let newPassword = $state('')
@@ -87,82 +69,88 @@
 </script>
 
 <form class={formClass} onsubmit={handleSubmit}>
+  <!-- 标题 -->
+  {#if showTitle}
+    <h2 class="text-2xl font-semibold text-center mb-4">{m('reset_password_title')}</h2>
+  {/if}
+
+  <!-- 描述 -->
+  {#if showDescription}
+    <p class="text-center text-base-content/60 text-sm mb-6">
+      {m('reset_password_desc')}
+    </p>
+  {/if}
+
   <!-- 验证码 -->
   {#if showCode}
     <div class="form-control">
       <label class="label" for="reset-code">
-        <span class="label-text">{mergedLabels.codeLabel}</span>
+        <span class="label-text">{m('reset_password_code_label')}</span>
       </label>
-      <input
+      <Input
         id="reset-code"
-        type="text"
         name="code"
-        placeholder={mergedLabels.codePlaceholder}
-        class={cn('input input-bordered w-full', errors.code && 'input-error')}
+        type="text"
+        placeholder={m('reset_password_code_placeholder')}
         bind:value={code}
         {disabled}
         required
+        error={errors.code}
       />
-      {#if errors.code}
-        <div class="label">
-          <span class="label-text-alt text-error">{errors.code}</span>
-        </div>
-      {/if}
     </div>
   {/if}
   
   <!-- 新密码 -->
   <div class="form-control">
     <label class="label" for="reset-new-password">
-      <span class="label-text">{mergedLabels.newPasswordLabel}</span>
+      <span class="label-text">{m('reset_password_new_label')}</span>
     </label>
     <PasswordInput
-      value={newPassword}
-      oninput={(e) => { newPassword = e.currentTarget.value }}
-      placeholder={mergedLabels.newPasswordPlaceholder}
+      bind:value={newPassword}
+      placeholder={m('reset_password_new_placeholder')}
       {disabled}
       error={errors.newPassword}
       showStrength={showPasswordStrength}
       minLength={minPasswordLength}
-      labels={passwordInputLabels}
     />
   </div>
   
   <!-- 确认新密码 -->
   <div class="form-control">
     <label class="label" for="reset-confirm-password">
-      <span class="label-text">{mergedLabels.confirmPasswordLabel}</span>
+      <span class="label-text">{m('reset_password_confirm_label')}</span>
     </label>
     <PasswordInput
-      value={confirmPassword}
-      oninput={(e) => { confirmPassword = e.currentTarget.value }}
-      placeholder={mergedLabels.confirmPasswordPlaceholder}
+      bind:value={confirmPassword}
+      placeholder={m('reset_password_confirm_placeholder')}
       {disabled}
-      error={errors.confirmPassword || (!passwordsMatch && confirmPassword ? (validationMessages.passwordMismatch || mergedLabels.passwordMismatch) : '')}
+      error={errors.confirmPassword || (!passwordsMatch && confirmPassword ? m('reset_password_mismatch') : '')}
       showStrength={false}
-      labels={passwordInputLabels}
     />
   </div>
   
   <!-- 通用错误 -->
   {#if errors.general}
-    <div class="alert alert-error">
-      <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
-      </svg>
-      <span>{errors.general}</span>
-    </div>
+    <Alert variant="error">
+      {errors.general}
+    </Alert>
   {/if}
   
   <!-- 提交按钮 -->
-  <button
+  <Button
     type="submit"
-    class="btn btn-primary w-full"
+    variant="primary"
+    {loading}
     disabled={loading || disabled || !canSubmit}
+    class="w-full"
   >
-    {#if loading}
-      <span class="loading loading-spinner loading-sm"></span>
-    {/if}
-    {submitText}
-  </button>
+    {submitText || m('reset_password_submit')}
+  </Button>
+
+  <!-- 返回链接 -->
+  {#if showBackLink}
+    <div class="text-center mt-4 text-sm">
+      <a href={loginUrl} class="link link-primary">← {m('reset_password_back')}</a>
+    </div>
+  {/if}
 </form>

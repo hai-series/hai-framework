@@ -46,32 +46,12 @@
   <title>{m.auth_login()} - Admin Console</title>
 </svelte:head>
 
-<h2 class="text-2xl font-semibold text-center mb-6">{m.auth_login()}</h2>
-
 <LoginForm
   {loading}
   {errors}
-  usernameLabel={m.auth_username_or_email()}
-  usernamePlaceholder={m.auth_username_placeholder()}
-  passwordLabel={m.auth_password()}
-  passwordPlaceholder={m.auth_password_placeholder()}
-  rememberMeLabel={m.auth_remember_me()}
-  forgotPasswordLabel={m.auth_forgot_password()}
-  submitText={m.auth_login()}
+  showTitle
+  showRegisterLink
   forgotPasswordUrl="/auth/forgot-password"
-  toggleLabels={{
-    showPassword: m.auth_show_password(),
-    hidePassword: m.auth_hide_password(),
-  }}
-  validationMessages={{
-    required: m.validation_required(),
-  }}
+  registerUrl="/auth/register"
   onsubmit={handleLogin}
->
-  {#snippet footer()}
-    <div class="text-center mt-4 text-sm text-base-content/60">
-      <span>{m.auth_no_account()}</span>
-      <a href="/auth/register" class="link link-primary ml-1">{m.auth_register_now()}</a>
-    </div>
-  {/snippet}
-</LoginForm>
+/>

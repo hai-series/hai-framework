@@ -10,40 +10,8 @@ import type { Snippet } from 'svelte'
 import type { Size } from '../../types.js'
 
 // =============================================================================
-// 通用 i18n 消息类型
-// =============================================================================
-
-/**
- * 表单验证消息配置
- * 用于覆盖浏览器原生验证提示，实现 i18n
- */
-export interface FormValidationMessages {
-  /** 必填字段验证消息 */
-  required?: string
-  /** 邮箱格式验证消息 */
-  email?: string
-  /** 最小长度验证消息 */
-  minLength?: string
-  /** 密码不匹配验证消息 */
-  passwordMismatch?: string
-}
-
-// =============================================================================
 // IAM 相关类型
 // =============================================================================
-
-/**
- * 密码输入框 i18n 文案
- */
-export interface PasswordInputLabels {
-  showPassword?: string
-  hidePassword?: string
-  strengthLabel?: string
-  strengthWeak?: string
-  strengthFair?: string
-  strengthGood?: string
-  strengthStrong?: string
-}
 
 /**
  * 密码输入框属性
@@ -69,8 +37,6 @@ export interface PasswordInputProps {
   showStrength?: boolean
   /** 最小长度 */
   minLength?: number
-  /** i18n 文案 */
-  labels?: PasswordInputLabels
   /** 自定义类名 */
   class?: string
   /** 输入事件 */
@@ -96,33 +62,20 @@ export interface LoginFormProps {
   loading?: boolean
   /** 禁用状态 */
   disabled?: boolean
+  /** 是否显示标题 */
+  showTitle?: boolean
   /** 是否显示记住我 */
   showRememberMe?: boolean
   /** 是否显示忘记密码 */
   showForgotPassword?: boolean
   /** 忘记密码链接 */
   forgotPasswordUrl?: string
-  /** 用户名标签 */
-  usernameLabel?: string
-  /** 用户名占位符 */
-  usernamePlaceholder?: string
-  /** 密码标签 */
-  passwordLabel?: string
-  /** 密码占位符 */
-  passwordPlaceholder?: string
-  /** 记住我标签 */
-  rememberMeLabel?: string
-  /** 忘记密码标签 */
-  forgotPasswordLabel?: string
+  /** 是否显示注册链接 */
+  showRegisterLink?: boolean
+  /** 注册页面链接 */
+  registerUrl?: string
   /** 提交按钮文本 */
   submitText?: string
-  /** 密码显示/隐藏切换标签（用于 i18n） */
-  toggleLabels?: {
-    showPassword?: string
-    hidePassword?: string
-  }
-  /** 自定义验证消息（用于 i18n） */
-  validationMessages?: FormValidationMessages
   /** 自定义类名 */
   class?: string
   /** 错误信息 */
@@ -162,6 +115,8 @@ export interface RegisterFormProps {
   loading?: boolean
   /** 禁用状态 */
   disabled?: boolean
+  /** 是否显示标题 */
+  showTitle?: boolean
   /** 是否显示密码强度 */
   showPasswordStrength?: boolean
   /** 是否需要确认密码 */
@@ -170,27 +125,12 @@ export interface RegisterFormProps {
   minPasswordLength?: number
   /** 显示的字段 */
   fields?: RegisterField[]
+  /** 是否显示登录链接 */
+  showLoginLink?: boolean
+  /** 登录页面链接 */
+  loginUrl?: string
   /** 提交按钮文本 */
   submitText?: string
-  /** 自定义验证消息（用于 i18n） */
-  validationMessages?: FormValidationMessages
-  /** 字段标签（用于 i18n） */
-  labels?: Partial<Record<RegisterField, string>>
-  /** 字段占位符（用于 i18n） */
-  placeholders?: Partial<Record<RegisterField, string>>
-  /** 密码强度标签（用于 i18n） */
-  strengthLabels?: {
-    weak?: string
-    medium?: string
-    strong?: string
-    veryStrong?: string
-    label?: string
-  }
-  /** 密码显示/隐藏切换标签（用于 i18n） */
-  toggleLabels?: {
-    showPassword?: string
-    hidePassword?: string
-  }
   /** 自定义类名 */
   class?: string
   /** 错误信息 */
@@ -228,16 +168,6 @@ export interface ChangePasswordFormProps {
   minPasswordLength?: number
   /** 提交按钮文本 */
   submitText?: string
-  /** i18n 文案配置 */
-  labels?: {
-    oldPassword?: string
-    newPassword?: string
-    confirmPassword?: string
-    oldPasswordPlaceholder?: string
-    newPasswordPlaceholder?: string
-    confirmPasswordPlaceholder?: string
-    passwordMismatch?: string
-  }
   /** 自定义类名 */
   class?: string
   /** 错误信息 */
@@ -262,26 +192,18 @@ export interface ForgotPasswordFormProps {
   loading?: boolean
   /** 禁用状态 */
   disabled?: boolean
+  /** 是否显示标题 */
+  showTitle?: boolean
+  /** 是否显示描述 */
+  showDescription?: boolean
   /** 找回方式 */
   mode?: 'email' | 'phone'
+  /** 是否显示返回登录链接 */
+  showBackLink?: boolean
+  /** 登录页面链接 */
+  loginUrl?: string
   /** 提交按钮文本 */
   submitText?: string
-  /** i18n 文案配置 */
-  labels?: {
-    emailLabel?: string
-    emailPlaceholder?: string
-    emailHint?: string
-    phoneLabel?: string
-    phonePlaceholder?: string
-    phoneHint?: string
-  }
-  /** 占位符配置 (兼容旧版) */
-  placeholders?: {
-    email?: string
-    phone?: string
-  }
-  /** 自定义验证消息（用于 i18n） */
-  validationMessages?: FormValidationMessages
   /** 自定义类名 */
   class?: string
   /** 错误信息 */
@@ -311,42 +233,22 @@ export interface ResetPasswordFormProps {
   loading?: boolean
   /** 禁用状态 */
   disabled?: boolean
+  /** 是否显示标题 */
+  showTitle?: boolean
+  /** 是否显示描述 */
+  showDescription?: boolean
   /** 是否显示验证码 */
   showCode?: boolean
   /** 是否显示密码强度 */
   showPasswordStrength?: boolean
   /** 最小密码长度 */
   minPasswordLength?: number
+  /** 是否显示返回登录链接 */
+  showBackLink?: boolean
+  /** 登录页面链接 */
+  loginUrl?: string
   /** 提交按钮文本 */
   submitText?: string
-  /** i18n 文案配置 */
-  labels?: {
-    codeLabel?: string
-    codePlaceholder?: string
-    newPasswordLabel?: string
-    newPasswordPlaceholder?: string
-    confirmPasswordLabel?: string
-    confirmPasswordPlaceholder?: string
-    passwordMismatch?: string
-  }
-  /** 密码强度文案 */
-  strengthLabels?: {
-    weak?: string
-    medium?: string
-    strong?: string
-    veryStrong?: string
-    label?: string
-  }
-  /** 密码显示/隐藏切换文案 */
-  toggleLabels?: {
-    showPassword?: string
-    hidePassword?: string
-  }
-  /** 验证消息 */
-  validationMessages?: {
-    required?: string
-    passwordMismatch?: string
-  }
   /** 自定义类名 */
   class?: string
   /** 错误信息 */
@@ -387,19 +289,6 @@ export interface UserProfileProps {
   fields?: UserProfileField[]
   /** 头像上传地址 */
   avatarUploadUrl?: string
-  /** i18n 文案配置 */
-  labels?: {
-    avatar?: string
-    username?: string
-    email?: string
-    nickname?: string
-    phone?: string
-    bio?: string
-    avatarHint?: string
-    save?: string
-    cancel?: string
-    editProfile?: string
-  }
   /** 自定义类名 */
   class?: string
   /** 错误信息 */
@@ -469,25 +358,6 @@ export interface FileUploadProps {
   showList?: boolean
   /** 是否支持拖拽 */
   dragDrop?: boolean
-  /** i18n 文案配置 */
-  labels?: {
-    dragHint?: string
-    clickToSelect?: string
-    supportedFormats?: string
-    maxFileSize?: string
-    maxFilesHint?: string
-    filesUnit?: string
-    uploadSuccess?: string
-    uploadFailed?: string
-    networkError?: string
-    noUploadUrl?: string
-    getUploadUrlFailed?: string
-    fileSizeExceeded?: string
-    unsupportedType?: string
-    maxFilesExceeded?: string
-    retry?: string
-    remove?: string
-  }
   /** 自定义类名 */
   class?: string
   /** 文件变化事件 */
@@ -540,14 +410,6 @@ export interface FileListProps {
   showDate?: boolean
   /** 布局模式 */
   layout?: 'list' | 'grid'
-  /** i18n 文案配置 */
-  labels?: {
-    noFiles?: string
-    preview?: string
-    download?: string
-    delete?: string
-    close?: string
-  }
   /** 自定义类名 */
   class?: string
   /** 下载事件 */
@@ -578,18 +440,6 @@ export interface ImageUploadProps {
   headers?: Record<string, string>
   /** 占位文本 */
   placeholder?: string
-  /** i18n 文案配置 */
-  labels?: {
-    placeholder?: string
-    maxSizeHint?: string
-    sizeExceeded?: string
-    invalidType?: string
-    getUploadUrlFailed?: string
-    uploadFailed?: string
-    previewAlt?: string
-    changeImage?: string
-    deleteImage?: string
-  }
   /** 宽高比 */
   aspectRatio?: string
   /** 宽度 */
@@ -626,14 +476,6 @@ export interface AvatarUploadProps {
   headers?: Record<string, string>
   /** 默认文字（没有图片时显示） */
   fallback?: string
-  /** i18n 文案配置 */
-  labels?: {
-    avatarAlt?: string
-    sizeExceeded?: string
-    invalidType?: string
-    getUploadUrlFailed?: string
-    uploadFailed?: string
-  }
   /** 自定义类名 */
   class?: string
   /** 变化事件 */
@@ -666,14 +508,6 @@ export interface EncryptedInputProps {
   showEncrypted?: boolean
   /** 加密算法 */
   algorithm?: 'SM2' | 'SM4' | 'AES'
-  /** i18n 文案配置 */
-  labels?: {
-    placeholder?: string
-    show?: string
-    hide?: string
-    encryptedResult?: string
-    copy?: string
-  }
   /** 加密函数 */
   onencrypt?: (value: string) => Promise<string>
   /** 自定义类名 */

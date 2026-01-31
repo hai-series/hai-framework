@@ -43,6 +43,9 @@ export function getVariantClass(variant: Variant, prefix = 'btn'): string {
     warning: `${prefix}-warning`,
     error: `${prefix}-error`,
     info: `${prefix}-info`,
+    ghost: `${prefix}-ghost`,
+    link: `${prefix}-link`,
+    outline: `${prefix}-outline`,
   }
   return map[variant] ?? map.default
 }

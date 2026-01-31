@@ -5,11 +5,14 @@
   哈希值展示组件
   
   使用 Svelte 5 Runes ($props, $state, $derived)
+  使用 primitives 组件：IconButton, Badge
   =============================================================================
 -->
 <script lang="ts">
   import type { HashDisplayProps } from '../types.js'
   import { cn } from '../../../utils.js'
+  import IconButton from '../../primitives/IconButton.svelte'
+  import Badge from '../../primitives/Badge.svelte'
   
   const defaultLabels = {
     copyHash: 'Copy hash',
@@ -63,7 +66,7 @@
     <div class="text-xs text-base-content/60 mb-1">
       {label}
       {#if algorithm}
-        <span class="badge badge-xs badge-ghost ml-1">{algorithm}</span>
+        <Badge size="xs" variant="ghost" class="ml-1">{algorithm}</Badge>
       {/if}
     </div>
   {/if}
@@ -74,22 +77,24 @@
     </code>
     
     {#if copyable && value}
-      <button
-        type="button"
-        class="btn btn-ghost btn-xs btn-circle shrink-0"
+      <IconButton
+        size="xs"
+        variant="ghost"
+        label={mergedLabels.copyHash}
         onclick={copyToClipboard}
-        aria-label={mergedLabels.copyHash}
       >
-        {#if copied}
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-success" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-          </svg>
-        {:else}
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-          </svg>
-        {/if}
-      </button>
+        {#snippet children()}
+          {#if copied}
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-success" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+            </svg>
+          {:else}
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+            </svg>
+          {/if}
+        {/snippet}
+      </IconButton>
     {/if}
   </div>
 </div>

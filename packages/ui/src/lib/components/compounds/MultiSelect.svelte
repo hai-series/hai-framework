@@ -1,43 +1,15 @@
 <!--
   @component MultiSelect
-  多选自动补全组件，支持搜索过滤和多选，适用于用户选择等场景。
-
-  @prop {string} label - 标签文本
-  @prop {Option[]} options - 选项列表
-  @prop {string[]} selected - 已选中的值数组
-  @prop {string} placeholder - 占位文本
-  @prop {boolean} disabled - 是否禁用
-  @prop {string} error - 错误提示
-  @prop {function} onchange - 选中项变化时的回调
-
-  @example
-  <MultiSelect
-    label="选择用户"
-    options={userOptions}
-    selected={selectedUserIds}
-    onchange={(ids) => selectedUserIds = ids}
-    placeholder="搜索用户..."
-  />
+  多选自动补全组件，支持搜索过滤和多选
+  内置多语言支持，自动跟随全局 locale
 -->
 <script lang='ts'>
+  import { m } from '../../messages.js'
+  
   interface Option {
     label: string
     value: string
     description?: string
-  }
-  
-  /** i18n 文案配置 */
-  interface MultiSelectLabels {
-    /** 无匹配项 */
-    noMatch?: string
-    /** 移除（用于 aria-label） */
-    remove?: string
-  }
-  
-  // 默认文案
-  const defaultLabels: Required<MultiSelectLabels> = {
-    noMatch: 'No match',
-    remove: 'Remove',
   }
 
   interface Props {
@@ -47,7 +19,6 @@
     placeholder?: string
     disabled?: boolean
     error?: string
-    labels?: MultiSelectLabels
     class?: string
     onchange?: (selected: string[]) => void
   }
@@ -59,13 +30,9 @@
     placeholder = 'Search...',
     disabled = false,
     error,
-    labels = {},
     class: className = '',
     onchange,
   }: Props = $props()
-  
-  // 合并文案
-  const mergedLabels = $derived({ ...defaultLabels, ...labels })
 
   let search = $state('')
   let isOpen = $state(false)
@@ -136,7 +103,7 @@
               type='button'
               class='hover:bg-primary/20 rounded p-0.5 transition-colors'
               onclick={(e) => removeOption(opt.value, e)}
-              aria-label='{mergedLabels.remove} {opt.label}'
+              aria-label='{m('multi_select_remove')} {opt.label}'
             >
               <span class='icon-[tabler--x] size-3'></span>
             </button>
@@ -166,7 +133,7 @@
         class='absolute z-50 top-full left-0 right-0 mt-1 max-h-48 overflow-y-auto bg-base-100 border border-base-content/10 rounded-lg shadow-lg'
       >
         {#if filteredOptions.length === 0}
-          <div class='px-3 py-2 text-sm text-base-content/50'>{mergedLabels.noMatch}</div>
+          <div class='px-3 py-2 text-sm text-base-content/50'>{m('multi_select_no_match')}</div>
         {:else}
           {#each filteredOptions as opt (opt.value)}
             <button

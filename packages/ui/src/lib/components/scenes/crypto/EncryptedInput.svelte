@@ -5,18 +5,38 @@
   加密输入框组件，支持自动加密显示
   
   使用 Svelte 5 Runes ($props, $state, $derived, $bindable)
+  内置多语言支持，自动跟随全局 locale
   =============================================================================
 -->
 <script lang="ts">
-  import type { EncryptedInputProps } from '../types.js'
-  import { cn, getInputSizeClass } from '../../../utils.js'
+  import type { Size } from '../../../types.js'
+  import Input from '../../primitives/Input.svelte'
+  import IconButton from '../../primitives/IconButton.svelte'
+  import { m } from '../../../messages.js'
   
-  const defaultLabels = {
-    placeholder: 'Enter content',
-    show: 'Show',
-    hide: 'Hide',
-    encryptedResult: 'Encrypted',
-    copy: 'Copy',
+  interface Props {
+    /** 原始值 */
+    value?: string
+    /** 加密后的值 */
+    encryptedValue?: string
+    /** 占位符 */
+    placeholder?: string
+    /** 尺寸 */
+    size?: Size
+    /** 是否禁用 */
+    disabled?: boolean
+    /** 是否显示加密结果 */
+    showEncrypted?: boolean
+    /** 加密算法 */
+    algorithm?: string
+    /** 自定义类名 */
+    class?: string
+    /** 加密函数 */
+    onencrypt?: (value: string) => Promise<string>
+    /** 输入事件 */
+    oninput?: (e: Event & { currentTarget: HTMLInputElement }) => void
+    /** 变化事件 */
+    onchange?: (e: Event & { currentTarget: HTMLInputElement }) => void
   }
   
   let {
@@ -25,44 +45,29 @@
     placeholder,
     size = 'md',
     disabled = false,
-    readonly = false,
     showEncrypted = false,
     algorithm = 'SM4',
-    labels = {},
-    onencrypt,
     class: className = '',
+    onencrypt,
     oninput,
     onchange,
-  }: EncryptedInputProps = $props()
-  
-  const mergedLabels = $derived({ ...defaultLabels, ...labels })
+  }: Props = $props()
   
   let showValue = $state(false)
   
-  const inputClass = $derived(
-    cn(
-      'input input-bordered w-full pr-10',
-      getInputSizeClass(size),
-      className,
-    )
-  )
-  
   // 模拟加密（实际应该调用 crypto 服务）
   function encrypt(text: string): string {
-    // 这里只是示例，实际应该使用 @hai/crypto
     return btoa(text)
   }
   
   function handleInput(e: Event & { currentTarget: HTMLInputElement }) {
     value = e.currentTarget.value
     
-    // 加密
     if (value && onencrypt) {
       onencrypt(value).then(encrypted => {
         encryptedValue = encrypted
       })
     } else if (value) {
-      // 使用内置简单加密
       encryptedValue = encrypt(value)
     } else {
       encryptedValue = ''
@@ -86,18 +91,18 @@
   }
 </script>
 
-<div class="encrypted-input space-y-2">
+<div class="encrypted-input space-y-2 {className}">
   <!-- 输入框 -->
   <div class="relative">
-    <input
+    <Input
       type={showValue ? 'text' : 'password'}
-      placeholder={placeholder || mergedLabels.placeholder}
+      placeholder={placeholder || m('encrypted_input_placeholder')}
       {disabled}
-      {readonly}
-      class={inputClass}
+      {size}
       bind:value
       oninput={handleInput}
       onchange={handleChange}
+      class="pr-10"
     />
     
     <button
@@ -105,7 +110,7 @@
       class="absolute right-3 top-1/2 -translate-y-1/2 text-base-content/50 hover:text-base-content"
       onclick={toggleShow}
       tabindex="-1"
-      aria-label={showValue ? mergedLabels.hide : mergedLabels.show}
+      aria-label={showValue ? m('encrypted_input_hide') : m('encrypted_input_show')}
     >
       {#if showValue}
         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -125,18 +130,20 @@
     <div class="bg-base-200 rounded-lg p-3">
       <div class="flex items-center justify-between mb-1">
         <span class="text-xs text-base-content/60">
-          {mergedLabels.encryptedResult} ({algorithm})
+          {m('encrypted_input_result')} ({algorithm})
         </span>
-        <button
-          type="button"
-          class="btn btn-ghost btn-xs"
+        <IconButton
+          size="xs"
+          variant="ghost"
+          label={m('encrypted_input_copy')}
           onclick={copyEncrypted}
-          aria-label={mergedLabels.copy}
         >
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-          </svg>
-        </button>
+          {#snippet children()}
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+            </svg>
+          {/snippet}
+        </IconButton>
       </div>
       <code class="text-xs break-all text-base-content/80">
         {encryptedValue}

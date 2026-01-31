@@ -5,11 +5,13 @@
   模态框组件
   
   使用 Svelte 5 Runes ($props, $derived, $effect)
+  使用 primitives 组件：IconButton
   =============================================================================
 -->
 <script lang="ts">
   import type { ModalProps } from '../../types.js'
   import { cn } from '../../utils.js'
+  import IconButton from '../primitives/IconButton.svelte'
   
   let {
     open = $bindable(false),
@@ -70,22 +72,34 @@
 
 <dialog class="modal" class:modal-open={open}>
   <div class={modalBoxClass}>
-    {#if showClose}
-      <button
-        class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2"
-        onclick={handleClose}
-      >
-        ✕
-      </button>
-    {/if}
-    
-    {#if header}
-      <div class="font-bold text-lg">
-        {@render header()}
-      </div>
-    {:else if title}
-      <h3 class="font-bold text-lg">{title}</h3>
-    {/if}
+    <!-- 头部：标题 + 关闭按钮 -->
+    <div class="flex items-start justify-between gap-4">
+      {#if header}
+        <div class="font-bold text-lg flex-1">
+          {@render header()}
+        </div>
+      {:else if title}
+        <h3 class="font-bold text-lg flex-1">{title}</h3>
+      {:else}
+        <div class="flex-1"></div>
+      {/if}
+      
+      {#if showClose}
+        <IconButton
+          size="sm"
+          variant="ghost"
+          label="Close"
+          onclick={handleClose}
+          class="-mt-1 -mr-2"
+        >
+          {#snippet children()}
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          {/snippet}
+        </IconButton>
+      {/if}
+    </div>
     
     <div class="py-4">
       {#if children}

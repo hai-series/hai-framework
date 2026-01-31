@@ -9,16 +9,22 @@
   @example
   ```svelte
   <script>
+    import { LanguageSwitch, createLocaleStore, setGlobalLocale } from '@hai/ui'
     import { setLocale, getLocale } from '$lib/paraglide/runtime.js'
+    
+    const localeStore = createLocaleStore()
   </script>
   
   <LanguageSwitch 
-    currentLanguage={getLocale()}
+    currentLanguage={localeStore.current}
     languages={[
       { value: 'zh-CN', label: '简体中文' },
       { value: 'en-US', label: 'English' }
     ]}
-    onchange={(lang) => setLocale(lang)}
+    onchange={(lang) => {
+      localeStore.set(lang)  // 同步到 @hai/core 全局 locale
+      setLocale(lang)        // 同步到 Paraglide
+    }}
   />
   ```
 -->
@@ -43,8 +49,8 @@
   let {
     currentLanguage = 'zh-CN',
     languages = [
-      { value: 'zh-CN', label: '简体中文', flag: '🇨🇳' },
-      { value: 'en-US', label: 'English', flag: '🇺🇸' },
+      { value: 'zh-CN', label: '简体中文', flag: 'CN' },
+      { value: 'en-US', label: 'English', flag: 'US' },
     ],
     onchange,
     class: className = '',
@@ -82,43 +88,41 @@
 <div bind:this={containerRef} class='dropdown dropdown-end {open ? "dropdown-open" : ""} {className}'>
   <button
     type='button'
-    class='btn btn-ghost btn-sm gap-1'
+    class='btn btn-ghost btn-sm gap-2 min-w-fit'
     onclick={() => (open = !open)}
     aria-label='Switch language'
   >
-    <svg xmlns='http://www.w3.org/2000/svg' class='h-4 w-4' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'>
+    <svg xmlns='http://www.w3.org/2000/svg' class='h-4 w-4 shrink-0' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'>
       <path d='M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129' />
     </svg>
     {#if currentLangInfo?.flag}
-      <span>{currentLangInfo.flag}</span>
+      <span class='shrink-0 text-xs'>{currentLangInfo.flag}</span>
     {/if}
-    <span class='text-sm'>{currentLangInfo?.label ?? currentLanguage}</span>
-    <svg xmlns='http://www.w3.org/2000/svg' class='h-3 w-3' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'>
-      <path d='M19 9l-7 7-7-7' />
+    <span class='text-sm whitespace-nowrap'>{currentLangInfo?.label ?? currentLanguage}</span>
+    <svg xmlns='http://www.w3.org/2000/svg' class='h-4 w-4 shrink-0 opacity-50' viewBox='0 0 20 20' fill='currentColor'>
+      <path fill-rule='evenodd' d='M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z' clip-rule='evenodd' />
     </svg>
   </button>
 
   {#if open}
-    <ul class='dropdown-content menu bg-base-100 rounded-box shadow-lg border border-base-content/10 z-50 w-44 p-2'>
+    <div class='dropdown-content bg-base-100 rounded-box shadow-lg border border-base-content/10 z-50 p-2'>
       {#each languages as lang (lang.value)}
-        <li>
-          <button
-            type='button'
-            class='flex items-center gap-2 {lang.value === currentLanguage ? "active" : ""}'
-            onclick={() => selectLanguage(lang.value)}
-          >
-            {#if lang.flag}
-              <span>{lang.flag}</span>
-            {/if}
-            <span>{lang.label}</span>
-            {#if lang.value === currentLanguage}
-              <svg xmlns='http://www.w3.org/2000/svg' class='h-4 w-4 ml-auto' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'>
-                <path d='M5 13l4 4L19 7' />
-              </svg>
-            {/if}
-          </button>
-        </li>
+        <button
+          type='button'
+          class='flex items-center gap-2 w-full px-3 py-2 rounded-lg text-left transition-colors whitespace-nowrap {lang.value === currentLanguage ? "bg-primary/10 text-primary" : "hover:bg-base-200"}'
+          onclick={() => selectLanguage(lang.value)}
+        >
+          {#if lang.flag}
+            <span class='shrink-0 text-xs font-medium text-base-content/60'>{lang.flag}</span>
+          {/if}
+          <span class='whitespace-nowrap'>{lang.label}</span>
+          {#if lang.value === currentLanguage}
+            <svg xmlns='http://www.w3.org/2000/svg' class='h-4 w-4 ml-auto shrink-0' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'>
+              <path d='M5 13l4 4L19 7' />
+            </svg>
+          {/if}
+        </button>
       {/each}
-    </ul>
+    </div>
   {/if}
 </div>

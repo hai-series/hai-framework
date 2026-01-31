@@ -23,8 +23,16 @@
     error = '',
     validationMessage = '',
     class: className = '',
+    id,
+    name,
+    autocomplete,
+    pattern,
+    list,
+    minlength,
+    maxlength,
     oninput,
     onchange,
+    oninvalid,
   }: InputProps = $props()
   
   let inputRef: HTMLInputElement | undefined = $state()
@@ -63,17 +71,25 @@
     if (validationMessage) {
       e.currentTarget.setCustomValidity(validationMessage)
     }
+    oninvalid?.(e)
   }
 </script>
 
 <div class="form-control w-full">
   <input
     bind:this={inputRef}
+    {id}
+    {name}
     {type}
     {placeholder}
     {disabled}
     {readonly}
     {required}
+    {pattern}
+    {list}
+    {minlength}
+    {maxlength}
+    autocomplete={autocomplete as HTMLInputElement['autocomplete']}
     class={inputClass}
     bind:value
     oninput={handleInput}

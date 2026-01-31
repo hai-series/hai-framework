@@ -56,7 +56,7 @@ export * from './iam-main.js'
 export * from './iam-types.js'
 
 // i18n
-export type IamMessageKey = keyof typeof messagesZhCN
+type IamMessageKey = keyof typeof messagesZhCN
 export const { getMessage: getIamMessage, setDefaultLocale: setIamDefaultLocale }
   = core.i18n.createMessageGetter<IamMessageKey>({ 'zh-CN': messagesZhCN, 'en-US': messagesEnUS })
 

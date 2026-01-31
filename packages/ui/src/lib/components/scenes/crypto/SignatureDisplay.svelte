@@ -5,11 +5,14 @@
   签名信息展示组件
   
   使用 Svelte 5 Runes ($props, $state, $derived)
+  使用 primitives 组件：IconButton, Badge
   =============================================================================
 -->
 <script lang="ts">
   import type { SignatureDisplayProps } from '../types.js'
   import { cn } from '../../../utils.js'
+  import IconButton from '../../primitives/IconButton.svelte'
+  import Badge from '../../primitives/Badge.svelte'
   
   const defaultLabels = {
     signature: 'Signature',
@@ -81,7 +84,7 @@
   <div class="flex items-center gap-2">
     <span class="text-sm font-medium">{mergedLabels.signature} ({algorithm})</span>
     {#if verified !== undefined}
-      <span class={cn('badge badge-sm', verified ? 'badge-success' : 'badge-error')}>
+      <Badge size="sm" variant={verified ? 'success' : 'error'}>
         {#if verified}
           <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
@@ -92,7 +95,7 @@
           </svg>
         {/if}
         {verifyStatusText}
-      </span>
+      </Badge>
     {/if}
   </div>
   
@@ -103,22 +106,24 @@
         {signature || mergedLabels.noSignature}
       </code>
       {#if copyable && signature}
-        <button
-          type="button"
-          class="btn btn-ghost btn-xs btn-circle shrink-0"
+        <IconButton
+          size="xs"
+          variant="ghost"
+          label={mergedLabels.copySignature}
           onclick={copySignature}
-          aria-label={mergedLabels.copySignature}
         >
-          {#if copiedSig}
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-success" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-            </svg>
-          {:else}
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-            </svg>
-          {/if}
-        </button>
+          {#snippet children()}
+            {#if copiedSig}
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-success" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+              </svg>
+            {:else}
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+              </svg>
+            {/if}
+          {/snippet}
+        </IconButton>
       {/if}
     </div>
   </div>
@@ -133,22 +138,24 @@
             {publicKey}
           </code>
           {#if copyable}
-            <button
-              type="button"
-              class="btn btn-ghost btn-xs btn-circle shrink-0"
+            <IconButton
+              size="xs"
+              variant="ghost"
+              label={mergedLabels.copyPublicKey}
               onclick={copyPublicKey}
-              aria-label={mergedLabels.copyPublicKey}
             >
-              {#if copiedKey}
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-success" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-                </svg>
-              {:else}
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                </svg>
-              {/if}
-            </button>
+              {#snippet children()}
+                {#if copiedKey}
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-success" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
+                  </svg>
+                {:else}
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                  </svg>
+                {/if}
+              {/snippet}
+            </IconButton>
           {/if}
         </div>
       </div>

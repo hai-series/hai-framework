@@ -176,6 +176,53 @@ core.time.startOfDay(date) // 当天 00:00:00
 core.time.endOfDay(date) // 当天 23:59:59
 ```
 
+### 国际化 - core.i18n
+
+通过 `core.i18n` 访问所有 i18n 功能。
+
+```typescript
+import { core } from '@hai/core'
+
+// 设置全局 locale（所有模块自动同步）
+core.i18n.setGlobalLocale('en-US')
+core.i18n.getGlobalLocale() // 'en-US'
+
+// 支持短格式自动扩展
+core.i18n.setGlobalLocale('en') // 自动变为 'en-US'
+core.i18n.setGlobalLocale('zh') // 自动变为 'zh-CN'
+```
+
+```typescript
+// 为模块创建消息获取器
+import messagesEnUS from '../messages/en-US.json'
+import messagesZhCN from '../messages/zh-CN.json'
+
+const { getMessage, setDefaultLocale } = core.i18n.createMessageGetter({
+  'zh-CN': messagesZhCN,
+  'en-US': messagesEnUS,
+})
+// createMessageGetter 会自动订阅全局 locale 变化
+
+// 使用消息
+getMessage('error_not_found') // 根据当前 locale 返回
+getMessage('error_not_found', 'en-US') // 指定 locale
+getMessage('welcome', undefined, { name: 'World' }) // 带插值
+
+// 浏览器语言检测
+const browserLocale = core.i18n.detectBrowserLocale() // 'zh-CN' | 'en-US' | undefined
+
+// 语言解析（不支持时回退到默认）
+core.i18n.resolveLocale('fr-FR') // 'zh-CN'（回退）
+core.i18n.resolveLocale('en-US') // 'en-US'
+
+// 检查语言是否支持
+core.i18n.isLocaleSupported('zh-CN') // true
+core.i18n.isLocaleSupported('fr-FR') // false
+
+// 字符串插值
+core.i18n.interpolate('Hello, {name}!', { name: 'World' }) // 'Hello, World!'
+```
+
 ## Result 类型
 
 ```typescript

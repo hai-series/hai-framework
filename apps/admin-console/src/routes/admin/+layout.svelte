@@ -7,7 +7,7 @@
   import type { LayoutData } from './$types'
   import { page } from '$app/stores'
   import { goto } from '$app/navigation'
-  import { Avatar } from '@hai/ui'
+  import { Avatar, Button } from '@hai/ui'
   import * as m from '$lib/paraglide/messages'
   
   interface Props {
@@ -347,16 +347,16 @@
                   </a>
                 </div>
                 <div class="border-t border-base-200 py-1">
-                  <button
-                    type="button"
+                  <Button
+                    variant="ghost"
+                    class="flex items-center gap-3 w-full justify-start text-error hover:bg-error/10"
                     onclick={handleLogout}
-                    class="flex items-center gap-3 w-full px-4 py-2 text-sm text-error hover:bg-error/10"
                   >
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
                     </svg>
                     {m.nav_logout()}
-                  </button>
+                  </Button>
                 </div>
               </div>
             {/if}
@@ -373,7 +373,7 @@
     <!-- 页脚 -->
     <footer class="h-12 bg-base-100 border-t border-base-200 flex items-center justify-center px-6 shrink-0">
       <p class="text-xs text-base-content/50">
-        {appName} v{appVersion} · {data.appConfig?.timezone ?? 'UTC'}
+        {appName} v{appVersion}
       </p>
     </footer>
   </div>

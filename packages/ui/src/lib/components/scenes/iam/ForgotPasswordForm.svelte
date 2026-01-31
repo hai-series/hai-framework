@@ -5,44 +5,32 @@
   找回密码表单组件
   
   使用 Svelte 5 Runes ($props, $state, $derived)
+  使用 primitives/compounds 组件：Input, Button, Alert
   =============================================================================
 -->
 <script lang="ts">
   import type { ForgotPasswordFormProps, ForgotPasswordFormData } from '../types.js'
   import { cn } from '../../../utils.js'
-  
-  // 默认文案
-  const defaultLabels = {
-    emailLabel: 'Email Address',
-    emailPlaceholder: 'Enter your registered email',
-    emailHint: 'We will send a password reset link to your email',
-    phoneLabel: 'Phone Number',
-    phonePlaceholder: 'Enter your registered phone number',
-    phoneHint: 'We will send a verification code to your phone',
-  }
+  import Input from '../../primitives/Input.svelte'
+  import Button from '../../primitives/Button.svelte'
+  import Alert from '../../compounds/Alert.svelte'
+  import { m } from '../../../messages.js'
   
   let {
     loading = false,
     disabled = false,
+    showTitle = false,
+    showDescription = false,
     mode = 'email',
-    submitText = 'Send Verification Code',
-    labels = {},
-    placeholders = {},
-    validationMessages = {},
+    showBackLink = false,
+    loginUrl = '/login',
+    submitText,
     class: className = '',
     errors = {},
     onsubmit,
     header,
     footer,
   }: ForgotPasswordFormProps = $props()
-  
-  // 合并文案（placeholders 覆盖 labels 中的占位符）
-  const mergedLabels = $derived({
-    ...defaultLabels,
-    ...labels,
-    emailPlaceholder: placeholders.email || labels.emailPlaceholder || defaultLabels.emailPlaceholder,
-    phonePlaceholder: placeholders.phone || labels.phonePlaceholder || defaultLabels.phonePlaceholder,
-  })
   
   let email = $state('')
   let phone = $state('')
@@ -68,6 +56,18 @@
 </script>
 
 <form class={formClass} onsubmit={handleSubmit}>
+  <!-- 标题 -->
+  {#if showTitle}
+    <h2 class="text-2xl font-semibold text-center mb-4">{m('forgot_password_title')}</h2>
+  {/if}
+
+  <!-- 描述 -->
+  {#if showDescription}
+    <p class="text-center text-base-content/60 text-sm mb-6">
+      {m('forgot_password_desc')}
+    </p>
+  {/if}
+
   <!-- 自定义头部 -->
   {#if header}
     <div class="forgot-password-form-header">
@@ -79,98 +79,72 @@
   {#if mode === 'email'}
     <div class="form-control">
       <label class="label" for="forgot-email">
-        <span class="label-text">{mergedLabels.emailLabel}</span>
+        <span class="label-text">{m('forgot_password_email_label')}</span>
       </label>
-      <input
+      <Input
         id="forgot-email"
-        type="email"
         name="email"
-        placeholder={mergedLabels.emailPlaceholder}
-        class={cn('input input-bordered w-full', errors.email && 'input-error')}
+        type="email"
+        placeholder={m('forgot_password_email_placeholder')}
         bind:value={email}
-        oninput={(e) => e.currentTarget.setCustomValidity('')}
-        oninvalid={(e) => {
-          const input = e.currentTarget as HTMLInputElement
-          if (input.validity.valueMissing && validationMessages.required) {
-            input.setCustomValidity(validationMessages.required)
-          } else if (input.validity.typeMismatch && validationMessages.email) {
-            input.setCustomValidity(validationMessages.email)
-          }
-        }}
         {disabled}
         required
+        error={errors.email}
       />
-      {#if errors.email}
-        <div class="label">
-          <span class="label-text-alt text-error">{errors.email}</span>
-        </div>
-      {/if}
     </div>
   {:else}
     <div class="form-control">
       <label class="label" for="forgot-phone">
-        <span class="label-text">{mergedLabels.phoneLabel}</span>
+        <span class="label-text">{m('forgot_password_phone_label')}</span>
       </label>
-      <input
+      <Input
         id="forgot-phone"
-        type="tel"
         name="phone"
-        placeholder={mergedLabels.phonePlaceholder}
-        class={cn('input input-bordered w-full', errors.phone && 'input-error')}
+        type="tel"
+        placeholder={m('forgot_password_phone_placeholder')}
         bind:value={phone}
-        oninput={(e) => e.currentTarget.setCustomValidity('')}
-        oninvalid={(e) => {
-          const input = e.currentTarget as HTMLInputElement
-          if (input.validity.valueMissing && validationMessages.required) {
-            input.setCustomValidity(validationMessages.required)
-          }
-        }}
         {disabled}
         required
+        error={errors.phone}
       />
-      {#if errors.phone}
-        <div class="label">
-          <span class="label-text-alt text-error">{errors.phone}</span>
-        </div>
-      {/if}
     </div>
   {/if}
   
   <!-- 提示信息 -->
   <p class="text-sm text-base-content/60">
     {#if mode === 'email'}
-      {mergedLabels.emailHint}
+      {m('forgot_password_email_hint')}
     {:else}
-      {mergedLabels.phoneHint}
+      {m('forgot_password_phone_hint')}
     {/if}
   </p>
   
   <!-- 通用错误 -->
   {#if errors.general}
-    <div class="alert alert-error">
-      <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
-      </svg>
-      <span>{errors.general}</span>
-    </div>
+    <Alert variant="error">
+      {errors.general}
+    </Alert>
   {/if}
   
   <!-- 提交按钮 -->
-  <button
+  <Button
     type="submit"
-    class="btn btn-primary w-full"
+    variant="primary"
+    {loading}
     disabled={loading || disabled}
+    class="w-full"
   >
-    {#if loading}
-      <span class="loading loading-spinner loading-sm"></span>
-    {/if}
-    {submitText}
-  </button>
+    {submitText || m('forgot_password_submit')}
+  </Button>
   
   <!-- 自定义底部 -->
   {#if footer}
     <div class="forgot-password-form-footer">
       {@render footer()}
+    </div>
+  {:else if showBackLink}
+    <div class="text-center mt-4 text-sm">
+      <a href={loginUrl} class="link link-primary">← {m('forgot_password_back')}</a>
     </div>
   {/if}
 </form>

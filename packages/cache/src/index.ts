@@ -58,7 +58,7 @@ export * from './cache-main.js'
 export * from './cache-types.js'
 
 // i18n
-export type CacheMessageKey = keyof typeof messagesZhCN
+type CacheMessageKey = keyof typeof messagesZhCN
 export const { getMessage: getCacheMessage, setDefaultLocale: setCacheDefaultLocale }
   = core.i18n.createMessageGetter<CacheMessageKey>({ 'zh-CN': messagesZhCN, 'en-US': messagesEnUS })
 

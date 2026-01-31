@@ -75,7 +75,7 @@ export * from './crypto-password.js'
 export * from './crypto-types.js'
 
 // i18n
-export type CryptoMessageKey = keyof typeof messagesZhCN
+type CryptoMessageKey = keyof typeof messagesZhCN
 export const { getMessage: getCryptoMessage, setDefaultLocale: setCryptoDefaultLocale }
   = core.i18n.createMessageGetter<CryptoMessageKey>({ 'zh-CN': messagesZhCN, 'en-US': messagesEnUS })
 

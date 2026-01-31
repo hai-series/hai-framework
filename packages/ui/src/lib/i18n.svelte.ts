@@ -7,6 +7,7 @@
  * 设计原则：
  * - Paraglide 优先：翻译由 Paraglide 生成，此模块仅提供 locale 状态管理
  * - 显式 locale：库组件通过 props 接收 locale，不依赖全局状态
+ * - 集成 @hai/core：locale 变化会同步到 @hai/core 的全局 locale 管理器
  * - 应用层使用：此工具主要在应用层（如 admin-console）使用
  *
  * 使用方式：
@@ -36,14 +37,17 @@
  */
 
 import type { Locale, LocaleInfo } from '@hai/core'
+import { core } from '@hai/core'
 
-import {
+// 从 core.i18n 解构常用函数
+const {
   DEFAULT_LOCALE,
   DEFAULT_LOCALES,
   detectBrowserLocale,
   isLocaleSupported,
   resolveLocale,
-} from '@hai/core'
+  setGlobalLocale,
+} = core.i18n
 
 // =============================================================================
 // LocalStorage Key
@@ -92,6 +96,9 @@ export function createLocaleStore(options: {
     }
   }
 
+  // 同步初始 locale 到 @hai/core 的全局管理器
+  setGlobalLocale(initialLocale)
+
   // 使用 Svelte 5 runes 创建响应式状态
   let currentLocale = $state<Locale>(initialLocale)
 
@@ -108,11 +115,15 @@ export function createLocaleStore(options: {
 
     /**
      * 设置当前语言
-     * 注意：这只更新本地状态，你还需要调用 Paraglide 的 setLocale
+     * 会同步到 @hai/core 的全局 locale 管理器
+     * 注意：你还需要调用 Paraglide 的 setLocale 来更新 UI 翻译
      */
     set(locale: Locale) {
       const resolved = resolveLocale(locale, supportedLocales, defaultLocale)
       currentLocale = resolved
+
+      // 同步到 @hai/core 的全局 locale 管理器
+      setGlobalLocale(resolved)
 
       // 持久化到 localStorage
       if (typeof window !== 'undefined') {
@@ -128,8 +139,21 @@ export function createLocaleStore(options: {
 }
 
 // =============================================================================
-// 类型重导出
+// 类型重导出（从 @hai/core 导出类型，函数通过 core.i18n 访问）
 // =============================================================================
 
 export type { InterpolationParams, Locale, LocaleInfo } from '@hai/core'
-export { DEFAULT_LOCALE, DEFAULT_LOCALES, detectBrowserLocale, interpolate, isLocaleSupported, resolveLocale } from '@hai/core'
+
+// 重导出常用常量和函数（便于应用层使用）
+export {
+  DEFAULT_LOCALE,
+  DEFAULT_LOCALES,
+  detectBrowserLocale,
+  isLocaleSupported,
+  resolveLocale,
+  setGlobalLocale,
+}
+
+// 导出额外的便捷函数
+export const getGlobalLocale = core.i18n.getGlobalLocale
+export const interpolate = core.i18n.interpolate

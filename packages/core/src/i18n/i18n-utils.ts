@@ -5,7 +5,8 @@
  * 国际化核心类型，为 Paraglide 生成的消息提供通用类型支持
  *
  * 设计原则：
- * - 显式传 locale：库包不维护全局 locale 状态，由应用层决定并传入
+ * - 集中式 locale 管理：通过 LocaleManager 单例统一管理全局 locale
+ * - 订阅机制：各模块的 createMessageGetter 自动订阅 locale 变化
  * - Paraglide 优先：翻译由 Paraglide 编译生成，此模块提供辅助工具
  * - 类型安全：完整的 TypeScript 类型支持
  * =============================================================================
@@ -128,6 +129,106 @@ export function resolveLocale(
 }
 
 // =============================================================================
+// 集中式 Locale 管理器（单例）
+// =============================================================================
+
+type LocaleChangeListener = (locale: Locale) => void
+
+/**
+ * 全局 Locale 管理器
+ *
+ * 提供集中式的 locale 状态管理，各模块通过订阅机制自动同步。
+ *
+ * @example
+ * ```ts
+ * // 应用层设置全局 locale
+ * import { localeManager } from '@hai/core'
+ *
+ * localeManager.setGlobalLocale('en-US')
+ *
+ * // 所有通过 createMessageGetter 创建的消息获取器会自动同步
+ * ```
+ */
+class LocaleManager {
+  private currentLocale: Locale = DEFAULT_LOCALE
+  private listeners: Set<LocaleChangeListener> = new Set()
+
+  /**
+   * 获取当前全局 locale
+   */
+  getLocale(): Locale {
+    return this.currentLocale
+  }
+
+  /**
+   * 设置全局 locale，并通知所有订阅者
+   */
+  setGlobalLocale(locale: Locale): void {
+    // 规范化 locale（支持短格式如 'en'、'zh'）
+    const normalizedLocale
+      = locale === 'en'
+        ? 'en-US'
+        : locale === 'zh'
+          ? 'zh-CN'
+          : locale
+
+    if (this.currentLocale === normalizedLocale) {
+      return
+    }
+
+    this.currentLocale = normalizedLocale
+    this.notifyListeners()
+  }
+
+  /**
+   * 订阅 locale 变化
+   * @returns 取消订阅的函数
+   */
+  subscribe(listener: LocaleChangeListener): () => void {
+    this.listeners.add(listener)
+    // 立即用当前 locale 调用一次，确保初始状态同步
+    listener(this.currentLocale)
+    return () => {
+      this.listeners.delete(listener)
+    }
+  }
+
+  /**
+   * 通知所有订阅者
+   */
+  private notifyListeners(): void {
+    for (const listener of this.listeners) {
+      listener(this.currentLocale)
+    }
+  }
+}
+
+/**
+ * 全局 Locale 管理器单例
+ */
+export const localeManager = new LocaleManager()
+
+/**
+ * 设置全局 locale（便捷函数）
+ *
+ * @example
+ * ```ts
+ * import { setGlobalLocale } from '@hai/core'
+ * setGlobalLocale('en-US')
+ * ```
+ */
+export function setGlobalLocale(locale: Locale): void {
+  localeManager.setGlobalLocale(locale)
+}
+
+/**
+ * 获取当前全局 locale（便捷函数）
+ */
+export function getGlobalLocale(): Locale {
+  return localeManager.getLocale()
+}
+
+// =============================================================================
 // 消息管理器
 // =============================================================================
 
@@ -204,6 +305,9 @@ export function createMessageGetter<K extends string>(
   function getDefaultLocale(): Locale {
     return defaultLocale
   }
+
+  // 自动订阅全局 locale 变化
+  localeManager.subscribe(setDefaultLocale)
 
   return { getMessage, setDefaultLocale, getDefaultLocale }
 }

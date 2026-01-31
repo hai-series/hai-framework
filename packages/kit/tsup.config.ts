@@ -12,8 +12,4 @@ export default defineConfig({
     'src/client/index.ts',
   ],
   external: ['@sveltejs/kit', '@hai/core', '@hai/iam', 'svelte', 'svelte/store'],
-  // 排除 JSON 内容被内联到 d.ts
-  esbuildOptions(options) {
-    options.loader = { ...options.loader, '.json': 'copy' }
-  },
 })

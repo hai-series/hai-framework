@@ -157,6 +157,27 @@ export async function POST(event) {
 {/each}
 ```
 
+### i18n 集成
+
+`setAllModulesLocale` 用于在 SvelteKit 应用中统一设置所有 hai 模块的语言。
+
+```typescript
+// src/hooks.server.ts
+import { setAllModulesLocale } from '@hai/kit'
+
+export const handle = async ({ event, resolve }) => {
+  // 从 cookie 或其他来源获取 locale
+  const locale = event.cookies.get('PARAGLIDE_LOCALE') ?? 'zh-CN'
+  
+  // 一次调用同步所有模块（IAM、DB、Cache 等）
+  setAllModulesLocale(locale)
+
+  return resolve(event)
+}
+```
+
+该函数内部调用 `@hai/core` 的 `setGlobalLocale`，所有通过 `createMessageGetter` 创建的消息获取器会自动订阅并同步。
+
 ## API 参考
 
 ### IAM

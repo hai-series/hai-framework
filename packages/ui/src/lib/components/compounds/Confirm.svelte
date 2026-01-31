@@ -5,11 +5,13 @@
   确认对话框组件
   
   使用 Svelte 5 Runes ($props, $state)
+  使用 primitives 组件：Button
   =============================================================================
 -->
 <script lang="ts">
   import type { ConfirmProps } from '../../types.js'
   import { cn } from '../../utils.js'
+  import Button from '../primitives/Button.svelte'
   
   let {
     open = $bindable(false),
@@ -33,13 +35,6 @@
       modalElement?.close()
     }
   })
-  
-  const variantClass = $derived({
-    default: 'btn-neutral',
-    primary: 'btn-primary',
-    warning: 'btn-warning',
-    error: 'btn-error',
-  }[variant] || 'btn-warning')
   
   async function handleConfirm() {
     await onconfirm?.()
@@ -67,25 +62,21 @@
     <h3 class="font-bold text-lg">{title}</h3>
     <p class="py-4">{message}</p>
     <div class="modal-action">
-      <button
-        type="button"
-        class="btn btn-ghost"
+      <Button
+        variant="ghost"
         onclick={handleCancel}
         disabled={loading}
       >
         {cancelText}
-      </button>
-      <button
-        type="button"
-        class="btn {variantClass}"
+      </Button>
+      <Button
+        variant={variant}
         onclick={handleConfirm}
+        {loading}
         disabled={loading}
       >
-        {#if loading}
-          <span class="loading loading-spinner loading-sm"></span>
-        {/if}
         {confirmText}
-      </button>
+      </Button>
     </div>
   </div>
 </dialog>

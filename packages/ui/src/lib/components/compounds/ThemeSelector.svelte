@@ -117,20 +117,14 @@
                 >
                   <!-- 主题预览色块 -->
                   <div
-                    class='w-4 h-4 rounded border flex-shrink-0'
+                    class='w-4 h-4 rounded border shrink-0'
                     style={renderThemePreview(theme)}
                   ></div>
                   <!-- 主题名称 -->
-                  <span class='text-sm truncate'>{theme.name}</span>
-                  <!-- 暗色主题标识 -->
-                  {#if theme.dark}
-                    <svg xmlns='http://www.w3.org/2000/svg' class='h-3 w-3 text-base-content/40 ml-auto flex-shrink-0' viewBox='0 0 24 24' fill='currentColor'>
-                      <path d='M21.752 15.002A9.718 9.718 0 0118 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 003 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 009.002-5.998z' />
-                    </svg>
-                  {/if}
+                  <span class='text-sm flex-1'>{theme.name}</span>
                   <!-- 选中标记 -->
                   {#if theme.id === currentTheme}
-                    <svg xmlns='http://www.w3.org/2000/svg' class='h-4 w-4 text-primary ml-auto flex-shrink-0' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'>
+                    <svg xmlns='http://www.w3.org/2000/svg' class='h-4 w-4 text-primary shrink-0' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'>
                       <path stroke-linecap='round' stroke-linejoin='round' d='M5 13l4 4L19 7' />
                     </svg>
                   {/if}
@@ -154,17 +148,12 @@
               onclick={() => selectTheme(theme.id)}
             >
               <div
-                class='w-4 h-4 rounded border flex-shrink-0'
+                class='w-4 h-4 rounded border shrink-0'
                 style={renderThemePreview(theme)}
               ></div>
-              <span class='text-sm truncate'>{theme.name}</span>
-              {#if theme.dark}
-                <svg xmlns='http://www.w3.org/2000/svg' class='h-3 w-3 text-base-content/40 ml-auto flex-shrink-0' viewBox='0 0 24 24' fill='currentColor'>
-                  <path d='M21.752 15.002A9.718 9.718 0 0118 15.75c-5.385 0-9.75-4.365-9.75-9.75 0-1.33.266-2.597.748-3.752A9.753 9.753 0 003 11.25C3 16.635 7.365 21 12.75 21a9.753 9.753 0 009.002-5.998z' />
-                </svg>
-              {/if}
+              <span class='text-sm flex-1'>{theme.name}</span>
               {#if theme.id === currentTheme}
-                <svg xmlns='http://www.w3.org/2000/svg' class='h-4 w-4 text-primary ml-auto flex-shrink-0' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'>
+                <svg xmlns='http://www.w3.org/2000/svg' class='h-4 w-4 text-primary shrink-0' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'>
                   <path stroke-linecap='round' stroke-linejoin='round' d='M5 13l4 4L19 7' />
                 </svg>
               {/if}

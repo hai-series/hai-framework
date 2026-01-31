@@ -13,13 +13,8 @@
  * =============================================================================
  */
 
-// Guards
-// i18n
-import type { Locale } from '@hai/core'
-import { setCacheDefaultLocale } from '@hai/cache'
+// i18n - 从 @hai/core 导入
 import { core } from '@hai/core'
-import { setDbDefaultLocale } from '@hai/db'
-import { setIamDefaultLocale } from '@hai/iam'
 import messagesEnUS from '../messages/en-US.json'
 import messagesZhCN from '../messages/zh-CN.json'
 
@@ -161,14 +156,15 @@ export type {
 // Validation
 export { validateForm, validateParams, validateQuery } from './validation.js'
 
-export type KitMessageKey = keyof typeof messagesZhCN
+type KitMessageKey = keyof typeof messagesZhCN
 export const { getMessage: getKitMessage, setDefaultLocale: setKitDefaultLocale }
   = core.i18n.createMessageGetter<KitMessageKey>({ 'zh-CN': messagesZhCN, 'en-US': messagesEnUS })
 
 /**
  * 统一设置所有 hai 模块的默认语言
  *
- * 在 SvelteKit 应用的 hooks.server.ts 中使用，根据请求的 locale 设置所有模块的语言。
+ * 通过 @hai/core 的集中式 locale 管理器，一次调用即可同步所有模块。
+ * 各模块的 createMessageGetter 已自动订阅 locale 变化。
  *
  * @example
  * ```ts
@@ -180,17 +176,5 @@ export const { getMessage: getKitMessage, setDefaultLocale: setKitDefaultLocale 
  * ```
  */
 export function setAllModulesLocale(locale: string): void {
-  // 规范化 locale（支持短格式如 'en'、'zh'）
-  const normalizedLocale = (
-    locale === 'en'
-      ? 'en-US'
-      : locale === 'zh'
-        ? 'zh-CN'
-        : locale
-  ) as Locale
-
-  setKitDefaultLocale(normalizedLocale)
-  setIamDefaultLocale(normalizedLocale)
-  setDbDefaultLocale(normalizedLocale)
-  setCacheDefaultLocale(normalizedLocale)
+  core.i18n.setGlobalLocale(locale)
 }

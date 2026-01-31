@@ -1,38 +1,17 @@
 <!--
   @component SettingsModal
   应用设置模态框，包含语言和主题切换功能。
+  内置多语言支持，自动跟随全局 locale
 
   @prop {boolean} open - 是否显示模态框（双向绑定）
   @prop {string} currentLanguage - 当前语言
   @prop {string} currentTheme - 当前主题
   @prop {function} onlanguagechange - 语言变更回调
   @prop {function} onthemechange - 主题变更回调
-
-  @example
-  <SettingsModal 
-    bind:open={showSettings}
-    currentLanguage={$locale}
-    currentTheme={$theme}
-    onlanguagechange={(lang) => locale.set(lang)}
-    onthemechange={(theme) => themeStore.set(theme)}
-  />
 -->
 <script lang='ts'>
-  /** i18n 文案配置 */
-  interface SettingsLabels {
-    title?: string
-    close?: string
-    language?: string
-    theme?: string
-  }
-  
-  // 默认文案
-  const defaultLabels: Required<SettingsLabels> = {
-    title: 'Settings',
-    close: 'Close',
-    language: 'Language',
-    theme: 'Theme',
-  }
+  import IconButton from '../primitives/IconButton.svelte'
+  import { m } from '../../messages.js'
   
   interface Props {
     open?: boolean
@@ -40,7 +19,6 @@
     currentTheme?: string
     languages?: { value: string, label: string, icon?: string }[]
     themes?: { value: string, label: string }[]
-    labels?: SettingsLabels
     onlanguagechange?: (lang: string) => void
     onthemechange?: (theme: string) => void
     onclose?: () => void
@@ -61,14 +39,10 @@
       { value: 'luxury', label: 'Luxury' },
       { value: 'pastel', label: 'Pastel' },
     ],
-    labels = {},
     onlanguagechange,
     onthemechange,
     onclose,
   }: Props = $props()
-  
-  // 合并文案
-  const mergedLabels = $derived({ ...defaultLabels, ...labels })
 
   function handleClose() {
     open = false
@@ -104,15 +78,18 @@
     >
       <!-- 标题栏 -->
       <div class='flex items-center justify-between border-b border-base-content/10 px-6 py-4'>
-        <h3 class='text-lg font-semibold text-base-content'>{mergedLabels.title}</h3>
-        <button
-          type='button'
-          class='btn btn-sm btn-circle btn-ghost hover:bg-base-content/10'
+        <h3 class='text-lg font-semibold text-base-content'>{m('settings_title')}</h3>
+        <IconButton
+          size="sm"
+          variant="ghost"
+          label={m('settings_close')}
           onclick={handleClose}
-          aria-label={mergedLabels.close}
+          class="hover:bg-base-content/10"
         >
-          <span class='icon-[tabler--x] size-5'></span>
-        </button>
+          {#snippet children()}
+            <span class='icon-[tabler--x] size-5'></span>
+          {/snippet}
+        </IconButton>
       </div>
 
       <!-- 内容区 -->
@@ -121,7 +98,7 @@
         <section class='mb-8'>
           <h4 class='mb-4 flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-base-content/60'>
             <span class='icon-[tabler--world] size-4'></span>
-            {mergedLabels.language}
+            {m('settings_language')}
           </h4>
           <div class='flex gap-3'>
             {#each languages as lang (lang.value)}
@@ -151,7 +128,7 @@
         <section>
           <h4 class='mb-4 flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-base-content/60'>
             <span class='icon-[tabler--sun] size-4'></span>
-            {mergedLabels.theme}
+            {m('settings_theme')}
           </h4>
           <div class='grid gap-2.5 grid-cols-2 sm:grid-cols-3'>
             {#each themes as theme (theme.value)}
