@@ -62,21 +62,36 @@
 
 <ul class={containerClass}>
   {#each items as item, index (index)}
-    <li
-      class={getStepClass(index)}
-      data-content={item.icon || (index < current ? '✓' : index + 1)}
-      onclick={() => handleClick(index)}
-      onkeydown={(e) => e.key === 'Enter' && handleClick(index)}
-      role={clickable ? 'button' : 'listitem'}
-      tabindex={clickable ? 0 : -1}
-    >
-      <div class="step-content">
-        <span class="font-medium">{item.title}</span>
-        {#if item.description}
-          <span class="text-xs text-base-content/60">{item.description}</span>
-        {/if}
-      </div>
-    </li>
+    {#if clickable}
+      <!-- svelte-ignore a11y_no_noninteractive_element_to_interactive_role -->
+      <li
+        class={getStepClass(index)}
+        data-content={item.icon || (index < current ? '✓' : index + 1)}
+        onclick={() => handleClick(index)}
+        onkeydown={(e) => e.key === 'Enter' && handleClick(index)}
+        role="button"
+        tabindex="0"
+      >
+        <div class="step-content">
+          <span class="font-medium">{item.title}</span>
+          {#if item.description}
+            <span class="text-xs text-base-content/60">{item.description}</span>
+          {/if}
+        </div>
+      </li>
+    {:else}
+      <li
+        class={getStepClass(index)}
+        data-content={item.icon || (index < current ? '✓' : index + 1)}
+      >
+        <div class="step-content">
+          <span class="font-medium">{item.title}</span>
+          {#if item.description}
+            <span class="text-xs text-base-content/60">{item.description}</span>
+          {/if}
+        </div>
+      </li>
+    {/if}
   {/each}
 </ul>
 

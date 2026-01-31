@@ -31,6 +31,7 @@
   "iam_getUserInfoFailed": "获取用户信息失败",
   "iam_getUserInfoRequestFailed": "获取用户信息请求失败",
   "iam_oauthStrategyRequired": "OAuth 认证需要配置 OAuth 策略",
+  "iam_oauthProviderNotFound": "OAuth 提供商 '{providerId}' 不存在",
   "iam_ldapConnectionFailed": "无法连接到 LDAP 服务器",
   "iam_ldapAdminBindFailed": "LDAP 管理员绑定失败",
   "iam_ldapSearchFailed": "LDAP 搜索失败",

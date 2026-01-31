@@ -13,10 +13,10 @@
   
   let {
     open = $bindable(false),
-    title = '确认操作',
-    message = '确定要执行此操作吗？',
-    confirmText = '确定',
-    cancelText = '取消',
+    title = 'Confirm',
+    message = 'Are you sure you want to proceed?',
+    confirmText = 'Confirm',
+    cancelText = 'Cancel',
     variant = 'warning',
     loading = false,
     class: className = '',

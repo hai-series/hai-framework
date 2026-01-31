@@ -11,17 +11,38 @@
   import type { ForgotPasswordFormProps, ForgotPasswordFormData } from '../types.js'
   import { cn } from '../../../utils.js'
   
+  // 默认文案
+  const defaultLabels = {
+    emailLabel: 'Email Address',
+    emailPlaceholder: 'Enter your registered email',
+    emailHint: 'We will send a password reset link to your email',
+    phoneLabel: 'Phone Number',
+    phonePlaceholder: 'Enter your registered phone number',
+    phoneHint: 'We will send a verification code to your phone',
+  }
+  
   let {
     loading = false,
     disabled = false,
     mode = 'email',
-    submitText = '发送验证码',
+    submitText = 'Send Verification Code',
+    labels = {},
+    placeholders = {},
+    validationMessages = {},
     class: className = '',
     errors = {},
     onsubmit,
     header,
     footer,
   }: ForgotPasswordFormProps = $props()
+  
+  // 合并文案（placeholders 覆盖 labels 中的占位符）
+  const mergedLabels = $derived({
+    ...defaultLabels,
+    ...labels,
+    emailPlaceholder: placeholders.email || labels.emailPlaceholder || defaultLabels.emailPlaceholder,
+    phonePlaceholder: placeholders.phone || labels.phonePlaceholder || defaultLabels.phonePlaceholder,
+  })
   
   let email = $state('')
   let phone = $state('')
@@ -58,43 +79,59 @@
   {#if mode === 'email'}
     <div class="form-control">
       <label class="label" for="forgot-email">
-        <span class="label-text">邮箱地址</span>
+        <span class="label-text">{mergedLabels.emailLabel}</span>
       </label>
       <input
         id="forgot-email"
         type="email"
         name="email"
-        placeholder="请输入注册时使用的邮箱"
+        placeholder={mergedLabels.emailPlaceholder}
         class={cn('input input-bordered w-full', errors.email && 'input-error')}
         bind:value={email}
+        oninput={(e) => e.currentTarget.setCustomValidity('')}
+        oninvalid={(e) => {
+          const input = e.currentTarget as HTMLInputElement
+          if (input.validity.valueMissing && validationMessages.required) {
+            input.setCustomValidity(validationMessages.required)
+          } else if (input.validity.typeMismatch && validationMessages.email) {
+            input.setCustomValidity(validationMessages.email)
+          }
+        }}
         {disabled}
         required
       />
       {#if errors.email}
-        <label class="label">
+        <div class="label">
           <span class="label-text-alt text-error">{errors.email}</span>
-        </label>
+        </div>
       {/if}
     </div>
   {:else}
     <div class="form-control">
       <label class="label" for="forgot-phone">
-        <span class="label-text">手机号</span>
+        <span class="label-text">{mergedLabels.phoneLabel}</span>
       </label>
       <input
         id="forgot-phone"
         type="tel"
         name="phone"
-        placeholder="请输入注册时使用的手机号"
+        placeholder={mergedLabels.phonePlaceholder}
         class={cn('input input-bordered w-full', errors.phone && 'input-error')}
         bind:value={phone}
+        oninput={(e) => e.currentTarget.setCustomValidity('')}
+        oninvalid={(e) => {
+          const input = e.currentTarget as HTMLInputElement
+          if (input.validity.valueMissing && validationMessages.required) {
+            input.setCustomValidity(validationMessages.required)
+          }
+        }}
         {disabled}
         required
       />
       {#if errors.phone}
-        <label class="label">
+        <div class="label">
           <span class="label-text-alt text-error">{errors.phone}</span>
-        </label>
+        </div>
       {/if}
     </div>
   {/if}
@@ -102,9 +139,9 @@
   <!-- 提示信息 -->
   <p class="text-sm text-base-content/60">
     {#if mode === 'email'}
-      我们将向您的邮箱发送一封包含重置密码链接的邮件
+      {mergedLabels.emailHint}
     {:else}
-      我们将向您的手机发送验证码
+      {mergedLabels.phoneHint}
     {/if}
   </p>
   

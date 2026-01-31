@@ -13,17 +13,32 @@
   import PasswordInput from './PasswordInput.svelte'
   import { arePasswordsEqual } from './password-utils.js'
   
+  // 默认文案
+  const defaultLabels = {
+    oldPassword: 'Current Password',
+    newPassword: 'New Password',
+    confirmPassword: 'Confirm Password',
+    oldPasswordPlaceholder: 'Enter current password',
+    newPasswordPlaceholder: 'Enter new password',
+    confirmPasswordPlaceholder: 'Re-enter new password',
+    passwordMismatch: 'Passwords do not match',
+  }
+  
   let {
     loading = false,
     disabled = false,
     requireOldPassword = true,
     showPasswordStrength = true,
     minPasswordLength = 8,
-    submitText = '修改密码',
+    submitText = 'Change Password',
+    labels = {},
     class: className = '',
     errors = {},
     onsubmit,
   }: ChangePasswordFormProps = $props()
+  
+  // 合并文案
+  const mergedLabels = $derived({ ...defaultLabels, ...labels })
   
   let oldPassword = $state('')
   let newPassword = $state('')
@@ -64,12 +79,12 @@
   {#if requireOldPassword}
     <div class="form-control">
       <label class="label" for="old-password">
-        <span class="label-text">当前密码</span>
+        <span class="label-text">{mergedLabels.oldPassword}</span>
       </label>
       <PasswordInput
         value={oldPassword}
         oninput={(e) => { oldPassword = e.currentTarget.value }}
-        placeholder="请输入当前密码"
+        placeholder={mergedLabels.oldPasswordPlaceholder}
         {disabled}
         error={errors.oldPassword}
         showStrength={false}
@@ -80,12 +95,12 @@
   <!-- 新密码 -->
   <div class="form-control">
     <label class="label" for="new-password">
-      <span class="label-text">新密码</span>
+      <span class="label-text">{mergedLabels.newPassword}</span>
     </label>
     <PasswordInput
       value={newPassword}
       oninput={(e) => { newPassword = e.currentTarget.value }}
-      placeholder="请输入新密码"
+      placeholder={mergedLabels.newPasswordPlaceholder}
       {disabled}
       error={errors.newPassword}
       showStrength={showPasswordStrength}
@@ -96,14 +111,14 @@
   <!-- 确认新密码 -->
   <div class="form-control">
     <label class="label" for="confirm-password">
-      <span class="label-text">确认新密码</span>
+      <span class="label-text">{mergedLabels.confirmPassword}</span>
     </label>
     <PasswordInput
       value={confirmPassword}
       oninput={(e) => { confirmPassword = e.currentTarget.value }}
-      placeholder="请再次输入新密码"
+      placeholder={mergedLabels.confirmPasswordPlaceholder}
       {disabled}
-      error={errors.confirmPassword || (!passwordsMatch && confirmPassword ? '两次密码输入不一致' : '')}
+      error={errors.confirmPassword || (!passwordsMatch && confirmPassword ? mergedLabels.passwordMismatch : '')}
       showStrength={false}
     />
   </div>

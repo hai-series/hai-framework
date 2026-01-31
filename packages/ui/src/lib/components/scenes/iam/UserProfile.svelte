@@ -11,16 +11,32 @@
   import type { UserProfileProps, UserProfileField } from '../types.js'
   import { cn } from '../../../utils.js'
   
+  const defaultLabels = {
+    avatar: 'Avatar',
+    username: 'Username',
+    email: 'Email',
+    nickname: 'Nickname',
+    phone: 'Phone',
+    bio: 'Bio',
+    avatarHint: 'JPG, PNG supported, max 2MB',
+    save: 'Save',
+    cancel: 'Cancel',
+    editProfile: 'Edit Profile',
+  }
+  
   let {
     user,
     editable = false,
     loading = false,
     fields = ['avatar', 'username', 'email', 'nickname', 'phone'],
+    labels = {},
     class: className = '',
     errors = {},
     onsubmit,
     onavatarchange,
   }: UserProfileProps = $props()
+  
+  const mergedLabels = $derived({ ...defaultLabels, ...labels })
   
   let editMode = $state(false)
   let formData = $state<Record<string, string>>({})
@@ -45,13 +61,9 @@
     )
   )
   
-  const fieldLabels: Record<UserProfileField, string> = {
-    avatar: '头像',
-    username: '用户名',
-    email: '邮箱',
-    nickname: '昵称',
-    phone: '手机号',
-    bio: '个人简介',
+  // 通过 mergedLabels 获取字段标签
+  function getFieldLabel(field: UserProfileField): string {
+    return mergedLabels[field] || field
   }
   
   function startEdit() {
@@ -98,7 +110,7 @@
             <div class="avatar">
               <div class="w-20 rounded-full ring ring-primary ring-offset-base-100 ring-offset-2">
                 {#if user?.avatar}
-                  <img src={user.avatar} alt="头像" />
+                  <img src={user.avatar} alt={mergedLabels.avatar} />
                 {:else}
                   <div class="bg-neutral text-neutral-content flex items-center justify-center text-2xl">
                     {user?.username?.charAt(0).toUpperCase() || 'U'}
@@ -114,16 +126,16 @@
                   class="file-input file-input-bordered file-input-sm w-full max-w-xs"
                   onchange={handleAvatarChange}
                 />
-                <p class="text-xs text-base-content/60 mt-1">支持 JPG、PNG 格式，最大 2MB</p>
+                <p class="text-xs text-base-content/60 mt-1">{mergedLabels.avatarHint}</p>
               </div>
             {/if}
           </div>
         {:else}
           <!-- 其他字段 -->
           <div class="form-control">
-            <label class="label">
-              <span class="label-text font-medium">{fieldLabels[field]}</span>
-            </label>
+            <div class="label">
+              <span class="label-text font-medium">{getFieldLabel(field)}</span>
+            </div>
             {#if editMode && field !== 'username'}
               {#if field === 'bio'}
                 <textarea
@@ -132,7 +144,7 @@
                   rows={3}
                   bind:value={formData[field]}
                   disabled={loading}
-                />
+                ></textarea>
               {:else}
                 <input
                   type={field === 'email' ? 'email' : field === 'phone' ? 'tel' : 'text'}
@@ -143,9 +155,9 @@
                 />
               {/if}
               {#if errors[field]}
-                <label class="label">
+                <div class="label">
                   <span class="label-text-alt text-error">{errors[field]}</span>
-                </label>
+                </div>
               {/if}
             {:else}
               <p class="py-2 px-1 text-base-content">
@@ -175,7 +187,7 @@
               {#if loading}
                 <span class="loading loading-spinner loading-sm"></span>
               {/if}
-              保存
+              {mergedLabels.save}
             </button>
             <button
               type="button"
@@ -183,7 +195,7 @@
               onclick={cancelEdit}
               disabled={loading}
             >
-              取消
+              {mergedLabels.cancel}
             </button>
           {:else}
             <button
@@ -191,7 +203,7 @@
               class="btn btn-outline"
               onclick={startEdit}
             >
-              编辑资料
+              {mergedLabels.editProfile}
             </button>
           {/if}
         </div>

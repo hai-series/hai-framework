@@ -1,5 +1,38 @@
 @import 'tailwindcss';
-@plugin "daisyui";
+@plugin "daisyui" {
+  themes: light --default,
+    dark --prefersdark,
+    cupcake,
+    bumblebee,
+    emerald,
+    corporate,
+    synthwave,
+    retro,
+    cyberpunk,
+    valentine,
+    halloween,
+    garden,
+    forest,
+    aqua,
+    lofi,
+    pastel,
+    fantasy,
+    wireframe,
+    black,
+    luxury,
+    dracula,
+    cmyk,
+    autumn,
+    business,
+    acid,
+    lemonade,
+    night,
+    coffee,
+    winter,
+    dim,
+    nord,
+    sunset;
+}
 @plugin "@iconify/tailwind4" {
   prefixes: tabler;
 }
@@ -9,6 +42,12 @@
   /* 自定义颜色 */
   --color-brand: oklch(0.6 0.2 275);
 }
+
+/**
+ * 全局样式
+ * 注意：@hai/ui/styles/global.css 提供了可复用的全局样式
+ * 但由于 Tailwind v4 CSS 导入限制，这里直接内联
+ */
 
 /* 自定义滚动条 */
 ::-webkit-scrollbar {

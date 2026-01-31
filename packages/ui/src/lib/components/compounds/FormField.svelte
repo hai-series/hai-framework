@@ -49,12 +49,12 @@
   </div>
   
   {#if error || hint}
-    <label class="label">
+    <div class="label">
       {#if error}
         <span class="label-text-alt text-error">{error}</span>
       {:else if hint}
         <span class="label-text-alt text-base-content/60">{hint}</span>
       {/if}
-    </label>
+    </div>
   {/if}
 </div>

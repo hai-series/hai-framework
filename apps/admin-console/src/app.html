@@ -1,10 +1,17 @@
 <!doctype html>
-<html lang="%lang%">
+<html lang="%lang%" data-theme="light">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="description" content="hai Admin Console - AI-Native 管理后台" />
     <link rel="icon" href="%sveltekit.assets%/favicon.png" />
+    <script>
+      // 在页面渲染前应用保存的主题，避免闪烁
+      ;(function () {
+        const theme = localStorage.getItem('theme') || 'light'
+        document.documentElement.setAttribute('data-theme', theme)
+      })()
+    </script>
     %sveltekit.head%
   </head>
 

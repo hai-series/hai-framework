@@ -15,5 +15,12 @@
   "kit_csrfTokenFailed": "生成 CSRF Token 失败",
   "kit_csrfVerifyFailed": "CSRF Token 验证失败",
   "kit_encryptFailed": "加密失败",
-  "kit_presignFetchFailed": "获取预签名 URL 失败"
+  "kit_presignFetchFailed": "获取预签名 URL 失败",
+  "kit_loginUsernamePasswordRequired": "请输入用户名和密码",
+  "kit_sessionCreateFailed": "创建会话失败",
+  "kit_registerFieldsRequired": "请填写所有必填字段",
+  "kit_passwordMismatch": "两次密码输入不一致",
+  "kit_passwordMinLength": "密码长度至少 {minLength} 位",
+  "kit_loginRequired": "请先登录",
+  "kit_changePasswordSuccess": "密码修改成功"
 }

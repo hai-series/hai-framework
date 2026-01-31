@@ -22,22 +22,19 @@ export const POST: RequestHandler = async ({ request, cookies, getClientAddress 
     // 使用 IAM 模块登录
     const loginResult = await iam.auth.login({ identifier, password })
     if (!loginResult.success) {
-      // 根据错误码返回不同响应
+      // 直接使用 iam 模块返回的错误消息（已经过 i18n 处理）
       const errorCode = loginResult.error.code
-      // 5001 = INVALID_CREDENTIALS (凭证无效)
-      // 5002 = USER_NOT_FOUND (用户不存在)
+      // 根据错误码决定 HTTP 状态码
+      let status = 400
+      // 5001 = INVALID_CREDENTIALS, 5002 = USER_NOT_FOUND
       if (errorCode === 5001 || errorCode === 5002) {
-        return json({ success: false, error: '用户名或密码错误' }, { status: 401 })
+        status = 401
       }
-      // 5003 = USER_DISABLED (用户已禁用)
-      if (errorCode === 5003) {
-        return json({ success: false, error: '账户已被禁用' }, { status: 403 })
+      // 5003 = USER_DISABLED, 5004 = USER_LOCKED
+      else if (errorCode === 5003 || errorCode === 5004) {
+        status = 403
       }
-      // 5004 = USER_LOCKED (用户已锁定)
-      if (errorCode === 5004) {
-        return json({ success: false, error: '账户已被锁定，请稍后重试' }, { status: 403 })
-      }
-      return json({ success: false, error: loginResult.error.message }, { status: 400 })
+      return json({ success: false, error: loginResult.error.message }, { status })
     }
 
     const { user, accessToken } = loginResult.data

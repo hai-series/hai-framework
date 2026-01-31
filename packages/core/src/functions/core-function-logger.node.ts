@@ -19,7 +19,35 @@
 
 import type { LogFormat, LoggingConfig, LogLevel } from '../core-config.js'
 import type { LogContext, Logger, LoggerOptions } from '../core-types.js'
+import { execSync } from 'node:child_process'
+import process from 'node:process'
 import pino from 'pino'
+
+// Windows 控制台 UTF-8 编码修复
+// 解决 Pino 日志中文乱码问题（pino/sonic-boom 在 Windows 上需要显式设置 UTF-8）
+if (process.platform === 'win32' && process.stdout.isTTY) {
+  try {
+    // 强制切换控制台代码页为 UTF-8（避免 GBK/GB2312 导致的乱码）
+    execSync('chcp 65001 > nul', { stdio: 'ignore' })
+
+    // 设置 stdout/stderr 编码为 UTF-8
+    if (process.stdout.setDefaultEncoding) {
+      process.stdout.setDefaultEncoding('utf8')
+    }
+    if (process.stderr.setDefaultEncoding) {
+      process.stderr.setDefaultEncoding('utf8')
+    }
+
+    // 通过环境变量强制 Node.js 使用 UTF-8
+    process.env.LANG = 'zh_CN.UTF-8'
+    process.env.LC_ALL = 'zh_CN.UTF-8'
+    process.env.PYTHONIOENCODING = 'utf-8'
+  }
+  // eslint-disable-next-line unused-imports/no-unused-vars
+  catch (_e) {
+    // 忽略错误，某些环境可能不支持
+  }
+}
 
 // =============================================================================
 // 全局配置

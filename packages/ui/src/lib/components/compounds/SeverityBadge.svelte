@@ -16,23 +16,43 @@
   <SeverityBadge type="critical" size="sm" />
 -->
 <script lang='ts'>
+  /** i18n labels configuration */
+  interface SeverityLabels {
+    critical?: string
+    high?: string
+    medium?: string
+    low?: string
+  }
+  
   interface Props {
     type: 'critical' | 'high' | 'medium' | 'low'
     size?: 'xs' | 'sm' | 'md'
+    labels?: SeverityLabels
     class?: string
   }
 
-  let { type, size = 'sm', class: className = '' }: Props = $props()
-
-  /** 严重程度样式映射 */
-  const typeStyles: Record<string, { class: string, label: string }> = {
-    critical: { class: 'badge-error', label: '严重' },
-    high: { class: 'badge-warning', label: '高' },
-    medium: { class: 'badge-info', label: '中' },
-    low: { class: 'badge-success', label: '低' },
+  // Default labels (English as universal fallback)
+  const defaultLabels: Required<SeverityLabels> = {
+    critical: 'Critical',
+    high: 'High',
+    medium: 'Medium',
+    low: 'Low',
   }
 
-  /** 尺寸样式映射 */
+  let { type, size = 'sm', labels = {}, class: className = '' }: Props = $props()
+
+  // Merge labels
+  const mergedLabels = $derived({ ...defaultLabels, ...labels })
+
+  /** Severity style mapping */
+  const typeStyles: Record<string, string> = {
+    critical: 'badge-error',
+    high: 'badge-warning',
+    medium: 'badge-info',
+    low: 'badge-success',
+  }
+
+  /** Size style mapping */
   const sizeClasses: Record<string, string> = {
     xs: 'badge-xs',
     sm: 'badge-sm',
@@ -40,6 +60,6 @@
   }
 </script>
 
-<span class='badge {typeStyles[type].class} {sizeClasses[size]} {className}'>
-  {typeStyles[type].label}
+<span class='badge {typeStyles[type]} {sizeClasses[size]} {className}'>
+  {mergedLabels[type]}
 </span>

@@ -61,7 +61,12 @@
 
 <div class={dropdownClass}>
   <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-  <div tabindex="0" role="button" onclick={toggleDropdown}>
+  <div
+    tabindex="0"
+    role="button"
+    onclick={toggleDropdown}
+    onkeydown={(e) => e.key === 'Enter' && toggleDropdown()}
+  >
     {#if children}
       {@render children()}
     {/if}

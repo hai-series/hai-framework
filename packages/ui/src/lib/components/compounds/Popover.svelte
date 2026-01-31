@@ -23,8 +23,8 @@
     children,
   }: PopoverProps = $props()
   
-  let triggerElement: HTMLDivElement
-  let popoverElement: HTMLDivElement
+  let triggerElement = $state<HTMLDivElement | null>(null)
+  let popoverElement = $state<HTMLDivElement | null>(null)
   
   const positionClass = $derived({
     top: 'bottom-full left-1/2 -translate-x-1/2 mb-2',
@@ -96,6 +96,7 @@
 
 <div
   class={cn('relative inline-block', className)}
+  role="group"
   onmouseenter={handleMouseEnter}
   onmouseleave={handleMouseLeave}
 >

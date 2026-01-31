@@ -11,6 +11,14 @@
   import type { FileListProps, FileItem } from '../types.js'
   import { cn } from '../../../utils.js'
   
+  const defaultLabels = {
+    noFiles: 'No files',
+    preview: 'Preview',
+    download: 'Download',
+    delete: 'Delete',
+    close: 'Close',
+  }
+  
   let {
     files = [],
     loading = false,
@@ -20,11 +28,14 @@
     showSize = true,
     showDate = true,
     layout = 'list',
+    labels = {},
     class: className = '',
     ondownload,
     ondelete,
     onpreview,
   }: FileListProps = $props()
+  
+  const mergedLabels = $derived({ ...defaultLabels, ...labels })
   
   let previewFile = $state<FileItem | null>(null)
   
@@ -105,7 +116,7 @@
     <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 mx-auto mb-4 opacity-30" fill="none" viewBox="0 0 24 24" stroke="currentColor">
       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
     </svg>
-    <p>暂无文件</p>
+    <p>{mergedLabels.noFiles}</p>
   </div>
 {:else}
   <div class={containerClass}>
@@ -130,17 +141,17 @@
             <div class="card-actions justify-end mt-2">
               {#if showPreview && canPreview(file)}
                 <button class="btn btn-ghost btn-xs" onclick={() => handlePreview(file)}>
-                  预览
+                  {mergedLabels.preview}
                 </button>
               {/if}
               {#if showDownload}
                 <button class="btn btn-ghost btn-xs" onclick={() => handleDownload(file)}>
-                  下载
+                  {mergedLabels.download}
                 </button>
               {/if}
               {#if showDelete}
                 <button class="btn btn-ghost btn-xs text-error" onclick={() => handleDelete(file)}>
-                  删除
+                  {mergedLabels.delete}
                 </button>
               {/if}
             </div>
@@ -178,7 +189,7 @@
                 type="button"
                 class="btn btn-ghost btn-sm btn-circle"
                 onclick={() => handlePreview(file)}
-                aria-label="预览"
+                aria-label={mergedLabels.preview}
               >
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -191,7 +202,7 @@
                 type="button"
                 class="btn btn-ghost btn-sm btn-circle"
                 onclick={() => handleDownload(file)}
-                aria-label="下载"
+                aria-label={mergedLabels.download}
               >
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
@@ -203,7 +214,7 @@
                 type="button"
                 class="btn btn-ghost btn-sm btn-circle text-error"
                 onclick={() => handleDelete(file)}
-                aria-label="删除"
+                aria-label={mergedLabels.delete}
               >
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -220,7 +231,13 @@
 <!-- 预览模态框 -->
 {#if previewFile}
   <dialog class="modal modal-open" onclick={closePreview}>
-    <div class="modal-box max-w-4xl" onclick={(e) => e.stopPropagation()}>
+    <div
+      class="modal-box max-w-4xl"
+      role="dialog"
+      tabindex="-1"
+      onclick={(e) => e.stopPropagation()}
+      onkeydown={(e) => e.stopPropagation()}
+    >
       <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2" onclick={closePreview}>✕</button>
       <h3 class="font-bold text-lg mb-4">{previewFile.name}</h3>
       
@@ -235,7 +252,7 @@
       {/if}
     </div>
     <form method="dialog" class="modal-backdrop">
-      <button>关闭</button>
+      <button>{mergedLabels.close}</button>
     </form>
   </dialog>
 {/if}

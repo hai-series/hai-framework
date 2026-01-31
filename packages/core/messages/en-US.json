@@ -41,5 +41,10 @@
   "time_daysAgo": "{n} days ago",
   "time_weeksAgo": "{n} weeks ago",
   "time_monthsAgo": "{n} months ago",
-  "time_yearsAgo": "{n} years ago"
+  "time_yearsAgo": "{n} years ago",
+  "config_envVarMissing": "Environment variable '{varName}' is not set and has no default value",
+  "config_fileNotExist": "Config file does not exist: {filePath}",
+  "config_parseFailed": "Failed to parse config file: {filePath}",
+  "config_validationFailed": "Config validation failed",
+  "config_notLoaded": "Config '{name}' is not loaded"
 }

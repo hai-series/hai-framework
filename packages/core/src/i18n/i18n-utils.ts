@@ -147,7 +147,7 @@ export type LocaleMessages<K extends string = string> = Record<Locale, Record<K,
  * 用于各模块创建自己的 getMessage 函数，统一消息加载和插值逻辑。
  *
  * @param messages - 多语言消息对象
- * @param defaultLocale - 默认语言，默认 'zh-CN'
+ * @param initialLocale - 默认语言，默认 'zh-CN'
  * @returns 消息获取函数和设置默认语言函数
  *
  * @example

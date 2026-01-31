@@ -2,80 +2,104 @@
   @component LanguageSwitch
   语言切换下拉组件，支持多语言切换。
 
-  @prop {string} currentLanguage - 当前语言代码
+  @prop {string} currentLanguage - 当前语言代码（BCP 47 格式，如 'zh-CN', 'en-US'）
   @prop {Language[]} languages - 可选语言列表
-  @prop {function} onchange - 语言变更回调
+  @prop {function} onchange - 语言变更回调，传入选中的语言代码
 
   @example
+  ```svelte
+  <script>
+    import { setLocale, getLocale } from '$lib/paraglide/runtime.js'
+  </script>
+  
   <LanguageSwitch 
-    currentLanguage={$locale}
+    currentLanguage={getLocale()}
     languages={[
-      { value: 'zh-cn', label: '简体中文' },
-      { value: 'en-us', label: 'English' }
+      { value: 'zh-CN', label: '简体中文' },
+      { value: 'en-US', label: 'English' }
     ]}
-    onchange={(lang) => locale.set(lang)}
+    onchange={(lang) => setLocale(lang)}
   />
+  ```
 -->
 <script lang='ts'>
   interface Language {
     value: string
     label: string
+    flag?: string
   }
 
   interface Props {
+    /** 当前语言代码（BCP 47 格式） */
     currentLanguage?: string
+    /** 可选语言列表 */
     languages?: Language[]
+    /** 语言变更回调 */
     onchange?: (lang: string) => void
+    /** 自定义类名 */
     class?: string
   }
 
   let {
-    currentLanguage = 'zh-cn',
+    currentLanguage = 'zh-CN',
     languages = [
-      { value: 'zh-cn', label: '简体中文' },
-      { value: 'en-us', label: 'English' },
+      { value: 'zh-CN', label: '简体中文', flag: '🇨🇳' },
+      { value: 'en-US', label: 'English', flag: '🇺🇸' },
     ],
     onchange,
     class: className = '',
   }: Props = $props()
 
   let open = $state(false)
+  let containerRef = $state<HTMLDivElement | null>(null)
 
-  const currentLabel = $derived(
-    languages.find(l => l.value === currentLanguage)?.label ?? currentLanguage
+  const currentLangInfo = $derived(
+    languages.find(l => l.value === currentLanguage)
   )
 
   function selectLanguage(lang: string) {
-    onchange?.(lang)
+    if (lang !== currentLanguage) {
+      onchange?.(lang)
+    }
     open = false
   }
+
+  function handleClickOutside(event: MouseEvent) {
+    if (containerRef && !containerRef.contains(event.target as Node)) {
+      open = false
+    }
+  }
+
+  $effect(() => {
+    if (open) {
+      document.addEventListener('click', handleClickOutside)
+      return () => document.removeEventListener('click', handleClickOutside)
+    }
+    return undefined
+  })
 </script>
 
-<div class='dropdown dropdown-end {open ? "dropdown-open" : ""} {className}'>
+<div bind:this={containerRef} class='dropdown dropdown-end {open ? "dropdown-open" : ""} {className}'>
   <button
     type='button'
     class='btn btn-ghost btn-sm gap-1'
     onclick={() => (open = !open)}
-    aria-label='切换语言'
+    aria-label='Switch language'
   >
     <svg xmlns='http://www.w3.org/2000/svg' class='h-4 w-4' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'>
       <path d='M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129' />
     </svg>
-    <span class='text-sm'>{currentLabel}</span>
+    {#if currentLangInfo?.flag}
+      <span>{currentLangInfo.flag}</span>
+    {/if}
+    <span class='text-sm'>{currentLangInfo?.label ?? currentLanguage}</span>
     <svg xmlns='http://www.w3.org/2000/svg' class='h-3 w-3' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'>
       <path d='M19 9l-7 7-7-7' />
     </svg>
   </button>
 
   {#if open}
-    <button
-      type='button'
-      class='fixed inset-0 z-40 cursor-default bg-transparent'
-      onclick={() => (open = false)}
-      aria-label='关闭语言菜单'
-      tabindex='-1'
-    ></button>
-    <ul class='dropdown-content menu bg-base-100 rounded-box shadow-lg border border-base-content/10 z-50 w-40 p-2'>
+    <ul class='dropdown-content menu bg-base-100 rounded-box shadow-lg border border-base-content/10 z-50 w-44 p-2'>
       {#each languages as lang (lang.value)}
         <li>
           <button
@@ -83,6 +107,9 @@
             class='flex items-center gap-2 {lang.value === currentLanguage ? "active" : ""}'
             onclick={() => selectLanguage(lang.value)}
           >
+            {#if lang.flag}
+              <span>{lang.flag}</span>
+            {/if}
             <span>{lang.label}</span>
             {#if lang.value === currentLanguage}
               <svg xmlns='http://www.w3.org/2000/svg' class='h-4 w-4 ml-auto' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'>

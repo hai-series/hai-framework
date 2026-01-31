@@ -11,6 +11,17 @@
   import type { SignatureDisplayProps } from '../types.js'
   import { cn } from '../../../utils.js'
   
+  const defaultLabels = {
+    signature: 'Signature',
+    publicKey: 'Public Key',
+    verified: 'Verified',
+    verifyFailed: 'Verification Failed',
+    notVerified: 'Not Verified',
+    noSignature: 'No signature',
+    copySignature: 'Copy signature',
+    copyPublicKey: 'Copy public key',
+  }
+  
   let {
     signature = '',
     publicKey = '',
@@ -18,8 +29,11 @@
     verified = undefined,
     showPublicKey = false,
     copyable = true,
+    labels = {},
     class: className = '',
   }: SignatureDisplayProps = $props()
+  
+  const mergedLabels = $derived({ ...defaultLabels, ...labels })
   
   let copiedSig = $state(false)
   let copiedKey = $state(false)
@@ -33,10 +47,10 @@
   
   const verifyStatusText = $derived(
     verified === true
-      ? '验证通过'
+      ? mergedLabels.verified
       : verified === false
-        ? '验证失败'
-        : '未验证'
+        ? mergedLabels.verifyFailed
+        : mergedLabels.notVerified
   )
   
   async function copySignature() {
@@ -65,7 +79,7 @@
 <div class={containerClass}>
   <!-- 签名状态 -->
   <div class="flex items-center gap-2">
-    <span class="text-sm font-medium">签名 ({algorithm})</span>
+    <span class="text-sm font-medium">{mergedLabels.signature} ({algorithm})</span>
     {#if verified !== undefined}
       <span class={cn('badge badge-sm', verified ? 'badge-success' : 'badge-error')}>
         {#if verified}
@@ -86,14 +100,14 @@
   <div class="bg-base-200 rounded-lg p-3">
     <div class="flex items-start justify-between gap-2">
       <code class="text-xs font-mono break-all text-base-content/80 flex-1">
-        {signature || '无签名'}
+        {signature || mergedLabels.noSignature}
       </code>
       {#if copyable && signature}
         <button
           type="button"
           class="btn btn-ghost btn-xs btn-circle shrink-0"
           onclick={copySignature}
-          aria-label="复制签名"
+          aria-label={mergedLabels.copySignature}
         >
           {#if copiedSig}
             <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-success" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -112,7 +126,7 @@
   <!-- 公钥（可选） -->
   {#if showPublicKey && publicKey}
     <div>
-      <div class="text-xs text-base-content/60 mb-1">公钥</div>
+      <div class="text-xs text-base-content/60 mb-1">{mergedLabels.publicKey}</div>
       <div class="bg-base-200 rounded-lg p-3">
         <div class="flex items-start justify-between gap-2">
           <code class="text-xs font-mono break-all text-base-content/80 flex-1">
@@ -123,7 +137,7 @@
               type="button"
               class="btn btn-ghost btn-xs btn-circle shrink-0"
               onclick={copyPublicKey}
-              aria-label="复制公钥"
+              aria-label={mergedLabels.copyPublicKey}
             >
               {#if copiedKey}
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-success" fill="none" viewBox="0 0 24 24" stroke="currentColor">

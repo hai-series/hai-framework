@@ -16,11 +16,13 @@
   />
 -->
 <script lang='ts'>
-  import { cn } from '../utils.js'
-  import { THEMES, THEME_GROUPS, isDarkTheme, type ThemeInfo } from '../theme-config.js'
+  import { cn } from '../../utils.js'
+  import { THEMES, THEME_GROUPS, type ThemeInfo } from '../../theme-config.js'
 
   interface Props {
     currentTheme?: string
+    /** 选择主题按钮的 aria-label */
+    selectLabel?: string
     onchange?: (theme: string) => void
     showPreview?: boolean
     grouped?: boolean
@@ -29,6 +31,7 @@
 
   let {
     currentTheme = 'light',
+    selectLabel = 'Select theme',
     onchange,
     showPreview = true,
     grouped = true,
@@ -36,6 +39,7 @@
   }: Props = $props()
 
   let open = $state(false)
+  let containerRef = $state<HTMLDivElement | null>(null)
 
   const currentInfo = $derived(
     THEMES.find(t => t.id === currentTheme) ?? THEMES[0]
@@ -52,14 +56,28 @@
       border-color: ${theme.primaryColor};
     `
   }
+
+  function handleClickOutside(event: MouseEvent) {
+    if (containerRef && !containerRef.contains(event.target as Node)) {
+      open = false
+    }
+  }
+
+  $effect(() => {
+    if (open) {
+      document.addEventListener('click', handleClickOutside)
+      return () => document.removeEventListener('click', handleClickOutside)
+    }
+    return undefined
+  })
 </script>
 
-<div class='dropdown dropdown-end {open ? "dropdown-open" : ""} {className}'>
+<div bind:this={containerRef} class='dropdown dropdown-end {open ? "dropdown-open" : ""} {className}'>
   <button
     type='button'
     class='btn btn-ghost gap-2'
     onclick={() => (open = !open)}
-    aria-label='选择主题'
+    aria-label={selectLabel}
   >
     <!-- 当前主题预览 -->
     {#if showPreview}
@@ -76,15 +94,6 @@
   </button>
 
   {#if open}
-    <!-- 背景遮罩 -->
-    <button
-      type='button'
-      class='fixed inset-0 z-40 cursor-default bg-transparent'
-      onclick={() => (open = false)}
-      aria-label='关闭主题菜单'
-      tabindex='-1'
-    ></button>
-    
     <!-- 主题列表 -->
     <div class='dropdown-content bg-base-100 rounded-box shadow-xl border border-base-content/10 z-50 w-72 p-3 max-h-96 overflow-y-auto'>
       {#if grouped}

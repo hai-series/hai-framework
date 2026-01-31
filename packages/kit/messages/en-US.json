@@ -15,5 +15,12 @@
   "kit_csrfTokenFailed": "Failed to generate CSRF token",
   "kit_csrfVerifyFailed": "CSRF token verification failed",
   "kit_encryptFailed": "Encryption failed",
-  "kit_presignFetchFailed": "Failed to fetch presigned URL"
+  "kit_presignFetchFailed": "Failed to fetch presigned URL",
+  "kit_loginUsernamePasswordRequired": "Please enter username and password",
+  "kit_sessionCreateFailed": "Failed to create session",
+  "kit_registerFieldsRequired": "Please fill in all required fields",
+  "kit_passwordMismatch": "Passwords do not match",
+  "kit_passwordMinLength": "Password must be at least {minLength} characters",
+  "kit_loginRequired": "Please login first",
+  "kit_changePasswordSuccess": "Password changed successfully"
 }

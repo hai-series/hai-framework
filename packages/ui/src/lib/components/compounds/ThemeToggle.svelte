@@ -16,11 +16,20 @@
 <script lang='ts'>
   import { isDarkTheme } from '../../theme-config.js'
 
+  const defaultLabels = {
+    switchToLight: 'Switch to light theme',
+    switchToDark: 'Switch to dark theme',
+  }
+
   interface Props {
     currentTheme?: string
     onchange?: (theme: string) => void
     lightTheme?: string
     darkTheme?: string
+    labels?: {
+      switchToLight?: string
+      switchToDark?: string
+    }
     class?: string
   }
 
@@ -29,9 +38,11 @@
     onchange,
     lightTheme = 'light',
     darkTheme = 'dark',
+    labels = {},
     class: className = '',
   }: Props = $props()
 
+  const mergedLabels = $derived({ ...defaultLabels, ...labels })
   const isDark = $derived(isDarkTheme(currentTheme))
 
   function toggleTheme() {
@@ -40,12 +51,12 @@
   }
 </script>
 
-<div class='tooltip tooltip-bottom {className}' data-tip={isDark ? '切换到亮色主题' : '切换到暗色主题'}>
+<div class='tooltip tooltip-bottom {className}' data-tip={isDark ? mergedLabels.switchToLight : mergedLabels.switchToDark}>
   <button
     type='button'
     class='btn btn-ghost btn-sm btn-circle'
     onclick={toggleTheme}
-    aria-label={isDark ? '切换到亮色主题' : '切换到暗色主题'}
+    aria-label={isDark ? mergedLabels.switchToLight : mergedLabels.switchToDark}
   >
     {#if isDark}
       <svg xmlns='http://www.w3.org/2000/svg' class='h-5 w-5' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'>

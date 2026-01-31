@@ -74,7 +74,7 @@ export interface IamServiceLike {
       data?: UserData
       error?: { code: number, message: string }
     }>
-    updatePassword: (
+    changePassword: (
       userId: string,
       oldPassword: string,
       newPassword: string,

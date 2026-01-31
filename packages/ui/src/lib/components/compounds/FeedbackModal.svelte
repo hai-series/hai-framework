@@ -22,13 +22,63 @@
     description: string
     contact?: string
   }
+  
+  /** i18n 文案配置 */
+  interface FeedbackLabels {
+    title?: string
+    description?: string
+    typeLabel?: string
+    contentLabel?: string
+    contentPlaceholder?: string
+    contactLabel?: string
+    contactPlaceholder?: string
+    cancel?: string
+    submit?: string
+    errorEmpty?: string
+    errorSubmit?: string
+    types?: {
+      bug?: string
+      feature?: string
+      question?: string
+      other?: string
+    }
+  }
+  
+  // 默认文案
+  const defaultLabels: Required<FeedbackLabels> = {
+    title: 'Feedback',
+    description: 'We value your feedback. Please share your thoughts with us.',
+    typeLabel: 'Feedback Type',
+    contentLabel: 'Content',
+    contentPlaceholder: 'Please describe your issue or suggestion in detail...',
+    contactLabel: 'Contact (Optional)',
+    contactPlaceholder: 'Email or phone for us to reply',
+    cancel: 'Cancel',
+    submit: 'Submit Feedback',
+    errorEmpty: 'Please fill in the feedback content',
+    errorSubmit: 'Submission failed, please try again',
+    types: {
+      bug: 'Bug Report',
+      feature: 'Feature Request',
+      question: 'Question',
+      other: 'Other',
+    },
+  }
 
   interface Props {
     open?: boolean
+    labels?: FeedbackLabels
     onsubmit?: (data: FeedbackData) => Promise<void>
   }
 
-  let { open = $bindable(false), onsubmit }: Props = $props()
+  let { open = $bindable(false), labels = {}, onsubmit }: Props = $props()
+  
+  // 合并文案
+  const mergedLabels = $derived({
+    ...defaultLabels,
+    ...labels,
+    types: { ...defaultLabels.types, ...labels.types },
+  })
 
   let feedbackType = $state<FeedbackType>('bug')
   let description = $state('')
@@ -36,16 +86,16 @@
   let loading = $state(false)
   let error = $state('')
 
-  const typeOptions: { value: FeedbackType, label: string }[] = [
-    { value: 'bug', label: 'Bug 报告' },
-    { value: 'feature', label: '功能建议' },
-    { value: 'question', label: '使用问题' },
-    { value: 'other', label: '其他' },
-  ]
+  const typeOptions = $derived<{ value: FeedbackType, label: string }[]>([
+    { value: 'bug', label: mergedLabels.types.bug },
+    { value: 'feature', label: mergedLabels.types.feature },
+    { value: 'question', label: mergedLabels.types.question },
+    { value: 'other', label: mergedLabels.types.other },
+  ])
 
   async function handleSubmit() {
     if (!description.trim()) {
-      error = '请填写反馈内容'
+      error = mergedLabels.errorEmpty
       return
     }
 
@@ -61,7 +111,7 @@
       open = false
       resetForm()
     } catch (e) {
-      error = e instanceof Error ? e.message : '提交失败，请重试'
+      error = e instanceof Error ? e.message : mergedLabels.errorSubmit
     } finally {
       loading = false
     }
@@ -75,8 +125,8 @@
   }
 </script>
 
-<Modal bind:open title="意见反馈">
-  <p class='text-base-content/70 mb-4'>我们非常重视您的反馈，请告诉我们您的想法。</p>
+<Modal bind:open title={mergedLabels.title}>
+  <p class='text-base-content/70 mb-4'>{mergedLabels.description}</p>
 
   {#if error}
     <div class='alert alert-error mb-4'>
@@ -88,7 +138,7 @@
   <div class='space-y-4'>
     <div class='form-control'>
       <label class='label' for='feedback-type'>
-        <span class='label-text'>反馈类型</span>
+        <span class='label-text'>{mergedLabels.typeLabel}</span>
       </label>
       <select
         id='feedback-type'
@@ -103,25 +153,25 @@
 
     <div class='form-control'>
       <label class='label' for='feedback-desc'>
-        <span class='label-text'>反馈内容 <span class='text-error'>*</span></span>
+        <span class='label-text'>{mergedLabels.contentLabel} <span class='text-error'>*</span></span>
       </label>
       <textarea
         id='feedback-desc'
         class='textarea textarea-bordered w-full h-32'
-        placeholder='请详细描述您的问题或建议...'
+        placeholder={mergedLabels.contentPlaceholder}
         bind:value={description}
       ></textarea>
     </div>
 
     <div class='form-control'>
       <label class='label' for='feedback-contact'>
-        <span class='label-text'>联系方式（可选）</span>
+        <span class='label-text'>{mergedLabels.contactLabel}</span>
       </label>
       <input
         id='feedback-contact'
         type='text'
         class='input input-bordered w-full'
-        placeholder='邮箱或手机号，方便我们回复您'
+        placeholder={mergedLabels.contactPlaceholder}
         bind:value={contact}
       />
     </div>
@@ -129,10 +179,10 @@
 
   {#snippet footer()}
     <button class='btn btn-ghost' type='button' onclick={() => open = false}>
-      取消
+      {mergedLabels.cancel}
     </button>
     <Button variant='primary' {loading} onclick={handleSubmit}>
-      提交反馈
+      {mergedLabels.submit}
     </Button>
   {/snippet}
 </Modal>

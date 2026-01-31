@@ -11,20 +11,31 @@
   import type { EncryptedInputProps } from '../types.js'
   import { cn, getInputSizeClass } from '../../../utils.js'
   
+  const defaultLabels = {
+    placeholder: 'Enter content',
+    show: 'Show',
+    hide: 'Hide',
+    encryptedResult: 'Encrypted',
+    copy: 'Copy',
+  }
+  
   let {
     value = $bindable(''),
     encryptedValue = $bindable(''),
-    placeholder = '请输入内容',
+    placeholder,
     size = 'md',
     disabled = false,
     readonly = false,
     showEncrypted = false,
     algorithm = 'SM4',
+    labels = {},
     onencrypt,
     class: className = '',
     oninput,
     onchange,
   }: EncryptedInputProps = $props()
+  
+  const mergedLabels = $derived({ ...defaultLabels, ...labels })
   
   let showValue = $state(false)
   
@@ -80,7 +91,7 @@
   <div class="relative">
     <input
       type={showValue ? 'text' : 'password'}
-      {placeholder}
+      placeholder={placeholder || mergedLabels.placeholder}
       {disabled}
       {readonly}
       class={inputClass}
@@ -94,7 +105,7 @@
       class="absolute right-3 top-1/2 -translate-y-1/2 text-base-content/50 hover:text-base-content"
       onclick={toggleShow}
       tabindex="-1"
-      aria-label={showValue ? '隐藏' : '显示'}
+      aria-label={showValue ? mergedLabels.hide : mergedLabels.show}
     >
       {#if showValue}
         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -114,13 +125,13 @@
     <div class="bg-base-200 rounded-lg p-3">
       <div class="flex items-center justify-between mb-1">
         <span class="text-xs text-base-content/60">
-          加密结果 ({algorithm})
+          {mergedLabels.encryptedResult} ({algorithm})
         </span>
         <button
           type="button"
           class="btn btn-ghost btn-xs"
           onclick={copyEncrypted}
-          aria-label="复制"
+          aria-label={mergedLabels.copy}
         >
           <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />

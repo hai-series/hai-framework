@@ -30,6 +30,7 @@
 import type { RequestEvent } from '@sveltejs/kit'
 import type { IamActionsConfig } from './iam-types.js'
 import { fail, redirect } from '@sveltejs/kit'
+import { getKitMessage } from '../../index.js'
 
 /**
  * 创建 IAM Form Actions
@@ -60,7 +61,7 @@ export function createIamActions(config: IamActionsConfig) {
 
       if (!username || !password) {
         return fail(400, {
-          error: '请输入用户名和密码',
+          error: getKitMessage('kit_loginUsernamePasswordRequired'),
           username,
         })
       }
@@ -73,25 +74,35 @@ export function createIamActions(config: IamActionsConfig) {
       })
 
       if (!authResult.success || !authResult.data) {
+        // 直接使用 iam 模块返回的错误消息（已经过 i18n 处理）
         return fail(401, {
-          error: authResult.error?.message || '用户名或密码错误',
+          error: authResult.error!.message,
           username,
         })
       }
 
       const user = authResult.data
 
+      // 获取客户端 IP（开发环境可能不可用）
+      let ipAddress: string | undefined
+      try {
+        ipAddress = event.getClientAddress()
+      }
+      catch {
+        ipAddress = undefined
+      }
+
       // 创建会话
       const sessionResult = await iam.session.create({
         userId: user.id,
         userAgent: event.request.headers.get('user-agent') || undefined,
-        ipAddress: event.getClientAddress(),
+        ipAddress,
         expiresIn: rememberMe ? rememberMeMaxAge : sessionMaxAge,
       })
 
       if (!sessionResult.success || !sessionResult.data) {
         return fail(500, {
-          error: '创建会话失败',
+          error: getKitMessage('kit_sessionCreateFailed'),
           username,
         })
       }
@@ -171,7 +182,7 @@ export function createIamActions(config: IamActionsConfig) {
       // 验证
       if (!username || !email || !password) {
         return fail(400, {
-          error: '请填写所有必填字段',
+          error: getKitMessage('kit_registerFieldsRequired'),
           username,
           email,
         })
@@ -179,7 +190,7 @@ export function createIamActions(config: IamActionsConfig) {
 
       if (password !== confirmPassword) {
         return fail(400, {
-          error: '两次密码输入不一致',
+          error: getKitMessage('kit_passwordMismatch'),
           username,
           email,
         })
@@ -187,7 +198,7 @@ export function createIamActions(config: IamActionsConfig) {
 
       if (password.length < 8) {
         return fail(400, {
-          error: '密码长度至少 8 位',
+          error: getKitMessage('kit_passwordMinLength', undefined, { minLength: 8 }),
           username,
           email,
         })
@@ -202,7 +213,7 @@ export function createIamActions(config: IamActionsConfig) {
 
       if (!registerResult.success || !registerResult.data) {
         return fail(400, {
-          error: registerResult.error?.message || '注册失败',
+          error: registerResult.error!.message,
           username,
           email,
         })
@@ -231,19 +242,19 @@ export function createIamActions(config: IamActionsConfig) {
       // 验证
       if (!oldPassword || !newPassword) {
         return fail(400, {
-          error: '请填写所有必填字段',
+          error: getKitMessage('kit_registerFieldsRequired'),
         })
       }
 
       if (newPassword !== confirmPassword) {
         return fail(400, {
-          error: '两次密码输入不一致',
+          error: getKitMessage('kit_passwordMismatch'),
         })
       }
 
       if (newPassword.length < 8) {
         return fail(400, {
-          error: '密码长度至少 8 位',
+          error: getKitMessage('kit_passwordMinLength', undefined, { minLength: 8 }),
         })
       }
 
@@ -251,22 +262,22 @@ export function createIamActions(config: IamActionsConfig) {
       const locals = event.locals as { user?: { id: string } }
       if (!locals.user) {
         return fail(401, {
-          error: '请先登录',
+          error: getKitMessage('kit_loginRequired'),
         })
       }
 
       // 修改密码
-      const result = await iam.user.updatePassword(locals.user.id, oldPassword, newPassword)
+      const result = await iam.user.changePassword(locals.user.id, oldPassword, newPassword)
 
       if (!result.success) {
         return fail(400, {
-          error: result.error?.message || '修改密码失败',
+          error: result.error!.message,
         })
       }
 
       return {
         success: true,
-        message: '密码修改成功',
+        message: getKitMessage('kit_changePasswordSuccess'),
       }
     },
   }

@@ -41,5 +41,10 @@
   "time_daysAgo": "{n} 天前",
   "time_weeksAgo": "{n} 周前",
   "time_monthsAgo": "{n} 个月前",
-  "time_yearsAgo": "{n} 年前"
+  "time_yearsAgo": "{n} 年前",
+  "config_envVarMissing": "环境变量 '{varName}' 未设置且无默认值",
+  "config_fileNotExist": "配置文件不存在: {filePath}",
+  "config_parseFailed": "配置文件解析失败: {filePath}",
+  "config_validationFailed": "配置验证失败",
+  "config_notLoaded": "配置 '{name}' 未加载"
 }

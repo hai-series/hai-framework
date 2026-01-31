@@ -12,9 +12,12 @@
   import { cn, getInputSizeClass } from '../../utils.js'
   import Tag from '../primitives/Tag.svelte'
   
+  // 默认占位符
+  const defaultPlaceholder = 'Press Enter to add'
+  
   let {
     tags = $bindable([]),
-    placeholder = '输入后按 Enter 添加',
+    placeholder = defaultPlaceholder,
     maxTags = 0,
     allowDuplicates = false,
     disabled = false,
@@ -24,7 +27,7 @@
   }: TagInputProps = $props()
   
   let inputValue = $state('')
-  let inputElement: HTMLInputElement
+  let inputElement = $state<HTMLInputElement | null>(null)
   
   const containerClass = $derived(
     cn(
@@ -72,6 +75,7 @@
 <div
   class={containerClass}
   onclick={() => inputElement?.focus()}
+  onkeydown={(e) => e.key === 'Enter' && inputElement?.focus()}
   role="textbox"
   tabindex="-1"
 >

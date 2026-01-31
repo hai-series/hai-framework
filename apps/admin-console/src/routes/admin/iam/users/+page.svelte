@@ -5,7 +5,8 @@
 -->
 <script lang="ts">
   import type { PageData } from './$types'
-  import { Card, Avatar, Badge, Button, Modal } from '@hai/ui'
+  import { Card, Avatar, Badge, Button, Modal, PasswordInput } from '@hai/ui'
+  import * as m from '$lib/paraglide/messages'
 
   // 定义本地类型（与 page.server.ts 中的 UserData 一致）
   interface UserData {
@@ -104,7 +105,7 @@
 
     // 验证
     if (!editingUser && form.password !== form.confirmPassword) {
-      error = '两次输入的密码不一致'
+      error = m.iam_users_password_mismatch()
       return
     }
 
@@ -134,10 +135,10 @@
         // 刷新页面数据
         location.reload()
       } else {
-        error = result.error || '操作失败'
+        error = result.error || m.iam_users_operation_failed()
       }
     } catch (e) {
-      error = '网络错误，请稍后重试'
+      error = m.common_network_error()
     } finally {
       submitting = false
     }
@@ -145,7 +146,7 @@
 
   /** 删除用户 */
   async function handleDelete(user: UserData) {
-    if (!confirm(`确定要删除用户 "${user.username}" 吗？此操作不可恢复。`)) {
+    if (!confirm(m.iam_users_delete_confirm())) {
       return
     }
 
@@ -159,10 +160,10 @@
       if (result.success) {
         location.reload()
       } else {
-        alert(result.error || '删除失败')
+        alert(result.error || m.iam_users_delete_failed())
       }
     } catch (e) {
-      alert('网络错误，请稍后重试')
+      alert(m.common_network_error())
     }
   }
 
@@ -184,11 +185,11 @@
   function getStatusText(status: string): string {
     switch (status) {
       case 'active':
-        return '正常'
+        return m.iam_users_status_active()
       case 'inactive':
-        return '未激活'
+        return m.iam_users_status_inactive()
       case 'suspended':
-        return '已禁用'
+        return m.iam_users_status_disabled()
       default:
         return status
     }
@@ -196,21 +197,21 @@
 </script>
 
 <svelte:head>
-  <title>用户管理 - Admin Console</title>
+  <title>{m.iam_users_title()} - Admin Console</title>
 </svelte:head>
 
 <div class="space-y-6">
   <!-- 页面标题 -->
   <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
     <div>
-      <h1 class="text-2xl font-bold text-slate-800">用户管理</h1>
-      <p class="text-slate-500 mt-1">管理系统用户账户</p>
+      <h1 class="text-2xl font-bold text-base-content">{m.iam_users_title()}</h1>
+      <p class="text-base-content/60 mt-1">{m.iam_users_subtitle()}</p>
     </div>
     <Button variant="primary" onclick={openCreateDialog}>
       <svg class="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
       </svg>
-      新建用户
+      {m.iam_users_create()}
     </Button>
   </div>
 
@@ -219,17 +220,17 @@
     <div class="p-4">
       <div class="flex flex-col sm:flex-row gap-4">
         <div class="flex-1 relative">
-          <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-base-content/40" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
           </svg>
           <input
             type="text"
-            placeholder="搜索用户名、邮箱或显示名称..."
-            class="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+            placeholder={m.iam_users_search_placeholder()}
+            class="w-full pl-10 pr-4 py-2 border border-base-content/20 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent bg-base-100"
             bind:value={searchQuery}
           />
         </div>
-        <div class="text-sm text-slate-500 self-center">
+        <div class="text-sm text-base-content/60 self-center">
           共 {filteredUsers.length} 个用户
         </div>
       </div>
@@ -240,31 +241,31 @@
   <Card>
     <div class="overflow-x-auto">
       <table class="w-full">
-        <thead class="bg-slate-50 border-b border-slate-200">
+        <thead class="bg-base-200 border-b border-base-content/10">
           <tr>
-            <th class="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">用户</th>
-            <th class="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">邮箱</th>
-            <th class="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">角色</th>
-            <th class="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">状态</th>
-            <th class="px-6 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wider">创建时间</th>
-            <th class="px-6 py-3 text-right text-xs font-semibold text-slate-500 uppercase tracking-wider">操作</th>
+            <th class="px-6 py-3 text-left text-xs font-semibold text-base-content/60 uppercase tracking-wider">{m.iam_users_col_username()}</th>
+            <th class="px-6 py-3 text-left text-xs font-semibold text-base-content/60 uppercase tracking-wider">{m.iam_users_col_email()}</th>
+            <th class="px-6 py-3 text-left text-xs font-semibold text-base-content/60 uppercase tracking-wider">{m.iam_users_col_roles()}</th>
+            <th class="px-6 py-3 text-left text-xs font-semibold text-base-content/60 uppercase tracking-wider">{m.iam_users_col_status()}</th>
+            <th class="px-6 py-3 text-left text-xs font-semibold text-base-content/60 uppercase tracking-wider">{m.iam_users_col_created_at()}</th>
+            <th class="px-6 py-3 text-right text-xs font-semibold text-base-content/60 uppercase tracking-wider">{m.iam_users_col_actions()}</th>
           </tr>
         </thead>
-        <tbody class="divide-y divide-slate-100">
+        <tbody class="divide-y divide-base-content/5">
           {#each filteredUsers as user}
-            <tr class="hover:bg-slate-50 transition-colors">
+            <tr class="hover:bg-base-200/50 transition-colors">
               <td class="px-6 py-4">
                 <div class="flex items-center gap-3">
                   <Avatar name={user.username} size="sm" />
                   <div>
-                    <div class="font-medium text-slate-800">{user.username}</div>
+                    <div class="font-medium text-base-content">{user.username}</div>
                     {#if user.display_name}
-                      <div class="text-sm text-slate-500">{user.display_name}</div>
+                      <div class="text-sm text-base-content/60">{user.display_name}</div>
                     {/if}
                   </div>
                 </div>
               </td>
-              <td class="px-6 py-4 text-sm text-slate-600">{user.email}</td>
+              <td class="px-6 py-4 text-sm text-base-content/80">{user.email}</td>
               <td class="px-6 py-4">
                 <div class="flex flex-wrap gap-1">
                   {#each user.roles as role}
@@ -280,16 +281,16 @@
                   {getStatusText(user.status)}
                 </Badge>
               </td>
-              <td class="px-6 py-4 text-sm text-slate-500">
+              <td class="px-6 py-4 text-sm text-base-content/60">
                 {new Date(user.created_at).toLocaleDateString('zh-CN')}
               </td>
               <td class="px-6 py-4 text-right">
                 <div class="flex justify-end gap-2">
                   <button
                     type="button"
-                    class="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                    class="p-2 text-base-content/40 hover:text-primary hover:bg-primary/10 rounded-lg transition-colors"
                     onclick={() => openEditDialog(user)}
-                    title="编辑"
+                    title={m.action_edit()}
                   >
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -297,9 +298,9 @@
                   </button>
                   <button
                     type="button"
-                    class="p-2 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                    class="p-2 text-base-content/40 hover:text-error hover:bg-error/10 rounded-lg transition-colors"
                     onclick={() => handleDelete(user)}
-                    title="删除"
+                    title={m.action_delete()}
                   >
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -310,11 +311,11 @@
             </tr>
           {:else}
             <tr>
-              <td colspan="6" class="px-6 py-12 text-center text-slate-500">
-                <svg class="w-12 h-12 mx-auto text-slate-300 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <td colspan="6" class="px-6 py-12 text-center text-base-content/60">
+                <svg class="w-12 h-12 mx-auto text-base-content/20 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
                 </svg>
-                暂无用户数据
+                {m.common_no_data()}
               </td>
             </tr>
           {/each}
@@ -329,12 +330,12 @@
   <Modal 
     open={showDialog} 
     onclose={closeDialog}
-    title={editingUser ? '编辑用户' : '新建用户'}
+    title={editingUser ? m.iam_users_edit() : m.iam_users_create()}
     size="lg"
   >
     <form onsubmit={handleSubmit} class="space-y-5">
       {#if error}
-        <div class="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600 flex items-center gap-2">
+        <div class="p-3 bg-error/10 border border-error/20 rounded-lg text-sm text-error flex items-center gap-2">
           <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
@@ -345,13 +346,13 @@
       <!-- 基本信息 -->
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
-          <label class="block text-sm font-medium text-slate-700 mb-1" for="username">
-            用户名 <span class="text-red-500">*</span>
+          <label class="block text-sm font-medium text-base-content mb-1" for="username">
+            {m.iam_users_form_username()} <span class="text-error">*</span>
           </label>
           <input
             type="text"
             id="username"
-            class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent disabled:bg-slate-50 disabled:text-slate-500"
+            class="w-full px-3 py-2 border border-base-content/20 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent disabled:bg-base-200 disabled:text-base-content/50 bg-base-100"
             bind:value={form.username}
             required
             disabled={submitting}
@@ -361,13 +362,13 @@
         </div>
 
         <div>
-          <label class="block text-sm font-medium text-slate-700 mb-1" for="email">
-            邮箱 <span class="text-red-500">*</span>
+          <label class="block text-sm font-medium text-base-content mb-1" for="email">
+            {m.iam_users_form_email()} <span class="text-error">*</span>
           </label>
           <input
             type="email"
             id="email"
-            class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent disabled:bg-slate-50 disabled:text-slate-500"
+            class="w-full px-3 py-2 border border-base-content/20 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent disabled:bg-base-200 disabled:text-base-content/50 bg-base-100"
             bind:value={form.email}
             required
             disabled={submitting}
@@ -377,13 +378,13 @@
       </div>
 
       <div>
-        <label class="block text-sm font-medium text-slate-700 mb-1" for="display_name">
-          显示名称
+        <label class="block text-sm font-medium text-base-content mb-1" for="display_name">
+          {m.iam_users_form_display_name()}
         </label>
         <input
           type="text"
           id="display_name"
-          class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent disabled:bg-slate-50 disabled:text-slate-500"
+          class="w-full px-3 py-2 border border-base-content/20 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent disabled:bg-base-200 disabled:text-base-content/50 bg-base-100"
           bind:value={form.display_name}
           disabled={submitting}
           placeholder="用户的显示名称（可选）"
@@ -393,34 +394,44 @@
       <!-- 密码 -->
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
-          <label class="block text-sm font-medium text-slate-700 mb-1" for="password">
-            密码 {#if !editingUser}<span class="text-red-500">*</span>{/if}
+          <label class="block text-sm font-medium text-base-content mb-1" for="password">
+            {m.iam_users_form_password()} {#if !editingUser}<span class="text-error">*</span>{/if}
           </label>
-          <input
-            type="password"
-            id="password"
-            class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent disabled:bg-slate-50 disabled:text-slate-500"
+          <PasswordInput
             bind:value={form.password}
+            placeholder={editingUser ? m.iam_users_form_password_hint() : m.iam_users_form_password_placeholder()}
             required={!editingUser}
             disabled={submitting}
-            minlength={8}
-            placeholder={editingUser ? '留空则不修改' : '至少8位'}
+            minLength={8}
+            showStrength={!editingUser}
+            size="sm"
+            labels={{
+              showPassword: m.auth_show_password(),
+              hidePassword: m.auth_hide_password(),
+              strengthLabel: m.auth_password_strength(),
+              strengthWeak: m.auth_password_weak(),
+              strengthFair: m.auth_password_medium(),
+              strengthGood: m.auth_password_strong(),
+              strengthStrong: m.auth_password_very_strong(),
+            }}
           />
         </div>
 
         {#if form.password || !editingUser}
           <div>
-            <label class="block text-sm font-medium text-slate-700 mb-1" for="confirmPassword">
-              确认密码 {#if !editingUser}<span class="text-red-500">*</span>{/if}
+            <label class="block text-sm font-medium text-base-content mb-1" for="confirmPassword">
+              {m.iam_users_form_confirm_password()} {#if !editingUser}<span class="text-error">*</span>{/if}
             </label>
-            <input
-              type="password"
-              id="confirmPassword"
-              class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent disabled:bg-slate-50 disabled:text-slate-500"
+            <PasswordInput
               bind:value={form.confirmPassword}
+              placeholder={m.iam_users_form_confirm_password_placeholder()}
               required={!editingUser || form.password !== ''}
               disabled={submitting}
-              placeholder="请再次输入密码"
+              size="sm"
+              labels={{
+                showPassword: m.auth_show_password(),
+                hidePassword: m.auth_hide_password(),
+              }}
             />
           </div>
         {/if}
@@ -428,32 +439,32 @@
 
       <!-- 状态 -->
       <div>
-        <label class="block text-sm font-medium text-slate-700 mb-1" for="status">
-          状态
+        <label class="block text-sm font-medium text-base-content mb-1" for="status">
+          {m.iam_users_col_status()}
         </label>
         <select 
           id="status" 
-          class="w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent disabled:bg-slate-50 disabled:text-slate-500"
+          class="w-full px-3 py-2 border border-base-content/20 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent disabled:bg-base-200 disabled:text-base-content/50 bg-base-100"
           bind:value={form.status} 
           disabled={submitting}
         >
-          <option value="active">正常</option>
-          <option value="inactive">未激活</option>
-          <option value="suspended">已禁用</option>
+          <option value="active">{m.iam_users_status_active()}</option>
+          <option value="inactive">{m.iam_users_status_inactive()}</option>
+          <option value="suspended">{m.iam_users_status_disabled()}</option>
         </select>
       </div>
 
       <!-- 角色 -->
       <div>
-        <label class="block text-sm font-medium text-slate-700 mb-2">
-          角色
+        <label class="block text-sm font-medium text-base-content mb-2">
+          {m.iam_users_col_roles()}
         </label>
-        <div class="flex flex-wrap gap-3 p-3 bg-slate-50 rounded-lg border border-slate-200">
+        <div class="flex flex-wrap gap-3 p-3 bg-base-200 rounded-lg border border-base-content/10">
           {#each data.roles as role}
             <label class="inline-flex items-center gap-2 cursor-pointer">
               <input
                 type="checkbox"
-                class="w-4 h-4 text-indigo-600 border-slate-300 rounded focus:ring-indigo-500"
+                class="w-4 h-4 text-primary border-base-content/20 rounded focus:ring-primary"
                 checked={form.roles.includes(role.name)}
                 onchange={(e) => {
                   if (e.currentTarget.checked) {
@@ -464,19 +475,19 @@
                 }}
                 disabled={submitting}
               />
-              <span class="text-sm text-slate-700">{role.name}</span>
+              <span class="text-sm text-base-content">{role.name}</span>
             </label>
           {/each}
           {#if data.roles.length === 0}
-            <span class="text-sm text-slate-500">暂无可分配的角色</span>
+            <span class="text-sm text-base-content/60">{m.common_no_data()}</span>
           {/if}
         </div>
       </div>
 
       <!-- 操作按钮 -->
-      <div class="flex justify-end gap-3 pt-4 border-t border-slate-100">
+      <div class="flex justify-end gap-3 pt-4 border-t border-base-content/10">
         <Button variant="secondary" onclick={closeDialog} disabled={submitting}>
-          取消
+          {m.action_cancel()}
         </Button>
         <Button variant="primary" type="submit" disabled={submitting}>
           {#if submitting}
@@ -485,7 +496,7 @@
               <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
             </svg>
           {/if}
-          {editingUser ? '保存' : '创建'}
+          {editingUser ? m.action_save() : m.action_create()}
         </Button>
       </div>
     </form>

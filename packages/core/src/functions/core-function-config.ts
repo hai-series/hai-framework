@@ -33,8 +33,18 @@ import { parse } from 'yaml'
 // 配置文件监听
 // =============================================================================
 
+import messagesEnUS from '../../messages/en-US.json'
+import messagesZhCN from '../../messages/zh-CN.json'
 import { ConfigErrorCode } from '../core-config.js'
 import { err, ok } from '../core-types.js'
+import { createMessageGetter } from '../i18n/i18n-utils.js'
+
+// 内部消息获取器
+type CoreMessageKey = keyof typeof messagesZhCN
+const { getMessage: getCoreMessage } = createMessageGetter<CoreMessageKey>({
+  'zh-CN': messagesZhCN,
+  'en-US': messagesEnUS,
+})
 
 // =============================================================================
 // 类型定义
@@ -86,7 +96,7 @@ function interpolateEnv(value: unknown): Result<unknown, ConfigError> {
       if (envValue === undefined && defaultValue === undefined) {
         return err({
           code: ConfigErrorCode.ENV_VAR_MISSING,
-          message: `环境变量 '${varName}' 未设置且无默认值`,
+          message: getCoreMessage('config_envVarMissing', undefined, { varName }),
         })
       }
       result = result.replace(fullMatch, envValue ?? defaultValue ?? '')
@@ -136,7 +146,7 @@ export function loadYaml(filePath: string): Result<unknown, ConfigError> {
   if (!existsSync(filePath)) {
     return err({
       code: ConfigErrorCode.FILE_NOT_FOUND,
-      message: `配置文件不存在: ${filePath}`,
+      message: getCoreMessage('config_fileNotExist', undefined, { filePath }),
       path: filePath,
     })
   }
@@ -149,7 +159,7 @@ export function loadYaml(filePath: string): Result<unknown, ConfigError> {
   catch (error) {
     return err({
       code: ConfigErrorCode.PARSE_ERROR,
-      message: `配置文件解析失败: ${filePath}`,
+      message: getCoreMessage('config_parseFailed', undefined, { filePath }),
       path: filePath,
       details: error,
     })
@@ -171,7 +181,7 @@ export function loadConfig<T>(
   if (!parseResult.success) {
     return err({
       code: ConfigErrorCode.VALIDATION_ERROR,
-      message: '配置验证失败',
+      message: getCoreMessage('config_validationFailed'),
       path: filePath,
       details: parseResult.error.issues,
     })
@@ -213,7 +223,7 @@ export const config = {
   getOrThrow<T>(name: string): T {
     const data = this.get<T>(name)
     if (data === undefined) {
-      throw new Error(`配置 '${name}' 未加载`)
+      throw new Error(getCoreMessage('config_notLoaded', undefined, { name }))
     }
     return data
   },
@@ -226,7 +236,7 @@ export const config = {
     if (!entry) {
       return err({
         code: ConfigErrorCode.NOT_LOADED,
-        message: `配置 '${name}' 未加载`,
+        message: getCoreMessage('config_notLoaded', undefined, { name }),
       })
     }
 

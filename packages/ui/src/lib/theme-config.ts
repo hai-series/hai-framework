@@ -2,14 +2,9 @@
  * =============================================================================
  * @hai/ui - 主题配置
  * =============================================================================
- * FlyonUI 主题元数据和配置
+ * DaisyUI 主题元数据和配置
  *
- * 支持的主题列表（17 个）：
- * - light, dark, black - 基础主题
- * - claude, corporate, ghibli, gourmet - 品牌主题
- * - luxury, mintlify, pastel, perplexity - 设计主题
- * - shadcn, slack, soft, spotify - 产品主题
- * - valorant, vscode - 游戏/工具主题
+ * 使用 DaisyUI 内置主题（32 个）
  * =============================================================================
  */
 
@@ -27,10 +22,6 @@ export interface ThemeInfo {
   primaryColor: string
   /** 背景色（用于预览） */
   bgColor: string
-  /** 所需字体族（可选） */
-  fontFamily?: string
-  /** Google Fonts URL（可选） */
-  fontUrl?: string
 }
 
 /**
@@ -46,155 +37,43 @@ export interface ThemeGroup {
 }
 
 /**
- * 所有 FlyonUI 主题配置
+ * DaisyUI 内置主题配置
  */
 export const THEMES: ThemeInfo[] = [
-  // 基础主题
-  {
-    id: 'light',
-    name: 'Light',
-    dark: false,
-    primaryColor: '#570df8',
-    bgColor: '#ffffff',
-  },
-  {
-    id: 'dark',
-    name: 'Dark',
-    dark: true,
-    primaryColor: '#661ae6',
-    bgColor: '#1d232a',
-  },
-  {
-    id: 'black',
-    name: 'Black',
-    dark: true,
-    primaryColor: '#ffffff',
-    bgColor: '#000000',
-  },
-  // 品牌主题
-  {
-    id: 'claude',
-    name: 'Claude',
-    dark: false,
-    primaryColor: '#d97706',
-    bgColor: '#fffbf5',
-    fontFamily: 'Geist',
-    fontUrl: 'https://fonts.googleapis.com/css2?family=Geist:wght@100..900&display=swap',
-  },
-  {
-    id: 'corporate',
-    name: 'Corporate',
-    dark: false,
-    primaryColor: '#4b6bfb',
-    bgColor: '#ffffff',
-    fontFamily: 'Public Sans',
-    fontUrl: 'https://fonts.googleapis.com/css2?family=Public+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300;1,400;1,500;1,600;1,700&display=swap',
-  },
-  {
-    id: 'ghibli',
-    name: 'Ghibli',
-    dark: false,
-    primaryColor: '#65c3c8',
-    bgColor: '#faf7f5',
-    fontFamily: 'Amaranth',
-    fontUrl: 'https://fonts.googleapis.com/css2?family=Amaranth:ital,wght@0,400;0,700;1,400;1,700&display=swap',
-  },
-  {
-    id: 'gourmet',
-    name: 'Gourmet',
-    dark: false,
-    primaryColor: '#b91c1c',
-    bgColor: '#fef9f3',
-    fontFamily: 'Rubik',
-    fontUrl: 'https://fonts.googleapis.com/css2?family=Rubik:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300;1,400;1,500;1,600;1,700&display=swap',
-  },
-  // 设计主题
-  {
-    id: 'luxury',
-    name: 'Luxury',
-    dark: true,
-    primaryColor: '#c9a53d',
-    bgColor: '#171618',
-    fontFamily: 'Archivo',
-    fontUrl: 'https://fonts.googleapis.com/css?family=Archivo:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300;1,400;1,500;1,600;1,700&display=swap',
-  },
-  {
-    id: 'mintlify',
-    name: 'Mintlify',
-    dark: false,
-    primaryColor: '#16a34a',
-    bgColor: '#f8fafc',
-  },
-  {
-    id: 'pastel',
-    name: 'Pastel',
-    dark: false,
-    primaryColor: '#d1c1d7',
-    bgColor: '#f5f0fa',
-    fontFamily: 'Open Sans',
-    fontUrl: 'https://fonts.googleapis.com/css2?family=Open+Sans:ital,wght@0,300..800;1,300..800&display=swap',
-  },
-  {
-    id: 'perplexity',
-    name: 'Perplexity',
-    dark: false,
-    primaryColor: '#20808d',
-    bgColor: '#ffffff',
-  },
-  // 产品主题
-  {
-    id: 'shadcn',
-    name: 'Shadcn',
-    dark: false,
-    primaryColor: '#18181b',
-    bgColor: '#ffffff',
-  },
-  {
-    id: 'slack',
-    name: 'Slack',
-    dark: true,
-    primaryColor: '#e9b045',
-    bgColor: '#1a1d21',
-    fontFamily: 'Lato',
-    fontUrl: 'https://fonts.googleapis.com/css2?family=Lato:ital,wght@0,100;0,300;0,400;0,700;0,900;1,100;1,300;1,400;1,700;1,900&display=swap',
-  },
-  {
-    id: 'soft',
-    name: 'Soft',
-    dark: false,
-    primaryColor: '#5e4db2',
-    bgColor: '#f9f7ff',
-    fontFamily: 'Montserrat',
-    fontUrl: 'https://fonts.googleapis.com/css2?family=Montserrat:ital,wght@0,300;0,400;0,500;0,600;0,700;1,300;1,400;1,500;1,600;1,700&display=swap',
-  },
-  {
-    id: 'spotify',
-    name: 'Spotify',
-    dark: true,
-    primaryColor: '#1db954',
-    bgColor: '#121212',
-    fontFamily: 'Lato',
-    fontUrl: 'https://fonts.googleapis.com/css2?family=Lato:ital,wght@0,100;0,300;0,400;0,700;0,900;1,100;1,300;1,400;1,700;1,900&display=swap',
-  },
-  // 游戏/工具主题
-  {
-    id: 'valorant',
-    name: 'Valorant',
-    dark: true,
-    primaryColor: '#ff4654',
-    bgColor: '#0f1923',
-    fontFamily: 'Work Sans',
-    fontUrl: 'https://fonts.googleapis.com/css2?family=Work+Sans:ital,wght@0,100..900;1,100..900&display=swap',
-  },
-  {
-    id: 'vscode',
-    name: 'VS Code',
-    dark: true,
-    primaryColor: '#0078d4',
-    bgColor: '#1e1e1e',
-    fontFamily: 'Fira Code',
-    fontUrl: 'https://fonts.googleapis.com/css?family=Fira+Code:wght@0,300;0,400;0,500;0,600;0,700;1,300;1,400;1,500;1,600;1,700&display=swap',
-  },
+  // 亮色主题
+  { id: 'light', name: 'Light', dark: false, primaryColor: '#570df8', bgColor: '#ffffff' },
+  { id: 'cupcake', name: 'Cupcake', dark: false, primaryColor: '#65c3c8', bgColor: '#faf7f5' },
+  { id: 'bumblebee', name: 'Bumblebee', dark: false, primaryColor: '#e0a82e', bgColor: '#ffffff' },
+  { id: 'emerald', name: 'Emerald', dark: false, primaryColor: '#66cc8a', bgColor: '#ffffff' },
+  { id: 'corporate', name: 'Corporate', dark: false, primaryColor: '#4b6bfb', bgColor: '#ffffff' },
+  { id: 'retro', name: 'Retro', dark: false, primaryColor: '#ef9995', bgColor: '#e4d8b4' },
+  { id: 'valentine', name: 'Valentine', dark: false, primaryColor: '#e96d7b', bgColor: '#f0d6e8' },
+  { id: 'garden', name: 'Garden', dark: false, primaryColor: '#5c7f67', bgColor: '#e9e7e7' },
+  { id: 'aqua', name: 'Aqua', dark: false, primaryColor: '#09ecf3', bgColor: '#345da7' },
+  { id: 'lofi', name: 'Lo-Fi', dark: false, primaryColor: '#0d0d0d', bgColor: '#ffffff' },
+  { id: 'pastel', name: 'Pastel', dark: false, primaryColor: '#d1c1d7', bgColor: '#f5f0fa' },
+  { id: 'fantasy', name: 'Fantasy', dark: false, primaryColor: '#6e0b75', bgColor: '#ffffff' },
+  { id: 'wireframe', name: 'Wireframe', dark: false, primaryColor: '#b8b8b8', bgColor: '#ffffff' },
+  { id: 'cmyk', name: 'CMYK', dark: false, primaryColor: '#45aeee', bgColor: '#ffffff' },
+  { id: 'autumn', name: 'Autumn', dark: false, primaryColor: '#8c0327', bgColor: '#f1f1f1' },
+  { id: 'acid', name: 'Acid', dark: false, primaryColor: '#ff00f4', bgColor: '#fafafa' },
+  { id: 'lemonade', name: 'Lemonade', dark: false, primaryColor: '#519903', bgColor: '#ffffff' },
+  { id: 'winter', name: 'Winter', dark: false, primaryColor: '#047aff', bgColor: '#ffffff' },
+  { id: 'nord', name: 'Nord', dark: false, primaryColor: '#5e81ac', bgColor: '#eceff4' },
+  // 暗色主题
+  { id: 'dark', name: 'Dark', dark: true, primaryColor: '#661ae6', bgColor: '#1d232a' },
+  { id: 'synthwave', name: 'Synthwave', dark: true, primaryColor: '#e779c1', bgColor: '#1a103d' },
+  { id: 'cyberpunk', name: 'Cyberpunk', dark: true, primaryColor: '#ff7598', bgColor: '#ffee00' },
+  { id: 'halloween', name: 'Halloween', dark: true, primaryColor: '#f28c18', bgColor: '#212121' },
+  { id: 'forest', name: 'Forest', dark: true, primaryColor: '#1eb854', bgColor: '#171212' },
+  { id: 'black', name: 'Black', dark: true, primaryColor: '#ffffff', bgColor: '#000000' },
+  { id: 'luxury', name: 'Luxury', dark: true, primaryColor: '#c9a53d', bgColor: '#171618' },
+  { id: 'dracula', name: 'Dracula', dark: true, primaryColor: '#ff79c6', bgColor: '#282a36' },
+  { id: 'business', name: 'Business', dark: true, primaryColor: '#1c4f82', bgColor: '#202020' },
+  { id: 'night', name: 'Night', dark: true, primaryColor: '#38bdf8', bgColor: '#0f172a' },
+  { id: 'coffee', name: 'Coffee', dark: true, primaryColor: '#db924b', bgColor: '#20161f' },
+  { id: 'dim', name: 'Dim', dark: true, primaryColor: '#9fe88d', bgColor: '#2a303c' },
+  { id: 'sunset', name: 'Sunset', dark: true, primaryColor: '#ff865b', bgColor: '#1a1919' },
 ]
 
 /**
@@ -202,29 +81,14 @@ export const THEMES: ThemeInfo[] = [
  */
 export const THEME_GROUPS: ThemeGroup[] = [
   {
-    id: 'basic',
-    name: '基础',
-    themes: THEMES.filter(t => ['light', 'dark', 'black'].includes(t.id)),
+    id: 'light',
+    name: '亮色主题',
+    themes: THEMES.filter(t => !t.dark),
   },
   {
-    id: 'brand',
-    name: '品牌',
-    themes: THEMES.filter(t => ['claude', 'corporate', 'ghibli', 'gourmet'].includes(t.id)),
-  },
-  {
-    id: 'design',
-    name: '设计',
-    themes: THEMES.filter(t => ['luxury', 'mintlify', 'pastel', 'perplexity'].includes(t.id)),
-  },
-  {
-    id: 'product',
-    name: '产品',
-    themes: THEMES.filter(t => ['shadcn', 'slack', 'soft', 'spotify'].includes(t.id)),
-  },
-  {
-    id: 'special',
-    name: '特色',
-    themes: THEMES.filter(t => ['valorant', 'vscode'].includes(t.id)),
+    id: 'dark',
+    name: '暗色主题',
+    themes: THEMES.filter(t => t.dark),
   },
 ]
 
@@ -248,21 +112,90 @@ export function isDarkTheme(themeId: string): boolean {
 }
 
 /**
- * 获取主题需要的字体 URL
+ * 获取主题需要的字体 URL（DaisyUI 内置主题无需额外字体）
  */
-export function getThemeFontUrl(themeId: string): string | undefined {
-  return getThemeInfo(themeId)?.fontUrl
+export function getThemeFontUrl(_themeId: string): string | undefined {
+  return undefined
 }
 
 /**
  * 获取所有需要预加载的字体 URL
  */
 export function getAllFontUrls(): string[] {
-  const urls = new Set<string>()
-  for (const theme of THEMES) {
-    if (theme.fontUrl) {
-      urls.add(theme.fontUrl)
-    }
-  }
-  return [...urls]
+  return []
 }
+
+// =============================================================================
+// 主题初始化工具
+// =============================================================================
+
+/**
+ * 默认主题
+ */
+export const DEFAULT_THEME = 'light'
+
+/**
+ * 主题存储键名
+ */
+export const THEME_STORAGE_KEY = 'theme'
+
+/**
+ * 获取主题初始化脚本（用于 app.html 防闪烁）
+ *
+ * 使用方式：在 app.html 的 <head> 中添加 <script>{getThemeInitScript()}</script>
+ */
+export function getThemeInitScript(): string {
+  return `(function(){var t=localStorage.getItem('${THEME_STORAGE_KEY}')||'${DEFAULT_THEME}';document.documentElement.setAttribute('data-theme',t)})()`
+}
+
+/**
+ * 应用主题
+ * @param theme - 主题 ID
+ * @param persist - 是否持久化到 localStorage
+ */
+export function applyTheme(theme: string, persist = true): void {
+  if (typeof document === 'undefined')
+    return
+
+  document.documentElement.setAttribute('data-theme', theme)
+
+  if (persist && typeof localStorage !== 'undefined') {
+    localStorage.setItem(THEME_STORAGE_KEY, theme)
+  }
+}
+
+/**
+ * 获取当前主题
+ */
+export function getCurrentTheme(): string {
+  if (typeof document === 'undefined')
+    return DEFAULT_THEME
+  return document.documentElement.getAttribute('data-theme') ?? DEFAULT_THEME
+}
+
+/**
+ * 获取保存的主题（从 localStorage）
+ */
+export function getSavedTheme(): string {
+  if (typeof localStorage === 'undefined')
+    return DEFAULT_THEME
+  return localStorage.getItem(THEME_STORAGE_KEY) ?? DEFAULT_THEME
+}
+
+/**
+ * DaisyUI 主题配置字符串（用于 app.css）
+ *
+ * 注意：Tailwind CSS v4 要求主题在 CSS 中声明，无法通过 JS 动态注入
+ * 消费应用需要在 app.css 中添加：
+ *
+ * @plugin "daisyui" {
+ *   themes: light --default, dark --prefersdark, cupcake, bumblebee, ...
+ * }
+ */
+export const DAISYUI_THEMES_CONFIG = THEMES.map((t, i) => {
+  if (i === 0)
+    return `${t.id} --default`
+  if (t.id === 'dark')
+    return `${t.id} --prefersdark`
+  return t.id
+}).join(',\n    ')

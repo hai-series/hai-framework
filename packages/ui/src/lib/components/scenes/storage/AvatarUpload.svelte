@@ -11,6 +11,14 @@
   import type { AvatarUploadProps } from '../types.js'
   import { cn } from '../../../utils.js'
   
+  const defaultLabels = {
+    avatarAlt: 'Avatar',
+    sizeExceeded: 'Image size exceeds limit (max',
+    invalidType: 'Please select an image file',
+    getUploadUrlFailed: 'Failed to get upload URL',
+    uploadFailed: 'Upload failed',
+  }
+  
   let {
     value = $bindable(''),
     size = 'lg',
@@ -21,10 +29,13 @@
     presignUrl = '',
     headers = {},
     fallback = '',
+    labels = {},
     class: className = '',
     onchange,
     onerror,
   }: AvatarUploadProps = $props()
+  
+  const mergedLabels = $derived({ ...defaultLabels, ...labels })
   
   let loading = $state(false)
   let inputElement: HTMLInputElement
@@ -59,11 +70,11 @@
   // 验证文件
   function validateFile(file: File): string | null {
     if (file.size > maxSize) {
-      return `图片大小超过限制（最大 ${formatSize(maxSize)}）`
+      return `${mergedLabels.sizeExceeded} ${formatSize(maxSize)}）`
     }
     
     if (!file.type.startsWith('image/')) {
-      return '请选择图片文件'
+      return mergedLabels.invalidType
     }
     
     return null
@@ -99,7 +110,7 @@
         })
         
         if (!presignResponse.ok) {
-          throw new Error('获取上传地址失败')
+          throw new Error(mergedLabels.getUploadUrlFailed)
         }
         
         const data = await presignResponse.json()
@@ -117,7 +128,7 @@
       })
       
       if (!response.ok) {
-        throw new Error('上传失败')
+        throw new Error(mergedLabels.uploadFailed)
       }
       
       // 获取最终 URL
@@ -135,7 +146,7 @@
       value = finalUrl
       onchange?.(finalUrl)
     } catch (error) {
-      const message = error instanceof Error ? error.message : '上传失败'
+      const message = error instanceof Error ? error.message : mergedLabels.uploadFailed
       onerror?.(message)
     } finally {
       loading = false
@@ -183,7 +194,7 @@
     {#if value}
       <img
         src={value}
-        alt="头像"
+        alt={mergedLabels.avatarAlt}
         class="w-full h-full object-cover"
       />
     {:else}

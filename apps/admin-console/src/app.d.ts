@@ -21,6 +21,8 @@ declare global {
         roles: string[]
         permissions: string[]
       }
+      /** 当前语言 */
+      locale?: string
     }
 
     interface PageData {

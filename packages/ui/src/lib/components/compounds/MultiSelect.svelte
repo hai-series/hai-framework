@@ -25,6 +25,20 @@
     value: string
     description?: string
   }
+  
+  /** i18n 文案配置 */
+  interface MultiSelectLabels {
+    /** 无匹配项 */
+    noMatch?: string
+    /** 移除（用于 aria-label） */
+    remove?: string
+  }
+  
+  // 默认文案
+  const defaultLabels: Required<MultiSelectLabels> = {
+    noMatch: 'No match',
+    remove: 'Remove',
+  }
 
   interface Props {
     label?: string
@@ -33,6 +47,7 @@
     placeholder?: string
     disabled?: boolean
     error?: string
+    labels?: MultiSelectLabels
     class?: string
     onchange?: (selected: string[]) => void
   }
@@ -41,12 +56,16 @@
     label,
     options,
     selected = $bindable([]),
-    placeholder = '搜索...',
+    placeholder = 'Search...',
     disabled = false,
     error,
+    labels = {},
     class: className = '',
     onchange,
   }: Props = $props()
+  
+  // 合并文案
+  const mergedLabels = $derived({ ...defaultLabels, ...labels })
 
   let search = $state('')
   let isOpen = $state(false)
@@ -91,14 +110,15 @@
       document.addEventListener('click', handleClickOutside)
       return () => document.removeEventListener('click', handleClickOutside)
     }
+    return undefined
   })
 </script>
 
 <div class='form-control w-full {className}'>
   {#if label}
-    <label class='label'>
+    <div class='label'>
       <span class='label-text font-medium'>{label}</span>
-    </label>
+    </div>
   {/if}
 
   <div class='relative' bind:this={containerRef}>
@@ -116,7 +136,7 @@
               type='button'
               class='hover:bg-primary/20 rounded p-0.5 transition-colors'
               onclick={(e) => removeOption(opt.value, e)}
-              aria-label='移除 {opt.label}'
+              aria-label='{mergedLabels.remove} {opt.label}'
             >
               <span class='icon-[tabler--x] size-3'></span>
             </button>
@@ -146,7 +166,7 @@
         class='absolute z-50 top-full left-0 right-0 mt-1 max-h-48 overflow-y-auto bg-base-100 border border-base-content/10 rounded-lg shadow-lg'
       >
         {#if filteredOptions.length === 0}
-          <div class='px-3 py-2 text-sm text-base-content/50'>无匹配项</div>
+          <div class='px-3 py-2 text-sm text-base-content/50'>{mergedLabels.noMatch}</div>
         {:else}
           {#each filteredOptions as opt (opt.value)}
             <button
@@ -175,8 +195,8 @@
   </div>
 
   {#if error}
-    <label class='label'>
+    <div class='label'>
       <span class='label-text-alt text-error'>{error}</span>
-    </label>
+    </div>
   {/if}
 </div>

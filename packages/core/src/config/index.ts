@@ -2,21 +2,15 @@
  * =============================================================================
  * @hai/core - Schema 入口（前后端通用）
  * =============================================================================
- * 导出所有配置 Schema，基于 zod
+ * 导出核心配置 Schema，基于 zod
+ *
+ * 各模块的配置 Schema 已移至对应模块：
+ * - AI 配置：@hai/ai
+ * - 加密配置：@hai/crypto
+ * - IAM 配置：@hai/iam
+ * - 存储配置：@hai/storage
  * =============================================================================
  */
 
 // 核心配置（日志、ID、应用、错误码）
 export * from '../core-config.js'
-
-// AI 配置
-export * from './core-config-ai.js'
-
-// 加密配置
-export * from './core-config-crypto.js'
-
-// IAM 配置
-export * from './core-config-iam.js'
-
-// 存储配置
-export * from './core-config-storage.js'

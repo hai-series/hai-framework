@@ -7,18 +7,14 @@
 
 import { describe, expect, it } from 'vitest'
 import {
-  AIErrorCode,
-  AuthErrorCode,
   // 错误码
   CommonErrorCode,
   ConfigErrorCode,
   // core 服务
   core,
-  CryptoErrorCode,
   err,
   // Result
   ok,
-  StorageErrorCode,
 } from '../src/core-index.node.js'
 
 describe('core.type - 类型检查', () => {
@@ -177,13 +173,7 @@ describe('错误码', () => {
     expect(ConfigErrorCode.VALIDATION_ERROR).toBe(1102)
   })
 
-  it('should have correct domain-specific error codes', () => {
-    expect(AuthErrorCode.INVALID_CREDENTIALS).toBeGreaterThanOrEqual(2000)
-    // DbErrorCode moved to @hai/db
-    expect(AIErrorCode.API_ERROR).toBeGreaterThanOrEqual(4000)
-    expect(StorageErrorCode.FILE_NOT_FOUND).toBeGreaterThanOrEqual(5000)
-    expect(CryptoErrorCode.ENCRYPT_FAILED).toBeGreaterThanOrEqual(6000)
-  })
+  // 注：领域错误码已移至各模块（@hai/iam、@hai/ai、@hai/storage、@hai/crypto）
 })
 
 describe('core.id - ID 生成', () => {

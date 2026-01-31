@@ -31,6 +31,7 @@
   "iam_getUserInfoFailed": "Failed to get user info",
   "iam_getUserInfoRequestFailed": "Get user info request failed",
   "iam_oauthStrategyRequired": "OAuth authentication requires OAuth strategy configuration",
+  "iam_oauthProviderNotFound": "OAuth provider '{providerId}' not found",
   "iam_ldapConnectionFailed": "Unable to connect to LDAP server",
   "iam_ldapAdminBindFailed": "LDAP admin bind failed",
   "iam_ldapSearchFailed": "LDAP search failed",

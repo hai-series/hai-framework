@@ -70,14 +70,14 @@
   <input {id} type="checkbox" class="drawer-toggle" bind:checked={open} />
   
   <div class={sideClass}>
-    <!-- svelte-ignore a11y_click_events_have_key_events -->
-    <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <label
-      for={id}
+    <div
+      role="button"
+      tabindex="0"
       aria-label="close sidebar"
       class="drawer-overlay"
       onclick={handleBackdropClick}
-    ></label>
+      onkeydown={(e) => e.key === 'Enter' && handleBackdropClick()}
+    ></div>
     
     <div class={contentClass}>
       <div class="flex items-center justify-between mb-4">

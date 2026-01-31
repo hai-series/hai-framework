@@ -22,9 +22,11 @@
   }: TabsProps = $props()
   
   // 默认选中第一个
-  if (!active && items.length > 0) {
-    active = items[0].key
-  }
+  $effect(() => {
+    if (!active && items.length > 0) {
+      active = items[0].key
+    }
+  })
   
   const typeMap = {
     line: 'tabs-bordered',

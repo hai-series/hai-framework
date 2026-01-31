@@ -12,7 +12,7 @@
   import { cn } from '../../utils.js'
   
   let {
-    title = '暂无数据',
+    title = 'No data',
     description = '',
     icon = 'inbox',
     size = 'md',

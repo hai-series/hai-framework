@@ -7,6 +7,7 @@
 -->
 <script lang="ts">
   import { ForgotPasswordForm, type ForgotPasswordFormData, Result } from '@hai/ui'
+  import * as m from '$lib/paraglide/messages'
   
   let loading = $state(false)
   let errors = $state<Record<string, string>>({})
@@ -28,10 +29,10 @@
       if (result.success) {
         success = true
       } else {
-        errors = { general: result.error || '请求失败' }
+        errors = { general: result.error || m.auth_forgot_password_error() }
       }
     } catch {
-      errors = { general: '网络错误，请稍后重试' }
+      errors = { general: m.common_network_error() }
     } finally {
       loading = false
     }
@@ -39,36 +40,46 @@
 </script>
 
 <svelte:head>
-  <title>忘记密码 - Admin Console</title>
+  <title>{m.auth_forgot_password_title()} - Admin Console</title>
 </svelte:head>
 
-<h2 class="text-2xl font-semibold text-center mb-4">忘记密码</h2>
+<h2 class="text-2xl font-semibold text-center mb-4">{m.auth_forgot_password_title()}</h2>
 
 {#if success}
   <Result
     status="success"
-    title="邮件已发送"
-    description="如果该邮箱已注册，您将收到密码重置邮件。请检查您的收件箱（包括垃圾邮件文件夹）"
+    title={m.auth_forgot_password_success_title()}
+    description={m.auth_forgot_password_success_desc()}
   >
     {#snippet actions()}
-      <a href="/auth/login" class="btn btn-primary">返回登录</a>
+      <a href="/auth/login" class="btn btn-primary">{m.auth_forgot_password_back()}</a>
     {/snippet}
   </Result>
 {:else}
   <p class="text-center text-base-content/60 text-sm mb-6">
-    请输入您的注册邮箱，我们将向您发送密码重置链接。
+    {m.auth_forgot_password_desc()}
   </p>
 
   <ForgotPasswordForm
     {loading}
     {errors}
     mode="email"
-    submitText="发送重置链接"
+    labels={{
+      email: m.auth_email(),
+    }}
+    placeholders={{
+      email: m.auth_email(),
+    }}
+    submitText={m.auth_forgot_password_submit()}
+    validationMessages={{
+      required: m.validation_required(),
+      email: m.validation_email(),
+    }}
     onsubmit={handleForgotPassword}
   >
     {#snippet footer()}
       <div class="text-center mt-4 text-sm">
-        <a href="/auth/login" class="link link-primary">← 返回登录</a>
+        <a href="/auth/login" class="link link-primary">← {m.auth_forgot_password_back()}</a>
       </div>
     {/snippet}
   </ForgotPasswordForm>

@@ -11,6 +11,25 @@
   import type { FileUploadProps, UploadFile } from '../types.js'
   import { cn, generateId } from '../../../utils.js'
   
+  const defaultLabels = {
+    dragHint: 'Drag files here, or',
+    clickToSelect: 'click to select',
+    supportedFormats: 'Supported:',
+    maxFileSize: 'Max size:',
+    maxFilesHint: 'Max',
+    filesUnit: 'files',
+    uploadSuccess: 'Upload successful',
+    uploadFailed: 'Upload failed',
+    networkError: 'Network error',
+    noUploadUrl: 'No upload URL configured',
+    getUploadUrlFailed: 'Failed to get upload URL',
+    fileSizeExceeded: 'File size exceeds limit (max',
+    unsupportedType: 'Unsupported file type',
+    maxFilesExceeded: 'Maximum upload limit:',
+    retry: 'Retry',
+    remove: 'Remove',
+  }
+  
   let {
     accept = '*',
     maxSize = 10 * 1024 * 1024, // 10MB
@@ -23,12 +42,15 @@
     autoUpload = true,
     showList = true,
     dragDrop = true,
+    labels = {},
     class: className = '',
     onchange,
     onupload,
     onerror,
     onremove,
   }: FileUploadProps = $props()
+  
+  const mergedLabels = $derived({ ...defaultLabels, ...labels })
   
   let files = $state<UploadFile[]>([])
   let isDragging = $state(false)
@@ -61,7 +83,7 @@
   // 验证文件
   function validateFile(file: File): string | null {
     if (file.size > maxSize) {
-      return `文件大小超过限制（最大 ${formatSize(maxSize)}）`
+      return `${mergedLabels.fileSizeExceeded} ${formatSize(maxSize)}）`
     }
     
     if (accept !== '*') {
@@ -80,7 +102,7 @@
       })
       
       if (!isAccepted) {
-        return '不支持的文件类型'
+        return mergedLabels.unsupportedType
       }
     }
     
@@ -95,7 +117,7 @@
     
     for (const file of Array.from(fileList)) {
       if (files.length + newFiles.length >= maxFiles) {
-        onerror?.(`最多只能上传 ${maxFiles} 个文件`)
+        onerror?.(`${mergedLabels.maxFilesExceeded} ${maxFiles} ${mergedLabels.filesUnit}`)
         break
       }
       
@@ -129,7 +151,7 @@
   // 上传单个文件
   async function uploadFile(uploadFile: UploadFile) {
     if (!uploadUrl && !presignUrl) {
-      uploadFile.error = '未配置上传地址'
+      uploadFile.error = mergedLabels.noUploadUrl
       uploadFile.state = 'error'
       return
     }
@@ -156,7 +178,7 @@
         })
         
         if (!presignResponse.ok) {
-          throw new Error('获取上传地址失败')
+          throw new Error(mergedLabels.getUploadUrlFailed)
         }
         
         const { url } = await presignResponse.json()
@@ -185,11 +207,11 @@
             }
             resolve()
           } else {
-            reject(new Error(`上传失败: ${xhr.statusText}`))
+            reject(new Error(`${mergedLabels.uploadFailed}: ${xhr.statusText}`))
           }
         }
         
-        xhr.onerror = () => reject(new Error('网络错误'))
+        xhr.onerror = () => reject(new Error(mergedLabels.networkError))
         
         xhr.open('PUT', targetUrl!)
         xhr.setRequestHeader('Content-Type', uploadFile.type || 'application/octet-stream')
@@ -204,7 +226,7 @@
       onupload?.(uploadFile)
     } catch (error) {
       uploadFile.state = 'error'
-      uploadFile.error = error instanceof Error ? error.message : '上传失败'
+      uploadFile.error = error instanceof Error ? error.message : mergedLabels.uploadFailed
       onerror?.(uploadFile.error)
     }
     
@@ -304,17 +326,17 @@
       </svg>
       <div class="text-base-content/70">
         {#if dragDrop}
-          <span>拖拽文件到此处，或</span>
+          <span>{mergedLabels.dragHint}</span>
         {/if}
-        <span class="text-primary">点击选择文件</span>
+        <span class="text-primary">{mergedLabels.clickToSelect}</span>
       </div>
       <div class="text-xs text-base-content/50">
         {#if accept !== '*'}
-          支持 {accept}，
+          {mergedLabels.supportedFormats} {accept}，
         {/if}
-        单个文件最大 {formatSize(maxSize)}
+        {mergedLabels.maxFileSize} {formatSize(maxSize)}
         {#if maxFiles > 1}
-          ，最多 {maxFiles} 个文件
+          ，{mergedLabels.maxFilesHint} {maxFiles} {mergedLabels.filesUnit}
         {/if}
       </div>
     </div>
@@ -347,7 +369,7 @@
             {:else if file.state === 'error'}
               <div class="text-xs text-error mt-1">{file.error}</div>
             {:else if file.state === 'success'}
-              <div class="text-xs text-success mt-1">上传成功</div>
+              <div class="text-xs text-success mt-1">{mergedLabels.uploadSuccess}</div>
             {/if}
           </div>
           
@@ -358,7 +380,7 @@
                 type="button"
                 class="btn btn-ghost btn-xs btn-circle"
                 onclick={() => retryUpload(file.id)}
-                aria-label="重试"
+                aria-label={mergedLabels.retry}
               >
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
@@ -369,7 +391,7 @@
               type="button"
               class="btn btn-ghost btn-xs btn-circle"
               onclick={() => removeFile(file.id)}
-              aria-label="移除"
+              aria-label={mergedLabels.remove}
             >
               <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />

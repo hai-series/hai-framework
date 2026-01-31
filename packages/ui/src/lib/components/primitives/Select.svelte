@@ -5,6 +5,7 @@
   下拉选择框组件
   
   使用 Svelte 5 Runes ($props, $derived, $bindable)
+  支持自定义验证消息（validationMessage）覆盖浏览器原生提示
   =============================================================================
 -->
 <script lang="ts" generics="T = string">
@@ -14,14 +15,17 @@
   let {
     value = $bindable<T>(),
     options,
-    placeholder = '请选择...',
+    placeholder = 'Select...',
     size = 'md',
     disabled = false,
     required = false,
     error = '',
+    validationMessage = '',
     class: className = '',
     onchange,
   }: SelectProps<T> = $props()
+  
+  let selectRef: HTMLSelectElement | undefined = $state()
   
   const selectClass = $derived(
     cn(
@@ -32,19 +36,38 @@
     )
   )
   
+  // 当 validationMessage 变化时更新自定义验证消息
+  $effect(() => {
+    if (selectRef) {
+      selectRef.setCustomValidity(validationMessage)
+    }
+  })
+  
   function handleChange(e: Event & { currentTarget: HTMLSelectElement }) {
     const selectedValue = e.currentTarget.value as T
     value = selectedValue
+    // 选择后重置自定义验证
+    if (validationMessage) {
+      e.currentTarget.setCustomValidity(validationMessage)
+    }
     onchange?.(selectedValue)
+  }
+  
+  function handleInvalid(e: Event & { currentTarget: HTMLSelectElement }) {
+    if (validationMessage) {
+      e.currentTarget.setCustomValidity(validationMessage)
+    }
   }
 </script>
 
 <div class="form-control w-full">
   <select
+    bind:this={selectRef}
     class={selectClass}
     {disabled}
     {required}
     onchange={handleChange}
+    oninvalid={handleInvalid}
   >
     {#if placeholder}
       <option value="" disabled selected={!value}>{placeholder}</option>
@@ -60,8 +83,8 @@
     {/each}
   </select>
   {#if error}
-    <label class="label">
+    <div class="label">
       <span class="label-text-alt text-error">{error}</span>
-    </label>
+    </div>
   {/if}
 </div>

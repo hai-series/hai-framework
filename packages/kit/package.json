@@ -44,11 +44,13 @@
     "clean": "rimraf dist .turbo"
   },
   "peerDependencies": {
-    "@sveltejs/kit": "^2.0.0",
-    "svelte": "^5.0.0"
+    "@sveltejs/kit": "^2.50.1",
+    "svelte": "^5.49.11"
   },
   "dependencies": {
+    "@hai/cache": "workspace:*",
     "@hai/core": "workspace:*",
+    "@hai/db": "workspace:*",
     "@hai/iam": "workspace:*"
   },
   "devDependencies": {

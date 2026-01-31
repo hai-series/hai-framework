@@ -9,7 +9,7 @@
 import type { Handle } from '@sveltejs/kit'
 import { initApp } from '$lib/server/init.js'
 import { iam } from '@hai/iam'
-import { authGuard, createHandle, loggingMiddleware, rateLimitMiddleware, sequence } from '@hai/kit'
+import { authGuard, createHandle, loggingMiddleware, rateLimitMiddleware, sequence, setAllModulesLocale } from '@hai/kit'
 
 // 初始化应用（包含数据库、缓存、IAM 等模块）
 initApp()
@@ -37,11 +37,26 @@ catch {
 
 /**
  * i18n Handle - 使用 Paraglide middleware 处理语言
+ * 使用 cookie 策略，不再需要 URL 前缀
+ *
+ * 注意：API 请求跳过 paraglideMiddleware，因为：
+ * 1. API 不需要页面级别的 locale 处理
+ * 2. paraglideMiddleware 内部 new Request(request) 会消耗 body
  */
 const i18nHandle: Handle = async ({ event, resolve }) => {
+  // API 请求不需要 i18n 处理，直接跳过
+  // 避免 paraglideMiddleware 消耗 request body
+  if (event.url.pathname.startsWith('/api/')) {
+    const locale = event.cookies.get('PARAGLIDE_LOCALE') ?? 'zh-CN'
+    event.locals.locale = locale
+    setAllModulesLocale(locale)
+    return resolve(event)
+  }
+
   if (paraglideMiddleware) {
-    return paraglideMiddleware(event.request, async ({ request: localizedRequest, locale }) => {
-      event.request = localizedRequest
+    return paraglideMiddleware(event.request, async ({ locale }) => {
+      event.locals.locale = locale
+      setAllModulesLocale(locale)
       return resolve(event, {
         transformPageChunk: ({ html }) => html.replace('%lang%', locale),
       })
@@ -49,6 +64,8 @@ const i18nHandle: Handle = async ({ event, resolve }) => {
   }
 
   // Paraglide 未就绪时，使用默认语言
+  event.locals.locale = 'zh-CN'
+  setAllModulesLocale('zh-CN')
   return resolve(event, {
     transformPageChunk: ({ html }) => html.replace('%lang%', 'zh-CN'),
   })

@@ -4,6 +4,8 @@
   =============================================================================
 -->
 <script lang="ts">
+  import { Card, Button, Modal, Badge, IconButton } from '@hai/ui'
+  import * as m from '$lib/paraglide/messages'
   import type { PageData } from './$types'
 
   interface Props {
@@ -63,7 +65,7 @@
     error = ''
 
     if (!form.name.trim() || !form.resource.trim() || !form.action.trim()) {
-      error = '请填写所有必填字段'
+      error = m.iam_permissions_fill_required()
       return
     }
 
@@ -82,10 +84,10 @@
         closeDialog()
         location.reload()
       } else {
-        error = result.error || '操作失败'
+        error = result.error || m.iam_users_operation_failed()
       }
     } catch (e) {
-      error = '网络错误，请稍后重试'
+      error = m.common_network_error()
     } finally {
       submitting = false
     }
@@ -94,11 +96,11 @@
   /** 删除权限 */
   async function handleDelete(perm: { id: string; name: string; is_system: boolean }) {
     if (perm.is_system) {
-      alert('系统权限不能删除')
+      alert(m.iam_permissions_system_cannot_delete())
       return
     }
 
-    if (!confirm(`确定要删除权限 "${perm.name}" 吗？此操作不可恢复。`)) {
+    if (!confirm(m.iam_permissions_delete_confirm())) {
       return
     }
 
@@ -112,29 +114,29 @@
       if (result.success) {
         location.reload()
       } else {
-        alert(result.error || '删除失败')
+        alert(result.error || m.iam_users_delete_failed())
       }
     } catch (e) {
-      alert('网络错误，请稍后重试')
+      alert(m.common_network_error())
     }
   }
 </script>
 
 <svelte:head>
-  <title>权限管理 - Admin Console</title>
+  <title>{m.iam_permissions_title()} - Admin Console</title>
 </svelte:head>
 
 <div class="space-y-6">
   <!-- 页面标题 -->
   <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
     <div>
-      <h1 class="text-2xl font-bold">权限管理</h1>
-      <p class="text-base-content/60 mt-1">管理系统权限定义</p>
+      <h1 class="text-2xl font-bold">{m.iam_permissions_title()}</h1>
+      <p class="text-base-content/60 mt-1">{m.iam_permissions_subtitle()}</p>
     </div>
-    <button type="button" class="btn btn-primary gap-2" onclick={openCreateDialog}>
+    <Button variant="primary" class="gap-2" onclick={openCreateDialog}>
       <span class="iconify tabler--plus size-5"></span>
-      新建权限
-    </button>
+      {m.iam_permissions_create()}
+    </Button>
   </div>
 
   <!-- 统计卡片 -->
@@ -162,23 +164,23 @@
   <!-- 权限列表（按资源分组） -->
   <div class="space-y-4">
     {#each Object.entries(data.permissions) as [resource, perms]}
-      <div class="card bg-base-100 shadow-sm">
-        <div class="card-body">
-          <h3 class="card-title capitalize">
+      <Card>
+        <div class="p-6">
+          <h3 class="text-lg font-semibold flex items-center gap-2 mb-4">
             <span class="iconify tabler--folder size-5"></span>
-            {resource}
-            <span class="badge badge-ghost badge-sm">{perms.length}</span>
+            <span class="capitalize">{resource}</span>
+            <Badge size="sm" outline>{perms.length}</Badge>
           </h3>
 
           <div class="overflow-x-auto">
             <table class="table table-sm">
               <thead>
                 <tr>
-                  <th>权限名称</th>
-                  <th>操作</th>
-                  <th>描述</th>
-                  <th>类型</th>
-                  <th class="text-right">操作</th>
+                  <th>{m.iam_permissions_col_name()}</th>
+                  <th>{m.iam_permissions_form_action()}</th>
+                  <th>{m.iam_permissions_col_description()}</th>
+                  <th>{m.iam_permissions_col_type()}</th>
+                  <th class="text-right">{m.iam_permissions_col_actions()}</th>
                 </tr>
               </thead>
               <tbody>
@@ -193,20 +195,19 @@
                     </td>
                     <td>
                       {#if perm.is_system}
-                        <span class="badge badge-secondary badge-sm">系统</span>
+                        <Badge variant="secondary" size="sm">{m.iam_permissions_type_system()}</Badge>
                       {:else}
-                        <span class="badge badge-ghost badge-sm">自定义</span>
+                        <Badge size="sm" outline>{m.iam_permissions_type_custom()}</Badge>
                       {/if}
                     </td>
                     <td class="text-right">
                       {#if !perm.is_system}
-                        <button
-                          type="button"
-                          class="btn btn-ghost btn-xs text-error"
+                        <IconButton
+                          icon="tabler--trash"
+                          size="xs"
+                          class="btn-ghost text-error"
                           onclick={() => handleDelete(perm)}
-                        >
-                          <span class="iconify tabler--trash size-4"></span>
-                        </button>
+                        />
                       {/if}
                     </td>
                   </tr>
@@ -215,113 +216,103 @@
             </table>
           </div>
         </div>
-      </div>
+      </Card>
     {/each}
   </div>
 </div>
 
 <!-- 新建对话框 -->
-{#if showDialog}
-  <div class="modal modal-open">
-    <div class="modal-box max-w-lg">
-      <h3 class="font-bold text-lg mb-4">新建权限</h3>
+<Modal open={showDialog} onclose={closeDialog} title={m.iam_permissions_create()} size="lg">
+  <form onsubmit={handleSubmit} class="space-y-4">
+    {#if error}
+      <div class="alert alert-error">
+        <span class="iconify tabler--alert-circle size-5"></span>
+        <span>{error}</span>
+      </div>
+    {/if}
 
-      <form onsubmit={handleSubmit} class="space-y-4">
-        {#if error}
-          <div class="alert alert-error">
-            <span class="iconify tabler--alert-circle size-5"></span>
-            <span>{error}</span>
-          </div>
-        {/if}
+    <div class="grid grid-cols-2 gap-4">
+      <div class="form-control">
+        <label class="label" for="resource">
+          <span class="label-text">{m.iam_permissions_form_resource()} <span class="text-error">*</span></span>
+        </label>
+        <input
+          type="text"
+          id="resource"
+          class="input input-bordered"
+          bind:value={form.resource}
+          oninput={updatePermissionName}
+          required
+          disabled={submitting}
+          placeholder={m.iam_permissions_form_resource_placeholder()}
+          list="resources"
+        />
+        <datalist id="resources">
+          {#each data.resources as res}
+            <option value={res}></option>
+          {/each}
+        </datalist>
+      </div>
 
-        <div class="grid grid-cols-2 gap-4">
-          <div class="form-control">
-            <label class="label" for="resource">
-              <span class="label-text">资源 <span class="text-error">*</span></span>
-            </label>
-            <input
-              type="text"
-              id="resource"
-              class="input input-bordered"
-              bind:value={form.resource}
-              oninput={updatePermissionName}
-              required
-              disabled={submitting}
-              placeholder="例如：user, role"
-              list="resources"
-            />
-            <datalist id="resources">
-              {#each data.resources as res}
-                <option value={res}></option>
-              {/each}
-            </datalist>
-          </div>
-
-          <div class="form-control">
-            <label class="label" for="action">
-              <span class="label-text">操作 <span class="text-error">*</span></span>
-            </label>
-            <input
-              type="text"
-              id="action"
-              class="input input-bordered"
-              bind:value={form.action}
-              oninput={updatePermissionName}
-              required
-              disabled={submitting}
-              placeholder="例如：read, write"
-              list="actions"
-            />
-            <datalist id="actions">
-              {#each data.actions as act}
-                <option value={act}></option>
-              {/each}
-            </datalist>
-          </div>
-        </div>
-
-        <div class="form-control">
-          <label class="label" for="name">
-            <span class="label-text">权限名称 <span class="text-error">*</span></span>
-          </label>
-          <input
-            type="text"
-            id="name"
-            class="input input-bordered font-mono"
-            bind:value={form.name}
-            required
-            disabled={submitting}
-            placeholder="自动生成：resource:action"
-          />
-        </div>
-
-        <div class="form-control">
-          <label class="label" for="description">
-            <span class="label-text">描述</span>
-          </label>
-          <textarea
-            id="description"
-            class="textarea textarea-bordered"
-            bind:value={form.description}
-            disabled={submitting}
-            placeholder="权限描述（可选）"
-            rows={2}
-          ></textarea>
-        </div>
-
-        <div class="modal-action">
-          <button type="button" class="btn btn-ghost" onclick={closeDialog} disabled={submitting}>
-            取消
-          </button>
-          <button type="submit" class="btn btn-primary" disabled={submitting}>
-            {#if submitting}
-              <span class="loading loading-spinner loading-sm"></span>
-            {/if}
-            创建
-          </button>
-        </div>
-      </form>
+      <div class="form-control">
+        <label class="label" for="action">
+          <span class="label-text">{m.iam_permissions_form_action()} <span class="text-error">*</span></span>
+        </label>
+        <input
+          type="text"
+          id="action"
+          class="input input-bordered"
+          bind:value={form.action}
+          oninput={updatePermissionName}
+          required
+          disabled={submitting}
+          placeholder={m.iam_permissions_form_action_placeholder()}
+          list="actions"
+        />
+        <datalist id="actions">
+          {#each data.actions as act}
+            <option value={act}></option>
+          {/each}
+        </datalist>
+      </div>
     </div>
-    <div class="modal-backdrop bg-black/50" onclick={closeDialog}></div>
-  </div>
-{/if}
+
+    <div class="form-control">
+      <label class="label" for="name">
+        <span class="label-text">{m.iam_permissions_form_name()} <span class="text-error">*</span></span>
+      </label>
+      <input
+        type="text"
+        id="name"
+        class="input input-bordered font-mono"
+        bind:value={form.name}
+        required
+        disabled={submitting}
+        placeholder={m.iam_permissions_form_name_placeholder()}
+      />
+    </div>
+
+    <div class="form-control">
+      <label class="label" for="description">
+        <span class="label-text">{m.iam_permissions_form_description()}</span>
+      </label>
+      <textarea
+        id="description"
+        class="textarea textarea-bordered"
+        bind:value={form.description}
+        disabled={submitting}
+        placeholder={m.iam_permissions_form_description_placeholder()}
+        rows={2}
+      ></textarea>
+    </div>
+
+    <div class="modal-action">
+      <Button class="btn-ghost" onclick={closeDialog} disabled={submitting}>
+        {m.action_cancel()}
+      </Button>
+      <Button variant="primary" type="submit" disabled={submitting} loading={submitting}>
+        {m.action_create()}
+      </Button>
+    </div>
+  </form>
+</Modal>

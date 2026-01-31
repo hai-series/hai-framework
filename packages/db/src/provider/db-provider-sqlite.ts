@@ -185,7 +185,7 @@ export function createSqliteProvider(): DbProvider {
       catch (error) {
         return err({
           code: DbErrorCode.DDL_FAILED,
-          message: `创建表 ${tableName} 失败: ${error}`,
+          message: getDbMessage('db_sqliteCreateTableFailed', undefined, { tableName, error: String(error) }),
           cause: error,
         })
       }
@@ -207,7 +207,7 @@ export function createSqliteProvider(): DbProvider {
       catch (error) {
         return err({
           code: DbErrorCode.DDL_FAILED,
-          message: `删除表 ${tableName} 失败: ${error}`,
+          message: getDbMessage('db_sqliteDropTableFailed', undefined, { tableName, error: String(error) }),
           cause: error,
         })
       }
@@ -229,7 +229,7 @@ export function createSqliteProvider(): DbProvider {
       catch (error) {
         return err({
           code: DbErrorCode.DDL_FAILED,
-          message: `向表 ${tableName} 添加列 ${columnName} 失败: ${error}`,
+          message: getDbMessage('db_sqliteAddColumnFailed', undefined, { tableName, columnName, error: String(error) }),
           cause: error,
         })
       }
@@ -250,7 +250,7 @@ export function createSqliteProvider(): DbProvider {
       catch (error) {
         return err({
           code: DbErrorCode.DDL_FAILED,
-          message: `从表 ${tableName} 删除列 ${columnName} 失败: ${error}`,
+          message: getDbMessage('db_sqliteDropColumnFailed', undefined, { tableName, columnName, error: String(error) }),
           cause: error,
         })
       }
@@ -271,7 +271,7 @@ export function createSqliteProvider(): DbProvider {
       catch (error) {
         return err({
           code: DbErrorCode.DDL_FAILED,
-          message: `重命名表 ${oldName} 为 ${newName} 失败: ${error}`,
+          message: getDbMessage('db_sqliteRenameTableFailed', undefined, { oldName, newName, error: String(error) }),
           cause: error,
         })
       }
@@ -298,7 +298,7 @@ export function createSqliteProvider(): DbProvider {
       catch (error) {
         return err({
           code: DbErrorCode.DDL_FAILED,
-          message: `创建索引 ${indexName} 失败: ${error}`,
+          message: getDbMessage('db_sqliteCreateIndexFailed', undefined, { indexName, error: String(error) }),
           cause: error,
         })
       }
@@ -320,7 +320,7 @@ export function createSqliteProvider(): DbProvider {
       catch (error) {
         return err({
           code: DbErrorCode.DDL_FAILED,
-          message: `删除索引 ${indexName} 失败: ${error}`,
+          message: getDbMessage('db_sqliteDropIndexFailed', undefined, { indexName, error: String(error) }),
           cause: error,
         })
       }
@@ -341,7 +341,7 @@ export function createSqliteProvider(): DbProvider {
       catch (error) {
         return err({
           code: DbErrorCode.DDL_FAILED,
-          message: `执行 DDL 失败: ${error}`,
+          message: getDbMessage('db_sqliteExecDdlFailed', undefined, { error: String(error) }),
           cause: error,
         })
       }
@@ -369,7 +369,7 @@ export function createSqliteProvider(): DbProvider {
       catch (error) {
         return err({
           code: DbErrorCode.QUERY_FAILED,
-          message: `查询失败: ${error}`,
+          message: getDbMessage('db_sqliteQueryFailed', undefined, { error: String(error) }),
           cause: error,
         })
       }
@@ -391,7 +391,7 @@ export function createSqliteProvider(): DbProvider {
       catch (error) {
         return err({
           code: DbErrorCode.QUERY_FAILED,
-          message: `查询失败: ${error}`,
+          message: getDbMessage('db_sqliteQueryFailed', undefined, { error: String(error) }),
           cause: error,
         })
       }
@@ -416,7 +416,7 @@ export function createSqliteProvider(): DbProvider {
       catch (error) {
         return err({
           code: DbErrorCode.QUERY_FAILED,
-          message: `执行失败: ${error}`,
+          message: getDbMessage('db_sqliteExecuteFailed', undefined, { error: String(error) }),
           cause: error,
         })
       }
@@ -449,7 +449,7 @@ export function createSqliteProvider(): DbProvider {
       catch (error) {
         return err({
           code: DbErrorCode.QUERY_FAILED,
-          message: `批量执行失败: ${error}`,
+          message: getDbMessage('db_sqliteBatchFailed', undefined, { error: String(error) }),
           cause: error,
         })
       }
@@ -503,7 +503,7 @@ export function createSqliteProvider(): DbProvider {
     catch (error) {
       return err({
         code: DbErrorCode.TRANSACTION_FAILED,
-        message: `事务执行失败: ${error}`,
+        message: getDbMessage('db_sqliteTxFailed', undefined, { error: String(error) }),
         cause: error,
       })
     }
@@ -555,7 +555,7 @@ export function createSqliteProvider(): DbProvider {
       db.exec('ROLLBACK')
       return err({
         code: DbErrorCode.TRANSACTION_FAILED,
-        message: `异步事务执行失败: ${error}`,
+        message: getDbMessage('db_sqliteTxAsyncFailed', undefined, { error: String(error) }),
         cause: error,
       })
     }
@@ -608,7 +608,7 @@ export function createSqliteProvider(): DbProvider {
       catch (error) {
         return err({
           code: DbErrorCode.CONNECTION_FAILED,
-          message: `连接 SQLite 失败: ${error}`,
+          message: getDbMessage('db_sqliteConnectionFailed', undefined, { error: String(error) }),
           cause: error,
         })
       }

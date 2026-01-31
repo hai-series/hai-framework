@@ -15,7 +15,8 @@
       "types": "./dist/components/*.d.ts",
       "svelte": "./dist/components/*.js",
       "import": "./dist/components/*.js"
-    }
+    },
+    "./styles/*": "./dist/styles/*"
   },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

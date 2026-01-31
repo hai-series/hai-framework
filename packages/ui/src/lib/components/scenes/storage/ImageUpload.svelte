@@ -11,6 +11,18 @@
   import type { ImageUploadProps } from '../types.js'
   import { cn } from '../../../utils.js'
   
+  const defaultLabels = {
+    placeholder: 'Click to upload image',
+    maxSizeHint: 'Max:',
+    sizeExceeded: 'Image size exceeds limit (max',
+    invalidType: 'Please select an image file',
+    getUploadUrlFailed: 'Failed to get upload URL',
+    uploadFailed: 'Upload failed',
+    previewAlt: 'Preview',
+    changeImage: 'Change image',
+    deleteImage: 'Delete image',
+  }
+  
   let {
     value = $bindable(''),
     accept = 'image/*',
@@ -19,7 +31,8 @@
     uploadUrl = '',
     presignUrl = '',
     headers = {},
-    placeholder = '点击上传图片',
+    placeholder,
+    labels = {},
     aspectRatio = '',
     width = '',
     height = '',
@@ -27,6 +40,8 @@
     onchange,
     onerror,
   }: ImageUploadProps = $props()
+  
+  const mergedLabels = $derived({ ...defaultLabels, ...labels })
   
   let loading = $state(false)
   let inputElement: HTMLInputElement
@@ -68,11 +83,11 @@
   // 验证文件
   function validateFile(file: File): string | null {
     if (file.size > maxSize) {
-      return `图片大小超过限制（最大 ${formatSize(maxSize)}）`
+      return `${mergedLabels.sizeExceeded} ${formatSize(maxSize)}）`
     }
     
     if (!file.type.startsWith('image/')) {
-      return '请选择图片文件'
+      return mergedLabels.invalidType
     }
     
     return null
@@ -111,7 +126,7 @@
         })
         
         if (!presignResponse.ok) {
-          throw new Error('获取上传地址失败')
+          throw new Error(mergedLabels.getUploadUrlFailed)
         }
         
         const data = await presignResponse.json()
@@ -129,7 +144,7 @@
       })
       
       if (!response.ok) {
-        throw new Error('上传失败')
+        throw new Error(mergedLabels.uploadFailed)
       }
       
       // 获取最终 URL
@@ -148,7 +163,7 @@
       previewUrl = finalUrl
       onchange?.(finalUrl)
     } catch (error) {
-      const message = error instanceof Error ? error.message : '上传失败'
+      const message = error instanceof Error ? error.message : mergedLabels.uploadFailed
       onerror?.(message)
       // 清除预览
       previewUrl = ''
@@ -206,7 +221,7 @@
     <!-- 预览图 -->
     <img
       src={previewUrl}
-      alt="预览"
+      alt={mergedLabels.previewAlt}
       class="w-full h-full object-cover"
     />
     
@@ -220,7 +235,7 @@
             type="button"
             class="btn btn-circle btn-sm btn-ghost text-white"
             onclick={handleClick}
-            aria-label="更换图片"
+            aria-label={mergedLabels.changeImage}
           >
             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -230,7 +245,7 @@
             type="button"
             class="btn btn-circle btn-sm btn-ghost text-white"
             onclick={handleRemove}
-            aria-label="删除图片"
+            aria-label={mergedLabels.deleteImage}
           >
             <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -248,8 +263,8 @@
         <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
         </svg>
-        <span class="text-sm text-center">{placeholder}</span>
-        <span class="text-xs mt-1">最大 {formatSize(maxSize)}</span>
+        <span class="text-sm text-center">{placeholder || mergedLabels.placeholder}</span>
+        <span class="text-xs mt-1">{mergedLabels.maxSizeHint} {formatSize(maxSize)}</span>
       {/if}
     </div>
   {/if}

@@ -21,11 +21,18 @@
 
   interface Props {
     messages?: ToastMessage[]
+    /** 关闭按钮的 aria-label */
+    closeLabel?: string
     ondismiss?: (id: string) => void
     class?: string
   }
 
-  let { messages = [], ondismiss, class: className = '' }: Props = $props()
+  let { 
+    messages = [], 
+    closeLabel = 'Close notification',
+    ondismiss, 
+    class: className = '' 
+  }: Props = $props()
 
   /** 通知类型样式映射 */
   const typeStyles: Record<string, { bg: string, icon: string }> = {
@@ -47,7 +54,7 @@
             type='button'
             class='btn btn-ghost btn-xs btn-circle'
             onclick={() => ondismiss?.(notification.id)}
-            aria-label='关闭通知'
+            aria-label={closeLabel}
           >
             <span class='icon-[tabler--x] size-4'></span>
           </button>

@@ -9,6 +9,7 @@
   import { page } from '$app/stores'
   import { goto } from '$app/navigation'
   import { ResetPasswordForm, type ResetPasswordFormData, Result } from '@hai/ui'
+  import * as m from '$lib/paraglide/messages'
   
   let loading = $state(false)
   let errors = $state<Record<string, string>>({})
@@ -21,7 +22,7 @@
     errors = {}
 
     if (!token) {
-      errors = { general: '重置链接无效' }
+      errors = { general: m.auth_reset_password_invalid_link() }
       return
     }
 
@@ -45,10 +46,10 @@
         // 3秒后跳转到登录页
         setTimeout(() => goto('/auth/login'), 3000)
       } else {
-        errors = { general: result.error || '重置失败' }
+        errors = { general: result.error || m.auth_reset_password_error() }
       }
     } catch {
-      errors = { general: '网络错误，请稍后重试' }
+      errors = { general: m.common_network_error() }
     } finally {
       loading = false
     }
@@ -56,34 +57,34 @@
 </script>
 
 <svelte:head>
-  <title>重置密码 - Admin Console</title>
+  <title>{m.auth_reset_password_title()} - Admin Console</title>
 </svelte:head>
 
-<h2 class="text-2xl font-semibold text-center mb-4">重置密码</h2>
+<h2 class="text-2xl font-semibold text-center mb-4">{m.auth_reset_password_title()}</h2>
 
 {#if success}
   <Result
     status="success"
-    title="密码重置成功"
-    description="您的密码已成功重置，正在跳转到登录页..."
+    title={m.auth_reset_password_success_title()}
+    description={m.auth_reset_password_success_desc()}
   >
     {#snippet actions()}
-      <a href="/auth/login" class="btn btn-primary">立即登录</a>
+      <a href="/auth/login" class="btn btn-primary">{m.auth_reset_password_login()}</a>
     {/snippet}
   </Result>
 {:else if !token}
   <Result
     status="warning"
-    title="无效的链接"
-    description="重置链接无效或已过期，请重新申请。"
+    title={m.auth_reset_password_invalid_title()}
+    description={m.auth_reset_password_invalid_desc()}
   >
     {#snippet actions()}
-      <a href="/auth/forgot-password" class="btn btn-primary">重新申请</a>
+      <a href="/auth/forgot-password" class="btn btn-primary">{m.auth_reset_password_reapply()}</a>
     {/snippet}
   </Result>
 {:else}
   <p class="text-center text-base-content/60 text-sm mb-6">
-    请输入您的新密码。
+    {m.auth_reset_password_desc()}
   </p>
 
   <ResetPasswordForm
@@ -92,10 +93,32 @@
     showCode={false}
     showPasswordStrength={true}
     minPasswordLength={8}
+    labels={{
+      newPasswordLabel: m.auth_reset_password_new(),
+      newPasswordPlaceholder: m.auth_reset_password_new_placeholder(),
+      confirmPasswordLabel: m.auth_reset_password_confirm(),
+      confirmPasswordPlaceholder: m.auth_reset_password_confirm_placeholder(),
+    }}
+    strengthLabels={{
+      weak: m.auth_password_weak(),
+      medium: m.auth_password_medium(),
+      strong: m.auth_password_strong(),
+      veryStrong: m.auth_password_very_strong(),
+      label: m.auth_password_strength(),
+    }}
+    toggleLabels={{
+      showPassword: m.auth_show_password(),
+      hidePassword: m.auth_hide_password(),
+    }}
+    validationMessages={{
+      required: m.validation_required(),
+      passwordMismatch: m.auth_password_mismatch(),
+    }}
+    submitText={m.auth_reset_password_submit()}
     onsubmit={handleResetPassword}
   />
 
   <div class="text-center mt-4 text-sm">
-    <a href="/auth/login" class="link link-primary">← 返回登录</a>
+    <a href="/auth/login" class="link link-primary">← {m.auth_forgot_password_back()}</a>
   </div>
 {/if}

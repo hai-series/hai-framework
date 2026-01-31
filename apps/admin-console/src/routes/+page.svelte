@@ -1,8 +1,8 @@
-/**
- * =============================================================================
- * hai Admin Console - 首页
- * =============================================================================
- */
+<!--
+  =============================================================================
+  hai Admin Console - 首页
+  =============================================================================
+-->
 <script lang="ts">
   /**
    * 首页组件
@@ -46,189 +46,56 @@
   <meta name="description" content="AI-Native, Configuration-Driven, Security-First Admin Framework" />
 </svelte:head>
 
-<div class="container">
-  <header class="hero">
-    <h1 class="title">
-      <span class="logo">hai</span>
-      <span class="subtitle">Admin Framework</span>
+<div class="max-w-6xl mx-auto px-8 py-8">
+  <!-- Hero -->
+  <header class="text-center py-16">
+    <h1 class="text-5xl font-bold mb-4">
+      <span class="text-primary font-extrabold">hai</span>
+      <span class="font-light text-base-content/60">Admin Framework</span>
     </h1>
-    <p class="tagline">AI-Native · Configuration-Driven · Security-First</p>
+    <p class="text-xl text-base-content/50 mb-8">AI-Native · Configuration-Driven · Security-First</p>
     
-    <div class="actions">
+    <div class="flex gap-4 justify-center">
       <a href="/login" class="btn btn-primary">开始使用</a>
-      <a href="https://github.com/hai-framework/hai" class="btn btn-secondary" target="_blank">
+      <a href="https://github.com/hai-framework/hai" class="btn btn-outline" target="_blank">
         GitHub
       </a>
     </div>
   </header>
   
-  <section class="features">
-    <h2 class="section-title">核心特性</h2>
-    <div class="feature-grid">
+  <!-- 核心特性 -->
+  <section class="py-12">
+    <h2 class="text-center text-2xl font-semibold text-base-content mb-8">核心特性</h2>
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
       {#each features as feature}
-        <div class="feature-card">
-          <span class="feature-icon">{feature.icon}</span>
-          <h3 class="feature-title">{feature.title}</h3>
-          <p class="feature-desc">{feature.description}</p>
+        <div class="card bg-base-100 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all">
+          <div class="card-body">
+            <span class="text-3xl">{feature.icon}</span>
+            <h3 class="card-title text-lg">{feature.title}</h3>
+            <p class="text-base-content/60 text-sm">{feature.description}</p>
+          </div>
         </div>
       {/each}
     </div>
   </section>
   
-  <section class="tech-stack">
-    <h2 class="section-title">技术栈</h2>
-    <div class="tech-tags">
-      <span class="tech-tag">SvelteKit 2.x</span>
-      <span class="tech-tag">Svelte 5 Runes</span>
-      <span class="tech-tag">TypeScript 5.7+</span>
-      <span class="tech-tag">Drizzle ORM</span>
-      <span class="tech-tag">国密算法</span>
-      <span class="tech-tag">Pino 日志</span>
-      <span class="tech-tag">Zod 验证</span>
-      <span class="tech-tag">MCP 协议</span>
+  <!-- 技术栈 -->
+  <section class="py-12">
+    <h2 class="text-center text-2xl font-semibold text-base-content mb-8">技术栈</h2>
+    <div class="flex flex-wrap gap-3 justify-center">
+      <span class="badge badge-primary badge-lg">SvelteKit 2.x</span>
+      <span class="badge badge-primary badge-lg">Svelte 5 Runes</span>
+      <span class="badge badge-primary badge-lg">TypeScript 5.7+</span>
+      <span class="badge badge-primary badge-lg">Drizzle ORM</span>
+      <span class="badge badge-primary badge-lg">国密算法</span>
+      <span class="badge badge-primary badge-lg">Pino 日志</span>
+      <span class="badge badge-primary badge-lg">Zod 验证</span>
+      <span class="badge badge-primary badge-lg">MCP 协议</span>
     </div>
   </section>
   
-  <footer class="footer">
+  <!-- Footer -->
+  <footer class="text-center py-8 text-base-content/50 text-sm">
     <p>© {new Date().getFullYear()} hai Admin Framework. MIT License.</p>
   </footer>
 </div>
-
-<style>
-  .container {
-    max-width: 1200px;
-    margin: 0 auto;
-    padding: 2rem;
-  }
-  
-  .hero {
-    text-align: center;
-    padding: 4rem 0;
-  }
-  
-  .title {
-    font-size: 3rem;
-    margin-bottom: 1rem;
-  }
-  
-  .logo {
-    color: #3b82f6;
-    font-weight: 800;
-  }
-  
-  .subtitle {
-    font-weight: 300;
-    color: #666;
-  }
-  
-  .tagline {
-    font-size: 1.25rem;
-    color: #888;
-    margin-bottom: 2rem;
-  }
-  
-  .actions {
-    display: flex;
-    gap: 1rem;
-    justify-content: center;
-  }
-  
-  .btn {
-    padding: 0.75rem 2rem;
-    border-radius: 0.5rem;
-    font-weight: 500;
-    transition: all 0.2s;
-  }
-  
-  .btn-primary {
-    background: #3b82f6;
-    color: white;
-  }
-  
-  .btn-primary:hover {
-    background: #2563eb;
-  }
-  
-  .btn-secondary {
-    background: white;
-    border: 1px solid #ddd;
-    color: #333;
-  }
-  
-  .btn-secondary:hover {
-    background: #f5f5f5;
-  }
-  
-  .section-title {
-    text-align: center;
-    font-size: 1.5rem;
-    margin-bottom: 2rem;
-    color: #333;
-  }
-  
-  .features {
-    padding: 3rem 0;
-  }
-  
-  .feature-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-    gap: 1.5rem;
-  }
-  
-  .feature-card {
-    background: white;
-    padding: 1.5rem;
-    border-radius: 0.75rem;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-    transition: transform 0.2s, box-shadow 0.2s;
-  }
-  
-  .feature-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  }
-  
-  .feature-icon {
-    font-size: 2rem;
-    display: block;
-    margin-bottom: 0.75rem;
-  }
-  
-  .feature-title {
-    font-size: 1.125rem;
-    margin-bottom: 0.5rem;
-  }
-  
-  .feature-desc {
-    color: #666;
-    font-size: 0.875rem;
-  }
-  
-  .tech-stack {
-    padding: 3rem 0;
-  }
-  
-  .tech-tags {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.75rem;
-    justify-content: center;
-  }
-  
-  .tech-tag {
-    background: #e0e7ff;
-    color: #3730a3;
-    padding: 0.5rem 1rem;
-    border-radius: 2rem;
-    font-size: 0.875rem;
-    font-weight: 500;
-  }
-  
-  .footer {
-    text-align: center;
-    padding: 2rem 0;
-    color: #888;
-    font-size: 0.875rem;
-  }
-</style>

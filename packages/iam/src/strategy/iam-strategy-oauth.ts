@@ -114,7 +114,7 @@ export function createOAuthStrategy(config: OAuthStrategyConfig): OAuthStrategy 
       if (!provider) {
         return err({
           code: IamErrorCode.OAUTH_PROVIDER_NOT_FOUND,
-          message: `OAuth 提供商 '${providerId}' 不存在`,
+          message: getIamMessage('iam_oauthProviderNotFound', undefined, { providerId }),
         })
       }
 
@@ -246,7 +246,7 @@ export function createOAuthStrategy(config: OAuthStrategyConfig): OAuthStrategy 
       if (!provider) {
         return err({
           code: IamErrorCode.OAUTH_PROVIDER_NOT_FOUND,
-          message: `OAuth 提供商 '${providerId}' 不存在`,
+          message: getIamMessage('iam_oauthProviderNotFound', undefined, { providerId }),
         })
       }
 
@@ -281,7 +281,7 @@ export function createOAuthStrategy(config: OAuthStrategyConfig): OAuthStrategy 
       if (!provider) {
         return err({
           code: IamErrorCode.OAUTH_PROVIDER_NOT_FOUND,
-          message: `OAuth 提供商 '${providerId}' 不存在`,
+          message: getIamMessage('iam_oauthProviderNotFound', undefined, { providerId }),
         })
       }
 
@@ -293,7 +293,7 @@ export function createOAuthStrategy(config: OAuthStrategyConfig): OAuthStrategy 
       if (!provider) {
         return err({
           code: IamErrorCode.OAUTH_PROVIDER_NOT_FOUND,
-          message: `OAuth 提供商 '${providerId}' 不存在`,
+          message: getIamMessage('iam_oauthProviderNotFound', undefined, { providerId }),
         })
       }
 

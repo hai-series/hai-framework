@@ -5,6 +5,7 @@
   用户登录表单组件
   
   使用 Svelte 5 Runes ($props, $state)
+  支持自定义验证消息（validationMessages）实现 i18n
   =============================================================================
 -->
 <script lang="ts">
@@ -12,17 +13,26 @@
   import { cn } from '../../../utils.js'
   import PasswordInput from './PasswordInput.svelte'
   
+  const defaultToggleLabels = {
+    showPassword: 'Show password',
+    hidePassword: 'Hide password',
+  }
+  
   let {
     loading = false,
     disabled = false,
     showRememberMe = true,
     showForgotPassword = true,
     forgotPasswordUrl = '/forgot-password',
-    usernameLabel = '用户名',
-    usernamePlaceholder = '请输入用户名或邮箱',
-    passwordLabel = '密码',
-    passwordPlaceholder = '请输入密码',
-    submitText = '登录',
+    usernameLabel = 'Username / Email',
+    usernamePlaceholder = 'Enter username or email',
+    passwordLabel = 'Password',
+    passwordPlaceholder = 'Enter password',
+    rememberMeLabel = 'Remember me',
+    forgotPasswordLabel = 'Forgot password?',
+    submitText = 'Login',
+    toggleLabels = {},
+    validationMessages = {},
     class: className = '',
     errors = {},
     onsubmit,
@@ -31,9 +41,13 @@
     footer,
   }: LoginFormProps = $props()
   
+  const mergedToggleLabels = $derived({ ...defaultToggleLabels, ...toggleLabels })
+  
   let username = $state('')
   let password = $state('')
   let rememberMe = $state(false)
+  let usernameRef: HTMLInputElement | undefined = $state()
+  let passwordRef: HTMLInputElement | undefined = $state()
   
   const formClass = $derived(
     cn(
@@ -41,6 +55,27 @@
       className,
     )
   )
+  
+  // 设置自定义验证消息
+  $effect(() => {
+    if (usernameRef && validationMessages.required) {
+      usernameRef.setCustomValidity('')
+    }
+    if (passwordRef && validationMessages.required) {
+      passwordRef.setCustomValidity('')
+    }
+  })
+  
+  function handleInvalid(e: Event & { currentTarget: HTMLInputElement }) {
+    if (validationMessages.required && e.currentTarget.validity.valueMissing) {
+      e.currentTarget.setCustomValidity(validationMessages.required)
+    }
+  }
+  
+  function handleInput(e: Event & { currentTarget: HTMLInputElement }) {
+    // 清除自定义验证消息，让浏览器重新验证
+    e.currentTarget.setCustomValidity('')
+  }
   
   async function handleSubmit(e: SubmitEvent) {
     e.preventDefault()
@@ -74,19 +109,22 @@
       <span class="label-text">{usernameLabel}</span>
     </label>
     <input
+      bind:this={usernameRef}
       id="login-username"
       type="text"
       name="username"
       placeholder={usernamePlaceholder}
       class={cn('input input-bordered w-full', errors.username && 'input-error')}
       bind:value={username}
+      oninput={handleInput}
+      oninvalid={handleInvalid}
       {disabled}
       required
     />
     {#if errors.username}
-      <label class="label">
+      <div class="label">
         <span class="label-text-alt text-error">{errors.username}</span>
-      </label>
+      </div>
     {/if}
   </div>
   
@@ -96,12 +134,21 @@
       <span class="label-text">{passwordLabel}</span>
     </label>
     <PasswordInput
+      bind:inputRef={passwordRef}
       value={password}
-      oninput={(e) => { password = e.currentTarget.value }}
+      oninput={(e) => { 
+        password = e.currentTarget.value
+        handleInput(e)
+      }}
+      oninvalid={handleInvalid}
       placeholder={passwordPlaceholder}
       {disabled}
       error={errors.password}
       showStrength={false}
+      labels={{
+        showPassword: mergedToggleLabels.showPassword,
+        hidePassword: mergedToggleLabels.hidePassword,
+      }}
     />
   </div>
   
@@ -117,7 +164,7 @@
             bind:checked={rememberMe}
             {disabled}
           />
-          <span class="label-text">记住我</span>
+          <span class="label-text">{rememberMeLabel}</span>
         </label>
       {:else}
         <div></div>
@@ -130,11 +177,11 @@
             class="link link-primary text-sm"
             onclick={handleForgotPassword}
           >
-            忘记密码？
+            {forgotPasswordLabel}
           </button>
         {:else}
           <a href={forgotPasswordUrl} class="link link-primary text-sm">
-            忘记密码？
+            {forgotPasswordLabel}
           </a>
         {/if}
       {/if}

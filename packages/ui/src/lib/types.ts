@@ -74,6 +74,8 @@ export interface InputProps {
   required?: boolean
   /** 错误消息 */
   error?: string
+  /** 自定义验证消息（用于覆盖浏览器原生验证提示） */
+  validationMessage?: string
   /** 自定义类名 */
   class?: string
   /** 输入事件 */
@@ -104,6 +106,8 @@ export interface TextareaProps {
   autoResize?: boolean
   /** 错误消息 */
   error?: string
+  /** 自定义验证消息（用于覆盖浏览器原生验证提示） */
+  validationMessage?: string
   /** 自定义类名 */
   class?: string
   /** 输入事件 */
@@ -140,6 +144,8 @@ export interface SelectProps<T = string> {
   required?: boolean
   /** 错误消息 */
   error?: string
+  /** 自定义验证消息（用于覆盖浏览器原生验证提示） */
+  validationMessage?: string
   /** 自定义类名 */
   class?: string
   /** 变化事件 */
@@ -438,6 +444,15 @@ export interface PaginationProps {
   showTotal?: boolean
   /** 是否显示跳转 */
   showJumper?: boolean
+  /** i18n 文案配置 */
+  labels?: {
+    /** 总数文案，{count} 会被替换为实际数字 */
+    total?: string
+    /** 跳转到 */
+    jumpTo?: string
+    /** 页 */
+    page?: string
+  }
   /** 自定义类名 */
   class?: string
   /** 页码变化事件 */
@@ -700,6 +715,8 @@ export interface TagProps {
   closable?: boolean
   /** 是否为轮廓样式 */
   outline?: boolean
+  /** 移除按钮的 aria-label */
+  removeLabel?: string
   /** 自定义类名 */
   class?: string
   /** 关闭事件 */

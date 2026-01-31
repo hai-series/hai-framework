@@ -11,6 +11,13 @@
   import type { PaginationProps } from '../../types.js'
   import { cn, getSizeClass } from '../../utils.js'
   
+  // 默认 i18n 文案
+  const defaultLabels = {
+    total: 'Total {count}',
+    jumpTo: 'Go to',
+    page: 'page',
+  }
+  
   let {
     page = $bindable(1),
     total,
@@ -18,9 +25,13 @@
     size = 'md',
     showTotal = true,
     showJumper = false,
+    labels = {},
     class: className = '',
     onchange,
   }: PaginationProps = $props()
+  
+  // 合并后的文案
+  const mergedLabels = $derived({ ...defaultLabels, ...labels })
   
   // 计算总页数
   const totalPages = $derived(Math.ceil(total / pageSize))
@@ -96,7 +107,7 @@
 <div class="flex items-center gap-4">
   {#if showTotal}
     <span class="text-sm text-base-content/70">
-      共 {total} 条
+      {mergedLabels.total.replace('{count}', String(total))}
     </span>
   {/if}
   
@@ -133,7 +144,7 @@
   
   {#if showJumper}
     <div class="flex items-center gap-2">
-      <span class="text-sm">跳转到</span>
+      <span class="text-sm">{mergedLabels.jumpTo}</span>
       <input
         type="number"
         class="input input-bordered input-sm w-16"
@@ -142,7 +153,7 @@
         bind:value={jumperValue}
         onkeydown={(e) => e.key === 'Enter' && handleJump()}
       />
-      <span class="text-sm">页</span>
+      <span class="text-sm">{mergedLabels.page}</span>
     </div>
   {/if}
 </div>

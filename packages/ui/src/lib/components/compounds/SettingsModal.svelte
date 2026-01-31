@@ -18,12 +18,29 @@
   />
 -->
 <script lang='ts'>
+  /** i18n 文案配置 */
+  interface SettingsLabels {
+    title?: string
+    close?: string
+    language?: string
+    theme?: string
+  }
+  
+  // 默认文案
+  const defaultLabels: Required<SettingsLabels> = {
+    title: 'Settings',
+    close: 'Close',
+    language: 'Language',
+    theme: 'Theme',
+  }
+  
   interface Props {
     open?: boolean
     currentLanguage?: string
     currentTheme?: string
     languages?: { value: string, label: string, icon?: string }[]
     themes?: { value: string, label: string }[]
+    labels?: SettingsLabels
     onlanguagechange?: (lang: string) => void
     onthemechange?: (theme: string) => void
     onclose?: () => void
@@ -44,10 +61,14 @@
       { value: 'luxury', label: 'Luxury' },
       { value: 'pastel', label: 'Pastel' },
     ],
+    labels = {},
     onlanguagechange,
     onthemechange,
     onclose,
   }: Props = $props()
+  
+  // 合并文案
+  const mergedLabels = $derived({ ...defaultLabels, ...labels })
 
   function handleClose() {
     open = false
@@ -83,12 +104,12 @@
     >
       <!-- 标题栏 -->
       <div class='flex items-center justify-between border-b border-base-content/10 px-6 py-4'>
-        <h3 class='text-lg font-semibold text-base-content'>设置</h3>
+        <h3 class='text-lg font-semibold text-base-content'>{mergedLabels.title}</h3>
         <button
           type='button'
           class='btn btn-sm btn-circle btn-ghost hover:bg-base-content/10'
           onclick={handleClose}
-          aria-label='关闭'
+          aria-label={mergedLabels.close}
         >
           <span class='icon-[tabler--x] size-5'></span>
         </button>
@@ -100,7 +121,7 @@
         <section class='mb-8'>
           <h4 class='mb-4 flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-base-content/60'>
             <span class='icon-[tabler--world] size-4'></span>
-            语言
+            {mergedLabels.language}
           </h4>
           <div class='flex gap-3'>
             {#each languages as lang (lang.value)}
@@ -130,7 +151,7 @@
         <section>
           <h4 class='mb-4 flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-base-content/60'>
             <span class='icon-[tabler--sun] size-4'></span>
-            主题
+            {mergedLabels.theme}
           </h4>
           <div class='grid gap-2.5 grid-cols-2 sm:grid-cols-3'>
             {#each themes as theme (theme.value)}

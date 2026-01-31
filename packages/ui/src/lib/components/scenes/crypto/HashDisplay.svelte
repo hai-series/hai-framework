@@ -11,6 +11,10 @@
   import type { HashDisplayProps } from '../types.js'
   import { cn } from '../../../utils.js'
   
+  const defaultLabels = {
+    copyHash: 'Copy hash',
+  }
+  
   let {
     value = '',
     algorithm = 'SM3',
@@ -18,8 +22,11 @@
     copyable = true,
     truncate = true,
     truncateLength = 16,
+    labels = {},
     class: className = '',
   }: HashDisplayProps = $props()
+  
+  const mergedLabels = $derived({ ...defaultLabels, ...labels })
   
   let copied = $state(false)
   
@@ -71,7 +78,7 @@
         type="button"
         class="btn btn-ghost btn-xs btn-circle shrink-0"
         onclick={copyToClipboard}
-        aria-label="复制哈希值"
+        aria-label={mergedLabels.copyHash}
       >
         {#if copied}
           <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-success" fill="none" viewBox="0 0 24 24" stroke="currentColor">

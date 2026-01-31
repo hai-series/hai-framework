@@ -13,17 +13,44 @@
   import PasswordInput from './PasswordInput.svelte'
   import { arePasswordsEqual } from './password-utils.js'
   
+  const defaultLabels = {
+    codeLabel: 'Verification Code',
+    codePlaceholder: 'Enter verification code',
+    newPasswordLabel: 'New Password',
+    newPasswordPlaceholder: 'Enter new password',
+    confirmPasswordLabel: 'Confirm Password',
+    confirmPasswordPlaceholder: 'Re-enter new password',
+    passwordMismatch: 'Passwords do not match',
+  }
+  
   let {
     loading = false,
     disabled = false,
     showCode = true,
     showPasswordStrength = true,
     minPasswordLength = 8,
-    submitText = '重置密码',
+    submitText = 'Reset Password',
+    labels = {},
+    strengthLabels = {},
+    toggleLabels = {},
+    validationMessages = {},
     class: className = '',
     errors = {},
     onsubmit,
   }: ResetPasswordFormProps = $props()
+  
+  const mergedLabels = $derived({ ...defaultLabels, ...labels })
+  
+  // 构建 PasswordInput 的 labels
+  const passwordInputLabels = $derived({
+    showPassword: toggleLabels.showPassword,
+    hidePassword: toggleLabels.hidePassword,
+    strengthLabel: strengthLabels.label,
+    strengthWeak: strengthLabels.weak,
+    strengthFair: strengthLabels.medium,
+    strengthGood: strengthLabels.strong,
+    strengthStrong: strengthLabels.veryStrong,
+  })
   
   let code = $state('')
   let newPassword = $state('')
@@ -64,22 +91,22 @@
   {#if showCode}
     <div class="form-control">
       <label class="label" for="reset-code">
-        <span class="label-text">验证码</span>
+        <span class="label-text">{mergedLabels.codeLabel}</span>
       </label>
       <input
         id="reset-code"
         type="text"
         name="code"
-        placeholder="请输入验证码"
+        placeholder={mergedLabels.codePlaceholder}
         class={cn('input input-bordered w-full', errors.code && 'input-error')}
         bind:value={code}
         {disabled}
         required
       />
       {#if errors.code}
-        <label class="label">
+        <div class="label">
           <span class="label-text-alt text-error">{errors.code}</span>
-        </label>
+        </div>
       {/if}
     </div>
   {/if}
@@ -87,31 +114,33 @@
   <!-- 新密码 -->
   <div class="form-control">
     <label class="label" for="reset-new-password">
-      <span class="label-text">新密码</span>
+      <span class="label-text">{mergedLabels.newPasswordLabel}</span>
     </label>
     <PasswordInput
       value={newPassword}
       oninput={(e) => { newPassword = e.currentTarget.value }}
-      placeholder="请输入新密码"
+      placeholder={mergedLabels.newPasswordPlaceholder}
       {disabled}
       error={errors.newPassword}
       showStrength={showPasswordStrength}
       minLength={minPasswordLength}
+      labels={passwordInputLabels}
     />
   </div>
   
   <!-- 确认新密码 -->
   <div class="form-control">
     <label class="label" for="reset-confirm-password">
-      <span class="label-text">确认新密码</span>
+      <span class="label-text">{mergedLabels.confirmPasswordLabel}</span>
     </label>
     <PasswordInput
       value={confirmPassword}
       oninput={(e) => { confirmPassword = e.currentTarget.value }}
-      placeholder="请再次输入新密码"
+      placeholder={mergedLabels.confirmPasswordPlaceholder}
       {disabled}
-      error={errors.confirmPassword || (!passwordsMatch && confirmPassword ? '两次密码输入不一致' : '')}
+      error={errors.confirmPassword || (!passwordsMatch && confirmPassword ? (validationMessages.passwordMismatch || mergedLabels.passwordMismatch) : '')}
       showStrength={false}
+      labels={passwordInputLabels}
     />
   </div>
   

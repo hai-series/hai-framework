@@ -12,6 +12,38 @@
   import type { RegisterFormProps, RegisterFormData, RegisterField } from '../types.js'
   import { cn } from '../../../utils.js'
   
+  // 默认标签和占位符（英文作为 fallback）
+  const defaultLabels: Record<RegisterField, string> = {
+    username: 'Username',
+    email: 'Email',
+    phone: 'Phone',
+    password: 'Password',
+    confirmPassword: 'Confirm Password',
+    nickname: 'Nickname',
+  }
+  
+  const defaultPlaceholders: Record<RegisterField, string> = {
+    username: 'Enter username',
+    email: 'Enter email address',
+    phone: 'Enter phone number',
+    password: 'Enter password',
+    confirmPassword: 'Re-enter password',
+    nickname: 'Enter nickname',
+  }
+  
+  const defaultStrengthLabels = {
+    weak: 'Weak',
+    medium: 'Fair',
+    strong: 'Strong',
+    veryStrong: 'Very Strong',
+    label: 'Password strength',
+  }
+  
+  const defaultToggleLabels = {
+    showPassword: 'Show password',
+    hidePassword: 'Hide password',
+  }
+  
   let {
     loading = false,
     disabled = false,
@@ -19,13 +51,24 @@
     requireConfirmPassword = true,
     minPasswordLength = 8,
     fields = ['username', 'email', 'password'],
-    submitText = '注册',
+    submitText = 'Register',
+    validationMessages = {},
+    labels = {},
+    placeholders = {},
+    strengthLabels = {},
+    toggleLabels = {},
     class: className = '',
     errors = {},
     onsubmit,
     header,
     footer,
   }: RegisterFormProps = $props()
+  
+  // 合并后的标签和占位符
+  const mergedLabels = $derived({ ...defaultLabels, ...labels })
+  const mergedPlaceholders = $derived({ ...defaultPlaceholders, ...placeholders })
+  const mergedStrengthLabels = $derived({ ...defaultStrengthLabels, ...strengthLabels })
+  const mergedToggleLabels = $derived({ ...defaultToggleLabels, ...toggleLabels })
   
   // 表单数据
   let username = $state('')
@@ -47,26 +90,41 @@
   )
   
   // 字段配置
-  const fieldConfigs: Record<RegisterField, { label: string; type: string; placeholder: string }> = {
-    username: { label: '用户名', type: 'text', placeholder: '请输入用户名' },
-    email: { label: '邮箱', type: 'email', placeholder: '请输入邮箱地址' },
-    phone: { label: '手机号', type: 'tel', placeholder: '请输入手机号' },
-    password: { label: '密码', type: 'password', placeholder: '请输入密码' },
-    confirmPassword: { label: '确认密码', type: 'password', placeholder: '请再次输入密码' },
-    nickname: { label: '昵称', type: 'text', placeholder: '请输入昵称' },
-  }
+  const fieldConfigs = $derived<Record<RegisterField, { label: string; type: string; placeholder: string }>>({
+    username: { label: mergedLabels.username, type: 'text', placeholder: mergedPlaceholders.username },
+    email: { label: mergedLabels.email, type: 'email', placeholder: mergedPlaceholders.email },
+    phone: { label: mergedLabels.phone, type: 'tel', placeholder: mergedPlaceholders.phone },
+    password: { label: mergedLabels.password, type: 'password', placeholder: mergedPlaceholders.password },
+    confirmPassword: { label: mergedLabels.confirmPassword, type: 'password', placeholder: mergedPlaceholders.confirmPassword },
+    nickname: { label: mergedLabels.nickname, type: 'text', placeholder: mergedPlaceholders.nickname },
+  })
   
   // 检查密码是否匹配
   const passwordsMatch = $derived(
     !requireConfirmPassword || password === confirmPassword
   )
   
-  // 确认密码错误提示
+  // 确认密码错误提示（使用 i18n 消息）
+  const defaultPasswordMismatchMsg = 'Passwords do not match'
   const confirmPasswordError = $derived(
-    errors.confirmPassword || (!passwordsMatch && confirmPassword.length > 0 ? '两次密码输入不一致' : '')
+    errors.confirmPassword || (!passwordsMatch && confirmPassword.length > 0 
+      ? (validationMessages.passwordMismatch || defaultPasswordMismatchMsg) 
+      : '')
   )
   
-  // 计算密码强度
+  // 处理 invalid 事件（设置自定义验证消息）
+  function handleInvalid(e: Event, field: RegisterField) {
+    const input = e.currentTarget as HTMLInputElement
+    if (input.validity.valueMissing && validationMessages.required) {
+      input.setCustomValidity(validationMessages.required)
+    } else if (input.validity.typeMismatch && field === 'email' && validationMessages.email) {
+      input.setCustomValidity(validationMessages.email)
+    } else {
+      input.setCustomValidity('')
+    }
+  }
+  
+  // 计算密码强度（使用 i18n 标签）
   const passwordStrength = $derived.by(() => {
     if (!password) return { score: 0, label: '', color: '' }
     
@@ -79,10 +137,10 @@
     if (/[0-9]/.test(password)) score += 1
     if (/[^a-zA-Z0-9]/.test(password)) score += 1
     
-    if (score <= 2) return { score: 1, label: '弱', color: 'bg-error' }
-    if (score <= 4) return { score: 2, label: '中', color: 'bg-warning' }
-    if (score <= 5) return { score: 3, label: '强', color: 'bg-success' }
-    return { score: 4, label: '非常强', color: 'bg-primary' }
+    if (score <= 2) return { score: 1, label: mergedStrengthLabels.weak, color: 'bg-error' }
+    if (score <= 4) return { score: 2, label: mergedStrengthLabels.medium, color: 'bg-warning' }
+    if (score <= 5) return { score: 3, label: mergedStrengthLabels.strong, color: 'bg-success' }
+    return { score: 4, label: mergedStrengthLabels.veryStrong, color: 'bg-primary' }
   })
   
   async function handleSubmit(e: SubmitEvent) {
@@ -148,7 +206,16 @@
             placeholder={fieldConfigs.password.placeholder}
             class={cn('input input-bordered w-full pr-10', errors.password && 'input-error')}
             value={password}
-            oninput={(e) => { password = e.currentTarget.value }}
+            oninput={(e) => { 
+              password = e.currentTarget.value
+              e.currentTarget.setCustomValidity('')
+            }}
+            oninvalid={(e) => {
+              const input = e.currentTarget as HTMLInputElement
+              if (input.validity.valueMissing && validationMessages.required) {
+                input.setCustomValidity(validationMessages.required)
+              }
+            }}
             {disabled}
             required
           />
@@ -157,7 +224,7 @@
             class="absolute right-3 top-1/2 -translate-y-1/2 text-base-content/50 hover:text-base-content"
             onclick={() => { showPassword = !showPassword }}
             tabindex={-1}
-            aria-label={showPassword ? '隐藏密码' : '显示密码'}
+            aria-label={showPassword ? mergedToggleLabels.hidePassword : mergedToggleLabels.showPassword}
           >
             {#if showPassword}
               <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -172,9 +239,9 @@
           </button>
         </div>
         {#if errors.password}
-          <label class="label">
+          <div class="label">
             <span class="label-text-alt text-error">{errors.password}</span>
-          </label>
+          </div>
         {/if}
         
         <!-- 密码强度指示器 -->
@@ -191,7 +258,7 @@
               {/each}
             </div>
             <span class="text-xs text-base-content/60">
-              密码强度：{passwordStrength.label}
+              {mergedStrengthLabels.label}：{passwordStrength.label}
             </span>
           </div>
         {/if}
@@ -211,7 +278,16 @@
               placeholder={fieldConfigs.confirmPassword.placeholder}
               class={cn('input input-bordered w-full pr-10', confirmPasswordError && 'input-error')}
               value={confirmPassword}
-              oninput={(e) => { confirmPassword = e.currentTarget.value }}
+              oninput={(e) => { 
+                confirmPassword = e.currentTarget.value
+                e.currentTarget.setCustomValidity('')
+              }}
+              oninvalid={(e) => {
+                const input = e.currentTarget as HTMLInputElement
+                if (input.validity.valueMissing && validationMessages.required) {
+                  input.setCustomValidity(validationMessages.required)
+                }
+              }}
               {disabled}
               required
             />
@@ -220,7 +296,7 @@
               class="absolute right-3 top-1/2 -translate-y-1/2 text-base-content/50 hover:text-base-content"
               onclick={() => { showConfirmPassword = !showConfirmPassword }}
               tabindex={-1}
-              aria-label={showConfirmPassword ? '隐藏密码' : '显示密码'}
+              aria-label={showConfirmPassword ? mergedToggleLabels.hidePassword : mergedToggleLabels.showPassword}
             >
               {#if showConfirmPassword}
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -235,9 +311,9 @@
             </button>
           </div>
           {#if confirmPasswordError}
-            <label class="label">
+            <div class="label">
               <span class="label-text-alt text-error">{confirmPasswordError}</span>
-            </label>
+            </div>
           {/if}
         </div>
       {/if}
@@ -255,14 +331,18 @@
             placeholder={config.placeholder}
             class={cn('input input-bordered w-full', errors[field] && 'input-error')}
             value={getFieldValue(field)}
-            oninput={(e) => setFieldValue(field, e.currentTarget.value)}
+            oninput={(e) => {
+              setFieldValue(field, e.currentTarget.value)
+              e.currentTarget.setCustomValidity('')
+            }}
+            oninvalid={(e) => handleInvalid(e, field)}
             {disabled}
             required={field === 'username' || field === 'email'}
           />
           {#if errors[field]}
-            <label class="label">
+            <div class="label">
               <span class="label-text-alt text-error">{errors[field]}</span>
-            </label>
+            </div>
           {/if}
         </div>
       {/if}
