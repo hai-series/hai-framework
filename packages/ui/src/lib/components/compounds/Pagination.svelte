@@ -10,6 +10,7 @@
 <script lang="ts">
   import type { PaginationProps } from '../../types.js'
   import { cn, getSizeClass } from '../../utils.js'
+  import Input from '../primitives/Input.svelte'
   
   // 默认 i18n 文案
   const defaultLabels = {
@@ -145,10 +146,11 @@
   {#if showJumper}
     <div class="flex items-center gap-2">
       <span class="text-sm">{mergedLabels.jumpTo}</span>
-      <input
+      <Input
         type="number"
-        class="input input-bordered input-sm w-16"
-        min="1"
+        size="sm"
+        class="w-16"
+        min={1}
         max={totalPages}
         bind:value={jumperValue}
         onkeydown={(e) => e.key === 'Enter' && handleJump()}

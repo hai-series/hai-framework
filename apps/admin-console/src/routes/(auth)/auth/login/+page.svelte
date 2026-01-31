@@ -32,7 +32,7 @@
       if (result.success) {
         goto('/admin')
       } else {
-        errors = { general: result.error || m.auth_login_failed() }
+        errors = { general: result.error || m.common_error() }
       }
     } catch {
       errors = { general: m.common_network_error() }
@@ -43,7 +43,7 @@
 </script>
 
 <svelte:head>
-  <title>{m.auth_login()} - Admin Console</title>
+  <title>Login - Admin Console</title>
 </svelte:head>
 
 <LoginForm

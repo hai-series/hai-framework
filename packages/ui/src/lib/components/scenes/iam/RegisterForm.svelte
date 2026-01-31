@@ -9,6 +9,8 @@
   =============================================================================
 -->
 <script lang="ts">
+      import Button from '../../primitives/Button.svelte'
+    import Input from '../../primitives/Input.svelte'
   import type { RegisterFormProps, RegisterFormData, RegisterField } from '../types.js'
   import { cn } from '../../../utils.js'
   import PasswordInput from './PasswordInput.svelte'
@@ -74,8 +76,9 @@
   }
   
   // 获取字段类型
-  function getFieldType(field: RegisterField): string {
-    const typeMap: Record<RegisterField, string> = {
+  import type { InputProps } from '../../types.js'
+  function getFieldType(field: RegisterField): InputProps['type'] {
+    const typeMap: Record<RegisterField, InputProps['type']> = {
       username: 'text',
       email: 'email',
       phone: 'tel',
@@ -83,7 +86,7 @@
       confirmPassword: 'password',
       nickname: 'text',
     }
-    return typeMap[field] || 'text'
+    return typeMap[field] ?? 'text'
   }
   
   // 检查密码是否匹配
@@ -190,16 +193,17 @@
         <label class="label" for="register-{field}">
           <span class="label-text">{getFieldLabel(field)}</span>
         </label>
-        <input
-          id="register-{field}"
+        <Input
+          id={`register-${field}`}
           type={getFieldType(field)}
           name={field}
           placeholder={getFieldPlaceholder(field)}
-          class={cn('input input-bordered w-full', errors[field] && 'input-error')}
+          class={errors[field] ? 'input-error' : ''}
           value={getFieldValue(field)}
           oninput={(e) => setFieldValue(field, e.currentTarget.value)}
           {disabled}
           required={field === 'username' || field === 'email'}
+          autocomplete={field === 'username' ? 'username' : field === 'email' ? 'email' : undefined}
         />
         {#if errors[field]}
           <div class="label">
@@ -221,16 +225,15 @@
   {/if}
   
   <!-- 提交按钮 -->
-  <button
+  <Button
     type="submit"
-    class="btn btn-primary w-full"
+    variant="primary"
+    class="w-full"
     disabled={loading || disabled || !passwordsMatch}
+    loading={loading}
   >
-    {#if loading}
-      <span class="loading loading-spinner loading-sm"></span>
-    {/if}
     {submitText || m('register_submit')}
-  </button>
+  </Button>
   
   <!-- 自定义底部 -->
   {#if footer}

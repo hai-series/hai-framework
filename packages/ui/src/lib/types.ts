@@ -92,6 +92,10 @@ export interface InputProps {
   minlength?: number
   /** 最大长度 */
   maxlength?: number
+  /** 最小值（针对 number 类型） */
+  min?: number
+  /** 最大值（针对 number 类型） */
+  max?: number
   /** 输入事件 */
   oninput?: (e: Event & { currentTarget: HTMLInputElement }) => void
   /** 变化事件 */

@@ -34,7 +34,7 @@
       if (result.success) {
         goto('/admin')
       } else {
-        errors = { general: result.error || m.auth_register_failed() }
+        errors = { general: result.error || m.common_error() }
       }
     } catch {
       errors = { general: m.common_network_error() }
@@ -45,7 +45,7 @@
 </script>
 
 <svelte:head>
-  <title>{m.auth_register()} - Admin Console</title>
+  <title>Register - Admin Console</title>
 </svelte:head>
 
 <RegisterForm

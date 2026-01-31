@@ -29,6 +29,8 @@
     pattern,
     list,
     minlength,
+    min,
+    max,
     maxlength,
     oninput,
     onchange,
@@ -37,13 +39,12 @@
   
   let inputRef: HTMLInputElement | undefined = $state()
   
-  const inputClass = $derived(
-    cn(
-      'input input-bordered w-full',
-      getInputSizeClass(size),
-      error && 'input-error',
-      className,
-    )
+  // 统一风格：自定义容器+input，圆角、边框、padding、focus 态与 PasswordInput 一致
+  const containerHeight = $derived(
+    size === 'xs' ? 'h-8' :
+    size === 'sm' ? 'h-10' :
+    size === 'lg' ? 'h-14' :
+    'h-12'
   )
   
   // 当 validationMessage 变化时更新自定义验证消息
@@ -76,26 +77,36 @@
 </script>
 
 <div class="form-control w-full">
-  <input
-    bind:this={inputRef}
-    {id}
-    {name}
-    {type}
-    {placeholder}
-    {disabled}
-    {readonly}
-    {required}
-    {pattern}
-    {list}
-    {minlength}
-    {maxlength}
-    autocomplete={autocomplete as HTMLInputElement['autocomplete']}
-    class={inputClass}
-    bind:value
-    oninput={handleInput}
-    onchange={handleChange}
-    oninvalid={handleInvalid}
-  />
+  <div class={cn(
+    'flex items-center w-full rounded-box border bg-base-100',
+    containerHeight,
+    error ? 'border-error' : 'border-base-content/20',
+    'focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-base-content/20',
+    className
+  )}>
+    <input
+      bind:this={inputRef}
+      {id}
+      {name}
+      {type}
+      {placeholder}
+      {disabled}
+      {readonly}
+      {required}
+      {pattern}
+      {list}
+      {minlength}
+        {min}
+        {max}
+      {maxlength}
+      autocomplete={autocomplete as HTMLInputElement['autocomplete']}
+      class="flex-1 h-full px-4 bg-transparent border-none outline-none"
+      bind:value
+      oninput={handleInput}
+      onchange={handleChange}
+      oninvalid={handleInvalid}
+    />
+  </div>
   {#if error}
     <div class="label">
       <span class="label-text-alt text-error">{error}</span>
