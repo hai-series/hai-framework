@@ -14,6 +14,8 @@
 <script lang='ts'>
   import Button from '../primitives/Button.svelte'
   import Modal from './Modal.svelte'
+  import Input from '../primitives/Input.svelte'
+  import Textarea from '../primitives/Textarea.svelte'
 
   type FeedbackType = 'bug' | 'feature' | 'question' | 'other'
 
@@ -155,24 +157,25 @@
       <label class='label' for='feedback-desc'>
         <span class='label-text'>{mergedLabels.contentLabel} <span class='text-error'>*</span></span>
       </label>
-      <textarea
+      <Textarea
         id='feedback-desc'
-        class='textarea textarea-bordered w-full h-32'
+        class='h-32'
         placeholder={mergedLabels.contentPlaceholder}
         bind:value={description}
-      ></textarea>
+      />
     </div>
 
     <div class='form-control'>
       <label class='label' for='feedback-contact'>
         <span class='label-text'>{mergedLabels.contactLabel}</span>
       </label>
-      <input
+      <Input
         id='feedback-contact'
         type='text'
-        class='input input-bordered w-full'
+        class='w-full'
         placeholder={mergedLabels.contactPlaceholder}
         bind:value={contact}
+        autocomplete='email'
       />
     </div>
   </div>

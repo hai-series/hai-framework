@@ -22,7 +22,7 @@
     errors = {}
 
     if (!token) {
-      errors = { general: m.auth_reset_password_invalid_link() }
+      errors = { general: 'Invalid reset link' }
       return
     }
 
@@ -46,7 +46,7 @@
         // 3秒后跳转到登录页
         setTimeout(() => goto('/auth/login'), 3000)
       } else {
-        errors = { general: result.error || m.auth_reset_password_error() }
+        errors = { general: result.error || 'Reset failed' }
       }
     } catch {
       errors = { general: m.common_network_error() }
@@ -57,27 +57,27 @@
 </script>
 
 <svelte:head>
-  <title>{m.auth_reset_password_title()} - Admin Console</title>
+  <title>Reset Password - Admin Console</title>
 </svelte:head>
 
 {#if success}
   <Result
     status="success"
-    title={m.auth_reset_password_success_title()}
-    description={m.auth_reset_password_success_desc()}
+    title="Password Reset Successful"
+    description="Your password has been reset. Redirecting to login page..."
   >
     {#snippet actions()}
-      <a href="/auth/login" class="btn btn-primary">{m.auth_reset_password_login()}</a>
+      <a href="/auth/login" class="btn btn-primary">Login Now</a>
     {/snippet}
   </Result>
 {:else if !token}
   <Result
     status="warning"
-    title={m.auth_reset_password_invalid_title()}
-    description={m.auth_reset_password_invalid_desc()}
+    title="Invalid Link"
+    description="The reset link is invalid or has expired. Please request a new one."
   >
     {#snippet actions()}
-      <a href="/auth/forgot-password" class="btn btn-primary">{m.auth_reset_password_reapply()}</a>
+      <a href="/auth/forgot-password" class="btn btn-primary">Request Again</a>
     {/snippet}
   </Result>
 {:else}

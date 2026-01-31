@@ -29,7 +29,7 @@
       if (result.success) {
         success = true
       } else {
-        errors = { general: result.error || m.auth_forgot_password_error() }
+        errors = { general: result.error || m.common_error() }
       }
     } catch {
       errors = { general: m.common_network_error() }
@@ -40,17 +40,17 @@
 </script>
 
 <svelte:head>
-  <title>{m.auth_forgot_password_title()} - Admin Console</title>
+  <title>Forgot Password - Admin Console</title>
 </svelte:head>
 
 {#if success}
   <Result
     status="success"
-    title={m.auth_forgot_password_success_title()}
-    description={m.auth_forgot_password_success_desc()}
+    title="Email Sent"
+    description="If this email is registered, you will receive a password reset email. Please check your inbox."
   >
     {#snippet actions()}
-      <a href="/auth/login" class="btn btn-primary">{m.auth_forgot_password_back()}</a>
+      <a href="/auth/login" class="btn btn-primary">Back to Login</a>
     {/snippet}
   </Result>
 {:else}
