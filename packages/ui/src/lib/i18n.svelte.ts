@@ -63,6 +63,10 @@ const LOCALE_STORAGE_KEY = 'hai-locale'
  * 创建 locale 状态管理器
  *
  * @param options - 配置选项
+ * @param options.defaultLocale - 默认 locale
+ * @param options.supportedLocales - 支持的 locale 列表
+ * @param options.detectBrowser - 是否检测浏览器语言
+ * @param options.persistKey - localStorage key
  * @returns locale 状态对象
  */
 export function createLocaleStore(options: {

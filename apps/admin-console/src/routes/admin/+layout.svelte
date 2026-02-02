@@ -7,7 +7,6 @@
   import type { LayoutData } from './$types'
   import { page } from '$app/stores'
   import { goto } from '$app/navigation'
-  import { Avatar, Button } from '@hai/ui'
   import * as m from '$lib/paraglide/messages'
   
   interface Props {
@@ -141,19 +140,19 @@
 <div class="flex h-screen bg-base-200">
   <!-- 移动端菜单遮罩 -->
   {#if mobileMenuOpen}
-    <button
+    <BareButton
       type="button"
       class="fixed inset-0 z-40 bg-black/30 lg:hidden"
       onclick={closeMobileMenu}
-      aria-label={m.action_close()}
-    ></button>
+      ariaLabel={m.action_close()}
+    />
   {/if}
   
   <!-- 侧边栏 -->
   <aside
     class="fixed lg:static top-0 left-0 z-50 h-full flex flex-col bg-base-100 border-r border-base-200
       transition-all duration-300 ease-out
-      {sidebarCollapsed ? 'w-[72px]' : 'w-[260px]'}
+      {sidebarCollapsed ? 'w-18' : 'w-65'}
       {mobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}"
   >
     <!-- Logo 区域 -->
@@ -176,13 +175,13 @@
           <li>
             {#if item.children}
               <!-- 有子菜单的项 -->
-              <button
+              <BareButton
                 type="button"
                 class="flex items-center w-full rounded-lg px-3 py-2.5 text-left transition-colors
                   {isActive(item.path)
                     ? 'bg-primary/10 text-primary'
                     : 'text-base-content/70 hover:bg-base-200 hover:text-base-content'}"
-                onclick={(e) => toggleSubmenu(e, item.path)}
+                onclick={(e: MouseEvent) => toggleSubmenu(e, item.path)}
               >
                 <span class="w-5 h-5 shrink-0">
                   {@html icons[item.icon] ?? ''}
@@ -196,7 +195,7 @@
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
                   </svg>
                 {/if}
-              </button>
+              </BareButton>
               
               <!-- 子菜单 -->
               {#if !sidebarCollapsed && expandedMenus.has(item.path)}
@@ -242,7 +241,7 @@
     
     <!-- 侧边栏底部 -->
     <div class="p-3 border-t border-base-200 shrink-0">
-      <button
+      <BareButton
         type="button"
         class="flex items-center w-full rounded-lg px-3 py-2.5 text-base-content/60 hover:bg-base-200 hover:text-base-content transition-colors"
         onclick={toggleSidebar}
@@ -256,7 +255,7 @@
         {#if !sidebarCollapsed}
           <span class="ml-3 text-sm font-medium">{m.nav_collapse()}</span>
         {/if}
-      </button>
+      </BareButton>
     </div>
   </aside>
   
@@ -267,16 +266,16 @@
       <div class="h-full flex items-center justify-between px-4 lg:px-6">
         <!-- 左侧：移动端菜单按钮 + 面包屑 -->
         <div class="flex items-center gap-4">
-          <button
+          <BareButton
             type="button"
             class="p-2 rounded-lg text-base-content/60 hover:bg-base-200 lg:hidden"
             onclick={() => mobileMenuOpen = !mobileMenuOpen}
-            aria-label={m.action_open()}
+            ariaLabel={m.action_open()}
           >
             <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
             </svg>
-          </button>
+          </BareButton>
           
           <nav class="hidden sm:flex items-center gap-2 text-sm">
             <a href="/admin" class="text-base-content/50 hover:text-base-content/70">{m.nav_home()}</a>
@@ -300,7 +299,7 @@
           
           <!-- 用户菜单 -->
           <div class="relative user-menu-container">
-            <button
+            <BareButton
               type="button"
               class="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-base-200 transition-colors"
               onclick={toggleUserMenu}
@@ -315,7 +314,7 @@
               <svg class="w-4 h-4 text-base-content/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
               </svg>
-            </button>
+            </BareButton>
             
             {#if userMenuOpen}
               <div class="absolute right-0 top-full mt-2 w-56 bg-base-100 rounded-xl shadow-lg border border-base-200 py-1 z-50">

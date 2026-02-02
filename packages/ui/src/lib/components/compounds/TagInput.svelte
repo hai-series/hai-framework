@@ -11,6 +11,7 @@
   import type { TagInputProps } from '../../types.js'
   import { cn, getInputSizeClass } from '../../utils.js'
   import Tag from '../primitives/Tag.svelte'
+  import BareInput from '../primitives/BareInput.svelte'
   
   // 默认占位符
   const defaultPlaceholder = 'Press Enter to add'
@@ -27,7 +28,7 @@
   }: TagInputProps = $props()
   
   let inputValue = $state('')
-  let inputElement = $state<HTMLInputElement | null>(null)
+  let inputElement = $state<HTMLInputElement | undefined>(undefined)
   
   const containerClass = $derived(
     cn(
@@ -89,13 +90,13 @@
   {/each}
   
   {#if canAddMore && !disabled}
-    <input
-      bind:this={inputElement}
-      bind:value={inputValue}
+    <BareInput
       type="text"
+      class="flex-1 min-w-[100px] bg-transparent border-none outline-none text-sm"
+      bind:value={inputValue}
+      bind:inputRef={inputElement}
       {placeholder}
       {disabled}
-      class="flex-1 min-w-[100px] bg-transparent border-none outline-none text-sm"
       onkeydown={handleKeydown}
       onblur={handleBlur}
     />

@@ -9,9 +9,10 @@
   =============================================================================
 -->
 <script lang="ts">
-      import Button from '../../primitives/Button.svelte'
-    import Input from '../../primitives/Input.svelte'
+  import Button from '../../primitives/Button.svelte'
+  import Input from '../../primitives/Input.svelte'
   import type { RegisterFormProps, RegisterFormData, RegisterField } from '../types.js'
+  import type { InputProps } from '../../../types.js'
   import { cn } from '../../../utils.js'
   import PasswordInput from './PasswordInput.svelte'
   import { m } from '../../../messages.js'
@@ -76,7 +77,6 @@
   }
   
   // 获取字段类型
-  import type { InputProps } from '../../types.js'
   function getFieldType(field: RegisterField): InputProps['type'] {
     const typeMap: Record<RegisterField, InputProps['type']> = {
       username: 'text',
@@ -158,10 +158,11 @@
     {#if field === 'password'}
       <!-- 密码字段 -->
       <div class="form-control">
-        <label class="label">
+        <label class="label" for="register-password">
           <span class="label-text">{getFieldLabel('password')}</span>
         </label>
         <PasswordInput
+          id="register-password"
           bind:value={password}
           placeholder={getFieldPlaceholder('password')}
           {disabled}
@@ -175,10 +176,11 @@
       <!-- 确认密码字段 -->
       {#if requireConfirmPassword}
         <div class="form-control">
-          <label class="label">
+          <label class="label" for="register-confirm-password">
             <span class="label-text">{getFieldLabel('confirmPassword')}</span>
           </label>
           <PasswordInput
+            id="register-confirm-password"
             bind:value={confirmPassword}
             placeholder={getFieldPlaceholder('confirmPassword')}
             {disabled}
@@ -200,7 +202,7 @@
           placeholder={getFieldPlaceholder(field)}
           class={errors[field] ? 'input-error' : ''}
           value={getFieldValue(field)}
-          oninput={(e) => setFieldValue(field, e.currentTarget.value)}
+          oninput={(e: Event & { currentTarget: HTMLInputElement }) => setFieldValue(field, e.currentTarget.value)}
           {disabled}
           required={field === 'username' || field === 'email'}
           autocomplete={field === 'username' ? 'username' : field === 'email' ? 'email' : undefined}

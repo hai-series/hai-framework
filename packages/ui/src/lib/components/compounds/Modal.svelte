@@ -12,6 +12,7 @@
   import type { ModalProps } from '../../types.js'
   import { cn } from '../../utils.js'
   import IconButton from '../primitives/IconButton.svelte'
+  import BareButton from '../primitives/BareButton.svelte'
   
   let {
     open = $bindable(false),
@@ -67,6 +68,7 @@
       document.addEventListener('keydown', handleKeydown)
       return () => document.removeEventListener('keydown', handleKeydown)
     }
+    return undefined
   })
 </script>
 
@@ -115,6 +117,6 @@
   </div>
   
   <form method="dialog" class="modal-backdrop">
-    <button onclick={handleBackdropClick}>close</button>
+    <BareButton type="submit" onclick={handleBackdropClick}>close</BareButton>
   </form>
 </dialog>

@@ -14,6 +14,7 @@
   let {
     variant = 'default',
     size = 'md',
+    ariaLabel = '',
     disabled = false,
     loading = false,
     outline = false,
@@ -49,6 +50,7 @@
   {type}
   class={buttonClass}
   disabled={disabled || loading}
+  aria-label={ariaLabel || undefined}
   onclick={handleClick}
 >
   {#if loading}

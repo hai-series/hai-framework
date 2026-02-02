@@ -18,6 +18,7 @@
 <script lang='ts'>
   import { cn } from '../../utils.js'
   import { THEMES, THEME_GROUPS, type ThemeInfo } from '../../theme-config.js'
+  import BareButton from '../primitives/BareButton.svelte'
 
   interface Props {
     currentTheme?: string
@@ -73,11 +74,11 @@
 </script>
 
 <div bind:this={containerRef} class='dropdown dropdown-end {open ? "dropdown-open" : ""} {className}'>
-  <button
+  <BareButton
     type='button'
     class='btn btn-ghost gap-2'
     onclick={() => (open = !open)}
-    aria-label={selectLabel}
+    ariaLabel={selectLabel}
   >
     <!-- 当前主题预览 -->
     {#if showPreview}
@@ -91,24 +92,24 @@
     <svg xmlns='http://www.w3.org/2000/svg' class='h-4 w-4' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'>
       <path stroke-linecap='round' stroke-linejoin='round' d='M19 9l-7 7-7-7' />
     </svg>
-  </button>
+  </BareButton>
 
   {#if open}
     <!-- 主题列表 -->
-    <div class='dropdown-content bg-base-100 rounded-box shadow-xl border border-base-content/10 z-50 w-72 p-3 max-h-96 overflow-y-auto'>
+    <div class='dropdown-content bg-base-100 rounded-box shadow-xl border border-base-content/10 z-50 p-4 max-h-[80vh] overflow-y-auto'>
       {#if grouped}
         <!-- 分组显示 -->
         {#each THEME_GROUPS as group}
-          <div class='mb-3 last:mb-0'>
+          <div class='mb-4 last:mb-0'>
             <div class='text-xs font-semibold text-base-content/50 uppercase tracking-wider px-2 mb-2'>
               {group.name}
             </div>
-            <div class='grid grid-cols-2 gap-1.5'>
+            <div class='flex flex-wrap gap-2'>
               {#each group.themes as theme (theme.id)}
-                <button
+                <BareButton
                   type='button'
                   class={cn(
-                    'flex items-center gap-2 px-3 py-2 rounded-lg text-left transition-colors',
+                    'flex items-center gap-2 px-3 py-1.5 rounded-lg text-left transition-colors w-28',
                     theme.id === currentTheme
                       ? 'bg-primary/10 text-primary ring-1 ring-primary/30'
                       : 'hover:bg-base-200'
@@ -121,26 +122,26 @@
                     style={renderThemePreview(theme)}
                   ></div>
                   <!-- 主题名称 -->
-                  <span class='text-sm flex-1'>{theme.name}</span>
+                  <span class='text-sm whitespace-nowrap'>{theme.name}</span>
                   <!-- 选中标记 -->
                   {#if theme.id === currentTheme}
                     <svg xmlns='http://www.w3.org/2000/svg' class='h-4 w-4 text-primary shrink-0' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'>
                       <path stroke-linecap='round' stroke-linejoin='round' d='M5 13l4 4L19 7' />
                     </svg>
                   {/if}
-                </button>
+                </BareButton>
               {/each}
             </div>
           </div>
         {/each}
       {:else}
         <!-- 平铺显示 -->
-        <div class='grid grid-cols-2 gap-1.5'>
+        <div class='flex flex-wrap gap-2'>
           {#each THEMES as theme (theme.id)}
-            <button
+            <BareButton
               type='button'
               class={cn(
-                'flex items-center gap-2 px-3 py-2 rounded-lg text-left transition-colors',
+                'flex items-center gap-2 px-3 py-1.5 rounded-lg text-left transition-colors w-28',
                 theme.id === currentTheme
                   ? 'bg-primary/10 text-primary ring-1 ring-primary/30'
                   : 'hover:bg-base-200'
@@ -151,13 +152,13 @@
                 class='w-4 h-4 rounded border shrink-0'
                 style={renderThemePreview(theme)}
               ></div>
-              <span class='text-sm flex-1'>{theme.name}</span>
+              <span class='text-sm whitespace-nowrap'>{theme.name}</span>
               {#if theme.id === currentTheme}
                 <svg xmlns='http://www.w3.org/2000/svg' class='h-4 w-4 text-primary shrink-0' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'>
                   <path stroke-linecap='round' stroke-linejoin='round' d='M5 13l4 4L19 7' />
                 </svg>
               {/if}
-            </button>
+            </BareButton>
           {/each}
         </div>
       {/if}

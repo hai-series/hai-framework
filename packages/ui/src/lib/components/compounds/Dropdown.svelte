@@ -10,6 +10,7 @@
 <script lang="ts">
   import type { DropdownProps } from '../../types.js'
   import { cn } from '../../utils.js'
+  import BareButton from '../primitives/BareButton.svelte'
   
   let {
     items,
@@ -61,8 +62,8 @@
 
 <div class={dropdownClass}>
   <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-  <div
-    tabindex="0"
+  <BareButton
+    tabindex={0}
     role="button"
     onclick={toggleDropdown}
     onkeydown={(e) => e.key === 'Enter' && toggleDropdown()}
@@ -70,7 +71,7 @@
     {#if children}
       {@render children()}
     {/if}
-  </div>
+  </BareButton>
   
   <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
   <ul tabindex="0" class="dropdown-content menu bg-base-100 rounded-box z-[1] w-52 p-2 shadow">
@@ -79,9 +80,8 @@
         <li class="divider"></li>
       {:else}
         <li>
-          <button
-            class="w-full text-left"
-            class:disabled={item.disabled}
+          <BareButton
+            class={cn('w-full text-left', item.disabled && 'disabled')}
             disabled={item.disabled}
             onclick={() => handleSelect(item.key)}
           >
@@ -89,7 +89,7 @@
               <span>{item.icon}</span>
             {/if}
             {item.label}
-          </button>
+          </BareButton>
         </li>
       {/if}
     {/each}

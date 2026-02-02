@@ -11,6 +11,7 @@
   import type { PaginationProps } from '../../types.js'
   import { cn, getSizeClass } from '../../utils.js'
   import Input from '../primitives/Input.svelte'
+  import BareButton from '../primitives/BareButton.svelte'
   
   import { m } from '../../messages.js'
 
@@ -108,34 +109,34 @@
   {/if}
   
   <div class={joinClass}>
-    <button
+    <BareButton
       class={btnClass}
       disabled={page === 1}
       onclick={() => goToPage(page - 1)}
     >
       «
-    </button>
+    </BareButton>
     
     {#each pages() as p}
       {#if typeof p === 'number'}
-        <button
+        <BareButton
           class={cn(btnClass, page === p && 'btn-active')}
           onclick={() => goToPage(p)}
         >
           {p}
-        </button>
+        </BareButton>
       {:else}
-        <button class={cn(btnClass, 'btn-disabled')}>...</button>
+        <BareButton class={cn(btnClass, 'btn-disabled')} disabled>...</BareButton>
       {/if}
     {/each}
     
-    <button
+    <BareButton
       class={btnClass}
       disabled={page === totalPages}
       onclick={() => goToPage(page + 1)}
     >
       »
-    </button>
+    </BareButton>
   </div>
   
   {#if showJumper}
@@ -148,7 +149,7 @@
         min={1}
         max={totalPages}
         bind:value={jumperValue}
-        onkeydown={(e) => e.key === 'Enter' && handleJump()}
+        onkeydown={(e: KeyboardEvent & { currentTarget: HTMLInputElement }) => e.key === 'Enter' && handleJump()}
       />
       <span class="text-sm">{labels.page ?? m('pagination_page')}</span>
     </div>

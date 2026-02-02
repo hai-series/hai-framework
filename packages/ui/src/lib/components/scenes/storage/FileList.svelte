@@ -11,6 +11,8 @@
   import type { FileListProps, FileItem } from '../types.js'
   import { cn } from '../../../utils.js'
   import { m } from '../../../messages.js'
+  import Button from '../../primitives/Button.svelte'
+  import IconButton from '../../primitives/IconButton.svelte'
   
   let {
     files = [],
@@ -130,19 +132,19 @@
             {/if}
             <div class="card-actions justify-end mt-2">
               {#if showPreview && canPreview(file)}
-                <button class="btn btn-ghost btn-xs" onclick={() => handlePreview(file)}>
+                <Button variant="ghost" size="xs" onclick={() => handlePreview(file)}>
                   {m('file_list_preview')}
-                </button>
+                </Button>
               {/if}
               {#if showDownload}
-                <button class="btn btn-ghost btn-xs" onclick={() => handleDownload(file)}>
+                <Button variant="ghost" size="xs" onclick={() => handleDownload(file)}>
                   {m('file_list_download')}
-                </button>
+                </Button>
               {/if}
               {#if showDelete}
-                <button class="btn btn-ghost btn-xs text-error" onclick={() => handleDelete(file)}>
+                <Button variant="ghost" size="xs" class="text-error" onclick={() => handleDelete(file)}>
                   {m('file_list_delete')}
-                </button>
+                </Button>
               {/if}
             </div>
           </div>
@@ -175,41 +177,42 @@
           <!-- 操作按钮 -->
           <div class="flex gap-1">
             {#if showPreview && canPreview(file)}
-              <button
-                type="button"
-                class="btn btn-ghost btn-sm btn-circle"
+              <IconButton
+                variant="ghost"
+                size="sm"
                 onclick={() => handlePreview(file)}
-                aria-label={m('file_list_preview')}
+                ariaLabel={m('file_list_preview')}
               >
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                 </svg>
-              </button>
+              </IconButton>
             {/if}
             {#if showDownload}
-              <button
-                type="button"
-                class="btn btn-ghost btn-sm btn-circle"
+              <IconButton
+                variant="ghost"
+                size="sm"
                 onclick={() => handleDownload(file)}
-                aria-label={m('file_list_download')}
+                ariaLabel={m('file_list_download')}
               >
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                 </svg>
-              </button>
+              </IconButton>
             {/if}
             {#if showDelete}
-              <button
-                type="button"
-                class="btn btn-ghost btn-sm btn-circle text-error"
+              <IconButton
+                variant="ghost"
+                size="sm"
+                class="text-error"
                 onclick={() => handleDelete(file)}
-                aria-label={m('file_list_delete')}
+                ariaLabel={m('file_list_delete')}
               >
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                 </svg>
-              </button>
+              </IconButton>
             {/if}
           </div>
         </div>
@@ -228,7 +231,7 @@
       onclick={(e) => e.stopPropagation()}
       onkeydown={(e) => e.stopPropagation()}
     >
-      <button class="btn btn-sm btn-circle btn-ghost absolute right-2 top-2" onclick={closePreview}>✕</button>
+      <IconButton variant="ghost" size="sm" class="absolute right-2 top-2" onclick={closePreview} ariaLabel={m('file_list_close')}>✕</IconButton>
       <h3 class="font-bold text-lg mb-4">{previewFile.name}</h3>
       
       {#if previewFile.type.startsWith('image/')}
@@ -242,7 +245,7 @@
       {/if}
     </div>
     <form method="dialog" class="modal-backdrop">
-      <button>{m('file_list_close')}</button>
+      <Button>{m('file_list_close')}</Button>
     </form>
   </dialog>
 {/if}

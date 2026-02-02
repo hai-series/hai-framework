@@ -35,6 +35,13 @@ import { cache } from '@hai/cache'
 import { core } from '@hai/core'
 import { db } from '@hai/db'
 import { iam } from '@hai/iam'
+import messagesEnUS from '../../../messages/en-US.json'
+import messagesZhCN from '../../../messages/zh-CN.json'
+
+const { getMessage } = core.i18n.createMessageGetter({
+  'zh-CN': messagesZhCN,
+  'en-US': messagesEnUS,
+})
 
 // =============================================================================
 // 状态
@@ -120,25 +127,34 @@ export async function initApp(): Promise<void> {
   }
 
   // 4. 初始化数据库连接
-  db.init(dbConfig)
+  const dbResult = db.init(dbConfig)
+  if (!dbResult.success) {
+    throw new Error(getMessage('server_init_db_failed', undefined, { message: dbResult.error.message }))
+  }
 
   // 5. 初始化缓存服务
   const cacheResult = await cache.init(cacheConfig)
   if (!cacheResult.success) {
-    throw new Error(`缓存初始化失败: ${cacheResult.error.message}`)
+    throw new Error(getMessage('server_init_cache_failed', undefined, { message: cacheResult.error.message }))
   }
 
   // 6. 初始化 IAM 模块
   const iamResult = await iam.init(db, cache, iamConfig)
   if (!iamResult.success) {
-    throw new Error(`IAM 初始化失败: ${iamResult.error.message}`)
+    const cause = iamResult.error.cause
+    const causeMsg = cause instanceof Error ? cause.message : String(cause)
+    const baseMessage = getMessage('server_init_iam_failed', undefined, { message: iamResult.error.message })
+    const fullMessage = cause
+      ? getMessage('server_error_with_cause', undefined, { message: baseMessage, cause: causeMsg })
+      : baseMessage
+    throw new Error(fullMessage)
   }
 
   // 7. 创建业务表
   createBusinessTables()
 
   initialized = true
-  core.logger.info('✅ 应用初始化完成')
+  core.logger.info('Application initialized.')
 }
 
 /**
@@ -153,7 +169,7 @@ export function isAppInitialized(): boolean {
  */
 export function getDb() {
   if (!initialized) {
-    throw new Error('应用未初始化，请先调用 initApp()')
+    throw new Error(getMessage('server_init_not_initialized'))
   }
   return db
 }

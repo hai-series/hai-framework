@@ -1,6 +1,7 @@
 @import 'tailwindcss';
 @plugin "daisyui" {
-  themes: light --default,
+  themes:
+    light --default,
     dark --prefersdark,
     cupcake,
     bumblebee,

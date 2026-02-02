@@ -9,6 +9,8 @@ import type {
   AlertProps,
   AvatarProps,
   BadgeProps,
+  BareButtonProps,
+  BareInputProps,
   ButtonProps,
   CardProps,
   CheckboxProps,
@@ -34,6 +36,8 @@ import type {
   TagInputProps,
   TagProps,
   ToastProps,
+  ToggleCheckboxProps,
+  ToggleRadioProps,
   TooltipProps,
   Variant,
 } from '../src/lib/types.js'
@@ -61,12 +65,24 @@ describe('原子组件 Props', () => {
     expectTypeOf<ButtonProps>().toHaveProperty('onclick')
   })
 
+  it('bareButtonProps 应该包含正确的属性', () => {
+    expectTypeOf<BareButtonProps>().toHaveProperty('class')
+    expectTypeOf<BareButtonProps>().toHaveProperty('ariaLabel')
+    expectTypeOf<BareButtonProps>().toHaveProperty('onclick')
+  })
+
   it('inputProps 应该包含正确的属性', () => {
     expectTypeOf<InputProps>().toHaveProperty('value')
     expectTypeOf<InputProps>().toHaveProperty('type')
     expectTypeOf<InputProps>().toHaveProperty('placeholder')
     expectTypeOf<InputProps>().toHaveProperty('disabled')
     expectTypeOf<InputProps>().toHaveProperty('error')
+  })
+
+  it('bareInputProps 应该包含正确的属性', () => {
+    expectTypeOf<BareInputProps>().toHaveProperty('type')
+    expectTypeOf<BareInputProps>().toHaveProperty('class')
+    expectTypeOf<BareInputProps>().toHaveProperty('onchange')
   })
 
   it('selectProps 应该包含正确的属性', () => {
@@ -81,6 +97,11 @@ describe('原子组件 Props', () => {
     expectTypeOf<CheckboxProps>().toHaveProperty('disabled')
   })
 
+  it('toggleCheckboxProps 应该包含正确的属性', () => {
+    expectTypeOf<ToggleCheckboxProps>().toHaveProperty('checked')
+    expectTypeOf<ToggleCheckboxProps>().toHaveProperty('onchange')
+  })
+
   it('switchProps 应该包含正确的属性', () => {
     expectTypeOf<SwitchProps>().toHaveProperty('checked')
     expectTypeOf<SwitchProps>().toHaveProperty('label')
@@ -89,6 +110,11 @@ describe('原子组件 Props', () => {
   it('radioProps 应该包含正确的属性', () => {
     expectTypeOf<RadioProps>().toHaveProperty('options')
     expectTypeOf<RadioProps>().toHaveProperty('value')
+  })
+
+  it('toggleRadioProps 应该包含正确的属性', () => {
+    expectTypeOf<ToggleRadioProps>().toHaveProperty('checked')
+    expectTypeOf<ToggleRadioProps>().toHaveProperty('onchange')
   })
 
   it('badgeProps 应该包含正确的属性', () => {

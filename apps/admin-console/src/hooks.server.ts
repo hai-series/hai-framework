@@ -24,20 +24,30 @@ initApp()
 // 首次运行前请先执行 pnpm paraglide:compile 或 pnpm build
 
 let paraglideMiddleware: ((request: Request, callback: (args: { request: Request, locale: string }) => Response | Promise<Response>) => Response | Promise<Response>) | null = null
+let paraglideMiddlewarePromise: Promise<((request: Request, callback: (args: { request: Request, locale: string }) => Response | Promise<Response>) => Response | Promise<Response>) | null> | null = null
 
-// 动态导入 paraglide middleware（仅当生成后可用）
-try {
-  const paraglideServer = await import('$lib/paraglide/server.js')
-  paraglideMiddleware = paraglideServer.paraglideMiddleware
-}
-catch {
-  // Paraglide 尚未编译，跳过
-  core.logger.warn('[i18n] Paraglide 尚未编译，跳过 i18n middleware')
+async function loadParaglideMiddleware() {
+  if (paraglideMiddleware)
+    return paraglideMiddleware
+
+  if (!paraglideMiddlewarePromise) {
+    paraglideMiddlewarePromise = import('$lib/paraglide/server.js')
+      .then((paraglideServer) => {
+        paraglideMiddleware = paraglideServer.paraglideMiddleware
+        return paraglideMiddleware
+      })
+      .catch(() => {
+        // Paraglide 尚未编译，跳过
+        core.logger.warn('[i18n] Paraglide 尚未编译，跳过 i18n middleware')
+        return null
+      })
+  }
+
+  return paraglideMiddlewarePromise
 }
 
 /**
  * i18n Handle - 使用 Paraglide middleware 处理语言
- * 使用 cookie 策略，不再需要 URL 前缀
  *
  * 注意：API 请求跳过 paraglideMiddleware，因为：
  * 1. API 不需要页面级别的 locale 处理
@@ -53,8 +63,9 @@ const i18nHandle: Handle = async ({ event, resolve }) => {
     return resolve(event)
   }
 
-  if (paraglideMiddleware) {
-    return paraglideMiddleware(event.request, async ({ locale }) => {
+  const middleware = await loadParaglideMiddleware()
+  if (middleware) {
+    return middleware(event.request, async ({ locale }) => {
       event.locals.locale = locale
       setAllModulesLocale(locale)
       return resolve(event, {

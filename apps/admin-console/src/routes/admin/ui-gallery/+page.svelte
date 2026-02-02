@@ -2,11 +2,7 @@
   UI 组件库展示页面 - 使用 @hai/ui 组件
 -->
 <script lang="ts">
-  import { 
-    Button, Avatar, Badge, Card, Alert, 
-    Input, Textarea, Select, Checkbox, Switch, Radio,
-    Spinner, Progress, Tag, Tabs
-  } from '@hai/ui'
+  
   
   // 示例数据
   let inputValue = $state('')
@@ -95,12 +91,12 @@
         <h3 class="text-lg font-semibold text-base-content mb-4">输入框</h3>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label class="block text-sm font-medium text-base-content/80 mb-1.5">默认输入框</label>
-            <Input bind:value={inputValue} placeholder="请输入内容" />
+            <label class="block text-sm font-medium text-base-content/80 mb-1.5" for="ui-input-default">默认输入框</label>
+            <Input id="ui-input-default" bind:value={inputValue} placeholder="请输入内容" />
           </div>
           <div>
-            <label class="block text-sm font-medium text-base-content/80 mb-1.5">禁用状态</label>
-            <Input value="禁用内容" disabled />
+            <label class="block text-sm font-medium text-base-content/80 mb-1.5" for="ui-input-disabled">禁用状态</label>
+            <Input id="ui-input-disabled" value="禁用内容" disabled />
           </div>
         </div>
       </Card>
@@ -116,8 +112,9 @@
         <h3 class="text-lg font-semibold text-base-content mb-4">选择控件</h3>
         <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div>
-            <label class="block text-sm font-medium text-base-content/80 mb-1.5">下拉选择</label>
-            <Select 
+            <label class="block text-sm font-medium text-base-content/80 mb-1.5" for="ui-select">下拉选择</label>
+            <Select
+              id="ui-select"
               bind:value={selectValue}
               options={[
                 { value: 'option1', label: '选项一' },
@@ -127,14 +124,14 @@
               placeholder="请选择"
             />
           </div>
-          <div>
-            <label class="block text-sm font-medium text-base-content/80 mb-3">复选框</label>
+          <fieldset>
+            <legend class="block text-sm font-medium text-base-content/80 mb-3">复选框</legend>
             <Checkbox bind:checked={checkboxValue} label="同意条款" />
-          </div>
-          <div>
-            <label class="block text-sm font-medium text-base-content/80 mb-3">开关</label>
+          </fieldset>
+          <fieldset>
+            <legend class="block text-sm font-medium text-base-content/80 mb-3">开关</legend>
             <Switch bind:checked={switchValue} label="启用功能" />
-          </div>
+          </fieldset>
         </div>
       </Card>
       
@@ -149,7 +146,7 @@
             { value: 'option3', label: '选项三' },
           ]}
           direction="horizontal"
-          onchange={(v) => radioValue = v}
+          onchange={(v: string) => radioValue = v}
         />
         <p class="text-sm text-base-content/60 mt-2">当前选中: {radioValue}</p>
       </Card>

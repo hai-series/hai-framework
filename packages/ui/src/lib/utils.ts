@@ -29,6 +29,9 @@ export const variantClasses: Record<Variant, string> = {
   warning: 'btn-warning',
   error: 'btn-error',
   info: 'btn-info',
+  ghost: 'btn-ghost',
+  link: 'btn-link',
+  outline: 'btn-outline',
 }
 
 /**
@@ -110,6 +113,9 @@ export function getAlertVariantClass(variant: Variant): string {
     warning: 'alert-warning',
     error: 'alert-error',
     info: 'alert-info',
+    ghost: 'alert',
+    link: 'alert',
+    outline: 'alert',
   }
   return map[variant] ?? map.default
 }

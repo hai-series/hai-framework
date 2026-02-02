@@ -10,6 +10,7 @@
 <script lang="ts">
   import type { TagProps } from '../../types.js'
   import { cn, getVariantClass, getSizeClass } from '../../utils.js'
+  import IconButton from './IconButton.svelte'
   
   let {
     text = '',
@@ -48,15 +49,16 @@
   {/if}
   
   {#if closable}
-    <button
-      type="button"
-      class="btn btn-ghost btn-xs btn-circle -mr-1"
+    <IconButton
+      variant="ghost"
+      size="xs"
+      class="-mr-1"
       onclick={handleClose}
-      aria-label={removeLabel}
+      ariaLabel={removeLabel}
     >
       <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
         <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
       </svg>
-    </button>
+    </IconButton>
   {/if}
 </span>

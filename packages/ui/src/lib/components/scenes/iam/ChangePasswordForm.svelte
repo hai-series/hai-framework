@@ -11,6 +11,7 @@
   import type { ChangePasswordFormProps, ChangePasswordFormData } from '../types.js'
   import { cn } from '../../../utils.js'
   import PasswordInput from './PasswordInput.svelte'
+  import Button from '../../primitives/Button.svelte'
   import { arePasswordsEqual } from './password-utils.js'
   import { m } from '../../../messages.js'
   
@@ -120,14 +121,13 @@
   {/if}
   
   <!-- 提交按钮 -->
-  <button
+  <Button
     type="submit"
-    class="btn btn-primary w-full"
+    variant="primary"
+    class="w-full"
     disabled={loading || disabled || !canSubmit}
+    {loading}
   >
-    {#if loading}
-      <span class="loading loading-spinner loading-sm"></span>
-    {/if}
     {submitText || m('change_password_submit')}
-  </button>
+  </Button>
 </form>

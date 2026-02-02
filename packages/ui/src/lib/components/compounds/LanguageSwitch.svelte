@@ -29,6 +29,7 @@
   ```
 -->
 <script lang='ts'>
+  import BareButton from '../primitives/BareButton.svelte'
   interface Language {
     value: string
     label: string
@@ -86,11 +87,11 @@
 </script>
 
 <div bind:this={containerRef} class='dropdown dropdown-end {open ? "dropdown-open" : ""} {className}'>
-  <button
+  <BareButton
     type='button'
     class='btn btn-ghost btn-sm gap-2 min-w-fit'
     onclick={() => (open = !open)}
-    aria-label='Switch language'
+    ariaLabel='Switch language'
   >
     <svg xmlns='http://www.w3.org/2000/svg' class='h-4 w-4 shrink-0' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'>
       <path d='M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129' />
@@ -102,12 +103,12 @@
     <svg xmlns='http://www.w3.org/2000/svg' class='h-4 w-4 shrink-0 opacity-50' viewBox='0 0 20 20' fill='currentColor'>
       <path fill-rule='evenodd' d='M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z' clip-rule='evenodd' />
     </svg>
-  </button>
+  </BareButton>
 
   {#if open}
     <div class='dropdown-content bg-base-100 rounded-box shadow-lg border border-base-content/10 z-50 p-2'>
       {#each languages as lang (lang.value)}
-        <button
+        <BareButton
           type='button'
           class='flex items-center gap-2 w-full px-3 py-2 rounded-lg text-left transition-colors whitespace-nowrap {lang.value === currentLanguage ? "bg-primary/10 text-primary" : "hover:bg-base-200"}'
           onclick={() => selectLanguage(lang.value)}
@@ -121,7 +122,7 @@
               <path d='M5 13l4 4L19 7' />
             </svg>
           {/if}
-        </button>
+        </BareButton>
       {/each}
     </div>
   {/if}

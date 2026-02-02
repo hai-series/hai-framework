@@ -19,8 +19,8 @@
  */
 
 // 折叠面板
+export type { AccordionItem } from './accordion-types.js'
 export { default as Accordion } from './Accordion.svelte'
-export type { AccordionItem } from './Accordion.svelte'
 // 反馈提示
 export { default as Alert } from './Alert.svelte'
 export { default as Breadcrumb } from './Breadcrumb.svelte'
@@ -67,8 +67,8 @@ export { default as TagInput } from './TagInput.svelte'
 export { default as ThemeSelector } from './ThemeSelector.svelte'
 export { default as ThemeToggle } from './ThemeToggle.svelte'
 // 时间线
+export type { TimelineItem } from './timeline-types.js'
 export { default as Timeline } from './Timeline.svelte'
-export type { TimelineItem } from './Timeline.svelte'
 export { default as Toast } from './Toast.svelte'
 export { default as ToastContainer } from './ToastContainer.svelte'
 export { default as Tooltip } from './Tooltip.svelte'

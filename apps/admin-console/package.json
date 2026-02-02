@@ -34,9 +34,9 @@
     "zod": "catalog:"
   },
   "devDependencies": {
-    "@inlang/paraglide-js": "^2.0.0",
     "@iconify-json/tabler": "catalog:",
     "@iconify/tailwind4": "catalog:",
+    "@inlang/paraglide-js": "catalog:",
     "@sveltejs/adapter-auto": "catalog:",
     "@sveltejs/kit": "catalog:",
     "@sveltejs/vite-plugin-svelte": "catalog:",

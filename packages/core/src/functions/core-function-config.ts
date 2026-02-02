@@ -38,6 +38,7 @@ import messagesZhCN from '../../messages/zh-CN.json'
 import { ConfigErrorCode } from '../core-config.js'
 import { err, ok } from '../core-types.js'
 import { createMessageGetter } from '../i18n/i18n-utils.js'
+import { isObject } from '../utils/core-util-type.js'
 
 // 内部消息获取器
 type CoreMessageKey = keyof typeof messagesZhCN
@@ -72,11 +73,6 @@ interface CacheEntry<T = unknown> {
 
 /** 环境变量插值正则 */
 const ENV_VAR_PATTERN = /\$\{([^}:]+)(?::([^}]*))?\}/g
-
-/** 检查是否为纯对象 */
-function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-}
 
 /** 递归替换环境变量 */
 function interpolateEnv(value: unknown): Result<unknown, ConfigError> {
@@ -115,7 +111,7 @@ function interpolateEnv(value: unknown): Result<unknown, ConfigError> {
     return ok(results)
   }
 
-  if (isPlainObject(value)) {
+  if (isObject(value)) {
     const results: Record<string, unknown> = {}
     for (const [k, v] of Object.entries(value)) {
       const r = interpolateEnv(v)

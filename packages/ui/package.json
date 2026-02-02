@@ -11,6 +11,10 @@
       "svelte": "./dist/index.js",
       "import": "./dist/index.js"
     },
+    "./auto-import": {
+      "types": "./auto-import.d.ts",
+      "import": "./auto-import.js"
+    },
     "./components/*": {
       "types": "./dist/components/*.d.ts",
       "svelte": "./dist/components/*.js",
@@ -21,6 +25,8 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "files": [
+    "auto-import.d.ts",
+    "auto-import.js",
     "dist"
   ],
   "scripts": {

@@ -8,6 +8,25 @@
 pnpm add @hai/ui
 ```
 
+## 自动导入（可选）
+
+在 Svelte 项目中启用预处理器后，可省略页面里对 @hai/ui 组件的显式 import：
+
+```js
+import { autoImportHaiUi } from '@hai/ui/auto-import'
+// svelte.config.js
+import adapter from '@sveltejs/adapter-auto'
+import { vitePreprocess } from '@sveltejs/vite-plugin-svelte'
+
+/** @type {import('@sveltejs/kit').Config} */
+const config = {
+  preprocess: [autoImportHaiUi(), vitePreprocess()],
+  kit: { adapter: adapter() },
+}
+
+export default config
+```
+
 ## 组件架构
 
 组件按三层划分：
@@ -26,21 +45,26 @@ components/
 
 ### 原子组件 (primitives)
 
-| 组件         | 描述     | 主要属性                                 |
-| ------------ | -------- | ---------------------------------------- |
-| `Button`     | 按钮     | `variant`, `size`, `loading`, `disabled` |
-| `IconButton` | 图标按钮 | `variant`, `size`, `disabled`            |
-| `Input`      | 输入框   | `type`, `label`, `error`, `hint`         |
-| `Textarea`   | 文本域   | `rows`, `maxlength`                      |
-| `Select`     | 下拉选择 | `options`, `placeholder`                 |
-| `Checkbox`   | 复选框   | `checked`, `label`                       |
-| `Switch`     | 开关     | `checked`, `label`                       |
-| `Radio`      | 单选框   | `options`, `value`, `direction`          |
-| `Badge`      | 徽章     | `variant`                                |
-| `Avatar`     | 头像     | `src`, `size`, `alt`                     |
-| `Tag`        | 标签     | `text`, `variant`, `closable`            |
-| `Spinner`    | 加载动画 | `size`                                   |
-| `Progress`   | 进度条   | `value`, `max`                           |
+| 组件             | 描述         | 主要属性                                 |
+| ---------------- | ------------ | ---------------------------------------- |
+| `BareButton`     | 无样式按钮   | `class`, `ariaLabel`                     |
+| `BareInput`      | 无样式输入   | `type`, `class`, `onchange`              |
+| `Button`         | 按钮         | `variant`, `size`, `loading`, `disabled` |
+| `IconButton`     | 图标按钮     | `variant`, `size`, `disabled`            |
+| `Input`          | 输入框       | `type`, `label`, `error`, `hint`         |
+| `Textarea`       | 文本域       | `rows`, `maxlength`                      |
+| `Select`         | 下拉选择     | `options`, `placeholder`                 |
+| `Checkbox`       | 复选框       | `checked`, `label`                       |
+| `Switch`         | 开关         | `checked`, `label`                       |
+| `Radio`          | 单选框       | `options`, `value`, `direction`          |
+| `ToggleCheckbox` | 原生开关输入 | `checked`, `onchange`                    |
+| `ToggleRadio`    | 原生单选输入 | `checked`, `onchange`                    |
+| `Range`          | 滑块         | `value`, `min`, `max`, `step`            |
+| `Badge`          | 徽章         | `variant`                                |
+| `Avatar`         | 头像         | `src`, `size`, `alt`                     |
+| `Tag`            | 标签         | `text`, `variant`, `closable`            |
+| `Spinner`        | 加载动画     | `size`                                   |
+| `Progress`       | 进度条       | `value`, `max`                           |
 
 ### 组合组件 (compounds)
 

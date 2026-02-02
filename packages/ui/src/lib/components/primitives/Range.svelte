@@ -10,6 +10,7 @@
 -->
 <script lang="ts">
   import { cn } from '../../utils.js'
+  import BareInput from './BareInput.svelte'
   
   interface Props {
     /** 当前值 */
@@ -94,13 +95,13 @@
 </script>
 
 <div class="w-full">
-  <input
+  <BareInput
     type="range"
     class={rangeClass}
     {min}
     {max}
     {step}
-    {value}
+    value={`${value}`}
     {disabled}
     oninput={handleInput}
     onchange={handleChange}

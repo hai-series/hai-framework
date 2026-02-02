@@ -8,7 +8,7 @@
 <script lang="ts">
   import { page } from '$app/stores'
   import { goto } from '$app/navigation'
-  import { ResetPasswordForm, type ResetPasswordFormData, Result } from '@hai/ui'
+  import type { ResetPasswordFormData } from '@hai/ui'
   import * as m from '$lib/paraglide/messages'
   
   let loading = $state(false)

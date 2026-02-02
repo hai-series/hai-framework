@@ -15,6 +15,7 @@
   import Button from '../primitives/Button.svelte'
   import Modal from './Modal.svelte'
   import Input from '../primitives/Input.svelte'
+  import Select from '../primitives/Select.svelte'
   import Textarea from '../primitives/Textarea.svelte'
 
   type FeedbackType = 'bug' | 'feature' | 'question' | 'other'
@@ -64,12 +65,12 @@
   let loading = $state(false)
   let error = $state('')
 
-  const typeOptions = [
+  const typeOptions = $derived([
     { value: 'bug', label: labels.types?.bug ?? m('feedback_type_bug') },
     { value: 'feature', label: labels.types?.feature ?? m('feedback_type_feature') },
     { value: 'question', label: labels.types?.question ?? m('feedback_type_question') },
     { value: 'other', label: labels.types?.other ?? m('feedback_type_other') },
-  ]
+  ])
 
   async function handleSubmit() {
     if (!description.trim()) {
@@ -118,15 +119,11 @@
       <label class='label' for='feedback-type'>
         <span class='label-text'>{labels.typeLabel ?? m('feedback_type_label')}</span>
       </label>
-      <select
+      <Select
         id='feedback-type'
-        class='select select-bordered w-full'
+        options={typeOptions}
         bind:value={feedbackType}
-      >
-        {#each typeOptions as opt (opt.value)}
-          <option value={opt.value}>{opt.label}</option>
-        {/each}
-      </select>
+      />
     </div>
 
     <div class='form-control'>
@@ -157,9 +154,9 @@
   </div>
 
   {#snippet footer()}
-    <button class='btn btn-ghost' type='button' onclick={() => open = false}>
+    <Button variant='ghost' onclick={() => open = false}>
       {labels.cancel ?? m('feedback_cancel')}
-    </button>
+    </Button>
     <Button variant='primary' {loading} onclick={handleSubmit}>
       {labels.submit ?? m('feedback_submit')}
     </Button>
