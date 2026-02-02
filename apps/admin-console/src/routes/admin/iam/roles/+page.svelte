@@ -5,17 +5,35 @@
 -->
 <script lang="ts">
   import type { PageData } from './$types'
-  import { Card, Button, Modal, Badge, IconButton, Input, Checkbox, Dropdown, Textarea } from '@hai/ui'
+  import * as m from '$lib/paraglide/messages'
+
+  interface RoleData {
+    id: string
+    name: string
+    description?: string | null
+    permissions: string[]
+    userCount: number
+    isSystem: boolean
+  }
+
+  interface PermissionItem {
+    name: string
+  }
+
+  type PermissionsByResource = Record<string, PermissionItem[]>
 
   interface Props {
-    data: PageData
+    data: PageData & {
+      roles: RoleData[]
+      permissions: PermissionsByResource
+    }
   }
 
   let { data }: Props = $props()
 
   /** 新建/编辑对话框状态 */
   let showDialog = $state(false)
-  let editingRole = $state<typeof data.roles[0] | null>(null)
+  let editingRole = $state<RoleData | null>(null)
 
   /** 表单数据 */
   let form = $state({
@@ -41,7 +59,7 @@
   }
 
   /** 打开编辑对话框 */
-  function openEditDialog(role: typeof data.roles[0]) {
+  function openEditDialog(role: RoleData) {
     editingRole = role
     form = {
       name: role.name,
@@ -69,7 +87,7 @@
   }
 
   /** 切换资源组所有权限 */
-  function toggleResourcePermissions(resource: string, permissions: { name: string }[]) {
+  function toggleResourcePermissions(resource: string, permissions: PermissionItem[]) {
     const permNames = permissions.map((p) => p.name)
     const allSelected = permNames.every((p) => form.permissions.includes(p))
 
@@ -86,7 +104,7 @@
     error = ''
 
     if (!form.name.trim()) {
-      error = '请输入角色名称'
+      error = m.iam_roles_fill_name()
       return
     }
 
@@ -112,23 +130,23 @@
         closeDialog()
         location.reload()
       } else {
-        error = result.error || '操作失败'
+        error = result.error || m.iam_roles_operation_failed()
       }
     } catch (e) {
-      error = '网络错误，请稍后重试'
+      error = m.common_network_error()
     } finally {
       submitting = false
     }
   }
 
   /** 删除角色 */
-  async function handleDelete(role: typeof data.roles[0]) {
+  async function handleDelete(role: RoleData) {
     if (role.isSystem) {
-      alert('系统角色不能删除')
+      alert(m.iam_roles_system_cannot_delete())
       return
     }
 
-    if (!confirm(`确定要删除角色 "${role.name}" 吗？此操作不可恢复。`)) {
+    if (!confirm(m.iam_roles_delete_confirm({ name: role.name }))) {
       return
     }
 
@@ -142,30 +160,28 @@
       if (result.success) {
         location.reload()
       } else {
-        alert(result.error || '删除失败')
+        alert(result.error || m.iam_roles_delete_failed())
       }
     } catch (e) {
-      alert('网络错误，请稍后重试')
+      alert(m.common_network_error())
     }
   }
 </script>
 
 <svelte:head>
-  <title>角色管理 - Admin Console</title>
+  <title>{m.iam_roles_title()} - Admin Console</title>
 </svelte:head>
 
 <div class="space-y-6">
   <!-- 页面标题 -->
-  <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-    <div>
-      <h1 class="text-2xl font-bold">角色管理</h1>
-      <p class="text-base-content/60 mt-1">管理系统角色和权限分配</p>
-    </div>
-    <Button variant="primary" class="gap-2" onclick={openCreateDialog}>
-      <span class="iconify tabler--plus size-5"></span>
-      新建角色
-    </Button>
-  </div>
+  <PageHeader title={m.iam_roles_title()} description={m.iam_roles_subtitle()}>
+    {#snippet actions()}
+      <Button variant="primary" class="gap-2" onclick={openCreateDialog}>
+        <span class="iconify tabler--plus size-5"></span>
+        {m.iam_roles_create()}
+      </Button>
+    {/snippet}
+  </PageHeader>
 
   <!-- 角色列表 -->
   <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
@@ -177,7 +193,7 @@
               <h3 class="card-title text-lg">
                 {role.name}
                 {#if role.isSystem}
-                  <Badge variant="default" size="sm" outline>系统</Badge>
+                  <Badge variant="default" size="sm" outline>{m.iam_roles_type_system()}</Badge>
                 {/if}
               </h3>
               {#if role.description}
@@ -185,21 +201,21 @@
               {/if}
             </div>
             <div class="dropdown dropdown-end">
-              <IconButton variant="ghost" size="sm" ariaLabel="角色操作菜单">
+              <IconButton variant="ghost" size="sm" ariaLabel={m.iam_roles_action_menu()}>
                 <span class="iconify tabler--dots-vertical size-5"></span>
               </IconButton>
               <ul class="dropdown-content menu bg-base-100 rounded-box shadow-lg border border-base-content/10 w-40 p-2 z-10">
                 <li>
                   <Button variant="ghost" class="justify-start" onclick={() => openEditDialog(role)}>
                     <span class="iconify tabler--edit size-4"></span>
-                    编辑
+                    {m.action_edit()}
                   </Button>
                 </li>
                 {#if !role.isSystem}
                   <li>
                     <Button variant="ghost" class="justify-start text-error" onclick={() => handleDelete(role)}>
                       <span class="iconify tabler--trash size-4"></span>
-                      删除
+                      {m.action_delete()}
                     </Button>
                   </li>
                 {/if}
@@ -212,11 +228,11 @@
           <div class="flex items-center justify-between text-sm">
             <span class="text-base-content/60">
               <span class="iconify tabler--users size-4 inline-block align-middle mr-1"></span>
-              {role.userCount} 个用户
+              {m.iam_roles_user_count({ count: role.userCount })}
             </span>
             <span class="text-base-content/60">
               <span class="iconify tabler--key size-4 inline-block align-middle mr-1"></span>
-              {role.permissions.length} 个权限
+              {m.iam_roles_permission_count({ count: role.permissions.length })}
             </span>
           </div>
 
@@ -241,7 +257,7 @@
   <div class="modal modal-open">
     <div class="modal-box max-w-2xl max-h-[90vh]">
       <h3 class="font-bold text-lg mb-4">
-        {editingRole ? '编辑角色' : '新建角色'}
+        {editingRole ? m.iam_roles_edit() : m.iam_roles_create()}
       </h3>
 
       <form onsubmit={handleSubmit} class="space-y-4">
@@ -254,7 +270,7 @@
 
         <div class="form-control">
           <label class="label" for="name">
-            <span class="label-text">角色名称 <span class="text-error">*</span></span>
+            <span class="label-text">{m.iam_roles_form_name()} <span class="text-error">*</span></span>
           </label>
           <Input
             type="text"
@@ -262,37 +278,39 @@
             bind:value={form.name}
             required
             disabled={submitting || Boolean(editingRole?.isSystem)}
-            placeholder="例如：editor, viewer"
+            placeholder={m.iam_roles_form_name_placeholder()}
           />
         </div>
 
         <div class="form-control">
           <label class="label" for="description">
-            <span class="label-text">描述</span>
+            <span class="label-text">{m.iam_roles_form_description()}</span>
           </label>
           <Textarea
             id="description"
             bind:value={form.description}
             disabled={submitting}
-            placeholder="角色描述（可选）"
+            placeholder={m.iam_roles_form_description_placeholder()}
             rows={2}
           />
         </div>
 
-        <div class="form-control">
-          <label class="label">
-            <span class="label-text">权限分配</span>
+        <fieldset class="form-control">
+          <legend class="label">
+            <span class="label-text">{m.iam_roles_form_permissions()}</span>
             <span class="label-text-alt text-base-content/60">
-              已选 {form.permissions.length} 个权限
+              {m.iam_roles_form_permissions_selected({ count: form.permissions.length })}
             </span>
-          </label>
+          </legend>
 
           <div class="border border-base-content/10 rounded-lg overflow-hidden max-h-64 overflow-y-auto">
             {#each Object.entries(data.permissions) as [resource, perms]}
               <div class="border-b border-base-content/10 last:border-b-0">
-                <div
-                  class="flex items-center justify-between px-4 py-2 bg-base-200/50 cursor-pointer hover:bg-base-200"
+                <BareButton
+                  type="button"
+                  class="flex w-full items-center justify-between px-4 py-2 bg-base-200/50 cursor-pointer hover:bg-base-200"
                   onclick={() => toggleResourcePermissions(resource, perms)}
+                  ariaLabel={m.iam_roles_form_permissions()}
                 >
                   <span class="font-medium capitalize">{resource}</span>
                   <Checkbox
@@ -300,7 +318,7 @@
                     checked={perms.every((p) => form.permissions.includes(p.name))}
                     readonly
                   />
-                </div>
+                </BareButton>
                 <div class="px-4 py-2 grid grid-cols-2 gap-2">
                   {#each perms as perm}
                     <label class="flex items-center gap-2 cursor-pointer">
@@ -317,21 +335,26 @@
               </div>
             {/each}
           </div>
-        </div>
+        </fieldset>
 
         <div class="modal-action">
           <Button variant="ghost" type="button" onclick={closeDialog} disabled={submitting}>
-            取消
+            {m.action_cancel()}
           </Button>
           <Button variant="primary" type="submit" disabled={submitting}>
             {#if submitting}
               <span class="loading loading-spinner loading-sm"></span>
             {/if}
-            {editingRole ? '保存' : '创建'}
+            {editingRole ? m.action_save() : m.action_create()}
           </Button>
         </div>
       </form>
     </div>
-    <div class="modal-backdrop bg-black/50" onclick={closeDialog}></div>
+    <BareButton
+      type="button"
+      class="modal-backdrop bg-black/50"
+      onclick={closeDialog}
+      ariaLabel={m.action_close()}
+    />
   </div>
 {/if}

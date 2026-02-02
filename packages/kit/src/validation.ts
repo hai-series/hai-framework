@@ -9,6 +9,43 @@
 import type { z } from 'zod'
 import type { FormError, FormValidationResult } from './types.js'
 
+// =============================================================================
+// 内部工具
+// =============================================================================
+
+/** Zod 错误 issue 类型 */
+interface ZodIssue {
+  path: (string | number)[]
+  message: string
+}
+
+/** 从 Zod SafeParseError 提取 issues 列表 */
+function extractZodIssues(error: z.ZodError): ZodIssue[] {
+  // Zod v4 使用 issues，兼容旧版 errors
+  const zodError = error as unknown as { issues?: ZodIssue[], errors?: ZodIssue[] }
+  return zodError.issues ?? zodError.errors ?? []
+}
+
+/** 将 Zod issues 转换为 FormError 列表 */
+function zodIssuesToFormErrors(issues: ZodIssue[]): FormError[] {
+  return issues.map(issue => ({
+    field: issue.path.join('.'),
+    message: issue.message,
+  }))
+}
+
+/** 创建验证失败结果 */
+function createValidationResult<T>(error: z.ZodError): FormValidationResult<T> {
+  return {
+    valid: false,
+    errors: zodIssuesToFormErrors(extractZodIssues(error)),
+  }
+}
+
+// =============================================================================
+// 公共验证函数
+// =============================================================================
+
 /**
  * 从 Request 解析并验证表单数据
  */
@@ -38,24 +75,10 @@ export async function validateForm<T extends z.ZodType>(
     const result = schema.safeParse(data)
 
     if (result.success) {
-      return {
-        valid: true,
-        data: result.data,
-        errors: [],
-      }
+      return { valid: true, data: result.data, errors: [] }
     }
 
-    // zod v4 使用 issues 而不是 errors
-    const issues = (result.error as any).issues ?? (result.error as any).errors ?? []
-    const errors: FormError[] = issues.map((err: any) => ({
-      field: err.path.join('.'),
-      message: err.message,
-    }))
-
-    return {
-      valid: false,
-      errors,
-    }
+    return createValidationResult(result.error)
   }
   catch {
     return {
@@ -76,24 +99,10 @@ export function validateQuery<T extends z.ZodType>(
   const result = schema.safeParse(data)
 
   if (result.success) {
-    return {
-      valid: true,
-      data: result.data,
-      errors: [],
-    }
+    return { valid: true, data: result.data, errors: [] }
   }
 
-  // zod v4 使用 issues 而不是 errors
-  const issues = (result.error as any).issues ?? (result.error as any).errors ?? []
-  const errors: FormError[] = issues.map((err: any) => ({
-    field: err.path.join('.'),
-    message: err.message,
-  }))
-
-  return {
-    valid: false,
-    errors,
-  }
+  return createValidationResult(result.error)
 }
 
 /**
@@ -106,22 +115,8 @@ export function validateParams<T extends z.ZodType>(
   const result = schema.safeParse(params)
 
   if (result.success) {
-    return {
-      valid: true,
-      data: result.data,
-      errors: [],
-    }
+    return { valid: true, data: result.data, errors: [] }
   }
 
-  // zod v4 使用 issues 而不是 errors
-  const issues = (result.error as any).issues ?? (result.error as any).errors ?? []
-  const errors: FormError[] = issues.map((err: any) => ({
-    field: err.path.join('.'),
-    message: err.message,
-  }))
-
-  return {
-    valid: false,
-    errors,
-  }
+  return createValidationResult(result.error)
 }

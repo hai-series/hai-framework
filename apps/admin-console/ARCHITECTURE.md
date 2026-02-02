@@ -12,6 +12,7 @@
   - IAM: LoginForm, RegisterForm, ForgotPasswordForm, ResetPasswordForm, ChangePasswordForm
   - Storage: FileUpload, ImageUpload, AvatarUpload, FileList
   - Crypto: PasswordInput, EncryptedInput, HashDisplay
+- **自动导入**：通过 `@hai/ui/auto-import` 预处理器在编译阶段自动注入 `@hai/ui` 组件 import
 
 ### @hai/kit SvelteKit 集成
 

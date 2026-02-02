@@ -12,6 +12,7 @@
   import type { ImageUploadProps } from '../types.js'
   import { cn } from '../../../utils.js'
   import IconButton from '../../primitives/IconButton.svelte'
+  import BareInput from '../../primitives/BareInput.svelte'
   import Spinner from '../../primitives/Spinner.svelte'
   import { m } from '../../../messages.js'
   
@@ -33,7 +34,7 @@
   }: ImageUploadProps = $props()
   
   let loading = $state(false)
-  let inputElement: HTMLInputElement
+  let inputElement = $state<HTMLInputElement | undefined>(undefined)
   let previewUrl = $state('')
   
   // 当 value 变化时更新预览
@@ -197,12 +198,12 @@
   onclick={handleClick}
   onkeydown={(e) => e.key === 'Enter' && handleClick()}
 >
-  <input
-    bind:this={inputElement}
+  <BareInput
     type="file"
+    class="hidden"
+    bind:inputRef={inputElement}
     {accept}
     {disabled}
-    class="hidden"
     onchange={handleChange}
   />
   

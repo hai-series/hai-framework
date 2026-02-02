@@ -8,24 +8,13 @@
   使用 DaisyUI collapse 类
   =============================================================================
 -->
-<script lang="ts" module>
-  export interface AccordionItem {
-    /** 唯一标识 */
-    id: string
-    /** 标题 */
-    title: string
-    /** 内容（字符串或 Snippet） */
-    content?: string
-    /** 是否禁用 */
-    disabled?: boolean
-    /** 图标（可选） */
-    icon?: string
-  }
-</script>
 
 <script lang="ts">
   import type { Snippet } from 'svelte'
+  import type { AccordionItem } from './accordion-types.js'
   import { cn } from '../../utils.js'
+  import ToggleCheckbox from '../primitives/ToggleCheckbox.svelte'
+  import ToggleRadio from '../primitives/ToggleRadio.svelte'
   
   interface Props {
     /** 折叠项数据 */
@@ -117,16 +106,14 @@
     <div class={getItemClass(item)}>
       {#if multiple}
         <!-- 多选模式 - 使用 checkbox -->
-        <input
-          type="checkbox"
+        <ToggleCheckbox
           checked={isExpanded(item.id)}
           disabled={item.disabled}
           onchange={() => toggleItem(item.id)}
         />
       {:else}
         <!-- 单选模式 - 使用 radio -->
-        <input
-          type="radio"
+        <ToggleRadio
           name={groupName}
           checked={isExpanded(item.id)}
           disabled={item.disabled}

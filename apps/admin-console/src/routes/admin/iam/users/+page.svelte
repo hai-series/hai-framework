@@ -5,7 +5,6 @@
 -->
 <script lang="ts">
   import type { PageData } from './$types'
-  import { Card, Avatar, Badge, Button, Modal, PasswordInput, Input, IconButton, Select, Checkbox } from '@hai/ui'
   import * as m from '$lib/paraglide/messages'
 
   // 定义本地类型（与 page.server.ts 中的 UserData 一致）
@@ -21,8 +20,15 @@
     updated_at: Date
   }
 
+  interface RoleData {
+    name: string
+  }
+
   interface Props {
-    data: PageData
+    data: PageData & {
+      users: UserData[]
+      roles: RoleData[]
+    }
   }
 
   let { data }: Props = $props()
@@ -202,18 +208,16 @@
 
 <div class="space-y-6">
   <!-- 页面标题 -->
-  <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-    <div>
-      <h1 class="text-2xl font-bold text-base-content">{m.iam_users_title()}</h1>
-      <p class="text-base-content/60 mt-1">{m.iam_users_subtitle()}</p>
-    </div>
-    <Button variant="primary" onclick={openCreateDialog}>
-      <svg class="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-      </svg>
-      {m.iam_users_create()}
-    </Button>
-  </div>
+  <PageHeader title={m.iam_users_title()} description={m.iam_users_subtitle()}>
+    {#snippet actions()}
+      <Button variant="primary" onclick={openCreateDialog}>
+        <svg class="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+        </svg>
+        {m.iam_users_create()}
+      </Button>
+    {/snippet}
+  </PageHeader>
 
   <!-- 搜索栏 -->
   <Card>
@@ -333,7 +337,7 @@
     <form onsubmit={handleSubmit} class="space-y-5">
       {#if error}
         <div class="p-3 bg-error/10 border border-error/20 rounded-lg text-sm text-error flex items-center gap-2">
-          <svg class="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
           <span>{error}</span>
@@ -381,7 +385,7 @@
           id="display_name"
           bind:value={form.display_name}
           disabled={submitting}
-          placeholder="用户的显示名称（可选）"
+          placeholder={m.iam_users_form_display_name_placeholder()}
         />
       </div>
 
@@ -435,17 +439,17 @@
       </div>
 
       <!-- 角色 -->
-      <div>
-        <label class="block text-sm font-medium text-base-content mb-2">
+      <fieldset>
+        <legend class="block text-sm font-medium text-base-content mb-2">
           {m.iam_users_col_roles()}
-        </label>
+        </legend>
         <div class="flex flex-wrap gap-3 p-3 bg-base-200 rounded-lg border border-base-content/10">
           {#each data.roles as role}
             <label class="inline-flex items-center gap-2 cursor-pointer">
               <Checkbox
                 size="sm"
                 checked={form.roles.includes(role.name)}
-                onchange={(checked) => {
+                onchange={(checked: boolean) => {
                   if (checked) {
                     form.roles = [...form.roles, role.name]
                   } else {
@@ -461,7 +465,7 @@
             <span class="text-sm text-base-content/60">{m.common_no_data()}</span>
           {/if}
         </div>
-      </div>
+      </fieldset>
 
       <!-- 操作按钮 -->
       <div class="flex justify-end gap-3 pt-4 border-t border-base-content/10">

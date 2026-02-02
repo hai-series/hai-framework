@@ -4,12 +4,24 @@
   =============================================================================
 -->
 <script lang="ts">
-  import { Card, Button, Modal, Badge, IconButton, Input, Textarea } from '@hai/ui'
   import * as m from '$lib/paraglide/messages'
   import type { PageData } from './$types'
 
+  interface PermissionItem {
+    id: string
+    name: string
+    description?: string | null
+    resource: string
+    action: string
+    is_system: boolean
+  }
+
   interface Props {
-    data: PageData
+    data: PageData & {
+      permissions: Record<string, PermissionItem[]>
+      resources: string[]
+      actions: string[]
+    }
   }
 
   let { data }: Props = $props()
@@ -128,33 +140,31 @@
 
 <div class="space-y-6">
   <!-- 页面标题 -->
-  <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-    <div>
-      <h1 class="text-2xl font-bold">{m.iam_permissions_title()}</h1>
-      <p class="text-base-content/60 mt-1">{m.iam_permissions_subtitle()}</p>
-    </div>
-    <Button variant="primary" class="gap-2" onclick={openCreateDialog}>
-      <span class="iconify tabler--plus size-5"></span>
-      {m.iam_permissions_create()}
-    </Button>
-  </div>
+  <PageHeader title={m.iam_permissions_title()} description={m.iam_permissions_subtitle()}>
+    {#snippet actions()}
+      <Button variant="primary" class="gap-2" onclick={openCreateDialog}>
+        <span class="iconify tabler--plus size-5"></span>
+        {m.iam_permissions_create()}
+      </Button>
+    {/snippet}
+  </PageHeader>
 
   <!-- 统计卡片 -->
   <div class="grid gap-4 grid-cols-2 lg:grid-cols-4">
     <div class="stat bg-base-100 rounded-lg shadow-sm">
-      <div class="stat-title">权限总数</div>
+      <div class="stat-title">{m.iam_permissions_stat_total()}</div>
       <div class="stat-value text-primary">{totalPermissions}</div>
     </div>
     <div class="stat bg-base-100 rounded-lg shadow-sm">
-      <div class="stat-title">资源数</div>
+      <div class="stat-title">{m.iam_permissions_stat_resources()}</div>
       <div class="stat-value">{data.resources.length}</div>
     </div>
     <div class="stat bg-base-100 rounded-lg shadow-sm">
-      <div class="stat-title">操作类型</div>
+      <div class="stat-title">{m.iam_permissions_stat_actions()}</div>
       <div class="stat-value">{data.actions.length}</div>
     </div>
     <div class="stat bg-base-100 rounded-lg shadow-sm">
-      <div class="stat-title">系统权限</div>
+      <div class="stat-title">{m.iam_permissions_stat_system()}</div>
       <div class="stat-value text-secondary">
         {Object.values(data.permissions).flat().filter((p) => p.is_system).length}
       </div>

@@ -33,13 +33,16 @@
     warning: 'text-warning',
     error: 'text-error',
     info: 'text-info',
+    ghost: 'text-base-content',
+    link: 'text-base-content',
+    outline: 'text-base-content',
   }
   
   const spinnerClass = $derived(
     cn(
       'loading loading-spinner',
       sizeMap[size],
-      variantMap[variant],
+      variantMap[variant] ?? variantMap.default,
       className,
     )
   )

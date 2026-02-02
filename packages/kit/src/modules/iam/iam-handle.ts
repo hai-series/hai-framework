@@ -61,7 +61,7 @@ export function createIamHandle(config: IamHandleConfig): Handle {
     const pathname = event.url.pathname
 
     // 初始化 locals
-    const locals = event.locals as IamLocals
+    const locals = event.locals as unknown as IamLocals
     locals.session = null
     locals.user = null
 
@@ -116,7 +116,7 @@ export function createIamHandle(config: IamHandleConfig): Handle {
  * 创建 API 路由守卫中间件
  */
 export function requireAuth(event: RequestEvent): IamLocals {
-  const locals = event.locals as IamLocals
+  const locals = event.locals as unknown as IamLocals
 
   if (!locals.session || !locals.user) {
     throw new Response('Unauthorized', { status: 401 })

@@ -11,6 +11,7 @@
 <script lang="ts">
   import type { FileUploadProps, UploadFile } from '../types.js'
   import { cn, generateId } from '../../../utils.js'
+  import BareInput from '../../primitives/BareInput.svelte'
   import Progress from '../../primitives/Progress.svelte'
   import IconButton from '../../primitives/IconButton.svelte'
   import { m } from '../../../messages.js'
@@ -36,7 +37,7 @@
   
   let files = $state<UploadFile[]>([])
   let isDragging = $state(false)
-  let inputElement: HTMLInputElement
+  let inputElement = $state<HTMLInputElement | undefined>(undefined)
   
   const containerClass = $derived(
     cn(
@@ -292,13 +293,13 @@
     onclick={handleClick}
     onkeydown={(e) => e.key === 'Enter' && handleClick()}
   >
-    <input
-      bind:this={inputElement}
+    <BareInput
       type="file"
+      class="hidden"
+      bind:inputRef={inputElement}
       {accept}
       {multiple}
       {disabled}
-      class="hidden"
       onchange={handleChange}
     />
     

@@ -6,8 +6,8 @@
 
 import type { RequestHandler } from '@sveltejs/kit'
 import { audit, permissionService } from '$lib/server/services/index.js'
-import { json } from '@sveltejs/kit'
 import { core } from '@hai/core'
+import { json } from '@sveltejs/kit'
 
 /**
  * GET /api/iam/permissions - 获取权限列表

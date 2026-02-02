@@ -37,7 +37,7 @@ class ToastState {
     this.items = [...this.items, item]
 
     // 自动关闭
-    if (item.duration > 0) {
+    if ((item.duration ?? 0) > 0) {
       setTimeout(() => {
         this.remove(id)
       }, item.duration)

@@ -6,11 +6,11 @@
 -->
 <script lang="ts">
   import type { PageData } from './$types'
-  import { LanguageSwitch, ThemeSelector, getThemeFontUrl } from '@hai/ui'
+  import { getThemeFontUrl } from '@hai/ui'
   import { core } from '@hai/core'
   import { browser } from '$app/environment'
   import { setLocale, getLocale } from '$lib/paraglide/runtime.js'
-  import { m } from '$lib/paraglide/messages.js'
+  import * as m from '$lib/paraglide/messages.js'
   
   interface Props {
     data: PageData

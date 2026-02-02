@@ -12,6 +12,65 @@
 
 ---
 
+## 自动导入预处理器
+
+用于在 Svelte 编译阶段自动注入 `@hai/ui` 组件 import，减少页面样板代码：
+
+```ts
+import { autoImportHaiUi } from '@hai/ui/auto-import'
+
+const preprocessors = [autoImportHaiUi()]
+```
+
+---
+
+## 原子组件补充（Bare / Toggle）
+
+用于需要原生元素直系子节点或完全自定义样式的场景：
+
+```ts
+interface BareButtonProps {
+  type?: 'button' | 'submit' | 'reset'
+  disabled?: boolean
+  class?: string
+  ariaLabel?: string
+  role?: string
+  ariaSelected?: boolean
+  tabindex?: number
+  onclick?: (e: MouseEvent) => void
+  onkeydown?: (e: KeyboardEvent) => void
+}
+
+interface BareInputProps {
+  type?: 'text' | 'password' | 'email' | 'number' | 'tel' | 'url' | 'search' | 'file' | 'range'
+  class?: string
+  accept?: string
+  multiple?: boolean
+  oninput?: (e: Event) => void
+  onchange?: (e: Event) => void
+}
+
+interface ToggleCheckboxProps {
+  checked?: boolean
+  name?: string
+  id?: string
+  disabled?: boolean
+  class?: string
+  onchange?: (checked: boolean) => void
+}
+
+interface ToggleRadioProps {
+  checked?: boolean
+  name?: string
+  id?: string
+  disabled?: boolean
+  class?: string
+  onchange?: (checked: boolean) => void
+}
+```
+
+---
+
 ## 国际化机制
 
 ### 内部实现
@@ -193,6 +252,7 @@ interface ChangePasswordFormData {
 
 ```ts
 interface PasswordInputProps {
+  id?: string
   value?: string
   placeholder?: string
   disabled?: boolean

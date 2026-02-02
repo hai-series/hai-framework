@@ -4,19 +4,34 @@
  * =============================================================================
  */
 
+import type { ToastItem } from '../src/lib/toast.svelte.js'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 // 由于 toast 使用 Svelte 5 Runes，需要模拟环境
 // 这里测试 toast 的核心逻辑
 
+/** Toast 模块类型 */
+interface ToastModule {
+  toast: {
+    items: ToastItem[]
+    add: (props: { message: string, variant: string, duration?: number, position?: string, dismissible?: boolean }) => string
+    remove: (id: string) => void
+    clear: () => void
+    success: (message: string, duration?: number) => string
+    error: (message: string, duration?: number) => string
+    warning: (message: string, duration?: number) => string
+    info: (message: string, duration?: number) => string
+  }
+}
+
 describe('toastState', () => {
-  let toast: any
+  let toast: ToastModule['toast']
 
   beforeEach(async () => {
     vi.useFakeTimers()
     // 动态导入以确保每次测试获得新实例
     vi.resetModules()
-    const module = await import('../src/lib/toast.svelte.js')
+    const module = await import('../src/lib/toast.svelte.js') as ToastModule
     toast = module.toast
   })
 

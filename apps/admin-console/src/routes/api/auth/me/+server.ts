@@ -5,9 +5,9 @@
  */
 
 import type { RequestHandler } from '@sveltejs/kit'
+import { core } from '@hai/core'
 import { iam } from '@hai/iam'
 import { json } from '@sveltejs/kit'
-import { core } from '@hai/core'
 
 export const GET: RequestHandler = async ({ cookies }) => {
   try {

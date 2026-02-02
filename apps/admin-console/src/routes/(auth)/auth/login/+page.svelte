@@ -7,7 +7,7 @@
 -->
 <script lang="ts">
   import { goto } from '$app/navigation'
-  import { LoginForm, type LoginFormData } from '@hai/ui'
+  import type { LoginFormData } from '@hai/ui'
   import * as m from '$lib/paraglide/messages'
   
   let loading = $state(false)

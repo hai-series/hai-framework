@@ -12,6 +12,7 @@
   import type { UserProfileProps, UserProfileField } from '../types.js'
   import { cn } from '../../../utils.js'
   import Input from '../../primitives/Input.svelte'
+  import BareInput from '../../primitives/BareInput.svelte'
   import Button from '../../primitives/Button.svelte'
   import Textarea from '../../primitives/Textarea.svelte'
   import Avatar from '../../primitives/Avatar.svelte'
@@ -115,10 +116,10 @@
             />
             {#if editable && editMode}
               <div>
-                <input
+                <BareInput
                   type="file"
-                  accept="image/*"
                   class="file-input file-input-bordered file-input-sm w-full max-w-xs"
+                  accept="image/*"
                   onchange={handleAvatarChange}
                 />
                 <p class="text-xs text-base-content/60 mt-1">{m('user_profile_avatar_hint')}</p>

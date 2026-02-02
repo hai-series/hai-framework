@@ -10,6 +10,7 @@
 <script lang="ts">
   import type { AvatarUploadProps } from '../types.js'
   import { cn } from '../../../utils.js'
+  import BareInput from '../../primitives/BareInput.svelte'
   import { m } from '../../../messages.js'
   
   let {
@@ -28,7 +29,7 @@
   }: AvatarUploadProps = $props()
   
   let loading = $state(false)
-  let inputElement: HTMLInputElement
+  let inputElement = $state<HTMLInputElement | undefined>(undefined)
   
   const sizeClass = $derived({
     xs: 'w-8 h-8',
@@ -170,12 +171,12 @@
   onclick={handleClick}
   onkeydown={(e) => e.key === 'Enter' && handleClick()}
 >
-  <input
-    bind:this={inputElement}
+  <BareInput
     type="file"
+    class="hidden"
+    bind:inputRef={inputElement}
     {accept}
     {disabled}
-    class="hidden"
     onchange={handleChange}
   />
   

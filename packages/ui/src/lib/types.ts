@@ -36,6 +36,10 @@ export interface ButtonProps {
   variant?: Variant
   /** 尺寸 */
   size?: Size
+  /** 自定义类名 */
+  class?: string
+  /** aria-label（无障碍标签） */
+  ariaLabel?: string
   /** 是否禁用 */
   disabled?: boolean
   /** 是否加载中 */
@@ -44,12 +48,36 @@ export interface ButtonProps {
   outline?: boolean
   /** 是否为圆形 */
   circle?: boolean
-  /** 自定义类名 */
-  class?: string
   /** 按钮类型 */
   type?: 'button' | 'submit' | 'reset'
   /** 点击事件 */
   onclick?: (e: MouseEvent) => void
+  /** 子内容 */
+  children?: Snippet
+}
+
+/**
+ * 无样式按钮属性
+ */
+export interface BareButtonProps {
+  /** 按钮类型 */
+  type?: 'button' | 'submit' | 'reset'
+  /** 是否禁用 */
+  disabled?: boolean
+  /** 自定义类名 */
+  class?: string
+  /** aria-label（无障碍标签） */
+  ariaLabel?: string
+  /** 角色（用于特殊交互） */
+  role?: string
+  /** aria-selected（用于 option/tab 等） */
+  ariaSelected?: boolean
+  /** tabindex */
+  tabindex?: number
+  /** 点击事件 */
+  onclick?: (e: MouseEvent) => void
+  /** 键盘事件 */
+  onkeydown?: (e: KeyboardEvent) => void
   /** 子内容 */
   children?: Snippet
 }
@@ -80,6 +108,8 @@ export interface InputProps {
   class?: string
   /** 元素 ID */
   id?: string
+  /** input 引用 */
+  inputRef?: HTMLInputElement
   /** 表单字段名 */
   name?: string
   /** 自动完成 */
@@ -88,6 +118,8 @@ export interface InputProps {
   pattern?: string
   /** 关联的 datalist id */
   list?: string
+  /** 输入模式（移动端键盘） */
+  inputmode?: 'text' | 'search' | 'none' | 'tel' | 'url' | 'email' | 'numeric' | 'decimal'
   /** 最小长度 */
   minlength?: number
   /** 最大长度 */
@@ -96,10 +128,86 @@ export interface InputProps {
   min?: number
   /** 最大值（针对 number 类型） */
   max?: number
+  /** 步进值（number 类型） */
+  step?: number
   /** 输入事件 */
   oninput?: (e: Event & { currentTarget: HTMLInputElement }) => void
   /** 变化事件 */
   onchange?: (e: Event & { currentTarget: HTMLInputElement }) => void
+  /** 键盘事件 */
+  onkeydown?: (e: KeyboardEvent & { currentTarget: HTMLInputElement }) => void
+  /** 失去焦点事件 */
+  onblur?: (e: FocusEvent & { currentTarget: HTMLInputElement }) => void
+  /** 获得焦点事件 */
+  onfocus?: (e: FocusEvent & { currentTarget: HTMLInputElement }) => void
+  /** 失效事件（表单验证失败） */
+  oninvalid?: (e: Event & { currentTarget: HTMLInputElement }) => void
+}
+
+/**
+ * 无样式输入框属性
+ */
+export interface BareInputProps {
+  /** 值 */
+  value?: string
+  /** 占位符 */
+  placeholder?: string
+  /** 类型 */
+  type?: 'text' | 'password' | 'email' | 'number' | 'tel' | 'url' | 'search' | 'file' | 'range'
+  /** 是否禁用 */
+  disabled?: boolean
+  /** 是否只读 */
+  readonly?: boolean
+  /** 是否必填 */
+  required?: boolean
+  /** 自定义类名 */
+  class?: string
+  /** 角色 */
+  role?: string
+  /** aria-expanded */
+  ariaExpanded?: boolean
+  /** aria-controls */
+  ariaControls?: string
+  /** aria-autocomplete */
+  ariaAutocomplete?: 'none' | 'list' | 'inline' | 'both'
+  /** 元素 ID */
+  id?: string
+  /** input 引用 */
+  inputRef?: HTMLInputElement
+  /** 表单字段名 */
+  name?: string
+  /** 自动完成 */
+  autocomplete?: string
+  /** 输入模式验证（正则表达式） */
+  pattern?: string
+  /** 关联的 datalist id */
+  list?: string
+  /** 文件类型限制（file 类型） */
+  accept?: string
+  /** 是否允许多选（file 类型） */
+  multiple?: boolean
+  /** 最小长度 */
+  minlength?: number
+  /** 最大长度 */
+  maxlength?: number
+  /** 最小值（针对 number 类型） */
+  min?: number
+  /** 最大值（针对 number 类型） */
+  max?: number
+  /** 步进值（number 类型） */
+  step?: number
+  /** 禁用软键盘（移动端） */
+  inputmode?: 'text' | 'search' | 'none' | 'tel' | 'url' | 'email' | 'numeric' | 'decimal'
+  /** 输入事件 */
+  oninput?: (e: Event & { currentTarget: HTMLInputElement }) => void
+  /** 变化事件 */
+  onchange?: (e: Event & { currentTarget: HTMLInputElement }) => void
+  /** 键盘事件 */
+  onkeydown?: (e: KeyboardEvent & { currentTarget: HTMLInputElement }) => void
+  /** 失去焦点事件 */
+  onblur?: (e: FocusEvent & { currentTarget: HTMLInputElement }) => void
+  /** 获得焦点事件 */
+  onfocus?: (e: FocusEvent & { currentTarget: HTMLInputElement }) => void
   /** 失效事件（表单验证失败） */
   oninvalid?: (e: Event & { currentTarget: HTMLInputElement }) => void
 }
@@ -124,7 +232,7 @@ export interface TextareaProps {
   required?: boolean
   /** 是否自动调整高度 */
   autoResize?: boolean
-  /** 错误消息 */
+  inputmode?: HTMLInputElement['inputMode']
   error?: string
   /** 自定义验证消息（用于覆盖浏览器原生验证提示） */
   validationMessage?: string
@@ -212,6 +320,39 @@ export interface SwitchProps {
   label?: string
   /** 尺寸 */
   size?: Size
+  /** 是否禁用 */
+  disabled?: boolean
+  /** 自定义类名 */
+  class?: string
+  /** 变化事件 */
+  onchange?: (checked: boolean) => void
+}
+
+/**
+ * 原生开关输入（用于折叠/抽屉等结构要求 input 直系子元素的场景）
+ */
+export interface ToggleCheckboxProps {
+  /** 是否选中 */
+  checked?: boolean
+  /** 表单字段名称 */
+  name?: string
+  /** 元素 ID */
+  id?: string
+  /** 是否禁用 */
+  disabled?: boolean
+  /** 自定义类名 */
+  class?: string
+  /** 变化事件 */
+  onchange?: (checked: boolean) => void
+}
+
+export interface ToggleRadioProps {
+  /** 是否选中 */
+  checked?: boolean
+  /** 表单字段名称 */
+  name?: string
+  /** 元素 ID */
+  id?: string
   /** 是否禁用 */
   disabled?: boolean
   /** 自定义类名 */
@@ -368,6 +509,8 @@ export interface ProgressProps {
   value: number
   /** 最大值 */
   max?: number
+  /** 步进值（number 类型） */
+  step?: number
   /** 尺寸 */
   size?: Size
   /** 变体 */

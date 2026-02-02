@@ -12,6 +12,7 @@
   import type { Size } from '../../../types.js'
   import Input from '../../primitives/Input.svelte'
   import IconButton from '../../primitives/IconButton.svelte'
+  import BareButton from '../../primitives/BareButton.svelte'
   import { m } from '../../../messages.js'
   
   interface Props {
@@ -105,12 +106,12 @@
       class="pr-10"
     />
     
-    <button
+    <BareButton
       type="button"
       class="absolute right-3 top-1/2 -translate-y-1/2 text-base-content/50 hover:text-base-content"
       onclick={toggleShow}
-      tabindex="-1"
-      aria-label={showValue ? m('encrypted_input_hide') : m('encrypted_input_show')}
+      tabindex={-1}
+      ariaLabel={showValue ? m('encrypted_input_hide') : m('encrypted_input_show')}
     >
       {#if showValue}
         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -122,7 +123,7 @@
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
         </svg>
       {/if}
-    </button>
+    </BareButton>
   </div>
   
   <!-- 加密结果展示 -->

@@ -1,5 +1,7 @@
 /// <reference types="@sveltejs/kit" />
 
+import '@hai/ui/auto-import'
+
 /**
  * hai Admin Console - 类型声明
  */

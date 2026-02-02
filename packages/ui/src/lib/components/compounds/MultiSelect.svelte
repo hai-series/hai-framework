@@ -5,6 +5,8 @@
 -->
 <script lang='ts'>
   import { m } from '../../messages.js'
+  import BareInput from '../primitives/BareInput.svelte'
+  import BareButton from '../primitives/BareButton.svelte'
   
   interface Option {
     label: string
@@ -99,19 +101,19 @@
         <span class='inline-flex items-center gap-1 px-2 py-0.5 bg-primary/10 text-primary text-sm rounded-md'>
           <span class='truncate max-w-32'>{opt.label}</span>
           {#if !disabled}
-            <button
+            <BareButton
               type='button'
               class='hover:bg-primary/20 rounded p-0.5 transition-colors'
               onclick={(e) => removeOption(opt.value, e)}
-              aria-label='{m('multi_select_remove')} {opt.label}'
+              ariaLabel={`${m('multi_select_remove')} ${opt.label}`}
             >
               <span class='icon-[tabler--x] size-3'></span>
-            </button>
+            </BareButton>
           {/if}
         </span>
       {/each}
 
-      <input
+      <BareInput
         type='text'
         class='flex-1 min-w-20 bg-transparent outline-none text-sm py-0.5'
         placeholder={selectedOptions.length === 0 ? placeholder : ''}
@@ -119,9 +121,9 @@
         onfocus={() => !disabled && (isOpen = true)}
         {disabled}
         role='combobox'
-        aria-expanded={isOpen}
-        aria-controls={listboxId}
-        aria-autocomplete='list'
+        ariaExpanded={isOpen}
+        ariaControls={listboxId}
+        ariaAutocomplete='list'
       />
     </div>
 
@@ -136,10 +138,10 @@
           <div class='px-3 py-2 text-sm text-base-content/50'>{m('multi_select_no_match')}</div>
         {:else}
           {#each filteredOptions as opt (opt.value)}
-            <button
+            <BareButton
               type='button'
               role='option'
-              aria-selected={selected.includes(opt.value)}
+              ariaSelected={selected.includes(opt.value)}
               class='w-full flex items-center gap-2 px-3 py-2 text-sm text-left hover:bg-base-200 transition-colors'
               onclick={() => toggleOption(opt.value)}
             >
@@ -154,7 +156,7 @@
                   <div class='text-xs text-base-content/50 truncate'>{opt.description}</div>
                 {/if}
               </div>
-            </button>
+            </BareButton>
           {/each}
         {/if}
       </div>

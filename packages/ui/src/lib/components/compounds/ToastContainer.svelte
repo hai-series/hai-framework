@@ -10,6 +10,7 @@
 <script lang="ts">
   import { toast } from '../../toast.svelte.js'
   import { cn, getAlertVariantClass } from '../../utils.js'
+  import IconButton from '../primitives/IconButton.svelte'
   
   const positionMap = {
     'top-right': 'toast-top toast-end',
@@ -42,12 +43,14 @@
       <div class={cn('alert', getAlertVariantClass(item.variant ?? 'info'))}>
         <span>{item.message}</span>
         {#if item.dismissible}
-          <button
-            class="btn btn-sm btn-ghost"
+          <IconButton
+            variant="ghost"
+            size="sm"
             onclick={() => toast.remove(item.id)}
+            ariaLabel="Dismiss"
           >
             ✕
-          </button>
+          </IconButton>
         {/if}
       </div>
     {/each}

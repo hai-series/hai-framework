@@ -15,7 +15,7 @@
 -->
 <script lang='ts'>
   import { isDarkTheme } from '../../theme-config.js'
-
+  import IconButton from '../primitives/IconButton.svelte'
   import { m } from '../../messages.js'
 
   interface Props {
@@ -49,11 +49,11 @@
 </script>
 
 <div class='tooltip tooltip-bottom {className}' data-tip={isDark ? (labels.switchToLight ?? m('theme_switch_to_light')) : (labels.switchToDark ?? m('theme_switch_to_dark'))}>
-  <button
-    type='button'
-    class='btn btn-ghost btn-sm btn-circle'
+  <IconButton
+    variant='ghost'
+    size='sm'
     onclick={toggleTheme}
-    aria-label={isDark ? (labels.switchToLight ?? m('theme_switch_to_light')) : (labels.switchToDark ?? m('theme_switch_to_dark'))}
+    ariaLabel={isDark ? (labels.switchToLight ?? m('theme_switch_to_light')) : (labels.switchToDark ?? m('theme_switch_to_dark'))}
   >
     {#if isDark}
       <svg xmlns='http://www.w3.org/2000/svg' class='h-5 w-5' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'>
@@ -72,5 +72,5 @@
         <path d='M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z' />
       </svg>
     {/if}
-  </button>
+  </IconButton>
 </div>

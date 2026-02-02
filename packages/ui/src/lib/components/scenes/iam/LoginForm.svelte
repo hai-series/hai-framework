@@ -14,6 +14,7 @@
   import PasswordInput from './PasswordInput.svelte'
   import Input from '../../primitives/Input.svelte'
   import Button from '../../primitives/Button.svelte'
+  import BareButton from '../../primitives/BareButton.svelte'
   import Checkbox from '../../primitives/Checkbox.svelte'
   import Alert from '../../compounds/Alert.svelte'
   import { m } from '../../../messages.js'
@@ -126,13 +127,13 @@
       
       {#if showForgotPassword}
         {#if onforgotpassword}
-          <button
+          <BareButton
             type="button"
             class="link link-primary text-sm"
             onclick={handleForgotPassword}
           >
             {m('login_forgot_password')}
-          </button>
+          </BareButton>
         {:else}
           <a href={forgotPasswordUrl} class="link link-primary text-sm">
             {m('login_forgot_password')}

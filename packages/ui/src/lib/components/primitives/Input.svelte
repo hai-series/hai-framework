@@ -10,7 +10,7 @@
 -->
 <script lang="ts">
   import type { InputProps } from '../../types.js'
-  import { cn, getInputSizeClass } from '../../utils.js'
+  import { cn } from '../../utils.js'
   
   let {
     value = $bindable(''),
@@ -28,47 +28,64 @@
     autocomplete,
     pattern,
     list,
+    inputmode,
+    step,
     minlength,
     min,
     max,
     maxlength,
+    inputRef = $bindable<HTMLInputElement | undefined>(),
     oninput,
     onchange,
+    onkeydown,
+    onblur,
+    onfocus,
     oninvalid,
   }: InputProps = $props()
-  
-  let inputRef: HTMLInputElement | undefined = $state()
-  
-  // 统一风格：自定义容器+input，圆角、边框、padding、focus 态与 PasswordInput 一致
+
   const containerHeight = $derived(
     size === 'xs' ? 'h-8' :
     size === 'sm' ? 'h-10' :
     size === 'lg' ? 'h-14' :
+    size === 'xl' ? 'h-16' :
     'h-12'
   )
-  
-  // 当 validationMessage 变化时更新自定义验证消息
-  $effect(() => {
-    if (inputRef) {
-      inputRef.setCustomValidity(validationMessage)
-    }
-  })
-  
+
+  const containerClass = $derived(
+    cn(
+      'flex items-center w-full rounded-box border bg-base-100',
+      containerHeight,
+      error ? 'border-error' : 'border-base-content/20',
+      'focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-base-content/20',
+      className,
+    )
+  )
+
   function handleInput(e: Event & { currentTarget: HTMLInputElement }) {
-    value = e.currentTarget.value
-    // 输入时重置自定义验证，让浏览器重新验证
     if (validationMessage) {
-      e.currentTarget.setCustomValidity(validationMessage)
+      e.currentTarget.setCustomValidity('')
     }
+    value = e.currentTarget.value
     oninput?.(e)
   }
-  
+
   function handleChange(e: Event & { currentTarget: HTMLInputElement }) {
     onchange?.(e)
   }
-  
+
+  function handleKeydown(e: KeyboardEvent & { currentTarget: HTMLInputElement }) {
+    onkeydown?.(e)
+  }
+
+  function handleBlur(e: FocusEvent & { currentTarget: HTMLInputElement }) {
+    onblur?.(e)
+  }
+
+  function handleFocus(e: FocusEvent & { currentTarget: HTMLInputElement }) {
+    onfocus?.(e)
+  }
+
   function handleInvalid(e: Event & { currentTarget: HTMLInputElement }) {
-    // 当触发 invalid 事件时，设置自定义验证消息
     if (validationMessage) {
       e.currentTarget.setCustomValidity(validationMessage)
     }
@@ -77,13 +94,7 @@
 </script>
 
 <div class="form-control w-full">
-  <div class={cn(
-    'flex items-center w-full rounded-box border bg-base-100',
-    containerHeight,
-    error ? 'border-error' : 'border-base-content/20',
-    'focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-base-content/20',
-    className
-  )}>
+  <div class={containerClass}>
     <input
       bind:this={inputRef}
       {id}
@@ -96,14 +107,19 @@
       {pattern}
       {list}
       {minlength}
-        {min}
-        {max}
+      {min}
+      {max}
       {maxlength}
+      {step}
+      inputmode={inputmode}
       autocomplete={autocomplete as HTMLInputElement['autocomplete']}
       class="flex-1 h-full px-4 bg-transparent border-none outline-none"
       bind:value
       oninput={handleInput}
       onchange={handleChange}
+      onkeydown={handleKeydown}
+      onblur={handleBlur}
+      onfocus={handleFocus}
       oninvalid={handleInvalid}
     />
   </div>

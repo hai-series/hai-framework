@@ -11,6 +11,7 @@
 -->
 <script lang='ts'>
   import IconButton from '../primitives/IconButton.svelte'
+  import BareButton from '../primitives/BareButton.svelte'
   import { m } from '../../messages.js'
   
   interface Props {
@@ -102,7 +103,7 @@
           </h4>
           <div class='flex gap-3'>
             {#each languages as lang (lang.value)}
-              <button
+              <BareButton
                 type='button'
                 class='group flex flex-1 items-center justify-center gap-3 rounded-xl border-2 px-6 py-4 text-base font-medium transition-all duration-200
                   hover:border-primary/60 hover:bg-primary/5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40
@@ -110,7 +111,8 @@
                     ? "border-primary bg-primary/10 text-primary shadow-sm"
                     : "border-base-content/15 bg-base-100 text-base-content/80"}'
                 onclick={() => onlanguagechange?.(lang.value)}
-                aria-pressed={currentLanguage === lang.value}
+                role="option"
+                ariaSelected={currentLanguage === lang.value}
               >
                 {#if lang.icon}
                   <span class='text-2xl'>{lang.icon}</span>
@@ -119,7 +121,7 @@
                 {#if currentLanguage === lang.value}
                   <span class='icon-[tabler--check] size-5 text-primary'></span>
                 {/if}
-              </button>
+              </BareButton>
             {/each}
           </div>
         </section>
@@ -132,7 +134,7 @@
           </h4>
           <div class='grid gap-2.5 grid-cols-2 sm:grid-cols-3'>
             {#each themes as theme (theme.value)}
-              <button
+              <BareButton
                 type='button'
                 class='group relative flex flex-col gap-2 rounded-xl border-2 p-3 text-left transition-all duration-200
                   hover:border-primary/50 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40
@@ -140,7 +142,8 @@
                     ? "border-primary bg-primary/5 shadow-sm"
                     : "border-base-content/10 bg-base-100 hover:bg-base-50"}'
                 onclick={() => onthemechange?.(theme.value)}
-                aria-pressed={currentTheme === theme.value}
+                role="option"
+                ariaSelected={currentTheme === theme.value}
               >
                 {#if currentTheme === theme.value}
                   <div class='absolute -right-1 -top-1 rounded-full bg-primary p-0.5 text-primary-content shadow'>
@@ -161,7 +164,7 @@
                 <span class='text-xs font-medium text-base-content/80 group-hover:text-base-content'>
                   {theme.label}
                 </span>
-              </button>
+              </BareButton>
             {/each}
           </div>
         </section>

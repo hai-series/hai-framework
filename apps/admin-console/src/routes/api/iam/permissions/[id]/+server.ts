@@ -6,8 +6,8 @@
 
 import type { RequestHandler } from '@sveltejs/kit'
 import { audit, permissionService } from '$lib/server/services/index.js'
-import { json } from '@sveltejs/kit'
 import { core } from '@hai/core'
+import { json } from '@sveltejs/kit'
 
 /**
  * DELETE /api/iam/permissions/[id] - 删除权限

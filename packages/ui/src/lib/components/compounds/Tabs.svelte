@@ -10,6 +10,7 @@
 <script lang="ts">
   import type { TabsProps } from '../../types.js'
   import { cn } from '../../utils.js'
+  import BareButton from '../primitives/BareButton.svelte'
   
   let {
     items,
@@ -59,10 +60,9 @@
 
 <div role="tablist" class={tabsClass}>
   {#each items as item}
-    <button
+    <BareButton
       role="tab"
-      class="tab"
-      class:tab-active={active === item.key}
+      class={cn('tab', active === item.key && 'tab-active')}
       disabled={item.disabled}
       onclick={() => handleSelect(item.key)}
     >
@@ -70,7 +70,7 @@
         <span class="mr-1">{item.icon}</span>
       {/if}
       {item.label}
-    </button>
+    </BareButton>
   {/each}
 </div>
 

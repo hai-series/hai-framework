@@ -12,6 +12,7 @@
   import type { DrawerProps } from '../../types.js'
   import { cn, generateId } from '../../utils.js'
   import IconButton from '../primitives/IconButton.svelte'
+  import ToggleCheckbox from '../primitives/ToggleCheckbox.svelte'
   
   let {
     open = $bindable(false),
@@ -69,7 +70,7 @@
 </script>
 
 <div class={drawerClass}>
-  <input {id} type="checkbox" class="drawer-toggle" bind:checked={open} />
+  <ToggleCheckbox {id} class="drawer-toggle" bind:checked={open} />
   
   <div class={sideClass}>
     <div

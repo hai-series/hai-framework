@@ -13,15 +13,25 @@ import type { Reroute } from '@sveltejs/kit'
 // 首次运行前请先执行 pnpm paraglide:compile 或 pnpm build
 
 let deLocalizeUrl: ((url: URL) => URL) | null = null
+let deLocalizeUrlPromise: Promise<((url: URL) => URL) | null> | null = null
 
-// 动态导入（仅当生成后可用）
-try {
-  const paraglideRuntime = await import('$lib/paraglide/runtime.js')
-  deLocalizeUrl = paraglideRuntime.deLocalizeUrl
+async function loadParaglideRuntime() {
+  if (deLocalizeUrl)
+    return deLocalizeUrl
+
+  if (!deLocalizeUrlPromise) {
+    deLocalizeUrlPromise = import('$lib/paraglide/runtime.js')
+      .then((paraglideRuntime) => {
+        deLocalizeUrl = paraglideRuntime.deLocalizeUrl
+        return deLocalizeUrl
+      })
+      .catch(() => null)
+  }
+
+  return deLocalizeUrlPromise
 }
-catch {
-  // Paraglide 尚未编译，跳过
-}
+
+void loadParaglideRuntime()
 
 /**
  * Reroute hook - 移除 URL 中的 locale 前缀用于路由匹配

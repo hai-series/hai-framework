@@ -13,9 +13,13 @@
   import type { Size } from '../../../types.js'
   import { cn } from '../../../utils.js'
   import Progress from '../../primitives/Progress.svelte'
+  import BareInput from '../../primitives/BareInput.svelte'
+  import BareButton from '../../primitives/BareButton.svelte'
   import { m } from '../../../messages.js'
   
   interface Props {
+    /** 元素 ID */
+    id?: string
     /** 值 */
     value?: string
     /** 占位符 */
@@ -49,6 +53,7 @@
   }
   
   let {
+    id,
     value = $bindable(''),
     placeholder = '',
     size = 'md',
@@ -130,15 +135,16 @@
     'focus-within:outline focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-base-content/20',
     className
   )}>
-    <input
-      bind:this={inputRef}
+    <BareInput
       type={showPassword ? 'text' : 'password'}
+      {id}
+      class="flex-1 h-full px-4 bg-transparent border-none outline-none"
+      bind:value
+      bind:inputRef={inputRef}
       {placeholder}
       {disabled}
       {readonly}
       {required}
-      class="flex-1 h-full px-4 bg-transparent border-none outline-none"
-      {value}
       oninput={handleInput}
       onchange={handleChange}
       oninvalid={oninvalid}
@@ -149,13 +155,13 @@
       <div class={cn('w-px h-6 bg-base-content/20')}></div>
       
       <!-- 切换按钮 -->
-      <button
+      <BareButton
         type="button"
         class="flex items-center justify-center w-10 h-full text-base-content/50 hover:text-base-content transition-colors"
         onclick={togglePassword}
-        tabindex="-1"
+        tabindex={-1}
         {disabled}
-        aria-label={showPassword ? m('password_hide') : m('password_show')}
+        ariaLabel={showPassword ? m('password_hide') : m('password_show')}
       >
         {#if showPassword}
           <!-- 眼睛斜杠图标 - 隐藏密码 -->
@@ -169,7 +175,7 @@
             <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
           </svg>
         {/if}
-      </button>
+      </BareButton>
     {/if}
   </div>
   

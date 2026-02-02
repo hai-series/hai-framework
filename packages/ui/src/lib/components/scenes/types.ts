@@ -17,6 +17,8 @@ import type { Size } from '../../types.js'
  * 密码输入框属性
  */
 export interface PasswordInputProps {
+  /** 元素 ID */
+  id?: string
   /** 值 */
   value?: string
   /** 占位符 */

@@ -6,7 +6,8 @@
  * =============================================================================
  */
 
-import type { GuardResult, RouteGuard } from '../types.js'
+import type { RequestEvent } from '@sveltejs/kit'
+import type { GuardResult, RouteGuard, SessionData } from '../types.js'
 
 /**
  * 所有守卫都通过才允许访问（AND 逻辑）
@@ -65,11 +66,14 @@ export function notGuard(guard: RouteGuard, options: { redirect?: string, messag
   }
 }
 
+/** 条件判断函数类型 */
+type ConditionFn = (event: RequestEvent, session: SessionData | undefined) => boolean | Promise<boolean>
+
 /**
  * 条件守卫
  */
 export function conditionalGuard(
-  condition: (event: any, session: any) => boolean | Promise<boolean>,
+  condition: ConditionFn,
   guard: RouteGuard,
 ): RouteGuard {
   return async (event, session): Promise<GuardResult> => {

@@ -4,7 +4,6 @@
 -->
 <script lang="ts">
   import type { PageData } from './$types'
-  import { Card, Badge } from '@hai/ui'
   import * as m from '$lib/paraglide/messages'
   import { getLocale } from '$lib/paraglide/runtime'
 
@@ -128,7 +127,7 @@
         <div>
           <p class="text-sm font-medium text-base-content/60">{m.dashboard_activity_7d()}</p>
           <p class="text-3xl font-bold text-info mt-1">
-            {data.auditStats.reduce((sum, s) => sum + s.count, 0)}
+            {data.auditStats.reduce((sum: number, s: { count: number }) => sum + s.count, 0)}
           </p>
           <p class="text-xs text-base-content/40 mt-1">{m.dashboard_audit_logs()}</p>
         </div>
@@ -213,7 +212,7 @@
         <div class="divide-y divide-base-content/10">
           {#each data.recentActivity as activity}
             <div class="flex items-start gap-3 py-3">
-              <div class="flex-shrink-0 w-8 h-8 rounded-full bg-base-200 flex items-center justify-center">
+              <div class="shrink-0 w-8 h-8 rounded-full bg-base-200 flex items-center justify-center">
                 <svg class="w-4 h-4 text-base-content/60" fill="none" stroke="currentColor" viewBox="0 0 24 24" stroke-width="1.5">
                   <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
                 </svg>

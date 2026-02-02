@@ -6,7 +6,7 @@
   =============================================================================
 -->
 <script lang="ts">
-  import { ForgotPasswordForm, type ForgotPasswordFormData, Result } from '@hai/ui'
+  import type { ForgotPasswordFormData } from '@hai/ui'
   import * as m from '$lib/paraglide/messages'
   
   let loading = $state(false)
