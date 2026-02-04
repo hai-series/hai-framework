@@ -76,7 +76,7 @@ export * from './crypto-types.js'
 
 // i18n
 type CryptoMessageKey = keyof typeof messagesZhCN
-export const { getMessage: getCryptoMessage, setDefaultLocale: setCryptoDefaultLocale }
+export const { getMessage: getCryptoMessage }
   = core.i18n.createMessageGetter<CryptoMessageKey>({ 'zh-CN': messagesZhCN, 'en-US': messagesEnUS })
 
 // 注册 crypto 模块的配置 Schema

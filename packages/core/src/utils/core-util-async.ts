@@ -19,7 +19,7 @@ function delay(ms: number): Promise<void> {
 async function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   // 使用 Promise.race + 定时器实现超时控制
   const timeout = new Promise<never>((_, reject) =>
-    setTimeout(() => reject(new Error(i18n.getCoreMessage('error_timeout'))), ms))
+    setTimeout(() => reject(new Error(i18n.coreM('error_timeout'))), ms))
   return Promise.race([promise, timeout])
 }
 

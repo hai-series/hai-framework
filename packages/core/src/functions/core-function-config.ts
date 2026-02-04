@@ -86,7 +86,7 @@ function interpolateEnv(value: unknown): Result<unknown, ConfigError> {
       if (envValue === undefined && defaultValue === undefined) {
         return err({
           code: ConfigErrorCode.ENV_VAR_MISSING,
-          message: i18n.getCoreMessage('config_envVarMissing', { params: { varName } }),
+          message: i18n.coreM('config_envVarMissing', { params: { varName } }),
         })
       }
       result = result.replace(fullMatch, envValue ?? defaultValue ?? '')
@@ -142,7 +142,7 @@ const watchEntries = new Map<string, WatchEntry>()
 function createNotLoadedError(name: string): ConfigError {
   return {
     code: ConfigErrorCode.NOT_LOADED,
-    message: i18n.getCoreMessage('config_notLoaded', { params: { name } }),
+    message: i18n.coreM('config_notLoaded', { params: { name } }),
   }
 }
 
@@ -171,7 +171,7 @@ function loadYaml(filePath: string): Result<unknown, ConfigError> {
   if (!existsSync(filePath)) {
     return err({
       code: ConfigErrorCode.FILE_NOT_FOUND,
-      message: i18n.getCoreMessage('config_fileNotExist', { params: { filePath } }),
+      message: i18n.coreM('config_fileNotExist', { params: { filePath } }),
       path: filePath,
     })
   }
@@ -184,7 +184,7 @@ function loadYaml(filePath: string): Result<unknown, ConfigError> {
   catch (error) {
     return err({
       code: ConfigErrorCode.PARSE_ERROR,
-      message: i18n.getCoreMessage('config_parseFailed', { params: { filePath } }),
+      message: i18n.coreM('config_parseFailed', { params: { filePath } }),
       path: filePath,
       details: error,
     })
@@ -206,7 +206,7 @@ function loadConfig<T>(
   if (!parseResult.success) {
     return err({
       code: ConfigErrorCode.VALIDATION_ERROR,
-      message: i18n.getCoreMessage('config_validationFailed'),
+      message: i18n.coreM('config_validationFailed'),
       path: filePath,
       details: parseResult.error.issues,
     })
@@ -371,7 +371,7 @@ export const config = {
   getOrThrow<T>(name: string): T {
     const data = this.get<T>(name)
     if (data === undefined) {
-      throw new Error(i18n.getCoreMessage('config_notLoaded', { params: { name } }))
+      throw new Error(i18n.coreM('config_notLoaded', { params: { name } }))
     }
     return data
   },

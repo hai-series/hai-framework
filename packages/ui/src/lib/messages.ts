@@ -6,7 +6,7 @@
  *
  * 设计原则：
  * - 组件内聚：翻译与组件在同一包内，开箱即用
- * - 自动同步：通过 @hai/core 的 localeManager 自动订阅 locale 变化
+ * - 自动同步：通过 @hai/core 的全局 locale 管理
  * - 可覆盖：组件仍支持 labels prop 进行应用层定制
  *
  * 使用方式（组件内部）：
@@ -29,7 +29,7 @@ import messagesZhCN from './messages/zh-CN.json'
 export type UIMessageKey = keyof typeof messagesZhCN
 
 // 创建消息获取器
-const { getMessage, getDefaultLocale, setDefaultLocale } = core.i18n.createMessageGetter({
+const { getMessage } = core.i18n.createMessageGetter({
   'zh-CN': messagesZhCN as Record<string, string>,
   'en-US': messagesEnUS as Record<string, string>,
 })
@@ -47,15 +47,19 @@ const { getMessage, getDefaultLocale, setDefaultLocale } = core.i18n.createMessa
  * ```
  */
 export function m(key: UIMessageKey, params?: Record<string, string | number | boolean>): string {
-  return getMessage(key, undefined, params)
+  return getMessage(key, params ? { params } : undefined)
 }
 
 /**
  * 获取当前 UI 模块使用的 locale
  */
-export { getDefaultLocale as getUILocale }
+export function getUILocale(): string {
+  return core.i18n.getGlobalLocale()
+}
 
 /**
  * 手动设置 UI 模块的 locale（通常不需要，会自动同步）
  */
-export { setDefaultLocale as setUILocale }
+export function setUILocale(locale: string): void {
+  core.i18n.setGlobalLocale(locale)
+}

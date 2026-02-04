@@ -8,7 +8,7 @@
 
 - 场景组件（`scenes/`）内置中英文翻译，自动响应全局 locale
 - 翻译文件：`packages/ui/src/lib/messages/{zh-CN,en-US}.json`
-- 通过 `@hai/core` 的 `localeManager` 订阅 locale 变化
+- 通过 `@hai/core` 的全局 locale 管理保持同步
 
 ---
 
@@ -84,7 +84,8 @@ import enUS from './messages/en-US.json'
 import zhCN from './messages/zh-CN.json'
 
 const messages = { 'zh-CN': zhCN, 'en-US': enUS }
-export const m = core.i18n.createMessageGetter(messages)
+const { getMessage } = core.i18n.createMessageGetter(messages)
+export const m = getMessage
 ```
 
 ### 使用方式

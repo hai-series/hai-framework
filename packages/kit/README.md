@@ -176,7 +176,7 @@ export async function handle({ event, resolve }) {
 }
 ```
 
-该函数内部调用 `@hai/core` 的 `setGlobalLocale`，所有通过 `createMessageGetter` 创建的消息获取器会自动订阅并同步。
+该函数内部调用 `@hai/core` 的 `setGlobalLocale`，所有通过 `createMessageGetter` 创建的消息获取器会读取全局 locale。
 
 ## API 参考
 

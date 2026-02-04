@@ -55,12 +55,12 @@ export * from './i18n/index.js'
 
 /** config 对象（浏览器环境不支持） */
 export const config = {
-  load: () => { throw new Error(i18n.getCoreMessage('core_browserFeatureUnsupported', { params: { feature: 'config.load' } })) },
-  get: () => { throw new Error(i18n.getCoreMessage('core_browserFeatureUnsupported', { params: { feature: 'config.get' } })) },
-  getOrThrow: () => { throw new Error(i18n.getCoreMessage('core_browserFeatureUnsupported', { params: { feature: 'config.getOrThrow' } })) },
-  reload: () => { throw new Error(i18n.getCoreMessage('core_browserFeatureUnsupported', { params: { feature: 'config.reload' } })) },
-  watch: () => { throw new Error(i18n.getCoreMessage('core_browserFeatureUnsupported', { params: { feature: 'config.watch' } })) },
-  unwatch: () => { throw new Error(i18n.getCoreMessage('core_browserFeatureUnsupported', { params: { feature: 'config.unwatch' } })) },
+  load: () => { throw new Error(i18n.coreM('core_browserFeatureUnsupported', { params: { feature: 'config.load' } })) },
+  get: () => { throw new Error(i18n.coreM('core_browserFeatureUnsupported', { params: { feature: 'config.get' } })) },
+  getOrThrow: () => { throw new Error(i18n.coreM('core_browserFeatureUnsupported', { params: { feature: 'config.getOrThrow' } })) },
+  reload: () => { throw new Error(i18n.coreM('core_browserFeatureUnsupported', { params: { feature: 'config.reload' } })) },
+  watch: () => { throw new Error(i18n.coreM('core_browserFeatureUnsupported', { params: { feature: 'config.watch' } })) },
+  unwatch: () => { throw new Error(i18n.coreM('core_browserFeatureUnsupported', { params: { feature: 'config.unwatch' } })) },
   isWatching: () => false,
   has: () => false,
   clear: () => { },

@@ -209,11 +209,11 @@ core.i18n.setGlobalLocale('zh') // 自动变为 'zh-CN'
 import messagesEnUS from '../messages/en-US.json'
 import messagesZhCN from '../messages/zh-CN.json'
 
-const { getMessage, setDefaultLocale } = core.i18n.createMessageGetter({
+const { getMessage } = core.i18n.createMessageGetter({
   'zh-CN': messagesZhCN,
   'en-US': messagesEnUS,
 })
-// createMessageGetter 会自动订阅全局 locale 变化
+// createMessageGetter 会读取全局 locale
 
 // 使用消息
 getMessage('error_not_found') // 根据当前 locale 返回

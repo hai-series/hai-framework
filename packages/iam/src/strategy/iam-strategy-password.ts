@@ -60,14 +60,14 @@ export function createPasswordStrategy(config: PasswordStrategyConfig): AuthStra
     if (password.length < passwordConfig.minLength) {
       return err({
         code: IamErrorCode.PASSWORD_POLICY_VIOLATION,
-        message: getIamMessage('iam_passwordMinLength', undefined, { minLength: passwordConfig.minLength }),
+        message: getIamMessage('iam_passwordMinLength', { params: { minLength: passwordConfig.minLength } }),
       })
     }
 
     if (password.length > passwordConfig.maxLength) {
       return err({
         code: IamErrorCode.PASSWORD_POLICY_VIOLATION,
-        message: getIamMessage('iam_passwordMaxLength', undefined, { maxLength: passwordConfig.maxLength }),
+        message: getIamMessage('iam_passwordMaxLength', { params: { maxLength: passwordConfig.maxLength } }),
       })
     }
 

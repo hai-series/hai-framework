@@ -238,7 +238,11 @@ export function createStorageEndpoint(config: StorageEndpointConfig) {
       // 检查文件大小
       if (file.size > maxFileSize) {
         return new Response(
-          JSON.stringify({ error: getKitMessage('kit_fileSizeExceeded', undefined, { maxSize: Math.round(maxFileSize / 1024 / 1024) }) }),
+          JSON.stringify({
+            error: getKitMessage('kit_fileSizeExceeded', {
+              params: { maxSize: Math.round(maxFileSize / 1024 / 1024) },
+            }),
+          }),
           {
             status: 400,
             headers: { 'Content-Type': 'application/json' },
