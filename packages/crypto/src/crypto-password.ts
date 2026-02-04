@@ -4,56 +4,37 @@
  * =============================================================================
  * 基于 SM3 的密码哈希和验证功能。
  * 使用 SM3 哈希算法对密码进行加盐哈希。
+ *
+ * @example
+ * ```ts
+ * import { crypto } from '@hai/crypto'
+
+ * const provider = crypto.password.create()
+ * const result = provider.hash('password')
+ * if (result.success) {
+ *   provider.verify('password', result.data)
+ * }
+ * ```
  * =============================================================================
  */
 
 import type { Result } from '@hai/core'
-import type { CryptoError } from './crypto-types.js'
+import type { CryptoError, PasswordProvider, PasswordProviderConfig } from './crypto-types.js'
 import { err, ok } from '@hai/core'
 import { CryptoErrorCode } from './crypto-config.js'
+import { cryptoM } from './crypto-i18n.js'
 import { createSM3 } from './crypto-sm3.js'
-import { getCryptoMessage } from './index.js'
 
 // =============================================================================
 // 类型定义
 // =============================================================================
-
-/**
- * 密码提供者接口
- */
-export interface PasswordProvider {
-  /**
-   * 对密码进行哈希
-   * @param password - 明文密码
-   * @returns 哈希后的密码（包含盐值）
-   */
-  hash: (password: string) => Result<string, CryptoError>
-
-  /**
-   * 验证密码
-   * @param password - 明文密码
-   * @param hash - 存储的哈希值
-   * @returns 验证结果
-   */
-  verify: (password: string, hash: string) => Result<boolean, CryptoError>
-}
-
-/**
- * 密码提供者配置
- */
-export interface PasswordProviderConfig {
-  /** 盐值长度（默认 16） */
-  saltLength?: number
-  /** 迭代次数（默认 10000） */
-  iterations?: number
-}
 
 // =============================================================================
 // 工具函数
 // =============================================================================
 
 /**
- * 生成随机盐值
+ * 生成随机盐值。
  */
 function generateSalt(length: number): string {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
@@ -65,7 +46,7 @@ function generateSalt(length: number): string {
 }
 
 /**
- * 对密码进行多次迭代哈希
+ * 对密码进行多次迭代哈希。
  */
 function iterateHash(
   sm3: ReturnType<typeof createSM3>,
@@ -89,27 +70,19 @@ function iterateHash(
 // =============================================================================
 
 /**
- * 创建基于 SM3 的密码哈希提供者
+ * 创建基于 SM3 的密码哈希提供者。
  *
  * @param config - 配置选项
  * @returns 密码提供者实例
  *
  * @example
  * ```ts
- * import { createHaiPasswordProvider } from '@hai/crypto'
+ * import { crypto } from '@hai/crypto'
  *
- * const provider = createHaiPasswordProvider()
- *
- * // 哈希密码
+ * const provider = crypto.password.create({ iterations: 12000 })
  * const hashResult = provider.hash('myPassword123')
  * if (hashResult.success) {
- *   // 存储 hashResult.data
- * }
- *
- * // 验证密码
- * const verifyResult = provider.verify('myPassword123', storedHash)
- * if (verifyResult.success && verifyResult.data) {
- *   // 密码正确
+ *   provider.verify('myPassword123', hashResult.data)
  * }
  * ```
  */
@@ -118,12 +91,24 @@ export function createHaiPasswordProvider(config: PasswordProviderConfig = {}): 
   const sm3 = createSM3()
 
   return {
+    /**
+     * 对密码进行哈希。
+     *
+     * @param password - 明文密码
+     * @returns 哈希结果
+     *
+     * @example
+     * ```ts
+     * const provider = crypto.password.create()
+     * const result = provider.hash('password')
+     * ```
+     */
     hash(password: string): Result<string, CryptoError> {
       try {
         if (!password) {
           return err({
             code: CryptoErrorCode.INVALID_INPUT,
-            message: getCryptoMessage('crypto_passwordEmpty'),
+            message: cryptoM('crypto_passwordEmpty'),
           })
         }
 
@@ -143,17 +128,31 @@ export function createHaiPasswordProvider(config: PasswordProviderConfig = {}): 
       catch (error) {
         return err({
           code: CryptoErrorCode.HASH_FAILED,
-          message: error instanceof Error ? error.message : '密码哈希失败',
+          message: cryptoM('crypto_passwordHashFailed'),
+          cause: error,
         })
       }
     },
 
+    /**
+     * 验证密码。
+     *
+     * @param password - 明文密码
+     * @param hash - 已存储的哈希值
+     * @returns 验证结果
+     *
+     * @example
+     * ```ts
+     * const provider = crypto.password.create()
+     * const result = provider.verify('password', '$hai$...')
+     * ```
+     */
     verify(password: string, hash: string): Result<boolean, CryptoError> {
       try {
         if (!password || !hash) {
           return err({
             code: CryptoErrorCode.INVALID_INPUT,
-            message: getCryptoMessage('crypto_passwordHashEmpty'),
+            message: cryptoM('crypto_passwordHashEmpty'),
           })
         }
 
@@ -162,7 +161,7 @@ export function createHaiPasswordProvider(config: PasswordProviderConfig = {}): 
         if (parts.length !== 5 || parts[1] !== 'hai') {
           return err({
             code: CryptoErrorCode.INVALID_INPUT,
-            message: getCryptoMessage('crypto_hashFormatInvalid'),
+            message: cryptoM('crypto_hashFormatInvalid'),
           })
         }
 
@@ -173,7 +172,7 @@ export function createHaiPasswordProvider(config: PasswordProviderConfig = {}): 
         if (Number.isNaN(storedIterations) || !salt || !storedHash) {
           return err({
             code: CryptoErrorCode.INVALID_INPUT,
-            message: getCryptoMessage('crypto_hashFormatInvalid'),
+            message: cryptoM('crypto_hashFormatInvalid'),
           })
         }
 
@@ -189,7 +188,8 @@ export function createHaiPasswordProvider(config: PasswordProviderConfig = {}): 
       catch (error) {
         return err({
           code: CryptoErrorCode.VERIFY_FAILED,
-          message: error instanceof Error ? error.message : '密码验证失败',
+          message: cryptoM('crypto_passwordVerifyFailed'),
+          cause: error,
         })
       }
     },

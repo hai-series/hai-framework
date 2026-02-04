@@ -7,7 +7,6 @@
  *
  * 包含：
  * - 错误码常量（4000-4999 范围）
- * - SM2/SM3/SM4 相关配置
  * - 统一的 CryptoConfig 配置结构
  *
  * @example
@@ -89,79 +88,6 @@ export const CryptoErrorCode = {
 
 /** 加密错误码类型 */
 export type CryptoErrorCodeType = typeof CryptoErrorCode[keyof typeof CryptoErrorCode]
-
-// =============================================================================
-// SM2 配置 Schema
-// =============================================================================
-
-/**
- * SM2 密文模式
- *
- * - 0: C1C2C3（旧版模式）
- * - 1: C1C3C2（国标模式，推荐）
- */
-export const SM2CipherModeSchema = z.union([z.literal(0), z.literal(1)]).default(1)
-export type SM2CipherMode = z.infer<typeof SM2CipherModeSchema>
-
-/**
- * SM2 加密选项 Schema
- */
-export const SM2EncryptOptionsSchema = z.object({
-  /** 密文模式：0=C1C2C3, 1=C1C3C2（国标） */
-  cipherMode: SM2CipherModeSchema.optional(),
-  /** 输出格式 */
-  outputFormat: z.enum(['hex', 'base64']).default('hex').optional(),
-}).optional()
-
-/**
- * SM2 签名选项 Schema
- */
-export const SM2SignOptionsSchema = z.object({
-  /** 是否对数据进行哈希 */
-  hash: z.boolean().default(true).optional(),
-  /** 用户 ID（默认 "1234567812345678"） */
-  userId: z.string().default('1234567812345678').optional(),
-  /** 输出格式 */
-  outputFormat: z.enum(['hex', 'der']).default('hex').optional(),
-}).optional()
-
-// =============================================================================
-// SM3 配置 Schema
-// =============================================================================
-
-/**
- * SM3 选项 Schema
- */
-export const SM3OptionsSchema = z.object({
-  /** 输入编码 */
-  inputEncoding: z.enum(['utf8', 'hex']).default('utf8').optional(),
-  /** 输出格式 */
-  outputFormat: z.enum(['hex', 'array']).default('hex').optional(),
-}).optional()
-
-// =============================================================================
-// SM4 配置 Schema
-// =============================================================================
-
-/**
- * SM4 加密模式
- */
-export const SM4ModeSchema = z.enum(['ecb', 'cbc']).default('ecb')
-export type SM4Mode = z.infer<typeof SM4ModeSchema>
-
-/**
- * SM4 选项 Schema
- */
-export const SM4OptionsSchema = z.object({
-  /** 加密模式 */
-  mode: SM4ModeSchema.optional(),
-  /** IV 向量（CBC 模式必需） */
-  iv: z.string().optional(),
-  /** 输入编码 */
-  inputEncoding: z.enum(['utf8', 'hex']).default('utf8').optional(),
-  /** 输出格式 */
-  outputFormat: z.enum(['hex', 'base64']).default('hex').optional(),
-}).optional()
 
 // =============================================================================
 // 统一配置 Schema
