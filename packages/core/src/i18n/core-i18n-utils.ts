@@ -12,6 +12,8 @@
  * =============================================================================
  */
 
+import { typeUtils } from '../utils/core-util-type.js'
+
 /**
  * 语言代码（ISO 639-1 + 地区代码）
  * @example 'zh-CN', 'en-US', 'ja-JP'
@@ -38,7 +40,7 @@ export type InterpolationParams = Record<string, string | number | boolean>
 /**
  * 默认支持的语言列表
  */
-export const DEFAULT_LOCALES: LocaleInfo[] = [
+const DEFAULT_LOCALES: LocaleInfo[] = [
   { code: 'zh-CN', label: '简体中文' },
   { code: 'en-US', label: 'English' },
 ]
@@ -46,7 +48,7 @@ export const DEFAULT_LOCALES: LocaleInfo[] = [
 /**
  * 默认语言
  */
-export const DEFAULT_LOCALE: Locale = 'zh-CN'
+const DEFAULT_LOCALE: Locale = 'zh-CN'
 
 // =============================================================================
 // 工具函数
@@ -61,7 +63,7 @@ export const DEFAULT_LOCALE: Locale = 'zh-CN'
  * @example
  * interpolate('Hello, {name}!', { name: 'World' }) // => 'Hello, World!'
  */
-export function interpolate(template: string, params: InterpolationParams): string {
+function interpolate(template: string, params: InterpolationParams): string {
   return template.replace(/\{(\w+)\}/g, (_, key) => {
     const value = params[key]
     return value !== undefined ? String(value) : `{${key}}`
@@ -73,7 +75,7 @@ export function interpolate(template: string, params: InterpolationParams): stri
  * @param supportedLocales - 支持的语言列表
  * @returns 检测到的语言代码，如果不支持则返回 undefined
  */
-export function detectBrowserLocale(supportedLocales: LocaleInfo[] = DEFAULT_LOCALES): Locale | undefined {
+function detectBrowserLocale(supportedLocales: LocaleInfo[] = DEFAULT_LOCALES): Locale | undefined {
   // 仅在浏览器环境中可用
   if (typeof navigator === 'undefined') {
     return undefined
@@ -104,7 +106,7 @@ export function detectBrowserLocale(supportedLocales: LocaleInfo[] = DEFAULT_LOC
  * @param locale - 要检查的语言代码
  * @param supportedLocales - 支持的语言列表
  */
-export function isLocaleSupported(
+function isLocaleSupported(
   locale: Locale,
   supportedLocales: LocaleInfo[] = DEFAULT_LOCALES,
 ): boolean {
@@ -117,7 +119,7 @@ export function isLocaleSupported(
  * @param supportedLocales - 支持的语言列表
  * @param fallback - 回退语言
  */
-export function resolveLocale(
+function resolveLocale(
   locale: Locale | undefined,
   supportedLocales: LocaleInfo[] = DEFAULT_LOCALES,
   fallback: Locale = DEFAULT_LOCALE,
@@ -206,7 +208,7 @@ class LocaleManager {
 /**
  * 全局 Locale 管理器单例
  */
-export const localeManager = new LocaleManager()
+const localeManager = new LocaleManager()
 
 /**
  * 设置全局 locale（便捷函数）
@@ -217,15 +219,22 @@ export const localeManager = new LocaleManager()
  * setGlobalLocale('en-US')
  * ```
  */
-export function setGlobalLocale(locale: Locale): void {
+function setGlobalLocale(locale: Locale): void {
   localeManager.setGlobalLocale(locale)
 }
 
 /**
  * 获取当前全局 locale（便捷函数）
  */
-export function getGlobalLocale(): Locale {
+function getGlobalLocale(): Locale {
   return localeManager.getLocale()
+}
+
+/**
+ * 订阅全局 locale 变化
+ */
+function subscribeLocale(listener: (locale: Locale) => void): () => void {
+  return localeManager.subscribe(listener)
 }
 
 // =============================================================================
@@ -241,6 +250,67 @@ export type MessageDictionary = Record<string, string>
  * 多语言消息集合
  */
 export type LocaleMessages<K extends string = string> = Record<Locale, Record<K, string>>
+
+/**
+ * 消息获取选项
+ */
+export interface MessageOptions {
+  locale?: Locale
+  params?: InterpolationParams
+}
+
+/**
+ * 判断是否为 MessageOptions
+ */
+function isMessageOptions(value: unknown): value is MessageOptions {
+  return typeUtils.isObject(value) && ('locale' in value || 'params' in value)
+}
+
+/**
+ * 消息注册表
+ */
+const messageRegistry = new Map<string, LocaleMessages>()
+
+/**
+ * 注册消息（集中式）
+ */
+function registerMessages<K extends string>(namespace: string, messages: LocaleMessages<K>): void {
+  messageRegistry.set(namespace, messages as LocaleMessages)
+}
+
+/**
+ * 获取已注册消息
+ */
+function getRegisteredMessage<K extends string>(
+  namespace: string,
+  key: K,
+  options?: MessageOptions | InterpolationParams,
+): string {
+  const messages = messageRegistry.get(namespace)
+  if (!messages)
+    return String(key)
+
+  const resolvedOptions = isMessageOptions(options)
+    ? options
+    : options
+      ? { params: options }
+      : undefined
+
+  const locale = resolveLocale(resolvedOptions?.locale, DEFAULT_LOCALES, DEFAULT_LOCALE)
+  const dict = messages[locale] ?? messages[DEFAULT_LOCALE] ?? messages['zh-CN']
+  if (!dict)
+    return String(key)
+
+  const template = dict[key]
+  if (template === undefined)
+    return String(key)
+
+  if (resolvedOptions?.params) {
+    return interpolate(template, resolvedOptions.params)
+  }
+
+  return template
+}
 
 /**
  * 创建消息获取函数
@@ -266,11 +336,11 @@ export type LocaleMessages<K extends string = string> = Record<Locale, Record<K,
  * export const setDbDefaultLocale = setDefaultLocale
  * ```
  */
-export function createMessageGetter<K extends string>(
+function createMessageGetter<K extends string>(
   messages: LocaleMessages<K>,
   initialLocale: Locale = DEFAULT_LOCALE,
 ): {
-  getMessage: (key: K, locale?: Locale, params?: InterpolationParams) => string
+  getMessage: (key: K, options?: MessageOptions | InterpolationParams) => string
   setDefaultLocale: (locale: Locale) => void
   getDefaultLocale: () => Locale
 } {
@@ -278,9 +348,15 @@ export function createMessageGetter<K extends string>(
 
   function getMessage(
     key: K,
-    locale: Locale = defaultLocale,
-    params?: InterpolationParams,
+    options?: MessageOptions | InterpolationParams,
   ): string {
+    const resolvedOptions = isMessageOptions(options)
+      ? options
+      : options
+        ? { params: options }
+        : undefined
+
+    const locale = (resolvedOptions?.locale ?? defaultLocale) as Locale
     const dict = messages[locale] ?? messages[DEFAULT_LOCALE] ?? messages['zh-CN']
     if (!dict) {
       return String(key)
@@ -291,8 +367,8 @@ export function createMessageGetter<K extends string>(
       return String(key)
     }
 
-    if (params) {
-      return interpolate(template, params)
+    if (resolvedOptions?.params) {
+      return interpolate(template, resolvedOptions.params)
     }
 
     return template
@@ -310,4 +386,23 @@ export function createMessageGetter<K extends string>(
   localeManager.subscribe(setDefaultLocale)
 
   return { getMessage, setDefaultLocale, getDefaultLocale }
+}
+
+// =============================================================================
+// 对外入口（仅 const）
+// =============================================================================
+
+export const i18n = {
+  DEFAULT_LOCALES,
+  DEFAULT_LOCALE,
+  interpolate,
+  detectBrowserLocale,
+  isLocaleSupported,
+  resolveLocale,
+  setGlobalLocale,
+  getGlobalLocale,
+  subscribeLocale,
+  createMessageGetter,
+  registerMessages,
+  t: getRegisteredMessage,
 }

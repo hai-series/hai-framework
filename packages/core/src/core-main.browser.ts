@@ -28,7 +28,7 @@
 
 import type { CoreOptions } from './core-types.js'
 import { createCore } from './core-main.js'
-import { configureLogger, createLogger, getLogger, getLogLevel, setLogLevel } from './functions/core-function-logger.browser.js'
+import { logger } from './functions/core-function-logger.browser.js'
 
 // =============================================================================
 // Core 实例
@@ -38,11 +38,11 @@ import { configureLogger, createLogger, getLogger, getLogLevel, setLogLevel } fr
  * Core 服务对象 - 聚合常用功能
  */
 export const core = createCore({
-  createLogger,
-  getLogger,
-  configureLogger,
-  setLogLevel,
-  getLogLevel,
+  createLogger: logger.createLogger,
+  getLogger: logger.getLogger,
+  configureLogger: logger.configureLogger,
+  setLogLevel: logger.setLogLevel,
+  getLogLevel: logger.getLogLevel,
 })
 
 /**

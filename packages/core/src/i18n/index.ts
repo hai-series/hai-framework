@@ -5,7 +5,7 @@
  * 国际化工具模块
  *
  * 设计原则：
- * - 集中式 locale 管理：通过 core.i18n.localeManager 统一管理全局 locale
+ * - 集中式 locale 管理：通过 core.i18n.subscribeLocale 统一管理全局 locale
  * - 通过 core.i18n.xxx 访问所有 i18n 功能
  * - JSON 消息：通过 createMessageGetter 统一消息获取
  *
@@ -15,8 +15,32 @@
  * =============================================================================
  */
 
-// core 内部消息获取器（对外可用）
-export * from './core-i18n-messages.js'
+import type { CoreMessageKey } from './core-i18n-messages.js'
+import messagesEnUS from '../../messages/en-US.json'
+import messagesZhCN from '../../messages/zh-CN.json'
+import { i18n as baseI18n } from './core-i18n-utils.js'
 
-// i18n 工具（函数与类型）
-export * from './core-i18n-utils.js'
+// =============================================================================
+// 对外入口（仅 const）
+// =============================================================================
+
+const { getMessage: getCoreMessage } = baseI18n.createMessageGetter<CoreMessageKey>({
+  'zh-CN': messagesZhCN,
+  'en-US': messagesEnUS,
+})
+
+export const i18n = {
+  ...baseI18n,
+  getCoreMessage,
+}
+
+// 仅对外导出类型
+export type { CoreMessageKey } from './core-i18n-messages.js'
+export type {
+  InterpolationParams,
+  Locale,
+  LocaleInfo,
+  LocaleMessages,
+  MessageDictionary,
+  MessageOptions,
+} from './core-i18n-utils.js'

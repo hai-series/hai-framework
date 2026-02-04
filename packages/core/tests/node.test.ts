@@ -81,7 +81,7 @@ describe('core.logger - 日志 (Node.js)', () => {
 })
 
 describe('core.config - 配置管理 (Node.js)', () => {
-  const testDir = join(process.cwd(), '.test-config')
+  const testDir = join(process.cwd(), '.test-config-node')
   const testFile = join(testDir, 'test.yml')
 
   beforeEach(() => {

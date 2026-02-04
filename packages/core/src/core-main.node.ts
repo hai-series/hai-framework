@@ -30,14 +30,14 @@
  * =============================================================================
  */
 
-import type { ZodSchema } from 'zod'
+import type { ZodType } from 'zod'
 import type { BuiltinConfigModule, ConfigLoadItem, CoreOptions } from './core-types.js'
 import { existsSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { CoreConfigSchema } from './config/index.js'
 import { createCore } from './core-main.js'
-import { config, unwatchConfig, watchConfig } from './functions/core-function-config.js'
-import { configureLogger, createLogger, getLogger, getLogLevel, setLogLevel } from './functions/core-function-logger.node.js'
+import { config } from './functions/core-function-config.js'
+import { logger } from './functions/core-function-logger.node.js'
 
 // =============================================================================
 // 内置模块 Schema 注册表
@@ -47,7 +47,7 @@ import { configureLogger, createLogger, getLogger, getLogLevel, setLogLevel } fr
  * 内置模块 Schema 映射
  * key 为文件名前缀（不含 _），value 为对应的 Zod Schema
  */
-const builtinSchemas: Record<BuiltinConfigModule, ZodSchema | null> = {
+const builtinSchemas: Record<BuiltinConfigModule, ZodType | null> = {
   core: CoreConfigSchema,
   db: null, // 延迟加载，避免循环依赖
   cache: null,
@@ -60,14 +60,14 @@ const builtinSchemas: Record<BuiltinConfigModule, ZodSchema | null> = {
 /**
  * 注册内置模块的 Schema（供其他模块调用）
  */
-export function registerBuiltinSchema(module: BuiltinConfigModule, schema: ZodSchema): void {
+export function registerBuiltinSchema(module: BuiltinConfigModule, schema: ZodType): void {
   builtinSchemas[module] = schema
 }
 
 /**
  * 获取内置模块的 Schema
  */
-function getBuiltinSchema(module: string): ZodSchema | null {
+function getBuiltinSchema(module: string): ZodType | null {
   return builtinSchemas[module as BuiltinConfigModule] ?? null
 }
 
@@ -80,11 +80,11 @@ function getBuiltinSchema(module: string): ZodSchema | null {
  */
 function createNodeCore() {
   const baseCore = createCore({
-    createLogger,
-    getLogger,
-    configureLogger,
-    setLogLevel,
-    getLogLevel,
+    createLogger: logger.createLogger,
+    getLogger: logger.getLogger,
+    configureLogger: logger.configureLogger,
+    setLogLevel: logger.setLogLevel,
+    getLogLevel: logger.getLogLevel,
   })
 
   // 扩展 config 和 init 功能
@@ -113,7 +113,7 @@ export const core = createNodeCore()
  */
 function scanConfigDir(
   configDir: string,
-  schemas?: Record<string, ZodSchema>,
+  schemas?: Record<string, ZodType>,
   silent?: boolean,
 ): ConfigLoadItem[] {
   const logger = core.logger
@@ -171,7 +171,7 @@ function scanConfigDir(
         items.push({
           name: baseName,
           filePath,
-          schema: { parse: (x: unknown) => x, safeParse: (x: unknown) => ({ success: true, data: x }) } as unknown as ZodSchema,
+          schema: { parse: (x: unknown) => x, safeParse: (x: unknown) => ({ success: true, data: x }) } as unknown as ZodType,
         })
       }
     }
@@ -216,9 +216,9 @@ function initCore(options: CoreOptions = {}): void {
       if (!silent) {
         logger.info(`[core] Config loaded: ${item.name} <- ${item.filePath}`)
       }
-      // Register change callback
-      if (item.onChange) {
-        config.onChange(item.name, item.onChange)
+      // Register watch callback
+      if (item.watch) {
+        config.watch(item.name, item.watch)
       }
     }
     else {
@@ -246,22 +246,17 @@ function setupConfigWatch(configs: ConfigLoadItem[], silent: boolean): void {
   const logger = core.logger
 
   for (const item of configs) {
-    const success = watchConfig(item.name, (name, reloadSuccess, error) => {
-      if (reloadSuccess) {
-        if (!silent) {
-          logger.info(`[core] Config reloaded: ${name}`)
-        }
+    config.watch(item.name, (_config, error) => {
+      if (error) {
+        logger.error(`[core] Config reload failed: ${item.name}`, { error })
       }
-      else {
-        logger.error(`[core] Config reload failed: ${name}`, { error })
+      else if (!silent) {
+        logger.info(`[core] Config reloaded: ${item.name}`)
       }
     })
 
-    if (success && !silent) {
+    if (!silent) {
       logger.debug(`[core] Config watch enabled: ${item.name}`)
-    }
-    else if (!success) {
-      logger.warn(`[core] Cannot watch config: ${item.filePath}`)
     }
   }
 }
@@ -270,7 +265,7 @@ function setupConfigWatch(configs: ConfigLoadItem[], silent: boolean): void {
  * Stop config file watching
  */
 export function stopConfigWatch(name?: string): void {
-  unwatchConfig(name)
+  config.unwatch(name)
 }
 
 // Re-export types

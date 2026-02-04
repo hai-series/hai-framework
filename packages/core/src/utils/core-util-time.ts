@@ -4,12 +4,12 @@
  * =============================================================================
  */
 
-import { getCoreMessage } from '../i18n/core-i18n-messages.js'
+import { i18n } from '../i18n/index.js'
 
 /**
  * 格式化日期
  */
-export function formatDate(date: Date, format = 'YYYY-MM-DD'): string {
+function formatDate(date: Date, format = 'YYYY-MM-DD'): string {
   const year = date.getFullYear()
   const month = String(date.getMonth() + 1).padStart(2, '0')
   const day = String(date.getDate()).padStart(2, '0')
@@ -29,49 +29,49 @@ export function formatDate(date: Date, format = 'YYYY-MM-DD'): string {
 /**
  * 相对时间描述
  */
-export function timeAgo(date: Date): string {
+function timeAgo(date: Date): string {
   const seconds = Math.floor((Date.now() - date.getTime()) / 1000)
   if (seconds < 60)
-    return getCoreMessage('time_secondsAgo', undefined, { n: seconds })
+    return i18n.getCoreMessage('time_secondsAgo', { params: { n: seconds } })
   if (seconds < 3600)
-    return getCoreMessage('time_minutesAgo', undefined, { n: Math.floor(seconds / 60) })
+    return i18n.getCoreMessage('time_minutesAgo', { params: { n: Math.floor(seconds / 60) } })
   if (seconds < 86400)
-    return getCoreMessage('time_hoursAgo', undefined, { n: Math.floor(seconds / 3600) })
-  return getCoreMessage('time_daysAgo', undefined, { n: Math.floor(seconds / 86400) })
+    return i18n.getCoreMessage('time_hoursAgo', { params: { n: Math.floor(seconds / 3600) } })
+  return i18n.getCoreMessage('time_daysAgo', { params: { n: Math.floor(seconds / 86400) } })
 }
 
 /**
  * 获取当前时间戳（毫秒）
  */
-export function now(): number {
+function now(): number {
   return Date.now()
 }
 
 /**
  * 获取当前时间戳（秒）
  */
-export function nowSeconds(): number {
+function nowSeconds(): number {
   return Math.floor(Date.now() / 1000)
 }
 
 /**
  * 解析日期字符串
  */
-export function parseDate(dateStr: string): Date {
+function parseDate(dateStr: string): Date {
   return new Date(dateStr)
 }
 
 /**
  * 判断是否为有效日期
  */
-export function isValidDate(date: Date): boolean {
+function isValidDate(date: Date): boolean {
   return !Number.isNaN(date.getTime())
 }
 
 /**
  * 添加天数
  */
-export function addDays(date: Date, days: number): Date {
+function addDays(date: Date, days: number): Date {
   const result = new Date(date)
   result.setDate(result.getDate() + days)
   return result
@@ -80,7 +80,7 @@ export function addDays(date: Date, days: number): Date {
 /**
  * 添加小时
  */
-export function addHours(date: Date, hours: number): Date {
+function addHours(date: Date, hours: number): Date {
   const result = new Date(date)
   result.setHours(result.getHours() + hours)
   return result
@@ -89,7 +89,7 @@ export function addHours(date: Date, hours: number): Date {
 /**
  * 获取日期的开始时间（00:00:00）
  */
-export function startOfDay(date: Date): Date {
+function startOfDay(date: Date): Date {
   const result = new Date(date)
   result.setHours(0, 0, 0, 0)
   return result
@@ -98,8 +98,24 @@ export function startOfDay(date: Date): Date {
 /**
  * 获取日期的结束时间（23:59:59）
  */
-export function endOfDay(date: Date): Date {
+function endOfDay(date: Date): Date {
   const result = new Date(date)
   result.setHours(23, 59, 59, 999)
   return result
+}
+
+/**
+ * 时间操作工具对象
+ */
+export const time = {
+  formatDate,
+  timeAgo,
+  now,
+  nowSeconds,
+  parseDate,
+  isValidDate,
+  addDays,
+  addHours,
+  startOfDay,
+  endOfDay,
 }

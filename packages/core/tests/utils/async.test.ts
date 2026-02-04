@@ -5,20 +5,13 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import {
-  debounce,
-  delay,
-  parallel,
-  retry,
-  serial,
-  withTimeout,
-} from '../../src/utils/core-util-async.js'
+import { async as asyncUtils } from '../../src/utils/core-util-async.js'
 
 describe('core-util-async', () => {
   describe('delay()', () => {
     it('应延迟指定时间', async () => {
       const start = Date.now()
-      await delay(50)
+      await asyncUtils.delay(50)
       const elapsed = Date.now() - start
 
       expect(elapsed).toBeGreaterThanOrEqual(45)
@@ -32,7 +25,7 @@ describe('core-util-async', () => {
         setTimeout(() => resolve('success'), 10)
       })
 
-      const result = await withTimeout(promise, 100)
+      const result = await asyncUtils.withTimeout(promise, 100)
       expect(result).toBe('success')
     })
 
@@ -41,7 +34,7 @@ describe('core-util-async', () => {
         setTimeout(resolve, 100)
       })
 
-      await expect(withTimeout(promise, 10)).rejects.toThrow('请求超时')
+      await expect(asyncUtils.withTimeout(promise, 10)).rejects.toThrow('请求超时')
     })
   })
 
@@ -53,7 +46,7 @@ describe('core-util-async', () => {
         return 'success'
       }
 
-      const result = await retry(fn)
+      const result = await asyncUtils.retry(fn)
       expect(result).toBe('success')
       expect(attempts).toBe(1)
     })
@@ -67,7 +60,7 @@ describe('core-util-async', () => {
         return 'success'
       }
 
-      const result = await retry(fn, { maxRetries: 3, delay: 10 })
+      const result = await asyncUtils.retry(fn, { maxRetries: 3, delay: 10 })
       expect(result).toBe('success')
       expect(attempts).toBe(3)
     })
@@ -77,14 +70,14 @@ describe('core-util-async', () => {
         throw new Error('always fail')
       }
 
-      await expect(retry(fn, { maxRetries: 2, delay: 10 })).rejects.toThrow('always fail')
+      await expect(asyncUtils.retry(fn, { maxRetries: 2, delay: 10 })).rejects.toThrow('always fail')
     })
   })
 
   describe('parallel()', () => {
     it('应并行执行任务', async () => {
       const items = [1, 2, 3, 4, 5]
-      const results = await parallel(items, async n => n * 2)
+      const results = await asyncUtils.parallel(items, async n => n * 2)
 
       expect(results).toEqual([2, 4, 6, 8, 10])
     })
@@ -94,10 +87,10 @@ describe('core-util-async', () => {
       let maxConcurrent = 0
 
       const items = [1, 2, 3, 4, 5]
-      await parallel(items, async () => {
+      await asyncUtils.parallel(items, async () => {
         concurrent++
         maxConcurrent = Math.max(maxConcurrent, concurrent)
-        await delay(20)
+        await asyncUtils.delay(20)
         concurrent--
       }, 2)
 
@@ -110,8 +103,8 @@ describe('core-util-async', () => {
       const order: number[] = []
       const items = [1, 2, 3]
 
-      await serial(items, async (n) => {
-        await delay(10)
+      await asyncUtils.serial(items, async (n) => {
+        await asyncUtils.delay(10)
         order.push(n)
       })
 
@@ -120,7 +113,7 @@ describe('core-util-async', () => {
 
     it('应返回所有结果', async () => {
       const items = [1, 2, 3]
-      const results = await serial(items, async n => n * 2)
+      const results = await asyncUtils.serial(items, async n => n * 2)
 
       expect(results).toEqual([2, 4, 6])
     })
@@ -129,7 +122,7 @@ describe('core-util-async', () => {
   describe('debounce()', () => {
     it('应防抖执行', async () => {
       let callCount = 0
-      const fn = debounce(() => {
+      const fn = asyncUtils.debounce(() => {
         callCount++
       }, 50)
 
@@ -139,13 +132,13 @@ describe('core-util-async', () => {
 
       expect(callCount).toBe(0)
 
-      await delay(100)
+      await asyncUtils.delay(100)
       expect(callCount).toBe(1)
     })
 
     it('应在延迟后执行最后一次调用', async () => {
       let lastValue = 0
-      const fn = debounce((value: number) => {
+      const fn = asyncUtils.debounce((value: number) => {
         lastValue = value
       }, 50)
 
@@ -153,7 +146,7 @@ describe('core-util-async', () => {
       fn(2)
       fn(3)
 
-      await delay(100)
+      await asyncUtils.delay(100)
       expect(lastValue).toBe(3)
     })
   })

@@ -11,8 +11,6 @@ import {
   // core 服务
   core,
   err,
-  // 配置占位
-  loadConfig,
   // Result
   ok,
 } from '../src/core-index.browser.js'
@@ -42,7 +40,7 @@ describe('browser entry', () => {
 
     it('should generate UUID', () => {
       const uuid = core.id.uuid()
-      expect(core.isValidUUID(uuid)).toBe(true)
+      expect(core.id.isValidUUID(uuid)).toBe(true)
     })
   })
 
@@ -124,10 +122,6 @@ describe('browser entry', () => {
   })
 
   describe('config 不可用（浏览器环境）', () => {
-    it('should throw for loadConfig', () => {
-      expect(() => loadConfig()).toThrow()
-    })
-
     it('should throw for config.load', () => {
       expect(() => config.load()).toThrow()
     })

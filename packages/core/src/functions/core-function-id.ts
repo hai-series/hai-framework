@@ -6,7 +6,7 @@
  *
  * @example
  * ```ts
- * import { id, isValidUUID, isValidNanoId } from '@hai/core'
+ * import { id } from '@hai/core'
  *
  * // 生成 ID
  * const myId = id.generate()
@@ -15,8 +15,8 @@
  * const uuid = id.uuid()
  *
  * // 验证
- * isValidUUID(uuid) // true
- * isValidNanoId(myId) // true
+ * id.isValidUUID(uuid) // true
+ * id.isValidNanoId(myId) // true
  * ```
  * =============================================================================
  */
@@ -116,23 +116,19 @@ export const id = {
   uuid(): string {
     return generateUUID()
   },
-}
 
-// =============================================================================
-// 验证工具
-// =============================================================================
+  /**
+   * 验证是否为有效的 UUID v4
+   */
+  isValidUUID(uuid: string): boolean {
+    return UUID_REGEX.test(uuid)
+  },
 
-/**
- * 验证是否为有效的 UUID v4
- */
-export function isValidUUID(uuid: string): boolean {
-  return UUID_REGEX.test(uuid)
-}
-
-/**
- * 验证是否为有效的 nanoid
- */
-export function isValidNanoId(str: string, length: number = DEFAULT_LENGTH): boolean {
-  const regex = new RegExp(`^[A-Za-z0-9_-]{${length}}$`)
-  return regex.test(str)
+  /**
+   * 验证是否为有效的 nanoid
+   */
+  isValidNanoId(str: string, length: number = DEFAULT_LENGTH): boolean {
+    const regex = new RegExp(`^[A-Za-z0-9_-]{${length}}$`)
+    return regex.test(str)
+  },
 }

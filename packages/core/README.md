@@ -128,10 +128,21 @@ if (result.success) {
 // 获取已加载的配置
 const appConfig = core.config.get('app')
 
-// 监听配置变更
-core.config.onChange('app', (newConfig) => {
+// 监听配置变更（文件变更或手动 reload）
+const unwatch = core.config.watch('app', (newConfig, error) => {
+  if (error) {
+    core.logger.error('Config reload failed', { error })
+    return
+  }
   core.logger.info('Config changed', { config: newConfig })
 })
+
+core.config.isWatching('app') // true/false
+
+// 停止监听
+unwatch()
+core.config.unwatch('app')
+core.config.unwatch() // 停止全部
 ```
 
 ### 配置 Schema
@@ -222,16 +233,16 @@ ConfigErrorCode.VALIDATION_ERROR // 1102
 
 ### core.id - ID 生成
 
-| 方法                      | 说明                      |
-| ------------------------- | ------------------------- |
-| `core.id.generate(len?)`  | 生成 nanoid（默认 21 位） |
-| `core.id.short()`         | 生成短 ID（10 位）        |
-| `core.id.withPrefix(p)`   | 生成带前缀的 ID           |
-| `core.id.trace()`         | 生成 trace ID             |
-| `core.id.request()`       | 生成 request ID           |
-| `core.id.uuid()`          | 生成 UUID v4              |
-| `core.isValidUUID(str)`   | 验证 UUID 格式            |
-| `core.isValidNanoId(str)` | 验证 nanoid 格式          |
+| 方法                         | 说明                      |
+| ---------------------------- | ------------------------- |
+| `core.id.generate(len?)`     | 生成 nanoid（默认 21 位） |
+| `core.id.short()`            | 生成短 ID（10 位）        |
+| `core.id.withPrefix(p)`      | 生成带前缀的 ID           |
+| `core.id.trace()`            | 生成 trace ID             |
+| `core.id.request()`          | 生成 request ID           |
+| `core.id.uuid()`             | 生成 UUID v4              |
+| `core.id.isValidUUID(str)`   | 验证 UUID 格式            |
+| `core.id.isValidNanoId(str)` | 验证 nanoid 格式          |
 
 ### core.config - 配置管理（Node.js）
 
@@ -242,7 +253,9 @@ ConfigErrorCode.VALIDATION_ERROR // 1102
 | `core.config.getOrThrow(name)`             | 获取配置（不存在则抛出） |
 | `core.config.has(name)`                    | 检查配置是否存在         |
 | `core.config.reload(name)`                 | 重新加载配置             |
-| `core.config.onChange(name, cb)`           | 监听配置变更             |
+| `core.config.watch(name, callback)`        | 监听配置变更并自动重载   |
+| `core.config.unwatch(name?)`               | 停止监听（支持全部）     |
+| `core.config.isWatching(name)`             | 是否正在监听             |
 | `core.config.clear()`                      | 清空所有配置             |
 | `core.config.keys()`                       | 获取所有配置名称         |
 

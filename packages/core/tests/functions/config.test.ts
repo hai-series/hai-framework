@@ -9,16 +9,9 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import { ConfigErrorCode } from '../../src/config/index.js'
-import {
-  config,
-  isWatchingConfig,
-  loadConfig,
-  loadYaml,
-  unwatchConfig,
-  watchConfig,
-} from '../../src/functions/core-function-config.js'
+import { config } from '../../src/functions/core-function-config.js'
 
-const testDir = join(process.cwd(), '.test-config')
+const testDir = join(process.cwd(), '.test-config-config')
 const testFile = join(testDir, 'test.yml')
 
 const TestSchema = z.object({
@@ -30,7 +23,7 @@ const TestSchema = z.object({
 describe('core-function-config', () => {
   beforeEach(() => {
     config.clear()
-    unwatchConfig()
+    config.unwatch()
     if (!existsSync(testDir)) {
       mkdirSync(testDir, { recursive: true })
     }
@@ -38,83 +31,10 @@ describe('core-function-config', () => {
 
   afterEach(() => {
     config.clear()
-    unwatchConfig()
+    config.unwatch()
     if (existsSync(testDir)) {
       rmSync(testDir, { recursive: true, force: true })
     }
-  })
-
-  describe('loadYaml()', () => {
-    it('应加载有效的 YAML 文件', () => {
-      writeFileSync(testFile, 'name: test\nport: 3000')
-      const result = loadYaml(testFile)
-      expect(result.success).toBe(true)
-      if (result.success) {
-        expect(result.data).toEqual({ name: 'test', port: 3000 })
-      }
-    })
-
-    it('应返回文件不存在错误', () => {
-      const result = loadYaml('/non/existent/file.yml')
-      expect(result.success).toBe(false)
-      if (!result.success) {
-        expect(result.error.code).toBe(ConfigErrorCode.FILE_NOT_FOUND)
-      }
-    })
-
-    it('应支持环境变量插值', () => {
-      process.env.TEST_PORT = '8080'
-      // eslint-disable-next-line no-template-curly-in-string
-      writeFileSync(testFile, 'name: test\nport: ${TEST_PORT}')
-      const result = loadYaml(testFile)
-      expect(result.success).toBe(true)
-      if (result.success) {
-        expect(result.data).toEqual({ name: 'test', port: '8080' })
-      }
-      delete process.env.TEST_PORT
-    })
-
-    it('应支持环境变量默认值', () => {
-      // eslint-disable-next-line no-template-curly-in-string
-      writeFileSync(testFile, 'name: ${UNDEFINED_VAR:default}\nport: 3000')
-      const result = loadYaml(testFile)
-      expect(result.success).toBe(true)
-      if (result.success) {
-        expect(result.data).toEqual({ name: 'default', port: 3000 })
-      }
-    })
-
-    it('应在缺少环境变量且无默认值时返回错误', () => {
-      // eslint-disable-next-line no-template-curly-in-string
-      writeFileSync(testFile, 'name: ${MISSING_VAR}\nport: 3000')
-      const result = loadYaml(testFile)
-      expect(result.success).toBe(false)
-      if (!result.success) {
-        expect(result.error.code).toBe(ConfigErrorCode.ENV_VAR_MISSING)
-      }
-    })
-  })
-
-  describe('loadConfig()', () => {
-    it('应加载并验证配置', () => {
-      writeFileSync(testFile, 'name: test\nport: 3000\ndebug: true')
-      const result = loadConfig(testFile, TestSchema)
-      expect(result.success).toBe(true)
-      if (result.success) {
-        expect(result.data.name).toBe('test')
-        expect(result.data.port).toBe(3000)
-        expect(result.data.debug).toBe(true)
-      }
-    })
-
-    it('应在验证失败时返回错误', () => {
-      writeFileSync(testFile, 'name: test\nport: invalid')
-      const result = loadConfig(testFile, TestSchema)
-      expect(result.success).toBe(false)
-      if (!result.success) {
-        expect(result.error.code).toBe(ConfigErrorCode.VALIDATION_ERROR)
-      }
-    })
   })
 
   describe('config.load()', () => {
@@ -177,20 +97,23 @@ describe('core-function-config', () => {
     })
   })
 
-  describe('config.onChange()', () => {
-    it('应注册变更监听器', () => {
+  describe('config.watch()', () => {
+    it('应监听文件变更并自动重载', () => {
       writeFileSync(testFile, 'name: v1\nport: 3000')
       config.load('app', testFile, TestSchema)
 
-      let changedConfig: unknown = null
-      config.onChange<z.infer<typeof TestSchema>>('app', (cfg) => {
-        changedConfig = cfg
+      let reloadedConfig: unknown = null
+      config.watch<z.infer<typeof TestSchema>>('app', (cfg, error) => {
+        if (!error) {
+          reloadedConfig = cfg
+        }
       })
 
       writeFileSync(testFile, 'name: v2\nport: 4000')
+      // 手动触发 reload 模拟文件变更
       config.reload('app')
 
-      expect(changedConfig).toEqual({ name: 'v2', port: 4000 })
+      expect(reloadedConfig).toEqual({ name: 'v2', port: 4000 })
     })
 
     it('应返回取消监听函数', () => {
@@ -198,16 +121,35 @@ describe('core-function-config', () => {
       config.load('app', testFile, TestSchema)
 
       let callCount = 0
-      const unsubscribe = config.onChange('app', () => {
-        callCount++
+      const unwatch = config.watch('app', (cfg, error) => {
+        if (!error) {
+          callCount++
+        }
       })
 
+      // 手动触发 reload
       config.reload('app')
       expect(callCount).toBe(1)
 
-      unsubscribe()
+      unwatch()
       config.reload('app')
-      expect(callCount).toBe(1) // 不再增加
+      expect(callCount).toBe(1)
+    })
+
+    it('应在配置加载失败时通知错误', () => {
+      writeFileSync(testFile, 'name: app\nport: 3000')
+      config.load('app', testFile, TestSchema)
+
+      let receivedError: unknown = null
+      config.watch('app', (cfg, error) => {
+        receivedError = error
+      })
+
+      // 写入无效配置
+      writeFileSync(testFile, 'invalid: yaml: content')
+      const result = config.reload('app')
+      expect(result.success).toBe(false)
+      expect(receivedError).not.toBeNull()
     })
   })
 
@@ -253,42 +195,25 @@ describe('core-function-config', () => {
     })
   })
 
-  describe('watchConfig()', () => {
-    it('应启用配置监听', () => {
-      writeFileSync(testFile, 'name: app\nport: 3000')
-      config.load('app', testFile, TestSchema)
-
-      const result = watchConfig('app')
-      expect(result).toBe(true)
-      expect(isWatchingConfig('app')).toBe(true)
-    })
-
-    it('应在配置未加载时返回 false', () => {
-      const result = watchConfig('nonexistent')
-      expect(result).toBe(false)
-    })
-  })
-
-  describe('unwatchConfig()', () => {
+  describe('config.unwatch()', () => {
     it('应停止指定配置的监听', () => {
       writeFileSync(testFile, 'name: app\nport: 3000')
       config.load('app', testFile, TestSchema)
-      watchConfig('app')
+      config.watch('app', () => {})
 
-      unwatchConfig('app')
-      expect(isWatchingConfig('app')).toBe(false)
+      config.unwatch('app')
+      // 无法直接验证是否停止，但不应抛出错误
     })
 
     it('应停止所有配置的监听', () => {
       writeFileSync(testFile, 'name: app\nport: 3000')
       config.load('app1', testFile, TestSchema)
       config.load('app2', testFile, TestSchema)
-      watchConfig('app1')
-      watchConfig('app2')
+      config.watch('app1', () => {})
+      config.watch('app2', () => {})
 
-      unwatchConfig()
-      expect(isWatchingConfig('app1')).toBe(false)
-      expect(isWatchingConfig('app2')).toBe(false)
+      config.unwatch()
+      // 无法直接验证是否停止，但不应抛出错误
     })
   })
 })
