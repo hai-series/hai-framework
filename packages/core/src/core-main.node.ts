@@ -144,24 +144,26 @@ function initCore(options: CoreOptions = {}): void {
 
   // 3. Load config files
   for (const item of configItems) {
-
-    if (item.name === "_core") {
+    if (item.name === '_core') {
       const result = config.load(item.name, item.filePath, CoreConfigSchema)
       if (result.success) {
         if (!options.logging) {
           core.configureLogger(result.data.logging || {})
         }
         logger.info(`[core] Config loaded: ${item.name} <- ${item.filePath}`)
-      } else {
+      }
+      else {
         logger.error(`[core] Config load failed: ${item.name}`, {
           error: result.error,
         })
       }
-    } else {
+    }
+    else {
       const result = config.load(item.name, item.filePath)
       if (result.success) {
         logger.info(`[core] Config loaded: ${item.name} <- ${item.filePath}`)
-      } else {
+      }
+      else {
         logger.error(`[core] Config load failed: ${item.name}`, {
           error: result.error,
         })
@@ -195,5 +197,3 @@ function setupConfigWatch(configs: ConfigLoadItem[]): void {
     logger.debug(`[core] Config watch enabled: ${item.name}`)
   }
 }
-
-

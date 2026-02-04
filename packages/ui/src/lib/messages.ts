@@ -29,7 +29,7 @@ import messagesZhCN from './messages/zh-CN.json'
 export type UIMessageKey = keyof typeof messagesZhCN
 
 // 创建消息获取器
-const { getMessage } = core.i18n.createMessageGetter({
+const getMessage = core.i18n.createMessageGetter({
   'zh-CN': messagesZhCN as Record<string, string>,
   'en-US': messagesEnUS as Record<string, string>,
 })

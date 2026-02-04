@@ -157,7 +157,7 @@ export type {
 export { validateForm, validateParams, validateQuery } from './validation.js'
 
 type KitMessageKey = keyof typeof messagesZhCN
-export const { getMessage: getKitMessage }
+export const getKitMessage
   = core.i18n.createMessageGetter<KitMessageKey>({ 'zh-CN': messagesZhCN, 'en-US': messagesEnUS })
 
 /**

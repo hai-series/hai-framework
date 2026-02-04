@@ -12,8 +12,6 @@
  * =============================================================================
  */
 
-import type { ZodType } from 'zod'
-
 // =============================================================================
 // 4. Core 初始化类型
 // =============================================================================
@@ -38,7 +36,7 @@ import type { LogFormat, LoggingConfig, LogLevel } from './config/index.js'
  */
 export type Result<T, E = Error>
   = | { success: true, data: T }
-  | { success: false, error: E }
+    | { success: false, error: E }
 
 /** 创建成功结果 */
 export function ok<T>(data: T): Result<T, never> {
@@ -123,4 +121,3 @@ export interface CoreOptions {
 }
 
 /** Logger 函数类型（内部使用） */
-

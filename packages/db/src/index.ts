@@ -73,7 +73,7 @@ export * from './db-types.js'
 
 // i18n
 type DbMessageKey = keyof typeof messagesZhCN
-export const { getMessage: getDbMessage }
+export const getDbMessage
   = core.i18n.createMessageGetter<DbMessageKey>({ 'zh-CN': messagesZhCN, 'en-US': messagesEnUS })
 
 // 注册 db 模块的配置 Schema
