@@ -47,30 +47,18 @@
  *         result.data.iv
  *     )
  * }
- *
- * // 创建独立实例
- * const myCrypto = createCryptoService()
  * ```
  * =============================================================================
  */
 
-import { core } from '@hai/core'
-import messagesEnUS from '../messages/en-US.json'
-import messagesZhCN from '../messages/zh-CN.json'
-
 // 配置 Schema（zod）
 export * from './crypto-config.js'
+
+// i18n
+export * from './crypto-i18n.js'
 
 // 统一服务入口
 export * from './crypto-main.js'
 
-// 密码哈希提供者
-export * from './crypto-password.js'
-
 // 类型定义
 export * from './crypto-types.js'
-
-// i18n
-type CryptoMessageKey = keyof typeof messagesZhCN
-export const getCryptoMessage
-  = core.i18n.createMessageGetter<CryptoMessageKey>({ 'zh-CN': messagesZhCN, 'en-US': messagesEnUS })

@@ -29,7 +29,7 @@ import type { SessionStore } from '../session/iam-session-stateful.js'
 import type { OAuthStrategy, OtpStrategy, PasswordStrategy } from '../strategy/index.js'
 import process from 'node:process'
 import { err, ok } from '@hai/core'
-import { createHaiPasswordProvider } from '@hai/crypto'
+import { crypto } from '@hai/crypto'
 
 import { createRbacManager } from '../authz/index.js'
 import { IamErrorCode } from '../iam-config.js'
@@ -94,7 +94,7 @@ export interface InitOptions {
 }
 
 /** 密码提供者 */
-const passwordProvider = createHaiPasswordProvider()
+const passwordProvider = crypto.password.create()
 
 /**
  * 初始化 IAM 组件

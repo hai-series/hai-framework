@@ -35,7 +35,7 @@ import { err, ok } from '@hai/core'
 import smCrypto from 'sm-crypto'
 
 import { CryptoErrorCode } from './crypto-config.js'
-import { getCryptoMessage } from './index.js'
+import { cryptoM } from './crypto-i18n.js'
 
 const { sm2 } = smCrypto
 
@@ -44,12 +44,35 @@ const { sm2 } = smCrypto
 // =============================================================================
 
 /**
- * 创建 SM2 算法实例
+ * 创建 SM2 算法实例。
  *
  * @returns SM2 操作接口
+ *
+ * @example
+ * ```ts
+ * import { createSM2 } from '@hai/crypto'
+ *
+ * const sm2 = createSM2()
+ * const keyPair = sm2.generateKeyPair()
+ * if (keyPair.success) {
+ *   sm2.encrypt('data', keyPair.data.publicKey)
+ * }
+ * ```
  */
 export function createSM2(): SM2Operations {
   return {
+    /**
+     * 生成 SM2 密钥对。
+     *
+     * @example
+     * ```ts
+     * const sm2 = createSM2()
+     * const keyPair = sm2.generateKeyPair()
+     * if (keyPair.success) {
+     *   const { publicKey, privateKey } = keyPair.data
+     * }
+     * ```
+     */
     generateKeyPair(): Result<SM2KeyPair, CryptoError> {
       try {
         const keyPair = sm2.generateKeyPairHex()
@@ -61,12 +84,28 @@ export function createSM2(): SM2Operations {
       catch (error) {
         return err({
           code: CryptoErrorCode.KEY_GENERATION_FAILED,
-          message: `SM2 密钥对生成失败: ${error}`,
+          message: cryptoM('crypto_sm2KeyPairGenerateFailed', { error: error instanceof Error ? error.message : String(error) }),
           cause: error,
         })
       }
     },
 
+    /**
+     * 使用公钥加密数据。
+     *
+     * @param data - 待加密明文
+     * @param publicKey - 公钥
+     * @param options - 可选参数
+     *
+     * @example
+     * ```ts
+     * const sm2 = createSM2()
+     * const keyPair = sm2.generateKeyPair()
+     * if (keyPair.success) {
+     *   sm2.encrypt('hello', keyPair.data.publicKey)
+     * }
+     * ```
+     */
     encrypt(
       data: string,
       publicKey: string,
@@ -77,7 +116,7 @@ export function createSM2(): SM2Operations {
       if (!this.isValidPublicKey(publicKey)) {
         return err({
           code: CryptoErrorCode.INVALID_KEY,
-          message: '无效的 SM2 公钥格式',
+          message: cryptoM('crypto_sm2PublicKeyInvalid'),
         })
       }
 
@@ -89,7 +128,7 @@ export function createSM2(): SM2Operations {
         if (!encrypted) {
           return err({
             code: CryptoErrorCode.ENCRYPTION_FAILED,
-            message: getCryptoMessage('crypto_sm2EncryptEmpty'),
+            message: cryptoM('crypto_sm2EncryptEmpty'),
           })
         }
 
@@ -102,12 +141,31 @@ export function createSM2(): SM2Operations {
       catch (error) {
         return err({
           code: CryptoErrorCode.ENCRYPTION_FAILED,
-          message: `SM2 加密失败: ${error}`,
+          message: cryptoM('crypto_sm2EncryptFailed', { error: error instanceof Error ? error.message : String(error) }),
           cause: error,
         })
       }
     },
 
+    /**
+     * 使用私钥解密数据。
+     *
+     * @param ciphertext - 密文
+     * @param privateKey - 私钥
+     * @param options - 可选参数
+     *
+     * @example
+     * ```ts
+     * const sm2 = createSM2()
+     * const keyPair = sm2.generateKeyPair()
+     * if (keyPair.success) {
+     *   const encrypted = sm2.encrypt('hello', keyPair.data.publicKey)
+     *   if (encrypted.success) {
+     *     sm2.decrypt(encrypted.data, keyPair.data.privateKey)
+     *   }
+     * }
+     * ```
+     */
     decrypt(
       ciphertext: string,
       privateKey: string,
@@ -118,7 +176,7 @@ export function createSM2(): SM2Operations {
       if (!this.isValidPrivateKey(privateKey)) {
         return err({
           code: CryptoErrorCode.INVALID_KEY,
-          message: getCryptoMessage('crypto_sm2PrivateKeyInvalid'),
+          message: cryptoM('crypto_sm2PrivateKeyInvalid'),
         })
       }
 
@@ -134,7 +192,7 @@ export function createSM2(): SM2Operations {
         if (decrypted === false || decrypted === null || decrypted === undefined) {
           return err({
             code: CryptoErrorCode.DECRYPTION_FAILED,
-            message: getCryptoMessage('crypto_sm2DecryptFailed'),
+            message: cryptoM('crypto_sm2DecryptFailed'),
           })
         }
 
@@ -143,12 +201,28 @@ export function createSM2(): SM2Operations {
       catch (error) {
         return err({
           code: CryptoErrorCode.DECRYPTION_FAILED,
-          message: `SM2 解密失败: ${error}`,
+          message: cryptoM('crypto_sm2DecryptFailedWithError', { error: error instanceof Error ? error.message : String(error) }),
           cause: error,
         })
       }
     },
 
+    /**
+     * 使用私钥签名数据。
+     *
+     * @param data - 待签名数据
+     * @param privateKey - 私钥
+     * @param options - 可选参数
+     *
+     * @example
+     * ```ts
+     * const sm2 = createSM2()
+     * const keyPair = sm2.generateKeyPair()
+     * if (keyPair.success) {
+     *   sm2.sign('data', keyPair.data.privateKey)
+     * }
+     * ```
+     */
     sign(
       data: string,
       privateKey: string,
@@ -159,7 +233,7 @@ export function createSM2(): SM2Operations {
       if (!this.isValidPrivateKey(privateKey)) {
         return err({
           code: CryptoErrorCode.INVALID_KEY,
-          message: getCryptoMessage('crypto_sm2PrivateKeyInvalid'),
+          message: cryptoM('crypto_sm2PrivateKeyInvalid'),
         })
       }
 
@@ -169,7 +243,7 @@ export function createSM2(): SM2Operations {
         if (!signature) {
           return err({
             code: CryptoErrorCode.SIGN_FAILED,
-            message: getCryptoMessage('crypto_sm2SignEmpty'),
+            message: cryptoM('crypto_sm2SignEmpty'),
           })
         }
 
@@ -178,12 +252,32 @@ export function createSM2(): SM2Operations {
       catch (error) {
         return err({
           code: CryptoErrorCode.SIGN_FAILED,
-          message: `SM2 签名失败: ${error}`,
+          message: cryptoM('crypto_sm2SignFailed', { error: error instanceof Error ? error.message : String(error) }),
           cause: error,
         })
       }
     },
 
+    /**
+     * 使用公钥验签。
+     *
+     * @param data - 原始数据
+     * @param signature - 签名
+     * @param publicKey - 公钥
+     * @param options - 可选参数
+     *
+     * @example
+     * ```ts
+     * const sm2 = createSM2()
+     * const keyPair = sm2.generateKeyPair()
+     * if (keyPair.success) {
+     *   const signature = sm2.sign('data', keyPair.data.privateKey)
+     *   if (signature.success) {
+     *     sm2.verify('data', signature.data, keyPair.data.publicKey)
+     *   }
+     * }
+     * ```
+     */
     verify(
       data: string,
       signature: string,
@@ -195,7 +289,7 @@ export function createSM2(): SM2Operations {
       if (!this.isValidPublicKey(publicKey)) {
         return err({
           code: CryptoErrorCode.INVALID_KEY,
-          message: getCryptoMessage('crypto_sm2PublicKeyInvalid'),
+          message: cryptoM('crypto_sm2PublicKeyInvalid'),
         })
       }
 
@@ -208,12 +302,24 @@ export function createSM2(): SM2Operations {
       catch (error) {
         return err({
           code: CryptoErrorCode.VERIFY_FAILED,
-          message: `SM2 验签失败: ${error}`,
+          message: cryptoM('crypto_sm2VerifyFailed', { error: error instanceof Error ? error.message : String(error) }),
           cause: error,
         })
       }
     },
 
+    /**
+     * 校验公钥格式是否合法。
+     *
+     * @param key - 公钥
+     * @returns 是否合法
+     *
+     * @example
+     * ```ts
+     * const sm2 = createSM2()
+     * const ok = sm2.isValidPublicKey('04...')
+     * ```
+     */
     isValidPublicKey(key: string): boolean {
       if (!key || typeof key !== 'string')
         return false
@@ -222,6 +328,18 @@ export function createSM2(): SM2Operations {
       return /^[0-9a-f]{128}$/i.test(cleanKey)
     },
 
+    /**
+     * 校验私钥格式是否合法。
+     *
+     * @param key - 私钥
+     * @returns 是否合法
+     *
+     * @example
+     * ```ts
+     * const sm2 = createSM2()
+     * const ok = sm2.isValidPrivateKey('...')
+     * ```
+     */
     isValidPrivateKey(key: string): boolean {
       if (!key || typeof key !== 'string')
         return false
@@ -236,14 +354,14 @@ export function createSM2(): SM2Operations {
 // =============================================================================
 
 /**
- * 判断字符串是否为 Base64 格式
+ * 判断字符串是否为 Base64 格式。
  */
 function isBase64(str: string): boolean {
   return str.includes('+') || str.includes('/') || str.endsWith('=')
 }
 
 /**
- * Hex 转 Base64（前后端通用）
+ * Hex 转 Base64（前后端通用）。
  */
 function hexToBase64(hex: string): string {
   const bytes = new Uint8Array(hex.length / 2)
@@ -261,7 +379,7 @@ function hexToBase64(hex: string): string {
 }
 
 /**
- * Base64 转 Hex（前后端通用）
+ * Base64 转 Hex（前后端通用）。
  */
 function base64ToHex(base64: string): string {
   let bytes: Uint8Array

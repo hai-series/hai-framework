@@ -39,7 +39,7 @@ import { err, ok } from '@hai/core'
 import smCrypto from 'sm-crypto'
 
 import { CryptoErrorCode } from './crypto-config.js'
-import { getCryptoMessage } from './index.js'
+import { cryptoM } from './crypto-i18n.js'
 
 const { sm3, sm4 } = smCrypto
 
@@ -48,20 +48,66 @@ const { sm3, sm4 } = smCrypto
 // =============================================================================
 
 /**
- * 创建 SM4 算法实例
+ * 创建 SM4 算法实例。
  *
  * @returns SM4 操作接口
+ *
+ * @example
+ * ```ts
+ * import { createSM4 } from '@hai/crypto'
+ *
+ * const sm4 = createSM4()
+ * const key = sm4.generateKey()
+ * sm4.encrypt('data', key)
+ * ```
  */
 export function createSM4(): SM4Operations {
   return {
+    /**
+     * 生成随机密钥。
+     *
+     * @returns 32 字符十六进制密钥
+     *
+     * @example
+     * ```ts
+     * const sm4 = createSM4()
+     * const key = sm4.generateKey()
+     * ```
+     */
     generateKey(): string {
       return generateRandomHex(16)
     },
 
+    /**
+     * 生成随机 IV。
+     *
+     * @returns 32 字符十六进制 IV
+     *
+     * @example
+     * ```ts
+     * const sm4 = createSM4()
+     * const iv = sm4.generateIV()
+     * ```
+     */
     generateIV(): string {
       return generateRandomHex(16)
     },
 
+    /**
+     * 加密数据。
+     *
+     * @param data - 待加密明文
+     * @param key - 密钥
+     * @param options - 可选参数
+     * @returns 加密结果
+     *
+     * @example
+     * ```ts
+     * const sm4 = createSM4()
+     * const key = sm4.generateKey()
+     * sm4.encrypt('data', key)
+     * ```
+     */
     encrypt(
       data: string,
       key: string,
@@ -76,21 +122,21 @@ export function createSM4(): SM4Operations {
       if (!this.isValidKey(key)) {
         return err({
           code: CryptoErrorCode.INVALID_KEY,
-          message: getCryptoMessage('crypto_sm4KeyInvalid'),
+          message: cryptoM('crypto_sm4KeyInvalid'),
         })
       }
 
       if (mode === 'cbc' && !iv) {
         return err({
           code: CryptoErrorCode.INVALID_IV,
-          message: getCryptoMessage('crypto_sm4CbcNeedIv'),
+          message: cryptoM('crypto_sm4CbcNeedIv'),
         })
       }
 
       if (mode === 'cbc' && iv && !this.isValidIV(iv)) {
         return err({
           code: CryptoErrorCode.INVALID_IV,
-          message: getCryptoMessage('crypto_sm4IvInvalid'),
+          message: cryptoM('crypto_sm4IvInvalid'),
         })
       }
 
@@ -109,7 +155,7 @@ export function createSM4(): SM4Operations {
         if (!encrypted) {
           return err({
             code: CryptoErrorCode.ENCRYPTION_FAILED,
-            message: getCryptoMessage('crypto_sm4EncryptEmpty'),
+            message: cryptoM('crypto_sm4EncryptEmpty'),
           })
         }
 
@@ -122,12 +168,30 @@ export function createSM4(): SM4Operations {
       catch (error) {
         return err({
           code: CryptoErrorCode.ENCRYPTION_FAILED,
-          message: `SM4 加密失败: ${error}`,
+          message: cryptoM('crypto_sm4EncryptFailed', { error: error instanceof Error ? error.message : String(error) }),
           cause: error,
         })
       }
     },
 
+    /**
+     * 解密数据。
+     *
+     * @param ciphertext - 密文
+     * @param key - 密钥
+     * @param options - 可选参数
+     * @returns 解密结果
+     *
+     * @example
+     * ```ts
+     * const sm4 = createSM4()
+     * const key = sm4.generateKey()
+     * const encrypted = sm4.encrypt('data', key)
+     * if (encrypted.success) {
+     *   sm4.decrypt(encrypted.data, key)
+     * }
+     * ```
+     */
     decrypt(
       ciphertext: string,
       key: string,
@@ -138,14 +202,14 @@ export function createSM4(): SM4Operations {
       if (!this.isValidKey(key)) {
         return err({
           code: CryptoErrorCode.INVALID_KEY,
-          message: getCryptoMessage('crypto_sm4KeyInvalid'),
+          message: cryptoM('crypto_sm4KeyInvalid'),
         })
       }
 
       if (mode === 'cbc' && !iv) {
         return err({
           code: CryptoErrorCode.INVALID_IV,
-          message: getCryptoMessage('crypto_sm4CbcNeedIv'),
+          message: cryptoM('crypto_sm4CbcNeedIv'),
         })
       }
 
@@ -170,7 +234,7 @@ export function createSM4(): SM4Operations {
         if (decrypted === false || decrypted === null || decrypted === undefined) {
           return err({
             code: CryptoErrorCode.DECRYPTION_FAILED,
-            message: getCryptoMessage('crypto_sm4DecryptFailed'),
+            message: cryptoM('crypto_sm4DecryptFailed'),
           })
         }
 
@@ -179,12 +243,26 @@ export function createSM4(): SM4Operations {
       catch (error) {
         return err({
           code: CryptoErrorCode.DECRYPTION_FAILED,
-          message: `SM4 解密失败: ${error}`,
+          message: cryptoM('crypto_sm4DecryptFailedWithError', { error: error instanceof Error ? error.message : String(error) }),
           cause: error,
         })
       }
     },
 
+    /**
+     * 生成 IV 并加密数据（CBC）。
+     *
+     * @param data - 待加密明文
+     * @param key - 密钥
+     * @returns 密文与 IV
+     *
+     * @example
+     * ```ts
+     * const sm4 = createSM4()
+     * const key = sm4.generateKey()
+     * sm4.encryptWithIV('data', key)
+     * ```
+     */
     encryptWithIV(
       data: string,
       key: string,
@@ -199,6 +277,24 @@ export function createSM4(): SM4Operations {
       return ok({ ciphertext: result.data, iv })
     },
 
+    /**
+     * 使用指定 IV 解密（CBC）。
+     *
+     * @param ciphertext - 密文
+     * @param key - 密钥
+     * @param iv - IV
+     * @returns 解密结果
+     *
+     * @example
+     * ```ts
+     * const sm4 = createSM4()
+     * const key = sm4.generateKey()
+     * const encrypted = sm4.encryptWithIV('data', key)
+     * if (encrypted.success) {
+     *   sm4.decryptWithIV(encrypted.data.ciphertext, key, encrypted.data.iv)
+     * }
+     * ```
+     */
     decryptWithIV(
       ciphertext: string,
       key: string,
@@ -207,6 +303,19 @@ export function createSM4(): SM4Operations {
       return this.decrypt(ciphertext, key, { mode: 'cbc', iv })
     },
 
+    /**
+     * 从密码派生 SM4 密钥。
+     *
+     * @param password - 密码
+     * @param salt - 盐值
+     * @returns 派生密钥
+     *
+     * @example
+     * ```ts
+     * const sm4 = createSM4()
+     * const key = sm4.deriveKey('password', 'salt')
+     * ```
+     */
     deriveKey(password: string, salt: string): string {
       const combined = password + salt
       const hash = sm3(combined)
@@ -214,10 +323,34 @@ export function createSM4(): SM4Operations {
       return hash.slice(0, 32)
     },
 
+    /**
+     * 校验密钥格式是否合法。
+     *
+     * @param key - 密钥
+     * @returns 是否合法
+     *
+     * @example
+     * ```ts
+     * const sm4 = createSM4()
+     * const ok = sm4.isValidKey('001122...')
+     * ```
+     */
     isValidKey(key: string): boolean {
       return /^[0-9a-f]{32}$/i.test(key)
     },
 
+    /**
+     * 校验 IV 格式是否合法。
+     *
+     * @param iv - IV
+     * @returns 是否合法
+     *
+     * @example
+     * ```ts
+     * const sm4 = createSM4()
+     * const ok = sm4.isValidIV('001122...')
+     * ```
+     */
     isValidIV(iv: string): boolean {
       return /^[0-9a-f]{32}$/i.test(iv)
     },
@@ -229,7 +362,7 @@ export function createSM4(): SM4Operations {
 // =============================================================================
 
 /**
- * 生成随机十六进制字符串（前后端通用）
+ * 生成随机十六进制字符串（前后端通用）。
  */
 function generateRandomHex(byteLength: number): string {
   const bytes = new Uint8Array(byteLength)
@@ -241,14 +374,14 @@ function generateRandomHex(byteLength: number): string {
 }
 
 /**
- * 判断字符串是否为 Base64 格式
+ * 判断字符串是否为 Base64 格式。
  */
 function isBase64(str: string): boolean {
   return str.includes('+') || str.includes('/') || str.endsWith('=')
 }
 
 /**
- * Hex 转 Base64（前后端通用）
+ * Hex 转 Base64（前后端通用）。
  */
 function hexToBase64(hex: string): string {
   const bytes = new Uint8Array(hex.length / 2)
@@ -263,7 +396,7 @@ function hexToBase64(hex: string): string {
 }
 
 /**
- * Base64 转 Hex（前后端通用）
+ * Base64 转 Hex（前后端通用）。
  */
 function base64ToHex(base64: string): string {
   let bytes: Uint8Array

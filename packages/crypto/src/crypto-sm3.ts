@@ -33,7 +33,7 @@ import { err, ok } from '@hai/core'
 import smCrypto from 'sm-crypto'
 
 import { CryptoErrorCode } from './crypto-config.js'
-import { getCryptoMessage } from './index.js'
+import { cryptoM } from './crypto-i18n.js'
 
 const { sm3 } = smCrypto
 
@@ -42,12 +42,34 @@ const { sm3 } = smCrypto
 // =============================================================================
 
 /**
- * 创建 SM3 算法实例
+ * 创建 SM3 算法实例。
  *
  * @returns SM3 操作接口
+ *
+ * @example
+ * ```ts
+ * import { createSM3 } from '@hai/crypto'
+ *
+ * const sm3 = createSM3()
+ * sm3.hash('data')
+ * sm3.hmac('data', 'key')
+ * ```
  */
 export function createSM3(): SM3Operations {
   return {
+    /**
+     * 计算 SM3 哈希。
+     *
+     * @param data - 待哈希数据
+     * @param options - 可选参数
+     * @returns 哈希结果
+     *
+     * @example
+     * ```ts
+     * const sm3 = createSM3()
+     * sm3.hash('hello')
+     * ```
+     */
     hash(
       data: string | Uint8Array,
       options: SM3Options = {},
@@ -75,7 +97,7 @@ export function createSM3(): SM3Operations {
         if (!result) {
           return err({
             code: CryptoErrorCode.HASH_FAILED,
-            message: getCryptoMessage('crypto_sm3HashEmpty'),
+            message: cryptoM('crypto_sm3HashEmpty'),
           })
         }
 
@@ -89,12 +111,25 @@ export function createSM3(): SM3Operations {
       catch (error) {
         return err({
           code: CryptoErrorCode.HASH_FAILED,
-          message: `SM3 哈希计算失败: ${error}`,
+          message: cryptoM('crypto_sm3HashFailed', { error: error instanceof Error ? error.message : String(error) }),
           cause: error,
         })
       }
     },
 
+    /**
+     * 计算 HMAC-SM3。
+     *
+     * @param data - 待计算数据
+     * @param key - 密钥
+     * @returns HMAC 结果
+     *
+     * @example
+     * ```ts
+     * const sm3 = createSM3()
+     * sm3.hmac('data', 'secret')
+     * ```
+     */
     hmac(data: string, key: string): Result<string, CryptoError> {
       try {
         const blockSize = 64
@@ -133,12 +168,28 @@ export function createSM3(): SM3Operations {
       catch (error) {
         return err({
           code: CryptoErrorCode.HMAC_FAILED,
-          message: `HMAC-SM3 计算失败: ${error}`,
+          message: cryptoM('crypto_sm3HmacFailed', { error: error instanceof Error ? error.message : String(error) }),
           cause: error,
         })
       }
     },
 
+    /**
+     * 验证哈希是否匹配。
+     *
+     * @param data - 原始数据
+     * @param expectedHash - 期望哈希
+     * @returns 是否匹配
+     *
+     * @example
+     * ```ts
+     * const sm3 = createSM3()
+     * const hash = sm3.hash('data')
+     * if (hash.success) {
+     *   sm3.verify('data', hash.data)
+     * }
+     * ```
+     */
     verify(data: string, expectedHash: string): Result<boolean, CryptoError> {
       try {
         const hashResult = sm3(data)
@@ -147,7 +198,7 @@ export function createSM3(): SM3Operations {
       catch (error) {
         return err({
           code: CryptoErrorCode.HASH_FAILED,
-          message: `SM3 哈希验证失败: ${error}`,
+          message: cryptoM('crypto_sm3VerifyFailed', { error: error instanceof Error ? error.message : String(error) }),
           cause: error,
         })
       }
@@ -160,7 +211,7 @@ export function createSM3(): SM3Operations {
 // =============================================================================
 
 /**
- * 十六进制字符串转字节数组
+ * 十六进制字符串转字节数组。
  */
 function hexToBytes(hex: string): number[] {
   const bytes: number[] = []
@@ -171,7 +222,7 @@ function hexToBytes(hex: string): number[] {
 }
 
 /**
- * UTF-8 字符串转字节数组（前后端通用）
+ * UTF-8 字符串转字节数组（前后端通用）。
  */
 function stringToBytes(str: string): number[] {
   const encoder = new TextEncoder()

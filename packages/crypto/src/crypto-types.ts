@@ -12,11 +12,10 @@
  * - SM3 哈希类型
  * - SM4 对称加密类型
  * - Provider 接口
- * - 统一服务接口
  *
  * @example
  * ```ts
- * import type { CryptoService, SM2KeyPair, SM4Options } from '@hai/crypto'
+ * import type { SM2KeyPair, SM4Options } from '@hai/crypto'
  *
  * // 使用 SM2 密钥对
  * const keyPair: SM2KeyPair = {
@@ -30,23 +29,24 @@
  */
 
 import type { Result } from '@hai/core'
-import type { CryptoConfig, CryptoConfigInput, CryptoErrorCodeType, SM4Mode } from './crypto-config.js'
+import type { CryptoErrorCodeType } from './crypto-config.js'
 
 // =============================================================================
 // 重新导出配置类型（方便使用）
 // =============================================================================
 
-export type { CryptoConfig, CryptoConfigInput, CryptoErrorCodeType, SM4Mode } from './crypto-config.js'
-export {
-  CryptoConfigSchema,
-  CryptoErrorCode,
-  SM2CipherModeSchema,
-  SM2EncryptOptionsSchema,
-  SM2SignOptionsSchema,
-  SM3OptionsSchema,
-  SM4ModeSchema,
-  SM4OptionsSchema,
-} from './crypto-config.js'
+export type { CryptoConfig, CryptoConfigInput, CryptoErrorCodeType } from './crypto-config.js'
+
+/**
+ * SM2 密文模式
+ */
+export type SM2CipherMode = 0 | 1
+
+/**
+ * SM4 加密模式
+ */
+export type SM4Mode = 'ecb' | 'cbc'
+export { CryptoConfigSchema, CryptoErrorCode } from './crypto-config.js'
 
 // =============================================================================
 // 错误类型
@@ -220,25 +220,35 @@ export interface SM4Operations {
 }
 
 // =============================================================================
-// 统一加密服务接口
+// Provider 接口
 // =============================================================================
 
 /**
- * 统一加密服务接口
- *
- * 聚合 SM2、SM3、SM4 算法，提供统一入口。
+ * 密码提供者接口
  */
-export interface CryptoService {
-  /** SM2 非对称加密 */
-  readonly sm2: SM2Operations
-  /** SM3 哈希 */
-  readonly sm3: SM3Operations
-  /** SM4 对称加密 */
-  readonly sm4: SM4Operations
-  /** 当前配置 */
-  readonly config: CryptoConfig
-  /** 检查是否已初始化 */
-  readonly isInitialized: boolean
-  /** 初始化（可重新配置） */
-  init: (config?: CryptoConfigInput) => void
+export interface PasswordProvider {
+  /**
+   * 对密码进行哈希
+   * @param password - 明文密码
+   * @returns 哈希后的密码（包含盐值）
+   */
+  hash: (password: string) => Result<string, CryptoError>
+
+  /**
+   * 验证密码
+   * @param password - 明文密码
+   * @param hash - 存储的哈希值
+   * @returns 验证结果
+   */
+  verify: (password: string, hash: string) => Result<boolean, CryptoError>
+}
+
+/**
+ * 密码提供者配置。
+ */
+export interface PasswordProviderConfig {
+  /** 盐值长度（默认 16） */
+  saltLength?: number
+  /** 迭代次数（默认 10000） */
+  iterations?: number
 }
