@@ -22,6 +22,17 @@ describe('crypto.sm2', () => {
     expect(crypto.sm2.isValidPrivateKey(result.data.privateKey)).toBe(true)
   })
 
+  it('should accept public key without 04 prefix', () => {
+    const result = crypto.sm2.generateKeyPair()
+    expect(result.success).toBe(true)
+    if (!result.success)
+      return
+
+    const publicKey = result.data.publicKey
+    const trimmed = publicKey.startsWith('04') ? publicKey.slice(2) : publicKey
+    expect(crypto.sm2.isValidPublicKey(trimmed)).toBe(true)
+  })
+
   it('should encrypt and decrypt roundtrip', () => {
     const keyPair = crypto.sm2.generateKeyPair()
     expect(keyPair.success).toBe(true)
@@ -29,6 +40,25 @@ describe('crypto.sm2', () => {
       return
 
     const encrypted = crypto.sm2.encrypt('hello', keyPair.data.publicKey)
+    expect(encrypted.success).toBe(true)
+    if (!encrypted.success)
+      return
+
+    const decrypted = crypto.sm2.decrypt(encrypted.data, keyPair.data.privateKey)
+    expect(decrypted.success).toBe(true)
+    if (!decrypted.success)
+      return
+
+    expect(decrypted.data).toBe('hello')
+  })
+
+  it('should encrypt and decrypt with base64 output', () => {
+    const keyPair = crypto.sm2.generateKeyPair()
+    expect(keyPair.success).toBe(true)
+    if (!keyPair.success)
+      return
+
+    const encrypted = crypto.sm2.encrypt('hello', keyPair.data.publicKey, { outputFormat: 'base64' })
     expect(encrypted.success).toBe(true)
     if (!encrypted.success)
       return
@@ -60,6 +90,25 @@ describe('crypto.sm2', () => {
     expect(verified.data).toBe(true)
   })
 
+  it('should return false when signature does not match payload', () => {
+    const keyPair = crypto.sm2.generateKeyPair()
+    expect(keyPair.success).toBe(true)
+    if (!keyPair.success)
+      return
+
+    const signature = crypto.sm2.sign('payload', keyPair.data.privateKey)
+    expect(signature.success).toBe(true)
+    if (!signature.success)
+      return
+
+    const verified = crypto.sm2.verify('another', signature.data, keyPair.data.publicKey)
+    expect(verified.success).toBe(true)
+    if (!verified.success)
+      return
+
+    expect(verified.data).toBe(false)
+  })
+
   it('should return INVALID_KEY for invalid public key', () => {
     const result = crypto.sm2.encrypt('data', 'invalid-key')
     expect(result.success).toBe(false)
@@ -67,5 +116,27 @@ describe('crypto.sm2', () => {
       return
 
     expect(result.error.code).toBe(CryptoErrorCode.INVALID_KEY)
+  })
+
+  it('should return INVALID_KEY for invalid private key in decrypt', () => {
+    const result = crypto.sm2.decrypt('abcd', 'invalid-private-key')
+    expect(result.success).toBe(false)
+    if (result.success)
+      return
+
+    expect(result.error.code).toBe(CryptoErrorCode.INVALID_KEY)
+  })
+
+  it('should return INVALID_KEY for invalid private key in sign', () => {
+    const result = crypto.sm2.sign('payload', 'invalid-private-key')
+    expect(result.success).toBe(false)
+    if (result.success)
+      return
+
+    expect(result.error.code).toBe(CryptoErrorCode.INVALID_KEY)
+  })
+
+  it('should return false for invalid private key format', () => {
+    expect(crypto.sm2.isValidPrivateKey('1234')).toBe(false)
   })
 })

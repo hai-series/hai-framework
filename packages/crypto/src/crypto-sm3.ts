@@ -212,6 +212,9 @@ export function createSM3(): SM3Operations {
 
 /**
  * 十六进制字符串转字节数组。
+ *
+ * @param hex - 十六进制字符串
+ * @returns 字节数组
  */
 function hexToBytes(hex: string): number[] {
   const bytes: number[] = []
@@ -223,6 +226,9 @@ function hexToBytes(hex: string): number[] {
 
 /**
  * UTF-8 字符串转字节数组（前后端通用）。
+ *
+ * @param str - UTF-8 字符串
+ * @returns 字节数组
  */
 function stringToBytes(str: string): number[] {
   const encoder = new TextEncoder()

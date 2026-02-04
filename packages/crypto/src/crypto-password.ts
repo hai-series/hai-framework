@@ -35,6 +35,9 @@ import { createSM3 } from './crypto-sm3.js'
 
 /**
  * 生成随机盐值。
+ *
+ * @param length - 盐值长度
+ * @returns 盐值字符串
  */
 function generateSalt(length: number): string {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
@@ -47,6 +50,12 @@ function generateSalt(length: number): string {
 
 /**
  * 对密码进行多次迭代哈希。
+ *
+ * @param sm3 - SM3 实例
+ * @param data - 明文密码
+ * @param salt - 盐值
+ * @param iterations - 迭代次数
+ * @returns 哈希结果（失败时返回 CryptoError）
  */
 function iterateHash(
   sm3: ReturnType<typeof createSM3>,

@@ -33,4 +33,25 @@ describe('crypto.init', () => {
     crypto.init(cfg as { defaultAlgorithm?: 'sm', custom?: Record<string, unknown> })
     expect(crypto.isInitialized).toBe(true)
   })
+
+  it('should return a new config object', () => {
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hai-crypto-'))
+    const filePath = path.join(tempDir, 'crypto.yml')
+
+    fs.writeFileSync(filePath, 'defaultAlgorithm: sm\ncustom:\n  feature: true\n', 'utf8')
+
+    const loadResult = core.config.load('crypto', filePath, CryptoConfigSchema)
+    expect(loadResult.success).toBe(true)
+
+    const cfg = core.config.get('crypto')
+    expect(cfg).toBeTruthy()
+
+    crypto.init(cfg as { defaultAlgorithm?: 'sm', custom?: Record<string, unknown> })
+
+    const first = crypto.config
+    const second = crypto.config
+    expect(first).toEqual(second)
+    expect(first).not.toBe(second)
+    expect(first.defaultAlgorithm).toBe('sm')
+  })
 })

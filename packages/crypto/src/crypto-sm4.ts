@@ -363,6 +363,9 @@ export function createSM4(): SM4Operations {
 
 /**
  * 生成随机十六进制字符串（前后端通用）。
+ *
+ * @param byteLength - 字节长度
+ * @returns 十六进制字符串
  */
 function generateRandomHex(byteLength: number): string {
   const bytes = new Uint8Array(byteLength)
@@ -375,6 +378,9 @@ function generateRandomHex(byteLength: number): string {
 
 /**
  * 判断字符串是否为 Base64 格式。
+ *
+ * @param str - 待检测字符串
+ * @returns 是否为 Base64 格式
  */
 function isBase64(str: string): boolean {
   return str.includes('+') || str.includes('/') || str.endsWith('=')
@@ -382,6 +388,9 @@ function isBase64(str: string): boolean {
 
 /**
  * Hex 转 Base64（前后端通用）。
+ *
+ * @param hex - 十六进制字符串
+ * @returns Base64 字符串
  */
 function hexToBase64(hex: string): string {
   const bytes = new Uint8Array(hex.length / 2)
@@ -397,6 +406,9 @@ function hexToBase64(hex: string): string {
 
 /**
  * Base64 转 Hex（前后端通用）。
+ *
+ * @param base64 - Base64 字符串
+ * @returns 十六进制字符串
  */
 function base64ToHex(base64: string): string {
   let bytes: Uint8Array

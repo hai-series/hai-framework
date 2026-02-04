@@ -1,12 +1,12 @@
 # @hai/crypto
 
-国密算法（SM2/SM3/SM4）加密模块，提供统一的 `crypto` 访问入口与密码哈希能力。
+国密算法（SM2/SM3/SM4）加密模块，统一通过 `crypto` 入口访问，包含密码哈希能力。
 
 ## 特性
 
 - 前后端通用（Node.js / 浏览器）
-- 统一 `Result` 错误返回结构
-- 通过 i18n 输出用户可见文案
+- 统一 `Result` 返回结构
+- 用户可见文案通过 i18n 输出
 
 ## 安装
 
@@ -35,22 +35,6 @@ if (result.success) {
 }
 ```
 
-## 配置管理（Node.js）
-
-当配置由 `core.init` 统一加载时，模块使用前需要显式校验配置合法性：
-
-```ts
-import { core } from '@hai/core'
-import { crypto, CryptoConfigSchema } from '@hai/crypto'
-
-core.config.validate('crypto', CryptoConfigSchema)
-
-const cryptoConfig = core.config.get('crypto')
-if (cryptoConfig) {
-  crypto.init(cryptoConfig)
-}
-```
-
 ## 密码哈希
 
 ```ts
@@ -60,6 +44,21 @@ const provider = crypto.password.create({ iterations: 12000 })
 const hashResult = provider.hash('myPassword123')
 if (hashResult.success) {
   provider.verify('myPassword123', hashResult.data)
+}
+```
+
+## 配置管理（Node.js）
+
+当配置由 `core.init` 统一加载时，模块使用前需要显式校验配置合法性：
+
+```ts
+import { core } from '@hai/core'
+import { crypto, CryptoConfigSchema } from '@hai/crypto'
+
+core.config.validate('crypto', CryptoConfigSchema)
+const cryptoConfig = core.config.get('crypto')
+if (cryptoConfig) {
+  crypto.init(cryptoConfig)
 }
 ```
 

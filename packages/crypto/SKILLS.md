@@ -1,6 +1,6 @@
 # @hai/crypto SKILLS
 
-> AI 助手参考文档，包含详细的接口说明、参数定义和使用示例。
+> AI 助手参考文档，包含详细接口、参数定义、错误码与使用示例。
 
 ---
 
@@ -10,40 +10,42 @@
 
 ---
 
-## 密码哈希（crypto.password）
+## 入口与初始化
 
-### crypto.password.create(config?)
+### crypto（统一入口）
 
-| 参数              | 类型     | 说明                   |
-| ----------------- | -------- | ---------------------- |
-| config.saltLength | `number` | 盐值长度（默认 16）    |
-| config.iterations | `number` | 迭代次数（默认 10000） |
+- `crypto.sm2`：SM2 非对称加密操作
+- `crypto.sm3`：SM3 哈希操作
+- `crypto.sm4`：SM4 对称加密操作
+- `crypto.password`：密码哈希提供者
+- `crypto.init(config?)`：初始化/重新配置
+- `crypto.config`：当前配置（浅拷贝）
+- `crypto.isInitialized`：是否已初始化
 
-返回：`PasswordProvider`
+### 初始化（Node.js）
 
-### PasswordProvider.hash(password)
+当配置由 `core.init` 统一加载时，使用前需显式校验配置：
 
-返回：`Result<string, CryptoError>`（格式：`$hai$iterations$salt$hash`）
+```ts
+import { core } from '@hai/core'
+import { crypto, CryptoConfigSchema } from '@hai/crypto'
 
-### PasswordProvider.verify(password, hash)
-
-返回：`Result<boolean, CryptoError>`
 core.config.validate('crypto', CryptoConfigSchema)
-
-const cryptoConfig = core.config.get('crypto')
-if (cryptoConfig) {
-crypto.init(cryptoConfig)
+const cfg = core.config.get('crypto')
+if (cfg) {
+  crypto.init(cfg)
 }
+```
 
-````
+---
 
-### i18n
+## i18n
 
 ```ts
 import { cryptoM } from '@hai/crypto'
 
 const message = cryptoM('crypto_sm2EncryptEmpty')
-````
+```
 
 ---
 
