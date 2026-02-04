@@ -68,7 +68,7 @@ export * from './storage-types.js'
 
 // i18n
 type StorageMessageKey = keyof typeof messagesZhCN
-export const { getMessage: getStorageMessage }
+export const getStorageMessage
   = core.i18n.createMessageGetter<StorageMessageKey>({ 'zh-CN': messagesZhCN, 'en-US': messagesEnUS })
 
 // 注册 storage 模块的配置 Schema

@@ -57,7 +57,7 @@ export * from './iam-types.js'
 
 // i18n
 type IamMessageKey = keyof typeof messagesZhCN
-export const { getMessage: getIamMessage }
+export const getIamMessage
   = core.i18n.createMessageGetter<IamMessageKey>({ 'zh-CN': messagesZhCN, 'en-US': messagesEnUS })
 
 // 注册 iam 模块的配置 Schema

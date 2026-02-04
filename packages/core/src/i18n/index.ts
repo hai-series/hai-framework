@@ -25,14 +25,14 @@ import { i18n as baseI18n } from './core-i18n-utils.js'
 
 export type CoreMessageKey = keyof typeof messagesZhCN
 
-const coreM= baseI18n.createMessageGetter<CoreMessageKey>({
+const coreM = baseI18n.createMessageGetter<CoreMessageKey>({
   'zh-CN': messagesZhCN,
   'en-US': messagesEnUS,
 })
 
 export const i18n = {
   ...baseI18n,
-  coreM
+  coreM,
 }
 
 // 仅对外导出类型

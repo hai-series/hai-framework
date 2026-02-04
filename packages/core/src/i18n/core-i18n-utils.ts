@@ -314,7 +314,7 @@ const messageManager = (() => {
  */
 function createMessageGetter<K extends string>(
   messages: LocaleMessages<K>,
-) {
+): (key: K, options?: MessageOptions | InterpolationParams) => string {
   function getMessage(
     key: K,
     options?: MessageOptions | InterpolationParams,
