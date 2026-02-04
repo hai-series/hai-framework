@@ -114,7 +114,7 @@ export function createCore(loggerFns: LoggerFunctions) {
     // =====================================================================
 
     /** 类型检查工具 */
-    type: typeUtils,
+    typeUtils,
 
     /** 对象操作工具 */
     object: objectUtils,

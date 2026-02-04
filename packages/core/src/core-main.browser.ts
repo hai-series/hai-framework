@@ -35,22 +35,35 @@ import { logger } from './functions/core-function-logger.browser.js'
 // =============================================================================
 
 /**
+ * 创建 Browser 版本的 core 对象
+ */
+function createBrowserCore() {
+  const baseCore = createCore({
+    createLogger: logger.createLogger,
+    getLogger: logger.getLogger,
+    configureLogger: logger.configureLogger,
+    setLogLevel: logger.setLogLevel,
+    getLogLevel: logger.getLogLevel,
+  })
+
+  // 扩展 config 和 init 功能
+  return {
+    ...baseCore,
+    /** 初始化 Core */
+    init: initCore,
+  }
+}
+
+/**
  * Core 服务对象 - 聚合常用功能
  */
-export const core = createCore({
-  createLogger: logger.createLogger,
-  getLogger: logger.getLogger,
-  configureLogger: logger.configureLogger,
-  setLogLevel: logger.setLogLevel,
-  getLogLevel: logger.getLogLevel,
-})
+export const core = createBrowserCore()
 
 /**
  * 初始化 Core（浏览器版本）
  * 注意：浏览器环境不支持 configs 和 watchConfig 选项
  */
 export function initCore(options: CoreOptions = {}): void {
-  const silent = options.silent ?? false
   const logger = core.logger
 
   // 配置日志
@@ -58,18 +71,9 @@ export function initCore(options: CoreOptions = {}): void {
     core.configureLogger(options.logging)
   }
 
-  // 警告不支持的选项
-  if (options.configs) {
-    logger.warn('[core] Browser does not support configs option, use server-side config loading')
-  }
   if (options.watchConfig) {
     logger.warn('[core] Browser does not support watchConfig option')
   }
 
-  if (!silent) {
-    logger.info('[core] Initialized (browser mode)')
-  }
+  logger.info('[core] Initialized (browser mode)')
 }
-
-// 重导出类型
-export type { CoreOptions } from './core-types.js'
