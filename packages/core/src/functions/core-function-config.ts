@@ -221,9 +221,9 @@ function loadConfig<T>(
 function loadAndCache<T>(
   name: string,
   filePath: string,
-  schema: ZodType<T>,
+  schema?: ZodType<T>,
 ): Result<T, ConfigError> {
-  const result = loadConfig(filePath, schema)
+  const result = schema ? loadConfig(filePath, schema) : loadYaml(filePath) as Result<T, ConfigError>
   if (result.success) {
     configCache.set(name, {
       data: result.data,
@@ -233,6 +233,36 @@ function loadAndCache<T>(
     })
   }
   return result
+}
+
+/**
+ * 校验已加载的配置并写回缓存
+ */
+function validateLoadedConfig<T>(name: string, schema: ZodType<T>): Result<T, ConfigError> {
+  const entry = configCache.get(name)
+  if (!entry) {
+    return err(createNotLoadedError(name))
+  }
+
+  const parseResult = schema.safeParse(entry.data)
+  if (!parseResult.success) {
+    return err({
+      code: ConfigErrorCode.VALIDATION_ERROR,
+      message: i18n.coreM('config_validationFailed'),
+      path: entry.filePath,
+      details: parseResult.error.issues,
+    })
+  }
+
+  const validated = parseResult.data
+  configCache.set(name, {
+    ...entry,
+    data: validated,
+    schema,
+    loadedAt: Date.now(),
+  })
+
+  return ok(validated)
 }
 
 /**
@@ -296,7 +326,7 @@ function registerWatch<T>(name: string, callback: WatchCallback<T>): () => void 
   const entry = startFileWatcher(name)
   if (!entry) {
     callback(null, createNotLoadedError(name))
-    return () => {}
+    return () => { }
   }
 
   entry.callbacks.add(callback as WatchCallback<unknown>)
@@ -354,8 +384,17 @@ export const config = {
   /**
    * 加载配置到缓存
    */
-  load<T>(name: string, filePath: string, schema: ZodType<T>): Result<T, ConfigError> {
+  load<T>(name: string, filePath: string, schema?: ZodType<T>): Result<T, ConfigError> {
     return loadAndCache(name, filePath, schema)
+  },
+
+  /**
+   * 验证数据
+   * @param name - 配置名称（用于错误消息）
+   * @param schema - Zod 验证模式
+   */
+  validate<T>(name: string, schema: ZodType<T>): Result<T, ConfigError> {
+    return validateLoadedConfig(name, schema)
   },
 
   /**

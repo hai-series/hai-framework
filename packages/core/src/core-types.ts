@@ -38,7 +38,7 @@ import type { LogFormat, LoggingConfig, LogLevel } from './config/index.js'
  */
 export type Result<T, E = Error>
   = | { success: true, data: T }
-    | { success: false, error: E }
+  | { success: false, error: E }
 
 /** 创建成功结果 */
 export function ok<T>(data: T): Result<T, never> {
@@ -90,29 +90,13 @@ export interface Logger {
   child: (context: Record<string, unknown>) => Logger
 }
 
-/** 配置加载项 */
-export interface ConfigLoadItem<T = unknown> {
-  /** 配置名称 */
-  name: string
-  /** 配置文件路径 */
-  filePath: string
-  /** Zod Schema */
-  schema: ZodType<T>
-  /** 监听回调（可选） */
-  watch?: ConfigWatchCallback<T>
+export interface LoggerFunctions {
+  createLogger: (options?: LoggerOptions) => Logger
+  getLogger: (name?: string) => Logger
+  configureLogger: (config: Partial<LoggingConfig>) => void
+  setLogLevel: (level: LogLevel) => void
+  getLogLevel: () => LogLevel
 }
-
-/** 配置监听回调 */
-export type ConfigWatchCallback<T = unknown> = (config: T | null, error?: unknown) => void
-
-/**
- * 内置模块名称与配置文件前缀的映射
- *
- * 约定：
- * - 内置模块配置文件以 `_` 开头，如 `_db.yml`
- * - 业务配置文件不带前缀，如 `app.yml`
- */
-export type BuiltinConfigModule = 'core' | 'db' | 'cache' | 'iam' | 'storage' | 'ai' | 'crypto'
 
 /** Core 配置选项 */
 export interface CoreOptions {
@@ -134,34 +118,9 @@ export interface CoreOptions {
    * ```
    */
   configDir?: string
-  /**
-   * 业务配置的 Schema 映射
-   *
-   * 用于验证非内置模块的配置文件。
-   * key 为文件名（不含扩展名），value 为 Zod Schema。
-   *
-   * @example
-   * ```ts
-   * core.init({
-   *   configDir: './config',
-   *   schemas: { myApp: MyAppConfigSchema }
-   * })
-   * ```
-   */
-  schemas?: Record<string, ZodType>
-  /** 配置文件加载列表（显式模式，与 configDir 互斥） */
-  configs?: ConfigLoadItem[]
   /** 是否启用配置文件监听（默认 false） */
   watchConfig?: boolean
-  /** 是否打印启动日志（默认 false） */
-  silent?: boolean
 }
 
 /** Logger 函数类型（内部使用） */
-export interface LoggerFunctions {
-  createLogger: (options?: LoggerOptions) => Logger
-  getLogger: (name?: string) => Logger
-  configureLogger: (config: Partial<LoggingConfig>) => void
-  setLogLevel: (level: LogLevel) => void
-  getLogLevel: () => LogLevel
-}
+

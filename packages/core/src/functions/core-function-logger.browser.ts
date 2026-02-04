@@ -15,7 +15,7 @@
  */
 
 import type { LoggingConfig, LogLevel } from '../config/index.js'
-import type { LogContext, Logger, LoggerOptions } from '../core-types.js'
+import type { LogContext, Logger, LoggerFunctions, LoggerOptions } from '../core-types.js'
 import log from 'loglevel'
 
 // =============================================================================
@@ -134,22 +134,14 @@ function getLogger(): Logger {
   return defaultLogger
 }
 
-/**
- * 重置默认 Logger（用于测试或重新配置后）
- */
-function resetLogger(): void {
-  defaultLogger = null
-}
-
 // =============================================================================
 // 对外出口
 // =============================================================================
 
-export const logger = {
+export const logger: LoggerFunctions = {
   configureLogger,
   setLogLevel,
   getLogLevel,
   createLogger,
   getLogger,
-  resetLogger,
 }

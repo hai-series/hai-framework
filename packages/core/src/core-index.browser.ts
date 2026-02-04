@@ -35,8 +35,6 @@
  * =============================================================================
  */
 
-import { i18n } from './i18n/index.js'
-
 // Schema（包含错误码）- 这些仍然直接导出
 export * from './config/index.js'
 
@@ -45,24 +43,3 @@ export * from './core-main.browser.js'
 
 // 类型定义（Result, Logger 等）
 export * from './core-types.js'
-
-// i18n 国际化
-export * from './i18n/index.js'
-
-// =============================================================================
-// 配置加载占位（浏览器环境不支持）
-// =============================================================================
-
-/** config 对象（浏览器环境不支持） */
-export const config = {
-  load: () => { throw new Error(i18n.coreM('core_browserFeatureUnsupported', { params: { feature: 'config.load' } })) },
-  get: () => { throw new Error(i18n.coreM('core_browserFeatureUnsupported', { params: { feature: 'config.get' } })) },
-  getOrThrow: () => { throw new Error(i18n.coreM('core_browserFeatureUnsupported', { params: { feature: 'config.getOrThrow' } })) },
-  reload: () => { throw new Error(i18n.coreM('core_browserFeatureUnsupported', { params: { feature: 'config.reload' } })) },
-  watch: () => { throw new Error(i18n.coreM('core_browserFeatureUnsupported', { params: { feature: 'config.watch' } })) },
-  unwatch: () => { throw new Error(i18n.coreM('core_browserFeatureUnsupported', { params: { feature: 'config.unwatch' } })) },
-  isWatching: () => false,
-  has: () => false,
-  clear: () => { },
-  keys: () => [],
-}

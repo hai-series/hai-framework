@@ -30,46 +30,13 @@
  * =============================================================================
  */
 
-import type { ZodType } from 'zod'
-import type { BuiltinConfigModule, ConfigLoadItem, CoreOptions } from './core-types.js'
+import type { CoreOptions } from './core-types.js'
 import { existsSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { CoreConfigSchema } from './config/index.js'
 import { createCore } from './core-main.js'
 import { config } from './functions/core-function-config.js'
 import { logger } from './functions/core-function-logger.node.js'
-
-// =============================================================================
-// 内置模块 Schema 注册表
-// =============================================================================
-
-/**
- * 内置模块 Schema 映射
- * key 为文件名前缀（不含 _），value 为对应的 Zod Schema
- */
-const builtinSchemas: Record<BuiltinConfigModule, ZodType | null> = {
-  core: CoreConfigSchema,
-  db: null, // 延迟加载，避免循环依赖
-  cache: null,
-  iam: null,
-  storage: null,
-  ai: null,
-  crypto: null,
-}
-
-/**
- * 注册内置模块的 Schema（供其他模块调用）
- */
-export function registerBuiltinSchema(module: BuiltinConfigModule, schema: ZodType): void {
-  builtinSchemas[module] = schema
-}
-
-/**
- * 获取内置模块的 Schema
- */
-function getBuiltinSchema(module: string): ZodType | null {
-  return builtinSchemas[module as BuiltinConfigModule] ?? null
-}
 
 // =============================================================================
 // Core 实例
@@ -94,8 +61,6 @@ function createNodeCore() {
     config,
     /** 初始化 Core */
     init: initCore,
-    /** 注册内置模块 Schema */
-    registerBuiltinSchema,
   }
 }
 
@@ -108,21 +73,24 @@ export const core = createNodeCore()
 // Initialization
 // =============================================================================
 
+interface ConfigLoadItem {
+  /** 配置名称 */
+  name: string
+  /** 配置文件路径 */
+  filePath: string
+}
+
 /**
  * 扫描配置目录并构建配置加载项列表
  */
 function scanConfigDir(
   configDir: string,
-  schemas?: Record<string, ZodType>,
-  silent?: boolean,
 ): ConfigLoadItem[] {
   const logger = core.logger
   const items: ConfigLoadItem[] = []
 
   if (!existsSync(configDir)) {
-    if (!silent) {
-      logger.warn(`[core] Config directory not found: ${configDir}`)
-    }
+    logger.warn(`[core] Config directory not found: ${configDir}`)
     return items
   }
 
@@ -137,46 +105,19 @@ function scanConfigDir(
     // 判断是否为内置模块配置（以 _ 开头）
     if (baseName.startsWith('_')) {
       const moduleName = baseName.slice(1) // 去掉 _ 前缀
-      const schema = getBuiltinSchema(moduleName)
-
-      if (schema) {
-        items.push({
-          name: moduleName,
-          filePath,
-          schema,
-        })
-      }
-      else {
-        if (!silent) {
-          logger.warn(`[core] Unknown builtin config: ${file}, skipped`)
-        }
-      }
+      items.push({
+        name: moduleName,
+        filePath,
+      })
     }
     else {
       // 业务配置（文件名作为配置名）
-      const schema = schemas?.[baseName]
-      if (schema) {
-        items.push({
-          name: baseName,
-          filePath,
-          schema,
-        })
-      }
-      else {
-        // 没有 schema 时，仍然加载但不验证（返回原始数据）
-        if (!silent) {
-          logger.debug(`[core] No schema for config: ${file}, loading without validation`)
-        }
-        // 使用一个宽松的 schema
-        items.push({
-          name: baseName,
-          filePath,
-          schema: { parse: (x: unknown) => x, safeParse: (x: unknown) => ({ success: true, data: x }) } as unknown as ZodType,
-        })
-      }
+      items.push({
+        name: baseName,
+        filePath,
+      })
     }
   }
-
   return items
 }
 
@@ -185,7 +126,6 @@ function scanConfigDir(
  */
 function initCore(options: CoreOptions = {}): void {
   const startTime = Date.now()
-  const silent = options.silent ?? false
   const logger = core.logger
 
   // 1. Configure logging
@@ -193,56 +133,55 @@ function initCore(options: CoreOptions = {}): void {
     core.configureLogger(options.logging)
   }
 
-  if (!silent) {
-    logger.info('[core] Initializing...')
-  }
+  logger.info('[core] Initializing...')
 
-  // 2. 确定配置加载项
   let configItems: ConfigLoadItem[] = []
 
   if (options.configDir) {
     // 约定优于配置模式
-    configItems = scanConfigDir(options.configDir, options.schemas, silent)
-  }
-  else if (options.configs && options.configs.length > 0) {
-    // 显式模式
-    configItems = options.configs
+    configItems = scanConfigDir(options.configDir)
   }
 
   // 3. Load config files
   for (const item of configItems) {
-    const result = config.load(item.name, item.filePath, item.schema)
-    if (result.success) {
-      if (!silent) {
+
+    if (item.name === "_core") {
+      const result = config.load(item.name, item.filePath, CoreConfigSchema)
+      if (result.success) {
+        if (!options.logging) {
+          core.configureLogger(result.data.logging || {})
+        }
         logger.info(`[core] Config loaded: ${item.name} <- ${item.filePath}`)
+      } else {
+        logger.error(`[core] Config load failed: ${item.name}`, {
+          error: result.error,
+        })
       }
-      // Register watch callback
-      if (item.watch) {
-        config.watch(item.name, item.watch)
+    } else {
+      const result = config.load(item.name, item.filePath)
+      if (result.success) {
+        logger.info(`[core] Config loaded: ${item.name} <- ${item.filePath}`)
+      } else {
+        logger.error(`[core] Config load failed: ${item.name}`, {
+          error: result.error,
+        })
       }
-    }
-    else {
-      logger.error(`[core] Config load failed: ${item.name}`, {
-        error: result.error,
-      })
     }
   }
 
   // 4. Enable config file watching
   if (options.watchConfig && configItems.length > 0) {
-    setupConfigWatch(configItems, silent)
+    setupConfigWatch(configItems)
   }
 
-  if (!silent) {
-    const duration = Date.now() - startTime
-    logger.info(`[core] Initialized (${duration}ms)`)
-  }
+  const duration = Date.now() - startTime
+  logger.info(`[core] Initialized (${duration}ms)`)
 }
 
 /**
  * Setup config file watching
  */
-function setupConfigWatch(configs: ConfigLoadItem[], silent: boolean): void {
+function setupConfigWatch(configs: ConfigLoadItem[]): void {
   const logger = core.logger
 
   for (const item of configs) {
@@ -250,23 +189,11 @@ function setupConfigWatch(configs: ConfigLoadItem[], silent: boolean): void {
       if (error) {
         logger.error(`[core] Config reload failed: ${item.name}`, { error })
       }
-      else if (!silent) {
-        logger.info(`[core] Config reloaded: ${item.name}`)
-      }
+      logger.info(`[core] Config reloaded: ${item.name}`)
     })
 
-    if (!silent) {
-      logger.debug(`[core] Config watch enabled: ${item.name}`)
-    }
+    logger.debug(`[core] Config watch enabled: ${item.name}`)
   }
 }
 
-/**
- * Stop config file watching
- */
-export function stopConfigWatch(name?: string): void {
-  config.unwatch(name)
-}
 
-// Re-export types
-export type { ConfigLoadItem, CoreOptions } from './core-types.js'

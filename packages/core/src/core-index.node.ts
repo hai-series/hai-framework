@@ -46,6 +46,3 @@ export * from './core-main.node.js'
 
 // 类型定义（Result, Logger 等）
 export * from './core-types.js'
-
-// i18n 国际化
-export * from './i18n/index.js'
