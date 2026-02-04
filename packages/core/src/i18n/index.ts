@@ -7,7 +7,7 @@
  * 设计原则：
  * - 集中式 locale 管理：通过 core.i18n.localeManager 统一管理全局 locale
  * - 通过 core.i18n.xxx 访问所有 i18n 功能
- * - Paraglide 优先：翻译由各包的 Paraglide 编译生成
+ * - JSON 消息：通过 createMessageGetter 统一消息获取
  *
  * 使用方式：
  * - core.i18n.setGlobalLocale('en-US') - 设置全局 locale
@@ -15,11 +15,8 @@
  * =============================================================================
  */
 
-// 仅导出类型，函数通过 core.i18n 访问
-export type {
-  InterpolationParams,
-  Locale,
-  LocaleInfo,
-  LocaleMessages,
-  MessageDictionary,
-} from './i18n-utils.js'
+// core 内部消息获取器（对外可用）
+export * from './core-i18n-messages.js'
+
+// i18n 工具（函数与类型）
+export * from './core-i18n-utils.js'

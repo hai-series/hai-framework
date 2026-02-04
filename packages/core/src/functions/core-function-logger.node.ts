@@ -17,7 +17,7 @@
  * =============================================================================
  */
 
-import type { LogFormat, LoggingConfig, LogLevel } from '../core-config.js'
+import type { LogFormat, LoggingConfig, LogLevel } from '../config/index.js'
 import type { LogContext, Logger, LoggerOptions } from '../core-types.js'
 import { execSync } from 'node:child_process'
 import process from 'node:process'

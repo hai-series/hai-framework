@@ -19,7 +19,7 @@ import type { ZodSchema } from 'zod'
 // 4. Core 初始化类型
 // =============================================================================
 
-import type { LogFormat, LoggingConfig, LogLevel } from './core-config.js'
+import type { LogFormat, LoggingConfig, LogLevel } from './config/index.js'
 
 // =============================================================================
 // 1. 基础类型 - Result / Option

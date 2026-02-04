@@ -6,7 +6,7 @@
 
 ```typescript
 import type { Logger, Result } from '@hai/core'
-import { CommonErrorCode, core, CoreConfigSchema, err, initCore, ok } from '@hai/core'
+import { CommonErrorCode, ConfigErrorCode, core, CoreConfigSchema, err, ok } from '@hai/core'
 ```
 
 ## 核心 API
@@ -16,14 +16,23 @@ import { CommonErrorCode, core, CoreConfigSchema, err, initCore, ok } from '@hai
 ### 初始化
 
 ```typescript
-// 初始化（可选，加载配置文件）
-initCore({
+// 初始化（可选，仅 Node.js，加载配置文件）
+core.init({
   silent: false,
   logging: { level: 'info' },
   configs: [
-    { name: 'core', filePath: './config/_core.yml', schema: CoreConfigSchema }
+    { name: 'core', filePath: './config/_core.yml', schema: CoreConfigSchema },
   ],
   watchConfig: true,
+})
+```
+
+```typescript
+// 浏览器初始化（可选）
+import { initCore } from '@hai/core'
+
+initCore({
+  logging: { level: 'info' },
 })
 ```
 
@@ -87,19 +96,13 @@ core.config.onChange('core', (newConfig) => {
 
 ```typescript
 core.type.isDefined(value) // 非 null/undefined
-core.type.isNull(value) // null
-core.type.isUndefined(value) // undefined
 core.type.isObject(value) // 对象（排除数组）
-core.type.isPlainObject(value) // 纯对象
 core.type.isArray(value) // 数组
 core.type.isString(value) // 字符串
 core.type.isNumber(value) // 数字
 core.type.isBoolean(value) // 布尔
 core.type.isFunction(value) // 函数
 core.type.isPromise(value) // Promise
-core.type.isDate(value) // Date
-core.type.isRegExp(value) // RegExp
-core.type.isEmpty(value) // 空值
 ```
 
 ### 对象操作 - core.object
@@ -109,9 +112,6 @@ core.object.deepClone(obj) // 深拷贝
 core.object.deepMerge(target, source) // 深合并
 core.object.pick(obj, ['a', 'b']) // 选取属性
 core.object.omit(obj, ['password']) // 排除属性
-core.object.get(obj, 'a.b.c') // 安全获取嵌套属性
-core.object.set(obj, 'a.b.c', value) // 安全设置嵌套属性
-core.object.has(obj, 'a.b.c') // 检查嵌套属性
 core.object.keys(obj) // 类型安全的 keys
 core.object.values(obj) // 类型安全的 values
 core.object.entries(obj) // 类型安全的 entries
@@ -127,11 +127,11 @@ core.string.kebabCase('helloWorld') // 'hello-world'
 core.string.snakeCase('helloWorld') // 'hello_world'
 core.string.pascalCase('hello-world') // 'HelloWorld'
 core.string.truncate('long text', 5) // 'long ...'
+core.string.trim('  hi  ') // 'hi'
+core.string.isBlank('   ') // true
+core.string.isNotBlank('hi') // true
 core.string.padStart('1', 3, '0') // '001'
 core.string.padEnd('1', 3, '0') // '100'
-core.string.template('Hello {name}', { name: 'World' }) // 'Hello World'
-core.string.escapeHtml('<script>') // '&lt;script&gt;'
-core.string.unescapeHtml('&lt;') // '<'
 ```
 
 ### 数组操作 - core.array
@@ -155,7 +155,8 @@ core.array.difference([1, 2, 3], [2]) // [1, 3]
 await core.async.delay(1000) // 延迟 1 秒
 await core.async.withTimeout(promise, 5000) // 超时控制
 await core.async.retry(fn, { maxRetries: 3 }) // 重试
-await core.async.parallel([fn1, fn2], { concurrency: 2 })
+await core.async.parallel([1, 2, 3], async n => n * 2, 2) // 并发处理
+await core.async.serial([1, 2, 3], async n => n * 2) // 串行处理
 const debounced = core.async.debounce(fn, 300) // 防抖
 const throttled = core.async.throttle(fn, 300) // 节流
 ```
@@ -164,14 +165,13 @@ const throttled = core.async.throttle(fn, 300) // 节流
 
 ```typescript
 core.time.formatDate(date) // '2024-01-15'
-core.time.formatTime(date) // '14:30:00'
-core.time.formatDateTime(date) // '2024-01-15 14:30:00'
 core.time.timeAgo(date) // '5分钟前'
-core.time.isToday(date) // true/false
-core.time.isSameDay(date1, date2) // true/false
+core.time.now() // 当前时间戳（毫秒）
+core.time.nowSeconds() // 当前时间戳（秒）
 core.time.parseDate('2024-01-15') // Date
+core.time.isValidDate(date) // 是否有效日期
 core.time.addDays(date, 7) // 7天后
-core.time.addMonths(date, 1) // 1个月后
+core.time.addHours(date, 1) // 1小时后
 core.time.startOfDay(date) // 当天 00:00:00
 core.time.endOfDay(date) // 当天 23:59:59
 ```
@@ -248,26 +248,18 @@ else {
 
 ```typescript
 import {
-  AIConfigSchema,
   CoreConfigSchema,
-  CryptoConfigSchema,
-  DbConfigSchema,
-  IAMConfigSchema,
-  StorageConfigSchema,
 } from '@hai/core'
 ```
+
+其他模块的配置 Schema 请从对应模块导入（如 `@hai/db`、`@hai/iam` 等）。
 
 ## 错误码
 
 ```typescript
 import {
-  AIErrorCode, // 4000-4999 AI
-  AuthErrorCode, // 2000-2999 认证
   CommonErrorCode, // 1000-1099 通用
   ConfigErrorCode, // 1100-1199 配置
-  CryptoErrorCode, // 6000-6999 加密
-  DbErrorCode, // 3000-3999 数据库
-  StorageErrorCode, // 5000-5999 存储
 } from '@hai/core'
 ```
 

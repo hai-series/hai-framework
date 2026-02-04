@@ -14,7 +14,7 @@
  * =============================================================================
  */
 
-import type { LoggingConfig, LogLevel } from '../core-config.js'
+import type { LoggingConfig, LogLevel } from '../config/index.js'
 import type { LogContext, Logger, LoggerOptions } from '../core-types.js'
 import log from 'loglevel'
 

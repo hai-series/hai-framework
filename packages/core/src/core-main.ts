@@ -30,10 +30,10 @@
  * =============================================================================
  */
 
-import type { LoggingConfig } from './core-config.js'
+import type { LoggingConfig } from './config/index.js'
 import type { Logger, LoggerFunctions } from './core-types.js'
 import { id, isValidNanoId, isValidUUID } from './functions/core-function-id.js'
-import * as i18nUtils from './i18n/i18n-utils.js'
+import * as i18nUtils from './i18n/core-i18n-utils.js'
 import * as arrayUtils from './utils/core-util-array.js'
 import * as asyncUtils from './utils/core-util-async.js'
 import * as objectUtils from './utils/core-util-object.js'

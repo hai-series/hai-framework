@@ -35,6 +35,8 @@
  * =============================================================================
  */
 
+import { getCoreMessage } from './i18n/core-i18n-messages.js'
+
 // Schema（包含错误码）- 这些仍然直接导出
 export * from './config/index.js'
 
@@ -53,21 +55,21 @@ export * from './i18n/index.js'
 
 /** 配置加载（浏览器环境不支持） */
 export function loadConfig(): never {
-  throw new Error('[hai/core] loadConfig is not available in browser. Use @hai/core/node.')
+  throw new Error(getCoreMessage('core_browserFeatureUnsupported', undefined, { feature: 'loadConfig' }))
 }
 
 /** 配置加载（浏览器环境不支持） */
 export function loadYaml(): never {
-  throw new Error('[hai/core] loadYaml is not available in browser. Use @hai/core/node.')
+  throw new Error(getCoreMessage('core_browserFeatureUnsupported', undefined, { feature: 'loadYaml' }))
 }
 
 /** config 对象（浏览器环境不支持） */
 export const config = {
-  load: () => { throw new Error('[hai/core] config.load is not available in browser.') },
-  get: () => { throw new Error('[hai/core] config.get is not available in browser.') },
-  getOrThrow: () => { throw new Error('[hai/core] config.getOrThrow is not available in browser.') },
-  reload: () => { throw new Error('[hai/core] config.reload is not available in browser.') },
-  onChange: () => { throw new Error('[hai/core] config.onChange is not available in browser.') },
+  load: () => { throw new Error(getCoreMessage('core_browserFeatureUnsupported', undefined, { feature: 'config.load' })) },
+  get: () => { throw new Error(getCoreMessage('core_browserFeatureUnsupported', undefined, { feature: 'config.get' })) },
+  getOrThrow: () => { throw new Error(getCoreMessage('core_browserFeatureUnsupported', undefined, { feature: 'config.getOrThrow' })) },
+  reload: () => { throw new Error(getCoreMessage('core_browserFeatureUnsupported', undefined, { feature: 'config.reload' })) },
+  onChange: () => { throw new Error(getCoreMessage('core_browserFeatureUnsupported', undefined, { feature: 'config.onChange' })) },
   has: () => false,
   clear: () => { },
   keys: () => [],
