@@ -2,7 +2,7 @@
  * =============================================================================
  * @hai/core - Logger（Node.js 版本，基于 pino）
  * =============================================================================
- * 提供统一的日志接口，Node.js 环境使用 pino 实现
+ * 提供统一的日志接口，Node.js 环境使用 pino 实现。
  *
  * @example
  * ```ts
@@ -59,7 +59,14 @@ let globalContext: Record<string, unknown> = {}
 let globalRedact: string[] = []
 
 /**
- * 配置全局 Logger 选项
+ * 配置全局 Logger 选项。
+ *
+ * @param config - 日志配置
+ *
+ * @example
+ * ```ts
+ * logger.configureLogger({ level: 'debug' })
+ * ```
  */
 function configureLogger(config: Partial<LoggingConfig>): void {
   if (config.level)
@@ -73,14 +80,26 @@ function configureLogger(config: Partial<LoggingConfig>): void {
 }
 
 /**
- * 设置全局日志级别
+ * 设置全局日志级别。
+ *
+ * @param level - 日志级别
+ *
+ * @example
+ * ```ts
+ * logger.setLogLevel('warn')
+ * ```
  */
 function setLogLevel(level: LogLevel): void {
   globalLevel = level
 }
 
 /**
- * 获取当前全局日志级别
+ * 获取当前全局日志级别。
+ *
+ * @example
+ * ```ts
+ * const level = logger.getLogLevel()
+ * ```
  */
 function getLogLevel(): LogLevel {
   return globalLevel
@@ -90,7 +109,12 @@ function getLogLevel(): LogLevel {
 // Logger 实现
 // =============================================================================
 
-/** 包装 pino 实例为统一 Logger 接口 */
+/**
+ * 包装 pino 实例为统一 Logger 接口。
+ *
+ * @param pinoLogger - pino 实例
+ * @param context - 合并上下文
+ */
 function wrapPino(pinoLogger: pino.Logger, context: Record<string, unknown>): Logger {
   return {
     trace(message: string, ctx?: LogContext) {
@@ -118,7 +142,16 @@ function wrapPino(pinoLogger: pino.Logger, context: Record<string, unknown>): Lo
 }
 
 /**
- * 创建 Logger 实例
+ * 创建 Logger 实例。
+ *
+ * @param options - Logger 选项
+ * @returns Logger 实例
+ *
+ * @example
+ * ```ts
+ * const appLogger = logger.createLogger({ name: 'api', level: 'info' })
+ * appLogger.info('ready')
+ * ```
  */
 function createLogger(options: LoggerOptions = {}): Logger {
   const level = options.level ?? globalLevel
@@ -170,7 +203,12 @@ function createLogger(options: LoggerOptions = {}): Logger {
 let defaultLogger: Logger | null = null
 
 /**
- * 获取默认 Logger 实例（单例）
+ * 获取默认 Logger 实例（单例）。
+ *
+ * @example
+ * ```ts
+ * const defaultLogger = logger.getLogger()
+ * ```
  */
 function getLogger(): Logger {
   if (!defaultLogger) {
@@ -183,6 +221,14 @@ function getLogger(): Logger {
 // 对外出口
 // =============================================================================
 
+/**
+ * Node.js Logger 函数集合。
+ *
+ * @example
+ * ```ts
+ * logger.createLogger({ name: 'service' }).info('boot')
+ * ```
+ */
 export const logger: LoggerFunctions = {
   configureLogger,
   setLogLevel,

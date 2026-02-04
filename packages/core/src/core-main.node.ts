@@ -2,8 +2,8 @@
  * =============================================================================
  * @hai/core - Core 服务聚合（Node.js）
  * =============================================================================
- * 提供统一的 core 对象，聚合常用功能
- * 所有功能统一通过 core 对象访问
+ * 提供 Node.js 环境的 core 对象，聚合常用功能。
+ * 所有功能统一通过 core 对象访问，并提供配置加载能力。
  *
  * @example
  * ```ts
@@ -43,7 +43,13 @@ import { logger } from './functions/core-function-logger.node.js'
 // =============================================================================
 
 /**
- * 创建 Node.js 版本的 core 对象
+ * 创建 Node.js 版本的 core 对象。
+ *
+ * @example
+ * ```ts
+ * import { core } from '@hai/core'
+ * core.logger.info('ready')
+ * ```
  */
 function createNodeCore() {
   const baseCore = createCore({
@@ -65,7 +71,13 @@ function createNodeCore() {
 }
 
 /**
- * Core 服务对象 - 聚合常用功能
+ * Core 服务对象 - 聚合常用功能（Node.js）。
+ *
+ * @example
+ * ```ts
+ * import { core } from '@hai/core'
+ * core.init({ configDir: './config' })
+ * ```
  */
 export const core = createNodeCore()
 
@@ -81,7 +93,15 @@ interface ConfigLoadItem {
 }
 
 /**
- * 扫描配置目录并构建配置加载项列表
+ * 扫描配置目录并构建配置加载项列表。
+ *
+ * @param configDir - 配置目录路径
+ * @returns 配置加载项列表
+ *
+ * @example
+ * ```ts
+ * const items = scanConfigDir('./config')
+ * ```
  */
 function scanConfigDir(
   configDir: string,
@@ -122,7 +142,14 @@ function scanConfigDir(
 }
 
 /**
- * 初始化 Core（内部实现，通过 core.init() 调用）
+ * 初始化 Core（内部实现，通过 core.init() 调用）。
+ *
+ * @param options - 初始化选项
+ *
+ * @example
+ * ```ts
+ * core.init({ configDir: './config', watchConfig: true })
+ * ```
  */
 function initCore(options: CoreOptions = {}): void {
   const startTime = Date.now()
@@ -142,7 +169,7 @@ function initCore(options: CoreOptions = {}): void {
     configItems = scanConfigDir(options.configDir)
   }
 
-  // 3. Load config files
+  // 2. Load config files
   for (const item of configItems) {
     if (item.name === '_core') {
       const result = config.load(item.name, item.filePath, CoreConfigSchema)
@@ -171,7 +198,7 @@ function initCore(options: CoreOptions = {}): void {
     }
   }
 
-  // 4. Enable config file watching
+  // 3. Enable config file watching
   if (options.watchConfig && configItems.length > 0) {
     setupConfigWatch(configItems)
   }
@@ -181,7 +208,14 @@ function initCore(options: CoreOptions = {}): void {
 }
 
 /**
- * Setup config file watching
+ * 启用配置文件监听。
+ *
+ * @param configs - 需要监听的配置项
+ *
+ * @example
+ * ```ts
+ * setupConfigWatch([{ name: 'app', filePath: './config/app.yml' }])
+ * ```
  */
 function setupConfigWatch(configs: ConfigLoadItem[]): void {
   const logger = core.logger

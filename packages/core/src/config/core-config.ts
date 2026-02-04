@@ -20,7 +20,12 @@ import { z } from 'zod'
 // =============================================================================
 
 /**
- * 通用错误码 (1000-1099)
+ * 通用错误码 (1000-1099)。
+ *
+ * @example
+ * ```ts
+ * CommonErrorCode.UNKNOWN // 1000
+ * ```
  */
 export const CommonErrorCode = {
   UNKNOWN: 1000,
@@ -36,7 +41,12 @@ export const CommonErrorCode = {
 export type CommonErrorCodeType = typeof CommonErrorCode[keyof typeof CommonErrorCode]
 
 /**
- * 配置错误码 (1100-1199)
+ * 配置错误码 (1100-1199)。
+ *
+ * @example
+ * ```ts
+ * ConfigErrorCode.FILE_NOT_FOUND // 1100
+ * ```
  */
 export const ConfigErrorCode = {
   FILE_NOT_FOUND: 1100,
@@ -52,19 +62,34 @@ export type ConfigErrorCodeType = typeof ConfigErrorCode[keyof typeof ConfigErro
 // =============================================================================
 
 /**
- * 环境类型 Schema
+ * 环境类型 Schema。
+ *
+ * @example
+ * ```ts
+ * EnvSchema.parse('development')
+ * ```
  */
 export const EnvSchema = z.enum(['development', 'production', 'test', 'staging'])
 export type Env = z.infer<typeof EnvSchema>
 
 /**
- * 日志级别 Schema
+ * 日志级别 Schema。
+ *
+ * @example
+ * ```ts
+ * LogLevelSchema.parse('info')
+ * ```
  */
 export const LogLevelSchema = z.enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal'])
 export type LogLevel = z.infer<typeof LogLevelSchema>
 
 /**
- * 日志格式 Schema
+ * 日志格式 Schema。
+ *
+ * @example
+ * ```ts
+ * LogFormatSchema.parse('json')
+ * ```
  */
 export const LogFormatSchema = z.enum(['json', 'pretty'])
 export type LogFormat = z.infer<typeof LogFormatSchema>
@@ -74,7 +99,12 @@ export type LogFormat = z.infer<typeof LogFormatSchema>
 // =============================================================================
 
 /**
- * 日志配置 Schema
+ * 日志配置 Schema。
+ *
+ * @example
+ * ```ts
+ * LoggingConfigSchema.parse({ level: 'info', format: 'json' })
+ * ```
  */
 export const LoggingConfigSchema = z.object({
   /** 日志级别 */
@@ -93,7 +123,12 @@ export type LoggingConfig = z.infer<typeof LoggingConfigSchema>
 // =============================================================================
 
 /**
- * ID 生成器配置 Schema
+ * ID 生成器配置 Schema。
+ *
+ * @example
+ * ```ts
+ * IdConfigSchema.parse({ length: 12 })
+ * ```
  */
 export const IdConfigSchema = z.object({
   /** ID 前缀 */
@@ -108,7 +143,12 @@ export type IdConfig = z.infer<typeof IdConfigSchema>
 // =============================================================================
 
 /**
- * Core 配置 Schema
+ * Core 配置 Schema。
+ *
+ * @example
+ * ```ts
+ * CoreConfigSchema.parse({ name: 'demo' })
+ * ```
  */
 export const CoreConfigSchema = z.object({
   /** 应用名称 */

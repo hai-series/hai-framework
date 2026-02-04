@@ -7,14 +7,29 @@
 import { i18n } from '../i18n/index.js'
 
 /**
- * 延迟执行
+ * 延迟执行。
+ *
+ * @param ms - 延迟毫秒数
+ *
+ * @example
+ * ```ts
+ * await async.delay(1000)
+ * ```
  */
 function delay(ms: number): Promise<void> {
   return new Promise<void>(resolve => setTimeout(resolve, ms))
 }
 
 /**
- * 添加超时限制
+ * 添加超时限制。
+ *
+ * @param promise - 目标 Promise
+ * @param ms - 超时时间（毫秒）
+ *
+ * @example
+ * ```ts
+ * await async.withTimeout(fetch('/api'), 5000)
+ * ```
  */
 async function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   // 使用 Promise.race + 定时器实现超时控制
@@ -24,7 +39,17 @@ async function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
 }
 
 /**
- * 重试操作
+ * 重试操作。
+ *
+ * @param fn - 待重试函数
+ * @param options - 重试配置
+ * @param options.maxRetries - 最大重试次数
+ * @param options.delay - 重试间隔（毫秒）
+ *
+ * @example
+ * ```ts
+ * await async.retry(() => fetch('/api'), { maxRetries: 3, delay: 500 })
+ * ```
  */
 async function retry<T>(
   fn: () => Promise<T>,
@@ -46,7 +71,16 @@ async function retry<T>(
 }
 
 /**
- * 并行执行，限制并发数
+ * 并行执行，限制并发数。
+ *
+ * @param items - 输入列表
+ * @param fn - 处理函数
+ * @param concurrency - 最大并发数
+ *
+ * @example
+ * ```ts
+ * await async.parallel([1, 2, 3], async n => n * 2, 2)
+ * ```
  */
 async function parallel<T, R>(
   items: T[],
@@ -72,7 +106,15 @@ async function parallel<T, R>(
 }
 
 /**
- * 串行执行
+ * 串行执行。
+ *
+ * @param items - 输入列表
+ * @param fn - 处理函数
+ *
+ * @example
+ * ```ts
+ * await async.serial([1, 2], async n => n * 2)
+ * ```
  */
 async function serial<T, R>(
   items: T[],
@@ -86,7 +128,15 @@ async function serial<T, R>(
 }
 
 /**
- * 防抖
+ * 防抖。
+ *
+ * @param fn - 目标函数
+ * @param ms - 延迟毫秒数
+ *
+ * @example
+ * ```ts
+ * const onInput = async.debounce(() => {}, 300)
+ * ```
  */
 function debounce<T extends (...args: unknown[]) => unknown>(
   fn: T,
@@ -101,7 +151,15 @@ function debounce<T extends (...args: unknown[]) => unknown>(
 }
 
 /**
- * 节流
+ * 节流。
+ *
+ * @param fn - 目标函数
+ * @param ms - 间隔毫秒数
+ *
+ * @example
+ * ```ts
+ * const onScroll = async.throttle(() => {}, 200)
+ * ```
  */
 function throttle<T extends (...args: unknown[]) => unknown>(
   fn: T,
@@ -118,7 +176,12 @@ function throttle<T extends (...args: unknown[]) => unknown>(
 }
 
 /**
- * 异步操作工具对象
+ * 异步操作工具对象。
+ *
+ * @example
+ * ```ts
+ * await async.delay(100)
+ * ```
  */
 export const async = {
   delay,

@@ -41,7 +41,6 @@
 import { core } from '@hai/core'
 import messagesEnUS from '../messages/en-US.json'
 import messagesZhCN from '../messages/zh-CN.json'
-import { CacheConfigSchema } from './cache-config.js'
 
 // =============================================================================
 // 导出配置和类型
@@ -61,6 +60,3 @@ export * from './cache-types.js'
 type CacheMessageKey = keyof typeof messagesZhCN
 export const getCacheMessage
   = core.i18n.createMessageGetter<CacheMessageKey>({ 'zh-CN': messagesZhCN, 'en-US': messagesEnUS })
-
-// 注册 cache 模块的配置 Schema
-core.registerBuiltinSchema('cache', CacheConfigSchema)

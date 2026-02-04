@@ -38,17 +38,47 @@ export type Result<T, E = Error>
   = | { success: true, data: T }
     | { success: false, error: E }
 
-/** 创建成功结果 */
+/**
+ * 创建成功结果。
+ *
+ * @example
+ * ```ts
+ * const result = ok({ id: 1 })
+ * if (result.success) {
+ *   console.log(result.data.id)
+ * }
+ * ```
+ */
 export function ok<T>(data: T): Result<T, never> {
   return { success: true, data }
 }
 
-/** 创建失败结果 */
+/**
+ * 创建失败结果。
+ *
+ * @example
+ * ```ts
+ * const result = err('bad request')
+ * if (!result.success) {
+ *   console.error(result.error)
+ * }
+ * ```
+ */
 export function err<E>(error: E): Result<never, E> {
   return { success: false, error }
 }
 
-/** Result Match 处理器 */
+/**
+ * Result Match 处理器。
+ *
+ * @example
+ * ```ts
+ * const handlers: MatchHandlers<number, string, number, number> = {
+ *   ok: n => n + 1,
+ *   err: () => 0,
+ * }
+ * ```
+ */
 export interface MatchHandlers<T, E, R1, R2> {
   ok: (data: T) => R1
   err: (error: E) => R2
@@ -58,7 +88,14 @@ export interface MatchHandlers<T, E, R1, R2> {
 // 2. 日志类型
 // =============================================================================
 
-/** 日志上下文 */
+/**
+ * 日志上下文。
+ *
+ * @example
+ * ```ts
+ * const context: LogContext = { requestId: 'req-1' }
+ * ```
+ */
 export interface LogContext {
   timestamp?: Date
   level?: LogLevel
@@ -66,7 +103,14 @@ export interface LogContext {
   [key: string]: unknown
 }
 
-/** 日志选项 */
+/**
+ * 日志选项。
+ *
+ * @example
+ * ```ts
+ * const options: LoggerOptions = { name: 'api', level: 'debug' }
+ * ```
+ */
 export interface LoggerOptions {
   name?: string
   level?: LogLevel
@@ -75,8 +119,13 @@ export interface LoggerOptions {
 }
 
 /**
- * Logger 接口
- * 统一的日志记录接口，具体实现由 Provider 提供
+ * Logger 接口。
+ * 统一的日志记录接口，具体实现由 Provider 提供。
+ *
+ * @example
+ * ```ts
+ * core.logger.info('ready', { requestId: 'req-1' })
+ * ```
  */
 export interface Logger {
   trace: (message: string, context?: LogContext) => void
@@ -88,6 +137,20 @@ export interface Logger {
   child: (context: Record<string, unknown>) => Logger
 }
 
+/**
+ * Logger 函数组合（平台实现依赖）。
+ *
+ * @example
+ * ```ts
+ * const fns: LoggerFunctions = {
+ *   createLogger,
+ *   getLogger,
+ *   configureLogger,
+ *   setLogLevel,
+ *   getLogLevel,
+ * }
+ * ```
+ */
 export interface LoggerFunctions {
   createLogger: (options?: LoggerOptions) => Logger
   getLogger: (name?: string) => Logger
@@ -96,7 +159,14 @@ export interface LoggerFunctions {
   getLogLevel: () => LogLevel
 }
 
-/** Core 配置选项 */
+/**
+ * Core 配置选项。
+ *
+ * @example
+ * ```ts
+ * const options: CoreOptions = { configDir: './config', watchConfig: true }
+ * ```
+ */
 export interface CoreOptions {
   /** 日志配置 */
   logging?: Partial<LoggingConfig>
@@ -119,5 +189,3 @@ export interface CoreOptions {
   /** 是否启用配置文件监听（默认 false） */
   watchConfig?: boolean
 }
-
-/** Logger 函数类型（内部使用） */

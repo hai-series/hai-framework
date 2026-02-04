@@ -7,15 +7,25 @@
 import { typeUtils } from './core-util-type.js'
 
 /**
- * 深度克隆对象
- * 注意：仅适用于可 JSON 序列化的数据（如 Date、Map、函数等会丢失信息）
+ * 深度克隆对象。
+ * 注意：仅适用于可 JSON 序列化的数据（如 Date、Map、函数等会丢失信息）。
+ *
+ * @example
+ * ```ts
+ * const cloned = object.deepClone({ a: 1 })
+ * ```
  */
 function deepClone<T>(obj: T): T {
   return JSON.parse(JSON.stringify(obj))
 }
 
 /**
- * 深度合并多个对象
+ * 深度合并多个对象。
+ *
+ * @example
+ * ```ts
+ * const merged = object.deepMerge({ a: 1 }, { b: 2 })
+ * ```
  */
 function deepMerge<T extends Record<string, unknown>>(...objects: Partial<T>[]): T {
   const result = {} as Record<string, unknown>
@@ -39,7 +49,12 @@ function deepMerge<T extends Record<string, unknown>>(...objects: Partial<T>[]):
 }
 
 /**
- * 从对象中选取指定的键
+ * 从对象中选取指定的键。
+ *
+ * @example
+ * ```ts
+ * object.pick({ a: 1, b: 2 }, ['a'])
+ * ```
  */
 function pick<T extends Record<string, unknown>, K extends keyof T>(
   obj: T,
@@ -55,7 +70,12 @@ function pick<T extends Record<string, unknown>, K extends keyof T>(
 }
 
 /**
- * 从对象中排除指定的键
+ * 从对象中排除指定的键。
+ *
+ * @example
+ * ```ts
+ * object.omit({ a: 1, b: 2 }, ['b'])
+ * ```
  */
 function omit<T extends Record<string, unknown>, K extends keyof T>(
   obj: T,
@@ -69,35 +89,60 @@ function omit<T extends Record<string, unknown>, K extends keyof T>(
 }
 
 /**
- * 获取对象的所有键
+ * 获取对象的所有键。
+ *
+ * @example
+ * ```ts
+ * object.keys({ a: 1, b: 2 })
+ * ```
  */
 function keys<T extends Record<string, unknown>>(obj: T): (keyof T)[] {
   return Object.keys(obj) as (keyof T)[]
 }
 
 /**
- * 获取对象的所有值
+ * 获取对象的所有值。
+ *
+ * @example
+ * ```ts
+ * object.values({ a: 1, b: 2 })
+ * ```
  */
 function values<T extends Record<string, unknown>>(obj: T): T[keyof T][] {
   return Object.values(obj) as T[keyof T][]
 }
 
 /**
- * 获取对象的键值对数组
+ * 获取对象的键值对数组。
+ *
+ * @example
+ * ```ts
+ * object.entries({ a: 1 })
+ * ```
  */
 function entries<T extends Record<string, unknown>>(obj: T): [keyof T, T[keyof T]][] {
   return Object.entries(obj) as [keyof T, T[keyof T]][]
 }
 
 /**
- * 从键值对数组创建对象
+ * 从键值对数组创建对象。
+ *
+ * @example
+ * ```ts
+ * object.fromEntries([['a', 1]])
+ * ```
  */
 function fromEntries<K extends string, V>(entries: [K, V][]): Record<K, V> {
   return Object.fromEntries(entries) as Record<K, V>
 }
 
 /**
- * 对象操作工具对象
+ * 对象操作工具对象。
+ *
+ * @example
+ * ```ts
+ * object.deepMerge({ a: 1 }, { b: 2 })
+ * ```
  */
 export const object = {
   deepClone,

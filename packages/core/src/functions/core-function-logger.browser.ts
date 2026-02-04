@@ -2,7 +2,7 @@
  * =============================================================================
  * @hai/core - Logger（浏览器版本，基于 loglevel）
  * =============================================================================
- * 提供统一的日志接口，浏览器环境使用 loglevel 实现
+ * 提供统一的日志接口，浏览器环境使用 loglevel 实现。
  *
  * @example
  * ```ts
@@ -36,7 +36,14 @@ const LEVEL_MAP: Record<LogLevel, log.LogLevelDesc> = {
 }
 
 /**
- * 配置全局 Logger 选项
+ * 配置全局 Logger 选项。
+ *
+ * @param config - 日志配置
+ *
+ * @example
+ * ```ts
+ * logger.configureLogger({ level: 'debug' })
+ * ```
  */
 function configureLogger(config: Partial<LoggingConfig>): void {
   if (config.level) {
@@ -49,7 +56,14 @@ function configureLogger(config: Partial<LoggingConfig>): void {
 }
 
 /**
- * 设置全局日志级别
+ * 设置全局日志级别。
+ *
+ * @param level - 日志级别
+ *
+ * @example
+ * ```ts
+ * logger.setLogLevel('warn')
+ * ```
  */
 function setLogLevel(level: LogLevel): void {
   globalLevel = level
@@ -57,7 +71,12 @@ function setLogLevel(level: LogLevel): void {
 }
 
 /**
- * 获取当前全局日志级别
+ * 获取当前全局日志级别。
+ *
+ * @example
+ * ```ts
+ * const level = logger.getLogLevel()
+ * ```
  */
 function getLogLevel(): LogLevel {
   return globalLevel
@@ -67,7 +86,12 @@ function getLogLevel(): LogLevel {
 // Logger 实现
 // =============================================================================
 
-/** 格式化消息 */
+/**
+ * 格式化消息。
+ *
+ * @param message - 日志文本
+ * @param context - 日志上下文
+ */
 function formatMessage(message: string, context?: LogContext): string {
   if (!context || Object.keys(context).length === 0) {
     return message
@@ -75,7 +99,12 @@ function formatMessage(message: string, context?: LogContext): string {
   return `${message} ${JSON.stringify(context)}`
 }
 
-/** 创建 Logger 包装 */
+/**
+ * 创建 Logger 包装。
+ *
+ * @param loggerInstance - loglevel 实例
+ * @param baseContext - 基础上下文
+ */
 function wrapLoglevel(loggerInstance: log.Logger, baseContext: Record<string, unknown>): Logger {
   return {
     trace(message: string, ctx?: LogContext) {
@@ -103,7 +132,16 @@ function wrapLoglevel(loggerInstance: log.Logger, baseContext: Record<string, un
 }
 
 /**
- * 创建 Logger 实例
+ * 创建 Logger 实例。
+ *
+ * @param options - Logger 选项
+ * @returns Logger 实例
+ *
+ * @example
+ * ```ts
+ * const appLogger = logger.createLogger({ name: 'web' })
+ * appLogger.info('ready')
+ * ```
  */
 function createLogger(options: LoggerOptions = {}): Logger {
   const { name, level, context } = options
@@ -125,7 +163,12 @@ function createLogger(options: LoggerOptions = {}): Logger {
 let defaultLogger: Logger | null = null
 
 /**
- * 获取默认 Logger 实例（单例）
+ * 获取默认 Logger 实例（单例）。
+ *
+ * @example
+ * ```ts
+ * const defaultLogger = logger.getLogger()
+ * ```
  */
 function getLogger(): Logger {
   if (!defaultLogger) {
@@ -138,6 +181,14 @@ function getLogger(): Logger {
 // 对外出口
 // =============================================================================
 
+/**
+ * 浏览器 Logger 函数集合。
+ *
+ * @example
+ * ```ts
+ * logger.createLogger({ name: 'ui' }).info('boot')
+ * ```
+ */
 export const logger: LoggerFunctions = {
   configureLogger,
   setLogLevel,

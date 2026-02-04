@@ -7,7 +7,12 @@
 import { i18n } from '../i18n/index.js'
 
 /**
- * 格式化日期
+ * 格式化日期。
+ *
+ * @example
+ * ```ts
+ * time.formatDate(new Date(), 'YYYY-MM-DD')
+ * ```
  */
 function formatDate(date: Date, format = 'YYYY-MM-DD'): string {
   const year = date.getFullYear()
@@ -27,7 +32,12 @@ function formatDate(date: Date, format = 'YYYY-MM-DD'): string {
 }
 
 /**
- * 相对时间描述
+ * 相对时间描述。
+ *
+ * @example
+ * ```ts
+ * time.timeAgo(new Date(Date.now() - 60000))
+ * ```
  */
 function timeAgo(date: Date): string {
   const seconds = Math.floor((Date.now() - date.getTime()) / 1000)
@@ -41,35 +51,60 @@ function timeAgo(date: Date): string {
 }
 
 /**
- * 获取当前时间戳（毫秒）
+ * 获取当前时间戳（毫秒）。
+ *
+ * @example
+ * ```ts
+ * const ts = time.now()
+ * ```
  */
 function now(): number {
   return Date.now()
 }
 
 /**
- * 获取当前时间戳（秒）
+ * 获取当前时间戳（秒）。
+ *
+ * @example
+ * ```ts
+ * const ts = time.nowSeconds()
+ * ```
  */
 function nowSeconds(): number {
   return Math.floor(Date.now() / 1000)
 }
 
 /**
- * 解析日期字符串
+ * 解析日期字符串。
+ *
+ * @example
+ * ```ts
+ * const date = time.parseDate('2024-01-01')
+ * ```
  */
 function parseDate(dateStr: string): Date {
   return new Date(dateStr)
 }
 
 /**
- * 判断是否为有效日期
+ * 判断是否为有效日期。
+ *
+ * @example
+ * ```ts
+ * time.isValidDate(new Date('invalid')) // false
+ * ```
  */
 function isValidDate(date: Date): boolean {
   return !Number.isNaN(date.getTime())
 }
 
 /**
- * 添加天数
+ * 添加天数。
+ *
+ * @example
+ * ```ts
+ * time.addDays(new Date(), 7)
+ * ```
  */
 function addDays(date: Date, days: number): Date {
   const result = new Date(date)
@@ -78,7 +113,12 @@ function addDays(date: Date, days: number): Date {
 }
 
 /**
- * 添加小时
+ * 添加小时。
+ *
+ * @example
+ * ```ts
+ * time.addHours(new Date(), 1)
+ * ```
  */
 function addHours(date: Date, hours: number): Date {
   const result = new Date(date)
@@ -87,7 +127,12 @@ function addHours(date: Date, hours: number): Date {
 }
 
 /**
- * 获取日期的开始时间（00:00:00）
+ * 获取日期的开始时间（00:00:00）。
+ *
+ * @example
+ * ```ts
+ * time.startOfDay(new Date())
+ * ```
  */
 function startOfDay(date: Date): Date {
   const result = new Date(date)
@@ -96,7 +141,12 @@ function startOfDay(date: Date): Date {
 }
 
 /**
- * 获取日期的结束时间（23:59:59）
+ * 获取日期的结束时间（23:59:59）。
+ *
+ * @example
+ * ```ts
+ * time.endOfDay(new Date())
+ * ```
  */
 function endOfDay(date: Date): Date {
   const result = new Date(date)
@@ -105,7 +155,12 @@ function endOfDay(date: Date): Date {
 }
 
 /**
- * 时间操作工具对象
+ * 时间操作工具对象。
+ *
+ * @example
+ * ```ts
+ * time.formatDate(new Date())
+ * ```
  */
 export const time = {
   formatDate,

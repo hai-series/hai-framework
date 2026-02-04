@@ -2,6 +2,11 @@
 
 > 此文件描述 @hai/core 模块的 API 调用方式，供 AI 助手参考。
 
+## 模块简介
+
+`@hai/core` 提供统一的 core 服务对象，包含日志、配置、ID、i18n 与基础工具函数。
+Node.js 与浏览器 API 形态一致（浏览器不支持 `core.config`）。
+
 ## 导入
 
 ```typescript
@@ -9,34 +14,29 @@ import type { Logger, Result } from '@hai/core'
 import { CommonErrorCode, ConfigErrorCode, core, CoreConfigSchema, err, ok } from '@hai/core'
 ```
 
-## 核心 API
+## 初始化/关闭
 
-所有功能统一通过 `core` 对象访问。
-
-### 初始化
+### Node.js 初始化（可选）
 
 ```typescript
-// 初始化（可选，仅 Node.js，加载配置文件）
 core.init({
-  silent: false,
-  logging: { level: 'info' },
-  configs: [
-    { name: 'core', filePath: './config/_core.yml', schema: CoreConfigSchema },
-  ],
+  configDir: './config',
   watchConfig: true,
+  logging: { level: 'info' },
 })
 ```
+
+### 浏览器初始化（可选）
 
 ```typescript
-// 浏览器初始化（可选）
-import { initCore } from '@hai/core'
+import { core } from '@hai/core'
 
-initCore({
-  logging: { level: 'info' },
-})
+core.init({ logging: { level: 'info' } })
 ```
 
-### 日志 - core.logger
+> 说明：core 模块无显式 close 方法。
+
+## 日志 - core.logger
 
 ```typescript
 core.logger.trace('详细跟踪')
@@ -46,16 +46,14 @@ core.logger.warn('警告')
 core.logger.error('错误', { error: err })
 core.logger.fatal('致命错误')
 
-// 创建独立 logger
 const logger = core.createLogger({ context: { service: 'api' } })
 
-// 配置日志
 core.configureLogger({ level: 'debug', format: 'pretty' })
 core.setLogLevel('warn')
 core.getLogLevel() // 'warn'
 ```
 
-### ID 生成 - core.id
+## ID 生成 - core.id
 
 ```typescript
 core.id.generate() // 标准 nanoid (21位)
@@ -70,212 +68,175 @@ core.id.isValidUUID(str) // 验证 UUID
 core.id.isValidNanoId(str) // 验证 nanoid
 ```
 
-### 配置管理 - core.config（仅 Node.js）
+## 配置管理 - core.config（仅 Node.js）
 
 ```typescript
-// 加载配置
 const result = core.config.load('core', './config/_core.yml', CoreConfigSchema)
 
-// 获取配置
 const cfg = core.config.get('core')
-const cfg = core.config.getOrThrow('core') // 不存在则抛出异常
+const cfg2 = core.config.getOrThrow('core')
 
-// 检查/重新加载
-core.config.has('core') // true/false
-core.config.reload('core') // 重新加载
-core.config.keys() // ['core', ...]
-core.config.clear() // 清空所有
+core.config.has('core')
+core.config.reload('core')
+core.config.keys()
+core.config.clear()
 
-// 监听变更（文件变更或手动 reload）
 const unwatch = core.config.watch('core', (newConfig, error) => {
   if (error) {
-    // 这里可以记录错误或做兜底处理
+    // 可记录错误
   }
   else {
-    // 在此处理配置变更（例如：热更新某些运行时参数）
+    // 处理配置变更
   }
 })
 
-core.config.isWatching('core') // true/false
+core.config.isWatching('core')
 
-// 停止监听
 unwatch()
 core.config.unwatch('core')
-core.config.unwatch() // 停止全部
+core.config.unwatch()
 ```
 
-### 类型检查 - core.type
+> 注意：core.init 会统一加载配置文件，但不会自动校验各模块配置。
+> 模块使用前请显式调用 `core.config.validate(name, schema)` 进行校验。
+
+### core.config 关键参数说明
+
+- `load(name, filePath, schema?)`
+  - `name`：配置名称（缓存 key）
+  - `filePath`：配置文件路径
+  - `schema`：可选 Zod 校验
+- `validate(name, schema)`：对已加载配置进行校验并写回缓存
+- `watch(name, callback)`：监听配置变更
+  - `callback(config, error)`：成功时返回新配置，失败时返回错误
+
+## 类型检查 - core.typeUtils
 
 ```typescript
-core.type.isDefined(value) // 非 null/undefined
-core.type.isObject(value) // 对象（排除数组）
-core.type.isArray(value) // 数组
-core.type.isString(value) // 字符串
-core.type.isNumber(value) // 数字
-core.type.isBoolean(value) // 布尔
-core.type.isFunction(value) // 函数
-core.type.isPromise(value) // Promise
+core.typeUtils.isDefined(value)
+core.typeUtils.isObject(value)
+core.typeUtils.isArray(value)
+core.typeUtils.isString(value)
+core.typeUtils.isNumber(value)
+core.typeUtils.isBoolean(value)
+core.typeUtils.isFunction(value)
+core.typeUtils.isPromise(value)
 ```
 
-### 对象操作 - core.object
+## 对象操作 - core.object
 
 ```typescript
-core.object.deepClone(obj) // 深拷贝
-core.object.deepMerge(target, source) // 深合并
-core.object.pick(obj, ['a', 'b']) // 选取属性
-core.object.omit(obj, ['password']) // 排除属性
-core.object.keys(obj) // 类型安全的 keys
-core.object.values(obj) // 类型安全的 values
-core.object.entries(obj) // 类型安全的 entries
-core.object.fromEntries(entries) // 从 entries 创建对象
+core.object.deepClone(obj)
+core.object.deepMerge(target, source)
+core.object.pick(obj, ['a', 'b'])
+core.object.omit(obj, ['password'])
+core.object.keys(obj)
+core.object.values(obj)
+core.object.entries(obj)
+core.object.fromEntries(entries)
 ```
 
-### 字符串操作 - core.string
+## 字符串操作 - core.string
 
 ```typescript
-core.string.capitalize('hello') // 'Hello'
-core.string.camelCase('hello-world') // 'helloWorld'
-core.string.kebabCase('helloWorld') // 'hello-world'
-core.string.snakeCase('helloWorld') // 'hello_world'
-core.string.pascalCase('hello-world') // 'HelloWorld'
-core.string.truncate('long text', 5) // 'long ...'
-core.string.trim('  hi  ') // 'hi'
-core.string.isBlank('   ') // true
-core.string.isNotBlank('hi') // true
-core.string.padStart('1', 3, '0') // '001'
-core.string.padEnd('1', 3, '0') // '100'
+core.string.capitalize('hello')
+core.string.camelCase('hello-world')
+core.string.kebabCase('helloWorld')
+core.string.snakeCase('helloWorld')
+core.string.pascalCase('hello-world')
+core.string.truncate('long text', 5)
+core.string.trim('  hi  ')
+core.string.isBlank('   ')
+core.string.isNotBlank('hi')
+core.string.padStart('1', 3, '0')
+core.string.padEnd('1', 3, '0')
 ```
 
-### 数组操作 - core.array
+## 数组操作 - core.array
 
 ```typescript
-core.array.unique([1, 1, 2]) // [1, 2]
+core.array.unique([1, 1, 2])
 core.array.groupBy(arr, item => item.type)
-core.array.chunk([1, 2, 3, 4, 5], 2) // [[1,2], [3,4], [5]]
-core.array.first([1, 2, 3]) // 1
-core.array.last([1, 2, 3]) // 3
-core.array.flatten([[1], [2, 3]]) // [1, 2, 3]
-core.array.compact([0, null, 1]) // [0, 1]
-core.array.shuffle([1, 2, 3]) // 随机打乱
-core.array.intersection([1, 2], [2, 3]) // [2]
-core.array.difference([1, 2, 3], [2]) // [1, 3]
+core.array.chunk([1, 2, 3, 4, 5], 2)
+core.array.first([1, 2, 3])
+core.array.last([1, 2, 3])
+core.array.flatten([[1], [2, 3]])
+core.array.compact([0, null, 1])
+core.array.shuffle([1, 2, 3])
+core.array.intersection([1, 2], [2, 3])
+core.array.difference([1, 2, 3], [2])
 ```
 
-### 异步操作 - core.async
+## 异步操作 - core.async
 
 ```typescript
-await core.async.delay(1000) // 延迟 1 秒
-await core.async.withTimeout(promise, 5000) // 超时控制
-await core.async.retry(fn, { maxRetries: 3 }) // 重试
-await core.async.parallel([1, 2, 3], async n => n * 2, 2) // 并发处理
-await core.async.serial([1, 2, 3], async n => n * 2) // 串行处理
-const debounced = core.async.debounce(fn, 300) // 防抖
-const throttled = core.async.throttle(fn, 300) // 节流
+await core.async.delay(1000)
+await core.async.withTimeout(promise, 5000)
+await core.async.retry(fn, { maxRetries: 3 })
+await core.async.parallel([1, 2, 3], async n => n * 2, 2)
+await core.async.serial([1, 2, 3], async n => n * 2)
+const debounced = core.async.debounce(fn, 300)
+const throttled = core.async.throttle(fn, 300)
 ```
 
-### 时间操作 - core.time
+## 时间操作 - core.time
 
 ```typescript
-core.time.formatDate(date) // '2024-01-15'
-core.time.timeAgo(date) // '5分钟前'
-core.time.now() // 当前时间戳（毫秒）
-core.time.nowSeconds() // 当前时间戳（秒）
-core.time.parseDate('2024-01-15') // Date
-core.time.isValidDate(date) // 是否有效日期
-core.time.addDays(date, 7) // 7天后
-core.time.addHours(date, 1) // 1小时后
-core.time.startOfDay(date) // 当天 00:00:00
-core.time.endOfDay(date) // 当天 23:59:59
+core.time.formatDate(date)
+core.time.timeAgo(date)
+core.time.now()
+core.time.nowSeconds()
+core.time.parseDate('2024-01-15')
+core.time.isValidDate(date)
+core.time.addDays(date, 7)
+core.time.addHours(date, 1)
+core.time.startOfDay(date)
+core.time.endOfDay(date)
 ```
 
-### 国际化 - core.i18n
-
-通过 `core.i18n` 访问所有 i18n 功能。
+## 国际化 - core.i18n
 
 ```typescript
-import { core } from '@hai/core'
-
-// 设置全局 locale（所有模块自动同步）
 core.i18n.setGlobalLocale('en-US')
-core.i18n.getGlobalLocale() // 'en-US'
+core.i18n.getGlobalLocale()
 
-// 支持短格式自动扩展
-core.i18n.setGlobalLocale('en') // 自动变为 'en-US'
-core.i18n.setGlobalLocale('zh') // 自动变为 'zh-CN'
-```
-
-```typescript
-// 为模块创建消息获取器
-import messagesEnUS from '../messages/en-US.json'
-import messagesZhCN from '../messages/zh-CN.json'
-
-const { getMessage } = core.i18n.createMessageGetter({
-  'zh-CN': messagesZhCN,
-  'en-US': messagesEnUS,
+const getMessage = core.i18n.createMessageGetter({
+  'zh-CN': { hello: '你好 {name}' },
+  'en-US': { hello: 'Hello {name}' },
 })
-// createMessageGetter 会读取全局 locale
 
-// 使用消息
-getMessage('error_not_found') // 根据当前 locale 返回
-getMessage('error_not_found', { locale: 'en-US' }) // 指定 locale
-getMessage('welcome', { params: { name: 'World' } }) // 带插值
+getMessage('hello', { params: { name: 'World' } })
+getMessage('hello', { locale: 'en-US' })
 
-// 浏览器语言检测
-const browserLocale = core.i18n.detectBrowserLocale() // 'zh-CN' | 'en-US' | undefined
-
-// 语言解析（不支持时回退到默认）
-core.i18n.resolveLocale('fr-FR') // 'zh-CN'（回退）
-core.i18n.resolveLocale('en-US') // 'en-US'
-
-// 检查语言是否支持
-core.i18n.isLocaleSupported('zh-CN') // true
-core.i18n.isLocaleSupported('fr-FR') // false
-
-// 字符串插值
-core.i18n.interpolate('Hello, {name}!', { name: 'World' }) // 'Hello, World!'
+core.i18n.detectBrowserLocale()
+core.i18n.resolveLocale('fr-FR')
+core.i18n.isLocaleSupported('zh-CN')
+core.i18n.interpolate('Hello, {name}!', { name: 'World' })
 ```
 
 ## Result 类型
 
 ```typescript
-import type { Result } from '@hai/core'
-import { core, err, ok } from '@hai/core'
-
 function divide(a: number, b: number): Result<number, string> {
   if (b === 0)
     return err('除数不能为零')
   return ok(a / b)
-}
-
-const result = divide(10, 2)
-if (result.success) {
-  core.logger.info(`Result: ${result.data}`) // 5
-}
-else {
-  core.logger.error(`Error: ${result.error}`)
 }
 ```
 
 ## 配置 Schema
 
 ```typescript
-import {
-  CoreConfigSchema,
-} from '@hai/core'
+import { CoreConfigSchema } from '@hai/core'
 ```
-
-其他模块的配置 Schema 请从对应模块导入（如 `@hai/db`、`@hai/iam` 等）。
 
 ## 错误码
 
 ```typescript
-import {
-  CommonErrorCode, // 1000-1099 通用
-  ConfigErrorCode, // 1100-1199 配置
-} from '@hai/core'
+import { CommonErrorCode, ConfigErrorCode } from '@hai/core'
 ```
 
 ## 环境支持
 
-- **Node.js**: 完整功能支持
-- **浏览器**: 除 `core.config` 外全部支持
+- **Node.js**：完整功能支持
+- **浏览器**：除 `core.config` 外全部支持

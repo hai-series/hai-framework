@@ -5,8 +5,8 @@
  */
 
 import type { GenerateOptions, GeneratorType, TemplateContext } from '../types.js'
-import { core } from '@hai/core'
 import path from 'node:path'
+import { core } from '@hai/core'
 import chalk from 'chalk'
 import ora from 'ora'
 import prompts from 'prompts'

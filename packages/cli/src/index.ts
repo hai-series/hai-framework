@@ -11,6 +11,7 @@
  */
 
 import type { CreateProjectOptions, GeneratorType } from './types.js'
+import process from 'node:process'
 import { core } from '@hai/core'
 import { cac } from 'cac'
 import chalk from 'chalk'

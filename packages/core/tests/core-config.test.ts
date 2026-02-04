@@ -34,7 +34,7 @@ describe('core.config', () => {
 
   it('load 应该读取并插值环境变量', () => {
     process.env.FOO = 'bar'
-    writeFileSync(configPath, 'foo: ${FOO}\nbar: ${BAR:default}\n', 'utf-8')
+    writeFileSync(configPath, `foo: \${FOO}\nbar: \${BAR:default}\n`, 'utf-8')
 
     const result = core.config.load('app', configPath, schema)
     expect(result.success).toBe(true)
@@ -44,7 +44,7 @@ describe('core.config', () => {
   })
 
   it('load 应该在缺少环境变量时返回错误', () => {
-    writeFileSync(configPath, 'foo: ${MISSING}\nbar: ok\n', 'utf-8')
+    writeFileSync(configPath, `foo: \${MISSING}\nbar: ok\n`, 'utf-8')
     const result = core.config.load('app', configPath, schema)
     expect(result.success).toBe(false)
     if (!result.success) {
