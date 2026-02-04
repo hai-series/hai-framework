@@ -76,6 +76,8 @@ let sm4Instance: SM4Operations | null = null
 
 /**
  * 获取或创建 SM2 实例。
+ *
+ * @returns SM2 操作实例
  */
 function getSM2(): SM2Operations {
   if (!sm2Instance) {
@@ -86,6 +88,8 @@ function getSM2(): SM2Operations {
 
 /**
  * 获取或创建 SM3 实例。
+ *
+ * @returns SM3 操作实例
  */
 function getSM3(): SM3Operations {
   if (!sm3Instance) {
@@ -96,6 +100,8 @@ function getSM3(): SM3Operations {
 
 /**
  * 获取或创建 SM4 实例。
+ *
+ * @returns SM4 操作实例
  */
 function getSM4(): SM4Operations {
   if (!sm4Instance) {
@@ -106,6 +112,8 @@ function getSM4(): SM4Operations {
 
 /**
  * 确保已初始化。
+ *
+ * 如果尚未初始化，则创建 SM2/SM3/SM4 实例并标记初始化状态。
  */
 function ensureInitialized(): void {
   if (!initialized) {
