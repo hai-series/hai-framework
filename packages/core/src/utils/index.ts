@@ -1,23 +1,28 @@
 /**
  * =============================================================================
- * @hai/core - Utils 统一导出
+ * @hai/core - Utils 统一导出。
+ *
+ * @example
+ * ```ts
+ * import { array, string } from '@hai/core'
+ * ```
  * =============================================================================
  */
 
-// 数组操作
+/** 数组操作。 */
 export * from './core-util-array.js'
 
-// 异步操作
+/** 异步操作。 */
 export * from './core-util-async.js'
 
-// 对象操作
+/** 对象操作。 */
 export * from './core-util-object.js'
 
-// 字符串操作
+/** 字符串操作。 */
 export * from './core-util-string.js'
 
-// 时间操作
+/** 时间操作。 */
 export * from './core-util-time.js'
 
-// 类型检查
+/** 类型检查。 */
 export * from './core-util-type.js'

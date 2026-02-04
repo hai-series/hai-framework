@@ -2,15 +2,15 @@
  * =============================================================================
  * @hai/core - Core 服务聚合（浏览器）
  * =============================================================================
- * 提供统一的 core 对象，聚合常用功能
- * 所有功能统一通过 core 对象访问
+ * 提供浏览器环境的 core 对象，聚合常用功能。
+ * 所有功能统一通过 core 对象访问（不含 config 能力）。
  *
  * @example
  * ```ts
- * import { core, initCore } from '@hai/core'
+ * import { core } from '@hai/core'
  *
  * // 初始化（可选）
- * initCore({ logging: { level: 'debug' } })
+ * core.init({ logging: { level: 'debug' } })
  *
  * // 日志
  * core.logger.info('Hello')
@@ -35,7 +35,13 @@ import { logger } from './functions/core-function-logger.browser.js'
 // =============================================================================
 
 /**
- * 创建 Browser 版本的 core 对象
+ * 创建 Browser 版本的 core 对象。
+ *
+ * @example
+ * ```ts
+ * import { core } from '@hai/core'
+ * core.logger.info('ready')
+ * ```
  */
 function createBrowserCore() {
   const baseCore = createCore({
@@ -55,15 +61,29 @@ function createBrowserCore() {
 }
 
 /**
- * Core 服务对象 - 聚合常用功能
+ * Core 服务对象 - 聚合常用功能（浏览器）。
+ *
+ * @example
+ * ```ts
+ * import { core } from '@hai/core'
+ * core.logger.info('browser ready')
+ * ```
  */
 export const core = createBrowserCore()
 
 /**
- * 初始化 Core（浏览器版本）
- * 注意：浏览器环境不支持 configs 和 watchConfig 选项
+ * 初始化 Core（内部实现，通过 core.init() 调用）。
+ * 注意：浏览器环境不支持 config 和 watchConfig 选项。
+ *
+ * @param options - 初始化选项
+ *
+ * @example
+ * ```ts
+ * import { core } from '@hai/core'
+ * core.init({ logging: { level: 'debug' } })
+ * ```
  */
-export function initCore(options: CoreOptions = {}): void {
+function initCore(options: CoreOptions = {}): void {
   const logger = core.logger
 
   // 配置日志

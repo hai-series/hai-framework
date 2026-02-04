@@ -2,7 +2,7 @@
  * =============================================================================
  * @hai/core - Node.js 入口
  * =============================================================================
- * Node.js 环境的完整功能入口
+ * Node.js 环境的完整功能入口。
  *
  * 所有功能统一通过 core 对象访问：
  * - core.init() - 初始化
@@ -23,7 +23,7 @@
  * import { CoreConfigSchema, CommonErrorCode } from '@hai/core'
  *
  * // 初始化
- * core.init({ silent: false })
+ * core.init({ configDir: './config' })
  *
  * // 日志
  * core.logger.info('Hello')
@@ -32,7 +32,7 @@
  * const myId = core.id.generate()
  *
  * // 工具函数
- * core.type.isDefined(value)
+ * core.typeUtils.isDefined(value)
  * core.object.deepMerge(a, b)
  * ```
  * =============================================================================
@@ -46,3 +46,13 @@ export * from './core-main.node.js'
 
 // 类型定义（Result, Logger 等）
 export * from './core-types.js'
+
+// i18n 类型导出
+export type {
+  InterpolationParams,
+  Locale,
+  LocaleInfo,
+  LocaleMessages,
+  MessageDictionary,
+  MessageOptions,
+} from './i18n/index.js'

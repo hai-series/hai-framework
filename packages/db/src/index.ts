@@ -54,13 +54,9 @@
  * ```
  * =============================================================================
  */
-// =============================================================================
-// 自动注册 Schema 到 @hai/core
-// =============================================================================
 import { core } from '@hai/core'
 import messagesEnUS from '../messages/en-US.json'
 import messagesZhCN from '../messages/zh-CN.json'
-import { DbConfigSchema } from './db-config.js'
 
 // 配置 Schema（zod）
 export * from './db-config.js'
@@ -75,6 +71,3 @@ export * from './db-types.js'
 type DbMessageKey = keyof typeof messagesZhCN
 export const getDbMessage
   = core.i18n.createMessageGetter<DbMessageKey>({ 'zh-CN': messagesZhCN, 'en-US': messagesEnUS })
-
-// 注册 db 模块的配置 Schema
-core.registerBuiltinSchema('db', DbConfigSchema)

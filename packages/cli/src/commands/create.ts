@@ -11,6 +11,7 @@
 import type { CreateProjectOptions, FeatureDefinition, FeatureId, ProjectInfo } from '../types.js'
 import { execSync } from 'node:child_process'
 import path from 'node:path'
+import process from 'node:process'
 import { core } from '@hai/core'
 import chalk from 'chalk'
 import fse from 'fs-extra'
@@ -405,15 +406,9 @@ async function generateProjectFiles(
       check: 'svelte-kit sync && svelte-check --tsconfig ./tsconfig.json',
       lint: 'eslint .',
       test: 'vitest run',
-    }, {
-      onCancel: () => {
-        core.logger.info(chalk.red('\n已取消'))
-        process.exit(1)
-      },
-    })
-      // 根据选择的功能添加包
-      ...featurePackages,
     },
+    // 根据选择的功能添加包
+    ...featurePackages,
     devDependencies: {
       '@sveltejs/adapter-auto': '^3.0.0',
       '@sveltejs/kit': '^2.0.0',

@@ -55,13 +55,15 @@ const DEFAULT_LOCALE: Locale = 'zh-CN'
 // =============================================================================
 
 /**
- * 执行字符串插值
+ * 执行字符串插值。
  * @param template - 模板字符串，如 'Hello, {name}!'
  * @param params - 插值参数
  * @returns 插值后的字符串
  *
  * @example
- * interpolate('Hello, {name}!', { name: 'World' }) // => 'Hello, World!'
+ * ```ts
+ * interpolate('Hello, {name}!', { name: 'World' })
+ * ```
  */
 function interpolate(template: string, params: InterpolationParams): string {
   return template.replace(/\{(\w+)\}/g, (_, key) => {
@@ -71,9 +73,14 @@ function interpolate(template: string, params: InterpolationParams): string {
 }
 
 /**
- * 检测浏览器首选语言
+ * 检测浏览器首选语言。
  * @param supportedLocales - 支持的语言列表
  * @returns 检测到的语言代码，如果不支持则返回 undefined
+ *
+ * @example
+ * ```ts
+ * const locale = detectBrowserLocale()
+ * ```
  */
 function detectBrowserLocale(supportedLocales: LocaleInfo[] = DEFAULT_LOCALES): Locale | undefined {
   // 仅在浏览器环境中可用
@@ -102,9 +109,14 @@ function detectBrowserLocale(supportedLocales: LocaleInfo[] = DEFAULT_LOCALES): 
 }
 
 /**
- * 检查语言是否支持
+ * 检查语言是否支持。
  * @param locale - 要检查的语言代码
  * @param supportedLocales - 支持的语言列表
+ *
+ * @example
+ * ```ts
+ * isLocaleSupported('zh-CN')
+ * ```
  */
 function isLocaleSupported(
   locale: Locale,
@@ -114,10 +126,15 @@ function isLocaleSupported(
 }
 
 /**
- * 获取有效的语言代码（如果不支持则返回默认语言）
+ * 获取有效的语言代码（如果不支持则返回默认语言）。
  * @param locale - 请求的语言代码
  * @param supportedLocales - 支持的语言列表
  * @param fallback - 回退语言
+ *
+ * @example
+ * ```ts
+ * resolveLocale('fr-FR') // fallback
+ * ```
  */
 function resolveLocale(
   locale: Locale | undefined,
@@ -155,6 +172,9 @@ const localeManager = (() => {
   let currentLocale: Locale = DEFAULT_LOCALE
   const listeners = new Set<LocaleChangeListener>()
 
+  /**
+   * 规范化简写语言（en/zh）。
+   */
   function normalizeLocale(locale: Locale): Locale {
     return locale === 'en'
       ? 'en-US'
@@ -163,16 +183,25 @@ const localeManager = (() => {
         : locale
   }
 
+  /**
+   * 通知订阅者。
+   */
   function notifyListeners(): void {
     for (const listener of listeners) {
       listener(currentLocale)
     }
   }
 
+  /**
+   * 获取当前 locale。
+   */
   function getLocale(): Locale {
     return currentLocale
   }
 
+  /**
+   * 设置全局 locale。
+   */
   function setGlobalLocale(locale: Locale): void {
     const normalizedLocale = normalizeLocale(locale)
 
@@ -184,6 +213,9 @@ const localeManager = (() => {
     notifyListeners()
   }
 
+  /**
+   * 订阅 locale 变更。
+   */
   function subscribe(listener: LocaleChangeListener): () => void {
     listeners.add(listener)
     // 立即用当前 locale 调用一次，确保初始状态同步
@@ -223,7 +255,7 @@ export interface MessageOptions {
 }
 
 /**
- * 判断是否为 MessageOptions
+ * 判断是否为 MessageOptions。
  */
 function isMessageOptions(value: unknown): value is MessageOptions {
   return typeUtils.isObject(value) && ('locale' in value || 'params' in value)
@@ -235,6 +267,9 @@ function isMessageOptions(value: unknown): value is MessageOptions {
 const messageManager = (() => {
   const messageRegistry = new Map<string, LocaleMessages>()
 
+  /**
+   * 解析消息文本。
+   */
   function resolveMessage<K extends string>(
     messages: LocaleMessages<K>,
     key: K,
@@ -267,10 +302,16 @@ const messageManager = (() => {
     return template
   }
 
+  /**
+   * 注册消息字典。
+   */
   function registerMessages<K extends string>(namespace: string, messages: LocaleMessages<K>): void {
     messageRegistry.set(namespace, messages as LocaleMessages)
   }
 
+  /**
+   * 获取已注册消息。
+   */
   function getRegisteredMessage<K extends string>(
     namespace: string,
     key: K,
@@ -291,7 +332,7 @@ const messageManager = (() => {
 })()
 
 /**
- * 创建消息获取函数
+ * 创建消息获取函数。
  *
  * 用于各模块创建自己的 getMessage 函数，统一消息加载和插值逻辑。
  *
@@ -300,16 +341,11 @@ const messageManager = (() => {
  *
  * @example
  * ```ts
- * // db 模块
- * import messagesZhCN from '../messages/zh-CN.json'
- * import messagesEnUS from '../messages/en-US.json'
- *
- * const { getMessage } = createMessageGetter({
- *   'zh-CN': messagesZhCN,
- *   'en-US': messagesEnUS,
+ * const getMessage = createMessageGetter({
+ *   'zh-CN': { hello: '你好' },
+ *   'en-US': { hello: 'Hello' },
  * })
- *
- * export const getDbMessage = getMessage
+ * getMessage('hello')
  * ```
  */
 function createMessageGetter<K extends string>(
@@ -329,6 +365,19 @@ function createMessageGetter<K extends string>(
 // 对外入口
 // =============================================================================
 
+/**
+ * i18n 工具集合。
+ *
+ * @example
+ * ```ts
+ * i18n.setGlobalLocale('en-US')
+ * const getMessage = i18n.createMessageGetter({
+ *   'zh-CN': { ok: '好' },
+ *   'en-US': { ok: 'OK' },
+ * })
+ * getMessage('ok')
+ * ```
+ */
 export const i18n = {
   DEFAULT_LOCALES,
   DEFAULT_LOCALE,

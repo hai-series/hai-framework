@@ -2,7 +2,7 @@
  * =============================================================================
  * @hai/core - i18n 模块导出
  * =============================================================================
- * 国际化工具模块
+ * 国际化工具模块。
  *
  * 设计原则：
  * - 集中式 locale 管理：通过 core.i18n.subscribeLocale 统一管理全局 locale
@@ -23,13 +23,38 @@ import { i18n as baseI18n } from './core-i18n-utils.js'
 // 对外入口（仅 const）
 // =============================================================================
 
+/**
+ * Core 内置消息 key 类型。
+ *
+ * @example
+ * ```ts
+ * const key: CoreMessageKey = 'error_timeout'
+ * ```
+ */
 export type CoreMessageKey = keyof typeof messagesZhCN
 
+/**
+ * Core 内置消息获取器。
+ *
+ * @example
+ * ```ts
+ * coreM('error_timeout')
+ * ```
+ */
 const coreM = baseI18n.createMessageGetter<CoreMessageKey>({
   'zh-CN': messagesZhCN,
   'en-US': messagesEnUS,
 })
 
+/**
+ * core i18n 对外入口。
+ *
+ * @example
+ * ```ts
+ * i18n.setGlobalLocale('en-US')
+ * i18n.coreM('error_timeout')
+ * ```
+ */
 export const i18n = {
   ...baseI18n,
   coreM,

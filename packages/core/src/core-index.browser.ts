@@ -2,7 +2,7 @@
  * =============================================================================
  * @hai/core - 浏览器入口
  * =============================================================================
- * 浏览器环境的完整功能入口
+ * 浏览器环境的完整功能入口。
  *
  * 所有功能统一通过 core 对象访问：
  * - core.logger - 日志
@@ -29,7 +29,7 @@
  * const myId = core.id.generate()
  *
  * // 工具函数
- * core.type.isDefined(value)
+ * core.typeUtils.isDefined(value)
  * core.object.deepMerge(a, b)
  * ```
  * =============================================================================
@@ -43,3 +43,13 @@ export * from './core-main.browser.js'
 
 // 类型定义（Result, Logger 等）
 export * from './core-types.js'
+
+// i18n 类型导出
+export type {
+  InterpolationParams,
+  Locale,
+  LocaleInfo,
+  LocaleMessages,
+  MessageDictionary,
+  MessageOptions,
+} from './i18n/index.js'

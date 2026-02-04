@@ -53,13 +53,9 @@
  * =============================================================================
  */
 
-// =============================================================================
-// 自动注册 Schema 到 @hai/core
-// =============================================================================
 import { core } from '@hai/core'
 import messagesEnUS from '../messages/en-US.json'
 import messagesZhCN from '../messages/zh-CN.json'
-import { AIConfigSchema } from './ai-config.js'
 
 // =============================================================================
 // 类型导出
@@ -103,6 +99,3 @@ export const getAiMessage
 export { createHaiLLMProvider } from './provider/ai-provider-llm.js'
 export { createHaiMCPProvider } from './provider/ai-provider-mcp.js'
 export { createHaiSkillsProvider, defineSkill } from './provider/ai-provider-skills.js'
-
-// 注册 ai 模块的配置 Schema
-core.registerBuiltinSchema('ai', AIConfigSchema)
