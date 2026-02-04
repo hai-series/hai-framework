@@ -11,11 +11,10 @@
  *
  * 使用方式：
  * - core.i18n.setGlobalLocale('en-US') - 设置全局 locale
- * - core.i18n.createMessageGetter(messages) - 创建消息获取器（自动订阅 locale 变化）
+ * - core.i18n.createMessageGetter(messages) - 创建消息获取器（读取全局 locale）
  * =============================================================================
  */
 
-import type { CoreMessageKey } from './core-i18n-messages.js'
 import messagesEnUS from '../../messages/en-US.json'
 import messagesZhCN from '../../messages/zh-CN.json'
 import { i18n as baseI18n } from './core-i18n-utils.js'
@@ -24,18 +23,19 @@ import { i18n as baseI18n } from './core-i18n-utils.js'
 // 对外入口（仅 const）
 // =============================================================================
 
-const { getMessage: getCoreMessage } = baseI18n.createMessageGetter<CoreMessageKey>({
+export type CoreMessageKey = keyof typeof messagesZhCN
+
+const coreM= baseI18n.createMessageGetter<CoreMessageKey>({
   'zh-CN': messagesZhCN,
   'en-US': messagesEnUS,
 })
 
 export const i18n = {
   ...baseI18n,
-  getCoreMessage,
+  coreM
 }
 
 // 仅对外导出类型
-export type { CoreMessageKey } from './core-i18n-messages.js'
 export type {
   InterpolationParams,
   Locale,

@@ -90,13 +90,13 @@ export function createCore(loggerFns: LoggerFunctions) {
      *
      * @example
      * ```ts
-     * // 设置全局 locale（所有订阅的模块自动同步）
+     * // 设置全局 locale（所有模块读取全局 locale）
      * core.i18n.setGlobalLocale('en-US')
      *
      * // 获取当前全局 locale
      * core.i18n.getGlobalLocale()
      *
-     * // 创建消息获取器（自动订阅 locale 变化）
+     * // 创建消息获取器（读取全局 locale）
      * const { getMessage } = core.i18n.createMessageGetter(messages)
      * ```
      */

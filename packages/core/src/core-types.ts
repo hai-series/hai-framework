@@ -6,10 +6,9 @@
  *
  * 组织结构：
  * 1. 基础类型 - Result / Option
- * 2. 错误类型 - ErrorCode / ErrorDetails
- * 3. 日志类型 - Logger / LogLevel
- * 4. Provider 接口 - Logger / IdGenerator
- * 5. Core 服务类型 - CoreService / CoreUtils
+ * 2. 日志类型 - Logger / LogLevel
+ * 3. Provider 接口 - Logger / IdGenerator
+ * 4. Core 服务类型 - CoreService / CoreUtils
  * =============================================================================
  */
 
@@ -58,7 +57,7 @@ export interface MatchHandlers<T, E, R1, R2> {
 }
 
 // =============================================================================
-// 3. 日志类型
+// 2. 日志类型
 // =============================================================================
 
 /** 日志上下文 */

@@ -114,7 +114,7 @@ export function createOAuthStrategy(config: OAuthStrategyConfig): OAuthStrategy 
       if (!provider) {
         return err({
           code: IamErrorCode.OAUTH_PROVIDER_NOT_FOUND,
-          message: getIamMessage('iam_oauthProviderNotFound', undefined, { providerId }),
+          message: getIamMessage('iam_oauthProviderNotFound', { params: { providerId } }),
         })
       }
 
@@ -246,7 +246,7 @@ export function createOAuthStrategy(config: OAuthStrategyConfig): OAuthStrategy 
       if (!provider) {
         return err({
           code: IamErrorCode.OAUTH_PROVIDER_NOT_FOUND,
-          message: getIamMessage('iam_oauthProviderNotFound', undefined, { providerId }),
+          message: getIamMessage('iam_oauthProviderNotFound', { params: { providerId } }),
         })
       }
 
@@ -281,7 +281,7 @@ export function createOAuthStrategy(config: OAuthStrategyConfig): OAuthStrategy 
       if (!provider) {
         return err({
           code: IamErrorCode.OAUTH_PROVIDER_NOT_FOUND,
-          message: getIamMessage('iam_oauthProviderNotFound', undefined, { providerId }),
+          message: getIamMessage('iam_oauthProviderNotFound', { params: { providerId } }),
         })
       }
 
@@ -293,7 +293,7 @@ export function createOAuthStrategy(config: OAuthStrategyConfig): OAuthStrategy 
       if (!provider) {
         return err({
           code: IamErrorCode.OAUTH_PROVIDER_NOT_FOUND,
-          message: getIamMessage('iam_oauthProviderNotFound', undefined, { providerId }),
+          message: getIamMessage('iam_oauthProviderNotFound', { params: { providerId } }),
         })
       }
 

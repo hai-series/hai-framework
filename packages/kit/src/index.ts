@@ -157,14 +157,14 @@ export type {
 export { validateForm, validateParams, validateQuery } from './validation.js'
 
 type KitMessageKey = keyof typeof messagesZhCN
-export const { getMessage: getKitMessage, setDefaultLocale: setKitDefaultLocale }
+export const { getMessage: getKitMessage }
   = core.i18n.createMessageGetter<KitMessageKey>({ 'zh-CN': messagesZhCN, 'en-US': messagesEnUS })
 
 /**
  * 统一设置所有 hai 模块的默认语言
  *
  * 通过 @hai/core 的集中式 locale 管理器，一次调用即可同步所有模块。
- * 各模块的 createMessageGetter 已自动订阅 locale 变化。
+ * 各模块的 createMessageGetter 会读取全局 locale。
  *
  * @example
  * ```ts

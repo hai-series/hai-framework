@@ -435,7 +435,7 @@ export function createPostgresProvider(): DbProvider {
       }
       return err({
         code: DbErrorCode.TRANSACTION_FAILED,
-        message: getDbMessage('db_postgresTxFailed', undefined, { error: String(error) }),
+        message: getDbMessage('db_postgresTxFailed', { params: { error: String(error) } }),
         cause: error,
       })
     }
@@ -486,7 +486,7 @@ export function createPostgresProvider(): DbProvider {
       catch (error) {
         return err({
           code: DbErrorCode.CONNECTION_FAILED,
-          message: getDbMessage('db_postgresConnectionFailed', undefined, { error: String(error) }),
+          message: getDbMessage('db_postgresConnectionFailed', { params: { error: String(error) } }),
           cause: error,
         })
       }

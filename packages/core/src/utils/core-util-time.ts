@@ -32,12 +32,12 @@ function formatDate(date: Date, format = 'YYYY-MM-DD'): string {
 function timeAgo(date: Date): string {
   const seconds = Math.floor((Date.now() - date.getTime()) / 1000)
   if (seconds < 60)
-    return i18n.getCoreMessage('time_secondsAgo', { params: { n: seconds } })
+    return i18n.coreM('time_secondsAgo', { params: { n: seconds } })
   if (seconds < 3600)
-    return i18n.getCoreMessage('time_minutesAgo', { params: { n: Math.floor(seconds / 60) } })
+    return i18n.coreM('time_minutesAgo', { params: { n: Math.floor(seconds / 60) } })
   if (seconds < 86400)
-    return i18n.getCoreMessage('time_hoursAgo', { params: { n: Math.floor(seconds / 3600) } })
-  return i18n.getCoreMessage('time_daysAgo', { params: { n: Math.floor(seconds / 86400) } })
+    return i18n.coreM('time_hoursAgo', { params: { n: Math.floor(seconds / 3600) } })
+  return i18n.coreM('time_daysAgo', { params: { n: Math.floor(seconds / 86400) } })
 }
 
 /**

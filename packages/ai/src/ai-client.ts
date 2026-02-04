@@ -127,7 +127,7 @@ export class AIClient {
 
     if (!response.ok) {
       const error = await response.text()
-      throw new Error(getAiMessage('ai_apiRequestFailed', undefined, { status: response.status, error }))
+      throw new Error(getAiMessage('ai_apiRequestFailed', { params: { status: response.status, error } }))
     }
 
     return response.json()
@@ -162,7 +162,7 @@ export class AIClient {
 
     if (!response.ok) {
       const error = await response.text()
-      throw new Error(getAiMessage('ai_apiRequestFailed', undefined, { status: response.status, error }))
+      throw new Error(getAiMessage('ai_apiRequestFailed', { params: { status: response.status, error } }))
     }
 
     const reader = response.body?.getReader()

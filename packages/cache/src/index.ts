@@ -59,7 +59,7 @@ export * from './cache-types.js'
 
 // i18n
 type CacheMessageKey = keyof typeof messagesZhCN
-export const { getMessage: getCacheMessage, setDefaultLocale: setCacheDefaultLocale }
+export const { getMessage: getCacheMessage }
   = core.i18n.createMessageGetter<CacheMessageKey>({ 'zh-CN': messagesZhCN, 'en-US': messagesEnUS })
 
 // 注册 cache 模块的配置 Schema

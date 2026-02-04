@@ -198,7 +198,7 @@ export function createIamActions(config: IamActionsConfig) {
 
       if (password.length < 8) {
         return fail(400, {
-          error: getKitMessage('kit_passwordMinLength', undefined, { minLength: 8 }),
+          error: getKitMessage('kit_passwordMinLength', { params: { minLength: 8 } }),
           username,
           email,
         })
@@ -254,7 +254,7 @@ export function createIamActions(config: IamActionsConfig) {
 
       if (newPassword.length < 8) {
         return fail(400, {
-          error: getKitMessage('kit_passwordMinLength', undefined, { minLength: 8 }),
+          error: getKitMessage('kit_passwordMinLength', { params: { minLength: 8 } }),
         })
       }
 
