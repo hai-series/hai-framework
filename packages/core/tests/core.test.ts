@@ -180,7 +180,7 @@ describe('core.id - ID 生成', () => {
   it('should generate standard nanoid', () => {
     const myId = core.id.generate()
     expect(myId).toHaveLength(21)
-    expect(core.isValidNanoId(myId)).toBe(true)
+    expect(core.id.isValidNanoId(myId)).toBe(true)
   })
 
   it('should generate short id', () => {
@@ -205,12 +205,12 @@ describe('core.id - ID 生成', () => {
 
   it('should generate valid UUID', () => {
     const uuid = core.id.uuid()
-    expect(core.isValidUUID(uuid)).toBe(true)
+    expect(core.id.isValidUUID(uuid)).toBe(true)
   })
 
   it('should validate nanoid format', () => {
-    expect(core.isValidNanoId('V1StGXR8_Z5jdHi6B-myT')).toBe(true)
-    expect(core.isValidNanoId('invalid!')).toBe(false)
+    expect(core.id.isValidNanoId('V1StGXR8_Z5jdHi6B-myT')).toBe(true)
+    expect(core.id.isValidNanoId('invalid!')).toBe(false)
   })
 })
 

@@ -4,29 +4,29 @@
  * =============================================================================
  */
 
-import { getCoreMessage } from '../i18n/core-i18n-messages.js'
+import { i18n } from '../i18n/index.js'
 
 /**
  * 延迟执行
  */
-export function delay(ms: number): Promise<void> {
+function delay(ms: number): Promise<void> {
   return new Promise<void>(resolve => setTimeout(resolve, ms))
 }
 
 /**
  * 添加超时限制
  */
-export async function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+async function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
   // 使用 Promise.race + 定时器实现超时控制
   const timeout = new Promise<never>((_, reject) =>
-    setTimeout(() => reject(new Error(getCoreMessage('error_timeout'))), ms))
+    setTimeout(() => reject(new Error(i18n.getCoreMessage('error_timeout'))), ms))
   return Promise.race([promise, timeout])
 }
 
 /**
  * 重试操作
  */
-export async function retry<T>(
+async function retry<T>(
   fn: () => Promise<T>,
   options: { maxRetries?: number, delay?: number } = {},
 ): Promise<T> {
@@ -48,7 +48,7 @@ export async function retry<T>(
 /**
  * 并行执行，限制并发数
  */
-export async function parallel<T, R>(
+async function parallel<T, R>(
   items: T[],
   fn: (item: T, index: number) => Promise<R>,
   concurrency = 5,
@@ -74,7 +74,7 @@ export async function parallel<T, R>(
 /**
  * 串行执行
  */
-export async function serial<T, R>(
+async function serial<T, R>(
   items: T[],
   fn: (item: T, index: number) => Promise<R>,
 ): Promise<R[]> {
@@ -88,7 +88,7 @@ export async function serial<T, R>(
 /**
  * 防抖
  */
-export function debounce<T extends (...args: unknown[]) => unknown>(
+function debounce<T extends (...args: unknown[]) => unknown>(
   fn: T,
   ms: number,
 ): (...args: Parameters<T>) => void {
@@ -103,7 +103,7 @@ export function debounce<T extends (...args: unknown[]) => unknown>(
 /**
  * 节流
  */
-export function throttle<T extends (...args: unknown[]) => unknown>(
+function throttle<T extends (...args: unknown[]) => unknown>(
   fn: T,
   ms: number,
 ): (...args: Parameters<T>) => void {
@@ -115,4 +115,17 @@ export function throttle<T extends (...args: unknown[]) => unknown>(
       fn(...args)
     }
   }
+}
+
+/**
+ * 异步操作工具对象
+ */
+export const async = {
+  delay,
+  withTimeout,
+  retry,
+  parallel,
+  serial,
+  debounce,
+  throttle,
 }

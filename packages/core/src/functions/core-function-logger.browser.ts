@@ -6,10 +6,10 @@
  *
  * @example
  * ```ts
- * import { createLogger, setLogLevel } from '@hai/core'
+ * import { logger } from './core-function-logger.browser.js'
  *
- * const logger = createLogger({ name: 'my-app' })
- * logger.info('Hello', { userId: 123 })
+ * const appLogger = logger.createLogger({ name: 'my-app' })
+ * appLogger.info('Hello', { userId: 123 })
  * ```
  * =============================================================================
  */
@@ -38,7 +38,7 @@ const LEVEL_MAP: Record<LogLevel, log.LogLevelDesc> = {
 /**
  * 配置全局 Logger 选项
  */
-export function configureLogger(config: Partial<LoggingConfig>): void {
+function configureLogger(config: Partial<LoggingConfig>): void {
   if (config.level) {
     globalLevel = config.level
     log.setLevel(LEVEL_MAP[config.level])
@@ -51,7 +51,7 @@ export function configureLogger(config: Partial<LoggingConfig>): void {
 /**
  * 设置全局日志级别
  */
-export function setLogLevel(level: LogLevel): void {
+function setLogLevel(level: LogLevel): void {
   globalLevel = level
   log.setLevel(LEVEL_MAP[level])
 }
@@ -59,7 +59,7 @@ export function setLogLevel(level: LogLevel): void {
 /**
  * 获取当前全局日志级别
  */
-export function getLogLevel(): LogLevel {
+function getLogLevel(): LogLevel {
   return globalLevel
 }
 
@@ -105,7 +105,7 @@ function wrapLoglevel(loggerInstance: log.Logger, baseContext: Record<string, un
 /**
  * 创建 Logger 实例
  */
-export function createLogger(options: LoggerOptions = {}): Logger {
+function createLogger(options: LoggerOptions = {}): Logger {
   const { name, level, context } = options
 
   // 创建或获取 logger 实例
@@ -127,7 +127,7 @@ let defaultLogger: Logger | null = null
 /**
  * 获取默认 Logger 实例（单例）
  */
-export function getLogger(): Logger {
+function getLogger(): Logger {
   if (!defaultLogger) {
     defaultLogger = createLogger()
   }
@@ -137,6 +137,19 @@ export function getLogger(): Logger {
 /**
  * 重置默认 Logger（用于测试或重新配置后）
  */
-export function resetLogger(): void {
+function resetLogger(): void {
   defaultLogger = null
+}
+
+// =============================================================================
+// 对外出口
+// =============================================================================
+
+export const logger = {
+  configureLogger,
+  setLogLevel,
+  getLogLevel,
+  createLogger,
+  getLogger,
+  resetLogger,
 }

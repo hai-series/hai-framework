@@ -7,15 +7,9 @@
  * =============================================================================
  */
 
-import messagesEnUS from '../../messages/en-US.json'
-import messagesZhCN from '../../messages/zh-CN.json'
-import { createMessageGetter } from './core-i18n-utils.js'
+import type messagesZhCN from '../../messages/zh-CN.json'
 
 // 内部消息 Key 类型
 export type CoreMessageKey = keyof typeof messagesZhCN
 
-// 内部消息获取器（自动订阅全局 locale）
-export const { getMessage: getCoreMessage } = createMessageGetter<CoreMessageKey>({
-  'zh-CN': messagesZhCN,
-  'en-US': messagesEnUS,
-})
+// 注意：核心消息获取器由 i18n/index.ts 统一创建并挂载到 i18n 对象

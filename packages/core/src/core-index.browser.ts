@@ -35,7 +35,7 @@
  * =============================================================================
  */
 
-import { getCoreMessage } from './i18n/core-i18n-messages.js'
+import { i18n } from './i18n/index.js'
 
 // Schema（包含错误码）- 这些仍然直接导出
 export * from './config/index.js'
@@ -53,23 +53,15 @@ export * from './i18n/index.js'
 // 配置加载占位（浏览器环境不支持）
 // =============================================================================
 
-/** 配置加载（浏览器环境不支持） */
-export function loadConfig(): never {
-  throw new Error(getCoreMessage('core_browserFeatureUnsupported', undefined, { feature: 'loadConfig' }))
-}
-
-/** 配置加载（浏览器环境不支持） */
-export function loadYaml(): never {
-  throw new Error(getCoreMessage('core_browserFeatureUnsupported', undefined, { feature: 'loadYaml' }))
-}
-
 /** config 对象（浏览器环境不支持） */
 export const config = {
-  load: () => { throw new Error(getCoreMessage('core_browserFeatureUnsupported', undefined, { feature: 'config.load' })) },
-  get: () => { throw new Error(getCoreMessage('core_browserFeatureUnsupported', undefined, { feature: 'config.get' })) },
-  getOrThrow: () => { throw new Error(getCoreMessage('core_browserFeatureUnsupported', undefined, { feature: 'config.getOrThrow' })) },
-  reload: () => { throw new Error(getCoreMessage('core_browserFeatureUnsupported', undefined, { feature: 'config.reload' })) },
-  onChange: () => { throw new Error(getCoreMessage('core_browserFeatureUnsupported', undefined, { feature: 'config.onChange' })) },
+  load: () => { throw new Error(i18n.getCoreMessage('core_browserFeatureUnsupported', { params: { feature: 'config.load' } })) },
+  get: () => { throw new Error(i18n.getCoreMessage('core_browserFeatureUnsupported', { params: { feature: 'config.get' } })) },
+  getOrThrow: () => { throw new Error(i18n.getCoreMessage('core_browserFeatureUnsupported', { params: { feature: 'config.getOrThrow' } })) },
+  reload: () => { throw new Error(i18n.getCoreMessage('core_browserFeatureUnsupported', { params: { feature: 'config.reload' } })) },
+  watch: () => { throw new Error(i18n.getCoreMessage('core_browserFeatureUnsupported', { params: { feature: 'config.watch' } })) },
+  unwatch: () => { throw new Error(i18n.getCoreMessage('core_browserFeatureUnsupported', { params: { feature: 'config.unwatch' } })) },
+  isWatching: () => false,
   has: () => false,
   clear: () => { },
   keys: () => [],

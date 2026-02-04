@@ -66,8 +66,8 @@ core.id.trace() // trace-xxx
 core.id.request() // req-xxx
 core.id.uuid() // UUID v4
 
-core.isValidUUID(str) // 验证 UUID
-core.isValidNanoId(str) // 验证 nanoid
+core.id.isValidUUID(str) // 验证 UUID
+core.id.isValidNanoId(str) // 验证 nanoid
 ```
 
 ### 配置管理 - core.config（仅 Node.js）
@@ -86,10 +86,22 @@ core.config.reload('core') // 重新加载
 core.config.keys() // ['core', ...]
 core.config.clear() // 清空所有
 
-// 监听变更
-core.config.onChange('core', (newConfig) => {
-  // 在此处理配置变更（例如：热更新某些运行时参数）
+// 监听变更（文件变更或手动 reload）
+const unwatch = core.config.watch('core', (newConfig, error) => {
+  if (error) {
+    // 这里可以记录错误或做兜底处理
+  }
+  else {
+    // 在此处理配置变更（例如：热更新某些运行时参数）
+  }
 })
+
+core.config.isWatching('core') // true/false
+
+// 停止监听
+unwatch()
+core.config.unwatch('core')
+core.config.unwatch() // 停止全部
 ```
 
 ### 类型检查 - core.type
@@ -205,8 +217,8 @@ const { getMessage, setDefaultLocale } = core.i18n.createMessageGetter({
 
 // 使用消息
 getMessage('error_not_found') // 根据当前 locale 返回
-getMessage('error_not_found', 'en-US') // 指定 locale
-getMessage('welcome', undefined, { name: 'World' }) // 带插值
+getMessage('error_not_found', { locale: 'en-US' }) // 指定 locale
+getMessage('welcome', { params: { name: 'World' } }) // 带插值
 
 // 浏览器语言检测
 const browserLocale = core.i18n.detectBrowserLocale() // 'zh-CN' | 'en-US' | undefined

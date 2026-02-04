@@ -14,15 +14,17 @@
  * // 获取配置
  * const coreConfig = config.get<CoreConfig>('core')
  *
- * // 监听变更
- * config.onChange('app', (cfg) => {
- *     // 在此处理配置变更（例如：热更新某些运行时参数）
+ * // 监听文件变更并自动重载
+ * const unwatch = config.watch('app', (cfg, error) => {
+ *   if (error) console.error('重载失败', error)
+ *   else console.log('配置已更新', cfg)
  * })
+ * // 取消监听：unwatch()
  * ```
  * =============================================================================
  */
 
-import type { ZodSchema } from 'zod'
+import type { ZodType } from 'zod'
 import type { Result } from '../core-types.js'
 
 import { existsSync, readFileSync, watch } from 'node:fs'
@@ -35,8 +37,8 @@ import { parse } from 'yaml'
 
 import { ConfigErrorCode } from '../config/index.js'
 import { err, ok } from '../core-types.js'
-import { getCoreMessage } from '../i18n/core-i18n-messages.js'
-import { isObject } from '../utils/core-util-type.js'
+import { i18n } from '../i18n/index.js'
+import { typeUtils } from '../utils/core-util-type.js'
 
 // =============================================================================
 // 类型定义
@@ -54,7 +56,7 @@ export interface ConfigError {
 interface CacheEntry<T = unknown> {
   data: T
   filePath: string
-  schema: ZodSchema<T>
+  schema: ZodType<T>
   loadedAt: number
 }
 
@@ -84,7 +86,7 @@ function interpolateEnv(value: unknown): Result<unknown, ConfigError> {
       if (envValue === undefined && defaultValue === undefined) {
         return err({
           code: ConfigErrorCode.ENV_VAR_MISSING,
-          message: getCoreMessage('config_envVarMissing', undefined, { varName }),
+          message: i18n.getCoreMessage('config_envVarMissing', { params: { varName } }),
         })
       }
       result = result.replace(fullMatch, envValue ?? defaultValue ?? '')
@@ -103,7 +105,7 @@ function interpolateEnv(value: unknown): Result<unknown, ConfigError> {
     return ok(results)
   }
 
-  if (isObject(value)) {
+  if (typeUtils.isObject(value)) {
     const results: Record<string, unknown> = {}
     for (const [k, v] of Object.entries(value)) {
       const r = interpolateEnv(v)
@@ -124,17 +126,52 @@ function interpolateEnv(value: unknown): Result<unknown, ConfigError> {
 /** 配置缓存 */
 const configCache = new Map<string, CacheEntry>()
 
-/** 变更监听器 */
-const configListeners = new Map<string, Set<(config: unknown) => void>>()
+/** 监听回调类型 */
+export type WatchCallback<T = unknown> = (config: T | null, error?: ConfigError) => void
+
+/** 配置监听条目 */
+interface WatchEntry {
+  watcher: ReturnType<typeof watch>
+  callbacks: Set<WatchCallback<unknown>>
+}
+
+/** 配置监听映射 */
+const watchEntries = new Map<string, WatchEntry>()
+
+/** 创建未加载错误 */
+function createNotLoadedError(name: string): ConfigError {
+  return {
+    code: ConfigErrorCode.NOT_LOADED,
+    message: i18n.getCoreMessage('config_notLoaded', { params: { name } }),
+  }
+}
+
+/** 通知监听回调 */
+function notifyWatchCallbacks(name: string, result: Result<unknown, ConfigError>): void {
+  const entry = watchEntries.get(name)
+  if (!entry)
+    return
+
+  if (result.success) {
+    for (const callback of entry.callbacks) {
+      callback(result.data, undefined)
+    }
+  }
+  else {
+    for (const callback of entry.callbacks) {
+      callback(null, result.error)
+    }
+  }
+}
 
 /**
  * 加载 YAML 配置文件（不带验证）
  */
-export function loadYaml(filePath: string): Result<unknown, ConfigError> {
+function loadYaml(filePath: string): Result<unknown, ConfigError> {
   if (!existsSync(filePath)) {
     return err({
       code: ConfigErrorCode.FILE_NOT_FOUND,
-      message: getCoreMessage('config_fileNotExist', undefined, { filePath }),
+      message: i18n.getCoreMessage('config_fileNotExist', { params: { filePath } }),
       path: filePath,
     })
   }
@@ -147,7 +184,7 @@ export function loadYaml(filePath: string): Result<unknown, ConfigError> {
   catch (error) {
     return err({
       code: ConfigErrorCode.PARSE_ERROR,
-      message: getCoreMessage('config_parseFailed', undefined, { filePath }),
+      message: i18n.getCoreMessage('config_parseFailed', { params: { filePath } }),
       path: filePath,
       details: error,
     })
@@ -157,9 +194,9 @@ export function loadYaml(filePath: string): Result<unknown, ConfigError> {
 /**
  * 加载并验证配置文件
  */
-export function loadConfig<T>(
+function loadConfig<T>(
   filePath: string,
-  schema: ZodSchema<T>,
+  schema: ZodType<T>,
 ): Result<T, ConfigError> {
   const yamlResult = loadYaml(filePath)
   if (!yamlResult.success)
@@ -169,7 +206,7 @@ export function loadConfig<T>(
   if (!parseResult.success) {
     return err({
       code: ConfigErrorCode.VALIDATION_ERROR,
-      message: getCoreMessage('config_validationFailed'),
+      message: i18n.getCoreMessage('config_validationFailed'),
       path: filePath,
       details: parseResult.error.issues,
     })
@@ -179,23 +216,146 @@ export function loadConfig<T>(
 }
 
 /**
+ * 加载配置并缓存
+ */
+function loadAndCache<T>(
+  name: string,
+  filePath: string,
+  schema: ZodType<T>,
+): Result<T, ConfigError> {
+  const result = loadConfig(filePath, schema)
+  if (result.success) {
+    configCache.set(name, {
+      data: result.data,
+      filePath,
+      schema: schema as ZodType<unknown>,
+      loadedAt: Date.now(),
+    })
+  }
+  return result
+}
+
+/**
+ * 重新加载配置并通知监听器
+ */
+function reloadAndNotify(name: string): Result<unknown, ConfigError> {
+  const entry = configCache.get(name)
+  if (!entry) {
+    const result = err(createNotLoadedError(name))
+    notifyWatchCallbacks(name, result)
+    return result
+  }
+
+  const result = loadConfig(entry.filePath, entry.schema)
+  if (result.success) {
+    configCache.set(name, {
+      ...entry,
+      data: result.data,
+      loadedAt: Date.now(),
+    })
+  }
+  notifyWatchCallbacks(name, result)
+  return result
+}
+
+/**
+ * 启动配置文件监听
+ */
+function startFileWatcher(name: string): WatchEntry | null {
+  const existing = watchEntries.get(name)
+  if (existing)
+    return existing
+
+  const entry = configCache.get(name)
+  if (!entry)
+    return null
+
+  try {
+    const watcher = watch(entry.filePath, (eventType) => {
+      if (eventType === 'change') {
+        reloadAndNotify(name)
+      }
+    })
+
+    const watchEntry: WatchEntry = {
+      watcher,
+      callbacks: new Set(),
+    }
+    watchEntries.set(name, watchEntry)
+    return watchEntry
+  }
+  catch {
+    return null
+  }
+}
+
+/**
+ * 注册监听
+ */
+function registerWatch<T>(name: string, callback: WatchCallback<T>): () => void {
+  const entry = startFileWatcher(name)
+  if (!entry) {
+    callback(null, createNotLoadedError(name))
+    return () => {}
+  }
+
+  entry.callbacks.add(callback as WatchCallback<unknown>)
+
+  return () => {
+    const current = watchEntries.get(name)
+    if (!current)
+      return
+
+    current.callbacks.delete(callback as WatchCallback<unknown>)
+    if (current.callbacks.size === 0) {
+      current.watcher.close()
+      watchEntries.delete(name)
+    }
+  }
+}
+
+/**
+ * 停止监听（内部实现）
+ */
+function stopWatching(name?: string): void {
+  if (name) {
+    const entry = watchEntries.get(name)
+    if (entry) {
+      entry.watcher.close()
+      watchEntries.delete(name)
+    }
+  }
+  else {
+    for (const entry of watchEntries.values()) {
+      entry.watcher.close()
+    }
+    watchEntries.clear()
+  }
+}
+
+/**
+ * 清理缓存
+ */
+function clearCache(name?: string): void {
+  if (name) {
+    configCache.delete(name)
+    stopWatching(name)
+  }
+  else {
+    configCache.clear()
+    stopWatching()
+  }
+}
+
+/**
  * 配置管理对象
  */
 export const config = {
   /**
    * 加载配置到缓存
    */
-  load<T>(name: string, filePath: string, schema: ZodSchema<T>): Result<T, ConfigError> {
-    const result = loadConfig(filePath, schema)
-    if (result.success) {
-      configCache.set(name, {
-        data: result.data,
-        filePath,
-        schema: schema as ZodSchema<unknown>,
-        loadedAt: Date.now(),
-      })
-    }
-    return result
+  load<T>(name: string, filePath: string, schema: ZodType<T>): Result<T, ConfigError> {
+    return loadAndCache(name, filePath, schema)
   },
 
   /**
@@ -211,7 +371,7 @@ export const config = {
   getOrThrow<T>(name: string): T {
     const data = this.get<T>(name)
     if (data === undefined) {
-      throw new Error(getCoreMessage('config_notLoaded', undefined, { name }))
+      throw new Error(i18n.getCoreMessage('config_notLoaded', { params: { name } }))
     }
     return data
   },
@@ -220,45 +380,7 @@ export const config = {
    * 重新加载配置
    */
   reload(name: string): Result<unknown, ConfigError> {
-    const entry = configCache.get(name)
-    if (!entry) {
-      return err({
-        code: ConfigErrorCode.NOT_LOADED,
-        message: getCoreMessage('config_notLoaded', undefined, { name }),
-      })
-    }
-
-    const result = loadConfig(entry.filePath, entry.schema)
-    if (result.success) {
-      configCache.set(name, {
-        ...entry,
-        data: result.data,
-        loadedAt: Date.now(),
-      })
-      // 通知监听器
-      const listeners = configListeners.get(name)
-      if (listeners) {
-        for (const fn of listeners) {
-          fn(result.data)
-        }
-      }
-    }
-    return result
-  },
-
-  /**
-   * 监听配置变更
-   */
-  onChange<T>(name: string, callback: (config: T) => void): () => void {
-    if (!configListeners.has(name)) {
-      configListeners.set(name, new Set())
-    }
-    configListeners.get(name)!.add(callback as (config: unknown) => void)
-
-    // 返回取消监听函数
-    return () => {
-      configListeners.get(name)?.delete(callback as (config: unknown) => void)
-    }
+    return reloadAndNotify(name)
   },
 
   /**
@@ -272,14 +394,7 @@ export const config = {
    * 清除配置缓存
    */
   clear(name?: string): void {
-    if (name) {
-      configCache.delete(name)
-      configListeners.delete(name)
-    }
-    else {
-      configCache.clear()
-      configListeners.clear()
-    }
+    clearCache(name)
   },
 
   /**
@@ -288,80 +403,29 @@ export const config = {
   keys(): string[] {
     return Array.from(configCache.keys())
   },
-}
 
-/** 文件监听器 */
-const configWatchers = new Map<string, ReturnType<typeof watch>>()
+  /**
+   * 监听配置文件变更并自动重载
+   * @param name - 配置名称
+   * @param callback - 配置变更回调，接收新配置或错误
+   * @returns 取消监听函数
+   */
+  watch<T = unknown>(name: string, callback: WatchCallback<T>): () => void {
+    return registerWatch(name, callback)
+  },
 
-/** Watch 回调类型 */
-export type ConfigWatchCallback = (name: string, success: boolean, error?: unknown) => void
+  /**
+   * 停止配置文件监听
+   * @param name - 配置名称，不传则停止所有
+   */
+  unwatch(name?: string): void {
+    stopWatching(name)
+  },
 
-/**
- * 启用配置文件监听
- * @param name - 配置名称
- * @param callback - 重新加载后的回调
- */
-export function watchConfig(name: string, callback?: ConfigWatchCallback): boolean {
-  // 避免重复监听
-  if (configWatchers.has(name)) {
-    return true
-  }
-
-  const entry = configCache.get(name)
-  if (!entry) {
-    return false
-  }
-
-  try {
-    const watcher = watch(entry.filePath, (eventType) => {
-      if (eventType === 'change') {
-        const result = config.reload(name)
-        callback?.(name, result.success, result.success ? undefined : result.error)
-      }
-    })
-
-    configWatchers.set(name, watcher)
-    return true
-  }
-  catch {
-    return false
-  }
-}
-
-/**
- * 批量启用配置文件监听
- * @param names - 配置名称列表
- * @param callback - 重新加载后的回调
- */
-export function watchConfigs(names: string[], callback?: ConfigWatchCallback): void {
-  for (const name of names) {
-    watchConfig(name, callback)
-  }
-}
-
-/**
- * 停止配置文件监听
- * @param name - 配置名称，不传则停止所有
- */
-export function unwatchConfig(name?: string): void {
-  if (name) {
-    const watcher = configWatchers.get(name)
-    if (watcher) {
-      watcher.close()
-      configWatchers.delete(name)
-    }
-  }
-  else {
-    for (const watcher of configWatchers.values()) {
-      watcher.close()
-    }
-    configWatchers.clear()
-  }
-}
-
-/**
- * 检查配置是否正在被监听
- */
-export function isWatchingConfig(name: string): boolean {
-  return configWatchers.has(name)
+  /**
+   * 检查是否正在监听
+   */
+  isWatching(name: string): boolean {
+    return watchEntries.has(name)
+  },
 }

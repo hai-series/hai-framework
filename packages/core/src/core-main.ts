@@ -32,15 +32,15 @@
 
 import type { LoggingConfig } from './config/index.js'
 import type { Logger, LoggerFunctions } from './core-types.js'
-import { id, isValidNanoId, isValidUUID } from './functions/core-function-id.js'
-import * as i18nUtils from './i18n/core-i18n-utils.js'
-import * as arrayUtils from './utils/core-util-array.js'
-import * as asyncUtils from './utils/core-util-async.js'
-import * as objectUtils from './utils/core-util-object.js'
-import * as stringUtils from './utils/core-util-string.js'
+import { id } from './functions/core-function-id.js'
+import { i18n } from './i18n/index.js'
+import { array as arrayUtils } from './utils/core-util-array.js'
+import { async as asyncUtils } from './utils/core-util-async.js'
+import { object as objectUtils } from './utils/core-util-object.js'
+import { string as stringUtils } from './utils/core-util-string.js'
 
-import * as timeUtils from './utils/core-util-time.js'
-import * as typeUtils from './utils/core-util-type.js'
+import { time as timeUtils } from './utils/core-util-time.js'
+import { typeUtils } from './utils/core-util-type.js'
 
 // =============================================================================
 // Core 对象工厂
@@ -100,7 +100,7 @@ export function createCore(loggerFns: LoggerFunctions) {
      * const { getMessage } = core.i18n.createMessageGetter(messages)
      * ```
      */
-    i18n: i18nUtils,
+    i18n,
 
     // =====================================================================
     // ID
@@ -108,12 +108,6 @@ export function createCore(loggerFns: LoggerFunctions) {
 
     /** ID 生成工具 */
     id,
-
-    /** 验证 UUID */
-    isValidUUID,
-
-    /** 验证 NanoId */
-    isValidNanoId,
 
     // =====================================================================
     // 工具函数（命名空间方式）

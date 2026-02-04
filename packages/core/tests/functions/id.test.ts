@@ -5,20 +5,20 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { id, isValidNanoId, isValidUUID } from '../../src/functions/core-function-id.js'
+import { id } from '../../src/functions/core-function-id.js'
 
 describe('core-function-id', () => {
   describe('id.generate()', () => {
     it('应生成 21 字符的默认 nanoid', () => {
       const result = id.generate()
       expect(result).toHaveLength(21)
-      expect(isValidNanoId(result)).toBe(true)
+      expect(id.isValidNanoId(result)).toBe(true)
     })
 
     it('应生成指定长度的 nanoid', () => {
       const result = id.generate(32)
       expect(result).toHaveLength(32)
-      expect(isValidNanoId(result, 32)).toBe(true)
+      expect(id.isValidNanoId(result, 32)).toBe(true)
     })
 
     it('应生成唯一的 ID', () => {
@@ -68,7 +68,7 @@ describe('core-function-id', () => {
   describe('id.uuid()', () => {
     it('应生成有效的 UUID v4', () => {
       const result = id.uuid()
-      expect(isValidUUID(result)).toBe(true)
+      expect(id.isValidUUID(result)).toBe(true)
     })
 
     it('应生成唯一的 UUID', () => {
@@ -80,29 +80,29 @@ describe('core-function-id', () => {
     })
   })
 
-  describe('isValidUUID()', () => {
-    it('应验证正确的 UUID', () => {
-      expect(isValidUUID('f47ac10b-58cc-4372-a567-0e02b2c3d479')).toBe(true)
-      expect(isValidUUID('550e8400-e29b-41d4-a716-446655440000')).toBe(true)
+  describe('id.isValidUUID()', () => {
+    it('应验证有效的 UUID', () => {
+      expect(id.isValidUUID('f47ac10b-58cc-4372-a567-0e02b2c3d479')).toBe(true)
+      expect(id.isValidUUID('550e8400-e29b-41d4-a716-446655440000')).toBe(true)
     })
 
     it('应拒绝无效的 UUID', () => {
-      expect(isValidUUID('not-a-uuid')).toBe(false)
-      expect(isValidUUID('f47ac10b-58cc-4372-a567')).toBe(false)
-      expect(isValidUUID('')).toBe(false)
+      expect(id.isValidUUID('not-a-uuid')).toBe(false)
+      expect(id.isValidUUID('f47ac10b-58cc-4372-a567')).toBe(false)
+      expect(id.isValidUUID('')).toBe(false)
     })
   })
 
-  describe('isValidNanoId()', () => {
+  describe('id.isValidNanoId()', () => {
     it('应验证正确的 nanoid', () => {
-      expect(isValidNanoId('V1StGXR8_Z5jdHi6B-myT')).toBe(true)
-      expect(isValidNanoId('abc1234567', 10)).toBe(true)
+      expect(id.isValidNanoId('V1StGXR8_Z5jdHi6B-myT')).toBe(true)
+      expect(id.isValidNanoId('abc1234567', 10)).toBe(true)
     })
 
     it('应拒绝无效的 nanoid', () => {
-      expect(isValidNanoId('invalid!')).toBe(false)
-      expect(isValidNanoId('too-short')).toBe(false)
-      expect(isValidNanoId('')).toBe(false)
+      expect(id.isValidNanoId('invalid!')).toBe(false)
+      expect(id.isValidNanoId('too-short')).toBe(false)
+      expect(id.isValidNanoId('')).toBe(false)
     })
   })
 })

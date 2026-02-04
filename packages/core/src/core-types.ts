@@ -13,7 +13,7 @@
  * =============================================================================
  */
 
-import type { ZodSchema } from 'zod'
+import type { ZodType } from 'zod'
 
 // =============================================================================
 // 4. Core 初始化类型
@@ -58,31 +58,6 @@ export interface MatchHandlers<T, E, R1, R2> {
 }
 
 // =============================================================================
-// 2. 错误类型
-// =============================================================================
-
-/**
- * 统一错误码类型
- */
-export type ErrorCodeType = number
-
-/** 错误详情 */
-export interface ErrorDetails {
-  code: ErrorCodeType
-  message: string
-  details?: Record<string, unknown>
-  cause?: Error
-}
-
-/** 序列化错误（用于 API 响应） */
-export interface SerializedError {
-  code: ErrorCodeType
-  message: string
-  details?: Record<string, unknown>
-  stack?: string
-}
-
-// =============================================================================
 // 3. 日志类型
 // =============================================================================
 
@@ -123,10 +98,13 @@ export interface ConfigLoadItem<T = unknown> {
   /** 配置文件路径 */
   filePath: string
   /** Zod Schema */
-  schema: ZodSchema<T>
-  /** 变更回调（可选） */
-  onChange?: (config: T) => void
+  schema: ZodType<T>
+  /** 监听回调（可选） */
+  watch?: ConfigWatchCallback<T>
 }
+
+/** 配置监听回调 */
+export type ConfigWatchCallback<T = unknown> = (config: T | null, error?: unknown) => void
 
 /**
  * 内置模块名称与配置文件前缀的映射
@@ -171,7 +149,7 @@ export interface CoreOptions {
    * })
    * ```
    */
-  schemas?: Record<string, ZodSchema>
+  schemas?: Record<string, ZodType>
   /** 配置文件加载列表（显式模式，与 configDir 互斥） */
   configs?: ConfigLoadItem[]
   /** 是否启用配置文件监听（默认 false） */
