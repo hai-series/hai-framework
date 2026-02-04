@@ -112,7 +112,7 @@ describe('core.async - 异步操作', () => {
 
   it('withTimeout should timeout slow promises', async () => {
     const slowPromise = new Promise(resolve => setTimeout(resolve, 100))
-    await expect(core.async.withTimeout(slowPromise, 20)).rejects.toThrow('Timeout')
+    await expect(core.async.withTimeout(slowPromise, 20)).rejects.toThrow('请求超时')
   })
 
   it('retry should retry failed operations', async () => {
@@ -138,7 +138,7 @@ describe('core.time - 时间操作', () => {
   it('timeAgo should return relative time', () => {
     const now = new Date()
     const fiveMinutesAgo = new Date(now.getTime() - 5 * 60 * 1000)
-    expect(core.time.timeAgo(fiveMinutesAgo)).toBe('5分钟前')
+    expect(core.time.timeAgo(fiveMinutesAgo)).toBe('5 分钟前')
   })
 })
 

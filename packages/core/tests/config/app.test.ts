@@ -12,12 +12,11 @@ import {
   CoreConfigSchema,
   // Schema
   EnvSchema,
-  FeaturesConfigSchema,
   IdConfigSchema,
   LogFormatSchema,
   LoggingConfigSchema,
   LogLevelSchema,
-} from '../../src/core-config.js'
+} from '../../src/config/index.js'
 
 describe('core-config', () => {
   describe('错误码', () => {
@@ -129,30 +128,6 @@ describe('core-config', () => {
       })
     })
 
-    describe('featuresConfigSchema', () => {
-      it('应使用默认值', () => {
-        const result = FeaturesConfigSchema.parse({})
-        expect(result.registration).toBe(true)
-        expect(result.apiAccess).toBe(true)
-        expect(result.aiEnabled).toBe(true)
-        expect(result.mcpEnabled).toBe(false)
-        expect(result.fileUpload).toBe(true)
-      })
-
-      it('应接受完整配置', () => {
-        const config = {
-          registration: false,
-          apiAccess: true,
-          aiEnabled: false,
-          mcpEnabled: true,
-          fileUpload: false,
-        }
-        const result = FeaturesConfigSchema.parse(config)
-        expect(result.registration).toBe(false)
-        expect(result.mcpEnabled).toBe(true)
-      })
-    })
-
     describe('coreConfigSchema', () => {
       it('应使用默认值', () => {
         const result = CoreConfigSchema.parse({})
@@ -160,7 +135,6 @@ describe('core-config', () => {
         expect(result.version).toBe('0.1.0')
         expect(result.env).toBe('development')
         expect(result.debug).toBe(false)
-        expect(result.timezone).toBe('Asia/Shanghai')
         expect(result.defaultLocale).toBe('zh-CN')
       })
 
@@ -172,10 +146,7 @@ describe('core-config', () => {
           debug: true,
           logging: { level: 'warn' },
           id: { prefix: 'app_' },
-          features: { registration: false },
-          timezone: 'UTC',
           defaultLocale: 'en-US',
-          supportedLocales: ['en-US', 'zh-CN', 'ja-JP'],
         }
         const result = CoreConfigSchema.parse(config)
         expect(result.name).toBe('My App')

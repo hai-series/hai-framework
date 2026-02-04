@@ -26,14 +26,14 @@ pnpm add @hai/core
 所有功能统一通过 `core` 对象访问：
 
 ```typescript
-import { core, initCore } from '@hai/core'
+import { core, CoreConfigSchema } from '@hai/core'
 
-// 初始化（可选）
-initCore({
+// 初始化（可选，仅 Node.js）
+core.init({
   silent: false, // 是否静默启动
   configs: [ // 配置文件列表（Node.js）
-    { path: './config/_core.yml', schema: CoreConfigSchema, key: 'core' }
-  ]
+    { name: 'core', filePath: './config/_core.yml', schema: CoreConfigSchema },
+  ],
 })
 
 // 日志
@@ -111,10 +111,16 @@ else {
 ### 加载配置文件
 
 ```typescript
-import { AppConfigSchema, core } from '@hai/core'
+import { core } from '@hai/core'
+import { z } from 'zod'
+
+const AppConfigSchema = z.object({
+  name: z.string(),
+  version: z.string().optional(),
+})
 
 // 加载单个配置文件
-const result = core.config.load('app', './config/_app.yml', AppConfigSchema)
+const result = core.config.load('app', './config/app.yml', AppConfigSchema)
 if (result.success) {
   core.logger.info('App config loaded')
 }
@@ -130,18 +136,13 @@ core.config.onChange('app', (newConfig) => {
 
 ### 配置 Schema
 
-模块提供了预定义的配置 Schema：
+`@hai/core` 提供核心配置 Schema：
 
 ```typescript
-import {
-  AIConfigSchema, // AI 配置
-  AppConfigSchema, // 应用配置
-  CryptoConfigSchema, // 加密配置
-  DbConfigSchema, // 数据库配置
-  IAMConfigSchema, // 身份认证配置
-  StorageConfigSchema, // 存储配置
-} from '@hai/core'
+import { CoreConfigSchema } from '@hai/core'
 ```
+
+其他模块的配置 Schema 请从对应模块导入（如 `@hai/db`、`@hai/iam` 等）。
 
 ## 日志
 
@@ -178,18 +179,15 @@ core.setLogLevel('warn')
 
 模块定义了统一的错误码：
 
-| 范围      | 模块   | 示例                               |
-| --------- | ------ | ---------------------------------- |
-| 1000-1099 | 通用   | UNKNOWN, VALIDATION, NOT_FOUND     |
-| 1100-1199 | 配置   | FILE_NOT_FOUND, PARSE_ERROR        |
-| 2000-2999 | 认证   | INVALID_CREDENTIALS, TOKEN_EXPIRED |
-| 3000-3999 | 数据库 | CONNECTION_FAILED, QUERY_FAILED    |
-| 4000-4999 | AI     | API_ERROR, RATE_LIMIT              |
-| 5000-5999 | 存储   | FILE_NOT_FOUND, UPLOAD_FAILED      |
-| 6000-6999 | 加密   | ENCRYPT_FAILED, DECRYPT_FAILED     |
+| 范围      | 模块 | 示例                           |
+| --------- | ---- | ------------------------------ |
+| 1000-1099 | 通用 | UNKNOWN, VALIDATION, NOT_FOUND |
+| 1100-1199 | 配置 | FILE_NOT_FOUND, PARSE_ERROR    |
+
+其他模块的错误码由对应模块提供（如 `@hai/iam`、`@hai/db` 等）。
 
 ```typescript
-import { AuthErrorCode, CommonErrorCode, ConfigErrorCode } from '@hai/core'
+import { CommonErrorCode, ConfigErrorCode } from '@hai/core'
 
 // 通用错误
 CommonErrorCode.UNKNOWN // 1000
@@ -237,51 +235,42 @@ ConfigErrorCode.VALIDATION_ERROR // 1102
 
 ### core.config - 配置管理（Node.js）
 
-| 方法                                   | 说明                     |
-| -------------------------------------- | ------------------------ |
-| `core.config.load(name, path, schema)` | 加载配置文件             |
-| `core.config.get(name)`                | 获取配置                 |
-| `core.config.getOrThrow(name)`         | 获取配置（不存在则抛出） |
-| `core.config.has(name)`                | 检查配置是否存在         |
-| `core.config.reload(name)`             | 重新加载配置             |
-| `core.config.onChange(name, cb)`       | 监听配置变更             |
-| `core.config.clear()`                  | 清空所有配置             |
-| `core.config.keys()`                   | 获取所有配置名称         |
+| 方法                                       | 说明                     |
+| ------------------------------------------ | ------------------------ |
+| `core.config.load(name, filePath, schema)` | 加载配置文件             |
+| `core.config.get(name)`                    | 获取配置                 |
+| `core.config.getOrThrow(name)`             | 获取配置（不存在则抛出） |
+| `core.config.has(name)`                    | 检查配置是否存在         |
+| `core.config.reload(name)`                 | 重新加载配置             |
+| `core.config.onChange(name, cb)`           | 监听配置变更             |
+| `core.config.clear()`                      | 清空所有配置             |
+| `core.config.keys()`                       | 获取所有配置名称         |
 
 ### core.type - 类型检查
 
-| 方法                         | 说明                   |
-| ---------------------------- | ---------------------- |
-| `core.type.isDefined(v)`     | 非 null/undefined 检查 |
-| `core.type.isNull(v)`        | null 检查              |
-| `core.type.isUndefined(v)`   | undefined 检查         |
-| `core.type.isObject(v)`      | 对象检查（排除数组）   |
-| `core.type.isPlainObject(v)` | 纯对象检查             |
-| `core.type.isArray(v)`       | 数组检查               |
-| `core.type.isString(v)`      | 字符串检查             |
-| `core.type.isNumber(v)`      | 数字检查               |
-| `core.type.isBoolean(v)`     | 布尔检查               |
-| `core.type.isFunction(v)`    | 函数检查               |
-| `core.type.isPromise(v)`     | Promise 检查           |
-| `core.type.isDate(v)`        | Date 检查              |
-| `core.type.isRegExp(v)`      | RegExp 检查            |
-| `core.type.isEmpty(v)`       | 空值检查               |
+| 方法                      | 说明                   |
+| ------------------------- | ---------------------- |
+| `core.type.isDefined(v)`  | 非 null/undefined 检查 |
+| `core.type.isObject(v)`   | 对象检查（排除数组）   |
+| `core.type.isArray(v)`    | 数组检查               |
+| `core.type.isString(v)`   | 字符串检查             |
+| `core.type.isNumber(v)`   | 数字检查               |
+| `core.type.isBoolean(v)`  | 布尔检查               |
+| `core.type.isFunction(v)` | 函数检查               |
+| `core.type.isPromise(v)`  | Promise 检查           |
 
 ### core.object - 对象操作
 
-| 方法                            | 说明                |
-| ------------------------------- | ------------------- |
-| `core.object.deepClone(obj)`    | 深拷贝              |
-| `core.object.deepMerge(a, b)`   | 深合并              |
-| `core.object.pick(obj, keys)`   | 选取属性            |
-| `core.object.omit(obj, keys)`   | 排除属性            |
-| `core.object.get(obj, path)`    | 安全获取嵌套属性    |
-| `core.object.set(obj, path, v)` | 安全设置嵌套属性    |
-| `core.object.has(obj, path)`    | 检查嵌套属性存在    |
-| `core.object.keys(obj)`         | 类型安全的 keys     |
-| `core.object.values(obj)`       | 类型安全的 values   |
-| `core.object.entries(obj)`      | 类型安全的 entries  |
-| `core.object.fromEntries(arr)`  | 从 entries 创建对象 |
+| 方法                           | 说明                |
+| ------------------------------ | ------------------- |
+| `core.object.deepClone(obj)`   | 深拷贝              |
+| `core.object.deepMerge(a, b)`  | 深合并              |
+| `core.object.pick(obj, keys)`  | 选取属性            |
+| `core.object.omit(obj, keys)`  | 排除属性            |
+| `core.object.keys(obj)`        | 类型安全的 keys     |
+| `core.object.values(obj)`      | 类型安全的 values   |
+| `core.object.entries(obj)`     | 类型安全的 entries  |
+| `core.object.fromEntries(arr)` | 从 entries 创建对象 |
 
 ### core.string - 字符串操作
 
@@ -293,11 +282,11 @@ ConfigErrorCode.VALIDATION_ERROR // 1102
 | `core.string.snakeCase(str)`      | 转下划线命名 |
 | `core.string.pascalCase(str)`     | 转帕斯卡命名 |
 | `core.string.truncate(str, len)`  | 截断字符串   |
+| `core.string.trim(str)`           | 去除两端空白 |
+| `core.string.isBlank(str)`        | 是否为空白   |
+| `core.string.isNotBlank(str)`     | 是否非空白   |
 | `core.string.padStart(str, l, c)` | 左填充       |
 | `core.string.padEnd(str, len, c)` | 右填充       |
-| `core.string.template(str, data)` | 模板替换     |
-| `core.string.escapeHtml(str)`     | HTML 转义    |
-| `core.string.unescapeHtml(str)`   | HTML 反转义  |
 
 ### core.array - 数组操作
 
@@ -316,30 +305,30 @@ ConfigErrorCode.VALIDATION_ERROR // 1102
 
 ### core.async - 异步操作
 
-| 方法                             | 说明         |
-| -------------------------------- | ------------ |
-| `core.async.delay(ms)`           | 延迟指定毫秒 |
-| `core.async.withTimeout(p, ms)`  | 超时控制     |
-| `core.async.retry(fn, opts)`     | 重试机制     |
-| `core.async.parallel(fns, opts)` | 并发控制     |
-| `core.async.debounce(fn, ms)`    | 防抖         |
-| `core.async.throttle(fn, ms)`    | 节流         |
+| 方法                                           | 说明                   |
+| ---------------------------------------------- | ---------------------- |
+| `core.async.delay(ms)`                         | 延迟指定毫秒           |
+| `core.async.withTimeout(p, ms)`                | 超时控制               |
+| `core.async.retry(fn, opts)`                   | 重试机制               |
+| `core.async.parallel(items, fn, concurrency?)` | 并发处理（限制并发数） |
+| `core.async.serial(items, fn)`                 | 串行处理               |
+| `core.async.debounce(fn, ms)`                  | 防抖                   |
+| `core.async.throttle(fn, ms)`                  | 节流                   |
 
 ### core.time - 时间操作
 
-| 方法                             | 说明                    |
-| -------------------------------- | ----------------------- |
-| `core.time.formatDate(date)`     | 格式化日期 YYYY-MM-DD   |
-| `core.time.formatTime(date)`     | 格式化时间 HH:mm:ss     |
-| `core.time.formatDateTime(date)` | 格式化日期时间          |
-| `core.time.timeAgo(date)`        | 相对时间（如"5分钟前"） |
-| `core.time.isToday(date)`        | 是否今天                |
-| `core.time.isSameDay(a, b)`      | 是否同一天              |
-| `core.time.parseDate(str)`       | 解析日期字符串          |
-| `core.time.addDays(date, n)`     | 增加天数                |
-| `core.time.addMonths(date, n)`   | 增加月数                |
-| `core.time.startOfDay(date)`     | 当天开始时间            |
-| `core.time.endOfDay(date)`       | 当天结束时间            |
+| 方法                          | 说明                    |
+| ----------------------------- | ----------------------- |
+| `core.time.formatDate(date)`  | 格式化日期              |
+| `core.time.timeAgo(date)`     | 相对时间（如"5分钟前"） |
+| `core.time.now()`             | 当前时间戳（毫秒）      |
+| `core.time.nowSeconds()`      | 当前时间戳（秒）        |
+| `core.time.parseDate(str)`    | 解析日期字符串          |
+| `core.time.isValidDate(date)` | 是否有效日期            |
+| `core.time.addDays(date, n)`  | 增加天数                |
+| `core.time.addHours(date, n)` | 增加小时                |
+| `core.time.startOfDay(date)`  | 当天开始时间            |
+| `core.time.endOfDay(date)`    | 当天结束时间            |
 
 ### Result 类型
 

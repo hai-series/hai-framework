@@ -41,7 +41,7 @@ describe('core-util-async', () => {
         setTimeout(resolve, 100)
       })
 
-      await expect(withTimeout(promise, 10)).rejects.toThrow('Timeout')
+      await expect(withTimeout(promise, 10)).rejects.toThrow('请求超时')
     })
   })
 

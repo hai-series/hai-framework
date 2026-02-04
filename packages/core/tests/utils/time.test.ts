@@ -36,22 +36,22 @@ describe('core-util-time', () => {
   describe('timeAgo()', () => {
     it('应显示秒前', () => {
       const date = new Date(Date.now() - 30 * 1000)
-      expect(timeAgo(date)).toBe('30秒前')
+      expect(timeAgo(date)).toBe('30 秒前')
     })
 
     it('应显示分钟前', () => {
       const date = new Date(Date.now() - 5 * 60 * 1000)
-      expect(timeAgo(date)).toBe('5分钟前')
+      expect(timeAgo(date)).toBe('5 分钟前')
     })
 
     it('应显示小时前', () => {
       const date = new Date(Date.now() - 3 * 60 * 60 * 1000)
-      expect(timeAgo(date)).toBe('3小时前')
+      expect(timeAgo(date)).toBe('3 小时前')
     })
 
     it('应显示天前', () => {
       const date = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000)
-      expect(timeAgo(date)).toBe('2天前')
+      expect(timeAgo(date)).toBe('2 天前')
     })
   })
 

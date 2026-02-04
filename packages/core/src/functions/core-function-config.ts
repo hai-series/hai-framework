@@ -33,19 +33,10 @@ import { parse } from 'yaml'
 // 配置文件监听
 // =============================================================================
 
-import messagesEnUS from '../../messages/en-US.json'
-import messagesZhCN from '../../messages/zh-CN.json'
-import { ConfigErrorCode } from '../core-config.js'
+import { ConfigErrorCode } from '../config/index.js'
 import { err, ok } from '../core-types.js'
-import { createMessageGetter } from '../i18n/i18n-utils.js'
+import { getCoreMessage } from '../i18n/core-i18n-messages.js'
 import { isObject } from '../utils/core-util-type.js'
-
-// 内部消息获取器
-type CoreMessageKey = keyof typeof messagesZhCN
-const { getMessage: getCoreMessage } = createMessageGetter<CoreMessageKey>({
-  'zh-CN': messagesZhCN,
-  'en-US': messagesEnUS,
-})
 
 // =============================================================================
 // 类型定义
@@ -71,7 +62,7 @@ interface CacheEntry<T = unknown> {
 // 内部工具
 // =============================================================================
 
-/** 环境变量插值正则 */
+/** 环境变量插值正则（支持 ${VAR} 与 ${VAR:default}） */
 const ENV_VAR_PATTERN = /\$\{([^}:]+)(?::([^}]*))?\}/g
 
 /** 递归替换环境变量 */
@@ -89,6 +80,7 @@ function interpolateEnv(value: unknown): Result<unknown, ConfigError> {
       const [fullMatch, varName, defaultValue] = match
       const envValue = process.env[varName]
 
+      // 未提供默认值且环境变量不存在时，返回错误
       if (envValue === undefined && defaultValue === undefined) {
         return err({
           code: ConfigErrorCode.ENV_VAR_MISSING,

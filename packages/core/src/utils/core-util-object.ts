@@ -8,6 +8,7 @@ import { isObject } from './core-util-type.js'
 
 /**
  * 深度克隆对象
+ * 注意：仅适用于可 JSON 序列化的数据（如 Date、Map、函数等会丢失信息）
  */
 export function deepClone<T>(obj: T): T {
   return JSON.parse(JSON.stringify(obj))

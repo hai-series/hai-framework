@@ -34,7 +34,7 @@ import type { ZodSchema } from 'zod'
 import type { BuiltinConfigModule, ConfigLoadItem, CoreOptions } from './core-types.js'
 import { existsSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
-import { CoreConfigSchema } from './core-config.js'
+import { CoreConfigSchema } from './config/index.js'
 import { createCore } from './core-main.js'
 import { config, unwatchConfig, watchConfig } from './functions/core-function-config.js'
 import { configureLogger, createLogger, getLogger, getLogLevel, setLogLevel } from './functions/core-function-logger.node.js'
@@ -153,7 +153,7 @@ function scanConfigDir(
       }
     }
     else {
-      // 业务配置
+      // 业务配置（文件名作为配置名）
       const schema = schemas?.[baseName]
       if (schema) {
         items.push({
@@ -163,7 +163,7 @@ function scanConfigDir(
         })
       }
       else {
-        // 没有 schema 时，仍然加载但不验证
+        // 没有 schema 时，仍然加载但不验证（返回原始数据）
         if (!silent) {
           logger.debug(`[core] No schema for config: ${file}, loading without validation`)
         }

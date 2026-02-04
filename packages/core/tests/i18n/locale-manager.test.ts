@@ -10,7 +10,7 @@ import {
   getGlobalLocale,
   localeManager,
   setGlobalLocale,
-} from '../../src/i18n/i18n-utils.js'
+} from '../../src/i18n/core-i18n-utils.js'
 
 describe('localeManager', () => {
   beforeEach(() => {

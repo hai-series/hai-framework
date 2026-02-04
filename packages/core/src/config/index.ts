@@ -13,4 +13,4 @@
  */
 
 // 核心配置（日志、ID、应用、错误码）
-export * from '../core-config.js'
+export * from './core-config.js'

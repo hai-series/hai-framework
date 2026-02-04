@@ -4,6 +4,8 @@
  * =============================================================================
  */
 
+import { getCoreMessage } from '../i18n/core-i18n-messages.js'
+
 /**
  * 格式化日期
  */
@@ -30,12 +32,12 @@ export function formatDate(date: Date, format = 'YYYY-MM-DD'): string {
 export function timeAgo(date: Date): string {
   const seconds = Math.floor((Date.now() - date.getTime()) / 1000)
   if (seconds < 60)
-    return `${seconds}秒前`
+    return getCoreMessage('time_secondsAgo', undefined, { n: seconds })
   if (seconds < 3600)
-    return `${Math.floor(seconds / 60)}分钟前`
+    return getCoreMessage('time_minutesAgo', undefined, { n: Math.floor(seconds / 60) })
   if (seconds < 86400)
-    return `${Math.floor(seconds / 3600)}小时前`
-  return `${Math.floor(seconds / 86400)}天前`
+    return getCoreMessage('time_hoursAgo', undefined, { n: Math.floor(seconds / 3600) })
+  return getCoreMessage('time_daysAgo', undefined, { n: Math.floor(seconds / 86400) })
 }
 
 /**
