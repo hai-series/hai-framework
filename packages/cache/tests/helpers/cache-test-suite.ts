@@ -24,12 +24,12 @@ export function defineCacheSuite(
 
     beforeAll(async () => {
       env = await setup()
-    })
+    }, 120000)
 
     beforeEach(async () => {
       await cache.close()
       await cache.init(env!.config)
-    })
+    }, 60000)
 
     afterEach(async () => {
       await cache.close()
@@ -38,7 +38,7 @@ export function defineCacheSuite(
     afterAll(async () => {
       await env?.release?.()
       env = null
-    })
+    }, 120000)
 
     defineTests()
   })
