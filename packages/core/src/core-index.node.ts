@@ -9,7 +9,7 @@
  * - core.logger - 日志
  * - core.id - ID 生成
  * - core.config - 配置管理
- * - core.type - 类型检查
+ * - core.typeUtils - 类型检查
  * - core.object - 对象操作
  * - core.string - 字符串操作
  * - core.array - 数组操作

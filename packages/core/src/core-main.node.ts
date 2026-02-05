@@ -171,7 +171,7 @@ function initCore(options: CoreOptions = {}): void {
 
   // 2. Load config files
   for (const item of configItems) {
-    if (item.name === '_core') {
+    if (item.name === 'core') {
       const result = config.load(item.name, item.filePath, CoreConfigSchema)
       if (result.success) {
         if (!options.logging) {

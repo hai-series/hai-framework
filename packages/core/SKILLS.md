@@ -99,6 +99,7 @@ core.config.unwatch()
 
 > 注意：core.init 会统一加载配置文件，但不会自动校验各模块配置。
 > 模块使用前请显式调用 `core.config.validate(name, schema)` 进行校验。
+> 说明：core.init 会使用 CoreConfigSchema 解析 `_core.yml` 并补齐默认值。
 
 ### core.config 关键参数说明
 

@@ -94,6 +94,7 @@ if (result.success) {
 
 // 注意：core.init 会统一加载配置文件，但不会自动校验各模块配置。
 // 模块使用前请显式校验一次。
+// 注意：core.init 会使用 CoreConfigSchema 解析 _core.yml，并应用默认值。
 core.config.validate('app', AppConfigSchema)
 
 const unwatch = core.config.watch('app', (newConfig, error) => {

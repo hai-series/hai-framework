@@ -19,7 +19,7 @@
  * const myId = core.id.generate()
  *
  * // 工具函数
- * core.type.isDefined(value)
+ * core.typeUtils.isDefined(value)
  * core.object.deepMerge(a, b)
  * core.string.capitalize('hello')
  * ```
