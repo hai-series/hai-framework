@@ -75,10 +75,10 @@ function rowToPermission(row: PermissionRow): Permission {
 /**
  * 创建数据库权限存储
  */
-export function createDbPermissionRepository(db: DbService): PermissionRepository {
+export async function createDbPermissionRepository(db: DbService): Promise<PermissionRepository> {
   // 确保表存在
-  function ensureTable(): Result<void, IamError> {
-    const result = db.ddl.createTable(TABLE_NAME, TABLE_SCHEMA, true)
+  async function ensureTable(): Promise<Result<void, IamError>> {
+    const result = await db.ddl.createTable(TABLE_NAME, TABLE_SCHEMA, true)
     if (!result.success) {
       return err({
         code: IamErrorCode.REPOSITORY_ERROR,
@@ -90,7 +90,7 @@ export function createDbPermissionRepository(db: DbService): PermissionRepositor
   }
 
   // 初始化表
-  const initResult = ensureTable()
+  const initResult = await ensureTable()
   if (!initResult.success) {
     throw new Error(initResult.error.message)
   }
@@ -100,7 +100,7 @@ export function createDbPermissionRepository(db: DbService): PermissionRepositor
       const id = generateId()
       const now = Date.now()
 
-      const result = db.sql.execute(
+      const result = await db.sql.execute(
         `INSERT INTO ${TABLE_NAME} (id, code, name, description, resource, action, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
         [
@@ -144,7 +144,7 @@ export function createDbPermissionRepository(db: DbService): PermissionRepositor
     },
 
     async findById(id): Promise<Result<Permission | null, IamError>> {
-      const result = db.sql.query<PermissionRow>(
+      const result = await db.sql.query<PermissionRow>(
         `SELECT * FROM ${TABLE_NAME} WHERE id = ?`,
         [id],
       )
@@ -165,7 +165,7 @@ export function createDbPermissionRepository(db: DbService): PermissionRepositor
     },
 
     async findByCode(code): Promise<Result<Permission | null, IamError>> {
-      const result = db.sql.query<PermissionRow>(
+      const result = await db.sql.query<PermissionRow>(
         `SELECT * FROM ${TABLE_NAME} WHERE code = ?`,
         [code],
       )
@@ -186,7 +186,7 @@ export function createDbPermissionRepository(db: DbService): PermissionRepositor
     },
 
     async findAll(): Promise<Result<Permission[], IamError>> {
-      const result = db.sql.query<PermissionRow>(`SELECT * FROM ${TABLE_NAME}`)
+      const result = await db.sql.query<PermissionRow>(`SELECT * FROM ${TABLE_NAME}`)
 
       if (!result.success) {
         return err({
@@ -200,7 +200,7 @@ export function createDbPermissionRepository(db: DbService): PermissionRepositor
     },
 
     async delete(id): Promise<Result<void, IamError>> {
-      const result = db.sql.execute(
+      const result = await db.sql.execute(
         `DELETE FROM ${TABLE_NAME} WHERE id = ?`,
         [id],
       )

@@ -34,13 +34,13 @@ const ROLE_PERMISSION_SCHEMA = {
 /**
  * 创建数据库角色-权限关联存储
  */
-export function createDbRolePermissionRepository(
+export async function createDbRolePermissionRepository(
   db: DbService,
   permissionRepository: { findById: (id: string) => Promise<Result<Permission | null, IamError>> },
-): RolePermissionRepository {
+): Promise<RolePermissionRepository> {
   // 确保表存在
-  function ensureTable(): Result<void, IamError> {
-    const result = db.ddl.createTable(ROLE_PERMISSION_TABLE, ROLE_PERMISSION_SCHEMA, true)
+  async function ensureTable(): Promise<Result<void, IamError>> {
+    const result = await db.ddl.createTable(ROLE_PERMISSION_TABLE, ROLE_PERMISSION_SCHEMA, true)
     if (!result.success) {
       return err({
         code: IamErrorCode.REPOSITORY_ERROR,
@@ -49,21 +49,31 @@ export function createDbRolePermissionRepository(
       })
     }
 
-    // 创建复合主键索引
-    db.ddl.createIndex(ROLE_PERMISSION_TABLE, 'idx_role_perm_role_perm', { columns: ['role_id', 'permission_id'], unique: true })
-    db.ddl.createIndex(ROLE_PERMISSION_TABLE, 'idx_role_perm_role', { columns: ['role_id'] })
+    const indexResults = await Promise.all([
+      db.ddl.createIndex(ROLE_PERMISSION_TABLE, 'idx_role_perm_role_perm', { columns: ['role_id', 'permission_id'], unique: true }),
+      db.ddl.createIndex(ROLE_PERMISSION_TABLE, 'idx_role_perm_role', { columns: ['role_id'] }),
+    ])
+    for (const indexResult of indexResults) {
+      if (!indexResult.success) {
+        return err({
+          code: IamErrorCode.REPOSITORY_ERROR,
+          message: `创建角色-权限索引失败: ${indexResult.error.message}`,
+          cause: indexResult.error,
+        })
+      }
+    }
 
     return ok(undefined)
   }
 
-  const initResult = ensureTable()
+  const initResult = await ensureTable()
   if (!initResult.success) {
     throw new Error(initResult.error.message)
   }
 
   return {
     async assign(roleId, permissionId): Promise<Result<void, IamError>> {
-      const result = db.sql.execute(
+      const result = await db.sql.execute(
         `INSERT OR IGNORE INTO ${ROLE_PERMISSION_TABLE} (role_id, permission_id) VALUES (?, ?)`,
         [roleId, permissionId],
       )
@@ -80,7 +90,7 @@ export function createDbRolePermissionRepository(
     },
 
     async remove(roleId, permissionId): Promise<Result<void, IamError>> {
-      const result = db.sql.execute(
+      const result = await db.sql.execute(
         `DELETE FROM ${ROLE_PERMISSION_TABLE} WHERE role_id = ? AND permission_id = ?`,
         [roleId, permissionId],
       )
@@ -97,7 +107,7 @@ export function createDbRolePermissionRepository(
     },
 
     async getPermissionIds(roleId): Promise<Result<string[], IamError>> {
-      const result = db.sql.query<{ permission_id: string }>(
+      const result = await db.sql.query<{ permission_id: string }>(
         `SELECT permission_id FROM ${ROLE_PERMISSION_TABLE} WHERE role_id = ?`,
         [roleId],
       )
@@ -130,7 +140,7 @@ export function createDbRolePermissionRepository(
     },
 
     async hasPermission(roleId, permissionCode): Promise<Result<boolean, IamError>> {
-      const result = db.sql.query<{ cnt: number }>(
+      const result = await db.sql.query<{ cnt: number }>(
         `SELECT COUNT(*) as cnt FROM ${ROLE_PERMISSION_TABLE} rp
          JOIN iam_permissions p ON rp.permission_id = p.id
          WHERE rp.role_id = ? AND p.code = ?`,
@@ -163,13 +173,13 @@ const USER_ROLE_SCHEMA = {
 /**
  * 创建数据库用户-角色关联存储
  */
-export function createDbUserRoleRepository(
+export async function createDbUserRoleRepository(
   db: DbService,
   roleRepository: { findById: (id: string) => Promise<Result<Role | null, IamError>> },
-): UserRoleRepository {
+): Promise<UserRoleRepository> {
   // 确保表存在
-  function ensureTable(): Result<void, IamError> {
-    const result = db.ddl.createTable(USER_ROLE_TABLE, USER_ROLE_SCHEMA, true)
+  async function ensureTable(): Promise<Result<void, IamError>> {
+    const result = await db.ddl.createTable(USER_ROLE_TABLE, USER_ROLE_SCHEMA, true)
     if (!result.success) {
       return err({
         code: IamErrorCode.REPOSITORY_ERROR,
@@ -178,21 +188,31 @@ export function createDbUserRoleRepository(
       })
     }
 
-    // 创建索引
-    db.ddl.createIndex(USER_ROLE_TABLE, 'idx_user_role_user_role', { columns: ['user_id', 'role_id'], unique: true })
-    db.ddl.createIndex(USER_ROLE_TABLE, 'idx_user_role_user', { columns: ['user_id'] })
+    const indexResults = await Promise.all([
+      db.ddl.createIndex(USER_ROLE_TABLE, 'idx_user_role_user_role', { columns: ['user_id', 'role_id'], unique: true }),
+      db.ddl.createIndex(USER_ROLE_TABLE, 'idx_user_role_user', { columns: ['user_id'] }),
+    ])
+    for (const indexResult of indexResults) {
+      if (!indexResult.success) {
+        return err({
+          code: IamErrorCode.REPOSITORY_ERROR,
+          message: `创建用户-角色索引失败: ${indexResult.error.message}`,
+          cause: indexResult.error,
+        })
+      }
+    }
 
     return ok(undefined)
   }
 
-  const initResult = ensureTable()
+  const initResult = await ensureTable()
   if (!initResult.success) {
     throw new Error(initResult.error.message)
   }
 
   return {
     async assign(userId, roleId): Promise<Result<void, IamError>> {
-      const result = db.sql.execute(
+      const result = await db.sql.execute(
         `INSERT OR IGNORE INTO ${USER_ROLE_TABLE} (user_id, role_id) VALUES (?, ?)`,
         [userId, roleId],
       )
@@ -209,7 +229,7 @@ export function createDbUserRoleRepository(
     },
 
     async remove(userId, roleId): Promise<Result<void, IamError>> {
-      const result = db.sql.execute(
+      const result = await db.sql.execute(
         `DELETE FROM ${USER_ROLE_TABLE} WHERE user_id = ? AND role_id = ?`,
         [userId, roleId],
       )
@@ -226,7 +246,7 @@ export function createDbUserRoleRepository(
     },
 
     async getRoleIds(userId): Promise<Result<string[], IamError>> {
-      const result = db.sql.query<{ role_id: string }>(
+      const result = await db.sql.query<{ role_id: string }>(
         `SELECT role_id FROM ${USER_ROLE_TABLE} WHERE user_id = ?`,
         [userId],
       )
@@ -259,7 +279,7 @@ export function createDbUserRoleRepository(
     },
 
     async hasRole(userId, roleCode): Promise<Result<boolean, IamError>> {
-      const result = db.sql.query<{ cnt: number }>(
+      const result = await db.sql.query<{ cnt: number }>(
         `SELECT COUNT(*) as cnt FROM ${USER_ROLE_TABLE} ur
          JOIN iam_roles r ON ur.role_id = r.id
          WHERE ur.user_id = ? AND r.code = ?`,

@@ -82,11 +82,11 @@ interface UserSessionRow {
 /**
  * 创建数据库会话存储（用于有状态会话管理器）
  */
-export function createDbSessionStore(db: DbService): SessionStore {
+export async function createDbSessionStore(db: DbService): Promise<SessionStore> {
   // 确保表存在
-  function ensureTables(): Result<void, IamError> {
+  async function ensureTables(): Promise<Result<void, IamError>> {
     // 创建会话表
-    const sessionResult = db.ddl.createTable(SESSION_TABLE, SESSION_SCHEMA, true)
+    const sessionResult = await db.ddl.createTable(SESSION_TABLE, SESSION_SCHEMA, true)
     if (!sessionResult.success) {
       return err({
         code: IamErrorCode.REPOSITORY_ERROR,
@@ -96,7 +96,7 @@ export function createDbSessionStore(db: DbService): SessionStore {
     }
 
     // 创建令牌映射表
-    const tokenResult = db.ddl.createTable(TOKEN_MAPPING_TABLE, TOKEN_MAPPING_SCHEMA, true)
+    const tokenResult = await db.ddl.createTable(TOKEN_MAPPING_TABLE, TOKEN_MAPPING_SCHEMA, true)
     if (!tokenResult.success) {
       return err({
         code: IamErrorCode.REPOSITORY_ERROR,
@@ -106,7 +106,7 @@ export function createDbSessionStore(db: DbService): SessionStore {
     }
 
     // 创建用户会话表
-    const userSessionResult = db.ddl.createTable(USER_SESSION_TABLE, USER_SESSION_SCHEMA, true)
+    const userSessionResult = await db.ddl.createTable(USER_SESSION_TABLE, USER_SESSION_SCHEMA, true)
     if (!userSessionResult.success) {
       return err({
         code: IamErrorCode.REPOSITORY_ERROR,
@@ -115,19 +115,29 @@ export function createDbSessionStore(db: DbService): SessionStore {
       })
     }
 
-    // 创建索引
-    db.ddl.createIndex(TOKEN_MAPPING_TABLE, 'idx_token_mapping_session', { columns: ['session_id'] })
-    db.ddl.createIndex(USER_SESSION_TABLE, 'idx_user_session_user', { columns: ['user_id'] })
-    db.ddl.createIndex(USER_SESSION_TABLE, 'idx_user_session_session', { columns: ['session_id'] })
-    db.ddl.createIndex(USER_SESSION_TABLE, 'idx_user_session_unique', {
-      columns: ['user_id', 'session_id'],
-      unique: true,
-    })
+    const indexResults = await Promise.all([
+      db.ddl.createIndex(TOKEN_MAPPING_TABLE, 'idx_token_mapping_session', { columns: ['session_id'] }),
+      db.ddl.createIndex(USER_SESSION_TABLE, 'idx_user_session_user', { columns: ['user_id'] }),
+      db.ddl.createIndex(USER_SESSION_TABLE, 'idx_user_session_session', { columns: ['session_id'] }),
+      db.ddl.createIndex(USER_SESSION_TABLE, 'idx_user_session_unique', {
+        columns: ['user_id', 'session_id'],
+        unique: true,
+      }),
+    ])
+    for (const indexResult of indexResults) {
+      if (!indexResult.success) {
+        return err({
+          code: IamErrorCode.REPOSITORY_ERROR,
+          message: `创建会话索引失败: ${indexResult.error.message}`,
+          cause: indexResult.error,
+        })
+      }
+    }
 
     return ok(undefined)
   }
 
-  const initResult = ensureTables()
+  const initResult = await ensureTables()
   if (!initResult.success) {
     throw new Error(initResult.error.message)
   }
@@ -137,7 +147,7 @@ export function createDbSessionStore(db: DbService): SessionStore {
       const now = Date.now()
       const expiresAt = now + ttl * 1000 // ttl 是秒数
 
-      const result = db.sql.execute(
+      const result = await db.sql.execute(
         `INSERT OR REPLACE INTO ${SESSION_TABLE} (session_id, session_data, expires_at, created_at)
          VALUES (?, ?, ?, ?)`,
         [sessionId, JSON.stringify(session), expiresAt, now],
@@ -155,7 +165,7 @@ export function createDbSessionStore(db: DbService): SessionStore {
     },
 
     async get(sessionId): Promise<Result<Session | null, IamError>> {
-      const result = db.sql.query<SessionRow>(
+      const result = await db.sql.query<SessionRow>(
         `SELECT * FROM ${SESSION_TABLE} WHERE session_id = ?`,
         [sessionId],
       )
@@ -197,7 +207,7 @@ export function createDbSessionStore(db: DbService): SessionStore {
     },
 
     async getSessionIdByToken(token): Promise<Result<string | null, IamError>> {
-      const result = db.sql.query<TokenMappingRow>(
+      const result = await db.sql.query<TokenMappingRow>(
         `SELECT * FROM ${TOKEN_MAPPING_TABLE} WHERE token = ?`,
         [token],
       )
@@ -229,7 +239,7 @@ export function createDbSessionStore(db: DbService): SessionStore {
       const now = Date.now()
       const expiresAt = now + ttl * 1000
 
-      const result = db.sql.execute(
+      const result = await db.sql.execute(
         `INSERT OR REPLACE INTO ${TOKEN_MAPPING_TABLE} (token, session_id, expires_at, created_at)
          VALUES (?, ?, ?, ?)`,
         [token, sessionId, expiresAt, now],
@@ -247,7 +257,7 @@ export function createDbSessionStore(db: DbService): SessionStore {
     },
 
     async deleteTokenMapping(token): Promise<Result<void, IamError>> {
-      const result = db.sql.execute(
+      const result = await db.sql.execute(
         `DELETE FROM ${TOKEN_MAPPING_TABLE} WHERE token = ?`,
         [token],
       )
@@ -265,7 +275,7 @@ export function createDbSessionStore(db: DbService): SessionStore {
 
     async delete(sessionId): Promise<Result<void, IamError>> {
       // 删除会话
-      const sessionResult = db.sql.execute(
+      const sessionResult = await db.sql.execute(
         `DELETE FROM ${SESSION_TABLE} WHERE session_id = ?`,
         [sessionId],
       )
@@ -279,22 +289,38 @@ export function createDbSessionStore(db: DbService): SessionStore {
       }
 
       // 删除相关令牌映射
-      db.sql.execute(
+      const tokenResult = await db.sql.execute(
         `DELETE FROM ${TOKEN_MAPPING_TABLE} WHERE session_id = ?`,
         [sessionId],
       )
 
+      if (!tokenResult.success) {
+        return err({
+          code: IamErrorCode.REPOSITORY_ERROR,
+          message: `删除令牌映射失败: ${tokenResult.error.message}`,
+          cause: tokenResult.error,
+        })
+      }
+
       // 删除用户会话映射
-      db.sql.execute(
+      const userSessionResult = await db.sql.execute(
         `DELETE FROM ${USER_SESSION_TABLE} WHERE session_id = ?`,
         [sessionId],
       )
+
+      if (!userSessionResult.success) {
+        return err({
+          code: IamErrorCode.REPOSITORY_ERROR,
+          message: `删除用户会话映射失败: ${userSessionResult.error.message}`,
+          cause: userSessionResult.error,
+        })
+      }
 
       return ok(undefined)
     },
 
     async getUserSessionIds(userId): Promise<Result<string[], IamError>> {
-      const result = db.sql.query<UserSessionRow>(
+      const result = await db.sql.query<UserSessionRow>(
         `SELECT session_id FROM ${USER_SESSION_TABLE} WHERE user_id = ?`,
         [userId],
       )
@@ -314,7 +340,7 @@ export function createDbSessionStore(db: DbService): SessionStore {
       const id = crypto.randomUUID()
       const now = Date.now()
 
-      const result = db.sql.execute(
+      const result = await db.sql.execute(
         `INSERT OR IGNORE INTO ${USER_SESSION_TABLE} (id, user_id, session_id, created_at)
          VALUES (?, ?, ?, ?)`,
         [id, userId, sessionId, now],
@@ -332,7 +358,7 @@ export function createDbSessionStore(db: DbService): SessionStore {
     },
 
     async removeUserSession(userId, sessionId): Promise<Result<void, IamError>> {
-      const result = db.sql.execute(
+      const result = await db.sql.execute(
         `DELETE FROM ${USER_SESSION_TABLE} WHERE user_id = ? AND session_id = ?`,
         [userId, sessionId],
       )

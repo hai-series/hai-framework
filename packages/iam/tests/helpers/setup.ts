@@ -18,7 +18,7 @@ import { db } from '@hai/db'
  * 初始化测试数据库（使用 sqlite 内存数据库）
  */
 export async function setupTestDb() {
-  const initResult = db.init({
+  const initResult = await db.init({
     type: 'sqlite',
     database: ':memory:',
   })
@@ -34,7 +34,7 @@ export async function setupTestDb() {
  * 关闭测试数据库
  */
 export async function teardownTestDb() {
-  db.close()
+  await db.close()
 }
 
 /**

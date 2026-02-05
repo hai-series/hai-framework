@@ -45,10 +45,10 @@ interface OtpRow {
 /**
  * 创建数据库 OTP 存储
  */
-export function createDbOtpStore(db: DbService): OtpStore {
+export async function createDbOtpStore(db: DbService): Promise<OtpStore> {
   // 确保表存在
-  function ensureTable(): Result<void, IamError> {
-    const result = db.ddl.createTable(TABLE_NAME, TABLE_SCHEMA, true)
+  async function ensureTable(): Promise<Result<void, IamError>> {
+    const result = await db.ddl.createTable(TABLE_NAME, TABLE_SCHEMA, true)
     if (!result.success) {
       return err({
         code: IamErrorCode.REPOSITORY_ERROR,
@@ -59,7 +59,7 @@ export function createDbOtpStore(db: DbService): OtpStore {
     return ok(undefined)
   }
 
-  const initResult = ensureTable()
+  const initResult = await ensureTable()
   if (!initResult.success) {
     throw new Error(initResult.error.message)
   }
@@ -68,7 +68,7 @@ export function createDbOtpStore(db: DbService): OtpStore {
     async set(identifier, code, expiresIn): Promise<Result<void, IamError>> {
       const now = Date.now()
       const expiresAt = now + expiresIn * 1000 // expiresIn 是秒数
-      const result = db.sql.execute(
+      const result = await db.sql.execute(
         `INSERT OR REPLACE INTO ${TABLE_NAME} (identifier, code, attempts, expires_at, created_at)
          VALUES (?, ?, ?, ?, ?)`,
         [identifier, code, 0, expiresAt, now],
@@ -86,7 +86,7 @@ export function createDbOtpStore(db: DbService): OtpStore {
     },
 
     async get(identifier): Promise<Result<{ code: string, attempts: number } | null, IamError>> {
-      const result = db.sql.query<OtpRow>(
+      const result = await db.sql.query<OtpRow>(
         `SELECT * FROM ${TABLE_NAME} WHERE identifier = ?`,
         [identifier],
       )
@@ -119,7 +119,7 @@ export function createDbOtpStore(db: DbService): OtpStore {
 
     async incrementAttempts(identifier): Promise<Result<number, IamError>> {
       // 先获取当前值
-      const getResult = db.sql.query<OtpRow>(
+      const getResult = await db.sql.query<OtpRow>(
         `SELECT * FROM ${TABLE_NAME} WHERE identifier = ?`,
         [identifier],
       )
@@ -139,7 +139,7 @@ export function createDbOtpStore(db: DbService): OtpStore {
       const newAttempts = getResult.data[0].attempts + 1
 
       // 更新尝试次数
-      const updateResult = db.sql.execute(
+      const updateResult = await db.sql.execute(
         `UPDATE ${TABLE_NAME} SET attempts = ? WHERE identifier = ?`,
         [newAttempts, identifier],
       )
@@ -156,7 +156,7 @@ export function createDbOtpStore(db: DbService): OtpStore {
     },
 
     async delete(identifier): Promise<Result<void, IamError>> {
-      const result = db.sql.execute(
+      const result = await db.sql.execute(
         `DELETE FROM ${TABLE_NAME} WHERE identifier = ?`,
         [identifier],
       )

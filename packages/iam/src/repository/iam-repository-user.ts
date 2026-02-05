@@ -102,10 +102,10 @@ function rowToUser(row: UserRow): StoredUser {
 /**
  * 创建数据库用户存储
  */
-export function createDbUserRepository(db: DbService): UserRepository {
+export async function createDbUserRepository(db: DbService): Promise<UserRepository> {
   // 确保表存在
-  function ensureTable(): Result<void, IamError> {
-    const result = db.ddl.createTable(TABLE_NAME, TABLE_SCHEMA, true)
+  async function ensureTable(): Promise<Result<void, IamError>> {
+    const result = await db.ddl.createTable(TABLE_NAME, TABLE_SCHEMA, true)
     if (!result.success) {
       return err({
         code: IamErrorCode.REPOSITORY_ERROR,
@@ -117,9 +117,30 @@ export function createDbUserRepository(db: DbService): UserRepository {
   }
 
   // 初始化表
-  const initResult = ensureTable()
+  const initResult = await ensureTable()
   if (!initResult.success) {
     throw new Error(initResult.error.message)
+  }
+
+  async function findByIdInternal(id: string): Promise<Result<StoredUser | null, IamError>> {
+    const result = await db.sql.query<UserRow>(
+      `SELECT * FROM ${TABLE_NAME} WHERE id = ?`,
+      [id],
+    )
+
+    if (!result.success) {
+      return err({
+        code: IamErrorCode.REPOSITORY_ERROR,
+        message: `查询用户失败: ${result.error.message}`,
+        cause: result.error,
+      })
+    }
+
+    if (result.data.length === 0) {
+      return ok(null)
+    }
+
+    return ok(rowToUser(result.data[0]))
   }
 
   return {
@@ -127,7 +148,7 @@ export function createDbUserRepository(db: DbService): UserRepository {
       const id = generateId()
       const now = Date.now()
 
-      const result = db.sql.execute(
+      const result = await db.sql.execute(
         `INSERT INTO ${TABLE_NAME} (
           id, username, email, phone, display_name, avatar_url,
           enabled, email_verified, phone_verified,
@@ -181,29 +202,10 @@ export function createDbUserRepository(db: DbService): UserRepository {
       } as StoredUser)
     },
 
-    async findById(id): Promise<Result<StoredUser | null, IamError>> {
-      const result = db.sql.query<UserRow>(
-        `SELECT * FROM ${TABLE_NAME} WHERE id = ?`,
-        [id],
-      )
-
-      if (!result.success) {
-        return err({
-          code: IamErrorCode.REPOSITORY_ERROR,
-          message: `查询用户失败: ${result.error.message}`,
-          cause: result.error,
-        })
-      }
-
-      if (result.data.length === 0) {
-        return ok(null)
-      }
-
-      return ok(rowToUser(result.data[0]))
-    },
+    findById: findByIdInternal,
 
     async findByUsername(username): Promise<Result<StoredUser | null, IamError>> {
-      const result = db.sql.query<UserRow>(
+      const result = await db.sql.query<UserRow>(
         `SELECT * FROM ${TABLE_NAME} WHERE username = ?`,
         [username],
       )
@@ -224,7 +226,7 @@ export function createDbUserRepository(db: DbService): UserRepository {
     },
 
     async findByEmail(email): Promise<Result<StoredUser | null, IamError>> {
-      const result = db.sql.query<UserRow>(
+      const result = await db.sql.query<UserRow>(
         `SELECT * FROM ${TABLE_NAME} WHERE email = ?`,
         [email],
       )
@@ -245,7 +247,7 @@ export function createDbUserRepository(db: DbService): UserRepository {
     },
 
     async findByPhone(phone): Promise<Result<StoredUser | null, IamError>> {
-      const result = db.sql.query<UserRow>(
+      const result = await db.sql.query<UserRow>(
         `SELECT * FROM ${TABLE_NAME} WHERE phone = ?`,
         [phone],
       )
@@ -266,7 +268,7 @@ export function createDbUserRepository(db: DbService): UserRepository {
     },
 
     async findByIdentifier(identifier): Promise<Result<StoredUser | null, IamError>> {
-      const result = db.sql.query<UserRow>(
+      const result = await db.sql.query<UserRow>(
         `SELECT * FROM ${TABLE_NAME} WHERE username = ? OR email = ? OR phone = ?`,
         [identifier, identifier, identifier],
       )
@@ -287,7 +289,7 @@ export function createDbUserRepository(db: DbService): UserRepository {
     },
 
     async findAll(): Promise<Result<StoredUser[], IamError>> {
-      const result = db.sql.query<UserRow>(
+      const result = await db.sql.query<UserRow>(
         `SELECT * FROM ${TABLE_NAME} ORDER BY created_at DESC`,
         [],
       )
@@ -366,17 +368,16 @@ export function createDbUserRepository(db: DbService): UserRepository {
 
       if (setClauses.length === 0) {
         // 没有更新字段，直接返回当前数据
-        return this.findById(id).then((r) => {
-          if (!r.success)
-            return r
-          if (!r.data) {
-            return err({
-              code: IamErrorCode.USER_NOT_FOUND,
-              message: getIamMessage('iam_userNotExist'),
-            })
-          }
-          return ok(r.data)
-        })
+        const current = await findByIdInternal(id)
+        if (!current.success)
+          return current
+        if (!current.data) {
+          return err({
+            code: IamErrorCode.USER_NOT_FOUND,
+            message: getIamMessage('iam_userNotExist'),
+          })
+        }
+        return ok(current.data)
       }
 
       const now = Date.now()
@@ -384,7 +385,7 @@ export function createDbUserRepository(db: DbService): UserRepository {
       values.push(now)
       values.push(id)
 
-      const result = db.sql.execute(
+      const result = await db.sql.execute(
         `UPDATE ${TABLE_NAME} SET ${setClauses.join(', ')} WHERE id = ?`,
         values,
       )
@@ -404,7 +405,7 @@ export function createDbUserRepository(db: DbService): UserRepository {
         })
       }
 
-      const findResult = await this.findById(id)
+      const findResult = await findByIdInternal(id)
       if (!findResult.success)
         return findResult
       if (!findResult.data) {
@@ -418,7 +419,7 @@ export function createDbUserRepository(db: DbService): UserRepository {
     },
 
     async delete(id): Promise<Result<void, IamError>> {
-      const result = db.sql.execute(
+      const result = await db.sql.execute(
         `DELETE FROM ${TABLE_NAME} WHERE id = ?`,
         [id],
       )
@@ -435,7 +436,7 @@ export function createDbUserRepository(db: DbService): UserRepository {
     },
 
     async existsByUsername(username): Promise<Result<boolean, IamError>> {
-      const result = db.sql.query<{ cnt: number }>(
+      const result = await db.sql.query<{ cnt: number }>(
         `SELECT COUNT(*) as cnt FROM ${TABLE_NAME} WHERE username = ?`,
         [username],
       )
@@ -452,7 +453,7 @@ export function createDbUserRepository(db: DbService): UserRepository {
     },
 
     async existsByEmail(email): Promise<Result<boolean, IamError>> {
-      const result = db.sql.query<{ cnt: number }>(
+      const result = await db.sql.query<{ cnt: number }>(
         `SELECT COUNT(*) as cnt FROM ${TABLE_NAME} WHERE email = ?`,
         [email],
       )

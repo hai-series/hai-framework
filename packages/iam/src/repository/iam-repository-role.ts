@@ -72,10 +72,10 @@ function rowToRole(row: RoleRow): Role {
 /**
  * 创建数据库角色存储
  */
-export function createDbRoleRepository(db: DbService): RoleRepository {
+export async function createDbRoleRepository(db: DbService): Promise<RoleRepository> {
   // 确保表存在
-  function ensureTable(): Result<void, IamError> {
-    const result = db.ddl.createTable(TABLE_NAME, TABLE_SCHEMA, true)
+  async function ensureTable(): Promise<Result<void, IamError>> {
+    const result = await db.ddl.createTable(TABLE_NAME, TABLE_SCHEMA, true)
     if (!result.success) {
       return err({
         code: IamErrorCode.REPOSITORY_ERROR,
@@ -87,9 +87,30 @@ export function createDbRoleRepository(db: DbService): RoleRepository {
   }
 
   // 初始化表
-  const initResult = ensureTable()
+  const initResult = await ensureTable()
   if (!initResult.success) {
     throw new Error(initResult.error.message)
+  }
+
+  async function findByIdInternal(id: string): Promise<Result<Role | null, IamError>> {
+    const result = await db.sql.query<RoleRow>(
+      `SELECT * FROM ${TABLE_NAME} WHERE id = ?`,
+      [id],
+    )
+
+    if (!result.success) {
+      return err({
+        code: IamErrorCode.REPOSITORY_ERROR,
+        message: `查询角色失败: ${result.error.message}`,
+        cause: result.error,
+      })
+    }
+
+    if (result.data.length === 0) {
+      return ok(null)
+    }
+
+    return ok(rowToRole(result.data[0]))
   }
 
   return {
@@ -97,7 +118,7 @@ export function createDbRoleRepository(db: DbService): RoleRepository {
       const id = generateId()
       const now = Date.now()
 
-      const result = db.sql.execute(
+      const result = await db.sql.execute(
         `INSERT INTO ${TABLE_NAME} (id, code, name, description, is_system, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, ?)`,
         [
@@ -138,29 +159,10 @@ export function createDbRoleRepository(db: DbService): RoleRepository {
       })
     },
 
-    async findById(id): Promise<Result<Role | null, IamError>> {
-      const result = db.sql.query<RoleRow>(
-        `SELECT * FROM ${TABLE_NAME} WHERE id = ?`,
-        [id],
-      )
-
-      if (!result.success) {
-        return err({
-          code: IamErrorCode.REPOSITORY_ERROR,
-          message: `查询角色失败: ${result.error.message}`,
-          cause: result.error,
-        })
-      }
-
-      if (result.data.length === 0) {
-        return ok(null)
-      }
-
-      return ok(rowToRole(result.data[0]))
-    },
+    findById: findByIdInternal,
 
     async findByCode(code): Promise<Result<Role | null, IamError>> {
-      const result = db.sql.query<RoleRow>(
+      const result = await db.sql.query<RoleRow>(
         `SELECT * FROM ${TABLE_NAME} WHERE code = ?`,
         [code],
       )
@@ -181,7 +183,7 @@ export function createDbRoleRepository(db: DbService): RoleRepository {
     },
 
     async findAll(): Promise<Result<Role[], IamError>> {
-      const result = db.sql.query<RoleRow>(`SELECT * FROM ${TABLE_NAME}`)
+      const result = await db.sql.query<RoleRow>(`SELECT * FROM ${TABLE_NAME}`)
 
       if (!result.success) {
         return err({
@@ -216,17 +218,16 @@ export function createDbRoleRepository(db: DbService): RoleRepository {
       }
 
       if (setClauses.length === 0) {
-        return this.findById(id).then((r) => {
-          if (!r.success)
-            return r
-          if (!r.data) {
-            return err({
-              code: IamErrorCode.ROLE_NOT_FOUND,
-              message: getIamMessage('iam_roleNotExist'),
-            })
-          }
-          return ok(r.data)
-        })
+        const current = await findByIdInternal(id)
+        if (!current.success)
+          return current
+        if (!current.data) {
+          return err({
+            code: IamErrorCode.ROLE_NOT_FOUND,
+            message: getIamMessage('iam_roleNotExist'),
+          })
+        }
+        return ok(current.data)
       }
 
       const now = Date.now()
@@ -234,7 +235,7 @@ export function createDbRoleRepository(db: DbService): RoleRepository {
       values.push(now)
       values.push(id)
 
-      const result = db.sql.execute(
+      const result = await db.sql.execute(
         `UPDATE ${TABLE_NAME} SET ${setClauses.join(', ')} WHERE id = ?`,
         values,
       )
@@ -254,7 +255,7 @@ export function createDbRoleRepository(db: DbService): RoleRepository {
         })
       }
 
-      const findResult = await this.findById(id)
+      const findResult = await findByIdInternal(id)
       if (!findResult.success)
         return findResult
       if (!findResult.data) {
@@ -269,7 +270,7 @@ export function createDbRoleRepository(db: DbService): RoleRepository {
 
     async delete(id): Promise<Result<void, IamError>> {
       // 检查是否为系统角色
-      const roleResult = await this.findById(id)
+      const roleResult = await findByIdInternal(id)
       if (roleResult.success && roleResult.data?.isSystem) {
         return err({
           code: IamErrorCode.FORBIDDEN,
@@ -277,7 +278,7 @@ export function createDbRoleRepository(db: DbService): RoleRepository {
         })
       }
 
-      const result = db.sql.execute(
+      const result = await db.sql.execute(
         `DELETE FROM ${TABLE_NAME} WHERE id = ?`,
         [id],
       )
@@ -294,7 +295,7 @@ export function createDbRoleRepository(db: DbService): RoleRepository {
     },
 
     async exists(id): Promise<Result<boolean, IamError>> {
-      const result = db.sql.query<{ cnt: number }>(
+      const result = await db.sql.query<{ cnt: number }>(
         `SELECT COUNT(*) as cnt FROM ${TABLE_NAME} WHERE id = ?`,
         [id],
       )

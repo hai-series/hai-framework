@@ -85,7 +85,7 @@ export async function seedIamData(
     if (options.roles) {
       for (const role of DEFAULT_ROLES) {
         const id = `role_${role.code}`
-        db.sql.execute(
+        await db.sql.execute(
           `INSERT OR IGNORE INTO iam_roles (id, code, name, description, is_system, created_at, updated_at)
            VALUES (?, ?, ?, ?, ?, ?, ?)`,
           [id, role.code, role.name, role.description, role.isSystem ? 1 : 0, now, now],
@@ -97,7 +97,7 @@ export async function seedIamData(
     if (options.permissions) {
       for (const perm of DEFAULT_PERMISSIONS) {
         const id = `perm_${perm.code.replace(':', '_')}`
-        db.sql.execute(
+        await db.sql.execute(
           `INSERT OR IGNORE INTO iam_permissions (id, code, name, resource, action, created_at, updated_at)
            VALUES (?, ?, ?, ?, ?, ?, ?)`,
           [id, perm.code, perm.name, perm.resource, perm.action, now, now],
@@ -109,10 +109,10 @@ export async function seedIamData(
     if (options.rolePermissions) {
       // 为管理员分配所有权限
       const adminRoleId = 'role_admin'
-      const allPermsResult = db.sql.query<{ id: string }>(`SELECT id FROM iam_permissions`)
+      const allPermsResult = await db.sql.query<{ id: string }>(`SELECT id FROM iam_permissions`)
       if (allPermsResult.success) {
         for (const perm of allPermsResult.data) {
-          db.sql.execute(
+          await db.sql.execute(
             `INSERT OR IGNORE INTO iam_role_permissions (role_id, permission_id) VALUES (?, ?)`,
             [adminRoleId, perm.id],
           )
@@ -123,7 +123,7 @@ export async function seedIamData(
       const userRoleId = 'role_user'
       const userPermIds = ['perm_user_read']
       for (const permId of userPermIds) {
-        db.sql.execute(
+        await db.sql.execute(
           `INSERT OR IGNORE INTO iam_role_permissions (role_id, permission_id) VALUES (?, ?)`,
           [userRoleId, permId],
         )
@@ -133,7 +133,7 @@ export async function seedIamData(
       const guestRoleId = 'role_guest'
       const guestPermIds = ['perm_user_read']
       for (const permId of guestPermIds) {
-        db.sql.execute(
+        await db.sql.execute(
           `INSERT OR IGNORE INTO iam_role_permissions (role_id, permission_id) VALUES (?, ?)`,
           [guestRoleId, permId],
         )

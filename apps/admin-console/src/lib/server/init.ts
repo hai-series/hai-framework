@@ -28,8 +28,6 @@
  * =============================================================================
  */
 
-import type { CacheConfig } from '@hai/cache'
-import type { DbConfig } from '@hai/db'
 import type { IamConfig } from '@hai/iam'
 import { cache } from '@hai/cache'
 import { core } from '@hai/core'
@@ -38,7 +36,10 @@ import { iam } from '@hai/iam'
 import messagesEnUS from '../../../messages/en-US.json'
 import messagesZhCN from '../../../messages/zh-CN.json'
 
-const { getMessage } = core.i18n.createMessageGetter({
+type DbConfigInput = Parameters<typeof db.init>[0]
+type CacheConfigInput = Parameters<typeof cache.init>[0]
+
+const getMessage = core.i18n.createMessageGetter({
   'zh-CN': messagesZhCN,
   'en-US': messagesEnUS,
 })
@@ -79,11 +80,14 @@ CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs(created_at);
 /**
  * 创建业务表
  */
-function createBusinessTables(): void {
+async function createBusinessTables(): Promise<void> {
   const statements = BUSINESS_SCHEMA.split(';').filter(s => s.trim())
   for (const statement of statements) {
     if (statement.trim()) {
-      db.sql.execute(statement)
+      const result = await db.sql.execute(statement)
+      if (!result.success) {
+        throw new Error(getMessage('server_init_db_failed', { message: result.error.message }))
+      }
     }
   }
 }
@@ -114,8 +118,8 @@ export async function initApp(): Promise<void> {
   })
 
   // 2. 获取配置
-  const dbConfig = core.config.getOrThrow<DbConfig>('db')
-  const cacheConfig = core.config.getOrThrow<CacheConfig>('cache')
+  const dbConfig = core.config.getOrThrow<DbConfigInput>('db')
+  const cacheConfig = core.config.getOrThrow<CacheConfigInput>('cache')
   const iamConfig = core.config.getOrThrow<IamConfig>('iam')
 
   // 3. 确保数据目录存在
@@ -127,15 +131,15 @@ export async function initApp(): Promise<void> {
   }
 
   // 4. 初始化数据库连接
-  const dbResult = db.init(dbConfig)
+  const dbResult = await db.init(dbConfig)
   if (!dbResult.success) {
-    throw new Error(getMessage('server_init_db_failed', undefined, { message: dbResult.error.message }))
+    throw new Error(getMessage('server_init_db_failed', { message: dbResult.error.message }))
   }
 
   // 5. 初始化缓存服务
   const cacheResult = await cache.init(cacheConfig)
   if (!cacheResult.success) {
-    throw new Error(getMessage('server_init_cache_failed', undefined, { message: cacheResult.error.message }))
+    throw new Error(getMessage('server_init_cache_failed', { message: cacheResult.error.message }))
   }
 
   // 6. 初始化 IAM 模块
@@ -143,15 +147,15 @@ export async function initApp(): Promise<void> {
   if (!iamResult.success) {
     const cause = iamResult.error.cause
     const causeMsg = cause instanceof Error ? cause.message : String(cause)
-    const baseMessage = getMessage('server_init_iam_failed', undefined, { message: iamResult.error.message })
+    const baseMessage = getMessage('server_init_iam_failed', { message: iamResult.error.message })
     const fullMessage = cause
-      ? getMessage('server_error_with_cause', undefined, { message: baseMessage, cause: causeMsg })
+      ? getMessage('server_error_with_cause', { message: baseMessage, cause: causeMsg })
       : baseMessage
     throw new Error(fullMessage)
   }
 
   // 7. 创建业务表
-  createBusinessTables()
+  await createBusinessTables()
 
   initialized = true
   core.logger.info('Application initialized.')

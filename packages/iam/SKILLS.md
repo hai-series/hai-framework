@@ -23,7 +23,7 @@ import { iam, IamErrorCode } from '@hai/iam'
 
 ```ts
 // 1. 先初始化数据库和缓存
-db.init({ type: 'sqlite', database: ':memory:' })
+await db.init({ type: 'sqlite', database: ':memory:' })
 await cache.init({ url: 'redis://localhost:6379' })
 
 // 2. 初始化 IAM（db 和 cache 为必需参数）
@@ -455,7 +455,7 @@ import { db } from '@hai/db'
 import { iam } from '@hai/iam'
 
 // 初始化 SQLite 数据库
-db.init({
+await db.init({
   type: 'sqlite',
   database: './data.db',
 })
