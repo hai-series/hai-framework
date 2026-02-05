@@ -26,7 +26,7 @@
  *
  * // 使用错误码
  * if (error.code === StorageErrorCode.NOT_INITIALIZED) {
- *     // 处理错误：请先调用 initStorage()
+ *     // 处理错误：请先调用 storage.init()
  * }
  * ```
  *
@@ -35,6 +35,7 @@
  */
 
 import { z } from 'zod'
+import { storageM } from './storage-i18n.js'
 
 // =============================================================================
 // 错误码常量
@@ -116,16 +117,16 @@ export const S3ConfigSchema = z.object({
   type: z.literal('s3'),
 
   /** 存储桶名称 */
-  bucket: z.string().min(1, 'Bucket 不能为空'),
+  bucket: z.string().min(1, storageM('storage_config_bucketRequired')),
 
   /** 区域 */
-  region: z.string().min(1, 'Region 不能为空'),
+  region: z.string().min(1, storageM('storage_config_regionRequired')),
 
   /** Access Key ID */
-  accessKeyId: z.string().min(1, 'Access Key ID 不能为空'),
+  accessKeyId: z.string().min(1, storageM('storage_config_accessKeyIdRequired')),
 
   /** Secret Access Key */
-  secretAccessKey: z.string().min(1, 'Secret Access Key 不能为空'),
+  secretAccessKey: z.string().min(1, storageM('storage_config_secretAccessKeyRequired')),
 
   /** 自定义端点（用于 MinIO、阿里云 OSS 等） */
   endpoint: z.string().url().optional(),
@@ -151,7 +152,7 @@ export const LocalConfigSchema = z.object({
   type: z.literal('local'),
 
   /** 根目录路径 */
-  root: z.string().min(1, 'Root 不能为空'),
+  root: z.string().min(1, storageM('storage_config_rootRequired')),
 
   /** 目录创建权限 */
   directoryMode: z.number().default(0o755),

@@ -37,32 +37,14 @@
  * =============================================================================
  */
 
-import { core } from '@hai/core'
-import messagesEnUS from '../messages/en-US.json'
-import messagesZhCN from '../messages/zh-CN.json'
-
-// =============================================================================
-// 主入口
-// =============================================================================
-
+// 前端客户端
 export * from './storage-client.js'
-
-// =============================================================================
-// 类型和配置
-// =============================================================================
 
 // 配置 Schema 和常量
 export * from './storage-config.js'
 
+// 统一服务入口
 export * from './storage-main.js'
 
-// =============================================================================
-// 前端客户端
-// =============================================================================
-
+// 类型定义
 export * from './storage-types.js'
-
-// i18n
-type StorageMessageKey = keyof typeof messagesZhCN
-export const getStorageMessage
-  = core.i18n.createMessageGetter<StorageMessageKey>({ 'zh-CN': messagesZhCN, 'en-US': messagesEnUS })

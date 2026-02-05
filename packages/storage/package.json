@@ -2,7 +2,7 @@
   "name": "@hai/storage",
   "type": "module",
   "version": "0.1.0",
-  "description": "hai Admin Framework - 对象存储服务（S3 协议）",
+  "description": "Object storage module for Hai framework .",
   "license": "Apache-2.0",
   "exports": {
     ".": {

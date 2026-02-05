@@ -28,14 +28,13 @@
  */
 
 import type { Result } from '@hai/core'
+import type { LocalConfig, StorageConfig } from '../storage-config.js'
 import type {
   DirOperations,
   FileMetadata,
   FileOperations,
   ListResult,
-  LocalConfig,
   PresignOperations,
-  StorageConfig,
   StorageError,
   StorageProvider,
 } from '../storage-types.js'
@@ -47,9 +46,9 @@ import * as fsp from 'node:fs/promises'
 import * as path from 'node:path'
 import { err, ok } from '@hai/core'
 
-import { getStorageMessage } from '../index.js'
-
 import { StorageErrorCode } from '../storage-config.js'
+
+import { storageM } from '../storage-i18n.js'
 
 // =============================================================================
 // 辅助函数
@@ -64,7 +63,7 @@ function toStorageError(error: unknown, key?: string): StorageError {
   if (e.code === 'ENOENT') {
     return {
       code: StorageErrorCode.NOT_FOUND,
-      message: `文件不存在: ${key}`,
+      message: storageM('storage_fileNotFound', { params: { key: key ?? '' } }),
       key,
       cause: error,
     }
@@ -73,7 +72,7 @@ function toStorageError(error: unknown, key?: string): StorageError {
   if (e.code === 'EACCES' || e.code === 'EPERM') {
     return {
       code: StorageErrorCode.PERMISSION_DENIED,
-      message: `权限不足: ${key}`,
+      message: storageM('storage_permissionDenied', { params: { key: key ?? '' } }),
       key,
       cause: error,
     }
@@ -82,7 +81,7 @@ function toStorageError(error: unknown, key?: string): StorageError {
   if (e.code === 'ENOSPC') {
     return {
       code: StorageErrorCode.QUOTA_EXCEEDED,
-      message: getStorageMessage('storage_diskSpaceInsufficient'),
+      message: storageM('storage_diskSpaceInsufficient'),
       key,
       cause: error,
     }
@@ -91,7 +90,7 @@ function toStorageError(error: unknown, key?: string): StorageError {
   if (e.code === 'EISDIR') {
     return {
       code: StorageErrorCode.INVALID_PATH,
-      message: `路径是目录: ${key}`,
+      message: storageM('storage_pathIsDir', { params: { key: key ?? '' } }),
       key,
       cause: error,
     }
@@ -99,7 +98,7 @@ function toStorageError(error: unknown, key?: string): StorageError {
 
   return {
     code: StorageErrorCode.IO_ERROR,
-    message: e.message ? `IO 错误: ${e.message}` : 'IO 错误',
+    message: storageM('storage_ioError', { params: { error: e.message ?? '' } }),
     key,
     cause: error,
   }
@@ -162,7 +161,7 @@ function safePath(root: string, key: string): string {
   const realPath = path.resolve(fullPath)
 
   if (!realPath.startsWith(realRoot)) {
-    throw new Error(getStorageMessage('storage_pathTraversal'))
+    throw new Error(storageM('storage_pathTraversal'))
   }
 
   return fullPath
@@ -187,7 +186,7 @@ export function createLocalProvider(): StorageProvider {
 
   function getConfig(): LocalConfig {
     if (!config) {
-      throw new Error(getStorageMessage('storage_localNotInitialized'))
+      throw new Error(storageM('storage_localNotInitialized'))
     }
     return config
   }
@@ -287,7 +286,7 @@ export function createLocalProvider(): StorageProvider {
         if (stat.isDirectory()) {
           return err({
             code: StorageErrorCode.INVALID_PATH,
-            message: `路径是目录: ${key}`,
+            message: storageM('storage_pathIsDir', { params: { key } }),
             key,
           })
         }
@@ -369,7 +368,7 @@ export function createLocalProvider(): StorageProvider {
       if (errors.length > 0) {
         return err({
           code: StorageErrorCode.OPERATION_FAILED,
-          message: `删除 ${errors.length} 个文件失败`,
+          message: storageM('storage_deleteManyFailed', { params: { count: errors.length } }),
           cause: errors,
         })
       }
@@ -562,7 +561,7 @@ export function createLocalProvider(): StorageProvider {
       if (cfg.type !== 'local') {
         return err({
           code: StorageErrorCode.CONFIG_ERROR,
-          message: getStorageMessage('storage_localConfigTypeError'),
+          message: storageM('storage_localConfigTypeError'),
         })
       }
 
