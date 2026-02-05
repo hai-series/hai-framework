@@ -1,5 +1,12 @@
 {
   "$schema": "https://inlang.com/schema/inlang-message-format",
-  "cache_notInitialized": "Cache not initialized, please call initCache() first",
-  "cache_notInitializedMain": "Cache not initialized, please call cache.init() first"
+  "cache_notInitialized": "Cache not initialized, please call cache.init() first",
+  "cache_notInitializedMain": "Cache not initialized, please call cache.init() first",
+  "cache_operationFailed": "Cache operation failed: {error}",
+  "cache_redisConnectionFailed": "Redis connection failed: {error}",
+  "cache_initFailed": "Cache initialization failed: {error}",
+  "cache_unsupportedType": "Unsupported cache type: {type}",
+  "cache_valueNotNumber": "Value is not a number",
+  "cache_keyNotFound": "Key not found",
+  "cache_indexOutOfRange": "Index out of range"
 }

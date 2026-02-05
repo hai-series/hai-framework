@@ -2,7 +2,7 @@
   "name": "@hai/cache",
   "type": "module",
   "version": "0.1.0",
-  "description": "缓存模块 (Redis)",
+  "description": "Cache module(based on Redis) for hai Framework.",
   "license": "Apache-2.0",
   "exports": {
     ".": {

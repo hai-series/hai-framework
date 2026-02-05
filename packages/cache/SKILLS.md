@@ -2,7 +2,7 @@
 
 ## 模块概述
 
-`@hai/cache` 是一个统一的缓存访问模块，支持 Redis。
+`@hai/cache` 是一个统一的缓存访问模块，支持 Redis 与内存缓存（开发/测试场景）。
 
 **特点**：
 
@@ -13,14 +13,14 @@
 ## 核心 API
 
 ```ts
-import { cache, closeCache, initCache } from '@hai/cache'
+import { cache } from '@hai/cache'
 ```
 
 ### 初始化
 
 ```ts
 // Redis 单机模式
-await initCache({
+await cache.init({
   type: 'redis',
   host: 'localhost',
   port: 6379,
@@ -29,13 +29,13 @@ await initCache({
 })
 
 // Redis URL 模式
-await initCache({
+await cache.init({
   type: 'redis',
   url: 'redis://:password@localhost:6379/0'
 })
 
 // Redis 集群模式
-await initCache({
+await cache.init({
   type: 'redis',
   cluster: [
     { host: 'node1', port: 6379 },
@@ -172,7 +172,7 @@ interface CacheConfig {
   keyPrefix?: string // 键前缀
   tls?: boolean // 是否启用 TLS
   maxRetries?: number // 最大重试次数（默认 3）
-  silent?: boolean // 静默模式
+  readOnly?: boolean // 只读模式
 }
 ```
 
@@ -224,7 +224,7 @@ const { success, data, error } = await cache.get('key')
 
 // 错误码判断
 if (!result.success && result.error.code === CacheErrorCode.NOT_INITIALIZED) {
-  // 处理错误：请先调用 initCache()
+  // 处理错误：请先调用 cache.init()
 }
 ```
 
@@ -295,5 +295,5 @@ if (acquired.success) {
 1. **序列化**：对象会自动 JSON 序列化，字符串直接存储
 2. **类型安全**：使用泛型获取正确的返回类型
 3. **键前缀**：可通过 `keyPrefix` 配置实现命名空间隔离
-4. **连接管理**：应用退出前调用 `closeCache()` 释放连接
+4. **连接管理**：应用退出前调用 `cache.close()` 释放连接
 5. **错误处理**：所有操作都返回 Result 类型，需检查 success 字段

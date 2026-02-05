@@ -1,5 +1,12 @@
 {
   "$schema": "https://inlang.com/schema/inlang-message-format",
-  "cache_notInitialized": "缓存未初始化，请先调用 initCache()",
-  "cache_notInitializedMain": "缓存未初始化，请先调用 cache.init()"
+  "cache_notInitialized": "缓存未初始化，请先调用 cache.init()",
+  "cache_notInitializedMain": "缓存未初始化，请先调用 cache.init()",
+  "cache_operationFailed": "缓存操作失败：{error}",
+  "cache_redisConnectionFailed": "Redis 连接失败：{error}",
+  "cache_initFailed": "缓存初始化失败：{error}",
+  "cache_unsupportedType": "不支持的缓存类型：{type}",
+  "cache_valueNotNumber": "值不是数字",
+  "cache_keyNotFound": "键不存在",
+  "cache_indexOutOfRange": "索引越界"
 }
