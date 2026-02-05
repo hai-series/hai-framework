@@ -36,13 +36,7 @@
 
 import type { Result } from '@hai/core'
 import type { Buffer } from 'node:buffer'
-import type { PresignOptions, PresignUploadOptions, StorageConfig, StorageErrorCodeType } from './storage-config.js'
-
-// =============================================================================
-// 重新导出配置类型（方便使用）
-// =============================================================================
-
-export * from './storage-config.js'
+import type { PresignOptions, PresignUploadOptions, StorageConfig, StorageConfigInput, StorageErrorCodeType } from './storage-config.js'
 
 // =============================================================================
 // 错误类型
@@ -180,6 +174,13 @@ export interface FileOperations {
    * @param data - 文件内容（Buffer、Uint8Array 或字符串）
    * @param options - 上传选项
    * @returns 上传结果包含文件元数据
+   * @example
+   * ```ts
+   * const result = await storage.file.put('uploads/a.txt', 'hello')
+   * if (result.success) {
+   *   result.data.key
+   * }
+   * ```
    */
   put: (key: string, data: Buffer | Uint8Array | string, options?: UploadOptions) => Promise<Result<FileMetadata, StorageError>>
 
@@ -189,6 +190,13 @@ export interface FileOperations {
    * @param key - 文件键/路径
    * @param options - 下载选项
    * @returns 文件内容
+   * @example
+   * ```ts
+   * const result = await storage.file.get('uploads/a.txt')
+   * if (result.success) {
+   *   const buffer = result.data
+   * }
+   * ```
    */
   get: (key: string, options?: DownloadOptions) => Promise<Result<Buffer, StorageError>>
 
@@ -197,6 +205,13 @@ export interface FileOperations {
    *
    * @param key - 文件键/路径
    * @returns 文件元数据
+   * @example
+   * ```ts
+   * const result = await storage.file.head('uploads/a.txt')
+   * if (result.success) {
+   *   result.data.size
+   * }
+   * ```
    */
   head: (key: string) => Promise<Result<FileMetadata, StorageError>>
 
@@ -205,6 +220,13 @@ export interface FileOperations {
    *
    * @param key - 文件键/路径
    * @returns 是否存在
+   * @example
+   * ```ts
+   * const result = await storage.file.exists('uploads/a.txt')
+   * if (result.success) {
+   *   result.data
+   * }
+   * ```
    */
   exists: (key: string) => Promise<Result<boolean, StorageError>>
 
@@ -213,6 +235,10 @@ export interface FileOperations {
    *
    * @param key - 文件键/路径
    * @returns 删除结果
+   * @example
+   * ```ts
+   * await storage.file.delete('uploads/a.txt')
+   * ```
    */
   delete: (key: string) => Promise<Result<void, StorageError>>
 
@@ -221,6 +247,10 @@ export interface FileOperations {
    *
    * @param keys - 文件键/路径列表
    * @returns 删除结果
+   * @example
+   * ```ts
+   * await storage.file.deleteMany(['a.txt', 'b.txt'])
+   * ```
    */
   deleteMany: (keys: string[]) => Promise<Result<void, StorageError>>
 
@@ -231,6 +261,10 @@ export interface FileOperations {
    * @param destKey - 目标文件键
    * @param options - 复制选项
    * @returns 目标文件元数据
+   * @example
+   * ```ts
+   * await storage.file.copy('a.txt', 'b.txt')
+   * ```
    */
   copy: (sourceKey: string, destKey: string, options?: CopyOptions) => Promise<Result<FileMetadata, StorageError>>
 }
@@ -246,6 +280,13 @@ export interface DirOperations {
    *
    * @param options - 列表选项
    * @returns 文件和目录列表
+   * @example
+   * ```ts
+   * const result = await storage.dir.list({ prefix: 'uploads/' })
+   * if (result.success) {
+   *   result.data.files
+   * }
+   * ```
    */
   list: (options?: ListOptions) => Promise<Result<ListResult, StorageError>>
 
@@ -254,6 +295,10 @@ export interface DirOperations {
    *
    * @param prefix - 目录前缀
    * @returns 删除结果
+   * @example
+   * ```ts
+   * await storage.dir.delete('uploads/tmp/')
+   * ```
    */
   delete: (prefix: string) => Promise<Result<void, StorageError>>
 }
@@ -270,6 +315,10 @@ export interface PresignOperations {
    * @param key - 文件键/路径
    * @param options - 签名选项
    * @returns 签名 URL
+   * @example
+   * ```ts
+   * const result = await storage.presign.getUrl('a.txt', { expiresIn: 60 })
+   * ```
    */
   getUrl: (key: string, options?: PresignOptions) => Promise<Result<string, StorageError>>
 
@@ -279,6 +328,10 @@ export interface PresignOperations {
    * @param key - 文件键/路径
    * @param options - 上传签名选项
    * @returns 签名 URL
+   * @example
+   * ```ts
+   * const result = await storage.presign.putUrl('a.txt', { contentType: 'text/plain' })
+   * ```
    */
   putUrl: (key: string, options?: PresignUploadOptions) => Promise<Result<string, StorageError>>
 
@@ -287,8 +340,103 @@ export interface PresignOperations {
    *
    * @param key - 文件键/路径
    * @returns 公开 URL，如果未配置 publicUrl 则返回 null
+   * @example
+   * ```ts
+   * const url = storage.presign.publicUrl('a.txt')
+   * ```
    */
   publicUrl: (key: string) => string | null
+}
+
+// =============================================================================
+// 前端客户端操作接口
+// =============================================================================
+
+/**
+ * 前端客户端操作接口
+ */
+export interface StorageClientOperations {
+  /**
+   * 使用签名 URL 上传文件
+   * @example
+   * ```ts
+   * const result = await storage.client.uploadWithPresignedUrl(url, file)
+   * ```
+   */
+  uploadWithPresignedUrl: (
+    url: string,
+    data: File | Blob | ArrayBuffer | string,
+    options?: ClientUploadOptions,
+  ) => Promise<{ success: boolean, error?: string }>
+
+  /**
+   * 使用签名 URL 下载文件
+   * @example
+   * ```ts
+   * const result = await storage.client.downloadWithPresignedUrl(url)
+   * ```
+   */
+  downloadWithPresignedUrl: (
+    url: string,
+    options?: ClientDownloadOptions,
+  ) => Promise<{ success: boolean, data?: Blob, error?: string }>
+
+  /**
+   * 下载并保存到本地（浏览器环境）
+   * @example
+   * ```ts
+   * await storage.client.downloadAndSave(url, { filename: 'report.pdf' })
+   * ```
+   */
+  downloadAndSave: (
+    url: string,
+    options?: ClientDownloadOptions,
+  ) => Promise<{ success: boolean, error?: string }>
+
+  /**
+   * 从 File 对象获取文件扩展名
+   * @example
+   * ```ts
+   * const ext = storage.client.getFileExtension(file)
+   * ```
+   */
+  getFileExtension: (file: File) => string
+
+  /**
+   * 根据文件扩展名获取 MIME 类型
+   * @example
+   * ```ts
+   * const type = storage.client.getMimeType('png')
+   * ```
+   */
+  getMimeType: (extension: string) => string
+
+  /**
+   * 格式化文件大小
+   * @example
+   * ```ts
+   * const text = storage.client.formatFileSize(2048)
+   * ```
+   */
+  formatFileSize: (bytes: number) => string
+}
+
+// =============================================================================
+// 复合存储操作接口
+// =============================================================================
+
+/**
+ * 复合存储操作接口
+ *
+ * 在基础操作之上，包含文件/目录/签名 URL 操作。
+ */
+export interface StorageCompositeOperations {
+  /** 文件操作 */
+  readonly file: FileOperations
+  /** 目录操作 */
+  readonly dir: DirOperations
+  /** 签名 URL 操作 */
+  readonly presign: PresignOperations
 }
 
 // =============================================================================
@@ -307,20 +455,28 @@ export interface PresignOperations {
  * - `storage.config` - 当前配置
  * - `storage.isInitialized` - 初始化状态
  */
-export interface StorageService {
-  /** 文件操作 */
-  readonly file: FileOperations
-  /** 目录操作 */
-  readonly dir: DirOperations
-  /** 签名 URL 操作 */
-  readonly presign: PresignOperations
+export interface StorageService extends StorageCompositeOperations {
+  /** 前端客户端操作（如签名 URL 上传下载） */
+  readonly client: StorageClientOperations
   /** 当前配置 */
   readonly config: StorageConfig | null
   /** 是否已初始化 */
   readonly isInitialized: boolean
-  /** 初始化存储连接 */
-  init: (config: StorageConfig) => Promise<Result<void, StorageError>>
-  /** 关闭连接 */
+  /**
+   * 初始化存储连接
+   * @example
+   * ```ts
+   * await storage.init({ type: 'local', root: '/data/uploads' })
+   * ```
+   */
+  init: (config: StorageConfigInput) => Promise<Result<void, StorageError>>
+  /**
+   * 关闭连接
+   * @example
+   * ```ts
+   * await storage.close()
+   * ```
+   */
   close: () => Promise<void>
 }
 
@@ -333,33 +489,36 @@ export interface StorageService {
  *
  * 由各具体存储实现（S3、Local、Memory）实现此接口。
  */
-export interface StorageProvider {
+export interface StorageProvider extends StorageCompositeOperations {
   /** Provider 名称 */
   readonly name: string
-
-  /** 文件操作 */
-  readonly file: FileOperations
-
-  /** 目录操作 */
-  readonly dir: DirOperations
-
-  /** 签名 URL 操作 */
-  readonly presign: PresignOperations
 
   /**
    * 初始化连接
    *
    * @param config - 存储配置
+   * @example
+   * ```ts
+   * await provider.connect(config)
+   * ```
    */
   connect: (config: StorageConfig) => Promise<Result<void, StorageError>>
 
   /**
    * 关闭连接
+   * @example
+   * ```ts
+   * await provider.close()
+   * ```
    */
   close: () => Promise<void>
 
   /**
    * 检查是否已连接
+   * @example
+   * ```ts
+   * const ok = provider.isConnected()
+   * ```
    */
   isConnected: () => boolean
 }

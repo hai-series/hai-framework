@@ -6,18 +6,18 @@
  * 本文件提供统一的 `storage` 对象，聚合所有存储操作功能。
  *
  * 使用方式：
- * 1. 调用 `initStorage()` 初始化存储连接
+ * 1. 调用 `storage.init()` 初始化存储连接
  * 2. 通过 `storage.file` 进行文件操作
  * 3. 通过 `storage.dir` 进行目录操作
  * 4. 通过 `storage.presign` 生成签名 URL（支持前端直传）
- * 5. 调用 `closeStorage()` 关闭连接
+ * 5. 调用 `storage.close()` 关闭连接
  *
  * @example
  * ```ts
- * import { storage, initStorage, closeStorage } from '@hai/storage'
+ * import { storage } from '@hai/storage'
  *
  * // 1. 初始化存储（S3 或兼容协议）
- * await initStorage({
+ * await storage.init({
  *     type: 's3',
  *     bucket: 'my-bucket',
  *     region: 'us-east-1',
@@ -48,7 +48,7 @@
  * })
  *
  * // 7. 关闭连接
- * await closeStorage()
+ * await storage.close()
  * ```
  *
  * @module storage-main
@@ -56,12 +56,12 @@
  */
 
 import type { Result } from '@hai/core'
+import type { StorageConfig, StorageConfigInput } from './storage-config.js'
 import type {
   DirOperations,
   FileOperations,
   PresignOperations,
-  StorageConfig,
-  StorageConfigInput,
+  StorageClientOperations,
   StorageError,
   StorageProvider,
   StorageService,
@@ -69,11 +69,12 @@ import type {
 
 import { err } from '@hai/core'
 
-import { getStorageMessage } from './index.js'
-
 import { createLocalProvider } from './provider/storage-provider-local.js'
+
 import { createS3Provider } from './provider/storage-provider-s3.js'
+import { storageClient } from './storage-client.js'
 import { StorageConfigSchema, StorageErrorCode } from './storage-config.js'
+import { storageM } from './storage-i18n.js'
 
 // =============================================================================
 // 内部状态
@@ -103,7 +104,7 @@ function createProvider(config: StorageConfig): StorageProvider {
     case 'local':
       return createLocalProvider()
     default:
-      throw new Error(`Unsupported storage type: ${(config as StorageConfig).type}`)
+      throw new Error(storageM('storage_unsupportedType', { params: { type: (config as StorageConfig).type } }))
   }
 }
 
@@ -117,33 +118,37 @@ function createProvider(config: StorageConfig): StorageProvider {
 function notInitializedError(): StorageError {
   return {
     code: StorageErrorCode.NOT_INITIALIZED,
-    message: getStorageMessage('storage_notInitialized'),
+    message: storageM('storage_notInitialized'),
   }
 }
 
+/** 未初始化时的统一占位操作类型 */
+type NotInitializedOperation = (...args: unknown[]) => Promise<Result<unknown, StorageError>>
+
+/** 未初始化时的占位操作实现 */
+const notInitializedOperation: NotInitializedOperation = async () => err(notInitializedError())
+
+/** 未初始化时的操作代理（所有方法均返回未初始化错误） */
+const notInitializedOperations = new Proxy(
+  {},
+  {
+    get: () => notInitializedOperation,
+  },
+)
+
 /** 未初始化时的文件操作占位 */
-const notInitializedFile: FileOperations = {
-  put: async () => err(notInitializedError()),
-  get: async () => err(notInitializedError()),
-  head: async () => err(notInitializedError()),
-  exists: async () => err(notInitializedError()),
-  delete: async () => err(notInitializedError()),
-  deleteMany: async () => err(notInitializedError()),
-  copy: async () => err(notInitializedError()),
-}
+const notInitializedFile = notInitializedOperations as FileOperations
 
 /** 未初始化时的目录操作占位 */
-const notInitializedDir: DirOperations = {
-  list: async () => err(notInitializedError()),
-  delete: async () => err(notInitializedError()),
-}
+const notInitializedDir = notInitializedOperations as DirOperations
 
 /** 未初始化时的签名 URL 操作占位 */
-const notInitializedPresign: PresignOperations = {
-  getUrl: async () => err(notInitializedError()),
-  putUrl: async () => err(notInitializedError()),
-  publicUrl: () => null,
-}
+const notInitializedPresign = new Proxy(
+  {},
+  {
+    get: (_target, prop) => (prop === 'publicUrl' ? () => null : notInitializedOperation),
+  },
+) as PresignOperations
 
 // =============================================================================
 // 统一存储服务对象
@@ -207,6 +212,11 @@ export const storage: StorageService = {
     return currentProvider?.presign ?? notInitializedPresign
   },
 
+  /** 获取前端客户端操作接口 */
+  get client(): StorageClientOperations {
+    return storageClient
+  },
+
   /** 获取当前配置 */
   get config(): StorageConfig | null {
     return currentConfig
@@ -246,7 +256,7 @@ export const storage: StorageService = {
     catch (error) {
       return err({
         code: StorageErrorCode.CONNECTION_FAILED,
-        message: error instanceof Error ? error.message : 'Unknown error',
+        message: storageM('storage_operationFailed', { params: { error: error instanceof Error ? error.message : String(error) } }),
         cause: error,
       })
     }

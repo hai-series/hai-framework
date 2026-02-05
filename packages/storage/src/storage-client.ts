@@ -31,6 +31,7 @@
  */
 
 import type { ClientDownloadOptions, ClientUploadOptions } from './storage-types.js'
+import { storageM } from './storage-i18n.js'
 
 // =============================================================================
 // 上传功能
@@ -95,7 +96,7 @@ export async function uploadWithPresignedUrl(
         if (options.abortController) {
           options.abortController.signal.addEventListener('abort', () => {
             xhr.abort()
-            resolve({ success: false, error: '上传已取消' })
+            resolve({ success: false, error: storageM('storage_uploadCanceled') })
           })
         }
 
@@ -118,14 +119,14 @@ export async function uploadWithPresignedUrl(
           else {
             resolve({
               success: false,
-              error: `上传失败（状态码 ${xhr.status}）：${xhr.statusText}`,
+              error: storageM('storage_uploadFailedStatus', { params: { status: xhr.status, statusText: xhr.statusText } }),
             })
           }
         })
 
         // 监听错误
         xhr.addEventListener('error', () => {
-          resolve({ success: false, error: '网络错误' })
+          resolve({ success: false, error: storageM('storage_networkError') })
         })
 
         // 发送请求
@@ -150,7 +151,7 @@ export async function uploadWithPresignedUrl(
     if (!response.ok) {
       return {
         success: false,
-        error: `上传失败（状态码 ${response.status}）：${response.statusText}`,
+        error: storageM('storage_uploadFailedStatus', { params: { status: response.status, statusText: response.statusText } }),
       }
     }
 
@@ -158,11 +159,11 @@ export async function uploadWithPresignedUrl(
   }
   catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
-      return { success: false, error: '上传已取消' }
+      return { success: false, error: storageM('storage_uploadCanceled') }
     }
     return {
       success: false,
-      error: error instanceof Error ? error.message : '未知错误',
+      error: error instanceof Error ? error.message : storageM('storage_unknownError'),
     }
   }
 }
@@ -204,7 +205,7 @@ export async function downloadWithPresignedUrl(
     if (!response.ok) {
       return {
         success: false,
-        error: `下载失败（状态码 ${response.status}）：${response.statusText}`,
+        error: storageM('storage_downloadFailedStatus', { params: { status: response.status, statusText: response.statusText } }),
       }
     }
 
@@ -213,11 +214,11 @@ export async function downloadWithPresignedUrl(
   }
   catch (error) {
     if (error instanceof Error && error.name === 'AbortError') {
-      return { success: false, error: '下载已取消' }
+      return { success: false, error: storageM('storage_downloadCanceled') }
     }
     return {
       success: false,
-      error: error instanceof Error ? error.message : '未知错误',
+      error: error instanceof Error ? error.message : storageM('storage_unknownError'),
     }
   }
 }
@@ -250,7 +251,7 @@ export async function downloadAndSave(
     const blobUrl = URL.createObjectURL(result.data)
     const link = document.createElement('a')
     link.href = blobUrl
-    link.download = options.filename || 'download'
+    link.download = options.filename || storageM('storage_downloadDefaultFilename')
 
     // 触发下载
     document.body.appendChild(link)
@@ -265,9 +266,25 @@ export async function downloadAndSave(
   catch (error) {
     return {
       success: false,
-      error: error instanceof Error ? error.message : '保存文件失败',
+      error: error instanceof Error ? error.message : storageM('storage_saveFileFailed'),
     }
   }
+}
+
+// =============================================================================
+// 统一前端客户端对象
+// =============================================================================
+
+/**
+ * 前端客户端统一入口
+ */
+export const storageClient = {
+  uploadWithPresignedUrl,
+  downloadWithPresignedUrl,
+  downloadAndSave,
+  getFileExtension,
+  getMimeType,
+  formatFileSize,
 }
 
 // =============================================================================

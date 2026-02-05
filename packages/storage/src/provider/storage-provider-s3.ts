@@ -31,14 +31,13 @@
  */
 
 import type { Result } from '@hai/core'
+import type { S3Config, StorageConfig } from '../storage-config.js'
 import type {
   DirOperations,
   FileMetadata,
   FileOperations,
   ListResult,
   PresignOperations,
-  S3Config,
-  StorageConfig,
   StorageError,
   StorageProvider,
 } from '../storage-types.js'
@@ -57,8 +56,8 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 
 import { err, ok } from '@hai/core'
 
-import { getStorageMessage } from '../index.js'
 import { StorageErrorCode } from '../storage-config.js'
+import { storageM } from '../storage-i18n.js'
 
 // =============================================================================
 // 辅助函数
@@ -74,7 +73,7 @@ function toStorageError(error: unknown, key?: string): StorageError {
   if (e.name === 'NoSuchKey' || e.Code === 'NoSuchKey') {
     return {
       code: StorageErrorCode.NOT_FOUND,
-      message: `文件不存在: ${key}`,
+      message: storageM('storage_fileNotFound', { params: { key: key ?? '' } }),
       key,
       cause: error,
     }
@@ -83,7 +82,7 @@ function toStorageError(error: unknown, key?: string): StorageError {
   if (e.name === 'AccessDenied' || e.Code === 'AccessDenied') {
     return {
       code: StorageErrorCode.PERMISSION_DENIED,
-      message: `权限不足: ${key}`,
+      message: storageM('storage_permissionDenied', { params: { key: key ?? '' } }),
       key,
       cause: error,
     }
@@ -92,7 +91,7 @@ function toStorageError(error: unknown, key?: string): StorageError {
   if (e.name === 'NoSuchBucket' || e.Code === 'NoSuchBucket') {
     return {
       code: StorageErrorCode.CONFIG_ERROR,
-      message: getStorageMessage('storage_bucketNotExist'),
+      message: storageM('storage_bucketNotExist'),
       cause: error,
     }
   }
@@ -101,14 +100,14 @@ function toStorageError(error: unknown, key?: string): StorageError {
   if (e.name === 'NetworkError' || e.name?.includes('ECONNREFUSED')) {
     return {
       code: StorageErrorCode.NETWORK_ERROR,
-      message: getStorageMessage('storage_networkError'),
+      message: storageM('storage_networkError'),
       cause: error,
     }
   }
 
   return {
     code: StorageErrorCode.OPERATION_FAILED,
-    message: e.message ? `操作失败: ${e.message}` : '操作失败',
+    message: storageM('storage_operationFailed', { params: { error: e.message ?? '' } }),
     key,
     cause: error,
   }
@@ -155,14 +154,14 @@ export function createS3Provider(): StorageProvider {
 
   function getClient(): S3Client {
     if (!client) {
-      throw new Error('S3 client not initialized')
+      throw new Error(storageM('storage_s3ClientNotInitialized'))
     }
     return client
   }
 
   function getConfig(): S3Config {
     if (!config) {
-      throw new Error('S3 config not initialized')
+      throw new Error(storageM('storage_s3ConfigNotInitialized'))
     }
     return config
   }
@@ -235,7 +234,7 @@ export function createS3Provider(): StorageProvider {
         if (!response.Body) {
           return err({
             code: StorageErrorCode.OPERATION_FAILED,
-            message: getStorageMessage('storage_responseBodyEmpty'),
+            message: storageM('storage_responseBodyEmpty'),
             key,
           })
         }
@@ -463,7 +462,7 @@ export function createS3Provider(): StorageProvider {
       catch (error) {
         return err({
           code: StorageErrorCode.PRESIGN_FAILED,
-          message: getStorageMessage('storage_presignUrlFailed'),
+          message: storageM('storage_presignUrlFailed'),
           key,
           cause: error,
         })
@@ -491,7 +490,7 @@ export function createS3Provider(): StorageProvider {
       catch (error) {
         return err({
           code: StorageErrorCode.PRESIGN_FAILED,
-          message: getStorageMessage('storage_presignUploadUrlFailed'),
+          message: storageM('storage_presignUploadUrlFailed'),
           key,
           cause: error,
         })
@@ -523,7 +522,7 @@ export function createS3Provider(): StorageProvider {
       if (cfg.type !== 's3') {
         return err({
           code: StorageErrorCode.CONFIG_ERROR,
-          message: getStorageMessage('storage_s3ConfigTypeError'),
+          message: storageM('storage_s3ConfigTypeError'),
         })
       }
 
