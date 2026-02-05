@@ -10,6 +10,7 @@ import { i18n } from '../i18n/index.js'
  * 延迟执行。
  *
  * @param ms - 延迟毫秒数
+ * @returns 延迟完成后的 Promise
  *
  * @example
  * ```ts
@@ -25,6 +26,8 @@ function delay(ms: number): Promise<void> {
  *
  * @param promise - 目标 Promise
  * @param ms - 超时时间（毫秒）
+ * @returns 原 Promise 的结果
+ * @throws 超时将抛出错误
  *
  * @example
  * ```ts
@@ -45,6 +48,8 @@ async function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
  * @param options - 重试配置
  * @param options.maxRetries - 最大重试次数
  * @param options.delay - 重试间隔（毫秒）
+ * @returns 成功的结果
+ * @throws 重试耗尽后抛出最后一次错误
  *
  * @example
  * ```ts
@@ -76,6 +81,8 @@ async function retry<T>(
  * @param items - 输入列表
  * @param fn - 处理函数
  * @param concurrency - 最大并发数
+ * @returns 处理结果列表
+ * @remarks 结果顺序与输入顺序一致。
  *
  * @example
  * ```ts
@@ -110,6 +117,7 @@ async function parallel<T, R>(
  *
  * @param items - 输入列表
  * @param fn - 处理函数
+ * @returns 处理结果列表
  *
  * @example
  * ```ts
@@ -132,6 +140,8 @@ async function serial<T, R>(
  *
  * @param fn - 目标函数
  * @param ms - 延迟毫秒数
+ * @returns 防抖后的函数
+ * @remarks 只会在最后一次调用后执行。
  *
  * @example
  * ```ts
@@ -155,6 +165,8 @@ function debounce<T extends (...args: unknown[]) => unknown>(
  *
  * @param fn - 目标函数
  * @param ms - 间隔毫秒数
+ * @returns 节流后的函数
+ * @remarks 在时间窗口内最多触发一次。
  *
  * @example
  * ```ts

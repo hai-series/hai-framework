@@ -6,6 +6,8 @@
 
 /**
  * 检查值是否已定义（非 null 和 undefined）。
+ * @param value - 待检查值
+ * @returns 是否已定义
  *
  * @example
  * ```ts
@@ -18,6 +20,8 @@ function isDefined<T>(value: T | undefined | null): value is T {
 
 /**
  * 检查值是否为纯对象（排除数组）。
+ * @param value - 待检查值
+ * @returns 是否为纯对象
  *
  * @example
  * ```ts
@@ -30,6 +34,8 @@ function isObject(value: unknown): value is Record<string, unknown> {
 
 /**
  * 检查值是否为函数。
+ * @param value - 待检查值
+ * @returns 是否为函数
  *
  * @example
  * ```ts
@@ -42,6 +48,8 @@ function isFunction(value: unknown): value is (...args: unknown[]) => unknown {
 
 /**
  * 检查值是否为 Promise。
+ * @param value - 待检查值
+ * @returns 是否为 Promise
  *
  * @example
  * ```ts
@@ -60,6 +68,8 @@ function isPromise<T>(value: unknown): value is Promise<T> {
 
 /**
  * 检查值是否为字符串。
+ * @param value - 待检查值
+ * @returns 是否为字符串
  *
  * @example
  * ```ts
@@ -72,6 +82,8 @@ function isString(value: unknown): value is string {
 
 /**
  * 检查值是否为数字。
+ * @param value - 待检查值
+ * @returns 是否为数字（排除 NaN）
  *
  * @example
  * ```ts
@@ -84,6 +96,8 @@ function isNumber(value: unknown): value is number {
 
 /**
  * 检查值是否为布尔值。
+ * @param value - 待检查值
+ * @returns 是否为布尔值
  *
  * @example
  * ```ts
@@ -96,6 +110,8 @@ function isBoolean(value: unknown): value is boolean {
 
 /**
  * 检查值是否为数组。
+ * @param value - 待检查值
+ * @returns 是否为数组
  *
  * @example
  * ```ts
