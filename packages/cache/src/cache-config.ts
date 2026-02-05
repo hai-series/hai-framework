@@ -24,7 +24,7 @@
  *
  * // 使用错误码
  * if (error.code === CacheErrorCode.NOT_INITIALIZED) {
- *     // 处理错误：请先调用 initCache()
+ *     // 处理错误：请先调用 cache.init()
  * }
  * ```
  *
@@ -208,13 +208,16 @@ export const CacheConfigSchema = z.object({
 
   /** 是否启用只读模式（用于从节点） */
   readOnly: z.boolean().default(false),
-
-  /** 是否静默模式（不输出日志） */
-  silent: z.boolean().default(false),
 })
 
-/** 缓存配置类型（parse 后的完整配置） */
+/**
+ * 缓存配置类型（parse 后的完整配置）
+ * @remarks 由 CacheConfigSchema 解析后的结果，所有默认值已补齐。
+ */
 export type CacheConfig = z.infer<typeof CacheConfigSchema>
 
-/** 缓存配置输入类型（parse 前，允许省略带默认值的字段） */
+/**
+ * 缓存配置输入类型（parse 前，允许省略带默认值的字段）
+ * @remarks 适合用于 init 入参或配置文件加载。
+ */
 export type CacheConfigInput = z.input<typeof CacheConfigSchema>

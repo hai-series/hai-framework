@@ -16,10 +16,9 @@
  */
 
 import type { Result } from '@hai/core'
+import type { CacheConfig, CacheErrorCodeType } from '../cache-config.js'
 import type {
-  CacheConfig,
   CacheError,
-  CacheErrorCodeType,
   CacheProvider,
   CacheValue,
   HashOperations,
@@ -32,6 +31,7 @@ import type {
 } from '../cache-types.js'
 import { err, ok } from '@hai/core'
 import { CacheErrorCode } from '../cache-config.js'
+import { cacheM } from '../cache-i18n.js'
 
 // =============================================================================
 // 内部类型
@@ -46,14 +46,42 @@ interface CacheEntry {
 // 辅助函数
 // =============================================================================
 
+/**
+ * 创建缓存错误对象
+ * @param code - 错误码
+ * @param message - 错误文案
+ * @returns CacheError
+ * @example
+ * ```ts
+ * const error = createError(CacheErrorCode.OPERATION_FAILED, 'failed')
+ * ```
+ */
 function createError(code: CacheErrorCodeType, message: string): CacheError {
   return { code, message }
 }
 
+/**
+ * 序列化值为字符串
+ * @param value - 缓存值
+ * @returns 序列化后的字符串
+ * @example
+ * ```ts
+ * const raw = serializeValue({ a: 1 })
+ * ```
+ */
 function serializeValue(value: CacheValue): string {
   return JSON.stringify(value)
 }
 
+/**
+ * 反序列化字符串为值
+ * @param str - 序列化字符串
+ * @returns 反序列化后的值
+ * @example
+ * ```ts
+ * const value = deserializeValue('{"a":1}')
+ * ```
+ */
 function deserializeValue(str: string): CacheValue {
   return JSON.parse(str)
 }
@@ -64,6 +92,11 @@ function deserializeValue(str: string): CacheValue {
 
 /**
  * 创建 Memory Provider 实例
+ * @returns Memory Provider
+ * @example
+ * ```ts
+ * const provider = createMemoryProvider()
+ * ```
  */
 export function createMemoryProvider(): CacheProvider {
   const store = new Map<string, CacheEntry>()
@@ -75,10 +108,26 @@ export function createMemoryProvider(): CacheProvider {
   let initialized = false
   let cleanupTimer: ReturnType<typeof setInterval> | null = null
 
+  /**
+   * 判断缓存项是否过期
+   * @param entry - 缓存项
+   * @returns 是否过期
+   * @example
+   * ```ts
+   * const expired = isExpired({ value: 1, expiresAt: Date.now() - 1 })
+   * ```
+   */
   function isExpired(entry: CacheEntry): boolean {
     return entry.expiresAt != null && Date.now() > entry.expiresAt
   }
 
+  /**
+   * 清理过期数据
+   * @example
+   * ```ts
+   * cleanup()
+   * ```
+   */
   function cleanup(): void {
     const now = Date.now()
     for (const [key, entry] of store.entries()) {
@@ -88,6 +137,15 @@ export function createMemoryProvider(): CacheProvider {
     }
   }
 
+  /**
+   * 获取有效缓存项（过期则清理）
+   * @param key - 键名
+   * @returns 缓存项或 null
+   * @example
+   * ```ts
+   * const entry = getValidEntry('key')
+   * ```
+   */
   function getValidEntry(key: string): CacheEntry | null {
     const entry = store.get(key)
     if (!entry)
@@ -99,6 +157,15 @@ export function createMemoryProvider(): CacheProvider {
     return entry
   }
 
+  /**
+   * 计算过期时间戳
+   * @param options - 设置选项
+   * @returns 过期时间戳（毫秒）或 undefined
+   * @example
+   * ```ts
+   * const expiresAt = calculateExpiry({ ex: 60 })
+   * ```
+   */
   function calculateExpiry(options?: SetOptions): number | undefined {
     if (!options)
       return undefined
@@ -200,7 +267,7 @@ export function createMemoryProvider(): CacheProvider {
     const entry = getValidEntry(key)
     const current = entry ? Number(entry.value) : 0
     if (Number.isNaN(current)) {
-      return err(createError(CacheErrorCode.OPERATION_FAILED, '值不是数字'))
+      return err(createError(CacheErrorCode.OPERATION_FAILED, cacheM('cache_valueNotNumber')))
     }
     const newValue = current + 1
     store.set(key, { value: newValue, expiresAt: entry?.expiresAt })
@@ -211,7 +278,7 @@ export function createMemoryProvider(): CacheProvider {
     const entry = getValidEntry(key)
     const current = entry ? Number(entry.value) : 0
     if (Number.isNaN(current)) {
-      return err(createError(CacheErrorCode.OPERATION_FAILED, '值不是数字'))
+      return err(createError(CacheErrorCode.OPERATION_FAILED, cacheM('cache_valueNotNumber')))
     }
     const newValue = current + increment
     store.set(key, { value: newValue, expiresAt: entry?.expiresAt })
@@ -452,11 +519,11 @@ export function createMemoryProvider(): CacheProvider {
     lset: async (key: string, index: number, value: CacheValue): Promise<Result<void, CacheError>> => {
       const arr = listStore.get(key)
       if (!arr) {
-        return err(createError(CacheErrorCode.KEY_NOT_FOUND, '键不存在'))
+        return err(createError(CacheErrorCode.KEY_NOT_FOUND, cacheM('cache_keyNotFound')))
       }
       const i = index < 0 ? arr.length + index : index
       if (i < 0 || i >= arr.length) {
-        return err(createError(CacheErrorCode.OPERATION_FAILED, '索引越界'))
+        return err(createError(CacheErrorCode.OPERATION_FAILED, cacheM('cache_indexOutOfRange')))
       }
       arr[i] = serializeValue(value)
       return ok(undefined)

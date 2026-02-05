@@ -1,6 +1,6 @@
 # @hai/cache
 
-统一的缓存访问模块，目前支持 Redis。
+统一的缓存访问模块，支持 Redis 与内存缓存（开发/测试场景）。
 
 ## 特性
 
@@ -12,9 +12,10 @@
 
 ## 支持的缓存
 
-| 类型  | 库      | 模式           |
-| ----- | ------- | -------------- |
-| Redis | ioredis | 单机/集群/哨兵 |
+| 类型   | 库      | 模式           |
+| ------ | ------- | -------------- |
+| Memory | 内置    | 单进程         |
+| Redis  | ioredis | 单机/集群/哨兵 |
 
 ## 安装
 
@@ -27,10 +28,10 @@ pnpm add @hai/cache
 ### 1. 初始化缓存
 
 ```ts
-import { cache, closeCache, initCache } from '@hai/cache'
+import { cache } from '@hai/cache'
 
 // Redis 单机模式
-await initCache({
+await cache.init({
   type: 'redis',
   host: 'localhost',
   port: 6379,
@@ -39,7 +40,7 @@ await initCache({
 })
 
 // 或使用 URL
-await initCache({
+await cache.init({
   type: 'redis',
   url: 'redis://:password@localhost:6379/0'
 })
@@ -143,97 +144,8 @@ const score = await cache.zset.zscore('leaderboard', 'player1')
 ### 7. 关闭连接
 
 ```ts
-await closeCache()
+await cache.close()
 ```
-
-## API 参考
-
-### 基础操作 (cache.\*)
-
-| 方法                        | 说明               |
-| --------------------------- | ------------------ |
-| `get<T>(key)`               | 获取值             |
-| `set(key, value, options?)` | 设置值             |
-| `del(...keys)`              | 删除键             |
-| `exists(...keys)`           | 检查键是否存在     |
-| `expire(key, seconds)`      | 设置过期时间（秒） |
-| `expireAt(key, timestamp)`  | 设置过期时间点     |
-| `ttl(key)`                  | 获取剩余过期时间   |
-| `persist(key)`              | 移除过期时间       |
-| `incr(key)`                 | 自增               |
-| `incrBy(key, increment)`    | 自增指定值         |
-| `decr(key)`                 | 自减               |
-| `decrBy(key, decrement)`    | 自减指定值         |
-| `mget<T>(...keys)`          | 批量获取           |
-| `mset(entries)`             | 批量设置           |
-| `keys(pattern)`             | 获取匹配的键       |
-| `scan(cursor, options?)`    | 扫描键             |
-| `type(key)`                 | 获取值类型         |
-
-### Hash 操作 (cache.hash.\*)
-
-| 方法                             | 说明             |
-| -------------------------------- | ---------------- |
-| `hget<T>(key, field)`            | 获取字段值       |
-| `hset(key, field, value)`        | 设置字段值       |
-| `hset(key, data)`                | 批量设置字段     |
-| `hdel(key, ...fields)`           | 删除字段         |
-| `hexists(key, field)`            | 检查字段是否存在 |
-| `hgetall<T>(key)`                | 获取所有字段和值 |
-| `hkeys(key)`                     | 获取所有字段名   |
-| `hvals<T>(key)`                  | 获取所有字段值   |
-| `hlen(key)`                      | 获取字段数量     |
-| `hmget<T>(key, ...fields)`       | 批量获取字段值   |
-| `hincrBy(key, field, increment)` | 字段自增         |
-
-### List 操作 (cache.list.\*)
-
-| 方法                          | 说明             |
-| ----------------------------- | ---------------- |
-| `lpush(key, ...values)`       | 从左侧推入       |
-| `rpush(key, ...values)`       | 从右侧推入       |
-| `lpop<T>(key)`                | 从左侧弹出       |
-| `rpop<T>(key)`                | 从右侧弹出       |
-| `llen(key)`                   | 获取列表长度     |
-| `lrange<T>(key, start, stop)` | 获取指定范围     |
-| `lindex<T>(key, index)`       | 获取指定索引元素 |
-| `lset(key, index, value)`     | 设置指定索引元素 |
-| `ltrim(key, start, stop)`     | 保留指定范围     |
-| `blpop<T>(timeout, ...keys)`  | 阻塞式左侧弹出   |
-| `brpop<T>(timeout, ...keys)`  | 阻塞式右侧弹出   |
-
-### Set 操作 (cache.set\_.\*)
-
-| 方法                          | 说明           |
-| ----------------------------- | -------------- |
-| `sadd(key, ...members)`       | 添加成员       |
-| `srem(key, ...members)`       | 移除成员       |
-| `smembers<T>(key)`            | 获取所有成员   |
-| `sismember(key, member)`      | 检查是否为成员 |
-| `scard(key)`                  | 获取成员数量   |
-| `srandmember<T>(key, count?)` | 随机获取成员   |
-| `spop<T>(key, count?)`        | 随机弹出成员   |
-| `sinter<T>(...keys)`          | 集合交集       |
-| `sunion<T>(...keys)`          | 集合并集       |
-| `sdiff<T>(...keys)`           | 集合差集       |
-
-### SortedSet 操作 (cache.zset.\*)
-
-| 方法                                       | 说明                     |
-| ------------------------------------------ | ------------------------ |
-| `zadd(key, ...members)`                    | 添加成员                 |
-| `zrem(key, ...members)`                    | 移除成员                 |
-| `zscore(key, member)`                      | 获取分数                 |
-| `zrank(key, member)`                       | 获取排名（升序）         |
-| `zrevrank(key, member)`                    | 获取排名（降序）         |
-| `zrange(key, start, stop, withScores?)`    | 获取范围（升序）         |
-| `zrevrange(key, start, stop, withScores?)` | 获取范围（降序）         |
-| `zrangeByScore(key, min, max, options?)`   | 按分数获取范围           |
-| `zcard(key)`                               | 获取成员数量             |
-| `zcount(key, min, max)`                    | 获取分数范围内的成员数量 |
-| `zincrBy(key, increment, member)`          | 增加分数                 |
-| `zremRangeByRank(key, start, stop)`        | 按排名移除               |
-| `zremRangeByScore(key, min, max)`          | 按分数移除               |
 
 ## 配置选项
 
@@ -265,7 +177,6 @@ interface CacheConfig {
   maxRetries?: number // 最大重试次数（默认 3）
   retryDelay?: number // 重试延迟（默认 50）
   readOnly?: boolean // 只读模式
-  silent?: boolean // 静默模式
 }
 ```
 
@@ -287,7 +198,7 @@ else {
   // 根据错误码处理
   switch (result.error.code) {
     case CacheErrorCode.NOT_INITIALIZED:
-      // 处理错误：请先调用 initCache()
+      // 处理错误：请先调用 cache.init()
       break
     case CacheErrorCode.CONNECTION_FAILED:
       // 处理错误：Redis 连接失败

@@ -69,7 +69,7 @@ import type {
 import { err } from '@hai/core'
 
 import { CacheConfigSchema, CacheErrorCode } from './cache-config.js'
-import { getCacheMessage } from './index.js'
+import { cacheM } from './cache-i18n.js'
 
 import { createMemoryProvider } from './provider/cache-provider-memory.js'
 import { createRedisProvider } from './provider/cache-provider-redis.js'
@@ -94,6 +94,10 @@ let currentConfig: CacheConfig | null = null
  * @param config - 缓存配置
  * @returns 对应类型的 Provider 实例
  * @throws 不支持的缓存类型时抛出错误
+ * @example
+ * ```ts
+ * const provider = createProvider({ type: 'memory' })
+ * ```
  */
 function createProvider(config: CacheConfig): CacheProvider {
   switch (config.type) {
@@ -102,7 +106,7 @@ function createProvider(config: CacheConfig): CacheProvider {
     case 'redis':
       return createRedisProvider()
     default:
-      throw new Error(`不支持的缓存类型: ${config.type}`)
+      throw new Error(cacheM('cache_unsupportedType', { params: { type: config.type } }))
   }
 }
 
@@ -112,73 +116,59 @@ function createProvider(config: CacheConfig): CacheProvider {
 
 /**
  * 创建未初始化错误
+ * @returns CacheError
+ * @example
+ * ```ts
+ * const error = notInitializedError()
+ * ```
  */
 function notInitializedError(): CacheError {
   return {
     code: CacheErrorCode.NOT_INITIALIZED,
-    message: getCacheMessage('cache_notInitializedMain'),
+    message: cacheM('cache_notInitializedMain'),
   }
 }
 
+/**
+ * 未初始化时的统一占位操作类型
+ */
+type NotInitializedOperation = (...args: unknown[]) => Promise<Result<unknown, CacheError>>
+
+/**
+ * 未初始化时的占位操作实现
+ * @returns 统一的未初始化错误
+ * @example
+ * ```ts
+ * const result = await notInitializedOperation()
+ * ```
+ */
+const notInitializedOperation: NotInitializedOperation = async () => err(notInitializedError())
+
+/**
+ * 未初始化时的操作代理（所有方法均返回未初始化错误）
+ * @example
+ * ```ts
+ * const result = await notInitializedOperations.anyMethod()
+ * ```
+ */
+const notInitializedOperations = new Proxy(
+  {},
+  {
+    get: () => notInitializedOperation,
+  },
+)
+
 /** 未初始化时的 Hash 操作占位 */
-const notInitializedHash: HashOperations = {
-  hget: async () => err(notInitializedError()),
-  hset: async () => err(notInitializedError()),
-  hdel: async () => err(notInitializedError()),
-  hexists: async () => err(notInitializedError()),
-  hgetall: async () => err(notInitializedError()),
-  hkeys: async () => err(notInitializedError()),
-  hvals: async () => err(notInitializedError()),
-  hlen: async () => err(notInitializedError()),
-  hmget: async () => err(notInitializedError()),
-  hincrBy: async () => err(notInitializedError()),
-}
+const notInitializedHash = notInitializedOperations as HashOperations
 
 /** 未初始化时的 List 操作占位 */
-const notInitializedList: ListOperations = {
-  lpush: async () => err(notInitializedError()),
-  rpush: async () => err(notInitializedError()),
-  lpop: async () => err(notInitializedError()),
-  rpop: async () => err(notInitializedError()),
-  llen: async () => err(notInitializedError()),
-  lrange: async () => err(notInitializedError()),
-  lindex: async () => err(notInitializedError()),
-  lset: async () => err(notInitializedError()),
-  ltrim: async () => err(notInitializedError()),
-  blpop: async () => err(notInitializedError()),
-  brpop: async () => err(notInitializedError()),
-}
+const notInitializedList = notInitializedOperations as ListOperations
 
 /** 未初始化时的 Set 操作占位 */
-const notInitializedSet: SetOperations = {
-  sadd: async () => err(notInitializedError()),
-  srem: async () => err(notInitializedError()),
-  smembers: async () => err(notInitializedError()),
-  sismember: async () => err(notInitializedError()),
-  scard: async () => err(notInitializedError()),
-  srandmember: async () => err(notInitializedError()),
-  spop: async () => err(notInitializedError()),
-  sinter: async () => err(notInitializedError()),
-  sunion: async () => err(notInitializedError()),
-  sdiff: async () => err(notInitializedError()),
-}
+const notInitializedSet = notInitializedOperations as SetOperations
 
 /** 未初始化时的 ZSet 操作占位 */
-const notInitializedZSet: ZSetOperations = {
-  zadd: async () => err(notInitializedError()),
-  zrem: async () => err(notInitializedError()),
-  zscore: async () => err(notInitializedError()),
-  zrank: async () => err(notInitializedError()),
-  zrevrank: async () => err(notInitializedError()),
-  zrange: async () => err(notInitializedError()),
-  zrevrange: async () => err(notInitializedError()),
-  zrangeByScore: async () => err(notInitializedError()),
-  zcard: async () => err(notInitializedError()),
-  zcount: async () => err(notInitializedError()),
-  zincrBy: async () => err(notInitializedError()),
-  zremRangeByRank: async () => err(notInitializedError()),
-  zremRangeByScore: async () => err(notInitializedError()),
-}
+const notInitializedZSet = notInitializedOperations as ZSetOperations
 
 // =============================================================================
 // 统一缓存服务对象
@@ -232,7 +222,7 @@ export const cache: CacheService = {
     catch (error) {
       return err({
         code: CacheErrorCode.CONNECTION_FAILED,
-        message: `缓存初始化失败: ${error instanceof Error ? error.message : String(error)}`,
+        message: cacheM('cache_initFailed', { params: { error: error instanceof Error ? error.message : String(error) } }),
         cause: error,
       })
     }

@@ -25,8 +25,8 @@
 
 import type { Result } from '@hai/core'
 import type { Cluster, ClusterOptions, RedisOptions } from 'ioredis'
+import type { CacheConfig } from '../cache-config.js'
 import type {
-  CacheConfig,
   CacheError,
   CacheProvider,
   CacheValue,
@@ -43,7 +43,7 @@ import { core, err, ok } from '@hai/core'
 import Redis from 'ioredis'
 
 import { CacheErrorCode } from '../cache-config.js'
-import { getCacheMessage } from '../index.js'
+import { cacheM } from '../cache-i18n.js'
 
 // =============================================================================
 // Redis Provider 实现
@@ -64,6 +64,12 @@ export function createRedisProvider(): CacheProvider {
 
   /**
    * 序列化值为字符串
+   * @param value - 缓存值
+   * @returns 序列化后的字符串
+   * @example
+   * ```ts
+   * const raw = serialize({ a: 1 })
+   * ```
    */
   function serialize(value: CacheValue): string {
     if (typeof value === 'string') {
@@ -74,6 +80,12 @@ export function createRedisProvider(): CacheProvider {
 
   /**
    * 反序列化字符串为值
+   * @param value - 序列化后的字符串
+   * @returns 反序列化后的值或 null
+   * @example
+   * ```ts
+   * const data = deserialize<{ a: number }>('{"a":1}')
+   * ```
    */
   function deserialize<T>(value: string | null): T | null {
     if (value === null) {
@@ -90,12 +102,18 @@ export function createRedisProvider(): CacheProvider {
 
   /**
    * 包装操作结果
+   * @param operation - 实际执行的操作
+   * @returns Result 包装后的操作结果
+   * @example
+   * ```ts
+   * const result = await wrapOperation(() => Promise.resolve('ok'))
+   * ```
    */
   async function wrapOperation<T>(operation: () => Promise<T>): Promise<Result<T, CacheError>> {
     if (!client) {
       return err({
         code: CacheErrorCode.NOT_INITIALIZED,
-        message: getCacheMessage('cache_notInitialized'),
+        message: cacheM('cache_notInitialized'),
       })
     }
 
@@ -106,7 +124,7 @@ export function createRedisProvider(): CacheProvider {
     catch (error) {
       return err({
         code: CacheErrorCode.OPERATION_FAILED,
-        message: `Cache operation failed: ${error instanceof Error ? error.message : String(error)}`,
+        message: cacheM('cache_operationFailed', { params: { error: error instanceof Error ? error.message : String(error) } }),
         cause: error,
       })
     }
@@ -498,6 +516,237 @@ export function createRedisProvider(): CacheProvider {
   // Provider 返回对象
   // =========================================================================
 
+  const init: CacheProvider['init'] = async (config: CacheConfig): Promise<Result<void, CacheError>> => {
+    try {
+      // 构建 Redis 配置
+      const redisOptions: RedisOptions = {
+        connectTimeout: config.connectTimeout,
+        commandTimeout: config.commandTimeout,
+        keyPrefix: config.keyPrefix,
+        maxRetriesPerRequest: config.maxRetries,
+        retryStrategy: (times) => {
+          if (times > config.maxRetries) {
+            return null
+          }
+          return config.retryDelay * times
+        },
+        lazyConnect: true,
+      }
+
+      if (config.tls) {
+        redisOptions.tls = {}
+      }
+
+      if (config.readOnly) {
+        redisOptions.readOnly = true
+      }
+
+      // 根据配置模式创建客户端
+      if (config.url) {
+        // URL 模式
+        client = new Redis(config.url, redisOptions)
+      }
+      else if (config.cluster && config.cluster.length > 0) {
+        // 集群模式
+        const clusterOptions: ClusterOptions = {
+          redisOptions,
+          clusterRetryStrategy: (times) => {
+            if (times > config.maxRetries) {
+              return null
+            }
+            return config.retryDelay * times
+          },
+        }
+        client = new Redis.Cluster(config.cluster, clusterOptions)
+      }
+      else if (config.sentinel) {
+        // 哨兵模式
+        client = new Redis({
+          ...redisOptions,
+          sentinels: config.sentinel.sentinels,
+          name: config.sentinel.name,
+          password: config.password,
+          db: config.db,
+        })
+      }
+      else {
+        // 单机模式
+        client = new Redis({
+          ...redisOptions,
+          host: config.host,
+          port: config.port,
+          password: config.password,
+          db: config.db,
+        })
+      }
+
+      // 连接
+      await client.connect()
+
+      // 测试连接
+      await client.ping()
+
+      const address = config.url || `${config.host}:${config.port}`
+      core.logger.info('Redis connected', { module: 'cache', address })
+
+      return ok(undefined)
+    }
+    catch (error) {
+      return err({
+        code: CacheErrorCode.CONNECTION_FAILED,
+        message: cacheM('cache_redisConnectionFailed', { params: { error: error instanceof Error ? error.message : String(error) } }),
+        cause: error,
+      })
+    }
+  }
+
+  const close: CacheProvider['close'] = async (): Promise<void> => {
+    if (client) {
+      await client.quit()
+      client = null
+    }
+  }
+
+  const ping: CacheProvider['ping'] = async (): Promise<Result<string, CacheError>> => {
+    return wrapOperation(() => client!.ping())
+  }
+
+  const get: CacheProvider['get'] = async <T = CacheValue>(key: string): Promise<Result<T | null, CacheError>> => {
+    return wrapOperation(async () => {
+      const value = await client!.get(key)
+      return deserialize<T>(value)
+    })
+  }
+
+  const set: CacheProvider['set'] = async (key: string, value: CacheValue, options?: SetOptions): Promise<Result<void, CacheError>> => {
+    return wrapOperation(async () => {
+      const args: (string | number)[] = [key, serialize(value)]
+
+      if (options?.ex) {
+        args.push('EX', options.ex)
+      }
+      else if (options?.px) {
+        args.push('PX', options.px)
+      }
+      else if (options?.exat) {
+        args.push('EXAT', options.exat)
+      }
+      else if (options?.pxat) {
+        args.push('PXAT', options.pxat)
+      }
+
+      if (options?.nx) {
+        args.push('NX')
+      }
+      else if (options?.xx) {
+        args.push('XX')
+      }
+
+      if (options?.keepTtl) {
+        args.push('KEEPTTL')
+      }
+
+      // 注意：不要把方法解构出来调用，否则会丢失 ioredis 的 this 绑定
+      await (client as unknown as { set: (...args: Array<string | number>) => Promise<unknown> }).set(...args)
+    })
+  }
+
+  const del: CacheProvider['del'] = async (...keys: string[]): Promise<Result<number, CacheError>> => {
+    return wrapOperation(() => client!.del(...keys))
+  }
+
+  const exists: CacheProvider['exists'] = async (...keys: string[]): Promise<Result<number, CacheError>> => {
+    return wrapOperation(() => client!.exists(...keys))
+  }
+
+  const expire: CacheProvider['expire'] = async (key: string, seconds: number): Promise<Result<boolean, CacheError>> => {
+    return wrapOperation(async () => {
+      const result = await client!.expire(key, seconds)
+      return result === 1
+    })
+  }
+
+  const expireAt: CacheProvider['expireAt'] = async (key: string, timestamp: number): Promise<Result<boolean, CacheError>> => {
+    return wrapOperation(async () => {
+      const result = await client!.expireat(key, timestamp)
+      return result === 1
+    })
+  }
+
+  const ttl: CacheProvider['ttl'] = async (key: string): Promise<Result<number, CacheError>> => {
+    return wrapOperation(() => client!.ttl(key))
+  }
+
+  const persist: CacheProvider['persist'] = async (key: string): Promise<Result<boolean, CacheError>> => {
+    return wrapOperation(async () => {
+      const result = await client!.persist(key)
+      return result === 1
+    })
+  }
+
+  const incr: CacheProvider['incr'] = async (key: string): Promise<Result<number, CacheError>> => {
+    return wrapOperation(() => client!.incr(key))
+  }
+
+  const incrBy: CacheProvider['incrBy'] = async (key: string, increment: number): Promise<Result<number, CacheError>> => {
+    return wrapOperation(() => client!.incrby(key, increment))
+  }
+
+  const decr: CacheProvider['decr'] = async (key: string): Promise<Result<number, CacheError>> => {
+    return wrapOperation(() => client!.decr(key))
+  }
+
+  const decrBy: CacheProvider['decrBy'] = async (key: string, decrement: number): Promise<Result<number, CacheError>> => {
+    return wrapOperation(() => client!.decrby(key, decrement))
+  }
+
+  const mget: CacheProvider['mget'] = async <T = CacheValue>(...keys: string[]): Promise<Result<(T | null)[], CacheError>> => {
+    return wrapOperation(async () => {
+      const values = await client!.mget(...keys)
+      return values.map(v => deserialize<T>(v))
+    })
+  }
+
+  const mset: CacheProvider['mset'] = async (entries: Array<[string, CacheValue]>): Promise<Result<void, CacheError>> => {
+    return wrapOperation(async () => {
+      const args: string[] = []
+      for (const [key, value] of entries) {
+        args.push(key, serialize(value))
+      }
+      await client!.mset(...args)
+    })
+  }
+
+  const scan: CacheProvider['scan'] = async (cursor: number, options?: ScanOptions): Promise<Result<[number, string[]], CacheError>> => {
+    return wrapOperation(async () => {
+      let result: [string, string[]]
+
+      if (options?.match && options?.count) {
+        result = await client!.scan(cursor, 'MATCH', options.match, 'COUNT', options.count)
+      }
+      else if (options?.match) {
+        result = await client!.scan(cursor, 'MATCH', options.match)
+      }
+      else if (options?.count) {
+        result = await client!.scan(cursor, 'COUNT', options.count)
+      }
+      else {
+        result = await client!.scan(cursor)
+      }
+
+      const [nextCursor, keys] = result
+      return [Number.parseInt(nextCursor, 10), keys]
+    })
+  }
+
+  const keys: CacheProvider['keys'] = async (pattern: string): Promise<Result<string[], CacheError>> => {
+    return wrapOperation(() => client!.keys(pattern))
+  }
+
+  const type: CacheProvider['type'] = async (key: string): Promise<Result<string, CacheError>> => {
+    return wrapOperation(() => client!.type(key))
+  }
+
   return {
     // ---------------------------------------------------------------------
     // 子操作接口
@@ -510,240 +759,29 @@ export function createRedisProvider(): CacheProvider {
     // ---------------------------------------------------------------------
     // 初始化和关闭
     // ---------------------------------------------------------------------
-    async init(config: CacheConfig): Promise<Result<void, CacheError>> {
-      try {
-        // 构建 Redis 配置
-        const redisOptions: RedisOptions = {
-          connectTimeout: config.connectTimeout,
-          commandTimeout: config.commandTimeout,
-          keyPrefix: config.keyPrefix,
-          maxRetriesPerRequest: config.maxRetries,
-          retryStrategy: (times) => {
-            if (times > config.maxRetries) {
-              return null
-            }
-            return config.retryDelay * times
-          },
-          lazyConnect: true,
-        }
-
-        if (config.tls) {
-          redisOptions.tls = {}
-        }
-
-        if (config.readOnly) {
-          redisOptions.readOnly = true
-        }
-
-        // 根据配置模式创建客户端
-        if (config.url) {
-          // URL 模式
-          client = new Redis(config.url, redisOptions)
-        }
-        else if (config.cluster && config.cluster.length > 0) {
-          // 集群模式
-          const clusterOptions: ClusterOptions = {
-            redisOptions,
-            clusterRetryStrategy: (times) => {
-              if (times > config.maxRetries) {
-                return null
-              }
-              return config.retryDelay * times
-            },
-          }
-          client = new Redis.Cluster(config.cluster, clusterOptions)
-        }
-        else if (config.sentinel) {
-          // 哨兵模式
-          client = new Redis({
-            ...redisOptions,
-            sentinels: config.sentinel.sentinels,
-            name: config.sentinel.name,
-            password: config.password,
-            db: config.db,
-          })
-        }
-        else {
-          // 单机模式
-          client = new Redis({
-            ...redisOptions,
-            host: config.host,
-            port: config.port,
-            password: config.password,
-            db: config.db,
-          })
-        }
-
-        // 连接
-        await client.connect()
-
-        // 测试连接
-        await client.ping()
-
-        if (!config.silent) {
-          const address = config.url || `${config.host}:${config.port}`
-          core.logger.info('Redis connected', { module: 'cache', address })
-        }
-
-        return ok(undefined)
-      }
-      catch (error) {
-        return err({
-          code: CacheErrorCode.CONNECTION_FAILED,
-          message: `Redis 连接失败: ${error instanceof Error ? error.message : String(error)}`,
-          cause: error,
-        })
-      }
-    },
-
-    async close(): Promise<void> {
-      if (client) {
-        await client.quit()
-        client = null
-      }
-    },
-
-    async ping(): Promise<Result<string, CacheError>> {
-      return wrapOperation(() => client!.ping())
-    },
+    init,
+    close,
+    ping,
 
     // ---------------------------------------------------------------------
     // 基础操作
     // ---------------------------------------------------------------------
-    async get<T = CacheValue>(key: string): Promise<Result<T | null, CacheError>> {
-      return wrapOperation(async () => {
-        const value = await client!.get(key)
-        return deserialize<T>(value)
-      })
-    },
-
-    async set(key: string, value: CacheValue, options?: SetOptions): Promise<Result<void, CacheError>> {
-      return wrapOperation(async () => {
-        const args: (string | number)[] = [key, serialize(value)]
-
-        if (options?.ex) {
-          args.push('EX', options.ex)
-        }
-        else if (options?.px) {
-          args.push('PX', options.px)
-        }
-        else if (options?.exat) {
-          args.push('EXAT', options.exat)
-        }
-        else if (options?.pxat) {
-          args.push('PXAT', options.pxat)
-        }
-
-        if (options?.nx) {
-          args.push('NX')
-        }
-        else if (options?.xx) {
-          args.push('XX')
-        }
-
-        if (options?.keepTtl) {
-          args.push('KEEPTTL')
-        }
-
-        // 注意：不要把方法解构出来调用，否则会丢失 ioredis 的 this 绑定
-        await (client as unknown as { set: (...args: Array<string | number>) => Promise<unknown> }).set(...args)
-      })
-    },
-
-    async del(...keys: string[]): Promise<Result<number, CacheError>> {
-      return wrapOperation(() => client!.del(...keys))
-    },
-
-    async exists(...keys: string[]): Promise<Result<number, CacheError>> {
-      return wrapOperation(() => client!.exists(...keys))
-    },
-
-    async expire(key: string, seconds: number): Promise<Result<boolean, CacheError>> {
-      return wrapOperation(async () => {
-        const result = await client!.expire(key, seconds)
-        return result === 1
-      })
-    },
-
-    async expireAt(key: string, timestamp: number): Promise<Result<boolean, CacheError>> {
-      return wrapOperation(async () => {
-        const result = await client!.expireat(key, timestamp)
-        return result === 1
-      })
-    },
-
-    async ttl(key: string): Promise<Result<number, CacheError>> {
-      return wrapOperation(() => client!.ttl(key))
-    },
-
-    async persist(key: string): Promise<Result<boolean, CacheError>> {
-      return wrapOperation(async () => {
-        const result = await client!.persist(key)
-        return result === 1
-      })
-    },
-
-    async incr(key: string): Promise<Result<number, CacheError>> {
-      return wrapOperation(() => client!.incr(key))
-    },
-
-    async incrBy(key: string, increment: number): Promise<Result<number, CacheError>> {
-      return wrapOperation(() => client!.incrby(key, increment))
-    },
-
-    async decr(key: string): Promise<Result<number, CacheError>> {
-      return wrapOperation(() => client!.decr(key))
-    },
-
-    async decrBy(key: string, decrement: number): Promise<Result<number, CacheError>> {
-      return wrapOperation(() => client!.decrby(key, decrement))
-    },
-
-    async mget<T = CacheValue>(...keys: string[]): Promise<Result<(T | null)[], CacheError>> {
-      return wrapOperation(async () => {
-        const values = await client!.mget(...keys)
-        return values.map(v => deserialize<T>(v))
-      })
-    },
-
-    async mset(entries: Array<[string, CacheValue]>): Promise<Result<void, CacheError>> {
-      return wrapOperation(async () => {
-        const args: string[] = []
-        for (const [key, value] of entries) {
-          args.push(key, serialize(value))
-        }
-        await client!.mset(...args)
-      })
-    },
-
-    async scan(cursor: number, options?: ScanOptions): Promise<Result<[number, string[]], CacheError>> {
-      return wrapOperation(async () => {
-        let result: [string, string[]]
-
-        if (options?.match && options?.count) {
-          result = await client!.scan(cursor, 'MATCH', options.match, 'COUNT', options.count)
-        }
-        else if (options?.match) {
-          result = await client!.scan(cursor, 'MATCH', options.match)
-        }
-        else if (options?.count) {
-          result = await client!.scan(cursor, 'COUNT', options.count)
-        }
-        else {
-          result = await client!.scan(cursor)
-        }
-
-        const [nextCursor, keys] = result
-        return [Number.parseInt(nextCursor, 10), keys]
-      })
-    },
-
-    async keys(pattern: string): Promise<Result<string[], CacheError>> {
-      return wrapOperation(() => client!.keys(pattern))
-    },
-
-    async type(key: string): Promise<Result<string, CacheError>> {
-      return wrapOperation(() => client!.type(key))
-    },
+    get,
+    set,
+    del,
+    exists,
+    expire,
+    expireAt,
+    ttl,
+    persist,
+    incr,
+    incrBy,
+    decr,
+    decrBy,
+    mget,
+    mset,
+    scan,
+    keys,
+    type,
   }
 }
