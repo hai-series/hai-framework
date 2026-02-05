@@ -19,7 +19,7 @@
  * import { db } from '@hai/db'
  *
  * // 1. 初始化数据库
- * db.init({ type: 'sqlite', database: './data.db' })
+ * await db.init({ type: 'sqlite', database: './data.db' })
  *
  * // 2. 初始化 IAM
  * await iam.init(db, {
@@ -247,7 +247,7 @@ function createIamServiceInstance(): IamService {
         state.config = config
 
         // 初始化组件（会自动创建表）
-        const initResult = initializeComponents({ db, cache, config })
+        const initResult = await initializeComponents({ db, cache, config })
         if (!initResult.success) {
           return initResult
         }

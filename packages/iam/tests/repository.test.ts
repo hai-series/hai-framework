@@ -22,21 +22,21 @@ import {
 describe('repository', () => {
   let testDb: DbService
 
-  beforeEach(() => {
-    const result = db.init({ type: 'sqlite', database: ':memory:' })
+  beforeEach(async () => {
+    const result = await db.init({ type: 'sqlite', database: ':memory:' })
     if (!result.success) {
       throw new Error(`初始化测试数据库失败: ${result.error.message}`)
     }
     testDb = db
   })
 
-  afterEach(() => {
-    db.close()
+  afterEach(async () => {
+    await db.close()
   })
 
   describe('userRepository', () => {
     it('应该创建用户', async () => {
-      const repo = createDbUserRepository(testDb)
+      const repo = await createDbUserRepository(testDb)
 
       const result = await repo.create({
         username: 'testuser',
@@ -55,7 +55,7 @@ describe('repository', () => {
     })
 
     it('应该按 ID 查找用户', async () => {
-      const repo = createDbUserRepository(testDb)
+      const repo = await createDbUserRepository(testDb)
 
       const createResult = await repo.create({
         username: 'testuser',
@@ -77,7 +77,7 @@ describe('repository', () => {
     })
 
     it('应该按用户名查找用户', async () => {
-      const repo = createDbUserRepository(testDb)
+      const repo = await createDbUserRepository(testDb)
 
       await repo.create({
         username: 'testuser',
@@ -95,7 +95,7 @@ describe('repository', () => {
     })
 
     it('应该按邮箱查找用户', async () => {
-      const repo = createDbUserRepository(testDb)
+      const repo = await createDbUserRepository(testDb)
 
       await repo.create({
         username: 'testuser',
@@ -114,7 +114,7 @@ describe('repository', () => {
     })
 
     it('应该更新用户', async () => {
-      const repo = createDbUserRepository(testDb)
+      const repo = await createDbUserRepository(testDb)
 
       const createResult = await repo.create({
         username: 'testuser',
@@ -138,7 +138,7 @@ describe('repository', () => {
     })
 
     it('应该删除用户', async () => {
-      const repo = createDbUserRepository(testDb)
+      const repo = await createDbUserRepository(testDb)
 
       const createResult = await repo.create({
         username: 'testuser',
@@ -164,7 +164,7 @@ describe('repository', () => {
 
   describe('roleRepository', () => {
     it('应该创建角色', async () => {
-      const repo = createDbRoleRepository(testDb)
+      const repo = await createDbRoleRepository(testDb)
 
       const result = await repo.create({
         code: 'admin',
@@ -180,7 +180,7 @@ describe('repository', () => {
     })
 
     it('应该按代码查找角色', async () => {
-      const repo = createDbRoleRepository(testDb)
+      const repo = await createDbRoleRepository(testDb)
 
       await repo.create({
         code: 'admin',
@@ -196,7 +196,7 @@ describe('repository', () => {
     })
 
     it('应该获取所有角色', async () => {
-      const repo = createDbRoleRepository(testDb)
+      const repo = await createDbRoleRepository(testDb)
 
       await repo.create({ code: 'admin', name: '管理员' })
       await repo.create({ code: 'user', name: '普通用户' })
@@ -212,7 +212,7 @@ describe('repository', () => {
 
   describe('permissionRepository', () => {
     it('应该创建权限', async () => {
-      const repo = createDbPermissionRepository(testDb)
+      const repo = await createDbPermissionRepository(testDb)
 
       const result = await repo.create({
         code: 'users:read',
@@ -228,7 +228,7 @@ describe('repository', () => {
     })
 
     it('应该按代码查找权限', async () => {
-      const repo = createDbPermissionRepository(testDb)
+      const repo = await createDbPermissionRepository(testDb)
 
       await repo.create({
         code: 'users:read',
@@ -246,7 +246,7 @@ describe('repository', () => {
 
   describe('otpStore', () => {
     it('应该存储和获取 OTP', async () => {
-      const store = createDbOtpStore(testDb)
+      const store = await createDbOtpStore(testDb)
 
       const setResult = await store.set('test@example.com', '123456', 300)
       expect(setResult.success).toBe(true)
@@ -260,7 +260,7 @@ describe('repository', () => {
     })
 
     it('应该增加尝试次数', async () => {
-      const store = createDbOtpStore(testDb)
+      const store = await createDbOtpStore(testDb)
 
       await store.set('test@example.com', '123456', 300)
       await store.incrementAttempts('test@example.com')
@@ -273,7 +273,7 @@ describe('repository', () => {
     })
 
     it('应该删除 OTP', async () => {
-      const store = createDbOtpStore(testDb)
+      const store = await createDbOtpStore(testDb)
 
       await store.set('test@example.com', '123456', 300)
       await store.delete('test@example.com')
@@ -288,7 +288,7 @@ describe('repository', () => {
 
   describe('oAuthStateStore', () => {
     it('应该存储和获取 OAuth 状态', async () => {
-      const store = createDbOAuthStateStore(testDb)
+      const store = await createDbOAuthStateStore(testDb)
 
       const state = {
         state: 'random-state',
@@ -311,7 +311,7 @@ describe('repository', () => {
 
   describe('sessionRepository', () => {
     it('应该创建会话', async () => {
-      const repo = createDbSessionRepository(testDb)
+      const repo = await createDbSessionRepository(testDb)
 
       const result = await repo.create({
         userId: 'user-1',
@@ -329,7 +329,7 @@ describe('repository', () => {
     })
 
     it('应该按 accessToken 查找会话', async () => {
-      const repo = createDbSessionRepository(testDb)
+      const repo = await createDbSessionRepository(testDb)
 
       await repo.create({
         userId: 'user-1',

@@ -54,7 +54,7 @@ export const auditService = {
     const db = getDb()
     const id = core.id.withPrefix('audit_')
 
-    const insertResult = db.sql.execute(
+    const insertResult = await db.sql.execute(
       `INSERT INTO audit_logs (id, user_id, action, resource, resource_id, details, ip_address, user_agent)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       [
@@ -84,7 +84,7 @@ export const auditService = {
    */
   async getById(id: string): Promise<AuditLog | null> {
     const db = getDb()
-    const logsResult = db.sql.query<AuditLog>(`SELECT * FROM audit_logs WHERE id = ?`, [id])
+    const logsResult = await db.sql.query<AuditLog>(`SELECT * FROM audit_logs WHERE id = ?`, [id])
     return logsResult.success && logsResult.data.length ? logsResult.data[0] : null
   },
 
@@ -123,11 +123,11 @@ export const auditService = {
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
 
     // 获取总数
-    const countResult = db.sql.query<{ count: number }>(`SELECT COUNT(*) as count FROM audit_logs a ${whereClause}`, params)
+    const countResult = await db.sql.query<{ count: number }>(`SELECT COUNT(*) as count FROM audit_logs a ${whereClause}`, params)
     const total = countResult.success ? (countResult.data[0]?.count ?? 0) : 0
 
     // 获取分页数据
-    const itemsResult = db.sql.query<AuditLogWithUser>(
+    const itemsResult = await db.sql.query<AuditLogWithUser>(
       `SELECT a.*, u.username
        FROM audit_logs a
        LEFT JOIN users u ON a.user_id = u.id
@@ -145,7 +145,7 @@ export const auditService = {
    */
   async getUserRecent(userId: string, limit = 10): Promise<AuditLog[]> {
     const db = getDb()
-    const result = db.sql.query<AuditLog>(
+    const result = await db.sql.query<AuditLog>(
       `SELECT * FROM audit_logs WHERE user_id = ? ORDER BY created_at DESC LIMIT ?`,
       [userId, limit],
     )
@@ -160,7 +160,7 @@ export const auditService = {
     const cutoff = new Date()
     cutoff.setDate(cutoff.getDate() - olderThanDays)
 
-    const result = db.sql.execute(`DELETE FROM audit_logs WHERE created_at < ?`, [cutoff.toISOString()])
+    const result = await db.sql.execute(`DELETE FROM audit_logs WHERE created_at < ?`, [cutoff.toISOString()])
     return result.success ? result.data.changes : 0
   },
 
@@ -172,7 +172,7 @@ export const auditService = {
     const cutoff = new Date()
     cutoff.setDate(cutoff.getDate() - days)
 
-    const result = db.sql.query<{ action: string, count: number }>(
+    const result = await db.sql.query<{ action: string, count: number }>(
       `SELECT action, COUNT(*) as count
        FROM audit_logs
        WHERE created_at >= ?

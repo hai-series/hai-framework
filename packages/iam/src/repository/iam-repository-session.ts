@@ -80,10 +80,10 @@ function rowToSession(row: SessionRow): Session {
 /**
  * 创建数据库会话存储
  */
-export function createDbSessionRepository(db: DbService): SessionRepository {
+export async function createDbSessionRepository(db: DbService): Promise<SessionRepository> {
   // 确保表存在
-  function ensureTable(): Result<void, IamError> {
-    const result = db.ddl.createTable(TABLE_NAME, TABLE_SCHEMA, true)
+  async function ensureTable(): Promise<Result<void, IamError>> {
+    const result = await db.ddl.createTable(TABLE_NAME, TABLE_SCHEMA, true)
     if (!result.success) {
       return err({
         code: IamErrorCode.REPOSITORY_ERROR,
@@ -92,17 +92,27 @@ export function createDbSessionRepository(db: DbService): SessionRepository {
       })
     }
 
-    // 创建索引
-    db.ddl.createIndex(TABLE_NAME, 'idx_session_user_id', { columns: ['user_id'] })
-    db.ddl.createIndex(TABLE_NAME, 'idx_session_access_token', { columns: ['access_token'], unique: true })
-    db.ddl.createIndex(TABLE_NAME, 'idx_session_refresh_token', { columns: ['refresh_token'] })
-    db.ddl.createIndex(TABLE_NAME, 'idx_session_expires_at', { columns: ['expires_at'] })
+    const indexResults = await Promise.all([
+      db.ddl.createIndex(TABLE_NAME, 'idx_session_user_id', { columns: ['user_id'] }),
+      db.ddl.createIndex(TABLE_NAME, 'idx_session_access_token', { columns: ['access_token'], unique: true }),
+      db.ddl.createIndex(TABLE_NAME, 'idx_session_refresh_token', { columns: ['refresh_token'] }),
+      db.ddl.createIndex(TABLE_NAME, 'idx_session_expires_at', { columns: ['expires_at'] }),
+    ])
+    for (const indexResult of indexResults) {
+      if (!indexResult.success) {
+        return err({
+          code: IamErrorCode.REPOSITORY_ERROR,
+          message: `创建会话索引失败: ${indexResult.error.message}`,
+          cause: indexResult.error,
+        })
+      }
+    }
 
     return ok(undefined)
   }
 
   // 初始化表
-  const initResult = ensureTable()
+  const initResult = await ensureTable()
   if (!initResult.success) {
     throw new Error(initResult.error.message)
   }
@@ -112,7 +122,7 @@ export function createDbSessionRepository(db: DbService): SessionRepository {
       const id = generateId()
       const now = Date.now()
 
-      const result = db.sql.execute(
+      const result = await db.sql.execute(
         `INSERT INTO ${TABLE_NAME} (
           id, user_id, access_token, refresh_token,
           user_agent, ip_address, data,
@@ -155,7 +165,7 @@ export function createDbSessionRepository(db: DbService): SessionRepository {
     },
 
     async findById(id): Promise<Result<Session | null, IamError>> {
-      const result = db.sql.query<SessionRow>(
+      const result = await db.sql.query<SessionRow>(
         `SELECT * FROM ${TABLE_NAME} WHERE id = ?`,
         [id],
       )
@@ -176,7 +186,7 @@ export function createDbSessionRepository(db: DbService): SessionRepository {
     },
 
     async findByAccessToken(accessToken): Promise<Result<Session | null, IamError>> {
-      const result = db.sql.query<SessionRow>(
+      const result = await db.sql.query<SessionRow>(
         `SELECT * FROM ${TABLE_NAME} WHERE access_token = ?`,
         [accessToken],
       )
@@ -197,7 +207,7 @@ export function createDbSessionRepository(db: DbService): SessionRepository {
     },
 
     async findByRefreshToken(refreshToken): Promise<Result<Session | null, IamError>> {
-      const result = db.sql.query<SessionRow>(
+      const result = await db.sql.query<SessionRow>(
         `SELECT * FROM ${TABLE_NAME} WHERE refresh_token = ?`,
         [refreshToken],
       )
@@ -218,7 +228,7 @@ export function createDbSessionRepository(db: DbService): SessionRepository {
     },
 
     async findByUserId(userId): Promise<Result<Session[], IamError>> {
-      const result = db.sql.query<SessionRow>(
+      const result = await db.sql.query<SessionRow>(
         `SELECT * FROM ${TABLE_NAME} WHERE user_id = ?`,
         [userId],
       )
@@ -265,7 +275,7 @@ export function createDbSessionRepository(db: DbService): SessionRepository {
 
       values.push(id)
 
-      const result = db.sql.execute(
+      const result = await db.sql.execute(
         `UPDATE ${TABLE_NAME} SET ${setClauses.join(', ')} WHERE id = ?`,
         values,
       )
@@ -282,7 +292,7 @@ export function createDbSessionRepository(db: DbService): SessionRepository {
     },
 
     async delete(id): Promise<Result<void, IamError>> {
-      const result = db.sql.execute(
+      const result = await db.sql.execute(
         `DELETE FROM ${TABLE_NAME} WHERE id = ?`,
         [id],
       )
@@ -299,7 +309,7 @@ export function createDbSessionRepository(db: DbService): SessionRepository {
     },
 
     async deleteByUserId(userId): Promise<Result<number, IamError>> {
-      const result = db.sql.execute(
+      const result = await db.sql.execute(
         `DELETE FROM ${TABLE_NAME} WHERE user_id = ?`,
         [userId],
       )
@@ -317,7 +327,7 @@ export function createDbSessionRepository(db: DbService): SessionRepository {
 
     async deleteExpired(): Promise<Result<number, IamError>> {
       const now = Date.now()
-      const result = db.sql.execute(
+      const result = await db.sql.execute(
         `DELETE FROM ${TABLE_NAME} WHERE expires_at < ?`,
         [now],
       )

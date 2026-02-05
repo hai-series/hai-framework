@@ -102,16 +102,16 @@ const passwordProvider = crypto.password.create()
  * @param options - 初始化选项
  * @returns IAM 组件容器
  */
-export function initializeComponents(options: InitOptions): Result<IamComponents, IamError> {
+export async function initializeComponents(options: InitOptions): Promise<Result<IamComponents, IamError>> {
   const { db, cache, config } = options
 
   try {
     // 初始化存储
-    const userRepository = createDbUserRepository(db)
-    const roleRepository = createDbRoleRepository(db)
-    const permissionRepository = createDbPermissionRepository(db)
-    const rolePermissionRepository = createDbRolePermissionRepository(db, permissionRepository)
-    const userRoleRepository = createDbUserRoleRepository(db, roleRepository)
+    const userRepository = await createDbUserRepository(db)
+    const roleRepository = await createDbRoleRepository(db)
+    const permissionRepository = await createDbPermissionRepository(db)
+    const rolePermissionRepository = await createDbRolePermissionRepository(db, permissionRepository)
+    const userRoleRepository = await createDbUserRoleRepository(db, roleRepository)
 
     // 权限缓存（使用 cache 服务）
     const permissionCache: PermissionCache = createCachePermissionCache(cache)
@@ -145,7 +145,7 @@ export function initializeComponents(options: InitOptions): Result<IamComponents
     // OTP 策略
     let otpStrategy: OtpStrategy | undefined
     if (config.strategies.includes('otp')) {
-      const otpStore = createDbOtpStore(db)
+      const otpStore = await createDbOtpStore(db)
       otpStrategy = createOtpStrategy({
         otpConfig: config.otp,
         userRepository,
@@ -161,8 +161,8 @@ export function initializeComponents(options: InitOptions): Result<IamComponents
     // OAuth 策略
     let oauthStrategy: OAuthStrategy | undefined
     if (config.strategies.includes('oauth') && config.oauth) {
-      const oauthStateStore = createDbOAuthStateStore(db)
-      const oauthAccountRepository = createDbOAuthAccountRepository(db)
+      const oauthStateStore = await createDbOAuthStateStore(db)
+      const oauthAccountRepository = await createDbOAuthAccountRepository(db)
       oauthStrategy = createOAuthStrategy({
         oauthConfig: config.oauth,
         userRepository,
@@ -183,7 +183,7 @@ export function initializeComponents(options: InitOptions): Result<IamComponents
 
     let sessionManager: SessionManager
     if (sessionConfig?.type === 'stateful') {
-      const sessionStore: SessionStore = createDbSessionStore(db)
+      const sessionStore: SessionStore = await createDbSessionStore(db)
       sessionManager = createStatefulSessionManager({
         jwt: jwtConfig,
         maxAge: sessionConfig?.maxAge,

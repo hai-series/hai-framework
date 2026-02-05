@@ -31,7 +31,7 @@ import { db } from '@hai/db'
 import { iam } from '@hai/iam'
 
 // 1. 初始化数据库和缓存
-db.init({ type: 'sqlite', database: './data.db' })
+await db.init({ type: 'sqlite', database: './data.db' })
 await cache.init({ url: 'redis://localhost:6379' })
 
 // 2. 初始化 IAM（传入 db 和 cache）
@@ -256,7 +256,7 @@ import { db } from '@hai/db'
 import { iam } from '@hai/iam'
 
 // 初始化数据库（SQLite/PostgreSQL/MySQL）
-db.init({
+await db.init({
   type: 'sqlite',
   database: './data.db',
 })

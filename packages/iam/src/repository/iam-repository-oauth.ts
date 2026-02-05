@@ -39,9 +39,9 @@ interface StateRow {
 /**
  * 创建数据库 OAuth 状态存储
  */
-export function createDbOAuthStateStore(db: DbService): OAuthStateStore {
-  function ensureTable(): Result<void, IamError> {
-    const result = db.ddl.createTable(STATE_TABLE, STATE_SCHEMA, true)
+export async function createDbOAuthStateStore(db: DbService): Promise<OAuthStateStore> {
+  async function ensureTable(): Promise<Result<void, IamError>> {
+    const result = await db.ddl.createTable(STATE_TABLE, STATE_SCHEMA, true)
     if (!result.success) {
       return err({
         code: IamErrorCode.REPOSITORY_ERROR,
@@ -52,7 +52,7 @@ export function createDbOAuthStateStore(db: DbService): OAuthStateStore {
     return ok(undefined)
   }
 
-  const initResult = ensureTable()
+  const initResult = await ensureTable()
   if (!initResult.success) {
     throw new Error(initResult.error.message)
   }
@@ -60,7 +60,7 @@ export function createDbOAuthStateStore(db: DbService): OAuthStateStore {
   return {
     async set(state, data): Promise<Result<void, IamError>> {
       const now = Date.now()
-      const result = db.sql.execute(
+      const result = await db.sql.execute(
         `INSERT OR REPLACE INTO ${STATE_TABLE} 
          (state, code_verifier, return_url, expires_at, created_at)
          VALUES (?, ?, ?, ?, ?)`,
@@ -85,7 +85,7 @@ export function createDbOAuthStateStore(db: DbService): OAuthStateStore {
     },
 
     async get(state): Promise<Result<OAuthState | null, IamError>> {
-      const result = db.sql.query<StateRow>(
+      const result = await db.sql.query<StateRow>(
         `SELECT * FROM ${STATE_TABLE} WHERE state = ?`,
         [state],
       )
@@ -120,7 +120,7 @@ export function createDbOAuthStateStore(db: DbService): OAuthStateStore {
     },
 
     async delete(state): Promise<Result<void, IamError>> {
-      const result = db.sql.execute(
+      const result = await db.sql.execute(
         `DELETE FROM ${STATE_TABLE} WHERE state = ?`,
         [state],
       )
@@ -181,9 +181,9 @@ function rowToAccount(row: AccountRow): OAuthAccount {
 /**
  * 创建数据库 OAuth 账户存储
  */
-export function createDbOAuthAccountRepository(db: DbService): OAuthAccountRepository {
-  function ensureTable(): Result<void, IamError> {
-    const result = db.ddl.createTable(ACCOUNT_TABLE, ACCOUNT_SCHEMA, true)
+export async function createDbOAuthAccountRepository(db: DbService): Promise<OAuthAccountRepository> {
+  async function ensureTable(): Promise<Result<void, IamError>> {
+    const result = await db.ddl.createTable(ACCOUNT_TABLE, ACCOUNT_SCHEMA, true)
     if (!result.success) {
       return err({
         code: IamErrorCode.REPOSITORY_ERROR,
@@ -192,17 +192,27 @@ export function createDbOAuthAccountRepository(db: DbService): OAuthAccountRepos
       })
     }
 
-    // 创建索引
-    db.ddl.createIndex(ACCOUNT_TABLE, 'idx_oauth_account_user', { columns: ['user_id'] })
-    db.ddl.createIndex(ACCOUNT_TABLE, 'idx_oauth_account_provider', {
-      columns: ['provider_id', 'provider_user_id'],
-      unique: true,
-    })
+    const indexResults = await Promise.all([
+      db.ddl.createIndex(ACCOUNT_TABLE, 'idx_oauth_account_user', { columns: ['user_id'] }),
+      db.ddl.createIndex(ACCOUNT_TABLE, 'idx_oauth_account_provider', {
+        columns: ['provider_id', 'provider_user_id'],
+        unique: true,
+      }),
+    ])
+    for (const indexResult of indexResults) {
+      if (!indexResult.success) {
+        return err({
+          code: IamErrorCode.REPOSITORY_ERROR,
+          message: `创建 OAuth 账户索引失败: ${indexResult.error.message}`,
+          cause: indexResult.error,
+        })
+      }
+    }
 
     return ok(undefined)
   }
 
-  const initResult = ensureTable()
+  const initResult = await ensureTable()
   if (!initResult.success) {
     throw new Error(initResult.error.message)
   }
@@ -211,7 +221,7 @@ export function createDbOAuthAccountRepository(db: DbService): OAuthAccountRepos
     async create(account): Promise<Result<OAuthAccount, IamError>> {
       const now = Date.now()
 
-      const result = db.sql.execute(
+      const result = await db.sql.execute(
         `INSERT INTO ${ACCOUNT_TABLE} 
          (user_id, provider_id, provider_user_id, access_token, refresh_token, token_expires_at, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -243,7 +253,7 @@ export function createDbOAuthAccountRepository(db: DbService): OAuthAccountRepos
     },
 
     async findByProvider(providerId, providerUserId): Promise<Result<OAuthAccount | null, IamError>> {
-      const result = db.sql.query<AccountRow>(
+      const result = await db.sql.query<AccountRow>(
         `SELECT * FROM ${ACCOUNT_TABLE} WHERE provider_id = ? AND provider_user_id = ?`,
         [providerId, providerUserId],
       )
@@ -264,7 +274,7 @@ export function createDbOAuthAccountRepository(db: DbService): OAuthAccountRepos
     },
 
     async findByUserId(userId): Promise<Result<OAuthAccount[], IamError>> {
-      const result = db.sql.query<AccountRow>(
+      const result = await db.sql.query<AccountRow>(
         `SELECT * FROM ${ACCOUNT_TABLE} WHERE user_id = ?`,
         [userId],
       )
@@ -306,7 +316,7 @@ export function createDbOAuthAccountRepository(db: DbService): OAuthAccountRepos
       values.push(userId)
       values.push(providerId)
 
-      const result = db.sql.execute(
+      const result = await db.sql.execute(
         `UPDATE ${ACCOUNT_TABLE} SET ${setClauses.join(', ')} WHERE user_id = ? AND provider_id = ?`,
         values,
       )
@@ -323,7 +333,7 @@ export function createDbOAuthAccountRepository(db: DbService): OAuthAccountRepos
     },
 
     async delete(userId, providerId): Promise<Result<void, IamError>> {
-      const result = db.sql.execute(
+      const result = await db.sql.execute(
         `DELETE FROM ${ACCOUNT_TABLE} WHERE user_id = ? AND provider_id = ?`,
         [userId, providerId],
       )
