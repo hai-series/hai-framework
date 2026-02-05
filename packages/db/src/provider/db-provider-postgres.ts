@@ -11,11 +11,6 @@
  * - 完整的 ACID 事务支持
  * - 使用连接池管理连接
  *
- * 注意事项：
- * - PostgreSQL 驱动是异步的
- * - 同步的 sql.query/get/execute 不可用，请使用 txAsync()
- * - DDL 操作会立即返回，但实际执行是异步的
- *
  * 适用场景：
  * - 生产环境
  * - 需要高级 SQL 功能
@@ -26,9 +21,9 @@
  */
 
 import type { Result } from '@hai/core'
+import type { DbConfig } from '../db-config.js'
 import type {
   ColumnDef,
-  DbConfig,
   DbError,
   DbProvider,
   DdlOperations,
@@ -43,7 +38,7 @@ import type {
 import { err, ok } from '@hai/core'
 
 import { DbErrorCode } from '../db-config.js'
-import { getDbMessage } from '../index.js'
+import { dbM } from '../db-i18n.js'
 
 // =============================================================================
 // pg 类型定义（避免强依赖）
@@ -83,40 +78,43 @@ export function createPostgresProvider(): DbProvider {
    * 构建列定义 SQL
    *
    * 将 ColumnDef 转换为 PostgreSQL 列定义语句
+   *
+   * @param name - 列名
+   * @param def - 列定义
+   * @returns 列定义 SQL 片段
    */
   function buildColumnSql(name: string, def: ColumnDef): string {
     const parts: string[] = [name]
 
-    // 类型映射
-    if (def.primaryKey && def.autoIncrement) {
-      parts.push('SERIAL')
-    }
-    else {
-      switch (def.type) {
-        case 'TEXT':
-          parts.push('TEXT')
-          break
-        case 'INTEGER':
+    switch (def.type) {
+      case 'TEXT':
+        parts.push('TEXT')
+        break
+      case 'INTEGER':
+        if (def.autoIncrement) {
+          parts.push('BIGSERIAL')
+        }
+        else {
           parts.push('INTEGER')
-          break
-        case 'REAL':
-          parts.push('DOUBLE PRECISION')
-          break
-        case 'BLOB':
-          parts.push('BYTEA')
-          break
-        case 'BOOLEAN':
-          parts.push('BOOLEAN')
-          break
-        case 'TIMESTAMP':
-          parts.push('TIMESTAMPTZ')
-          break
-        case 'JSON':
-          parts.push('JSONB')
-          break
-        default:
-          parts.push('TEXT')
-      }
+        }
+        break
+      case 'REAL':
+        parts.push('DOUBLE PRECISION')
+        break
+      case 'BLOB':
+        parts.push('BYTEA')
+        break
+      case 'BOOLEAN':
+        parts.push('BOOLEAN')
+        break
+      case 'TIMESTAMP':
+        parts.push('TIMESTAMP')
+        break
+      case 'JSON':
+        parts.push('JSONB')
+        break
+      default:
+        parts.push('TEXT')
     }
 
     if (def.primaryKey) {
@@ -169,12 +167,14 @@ export function createPostgresProvider(): DbProvider {
 
   /**
    * 确保数据库已连接
+   *
+   * @returns 连接池或错误
    */
   function ensureConnected(): Result<PgPool, DbError> {
     if (!pool) {
       return err({
         code: DbErrorCode.NOT_INITIALIZED,
-        message: getDbMessage('db_notInitialized'),
+        message: dbM('db_notInitialized'),
       })
     }
     return ok(pool)
@@ -182,6 +182,9 @@ export function createPostgresProvider(): DbProvider {
 
   /**
    * 将 ? 占位符转换为 PostgreSQL 的 $1, $2, ... 格式
+   *
+   * @param sql - 含 ? 占位符的 SQL
+   * @returns 替换为 $n 的 SQL
    */
   function convertPlaceholders(sql: string): string {
     let index = 0
@@ -199,7 +202,7 @@ export function createPostgresProvider(): DbProvider {
    * 但实际 SQL 执行是异步的。错误会在后台处理。
    */
   const ddl: DdlOperations = {
-    createTable(tableName: string, columns: TableDef, ifNotExists = true): Result<void, DbError> {
+    async createTable(tableName: string, columns: TableDef, ifNotExists = true): Promise<Result<void, DbError>> {
       const connResult = ensureConnected()
       if (!connResult.success)
         return connResult
@@ -211,56 +214,94 @@ export function createPostgresProvider(): DbProvider {
       const ifNotExistsClause = ifNotExists ? 'IF NOT EXISTS ' : ''
       const sql = `CREATE TABLE ${ifNotExistsClause}${tableName} (${columnDefs})`
 
-      // DDL 使用同步风格返回，但实际执行是异步的
-      // 这里返回一个立即成功的结果，实际执行在后台
-      pool!.query(sql).catch(() => {
-        // 忽略错误，因为我们无法在同步函数中处理
-      })
-
-      return ok(undefined)
+      try {
+        await connResult.data.query(sql)
+        return ok(undefined)
+      }
+      catch (error) {
+        return err({
+          code: DbErrorCode.DDL_FAILED,
+          message: dbM('db_ddlFailed', { params: { error: String(error) } }),
+          cause: error,
+        })
+      }
     },
 
-    dropTable(tableName: string, ifExists = true): Result<void, DbError> {
+    async dropTable(tableName: string, ifExists = true): Promise<Result<void, DbError>> {
       const connResult = ensureConnected()
       if (!connResult.success)
         return connResult
 
       const ifExistsClause = ifExists ? 'IF EXISTS ' : ''
-      pool!.query(`DROP TABLE ${ifExistsClause}${tableName}`).catch(() => { })
-
-      return ok(undefined)
+      try {
+        await connResult.data.query(`DROP TABLE ${ifExistsClause}${tableName}`)
+        return ok(undefined)
+      }
+      catch (error) {
+        return err({
+          code: DbErrorCode.DDL_FAILED,
+          message: dbM('db_ddlFailed', { params: { error: String(error) } }),
+          cause: error,
+        })
+      }
     },
 
-    addColumn(tableName: string, columnName: string, columnDef: ColumnDef): Result<void, DbError> {
+    async addColumn(tableName: string, columnName: string, columnDef: ColumnDef): Promise<Result<void, DbError>> {
       const connResult = ensureConnected()
       if (!connResult.success)
         return connResult
 
       const colSql = buildColumnSql(columnName, columnDef)
-      pool!.query(`ALTER TABLE ${tableName} ADD COLUMN ${colSql}`).catch(() => { })
-
-      return ok(undefined)
+      try {
+        await connResult.data.query(`ALTER TABLE ${tableName} ADD COLUMN ${colSql}`)
+        return ok(undefined)
+      }
+      catch (error) {
+        return err({
+          code: DbErrorCode.DDL_FAILED,
+          message: dbM('db_ddlFailed', { params: { error: String(error) } }),
+          cause: error,
+        })
+      }
     },
 
-    dropColumn(tableName: string, columnName: string): Result<void, DbError> {
+    async dropColumn(tableName: string, columnName: string): Promise<Result<void, DbError>> {
       const connResult = ensureConnected()
       if (!connResult.success)
         return connResult
 
-      pool!.query(`ALTER TABLE ${tableName} DROP COLUMN ${columnName}`).catch(() => { })
-      return ok(undefined)
+      try {
+        await connResult.data.query(`ALTER TABLE ${tableName} DROP COLUMN ${columnName}`)
+        return ok(undefined)
+      }
+      catch (error) {
+        return err({
+          code: DbErrorCode.DDL_FAILED,
+          message: dbM('db_ddlFailed', { params: { error: String(error) } }),
+          cause: error,
+        })
+      }
     },
 
-    renameTable(oldName: string, newName: string): Result<void, DbError> {
+    async renameTable(oldName: string, newName: string): Promise<Result<void, DbError>> {
       const connResult = ensureConnected()
       if (!connResult.success)
         return connResult
 
-      pool!.query(`ALTER TABLE ${oldName} RENAME TO ${newName}`).catch(() => { })
-      return ok(undefined)
+      try {
+        await connResult.data.query(`ALTER TABLE ${oldName} RENAME TO ${newName}`)
+        return ok(undefined)
+      }
+      catch (error) {
+        return err({
+          code: DbErrorCode.DDL_FAILED,
+          message: dbM('db_ddlFailed', { params: { error: String(error) } }),
+          cause: error,
+        })
+      }
     },
 
-    createIndex(tableName: string, indexName: string, indexDef: IndexDef): Result<void, DbError> {
+    async createIndex(tableName: string, indexName: string, indexDef: IndexDef): Promise<Result<void, DbError>> {
       const connResult = ensureConnected()
       if (!connResult.success)
         return connResult
@@ -269,70 +310,157 @@ export function createPostgresProvider(): DbProvider {
       const columns = indexDef.columns.join(', ')
       const whereClause = indexDef.where ? ` WHERE ${indexDef.where}` : ''
 
-      pool!.query(
-        `CREATE ${uniqueClause}INDEX IF NOT EXISTS ${indexName} ON ${tableName} (${columns})${whereClause}`,
-      ).catch(() => { })
-
-      return ok(undefined)
+      try {
+        await connResult.data.query(
+          `CREATE ${uniqueClause}INDEX IF NOT EXISTS ${indexName} ON ${tableName} (${columns})${whereClause}`,
+        )
+        return ok(undefined)
+      }
+      catch (error) {
+        return err({
+          code: DbErrorCode.DDL_FAILED,
+          message: dbM('db_ddlFailed', { params: { error: String(error) } }),
+          cause: error,
+        })
+      }
     },
 
-    dropIndex(indexName: string, ifExists = true): Result<void, DbError> {
+    async dropIndex(indexName: string, ifExists = true): Promise<Result<void, DbError>> {
       const connResult = ensureConnected()
       if (!connResult.success)
         return connResult
 
       const ifExistsClause = ifExists ? 'IF EXISTS ' : ''
-      pool!.query(`DROP INDEX ${ifExistsClause}${indexName}`).catch(() => { })
-      return ok(undefined)
+      try {
+        await connResult.data.query(`DROP INDEX ${ifExistsClause}${indexName}`)
+        return ok(undefined)
+      }
+      catch (error) {
+        return err({
+          code: DbErrorCode.DDL_FAILED,
+          message: dbM('db_ddlFailed', { params: { error: String(error) } }),
+          cause: error,
+        })
+      }
     },
 
-    raw(sql: string): Result<void, DbError> {
+    async raw(sql: string): Promise<Result<void, DbError>> {
       const connResult = ensureConnected()
       if (!connResult.success)
         return connResult
 
-      pool!.query(sql).catch(() => { })
-      return ok(undefined)
+      try {
+        await connResult.data.query(sql)
+        return ok(undefined)
+      }
+      catch (error) {
+        return err({
+          code: DbErrorCode.DDL_FAILED,
+          message: dbM('db_ddlFailed', { params: { error: String(error) } }),
+          cause: error,
+        })
+      }
     },
   }
 
   // =========================================================================
-  // SQL 操作（PostgreSQL 不支持同步模式）
+  // SQL 操作
   // =========================================================================
 
   /**
    * SQL 操作
-   *
-   * PostgreSQL 驱动是异步的，不支持同步的 sql 操作。
-   * 请使用 txAsync() 进行数据操作。
    */
   const sql: SqlOperations = {
-    query<T>(_sql: string, _params?: unknown[]): Result<T[], DbError> {
-      return err({
-        code: DbErrorCode.UNSUPPORTED_TYPE,
-        message: getDbMessage('db_postgresNotSupportSyncQuery'),
-      })
+    async query<T>(sqlStr: string, params?: unknown[]): Promise<Result<T[], DbError>> {
+      const connResult = ensureConnected()
+      if (!connResult.success)
+        return connResult
+
+      try {
+        const pgSql = convertPlaceholders(sqlStr)
+        const result = await connResult.data.query(pgSql, params)
+        return ok(result.rows as T[])
+      }
+      catch (error) {
+        return err({
+          code: DbErrorCode.QUERY_FAILED,
+          message: dbM('db_queryFailed', { params: { error: String(error) } }),
+          cause: error,
+        })
+      }
     },
 
-    get<T>(_sql: string, _params?: unknown[]): Result<T | null, DbError> {
-      return err({
-        code: DbErrorCode.UNSUPPORTED_TYPE,
-        message: getDbMessage('db_postgresNotSupportSyncGet'),
-      })
+    async get<T>(sqlStr: string, params?: unknown[]): Promise<Result<T | null, DbError>> {
+      const connResult = ensureConnected()
+      if (!connResult.success)
+        return connResult
+
+      try {
+        const pgSql = convertPlaceholders(sqlStr)
+        const result = await connResult.data.query(pgSql, params)
+        return ok((result.rows[0] as T) ?? null)
+      }
+      catch (error) {
+        return err({
+          code: DbErrorCode.QUERY_FAILED,
+          message: dbM('db_queryFailed', { params: { error: String(error) } }),
+          cause: error,
+        })
+      }
     },
 
-    execute(_sql: string, _params?: unknown[]): Result<ExecuteResult, DbError> {
-      return err({
-        code: DbErrorCode.UNSUPPORTED_TYPE,
-        message: getDbMessage('db_postgresNotSupportSyncExecute'),
-      })
+    async execute(sqlStr: string, params?: unknown[]): Promise<Result<ExecuteResult, DbError>> {
+      const connResult = ensureConnected()
+      if (!connResult.success)
+        return connResult
+
+      try {
+        const pgSql = convertPlaceholders(sqlStr)
+        const result = await connResult.data.query(pgSql, params)
+        return ok({
+          changes: result.rowCount ?? 0,
+        })
+      }
+      catch (error) {
+        return err({
+          code: DbErrorCode.QUERY_FAILED,
+          message: dbM('db_executeFailed', { params: { error: String(error) } }),
+          cause: error,
+        })
+      }
     },
 
-    batch(_statements: Array<{ sql: string, params?: unknown[] }>): Result<void, DbError> {
-      return err({
-        code: DbErrorCode.UNSUPPORTED_TYPE,
-        message: getDbMessage('db_postgresNotSupportSyncBatch'),
-      })
+    async batch(statements: Array<{ sql: string, params?: unknown[] }>): Promise<Result<void, DbError>> {
+      const connResult = ensureConnected()
+      if (!connResult.success)
+        return connResult
+
+      let client: PgClient | null = null
+      try {
+        client = await connResult.data.connect()
+        await client.query('BEGIN')
+        for (const { sql: statement, params } of statements) {
+          const pgSql = convertPlaceholders(statement)
+          await client.query(pgSql, params)
+        }
+        await client.query('COMMIT')
+        return ok(undefined)
+      }
+      catch (error) {
+        if (client) {
+          await client.query('ROLLBACK').catch(() => { })
+        }
+        return err({
+          code: DbErrorCode.QUERY_FAILED,
+          message: dbM('db_batchFailed', { params: { error: String(error) } }),
+          cause: error,
+        })
+      }
+      finally {
+        if (client) {
+          client.release()
+        }
+      }
     },
   }
 
@@ -341,30 +469,20 @@ export function createPostgresProvider(): DbProvider {
   // =========================================================================
 
   /**
-   * 同步事务（不支持）
-   */
-  function tx<T>(_fn: TxCallback<T>): Result<T, DbError> {
-    return err({
-      code: DbErrorCode.UNSUPPORTED_TYPE,
-      message: getDbMessage('db_postgresNotSupportSyncTx'),
-    })
-  }
-
-  /**
    * 异步事务
    *
    * PostgreSQL 推荐使用异步事务进行数据操作。
    *
    * @example
    * ```ts
-   * await db.txAsync(async (tx) => {
+   * await db.tx(async (tx) => {
    *     await tx.execute('INSERT INTO users (name) VALUES (?)', ['张三'])
    *     const users = await tx.query('SELECT * FROM users')
    *     return users
    * })
    * ```
    */
-  async function txAsync<T>(fn: (tx: TxOperations) => Promise<T>): Promise<Result<T, DbError>> {
+  async function tx<T>(fn: TxCallback<T>): Promise<Result<T, DbError>> {
     const connResult = ensureConnected()
     if (!connResult.success)
       return connResult
@@ -374,23 +492,7 @@ export function createPostgresProvider(): DbProvider {
     try {
       client = await pool!.connect()
 
-      // 创建同步风格的事务操作对象（会抛出错误提示使用 await）
       const txOps: TxOperations = {
-        query<R>(_sqlStr: string, _params?: unknown[]): R[] {
-          throw new Error(getDbMessage('db_postgresTxQueryHint'))
-        },
-
-        get<R>(_sqlStr: string, _params?: unknown[]): R | null {
-          throw new Error(getDbMessage('db_postgresTxGetHint'))
-        },
-
-        execute(_sqlStr: string, _params?: unknown[]): ExecuteResult {
-          throw new Error(getDbMessage('db_postgresTxExecuteHint'))
-        },
-      }
-
-      // 提供异步版本的操作
-      const asyncTxOps = {
         async query<R>(sqlStr: string, params?: unknown[]): Promise<R[]> {
           const pgSql = convertPlaceholders(sqlStr)
           const result = await client!.query(pgSql, params)
@@ -413,18 +515,7 @@ export function createPostgresProvider(): DbProvider {
       }
 
       await client.query('BEGIN')
-
-      // 将异步操作注入到 txOps 中（通过代理）
-      const proxiedTxOps = new Proxy(txOps, {
-        get(target, prop) {
-          if (prop in asyncTxOps) {
-            return (asyncTxOps as Record<string, unknown>)[prop as string]
-          }
-          return (target as unknown as Record<string, unknown>)[prop as string]
-        },
-      })
-
-      const result = await fn(proxiedTxOps)
+      const result = await fn(txOps)
       await client.query('COMMIT')
 
       return ok(result)
@@ -435,7 +526,7 @@ export function createPostgresProvider(): DbProvider {
       }
       return err({
         code: DbErrorCode.TRANSACTION_FAILED,
-        message: getDbMessage('db_postgresTxFailed', { params: { error: String(error) } }),
+        message: dbM('db_postgresTxFailed', { params: { error: String(error) } }),
         cause: error,
       })
     }
@@ -450,68 +541,70 @@ export function createPostgresProvider(): DbProvider {
   // Provider 接口实现
   // =========================================================================
 
+  /**
+   * 连接 PostgreSQL 数据库
+   */
+  const connect: DbProvider['connect'] = async (config: DbConfig): Promise<Result<void, DbError>> => {
+    if (config.type !== 'postgresql') {
+      return err({
+        code: DbErrorCode.UNSUPPORTED_TYPE,
+        message: dbM('db_postgresOnlyPostgresql'),
+      })
+    }
+
+    try {
+      // 动态导入 pg
+      // eslint-disable-next-line ts/no-require-imports -- 需要保持 connect 同步，使用 require 进行按需加载
+      const { Pool } = require('pg')
+
+      pool = new Pool({
+        connectionString: config.url,
+        host: config.host,
+        port: config.port,
+        database: config.database,
+        user: config.user,
+        password: config.password,
+        ssl: config.ssl,
+        min: config.pool?.min,
+        max: config.pool?.max ?? 10,
+        idleTimeoutMillis: config.pool?.idleTimeout,
+        connectionTimeoutMillis: config.pool?.acquireTimeout,
+      }) as PgPool
+
+      return ok(undefined)
+    }
+    catch (error) {
+      return err({
+        code: DbErrorCode.CONNECTION_FAILED,
+        message: dbM('db_postgresConnectionFailed', { params: { error: String(error) } }),
+        cause: error,
+      })
+    }
+  }
+
+  /**
+   * 关闭连接池
+   */
+  const close: DbProvider['close'] = async (): Promise<void> => {
+    if (pool) {
+      await pool.end()
+      pool = null
+    }
+  }
+
+  /**
+   * 检查是否已连接
+   */
+  const isConnected: DbProvider['isConnected'] = (): boolean => {
+    return pool !== null
+  }
+
   return {
-    /**
-     * 连接 PostgreSQL 数据库
-     */
-    connect(config: DbConfig): Result<void, DbError> {
-      if (config.type !== 'postgresql') {
-        return err({
-          code: DbErrorCode.UNSUPPORTED_TYPE,
-          message: getDbMessage('db_postgresOnlyPostgresql'),
-        })
-      }
-
-      try {
-        // 动态导入 pg
-        // eslint-disable-next-line ts/no-require-imports -- 需要保持 connect 同步，使用 require 进行按需加载
-        const { Pool } = require('pg')
-
-        pool = new Pool({
-          connectionString: config.url,
-          host: config.host,
-          port: config.port,
-          database: config.database,
-          user: config.user,
-          password: config.password,
-          ssl: config.ssl,
-          min: config.pool?.min,
-          max: config.pool?.max ?? 10,
-          idleTimeoutMillis: config.pool?.idleTimeout,
-          connectionTimeoutMillis: config.pool?.acquireTimeout,
-        }) as PgPool
-
-        return ok(undefined)
-      }
-      catch (error) {
-        return err({
-          code: DbErrorCode.CONNECTION_FAILED,
-          message: getDbMessage('db_postgresConnectionFailed', { params: { error: String(error) } }),
-          cause: error,
-        })
-      }
-    },
-
-    /**
-     * 关闭连接池
-     */
-    close(): void {
-      if (pool) {
-        pool.end().catch(() => { })
-        pool = null
-      }
-    },
-
-    /**
-     * 检查是否已连接
-     */
-    isConnected(): boolean {
-      return pool !== null
-    },
-
+    connect,
+    close,
+    isConnected,
     ddl,
     sql,
     tx,
-    txAsync,
   }
 }

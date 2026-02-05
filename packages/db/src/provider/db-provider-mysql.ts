@@ -13,8 +13,6 @@
  *
  * 注意事项：
  * - MySQL 驱动是异步的
- * - 同步的 sql.query/get/execute 不可用，请使用 txAsync()
- * - DDL 操作会立即返回，但实际执行是异步的
  * - 默认使用 utf8mb4 字符集支持完整 Unicode
  *
  * 适用场景：
@@ -27,9 +25,9 @@
  */
 
 import type { Result } from '@hai/core'
+import type { DbConfig } from '../db-config.js'
 import type {
   ColumnDef,
-  DbConfig,
   DbError,
   DbProvider,
   DdlOperations,
@@ -44,7 +42,7 @@ import type {
 import { err, ok } from '@hai/core'
 
 import { DbErrorCode } from '../db-config.js'
-import { getDbMessage } from '../index.js'
+import { dbM } from '../db-i18n.js'
 
 // =============================================================================
 // mysql2 类型定义（避免强依赖）
@@ -95,6 +93,10 @@ export function createMysqlProvider(): DbProvider {
    * 构建列定义 SQL
    *
    * 将 ColumnDef 转换为 MySQL 列定义语句
+   *
+   * @param name - 列名
+   * @param def - 列定义
+   * @returns 列定义 SQL 片段
    */
   function buildColumnSql(name: string, def: ColumnDef): string {
     const parts: string[] = [`\`${name}\``]
@@ -174,12 +176,14 @@ export function createMysqlProvider(): DbProvider {
 
   /**
    * 确保数据库已连接
+   *
+   * @returns 连接池或错误
    */
   function ensureConnected(): Result<MysqlPool, DbError> {
     if (!pool) {
       return err({
         code: DbErrorCode.NOT_INITIALIZED,
-        message: getDbMessage('db_notInitialized'),
+        message: dbM('db_notInitialized'),
       })
     }
     return ok(pool)
@@ -196,7 +200,7 @@ export function createMysqlProvider(): DbProvider {
    * 但实际 SQL 执行是异步的。错误会在后台处理。
    */
   const ddl: DdlOperations = {
-    createTable(tableName: string, columns: TableDef, ifNotExists = true): Result<void, DbError> {
+    async createTable(tableName: string, columns: TableDef, ifNotExists = true): Promise<Result<void, DbError>> {
       const connResult = ensureConnected()
       if (!connResult.success)
         return connResult
@@ -232,49 +236,94 @@ export function createMysqlProvider(): DbProvider {
       const ifNotExistsClause = ifNotExists ? 'IF NOT EXISTS ' : ''
       const sql = `CREATE TABLE ${ifNotExistsClause}\`${tableName}\` (${columnDefs.join(', ')}) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`
 
-      pool!.query(sql).catch(() => { })
-      return ok(undefined)
+      try {
+        await connResult.data.query(sql)
+        return ok(undefined)
+      }
+      catch (error) {
+        return err({
+          code: DbErrorCode.DDL_FAILED,
+          message: dbM('db_ddlFailed', { params: { error: String(error) } }),
+          cause: error,
+        })
+      }
     },
 
-    dropTable(tableName: string, ifExists = true): Result<void, DbError> {
+    async dropTable(tableName: string, ifExists = true): Promise<Result<void, DbError>> {
       const connResult = ensureConnected()
       if (!connResult.success)
         return connResult
 
       const ifExistsClause = ifExists ? 'IF EXISTS ' : ''
-      pool!.query(`DROP TABLE ${ifExistsClause}\`${tableName}\``).catch(() => { })
-      return ok(undefined)
+      try {
+        await connResult.data.query(`DROP TABLE ${ifExistsClause}\`${tableName}\``)
+        return ok(undefined)
+      }
+      catch (error) {
+        return err({
+          code: DbErrorCode.DDL_FAILED,
+          message: dbM('db_ddlFailed', { params: { error: String(error) } }),
+          cause: error,
+        })
+      }
     },
 
-    addColumn(tableName: string, columnName: string, columnDef: ColumnDef): Result<void, DbError> {
+    async addColumn(tableName: string, columnName: string, columnDef: ColumnDef): Promise<Result<void, DbError>> {
       const connResult = ensureConnected()
       if (!connResult.success)
         return connResult
 
       const colSql = buildColumnSql(columnName, columnDef)
-      pool!.query(`ALTER TABLE \`${tableName}\` ADD COLUMN ${colSql}`).catch(() => { })
-      return ok(undefined)
+      try {
+        await connResult.data.query(`ALTER TABLE \`${tableName}\` ADD COLUMN ${colSql}`)
+        return ok(undefined)
+      }
+      catch (error) {
+        return err({
+          code: DbErrorCode.DDL_FAILED,
+          message: dbM('db_ddlFailed', { params: { error: String(error) } }),
+          cause: error,
+        })
+      }
     },
 
-    dropColumn(tableName: string, columnName: string): Result<void, DbError> {
+    async dropColumn(tableName: string, columnName: string): Promise<Result<void, DbError>> {
       const connResult = ensureConnected()
       if (!connResult.success)
         return connResult
 
-      pool!.query(`ALTER TABLE \`${tableName}\` DROP COLUMN \`${columnName}\``).catch(() => { })
-      return ok(undefined)
+      try {
+        await connResult.data.query(`ALTER TABLE \`${tableName}\` DROP COLUMN \`${columnName}\``)
+        return ok(undefined)
+      }
+      catch (error) {
+        return err({
+          code: DbErrorCode.DDL_FAILED,
+          message: dbM('db_ddlFailed', { params: { error: String(error) } }),
+          cause: error,
+        })
+      }
     },
 
-    renameTable(oldName: string, newName: string): Result<void, DbError> {
+    async renameTable(oldName: string, newName: string): Promise<Result<void, DbError>> {
       const connResult = ensureConnected()
       if (!connResult.success)
         return connResult
 
-      pool!.query(`RENAME TABLE \`${oldName}\` TO \`${newName}\``).catch(() => { })
-      return ok(undefined)
+      try {
+        await connResult.data.query(`RENAME TABLE \`${oldName}\` TO \`${newName}\``)
+        return ok(undefined)
+      }
+      catch (error) {
+        return err({
+          code: DbErrorCode.DDL_FAILED,
+          message: dbM('db_ddlFailed', { params: { error: String(error) } }),
+          cause: error,
+        })
+      }
     },
 
-    createIndex(tableName: string, indexName: string, indexDef: IndexDef): Result<void, DbError> {
+    async createIndex(tableName: string, indexName: string, indexDef: IndexDef): Promise<Result<void, DbError>> {
       const connResult = ensureConnected()
       if (!connResult.success)
         return connResult
@@ -282,75 +331,162 @@ export function createMysqlProvider(): DbProvider {
       const uniqueClause = indexDef.unique ? 'UNIQUE ' : ''
       const columns = indexDef.columns.map(c => `\`${c}\``).join(', ')
 
-      pool!.query(
-        `CREATE ${uniqueClause}INDEX \`${indexName}\` ON \`${tableName}\` (${columns})`,
-      ).catch(() => { })
-      return ok(undefined)
+      try {
+        await connResult.data.query(
+          `CREATE ${uniqueClause}INDEX \`${indexName}\` ON \`${tableName}\` (${columns})`,
+        )
+        return ok(undefined)
+      }
+      catch (error) {
+        return err({
+          code: DbErrorCode.DDL_FAILED,
+          message: dbM('db_ddlFailed', { params: { error: String(error) } }),
+          cause: error,
+        })
+      }
     },
 
-    dropIndex(indexName: string, ifExists = true): Result<void, DbError> {
+    async dropIndex(indexName: string, ifExists = true): Promise<Result<void, DbError>> {
       const connResult = ensureConnected()
       if (!connResult.success)
         return connResult
 
       // MySQL 需要指定表名来删除索引，这里使用通用方式
       // 实际使用时建议用 raw() 指定表名
-      if (ifExists) {
-        pool!.query(`DROP INDEX IF EXISTS \`${indexName}\``).catch(() => { })
+      try {
+        if (ifExists) {
+          await connResult.data.query(`DROP INDEX IF EXISTS \`${indexName}\``)
+        }
+        else {
+          await connResult.data.query(`DROP INDEX \`${indexName}\``)
+        }
+        return ok(undefined)
       }
-      else {
-        pool!.query(`DROP INDEX \`${indexName}\``).catch(() => { })
+      catch (error) {
+        return err({
+          code: DbErrorCode.DDL_FAILED,
+          message: dbM('db_ddlFailed', { params: { error: String(error) } }),
+          cause: error,
+        })
       }
-      return ok(undefined)
     },
 
-    raw(sql: string): Result<void, DbError> {
+    async raw(sql: string): Promise<Result<void, DbError>> {
       const connResult = ensureConnected()
       if (!connResult.success)
         return connResult
 
-      pool!.query(sql).catch(() => { })
-      return ok(undefined)
+      try {
+        await connResult.data.query(sql)
+        return ok(undefined)
+      }
+      catch (error) {
+        return err({
+          code: DbErrorCode.DDL_FAILED,
+          message: dbM('db_ddlFailed', { params: { error: String(error) } }),
+          cause: error,
+        })
+      }
     },
   }
 
   // =========================================================================
-  // SQL 操作（MySQL 不支持同步模式）
+  // SQL 操作
   // =========================================================================
 
   /**
    * SQL 操作
-   *
-   * MySQL 驱动是异步的，不支持同步的 sql 操作。
-   * 请使用 txAsync() 进行数据操作。
    */
   const sql: SqlOperations = {
-    query<T>(_sql: string, _params?: unknown[]): Result<T[], DbError> {
-      return err({
-        code: DbErrorCode.UNSUPPORTED_TYPE,
-        message: getDbMessage('db_mysqlNotSupportSyncQuery'),
-      })
+    async query<T>(sqlStr: string, params?: unknown[]): Promise<Result<T[], DbError>> {
+      const connResult = ensureConnected()
+      if (!connResult.success)
+        return connResult
+
+      try {
+        const [rows] = await connResult.data.query(sqlStr, params)
+        return ok(rows as T[])
+      }
+      catch (error) {
+        return err({
+          code: DbErrorCode.QUERY_FAILED,
+          message: dbM('db_queryFailed', { params: { error: String(error) } }),
+          cause: error,
+        })
+      }
     },
 
-    get<T>(_sql: string, _params?: unknown[]): Result<T | null, DbError> {
-      return err({
-        code: DbErrorCode.UNSUPPORTED_TYPE,
-        message: getDbMessage('db_mysqlNotSupportSyncGet'),
-      })
+    async get<T>(sqlStr: string, params?: unknown[]): Promise<Result<T | null, DbError>> {
+      const connResult = ensureConnected()
+      if (!connResult.success)
+        return connResult
+
+      try {
+        const [rows] = await connResult.data.query(sqlStr, params)
+        const row = (rows as T[])[0] ?? null
+        return ok(row)
+      }
+      catch (error) {
+        return err({
+          code: DbErrorCode.QUERY_FAILED,
+          message: dbM('db_queryFailed', { params: { error: String(error) } }),
+          cause: error,
+        })
+      }
     },
 
-    execute(_sql: string, _params?: unknown[]): Result<ExecuteResult, DbError> {
-      return err({
-        code: DbErrorCode.UNSUPPORTED_TYPE,
-        message: getDbMessage('db_mysqlNotSupportSyncExecute'),
-      })
+    async execute(sqlStr: string, params?: unknown[]): Promise<Result<ExecuteResult, DbError>> {
+      const connResult = ensureConnected()
+      if (!connResult.success)
+        return connResult
+
+      try {
+        const [result] = await connResult.data.execute(sqlStr, params)
+        const mysqlResult = result as MysqlResult
+        return ok({
+          changes: mysqlResult.affectedRows,
+          lastInsertRowid: mysqlResult.insertId,
+        })
+      }
+      catch (error) {
+        return err({
+          code: DbErrorCode.QUERY_FAILED,
+          message: dbM('db_executeFailed', { params: { error: String(error) } }),
+          cause: error,
+        })
+      }
     },
 
-    batch(_statements: Array<{ sql: string, params?: unknown[] }>): Result<void, DbError> {
-      return err({
-        code: DbErrorCode.UNSUPPORTED_TYPE,
-        message: getDbMessage('db_mysqlNotSupportSyncBatch'),
-      })
+    async batch(statements: Array<{ sql: string, params?: unknown[] }>): Promise<Result<void, DbError>> {
+      const connResult = ensureConnected()
+      if (!connResult.success)
+        return connResult
+
+      let connection: MysqlConnection | null = null
+      try {
+        connection = await connResult.data.getConnection()
+        await connection.beginTransaction()
+        for (const { sql: statement, params } of statements) {
+          await connection.execute(statement, params)
+        }
+        await connection.commit()
+        return ok(undefined)
+      }
+      catch (error) {
+        if (connection) {
+          await connection.rollback().catch(() => { })
+        }
+        return err({
+          code: DbErrorCode.QUERY_FAILED,
+          message: dbM('db_batchFailed', { params: { error: String(error) } }),
+          cause: error,
+        })
+      }
+      finally {
+        if (connection) {
+          connection.release()
+        }
+      }
     },
   }
 
@@ -359,30 +495,20 @@ export function createMysqlProvider(): DbProvider {
   // =========================================================================
 
   /**
-   * 同步事务（不支持）
-   */
-  function tx<T>(_fn: TxCallback<T>): Result<T, DbError> {
-    return err({
-      code: DbErrorCode.UNSUPPORTED_TYPE,
-      message: getDbMessage('db_mysqlNotSupportSyncTx'),
-    })
-  }
-
-  /**
    * 异步事务
    *
    * MySQL 推荐使用异步事务进行数据操作。
    *
    * @example
    * ```ts
-   * await db.txAsync(async (tx) => {
+   * await db.tx(async (tx) => {
    *     await tx.execute('INSERT INTO users (name) VALUES (?)', ['张三'])
    *     const users = await tx.query('SELECT * FROM users')
    *     return users
    * })
    * ```
    */
-  async function txAsync<T>(fn: (tx: TxOperations) => Promise<T>): Promise<Result<T, DbError>> {
+  async function tx<T>(fn: TxCallback<T>): Promise<Result<T, DbError>> {
     const connResult = ensureConnected()
     if (!connResult.success)
       return connResult
@@ -392,18 +518,15 @@ export function createMysqlProvider(): DbProvider {
     try {
       connection = await pool!.getConnection()
 
-      // 创建事务内操作对象（异步版本）
-      const asyncTxOps = {
+      const txOps: TxOperations = {
         async query<R>(sqlStr: string, params?: unknown[]): Promise<R[]> {
           const [rows] = await connection!.query(sqlStr, params)
           return rows as R[]
         },
-
         async get<R>(sqlStr: string, params?: unknown[]): Promise<R | null> {
           const [rows] = await connection!.query(sqlStr, params)
           return ((rows as R[])[0] as R) ?? null
         },
-
         async execute(sqlStr: string, params?: unknown[]): Promise<ExecuteResult> {
           const [result] = await connection!.execute(sqlStr, params)
           const mysqlResult = result as MysqlResult
@@ -414,31 +537,8 @@ export function createMysqlProvider(): DbProvider {
         },
       }
 
-      // 同步风格的接口（会抛出错误提示使用 await）
-      const txOps: TxOperations = {
-        query<R>(_sqlStr: string, _params?: unknown[]): R[] {
-          throw new Error(getDbMessage('db_mysqlTxQueryHint'))
-        },
-        get<R>(_sqlStr: string, _params?: unknown[]): R | null {
-          throw new Error(getDbMessage('db_mysqlTxGetHint'))
-        },
-        execute(_sqlStr: string, _params?: unknown[]): ExecuteResult {
-          throw new Error(getDbMessage('db_mysqlTxExecuteHint'))
-        },
-      }
-
-      // 代理同步接口到异步
-      const proxiedTxOps = new Proxy(txOps, {
-        get(target, prop) {
-          if (prop in asyncTxOps) {
-            return (asyncTxOps as Record<string, unknown>)[prop as string]
-          }
-          return (target as unknown as Record<string, unknown>)[prop as string]
-        },
-      })
-
       await connection.beginTransaction()
-      const result = await fn(proxiedTxOps)
+      const result = await fn(txOps)
       await connection.commit()
 
       return ok(result)
@@ -449,7 +549,7 @@ export function createMysqlProvider(): DbProvider {
       }
       return err({
         code: DbErrorCode.TRANSACTION_FAILED,
-        message: `异步事务执行失败: ${error}`,
+        message: dbM('db_mysqlTxFailed', { params: { error: String(error) } }),
         cause: error,
       })
     }
@@ -464,68 +564,70 @@ export function createMysqlProvider(): DbProvider {
   // Provider 接口实现
   // =========================================================================
 
+  /**
+   * 连接 MySQL 数据库
+   */
+  const connect: DbProvider['connect'] = async (config: DbConfig): Promise<Result<void, DbError>> => {
+    if (config.type !== 'mysql') {
+      return err({
+        code: DbErrorCode.UNSUPPORTED_TYPE,
+        message: dbM('db_mysqlOnlyMysql'),
+      })
+    }
+
+    try {
+      // 动态导入 mysql2
+      // eslint-disable-next-line ts/no-require-imports -- 需要保持 connect 同步，使用 require 进行按需加载
+      const mysql = require('mysql2/promise')
+
+      pool = mysql.createPool({
+        uri: config.url,
+        host: config.host,
+        port: config.port,
+        database: config.database,
+        user: config.user,
+        password: config.password,
+        ssl: config.ssl,
+        connectionLimit: config.pool?.max ?? 10,
+        waitForConnections: true,
+        queueLimit: 0,
+        charset: config.mysql?.charset ?? 'utf8mb4',
+      }) as MysqlPool
+
+      return ok(undefined)
+    }
+    catch (error) {
+      return err({
+        code: DbErrorCode.CONNECTION_FAILED,
+        message: dbM('db_mysqlConnectionFailed', { params: { error: String(error) } }),
+        cause: error,
+      })
+    }
+  }
+
+  /**
+   * 关闭连接池
+   */
+  const close: DbProvider['close'] = async (): Promise<void> => {
+    if (pool) {
+      await pool.end()
+      pool = null
+    }
+  }
+
+  /**
+   * 检查是否已连接
+   */
+  const isConnected: DbProvider['isConnected'] = (): boolean => {
+    return pool !== null
+  }
+
   return {
-    /**
-     * 连接 MySQL 数据库
-     */
-    connect(config: DbConfig): Result<void, DbError> {
-      if (config.type !== 'mysql') {
-        return err({
-          code: DbErrorCode.UNSUPPORTED_TYPE,
-          message: getDbMessage('db_mysqlOnlyMysql'),
-        })
-      }
-
-      try {
-        // 动态导入 mysql2
-        // eslint-disable-next-line ts/no-require-imports -- 需要保持 connect 同步，使用 require 进行按需加载
-        const mysql = require('mysql2/promise')
-
-        pool = mysql.createPool({
-          uri: config.url,
-          host: config.host,
-          port: config.port,
-          database: config.database,
-          user: config.user,
-          password: config.password,
-          ssl: config.ssl,
-          connectionLimit: config.pool?.max ?? 10,
-          waitForConnections: true,
-          queueLimit: 0,
-          charset: config.mysql?.charset ?? 'utf8mb4',
-        }) as MysqlPool
-
-        return ok(undefined)
-      }
-      catch (error) {
-        return err({
-          code: DbErrorCode.CONNECTION_FAILED,
-          message: `连接 MySQL 失败: ${error}`,
-          cause: error,
-        })
-      }
-    },
-
-    /**
-     * 关闭连接池
-     */
-    close(): void {
-      if (pool) {
-        pool.end().catch(() => { })
-        pool = null
-      }
-    },
-
-    /**
-     * 检查是否已连接
-     */
-    isConnected(): boolean {
-      return pool !== null
-    },
-
+    connect,
+    close,
+    isConnected,
     ddl,
     sql,
     tx,
-    txAsync,
   }
 }

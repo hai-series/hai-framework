@@ -23,9 +23,9 @@
 
 import type { Result } from '@hai/core'
 import type Database from 'better-sqlite3'
+import type { DbConfig } from '../db-config.js'
 import type {
   ColumnDef,
-  DbConfig,
   DbError,
   DbProvider,
   DdlOperations,
@@ -41,7 +41,7 @@ import { createRequire } from 'node:module'
 import { err, ok } from '@hai/core'
 
 import { DbErrorCode } from '../db-config.js'
-import { getDbMessage } from '../index.js'
+import { dbM } from '../db-i18n.js'
 
 const require = createRequire(import.meta.url)
 
@@ -152,7 +152,7 @@ export function createSqliteProvider(): DbProvider {
     if (!database) {
       return err({
         code: DbErrorCode.NOT_INITIALIZED,
-        message: getDbMessage('db_notInitialized'),
+        message: dbM('db_notInitialized'),
       })
     }
     return ok(database)
@@ -166,7 +166,7 @@ export function createSqliteProvider(): DbProvider {
     /**
      * 创建表
      */
-    createTable(tableName: string, columns: TableDef, ifNotExists = true): Result<void, DbError> {
+    async createTable(tableName: string, columns: TableDef, ifNotExists = true): Promise<Result<void, DbError>> {
       const connResult = ensureConnected()
       if (!connResult.success)
         return connResult
@@ -185,7 +185,7 @@ export function createSqliteProvider(): DbProvider {
       catch (error) {
         return err({
           code: DbErrorCode.DDL_FAILED,
-          message: getDbMessage('db_sqliteCreateTableFailed', { params: { tableName, error: String(error) } }),
+          message: dbM('db_sqliteCreateTableFailed', { params: { tableName, error: String(error) } }),
           cause: error,
         })
       }
@@ -194,7 +194,7 @@ export function createSqliteProvider(): DbProvider {
     /**
      * 删除表
      */
-    dropTable(tableName: string, ifExists = true): Result<void, DbError> {
+    async dropTable(tableName: string, ifExists = true): Promise<Result<void, DbError>> {
       const connResult = ensureConnected()
       if (!connResult.success)
         return connResult
@@ -207,7 +207,7 @@ export function createSqliteProvider(): DbProvider {
       catch (error) {
         return err({
           code: DbErrorCode.DDL_FAILED,
-          message: getDbMessage('db_sqliteDropTableFailed', { params: { tableName, error: String(error) } }),
+          message: dbM('db_sqliteDropTableFailed', { params: { tableName, error: String(error) } }),
           cause: error,
         })
       }
@@ -216,7 +216,7 @@ export function createSqliteProvider(): DbProvider {
     /**
      * 添加列
      */
-    addColumn(tableName: string, columnName: string, columnDef: ColumnDef): Result<void, DbError> {
+    async addColumn(tableName: string, columnName: string, columnDef: ColumnDef): Promise<Result<void, DbError>> {
       const connResult = ensureConnected()
       if (!connResult.success)
         return connResult
@@ -229,7 +229,7 @@ export function createSqliteProvider(): DbProvider {
       catch (error) {
         return err({
           code: DbErrorCode.DDL_FAILED,
-          message: getDbMessage('db_sqliteAddColumnFailed', { params: { tableName, columnName, error: String(error) } }),
+          message: dbM('db_sqliteAddColumnFailed', { params: { tableName, columnName, error: String(error) } }),
           cause: error,
         })
       }
@@ -238,7 +238,7 @@ export function createSqliteProvider(): DbProvider {
     /**
      * 删除列
      */
-    dropColumn(tableName: string, columnName: string): Result<void, DbError> {
+    async dropColumn(tableName: string, columnName: string): Promise<Result<void, DbError>> {
       const connResult = ensureConnected()
       if (!connResult.success)
         return connResult
@@ -250,7 +250,7 @@ export function createSqliteProvider(): DbProvider {
       catch (error) {
         return err({
           code: DbErrorCode.DDL_FAILED,
-          message: getDbMessage('db_sqliteDropColumnFailed', { params: { tableName, columnName, error: String(error) } }),
+          message: dbM('db_sqliteDropColumnFailed', { params: { tableName, columnName, error: String(error) } }),
           cause: error,
         })
       }
@@ -259,7 +259,7 @@ export function createSqliteProvider(): DbProvider {
     /**
      * 重命名表
      */
-    renameTable(oldName: string, newName: string): Result<void, DbError> {
+    async renameTable(oldName: string, newName: string): Promise<Result<void, DbError>> {
       const connResult = ensureConnected()
       if (!connResult.success)
         return connResult
@@ -271,7 +271,7 @@ export function createSqliteProvider(): DbProvider {
       catch (error) {
         return err({
           code: DbErrorCode.DDL_FAILED,
-          message: getDbMessage('db_sqliteRenameTableFailed', { params: { oldName, newName, error: String(error) } }),
+          message: dbM('db_sqliteRenameTableFailed', { params: { oldName, newName, error: String(error) } }),
           cause: error,
         })
       }
@@ -280,7 +280,7 @@ export function createSqliteProvider(): DbProvider {
     /**
      * 创建索引
      */
-    createIndex(tableName: string, indexName: string, indexDef: IndexDef): Result<void, DbError> {
+    async createIndex(tableName: string, indexName: string, indexDef: IndexDef): Promise<Result<void, DbError>> {
       const connResult = ensureConnected()
       if (!connResult.success)
         return connResult
@@ -298,7 +298,7 @@ export function createSqliteProvider(): DbProvider {
       catch (error) {
         return err({
           code: DbErrorCode.DDL_FAILED,
-          message: getDbMessage('db_sqliteCreateIndexFailed', { params: { indexName, error: String(error) } }),
+          message: dbM('db_sqliteCreateIndexFailed', { params: { indexName, error: String(error) } }),
           cause: error,
         })
       }
@@ -307,7 +307,7 @@ export function createSqliteProvider(): DbProvider {
     /**
      * 删除索引
      */
-    dropIndex(indexName: string, ifExists = true): Result<void, DbError> {
+    async dropIndex(indexName: string, ifExists = true): Promise<Result<void, DbError>> {
       const connResult = ensureConnected()
       if (!connResult.success)
         return connResult
@@ -320,7 +320,7 @@ export function createSqliteProvider(): DbProvider {
       catch (error) {
         return err({
           code: DbErrorCode.DDL_FAILED,
-          message: getDbMessage('db_sqliteDropIndexFailed', { params: { indexName, error: String(error) } }),
+          message: dbM('db_sqliteDropIndexFailed', { params: { indexName, error: String(error) } }),
           cause: error,
         })
       }
@@ -329,7 +329,7 @@ export function createSqliteProvider(): DbProvider {
     /**
      * 执行原始 DDL 语句
      */
-    raw(sql: string): Result<void, DbError> {
+    async raw(sql: string): Promise<Result<void, DbError>> {
       const connResult = ensureConnected()
       if (!connResult.success)
         return connResult
@@ -341,7 +341,7 @@ export function createSqliteProvider(): DbProvider {
       catch (error) {
         return err({
           code: DbErrorCode.DDL_FAILED,
-          message: getDbMessage('db_sqliteExecDdlFailed', { params: { error: String(error) } }),
+          message: dbM('db_sqliteExecDdlFailed', { params: { error: String(error) } }),
           cause: error,
         })
       }
@@ -356,7 +356,7 @@ export function createSqliteProvider(): DbProvider {
     /**
      * 查询多行
      */
-    query<T>(sqlStr: string, params?: unknown[]): Result<T[], DbError> {
+    async query<T>(sqlStr: string, params?: unknown[]): Promise<Result<T[], DbError>> {
       const connResult = ensureConnected()
       if (!connResult.success)
         return connResult
@@ -369,7 +369,7 @@ export function createSqliteProvider(): DbProvider {
       catch (error) {
         return err({
           code: DbErrorCode.QUERY_FAILED,
-          message: getDbMessage('db_sqliteQueryFailed', { params: { error: String(error) } }),
+          message: dbM('db_sqliteQueryFailed', { params: { error: String(error) } }),
           cause: error,
         })
       }
@@ -378,7 +378,7 @@ export function createSqliteProvider(): DbProvider {
     /**
      * 查询单行
      */
-    get<T>(sqlStr: string, params?: unknown[]): Result<T | null, DbError> {
+    async get<T>(sqlStr: string, params?: unknown[]): Promise<Result<T | null, DbError>> {
       const connResult = ensureConnected()
       if (!connResult.success)
         return connResult
@@ -391,7 +391,7 @@ export function createSqliteProvider(): DbProvider {
       catch (error) {
         return err({
           code: DbErrorCode.QUERY_FAILED,
-          message: getDbMessage('db_sqliteQueryFailed', { params: { error: String(error) } }),
+          message: dbM('db_sqliteQueryFailed', { params: { error: String(error) } }),
           cause: error,
         })
       }
@@ -400,7 +400,7 @@ export function createSqliteProvider(): DbProvider {
     /**
      * 执行修改语句（INSERT/UPDATE/DELETE）
      */
-    execute(sqlStr: string, params?: unknown[]): Result<ExecuteResult, DbError> {
+    async execute(sqlStr: string, params?: unknown[]): Promise<Result<ExecuteResult, DbError>> {
       const connResult = ensureConnected()
       if (!connResult.success)
         return connResult
@@ -416,7 +416,7 @@ export function createSqliteProvider(): DbProvider {
       catch (error) {
         return err({
           code: DbErrorCode.QUERY_FAILED,
-          message: getDbMessage('db_sqliteExecuteFailed', { params: { error: String(error) } }),
+          message: dbM('db_sqliteExecuteFailed', { params: { error: String(error) } }),
           cause: error,
         })
       }
@@ -425,7 +425,7 @@ export function createSqliteProvider(): DbProvider {
     /**
      * 批量执行多条语句
      */
-    batch(statements: Array<{ sql: string, params?: unknown[] }>): Result<void, DbError> {
+    async batch(statements: Array<{ sql: string, params?: unknown[] }>): Promise<Result<void, DbError>> {
       const connResult = ensureConnected()
       if (!connResult.success)
         return connResult
@@ -449,7 +449,7 @@ export function createSqliteProvider(): DbProvider {
       catch (error) {
         return err({
           code: DbErrorCode.QUERY_FAILED,
-          message: getDbMessage('db_sqliteBatchFailed', { params: { error: String(error) } }),
+          message: dbM('db_sqliteBatchFailed', { params: { error: String(error) } }),
           cause: error,
         })
       }
@@ -461,61 +461,15 @@ export function createSqliteProvider(): DbProvider {
   // =========================================================================
 
   /**
-   * 执行同步事务
-   *
-   * SQLite 支持同步事务，性能优秀。
-   */
-  function tx<T>(fn: TxCallback<T>): Result<T, DbError> {
-    const connResult = ensureConnected()
-    if (!connResult.success)
-      return connResult
-
-    const db = connResult.data
-
-    // 创建事务内操作对象
-    const txOps: TxOperations = {
-      query<R>(sqlStr: string, params?: unknown[]): R[] {
-        const stmt = db.prepare(sqlStr)
-        return (params ? stmt.all(...params) : stmt.all()) as R[]
-      },
-
-      get<R>(sqlStr: string, params?: unknown[]): R | null {
-        const stmt = db.prepare(sqlStr)
-        const row = params ? stmt.get(...params) : stmt.get()
-        return (row as R) ?? null
-      },
-
-      execute(sqlStr: string, params?: unknown[]): ExecuteResult {
-        const stmt = db.prepare(sqlStr)
-        const result = params ? stmt.run(...params) : stmt.run()
-        return {
-          changes: result.changes,
-          lastInsertRowid: result.lastInsertRowid,
-        }
-      },
-    }
-
-    try {
-      const transaction = db.transaction(() => fn(txOps))
-      const result = transaction()
-      return ok(result)
-    }
-    catch (error) {
-      return err({
-        code: DbErrorCode.TRANSACTION_FAILED,
-        message: getDbMessage('db_sqliteTxFailed', { params: { error: String(error) } }),
-        cause: error,
-      })
-    }
-  }
-
-  /**
    * 执行异步事务
    *
-   * 支持在事务中执行异步操作，但注意 SQLite 的事务是同步的，
-   * 异步操作可能导致并发问题。
+   * SQLite 使用同步 API，因此在这里显式执行 BEGIN/COMMIT/ROLLBACK，
+   * 并将同步调用包装为异步接口。
+   *
+   * @param fn - 事务回调
+   * @returns 事务回调结果或错误
    */
-  async function txAsync<T>(fn: (tx: TxOperations) => Promise<T>): Promise<Result<T, DbError>> {
+  async function tx<T>(fn: TxCallback<T>): Promise<Result<T, DbError>> {
     const connResult = ensureConnected()
     if (!connResult.success)
       return connResult
@@ -524,18 +478,18 @@ export function createSqliteProvider(): DbProvider {
 
     // 创建事务内操作对象
     const txOps: TxOperations = {
-      query<R>(sqlStr: string, params?: unknown[]): R[] {
+      async query<R>(sqlStr: string, params?: unknown[]): Promise<R[]> {
         const stmt = db.prepare(sqlStr)
         return (params ? stmt.all(...params) : stmt.all()) as R[]
       },
 
-      get<R>(sqlStr: string, params?: unknown[]): R | null {
+      async get<R>(sqlStr: string, params?: unknown[]): Promise<R | null> {
         const stmt = db.prepare(sqlStr)
         const row = params ? stmt.get(...params) : stmt.get()
         return (row as R) ?? null
       },
 
-      execute(sqlStr: string, params?: unknown[]): ExecuteResult {
+      async execute(sqlStr: string, params?: unknown[]): Promise<ExecuteResult> {
         const stmt = db.prepare(sqlStr)
         const result = params ? stmt.run(...params) : stmt.run()
         return {
@@ -555,7 +509,7 @@ export function createSqliteProvider(): DbProvider {
       db.exec('ROLLBACK')
       return err({
         code: DbErrorCode.TRANSACTION_FAILED,
-        message: getDbMessage('db_sqliteTxAsyncFailed', { params: { error: String(error) } }),
+        message: dbM('db_sqliteTxFailed', { params: { error: String(error) } }),
         cause: error,
       })
     }
@@ -565,75 +519,77 @@ export function createSqliteProvider(): DbProvider {
   // Provider 接口实现
   // =========================================================================
 
+  /**
+   * 连接 SQLite 数据库
+   */
+  const connect: DbProvider['connect'] = async (config: DbConfig): Promise<Result<void, DbError>> => {
+    if (config.type !== 'sqlite') {
+      return err({
+        code: DbErrorCode.UNSUPPORTED_TYPE,
+        message: dbM('db_sqliteOnlySqlite'),
+      })
+    }
+
+    if (!config.database) {
+      return err({
+        code: DbErrorCode.CONFIG_ERROR,
+        message: dbM('db_sqliteNeedPath'),
+      })
+    }
+
+    try {
+      // 动态导入 better-sqlite3
+
+      const Database = require('better-sqlite3')
+
+      const sqliteOptions: { walMode: boolean, readonly: boolean } = {
+        walMode: true,
+        readonly: false,
+        ...(config.sqlite ?? {}),
+      }
+      database = new Database(config.database, {
+        readonly: sqliteOptions.readonly ?? false,
+      }) as Database.Database
+
+      // 启用 WAL 模式（提高并发性能）
+      if (sqliteOptions.walMode !== false) {
+        database.pragma('journal_mode = WAL')
+      }
+
+      return ok(undefined)
+    }
+    catch (error) {
+      return err({
+        code: DbErrorCode.CONNECTION_FAILED,
+        message: dbM('db_sqliteConnectionFailed', { params: { error: String(error) } }),
+        cause: error,
+      })
+    }
+  }
+
+  /**
+   * 关闭数据库连接
+   */
+  const close: DbProvider['close'] = async (): Promise<void> => {
+    if (database) {
+      database.close()
+      database = null
+    }
+  }
+
+  /**
+   * 检查是否已连接
+   */
+  const isConnected: DbProvider['isConnected'] = (): boolean => {
+    return database !== null && database.open
+  }
+
   return {
-    /**
-     * 连接 SQLite 数据库
-     */
-    connect(config: DbConfig): Result<void, DbError> {
-      if (config.type !== 'sqlite') {
-        return err({
-          code: DbErrorCode.UNSUPPORTED_TYPE,
-          message: getDbMessage('db_sqliteOnlySqlite'),
-        })
-      }
-
-      if (!config.database) {
-        return err({
-          code: DbErrorCode.CONFIG_ERROR,
-          message: getDbMessage('db_sqliteNeedPath'),
-        })
-      }
-
-      try {
-        // 动态导入 better-sqlite3
-
-        const Database = require('better-sqlite3')
-
-        const sqliteOptions: { walMode: boolean, readonly: boolean } = {
-          walMode: true,
-          readonly: false,
-          ...(config.sqlite ?? {}),
-        }
-        database = new Database(config.database, {
-          readonly: sqliteOptions.readonly ?? false,
-        }) as Database.Database
-
-        // 启用 WAL 模式（提高并发性能）
-        if (sqliteOptions.walMode !== false) {
-          database.pragma('journal_mode = WAL')
-        }
-
-        return ok(undefined)
-      }
-      catch (error) {
-        return err({
-          code: DbErrorCode.CONNECTION_FAILED,
-          message: getDbMessage('db_sqliteConnectionFailed', { params: { error: String(error) } }),
-          cause: error,
-        })
-      }
-    },
-
-    /**
-     * 关闭数据库连接
-     */
-    close(): void {
-      if (database) {
-        database.close()
-        database = null
-      }
-    },
-
-    /**
-     * 检查是否已连接
-     */
-    isConnected(): boolean {
-      return database !== null && database.open
-    },
-
+    connect,
+    close,
+    isConnected,
     ddl,
     sql,
     tx,
-    txAsync,
   }
 }
