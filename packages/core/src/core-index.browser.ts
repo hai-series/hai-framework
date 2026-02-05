@@ -7,7 +7,7 @@
  * 所有功能统一通过 core 对象访问：
  * - core.logger - 日志
  * - core.id - ID 生成
- * - core.type - 类型检查
+ * - core.typeUtils - 类型检查
  * - core.object - 对象操作
  * - core.string - 字符串操作
  * - core.array - 数组操作

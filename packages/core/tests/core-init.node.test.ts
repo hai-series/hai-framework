@@ -29,7 +29,13 @@ describe('core.init', () => {
 
     core.init({ configDir: tempDir })
 
-    expect(core.config.get('core')).toEqual({ name: 'demo' })
+    expect(core.config.get('core')).toEqual({
+      name: 'demo',
+      version: '0.1.0',
+      env: 'development',
+      debug: false,
+      defaultLocale: 'zh-CN',
+    })
     expect(core.config.get('app')).toEqual({ foo: 'bar' })
   })
 })
