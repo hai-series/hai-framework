@@ -232,12 +232,6 @@ export const crypto = {
    * ```
    */
   init(config?: CryptoConfigInput): void {
-    const validation = core.config.validate('crypto', CryptoConfigSchema)
-    if (!validation.success) {
-      const error = new Error(validation.error.message)
-      ;(error as Error & { cause?: unknown }).cause = validation.error
-      throw error
-    }
     if (config) {
       currentConfig = CryptoConfigSchema.parse(config)
     }

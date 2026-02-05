@@ -2,7 +2,7 @@
   "name": "@hai/crypto",
   "type": "module",
   "version": "0.1.0",
-  "description": "Chinese National Cryptographic Algorithms (SM2/SM3/SM4) .",
+  "description": "Chinese National Cryptographic Algorithms (SM2/SM3/SM4) module for hai Framework.",
   "license": "Apache-2.0",
   "exports": {
     ".": {
