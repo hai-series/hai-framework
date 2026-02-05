@@ -9,6 +9,9 @@ import { typeUtils } from './core-util-type.js'
 /**
  * 深度克隆对象。
  * 注意：仅适用于可 JSON 序列化的数据（如 Date、Map、函数等会丢失信息）。
+ * @param obj - 目标对象
+ * @returns 深度克隆结果
+ * @remarks 不适用于循环引用对象。
  *
  * @example
  * ```ts
@@ -21,6 +24,9 @@ function deepClone<T>(obj: T): T {
 
 /**
  * 深度合并多个对象。
+ * @param objects - 需要合并的对象列表
+ * @returns 合并后的新对象
+ * @remarks 仅合并纯对象字段，数组会被直接覆盖。
  *
  * @example
  * ```ts
@@ -50,6 +56,9 @@ function deepMerge<T extends Record<string, unknown>>(...objects: Partial<T>[]):
 
 /**
  * 从对象中选取指定的键。
+ * @param obj - 目标对象
+ * @param keys - 要选取的键列表
+ * @returns 仅包含指定键的新对象
  *
  * @example
  * ```ts
@@ -71,6 +80,9 @@ function pick<T extends Record<string, unknown>, K extends keyof T>(
 
 /**
  * 从对象中排除指定的键。
+ * @param obj - 目标对象
+ * @param keys - 要排除的键列表
+ * @returns 排除指定键后的新对象
  *
  * @example
  * ```ts
@@ -90,6 +102,8 @@ function omit<T extends Record<string, unknown>, K extends keyof T>(
 
 /**
  * 获取对象的所有键。
+ * @param obj - 目标对象
+ * @returns 键列表
  *
  * @example
  * ```ts
@@ -102,6 +116,8 @@ function keys<T extends Record<string, unknown>>(obj: T): (keyof T)[] {
 
 /**
  * 获取对象的所有值。
+ * @param obj - 目标对象
+ * @returns 值列表
  *
  * @example
  * ```ts
@@ -114,6 +130,8 @@ function values<T extends Record<string, unknown>>(obj: T): T[keyof T][] {
 
 /**
  * 获取对象的键值对数组。
+ * @param obj - 目标对象
+ * @returns 键值对数组
  *
  * @example
  * ```ts
@@ -126,6 +144,8 @@ function entries<T extends Record<string, unknown>>(obj: T): [keyof T, T[keyof T
 
 /**
  * 从键值对数组创建对象。
+ * @param entries - 键值对数组
+ * @returns 生成的对象
  *
  * @example
  * ```ts
