@@ -11,7 +11,9 @@
  */
 
 import type { Result } from '@hai/core'
+import type { IamConfig } from '../iam-config.js'
 import type {
+  AgreementDisplay,
   AuthOperations,
   AuthResult,
   IamError,
@@ -27,8 +29,8 @@ import type {
 import type { OAuthStrategy, OtpStrategy, PasswordStrategy } from '../strategy/index.js'
 import { err, ok } from '@hai/core'
 
-import { IamErrorCode } from '../iam-config.js'
-import { getIamMessage } from '../index.js'
+import { AgreementConfigSchema, IamErrorCode, LoginConfigSchema } from '../iam-config.js'
+import { getIamMessage } from '../iam-i18n.js'
 
 /**
  * 认证服务依赖
@@ -44,6 +46,8 @@ export interface AuthServiceDeps {
   oauthStrategy?: OAuthStrategy
   /** 会话管理器 */
   sessionManager: SessionManager
+  /** IAM 配置 */
+  config: IamConfig
 }
 
 /**
@@ -58,10 +62,44 @@ export function createAuthOperations(deps: AuthServiceDeps): AuthOperations {
     otpStrategy,
     oauthStrategy,
     sessionManager,
+    config,
   } = deps
+
+  const loginConfig = LoginConfigSchema.parse(config.login ?? {})
+  const agreementConfig = AgreementConfigSchema.parse(config.agreements ?? {})
+
+  function buildAgreementDisplay(): AgreementDisplay | undefined {
+    if (!agreementConfig.showOnLogin) {
+      return undefined
+    }
+    if (!agreementConfig.userAgreementUrl && !agreementConfig.privacyPolicyUrl) {
+      return undefined
+    }
+    return {
+      userAgreementUrl: agreementConfig.userAgreementUrl,
+      privacyPolicyUrl: agreementConfig.privacyPolicyUrl,
+      showOnRegister: agreementConfig.showOnRegister,
+      showOnLogin: agreementConfig.showOnLogin,
+    }
+  }
+
+  function loginDisabled(type: 'password' | 'otp' | 'ldap' | 'oauth'): Result<void, IamError> | null {
+    if (!loginConfig[type]) {
+      return err({
+        code: IamErrorCode.LOGIN_DISABLED,
+        message: getIamMessage('iam_loginDisabled', { params: { type } }),
+      })
+    }
+    return null
+  }
 
   return {
     async login(credentials: PasswordCredentials): Promise<Result<AuthResult, IamError>> {
+      const disabled = loginDisabled('password')
+      if (disabled) {
+        return disabled as Result<AuthResult, IamError>
+      }
+
       // 使用密码策略认证
       const authResult = await passwordStrategy.authenticate({
         type: 'password',
@@ -92,10 +130,16 @@ export function createAuthOperations(deps: AuthServiceDeps): AuthOperations {
         refreshToken: session.refreshToken,
         accessTokenExpiresAt: session.expiresAt,
         refreshTokenExpiresAt: session.expiresAt,
+        agreements: buildAgreementDisplay(),
       })
     },
 
     async loginWithOtp(credentials: OtpCredentials): Promise<Result<AuthResult, IamError>> {
+      const disabled = loginDisabled('otp')
+      if (disabled) {
+        return disabled as Result<AuthResult, IamError>
+      }
+
       if (!otpStrategy) {
         return err({
           code: IamErrorCode.STRATEGY_NOT_SUPPORTED,
@@ -131,10 +175,16 @@ export function createAuthOperations(deps: AuthServiceDeps): AuthOperations {
         refreshToken: session.refreshToken,
         accessTokenExpiresAt: session.expiresAt,
         refreshTokenExpiresAt: session.expiresAt,
+        agreements: buildAgreementDisplay(),
       })
     },
 
     async loginWithLdap(_credentials: LdapCredentials): Promise<Result<AuthResult, IamError>> {
+      const disabled = loginDisabled('ldap')
+      if (disabled) {
+        return disabled as Result<AuthResult, IamError>
+      }
+
       return err({
         code: IamErrorCode.STRATEGY_NOT_SUPPORTED,
         message: getIamMessage('iam_ldapStrategyRequired'),
@@ -142,6 +192,11 @@ export function createAuthOperations(deps: AuthServiceDeps): AuthOperations {
     },
 
     async getOAuthUrl(providerId: string, returnUrl?: string): Promise<Result<{ url: string, state: string }, IamError>> {
+      const disabled = loginDisabled('oauth')
+      if (disabled) {
+        return disabled as Result<{ url: string, state: string }, IamError>
+      }
+
       if (!oauthStrategy) {
         return err({
           code: IamErrorCode.STRATEGY_NOT_SUPPORTED,
@@ -161,6 +216,11 @@ export function createAuthOperations(deps: AuthServiceDeps): AuthOperations {
     },
 
     async handleOAuthCallback(credentials: OAuthCredentials): Promise<Result<AuthResult, IamError>> {
+      const disabled = loginDisabled('oauth')
+      if (disabled) {
+        return disabled as Result<AuthResult, IamError>
+      }
+
       if (!oauthStrategy) {
         return err({
           code: IamErrorCode.STRATEGY_NOT_SUPPORTED,
@@ -196,6 +256,7 @@ export function createAuthOperations(deps: AuthServiceDeps): AuthOperations {
         refreshToken: session.refreshToken,
         accessTokenExpiresAt: session.expiresAt,
         refreshTokenExpiresAt: session.expiresAt,
+        agreements: buildAgreementDisplay(),
       })
     },
 
@@ -217,6 +278,11 @@ export function createAuthOperations(deps: AuthServiceDeps): AuthOperations {
     },
 
     async sendOtp(identifier: string): Promise<Result<{ expiresAt: Date }, IamError>> {
+      const disabled = loginDisabled('otp')
+      if (disabled) {
+        return disabled as Result<{ expiresAt: Date }, IamError>
+      }
+
       if (!otpStrategy) {
         return err({
           code: IamErrorCode.STRATEGY_NOT_SUPPORTED,

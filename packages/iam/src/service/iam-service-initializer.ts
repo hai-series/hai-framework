@@ -16,7 +16,6 @@ import type { DbService } from '@hai/db'
 import type { PermissionCache } from '../authz/iam-authz-rbac.js'
 import type {
   AuthzManager,
-  IamConfig,
   IamError,
   PermissionRepository,
   RolePermissionRepository,
@@ -25,15 +24,16 @@ import type {
   UserRepository,
   UserRoleRepository,
 } from '../iam-types.js'
+import type { IamConfig } from '../iam-config.js'
 import type { SessionStore } from '../session/iam-session-stateful.js'
 import type { OAuthStrategy, OtpStrategy, PasswordStrategy } from '../strategy/index.js'
 import process from 'node:process'
 import { err, ok } from '@hai/core'
-import { crypto } from '@hai/crypto'
+import { crypto as haiCrypto } from '@hai/crypto'
 
 import { createRbacManager } from '../authz/index.js'
-import { IamErrorCode } from '../iam-config.js'
-import { getIamMessage } from '../index.js'
+import { IamErrorCode, LoginConfigSchema, SecurityConfigSchema } from '../iam-config.js'
+import { getIamMessage } from '../iam-i18n.js'
 import {
   createCachePermissionCache,
   createDbOAuthAccountRepository,
@@ -94,7 +94,18 @@ export interface InitOptions {
 }
 
 /** 密码提供者 */
-const passwordProvider = crypto.password.create()
+const passwordProvider = haiCrypto.password.create()
+
+/**
+ * 生成默认 JWT 密钥
+ */
+function createDefaultJwtSecret(): string {
+  const uuid = typeof globalThis.crypto?.randomUUID === 'function'
+    ? globalThis.crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(36).slice(2)}`
+
+  return `change-me-in-production-${uuid}`
+}
 
 /**
  * 初始化 IAM 组件
@@ -117,6 +128,8 @@ export async function initializeComponents(options: InitOptions): Promise<Result
     const permissionCache: PermissionCache = createCachePermissionCache(cache)
 
     // 密码策略
+    const securityConfig = SecurityConfigSchema.parse(config.security ?? {})
+
     const passwordStrategy = createPasswordStrategy({
       passwordConfig: config.password,
       userRepository,
@@ -140,11 +153,15 @@ export async function initializeComponents(options: InitOptions): Promise<Result
         }
         return ok(result.data)
       },
+      maxLoginAttempts: securityConfig.maxLoginAttempts,
+      lockoutDuration: securityConfig.lockoutDuration,
     }) as PasswordStrategy
+
+    const loginConfig = LoginConfigSchema.parse(config.login ?? {})
 
     // OTP 策略
     let otpStrategy: OtpStrategy | undefined
-    if (config.strategies.includes('otp')) {
+    if (loginConfig.otp && config.otp) {
       const otpStore = await createDbOtpStore(db)
       otpStrategy = createOtpStrategy({
         otpConfig: config.otp,
@@ -155,12 +172,13 @@ export async function initializeComponents(options: InitOptions): Promise<Result
           sendSms: async (_phone, _code) => ok(undefined),
         },
         autoRegister: true,
+        registerConfig: config.register,
       })
     }
 
     // OAuth 策略
     let oauthStrategy: OAuthStrategy | undefined
-    if (config.strategies.includes('oauth') && config.oauth) {
+    if (loginConfig.oauth && config.oauth) {
       const oauthStateStore = await createDbOAuthStateStore(db)
       const oauthAccountRepository = await createDbOAuthAccountRepository(db)
       oauthStrategy = createOAuthStrategy({
@@ -169,13 +187,14 @@ export async function initializeComponents(options: InitOptions): Promise<Result
         oauthAccountRepository,
         oauthStateStore,
         autoRegister: true,
+        registerConfig: config.register,
       })
     }
 
     // 会话管理器
     const sessionConfig = config.session
     const jwtConfig = sessionConfig?.jwt || {
-      secret: process.env.JWT_SECRET || `change-me-in-production-${crypto.randomUUID()}`,
+      secret: process.env.JWT_SECRET || createDefaultJwtSecret(),
       algorithm: 'HS256' as const,
       accessTokenExpiresIn: 900,
       refreshTokenExpiresIn: 604800,

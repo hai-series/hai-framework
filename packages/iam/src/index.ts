@@ -11,9 +11,13 @@
  * @example
  * ```ts
  * import { iam } from '@hai/iam'
+ * import { cache } from '@hai/cache'
+ * import { db } from '@hai/db'
  *
  * // 初始化
- * await iam.init({ strategies: ['password'] })
+ * await db.init({ type: 'sqlite', database: './data.db' })
+ * await cache.init({ url: 'redis://localhost:6379' })
+ * await iam.init(db, cache)
  *
  * // 注册用户
  * const user = await iam.user.register({
@@ -35,23 +39,8 @@
  * @module @hai/iam
  */
 
-import { core } from '@hai/core'
-import messagesEnUS from '../messages/en-US.json'
-import messagesZhCN from '../messages/zh-CN.json'
-
-// 配置 Schema（zod）
-export * from './iam-config.js'
-
-// 数据库初始化与种子数据
-export * from './iam-database.js'
-
 // 统一服务入口
 export * from './iam-main.js'
 
 // 类型定义
 export * from './iam-types.js'
-
-// i18n
-type IamMessageKey = keyof typeof messagesZhCN
-export const getIamMessage
-  = core.i18n.createMessageGetter<IamMessageKey>({ 'zh-CN': messagesZhCN, 'en-US': messagesEnUS })

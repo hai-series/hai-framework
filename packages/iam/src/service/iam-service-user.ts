@@ -11,11 +11,13 @@
  */
 
 import type { Result } from '@hai/core'
+import type { IamConfig } from '../iam-config.js'
 import type {
   AuthzManager,
-  IamConfig,
+  AgreementDisplay,
   IamError,
   RegisterOptions,
+  RegisterResult,
   SessionManager,
   StoredUser,
   User,
@@ -25,8 +27,8 @@ import type {
 import type { PasswordStrategy } from '../strategy/index.js'
 import { err, ok } from '@hai/core'
 
-import { IamErrorCode } from '../iam-config.js'
-import { getIamMessage } from '../index.js'
+import { AgreementConfigSchema, IamErrorCode, RegisterConfigSchema } from '../iam-config.js'
+import { getIamMessage } from '../iam-i18n.js'
 import { verifyPassword } from './iam-service-initializer.js'
 
 /**
@@ -80,12 +82,37 @@ export function createUserOperations(deps: UserServiceDeps): UserOperations {
     config,
   } = deps
 
+  const registerConfig = RegisterConfigSchema.parse(config.register ?? {})
+  const agreementConfig = AgreementConfigSchema.parse(config.agreements ?? {})
+
+  function buildAgreementDisplay(): AgreementDisplay | undefined {
+    if (!agreementConfig.showOnRegister) {
+      return undefined
+    }
+    if (!agreementConfig.userAgreementUrl && !agreementConfig.privacyPolicyUrl) {
+      return undefined
+    }
+    return {
+      userAgreementUrl: agreementConfig.userAgreementUrl,
+      privacyPolicyUrl: agreementConfig.privacyPolicyUrl,
+      showOnRegister: agreementConfig.showOnRegister,
+      showOnLogin: agreementConfig.showOnLogin,
+    }
+  }
+
   return {
-    async register(options: RegisterOptions): Promise<Result<User, IamError>> {
+    async register(options: RegisterOptions): Promise<Result<RegisterResult, IamError>> {
+      if (!registerConfig.enabled) {
+        return err({
+          code: IamErrorCode.REGISTER_DISABLED,
+          message: getIamMessage('iam_registerDisabled'),
+        })
+      }
+
       // 验证密码强度
       const validateResult = passwordStrategy.validatePassword(options.password)
       if (!validateResult.success) {
-        return validateResult as Result<User, IamError>
+        return validateResult as Result<RegisterResult, IamError>
       }
 
       // 检查用户名是否存在
@@ -111,7 +138,7 @@ export function createUserOperations(deps: UserServiceDeps): UserOperations {
       // 哈希密码
       const hashResult = passwordStrategy.hashPassword(options.password)
       if (!hashResult.success) {
-        return hashResult as Result<User, IamError>
+        return hashResult as Result<RegisterResult, IamError>
       }
 
       // 创建用户
@@ -120,7 +147,7 @@ export function createUserOperations(deps: UserServiceDeps): UserOperations {
         email: options.email,
         phone: options.phone,
         displayName: options.displayName,
-        enabled: true,
+        enabled: registerConfig.defaultEnabled,
         emailVerified: false,
         phoneVerified: false,
         passwordHash: hashResult.data,
@@ -129,7 +156,7 @@ export function createUserOperations(deps: UserServiceDeps): UserOperations {
       })
 
       if (!createResult.success) {
-        return createResult as Result<User, IamError>
+        return createResult as Result<RegisterResult, IamError>
       }
 
       // 分配默认角色
@@ -140,7 +167,10 @@ export function createUserOperations(deps: UserServiceDeps): UserOperations {
         }
       }
 
-      return ok(toUser(createResult.data))
+      return ok({
+        user: toUser(createResult.data),
+        agreements: buildAgreementDisplay(),
+      })
     },
 
     async getCurrentUser(accessToken: string): Promise<Result<User, IamError>> {

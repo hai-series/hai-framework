@@ -25,7 +25,7 @@ import type {
 import { err, ok } from '@hai/core'
 
 import { IamErrorCode, RbacConfigSchema } from '../iam-config.js'
-import { getIamMessage } from '../index.js'
+import { getIamMessage } from '../iam-i18n.js'
 
 /**
  * 权限缓存接口

@@ -2,7 +2,7 @@
   "name": "@hai/core",
   "type": "module",
   "version": "0.1.0",
-  "description": "hai Admin Framework - Core utilities, types and functions",
+  "description": "Core utilities, types and functions module for Hai framework .",
   "license": "Apache-2.0",
   "exports": {
     ".": {

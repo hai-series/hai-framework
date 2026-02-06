@@ -18,13 +18,13 @@ describe('authz', () => {
     testDb = await setupTestDb()
     testCache = createMockCacheService()
     await iam.init(testDb, testCache, {
-      strategies: ['password'],
       session: {
         type: 'jwt',
         jwt: {
           secret: 'test-secret-key-must-be-at-least-32-characters',
         },
       },
+      seedDefaultData: false,
     })
   })
 

@@ -23,7 +23,7 @@ import { err, ok } from '@hai/core'
 import * as jose from 'jose'
 
 import { IamErrorCode, JwtConfigSchema } from '../iam-config.js'
-import { getIamMessage } from '../index.js'
+import { getIamMessage } from '../iam-i18n.js'
 
 /**
  * JWT 会话管理器配置

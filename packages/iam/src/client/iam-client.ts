@@ -125,6 +125,20 @@ export interface AuthTokens {
 }
 
 /**
+ * 协议展示信息
+ */
+export interface AgreementDisplay {
+  /** 用户协议 URL */
+  userAgreementUrl?: string
+  /** 隐私协议 URL */
+  privacyPolicyUrl?: string
+  /** 注册时展示协议 */
+  showOnRegister: boolean
+  /** 登录时展示协议 */
+  showOnLogin: boolean
+}
+
+/**
  * 登录凭证
  */
 export interface LoginCredentials {
@@ -158,6 +172,8 @@ export interface LoginResult {
   refreshToken?: string
   /** 过期时间 */
   expiresAt: Date
+  /** 协议展示信息（可选） */
+  agreements?: AgreementDisplay
 }
 
 /**
@@ -203,6 +219,16 @@ export interface RegisterOptions {
 }
 
 /**
+ * 注册结果
+ */
+export interface RegisterResult {
+  /** 用户信息 */
+  user: UserInfo
+  /** 协议展示信息（可选） */
+  agreements?: AgreementDisplay
+}
+
+/**
  * 修改密码选项
  */
 export interface ChangePasswordOptions {
@@ -242,7 +268,7 @@ export interface IamClient {
 
   // 用户操作
   /** 注册 */
-  register: (options: RegisterOptions) => Promise<Result<UserInfo, IamClientError>>
+  register: (options: RegisterOptions) => Promise<Result<RegisterResult, IamClientError>>
   /** 获取当前用户 */
   getCurrentUser: () => Promise<Result<UserInfo, IamClientError>>
   /** 更新用户信息 */
@@ -269,7 +295,7 @@ export interface IamClient {
  */
 export function createIamClient(config: IamClientConfig): IamClient {
   const { baseUrl, getAccessToken, onTokenRefresh, onAuthError } = config
-  const fetchFn = config.fetch || fetch
+  const fetchFn = config.fetch || (typeof fetch === 'function' ? fetch : undefined)
   const paths: Required<IamClientPaths> = { ...DEFAULT_PATHS, ...config.paths }
 
   /**
@@ -281,6 +307,12 @@ export function createIamClient(config: IamClientConfig): IamClient {
     body?: unknown,
     options?: { requireAuth?: boolean },
   ): Promise<Result<T, IamClientError>> {
+    if (!fetchFn) {
+      return err({
+        code: 'FETCH_NOT_AVAILABLE',
+        message: 'Fetch is not available in the current environment',
+      })
+    }
     const url = `${baseUrl}${path}`
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
@@ -413,9 +445,12 @@ export function createIamClient(config: IamClientConfig): IamClient {
     // =========================================================================
 
     async register(options) {
-      const result = await request<UserInfo>('POST', paths.register, options, { requireAuth: false })
+      const result = await request<RegisterResult>('POST', paths.register, options, { requireAuth: false })
       if (result.success) {
-        return ok(parseUserInfo(result.data))
+        return ok({
+          ...result.data,
+          user: parseUserInfo(result.data.user),
+        })
       }
       return result
     },

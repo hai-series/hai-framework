@@ -54,12 +54,6 @@
  * ```
  * =============================================================================
  */
-// 配置 Schema（zod）
-export * from './db-config.js'
-
-// i18n
-export * from './db-i18n.js'
-
 // 统一服务入口
 export * from './db-main.js'
 

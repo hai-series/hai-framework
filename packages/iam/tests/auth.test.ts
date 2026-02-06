@@ -7,6 +7,7 @@
 import type { CacheService } from '@hai/cache'
 import type { DbService } from '@hai/db'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { IamErrorCode } from '../src/iam-config.js'
 import { iam } from '../src/index.js'
 import { createMockCacheService, defaultTestConfig, setupTestDb, teardownTestDb } from './helpers/setup.js'
 
@@ -79,6 +80,70 @@ describe('auth', () => {
       })
 
       expect(result.success).toBe(false)
+    }, SLOW_TIMEOUT)
+  })
+
+  describe('security', () => {
+    it('应该支持禁用密码登录', async () => {
+      await iam.close()
+      await iam.init(testDb, testCache, {
+        ...defaultTestConfig,
+        login: { password: false, otp: true, ldap: true, oauth: true },
+      })
+
+      const result = await iam.auth.login({
+        identifier: 'testuser',
+        password: 'Password123',
+      })
+
+      expect(result.success).toBe(false)
+      if (!result.success) {
+        expect(result.error.code).toBe(IamErrorCode.LOGIN_DISABLED)
+      }
+    }, SLOW_TIMEOUT)
+
+    it('应该在多次失败后锁定账户', async () => {
+      await iam.close()
+      await iam.init(testDb, testCache, {
+        ...defaultTestConfig,
+        security: { maxLoginAttempts: 2, lockoutDuration: 60 },
+      })
+
+      await iam.user.register({
+        username: 'lockeduser',
+        password: 'Password123',
+      })
+
+      await iam.auth.login({ identifier: 'lockeduser', password: 'WrongPassword1' })
+      await iam.auth.login({ identifier: 'lockeduser', password: 'WrongPassword2' })
+
+      const result = await iam.auth.login({
+        identifier: 'lockeduser',
+        password: 'Password123',
+      })
+
+      expect(result.success).toBe(false)
+      if (!result.success) {
+        expect(result.error.code).toBe(IamErrorCode.USER_LOCKED)
+      }
+    }, SLOW_TIMEOUT)
+
+    it('应该限制验证码发送间隔', async () => {
+      await iam.close()
+      await iam.init(testDb, testCache, {
+        otp: { resendInterval: 60 },
+        login: { password: false, otp: true, ldap: false, oauth: false },
+        session: defaultTestConfig.session,
+      })
+
+      const first = await iam.auth.sendOtp('test@example.com')
+      expect(first.success).toBe(true)
+
+      const second = await iam.auth.sendOtp('test@example.com')
+      expect(second.success).toBe(false)
+      if (!second.success) {
+        expect(second.error.code).toBe(IamErrorCode.OTP_RESEND_TOO_FAST)
+      }
     }, SLOW_TIMEOUT)
   })
 

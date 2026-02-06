@@ -51,12 +51,6 @@
  * =============================================================================
  */
 
-// 配置 Schema（zod）
-export * from './crypto-config.js'
-
-// i18n
-export * from './crypto-i18n.js'
-
 // 统一服务入口
 export * from './crypto-main.js'
 

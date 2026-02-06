@@ -16,7 +16,7 @@
 ```ts
 import { cache } from '@hai/cache'
 import { db } from '@hai/db'
-import { iam, IamErrorCode } from '@hai/iam'
+import { iam } from '@hai/iam'
 ```
 
 ### 初始化与关闭
@@ -28,20 +28,20 @@ await cache.init({ url: 'redis://localhost:6379' })
 
 // 2. 初始化 IAM（db 和 cache 为必需参数）
 await iam.init(db, cache, {
-  strategies: ['password']
+  password: {
+    minLength: 8
+  }
 })
 
 // 完整配置
 await iam.init(db, cache, {
-  strategies: ['password', 'otp', 'oauth'],
-
   password: {
     minLength: 8,
     maxLength: 128,
     requireUppercase: true,
     requireLowercase: true,
-    requireNumbers: true,
-    requireSymbols: false
+    requireNumber: true,
+    requireSpecialChar: false
   },
 
   session: {
@@ -59,7 +59,8 @@ await iam.init(db, cache, {
   otp: {
     length: 6,
     expiresIn: 300,
-    maxAttempts: 3
+    maxAttempts: 3,
+    resendInterval: 60
   },
 
   oauth: {
@@ -70,20 +71,63 @@ await iam.init(db, cache, {
       clientSecret: process.env.GITHUB_CLIENT_SECRET,
       authorizationUrl: 'https://github.com/login/oauth/authorize',
       tokenUrl: 'https://github.com/login/oauth/access_token',
-      userinfoUrl: 'https://api.github.com/user',
-      scope: 'user:email'
+      userInfoUrl: 'https://api.github.com/user',
+      scopes: ['user:email']
     }]
+  },
+
+  login: {
+    password: true,
+    otp: true,
+    ldap: false,
+    oauth: true
+  },
+
+  // 认证策略启用规则：提供对应配置且 login 未禁用时启用
+
+  register: {
+    enabled: true,
+    defaultEnabled: true
+  },
+
+  agreements: {
+    userAgreementUrl: 'https://example.com/terms',
+    privacyPolicyUrl: 'https://example.com/privacy',
+    showOnRegister: true,
+    showOnLogin: false
+  },
+
+  security: {
+    maxLoginAttempts: 5,
+    lockoutDuration: 900
   },
 
   rbac: {
     defaultRole: 'user',
-    cacheEnabled: true,
+    cachePermissions: true,
     cacheTtl: 300
   }
 })
 
 // 关闭
 await iam.close()
+```
+
+## 目录结构
+
+```
+packages/iam/
+├── src/
+│   ├── index.ts
+│   ├── iam-config.ts
+│   ├── iam-i18n.ts
+│   ├── iam-main.ts
+│   ├── iam-types.ts
+│   ├── iam-database.ts
+│   └── client/
+│       ├── index.ts
+│       └── iam-client.ts
+└── tests/
 ```
 
 ### 用户注册 (iam.user)
@@ -100,7 +144,7 @@ const result = await iam.user.register({
 })
 
 if (result.success) {
-  const user = result.data
+  const user = result.data.user
   // user: { id, username, email, phone, displayName, enabled, emailVerified, phoneVerified, createdAt, updatedAt, metadata }
 }
 
@@ -268,49 +312,12 @@ await iam.session.cleanup()
 ## 错误码
 
 ```ts
-enum IamErrorCode {
-  // 通用错误 (5000-5099)
-  NOT_INITIALIZED = 5000,
-  CONFIG_ERROR = 5001,
-  INTERNAL_ERROR = 5002,
+import { iam } from '@hai/iam'
 
-  // 认证错误 (5100-5199)
-  INVALID_CREDENTIALS = 5100,
-  USER_NOT_FOUND = 5101,
-  USER_DISABLED = 5102,
-  USER_ALREADY_EXISTS = 5103,
-  ACCOUNT_LOCKED = 5104,
-  PASSWORD_EXPIRED = 5105,
-  PASSWORD_POLICY_VIOLATION = 5106,
-
-  // OTP 错误 (5200-5299)
-  OTP_EXPIRED = 5200,
-  OTP_INVALID = 5201,
-  OTP_MAX_ATTEMPTS = 5202,
-  OTP_SEND_FAILED = 5203,
-
-  // OAuth 错误 (5300-5399)
-  OAUTH_STATE_INVALID = 5300,
-  OAUTH_TOKEN_FAILED = 5301,
-  OAUTH_USERINFO_FAILED = 5302,
-  OAUTH_PROVIDER_NOT_FOUND = 5303,
-
-  // 会话错误 (5400-5499)
-  SESSION_NOT_FOUND = 5400,
-  SESSION_EXPIRED = 5401,
-  TOKEN_INVALID = 5402,
-  TOKEN_EXPIRED = 5403,
-  REFRESH_TOKEN_INVALID = 5404,
-
-  // 授权错误 (5500-5599)
-  PERMISSION_DENIED = 5500,
-  ROLE_NOT_FOUND = 5501,
-  PERMISSION_NOT_FOUND = 5502,
-
-  // 策略错误 (5600-5699)
-  STRATEGY_NOT_SUPPORTED = 5600,
-  LDAP_CONNECTION_FAILED = 5601,
-  LDAP_BIND_FAILED = 5602
+if (!result.success) {
+  if (result.error.code === iam.errorCode.INVALID_CREDENTIALS) {
+    // 处理错误：凭证无效
+  }
 }
 ```
 
@@ -344,6 +351,7 @@ interface AuthResult {
   refreshToken?: string
   accessTokenExpiresAt: Date
   refreshTokenExpiresAt?: Date
+  agreements?: AgreementDisplay
 }
 ```
 
@@ -372,14 +380,19 @@ interface AuthzContext {
 ## 创建独立实例
 
 ```ts
-import { createIamService } from '@hai/iam'
+import { iam } from '@hai/iam'
 
 // 多租户场景
-const tenant1Iam = createIamService()
-const tenant2Iam = createIamService()
+const tenant1Iam = iam.create()
+const tenant2Iam = iam.create()
 
-await tenant1Iam.init(db, cache, { strategies: ['password'] })
-await tenant2Iam.init(db2, cache2, { strategies: ['password', 'otp'] })
+await tenant1Iam.init(db, cache, {
+  password: { minLength: 8 }
+})
+await tenant2Iam.init(db2, cache2, {
+  password: { minLength: 8 },
+  otp: { length: 6 }
+})
 ```
 
 ## 前端客户端
@@ -467,7 +480,9 @@ await cache.init({
 
 // IAM 会自动创建所需的数据表和缓存键
 await iam.init(db, cache, {
-  strategies: ['password'],
+  password: {
+    minLength: 8
+  },
 })
 ```
 

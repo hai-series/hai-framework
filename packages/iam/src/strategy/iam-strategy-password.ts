@@ -22,7 +22,7 @@ import type {
 import { err, ok } from '@hai/core'
 
 import { IamErrorCode, PasswordConfigSchema } from '../iam-config.js'
-import { getIamMessage } from '../index.js'
+import { getIamMessage } from '../iam-i18n.js'
 
 /**
  * 密码认证策略配置

@@ -6,7 +6,7 @@
  * 本文件提供统一的 `iam` 对象，聚合所有 IAM 功能。
  *
  * 使用方式：
- * 1. 调用 `iam.init(db)` 初始化 IAM 服务
+ * 1. 调用 `iam.init(db, cache)` 初始化 IAM 服务
  * 2. 通过 `iam.auth` 进行认证操作
  * 3. 通过 `iam.user` 进行用户管理
  * 4. 通过 `iam.authz` 进行授权检查
@@ -16,14 +16,15 @@
  * @example
  * ```ts
  * import { iam } from '@hai/iam'
+ * import { cache } from '@hai/cache'
  * import { db } from '@hai/db'
  *
- * // 1. 初始化数据库
+ * // 1. 初始化数据库与缓存
  * await db.init({ type: 'sqlite', database: './data.db' })
+ * await cache.init({ url: 'redis://localhost:6379' })
  *
  * // 2. 初始化 IAM
- * await iam.init(db, {
- *     strategies: ['password'],
+ * await iam.init(db, cache, {
  *     session: {
  *         type: 'jwt',
  *         jwt: { secret: 'your-secret-key' }
@@ -63,22 +64,21 @@
 import type { CacheService } from '@hai/cache'
 import type { Result } from '@hai/core'
 import type { DbService } from '@hai/db'
+import type { IamConfig, IamConfigInput, IamErrorCodeType } from './iam-config.js'
 import type {
   AuthOperations,
   AuthzManager,
-  IamConfig,
-  IamConfigInput,
+  IamEntry,
   IamError,
   IamService,
   SessionManager,
   UserOperations,
 } from './iam-types.js'
 import type { IamComponents } from './service/iam-service-initializer.js'
-
 import { err, ok } from '@hai/core'
 import { IamConfigSchema, IamErrorCode } from './iam-config.js'
 import { seedIamData } from './iam-database.js'
-import { getIamMessage } from './index.js'
+import { getIamMessage } from './iam-i18n.js'
 import { createAuthOperations } from './service/iam-service-auth.js'
 import {
 
@@ -100,83 +100,44 @@ function notInitializedError(): IamError {
   }
 }
 
-/**
- * 创建未初始化的占位授权管理器
- */
-function createNotInitializedAuthz(): AuthzManager {
-  return {
-    checkPermission: async () => err(notInitializedError()),
-    hasRole: async () => err(notInitializedError()),
-    getUserPermissions: async () => err(notInitializedError()),
-    getUserRoles: async () => err(notInitializedError()),
-    assignRole: async () => err(notInitializedError()),
-    removeRole: async () => err(notInitializedError()),
-    createRole: async () => err(notInitializedError()),
-    getRole: async () => err(notInitializedError()),
-    getAllRoles: async () => err(notInitializedError()),
-    updateRole: async () => err(notInitializedError()),
-    deleteRole: async () => err(notInitializedError()),
-    createPermission: async () => err(notInitializedError()),
-    getPermission: async () => err(notInitializedError()),
-    getAllPermissions: async () => err(notInitializedError()),
-    deletePermission: async () => err(notInitializedError()),
-    assignPermissionToRole: async () => err(notInitializedError()),
-    removePermissionFromRole: async () => err(notInitializedError()),
-    getRolePermissions: async () => err(notInitializedError()),
-  }
-}
+/** 未初始化时的统一占位操作类型 */
+type NotInitializedOperation = (...args: unknown[]) => Promise<Result<unknown, IamError>>
 
-/**
- * 创建未初始化的占位会话管理器
- */
-function createNotInitializedSession(): SessionManager {
-  return {
-    type: 'jwt',
-    create: async () => err(notInitializedError()),
-    get: async () => err(notInitializedError()),
-    getByToken: async () => err(notInitializedError()),
-    verifyToken: async () => err(notInitializedError()),
-    refresh: async () => err(notInitializedError()),
-    update: async () => err(notInitializedError()),
-    delete: async () => err(notInitializedError()),
-    deleteByUserId: async () => err(notInitializedError()),
-    cleanup: async () => err(notInitializedError()),
-  }
-}
+/** 未初始化时的占位操作实现 */
+const notInitializedOperation: NotInitializedOperation = async () => err(notInitializedError())
 
-/**
- * 创建未初始化的占位认证操作
- */
-function createNotInitializedAuth(): AuthOperations {
-  return {
-    login: async () => err(notInitializedError()),
-    loginWithOtp: async () => err(notInitializedError()),
-    loginWithLdap: async () => err(notInitializedError()),
-    getOAuthUrl: async () => err(notInitializedError()),
-    handleOAuthCallback: async () => err(notInitializedError()),
-    logout: async () => err(notInitializedError()),
-    refresh: async () => err(notInitializedError()),
-    verifyToken: async () => err(notInitializedError()),
-    sendOtp: async () => err(notInitializedError()),
-  }
-}
+/** 未初始化时的同步占位操作实现 */
+const notInitializedSyncOperation = () => err(notInitializedError())
 
-/**
- * 创建未初始化的占位用户操作
- */
-function createNotInitializedUser(): UserOperations {
-  return {
-    register: async () => err(notInitializedError()),
-    getCurrentUser: async () => err(notInitializedError()),
-    getUser: async () => err(notInitializedError()),
-    listUsers: async () => err(notInitializedError()),
-    updateUser: async () => err(notInitializedError()),
-    changePassword: async () => err(notInitializedError()),
-    requestPasswordReset: async () => err(notInitializedError()),
-    confirmPasswordReset: async () => err(notInitializedError()),
-    validatePassword: () => err(notInitializedError()),
-  }
-}
+/** 未初始化时的操作代理（所有方法均返回未初始化错误） */
+const notInitializedOperations = new Proxy(
+  {},
+  {
+    get: () => notInitializedOperation,
+  },
+)
+
+/** 未初始化的认证操作占位 */
+const notInitializedAuth = notInitializedOperations as AuthOperations
+
+/** 未初始化的用户操作占位 */
+const notInitializedUser = new Proxy(
+  { validatePassword: notInitializedSyncOperation },
+  {
+    get: (target, prop) => (prop in target ? target[prop as keyof typeof target] : notInitializedOperation),
+  },
+) as unknown as UserOperations
+
+/** 未初始化的授权管理器占位 */
+const notInitializedAuthz = notInitializedOperations as AuthzManager
+
+/** 未初始化的会话管理器占位 */
+const notInitializedSession = new Proxy(
+  { type: 'jwt' as const },
+  {
+    get: (target, prop) => (prop === 'type' ? target.type : notInitializedOperation),
+  },
+) as SessionManager
 
 // =============================================================================
 // 创建 IAM 服务实例
@@ -207,8 +168,8 @@ function createIamServiceInstance(): IamService {
     initialized: false,
     config: null,
     components: null,
-    authOperations: createNotInitializedAuth(),
-    userOperations: createNotInitializedUser(),
+    authOperations: notInitializedAuth,
+    userOperations: notInitializedUser,
   }
 
   return {
@@ -221,11 +182,11 @@ function createIamServiceInstance(): IamService {
     },
 
     get authz(): AuthzManager {
-      return state.components?.authzManager || createNotInitializedAuthz()
+      return state.components?.authzManager || notInitializedAuthz
     },
 
     get session(): SessionManager {
-      return state.components?.sessionManager || createNotInitializedSession()
+      return state.components?.sessionManager || notInitializedSession
     },
 
     get config(): IamConfig | null {
@@ -234,6 +195,10 @@ function createIamServiceInstance(): IamService {
 
     get isInitialized(): boolean {
       return state.initialized
+    },
+
+    get errorCode(): Record<string, IamErrorCodeType> {
+      return IamErrorCode
     },
 
     async init(db: DbService, cache: CacheService, configInput?: IamConfigInput): Promise<Result<void, IamError>> {
@@ -269,6 +234,7 @@ function createIamServiceInstance(): IamService {
           otpStrategy: state.components.otpStrategy,
           oauthStrategy: state.components.oauthStrategy,
           sessionManager: state.components.sessionManager,
+          config,
         })
 
         // 创建用户操作
@@ -296,8 +262,8 @@ function createIamServiceInstance(): IamService {
       state.config = null
       state.initialized = false
       state.components = null
-      state.authOperations = createNotInitializedAuth()
-      state.userOperations = createNotInitializedUser()
+      state.authOperations = notInitializedAuth
+      state.userOperations = notInitializedUser
 
       return ok(undefined)
     },
@@ -311,13 +277,8 @@ function createIamServiceInstance(): IamService {
 /**
  * IAM 服务单例
  */
-export const iam: IamService = createIamServiceInstance()
+const iamInstance = createIamServiceInstance()
 
-/**
- * 创建独立的 IAM 服务实例
- *
- * 用于需要多个独立 IAM 实例的场景
- */
-export function createIamService(): IamService {
-  return createIamServiceInstance()
-}
+export const iam: IamEntry = Object.assign(iamInstance, {
+  create: () => createIamServiceInstance(),
+})
