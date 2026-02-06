@@ -36,7 +36,6 @@ await cache.init({ url: 'redis://localhost:6379' })
 
 // 2. 初始化 IAM（传入 db 和 cache）
 await iam.init(db, cache, {
-  strategies: ['password'],
   session: {
     type: 'jwt',
     jwt: { secret: 'your-secret-key-at-least-32-chars' }
@@ -49,6 +48,9 @@ const userResult = await iam.user.register({
   email: 'admin@example.com',
   password: 'Password123'
 })
+if (userResult.success) {
+  const user = userResult.data.user
+}
 
 // 4. 登录
 const loginResult = await iam.auth.login({
@@ -72,6 +74,23 @@ const hasPermission = await iam.authz.checkPermission(
 
 // 7. 关闭
 await iam.close()
+```
+
+## 目录结构
+
+```
+packages/iam/
+├── src/
+│   ├── index.ts
+│   ├── iam-config.ts
+│   ├── iam-i18n.ts
+│   ├── iam-main.ts
+│   ├── iam-types.ts
+│   ├── iam-database.ts
+│   └── client/
+│       ├── index.ts
+│       └── iam-client.ts
+└── tests/
 ```
 
 ## 前端客户端
@@ -188,17 +207,14 @@ import { createIamClient } from '@hai/iam/client'
 
 ```ts
 interface IamConfig {
-  /** 启用的认证策略 */
-  strategies: ('password' | 'otp' | 'ldap' | 'oauth')[]
-
   /** 密码策略 */
-  passwordPolicy?: {
+  password?: {
     minLength?: number // 最小长度，默认 8
     maxLength?: number // 最大长度，默认 128
     requireUppercase?: boolean // 需要大写字母
     requireLowercase?: boolean // 需要小写字母
-    requireNumbers?: boolean // 需要数字
-    requireSpecial?: boolean // 需要特殊字符
+    requireNumber?: boolean // 需要数字
+    requireSpecialChar?: boolean // 需要特殊字符
   }
 
   /** 会话配置 */
@@ -219,12 +235,47 @@ interface IamConfig {
     length?: number // 验证码长度，默认 6
     expiresIn?: number // 过期时间（秒），默认 300
     maxAttempts?: number // 最大尝试次数，默认 3
+    resendInterval?: number // 发送间隔（秒），默认 60
+  }
+
+  /**
+   * 认证策略启用规则：
+   * - otp/oauth/ldap：提供对应配置且 login 未禁用时启用
+   * - password：默认启用，可通过 login.password 关闭
+   */
+
+  /** 登录类型启用 */
+  login?: {
+    password?: boolean
+    otp?: boolean
+    ldap?: boolean
+    oauth?: boolean
+  }
+
+  /** 注册配置 */
+  register?: {
+    enabled?: boolean // 是否启用注册
+    defaultEnabled?: boolean // 新注册用户是否默认启用
+  }
+
+  /** 协议展示配置 */
+  agreements?: {
+    userAgreementUrl?: string
+    privacyPolicyUrl?: string
+    showOnRegister?: boolean
+    showOnLogin?: boolean
+  }
+
+  /** 安全策略配置 */
+  security?: {
+    maxLoginAttempts?: number // 最大登录失败次数
+    lockoutDuration?: number // 锁定时长（秒）
   }
 
   /** RBAC 配置 */
   rbac?: {
     defaultRole?: string // 新用户默认角色
-    cacheEnabled?: boolean // 启用权限缓存
+    cachePermissions?: boolean // 启用权限缓存
     cacheTtl?: number // 缓存 TTL（秒）
   }
 }
@@ -233,14 +284,14 @@ interface IamConfig {
 ## 创建独立实例
 
 ```ts
-import { createIamService } from '@hai/iam'
+import { iam } from '@hai/iam'
 
 // 创建独立实例（多租户场景）
-const tenantIam = createIamService()
-await tenantIam.init(db, cache, { strategies: ['password'] })
+const tenantIam = iam.create()
+await tenantIam.init(db, cache)
 
 // 使用
-const result = await tenantIam.auth.login({ ... })
+const result = await tenantIam.auth.login({ identifier: 'admin', password: 'Password123' })
 
 // 关闭
 await tenantIam.close()
@@ -268,6 +319,8 @@ await cache.init({
 
 // IAM 会自动创建所需的数据表
 await iam.init(db, cache, {
-  strategies: ['password'],
+  password: {
+    minLength: 8,
+  },
 })
 ```

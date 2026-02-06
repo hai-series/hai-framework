@@ -85,7 +85,7 @@ export async function createDbOtpStore(db: DbService): Promise<OtpStore> {
       return ok(undefined)
     },
 
-    async get(identifier): Promise<Result<{ code: string, attempts: number } | null, IamError>> {
+    async get(identifier): Promise<Result<{ code: string, attempts: number, createdAt: Date } | null, IamError>> {
       const result = await db.sql.query<OtpRow>(
         `SELECT * FROM ${TABLE_NAME} WHERE identifier = ?`,
         [identifier],
@@ -114,6 +114,7 @@ export async function createDbOtpStore(db: DbService): Promise<OtpStore> {
       return ok({
         code: row.code,
         attempts: row.attempts,
+        createdAt: new Date(row.created_at),
       })
     },
 

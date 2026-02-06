@@ -40,9 +40,6 @@
 // 前端客户端
 export * from './storage-client.js'
 
-// 配置 Schema 和常量
-export * from './storage-config.js'
-
 // 统一服务入口
 export * from './storage-main.js'
 

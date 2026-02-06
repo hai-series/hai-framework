@@ -7,6 +7,7 @@
 import type { CacheService } from '@hai/cache'
 import type { DbService } from '@hai/db'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { getIamMessage } from '../src/iam-i18n.js'
 import { iam } from '../src/index.js'
 import { createMockCacheService, defaultTestConfig, setupTestDb, teardownTestDb } from './helpers/setup.js'
 
@@ -69,18 +70,17 @@ describe('iam', () => {
     it('应该返回当前配置', async () => {
       await iam.init(testDb, testCache, defaultTestConfig)
       expect(iam.config).toBeTruthy()
-      expect(iam.config?.strategies).toContain('password')
+      expect(iam.config?.login?.password).toBe(true)
     })
 
     it('应该支持自定义密码策略配置', async () => {
       await iam.init(testDb, testCache, {
-        strategies: ['password'],
         password: {
           minLength: 12,
           requireUppercase: true,
           requireLowercase: true,
-          requireNumbers: true,
-          requireSymbols: true,
+          requireNumber: true,
+          requireSpecialChar: true,
         },
       })
 
@@ -94,7 +94,6 @@ describe('iam', () => {
 
     it('应该支持 JWT 会话配置', async () => {
       await iam.init(testDb, testCache, {
-        strategies: ['password'],
         session: {
           type: 'jwt',
           jwt: {
@@ -111,7 +110,6 @@ describe('iam', () => {
 
     it('应该支持有状态会话配置', async () => {
       await iam.init(testDb, testCache, {
-        strategies: ['password'],
         session: {
           type: 'stateful',
           jwt: {
@@ -141,6 +139,14 @@ describe('iam', () => {
       expect(iam.session).toBeTruthy()
       expect(typeof iam.session.create).toBe('function')
       expect(typeof iam.session.verifyToken).toBe('function')
+    })
+  })
+
+  describe('i18n', () => {
+    it('应该返回默认语言文案', () => {
+      const text = getIamMessage('iam_notInitialized')
+      expect(typeof text).toBe('string')
+      expect(text.length).toBeGreaterThan(0)
     })
   })
 })

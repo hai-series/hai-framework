@@ -356,7 +356,7 @@ export interface OtpStore {
   /**
    * 获取验证码
    */
-  get: (identifier: string) => Promise<Result<{ code: string, attempts: number } | null, IamError>>
+  get: (identifier: string) => Promise<Result<{ code: string, attempts: number, createdAt: Date } | null, IamError>>
 
   /**
    * 增加尝试次数

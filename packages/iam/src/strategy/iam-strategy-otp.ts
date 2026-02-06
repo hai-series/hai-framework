@@ -21,10 +21,11 @@ import type {
   User,
   UserRepository,
 } from '../iam-types.js'
+import type { RegisterConfig } from '../iam-config.js'
 import { err, ok } from '@hai/core'
 
 import { IamErrorCode, OtpConfigSchema } from '../iam-config.js'
-import { getIamMessage } from '../index.js'
+import { getIamMessage } from '../iam-i18n.js'
 
 /**
  * OTP 认证策略配置
@@ -40,6 +41,8 @@ export interface OtpStrategyConfig {
   otpSender: OtpSender
   /** 是否允许自动注册新用户 */
   autoRegister?: boolean
+  /** 注册配置（用于自动注册场景） */
+  registerConfig?: RegisterConfig
 }
 
 /**
@@ -85,6 +88,9 @@ export function createOtpStrategy(config: OtpStrategyConfig): OtpStrategy {
   const otpConfig = config.otpConfig
     ? OtpConfigSchema.parse(config.otpConfig)
     : OtpConfigSchema.parse({})
+  const registerConfig = config.registerConfig
+  const allowAutoRegister = registerConfig?.enabled ?? config.autoRegister ?? false
+  const defaultEnabled = registerConfig?.defaultEnabled ?? true
 
   /**
    * 将 StoredUser 转换为 User（移除敏感信息）
@@ -165,13 +171,13 @@ export function createOtpStrategy(config: OtpStrategyConfig): OtpStrategy {
       let storedUser = userResult.data
 
       // 如果用户不存在且允许自动注册
-      if (!storedUser && config.autoRegister) {
+      if (!storedUser && allowAutoRegister) {
         const type = identifierType(identifier)
         const createResult = await config.userRepository.create({
           username: identifier,
           email: type === 'email' ? identifier : undefined,
           phone: type === 'phone' ? identifier : undefined,
-          enabled: true,
+          enabled: defaultEnabled,
           emailVerified: type === 'email',
           phoneVerified: type === 'phone',
         })
@@ -200,6 +206,18 @@ export function createOtpStrategy(config: OtpStrategyConfig): OtpStrategy {
     },
 
     async challenge(identifier: string): Promise<Result<{ expiresAt: Date }, IamError>> {
+      // 发送频率限制
+      const existingResult = await config.otpStore.get(identifier)
+      if (existingResult.success && existingResult.data) {
+        const elapsedSeconds = Math.floor((Date.now() - existingResult.data.createdAt.getTime()) / 1000)
+        if (elapsedSeconds < otpConfig.resendInterval) {
+          return err({
+            code: IamErrorCode.OTP_RESEND_TOO_FAST,
+            message: getIamMessage('iam_otpResendTooFast', { params: { seconds: otpConfig.resendInterval - elapsedSeconds } }),
+          })
+        }
+      }
+
       // 生成验证码
       const code = generateOtpCode(otpConfig.length)
       const expiresAt = new Date(Date.now() + otpConfig.expiresIn * 1000)

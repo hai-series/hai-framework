@@ -46,6 +46,24 @@ export interface User {
   metadata?: Record<string, unknown>
 }
 
+// =============================================================================
+// 协议展示类型
+// =============================================================================
+
+/**
+ * 用户协议/隐私协议展示配置
+ */
+export interface AgreementDisplay {
+  /** 用户协议 URL */
+  userAgreementUrl?: string
+  /** 隐私协议 URL */
+  privacyPolicyUrl?: string
+  /** 注册时展示协议 */
+  showOnRegister: boolean
+  /** 登录时展示协议 */
+  showOnLogin: boolean
+}
+
 /**
  * 内部存储用户（包含密码哈希等敏感信息）
  */
@@ -135,4 +153,14 @@ export interface RegisterOptions {
   displayName?: string
   /** 扩展属性 */
   metadata?: Record<string, unknown>
+}
+
+/**
+ * 注册结果
+ */
+export interface RegisterResult {
+  /** 用户信息 */
+  user: User
+  /** 协议展示信息（可选） */
+  agreements?: AgreementDisplay
 }

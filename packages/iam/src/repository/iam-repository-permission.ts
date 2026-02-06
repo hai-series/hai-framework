@@ -14,7 +14,7 @@ import type { DbService } from '@hai/db'
 import type { IamError, Permission, PermissionRepository } from '../iam-types.js'
 import { err, ok } from '@hai/core'
 import { IamErrorCode } from '../iam-config.js'
-import { getIamMessage } from '../index.js'
+import { getIamMessage } from '../iam-i18n.js'
 
 /**
  * 权限表名

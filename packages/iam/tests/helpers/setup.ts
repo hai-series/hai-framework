@@ -104,12 +104,11 @@ export function createMockCacheService(): CacheService {
  * 默认测试配置
  */
 export const defaultTestConfig: IamConfigInput = {
-  strategies: ['password'],
   password: {
     minLength: 8,
     requireUppercase: true,
     requireLowercase: true,
-    requireNumbers: true,
+    requireNumber: true,
   },
   session: {
     type: 'jwt',

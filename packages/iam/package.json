@@ -2,7 +2,7 @@
   "name": "@hai/iam",
   "type": "module",
   "version": "0.1.0",
-  "description": "身份与访问管理模块 - Identity & Access Management",
+  "description": "Identity & Access Management module for Hai framework.",
   "license": "Apache-2.0",
   "exports": {
     ".": {

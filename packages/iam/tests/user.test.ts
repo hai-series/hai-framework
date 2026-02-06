@@ -38,10 +38,25 @@ describe('user', () => {
 
       expect(result.success).toBe(true)
       if (result.success) {
-        expect(result.data.username).toBe('testuser')
-        expect(result.data.email).toBe('test@example.com')
-        expect(result.data.enabled).toBe(true)
+        expect(result.data.user.username).toBe('testuser')
+        expect(result.data.user.email).toBe('test@example.com')
+        expect(result.data.user.enabled).toBe(true)
       }
+    }, SLOW_TIMEOUT)
+
+    it('应该支持禁用注册', async () => {
+      await iam.close()
+      await iam.init(testDb, testCache, {
+        ...defaultTestConfig,
+        register: { enabled: false, defaultEnabled: false },
+      })
+
+      const result = await iam.user.register({
+        username: 'disabled-user',
+        password: 'Password123',
+      })
+
+      expect(result.success).toBe(false)
     }, SLOW_TIMEOUT)
 
     it('应该拒绝弱密码', async () => {
@@ -94,8 +109,8 @@ describe('user', () => {
 
       expect(result.success).toBe(true)
       if (result.success) {
-        expect(result.data.username).toBe('testuser')
-        expect(result.data.email).toBeUndefined()
+        expect(result.data.user.username).toBe('testuser')
+        expect(result.data.user.email).toBeUndefined()
       }
     }, SLOW_TIMEOUT)
   })
@@ -166,7 +181,7 @@ describe('user', () => {
       }
 
       const changeResult = await iam.user.changePassword(
-        registerResult.data.id,
+        registerResult.data.user.id,
         'Password123',
         'NewPassword456',
       )
@@ -193,7 +208,7 @@ describe('user', () => {
       }
 
       const changeResult = await iam.user.changePassword(
-        registerResult.data.id,
+        registerResult.data.user.id,
         'WrongPassword',
         'NewPassword456',
       )
@@ -212,7 +227,7 @@ describe('user', () => {
       }
 
       const changeResult = await iam.user.changePassword(
-        registerResult.data.id,
+        registerResult.data.user.id,
         'Password123',
         'weak',
       )
@@ -233,7 +248,7 @@ describe('user', () => {
         throw new Error('注册失败')
       }
 
-      const userResult = await iam.user.getUser(registerResult.data.id)
+      const userResult = await iam.user.getUser(registerResult.data.user.id)
 
       expect(userResult.success).toBe(true)
       if (userResult.success && userResult.data) {
@@ -263,7 +278,7 @@ describe('user', () => {
         throw new Error('注册失败')
       }
 
-      const updateResult = await iam.user.updateUser(registerResult.data.id, {
+      const updateResult = await iam.user.updateUser(registerResult.data.user.id, {
         displayName: '测试用户',
       })
 

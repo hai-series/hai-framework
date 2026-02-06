@@ -25,10 +25,11 @@ import type {
   User,
   UserRepository,
 } from '../iam-types.js'
+import type { RegisterConfig } from '../iam-config.js'
 import { err, ok } from '@hai/core'
 
 import { IamErrorCode, OAuthConfigSchema } from '../iam-config.js'
-import { getIamMessage } from '../index.js'
+import { getIamMessage } from '../iam-i18n.js'
 
 /**
  * OAuth 认证策略配置
@@ -44,6 +45,8 @@ export interface OAuthStrategyConfig {
   oauthStateStore: OAuthStateStore
   /** 是否允许自动注册新用户 */
   autoRegister?: boolean
+  /** 注册配置（用于自动注册场景） */
+  registerConfig?: RegisterConfig
 }
 
 /**
@@ -68,6 +71,9 @@ export function createOAuthStrategy(config: OAuthStrategyConfig): OAuthStrategy 
   const oauthConfig = config.oauthConfig
     ? OAuthConfigSchema.parse(config.oauthConfig)
     : OAuthConfigSchema.parse({})
+  const registerConfig = config.registerConfig
+  const allowAutoRegister = registerConfig?.enabled ?? config.autoRegister ?? false
+  const defaultEnabled = registerConfig?.defaultEnabled ?? true
 
   const providers = new Map<string, OAuthProviderConfig>()
   for (const provider of oauthConfig.providers) {
@@ -182,7 +188,7 @@ export function createOAuthStrategy(config: OAuthStrategyConfig): OAuthStrategy 
           tokenExpiresAt: tokens.expiresIn ? new Date(Date.now() + tokens.expiresIn * 1000) : undefined,
         })
       }
-      else if (config.autoRegister !== false) {
+      else if (allowAutoRegister) {
         // 未关联，尝试通过邮箱查找用户或创建新用户
         if (oauthUserInfo.email) {
           const existingUserResult = await config.userRepository.findByEmail(oauthUserInfo.email)
@@ -199,7 +205,7 @@ export function createOAuthStrategy(config: OAuthStrategyConfig): OAuthStrategy 
             email: oauthUserInfo.email,
             displayName: oauthUserInfo.displayName,
             avatarUrl: oauthUserInfo.avatarUrl,
-            enabled: true,
+            enabled: defaultEnabled,
             emailVerified: !!oauthUserInfo.email,
             metadata: {
               authSource: 'oauth',

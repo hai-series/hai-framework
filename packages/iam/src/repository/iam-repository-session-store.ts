@@ -16,7 +16,7 @@ import type { IamError, Session } from '../iam-types.js'
 import type { SessionStore } from '../session/iam-session-stateful.js'
 import { err, ok } from '@hai/core'
 import { IamErrorCode } from '../iam-config.js'
-import { getIamMessage } from '../index.js'
+import { getIamMessage } from '../iam-i18n.js'
 
 // =============================================================================
 // 会话存储表

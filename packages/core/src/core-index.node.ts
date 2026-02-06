@@ -38,9 +38,6 @@
  * =============================================================================
  */
 
-// Schema（包含错误码）- 这些仍然直接导出
-export * from './config/index.js'
-
 // Core 聚合服务（包含 logger, id, type, object, string, array, async, time）
 export * from './core-main.node.js'
 

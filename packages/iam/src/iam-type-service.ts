@@ -40,6 +40,7 @@ import type {
   OtpCredentials,
   PasswordCredentials,
   RegisterOptions,
+  RegisterResult,
   User,
 } from './iam-type-user.js'
 
@@ -314,7 +315,7 @@ export interface UserOperations {
   /**
    * 注册用户
    */
-  register: (options: RegisterOptions) => Promise<Result<User, IamError>>
+  register: (options: RegisterOptions) => Promise<Result<RegisterResult, IamError>>
 
   /**
    * 获取当前用户
@@ -377,6 +378,9 @@ export interface IamService {
   /** 是否已初始化 */
   readonly isInitialized: boolean
 
+  /** 错误码常量 */
+  readonly errorCode: Record<string, IamErrorCodeType>
+
   /**
    * 初始化 IAM 服务
    *
@@ -390,4 +394,12 @@ export interface IamService {
    * 关闭
    */
   close: () => Promise<Result<void, IamError>>
+}
+
+/**
+ * IAM 入口对象（包含创建实例能力）
+ */
+export interface IamEntry extends IamService {
+  /** 创建独立 IAM 实例 */
+  create: () => IamService
 }

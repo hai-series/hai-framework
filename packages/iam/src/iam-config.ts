@@ -15,16 +15,15 @@
  *
  * @example
  * ```ts
- * import { IamConfigSchema, IamErrorCode } from '@hai/iam'
+ * import { IamConfigSchema } from './iam-config'
  *
  * // 校验配置
  * const config = IamConfigSchema.parse({
- *     strategies: ['password'],
  *     session: { type: 'jwt' }
  * })
  *
  * // 使用错误码
- * if (error.code === IamErrorCode.INVALID_CREDENTIALS) {
+ * if (error.code === iam.errorCode.INVALID_CREDENTIALS) {
  *     // 处理错误：凭证无效
  * }
  * ```
@@ -46,9 +45,9 @@ import { z } from 'zod'
  *
  * @example
  * ```ts
- * import { IamErrorCode } from '@hai/iam'
+ * import { iam } from '@hai/iam'
  *
- * if (result.error?.code === IamErrorCode.INVALID_CREDENTIALS) {
+ * if (result.error?.code === iam.errorCode.INVALID_CREDENTIALS) {
  *     // 处理错误：凭证无效
  * }
  * ```
@@ -81,8 +80,14 @@ export const IamErrorCode = {
   OTP_INVALID: 5010,
   /** 验证码已过期 */
   OTP_EXPIRED: 5011,
+  /** 验证码发送过于频繁 */
+  OTP_RESEND_TOO_FAST: 5012,
+  /** 登录方式已禁用 */
+  LOGIN_DISABLED: 5013,
+  /** 注册已禁用 */
+  REGISTER_DISABLED: 5014,
   /** 认证策略不支持 */
-  STRATEGY_NOT_SUPPORTED: 5012,
+  STRATEGY_NOT_SUPPORTED: 5015,
 
   // =========================================================================
   // 会话错误 (5100-5199)
@@ -300,6 +305,58 @@ export const OAuthConfigSchema = z.object({
 export type OAuthConfig = z.infer<typeof OAuthConfigSchema>
 
 // =============================================================================
+// 登录/注册与安全策略配置
+// =============================================================================
+
+/** 登录类型启用配置 */
+export const LoginConfigSchema = z.object({
+  /** 是否启用密码登录 */
+  password: z.boolean().default(true),
+  /** 是否启用 OTP 登录 */
+  otp: z.boolean().default(true),
+  /** 是否启用 LDAP 登录 */
+  ldap: z.boolean().default(true),
+  /** 是否启用 OAuth 登录 */
+  oauth: z.boolean().default(true),
+})
+
+export type LoginConfig = z.infer<typeof LoginConfigSchema>
+
+/** 注册配置 */
+export const RegisterConfigSchema = z.object({
+  /** 是否启用注册 */
+  enabled: z.boolean().default(true),
+  /** 新注册用户是否默认启用 */
+  defaultEnabled: z.boolean().default(true),
+})
+
+export type RegisterConfig = z.infer<typeof RegisterConfigSchema>
+
+/** 安全策略配置 */
+export const SecurityConfigSchema = z.object({
+  /** 最大登录失败次数（默认 5） */
+  maxLoginAttempts: z.number().int().min(1).default(5),
+  /** 锁定时长（秒，默认 900） */
+  lockoutDuration: z.number().int().min(60).default(900),
+})
+
+export type SecurityConfig = z.infer<typeof SecurityConfigSchema>
+
+/** 协议展示配置 */
+export const AgreementConfigSchema = z.object({
+  /** 用户协议 URL */
+  userAgreementUrl: z.url().optional(),
+  /** 隐私协议 URL */
+  privacyPolicyUrl: z.url().optional(),
+  /** 注册时展示协议 */
+  showOnRegister: z.boolean().default(true),
+  /** 登录时展示协议 */
+  showOnLogin: z.boolean().default(false),
+})
+
+export type AgreementConfig = z.infer<typeof AgreementConfigSchema>
+
+// =============================================================================
 // 会话配置
 // =============================================================================
 
@@ -387,12 +444,16 @@ export type RbacConfig = z.infer<typeof RbacConfigSchema>
  * @example
  * ```ts
  * const config: IamConfig = {
- *     strategies: ['password', 'oauth'],
  *     password: { minLength: 8 },
  *     session: {
  *         type: 'jwt',
  *         jwt: { secret: 'your-secret-key' }
  *     },
+ *     oauth: {
+ *         providers: []
+ *     },
+ *     login: { password: true, oauth: true },
+ *     register: { enabled: true, defaultEnabled: true },
  *     rbac: { enabled: true }
  * }
  * ```
@@ -401,9 +462,6 @@ export const IamConfigSchema = z.object({
   // =========================================================================
   // 认证策略配置
   // =========================================================================
-
-  /** 启用的认证策略列表 */
-  strategies: z.array(AuthStrategyTypeSchema).default(['password']),
 
   /** 密码配置 */
   password: PasswordConfigSchema.optional(),
@@ -416,6 +474,32 @@ export const IamConfigSchema = z.object({
 
   /** OAuth 配置 */
   oauth: OAuthConfigSchema.optional(),
+
+  /** 登录启用配置 */
+  login: LoginConfigSchema.default({
+    password: true,
+    otp: true,
+    ldap: true,
+    oauth: true,
+  }),
+
+  /** 注册配置 */
+  register: RegisterConfigSchema.default({
+    enabled: true,
+    defaultEnabled: true,
+  }),
+
+  /** 协议展示配置 */
+  agreements: AgreementConfigSchema.default({
+    showOnRegister: true,
+    showOnLogin: false,
+  }),
+
+  /** 安全策略配置 */
+  security: SecurityConfigSchema.default({
+    maxLoginAttempts: 5,
+    lockoutDuration: 900,
+  }),
 
   // =========================================================================
   // 会话配置
@@ -434,9 +518,6 @@ export const IamConfigSchema = z.object({
   // =========================================================================
   // 运行时选项
   // =========================================================================
-
-  /** 静默模式，不输出日志（默认 false） */
-  silent: z.boolean().default(false),
 
   /** 是否初始化默认角色和权限（默认 true） */
   seedDefaultData: z.boolean().default(true),

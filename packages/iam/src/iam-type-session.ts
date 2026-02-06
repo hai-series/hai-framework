@@ -12,7 +12,7 @@
  * =============================================================================
  */
 
-import type { User } from './iam-type-user.js'
+import type { AgreementDisplay, User } from './iam-type-user.js'
 
 // =============================================================================
 // 认证结果类型
@@ -36,6 +36,8 @@ export interface AuthResult {
   mfaRequired?: boolean
   /** MFA 令牌（需要 MFA 时使用） */
   mfaToken?: string
+  /** 协议展示信息（可选） */
+  agreements?: AgreementDisplay
 }
 
 /**

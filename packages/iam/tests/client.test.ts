@@ -221,14 +221,16 @@ describe('iamClient', () => {
         ['POST:/user/register', {
           status: 200,
           body: {
-            id: 'user-1',
-            username: 'newuser',
-            email: 'new@example.com',
-            enabled: true,
-            emailVerified: false,
-            phoneVerified: false,
-            createdAt: '2024-01-01T00:00:00.000Z',
-            updatedAt: '2024-01-01T00:00:00.000Z',
+            user: {
+              id: 'user-1',
+              username: 'newuser',
+              email: 'new@example.com',
+              enabled: true,
+              emailVerified: false,
+              phoneVerified: false,
+              createdAt: '2024-01-01T00:00:00.000Z',
+              updatedAt: '2024-01-01T00:00:00.000Z',
+            },
           },
         }],
       ]))
@@ -246,8 +248,8 @@ describe('iamClient', () => {
 
       expect(result.success).toBe(true)
       if (result.success) {
-        expect(result.data.username).toBe('newuser')
-        expect(result.data.createdAt).toBeInstanceOf(Date)
+        expect(result.data.user.username).toBe('newuser')
+        expect(result.data.user.createdAt).toBeInstanceOf(Date)
       }
     })
 
