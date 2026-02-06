@@ -22,10 +22,8 @@
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
-    "test": "vitest run tests/local.test.ts",
+    "test": "vitest run",
     "test:watch": "vitest",
-    "test:container": "vitest run --testTimeout=120000 tests/s3.test.ts",
-    "test:all": "vitest run --testTimeout=120000",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",

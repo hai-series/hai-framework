@@ -58,8 +58,10 @@ await uploadWithPresignedUrl(uploadUrl, file)
 ## 错误处理示例
 
 ```ts
+import { storage, StorageErrorCode } from '@hai/storage'
+
 const result = await storage.file.get('image.png')
-if (!result.success && result.error.code === 5010) {
+if (!result.success && result.error.code === StorageErrorCode.NOT_INITIALIZED) {
   // 存储未初始化
 }
 ```
