@@ -70,7 +70,9 @@ function toStorageError(error: unknown, key?: string): StorageError {
   const e = error as { name?: string, message?: string, Code?: string }
 
   // S3 特定错误处理
-  if (e.name === 'NoSuchKey' || e.Code === 'NoSuchKey') {
+  if (e.name === 'NoSuchKey' || e.Code === 'NoSuchKey'
+    || e.name === 'NotFound' || e.Code === 'NotFound'
+    || e.name === '404' || (e as { $metadata?: { httpStatusCode?: number } }).$metadata?.httpStatusCode === 404) {
     return {
       code: StorageErrorCode.NOT_FOUND,
       message: storageM('storage_fileNotFound', { params: { key: key ?? '' } }),

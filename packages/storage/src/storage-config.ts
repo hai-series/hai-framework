@@ -167,7 +167,7 @@ export type LocalConfig = z.infer<typeof LocalConfigSchema>
 /**
  * 统一存储配置 Schema
  *
- * 支持 S3、本地文件、内存存储三种类型的配置验证。
+ * 支持 S3 和本地文件两种类型的配置验证。
  *
  * @example
  * ```ts

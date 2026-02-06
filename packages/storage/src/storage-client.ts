@@ -75,17 +75,7 @@ export async function uploadWithPresignedUrl(
 ): Promise<{ success: boolean, error?: string }> {
   try {
     // 准备请求体
-    let body: BodyInit
-
-    if (typeof data === 'string') {
-      body = data
-    }
-    else if (data instanceof ArrayBuffer) {
-      body = data
-    }
-    else {
-      body = data
-    }
+    const body: BodyInit = data
 
     // 使用 XMLHttpRequest 以支持上传进度
     if (options.onProgress) {

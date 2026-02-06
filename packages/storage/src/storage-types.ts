@@ -487,7 +487,7 @@ export interface StorageService extends StorageCompositeOperations {
 /**
  * 存储 Provider 接口
  *
- * 由各具体存储实现（S3、Local、Memory）实现此接口。
+ * 由各具体存储实现（S3、Local）实现此接口。
  */
 export interface StorageProvider extends StorageCompositeOperations {
   /** Provider 名称 */
