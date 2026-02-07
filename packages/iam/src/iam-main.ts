@@ -6,7 +6,7 @@
  * 本文件提供统一的 `iam` 对象，聚合所有 IAM 功能。
  *
  * 使用方式：
- * 1. 调用 `iam.init(db, cache)` 初始化 IAM 服务
+ * 1. 调用 `iam.init(db)` 初始化 IAM 服务
  * 2. 通过 `iam.auth` 进行认证操作
  * 3. 通过 `iam.user` 进行用户管理
  * 4. 通过 `iam.authz` 进行授权检查
@@ -16,15 +16,13 @@
  * @example
  * ```ts
  * import { iam } from '@hai/iam'
- * import { cache } from '@hai/cache'
  * import { db } from '@hai/db'
  *
- * // 1. 初始化数据库与缓存
+ * // 1. 初始化数据库
  * await db.init({ type: 'sqlite', database: './data.db' })
- * await cache.init({ url: 'redis://localhost:6379' })
  *
  * // 2. 初始化 IAM
- * await iam.init(db, cache, {
+ * await iam.init(db, {
  *     session: {
  *         type: 'jwt',
  *         jwt: { secret: 'your-secret-key' }
@@ -61,29 +59,23 @@
  * =============================================================================
  */
 
-import type { CacheService } from '@hai/cache'
 import type { Result } from '@hai/core'
 import type { DbService } from '@hai/db'
+import type { AuthOperations } from './authn/iam-authn-types.js'
+import type { LdapClientFactory } from './authn/ldap/iam-authn-ldap-strategy.js'
+import type { AuthzManager } from './authz/rbac/iam-authz-rbac-types.js'
 import type { IamConfig, IamConfigInput, IamErrorCodeType } from './iam-config.js'
-import type {
-  AuthOperations,
-  AuthzManager,
-  IamError,
-  IamService,
-  SessionManager,
-  UserOperations,
-} from './iam-types.js'
-import type { IamComponents } from './service/iam-service-initializer.js'
+import type { IamError } from './iam-core-types.js'
+import type { IamComponents } from './iam-initializer.js'
+import type { SessionManager } from './session/iam-session-types.js'
+import type { UserOperations } from './user/iam-user-types.js'
 import { err, ok } from '@hai/core'
-import { IamConfigSchema, IamErrorCode } from './iam-config.js'
-import { seedIamData } from './iam-database.js'
-import { iamM } from './iam-i18n.js'
-import { createAuthOperations } from './service/iam-service-auth.js'
-import {
 
-  initializeComponents,
-} from './service/iam-service-initializer.js'
-import { createUserOperations } from './service/iam-service-user.js'
+import { createAuthOperations } from './authn/iam-authn-service.js'
+import { IamConfigSchema, IamErrorCode } from './iam-config.js'
+import { iamM } from './iam-i18n.js'
+import { initializeComponents, seedIamData } from './iam-initializer.js'
+import { createUserOperations } from './user/iam-user-service.js'
 
 // =============================================================================
 // 未初始化时的占位操作
@@ -159,6 +151,54 @@ interface IamServiceState {
 }
 
 /**
+ * IAM 服务接口
+ *
+ * 统一聚合所有 IAM 功能
+ */
+export interface IamService {
+  /** 认证操作 */
+  readonly auth: AuthOperations
+  /** 用户管理操作 */
+  readonly user: UserOperations
+  /** 授权管理 */
+  readonly authz: AuthzManager
+  /** 会话管理 */
+  readonly session: SessionManager
+
+  /** 当前配置 */
+  readonly config: IamConfig | null
+  /** 是否已初始化 */
+  readonly isInitialized: boolean
+
+  /** 错误码常量 */
+  readonly errorCode: Record<string, IamErrorCodeType>
+
+  /**
+   * 初始化 IAM 服务
+   *
+   * @param db - 数据库服务实例（必需）
+   * @param config - IAM 配置（可选）
+   * @param options - 运行时选项（可选）
+   */
+  init: (db: DbService, config?: IamConfigInput, options?: IamInitOptions) => Promise<Result<void, IamError>>
+
+  /**
+   * 关闭
+   */
+  close: () => Promise<Result<void, IamError>>
+}
+
+/**
+ * IAM 初始化运行时选项
+ */
+export interface IamInitOptions {
+  /** LDAP 客户端工厂（启用 LDAP 登录时必填） */
+  ldapClientFactory?: LdapClientFactory
+  /** LDAP 用户同步开关（默认 true） */
+  ldapSyncUser?: boolean
+}
+
+/**
  * 创建 IAM 服务实例
  */
 function createIamServiceInstance(): IamService {
@@ -200,7 +240,7 @@ function createIamServiceInstance(): IamService {
       return IamErrorCode
     },
 
-    async init(db: DbService, cache: CacheService, configInput?: IamConfigInput): Promise<Result<void, IamError>> {
+    async init(db: DbService, configInput?: IamConfigInput, options?: IamInitOptions): Promise<Result<void, IamError>> {
       if (state.initialized) {
         return ok(undefined)
       }
@@ -211,7 +251,12 @@ function createIamServiceInstance(): IamService {
         state.config = config
 
         // 初始化组件（会自动创建表）
-        const initResult = await initializeComponents({ db, cache, config })
+        const initResult = await initializeComponents({
+          db,
+          config,
+          ldapClientFactory: options?.ldapClientFactory,
+          ldapSyncUser: options?.ldapSyncUser,
+        })
         if (!initResult.success) {
           return initResult
         }
@@ -228,10 +273,9 @@ function createIamServiceInstance(): IamService {
 
         // 创建认证操作
         state.authOperations = createAuthOperations({
-          userRepository: state.components.userRepository,
           passwordStrategy: state.components.passwordStrategy,
           otpStrategy: state.components.otpStrategy,
-          oauthStrategy: state.components.oauthStrategy,
+          ldapStrategy: state.components.ldapStrategy,
           sessionManager: state.components.sessionManager,
           config,
         })

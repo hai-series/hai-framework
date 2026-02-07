@@ -122,18 +122,6 @@ export const IamErrorCode = {
   PERMISSION_ALREADY_EXISTS: 5204,
 
   // =========================================================================
-  // OAuth 错误 (5300-5399)
-  // =========================================================================
-  /** OAuth 提供商不存在 */
-  OAUTH_PROVIDER_NOT_FOUND: 5300,
-  /** OAuth 状态无效 */
-  OAUTH_INVALID_STATE: 5301,
-  /** OAuth 令牌错误 */
-  OAUTH_TOKEN_ERROR: 5302,
-  /** OAuth 回调错误 */
-  OAUTH_CALLBACK_ERROR: 5303,
-
-  // =========================================================================
   // LDAP 错误 (5400-5499)
   // =========================================================================
   /** LDAP 连接失败 */
@@ -186,9 +174,8 @@ export type IamErrorCodeType = typeof IamErrorCode[keyof typeof IamErrorCode]
  * - `password` - 用户名/邮箱 + 密码
  * - `otp` - 邮箱/短信 + 验证码
  * - `ldap` - LDAP 目录认证
- * - `oauth` - OAuth2 第三方登录
  */
-export const AuthStrategyTypeSchema = z.enum(['password', 'otp', 'ldap', 'oauth'])
+export const AuthStrategyTypeSchema = z.enum(['password', 'otp', 'ldap'])
 
 /** 认证策略类型 */
 export type AuthStrategyType = z.infer<typeof AuthStrategyTypeSchema>
@@ -219,27 +206,6 @@ export const PasswordConfigSchema = z.object({
 export type PasswordConfig = z.infer<typeof PasswordConfigSchema>
 
 /**
- * OTP 存储类型
- */
-export const OtpStoreTypeSchema = z.enum(['db', 'cache'])
-
-/** OTP 存储类型 */
-export type OtpStoreType = z.infer<typeof OtpStoreTypeSchema>
-
-/**
- * OTP 存储配置 Schema
- */
-export const OtpStoreConfigSchema = z.object({
-  /** 存储类型 */
-  type: OtpStoreTypeSchema.default('db'),
-  /** 缓存键前缀（仅 cache 时生效） */
-  keyPrefix: z.string().optional(),
-})
-
-/** OTP 存储配置类型 */
-export type OtpStoreConfig = z.infer<typeof OtpStoreConfigSchema>
-
-/**
  * OTP 配置 Schema
  */
 export const OtpConfigSchema = z.object({
@@ -251,8 +217,6 @@ export const OtpConfigSchema = z.object({
   maxAttempts: z.number().int().min(1).default(3),
   /** 发送间隔（秒，默认 60） */
   resendInterval: z.number().int().min(30).default(60),
-  /** OTP 存储配置 */
-  store: OtpStoreConfigSchema.default({ type: 'db' }),
 })
 
 /** OTP 配置类型 */
@@ -287,69 +251,6 @@ export const LdapConfigSchema = z.object({
 /** LDAP 配置类型 */
 export type LdapConfig = z.infer<typeof LdapConfigSchema>
 
-/**
- * OAuth 提供商配置 Schema
- */
-export const OAuthProviderConfigSchema = z.object({
-  /** 提供商 ID（如 github, google） */
-  id: z.string(),
-  /** 提供商名称 */
-  name: z.string(),
-  /** 客户端 ID */
-  clientId: z.string(),
-  /** 客户端密钥 */
-  clientSecret: z.string(),
-  /** 授权 URL */
-  authorizationUrl: z.string().url(),
-  /** 令牌 URL */
-  tokenUrl: z.string().url(),
-  /** 用户信息 URL */
-  userInfoUrl: z.string().url().optional(),
-  /** 作用域 */
-  scopes: z.array(z.string()).default([]),
-  /** 回调 URL */
-  redirectUrl: z.string().url(),
-})
-
-/** OAuth 提供商配置类型 */
-export type OAuthProviderConfig = z.infer<typeof OAuthProviderConfigSchema>
-
-/**
- * OAuth 状态存储类型
- */
-export const OAuthStateStoreTypeSchema = z.enum(['db', 'cache'])
-
-/** OAuth 状态存储类型 */
-export type OAuthStateStoreType = z.infer<typeof OAuthStateStoreTypeSchema>
-
-/**
- * OAuth 状态存储配置 Schema
- */
-export const OAuthStateStoreConfigSchema = z.object({
-  /** 存储类型 */
-  type: OAuthStateStoreTypeSchema.default('db'),
-  /** 缓存键前缀（仅 cache 时生效） */
-  keyPrefix: z.string().optional(),
-})
-
-/** OAuth 状态存储配置类型 */
-export type OAuthStateStoreConfig = z.infer<typeof OAuthStateStoreConfigSchema>
-
-/**
- * OAuth 配置 Schema
- */
-export const OAuthConfigSchema = z.object({
-  /** 提供商列表 */
-  providers: z.array(OAuthProviderConfigSchema).default([]),
-  /** 状态令牌过期时间（秒，默认 600） */
-  stateExpiresIn: z.number().int().min(60).default(600),
-  /** OAuth 状态存储配置 */
-  stateStore: OAuthStateStoreConfigSchema.default({ type: 'db' }),
-})
-
-/** OAuth 配置类型 */
-export type OAuthConfig = z.infer<typeof OAuthConfigSchema>
-
 // =============================================================================
 // 登录/注册与安全策略配置
 // =============================================================================
@@ -362,8 +263,6 @@ export const LoginConfigSchema = z.object({
   otp: z.boolean().default(true),
   /** 是否启用 LDAP 登录 */
   ldap: z.boolean().default(true),
-  /** 是否启用 OAuth 登录 */
-  oauth: z.boolean().default(true),
 })
 
 export type LoginConfig = z.infer<typeof LoginConfigSchema>
@@ -439,29 +338,6 @@ export const JwtConfigSchema = z.object({
 export type JwtConfig = z.infer<typeof JwtConfigSchema>
 
 /**
- * 会话映射存储类型
- */
-export const SessionMappingStoreTypeSchema = z.enum(['db', 'cache'])
-
-/** 会话映射存储类型 */
-export type SessionMappingStoreType = z.infer<typeof SessionMappingStoreTypeSchema>
-
-/**
- * 会话映射存储配置 Schema
- */
-export const SessionMappingStoreConfigSchema = z.object({
-  /** 存储类型 */
-  type: SessionMappingStoreTypeSchema.default('db'),
-  /** 缓存键前缀（仅 cache 时生效） */
-  keyPrefix: z.string().optional(),
-  /** 用户会话映射 TTL（秒，仅 cache 时生效） */
-  userSessionTtl: z.number().int().min(60).optional(),
-})
-
-/** 会话映射存储配置类型 */
-export type SessionMappingStoreConfig = z.infer<typeof SessionMappingStoreConfigSchema>
-
-/**
  * 会话配置 Schema
  */
 export const SessionConfigSchema = z.object({
@@ -475,8 +351,6 @@ export const SessionConfigSchema = z.object({
   jwt: JwtConfigSchema.optional(),
   /** 单设备登录（踢掉其他设备） */
   singleDevice: z.boolean().default(false),
-  /** 会话映射存储配置（type 为 stateful 时使用） */
-  mappingStore: SessionMappingStoreConfigSchema.default({ type: 'db' }),
 })
 
 /** 会话配置类型 */
@@ -496,10 +370,6 @@ export const RbacConfigSchema = z.object({
   superAdminRole: z.string().default('super_admin'),
   /** 默认用户角色 */
   defaultRole: z.string().default('user'),
-  /** 是否缓存权限（提高性能） */
-  cachePermissions: z.boolean().default(true),
-  /** 权限缓存过期时间（秒） */
-  cacheTtl: z.number().int().min(60).default(300),
 })
 
 /** RBAC 配置类型 */
@@ -520,10 +390,7 @@ export type RbacConfig = z.infer<typeof RbacConfigSchema>
  *         type: 'jwt',
  *         jwt: { secret: 'your-secret-key' }
  *     },
- *     oauth: {
- *         providers: []
- *     },
- *     login: { password: true, oauth: true },
+ *     login: { password: true, otp: true },
  *     register: { enabled: true, defaultEnabled: true },
  *     rbac: { enabled: true }
  * }
@@ -543,15 +410,11 @@ export const IamConfigSchema = z.object({
   /** LDAP 配置 */
   ldap: LdapConfigSchema.optional(),
 
-  /** OAuth 配置 */
-  oauth: OAuthConfigSchema.optional(),
-
   /** 登录启用配置 */
   login: LoginConfigSchema.default({
     password: true,
     otp: true,
     ldap: true,
-    oauth: true,
   }),
 
   /** 注册配置 */

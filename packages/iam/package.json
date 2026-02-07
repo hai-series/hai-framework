@@ -29,7 +29,6 @@
     "clean": "rimraf dist .turbo"
   },
   "dependencies": {
-    "@hai/cache": "workspace:*",
     "@hai/core": "workspace:*",
     "@hai/crypto": "workspace:*",
     "@hai/db": "workspace:*",

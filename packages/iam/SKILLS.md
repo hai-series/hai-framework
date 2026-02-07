@@ -7,14 +7,12 @@
 **依赖**：
 
 - `@hai/db` - 数据库服务（必需）
-- `@hai/cache` - 缓存服务（必需，用于权限缓存）
 
 **重要**：所有操作返回 `Result<T, IamError>` 类型，需检查 `success` 属性。
 
 ## 核心 API
 
 ```ts
-import { cache } from '@hai/cache'
 import { db } from '@hai/db'
 import { iam } from '@hai/iam'
 ```
@@ -22,19 +20,18 @@ import { iam } from '@hai/iam'
 ### 初始化与关闭
 
 ```ts
-// 1. 先初始化数据库和缓存
+// 1. 先初始化数据库
 await db.init({ type: 'sqlite', database: ':memory:' })
-await cache.init({ url: 'redis://localhost:6379' })
 
-// 2. 初始化 IAM（db 和 cache 为必需参数）
-await iam.init(db, cache, {
+// 2. 初始化 IAM（db 为必需参数）
+await iam.init(db, {
   password: {
     minLength: 8
   }
 })
 
 // 完整配置
-await iam.init(db, cache, {
+await iam.init(db, {
   password: {
     minLength: 8,
     maxLength: 128,
@@ -52,9 +49,6 @@ await iam.init(db, cache, {
       accessTokenExpiresIn: 900, // 15 分钟
       refreshTokenExpiresIn: 604800 // 7 天
     },
-    mappingStore: {
-      type: 'db'
-    },
     maxAge: 86400, // 会话最大有效期
     sliding: true // 滑动续期
   },
@@ -63,33 +57,13 @@ await iam.init(db, cache, {
     length: 6,
     expiresIn: 300,
     maxAttempts: 3,
-    resendInterval: 60,
-    store: {
-      type: 'db'
-    }
-  },
-
-  oauth: {
-    providers: [{
-      id: 'github',
-      name: 'GitHub',
-      clientId: process.env.GITHUB_CLIENT_ID,
-      clientSecret: process.env.GITHUB_CLIENT_SECRET,
-      authorizationUrl: 'https://github.com/login/oauth/authorize',
-      tokenUrl: 'https://github.com/login/oauth/access_token',
-      userInfoUrl: 'https://api.github.com/user',
-      scopes: ['user:email']
-    }],
-    stateStore: {
-      type: 'db'
-    }
+    resendInterval: 60
   },
 
   login: {
     password: true,
     otp: true,
-    ldap: false,
-    oauth: true
+    ldap: false
   },
 
   // 认证策略启用规则：提供对应配置且 login 未禁用时启用
@@ -112,11 +86,31 @@ await iam.init(db, cache, {
   },
 
   rbac: {
-    defaultRole: 'user',
-    cachePermissions: true,
-    cacheTtl: 300
+    defaultRole: 'user'
   }
 })
+
+// LDAP 登录需额外传入 ldapClientFactory
+await iam.init(
+  db,
+  {
+    login: { ldap: true },
+    ldap: {
+      url: 'ldap://localhost:389',
+      bindDn: 'cn=admin,dc=example,dc=com',
+      bindPassword: 'secret',
+      searchBase: 'dc=example,dc=com'
+    }
+  },
+  {
+    ldapClientFactory: async () => {
+      return {
+        success: false,
+        error: { code: iam.errorCode.LDAP_CONNECTION_FAILED, message: 'LDAP client not configured' }
+      }
+    }
+  }
+)
 
 // 关闭
 await iam.close()
@@ -131,8 +125,12 @@ packages/iam/
 │   ├── iam-config.ts
 │   ├── iam-i18n.ts
 │   ├── iam-main.ts
-│   ├── iam-types.ts
-│   ├── iam-database.ts
+│   ├── iam-core-types.ts
+│   ├── iam-initializer.ts
+│   ├── authn/
+│   ├── authz/
+│   ├── session/
+│   ├── user/
 │   └── client/
 │       ├── index.ts
 │       └── iam-client.ts
@@ -197,22 +195,20 @@ const otpLoginResult = await iam.auth.loginWithOtp({
 })
 ```
 
-### OAuth 登录
+### LDAP 登录
 
 ```ts
-// 获取授权 URL
-const urlResult = await iam.auth.getOAuthUrl('github', 'https://myapp.com/callback')
-if (urlResult.success) {
-  // 重定向用户到 urlResult.data.url
-}
-
-// 处理回调
-const oauthResult = await iam.auth.handleOAuthCallback({
-  providerId: 'github',
-  code: 'authorization_code',
-  state: 'state_from_callback'
+const ldapLoginResult = await iam.auth.loginWithLdap({
+  username: 'ldap-user',
+  password: 'LdapPassword123'
 })
+
+if (ldapLoginResult.success) {
+  const { user, accessToken } = ldapLoginResult.data
+}
 ```
+
+> 安全说明：OTP/LDAP 登录失败同样会触发 `security.maxLoginAttempts` 与 `security.lockoutDuration` 账户锁定策略。
 
 ### 令牌操作
 
@@ -235,6 +231,9 @@ if (refreshResult.success) {
 
 ```ts
 // 获取当前用户（通过令牌）
+// 用户分页列表
+import type { PaginationOptionsInput } from '@hai/core'
+
 const currentUser = await iam.user.getCurrentUser(accessToken)
 
 // 获取用户
@@ -248,9 +247,6 @@ const updated = await iam.user.updateUser('user-id', {
 
 // 修改密码
 const changeResult = await iam.user.changePassword('user-id', 'oldPassword', 'newPassword')
-
-// 用户分页列表
-import type { PaginationOptionsInput } from '@hai/core'
 
 const listResult = await iam.user.listUsers({ page: 1, pageSize: 20 } satisfies PaginationOptionsInput)
 if (listResult.success) {
@@ -407,10 +403,10 @@ import { iam } from '@hai/iam'
 const tenant1Iam = iam.create()
 const tenant2Iam = iam.create()
 
-await tenant1Iam.init(db, cache, {
+await tenant1Iam.init(db, {
   password: { minLength: 8 }
 })
-await tenant2Iam.init(db2, cache2, {
+await tenant2Iam.init(db2, {
   password: { minLength: 8 },
   otp: { length: 6 }
 })
@@ -474,17 +470,13 @@ const refreshResult = await client.refreshToken(localStorage.getItem('refreshTok
 // 登出
 await client.logout()
 
-// OAuth
-const oauthResult = await client.getOAuthUrl('github', '/callback')
-// 重定向到 oauthResult.data.url
 ```
 
 ## 自定义存储实现
 
-IAM 使用 `@hai/db` 进行数据持久化，`@hai/cache` 进行权限缓存：
+IAM 使用 `@hai/db` 进行数据持久化：
 
 ```ts
-import { cache } from '@hai/cache'
 import { db } from '@hai/db'
 import { iam } from '@hai/iam'
 
@@ -494,13 +486,8 @@ await db.init({
   database: './data.db',
 })
 
-// 初始化 Redis 缓存
-await cache.init({
-  url: 'redis://localhost:6379',
-})
-
-// IAM 会自动创建所需的数据表和缓存键
-await iam.init(db, cache, {
+// IAM 会自动创建所需的数据表
+await iam.init(db, {
   password: {
     minLength: 8
   },
@@ -516,24 +503,25 @@ import type { SessionMappingRepository, UserRepository } from '@hai/iam'
 
 // 用户存储接口
 const customUserRepository: UserRepository = {
-  async findById(id) {
+  async findById(id, tx) {
     const row = await myDb.queryOne('SELECT * FROM users WHERE id = ?', [id])
     return ok(row ? mapToUser(row) : null)
   },
-  async findByUsername(username) { /* ... */ },
-  async findByEmail(email) { /* ... */ },
-  async findByPhone(phone) { /* ... */ },
-  async create(data) { /* ... */ },
-  async update(id, data) { /* ... */ },
-  async delete(id) { /* ... */ },
-  async existsByUsername(username) { /* ... */ },
-  async existsByEmail(email) { /* ... */ },
-  async findAll(options) {
-    const page = options?.page ?? 1
-    const pageSize = options?.pageSize ?? 20
+  async findByUsername(username, tx) { /* ... */ },
+  async findByEmail(email, tx) { /* ... */ },
+  async findByPhone(phone, tx) { /* ... */ },
+  async findByIdentifier(identifier, tx) { /* ... */ },
+  async existsByUsername(username, tx) { /* ... */ },
+  async existsByEmail(email, tx) { /* ... */ },
+  async create(data, tx) { /* ... */ },
+  async createMany(items, tx) { /* ... */ },
+  async findAll(options, tx) { /* ... */ },
+  async findPage(options, tx) {
+    const page = options.pagination?.page ?? 1
+    const pageSize = options.pagination?.pageSize ?? 20
     const offset = (page - 1) * pageSize
 
-    const items = await myDb.query('SELECT * FROM users LIMIT ? OFFSET ?', [pageSize, offset])
+    const items = await myDb.query('SELECT * FROM users ORDER BY created_at DESC LIMIT ? OFFSET ?', [pageSize, offset])
     const total = await myDb.queryOne('SELECT COUNT(*) as cnt FROM users')
 
     return ok({
@@ -543,46 +531,24 @@ const customUserRepository: UserRepository = {
       pageSize,
     })
   },
+  async updateById(id, data, tx) { /* ... */ },
+  async deleteById(id, tx) { /* ... */ },
+  async count(options, tx) { /* ... */ },
+  async exists(options, tx) { /* ... */ },
+  async existsById(id, tx) { /* ... */ },
 }
 
 // 会话映射存储接口
 const customSessionMappingRepository: SessionMappingRepository = {
-  async get(sessionId) {
-    const data = await redis.get(`session:${sessionId}`)
-    return ok(data ? JSON.parse(data) : null)
-  },
-  async set(sessionId, session, ttl) {
-    await redis.setex(`session:${sessionId}`, ttl, JSON.stringify(session))
-    return ok(undefined)
-  },
-  async getSessionIdByToken(token) {
-    const sessionId = await redis.get(`token:${token}`)
-    return ok(sessionId ?? null)
-  },
-  async setTokenMapping(token, sessionId, ttl) {
-    await redis.setex(`token:${token}`, ttl, sessionId)
-    return ok(undefined)
-  },
-  async deleteTokenMapping(token) {
-    await redis.del(`token:${token}`)
-    return ok(undefined)
-  },
-  async delete(sessionId) {
-    await redis.del(`session:${sessionId}`)
-    return ok(undefined)
-  },
-  async getUserSessionIds(userId) {
-    const ids = await redis.lrange(`user:${userId}:sessions`, 0, -1)
-    return ok(ids)
-  },
-  async addUserSession(userId, sessionId) {
-    await redis.rpush(`user:${userId}:sessions`, sessionId)
-    return ok(undefined)
-  },
-  async removeUserSession(userId, sessionId) {
-    await redis.lrem(`user:${userId}:sessions`, 0, sessionId)
-    return ok(undefined)
-  }
+  async get(_sessionId) { return ok(null) },
+  async set(_sessionId, _session, _ttl) { return ok(undefined) },
+  async getSessionIdByToken(_token) { return ok(null) },
+  async setTokenMapping(_token, _sessionId, _ttl) { return ok(undefined) },
+  async deleteTokenMapping(_token) { return ok(undefined) },
+  async delete(_sessionId) { return ok(undefined) },
+  async getUserSessionIds(_userId) { return ok([]) },
+  async addUserSession(_userId, _sessionId) { return ok(undefined) },
+  async removeUserSession(_userId, _sessionId) { return ok(undefined) },
 }
 ```
 
