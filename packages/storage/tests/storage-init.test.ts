@@ -4,6 +4,7 @@
  * =============================================================================
  */
 
+import type { StorageConfigInput } from '../src/storage-config.js'
 import { describe, expect, it } from 'vitest'
 import { storage } from '../src/storage-index.node.js'
 import { defineStorageSuite, localStorageEnv, s3Env } from './helpers/storage-test-suite.js'
@@ -54,7 +55,7 @@ describe('storage.init', () => {
 describe('storage.init 配置校验', () => {
   it('缺少 root 的 local 配置应初始化失败', async () => {
     await storage.close()
-    const result = await storage.init({ type: 'local', root: '' } as any)
+    const result = await storage.init({ type: 'local', root: '' } as unknown as StorageConfigInput)
     expect(result.success).toBe(false)
     if (!result.success) {
       expect(result.error.code).toBe(5000)
@@ -63,7 +64,7 @@ describe('storage.init 配置校验', () => {
 
   it('不支持的存储类型应初始化失败', async () => {
     await storage.close()
-    const result = await storage.init({ type: 'unknown' } as any)
+    const result = await storage.init({ type: 'unknown' } as unknown as StorageConfigInput)
     expect(result.success).toBe(false)
     if (!result.success) {
       expect(result.error.code).toBe(5000)

@@ -45,7 +45,7 @@ export type Result<T, E = Error>
  * ```ts
  * const result = ok({ id: 1 })
  * if (result.success) {
- *   console.log(result.data.id)
+ *   // 使用 result.data.id
  * }
  * ```
  */
@@ -60,7 +60,7 @@ export function ok<T>(data: T): Result<T, never> {
  * ```ts
  * const result = err('bad request')
  * if (!result.success) {
- *   console.error(result.error)
+ *   // 处理错误：result.error
  * }
  * ```
  */

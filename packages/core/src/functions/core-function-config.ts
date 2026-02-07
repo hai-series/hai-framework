@@ -145,7 +145,7 @@ const configCache = new Map<string, CacheEntry>()
  * ```ts
  * const callback: WatchCallback = (cfg, error) => {
  *   if (error) return
- *   console.log(cfg)
+ *   // 使用 cfg
  * }
  * ```
  */
