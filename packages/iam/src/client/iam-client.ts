@@ -63,8 +63,6 @@ export interface IamClientPaths {
   changePassword?: string
   /** 验证密码强度路径 */
   validatePassword?: string
-  /** 获取 OAuth URL 路径 */
-  oauthUrl?: string
 }
 
 /**
@@ -80,7 +78,6 @@ const DEFAULT_PATHS: Required<IamClientPaths> = {
   currentUser: '/user/me',
   changePassword: '/user/password',
   validatePassword: '/user/validate-password',
-  oauthUrl: '/auth/oauth/url',
 }
 
 /**
@@ -278,10 +275,6 @@ export interface IamClient {
   changePassword: (options: ChangePasswordOptions) => Promise<Result<void, IamClientError>>
   /** 验证密码强度 */
   validatePassword: (password: string) => Promise<Result<void, IamClientError>>
-
-  // OAuth 操作
-  /** 获取 OAuth 授权 URL */
-  getOAuthUrl: (provider: string, returnUrl?: string) => Promise<Result<{ url: string }, IamClientError>>
 }
 
 // =============================================================================
@@ -483,16 +476,5 @@ export function createIamClient(config: IamClientConfig): IamClient {
       return await request<void>('POST', paths.validatePassword, { password }, { requireAuth: false })
     },
 
-    // =========================================================================
-    // OAuth 操作
-    // =========================================================================
-
-    async getOAuthUrl(provider, returnUrl) {
-      const params = new URLSearchParams({ provider })
-      if (returnUrl) {
-        params.set('returnUrl', returnUrl)
-      }
-      return await request<{ url: string }>('GET', `${paths.oauthUrl}?${params}`, undefined, { requireAuth: false })
-    },
   }
 }

@@ -26,7 +26,7 @@ const FEATURES: Record<FeatureId, FeatureDefinition> = {
   iam: {
     id: 'iam',
     name: '身份与访问管理',
-    description: 'Session/JWT 会话管理、RBAC 权限控制、OAuth',
+    description: 'Session/JWT 会话管理、RBAC 权限控制',
     packages: ['@hai/iam'],
     dependencies: ['crypto'],
   },

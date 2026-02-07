@@ -8,14 +8,12 @@
  * 初始化顺序：
  * 1. core.init 加载配置文件（约定优于配置）
  * 2. 数据库连接
- * 3. 缓存服务
- * 4. IAM 模块
- * 5. 业务表创建
+ * 3. IAM 模块
+ * 4. 业务表创建
  *
  * 配置文件约定：
  * - `config/_core.yml`  → 使用 CoreConfigSchema
  * - `config/_db.yml`    → 使用 DbConfigSchema
- * - `config/_cache.yml` → 使用 CacheConfigSchema
  * - `config/_iam.yml`   → 使用 IamConfigSchema
  *
  * @example
@@ -29,7 +27,6 @@
  */
 
 import type { IamConfig } from '@hai/iam'
-import { cache } from '@hai/cache'
 import { core } from '@hai/core'
 import { db } from '@hai/db'
 import { iam } from '@hai/iam'
@@ -37,7 +34,6 @@ import messagesEnUS from '../../../messages/en-US.json'
 import messagesZhCN from '../../../messages/zh-CN.json'
 
 type DbConfigInput = Parameters<typeof db.init>[0]
-type CacheConfigInput = Parameters<typeof cache.init>[0]
 
 const getMessage = core.i18n.createMessageGetter({
   'zh-CN': messagesZhCN,
@@ -102,9 +98,8 @@ async function createBusinessTables(): Promise<void> {
  * 按顺序初始化所有模块：
  * 1. 使用 core.init 加载配置文件（约定优于配置）
  * 2. 初始化数据库连接
- * 3. 初始化缓存服务
- * 4. 初始化 IAM 模块
- * 5. 创建业务表
+ * 3. 初始化 IAM 模块
+ * 4. 创建业务表
  */
 export async function initApp(): Promise<void> {
   if (initialized)
@@ -119,7 +114,6 @@ export async function initApp(): Promise<void> {
 
   // 2. 获取配置
   const dbConfig = core.config.getOrThrow<DbConfigInput>('db')
-  const cacheConfig = core.config.getOrThrow<CacheConfigInput>('cache')
   const iamConfig = core.config.getOrThrow<IamConfig>('iam')
 
   // 3. 确保数据目录存在
@@ -136,14 +130,8 @@ export async function initApp(): Promise<void> {
     throw new Error(getMessage('server_init_db_failed', { message: dbResult.error.message }))
   }
 
-  // 5. 初始化缓存服务
-  const cacheResult = await cache.init(cacheConfig)
-  if (!cacheResult.success) {
-    throw new Error(getMessage('server_init_cache_failed', { message: cacheResult.error.message }))
-  }
-
-  // 6. 初始化 IAM 模块
-  const iamResult = await iam.init(db, cache, iamConfig)
+  // 5. 初始化 IAM 模块
+  const iamResult = await iam.init(db, iamConfig)
   if (!iamResult.success) {
     const cause = iamResult.error.cause
     const causeMsg = cause instanceof Error ? cause.message : String(cause)
@@ -154,7 +142,7 @@ export async function initApp(): Promise<void> {
     throw new Error(fullMessage)
   }
 
-  // 7. 创建业务表
+  // 6. 创建业务表
   await createBusinessTables()
 
   initialized = true
