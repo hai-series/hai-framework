@@ -20,7 +20,7 @@
  * =============================================================================
  */
 
-import type { Result } from '@hai/core'
+import type { PaginatedResult, Result } from '@hai/core'
 import type { DbConfig } from '../db-config.js'
 import type {
   ColumnDef,
@@ -29,6 +29,7 @@ import type {
   DdlOperations,
   ExecuteResult,
   IndexDef,
+  PaginationQueryOptions,
   SqlOperations,
   TableDef,
   TxCallback,
@@ -39,6 +40,7 @@ import { err, ok } from '@hai/core'
 
 import { DbErrorCode } from '../db-config.js'
 import { dbM } from '../db-i18n.js'
+import { buildPaginatedResult, normalizePagination } from '../db-pagination.js'
 
 // =============================================================================
 // pg 类型定义（避免强依赖）
@@ -189,6 +191,47 @@ export function createPostgresProvider(): DbProvider {
   function convertPlaceholders(sql: string): string {
     let index = 0
     return sql.replace(/\?/g, () => `$${++index}`)
+  }
+
+  /**
+   * 解析统计数量
+   */
+  function parseCount(row: Record<string, unknown> | null | undefined): number {
+    if (!row) {
+      return 0
+    }
+    if ('total' in row) {
+      return Number(row.total ?? 0)
+    }
+    if ('__total__' in row) {
+      return Number(row.__total__ ?? 0)
+    }
+    if ('cnt' in row) {
+      return Number(row.cnt ?? 0)
+    }
+    const value = Object.values(row)[0]
+    if (typeof value === 'bigint') {
+      return Number(value)
+    }
+    return Number(value ?? 0)
+  }
+
+  /**
+   * 执行分页查询
+   */
+  async function queryPageWithExecutor<T>(
+    executor: (sql: string, params?: unknown[]) => Promise<{ rows: unknown[] }>,
+    options: PaginationQueryOptions,
+  ): Promise<PaginatedResult<T>> {
+    const pagination = normalizePagination(options.pagination, options.overrides)
+    const dataSql = `SELECT *, COUNT(*) OVER() AS __total__ FROM (${options.sql}) AS t LIMIT ? OFFSET ?`
+    const dataParams = [...(options.params ?? []), pagination.limit, pagination.offset]
+    const dataQuerySql = convertPlaceholders(dataSql)
+    const dataResult = await executor(dataQuerySql, dataParams)
+    const rows = dataResult.rows as Record<string, unknown>[]
+    const total = rows.length > 0 ? parseCount(rows[0]) : 0
+    const items = rows.map(({ __total__, ...rest }) => rest) as T[]
+    return buildPaginatedResult(items, total, pagination)
   }
 
   // =========================================================================
@@ -462,6 +505,27 @@ export function createPostgresProvider(): DbProvider {
         }
       }
     },
+
+    async queryPage<T>(options: PaginationQueryOptions): Promise<Result<PaginatedResult<T>, DbError>> {
+      const connResult = ensureConnected()
+      if (!connResult.success)
+        return connResult
+
+      try {
+        const pageResult = await queryPageWithExecutor<T>(
+          (sqlStr, params) => connResult.data.query(sqlStr, params),
+          options,
+        )
+        return ok(pageResult)
+      }
+      catch (error) {
+        return err({
+          code: DbErrorCode.QUERY_FAILED,
+          message: dbM('db_queryFailed', { params: { error: String(error) } }),
+          cause: error,
+        })
+      }
+    },
   }
 
   // =========================================================================
@@ -511,6 +575,13 @@ export function createPostgresProvider(): DbProvider {
           return {
             changes: result.rowCount ?? 0,
           }
+        },
+
+        async queryPage<R>(options: PaginationQueryOptions): Promise<PaginatedResult<R>> {
+          return queryPageWithExecutor<R>(
+            (sqlStr, params) => client!.query(sqlStr, params),
+            options,
+          )
         },
       }
 

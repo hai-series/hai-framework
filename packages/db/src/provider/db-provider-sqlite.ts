@@ -21,7 +21,7 @@
  * =============================================================================
  */
 
-import type { Result } from '@hai/core'
+import type { PaginatedResult, Result } from '@hai/core'
 import type Database from 'better-sqlite3'
 import type { DbConfig } from '../db-config.js'
 import type {
@@ -31,6 +31,7 @@ import type {
   DdlOperations,
   ExecuteResult,
   IndexDef,
+  PaginationQueryOptions,
   SqlOperations,
   TableDef,
   TxCallback,
@@ -42,6 +43,7 @@ import { err, ok } from '@hai/core'
 
 import { DbErrorCode } from '../db-config.js'
 import { dbM } from '../db-i18n.js'
+import { buildPaginatedResult, normalizePagination } from '../db-pagination.js'
 
 const require = createRequire(import.meta.url)
 
@@ -156,6 +158,50 @@ export function createSqliteProvider(): DbProvider {
       })
     }
     return ok(database)
+  }
+
+  /**
+   * 解析统计数量
+   */
+  function parseCount(row: Record<string, unknown> | null | undefined): number {
+    if (!row) {
+      return 0
+    }
+    if ('total' in row) {
+      return Number(row.total ?? 0)
+    }
+    if ('__total__' in row) {
+      return Number(row.__total__ ?? 0)
+    }
+    if ('cnt' in row) {
+      return Number(row.cnt ?? 0)
+    }
+    const value = Object.values(row)[0]
+    if (typeof value === 'bigint') {
+      return Number(value)
+    }
+    return Number(value ?? 0)
+  }
+
+  /**
+   * 执行分页查询
+   */
+  function queryPageWithDatabase<T>(
+    db: Database.Database,
+    options: PaginationQueryOptions,
+  ): PaginatedResult<T> {
+    const pagination = normalizePagination(options.pagination, options.overrides)
+    const dataSql = `${options.sql} LIMIT ? OFFSET ?`
+    const dataParams = [...(options.params ?? []), pagination.limit, pagination.offset]
+    const countSql = `SELECT COUNT(*) as cnt FROM (${options.sql}) AS t`
+
+    const countStmt = db.prepare(countSql)
+    const countRow = options.params ? countStmt.get(...options.params) : countStmt.get()
+    const total = parseCount(countRow as Record<string, unknown> | null)
+
+    const stmt = db.prepare(dataSql)
+    const rows = stmt.all(...dataParams)
+    return buildPaginatedResult(rows as T[], total, pagination)
   }
 
   // =========================================================================
@@ -454,6 +500,24 @@ export function createSqliteProvider(): DbProvider {
         })
       }
     },
+
+    async queryPage<T>(options: PaginationQueryOptions): Promise<Result<PaginatedResult<T>, DbError>> {
+      const connResult = ensureConnected()
+      if (!connResult.success)
+        return connResult
+
+      try {
+        const pageResult = queryPageWithDatabase<T>(connResult.data, options)
+        return ok(pageResult)
+      }
+      catch (error) {
+        return err({
+          code: DbErrorCode.QUERY_FAILED,
+          message: dbM('db_sqliteQueryFailed', { params: { error: String(error) } }),
+          cause: error,
+        })
+      }
+    },
   }
 
   // =========================================================================
@@ -496,6 +560,10 @@ export function createSqliteProvider(): DbProvider {
           changes: result.changes,
           lastInsertRowid: result.lastInsertRowid,
         }
+      },
+
+      async queryPage<R>(options: PaginationQueryOptions): Promise<PaginatedResult<R>> {
+        return queryPageWithDatabase<R>(db, options)
       },
     }
 
