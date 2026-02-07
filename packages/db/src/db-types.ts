@@ -32,7 +32,7 @@
  * =============================================================================
  */
 
-import type { Result } from '@hai/core'
+import type { PaginatedResult, PaginationOptions, PaginationOptionsInput, Result } from '@hai/core'
 import type { DbConfig, DbConfigInput, DbErrorCodeType } from './db-config.js'
 
 // =============================================================================
@@ -338,6 +338,46 @@ export interface ExecuteResult {
   lastInsertRowid?: number | bigint
 }
 
+// =============================================================================
+// 分页类型
+// =============================================================================
+
+/**
+ * 规范化后的分页参数
+ */
+export interface NormalizedPagination extends PaginationOptions {
+  /** SQL offset */
+  offset: number
+  /** SQL limit */
+  limit: number
+}
+
+/**
+ * 分页参数覆盖
+ */
+export interface PaginationOverrides {
+  /** 默认页码 */
+  defaultPage?: number
+  /** 默认每页数量 */
+  defaultPageSize?: number
+  /** 最大每页数量 */
+  maxPageSize?: number
+}
+
+/**
+ * 分页查询参数
+ */
+export interface PaginationQueryOptions {
+  /** 数据查询 SQL（不含 LIMIT/OFFSET） */
+  sql: string
+  /** 参数列表 */
+  params?: unknown[]
+  /** 分页参数 */
+  pagination?: PaginationOptionsInput
+  /** 覆盖默认分页参数 */
+  overrides?: PaginationOverrides
+}
+
 /**
  * SQL（数据操作语言）操作接口
  *
@@ -419,6 +459,13 @@ export interface SqlOperations {
    * ```
    */
   batch: (statements: Array<{ sql: string, params?: unknown[] }>) => Promise<Result<void, DbError>>
+
+  /**
+   * 分页查询
+   * @param options - 分页查询参数
+   * @returns 分页结果
+   */
+  queryPage: <T = QueryRow>(options: PaginationQueryOptions) => Promise<Result<PaginatedResult<T>, DbError>>
 }
 
 // =============================================================================
@@ -465,6 +512,13 @@ export interface TxOperations {
    * ```
    */
   execute: (sql: string, params?: unknown[]) => Promise<ExecuteResult>
+
+  /**
+   * 分页查询
+   * @param options - 分页查询参数
+   * @returns 分页结果
+   */
+  queryPage: <T = QueryRow>(options: PaginationQueryOptions) => Promise<PaginatedResult<T>>
 }
 
 /**
@@ -500,6 +554,20 @@ export interface DbCompositeOperations {
 
   /** 执行异步事务 */
   tx: <T>(fn: TxCallback<T>) => Promise<Result<T, DbError>>
+}
+
+// =============================================================================
+// 分页工具接口
+// =============================================================================
+
+/**
+ * 分页工具接口
+ */
+export interface DbPagination {
+  /** 规范化分页参数 */
+  normalize: (options?: PaginationOptionsInput, overrides?: PaginationOverrides) => NormalizedPagination
+  /** 构建分页结果 */
+  build: <T>(items: T[], total: number, pagination: PaginationOptions) => PaginatedResult<T>
 }
 
 // =============================================================================
@@ -550,6 +618,9 @@ export interface DbService extends DbCompositeOperations {
 
   /** 是否已初始化 */
   readonly isInitialized: boolean
+
+  /** 分页工具 */
+  readonly pagination: DbPagination
 
   /** 关闭数据库连接 */
   close: () => Promise<void>

@@ -84,16 +84,41 @@ await db.close()
 - `get<T>(sql, params?)` → `Result<T | null, DbError>`
 - `execute(sql, params?)` → `Result<{ changes, lastInsertRowid? }, DbError>`
 - `batch(statements)` → `Result<void, DbError>`
+- `queryPage(options)` → `Result<PaginatedResult<T>, DbError>`
 
 ### 参数占位符
 
 统一使用 `?` 作为占位符，模块内部会转为各数据库对应格式。
 
+### 分页查询（queryPage）
+
+```ts
+const pageResult = await db.sql.queryPage<{ id: number, name: string }>({
+  sql: 'SELECT id, name FROM users ORDER BY created_at DESC',
+  pagination: { page: 1, pageSize: 20 },
+})
+
+if (pageResult.success) {
+  const { items, total, page, pageSize } = pageResult.data
+}
+```
+
 ## 事务（db.tx）
 
 - `db.tx(fn)` → `Result<T, DbError>`
-- `TxOperations` 提供 `query/get/execute`（与 `db.sql` 相同语义）
+- `TxOperations` 提供 `query/get/execute/queryPage`（与 `db.sql` 相同语义）
 - 事务回调内所有操作必须 `await`
+
+```ts
+const result = await db.tx(async (tx) => {
+  await tx.execute('INSERT INTO users (name) VALUES (?)', ['用户A'])
+  const page = await tx.queryPage<{ id: number, name: string }>({
+    sql: 'SELECT id, name FROM users ORDER BY created_at DESC',
+    pagination: { page: 1, pageSize: 10 },
+  })
+  return page
+})
+```
 
 ## 返回值与错误码
 
@@ -158,6 +183,16 @@ const result = await db.tx(async (tx) => {
   await tx.execute('UPDATE accounts SET balance = balance + ? WHERE id = ?', [100, 2])
   return await tx.get('SELECT balance FROM accounts WHERE id = ?', [1])
 })
+
+## 分页工具（db.pagination）
+
+```ts
+const pagination = db.pagination.normalize({ page: 1, pageSize: 20 })
+// pagination: { page, pageSize, offset, limit }
+
+const result = db.pagination.build(['a', 'b'], 2, pagination)
+// result: { items, total, page, pageSize }
+```
 ```
 
 ## 注意事项

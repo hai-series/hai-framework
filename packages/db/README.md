@@ -45,14 +45,41 @@ if (users.success) {
   // 使用 users.data
 }
 
+// 4.1 分页查询
+const pageResult = await db.sql.queryPage<{ id: number, name: string }>({
+  sql: 'SELECT id, name FROM users ORDER BY created_at DESC',
+  pagination: { page: 1, pageSize: 20 },
+})
+if (pageResult.success) {
+  // pageResult.data.items / total / page / pageSize
+}
+
 // 5. 事务操作
 await db.tx(async (tx) => {
   await tx.execute('INSERT INTO users (name) VALUES (?)', ['用户1'])
   await tx.execute('INSERT INTO users (name) VALUES (?)', ['用户2'])
+
+  const page = await tx.queryPage<{ id: number, name: string }>({
+    sql: 'SELECT id, name FROM users ORDER BY created_at DESC',
+    pagination: { page: 1, pageSize: 10 },
+  })
+  // page.items / total / page / pageSize
 })
 
 // 6. 关闭连接
 await db.close()
+```
+
+## 分页工具
+
+`db.pagination` 提供业务无关的分页参数规范化与结果构建工具：
+
+```ts
+const pagination = db.pagination.normalize({ page: 2, pageSize: 20 })
+// pagination: { page, pageSize, offset, limit }
+
+const result = db.pagination.build(['a', 'b'], 100, pagination)
+// result: { items, total, page, pageSize }
 ```
 
 ## 配置要点

@@ -72,6 +72,7 @@ import { err } from '@hai/core'
 
 import { DbConfigSchema, DbErrorCode } from './db-config.js'
 import { dbM } from './db-i18n.js'
+import { pagination } from './db-pagination.js'
 
 import { createMysqlProvider } from './provider/db-provider-mysql.js'
 import { createPostgresProvider } from './provider/db-provider-postgres.js'
@@ -292,6 +293,10 @@ export const db: DbService = {
   /** 检查是否已初始化 */
   get isInitialized(): boolean {
     return currentProvider !== null && currentProvider.isConnected()
+  },
+
+  get pagination() {
+    return pagination
   },
 
   /**
