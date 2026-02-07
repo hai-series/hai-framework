@@ -197,10 +197,10 @@ describe('db.BaseCrudRepository', () => {
         expect(user?.updatedAt).toBeInstanceOf(Date)
       }
 
-      const existById = await repo.existById(1)
-      expect(existById.success).toBe(true)
-      if (existById.success) {
-        expect(existById.data).toBe(true)
+      const existsById = await repo.existsById(1)
+      expect(existsById.success).toBe(true)
+      if (existsById.success) {
+        expect(existsById.data).toBe(true)
       }
     })
 

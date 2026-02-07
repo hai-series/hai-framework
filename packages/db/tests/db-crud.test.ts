@@ -81,24 +81,6 @@ describe('db.crud', () => {
         expect(existsResult.data).toBe(true)
       }
 
-      const existByIdResult = await crud.existById(1)
-      expect(existByIdResult.success).toBe(true)
-      if (existByIdResult.success) {
-        expect(existByIdResult.data).toBe(true)
-      }
-
-      const existResult = await crud.exist({ where: 'email = ?', params: ['u1@test.com'] })
-      expect(existResult.success).toBe(true)
-      if (existResult.success) {
-        expect(existResult.data).toBe(true)
-      }
-
-      const existMissingResult = await crud.exist({ where: 'email = ?', params: ['missing@test.com'] })
-      expect(existMissingResult.success).toBe(true)
-      if (existMissingResult.success) {
-        expect(existMissingResult.data).toBe(false)
-      }
-
       const updateResult = await crud.updateById(1, { name: '用户1-更新' })
       expect(updateResult.success).toBe(true)
 

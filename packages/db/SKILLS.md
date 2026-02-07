@@ -109,7 +109,7 @@ if (pageResult.success) {
 
 - `db.crud.table(config)` → 单表 CRUD 仓库
 - `tx.crud.table(config)` → 事务内 CRUD 仓库
-- 统一提供 `create/createMany/findById/findAll/findPage/updateById/deleteById/count/exist/existById/existsById`
+- 统一提供 `create/createMany/findById/findAll/findPage/updateById/deleteById/count/exists/existsById`
 - CRUD 方法支持可选事务参数 `tx`（同一事务内跨仓库操作）
 
 ```ts

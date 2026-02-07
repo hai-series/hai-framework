@@ -483,20 +483,12 @@ export abstract class BaseCrudRepository<TItem> implements CrudRepository<TItem>
     return this.crud.count(options, tx)
   }
 
-  async exist(options?: CrudCountOptions, tx?: TxHandle): Promise<Result<boolean, DbError>> {
+  async exists(options?: CrudCountOptions, tx?: TxHandle): Promise<Result<boolean, DbError>> {
     const ready = await this.ensureReady()
     if (!ready.success) {
       return ready as Result<boolean, DbError>
     }
-    return this.crud.exist(options, tx)
-  }
-
-  async existById(id: unknown, tx?: TxHandle): Promise<Result<boolean, DbError>> {
-    const ready = await this.ensureReady()
-    if (!ready.success) {
-      return ready as Result<boolean, DbError>
-    }
-    return this.crud.existById(id, tx)
+    return this.crud.exists(options, tx)
   }
 
   async existsById(id: unknown, tx?: TxHandle): Promise<Result<boolean, DbError>> {
