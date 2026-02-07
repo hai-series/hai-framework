@@ -34,14 +34,20 @@ describe.sequential('db (not initialized)', () => {
   })
 
   it('tx 操作应返回 NOT_INITIALIZED', async () => {
-    const result = await db.tx(async (tx) => {
+    const wrapResult = await db.tx.wrap(async (tx) => {
       await tx.execute('INSERT INTO users (name) VALUES (?)', ['用户A'])
       return 1
     })
 
-    expect(result.success).toBe(false)
-    if (!result.success) {
-      expect(result.error.code).toBe(NOT_INITIALIZED)
+    expect(wrapResult.success).toBe(false)
+    if (!wrapResult.success) {
+      expect(wrapResult.error.code).toBe(NOT_INITIALIZED)
+    }
+
+    const beginResult = await db.tx.begin()
+    expect(beginResult.success).toBe(false)
+    if (!beginResult.success) {
+      expect(beginResult.error.code).toBe(NOT_INITIALIZED)
     }
   })
 })

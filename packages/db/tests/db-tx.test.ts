@@ -20,7 +20,7 @@ describe('db.tx', () => {
       })
       expect(createTable.success).toBe(true)
 
-      const result = await db.tx(async (tx) => {
+      const result = await db.tx.wrap(async (tx) => {
         await tx.execute('INSERT INTO users (name) VALUES (?)', ['用户1'])
         await tx.execute('INSERT INTO users (name) VALUES (?)', ['用户2'])
         return 'ok'
@@ -38,6 +38,31 @@ describe('db.tx', () => {
       }
     })
 
+    it(`${label}: 事务内 batch 应执行全部语句`, async () => {
+      await db.ddl.dropTable('users', true)
+      const createTable = await db.ddl.createTable('users', {
+        id: { type: 'INTEGER', primaryKey: true, autoIncrement: true },
+        name: { type: 'TEXT', notNull: true },
+      })
+      expect(createTable.success).toBe(true)
+
+      const result = await db.tx.wrap(async (tx) => {
+        await tx.batch([
+          { sql: 'INSERT INTO users (name) VALUES (?)', params: ['用户1'] },
+          { sql: 'INSERT INTO users (name) VALUES (?)', params: ['用户2'] },
+        ])
+        return 'ok'
+      })
+
+      expect(result.success).toBe(true)
+
+      const count = await db.sql.get<{ count: number }>('SELECT COUNT(*) as count FROM users')
+      expect(count.success).toBe(true)
+      if (count.success) {
+        expect(Number(count.data?.count)).toBe(2)
+      }
+    })
+
     it(`${label}: 事务内分页查询应返回总数`, async () => {
       await db.ddl.dropTable('users', true)
       const createTable = await db.ddl.createTable('users', {
@@ -46,14 +71,18 @@ describe('db.tx', () => {
       })
       expect(createTable.success).toBe(true)
 
-      const result = await db.tx(async (tx) => {
+      const result = await db.tx.wrap(async (tx) => {
         await tx.execute('INSERT INTO users (name) VALUES (?)', ['用户1'])
         await tx.execute('INSERT INTO users (name) VALUES (?)', ['用户2'])
         await tx.execute('INSERT INTO users (name) VALUES (?)', ['用户3'])
-        return tx.queryPage<{ id: number, name: string }>({
+        const pageResult = await tx.queryPage<{ id: number, name: string }>({
           sql: 'SELECT id, name FROM users ORDER BY id ASC',
           pagination: { page: 1, pageSize: 2 },
         })
+        if (!pageResult.success) {
+          throw new Error(pageResult.error.message)
+        }
+        return pageResult.data
       })
 
       expect(result.success).toBe(true)
@@ -73,7 +102,7 @@ describe('db.tx', () => {
       })
       expect(createTable.success).toBe(true)
 
-      const result = await db.tx(async (tx) => {
+      const result = await db.tx.wrap(async (tx) => {
         await tx.execute('INSERT INTO users (name) VALUES (?)', ['用户1'])
         throw new Error('boom')
       })

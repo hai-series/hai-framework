@@ -33,5 +33,7 @@
   "db_mysqlTxFailed": "Transaction failed: {error}",
   "db_mysqlTxQueryHint": "In MySQL transaction, please use await tx.query()",
   "db_mysqlTxGetHint": "In MySQL transaction, please use await tx.get()",
-  "db_mysqlTxExecuteHint": "In MySQL transaction, please use await tx.execute()"
+  "db_mysqlTxExecuteHint": "In MySQL transaction, please use await tx.execute()",
+  "db_crudEmptyPayload": "CRUD payload is empty, please provide data",
+  "db_crudNoValidColumns": "CRUD payload has no valid columns"
 }

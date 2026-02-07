@@ -26,6 +26,8 @@ import type Database from 'better-sqlite3'
 import type { DbConfig } from '../db-config.js'
 import type {
   ColumnDef,
+  CrudManager,
+  DataOperations,
   DbError,
   DbProvider,
   DdlOperations,
@@ -34,13 +36,15 @@ import type {
   PaginationQueryOptions,
   SqlOperations,
   TableDef,
-  TxCallback,
-  TxOperations,
+  TxHandle,
+  TxManager,
+  TxWrapCallback,
 } from '../db-types.js'
 import { createRequire } from 'node:module'
 
 import { err, ok } from '@hai/core'
 
+import { createCrud } from '../crud/db-crud-kernal.js'
 import { DbErrorCode } from '../db-config.js'
 import { dbM } from '../db-i18n.js'
 import { buildPaginatedResult, normalizePagination } from '../db-pagination.js'
@@ -203,6 +207,119 @@ export function createSqliteProvider(): DbProvider {
     const rows = stmt.all(...dataParams)
     return buildPaginatedResult(rows as T[], total, pagination)
   }
+
+  async function runQueryResult<T>(
+    db: Database.Database,
+    sqlStr: string,
+    params?: unknown[],
+  ): Promise<Result<T[], DbError>> {
+    try {
+      const stmt = db.prepare(sqlStr)
+      const rows = params ? stmt.all(...params) : stmt.all()
+      return ok(rows as T[])
+    }
+    catch (error) {
+      return err({
+        code: DbErrorCode.QUERY_FAILED,
+        message: dbM('db_sqliteQueryFailed', { params: { error: String(error) } }),
+        cause: error,
+      })
+    }
+  }
+
+  async function runGetResult<T>(
+    db: Database.Database,
+    sqlStr: string,
+    params?: unknown[],
+  ): Promise<Result<T | null, DbError>> {
+    try {
+      const stmt = db.prepare(sqlStr)
+      const row = params ? stmt.get(...params) : stmt.get()
+      return ok((row as T) ?? null)
+    }
+    catch (error) {
+      return err({
+        code: DbErrorCode.QUERY_FAILED,
+        message: dbM('db_sqliteQueryFailed', { params: { error: String(error) } }),
+        cause: error,
+      })
+    }
+  }
+
+  async function runExecuteResult(
+    db: Database.Database,
+    sqlStr: string,
+    params?: unknown[],
+  ): Promise<Result<ExecuteResult, DbError>> {
+    try {
+      const stmt = db.prepare(sqlStr)
+      const result = params ? stmt.run(...params) : stmt.run()
+      return ok({
+        changes: result.changes,
+        lastInsertRowid: result.lastInsertRowid,
+      })
+    }
+    catch (error) {
+      return err({
+        code: DbErrorCode.QUERY_FAILED,
+        message: dbM('db_sqliteExecuteFailed', { params: { error: String(error) } }),
+        cause: error,
+      })
+    }
+  }
+
+  function runStatementBatch(
+    db: Database.Database,
+    statements: Array<{ sql: string, params?: unknown[] }>,
+  ): void {
+    for (const { sql: sqlStr, params } of statements) {
+      const stmt = db.prepare(sqlStr)
+      if (params) {
+        stmt.run(...params)
+      }
+      else {
+        stmt.run()
+      }
+    }
+  }
+
+  async function runBatchResult(
+    db: Database.Database,
+    statements: Array<{ sql: string, params?: unknown[] }>,
+  ): Promise<Result<void, DbError>> {
+    try {
+      runStatementBatch(db, statements)
+      return ok(undefined)
+    }
+    catch (error) {
+      return err({
+        code: DbErrorCode.QUERY_FAILED,
+        message: dbM('db_sqliteBatchFailed', { params: { error: String(error) } }),
+        cause: error,
+      })
+    }
+  }
+
+  async function runQueryPageResult<T>(
+    db: Database.Database,
+    options: PaginationQueryOptions,
+  ): Promise<Result<PaginatedResult<T>, DbError>> {
+    try {
+      const pageResult = queryPageWithDatabase<T>(db, options)
+      return ok(pageResult)
+    }
+    catch (error) {
+      return err({
+        code: DbErrorCode.QUERY_FAILED,
+        message: dbM('db_sqliteQueryFailed', { params: { error: String(error) } }),
+        cause: error,
+      })
+    }
+  }
+
+  const createCrudManager = (ops: DataOperations): CrudManager => ({
+    table: config => createCrud(ops, config),
+  })
 
   // =========================================================================
   // DDL 操作实现
@@ -406,19 +523,7 @@ export function createSqliteProvider(): DbProvider {
       const connResult = ensureConnected()
       if (!connResult.success)
         return connResult
-
-      try {
-        const stmt = connResult.data.prepare(sqlStr)
-        const rows = params ? stmt.all(...params) : stmt.all()
-        return ok(rows as T[])
-      }
-      catch (error) {
-        return err({
-          code: DbErrorCode.QUERY_FAILED,
-          message: dbM('db_sqliteQueryFailed', { params: { error: String(error) } }),
-          cause: error,
-        })
-      }
+      return runQueryResult<T>(connResult.data, sqlStr, params)
     },
 
     /**
@@ -428,19 +533,7 @@ export function createSqliteProvider(): DbProvider {
       const connResult = ensureConnected()
       if (!connResult.success)
         return connResult
-
-      try {
-        const stmt = connResult.data.prepare(sqlStr)
-        const row = params ? stmt.get(...params) : stmt.get()
-        return ok((row as T) ?? null)
-      }
-      catch (error) {
-        return err({
-          code: DbErrorCode.QUERY_FAILED,
-          message: dbM('db_sqliteQueryFailed', { params: { error: String(error) } }),
-          cause: error,
-        })
-      }
+      return runGetResult<T>(connResult.data, sqlStr, params)
     },
 
     /**
@@ -450,22 +543,7 @@ export function createSqliteProvider(): DbProvider {
       const connResult = ensureConnected()
       if (!connResult.success)
         return connResult
-
-      try {
-        const stmt = connResult.data.prepare(sqlStr)
-        const result = params ? stmt.run(...params) : stmt.run()
-        return ok({
-          changes: result.changes,
-          lastInsertRowid: result.lastInsertRowid,
-        })
-      }
-      catch (error) {
-        return err({
-          code: DbErrorCode.QUERY_FAILED,
-          message: dbM('db_sqliteExecuteFailed', { params: { error: String(error) } }),
-          cause: error,
-        })
-      }
+      return runExecuteResult(connResult.data, sqlStr, params)
     },
 
     /**
@@ -479,15 +557,7 @@ export function createSqliteProvider(): DbProvider {
       try {
         const db = connResult.data
         const transaction = db.transaction(() => {
-          for (const { sql: sqlStr, params } of statements) {
-            const stmt = db.prepare(sqlStr)
-            if (params) {
-              stmt.run(...params)
-            }
-            else {
-              stmt.run()
-            }
-          }
+          runStatementBatch(db, statements)
         })
         transaction()
         return ok(undefined)
@@ -505,20 +575,12 @@ export function createSqliteProvider(): DbProvider {
       const connResult = ensureConnected()
       if (!connResult.success)
         return connResult
-
-      try {
-        const pageResult = queryPageWithDatabase<T>(connResult.data, options)
-        return ok(pageResult)
-      }
-      catch (error) {
-        return err({
-          code: DbErrorCode.QUERY_FAILED,
-          message: dbM('db_sqliteQueryFailed', { params: { error: String(error) } }),
-          cause: error,
-        })
-      }
+      return runQueryPageResult<T>(connResult.data, options)
     },
+
   }
+
+  const crud = createCrudManager(sql)
 
   // =========================================================================
   // 事务操作实现
@@ -530,57 +592,143 @@ export function createSqliteProvider(): DbProvider {
    * SQLite 使用同步 API，因此在这里显式执行 BEGIN/COMMIT/ROLLBACK，
    * 并将同步调用包装为异步接口。
    *
-   * @param fn - 事务回调
    * @returns 事务回调结果或错误
    */
-  async function tx<T>(fn: TxCallback<T>): Promise<Result<T, DbError>> {
+  async function beginTransaction(): Promise<Result<TxHandle, DbError>> {
     const connResult = ensureConnected()
     if (!connResult.success)
       return connResult
 
     const db = connResult.data
-
-    // 创建事务内操作对象
-    const txOps: TxOperations = {
-      async query<R>(sqlStr: string, params?: unknown[]): Promise<R[]> {
-        const stmt = db.prepare(sqlStr)
-        return (params ? stmt.all(...params) : stmt.all()) as R[]
-      },
-
-      async get<R>(sqlStr: string, params?: unknown[]): Promise<R | null> {
-        const stmt = db.prepare(sqlStr)
-        const row = params ? stmt.get(...params) : stmt.get()
-        return (row as R) ?? null
-      },
-
-      async execute(sqlStr: string, params?: unknown[]): Promise<ExecuteResult> {
-        const stmt = db.prepare(sqlStr)
-        const result = params ? stmt.run(...params) : stmt.run()
-        return {
-          changes: result.changes,
-          lastInsertRowid: result.lastInsertRowid,
-        }
-      },
-
-      async queryPage<R>(options: PaginationQueryOptions): Promise<PaginatedResult<R>> {
-        return queryPageWithDatabase<R>(db, options)
-      },
-    }
+    let active = true
 
     try {
       db.exec('BEGIN TRANSACTION')
-      const result = await fn(txOps)
-      db.exec('COMMIT')
-      return ok(result)
     }
     catch (error) {
-      db.exec('ROLLBACK')
       return err({
         code: DbErrorCode.TRANSACTION_FAILED,
         message: dbM('db_sqliteTxFailed', { params: { error: String(error) } }),
         cause: error,
       })
     }
+
+    const ensureActive = (): Result<void, DbError> => {
+      if (!active) {
+        return err({
+          code: DbErrorCode.TRANSACTION_FAILED,
+          message: dbM('db_sqliteTxFailed', { params: { error: 'transaction finished' } }),
+        })
+      }
+      return ok(undefined)
+    }
+
+    const txDataOps: DataOperations = {
+      async query<R>(sqlStr: string, params?: unknown[]): Promise<Result<R[], DbError>> {
+        const activeResult = ensureActive()
+        if (!activeResult.success)
+          return activeResult
+        return runQueryResult<R>(db, sqlStr, params)
+      },
+
+      async get<R>(sqlStr: string, params?: unknown[]): Promise<Result<R | null, DbError>> {
+        const activeResult = ensureActive()
+        if (!activeResult.success)
+          return activeResult
+        return runGetResult<R>(db, sqlStr, params)
+      },
+
+      async execute(sqlStr: string, params?: unknown[]): Promise<Result<ExecuteResult, DbError>> {
+        const activeResult = ensureActive()
+        if (!activeResult.success)
+          return activeResult
+        return runExecuteResult(db, sqlStr, params)
+      },
+
+      async batch(statements: Array<{ sql: string, params?: unknown[] }>): Promise<Result<void, DbError>> {
+        const activeResult = ensureActive()
+        if (!activeResult.success)
+          return activeResult
+        return runBatchResult(db, statements)
+      },
+
+      async queryPage<R>(options: PaginationQueryOptions): Promise<Result<PaginatedResult<R>, DbError>> {
+        const activeResult = ensureActive()
+        if (!activeResult.success)
+          return activeResult
+        return runQueryPageResult<R>(db, options)
+      },
+    }
+
+    const txOps: TxHandle = {
+      ...txDataOps,
+      crud: createCrudManager(txDataOps),
+
+      async commit(): Promise<Result<void, DbError>> {
+        const activeResult = ensureActive()
+        if (!activeResult.success)
+          return activeResult
+        try {
+          db.exec('COMMIT')
+          active = false
+          return ok(undefined)
+        }
+        catch (error) {
+          return err({
+            code: DbErrorCode.TRANSACTION_FAILED,
+            message: dbM('db_sqliteTxFailed', { params: { error: String(error) } }),
+            cause: error,
+          })
+        }
+      },
+
+      async rollback(): Promise<Result<void, DbError>> {
+        const activeResult = ensureActive()
+        if (!activeResult.success)
+          return activeResult
+        try {
+          db.exec('ROLLBACK')
+          active = false
+          return ok(undefined)
+        }
+        catch (error) {
+          return err({
+            code: DbErrorCode.TRANSACTION_FAILED,
+            message: dbM('db_sqliteTxFailed', { params: { error: String(error) } }),
+            cause: error,
+          })
+        }
+      },
+    }
+
+    return ok(txOps)
+  }
+
+  const tx: TxManager = {
+    begin: beginTransaction,
+
+    async wrap<T>(fn: TxWrapCallback<T>): Promise<Result<T, DbError>> {
+      const txResult = await beginTransaction()
+      if (!txResult.success)
+        return txResult
+
+      try {
+        const result = await fn(txResult.data)
+        const commitResult = await txResult.data.commit()
+        if (!commitResult.success) {
+          return commitResult as Result<T, DbError>
+        }
+        return ok(result)
+      }
+      catch (error) {
+        await txResult.data.rollback()
+        return err({
+          code: DbErrorCode.TRANSACTION_FAILED,
+          message: dbM('db_sqliteTxFailed', { params: { error: String(error) } }),
+          cause: error,
+        })
+      }
+    },
   }
 
   // =========================================================================
@@ -658,6 +806,7 @@ export function createSqliteProvider(): DbProvider {
     isConnected,
     ddl,
     sql,
+    crud,
     tx,
   }
 }
