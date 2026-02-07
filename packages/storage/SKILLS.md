@@ -6,7 +6,8 @@
 
 ## 入口与初始化
 
-- 入口：`import { storage } from '@hai/storage'`
+- Node.js 入口：`import { storage } from '@hai/storage'`
+- 浏览器入口：`import { uploadWithPresignedUrl } from '@hai/storage'`（仅前端客户端能力）
 - 初始化：`storage.init(config)` → `Result<void, StorageError>`
 - 关闭：`storage.close()` → `Promise<void>`
 - 状态：`storage.isInitialized` / `storage.config`
@@ -21,7 +22,8 @@ await storage.close()
 ```
 packages/storage/
 ├── src/
-│   ├── index.ts
+│   ├── storage-index.node.ts
+│   ├── storage-index.browser.ts
 │   ├── storage-config.ts
 │   ├── storage-i18n.ts
 │   ├── storage-main.ts
@@ -77,7 +79,7 @@ packages/storage/
 - `putUrl(key, options?)` → `Result<string, StorageError>`
 - `publicUrl(key)` → `string | null`
 
-## 前端客户端（@hai/storage/client）
+## 前端客户端（@hai/storage / @hai/storage/client）
 
 - `uploadWithPresignedUrl(url, data, options?)`
 - `downloadWithPresignedUrl(url, options?)`

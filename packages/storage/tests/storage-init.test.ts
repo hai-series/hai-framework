@@ -5,7 +5,7 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { storage, StorageErrorCode } from '../src/index.js'
+import { storage } from '../src/storage-index.node.js'
 import { defineStorageSuite, localStorageEnv, s3Env } from './helpers/storage-test-suite.js'
 
 describe('storage.init', () => {
@@ -26,7 +26,7 @@ describe('storage.init', () => {
       const result = await storage.file.put('test.txt', 'hello')
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.code).toBe(StorageErrorCode.NOT_INITIALIZED)
+        expect(result.error.code).toBe(5010)
       }
     })
 
@@ -57,7 +57,7 @@ describe('storage.init 配置校验', () => {
     const result = await storage.init({ type: 'local', root: '' } as any)
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(StorageErrorCode.CONNECTION_FAILED)
+      expect(result.error.code).toBe(5000)
     }
   })
 
@@ -66,7 +66,7 @@ describe('storage.init 配置校验', () => {
     const result = await storage.init({ type: 'unknown' } as any)
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(StorageErrorCode.CONNECTION_FAILED)
+      expect(result.error.code).toBe(5000)
     }
   })
 })
