@@ -5,7 +5,8 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { formatFileSize, getMimeType, storage } from '../src/index.js'
+import * as storageBrowser from '../src/storage-index.browser.js'
+import { formatFileSize, getMimeType, storage } from '../src/storage-index.node.js'
 
 describe('storage.client 工具函数', () => {
   // ===========================================================================
@@ -125,6 +126,22 @@ describe('storage.client 工具函数', () => {
     it('client.formatFileSize 与直接导入的 formatFileSize 行为一致', () => {
       expect(storage.client.formatFileSize(1024)).toBe(formatFileSize(1024))
       expect(storage.client.formatFileSize(0)).toBe(formatFileSize(0))
+    })
+  })
+
+  // ===========================================================================
+  // 浏览器入口导出
+  // ===========================================================================
+
+  describe('browser entry exports', () => {
+    it('浏览器入口不应导出 storage 主对象', () => {
+      expect('storage' in storageBrowser).toBe(false)
+    })
+
+    it('浏览器入口应导出前端客户端方法', () => {
+      expect(typeof storageBrowser.uploadWithPresignedUrl).toBe('function')
+      expect(typeof storageBrowser.downloadWithPresignedUrl).toBe('function')
+      expect(typeof storageBrowser.downloadAndSave).toBe('function')
     })
   })
 })

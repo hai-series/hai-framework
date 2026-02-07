@@ -20,7 +20,7 @@
 
 import { Buffer } from 'node:buffer'
 import { describe, expect, it } from 'vitest'
-import { storage, StorageErrorCode } from '../src/index.js'
+import { storage } from '../src/storage-index.node.js'
 import { defineStorageSuite, localStorageEnv, s3Env } from './helpers/storage-test-suite.js'
 
 describe('storage workflow', () => {
@@ -204,7 +204,7 @@ describe('storage workflow', () => {
       const afterCloseResult = await storage.file.get('any-key')
       expect(afterCloseResult.success).toBe(false)
       if (!afterCloseResult.success) {
-        expect(afterCloseResult.error.code).toBe(StorageErrorCode.NOT_INITIALIZED)
+        expect(afterCloseResult.error.code).toBe(5010)
       }
     })
   }

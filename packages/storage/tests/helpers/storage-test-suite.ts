@@ -4,12 +4,12 @@
  * =============================================================================
  */
 
-import type { StorageConfigInput } from '../../src/index.js'
+import type { StorageConfigInput } from '../../src/storage-index.node.js'
 import * as fs from 'node:fs'
 import * as os from 'node:os'
 import * as path from 'node:path'
 import { afterAll, afterEach, beforeAll, beforeEach, describe } from 'vitest'
-import { storage } from '../../src/index.js'
+import { storage } from '../../src/storage-index.node.js'
 import { acquireMinioContainer } from './minio-container.js'
 
 export interface StorageTestEnv {

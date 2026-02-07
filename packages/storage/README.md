@@ -13,7 +13,7 @@
 pnpm add @hai/storage
 ```
 
-## 快速开始
+## 快速开始（Node.js）
 
 ```ts
 import { storage } from '@hai/storage'
@@ -41,13 +41,21 @@ const downloadUrl = await storage.presign.getUrl('uploads/image.png', { expiresI
 await storage.close()
 ```
 
-## 前端客户端
+## 前端客户端（浏览器）
+
+> 浏览器环境下，`@hai/storage` 默认仅导出前端客户端能力，不包含 `storage.init/file/dir/presign`。
 
 ```ts
 import { downloadAndSave, uploadWithPresignedUrl } from '@hai/storage/client'
 
 const { uploadUrl } = await fetch('/api/storage/presign').then(r => r.json())
 await uploadWithPresignedUrl(uploadUrl, file)
+```
+
+也可以直接从 `@hai/storage` 导入（浏览器构建会自动指向前端客户端）：
+
+```ts
+import { downloadAndSave, uploadWithPresignedUrl } from '@hai/storage'
 ```
 
 ## 配置要点

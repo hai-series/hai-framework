@@ -6,7 +6,7 @@
 
 import { Buffer } from 'node:buffer'
 import { describe, expect, it } from 'vitest'
-import { storage, StorageErrorCode } from '../src/index.js'
+import { storage } from '../src/storage-index.node.js'
 import { defineStorageSuite, localStorageEnv, s3Env } from './helpers/storage-test-suite.js'
 
 describe('storage.file', () => {
@@ -109,7 +109,7 @@ describe('storage.file', () => {
       const result = await storage.file.get('nonexistent.txt')
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.code).toBe(StorageErrorCode.NOT_FOUND)
+        expect(result.error.code).toBe(5002)
       }
     })
 
@@ -148,7 +148,7 @@ describe('storage.file', () => {
       const result = await storage.file.head('nope.txt')
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.code).toBe(StorageErrorCode.NOT_FOUND)
+        expect(result.error.code).toBe(5002)
       }
     })
 

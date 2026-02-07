@@ -5,7 +5,7 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { storage } from '../src/index.js'
+import { storage } from '../src/storage-index.node.js'
 import { defineStorageSuite, localStorageEnv, s3Env } from './helpers/storage-test-suite.js'
 
 describe('storage.dir', () => {

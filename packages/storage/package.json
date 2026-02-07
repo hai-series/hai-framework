@@ -6,16 +6,19 @@
   "license": "Apache-2.0",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
+      "types": "./dist/node.d.ts",
+      "browser": "./dist/browser.js",
+      "import": "./dist/node.js",
+      "default": "./dist/node.js"
     },
     "./client": {
       "types": "./dist/storage-client.d.ts",
       "import": "./dist/storage-client.js"
     }
   },
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
+  "main": "./dist/node.js",
+  "browser": "./dist/browser.js",
+  "types": "./dist/node.d.ts",
   "files": [
     "dist"
   ],
