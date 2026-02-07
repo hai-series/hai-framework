@@ -23,7 +23,7 @@ pnpm add mysql2
 ## 快速开始
 
 ```ts
-import { db } from '@hai/db'
+import { BaseCrudRepository, db } from '@hai/db'
 
 // 1. 初始化数据库
 await db.init({ type: 'sqlite', database: './data.db' })
@@ -55,7 +55,7 @@ if (pageResult.success) {
 }
 
 // 5. 事务操作
-await db.tx(async (tx) => {
+await db.tx.wrap(async (tx) => {
   await tx.execute('INSERT INTO users (name) VALUES (?)', ['用户1'])
   await tx.execute('INSERT INTO users (name) VALUES (?)', ['用户2'])
 
@@ -65,6 +65,78 @@ await db.tx(async (tx) => {
   })
   // page.items / total / page / pageSize
 })
+
+// 5.1 CRUD 抽象（可用于 db.sql 或 tx）
+const userCrud = db.crud.table({
+  table: 'users',
+  idColumn: 'id',
+  select: ['id', 'name', 'email'],
+  createColumns: ['name', 'email'],
+  updateColumns: ['name', 'email'],
+})
+
+await userCrud.create({ name: '张三', email: 'test@example.com' })
+const user = await userCrud.findById(1)
+const hasUser = await userCrud.existById(1)
+
+// 5.1.1 在事务中使用 CRUD
+const txResult = await db.tx.begin()
+if (txResult.success) {
+  const tx = txResult.data
+  await userCrud.create({ name: '事务用户', email: 'tx@test.com' }, tx)
+  await tx.commit()
+}
+
+// 5.2 基于 BaseCrudRepository 的业务仓库
+class UserRepository extends BaseCrudRepository<{ id: number, name: string, email: string }> {
+  constructor() {
+    super(db, {
+      table: 'users',
+      idColumn: 'id',
+      fields: [
+        {
+          fieldName: 'id',
+          columnName: 'id',
+          def: { type: 'INTEGER', primaryKey: true, autoIncrement: true },
+          select: true,
+          create: false,
+          update: false,
+        },
+        {
+          fieldName: 'name',
+          columnName: 'name',
+          def: { type: 'TEXT', notNull: true },
+          select: true,
+          create: true,
+          update: true,
+        },
+        {
+          fieldName: 'email',
+          columnName: 'email',
+          def: { type: 'TEXT', notNull: true },
+          select: true,
+          create: true,
+          update: true,
+        },
+      ],
+    })
+  }
+
+  async findByEmail(email: string) {
+    return this.findAll({ where: 'email = ?', params: [email], limit: 1 })
+  }
+}
+
+const userRepo = new UserRepository()
+await userRepo.create({ name: '李四', email: 'li@test.com' })
+await userRepo.findByEmail('li@test.com')
+
+const txResult2 = await db.tx.begin()
+if (txResult2.success) {
+  const tx = txResult2.data
+  await userRepo.create({ name: '事务用户2', email: 'tx2@test.com' }, tx)
+  await tx.commit()
+}
 
 // 6. 关闭连接
 await db.close()
@@ -119,6 +191,10 @@ if (!result.success && result.error.code === DbErrorCode.NOT_INITIALIZED) {
   // 请先调用 db.init()
 }
 ```
+
+## 注意事项
+
+- MySQL 的 `dropIndex` 会在当前数据库中按索引名查找所属表并执行删除，确保索引名在库内唯一；如遇重名，建议使用 `db.ddl.raw()` 明确指定表。
 
 ## 测试
 

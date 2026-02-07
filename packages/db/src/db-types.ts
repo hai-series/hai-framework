@@ -11,7 +11,8 @@
  * - 列定义（ColumnDef、TableDef、IndexDef）
  * - DDL 操作接口（DdlOperations）
  * - SQL 操作接口（SqlOperations）
- * - 事务操作接口（TxOperations）
+ * - 事务操作接口（TxHandle / TxManager）
+ * - CRUD 抽象（db-crud）
  * - 复合数据库操作接口（DbCompositeOperations）
  * - 数据库服务接口（DbService）
  * - Provider 接口（DbProvider）
@@ -379,6 +380,133 @@ export interface PaginationQueryOptions {
 }
 
 /**
+ * 数据读写操作接口（SQL / 事务共享）
+ */
+export interface DataOperations {
+  /** 查询多行 */
+  query: <T = QueryRow>(sql: string, params?: unknown[]) => Promise<Result<T[], DbError>>
+  /** 查询单行 */
+  get: <T = QueryRow>(sql: string, params?: unknown[]) => Promise<Result<T | null, DbError>>
+  /** 执行修改语句（INSERT/UPDATE/DELETE） */
+  execute: (sql: string, params?: unknown[]) => Promise<Result<ExecuteResult, DbError>>
+  /** 批量执行多条语句（在同一事务上下文中） */
+  batch: (statements: Array<{ sql: string, params?: unknown[] }>) => Promise<Result<void, DbError>>
+  /** 分页查询 */
+  queryPage: <T = QueryRow>(options: PaginationQueryOptions) => Promise<Result<PaginatedResult<T>, DbError>>
+}
+
+// =============================================================================
+// CRUD 抽象类型
+// =============================================================================
+
+/** CRUD 查询条件 */
+export interface CrudQueryOptions {
+  /** WHERE 子句（不包含 WHERE 关键字） */
+  where?: string
+  /** 参数列表 */
+  params?: unknown[]
+  /** ORDER BY 子句（不包含 ORDER BY 关键字） */
+  orderBy?: string
+  /** LIMIT */
+  limit?: number
+  /** OFFSET */
+  offset?: number
+}
+
+/** CRUD 分页查询条件 */
+export interface CrudPageOptions {
+  /** WHERE 子句（不包含 WHERE 关键字） */
+  where?: string
+  /** 参数列表 */
+  params?: unknown[]
+  /** ORDER BY 子句（不包含 ORDER BY 关键字） */
+  orderBy?: string
+  /** 分页参数 */
+  pagination?: PaginationOptionsInput
+  /** 分页参数覆盖 */
+  overrides?: PaginationOverrides
+}
+
+/** CRUD 统计条件 */
+export interface CrudCountOptions {
+  /** WHERE 子句（不包含 WHERE 关键字） */
+  where?: string
+  /** 参数列表 */
+  params?: unknown[]
+}
+
+/** CRUD 配置 */
+export interface CrudConfig<TItem> {
+  /** 表名 */
+  table: string
+  /** 主键列名（默认 id） */
+  idColumn?: string
+  /** 查询列（默认 *） */
+  select?: string[]
+  /** 允许插入的列（不填则使用数据本身列） */
+  createColumns?: string[]
+  /** 允许更新的列（不填则使用数据本身列） */
+  updateColumns?: string[]
+  /** 行映射函数（可选） */
+  mapRow?: (row: QueryRow) => TItem
+}
+
+/** CRUD 字段定义 */
+export interface CrudFieldDefinition {
+  /** 对象字段名 */
+  fieldName: string
+  /** 数据库列名 */
+  columnName: string
+  /** 列定义 */
+  def: ColumnDef
+  /** 是否用于查询 */
+  select: boolean
+  /** 是否允许插入 */
+  create: boolean
+  /** 是否允许更新 */
+  update: boolean
+}
+
+/** BaseCrudRepository 配置 */
+export interface BaseCrudRepositoryConfig<TItem> {
+  /** 表名 */
+  table: string
+  /** 字段定义 */
+  fields: CrudFieldDefinition[]
+  /** 主键列名（默认 id） */
+  idColumn?: string
+  /** 主键字段名（默认与 idColumn 相同） */
+  idField?: keyof TItem & string
+  /** 是否自动创建表（默认 true） */
+  createTableIfNotExists?: boolean
+  /** 主键生成策略（未提供则尝试使用 crypto.randomUUID） */
+  generateId?: () => string | number
+  /** 当前时间提供者（默认 Date.now） */
+  nowProvider?: () => number
+}
+
+/** CRUD 仓库接口 */
+export interface CrudRepository<TItem> {
+  create: (data: Record<string, unknown>, tx?: TxHandle) => Promise<Result<ExecuteResult, DbError>>
+  createMany: (items: Array<Record<string, unknown>>, tx?: TxHandle) => Promise<Result<void, DbError>>
+  findById: (id: unknown, tx?: TxHandle) => Promise<Result<TItem | null, DbError>>
+  findAll: (options?: CrudQueryOptions, tx?: TxHandle) => Promise<Result<TItem[], DbError>>
+  findPage: (options: CrudPageOptions, tx?: TxHandle) => Promise<Result<PaginatedResult<TItem>, DbError>>
+  updateById: (id: unknown, data: Record<string, unknown>, tx?: TxHandle) => Promise<Result<ExecuteResult, DbError>>
+  deleteById: (id: unknown, tx?: TxHandle) => Promise<Result<ExecuteResult, DbError>>
+  count: (options?: CrudCountOptions, tx?: TxHandle) => Promise<Result<number, DbError>>
+  exist: (options?: CrudCountOptions, tx?: TxHandle) => Promise<Result<boolean, DbError>>
+  existById: (id: unknown, tx?: TxHandle) => Promise<Result<boolean, DbError>>
+  existsById: (id: unknown, tx?: TxHandle) => Promise<Result<boolean, DbError>>
+}
+
+/** CRUD 管理器（统一入口） */
+export interface CrudManager {
+  /** 获取单表 CRUD 仓库 */
+  table: <TItem>(config: CrudConfig<TItem>) => CrudRepository<TItem>
+}
+
+/**
  * SQL（数据操作语言）操作接口
  *
  * 提供数据查询和修改功能。
@@ -398,74 +526,7 @@ export interface PaginationQueryOptions {
  * // 可从 result.data?.lastInsertRowid 获取插入 ID
  * ```
  */
-export interface SqlOperations {
-  /**
-   * 查询多行
-   * @param sql - SQL 查询语句
-   * @param params - 参数列表（使用 ? 占位符）
-   * @returns 查询结果数组
-   * @example
-   * ```ts
-   * const users = await db.sql.query<{ id: number; name: string }>(
-   *     'SELECT id, name FROM users WHERE status = ?',
-   *     ['active'],
-   * )
-   * ```
-   */
-  query: <T = QueryRow>(sql: string, params?: unknown[]) => Promise<Result<T[], DbError>>
-
-  /**
-   * 查询单行
-   * @param sql - SQL 查询语句
-   * @param params - 参数列表
-   * @returns 单行结果或 null
-   * @example
-   * ```ts
-   * const user = await db.sql.get<{ id: number; name: string }>(
-   *     'SELECT id, name FROM users WHERE id = ?',
-   *     [1],
-   * )
-   * ```
-   */
-  get: <T = QueryRow>(sql: string, params?: unknown[]) => Promise<Result<T | null, DbError>>
-
-  /**
-   * 执行修改语句（INSERT/UPDATE/DELETE）
-   * @param sql - SQL 语句
-   * @param params - 参数列表
-   * @returns 执行结果（影响行数、最后插入 ID）
-   * @example
-   * ```ts
-   * const result = await db.sql.execute(
-   *     'UPDATE users SET status = ? WHERE id = ?',
-   *     ['active', 1],
-   * )
-   * if (result.success) {
-   *     // result.data.changes 为影响行数
-   * }
-   * ```
-   */
-  execute: (sql: string, params?: unknown[]) => Promise<Result<ExecuteResult, DbError>>
-
-  /**
-   * 批量执行多条语句（在同一事务中）
-   * @param statements - SQL 语句数组
-   * @example
-   * ```ts
-   * await db.sql.batch([
-   *     { sql: 'INSERT INTO users (name) VALUES (?)', params: ['用户1'] },
-   *     { sql: 'INSERT INTO users (name) VALUES (?)', params: ['用户2'] },
-   * ])
-   * ```
-   */
-  batch: (statements: Array<{ sql: string, params?: unknown[] }>) => Promise<Result<void, DbError>>
-
-  /**
-   * 分页查询
-   * @param options - 分页查询参数
-   * @returns 分页结果
-   */
-  queryPage: <T = QueryRow>(options: PaginationQueryOptions) => Promise<Result<PaginatedResult<T>, DbError>>
+export interface SqlOperations extends DataOperations {
 }
 
 // =============================================================================
@@ -473,52 +534,15 @@ export interface SqlOperations {
 // =============================================================================
 
 /**
- * 事务内操作接口
- *
- * 在事务回调函数中使用，提供异步风格的数据操作。
- *
- * @example
- * ```ts
- * // 异步事务
- * const result = await db.tx(async (tx) => {
- *     await tx.execute('INSERT INTO users (name) VALUES (?)', ['用户1'])
- *     const user = await tx.get('SELECT * FROM users WHERE name = ?', ['用户1'])
- *     return user
- * })
- * ```
+ * 事务句柄接口（分步事务）
  */
-export interface TxOperations {
-  /**
-   * 查询多行
-   * @example
-   * ```ts
-   * const rows = await tx.query('SELECT * FROM users WHERE status = ?', ['active'])
-   * ```
-   */
-  query: <T = QueryRow>(sql: string, params?: unknown[]) => Promise<T[]>
-  /**
-   * 查询单行
-   * @example
-   * ```ts
-   * const user = await tx.get('SELECT * FROM users WHERE id = ?', [1])
-   * ```
-   */
-  get: <T = QueryRow>(sql: string, params?: unknown[]) => Promise<T | null>
-  /**
-   * 执行修改
-   * @example
-   * ```ts
-   * await tx.execute('UPDATE users SET status = ? WHERE id = ?', ['active', 1])
-   * ```
-   */
-  execute: (sql: string, params?: unknown[]) => Promise<ExecuteResult>
-
-  /**
-   * 分页查询
-   * @param options - 分页查询参数
-   * @returns 分页结果
-   */
-  queryPage: <T = QueryRow>(options: PaginationQueryOptions) => Promise<PaginatedResult<T>>
+export interface TxHandle extends DataOperations {
+  /** CRUD 管理器 */
+  crud: CrudManager
+  /** 提交事务 */
+  commit: () => Promise<Result<void, DbError>>
+  /** 回滚事务 */
+  rollback: () => Promise<Result<void, DbError>>
 }
 
 /**
@@ -528,13 +552,23 @@ export interface TxOperations {
  * @returns 业务返回值（将被包装为 Result）
  * @example
  * ```ts
- * const result = await db.tx(async (tx) => {
+ * const result = await db.tx.wrap(async (tx) => {
  *     await tx.execute('INSERT INTO users (name) VALUES (?)', ['用户A'])
  *     return await tx.get('SELECT * FROM users WHERE name = ?', ['用户A'])
  * })
  * ```
  */
-export type TxCallback<T> = (tx: TxOperations) => Promise<T>
+export type TxWrapCallback<T> = (tx: TxHandle) => Promise<T>
+
+/**
+ * 事务管理器
+ */
+export interface TxManager {
+  /** 开启事务（分步事务） */
+  begin: () => Promise<Result<TxHandle, DbError>>
+  /** 包裹事务（自动提交/回滚） */
+  wrap: <T>(fn: TxWrapCallback<T>) => Promise<Result<T, DbError>>
+}
 
 // =============================================================================
 // 复合数据库操作接口
@@ -552,8 +586,11 @@ export interface DbCompositeOperations {
   /** SQL 操作（数据查询和修改） */
   readonly sql: SqlOperations
 
-  /** 执行异步事务 */
-  tx: <T>(fn: TxCallback<T>) => Promise<Result<T, DbError>>
+  /** CRUD 管理器 */
+  readonly crud: CrudManager
+
+  /** 事务管理器 */
+  tx: TxManager
 }
 
 // =============================================================================
@@ -598,7 +635,7 @@ export interface DbPagination {
  * await db.sql.query('SELECT * FROM users')
  *
  * // 使用事务
- * await db.tx(async (tx) => { ... })
+ * await db.tx.wrap(async (tx) => { ... })
  *
  * // 关闭连接
  * await db.close()

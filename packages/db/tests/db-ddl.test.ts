@@ -45,6 +45,30 @@ describe('db.ddl', () => {
       }
     })
 
+    it(`${options.label}: dropIndex 应该生效`, async () => {
+      await db.ddl.dropTable('users', true)
+      const createTable = await db.ddl.createTable('users', {
+        id: { type: 'INTEGER', primaryKey: true, autoIncrement: true },
+        name: { type: 'TEXT', notNull: true },
+      })
+      expect(createTable.success).toBe(true)
+
+      const createIndex = await db.ddl.createIndex('users', 'idx_users_email', {
+        columns: ['name'],
+        unique: true,
+      })
+      expect(createIndex.success).toBe(true)
+
+      const dropIndex = await db.ddl.dropIndex('idx_users_email', true)
+      expect(dropIndex.success).toBe(true)
+
+      const index = await db.sql.get<{ name: string }>(options.indexQuery, ['idx_users_email'])
+      expect(index.success).toBe(true)
+      if (index.success) {
+        expect(index.data).toBeNull()
+      }
+    })
+
     it(`${options.label}: raw DDL 应该可执行`, async () => {
       await db.ddl.dropTable('posts', true)
       const createTable = await db.ddl.createTable('posts', {

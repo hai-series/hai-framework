@@ -33,5 +33,7 @@
   "db_mysqlTxFailed": "事务执行失败: {error}",
   "db_mysqlTxQueryHint": "MySQL 事务中请使用 await tx.query()",
   "db_mysqlTxGetHint": "MySQL 事务中请使用 await tx.get()",
-  "db_mysqlTxExecuteHint": "MySQL 事务中请使用 await tx.execute()"
+  "db_mysqlTxExecuteHint": "MySQL 事务中请使用 await tx.execute()",
+  "db_crudEmptyPayload": "CRUD 数据为空，请提供数据",
+  "db_crudNoValidColumns": "CRUD 数据没有有效列"
 }

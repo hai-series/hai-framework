@@ -9,7 +9,7 @@
  * 1. 调用 `db.init()` 初始化数据库连接
  * 2. 通过 `db.ddl` 进行表结构操作
  * 3. 通过 `db.sql` 进行数据查询和修改
- * 4. 通过 `db.tx()` 执行事务
+ * 4. 通过 `db.tx.wrap()` 执行事务
  * 5. 调用 `db.close()` 关闭连接
  *
  * @example
@@ -43,7 +43,7 @@
  * }
  *
  * // 5. 事务操作
- * const result = await db.tx(async (tx) => {
+ * const result = await db.tx.wrap(async (tx) => {
  *     await tx.execute('INSERT INTO users (name) VALUES (?)', ['用户1'])
  *     await tx.execute('INSERT INTO users (name) VALUES (?)', ['用户2'])
  *     return tx.query('SELECT COUNT(*) as count FROM users')
@@ -60,16 +60,18 @@
 import type { Result } from '@hai/core'
 import type { DbConfig, DbConfigInput } from './db-config.js'
 import type {
+  CrudManager,
   DbError,
   DbProvider,
   DbService,
   DdlOperations,
   SqlOperations,
-  TxCallback,
+  TxManager,
 } from './db-types.js'
 
 import { err } from '@hai/core'
 
+import { createCrud } from './crud/db-crud-kernal.js'
 import { DbConfigSchema, DbErrorCode } from './db-config.js'
 import { dbM } from './db-i18n.js'
 import { pagination } from './db-pagination.js'
@@ -170,6 +172,11 @@ const notInitializedDdl = notInitializedOperations as DdlOperations
 /** 未初始化时的 SQL 操作占位对象 */
 const notInitializedSql = notInitializedOperations as SqlOperations
 
+/** 未初始化时的 CRUD 管理器 */
+const notInitializedCrud: CrudManager = {
+  table: config => createCrud(notInitializedSql, config),
+}
+
 // =============================================================================
 // 统一数据库服务对象
 // =============================================================================
@@ -182,7 +189,7 @@ const notInitializedSql = notInitializedOperations as SqlOperations
  * - `db.close()` - 关闭连接
  * - `db.ddl` - DDL 操作（表结构管理）
  * - `db.sql` - SQL 操作（数据查询和修改）
- * - `db.tx()` - 异步事务（所有数据库）
+ * - `db.tx` - 事务管理器（begin / wrap）
  * - `db.config` - 当前配置
  * - `db.isInitialized` - 初始化状态
  *
@@ -204,7 +211,7 @@ const notInitializedSql = notInitializedOperations as SqlOperations
  * const users = await db.sql.query('SELECT * FROM users')
  *
  * // 事务操作
- * await db.tx(async (tx) => {
+ * await db.tx.wrap(async (tx) => {
  *     await tx.execute('INSERT INTO users (name) VALUES (?)', ['用户1'])
  *     await tx.execute('INSERT INTO users (name) VALUES (?)', ['用户2'])
  *     return tx.query('SELECT * FROM users').length
@@ -272,17 +279,20 @@ export const db: DbService = {
     return currentProvider?.sql ?? notInitializedSql
   },
 
-  /**
-   * 执行异步事务
-   *
-   * @param fn - 事务回调
-   * @returns 事务执行结果
-   */
-  async tx<T>(fn: TxCallback<T>): Promise<Result<T, DbError>> {
+  /** CRUD 管理器 */
+  get crud() {
+    return currentProvider?.crud ?? notInitializedCrud
+  },
+
+  /** 事务管理器 */
+  get tx(): TxManager {
     if (!currentProvider) {
-      return err(notInitializedError())
+      return {
+        begin: async () => err(notInitializedError()),
+        wrap: async () => err(notInitializedError()),
+      }
     }
-    return currentProvider.tx(fn)
+    return currentProvider.tx
   },
 
   /** 获取当前配置（未初始化时为 null） */

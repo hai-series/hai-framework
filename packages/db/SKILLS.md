@@ -60,6 +60,8 @@ await db.close()
 - `dropIndex(indexName, ifExists?)`
 - `raw(sql)`
 
+> MySQL 的 `dropIndex` 会在当前数据库中按索引名解析所属表并执行删除，确保索引名在库内唯一；如遇重名，建议使用 `raw()` 显式指定表。
+
 ### ColumnDef
 
 - `type`: `'TEXT' | 'INTEGER' | 'REAL' | 'BLOB' | 'BOOLEAN' | 'TIMESTAMP' | 'JSON'`
@@ -103,14 +105,94 @@ if (pageResult.success) {
 }
 ```
 
+## CRUD 抽象（db.crud）
+
+- `db.crud.table(config)` → 单表 CRUD 仓库
+- `tx.crud.table(config)` → 事务内 CRUD 仓库
+- 统一提供 `create/createMany/findById/findAll/findPage/updateById/deleteById/count/exist/existById/existsById`
+- CRUD 方法支持可选事务参数 `tx`（同一事务内跨仓库操作）
+
+```ts
+const userCrud = db.crud.table({
+  table: 'users',
+  idColumn: 'id',
+  select: ['id', 'name', 'email'],
+  createColumns: ['name', 'email'],
+  updateColumns: ['name', 'email'],
+})
+
+await userCrud.create({ name: '张三', email: 'test@example.com' })
+const user = await userCrud.findById(1)
+
+const txResult = await db.tx.begin()
+if (txResult.success) {
+  const tx = txResult.data
+  await userCrud.create({ name: '事务用户', email: 'tx@test.com' }, tx)
+  await tx.rollback()
+}
+```
+
+### BaseCrudRepository
+
+业务仓库可继承 `BaseCrudRepository`，复用通用 CRUD，仅实现自定义方法：
+
+```ts
+class UserRepository extends BaseCrudRepository<{ id: number, name: string, email: string }> {
+  constructor() {
+    super(db, {
+      table: 'users',
+      idColumn: 'id',
+      fields: [
+        {
+          fieldName: 'id',
+          columnName: 'id',
+          def: { type: 'INTEGER', primaryKey: true, autoIncrement: true },
+          select: true,
+          create: false,
+          update: false,
+        },
+        {
+          fieldName: 'name',
+          columnName: 'name',
+          def: { type: 'TEXT', notNull: true },
+          select: true,
+          create: true,
+          update: true,
+        },
+        {
+          fieldName: 'email',
+          columnName: 'email',
+          def: { type: 'TEXT', notNull: true },
+          select: true,
+          create: true,
+          update: true,
+        },
+      ],
+    })
+  }
+
+  async findByEmail(email: string) {
+    return this.findAll({ where: 'email = ?', params: [email], limit: 1 })
+  }
+}
+
+const txResult2 = await db.tx.begin()
+if (txResult2.success) {
+  const tx = txResult2.data
+  await userRepo.create({ name: '事务用户2', email: 'tx2@test.com' }, tx)
+  await tx.commit()
+}
+```
+
 ## 事务（db.tx）
 
-- `db.tx(fn)` → `Result<T, DbError>`
-- `TxOperations` 提供 `query/get/execute/queryPage`（与 `db.sql` 相同语义）
+- `db.tx.wrap(fn)` → `Result<T, DbError>`（自动提交/回滚）
+- `db.tx.begin()` → `Result<TxHandle, DbError>`（分步事务）
+- `TxHandle` 提供 `query/get/execute/batch/queryPage` 并支持 `commit/rollback`
 - 事务回调内所有操作必须 `await`
 
 ```ts
-const result = await db.tx(async (tx) => {
+const result = await db.tx.wrap(async (tx) => {
   await tx.execute('INSERT INTO users (name) VALUES (?)', ['用户A'])
   const page = await tx.queryPage<{ id: number, name: string }>({
     sql: 'SELECT id, name FROM users ORDER BY created_at DESC',
@@ -118,6 +200,14 @@ const result = await db.tx(async (tx) => {
   })
   return page
 })
+
+const txResult = await db.tx.begin()
+if (txResult.success) {
+  const tx = txResult.data
+  await tx.execute('UPDATE accounts SET balance = balance - ? WHERE id = ?', [100, 1])
+  await tx.execute('UPDATE accounts SET balance = balance + ? WHERE id = ?', [100, 2])
+  await tx.commit()
+}
 ```
 
 ## 返回值与错误码
@@ -178,11 +268,12 @@ await db.init({
 ### 事务处理
 
 ```ts
-const result = await db.tx(async (tx) => {
+const result = await db.tx.wrap(async (tx) => {
   await tx.execute('UPDATE accounts SET balance = balance - ? WHERE id = ?', [100, 1])
   await tx.execute('UPDATE accounts SET balance = balance + ? WHERE id = ?', [100, 2])
   return await tx.get('SELECT balance FROM accounts WHERE id = ?', [1])
 })
+```
 
 ## 分页工具（db.pagination）
 
@@ -192,7 +283,6 @@ const pagination = db.pagination.normalize({ page: 1, pageSize: 20 })
 
 const result = db.pagination.build(['a', 'b'], 2, pagination)
 // result: { items, total, page, pageSize }
-```
 ```
 
 ## 注意事项

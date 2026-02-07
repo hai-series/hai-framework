@@ -24,6 +24,8 @@ import type { PaginatedResult, Result } from '@hai/core'
 import type { DbConfig } from '../db-config.js'
 import type {
   ColumnDef,
+  CrudManager,
+  DataOperations,
   DbError,
   DbProvider,
   DdlOperations,
@@ -32,12 +34,14 @@ import type {
   PaginationQueryOptions,
   SqlOperations,
   TableDef,
-  TxCallback,
-  TxOperations,
+  TxHandle,
+  TxManager,
+  TxWrapCallback,
 } from '../db-types.js'
 
 import { err, ok } from '@hai/core'
 
+import { createCrud } from '../crud/db-crud-kernal.js'
 import { DbErrorCode } from '../db-config.js'
 import { dbM } from '../db-i18n.js'
 import { buildPaginatedResult, normalizePagination } from '../db-pagination.js'
@@ -234,6 +238,113 @@ export function createPostgresProvider(): DbProvider {
     return buildPaginatedResult(items, total, pagination)
   }
 
+  async function runStatementBatch(
+    executor: (sql: string, params?: unknown[]) => Promise<{ rows: unknown[], rowCount: number }>,
+    statements: Array<{ sql: string, params?: unknown[] }>,
+  ): Promise<void> {
+    for (const { sql: statement, params } of statements) {
+      const pgSql = convertPlaceholders(statement)
+      await executor(pgSql, params)
+    }
+  }
+
+  async function runQuery<T>(
+    executor: (sql: string, params?: unknown[]) => Promise<{ rows: unknown[], rowCount: number }>,
+    sqlStr: string,
+    params?: unknown[],
+  ): Promise<Result<T[], DbError>> {
+    try {
+      const pgSql = convertPlaceholders(sqlStr)
+      const result = await executor(pgSql, params)
+      return ok(result.rows as T[])
+    }
+    catch (error) {
+      return err({
+        code: DbErrorCode.QUERY_FAILED,
+        message: dbM('db_queryFailed', { params: { error: String(error) } }),
+        cause: error,
+      })
+    }
+  }
+
+  async function runGet<T>(
+    executor: (sql: string, params?: unknown[]) => Promise<{ rows: unknown[], rowCount: number }>,
+    sqlStr: string,
+    params?: unknown[],
+  ): Promise<Result<T | null, DbError>> {
+    try {
+      const pgSql = convertPlaceholders(sqlStr)
+      const result = await executor(pgSql, params)
+      return ok((result.rows[0] as T) ?? null)
+    }
+    catch (error) {
+      return err({
+        code: DbErrorCode.QUERY_FAILED,
+        message: dbM('db_queryFailed', { params: { error: String(error) } }),
+        cause: error,
+      })
+    }
+  }
+
+  async function runExecute(
+    executor: (sql: string, params?: unknown[]) => Promise<{ rows: unknown[], rowCount: number }>,
+    sqlStr: string,
+    params?: unknown[],
+  ): Promise<Result<ExecuteResult, DbError>> {
+    try {
+      const pgSql = convertPlaceholders(sqlStr)
+      const result = await executor(pgSql, params)
+      return ok({
+        changes: result.rowCount ?? 0,
+      })
+    }
+    catch (error) {
+      return err({
+        code: DbErrorCode.QUERY_FAILED,
+        message: dbM('db_executeFailed', { params: { error: String(error) } }),
+        cause: error,
+      })
+    }
+  }
+
+  async function runBatch(
+    executor: (sql: string, params?: unknown[]) => Promise<{ rows: unknown[], rowCount: number }>,
+    statements: Array<{ sql: string, params?: unknown[] }>,
+  ): Promise<Result<void, DbError>> {
+    try {
+      await runStatementBatch(executor, statements)
+      return ok(undefined)
+    }
+    catch (error) {
+      return err({
+        code: DbErrorCode.QUERY_FAILED,
+        message: dbM('db_batchFailed', { params: { error: String(error) } }),
+        cause: error,
+      })
+    }
+  }
+
+  async function runQueryPage<T>(
+    executor: (sql: string, params?: unknown[]) => Promise<{ rows: unknown[], rowCount: number }>,
+    options: PaginationQueryOptions,
+  ): Promise<Result<PaginatedResult<T>, DbError>> {
+    try {
+      const pageResult = await queryPageWithExecutor<T>(executor, options)
+      return ok(pageResult)
+    }
+    catch (error) {
+      return err({
+        code: DbErrorCode.QUERY_FAILED,
+        message: dbM('db_queryFailed', { params: { error: String(error) } }),
+        cause: error,
+      })
+    }
+  }
+
+  const createCrudManager = (ops: DataOperations): CrudManager => ({
+    table: config => createCrud(ops, config),
+  })
+
   // =========================================================================
   // DDL 操作实现
   // =========================================================================
@@ -418,59 +529,21 @@ export function createPostgresProvider(): DbProvider {
       const connResult = ensureConnected()
       if (!connResult.success)
         return connResult
-
-      try {
-        const pgSql = convertPlaceholders(sqlStr)
-        const result = await connResult.data.query(pgSql, params)
-        return ok(result.rows as T[])
-      }
-      catch (error) {
-        return err({
-          code: DbErrorCode.QUERY_FAILED,
-          message: dbM('db_queryFailed', { params: { error: String(error) } }),
-          cause: error,
-        })
-      }
+      return runQuery<T>((sqlStrInner, paramsInner) => connResult.data.query(sqlStrInner, paramsInner), sqlStr, params)
     },
 
     async get<T>(sqlStr: string, params?: unknown[]): Promise<Result<T | null, DbError>> {
       const connResult = ensureConnected()
       if (!connResult.success)
         return connResult
-
-      try {
-        const pgSql = convertPlaceholders(sqlStr)
-        const result = await connResult.data.query(pgSql, params)
-        return ok((result.rows[0] as T) ?? null)
-      }
-      catch (error) {
-        return err({
-          code: DbErrorCode.QUERY_FAILED,
-          message: dbM('db_queryFailed', { params: { error: String(error) } }),
-          cause: error,
-        })
-      }
+      return runGet<T>((sqlStrInner, paramsInner) => connResult.data.query(sqlStrInner, paramsInner), sqlStr, params)
     },
 
     async execute(sqlStr: string, params?: unknown[]): Promise<Result<ExecuteResult, DbError>> {
       const connResult = ensureConnected()
       if (!connResult.success)
         return connResult
-
-      try {
-        const pgSql = convertPlaceholders(sqlStr)
-        const result = await connResult.data.query(pgSql, params)
-        return ok({
-          changes: result.rowCount ?? 0,
-        })
-      }
-      catch (error) {
-        return err({
-          code: DbErrorCode.QUERY_FAILED,
-          message: dbM('db_executeFailed', { params: { error: String(error) } }),
-          cause: error,
-        })
-      }
+      return runExecute((sqlStrInner, paramsInner) => connResult.data.query(sqlStrInner, paramsInner), sqlStr, params)
     },
 
     async batch(statements: Array<{ sql: string, params?: unknown[] }>): Promise<Result<void, DbError>> {
@@ -482,10 +555,7 @@ export function createPostgresProvider(): DbProvider {
       try {
         client = await connResult.data.connect()
         await client.query('BEGIN')
-        for (const { sql: statement, params } of statements) {
-          const pgSql = convertPlaceholders(statement)
-          await client.query(pgSql, params)
-        }
+        await runStatementBatch((sqlStr, params) => client!.query(sqlStr, params), statements)
         await client.query('COMMIT')
         return ok(undefined)
       }
@@ -510,23 +580,11 @@ export function createPostgresProvider(): DbProvider {
       const connResult = ensureConnected()
       if (!connResult.success)
         return connResult
-
-      try {
-        const pageResult = await queryPageWithExecutor<T>(
-          (sqlStr, params) => connResult.data.query(sqlStr, params),
-          options,
-        )
-        return ok(pageResult)
-      }
-      catch (error) {
-        return err({
-          code: DbErrorCode.QUERY_FAILED,
-          message: dbM('db_queryFailed', { params: { error: String(error) } }),
-          cause: error,
-        })
-      }
+      return runQueryPage<T>((sqlStr, params) => connResult.data.query(sqlStr, params), options)
     },
   }
+
+  const crud = createCrudManager(sql)
 
   // =========================================================================
   // 事务操作实现
@@ -539,14 +597,14 @@ export function createPostgresProvider(): DbProvider {
    *
    * @example
    * ```ts
-   * await db.tx(async (tx) => {
+   * await db.tx.wrap(async (tx) => {
    *     await tx.execute('INSERT INTO users (name) VALUES (?)', ['张三'])
    *     const users = await tx.query('SELECT * FROM users')
    *     return users
    * })
    * ```
    */
-  async function tx<T>(fn: TxCallback<T>): Promise<Result<T, DbError>> {
+  async function beginTransaction(): Promise<Result<TxHandle, DbError>> {
     const connResult = ensureConnected()
     if (!connResult.success)
       return connResult
@@ -555,45 +613,11 @@ export function createPostgresProvider(): DbProvider {
 
     try {
       client = await pool!.connect()
-
-      const txOps: TxOperations = {
-        async query<R>(sqlStr: string, params?: unknown[]): Promise<R[]> {
-          const pgSql = convertPlaceholders(sqlStr)
-          const result = await client!.query(pgSql, params)
-          return result.rows as R[]
-        },
-
-        async get<R>(sqlStr: string, params?: unknown[]): Promise<R | null> {
-          const pgSql = convertPlaceholders(sqlStr)
-          const result = await client!.query(pgSql, params)
-          return (result.rows[0] as R) ?? null
-        },
-
-        async execute(sqlStr: string, params?: unknown[]): Promise<ExecuteResult> {
-          const pgSql = convertPlaceholders(sqlStr)
-          const result = await client!.query(pgSql, params)
-          return {
-            changes: result.rowCount ?? 0,
-          }
-        },
-
-        async queryPage<R>(options: PaginationQueryOptions): Promise<PaginatedResult<R>> {
-          return queryPageWithExecutor<R>(
-            (sqlStr, params) => client!.query(sqlStr, params),
-            options,
-          )
-        },
-      }
-
       await client.query('BEGIN')
-      const result = await fn(txOps)
-      await client.query('COMMIT')
-
-      return ok(result)
     }
     catch (error) {
       if (client) {
-        await client.query('ROLLBACK').catch(() => { })
+        client.release()
       }
       return err({
         code: DbErrorCode.TRANSACTION_FAILED,
@@ -601,11 +625,130 @@ export function createPostgresProvider(): DbProvider {
         cause: error,
       })
     }
-    finally {
-      if (client) {
-        client.release()
+
+    let active = true
+
+    const ensureActive = (): Result<void, DbError> => {
+      if (!active) {
+        return err({
+          code: DbErrorCode.TRANSACTION_FAILED,
+          message: dbM('db_postgresTxFailed', { params: { error: 'transaction finished' } }),
+        })
       }
+      return ok(undefined)
     }
+
+    const txDataOps: DataOperations = {
+      async query<R>(sqlStr: string, params?: unknown[]): Promise<Result<R[], DbError>> {
+        const activeResult = ensureActive()
+        if (!activeResult.success)
+          return activeResult
+        return runQuery<R>((sqlStrInner, paramsInner) => client!.query(sqlStrInner, paramsInner), sqlStr, params)
+      },
+
+      async get<R>(sqlStr: string, params?: unknown[]): Promise<Result<R | null, DbError>> {
+        const activeResult = ensureActive()
+        if (!activeResult.success)
+          return activeResult
+        return runGet<R>((sqlStrInner, paramsInner) => client!.query(sqlStrInner, paramsInner), sqlStr, params)
+      },
+
+      async execute(sqlStr: string, params?: unknown[]): Promise<Result<ExecuteResult, DbError>> {
+        const activeResult = ensureActive()
+        if (!activeResult.success)
+          return activeResult
+        return runExecute((sqlStrInner, paramsInner) => client!.query(sqlStrInner, paramsInner), sqlStr, params)
+      },
+
+      async batch(statements: Array<{ sql: string, params?: unknown[] }>): Promise<Result<void, DbError>> {
+        const activeResult = ensureActive()
+        if (!activeResult.success)
+          return activeResult
+        return runBatch((sqlStrInner, paramsInner) => client!.query(sqlStrInner, paramsInner), statements)
+      },
+
+      async queryPage<R>(options: PaginationQueryOptions): Promise<Result<PaginatedResult<R>, DbError>> {
+        const activeResult = ensureActive()
+        if (!activeResult.success)
+          return activeResult
+        return runQueryPage<R>((sqlStrInner, paramsInner) => client!.query(sqlStrInner, paramsInner), options)
+      },
+    }
+
+    const txOps: TxHandle = {
+      ...txDataOps,
+      crud: createCrudManager(txDataOps),
+
+      async commit(): Promise<Result<void, DbError>> {
+        const activeResult = ensureActive()
+        if (!activeResult.success)
+          return activeResult
+        try {
+          await client!.query('COMMIT')
+          active = false
+          return ok(undefined)
+        }
+        catch (error) {
+          return err({
+            code: DbErrorCode.TRANSACTION_FAILED,
+            message: dbM('db_postgresTxFailed', { params: { error: String(error) } }),
+            cause: error,
+          })
+        }
+        finally {
+          client!.release()
+        }
+      },
+      async rollback(): Promise<Result<void, DbError>> {
+        const activeResult = ensureActive()
+        if (!activeResult.success)
+          return activeResult
+        try {
+          await client!.query('ROLLBACK')
+          active = false
+          return ok(undefined)
+        }
+        catch (error) {
+          return err({
+            code: DbErrorCode.TRANSACTION_FAILED,
+            message: dbM('db_postgresTxFailed', { params: { error: String(error) } }),
+            cause: error,
+          })
+        }
+        finally {
+          client!.release()
+        }
+      },
+    }
+
+    return ok(txOps)
+  }
+
+  const tx: TxManager = {
+    begin: beginTransaction,
+
+    async wrap<T>(fn: TxWrapCallback<T>): Promise<Result<T, DbError>> {
+      const txResult = await beginTransaction()
+      if (!txResult.success)
+        return txResult
+
+      try {
+        const result = await fn(txResult.data)
+        const commitResult = await txResult.data.commit()
+        if (!commitResult.success) {
+          return commitResult as Result<T, DbError>
+        }
+        return ok(result)
+      }
+      catch (error) {
+        await txResult.data.rollback()
+        return err({
+          code: DbErrorCode.TRANSACTION_FAILED,
+          message: dbM('db_postgresTxFailed', { params: { error: String(error) } }),
+          cause: error,
+        })
+      }
+    },
   }
 
   // =========================================================================
@@ -676,6 +819,7 @@ export function createPostgresProvider(): DbProvider {
     isConnected,
     ddl,
     sql,
+    crud,
     tx,
   }
 }

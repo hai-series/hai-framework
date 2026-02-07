@@ -28,6 +28,8 @@ import type { PaginatedResult, Result } from '@hai/core'
 import type { DbConfig } from '../db-config.js'
 import type {
   ColumnDef,
+  CrudManager,
+  DataOperations,
   DbError,
   DbProvider,
   DdlOperations,
@@ -36,12 +38,14 @@ import type {
   PaginationQueryOptions,
   SqlOperations,
   TableDef,
-  TxCallback,
-  TxOperations,
+  TxHandle,
+  TxManager,
+  TxWrapCallback,
 } from '../db-types.js'
 
 import { err, ok } from '@hai/core'
 
+import { createCrud } from '../crud/db-crud-kernal.js'
 import { DbErrorCode } from '../db-config.js'
 import { dbM } from '../db-i18n.js'
 import { buildPaginatedResult, normalizePagination } from '../db-pagination.js'
@@ -246,6 +250,120 @@ export function createMysqlProvider(): DbProvider {
     return buildPaginatedResult(rows as T[], total, pagination)
   }
 
+  async function runQueryResult<T>(
+    executor: (sql: string, values?: unknown[]) => Promise<[unknown[], unknown]>,
+    sqlStr: string,
+    params?: unknown[],
+  ): Promise<Result<T[], DbError>> {
+    try {
+      const [rows] = await executor(sqlStr, params)
+      return ok(rows as T[])
+    }
+    catch (error) {
+      return err({
+        code: DbErrorCode.QUERY_FAILED,
+        message: dbM('db_queryFailed', { params: { error: String(error) } }),
+        cause: error,
+      })
+    }
+  }
+
+  /**
+   * 根据索引名解析所在表
+   *
+   * MySQL 的 DROP INDEX 语句需要表名，因此这里通过 INFORMATION_SCHEMA
+   * 在当前数据库中查找索引所属表。
+   */
+  async function findIndexTableName(
+    executor: (sql: string, values?: unknown[]) => Promise<[unknown[], unknown]>,
+    indexName: string,
+  ): Promise<Result<string | null, DbError>> {
+    const rowsResult = await runQueryResult<{ name: string }>(
+      executor,
+      'SELECT TABLE_NAME as name FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND INDEX_NAME = ? LIMIT 1',
+      [indexName],
+    )
+
+    if (!rowsResult.success) {
+      return rowsResult
+    }
+
+    return ok(rowsResult.data[0]?.name ?? null)
+  }
+
+  async function runGetResult<T>(
+    executor: (sql: string, values?: unknown[]) => Promise<[unknown[], unknown]>,
+    sqlStr: string,
+    params?: unknown[],
+  ): Promise<Result<T | null, DbError>> {
+    const rowsResult = await runQueryResult<T>(executor, sqlStr, params)
+    if (!rowsResult.success) {
+      return rowsResult
+    }
+    return ok(rowsResult.data[0] ?? null)
+  }
+
+  async function runExecuteResult(
+    executor: (sql: string, values?: unknown[]) => Promise<[MysqlResult, unknown]>,
+    sqlStr: string,
+    params?: unknown[],
+  ): Promise<Result<ExecuteResult, DbError>> {
+    try {
+      const [result] = await executor(sqlStr, params)
+      return ok({
+        changes: result.affectedRows,
+        lastInsertRowid: result.insertId,
+      })
+    }
+    catch (error) {
+      return err({
+        code: DbErrorCode.QUERY_FAILED,
+        message: dbM('db_executeFailed', { params: { error: String(error) } }),
+        cause: error,
+      })
+    }
+  }
+
+  async function runBatchResult(
+    executor: (sql: string, values?: unknown[]) => Promise<[MysqlResult, unknown]>,
+    statements: Array<{ sql: string, params?: unknown[] }>,
+  ): Promise<Result<void, DbError>> {
+    try {
+      for (const { sql: statement, params } of statements) {
+        await executor(statement, params)
+      }
+      return ok(undefined)
+    }
+    catch (error) {
+      return err({
+        code: DbErrorCode.QUERY_FAILED,
+        message: dbM('db_batchFailed', { params: { error: String(error) } }),
+        cause: error,
+      })
+    }
+  }
+
+  async function runQueryPageResult<T>(
+    executor: (sql: string, values?: unknown[]) => Promise<[unknown[], unknown]>,
+    options: PaginationQueryOptions,
+  ): Promise<Result<PaginatedResult<T>, DbError>> {
+    try {
+      const pageResult = await queryPageWithExecutor<T>(executor, options)
+      return ok(pageResult)
+    }
+    catch (error) {
+      return err({
+        code: DbErrorCode.QUERY_FAILED,
+        message: dbM('db_queryFailed', { params: { error: String(error) } }),
+        cause: error,
+      })
+    }
+  }
+
+  const createCrudManager = (ops: DataOperations): CrudManager => ({
+    table: config => createCrud(ops, config),
+  })
+
   // =========================================================================
   // DDL 操作实现
   // =========================================================================
@@ -408,15 +526,22 @@ export function createMysqlProvider(): DbProvider {
       if (!connResult.success)
         return connResult
 
-      // MySQL 需要指定表名来删除索引，这里使用通用方式
-      // 实际使用时建议用 raw() 指定表名
-      try {
+      const tableResult = await findIndexTableName((sql, values) => connResult.data.query(sql, values), indexName)
+      if (!tableResult.success)
+        return tableResult
+
+      if (!tableResult.data) {
         if (ifExists) {
-          await connResult.data.query(`DROP INDEX IF EXISTS \`${indexName}\``)
+          return ok(undefined)
         }
-        else {
-          await connResult.data.query(`DROP INDEX \`${indexName}\``)
-        }
+        return err({
+          code: DbErrorCode.DDL_FAILED,
+          message: dbM('db_ddlFailed', { params: { error: `index not found: ${indexName}` } }),
+        })
+      }
+
+      try {
+        await connResult.data.query(`DROP INDEX \`${indexName}\` ON \`${tableResult.data}\``)
         return ok(undefined)
       }
       catch (error) {
@@ -459,59 +584,25 @@ export function createMysqlProvider(): DbProvider {
       const connResult = ensureConnected()
       if (!connResult.success)
         return connResult
-
-      try {
-        const [rows] = await connResult.data.query(sqlStr, params)
-        return ok(rows as T[])
-      }
-      catch (error) {
-        return err({
-          code: DbErrorCode.QUERY_FAILED,
-          message: dbM('db_queryFailed', { params: { error: String(error) } }),
-          cause: error,
-        })
-      }
+      return runQueryResult<T>((sqlStrInner, paramsInner) => connResult.data.query(sqlStrInner, paramsInner), sqlStr, params)
     },
 
     async get<T>(sqlStr: string, params?: unknown[]): Promise<Result<T | null, DbError>> {
       const connResult = ensureConnected()
       if (!connResult.success)
         return connResult
-
-      try {
-        const [rows] = await connResult.data.query(sqlStr, params)
-        const row = (rows as T[])[0] ?? null
-        return ok(row)
-      }
-      catch (error) {
-        return err({
-          code: DbErrorCode.QUERY_FAILED,
-          message: dbM('db_queryFailed', { params: { error: String(error) } }),
-          cause: error,
-        })
-      }
+      return runGetResult<T>((sqlStrInner, paramsInner) => connResult.data.query(sqlStrInner, paramsInner), sqlStr, params)
     },
 
     async execute(sqlStr: string, params?: unknown[]): Promise<Result<ExecuteResult, DbError>> {
       const connResult = ensureConnected()
       if (!connResult.success)
         return connResult
-
-      try {
-        const [result] = await connResult.data.execute(sqlStr, params)
-        const mysqlResult = result as MysqlResult
-        return ok({
-          changes: mysqlResult.affectedRows,
-          lastInsertRowid: mysqlResult.insertId,
-        })
-      }
-      catch (error) {
-        return err({
-          code: DbErrorCode.QUERY_FAILED,
-          message: dbM('db_executeFailed', { params: { error: String(error) } }),
-          cause: error,
-        })
-      }
+      return runExecuteResult(
+        (sqlStrInner, paramsInner) => connResult.data.execute(sqlStrInner, paramsInner),
+        sqlStr,
+        params,
+      )
     },
 
     async batch(statements: Array<{ sql: string, params?: unknown[] }>): Promise<Result<void, DbError>> {
@@ -523,8 +614,12 @@ export function createMysqlProvider(): DbProvider {
       try {
         connection = await connResult.data.getConnection()
         await connection.beginTransaction()
-        for (const { sql: statement, params } of statements) {
-          await connection.execute(statement, params)
+        const batchResult = await runBatchResult(
+          (sqlStrInner, paramsInner) => connection!.execute(sqlStrInner, paramsInner),
+          statements,
+        )
+        if (!batchResult.success) {
+          return batchResult
         }
         await connection.commit()
         return ok(undefined)
@@ -550,23 +645,12 @@ export function createMysqlProvider(): DbProvider {
       const connResult = ensureConnected()
       if (!connResult.success)
         return connResult
-
-      try {
-        const pageResult = await queryPageWithExecutor<T>(
-          (sqlStr, params) => connResult.data.query(sqlStr, params),
-          options,
-        )
-        return ok(pageResult)
-      }
-      catch (error) {
-        return err({
-          code: DbErrorCode.QUERY_FAILED,
-          message: dbM('db_queryFailed', { params: { error: String(error) } }),
-          cause: error,
-        })
-      }
+      return runQueryPageResult<T>((sqlStr, params) => connResult.data.query(sqlStr, params), options)
     },
+
   }
+
+  const crud = createCrudManager(sql)
 
   // =========================================================================
   // 事务操作实现
@@ -579,14 +663,14 @@ export function createMysqlProvider(): DbProvider {
    *
    * @example
    * ```ts
-   * await db.tx(async (tx) => {
+   * await db.tx.wrap(async (tx) => {
    *     await tx.execute('INSERT INTO users (name) VALUES (?)', ['张三'])
    *     const users = await tx.query('SELECT * FROM users')
    *     return users
    * })
    * ```
    */
-  async function tx<T>(fn: TxCallback<T>): Promise<Result<T, DbError>> {
+  async function beginTransaction(): Promise<Result<TxHandle, DbError>> {
     const connResult = ensureConnected()
     if (!connResult.success)
       return connResult
@@ -595,42 +679,11 @@ export function createMysqlProvider(): DbProvider {
 
     try {
       connection = await pool!.getConnection()
-
-      const txOps: TxOperations = {
-        async query<R>(sqlStr: string, params?: unknown[]): Promise<R[]> {
-          const [rows] = await connection!.query(sqlStr, params)
-          return rows as R[]
-        },
-        async get<R>(sqlStr: string, params?: unknown[]): Promise<R | null> {
-          const [rows] = await connection!.query(sqlStr, params)
-          return ((rows as R[])[0] as R) ?? null
-        },
-        async execute(sqlStr: string, params?: unknown[]): Promise<ExecuteResult> {
-          const [result] = await connection!.execute(sqlStr, params)
-          const mysqlResult = result as MysqlResult
-          return {
-            changes: mysqlResult.affectedRows,
-            lastInsertRowid: mysqlResult.insertId,
-          }
-        },
-
-        async queryPage<R>(options: PaginationQueryOptions): Promise<PaginatedResult<R>> {
-          return queryPageWithExecutor<R>(
-            (sqlStr, params) => connection!.query(sqlStr, params),
-            options,
-          )
-        },
-      }
-
       await connection.beginTransaction()
-      const result = await fn(txOps)
-      await connection.commit()
-
-      return ok(result)
     }
     catch (error) {
       if (connection) {
-        await connection.rollback().catch(() => { })
+        connection.release()
       }
       return err({
         code: DbErrorCode.TRANSACTION_FAILED,
@@ -638,11 +691,138 @@ export function createMysqlProvider(): DbProvider {
         cause: error,
       })
     }
-    finally {
-      if (connection) {
-        connection.release()
+
+    let active = true
+
+    const ensureActive = (): Result<void, DbError> => {
+      if (!active) {
+        return err({
+          code: DbErrorCode.TRANSACTION_FAILED,
+          message: dbM('db_mysqlTxFailed', { params: { error: 'transaction finished' } }),
+        })
       }
+      return ok(undefined)
     }
+
+    const txDataOps: DataOperations = {
+      async query<R>(sqlStr: string, params?: unknown[]): Promise<Result<R[], DbError>> {
+        const activeResult = ensureActive()
+        if (!activeResult.success)
+          return activeResult
+        return runQueryResult<R>((sqlStrInner, paramsInner) => connection!.query(sqlStrInner, paramsInner), sqlStr, params)
+      },
+
+      async get<R>(sqlStr: string, params?: unknown[]): Promise<Result<R | null, DbError>> {
+        const activeResult = ensureActive()
+        if (!activeResult.success)
+          return activeResult
+        return runGetResult<R>((sqlStrInner, paramsInner) => connection!.query(sqlStrInner, paramsInner), sqlStr, params)
+      },
+
+      async execute(sqlStr: string, params?: unknown[]): Promise<Result<ExecuteResult, DbError>> {
+        const activeResult = ensureActive()
+        if (!activeResult.success)
+          return activeResult
+        return runExecuteResult(
+          (sqlStrInner, paramsInner) => connection!.execute(sqlStrInner, paramsInner),
+          sqlStr,
+          params,
+        )
+      },
+
+      async batch(statements: Array<{ sql: string, params?: unknown[] }>): Promise<Result<void, DbError>> {
+        const activeResult = ensureActive()
+        if (!activeResult.success)
+          return activeResult
+        return runBatchResult(
+          (sqlStrInner, paramsInner) => connection!.execute(sqlStrInner, paramsInner),
+          statements,
+        )
+      },
+
+      async queryPage<R>(options: PaginationQueryOptions): Promise<Result<PaginatedResult<R>, DbError>> {
+        const activeResult = ensureActive()
+        if (!activeResult.success)
+          return activeResult
+        return runQueryPageResult<R>((sqlStr, params) => connection!.query(sqlStr, params), options)
+      },
+    }
+
+    const txOps: TxHandle = {
+      ...txDataOps,
+      crud: createCrudManager(txDataOps),
+
+      async commit(): Promise<Result<void, DbError>> {
+        const activeResult = ensureActive()
+        if (!activeResult.success)
+          return activeResult
+        try {
+          await connection!.commit()
+          active = false
+          return ok(undefined)
+        }
+        catch (error) {
+          return err({
+            code: DbErrorCode.TRANSACTION_FAILED,
+            message: dbM('db_mysqlTxFailed', { params: { error: String(error) } }),
+            cause: error,
+          })
+        }
+        finally {
+          connection!.release()
+        }
+      },
+
+      async rollback(): Promise<Result<void, DbError>> {
+        const activeResult = ensureActive()
+        if (!activeResult.success)
+          return activeResult
+        try {
+          await connection!.rollback()
+          active = false
+          return ok(undefined)
+        }
+        catch (error) {
+          return err({
+            code: DbErrorCode.TRANSACTION_FAILED,
+            message: dbM('db_mysqlTxFailed', { params: { error: String(error) } }),
+            cause: error,
+          })
+        }
+        finally {
+          connection!.release()
+        }
+      },
+    }
+
+    return ok(txOps)
+  }
+
+  const tx: TxManager = {
+    begin: beginTransaction,
+
+    async wrap<T>(fn: TxWrapCallback<T>): Promise<Result<T, DbError>> {
+      const txResult = await beginTransaction()
+      if (!txResult.success)
+        return txResult
+
+      try {
+        const result = await fn(txResult.data)
+        const commitResult = await txResult.data.commit()
+        if (!commitResult.success) {
+          return commitResult as Result<T, DbError>
+        }
+        return ok(result)
+      }
+      catch (error) {
+        await txResult.data.rollback()
+        return err({
+          code: DbErrorCode.TRANSACTION_FAILED,
+          message: dbM('db_mysqlTxFailed', { params: { error: String(error) } }),
+          cause: error,
+        })
+      }
+    },
   }
 
   // =========================================================================
@@ -713,6 +893,7 @@ export function createMysqlProvider(): DbProvider {
     isConnected,
     ddl,
     sql,
+    crud,
     tx,
   }
 }

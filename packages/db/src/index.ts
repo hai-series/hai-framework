@@ -44,7 +44,7 @@
  * const users = await db.sql.query('SELECT * FROM users')
  *
  * // 事务
- * await db.tx(async (tx) => {
+ * await db.tx.wrap(async (tx) => {
  *     await tx.execute('INSERT INTO users (name) VALUES (?)', ['用户1'])
  *     await tx.execute('INSERT INTO users (name) VALUES (?)', ['用户2'])
  * })
@@ -54,6 +54,9 @@
  * ```
  * =============================================================================
  */
+// CRUD 仓库基类
+export * from './crud/db-crud-repository.js'
+
 // 统一服务入口
 export * from './db-main.js'
 
