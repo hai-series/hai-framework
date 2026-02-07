@@ -43,8 +43,6 @@ import type {
   SM4Operations,
 } from './crypto-types.js'
 
-import { core } from '@hai/core'
-
 import { CryptoConfigSchema } from './crypto-config.js'
 import { createHaiPasswordProvider } from './crypto-password.js'
 import { createSM2 } from './crypto-sm2.js'
