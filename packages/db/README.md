@@ -77,7 +77,7 @@ const userCrud = db.crud.table({
 
 await userCrud.create({ name: '张三', email: 'test@example.com' })
 const user = await userCrud.findById(1)
-const hasUser = await userCrud.existById(1)
+const hasUser = await userCrud.existsById(1)
 
 // 5.1.1 在事务中使用 CRUD
 const txResult = await db.tx.begin()

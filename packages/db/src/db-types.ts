@@ -495,8 +495,7 @@ export interface CrudRepository<TItem> {
   updateById: (id: unknown, data: Record<string, unknown>, tx?: TxHandle) => Promise<Result<ExecuteResult, DbError>>
   deleteById: (id: unknown, tx?: TxHandle) => Promise<Result<ExecuteResult, DbError>>
   count: (options?: CrudCountOptions, tx?: TxHandle) => Promise<Result<number, DbError>>
-  exist: (options?: CrudCountOptions, tx?: TxHandle) => Promise<Result<boolean, DbError>>
-  existById: (id: unknown, tx?: TxHandle) => Promise<Result<boolean, DbError>>
+  exists: (options?: CrudCountOptions, tx?: TxHandle) => Promise<Result<boolean, DbError>>
   existsById: (id: unknown, tx?: TxHandle) => Promise<Result<boolean, DbError>>
 }
 

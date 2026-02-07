@@ -268,7 +268,7 @@ export function createCrud<TItem>(
       return ok(parseCount(result.data ?? null))
     },
 
-    async exist(options: CrudCountOptions = {}, tx?: TxHandle): Promise<Result<boolean, DbError>> {
+    async exists(options: CrudCountOptions = {}, tx?: TxHandle): Promise<Result<boolean, DbError>> {
       const whereClause = buildWhereClause(options.where)
       const sql = `SELECT 1 as exist_flag FROM ${table}${whereClause} LIMIT 1`
       const result = await resolveOps(tx).get<QueryRow>(sql, options.params)
@@ -281,16 +281,6 @@ export function createCrud<TItem>(
     },
 
     async existsById(id: unknown, tx?: TxHandle): Promise<Result<boolean, DbError>> {
-      const sql = `SELECT 1 as exist_flag FROM ${table} WHERE ${idColumn} = ? LIMIT 1`
-      const result = await resolveOps(tx).get<QueryRow>(sql, [id])
-      if (!result.success) {
-        // 透传查询错误
-        return result
-      }
-      return ok(Boolean(result.data))
-    },
-
-    async existById(id: unknown, tx?: TxHandle): Promise<Result<boolean, DbError>> {
       const sql = `SELECT 1 as exist_flag FROM ${table} WHERE ${idColumn} = ? LIMIT 1`
       const result = await resolveOps(tx).get<QueryRow>(sql, [id])
       if (!result.success) {
