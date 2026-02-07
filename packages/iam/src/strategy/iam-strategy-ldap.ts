@@ -10,11 +10,11 @@
  */
 
 import type { Result } from '@hai/core'
+import type { LdapConfig } from '../iam-config.js'
 import type {
   AuthStrategy,
   Credentials,
   IamError,
-  LdapConfig,
   StoredUser,
   User,
   UserRepository,
@@ -22,7 +22,7 @@ import type {
 import { err, ok } from '@hai/core'
 
 import { IamErrorCode } from '../iam-config.js'
-import { getIamMessage } from '../iam-i18n.js'
+import { iamM } from '../iam-i18n.js'
 
 /**
  * LDAP 客户端接口
@@ -110,6 +110,26 @@ export function createLdapStrategy(config: LdapStrategyConfig): AuthStrategy {
     }
   }
 
+  /**
+   * 构建 LDAP 用户信息
+   */
+  function buildLdapUser(entry: LdapSearchEntry, ldapUsername: string, ldapEmail?: string, ldapDisplayName?: string): User {
+    const now = new Date()
+    return {
+      id: entry.dn,
+      username: ldapUsername,
+      email: ldapEmail,
+      displayName: ldapDisplayName,
+      enabled: true,
+      createdAt: now,
+      updatedAt: now,
+      metadata: {
+        ldapDn: entry.dn,
+        authSource: 'ldap',
+      },
+    }
+  }
+
   return {
     type: 'ldap',
     name: 'ldap-strategy',
@@ -119,7 +139,7 @@ export function createLdapStrategy(config: LdapStrategyConfig): AuthStrategy {
       if (credentials.type !== 'ldap') {
         return err({
           code: IamErrorCode.INVALID_CREDENTIALS,
-          message: getIamMessage('iam_credentialTypeMismatch'),
+          message: iamM('iam_credentialTypeMismatch'),
         })
       }
 
@@ -130,7 +150,7 @@ export function createLdapStrategy(config: LdapStrategyConfig): AuthStrategy {
       if (!clientResult.success) {
         return err({
           code: IamErrorCode.LDAP_CONNECTION_FAILED,
-          message: getIamMessage('iam_ldapConnectionFailed'),
+          message: iamM('iam_ldapConnectionFailed'),
           cause: clientResult.error,
         })
       }
@@ -143,7 +163,7 @@ export function createLdapStrategy(config: LdapStrategyConfig): AuthStrategy {
         if (!adminBindResult.success) {
           return err({
             code: IamErrorCode.LDAP_BIND_FAILED,
-            message: getIamMessage('iam_ldapAdminBindFailed'),
+            message: iamM('iam_ldapAdminBindFailed'),
             cause: adminBindResult.error,
           })
         }
@@ -159,7 +179,7 @@ export function createLdapStrategy(config: LdapStrategyConfig): AuthStrategy {
         if (!searchResult.success) {
           return err({
             code: IamErrorCode.LDAP_SEARCH_FAILED,
-            message: getIamMessage('iam_ldapSearchFailed'),
+            message: iamM('iam_ldapSearchFailed'),
             cause: searchResult.error,
           })
         }
@@ -168,7 +188,7 @@ export function createLdapStrategy(config: LdapStrategyConfig): AuthStrategy {
         if (entries.length === 0) {
           return err({
             code: IamErrorCode.USER_NOT_FOUND,
-            message: getIamMessage('iam_userNotExist'),
+            message: iamM('iam_userNotExist'),
           })
         }
 
@@ -179,7 +199,7 @@ export function createLdapStrategy(config: LdapStrategyConfig): AuthStrategy {
         if (!userBindResult.success) {
           return err({
             code: IamErrorCode.INVALID_CREDENTIALS,
-            message: getIamMessage('iam_passwordWrong'),
+            message: iamM('iam_passwordWrong'),
           })
         }
 
@@ -232,27 +252,15 @@ export function createLdapStrategy(config: LdapStrategyConfig): AuthStrategy {
 
         if (!storedUser) {
           // 如果不同步用户，直接返回 LDAP 用户信息
-          const now = new Date()
-          return ok({
-            id: entry.dn,
-            username: ldapUsername,
-            email: ldapEmail,
-            displayName: ldapDisplayName,
-            enabled: true,
-            createdAt: now,
-            updatedAt: now,
-            metadata: {
-              ldapDn: entry.dn,
-              authSource: 'ldap',
-            },
-          })
+          const ldapUser = buildLdapUser(entry, ldapUsername, ldapEmail, ldapDisplayName)
+          return ok(ldapUser)
         }
 
         // 检查账户状态
         if (!storedUser.enabled) {
           return err({
             code: IamErrorCode.USER_DISABLED,
-            message: getIamMessage('iam_accountDisabled'),
+            message: iamM('iam_accountDisabled'),
           })
         }
 

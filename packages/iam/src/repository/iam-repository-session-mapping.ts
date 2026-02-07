@@ -1,22 +1,20 @@
 /**
  * =============================================================================
- * @hai/iam - 会话存储实现（用于有状态会话管理器）
+ * @hai/iam - 会话映射存储实现
  * =============================================================================
  *
- * 基于 @hai/db 的 SessionStore 实现，用于 stateful session。
- * 注意：这与 SessionRepository 不同，SessionStore 是用于令牌映射和会话存储的接口。
+ * 基于 @hai/db 的会话映射存储实现，用于有状态会话管理器。
  *
- * @module iam-repository-session-store
+ * @module iam-repository-session-mapping
  * =============================================================================
  */
 
 import type { Result } from '@hai/core'
 import type { DbService } from '@hai/db'
-import type { IamError, Session } from '../iam-types.js'
-import type { SessionStore } from '../session/iam-session-stateful.js'
+import type { IamError, Session, SessionMappingRepository } from '../iam-types.js'
 import { err, ok } from '@hai/core'
 import { IamErrorCode } from '../iam-config.js'
-import { getIamMessage } from '../iam-i18n.js'
+import { iamM } from '../iam-i18n.js'
 
 // =============================================================================
 // 会话存储表
@@ -80,9 +78,58 @@ interface UserSessionRow {
 }
 
 /**
- * 创建数据库会话存储（用于有状态会话管理器）
+ * 判断是否过期
  */
-export async function createDbSessionStore(db: DbService): Promise<SessionStore> {
+function isExpired(expiresAt: number, now = Date.now()): boolean {
+  return now > expiresAt
+}
+
+/**
+ * 恢复会话 Date 字段
+ */
+function restoreSessionDates(session: Session): Session {
+  return {
+    ...session,
+    createdAt: new Date(session.createdAt),
+    lastActiveAt: new Date(session.lastActiveAt),
+    expiresAt: new Date(session.expiresAt),
+  }
+}
+
+/**
+ * 解析会话数据
+ */
+function parseSessionData(raw: string): Result<Session, IamError> {
+  try {
+    const parsed = JSON.parse(raw) as Session
+    return ok(restoreSessionDates(parsed))
+  }
+  catch {
+    return err({
+      code: IamErrorCode.REPOSITORY_ERROR,
+      message: iamM('iam_parseSessionDataFailed'),
+    })
+  }
+}
+
+/**
+ * 解析会话行
+ */
+function parseSessionRow(row: SessionRow): Result<Session, IamError> {
+  return parseSessionData(row.session_data)
+}
+
+/**
+ * 获取用户会话 ID
+ */
+function getUserSessionId(row: UserSessionRow): string {
+  return row.session_id
+}
+
+/**
+ * 创建数据库会话映射存储（用于有状态会话管理器）
+ */
+export async function createDbSessionMappingRepository(db: DbService): Promise<SessionMappingRepository> {
   // 确保表存在
   async function ensureTables(): Promise<Result<void, IamError>> {
     // 创建会话表
@@ -90,7 +137,7 @@ export async function createDbSessionStore(db: DbService): Promise<SessionStore>
     if (!sessionResult.success) {
       return err({
         code: IamErrorCode.REPOSITORY_ERROR,
-        message: `创建会话存储表失败: ${sessionResult.error.message}`,
+        message: iamM('iam_createSessionStoreTableFailed', { params: { message: sessionResult.error.message } }),
         cause: sessionResult.error,
       })
     }
@@ -100,7 +147,7 @@ export async function createDbSessionStore(db: DbService): Promise<SessionStore>
     if (!tokenResult.success) {
       return err({
         code: IamErrorCode.REPOSITORY_ERROR,
-        message: `创建令牌映射表失败: ${tokenResult.error.message}`,
+        message: iamM('iam_createTokenMappingTableFailed', { params: { message: tokenResult.error.message } }),
         cause: tokenResult.error,
       })
     }
@@ -110,7 +157,7 @@ export async function createDbSessionStore(db: DbService): Promise<SessionStore>
     if (!userSessionResult.success) {
       return err({
         code: IamErrorCode.REPOSITORY_ERROR,
-        message: `创建用户会话表失败: ${userSessionResult.error.message}`,
+        message: iamM('iam_createUserSessionTableFailed', { params: { message: userSessionResult.error.message } }),
         cause: userSessionResult.error,
       })
     }
@@ -128,7 +175,7 @@ export async function createDbSessionStore(db: DbService): Promise<SessionStore>
       if (!indexResult.success) {
         return err({
           code: IamErrorCode.REPOSITORY_ERROR,
-          message: `创建会话索引失败: ${indexResult.error.message}`,
+          message: iamM('iam_createSessionStoreIndexFailed', { params: { message: indexResult.error.message } }),
           cause: indexResult.error,
         })
       }
@@ -142,10 +189,70 @@ export async function createDbSessionStore(db: DbService): Promise<SessionStore>
     throw new Error(initResult.error.message)
   }
 
+  async function deleteTokenMappingInternal(token: string): Promise<Result<void, IamError>> {
+    const result = await db.sql.execute(
+      `DELETE FROM ${TOKEN_MAPPING_TABLE} WHERE token = ?`,
+      [token],
+    )
+
+    if (!result.success) {
+      return err({
+        code: IamErrorCode.REPOSITORY_ERROR,
+        message: iamM('iam_deleteTokenMappingFailed', { params: { message: result.error.message } }),
+        cause: result.error,
+      })
+    }
+
+    return ok(undefined)
+  }
+
+  async function deleteSessionInternal(sessionId: string): Promise<Result<void, IamError>> {
+    const sessionResult = await db.sql.execute(
+      `DELETE FROM ${SESSION_TABLE} WHERE session_id = ?`,
+      [sessionId],
+    )
+
+    if (!sessionResult.success) {
+      return err({
+        code: IamErrorCode.REPOSITORY_ERROR,
+        message: iamM('iam_deleteSessionFailed', { params: { message: sessionResult.error.message } }),
+        cause: sessionResult.error,
+      })
+    }
+
+    const tokenResult = await db.sql.execute(
+      `DELETE FROM ${TOKEN_MAPPING_TABLE} WHERE session_id = ?`,
+      [sessionId],
+    )
+
+    if (!tokenResult.success) {
+      return err({
+        code: IamErrorCode.REPOSITORY_ERROR,
+        message: iamM('iam_deleteTokenMappingFailed', { params: { message: tokenResult.error.message } }),
+        cause: tokenResult.error,
+      })
+    }
+
+    const userSessionResult = await db.sql.execute(
+      `DELETE FROM ${USER_SESSION_TABLE} WHERE session_id = ?`,
+      [sessionId],
+    )
+
+    if (!userSessionResult.success) {
+      return err({
+        code: IamErrorCode.REPOSITORY_ERROR,
+        message: iamM('iam_deleteUserSessionMappingFailed', { params: { message: userSessionResult.error.message } }),
+        cause: userSessionResult.error,
+      })
+    }
+
+    return ok(undefined)
+  }
+
   return {
     async set(sessionId, session, ttl): Promise<Result<void, IamError>> {
       const now = Date.now()
-      const expiresAt = now + ttl * 1000 // ttl 是秒数
+      const expiresAt = now + ttl * 1000
 
       const result = await db.sql.execute(
         `INSERT OR REPLACE INTO ${SESSION_TABLE} (session_id, session_data, expires_at, created_at)
@@ -156,7 +263,7 @@ export async function createDbSessionStore(db: DbService): Promise<SessionStore>
       if (!result.success) {
         return err({
           code: IamErrorCode.REPOSITORY_ERROR,
-          message: `保存会话失败: ${result.error.message}`,
+          message: iamM('iam_saveSessionFailed', { params: { message: result.error.message } }),
           cause: result.error,
         })
       }
@@ -173,7 +280,7 @@ export async function createDbSessionStore(db: DbService): Promise<SessionStore>
       if (!result.success) {
         return err({
           code: IamErrorCode.REPOSITORY_ERROR,
-          message: `查询会话失败: ${result.error.message}`,
+          message: iamM('iam_querySessionFailed', { params: { message: result.error.message } }),
           cause: result.error,
         })
       }
@@ -183,27 +290,17 @@ export async function createDbSessionStore(db: DbService): Promise<SessionStore>
       }
 
       const row = result.data[0]
-
-      // 检查是否已过期
-      if (Date.now() > row.expires_at) {
-        await this.delete(sessionId)
+      if (isExpired(row.expires_at)) {
+        await deleteSessionInternal(sessionId)
         return ok(null)
       }
 
-      try {
-        const session = JSON.parse(row.session_data) as Session
-        // 恢复 Date 对象
-        session.createdAt = new Date(session.createdAt)
-        session.lastActiveAt = new Date(session.lastActiveAt)
-        session.expiresAt = new Date(session.expiresAt)
-        return ok(session)
+      const parseResult = parseSessionRow(row)
+      if (!parseResult.success) {
+        return parseResult
       }
-      catch {
-        return err({
-          code: IamErrorCode.REPOSITORY_ERROR,
-          message: getIamMessage('iam_parseSessionDataFailed'),
-        })
-      }
+
+      return ok(parseResult.data)
     },
 
     async getSessionIdByToken(token): Promise<Result<string | null, IamError>> {
@@ -215,7 +312,7 @@ export async function createDbSessionStore(db: DbService): Promise<SessionStore>
       if (!result.success) {
         return err({
           code: IamErrorCode.REPOSITORY_ERROR,
-          message: `查询令牌映射失败: ${result.error.message}`,
+          message: iamM('iam_queryTokenMappingFailed', { params: { message: result.error.message } }),
           cause: result.error,
         })
       }
@@ -225,10 +322,8 @@ export async function createDbSessionStore(db: DbService): Promise<SessionStore>
       }
 
       const row = result.data[0]
-
-      // 检查是否已过期
-      if (Date.now() > row.expires_at) {
-        await this.deleteTokenMapping(token)
+      if (isExpired(row.expires_at)) {
+        await deleteTokenMappingInternal(token)
         return ok(null)
       }
 
@@ -248,7 +343,7 @@ export async function createDbSessionStore(db: DbService): Promise<SessionStore>
       if (!result.success) {
         return err({
           code: IamErrorCode.REPOSITORY_ERROR,
-          message: `保存令牌映射失败: ${result.error.message}`,
+          message: iamM('iam_saveTokenMappingFailed', { params: { message: result.error.message } }),
           cause: result.error,
         })
       }
@@ -257,66 +352,11 @@ export async function createDbSessionStore(db: DbService): Promise<SessionStore>
     },
 
     async deleteTokenMapping(token): Promise<Result<void, IamError>> {
-      const result = await db.sql.execute(
-        `DELETE FROM ${TOKEN_MAPPING_TABLE} WHERE token = ?`,
-        [token],
-      )
-
-      if (!result.success) {
-        return err({
-          code: IamErrorCode.REPOSITORY_ERROR,
-          message: `删除令牌映射失败: ${result.error.message}`,
-          cause: result.error,
-        })
-      }
-
-      return ok(undefined)
+      return deleteTokenMappingInternal(token)
     },
 
     async delete(sessionId): Promise<Result<void, IamError>> {
-      // 删除会话
-      const sessionResult = await db.sql.execute(
-        `DELETE FROM ${SESSION_TABLE} WHERE session_id = ?`,
-        [sessionId],
-      )
-
-      if (!sessionResult.success) {
-        return err({
-          code: IamErrorCode.REPOSITORY_ERROR,
-          message: `删除会话失败: ${sessionResult.error.message}`,
-          cause: sessionResult.error,
-        })
-      }
-
-      // 删除相关令牌映射
-      const tokenResult = await db.sql.execute(
-        `DELETE FROM ${TOKEN_MAPPING_TABLE} WHERE session_id = ?`,
-        [sessionId],
-      )
-
-      if (!tokenResult.success) {
-        return err({
-          code: IamErrorCode.REPOSITORY_ERROR,
-          message: `删除令牌映射失败: ${tokenResult.error.message}`,
-          cause: tokenResult.error,
-        })
-      }
-
-      // 删除用户会话映射
-      const userSessionResult = await db.sql.execute(
-        `DELETE FROM ${USER_SESSION_TABLE} WHERE session_id = ?`,
-        [sessionId],
-      )
-
-      if (!userSessionResult.success) {
-        return err({
-          code: IamErrorCode.REPOSITORY_ERROR,
-          message: `删除用户会话映射失败: ${userSessionResult.error.message}`,
-          cause: userSessionResult.error,
-        })
-      }
-
-      return ok(undefined)
+      return deleteSessionInternal(sessionId)
     },
 
     async getUserSessionIds(userId): Promise<Result<string[], IamError>> {
@@ -328,12 +368,12 @@ export async function createDbSessionStore(db: DbService): Promise<SessionStore>
       if (!result.success) {
         return err({
           code: IamErrorCode.REPOSITORY_ERROR,
-          message: `查询用户会话失败: ${result.error.message}`,
+          message: iamM('iam_queryUserSessionFailed', { params: { message: result.error.message } }),
           cause: result.error,
         })
       }
 
-      return ok(result.data.map(row => row.session_id))
+      return ok(result.data.map(getUserSessionId))
     },
 
     async addUserSession(userId, sessionId): Promise<Result<void, IamError>> {
@@ -349,7 +389,7 @@ export async function createDbSessionStore(db: DbService): Promise<SessionStore>
       if (!result.success) {
         return err({
           code: IamErrorCode.REPOSITORY_ERROR,
-          message: `添加用户会话映射失败: ${result.error.message}`,
+          message: iamM('iam_addUserSessionMappingFailed', { params: { message: result.error.message } }),
           cause: result.error,
         })
       }
@@ -366,7 +406,7 @@ export async function createDbSessionStore(db: DbService): Promise<SessionStore>
       if (!result.success) {
         return err({
           code: IamErrorCode.REPOSITORY_ERROR,
-          message: `删除用户会话映射失败: ${result.error.message}`,
+          message: iamM('iam_deleteUserSessionMappingFailed', { params: { message: result.error.message } }),
           cause: result.error,
         })
       }

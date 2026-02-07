@@ -14,6 +14,7 @@ import type { CacheService } from '@hai/cache'
 import type { Result } from '@hai/core'
 import type { DbService } from '@hai/db'
 import type { PermissionCache } from '../authz/iam-authz-rbac.js'
+import type { IamConfig } from '../iam-config.js'
 import type {
   AuthzManager,
   IamError,
@@ -21,28 +22,37 @@ import type {
   RolePermissionRepository,
   RoleRepository,
   SessionManager,
+  SessionMappingRepository,
   UserRepository,
   UserRoleRepository,
 } from '../iam-types.js'
-import type { IamConfig } from '../iam-config.js'
-import type { SessionStore } from '../session/iam-session-stateful.js'
 import type { OAuthStrategy, OtpStrategy, PasswordStrategy } from '../strategy/index.js'
 import process from 'node:process'
 import { err, ok } from '@hai/core'
 import { crypto as haiCrypto } from '@hai/crypto'
 
 import { createRbacManager } from '../authz/index.js'
-import { IamErrorCode, LoginConfigSchema, SecurityConfigSchema } from '../iam-config.js'
-import { getIamMessage } from '../iam-i18n.js'
 import {
+  IamErrorCode,
+  LoginConfigSchema,
+  OAuthConfigSchema,
+  OtpConfigSchema,
+  SecurityConfigSchema,
+  SessionConfigSchema,
+} from '../iam-config.js'
+import { iamM } from '../iam-i18n.js'
+import {
+  createCacheOAuthStateStore,
+  createCacheOtpStore,
   createCachePermissionCache,
+  createCacheSessionMappingRepository,
   createDbOAuthAccountRepository,
   createDbOAuthStateStore,
   createDbOtpStore,
   createDbPermissionRepository,
   createDbRolePermissionRepository,
   createDbRoleRepository,
-  createDbSessionStore,
+  createDbSessionMappingRepository,
   createDbUserRepository,
   createDbUserRoleRepository,
 } from '../repository/index.js'
@@ -158,13 +168,17 @@ export async function initializeComponents(options: InitOptions): Promise<Result
     }) as PasswordStrategy
 
     const loginConfig = LoginConfigSchema.parse(config.login ?? {})
+    const otpConfig = config.otp ? OtpConfigSchema.parse(config.otp) : undefined
+    const oauthConfig = config.oauth ? OAuthConfigSchema.parse(config.oauth) : undefined
 
     // OTP 策略
     let otpStrategy: OtpStrategy | undefined
-    if (loginConfig.otp && config.otp) {
-      const otpStore = await createDbOtpStore(db)
+    if (loginConfig.otp && otpConfig) {
+      const otpStore = otpConfig.store.type === 'cache'
+        ? createCacheOtpStore(cache, { keyPrefix: otpConfig.store.keyPrefix })
+        : await createDbOtpStore(db)
       otpStrategy = createOtpStrategy({
-        otpConfig: config.otp,
+        otpConfig,
         userRepository,
         otpStore,
         otpSender: {
@@ -178,11 +192,13 @@ export async function initializeComponents(options: InitOptions): Promise<Result
 
     // OAuth 策略
     let oauthStrategy: OAuthStrategy | undefined
-    if (loginConfig.oauth && config.oauth) {
-      const oauthStateStore = await createDbOAuthStateStore(db)
+    if (loginConfig.oauth && oauthConfig) {
+      const oauthStateStore = oauthConfig.stateStore.type === 'cache'
+        ? createCacheOAuthStateStore(cache, { keyPrefix: oauthConfig.stateStore.keyPrefix })
+        : await createDbOAuthStateStore(db)
       const oauthAccountRepository = await createDbOAuthAccountRepository(db)
       oauthStrategy = createOAuthStrategy({
-        oauthConfig: config.oauth,
+        oauthConfig,
         userRepository,
         oauthAccountRepository,
         oauthStateStore,
@@ -192,8 +208,8 @@ export async function initializeComponents(options: InitOptions): Promise<Result
     }
 
     // 会话管理器
-    const sessionConfig = config.session
-    const jwtConfig = sessionConfig?.jwt || {
+    const sessionConfig = SessionConfigSchema.parse(config.session ?? {})
+    const jwtConfig = sessionConfig.jwt || {
       secret: process.env.JWT_SECRET || createDefaultJwtSecret(),
       algorithm: 'HS256' as const,
       accessTokenExpiresIn: 900,
@@ -201,19 +217,25 @@ export async function initializeComponents(options: InitOptions): Promise<Result
     }
 
     let sessionManager: SessionManager
-    if (sessionConfig?.type === 'stateful') {
-      const sessionStore: SessionStore = await createDbSessionStore(db)
+    if (sessionConfig.type === 'stateful') {
+      const mappingStoreConfig = sessionConfig.mappingStore
+      const sessionMappingRepository: SessionMappingRepository = mappingStoreConfig.type === 'cache'
+        ? createCacheSessionMappingRepository(cache, {
+            keyPrefix: mappingStoreConfig.keyPrefix,
+            userSessionTtl: mappingStoreConfig.userSessionTtl ?? sessionConfig.maxAge,
+          })
+        : await createDbSessionMappingRepository(db)
       sessionManager = createStatefulSessionManager({
         jwt: jwtConfig,
-        maxAge: sessionConfig?.maxAge,
-        sliding: sessionConfig?.sliding,
-        sessionStore,
+        maxAge: sessionConfig.maxAge,
+        sliding: sessionConfig.sliding,
+        sessionMappingRepository,
       })
     }
     else {
       sessionManager = createJwtSessionManager({
         jwt: jwtConfig,
-        maxAge: sessionConfig?.maxAge,
+        maxAge: sessionConfig.maxAge,
       })
     }
 
@@ -244,7 +266,7 @@ export async function initializeComponents(options: InitOptions): Promise<Result
   catch (error) {
     return err({
       code: IamErrorCode.CONFIG_ERROR,
-      message: getIamMessage('iam_initComponentFailed'),
+      message: iamM('iam_initComponentFailed'),
       cause: error,
     })
   }

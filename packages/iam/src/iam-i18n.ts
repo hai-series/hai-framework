@@ -31,7 +31,7 @@ type IamMessageKey = keyof typeof messagesZhCN
  * 模块内部使用，不对外导出。
  * @internal
  */
-export const getIamMessage = core.i18n.createMessageGetter<IamMessageKey>({
+export const iamM = core.i18n.createMessageGetter<IamMessageKey>({
   'zh-CN': messagesZhCN,
   'en-US': messagesEnUS,
 })

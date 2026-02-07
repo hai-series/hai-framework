@@ -9,11 +9,12 @@
  * =============================================================================
  */
 
-import type { Result } from '@hai/core'
+import type { PaginatedResult, PaginationOptionsInput, Result } from '@hai/core'
 import type { DbService } from '@hai/db'
 import type { IamError, Session, SessionRepository } from '../iam-types.js'
 import { err, ok } from '@hai/core'
 import { IamErrorCode } from '../iam-config.js'
+import { iamM } from '../iam-i18n.js'
 
 /**
  * 会话表名
@@ -87,7 +88,7 @@ export async function createDbSessionRepository(db: DbService): Promise<SessionR
     if (!result.success) {
       return err({
         code: IamErrorCode.REPOSITORY_ERROR,
-        message: `创建会话表失败: ${result.error.message}`,
+        message: iamM('iam_createSessionTableFailed', { params: { message: result.error.message } }),
         cause: result.error,
       })
     }
@@ -102,7 +103,7 @@ export async function createDbSessionRepository(db: DbService): Promise<SessionR
       if (!indexResult.success) {
         return err({
           code: IamErrorCode.REPOSITORY_ERROR,
-          message: `创建会话索引失败: ${indexResult.error.message}`,
+          message: iamM('iam_createSessionIndexFailed', { params: { message: indexResult.error.message } }),
           cause: indexResult.error,
         })
       }
@@ -145,7 +146,7 @@ export async function createDbSessionRepository(db: DbService): Promise<SessionR
       if (!result.success) {
         return err({
           code: IamErrorCode.REPOSITORY_ERROR,
-          message: `创建会话失败: ${result.error.message}`,
+          message: iamM('iam_createSessionRecordFailed', { params: { message: result.error.message } }),
           cause: result.error,
         })
       }
@@ -173,7 +174,7 @@ export async function createDbSessionRepository(db: DbService): Promise<SessionR
       if (!result.success) {
         return err({
           code: IamErrorCode.REPOSITORY_ERROR,
-          message: `查询会话失败: ${result.error.message}`,
+          message: iamM('iam_querySessionFailed', { params: { message: result.error.message } }),
           cause: result.error,
         })
       }
@@ -194,7 +195,7 @@ export async function createDbSessionRepository(db: DbService): Promise<SessionR
       if (!result.success) {
         return err({
           code: IamErrorCode.REPOSITORY_ERROR,
-          message: `查询会话失败: ${result.error.message}`,
+          message: iamM('iam_querySessionFailed', { params: { message: result.error.message } }),
           cause: result.error,
         })
       }
@@ -215,7 +216,7 @@ export async function createDbSessionRepository(db: DbService): Promise<SessionR
       if (!result.success) {
         return err({
           code: IamErrorCode.REPOSITORY_ERROR,
-          message: `查询会话失败: ${result.error.message}`,
+          message: iamM('iam_querySessionFailed', { params: { message: result.error.message } }),
           cause: result.error,
         })
       }
@@ -227,21 +228,27 @@ export async function createDbSessionRepository(db: DbService): Promise<SessionR
       return ok(rowToSession(result.data[0]))
     },
 
-    async findByUserId(userId): Promise<Result<Session[], IamError>> {
-      const result = await db.sql.query<SessionRow>(
-        `SELECT * FROM ${TABLE_NAME} WHERE user_id = ?`,
-        [userId],
-      )
+    async findByUserId(userId, options?: PaginationOptionsInput): Promise<Result<PaginatedResult<Session>, IamError>> {
+      const result = await db.sql.queryPage<SessionRow>({
+        sql: `SELECT * FROM ${TABLE_NAME} WHERE user_id = ? ORDER BY created_at DESC`,
+        params: [userId],
+        pagination: options,
+      })
 
       if (!result.success) {
         return err({
           code: IamErrorCode.REPOSITORY_ERROR,
-          message: `查询会话失败: ${result.error.message}`,
+          message: iamM('iam_querySessionFailed', { params: { message: result.error.message } }),
           cause: result.error,
         })
       }
 
-      return ok(result.data.map(rowToSession))
+      return ok({
+        items: result.data.items.map(rowToSession),
+        total: result.data.total,
+        page: result.data.page,
+        pageSize: result.data.pageSize,
+      })
     },
 
     async update(id, data): Promise<Result<void, IamError>> {
@@ -283,7 +290,7 @@ export async function createDbSessionRepository(db: DbService): Promise<SessionR
       if (!result.success) {
         return err({
           code: IamErrorCode.REPOSITORY_ERROR,
-          message: `更新会话失败: ${result.error.message}`,
+          message: iamM('iam_updateSessionFailed', { params: { message: result.error.message } }),
           cause: result.error,
         })
       }
@@ -300,7 +307,7 @@ export async function createDbSessionRepository(db: DbService): Promise<SessionR
       if (!result.success) {
         return err({
           code: IamErrorCode.REPOSITORY_ERROR,
-          message: `删除会话失败: ${result.error.message}`,
+          message: iamM('iam_deleteSessionFailed', { params: { message: result.error.message } }),
           cause: result.error,
         })
       }
@@ -317,7 +324,7 @@ export async function createDbSessionRepository(db: DbService): Promise<SessionR
       if (!result.success) {
         return err({
           code: IamErrorCode.REPOSITORY_ERROR,
-          message: `删除会话失败: ${result.error.message}`,
+          message: iamM('iam_deleteSessionFailed', { params: { message: result.error.message } }),
           cause: result.error,
         })
       }
@@ -335,7 +342,7 @@ export async function createDbSessionRepository(db: DbService): Promise<SessionR
       if (!result.success) {
         return err({
           code: IamErrorCode.REPOSITORY_ERROR,
-          message: `清理会话失败: ${result.error.message}`,
+          message: iamM('iam_cleanupSessionFailed', { params: { message: result.error.message } }),
           cause: result.error,
         })
       }

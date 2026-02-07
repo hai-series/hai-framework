@@ -3,17 +3,24 @@
  * @hai/iam - OAuth 存储实现
  * =============================================================================
  *
- * 基于 @hai/db 的 OAuth 状态和账户存储实现。
+ * 基于 @hai/db 的 OAuth 状态与账户存储实现。
  *
  * @module iam-repository-oauth
  * =============================================================================
  */
 
-import type { Result } from '@hai/core'
+import type { PaginatedResult, PaginationOptionsInput, Result } from '@hai/core'
 import type { DbService } from '@hai/db'
-import type { IamError, OAuthAccount, OAuthAccountRepository, OAuthState, OAuthStateStore } from '../iam-types.js'
+import type {
+  IamError,
+  OAuthAccount,
+  OAuthAccountRepository,
+  OAuthState,
+  OAuthStateStore,
+} from '../iam-types.js'
 import { err, ok } from '@hai/core'
 import { IamErrorCode } from '../iam-config.js'
+import { iamM } from '../iam-i18n.js'
 
 // =============================================================================
 // OAuth 状态存储
@@ -37,6 +44,25 @@ interface StateRow {
 }
 
 /**
+ * 判断是否过期
+ */
+function isExpired(expiresAt: Date, now = Date.now()): boolean {
+  return expiresAt.getTime() <= now
+}
+
+/**
+ * 构建 OAuth 状态
+ */
+function buildOAuthState(row: StateRow): OAuthState {
+  return {
+    state: row.state,
+    codeVerifier: row.code_verifier ?? undefined,
+    returnUrl: row.return_url ?? undefined,
+    expiresAt: new Date(row.expires_at),
+  }
+}
+
+/**
  * 创建数据库 OAuth 状态存储
  */
 export async function createDbOAuthStateStore(db: DbService): Promise<OAuthStateStore> {
@@ -45,7 +71,7 @@ export async function createDbOAuthStateStore(db: DbService): Promise<OAuthState
     if (!result.success) {
       return err({
         code: IamErrorCode.REPOSITORY_ERROR,
-        message: `创建 OAuth 状态表失败: ${result.error.message}`,
+        message: iamM('iam_createOauthStateTableFailed', { params: { message: result.error.message } }),
         cause: result.error,
       })
     }
@@ -55,6 +81,23 @@ export async function createDbOAuthStateStore(db: DbService): Promise<OAuthState
   const initResult = await ensureTable()
   if (!initResult.success) {
     throw new Error(initResult.error.message)
+  }
+
+  async function deleteStateInternal(state: string): Promise<Result<void, IamError>> {
+    const result = await db.sql.execute(
+      `DELETE FROM ${STATE_TABLE} WHERE state = ?`,
+      [state],
+    )
+
+    if (!result.success) {
+      return err({
+        code: IamErrorCode.REPOSITORY_ERROR,
+        message: iamM('iam_deleteOauthStateFailed', { params: { message: result.error.message } }),
+        cause: result.error,
+      })
+    }
+
+    return ok(undefined)
   }
 
   return {
@@ -76,7 +119,7 @@ export async function createDbOAuthStateStore(db: DbService): Promise<OAuthState
       if (!result.success) {
         return err({
           code: IamErrorCode.REPOSITORY_ERROR,
-          message: `保存 OAuth 状态失败: ${result.error.message}`,
+          message: iamM('iam_saveOauthStateFailed', { params: { message: result.error.message } }),
           cause: result.error,
         })
       }
@@ -93,7 +136,7 @@ export async function createDbOAuthStateStore(db: DbService): Promise<OAuthState
       if (!result.success) {
         return err({
           code: IamErrorCode.REPOSITORY_ERROR,
-          message: `查询 OAuth 状态失败: ${result.error.message}`,
+          message: iamM('iam_queryOauthStateFailed', { params: { message: result.error.message } }),
           cause: result.error,
         })
       }
@@ -102,38 +145,17 @@ export async function createDbOAuthStateStore(db: DbService): Promise<OAuthState
         return ok(null)
       }
 
-      const row = result.data[0]
-      const expiresAt = new Date(row.expires_at)
-
-      // 检查是否已过期
-      if (new Date() > expiresAt) {
-        await this.delete(state)
+      const oauthState = buildOAuthState(result.data[0])
+      if (isExpired(oauthState.expiresAt)) {
+        await deleteStateInternal(state)
         return ok(null)
       }
 
-      return ok({
-        state: row.state,
-        codeVerifier: row.code_verifier ?? undefined,
-        returnUrl: row.return_url ?? undefined,
-        expiresAt,
-      })
+      return ok(oauthState)
     },
 
     async delete(state): Promise<Result<void, IamError>> {
-      const result = await db.sql.execute(
-        `DELETE FROM ${STATE_TABLE} WHERE state = ?`,
-        [state],
-      )
-
-      if (!result.success) {
-        return err({
-          code: IamErrorCode.REPOSITORY_ERROR,
-          message: `删除 OAuth 状态失败: ${result.error.message}`,
-          cause: result.error,
-        })
-      }
-
-      return ok(undefined)
+      return deleteStateInternal(state)
     },
   }
 }
@@ -187,7 +209,7 @@ export async function createDbOAuthAccountRepository(db: DbService): Promise<OAu
     if (!result.success) {
       return err({
         code: IamErrorCode.REPOSITORY_ERROR,
-        message: `创建 OAuth 账户表失败: ${result.error.message}`,
+        message: iamM('iam_createOauthAccountTableFailed', { params: { message: result.error.message } }),
         cause: result.error,
       })
     }
@@ -203,7 +225,7 @@ export async function createDbOAuthAccountRepository(db: DbService): Promise<OAu
       if (!indexResult.success) {
         return err({
           code: IamErrorCode.REPOSITORY_ERROR,
-          message: `创建 OAuth 账户索引失败: ${indexResult.error.message}`,
+          message: iamM('iam_createOauthAccountIndexFailed', { params: { message: indexResult.error.message } }),
           cause: indexResult.error,
         })
       }
@@ -240,7 +262,7 @@ export async function createDbOAuthAccountRepository(db: DbService): Promise<OAu
       if (!result.success) {
         return err({
           code: IamErrorCode.REPOSITORY_ERROR,
-          message: `创建 OAuth 账户失败: ${result.error.message}`,
+          message: iamM('iam_createOauthAccountFailed', { params: { message: result.error.message } }),
           cause: result.error,
         })
       }
@@ -261,7 +283,7 @@ export async function createDbOAuthAccountRepository(db: DbService): Promise<OAu
       if (!result.success) {
         return err({
           code: IamErrorCode.REPOSITORY_ERROR,
-          message: `查询 OAuth 账户失败: ${result.error.message}`,
+          message: iamM('iam_queryOauthAccountFailed', { params: { message: result.error.message } }),
           cause: result.error,
         })
       }
@@ -273,21 +295,27 @@ export async function createDbOAuthAccountRepository(db: DbService): Promise<OAu
       return ok(rowToAccount(result.data[0]))
     },
 
-    async findByUserId(userId): Promise<Result<OAuthAccount[], IamError>> {
-      const result = await db.sql.query<AccountRow>(
-        `SELECT * FROM ${ACCOUNT_TABLE} WHERE user_id = ?`,
-        [userId],
-      )
+    async findByUserId(userId, options?: PaginationOptionsInput): Promise<Result<PaginatedResult<OAuthAccount>, IamError>> {
+      const result = await db.sql.queryPage<AccountRow>({
+        sql: `SELECT * FROM ${ACCOUNT_TABLE} WHERE user_id = ? ORDER BY created_at DESC`,
+        params: [userId],
+        pagination: options,
+      })
 
       if (!result.success) {
         return err({
           code: IamErrorCode.REPOSITORY_ERROR,
-          message: `查询 OAuth 账户失败: ${result.error.message}`,
+          message: iamM('iam_queryOauthAccountFailed', { params: { message: result.error.message } }),
           cause: result.error,
         })
       }
 
-      return ok(result.data.map(rowToAccount))
+      return ok({
+        items: result.data.items.map(rowToAccount),
+        total: result.data.total,
+        page: result.data.page,
+        pageSize: result.data.pageSize,
+      })
     },
 
     async update(userId, providerId, data): Promise<Result<void, IamError>> {
@@ -324,7 +352,7 @@ export async function createDbOAuthAccountRepository(db: DbService): Promise<OAu
       if (!result.success) {
         return err({
           code: IamErrorCode.REPOSITORY_ERROR,
-          message: `更新 OAuth 账户失败: ${result.error.message}`,
+          message: iamM('iam_updateOauthAccountFailed', { params: { message: result.error.message } }),
           cause: result.error,
         })
       }
@@ -341,7 +369,7 @@ export async function createDbOAuthAccountRepository(db: DbService): Promise<OAu
       if (!result.success) {
         return err({
           code: IamErrorCode.REPOSITORY_ERROR,
-          message: `删除 OAuth 账户失败: ${result.error.message}`,
+          message: iamM('iam_deleteOauthAccountFailed', { params: { message: result.error.message } }),
           cause: result.error,
         })
       }

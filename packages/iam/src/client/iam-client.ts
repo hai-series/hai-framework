@@ -35,6 +35,7 @@
 
 import type { Result } from '@hai/core'
 import { err, ok } from '@hai/core'
+import { iamM } from '../iam-i18n.js'
 
 // =============================================================================
 // 类型定义
@@ -310,7 +311,7 @@ export function createIamClient(config: IamClientConfig): IamClient {
     if (!fetchFn) {
       return err({
         code: 'FETCH_NOT_AVAILABLE',
-        message: 'Fetch is not available in the current environment',
+        message: iamM('iam_clientFetchNotAvailable'),
       })
     }
     const url = `${baseUrl}${path}`
@@ -339,7 +340,7 @@ export function createIamClient(config: IamClientConfig): IamClient {
       if (!response.ok) {
         const error: IamClientError = {
           code: data?.code || 'REQUEST_FAILED',
-          message: data?.message || `请求失败: ${response.status}`,
+          message: data?.message || iamM('iam_clientRequestFailed', { params: { status: response.status } }),
           status: response.status,
         }
 
@@ -354,9 +355,12 @@ export function createIamClient(config: IamClientConfig): IamClient {
       return ok(data as T)
     }
     catch (error) {
+      const detail = error instanceof Error ? error.message : undefined
       return err({
         code: 'NETWORK_ERROR',
-        message: error instanceof Error ? error.message : '网络请求失败',
+        message: detail
+          ? iamM('iam_clientNetworkErrorWithDetail', { params: { message: detail } })
+          : iamM('iam_clientNetworkError'),
       })
     }
   }

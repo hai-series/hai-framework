@@ -52,6 +52,9 @@ await iam.init(db, cache, {
       accessTokenExpiresIn: 900, // 15 分钟
       refreshTokenExpiresIn: 604800 // 7 天
     },
+    mappingStore: {
+      type: 'db'
+    },
     maxAge: 86400, // 会话最大有效期
     sliding: true // 滑动续期
   },
@@ -60,7 +63,10 @@ await iam.init(db, cache, {
     length: 6,
     expiresIn: 300,
     maxAttempts: 3,
-    resendInterval: 60
+    resendInterval: 60,
+    store: {
+      type: 'db'
+    }
   },
 
   oauth: {
@@ -73,7 +79,10 @@ await iam.init(db, cache, {
       tokenUrl: 'https://github.com/login/oauth/access_token',
       userInfoUrl: 'https://api.github.com/user',
       scopes: ['user:email']
-    }]
+    }],
+    stateStore: {
+      type: 'db'
+    }
   },
 
   login: {
@@ -239,6 +248,14 @@ const updated = await iam.user.updateUser('user-id', {
 
 // 修改密码
 const changeResult = await iam.user.changePassword('user-id', 'oldPassword', 'newPassword')
+
+// 用户分页列表
+import type { PaginationOptionsInput } from '@hai/core'
+
+const listResult = await iam.user.listUsers({ page: 1, pageSize: 20 } satisfies PaginationOptionsInput)
+if (listResult.success) {
+  const { items, total } = listResult.data
+}
 ```
 
 ### RBAC 授权 (iam.authz)
@@ -281,6 +298,10 @@ const roles = await iam.authz.getUserRoles('user-id')
 
 // 检查角色
 const isAdmin = await iam.authz.hasRole(context, 'admin')
+
+// 角色与权限分页列表
+const rolesResult = await iam.authz.getAllRoles({ page: 1, pageSize: 50 })
+const permissionsResult = await iam.authz.getAllPermissions({ page: 1, pageSize: 50 })
 ```
 
 ### 会话管理 (iam.session)
@@ -491,7 +512,7 @@ await iam.init(db, cache, {
 如需自定义存储，可实现以下接口：
 
 ```ts
-import type { SessionStore, UserRepository } from '@hai/iam'
+import type { SessionMappingRepository, UserRepository } from '@hai/iam'
 
 // 用户存储接口
 const customUserRepository: UserRepository = {
@@ -506,11 +527,26 @@ const customUserRepository: UserRepository = {
   async update(id, data) { /* ... */ },
   async delete(id) { /* ... */ },
   async existsByUsername(username) { /* ... */ },
-  async existsByEmail(email) { /* ... */ }
+  async existsByEmail(email) { /* ... */ },
+  async findAll(options) {
+    const page = options?.page ?? 1
+    const pageSize = options?.pageSize ?? 20
+    const offset = (page - 1) * pageSize
+
+    const items = await myDb.query('SELECT * FROM users LIMIT ? OFFSET ?', [pageSize, offset])
+    const total = await myDb.queryOne('SELECT COUNT(*) as cnt FROM users')
+
+    return ok({
+      items: items.map(mapToUser),
+      total: total.cnt,
+      page,
+      pageSize,
+    })
+  },
 }
 
-// 会话存储接口
-const customSessionStore: SessionStore = {
+// 会话映射存储接口
+const customSessionMappingRepository: SessionMappingRepository = {
   async get(sessionId) {
     const data = await redis.get(`session:${sessionId}`)
     return ok(data ? JSON.parse(data) : null)
@@ -519,12 +555,32 @@ const customSessionStore: SessionStore = {
     await redis.setex(`session:${sessionId}`, ttl, JSON.stringify(session))
     return ok(undefined)
   },
+  async getSessionIdByToken(token) {
+    const sessionId = await redis.get(`token:${token}`)
+    return ok(sessionId ?? null)
+  },
+  async setTokenMapping(token, sessionId, ttl) {
+    await redis.setex(`token:${token}`, ttl, sessionId)
+    return ok(undefined)
+  },
+  async deleteTokenMapping(token) {
+    await redis.del(`token:${token}`)
+    return ok(undefined)
+  },
   async delete(sessionId) {
     await redis.del(`session:${sessionId}`)
     return ok(undefined)
   },
-  async deleteByUserId(userId) {
-    // 使用 Redis SCAN 查找并删除
+  async getUserSessionIds(userId) {
+    const ids = await redis.lrange(`user:${userId}:sessions`, 0, -1)
+    return ok(ids)
+  },
+  async addUserSession(userId, sessionId) {
+    await redis.rpush(`user:${userId}:sessions`, sessionId)
+    return ok(undefined)
+  },
+  async removeUserSession(userId, sessionId) {
+    await redis.lrem(`user:${userId}:sessions`, 0, sessionId)
     return ok(undefined)
   }
 }

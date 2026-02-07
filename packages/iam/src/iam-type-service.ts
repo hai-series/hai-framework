@@ -16,7 +16,7 @@
  */
 
 import type { CacheService } from '@hai/cache'
-import type { Result } from '@hai/core'
+import type { PaginatedResult, PaginationOptionsInput, Result } from '@hai/core'
 import type { DbService } from '@hai/db'
 import type {
   AuthStrategyType,
@@ -202,7 +202,7 @@ export interface AuthzManager {
   /**
    * 获取所有角色
    */
-  getAllRoles: () => Promise<Result<Role[], IamError>>
+  getAllRoles: (options?: PaginationOptionsInput) => Promise<Result<PaginatedResult<Role>, IamError>>
 
   /**
    * 更新角色
@@ -231,7 +231,7 @@ export interface AuthzManager {
   /**
    * 获取所有权限
    */
-  getAllPermissions: () => Promise<Result<Permission[], IamError>>
+  getAllPermissions: (options?: PaginationOptionsInput) => Promise<Result<PaginatedResult<Permission>, IamError>>
 
   /**
    * 删除权限
@@ -330,7 +330,7 @@ export interface UserOperations {
   /**
    * 获取所有用户列表
    */
-  listUsers: () => Promise<Result<User[], IamError>>
+  listUsers: (options?: PaginationOptionsInput) => Promise<Result<PaginatedResult<User>, IamError>>
 
   /**
    * 更新用户信息
@@ -394,12 +394,4 @@ export interface IamService {
    * 关闭
    */
   close: () => Promise<Result<void, IamError>>
-}
-
-/**
- * IAM 入口对象（包含创建实例能力）
- */
-export interface IamEntry extends IamService {
-  /** 创建独立 IAM 实例 */
-  create: () => IamService
 }

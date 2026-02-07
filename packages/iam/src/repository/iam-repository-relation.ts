@@ -20,6 +20,7 @@ import type {
 } from '../iam-types.js'
 import { err, ok } from '@hai/core'
 import { IamErrorCode } from '../iam-config.js'
+import { iamM } from '../iam-i18n.js'
 
 // =============================================================================
 // 角色-权限关联存储
@@ -44,7 +45,7 @@ export async function createDbRolePermissionRepository(
     if (!result.success) {
       return err({
         code: IamErrorCode.REPOSITORY_ERROR,
-        message: `创建角色-权限关联表失败: ${result.error.message}`,
+        message: iamM('iam_createRolePermissionTableFailed', { params: { message: result.error.message } }),
         cause: result.error,
       })
     }
@@ -57,7 +58,7 @@ export async function createDbRolePermissionRepository(
       if (!indexResult.success) {
         return err({
           code: IamErrorCode.REPOSITORY_ERROR,
-          message: `创建角色-权限索引失败: ${indexResult.error.message}`,
+          message: iamM('iam_createRolePermissionIndexFailed', { params: { message: indexResult.error.message } }),
           cause: indexResult.error,
         })
       }
@@ -71,6 +72,23 @@ export async function createDbRolePermissionRepository(
     throw new Error(initResult.error.message)
   }
 
+  async function getPermissionIdsInternal(roleId: string): Promise<Result<string[], IamError>> {
+    const result = await db.sql.query<{ permission_id: string }>(
+      `SELECT permission_id FROM ${ROLE_PERMISSION_TABLE} WHERE role_id = ?`,
+      [roleId],
+    )
+
+    if (!result.success) {
+      return err({
+        code: IamErrorCode.REPOSITORY_ERROR,
+        message: iamM('iam_queryPermissionFailed', { params: { message: result.error.message } }),
+        cause: result.error,
+      })
+    }
+
+    return ok(result.data.map(r => r.permission_id))
+  }
+
   return {
     async assign(roleId, permissionId): Promise<Result<void, IamError>> {
       const result = await db.sql.execute(
@@ -81,7 +99,7 @@ export async function createDbRolePermissionRepository(
       if (!result.success) {
         return err({
           code: IamErrorCode.REPOSITORY_ERROR,
-          message: `分配权限失败: ${result.error.message}`,
+          message: iamM('iam_assignPermissionFailed', { params: { message: result.error.message } }),
           cause: result.error,
         })
       }
@@ -98,7 +116,7 @@ export async function createDbRolePermissionRepository(
       if (!result.success) {
         return err({
           code: IamErrorCode.REPOSITORY_ERROR,
-          message: `移除权限失败: ${result.error.message}`,
+          message: iamM('iam_removePermissionFailed', { params: { message: result.error.message } }),
           cause: result.error,
         })
       }
@@ -107,24 +125,11 @@ export async function createDbRolePermissionRepository(
     },
 
     async getPermissionIds(roleId): Promise<Result<string[], IamError>> {
-      const result = await db.sql.query<{ permission_id: string }>(
-        `SELECT permission_id FROM ${ROLE_PERMISSION_TABLE} WHERE role_id = ?`,
-        [roleId],
-      )
-
-      if (!result.success) {
-        return err({
-          code: IamErrorCode.REPOSITORY_ERROR,
-          message: `查询权限失败: ${result.error.message}`,
-          cause: result.error,
-        })
-      }
-
-      return ok(result.data.map(r => r.permission_id))
+      return getPermissionIdsInternal(roleId)
     },
 
     async getPermissions(roleId): Promise<Result<Permission[], IamError>> {
-      const idsResult = await this.getPermissionIds(roleId)
+      const idsResult = await getPermissionIdsInternal(roleId)
       if (!idsResult.success)
         return idsResult
 
@@ -150,7 +155,7 @@ export async function createDbRolePermissionRepository(
       if (!result.success) {
         return err({
           code: IamErrorCode.REPOSITORY_ERROR,
-          message: `查询权限失败: ${result.error.message}`,
+          message: iamM('iam_queryPermissionFailed', { params: { message: result.error.message } }),
           cause: result.error,
         })
       }
@@ -183,7 +188,7 @@ export async function createDbUserRoleRepository(
     if (!result.success) {
       return err({
         code: IamErrorCode.REPOSITORY_ERROR,
-        message: `创建用户-角色关联表失败: ${result.error.message}`,
+        message: iamM('iam_createUserRoleTableFailed', { params: { message: result.error.message } }),
         cause: result.error,
       })
     }
@@ -196,7 +201,7 @@ export async function createDbUserRoleRepository(
       if (!indexResult.success) {
         return err({
           code: IamErrorCode.REPOSITORY_ERROR,
-          message: `创建用户-角色索引失败: ${indexResult.error.message}`,
+          message: iamM('iam_createUserRoleIndexFailed', { params: { message: indexResult.error.message } }),
           cause: indexResult.error,
         })
       }
@@ -210,6 +215,23 @@ export async function createDbUserRoleRepository(
     throw new Error(initResult.error.message)
   }
 
+  async function getRoleIdsInternal(userId: string): Promise<Result<string[], IamError>> {
+    const result = await db.sql.query<{ role_id: string }>(
+      `SELECT role_id FROM ${USER_ROLE_TABLE} WHERE user_id = ?`,
+      [userId],
+    )
+
+    if (!result.success) {
+      return err({
+        code: IamErrorCode.REPOSITORY_ERROR,
+        message: iamM('iam_queryRoleFailed', { params: { message: result.error.message } }),
+        cause: result.error,
+      })
+    }
+
+    return ok(result.data.map(r => r.role_id))
+  }
+
   return {
     async assign(userId, roleId): Promise<Result<void, IamError>> {
       const result = await db.sql.execute(
@@ -220,7 +242,7 @@ export async function createDbUserRoleRepository(
       if (!result.success) {
         return err({
           code: IamErrorCode.REPOSITORY_ERROR,
-          message: `分配角色失败: ${result.error.message}`,
+          message: iamM('iam_assignRoleFailed', { params: { message: result.error.message } }),
           cause: result.error,
         })
       }
@@ -237,7 +259,7 @@ export async function createDbUserRoleRepository(
       if (!result.success) {
         return err({
           code: IamErrorCode.REPOSITORY_ERROR,
-          message: `移除角色失败: ${result.error.message}`,
+          message: iamM('iam_removeRoleFailed', { params: { message: result.error.message } }),
           cause: result.error,
         })
       }
@@ -246,24 +268,11 @@ export async function createDbUserRoleRepository(
     },
 
     async getRoleIds(userId): Promise<Result<string[], IamError>> {
-      const result = await db.sql.query<{ role_id: string }>(
-        `SELECT role_id FROM ${USER_ROLE_TABLE} WHERE user_id = ?`,
-        [userId],
-      )
-
-      if (!result.success) {
-        return err({
-          code: IamErrorCode.REPOSITORY_ERROR,
-          message: `查询角色失败: ${result.error.message}`,
-          cause: result.error,
-        })
-      }
-
-      return ok(result.data.map(r => r.role_id))
+      return getRoleIdsInternal(userId)
     },
 
     async getRoles(userId): Promise<Result<Role[], IamError>> {
-      const idsResult = await this.getRoleIds(userId)
+      const idsResult = await getRoleIdsInternal(userId)
       if (!idsResult.success)
         return idsResult
 
@@ -289,7 +298,7 @@ export async function createDbUserRoleRepository(
       if (!result.success) {
         return err({
           code: IamErrorCode.REPOSITORY_ERROR,
-          message: `查询角色失败: ${result.error.message}`,
+          message: iamM('iam_queryRoleFailed', { params: { message: result.error.message } }),
           cause: result.error,
         })
       }

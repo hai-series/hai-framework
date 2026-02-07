@@ -9,12 +9,12 @@
  * =============================================================================
  */
 
-import type { Result } from '@hai/core'
+import type { PaginatedResult, PaginationOptionsInput, Result } from '@hai/core'
 import type { DbService } from '@hai/db'
 import type { IamError, Permission, PermissionRepository } from '../iam-types.js'
 import { err, ok } from '@hai/core'
 import { IamErrorCode } from '../iam-config.js'
-import { getIamMessage } from '../iam-i18n.js'
+import { iamM } from '../iam-i18n.js'
 
 /**
  * 权限表名
@@ -82,7 +82,7 @@ export async function createDbPermissionRepository(db: DbService): Promise<Permi
     if (!result.success) {
       return err({
         code: IamErrorCode.REPOSITORY_ERROR,
-        message: `创建权限表失败: ${result.error.message}`,
+        message: iamM('iam_createPermissionTableFailed', { params: { message: result.error.message } }),
         cause: result.error,
       })
     }
@@ -94,6 +94,7 @@ export async function createDbPermissionRepository(db: DbService): Promise<Permi
   if (!initResult.success) {
     throw new Error(initResult.error.message)
   }
+
 
   return {
     async create(permission): Promise<Result<Permission, IamError>> {
@@ -120,13 +121,13 @@ export async function createDbPermissionRepository(db: DbService): Promise<Permi
         if (errorMsg.includes('unique') || errorMsg.includes('duplicate')) {
           return err({
             code: IamErrorCode.PERMISSION_ALREADY_EXISTS,
-            message: getIamMessage('iam_permissionAlreadyExist'),
+            message: iamM('iam_permissionAlreadyExist'),
             cause: result.error,
           })
         }
         return err({
           code: IamErrorCode.REPOSITORY_ERROR,
-          message: `创建权限失败: ${result.error.message}`,
+          message: iamM('iam_createPermissionFailed', { params: { message: result.error.message } }),
           cause: result.error,
         })
       }
@@ -152,7 +153,7 @@ export async function createDbPermissionRepository(db: DbService): Promise<Permi
       if (!result.success) {
         return err({
           code: IamErrorCode.REPOSITORY_ERROR,
-          message: `查询权限失败: ${result.error.message}`,
+          message: iamM('iam_queryPermissionFailed', { params: { message: result.error.message } }),
           cause: result.error,
         })
       }
@@ -173,7 +174,7 @@ export async function createDbPermissionRepository(db: DbService): Promise<Permi
       if (!result.success) {
         return err({
           code: IamErrorCode.REPOSITORY_ERROR,
-          message: `查询权限失败: ${result.error.message}`,
+          message: iamM('iam_queryPermissionFailed', { params: { message: result.error.message } }),
           cause: result.error,
         })
       }
@@ -185,18 +186,26 @@ export async function createDbPermissionRepository(db: DbService): Promise<Permi
       return ok(rowToPermission(result.data[0]))
     },
 
-    async findAll(): Promise<Result<Permission[], IamError>> {
-      const result = await db.sql.query<PermissionRow>(`SELECT * FROM ${TABLE_NAME}`)
+    async findAll(options?: PaginationOptionsInput): Promise<Result<PaginatedResult<Permission>, IamError>> {
+      const result = await db.sql.queryPage<PermissionRow>({
+        sql: `SELECT * FROM ${TABLE_NAME} ORDER BY created_at DESC`,
+        pagination: options,
+      })
 
       if (!result.success) {
         return err({
           code: IamErrorCode.REPOSITORY_ERROR,
-          message: `查询权限失败: ${result.error.message}`,
+          message: iamM('iam_queryPermissionFailed', { params: { message: result.error.message } }),
           cause: result.error,
         })
       }
 
-      return ok(result.data.map(rowToPermission))
+      return ok({
+        items: result.data.items.map(rowToPermission),
+        total: result.data.total,
+        page: result.data.page,
+        pageSize: result.data.pageSize,
+      })
     },
 
     async delete(id): Promise<Result<void, IamError>> {
@@ -208,7 +217,7 @@ export async function createDbPermissionRepository(db: DbService): Promise<Permi
       if (!result.success) {
         return err({
           code: IamErrorCode.REPOSITORY_ERROR,
-          message: `删除权限失败: ${result.error.message}`,
+          message: iamM('iam_deletePermissionFailed', { params: { message: result.error.message } }),
           cause: result.error,
         })
       }

@@ -19,7 +19,7 @@
  * =============================================================================
  */
 
-import type { Result } from '@hai/core'
+import type { PaginatedResult, PaginationOptionsInput, Result } from '@hai/core'
 import type { Permission, Role } from './iam-type-authz.js'
 import type { OAuthAccount, OAuthState } from './iam-type-oauth.js'
 import type { IamError } from './iam-type-service.js'
@@ -67,7 +67,7 @@ export interface UserRepository {
   /**
    * 获取所有用户列表
    */
-  findAll: () => Promise<Result<StoredUser[], IamError>>
+  findAll: (options?: PaginationOptionsInput) => Promise<Result<PaginatedResult<StoredUser>, IamError>>
 
   /**
    * 更新用户
@@ -116,7 +116,7 @@ export interface RoleRepository {
   /**
    * 获取所有角色
    */
-  findAll: () => Promise<Result<Role[], IamError>>
+  findAll: (options?: PaginationOptionsInput) => Promise<Result<PaginatedResult<Role>, IamError>>
 
   /**
    * 更新角色
@@ -160,7 +160,7 @@ export interface PermissionRepository {
   /**
    * 获取所有权限
    */
-  findAll: () => Promise<Result<Permission[], IamError>>
+  findAll: (options?: PaginationOptionsInput) => Promise<Result<PaginatedResult<Permission>, IamError>>
 
   /**
    * 删除权限
@@ -267,7 +267,7 @@ export interface SessionRepository {
   /**
    * 获取用户的所有会话
    */
-  findByUserId: (userId: string) => Promise<Result<Session[], IamError>>
+  findByUserId: (userId: string, options?: PaginationOptionsInput) => Promise<Result<PaginatedResult<Session>, IamError>>
 
   /**
    * 更新会话
@@ -311,7 +311,7 @@ export interface OAuthAccountRepository {
   /**
    * 获取用户的所有 OAuth 账户
    */
-  findByUserId: (userId: string) => Promise<Result<OAuthAccount[], IamError>>
+  findByUserId: (userId: string, options?: PaginationOptionsInput) => Promise<Result<PaginatedResult<OAuthAccount>, IamError>>
 
   /**
    * 更新 OAuth 账户

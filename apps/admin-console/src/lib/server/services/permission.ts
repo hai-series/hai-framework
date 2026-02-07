@@ -55,6 +55,35 @@ export interface UpdatePermissionInput {
 }
 
 // =============================================================================
+// 内部辅助
+// =============================================================================
+
+async function listAllPermissions(pageSize = 200): Promise<Permission[]> {
+  const permissions: Permission[] = []
+  let page = 1
+  let total = 0
+
+  while (true) {
+    const result = await iam.authz.getAllPermissions({ page, pageSize })
+    if (!result.success) {
+      return permissions
+    }
+
+    if (page === 1) {
+      total = result.data.total
+    }
+
+    permissions.push(...result.data.items)
+
+    if (permissions.length >= total || result.data.items.length === 0) {
+      return permissions
+    }
+
+    page += 1
+  }
+}
+
+// =============================================================================
 // 权限服务
 // =============================================================================
 
@@ -105,11 +134,11 @@ export const permissionService = {
    * 获取权限列表
    */
   async list(options?: { resource?: string }): Promise<PermissionWithSystem[]> {
-    const result = await iam.authz.getAllPermissions()
-    if (!result.success)
+    const permissionsResult = await listAllPermissions()
+    if (permissionsResult.length === 0)
       return []
 
-    let permissions = result.data.map(p => this.toPermissionWithSystem(p))
+    let permissions = permissionsResult.map(p => this.toPermissionWithSystem(p))
 
     if (options?.resource) {
       permissions = permissions.filter(p => p.resource === options.resource)

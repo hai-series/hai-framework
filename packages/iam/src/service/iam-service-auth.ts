@@ -30,7 +30,7 @@ import type { OAuthStrategy, OtpStrategy, PasswordStrategy } from '../strategy/i
 import { err, ok } from '@hai/core'
 
 import { AgreementConfigSchema, IamErrorCode, LoginConfigSchema } from '../iam-config.js'
-import { getIamMessage } from '../iam-i18n.js'
+import { iamM } from '../iam-i18n.js'
 
 /**
  * 认证服务依赖
@@ -87,7 +87,7 @@ export function createAuthOperations(deps: AuthServiceDeps): AuthOperations {
     if (!loginConfig[type]) {
       return err({
         code: IamErrorCode.LOGIN_DISABLED,
-        message: getIamMessage('iam_loginDisabled', { params: { type } }),
+        message: iamM('iam_loginDisabled', { params: { type } }),
       })
     }
     return null
@@ -143,7 +143,7 @@ export function createAuthOperations(deps: AuthServiceDeps): AuthOperations {
       if (!otpStrategy) {
         return err({
           code: IamErrorCode.STRATEGY_NOT_SUPPORTED,
-          message: getIamMessage('iam_otpStrategyRequired'),
+          message: iamM('iam_otpStrategyRequired'),
         })
       }
 
@@ -187,7 +187,7 @@ export function createAuthOperations(deps: AuthServiceDeps): AuthOperations {
 
       return err({
         code: IamErrorCode.STRATEGY_NOT_SUPPORTED,
-        message: getIamMessage('iam_ldapStrategyRequired'),
+        message: iamM('iam_ldapStrategyRequired'),
       })
     },
 
@@ -200,7 +200,7 @@ export function createAuthOperations(deps: AuthServiceDeps): AuthOperations {
       if (!oauthStrategy) {
         return err({
           code: IamErrorCode.STRATEGY_NOT_SUPPORTED,
-          message: getIamMessage('iam_oauthStrategyRequired'),
+          message: iamM('iam_oauthStrategyRequired'),
         })
       }
 
@@ -224,7 +224,7 @@ export function createAuthOperations(deps: AuthServiceDeps): AuthOperations {
       if (!oauthStrategy) {
         return err({
           code: IamErrorCode.STRATEGY_NOT_SUPPORTED,
-          message: getIamMessage('iam_oauthStrategyRequired'),
+          message: iamM('iam_oauthStrategyRequired'),
         })
       }
 
@@ -286,7 +286,7 @@ export function createAuthOperations(deps: AuthServiceDeps): AuthOperations {
       if (!otpStrategy) {
         return err({
           code: IamErrorCode.STRATEGY_NOT_SUPPORTED,
-          message: getIamMessage('iam_otpStrategyRequiredForSend'),
+          message: iamM('iam_otpStrategyRequiredForSend'),
         })
       }
 

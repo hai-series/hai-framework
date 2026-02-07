@@ -9,14 +9,14 @@
  * =============================================================================
  */
 
-import type { Result } from '@hai/core'
+import type { PaginatedResult, PaginationOptionsInput, Result } from '@hai/core'
+import type { RbacConfig } from '../iam-config.js'
 import type {
   AuthzContext,
   AuthzManager,
   IamError,
   Permission,
   PermissionRepository,
-  RbacConfig,
   Role,
   RolePermissionRepository,
   RoleRepository,
@@ -25,7 +25,7 @@ import type {
 import { err, ok } from '@hai/core'
 
 import { IamErrorCode, RbacConfigSchema } from '../iam-config.js'
-import { getIamMessage } from '../iam-i18n.js'
+import { iamM } from '../iam-i18n.js'
 
 /**
  * 权限缓存接口
@@ -211,7 +211,7 @@ export function createRbacManager(config: RbacManagerConfig): AuthzManager {
       if (!roleExistsResult.data) {
         return err({
           code: IamErrorCode.ROLE_NOT_FOUND,
-          message: getIamMessage('iam_roleNotExist'),
+          message: iamM('iam_roleNotExist'),
         })
       }
 
@@ -249,8 +249,8 @@ export function createRbacManager(config: RbacManagerConfig): AuthzManager {
       return roleRepository.findById(roleId)
     },
 
-    async getAllRoles(): Promise<Result<Role[], IamError>> {
-      return roleRepository.findAll()
+    async getAllRoles(options?: PaginationOptionsInput): Promise<Result<PaginatedResult<Role>, IamError>> {
+      return roleRepository.findAll(options)
     },
 
     async updateRole(roleId, data): Promise<Result<Role, IamError>> {
@@ -273,8 +273,8 @@ export function createRbacManager(config: RbacManagerConfig): AuthzManager {
       return permissionRepository.findById(permissionId)
     },
 
-    async getAllPermissions(): Promise<Result<Permission[], IamError>> {
-      return permissionRepository.findAll()
+    async getAllPermissions(options?: PaginationOptionsInput): Promise<Result<PaginatedResult<Permission>, IamError>> {
+      return permissionRepository.findAll(options)
     },
 
     async deletePermission(permissionId): Promise<Result<void, IamError>> {
@@ -294,7 +294,7 @@ export function createRbacManager(config: RbacManagerConfig): AuthzManager {
       if (!roleResult.data) {
         return err({
           code: IamErrorCode.ROLE_NOT_FOUND,
-          message: getIamMessage('iam_roleNotExist'),
+          message: iamM('iam_roleNotExist'),
         })
       }
 
@@ -304,7 +304,7 @@ export function createRbacManager(config: RbacManagerConfig): AuthzManager {
       if (!permResult.data) {
         return err({
           code: IamErrorCode.PERMISSION_NOT_FOUND,
-          message: getIamMessage('iam_permissionNotExist'),
+          message: iamM('iam_permissionNotExist'),
         })
       }
 

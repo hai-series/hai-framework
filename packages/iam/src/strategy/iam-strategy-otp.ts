@@ -10,22 +10,21 @@
  */
 
 import type { Result } from '@hai/core'
+import type { OtpConfig, RegisterConfig } from '../iam-config.js'
 import type {
   AuthStrategy,
   Credentials,
   IamError,
-  OtpConfig,
   OtpSender,
   OtpStore,
   StoredUser,
   User,
   UserRepository,
 } from '../iam-types.js'
-import type { RegisterConfig } from '../iam-config.js'
 import { err, ok } from '@hai/core'
 
 import { IamErrorCode, OtpConfigSchema } from '../iam-config.js'
-import { getIamMessage } from '../iam-i18n.js'
+import { iamM } from '../iam-i18n.js'
 
 /**
  * OTP 认证策略配置
@@ -112,6 +111,13 @@ export function createOtpStrategy(config: OtpStrategyConfig): OtpStrategy {
     }
   }
 
+  /**
+   * 构建挑战返回值
+   */
+  function buildChallengeResult(expiresAt: Date): { expiresAt: Date } {
+    return { expiresAt }
+  }
+
   return {
     type: 'otp',
     name: 'otp-strategy',
@@ -121,7 +127,7 @@ export function createOtpStrategy(config: OtpStrategyConfig): OtpStrategy {
       if (credentials.type !== 'otp') {
         return err({
           code: IamErrorCode.INVALID_CREDENTIALS,
-          message: getIamMessage('iam_credentialTypeMismatch'),
+          message: iamM('iam_credentialTypeMismatch'),
         })
       }
 
@@ -137,7 +143,7 @@ export function createOtpStrategy(config: OtpStrategyConfig): OtpStrategy {
       if (!storedOtp) {
         return err({
           code: IamErrorCode.OTP_INVALID,
-          message: getIamMessage('iam_otpNotExistOrExpired'),
+          message: iamM('iam_otpNotExistOrExpired'),
         })
       }
 
@@ -146,7 +152,7 @@ export function createOtpStrategy(config: OtpStrategyConfig): OtpStrategy {
         await config.otpStore.delete(identifier)
         return err({
           code: IamErrorCode.OTP_INVALID,
-          message: getIamMessage('iam_otpInvalid'),
+          message: iamM('iam_otpInvalid'),
         })
       }
 
@@ -155,7 +161,7 @@ export function createOtpStrategy(config: OtpStrategyConfig): OtpStrategy {
         await config.otpStore.incrementAttempts(identifier)
         return err({
           code: IamErrorCode.OTP_INVALID,
-          message: getIamMessage('iam_otpWrong'),
+          message: iamM('iam_otpWrong'),
         })
       }
 
@@ -190,7 +196,7 @@ export function createOtpStrategy(config: OtpStrategyConfig): OtpStrategy {
       if (!storedUser) {
         return err({
           code: IamErrorCode.USER_NOT_FOUND,
-          message: getIamMessage('iam_userNotExist'),
+          message: iamM('iam_userNotExist'),
         })
       }
 
@@ -198,7 +204,7 @@ export function createOtpStrategy(config: OtpStrategyConfig): OtpStrategy {
       if (!storedUser.enabled) {
         return err({
           code: IamErrorCode.USER_DISABLED,
-          message: getIamMessage('iam_accountDisabled'),
+          message: iamM('iam_accountDisabled'),
         })
       }
 
@@ -213,7 +219,7 @@ export function createOtpStrategy(config: OtpStrategyConfig): OtpStrategy {
         if (elapsedSeconds < otpConfig.resendInterval) {
           return err({
             code: IamErrorCode.OTP_RESEND_TOO_FAST,
-            message: getIamMessage('iam_otpResendTooFast', { params: { seconds: otpConfig.resendInterval - elapsedSeconds } }),
+            message: iamM('iam_otpResendTooFast', { params: { seconds: otpConfig.resendInterval - elapsedSeconds } }),
           })
         }
       }
@@ -245,11 +251,12 @@ export function createOtpStrategy(config: OtpStrategyConfig): OtpStrategy {
       else {
         return err({
           code: IamErrorCode.INTERNAL_ERROR,
-          message: getIamMessage('iam_identifierTypeNotSupported'),
+          message: iamM('iam_identifierTypeNotSupported'),
         })
       }
 
-      return ok({ expiresAt })
+      const result = buildChallengeResult(expiresAt)
+      return ok(result)
     },
   }
 }

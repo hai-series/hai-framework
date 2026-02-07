@@ -68,7 +68,6 @@ import type { IamConfig, IamConfigInput, IamErrorCodeType } from './iam-config.j
 import type {
   AuthOperations,
   AuthzManager,
-  IamEntry,
   IamError,
   IamService,
   SessionManager,
@@ -78,7 +77,7 @@ import type { IamComponents } from './service/iam-service-initializer.js'
 import { err, ok } from '@hai/core'
 import { IamConfigSchema, IamErrorCode } from './iam-config.js'
 import { seedIamData } from './iam-database.js'
-import { getIamMessage } from './iam-i18n.js'
+import { iamM } from './iam-i18n.js'
 import { createAuthOperations } from './service/iam-service-auth.js'
 import {
 
@@ -96,7 +95,7 @@ import { createUserOperations } from './service/iam-service-user.js'
 function notInitializedError(): IamError {
   return {
     code: IamErrorCode.NOT_INITIALIZED,
-    message: getIamMessage('iam_notInitialized'),
+    message: iamM('iam_notInitialized'),
   }
 }
 
@@ -252,7 +251,7 @@ function createIamServiceInstance(): IamService {
       catch (error) {
         return err({
           code: IamErrorCode.CONFIG_ERROR,
-          message: getIamMessage('iam_initFailed'),
+          message: iamM('iam_initFailed'),
           cause: error,
         })
       }
@@ -279,6 +278,6 @@ function createIamServiceInstance(): IamService {
  */
 const iamInstance = createIamServiceInstance()
 
-export const iam: IamEntry = Object.assign(iamInstance, {
+export const iam: IamService & { create: () => IamService } = Object.assign(iamInstance, {
   create: () => createIamServiceInstance(),
 })

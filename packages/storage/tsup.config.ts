@@ -4,8 +4,8 @@ import { baseConfig } from '../tsup.base'
 export default defineConfig({
   ...baseConfig,
   entry: {
-    node: 'src/storage-index.node.ts',
-    browser: 'src/storage-index.browser.ts',
+    'node': 'src/storage-index.node.ts',
+    'browser': 'src/storage-index.browser.ts',
     'storage-client': 'src/storage-client.ts',
   },
   external: [
