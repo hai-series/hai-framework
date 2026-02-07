@@ -174,6 +174,15 @@ class UserRepository extends BaseCrudRepository<{ id: number, name: string, emai
   async findByEmail(email: string) {
     return this.findAll({ where: 'email = ?', params: [email], limit: 1 })
   }
+
+  // 在自定义方法中可使用 sql(tx) 自动选择事务内 CRUD
+  async insertWithTx(data: { name: string, email: string }, tx?: import('@hai/db').TxHandle) {
+    const now = new Date()
+    return this.sql(tx).execute(
+      'INSERT INTO users (name, email, created_at, updated_at) VALUES (?, ?, ?, ?)',
+      [data.name, data.email, now, now],
+    )
+  }
 }
 
 const txResult2 = await db.tx.begin()
