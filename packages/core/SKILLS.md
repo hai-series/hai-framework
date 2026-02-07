@@ -225,6 +225,21 @@ function divide(a: number, b: number): Result<number, string> {
 }
 ```
 
+## 分页类型
+
+```typescript
+import type { PaginatedResult, PaginationOptionsInput } from '@hai/core'
+
+const options: PaginationOptionsInput = { page: 1, pageSize: 20 }
+
+const result: PaginatedResult<number> = {
+  items: [1, 2, 3],
+  total: 3,
+  page: 1,
+  pageSize: 20,
+}
+```
+
 ## 配置 Schema
 
 ```typescript
