@@ -10,70 +10,21 @@
  */
 
 import type { Result } from '@hai/core'
+import type { JwtConfig } from '../iam-config.js'
 import type {
   CreateSessionOptions,
   IamError,
-  JwtConfig,
   RefreshResult,
   Session,
   SessionManager,
+  SessionMappingRepository,
   TokenPayload,
 } from '../iam-types.js'
 import { err, ok } from '@hai/core'
 import * as jose from 'jose'
 
 import { IamErrorCode, JwtConfigSchema } from '../iam-config.js'
-import { getIamMessage } from '../iam-i18n.js'
-
-/**
- * 会话存储接口
- */
-export interface SessionStore {
-  /**
-   * 存储会话
-   */
-  set: (sessionId: string, session: Session, ttl: number) => Promise<Result<void, IamError>>
-
-  /**
-   * 获取会话
-   */
-  get: (sessionId: string) => Promise<Result<Session | null, IamError>>
-
-  /**
-   * 通过令牌获取会话 ID
-   */
-  getSessionIdByToken: (token: string) => Promise<Result<string | null, IamError>>
-
-  /**
-   * 存储令牌到会话 ID 的映射
-   */
-  setTokenMapping: (token: string, sessionId: string, ttl: number) => Promise<Result<void, IamError>>
-
-  /**
-   * 删除令牌映射
-   */
-  deleteTokenMapping: (token: string) => Promise<Result<void, IamError>>
-
-  /**
-   * 删除会话
-   */
-  delete: (sessionId: string) => Promise<Result<void, IamError>>
-
-  /**
-   * 获取用户的所有会话 ID
-   */
-  getUserSessionIds: (userId: string) => Promise<Result<string[], IamError>>
-
-  /**
-   * 添加用户会话映射
-   */
-  addUserSession: (userId: string, sessionId: string) => Promise<Result<void, IamError>>
-
-  /**
-   * 移除用户会话映射
-   */
-  removeUserSession: (userId: string, sessionId: string) => Promise<Result<void, IamError>>
-}
+import { iamM } from '../iam-i18n.js'
 
 /**
  * 有状态会话管理器配置
@@ -85,8 +36,8 @@ export interface StatefulSessionConfig {
   maxAge?: number
   /** 是否滑动窗口 */
   sliding?: boolean
-  /** 会话存储 */
-  sessionStore: SessionStore
+  /** 会话映射存储 */
+  sessionMappingRepository: SessionMappingRepository
 }
 
 /**
@@ -103,6 +54,77 @@ export function createStatefulSessionManager(config: StatefulSessionConfig): Ses
    */
   function generateId(): string {
     return crypto.randomUUID()
+  }
+
+  /**
+   * 构建会话数据
+   */
+  function buildSession(options: CreateSessionOptions, sessionId: string, now: Date, sessionTtl: number, accessToken: string, refreshToken: string): Session {
+    return {
+      id: sessionId,
+      userId: options.userId,
+      accessToken,
+      refreshToken,
+      userAgent: options.userAgent,
+      ipAddress: options.ipAddress,
+      createdAt: now,
+      lastActiveAt: now,
+      expiresAt: new Date(now.getTime() + sessionTtl * 1000),
+      data: options.data,
+    }
+  }
+
+  /**
+   * 构建令牌载荷
+   */
+  function buildTokenPayload(payload: jose.JWTPayload): TokenPayload {
+    return {
+      sub: payload.sub as string,
+      username: payload.username as string | undefined,
+      sid: payload.sid as string | undefined,
+      iat: payload.iat as number,
+      exp: payload.exp as number,
+      iss: payload.iss as string | undefined,
+      aud: payload.aud as string | undefined,
+      type: payload.type as 'access' | 'refresh' | undefined,
+    }
+  }
+
+  /**
+   * 构建刷新结果
+   */
+  function buildRefreshResult(now: Date, accessToken: string, refreshToken: string, accessExpiresIn: number, refreshExpiresIn: number): RefreshResult {
+    return {
+      accessToken,
+      refreshToken,
+      accessTokenExpiresAt: new Date(now.getTime() + accessExpiresIn * 1000),
+      refreshTokenExpiresAt: new Date(now.getTime() + refreshExpiresIn * 1000),
+    }
+  }
+
+  /**
+   * 计算会话剩余 TTL
+   */
+  function getSessionTtl(session: Session, now = Date.now()): number {
+    return Math.max(0, Math.floor((session.expiresAt.getTime() - now) / 1000))
+  }
+
+  /**
+   * 应用会话更新
+   */
+  function applySessionPatch(session: Session, patch: Partial<Session>): Session {
+    const nextSession = { ...session }
+    if (patch.data !== undefined) {
+      nextSession.data = { ...nextSession.data, ...patch.data }
+    }
+    if (patch.userAgent !== undefined) {
+      nextSession.userAgent = patch.userAgent
+    }
+    if (patch.ipAddress !== undefined) {
+      nextSession.ipAddress = patch.ipAddress
+    }
+    nextSession.lastActiveAt = new Date()
+    return nextSession
   }
 
   /**
@@ -142,28 +164,20 @@ export function createStatefulSessionManager(config: StatefulSessionConfig): Ses
 
       const { payload } = await jose.jwtVerify(token, secretKey, options)
 
-      return ok({
-        sub: payload.sub as string,
-        username: payload.username as string | undefined,
-        sid: payload.sid as string | undefined,
-        iat: payload.iat as number,
-        exp: payload.exp as number,
-        iss: payload.iss as string | undefined,
-        aud: payload.aud as string | undefined,
-        type: payload.type as 'access' | 'refresh' | undefined,
-      })
+      const tokenPayload = buildTokenPayload(payload)
+      return ok(tokenPayload)
     }
     catch (error) {
       if (error instanceof jose.errors.JWTExpired) {
         return err({
           code: IamErrorCode.TOKEN_EXPIRED,
-          message: getIamMessage('iam_tokenExpired'),
+          message: iamM('iam_tokenExpired'),
           cause: error,
         })
       }
       return err({
         code: IamErrorCode.TOKEN_INVALID,
-        message: getIamMessage('iam_tokenInvalid'),
+        message: iamM('iam_tokenInvalid'),
         cause: error,
       })
     }
@@ -190,45 +204,34 @@ export function createStatefulSessionManager(config: StatefulSessionConfig): Ses
           refreshExpiresIn,
         )
 
-        const session: Session = {
-          id: sessionId,
-          userId: options.userId,
-          accessToken,
-          refreshToken,
-          userAgent: options.userAgent,
-          ipAddress: options.ipAddress,
-          createdAt: now,
-          lastActiveAt: now,
-          expiresAt: new Date(now.getTime() + sessionTtl * 1000),
-          data: options.data,
-        }
+        const session = buildSession(options, sessionId, now, sessionTtl, accessToken, refreshToken)
 
         // 存储会话
-        const storeResult = await config.sessionStore.set(sessionId, session, sessionTtl)
+        const storeResult = await config.sessionMappingRepository.set(sessionId, session, sessionTtl)
         if (!storeResult.success) {
           return storeResult as Result<Session, IamError>
         }
 
         // 存储令牌映射
-        await config.sessionStore.setTokenMapping(accessToken, sessionId, accessExpiresIn)
-        await config.sessionStore.setTokenMapping(refreshToken, sessionId, refreshExpiresIn)
+        await config.sessionMappingRepository.setTokenMapping(accessToken, sessionId, accessExpiresIn)
+        await config.sessionMappingRepository.setTokenMapping(refreshToken, sessionId, refreshExpiresIn)
 
         // 添加用户会话映射
-        await config.sessionStore.addUserSession(options.userId, sessionId)
+        await config.sessionMappingRepository.addUserSession(options.userId, sessionId)
 
         return ok(session)
       }
       catch (error) {
         return err({
           code: IamErrorCode.SESSION_CREATE_FAILED,
-          message: getIamMessage('iam_createSessionFailed'),
+          message: iamM('iam_createSessionFailed'),
           cause: error,
         })
       }
     },
 
     async get(sessionId: string): Promise<Result<Session | null, IamError>> {
-      const sessionResult = await config.sessionStore.get(sessionId)
+      const sessionResult = await config.sessionMappingRepository.get(sessionId)
       if (!sessionResult.success) {
         return sessionResult
       }
@@ -249,7 +252,7 @@ export function createStatefulSessionManager(config: StatefulSessionConfig): Ses
         const now = new Date()
         session.lastActiveAt = now
         session.expiresAt = new Date(now.getTime() + maxAge * 1000)
-        await config.sessionStore.set(sessionId, session, maxAge)
+        await config.sessionMappingRepository.set(sessionId, session, maxAge)
       }
 
       return ok(session)
@@ -263,7 +266,7 @@ export function createStatefulSessionManager(config: StatefulSessionConfig): Ses
       }
 
       // 从存储获取会话 ID
-      const sessionIdResult = await config.sessionStore.getSessionIdByToken(accessToken)
+      const sessionIdResult = await config.sessionMappingRepository.getSessionIdByToken(accessToken)
       if (!sessionIdResult.success) {
         return sessionIdResult as Result<Session | null, IamError>
       }
@@ -285,7 +288,7 @@ export function createStatefulSessionManager(config: StatefulSessionConfig): Ses
       }
 
       // 检查会话是否存在
-      const sessionIdResult = await config.sessionStore.getSessionIdByToken(accessToken)
+      const sessionIdResult = await config.sessionMappingRepository.getSessionIdByToken(accessToken)
       if (!sessionIdResult.success) {
         return sessionIdResult as Result<TokenPayload, IamError>
       }
@@ -293,7 +296,7 @@ export function createStatefulSessionManager(config: StatefulSessionConfig): Ses
       if (!sessionIdResult.data) {
         return err({
           code: IamErrorCode.SESSION_INVALID,
-          message: getIamMessage('iam_sessionExpired'),
+          message: iamM('iam_sessionExpired'),
         })
       }
 
@@ -310,25 +313,25 @@ export function createStatefulSessionManager(config: StatefulSessionConfig): Ses
       if (payload.type !== 'refresh') {
         return err({
           code: IamErrorCode.TOKEN_INVALID,
-          message: getIamMessage('iam_invalidRefreshToken'),
+          message: iamM('iam_invalidRefreshToken'),
         })
       }
 
       // 检查会话是否存在
-      const sessionIdResult = await config.sessionStore.getSessionIdByToken(refreshToken)
+      const sessionIdResult = await config.sessionMappingRepository.getSessionIdByToken(refreshToken)
       if (!sessionIdResult.success || !sessionIdResult.data) {
         return err({
           code: IamErrorCode.SESSION_INVALID,
-          message: getIamMessage('iam_sessionExpired'),
+          message: iamM('iam_sessionExpired'),
         })
       }
 
       const sessionId = sessionIdResult.data
-      const sessionResult = await config.sessionStore.get(sessionId)
+      const sessionResult = await config.sessionMappingRepository.get(sessionId)
       if (!sessionResult.success || !sessionResult.data) {
         return err({
           code: IamErrorCode.SESSION_NOT_FOUND,
-          message: getIamMessage('iam_sessionNotExist'),
+          message: iamM('iam_sessionNotExist'),
         })
       }
 
@@ -350,12 +353,12 @@ export function createStatefulSessionManager(config: StatefulSessionConfig): Ses
         )
 
         // 删除旧令牌映射
-        await config.sessionStore.deleteTokenMapping(session.accessToken)
-        await config.sessionStore.deleteTokenMapping(session.refreshToken || '')
+        await config.sessionMappingRepository.deleteTokenMapping(session.accessToken)
+        await config.sessionMappingRepository.deleteTokenMapping(session.refreshToken || '')
 
         // 存储新令牌映射
-        await config.sessionStore.setTokenMapping(newAccessToken, sessionId, accessExpiresIn)
-        await config.sessionStore.setTokenMapping(newRefreshToken, sessionId, refreshExpiresIn)
+        await config.sessionMappingRepository.setTokenMapping(newAccessToken, sessionId, accessExpiresIn)
+        await config.sessionMappingRepository.setTokenMapping(newRefreshToken, sessionId, refreshExpiresIn)
 
         // 更新会话
         session.accessToken = newAccessToken
@@ -364,26 +367,22 @@ export function createStatefulSessionManager(config: StatefulSessionConfig): Ses
         if (sliding) {
           session.expiresAt = new Date(now.getTime() + maxAge * 1000)
         }
-        await config.sessionStore.set(sessionId, session, maxAge)
+        await config.sessionMappingRepository.set(sessionId, session, maxAge)
 
-        return ok({
-          accessToken: newAccessToken,
-          refreshToken: newRefreshToken,
-          accessTokenExpiresAt: new Date(now.getTime() + accessExpiresIn * 1000),
-          refreshTokenExpiresAt: new Date(now.getTime() + refreshExpiresIn * 1000),
-        })
+        const refreshResult = buildRefreshResult(now, newAccessToken, newRefreshToken, accessExpiresIn, refreshExpiresIn)
+        return ok(refreshResult)
       }
       catch (error) {
         return err({
           code: IamErrorCode.TOKEN_REFRESH_FAILED,
-          message: getIamMessage('iam_refreshTokenFailed'),
+          message: iamM('iam_refreshTokenFailed'),
           cause: error,
         })
       }
     },
 
     async update(sessionId: string, data: Partial<Session>): Promise<Result<void, IamError>> {
-      const sessionResult = await config.sessionStore.get(sessionId)
+      const sessionResult = await config.sessionMappingRepository.get(sessionId)
       if (!sessionResult.success) {
         return sessionResult as Result<void, IamError>
       }
@@ -392,46 +391,35 @@ export function createStatefulSessionManager(config: StatefulSessionConfig): Ses
       if (!session) {
         return err({
           code: IamErrorCode.SESSION_NOT_FOUND,
-          message: getIamMessage('iam_sessionNotExist'),
+          message: iamM('iam_sessionNotExist'),
         })
       }
 
-      // 更新允许的字段
-      if (data.data !== undefined) {
-        session.data = { ...session.data, ...data.data }
-      }
-      if (data.userAgent !== undefined) {
-        session.userAgent = data.userAgent
-      }
-      if (data.ipAddress !== undefined) {
-        session.ipAddress = data.ipAddress
-      }
-      session.lastActiveAt = new Date()
-
-      const ttl = Math.max(0, Math.floor((session.expiresAt.getTime() - Date.now()) / 1000))
-      return config.sessionStore.set(sessionId, session, ttl)
+      const nextSession = applySessionPatch(session, data)
+      const ttl = getSessionTtl(nextSession)
+      return config.sessionMappingRepository.set(sessionId, nextSession, ttl)
     },
 
     async delete(sessionId: string): Promise<Result<void, IamError>> {
       // 获取会话信息
-      const sessionResult = await config.sessionStore.get(sessionId)
+      const sessionResult = await config.sessionMappingRepository.get(sessionId)
       if (sessionResult.success && sessionResult.data) {
         const session = sessionResult.data
         // 删除令牌映射
-        await config.sessionStore.deleteTokenMapping(session.accessToken)
+        await config.sessionMappingRepository.deleteTokenMapping(session.accessToken)
         if (session.refreshToken) {
-          await config.sessionStore.deleteTokenMapping(session.refreshToken)
+          await config.sessionMappingRepository.deleteTokenMapping(session.refreshToken)
         }
         // 移除用户会话映射
-        await config.sessionStore.removeUserSession(session.userId, sessionId)
+        await config.sessionMappingRepository.removeUserSession(session.userId, sessionId)
       }
 
       // 删除会话
-      return config.sessionStore.delete(sessionId)
+      return config.sessionMappingRepository.delete(sessionId)
     },
 
     async deleteByUserId(userId: string): Promise<Result<number, IamError>> {
-      const sessionIdsResult = await config.sessionStore.getUserSessionIds(userId)
+      const sessionIdsResult = await config.sessionMappingRepository.getUserSessionIds(userId)
       if (!sessionIdsResult.success) {
         return sessionIdsResult as Result<number, IamError>
       }

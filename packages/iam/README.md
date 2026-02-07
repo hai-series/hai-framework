@@ -155,6 +155,7 @@ await client.changePassword({
 | `register(options)`                                | 注册用户     |
 | `getCurrentUser(accessToken)`                      | 获取当前用户 |
 | `getUser(userId)`                                  | 获取用户     |
+| `listUsers(options)`                               | 用户分页列表 |
 | `updateUser(userId, data)`                         | 更新用户     |
 | `changePassword(userId, oldPassword, newPassword)` | 修改密码     |
 | `validatePassword(password)`                       | 验证密码强度 |
@@ -167,10 +168,25 @@ await client.changePassword({
 | `hasRole(context, roleId)`                     | 检查角色       |
 | `getUserPermissions(userId)`                   | 获取用户权限   |
 | `getUserRoles(userId)`                         | 获取用户角色   |
+| `getAllRoles(options)`                         | 角色分页列表   |
+| `getAllPermissions(options)`                   | 权限分页列表   |
 | `assignRole(userId, roleId)`                   | 分配角色       |
 | `removeRole(userId, roleId)`                   | 移除角色       |
 | `createRole(role)`                             | 创建角色       |
 | `assignPermissionToRole(roleId, permissionId)` | 分配权限到角色 |
+
+### 分页参数
+
+```ts
+import type { PaginatedResult, PaginationOptionsInput } from '@hai/core'
+```
+
+```ts
+const usersResult = await iam.user.listUsers({ page: 1, pageSize: 20 } satisfies PaginationOptionsInput)
+if (usersResult.success) {
+  const { items, total } = usersResult.data
+}
+```
 
 ### iam.session - 会话管理
 
@@ -220,6 +236,11 @@ interface IamConfig {
   /** 会话配置 */
   session?: {
     type: 'jwt' | 'stateful'
+    mappingStore?: {
+      type?: 'db' | 'cache'
+      keyPrefix?: string
+      userSessionTtl?: number // 仅 cache 时生效（秒）
+    }
     jwt?: {
       secret: string
       algorithm?: 'HS256' | 'HS384' | 'HS512'
@@ -236,6 +257,28 @@ interface IamConfig {
     expiresIn?: number // 过期时间（秒），默认 300
     maxAttempts?: number // 最大尝试次数，默认 3
     resendInterval?: number // 发送间隔（秒），默认 60
+    store?: {
+      type?: 'db' | 'cache'
+      keyPrefix?: string
+    }
+  }
+
+  /** OAuth 配置 */
+  oauth?: {
+    providers?: Array<{
+      id: string
+      name: string
+      clientId: string
+      clientSecret: string
+      authorizationUrl: string
+      tokenUrl: string
+      redirectUrl: string
+    }>
+    stateExpiresIn?: number // 状态过期时间（秒），默认 600
+    stateStore?: {
+      type?: 'db' | 'cache'
+      keyPrefix?: string
+    }
   }
 
   /**
@@ -323,4 +366,82 @@ await iam.init(db, cache, {
     minLength: 8,
   },
 })
+```
+
+如需自定义存储，可实现以下接口：
+
+```ts
+import type { SessionMappingRepository, UserRepository } from '@hai/iam'
+import { ok } from '@hai/core'
+
+// 用户存储接口
+const customUserRepository: UserRepository = {
+  async findById(id) {
+    const row = await myDb.queryOne('SELECT * FROM users WHERE id = ?', [id])
+    return ok(row ? mapToUser(row) : null)
+  },
+  async findByUsername(username) { /* ... */ },
+  async findByEmail(email) { /* ... */ },
+  async findByPhone(phone) { /* ... */ },
+  async create(data) { /* ... */ },
+  async update(id, data) { /* ... */ },
+  async delete(id) { /* ... */ },
+  async existsByUsername(username) { /* ... */ },
+  async existsByEmail(email) { /* ... */ },
+  async findAll(options) {
+    const page = options?.page ?? 1
+    const pageSize = options?.pageSize ?? 20
+    const offset = (page - 1) * pageSize
+
+    const items = await myDb.query('SELECT * FROM users LIMIT ? OFFSET ?', [pageSize, offset])
+    const total = await myDb.queryOne('SELECT COUNT(*) as cnt FROM users')
+
+    return ok({
+      items: items.map(mapToUser),
+      total: total.cnt,
+      page,
+      pageSize,
+    })
+  },
+}
+
+// 会话映射存储接口
+const customSessionMappingRepository: SessionMappingRepository = {
+  async get(sessionId) {
+    const data = await redis.get(`session:${sessionId}`)
+    return ok(data ? JSON.parse(data) : null)
+  },
+  async set(sessionId, session, ttl) {
+    await redis.setex(`session:${sessionId}`, ttl, JSON.stringify(session))
+    return ok(undefined)
+  },
+  async getSessionIdByToken(token) {
+    const sessionId = await redis.get(`token:${token}`)
+    return ok(sessionId ?? null)
+  },
+  async setTokenMapping(token, sessionId, ttl) {
+    await redis.setex(`token:${token}`, ttl, sessionId)
+    return ok(undefined)
+  },
+  async deleteTokenMapping(token) {
+    await redis.del(`token:${token}`)
+    return ok(undefined)
+  },
+  async delete(sessionId) {
+    await redis.del(`session:${sessionId}`)
+    return ok(undefined)
+  },
+  async getUserSessionIds(userId) {
+    const ids = await redis.lrange(`user:${userId}:sessions`, 0, -1)
+    return ok(ids)
+  },
+  async addUserSession(userId, sessionId) {
+    await redis.rpush(`user:${userId}:sessions`, sessionId)
+    return ok(undefined)
+  },
+  async removeUserSession(userId, sessionId) {
+    await redis.lrem(`user:${userId}:sessions`, 0, sessionId)
+    return ok(undefined)
+  },
+}
 ```

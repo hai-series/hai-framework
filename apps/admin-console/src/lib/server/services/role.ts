@@ -41,6 +41,35 @@ export interface UpdateRoleInput {
 }
 
 // =============================================================================
+// 内部辅助
+// =============================================================================
+
+async function listAllRoles(pageSize = 200): Promise<Role[]> {
+  const roles: Role[] = []
+  let page = 1
+  let total = 0
+
+  while (true) {
+    const result = await iam.authz.getAllRoles({ page, pageSize })
+    if (!result.success) {
+      return roles
+    }
+
+    if (page === 1) {
+      total = result.data.total
+    }
+
+    roles.push(...result.data.items)
+
+    if (roles.length >= total || result.data.items.length === 0) {
+      return roles
+    }
+
+    page += 1
+  }
+}
+
+// =============================================================================
 // 角色服务
 // =============================================================================
 
@@ -97,12 +126,13 @@ export const roleService = {
    * 获取角色列表
    */
   async list(): Promise<RoleWithPermissions[]> {
-    const result = await iam.authz.getAllRoles()
-    if (!result.success)
+    const result = await listAllRoles()
+    if (result.length === 0) {
       return []
+    }
 
     return Promise.all(
-      result.data.map(async (role) => {
+      result.map(async (role) => {
         const permissions = await this.getRolePermissions(role.id)
         return { ...role, permissions }
       }),

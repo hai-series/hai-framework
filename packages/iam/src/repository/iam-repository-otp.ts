@@ -3,7 +3,7 @@
  * @hai/iam - OTP 存储实现
  * =============================================================================
  *
- * 基于 @hai/db 的 OTP（一次性密码）存储实现。
+ * 基于 @hai/db 的 OTP 存储实现。
  *
  * @module iam-repository-otp
  * =============================================================================
@@ -14,6 +14,7 @@ import type { DbService } from '@hai/db'
 import type { IamError, OtpStore } from '../iam-types.js'
 import { err, ok } from '@hai/core'
 import { IamErrorCode } from '../iam-config.js'
+import { iamM } from '../iam-i18n.js'
 
 /**
  * OTP 表名
@@ -43,6 +44,24 @@ interface OtpRow {
 }
 
 /**
+ * 判断是否过期
+ */
+function isExpired(expiresAt: number, now = Date.now()): boolean {
+  return now > expiresAt
+}
+
+/**
+ * 构建 OTP 记录
+ */
+function buildOtpRecord(row: OtpRow): { code: string, attempts: number, createdAt: Date } {
+  return {
+    code: row.code,
+    attempts: row.attempts,
+    createdAt: new Date(row.created_at),
+  }
+}
+
+/**
  * 创建数据库 OTP 存储
  */
 export async function createDbOtpStore(db: DbService): Promise<OtpStore> {
@@ -52,7 +71,7 @@ export async function createDbOtpStore(db: DbService): Promise<OtpStore> {
     if (!result.success) {
       return err({
         code: IamErrorCode.REPOSITORY_ERROR,
-        message: `创建 OTP 表失败: ${result.error.message}`,
+        message: iamM('iam_createOtpTableFailed', { params: { message: result.error.message } }),
         cause: result.error,
       })
     }
@@ -62,6 +81,23 @@ export async function createDbOtpStore(db: DbService): Promise<OtpStore> {
   const initResult = await ensureTable()
   if (!initResult.success) {
     throw new Error(initResult.error.message)
+  }
+
+  async function deleteOtpInternal(identifier: string): Promise<Result<void, IamError>> {
+    const result = await db.sql.execute(
+      `DELETE FROM ${TABLE_NAME} WHERE identifier = ?`,
+      [identifier],
+    )
+
+    if (!result.success) {
+      return err({
+        code: IamErrorCode.REPOSITORY_ERROR,
+        message: iamM('iam_deleteOtpFailed', { params: { message: result.error.message } }),
+        cause: result.error,
+      })
+    }
+
+    return ok(undefined)
   }
 
   return {
@@ -77,7 +113,7 @@ export async function createDbOtpStore(db: DbService): Promise<OtpStore> {
       if (!result.success) {
         return err({
           code: IamErrorCode.REPOSITORY_ERROR,
-          message: `保存 OTP 失败: ${result.error.message}`,
+          message: iamM('iam_saveOtpFailed', { params: { message: result.error.message } }),
           cause: result.error,
         })
       }
@@ -94,7 +130,7 @@ export async function createDbOtpStore(db: DbService): Promise<OtpStore> {
       if (!result.success) {
         return err({
           code: IamErrorCode.REPOSITORY_ERROR,
-          message: `查询 OTP 失败: ${result.error.message}`,
+          message: iamM('iam_queryOtpFailed', { params: { message: result.error.message } }),
           cause: result.error,
         })
       }
@@ -104,18 +140,12 @@ export async function createDbOtpStore(db: DbService): Promise<OtpStore> {
       }
 
       const row = result.data[0]
-
-      // 检查是否已过期
-      if (Date.now() > row.expires_at) {
-        await this.delete(identifier)
+      if (isExpired(row.expires_at)) {
+        await deleteOtpInternal(identifier)
         return ok(null)
       }
 
-      return ok({
-        code: row.code,
-        attempts: row.attempts,
-        createdAt: new Date(row.created_at),
-      })
+      return ok(buildOtpRecord(row))
     },
 
     async incrementAttempts(identifier): Promise<Result<number, IamError>> {
@@ -128,7 +158,7 @@ export async function createDbOtpStore(db: DbService): Promise<OtpStore> {
       if (!getResult.success) {
         return err({
           code: IamErrorCode.REPOSITORY_ERROR,
-          message: `查询 OTP 失败: ${getResult.error.message}`,
+          message: iamM('iam_queryOtpFailed', { params: { message: getResult.error.message } }),
           cause: getResult.error,
         })
       }
@@ -148,7 +178,7 @@ export async function createDbOtpStore(db: DbService): Promise<OtpStore> {
       if (!updateResult.success) {
         return err({
           code: IamErrorCode.REPOSITORY_ERROR,
-          message: `更新 OTP 尝试次数失败: ${updateResult.error.message}`,
+          message: iamM('iam_updateOtpAttemptsFailed', { params: { message: updateResult.error.message } }),
           cause: updateResult.error,
         })
       }
@@ -157,20 +187,7 @@ export async function createDbOtpStore(db: DbService): Promise<OtpStore> {
     },
 
     async delete(identifier): Promise<Result<void, IamError>> {
-      const result = await db.sql.execute(
-        `DELETE FROM ${TABLE_NAME} WHERE identifier = ?`,
-        [identifier],
-      )
-
-      if (!result.success) {
-        return err({
-          code: IamErrorCode.REPOSITORY_ERROR,
-          message: `删除 OTP 失败: ${result.error.message}`,
-          cause: result.error,
-        })
-      }
-
-      return ok(undefined)
+      return deleteOtpInternal(identifier)
     },
   }
 }

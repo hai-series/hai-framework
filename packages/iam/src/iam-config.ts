@@ -219,6 +219,27 @@ export const PasswordConfigSchema = z.object({
 export type PasswordConfig = z.infer<typeof PasswordConfigSchema>
 
 /**
+ * OTP 存储类型
+ */
+export const OtpStoreTypeSchema = z.enum(['db', 'cache'])
+
+/** OTP 存储类型 */
+export type OtpStoreType = z.infer<typeof OtpStoreTypeSchema>
+
+/**
+ * OTP 存储配置 Schema
+ */
+export const OtpStoreConfigSchema = z.object({
+  /** 存储类型 */
+  type: OtpStoreTypeSchema.default('db'),
+  /** 缓存键前缀（仅 cache 时生效） */
+  keyPrefix: z.string().optional(),
+})
+
+/** OTP 存储配置类型 */
+export type OtpStoreConfig = z.infer<typeof OtpStoreConfigSchema>
+
+/**
  * OTP 配置 Schema
  */
 export const OtpConfigSchema = z.object({
@@ -230,6 +251,8 @@ export const OtpConfigSchema = z.object({
   maxAttempts: z.number().int().min(1).default(3),
   /** 发送间隔（秒，默认 60） */
   resendInterval: z.number().int().min(30).default(60),
+  /** OTP 存储配置 */
+  store: OtpStoreConfigSchema.default({ type: 'db' }),
 })
 
 /** OTP 配置类型 */
@@ -292,6 +315,27 @@ export const OAuthProviderConfigSchema = z.object({
 export type OAuthProviderConfig = z.infer<typeof OAuthProviderConfigSchema>
 
 /**
+ * OAuth 状态存储类型
+ */
+export const OAuthStateStoreTypeSchema = z.enum(['db', 'cache'])
+
+/** OAuth 状态存储类型 */
+export type OAuthStateStoreType = z.infer<typeof OAuthStateStoreTypeSchema>
+
+/**
+ * OAuth 状态存储配置 Schema
+ */
+export const OAuthStateStoreConfigSchema = z.object({
+  /** 存储类型 */
+  type: OAuthStateStoreTypeSchema.default('db'),
+  /** 缓存键前缀（仅 cache 时生效） */
+  keyPrefix: z.string().optional(),
+})
+
+/** OAuth 状态存储配置类型 */
+export type OAuthStateStoreConfig = z.infer<typeof OAuthStateStoreConfigSchema>
+
+/**
  * OAuth 配置 Schema
  */
 export const OAuthConfigSchema = z.object({
@@ -299,6 +343,8 @@ export const OAuthConfigSchema = z.object({
   providers: z.array(OAuthProviderConfigSchema).default([]),
   /** 状态令牌过期时间（秒，默认 600） */
   stateExpiresIn: z.number().int().min(60).default(600),
+  /** OAuth 状态存储配置 */
+  stateStore: OAuthStateStoreConfigSchema.default({ type: 'db' }),
 })
 
 /** OAuth 配置类型 */
@@ -364,7 +410,7 @@ export type AgreementConfig = z.infer<typeof AgreementConfigSchema>
  * 会话类型
  *
  * - `jwt` - 无状态 JWT 会话
- * - `stateful` - 有状态会话（存储在 cache 中）
+ * - `stateful` - 有状态会话（存储在外部存储中）
  */
 export const SessionTypeSchema = z.enum(['jwt', 'stateful'])
 
@@ -393,6 +439,29 @@ export const JwtConfigSchema = z.object({
 export type JwtConfig = z.infer<typeof JwtConfigSchema>
 
 /**
+ * 会话映射存储类型
+ */
+export const SessionMappingStoreTypeSchema = z.enum(['db', 'cache'])
+
+/** 会话映射存储类型 */
+export type SessionMappingStoreType = z.infer<typeof SessionMappingStoreTypeSchema>
+
+/**
+ * 会话映射存储配置 Schema
+ */
+export const SessionMappingStoreConfigSchema = z.object({
+  /** 存储类型 */
+  type: SessionMappingStoreTypeSchema.default('db'),
+  /** 缓存键前缀（仅 cache 时生效） */
+  keyPrefix: z.string().optional(),
+  /** 用户会话映射 TTL（秒，仅 cache 时生效） */
+  userSessionTtl: z.number().int().min(60).optional(),
+})
+
+/** 会话映射存储配置类型 */
+export type SessionMappingStoreConfig = z.infer<typeof SessionMappingStoreConfigSchema>
+
+/**
  * 会话配置 Schema
  */
 export const SessionConfigSchema = z.object({
@@ -406,6 +475,8 @@ export const SessionConfigSchema = z.object({
   jwt: JwtConfigSchema.optional(),
   /** 单设备登录（踢掉其他设备） */
   singleDevice: z.boolean().default(false),
+  /** 会话映射存储配置（type 为 stateful 时使用） */
+  mappingStore: SessionMappingStoreConfigSchema.default({ type: 'db' }),
 })
 
 /** 会话配置类型 */

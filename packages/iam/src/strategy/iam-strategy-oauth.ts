@@ -10,13 +10,12 @@
  */
 
 import type { Result } from '@hai/core'
+import type { OAuthConfig, OAuthProviderConfig, RegisterConfig } from '../iam-config.js'
 import type {
   AuthStrategy,
   Credentials,
   IamError,
   OAuthAccountRepository,
-  OAuthConfig,
-  OAuthProviderConfig,
   OAuthState,
   OAuthStateStore,
   OAuthTokens,
@@ -25,11 +24,10 @@ import type {
   User,
   UserRepository,
 } from '../iam-types.js'
-import type { RegisterConfig } from '../iam-config.js'
 import { err, ok } from '@hai/core'
 
 import { IamErrorCode, OAuthConfigSchema } from '../iam-config.js'
-import { getIamMessage } from '../iam-i18n.js'
+import { iamM } from '../iam-i18n.js'
 
 /**
  * OAuth 认证策略配置
@@ -75,6 +73,13 @@ export function createOAuthStrategy(config: OAuthStrategyConfig): OAuthStrategy 
   const allowAutoRegister = registerConfig?.enabled ?? config.autoRegister ?? false
   const defaultEnabled = registerConfig?.defaultEnabled ?? true
 
+  /**
+   * 构建授权 URL 结果
+   */
+  function buildAuthorizationUrlResult(url: string, state: OAuthState): { url: string, state: OAuthState } {
+    return { url, state }
+  }
+
   const providers = new Map<string, OAuthProviderConfig>()
   for (const provider of oauthConfig.providers) {
     providers.set(provider.id, provider)
@@ -109,7 +114,7 @@ export function createOAuthStrategy(config: OAuthStrategyConfig): OAuthStrategy 
       if (credentials.type !== 'oauth') {
         return err({
           code: IamErrorCode.INVALID_CREDENTIALS,
-          message: getIamMessage('iam_credentialTypeMismatch'),
+          message: iamM('iam_credentialTypeMismatch'),
         })
       }
 
@@ -120,7 +125,7 @@ export function createOAuthStrategy(config: OAuthStrategyConfig): OAuthStrategy 
       if (!provider) {
         return err({
           code: IamErrorCode.OAUTH_PROVIDER_NOT_FOUND,
-          message: getIamMessage('iam_oauthProviderNotFound', { params: { providerId } }),
+          message: iamM('iam_oauthProviderNotFound', { params: { providerId } }),
         })
       }
 
@@ -134,7 +139,7 @@ export function createOAuthStrategy(config: OAuthStrategyConfig): OAuthStrategy 
       if (!storedState) {
         return err({
           code: IamErrorCode.OAUTH_INVALID_STATE,
-          message: getIamMessage('iam_invalidStateToken'),
+          message: iamM('iam_invalidStateToken'),
         })
       }
 
@@ -142,7 +147,7 @@ export function createOAuthStrategy(config: OAuthStrategyConfig): OAuthStrategy 
         await config.oauthStateStore.delete(state)
         return err({
           code: IamErrorCode.OAUTH_INVALID_STATE,
-          message: getIamMessage('iam_stateTokenExpired'),
+          message: iamM('iam_stateTokenExpired'),
         })
       }
 
@@ -232,7 +237,7 @@ export function createOAuthStrategy(config: OAuthStrategyConfig): OAuthStrategy 
       if (!storedUser) {
         return err({
           code: IamErrorCode.USER_NOT_FOUND,
-          message: getIamMessage('iam_userNotExistNoAutoRegister'),
+          message: iamM('iam_userNotExistNoAutoRegister'),
         })
       }
 
@@ -240,7 +245,7 @@ export function createOAuthStrategy(config: OAuthStrategyConfig): OAuthStrategy 
       if (!storedUser.enabled) {
         return err({
           code: IamErrorCode.USER_DISABLED,
-          message: getIamMessage('iam_accountDisabled'),
+          message: iamM('iam_accountDisabled'),
         })
       }
 
@@ -252,7 +257,7 @@ export function createOAuthStrategy(config: OAuthStrategyConfig): OAuthStrategy 
       if (!provider) {
         return err({
           code: IamErrorCode.OAUTH_PROVIDER_NOT_FOUND,
-          message: getIamMessage('iam_oauthProviderNotFound', { params: { providerId } }),
+          message: iamM('iam_oauthProviderNotFound', { params: { providerId } }),
         })
       }
 
@@ -279,7 +284,8 @@ export function createOAuthStrategy(config: OAuthStrategyConfig): OAuthStrategy 
 
       const url = `${provider.authorizationUrl}?${params.toString()}`
 
-      return ok({ url, state: oauthState })
+      const result = buildAuthorizationUrlResult(url, oauthState)
+      return ok(result)
     },
 
     async getUserInfo(providerId: string, accessToken: string): Promise<Result<OAuthUserInfo, IamError>> {
@@ -287,7 +293,7 @@ export function createOAuthStrategy(config: OAuthStrategyConfig): OAuthStrategy 
       if (!provider) {
         return err({
           code: IamErrorCode.OAUTH_PROVIDER_NOT_FOUND,
-          message: getIamMessage('iam_oauthProviderNotFound', { params: { providerId } }),
+          message: iamM('iam_oauthProviderNotFound', { params: { providerId } }),
         })
       }
 
@@ -299,7 +305,7 @@ export function createOAuthStrategy(config: OAuthStrategyConfig): OAuthStrategy 
       if (!provider) {
         return err({
           code: IamErrorCode.OAUTH_PROVIDER_NOT_FOUND,
-          message: getIamMessage('iam_oauthProviderNotFound', { params: { providerId } }),
+          message: iamM('iam_oauthProviderNotFound', { params: { providerId } }),
         })
       }
 
@@ -321,7 +327,7 @@ export function createOAuthStrategy(config: OAuthStrategyConfig): OAuthStrategy 
         if (!response.ok) {
           return err({
             code: IamErrorCode.OAUTH_TOKEN_ERROR,
-            message: getIamMessage('iam_refreshTokenFailed'),
+            message: iamM('iam_refreshTokenFailed'),
           })
         }
 
@@ -334,19 +340,13 @@ export function createOAuthStrategy(config: OAuthStrategyConfig): OAuthStrategy 
           scope?: string
         }
 
-        return ok({
-          accessToken: data.access_token,
-          refreshToken: data.refresh_token,
-          idToken: data.id_token,
-          tokenType: data.token_type,
-          expiresIn: data.expires_in,
-          scope: data.scope,
-        })
+        const tokens = mapOAuthTokensResponse(data)
+        return ok(tokens)
       }
       catch (error) {
         return err({
           code: IamErrorCode.OAUTH_TOKEN_ERROR,
-          message: getIamMessage('iam_refreshTokenRequestFailed'),
+          message: iamM('iam_refreshTokenRequestFailed'),
           cause: error,
         })
       }
@@ -358,7 +358,7 @@ export function createOAuthStrategy(config: OAuthStrategyConfig): OAuthStrategy 
       if (!storedStateResult.success || !storedStateResult.data) {
         return err({
           code: IamErrorCode.OAUTH_INVALID_STATE,
-          message: getIamMessage('iam_invalidStateToken'),
+          message: iamM('iam_invalidStateToken'),
         })
       }
 
@@ -368,7 +368,7 @@ export function createOAuthStrategy(config: OAuthStrategyConfig): OAuthStrategy 
       if (!provider) {
         return err({
           code: IamErrorCode.OAUTH_PROVIDER_NOT_FOUND,
-          message: `OAuth 提供商 '${providerId}' 不存在`,
+          message: iamM('iam_oauthProviderNotFound', { params: { providerId } }),
         })
       }
 
@@ -389,7 +389,7 @@ export function createOAuthStrategy(config: OAuthStrategyConfig): OAuthStrategy 
       if (existingResult.success && existingResult.data && existingResult.data.userId !== userId) {
         return err({
           code: IamErrorCode.OAUTH_CALLBACK_ERROR,
-          message: getIamMessage('iam_oauthAccountLinkedByOther'),
+          message: iamM('iam_oauthAccountLinkedByOther'),
         })
       }
 
@@ -409,6 +409,41 @@ export function createOAuthStrategy(config: OAuthStrategyConfig): OAuthStrategy 
     async unlinkAccount(userId: string, providerId: string): Promise<Result<void, IamError>> {
       return config.oauthAccountRepository.delete(userId, providerId)
     },
+  }
+}
+
+/**
+ * 构建 OAuth 令牌结果
+ */
+function mapOAuthTokensResponse(data: {
+  access_token: string
+  refresh_token?: string
+  id_token?: string
+  token_type: string
+  expires_in: number
+  scope?: string
+}): OAuthTokens {
+  return {
+    accessToken: data.access_token,
+    refreshToken: data.refresh_token,
+    idToken: data.id_token,
+    tokenType: data.token_type,
+    expiresIn: data.expires_in,
+    scope: data.scope,
+  }
+}
+
+/**
+ * 标准化 OAuth 用户信息
+ */
+function buildOAuthUserInfo(data: Record<string, unknown>): OAuthUserInfo {
+  return {
+    providerId: String(data.id || data.sub || ''),
+    email: data.email as string | undefined,
+    username: (data.login as string | undefined) || (data.username as string | undefined),
+    displayName: data.name as string | undefined,
+    avatarUrl: (data.avatar_url as string | undefined) || (data.picture as string | undefined),
+    raw: data,
   }
 }
 
@@ -435,7 +470,7 @@ async function exchangeCode(provider: OAuthProviderConfig, code: string): Promis
     if (!response.ok) {
       return err({
         code: IamErrorCode.OAUTH_TOKEN_ERROR,
-        message: getIamMessage('iam_exchangeCodeFailed'),
+        message: iamM('iam_exchangeCodeFailed'),
       })
     }
 
@@ -448,19 +483,13 @@ async function exchangeCode(provider: OAuthProviderConfig, code: string): Promis
       scope?: string
     }
 
-    return ok({
-      accessToken: data.access_token,
-      refreshToken: data.refresh_token,
-      idToken: data.id_token,
-      tokenType: data.token_type,
-      expiresIn: data.expires_in,
-      scope: data.scope,
-    })
+    const tokens = mapOAuthTokensResponse(data)
+    return ok(tokens)
   }
   catch (error) {
     return err({
       code: IamErrorCode.OAUTH_TOKEN_ERROR,
-      message: getIamMessage('iam_tokenRequestFailed'),
+      message: iamM('iam_tokenRequestFailed'),
       cause: error,
     })
   }
@@ -473,7 +502,7 @@ async function fetchUserInfo(provider: OAuthProviderConfig, accessToken: string)
   if (!provider.userInfoUrl) {
     return err({
       code: IamErrorCode.CONFIG_ERROR,
-      message: getIamMessage('iam_userInfoUrlNotConfigured'),
+      message: iamM('iam_userInfoUrlNotConfigured'),
     })
   }
 
@@ -488,28 +517,20 @@ async function fetchUserInfo(provider: OAuthProviderConfig, accessToken: string)
     if (!response.ok) {
       return err({
         code: IamErrorCode.OAUTH_TOKEN_ERROR,
-        message: getIamMessage('iam_getUserInfoFailed'),
+        message: iamM('iam_getUserInfoFailed'),
       })
     }
 
     const data = await response.json() as Record<string, unknown>
 
     // 标准化用户信息（不同提供商格式不同）
-    const userInfo: OAuthUserInfo = {
-      providerId: String(data.id || data.sub || ''),
-      email: data.email as string | undefined,
-      username: (data.login as string | undefined) || (data.username as string | undefined),
-      displayName: data.name as string | undefined,
-      avatarUrl: (data.avatar_url as string | undefined) || (data.picture as string | undefined),
-      raw: data,
-    }
-
+    const userInfo = buildOAuthUserInfo(data)
     return ok(userInfo)
   }
   catch (error) {
     return err({
       code: IamErrorCode.OAUTH_TOKEN_ERROR,
-      message: getIamMessage('iam_getUserInfoRequestFailed'),
+      message: iamM('iam_getUserInfoRequestFailed'),
       cause: error,
     })
   }

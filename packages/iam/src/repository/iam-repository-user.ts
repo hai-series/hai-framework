@@ -9,12 +9,12 @@
  * =============================================================================
  */
 
-import type { Result } from '@hai/core'
+import type { PaginatedResult, PaginationOptionsInput, Result } from '@hai/core'
 import type { DbService } from '@hai/db'
 import type { IamError, StoredUser, UserRepository } from '../iam-types.js'
 import { err, ok } from '@hai/core'
 import { IamErrorCode } from '../iam-config.js'
-import { getIamMessage } from '../iam-i18n.js'
+import { iamM } from '../iam-i18n.js'
 
 /**
  * 用户表名
@@ -109,7 +109,7 @@ export async function createDbUserRepository(db: DbService): Promise<UserReposit
     if (!result.success) {
       return err({
         code: IamErrorCode.REPOSITORY_ERROR,
-        message: `创建用户表失败: ${result.error.message}`,
+        message: iamM('iam_createUserTableFailed', { params: { message: result.error.message } }),
         cause: result.error,
       })
     }
@@ -131,7 +131,7 @@ export async function createDbUserRepository(db: DbService): Promise<UserReposit
     if (!result.success) {
       return err({
         code: IamErrorCode.REPOSITORY_ERROR,
-        message: `查询用户失败: ${result.error.message}`,
+        message: iamM('iam_queryUserFailed', { params: { message: result.error.message } }),
         cause: result.error,
       })
     }
@@ -183,13 +183,13 @@ export async function createDbUserRepository(db: DbService): Promise<UserReposit
         if (errorMsg.includes('unique') || errorMsg.includes('duplicate')) {
           return err({
             code: IamErrorCode.USER_ALREADY_EXISTS,
-            message: getIamMessage('iam_userAlreadyExist'),
+            message: iamM('iam_userAlreadyExist'),
             cause: result.error,
           })
         }
         return err({
           code: IamErrorCode.REPOSITORY_ERROR,
-          message: `创建用户失败: ${result.error.message}`,
+          message: iamM('iam_createUserFailed', { params: { message: result.error.message } }),
           cause: result.error,
         })
       }
@@ -213,7 +213,7 @@ export async function createDbUserRepository(db: DbService): Promise<UserReposit
       if (!result.success) {
         return err({
           code: IamErrorCode.REPOSITORY_ERROR,
-          message: `查询用户失败: ${result.error.message}`,
+          message: iamM('iam_queryUserFailed', { params: { message: result.error.message } }),
           cause: result.error,
         })
       }
@@ -234,7 +234,7 @@ export async function createDbUserRepository(db: DbService): Promise<UserReposit
       if (!result.success) {
         return err({
           code: IamErrorCode.REPOSITORY_ERROR,
-          message: `查询用户失败: ${result.error.message}`,
+          message: iamM('iam_queryUserFailed', { params: { message: result.error.message } }),
           cause: result.error,
         })
       }
@@ -255,7 +255,7 @@ export async function createDbUserRepository(db: DbService): Promise<UserReposit
       if (!result.success) {
         return err({
           code: IamErrorCode.REPOSITORY_ERROR,
-          message: `查询用户失败: ${result.error.message}`,
+          message: iamM('iam_queryUserFailed', { params: { message: result.error.message } }),
           cause: result.error,
         })
       }
@@ -276,7 +276,7 @@ export async function createDbUserRepository(db: DbService): Promise<UserReposit
       if (!result.success) {
         return err({
           code: IamErrorCode.REPOSITORY_ERROR,
-          message: `查询用户失败: ${result.error.message}`,
+          message: iamM('iam_queryUserFailed', { params: { message: result.error.message } }),
           cause: result.error,
         })
       }
@@ -288,21 +288,26 @@ export async function createDbUserRepository(db: DbService): Promise<UserReposit
       return ok(rowToUser(result.data[0]))
     },
 
-    async findAll(): Promise<Result<StoredUser[], IamError>> {
-      const result = await db.sql.query<UserRow>(
-        `SELECT * FROM ${TABLE_NAME} ORDER BY created_at DESC`,
-        [],
-      )
+    async findAll(options?: PaginationOptionsInput): Promise<Result<PaginatedResult<StoredUser>, IamError>> {
+      const result = await db.sql.queryPage<UserRow>({
+        sql: `SELECT * FROM ${TABLE_NAME} ORDER BY created_at DESC`,
+        pagination: options,
+      })
 
       if (!result.success) {
         return err({
           code: IamErrorCode.REPOSITORY_ERROR,
-          message: `查询用户列表失败: ${result.error.message}`,
+          message: iamM('iam_queryUserListFailed', { params: { message: result.error.message } }),
           cause: result.error,
         })
       }
 
-      return ok(result.data.map(rowToUser))
+      return ok({
+        items: result.data.items.map(rowToUser),
+        total: result.data.total,
+        page: result.data.page,
+        pageSize: result.data.pageSize,
+      })
     },
 
     async update(id, data): Promise<Result<StoredUser, IamError>> {
@@ -374,7 +379,7 @@ export async function createDbUserRepository(db: DbService): Promise<UserReposit
         if (!current.data) {
           return err({
             code: IamErrorCode.USER_NOT_FOUND,
-            message: getIamMessage('iam_userNotExist'),
+            message: iamM('iam_userNotExist'),
           })
         }
         return ok(current.data)
@@ -393,7 +398,7 @@ export async function createDbUserRepository(db: DbService): Promise<UserReposit
       if (!result.success) {
         return err({
           code: IamErrorCode.REPOSITORY_ERROR,
-          message: `更新用户失败: ${result.error.message}`,
+          message: iamM('iam_updateUserFailed', { params: { message: result.error.message } }),
           cause: result.error,
         })
       }
@@ -401,7 +406,7 @@ export async function createDbUserRepository(db: DbService): Promise<UserReposit
       if (result.data.changes === 0) {
         return err({
           code: IamErrorCode.USER_NOT_FOUND,
-          message: getIamMessage('iam_userNotExist'),
+          message: iamM('iam_userNotExist'),
         })
       }
 
@@ -411,7 +416,7 @@ export async function createDbUserRepository(db: DbService): Promise<UserReposit
       if (!findResult.data) {
         return err({
           code: IamErrorCode.USER_NOT_FOUND,
-          message: getIamMessage('iam_userNotExist'),
+          message: iamM('iam_userNotExist'),
         })
       }
 
@@ -427,7 +432,7 @@ export async function createDbUserRepository(db: DbService): Promise<UserReposit
       if (!result.success) {
         return err({
           code: IamErrorCode.REPOSITORY_ERROR,
-          message: `删除用户失败: ${result.error.message}`,
+          message: iamM('iam_deleteUserFailed', { params: { message: result.error.message } }),
           cause: result.error,
         })
       }
@@ -444,7 +449,7 @@ export async function createDbUserRepository(db: DbService): Promise<UserReposit
       if (!result.success) {
         return err({
           code: IamErrorCode.REPOSITORY_ERROR,
-          message: `查询用户失败: ${result.error.message}`,
+          message: iamM('iam_queryUserFailed', { params: { message: result.error.message } }),
           cause: result.error,
         })
       }
@@ -461,7 +466,7 @@ export async function createDbUserRepository(db: DbService): Promise<UserReposit
       if (!result.success) {
         return err({
           code: IamErrorCode.REPOSITORY_ERROR,
-          message: `查询用户失败: ${result.error.message}`,
+          message: iamM('iam_queryUserFailed', { params: { message: result.error.message } }),
           cause: result.error,
         })
       }

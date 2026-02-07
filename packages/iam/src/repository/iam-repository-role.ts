@@ -9,12 +9,12 @@
  * =============================================================================
  */
 
-import type { Result } from '@hai/core'
+import type { PaginatedResult, PaginationOptionsInput, Result } from '@hai/core'
 import type { DbService } from '@hai/db'
 import type { IamError, Role, RoleRepository } from '../iam-types.js'
 import { err, ok } from '@hai/core'
 import { IamErrorCode } from '../iam-config.js'
-import { getIamMessage } from '../iam-i18n.js'
+import { iamM } from '../iam-i18n.js'
 
 /**
  * 角色表名
@@ -79,7 +79,7 @@ export async function createDbRoleRepository(db: DbService): Promise<RoleReposit
     if (!result.success) {
       return err({
         code: IamErrorCode.REPOSITORY_ERROR,
-        message: `创建角色表失败: ${result.error.message}`,
+        message: iamM('iam_createRoleTableFailed', { params: { message: result.error.message } }),
         cause: result.error,
       })
     }
@@ -101,7 +101,7 @@ export async function createDbRoleRepository(db: DbService): Promise<RoleReposit
     if (!result.success) {
       return err({
         code: IamErrorCode.REPOSITORY_ERROR,
-        message: `查询角色失败: ${result.error.message}`,
+        message: iamM('iam_queryRoleFailed', { params: { message: result.error.message } }),
         cause: result.error,
       })
     }
@@ -112,6 +112,7 @@ export async function createDbRoleRepository(db: DbService): Promise<RoleReposit
 
     return ok(rowToRole(result.data[0]))
   }
+
 
   return {
     async create(role): Promise<Result<Role, IamError>> {
@@ -137,13 +138,13 @@ export async function createDbRoleRepository(db: DbService): Promise<RoleReposit
         if (errorMsg.includes('unique') || errorMsg.includes('duplicate')) {
           return err({
             code: IamErrorCode.ROLE_ALREADY_EXISTS,
-            message: getIamMessage('iam_roleAlreadyExist'),
+            message: iamM('iam_roleAlreadyExist'),
             cause: result.error,
           })
         }
         return err({
           code: IamErrorCode.REPOSITORY_ERROR,
-          message: `创建角色失败: ${result.error.message}`,
+          message: iamM('iam_createRoleFailed', { params: { message: result.error.message } }),
           cause: result.error,
         })
       }
@@ -170,7 +171,7 @@ export async function createDbRoleRepository(db: DbService): Promise<RoleReposit
       if (!result.success) {
         return err({
           code: IamErrorCode.REPOSITORY_ERROR,
-          message: `查询角色失败: ${result.error.message}`,
+          message: iamM('iam_queryRoleFailed', { params: { message: result.error.message } }),
           cause: result.error,
         })
       }
@@ -182,18 +183,26 @@ export async function createDbRoleRepository(db: DbService): Promise<RoleReposit
       return ok(rowToRole(result.data[0]))
     },
 
-    async findAll(): Promise<Result<Role[], IamError>> {
-      const result = await db.sql.query<RoleRow>(`SELECT * FROM ${TABLE_NAME}`)
+    async findAll(options?: PaginationOptionsInput): Promise<Result<PaginatedResult<Role>, IamError>> {
+      const result = await db.sql.queryPage<RoleRow>({
+        sql: `SELECT * FROM ${TABLE_NAME} ORDER BY created_at DESC`,
+        pagination: options,
+      })
 
       if (!result.success) {
         return err({
           code: IamErrorCode.REPOSITORY_ERROR,
-          message: `查询角色失败: ${result.error.message}`,
+          message: iamM('iam_queryRoleFailed', { params: { message: result.error.message } }),
           cause: result.error,
         })
       }
 
-      return ok(result.data.map(rowToRole))
+      return ok({
+        items: result.data.items.map(rowToRole),
+        total: result.data.total,
+        page: result.data.page,
+        pageSize: result.data.pageSize,
+      })
     },
 
     async update(id, data): Promise<Result<Role, IamError>> {
@@ -224,7 +233,7 @@ export async function createDbRoleRepository(db: DbService): Promise<RoleReposit
         if (!current.data) {
           return err({
             code: IamErrorCode.ROLE_NOT_FOUND,
-            message: getIamMessage('iam_roleNotExist'),
+            message: iamM('iam_roleNotExist'),
           })
         }
         return ok(current.data)
@@ -243,7 +252,7 @@ export async function createDbRoleRepository(db: DbService): Promise<RoleReposit
       if (!result.success) {
         return err({
           code: IamErrorCode.REPOSITORY_ERROR,
-          message: `更新角色失败: ${result.error.message}`,
+          message: iamM('iam_updateRoleFailed', { params: { message: result.error.message } }),
           cause: result.error,
         })
       }
@@ -251,7 +260,7 @@ export async function createDbRoleRepository(db: DbService): Promise<RoleReposit
       if (result.data.changes === 0) {
         return err({
           code: IamErrorCode.ROLE_NOT_FOUND,
-          message: getIamMessage('iam_roleNotExist'),
+          message: iamM('iam_roleNotExist'),
         })
       }
 
@@ -261,7 +270,7 @@ export async function createDbRoleRepository(db: DbService): Promise<RoleReposit
       if (!findResult.data) {
         return err({
           code: IamErrorCode.ROLE_NOT_FOUND,
-          message: getIamMessage('iam_roleNotExist'),
+          message: iamM('iam_roleNotExist'),
         })
       }
 
@@ -274,7 +283,7 @@ export async function createDbRoleRepository(db: DbService): Promise<RoleReposit
       if (roleResult.success && roleResult.data?.isSystem) {
         return err({
           code: IamErrorCode.FORBIDDEN,
-          message: getIamMessage('iam_cannotDeleteSystemRole'),
+          message: iamM('iam_cannotDeleteSystemRole'),
         })
       }
 
@@ -286,7 +295,7 @@ export async function createDbRoleRepository(db: DbService): Promise<RoleReposit
       if (!result.success) {
         return err({
           code: IamErrorCode.REPOSITORY_ERROR,
-          message: `删除角色失败: ${result.error.message}`,
+          message: iamM('iam_deleteRoleFailed', { params: { message: result.error.message } }),
           cause: result.error,
         })
       }
@@ -303,7 +312,7 @@ export async function createDbRoleRepository(db: DbService): Promise<RoleReposit
       if (!result.success) {
         return err({
           code: IamErrorCode.REPOSITORY_ERROR,
-          message: `查询角色失败: ${result.error.message}`,
+          message: iamM('iam_queryRoleFailed', { params: { message: result.error.message } }),
           cause: result.error,
         })
       }

@@ -10,11 +10,11 @@
  */
 
 import type { Result } from '@hai/core'
+import type { PasswordConfig } from '../iam-config.js'
 import type {
   AuthStrategy,
   Credentials,
   IamError,
-  PasswordConfig,
   StoredUser,
   User,
   UserRepository,
@@ -22,7 +22,7 @@ import type {
 import { err, ok } from '@hai/core'
 
 import { IamErrorCode, PasswordConfigSchema } from '../iam-config.js'
-import { getIamMessage } from '../iam-i18n.js'
+import { iamM } from '../iam-i18n.js'
 
 /**
  * 密码认证策略配置
@@ -60,42 +60,42 @@ export function createPasswordStrategy(config: PasswordStrategyConfig): AuthStra
     if (password.length < passwordConfig.minLength) {
       return err({
         code: IamErrorCode.PASSWORD_POLICY_VIOLATION,
-        message: getIamMessage('iam_passwordMinLength', { params: { minLength: passwordConfig.minLength } }),
+        message: iamM('iam_passwordMinLength', { params: { minLength: passwordConfig.minLength } }),
       })
     }
 
     if (password.length > passwordConfig.maxLength) {
       return err({
         code: IamErrorCode.PASSWORD_POLICY_VIOLATION,
-        message: getIamMessage('iam_passwordMaxLength', { params: { maxLength: passwordConfig.maxLength } }),
+        message: iamM('iam_passwordMaxLength', { params: { maxLength: passwordConfig.maxLength } }),
       })
     }
 
     if (passwordConfig.requireUppercase && !/[A-Z]/.test(password)) {
       return err({
         code: IamErrorCode.PASSWORD_POLICY_VIOLATION,
-        message: getIamMessage('iam_passwordNeedUppercase'),
+        message: iamM('iam_passwordNeedUppercase'),
       })
     }
 
     if (passwordConfig.requireLowercase && !/[a-z]/.test(password)) {
       return err({
         code: IamErrorCode.PASSWORD_POLICY_VIOLATION,
-        message: getIamMessage('iam_passwordNeedLowercase'),
+        message: iamM('iam_passwordNeedLowercase'),
       })
     }
 
     if (passwordConfig.requireNumber && !/\d/.test(password)) {
       return err({
         code: IamErrorCode.PASSWORD_POLICY_VIOLATION,
-        message: getIamMessage('iam_passwordNeedNumber'),
+        message: iamM('iam_passwordNeedNumber'),
       })
     }
 
     if (passwordConfig.requireSpecialChar && !/[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(password)) {
       return err({
         code: IamErrorCode.PASSWORD_POLICY_VIOLATION,
-        message: getIamMessage('iam_passwordNeedSpecialChar'),
+        message: iamM('iam_passwordNeedSpecialChar'),
       })
     }
 
@@ -153,7 +153,7 @@ export function createPasswordStrategy(config: PasswordStrategyConfig): AuthStra
       if (credentials.type !== 'password') {
         return err({
           code: IamErrorCode.INVALID_CREDENTIALS,
-          message: getIamMessage('iam_credentialTypeMismatch'),
+          message: iamM('iam_credentialTypeMismatch'),
         })
       }
 
@@ -169,7 +169,7 @@ export function createPasswordStrategy(config: PasswordStrategyConfig): AuthStra
       if (!storedUser) {
         return err({
           code: IamErrorCode.USER_NOT_FOUND,
-          message: getIamMessage('iam_userNotExist'),
+          message: iamM('iam_userNotExist'),
         })
       }
 
@@ -177,7 +177,7 @@ export function createPasswordStrategy(config: PasswordStrategyConfig): AuthStra
       if (!storedUser.enabled) {
         return err({
           code: IamErrorCode.USER_DISABLED,
-          message: getIamMessage('iam_accountDisabled'),
+          message: iamM('iam_accountDisabled'),
         })
       }
 
@@ -185,7 +185,7 @@ export function createPasswordStrategy(config: PasswordStrategyConfig): AuthStra
       if (isAccountLocked(storedUser)) {
         return err({
           code: IamErrorCode.USER_LOCKED,
-          message: getIamMessage('iam_accountLocked'),
+          message: iamM('iam_accountLocked'),
         })
       }
 
@@ -193,7 +193,7 @@ export function createPasswordStrategy(config: PasswordStrategyConfig): AuthStra
       if (!storedUser.passwordHash) {
         return err({
           code: IamErrorCode.INVALID_CREDENTIALS,
-          message: getIamMessage('iam_accountNoPassword'),
+          message: iamM('iam_accountNoPassword'),
         })
       }
 
@@ -219,7 +219,7 @@ export function createPasswordStrategy(config: PasswordStrategyConfig): AuthStra
 
         return err({
           code: IamErrorCode.INVALID_CREDENTIALS,
-          message: getIamMessage('iam_passwordWrong'),
+          message: iamM('iam_passwordWrong'),
         })
       }
 
@@ -227,7 +227,7 @@ export function createPasswordStrategy(config: PasswordStrategyConfig): AuthStra
       if (isPasswordExpired(storedUser)) {
         return err({
           code: IamErrorCode.PASSWORD_EXPIRED,
-          message: getIamMessage('iam_passwordExpired'),
+          message: iamM('iam_passwordExpired'),
         })
       }
 

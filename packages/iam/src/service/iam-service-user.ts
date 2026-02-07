@@ -10,11 +10,11 @@
  * =============================================================================
  */
 
-import type { Result } from '@hai/core'
+import type { PaginatedResult, PaginationOptionsInput, Result } from '@hai/core'
 import type { IamConfig } from '../iam-config.js'
 import type {
-  AuthzManager,
   AgreementDisplay,
+  AuthzManager,
   IamError,
   RegisterOptions,
   RegisterResult,
@@ -28,7 +28,7 @@ import type { PasswordStrategy } from '../strategy/index.js'
 import { err, ok } from '@hai/core'
 
 import { AgreementConfigSchema, IamErrorCode, RegisterConfigSchema } from '../iam-config.js'
-import { getIamMessage } from '../iam-i18n.js'
+import { iamM } from '../iam-i18n.js'
 import { verifyPassword } from './iam-service-initializer.js'
 
 /**
@@ -105,7 +105,7 @@ export function createUserOperations(deps: UserServiceDeps): UserOperations {
       if (!registerConfig.enabled) {
         return err({
           code: IamErrorCode.REGISTER_DISABLED,
-          message: getIamMessage('iam_registerDisabled'),
+          message: iamM('iam_registerDisabled'),
         })
       }
 
@@ -120,7 +120,7 @@ export function createUserOperations(deps: UserServiceDeps): UserOperations {
       if (existsResult.success && existsResult.data) {
         return err({
           code: IamErrorCode.USER_ALREADY_EXISTS,
-          message: getIamMessage('iam_usernameAlreadyExist'),
+          message: iamM('iam_usernameAlreadyExist'),
         })
       }
 
@@ -130,7 +130,7 @@ export function createUserOperations(deps: UserServiceDeps): UserOperations {
         if (emailExistsResult.success && emailExistsResult.data) {
           return err({
             code: IamErrorCode.USER_ALREADY_EXISTS,
-            message: getIamMessage('iam_emailAlreadyUsed'),
+            message: iamM('iam_emailAlreadyUsed'),
           })
         }
       }
@@ -187,7 +187,7 @@ export function createUserOperations(deps: UserServiceDeps): UserOperations {
       if (!userResult.data) {
         return err({
           code: IamErrorCode.USER_NOT_FOUND,
-          message: getIamMessage('iam_userNotExist'),
+          message: iamM('iam_userNotExist'),
         })
       }
 
@@ -203,13 +203,19 @@ export function createUserOperations(deps: UserServiceDeps): UserOperations {
       return ok(userResult.data ? toUser(userResult.data) : null)
     },
 
-    async listUsers(): Promise<Result<User[], IamError>> {
-      const usersResult = await userRepository.findAll()
+    async listUsers(options?: PaginationOptionsInput): Promise<Result<PaginatedResult<User>, IamError>> {
+      const usersResult = await userRepository.findAll(options)
       if (!usersResult.success) {
-        return usersResult as Result<User[], IamError>
+        return usersResult as Result<PaginatedResult<User>, IamError>
       }
 
-      return ok(usersResult.data.map(toUser))
+      const items = usersResult.data.items.map(toUser)
+      return ok({
+        items,
+        total: usersResult.data.total,
+        page: usersResult.data.page,
+        pageSize: usersResult.data.pageSize,
+      })
     },
 
     async updateUser(userId: string, data: Partial<User>): Promise<Result<User, IamError>> {
@@ -227,7 +233,7 @@ export function createUserOperations(deps: UserServiceDeps): UserOperations {
       if (!userResult.success || !userResult.data) {
         return err({
           code: IamErrorCode.USER_NOT_FOUND,
-          message: getIamMessage('iam_userNotExist'),
+          message: iamM('iam_userNotExist'),
         })
       }
 
@@ -237,7 +243,7 @@ export function createUserOperations(deps: UserServiceDeps): UserOperations {
       if (!user.passwordHash) {
         return err({
           code: IamErrorCode.INVALID_CREDENTIALS,
-          message: getIamMessage('iam_accountNoPassword'),
+          message: iamM('iam_accountNoPassword'),
         })
       }
 
@@ -245,7 +251,7 @@ export function createUserOperations(deps: UserServiceDeps): UserOperations {
       if (!verifyResult.success || !verifyResult.data) {
         return err({
           code: IamErrorCode.INVALID_CREDENTIALS,
-          message: getIamMessage('iam_originalPasswordWrong'),
+          message: iamM('iam_originalPasswordWrong'),
         })
       }
 
@@ -279,7 +285,7 @@ export function createUserOperations(deps: UserServiceDeps): UserOperations {
       // TODO: 实现密码重置确认
       return err({
         code: IamErrorCode.INTERNAL_ERROR,
-        message: getIamMessage('iam_featureNotImplemented'),
+        message: iamM('iam_featureNotImplemented'),
       })
     },
 

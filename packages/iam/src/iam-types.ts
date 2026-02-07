@@ -42,6 +42,7 @@ export * from './iam-type-authz.js'
 // OAuth 相关类型
 export * from './iam-type-oauth.js'
 
+
 // 存储接口类型
 export * from './iam-type-repository.js'
 

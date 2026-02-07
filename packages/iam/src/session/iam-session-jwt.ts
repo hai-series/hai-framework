@@ -10,10 +10,10 @@
  */
 
 import type { Result } from '@hai/core'
+import type { JwtConfig } from '../iam-config.js'
 import type {
   CreateSessionOptions,
   IamError,
-  JwtConfig,
   RefreshResult,
   Session,
   SessionManager,
@@ -23,7 +23,7 @@ import { err, ok } from '@hai/core'
 import * as jose from 'jose'
 
 import { IamErrorCode, JwtConfigSchema } from '../iam-config.js'
-import { getIamMessage } from '../iam-i18n.js'
+import { iamM } from '../iam-i18n.js'
 
 /**
  * JWT 会话管理器配置
@@ -47,6 +47,66 @@ export function createJwtSessionManager(config: JwtSessionConfig): SessionManage
    */
   function generateId(): string {
     return crypto.randomUUID()
+  }
+
+  /**
+   * 构建令牌载荷
+   */
+  function buildTokenPayload(payload: jose.JWTPayload): TokenPayload {
+    return {
+      sub: payload.sub as string,
+      username: payload.username as string | undefined,
+      sid: payload.sid as string | undefined,
+      iat: payload.iat as number,
+      exp: payload.exp as number,
+      iss: payload.iss as string | undefined,
+      aud: payload.aud as string | undefined,
+      type: payload.type as 'access' | 'refresh' | undefined,
+    }
+  }
+
+  /**
+   * 构建会话数据
+   */
+  function buildSession(options: CreateSessionOptions, sessionId: string, now: Date, accessToken: string, refreshToken: string, refreshExpiresIn: number): Session {
+    return {
+      id: sessionId,
+      userId: options.userId,
+      accessToken,
+      refreshToken,
+      userAgent: options.userAgent,
+      ipAddress: options.ipAddress,
+      createdAt: now,
+      lastActiveAt: now,
+      expiresAt: new Date(now.getTime() + refreshExpiresIn * 1000),
+      data: options.data,
+    }
+  }
+
+  /**
+   * 从载荷构建会话
+   */
+  function buildSessionFromPayload(payload: TokenPayload, accessToken: string, now: Date): Session {
+    return {
+      id: payload.sid || '',
+      userId: payload.sub,
+      accessToken,
+      createdAt: new Date(payload.iat * 1000),
+      lastActiveAt: now,
+      expiresAt: new Date(payload.exp * 1000),
+    }
+  }
+
+  /**
+   * 构建刷新结果
+   */
+  function buildRefreshResult(now: Date, accessToken: string, refreshToken: string, accessExpiresIn: number, refreshExpiresIn: number): RefreshResult {
+    return {
+      accessToken,
+      refreshToken,
+      accessTokenExpiresAt: new Date(now.getTime() + accessExpiresIn * 1000),
+      refreshTokenExpiresAt: new Date(now.getTime() + refreshExpiresIn * 1000),
+    }
   }
 
   /**
@@ -86,28 +146,20 @@ export function createJwtSessionManager(config: JwtSessionConfig): SessionManage
 
       const { payload } = await jose.jwtVerify(token, secretKey, options)
 
-      return ok({
-        sub: payload.sub as string,
-        username: payload.username as string | undefined,
-        sid: payload.sid as string | undefined,
-        iat: payload.iat as number,
-        exp: payload.exp as number,
-        iss: payload.iss as string | undefined,
-        aud: payload.aud as string | undefined,
-        type: payload.type as 'access' | 'refresh' | undefined,
-      })
+      const tokenPayload = buildTokenPayload(payload)
+      return ok(tokenPayload)
     }
     catch (error) {
       if (error instanceof jose.errors.JWTExpired) {
         return err({
           code: IamErrorCode.TOKEN_EXPIRED,
-          message: getIamMessage('iam_tokenExpired'),
+          message: iamM('iam_tokenExpired'),
           cause: error,
         })
       }
       return err({
         code: IamErrorCode.TOKEN_INVALID,
-        message: getIamMessage('iam_tokenInvalid'),
+        message: iamM('iam_tokenInvalid'),
         cause: error,
       })
     }
@@ -133,25 +185,13 @@ export function createJwtSessionManager(config: JwtSessionConfig): SessionManage
           refreshExpiresIn,
         )
 
-        const session: Session = {
-          id: sessionId,
-          userId: options.userId,
-          accessToken,
-          refreshToken,
-          userAgent: options.userAgent,
-          ipAddress: options.ipAddress,
-          createdAt: now,
-          lastActiveAt: now,
-          expiresAt: new Date(now.getTime() + refreshExpiresIn * 1000),
-          data: options.data,
-        }
-
+        const session = buildSession(options, sessionId, now, accessToken, refreshToken, refreshExpiresIn)
         return ok(session)
       }
       catch (error) {
         return err({
           code: IamErrorCode.SESSION_CREATE_FAILED,
-          message: getIamMessage('iam_createSessionFailed'),
+          message: iamM('iam_createSessionFailed'),
           cause: error,
         })
       }
@@ -172,15 +212,7 @@ export function createJwtSessionManager(config: JwtSessionConfig): SessionManage
       const now = new Date()
 
       // 从 JWT 重建会话信息
-      const session: Session = {
-        id: payload.sid || '',
-        userId: payload.sub,
-        accessToken,
-        createdAt: new Date(payload.iat * 1000),
-        lastActiveAt: now,
-        expiresAt: new Date(payload.exp * 1000),
-      }
-
+      const session = buildSessionFromPayload(payload, accessToken, now)
       return ok(session)
     },
 
@@ -198,7 +230,7 @@ export function createJwtSessionManager(config: JwtSessionConfig): SessionManage
       if (payload.type !== 'refresh') {
         return err({
           code: IamErrorCode.TOKEN_INVALID,
-          message: getIamMessage('iam_invalidRefreshToken'),
+          message: iamM('iam_invalidRefreshToken'),
         })
       }
 
@@ -217,17 +249,13 @@ export function createJwtSessionManager(config: JwtSessionConfig): SessionManage
           refreshExpiresIn,
         )
 
-        return ok({
-          accessToken: newAccessToken,
-          refreshToken: newRefreshToken,
-          accessTokenExpiresAt: new Date(now.getTime() + accessExpiresIn * 1000),
-          refreshTokenExpiresAt: new Date(now.getTime() + refreshExpiresIn * 1000),
-        })
+        const refreshResult = buildRefreshResult(now, newAccessToken, newRefreshToken, accessExpiresIn, refreshExpiresIn)
+        return ok(refreshResult)
       }
       catch (error) {
         return err({
           code: IamErrorCode.TOKEN_REFRESH_FAILED,
-          message: getIamMessage('iam_refreshTokenFailed'),
+          message: iamM('iam_refreshTokenFailed'),
           cause: error,
         })
       }

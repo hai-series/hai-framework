@@ -7,11 +7,14 @@
  * - 会话类型（Session）
  * - 令牌类型（TokenPayload）
  * - 认证结果（AuthResult、RefreshResult）
+ * - 会话映射存储接口（SessionMappingRepository）
  *
  * @module iam-type-session
  * =============================================================================
  */
 
+import type { Result } from '@hai/core'
+import type { IamError } from './iam-type-service.js'
 import type { AgreementDisplay, User } from './iam-type-user.js'
 
 // =============================================================================
@@ -122,4 +125,58 @@ export interface CreateSessionOptions {
   maxAge?: number
   /** 扩展数据 */
   data?: Record<string, unknown>
+}
+
+// =============================================================================
+// 会话映射存储接口
+// =============================================================================
+
+/**
+ * 会话映射存储接口
+ */
+export interface SessionMappingRepository {
+  /**
+   * 存储会话
+   */
+  set: (sessionId: string, session: Session, ttl: number) => Promise<Result<void, IamError>>
+
+  /**
+   * 获取会话
+   */
+  get: (sessionId: string) => Promise<Result<Session | null, IamError>>
+
+  /**
+   * 通过令牌获取会话 ID
+   */
+  getSessionIdByToken: (token: string) => Promise<Result<string | null, IamError>>
+
+  /**
+   * 存储令牌到会话 ID 的映射
+   */
+  setTokenMapping: (token: string, sessionId: string, ttl: number) => Promise<Result<void, IamError>>
+
+  /**
+   * 删除令牌映射
+   */
+  deleteTokenMapping: (token: string) => Promise<Result<void, IamError>>
+
+  /**
+   * 删除会话
+   */
+  delete: (sessionId: string) => Promise<Result<void, IamError>>
+
+  /**
+   * 获取用户的所有会话 ID
+   */
+  getUserSessionIds: (userId: string) => Promise<Result<string[], IamError>>
+
+  /**
+   * 添加用户会话映射
+   */
+  addUserSession: (userId: string, sessionId: string) => Promise<Result<void, IamError>>
+
+  /**
+   * 移除用户会话映射
+   */
+  removeUserSession: (userId: string, sessionId: string) => Promise<Result<void, IamError>>
 }
