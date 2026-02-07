@@ -18,6 +18,7 @@ import type {
   CrudPageOptions,
   CrudQueryOptions,
   CrudRepository,
+  DataOperations,
   DbError,
   DbService,
   ExecuteResult,
@@ -38,6 +39,8 @@ import { dbM } from '../db-i18n.js'
 export abstract class BaseCrudRepository<TItem> implements CrudRepository<TItem> {
   /** 底层 CRUD 仓库实例（由子类传入） */
   protected readonly crud: CrudRepository<TItem>
+  /** 数据库服务（用于选择 crud/tx） */
+  protected readonly db: DbService
   private readonly fields: CrudFieldDefinition[]
   private readonly idField?: string
   private readonly idColumn: string
@@ -55,6 +58,7 @@ export abstract class BaseCrudRepository<TItem> implements CrudRepository<TItem>
    * @param config - BaseCrudRepository 配置
    */
   protected constructor(db: DbService, config: BaseCrudRepositoryConfig<TItem>) {
+    this.db = db
     this.dbType = db.config?.type
     this.fields = config.fields
     this.idColumn = config.idColumn ?? 'id'
@@ -87,6 +91,18 @@ export abstract class BaseCrudRepository<TItem> implements CrudRepository<TItem>
       updateColumns: this.updateColumns,
       mapRow: row => this.mapRow(row),
     })
+  }
+
+  /**
+   * 获取 SQL 操作对象（自动选择 db.sql 或 tx）
+   *
+   * 当传入事务句柄时，自动使用事务内 DataOperations；否则使用 db.sql。
+   *
+   * @param tx - 可选事务句柄
+   * @returns DataOperations 实例
+   */
+  protected sql(tx?: TxHandle): DataOperations {
+    return tx ?? this.db.sql
   }
 
   /**

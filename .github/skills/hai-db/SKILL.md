@@ -34,12 +34,14 @@ description: 使用 @hai/db 进行 SQLite/PostgreSQL/MySQL 的初始化、SQL/DD
    - DDL：`db.ddl`（建表/索引/字段变更）。
    - SQL：`db.sql`（`query/get/execute/batch/queryPage`）。
    - CRUD：`db.crud.table(config)` 或继承 `BaseCrudRepository`。
+  - BaseCrudRepository：`sql(tx?)` 返回 `DataOperations`（`db.sql` 或 `tx`）。
    - 事务：`db.tx.wrap(fn)` 或 `db.tx.begin()`。
    - 分页：`db.pagination.normalize/build`。
 
 3. **CRUD 与事务的正确组合**
    - 所有 CRUD 方法支持传入 `tx` 句柄（同一事务内跨仓库操作）。
    - `BaseCrudRepository` 适用于业务仓库封装，字段映射应完整声明。
+  - 自定义 SQL 时优先使用 `this.sql(tx)` 自动选择 `db.sql` 或 `tx`。
 
 4. **SQL 规则与参数**
    - 参数占位符统一使用 `?`。

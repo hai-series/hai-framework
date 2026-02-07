@@ -142,6 +142,17 @@ class UserRepository extends BaseCrudRepository<UserRow> {
   async findByEmail(email: string) {
     return this.findAll({ where: 'email = ?', params: [email], limit: 1 })
   }
+
+  async insertRaw(data: { name: string, email: string, enabled?: boolean }, tx?: import('../src/index.js').TxHandle) {
+    const isSqlite = db.config?.type === 'sqlite'
+    const now = isSqlite ? Date.now() : new Date()
+    const enabledValue = data.enabled ?? true
+    const normalizedEnabled = isSqlite ? (enabledValue ? 1 : 0) : enabledValue
+    return this.sql(tx).execute(
+      'INSERT INTO users (name, email, enabled, created_at, updated_at) VALUES (?, ?, ?, ?, ?)',
+      [data.name, data.email, normalizedEnabled, now, now],
+    )
+  }
 }
 
 class ApiKeyRepository extends BaseCrudRepository<ApiKeyRow> {
@@ -297,6 +308,30 @@ describe('db.BaseCrudRepository', () => {
       expect(rollbackResult.success).toBe(true)
 
       const afterCount = await userRepo.count()
+      expect(afterCount.success).toBe(true)
+      if (afterCount.success) {
+        expect(afterCount.data).toBe(0)
+      }
+    })
+
+    it(`${label}: sql helper should route to tx crud when provided`, async () => {
+      await ensureTable()
+      const repo = new UserRepository()
+
+      const txResult = await db.tx.begin()
+      expect(txResult.success).toBe(true)
+      if (!txResult.success) {
+        return
+      }
+
+      const tx = txResult.data
+      const createResult = await repo.insertRaw({ name: '用户TX2', email: 'tx2@test.com' }, tx)
+      expect(createResult.success).toBe(true)
+
+      const rollbackResult = await tx.rollback()
+      expect(rollbackResult.success).toBe(true)
+
+      const afterCount = await repo.count()
       expect(afterCount.success).toBe(true)
       if (afterCount.success) {
         expect(afterCount.data).toBe(0)
