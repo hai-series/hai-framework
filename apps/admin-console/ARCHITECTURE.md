@@ -58,7 +58,7 @@
 
 ### @hai/iam 身份认证
 
-- Auth: login, logout, refreshToken, validateSession
+- Auth: login, logout, validateSession
 - User: register, getById, update, delete, list, changePassword, resetPassword
 - Role: create, update, delete, list, assignToUser, removeFromUser
 - Permission: create, update, delete, list, assignToRole, removeFromRole

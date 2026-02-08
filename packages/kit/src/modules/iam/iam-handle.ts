@@ -77,16 +77,11 @@ export function createIamHandle(config: IamHandleConfig): Handle {
         const result = await iam.session.verifyToken(sessionToken)
 
         if (result.success && result.data) {
-          const payload = result.data
-
-          // 获取完整会话
-          const sessionResult = await iam.session.getByToken(sessionToken)
-
+          const sessionResult = await iam.session.get(sessionToken)
           if (sessionResult.success && sessionResult.data) {
             locals.session = sessionResult.data
 
-            // 获取用户信息
-            const userResult = await iam.user.getById(payload.userId)
+            const userResult = await iam.user.getById(result.data.userId)
             if (userResult.success && userResult.data) {
               locals.user = userResult.data
             }
@@ -135,9 +130,13 @@ export async function requireRole(
 ): Promise<IamLocals> {
   const locals = requireAuth(event)
 
-  const result = await config.iam.authz.hasRole({ userId: locals.user!.id }, roleId)
+  if (locals.session?.roles?.includes(roleId)) {
+    return locals
+  }
 
-  if (!result.success || !result.data) {
+  const rolesResult = await config.iam.authz.getUserRoles(locals.user!.id)
+  const roles = rolesResult.success ? (rolesResult.data ?? []) : []
+  if (!rolesResult.success || !roles.some(role => role.id === roleId)) {
     throw new Response('Forbidden', { status: 403 })
   }
 

@@ -83,21 +83,21 @@ export function createIamActions(config: IamActionsConfig) {
 
       const user = authResult.data
 
-      // 获取客户端 IP（开发环境可能不可用）
-      let ipAddress: string | undefined
-      try {
-        ipAddress = event.getClientAddress()
+      const rolesResult = await iam.authz.getUserRoles(user.id)
+      if (!rolesResult.success || !rolesResult.data) {
+        return fail(500, {
+          error: getKitMessage('kit_sessionCreateFailed'),
+          username,
+        })
       }
-      catch {
-        ipAddress = undefined
-      }
+      const roles = rolesResult.data.map(role => role.id)
 
       // 创建会话
       const sessionResult = await iam.session.create({
         userId: user.id,
-        userAgent: event.request.headers.get('user-agent') || undefined,
-        ipAddress,
-        expiresIn: rememberMe ? rememberMeMaxAge : sessionMaxAge,
+        roles,
+        source: 'pc',
+        maxAge: rememberMe ? rememberMeMaxAge : sessionMaxAge,
       })
 
       if (!sessionResult.success || !sessionResult.data) {
@@ -130,10 +130,10 @@ export function createIamActions(config: IamActionsConfig) {
             updatedAt: new Date(),
           },
           session: {
-            id: session.id,
             userId: user.id,
+            roles,
+            source: session.source,
             accessToken: session.accessToken,
-            refreshToken: session.refreshToken,
             expiresAt: session.expiresAt,
             createdAt: new Date(),
           },
@@ -153,9 +153,9 @@ export function createIamActions(config: IamActionsConfig) {
 
       if (sessionToken) {
         // 获取并删除会话
-        const sessionResult = await iam.session.getByToken(sessionToken)
+        const sessionResult = await iam.session.get(sessionToken)
         if (sessionResult.success && sessionResult.data) {
-          await iam.session.delete(sessionResult.data.id)
+          await iam.session.delete(sessionResult.data.accessToken)
         }
 
         // 清除 Cookie

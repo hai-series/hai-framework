@@ -314,14 +314,13 @@ const result = await auth.register({
 // 登录
 const result = await auth.login('user@example.com', 'password123')
 if (result.ok) {
-  const { user, accessToken, refreshToken } = result.value
+  const { user, accessToken } = result.value
 }
 
 // 验证 Token
 const user = await auth.verify(accessToken)
 
 // 刷新 Token
-const newTokens = await auth.refresh(refreshToken)
 
 // 登出
 await auth.logout(userId)

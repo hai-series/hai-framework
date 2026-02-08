@@ -16,7 +16,7 @@ function createMockIam() {
   return {
     session: {
       verifyToken: vi.fn(),
-      getByToken: vi.fn(),
+      get: vi.fn(),
       create: vi.fn(),
       delete: vi.fn(),
     },
@@ -28,8 +28,8 @@ function createMockIam() {
       authenticate: vi.fn(),
     },
     authz: {
-      hasRole: vi.fn(),
       checkPermission: vi.fn(),
+      getUserRoles: vi.fn(),
     },
   }
 }
@@ -116,11 +116,17 @@ describe('createIamHandle', () => {
   it('应该验证有效的会话令牌', async () => {
     mockIam.session.verifyToken.mockResolvedValue({
       success: true,
-      data: { userId: 'user-1' },
+      data: {
+        userId: 'user-1',
+        roles: [],
+        accessToken: 'valid-token',
+        expiresAt: new Date(),
+        createdAt: new Date(),
+      },
     })
-    mockIam.session.getByToken.mockResolvedValue({
+    mockIam.session.get.mockResolvedValue({
       success: true,
-      data: { id: 'session-1', userId: 'user-1' },
+      data: { userId: 'user-1', roles: [], accessToken: 'valid-token', expiresAt: new Date(), createdAt: new Date() },
     })
     mockIam.user.getById.mockResolvedValue({
       success: true,
@@ -195,11 +201,17 @@ describe('createIamHandle', () => {
   it('应该使用自定义 Cookie 名称', async () => {
     mockIam.session.verifyToken.mockResolvedValue({
       success: true,
-      data: { userId: 'user-1' },
+      data: {
+        userId: 'user-1',
+        roles: [],
+        accessToken: 'valid-token',
+        expiresAt: new Date(),
+        createdAt: new Date(),
+      },
     })
-    mockIam.session.getByToken.mockResolvedValue({
+    mockIam.session.get.mockResolvedValue({
       success: true,
-      data: { id: 'session-1', userId: 'user-1' },
+      data: { userId: 'user-1', roles: [], accessToken: 'valid-token', expiresAt: new Date(), createdAt: new Date() },
     })
     mockIam.user.getById.mockResolvedValue({
       success: true,
@@ -225,7 +237,7 @@ describe('createIamHandle', () => {
 describe('requireAuth', () => {
   it('应该返回已认证的 locals', () => {
     const event = createMockEvent('/api/data')
-    ;(event.locals as IamLocals).session = { id: 'session-1' } as any
+    ;(event.locals as IamLocals).session = { userId: 'session-user', roles: [], accessToken: 'token', expiresAt: new Date(), createdAt: new Date() } as any
     ;(event.locals as IamLocals).user = { id: 'user-1' } as any
 
     const result = requireAuth(event)
