@@ -44,7 +44,7 @@ import { createRequire } from 'node:module'
 
 import { err, ok } from '@hai/core'
 
-import { createCrud } from '../crud/db-crud-kernal.js'
+import { createCrud } from '../crud/db-crud-kernel.js'
 import { DbErrorCode } from '../db-config.js'
 import { dbM } from '../db-i18n.js'
 import { buildPaginatedResult, normalizePagination } from '../db-pagination.js'
