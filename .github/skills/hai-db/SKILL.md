@@ -20,7 +20,7 @@ description: 使用 @hai/db 进行 SQLite/PostgreSQL/MySQL 的初始化、SQL/DD
 - `packages/db/SKILLS.md`
 - `packages/db/src/db-main.ts`
 - `packages/db/src/db-types.ts`
-- `packages/db/src/crud/db-crud-kernal.ts`
+- `packages/db/src/crud/db-crud-kernel.ts`
 - `packages/db/src/crud/db-crud-repository.ts`
 - `packages/db/src/db-pagination.ts`
 

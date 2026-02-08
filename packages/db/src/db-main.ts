@@ -71,7 +71,7 @@ import type {
 
 import { err } from '@hai/core'
 
-import { createCrud } from './crud/db-crud-kernal.js'
+import { createCrud } from './crud/db-crud-kernel.js'
 import { DbConfigSchema, DbErrorCode } from './db-config.js'
 import { dbM } from './db-i18n.js'
 import { pagination } from './db-pagination.js'

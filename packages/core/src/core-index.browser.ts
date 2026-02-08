@@ -35,18 +35,14 @@
  * =============================================================================
  */
 
+// 配置类型与错误码（CommonErrorCode, ConfigErrorCode, CoreConfigSchema 等）
+export * from './config/index.js'
+
 // Core 聚合服务（包含 logger, id, type, object, string, array, async, time）
 export * from './core-main.browser.js'
 
 // 类型定义（Result, Logger 等）
 export * from './core-types.js'
 
-// i18n 类型导出
-export type {
-  InterpolationParams,
-  Locale,
-  LocaleInfo,
-  LocaleMessages,
-  MessageDictionary,
-  MessageOptions,
-} from './i18n/index.js'
+// i18n 公共类型导出
+export * from './i18n/core-i18n-types.js'
