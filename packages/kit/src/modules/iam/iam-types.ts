@@ -26,16 +26,15 @@ export interface IamServiceLike {
   session: {
     create: (options: {
       userId: string
-      userAgent?: string
-      ipAddress?: string
-      expiresIn?: number
+      roles: string[]
+      source?: string
+      maxAge?: number
     }) => Promise<{
       success: boolean
       data?: {
-        id: string
         accessToken: string
-        refreshToken?: string
         expiresAt: Date
+        source?: string
       }
       error?: { code: number, message: string }
     }>
@@ -44,14 +43,9 @@ export interface IamServiceLike {
       data?: SessionData | null
       error?: { code: number, message: string }
     }>
-    getByToken: (token: string) => Promise<{
-      success: boolean
-      data?: SessionData | null
-      error?: { code: number, message: string }
-    }>
     verifyToken: (token: string) => Promise<{
       success: boolean
-      data?: { userId: string, sessionId: string, exp: number }
+      data?: SessionData
       error?: { code: number, message: string }
     }>
     delete: (sessionId: string) => Promise<{
@@ -84,20 +78,17 @@ export interface IamServiceLike {
     }>
   }
   authz: {
-    hasRole: (
-      ctx: { userId: string },
-      roleId: string,
-    ) => Promise<{
-      success: boolean
-      data?: boolean
-      error?: { code: number, message: string }
-    }>
     checkPermission: (
       ctx: { userId: string },
       permission: string,
     ) => Promise<{
       success: boolean
       data?: boolean
+      error?: { code: number, message: string }
+    }>
+    getUserRoles: (userId: string) => Promise<{
+      success: boolean
+      data?: Array<{ id: string, code: string }>
       error?: { code: number, message: string }
     }>
   }
@@ -121,13 +112,11 @@ export interface UserData {
  * 会话数据
  */
 export interface SessionData {
-  id: string
   userId: string
+  roles: string[]
+  source?: string
   accessToken: string
-  refreshToken?: string
   expiresAt: Date
-  userAgent?: string
-  ipAddress?: string
   createdAt: Date
 }
 

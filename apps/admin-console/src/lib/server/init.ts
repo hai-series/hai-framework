@@ -26,7 +26,9 @@
  * =============================================================================
  */
 
+import type { CacheConfigInput } from '@hai/cache'
 import type { IamConfig } from '@hai/iam'
+import { cache } from '@hai/cache'
 import { core } from '@hai/core'
 import { db } from '@hai/db'
 import { iam } from '@hai/iam'
@@ -114,6 +116,7 @@ export async function initApp(): Promise<void> {
 
   // 2. 获取配置
   const dbConfig = core.config.getOrThrow<DbConfigInput>('db')
+  const cacheConfig = core.config.getOrThrow<CacheConfigInput>('cache')
   const iamConfig = core.config.getOrThrow<IamConfig>('iam')
 
   // 3. 确保数据目录存在
@@ -130,8 +133,14 @@ export async function initApp(): Promise<void> {
     throw new Error(getMessage('server_init_db_failed', { message: dbResult.error.message }))
   }
 
-  // 5. 初始化 IAM 模块
-  const iamResult = await iam.init(db, iamConfig)
+  // 5. 初始化缓存
+  const cacheResult = await cache.init(cacheConfig)
+  if (!cacheResult.success) {
+    throw new Error(getMessage('server_init_cache_failed', { message: cacheResult.error.message }))
+  }
+
+  // 6. 初始化 IAM 模块
+  const iamResult = await iam.init(db, iamConfig, { cache })
   if (!iamResult.success) {
     const cause = iamResult.error.cause
     const causeMsg = cause instanceof Error ? cause.message : String(cause)
@@ -142,7 +151,7 @@ export async function initApp(): Promise<void> {
     throw new Error(fullMessage)
   }
 
-  // 6. 创建业务表
+  // 7. 创建业务表
   await createBusinessTables()
 
   initialized = true
