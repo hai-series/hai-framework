@@ -100,19 +100,35 @@ const ROLE_FIELDS: CrudFieldDefinition[] = [
   },
 ]
 
-/**
- * 创建数据库角色存储
- */
-let roleRepositorySingleton: RoleRepository | null = null
+/** 角色存储单例缓存（通过 db.config 引用比较检测 db 重新初始化） */
+let roleRepoInstance: RoleRepository | null = null
+let roleRepoDbConfig: unknown = null
 
+/**
+ * 创建基于数据库的角色存储实例
+ *
+ * 单例模式：同一 db 生命周期内重复调用返回缓存实例，
+ * db 重新初始化后自动创建新实例。
+ *
+ * @param db - 数据库服务实例
+ * @returns 角色存储接口实现
+ */
 export async function createDbRoleRepository(db: DbService): Promise<RoleRepository> {
-  if (roleRepositorySingleton) {
-    return roleRepositorySingleton
-  }
-  roleRepositorySingleton = new DbRoleRepository(db)
-  return roleRepositorySingleton
+  if (roleRepoInstance && roleRepoDbConfig === db.config)
+    return roleRepoInstance
+
+  const repo = new DbRoleRepository(db)
+  await repo.count()
+  roleRepoInstance = repo
+  roleRepoDbConfig = db.config
+  return repo
 }
 
+/**
+ * 基于数据库的角色存储实现
+ *
+ * 继承 BaseCrudRepository，提供按 code 查找角色的能力。
+ */
 class DbRoleRepository extends BaseCrudRepository<Role> implements RoleRepository {
   constructor(db: DbService) {
     super(db, {
@@ -121,6 +137,7 @@ class DbRoleRepository extends BaseCrudRepository<Role> implements RoleRepositor
     })
   }
 
+  /** 根据角色代码查找角色 */
   async findByCode(code: string): Promise<Result<Role | null, IamError>> {
     return this.findOneBy('code = ?', [code])
   }

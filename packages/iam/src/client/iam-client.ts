@@ -4,7 +4,7 @@
  * =============================================================================
  *
  * 提供前端通过 HTTP API 调用 IAM 服务的客户端实现。
- * 支持认证、用户管理、令牌刷新等操作。
+ * 支持认证与用户管理等操作。
  *
  * @example
  * ```ts
@@ -53,8 +53,6 @@ export interface IamClientPaths {
   sendOtp?: string
   /** 登出路径 */
   logout?: string
-  /** 刷新令牌路径 */
-  refresh?: string
   /** 注册路径 */
   register?: string
   /** 获取当前用户路径 */
@@ -73,7 +71,6 @@ const DEFAULT_PATHS: Required<IamClientPaths> = {
   loginWithOtp: '/auth/login/otp',
   sendOtp: '/auth/otp/send',
   logout: '/auth/logout',
-  refresh: '/auth/refresh',
   register: '/user/register',
   currentUser: '/user/me',
   changePassword: '/user/password',
@@ -116,8 +113,6 @@ export interface IamClientError {
 export interface AuthTokens {
   /** 访问令牌 */
   accessToken: string
-  /** 刷新令牌 */
-  refreshToken?: string
   /** 过期时间 */
   expiresAt?: Date
 }
@@ -166,8 +161,6 @@ export interface LoginResult {
   user: UserInfo
   /** 访问令牌 */
   accessToken: string
-  /** 刷新令牌 */
-  refreshToken?: string
   /** 过期时间 */
   expiresAt: Date
   /** 协议展示信息（可选） */
@@ -261,8 +254,6 @@ export interface IamClient {
   sendOtp: (identifier: string) => Promise<Result<{ expiresAt: Date }, IamClientError>>
   /** 登出 */
   logout: () => Promise<Result<void, IamClientError>>
-  /** 刷新令牌 */
-  refreshToken: (refreshToken: string) => Promise<Result<AuthTokens, IamClientError>>
 
   // 用户操作
   /** 注册 */
@@ -284,7 +275,10 @@ export interface IamClient {
 /**
  * 创建 IAM 客户端
  *
- * @param config - 客户端配置
+ * 提供通过 HTTP API 调用 IAM 服务的客户端实现。
+ * 支持自动附加认证头、令牌刷新回调、认证失败回调等能力。
+ *
+ * @param config - 客户端配置（基础路径、路径映射、令牌获取等）
  * @returns IAM 客户端实例
  */
 export function createIamClient(config: IamClientConfig): IamClient {
@@ -293,7 +287,16 @@ export function createIamClient(config: IamClientConfig): IamClient {
   const paths: Required<IamClientPaths> = { ...DEFAULT_PATHS, ...config.paths }
 
   /**
-   * 发送请求
+   * 发送 HTTP 请求
+   *
+   * 自动处理 JSON 序列化、认证头注入、错误解析和 401 回调。
+   *
+   * @param method - HTTP 方法
+   * @param path - API 路径（相对于 baseUrl）
+   * @param body - 请求体（可选）
+   * @param options - 请求选项（可选）
+   * @param options.requireAuth - 是否需要认证（默认 true）
+   * @returns 响应数据，或客户端错误
    */
   async function request<T>(
     method: 'GET' | 'POST' | 'PUT' | 'DELETE',
@@ -359,7 +362,12 @@ export function createIamClient(config: IamClientConfig): IamClient {
   }
 
   /**
-   * 解析日期字段
+   * 解析登录结果中的日期字段
+   *
+   * 将 JSON 中的日期字符串转为 Date 对象。
+   *
+   * @param data - 原始登录结果
+   * @returns 日期已解析的 LoginResult
    */
   function parseLoginResult(data: LoginResult): LoginResult {
     return {
@@ -370,7 +378,10 @@ export function createIamClient(config: IamClientConfig): IamClient {
   }
 
   /**
-   * 解析用户信息日期字段
+   * 解析用户信息中的日期字段
+   *
+   * @param data - 原始用户信息
+   * @returns 日期已解析的 UserInfo
    */
   function parseUserInfo(data: UserInfo): UserInfo {
     return {
@@ -392,7 +403,6 @@ export function createIamClient(config: IamClientConfig): IamClient {
         if (onTokenRefresh) {
           onTokenRefresh({
             accessToken: parsed.accessToken,
-            refreshToken: parsed.refreshToken,
             expiresAt: parsed.expiresAt,
           })
         }
@@ -408,7 +418,6 @@ export function createIamClient(config: IamClientConfig): IamClient {
         if (onTokenRefresh) {
           onTokenRefresh({
             accessToken: parsed.accessToken,
-            refreshToken: parsed.refreshToken,
             expiresAt: parsed.expiresAt,
           })
         }
@@ -427,14 +436,6 @@ export function createIamClient(config: IamClientConfig): IamClient {
 
     async logout() {
       return await request<void>('POST', paths.logout)
-    },
-
-    async refreshToken(refreshToken) {
-      const result = await request<AuthTokens>('POST', paths.refresh, { refreshToken }, { requireAuth: false })
-      if (result.success && onTokenRefresh) {
-        onTokenRefresh(result.data)
-      }
-      return result
     },
 
     // =========================================================================

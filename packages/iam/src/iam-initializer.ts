@@ -9,6 +9,7 @@
  * =============================================================================
  */
 
+import type { CacheService } from '@hai/cache'
 import type { Result } from '@hai/core'
 import type { DbService } from '@hai/db'
 import type { AuthStrategy } from './authn/iam-authn-types.js'
@@ -21,10 +22,10 @@ import type { RoleRepository } from './authz/rbac/iam-authz-rbac-repository-role
 import type { AuthzManager } from './authz/rbac/iam-authz-rbac-types.js'
 import type { IamConfig } from './iam-config.js'
 import type { IamError } from './iam-core-types.js'
-import type { SessionManager, SessionMappingRepository } from './session/iam-session-types.js'
+import type { SessionMappingRepository } from './session/iam-session-repository-cache.js'
+import type { SessionManager } from './session/iam-session-types.js'
 import type { UserRepository } from './user/iam-user-repository-user.js'
-import process from 'node:process'
-import { err, ok } from '@hai/core'
+import { core, err, ok } from '@hai/core'
 import { crypto as haiCrypto } from '@hai/crypto'
 
 import { createLdapStrategy } from './authn/ldap/iam-authn-ldap-strategy.js'
@@ -43,10 +44,11 @@ import {
   SessionConfigSchema,
 } from './iam-config.js'
 import { iamM } from './iam-i18n.js'
-import { createJwtSessionManager } from './session/jwt/iam-session-jwt.js'
-import { createDbSessionMappingRepository } from './session/stateful/iam-session-stateful-repository-session-mapping.js'
-import { createStatefulSessionManager } from './session/stateful/iam-session-stateful.js'
+import { createCacheSessionMappingRepository } from './session/iam-session-repository-cache.js'
+import { createSessionManager } from './session/iam-session-service.js'
 import { createDbUserRepository } from './user/iam-user-repository-user.js'
+
+const logger = core.logger.child({ module: 'iam', scope: 'initializer' })
 
 // =============================================================================
 // IAM 组件容器
@@ -84,6 +86,8 @@ export interface IamComponents {
 export interface InitOptions {
   /** 数据库服务 */
   db: DbService
+  /** 缓存服务 */
+  cache: CacheService
   /** IAM 配置 */
   config: IamConfig
   /** LDAP 客户端工厂（启用 LDAP 登录时必填） */
@@ -96,32 +100,24 @@ export interface InitOptions {
 const passwordProvider = haiCrypto.password.create()
 
 /**
- * 生成默认 JWT 密钥
- */
-function createDefaultJwtSecret(): string {
-  const uuid = typeof globalThis.crypto?.randomUUID === 'function'
-    ? globalThis.crypto.randomUUID()
-    : `${Date.now()}-${Math.random().toString(36).slice(2)}`
-
-  return `change-me-in-production-${uuid}`
-}
-
-/**
  * 初始化 IAM 组件
  *
- * @param options - 初始化选项
- * @returns IAM 组件容器
+ * 按顺序初始化存储层、认证策略、会话管理器、授权管理器等所有组件。
+ * 各存储层会自动创建所需的数据库表。
+ *
+ * @param options - 初始化选项（数据库、缓存、配置、LDAP 工厂等）
+ * @returns 成功时返回 IamComponents 容器，失败时返回 CONFIG_ERROR
  */
 export async function initializeComponents(options: InitOptions): Promise<Result<IamComponents, IamError>> {
-  const { db, config } = options
+  const { db, config, cache } = options
 
   try {
     // 初始化存储
     const userRepository = await createDbUserRepository(db)
     const roleRepository = await createDbRoleRepository(db)
     const permissionRepository = await createDbPermissionRepository(db)
-    const rolePermissionRepository = await createDbRolePermissionRepository(db, permissionRepository)
-    const userRoleRepository = await createDbUserRoleRepository(db, roleRepository)
+    const rolePermissionRepository = await createDbRolePermissionRepository(db, permissionRepository, cache)
+    const userRoleRepository = await createDbUserRoleRepository(db, roleRepository, cache)
 
     // 密码策略
     const securityConfig = SecurityConfigSchema.parse(config.security ?? {})
@@ -129,29 +125,9 @@ export async function initializeComponents(options: InitOptions): Promise<Result
     const passwordStrategy = createPasswordStrategy({
       passwordConfig: config.password,
       userRepository,
-      hashPassword: (password: string) => {
-        const result = passwordProvider.hash(password)
-        if (!result.success) {
-          return err({
-            code: IamErrorCode.INTERNAL_ERROR,
-            message: result.error.message,
-          })
-        }
-        return ok(result.data)
-      },
-      verifyPassword: (password: string, hash: string) => {
-        const result = passwordProvider.verify(password, hash)
-        if (!result.success) {
-          return err({
-            code: IamErrorCode.INTERNAL_ERROR,
-            message: result.error.message,
-          })
-        }
-        return ok(result.data)
-      },
       maxLoginAttempts: securityConfig.maxLoginAttempts,
       lockoutDuration: securityConfig.lockoutDuration,
-    }) as PasswordStrategy
+    })
 
     const loginConfig = LoginConfigSchema.parse(config.login ?? {})
     const otpConfig = config.otp ? OtpConfigSchema.parse(config.otp) : undefined
@@ -186,29 +162,13 @@ export async function initializeComponents(options: InitOptions): Promise<Result
 
     // 会话管理器
     const sessionConfig = SessionConfigSchema.parse(config.session ?? {})
-    const jwtConfig = sessionConfig.jwt || {
-      secret: process.env.JWT_SECRET || createDefaultJwtSecret(),
-      algorithm: 'HS256' as const,
-      accessTokenExpiresIn: 900,
-      refreshTokenExpiresIn: 604800,
-    }
-
-    let sessionManager: SessionManager
-    if (sessionConfig.type === 'stateful') {
-      const sessionMappingRepository: SessionMappingRepository = await createDbSessionMappingRepository(db)
-      sessionManager = createStatefulSessionManager({
-        jwt: jwtConfig,
-        maxAge: sessionConfig.maxAge,
-        sliding: sessionConfig.sliding,
-        sessionMappingRepository,
-      })
-    }
-    else {
-      sessionManager = createJwtSessionManager({
-        jwt: jwtConfig,
-        maxAge: sessionConfig.maxAge,
-      })
-    }
+    const sessionMappingRepository: SessionMappingRepository = createCacheSessionMappingRepository(cache)
+    const sessionManager: SessionManager = createSessionManager({
+      maxAge: sessionConfig.maxAge,
+      sliding: sessionConfig.sliding,
+      singleDevice: sessionConfig.singleDevice,
+      sessionMappingRepository,
+    })
 
     // 授权管理器
     const authzManager = createRbacManager({
@@ -233,6 +193,7 @@ export async function initializeComponents(options: InitOptions): Promise<Result
     })
   }
   catch (error) {
+    logger.error('Failed to initialize IAM components', { error })
     return err({
       code: IamErrorCode.CONFIG_ERROR,
       message: iamM('iam_initComponentFailed'),
@@ -247,6 +208,11 @@ export async function initializeComponents(options: InitOptions): Promise<Result
 
 /**
  * 密码哈希函数
+ *
+ * 使用 @hai/crypto 对明文密码进行哈希处理。
+ *
+ * @param password - 明文密码
+ * @returns 哈希字符串，或 INTERNAL_ERROR
  */
 export function hashPassword(password: string): Result<string, IamError> {
   const result = passwordProvider.hash(password)
@@ -261,6 +227,12 @@ export function hashPassword(password: string): Result<string, IamError> {
 
 /**
  * 密码验证函数
+ *
+ * 校验明文密码与哈希是否匹配。
+ *
+ * @param password - 明文密码
+ * @param hash - 已存储的哈希
+ * @returns 匹配返回 true，不匹配返回 false
  */
 export function verifyPassword(password: string, hash: string): Result<boolean, IamError> {
   const result = passwordProvider.verify(password, hash)
@@ -331,22 +303,32 @@ export interface SeedOptions {
 
 /**
  * 执行种子数据初始化
+ *
+ * 在事务中初始化默认角色、权限和角色-权限关联。
+ * 使用 `ON CONFLICT DO NOTHING` 确保幂等性（兼容 SQLite / PostgreSQL）。
+ *
+ * @param db - 数据库服务实例
+ * @param options - 种子数据选项（可控制是否初始化角色/权限/关联）
+ * @returns 成功返回 ok(undefined)，失败返回 REPOSITORY_ERROR
  */
 export async function seedIamData(
   db: DbService,
   options: SeedOptions = { roles: true, permissions: true, rolePermissions: true },
 ): Promise<Result<void, IamError>> {
-  try {
-    const now = Date.now()
+  const txResult = await db.tx.wrap(async (tx) => {
+    const isPostgres = db.config?.type === 'postgresql'
+    // PostgreSQL 需要 Date 对象和 boolean；SQLite 需要 number 和 0/1
+    const now: Date | number = isPostgres ? new Date() : Date.now()
+    const toBool = (v: boolean): boolean | number => isPostgres ? v : (v ? 1 : 0)
 
     // 1. 初始化角色
     if (options.roles) {
       for (const role of DEFAULT_ROLES) {
         const id = `role_${role.code}`
-        await db.sql.execute(
-          `INSERT OR IGNORE INTO iam_roles (id, code, name, description, is_system, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?)`,
-          [id, role.code, role.name, role.description, role.isSystem ? 1 : 0, now, now],
+        await tx.execute(
+          `INSERT INTO iam_roles (id, code, name, description, is_system, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING`,
+          [id, role.code, role.name, role.description, toBool(role.isSystem), now, now],
         )
       }
     }
@@ -355,9 +337,9 @@ export async function seedIamData(
     if (options.permissions) {
       for (const perm of DEFAULT_PERMISSIONS) {
         const id = `perm_${perm.code.replace(':', '_')}`
-        await db.sql.execute(
-          `INSERT OR IGNORE INTO iam_permissions (id, code, name, resource, action, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        await tx.execute(
+          `INSERT INTO iam_permissions (id, code, name, resource, action, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT DO NOTHING`,
           [id, perm.code, perm.name, perm.resource, perm.action, now, now],
         )
       }
@@ -367,11 +349,11 @@ export async function seedIamData(
     if (options.rolePermissions) {
       // 为管理员分配所有权限
       const adminRoleId = 'role_admin'
-      const allPermsResult = await db.sql.query<{ id: string }>(`SELECT id FROM iam_permissions`)
+      const allPermsResult = await tx.query<{ id: string }>(`SELECT id FROM iam_permissions`)
       if (allPermsResult.success) {
         for (const perm of allPermsResult.data) {
-          await db.sql.execute(
-            `INSERT OR IGNORE INTO iam_role_permissions (role_id, permission_id) VALUES (?, ?)`,
+          await tx.execute(
+            `INSERT INTO iam_role_permissions (role_id, permission_id) VALUES (?, ?) ON CONFLICT DO NOTHING`,
             [adminRoleId, perm.id],
           )
         }
@@ -381,8 +363,8 @@ export async function seedIamData(
       const userRoleId = 'role_user'
       const userPermIds = ['perm_user_read']
       for (const permId of userPermIds) {
-        await db.sql.execute(
-          `INSERT OR IGNORE INTO iam_role_permissions (role_id, permission_id) VALUES (?, ?)`,
+        await tx.execute(
+          `INSERT INTO iam_role_permissions (role_id, permission_id) VALUES (?, ?) ON CONFLICT DO NOTHING`,
           [userRoleId, permId],
         )
       }
@@ -391,20 +373,23 @@ export async function seedIamData(
       const guestRoleId = 'role_guest'
       const guestPermIds = ['perm_user_read']
       for (const permId of guestPermIds) {
-        await db.sql.execute(
-          `INSERT OR IGNORE INTO iam_role_permissions (role_id, permission_id) VALUES (?, ?)`,
+        await tx.execute(
+          `INSERT INTO iam_role_permissions (role_id, permission_id) VALUES (?, ?) ON CONFLICT DO NOTHING`,
           [guestRoleId, permId],
         )
       }
     }
+  })
 
-    return ok(undefined)
-  }
-  catch (error) {
+  if (!txResult.success) {
+    logger.error('Failed to seed IAM data', { error: txResult.error })
     return err({
       code: IamErrorCode.REPOSITORY_ERROR,
       message: iamM('iam_initSeedDataFailed'),
-      cause: error,
+      cause: txResult.error,
     })
   }
+
+  logger.info('IAM seed data initialized')
+  return ok(undefined)
 }

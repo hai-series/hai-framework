@@ -48,6 +48,7 @@
   "iam_permissionNotExist": "Permission does not exist",
   "iam_notInitialized": "Not initialized, please call iam.init() first",
   "iam_initFailed": "Initialization failed",
+  "iam_cacheRequired": "Cache service is required for session management",
   "iam_initComponentFailed": "Failed to initialize component",
   "iam_initSeedDataFailed": "Failed to initialize seed data",
   "iam_createUserTableFailed": "Failed to create user table: {message}",

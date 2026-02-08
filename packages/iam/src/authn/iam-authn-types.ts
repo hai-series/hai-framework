@@ -15,7 +15,7 @@
 import type { Result } from '@hai/core'
 import type { AuthStrategyType } from '../iam-config.js'
 import type { IamError } from '../iam-core-types.js'
-import type { AuthResult, RefreshResult, TokenPayload } from '../session/iam-session-types.js'
+import type { AuthResult, Session } from '../session/iam-session-types.js'
 import type { User } from '../user/iam-user-types.js'
 
 // =============================================================================
@@ -117,14 +117,9 @@ export interface AuthOperations {
   logout: (accessToken: string) => Promise<Result<void, IamError>>
 
   /**
-   * 刷新令牌
-   */
-  refresh: (refreshToken: string) => Promise<Result<RefreshResult, IamError>>
-
-  /**
    * 验证令牌
    */
-  verifyToken: (accessToken: string) => Promise<Result<TokenPayload, IamError>>
+  verifyToken: (accessToken: string) => Promise<Result<Session, IamError>>
 
   /**
    * 发送验证码

@@ -16,7 +16,7 @@ import type { UserRepository } from '../../user/iam-user-repository-user.js'
 import type { StoredUser, User } from '../../user/iam-user-types.js'
 import type { AuthStrategy, Credentials } from '../iam-authn-types.js'
 import type { OtpRepository } from './iam-authn-otp-repository-otp.js'
-import { err, ok } from '@hai/core'
+import { core, err, ok } from '@hai/core'
 
 import { IamErrorCode, OtpConfigSchema } from '../../iam-config.js'
 import { iamM } from '../../iam-i18n.js'
@@ -27,6 +27,8 @@ import {
   recordLoginFailure,
   resetLoginFailures,
 } from '../iam-authn-utils.js'
+
+const logger = core.logger.child({ module: 'iam', scope: 'otp-strategy' })
 
 /**
  * OTP 认证策略配置
@@ -49,7 +51,12 @@ export interface OtpStrategyConfig {
 }
 
 /**
- * 生成随机验证码
+ * 生成随机数字验证码
+ *
+ * 使用 `crypto.getRandomValues` 生成加密安全的随机数字串。
+ *
+ * @param length - 验证码长度
+ * @returns 纯数字验证码字符串
  */
 function generateOtpCode(length: number): string {
   const digits = '0123456789'
@@ -64,6 +71,11 @@ function generateOtpCode(length: number): string {
 
 /**
  * 判断标识符类型
+ *
+ * 通过简单规则推断标识符是邮箱、手机号还是未知类型。
+ *
+ * @param identifier - 用户标识符（邮箱/手机号）
+ * @returns 标识符类型：'email' | 'phone' | 'unknown'
  */
 function identifierType(identifier: string): 'email' | 'phone' | 'unknown' {
   // 简单邮箱检测
@@ -86,6 +98,11 @@ export type OtpStrategy = AuthStrategy & {
 
 /**
  * 创建 OTP 认证策略
+ *
+ * 支持验证码登录、自动注册新用户、发送频率限制、登录失败锁定等能力。
+ *
+ * @param config - OTP 策略配置（包含用户存储、OTP 存储、自动注册开关等）
+ * @returns OTP 认证策略实例，包含 authenticate 和 challenge 方法
  */
 export function createOtpStrategy(config: OtpStrategyConfig): OtpStrategy {
   const otpConfig = config.otpConfig
@@ -98,7 +115,10 @@ export function createOtpStrategy(config: OtpStrategyConfig): OtpStrategy {
   const defaultEnabled = registerConfig?.defaultEnabled ?? true
 
   /**
-   * 构建挑战返回值
+   * 构建挑战响应结果
+   *
+   * @param expiresAt - 验证码过期时间
+   * @returns 包含过期时间的结果对象
    */
   function buildChallengeResult(expiresAt: Date): { expiresAt: Date } {
     return { expiresAt }
@@ -217,6 +237,7 @@ export function createOtpStrategy(config: OtpStrategyConfig): OtpStrategy {
 
       // 登录成功，重置失败计数
       await resetLoginFailures(config.userRepository, storedUser)
+      logger.info('OTP authentication succeeded', { userId: storedUser.id })
 
       return ok(toUser(storedUser))
     },
@@ -266,6 +287,7 @@ export function createOtpStrategy(config: OtpStrategyConfig): OtpStrategy {
       }
 
       const result = buildChallengeResult(expiresAt)
+      logger.debug('OTP challenge sent', { identifier, expiresAt })
       return ok(result)
     },
   }

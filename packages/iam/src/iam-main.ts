@@ -6,7 +6,7 @@
  * 本文件提供统一的 `iam` 对象，聚合所有 IAM 功能。
  *
  * 使用方式：
- * 1. 调用 `iam.init(db)` 初始化 IAM 服务
+ * 1. 调用 `iam.init(db, config, { cache })` 初始化 IAM 服务
  * 2. 通过 `iam.auth` 进行认证操作
  * 3. 通过 `iam.user` 进行用户管理
  * 4. 通过 `iam.authz` 进行授权检查
@@ -24,10 +24,10 @@
  * // 2. 初始化 IAM
  * await iam.init(db, {
  *     session: {
- *         type: 'jwt',
- *         jwt: { secret: 'your-secret-key' }
+ *         maxAge: 86400,
+ *         sliding: true
  *     }
- * })
+ * }, { cache })
  *
  * // 3. 注册用户
  * const user = await iam.user.register({
@@ -47,7 +47,7 @@
  *
  * // 6. 检查权限
  * const hasPermission = await iam.authz.checkPermission(
- *     { userId: user.id, roles: ['admin'] },
+ *     { userId: user.id, roles: ['role_admin'] },
  *     'users:read'
  * )
  *
@@ -59,23 +59,28 @@
  * =============================================================================
  */
 
+import type { CacheService } from '@hai/cache'
 import type { Result } from '@hai/core'
 import type { DbService } from '@hai/db'
 import type { AuthOperations } from './authn/iam-authn-types.js'
 import type { LdapClientFactory } from './authn/ldap/iam-authn-ldap-strategy.js'
 import type { AuthzManager } from './authz/rbac/iam-authz-rbac-types.js'
+import type { IamClient, IamClientConfig } from './client/iam-client.js'
 import type { IamConfig, IamConfigInput, IamErrorCodeType } from './iam-config.js'
 import type { IamError } from './iam-core-types.js'
 import type { IamComponents } from './iam-initializer.js'
 import type { SessionManager } from './session/iam-session-types.js'
 import type { UserOperations } from './user/iam-user-types.js'
-import { err, ok } from '@hai/core'
+import { core, err, ok } from '@hai/core'
 
 import { createAuthOperations } from './authn/iam-authn-service.js'
+import { createIamClient } from './client/iam-client.js'
 import { IamConfigSchema, IamErrorCode } from './iam-config.js'
 import { iamM } from './iam-i18n.js'
 import { initializeComponents, seedIamData } from './iam-initializer.js'
 import { createUserOperations } from './user/iam-user-service.js'
+
+const logger = core.logger.child({ module: 'iam', scope: 'main' })
 
 // =============================================================================
 // 未初始化时的占位操作
@@ -83,6 +88,10 @@ import { createUserOperations } from './user/iam-user-service.js'
 
 /**
  * 创建未初始化错误
+ *
+ * 当 IAM 服务尚未调用 `init()` 时，所有操作均返回此错误。
+ *
+ * @returns 包含 NOT_INITIALIZED 错误码的 IamError
  */
 function notInitializedError(): IamError {
   return {
@@ -123,12 +132,7 @@ const notInitializedUser = new Proxy(
 const notInitializedAuthz = notInitializedOperations as AuthzManager
 
 /** 未初始化的会话管理器占位 */
-const notInitializedSession = new Proxy(
-  { type: 'jwt' as const },
-  {
-    get: (target, prop) => (prop === 'type' ? target.type : notInitializedOperation),
-  },
-) as SessionManager
+const notInitializedSession = notInitializedOperations as SessionManager
 
 // =============================================================================
 // 创建 IAM 服务实例
@@ -151,6 +155,28 @@ interface IamServiceState {
 }
 
 /**
+ * IAM 客户端操作接口
+ *
+ * 通过 `iam.client` 访问，提供前端客户端的创建能力。
+ * 客户端通过 HTTP API 与 IAM 服务通信，适用于前端场景。
+ *
+ * @example
+ * ```ts
+ * const client = iam.client.create({ baseUrl: '/api/iam' })
+ * const result = await client.login({ identifier: 'admin', password: 'xxx' })
+ * ```
+ */
+export interface IamClientOperations {
+  /** 创建 IAM 客户端实例 */
+  create: (config: IamClientConfig) => IamClient
+}
+
+/** IAM 客户端操作实例（无状态，无需初始化） */
+const iamClientOperations: IamClientOperations = {
+  create: createIamClient,
+}
+
+/**
  * IAM 服务接口
  *
  * 统一聚合所有 IAM 功能
@@ -164,6 +190,8 @@ export interface IamService {
   readonly authz: AuthzManager
   /** 会话管理 */
   readonly session: SessionManager
+  /** 前端客户端操作（无需 init 即可使用） */
+  readonly client: IamClientOperations
 
   /** 当前配置 */
   readonly config: IamConfig | null
@@ -196,10 +224,18 @@ export interface IamInitOptions {
   ldapClientFactory?: LdapClientFactory
   /** LDAP 用户同步开关（默认 true） */
   ldapSyncUser?: boolean
+  /** 缓存服务（必需） */
+  cache: CacheService
 }
 
 /**
  * 创建 IAM 服务实例
+ *
+ * 内部工厂函数，构造带有延迟初始化语义的 `IamService` 对象。
+ * 初始状态下所有操作均为占位（返回未初始化错误），
+ * 调用 `init()` 后替换为实际实现。
+ *
+ * @returns 全新的 IamService 实例
  */
 function createIamServiceInstance(): IamService {
   // 服务状态
@@ -228,6 +264,10 @@ function createIamServiceInstance(): IamService {
       return state.components?.sessionManager || notInitializedSession
     },
 
+    get client(): IamClientOperations {
+      return iamClientOperations
+    },
+
     get config(): IamConfig | null {
       return state.config
     },
@@ -246,6 +286,13 @@ function createIamServiceInstance(): IamService {
       }
 
       try {
+        if (!options?.cache) {
+          return err({
+            code: IamErrorCode.CONFIG_ERROR,
+            message: iamM('iam_cacheRequired'),
+          })
+        }
+
         // 解析配置
         const config = IamConfigSchema.parse(configInput || {})
         state.config = config
@@ -256,6 +303,7 @@ function createIamServiceInstance(): IamService {
           config,
           ldapClientFactory: options?.ldapClientFactory,
           ldapSyncUser: options?.ldapSyncUser,
+          cache: options.cache,
         })
         if (!initResult.success) {
           return initResult
@@ -277,11 +325,13 @@ function createIamServiceInstance(): IamService {
           otpStrategy: state.components.otpStrategy,
           ldapStrategy: state.components.ldapStrategy,
           sessionManager: state.components.sessionManager,
+          authzManager: state.components.authzManager,
           config,
         })
 
         // 创建用户操作
         state.userOperations = createUserOperations({
+          db,
           userRepository: state.components.userRepository,
           passwordStrategy: state.components.passwordStrategy,
           sessionManager: state.components.sessionManager,
@@ -290,9 +340,11 @@ function createIamServiceInstance(): IamService {
         })
 
         state.initialized = true
+        logger.info('IAM service initialized')
         return ok(undefined)
       }
       catch (error) {
+        logger.error('IAM initialization failed', { error })
         return err({
           code: IamErrorCode.CONFIG_ERROR,
           message: iamM('iam_initFailed'),
@@ -308,6 +360,7 @@ function createIamServiceInstance(): IamService {
       state.authOperations = notInitializedAuth
       state.userOperations = notInitializedUser
 
+      logger.info('IAM service closed')
       return ok(undefined)
     },
   }
@@ -319,6 +372,9 @@ function createIamServiceInstance(): IamService {
 
 /**
  * IAM 服务单例
+ *
+ * 默认导出的全局实例，适用于单进程场景。
+ * 如需多实例（如测试隔离），使用 `iam.create()` 创建独立实例。
  */
 const iamInstance = createIamServiceInstance()
 
