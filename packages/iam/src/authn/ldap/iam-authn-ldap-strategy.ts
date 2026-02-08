@@ -15,12 +15,14 @@ import type { IamError } from '../../iam-core-types.js'
 import type { UserRepository } from '../../user/iam-user-repository-user.js'
 import type { StoredUser, User } from '../../user/iam-user-types.js'
 import type { AuthStrategy, Credentials } from '../iam-authn-types.js'
-import { err, ok } from '@hai/core'
+import { core, err, ok } from '@hai/core'
 
 import { IamErrorCode } from '../../iam-config.js'
 import { iamM } from '../../iam-i18n.js'
 import { toUser } from '../../user/iam-user-utils.js'
 import { ensureCredentialType, isAccountLocked, recordLoginFailure, resetLoginFailures } from '../iam-authn-utils.js'
+
+const logger = core.logger.child({ module: 'iam', scope: 'ldap-strategy' })
 
 /**
  * LDAP 客户端接口
@@ -77,6 +79,12 @@ export interface LdapStrategyConfig {
 
 /**
  * 创建 LDAP 认证策略
+ *
+ * 通过 LDAP 目录服务进行用户认证。
+ * 支持用户同步到本地数据库、登录失败锁定等能力。
+ *
+ * @param config - LDAP 策略配置（LDAP 配置、用户存储、客户端工厂等）
+ * @returns 认证策略实例
  */
 export function createLdapStrategy(config: LdapStrategyConfig): AuthStrategy {
   const {
@@ -89,7 +97,13 @@ export function createLdapStrategy(config: LdapStrategyConfig): AuthStrategy {
   } = config
 
   /**
-   * 获取属性值（支持单值和多值）
+   * 获取 LDAP 搜索结果中的属性值
+   *
+   * 支持单值和多值属性，多值时返回第一个。
+   *
+   * @param entry - LDAP 搜索结果条目
+   * @param attr - 属性名
+   * @returns 属性值，或 undefined
    */
   function getAttributeValue(entry: LdapSearchEntry, attr: string): string | undefined {
     const value = entry.attributes[attr]
@@ -100,7 +114,15 @@ export function createLdapStrategy(config: LdapStrategyConfig): AuthStrategy {
   }
 
   /**
-   * 构建 LDAP 用户信息
+   * 构建 LDAP 用户信息对象
+   *
+   * 用于未开启用户同步时，直接返回 LDAP 目录中的用户信息。
+   *
+   * @param entry - LDAP 搜索结果条目
+   * @param ldapUsername - 用户名
+   * @param ldapEmail - 邮箱（可选）
+   * @param ldapDisplayName - 显示名称（可选）
+   * @returns User 对象（ID 为 LDAP DN）
    */
   function buildLdapUser(entry: LdapSearchEntry, ldapUsername: string, ldapEmail?: string, ldapDisplayName?: string): User {
     const now = new Date()
@@ -216,6 +238,7 @@ export function createLdapStrategy(config: LdapStrategyConfig): AuthStrategy {
           if (storedUser) {
             await recordLoginFailure(userRepository, storedUser, { maxLoginAttempts, lockoutDuration })
           }
+          logger.warn('LDAP authentication failed', { username })
           return err({
             code: IamErrorCode.INVALID_CREDENTIALS,
             message: iamM('iam_passwordWrong'),
@@ -275,6 +298,7 @@ export function createLdapStrategy(config: LdapStrategyConfig): AuthStrategy {
         }
 
         await resetLoginFailures(userRepository, storedUser)
+        logger.info('LDAP authentication succeeded', { userId: storedUser.id })
 
         return ok(toUser(storedUser))
       }

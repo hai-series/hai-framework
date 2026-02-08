@@ -7,7 +7,9 @@
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
+      "browser": "./dist/browser.js",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
     },
     "./client": {
       "types": "./dist/client/index.d.ts",
@@ -15,6 +17,7 @@
     }
   },
   "main": "./dist/index.js",
+  "browser": "./dist/browser.js",
   "types": "./dist/index.d.ts",
   "files": [
     "dist"
@@ -29,14 +32,15 @@
     "clean": "rimraf dist .turbo"
   },
   "dependencies": {
+    "@hai/cache": "workspace:*",
     "@hai/core": "workspace:*",
     "@hai/crypto": "workspace:*",
-    "@hai/db": "workspace:*",
-    "jose": "catalog:"
+    "@hai/db": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "catalog:",
     "rimraf": "catalog:",
+    "testcontainers": "^11.11.0",
     "tsup": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"

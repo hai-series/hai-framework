@@ -21,10 +21,12 @@ import type {
   Permission,
   Role,
 } from './iam-authz-rbac-types.js'
-import { err, ok } from '@hai/core'
+import { core, err, ok } from '@hai/core'
 
 import { IamErrorCode, RbacConfigSchema } from '../../iam-config.js'
 import { iamM } from '../../iam-i18n.js'
+
+const logger = core.logger.child({ module: 'iam', scope: 'rbac' })
 
 /**
  * RBAC 授权管理器配置
@@ -44,6 +46,12 @@ export interface RbacManagerConfig {
 
 /**
  * 创建 RBAC 授权管理器
+ *
+ * 提供角色/权限的 CRUD、用户角色分配、权限检查等能力。
+ * 内置超级管理员角色识别：超管角色自动拥有所有权限。
+ *
+ * @param config - RBAC 配置和存储层依赖
+ * @returns 授权管理器接口实现
  */
 export function createRbacManager(config: RbacManagerConfig): AuthzManager {
   const rbacConfig = config.rbacConfig
@@ -57,6 +65,35 @@ export function createRbacManager(config: RbacManagerConfig): AuthzManager {
     userRoleRepository,
   } = config
 
+  let superAdminRoleId: string | null | undefined
+
+  /**
+   * 解析超级管理员角色 ID
+   *
+   * 首次调用时从数据库查询，之后缓存结果。
+   *
+   * @returns 超管角色 ID，或 null（未配置时）
+   */
+  async function resolveSuperAdminRoleId(): Promise<Result<string | null, IamError>> {
+    if (superAdminRoleId !== undefined) {
+      return ok(superAdminRoleId)
+    }
+
+    const roleResult = await roleRepository.findByCode(rbacConfig.superAdminRole)
+    if (!roleResult.success) {
+      return mapRepositoryError('iam_queryRoleFailed', roleResult.error.message) as Result<string | null, IamError>
+    }
+
+    superAdminRoleId = roleResult.data?.id ?? null
+    return ok(superAdminRoleId)
+  }
+
+  /**
+   * 构建存储层错误响应
+   *
+   * @param messageKey - i18n 消息键
+   * @param message - 原始错误消息
+   */
   function mapRepositoryError(messageKey: Parameters<typeof iamM>[0], message: string) {
     return err({
       code: IamErrorCode.REPOSITORY_ERROR,
@@ -65,48 +102,91 @@ export function createRbacManager(config: RbacManagerConfig): AuthzManager {
   }
 
   /**
-   * 获取用户权限列表（无缓存）
+   * 判断权限代码是否匹配指定权限
+   *
+   * 支持通配符 `*`，如 `user:*` 匹配 `user:read`、`user:write`。
+   *
+   * @param permission - 要检查的权限
+   * @param code - 角色拥有的权限代码
+   * @returns 匹配返回 true
    */
-  async function getUserPermissionsInternal(userId: string): Promise<Result<Permission[], IamError>> {
-    // 从存储获取
-    const rolesResult = await userRoleRepository.getRoles(userId)
-    if (!rolesResult.success) {
-      return rolesResult as Result<Permission[], IamError>
+  function matchesPermission(permission: string, code: string): boolean {
+    if (code === permission) {
+      return true
     }
 
-    const permissions: Permission[] = []
-    const seen = new Set<string>()
-
-    for (const role of rolesResult.data) {
-      const rolePermsResult = await rolePermissionRepository.getPermissions(role.id)
-      if (rolePermsResult.success) {
-        for (const perm of rolePermsResult.data) {
-          if (!seen.has(perm.id)) {
-            permissions.push(perm)
-            seen.add(perm.id)
-          }
-        }
-      }
+    if (code.endsWith(':*')) {
+      const prefix = code.slice(0, -1)
+      return permission.startsWith(prefix)
     }
 
-    return ok(permissions)
+    return false
   }
 
   /**
-   * 根据角色列表获取权限（直接从角色获取，不需要用户 ID）
+   * 解析用户角色 ID 列表
+   *
+   * 优先使用上下文中已有的 roles，若为空则从数据库查询。
+   *
+   * @param ctx - 授权上下文
+   * @returns 角色 ID 数组
    */
-  async function getPermissionsByRoles(roleIds: string[]): Promise<Result<Permission[], IamError>> {
+  async function resolveRoleIds(ctx: AuthzContext): Promise<Result<string[], IamError>> {
+    if (ctx.roles.length > 0) {
+      return ok(ctx.roles)
+    }
+
+    const rolesResult = await userRoleRepository.getRoleIds(ctx.userId)
+    if (!rolesResult.success) {
+      return rolesResult
+    }
+
+    return ok(rolesResult.data)
+  }
+
+  /**
+   * 批量查询多个角色的权限代码，并判断是否匹配指定权限
+   */
+  async function hasPermissionInRoles(roleIds: string[], permission: string): Promise<Result<boolean, IamError>> {
+    const codesResults = await Promise.all(
+      roleIds.map(id => rolePermissionRepository.getPermissionCodes(id)),
+    )
+
+    for (const codesResult of codesResults) {
+      if (!codesResult.success)
+        return codesResult as Result<boolean, IamError>
+      for (const code of codesResult.data) {
+        if (matchesPermission(permission, code))
+          return ok(true)
+      }
+    }
+
+    return ok(false)
+  }
+
+  /**
+   * 获取用户所有权限（通过角色聚合，并行查询）
+   */
+  async function getUserPermissionsInternal(userId: string): Promise<Result<Permission[], IamError>> {
+    const rolesResult = await userRoleRepository.getRoles(userId)
+    if (!rolesResult.success)
+      return rolesResult as Result<Permission[], IamError>
+    if (rolesResult.data.length === 0)
+      return ok([])
+
+    const permResults = await Promise.all(
+      rolesResult.data.map(role => rolePermissionRepository.getPermissions(role.id)),
+    )
+
     const permissions: Permission[] = []
     const seen = new Set<string>()
-
-    for (const roleId of roleIds) {
-      const rolePermsResult = await rolePermissionRepository.getPermissions(roleId)
-      if (rolePermsResult.success) {
-        for (const perm of rolePermsResult.data) {
-          if (!seen.has(perm.id)) {
-            permissions.push(perm)
-            seen.add(perm.id)
-          }
+    for (const permResult of permResults) {
+      if (!permResult.success)
+        return permResult as Result<Permission[], IamError>
+      for (const perm of permResult.data) {
+        if (!seen.has(perm.id)) {
+          permissions.push(perm)
+          seen.add(perm.id)
         }
       }
     }
@@ -116,51 +196,23 @@ export function createRbacManager(config: RbacManagerConfig): AuthzManager {
 
   return {
     async checkPermission(ctx: AuthzContext, permission: string): Promise<Result<boolean, IamError>> {
+      const roleIdsResult = await resolveRoleIds(ctx)
+      if (!roleIdsResult.success)
+        return roleIdsResult as Result<boolean, IamError>
+
+      const superAdminResult = await resolveSuperAdminRoleId()
+      if (!superAdminResult.success)
+        return superAdminResult as Result<boolean, IamError>
+
+      const roleIds = roleIdsResult.data
+
       // 超级管理员拥有所有权限
-      if (ctx.roles.includes(rbacConfig.superAdminRole)) {
+      if (superAdminResult.data && roleIds.includes(superAdminResult.data)) {
         return ok(true)
       }
 
-      // 优先使用传入的 roles（如果有的话）
-      let permissionsResult: Result<Permission[], IamError>
-      if (ctx.roles.length > 0) {
-        permissionsResult = await getPermissionsByRoles(ctx.roles)
-      }
-      else {
-        // 否则从数据库查询用户的角色
-        permissionsResult = await getUserPermissionsInternal(ctx.userId)
-      }
-
-      if (!permissionsResult.success) {
-        return permissionsResult as Result<boolean, IamError>
-      }
-
-      // 检查是否有匹配的权限
-      const hasPermission = permissionsResult.data.some((p) => {
-        // 精确匹配
-        if (p.code === permission) {
-          return true
-        }
-        // 通配符匹配（如 users:* 匹配 users:read）
-        if (p.code.endsWith(':*')) {
-          const prefix = p.code.slice(0, -1)
-          if (permission.startsWith(prefix)) {
-            return true
-          }
-        }
-        return false
-      })
-
-      return ok(hasPermission)
-    },
-
-    async hasRole(ctx: AuthzContext, role: string): Promise<Result<boolean, IamError>> {
-      // 如果 ctx.roles 中有该角色，直接返回 true
-      if (ctx.roles?.includes(role)) {
-        return ok(true)
-      }
-      // 否则从数据库查询
-      return userRoleRepository.hasRole(ctx.userId, role)
+      // 并行查询所有角色的权限
+      return hasPermissionInRoles(roleIds, permission)
     },
 
     async getUserPermissions(userId: string): Promise<Result<Permission[], IamError>> {
@@ -172,25 +224,27 @@ export function createRbacManager(config: RbacManagerConfig): AuthzManager {
     },
 
     async assignRole(userId: string, roleId: string): Promise<Result<void, IamError>> {
-      // 检查角色是否存在
       const roleExistsResult = await roleRepository.existsById(roleId)
       if (!roleExistsResult.success) {
         return mapRepositoryError('iam_queryRoleFailed', roleExistsResult.error.message) as Result<void, IamError>
       }
-
       if (!roleExistsResult.data) {
-        return err({
-          code: IamErrorCode.ROLE_NOT_FOUND,
-          message: iamM('iam_roleNotExist'),
-        })
+        return err({ code: IamErrorCode.ROLE_NOT_FOUND, message: iamM('iam_roleNotExist') })
       }
 
-      // 分配角色
-      return userRoleRepository.assign(userId, roleId)
+      const result = await userRoleRepository.assign(userId, roleId)
+      if (result.success) {
+        logger.info('Role assigned to user', { userId, roleId })
+      }
+      return result
     },
 
     async removeRole(userId: string, roleId: string): Promise<Result<void, IamError>> {
-      return userRoleRepository.remove(userId, roleId)
+      const result = await userRoleRepository.remove(userId, roleId)
+      if (result.success) {
+        logger.info('Role removed from user', { userId, roleId })
+      }
+      return result
     },
 
     // =========================================================================
@@ -208,11 +262,10 @@ export function createRbacManager(config: RbacManagerConfig): AuthzManager {
         return mapRepositoryError('iam_queryRoleFailed', createdResult.error.message) as Result<Role, IamError>
       }
       if (!createdResult.data) {
-        return err({
-          code: IamErrorCode.ROLE_NOT_FOUND,
-          message: iamM('iam_roleNotExist'),
-        })
+        return err({ code: IamErrorCode.ROLE_NOT_FOUND, message: iamM('iam_roleNotExist') })
       }
+
+      logger.info('Role created', { roleId: createdResult.data.id, code: role.code })
       return ok(createdResult.data)
     },
 
@@ -266,11 +319,15 @@ export function createRbacManager(config: RbacManagerConfig): AuthzManager {
         return mapRepositoryError('iam_deleteRoleFailed', deleteResult.error.message) as Result<void, IamError>
       }
       if (deleteResult.data.changes === 0) {
-        return err({
-          code: IamErrorCode.ROLE_NOT_FOUND,
-          message: iamM('iam_roleNotExist'),
-        })
+        return err({ code: IamErrorCode.ROLE_NOT_FOUND, message: iamM('iam_roleNotExist') })
       }
+
+      if (superAdminRoleId && superAdminRoleId === roleId) {
+        superAdminRoleId = null
+      }
+      await rolePermissionRepository.clearRolePermissionsCache(roleId)
+
+      logger.info('Role deleted', { roleId })
       return ok(undefined)
     },
 
@@ -289,11 +346,10 @@ export function createRbacManager(config: RbacManagerConfig): AuthzManager {
         return mapRepositoryError('iam_queryPermissionFailed', createdResult.error.message) as Result<Permission, IamError>
       }
       if (!createdResult.data) {
-        return err({
-          code: IamErrorCode.PERMISSION_NOT_FOUND,
-          message: iamM('iam_permissionNotExist'),
-        })
+        return err({ code: IamErrorCode.PERMISSION_NOT_FOUND, message: iamM('iam_permissionNotExist') })
       }
+
+      logger.info('Permission created', { permissionId: createdResult.data.id, code: permission.code })
       return ok(createdResult.data)
     },
 
@@ -317,6 +373,17 @@ export function createRbacManager(config: RbacManagerConfig): AuthzManager {
     },
 
     async deletePermission(permissionId): Promise<Result<void, IamError>> {
+      const permissionResult = await permissionRepository.findById(permissionId)
+      if (!permissionResult.success) {
+        return mapRepositoryError('iam_queryPermissionFailed', permissionResult.error.message) as Result<void, IamError>
+      }
+      if (!permissionResult.data) {
+        return err({
+          code: IamErrorCode.PERMISSION_NOT_FOUND,
+          message: iamM('iam_permissionNotExist'),
+        })
+      }
+
       const deleteResult = await permissionRepository.deleteById(permissionId)
       if (!deleteResult.success) {
         return mapRepositoryError('iam_deletePermissionFailed', deleteResult.error.message) as Result<void, IamError>
@@ -327,6 +394,10 @@ export function createRbacManager(config: RbacManagerConfig): AuthzManager {
           message: iamM('iam_permissionNotExist'),
         })
       }
+
+      await rolePermissionRepository.removePermissionCodeFromCache(permissionResult.data.code)
+
+      logger.info('Permission deleted', { permissionId })
       return ok(undefined)
     },
 
@@ -357,11 +428,30 @@ export function createRbacManager(config: RbacManagerConfig): AuthzManager {
         })
       }
 
-      return rolePermissionRepository.assign(roleId, permissionId)
+      const assignResult = await rolePermissionRepository.assign(roleId, permissionId, permResult.data.code)
+      if (assignResult.success) {
+        logger.info('Permission assigned to role', { roleId, permissionId })
+      }
+      return assignResult
     },
 
     async removePermissionFromRole(roleId, permissionId): Promise<Result<void, IamError>> {
-      return rolePermissionRepository.remove(roleId, permissionId)
+      const permResult = await permissionRepository.findById(permissionId)
+      if (!permResult.success) {
+        return mapRepositoryError('iam_queryPermissionFailed', permResult.error.message) as Result<void, IamError>
+      }
+      if (!permResult.data) {
+        return err({
+          code: IamErrorCode.PERMISSION_NOT_FOUND,
+          message: iamM('iam_permissionNotExist'),
+        })
+      }
+
+      const removeResult = await rolePermissionRepository.remove(roleId, permissionId, permResult.data.code)
+      if (removeResult.success) {
+        logger.info('Permission removed from role', { roleId, permissionId })
+      }
+      return removeResult
     },
 
     async getRolePermissions(roleId): Promise<Result<Permission[], IamError>> {

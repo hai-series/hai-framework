@@ -209,19 +209,36 @@ const USER_FIELDS: CrudFieldDefinition[] = [
   },
 ]
 
-/**
- * 创建数据库用户存储
- */
-let userRepositorySingleton: DbUserRepository | null = null
+/** 用户存储单例缓存（通过 db.config 引用比较检测 db 重新初始化） */
+let userRepoInstance: UserRepository | null = null
+let userRepoDbConfig: unknown = null
 
+/**
+ * 创建基于数据库的用户存储实例
+ *
+ * 单例模式：同一 db 生命周期内重复调用返回缓存实例，
+ * db 重新初始化后自动创建新实例。
+ *
+ * @param db - 数据库服务实例
+ * @returns 用户存储接口实现
+ */
 export async function createDbUserRepository(db: DbService): Promise<UserRepository> {
-  if (userRepositorySingleton) {
-    return userRepositorySingleton
-  }
-  userRepositorySingleton = new DbUserRepository(db)
-  return userRepositorySingleton
+  if (userRepoInstance && userRepoDbConfig === db.config)
+    return userRepoInstance
+
+  const repo = new DbUserRepository(db)
+  // 确保底层表创建完成（BaseCrudRepository 的表创建是异步的）
+  await repo.count()
+  userRepoInstance = repo
+  userRepoDbConfig = db.config
+  return repo
 }
 
+/**
+ * 基于数据库的用户存储实现
+ *
+ * 继承 BaseCrudRepository，提供按用户名/邮箱/手机号/标识符的查询能力。
+ */
 class DbUserRepository extends BaseCrudRepository<StoredUser> implements UserRepository {
   constructor(db: DbService) {
     super(db, {
@@ -230,30 +247,43 @@ class DbUserRepository extends BaseCrudRepository<StoredUser> implements UserRep
     })
   }
 
+  /** 根据用户名查找用户 */
   async findByUsername(username: string, tx?: TxHandle): Promise<Result<StoredUser | null, IamError>> {
     return this.findOneBy('username = ?', [username], tx)
   }
 
+  /** 根据邮箱查找用户 */
   async findByEmail(email: string, tx?: TxHandle): Promise<Result<StoredUser | null, IamError>> {
     return this.findOneBy('email = ?', [email], tx)
   }
 
+  /** 根据手机号查找用户 */
   async findByPhone(phone: string, tx?: TxHandle): Promise<Result<StoredUser | null, IamError>> {
     return this.findOneBy('phone = ?', [phone], tx)
   }
 
+  /** 根据标识符查找用户（同时匹配用户名、邮箱、手机号） */
   async findByIdentifier(identifier: string, tx?: TxHandle): Promise<Result<StoredUser | null, IamError>> {
     return this.findOneBy('username = ? OR email = ? OR phone = ?', [identifier, identifier, identifier], tx)
   }
 
+  /** 检查用户名是否已存在 */
   async existsByUsername(username: string, tx?: TxHandle): Promise<Result<boolean, IamError>> {
     return this.existsBy('username = ?', [username], tx)
   }
 
+  /** 检查邮箱是否已存在 */
   async existsByEmail(email: string, tx?: TxHandle): Promise<Result<boolean, IamError>> {
     return this.existsBy('email = ?', [email], tx)
   }
 
+  /**
+   * 构建查询错误响应
+   *
+   * @param error - 原始错误对象
+   * @param error.message - 错误消息
+   * @param cause - 错误原因
+   */
   private buildQueryError(error: { message: string }, cause: unknown): Result<never, IamError> {
     return err({
       code: IamErrorCode.REPOSITORY_ERROR,
@@ -262,6 +292,13 @@ class DbUserRepository extends BaseCrudRepository<StoredUser> implements UserRep
     })
   }
 
+  /**
+   * 按条件检查是否存在
+   *
+   * @param where - SQL WHERE 条件
+   * @param params - 绑定参数
+   * @param tx - 可选事务句柄
+   */
   private async existsBy(where: string, params: unknown[], tx?: TxHandle): Promise<Result<boolean, IamError>> {
     const result = await this.exists({ where, params }, tx)
     if (!result.success) {
@@ -270,6 +307,14 @@ class DbUserRepository extends BaseCrudRepository<StoredUser> implements UserRep
     return ok(result.data)
   }
 
+  /**
+   * 按条件查找单条记录
+   *
+   * @param where - SQL WHERE 条件
+   * @param params - 绑定参数
+   * @param tx - 可选事务句柄
+   * @returns 单条用户记录，或 null
+   */
   private async findOneBy(where: string, params: unknown[], tx?: TxHandle): Promise<Result<StoredUser | null, IamError>> {
     const result = await this.findAll({ where, params, limit: 1 }, tx)
     if (!result.success) {
@@ -278,6 +323,13 @@ class DbUserRepository extends BaseCrudRepository<StoredUser> implements UserRep
     return ok(result.data[0] ?? null)
   }
 
+  /**
+   * 检查符合条件的记录是否存在
+   *
+   * @param options - 查询条件
+   * @param tx - 可选事务句柄
+   * @returns 存在返回 true
+   */
   async exists(options?: CrudCountOptions, tx?: TxHandle): Promise<Result<boolean, DbError>> {
     const result = await this.count(options, tx)
     if (!result.success) {

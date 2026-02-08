@@ -89,7 +89,7 @@ export interface UserRole {
 export interface AuthzContext {
   /** 用户 ID */
   userId: string
-  /** 用户角色代码列表 */
+  /** 用户角色 ID 列表 */
   roles: string[]
   /** 资源标识 */
   resource?: string
@@ -111,13 +111,6 @@ export interface AuthzManager {
    * 检查权限
    */
   checkPermission: (ctx: AuthzContext, permission: string) => Promise<Result<boolean, IamError>>
-
-  /**
-   * 检查角色
-   * @param ctx 授权上下文（使用 userId 检查）
-   * @param role 角色 ID
-   */
-  hasRole: (ctx: AuthzContext, role: string) => Promise<Result<boolean, IamError>>
 
   /**
    * 获取用户权限列表

@@ -108,19 +108,35 @@ const PERMISSION_FIELDS: CrudFieldDefinition[] = [
   },
 ]
 
-/**
- * 创建数据库权限存储
- */
-let permissionRepositorySingleton: PermissionRepository | null = null
+/** 权限存储单例缓存（通过 db.config 引用比较检测 db 重新初始化） */
+let permRepoInstance: PermissionRepository | null = null
+let permRepoDbConfig: unknown = null
 
+/**
+ * 创建基于数据库的权限存储实例
+ *
+ * 单例模式：同一 db 生命周期内重复调用返回缓存实例，
+ * db 重新初始化后自动创建新实例。
+ *
+ * @param db - 数据库服务实例
+ * @returns 权限存储接口实现
+ */
 export async function createDbPermissionRepository(db: DbService): Promise<PermissionRepository> {
-  if (permissionRepositorySingleton) {
-    return permissionRepositorySingleton
-  }
-  permissionRepositorySingleton = new DbPermissionRepository(db)
-  return permissionRepositorySingleton
+  if (permRepoInstance && permRepoDbConfig === db.config)
+    return permRepoInstance
+
+  const repo = new DbPermissionRepository(db)
+  await repo.count()
+  permRepoInstance = repo
+  permRepoDbConfig = db.config
+  return repo
 }
 
+/**
+ * 基于数据库的权限存储实现
+ *
+ * 继承 BaseCrudRepository，提供按 code 查找权限的能力。
+ */
 class DbPermissionRepository extends BaseCrudRepository<Permission> implements PermissionRepository {
   constructor(db: DbService) {
     super(db, {
@@ -129,16 +145,9 @@ class DbPermissionRepository extends BaseCrudRepository<Permission> implements P
     })
   }
 
+  /** 根据权限代码查找权限 */
   async findByCode(code: string): Promise<Result<Permission | null, IamError>> {
-    const result = await this.findAll({ where: 'code = ?', params: [code], limit: 1 })
-    if (!result.success) {
-      return err({
-        code: IamErrorCode.REPOSITORY_ERROR,
-        message: iamM('iam_queryPermissionFailed', { params: { message: result.error.message } }),
-        cause: result.error,
-      })
-    }
-    return ok(result.data[0] ?? null)
+    return this.findOneBy('code = ?', [code])
   }
 
   async exists(options?: CrudCountOptions, tx?: TxHandle): Promise<Result<boolean, DbError>> {
@@ -147,5 +156,21 @@ class DbPermissionRepository extends BaseCrudRepository<Permission> implements P
       return result as Result<boolean, DbError>
     }
     return ok(result.data > 0)
+  }
+
+  private buildQueryError(error: { message: string }, cause: unknown): Result<never, IamError> {
+    return err({
+      code: IamErrorCode.REPOSITORY_ERROR,
+      message: iamM('iam_queryPermissionFailed', { params: { message: error.message } }),
+      cause,
+    })
+  }
+
+  private async findOneBy(where: string, params: unknown[]): Promise<Result<Permission | null, IamError>> {
+    const result = await this.findAll({ where, params, limit: 1 })
+    if (!result.success) {
+      return this.buildQueryError(result.error, result.error)
+    }
+    return ok(result.data[0] ?? null)
   }
 }

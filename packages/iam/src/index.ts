@@ -5,7 +5,7 @@
  *
  * 本模块提供完整的身份认证与访问控制能力：
  * - 多种认证策略：密码、OTP、LDAP
- * - 会话管理：JWT 无状态 / 有状态会话
+ * - 会话管理：有状态会话（随机访问令牌）
  * - RBAC 授权：角色与权限管理
  *
  * @example
@@ -15,7 +15,7 @@
  *
  * // 初始化
  * await db.init({ type: 'sqlite', database: './data.db' })
- * await iam.init(db)
+ * await iam.init(db, {}, { cache })
  *
  * // 注册用户
  * const user = await iam.user.register({

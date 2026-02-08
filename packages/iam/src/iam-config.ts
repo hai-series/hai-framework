@@ -9,7 +9,6 @@
  * - 错误码常量（5000-5999 范围）
  * - 认证策略类型枚举
  * - 会话配置
- * - JWT 配置
  * - RBAC 配置
  * - 统一的 IamConfig 配置结构
  *
@@ -19,7 +18,7 @@
  *
  * // 校验配置
  * const config = IamConfigSchema.parse({
- *     session: { type: 'jwt' }
+ *     session: { maxAge: 86400 }
  * })
  *
  * // 使用错误码
@@ -72,10 +71,6 @@ export const IamErrorCode = {
   PASSWORD_EXPIRED: 5006,
   /** 密码不符合策略 */
   PASSWORD_POLICY_VIOLATION: 5007,
-  /** 需要多因素认证 */
-  MFA_REQUIRED: 5008,
-  /** 多因素认证无效 */
-  MFA_INVALID: 5009,
   /** 验证码无效 */
   OTP_INVALID: 5010,
   /** 验证码已过期 */
@@ -306,49 +301,13 @@ export type AgreementConfig = z.infer<typeof AgreementConfigSchema>
 // =============================================================================
 
 /**
- * 会话类型
- *
- * - `jwt` - 无状态 JWT 会话
- * - `stateful` - 有状态会话（存储在外部存储中）
- */
-export const SessionTypeSchema = z.enum(['jwt', 'stateful'])
-
-/** 会话类型 */
-export type SessionType = z.infer<typeof SessionTypeSchema>
-
-/**
- * JWT 配置 Schema
- */
-export const JwtConfigSchema = z.object({
-  /** 密钥（HS256）或私钥（RS256/ES256） */
-  secret: z.string().min(32),
-  /** 签名算法 */
-  algorithm: z.enum(['HS256', 'HS384', 'HS512', 'RS256', 'RS384', 'RS512', 'ES256', 'ES384', 'ES512']).default('HS256'),
-  /** 访问令牌过期时间（秒，默认 900 = 15分钟） */
-  accessTokenExpiresIn: z.number().int().min(60).default(900),
-  /** 刷新令牌过期时间（秒，默认 604800 = 7天） */
-  refreshTokenExpiresIn: z.number().int().min(60).default(604800),
-  /** 发行者 */
-  issuer: z.string().optional(),
-  /** 受众 */
-  audience: z.string().optional(),
-})
-
-/** JWT 配置类型 */
-export type JwtConfig = z.infer<typeof JwtConfigSchema>
-
-/**
  * 会话配置 Schema
  */
 export const SessionConfigSchema = z.object({
-  /** 会话类型 */
-  type: SessionTypeSchema.default('jwt'),
   /** 会话超时时间（秒，默认 86400 = 24小时） */
   maxAge: z.number().int().min(60).default(86400),
   /** 是否滑动窗口（每次访问刷新过期时间） */
   sliding: z.boolean().default(true),
-  /** JWT 配置（type 为 jwt 时使用） */
-  jwt: JwtConfigSchema.optional(),
   /** 单设备登录（踢掉其他设备） */
   singleDevice: z.boolean().default(false),
 })
@@ -387,8 +346,8 @@ export type RbacConfig = z.infer<typeof RbacConfigSchema>
  * const config: IamConfig = {
  *     password: { minLength: 8 },
  *     session: {
- *         type: 'jwt',
- *         jwt: { secret: 'your-secret-key' }
+ *         maxAge: 86400,
+ *         sliding: true
  *     },
  *     login: { password: true, otp: true },
  *     register: { enabled: true, defaultEnabled: true },

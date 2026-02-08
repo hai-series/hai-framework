@@ -48,6 +48,7 @@
   "iam_permissionNotExist": "权限不存在",
   "iam_notInitialized": "未初始化，请先调用 iam.init()",
   "iam_initFailed": "初始化失败",
+  "iam_cacheRequired": "会话管理需要提供缓存服务",
   "iam_initComponentFailed": "初始化组件失败",
   "iam_initSeedDataFailed": "初始化种子数据失败",
   "iam_createUserTableFailed": "创建用户表失败: {message}",

@@ -15,7 +15,8 @@ import type { IamError } from '../../iam-core-types.js'
 import type { UserRepository } from '../../user/iam-user-repository-user.js'
 import type { StoredUser, User } from '../../user/iam-user-types.js'
 import type { AuthStrategy, Credentials } from '../iam-authn-types.js'
-import { err, ok } from '@hai/core'
+import { core, err, ok } from '@hai/core'
+import { crypto as haiCrypto } from '@hai/crypto'
 
 import { IamErrorCode, PasswordConfigSchema } from '../../iam-config.js'
 import { iamM } from '../../iam-i18n.js'
@@ -30,26 +31,32 @@ export interface PasswordStrategyConfig {
   passwordConfig?: PasswordConfig
   /** 用户存储 */
   userRepository: UserRepository
-  /** 密码哈希函数 */
-  hashPassword: (password: string) => Result<string, IamError>
-  /** 密码验证函数 */
-  verifyPassword: (password: string, hash: string) => Result<boolean, IamError>
   /** 最大登录失败次数（默认 5） */
   maxLoginAttempts?: number
   /** 锁定时间（秒，默认 900 = 15分钟） */
   lockoutDuration?: number
 }
 
+const logger = core.logger.child({ module: 'iam', scope: 'password-strategy' })
+
 /**
  * 创建密码认证策略
  */
-export function createPasswordStrategy(config: PasswordStrategyConfig): AuthStrategy {
+export function createPasswordStrategy(config: PasswordStrategyConfig): PasswordStrategy {
   const passwordConfig = config.passwordConfig
     ? PasswordConfigSchema.parse(config.passwordConfig)
     : PasswordConfigSchema.parse({})
 
   const maxLoginAttempts = config.maxLoginAttempts ?? 5
   const lockoutDuration = config.lockoutDuration ?? 900
+  const passwordProvider = haiCrypto.password.create()
+
+  function mapPasswordError(message: string): Result<never, IamError> {
+    return err({
+      code: IamErrorCode.INTERNAL_ERROR,
+      message,
+    })
+  }
 
   /**
    * 验证密码强度
@@ -112,12 +119,46 @@ export function createPasswordStrategy(config: PasswordStrategyConfig): AuthStra
     return new Date() > expirationDate
   }
 
-  const strategy: AuthStrategy = {
+  /**
+   * 校验账户状态（启用、锁定）
+   */
+  function checkAccountStatus(user: StoredUser): Result<void, IamError> {
+    if (!user.enabled) {
+      return err({ code: IamErrorCode.USER_DISABLED, message: iamM('iam_accountDisabled') })
+    }
+    if (isAccountLocked(user)) {
+      return err({ code: IamErrorCode.USER_LOCKED, message: iamM('iam_accountLocked') })
+    }
+    return ok(undefined)
+  }
+
+  /**
+   * 验证用户密码
+   */
+  async function verifyUserPassword(user: StoredUser, password: string): Promise<Result<void, IamError>> {
+    if (!user.passwordHash) {
+      return err({ code: IamErrorCode.INVALID_CREDENTIALS, message: iamM('iam_accountNoPassword') })
+    }
+
+    const verifyResult = passwordProvider.verify(password, user.passwordHash)
+    if (!verifyResult.success) {
+      return mapPasswordError(verifyResult.error.message)
+    }
+
+    if (!verifyResult.data) {
+      await recordLoginFailure(config.userRepository, user, { maxLoginAttempts, lockoutDuration })
+      logger.warn('Password verification failed', { userId: user.id })
+      return err({ code: IamErrorCode.INVALID_CREDENTIALS, message: iamM('iam_passwordWrong') })
+    }
+
+    return ok(undefined)
+  }
+
+  return {
     type: 'password',
     name: 'password-strategy',
 
     async authenticate(credentials: Credentials): Promise<Result<User, IamError>> {
-      // 类型检查
       const credentialResult = ensureCredentialType(credentials, 'password')
       if (!credentialResult.success) {
         return credentialResult as Result<User, IamError>
@@ -127,80 +168,48 @@ export function createPasswordStrategy(config: PasswordStrategyConfig): AuthStra
 
       // 查找用户
       const userResult = await config.userRepository.findByIdentifier(identifier)
-      if (!userResult.success) {
+      if (!userResult.success)
         return userResult
-      }
 
       const storedUser = userResult.data
       if (!storedUser) {
-        return err({
-          code: IamErrorCode.USER_NOT_FOUND,
-          message: iamM('iam_userNotExist'),
-        })
+        return err({ code: IamErrorCode.USER_NOT_FOUND, message: iamM('iam_userNotExist') })
       }
 
-      // 检查账户状态
-      if (!storedUser.enabled) {
-        return err({
-          code: IamErrorCode.USER_DISABLED,
-          message: iamM('iam_accountDisabled'),
-        })
-      }
-
-      // 检查账户锁定
-      if (isAccountLocked(storedUser)) {
-        return err({
-          code: IamErrorCode.USER_LOCKED,
-          message: iamM('iam_accountLocked'),
-        })
-      }
+      // 校验账户状态
+      const statusResult = checkAccountStatus(storedUser)
+      if (!statusResult.success)
+        return statusResult as Result<User, IamError>
 
       // 验证密码
-      if (!storedUser.passwordHash) {
-        return err({
-          code: IamErrorCode.INVALID_CREDENTIALS,
-          message: iamM('iam_accountNoPassword'),
-        })
-      }
-
-      const verifyResult = config.verifyPassword(password, storedUser.passwordHash)
-      if (!verifyResult.success) {
-        return verifyResult as Result<User, IamError>
-      }
-
-      if (!verifyResult.data) {
-        await recordLoginFailure(config.userRepository, storedUser, {
-          maxLoginAttempts,
-          lockoutDuration,
-        })
-
-        return err({
-          code: IamErrorCode.INVALID_CREDENTIALS,
-          message: iamM('iam_passwordWrong'),
-        })
-      }
+      const pwResult = await verifyUserPassword(storedUser, password)
+      if (!pwResult.success)
+        return pwResult as Result<User, IamError>
 
       // 检查密码是否过期
       if (isPasswordExpired(storedUser)) {
-        return err({
-          code: IamErrorCode.PASSWORD_EXPIRED,
-          message: iamM('iam_passwordExpired'),
-        })
+        return err({ code: IamErrorCode.PASSWORD_EXPIRED, message: iamM('iam_passwordExpired') })
       }
 
       // 登录成功，重置失败计数
       await resetLoginFailures(config.userRepository, storedUser)
+      logger.info('Password authentication succeeded', { userId: storedUser.id })
 
       return ok(toUser(storedUser))
     },
+
+    validatePassword: validatePasswordStrength,
+
+    hashPassword(password: string): Result<string, IamError> {
+      const hashResult = passwordProvider.hash(password)
+      if (!hashResult.success) {
+        return mapPasswordError(hashResult.error.message)
+      }
+      return ok(hashResult.data)
+    },
+
+    passwordConfig,
   }
-
-  // 添加密码验证方法到策略上
-  ;(strategy as PasswordStrategy).validatePassword = validatePasswordStrength
-  ;(strategy as PasswordStrategy).hashPassword = config.hashPassword
-  ;(strategy as PasswordStrategy).passwordConfig = passwordConfig
-
-  return strategy
 }
 
 /**
