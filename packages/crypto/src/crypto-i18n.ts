@@ -1,37 +1,19 @@
-/**
- * =============================================================================
- * @hai/crypto - i18n
- * =============================================================================
- *
- * 本文件提供加密模块的 i18n 文案访问入口。
- *
- * @example
- * ```ts
- * import { cryptoM } from '@hai/crypto'
- *
- * const message = cryptoM('crypto_sm2EncryptEmpty')
- * ```
- * =============================================================================
- */
-
 import { core } from '@hai/core'
 import messagesEnUS from '../messages/en-US.json'
 import messagesZhCN from '../messages/zh-CN.json'
 
-// =============================================================================
-// i18n
-// =============================================================================
-
+/** 加密模块 i18n 消息键类型（自动从 zh-CN 消息文件推断） */
 type CryptoMessageKey = keyof typeof messagesZhCN
 
 /**
- * 获取加密模块文案。
+ * 加密模块 i18n 消息获取器
+ *
+ * 根据当前全局 locale 返回对应语言的消息文本，支持参数插值。
  *
  * @example
  * ```ts
- * import { cryptoM } from '@hai/crypto'
- *
- * const text = cryptoM('crypto_passwordEmpty')
+ * cryptoM('crypto_sm2PublicKeyInvalid')
+ * cryptoM('crypto_initFailed', { params: { error: 'bad config' } })
  * ```
  */
 export const cryptoM = core.i18n.createMessageGetter<CryptoMessageKey>({

@@ -7,7 +7,8 @@
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
     }
   },
   "main": "./dist/index.js",
@@ -21,7 +22,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint src",
+    "lint": "eslint .",
     "clean": "rimraf dist .turbo"
   },
   "dependencies": {

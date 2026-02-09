@@ -1,43 +1,29 @@
-/**
- * =============================================================================
- * @hai/crypto - 密码哈希提供者
- * =============================================================================
- * 基于 SM3 的密码哈希和验证功能。
- * 使用 SM3 哈希算法对密码进行加盐哈希。
- *
- * @example
- * ```ts
- * import { crypto } from '@hai/crypto'
-
- * const provider = crypto.password.create()
- * const result = provider.hash('password')
- * if (result.success) {
- *   provider.verify('password', result.data)
- * }
- * ```
- * =============================================================================
- */
-
 import type { Result } from '@hai/core'
-import type { CryptoError, PasswordProvider, PasswordProviderConfig } from './crypto-types.js'
+
+import type { CryptoError, PasswordConfig, PasswordOperations, SM3Operations } from './crypto-types.js'
+
 import { err, ok } from '@hai/core'
+
 import { CryptoErrorCode } from './crypto-config.js'
 import { cryptoM } from './crypto-i18n.js'
-import { createSM3 } from './crypto-sm3.js'
 
-// =============================================================================
-// 类型定义
-// =============================================================================
+// ─── 依赖接口 ───
 
-// =============================================================================
-// 工具函数
-// =============================================================================
+/** createPasswordFunctions 所需的外部依赖 */
+interface PasswordDeps {
+  /** SM3 操作实例，用于迭代哈希计算 */
+  sm3: SM3Operations
+}
+
+// ─── 工具函数 ───
 
 /**
- * 生成随机盐值。
+ * 生成随机盐值
  *
- * @param length - 盐值长度
- * @returns 盐值字符串
+ * 从大小写字母和数字中随机选取字符组成盐值字符串。
+ *
+ * @param length - 盐值长度（字符数）
+ * @returns 随机盐值字符串
  */
 function generateSalt(length: number): string {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
@@ -49,16 +35,19 @@ function generateSalt(length: number): string {
 }
 
 /**
- * 对密码进行多次迭代哈希。
+ * 对数据进行多次迭代哈希（密钥拉伸）
  *
- * @param sm3 - SM3 实例
- * @param data - 明文密码
+ * 首次输入为 salt + data，后续每次用前一轮的哈希结果作为输入。
+ * 任一轮 SM3 计算失败则立即返回错误。
+ *
+ * @param sm3 - SM3 操作实例
+ * @param data - 原始数据（通常为密码）
  * @param salt - 盐值
  * @param iterations - 迭代次数
- * @returns 哈希结果（失败时返回 CryptoError）
+ * @returns 成功时返回最终哈希值（64 字符十六进制）
  */
 function iterateHash(
-  sm3: ReturnType<typeof createSM3>,
+  sm3: SM3Operations,
   data: string,
   salt: string,
   iterations: number,
@@ -74,45 +63,23 @@ function iterateHash(
   return ok(current)
 }
 
-// =============================================================================
-// 密码提供者实现
-// =============================================================================
+// ─── 密码操作工厂 ───
 
 /**
- * 创建基于 SM3 的密码哈希提供者。
+ * 创建密码哈希操作实例
  *
- * @param config - 配置选项
- * @returns 密码提供者实例
+ * 内部使用 SM3 迭代加盐的方式生成密码哈希，格式为 `$hai$<iterations>$<salt>$<hash>`。
  *
- * @example
- * ```ts
- * import { crypto } from '@hai/crypto'
- *
- * const provider = crypto.password.create({ iterations: 12000 })
- * const hashResult = provider.hash('myPassword123')
- * if (hashResult.success) {
- *   provider.verify('myPassword123', hashResult.data)
- * }
- * ```
+ * @param deps - 依赖（需要注入 SM3 操作实例）
+ * @returns PasswordOperations 接口实现
  */
-export function createHaiPasswordProvider(config: PasswordProviderConfig = {}): PasswordProvider {
-  const { saltLength = 16, iterations = 10000 } = config
-  const sm3 = createSM3()
+export function createPasswordFunctions(deps: PasswordDeps): PasswordOperations {
+  const { sm3 } = deps
 
   return {
-    /**
-     * 对密码进行哈希。
-     *
-     * @param password - 明文密码
-     * @returns 哈希结果
-     *
-     * @example
-     * ```ts
-     * const provider = crypto.password.create()
-     * const result = provider.hash('password')
-     * ```
-     */
-    hash(password: string): Result<string, CryptoError> {
+    hash(password: string, config: PasswordConfig = {}): Result<string, CryptoError> {
+      const { saltLength = 16, iterations = 10000 } = config
+
       try {
         if (!password) {
           return err({
@@ -121,16 +88,12 @@ export function createHaiPasswordProvider(config: PasswordProviderConfig = {}): 
           })
         }
 
-        // 生成随机盐值
         const salt = generateSalt(saltLength)
-
-        // 进行迭代哈希
         const hashResult = iterateHash(sm3, password, salt, iterations)
         if (!hashResult.success) {
           return hashResult
         }
 
-        // 格式：$hai$iterations$salt$hash
         const formatted = `$hai$${iterations}$${salt}$${hashResult.data}`
         return ok(formatted)
       }
@@ -143,19 +106,6 @@ export function createHaiPasswordProvider(config: PasswordProviderConfig = {}): 
       }
     },
 
-    /**
-     * 验证密码。
-     *
-     * @param password - 明文密码
-     * @param hash - 已存储的哈希值
-     * @returns 验证结果
-     *
-     * @example
-     * ```ts
-     * const provider = crypto.password.create()
-     * const result = provider.verify('password', '$hai$...')
-     * ```
-     */
     verify(password: string, hash: string): Result<boolean, CryptoError> {
       try {
         if (!password || !hash) {
@@ -165,7 +115,6 @@ export function createHaiPasswordProvider(config: PasswordProviderConfig = {}): 
           })
         }
 
-        // 解析存储的哈希：$hai$iterations$salt$hash
         const parts = hash.split('$')
         if (parts.length !== 5 || parts[1] !== 'hai') {
           return err({
@@ -185,13 +134,11 @@ export function createHaiPasswordProvider(config: PasswordProviderConfig = {}): 
           })
         }
 
-        // 使用相同参数重新计算哈希
         const hashResult = iterateHash(sm3, password, salt, storedIterations)
         if (!hashResult.success) {
           return hashResult
         }
 
-        // 比较哈希值
         return ok(hashResult.data === storedHash)
       }
       catch (error) {

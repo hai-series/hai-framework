@@ -1,17 +1,13 @@
-import { describe, expect, it } from 'vitest'
+import { beforeAll, describe, expect, it } from 'vitest'
 import { crypto, CryptoErrorCode } from '../src/index.js'
 
-/**
- * @example
- * ```ts
- * const keyPair = crypto.sm2.generateKeyPair()
- * if (keyPair.success) {
- *   const encrypted = crypto.sm2.encrypt('data', keyPair.data.publicKey)
- * }
- * ```
- */
-
 describe('crypto.sm2', () => {
+  beforeAll(async () => {
+    await crypto.init({})
+  })
+
+  // ─── 密钥对生成 ───
+
   it('should generate valid key pair', () => {
     const result = crypto.sm2.generateKeyPair()
     expect(result.success).toBe(true)
@@ -21,6 +17,18 @@ describe('crypto.sm2', () => {
     expect(crypto.sm2.isValidPublicKey(result.data.publicKey)).toBe(true)
     expect(crypto.sm2.isValidPrivateKey(result.data.privateKey)).toBe(true)
   })
+
+  it('should generate different key pairs each time', () => {
+    const pair1 = crypto.sm2.generateKeyPair()
+    const pair2 = crypto.sm2.generateKeyPair()
+    expect(pair1.success && pair2.success).toBe(true)
+    if (!pair1.success || !pair2.success)
+      return
+
+    expect(pair1.data.privateKey).not.toBe(pair2.data.privateKey)
+  })
+
+  // ─── 密钥格式校验 ───
 
   it('should accept public key without 04 prefix', () => {
     const result = crypto.sm2.generateKeyPair()
@@ -32,6 +40,34 @@ describe('crypto.sm2', () => {
     const trimmed = publicKey.startsWith('04') ? publicKey.slice(2) : publicKey
     expect(crypto.sm2.isValidPublicKey(trimmed)).toBe(true)
   })
+
+  it('should reject empty string as public key', () => {
+    expect(crypto.sm2.isValidPublicKey('')).toBe(false)
+  })
+
+  it('should reject short string as public key', () => {
+    expect(crypto.sm2.isValidPublicKey('04abcdef')).toBe(false)
+  })
+
+  it('should reject non-hex characters in public key', () => {
+    const nonHex = `04${'zz'.repeat(64)}`
+    expect(crypto.sm2.isValidPublicKey(nonHex)).toBe(false)
+  })
+
+  it('should reject empty string as private key', () => {
+    expect(crypto.sm2.isValidPrivateKey('')).toBe(false)
+  })
+
+  it('should reject short string as private key', () => {
+    expect(crypto.sm2.isValidPrivateKey('1234')).toBe(false)
+  })
+
+  it('should reject non-hex characters in private key', () => {
+    const nonHex = 'zz'.repeat(32)
+    expect(crypto.sm2.isValidPrivateKey(nonHex)).toBe(false)
+  })
+
+  // ─── 加密解密 ───
 
   it('should encrypt and decrypt roundtrip', () => {
     const keyPair = crypto.sm2.generateKeyPair()
@@ -63,6 +99,7 @@ describe('crypto.sm2', () => {
     if (!encrypted.success)
       return
 
+    // base64 密文应能被自动检测并解密
     const decrypted = crypto.sm2.decrypt(encrypted.data, keyPair.data.privateKey)
     expect(decrypted.success).toBe(true)
     if (!decrypted.success)
@@ -70,6 +107,65 @@ describe('crypto.sm2', () => {
 
     expect(decrypted.data).toBe('hello')
   })
+
+  it('should encrypt and decrypt with cipherMode=0 (C1C2C3)', () => {
+    const keyPair = crypto.sm2.generateKeyPair()
+    expect(keyPair.success).toBe(true)
+    if (!keyPair.success)
+      return
+
+    const encrypted = crypto.sm2.encrypt('hello', keyPair.data.publicKey, { cipherMode: 0 })
+    expect(encrypted.success).toBe(true)
+    if (!encrypted.success)
+      return
+
+    const decrypted = crypto.sm2.decrypt(encrypted.data, keyPair.data.privateKey, { cipherMode: 0 })
+    expect(decrypted.success).toBe(true)
+    if (!decrypted.success)
+      return
+
+    expect(decrypted.data).toBe('hello')
+  })
+
+  it('should encrypt and decrypt Chinese text', () => {
+    const keyPair = crypto.sm2.generateKeyPair()
+    expect(keyPair.success).toBe(true)
+    if (!keyPair.success)
+      return
+
+    const text = '你好世界'
+    const encrypted = crypto.sm2.encrypt(text, keyPair.data.publicKey)
+    expect(encrypted.success).toBe(true)
+    if (!encrypted.success)
+      return
+
+    const decrypted = crypto.sm2.decrypt(encrypted.data, keyPair.data.privateKey)
+    expect(decrypted.success).toBe(true)
+    if (!decrypted.success)
+      return
+
+    expect(decrypted.data).toBe(text)
+  })
+
+  it('should return INVALID_KEY for invalid public key on encrypt', () => {
+    const result = crypto.sm2.encrypt('data', 'invalid-key')
+    expect(result.success).toBe(false)
+    if (result.success)
+      return
+
+    expect(result.error.code).toBe(CryptoErrorCode.INVALID_KEY)
+  })
+
+  it('should return INVALID_KEY for invalid private key on decrypt', () => {
+    const result = crypto.sm2.decrypt('abcd', 'invalid-private-key')
+    expect(result.success).toBe(false)
+    if (result.success)
+      return
+
+    expect(result.error.code).toBe(CryptoErrorCode.INVALID_KEY)
+  })
+
+  // ─── 签名验签 ───
 
   it('should sign and verify', () => {
     const keyPair = crypto.sm2.generateKeyPair()
@@ -109,22 +205,31 @@ describe('crypto.sm2', () => {
     expect(verified.data).toBe(false)
   })
 
-  it('should return INVALID_KEY for invalid public key', () => {
-    const result = crypto.sm2.encrypt('data', 'invalid-key')
-    expect(result.success).toBe(false)
-    if (result.success)
+  it('should sign with custom userId and verify', () => {
+    const keyPair = crypto.sm2.generateKeyPair()
+    expect(keyPair.success).toBe(true)
+    if (!keyPair.success)
       return
 
-    expect(result.error.code).toBe(CryptoErrorCode.INVALID_KEY)
-  })
-
-  it('should return INVALID_KEY for invalid private key in decrypt', () => {
-    const result = crypto.sm2.decrypt('abcd', 'invalid-private-key')
-    expect(result.success).toBe(false)
-    if (result.success)
+    const customOpts = { userId: 'customUser1234567' }
+    const signature = crypto.sm2.sign('data', keyPair.data.privateKey, customOpts)
+    expect(signature.success).toBe(true)
+    if (!signature.success)
       return
 
-    expect(result.error.code).toBe(CryptoErrorCode.INVALID_KEY)
+    // 同一 userId 验签应通过
+    const verified = crypto.sm2.verify('data', signature.data, keyPair.data.publicKey, customOpts)
+    expect(verified.success).toBe(true)
+    if (!verified.success)
+      return
+    expect(verified.data).toBe(true)
+
+    // 不同 userId 验签应失败
+    const wrongUser = crypto.sm2.verify('data', signature.data, keyPair.data.publicKey, { userId: 'wrongUser12345678' })
+    expect(wrongUser.success).toBe(true)
+    if (!wrongUser.success)
+      return
+    expect(wrongUser.data).toBe(false)
   })
 
   it('should return INVALID_KEY for invalid private key in sign', () => {
@@ -136,7 +241,12 @@ describe('crypto.sm2', () => {
     expect(result.error.code).toBe(CryptoErrorCode.INVALID_KEY)
   })
 
-  it('should return false for invalid private key format', () => {
-    expect(crypto.sm2.isValidPrivateKey('1234')).toBe(false)
+  it('should return INVALID_KEY for invalid public key in verify', () => {
+    const result = crypto.sm2.verify('data', 'fakesig', 'invalid-public-key')
+    expect(result.success).toBe(false)
+    if (result.success)
+      return
+
+    expect(result.error.code).toBe(CryptoErrorCode.INVALID_KEY)
   })
 })

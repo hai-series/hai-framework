@@ -1,27 +1,5 @@
-/**
- * =============================================================================
- * @hai/crypto - SM3 国密哈希算法
- * =============================================================================
- *
- * SM3 国密哈希算法实现，基于 sm-crypto 库。
- *
- * SM3 算法特点：
- * - 输出长度 256 位（32 字节，64 个十六进制字符）
- * - 单向不可逆
- * - 抗碰撞性强
- * - 国家密码管理局推荐算法
- *
- * 适用场景：
- * - 数据完整性校验
- * - 数字签名的哈希预处理
- * - 消息认证码（HMAC）
- * - 密钥派生
- *
- * @module crypto-sm3
- * =============================================================================
- */
-
 import type { Result } from '@hai/core'
+
 import type {
   CryptoError,
   SM3Operations,
@@ -37,39 +15,19 @@ import { cryptoM } from './crypto-i18n.js'
 
 const { sm3 } = smCrypto
 
-// =============================================================================
-// SM3 算法实现
-// =============================================================================
+// ─── SM3 算法实现 ───
 
 /**
- * 创建 SM3 算法实例。
+ * 创建 SM3 算法操作实例
  *
- * @returns SM3 操作接口
+ * 基于 sm-crypto 库实现 SM3 哈希、HMAC 与哈希验证。
+ * 支持字符串（UTF-8/Hex）和 Uint8Array 输入。
+ * HMAC 实现遵循 RFC 2104 标准。
  *
- * @example
- * ```ts
- * import { createSM3 } from '@hai/crypto'
- *
- * const sm3 = createSM3()
- * sm3.hash('data')
- * sm3.hmac('data', 'key')
- * ```
+ * @returns SM3Operations 接口实现
  */
 export function createSM3(): SM3Operations {
   return {
-    /**
-     * 计算 SM3 哈希。
-     *
-     * @param data - 待哈希数据
-     * @param options - 可选参数
-     * @returns 哈希结果
-     *
-     * @example
-     * ```ts
-     * const sm3 = createSM3()
-     * sm3.hash('hello')
-     * ```
-     */
     hash(
       data: string | Uint8Array,
       options: SM3Options = {},
@@ -111,25 +69,12 @@ export function createSM3(): SM3Operations {
       catch (error) {
         return err({
           code: CryptoErrorCode.HASH_FAILED,
-          message: cryptoM('crypto_sm3HashFailed', { error: error instanceof Error ? error.message : String(error) }),
+          message: cryptoM('crypto_sm3HashFailed', { params: { error: error instanceof Error ? error.message : String(error) } }),
           cause: error,
         })
       }
     },
 
-    /**
-     * 计算 HMAC-SM3。
-     *
-     * @param data - 待计算数据
-     * @param key - 密钥
-     * @returns HMAC 结果
-     *
-     * @example
-     * ```ts
-     * const sm3 = createSM3()
-     * sm3.hmac('data', 'secret')
-     * ```
-     */
     hmac(data: string, key: string): Result<string, CryptoError> {
       try {
         const blockSize = 64
@@ -168,28 +113,12 @@ export function createSM3(): SM3Operations {
       catch (error) {
         return err({
           code: CryptoErrorCode.HMAC_FAILED,
-          message: cryptoM('crypto_sm3HmacFailed', { error: error instanceof Error ? error.message : String(error) }),
+          message: cryptoM('crypto_sm3HmacFailed', { params: { error: error instanceof Error ? error.message : String(error) } }),
           cause: error,
         })
       }
     },
 
-    /**
-     * 验证哈希是否匹配。
-     *
-     * @param data - 原始数据
-     * @param expectedHash - 期望哈希
-     * @returns 是否匹配
-     *
-     * @example
-     * ```ts
-     * const sm3 = createSM3()
-     * const hash = sm3.hash('data')
-     * if (hash.success) {
-     *   sm3.verify('data', hash.data)
-     * }
-     * ```
-     */
     verify(data: string, expectedHash: string): Result<boolean, CryptoError> {
       try {
         const hashResult = sm3(data)
@@ -198,7 +127,7 @@ export function createSM3(): SM3Operations {
       catch (error) {
         return err({
           code: CryptoErrorCode.HASH_FAILED,
-          message: cryptoM('crypto_sm3VerifyFailed', { error: error instanceof Error ? error.message : String(error) }),
+          message: cryptoM('crypto_sm3VerifyFailed', { params: { error: error instanceof Error ? error.message : String(error) } }),
           cause: error,
         })
       }
@@ -206,14 +135,12 @@ export function createSM3(): SM3Operations {
   }
 }
 
-// =============================================================================
-// 辅助函数（前后端通用）
-// =============================================================================
+// ─── 辅助函数 ───
 
 /**
- * 十六进制字符串转字节数组。
+ * 十六进制字符串转字节数组
  *
- * @param hex - 十六进制字符串
+ * @param hex - 十六进制字符串（长度必须为偶数）
  * @returns 字节数组
  */
 function hexToBytes(hex: string): number[] {
@@ -225,7 +152,9 @@ function hexToBytes(hex: string): number[] {
 }
 
 /**
- * UTF-8 字符串转字节数组（前后端通用）。
+ * UTF-8 字符串转字节数组
+ *
+ * 使用 TextEncoder 进行编码转换。
  *
  * @param str - UTF-8 字符串
  * @returns 字节数组
