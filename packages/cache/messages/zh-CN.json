@@ -1,7 +1,6 @@
 {
   "$schema": "https://inlang.com/schema/inlang-message-format",
   "cache_notInitialized": "缓存未初始化，请先调用 cache.init()",
-  "cache_notInitializedMain": "缓存未初始化，请先调用 cache.init()",
   "cache_operationFailed": "缓存操作失败：{error}",
   "cache_redisConnectionFailed": "Redis 连接失败：{error}",
   "cache_initFailed": "缓存初始化失败：{error}",

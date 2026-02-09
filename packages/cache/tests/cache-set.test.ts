@@ -61,6 +61,111 @@ describe('cache set operations', () => {
         expect(diff.data.sort()).toEqual(['a'])
       }
     })
+
+    // ─── 边界场景 ───
+
+    it('sadd 重复成员应返回 0 新增计数', async () => {
+      await cache.set_.sadd('s-dup', 'a', 'b')
+      const result = await cache.set_.sadd('s-dup', 'b', 'c')
+      expect(result.success).toBe(true)
+      if (result.success) {
+        // 只有 'c' 是新增的
+        expect(result.data).toBe(1)
+      }
+    })
+
+    it('smembers 不存在的 key 应返回空数组', async () => {
+      const result = await cache.set_.smembers('nonexistent-set')
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data).toEqual([])
+      }
+    })
+
+    it('sismember 不存在的 key 应返回 false', async () => {
+      const result = await cache.set_.sismember('nonexistent-set-is', 'a')
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data).toBe(false)
+      }
+    })
+
+    it('scard 不存在的 key 应返回 0', async () => {
+      const result = await cache.set_.scard('nonexistent-scard')
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data).toBe(0)
+      }
+    })
+
+    it('srem 不存在的成员应返回 0', async () => {
+      await cache.set_.sadd('s-rem', 'a')
+      const result = await cache.set_.srem('s-rem', 'nonexistent')
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data).toBe(0)
+      }
+    })
+
+    it('srandmember 应返回集合中的成员', async () => {
+      await cache.set_.sadd('s-rand', 'x', 'y', 'z')
+      const result = await cache.set_.srandmember<string>('s-rand')
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(['x', 'y', 'z']).toContain(result.data)
+      }
+    })
+
+    it('srandmember 不存在的 key 应返回 null', async () => {
+      const result = await cache.set_.srandmember('nonexistent-srand')
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data).toBeNull()
+      }
+    })
+
+    it('srandmember 传 count 应返回数组', async () => {
+      await cache.set_.sadd('s-rand-c', 'a', 'b', 'c')
+      const result = await cache.set_.srandmember<string>('s-rand-c', 2)
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(Array.isArray(result.data)).toBe(true)
+        expect((result.data as string[]).length).toBeLessThanOrEqual(2)
+      }
+    })
+
+    it('spop 应弹出并移除成员', async () => {
+      await cache.set_.sadd('s-pop', 'a', 'b', 'c')
+      const result = await cache.set_.spop<string>('s-pop')
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(['a', 'b', 'c']).toContain(result.data)
+      }
+
+      // 弹出后集合应少一个成员
+      const count = await cache.set_.scard('s-pop')
+      expect(count.success).toBe(true)
+      if (count.success) {
+        expect(count.data).toBe(2)
+      }
+    })
+
+    it('spop 不存在的 key 应返回 null', async () => {
+      const result = await cache.set_.spop('nonexistent-spop')
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data).toBeNull()
+      }
+    })
+
+    it('sinter 含不存在的 key 应返回空数组', async () => {
+      await cache.set_.sadd('s-inter-exist', 'a', 'b')
+      const result = await cache.set_.sinter('s-inter-exist', 'nonexistent-inter')
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data).toEqual([])
+      }
+    })
   }
 
   defineCacheSuite('memory', memoryEnv, defineCommon)

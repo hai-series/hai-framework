@@ -75,6 +75,96 @@ describe('cache hash operations', () => {
         expect(incr.data).toBe(4)
       }
     })
+
+    // ─── 边界场景 ───
+
+    it('hget 不存在的 key 应返回 null', async () => {
+      const result = await cache.hash.hget('nonexistent-hash', 'f1')
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data).toBeNull()
+      }
+    })
+
+    it('hget 不存在的 field 应返回 null', async () => {
+      await cache.hash.hset('h-partial', 'f1', 'v1')
+      const result = await cache.hash.hget('h-partial', 'missing')
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data).toBeNull()
+      }
+    })
+
+    it('hgetall 不存在的 key 应返回空对象', async () => {
+      const result = await cache.hash.hgetall('nonexistent-hash-all')
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data).toEqual({})
+      }
+    })
+
+    it('hexists 不存在的 key 应返回 false', async () => {
+      const result = await cache.hash.hexists('nonexistent-hash-ex', 'f1')
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data).toBe(false)
+      }
+    })
+
+    it('hdel 不存在的 field 应返回 0', async () => {
+      await cache.hash.hset('h-del', 'f1', 'v1')
+      const result = await cache.hash.hdel('h-del', 'missing')
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data).toBe(0)
+      }
+    })
+
+    it('hlen 不存在的 key 应返回 0', async () => {
+      const result = await cache.hash.hlen('nonexistent-hlen')
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data).toBe(0)
+      }
+    })
+
+    it('hkeys/hvals 不存在的 key 应返回空数组', async () => {
+      const keys = await cache.hash.hkeys('nonexistent-hkeys')
+      expect(keys.success).toBe(true)
+      if (keys.success) {
+        expect(keys.data).toEqual([])
+      }
+
+      const vals = await cache.hash.hvals('nonexistent-hvals')
+      expect(vals.success).toBe(true)
+      if (vals.success) {
+        expect(vals.data).toEqual([])
+      }
+    })
+
+    it('hincrBy 对不存在的 key/field 应从 0 开始', async () => {
+      const result = await cache.hash.hincrBy('new-hash-incr', 'counter', 5)
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data).toBe(5)
+      }
+    })
+
+    it('hset 覆盖已有字段不应增加计数', async () => {
+      await cache.hash.hset('h-overwrite', 'f1', 'v1')
+      const result = await cache.hash.hset('h-overwrite', 'f1', 'v2')
+      expect(result.success).toBe(true)
+      if (result.success) {
+        // hset 返回的是新增字段数，覆盖已有字段返回 0
+        expect(result.data).toBe(0)
+      }
+
+      const val = await cache.hash.hget('h-overwrite', 'f1')
+      expect(val.success).toBe(true)
+      if (val.success) {
+        expect(val.data).toBe('v2')
+      }
+    })
   }
 
   defineCacheSuite('memory', memoryEnv, defineCommon)
