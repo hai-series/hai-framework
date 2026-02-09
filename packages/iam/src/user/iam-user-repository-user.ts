@@ -10,7 +10,7 @@
  */
 
 import type { Result } from '@hai/core'
-import type { CrudCountOptions, CrudFieldDefinition, CrudRepository, DbError, DbService, TxHandle } from '@hai/db'
+import type { CrudCountOptions, CrudFieldDefinition, CrudRepository, DbError, DbFunctions, TxHandle } from '@hai/db'
 import type { IamError } from '../iam-core-types.js'
 import type { StoredUser } from './iam-user-types.js'
 import { err, ok } from '@hai/core'
@@ -222,7 +222,7 @@ let userRepoDbConfig: unknown = null
  * @param db - 数据库服务实例
  * @returns 用户存储接口实现
  */
-export async function createDbUserRepository(db: DbService): Promise<UserRepository> {
+export async function createDbUserRepository(db: DbFunctions): Promise<UserRepository> {
   if (userRepoInstance && userRepoDbConfig === db.config)
     return userRepoInstance
 
@@ -240,7 +240,7 @@ export async function createDbUserRepository(db: DbService): Promise<UserReposit
  * 继承 BaseCrudRepository，提供按用户名/邮箱/手机号/标识符的查询能力。
  */
 class DbUserRepository extends BaseCrudRepository<StoredUser> implements UserRepository {
-  constructor(db: DbService) {
+  constructor(db: DbFunctions) {
     super(db, {
       table: TABLE_NAME,
       fields: USER_FIELDS,

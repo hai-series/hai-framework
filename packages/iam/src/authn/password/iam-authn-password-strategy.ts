@@ -49,7 +49,7 @@ export function createPasswordStrategy(config: PasswordStrategyConfig): Password
 
   const maxLoginAttempts = config.maxLoginAttempts ?? 5
   const lockoutDuration = config.lockoutDuration ?? 900
-  const passwordProvider = haiCrypto.password.create()
+  const passwordOps = haiCrypto.password
 
   function mapPasswordError(message: string): Result<never, IamError> {
     return err({
@@ -140,7 +140,7 @@ export function createPasswordStrategy(config: PasswordStrategyConfig): Password
       return err({ code: IamErrorCode.INVALID_CREDENTIALS, message: iamM('iam_accountNoPassword') })
     }
 
-    const verifyResult = passwordProvider.verify(password, user.passwordHash)
+    const verifyResult = passwordOps.verify(password, user.passwordHash)
     if (!verifyResult.success) {
       return mapPasswordError(verifyResult.error.message)
     }
@@ -201,7 +201,7 @@ export function createPasswordStrategy(config: PasswordStrategyConfig): Password
     validatePassword: validatePasswordStrength,
 
     hashPassword(password: string): Result<string, IamError> {
-      const hashResult = passwordProvider.hash(password)
+      const hashResult = passwordOps.hash(password)
       if (!hashResult.success) {
         return mapPasswordError(hashResult.error.message)
       }

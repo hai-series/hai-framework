@@ -61,7 +61,7 @@
 
 import type { CacheService } from '@hai/cache'
 import type { Result } from '@hai/core'
-import type { DbService } from '@hai/db'
+import type { DbFunctions } from '@hai/db'
 import type { AuthOperations } from './authn/iam-authn-types.js'
 import type { LdapClientFactory } from './authn/ldap/iam-authn-ldap-strategy.js'
 import type { AuthzManager } from './authz/rbac/iam-authz-rbac-types.js'
@@ -183,7 +183,7 @@ export interface IamService {
    * @param config - IAM 配置（可选）
    * @param options - 运行时选项（可选）
    */
-  init: (db: DbService, config?: IamConfigInput, options?: IamInitOptions) => Promise<Result<void, IamError>>
+  init: (db: DbFunctions, config?: IamConfigInput, options?: IamInitOptions) => Promise<Result<void, IamError>>
 
   /**
    * 关闭
@@ -255,7 +255,7 @@ function createIamServiceInstance(): IamService {
       return IamErrorCode
     },
 
-    async init(db: DbService, configInput?: IamConfigInput, options?: IamInitOptions): Promise<Result<void, IamError>> {
+    async init(db: DbFunctions, configInput?: IamConfigInput, options?: IamInitOptions): Promise<Result<void, IamError>> {
       if (state.initialized) {
         return ok(undefined)
       }
