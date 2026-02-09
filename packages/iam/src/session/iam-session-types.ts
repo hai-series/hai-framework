@@ -13,7 +13,7 @@
  */
 
 import type { Result } from '@hai/core'
-import type { IamError } from '../iam-core-types.js'
+import type { IamError } from '../iam-types.js'
 import type { AgreementDisplay, User } from '../user/iam-user-types.js'
 
 // =============================================================================
@@ -85,9 +85,9 @@ export interface CreateSessionOptions {
 // =============================================================================
 
 /**
- * 会话管理器接口
+ * 会话子功能接口
  */
-export interface SessionManager {
+export interface IamSessionFunctions {
   /**
    * 创建会话
    */

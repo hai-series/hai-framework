@@ -28,19 +28,21 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
-    "lint": "eslint src",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
     "clean": "rimraf dist .turbo"
   },
   "dependencies": {
     "@hai/cache": "workspace:*",
     "@hai/core": "workspace:*",
     "@hai/crypto": "workspace:*",
-    "@hai/db": "workspace:*"
+    "@hai/db": "workspace:*",
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@types/node": "catalog:",
     "rimraf": "catalog:",
-    "testcontainers": "^11.11.0",
+    "testcontainers": "catalog:",
     "tsup": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"

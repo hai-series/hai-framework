@@ -1,63 +1,150 @@
 /**
- * =============================================================================
- * @hai/iam - 认证服务
- * =============================================================================
+ * @hai/iam — 认证子功能工厂
  *
- * 提供认证相关操作的实现。
- *
- * @module authn/iam-authn-service
- * =============================================================================
+ * 创建认证策略（密码/OTP/LDAP），组装成统一的认证操作接口。
  */
 
 import type { Result } from '@hai/core'
-import type { AuthzManager } from '../authz/rbac/iam-authz-rbac-types.js'
+import type { DbFunctions } from '@hai/db'
+
+import type { IamAuthzFunctions } from '../authz/iam-authz-types.js'
 import type { IamConfig } from '../iam-config.js'
-import type { IamError } from '../iam-core-types.js'
-import type { AuthResult, Session, SessionManager } from '../session/iam-session-types.js'
+import type { IamError } from '../iam-types.js'
+import type { AuthResult, IamSessionFunctions, Session } from '../session/iam-session-types.js'
 import type { AgreementDisplay, User } from '../user/iam-user-types.js'
-import type { AuthOperations, AuthStrategy, Credentials, LdapCredentials, OtpCredentials, PasswordCredentials } from './iam-authn-types.js'
+import type { AuthStrategy, Credentials, IamAuthnFunctions, LdapCredentials, OtpCredentials, PasswordCredentials } from './iam-authn-types.js'
+import type { LdapClientFactory } from './ldap/iam-authn-ldap-strategy.js'
 import type { OtpStrategy } from './otp/iam-authn-otp-strategy.js'
 import type { PasswordStrategy } from './password/iam-authn-password-strategy.js'
+
 import { core, err, ok } from '@hai/core'
 
-import { AgreementConfigSchema, IamErrorCode, LoginConfigSchema } from '../iam-config.js'
+import { AgreementConfigSchema, IamErrorCode, LoginConfigSchema, OtpConfigSchema, SecurityConfigSchema } from '../iam-config.js'
 import { iamM } from '../iam-i18n.js'
+import { createDbUserRepository } from '../user/iam-user-repository-user.js'
+import { createLdapStrategy } from './ldap/iam-authn-ldap-strategy.js'
+import { createDbOtpRepository } from './otp/iam-authn-otp-repository-otp.js'
+import { createOtpStrategy } from './otp/iam-authn-otp-strategy.js'
+import { createPasswordStrategy } from './password/iam-authn-password-strategy.js'
 
-const logger = core.logger.child({ module: 'iam', scope: 'auth' })
+const logger = core.logger.child({ module: 'iam', scope: 'authn' })
+
+// ─── 子功能依赖 ───
 
 /**
- * 认证服务依赖
+ * 认证子功能依赖
  */
-export interface AuthServiceDeps {
-  /** 密码策略 */
+export interface IamAuthnFunctionsDeps {
+  config: IamConfig
+  db: DbFunctions
+  sessionFunctions: IamSessionFunctions
+  authzFunctions: IamAuthzFunctions
+  ldapClientFactory?: LdapClientFactory
+  ldapSyncUser?: boolean
+}
+
+/**
+ * 认证子功能返回值（带内部引用）
+ */
+export type IamAuthnFunctionsResult = IamAuthnFunctions & {
+  /** 密码策略引用（供 user 子功能复用） */
+  _passwordStrategy: PasswordStrategy
+}
+
+/**
+ * 创建认证子功能
+ *
+ * 内部创建密码/OTP/LDAP 策略，组装成统一的认证操作接口。
+ */
+export async function createIamAuthnFunctions(deps: IamAuthnFunctionsDeps): Promise<Result<IamAuthnFunctionsResult, IamError>> {
+  try {
+    const { config, db, sessionFunctions, authzFunctions, ldapClientFactory, ldapSyncUser } = deps
+
+    const userRepository = await createDbUserRepository(db)
+    const securityConfig = SecurityConfigSchema.parse(config.security ?? {})
+    const loginConfig = LoginConfigSchema.parse(config.login ?? {})
+
+    // 密码策略
+    const passwordStrategy = createPasswordStrategy({
+      passwordConfig: config.password,
+      userRepository,
+      maxLoginAttempts: securityConfig.maxLoginAttempts,
+      lockoutDuration: securityConfig.lockoutDuration,
+    })
+
+    // OTP 策略
+    let otpStrategy: OtpStrategy | undefined
+    const otpConfig = config.otp ? OtpConfigSchema.parse(config.otp) : undefined
+    if (loginConfig.otp && otpConfig) {
+      const otpRepository = await createDbOtpRepository(db)
+      otpStrategy = createOtpStrategy({
+        otpConfig,
+        userRepository,
+        otpRepository,
+        autoRegister: true,
+        registerConfig: config.register,
+        maxLoginAttempts: securityConfig.maxLoginAttempts,
+        lockoutDuration: securityConfig.lockoutDuration,
+      })
+    }
+
+    // LDAP 策略
+    let ldapStrategy: AuthStrategy | undefined
+    if (loginConfig.ldap && config.ldap && ldapClientFactory) {
+      ldapStrategy = createLdapStrategy({
+        ldapConfig: config.ldap,
+        userRepository,
+        ldapClientFactory,
+        syncUser: ldapSyncUser ?? true,
+        maxLoginAttempts: securityConfig.maxLoginAttempts,
+        lockoutDuration: securityConfig.lockoutDuration,
+      })
+    }
+
+    // 组装认证操作
+    const operations = buildAuthnOperations({
+      passwordStrategy,
+      otpStrategy,
+      ldapStrategy,
+      sessionFunctions,
+      authzFunctions,
+      config,
+    })
+
+    logger.info('Authn sub-feature initialized')
+    return ok(Object.assign(operations, { _passwordStrategy: passwordStrategy }))
+  }
+  catch (error) {
+    logger.error('Authn sub-feature initialization failed', { error })
+    return err({
+      code: IamErrorCode.CONFIG_ERROR,
+      message: iamM('iam_initComponentFailed'),
+      cause: error,
+    })
+  }
+}
+
+// ─── 内部实现 ───
+
+interface AuthnOperationsDeps {
   passwordStrategy: PasswordStrategy
-  /** OTP 策略（可选） */
   otpStrategy?: OtpStrategy
-  /** LDAP 策略（可选） */
   ldapStrategy?: AuthStrategy
-  /** 会话管理器 */
-  sessionManager: SessionManager
-  /** 授权管理器 */
-  authzManager: AuthzManager
-  /** IAM 配置 */
+  sessionFunctions: IamSessionFunctions
+  authzFunctions: IamAuthzFunctions
   config: IamConfig
 }
 
 /**
- * 创建认证操作
- *
- * 将密码/OTP/LDAP 策略、会话管理器、授权管理器组装成统一的认证操作接口。
- *
- * @param deps - 依赖组件（策略、会话、授权、配置）
- * @returns 认证操作接口，包含 login / loginWithOtp / loginWithLdap / logout / verifyToken / sendOtp
+ * 组装认证操作（纯同步，不涉及 I/O）
  */
-export function createAuthOperations(deps: AuthServiceDeps): AuthOperations {
+function buildAuthnOperations(deps: AuthnOperationsDeps): IamAuthnFunctions {
   const {
     passwordStrategy,
     otpStrategy,
     ldapStrategy,
-    sessionManager,
-    authzManager,
+    sessionFunctions,
+    authzFunctions,
     config,
   } = deps
 
@@ -109,7 +196,7 @@ export function createAuthOperations(deps: AuthServiceDeps): AuthOperations {
    * @returns 角色 ID 数组
    */
   async function resolveUserRoles(userId: string): Promise<Result<string[], IamError>> {
-    const rolesResult = await authzManager.getUserRoles(userId)
+    const rolesResult = await authzFunctions.getUserRoles(userId)
     if (!rolesResult.success) {
       return rolesResult as Result<string[], IamError>
     }
@@ -164,7 +251,7 @@ export function createAuthOperations(deps: AuthServiceDeps): AuthOperations {
       return rolesResult as Result<AuthResult, IamError>
     }
 
-    const sessionResult = await sessionManager.create({
+    const sessionResult = await sessionFunctions.create({
       userId: user.id,
       username: user.username,
       roles: rolesResult.data,
@@ -238,9 +325,9 @@ export function createAuthOperations(deps: AuthServiceDeps): AuthOperations {
     },
 
     async logout(accessToken: string): Promise<Result<void, IamError>> {
-      const sessionResult = await sessionManager.get(accessToken)
+      const sessionResult = await sessionFunctions.get(accessToken)
       if (sessionResult.success && sessionResult.data) {
-        await sessionManager.delete(sessionResult.data.accessToken)
+        await sessionFunctions.delete(sessionResult.data.accessToken)
         logger.info('User logged out', { userId: sessionResult.data.userId })
       }
 
@@ -248,7 +335,7 @@ export function createAuthOperations(deps: AuthServiceDeps): AuthOperations {
     },
 
     async verifyToken(accessToken: string): Promise<Result<Session, IamError>> {
-      return sessionManager.verifyToken(accessToken)
+      return sessionFunctions.verifyToken(accessToken)
     },
 
     async sendOtp(identifier: string): Promise<Result<{ expiresAt: Date }, IamError>> {

@@ -5,21 +5,21 @@
  *
  * 包含角色-权限、用户-角色关联存储。
  *
- * @module authz/rbac/iam-authz-rbac-repository-relation
+ * @module authz/iam-authz-repository-relation
  * =============================================================================
  */
 
-import type { CacheService } from '@hai/cache'
+import type { CacheFunctions } from '@hai/cache'
 import type { Result } from '@hai/core'
 import type { DbFunctions, TxHandle } from '@hai/db'
-import type { IamError } from '../../iam-core-types.js'
-import type { PermissionRepository } from './iam-authz-rbac-repository-permission.js'
-import type { RoleRepository } from './iam-authz-rbac-repository-role.js'
-import type { Permission, Role } from './iam-authz-rbac-types.js'
+import type { IamError } from '../iam-types.js'
+import type { PermissionRepository } from './iam-authz-repository-permission.js'
+import type { RoleRepository } from './iam-authz-repository-role.js'
+import type { Permission, Role } from './iam-authz-types.js'
 import { core, err, ok } from '@hai/core'
-import { IamErrorCode } from '../../iam-config.js'
-import { iamM } from '../../iam-i18n.js'
-import { buildTokenKey, buildUserTokensKey } from '../../session/iam-session-repository-cache.js'
+import { IamErrorCode } from '../iam-config.js'
+import { iamM } from '../iam-i18n.js'
+import { buildTokenKey, buildUserTokensKey } from '../session/iam-session-repository-cache.js'
 
 // =============================================================================
 // 角色-权限关联存储接口
@@ -125,7 +125,7 @@ const ROLE_PERMISSION_SCHEMA = {
 export async function createDbRolePermissionRepository(
   db: DbFunctions,
   permissionRepository: PermissionRepository,
-  cache: CacheService,
+  cache: CacheFunctions,
 ): Promise<RolePermissionRepository> {
   // 确保表存在
   async function ensureTable(): Promise<Result<void, IamError>> {
@@ -304,7 +304,7 @@ export async function createDbRolePermissionRepository(
   async function getPermissionCodesCached(roleId: string, tx?: TxHandle): Promise<Result<string[], IamError>> {
     const key = buildRolePermsKey(roleId)
 
-    const existsResult = await cache.exists(key)
+    const existsResult = await cache.kv.exists(key)
     if (!existsResult.success) {
       return err({
         code: IamErrorCode.REPOSITORY_ERROR,
@@ -442,7 +442,7 @@ export async function createDbRolePermissionRepository(
         return removeRoleResult
       }
 
-      const result = await cache.del(buildRolePermsKey(roleId))
+      const result = await cache.kv.del(buildRolePermsKey(roleId))
       if (!result.success) {
         return err({
           code: IamErrorCode.REPOSITORY_ERROR,
@@ -476,7 +476,7 @@ export async function createDbRolePermissionRepository(
         }
       }
 
-      const deleteResult = await cache.del(buildPermissionRolesKey(permissionCode))
+      const deleteResult = await cache.kv.del(buildPermissionRolesKey(permissionCode))
       if (!deleteResult.success) {
         return err({
           code: IamErrorCode.REPOSITORY_ERROR,
@@ -490,7 +490,7 @@ export async function createDbRolePermissionRepository(
 
     async hasPermission(roleId, permissionCode, tx): Promise<Result<boolean, IamError>> {
       const cacheKey = buildRolePermsKey(roleId)
-      const existsResult = await cache.exists(cacheKey)
+      const existsResult = await cache.kv.exists(cacheKey)
       if (!existsResult.success) {
         return err({
           code: IamErrorCode.REPOSITORY_ERROR,
@@ -544,7 +544,7 @@ const USER_ROLE_SCHEMA = {
 export async function createDbUserRoleRepository(
   db: DbFunctions,
   roleRepository: RoleRepository,
-  cache: CacheService,
+  cache: CacheFunctions,
 ): Promise<UserRoleRepository> {
   /**
    * 确保关联表和索引已创建
@@ -636,13 +636,13 @@ export async function createDbUserRoleRepository(
 
     for (const token of tokensResult.data) {
       const sessionKey = buildTokenKey(token)
-      const sessionResult = await cache.get<Record<string, unknown>>(sessionKey)
+      const sessionResult = await cache.kv.get<Record<string, unknown>>(sessionKey)
       if (!sessionResult.success || !sessionResult.data) {
         staleTokens.push(token)
         continue
       }
 
-      const ttlResult = await cache.ttl(sessionKey)
+      const ttlResult = await cache.kv.ttl(sessionKey)
       if (!ttlResult.success || ttlResult.data <= 0) {
         staleTokens.push(token)
         continue
@@ -653,7 +653,7 @@ export async function createDbUserRoleRepository(
         roles: roleIdsResult.data,
       }
 
-      const setResult = await cache.set(sessionKey, updated, { ex: ttlResult.data })
+      const setResult = await cache.kv.set(sessionKey, updated, { ex: ttlResult.data })
       if (!setResult.success) {
         logger.error('Failed to update user session roles cache', { userId, error: setResult.error.message })
         return err({

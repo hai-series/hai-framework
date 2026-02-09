@@ -11,9 +11,9 @@
  * =============================================================================
  */
 
-import type { CacheService } from '@hai/cache'
+import type { CacheFunctions } from '@hai/cache'
 import type { Result } from '@hai/core'
-import type { IamError } from '../iam-core-types.js'
+import type { IamError } from '../iam-types.js'
 import type { Session } from './iam-session-types.js'
 import { err, ok } from '@hai/core'
 
@@ -107,10 +107,10 @@ export interface SessionMappingRepository {
  * @param cache - 缓存服务实例
  * @returns 会话映射存储接口实现
  */
-export function createCacheSessionMappingRepository(cache: CacheService): SessionMappingRepository {
+export function createCacheSessionMappingRepository(cache: CacheFunctions): SessionMappingRepository {
   return {
     async set(token, session, ttl): Promise<Result<void, IamError>> {
-      const result = await cache.set(buildTokenKey(token), session, { ex: ttl })
+      const result = await cache.kv.set(buildTokenKey(token), session, { ex: ttl })
       if (!result.success) {
         return err({
           code: IamErrorCode.REPOSITORY_ERROR,
@@ -122,7 +122,7 @@ export function createCacheSessionMappingRepository(cache: CacheService): Sessio
     },
 
     async get(token): Promise<Result<Session | null, IamError>> {
-      const result = await cache.get<Session>(buildTokenKey(token))
+      const result = await cache.kv.get<Session>(buildTokenKey(token))
       if (!result.success) {
         return err({
           code: IamErrorCode.REPOSITORY_ERROR,
@@ -137,7 +137,7 @@ export function createCacheSessionMappingRepository(cache: CacheService): Sessio
     },
 
     async delete(token): Promise<Result<void, IamError>> {
-      const result = await cache.del(buildTokenKey(token))
+      const result = await cache.kv.del(buildTokenKey(token))
       if (!result.success) {
         return err({
           code: IamErrorCode.REPOSITORY_ERROR,

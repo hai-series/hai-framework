@@ -1,16 +1,12 @@
 /**
- * =============================================================================
- * @hai/iam - 测试辅助工具
- * =============================================================================
+ * @hai/iam — 测试辅助工具
  *
  * 提供 IAM 测试的统一初始化/清理逻辑。
  * 使用 SQLite 内存数据库 + 内存缓存，无需外部依赖。
- *
- * 注意：db 和 cache 是全局单例，每个测试文件只能初始化一次。
- * 需要多个 iam 配置时，通过 `createIamInstance()` 创建独立实例。
  */
 
-import type { IamConfigInput, IamInitOptions } from '../../src/iam-main.js'
+import type { IamConfigSettingsInput } from '../../src/iam-config.js'
+import type { IamFunctions } from '../../src/iam-types.js'
 import { cache } from '@hai/cache'
 import { db } from '@hai/db'
 import { afterAll, beforeAll } from 'vitest'
@@ -23,23 +19,16 @@ export const TEST_PASSWORD = 'TestPass123'
 export const WEAK_PASSWORD = 'abc'
 
 /**
- * 创建并初始化独立 IAM 实例
+ * 初始化 IAM 单例
  *
- * db/cache 需要已被初始化。
+ * db / cache 需已初始化。用于需要不同配置的子场景。
  */
-export async function createIamInstance(
-  configInput?: IamConfigInput,
-  optionsOverride?: Partial<Omit<IamInitOptions, 'cache'>>,
-) {
-  const instance = iam.create()
-  const result = await instance.init(db, configInput ?? {}, {
-    cache,
-    ...optionsOverride,
-  })
+export async function initIam(settings?: IamConfigSettingsInput): Promise<IamFunctions> {
+  const result = await iam.init({ db, cache, ...(settings ?? {}) })
   if (!result.success) {
     throw new Error(`IAM init failed: ${result.error.message}`)
   }
-  return instance
+  return iam
 }
 
 /**
@@ -50,11 +39,8 @@ export async function createIamInstance(
  */
 export function defineIamTestEnv(
   _label: string,
-  configInput?: IamConfigInput,
-  optionsOverride?: Partial<Omit<IamInitOptions, 'cache'>>,
+  settings?: IamConfigSettingsInput,
 ) {
-  const iamInstance = iam.create()
-
   beforeAll(async () => {
     if (!db.isInitialized) {
       await db.init({ type: 'sqlite', database: ':memory:' })
@@ -63,22 +49,19 @@ export function defineIamTestEnv(
       await cache.init({ type: 'memory' })
     }
 
-    const result = await iamInstance.init(db, configInput ?? {}, {
-      cache,
-      ...optionsOverride,
-    })
+    const result = await iam.init({ db, cache, ...(settings ?? {}) })
     if (!result.success) {
       throw new Error(`IAM init failed in "${_label}": ${result.error.message}`)
     }
   })
 
   afterAll(async () => {
-    await iamInstance.close()
+    await iam.close()
     await cache.close()
     await db.close()
   })
 
-  return iamInstance
+  return iam
 }
 
 /**

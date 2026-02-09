@@ -1,72 +1,101 @@
 /**
- * =============================================================================
- * @hai/iam - 用户服务
- * =============================================================================
+ * @hai/iam — 用户子功能工厂
  *
- * 提供用户管理相关操作的实现。
- *
- * @module user/iam-user-service
- * =============================================================================
+ * 提供用户管理相关操作：注册、查询、更新、密码管理等。
  */
 
 import type { PaginatedResult, PaginationOptionsInput, Result } from '@hai/core'
 import type { DbFunctions } from '@hai/db'
 import type { PasswordStrategy } from '../authn/password/iam-authn-password-strategy.js'
-import type { AuthzManager } from '../authz/rbac/iam-authz-rbac-types.js'
+import type { IamAuthzFunctions } from '../authz/iam-authz-types.js'
 import type { IamConfig, IamErrorCodeType } from '../iam-config.js'
-import type { IamError } from '../iam-core-types.js'
-import type { SessionManager } from '../session/iam-session-types.js'
+import type { IamError } from '../iam-types.js'
+import type { IamSessionFunctions } from '../session/iam-session-types.js'
 import type { UserRepository } from './iam-user-repository-user.js'
 import type {
   AgreementDisplay,
+  IamUserFunctions,
   RegisterOptions,
   RegisterResult,
   User,
-  UserOperations,
 } from './iam-user-types.js'
 import { core, err, ok } from '@hai/core'
+import { crypto } from '@hai/crypto'
 
 import { AgreementConfigSchema, IamErrorCode, RegisterConfigSchema } from '../iam-config.js'
 import { iamM } from '../iam-i18n.js'
-import { verifyPassword } from '../iam-initializer.js'
+import { createDbUserRepository } from './iam-user-repository-user.js'
 import { toUser } from './iam-user-utils.js'
 
 const logger = core.logger.child({ module: 'iam', scope: 'user' })
 
+// ─── 子功能依赖 ───
+
 /**
- * 用户服务依赖
+ * 用户子功能依赖
  */
-export interface UserServiceDeps {
-  /** 数据库服务（用于事务支持） */
+export interface IamUserFunctionsDeps {
+  config: IamConfig
   db: DbFunctions
-  /** 用户存储 */
-  userRepository: UserRepository
-  /** 密码策略 */
   passwordStrategy: PasswordStrategy
-  /** 会话管理器 */
-  sessionManager: SessionManager
-  /** 授权管理器 */
-  authzManager: AuthzManager
-  /** IAM 配置 */
+  sessionFunctions: IamSessionFunctions
+  authzFunctions: IamAuthzFunctions
+}
+
+/**
+ * 创建用户子功能
+ *
+ * 内部创建用户存储，组装用户管理操作接口。
+ */
+export async function createIamUserFunctions(deps: IamUserFunctionsDeps): Promise<Result<IamUserFunctions, IamError>> {
+  try {
+    const { config, db, passwordStrategy, sessionFunctions, authzFunctions } = deps
+
+    const userRepository = await createDbUserRepository(db)
+
+    const functions = buildUserFunctions({
+      db,
+      userRepository,
+      passwordStrategy,
+      sessionFunctions,
+      authzFunctions,
+      config,
+    })
+
+    logger.info('User sub-feature initialized')
+    return ok(functions)
+  }
+  catch (error) {
+    logger.error('User sub-feature initialization failed', { error })
+    return err({
+      code: IamErrorCode.CONFIG_ERROR,
+      message: iamM('iam_initComponentFailed'),
+      cause: error,
+    })
+  }
+}
+
+// ─── 内部实现 ───
+
+interface UserBuilderDeps {
+  db: DbFunctions
+  userRepository: UserRepository
+  passwordStrategy: PasswordStrategy
+  sessionFunctions: IamSessionFunctions
+  authzFunctions: IamAuthzFunctions
   config: IamConfig
 }
 
 /**
- * 创建用户操作
- *
- * 将用户存储、密码策略、会话管理器、授权管理器组装成用户管理操作接口。
- * 包含注册、查询、更新、密码管理等全套用户生命周期操作。
- *
- * @param deps - 依赖组件（数据库、存储、策略、会话、授权、配置）
- * @returns 用户操作接口
+ * 组装用户操作
  */
-export function createUserOperations(deps: UserServiceDeps): UserOperations {
+function buildUserFunctions(deps: UserBuilderDeps): IamUserFunctions {
   const {
     db,
     userRepository,
     passwordStrategy,
-    sessionManager,
-    authzManager,
+    sessionFunctions,
+    authzFunctions,
     config,
   } = deps
 
@@ -161,9 +190,9 @@ export function createUserOperations(deps: UserServiceDeps): UserOperations {
   async function assignDefaultRole(userId: string): Promise<void> {
     if (!config.rbac?.defaultRole)
       return
-    const roleResult = await authzManager.getRole(config.rbac.defaultRole)
+    const roleResult = await authzFunctions.getRole(config.rbac.defaultRole)
     if (roleResult.success && roleResult.data) {
-      await authzManager.assignRole(userId, roleResult.data.id)
+      await authzFunctions.assignRole(userId, roleResult.data.id)
     }
   }
 
@@ -229,7 +258,7 @@ export function createUserOperations(deps: UserServiceDeps): UserOperations {
     },
 
     async getCurrentUser(accessToken: string): Promise<Result<User, IamError>> {
-      const verifyResult = await sessionManager.verifyToken(accessToken)
+      const verifyResult = await sessionFunctions.verifyToken(accessToken)
       if (!verifyResult.success) {
         return verifyResult as Result<User, IamError>
       }
@@ -334,7 +363,7 @@ export function createUserOperations(deps: UserServiceDeps): UserOperations {
         return err({ code: IamErrorCode.INVALID_CREDENTIALS, message: iamM('iam_accountNoPassword') })
       }
 
-      const verifyResult = verifyPassword(oldPassword, user.passwordHash)
+      const verifyResult = crypto.password.verify(oldPassword, user.passwordHash)
       if (!verifyResult.success || !verifyResult.data) {
         return err({ code: IamErrorCode.INVALID_CREDENTIALS, message: iamM('iam_originalPasswordWrong') })
       }

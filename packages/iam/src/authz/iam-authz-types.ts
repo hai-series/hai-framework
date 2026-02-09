@@ -1,6 +1,6 @@
 /**
  * =============================================================================
- * @hai/iam - 授权相关类型定义（RBAC）
+ * @hai/iam — 授权子功能类型定义（RBAC）
  * =============================================================================
  *
  * 包含：
@@ -8,14 +8,14 @@
  * - 角色类型（Role）
  * - 关联类型（RolePermission、UserRole）
  * - 授权上下文（AuthzContext）
- * - 授权管理接口（AuthzManager）
+ * - 授权管理接口（IamAuthzFunctions）
  *
- * @module authz/rbac/iam-authz-rbac-types
+ * @module authz/iam-authz-types
  * =============================================================================
  */
 
 import type { PaginatedResult, PaginationOptionsInput, Result } from '@hai/core'
-import type { IamError } from '../../iam-core-types.js'
+import type { IamError } from '../iam-types.js'
 
 // =============================================================================
 // 授权类型（RBAC）
@@ -104,9 +104,9 @@ export interface AuthzContext {
 // =============================================================================
 
 /**
- * 授权管理器接口（RBAC）
+ * 授权子功能接口
  */
-export interface AuthzManager {
+export interface IamAuthzFunctions {
   /**
    * 检查权限
    */

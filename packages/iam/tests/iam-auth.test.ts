@@ -15,13 +15,13 @@
  * - 登录结果中的 agreements
  */
 
-import type { IamService } from '../src/iam-main.js'
+import type { IamFunctions } from '../src/iam-types.js'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { IamErrorCode } from '../src/iam-config.js'
-import { createIamInstance, defineIamSuite, postgresRedisEnv, sqliteMemoryEnv, TEST_PASSWORD } from './helpers/iam-test-suite.js'
+import { defineIamSuite, initIam, postgresRedisEnv, sqliteMemoryEnv, TEST_PASSWORD } from './helpers/iam-test-suite.js'
 
 describe('iam.auth', () => {
-  const defineCommon = (getIam: () => IamService) => {
+  const defineCommon = (getIam: () => IamFunctions) => {
     // =========================================================================
     // 辅助：注册测试用户
     // =========================================================================
@@ -221,10 +221,10 @@ describe('iam.auth', () => {
     // =========================================================================
 
     describe('login 禁用配置', () => {
-      let loginDisabledIam: IamService
+      let loginDisabledIam: IamFunctions
 
       beforeAll(async () => {
-        loginDisabledIam = await createIamInstance({
+        loginDisabledIam = await initIam({
           login: { password: false, otp: false, ldap: false },
         })
       })
@@ -258,10 +258,10 @@ describe('iam.auth', () => {
     // =========================================================================
 
     describe('禁用用户登录', () => {
-      let disabledUserIam: IamService
+      let disabledUserIam: IamFunctions
 
       beforeAll(async () => {
-        disabledUserIam = await createIamInstance({
+        disabledUserIam = await initIam({
           register: { enabled: true, defaultEnabled: false },
         })
         await disabledUserIam.user.register({
@@ -291,10 +291,10 @@ describe('iam.auth', () => {
     // =========================================================================
 
     describe('账户锁定', () => {
-      let lockIam: IamService
+      let lockIam: IamFunctions
 
       beforeAll(async () => {
-        lockIam = await createIamInstance({
+        lockIam = await initIam({
           security: { maxLoginAttempts: 3, lockoutDuration: 60 },
         })
       })
@@ -352,10 +352,10 @@ describe('iam.auth', () => {
     // =========================================================================
 
     describe('登录返回 agreements', () => {
-      let agreementIam: IamService
+      let agreementIam: IamFunctions
 
       beforeAll(async () => {
-        agreementIam = await createIamInstance({
+        agreementIam = await initIam({
           agreements: {
             userAgreementUrl: 'https://example.com/terms',
             privacyPolicyUrl: 'https://example.com/privacy',

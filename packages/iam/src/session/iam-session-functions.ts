@@ -1,29 +1,70 @@
 /**
- * =============================================================================
- * @hai/iam - 会话管理器
- * =============================================================================
+ * @hai/iam — 会话子功能工厂
  *
- * 基于缓存存储的会话实现。
- *
- * @module session/iam-session-service
- * =============================================================================
+ * 基于缓存存储的会话实现：创建、查询、验证、更新、删除。
  */
 
+import type { CacheFunctions } from '@hai/cache'
 import type { Result } from '@hai/core'
-import type { IamError } from '../iam-core-types.js'
+import type { IamConfig } from '../iam-config.js'
+import type { IamError } from '../iam-types.js'
 import type { SessionMappingRepository } from './iam-session-repository-cache.js'
-import type { CreateSessionOptions, Session, SessionManager } from './iam-session-types.js'
+import type { CreateSessionOptions, IamSessionFunctions, Session } from './iam-session-types.js'
 import { core, err, ok } from '@hai/core'
-import { IamErrorCode } from '../iam-config.js'
+import { IamErrorCode, SessionConfigSchema } from '../iam-config.js'
 import { iamM } from '../iam-i18n.js'
+import { createCacheSessionMappingRepository } from './iam-session-repository-cache.js'
 import { applySessionPatch, buildSession, generateToken, getSessionTtl } from './iam-session-utils.js'
 
 const logger = core.logger.child({ module: 'iam', scope: 'session' })
 
+// ─── 子功能依赖 ───
+
 /**
- * 会话管理器配置
+ * 会话子功能依赖
  */
-export interface SessionManagerConfig {
+export interface IamSessionFunctionsDeps {
+  config: IamConfig
+  cache: CacheFunctions
+}
+
+/**
+ * 创建会话子功能
+ *
+ * 内部创建缓存会话存储，返回会话管理接口。
+ */
+export async function createIamSessionFunctions(deps: IamSessionFunctionsDeps): Promise<Result<IamSessionFunctions, IamError>> {
+  try {
+    const { config, cache } = deps
+    const sessionConfig = SessionConfigSchema.parse(config.session ?? {})
+    const sessionMappingRepository = createCacheSessionMappingRepository(cache)
+
+    const functions = buildSessionFunctions({
+      maxAge: sessionConfig.maxAge,
+      sliding: sessionConfig.sliding,
+      singleDevice: sessionConfig.singleDevice,
+      sessionMappingRepository,
+    })
+
+    logger.info('Session sub-feature initialized')
+    return ok(functions)
+  }
+  catch (error) {
+    logger.error('Session sub-feature initialization failed', { error })
+    return err({
+      code: IamErrorCode.CONFIG_ERROR,
+      message: iamM('iam_initComponentFailed'),
+      cause: error,
+    })
+  }
+}
+
+// ─── 内部实现 ───
+
+/**
+ * 内部会话构建器配置
+ */
+interface SessionBuilderConfig {
   /** 会话最大有效期（秒，默认 86400 = 24小时） */
   maxAge?: number
   /** 是否滑动窗口 */
@@ -35,15 +76,9 @@ export interface SessionManagerConfig {
 }
 
 /**
- * 创建会话管理器
- *
- * 基于缓存存储实现会话的创建、查询、验证、更新、删除操作。
- * 支持滑动窗口续期、单设备登录等能力。
- *
- * @param config - 会话管理器配置（最大有效期、滑动窗口、单设备、存储实例）
- * @returns 会话管理器实现
+ * 组装会话操作（纯同步，不涉及 I/O，除缓存操作）
  */
-export function createSessionManager(config: SessionManagerConfig): SessionManager {
+function buildSessionFunctions(config: SessionBuilderConfig): IamSessionFunctions {
   const maxAge = config.maxAge ?? 86400
   const sliding = config.sliding ?? true
   const singleDevice = config.singleDevice ?? false

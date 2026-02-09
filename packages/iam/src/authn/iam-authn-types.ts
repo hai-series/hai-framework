@@ -6,7 +6,7 @@
  * 包含：
  * - 凭证类型（Credentials）
  * - 认证策略接口（AuthStrategy）
- * - 认证操作接口（AuthOperations）
+ * - 认证操作接口（IamAuthnFunctions）
  *
  * @module authn/iam-authn-types
  * =============================================================================
@@ -14,7 +14,7 @@
 
 import type { Result } from '@hai/core'
 import type { AuthStrategyType } from '../iam-config.js'
-import type { IamError } from '../iam-core-types.js'
+import type { IamError } from '../iam-types.js'
 import type { AuthResult, Session } from '../session/iam-session-types.js'
 import type { User } from '../user/iam-user-types.js'
 
@@ -93,9 +93,9 @@ export interface AuthStrategy {
 // =============================================================================
 
 /**
- * 认证操作接口
+ * 认证子功能接口
  */
-export interface AuthOperations {
+export interface IamAuthnFunctions {
   /**
    * 登录（使用密码）
    */
