@@ -109,6 +109,78 @@ if (!result.success) { return result }
   - `error`：操作失败（需人工排查）
   - `fatal`：致命错误（服务无法继续）
 
+#### 日志输出审查要点（hai-create §4.10）
+
+审查时必须确认以下位置**已输出日志且级别正确**：
+
+| 位置 | 必须级别 | 审查项 |
+|---|---|---|
+| `init()` 成功 | `info` | 模块/服务初始化完成，附带配置类型等关键参数 |
+| `init()` 失败 | `error` | 初始化异常，附带 `{ error }` |
+| `close()` | `info` | 模块/服务关闭 |
+| 业务写操作成功（create/update/delete） | `info` | 携带业务标识（`id`、`userId` 等） |
+| 业务写操作进入 | `debug` | 携带输入参数概要 |
+| 业务写操作失败 | `warn` 或 `error` | 校验失败用 `warn`，系统异常用 `error`，附带 `{ error }` 或 `{ reason }` |
+| Provider connect 成功/失败 | `info` / `error` | 附带连接目标信息（`host`、`type`） |
+| Provider disconnect | `info` | — |
+| 安全敏感操作（登录/登出/授权） | `info`（成功）/ `warn`（失败） | 附带 `userId`、`type`；禁止输出密码/token 明文 |
+| 读操作 / 查询 | `debug` | 不使用 `info`，避免日志过多 |
+| 循环体内详细记录 | `trace` | 生产环境默认不输出 |
+
+**日志内容规范**：
+- 消息文本：英文，简洁动宾结构（如 `'XX module initialized'`、`'Failed to create yy item'`）
+- 上下文对象：携带关键业务标识（`id`、`userId`、`type`），禁止输出密码、token 明文等敏感信息
+- 错误上下文：失败日志携带 `{ error }` 或 `{ reason: errorCode }`，便于排查
+
+**常见审查不合格示例**：
+
+```ts
+// ❌ init 成功后没有日志
+async init(config) {
+  const parsed = XxConfigSchema.parse(config)
+  currentConfig = parsed
+  return ok(undefined)
+}
+
+// ✅ init 成功必须输出 info 日志
+async init(config) {
+  const parsed = XxConfigSchema.parse(config)
+  currentConfig = parsed
+  logger.info('XX module initialized', { type: parsed.type })
+  return ok(undefined)
+}
+```
+
+```ts
+// ❌ 业务操作成功没有日志
+async create(input) {
+  const item = await doCreate(input)
+  return ok(item)
+}
+
+// ✅ 写操作需有 debug 进入 + info 成功
+async create(input) {
+  logger.debug('Creating yy item', { name: input.name })
+  const item = await doCreate(input)
+  logger.info('Yy item created', { itemId: item.id })
+  return ok(item)
+}
+```
+
+```ts
+// ❌ 日志级别不当：把每次查询都用 info
+async get(id) {
+  logger.info('Getting item', { id })  // 读操作不应用 info
+  return ok(await dataSource.get(id))
+}
+
+// ✅ 读操作用 debug
+async get(id) {
+  logger.debug('Getting item', { id })
+  return ok(await dataSource.get(id))
+}
+```
+
 ### 安全与配置
 
 - **环境变量**：禁止硬编码密钥；新增变量需补 `.env` 占位与文档说明。
@@ -191,6 +263,12 @@ if (!result.success) { return result }
 - [ ] 中文注释、英文日志、命名一致
 - [ ] 所有用户可见文本走 i18n key，消息键前缀正确
 - [ ] 无 `console.log`，日志级别符合场景
+- [ ] init/close 有 info 日志输出
+- [ ] 业务写操作有 debug（进入）+ info（成功）日志
+- [ ] 失败分支有 warn 或 error 日志，附带错误上下文
+- [ ] Provider connect/disconnect 有 info 日志
+- [ ] 读操作使用 debug 而非 info
+- [ ] 日志不包含密码、token 明文等敏感信息
 
 ### 安全与类型
 
