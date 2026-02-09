@@ -12,8 +12,13 @@
 import type { PaginatedResult, PaginationOptions, PaginationOptionsInput } from '@hai/core'
 import type { NormalizedPagination, PaginationOverrides } from './db-types.js'
 
+/** 默认起始页码 */
 const DEFAULT_PAGE = 1
+
+/** 默认每页数量 */
 const DEFAULT_PAGE_SIZE = 20
+
+/** 每页最大允许数量（防止过大分页导致性能问题） */
 const MAX_PAGE_SIZE = 200
 
 /**
@@ -50,6 +55,31 @@ function normalizePageSize(value: number | undefined, fallback: number, maxSize:
 
 /**
  * 规范化分页参数
+ *
+ * 将用户输入的可选分页参数转换为带有默认值的完整分页对象，
+ * 同时计算 SQL 所需的 offset 和 limit。
+ *
+ * 处理规则：
+ * - page < 1 或未提供 → 使用 defaultPage（默认 1）
+ * - pageSize < 1 或未提供 → 使用 defaultPageSize（默认 20）
+ * - pageSize > maxPageSize → 截断为 maxPageSize（默认 200）
+ * - offset = (page - 1) * pageSize
+ *
+ * @param options - 用户传入的分页参数（可选）
+ * @param overrides - 覆盖默认分页参数（可选）
+ * @returns 规范化后的分页参数（含 offset、limit）
+ *
+ * @example
+ * ```ts
+ * // 使用默认值
+ * normalizePagination() // { page: 1, pageSize: 20, offset: 0, limit: 20 }
+ *
+ * // 自定义分页
+ * normalizePagination({ page: 3, pageSize: 10 }) // { page: 3, pageSize: 10, offset: 20, limit: 10 }
+ *
+ * // 覆盖默认值
+ * normalizePagination(undefined, { defaultPageSize: 50, maxPageSize: 100 })
+ * ```
  */
 export function normalizePagination(
   options?: PaginationOptionsInput,
@@ -74,6 +104,23 @@ export function normalizePagination(
 
 /**
  * 构建分页结果
+ *
+ * 将查询结果和分页元数据组装为统一的分页响应结构。
+ *
+ * @param items - 当前页数据
+ * @param total - 总记录数
+ * @param pagination - 当前分页参数
+ * @returns 标准分页结果对象
+ *
+ * @example
+ * ```ts
+ * const result = buildPaginatedResult(
+ *   [{ id: 1, name: '张三' }],
+ *   100,
+ *   { page: 1, pageSize: 20 }
+ * )
+ * // { items: [...], total: 100, page: 1, pageSize: 20 }
+ * ```
  */
 export function buildPaginatedResult<T>(
   items: T[],
@@ -91,6 +138,18 @@ export function buildPaginatedResult<T>(
 
 /**
  * 分页工具集合
+ *
+ * 提供分页参数规范化与结果构建能力，通过 `db.pagination` 访问。
+ *
+ * @example
+ * ```ts
+ * import { db } from '@hai/db'
+ *
+ * const pag = db.pagination.normalize({ page: 2, pageSize: 10 })
+ * // pag.offset = 10, pag.limit = 10
+ *
+ * const result = db.pagination.build(items, total, pag)
+ * ```
  */
 export const pagination = {
   normalize: normalizePagination,

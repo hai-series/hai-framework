@@ -14,12 +14,12 @@
  * - 事务操作接口（TxHandle / TxManager）
  * - CRUD 抽象（db-crud）
  * - 复合数据库操作接口（DbCompositeOperations）
- * - 数据库服务接口（DbService）
+ * - 数据库服务接口（DbFunctions）
  * - Provider 接口（DbProvider）
  *
  * @example
  * ```ts
- * import type { DbService, TableDef, ColumnDef } from '@hai/db'
+ * import type { DbFunctions, TableDef, ColumnDef } from '@hai/db'
  *
  * // 定义表结构
  * const userTable: TableDef = {
@@ -607,11 +607,11 @@ export interface DbPagination {
 }
 
 // =============================================================================
-// 数据库服务接口
+// 数据库函数接口
 // =============================================================================
 
 /**
- * 数据库服务接口
+ * 数据库函数接口
  *
  * 统一的数据库访问入口，通过 `db` 对象提供所有数据库操作。
  *
@@ -640,7 +640,7 @@ export interface DbPagination {
  * await db.close()
  * ```
  */
-export interface DbService extends DbCompositeOperations {
+export interface DbFunctions extends DbCompositeOperations {
   /**
    * 初始化数据库连接
    *

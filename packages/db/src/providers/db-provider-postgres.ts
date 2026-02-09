@@ -1,26 +1,22 @@
 /**
  * =============================================================================
- * @hai/db - MySQL Provider
+ * @hai/db - PostgreSQL Provider
  * =============================================================================
  *
- * 基于 mysql2 的 MySQL 数据库实现。
+ * 基于 pg 的 PostgreSQL 数据库实现。
  *
- * MySQL 特点：
- * - 广泛使用的开源关系型数据库
- * - 支持多种存储引擎（默认 InnoDB）
- * - 完整的事务支持
+ * PostgreSQL 特点：
+ * - 功能强大的开源关系型数据库
+ * - 支持高级数据类型（JSONB、数组等）
+ * - 完整的 ACID 事务支持
  * - 使用连接池管理连接
- *
- * 注意事项：
- * - MySQL 驱动是异步的
- * - 默认使用 utf8mb4 字符集支持完整 Unicode
  *
  * 适用场景：
  * - 生产环境
- * - Web 应用
- * - 需要与现有 MySQL 基础设施集成
+ * - 需要高级 SQL 功能
+ * - 大规模数据处理
  *
- * @module db-provider-mysql
+ * @module db-provider-postgres
  * =============================================================================
  */
 
@@ -45,51 +41,40 @@ import type {
 
 import { err, ok } from '@hai/core'
 
-import { createCrud } from '../crud/db-crud-kernel.js'
 import { DbErrorCode } from '../db-config.js'
+import { createCrud } from '../db-crud-kernel.js'
 import { dbM } from '../db-i18n.js'
 import { buildPaginatedResult, normalizePagination } from '../db-pagination.js'
 
 // =============================================================================
-// mysql2 类型定义（避免强依赖）
+// pg 类型定义（避免强依赖）
 // =============================================================================
 
-/** MySQL 连接池接口 */
-interface MysqlPool {
-  query: (sql: string, values?: unknown[]) => Promise<[unknown[], unknown]>
-  execute: (sql: string, values?: unknown[]) => Promise<[MysqlResult, unknown]>
-  getConnection: () => Promise<MysqlConnection>
+/** PostgreSQL 连接池接口 */
+interface PgPool {
+  query: (text: string, values?: unknown[]) => Promise<{ rows: unknown[], rowCount: number }>
+  connect: () => Promise<PgClient>
   end: () => Promise<void>
 }
 
-/** MySQL 连接接口 */
-interface MysqlConnection {
-  query: (sql: string, values?: unknown[]) => Promise<[unknown[], unknown]>
-  execute: (sql: string, values?: unknown[]) => Promise<[MysqlResult, unknown]>
-  beginTransaction: () => Promise<void>
-  commit: () => Promise<void>
-  rollback: () => Promise<void>
+/** PostgreSQL 客户端接口 */
+interface PgClient {
+  query: (text: string, values?: unknown[]) => Promise<{ rows: unknown[], rowCount: number }>
   release: () => void
 }
 
-/** MySQL 执行结果 */
-interface MysqlResult {
-  affectedRows: number
-  insertId: number
-}
-
 // =============================================================================
-// MySQL Provider 实现
+// PostgreSQL Provider 实现
 // =============================================================================
 
 /**
- * 创建 MySQL Provider 实例
+ * 创建 PostgreSQL Provider 实例
  *
- * @returns MySQL Provider
+ * @returns PostgreSQL Provider
  */
-export function createMysqlProvider(): DbProvider {
+export function createPostgresProvider(): DbProvider {
   /** 连接池实例 */
-  let pool: MysqlPool | null = null
+  let pool: PgPool | null = null
 
   // =========================================================================
   // 辅助函数
@@ -98,71 +83,67 @@ export function createMysqlProvider(): DbProvider {
   /**
    * 构建列定义 SQL
    *
-   * 将 ColumnDef 转换为 MySQL 列定义语句
+   * 将 ColumnDef 转换为 PostgreSQL 列定义语句
    *
    * @param name - 列名
    * @param def - 列定义
    * @returns 列定义 SQL 片段
    */
   function buildColumnSql(name: string, def: ColumnDef): string {
-    const parts: string[] = [`\`${name}\``]
+    const parts: string[] = [name]
 
-    // 类型映射
     switch (def.type) {
       case 'TEXT':
-        // MySQL 中 TEXT/BLOB 不能直接建 UNIQUE/索引（需要指定长度）。
-        // ColumnDef 目前没有长度字段，因此默认使用 VARCHAR(255) 以获得更好的可用性。
-        parts.push('VARCHAR(255)')
+        parts.push('TEXT')
         break
       case 'INTEGER':
         if (def.autoIncrement) {
-          parts.push('BIGINT')
+          parts.push('BIGSERIAL')
         }
         else {
-          parts.push('INT')
+          parts.push('INTEGER')
         }
         break
       case 'REAL':
-        parts.push('DOUBLE')
+        parts.push('DOUBLE PRECISION')
         break
       case 'BLOB':
-        parts.push('BLOB')
+        parts.push('BYTEA')
         break
       case 'BOOLEAN':
-        parts.push('TINYINT(1)')
+        parts.push('BOOLEAN')
         break
       case 'TIMESTAMP':
-        parts.push('DATETIME')
+        parts.push('TIMESTAMP')
         break
       case 'JSON':
-        parts.push('JSON')
+        parts.push('JSONB')
         break
       default:
         parts.push('TEXT')
     }
 
-    if (def.notNull || def.primaryKey) {
-      parts.push('NOT NULL')
+    if (def.primaryKey) {
+      parts.push('PRIMARY KEY')
     }
 
-    if (def.autoIncrement) {
-      parts.push('AUTO_INCREMENT')
+    if (def.notNull && !def.primaryKey) {
+      parts.push('NOT NULL')
     }
 
     if (def.unique && !def.primaryKey) {
       parts.push('UNIQUE')
     }
 
-    if (def.defaultValue !== undefined && !def.autoIncrement) {
+    if (def.defaultValue !== undefined) {
       if (def.defaultValue === null) {
         parts.push('DEFAULT NULL')
       }
       else if (typeof def.defaultValue === 'string') {
-        if (def.defaultValue === 'NOW()' || def.defaultValue === 'CURRENT_TIMESTAMP') {
+        if (def.defaultValue.startsWith('(') && def.defaultValue.endsWith(')')) {
           parts.push(`DEFAULT ${def.defaultValue}`)
         }
-        else if (def.defaultValue.startsWith('(') && def.defaultValue.endsWith(')')) {
-          // MySQL 8.0+ 支持表达式默认值
+        else if (def.defaultValue === 'NOW()' || def.defaultValue === 'CURRENT_TIMESTAMP') {
           parts.push(`DEFAULT ${def.defaultValue}`)
         }
         else {
@@ -170,10 +151,20 @@ export function createMysqlProvider(): DbProvider {
         }
       }
       else if (typeof def.defaultValue === 'boolean') {
-        parts.push(`DEFAULT ${def.defaultValue ? 1 : 0}`)
+        parts.push(`DEFAULT ${def.defaultValue}`)
       }
       else {
         parts.push(`DEFAULT ${def.defaultValue}`)
+      }
+    }
+
+    if (def.references) {
+      parts.push(`REFERENCES ${def.references.table}(${def.references.column})`)
+      if (def.references.onDelete) {
+        parts.push(`ON DELETE ${def.references.onDelete}`)
+      }
+      if (def.references.onUpdate) {
+        parts.push(`ON UPDATE ${def.references.onUpdate}`)
       }
     }
 
@@ -185,7 +176,7 @@ export function createMysqlProvider(): DbProvider {
    *
    * @returns 连接池或错误
    */
-  function ensureConnected(): Result<MysqlPool, DbError> {
+  function ensureConnected(): Result<PgPool, DbError> {
     if (!pool) {
       return err({
         code: DbErrorCode.NOT_INITIALIZED,
@@ -196,7 +187,23 @@ export function createMysqlProvider(): DbProvider {
   }
 
   /**
+   * 将 ? 占位符转换为 PostgreSQL 的 $1, $2, ... 格式
+   *
+   * @param sql - 含 ? 占位符的 SQL
+   * @returns 替换为 $n 的 SQL
+   */
+  function convertPlaceholders(sql: string): string {
+    let index = 0
+    return sql.replace(/\?/g, () => `$${++index}`)
+  }
+
+  /**
    * 解析统计数量
+   *
+   * 兼容不同 SQL 别名（total、__total__、cnt）和数据类型（bigint）。
+   *
+   * @param row - 查询返回的记录
+   * @returns 解析后的数值
    */
   function parseCount(row: Record<string, unknown> | null | undefined): number {
     if (!row) {
@@ -219,45 +226,67 @@ export function createMysqlProvider(): DbProvider {
   }
 
   /**
-   * 执行查询并返回行数据
-   */
-  async function runQuery(
-    executor: (sql: string, values?: unknown[]) => Promise<[unknown[], unknown]>,
-    sqlStr: string,
-    params?: unknown[],
-  ): Promise<unknown[]> {
-    const [rows] = await executor(sqlStr, params)
-    return rows as unknown[]
-  }
-
-  /**
    * 执行分页查询
+   *
+   * 使用 `COUNT(*) OVER()` 窗口函数在一次查询中同时获取数据和总数。
+   *
+   * 注意：当 OFFSET 超过数据总量时，PostgreSQL 返回 0 行，此时 total 为 0。
+   * 这与 SQLite/MySQL 的独立 COUNT 查询行为不同。
+   *
+   * @param executor - SQL 执行器
+   * @param options - 分页查询参数
+   * @returns 分页结果
    */
   async function queryPageWithExecutor<T>(
-    executor: (sql: string, values?: unknown[]) => Promise<[unknown[], unknown]>,
+    executor: (sql: string, params?: unknown[]) => Promise<{ rows: unknown[] }>,
     options: PaginationQueryOptions,
   ): Promise<PaginatedResult<T>> {
     const pagination = normalizePagination(options.pagination, options.overrides)
-    const dataSql = `${options.sql} LIMIT ? OFFSET ?`
+    const dataSql = `SELECT *, COUNT(*) OVER() AS __total__ FROM (${options.sql}) AS t LIMIT ? OFFSET ?`
     const dataParams = [...(options.params ?? []), pagination.limit, pagination.offset]
-    const countSql = `SELECT COUNT(*) as cnt FROM (${options.sql}) AS t`
-
-    const countRows = await runQuery(executor, countSql, options.params)
-    const countRow = (countRows as Record<string, unknown>[])[0]
-    const total = parseCount(countRow)
-
-    const rows = await runQuery(executor, dataSql, dataParams)
-    return buildPaginatedResult(rows as T[], total, pagination)
+    const dataQuerySql = convertPlaceholders(dataSql)
+    const dataResult = await executor(dataQuerySql, dataParams)
+    const rows = dataResult.rows as Record<string, unknown>[]
+    const total = rows.length > 0 ? parseCount(rows[0]) : 0
+    const items = rows.map(({ __total__, ...rest }) => rest) as T[]
+    return buildPaginatedResult(items, total, pagination)
   }
 
-  async function runQueryResult<T>(
-    executor: (sql: string, values?: unknown[]) => Promise<[unknown[], unknown]>,
+  /**
+   * 批量执行多条 SQL 语句（序列化执行，负责占位符转换）
+   *
+   * @param executor - SQL 执行器
+   * @param statements - SQL 语句列表
+   */
+  async function runStatementBatch(
+    executor: (sql: string, params?: unknown[]) => Promise<{ rows: unknown[], rowCount: number }>,
+    statements: Array<{ sql: string, params?: unknown[] }>,
+  ): Promise<void> {
+    for (const { sql: statement, params } of statements) {
+      const pgSql = convertPlaceholders(statement)
+      await executor(pgSql, params)
+    }
+  }
+
+  /**
+   * 执行查询并返回多行结果
+   *
+   * 自动将 ? 占位符转换为 PostgreSQL 的 $n 格式。
+   *
+   * @param executor - SQL 执行器
+   * @param sqlStr - SQL 查询语句
+   * @param params - 查询参数
+   * @returns 查询结果数组或错误
+   */
+  async function runQuery<T>(
+    executor: (sql: string, params?: unknown[]) => Promise<{ rows: unknown[], rowCount: number }>,
     sqlStr: string,
     params?: unknown[],
   ): Promise<Result<T[], DbError>> {
     try {
-      const [rows] = await executor(sqlStr, params)
-      return ok(rows as T[])
+      const pgSql = convertPlaceholders(sqlStr)
+      const result = await executor(pgSql, params)
+      return ok(result.rows as T[])
     }
     catch (error) {
       return err({
@@ -269,50 +298,50 @@ export function createMysqlProvider(): DbProvider {
   }
 
   /**
-   * 根据索引名解析所在表
+   * 执行查询并返回单行结果
    *
-   * MySQL 的 DROP INDEX 语句需要表名，因此这里通过 INFORMATION_SCHEMA
-   * 在当前数据库中查找索引所属表。
+   * @param executor - SQL 执行器
+   * @param sqlStr - SQL 查询语句
+   * @param params - 查询参数
+   * @returns 单行结果或 null
    */
-  async function findIndexTableName(
-    executor: (sql: string, values?: unknown[]) => Promise<[unknown[], unknown]>,
-    indexName: string,
-  ): Promise<Result<string | null, DbError>> {
-    const rowsResult = await runQueryResult<{ name: string }>(
-      executor,
-      'SELECT TABLE_NAME as name FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND INDEX_NAME = ? LIMIT 1',
-      [indexName],
-    )
-
-    if (!rowsResult.success) {
-      return rowsResult
-    }
-
-    return ok(rowsResult.data[0]?.name ?? null)
-  }
-
-  async function runGetResult<T>(
-    executor: (sql: string, values?: unknown[]) => Promise<[unknown[], unknown]>,
+  async function runGet<T>(
+    executor: (sql: string, params?: unknown[]) => Promise<{ rows: unknown[], rowCount: number }>,
     sqlStr: string,
     params?: unknown[],
   ): Promise<Result<T | null, DbError>> {
-    const rowsResult = await runQueryResult<T>(executor, sqlStr, params)
-    if (!rowsResult.success) {
-      return rowsResult
+    try {
+      const pgSql = convertPlaceholders(sqlStr)
+      const result = await executor(pgSql, params)
+      return ok((result.rows[0] as T) ?? null)
     }
-    return ok(rowsResult.data[0] ?? null)
+    catch (error) {
+      return err({
+        code: DbErrorCode.QUERY_FAILED,
+        message: dbM('db_queryFailed', { params: { error: String(error) } }),
+        cause: error,
+      })
+    }
   }
 
-  async function runExecuteResult(
-    executor: (sql: string, values?: unknown[]) => Promise<[MysqlResult, unknown]>,
+  /**
+   * 执行修改语句（INSERT/UPDATE/DELETE）
+   *
+   * @param executor - SQL 执行器
+   * @param sqlStr - SQL 修改语句
+   * @param params - 语句参数
+   * @returns 执行结果（含 changes）
+   */
+  async function runExecute(
+    executor: (sql: string, params?: unknown[]) => Promise<{ rows: unknown[], rowCount: number }>,
     sqlStr: string,
     params?: unknown[],
   ): Promise<Result<ExecuteResult, DbError>> {
     try {
-      const [result] = await executor(sqlStr, params)
+      const pgSql = convertPlaceholders(sqlStr)
+      const result = await executor(pgSql, params)
       return ok({
-        changes: result.affectedRows,
-        lastInsertRowid: result.insertId,
+        changes: result.rowCount ?? 0,
       })
     }
     catch (error) {
@@ -324,14 +353,19 @@ export function createMysqlProvider(): DbProvider {
     }
   }
 
-  async function runBatchResult(
-    executor: (sql: string, values?: unknown[]) => Promise<[MysqlResult, unknown]>,
+  /**
+   * 批量执行多条 SQL 语句（带错误包装）
+   *
+   * @param executor - SQL 执行器
+   * @param statements - SQL 语句列表
+   * @returns 批量执行结果
+   */
+  async function runBatch(
+    executor: (sql: string, params?: unknown[]) => Promise<{ rows: unknown[], rowCount: number }>,
     statements: Array<{ sql: string, params?: unknown[] }>,
   ): Promise<Result<void, DbError>> {
     try {
-      for (const { sql: statement, params } of statements) {
-        await executor(statement, params)
-      }
+      await runStatementBatch(executor, statements)
       return ok(undefined)
     }
     catch (error) {
@@ -343,8 +377,15 @@ export function createMysqlProvider(): DbProvider {
     }
   }
 
-  async function runQueryPageResult<T>(
-    executor: (sql: string, values?: unknown[]) => Promise<[unknown[], unknown]>,
+  /**
+   * 执行分页查询（带错误包装）
+   *
+   * @param executor - SQL 执行器
+   * @param options - 分页查询参数
+   * @returns 分页结果或错误
+   */
+  async function runQueryPage<T>(
+    executor: (sql: string, params?: unknown[]) => Promise<{ rows: unknown[], rowCount: number }>,
     options: PaginationQueryOptions,
   ): Promise<Result<PaginatedResult<T>, DbError>> {
     try {
@@ -360,6 +401,7 @@ export function createMysqlProvider(): DbProvider {
     }
   }
 
+  /** 创建 CRUD 管理器（基于给定的 DataOperations 创建单表 CRUD 工厂） */
   const createCrudManager = (ops: DataOperations): CrudManager => ({
     table: config => createCrud(ops, config),
   })
@@ -371,8 +413,7 @@ export function createMysqlProvider(): DbProvider {
   /**
    * DDL 操作
    *
-   * 注意：MySQL 的 DDL 操作会立即返回成功，
-   * 但实际 SQL 执行是异步的。错误会在后台处理。
+   * PostgreSQL 的 DDL 语句通过连接池异步执行。
    */
   const ddl: DdlOperations = {
     async createTable(tableName: string, columns: TableDef, ifNotExists = true): Promise<Result<void, DbError>> {
@@ -380,36 +421,12 @@ export function createMysqlProvider(): DbProvider {
       if (!connResult.success)
         return connResult
 
-      const columnDefs: string[] = []
-      let primaryKeyCol: string | null = null
-
-      for (const [name, def] of Object.entries(columns)) {
-        columnDefs.push(buildColumnSql(name, def))
-        if (def.primaryKey) {
-          primaryKeyCol = name
-        }
-      }
-
-      if (primaryKeyCol) {
-        columnDefs.push(`PRIMARY KEY (\`${primaryKeyCol}\`)`)
-      }
-
-      // 添加外键约束
-      for (const [name, def] of Object.entries(columns)) {
-        if (def.references) {
-          let fkSql = `FOREIGN KEY (\`${name}\`) REFERENCES \`${def.references.table}\`(\`${def.references.column}\`)`
-          if (def.references.onDelete) {
-            fkSql += ` ON DELETE ${def.references.onDelete}`
-          }
-          if (def.references.onUpdate) {
-            fkSql += ` ON UPDATE ${def.references.onUpdate}`
-          }
-          columnDefs.push(fkSql)
-        }
-      }
+      const columnDefs = Object.entries(columns)
+        .map(([name, def]) => buildColumnSql(name, def))
+        .join(', ')
 
       const ifNotExistsClause = ifNotExists ? 'IF NOT EXISTS ' : ''
-      const sql = `CREATE TABLE ${ifNotExistsClause}\`${tableName}\` (${columnDefs.join(', ')}) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`
+      const sql = `CREATE TABLE ${ifNotExistsClause}${tableName} (${columnDefs})`
 
       try {
         await connResult.data.query(sql)
@@ -431,7 +448,7 @@ export function createMysqlProvider(): DbProvider {
 
       const ifExistsClause = ifExists ? 'IF EXISTS ' : ''
       try {
-        await connResult.data.query(`DROP TABLE ${ifExistsClause}\`${tableName}\``)
+        await connResult.data.query(`DROP TABLE ${ifExistsClause}${tableName}`)
         return ok(undefined)
       }
       catch (error) {
@@ -450,7 +467,7 @@ export function createMysqlProvider(): DbProvider {
 
       const colSql = buildColumnSql(columnName, columnDef)
       try {
-        await connResult.data.query(`ALTER TABLE \`${tableName}\` ADD COLUMN ${colSql}`)
+        await connResult.data.query(`ALTER TABLE ${tableName} ADD COLUMN ${colSql}`)
         return ok(undefined)
       }
       catch (error) {
@@ -468,7 +485,7 @@ export function createMysqlProvider(): DbProvider {
         return connResult
 
       try {
-        await connResult.data.query(`ALTER TABLE \`${tableName}\` DROP COLUMN \`${columnName}\``)
+        await connResult.data.query(`ALTER TABLE ${tableName} DROP COLUMN ${columnName}`)
         return ok(undefined)
       }
       catch (error) {
@@ -486,7 +503,7 @@ export function createMysqlProvider(): DbProvider {
         return connResult
 
       try {
-        await connResult.data.query(`RENAME TABLE \`${oldName}\` TO \`${newName}\``)
+        await connResult.data.query(`ALTER TABLE ${oldName} RENAME TO ${newName}`)
         return ok(undefined)
       }
       catch (error) {
@@ -504,11 +521,12 @@ export function createMysqlProvider(): DbProvider {
         return connResult
 
       const uniqueClause = indexDef.unique ? 'UNIQUE ' : ''
-      const columns = indexDef.columns.map(c => `\`${c}\``).join(', ')
+      const columns = indexDef.columns.join(', ')
+      const whereClause = indexDef.where ? ` WHERE ${indexDef.where}` : ''
 
       try {
         await connResult.data.query(
-          `CREATE ${uniqueClause}INDEX \`${indexName}\` ON \`${tableName}\` (${columns})`,
+          `CREATE ${uniqueClause}INDEX IF NOT EXISTS ${indexName} ON ${tableName} (${columns})${whereClause}`,
         )
         return ok(undefined)
       }
@@ -526,22 +544,9 @@ export function createMysqlProvider(): DbProvider {
       if (!connResult.success)
         return connResult
 
-      const tableResult = await findIndexTableName((sql, values) => connResult.data.query(sql, values), indexName)
-      if (!tableResult.success)
-        return tableResult
-
-      if (!tableResult.data) {
-        if (ifExists) {
-          return ok(undefined)
-        }
-        return err({
-          code: DbErrorCode.DDL_FAILED,
-          message: dbM('db_ddlFailed', { params: { error: `index not found: ${indexName}` } }),
-        })
-      }
-
+      const ifExistsClause = ifExists ? 'IF EXISTS ' : ''
       try {
-        await connResult.data.query(`DROP INDEX \`${indexName}\` ON \`${tableResult.data}\``)
+        await connResult.data.query(`DROP INDEX ${ifExistsClause}${indexName}`)
         return ok(undefined)
       }
       catch (error) {
@@ -584,25 +589,21 @@ export function createMysqlProvider(): DbProvider {
       const connResult = ensureConnected()
       if (!connResult.success)
         return connResult
-      return runQueryResult<T>((sqlStrInner, paramsInner) => connResult.data.query(sqlStrInner, paramsInner), sqlStr, params)
+      return runQuery<T>((sqlStrInner, paramsInner) => connResult.data.query(sqlStrInner, paramsInner), sqlStr, params)
     },
 
     async get<T>(sqlStr: string, params?: unknown[]): Promise<Result<T | null, DbError>> {
       const connResult = ensureConnected()
       if (!connResult.success)
         return connResult
-      return runGetResult<T>((sqlStrInner, paramsInner) => connResult.data.query(sqlStrInner, paramsInner), sqlStr, params)
+      return runGet<T>((sqlStrInner, paramsInner) => connResult.data.query(sqlStrInner, paramsInner), sqlStr, params)
     },
 
     async execute(sqlStr: string, params?: unknown[]): Promise<Result<ExecuteResult, DbError>> {
       const connResult = ensureConnected()
       if (!connResult.success)
         return connResult
-      return runExecuteResult(
-        (sqlStrInner, paramsInner) => connResult.data.execute(sqlStrInner, paramsInner),
-        sqlStr,
-        params,
-      )
+      return runExecute((sqlStrInner, paramsInner) => connResult.data.query(sqlStrInner, paramsInner), sqlStr, params)
     },
 
     async batch(statements: Array<{ sql: string, params?: unknown[] }>): Promise<Result<void, DbError>> {
@@ -610,23 +611,17 @@ export function createMysqlProvider(): DbProvider {
       if (!connResult.success)
         return connResult
 
-      let connection: MysqlConnection | null = null
+      let client: PgClient | null = null
       try {
-        connection = await connResult.data.getConnection()
-        await connection.beginTransaction()
-        const batchResult = await runBatchResult(
-          (sqlStrInner, paramsInner) => connection!.execute(sqlStrInner, paramsInner),
-          statements,
-        )
-        if (!batchResult.success) {
-          return batchResult
-        }
-        await connection.commit()
+        client = await connResult.data.connect()
+        await client.query('BEGIN')
+        await runStatementBatch((sqlStr, params) => client!.query(sqlStr, params), statements)
+        await client.query('COMMIT')
         return ok(undefined)
       }
       catch (error) {
-        if (connection) {
-          await connection.rollback().catch(() => { })
+        if (client) {
+          await client.query('ROLLBACK').catch(() => { })
         }
         return err({
           code: DbErrorCode.QUERY_FAILED,
@@ -635,8 +630,8 @@ export function createMysqlProvider(): DbProvider {
         })
       }
       finally {
-        if (connection) {
-          connection.release()
+        if (client) {
+          client.release()
         }
       }
     },
@@ -645,9 +640,8 @@ export function createMysqlProvider(): DbProvider {
       const connResult = ensureConnected()
       if (!connResult.success)
         return connResult
-      return runQueryPageResult<T>((sqlStr, params) => connResult.data.query(sqlStr, params), options)
+      return runQueryPage<T>((sqlStr, params) => connResult.data.query(sqlStr, params), options)
     },
-
   }
 
   const crud = createCrudManager(sql)
@@ -657,37 +651,31 @@ export function createMysqlProvider(): DbProvider {
   // =========================================================================
 
   /**
-   * 异步事务
+   * 开启事务
    *
-   * MySQL 推荐使用异步事务进行数据操作。
+   * 从连接池获取独立连接，执行 BEGIN，并返回事务句柄。
+   * 事务完成后（commit/rollback）自动释放连接。
    *
-   * @example
-   * ```ts
-   * await db.tx.wrap(async (tx) => {
-   *     await tx.execute('INSERT INTO users (name) VALUES (?)', ['张三'])
-   *     const users = await tx.query('SELECT * FROM users')
-   *     return users
-   * })
-   * ```
+   * @returns 事务句柄或错误
    */
   async function beginTransaction(): Promise<Result<TxHandle, DbError>> {
     const connResult = ensureConnected()
     if (!connResult.success)
       return connResult
 
-    let connection: MysqlConnection | null = null
+    let client: PgClient | null = null
 
     try {
-      connection = await pool!.getConnection()
-      await connection.beginTransaction()
+      client = await pool!.connect()
+      await client.query('BEGIN')
     }
     catch (error) {
-      if (connection) {
-        connection.release()
+      if (client) {
+        client.release()
       }
       return err({
         code: DbErrorCode.TRANSACTION_FAILED,
-        message: dbM('db_mysqlTxFailed', { params: { error: String(error) } }),
+        message: dbM('db_postgresTxFailed', { params: { error: String(error) } }),
         cause: error,
       })
     }
@@ -698,7 +686,7 @@ export function createMysqlProvider(): DbProvider {
       if (!active) {
         return err({
           code: DbErrorCode.TRANSACTION_FAILED,
-          message: dbM('db_mysqlTxFailed', { params: { error: 'transaction finished' } }),
+          message: dbM('db_postgresTxFailed', { params: { error: 'transaction finished' } }),
         })
       }
       return ok(undefined)
@@ -709,42 +697,35 @@ export function createMysqlProvider(): DbProvider {
         const activeResult = ensureActive()
         if (!activeResult.success)
           return activeResult
-        return runQueryResult<R>((sqlStrInner, paramsInner) => connection!.query(sqlStrInner, paramsInner), sqlStr, params)
+        return runQuery<R>((sqlStrInner, paramsInner) => client!.query(sqlStrInner, paramsInner), sqlStr, params)
       },
 
       async get<R>(sqlStr: string, params?: unknown[]): Promise<Result<R | null, DbError>> {
         const activeResult = ensureActive()
         if (!activeResult.success)
           return activeResult
-        return runGetResult<R>((sqlStrInner, paramsInner) => connection!.query(sqlStrInner, paramsInner), sqlStr, params)
+        return runGet<R>((sqlStrInner, paramsInner) => client!.query(sqlStrInner, paramsInner), sqlStr, params)
       },
 
       async execute(sqlStr: string, params?: unknown[]): Promise<Result<ExecuteResult, DbError>> {
         const activeResult = ensureActive()
         if (!activeResult.success)
           return activeResult
-        return runExecuteResult(
-          (sqlStrInner, paramsInner) => connection!.execute(sqlStrInner, paramsInner),
-          sqlStr,
-          params,
-        )
+        return runExecute((sqlStrInner, paramsInner) => client!.query(sqlStrInner, paramsInner), sqlStr, params)
       },
 
       async batch(statements: Array<{ sql: string, params?: unknown[] }>): Promise<Result<void, DbError>> {
         const activeResult = ensureActive()
         if (!activeResult.success)
           return activeResult
-        return runBatchResult(
-          (sqlStrInner, paramsInner) => connection!.execute(sqlStrInner, paramsInner),
-          statements,
-        )
+        return runBatch((sqlStrInner, paramsInner) => client!.query(sqlStrInner, paramsInner), statements)
       },
 
       async queryPage<R>(options: PaginationQueryOptions): Promise<Result<PaginatedResult<R>, DbError>> {
         const activeResult = ensureActive()
         if (!activeResult.success)
           return activeResult
-        return runQueryPageResult<R>((sqlStr, params) => connection!.query(sqlStr, params), options)
+        return runQueryPage<R>((sqlStrInner, paramsInner) => client!.query(sqlStrInner, paramsInner), options)
       },
     }
 
@@ -757,40 +738,39 @@ export function createMysqlProvider(): DbProvider {
         if (!activeResult.success)
           return activeResult
         try {
-          await connection!.commit()
+          await client!.query('COMMIT')
           active = false
           return ok(undefined)
         }
         catch (error) {
           return err({
             code: DbErrorCode.TRANSACTION_FAILED,
-            message: dbM('db_mysqlTxFailed', { params: { error: String(error) } }),
+            message: dbM('db_postgresTxFailed', { params: { error: String(error) } }),
             cause: error,
           })
         }
         finally {
-          connection!.release()
+          client!.release()
         }
       },
-
       async rollback(): Promise<Result<void, DbError>> {
         const activeResult = ensureActive()
         if (!activeResult.success)
           return activeResult
         try {
-          await connection!.rollback()
+          await client!.query('ROLLBACK')
           active = false
           return ok(undefined)
         }
         catch (error) {
           return err({
             code: DbErrorCode.TRANSACTION_FAILED,
-            message: dbM('db_mysqlTxFailed', { params: { error: String(error) } }),
+            message: dbM('db_postgresTxFailed', { params: { error: String(error) } }),
             cause: error,
           })
         }
         finally {
-          connection!.release()
+          client!.release()
         }
       },
     }
@@ -818,7 +798,7 @@ export function createMysqlProvider(): DbProvider {
         await txResult.data.rollback()
         return err({
           code: DbErrorCode.TRANSACTION_FAILED,
-          message: dbM('db_mysqlTxFailed', { params: { error: String(error) } }),
+          message: dbM('db_postgresTxFailed', { params: { error: String(error) } }),
           cause: error,
         })
       }
@@ -830,41 +810,41 @@ export function createMysqlProvider(): DbProvider {
   // =========================================================================
 
   /**
-   * 连接 MySQL 数据库
+   * 连接 PostgreSQL 数据库
    */
   const connect: DbProvider['connect'] = async (config: DbConfig): Promise<Result<void, DbError>> => {
-    if (config.type !== 'mysql') {
+    if (config.type !== 'postgresql') {
       return err({
         code: DbErrorCode.UNSUPPORTED_TYPE,
-        message: dbM('db_mysqlOnlyMysql'),
+        message: dbM('db_postgresOnlyPostgresql'),
       })
     }
 
     try {
-      // 动态导入 mysql2
+      // 动态导入 pg
       // eslint-disable-next-line ts/no-require-imports -- 需要保持 connect 同步，使用 require 进行按需加载
-      const mysql = require('mysql2/promise')
+      const { Pool } = require('pg')
 
-      pool = mysql.createPool({
-        uri: config.url,
+      pool = new Pool({
+        connectionString: config.url,
         host: config.host,
         port: config.port,
         database: config.database,
         user: config.user,
         password: config.password,
         ssl: config.ssl,
-        connectionLimit: config.pool?.max ?? 10,
-        waitForConnections: true,
-        queueLimit: 0,
-        charset: config.mysql?.charset ?? 'utf8mb4',
-      }) as MysqlPool
+        min: config.pool?.min,
+        max: config.pool?.max ?? 10,
+        idleTimeoutMillis: config.pool?.idleTimeout,
+        connectionTimeoutMillis: config.pool?.acquireTimeout,
+      }) as PgPool
 
       return ok(undefined)
     }
     catch (error) {
       return err({
         code: DbErrorCode.CONNECTION_FAILED,
-        message: dbM('db_mysqlConnectionFailed', { params: { error: String(error) } }),
+        message: dbM('db_postgresConnectionFailed', { params: { error: String(error) } }),
         cause: error,
       })
     }

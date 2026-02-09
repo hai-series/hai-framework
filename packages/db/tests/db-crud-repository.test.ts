@@ -337,6 +337,141 @@ describe('db.BaseCrudRepository', () => {
         expect(afterCount.data).toBe(0)
       }
     })
+
+    it(`${label}: deleteById should remove record`, async () => {
+      await ensureTable()
+      const repo = new UserRepository()
+
+      const createResult = await repo.create({ name: '用户Del', email: 'del@test.com' })
+      expect(createResult.success).toBe(true)
+
+      const countBefore = await repo.count()
+      expect(countBefore.success).toBe(true)
+      if (countBefore.success) {
+        expect(countBefore.data).toBe(1)
+      }
+
+      const deleteResult = await repo.deleteById(1)
+      expect(deleteResult.success).toBe(true)
+      if (deleteResult.success) {
+        expect(deleteResult.data.changes).toBe(1)
+      }
+
+      const countAfter = await repo.count()
+      expect(countAfter.success).toBe(true)
+      if (countAfter.success) {
+        expect(countAfter.data).toBe(0)
+      }
+    })
+
+    it(`${label}: findById non-existent should return null`, async () => {
+      await ensureTable()
+      const repo = new UserRepository()
+
+      const result = await repo.findById(999)
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data).toBeNull()
+      }
+    })
+
+    it(`${label}: existsById non-existent should return false`, async () => {
+      await ensureTable()
+      const repo = new UserRepository()
+
+      const result = await repo.existsById(999)
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data).toBe(false)
+      }
+    })
+
+    it(`${label}: exists on empty table should return false`, async () => {
+      await ensureTable()
+      const repo = new UserRepository()
+
+      const result = await repo.exists()
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data).toBe(false)
+      }
+    })
+
+    it(`${label}: count with where clause should filter`, async () => {
+      await ensureTable()
+      const repo = new UserRepository()
+
+      await repo.create({ name: '用户A', email: 'a@test.com' })
+      await repo.create({ name: '用户B', email: 'b@test.com' })
+      await repo.create({ name: '用户C', email: 'c@test.com' })
+
+      const result = await repo.count({ where: 'email LIKE ?', params: ['%b@%'] })
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data).toBe(1)
+      }
+    })
+
+    it(`${label}: findAll with where and orderBy should work`, async () => {
+      await ensureTable()
+      const repo = new UserRepository()
+
+      await repo.create({ name: '用户C', email: 'c@test.com' })
+      await repo.create({ name: '用户A', email: 'a@test.com' })
+      await repo.create({ name: '用户B', email: 'b@test.com' })
+
+      const result = await repo.findAll({ where: 'name LIKE ?', params: ['用户%'], orderBy: 'email ASC' })
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data).toHaveLength(3)
+        expect(result.data[0].email).toBe('a@test.com')
+        expect(result.data[2].email).toBe('c@test.com')
+      }
+    })
+
+    it(`${label}: findPage should return paginated results`, async () => {
+      await ensureTable()
+      const repo = new UserRepository()
+
+      await repo.create({ name: '用户1', email: 'u1@test.com' })
+      await repo.create({ name: '用户2', email: 'u2@test.com' })
+      await repo.create({ name: '用户3', email: 'u3@test.com' })
+
+      const result = await repo.findPage({
+        orderBy: 'id ASC',
+        pagination: { page: 1, pageSize: 2 },
+      })
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data.total).toBe(3)
+        expect(result.data.items).toHaveLength(2)
+        expect(result.data.page).toBe(1)
+        expect(result.data.pageSize).toBe(2)
+      }
+    })
+
+    it(`${label}: createMany empty array should succeed`, async () => {
+      await ensureTable()
+      const repo = new UserRepository()
+
+      const result = await repo.createMany([])
+      expect(result.success).toBe(true)
+    })
+
+    it(`${label}: findAll with limit should restrict results`, async () => {
+      await ensureTable()
+      const repo = new UserRepository()
+
+      await repo.create({ name: '用户1', email: 'u1@test.com' })
+      await repo.create({ name: '用户2', email: 'u2@test.com' })
+      await repo.create({ name: '用户3', email: 'u3@test.com' })
+
+      const result = await repo.findAll({ orderBy: 'id ASC', limit: 2 })
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data).toHaveLength(2)
+      }
+    })
   }
 
   defineDbSuite('sqlite', sqliteMemoryEnv, () => defineCommon('sqlite'))

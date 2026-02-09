@@ -5,7 +5,7 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { db } from '../src/index.js'
+import { db, DbErrorCode } from '../src/index.js'
 import { defineDbSuite, mysqlEnv, postgresEnv, sqliteMemoryEnv } from './helpers/db-test-suite.js'
 
 describe('db.sql', () => {
@@ -56,6 +56,89 @@ describe('db.sql', () => {
       expect(count.success).toBe(true)
       if (count.success) {
         expect(Number(count.data?.count)).toBe(2)
+      }
+    })
+
+    it(`${label}: query 无匹配行应返回空数组`, async () => {
+      await db.ddl.dropTable('users', true)
+      await db.ddl.createTable('users', {
+        id: { type: 'INTEGER', primaryKey: true, autoIncrement: true },
+        name: { type: 'TEXT', notNull: true },
+      })
+
+      const result = await db.sql.query<{ id: number }>('SELECT id FROM users')
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data).toEqual([])
+      }
+    })
+
+    it(`${label}: get 无匹配行应返回 null`, async () => {
+      await db.ddl.dropTable('users', true)
+      await db.ddl.createTable('users', {
+        id: { type: 'INTEGER', primaryKey: true, autoIncrement: true },
+        name: { type: 'TEXT', notNull: true },
+      })
+
+      const result = await db.sql.get<{ id: number }>('SELECT id FROM users WHERE id = ?', [999])
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data).toBeNull()
+      }
+    })
+
+    it(`${label}: execute 无匹配行应返回 changes=0`, async () => {
+      await db.ddl.dropTable('users', true)
+      await db.ddl.createTable('users', {
+        id: { type: 'INTEGER', primaryKey: true, autoIncrement: true },
+        name: { type: 'TEXT', notNull: true },
+      })
+
+      const result = await db.sql.execute('DELETE FROM users WHERE id = ?', [999])
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data.changes).toBe(0)
+      }
+    })
+
+    it(`${label}: 无效 SQL 应返回 QUERY_FAILED`, async () => {
+      const result = await db.sql.query('SELECT * FROM nonexistent_table_xyz')
+      expect(result.success).toBe(false)
+      if (!result.success) {
+        expect(result.error.code).toBe(DbErrorCode.QUERY_FAILED)
+      }
+    })
+
+    it(`${label}: execute 无效 SQL 应返回失败`, async () => {
+      const result = await db.sql.execute('INSERT INTO nonexistent_table_xyz (name) VALUES (?)', ['用户'])
+      expect(result.success).toBe(false)
+    })
+
+    it(`${label}: batch 空语句列表应成功`, async () => {
+      const result = await db.sql.batch([])
+      expect(result.success).toBe(true)
+    })
+
+    it(`${label}: 参数化查询应正确绑定`, async () => {
+      await db.ddl.dropTable('users', true)
+      await db.ddl.createTable('users', {
+        id: { type: 'INTEGER', primaryKey: true, autoIncrement: true },
+        name: { type: 'TEXT', notNull: true },
+      })
+
+      await db.sql.execute('INSERT INTO users (name) VALUES (?)', ['Alice'])
+      await db.sql.execute('INSERT INTO users (name) VALUES (?)', ['Bob'])
+      await db.sql.execute('INSERT INTO users (name) VALUES (?)', ['Charlie'])
+
+      const result = await db.sql.query<{ name: string }>(
+        'SELECT name FROM users WHERE name LIKE ? ORDER BY name ASC',
+        ['%li%'],
+      )
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data).toHaveLength(2)
+        expect(result.data[0].name).toBe('Alice')
+        expect(result.data[1].name).toBe('Charlie')
       }
     })
   }
