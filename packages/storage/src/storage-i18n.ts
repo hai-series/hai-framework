@@ -1,35 +1,27 @@
 /**
- * =============================================================================
- * @hai/storage - i18n
- * =============================================================================
+ * @hai/storage — i18n 消息获取器
  *
- * 本文件提供存储模块的 i18n 文案访问入口。
- * 模块内部使用，不对外导出。
- *
- * @internal
+ * 加载存储模块的中英文翻译文件，提供统一的文案获取函数。
+ * 内部使用，不对外导出。
  */
 
 import { core } from '@hai/core'
 import messagesEnUS from '../messages/en-US.json'
 import messagesZhCN from '../messages/zh-CN.json'
 
-// =============================================================================
-// i18n
-// =============================================================================
-
-/**
- * 存储模块文案 Key 类型
- */
+/** 消息键类型（从 zh-CN 翻译文件自动推断） */
 type StorageMessageKey = keyof typeof messagesZhCN
 
 /**
- * 获取存储模块文案。
- * @param key - 文案 Key
- * @param options - 插值参数与格式化选项
- * @returns 本地化后的文案字符串
- * @remarks 具体参数结构与 core.i18n.createMessageGetter 保持一致。
- * 模块内部使用，不对外导出。
- * @internal
+ * 获取存储模块本地化文案
+ *
+ * 根据当前 locale 自动选择 zh-CN 或 en-US 的文案，
+ * 支持带参数插值（通过 `{ params: { key: value } }`）。
+ *
+ * @example
+ * ```ts
+ * storageM('storage_fileNotFound', { params: { key: 'a.txt' } })
+ * ```
  */
 export const storageM = core.i18n.createMessageGetter<StorageMessageKey>({
   'zh-CN': messagesZhCN,

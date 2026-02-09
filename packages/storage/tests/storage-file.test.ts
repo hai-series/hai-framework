@@ -5,8 +5,12 @@
  */
 
 import { Buffer } from 'node:buffer'
+import * as fs from 'node:fs'
+import * as os from 'node:os'
+import * as path from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { storage } from '../src/storage-index.node.js'
+import { storage } from '../src/index.js'
+import { StorageErrorCode } from '../src/storage-config.js'
 import { defineStorageSuite, localStorageEnv, s3Env } from './helpers/storage-test-suite.js'
 
 describe('storage.file', () => {
@@ -263,9 +267,152 @@ describe('storage.file', () => {
         expect(getResult.data.toString()).toBe('flat content')
       }
     })
+
+    // =========================================================================
+    // put 带自定义 metadata 后通过 head 验证
+    // =========================================================================
+
+    it(`${label}: put 带自定义 metadata 后 head 应包含 metadata`, async () => {
+      const result = await storage.file.put('with-meta.txt', 'meta content', {
+        contentType: 'text/plain',
+        metadata: { author: 'test', version: '1' },
+      })
+      expect(result.success).toBe(true)
+
+      const headResult = await storage.file.head('with-meta.txt')
+      expect(headResult.success).toBe(true)
+      if (headResult.success) {
+        expect(headResult.data.key).toBe('with-meta.txt')
+        expect(headResult.data.contentType).toBe('text/plain')
+        // metadata 应存在（local 通过 .meta.json，s3 通过 Metadata header）
+        expect(headResult.data.metadata).toBeDefined()
+        if (headResult.data.metadata) {
+          expect(headResult.data.metadata.author).toBe('test')
+          expect(headResult.data.metadata.version).toBe('1')
+        }
+      }
+    })
+
+    // =========================================================================
+    // put 带 cacheControl / contentDisposition
+    // =========================================================================
+
+    it(`${label}: put 带 cacheControl 后上传应成功`, async () => {
+      const result = await storage.file.put('cached.txt', 'cache test', {
+        cacheControl: 'max-age=86400',
+      })
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data.key).toBe('cached.txt')
+      }
+    })
+
+    it(`${label}: put 带 contentDisposition 后上传应成功`, async () => {
+      const result = await storage.file.put('download.txt', 'download content', {
+        contentDisposition: 'attachment; filename="download.txt"',
+      })
+      expect(result.success).toBe(true)
+    })
+
+    // =========================================================================
+    // copy 带选项
+    // =========================================================================
+
+    it(`${label}: copy 带 contentType 应覆盖目标文件类型`, async () => {
+      await storage.file.put('src-type.txt', 'type test')
+
+      const copyResult = await storage.file.copy('src-type.txt', 'dest-type.html', {
+        contentType: 'text/html',
+      })
+      expect(copyResult.success).toBe(true)
+      if (copyResult.success) {
+        expect(copyResult.data.contentType).toBe('text/html')
+      }
+    })
+
+    // =========================================================================
+    // get 范围边界
+    // =========================================================================
+
+    it(`${label}: get 只指定 rangeStart 应读取到末尾`, async () => {
+      await storage.file.put('range2.txt', 'Hello World')
+
+      const result = await storage.file.get('range2.txt', { rangeStart: 6 })
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data.toString()).toBe('World')
+      }
+    })
+
+    // =========================================================================
+    // head 元数据字段完整性
+    // =========================================================================
+
+    it(`${label}: head 返回的元数据应包含完整字段`, async () => {
+      await storage.file.put('head-full.txt', 'check all fields', {
+        contentType: 'text/plain',
+      })
+
+      const result = await storage.file.head('head-full.txt')
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data.key).toBe('head-full.txt')
+        expect(result.data.size).toBe(Buffer.from('check all fields').length)
+        expect(result.data.contentType).toBe('text/plain')
+        expect(result.data.lastModified).toBeInstanceOf(Date)
+        expect(typeof result.data.etag).toBe('string')
+        expect(result.data.etag!.length).toBeGreaterThan(0)
+      }
+    })
   }
 
   defineStorageSuite('local', localStorageEnv, () => defineCommon('local'))
 
   defineStorageSuite('s3', s3Env, () => defineCommon('s3'))
+
+  // ===========================================================================
+  // Local 专属边界测试
+  // ===========================================================================
+
+  describe('storage.file (local 边界)', () => {
+    it('local: 路径穿越的 key 应被安全规范化到 root 内', async () => {
+      const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'hai-storage-file-local-'))
+      await storage.close()
+      const initResult = await storage.init({ type: 'local', root: tempRoot })
+      expect(initResult.success).toBe(true)
+
+      // safePath 会将 ../../etc/evil.txt 规范化为 etc/evil.txt（剥离前导 ../ ）
+      const result = await storage.file.put('../../etc/evil.txt', 'sanitized')
+      expect(result.success).toBe(true)
+
+      // 验证文件实际写入到 root 下的 etc/evil.txt
+      const getResult = await storage.file.get('etc/evil.txt')
+      expect(getResult.success).toBe(true)
+      if (getResult.success) {
+        expect(getResult.data.toString()).toBe('sanitized')
+      }
+
+      await storage.close()
+      fs.rmSync(tempRoot, { recursive: true, force: true })
+    })
+
+    it('local: head 对目录路径应返回 INVALID_PATH', async () => {
+      const root = fs.mkdtempSync(path.join(os.tmpdir(), 'hai-storage-file-head-dir-'))
+      const subDir = path.join(root, 'subdir')
+      fs.mkdirSync(subDir)
+
+      await storage.close()
+      const initResult = await storage.init({ type: 'local', root })
+      expect(initResult.success).toBe(true)
+
+      const result = await storage.file.head('subdir')
+      expect(result.success).toBe(false)
+      if (!result.success) {
+        expect(result.error.code).toBe(StorageErrorCode.INVALID_PATH)
+      }
+
+      await storage.close()
+      fs.rmSync(root, { recursive: true, force: true })
+    })
+  })
 })

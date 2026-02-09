@@ -5,7 +5,7 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { storage } from '../src/storage-index.node.js'
+import { storage } from '../src/index.js'
 import { defineStorageSuite, localStorageEnv, s3Env } from './helpers/storage-test-suite.js'
 
 describe('storage.dir', () => {
@@ -86,6 +86,82 @@ describe('storage.dir', () => {
       expect(result.success).toBe(true)
       if (result.success) {
         expect(result.data.files).toEqual([])
+      }
+    })
+
+    it(`${label}: list 不传任何选项应返回所有文件`, async () => {
+      await storage.file.put('root-file-1.txt', 'content1')
+      await storage.file.put('root-file-2.txt', 'content2')
+
+      const result = await storage.dir.list()
+      expect(result.success).toBe(true)
+      if (result.success) {
+        const keys = result.data.files.map(f => f.key)
+        expect(keys).toContain('root-file-1.txt')
+        expect(keys).toContain('root-file-2.txt')
+      }
+    })
+
+    it(`${label}: list 带 maxKeys 后通过 continuationToken 翻页`, async () => {
+      // 上传 5 个文件
+      for (let i = 0; i < 5; i++) {
+        await storage.file.put(`page-ns/page-${i}.txt`, `content-${i}`)
+      }
+
+      // 第一页：取 2 条
+      const page1 = await storage.dir.list({ prefix: 'page-ns/', maxKeys: 2 })
+      expect(page1.success).toBe(true)
+      if (!page1.success)
+        return
+      expect(page1.data.files.length).toBe(2)
+      expect(page1.data.isTruncated).toBe(true)
+
+      // local provider 不支持 continuationToken，仅验证 maxKeys 限制
+      if (label === 'local')
+        return
+
+      // S3: 用 continuationToken 翻页
+      const page2 = await storage.dir.list({
+        prefix: 'page-ns/',
+        maxKeys: 2,
+        continuationToken: page1.data.nextContinuationToken,
+      })
+      expect(page2.success).toBe(true)
+      if (!page2.success)
+        return
+      expect(page2.data.files.length).toBe(2)
+
+      // 第三页
+      const page3 = await storage.dir.list({
+        prefix: 'page-ns/',
+        maxKeys: 2,
+        continuationToken: page2.data.nextContinuationToken,
+      })
+      expect(page3.success).toBe(true)
+      if (!page3.success)
+        return
+      expect(page3.data.files.length).toBe(1)
+      expect(page3.data.isTruncated).toBe(false)
+
+      // 三页文件 key 合一应为 5 条不重复
+      const allKeys = [
+        ...page1.data.files.map(f => f.key),
+        ...page2.data.files.map(f => f.key),
+        ...page3.data.files.map(f => f.key),
+      ]
+      expect(new Set(allKeys).size).toBe(5)
+    })
+
+    it(`${label}: list 返回的文件应包含基本元数据`, async () => {
+      await storage.file.put('meta-list/doc.txt', 'test content')
+
+      const result = await storage.dir.list({ prefix: 'meta-list/' })
+      expect(result.success).toBe(true)
+      if (result.success && result.data.files.length > 0) {
+        const file = result.data.files[0]
+        expect(file.key).toContain('doc.txt')
+        expect(file.size).toBeGreaterThan(0)
+        expect(file.lastModified).toBeInstanceOf(Date)
       }
     })
 

@@ -2,18 +2,14 @@
 
 对象存储模块，提供统一 `storage` 访问入口，支持 S3 兼容存储与本地文件系统。
 
-## 支持的存储
+## 支持的后端
 
 - S3 协议（AWS S3 / MinIO / OSS 等）
 - 本地文件系统
 
-## 安装
+## 快速开始
 
-```bash
-pnpm add @hai/storage
-```
-
-## 快速开始（Node.js）
+### Node.js 服务端
 
 ```ts
 import { storage } from '@hai/storage'
@@ -35,15 +31,15 @@ await storage.file.put('uploads/image.png', imageBuffer, { contentType: 'image/p
 const file = await storage.file.get('uploads/image.png')
 
 // 签名 URL
-const downloadUrl = await storage.presign.getUrl('uploads/image.png', { expiresIn: 3600 })
+const url = await storage.presign.getUrl('uploads/image.png', { expiresIn: 3600 })
 
 // 关闭连接
 await storage.close()
 ```
 
-## 前端客户端（浏览器）
+### 浏览器客户端
 
-> 浏览器环境下，`@hai/storage` 默认仅导出前端客户端能力，不包含 `storage.init/file/dir/presign`。
+浏览器环境下仅导出客户端能力（签名 URL 上传/下载），不包含 `storage` 服务对象。
 
 ```ts
 import { downloadAndSave, uploadWithPresignedUrl } from '@hai/storage/client'
@@ -52,18 +48,12 @@ const { uploadUrl } = await fetch('/api/storage/presign').then(r => r.json())
 await uploadWithPresignedUrl(uploadUrl, file)
 ```
 
-也可以直接从 `@hai/storage` 导入（浏览器构建会自动指向前端客户端）：
+## 配置
 
-```ts
-import { downloadAndSave, uploadWithPresignedUrl } from '@hai/storage'
-```
+- **S3**：`bucket / region / accessKeyId / secretAccessKey` 必填，可选 `endpoint / forcePathStyle / prefix / publicUrl`
+- **Local**：`root` 必填，可选 `directoryMode / fileMode`
 
-## 配置要点
-
-- S3：`bucket/region/accessKeyId/secretAccessKey` 为必填，可选 `endpoint/forcePathStyle/prefix/publicUrl`
-- Local：`root` 为必填，可选 `directoryMode/fileMode`
-
-## 错误处理示例
+## 错误处理
 
 ```ts
 import { storage, StorageErrorCode } from '@hai/storage'
@@ -80,8 +70,6 @@ if (!result.success && result.error.code === StorageErrorCode.NOT_INITIALIZED) {
 pnpm test
 ```
 
-> 运行 S3 容器化测试需要 Docker。
-
-## 许可证
+## License
 
 Apache-2.0

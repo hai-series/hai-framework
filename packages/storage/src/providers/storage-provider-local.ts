@@ -1,30 +1,7 @@
 /**
- * =============================================================================
- * @hai/storage - Local Provider 实现
- * =============================================================================
+ * @hai/storage — Local Provider 实现
  *
  * 基于本地文件系统的存储 Provider。
- * 将文件存储在服务器本地文件系统中。
- *
- * @example
- * ```ts
- * import { createLocalProvider } from '@hai/storage'
- *
- * const provider = createLocalProvider()
- * await provider.connect({
- *     type: 'local',
- *     root: '/data/uploads'
- * })
- *
- * // 上传文件
- * await provider.file.put('images/photo.jpg', imageBuffer)
- *
- * // 下载文件
- * const data = await provider.file.get('images/photo.jpg')
- * ```
- *
- * @module storage-provider-local
- * =============================================================================
  */
 
 import type { Result } from '@hai/core'
@@ -55,7 +32,18 @@ import { storageM } from '../storage-i18n.js'
 // =============================================================================
 
 /**
- * 将 Node.js 错误转换为 StorageError
+ * 将 Node.js 文件系统错误转换为 StorageError
+ *
+ * 映射规则：
+ * - ENOENT → NOT_FOUND
+ * - EACCES / EPERM → PERMISSION_DENIED
+ * - ENOSPC → QUOTA_EXCEEDED
+ * - EISDIR → INVALID_PATH
+ * - 其他 → IO_ERROR
+ *
+ * @param error - 原始错误对象
+ * @param key - 相关文件键（可选，用于错误消息）
+ * @returns 统一的 StorageError
  */
 function toStorageError(error: unknown, key?: string): StorageError {
   const e = error as NodeJS.ErrnoException
@@ -105,7 +93,12 @@ function toStorageError(error: unknown, key?: string): StorageError {
 }
 
 /**
- * 获取文件的 MIME 类型
+ * 根据文件扩展名获取 MIME 类型
+ *
+ * 内置常见扩展名映射，未匹配时返回 'application/octet-stream'。
+ *
+ * @param filePath - 文件路径或文件名
+ * @returns MIME 类型字符串
  */
 function getMimeType(filePath: string): string {
   const ext = path.extname(filePath).toLowerCase()
@@ -141,7 +134,10 @@ function getMimeType(filePath: string): string {
 }
 
 /**
- * 计算文件的 ETag
+ * 计算文件内容的 ETag（MD5 哈希）
+ *
+ * @param data - 文件内容 Buffer
+ * @returns 带双引号的 MD5 哈希字符串，如 '"d41d8cd98f00b204e9800998ecf8427e"'
  */
 function calculateEtag(data: Buffer): string {
   const hash = crypto.createHash('md5').update(data).digest('hex')
@@ -150,6 +146,16 @@ function calculateEtag(data: Buffer): string {
 
 /**
  * 安全的路径解析，防止路径穿越攻击
+ *
+ * 处理流程：
+ * 1. 规范化 key，移除前导 `../` 模式
+ * 2. 拼接 root + key 得到完整路径
+ * 3. resolve 后确认路径仍在 root 目录下
+ *
+ * @param root - 存储根目录绝对路径
+ * @param key - 用户提供的文件键
+ * @returns 安全的完整文件路径
+ * @throws 当解析后路径超出 root 范围时抛出异常
  */
 function safePath(root: string, key: string): string {
   // 规范化路径，移除 ../ 等
@@ -174,6 +180,14 @@ function safePath(root: string, key: string): string {
 /**
  * 创建本地存储 Provider
  *
+ * 基于本地文件系统实现的 StorageProvider。
+ * connect 时会自动创建根目录；文件操作会自动创建中间目录。
+ *
+ * 已知限制：
+ * - list 不支持 continuationToken 分页（仅支持 maxKeys 截断）
+ * - presign 返回虚拟 `local://` URL，应用层需自行处理
+ * - publicUrl 始终返回 null
+ *
  * @returns Local Provider 实例
  */
 export function createLocalProvider(): StorageProvider {
@@ -184,6 +198,7 @@ export function createLocalProvider(): StorageProvider {
   // 辅助方法
   // -------------------------------------------------------------------------
 
+  /** 获取当前 Local 配置，未初始化时抛异常 */
   function getConfig(): LocalConfig {
     if (!config) {
       throw new Error(storageM('storage_localNotInitialized'))
@@ -191,10 +206,17 @@ export function createLocalProvider(): StorageProvider {
     return config
   }
 
+  /** 将用户 key 转为安全的绝对路径（经 safePath 防穿越处理） */
   function fullPath(key: string): string {
     return safePath(getConfig().root, key)
   }
 
+  /**
+   * 将输入数据统一转为 Buffer
+   *
+   * @param data - 字符串、Buffer 或 Uint8Array
+   * @returns Buffer 实例
+   */
   function toBuffer(data: Buffer | Uint8Array | string): Buffer {
     if (typeof data === 'string') {
       return Buffer.from(data)
