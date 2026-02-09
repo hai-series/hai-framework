@@ -954,6 +954,166 @@ import { XxConfigSchema } from './xx-config.js'
 - ❌ 超过 2 层 if 嵌套
 - ❌ 重新包装上游 Result 错误
 
+### 4.10 日志输出规范
+
+模块在关键生命周期节点与业务操作中**必须输出日志**，帮助开发与运维追踪执行流程、定位问题。
+
+#### 日志实例创建
+
+每个文件使用 `core.logger.child` 创建局部 logger，标注模块与作用域：
+
+```ts
+import { core } from '@hai/core'
+
+// main.ts
+const logger = core.logger.child({ module: 'xx', scope: 'main' })
+
+// 子功能文件
+const logger = core.logger.child({ module: 'xx', scope: 'yy' })
+
+// Provider 实现
+const logger = core.logger.child({ module: 'xx', scope: 'provider-aaa' })
+```
+
+#### 日志级别与使用场景
+
+| 级别 | 场景 | 示例 |
+|---|---|---|
+| `trace` | 循环体内、变量快照、详细执行路径 | 逐行处理记录、缓存命中/未命中 |
+| `debug` | 函数进入、中间状态、参数概要 | 开始处理请求、解析配置 |
+| `info` | 业务里程碑事件（初始化完成、连接就绪、关键操作成功） | 服务启动、用户创建、会话建立 |
+| `warn` | 异常但可恢复（重试、降级、校验失败） | 认证失败、速率限制触发、配置回退默认值 |
+| `error` | 操作失败且需人工排查 | 数据库连接失败、Provider 异常 |
+| `fatal` | 致命错误、服务无法继续 | 核心依赖不可用、数据损坏 |
+
+#### 必须输出日志的位置
+
+**1. 生命周期（init / close）**
+
+```ts
+export const xx: XxFunctions = {
+  async init(config: XxConfigInput): Promise<Result<void, XxError>> {
+    await xx.close()
+    try {
+      const parsed = XxConfigSchema.parse(config)
+      logger.debug('Initializing xx module', { type: parsed.type })
+
+      // ... 创建功能实例 ...
+
+      currentConfig = parsed
+      logger.info('XX module initialized', { type: parsed.type })
+      return ok(undefined)
+    }
+    catch (error) {
+      logger.error('XX module initialization failed', { error })
+      return err({ code: XxErrorCode.CONFIG_ERROR, message: xxM('xx_initFailed', { params: { error: String(error) } }), cause: error })
+    }
+  },
+
+  async close() {
+    if (currentProvider) {
+      await currentProvider.close()
+      currentProvider = null
+    }
+    currentConfig = null
+    logger.info('XX module closed')
+  },
+}
+```
+
+**2. 业务操作（成功 / 失败 / 异常分支）**
+
+```ts
+async create(input: CreateYyInput) {
+  logger.debug('Creating yy item', { name: input.name })
+
+  if (!input.name) {
+    logger.warn('Yy creation rejected: name is empty')
+    return err({ code: XxErrorCode.VALIDATION_ERROR, message: xxM('xx_yy_nameRequired') })
+  }
+
+  try {
+    const item = await doCreate(input)
+    logger.info('Yy item created', { itemId: item.id, name: item.name })
+    return ok(item)
+  }
+  catch (error) {
+    logger.error('Failed to create yy item', { name: input.name, error })
+    return err({ code: XxErrorCode.OPERATION_FAILED, message: xxM('xx_yy_createFailed'), cause: error })
+  }
+},
+
+async remove(id: string) {
+  logger.debug('Removing yy item', { id })
+  const result = await dataSource.delete(id)
+  if (!result.success) {
+    logger.warn('Failed to remove yy item', { id, reason: result.error.code })
+    return result
+  }
+  logger.info('Yy item removed', { id })
+  return ok(undefined)
+},
+```
+
+**3. Provider 连接 / 断开**
+
+```ts
+export function createTypeAProvider(): XxProvider {
+  const logger = core.logger.child({ module: 'xx', scope: 'provider-typeA' })
+  let client: ExternalClient | null = null
+
+  return {
+    name: 'typeA',
+    async connect(config) {
+      logger.debug('Connecting to TypeA backend', { host: config.host })
+      try {
+        client = new ExternalClient(config)
+        await client.connect()
+        logger.info('TypeA backend connected', { host: config.host })
+        return ok(undefined)
+      }
+      catch (error) {
+        logger.error('TypeA connection failed', { host: config.host, error })
+        return err(toXxError(error))
+      }
+    },
+    async close() {
+      await client?.close()
+      client = null
+      logger.info('TypeA backend disconnected')
+    },
+    // ...
+  }
+}
+```
+
+**4. 认证 / 权限等安全敏感操作**
+
+```ts
+async login(credentials) {
+  const authResult = await strategy.authenticate(credentials)
+  if (!authResult.success) {
+    logger.warn('Login failed', { type: credentials.type, reason: authResult.error.code })
+    return authResult
+  }
+  logger.info('Login succeeded', { type: credentials.type, userId: authResult.data.id })
+  return buildAuthResult(authResult.data)
+},
+
+async logout(accessToken: string) {
+  // ...
+  logger.info('User logged out', { userId: session.userId })
+  return ok(undefined)
+},
+```
+
+#### 日志内容规范
+
+- **消息文本**：英文，简洁动宾结构（如 `'XX module initialized'`、`'Failed to create yy item'`）
+- **上下文对象**：携带关键业务标识（`id`、`userId`、`type`），禁止输出密码、token 明文等敏感信息
+- **错误上下文**：失败日志携带 `{ error }` 或 `{ reason: errorCode }`，便于排查
+- **不要过度日志**：循环体内用 `trace`；正常查询/读取操作用 `debug`，不要用 `info`
+
 ---
 
 ## 5. 工程化配置
