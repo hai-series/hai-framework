@@ -4,12 +4,12 @@
  * =============================================================================
  *
  * 覆盖范围：
- * - login：用户名/邮箱、密码错误、用户不存在、空 identifier
+ * - login：用户名/邮箱、密码错误、用户不存在、空 identifier、空密码
  * - loginWithOtp / loginWithLdap：无策略时应返回 STRATEGY_NOT_SUPPORTED
  * - sendOtp：无策略时应返回 STRATEGY_NOT_SUPPORTED
  * - login 禁用配置：关闭密码登录后应返回 LOGIN_DISABLED
- * - verifyToken：有效/无效/空令牌
- * - logout：正常登出、令牌失效、重复登出
+ * - verifyToken：有效/无效/空令牌、登出后令牌验证
+ * - logout：正常登出、令牌失效、重复登出、不存在令牌幂等
  * - 禁用用户登录：register(defaultEnabled:false) → login 应返回 USER_DISABLED
  * - 账户锁定：超过最大尝试次数后锁定
  * - 登录结果中的 agreements
@@ -99,6 +99,21 @@ describe('iam.auth', () => {
           password: TEST_PASSWORD,
         })
         expect(result.success).toBe(false)
+        if (!result.success) {
+          expect(result.error.code).toBe(IamErrorCode.USER_NOT_FOUND)
+        }
+      })
+
+      it('空密码应返回 INTERNAL_ERROR', async () => {
+        await registerUser('auth_empty_pwd_user')
+        const result = await getIam().auth.login({
+          identifier: 'auth_empty_pwd_user',
+          password: '',
+        })
+        expect(result.success).toBe(false)
+        if (!result.success) {
+          expect(result.error.code).toBe(IamErrorCode.INTERNAL_ERROR)
+        }
       })
     })
 
@@ -136,6 +151,26 @@ describe('iam.auth', () => {
       it('空字符串令牌应返回错误', async () => {
         const result = await getIam().auth.verifyToken('')
         expect(result.success).toBe(false)
+        if (!result.success) {
+          expect(result.error.code).toBe(IamErrorCode.SESSION_INVALID)
+        }
+      })
+
+      it('登出后的令牌 verifyToken 应返回 SESSION_INVALID', async () => {
+        await registerUser('auth_verify_after_logout')
+        const loginResult = await getIam().auth.login({
+          identifier: 'auth_verify_after_logout',
+          password: TEST_PASSWORD,
+        })
+        if (!loginResult.success)
+          return
+
+        await getIam().auth.logout(loginResult.data.accessToken)
+        const result = await getIam().auth.verifyToken(loginResult.data.accessToken)
+        expect(result.success).toBe(false)
+        if (!result.success) {
+          expect(result.error.code).toBe(IamErrorCode.SESSION_INVALID)
+        }
       })
     })
 
@@ -172,7 +207,12 @@ describe('iam.auth', () => {
 
         await getIam().auth.logout(loginResult.data.accessToken)
         const result = await getIam().auth.logout(loginResult.data.accessToken)
-        expect(result).toBeDefined()
+        expect(result.success).toBe(true)
+      })
+
+      it('不存在的令牌登出应成功（幂等）', async () => {
+        const result = await getIam().auth.logout('completely-nonexistent-token')
+        expect(result.success).toBe(true)
       })
     })
 
@@ -230,7 +270,7 @@ describe('iam.auth', () => {
       })
 
       afterAll(async () => {
-        await loginDisabledIam.close()
+        await initIam()
       })
 
       it('密码登录禁用时应返回 LOGIN_DISABLED', async () => {
@@ -271,7 +311,7 @@ describe('iam.auth', () => {
       })
 
       afterAll(async () => {
-        await disabledUserIam.close()
+        await initIam()
       })
 
       it('禁用用户登录应返回 USER_DISABLED', async () => {
@@ -300,7 +340,7 @@ describe('iam.auth', () => {
       })
 
       afterAll(async () => {
-        await lockIam.close()
+        await initIam()
       })
 
       it('超过最大登录失败次数后应锁定账户', async () => {
@@ -370,7 +410,7 @@ describe('iam.auth', () => {
       })
 
       afterAll(async () => {
-        await agreementIam.close()
+        await initIam()
       })
 
       it('配置 agreements 且 showOnLogin 时登录结果应包含协议信息', async () => {

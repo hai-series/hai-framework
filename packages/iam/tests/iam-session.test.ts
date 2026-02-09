@@ -9,10 +9,11 @@
  * - update：正常更新、不存在的令牌应返回 SESSION_NOT_FOUND
  * - delete：正常删除、不存在的令牌幂等删除
  * - deleteByUserId：多会话批量删除、无会话用户删除返回 0
+ * - 创建会话时自定义 maxAge / source / data / 空 roles
  * - 滑动续期：get 更新 lastActiveAt
+ * - 会话过期：短 maxAge 会话过期后 get 返回 null、verifyToken 返回 SESSION_INVALID
  * - 单设备登录：新登录使旧会话失效
  * - 登录后角色同步
- * - 创建会话时自定义 maxAge / source / data
  */
 
 import type { IamFunctions } from '../src/iam-types.js'
@@ -228,6 +229,31 @@ describe('iam.session', () => {
           expect(result.data.data?.deviceId).toBe('abc123')
         }
       })
+
+      it('创建会话时可自定义 maxAge', async () => {
+        const result = await getIam().session.create({
+          userId: 'session-custom-maxage',
+          roles: [],
+          maxAge: 60,
+        })
+        expect(result.success).toBe(true)
+        if (result.success) {
+          const ttlMs = result.data.expiresAt.getTime() - result.data.createdAt.getTime()
+          expect(ttlMs).toBeLessThanOrEqual(61000)
+          expect(ttlMs).toBeGreaterThanOrEqual(59000)
+        }
+      })
+
+      it('创建会话时 roles 为空数组应成功', async () => {
+        const result = await getIam().session.create({
+          userId: 'session-empty-roles',
+          roles: [],
+        })
+        expect(result.success).toBe(true)
+        if (result.success) {
+          expect(result.data.roles).toEqual([])
+        }
+      })
     })
 
     // =========================================================================
@@ -244,7 +270,7 @@ describe('iam.session', () => {
       })
 
       afterAll(async () => {
-        await slidingIam.close()
+        await initIam()
       })
 
       it('get 操作应更新 lastActiveAt', async () => {
@@ -268,6 +294,49 @@ describe('iam.session', () => {
     })
 
     // =========================================================================
+    // 会话过期
+    // =========================================================================
+
+    describe('会话过期（短 maxAge）', () => {
+      it('超过 maxAge 后会话应过期（get 返回 null）', async () => {
+        const createResult = await getIam().session.create({
+          userId: 'expired-session-user',
+          roles: [],
+          maxAge: 1,
+        })
+        if (!createResult.success)
+          return
+
+        // 等待 1.5 秒让会话过期
+        await new Promise(resolve => setTimeout(resolve, 1500))
+
+        const getResult = await getIam().session.get(createResult.data.accessToken)
+        expect(getResult.success).toBe(true)
+        if (getResult.success) {
+          expect(getResult.data).toBeNull()
+        }
+      })
+
+      it('超过 maxAge 后 verifyToken 应返回 SESSION_INVALID', async () => {
+        const createResult = await getIam().session.create({
+          userId: 'expired-verify-user',
+          roles: [],
+          maxAge: 1,
+        })
+        if (!createResult.success)
+          return
+
+        await new Promise(resolve => setTimeout(resolve, 1500))
+
+        const result = await getIam().session.verifyToken(createResult.data.accessToken)
+        expect(result.success).toBe(false)
+        if (!result.success) {
+          expect(result.error.code).toBe(IamErrorCode.SESSION_INVALID)
+        }
+      })
+    })
+
+    // =========================================================================
     // 单设备登录
     // =========================================================================
 
@@ -281,7 +350,7 @@ describe('iam.session', () => {
       })
 
       afterAll(async () => {
-        await singleIam.close()
+        await initIam()
       })
 
       it('新登录应使旧会话失效', async () => {

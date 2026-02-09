@@ -126,46 +126,88 @@ export interface RegisterResult {
 export interface IamUserFunctions {
   /**
    * 注册用户
+   *
+   * 校验注册开关、密码强度、用户名/邮箱唯一性后，
+   * 在事务中创建用户并分配默认角色。
+   *
+   * @param options - 注册选项（用户名、密码、邮箱等）
+   * @returns 成功返回用户信息及可选的协议展示；失败返回对应错误码
    */
   register: (options: RegisterOptions) => Promise<Result<RegisterResult, IamError>>
 
   /**
    * 获取当前用户
+   *
+   * 通过访问令牌验证会话后查询用户信息。
+   *
+   * @param accessToken - 访问令牌
+   * @returns 成功返回用户信息；令牌无效/过期返回错误
    */
   getCurrentUser: (accessToken: string) => Promise<Result<User, IamError>>
 
   /**
    * 获取用户信息
+   *
+   * @param userId - 用户 ID
+   * @returns 成功返回用户信息或 null（用户不存在时）
    */
   getUser: (userId: string) => Promise<Result<User | null, IamError>>
 
   /**
-   * 获取所有用户列表
+   * 获取所有用户列表（分页）
+   *
+   * @param options - 分页参数（页码、每页数量），可选
+   * @returns 成功返回分页用户列表
    */
   listUsers: (options?: PaginationOptionsInput) => Promise<Result<PaginatedResult<User>, IamError>>
 
   /**
    * 更新用户信息
+   *
+   * 空更新（无有效字段）时直接返回当前用户信息。
+   *
+   * @param userId - 用户 ID
+   * @param data - 要更新的字段（displayName、email 等）
+   * @returns 成功返回更新后的用户信息；用户不存在返回 USER_NOT_FOUND
    */
   updateUser: (userId: string, data: Partial<User>) => Promise<Result<User, IamError>>
 
   /**
    * 修改密码
+   *
+   * 验证旧密码 → 校验新密码强度 → 哈希并更新。
+   *
+   * @param userId - 用户 ID
+   * @param oldPassword - 旧密码
+   * @param newPassword - 新密码
+   * @returns 成功返回 ok；旧密码错误返回 INVALID_CREDENTIALS，新密码不合规返回 PASSWORD_POLICY_VIOLATION
    */
   changePassword: (userId: string, oldPassword: string, newPassword: string) => Promise<Result<void, IamError>>
 
   /**
    * 重置密码（发送重置链接）
+   *
+   * @param identifier - 用户标识（邮箱/手机号）
+   * @returns 成功返回 ok（目前为占位实现）
    */
   requestPasswordReset: (identifier: string) => Promise<Result<void, IamError>>
 
   /**
    * 确认重置密码
+   *
+   * @param token - 重置令牌
+   * @param newPassword - 新密码
+   * @returns 目前返回 INTERNAL_ERROR（未实现）
    */
   confirmPasswordReset: (token: string, newPassword: string) => Promise<Result<void, IamError>>
 
   /**
-   * 验证密码强度
+   * 验证密码强度（同步方法）
+   *
+   * 根据密码策略校验长度、大小写、数字、特殊字符等要求。
+   *
+   * @param password - 待校验的密码
+   * @returns 通过返回 ok；不合规返回 PASSWORD_POLICY_VIOLATION
    */
   validatePassword: (password: string) => Result<void, IamError>
 }

@@ -4,10 +4,10 @@
  * =============================================================================
  *
  * 覆盖范围：
- * - register：正常注册、重复用户名/邮箱、弱密码、可选字段、注册禁用
- * - validatePassword：强密码、弱密码、空密码、边界长度
- * - getUser / getCurrentUser / listUsers
- * - updateUser：正常更新、空更新、用户不存在
+ * - register：正常注册、重复用户名/邮箱、弱密码、空密码、可选字段、注册禁用
+ * - validatePassword：强密码、弱密码、空密码、边界长度、超最大长度
+ * - getUser / getCurrentUser / listUsers（含分页边界）
+ * - updateUser：正常更新、空更新、多字段更新、用户不存在
  * - changePassword：正确/错误旧密码、弱新密码、用户不存在
  * - requestPasswordReset / confirmPasswordReset：桩实现行为
  * - 自定义密码策略配置：requireSpecialChar、自定义 minLength
@@ -126,6 +126,17 @@ describe('iam.user', () => {
           expect(result.data.user.email).toBeUndefined()
         }
       })
+
+      it('空密码注册应返回 PASSWORD_POLICY_VIOLATION', async () => {
+        const result = await getIam().user.register({
+          username: 'user_empty_pwd',
+          password: '',
+        })
+        expect(result.success).toBe(false)
+        if (!result.success) {
+          expect(result.error.code).toBe(IamErrorCode.PASSWORD_POLICY_VIOLATION)
+        }
+      })
     })
 
     // =========================================================================
@@ -142,7 +153,7 @@ describe('iam.user', () => {
       })
 
       afterAll(async () => {
-        await noRegIam.close()
+        await initIam()
       })
 
       it('注册关闭时应返回 REGISTER_DISABLED', async () => {
@@ -171,7 +182,7 @@ describe('iam.user', () => {
       })
 
       afterAll(async () => {
-        await disabledByDefaultIam.close()
+        await initIam()
       })
 
       it('新注册用户 enabled 应为 false', async () => {
@@ -248,6 +259,15 @@ describe('iam.user', () => {
           expect(result.error.code).toBe(IamErrorCode.PASSWORD_POLICY_VIOLATION)
         }
       })
+
+      it('超过最大长度(128)应不通过', () => {
+        const longPwd = `Aa1${'x'.repeat(126)}`
+        const result = getIam().user.validatePassword(longPwd)
+        expect(result.success).toBe(false)
+        if (!result.success) {
+          expect(result.error.code).toBe(IamErrorCode.PASSWORD_POLICY_VIOLATION)
+        }
+      })
     })
 
     // =========================================================================
@@ -267,7 +287,7 @@ describe('iam.user', () => {
       })
 
       afterAll(async () => {
-        await specialCharIam.close()
+        await initIam()
       })
 
       it('无特殊字符时应返回 PASSWORD_POLICY_VIOLATION', () => {
@@ -374,6 +394,9 @@ describe('iam.user', () => {
       it('空令牌应返回错误', async () => {
         const result = await getIam().user.getCurrentUser('')
         expect(result.success).toBe(false)
+        if (!result.success) {
+          expect(result.error.code).toBe(IamErrorCode.SESSION_INVALID)
+        }
       })
     })
 
@@ -409,6 +432,23 @@ describe('iam.user', () => {
           for (const user of result.data.items) {
             expect((user as any).passwordHash).toBeUndefined()
           }
+        }
+      })
+
+      it('pageSize=1 应只返回一条记录', async () => {
+        const result = await getIam().user.listUsers({ page: 1, pageSize: 1 })
+        expect(result.success).toBe(true)
+        if (result.success) {
+          expect(result.data.items.length).toBeLessThanOrEqual(1)
+          expect(result.data.pageSize).toBe(1)
+        }
+      })
+
+      it('超出范围的页码应返回空列表', async () => {
+        const result = await getIam().user.listUsers({ page: 9999, pageSize: 10 })
+        expect(result.success).toBe(true)
+        if (result.success) {
+          expect(result.data.items).toHaveLength(0)
         }
       })
     })
@@ -459,6 +499,24 @@ describe('iam.user', () => {
         expect(result.success).toBe(true)
         if (result.success) {
           expect(result.data.username).toBe('user_empty_update')
+        }
+      })
+
+      it('应能同时更新 displayName 和 metadata', async () => {
+        const regResult = await getIam().user.register({
+          username: 'user_update_multi',
+          password: TEST_PASSWORD,
+        })
+        if (!regResult.success)
+          return
+
+        const result = await getIam().user.updateUser(regResult.data.user.id, {
+          displayName: '多字段更新',
+          metadata: { key: 'value' },
+        })
+        expect(result.success).toBe(true)
+        if (result.success) {
+          expect(result.data.displayName).toBe('多字段更新')
         }
       })
     })
