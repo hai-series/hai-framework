@@ -41,11 +41,6 @@ const GENERATORS: Record<GeneratorType, {
     defaultPath: 'src/lib/models',
     generate: generateModel,
   },
-  skill: {
-    description: 'AI 技能',
-    defaultPath: 'src/lib/skills',
-    generate: generateSkill,
-  },
   migration: {
     description: '数据库迁移',
     defaultPath: 'migrations',
@@ -362,48 +357,6 @@ export type Update${context.pascalCase} = z.infer<typeof update${context.pascalC
   const modelPath = path.join(outputDir, `${context.kebabCase}.ts`)
   await writeFile(modelPath, modelContent)
   files.push(modelPath)
-
-  return files
-}
-
-/**
- * 生成技能
- */
-async function generateSkill(
-  name: string,
-  context: TemplateContext,
-  outputDir: string,
-): Promise<string[]> {
-  const files: string[] = []
-
-  // skill.ts
-  const skillContent = `/**
- * ${context.pascalCase} 技能
- */
-import { z } from 'zod'
-import { defineSkill } from '@hai/ai'
-
-/**
- * ${context.pascalCase} 技能定义
- */
-export const ${context.camelCase}Skill = defineSkill({
-  name: '${context.kebabCase}',
-  description: '${context.pascalCase} 技能描述',
-  schema: z.object({
-    input: z.string().describe('输入参数'),
-  }),
-  handler: async ({ input }, context) => {
-    // 技能逻辑
-    return {
-      output: \`处理结果: \${input}\`,
-    }
-  },
-})
-`
-
-  const skillPath = path.join(outputDir, `${context.kebabCase}.ts`)
-  await writeFile(skillPath, skillContent)
-  files.push(skillPath)
 
   return files
 }

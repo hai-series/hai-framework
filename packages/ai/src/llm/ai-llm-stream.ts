@@ -7,20 +7,16 @@
  *
  * @example
  * ```ts
- * import { createStreamProcessor, collectStream } from '@hai/ai'
+ * import { ai } from '@hai/ai'
  *
- * // 使用流处理器
- * const processor = createStreamProcessor()
+ * const processor = ai.stream.createProcessor()
  * for await (const chunk of ai.llm.chatStream({ messages })) {
  *     processor.process(chunk)
  * }
  * const result = processor.getResult()
- *
- * // 或者直接收集
- * const result = await collectStream(ai.llm.chatStream({ messages }))
  * ```
  *
- * @module ai-stream
+ * @module stream/ai-stream-main
  * =============================================================================
  */
 
@@ -29,37 +25,107 @@ import type {
   ChatCompletionChunk,
   ChatCompletionDelta,
   ToolCall,
-} from './ai-types.js'
+} from '../ai-types.js'
 
 // =============================================================================
-// 流处理器
+// 类型定义
 // =============================================================================
 
 /**
  * 流处理结果
+ *
+ * 通过 `StreamProcessor.getResult()` 或 `ai.stream.collect()` 获取。
  */
 export interface StreamResult {
-  /** 累积的文本内容 */
+  /** 累积的文本内容（所有 chunk 的 `delta.content` 拼接） */
   content: string
-  /** 累积的工具调用 */
+  /** 累积的工具调用（按 `index` 合并后转换为完整 `ToolCall`） */
   toolCalls: ToolCall[]
-  /** 完成原因 */
+  /** 完成原因（如 `'stop'`、`'tool_calls'`），未完成时为 `null` */
   finishReason: string | null
 }
 
 /**
  * 流处理器接口
+ *
+ * 逐块累积流式响应中的文本内容和工具调用。
+ * 通过 `ai.stream.createProcessor()` 创建。
  */
 export interface StreamProcessor {
-  /** 处理一个流式块 */
+  /**
+   * 处理一个流式块
+   *
+   * 累积 `delta.content`、`delta.tool_calls` 和 `finish_reason`。
+   * 若 chunk 中无有效 choice，返回 `null`。
+   */
   process: (chunk: ChatCompletionChunk) => ChatCompletionDelta | null
-  /** 获取当前结果 */
+  /** 获取当前累积结果（可在流处理过程中随时调用） */
   getResult: () => StreamResult
-  /** 转换为助手消息 */
+  /**
+   * 将累积结果转换为助手消息
+   *
+   * 当存在工具调用时，`content` 设为 `null`，`tool_calls` 包含所有工具调用。
+   * 无工具调用时，`content` 为累积的文本内容。
+   */
   toAssistantMessage: () => AssistantMessage
-  /** 重置处理器 */
+  /** 重置处理器状态（清空内容、工具调用和完成原因） */
   reset: () => void
 }
+
+/**
+ * SSE 事件
+ *
+ * 符合 Server-Sent Events 规范的事件结构。
+ * 所有字段均为可选，但至少应包含 `data`。
+ */
+export interface SSEEvent {
+  /** 事件类型（对应 SSE 的 `event:` 字段） */
+  event?: string
+  /** 事件 ID（对应 SSE 的 `id:` 字段，用于断线重连） */
+  id?: string
+  /** 重连间隔（毫秒，对应 SSE 的 `retry:` 字段） */
+  retry?: number
+  /** 事件数据（对应 SSE 的 `data:` 字段，多行用 `\n` 连接） */
+  data?: string
+}
+
+/**
+ * SSE 解码器接口
+ *
+ * 内部维护缓冲区，支持跨多次 `decode()` 调用的分片拼接。
+ * 以双换行符 `\n\n` 为事件分隔符。
+ */
+export interface SSEDecoder {
+  /** 解码文本数据，产出零个或多个完整的 SSE 事件 */
+  decode: (text: string) => Iterable<SSEEvent>
+  /** 重置解码器，清空内部缓冲区 */
+  reset: () => void
+}
+
+// =============================================================================
+// 操作接口
+// =============================================================================
+
+/**
+ * Stream 操作接口
+ *
+ * 通过 `ai.stream` 访问。
+ * 所有方法为纯函数，不依赖 `ai.init()` 初始化状态。
+ */
+export interface StreamOperations {
+  /** 创建流处理器，用于逐块累积流式响应 */
+  createProcessor: () => StreamProcessor
+  /** 完整消费流式响应并返回累积结果 */
+  collect: (stream: AsyncIterable<ChatCompletionChunk>) => Promise<StreamResult>
+  /** 创建 SSE 解码器（支持跨分片缓冲） */
+  createSSEDecoder: () => SSEDecoder
+  /** 将 SSE 事件编码为符合规范的文本格式 */
+  encodeSSE: (event: SSEEvent) => string
+}
+
+// =============================================================================
+// 流处理器
+// =============================================================================
 
 /**
  * 创建流处理器
@@ -68,7 +134,7 @@ export interface StreamProcessor {
  *
  * @example
  * ```ts
- * const processor = createStreamProcessor()
+ * const processor = ai.stream.createProcessor()
  *
  * for await (const chunk of stream) {
  *     const delta = processor.process(chunk)
@@ -81,8 +147,11 @@ export interface StreamProcessor {
  * ```
  */
 export function createStreamProcessor(): StreamProcessor {
+  /** 累积的文本内容 */
   let content = ''
+  /** 按 index 索引累积的工具调用（同一 index 的多个 chunk 会合并 name/arguments） */
   let toolCalls: Map<number, { id: string, name: string, arguments: string }> = new Map()
+  /** 最后一个非 null 的 finish_reason */
   let finishReason: string | null = null
 
   return {
@@ -93,17 +162,16 @@ export function createStreamProcessor(): StreamProcessor {
 
       const delta = choice.delta
 
-      // 累积内容
+      // 累积内容片段
       if (delta.content) {
         content += delta.content
       }
 
-      // 累积工具调用
+      // 累积工具调用：同一 index 的多个 chunk 会被合并（name 和 arguments 逐步拼接）
       if (delta.tool_calls) {
         for (const tc of delta.tool_calls) {
           const existing = toolCalls.get(tc.index)
           if (existing) {
-            // 追加到现有工具调用
             if (tc.function?.name) {
               existing.name += tc.function.name
             }
@@ -112,7 +180,6 @@ export function createStreamProcessor(): StreamProcessor {
             }
           }
           else if (tc.id) {
-            // 新的工具调用
             toolCalls.set(tc.index, {
               id: tc.id,
               name: tc.function?.name || '',
@@ -147,6 +214,7 @@ export function createStreamProcessor(): StreamProcessor {
 
     toAssistantMessage(): AssistantMessage {
       const result = this.getResult()
+      // 存在工具调用时，content 设为 null（符合 OpenAI 协议约定）
       const message: AssistantMessage = {
         role: 'assistant',
         content: result.toolCalls.length > 0 ? null : result.content,
@@ -175,7 +243,7 @@ export function createStreamProcessor(): StreamProcessor {
  *
  * @example
  * ```ts
- * const result = await collectStream(ai.llm.chatStream({ messages }))
+ * const result = await ai.stream.collect(ai.llm.chatStream({ messages }))
  * console.log(result.content)
  * ```
  */
@@ -196,35 +264,14 @@ export async function collectStream(
 // =============================================================================
 
 /**
- * SSE 事件
- */
-export interface SSEEvent {
-  event?: string
-  id?: string
-  retry?: number
-  data?: string
-}
-
-/**
- * SSE 解码器接口
- */
-export interface SSEDecoder {
-  /** 解码文本数据 */
-  decode: (text: string) => Iterable<SSEEvent>
-  /** 重置解码器 */
-  reset: () => void
-}
-
-/**
  * 创建 SSE 解码器
  *
  * @returns SSE 解码器实例
  *
  * @example
  * ```ts
- * const decoder = createSSEDecoder()
+ * const decoder = ai.stream.createSSEDecoder()
  *
- * // 处理流式数据
  * for (const text of dataChunks) {
  *     for (const event of decoder.decode(text)) {
  *         console.log(event.data)
@@ -239,9 +286,7 @@ export function createSSEDecoder(): SSEDecoder {
     * decode(text: string): Iterable<SSEEvent> {
       buffer += text
 
-      // 按事件分割（双换行）
       const parts = buffer.split('\n\n')
-      // 最后一部分可能不完整，保留在 buffer 中
       buffer = parts.pop() || ''
 
       for (const part of parts) {
@@ -292,7 +337,7 @@ export function createSSEDecoder(): SSEDecoder {
  *
  * @example
  * ```ts
- * const encoded = encodeSSE({ data: '{"text": "hello"}' })
+ * const encoded = ai.stream.encodeSSE({ data: '{"text": "hello"}' })
  * // => 'data: {"text": "hello"}\n\n'
  * ```
  */
@@ -309,7 +354,6 @@ export function encodeSSE(event: SSEEvent): string {
     lines.push(`retry: ${event.retry}`)
   }
   if (event.data !== undefined) {
-    // 多行数据需要分成多个 data: 行
     const dataLines = event.data.split('\n')
     for (const line of dataLines) {
       lines.push(`data: ${line}`)

@@ -1,0 +1,121 @@
+/**
+ * =============================================================================
+ * @hai/core - 模块初始化工具
+ * =============================================================================
+ * 封装各模块共同的「未初始化」错误处理模式，消除跨模块冗余。
+ *
+ * @example
+ * ```ts
+ * import { core } from '@hai/core'
+ * import type { MyError } from './my-types.js'
+ *
+ * const notInitialized = core.module.createNotInitializedKit<MyError>(
+ *   MyErrorCode.NOT_INITIALIZED,
+ *   () => myM('my_notInitialized'),
+ * )
+ *
+ * // 创建错误对象
+ * const error = notInitialized.error()
+ *
+ * // 创建失败 Result
+ * const result = notInitialized.result<string>()
+ *
+ * // 异步占位操作
+ * const op = notInitialized.operation
+ *
+ * // Proxy 代理（所有方法均返回未初始化错误）
+ * const ops = notInitialized.proxy<FileOperations>()
+ * ```
+ * =============================================================================
+ */
+
+import type { Result } from '../core-types.js'
+import { err } from '../core-types.js'
+
+// =============================================================================
+// 基础类型
+// =============================================================================
+
+/**
+ * 模块错误基础接口
+ *
+ * 所有模块的错误类型必须至少包含 code 和 message。
+ */
+export interface BaseModuleError {
+  code: number
+  message: string
+}
+
+// =============================================================================
+// 未初始化工具集
+// =============================================================================
+
+/**
+ * 未初始化工具集返回类型
+ *
+ * 提供错误创建、Result 包装、占位操作和 Proxy 代理等能力。
+ */
+export interface NotInitializedKit<E extends BaseModuleError> {
+  /** 创建未初始化错误对象 */
+  error: () => E
+  /** 创建包含未初始化错误的失败 Result */
+  result: <T>() => Result<T, E>
+  /** 异步占位操作（返回失败 Result） */
+  operation: (...args: unknown[]) => Promise<Result<unknown, E>>
+  /** 同步占位操作（返回失败 Result） */
+  syncOperation: (...args: unknown[]) => Result<unknown, E>
+  /** 创建 Proxy 代理（所有方法调用均返回异步未初始化错误） */
+  proxy: <T>() => T
+}
+
+/**
+ * 创建模块未初始化工具集
+ *
+ * 封装各模块共同的未初始化错误处理模式，包括：
+ * - `error()` — 创建未初始化错误对象
+ * - `result<T>()` — 创建包含未初始化错误的失败 Result
+ * - `operation` — 异步占位操作（返回失败 Result）
+ * - `syncOperation` — 同步占位操作（返回失败 Result）
+ * - `proxy<T>()` — 创建 Proxy 对象（所有方法调用均返回异步未初始化错误）
+ *
+ * @param code - 模块的 NOT_INITIALIZED 错误码
+ * @param messageFn - 返回 i18n 错误消息的函数（延迟求值，确保运行时 locale 正确）
+ * @returns 未初始化工具集
+ *
+ * @example
+ * ```ts
+ * import { core } from '@hai/core'
+ *
+ * const notInitialized = core.module.createNotInitializedKit<DbError>(
+ *   DbErrorCode.NOT_INITIALIZED,
+ *   () => dbM('db_notInitialized'),
+ * )
+ *
+ * // 在服务对象中使用
+ * const db = {
+ *   get ddl() { return currentProvider?.ddl ?? notInitialized.proxy<DdlOperations>() },
+ *   get sql() { return currentProvider?.sql ?? notInitialized.proxy<SqlOperations>() },
+ * }
+ * ```
+ */
+export function createNotInitializedKit<E extends BaseModuleError>(
+  code: E['code'],
+  messageFn: () => string,
+): NotInitializedKit<E> {
+  /** 创建未初始化错误 */
+  const error = (): E => ({ code, message: messageFn() }) as E
+
+  /** 创建未初始化错误的 Result */
+  const result = <T>(): Result<T, E> => err(error())
+
+  /** 异步占位操作 */
+  const operation = async (): Promise<Result<unknown, E>> => err(error())
+
+  /** 同步占位操作 */
+  const syncOperation = (): Result<unknown, E> => err(error())
+
+  /** 创建 Proxy 代理 */
+  const proxy = <T>(): T => new Proxy({}, { get: () => operation }) as T
+
+  return { error, result, operation, syncOperation, proxy }
+}

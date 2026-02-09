@@ -39,6 +39,7 @@ import { async as asyncUtils } from './utils/core-util-async.js'
 import { object as objectUtils } from './utils/core-util-object.js'
 import { string as stringUtils } from './utils/core-util-string.js'
 
+import { createNotInitializedKit } from './utils/core-util-module.js'
 import { time as timeUtils } from './utils/core-util-time.js'
 import { typeUtils } from './utils/core-util-type.js'
 
@@ -234,6 +235,27 @@ export function createCore(loggerFns: LoggerFunctions) {
      * ```
      */
     time: timeUtils,
+
+    // =====================================================================
+    // 模块基础能力
+    // =====================================================================
+
+    /**
+     * 模块基础工具集。
+     *
+     * 提供各模块共用的未初始化错误处理等基础能力。
+     *
+     * @example
+     * ```ts
+     * const notInitialized = core.module.createNotInitializedKit<DbError>(
+     *   DbErrorCode.NOT_INITIALIZED,
+     *   () => dbM('db_notInitialized'),
+     * )
+     * ```
+     */
+    module: {
+      createNotInitializedKit,
+    },
   }
 }
 

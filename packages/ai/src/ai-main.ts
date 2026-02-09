@@ -9,8 +9,9 @@
  * 1. 调用 `ai.init()` 初始化 AI 服务
  * 2. 通过 `ai.llm` 进行大模型调用
  * 3. 通过 `ai.mcp` 进行 MCP 服务调用
- * 4. 通过 `ai.skills` 管理和执行技能
- * 5. 调用 `ai.close()` 关闭服务
+ * 4. 通过 `ai.tools` 定义和管理工具
+ * 5. 通过 `ai.stream` 处理流式响应
+ * 6. 调用 `ai.close()` 关闭服务
  *
  * @example
  * ```ts
@@ -39,11 +40,18 @@
  * )
  * await ai.mcp.callTool('search', { query: 'hello' })
  *
- * // 4. 技能执行
- * ai.skills.register(mySkill)
- * await ai.skills.execute('translate', { text: 'hello', to: 'zh' })
+ * // 4. 工具定义
+ * const tool = ai.tools.define({
+ *     name: 'greet',
+ *     description: '问候',
+ *     parameters: z.object({ name: z.string() }),
+ *     handler: ({ name }) => `Hello ${name}`,
+ * })
  *
- * // 5. 关闭服务
+ * // 5. 流处理
+ * const processor = ai.stream.createProcessor()
+ *
+ * // 6. 关闭服务
  * ai.close()
  * ```
  *
@@ -71,36 +79,31 @@ import type {
   MCPResourceContent,
   MCPToolDefinition,
   MCPToolHandler,
-  Skill,
-  SkillContext,
-  SkillQuery,
-  SkillResult,
-  SkillsOperations,
-  SkillsProvider,
+  StreamOperations,
+  ToolsOperations,
 } from './ai-types.js'
 
-import { err, ok } from '@hai/core'
+import { core, err, ok } from '@hai/core'
 
 import { AIConfigSchema, AIErrorCode } from './ai-config.js'
+import { aiM } from './ai-i18n.js'
 
-import { createHaiLLMProvider } from './provider/ai-provider-llm.js'
-import { createHaiMCPProvider } from './provider/ai-provider-mcp.js'
-import { createHaiSkillsProvider } from './provider/ai-provider-skills.js'
+import { createHaiLLMProvider } from './llm/ai-llm-provider.js'
+import { collectStream, createSSEDecoder, createStreamProcessor, encodeSSE } from './llm/ai-llm-stream.js'
+import { createToolRegistry, defineTool } from './llm/ai-llm-tool.js'
+import { createHaiMCPProvider } from './mcp/ai-mcp-provider.js'
 
 // =============================================================================
 // 内部状态
 // =============================================================================
 
-/** 当前活跃的 LLM Provider */
+/** 当前活跃的 LLM Provider，未初始化时为 `null` */
 let currentLLMProvider: LLMProvider | null = null
 
-/** 当前活跃的 MCP Provider */
+/** 当前活跃的 MCP Provider，未初始化时为 `null` */
 let currentMCPProvider: MCPProvider | null = null
 
-/** 当前活跃的 Skills Provider */
-let currentSkillsProvider: SkillsProvider | null = null
-
-/** 当前 AI 配置 */
+/** 当前 AI 配置（经过 Zod 校验后的完整配置），未初始化时为 `null` */
 let currentConfig: AIConfig | null = null
 
 // =============================================================================
@@ -109,71 +112,60 @@ let currentConfig: AIConfig | null = null
 
 /**
  * 根据配置创建 LLM Provider
+ *
+ * @param config - 经过校验的 AI 配置
+ * @returns 基于 OpenAI SDK 的 LLM Provider 实例
  */
 function createLLMProvider(config: AIConfig): LLMProvider {
-  // 目前只支持 hai provider（兼容 OpenAI API）
   return createHaiLLMProvider(config)
 }
 
 /**
  * 根据配置创建 MCP Provider
+ *
+ * @param config - 经过校验的 AI 配置
+ * @returns MCP Provider 实例
  */
 function createMCPProvider(config: AIConfig): MCPProvider {
   return createHaiMCPProvider(config)
-}
-
-/**
- * 根据配置创建 Skills Provider
- */
-function createSkillsProvider(config: AIConfig): SkillsProvider {
-  return createHaiSkillsProvider(config)
 }
 
 // =============================================================================
 // 未初始化时的占位操作
 // =============================================================================
 
+/** 未初始化工具集 */
+const notInitialized = core.module.createNotInitializedKit<AIError>(
+  AIErrorCode.NOT_INITIALIZED,
+  () => aiM('ai_notInitialized'),
+)
+
 /**
- * 创建未初始化错误
+ * 未初始化时的 LLM 操作占位
+ *
+ * `chat`/`listModels` 返回包含 `NOT_INITIALIZED` 错误的 Result，
+ * `chatStream` 抛出 `NOT_INITIALIZED` 异常（因为 AsyncGenerator 无法返回 Result）。
  */
-function notInitializedError(): AIError {
-  return {
-    code: AIErrorCode.NOT_INITIALIZED,
-    message: 'AI service not initialized. Call ai.init() first.',
-  }
-}
-
-/** 创建未初始化错误 Result */
-function notInitializedResult<T>(): Result<T, AIError> {
-  return err(notInitializedError())
-}
-
-/** 未初始化时的 LLM 操作占位 */
 const notInitializedLLM: LLMOperations = {
-  chat: () => Promise.resolve(notInitializedResult()),
+  chat: () => Promise.resolve(notInitialized.result()),
   async* chatStream() {
-    throw notInitializedError()
+    throw notInitialized.error()
   },
-  listModels: () => Promise.resolve(notInitializedResult()),
+  listModels: () => Promise.resolve(notInitialized.result()),
 }
 
-/** 未初始化时的 MCP 操作占位 */
+/**
+ * 未初始化时的 MCP 操作占位
+ *
+ * `register*` 抛出异常，调用操作返回包含 `NOT_INITIALIZED` 错误的 Result。
+ */
 const notInitializedMCP: MCPOperations = {
-  registerTool: () => { throw notInitializedError() },
-  registerResource: () => { throw notInitializedError() },
-  registerPrompt: () => { throw notInitializedError() },
-  callTool: () => Promise.resolve(notInitializedResult()),
-  readResource: () => Promise.resolve(notInitializedResult()),
-  getPrompt: () => Promise.resolve(notInitializedResult()),
-}
-
-/** 未初始化时的 Skills 操作占位 */
-const notInitializedSkills: SkillsOperations = {
-  register: () => { throw notInitializedError() },
-  unregister: () => { throw notInitializedError() },
-  get: () => { throw notInitializedError() },
-  query: () => { throw notInitializedError() },
-  execute: () => Promise.resolve(notInitializedResult()),
+  registerTool: () => { throw notInitialized.error() },
+  registerResource: () => { throw notInitialized.error() },
+  registerPrompt: () => { throw notInitialized.error() },
+  callTool: () => Promise.resolve(notInitialized.result()),
+  readResource: () => Promise.resolve(notInitialized.result()),
+  getPrompt: () => Promise.resolve(notInitialized.result()),
 }
 
 // =============================================================================
@@ -188,7 +180,8 @@ const notInitializedSkills: SkillsOperations = {
  * - `ai.close()` - 关闭服务
  * - `ai.llm` - LLM 操作（聊天、流式响应）
  * - `ai.mcp` - MCP 操作（工具、资源、提示词）
- * - `ai.skills` - 技能操作（注册、执行）
+ * - `ai.tools` - 工具操作（定义、注册表）
+ * - `ai.stream` - 流处理操作（处理器、SSE）
  * - `ai.config` - 当前配置
  * - `ai.isInitialized` - 初始化状态
  *
@@ -196,31 +189,34 @@ const notInitializedSkills: SkillsOperations = {
  * ```ts
  * import { ai } from '@hai/ai'
  *
- * // 初始化
  * ai.init({ llm: { model: 'gpt-4o-mini' } })
  *
- * // LLM 调用
  * const result = await ai.llm.chat({
  *     messages: [{ role: 'user', content: '你好' }]
  * })
  *
- * // 流式调用
  * for await (const chunk of ai.llm.chatStream({ messages: [...] })) {
  *     // 处理 chunk.choices[0].delta.content
  * }
  *
- * // 关闭
  * ai.close()
  * ```
  */
 export const ai: AIService = {
-  /** 初始化 AI 服务 */
+  /**
+   * 初始化 AI 服务
+   *
+   * 通过 Zod Schema 校验配置并创建各 Provider。
+   * 重复调用时会先释放旧实例。
+   *
+   * @param config - AI 配置（可选），未提供时使用全部默认值
+   * @returns 成功返回 `ok(undefined)`，配置校验失败返回 `err(CONFIGURATION_ERROR)`
+   */
   init(config?: AIConfigInput): Result<void, AIError> {
     // 关闭现有服务（如果存在）
-    if (currentLLMProvider || currentMCPProvider || currentSkillsProvider) {
+    if (currentLLMProvider || currentMCPProvider) {
       currentLLMProvider = null
       currentMCPProvider = null
-      currentSkillsProvider = null
       currentConfig = null
     }
 
@@ -231,7 +227,6 @@ export const ai: AIService = {
       // 创建各 Provider
       currentLLMProvider = createLLMProvider(normalizedConfig)
       currentMCPProvider = createMCPProvider(normalizedConfig)
-      currentSkillsProvider = createSkillsProvider(normalizedConfig)
       currentConfig = normalizedConfig
 
       return ok(undefined)
@@ -239,13 +234,17 @@ export const ai: AIService = {
     catch (error) {
       return err({
         code: AIErrorCode.CONFIGURATION_ERROR,
-        message: `Failed to initialize AI service: ${error}`,
+        message: aiM('ai_initFailed', { params: { error: String(error) } }),
         cause: error,
       })
     }
   },
 
-  /** 获取 LLM 操作接口 */
+  /**
+   * 获取 LLM 操作接口
+   *
+   * 未初始化时返回占位对象（所有方法返回 NOT_INITIALIZED 错误）。
+   */
   get llm(): LLMOperations {
     if (!currentLLMProvider) {
       return notInitializedLLM
@@ -264,7 +263,11 @@ export const ai: AIService = {
     }
   },
 
-  /** 获取 MCP 操作接口 */
+  /**
+   * 获取 MCP 操作接口
+   *
+   * 未初始化时返回占位对象（注册操作抛异常，调用操作返回 NOT_INITIALIZED 错误）。
+   */
   get mcp(): MCPOperations {
     if (!currentMCPProvider) {
       return notInitializedMCP
@@ -301,50 +304,51 @@ export const ai: AIService = {
     }
   },
 
-  /** 获取 Skills 操作接口 */
-  get skills(): SkillsOperations {
-    if (!currentSkillsProvider) {
-      return notInitializedSkills
-    }
-
+  /**
+   * 获取工具操作接口
+   *
+   * 工具操作为纯函数，不依赖初始化状态，可随时调用。
+   */
+  get tools(): ToolsOperations {
     return {
-      register: <TInput, TOutput>(skill: Skill<TInput, TOutput>): void => {
-        currentSkillsProvider!.register(skill)
-      },
-      unregister: (name: string): void => {
-        currentSkillsProvider!.unregister(name)
-      },
-      get: (name: string): Skill | undefined => {
-        return currentSkillsProvider!.get(name)
-      },
-      query: (query: SkillQuery): Skill[] => {
-        return currentSkillsProvider!.query(query)
-      },
-      execute: <TInput, TOutput>(
-        name: string,
-        input: TInput,
-        context?: SkillContext,
-      ): Promise<Result<SkillResult<TOutput>, AIError>> => {
-        return currentSkillsProvider!.execute(name, input, context)
-      },
+      define: defineTool,
+      createRegistry: createToolRegistry,
     }
   },
 
-  /** 获取当前配置 */
+  /**
+   * 获取流处理操作接口
+   *
+   * 流处理操作为纯函数，不依赖初始化状态，可随时调用。
+   */
+  get stream(): StreamOperations {
+    return {
+      createProcessor: createStreamProcessor,
+      collect: collectStream,
+      createSSEDecoder,
+      encodeSSE,
+    }
+  },
+
+  /** 获取当前配置，未初始化时返回 `null` */
   get config(): AIConfig | null {
     return currentConfig
   },
 
-  /** 检查是否已初始化 */
+  /** 检查是否已初始化（即 LLM Provider 是否存在） */
   get isInitialized(): boolean {
     return currentLLMProvider !== null
   },
 
-  /** 关闭 AI 服务 */
+  /**
+   * 关闭 AI 服务
+   *
+   * 释放所有 Provider 实例并清空配置。
+   * 重复调用是安全的（幂等）。
+   */
   close(): void {
     currentLLMProvider = null
     currentMCPProvider = null
-    currentSkillsProvider = null
     currentConfig = null
   },
 }

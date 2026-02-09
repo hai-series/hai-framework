@@ -66,7 +66,7 @@ import type {
   ZSetOperations,
 } from './cache-types.js'
 
-import { err } from '@hai/core'
+import { core, err } from '@hai/core'
 
 import { CacheConfigSchema, CacheErrorCode } from './cache-config.js'
 import { cacheM } from './cache-i18n.js'
@@ -114,61 +114,23 @@ function createProvider(config: CacheConfig): CacheProvider {
 // 未初始化时的错误处理
 // =============================================================================
 
-/**
- * 创建未初始化错误
- * @returns CacheError
- * @example
- * ```ts
- * const error = notInitializedError()
- * ```
- */
-function notInitializedError(): CacheError {
-  return {
-    code: CacheErrorCode.NOT_INITIALIZED,
-    message: cacheM('cache_notInitializedMain'),
-  }
-}
-
-/**
- * 未初始化时的统一占位操作类型
- */
-type NotInitializedOperation = (...args: unknown[]) => Promise<Result<unknown, CacheError>>
-
-/**
- * 未初始化时的占位操作实现
- * @returns 统一的未初始化错误
- * @example
- * ```ts
- * const result = await notInitializedOperation()
- * ```
- */
-const notInitializedOperation: NotInitializedOperation = async () => err(notInitializedError())
-
-/**
- * 未初始化时的操作代理（所有方法均返回未初始化错误）
- * @example
- * ```ts
- * const result = await notInitializedOperations.anyMethod()
- * ```
- */
-const notInitializedOperations = new Proxy(
-  {},
-  {
-    get: () => notInitializedOperation,
-  },
+/** 未初始化工具集 */
+const notInitialized = core.module.createNotInitializedKit<CacheError>(
+  CacheErrorCode.NOT_INITIALIZED,
+  () => cacheM('cache_notInitializedMain'),
 )
 
 /** 未初始化时的 Hash 操作占位 */
-const notInitializedHash = notInitializedOperations as HashOperations
+const notInitializedHash = notInitialized.proxy<HashOperations>()
 
 /** 未初始化时的 List 操作占位 */
-const notInitializedList = notInitializedOperations as ListOperations
+const notInitializedList = notInitialized.proxy<ListOperations>()
 
 /** 未初始化时的 Set 操作占位 */
-const notInitializedSet = notInitializedOperations as SetOperations
+const notInitializedSet = notInitialized.proxy<SetOperations>()
 
 /** 未初始化时的 ZSet 操作占位 */
-const notInitializedZSet = notInitializedOperations as ZSetOperations
+const notInitializedZSet = notInitialized.proxy<ZSetOperations>()
 
 // =============================================================================
 // 统一缓存服务对象
@@ -232,71 +194,71 @@ export const cache: CacheService = {
   // 基础操作代理
   // -------------------------------------------------------------------------
   get<T = CacheValue>(key: string): Promise<Result<T | null, CacheError>> {
-    return currentProvider?.get<T>(key) ?? Promise.resolve(err(notInitializedError()))
+    return currentProvider?.get<T>(key) ?? Promise.resolve(notInitialized.result())
   },
 
   set(key: string, value: CacheValue, options?: SetOptions): Promise<Result<void, CacheError>> {
-    return currentProvider?.set(key, value, options) ?? Promise.resolve(err(notInitializedError()))
+    return currentProvider?.set(key, value, options) ?? Promise.resolve(notInitialized.result())
   },
 
   del(...keys: string[]): Promise<Result<number, CacheError>> {
-    return currentProvider?.del(...keys) ?? Promise.resolve(err(notInitializedError()))
+    return currentProvider?.del(...keys) ?? Promise.resolve(notInitialized.result())
   },
 
   exists(...keys: string[]): Promise<Result<number, CacheError>> {
-    return currentProvider?.exists(...keys) ?? Promise.resolve(err(notInitializedError()))
+    return currentProvider?.exists(...keys) ?? Promise.resolve(notInitialized.result())
   },
 
   expire(key: string, seconds: number): Promise<Result<boolean, CacheError>> {
-    return currentProvider?.expire(key, seconds) ?? Promise.resolve(err(notInitializedError()))
+    return currentProvider?.expire(key, seconds) ?? Promise.resolve(notInitialized.result())
   },
 
   expireAt(key: string, timestamp: number): Promise<Result<boolean, CacheError>> {
-    return currentProvider?.expireAt(key, timestamp) ?? Promise.resolve(err(notInitializedError()))
+    return currentProvider?.expireAt(key, timestamp) ?? Promise.resolve(notInitialized.result())
   },
 
   ttl(key: string): Promise<Result<number, CacheError>> {
-    return currentProvider?.ttl(key) ?? Promise.resolve(err(notInitializedError()))
+    return currentProvider?.ttl(key) ?? Promise.resolve(notInitialized.result())
   },
 
   persist(key: string): Promise<Result<boolean, CacheError>> {
-    return currentProvider?.persist(key) ?? Promise.resolve(err(notInitializedError()))
+    return currentProvider?.persist(key) ?? Promise.resolve(notInitialized.result())
   },
 
   incr(key: string): Promise<Result<number, CacheError>> {
-    return currentProvider?.incr(key) ?? Promise.resolve(err(notInitializedError()))
+    return currentProvider?.incr(key) ?? Promise.resolve(notInitialized.result())
   },
 
   incrBy(key: string, increment: number): Promise<Result<number, CacheError>> {
-    return currentProvider?.incrBy(key, increment) ?? Promise.resolve(err(notInitializedError()))
+    return currentProvider?.incrBy(key, increment) ?? Promise.resolve(notInitialized.result())
   },
 
   decr(key: string): Promise<Result<number, CacheError>> {
-    return currentProvider?.decr(key) ?? Promise.resolve(err(notInitializedError()))
+    return currentProvider?.decr(key) ?? Promise.resolve(notInitialized.result())
   },
 
   decrBy(key: string, decrement: number): Promise<Result<number, CacheError>> {
-    return currentProvider?.decrBy(key, decrement) ?? Promise.resolve(err(notInitializedError()))
+    return currentProvider?.decrBy(key, decrement) ?? Promise.resolve(notInitialized.result())
   },
 
   mget<T = CacheValue>(...keys: string[]): Promise<Result<(T | null)[], CacheError>> {
-    return currentProvider?.mget<T>(...keys) ?? Promise.resolve(err(notInitializedError()))
+    return currentProvider?.mget<T>(...keys) ?? Promise.resolve(notInitialized.result())
   },
 
   mset(entries: Array<[string, CacheValue]>): Promise<Result<void, CacheError>> {
-    return currentProvider?.mset(entries) ?? Promise.resolve(err(notInitializedError()))
+    return currentProvider?.mset(entries) ?? Promise.resolve(notInitialized.result())
   },
 
   scan(cursor: number, options?: ScanOptions): Promise<Result<[number, string[]], CacheError>> {
-    return currentProvider?.scan(cursor, options) ?? Promise.resolve(err(notInitializedError()))
+    return currentProvider?.scan(cursor, options) ?? Promise.resolve(notInitialized.result())
   },
 
   keys(pattern: string): Promise<Result<string[], CacheError>> {
-    return currentProvider?.keys(pattern) ?? Promise.resolve(err(notInitializedError()))
+    return currentProvider?.keys(pattern) ?? Promise.resolve(notInitialized.result())
   },
 
   type(key: string): Promise<Result<string, CacheError>> {
-    return currentProvider?.type(key) ?? Promise.resolve(err(notInitializedError()))
+    return currentProvider?.type(key) ?? Promise.resolve(notInitialized.result())
   },
 
   // -------------------------------------------------------------------------
@@ -338,6 +300,6 @@ export const cache: CacheService = {
   },
 
   ping(): Promise<Result<string, CacheError>> {
-    return currentProvider?.ping() ?? Promise.resolve(err(notInitializedError()))
+    return currentProvider?.ping() ?? Promise.resolve(notInitialized.result())
   },
 }

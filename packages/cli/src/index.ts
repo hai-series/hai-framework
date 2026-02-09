@@ -31,7 +31,7 @@ cli.option('-C, --cwd <path>', '工作目录')
 cli
   .command('create [name]', '创建新的 hai 项目')
   .option('-t, --template <template>', '项目模板 (minimal, default, full, custom)')
-  .option('-f, --features <features>', '功能列表 (逗号分隔: auth,db,ai,storage,mcp,crypto,skills)')
+  .option('-f, --features <features>', '功能列表 (逗号分隔: auth,db,ai,storage,mcp,crypto)')
   .option('--examples', '添加示例代码')
   .option('--no-examples', '不添加示例代码')
   .option('--no-install', '不安装依赖')
@@ -106,12 +106,6 @@ cli
   .command('g:model <name>', '生成数据模型')
   .action(async (name: string, options: Record<string, unknown>) => {
     await generate({ type: 'model', name, cwd: options.cwd as string })
-  })
-
-cli
-  .command('g:skill <name>', '生成技能')
-  .action(async (name: string, options: Record<string, unknown>) => {
-    await generate({ type: 'skill', name, cwd: options.cwd as string })
   })
 
 // 版本和帮助

@@ -2,7 +2,7 @@
   "name": "@hai/ai",
   "type": "module",
   "version": "0.1.0",
-  "description": "hai Admin Framework - AI 模块（LLM、MCP、技能、提示词、工具调用）",
+  "description": "hai Admin Framework - AI module (LLM, MCP, Tools, Client)",
   "license": "Apache-2.0",
   "exports": {
     ".": {
@@ -10,8 +10,8 @@
       "import": "./dist/index.js"
     },
     "./client": {
-      "types": "./dist/ai-client.d.ts",
-      "import": "./dist/ai-client.js"
+      "types": "./dist/client/ai-client.d.ts",
+      "import": "./dist/client/ai-client.js"
     }
   },
   "main": "./dist/index.js",

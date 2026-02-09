@@ -68,12 +68,6 @@ const FEATURES: Record<FeatureId, FeatureDefinition> = {
     description: '已合并到 ai 模块',
     packages: ['@hai/ai'],
   },
-  skills: {
-    id: 'skills',
-    name: '技能系统（别名）',
-    description: '已合并到 ai 模块',
-    packages: ['@hai/ai'],
-  },
 }
 
 /**

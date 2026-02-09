@@ -3,7 +3,8 @@
  * @hai/ai - Provider: LLM
  * =============================================================================
  *
- * LLM Provider 实现（基于 OpenAI 兼容 API）
+ * LLM Provider 实现（基于 OpenAI 兼容 API）。
+ * 通过 OpenAI SDK 支持所有 OpenAI 兼容的 API 端点。
  *
  * @module ai-provider-llm
  * =============================================================================
@@ -23,16 +24,25 @@ import { err, ok } from '@hai/core'
 import OpenAI from 'openai'
 
 import { AIErrorCode } from '../ai-config.js'
-import { getAiMessage } from '../index.js'
+import { aiM } from '../ai-i18n.js'
 
 /**
  * HAI LLM Provider 实现
  *
- * 基于 OpenAI SDK，支持所有 OpenAI 兼容的 API。
+ * 基于 OpenAI SDK，支持所有 OpenAI 兼容的 API 端点。
+ * 通过 `createHaiLLMProvider()` 工厂函数创建，不直接对外暴露。
  */
 class HaiLLMProvider implements LLMProvider {
+  /** OpenAI SDK 客户端实例 */
   private client: OpenAI
+  /** 保存初始化配置，用于请求时读取默认值 */
   private _config: AIConfig
+
+  /**
+   * @param config - 经过 Zod 校验的 AI 配置。
+   *   apiKey 回退顺序：config.llm.apiKey → env.OPENAI_API_KEY → 空字符串
+   *   baseURL 回退顺序：config.llm.baseUrl → env.OPENAI_BASE_URL → OpenAI 官方地址
+   */
 
   constructor(config: AIConfig) {
     this._config = config
@@ -44,6 +54,12 @@ class HaiLLMProvider implements LLMProvider {
     })
   }
 
+  /**
+   * 非流式聊天完成
+   *
+   * @param request - 聊天请求，`model` 未提供时使用配置默认值
+   * @returns 成功返回完整响应，SDK 异常转换为对应的 AIError
+   */
   async chat(request: ChatCompletionRequest): Promise<Result<ChatCompletionResponse, AIError>> {
     const model = request.model || this._config.llm?.model || 'gpt-4o-mini'
 
@@ -61,6 +77,12 @@ class HaiLLMProvider implements LLMProvider {
     }
   }
 
+  /**
+   * 流式聊天完成
+   *
+   * @param request - 聊天请求，强制 `stream: true`
+   * @yields 逐块产出映射后的 ChatCompletionChunk
+   */
   async* chatStream(request: ChatCompletionRequest): AsyncIterable<ChatCompletionChunk> {
     const model = request.model || this._config.llm?.model || 'gpt-4o-mini'
 
@@ -75,6 +97,11 @@ class HaiLLMProvider implements LLMProvider {
     }
   }
 
+  /**
+   * 获取可用模型列表
+   *
+   * @returns 成功返回模型 ID 数组，SDK 异常转换为 AIError
+   */
   async listModels(): Promise<Result<string[], AIError>> {
     try {
       const response = await this.client.models.list()
@@ -86,6 +113,12 @@ class HaiLLMProvider implements LLMProvider {
     }
   }
 
+  /**
+   * 将 OpenAI SDK 响应映射为内部响应类型
+   *
+   * 处理 SDK 类型与内部类型的差异（如 `content` 的 null/空字符串、
+   * `tool_calls` 的结构差异、`usage` 的可选性等）。
+   */
   private mapResponse(response: OpenAI.Chat.ChatCompletion): ChatCompletionResponse {
     return {
       id: response.id,
@@ -116,6 +149,11 @@ class HaiLLMProvider implements LLMProvider {
     }
   }
 
+  /**
+   * 将 OpenAI SDK 流式块映射为内部类型
+   *
+   * 处理 `delta` 字段的 role 、content、tool_calls 和 finish_reason 的类型转换。
+   */
   private mapChunk(chunk: OpenAI.Chat.ChatCompletionChunk): ChatCompletionChunk {
     return {
       id: chunk.id,
@@ -144,9 +182,19 @@ class HaiLLMProvider implements LLMProvider {
     }
   }
 
+  /**
+   * 将 OpenAI SDK 异常映射为 AIError
+   *
+   * 映射规则：
+   * - HTTP 429 → `RATE_LIMITED`
+   * - HTTP 404 → `MODEL_NOT_FOUND`
+   * - HTTP 400 → `INVALID_REQUEST`
+   * - 其他 APIError → `API_ERROR`
+   * - AbortError → `TIMEOUT`
+   * - 未知异常 → `INTERNAL_ERROR`
+   */
   private mapError(error: unknown): AIError {
     if (error instanceof OpenAI.APIError) {
-      // 根据状态码映射错误类型
       let code: AIError['code'] = AIErrorCode.API_ERROR
       if (error.status === 429) {
         code = AIErrorCode.RATE_LIMITED
@@ -168,14 +216,14 @@ class HaiLLMProvider implements LLMProvider {
     if (error instanceof Error && error.name === 'AbortError') {
       return {
         code: AIErrorCode.TIMEOUT,
-        message: getAiMessage('ai_requestTimeout'),
+        message: aiM('ai_requestTimeout'),
         cause: error,
       }
     }
 
     return {
       code: AIErrorCode.INTERNAL_ERROR,
-      message: error instanceof Error ? error.message : 'Unknown error',
+      message: aiM('ai_internalError', { params: { error: error instanceof Error ? error.message : 'Unknown error' } }),
       cause: error,
     }
   }
@@ -184,8 +232,10 @@ class HaiLLMProvider implements LLMProvider {
 /**
  * 创建 HAI LLM Provider
  *
- * @param config - AI 配置
- * @returns LLM Provider 实例
+ * 工厂函数，内部使用，由 `ai.init()` 调用。
+ *
+ * @param config - 经过 Zod 校验的 AI 配置
+ * @returns 实现了 `LLMProvider` 接口的实例
  */
 export function createHaiLLMProvider(config: AIConfig): LLMProvider {
   return new HaiLLMProvider(config)

@@ -10,13 +10,12 @@
 export type FeatureId
   = | 'iam' // 身份与访问管理（新）
     | 'db' // 数据库
-    | 'ai' // AI 集成（含 MCP、技能）
+    | 'ai' // AI 集成（含 MCP）
     | 'storage' // 文件存储
     | 'crypto' // 加密模块
     // 兼容性别名
     | 'auth' // 认证授权 → iam
     | 'mcp' // MCP 协议 → ai
-    | 'skills' // 技能系统 → ai
 
 /**
  * 功能定义
@@ -86,7 +85,6 @@ export type GeneratorType
     | 'component'
     | 'api'
     | 'model'
-    | 'skill'
     | 'migration'
 
 /**

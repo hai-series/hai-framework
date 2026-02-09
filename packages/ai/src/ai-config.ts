@@ -7,7 +7,6 @@
  *
  * 包含：
  * - 错误码常量（4000-4999 范围）
- * - AI 提供者类型枚举
  * - LLM 配置
  * - MCP 配置
  * - 统一的 AIConfig 配置结构
@@ -16,19 +15,12 @@
  * ```ts
  * import { AIConfigSchema, AIErrorCode } from '@hai/ai'
  *
- * // 校验配置
  * const config = AIConfigSchema.parse({
- *     provider: 'hai',
  *     llm: {
  *         model: 'gpt-4o-mini',
  *         apiKey: 'sk-xxx',
  *     }
  * })
- *
- * // 使用错误码
- * if (error.code === AIErrorCode.NOT_INITIALIZED) {
- *     // 处理错误：请先调用 ai.init()
- * }
  * ```
  *
  * @module ai-config
@@ -87,14 +79,8 @@ export const AIErrorCode = {
   MCP_TOOL_ERROR: 4202,
   /** MCP 资源错误 */
   MCP_RESOURCE_ERROR: 4203,
-
-  // 技能错误 (4300-4399)
-  /** 技能未找到 */
-  SKILL_NOT_FOUND: 4300,
-  /** 技能执行错误 */
-  SKILL_EXECUTION_ERROR: 4301,
-  /** 技能验证错误 */
-  SKILL_VALIDATION_ERROR: 4302,
+  /** MCP 服务器错误 */
+  MCP_SERVER_ERROR: 4204,
 
   // 工具错误 (4400-4499)
   /** 工具未找到 */
@@ -107,27 +93,12 @@ export const AIErrorCode = {
   TOOL_TIMEOUT: 4403,
 } as const
 
-/** 错误码类型 */
-export type AIErrorCodeType = (typeof AIErrorCode)[keyof typeof AIErrorCode]
-
-// =============================================================================
-// AI 提供者类型
-// =============================================================================
-
 /**
- * AI 提供者类型 Schema
+ * 错误码值类型（AIErrorCode 中所有数值的联合）
+ *
+ * 用于类型约束 `AIError.code` 字段。
  */
-export const AIProviderSchema = z.enum([
-  'hai',
-  'openai',
-  'azure',
-  'anthropic',
-  'google',
-  'custom',
-])
-
-/** AI 提供者类型 */
-export type AIProvider = z.infer<typeof AIProviderSchema>
+export type AIErrorCodeType = (typeof AIErrorCode)[keyof typeof AIErrorCode]
 
 // =============================================================================
 // LLM 配置
@@ -135,29 +106,28 @@ export type AIProvider = z.infer<typeof AIProviderSchema>
 
 /**
  * LLM 配置 Schema
+ *
+ * 所有字段均为可选，未提供时使用默认值。
+ * 运行时通过 Zod 进行校验（如 temperature 范围、URL 格式等），
+ * 校验失败会导致 `ai.init()` 返回 `CONFIGURATION_ERROR`。
  */
 export const LLMConfigSchema = z.object({
-  /** 提供者 */
-  provider: AIProviderSchema.optional().default('hai'),
-  /** API Key */
+  /** API Key，未提供时回退到 `process.env.OPENAI_API_KEY` */
   apiKey: z.string().optional(),
-  /** API 基础 URL */
+  /** API 基础 URL（须为合法 URL），未提供时回退到 `process.env.OPENAI_BASE_URL` 或 OpenAI 官方地址 */
   baseUrl: z.string().url().optional(),
-  /** 默认模型 */
+  /** 默认模型名称（默认 `'gpt-4o-mini'`） */
   model: z.string().optional().default('gpt-4o-mini'),
-  /** 最大 Token 数 */
+  /** 单次请求最大 Token 数，须为正整数（默认 `4096`） */
   maxTokens: z.number().positive().optional().default(4096),
-  /** 温度参数 */
+  /** 采样温度，取值范围 `[0, 2]`（默认 `0.7`） */
   temperature: z.number().min(0).max(2).optional().default(0.7),
-  /** 请求超时（毫秒） */
+  /** 请求超时时间（毫秒），须为正数（默认 `60000`） */
   timeout: z.number().positive().optional().default(60000),
 })
 
 /** LLM 配置类型 */
 export type LLMConfig = z.infer<typeof LLMConfigSchema>
-
-/** LLM 配置输入类型（允许部分字段） */
-export type LLMConfigInput = z.input<typeof LLMConfigSchema>
 
 // =============================================================================
 // MCP 配置
@@ -165,13 +135,16 @@ export type LLMConfigInput = z.input<typeof LLMConfigSchema>
 
 /**
  * MCP 服务器能力 Schema
+ *
+ * 声明 MCP 服务器支持的协议能力，用于握手阶段通告客户端。
+ * 所有能力默认开启（`true`）。
  */
 export const MCPServerCapabilitiesSchema = z.object({
-  /** 是否支持工具 */
+  /** 是否支持工具调用（默认 `true`） */
   tools: z.boolean().optional().default(true),
-  /** 是否支持资源 */
+  /** 是否支持资源访问（默认 `true`） */
   resources: z.boolean().optional().default(true),
-  /** 是否支持提示词 */
+  /** 是否支持提示词模板（默认 `true`） */
   prompts: z.boolean().optional().default(true),
 })
 
@@ -180,13 +153,15 @@ export type MCPServerCapabilities = z.infer<typeof MCPServerCapabilitiesSchema>
 
 /**
  * MCP 服务器配置 Schema
+ *
+ * 定义 MCP 服务器的基本信息与能力声明。
  */
 export const MCPServerConfigSchema = z.object({
-  /** 服务器名称 */
+  /** 服务器名称（必填，用于 MCP 握手标识） */
   name: z.string(),
-  /** 服务器版本 */
+  /** 服务器版本（默认 `'1.0.0'`） */
   version: z.string().optional().default('1.0.0'),
-  /** 服务器能力 */
+  /** 服务器能力声明，未提供时全部默认开启 */
   capabilities: MCPServerCapabilitiesSchema.optional(),
 })
 
@@ -194,26 +169,11 @@ export const MCPServerConfigSchema = z.object({
 export type MCPServerConfig = z.infer<typeof MCPServerConfigSchema>
 
 /**
- * MCP 客户端配置 Schema
- */
-export const MCPClientConfigSchema = z.object({
-  /** 服务器 URL */
-  serverUrl: z.string().url().optional(),
-  /** 请求超时（毫秒） */
-  timeout: z.number().positive().optional().default(30000),
-})
-
-/** MCP 客户端配置类型 */
-export type MCPClientConfig = z.infer<typeof MCPClientConfigSchema>
-
-/**
  * MCP 配置 Schema
  */
 export const MCPConfigSchema = z.object({
   /** 服务器配置 */
   server: MCPServerConfigSchema.optional(),
-  /** 客户端配置 */
-  client: MCPClientConfigSchema.optional(),
 })
 
 /** MCP 配置类型 */
@@ -229,7 +189,6 @@ export type MCPConfig = z.infer<typeof MCPConfigSchema>
  * @example
  * ```ts
  * const config = AIConfigSchema.parse({
- *     provider: 'hai',
  *     llm: {
  *         model: 'gpt-4o-mini',
  *         apiKey: process.env.OPENAI_API_KEY,
@@ -241,8 +200,6 @@ export type MCPConfig = z.infer<typeof MCPConfigSchema>
  * ```
  */
 export const AIConfigSchema = z.object({
-  /** AI 提供者 */
-  provider: AIProviderSchema.optional().default('hai'),
   /** LLM 配置 */
   llm: LLMConfigSchema.optional(),
   /** MCP 配置 */

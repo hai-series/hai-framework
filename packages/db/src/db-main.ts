@@ -69,7 +69,7 @@ import type {
   TxManager,
 } from './db-types.js'
 
-import { err } from '@hai/core'
+import { core, err } from '@hai/core'
 
 import { createCrud } from './crud/db-crud-kernel.js'
 import { DbConfigSchema, DbErrorCode } from './db-config.js'
@@ -125,52 +125,17 @@ function createProvider(config: DbConfig): DbProvider {
 // 未初始化时的占位操作
 // =============================================================================
 
-/**
- * 创建未初始化错误
- */
-/**
- * 创建未初始化错误对象
- *
- * @returns 未初始化错误
- */
-function notInitializedError(): DbError {
-  return {
-    code: DbErrorCode.NOT_INITIALIZED,
-    message: dbM('db_notInitialized'),
-  }
-}
-
-/**
- * 未初始化时的统一占位操作类型
- *
- * 所有未初始化方法统一返回 `NOT_INITIALIZED` 错误。
- */
-type NotInitializedOperation = (...args: unknown[]) => Promise<Result<unknown, DbError>>
-
-/**
- * 未初始化时的占位操作实现
- *
- * @returns 统一的未初始化错误
- */
-const notInitializedOperation: NotInitializedOperation = async () => err(notInitializedError())
-
-/**
- * 未初始化时的操作代理（所有方法均返回未初始化错误）
- *
- * 通过 Proxy 避免逐个声明占位方法。
- */
-const notInitializedOperations = new Proxy(
-  {},
-  {
-    get: () => notInitializedOperation,
-  },
+/** 未初始化工具集 */
+const notInitialized = core.module.createNotInitializedKit<DbError>(
+  DbErrorCode.NOT_INITIALIZED,
+  () => dbM('db_notInitialized'),
 )
 
 /** 未初始化时的 DDL 操作占位对象 */
-const notInitializedDdl = notInitializedOperations as DdlOperations
+const notInitializedDdl = notInitialized.proxy<DdlOperations>()
 
 /** 未初始化时的 SQL 操作占位对象 */
-const notInitializedSql = notInitializedOperations as SqlOperations
+const notInitializedSql = notInitialized.proxy<SqlOperations>()
 
 /** 未初始化时的 CRUD 管理器 */
 const notInitializedCrud: CrudManager = {
@@ -288,8 +253,8 @@ export const db: DbService = {
   get tx(): TxManager {
     if (!currentProvider) {
       return {
-        begin: async () => err(notInitializedError()),
-        wrap: async () => err(notInitializedError()),
+        begin: async () => notInitialized.result(),
+        wrap: async () => notInitialized.result(),
       }
     }
     return currentProvider.tx
