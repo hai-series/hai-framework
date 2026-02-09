@@ -280,9 +280,9 @@ const content = await collectStreamContent(client.chatStream({ messages }))
 
 | 错误码                    | 数值 | 说明           |
 | ------------------------- | ---- | -------------- |
-| `NOT_INITIALIZED`         | 4000 | 服务未初始化   |
-| `CONFIGURATION_ERROR`     | 4001 | 配置错误       |
-| `INTERNAL_ERROR`          | 4002 | 内部错误       |
+| `INTERNAL_ERROR`          | 4000 | 内部错误       |
+| `NOT_INITIALIZED`         | 4010 | 服务未初始化   |
+| `CONFIGURATION_ERROR`     | 4011 | 配置错误       |
 | `API_ERROR`               | 4100 | API 调用错误   |
 | `INVALID_REQUEST`         | 4101 | 无效请求       |
 | `RATE_LIMITED`            | 4102 | 速率限制       |
@@ -380,7 +380,7 @@ interface ChatCompletionChunk {
   model: string
   choices: Array<{
     index: number
-    delta: { role?: 'assistant', content?: string, tool_calls?: [...] }
+    delta: { role?: 'assistant', content?: string, tool_calls?: ToolCall[] }
     finish_reason: 'stop' | 'length' | 'tool_calls' | 'content_filter' | null
   }>
 }

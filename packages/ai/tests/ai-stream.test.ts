@@ -178,6 +178,42 @@ describe('ai.stream.createProcessor', () => {
     expect(result.toolCalls).toHaveLength(0)
     expect(result.finishReason).toBeNull()
   })
+
+  it('混合文本与工具调用', () => {
+    const processor = ai.stream.createProcessor()
+
+    processor.process(textChunk('思考中...'))
+    processor.process(toolCallChunk(0, 'c1', 'search', '{"q":"test"}', 'tool_calls'))
+
+    const result = processor.getResult()
+    expect(result.content).toBe('思考中...')
+    expect(result.toolCalls).toHaveLength(1)
+    expect(result.toolCalls[0].function.name).toBe('search')
+    expect(result.finishReason).toBe('tool_calls')
+  })
+
+  it('toAssistantMessage 有工具调用时 content 为 null', () => {
+    const processor = ai.stream.createProcessor()
+    // 有文本也有工具调用
+    processor.process(textChunk('thinking'))
+    processor.process(toolCallChunk(0, 'c1', 'fn', '{}'))
+
+    const msg = processor.toAssistantMessage()
+    // 当存在 tool_calls 时，content 应为 null
+    expect(msg.content).toBeNull()
+    expect(msg.tool_calls).toHaveLength(1)
+  })
+
+  it('reset 后可复用', () => {
+    const processor = ai.stream.createProcessor()
+
+    processor.process(textChunk('first round', 'stop'))
+    expect(processor.getResult().content).toBe('first round')
+
+    processor.reset()
+    processor.process(textChunk('second round', 'stop'))
+    expect(processor.getResult().content).toBe('second round')
+  })
 })
 
 // =============================================================================
@@ -202,6 +238,18 @@ describe('ai.stream.collect', () => {
     expect(result.content).toBe('')
     expect(result.toolCalls).toHaveLength(0)
     expect(result.finishReason).toBeNull()
+  })
+
+  it('收集包含工具调用的流', async () => {
+    const chunks = [
+      toolCallChunk(0, 'c1', 'search', '{"q":"hello"}', 'tool_calls'),
+    ]
+
+    const result = await ai.stream.collect(toAsyncIterable(chunks))
+    expect(result.content).toBe('')
+    expect(result.toolCalls).toHaveLength(1)
+    expect(result.toolCalls[0].function.name).toBe('search')
+    expect(result.finishReason).toBe('tool_calls')
   })
 })
 

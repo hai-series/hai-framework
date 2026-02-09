@@ -76,6 +76,57 @@ describe('ai.mcp — Tool', () => {
     await ai.mcp.callTool('ctx_tool', {}, ctx)
     expect(receivedCtx).toEqual(ctx)
   })
+
+  it('不传 context 时自动生成 requestId', async () => {
+    ai.init()
+
+    let receivedCtx: unknown = null
+    ai.mcp.registerTool(
+      { name: 'auto_ctx', description: 'test', inputSchema: {} },
+      async (_input: unknown, ctx: unknown) => {
+        receivedCtx = ctx
+        return 'ok'
+      },
+    )
+
+    await ai.mcp.callTool('auto_ctx', {})
+    expect(receivedCtx).toBeDefined()
+    expect((receivedCtx as { requestId: string }).requestId).toBeTruthy()
+  })
+
+  it('覆盖注册同名工具', async () => {
+    ai.init()
+
+    ai.mcp.registerTool(
+      { name: 'dup', description: 'v1', inputSchema: {} },
+      async () => 'version-1',
+    )
+    ai.mcp.registerTool(
+      { name: 'dup', description: 'v2', inputSchema: {} },
+      async () => 'version-2',
+    )
+
+    const result = await ai.mcp.callTool('dup', {})
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data).toBe('version-2')
+    }
+  })
+
+  it('handler 抛非 Error 对象返回 MCP_TOOL_ERROR', async () => {
+    ai.init()
+
+    ai.mcp.registerTool(
+      { name: 'str_throw', description: 'test', inputSchema: {} },
+      () => { throw new TypeError('string error') },
+    )
+
+    const result = await ai.mcp.callTool('str_throw', {})
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error.code).toBe(AIErrorCode.MCP_TOOL_ERROR)
+    }
+  })
 })
 
 // =============================================================================
@@ -122,6 +173,41 @@ describe('ai.mcp — Resource', () => {
     if (!result.success) {
       expect(result.error.code).toBe(AIErrorCode.MCP_RESOURCE_ERROR)
       expect(result.error.message).toContain('resource boom')
+    }
+  })
+
+  it('资源 mimeType 和 blob 字段正确保留', async () => {
+    ai.init()
+
+    ai.mcp.registerResource(
+      { uri: 'data://img', name: '图片', mimeType: 'image/png' },
+      async () => ({ uri: 'data://img', blob: 'base64data', mimeType: 'image/png' }),
+    )
+
+    const result = await ai.mcp.readResource('data://img')
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.blob).toBe('base64data')
+      expect(result.data.mimeType).toBe('image/png')
+    }
+  })
+
+  it('覆盖注册同 URI 资源', async () => {
+    ai.init()
+
+    ai.mcp.registerResource(
+      { uri: 'file:///a', name: 'v1' },
+      async () => ({ uri: 'file:///a', text: 'old' }),
+    )
+    ai.mcp.registerResource(
+      { uri: 'file:///a', name: 'v2' },
+      async () => ({ uri: 'file:///a', text: 'new' }),
+    )
+
+    const result = await ai.mcp.readResource('file:///a')
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.text).toBe('new')
     }
   })
 })
@@ -206,5 +292,48 @@ describe('ai.mcp — Prompt', () => {
 
     const result = await ai.mcp.getPrompt('flexible', { required: 'yes' })
     expect(result.success).toBe(true)
+  })
+
+  it('返回多条提示词消息', async () => {
+    ai.init()
+
+    ai.mcp.registerPrompt(
+      { name: 'multi' },
+      async () => [
+        { role: 'user', content: { type: 'text', text: '请翻译' } },
+        { role: 'assistant', content: { type: 'text', text: '好的' } },
+        { role: 'user', content: { type: 'text', text: 'Hello' } },
+      ],
+    )
+
+    const result = await ai.mcp.getPrompt('multi', {})
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data).toHaveLength(3)
+      expect(result.data[0].role).toBe('user')
+      expect(result.data[1].role).toBe('assistant')
+    }
+  })
+
+  it('提示词 resource 类型内容', async () => {
+    ai.init()
+
+    ai.mcp.registerPrompt(
+      { name: 'with_resource' },
+      async () => [{
+        role: 'user',
+        content: {
+          type: 'resource',
+          resource: { uri: 'file:///doc.md', text: '# Title', mimeType: 'text/markdown' },
+        },
+      }],
+    )
+
+    const result = await ai.mcp.getPrompt('with_resource', {})
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data[0].content.type).toBe('resource')
+      expect(result.data[0].content.resource?.uri).toBe('file:///doc.md')
+    }
   })
 })

@@ -98,6 +98,58 @@ describe('ai.tools.define', () => {
     expect(def.function.parameters).toHaveProperty('properties')
     expect(def.function.parameters).not.toHaveProperty('$schema')
   })
+
+  it('复杂嵌套 Zod schema', async () => {
+    const tool = ai.tools.define({
+      name: 'create_event',
+      description: '创建事件',
+      parameters: z.object({
+        title: z.string(),
+        attendees: z.array(z.object({
+          name: z.string(),
+          email: z.string().email(),
+        })),
+        location: z.object({
+          city: z.string(),
+          country: z.string(),
+        }).optional(),
+      }),
+      handler: input => ({ id: '1', ...input }),
+    })
+
+    const result = await tool.execute({
+      title: 'Meeting',
+      attendees: [{ name: 'Alice', email: 'alice@example.com' }],
+    })
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.title).toBe('Meeting')
+      expect(result.data.attendees).toHaveLength(1)
+    }
+
+    const def = tool.toDefinition()
+    const props = def.function.parameters.properties as Record<string, { type?: string }>
+    expect(props.attendees).toBeDefined()
+  })
+
+  it('嵌套 schema 校验失败', async () => {
+    const tool = ai.tools.define({
+      name: 'nested',
+      description: 'test',
+      parameters: z.object({
+        items: z.array(z.object({ count: z.number().min(0) })),
+      }),
+      handler: input => input,
+    })
+
+    const result = await tool.execute({
+      items: [{ count: -1 }],
+    })
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error.type).toBe('VALIDATION_FAILED')
+    }
+  })
 })
 
 // =============================================================================
@@ -317,5 +369,103 @@ describe('ai.tools.createRegistry', () => {
     const result = registry.register(add).register(multiply)
     expect(result).toBe(registry)
     expect(registry.size).toBe(2)
+  })
+
+  it('registerMany 链式返回 registry', () => {
+    const registry = ai.tools.createRegistry()
+    const { add, multiply } = createTestTools()
+
+    const result = registry.registerMany([add, multiply])
+    expect(result).toBe(registry)
+  })
+
+  it('get 不存在的工具返回 undefined', () => {
+    const registry = ai.tools.createRegistry()
+    expect(registry.get('nonexistent')).toBeUndefined()
+  })
+
+  it('空注册表的 getNames 和 getDefinitions', () => {
+    const registry = ai.tools.createRegistry()
+    expect(registry.getNames()).toEqual([])
+    expect(registry.getDefinitions()).toEqual([])
+  })
+
+  it('重复注册同名工具覆盖旧的', async () => {
+    const registry = ai.tools.createRegistry()
+    const v1 = ai.tools.define({
+      name: 'calc',
+      description: 'v1',
+      parameters: z.object({ x: z.number() }),
+      handler: ({ x }) => x * 2,
+    })
+    const v2 = ai.tools.define({
+      name: 'calc',
+      description: 'v2',
+      parameters: z.object({ x: z.number() }),
+      handler: ({ x }) => x * 10,
+    })
+
+    registry.register(v1)
+    registry.register(v2)
+    expect(registry.size).toBe(1)
+
+    const result = await registry.execute({
+      id: 'c1',
+      type: 'function',
+      function: { name: 'calc', arguments: '{"x":5}' },
+    })
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.content).toBe('50') // v2 的逻辑
+    }
+  })
+
+  it('executeAll 并行模式遇到错误', async () => {
+    const registry = ai.tools.createRegistry()
+    const { add } = createTestTools()
+    registry.register(add)
+
+    const calls: ToolCall[] = [
+      { id: 'c1', type: 'function', function: { name: 'add', arguments: '{"a":1,"b":2}' } },
+      { id: 'c2', type: 'function', function: { name: 'missing', arguments: '{}' } },
+    ]
+
+    const result = await registry.executeAll(calls, { parallel: true })
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error.type).toBe('TOOL_NOT_FOUND')
+    }
+  })
+
+  it('executeAll 空数组返回成功', async () => {
+    const registry = ai.tools.createRegistry()
+
+    const result = await registry.executeAll([])
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data).toEqual([])
+    }
+  })
+
+  it('handler 异步抛异常通过 execute 返回错误', async () => {
+    const registry = ai.tools.createRegistry()
+    const failTool = ai.tools.define({
+      name: 'async_fail',
+      description: 'test',
+      parameters: z.object({}),
+      handler: async () => { throw new Error('async boom') },
+    })
+    registry.register(failTool)
+
+    const result = await registry.execute({
+      id: 'c1',
+      type: 'function',
+      function: { name: 'async_fail', arguments: '{}' },
+    })
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error.type).toBe('EXECUTION_FAILED')
+      expect(result.error.message).toBe('async boom')
+    }
   })
 })
