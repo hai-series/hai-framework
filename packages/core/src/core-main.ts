@@ -30,16 +30,16 @@
  * =============================================================================
  */
 
-import type { LoggingConfig } from './config/index.js'
+import type { LoggingConfig } from './core-config.js'
 import type { Logger, LoggerFunctions } from './core-types.js'
 import { id } from './functions/core-function-id.js'
-import { i18n } from './i18n/index.js'
+import { i18n } from './i18n/core-i18n-utils.js'
 import { array as arrayUtils } from './utils/core-util-array.js'
 import { async as asyncUtils } from './utils/core-util-async.js'
-import { object as objectUtils } from './utils/core-util-object.js'
-import { string as stringUtils } from './utils/core-util-string.js'
-
 import { createNotInitializedKit } from './utils/core-util-module.js'
+import { object as objectUtils } from './utils/core-util-object.js'
+
+import { string as stringUtils } from './utils/core-util-string.js'
 import { time as timeUtils } from './utils/core-util-time.js'
 import { typeUtils } from './utils/core-util-type.js'
 

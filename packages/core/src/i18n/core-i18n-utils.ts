@@ -1,8 +1,8 @@
 /**
  * =============================================================================
- * @hai/core - i18n 核心类型定义
+ * @hai/core - i18n 国际化工具
  * =============================================================================
- * 国际化核心类型，为 JSON 消息字典提供通用类型支持
+ * 国际化核心实现，为 JSON 消息字典提供通用类型支持。
  *
  * 设计原则：
  * - 集中式 locale 管理：通过 LocaleManager 单例统一管理全局 locale
@@ -12,33 +12,15 @@
  * =============================================================================
  */
 
+import type { InterpolationParams, Locale, LocaleInfo, LocaleMessages, MessageOptions } from '../core-types.js'
+import messagesEnUS from '../../messages/en-US.json'
+import messagesZhCN from '../../messages/zh-CN.json'
 import { typeUtils } from '../utils/core-util-type.js'
 
 /**
- * 语言代码（ISO 639-1 + 地区代码）
- * @example 'zh-CN', 'en-US', 'ja-JP'
- */
-export type Locale = string
-
-/**
- * 语言信息
- */
-export interface LocaleInfo {
-  /** 语言代码 */
-  code: Locale
-  /** 显示名称 */
-  label: string
-  /** 是否为 RTL 语言 */
-  rtl?: boolean
-}
-
-/**
- * 插值参数类型
- */
-export type InterpolationParams = Record<string, string | number | boolean>
-
-/**
- * 默认支持的语言列表
+ * 默认支持的语言列表。
+ *
+ * 目前支持简体中文和英文。
  */
 const DEFAULT_LOCALES: LocaleInfo[] = [
   { code: 'zh-CN', label: '简体中文' },
@@ -46,7 +28,7 @@ const DEFAULT_LOCALES: LocaleInfo[] = [
 ]
 
 /**
- * 默认语言
+ * 默认语言（简体中文）。
  */
 const DEFAULT_LOCALE: Locale = 'zh-CN'
 
@@ -173,7 +155,12 @@ const localeManager = (() => {
   const listeners = new Set<LocaleChangeListener>()
 
   /**
-   * 规范化简写语言（en/zh）。
+   * 规范化简写语言代码。
+   *
+   * 将 'en' 映射为 'en-US'，'zh' 映射为 'zh-CN'，其他原样返回。
+   *
+   * @param locale - 输入的语言代码
+   * @returns 规范化后的语言代码
    */
   function normalizeLocale(locale: Locale): Locale {
     return locale === 'en'
@@ -184,7 +171,7 @@ const localeManager = (() => {
   }
 
   /**
-   * 通知订阅者。
+   * 通知所有订阅者 locale 已变更。
    */
   function notifyListeners(): void {
     for (const listener of listeners) {
@@ -193,7 +180,9 @@ const localeManager = (() => {
   }
 
   /**
-   * 获取当前 locale。
+   * 获取当前全局 locale。
+   *
+   * @returns 当前生效的 locale 代码
    */
   function getLocale(): Locale {
     return currentLocale
@@ -201,6 +190,11 @@ const localeManager = (() => {
 
   /**
    * 设置全局 locale。
+   *
+   * 会自动规范化简写（如 'en' → 'en-US'），然后通知所有订阅者。
+   * 若值未变化则不触发通知。
+   *
+   * @param locale - 目标 locale 代码
    */
   function setGlobalLocale(locale: Locale): void {
     const normalizedLocale = normalizeLocale(locale)
@@ -215,6 +209,11 @@ const localeManager = (() => {
 
   /**
    * 订阅 locale 变更。
+   *
+   * 注册后会立即用当前 locale 调用一次，确保初始状态同步。
+   *
+   * @param listener - locale 变更监听器
+   * @returns 取消订阅函数
    */
   function subscribe(listener: LocaleChangeListener): () => void {
     listeners.add(listener)
@@ -237,25 +236,12 @@ const localeManager = (() => {
 // =============================================================================
 
 /**
- * 消息字典类型
- */
-export type MessageDictionary = Record<string, string>
-
-/**
- * 多语言消息集合
- */
-export type LocaleMessages<K extends string = string> = Record<Locale, Record<K, string>>
-
-/**
- * 消息获取选项
- */
-export interface MessageOptions {
-  locale?: Locale
-  params?: InterpolationParams
-}
-
-/**
- * 判断是否为 MessageOptions。
+ * 判断值是否为 MessageOptions 类型。
+ *
+ * 用于区分 `getMessage(key, options)` 中第二参数是 MessageOptions 还是 InterpolationParams。
+ *
+ * @param value - 待检查值
+ * @returns 是否包含 locale 或 params 字段
  */
 function isMessageOptions(value: unknown): value is MessageOptions {
   return typeUtils.isObject(value) && ('locale' in value || 'params' in value)
@@ -269,6 +255,15 @@ const messageManager = (() => {
 
   /**
    * 解析消息文本。
+   *
+   * 根据 locale 从消息字典中查找模板，并执行插值。
+   * 找不到对应 locale 时回退到默认语言，找不到 key 时返回 key 本身。
+   *
+   * @param messages - 多语言消息集合
+   * @param key - 消息 key
+   * @param options - 消息选项或插值参数
+   * @param defaultLocale - 默认 locale
+   * @returns 解析后的消息文本
    */
   function resolveMessage<K extends string>(
     messages: LocaleMessages<K>,
@@ -304,13 +299,26 @@ const messageManager = (() => {
 
   /**
    * 注册消息字典。
+   *
+   * 将消息集合按 namespace 存储，供 `getRegisteredMessage` 查询。
+   *
+   * @param namespace - 命名空间（通常为模块名）
+   * @param messages - 多语言消息集合
    */
   function registerMessages<K extends string>(namespace: string, messages: LocaleMessages<K>): void {
     messageRegistry.set(namespace, messages as LocaleMessages)
   }
 
   /**
-   * 获取已注册消息。
+   * 获取已注册的消息。
+   *
+   * 从指定 namespace 的消息字典中查找并解析消息。
+   * namespace 未注册时返回 key 本身。
+   *
+   * @param namespace - 命名空间
+   * @param key - 消息 key
+   * @param options - 消息选项或插值参数
+   * @returns 解析后的消息文本
    */
   function getRegisteredMessage<K extends string>(
     namespace: string,
@@ -366,11 +374,69 @@ function createMessageGetter<K extends string>(
 // =============================================================================
 
 /**
- * i18n 工具集合。
+ * i18n 基础工具集合（不含 coreM）。
+ *
+ * 提供 locale 管理、浏览器检测、消息创建与注册等基础能力。
+ */
+const baseI18n = {
+  /** 默认支持的语言列表 */
+  DEFAULT_LOCALES,
+  /** 默认语言 */
+  DEFAULT_LOCALE,
+  /** 字符串插值（将 `{key}` 替换为 params 中的值） */
+  interpolate,
+  /** 检测浏览器首选语言 */
+  detectBrowserLocale,
+  /** 检查语言是否在支持列表中 */
+  isLocaleSupported,
+  /** 获取有效的语言代码（不支持时回退到默认语言） */
+  resolveLocale,
+  /** 设置全局 locale（所有 createMessageGetter 创建的函数自动响应） */
+  setGlobalLocale: (locale: Locale) => {
+    localeManager.setGlobalLocale(locale)
+  },
+  /** 获取当前全局 locale */
+  getGlobalLocale: () => localeManager.getLocale(),
+  /** 订阅 locale 变更（注册后立即回调一次当前值） */
+  subscribeLocale: (listener: (locale: Locale) => void) => localeManager.subscribe(listener),
+  /** 创建消息获取函数（读取全局 locale） */
+  createMessageGetter,
+  /** 按 namespace 注册消息字典 */
+  registerMessages: messageManager.registerMessages,
+  /** 从已注册的 namespace 中获取消息 */
+  getRegisteredMessage: messageManager.getRegisteredMessage,
+}
+
+// =============================================================================
+// Core 内置消息
+// =============================================================================
+
+/**
+ * Core 内置消息 key 类型。
+ */
+type CoreMessageKey = keyof typeof messagesZhCN
+
+/**
+ * Core 内置消息获取器。
+ *
+ * @example
+ * ```ts
+ * coreM('core_errorTimeout')
+ * ```
+ */
+const coreM = baseI18n.createMessageGetter<CoreMessageKey>({
+  'zh-CN': messagesZhCN,
+  'en-US': messagesEnUS,
+})
+
+/**
+ * i18n 工具集合（含 coreM）。
  *
  * @example
  * ```ts
  * i18n.setGlobalLocale('en-US')
+ * i18n.coreM('core_errorTimeout')
+ *
  * const getMessage = i18n.createMessageGetter({
  *   'zh-CN': { ok: '好' },
  *   'en-US': { ok: 'OK' },
@@ -379,18 +445,6 @@ function createMessageGetter<K extends string>(
  * ```
  */
 export const i18n = {
-  DEFAULT_LOCALES,
-  DEFAULT_LOCALE,
-  interpolate,
-  detectBrowserLocale,
-  isLocaleSupported,
-  resolveLocale,
-  setGlobalLocale: (locale: Locale) => {
-    localeManager.setGlobalLocale(locale)
-  },
-  getGlobalLocale: () => localeManager.getLocale(),
-  subscribeLocale: (listener: (locale: Locale) => void) => localeManager.subscribe(listener),
-  createMessageGetter,
-  registerMessages: messageManager.registerMessages,
-  getRegisteredMessage: messageManager.getRegisteredMessage,
+  ...baseI18n,
+  coreM,
 }

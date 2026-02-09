@@ -5,7 +5,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { core } from '../src/core-index.node.js'
+import { core } from '../src/index.js'
 
 describe('core.async', () => {
   beforeEach(() => {
@@ -35,6 +35,16 @@ describe('core.async', () => {
     const assertion = expect(promise).rejects.toThrow('Request timeout')
     await vi.advanceTimersByTimeAsync(100)
     await assertion
+  })
+
+  it('withTimeout 应该在超时前正常返回结果', async () => {
+    const promise = core.async.withTimeout(
+      core.async.delay(50).then(() => 'done'),
+      200,
+    )
+    await vi.advanceTimersByTimeAsync(50)
+    const result = await promise
+    expect(result).toBe('done')
   })
 
   it('retry 应该按次数重试', async () => {

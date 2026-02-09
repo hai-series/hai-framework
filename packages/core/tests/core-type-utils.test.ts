@@ -5,7 +5,7 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { core } from '../src/core-index.node.js'
+import { core } from '../src/index.js'
 
 describe('core.typeUtils', () => {
   it('isDefined 应该识别 null/undefined', () => {

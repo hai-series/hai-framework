@@ -1,49 +1,31 @@
 # @hai/core
 
-> hai Admin Framework 核心模块 - 提供基础工具、类型定义、配置管理和日志功能
+> hai Admin Framework 核心模块 — 提供统一的基础工具、类型定义、配置管理和日志功能。
 
-[![npm version](https://img.shields.io/npm/v/@hai/core.svg)](https://www.npmjs.com/package/@hai/core)
-[![License](https://img.shields.io/npm/l/@hai/core.svg)](https://github.com/hai-framework/hai/blob/main/LICENSE)
+## 支持的能力
 
-## 特性
+- **Result 类型** — 函数式错误处理（`ok` / `err`）
+- **统一日志** — Node.js 基于 pino，浏览器基于 loglevel，API 一致
+- **配置管理** — YAML 配置加载、Zod 校验、文件监听（仅 Node.js）
+- **ID 生成** — nanoid / UUID v4
+- **i18n** — 集中式 locale 管理 + 消息获取器
+- **工具函数** — 类型检查、对象 / 字符串 / 数组 / 异步 / 时间操作
 
-- 🛠️ **核心工具** - ID 生成、类型检查、对象/字符串/数组操作、异步工具、时间处理
-- 📝 **统一日志** - Node.js 基于 pino，浏览器基于 loglevel，统一 API
-- ⚙️ **配置管理** - 支持 YAML 配置文件加载、验证和监听变更（仅 Node.js）
-- 📦 **Result 类型** - 函数式错误处理，避免异常驱动控制流
-- 🔒 **类型安全** - 完整的 TypeScript 类型定义
-- 🌐 **同构支持** - Node.js / 浏览器环境统一使用方式
+## 快速开始
 
-## 安装
-
-```bash
-pnpm add @hai/core
-```
-
-## 快速开始（Node.js）
+### Node.js 服务端
 
 ```typescript
-import { core, CoreConfigSchema } from '@hai/core'
+import { core } from '@hai/core'
 
-// 初始化（可选）
-core.init({
-  configDir: './config',
-  watchConfig: true,
-  logging: { level: 'info' },
-})
+// 初始化（可选，加载配置目录）
+core.init({ configDir: './config' })
 
 // 日志
-core.logger.info('应用启动', { version: '1.0.0' })
-
-// 配置（也可手动加载）
-core.config.load('core', './config/_core.yml', CoreConfigSchema)
+core.logger.info('App started')
 
 // ID 生成
-const myId = core.id.generate()
-const uuid = core.id.uuid()
-
-// 类型检查
-core.typeUtils.isDefined(myId)
+const id = core.id.generate()
 
 // 工具函数
 core.object.deepMerge({ a: 1 }, { b: 2 })
@@ -53,20 +35,48 @@ await core.async.delay(100)
 core.time.formatDate(new Date())
 ```
 
-## 快速开始（浏览器）
+### 浏览器端
 
 ```typescript
 import { core } from '@hai/core'
 
-// 初始化（可选）
 core.init({ logging: { level: 'debug' } })
-
 core.logger.info('browser ready')
-const myId = core.id.generate()
-const isObj = core.typeUtils.isObject({})
+const id = core.id.generate()
 ```
 
-## Result 类型
+## 配置
+
+### Node.js 配置加载
+
+```typescript
+import { core, CoreConfigSchema } from '@hai/core'
+import { z } from 'zod'
+
+// 方式 1：通过 init 自动加载配置目录
+core.init({ configDir: './config', watchConfig: true })
+
+// 方式 2：手动加载
+const AppSchema = z.object({ name: z.string() })
+core.config.load('app', './config/app.yml', AppSchema)
+
+// 使用前校验
+core.config.validate('db', DbConfigSchema)
+
+// 监听变更
+const unwatch = core.config.watch('app', (newConfig, error) => {
+  if (error)
+    return core.logger.error('Reload failed', { error })
+  core.logger.info('Config reloaded')
+})
+unwatch()
+```
+
+### 浏览器配置
+
+浏览器不支持 `core.config`，其余功能与 Node.js 一致。
+
+## 错误处理
 
 ```typescript
 import type { Result } from '@hai/core'
@@ -79,80 +89,12 @@ function divide(a: number, b: number): Result<number, string> {
 }
 ```
 
-## 分页类型
+## 测试
 
-```typescript
-import type { PaginatedResult, PaginationOptionsInput } from '@hai/core'
-
-const options: PaginationOptionsInput = { page: 1, pageSize: 20 }
-
-const result: PaginatedResult<string> = {
-  items: ['a', 'b'],
-  total: 2,
-  page: 1,
-  pageSize: 20,
-}
+```bash
+pnpm --filter @hai/core test
 ```
 
-## 配置管理（Node.js）
-
-```typescript
-import { core } from '@hai/core'
-import { z } from 'zod'
-
-const AppConfigSchema = z.object({ name: z.string() })
-
-const result = core.config.load('app', './config/app.yml', AppConfigSchema)
-if (result.success) {
-  core.logger.info('App config loaded')
-}
-
-// 注意：core.init 会统一加载配置文件，但不会自动校验各模块配置。
-// 模块使用前请显式校验一次。
-// 注意：core.init 会使用 CoreConfigSchema 解析 _core.yml，并应用默认值。
-core.config.validate('app', AppConfigSchema)
-
-const unwatch = core.config.watch('app', (newConfig, error) => {
-  if (error) {
-    core.logger.error('Config reload failed', { error })
-    return
-  }
-  core.logger.info('Config changed', { config: newConfig })
-})
-
-unwatch()
-```
-
-## i18n
-
-```typescript
-import { core } from '@hai/core'
-
-const getMessage = core.i18n.createMessageGetter({
-  'zh-CN': { hello: '你好 {name}' },
-  'en-US': { hello: 'Hello {name}' },
-})
-
-core.i18n.setGlobalLocale('en-US')
-getMessage('hello', { params: { name: 'World' } })
-```
-
-## 错误码 & Schema
-
-```typescript
-import { CommonErrorCode, ConfigErrorCode, CoreConfigSchema } from '@hai/core'
-
-CommonErrorCode.UNKNOWN
-ConfigErrorCode.FILE_NOT_FOUND
-CoreConfigSchema.parse({ name: 'demo' })
-```
-
-## 浏览器支持
-
-- 日志使用 `loglevel` 替代 `pino`
-- 配置管理不可用（`core.config`）
-- 其余功能与 Node.js 一致
-
-## 许可证
+## License
 
 Apache-2.0

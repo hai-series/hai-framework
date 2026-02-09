@@ -2,21 +2,18 @@
  * =============================================================================
  * @hai/core - 类型定义
  * =============================================================================
- * 核心模块的公共类型（完全自包含，无外部依赖，前后端通用）
+ * 核心模块的公共类型（前后端通用）
  *
  * 组织结构：
- * 1. 基础类型 - Result / Option
- * 2. 日志类型 - Logger / LogLevel
- * 3. Provider 接口 - Logger / IdGenerator
- * 4. Core 服务类型 - CoreService / CoreUtils
+ * 1. 基础类型 - Result
+ * 2. 分页类型
+ * 3. 日志类型 - Logger / LogLevel
+ * 4. i18n 类型
+ * 5. Core 初始化类型
  * =============================================================================
  */
 
-// =============================================================================
-// 4. Core 初始化类型
-// =============================================================================
-
-import type { LogFormat, LoggingConfig, LogLevel } from './config/index.js'
+import type { LogFormat, LoggingConfig, LogLevel } from './core-config.js'
 
 // =============================================================================
 // 1. 基础类型 - Result / Option
@@ -71,6 +68,13 @@ export function err<E>(error: E): Result<never, E> {
 /**
  * Result Match 处理器。
  *
+ * 提供对 Result 的模式匹配能力，分别处理成功和失败两种情况。
+ *
+ * @template T - 成功数据类型
+ * @template E - 错误类型
+ * @template R1 - ok 分支返回类型
+ * @template R2 - err 分支返回类型
+ *
  * @example
  * ```ts
  * const handlers: MatchHandlers<number, string, number, number> = {
@@ -80,7 +84,9 @@ export function err<E>(error: E): Result<never, E> {
  * ```
  */
 export interface MatchHandlers<T, E, R1, R2> {
+  /** 成功分支处理器 */
   ok: (data: T) => R1
+  /** 失败分支处理器 */
   err: (error: E) => R2
 }
 
@@ -89,17 +95,27 @@ export interface MatchHandlers<T, E, R1, R2> {
 // =============================================================================
 
 /**
- * 分页参数输入
+ * 分页参数输入（可选字段，未提供时使用默认值）。
+ *
+ * @example
+ * ```ts
+ * const input: PaginationOptionsInput = { page: 2, pageSize: 20 }
+ * ```
  */
 export interface PaginationOptionsInput {
-  /** 页码（从 1 开始） */
+  /** 页码（从 1 开始，默认 1） */
   page?: number
-  /** 每页数量 */
+  /** 每页数量（默认由业务层决定） */
   pageSize?: number
 }
 
 /**
- * 分页参数
+ * 分页参数（必填，已确定具体值）。
+ *
+ * @example
+ * ```ts
+ * const options: PaginationOptions = { page: 1, pageSize: 20 }
+ * ```
  */
 export interface PaginationOptions {
   /** 页码（从 1 开始） */
@@ -109,7 +125,19 @@ export interface PaginationOptions {
 }
 
 /**
- * 分页结果
+ * 分页结果。
+ *
+ * @template T - 数据项类型
+ *
+ * @example
+ * ```ts
+ * const result: PaginatedResult<User> = {
+ *   items: [{ id: 1, name: 'Alice' }],
+ *   total: 100,
+ *   page: 1,
+ *   pageSize: 20,
+ * }
+ * ```
  */
 export interface PaginatedResult<T> {
   /** 当前页数据 */
@@ -178,6 +206,8 @@ export interface Logger {
 /**
  * Logger 函数组合（平台实现依赖）。
  *
+ * 由各平台（Node.js / Browser）提供具体实现，通过 `createCore()` 注入。
+ *
  * @example
  * ```ts
  * const fns: LoggerFunctions = {
@@ -190,10 +220,15 @@ export interface Logger {
  * ```
  */
 export interface LoggerFunctions {
+  /** 创建新的 Logger 实例 */
   createLogger: (options?: LoggerOptions) => Logger
+  /** 获取默认或命名 Logger 实例（单例） */
   getLogger: (name?: string) => Logger
+  /** 配置全局 Logger 选项（级别、格式、上下文等） */
   configureLogger: (config: Partial<LoggingConfig>) => void
+  /** 设置全局日志级别 */
   setLogLevel: (level: LogLevel) => void
+  /** 获取当前全局日志级别 */
   getLogLevel: () => LogLevel
 }
 
@@ -226,4 +261,87 @@ export interface CoreOptions {
   configDir?: string
   /** 是否启用配置文件监听（默认 false） */
   watchConfig?: boolean
+}
+
+// =============================================================================
+// 5. i18n 公共类型
+// =============================================================================
+
+/**
+ * 语言代码（ISO 639-1 + 地区代码）。
+ *
+ * @example 'zh-CN', 'en-US', 'ja-JP'
+ */
+export type Locale = string
+
+/**
+ * 语言信息。
+ *
+ * @example
+ * ```ts
+ * const locale: LocaleInfo = { code: 'zh-CN', label: '简体中文' }
+ * ```
+ */
+export interface LocaleInfo {
+  /** 语言代码（如 'zh-CN'、'en-US'） */
+  code: Locale
+  /** 显示名称（如 '简体中文'、'English'） */
+  label: string
+  /** 是否为从右到左书写的语言（如阿拉伯语），默认 false */
+  rtl?: boolean
+}
+
+/**
+ * 插值参数类型。
+ *
+ * 用于 i18n 消息模板中的 `{key}` 占位符替换。
+ *
+ * @example
+ * ```ts
+ * const params: InterpolationParams = { name: 'Alice', count: 3 }
+ * // 模板 'Hello, {name}! You have {count} items.'
+ * ```
+ */
+export type InterpolationParams = Record<string, string | number | boolean>
+
+/**
+ * 消息字典类型（单语言的 key-value 映射）。
+ *
+ * @example
+ * ```ts
+ * const dict: MessageDictionary = { hello: '你好', bye: '再见' }
+ * ```
+ */
+export type MessageDictionary = Record<string, string>
+
+/**
+ * 多语言消息集合。
+ *
+ * 以 locale 为键，每个 locale 下包含该语言的所有消息 key-value。
+ *
+ * @template K - 消息 key 的联合类型
+ *
+ * @example
+ * ```ts
+ * const messages: LocaleMessages<'hello' | 'bye'> = {
+ *   'zh-CN': { hello: '你好', bye: '再见' },
+ *   'en-US': { hello: 'Hello', bye: 'Bye' },
+ * }
+ * ```
+ */
+export type LocaleMessages<K extends string = string> = Record<Locale, Record<K, string>>
+
+/**
+ * 消息获取选项。
+ *
+ * @example
+ * ```ts
+ * getMessage('hello', { locale: 'en-US', params: { name: 'World' } })
+ * ```
+ */
+export interface MessageOptions {
+  /** 指定 locale（不传则使用全局 locale） */
+  locale?: Locale
+  /** 插值参数 */
+  params?: InterpolationParams
 }
