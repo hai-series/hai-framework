@@ -3,6 +3,6 @@ import { baseConfig } from '../tsup.base'
 
 export default defineConfig({
   ...baseConfig,
-  entry: ['src/index.ts'],
+  entry: { index: 'src/index.ts' },
   external: ['@hai/core', 'better-sqlite3', 'pg', 'mysql2'],
 })

@@ -165,6 +165,130 @@ describe('db.crud', () => {
         expect(Number(count.data?.count)).toBe(1)
       }
     })
+
+    it(`${label}: findById non-existent should return null`, async () => {
+      await ensureTable()
+      const crud = userCrud()
+
+      const result = await crud.findById(999)
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data).toBeNull()
+      }
+    })
+
+    it(`${label}: existsById non-existent should return false`, async () => {
+      await ensureTable()
+      const crud = userCrud()
+
+      const result = await crud.existsById(999)
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data).toBe(false)
+      }
+    })
+
+    it(`${label}: exists on empty table should return false`, async () => {
+      await ensureTable()
+      const crud = userCrud()
+
+      const result = await crud.exists()
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data).toBe(false)
+      }
+    })
+
+    it(`${label}: count on empty table should return 0`, async () => {
+      await ensureTable()
+      const crud = userCrud()
+
+      const result = await crud.count()
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data).toBe(0)
+      }
+    })
+
+    it(`${label}: findAll on empty table should return empty array`, async () => {
+      await ensureTable()
+      const crud = userCrud()
+
+      const result = await crud.findAll()
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data).toEqual([])
+      }
+    })
+
+    it(`${label}: findPage on empty table should return empty page`, async () => {
+      await ensureTable()
+      const crud = userCrud()
+
+      const result = await crud.findPage({
+        pagination: { page: 1, pageSize: 10 },
+      })
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data.total).toBe(0)
+        expect(result.data.items).toHaveLength(0)
+      }
+    })
+
+    it(`${label}: deleteById non-existent should return changes=0`, async () => {
+      await ensureTable()
+      const crud = userCrud()
+
+      const result = await crud.deleteById(999)
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data.changes).toBe(0)
+      }
+    })
+
+    it(`${label}: updateById non-existent should return changes=0`, async () => {
+      await ensureTable()
+      const crud = userCrud()
+
+      const result = await crud.updateById(999, { name: '不存在' })
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data.changes).toBe(0)
+      }
+    })
+
+    it(`${label}: findAll with where clause should filter`, async () => {
+      await ensureTable()
+      const crud = userCrud()
+
+      await crud.create({ name: '用户X', email: 'x@test.com' })
+      await crud.create({ name: '用户Y', email: 'y@test.com' })
+      await crud.create({ name: '用户Z', email: 'z@test.com' })
+
+      const result = await crud.findAll({
+        where: 'email LIKE ?',
+        params: ['%y@%'],
+      })
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data).toHaveLength(1)
+        expect(result.data[0].name).toBe('用户Y')
+      }
+    })
+
+    it(`${label}: count with where clause should filter`, async () => {
+      await ensureTable()
+      const crud = userCrud()
+
+      await crud.create({ name: '用户X', email: 'x@test.com' })
+      await crud.create({ name: '用户Y', email: 'y@test.com' })
+
+      const result = await crud.count({ where: 'email = ?', params: ['x@test.com'] })
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data).toBe(1)
+      }
+    })
   }
 
   defineDbSuite('sqlite', sqliteMemoryEnv, () => defineCommon('sqlite'))

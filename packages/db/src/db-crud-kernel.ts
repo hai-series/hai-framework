@@ -21,16 +21,22 @@ import type {
   ExecuteResult,
   QueryRow,
   TxHandle,
-} from '../db-types.js'
+} from './db-types.js'
 import { err, ok } from '@hai/core'
 
-import { DbErrorCode } from '../db-config.js'
-import { dbM } from '../db-i18n.js'
+import { DbErrorCode } from './db-config.js'
+import { dbM } from './db-i18n.js'
 
 // =============================================================================
 // CRUD 工具方法
 // =============================================================================
 
+/**
+ * 构建查询列字符串
+ *
+ * @param select - 列名数组（空或未提供时返回 '*'）
+ * @returns SQL SELECT 列片段
+ */
 function buildSelectColumns(select?: string[]): string {
   if (!select || select.length === 0) {
     // 未指定字段时默认全部列
@@ -108,8 +114,12 @@ export function createCrud<TItem>(
   const mapRow = config.mapRow ?? ((row: QueryRow) => row as TItem)
 
   // SQL 片段拼接工具（仅在传入值时附加）
+
+  /** 构建 WHERE 子句，无条件时返回空字符串 */
   const buildWhereClause = (where?: string): string => (where ? ` WHERE ${where}` : '')
+  /** 构建 ORDER BY 子句，无排序时返回空字符串 */
   const buildOrderClause = (orderBy?: string): string => (orderBy ? ` ORDER BY ${orderBy}` : '')
+  /** 构建 LIMIT/OFFSET 子句，仅在传入值时生效 */
   const buildLimitOffset = (limit?: number, offset?: number): string => {
     const parts: string[] = []
     if (typeof limit === 'number') {
@@ -123,19 +133,29 @@ export function createCrud<TItem>(
     return parts.join('')
   }
 
+  /** 构建空负载错误结果（数据为空时报错） */
   const createPayloadError = (): Result<ExecuteResult, DbError> => err({
     code: DbErrorCode.CONFIG_ERROR,
     message: dbM('db_crudEmptyPayload'),
   })
 
+  /** 构建无有效列错误结果（白名单过滤后无可写列时报错） */
   const createColumnsError = (): Result<ExecuteResult, DbError> => err({
     code: DbErrorCode.CONFIG_ERROR,
     message: dbM('db_crudNoValidColumns'),
   })
 
+  /** 解析实际数据操作接口：传入事务时使用事务接口，否则使用 db.sql */
   const resolveOps = (tx?: TxHandle): DataOperations => tx ?? ops
 
   return {
+    /**
+     * 创建单条记录
+     *
+     * @param data - 列名与值的映射（会根据 createColumns 白名单过滤）
+     * @param tx - 可选事务句柄
+     * @returns 插入结果（含 changes、lastInsertRowid）
+     */
     async create(data: Record<string, unknown>, tx?: TxHandle): Promise<Result<ExecuteResult, DbError>> {
       if (!data || Object.keys(data).length === 0) {
         // 空数据直接报错
@@ -153,6 +173,15 @@ export function createCrud<TItem>(
       return resolveOps(tx).execute(sql, values)
     },
 
+    /**
+     * 批量创建记录
+     *
+     * 所有记录在同一 batch 中执行，任意一条失败则整体失败。
+     *
+     * @param items - 待插入的数据数组
+     * @param tx - 可选事务句柄
+     * @returns 批量插入结果
+     */
     async createMany(items: Array<Record<string, unknown>>, tx?: TxHandle): Promise<Result<void, DbError>> {
       if (!items || items.length === 0) {
         // 空数组视为成功
@@ -187,6 +216,13 @@ export function createCrud<TItem>(
       return resolveOps(tx).batch(statements)
     },
 
+    /**
+     * 根据主键查找单条记录
+     *
+     * @param id - 主键值
+     * @param tx - 可选事务句柄
+     * @returns 记录对象或 null（未找到）
+     */
     async findById(id: unknown, tx?: TxHandle): Promise<Result<TItem | null, DbError>> {
       const sql = `SELECT ${selectColumns} FROM ${table} WHERE ${idColumn} = ?`
       const result = await resolveOps(tx).get<QueryRow>(sql, [id])
@@ -198,6 +234,13 @@ export function createCrud<TItem>(
       return ok(result.data ? mapRow(result.data) : null)
     },
 
+    /**
+     * 条件查询多条记录
+     *
+     * @param options - 查询条件（where、orderBy、limit、offset）
+     * @param tx - 可选事务句柄
+     * @returns 记录数组
+     */
     async findAll(options: CrudQueryOptions = {}, tx?: TxHandle): Promise<Result<TItem[], DbError>> {
       const whereClause = buildWhereClause(options.where)
       const orderClause = buildOrderClause(options.orderBy)
@@ -211,6 +254,13 @@ export function createCrud<TItem>(
       return ok(result.data.map(row => mapRow(row)))
     },
 
+    /**
+     * 分页查询记录
+     *
+     * @param options - 分页查询条件（where、orderBy、pagination、overrides）
+     * @param tx - 可选事务句柄
+     * @returns 分页结果（含 items、total、page、pageSize）
+     */
     async findPage(options: CrudPageOptions, tx?: TxHandle): Promise<Result<PaginatedResult<TItem>, DbError>> {
       const whereClause = buildWhereClause(options.where)
       const orderClause = buildOrderClause(options.orderBy)
@@ -231,6 +281,16 @@ export function createCrud<TItem>(
       })
     },
 
+    /**
+     * 根据主键更新记录
+     *
+     * 主键列不可更新，会自动排除。
+     *
+     * @param id - 主键值
+     * @param data - 待更新的列值映射（会根据 updateColumns 白名单过滤）
+     * @param tx - 可选事务句柄
+     * @returns 更新结果（含 changes）
+     */
     async updateById(id: unknown, data: Record<string, unknown>, tx?: TxHandle): Promise<Result<ExecuteResult, DbError>> {
       if (!data || Object.keys(data).length === 0) {
         // 空数据不允许更新
@@ -252,11 +312,25 @@ export function createCrud<TItem>(
       return resolveOps(tx).execute(sql, params)
     },
 
+    /**
+     * 根据主键删除记录
+     *
+     * @param id - 主键值
+     * @param tx - 可选事务句柄
+     * @returns 删除结果（含 changes）
+     */
     async deleteById(id: unknown, tx?: TxHandle): Promise<Result<ExecuteResult, DbError>> {
       const sql = `DELETE FROM ${table} WHERE ${idColumn} = ?`
       return resolveOps(tx).execute(sql, [id])
     },
 
+    /**
+     * 统计符合条件的记录数
+     *
+     * @param options - 查询条件（where、params）
+     * @param tx - 可选事务句柄
+     * @returns 记录数
+     */
     async count(options: CrudCountOptions = {}, tx?: TxHandle): Promise<Result<number, DbError>> {
       const whereClause = buildWhereClause(options.where)
       const sql = `SELECT COUNT(*) as cnt FROM ${table}${whereClause}`
@@ -268,6 +342,13 @@ export function createCrud<TItem>(
       return ok(parseCount(result.data ?? null))
     },
 
+    /**
+     * 检查是否存在符合条件的记录
+     *
+     * @param options - 查询条件（where、params）
+     * @param tx - 可选事务句柄
+     * @returns 是否存在
+     */
     async exists(options: CrudCountOptions = {}, tx?: TxHandle): Promise<Result<boolean, DbError>> {
       const whereClause = buildWhereClause(options.where)
       const sql = `SELECT 1 as exist_flag FROM ${table}${whereClause} LIMIT 1`
@@ -280,6 +361,13 @@ export function createCrud<TItem>(
       return ok(Boolean(result.data))
     },
 
+    /**
+     * 根据主键检查记录是否存在
+     *
+     * @param id - 主键值
+     * @param tx - 可选事务句柄
+     * @returns 是否存在
+     */
     async existsById(id: unknown, tx?: TxHandle): Promise<Result<boolean, DbError>> {
       const sql = `SELECT 1 as exist_flag FROM ${table} WHERE ${idColumn} = ? LIMIT 1`
       const result = await resolveOps(tx).get<QueryRow>(sql, [id])

@@ -1,6 +1,6 @@
 # @hai/db
 
-关系型数据库访问模块，提供统一的 `db` 对象访问 SQLite、PostgreSQL、MySQL（异步 API）。
+关系型数据库访问模块，通过统一的 `db` 对象访问 SQLite、PostgreSQL、MySQL。
 
 ## 支持的数据库
 
@@ -8,65 +8,32 @@
 - PostgreSQL（pg）
 - MySQL（mysql2）
 
-## 安装
-
-```bash
-pnpm add @hai/db
-
-# PostgreSQL（可选）
-pnpm add pg
-
-# MySQL（可选）
-pnpm add mysql2
-```
-
 ## 快速开始
 
 ```ts
-import { BaseCrudRepository, db } from '@hai/db'
+import { db, DbErrorCode } from '@hai/db'
 
-// 1. 初始化数据库
-await db.init({ type: 'sqlite', database: './data.db' })
+// 初始化
+await db.init({ type: 'sqlite', database: ':memory:' })
 
-// 2. 创建表
+// DDL
 await db.ddl.createTable('users', {
   id: { type: 'INTEGER', primaryKey: true, autoIncrement: true },
   name: { type: 'TEXT', notNull: true },
   email: { type: 'TEXT', unique: true },
-  created_at: { type: 'TIMESTAMP', defaultValue: '(unixepoch())' },
 })
 
-// 3. 插入数据
+// SQL
 await db.sql.execute('INSERT INTO users (name, email) VALUES (?, ?)', ['张三', 'test@example.com'])
+const users = await db.sql.query<{ id: number, name: string }>('SELECT * FROM users')
 
-// 4. 查询数据
-const users = await db.sql.query<{ id: number, name: string }>('SELECT id, name FROM users')
-if (users.success) {
-  // 使用 users.data
-}
-
-// 4.1 分页查询
-const pageResult = await db.sql.queryPage<{ id: number, name: string }>({
-  sql: 'SELECT id, name FROM users ORDER BY created_at DESC',
+// 分页查询
+const page = await db.sql.queryPage<{ id: number, name: string }>({
+  sql: 'SELECT id, name FROM users ORDER BY id',
   pagination: { page: 1, pageSize: 20 },
 })
-if (pageResult.success) {
-  // pageResult.data.items / total / page / pageSize
-}
 
-// 5. 事务操作
-await db.tx.wrap(async (tx) => {
-  await tx.execute('INSERT INTO users (name) VALUES (?)', ['用户1'])
-  await tx.execute('INSERT INTO users (name) VALUES (?)', ['用户2'])
-
-  const page = await tx.queryPage<{ id: number, name: string }>({
-    sql: 'SELECT id, name FROM users ORDER BY created_at DESC',
-    pagination: { page: 1, pageSize: 10 },
-  })
-  // page.items / total / page / pageSize
-})
-
-// 5.1 CRUD 抽象（可用于 db.sql 或 tx）
+// CRUD
 const userCrud = db.crud.table({
   table: 'users',
   idColumn: 'id',
@@ -74,111 +41,25 @@ const userCrud = db.crud.table({
   createColumns: ['name', 'email'],
   updateColumns: ['name', 'email'],
 })
-
-await userCrud.create({ name: '张三', email: 'test@example.com' })
+await userCrud.create({ name: '李四', email: 'li@test.com' })
 const user = await userCrud.findById(1)
-const hasUser = await userCrud.existsById(1)
 
-// 5.1.1 在事务中使用 CRUD
-const txResult = await db.tx.begin()
-if (txResult.success) {
-  const tx = txResult.data
-  await userCrud.create({ name: '事务用户', email: 'tx@test.com' }, tx)
-  await tx.commit()
-}
-
-// 5.2 基于 BaseCrudRepository 的业务仓库
-class UserRepository extends BaseCrudRepository<{ id: number, name: string, email: string }> {
-  constructor() {
-    super(db, {
-      table: 'users',
-      idColumn: 'id',
-      fields: [
-        {
-          fieldName: 'id',
-          columnName: 'id',
-          def: { type: 'INTEGER', primaryKey: true, autoIncrement: true },
-          select: true,
-          create: false,
-          update: false,
-        },
-        {
-          fieldName: 'name',
-          columnName: 'name',
-          def: { type: 'TEXT', notNull: true },
-          select: true,
-          create: true,
-          update: true,
-        },
-        {
-          fieldName: 'email',
-          columnName: 'email',
-          def: { type: 'TEXT', notNull: true },
-          select: true,
-          create: true,
-          update: true,
-        },
-      ],
-    })
-  }
-
-  async findByEmail(email: string) {
-    return this.findAll({ where: 'email = ?', params: [email], limit: 1 })
-  }
-
-  // 在自定义方法中可使用 sql(tx) 自动选择事务内 CRUD
-  async insertWithTx(data: { name: string, email: string }, tx?: import('@hai/db').TxHandle) {
-    const now = new Date()
-    return this.sql(tx).execute(
-      'INSERT INTO users (name, email, created_at, updated_at) VALUES (?, ?, ?, ?)',
-      [data.name, data.email, now, now],
-    )
-  }
-}
-
-const userRepo = new UserRepository()
-await userRepo.create({ name: '李四', email: 'li@test.com' })
-await userRepo.findByEmail('li@test.com')
-
-const txResult2 = await db.tx.begin()
-if (txResult2.success) {
-  const tx = txResult2.data
-  await userRepo.create({ name: '事务用户2', email: 'tx2@test.com' }, tx)
-  await tx.commit()
-}
-
-// 6. 关闭连接
+// 关闭
 await db.close()
 ```
 
-## 分页工具
+## 配置
 
-`db.pagination` 提供业务无关的分页参数规范化与结果构建工具：
-
-```ts
-const pagination = db.pagination.normalize({ page: 2, pageSize: 20 })
-// pagination: { page, pageSize, offset, limit }
-
-const result = db.pagination.build(['a', 'b'], 100, pagination)
-// result: { items, total, page, pageSize }
-```
-
-## 配置要点
-
-- 支持连接字符串（`url`）或分字段（`host/port/database/user/password`）二选一。
-- SQLite 使用 `database` 作为文件路径或 `:memory:`。
-- PostgreSQL/MySQL 可配置连接池与 SSL。
-
-示例：
+支持连接字符串（`url`）或分字段（`host/port/database/user/password`）。
 
 ```ts
-await db.init({ type: 'sqlite', database: ':memory:' })
+// SQLite
+await db.init({ type: 'sqlite', database: './data.db' })
 
-await db.init({
-  type: 'postgresql',
-  url: 'postgres://user:pass@localhost:5432/mydb',
-})
+// PostgreSQL
+await db.init({ type: 'postgresql', url: 'postgres://user:pass@localhost:5432/mydb' })
 
+// MySQL
 await db.init({
   type: 'mysql',
   host: 'localhost',
@@ -190,29 +71,139 @@ await db.init({
 })
 ```
 
-## 错误处理示例
+## 事务
+
+三种使用方式：
+
+### wrap（自动提交/回滚）
 
 ```ts
-import { db, DbErrorCode } from '@hai/db'
+const result = await db.tx.wrap(async (tx) => {
+  await tx.execute('INSERT INTO users (name) VALUES (?)', ['用户1'])
+  await tx.execute('INSERT INTO users (name) VALUES (?)', ['用户2'])
+  return 'ok'
+})
+// 回调正常返回 → 自动提交；抛异常 → 自动回滚
+```
 
-const result = await db.sql.query('SELECT * FROM users')
-if (!result.success && result.error.code === DbErrorCode.NOT_INITIALIZED) {
-  // 请先调用 db.init()
+### begin + commit（分步提交）
+
+```ts
+const txResult = await db.tx.begin()
+if (!txResult.success) { /* 处理错误 */ }
+const tx = txResult.data
+
+await tx.execute('INSERT INTO users (name) VALUES (?)', ['用户1'])
+await tx.execute('INSERT INTO users (name) VALUES (?)', ['用户2'])
+await tx.commit()
+```
+
+### begin + rollback（分步回滚）
+
+```ts
+const txResult = await db.tx.begin()
+if (!txResult.success) { /* 处理错误 */ }
+const tx = txResult.data
+
+await tx.execute('INSERT INTO users (name) VALUES (?)', ['用户1'])
+// 业务检查失败，手动回滚
+await tx.rollback()
+```
+
+### 事务内使用 batch / queryPage
+
+```ts
+await db.tx.wrap(async (tx) => {
+  await tx.batch([
+    { sql: 'INSERT INTO users (name) VALUES (?)', params: ['用户1'] },
+    { sql: 'INSERT INTO users (name) VALUES (?)', params: ['用户2'] },
+  ])
+
+  const page = await tx.queryPage<{ id: number, name: string }>({
+    sql: 'SELECT id, name FROM users ORDER BY id',
+    pagination: { page: 1, pageSize: 10 },
+  })
+})
+```
+
+## BaseCrudRepository
+
+业务仓库继承 `BaseCrudRepository`，通过 `fields` 定义字段映射，自动建表、类型转换：
+
+```ts
+import type { CrudFieldDefinition, TxHandle } from '@hai/db'
+import { BaseCrudRepository, db } from '@hai/db'
+
+interface UserRow {
+  id: number
+  name: string
+  email: string
+  createdAt: Date
+  updatedAt: Date
+}
+
+const USER_FIELDS: CrudFieldDefinition[] = [
+  { fieldName: 'id', columnName: 'id', def: { type: 'INTEGER', primaryKey: true, autoIncrement: true }, select: true, create: false, update: false },
+  { fieldName: 'name', columnName: 'name', def: { type: 'TEXT', notNull: true }, select: true, create: true, update: true },
+  { fieldName: 'email', columnName: 'email', def: { type: 'TEXT', notNull: true }, select: true, create: true, update: true },
+  { fieldName: 'createdAt', columnName: 'created_at', def: { type: 'TIMESTAMP', notNull: true }, select: true, create: true, update: false },
+  { fieldName: 'updatedAt', columnName: 'updated_at', def: { type: 'TIMESTAMP', notNull: true }, select: true, create: true, update: false },
+]
+
+class UserRepository extends BaseCrudRepository<UserRow> {
+  constructor() {
+    super(db, { table: 'users', idColumn: 'id', fields: USER_FIELDS })
+  }
+
+  /** 自定义查询方法 */
+  async findByEmail(email: string) {
+    return this.findAll({ where: 'email = ?', params: [email], limit: 1 })
+  }
+
+  /** 自定义方法中使用 this.sql(tx) 自动路由到事务 */
+  async insertRaw(data: { name: string, email: string }, tx?: TxHandle) {
+    const now = Date.now()
+    return this.sql(tx).execute(
+      'INSERT INTO users (name, email, created_at, updated_at) VALUES (?, ?, ?, ?)',
+      [data.name, data.email, now, now],
+    )
+  }
+}
+
+// 使用
+const repo = new UserRepository()
+await repo.create({ name: '张三', email: 'test@example.com' })
+const user = await repo.findById(1)
+
+// 跨仓库事务
+const txResult = await db.tx.begin()
+if (txResult.success) {
+  const tx = txResult.data
+  await repo.create({ name: '用户A', email: 'a@test.com' }, tx)
+  await repo.create({ name: '用户B', email: 'b@test.com' }, tx)
+  await tx.commit()
 }
 ```
 
-## 注意事项
+## 错误处理
 
-- MySQL 的 `dropIndex` 会在当前数据库中按索引名查找所属表并执行删除，确保索引名在库内唯一；如遇重名，建议使用 `db.ddl.raw()` 明确指定表。
+```ts
+const result = await db.sql.query('SELECT * FROM users')
+if (!result.success) {
+  if (result.error.code === DbErrorCode.NOT_INITIALIZED) {
+    // 请先调用 db.init()
+  }
+}
+```
 
 ## 测试
 
 ```bash
-pnpm test
+pnpm --filter @hai/db test
 ```
 
-> 需要 Docker 运行 MySQL/PostgreSQL 容器测试。
+> MySQL/PostgreSQL 测试需要 Docker。
 
-## 许可证
+## License
 
 Apache-2.0

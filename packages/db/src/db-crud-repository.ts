@@ -10,7 +10,7 @@
  */
 
 import type { PaginatedResult, Result } from '@hai/core'
-import type { DbConfig } from '../db-config.js'
+import type { DbConfig } from './db-config.js'
 import type {
   BaseCrudRepositoryConfig,
   CrudCountOptions,
@@ -20,44 +20,80 @@ import type {
   CrudRepository,
   DataOperations,
   DbError,
-  DbService,
+  DbFunctions,
   ExecuteResult,
   QueryRow,
   TableDef,
   TxHandle,
-} from '../db-types.js'
+} from './db-types.js'
 
 import { err, ok } from '@hai/core'
-import { DbErrorCode } from '../db-config.js'
-import { dbM } from '../db-i18n.js'
+import { DbErrorCode } from './db-config.js'
+import { dbM } from './db-i18n.js'
 
 /**
  * CRUD 仓库基类
  *
- * 业务仓库可继承该类，并通过组合的 CrudRepository 实例实现通用 CRUD。
+ * 提供通用的单表 CRUD 操作封装，业务仓库可继承该类实现自定义逻辑。
+ *
+ * 核心能力：
+ * - 自动建表（默认开启，可通过 `createTableIfNotExists: false` 关闭）
+ * - 字段级别的权限控制（select / create / update 分别配置）
+ * - 自动填充主键、createdAt、updatedAt
+ * - 跨数据库类型值转换（BOOLEAN / TIMESTAMP / JSON）
+ * - 支持事务上下文（所有方法均接受可选 tx 参数）
+ *
+ * @example
+ * ```ts
+ * class UserRepository extends BaseCrudRepository<User> {
+ *   constructor(db: DbFunctions) {
+ *     super(db, {
+ *       table: 'users',
+ *       fields: [
+ *         { fieldName: 'id', columnName: 'id', def: { type: 'INTEGER', primaryKey: true, autoIncrement: true }, select: true, create: false, update: false },
+ *         { fieldName: 'name', columnName: 'name', def: { type: 'TEXT', notNull: true }, select: true, create: true, update: true },
+ *         { fieldName: 'createdAt', columnName: 'created_at', def: { type: 'TIMESTAMP' }, select: true, create: true, update: false },
+ *       ],
+ *     })
+ *   }
+ * }
+ * ```
  */
 export abstract class BaseCrudRepository<TItem> implements CrudRepository<TItem> {
-  /** 底层 CRUD 仓库实例（由子类传入） */
+  /** 底层 CRUD 仓库实例（基于 db-crud-kernel 创建） */
   protected readonly crud: CrudRepository<TItem>
-  /** 数据库服务（用于选择 crud/tx） */
-  protected readonly db: DbService
+  /** 数据库服务对象 */
+  protected readonly db: DbFunctions
+  /** 字段定义列表 */
   private readonly fields: CrudFieldDefinition[]
+  /** 主键字段名（对象侧） */
   private readonly idField?: string
+  /** 主键列名（数据库侧） */
   private readonly idColumn: string
+  /** 主键生成器 */
   private readonly generateId?: () => string | number
+  /** 当前时间提供者（默认 Date.now） */
   private readonly nowProvider: () => number
+  /** 初始化 Promise（自动建表等） */
   private readonly initPromise: Promise<Result<void, DbError>>
+  /** 可查询列 */
   private readonly selectColumns: string[]
+  /** 可插入列 */
   private readonly createColumns: string[]
+  /** 可更新列 */
   private readonly updateColumns: string[]
+  /** 当前数据库类型（用于值转换） */
   private readonly dbType?: DbConfig['type']
 
   /**
    * 创建 BaseCrudRepository
-   * @param db - 数据库服务
-   * @param config - BaseCrudRepository 配置
+   *
+   * 初始化字段映射、构建表结构（默认自动建表）并配置底层 CRUD 仓库。
+   *
+   * @param db - 数据库服务对象
+   * @param config - BaseCrudRepository 配置（表名、字段定义、主键策略等）
    */
-  protected constructor(db: DbService, config: BaseCrudRepositoryConfig<TItem>) {
+  protected constructor(db: DbFunctions, config: BaseCrudRepositoryConfig<TItem>) {
     this.db = db
     this.dbType = db.config?.type
     this.fields = config.fields
@@ -418,6 +454,15 @@ export abstract class BaseCrudRepository<TItem> implements CrudRepository<TItem>
     return ok(undefined)
   }
 
+  /**
+   * 创建单条记录
+   *
+   * 自动处理主键生成、createdAt/updatedAt 填充、字段类型转换。
+   *
+   * @param data - 业务字段与值的映射
+   * @param tx - 可选事务句柄
+   * @returns 插入结果（含 changes、lastInsertRowid）
+   */
   async create(data: Record<string, unknown>, tx?: TxHandle): Promise<Result<ExecuteResult, DbError>> {
     const ready = await this.ensureReady()
     if (!ready.success) {
@@ -434,6 +479,15 @@ export abstract class BaseCrudRepository<TItem> implements CrudRepository<TItem>
     return this.crud.create(payload, tx)
   }
 
+  /**
+   * 批量创建记录
+   *
+   * 每条记录均通过 buildCreatePayload 处理，然后以 batch 方式写入。
+   *
+   * @param items - 待插入的业务数据数组
+   * @param tx - 可选事务句柄
+   * @returns 批量插入结果
+   */
   async createMany(items: Array<Record<string, unknown>>, tx?: TxHandle): Promise<Result<void, DbError>> {
     const ready = await this.ensureReady()
     if (!ready.success) {
@@ -443,6 +497,13 @@ export abstract class BaseCrudRepository<TItem> implements CrudRepository<TItem>
     return this.crud.createMany(payloads, tx)
   }
 
+  /**
+   * 根据主键查找单条记录
+   *
+   * @param id - 主键值
+   * @param tx - 可选事务句柄
+   * @returns 业务模型对象或 null（未找到）
+   */
   async findById(id: unknown, tx?: TxHandle): Promise<Result<TItem | null, DbError>> {
     const ready = await this.ensureReady()
     if (!ready.success) {
@@ -451,6 +512,13 @@ export abstract class BaseCrudRepository<TItem> implements CrudRepository<TItem>
     return this.crud.findById(id, tx)
   }
 
+  /**
+   * 条件查询多条记录
+   *
+   * @param options - 查询条件（where、orderBy、limit、offset）
+   * @param tx - 可选事务句柄
+   * @returns 业务模型数组
+   */
   async findAll(options?: CrudQueryOptions, tx?: TxHandle): Promise<Result<TItem[], DbError>> {
     const ready = await this.ensureReady()
     if (!ready.success) {
@@ -459,6 +527,13 @@ export abstract class BaseCrudRepository<TItem> implements CrudRepository<TItem>
     return this.crud.findAll(options, tx)
   }
 
+  /**
+   * 分页查询记录
+   *
+   * @param options - 分页查询条件（where、orderBy、pagination、overrides）
+   * @param tx - 可选事务句柄
+   * @returns 分页结果（含 items、total、page、pageSize）
+   */
   async findPage(options: CrudPageOptions, tx?: TxHandle): Promise<Result<PaginatedResult<TItem>, DbError>> {
     const ready = await this.ensureReady()
     if (!ready.success) {
@@ -467,6 +542,16 @@ export abstract class BaseCrudRepository<TItem> implements CrudRepository<TItem>
     return this.crud.findPage(options, tx)
   }
 
+  /**
+   * 根据主键更新记录
+   *
+   * 自动填充 updatedAt 字段。无可更新字段时返回 CONFIG_ERROR。
+   *
+   * @param id - 主键值
+   * @param data - 待更新的业务字段
+   * @param tx - 可选事务句柄
+   * @returns 更新结果（含 changes）
+   */
   async updateById(id: unknown, data: Record<string, unknown>, tx?: TxHandle): Promise<Result<ExecuteResult, DbError>> {
     const ready = await this.ensureReady()
     if (!ready.success) {
@@ -483,6 +568,13 @@ export abstract class BaseCrudRepository<TItem> implements CrudRepository<TItem>
     return this.crud.updateById(id, payload, tx)
   }
 
+  /**
+   * 根据主键删除记录
+   *
+   * @param id - 主键值
+   * @param tx - 可选事务句柄
+   * @returns 删除结果（含 changes）
+   */
   async deleteById(id: unknown, tx?: TxHandle): Promise<Result<ExecuteResult, DbError>> {
     const ready = await this.ensureReady()
     if (!ready.success) {
@@ -491,6 +583,13 @@ export abstract class BaseCrudRepository<TItem> implements CrudRepository<TItem>
     return this.crud.deleteById(id, tx)
   }
 
+  /**
+   * 统计符合条件的记录数
+   *
+   * @param options - 查询条件（where、params）
+   * @param tx - 可选事务句柄
+   * @returns 记录数
+   */
   async count(options?: CrudCountOptions, tx?: TxHandle): Promise<Result<number, DbError>> {
     const ready = await this.ensureReady()
     if (!ready.success) {
@@ -499,6 +598,13 @@ export abstract class BaseCrudRepository<TItem> implements CrudRepository<TItem>
     return this.crud.count(options, tx)
   }
 
+  /**
+   * 检查是否存在符合条件的记录
+   *
+   * @param options - 查询条件（where、params）
+   * @param tx - 可选事务句柄
+   * @returns 是否存在
+   */
   async exists(options?: CrudCountOptions, tx?: TxHandle): Promise<Result<boolean, DbError>> {
     const ready = await this.ensureReady()
     if (!ready.success) {
@@ -507,6 +613,13 @@ export abstract class BaseCrudRepository<TItem> implements CrudRepository<TItem>
     return this.crud.exists(options, tx)
   }
 
+  /**
+   * 根据主键检查记录是否存在
+   *
+   * @param id - 主键值
+   * @param tx - 可选事务句柄
+   * @returns 是否存在
+   */
   async existsById(id: unknown, tx?: TxHandle): Promise<Result<boolean, DbError>> {
     const ready = await this.ensureReady()
     if (!ready.success) {

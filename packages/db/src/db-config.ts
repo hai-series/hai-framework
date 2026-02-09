@@ -178,7 +178,7 @@ export const SqliteOptionsSchema = z.object({
   walMode: z.boolean().default(true),
   /** 是否只读模式（默认 false） */
   readonly: z.boolean().default(false),
-}).optional()
+})
 
 /**
  * MySQL 特定选项 Schema
@@ -196,64 +196,13 @@ export const MysqlOptionsSchema = z.object({
   charset: z.string().default('utf8mb4'),
   /** 时区设置，如 '+08:00' */
   timezone: z.string().optional(),
-}).optional()
+})
 
-/**
- * 统一数据库配置 Schema
- *
- * 所有数据库类型使用统一的配置结构，根据 `type` 字段区分。
- *
- * 连接方式：
- * 1. 使用 `url` 连接字符串（推荐用于生产环境）
- * 2. 使用分开的 `host`、`port`、`database` 等字段
- *
- * @example
- * ```ts
- * // SQLite - 文件数据库
- * { type: 'sqlite', database: './data.db' }
- *
- * // SQLite - 内存数据库（用于测试）
- * { type: 'sqlite', database: ':memory:' }
- *
- * // PostgreSQL - 使用连接字符串
- * { type: 'postgresql', url: 'postgres://user:pass@localhost:5432/mydb' }
- *
- * // PostgreSQL - 使用分开的字段
- * {
- *     type: 'postgresql',
- *     host: 'localhost',
- *     port: 5432,
- *     database: 'mydb',
- *     user: 'admin',
- *     password: 'secret',
- *     pool: { max: 20 }
- * }
- *
- * // MySQL - 使用连接字符串
- * { type: 'mysql', url: 'mysql://user:pass@localhost:3306/mydb' }
- *
- * // MySQL - 使用分开的字段
- * {
- *     type: 'mysql',
- *     host: 'localhost',
- *     port: 3306,
- *     database: 'mydb',
- *     user: 'admin',
- *     password: 'secret',
- *     mysql: { charset: 'utf8mb4' }
- * }
- * ```
- */
-export const DbConfigSchema = z.object({
-  /** 数据库类型：sqlite / postgresql / mysql */
-  type: DbTypeSchema,
+// ─── 网络数据库共享字段 ───
 
-  // =========================================================================
-  // 通用连接配置
-  // =========================================================================
-
+const NetworkConfigSchema = z.object({
   /**
-   * 连接字符串（可选，PostgreSQL/MySQL）
+   * 连接字符串（可选）
    * 如果提供 url，将优先使用，忽略 host/port 等字段
    */
   url: z.string().optional(),
@@ -265,50 +214,119 @@ export const DbConfigSchema = z.object({
    * 数据库端口
    * - PostgreSQL 默认 5432
    * - MySQL 默认 3306
-   * - SQLite 不使用此字段
    */
   port: z.number().int().min(1).max(65535).optional(),
 
-  /**
-   * 数据库名称或文件路径
-   * - SQLite：文件路径（如 './data.db'）或 ':memory:'（内存数据库）
-   * - PostgreSQL/MySQL：数据库名称
-   */
+  /** 数据库名称 */
   database: z.string(),
 
-  /** 数据库用户名（PostgreSQL/MySQL） */
+  /** 数据库用户名 */
   user: z.string().optional(),
 
-  /** 数据库密码（PostgreSQL/MySQL） */
+  /** 数据库密码 */
   password: z.string().optional(),
-
-  // =========================================================================
-  // 安全配置
-  // =========================================================================
 
   /** SSL/TLS 连接配置 */
   ssl: SslConfigSchema.optional(),
 
-  // =========================================================================
-  // 连接池配置
-  // =========================================================================
-
-  /** 连接池配置（PostgreSQL/MySQL） */
+  /** 连接池配置 */
   pool: PoolConfigSchema.optional(),
-
-  // =========================================================================
-  // 数据库特定选项
-  // =========================================================================
-
-  /** SQLite 特定选项 */
-  sqlite: SqliteOptionsSchema,
-
-  /** MySQL 特定选项 */
-  mysql: MysqlOptionsSchema,
 })
 
-/** 数据库配置类型 */
+// ─── 各数据库类型配置 Schema ───
+
+/**
+ * SQLite 配置 Schema
+ *
+ * @example
+ * ```ts
+ * // 文件数据库
+ * { type: 'sqlite', database: './data.db' }
+ *
+ * // 内存数据库（用于测试）
+ * { type: 'sqlite', database: ':memory:' }
+ * ```
+ */
+export const SqliteConfigSchema = z.object({
+  type: z.literal('sqlite'),
+  /** 数据库文件路径（如 './data.db'）或 ':memory:'（内存数据库） */
+  database: z.string(),
+  /** SQLite 特定选项 */
+  sqlite: SqliteOptionsSchema.optional(),
+})
+
+/**
+ * PostgreSQL 配置 Schema
+ *
+ * @example
+ * ```ts
+ * // 使用连接字符串
+ * { type: 'postgresql', url: 'postgres://user:pass@localhost:5432/mydb' }
+ *
+ * // 使用分开的字段
+ * {
+ *     type: 'postgresql',
+ *     host: 'localhost',
+ *     port: 5432,
+ *     database: 'mydb',
+ *     user: 'admin',
+ *     password: 'secret',
+ *     pool: { max: 20 }
+ * }
+ * ```
+ */
+export const PostgresqlConfigSchema = NetworkConfigSchema.extend({
+  type: z.literal('postgresql'),
+})
+
+/**
+ * MySQL 配置 Schema
+ *
+ * @example
+ * ```ts
+ * // 使用连接字符串
+ * { type: 'mysql', url: 'mysql://user:pass@localhost:3306/mydb' }
+ *
+ * // 使用分开的字段
+ * {
+ *     type: 'mysql',
+ *     host: 'localhost',
+ *     port: 3306,
+ *     database: 'mydb',
+ *     user: 'admin',
+ *     password: 'secret',
+ *     mysql: { charset: 'utf8mb4' }
+ * }
+ * ```
+ */
+export const MysqlConfigSchema = NetworkConfigSchema.extend({
+  type: z.literal('mysql'),
+  /** MySQL 特定选项 */
+  mysql: MysqlOptionsSchema.optional(),
+})
+
+/**
+ * 统一数据库配置 Schema（判别联合体）
+ *
+ * 根据 `type` 字段区分不同数据库类型的配置。
+ */
+export const DbConfigSchema = z.discriminatedUnion('type', [
+  SqliteConfigSchema,
+  PostgresqlConfigSchema,
+  MysqlConfigSchema,
+])
+
+/** 数据库配置类型（判别联合体） */
 export type DbConfig = z.infer<typeof DbConfigSchema>
+
+/** SQLite 配置类型 */
+export type SqliteConfig = z.infer<typeof SqliteConfigSchema>
+
+/** PostgreSQL 配置类型 */
+export type PostgresqlConfig = z.infer<typeof PostgresqlConfigSchema>
+
+/** MySQL 配置类型 */
+export type MysqlConfig = z.infer<typeof MysqlConfigSchema>
 
 /**
  * 数据库配置输入类型（用于 init 等入口）

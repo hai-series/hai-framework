@@ -62,23 +62,23 @@ import type { DbConfig, DbConfigInput } from './db-config.js'
 import type {
   CrudManager,
   DbError,
+  DbFunctions,
   DbProvider,
-  DbService,
   DdlOperations,
   SqlOperations,
   TxManager,
 } from './db-types.js'
 
-import { core, err } from '@hai/core'
+import { core, err, ok } from '@hai/core'
 
-import { createCrud } from './crud/db-crud-kernel.js'
 import { DbConfigSchema, DbErrorCode } from './db-config.js'
+import { createCrud } from './db-crud-kernel.js'
 import { dbM } from './db-i18n.js'
 import { pagination } from './db-pagination.js'
 
-import { createMysqlProvider } from './provider/db-provider-mysql.js'
-import { createPostgresProvider } from './provider/db-provider-postgres.js'
-import { createSqliteProvider } from './provider/db-provider-sqlite.js'
+import { createMysqlProvider } from './providers/db-provider-mysql.js'
+import { createPostgresProvider } from './providers/db-provider-postgres.js'
+import { createSqliteProvider } from './providers/db-provider-sqlite.js'
 
 // =============================================================================
 // 内部状态
@@ -97,16 +97,8 @@ let currentConfig: DbConfig | null = null
 /**
  * 根据配置创建对应的数据库 Provider
  *
- * @param config - 数据库配置
- * @returns 对应类型的 Provider 实例
- * @throws 不支持的数据库类型时抛出错误
- */
-/**
- * 根据配置创建对应的数据库 Provider
- *
  * @param config - 数据库配置（已校验、默认值补齐）
  * @returns Provider 实例
- * @throws 当数据库类型不受支持时抛出错误
  */
 function createProvider(config: DbConfig): DbProvider {
   switch (config.type) {
@@ -116,8 +108,6 @@ function createProvider(config: DbConfig): DbProvider {
       return createPostgresProvider()
     case 'mysql':
       return createMysqlProvider()
-    default:
-      throw new Error(dbM('db_unsupportedType', { params: { type: config.type } }))
   }
 }
 
@@ -140,6 +130,12 @@ const notInitializedSql = notInitialized.proxy<SqlOperations>()
 /** 未初始化时的 CRUD 管理器 */
 const notInitializedCrud: CrudManager = {
   table: config => createCrud(notInitializedSql, config),
+}
+
+/** 未初始化时的事务管理器占位对象 */
+const notInitializedTx: TxManager = {
+  begin: async () => notInitialized.result(),
+  wrap: async () => notInitialized.result(),
 }
 
 // =============================================================================
@@ -186,7 +182,7 @@ const notInitializedCrud: CrudManager = {
  * await db.close()
  * ```
  */
-export const db: DbService = {
+export const db: DbFunctions = {
   /**
    * 初始化数据库连接
    *
@@ -194,28 +190,17 @@ export const db: DbService = {
    * @returns 初始化结果，失败时包含错误信息
    */
   async init(config: DbConfigInput): Promise<Result<void, DbError>> {
-    // 关闭现有连接（如果存在）
-    if (currentProvider) {
-      await currentProvider.close()
-      currentProvider = null
-      currentConfig = null
-    }
-
+    await db.close()
     try {
-      // 运行时校验并补齐默认值（如 host、pool 等）
-      const normalizedConfig = DbConfigSchema.parse(config)
-
-      // 创建对应类型的 Provider
-      currentProvider = createProvider(normalizedConfig)
-
-      // 连接数据库
-      const result = await currentProvider.connect(normalizedConfig)
-
-      if (result.success) {
-        currentConfig = normalizedConfig
+      const parsed = DbConfigSchema.parse(config)
+      const provider = createProvider(parsed)
+      const connectResult = await provider.connect(parsed)
+      if (!connectResult.success) {
+        return connectResult
       }
-
-      return result
+      currentProvider = provider
+      currentConfig = parsed
+      return ok(undefined)
     }
     catch (error) {
       return err({
@@ -244,20 +229,19 @@ export const db: DbService = {
     return currentProvider?.sql ?? notInitializedSql
   },
 
-  /** CRUD 管理器 */
+  /**
+   * 获取 CRUD 管理器
+   *
+   * 通过 `db.crud.table(config)` 获取单表 CRUD 仓库。
+   * 未初始化时返回占位对象（所有调用返回 NOT_INITIALIZED）。
+   */
   get crud() {
     return currentProvider?.crud ?? notInitializedCrud
   },
 
   /** 事务管理器 */
   get tx(): TxManager {
-    if (!currentProvider) {
-      return {
-        begin: async () => notInitialized.result(),
-        wrap: async () => notInitialized.result(),
-      }
-    }
-    return currentProvider.tx
+    return currentProvider?.tx ?? notInitializedTx
   },
 
   /** 获取当前配置（未初始化时为 null） */
@@ -270,6 +254,12 @@ export const db: DbService = {
     return currentProvider !== null && currentProvider.isConnected()
   },
 
+  /**
+   * 获取分页工具
+   *
+   * 提供 `db.pagination.normalize()` 和 `db.pagination.build()` 两个纯函数，
+   * 用于自定义分页场景（无需数据库连接）。
+   */
   get pagination() {
     return pagination
   },

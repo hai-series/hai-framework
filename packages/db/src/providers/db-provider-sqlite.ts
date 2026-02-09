@@ -1,26 +1,28 @@
 /**
  * =============================================================================
- * @hai/db - PostgreSQL Provider
+ * @hai/db - SQLite Provider
  * =============================================================================
  *
- * 基于 pg 的 PostgreSQL 数据库实现。
+ * 基于 better-sqlite3 的 SQLite 数据库实现。
  *
- * PostgreSQL 特点：
- * - 功能强大的开源关系型数据库
- * - 支持高级数据类型（JSONB、数组等）
- * - 完整的 ACID 事务支持
- * - 使用连接池管理连接
+ * SQLite 是嵌入式数据库，特点：
+ * - 无需独立数据库服务器
+ * - 支持文件存储和内存存储（:memory:）
+ * - 同步 API，性能优秀
+ * - 支持 WAL 模式提高并发性能
  *
  * 适用场景：
- * - 生产环境
- * - 需要高级 SQL 功能
- * - 大规模数据处理
+ * - 开发和测试环境
+ * - 轻量级部署
+ * - 单机应用
+ * - 嵌入式应用
  *
- * @module db-provider-postgres
+ * @module db-provider-sqlite
  * =============================================================================
  */
 
 import type { PaginatedResult, Result } from '@hai/core'
+import type Database from 'better-sqlite3'
 import type { DbConfig } from '../db-config.js'
 import type {
   ColumnDef,
@@ -38,43 +40,29 @@ import type {
   TxManager,
   TxWrapCallback,
 } from '../db-types.js'
+import { createRequire } from 'node:module'
 
 import { err, ok } from '@hai/core'
 
-import { createCrud } from '../crud/db-crud-kernel.js'
 import { DbErrorCode } from '../db-config.js'
+import { createCrud } from '../db-crud-kernel.js'
 import { dbM } from '../db-i18n.js'
 import { buildPaginatedResult, normalizePagination } from '../db-pagination.js'
 
-// =============================================================================
-// pg 类型定义（避免强依赖）
-// =============================================================================
-
-/** PostgreSQL 连接池接口 */
-interface PgPool {
-  query: (text: string, values?: unknown[]) => Promise<{ rows: unknown[], rowCount: number }>
-  connect: () => Promise<PgClient>
-  end: () => Promise<void>
-}
-
-/** PostgreSQL 客户端接口 */
-interface PgClient {
-  query: (text: string, values?: unknown[]) => Promise<{ rows: unknown[], rowCount: number }>
-  release: () => void
-}
+const require = createRequire(import.meta.url)
 
 // =============================================================================
-// PostgreSQL Provider 实现
+// SQLite Provider 实现
 // =============================================================================
 
 /**
- * 创建 PostgreSQL Provider 实例
+ * 创建 SQLite Provider 实例
  *
- * @returns PostgreSQL Provider
+ * @returns SQLite Provider
  */
-export function createPostgresProvider(): DbProvider {
-  /** 连接池实例 */
-  let pool: PgPool | null = null
+export function createSqliteProvider(): DbProvider {
+  /** 数据库实例 */
+  let database: Database.Database | null = null
 
   // =========================================================================
   // 辅助函数
@@ -83,41 +71,33 @@ export function createPostgresProvider(): DbProvider {
   /**
    * 构建列定义 SQL
    *
-   * 将 ColumnDef 转换为 PostgreSQL 列定义语句
+   * 将 ColumnDef 转换为 SQLite 列定义语句
    *
    * @param name - 列名
    * @param def - 列定义
-   * @returns 列定义 SQL 片段
+   * @returns SQL 列定义字符串
    */
   function buildColumnSql(name: string, def: ColumnDef): string {
     const parts: string[] = [name]
 
+    // 类型映射
     switch (def.type) {
       case 'TEXT':
+      case 'JSON':
         parts.push('TEXT')
         break
       case 'INTEGER':
-        if (def.autoIncrement) {
-          parts.push('BIGSERIAL')
-        }
-        else {
-          parts.push('INTEGER')
-        }
+      case 'BOOLEAN':
+        parts.push('INTEGER')
         break
       case 'REAL':
-        parts.push('DOUBLE PRECISION')
+        parts.push('REAL')
         break
       case 'BLOB':
-        parts.push('BYTEA')
-        break
-      case 'BOOLEAN':
-        parts.push('BOOLEAN')
+        parts.push('BLOB')
         break
       case 'TIMESTAMP':
-        parts.push('TIMESTAMP')
-        break
-      case 'JSON':
-        parts.push('JSONB')
+        parts.push('INTEGER') // Unix timestamp
         break
       default:
         parts.push('TEXT')
@@ -125,6 +105,9 @@ export function createPostgresProvider(): DbProvider {
 
     if (def.primaryKey) {
       parts.push('PRIMARY KEY')
+      if (def.autoIncrement) {
+        parts.push('AUTOINCREMENT')
+      }
     }
 
     if (def.notNull && !def.primaryKey) {
@@ -140,18 +123,13 @@ export function createPostgresProvider(): DbProvider {
         parts.push('DEFAULT NULL')
       }
       else if (typeof def.defaultValue === 'string') {
+        // 处理特殊默认值表达式
         if (def.defaultValue.startsWith('(') && def.defaultValue.endsWith(')')) {
-          parts.push(`DEFAULT ${def.defaultValue}`)
-        }
-        else if (def.defaultValue === 'NOW()' || def.defaultValue === 'CURRENT_TIMESTAMP') {
           parts.push(`DEFAULT ${def.defaultValue}`)
         }
         else {
           parts.push(`DEFAULT '${def.defaultValue}'`)
         }
-      }
-      else if (typeof def.defaultValue === 'boolean') {
-        parts.push(`DEFAULT ${def.defaultValue}`)
       }
       else {
         parts.push(`DEFAULT ${def.defaultValue}`)
@@ -174,27 +152,16 @@ export function createPostgresProvider(): DbProvider {
   /**
    * 确保数据库已连接
    *
-   * @returns 连接池或错误
+   * @returns 数据库实例或错误
    */
-  function ensureConnected(): Result<PgPool, DbError> {
-    if (!pool) {
+  function ensureConnected(): Result<Database.Database, DbError> {
+    if (!database) {
       return err({
         code: DbErrorCode.NOT_INITIALIZED,
         message: dbM('db_notInitialized'),
       })
     }
-    return ok(pool)
-  }
-
-  /**
-   * 将 ? 占位符转换为 PostgreSQL 的 $1, $2, ... 格式
-   *
-   * @param sql - 含 ? 占位符的 SQL
-   * @returns 替换为 $n 的 SQL
-   */
-  function convertPlaceholders(sql: string): string {
-    let index = 0
-    return sql.replace(/\?/g, () => `$${++index}`)
+    return ok(database)
   }
 
   /**
@@ -222,125 +189,185 @@ export function createPostgresProvider(): DbProvider {
 
   /**
    * 执行分页查询
+   *
+   * 使用独立的 COUNT(*) 查询获取总数，再执行 LIMIT/OFFSET 获取当前页数据。
+   *
+   * @param db - better-sqlite3 数据库实例
+   * @param options - 分页查询参数
+   * @returns 分页结果
    */
-  async function queryPageWithExecutor<T>(
-    executor: (sql: string, params?: unknown[]) => Promise<{ rows: unknown[] }>,
+  function queryPageWithDatabase<T>(
+    db: Database.Database,
     options: PaginationQueryOptions,
-  ): Promise<PaginatedResult<T>> {
+  ): PaginatedResult<T> {
     const pagination = normalizePagination(options.pagination, options.overrides)
-    const dataSql = `SELECT *, COUNT(*) OVER() AS __total__ FROM (${options.sql}) AS t LIMIT ? OFFSET ?`
+    const dataSql = `${options.sql} LIMIT ? OFFSET ?`
     const dataParams = [...(options.params ?? []), pagination.limit, pagination.offset]
-    const dataQuerySql = convertPlaceholders(dataSql)
-    const dataResult = await executor(dataQuerySql, dataParams)
-    const rows = dataResult.rows as Record<string, unknown>[]
-    const total = rows.length > 0 ? parseCount(rows[0]) : 0
-    const items = rows.map(({ __total__, ...rest }) => rest) as T[]
-    return buildPaginatedResult(items, total, pagination)
+    const countSql = `SELECT COUNT(*) as cnt FROM (${options.sql}) AS t`
+
+    const countStmt = db.prepare(countSql)
+    const countRow = options.params ? countStmt.get(...options.params) : countStmt.get()
+    const total = parseCount(countRow as Record<string, unknown> | null)
+
+    const stmt = db.prepare(dataSql)
+    const rows = stmt.all(...dataParams)
+    return buildPaginatedResult(rows as T[], total, pagination)
   }
 
-  async function runStatementBatch(
-    executor: (sql: string, params?: unknown[]) => Promise<{ rows: unknown[], rowCount: number }>,
-    statements: Array<{ sql: string, params?: unknown[] }>,
-  ): Promise<void> {
-    for (const { sql: statement, params } of statements) {
-      const pgSql = convertPlaceholders(statement)
-      await executor(pgSql, params)
-    }
-  }
-
-  async function runQuery<T>(
-    executor: (sql: string, params?: unknown[]) => Promise<{ rows: unknown[], rowCount: number }>,
+  /**
+   * 执行查询并返回多行结果
+   *
+   * @param db - 数据库实例
+   * @param sqlStr - SQL 查询语句
+   * @param params - 查询参数
+   * @returns 查询结果数组或错误
+   */
+  async function runQueryResult<T>(
+    db: Database.Database,
     sqlStr: string,
     params?: unknown[],
   ): Promise<Result<T[], DbError>> {
     try {
-      const pgSql = convertPlaceholders(sqlStr)
-      const result = await executor(pgSql, params)
-      return ok(result.rows as T[])
+      const stmt = db.prepare(sqlStr)
+      const rows = params ? stmt.all(...params) : stmt.all()
+      return ok(rows as T[])
     }
     catch (error) {
       return err({
         code: DbErrorCode.QUERY_FAILED,
-        message: dbM('db_queryFailed', { params: { error: String(error) } }),
+        message: dbM('db_sqliteQueryFailed', { params: { error: String(error) } }),
         cause: error,
       })
     }
   }
 
-  async function runGet<T>(
-    executor: (sql: string, params?: unknown[]) => Promise<{ rows: unknown[], rowCount: number }>,
+  /**
+   * 执行查询并返回单行结果
+   *
+   * @param db - 数据库实例
+   * @param sqlStr - SQL 查询语句
+   * @param params - 查询参数
+   * @returns 单行结果或 null
+   */
+  async function runGetResult<T>(
+    db: Database.Database,
     sqlStr: string,
     params?: unknown[],
   ): Promise<Result<T | null, DbError>> {
     try {
-      const pgSql = convertPlaceholders(sqlStr)
-      const result = await executor(pgSql, params)
-      return ok((result.rows[0] as T) ?? null)
+      const stmt = db.prepare(sqlStr)
+      const row = params ? stmt.get(...params) : stmt.get()
+      return ok((row as T) ?? null)
     }
     catch (error) {
       return err({
         code: DbErrorCode.QUERY_FAILED,
-        message: dbM('db_queryFailed', { params: { error: String(error) } }),
+        message: dbM('db_sqliteQueryFailed', { params: { error: String(error) } }),
         cause: error,
       })
     }
   }
 
-  async function runExecute(
-    executor: (sql: string, params?: unknown[]) => Promise<{ rows: unknown[], rowCount: number }>,
+  /**
+   * 执行修改语句（INSERT/UPDATE/DELETE）
+   *
+   * @param db - 数据库实例
+   * @param sqlStr - SQL 修改语句
+   * @param params - 语句参数
+   * @returns 执行结果（含 changes、lastInsertRowid）
+   */
+  async function runExecuteResult(
+    db: Database.Database,
     sqlStr: string,
     params?: unknown[],
   ): Promise<Result<ExecuteResult, DbError>> {
     try {
-      const pgSql = convertPlaceholders(sqlStr)
-      const result = await executor(pgSql, params)
+      const stmt = db.prepare(sqlStr)
+      const result = params ? stmt.run(...params) : stmt.run()
       return ok({
-        changes: result.rowCount ?? 0,
+        changes: result.changes,
+        lastInsertRowid: result.lastInsertRowid,
       })
     }
     catch (error) {
       return err({
         code: DbErrorCode.QUERY_FAILED,
-        message: dbM('db_executeFailed', { params: { error: String(error) } }),
+        message: dbM('db_sqliteExecuteFailed', { params: { error: String(error) } }),
         cause: error,
       })
     }
   }
 
-  async function runBatch(
-    executor: (sql: string, params?: unknown[]) => Promise<{ rows: unknown[], rowCount: number }>,
+  /**
+   * 同步执行多条 SQL 语句
+   *
+   * @param db - 数据库实例
+   * @param statements - SQL 语句列表
+   */
+  function runStatementBatch(
+    db: Database.Database,
+    statements: Array<{ sql: string, params?: unknown[] }>,
+  ): void {
+    for (const { sql: sqlStr, params } of statements) {
+      const stmt = db.prepare(sqlStr)
+      if (params) {
+        stmt.run(...params)
+      }
+      else {
+        stmt.run()
+      }
+    }
+  }
+
+  /**
+   * 批量执行多条 SQL 语句（带错误包装）
+   *
+   * @param db - 数据库实例
+   * @param statements - SQL 语句列表
+   * @returns 批量执行结果
+   */
+  async function runBatchResult(
+    db: Database.Database,
     statements: Array<{ sql: string, params?: unknown[] }>,
   ): Promise<Result<void, DbError>> {
     try {
-      await runStatementBatch(executor, statements)
+      runStatementBatch(db, statements)
       return ok(undefined)
     }
     catch (error) {
       return err({
         code: DbErrorCode.QUERY_FAILED,
-        message: dbM('db_batchFailed', { params: { error: String(error) } }),
+        message: dbM('db_sqliteBatchFailed', { params: { error: String(error) } }),
         cause: error,
       })
     }
   }
 
-  async function runQueryPage<T>(
-    executor: (sql: string, params?: unknown[]) => Promise<{ rows: unknown[], rowCount: number }>,
+  /**
+   * 执行分页查询（带错误包装）
+   *
+   * @param db - 数据库实例
+   * @param options - 分页查询参数
+   * @returns 分页结果或错误
+   */
+  async function runQueryPageResult<T>(
+    db: Database.Database,
     options: PaginationQueryOptions,
   ): Promise<Result<PaginatedResult<T>, DbError>> {
     try {
-      const pageResult = await queryPageWithExecutor<T>(executor, options)
+      const pageResult = queryPageWithDatabase<T>(db, options)
       return ok(pageResult)
     }
     catch (error) {
       return err({
         code: DbErrorCode.QUERY_FAILED,
-        message: dbM('db_queryFailed', { params: { error: String(error) } }),
+        message: dbM('db_sqliteQueryFailed', { params: { error: String(error) } }),
         cause: error,
       })
     }
   }
 
+  /** 创建 CRUD 管理器（基于给定的 DataOperations 创建单表 CRUD 工厂） */
   const createCrudManager = (ops: DataOperations): CrudManager => ({
     table: config => createCrud(ops, config),
   })
@@ -349,123 +376,135 @@ export function createPostgresProvider(): DbProvider {
   // DDL 操作实现
   // =========================================================================
 
-  /**
-   * DDL 操作
-   *
-   * 注意：PostgreSQL 的 DDL 操作会立即返回成功，
-   * 但实际 SQL 执行是异步的。错误会在后台处理。
-   */
   const ddl: DdlOperations = {
+    /**
+     * 创建表
+     */
     async createTable(tableName: string, columns: TableDef, ifNotExists = true): Promise<Result<void, DbError>> {
       const connResult = ensureConnected()
       if (!connResult.success)
         return connResult
 
-      const columnDefs = Object.entries(columns)
-        .map(([name, def]) => buildColumnSql(name, def))
-        .join(', ')
-
-      const ifNotExistsClause = ifNotExists ? 'IF NOT EXISTS ' : ''
-      const sql = `CREATE TABLE ${ifNotExistsClause}${tableName} (${columnDefs})`
-
       try {
-        await connResult.data.query(sql)
+        const columnDefs = Object.entries(columns)
+          .map(([name, def]) => buildColumnSql(name, def))
+          .join(', ')
+
+        const ifNotExistsClause = ifNotExists ? 'IF NOT EXISTS ' : ''
+        const sql = `CREATE TABLE ${ifNotExistsClause}${tableName} (${columnDefs})`
+
+        connResult.data.exec(sql)
         return ok(undefined)
       }
       catch (error) {
         return err({
           code: DbErrorCode.DDL_FAILED,
-          message: dbM('db_ddlFailed', { params: { error: String(error) } }),
+          message: dbM('db_sqliteCreateTableFailed', { params: { tableName, error: String(error) } }),
           cause: error,
         })
       }
     },
 
+    /**
+     * 删除表
+     */
     async dropTable(tableName: string, ifExists = true): Promise<Result<void, DbError>> {
       const connResult = ensureConnected()
       if (!connResult.success)
         return connResult
 
-      const ifExistsClause = ifExists ? 'IF EXISTS ' : ''
       try {
-        await connResult.data.query(`DROP TABLE ${ifExistsClause}${tableName}`)
+        const ifExistsClause = ifExists ? 'IF EXISTS ' : ''
+        connResult.data.exec(`DROP TABLE ${ifExistsClause}${tableName}`)
         return ok(undefined)
       }
       catch (error) {
         return err({
           code: DbErrorCode.DDL_FAILED,
-          message: dbM('db_ddlFailed', { params: { error: String(error) } }),
+          message: dbM('db_sqliteDropTableFailed', { params: { tableName, error: String(error) } }),
           cause: error,
         })
       }
     },
 
+    /**
+     * 添加列
+     */
     async addColumn(tableName: string, columnName: string, columnDef: ColumnDef): Promise<Result<void, DbError>> {
       const connResult = ensureConnected()
       if (!connResult.success)
         return connResult
 
-      const colSql = buildColumnSql(columnName, columnDef)
       try {
-        await connResult.data.query(`ALTER TABLE ${tableName} ADD COLUMN ${colSql}`)
+        const colSql = buildColumnSql(columnName, columnDef)
+        connResult.data.exec(`ALTER TABLE ${tableName} ADD COLUMN ${colSql}`)
         return ok(undefined)
       }
       catch (error) {
         return err({
           code: DbErrorCode.DDL_FAILED,
-          message: dbM('db_ddlFailed', { params: { error: String(error) } }),
+          message: dbM('db_sqliteAddColumnFailed', { params: { tableName, columnName, error: String(error) } }),
           cause: error,
         })
       }
     },
 
+    /**
+     * 删除列
+     */
     async dropColumn(tableName: string, columnName: string): Promise<Result<void, DbError>> {
       const connResult = ensureConnected()
       if (!connResult.success)
         return connResult
 
       try {
-        await connResult.data.query(`ALTER TABLE ${tableName} DROP COLUMN ${columnName}`)
+        connResult.data.exec(`ALTER TABLE ${tableName} DROP COLUMN ${columnName}`)
         return ok(undefined)
       }
       catch (error) {
         return err({
           code: DbErrorCode.DDL_FAILED,
-          message: dbM('db_ddlFailed', { params: { error: String(error) } }),
+          message: dbM('db_sqliteDropColumnFailed', { params: { tableName, columnName, error: String(error) } }),
           cause: error,
         })
       }
     },
 
+    /**
+     * 重命名表
+     */
     async renameTable(oldName: string, newName: string): Promise<Result<void, DbError>> {
       const connResult = ensureConnected()
       if (!connResult.success)
         return connResult
 
       try {
-        await connResult.data.query(`ALTER TABLE ${oldName} RENAME TO ${newName}`)
+        connResult.data.exec(`ALTER TABLE ${oldName} RENAME TO ${newName}`)
         return ok(undefined)
       }
       catch (error) {
         return err({
           code: DbErrorCode.DDL_FAILED,
-          message: dbM('db_ddlFailed', { params: { error: String(error) } }),
+          message: dbM('db_sqliteRenameTableFailed', { params: { oldName, newName, error: String(error) } }),
           cause: error,
         })
       }
     },
 
+    /**
+     * 创建索引
+     */
     async createIndex(tableName: string, indexName: string, indexDef: IndexDef): Promise<Result<void, DbError>> {
       const connResult = ensureConnected()
       if (!connResult.success)
         return connResult
 
-      const uniqueClause = indexDef.unique ? 'UNIQUE ' : ''
-      const columns = indexDef.columns.join(', ')
-      const whereClause = indexDef.where ? ` WHERE ${indexDef.where}` : ''
-
       try {
-        await connResult.data.query(
+        const uniqueClause = indexDef.unique ? 'UNIQUE ' : ''
+        const columns = indexDef.columns.join(', ')
+        const whereClause = indexDef.where ? ` WHERE ${indexDef.where}` : ''
+
+        connResult.data.exec(
           `CREATE ${uniqueClause}INDEX IF NOT EXISTS ${indexName} ON ${tableName} (${columns})${whereClause}`,
         )
         return ok(undefined)
@@ -473,44 +512,50 @@ export function createPostgresProvider(): DbProvider {
       catch (error) {
         return err({
           code: DbErrorCode.DDL_FAILED,
-          message: dbM('db_ddlFailed', { params: { error: String(error) } }),
+          message: dbM('db_sqliteCreateIndexFailed', { params: { indexName, error: String(error) } }),
           cause: error,
         })
       }
     },
 
+    /**
+     * 删除索引
+     */
     async dropIndex(indexName: string, ifExists = true): Promise<Result<void, DbError>> {
       const connResult = ensureConnected()
       if (!connResult.success)
         return connResult
 
-      const ifExistsClause = ifExists ? 'IF EXISTS ' : ''
       try {
-        await connResult.data.query(`DROP INDEX ${ifExistsClause}${indexName}`)
+        const ifExistsClause = ifExists ? 'IF EXISTS ' : ''
+        connResult.data.exec(`DROP INDEX ${ifExistsClause}${indexName}`)
         return ok(undefined)
       }
       catch (error) {
         return err({
           code: DbErrorCode.DDL_FAILED,
-          message: dbM('db_ddlFailed', { params: { error: String(error) } }),
+          message: dbM('db_sqliteDropIndexFailed', { params: { indexName, error: String(error) } }),
           cause: error,
         })
       }
     },
 
+    /**
+     * 执行原始 DDL 语句
+     */
     async raw(sql: string): Promise<Result<void, DbError>> {
       const connResult = ensureConnected()
       if (!connResult.success)
         return connResult
 
       try {
-        await connResult.data.query(sql)
+        connResult.data.exec(sql)
         return ok(undefined)
       }
       catch (error) {
         return err({
           code: DbErrorCode.DDL_FAILED,
-          message: dbM('db_ddlFailed', { params: { error: String(error) } }),
+          message: dbM('db_sqliteExecDdlFailed', { params: { error: String(error) } }),
           cause: error,
         })
       }
@@ -518,61 +563,62 @@ export function createPostgresProvider(): DbProvider {
   }
 
   // =========================================================================
-  // SQL 操作
+  // SQL 操作实现
   // =========================================================================
 
-  /**
-   * SQL 操作
-   */
   const sql: SqlOperations = {
+    /**
+     * 查询多行
+     */
     async query<T>(sqlStr: string, params?: unknown[]): Promise<Result<T[], DbError>> {
       const connResult = ensureConnected()
       if (!connResult.success)
         return connResult
-      return runQuery<T>((sqlStrInner, paramsInner) => connResult.data.query(sqlStrInner, paramsInner), sqlStr, params)
+      return runQueryResult<T>(connResult.data, sqlStr, params)
     },
 
+    /**
+     * 查询单行
+     */
     async get<T>(sqlStr: string, params?: unknown[]): Promise<Result<T | null, DbError>> {
       const connResult = ensureConnected()
       if (!connResult.success)
         return connResult
-      return runGet<T>((sqlStrInner, paramsInner) => connResult.data.query(sqlStrInner, paramsInner), sqlStr, params)
+      return runGetResult<T>(connResult.data, sqlStr, params)
     },
 
+    /**
+     * 执行修改语句（INSERT/UPDATE/DELETE）
+     */
     async execute(sqlStr: string, params?: unknown[]): Promise<Result<ExecuteResult, DbError>> {
       const connResult = ensureConnected()
       if (!connResult.success)
         return connResult
-      return runExecute((sqlStrInner, paramsInner) => connResult.data.query(sqlStrInner, paramsInner), sqlStr, params)
+      return runExecuteResult(connResult.data, sqlStr, params)
     },
 
+    /**
+     * 批量执行多条语句
+     */
     async batch(statements: Array<{ sql: string, params?: unknown[] }>): Promise<Result<void, DbError>> {
       const connResult = ensureConnected()
       if (!connResult.success)
         return connResult
 
-      let client: PgClient | null = null
       try {
-        client = await connResult.data.connect()
-        await client.query('BEGIN')
-        await runStatementBatch((sqlStr, params) => client!.query(sqlStr, params), statements)
-        await client.query('COMMIT')
+        const db = connResult.data
+        const transaction = db.transaction(() => {
+          runStatementBatch(db, statements)
+        })
+        transaction()
         return ok(undefined)
       }
       catch (error) {
-        if (client) {
-          await client.query('ROLLBACK').catch(() => { })
-        }
         return err({
           code: DbErrorCode.QUERY_FAILED,
-          message: dbM('db_batchFailed', { params: { error: String(error) } }),
+          message: dbM('db_sqliteBatchFailed', { params: { error: String(error) } }),
           cause: error,
         })
-      }
-      finally {
-        if (client) {
-          client.release()
-        }
       }
     },
 
@@ -580,8 +626,9 @@ export function createPostgresProvider(): DbProvider {
       const connResult = ensureConnected()
       if (!connResult.success)
         return connResult
-      return runQueryPage<T>((sqlStr, params) => connResult.data.query(sqlStr, params), options)
+      return runQueryPageResult<T>(connResult.data, options)
     },
+
   }
 
   const crud = createCrudManager(sql)
@@ -591,48 +638,37 @@ export function createPostgresProvider(): DbProvider {
   // =========================================================================
 
   /**
-   * 异步事务
+   * 开启事务
    *
-   * PostgreSQL 推荐使用异步事务进行数据操作。
+   * SQLite 使用同步 API，此处显式执行 BEGIN/COMMIT/ROLLBACK，
+   * 并将同步调用包装为异步接口。
    *
-   * @example
-   * ```ts
-   * await db.tx.wrap(async (tx) => {
-   *     await tx.execute('INSERT INTO users (name) VALUES (?)', ['张三'])
-   *     const users = await tx.query('SELECT * FROM users')
-   *     return users
-   * })
-   * ```
+   * @returns 事务句柄或错误
    */
   async function beginTransaction(): Promise<Result<TxHandle, DbError>> {
     const connResult = ensureConnected()
     if (!connResult.success)
       return connResult
 
-    let client: PgClient | null = null
+    const db = connResult.data
+    let active = true
 
     try {
-      client = await pool!.connect()
-      await client.query('BEGIN')
+      db.exec('BEGIN TRANSACTION')
     }
     catch (error) {
-      if (client) {
-        client.release()
-      }
       return err({
         code: DbErrorCode.TRANSACTION_FAILED,
-        message: dbM('db_postgresTxFailed', { params: { error: String(error) } }),
+        message: dbM('db_sqliteTxFailed', { params: { error: String(error) } }),
         cause: error,
       })
     }
-
-    let active = true
 
     const ensureActive = (): Result<void, DbError> => {
       if (!active) {
         return err({
           code: DbErrorCode.TRANSACTION_FAILED,
-          message: dbM('db_postgresTxFailed', { params: { error: 'transaction finished' } }),
+          message: dbM('db_sqliteTxFailed', { params: { error: 'transaction finished' } }),
         })
       }
       return ok(undefined)
@@ -643,35 +679,35 @@ export function createPostgresProvider(): DbProvider {
         const activeResult = ensureActive()
         if (!activeResult.success)
           return activeResult
-        return runQuery<R>((sqlStrInner, paramsInner) => client!.query(sqlStrInner, paramsInner), sqlStr, params)
+        return runQueryResult<R>(db, sqlStr, params)
       },
 
       async get<R>(sqlStr: string, params?: unknown[]): Promise<Result<R | null, DbError>> {
         const activeResult = ensureActive()
         if (!activeResult.success)
           return activeResult
-        return runGet<R>((sqlStrInner, paramsInner) => client!.query(sqlStrInner, paramsInner), sqlStr, params)
+        return runGetResult<R>(db, sqlStr, params)
       },
 
       async execute(sqlStr: string, params?: unknown[]): Promise<Result<ExecuteResult, DbError>> {
         const activeResult = ensureActive()
         if (!activeResult.success)
           return activeResult
-        return runExecute((sqlStrInner, paramsInner) => client!.query(sqlStrInner, paramsInner), sqlStr, params)
+        return runExecuteResult(db, sqlStr, params)
       },
 
       async batch(statements: Array<{ sql: string, params?: unknown[] }>): Promise<Result<void, DbError>> {
         const activeResult = ensureActive()
         if (!activeResult.success)
           return activeResult
-        return runBatch((sqlStrInner, paramsInner) => client!.query(sqlStrInner, paramsInner), statements)
+        return runBatchResult(db, statements)
       },
 
       async queryPage<R>(options: PaginationQueryOptions): Promise<Result<PaginatedResult<R>, DbError>> {
         const activeResult = ensureActive()
         if (!activeResult.success)
           return activeResult
-        return runQueryPage<R>((sqlStrInner, paramsInner) => client!.query(sqlStrInner, paramsInner), options)
+        return runQueryPageResult<R>(db, options)
       },
     }
 
@@ -684,39 +720,34 @@ export function createPostgresProvider(): DbProvider {
         if (!activeResult.success)
           return activeResult
         try {
-          await client!.query('COMMIT')
+          db.exec('COMMIT')
           active = false
           return ok(undefined)
         }
         catch (error) {
           return err({
             code: DbErrorCode.TRANSACTION_FAILED,
-            message: dbM('db_postgresTxFailed', { params: { error: String(error) } }),
+            message: dbM('db_sqliteTxFailed', { params: { error: String(error) } }),
             cause: error,
           })
         }
-        finally {
-          client!.release()
-        }
       },
+
       async rollback(): Promise<Result<void, DbError>> {
         const activeResult = ensureActive()
         if (!activeResult.success)
           return activeResult
         try {
-          await client!.query('ROLLBACK')
+          db.exec('ROLLBACK')
           active = false
           return ok(undefined)
         }
         catch (error) {
           return err({
             code: DbErrorCode.TRANSACTION_FAILED,
-            message: dbM('db_postgresTxFailed', { params: { error: String(error) } }),
+            message: dbM('db_sqliteTxFailed', { params: { error: String(error) } }),
             cause: error,
           })
-        }
-        finally {
-          client!.release()
         }
       },
     }
@@ -744,7 +775,7 @@ export function createPostgresProvider(): DbProvider {
         await txResult.data.rollback()
         return err({
           code: DbErrorCode.TRANSACTION_FAILED,
-          message: dbM('db_postgresTxFailed', { params: { error: String(error) } }),
+          message: dbM('db_sqliteTxFailed', { params: { error: String(error) } }),
           cause: error,
         })
       }
@@ -756,53 +787,60 @@ export function createPostgresProvider(): DbProvider {
   // =========================================================================
 
   /**
-   * 连接 PostgreSQL 数据库
+   * 连接 SQLite 数据库
    */
   const connect: DbProvider['connect'] = async (config: DbConfig): Promise<Result<void, DbError>> => {
-    if (config.type !== 'postgresql') {
+    if (config.type !== 'sqlite') {
       return err({
         code: DbErrorCode.UNSUPPORTED_TYPE,
-        message: dbM('db_postgresOnlyPostgresql'),
+        message: dbM('db_sqliteOnlySqlite'),
+      })
+    }
+
+    if (!config.database) {
+      return err({
+        code: DbErrorCode.CONFIG_ERROR,
+        message: dbM('db_sqliteNeedPath'),
       })
     }
 
     try {
-      // 动态导入 pg
-      // eslint-disable-next-line ts/no-require-imports -- 需要保持 connect 同步，使用 require 进行按需加载
-      const { Pool } = require('pg')
+      // 动态导入 better-sqlite3
 
-      pool = new Pool({
-        connectionString: config.url,
-        host: config.host,
-        port: config.port,
-        database: config.database,
-        user: config.user,
-        password: config.password,
-        ssl: config.ssl,
-        min: config.pool?.min,
-        max: config.pool?.max ?? 10,
-        idleTimeoutMillis: config.pool?.idleTimeout,
-        connectionTimeoutMillis: config.pool?.acquireTimeout,
-      }) as PgPool
+      const Database = require('better-sqlite3')
+
+      const sqliteOptions: { walMode: boolean, readonly: boolean } = {
+        walMode: true,
+        readonly: false,
+        ...(config.sqlite ?? {}),
+      }
+      database = new Database(config.database, {
+        readonly: sqliteOptions.readonly ?? false,
+      }) as Database.Database
+
+      // 启用 WAL 模式（提高并发性能）
+      if (sqliteOptions.walMode !== false) {
+        database.pragma('journal_mode = WAL')
+      }
 
       return ok(undefined)
     }
     catch (error) {
       return err({
         code: DbErrorCode.CONNECTION_FAILED,
-        message: dbM('db_postgresConnectionFailed', { params: { error: String(error) } }),
+        message: dbM('db_sqliteConnectionFailed', { params: { error: String(error) } }),
         cause: error,
       })
     }
   }
 
   /**
-   * 关闭连接池
+   * 关闭数据库连接
    */
   const close: DbProvider['close'] = async (): Promise<void> => {
-    if (pool) {
-      await pool.end()
-      pool = null
+    if (database) {
+      database.close()
+      database = null
     }
   }
 
@@ -810,7 +848,7 @@ export function createPostgresProvider(): DbProvider {
    * 检查是否已连接
    */
   const isConnected: DbProvider['isConnected'] = (): boolean => {
-    return pool !== null
+    return database !== null && database.open
   }
 
   return {
