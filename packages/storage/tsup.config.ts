@@ -4,9 +4,9 @@ import { baseConfig } from '../tsup.base'
 export default defineConfig({
   ...baseConfig,
   entry: {
-    'node': 'src/storage-index.node.ts',
+    'node': 'src/index.ts',
     'browser': 'src/storage-index.browser.ts',
-    'storage-client': 'src/storage-client.ts',
+    'client/index': 'src/client/index.ts',
   },
   external: [
     '@hai/core',

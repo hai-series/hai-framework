@@ -30,8 +30,49 @@
  * =============================================================================
  */
 
-import type { ClientDownloadOptions, ClientUploadOptions } from './storage-types.js'
-import { storageM } from './storage-i18n.js'
+import { storageM } from '../storage-i18n.js'
+
+// ─── 客户端类型 ───
+
+/**
+ * 上传进度回调数据
+ *
+ * 由 `uploadWithPresignedUrl` 在上传过程中通过 `onProgress` 回调返回。
+ */
+export interface UploadProgress {
+  /** 已上传字节数 */
+  loaded: number
+  /** 总字节数（仅在 lengthComputable 时可靠） */
+  total: number
+  /** 进度百分比 (0–100)，四舍五入到整数 */
+  percent: number
+}
+
+/**
+ * 前端上传选项
+ *
+ * 控制 `uploadWithPresignedUrl` 的行为，包括内容类型、进度监听和取消。
+ */
+export interface ClientUploadOptions {
+  /** 内容类型（设置后会加到请求 Content-Type 头） */
+  contentType?: string
+  /** 进度回调（设置后会使用 XMLHttpRequest 以支持上传进度） */
+  onProgress?: (progress: UploadProgress) => void
+  /** AbortController 用于取消上传（abort 后返回 {success: false}） */
+  abortController?: AbortController
+}
+
+/**
+ * 前端下载选项
+ *
+ * 控制 `downloadWithPresignedUrl` / `downloadAndSave` 的行为。
+ */
+export interface ClientDownloadOptions {
+  /** 保存的文件名（仅 downloadAndSave 使用，默认为 'download'） */
+  filename?: string
+  /** AbortController 用于取消下载（abort 后返回 {success: false}） */
+  abortController?: AbortController
+}
 
 // =============================================================================
 // 上传功能
@@ -261,31 +302,22 @@ export async function downloadAndSave(
   }
 }
 
-// =============================================================================
-// 统一前端客户端对象
-// =============================================================================
-
-/**
- * 前端客户端统一入口
- */
-export const storageClient = {
-  uploadWithPresignedUrl,
-  downloadWithPresignedUrl,
-  downloadAndSave,
-  getFileExtension,
-  getMimeType,
-  formatFileSize,
-}
-
-// =============================================================================
-// 辅助功能
-// =============================================================================
+// ─── 辅助功能 ───
 
 /**
  * 从 File 对象获取文件扩展名
  *
- * @param file - File 对象
- * @returns 文件扩展名（不含点）
+ * 取文件名中最后一个 '.' 之后的部分，转为小写。
+ * 若文件名无点号或以点号开头且无其他点号，返回空字符串。
+ *
+ * @param file - 浏览器 File 对象
+ * @returns 扩展名（不含点），如 'png'、'tar.gz' 返回 'gz'
+ *
+ * @example
+ * ```ts
+ * getFileExtension(new File([], 'photo.PNG'))  // 'png'
+ * getFileExtension(new File([], '.gitignore')) // ''
+ * ```
  */
 export function getFileExtension(file: File): string {
   const name = file.name
@@ -296,8 +328,17 @@ export function getFileExtension(file: File): string {
 /**
  * 根据文件扩展名获取 MIME 类型
  *
- * @param extension - 文件扩展名
- * @returns MIME 类型
+ * 内置常见扩展名映射（图片/文档/文本/音视频/压缩包），
+ * 未匹配时返回 'application/octet-stream'。
+ *
+ * @param extension - 文件扩展名（不含点，大小写不敏感）
+ * @returns MIME 类型字符串
+ *
+ * @example
+ * ```ts
+ * getMimeType('png')  // 'image/png'
+ * getMimeType('xyz')  // 'application/octet-stream'
+ * ```
  */
 export function getMimeType(extension: string): string {
   const mimeTypes: Record<string, string> = {
@@ -348,10 +389,20 @@ export function getMimeType(extension: string): string {
 }
 
 /**
- * 格式化文件大小
+ * 格式化文件大小为人类可读字符串
  *
- * @param bytes - 字节数
- * @returns 格式化后的大小字符串
+ * 使用 1024 进制，输出单位为 B/KB/MB/GB/TB。
+ * 大于 1 B 时保留 2 位小数。
+ *
+ * @param bytes - 字节数（非负整数）
+ * @returns 格式化后的字符串，如 '0 B'、'1.50 KB'、'2.30 MB'
+ *
+ * @example
+ * ```ts
+ * formatFileSize(0)         // '0 B'
+ * formatFileSize(1536)      // '1.50 KB'
+ * formatFileSize(1048576)   // '1.00 MB'
+ * ```
  */
 export function formatFileSize(bytes: number): string {
   if (bytes === 0)

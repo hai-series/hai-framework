@@ -20,7 +20,7 @@
 
 import { Buffer } from 'node:buffer'
 import { describe, expect, it } from 'vitest'
-import { storage } from '../src/storage-index.node.js'
+import { downloadWithPresignedUrl, storage, uploadWithPresignedUrl } from '../src/index.js'
 import { defineStorageSuite, localStorageEnv, s3Env } from './helpers/storage-test-suite.js'
 
 describe('storage workflow', () => {
@@ -313,8 +313,8 @@ describe('storage workflow', () => {
       expect(Buffer.compare(downloadedBuffer, binaryContent)).toBe(0)
     })
 
-    it('s3: 使用 storage.client.uploadWithPresignedUrl 上传并验证', async () => {
-      const content = 'uploaded via storage.client helper'
+    it('s3: 使用 uploadWithPresignedUrl 上传并验证', async () => {
+      const content = 'uploaded via client helper'
 
       // 生成上传签名 URL
       const putUrlResult = await storage.presign.putUrl('presign-test/client-helper.txt', {
@@ -325,8 +325,8 @@ describe('storage workflow', () => {
       if (!putUrlResult.success)
         return
 
-      // 通过 storage.client 上传
-      const uploadResult = await storage.client.uploadWithPresignedUrl(
+      // 通过客户端函数上传
+      const uploadResult = await uploadWithPresignedUrl(
         putUrlResult.data,
         content,
         { contentType: 'text/plain' },
@@ -341,7 +341,7 @@ describe('storage workflow', () => {
       }
     })
 
-    it('s3: 使用 storage.client.downloadWithPresignedUrl 下载并验证', async () => {
+    it('s3: 使用 downloadWithPresignedUrl 下载并验证', async () => {
       const content = 'content for client download test'
 
       // 服务端上传
@@ -357,8 +357,8 @@ describe('storage workflow', () => {
       if (!getUrlResult.success)
         return
 
-      // 通过 storage.client 下载
-      const downloadResult = await storage.client.downloadWithPresignedUrl(getUrlResult.data)
+      // 通过客户端函数下载
+      const downloadResult = await downloadWithPresignedUrl(getUrlResult.data)
       expect(downloadResult.success).toBe(true)
       if (downloadResult.success && downloadResult.data) {
         const text = await downloadResult.data.text()

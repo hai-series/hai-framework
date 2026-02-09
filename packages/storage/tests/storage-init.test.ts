@@ -5,9 +5,18 @@
  */
 
 import type { StorageConfigInput } from '../src/storage-config.js'
-import { describe, expect, it } from 'vitest'
-import { storage } from '../src/storage-index.node.js'
+import * as fs from 'node:fs'
+import * as os from 'node:os'
+import * as path from 'node:path'
+import { afterAll, describe, expect, it } from 'vitest'
+import { storage } from '../src/index.js'
 import { defineStorageSuite, localStorageEnv, s3Env } from './helpers/storage-test-suite.js'
+
+const localRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'hai-storage-init-'))
+
+afterAll(() => {
+  fs.rmSync(localRoot, { recursive: true, force: true })
+})
 
 describe('storage.init', () => {
   const defineCommon = (label: 'local' | 's3') => {
@@ -68,6 +77,78 @@ describe('storage.init 配置校验', () => {
     expect(result.success).toBe(false)
     if (!result.success) {
       expect(result.error.code).toBe(5000)
+    }
+  })
+
+  it('缺少 type 字段应初始化失败', async () => {
+    await storage.close()
+    const result = await storage.init({} as unknown as StorageConfigInput)
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error.code).toBe(5000)
+    }
+  })
+
+  it('s3 配置缺少 bucket 应初始化失败', async () => {
+    await storage.close()
+    const result = await storage.init({
+      type: 's3',
+      region: 'us-east-1',
+      accessKeyId: 'key',
+      secretAccessKey: 'secret',
+    } as unknown as StorageConfigInput)
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error.code).toBe(5000)
+    }
+  })
+
+  it('s3 配置缺少 accessKeyId 应初始化失败', async () => {
+    await storage.close()
+    const result = await storage.init({
+      type: 's3',
+      bucket: 'test',
+      region: 'us-east-1',
+      secretAccessKey: 'secret',
+    } as unknown as StorageConfigInput)
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error.code).toBe(5000)
+    }
+  })
+
+  it('s3 配置非法 endpoint 应初始化失败', async () => {
+    await storage.close()
+    const result = await storage.init({
+      type: 's3',
+      bucket: 'test',
+      region: 'us-east-1',
+      accessKeyId: 'key',
+      secretAccessKey: 'secret',
+      endpoint: 'not-a-valid-url',
+    } as unknown as StorageConfigInput)
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error.code).toBe(5000)
+    }
+  })
+
+  it('init 后 isInitialized 应为 true', async () => {
+    await storage.close()
+    const result = await storage.init({ type: 'local', root: localRoot })
+    expect(result.success).toBe(true)
+    expect(storage.isInitialized).toBe(true)
+  })
+
+  it('init 后 config 应包含解析后的完整配置', async () => {
+    await storage.close()
+    const result = await storage.init({ type: 'local', root: localRoot })
+    expect(result.success).toBe(true)
+    expect(storage.config).not.toBeNull()
+    expect(storage.config?.type).toBe('local')
+    if (storage.config?.type === 'local') {
+      expect(storage.config.directoryMode).toBe(0o755)
+      expect(storage.config.fileMode).toBe(0o644)
     }
   })
 })

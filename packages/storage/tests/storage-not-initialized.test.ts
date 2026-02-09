@@ -5,7 +5,7 @@
  */
 
 import { beforeEach, describe, expect, it } from 'vitest'
-import { storage } from '../src/storage-index.node.js'
+import { storage } from '../src/index.js'
 
 describe.sequential('storage (not initialized)', () => {
   beforeEach(async () => {

@@ -12,8 +12,8 @@
       "default": "./dist/node.js"
     },
     "./client": {
-      "types": "./dist/storage-client.d.ts",
-      "import": "./dist/storage-client.js"
+      "types": "./dist/client/index.d.ts",
+      "import": "./dist/client/index.js"
     }
   },
   "main": "./dist/node.js",

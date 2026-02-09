@@ -1,33 +1,8 @@
 /**
- * =============================================================================
- * @hai/storage - S3 Provider 实现
- * =============================================================================
+ * @hai/storage — S3 Provider 实现
  *
  * 基于 AWS SDK v3 实现的 S3 协议存储 Provider。
  * 支持 AWS S3、MinIO、阿里云 OSS 等兼容 S3 协议的存储服务。
- *
- * @example
- * ```ts
- * import { createS3Provider } from '@hai/storage'
- *
- * const provider = createS3Provider()
- * await provider.connect({
- *     type: 's3',
- *     bucket: 'my-bucket',
- *     region: 'us-east-1',
- *     accessKeyId: 'xxx',
- *     secretAccessKey: 'xxx'
- * })
- *
- * // 上传文件
- * await provider.file.put('test.txt', 'Hello World')
- *
- * // 生成签名 URL
- * const url = await provider.presign.getUrl('test.txt', { expiresIn: 3600 })
- * ```
- *
- * @module storage-provider-s3
- * =============================================================================
  */
 
 import type { Result } from '@hai/core'
@@ -64,7 +39,18 @@ import { storageM } from '../storage-i18n.js'
 // =============================================================================
 
 /**
- * 将 S3 错误转换为 StorageError
+ * 将 S3 SDK 错误转换为 StorageError
+ *
+ * 映射规则：
+ * - NoSuchKey / NotFound / 404 → NOT_FOUND
+ * - AccessDenied → PERMISSION_DENIED
+ * - NoSuchBucket → CONFIG_ERROR
+ * - NetworkError / ECONNREFUSED → NETWORK_ERROR
+ * - 其他 → OPERATION_FAILED
+ *
+ * @param error - AWS SDK 抛出的原始错误
+ * @param key - 相关文件键（可选，用于错误消息）
+ * @returns 统一的 StorageError
  */
 function toStorageError(error: unknown, key?: string): StorageError {
   const e = error as { name?: string, message?: string, Code?: string }
@@ -116,7 +102,11 @@ function toStorageError(error: unknown, key?: string): StorageError {
 }
 
 /**
- * 添加前缀到 key
+ * 为 key 添加配置中的路径前缀
+ *
+ * @param key - 用户提供的文件键
+ * @param prefix - 配置中的前缀（可能为空）
+ * @returns 拼接后的完整 S3 key
  */
 function withPrefix(key: string, prefix: string): string {
   if (!prefix)
@@ -125,7 +115,11 @@ function withPrefix(key: string, prefix: string): string {
 }
 
 /**
- * 从 key 移除前缀
+ * 从 S3 key 中移除配置前缀，还原为用户视角的文件键
+ *
+ * @param key - 包含前缀的完整 S3 key
+ * @param prefix - 配置中的前缀
+ * @returns 去除前缀后的文件键
  */
 function withoutPrefix(key: string, prefix: string): string {
   if (!prefix)
@@ -144,6 +138,15 @@ function withoutPrefix(key: string, prefix: string): string {
 /**
  * 创建 S3 存储 Provider
  *
+ * 基于 AWS SDK v3 实现的 StorageProvider。
+ * connect 时会创建 S3Client 并通过 ListObjectsV2 验证连接。
+ * 支持配置 prefix 重定向所有 key，对用户透明。
+ *
+ * 实现说明：
+ * - copy 时若指定了 contentType 或 metadata，使用 MetadataDirective='REPLACE'
+ * - dir.delete 通过先 list 再批量删除实现
+ * - presign 使用 @aws-sdk/s3-request-presigner 签名
+ *
  * @returns S3 Provider 实例
  */
 export function createS3Provider(): StorageProvider {
@@ -154,6 +157,7 @@ export function createS3Provider(): StorageProvider {
   // 内部辅助
   // -------------------------------------------------------------------------
 
+  /** 获取当前 S3Client，未初始化时抛异常 */
   function getClient(): S3Client {
     if (!client) {
       throw new Error(storageM('storage_s3ClientNotInitialized'))
@@ -161,6 +165,7 @@ export function createS3Provider(): StorageProvider {
     return client
   }
 
+  /** 获取当前 S3 配置，未初始化时抛异常 */
   function getConfig(): S3Config {
     if (!config) {
       throw new Error(storageM('storage_s3ConfigNotInitialized'))
@@ -168,6 +173,7 @@ export function createS3Provider(): StorageProvider {
     return config
   }
 
+  /** 将用户 key 拼接配置前缀，得到完整 S3 对象键 */
   function fullKey(key: string): string {
     return withPrefix(key, getConfig().prefix)
   }
@@ -345,7 +351,7 @@ export function createS3Provider(): StorageProvider {
           Key: destFullPath,
           ContentType: options.contentType,
           Metadata: options.metadata,
-          MetadataDirective: options.metadata ? 'REPLACE' : 'COPY',
+          MetadataDirective: (options.metadata || options.contentType) ? 'REPLACE' : 'COPY',
         }))
 
         return file.head(destKey)
