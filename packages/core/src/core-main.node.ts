@@ -33,7 +33,7 @@
 import type { CoreOptions } from './core-types.js'
 import { existsSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
-import { CoreConfigSchema } from './config/index.js'
+import { CoreConfigSchema } from './core-config.js'
 import { createCore } from './core-main.js'
 import { config } from './functions/core-function-config.js'
 import { logger } from './functions/core-function-logger.node.js'
@@ -85,22 +85,30 @@ export const core = createNodeCore()
 // Initialization
 // =============================================================================
 
+/**
+ * 配置加载项（描述单个待加载的配置文件）。
+ */
 interface ConfigLoadItem {
-  /** 配置名称 */
+  /** 配置名称（用作缓存 key，如 'core'、'db'、'app'） */
   name: string
-  /** 配置文件路径 */
+  /** 配置文件绝对路径 */
   filePath: string
 }
 
 /**
  * 扫描配置目录并构建配置加载项列表。
  *
+ * 约定：
+ * - 以 `_` 开头的文件为内置模块配置（如 `_core.yml` → name='core'）
+ * - 其他文件为业务配置（如 `app.yml` → name='app'）
+ *
  * @param configDir - 配置目录路径
- * @returns 配置加载项列表
+ * @returns 配置加载项列表；目录不存在时返回空数组并输出警告
  *
  * @example
  * ```ts
  * const items = scanConfigDir('./config')
+ * // [{ name: 'core', filePath: './config/_core.yml' }, { name: 'app', filePath: './config/app.yml' }]
  * ```
  */
 function scanConfigDir(
@@ -142,7 +150,12 @@ function scanConfigDir(
 }
 
 /**
- * 初始化 Core（内部实现，通过 core.init() 调用）。
+ * 初始化 Core（内部实现，通过 `core.init()` 调用）。
+ *
+ * 执行流程：
+ * 1. 配置日志（若提供 `options.logging`）
+ * 2. 扫描并加载配置目录中的所有 YAML 文件
+ * 3. 启用配置文件监听（若 `options.watchConfig` 为 true）
  *
  * @param options - 初始化选项
  *
@@ -210,12 +223,9 @@ function initCore(options: CoreOptions = {}): void {
 /**
  * 启用配置文件监听。
  *
- * @param configs - 需要监听的配置项
+ * 为每个已加载的配置项注册文件 watcher，变更时自动重载并输出日志。
  *
- * @example
- * ```ts
- * setupConfigWatch([{ name: 'app', filePath: './config/app.yml' }])
- * ```
+ * @param configs - 需要监听的配置项列表
  */
 function setupConfigWatch(configs: ConfigLoadItem[]): void {
   const logger = core.logger

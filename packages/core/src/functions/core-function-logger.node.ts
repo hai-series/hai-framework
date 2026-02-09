@@ -17,7 +17,7 @@
  * =============================================================================
  */
 
-import type { LogFormat, LoggingConfig, LogLevel } from '../config/index.js'
+import type { LogFormat, LoggingConfig, LogLevel } from '../core-config.js'
 import type { LogContext, Logger, LoggerFunctions, LoggerOptions } from '../core-types.js'
 import { execSync } from 'node:child_process'
 import process from 'node:process'
@@ -53,9 +53,16 @@ if (process.platform === 'win32' && process.stdout.isTTY) {
 // 全局配置
 // =============================================================================
 
+/** 全局日志级别（默认 'info'） */
 let globalLevel: LogLevel = 'info'
+
+/** 全局日志格式（默认 'pretty'，适合开发环境） */
 let globalFormat: LogFormat = 'pretty'
+
+/** 全局默认上下文（每条日志自动附带） */
 let globalContext: Record<string, unknown> = {}
+
+/** 全局脱敏字段路径列表（如 ['password', 'token']） */
 let globalRedact: string[] = []
 
 /**
@@ -112,8 +119,11 @@ function getLogLevel(): LogLevel {
 /**
  * 包装 pino 实例为统一 Logger 接口。
  *
+ * 将 pino 的原生方法映射为 Logger 接口，自动合并上下文。
+ *
  * @param pinoLogger - pino 实例
- * @param context - 合并上下文
+ * @param context - 基础上下文（会与每次调用时的 ctx 合并）
+ * @returns 统一 Logger 实例
  */
 function wrapPino(pinoLogger: pino.Logger, context: Record<string, unknown>): Logger {
   return {

@@ -14,7 +14,7 @@
  * =============================================================================
  */
 
-import type { LoggingConfig, LogLevel } from '../config/index.js'
+import type { LoggingConfig, LogLevel } from '../core-config.js'
 import type { LogContext, Logger, LoggerFunctions, LoggerOptions } from '../core-types.js'
 import log from 'loglevel'
 
@@ -22,10 +22,17 @@ import log from 'loglevel'
 // 全局配置
 // =============================================================================
 
+/** 全局日志级别（默认 'info'） */
 let globalLevel: LogLevel = 'info'
+
+/** 全局默认上下文（每条日志自动附带） */
 let globalContext: Record<string, unknown> = {}
 
-/** LogLevel 到 loglevel 级别映射 */
+/**
+ * LogLevel 到 loglevel 库级别的映射。
+ *
+ * loglevel 不支持 fatal，映射为 error。
+ */
 const LEVEL_MAP: Record<LogLevel, log.LogLevelDesc> = {
   trace: 'trace',
   debug: 'debug',
@@ -87,10 +94,13 @@ function getLogLevel(): LogLevel {
 // =============================================================================
 
 /**
- * 格式化消息。
+ * 格式化日志消息。
+ *
+ * 将消息文本与上下文拼接为单行输出（上下文序列化为 JSON）。
  *
  * @param message - 日志文本
- * @param context - 日志上下文
+ * @param context - 日志上下文（空对象时不输出）
+ * @returns 格式化后的字符串
  */
 function formatMessage(message: string, context?: LogContext): string {
   if (!context || Object.keys(context).length === 0) {
@@ -102,8 +112,11 @@ function formatMessage(message: string, context?: LogContext): string {
 /**
  * 创建 Logger 包装。
  *
+ * 将 loglevel 实例包装为统一 Logger 接口，自动合并基础上下文。
+ *
  * @param loggerInstance - loglevel 实例
- * @param baseContext - 基础上下文
+ * @param baseContext - 基础上下文（会与每次调用时的 ctx 合并）
+ * @returns 统一 Logger 实例
  */
 function wrapLoglevel(loggerInstance: log.Logger, baseContext: Record<string, unknown>): Logger {
   return {

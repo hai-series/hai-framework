@@ -4,7 +4,7 @@ import { baseConfig } from '../tsup.base'
 export default defineConfig({
   ...baseConfig,
   entry: {
-    node: 'src/core-index.node.ts',
+    node: 'src/index.ts',
     browser: 'src/core-index.browser.ts',
   },
   external: ['yaml', 'pino', 'pino-pretty', 'loglevel', 'nanoid'],
