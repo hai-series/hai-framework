@@ -4,10 +4,14 @@
  * =============================================================================
  * 提供统一的 AI 能力接口
  *
- * 支持：
- * - LLM（大模型调用、流式响应）
- * - MCP（工具、资源、提示词）
- * - Skills（技能注册与执行）
+ * 所有功能通过 `ai` 对象统一访问：
+ * - `ai.llm` — 大模型调用、流式响应（OpenAI 兼容协议）
+ * - `ai.mcp` — MCP 工具/资源/提示词注册与调用
+ * - `ai.tools` — OpenAI function calling 工具定义与注册表
+ * - `ai.stream` — 流处理器、SSE 编解码
+ * - `ai.config` / `ai.isInitialized` / `ai.init()` / `ai.close()`
+ *
+ * 前端客户端通过 `@hai/ai/client` 独立入口访问。
  *
  * @example
  * ```ts
@@ -21,29 +25,17 @@
  *     }
  * })
  *
- * // LLM 调用
+ * // LLM
  * const result = await ai.llm.chat({
- *     messages: [
- *         { role: 'system', content: '你是一个有帮助的助手' },
- *         { role: 'user', content: '你好！' }
- *     ]
+ *     messages: [{ role: 'user', content: '你好！' }]
  * })
  *
- * // 流式调用
- * for await (const chunk of ai.llm.chatStream({ messages: [...] })) {
- *     // 处理 chunk.choices[0].delta.content
- * }
+ * // 工具
+ * const tool = ai.tools.define({ name: 'greet', ... })
+ * const registry = ai.tools.createRegistry()
  *
- * // MCP 工具
- * ai.mcp.registerTool(
- *     { name: 'search', description: '搜索', inputSchema: {} },
- *     async (input) => ({ results: [] })
- * )
- * await ai.mcp.callTool('search', { query: 'hello' })
- *
- * // 技能
- * ai.skills.register(mySkill)
- * await ai.skills.execute('translate', { text: 'hello', to: 'zh' })
+ * // 流处理
+ * const processor = ai.stream.createProcessor()
  *
  * // 关闭
  * ai.close()
@@ -53,49 +45,14 @@
  * =============================================================================
  */
 
-import { core } from '@hai/core'
-import messagesEnUS from '../messages/en-US.json'
-import messagesZhCN from '../messages/zh-CN.json'
-
 // =============================================================================
-// 类型导出
-// =============================================================================
-
-export * from './ai-config.js'
-
-// =============================================================================
-// 配置导出
+// 统一服务入口
 // =============================================================================
 
 export { ai } from './ai-main.js'
 
 // =============================================================================
-// 统一服务入口
-// =============================================================================
-
-export * from './ai-stream.js'
-
-// =============================================================================
-// 工具相关
-// =============================================================================
-
-export * from './ai-tools.js'
-
-// =============================================================================
-// 流处理
+// 类型导出（含子模块类型）
 // =============================================================================
 
 export * from './ai-types.js'
-
-// i18n
-type AiMessageKey = keyof typeof messagesZhCN
-export const getAiMessage
-  = core.i18n.createMessageGetter<AiMessageKey>({ 'zh-CN': messagesZhCN, 'en-US': messagesEnUS })
-
-// =============================================================================
-// Provider 实现（高级用法）
-// =============================================================================
-
-export { createHaiLLMProvider } from './provider/ai-provider-llm.js'
-export { createHaiMCPProvider } from './provider/ai-provider-mcp.js'
-export { createHaiSkillsProvider, defineSkill } from './provider/ai-provider-skills.js'

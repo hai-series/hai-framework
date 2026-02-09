@@ -15,6 +15,9 @@ export * from './core-util-array.js'
 /** 异步操作。 */
 export * from './core-util-async.js'
 
+/** 模块初始化工具类型。 */
+export type { BaseModuleError, NotInitializedKit } from './core-util-module.js'
+
 /** 对象操作。 */
 export * from './core-util-object.js'
 

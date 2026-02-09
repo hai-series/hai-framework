@@ -1,7 +1,20 @@
 {
   "$schema": "https://inlang.com/schema/inlang-message-format",
+
+  "ai_notInitialized": "AI service not initialized. Call ai.init() first.",
+  "ai_initFailed": "Failed to initialize AI service: {error}",
+
   "ai_requestTimeout": "Request timeout",
-  "ai_operationFailed": "Operation failed: {error}",
-  "ai_responseNotReadable": "Response body is not readable",
-  "ai_apiRequestFailed": "AI API request failed: {status} {error}"
+  "ai_internalError": "Internal error: {error}",
+
+  "ai_mcpToolNotFound": "MCP tool '{name}' not found",
+  "ai_mcpToolFailed": "MCP tool '{name}' execution failed: {error}",
+  "ai_mcpResourceNotFound": "MCP resource '{uri}' not found",
+  "ai_mcpResourceFailed": "MCP resource '{uri}' read failed: {error}",
+  "ai_mcpPromptNotFound": "MCP prompt '{name}' not found",
+  "ai_mcpPromptMissingArg": "MCP prompt '{name}' missing required argument '{arg}'",
+  "ai_mcpPromptFailed": "MCP prompt '{name}' execution failed: {error}",
+
+  "ai_toolNotFound": "Tool '{name}' not found",
+  "ai_toolInvalidJson": "Invalid JSON in tool call arguments"
 }

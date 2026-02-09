@@ -86,53 +86,28 @@ const logger = core.logger.child({ module: 'iam', scope: 'main' })
 // 未初始化时的占位操作
 // =============================================================================
 
-/**
- * 创建未初始化错误
- *
- * 当 IAM 服务尚未调用 `init()` 时，所有操作均返回此错误。
- *
- * @returns 包含 NOT_INITIALIZED 错误码的 IamError
- */
-function notInitializedError(): IamError {
-  return {
-    code: IamErrorCode.NOT_INITIALIZED,
-    message: iamM('iam_notInitialized'),
-  }
-}
-
-/** 未初始化时的统一占位操作类型 */
-type NotInitializedOperation = (...args: unknown[]) => Promise<Result<unknown, IamError>>
-
-/** 未初始化时的占位操作实现 */
-const notInitializedOperation: NotInitializedOperation = async () => err(notInitializedError())
-
-/** 未初始化时的同步占位操作实现 */
-const notInitializedSyncOperation = () => err(notInitializedError())
-
-/** 未初始化时的操作代理（所有方法均返回未初始化错误） */
-const notInitializedOperations = new Proxy(
-  {},
-  {
-    get: () => notInitializedOperation,
-  },
+/** 未初始化工具集 */
+const notInitialized = core.module.createNotInitializedKit<IamError>(
+  IamErrorCode.NOT_INITIALIZED,
+  () => iamM('iam_notInitialized'),
 )
 
 /** 未初始化的认证操作占位 */
-const notInitializedAuth = notInitializedOperations as AuthOperations
+const notInitializedAuth = notInitialized.proxy<AuthOperations>()
 
 /** 未初始化的用户操作占位 */
 const notInitializedUser = new Proxy(
-  { validatePassword: notInitializedSyncOperation },
+  { validatePassword: notInitialized.syncOperation },
   {
-    get: (target, prop) => (prop in target ? target[prop as keyof typeof target] : notInitializedOperation),
+    get: (target, prop) => (prop in target ? target[prop as keyof typeof target] : notInitialized.operation),
   },
 ) as unknown as UserOperations
 
 /** 未初始化的授权管理器占位 */
-const notInitializedAuthz = notInitializedOperations as AuthzManager
+const notInitializedAuthz = notInitialized.proxy<AuthzManager>()
 
 /** 未初始化的会话管理器占位 */
-const notInitializedSession = notInitializedOperations as SessionManager
+const notInitializedSession = notInitialized.proxy<SessionManager>()
 
 // =============================================================================
 // 创建 IAM 服务实例

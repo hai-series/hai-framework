@@ -67,7 +67,7 @@ import type {
   StorageService,
 } from './storage-types.js'
 
-import { err } from '@hai/core'
+import { core, err } from '@hai/core'
 
 import { createLocalProvider } from './provider/storage-provider-local.js'
 
@@ -112,41 +112,23 @@ function createProvider(config: StorageConfig): StorageProvider {
 // 未初始化时的错误处理
 // =============================================================================
 
-/**
- * 创建未初始化错误
- */
-function notInitializedError(): StorageError {
-  return {
-    code: StorageErrorCode.NOT_INITIALIZED,
-    message: storageM('storage_notInitialized'),
-  }
-}
-
-/** 未初始化时的统一占位操作类型 */
-type NotInitializedOperation = (...args: unknown[]) => Promise<Result<unknown, StorageError>>
-
-/** 未初始化时的占位操作实现 */
-const notInitializedOperation: NotInitializedOperation = async () => err(notInitializedError())
-
-/** 未初始化时的操作代理（所有方法均返回未初始化错误） */
-const notInitializedOperations = new Proxy(
-  {},
-  {
-    get: () => notInitializedOperation,
-  },
+/** 未初始化工具集 */
+const notInitialized = core.module.createNotInitializedKit<StorageError>(
+  StorageErrorCode.NOT_INITIALIZED,
+  () => storageM('storage_notInitialized'),
 )
 
 /** 未初始化时的文件操作占位 */
-const notInitializedFile = notInitializedOperations as FileOperations
+const notInitializedFile = notInitialized.proxy<FileOperations>()
 
 /** 未初始化时的目录操作占位 */
-const notInitializedDir = notInitializedOperations as DirOperations
+const notInitializedDir = notInitialized.proxy<DirOperations>()
 
 /** 未初始化时的签名 URL 操作占位 */
 const notInitializedPresign = new Proxy(
   {},
   {
-    get: (_target, prop) => (prop === 'publicUrl' ? () => null : notInitializedOperation),
+    get: (_target, prop) => (prop === 'publicUrl' ? () => null : notInitialized.operation),
   },
 ) as PresignOperations
 

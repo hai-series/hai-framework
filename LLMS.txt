@@ -62,7 +62,7 @@ ai.configure({ provider: 'hai' })
 await iam.ident.login({ identifier: 'user', password: 'pass' })
 await iam.authz.checkPermission(ctx, 'users:read')
 await ai.llm.chat({ model: 'gpt-4', messages: [...] })
-await ai.skills.execute('translate', { text: 'hello', to: 'zh' })
+await ai.mcp.callTool('translate', { text: 'hello', to: 'zh' })
 ```
 
 ## 快速开始

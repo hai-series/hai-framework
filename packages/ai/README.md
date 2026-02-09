@@ -1,16 +1,16 @@
 # @hai/ai
 
-AI 能力模块，提供统一的 `ai` 对象访问大模型、MCP 服务和技能功能。
+AI 能力模块，提供统一的 `ai` 对象访问大模型、MCP 服务和工具调用功能。
 
 ## 功能特性
 
-| 功能   | 说明                                       |
-| ------ | ------------------------------------------ |
-| LLM    | 大模型调用、流式响应、模型列表             |
-| MCP    | 工具注册与调用、资源读取、提示词管理       |
-| Skills | 技能注册与执行、技能查询                   |
-| Tools  | 工具定义、参数验证、批量执行               |
-| Client | 前端轻量客户端（流式响应、SSE 解析）       |
+| 功能       | 说明                                 |
+| ---------- | ------------------------------------ |
+| LLM        | 大模型调用、流式响应、模型列表       |
+| MCP        | 工具注册与调用、资源读取、提示词管理 |
+| MCP Server | MCP HTTP 服务器、传输层支持          |
+| Tools      | 工具定义、参数验证、批量执行         |
+| Client     | 前端轻量客户端（流式响应、SSE 解析） |
 
 ## 安装
 
@@ -45,60 +45,48 @@ if (result.success) {
 // 3. 流式调用
 for await (const chunk of ai.llm.chatStream({ messages })) {
   const delta = chunk.choices[0]?.delta?.content
-  if (delta) process.stdout.write(delta)
+  if (delta)
+    process.stdout.write(delta)
 }
 
 // 4. 关闭服务
 ai.close()
 ```
 
-## API 参考
+## MCP Server
 
-### 初始化
+```ts
+import { randomUUID } from 'node:crypto'
+import { createMcpServer, StreamableHTTPServerTransport } from '@hai/ai'
+import { z } from 'zod'
 
-| 方法          | 说明             |
-| ------------- | ---------------- |
-| `ai.init()`   | 初始化 AI 服务   |
-| `ai.close()`  | 关闭 AI 服务     |
-| `ai.config`   | 获取当前配置     |
-| `ai.isInitialized` | 检查是否已初始化 |
+// 创建 MCP 服务器
+const mcp = createMcpServer({ name: 'my-app' })
 
-### ai.llm - LLM 操作
+// 注册工具
+mcp.registerTool('search', {
+  description: '搜索',
+  inputSchema: { query: z.string() },
+}, async ({ query }) => ({
+  content: [{ type: 'text', text: `Results for ${query}` }]
+}))
 
-| 方法                       | 说明               |
-| -------------------------- | ------------------ |
-| `chat(request)`            | 聊天完成（非流式） |
-| `chatStream(request)`      | 流式聊天完成       |
-| `listModels()`             | 获取模型列表       |
-
-### ai.mcp - MCP 操作
-
-| 方法                                | 说明         |
-| ----------------------------------- | ------------ |
-| `registerTool(definition, handler)` | 注册工具     |
-| `registerResource(resource, handler)` | 注册资源   |
-| `registerPrompt(prompt, handler)`   | 注册提示词   |
-| `callTool(name, args, context?)`    | 调用工具     |
-| `readResource(uri)`                 | 读取资源     |
-| `getPrompt(name, args)`             | 获取提示词   |
-
-### ai.skills - 技能操作
-
-| 方法                            | 说明         |
-| ------------------------------- | ------------ |
-| `register(skill)`               | 注册技能     |
-| `unregister(name)`              | 注销技能     |
-| `get(name)`                     | 获取技能     |
-| `query(query)`                  | 查询技能     |
-| `execute(name, input, context?)` | 执行技能    |
+// 连接 HTTP 传输层（以 Express 为例）
+app.post('/mcp', async (req, res) => {
+  const transport = new StreamableHTTPServerTransport({
+    sessionIdGenerator: () => randomUUID(),
+  })
+  await mcp.connect(transport)
+  await transport.handleRequest(req, res, req.body)
+})
+```
 
 ## 工具调用
 
 ```ts
-import { defineTool, createToolRegistry } from '@hai/ai'
+import { createToolRegistry, defineTool } from '@hai/ai'
 import { z } from 'zod'
 
-// 定义工具
 const weatherTool = defineTool({
   name: 'get_weather',
   description: '获取天气信息',
@@ -108,7 +96,6 @@ const weatherTool = defineTool({
   handler: async ({ city }) => ({ temperature: 20, city }),
 })
 
-// 创建注册表
 const registry = createToolRegistry()
 registry.register(weatherTool)
 
@@ -131,7 +118,8 @@ const client = createAIClient({
 // 流式聊天
 for await (const chunk of client.chatStream({ messages })) {
   const delta = chunk.choices[0]?.delta?.content
-  if (delta) console.log(delta)
+  if (delta)
+    console.log(delta)
 }
 
 // 便捷方法
@@ -141,13 +129,13 @@ const reply = await client.sendMessage('你好', '你是一个助手')
 ## 流处理工具
 
 ```ts
-import { createStreamProcessor, collectStream } from '@hai/ai'
+import { collectStream, createStreamProcessor } from '@hai/ai'
 
-// 使用流处理器
 const processor = createStreamProcessor()
 for await (const chunk of stream) {
   const delta = processor.process(chunk)
-  if (delta?.content) console.log(delta.content)
+  if (delta?.content)
+    console.log(delta.content)
 }
 const result = processor.getResult()
 

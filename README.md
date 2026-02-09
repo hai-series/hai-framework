@@ -159,25 +159,26 @@ export const handle = createHandle({
 </Modal>
 ```
 
-### AI 技能
+### AI & MCP Server
 
 ```typescript
-import { ai, defineSkill } from '@hai/ai'
+import { ai, createMcpServer, StreamableHTTPServerTransport } from '@hai/ai'
 import { z } from 'zod'
 
-const searchSkill = defineSkill({
-  name: 'search',
-  description: '搜索内容',
-  execute: async ({ query }, context) => {
-    // 执行搜索
-    return { success: true, data: { results: [] } }
-  },
+// LLM 调用
+ai.init({ llm: { model: 'gpt-4o-mini', apiKey: process.env.OPENAI_API_KEY } })
+const result = await ai.llm.chat({
+  messages: [{ role: 'user', content: '你好' }],
 })
 
-// 注册并执行技能
-ai.skills.register(searchSkill)
-const result = await ai.skills.execute('search', { query: 'hello' })
-registry.register(searchSkill)
+// MCP HTTP Server
+const mcp = createMcpServer({ name: 'my-app' })
+mcp.registerTool('search', {
+  description: '搜索',
+  inputSchema: { query: z.string() },
+}, async ({ query }) => ({
+  content: [{ type: 'text', text: `Results for ${query}` }]
+}))
 ```
 
 ## 🔧 CLI 命令
@@ -191,7 +192,6 @@ hai generate page <name>       # 生成页面
 hai generate component <name>  # 生成组件
 hai generate api <name>        # 生成 API
 hai generate model <name>      # 生成数据模型
-hai generate skill <name>      # 生成 AI 技能
 hai generate migration <name>  # 生成数据库迁移
 
 # 快捷命令

@@ -1,7 +1,20 @@
 {
   "$schema": "https://inlang.com/schema/inlang-message-format",
+
+  "ai_notInitialized": "AI 服务未初始化，请先调用 ai.init()",
+  "ai_initFailed": "AI 服务初始化失败：{error}",
+
   "ai_requestTimeout": "请求超时",
-  "ai_operationFailed": "操作失败: {error}",
-  "ai_responseNotReadable": "响应体不可读",
-  "ai_apiRequestFailed": "AI API 请求失败：{status} {error}"
+  "ai_internalError": "内部错误：{error}",
+
+  "ai_mcpToolNotFound": "MCP 工具 '{name}' 未找到",
+  "ai_mcpToolFailed": "MCP 工具 '{name}' 执行失败：{error}",
+  "ai_mcpResourceNotFound": "MCP 资源 '{uri}' 未找到",
+  "ai_mcpResourceFailed": "MCP 资源 '{uri}' 读取失败：{error}",
+  "ai_mcpPromptNotFound": "MCP 提示词 '{name}' 未找到",
+  "ai_mcpPromptMissingArg": "MCP 提示词 '{name}' 缺少必需参数 '{arg}'",
+  "ai_mcpPromptFailed": "MCP 提示词 '{name}' 执行失败：{error}",
+
+  "ai_toolNotFound": "工具 '{name}' 未找到",
+  "ai_toolInvalidJson": "工具调用参数 JSON 格式无效"
 }
