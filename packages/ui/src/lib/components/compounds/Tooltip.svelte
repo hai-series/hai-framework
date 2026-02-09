@@ -14,7 +14,7 @@
   let {
     content,
     position = 'top',
-    delay = 0,
+    delay: _delay = 0,
     class: className = '',
     children,
   }: TooltipProps = $props()

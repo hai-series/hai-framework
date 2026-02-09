@@ -125,7 +125,7 @@
 {:else}
   <!-- 交互模式 - 使用 radio input -->
   <div class={ratingClass}>
-    {#each items as item, idx}
+    {#each items as item}
       <input
         type="radio"
         {name}
