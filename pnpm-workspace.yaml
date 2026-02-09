@@ -44,6 +44,7 @@ catalog:
   '@iconify-json/tabler': ^1.2.15
   '@iconify/tailwind4': ^1.0.7
   '@inlang/paraglide-js': ^2.0.0
+  '@inlang/plugin-message-format': ^4.2.0
   '@modelcontextprotocol/sdk': ^1.0.4
 
   '@noble/hashes': ^2.0.1
