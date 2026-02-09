@@ -10,7 +10,7 @@
  */
 
 import type { Result } from '@hai/core'
-import type { CrudCountOptions, CrudFieldDefinition, CrudRepository, DbError, DbService, TxHandle } from '@hai/db'
+import type { CrudCountOptions, CrudFieldDefinition, CrudRepository, DbError, DbFunctions, TxHandle } from '@hai/db'
 import type { IamError } from '../../iam-core-types.js'
 import type { Permission } from './iam-authz-rbac-types.js'
 import { err, ok } from '@hai/core'
@@ -121,7 +121,7 @@ let permRepoDbConfig: unknown = null
  * @param db - 数据库服务实例
  * @returns 权限存储接口实现
  */
-export async function createDbPermissionRepository(db: DbService): Promise<PermissionRepository> {
+export async function createDbPermissionRepository(db: DbFunctions): Promise<PermissionRepository> {
   if (permRepoInstance && permRepoDbConfig === db.config)
     return permRepoInstance
 
@@ -138,7 +138,7 @@ export async function createDbPermissionRepository(db: DbService): Promise<Permi
  * 继承 BaseCrudRepository，提供按 code 查找权限的能力。
  */
 class DbPermissionRepository extends BaseCrudRepository<Permission> implements PermissionRepository {
-  constructor(db: DbService) {
+  constructor(db: DbFunctions) {
     super(db, {
       table: TABLE_NAME,
       fields: PERMISSION_FIELDS,

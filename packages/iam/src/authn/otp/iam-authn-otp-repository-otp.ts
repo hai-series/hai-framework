@@ -10,7 +10,7 @@
  */
 
 import type { Result } from '@hai/core'
-import type { CrudCountOptions, CrudFieldDefinition, DbError, DbService, TxHandle } from '@hai/db'
+import type { CrudCountOptions, CrudFieldDefinition, DbError, DbFunctions, TxHandle } from '@hai/db'
 import type { IamError } from '../../iam-core-types.js'
 import { err, ok } from '@hai/core'
 import { BaseCrudRepository } from '@hai/db'
@@ -148,7 +148,7 @@ let otpRepoDbConfig: unknown = null
  * @param db - 数据库服务实例
  * @returns OTP 存储接口实现
  */
-export async function createDbOtpRepository(db: DbService): Promise<OtpRepository> {
+export async function createDbOtpRepository(db: DbFunctions): Promise<OtpRepository> {
   if (otpRepoInstance && otpRepoDbConfig === db.config)
     return otpRepoInstance
 
@@ -166,7 +166,7 @@ export async function createDbOtpRepository(db: DbService): Promise<OtpRepositor
  * 内置过期自动清理：查询时发现过期会自动删除并返回 null。
  */
 class DbOtpRepository extends BaseCrudRepository<OtpRecord> implements OtpRepository {
-  constructor(db: DbService) {
+  constructor(db: DbFunctions) {
     super(db, {
       table: TABLE_NAME,
       idColumn: 'identifier',

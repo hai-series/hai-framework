@@ -11,7 +11,7 @@
 
 import type { CacheService } from '@hai/cache'
 import type { Result } from '@hai/core'
-import type { DbService } from '@hai/db'
+import type { DbFunctions } from '@hai/db'
 import type { AuthStrategy } from './authn/iam-authn-types.js'
 import type { LdapClientFactory } from './authn/ldap/iam-authn-ldap-strategy.js'
 import type { OtpStrategy } from './authn/otp/iam-authn-otp-strategy.js'
@@ -85,7 +85,7 @@ export interface IamComponents {
  */
 export interface InitOptions {
   /** 数据库服务 */
-  db: DbService
+  db: DbFunctions
   /** 缓存服务 */
   cache: CacheService
   /** IAM 配置 */
@@ -96,8 +96,8 @@ export interface InitOptions {
   ldapSyncUser?: boolean
 }
 
-/** 密码提供者 */
-const passwordProvider = haiCrypto.password.create()
+/** 密码操作 */
+const passwordOps = haiCrypto.password
 
 /**
  * 初始化 IAM 组件
@@ -215,7 +215,7 @@ export async function initializeComponents(options: InitOptions): Promise<Result
  * @returns 哈希字符串，或 INTERNAL_ERROR
  */
 export function hashPassword(password: string): Result<string, IamError> {
-  const result = passwordProvider.hash(password)
+  const result = passwordOps.hash(password)
   if (!result.success) {
     return err({
       code: IamErrorCode.INTERNAL_ERROR,
@@ -235,7 +235,7 @@ export function hashPassword(password: string): Result<string, IamError> {
  * @returns 匹配返回 true，不匹配返回 false
  */
 export function verifyPassword(password: string, hash: string): Result<boolean, IamError> {
-  const result = passwordProvider.verify(password, hash)
+  const result = passwordOps.verify(password, hash)
   if (!result.success) {
     return err({
       code: IamErrorCode.INTERNAL_ERROR,
@@ -312,7 +312,7 @@ export interface SeedOptions {
  * @returns 成功返回 ok(undefined)，失败返回 REPOSITORY_ERROR
  */
 export async function seedIamData(
-  db: DbService,
+  db: DbFunctions,
   options: SeedOptions = { roles: true, permissions: true, rolePermissions: true },
 ): Promise<Result<void, IamError>> {
   const txResult = await db.tx.wrap(async (tx) => {

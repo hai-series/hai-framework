@@ -11,7 +11,7 @@
 
 import type { CacheService } from '@hai/cache'
 import type { Result } from '@hai/core'
-import type { DbService, TxHandle } from '@hai/db'
+import type { DbFunctions, TxHandle } from '@hai/db'
 import type { IamError } from '../../iam-core-types.js'
 import type { PermissionRepository } from './iam-authz-rbac-repository-permission.js'
 import type { RoleRepository } from './iam-authz-rbac-repository-role.js'
@@ -123,7 +123,7 @@ const ROLE_PERMISSION_SCHEMA = {
  * @returns 角色-权限关联存储接口实现
  */
 export async function createDbRolePermissionRepository(
-  db: DbService,
+  db: DbFunctions,
   permissionRepository: PermissionRepository,
   cache: CacheService,
 ): Promise<RolePermissionRepository> {
@@ -542,7 +542,7 @@ const USER_ROLE_SCHEMA = {
  * @returns 用户-角色关联存储接口实现
  */
 export async function createDbUserRoleRepository(
-  db: DbService,
+  db: DbFunctions,
   roleRepository: RoleRepository,
   cache: CacheService,
 ): Promise<UserRoleRepository> {

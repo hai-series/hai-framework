@@ -10,7 +10,7 @@
  */
 
 import type { PaginatedResult, PaginationOptionsInput, Result } from '@hai/core'
-import type { DbService } from '@hai/db'
+import type { DbFunctions } from '@hai/db'
 import type { PasswordStrategy } from '../authn/password/iam-authn-password-strategy.js'
 import type { AuthzManager } from '../authz/rbac/iam-authz-rbac-types.js'
 import type { IamConfig, IamErrorCodeType } from '../iam-config.js'
@@ -38,7 +38,7 @@ const logger = core.logger.child({ module: 'iam', scope: 'user' })
  */
 export interface UserServiceDeps {
   /** 数据库服务（用于事务支持） */
-  db: DbService
+  db: DbFunctions
   /** 用户存储 */
   userRepository: UserRepository
   /** 密码策略 */

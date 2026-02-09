@@ -10,7 +10,7 @@
  */
 
 import type { Result } from '@hai/core'
-import type { CrudCountOptions, CrudFieldDefinition, CrudRepository, DbError, DbService, TxHandle } from '@hai/db'
+import type { CrudCountOptions, CrudFieldDefinition, CrudRepository, DbError, DbFunctions, TxHandle } from '@hai/db'
 import type { IamError } from '../../iam-core-types.js'
 import type { Role } from './iam-authz-rbac-types.js'
 import { err, ok } from '@hai/core'
@@ -113,7 +113,7 @@ let roleRepoDbConfig: unknown = null
  * @param db - 数据库服务实例
  * @returns 角色存储接口实现
  */
-export async function createDbRoleRepository(db: DbService): Promise<RoleRepository> {
+export async function createDbRoleRepository(db: DbFunctions): Promise<RoleRepository> {
   if (roleRepoInstance && roleRepoDbConfig === db.config)
     return roleRepoInstance
 
@@ -130,7 +130,7 @@ export async function createDbRoleRepository(db: DbService): Promise<RoleReposit
  * 继承 BaseCrudRepository，提供按 code 查找角色的能力。
  */
 class DbRoleRepository extends BaseCrudRepository<Role> implements RoleRepository {
-  constructor(db: DbService) {
+  constructor(db: DbFunctions) {
     super(db, {
       table: TABLE_NAME,
       fields: ROLE_FIELDS,
