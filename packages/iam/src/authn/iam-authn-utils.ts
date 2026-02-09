@@ -10,7 +10,7 @@
  */
 
 import type { Result } from '@hai/core'
-import type { IamError } from '../iam-core-types.js'
+import type { IamError } from '../iam-types.js'
 import type { UserRepository } from '../user/iam-user-repository-user.js'
 import type { StoredUser } from '../user/iam-user-types.js'
 import type { Credentials } from './iam-authn-types.js'

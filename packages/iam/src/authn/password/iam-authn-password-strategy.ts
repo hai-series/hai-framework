@@ -11,7 +11,7 @@
 
 import type { Result } from '@hai/core'
 import type { PasswordConfig } from '../../iam-config.js'
-import type { IamError } from '../../iam-core-types.js'
+import type { IamError } from '../../iam-types.js'
 import type { UserRepository } from '../../user/iam-user-repository-user.js'
 import type { StoredUser, User } from '../../user/iam-user-types.js'
 import type { AuthStrategy, Credentials } from '../iam-authn-types.js'

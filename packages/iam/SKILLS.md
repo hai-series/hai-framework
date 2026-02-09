@@ -57,22 +57,22 @@ packages/iam/
 
 ### 数据库表（@hai/db，初始化时自动创建）
 
-| 表名                   | 用途           | 主要字段                                                     |
-| ---------------------- | -------------- | ------------------------------------------------------------ |
-| `iam_users`            | 用户信息       | id, username, email, phone, password_hash, enabled, locked_until 等 |
-| `iam_otp`              | OTP 验证码     | identifier(PK), code, attempts, expires_at, created_at       |
-| `iam_roles`            | 角色定义       | id, code, name, description, is_system                       |
-| `iam_permissions`      | 权限定义       | id, code, name, resource, action                             |
-| `iam_role_permissions` | 角色-权限关联  | role_id, permission_id（联合唯一索引）                       |
-| `iam_user_roles`       | 用户-角色关联  | user_id, role_id（联合唯一索引）                             |
+| 表名                   | 用途          | 主要字段                                                            |
+| ---------------------- | ------------- | ------------------------------------------------------------------- |
+| `iam_users`            | 用户信息      | id, username, email, phone, password_hash, enabled, locked_until 等 |
+| `iam_otp`              | OTP 验证码    | identifier(PK), code, attempts, expires_at, created_at              |
+| `iam_roles`            | 角色定义      | id, code, name, description, is_system                              |
+| `iam_permissions`      | 权限定义      | id, code, name, resource, action                                    |
+| `iam_role_permissions` | 角色-权限关联 | role_id, permission_id（联合唯一索引）                              |
+| `iam_user_roles`       | 用户-角色关联 | user_id, role_id（联合唯一索引）                                    |
 
 ### 缓存键（@hai/cache）
 
-| Key                           | 数据结构      | 用途                      | TTL          |
-| ----------------------------- | ------------- | ------------------------- | ------------ |
-| `iam:token:{token}`           | String/Object | Token → Session 会话数据  | session.maxAge |
-| `iam:user:{userId}:tokens`    | Set           | 用户 → 活跃 Token 集合   | 无（手动管理） |
-| `iam:role:{roleId}:perms`     | Set           | 角色 → 权限代码集合      | 无（写时更新） |
+| Key                           | 数据结构      | 用途                            | TTL            |
+| ----------------------------- | ------------- | ------------------------------- | -------------- |
+| `iam:token:{token}`           | String/Object | Token → Session 会话数据        | session.maxAge |
+| `iam:user:{userId}:tokens`    | Set           | 用户 → 活跃 Token 集合          | 无（手动管理） |
+| `iam:role:{roleId}:perms`     | Set           | 角色 → 权限代码集合             | 无（写时更新） |
 | `iam:permission:{code}:roles` | Set           | 权限代码 → 拥有该权限的角色集合 | 无（写时更新） |
 
 ## 核心流程（含 DB/Cache 节点标注）
@@ -357,8 +357,8 @@ await iam.init(db, {
   },
 
   session: {
-    maxAge: 86400,     // 会话最大有效期（秒）
-    sliding: true,     // 滑动续期
+    maxAge: 86400, // 会话最大有效期（秒）
+    sliding: true, // 滑动续期
     singleDevice: false, // 单设备登录
   },
 
@@ -603,8 +603,8 @@ const permissionsResult = await iam.authz.getAllPermissions({ page: 1, pageSize:
 await iam.authz.removePermissionFromRole('role_admin', 'perm_users_write')
 
 // 删除角色/权限（同步清理关联缓存）
-await iam.authz.deleteRole('role_admin')       // 清理 iam:role:{id}:perms + 反向索引
-await iam.authz.deletePermission('perm_id')    // 清理 iam:permission:{code}:roles + 角色缓存
+await iam.authz.deleteRole('role_admin') // 清理 iam:role:{id}:perms + 反向索引
+await iam.authz.deletePermission('perm_id') // 清理 iam:permission:{code}:roles + 角色缓存
 ```
 
 ### 会话管理 (iam.session)
@@ -635,10 +635,10 @@ await iam.session.deleteByUserId('user-id')
 
 ```ts
 // 方式 1：通过 iam 对象创建（Node.js 环境）
-const client = iam.client.create({ baseUrl: '/api/iam' })
-
 // 方式 2：独立导入（前端/浏览器环境）
 import { createIamClient } from '@hai/iam/client'
+
+const client = iam.client.create({ baseUrl: '/api/iam' })
 
 const client = createIamClient({
   baseUrl: '/api/iam',
@@ -697,21 +697,21 @@ import { iam } from '@hai/iam'
 if (!result.success) {
   switch (result.error.code) {
     case iam.errorCode.INVALID_CREDENTIALS: // 5001 凭证无效
-    case iam.errorCode.USER_NOT_FOUND:      // 5002 用户不存在
-    case iam.errorCode.USER_DISABLED:       // 5003 用户已禁用
-    case iam.errorCode.USER_LOCKED:         // 5004 用户已锁定
+    case iam.errorCode.USER_NOT_FOUND: // 5002 用户不存在
+    case iam.errorCode.USER_DISABLED: // 5003 用户已禁用
+    case iam.errorCode.USER_LOCKED: // 5004 用户已锁定
     case iam.errorCode.USER_ALREADY_EXISTS: // 5005 用户已存在
-    case iam.errorCode.PASSWORD_EXPIRED:    // 5006 密码已过期
+    case iam.errorCode.PASSWORD_EXPIRED: // 5006 密码已过期
     case iam.errorCode.PASSWORD_POLICY_VIOLATION: // 5007 密码不符合策略
-    case iam.errorCode.OTP_INVALID:         // 5010 验证码无效
+    case iam.errorCode.OTP_INVALID: // 5010 验证码无效
     case iam.errorCode.OTP_RESEND_TOO_FAST: // 5012 发送过于频繁
-    case iam.errorCode.LOGIN_DISABLED:      // 5013 登录方式已禁用
-    case iam.errorCode.REGISTER_DISABLED:   // 5014 注册已禁用
-    case iam.errorCode.SESSION_INVALID:     // 5102 会话无效
-    case iam.errorCode.ROLE_NOT_FOUND:      // 5200 角色不存在
+    case iam.errorCode.LOGIN_DISABLED: // 5013 登录方式已禁用
+    case iam.errorCode.REGISTER_DISABLED: // 5014 注册已禁用
+    case iam.errorCode.SESSION_INVALID: // 5102 会话无效
+    case iam.errorCode.ROLE_NOT_FOUND: // 5200 角色不存在
     case iam.errorCode.PERMISSION_NOT_FOUND: // 5201 权限不存在
-    case iam.errorCode.REPOSITORY_ERROR:    // 5300 存储层错误
-    case iam.errorCode.CONFIG_ERROR:        // 5400 配置错误
+    case iam.errorCode.REPOSITORY_ERROR: // 5300 存储层错误
+    case iam.errorCode.CONFIG_ERROR: // 5400 配置错误
       break
   }
 }
@@ -770,7 +770,7 @@ interface Session {
 ```ts
 interface AuthzContext {
   userId: string
-  roles: string[]        // 角色 ID 列表
+  roles: string[] // 角色 ID 列表
   resource?: string
   action?: string
   context?: Record<string, unknown>

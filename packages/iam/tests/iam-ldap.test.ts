@@ -13,11 +13,11 @@
  * - LDAP 配置缺失时行为
  */
 
-import type { IamService } from '../src/iam-main.js'
+import type { IamFunctions } from '../src/iam-types.js'
 import type { LdapContainerLease } from './helpers/ldap-container.js'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { IamErrorCode } from '../src/iam-config.js'
-import { createIamInstance, defineIamSuite, postgresRedisEnv, sqliteMemoryEnv, TEST_PASSWORD } from './helpers/iam-test-suite.js'
+import { defineIamSuite, initIam, postgresRedisEnv, sqliteMemoryEnv, TEST_PASSWORD } from './helpers/iam-test-suite.js'
 import { acquireLdapContainer } from './helpers/ldap-container.js'
 
 describe('iam.ldap', () => {
@@ -32,7 +32,7 @@ describe('iam.ldap', () => {
     await ldapLease?.release()
   }, 300_000)
 
-  const defineCommon = (getIam: () => IamService) => {
+  const defineCommon = (getIam: () => IamFunctions) => {
     // =========================================================================
     // LDAP 登录
     // =========================================================================
@@ -222,17 +222,15 @@ describe('iam.ldap', () => {
     // =========================================================================
 
     describe('lDAP 账户锁定', () => {
-      let lockIam: IamService
+      let lockIam: IamFunctions
 
       beforeAll(async () => {
-        lockIam = await createIamInstance(
-          {
-            security: { maxLoginAttempts: 3, lockoutDuration: 60 },
-            login: { password: true, ldap: true },
-            ldap: ldapLease.ldapConfig,
-          },
-          { ldapClientFactory: ldapLease.ldapClientFactory },
-        )
+        lockIam = await initIam({
+          security: { maxLoginAttempts: 3, lockoutDuration: 60 },
+          login: { password: true, ldap: true },
+          ldap: ldapLease.ldapConfig,
+          ldapClientFactory: ldapLease.ldapClientFactory,
+        })
       })
 
       afterAll(async () => {
@@ -276,8 +274,6 @@ describe('iam.ldap', () => {
     () => ({
       login: { password: true, ldap: true },
       ldap: ldapLease.ldapConfig,
-    }),
-    () => ({
       ldapClientFactory: ldapLease.ldapClientFactory,
     }),
   )
@@ -289,8 +285,6 @@ describe('iam.ldap', () => {
     () => ({
       login: { password: true, ldap: true },
       ldap: ldapLease.ldapConfig,
-    }),
-    () => ({
       ldapClientFactory: ldapLease.ldapClientFactory,
     }),
   )

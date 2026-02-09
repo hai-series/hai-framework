@@ -15,13 +15,13 @@
  * - 创建会话时自定义 maxAge / source / data
  */
 
-import type { IamService } from '../src/iam-main.js'
+import type { IamFunctions } from '../src/iam-types.js'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { IamErrorCode } from '../src/iam-config.js'
-import { createIamInstance, defineIamSuite, postgresRedisEnv, sqliteMemoryEnv, TEST_PASSWORD } from './helpers/iam-test-suite.js'
+import { defineIamSuite, initIam, postgresRedisEnv, sqliteMemoryEnv, TEST_PASSWORD } from './helpers/iam-test-suite.js'
 
 describe('iam.session', () => {
-  const defineCommon = (getIam: () => IamService) => {
+  const defineCommon = (getIam: () => IamFunctions) => {
     // =========================================================================
     // 创建与获取会话
     // =========================================================================
@@ -235,10 +235,10 @@ describe('iam.session', () => {
     // =========================================================================
 
     describe('滑动续期', () => {
-      let slidingIam: IamService
+      let slidingIam: IamFunctions
 
       beforeAll(async () => {
-        slidingIam = await createIamInstance({
+        slidingIam = await initIam({
           session: { maxAge: 3600, sliding: true },
         })
       })
@@ -272,10 +272,10 @@ describe('iam.session', () => {
     // =========================================================================
 
     describe('单设备登录', () => {
-      let singleIam: IamService
+      let singleIam: IamFunctions
 
       beforeAll(async () => {
-        singleIam = await createIamInstance({
+        singleIam = await initIam({
           session: { maxAge: 3600, sliding: false, singleDevice: true },
         })
       })

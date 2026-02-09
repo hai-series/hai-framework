@@ -150,7 +150,7 @@ export const IamErrorCode = {
   /** 配置错误 */
   CONFIG_ERROR: 5900,
   /** 未初始化 */
-  NOT_INITIALIZED: 5901,
+  NOT_INITIALIZED: 5010,
   /** 内部错误 */
   INTERNAL_ERROR: 5999,
 } as const
@@ -420,9 +420,8 @@ export const IamConfigSchema = z.object({
 export type IamConfig = z.infer<typeof IamConfigSchema>
 
 /**
- * IAM 配置输入类型（用于 init 等入口）
+ * IAM 配置设置输入类型（仅设置字段，不含运行时依赖）
  *
  * 说明：Zod 的 default 会让输入端字段可省略，但输出端字段为必填。
- * 因此对外 API（如 iam.init）更适合接收 IamConfigInput。
  */
-export type IamConfigInput = z.input<typeof IamConfigSchema>
+export type IamConfigSettingsInput = z.input<typeof IamConfigSchema>

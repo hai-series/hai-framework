@@ -7,14 +7,14 @@
  * - 用户基础类型（User、StoredUser）
  * - 注册选项（RegisterOptions）
  * - 协议展示类型（AgreementDisplay）
- * - 用户操作接口（UserOperations）
+ * - 用户操作接口（IamUserFunctions）
  *
  * @module user/iam-user-types
  * =============================================================================
  */
 
 import type { PaginatedResult, PaginationOptionsInput, Result } from '@hai/core'
-import type { IamError } from '../iam-core-types.js'
+import type { IamError } from '../iam-types.js'
 
 // =============================================================================
 // 用户类型
@@ -121,9 +121,9 @@ export interface RegisterResult {
 // =============================================================================
 
 /**
- * 用户管理操作接口
+ * 用户子功能接口
  */
-export interface UserOperations {
+export interface IamUserFunctions {
   /**
    * 注册用户
    */

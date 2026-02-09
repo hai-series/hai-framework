@@ -13,13 +13,13 @@
  * - 种子数据：默认角色/权限/关联验证
  */
 
-import type { IamService } from '../src/iam-main.js'
+import type { IamFunctions } from '../src/iam-types.js'
 import { beforeAll, describe, expect, it } from 'vitest'
 import { IamErrorCode } from '../src/iam-config.js'
 import { defineIamSuite, postgresRedisEnv, sqliteMemoryEnv, TEST_PASSWORD } from './helpers/iam-test-suite.js'
 
 describe('iam.authz', () => {
-  const defineCommon = (getIam: () => IamService) => {
+  const defineCommon = (getIam: () => IamFunctions) => {
     // =========================================================================
     // 角色 CRUD
     // =========================================================================

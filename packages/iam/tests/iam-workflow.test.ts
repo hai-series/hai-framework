@@ -13,13 +13,13 @@
  * 4. 管理员操作：创建角色/权限 → 分配用户 → 用户验证权限 → 管理员撤销
  */
 
-import type { IamService } from '../src/iam-main.js'
+import type { IamFunctions } from '../src/iam-types.js'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { IamErrorCode } from '../src/iam-config.js'
-import { createIamInstance, defineIamSuite, postgresRedisEnv, sqliteMemoryEnv, TEST_PASSWORD } from './helpers/iam-test-suite.js'
+import { defineIamSuite, initIam, postgresRedisEnv, sqliteMemoryEnv, TEST_PASSWORD } from './helpers/iam-test-suite.js'
 
 describe('iam.workflow', () => {
-  const defineCommon = (getIam: () => IamService) => {
+  const defineCommon = (getIam: () => IamFunctions) => {
     // =========================================================================
     // 工作流 1：完整用户生命周期
     // =========================================================================
@@ -313,10 +313,10 @@ describe('iam.workflow', () => {
     // =========================================================================
 
     describe('单设备登录策略', () => {
-      let singleDeviceIam: IamService
+      let singleDeviceIam: IamFunctions
 
       beforeAll(async () => {
-        singleDeviceIam = await createIamInstance({
+        singleDeviceIam = await initIam({
           session: { maxAge: 3600, sliding: false, singleDevice: true },
         })
       })
@@ -402,7 +402,7 @@ describe('iam.workflow', () => {
     describe('注册限制与账户锁定', () => {
       it('注册禁用 → 拒绝 → 开启后允许 → 登录失败锁定', async () => {
         // ① 注册禁用配置
-        const restrictedIam = await createIamInstance({
+        const restrictedIam = await initIam({
           register: { enabled: false, defaultEnabled: true },
           security: { maxLoginAttempts: 2, lockoutDuration: 60 },
         })
@@ -420,7 +420,7 @@ describe('iam.workflow', () => {
         await restrictedIam.close()
 
         // ③ 创建允许注册的实例
-        const openIam = await createIamInstance({
+        const openIam = await initIam({
           security: { maxLoginAttempts: 2, lockoutDuration: 60 },
         })
 
@@ -536,10 +536,10 @@ describe('iam.workflow', () => {
     // =========================================================================
 
     describe('协议确认流程', () => {
-      let agreementIam: IamService
+      let agreementIam: IamFunctions
 
       beforeAll(async () => {
-        agreementIam = await createIamInstance({
+        agreementIam = await initIam({
           agreements: {
             userAgreementUrl: 'https://example.com/terms',
             privacyPolicyUrl: 'https://example.com/privacy',

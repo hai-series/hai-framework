@@ -1,46 +1,91 @@
 /**
- * =============================================================================
- * @hai/iam - RBAC 授权管理器
- * =============================================================================
+ * @hai/iam — 授权子功能工厂（RBAC）
  *
- * 基于角色的访问控制（RBAC）实现
- *
- * @module authz/rbac/iam-authz-rbac-service
- * =============================================================================
+ * 提供角色/权限的 CRUD、用户角色分配、权限检查等能力。
  */
 
+import type { CacheFunctions } from '@hai/cache'
 import type { PaginatedResult, PaginationOptionsInput, Result } from '@hai/core'
-import type { RbacConfig } from '../../iam-config.js'
-import type { IamError } from '../../iam-core-types.js'
-import type { PermissionRepository } from './iam-authz-rbac-repository-permission.js'
-import type { RolePermissionRepository, UserRoleRepository } from './iam-authz-rbac-repository-relation.js'
-import type { RoleRepository } from './iam-authz-rbac-repository-role.js'
+import type { DbFunctions } from '@hai/db'
+
+import type { IamConfig, RbacConfig } from '../iam-config.js'
+import type { IamError } from '../iam-types.js'
+import type { PermissionRepository } from './iam-authz-repository-permission.js'
+import type { RolePermissionRepository, UserRoleRepository } from './iam-authz-repository-relation.js'
+import type { RoleRepository } from './iam-authz-repository-role.js'
 import type {
   AuthzContext,
-  AuthzManager,
+  IamAuthzFunctions,
   Permission,
   Role,
-} from './iam-authz-rbac-types.js'
+} from './iam-authz-types.js'
+
 import { core, err, ok } from '@hai/core'
 
-import { IamErrorCode, RbacConfigSchema } from '../../iam-config.js'
-import { iamM } from '../../iam-i18n.js'
+import { IamErrorCode, RbacConfigSchema } from '../iam-config.js'
+import { iamM } from '../iam-i18n.js'
+import { createDbPermissionRepository } from './iam-authz-repository-permission.js'
+import { createDbRolePermissionRepository, createDbUserRoleRepository } from './iam-authz-repository-relation.js'
+import { createDbRoleRepository } from './iam-authz-repository-role.js'
 
-const logger = core.logger.child({ module: 'iam', scope: 'rbac' })
+const logger = core.logger.child({ module: 'iam', scope: 'authz' })
+
+// ─── 子功能依赖 ───
 
 /**
- * RBAC 授权管理器配置
+ * 授权子功能依赖
  */
-export interface RbacManagerConfig {
-  /** RBAC 配置 */
+export interface IamAuthzFunctionsDeps {
+  config: IamConfig
+  db: DbFunctions
+  cache: CacheFunctions
+}
+
+/**
+ * 创建授权子功能
+ *
+ * 内部创建 RBAC 所需的存储层，返回授权管理接口。
+ */
+export async function createIamAuthzFunctions(deps: IamAuthzFunctionsDeps): Promise<Result<IamAuthzFunctions, IamError>> {
+  try {
+    const { config, db, cache } = deps
+
+    const roleRepository = await createDbRoleRepository(db)
+    const permissionRepository = await createDbPermissionRepository(db)
+    const rolePermissionRepository = await createDbRolePermissionRepository(db, permissionRepository, cache)
+    const userRoleRepository = await createDbUserRoleRepository(db, roleRepository, cache)
+
+    const manager = createRbacManager({
+      rbacConfig: config.rbac,
+      roleRepository,
+      permissionRepository,
+      rolePermissionRepository,
+      userRoleRepository,
+    })
+
+    logger.info('Authz sub-feature initialized')
+    return ok(manager)
+  }
+  catch (error) {
+    logger.error('Authz sub-feature initialization failed', { error })
+    return err({
+      code: IamErrorCode.CONFIG_ERROR,
+      message: iamM('iam_initComponentFailed'),
+      cause: error,
+    })
+  }
+}
+
+// ─── 内部实现 ───
+
+/**
+ * RBAC 管理器内部配置
+ */
+interface RbacManagerConfig {
   rbacConfig?: RbacConfig
-  /** 角色存储 */
   roleRepository: RoleRepository
-  /** 权限存储 */
   permissionRepository: PermissionRepository
-  /** 角色-权限关联存储 */
   rolePermissionRepository: RolePermissionRepository
-  /** 用户-角色关联存储 */
   userRoleRepository: UserRoleRepository
 }
 
@@ -53,7 +98,7 @@ export interface RbacManagerConfig {
  * @param config - RBAC 配置和存储层依赖
  * @returns 授权管理器接口实现
  */
-export function createRbacManager(config: RbacManagerConfig): AuthzManager {
+function createRbacManager(config: RbacManagerConfig): IamAuthzFunctions {
   const rbacConfig = config.rbacConfig
     ? RbacConfigSchema.parse(config.rbacConfig)
     : RbacConfigSchema.parse({})

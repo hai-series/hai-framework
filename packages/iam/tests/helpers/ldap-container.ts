@@ -10,7 +10,7 @@
 import type { StartedTestContainer } from 'testcontainers'
 import type { LdapClient, LdapClientFactory, LdapSearchEntry } from '../../src/authn/ldap/iam-authn-ldap-strategy.js'
 import type { LdapConfig } from '../../src/iam-config.js'
-import type { IamError } from '../../src/iam-core-types.js'
+import type { IamError } from '../../src/iam-types.js'
 import { err, ok } from '@hai/core'
 import { GenericContainer, Wait } from 'testcontainers'
 import { IamErrorCode } from '../../src/iam-config.js'
@@ -295,7 +295,8 @@ function parseLdifOutput(output: string): LdapSearchEntry[] {
 
       // 处理 base64 编码值（以 :: 分隔）
       if (line.charAt(colonIdx + 1) === ':') {
-        value = Buffer.from(value, 'base64').toString('utf-8')
+        const { Buffer: NodeBuffer } = await import('node:buffer')
+        value = NodeBuffer.from(value, 'base64').toString('utf-8')
       }
 
       if (key === 'dn') {

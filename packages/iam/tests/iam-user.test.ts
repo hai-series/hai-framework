@@ -13,13 +13,13 @@
  * - 自定义密码策略配置：requireSpecialChar、自定义 minLength
  */
 
-import type { IamService } from '../src/iam-main.js'
+import type { IamFunctions } from '../src/iam-types.js'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { IamErrorCode } from '../src/iam-config.js'
-import { createIamInstance, defineIamSuite, postgresRedisEnv, sqliteMemoryEnv, TEST_PASSWORD, WEAK_PASSWORD } from './helpers/iam-test-suite.js'
+import { defineIamSuite, initIam, postgresRedisEnv, sqliteMemoryEnv, TEST_PASSWORD, WEAK_PASSWORD } from './helpers/iam-test-suite.js'
 
 describe('iam.user', () => {
-  const defineCommon = (getIam: () => IamService) => {
+  const defineCommon = (getIam: () => IamFunctions) => {
     // =========================================================================
     // 注册
     // =========================================================================
@@ -133,10 +133,10 @@ describe('iam.user', () => {
     // =========================================================================
 
     describe('register（禁用注册）', () => {
-      let noRegIam: IamService
+      let noRegIam: IamFunctions
 
       beforeAll(async () => {
-        noRegIam = await createIamInstance({
+        noRegIam = await initIam({
           register: { enabled: false, defaultEnabled: true },
         })
       })
@@ -162,10 +162,10 @@ describe('iam.user', () => {
     // =========================================================================
 
     describe('register（新用户默认禁用）', () => {
-      let disabledByDefaultIam: IamService
+      let disabledByDefaultIam: IamFunctions
 
       beforeAll(async () => {
-        disabledByDefaultIam = await createIamInstance({
+        disabledByDefaultIam = await initIam({
           register: { enabled: true, defaultEnabled: false },
         })
       })
@@ -255,10 +255,10 @@ describe('iam.user', () => {
     // =========================================================================
 
     describe('validatePassword（自定义密码策略）', () => {
-      let specialCharIam: IamService
+      let specialCharIam: IamFunctions
 
       beforeAll(async () => {
-        specialCharIam = await createIamInstance({
+        specialCharIam = await initIam({
           password: {
             minLength: 10,
             requireSpecialChar: true,

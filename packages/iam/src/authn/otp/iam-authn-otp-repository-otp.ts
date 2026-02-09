@@ -11,7 +11,7 @@
 
 import type { Result } from '@hai/core'
 import type { CrudCountOptions, CrudFieldDefinition, DbError, DbFunctions, TxHandle } from '@hai/db'
-import type { IamError } from '../../iam-core-types.js'
+import type { IamError } from '../../iam-types.js'
 import { err, ok } from '@hai/core'
 import { BaseCrudRepository } from '@hai/db'
 import { IamErrorCode } from '../../iam-config.js'

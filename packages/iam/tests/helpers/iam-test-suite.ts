@@ -1,7 +1,5 @@
 /**
- * =============================================================================
- * @hai/iam - 测试套件辅助
- * =============================================================================
+ * @hai/iam — 测试套件辅助
  *
  * 参照 @hai/storage 测试风格，提供多环境 IAM 测试支撑：
  * - sqlite + memory：轻量快速（默认，无需 Docker）
@@ -11,7 +9,7 @@
  * afterAll 全部清理。测试体通过闭包拿到 iam 实例。
  */
 
-import type { IamConfigInput, IamInitOptions, IamService } from '../../src/iam-main.js'
+import type { IamConfigInput, IamFunctions } from '../../src/iam-types.js'
 import type { LdapContainerLease } from './ldap-container.js'
 import type { PostgresContainerLease } from './postgres-container.js'
 import type { RedisContainerLease } from './redis-container.js'
@@ -177,29 +175,24 @@ export async function fullIntegrationEnv(): Promise<IamTestEnv & { ldapLease: Ld
 // 测试套件定义
 // =============================================================================
 
+/** 测试用的 IAM 设置类型（包含 settings + 运行时依赖，不含 db/cache） */
+type IamTestSettings = Omit<IamConfigInput, 'db' | 'cache'>
+
 /**
  * 定义 IAM 测试套件
  *
  * 参照 storage 的 defineStorageSuite 模式：
- * - beforeAll：初始化环境 + 创建 IAM 实例
+ * - beforeAll：初始化环境 + 初始化 IAM
  * - afterAll：关闭 IAM + 清理环境
  * - defineTests 接收 iam 实例引用
- *
- * @param label - 环境标签（如 'sqlite+memory'）
- * @param envOrFactory - 环境对象或异步工厂
- * @param defineTests - 测试定义函数，参数为 () => IamService 的 getter
- * @param iamConfig - IAM 配置（可选，同步值或延迟工厂）
- * @param iamOptions - IAM 初始化选项（可选，同步值或延迟工厂，不含 cache）
  */
 export function defineIamSuite(
   label: string,
   envOrFactory: IamTestEnv | (() => Promise<IamTestEnv>),
-  defineTests: (getIam: () => IamService) => void,
-  iamConfig?: IamConfigInput | (() => IamConfigInput),
-  iamOptions?: Partial<Omit<IamInitOptions, 'cache'>> | (() => Partial<Omit<IamInitOptions, 'cache'>>),
+  defineTests: (getIam: () => IamFunctions) => void,
+  iamSettings?: IamTestSettings | (() => IamTestSettings),
 ): void {
   const envRef: { env: IamTestEnv | null } = { env: null }
-  const iamRef: { instance: IamService | null } = { instance: null }
 
   describe.sequential(`iam (${label})`, () => {
     beforeAll(async () => {
@@ -207,32 +200,21 @@ export function defineIamSuite(
       envRef.env = env
       await env.setup()
 
-      const resolvedConfig = typeof iamConfig === 'function' ? iamConfig() : (iamConfig ?? {})
-      const resolvedOptions = typeof iamOptions === 'function' ? iamOptions() : (iamOptions ?? {})
+      const resolvedSettings = typeof iamSettings === 'function' ? iamSettings() : (iamSettings ?? {})
 
-      const instance = iam.create()
-      const result = await instance.init(db, resolvedConfig, {
-        cache,
-        ...resolvedOptions,
-      })
+      const result = await iam.init({ db, cache, ...resolvedSettings } as IamConfigInput)
       if (!result.success) {
         throw new Error(`IAM init failed in "${label}": ${JSON.stringify(result.error)}`)
       }
-      iamRef.instance = instance
     }, 300_000)
 
     afterAll(async () => {
-      await iamRef.instance?.close()
-      iamRef.instance = null
+      await iam.close()
       await envRef.env?.cleanup()
       envRef.env = null
     }, 300_000)
 
-    defineTests(() => {
-      if (!iamRef.instance)
-        throw new Error('IAM instance not initialized')
-      return iamRef.instance
-    })
+    defineTests(() => iam)
   })
 }
 
@@ -270,21 +252,15 @@ export function defineIamEnvSuite(
 }
 
 /**
- * 创建并初始化独立 IAM 实例
+ * 初始化 IAM 单例（不同配置）
  *
  * db / cache 需已初始化。用于需要不同配置的子场景。
+ * 注意：会重置当前 IAM 状态。
  */
-export async function createIamInstance(
-  configInput?: IamConfigInput,
-  optionsOverride?: Partial<Omit<IamInitOptions, 'cache'>>,
-): Promise<IamService> {
-  const instance = iam.create()
-  const result = await instance.init(db, configInput ?? {}, {
-    cache,
-    ...optionsOverride,
-  })
+export async function initIam(settings?: Omit<IamConfigInput, 'db' | 'cache'>): Promise<IamFunctions> {
+  const result = await iam.init({ db, cache, ...(settings ?? {}) } as IamConfigInput)
   if (!result.success) {
     throw new Error(`IAM init failed: ${JSON.stringify(result.error)}`)
   }
-  return instance
+  return iam
 }

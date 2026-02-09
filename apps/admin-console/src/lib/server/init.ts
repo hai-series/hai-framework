@@ -27,7 +27,7 @@
  */
 
 import type { CacheConfigInput } from '@hai/cache'
-import type { IamConfig } from '@hai/iam'
+import type { IamConfigSettingsInput } from '@hai/iam'
 import { cache } from '@hai/cache'
 import { core } from '@hai/core'
 import { db } from '@hai/db'
@@ -117,7 +117,7 @@ export async function initApp(): Promise<void> {
   // 2. 获取配置
   const dbConfig = core.config.getOrThrow<DbConfigInput>('db')
   const cacheConfig = core.config.getOrThrow<CacheConfigInput>('cache')
-  const iamConfig = core.config.getOrThrow<IamConfig>('iam')
+  const iamConfig = core.config.getOrThrow<IamConfigSettingsInput>('iam')
 
   // 3. 确保数据目录存在
   const path = await import('node:path')
@@ -140,7 +140,7 @@ export async function initApp(): Promise<void> {
   }
 
   // 6. 初始化 IAM 模块
-  const iamResult = await iam.init(db, iamConfig, { cache })
+  const iamResult = await iam.init({ db, cache, ...iamConfig })
   if (!iamResult.success) {
     const cause = iamResult.error.cause
     const causeMsg = cause instanceof Error ? cause.message : String(cause)
