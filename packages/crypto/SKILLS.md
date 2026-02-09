@@ -6,61 +6,77 @@
 
 ## 模块概述
 
-`@hai/crypto` 提供 SM2/SM3/SM4 国密能力与密码哈希能力，统一通过 `crypto` 入口访问。
+`@hai/crypto` 提供 SM2/SM3/SM4 国密能力与密码哈希能力，统一通过 `crypto` 入口访问。前后端通用。
 
 ---
 
 ## 入口与初始化
 
-### crypto（统一入口）
-
-- `crypto.sm2`：SM2 非对称加密操作
-- `crypto.sm3`：SM3 哈希操作
-- `crypto.sm4`：SM4 对称加密操作
-- `crypto.password`：密码哈希提供者
-- `crypto.init(config?)`：初始化/重新配置
-- `crypto.config`：当前配置（浅拷贝）
-- `crypto.isInitialized`：是否已初始化
-
-### 初始化（Node.js）
-
-当配置由 `core.init` 统一加载时，使用前需显式校验配置：
-
 ```ts
-import { core } from '@hai/core'
-import { crypto, CryptoConfigSchema } from '@hai/crypto'
+import { crypto } from '@hai/crypto'
 
-core.config.validate('crypto', CryptoConfigSchema)
-const cfg = core.config.get('crypto')
-if (cfg) {
-  crypto.init(cfg)
-}
+// 初始化（必须）
+const result = await crypto.init({ defaultAlgorithm: 'sm' })
+// result: Result<void, CryptoError>
+
+// 关闭
+await crypto.close()
+
+// 状态
+crypto.isInitialized // boolean
+crypto.config // CryptoConfig | null
+```
+
+### 子功能访问（需先 init）
+
+- `crypto.sm2` — SM2 非对称加密操作
+- `crypto.sm3` — SM3 哈希操作
+- `crypto.sm4` — SM4 对称加密操作
+- `crypto.password` — 密码哈希操作
+
+未初始化时访问以上属性将返回 `NOT_INITIALIZED` 错误。
+
+---
+
+## 目录结构
+
+```
+packages/crypto/
+  package.json
+  README.md
+  SKILLS.md
+  tsconfig.json
+  tsup.config.ts
+  vitest.config.ts
+  messages/
+    en-US.json
+    zh-CN.json
+  src/
+    index.ts            # 唯一入口，仅做 export * 聚合
+    crypto-main.ts      # 服务对象（export const crypto）
+    crypto-types.ts     # 公共类型
+    crypto-config.ts    # 错误码 + Zod Schema + 配置类型
+    crypto-i18n.ts      # i18n 消息获取器
+    crypto-password.ts  # 密码哈希操作工厂
+    crypto-sm2.ts       # SM2 算法工厂
+    crypto-sm3.ts       # SM3 算法工厂
+    crypto-sm4.ts       # SM4 算法工厂
+  tests/
 ```
 
 ---
 
-## i18n
-
-```ts
-import { cryptoM } from '@hai/crypto'
-
-const message = cryptoM('crypto_sm2EncryptEmpty')
-```
-
----
-
-## 配置类型
+## 配置说明
 
 ### CryptoConfig
 
-| 字段             | 类型                      | 说明                  |
-| ---------------- | ------------------------- | --------------------- |
-| defaultAlgorithm | `'sm'`                    | 默认算法（当前仅 sm） |
-| custom           | `Record<string, unknown>` | 自定义配置            |
+| 字段             | 类型   | 默认值 | 说明             |
+| ---------------- | ------ | ------ | ---------------- |
+| defaultAlgorithm | `'sm'` | `'sm'` | 默认算法（国密） |
 
 ### CryptoConfigInput
 
-`CryptoConfig` 的输入类型，允许字段可选。
+`CryptoConfig` 的输入类型，所有字段可选。
 
 ---
 
@@ -69,6 +85,13 @@ const message = cryptoM('crypto_sm2EncryptEmpty')
 ### generateKeyPair()
 
 返回：`Result<SM2KeyPair, CryptoError>`
+
+```ts
+interface SM2KeyPair {
+  publicKey: string // 十六进制，含 04 前缀
+  privateKey: string // 十六进制，64 字符
+}
+```
 
 ### encrypt(data, publicKey, options?)
 
@@ -79,6 +102,8 @@ const message = cryptoM('crypto_sm2EncryptEmpty')
 | options.cipherMode   | `0 \| 1`            | 密文格式：0=C1C2C3，1=C1C3C2（默认） |
 | options.outputFormat | `'hex' \| 'base64'` | 输出格式（默认 hex）                 |
 
+返回：`Result<string, CryptoError>`
+
 ### decrypt(ciphertext, privateKey, options?)
 
 | 参数               | 类型     | 说明                  |
@@ -86,6 +111,8 @@ const message = cryptoM('crypto_sm2EncryptEmpty')
 | ciphertext         | `string` | 密文（hex 或 base64） |
 | privateKey         | `string` | 私钥（十六进制）      |
 | options.cipherMode | `0 \| 1` | 密文格式              |
+
+返回：`Result<string, CryptoError>`
 
 ### sign(data, privateKey, options?)
 
@@ -96,6 +123,8 @@ const message = cryptoM('crypto_sm2EncryptEmpty')
 | options.hash   | `boolean` | 是否先做 SM3 哈希（默认 true）      |
 | options.userId | `string`  | 用户标识（默认 "1234567812345678"） |
 
+返回：`Result<string, CryptoError>`
+
 ### verify(data, signature, publicKey, options?)
 
 | 参数      | 类型     | 说明     |
@@ -103,6 +132,8 @@ const message = cryptoM('crypto_sm2EncryptEmpty')
 | data      | `string` | 原始数据 |
 | signature | `string` | 签名     |
 | publicKey | `string` | 公钥     |
+
+返回：`Result<boolean, CryptoError>`
 
 ### isValidPublicKey(key) / isValidPrivateKey(key)
 
@@ -120,12 +151,16 @@ const message = cryptoM('crypto_sm2EncryptEmpty')
 | options.inputEncoding | `'utf8' \| 'hex'`      | 输入编码（默认 utf8） |
 | options.outputFormat  | `'hex' \| 'array'`     | 输出格式（默认 hex）  |
 
+返回：`Result<string, CryptoError>`
+
 ### hmac(data, key)
 
 | 参数 | 类型     | 说明       |
 | ---- | -------- | ---------- |
 | data | `string` | 待计算数据 |
 | key  | `string` | 密钥       |
+
+返回：`Result<string, CryptoError>`
 
 ### verify(data, expectedHash)
 
@@ -149,6 +184,8 @@ const message = cryptoM('crypto_sm2EncryptEmpty')
 | options.iv           | `string`            | CBC 模式 IV             |
 | options.outputFormat | `'hex' \| 'base64'` | 输出格式（默认 hex）    |
 
+返回：`Result<string, CryptoError>`
+
 ### decrypt(ciphertext, key, options?)
 
 | 参数         | 类型             | 说明                  |
@@ -158,9 +195,18 @@ const message = cryptoM('crypto_sm2EncryptEmpty')
 | options.mode | `'ecb' \| 'cbc'` | 解密模式              |
 | options.iv   | `string`         | CBC 模式 IV           |
 
+返回：`Result<string, CryptoError>`
+
 ### encryptWithIV(data, key)
 
 返回：`Result<SM4EncryptWithIVResult, CryptoError>`（自动生成 IV）
+
+```ts
+interface SM4EncryptWithIVResult {
+  ciphertext: string
+  iv: string
+}
+```
 
 ### decryptWithIV(ciphertext, key, iv)
 
@@ -168,7 +214,7 @@ const message = cryptoM('crypto_sm2EncryptEmpty')
 
 ### deriveKey(password, salt)
 
-返回：`string`（派生密钥）
+返回：`string`（基于 SM3 派生的 32 字符十六进制密钥）
 
 ### isValidKey(key) / isValidIV(iv)
 
@@ -178,20 +224,22 @@ const message = cryptoM('crypto_sm2EncryptEmpty')
 
 ## 密码哈希（crypto.password）
 
-### crypto.password.create(config?)
+### hash(password, config?)
 
 | 参数              | 类型     | 说明                   |
 | ----------------- | -------- | ---------------------- |
+| password          | `string` | 明文密码               |
 | config.saltLength | `number` | 盐值长度（默认 16）    |
 | config.iterations | `number` | 迭代次数（默认 10000） |
 
-返回：`PasswordProvider`
-
-### PasswordProvider.hash(password)
-
 返回：`Result<string, CryptoError>`（格式：`$hai$iterations$salt$hash`）
 
-### PasswordProvider.verify(password, hash)
+### verify(password, hash)
+
+| 参数     | 类型     | 说明         |
+| -------- | -------- | ------------ |
+| password | `string` | 明文密码     |
+| hash     | `string` | 存储的哈希值 |
 
 返回：`Result<boolean, CryptoError>`
 
@@ -201,17 +249,28 @@ const message = cryptoM('crypto_sm2EncryptEmpty')
 
 | 错误码 | 常量                    | 说明          |
 | ------ | ----------------------- | ------------- |
-| 4000   | `KEY_GENERATION_FAILED` | 密钥生成失败  |
-| 4001   | `ENCRYPTION_FAILED`     | 加密失败      |
-| 4002   | `DECRYPTION_FAILED`     | 解密失败      |
-| 4003   | `SIGN_FAILED`           | 签名失败      |
-| 4004   | `VERIFY_FAILED`         | 验签失败      |
-| 4005   | `INVALID_KEY`           | 无效密钥      |
-| 4020   | `HASH_FAILED`           | 哈希计算失败  |
-| 4021   | `HMAC_FAILED`           | HMAC 计算失败 |
-| 4022   | `INVALID_INPUT`         | 无效输入      |
-| 4040   | `INVALID_IV`            | 无效 IV       |
-| 4060   | `NOT_INITIALIZED`       | 未初始化      |
-| 4061   | `UNSUPPORTED_ALGORITHM` | 不支持算法    |
-| 4062   | `CONFIG_ERROR`          | 配置错误      |
-| 4063   | `OPERATION_FAILED`      | 操作失败      |
+| 4000   | `OPERATION_FAILED`      | 操作失败      |
+| 4001   | `INVALID_INPUT`         | 无效输入      |
+| 4002   | `INVALID_KEY`           | 无效密钥      |
+| 4010   | `NOT_INITIALIZED`       | 未初始化      |
+| 4011   | `CONFIG_ERROR`          | 配置错误      |
+| 4012   | `UNSUPPORTED_ALGORITHM` | 不支持算法    |
+| 4020   | `KEY_GENERATION_FAILED` | 密钥生成失败  |
+| 4021   | `ENCRYPTION_FAILED`     | 加密失败      |
+| 4022   | `DECRYPTION_FAILED`     | 解密失败      |
+| 4023   | `SIGN_FAILED`           | 签名失败      |
+| 4024   | `VERIFY_FAILED`         | 验签失败      |
+| 4040   | `HASH_FAILED`           | 哈希计算失败  |
+| 4041   | `HMAC_FAILED`           | HMAC 计算失败 |
+| 4060   | `INVALID_IV`            | 无效 IV       |
+
+---
+
+## 注意事项
+
+- 必须先调用 `crypto.init()` 才能使用 sm2/sm3/sm4/password 操作
+- `init()` 返回 `Promise<Result<void, CryptoError>>`，需检查返回值
+- 所有操作返回 `Result<T, CryptoError>`，需通过 `result.success` 判断
+- SM2 公钥支持带 `04` 前缀和不带前缀两种格式
+- SM4 CBC 模式必须提供 IV，推荐使用 `encryptWithIV` 自动生成
+- 密码哈希格式为 `$hai$iterations$salt$hash`，verify 时会自动解析

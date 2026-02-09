@@ -1,57 +1,118 @@
-import fs from 'node:fs'
-import os from 'node:os'
-import path from 'node:path'
-import { core } from '@hai/core'
-import { describe, expect, it } from 'vitest'
-import { crypto, CryptoConfigSchema } from '../src/index.js'
-
-/**
- * @example
- * ```ts
- * core.config.load('crypto', '/path/to/crypto.yml', CryptoConfigSchema)
- * crypto.init(core.config.get('crypto'))
- * ```
- */
+import { afterEach, describe, expect, it } from 'vitest'
+import { crypto, CryptoConfigSchema, CryptoErrorCode } from '../src/index.js'
 
 describe('crypto.init', () => {
-  it('should throw when config not loaded', () => {
-    expect(() => crypto.init()).toThrow()
+  afterEach(async () => {
+    await crypto.close()
   })
 
-  it('should initialize after loading config', () => {
-    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hai-crypto-'))
-    const filePath = path.join(tempDir, 'crypto.yml')
+  it('should not be initialized by default', () => {
+    expect(crypto.isInitialized).toBe(false)
+    expect(crypto.config).toBeNull()
+  })
 
-    fs.writeFileSync(filePath, 'defaultAlgorithm: sm\n', 'utf8')
+  it('should initialize with valid config', async () => {
+    const result = await crypto.init({ defaultAlgorithm: 'sm' })
+    expect(result.success).toBe(true)
+    expect(crypto.isInitialized).toBe(true)
+    expect(crypto.config).toEqual({ defaultAlgorithm: 'sm' })
+  })
 
-    const loadResult = core.config.load('crypto', filePath, CryptoConfigSchema)
-    expect(loadResult.success).toBe(true)
+  it('should initialize with default config', async () => {
+    const result = await crypto.init({})
+    expect(result.success).toBe(true)
+    expect(crypto.isInitialized).toBe(true)
+    expect(crypto.config?.defaultAlgorithm).toBe('sm')
+  })
 
-    const cfg = core.config.get('crypto')
-    expect(cfg).toBeTruthy()
+  it('should return CONFIG_ERROR for invalid config', async () => {
+    // @ts-expect-error 测试无效配置
+    const result = await crypto.init({ defaultAlgorithm: 'invalid' })
+    expect(result.success).toBe(false)
+    if (result.success)
+      return
+    expect(result.error.code).toBe(CryptoErrorCode.CONFIG_ERROR)
+  })
 
-    crypto.init(cfg as { defaultAlgorithm?: 'sm', custom?: Record<string, unknown> })
+  it('should close and reset state', async () => {
+    await crypto.init({})
+    expect(crypto.isInitialized).toBe(true)
+
+    await crypto.close()
+    expect(crypto.isInitialized).toBe(false)
+    expect(crypto.config).toBeNull()
+  })
+
+  it('should re-init after close', async () => {
+    await crypto.init({})
+    await crypto.close()
+    const result = await crypto.init({ defaultAlgorithm: 'sm' })
+    expect(result.success).toBe(true)
     expect(crypto.isInitialized).toBe(true)
   })
 
-  it('should return a new config object', () => {
-    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'hai-crypto-'))
-    const filePath = path.join(tempDir, 'crypto.yml')
+  it('should export CryptoConfigSchema', () => {
+    const parsed = CryptoConfigSchema.parse({})
+    expect(parsed.defaultAlgorithm).toBe('sm')
+  })
 
-    fs.writeFileSync(filePath, 'defaultAlgorithm: sm\ncustom:\n  feature: true\n', 'utf8')
+  it('should return NOT_INITIALIZED when accessing sm2 before init', () => {
+    const result = crypto.sm2.generateKeyPair()
+    expect(result.success).toBe(false)
+    if (result.success)
+      return
+    expect(result.error.code).toBe(CryptoErrorCode.NOT_INITIALIZED)
+  })
 
-    const loadResult = core.config.load('crypto', filePath, CryptoConfigSchema)
-    expect(loadResult.success).toBe(true)
+  it('should return NOT_INITIALIZED when accessing sm3 before init', () => {
+    const result = crypto.sm3.hash('hello')
+    expect(result.success).toBe(false)
+    if (result.success)
+      return
+    expect(result.error.code).toBe(CryptoErrorCode.NOT_INITIALIZED)
+  })
 
-    const cfg = core.config.get('crypto')
-    expect(cfg).toBeTruthy()
+  it('should return NOT_INITIALIZED when accessing sm4 before init', () => {
+    const key = '00112233445566778899aabbccddeeff'
+    const result = crypto.sm4.encrypt('hello', key)
+    expect(result.success).toBe(false)
+    if (result.success)
+      return
+    expect(result.error.code).toBe(CryptoErrorCode.NOT_INITIALIZED)
+  })
 
-    crypto.init(cfg as { defaultAlgorithm?: 'sm', custom?: Record<string, unknown> })
+  it('should return NOT_INITIALIZED when accessing password before init', () => {
+    const result = crypto.password.hash('password')
+    expect(result.success).toBe(false)
+    if (result.success)
+      return
+    expect(result.error.code).toBe(CryptoErrorCode.NOT_INITIALIZED)
+  })
 
-    const first = crypto.config
-    const second = crypto.config
-    expect(first).toEqual(second)
-    expect(first).not.toBe(second)
-    expect(first.defaultAlgorithm).toBe('sm')
+  it('should return NOT_INITIALIZED after close', async () => {
+    await crypto.init({})
+    await crypto.close()
+
+    const result = crypto.sm3.hash('hello')
+    expect(result.success).toBe(false)
+    if (result.success)
+      return
+    expect(result.error.code).toBe(CryptoErrorCode.NOT_INITIALIZED)
+  })
+
+  it('should overwrite previous state on re-init', async () => {
+    await crypto.init({})
+    const hash1 = crypto.sm3.hash('test')
+    expect(hash1.success).toBe(true)
+
+    const result = await crypto.init({ defaultAlgorithm: 'sm' })
+    expect(result.success).toBe(true)
+
+    // 重新初始化后功能仍正常
+    const hash2 = crypto.sm3.hash('test')
+    expect(hash2.success).toBe(true)
+    if (!hash1.success || !hash2.success)
+      return
+    expect(hash1.data).toBe(hash2.data)
   })
 })

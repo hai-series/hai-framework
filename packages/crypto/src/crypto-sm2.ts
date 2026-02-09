@@ -1,27 +1,5 @@
-/**
- * =============================================================================
- * @hai/crypto - SM2 国密非对称加密算法
- * =============================================================================
- *
- * SM2 国密非对称加密算法实现，基于 sm-crypto 库。
- *
- * SM2 算法特点：
- * - 基于椭圆曲线密码学（ECC）
- * - 密钥长度 256 位
- * - 支持加密、解密、签名、验签
- * - 国家密码管理局推荐算法
- *
- * 适用场景：
- * - 数据加密传输
- * - 数字签名
- * - 身份认证
- * - 密钥协商
- *
- * @module crypto-sm2
- * =============================================================================
- */
-
 import type { Result } from '@hai/core'
+
 import type {
   CryptoError,
   SM2EncryptOptions,
@@ -39,40 +17,19 @@ import { cryptoM } from './crypto-i18n.js'
 
 const { sm2 } = smCrypto
 
-// =============================================================================
-// SM2 算法实现
-// =============================================================================
+// ─── SM2 算法实现 ───
 
 /**
- * 创建 SM2 算法实例。
+ * 创建 SM2 算法操作实例
  *
- * @returns SM2 操作接口
+ * 基于 sm-crypto 库实现 SM2 非对称加密、签名与验签。
+ * 公钥支持带/不带 04 前缀两种格式（内部统一补齐）。
+ * 密文支持 hex/base64 两种格式（解密时自动检测）。
  *
- * @example
- * ```ts
- * import { createSM2 } from '@hai/crypto'
- *
- * const sm2 = createSM2()
- * const keyPair = sm2.generateKeyPair()
- * if (keyPair.success) {
- *   sm2.encrypt('data', keyPair.data.publicKey)
- * }
- * ```
+ * @returns SM2Operations 接口实现
  */
 export function createSM2(): SM2Operations {
   return {
-    /**
-     * 生成 SM2 密钥对。
-     *
-     * @example
-     * ```ts
-     * const sm2 = createSM2()
-     * const keyPair = sm2.generateKeyPair()
-     * if (keyPair.success) {
-     *   const { publicKey, privateKey } = keyPair.data
-     * }
-     * ```
-     */
     generateKeyPair(): Result<SM2KeyPair, CryptoError> {
       try {
         const keyPair = sm2.generateKeyPairHex()
@@ -84,28 +41,12 @@ export function createSM2(): SM2Operations {
       catch (error) {
         return err({
           code: CryptoErrorCode.KEY_GENERATION_FAILED,
-          message: cryptoM('crypto_sm2KeyPairGenerateFailed', { error: error instanceof Error ? error.message : String(error) }),
+          message: cryptoM('crypto_sm2KeyPairGenerateFailed', { params: { error: error instanceof Error ? error.message : String(error) } }),
           cause: error,
         })
       }
     },
 
-    /**
-     * 使用公钥加密数据。
-     *
-     * @param data - 待加密明文
-     * @param publicKey - 公钥
-     * @param options - 可选参数
-     *
-     * @example
-     * ```ts
-     * const sm2 = createSM2()
-     * const keyPair = sm2.generateKeyPair()
-     * if (keyPair.success) {
-     *   sm2.encrypt('hello', keyPair.data.publicKey)
-     * }
-     * ```
-     */
     encrypt(
       data: string,
       publicKey: string,
@@ -141,31 +82,12 @@ export function createSM2(): SM2Operations {
       catch (error) {
         return err({
           code: CryptoErrorCode.ENCRYPTION_FAILED,
-          message: cryptoM('crypto_sm2EncryptFailed', { error: error instanceof Error ? error.message : String(error) }),
+          message: cryptoM('crypto_sm2EncryptFailed', { params: { error: error instanceof Error ? error.message : String(error) } }),
           cause: error,
         })
       }
     },
 
-    /**
-     * 使用私钥解密数据。
-     *
-     * @param ciphertext - 密文
-     * @param privateKey - 私钥
-     * @param options - 可选参数
-     *
-     * @example
-     * ```ts
-     * const sm2 = createSM2()
-     * const keyPair = sm2.generateKeyPair()
-     * if (keyPair.success) {
-     *   const encrypted = sm2.encrypt('hello', keyPair.data.publicKey)
-     *   if (encrypted.success) {
-     *     sm2.decrypt(encrypted.data, keyPair.data.privateKey)
-     *   }
-     * }
-     * ```
-     */
     decrypt(
       ciphertext: string,
       privateKey: string,
@@ -201,28 +123,12 @@ export function createSM2(): SM2Operations {
       catch (error) {
         return err({
           code: CryptoErrorCode.DECRYPTION_FAILED,
-          message: cryptoM('crypto_sm2DecryptFailedWithError', { error: error instanceof Error ? error.message : String(error) }),
+          message: cryptoM('crypto_sm2DecryptFailedWithError', { params: { error: error instanceof Error ? error.message : String(error) } }),
           cause: error,
         })
       }
     },
 
-    /**
-     * 使用私钥签名数据。
-     *
-     * @param data - 待签名数据
-     * @param privateKey - 私钥
-     * @param options - 可选参数
-     *
-     * @example
-     * ```ts
-     * const sm2 = createSM2()
-     * const keyPair = sm2.generateKeyPair()
-     * if (keyPair.success) {
-     *   sm2.sign('data', keyPair.data.privateKey)
-     * }
-     * ```
-     */
     sign(
       data: string,
       privateKey: string,
@@ -252,32 +158,12 @@ export function createSM2(): SM2Operations {
       catch (error) {
         return err({
           code: CryptoErrorCode.SIGN_FAILED,
-          message: cryptoM('crypto_sm2SignFailed', { error: error instanceof Error ? error.message : String(error) }),
+          message: cryptoM('crypto_sm2SignFailed', { params: { error: error instanceof Error ? error.message : String(error) } }),
           cause: error,
         })
       }
     },
 
-    /**
-     * 使用公钥验签。
-     *
-     * @param data - 原始数据
-     * @param signature - 签名
-     * @param publicKey - 公钥
-     * @param options - 可选参数
-     *
-     * @example
-     * ```ts
-     * const sm2 = createSM2()
-     * const keyPair = sm2.generateKeyPair()
-     * if (keyPair.success) {
-     *   const signature = sm2.sign('data', keyPair.data.privateKey)
-     *   if (signature.success) {
-     *     sm2.verify('data', signature.data, keyPair.data.publicKey)
-     *   }
-     * }
-     * ```
-     */
     verify(
       data: string,
       signature: string,
@@ -302,24 +188,12 @@ export function createSM2(): SM2Operations {
       catch (error) {
         return err({
           code: CryptoErrorCode.VERIFY_FAILED,
-          message: cryptoM('crypto_sm2VerifyFailed', { error: error instanceof Error ? error.message : String(error) }),
+          message: cryptoM('crypto_sm2VerifyFailed', { params: { error: error instanceof Error ? error.message : String(error) } }),
           cause: error,
         })
       }
     },
 
-    /**
-     * 校验公钥格式是否合法。
-     *
-     * @param key - 公钥
-     * @returns 是否合法
-     *
-     * @example
-     * ```ts
-     * const sm2 = createSM2()
-     * const ok = sm2.isValidPublicKey('04...')
-     * ```
-     */
     isValidPublicKey(key: string): boolean {
       if (!key || typeof key !== 'string')
         return false
@@ -328,18 +202,6 @@ export function createSM2(): SM2Operations {
       return /^[0-9a-f]{128}$/i.test(cleanKey)
     },
 
-    /**
-     * 校验私钥格式是否合法。
-     *
-     * @param key - 私钥
-     * @returns 是否合法
-     *
-     * @example
-     * ```ts
-     * const sm2 = createSM2()
-     * const ok = sm2.isValidPrivateKey('...')
-     * ```
-     */
     isValidPrivateKey(key: string): boolean {
       if (!key || typeof key !== 'string')
         return false
@@ -349,51 +211,50 @@ export function createSM2(): SM2Operations {
   }
 }
 
-// =============================================================================
-// 辅助函数（前后端通用）
-// =============================================================================
+// ─── 辅助函数 ───
 
 /**
- * 判断字符串是否为 Base64 格式。
+ * 判断字符串是否为 Base64 格式
+ *
+ * 使用简单启发式：包含 +、/ 或以 = 结尾视为 base64。
  *
  * @param str - 待检测字符串
- * @returns 是否为 Base64 格式
  */
 function isBase64(str: string): boolean {
   return str.includes('+') || str.includes('/') || str.endsWith('=')
 }
 
 /**
- * Hex 转 Base64（前后端通用）。
+ * Hex 字符串转 Base64 编码
  *
- * @param hex - 十六进制字符串
- * @returns Base64 字符串
+ * 前后端通用：优先使用 btoa（浏览器），回退到 Buffer（Node.js）。
+ *
+ * @param hex - 十六进制字符串（长度必须为偶数）
+ * @returns Base64 编码字符串
  */
 function hexToBase64(hex: string): string {
   const bytes = new Uint8Array(hex.length / 2)
   for (let i = 0; i < hex.length; i += 2) {
     bytes[i / 2] = Number.parseInt(hex.slice(i, i + 2), 16)
   }
-  // 使用前后端通用的方式
   if (typeof btoa !== 'undefined') {
-    // 浏览器环境
     return btoa(String.fromCharCode(...bytes))
   }
-  // Node.js 环境
   // eslint-disable-next-line node/prefer-global/buffer
   return globalThis.Buffer.from(bytes).toString('base64')
 }
 
 /**
- * Base64 转 Hex（前后端通用）。
+ * Base64 编码转 Hex 字符串
  *
- * @param base64 - Base64 字符串
- * @returns 十六进制字符串
+ * 前后端通用：优先使用 atob（浏览器），回退到 Buffer（Node.js）。
+ *
+ * @param base64 - Base64 编码字符串
+ * @returns 小写十六进制字符串
  */
 function base64ToHex(base64: string): string {
   let bytes: Uint8Array
   if (typeof atob !== 'undefined') {
-    // 浏览器环境
     const binary = atob(base64)
     bytes = new Uint8Array(binary.length)
     for (let i = 0; i < binary.length; i++) {
@@ -401,7 +262,6 @@ function base64ToHex(base64: string): string {
     }
   }
   else {
-    // Node.js 环境
     // eslint-disable-next-line node/prefer-global/buffer
     bytes = new Uint8Array(globalThis.Buffer.from(base64, 'base64'))
   }

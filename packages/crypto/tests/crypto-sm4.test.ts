@@ -1,31 +1,51 @@
-import { describe, expect, it } from 'vitest'
+import { beforeAll, describe, expect, it } from 'vitest'
 import { crypto, CryptoErrorCode } from '../src/index.js'
 
-/**
- * @example
- * ```ts
- * const key = crypto.sm4.generateKey()
- * const encrypted = crypto.sm4.encrypt('data', key)
- * ```
- */
-
 describe('crypto.sm4', () => {
-  it('should generate key and iv', () => {
-    const key = crypto.sm4.generateKey()
-    const iv = crypto.sm4.generateIV()
+  beforeAll(async () => {
+    await crypto.init({})
+  })
 
+  // ─── 密钥与 IV 生成 ───
+
+  it('should generate key as 32-char hex', () => {
+    const key = crypto.sm4.generateKey()
     expect(key).toMatch(/^[0-9a-f]{32}$/i)
+  })
+
+  it('should generate iv as 32-char hex', () => {
+    const iv = crypto.sm4.generateIV()
     expect(iv).toMatch(/^[0-9a-f]{32}$/i)
   })
 
-  it('should validate key and iv format', () => {
-    expect(crypto.sm4.isValidKey('00112233445566778899aabbccddeeff')).toBe(true)
-    expect(crypto.sm4.isValidIV('00112233445566778899aabbccddeeff')).toBe(true)
-    expect(crypto.sm4.isValidKey('bad')).toBe(false)
-    expect(crypto.sm4.isValidIV('bad')).toBe(false)
+  it('should generate different keys each time', () => {
+    const key1 = crypto.sm4.generateKey()
+    const key2 = crypto.sm4.generateKey()
+    expect(key1).not.toBe(key2)
   })
 
-  it('should encrypt and decrypt (ecb)', () => {
+  // ─── 格式校验 ───
+
+  it('should validate correct key and iv format', () => {
+    expect(crypto.sm4.isValidKey('00112233445566778899aabbccddeeff')).toBe(true)
+    expect(crypto.sm4.isValidIV('00112233445566778899aabbccddeeff')).toBe(true)
+  })
+
+  it('should reject invalid key format', () => {
+    expect(crypto.sm4.isValidKey('bad')).toBe(false)
+    expect(crypto.sm4.isValidKey('00112233445566778899aabbccddeef')).toBe(false) // 31 chars
+    expect(crypto.sm4.isValidKey('00112233445566778899aabbccddeefff')).toBe(false) // 33 chars
+    expect(crypto.sm4.isValidKey('zz112233445566778899aabbccddeeff')).toBe(false) // non-hex
+  })
+
+  it('should reject invalid iv format', () => {
+    expect(crypto.sm4.isValidIV('bad')).toBe(false)
+    expect(crypto.sm4.isValidIV('')).toBe(false)
+  })
+
+  // ─── ECB 模式 ───
+
+  it('should encrypt and decrypt in ecb mode (default)', () => {
     const key = crypto.sm4.generateKey()
     const encrypted = crypto.sm4.encrypt('hello', key)
     expect(encrypted.success).toBe(true)
@@ -47,6 +67,7 @@ describe('crypto.sm4', () => {
     if (!encrypted.success)
       return
 
+    // base64 密文应能被自动检测并解密
     const decrypted = crypto.sm4.decrypt(encrypted.data, key)
     expect(decrypted.success).toBe(true)
     if (!decrypted.success)
@@ -55,12 +76,77 @@ describe('crypto.sm4', () => {
     expect(decrypted.data).toBe('hello')
   })
 
-  it('should encrypt and decrypt with iv (cbc)', () => {
+  it('should produce different ciphertext for different data', () => {
+    const key = crypto.sm4.generateKey()
+    const enc1 = crypto.sm4.encrypt('hello', key)
+    const enc2 = crypto.sm4.encrypt('world', key)
+    expect(enc1.success && enc2.success).toBe(true)
+    if (!enc1.success || !enc2.success)
+      return
+
+    expect(enc1.data).not.toBe(enc2.data)
+  })
+
+  it('should encrypt and decrypt Chinese text', () => {
+    const key = crypto.sm4.generateKey()
+    const text = '你好世界，这是一段中文'
+    const encrypted = crypto.sm4.encrypt(text, key)
+    expect(encrypted.success).toBe(true)
+    if (!encrypted.success)
+      return
+
+    const decrypted = crypto.sm4.decrypt(encrypted.data, key)
+    expect(decrypted.success).toBe(true)
+    if (!decrypted.success)
+      return
+
+    expect(decrypted.data).toBe(text)
+  })
+
+  it('should encrypt and decrypt long text', () => {
+    const key = crypto.sm4.generateKey()
+    const text = 'a'.repeat(10000)
+    const encrypted = crypto.sm4.encrypt(text, key)
+    expect(encrypted.success).toBe(true)
+    if (!encrypted.success)
+      return
+
+    const decrypted = crypto.sm4.decrypt(encrypted.data, key)
+    expect(decrypted.success).toBe(true)
+    if (!decrypted.success)
+      return
+
+    expect(decrypted.data).toBe(text)
+  })
+
+  // ─── CBC 模式 ───
+
+  it('should encrypt and decrypt in cbc mode with explicit iv', () => {
+    const key = crypto.sm4.generateKey()
+    const iv = crypto.sm4.generateIV()
+    const encrypted = crypto.sm4.encrypt('hello', key, { mode: 'cbc', iv })
+    expect(encrypted.success).toBe(true)
+    if (!encrypted.success)
+      return
+
+    const decrypted = crypto.sm4.decrypt(encrypted.data, key, { mode: 'cbc', iv })
+    expect(decrypted.success).toBe(true)
+    if (!decrypted.success)
+      return
+
+    expect(decrypted.data).toBe('hello')
+  })
+
+  it('should encrypt and decrypt with encryptWithIV/decryptWithIV', () => {
     const key = crypto.sm4.generateKey()
     const encrypted = crypto.sm4.encryptWithIV('hello', key)
     expect(encrypted.success).toBe(true)
     if (!encrypted.success)
       return
+
+    // 返回结构中应包含密文与 IV
+    expect(encrypted.data.ciphertext).toBeDefined()
+    expect(encrypted.data.iv).toMatch(/^[0-9a-f]{32}$/i)
 
     const decrypted = crypto.sm4.decryptWithIV(encrypted.data.ciphertext, key, encrypted.data.iv)
     expect(decrypted.success).toBe(true)
@@ -70,21 +156,7 @@ describe('crypto.sm4', () => {
     expect(decrypted.data).toBe('hello')
   })
 
-  it('should derive key from password and salt', () => {
-    const key = crypto.sm4.deriveKey('password', 'salt')
-    expect(key).toMatch(/^[0-9a-f]{32}$/i)
-  })
-
-  it('should return INVALID_KEY for invalid key', () => {
-    const result = crypto.sm4.encrypt('data', 'invalid-key')
-    expect(result.success).toBe(false)
-    if (result.success)
-      return
-
-    expect(result.error.code).toBe(CryptoErrorCode.INVALID_KEY)
-  })
-
-  it('should return INVALID_IV when missing iv in cbc', () => {
+  it('should return INVALID_IV when missing iv in cbc encrypt', () => {
     const key = crypto.sm4.generateKey()
     const result = crypto.sm4.encrypt('data', key, { mode: 'cbc' })
     expect(result.success).toBe(false)
@@ -94,7 +166,7 @@ describe('crypto.sm4', () => {
     expect(result.error.code).toBe(CryptoErrorCode.INVALID_IV)
   })
 
-  it('should return INVALID_IV when decrypting cbc without iv', () => {
+  it('should return INVALID_IV when missing iv in cbc decrypt', () => {
     const key = crypto.sm4.generateKey()
     const result = crypto.sm4.decrypt('abcd', key, { mode: 'cbc' })
     expect(result.success).toBe(false)
@@ -102,5 +174,60 @@ describe('crypto.sm4', () => {
       return
 
     expect(result.error.code).toBe(CryptoErrorCode.INVALID_IV)
+  })
+
+  it('should return INVALID_IV when iv format is invalid in cbc encrypt', () => {
+    const key = crypto.sm4.generateKey()
+    const result = crypto.sm4.encrypt('data', key, { mode: 'cbc', iv: 'bad-iv' })
+    expect(result.success).toBe(false)
+    if (result.success)
+      return
+
+    expect(result.error.code).toBe(CryptoErrorCode.INVALID_IV)
+  })
+
+  // ─── 密钥派生 ───
+
+  it('should derive key from password and salt', () => {
+    const key = crypto.sm4.deriveKey('password', 'salt')
+    expect(key).toMatch(/^[0-9a-f]{32}$/i)
+  })
+
+  it('should derive same key for same inputs (deterministic)', () => {
+    const key1 = crypto.sm4.deriveKey('password', 'salt')
+    const key2 = crypto.sm4.deriveKey('password', 'salt')
+    expect(key1).toBe(key2)
+  })
+
+  it('should derive different keys for different password', () => {
+    const key1 = crypto.sm4.deriveKey('password1', 'salt')
+    const key2 = crypto.sm4.deriveKey('password2', 'salt')
+    expect(key1).not.toBe(key2)
+  })
+
+  it('should derive different keys for different salt', () => {
+    const key1 = crypto.sm4.deriveKey('password', 'salt1')
+    const key2 = crypto.sm4.deriveKey('password', 'salt2')
+    expect(key1).not.toBe(key2)
+  })
+
+  // ─── 错误处理 ───
+
+  it('should return INVALID_KEY for invalid key on encrypt', () => {
+    const result = crypto.sm4.encrypt('data', 'invalid-key')
+    expect(result.success).toBe(false)
+    if (result.success)
+      return
+
+    expect(result.error.code).toBe(CryptoErrorCode.INVALID_KEY)
+  })
+
+  it('should return INVALID_KEY for invalid key on decrypt', () => {
+    const result = crypto.sm4.decrypt('data', 'invalid-key')
+    expect(result.success).toBe(false)
+    if (result.success)
+      return
+
+    expect(result.error.code).toBe(CryptoErrorCode.INVALID_KEY)
   })
 })
