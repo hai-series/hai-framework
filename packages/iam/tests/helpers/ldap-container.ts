@@ -295,8 +295,8 @@ function parseLdifOutput(output: string): LdapSearchEntry[] {
 
       // 处理 base64 编码值（以 :: 分隔）
       if (line.charAt(colonIdx + 1) === ':') {
-        const { Buffer: NodeBuffer } = await import('node:buffer')
-        value = NodeBuffer.from(value, 'base64').toString('utf-8')
+        // eslint-disable-next-line node/prefer-global/buffer -- 测试辅助函数，直接使用 Node.js Buffer
+        value = Buffer.from(value, 'base64').toString('utf-8')
       }
 
       if (key === 'dn') {

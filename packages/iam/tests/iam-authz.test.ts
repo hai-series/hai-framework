@@ -4,10 +4,10 @@
  * =============================================================================
  *
  * 覆盖范围：
- * - 角色 CRUD：创建/获取/更新/删除、不存在场景、重复 code
+ * - 角色 CRUD：创建/获取/更新/删除、不存在场景、重复 code、分页边界
  * - 权限 CRUD：同上
- * - 角色-权限关联：关联/移除/查询、角色/权限不存在、重复关联幂等
- * - 用户-角色关联：分配/移除/查询、角色不存在、重复分配幂等、无角色用户
+ * - 角色-权限关联：关联/移除/查询、角色/权限不存在、重复关联幂等、未关联移除幂等
+ * - 用户-角色关联：分配/移除/查询、角色不存在、重复分配幂等、无角色用户、未分配移除幂等
  * - checkPermission：拥有/缺少/超管、通配符匹配
  * - 缓存清理：删除角色/权限后缓存更新
  * - 种子数据：默认角色/权限/关联验证
@@ -128,10 +128,21 @@ describe('iam.authz', () => {
         }
       })
 
+      it('getAllRoles 超出范围的页码应返回空列表', async () => {
+        const result = await getIam().authz.getAllRoles({ page: 9999, pageSize: 10 })
+        expect(result.success).toBe(true)
+        if (result.success) {
+          expect(result.data.items).toHaveLength(0)
+        }
+      })
+
       it('创建重复 code 的角色应失败', async () => {
         await getIam().authz.createRole({ code: 'dup_role_code', name: '角色1' })
         const result = await getIam().authz.createRole({ code: 'dup_role_code', name: '角色2' })
         expect(result.success).toBe(false)
+        if (!result.success) {
+          expect(result.error.code).toBe(IamErrorCode.REPOSITORY_ERROR)
+        }
       })
 
       it('种子数据应包含默认角色（admin/user/guest）', async () => {
@@ -228,6 +239,9 @@ describe('iam.authz', () => {
         await getIam().authz.createPermission({ code: 'dup:perm', name: '权限1' })
         const result = await getIam().authz.createPermission({ code: 'dup:perm', name: '权限2' })
         expect(result.success).toBe(false)
+        if (!result.success) {
+          expect(result.error.code).toBe(IamErrorCode.REPOSITORY_ERROR)
+        }
       })
 
       it('种子数据应包含默认权限', async () => {
@@ -337,6 +351,28 @@ describe('iam.authz', () => {
           const matching = permsResult.data.filter(p => p.code === 'rp:dup_assign')
           expect(matching).toHaveLength(1)
         }
+      })
+
+      it('removePermissionFromRole 权限不存在应返回 PERMISSION_NOT_FOUND', async () => {
+        const role = await getIam().authz.createRole({ code: 'rp_remove_bad_perm', name: '测试角色' })
+        if (!role.success)
+          return
+
+        const result = await getIam().authz.removePermissionFromRole(role.data.id, 'nonexistent-perm-id')
+        expect(result.success).toBe(false)
+        if (!result.success) {
+          expect(result.error.code).toBe(IamErrorCode.PERMISSION_NOT_FOUND)
+        }
+      })
+
+      it('removePermissionFromRole 未关联的权限应幂等成功', async () => {
+        const role = await getIam().authz.createRole({ code: 'rp_remove_unlinked', name: '未关联角色' })
+        const perm = await getIam().authz.createPermission({ code: 'rp:remove_unlinked', name: '未关联权限' })
+        if (!role.success || !perm.success)
+          return
+
+        const result = await getIam().authz.removePermissionFromRole(role.data.id, perm.data.id)
+        expect(result.success).toBe(true)
       })
     })
 
@@ -456,6 +492,19 @@ describe('iam.authz', () => {
         if (result.success) {
           expect(result.data).toEqual([])
         }
+      })
+
+      it('removeRole 未分配的角色应幂等成功', async () => {
+        const regResult = await getIam().user.register({
+          username: 'authz_remove_unassigned',
+          password: TEST_PASSWORD,
+        })
+        const role = await getIam().authz.createRole({ code: 'unassigned_role', name: '未分配角色' })
+        if (!regResult.success || !role.success)
+          return
+
+        const result = await getIam().authz.removeRole(regResult.data.user.id, role.data.id)
+        expect(result.success).toBe(true)
       })
 
       it('getUserPermissions 无角色用户应返回空数组', async () => {

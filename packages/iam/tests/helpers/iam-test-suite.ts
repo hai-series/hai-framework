@@ -258,6 +258,7 @@ export function defineIamEnvSuite(
  * 注意：会重置当前 IAM 状态。
  */
 export async function initIam(settings?: Omit<IamConfigInput, 'db' | 'cache'>): Promise<IamFunctions> {
+  await iam.close()
   const result = await iam.init({ db, cache, ...(settings ?? {}) } as IamConfigInput)
   if (!result.success) {
     throw new Error(`IAM init failed: ${JSON.stringify(result.error)}`)

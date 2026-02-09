@@ -234,7 +234,7 @@ describe('iam.ldap', () => {
       })
 
       afterAll(async () => {
-        await lockIam.close()
+        await initIam()
       })
 
       it('lDAP 登录超过最大失败次数后应锁定账户', async () => {

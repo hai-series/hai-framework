@@ -20,6 +20,7 @@ import type {
 } from './iam-types.js'
 
 import { core, err, ok } from '@hai/core'
+import { crypto } from '@hai/crypto'
 
 import { createIamAuthnFunctions } from './authn/iam-authn-functions.js'
 import { createIamAuthzFunctions } from './authz/iam-authz-functions.js'
@@ -47,9 +48,23 @@ const notInitialized = core.module.createNotInitializedKit<IamError>(
 )
 
 const notInitializedAuth = notInitialized.proxy<IamAuthnFunctions>()
-const notInitializedUser = notInitialized.proxy<IamUserFunctions>()
 const notInitializedAuthz = notInitialized.proxy<IamAuthzFunctions>()
 const notInitializedSession = notInitialized.proxy<IamSessionFunctions>()
+
+/**
+ * 用户子功能的未初始化代理
+ *
+ * 需要特殊处理 validatePassword：该方法是同步的，
+ * 而默认 proxy 总是返回异步 operation，会导致同步调用方拿到 Promise 而非 Result。
+ */
+const notInitializedUser = new Proxy({} as IamUserFunctions, {
+  get(_target, prop) {
+    if (prop === 'validatePassword') {
+      return notInitialized.syncOperation
+    }
+    return notInitialized.operation
+  },
+})
 
 /** 客户端操作（无状态，无需初始化） */
 const iamClientOperations: IamClientOperations = {
@@ -60,12 +75,28 @@ const iamClientOperations: IamClientOperations = {
 
 export const iam: IamFunctions = {
   async init(config: IamConfigInput): Promise<Result<void, IamError>> {
-    await iam.close()
+    // 幂等：已初始化时直接返回
+    if (currentConfig !== null) {
+      logger.debug('IAM already initialized, skipping')
+      return ok(undefined)
+    }
 
     try {
       const { db, cache, ldapClientFactory, ldapSyncUser, ...settingsInput } = config
 
       logger.debug('Initializing IAM module')
+
+      // 确保 crypto 已初始化（密码哈希依赖）
+      if (!crypto.isInitialized) {
+        const cryptoResult = await crypto.init({})
+        if (!cryptoResult.success) {
+          return err({
+            code: IamErrorCode.CONFIG_ERROR,
+            message: iamM('iam_initFailed'),
+            cause: cryptoResult.error,
+          })
+        }
+      }
 
       const parsed = IamConfigSchema.parse(settingsInput)
 
@@ -173,42 +204,59 @@ const DEFAULT_PERMISSIONS = [
 ] as const
 
 /**
- * 执行种子数据初始化
+ * 执行种子数据初始化（幂等）
  *
  * 通过 authz 子功能 API 初始化默认角色、权限和角色-权限关联。
+ * 重复执行时跳过已存在的数据，确保幂等性。
  */
 async function seedIamData(
   authz: IamAuthzFunctions,
 ): Promise<Result<void, IamError>> {
   try {
+    // 查询现有角色，避免重复创建
+    const existingRoles = await authz.getAllRoles({ page: 1, pageSize: 1000 })
+    const existingRoleMap = new Map<string, string>()
+    if (existingRoles.success) {
+      for (const role of existingRoles.data.items) {
+        existingRoleMap.set(role.code, role.id)
+      }
+    }
+
     const roleMap = new Map<string, string>()
     for (const role of DEFAULT_ROLES) {
+      const existingId = existingRoleMap.get(role.code)
+      if (existingId) {
+        roleMap.set(role.code, existingId)
+        continue
+      }
       const result = await authz.createRole({ code: role.code, name: role.name, description: role.description, isSystem: role.isSystem })
       if (result.success) {
         roleMap.set(role.code, result.data.id)
-      }
-      else if (result.error.code === IamErrorCode.ROLE_ALREADY_EXISTS) {
-        const existing = await authz.getRole(`role_${role.code}`)
-        if (existing.success && existing.data) {
-          roleMap.set(role.code, existing.data.id)
-        }
       }
       else {
         return result as Result<void, IamError>
       }
     }
 
+    // 查询现有权限，避免重复创建
+    const existingPerms = await authz.getAllPermissions({ page: 1, pageSize: 1000 })
+    const existingPermMap = new Map<string, string>()
+    if (existingPerms.success) {
+      for (const perm of existingPerms.data.items) {
+        existingPermMap.set(perm.code, perm.id)
+      }
+    }
+
     const permMap = new Map<string, string>()
     for (const perm of DEFAULT_PERMISSIONS) {
+      const existingId = existingPermMap.get(perm.code)
+      if (existingId) {
+        permMap.set(perm.code, existingId)
+        continue
+      }
       const result = await authz.createPermission({ code: perm.code, name: perm.name, resource: perm.resource, action: perm.action })
       if (result.success) {
         permMap.set(perm.code, result.data.id)
-      }
-      else if (result.error.code === IamErrorCode.PERMISSION_ALREADY_EXISTS) {
-        const existing = await authz.getPermission(`perm_${perm.code.replace(':', '_')}`)
-        if (existing.success && existing.data) {
-          permMap.set(perm.code, existing.data.id)
-        }
       }
       else {
         return result as Result<void, IamError>

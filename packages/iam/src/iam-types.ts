@@ -76,23 +76,47 @@ export interface IamClientOperations {
  * 统一聚合所有 IAM 功能。
  */
 export interface IamFunctions {
-  /** 初始化 IAM 服务 */
+  /**
+   * 初始化 IAM 服务
+   *
+   * 幂等操作：已初始化时直接返回成功。
+   * 内部按依赖顺序创建 session → authz → authn → user 子功能，
+   * 并可选执行种子数据初始化。
+   *
+   * @param config - IAM 初始化配置（包含数据库、缓存、可选 LDAP 工厂等）
+   * @returns 成功返回 `ok(undefined)`；失败返回含错误码的 `err`
+   *
+   * @example
+   * ```ts
+   * const result = await iam.init({ db, cache })
+   * if (!result.success) {
+   *   console.error(result.error.message)
+   * }
+   * ```
+   */
   init: (config: IamConfigInput) => Promise<Result<void, IamError>>
-  /** 关闭 IAM 服务 */
+
+  /**
+   * 关闭 IAM 服务
+   *
+   * 释放所有内部子功能引用，将模块恢复到未初始化状态。
+   * 关闭后访问 `iam.auth` 等属性将返回未初始化错误。
+   */
   close: () => Promise<void>
-  /** 当前配置 */
+
+  /** 当前配置（未初始化时为 null） */
   readonly config: IamConfig | null
   /** 是否已初始化 */
   readonly isInitialized: boolean
-  /** 认证操作 */
+  /** 认证操作（登录、登出、令牌验证等） */
   readonly auth: IamAuthnFunctions
-  /** 用户管理 */
+  /** 用户管理（注册、查询、更新、密码管理等） */
   readonly user: IamUserFunctions
-  /** 授权管理 */
+  /** 授权管理（角色/权限 CRUD、用户角色分配、权限检查） */
   readonly authz: IamAuthzFunctions
-  /** 会话管理 */
+  /** 会话管理（创建、查询、验证、删除会话） */
   readonly session: IamSessionFunctions
-  /** 前端客户端操作（无需 init 即可使用） */
+  /** 前端客户端操作（无状态，无需 init 即可使用） */
   readonly client: IamClientOperations
 }
 

@@ -322,7 +322,7 @@ describe('iam.workflow', () => {
       })
 
       afterAll(async () => {
-        await singleDeviceIam.close()
+        await initIam()
       })
 
       it('注册 → 登录A → 登录B → A失效 → B有效 → 登出B', async () => {
@@ -417,7 +417,7 @@ describe('iam.workflow', () => {
           expect(regResult.error.code).toBe(IamErrorCode.REGISTER_DISABLED)
         }
 
-        await restrictedIam.close()
+        await initIam()
 
         // ③ 创建允许注册的实例
         const openIam = await initIam({
@@ -450,7 +450,7 @@ describe('iam.workflow', () => {
 
         // ⑥ 锁定后即使密码正确也应失败（不等待解锁，lockoutDuration=60s 远超测试时间）
 
-        await openIam.close()
+        await initIam()
       })
     })
 
@@ -550,7 +550,7 @@ describe('iam.workflow', () => {
       })
 
       afterAll(async () => {
-        await agreementIam.close()
+        await initIam()
       })
 
       it('注册 → 登录应包含协议信息 → 前端展示协议', async () => {
