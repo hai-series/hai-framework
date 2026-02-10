@@ -13,7 +13,7 @@
   
   let {
     items,
-    separator = '/',
+    separator: _separator = '/',
     class: className = '',
   }: BreadcrumbProps = $props()
   

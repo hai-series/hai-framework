@@ -16,6 +16,7 @@
   "nav_logout": "Logout",
   "nav_collapse": "Collapse",
   "nav_page": "Page",
+  "nav_modules": "Module Demos",
 
   "settings_title": "System Settings",
   "settings_subtitle": "Customize your system appearance and regional preferences",
@@ -185,5 +186,21 @@
   "iam_roles_form_permissions_selected": "{count} permissions selected",
   "iam_roles_user_count": "{count} users",
   "iam_roles_permission_count": "{count} permissions",
-  "iam_roles_action_menu": "Role action menu"
+  "iam_roles_action_menu": "Role action menu",
+
+  "gallery_title": "UI Gallery",
+  "gallery_desc": "Complete component showcase based on @hai/ui, powered by DaisyUI",
+  "gallery_tab_primitives": "Primitives",
+  "gallery_tab_compounds": "Compounds",
+  "gallery_tab_scenes": "Scenes",
+  "gallery_tab_overlays": "Overlays / Theme",
+
+  "modules_title": "Module Demos",
+  "modules_desc": "Showcase and usage examples for hai-framework backend modules",
+  "modules_tab_core": "Core",
+  "modules_tab_db": "DB Database",
+  "modules_tab_cache": "Cache",
+  "modules_tab_storage": "Storage",
+  "modules_tab_ai": "AI",
+  "modules_tab_crypto": "Crypto"
 }

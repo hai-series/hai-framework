@@ -29,26 +29,6 @@
 <script lang='ts' generics='T'>
   import type { Snippet } from 'svelte'
 
-  interface Column<T> {
-    key: keyof T | string
-    label: string
-    width?: string
-    align?: 'left' | 'center' | 'right'
-    render?: (item: T) => string
-  }
-
-  interface Props {
-    data: T[]
-    columns: Column<T>[]
-    keyField: keyof T
-    actions?: Snippet<[T]>
-    empty?: Snippet
-    loading?: boolean
-    striped?: boolean
-    hoverable?: boolean
-    class?: string
-  }
-
   let {
     data,
     columns,
@@ -59,9 +39,21 @@
     striped = true,
     hoverable = true,
     class: className = '',
-  }: Props = $props()
+  }: {
+    data: T[]
+    columns: { key: keyof T | string; label: string; width?: string; align?: 'left' | 'center' | 'right'; render?: (item: T) => string }[]
+    keyField: keyof T
+    actions?: Snippet<[T]>
+    empty?: Snippet
+    loading?: boolean
+    striped?: boolean
+    hoverable?: boolean
+    class?: string
+  } = $props()
 
-  function getValue(item: T, col: Column<T>): string {
+  type Column = { key: keyof T | string; label: string; width?: string; align?: 'left' | 'center' | 'right'; render?: (item: T) => string }
+
+  function getValue(item: T, col: Column): string {
     if (col.render) {
       return col.render(item)
     }

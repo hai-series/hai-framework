@@ -17,8 +17,8 @@
     size = 'md',
     variant = 'primary',
     showLabel = false,
-    striped = false,
-    animated = false,
+    striped: _striped = false,
+    animated: _animated = false,
     class: className = '',
   }: ProgressProps = $props()
   

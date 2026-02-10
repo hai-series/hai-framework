@@ -16,6 +16,7 @@
   "nav_logout": "退出登录",
   "nav_collapse": "收起菜单",
   "nav_page": "页面",
+  "nav_modules": "模块示例",
 
   "settings_title": "系统设置",
   "settings_subtitle": "个性化您的系统外观和区域偏好",
@@ -185,5 +186,21 @@
   "iam_roles_form_permissions_selected": "已选 {count} 个权限",
   "iam_roles_user_count": "{count} 个用户",
   "iam_roles_permission_count": "{count} 个权限",
-  "iam_roles_action_menu": "角色操作菜单"
+  "iam_roles_action_menu": "角色操作菜单",
+
+  "gallery_title": "UI 组件库",
+  "gallery_desc": "基于 @hai/ui 的全部组件展示，封装自 DaisyUI",
+  "gallery_tab_primitives": "原子组件",
+  "gallery_tab_compounds": "组合组件",
+  "gallery_tab_scenes": "场景组件",
+  "gallery_tab_overlays": "覆盖/主题",
+
+  "modules_title": "模块功能示例",
+  "modules_desc": "hai-framework 各后端模块能力展示与用法示例",
+  "modules_tab_core": "Core 核心",
+  "modules_tab_db": "DB 数据库",
+  "modules_tab_cache": "Cache 缓存",
+  "modules_tab_storage": "Storage 存储",
+  "modules_tab_ai": "AI 智能",
+  "modules_tab_crypto": "Crypto 加密"
 }
