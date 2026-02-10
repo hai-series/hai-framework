@@ -22,5 +22,13 @@
   "kit_passwordMismatch": "Passwords do not match",
   "kit_passwordMinLength": "Password must be at least {minLength} characters",
   "kit_loginRequired": "Please login first",
-  "kit_changePasswordSuccess": "Password changed successfully"
+  "kit_changePasswordSuccess": "Password changed successfully",
+  "kit_transportKeyGenerationFailed": "Transport encryption key generation failed",
+  "kit_transportClientKeyNotFound": "Client key not found",
+  "kit_transportEncryptFailed": "Transport encryption failed",
+  "kit_transportEncryptKeyFailed": "Symmetric key encryption failed",
+  "kit_transportDecryptKeyFailed": "Symmetric key decryption failed",
+  "kit_transportDecryptFailed": "Transport decryption failed",
+  "kit_transportInvalidPayload": "Invalid encrypted payload",
+  "kit_transportKeyExchangeFailed": "Key exchange failed"
 }

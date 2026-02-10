@@ -25,5 +25,19 @@ export type {
   CryptoServiceLike,
   CsrfConfig,
   EncryptedCookieConfig,
+  EncryptedPayload,
+  TransportCryptoServiceLike,
+  TransportEncryptionConfig,
+  TransportEncryptionManager,
+  TransportKeyPair,
   WebhookVerifyConfig,
 } from './crypto-types.js'
+
+// 传输加密
+export {
+  createKeyExchangeHandler,
+  createTransportEncryption,
+  isValidEncryptedPayload,
+} from './transport-encryption.js'
+
+export { transportEncryptionMiddleware } from './transport-middleware.js'
