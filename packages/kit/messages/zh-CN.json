@@ -22,5 +22,13 @@
   "kit_passwordMismatch": "两次密码输入不一致",
   "kit_passwordMinLength": "密码长度至少 {minLength} 位",
   "kit_loginRequired": "请先登录",
-  "kit_changePasswordSuccess": "密码修改成功"
+  "kit_changePasswordSuccess": "密码修改成功",
+  "kit_transportKeyGenerationFailed": "传输加密密钥对生成失败",
+  "kit_transportClientKeyNotFound": "客户端密钥未找到",
+  "kit_transportEncryptFailed": "传输加密失败",
+  "kit_transportEncryptKeyFailed": "对称密钥加密失败",
+  "kit_transportDecryptKeyFailed": "对称密钥解密失败",
+  "kit_transportDecryptFailed": "传输解密失败",
+  "kit_transportInvalidPayload": "无效的加密载荷",
+  "kit_transportKeyExchangeFailed": "密钥交换失败"
 }

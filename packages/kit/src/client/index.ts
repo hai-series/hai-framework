@@ -27,3 +27,10 @@ export type {
 
 // Stores
 export { useIsAuthenticated, useSession, useUpload, useUser } from './stores.js'
+
+export type {
+  TransportEncryptionState,
+  TransportEncryptionStore,
+  UseTransportEncryptionOptions,
+} from './transport-encryption-store.js'
+export { useTransportEncryption } from './transport-encryption-store.js'

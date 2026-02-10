@@ -140,3 +140,83 @@ export interface EncryptedCookieConfig {
     maxAge?: number
   }
 }
+
+// =============================================================================
+// 传输加密（Transport Encryption）
+// =============================================================================
+
+/** SM2 密钥对 */
+export interface TransportKeyPair {
+  /** 公钥（十六进制） */
+  publicKey: string
+  /** 私钥（十六进制） */
+  privateKey: string
+}
+
+/**
+ * 传输加密服务接口（解耦 @hai/crypto）
+ *
+ * 只声明传输加密所需的 SM2 + SM4 子集，由使用者注入实际实现。
+ */
+export interface TransportCryptoServiceLike {
+  sm2: {
+    /** 生成 SM2 密钥对 */
+    generateKeyPair: () => { success: boolean, data?: TransportKeyPair, error?: { code: number, message: string } }
+    /** SM2 加密 */
+    encrypt: (data: string, publicKey: string) => { success: boolean, data?: string, error?: { code: number, message: string } }
+    /** SM2 解密 */
+    decrypt: (ciphertext: string, privateKey: string) => { success: boolean, data?: string, error?: { code: number, message: string } }
+  }
+  sm4: {
+    /** 生成随机 SM4 密钥 */
+    generateKey: () => string
+    /** SM4 带 IV 加密（CBC 模式，自动生成 IV） */
+    encryptWithIV: (data: string, key: string) => { success: boolean, data?: { ciphertext: string, iv: string }, error?: { code: number, message: string } }
+    /** SM4 带 IV 解密（CBC 模式） */
+    decryptWithIV: (ciphertext: string, key: string, iv: string) => { success: boolean, data?: string, error?: { code: number, message: string } }
+  }
+}
+
+/**
+ * 传输加密配置
+ */
+export interface TransportEncryptionConfig {
+  /** 是否启用传输加密（默认 false） */
+  enabled: boolean
+  /** 传输加密服务实例 */
+  crypto: TransportCryptoServiceLike
+  /** 密钥交换端点路径（默认 '/api/kit/key-exchange'） */
+  keyExchangePath?: string
+  /** 排除路径（不加密），支持精确匹配和前缀匹配 */
+  excludePaths?: string[]
+  /** 是否加密响应（默认 true） */
+  encryptResponse?: boolean
+}
+
+/**
+ * 加密载荷（前后端传输的统一格式）
+ */
+export interface EncryptedPayload {
+  /** SM2 加密后的对称密钥（hex） */
+  encryptedKey: string
+  /** SM4 加密后的密文（hex） */
+  ciphertext: string
+  /** SM4 CBC 模式的 IV（hex） */
+  iv: string
+}
+
+/**
+ * 传输加密管理器接口
+ */
+export interface TransportEncryptionManager {
+  /** 获取服务端公钥 */
+  getServerPublicKey: () => string
+  /** 注册客户端公钥，返回分配的 clientId */
+  registerClientKey: (clientPublicKey: string) => string
+  /** 获取已注册的客户端公钥 */
+  getClientPublicKey: (clientId: string) => string | undefined
+  /** 加密响应数据（使用指定客户端的公钥） */
+  encryptResponse: (clientId: string, data: string) => EncryptedPayload
+  /** 解密请求数据（使用服务端私钥） */
+  decryptRequest: (payload: EncryptedPayload) => string
+}

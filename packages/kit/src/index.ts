@@ -21,6 +21,7 @@ import messagesZhCN from '../messages/zh-CN.json'
 export {
   useIsAuthenticated,
   useSession,
+  useTransportEncryption,
   useUpload,
   useUser,
 } from './client/index.js'
@@ -29,11 +30,14 @@ export type {
   ClientUser,
   SessionState,
   SessionStore,
+  TransportEncryptionState,
+  TransportEncryptionStore,
   UploadFile,
   UploadOptions,
   UploadState,
   UploadStore,
   UseSessionOptions,
+  UseTransportEncryptionOptions,
   UseUploadOptions,
 } from './client/index.js'
 
@@ -78,7 +82,11 @@ export type {
 export {
   createCsrfManager,
   createEncryptedCookie,
+  createKeyExchangeHandler,
+  createTransportEncryption,
+  isValidEncryptedPayload,
   signRequest,
+  transportEncryptionMiddleware,
   verifyWebhookSignature,
 } from './modules/crypto/index.js'
 
@@ -86,6 +94,11 @@ export type {
   CsrfConfig as CryptoCSRFConfig,
   CryptoServiceLike,
   EncryptedCookieConfig,
+  EncryptedPayload,
+  TransportCryptoServiceLike,
+  TransportEncryptionConfig,
+  TransportEncryptionManager,
+  TransportKeyPair,
   WebhookVerifyConfig,
 } from './modules/crypto/index.js'
 // IAM 模块
