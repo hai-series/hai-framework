@@ -53,12 +53,12 @@
 <div class='flex items-center gap-3 {className}'>
   <progress 
     class='progress {colorClass} {sizeClasses[size]} flex-1' 
-    {value} 
-    {max}
+    value={percentage}
+    max={100}
   ></progress>
   {#if showLabel}
     <span class='text-sm font-medium tabular-nums min-w-[3ch] text-right'>
-      {Math.round(value)}
+      {Math.round(percentage)}
     </span>
   {/if}
 </div>

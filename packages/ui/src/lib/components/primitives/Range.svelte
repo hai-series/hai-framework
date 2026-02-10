@@ -109,7 +109,7 @@
   
   {#if showSteps && stepCount > 0}
     <div class="flex w-full justify-between px-2 text-xs text-base-content/60">
-      {#each Array(stepCount) as _, i}
+      {#each Array(stepCount) as _}
         <span>|</span>
       {/each}
     </div>

@@ -9,7 +9,7 @@
 -->
 <script lang="ts">
   import type { SpinnerProps } from '../../types.js'
-  import { cn, getSizeClass, getVariantClass } from '../../utils.js'
+  import { cn } from '../../utils.js'
   
   let {
     size = 'md',
