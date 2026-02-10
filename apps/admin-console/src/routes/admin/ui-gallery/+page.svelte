@@ -3,15 +3,16 @@
 -->
 <script lang="ts">
   import { toast } from '@hai/ui'
+  import * as m from '$lib/paraglide/messages'
 
   // === 顶层标签状态 ===
   let activeTab = $state('primitives')
-  const mainTabs = [
-    { key: 'primitives', label: '原子组件' },
-    { key: 'compounds', label: '组合组件' },
-    { key: 'scenes', label: '场景组件' },
-    { key: 'overlays', label: '覆盖/主题' },
-  ]
+  const mainTabs = $derived([
+    { key: 'primitives', label: m.gallery_tab_primitives() },
+    { key: 'compounds', label: m.gallery_tab_compounds() },
+    { key: 'scenes', label: m.gallery_tab_scenes() },
+    { key: 'overlays', label: m.gallery_tab_overlays() },
+  ])
 
   // === 原子组件状态 ===
   let inputVal = $state('')
@@ -89,10 +90,10 @@
   ]
 
   const dropdownItems = [
-    { label: '编辑', value: 'edit' },
-    { label: '复制', value: 'copy' },
-    { divider: true, label: '' },
-    { label: '删除', value: 'delete' },
+    { label: '编辑', key: 'edit' },
+    { label: '复制', key: 'copy' },
+    { divider: true, key: 'divider-1', label: '' },
+    { label: '删除', key: 'delete' },
   ]
 
   const multiOpts = [
@@ -120,13 +121,13 @@
 </script>
 
 <svelte:head>
-  <title>UI 组件库 - hai Admin</title>
+  <title>{m.gallery_title()} - hai Admin</title>
 </svelte:head>
 
 <ToastContainer />
 
 <div class="space-y-6">
-  <PageHeader title="UI 组件库" description="基于 @hai/ui 的全部组件展示，封装自 DaisyUI" />
+  <PageHeader title={m.gallery_title()} description={m.gallery_desc()} />
 
   <Tabs items={mainTabs} bind:active={activeTab} type="card" />
 
@@ -339,7 +340,7 @@
         <div class="space-y-6">
           <div>
             <p class="text-sm font-medium mb-2">分页（当前第 {paginationPage} 页）</p>
-            <Pagination total={50} current={paginationPage} pageSize={10} onchange={(p: number) => paginationPage = p} />
+            <Pagination total={50} bind:page={paginationPage} pageSize={10} onchange={(p: number) => paginationPage = p} />
           </div>
           <div>
             <p class="text-sm font-medium mb-2">步骤条</p>
@@ -391,10 +392,10 @@
           <div>
             <p class="text-sm font-medium mb-2">严重性徽章</p>
             <div class="flex flex-wrap gap-2">
-              <SeverityBadge level="critical" />
-              <SeverityBadge level="high" />
-              <SeverityBadge level="medium" />
-              <SeverityBadge level="low" />
+              <SeverityBadge type="critical" />
+              <SeverityBadge type="high" />
+              <SeverityBadge type="medium" />
+              <SeverityBadge type="low" />
             </div>
           </div>
         </div>
@@ -405,7 +406,7 @@
         <div class="space-y-3">
           <Alert variant="info">信息提示：系统将于今晚进行维护。</Alert>
           <Alert variant="success">操作成功！数据已保存。</Alert>
-          <Alert variant="warning" closable>警告：存储空间即将用完。</Alert>
+          <Alert variant="warning" dismissible>警告：存储空间即将用完。</Alert>
           <Alert variant="error">错误：网络连接失败，请重试。</Alert>
         </div>
       </Card>
@@ -470,7 +471,7 @@
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div>
             <p class="text-sm font-medium mb-2">标签输入</p>
-            <TagInput bind:value={tagInputVal} placeholder="输入后回车添加" />
+            <TagInput bind:tags={tagInputVal} placeholder="输入后回车添加" />
           </div>
           <div>
             <p class="text-sm font-medium mb-2">多选</p>
@@ -547,7 +548,7 @@
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div>
             <p class="text-sm font-medium mb-2">文件上传</p>
-            <FileUpload accept="image/*,.pdf" maxFiles={3} multiple dragDrop />
+            <FileUpload accept="image/*,.pdf" maxFiles={3} multiple dragDrop autoUpload={false} />
           </div>
           <div>
             <p class="text-sm font-medium mb-2">文件列表</p>
@@ -579,7 +580,7 @@
           </div>
           <div>
             <p class="text-sm font-medium mb-2">哈希展示</p>
-            <HashDisplay value="e3b0c44298fc1c149afbf4c8996fb924" algorithm="SHA-256" label="文件哈希" copyable truncate />
+            <HashDisplay value="e3b0c44298fc1c149afbf4c8996fb924" algorithm="SHA256" label="文件哈希" copyable truncate />
           </div>
           <div>
             <p class="text-sm font-medium mb-2">签名展示</p>
@@ -622,7 +623,7 @@
           message="确定要删除此项目吗？此操作不可撤销。"
           confirmText="删除"
           cancelText="取消"
-          confirmVariant="error"
+          variant="error"
           onconfirm={() => { toast.error('已删除'); confirmOpen = false }}
           oncancel={() => confirmOpen = false}
         />

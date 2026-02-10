@@ -19,7 +19,7 @@ pnpm add @hai/ui
 
 <Card title="示例表单">
   <Input placeholder="请输入用户名" />
-  <Button variant="primary" onclick={() => console.log('clicked')}>提交</Button>
+  <Button variant="primary" onclick={handleSubmit}>提交</Button>
 </Card>
 ```
 
@@ -226,9 +226,9 @@ components/
   let formData = $state({ name: '', type: '' })
 
   const columns = [
-    { key: 'name', title: '名称' },
-    { key: 'type', title: '类型' },
-    { key: 'createdAt', title: '创建时间' },
+    { key: 'name', label: '名称' },
+    { key: 'type', label: '类型' },
+    { key: 'createdAt', label: '创建时间' },
   ]
 
   async function handleCreate() {

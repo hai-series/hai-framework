@@ -3,16 +3,17 @@
 -->
 <script lang="ts">
   import { toast } from '@hai/ui'
+  import * as m from '$lib/paraglide/messages'
 
   let activeTab = $state('core')
-  const tabs = [
-    { key: 'core', label: 'Core 核心' },
-    { key: 'db', label: 'DB 数据库' },
-    { key: 'cache', label: 'Cache 缓存' },
-    { key: 'storage', label: 'Storage 存储' },
-    { key: 'ai', label: 'AI 智能' },
-    { key: 'crypto', label: 'Crypto 加密' },
-  ]
+  const tabs = $derived([
+    { key: 'core', label: m.modules_tab_core() },
+    { key: 'db', label: m.modules_tab_db() },
+    { key: 'cache', label: m.modules_tab_cache() },
+    { key: 'storage', label: m.modules_tab_storage() },
+    { key: 'ai', label: m.modules_tab_ai() },
+    { key: 'crypto', label: m.modules_tab_crypto() },
+  ])
 
   // Core 示例数据
   const coreFeatures = [
@@ -71,7 +72,7 @@
 
   function mockEncrypt() {
     // 模拟 SM4 加密
-    const encrypted = btoa(plainText).replace(/=/g, '') + Array.from(
+    const encrypted = btoa(unescape(encodeURIComponent(plainText))).replace(/=/g, '') + Array.from(
       { length: 8 },
       () => '0123456789abcdef'[Math.floor(Math.random() * 16)]
     ).join('')
@@ -81,13 +82,13 @@
 </script>
 
 <svelte:head>
-  <title>模块示例 - hai Admin</title>
+  <title>{m.modules_title()} - hai Admin</title>
 </svelte:head>
 
 <ToastContainer />
 
 <div class="space-y-6">
-  <PageHeader title="模块功能示例" description="hai-framework 各后端模块能力展示与用法示例" />
+  <PageHeader title={m.modules_title()} description={m.modules_desc()} />
 
   <Tabs items={tabs} bind:active={activeTab} type="card" />
 
