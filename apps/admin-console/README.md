@@ -1,174 +1,217 @@
 # hai Admin Console
 
-> 基于 hai Admin Framework 构建的现代化管理后台示例应用
-
-[![GitHub](https://img.shields.io/badge/GitHub-200hub/hai--framework--admin--console-blue)](https://github.com/200hub/hai-framework-admin-console)
-[![License](https://img.shields.io/badge/License-Apache%202.0-green)](LICENSE)
+> 基于 hai-framework 构建的 SvelteKit 管理后台示例应用，展示框架全模块集成能力。
 
 ## ✨ 特性
 
-- 🎨 **现代化 UI** - 基于 Svelte 5 Runes + TailwindCSS v4 + DaisyUI v5
-- 🔐 **完整认证** - JWT 认证、角色权限、会话管理
-- 📊 **数据管理** - CRUD 操作、搜索过滤、分页排序
-- 🌍 **国际化** - 中英文切换支持
-- 🌓 **主题切换** - 亮色/暗色主题
-- 📱 **响应式** - 移动端完美适配
-- 🤖 **AI 集成** - 内置 AI 对话、代码审计功能
-- 🧩 **组件自动导入** - 页面中使用 @hai/ui 组件无需显式 import
+- 🎨 **现代化 UI** — Svelte 5 Runes + TailwindCSS v4 + DaisyUI，32 套主题随时切换
+- 🔐 **完整认证流** — 登录 / 注册 / 忘记密码 / 重置密码，均基于 @hai/ui 场景组件
+- 👥 **IAM 管理** — 用户、角色、权限 CRUD，操作审计日志
+- 🧩 **UI Gallery** — 69+ @hai/ui 组件的交互式展览（4 分类标签页）
+- 🔧 **模块演示** — Core、DB、Cache、Storage、AI、Crypto 交互式示例
+- 🌍 **国际化** — Paraglide 集成，189+ message keys，中英文实时切换
+- 📱 **响应式布局** — Sidebar + TopBar 自适应，移动端友好
+- 🧩 **组件自动导入** — 页面中使用 @hai/ui 组件无需显式 import
 
 ## 🚀 快速开始
 
-### 方式一：使用 CLI 创建（推荐）
+### 前置要求
+
+- Node.js ≥ 20
+- pnpm ≥ 9
+
+### 安装与启动
 
 ```bash
-# 安装 CLI
-pnpm add -g @hai/cli
-
-# 创建新项目（交互式选择功能）
-pnpm hai create my-admin-app
-
-# 进入项目目录
-cd my-admin-app
-
-# 启动开发服务器
-pnpm dev
-```
-
-### 方式二：克隆本仓库
-
-```bash
-# 克隆仓库
-git clone https://github.com/200hub/hai-framework-admin-console
-cd hai-framework-admin-console
-
-# 安装依赖
+# 在 hai-framework monorepo 根目录
 pnpm install
 
-# 配置环境变量
-cp .env.example .env
-# 编辑 .env 填写必要配置
+# 复制环境变量（按需修改）
+cp apps/admin-console/.env.example apps/admin-console/.env
 
 # 启动开发服务器
-pnpm dev
+pnpm --filter admin-console dev
 ```
 
-### 方式三：作为 hai-framework monorepo 的子应用
+浏览器打开 `http://localhost:5173` 即可访问。
+
+### 构建
 
 ```bash
-# 在 hai-framework 根目录
-cd apps/admin-console
-pnpm dev
+pnpm --filter admin-console build
+pnpm --filter admin-console preview
 ```
 
 ## 📋 功能模块
 
-| 模块        | 描述                | 路由        |
-| ----------- | ------------------- | ----------- |
-| 🏠 仪表盘   | 数据概览、统计图表  | `/`         |
-| 👥 用户管理 | 用户 CRUD、角色分配 | `/users`    |
-| 🔑 角色权限 | 角色管理、权限配置  | `/roles`    |
-| 📝 系统日志 | 操作日志、审计追踪  | `/logs`     |
-| ⚙️ 系统设置 | 系统配置、个人设置  | `/settings` |
-| 🤖 AI 对话  | 智能问答、代码审计  | `/ai`       |
+| 模块 | 描述 | 路由 |
+| --- | --- | --- |
+| 🔐 登录 | 用户名密码登录 | `/auth/login` |
+| 📝 注册 | 新用户注册 | `/auth/register` |
+| 🔑 忘记密码 | 邮箱验证找回密码 | `/auth/forgot-password` |
+| 🔄 重置密码 | Token 验证重置密码 | `/auth/reset-password` |
+| 🏠 仪表盘 | 统计卡片、近期活动、快捷操作 | `/admin` |
+| 👥 用户管理 | 用户 CRUD、角色分配 | `/admin/iam/users` |
+| 🎭 角色管理 | 角色 CRUD、权限绑定 | `/admin/iam/roles` |
+| 🛡️ 权限管理 | 权限 CRUD、审计日志 | `/admin/iam/permissions` |
+| 🧩 UI Gallery | 69+ 组件交互式展示（4 标签页） | `/admin/ui-gallery` |
+| 🔧 模块演示 | Core / DB / Cache / Storage / AI / Crypto 演示 | `/admin/modules` |
+| ⚙️ 设置 | 主题切换（32 套）、语言切换 | `/admin/settings` |
 
-## 🛠️ 技术栈
+## 🗂️ 路由结构
 
-- **前端框架**: Svelte 5 + SvelteKit 2
-- **样式**: TailwindCSS v4 + DaisyUI v5
-- **语言**: TypeScript 5.7+
-- **构建工具**: Vite 6
-- **包管理**: pnpm
-- **核心依赖**: @hai/\* 框架包
+```
+src/routes/
+├── +layout.svelte                  # 全局根布局
+├── +page.svelte                    # 首页（重定向）
+│
+├── (auth)/                         # 认证页面（无 Sidebar 布局）
+│   └── auth/
+│       ├── login/+page.svelte
+│       ├── register/+page.svelte
+│       ├── forgot-password/+page.svelte
+│       └── reset-password/+page.svelte
+│
+├── admin/                          # 管理后台（需登录，Sidebar 布局）
+│   ├── +layout.svelte
+│   ├── +layout.server.ts           # Session 校验
+│   ├── +page.svelte                # Dashboard
+│   ├── iam/
+│   │   ├── users/+page.svelte
+│   │   ├── roles/+page.svelte
+│   │   └── permissions/+page.svelte
+│   ├── ui-gallery/+page.svelte
+│   ├── modules/+page.svelte
+│   └── settings/+page.svelte
+│
+└── api/                            # REST API
+    ├── auth/
+    │   ├── login/+server.ts
+    │   ├── register/+server.ts
+    │   ├── logout/+server.ts
+    │   ├── forgot-password/+server.ts
+    │   ├── reset-password/+server.ts
+    │   └── me/+server.ts
+    ├── iam/
+    │   ├── users/+server.ts
+    │   ├── users/[id]/+server.ts
+    │   ├── roles/+server.ts
+    │   ├── roles/[id]/+server.ts
+    │   ├── permissions/+server.ts
+    │   └── permissions/[id]/+server.ts
+    └── health/+server.ts
+```
+
+## ⚙️ 配置
+
+### 环境变量
+
+复制 `.env.example` 到 `.env` 并按需修改：
+
+```bash
+# 运行环境
+HAI_ENV=development
+HAI_DEBUG=false
+
+# 数据库（默认 SQLite）
+HAI_DB_TYPE=sqlite
+HAI_DB_DATABASE=./data/admin.db
+
+# Session 密钥（必填，≥ 32 字符）
+HAI_SESSION_SECRET=change-me-to-a-strong-random-string-min-32-chars
+
+# 缓存（memory | redis）
+HAI_CACHE_TYPE=memory
+
+# 存储（local | s3）
+HAI_STORAGE_TYPE=local
+```
+
+### YAML 配置文件
+
+| 文件 | 用途 |
+| --- | --- |
+| `config/_core.yml` | 应用名称、版本、locale、功能开关 |
+| `config/_db.yml` | 数据库连接（SQLite / PostgreSQL / MySQL） |
+| `config/_iam.yml` | 认证策略、密码策略、JWT、RBAC、种子数据 |
+| `config/storage.yml` | 存储类型及参数（local / S3） |
+
+配置值支持 `${ENV_VAR:default}` 语法引用环境变量。
+
+## 🌍 国际化 (i18n)
+
+本应用使用 [Paraglide](https://inlang.com/m/gerre34r/library-inlang-paraglideJs) 实现国际化。
+
+- **翻译文件**：`messages/zh-CN.json` 和 `messages/en-US.json`，包含 189+ message keys
+- **编译命令**：`pnpm paraglide:compile` （编译后输出到 `src/lib/paraglide/`）
+- **运行时切换**：Settings 页面可实时切换语言
+- **服务端中间件**：`hooks.server.ts` 中的 `i18nHandle` 自动检测请求语言（跳过 `/api/*`）
+
+添加新翻译：在 `messages/zh-CN.json` 和 `messages/en-US.json` 中同时添加对应 key 即可。
 
 ## 🧩 @hai/ui 组件自动导入
 
-为减少页面样板代码，已在 `svelte.config.js` 中启用自动导入预处理器：
+`svelte.config.js` 中启用了 `@hai/ui/auto-import` 预处理器：
 
-- 预处理器来源：`@hai/ui/auto-import`
-- 作用范围：所有 `.svelte` 页面
-- 行为：检测到 @hai/ui 组件标签时自动注入 `import { ... } from '@hai/ui'`
+- 所有 `.svelte` 文件中使用 @hai/ui 组件标签时，自动注入 import 语句
+- 无需手动编写 `import { Button } from '@hai/ui'`
 
-同时，`svelte.config.js` 中的 `@hai/*` alias 指向各包**根目录**，以便构建时走包的 `exports`，避免依赖 `src` 路径。
+## 🔧 扩展指南
 
-## 📁 项目结构
+### 添加新页面
 
-```
-src/
-├── app.html              # HTML 模板
-├── app.css               # 全局样式（TailwindCSS v4）
-├── app.d.ts              # 全局类型声明
-├── hooks.server.ts       # 服务端钩子（认证、日志）
-├── lib/
-│   ├── components/       # 业务组件
-│   │   ├── layout/       # 布局组件
-│   │   └── ui/           # UI 组件
-│   ├── services/         # 业务服务
-│   ├── stores/           # 状态管理
-│   ├── types/            # 类型定义
-│   └── utils/            # 工具函数
-└── routes/
-    ├── (app)/            # 需要认证的路由
-    │   ├── +layout.svelte
-    │   ├── users/        # 用户管理
-    │   ├── roles/        # 角色管理
-    │   ├── logs/         # 系统日志
-    │   ├── settings/     # 系统设置
-    │   └── ai/           # AI 功能
-    ├── (auth)/           # 认证相关
-    │   ├── login/
-    │   └── register/
-    └── api/              # API 路由
-        └── v1/
-```
+1. 在 `src/routes/admin/` 下创建目录和 `+page.svelte`
+2. 页面可直接使用 @hai/ui 组件（自动导入）
+3. 如需服务端数据，添加 `+page.server.ts` 配合 load 函数
+4. 在 Sidebar 导航配置中添加菜单项
+5. 在 `messages/` 下的两个语言文件中添加相关翻译 key
 
-## ⚙️ 环境变量
+### 添加新 API 端点
 
-```bash
-# .env
-DATABASE_URL=file:./data/app.db    # 数据库连接
-JWT_SECRET=your-secret-key          # JWT 密钥
-OPENAI_API_KEY=sk-xxx               # OpenAI API Key (可选)
-HAI_LOG_LEVEL=info                  # 日志级别
-HAI_LOG_FORMAT=logfmt               # 日志格式 (logfmt/json)
-```
+1. 在 `src/routes/api/` 下创建 `+server.ts`
+2. 使用 @hai/kit 的 response helper 返回标准格式
+3. 如需认证保护，路由会自动走 `hooks.server.ts` 中的 guard 逻辑（`/api/auth/*` 和 `/api/public/*` 除外）
+
+### 添加新业务服务
+
+1. 在 `src/lib/server/services/` 下创建服务文件
+2. 在 `src/lib/server/services/index.ts` 中聚合导出
 
 ## 🧪 开发命令
 
 ```bash
-pnpm dev          # 启动开发服务器
-pnpm build        # 构建生产版本
-pnpm preview      # 预览生产版本
-pnpm check        # 类型检查
-pnpm lint         # 代码检查
-pnpm test         # 运行测试
+pnpm dev              # 启动开发服务器
+pnpm build            # 构建生产版本
+pnpm preview          # 预览生产版本
+pnpm check            # Svelte + TypeScript 类型检查
+pnpm lint             # ESLint 代码检查
+pnpm test             # 运行单元测试（Vitest）
+pnpm paraglide:compile # 编译 i18n 翻译文件
 ```
 
-## 🎭 演示账号
+## 🛠️ 技术栈
 
-| 角色     | 用户名 | 密码     |
-| -------- | ------ | -------- |
-| 管理员   | admin  | admin123 |
-| 普通用户 | user   | user123  |
+- **前端框架**：SvelteKit 2 + Svelte 5 (Runes)
+- **样式**：TailwindCSS v4 + DaisyUI
+- **语言**：TypeScript 5.7+
+- **构建工具**：Vite 6
+- **i18n**：Paraglide
+- **包管理**：pnpm
 
-## 📝 依赖 hai-framework 包
+## 📦 框架依赖
 
-此应用依赖以下 @hai/\* 包：
-
-- `@hai/core` - 核心工具（Result、错误处理、日志）
-- `@hai/core` - 配置管理
-- `@hai/crypto` - 加密模块（SM2/SM3/SM4、Argon2）
-- `@hai/db` - 数据库抽象（Drizzle ORM）
-- `@hai/auth` - 认证授权
-- `@hai/ai` - AI 集成
-- `@hai/kit` - SvelteKit 集成
-- `@hai/ui` - UI 组件库
-
-## 🔗 相关链接
-
-- [hai-framework 主仓库](https://github.com/200hub/hai-framework)
-- [框架文档](https://hai-framework.dev)
-- [组件文档](https://hai-framework.dev/ui)
+| 包 | 用途 |
+| --- | --- |
+| `@hai/core` | 配置管理、日志、Result 模式、错误处理 |
+| `@hai/db` | 数据库抽象（SQLite / PostgreSQL / MySQL） |
+| `@hai/iam` | 用户、角色、权限、认证、RBAC |
+| `@hai/cache` | 缓存（Memory / Redis） |
+| `@hai/storage` | 文件存储（Local / S3） |
+| `@hai/crypto` | 加密（SM2 / SM3 / SM4、Argon2） |
+| `@hai/ai` | AI 集成 |
+| `@hai/kit` | SvelteKit hooks、guards、中间件、校验 |
+| `@hai/ui` | UI 组件库（69+ 组件、场景组件、自动导入） |
 
 ## 📄 许可证
 
-Apache License 2.0 © 2024 [200hub](https://github.com/200hub)
+Apache License 2.0
