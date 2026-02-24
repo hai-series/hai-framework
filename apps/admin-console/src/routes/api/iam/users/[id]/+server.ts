@@ -95,13 +95,12 @@ export const PUT: RequestHandler = async ({ params, request, locals, getClientAd
       }
     }
 
-    // 更新密码（如果提供）
+    // 更新密码（如果提供，管理员直接重置）
     if (password) {
-      if (password.length < 8) {
-        return json({ success: false, error: '密码至少需要8位' }, { status: 400 })
+      const resetResult = await iam.user.adminResetPassword(userId, password)
+      if (!resetResult.success) {
+        return json({ success: false, error: resetResult.error.message }, { status: 400 })
       }
-      // 注意：这里暂时没有管理员直接重置用户密码的功能
-      // 可以考虑添加 iam.user.adminResetPassword 方法
     }
 
     // 更新角色（如果提供）
@@ -171,9 +170,6 @@ export const PUT: RequestHandler = async ({ params, request, locals, getClientAd
 
 /**
  * DELETE /api/iam/users/[id] - 删除用户
- *
- * TODO: 需要在 @hai/iam 中添加删除用户功能
- * 暂时返回错误
  */
 export const DELETE: RequestHandler = async ({ params, locals, request, getClientAddress }) => {
   try {
@@ -185,16 +181,17 @@ export const DELETE: RequestHandler = async ({ params, locals, request, getClien
       return json({ success: false, error: '用户不存在' }, { status: 404 })
     }
 
-    const existing = existingResult.data
-
     // 禁止删除自己
     if (locals.session?.userId === userId) {
       return json({ success: false, error: '不能删除当前登录用户' }, { status: 400 })
     }
 
-    // TODO: iam 模块目前没有删除用户功能
-    // 暂时通过禁用用户来实现
-    await iam.user.updateUser(userId, { enabled: false })
+    const existing = existingResult.data
+
+    const deleteResult = await iam.user.deleteUser(userId)
+    if (!deleteResult.success) {
+      return json({ success: false, error: deleteResult.error.message }, { status: 500 })
+    }
 
     // 记录审计日志
     const ip = getClientAddress()
@@ -212,7 +209,7 @@ export const DELETE: RequestHandler = async ({ params, locals, request, getClien
     return json({ success: true })
   }
   catch (error) {
-    core.logger.error('删除用户失败:', { error })
+    core.logger.error('删除用户失败', { error })
     return json({ success: false, error: '删除用户失败' }, { status: 500 })
   }
 }

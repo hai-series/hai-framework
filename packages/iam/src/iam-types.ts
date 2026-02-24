@@ -125,4 +125,4 @@ export interface IamFunctions {
 export type { AuthStrategy, Credentials, IamAuthnFunctions, LdapCredentials, OtpCredentials, PasswordCredentials } from './authn/iam-authn-types.js'
 export type { AuthzContext, IamAuthzFunctions, Permission, Role, RolePermission, UserRole } from './authz/iam-authz-types.js'
 export type { AuthResult, CreateSessionOptions, IamSessionFunctions, Session } from './session/iam-session-types.js'
-export type { AgreementDisplay, IamUserFunctions, RegisterOptions, RegisterResult, StoredUser, User } from './user/iam-user-types.js'
+export type { AgreementDisplay, IamUserFunctions, ListUsersOptions, RegisterOptions, RegisterResult, StoredUser, User } from './user/iam-user-types.js'
