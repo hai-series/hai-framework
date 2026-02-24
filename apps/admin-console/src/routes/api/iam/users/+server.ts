@@ -13,23 +13,54 @@ import { json } from '@sveltejs/kit'
 /**
  * GET /api/iam/users - 获取用户列表
  *
- * TODO: 需要在 @hai/iam 中添加用户列表查询功能
- * 暂时返回空数组
+ * 支持分页、搜索关键字和启用状态过滤。
+ *
+ * 查询参数：
+ * - page: 页码（默认 1）
+ * - pageSize: 每页数量（默认 20）
+ * - search: 搜索关键字（模糊匹配用户名/邮箱）
+ * - enabled: 启用状态过滤（true/false，不传则返回全部）
  */
-export const GET: RequestHandler = async () => {
+export const GET: RequestHandler = async ({ url }) => {
   try {
-    // iam 模块目前没有列表查询功能，返回空数据
-    return json({
-      success: true,
-      data: {
-        users: [],
-        total: 0,
-      },
-    })
+    const page = Math.max(1, Number.parseInt(url.searchParams.get('page') ?? '1', 10) || 1)
+    const pageSize = Math.max(1, Number.parseInt(url.searchParams.get('pageSize') ?? '20', 10) || 20)
+    const search = url.searchParams.get('search') ?? undefined
+    const enabledParam = url.searchParams.get('enabled')
+    const enabled = enabledParam === 'true' ? true : enabledParam === 'false' ? false : undefined
+
+    const usersResult = await iam.user.listUsers({ page, pageSize, search, enabled })
+    if (!usersResult.success) {
+      core.logger.error('Failed to list users', { error: usersResult.error })
+      return json({ success: false, error: usersResult.error.message }, { status: 500 })
+    }
+
+    const { items, total } = usersResult.data
+
+    // 获取每个用户的角色
+    const users = await Promise.all(
+      items.map(async (user) => {
+        const rolesResult = await iam.authz.getUserRoles(user.id)
+        const roles = rolesResult.success ? rolesResult.data.map(r => r.code) : []
+        return {
+          id: user.id,
+          username: user.username,
+          email: user.email,
+          display_name: user.displayName,
+          avatar: user.avatarUrl,
+          status: user.enabled ? 'active' : 'inactive',
+          roles,
+          created_at: user.createdAt,
+          updated_at: user.updatedAt,
+        }
+      }),
+    )
+
+    return json({ success: true, data: { users, total, page, pageSize } })
   }
   catch (error) {
-    core.logger.error('获取用户列表失败:', { error })
-    return json({ success: false, error: '获取用户列表失败' }, { status: 500 })
+    core.logger.error('Failed to list users', { error })
+    return json({ success: false, error: 'Failed to list users' }, { status: 500 })
   }
 }
 
