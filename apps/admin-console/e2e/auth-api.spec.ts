@@ -1,0 +1,169 @@
+/**
+ * =============================================================================
+ * E2E 测试 - Auth API 接口
+ * =============================================================================
+ */
+
+import { expect, test } from '@playwright/test'
+
+function uniqueUser() {
+  const ts = Date.now().toString(36)
+  return {
+    username: `api_${ts}`,
+    email: `api_${ts}@test.local`,
+    password: 'Test1234!@',
+  }
+}
+
+// ---------------------------------------------------------------------------
+// POST /api/auth/register
+// ---------------------------------------------------------------------------
+test.describe('POST /api/auth/register', () => {
+  test('成功注册返回用户信息', async ({ request }) => {
+    const u = uniqueUser()
+    const res = await request.post('/api/auth/register', {
+      data: {
+        username: u.username,
+        email: u.email,
+        password: u.password,
+        confirmPassword: u.password,
+      },
+    })
+    expect(res.ok()).toBeTruthy()
+
+    const body = await res.json()
+    expect(body.success).toBe(true)
+    expect(body.user).toBeDefined()
+    expect(body.user).toHaveProperty('roles')
+  })
+
+  test('重复用户名返回 400', async ({ request }) => {
+    const u = uniqueUser()
+    // 先注册一次
+    await request.post('/api/auth/register', {
+      data: { username: u.username, email: u.email, password: u.password, confirmPassword: u.password },
+    })
+    // 再次注册相同用户名
+    const res = await request.post('/api/auth/register', {
+      data: { username: u.username, email: `dup_${u.email}`, password: u.password, confirmPassword: u.password },
+    })
+    expect(res.status()).toBe(400)
+    const body = await res.json()
+    expect(body.success).toBe(false)
+  })
+
+  test('缺少必填字段返回 400', async ({ request }) => {
+    const res = await request.post('/api/auth/register', {
+      data: { username: '', email: '', password: '' },
+    })
+    expect(res.status()).toBe(400)
+  })
+
+  test('密码不一致返回 400', async ({ request }) => {
+    const u = uniqueUser()
+    const res = await request.post('/api/auth/register', {
+      data: {
+        username: u.username,
+        email: u.email,
+        password: u.password,
+        confirmPassword: 'different',
+      },
+    })
+    expect(res.status()).toBe(400)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// POST /api/auth/login
+// ---------------------------------------------------------------------------
+test.describe('POST /api/auth/login', () => {
+  const user = uniqueUser()
+
+  test.beforeAll(async ({ request }) => {
+    await request.post('/api/auth/register', {
+      data: { username: user.username, email: user.email, password: user.password, confirmPassword: user.password },
+    })
+  })
+
+  test('正确凭据登录成功', async ({ request }) => {
+    const res = await request.post('/api/auth/login', {
+      data: { identifier: user.username, password: user.password },
+    })
+    expect(res.ok()).toBeTruthy()
+
+    const body = await res.json()
+    expect(body.success).toBe(true)
+    expect(body.user).toHaveProperty('id')
+    expect(body.user.username).toBe(user.username)
+  })
+
+  test('用邮箱登录成功', async ({ request }) => {
+    const res = await request.post('/api/auth/login', {
+      data: { identifier: user.email, password: user.password },
+    })
+    expect(res.ok()).toBeTruthy()
+
+    const body = await res.json()
+    expect(body.success).toBe(true)
+  })
+
+  test('错误密码返回 401', async ({ request }) => {
+    const res = await request.post('/api/auth/login', {
+      data: { identifier: user.username, password: 'wrongpassword' },
+    })
+    expect(res.status()).toBe(401)
+  })
+
+  test('不存在的用户返回 401', async ({ request }) => {
+    const res = await request.post('/api/auth/login', {
+      data: { identifier: 'nonexistent_user_xyz', password: 'whatever' },
+    })
+    expect(res.status()).toBe(401)
+  })
+
+  test('缺少字段返回 400', async ({ request }) => {
+    const res = await request.post('/api/auth/login', {
+      data: { identifier: '', password: '' },
+    })
+    expect(res.status()).toBe(400)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// POST /api/auth/logout
+// ---------------------------------------------------------------------------
+test.describe('POST /api/auth/logout', () => {
+  test('登出始终返回 success', async ({ request }) => {
+    const res = await request.post('/api/auth/logout')
+    expect(res.ok()).toBeTruthy()
+
+    const body = await res.json()
+    expect(body.success).toBe(true)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// GET /api/auth/me
+// ---------------------------------------------------------------------------
+test.describe('GET /api/auth/me', () => {
+  test('未登录返回 user: null', async ({ request }) => {
+    const res = await request.get('/api/auth/me')
+    const body = await res.json()
+    // 未认证时返回 success: false 或 user: null
+    expect(body.user === null || body.success === false).toBeTruthy()
+  })
+
+  test('登录后返回用户信息', async ({ request }) => {
+    const u = uniqueUser()
+    // 注册（自动登录，设置 cookie）
+    await request.post('/api/auth/register', {
+      data: { username: u.username, email: u.email, password: u.password, confirmPassword: u.password },
+    })
+
+    const res = await request.get('/api/auth/me')
+    const body = await res.json()
+    expect(body.success).toBe(true)
+    expect(body.user).toHaveProperty('id')
+    expect(body.user.username).toBe(u.username)
+  })
+})
