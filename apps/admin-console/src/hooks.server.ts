@@ -83,20 +83,12 @@ const i18nHandle: Handle = async ({ event, resolve }) => {
 }
 
 /**
- * 会话验证 - 使用 IAM 模块验证 JWT token
+ * 会话验证 - 使用 IAM 模块验证 session token
  */
 async function validateSession(token: string) {
   try {
-    // 验证 token
-    const verifyResult = await iam.auth.verifyToken(token)
-    if (!verifyResult.success) {
-      return null
-    }
-
-    const userId = verifyResult.data.sub
-
-    // 获取用户信息
-    const userResult = await iam.user.getUser(userId)
+    // 使用 session token 获取当前用户
+    const userResult = await iam.user.getCurrentUser(token)
     if (!userResult.success || !userResult.data || !userResult.data.enabled) {
       return null
     }
@@ -104,11 +96,11 @@ async function validateSession(token: string) {
     const user = userResult.data
 
     // 获取用户角色
-    const rolesResult = await iam.authz.getUserRoles(userId)
+    const rolesResult = await iam.authz.getUserRoles(user.id)
     const roles = rolesResult.success ? rolesResult.data.map(r => r.code) : []
 
     // 获取用户权限
-    const permissionsResult = await iam.authz.getUserPermissions(userId)
+    const permissionsResult = await iam.authz.getUserPermissions(user.id)
     const permissions = permissionsResult.success ? permissionsResult.data.map(p => p.code) : []
 
     return {
