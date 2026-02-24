@@ -14,6 +14,7 @@
  * 配置文件约定：
  * - `config/_core.yml`  → 使用 CoreConfigSchema
  * - `config/_db.yml`    → 使用 DbConfigSchema
+ * - `config/_cache.yml` → 使用 CacheConfigSchema
  * - `config/_iam.yml`   → 使用 IamConfigSchema
  *
  * @example

@@ -43,6 +43,10 @@ const hashResult = crypto.password.hash('myPassword123', { iterations: 12000 })
 if (hashResult.success) {
   crypto.password.verify('myPassword123', hashResult.data)
 }
+
+// 独立密码提供者（无需 init）
+const passwordProvider = crypto.createHaiPasswordProvider()
+const standaloneHash = passwordProvider.hash('myPassword123')
 ```
 
 ## 配置

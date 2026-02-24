@@ -310,6 +310,13 @@ export interface PasswordOperations {
  */
 export interface CryptoFunctions {
   /**
+   * 创建独立密码提供者（无需依赖 init 生命周期）
+   *
+   * 适用于需要在未初始化全局 crypto 服务时，
+   * 单独进行密码哈希/校验的场景。
+   */
+  createHaiPasswordProvider: () => PasswordOperations
+  /**
    * 初始化加密模块
    *
    * 解析配置并创建 SM2/SM3/SM4/Password 操作实例。

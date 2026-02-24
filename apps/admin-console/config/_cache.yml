@@ -1,0 +1,16 @@
+# =============================================================================
+# Admin Console - 缓存配置
+# =============================================================================
+
+# 缓存类型: memory | redis
+type: ${HAI_CACHE_TYPE:memory}
+
+# Redis 配置（当 type 为 redis 时使用）
+# url: ${HAI_CACHE_REDIS_URL:redis://localhost:6379/0}
+# host: ${HAI_CACHE_REDIS_HOST:localhost}
+# port: ${HAI_CACHE_REDIS_PORT:6379}
+# password: ${HAI_CACHE_REDIS_PASSWORD:}
+# db: ${HAI_CACHE_REDIS_DB:0}
+# connectTimeout: ${HAI_CACHE_CONNECT_TIMEOUT:10000}
+# commandTimeout: ${HAI_CACHE_COMMAND_TIMEOUT:5000}
+# keyPrefix: ${HAI_CACHE_KEY_PREFIX:hai:}

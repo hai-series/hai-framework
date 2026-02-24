@@ -74,6 +74,11 @@ const notInitializedPassword = syncProxy<PasswordOperations>()
  * ```
  */
 export const crypto: CryptoFunctions = {
+  createHaiPasswordProvider(): PasswordOperations {
+    const sm3 = createSM3()
+    return createPasswordFunctions({ sm3 })
+  },
+
   async init(config: CryptoConfigInput): Promise<Result<void, CryptoError>> {
     await crypto.close()
     try {
