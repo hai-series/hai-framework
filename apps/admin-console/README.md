@@ -44,19 +44,17 @@ pnpm --filter admin-console preview
 
 ## 📋 功能模块
 
-| 模块 | 描述 | 路由 |
-| --- | --- | --- |
-| 🔐 登录 | 用户名密码登录 | `/auth/login` |
-| 📝 注册 | 新用户注册 | `/auth/register` |
-| 🔑 忘记密码 | 邮箱验证找回密码 | `/auth/forgot-password` |
-| 🔄 重置密码 | Token 验证重置密码 | `/auth/reset-password` |
-| 🏠 仪表盘 | 统计卡片、近期活动、快捷操作 | `/admin` |
-| 👥 用户管理 | 用户 CRUD、角色分配 | `/admin/iam/users` |
-| 🎭 角色管理 | 角色 CRUD、权限绑定 | `/admin/iam/roles` |
-| 🛡️ 权限管理 | 权限 CRUD、审计日志 | `/admin/iam/permissions` |
-| 🧩 UI Gallery | 69+ 组件交互式展示（4 标签页） | `/admin/ui-gallery` |
-| 🔧 模块演示 | Core / DB / Cache / Storage / AI / Crypto 演示 | `/admin/modules` |
-| ⚙️ 设置 | 主题切换（32 套）、语言切换 | `/admin/settings` |
+- 🔐 登录：用户名密码登录（`/auth/login`）
+- 📝 注册：新用户注册（`/auth/register`）
+- 🔑 忘记密码：邮箱验证找回密码（`/auth/forgot-password`）
+- 🔄 重置密码：Token 验证重置密码（`/auth/reset-password`）
+- 🏠 仪表盘：统计卡片、近期活动、快捷操作（`/admin`）
+- 👥 用户管理：用户 CRUD、角色分配（`/admin/iam/users`）
+- 🎭 角色管理：角色 CRUD、权限绑定（`/admin/iam/roles`）
+- 🛡️ 权限管理：权限 CRUD、审计日志（`/admin/iam/permissions`）
+- 🧩 UI Gallery：69+ 组件交互式展示（4 标签页）（`/admin/ui-gallery`）
+- 🔧 模块演示：Core / DB / Cache / Storage / AI / Crypto 演示（`/admin/modules`）
+- ⚙️ 设置：主题切换（32 套）、语言切换（`/admin/settings`）
 
 ## 🗂️ 路由结构
 
@@ -129,12 +127,11 @@ HAI_STORAGE_TYPE=local
 
 ### YAML 配置文件
 
-| 文件 | 用途 |
-| --- | --- |
-| `config/_core.yml` | 应用名称、版本、locale、功能开关 |
-| `config/_db.yml` | 数据库连接（SQLite / PostgreSQL / MySQL） |
-| `config/_iam.yml` | 认证策略、密码策略、JWT、RBAC、种子数据 |
-| `config/storage.yml` | 存储类型及参数（local / S3） |
+- `config/_core.yml`：应用名称、版本、locale、功能开关
+- `config/_db.yml`：数据库连接（SQLite / PostgreSQL / MySQL）
+- `config/_cache.yml`：缓存类型与连接参数（memory / redis）
+- `config/_iam.yml`：认证策略、密码策略、JWT、RBAC、种子数据
+- `config/storage.yml`：存储类型及参数（local / S3）
 
 配置值支持 `${ENV_VAR:default}` 语法引用环境变量。
 
@@ -200,17 +197,15 @@ pnpm paraglide:compile # 编译 i18n 翻译文件
 
 ## 📦 框架依赖
 
-| 包 | 用途 |
-| --- | --- |
-| `@hai/core` | 配置管理、日志、Result 模式、错误处理 |
-| `@hai/db` | 数据库抽象（SQLite / PostgreSQL / MySQL） |
-| `@hai/iam` | 用户、角色、权限、认证、RBAC |
-| `@hai/cache` | 缓存（Memory / Redis） |
-| `@hai/storage` | 文件存储（Local / S3） |
-| `@hai/crypto` | 加密（SM2 / SM3 / SM4、Argon2） |
-| `@hai/ai` | AI 集成 |
-| `@hai/kit` | SvelteKit hooks、guards、中间件、校验 |
-| `@hai/ui` | UI 组件库（69+ 组件、场景组件、自动导入） |
+- `@hai/core`：配置管理、日志、Result 模式、错误处理
+- `@hai/db`：数据库抽象（SQLite / PostgreSQL / MySQL）
+- `@hai/iam`：用户、角色、权限、认证、RBAC
+- `@hai/cache`：缓存（Memory / Redis）
+- `@hai/storage`：文件存储（Local / S3）
+- `@hai/crypto`：加密（SM2 / SM3 / SM4、Argon2）
+- `@hai/ai`：AI 集成
+- `@hai/kit`：SvelteKit hooks、guards、中间件、校验
+- `@hai/ui`：UI 组件库（69+ 组件、场景组件、自动导入）
 
 ## 📄 许可证
 

@@ -29,7 +29,7 @@ const config = {
       '@hai/iam': '../../packages/iam',
       '@hai/kit': '../../packages/kit',
       '@hai/storage': '../../packages/storage',
-      '@hai/ui': '../../packages/ui',
+      '@hai/ui': '../../packages/ui/src/lib/index.ts',
       '@hai/ui/*': '../../packages/ui/*',
     },
   },
