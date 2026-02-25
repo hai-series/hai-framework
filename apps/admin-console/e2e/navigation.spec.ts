@@ -32,6 +32,13 @@ test.describe('Page Navigation', () => {
     await expect(page.locator('body')).toBeVisible()
   })
 
+  test('个人资料页面可访问', async ({ page, request }) => {
+    await registerAndLogin(page, request, 'nav')
+    await page.goto('/admin/profile')
+    await page.waitForLoadState('domcontentloaded')
+    await expect(page.locator('h1')).toContainText(/个人资料|Profile/)
+  })
+
   test('/admin/iam 重定向到 /admin/iam/users', async ({ page, request }) => {
     await registerAndLogin(page, request, 'nav')
     await page.goto('/admin/iam')

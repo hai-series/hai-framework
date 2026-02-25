@@ -116,6 +116,8 @@ async function validateSession(token: string) {
     return {
       userId: user.id,
       username: user.username,
+      displayName: user.displayName,
+      avatarUrl: user.avatarUrl,
       roles,
       permissions,
     }

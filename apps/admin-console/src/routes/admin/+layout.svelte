@@ -310,11 +310,12 @@
               onclick={toggleUserMenu}
             >
               <Avatar 
-                name={data.user?.username ?? 'Guest'} 
+                name={data.user?.displayName || data.user?.username || 'Guest'}
+                src={data.user?.avatarUrl}
                 size="sm"
               />
               <span class="hidden sm:block text-sm font-medium text-base-content">
-                {data.user?.username ?? 'Guest'}
+                {data.user?.displayName || data.user?.username || 'Guest'}
               </span>
               <svg class="w-4 h-4 text-base-content/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
@@ -324,7 +325,8 @@
             {#if userMenuOpen}
               <div class="absolute right-0 top-full mt-2 w-56 bg-base-100 rounded-xl shadow-lg border border-base-200 py-1 z-50">
                 <div class="px-4 py-3 border-b border-base-200">
-                  <p class="text-sm font-medium text-base-content">{data.user?.username ?? 'Guest'}</p>
+                  <p class="text-sm font-medium text-base-content">{data.user?.displayName || data.user?.username || 'Guest'}</p>
+                  <p class="text-xs text-base-content/50 mt-0.5">@{data.user?.username ?? 'guest'}</p>
                   <p class="text-xs text-base-content/60 mt-0.5">{data.user?.roles?.join(', ') ?? m.common_guest()}</p>
                 </div>
                 <div class="py-1">

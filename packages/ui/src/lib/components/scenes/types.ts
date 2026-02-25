@@ -262,7 +262,7 @@ export interface ResetPasswordFormProps {
 /**
  * 用户个人信息字段
  */
-export type UserProfileField = 'avatar' | 'username' | 'email' | 'nickname' | 'phone' | 'bio'
+export type UserProfileField = 'avatar' | 'username' | 'email' | 'displayName' | 'nickname' | 'phone' | 'bio'
 
 /**
  * 用户信息
@@ -271,10 +271,20 @@ export interface UserProfileData {
   id?: string
   username?: string
   email?: string
+  displayName?: string
   nickname?: string
   phone?: string
   avatar?: string
+  avatarUrl?: string
   bio?: string
+}
+
+export interface UserProfileSubmitData {
+  username: string
+  email: string
+  displayName: string
+  phone: string
+  bio: string
 }
 
 /**
@@ -285,6 +295,7 @@ export interface UserProfileProps {
   user?: UserProfileData
   /** 是否可编辑 */
   editable?: boolean
+  alwaysEditable?: boolean
   /** 加载状态 */
   loading?: boolean
   /** 显示的字段 */
@@ -296,7 +307,7 @@ export interface UserProfileProps {
   /** 错误信息 */
   errors?: Record<string, string>
   /** 保存事件 */
-  onsubmit?: (data: Record<string, string>) => void | Promise<void>
+  onsubmit?: (data: UserProfileSubmitData) => void | Promise<void>
   /** 头像变更事件 */
   onavatarchange?: (file: File) => void | Promise<void>
 }

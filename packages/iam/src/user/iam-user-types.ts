@@ -160,6 +160,15 @@ export interface IamUserFunctions {
   getCurrentUser: (accessToken: string) => Promise<Result<User, IamError>>
 
   /**
+   * 更新当前登录用户信息（通过 accessToken 识别用户）
+   *
+   * @param accessToken - 访问令牌
+   * @param data - 要更新的字段
+   * @returns 成功返回更新后的用户信息
+   */
+  updateCurrentUser: (accessToken: string, data: Partial<User>) => Promise<Result<User, IamError>>
+
+  /**
    * 获取用户信息
    *
    * @param userId - 用户 ID
@@ -218,6 +227,12 @@ export interface IamUserFunctions {
    * @returns 成功返回 ok；旧密码错误返回 INVALID_CREDENTIALS，新密码不合规返回 PASSWORD_POLICY_VIOLATION
    */
   changePassword: (userId: string, oldPassword: string, newPassword: string) => Promise<Result<void, IamError>>
+
+  changeCurrentUserPassword: (
+    accessToken: string,
+    oldPassword: string,
+    newPassword: string,
+  ) => Promise<Result<void, IamError>>
 
   /**
    * 重置密码（发送重置链接）

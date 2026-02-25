@@ -46,6 +46,7 @@
   /** 提交中状态 */
   let submitting = $state(false)
   let error = $state('')
+  let dialogOpenedAt = $state(0)
 
   /** 打开新建对话框 */
   function openCreateDialog() {
@@ -57,6 +58,7 @@
     }
     error = ''
     showDialog = true
+    dialogOpenedAt = Date.now()
   }
 
   /** 打开编辑对话框 */
@@ -69,10 +71,14 @@
     }
     error = ''
     showDialog = true
+    dialogOpenedAt = Date.now()
   }
 
   /** 关闭对话框 */
-  function closeDialog() {
+  function closeDialog(source: 'action' | 'backdrop' = 'action') {
+    if (source === 'backdrop' && Date.now() - dialogOpenedAt < 25) {
+      return
+    }
     showDialog = false
     editingRole = null
     error = ''
@@ -355,7 +361,7 @@
       <button
         type="button"
         class="h-full w-full bg-black/50"
-        onclick={closeDialog}
+        onclick={() => closeDialog('backdrop')}
         aria-label={m.action_close()}
       >
         close

@@ -59,6 +59,26 @@ export interface IamServiceLike {
       data?: UserData | null
       error?: { code: number, message: string }
     }>
+    getUser?: (userId: string) => Promise<{
+      success: boolean
+      data?: UserData | null
+      error?: { code: number, message: string }
+    }>
+    getCurrentUser?: (accessToken: string) => Promise<{
+      success: boolean
+      data?: UserData | null
+      error?: { code: number, message: string }
+    }>
+    updateUser?: (userId: string, data: Partial<UserData>) => Promise<{
+      success: boolean
+      data?: UserData
+      error?: { code: number, message: string }
+    }>
+    updateCurrentUser?: (accessToken: string, data: Partial<UserData>) => Promise<{
+      success: boolean
+      data?: UserData
+      error?: { code: number, message: string }
+    }>
     register: (options: {
       username: string
       email: string
@@ -70,6 +90,14 @@ export interface IamServiceLike {
     }>
     changePassword: (
       userId: string,
+      oldPassword: string,
+      newPassword: string,
+    ) => Promise<{
+      success: boolean
+      error?: { code: number, message: string }
+    }>
+    changeCurrentUserPassword?: (
+      accessToken: string,
       oldPassword: string,
       newPassword: string,
     ) => Promise<{
@@ -101,6 +129,9 @@ export interface UserData {
   id: string
   username: string
   email?: string
+  displayName?: string
+  phone?: string
+  avatarUrl?: string
   nickname?: string
   avatar?: string
   enabled: boolean

@@ -15,6 +15,20 @@ import { validateForm } from '@hai/kit'
 import { json } from '@sveltejs/kit'
 
 /**
+ * 统一处理唯一键冲突错误，避免 API 响应泄露底层 SQL 细节。
+ *
+ * @param message 底层错误消息
+ * @returns 用户可读错误提示
+ */
+function normalizeUpdateUserError(message: string | undefined): string {
+  const lowerMessage = message?.toLowerCase() ?? ''
+  if (lowerMessage.includes('unique constraint') || lowerMessage.includes('duplicate')) {
+    return m.api_auth_username_or_email_taken()
+  }
+  return message ?? m.api_iam_users_update_failed()
+}
+
+/**
  * GET /api/iam/users/[id] - 获取单个用户
  */
 export const GET: RequestHandler = async ({ params }) => {
@@ -75,13 +89,13 @@ export const PUT: RequestHandler = async ({ params, request, locals, getClientAd
       updateData.username = username
     if (email)
       updateData.email = email
-    if (display_name)
+    if (display_name !== undefined)
       updateData.displayName = display_name
 
     if (Object.keys(updateData).length > 0) {
       const updateResult = await iam.user.updateUser(userId, updateData)
       if (!updateResult.success) {
-        return json({ success: false, error: updateResult.error.message }, { status: 400 })
+        return json({ success: false, error: normalizeUpdateUserError(updateResult.error.message) }, { status: 400 })
       }
     }
 
@@ -153,6 +167,10 @@ export const PUT: RequestHandler = async ({ params, request, locals, getClientAd
     })
   }
   catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error)
+    if (errorMessage.toLowerCase().includes('unique constraint') || errorMessage.toLowerCase().includes('duplicate')) {
+      return json({ success: false, error: m.api_auth_username_or_email_taken() }, { status: 409 })
+    }
     core.logger.error('Failed to update user:', { error })
     return json({ success: false, error: m.api_iam_users_update_failed() }, { status: 500 })
   }
@@ -189,7 +207,7 @@ export const DELETE: RequestHandler = async ({ params, locals, request, cookies,
 
     const existing = existingResult.data
 
-    // Best effort: session cleanup should not block user deletion.
+    // 尽力清理会话，但不应阻断用户删除主流程。
     try {
       await iam.session.deleteByUserId(userId)
     }
@@ -197,7 +215,7 @@ export const DELETE: RequestHandler = async ({ params, locals, request, cookies,
       core.logger.warn('Failed to clear user sessions before deletion', { userId, error })
     }
 
-    // Prefer iam.user.deleteUser; fall back to manual transactional delete for older runtimes.
+    // 优先使用 iam.user.deleteUser；老版本运行时回退到手动事务删除。
     const deleteUserFn = (iam.user as { deleteUser?: (id: string) => Promise<{ success: boolean, error?: { message: string } }> }).deleteUser
     if (typeof deleteUserFn === 'function') {
       const deleteResult = await deleteUserFn(userId)

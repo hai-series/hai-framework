@@ -1,6 +1,5 @@
 {
   "_comment": "@hai/ui component library built-in translations - English",
-
   "password_show": "Show password",
   "password_hide": "Hide password",
   "password_strength_label": "Password strength:",
@@ -8,7 +7,6 @@
   "password_strength_fair": "Fair",
   "password_strength_good": "Good",
   "password_strength_strong": "Strong",
-
   "login_username": "Username / Email",
   "login_username_placeholder": "Enter username or email",
   "login_password": "Password",
@@ -19,21 +17,17 @@
   "login_title": "Login",
   "login_no_account": "Don't have an account?",
   "login_register_now": "Register now",
-
   "settings_title": "Settings",
   "settings_close": "Close",
   "settings_language": "Language",
   "settings_theme": "Theme",
-
   "multi_select_no_match": "No match",
   "multi_select_remove": "Remove",
-
   "encrypted_input_placeholder": "Enter content",
   "encrypted_input_show": "Show",
   "encrypted_input_hide": "Hide",
   "encrypted_input_result": "Encrypted",
   "encrypted_input_copy": "Copy",
-
   "image_upload_placeholder": "Click to upload image",
   "image_upload_max_size_hint": "Max:",
   "image_upload_size_exceeded": "Image size exceeds limit (max",
@@ -43,7 +37,6 @@
   "image_upload_preview_alt": "Preview",
   "image_upload_change": "Change image",
   "image_upload_delete": "Delete image",
-
   "file_upload_drag_hint": "Drag files here, or",
   "file_upload_click_to_select": "click to select",
   "file_upload_supported_formats": "Supported:",
@@ -60,22 +53,20 @@
   "file_upload_max_files_exceeded": "Maximum upload limit:",
   "file_upload_retry": "Retry",
   "file_upload_remove": "Remove",
-
   "file_list_no_files": "No files",
   "file_list_preview": "Preview",
   "file_list_download": "Download",
   "file_list_delete": "Delete",
   "file_list_close": "Close",
-
   "avatar_upload_alt": "Avatar",
   "avatar_upload_size_exceeded": "Image size exceeds limit (max",
   "avatar_upload_invalid_type": "Please select an image file",
   "avatar_upload_get_url_failed": "Failed to get upload URL",
   "avatar_upload_failed": "Upload failed",
-
   "user_profile_avatar": "Avatar",
   "user_profile_username": "Username",
   "user_profile_email": "Email",
+  "user_profile_display_name": "Display Name",
   "user_profile_nickname": "Nickname",
   "user_profile_phone": "Phone",
   "user_profile_bio": "Bio",
@@ -83,7 +74,6 @@
   "user_profile_save": "Save",
   "user_profile_cancel": "Cancel",
   "user_profile_edit": "Edit Profile",
-
   "reset_password_code_label": "Verification Code",
   "reset_password_code_placeholder": "Enter verification code",
   "reset_password_new_label": "New Password",
@@ -95,7 +85,6 @@
   "reset_password_title": "Reset Password",
   "reset_password_desc": "Please enter your new password.",
   "reset_password_back": "Back to Login",
-
   "register_username": "Username",
   "register_email": "Email",
   "register_phone": "Phone",
@@ -113,7 +102,6 @@
   "register_title": "Create Account",
   "register_has_account": "Already have an account?",
   "register_login_now": "Login now",
-
   "forgot_password_email_label": "Email Address",
   "forgot_password_email_placeholder": "Enter your registered email",
   "forgot_password_email_hint": "We will send a password reset link to your email",
@@ -124,7 +112,6 @@
   "forgot_password_title": "Forgot Password",
   "forgot_password_desc": "Enter your registered email and we'll send you a password reset link.",
   "forgot_password_back": "Back to Login",
-
   "change_password_old": "Current Password",
   "change_password_new": "New Password",
   "change_password_confirm": "Confirm Password",
@@ -133,7 +120,7 @@
   "change_password_confirm_placeholder": "Re-enter new password",
   "change_password_mismatch": "Passwords do not match",
   "change_password_submit": "Change Password",
-
+  "change_password_relogin_hint": "After submission, the current session will be invalidated immediately. Please sign in again with your new password.",
   "feedback_title": "Feedback",
   "feedback_description": "We value your feedback. Please share your thoughts with us.",
   "feedback_type_label": "Feedback Type",
@@ -149,7 +136,6 @@
   "feedback_type_feature": "Feature Request",
   "feedback_type_question": "Question",
   "feedback_type_other": "Other",
-
   "pagination_total": "Total {count}",
   "pagination_jump_to": "Go to",
   "pagination_page": "page",

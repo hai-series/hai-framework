@@ -39,6 +39,26 @@ export const UpdateUserSchema = z.object({
   roles: z.array(z.string()).optional(),
 })
 
+/** 更新当前用户资料 Schema */
+export const UpdateProfileSchema = z.object({
+  username: z.string().regex(/^\w{3,20}$/, m.api_auth_username_format_invalid()).optional(),
+  display_name: z.string().optional(),
+  email: z.string().regex(/^[^\s@]+@[^\s@][^\s.@]*\.[^\s@]+$/, m.api_auth_email_invalid()).optional(),
+  phone: z.string().optional(),
+  avatar: z.string().optional(),
+})
+
+export const ChangeCurrentPasswordSchema = z
+  .object({
+    old_password: z.string().min(1, m.api_common_required_fields()),
+    new_password: z.string().min(8, m.api_auth_password_too_short()),
+    confirm_password: z.string().min(1, m.api_common_required_fields()),
+  })
+  .refine(data => data.new_password === data.confirm_password, {
+    message: m.api_auth_password_mismatch(),
+    path: ['confirm_password'],
+  })
+
 /** 创建角色请求 Schema */
 export const CreateRoleSchema = z.object({
   name: z.string().trim().min(1, m.api_iam_roles_name_required()),

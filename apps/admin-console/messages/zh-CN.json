@@ -2,7 +2,6 @@
   "$schema": "https://inlang.com/schema/inlang-message-format",
   "app_title": "hai 管理控制台",
   "app_description": "现代化管理后台",
-
   "nav_home": "首页",
   "nav_dashboard": "仪表盘",
   "nav_settings": "系统设置",
@@ -17,7 +16,6 @@
   "nav_collapse": "收起菜单",
   "nav_page": "页面",
   "nav_modules": "模块示例",
-
   "settings_title": "系统设置",
   "settings_subtitle": "个性化您的系统外观和区域偏好",
   "settings_appearance": "外观",
@@ -33,7 +31,6 @@
   "settings_version": "版本",
   "settings_version_dev": "开发版本",
   "settings_save": "保存设置",
-
   "dashboard_title": "仪表盘",
   "dashboard_subtitle": "系统概览与快速入口",
   "dashboard_welcome": "欢迎回来",
@@ -49,7 +46,6 @@
   "dashboard_recent_activity": "最近活动",
   "dashboard_quick_actions": "快速入口",
   "dashboard_activity_stats": "近7日活动统计",
-
   "user_management": "用户管理",
   "user_list": "用户列表",
   "user_create": "创建用户",
@@ -63,10 +59,8 @@
   "user_actions": "操作",
   "user_enabled": "已启用",
   "user_disabled": "已禁用",
-
   "role_management": "角色管理",
   "permission_management": "权限管理",
-
   "action_create": "创建",
   "action_edit": "编辑",
   "action_delete": "删除",
@@ -80,7 +74,6 @@
   "action_close": "关闭",
   "action_open": "打开",
   "action_view_all": "查看全部",
-
   "common_loading": "加载中...",
   "common_no_data": "暂无数据",
   "common_error": "发生错误",
@@ -91,18 +84,15 @@
   "common_unknown_user": "未知用户",
   "common_no_activity": "暂无活动记录",
   "common_network_error": "网络错误，请稍后重试",
-
   "server_init_db_failed": "数据库初始化失败: {message}",
   "server_init_cache_failed": "缓存初始化失败: {message}",
   "server_init_iam_failed": "IAM 初始化失败: {message}",
   "server_error_with_cause": "{message} (原因: {cause})",
   "server_init_not_initialized": "应用未初始化，请先调用 initApp()",
-
   "time_just_now": "刚刚",
   "time_minutes_ago": "{count} 分钟前",
   "time_hours_ago": "{count} 小时前",
   "time_days_ago": "{count} 天前",
-
   "activity_login": "登录",
   "activity_logout": "登出",
   "activity_register": "注册",
@@ -110,7 +100,6 @@
   "activity_update": "更新",
   "activity_delete": "删除",
   "activity_password_reset": "重置密码",
-
   "iam_users_title": "用户管理",
   "iam_users_subtitle": "管理系统用户账号",
   "iam_users_search_placeholder": "搜索用户名、邮箱或显示名称...",
@@ -141,7 +130,6 @@
   "iam_users_form_roles": "角色",
   "iam_users_form_status": "状态",
   "iam_users_form_password_hint": "留空则保持原密码不变",
-
   "iam_permissions_title": "权限管理",
   "iam_permissions_subtitle": "管理系统权限配置",
   "iam_permissions_create": "创建权限",
@@ -167,7 +155,6 @@
   "iam_permissions_stat_resources": "资源数",
   "iam_permissions_stat_actions": "操作类型",
   "iam_permissions_stat_system": "系统权限",
-
   "iam_roles_title": "角色管理",
   "iam_roles_subtitle": "管理系统角色和权限分配",
   "iam_roles_create": "新建角色",
@@ -187,14 +174,12 @@
   "iam_roles_user_count": "{count} 个用户",
   "iam_roles_permission_count": "{count} 个权限",
   "iam_roles_action_menu": "角色操作菜单",
-
   "gallery_title": "UI 组件库",
   "gallery_desc": "基于 @hai/ui 的全部组件展示，封装自 DaisyUI",
   "gallery_tab_primitives": "原子组件",
   "gallery_tab_compounds": "组合组件",
   "gallery_tab_scenes": "场景组件",
   "gallery_tab_overlays": "覆盖/主题",
-
   "modules_title": "模块功能示例",
   "modules_desc": "hai-framework 各后端模块能力展示与用法示例",
   "modules_tab_core": "Core 核心",
@@ -203,7 +188,6 @@
   "modules_tab_storage": "Storage 存储",
   "modules_tab_ai": "AI 智能",
   "modules_tab_crypto": "Crypto 加密",
-
   "api_auth_identifier_password_required": "请输入用户名/邮箱和密码",
   "api_auth_login_failed": "登录失败，请稍后重试",
   "api_common_required_fields": "请填写所有必填字段",
@@ -243,5 +227,12 @@
   "api_iam_permissions_delete_failed": "删除权限失败",
   "api_iam_permissions_update_not_supported": "暂不支持更新权限，请删除后重建",
   "api_audit_log_failed": "记录审计日志失败: {message}",
-  "api_audit_log_retrieve_failed": "记录审计日志后无法获取日志信息"
+  "api_audit_log_retrieve_failed": "记录审计日志后无法获取日志信息",
+  "profile_password_security_desc": "修改密码后，当前会话会自动退出，请使用新密码重新登录。",
+  "profile_password_rules_title": "密码规则",
+  "profile_password_rule_min_length": "长度不少于 {minLength} 位",
+  "profile_password_rule_not_same": "新密码不能与旧密码相同",
+  "profile_password_rule_confirm_match": "确认密码必须与新密码一致",
+  "api_auth_avatar_invalid_type": "仅支持 PNG/JPEG/WEBP/GIF 图片文件",
+  "api_auth_avatar_size_exceeded": "头像文件大小必须小于 2MB"
 }
