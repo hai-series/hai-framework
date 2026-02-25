@@ -1,6 +1,6 @@
 /**
  * =============================================================================
- * @hai/kit - Crypto 类型定义
+ * @h-ai/kit - Crypto 类型定义
  * =============================================================================
  * Crypto 模块集成相关类型
  * =============================================================================
@@ -9,7 +9,7 @@
 import type { RequestEvent } from '@sveltejs/kit'
 
 /**
- * Crypto 服务接口（简化版，与 @hai/crypto 兼容）
+ * Crypto 服务接口（简化版，与 @h-ai/crypto 兼容）
  */
 export interface CryptoServiceLike {
   hmac: {
@@ -154,7 +154,7 @@ export interface TransportKeyPair {
 }
 
 /**
- * 传输加密服务接口（解耦 @hai/crypto）
+ * 传输加密服务接口（解耦 @h-ai/crypto）
  *
  * 只声明传输加密所需的 SM2 + SM4 子集，由使用者注入实际实现。
  */

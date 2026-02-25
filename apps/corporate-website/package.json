@@ -23,9 +23,9 @@
     "clean": "rimraf .svelte-kit build .turbo"
   },
   "dependencies": {
-    "@hai/core": "workspace:*",
-    "@hai/kit": "workspace:*",
-    "@hai/ui": "workspace:*",
+    "@h-ai/core": "workspace:*",
+    "@h-ai/kit": "workspace:*",
+    "@h-ai/ui": "workspace:*",
     "zod": "catalog:"
   },
   "devDependencies": {

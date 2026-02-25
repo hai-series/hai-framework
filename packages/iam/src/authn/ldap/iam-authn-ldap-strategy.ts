@@ -1,6 +1,6 @@
 /**
  * =============================================================================
- * @hai/iam - LDAP 认证策略
+ * @h-ai/iam - LDAP 认证策略
  * =============================================================================
  *
  * LDAP 目录认证方式
@@ -9,13 +9,13 @@
  * =============================================================================
  */
 
-import type { Result } from '@hai/core'
+import type { Result } from '@h-ai/core'
 import type { LdapConfig } from '../../iam-config.js'
 import type { IamError } from '../../iam-types.js'
 import type { UserRepository } from '../../user/iam-user-repository-user.js'
 import type { StoredUser, User } from '../../user/iam-user-types.js'
 import type { AuthStrategy, Credentials } from '../iam-authn-types.js'
-import { core, err, ok } from '@hai/core'
+import { core, err, ok } from '@h-ai/core'
 
 import { IamErrorCode } from '../../iam-config.js'
 import { iamM } from '../../iam-i18n.js'

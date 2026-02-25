@@ -7,7 +7,7 @@
 import type { RequestHandler } from '@sveltejs/kit'
 import * as m from '$lib/paraglide/messages.js'
 import { audit, permissionService } from '$lib/server/services/index.js'
-import { core } from '@hai/core'
+import { core } from '@h-ai/core'
 import { json } from '@sveltejs/kit'
 
 /**

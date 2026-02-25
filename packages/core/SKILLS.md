@@ -1,18 +1,18 @@
-# @hai/core Skills
+# @h-ai/core Skills
 
-> 此文件描述 @hai/core 模块的 API 调用方式，供 AI 助手参考。
+> 此文件描述 @h-ai/core 模块的 API 调用方式，供 AI 助手参考。
 
 ## 1. 模块概述
 
-`@hai/core` 是 hai-framework 的核心基础模块，提供统一的 core 服务对象，聚合日志、配置、ID 生成、i18n 与基础工具函数。Node.js 与浏览器 API 形态一致（浏览器不支持 `core.config`）。
+`@h-ai/core` 是 hai-framework 的核心基础模块，提供统一的 core 服务对象，聚合日志、配置、ID 生成、i18n 与基础工具函数。Node.js 与浏览器 API 形态一致（浏览器不支持 `core.config`）。
 
 ## 2. 入口与初始化
 
 ### 导入
 
 ```typescript
-import type { InterpolationParams, Locale, LocaleInfo, LocaleMessages, Logger, MessageDictionary, MessageOptions, PaginatedResult, PaginationOptions, PaginationOptionsInput, Result } from '@hai/core'
-import { CommonErrorCode, ConfigErrorCode, core, CoreConfigSchema, err, ok } from '@hai/core'
+import type { InterpolationParams, Locale, LocaleInfo, LocaleMessages, Logger, MessageDictionary, MessageOptions, PaginatedResult, PaginationOptions, PaginationOptionsInput, Result } from '@h-ai/core'
+import { CommonErrorCode, ConfigErrorCode, core, CoreConfigSchema, err, ok } from '@h-ai/core'
 ```
 
 ### Node.js 初始化（可选）
@@ -291,8 +291,8 @@ core.time.endOfDay(date)
 ### Result 类型
 
 ```typescript
-import type { Result } from '@hai/core'
-import { err, ok } from '@hai/core'
+import type { Result } from '@h-ai/core'
+import { err, ok } from '@h-ai/core'
 
 function divide(a: number, b: number): Result<number, string> {
   if (b === 0)
@@ -312,7 +312,7 @@ else {
 ### 分页类型
 
 ```typescript
-import type { PaginatedResult, PaginationOptions, PaginationOptionsInput } from '@hai/core'
+import type { PaginatedResult, PaginationOptions, PaginationOptionsInput } from '@h-ai/core'
 
 const options: PaginationOptionsInput = { page: 1, pageSize: 20 }
 const result: PaginatedResult<string> = { items: ['a'], total: 1, page: 1, pageSize: 20 }

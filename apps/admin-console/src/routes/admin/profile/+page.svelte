@@ -1,8 +1,7 @@
 <script lang="ts">
   import type { PageData } from './$types'
-  import type { ChangePasswordFormData, UserProfileSubmitData } from '@hai/ui'
+  import type { ChangePasswordFormData, UserProfileSubmitData } from '@h-ai/ui'
   import * as m from '$lib/paraglide/messages.js'
-  import { ChangePasswordForm, UserProfile } from '@hai/ui'
 
   interface Props {
     data: PageData
@@ -305,7 +304,7 @@
   </div>
 
   <div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
-    <aside class="card bg-base-100 border border-base-200 shadow-sm xl:col-span-1">
+    <aside class="card bg-base-100 shadow-sm rounded-xl xl:col-span-1">
       <div class="card-body gap-5">
         <div class="space-y-1">
           <p class="text-xs uppercase tracking-wider text-base-content/50">{m.iam_users_form_username()}</p>
@@ -322,7 +321,7 @@
       </div>
     </aside>
 
-    <section class="card bg-base-100 border border-base-200 shadow-sm xl:col-span-2">
+    <section class="card bg-base-100 shadow-sm rounded-xl xl:col-span-2">
       <div class="card-body gap-4">
         <div class="flex items-center justify-between">
           <h2 class="text-lg font-semibold text-base-content">{m.nav_profile()}</h2>
@@ -346,16 +345,16 @@
     </section>
   </div>
 
-  <section class="card bg-base-100 border border-base-200 shadow-sm overflow-hidden" data-testid="profile-password-card">
+  <section class="card bg-base-100 shadow-sm rounded-xl overflow-hidden" data-testid="profile-password-card">
     <div class="grid grid-cols-1 lg:grid-cols-12">
-      <aside class="lg:col-span-4 bg-base-200/50 border-b lg:border-b-0 lg:border-r border-base-200 p-6 space-y-4">
+      <aside class="lg:col-span-4 bg-base-200/50 border-b lg:border-b-0 lg:border-r border-base-content/5 p-6 space-y-4">
         <div>
           <h2 class="text-lg font-semibold text-base-content">{m.iam_users_form_password()}</h2>
           <p class="text-sm text-base-content/70 mt-2">
             {m.profile_password_security_desc()}
           </p>
         </div>
-        <div class="rounded-lg border border-base-300/70 bg-base-100 px-4 py-3">
+        <div class="rounded-lg bg-base-100 px-4 py-3">
           <p class="text-xs font-medium text-base-content/70 mb-2">{m.profile_password_rules_title()}</p>
           <ul class="text-xs text-base-content/70 space-y-1">
             <li>{m.profile_password_rule_min_length({ minLength: MIN_PASSWORD_LENGTH })}</li>

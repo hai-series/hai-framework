@@ -1,6 +1,6 @@
 /**
  * =============================================================================
- * @hai/iam - OTP 认证策略
+ * @h-ai/iam - OTP 认证策略
  * =============================================================================
  *
  * 邮箱/短信 + 验证码的认证方式
@@ -9,14 +9,14 @@
  * =============================================================================
  */
 
-import type { Result } from '@hai/core'
+import type { Result } from '@h-ai/core'
 import type { OtpConfig, RegisterConfig } from '../../iam-config.js'
 import type { IamError } from '../../iam-types.js'
 import type { UserRepository } from '../../user/iam-user-repository-user.js'
 import type { StoredUser, User } from '../../user/iam-user-types.js'
 import type { AuthStrategy, Credentials } from '../iam-authn-types.js'
 import type { OtpRepository } from './iam-authn-otp-repository-otp.js'
-import { core, err, ok } from '@hai/core'
+import { core, err, ok } from '@h-ai/core'
 
 import { IamErrorCode, OtpConfigSchema } from '../../iam-config.js'
 import { iamM } from '../../iam-i18n.js'

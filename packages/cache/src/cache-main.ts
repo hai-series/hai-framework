@@ -1,4 +1,4 @@
-import type { Result } from '@hai/core'
+import type { Result } from '@h-ai/core'
 import type { CacheConfig, CacheConfigInput } from './cache-config.js'
 import type {
   CacheError,
@@ -11,7 +11,7 @@ import type {
   ZSetOperations,
 } from './cache-types.js'
 
-import { core, err, ok } from '@hai/core'
+import { core, err, ok } from '@h-ai/core'
 
 import { CacheConfigSchema, CacheErrorCode } from './cache-config.js'
 import { cacheM } from './cache-i18n.js'
@@ -71,7 +71,7 @@ const notInitializedZSet = notInitialized.proxy<ZSetOperations>()
  *
  * @example
  * ```ts
- * import { cache } from '@hai/cache'
+ * import { cache } from '@h-ai/cache'
  *
  * await cache.init({ type: 'redis', host: 'localhost', port: 6379 })
  * await cache.kv.set('user:1', { name: '张三' }, { ex: 3600 })

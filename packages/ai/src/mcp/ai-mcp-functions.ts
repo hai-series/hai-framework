@@ -1,10 +1,10 @@
 /**
- * @hai/ai — MCP 子功能工厂
+ * @h-ai/ai — MCP 子功能工厂
  *
  * 提供 MCP 工具/资源/提示词的注册与调用功能。
  */
 
-import type { Result } from '@hai/core'
+import type { Result } from '@h-ai/core'
 
 import type { AIError } from '../ai-config.js'
 import type {
@@ -19,7 +19,7 @@ import type {
   MCPToolHandler,
 } from './ai-mcp-types.js'
 
-import { err, ok } from '@hai/core'
+import { err, ok } from '@h-ai/core'
 
 import { AIErrorCode } from '../ai-config.js'
 import { aiM } from '../ai-i18n.js'

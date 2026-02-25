@@ -1,10 +1,10 @@
 /**
- * @hai/ai — LLM Provider: OpenAI 兼容实现
+ * @h-ai/ai — LLM Provider: OpenAI 兼容实现
  *
  * 工厂函数创建，基于 OpenAI SDK 支持所有 OpenAI 兼容的 API 端点。
  */
 
-import type { Result } from '@hai/core'
+import type { Result } from '@h-ai/core'
 
 import type { AIError } from '../../ai-config.js'
 import type {
@@ -16,7 +16,7 @@ import type {
 } from '../ai-llm-types.js'
 
 import process from 'node:process'
-import { err, ok } from '@hai/core'
+import { err, ok } from '@h-ai/core'
 import OpenAI from 'openai'
 
 import { AIErrorCode } from '../../ai-config.js'

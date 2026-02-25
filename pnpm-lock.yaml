@@ -209,31 +209,31 @@ importers:
 
   apps/admin-console:
     dependencies:
-      '@hai/ai':
+      '@h-ai/ai':
         specifier: workspace:*
         version: link:../../packages/ai
-      '@hai/cache':
+      '@h-ai/cache':
         specifier: workspace:*
         version: link:../../packages/cache
-      '@hai/core':
+      '@h-ai/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@hai/crypto':
+      '@h-ai/crypto':
         specifier: workspace:*
         version: link:../../packages/crypto
-      '@hai/db':
+      '@h-ai/db':
         specifier: workspace:*
         version: link:../../packages/db
-      '@hai/iam':
+      '@h-ai/iam':
         specifier: workspace:*
         version: link:../../packages/iam
-      '@hai/kit':
+      '@h-ai/kit':
         specifier: workspace:*
         version: link:../../packages/kit
-      '@hai/storage':
+      '@h-ai/storage':
         specifier: workspace:*
         version: link:../../packages/storage
-      '@hai/ui':
+      '@h-ai/ui':
         specifier: workspace:*
         version: link:../../packages/ui
       zod:
@@ -297,16 +297,16 @@ importers:
 
   apps/api-service:
     dependencies:
-      '@hai/core':
+      '@h-ai/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@hai/db':
+      '@h-ai/db':
         specifier: workspace:*
         version: link:../../packages/db
-      '@hai/iam':
+      '@h-ai/iam':
         specifier: workspace:*
         version: link:../../packages/iam
-      '@hai/kit':
+      '@h-ai/kit':
         specifier: workspace:*
         version: link:../../packages/kit
       '@sveltejs/adapter-node':
@@ -334,13 +334,13 @@ importers:
 
   apps/corporate-website:
     dependencies:
-      '@hai/core':
+      '@h-ai/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@hai/kit':
+      '@h-ai/kit':
         specifier: workspace:*
         version: link:../../packages/kit
-      '@hai/ui':
+      '@h-ai/ui':
         specifier: workspace:*
         version: link:../../packages/ui
       zod:
@@ -389,13 +389,13 @@ importers:
 
   apps/h5-app:
     dependencies:
-      '@hai/core':
+      '@h-ai/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@hai/kit':
+      '@h-ai/kit':
         specifier: workspace:*
         version: link:../../packages/kit
-      '@hai/ui':
+      '@h-ai/ui':
         specifier: workspace:*
         version: link:../../packages/ui
       '@sveltejs/adapter-auto':
@@ -432,7 +432,7 @@ importers:
 
   packages/ai:
     dependencies:
-      '@hai/core':
+      '@h-ai/core':
         specifier: workspace:*
         version: link:../core
       '@modelcontextprotocol/sdk':
@@ -463,7 +463,7 @@ importers:
 
   packages/cache:
     dependencies:
-      '@hai/core':
+      '@h-ai/core':
         specifier: workspace:*
         version: link:../core
       ioredis:
@@ -494,7 +494,7 @@ importers:
 
   packages/cli:
     dependencies:
-      '@hai/core':
+      '@h-ai/core':
         specifier: workspace:*
         version: link:../core
       cac:
@@ -581,7 +581,7 @@ importers:
 
   packages/crypto:
     dependencies:
-      '@hai/core':
+      '@h-ai/core':
         specifier: workspace:*
         version: link:../core
       sm-crypto:
@@ -609,7 +609,7 @@ importers:
 
   packages/db:
     dependencies:
-      '@hai/core':
+      '@h-ai/core':
         specifier: workspace:*
         version: link:../core
       better-sqlite3:
@@ -653,16 +653,16 @@ importers:
 
   packages/iam:
     dependencies:
-      '@hai/cache':
+      '@h-ai/cache':
         specifier: workspace:*
         version: link:../cache
-      '@hai/core':
+      '@h-ai/core':
         specifier: workspace:*
         version: link:../core
-      '@hai/crypto':
+      '@h-ai/crypto':
         specifier: workspace:*
         version: link:../crypto
-      '@hai/db':
+      '@h-ai/db':
         specifier: workspace:*
         version: link:../db
       zod:
@@ -690,16 +690,16 @@ importers:
 
   packages/kit:
     dependencies:
-      '@hai/cache':
+      '@h-ai/cache':
         specifier: workspace:*
         version: link:../cache
-      '@hai/core':
+      '@h-ai/core':
         specifier: workspace:*
         version: link:../core
-      '@hai/db':
+      '@h-ai/db':
         specifier: workspace:*
         version: link:../db
-      '@hai/iam':
+      '@h-ai/iam':
         specifier: workspace:*
         version: link:../iam
       zod:
@@ -736,7 +736,7 @@ importers:
       '@aws-sdk/s3-request-presigner':
         specifier: 'catalog:'
         version: 3.978.0
-      '@hai/core':
+      '@h-ai/core':
         specifier: workspace:*
         version: link:../core
       zod:
@@ -764,7 +764,7 @@ importers:
 
   packages/ui:
     dependencies:
-      '@hai/core':
+      '@h-ai/core':
         specifier: workspace:*
         version: link:../core
     devDependencies:

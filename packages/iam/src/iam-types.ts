@@ -1,5 +1,5 @@
 /**
- * @hai/iam — 公共类型定义
+ * @h-ai/iam — 公共类型定义
  *
  * 包含：
  * - 错误类型（IamError）
@@ -9,9 +9,9 @@
  * - 子功能类型 re-export
  */
 
-import type { CacheFunctions } from '@hai/cache'
-import type { Result } from '@hai/core'
-import type { DbFunctions } from '@hai/db'
+import type { CacheFunctions } from '@h-ai/cache'
+import type { Result } from '@h-ai/core'
+import type { DbFunctions } from '@h-ai/db'
 
 import type { IamAuthnFunctions } from './authn/iam-authn-types.js'
 import type { LdapClientFactory } from './authn/ldap/iam-authn-ldap-strategy.js'

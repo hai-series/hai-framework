@@ -1,12 +1,12 @@
 /**
- * @hai/ai — i18n 消息获取器
+ * @h-ai/ai — i18n 消息获取器
  *
  * 模块内部使用，不对外导出。
  *
  * @internal
  */
 
-import { core } from '@hai/core'
+import { core } from '@h-ai/core'
 import messagesEnUS from '../messages/en-US.json'
 import messagesZhCN from '../messages/zh-CN.json'
 

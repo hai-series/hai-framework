@@ -1,20 +1,20 @@
 /**
  * =============================================================================
- * @hai/iam - 角色存储实现
+ * @h-ai/iam - 角色存储实现
  * =============================================================================
  *
- * 基于 @hai/db 的角色存储实现。
+ * 基于 @h-ai/db 的角色存储实现。
  *
  * @module authz/iam-authz-repository-role
  * =============================================================================
  */
 
-import type { Result } from '@hai/core'
-import type { CrudCountOptions, CrudFieldDefinition, CrudRepository, DbError, DbFunctions, TxHandle } from '@hai/db'
+import type { Result } from '@h-ai/core'
+import type { CrudCountOptions, CrudFieldDefinition, CrudRepository, DbError, DbFunctions, TxHandle } from '@h-ai/db'
 import type { IamError } from '../iam-types.js'
 import type { Role } from './iam-authz-types.js'
-import { err, ok } from '@hai/core'
-import { BaseCrudRepository } from '@hai/db'
+import { err, ok } from '@h-ai/core'
+import { BaseCrudRepository } from '@h-ai/db'
 import { IamErrorCode } from '../iam-config.js'
 import { iamM } from '../iam-i18n.js'
 

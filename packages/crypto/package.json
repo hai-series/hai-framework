@@ -1,5 +1,5 @@
 {
-  "name": "@hai/crypto",
+  "name": "@h-ai/crypto",
   "type": "module",
   "version": "0.1.0",
   "description": "Chinese National Cryptographic Algorithms (SM2/SM3/SM4) module for hai Framework.",
@@ -29,7 +29,7 @@
     "clean": "rimraf dist .turbo"
   },
   "dependencies": {
-    "@hai/core": "workspace:*",
+    "@h-ai/core": "workspace:*",
     "sm-crypto": "catalog:",
     "zod": "catalog:"
   },

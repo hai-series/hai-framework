@@ -74,7 +74,7 @@
   <!-- 统计卡片 -->
   <div class="grid gap-4 grid-cols-2 lg:grid-cols-4">
     <!-- 用户总数 -->
-    <div class="bg-base-100 rounded-xl border border-base-content/10 p-5">
+    <div class="bg-base-100 rounded-xl shadow-sm p-5">
       <div class="flex items-start justify-between">
         <div>
           <p class="text-sm font-medium text-base-content/60">{m.dashboard_total_users()}</p>
@@ -90,7 +90,7 @@
     </div>
 
     <!-- 角色数 -->
-    <div class="bg-base-100 rounded-xl border border-base-content/10 p-5">
+    <div class="bg-base-100 rounded-xl shadow-sm p-5">
       <div class="flex items-start justify-between">
         <div>
           <p class="text-sm font-medium text-base-content/60">{m.dashboard_total_roles()}</p>
@@ -106,7 +106,7 @@
     </div>
 
     <!-- 权限数 -->
-    <div class="bg-base-100 rounded-xl border border-base-content/10 p-5">
+    <div class="bg-base-100 rounded-xl shadow-sm p-5">
       <div class="flex items-start justify-between">
         <div>
           <p class="text-sm font-medium text-base-content/60">{m.dashboard_total_permissions()}</p>
@@ -122,7 +122,7 @@
     </div>
 
     <!-- 近7日活动 -->
-    <div class="bg-base-100 rounded-xl border border-base-content/10 p-5">
+    <div class="bg-base-100 rounded-xl shadow-sm p-5">
       <div class="flex items-start justify-between">
         <div>
           <p class="text-sm font-medium text-base-content/60">{m.dashboard_activity_7d()}</p>
@@ -209,7 +209,7 @@
           </a>
         </div>
 
-        <div class="divide-y divide-base-content/10">
+        <div class="divide-y divide-base-content/5">
           {#each data.recentActivity as activity}
             <div class="flex items-start gap-3 py-3">
               <div class="shrink-0 w-8 h-8 rounded-full bg-base-200 flex items-center justify-center">

@@ -4,7 +4,7 @@
  * =============================================================================
  */
 
-import { autoImportHaiUi } from '@hai/ui/auto-import'
+import { autoImportHaiUi } from '@h-ai/ui/auto-import'
 import adapter from '@sveltejs/adapter-auto'
 import { vitePreprocess } from '@sveltejs/vite-plugin-svelte'
 
@@ -21,16 +21,16 @@ const config = {
       '$components': './src/lib/components',
       '$stores': './src/lib/stores',
       '$utils': './src/lib/utils',
-      '@hai/ai': '../../packages/ai',
-      '@hai/cache': '../../packages/cache',
-      '@hai/core': '../../packages/core',
-      '@hai/crypto': '../../packages/crypto',
-      '@hai/db': '../../packages/db',
-      '@hai/iam': '../../packages/iam',
-      '@hai/kit': '../../packages/kit',
-      '@hai/storage': '../../packages/storage',
-      '@hai/ui': '../../packages/ui/src/lib/index.ts',
-      '@hai/ui/*': '../../packages/ui/*',
+      '@h-ai/ai': '../../packages/ai',
+      '@h-ai/cache': '../../packages/cache',
+      '@h-ai/core': '../../packages/core',
+      '@h-ai/crypto': '../../packages/crypto',
+      '@h-ai/db': '../../packages/db',
+      '@h-ai/iam': '../../packages/iam',
+      '@h-ai/kit': '../../packages/kit',
+      '@h-ai/storage': '../../packages/storage',
+      '@h-ai/ui': '../../packages/ui/src/lib/index.ts',
+      '@h-ai/ui/*': '../../packages/ui/*',
     },
   },
 }

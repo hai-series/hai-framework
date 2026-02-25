@@ -9,9 +9,9 @@
 import type { Handle } from '@sveltejs/kit'
 import process from 'node:process'
 import { initApp } from '$lib/server/init.js'
-import { core } from '@hai/core'
-import { iam } from '@hai/iam'
-import { kit } from '@hai/kit'
+import { core } from '@h-ai/core'
+import { iam } from '@h-ai/iam'
+import { kit } from '@h-ai/kit'
 
 // 初始化应用（包含数据库、缓存、IAM 等模块）
 let appInitPromise: Promise<void> | null = null

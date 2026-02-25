@@ -1,37 +1,37 @@
-# @hai/ui SKILLS（AI 辅助文档）
+# @h-ai/ui SKILLS（AI 辅助文档）
 
-> 本文件提供详细技术接口信息，供 AI 助手理解和使用 @hai/ui 组件。
+> 本文件提供详细技术接口信息，供 AI 助手理解和使用 @h-ai/ui 组件。
 
 ---
 
 ## 模块概述
 
-@hai/ui 是基于 **Svelte 5 Runes** 的管理后台 UI 组件库。
+@h-ai/ui 是基于 **Svelte 5 Runes** 的管理后台 UI 组件库。
 
 - **样式方案**：DaisyUI + TailwindCSS v4，支持 32 个 DaisyUI 内置主题
 - **三层架构**：primitives（原子）→ compounds（组合）→ scenes（场景）
-- **内置 i18n**：场景组件内置 zh-CN / en-US 翻译，通过 `@hai/core` 全局 locale 管理自动同步
+- **内置 i18n**：场景组件内置 zh-CN / en-US 翻译，通过 `@h-ai/core` 全局 locale 管理自动同步
 - **翻译文件**：`src/lib/messages/{zh-CN,en-US}.json`
-- **依赖**：`@hai/core`（workspace 依赖）
+- **依赖**：`@h-ai/core`（workspace 依赖）
 
 ### 导出入口
 
-| 入口                   | 说明                                 |
-| ---------------------- | ------------------------------------ |
-| `@hai/ui`              | 主入口，导出所有组件、类型、工具函数 |
-| `@hai/ui/auto-import`  | 自动导入预处理器                     |
-| `@hai/ui/components/*` | 按路径导入单个组件                   |
-| `@hai/ui/styles/*`     | 样式文件                             |
+| 入口                    | 说明                                 |
+| ----------------------- | ------------------------------------ |
+| `@h-ai/ui`              | 主入口，导出所有组件、类型、工具函数 |
+| `@h-ai/ui/auto-import`  | 自动导入预处理器                     |
+| `@h-ai/ui/components/*` | 按路径导入单个组件                   |
+| `@h-ai/ui/styles/*`     | 样式文件                             |
 
 ---
 
 ## 自动导入预处理器
 
-在 Svelte 编译阶段自动注入 `@hai/ui` 组件 import，减少页面样板代码。
+在 Svelte 编译阶段自动注入 `@h-ai/ui` 组件 import，减少页面样板代码。
 
 ```ts
 // svelte.config.js
-import { autoImportHaiUi } from '@hai/ui/auto-import'
+import { autoImportHaiUi } from '@h-ai/ui/auto-import'
 
 const config = {
   preprocess: [autoImportHaiUi(), vitePreprocess()],
@@ -1083,7 +1083,7 @@ interface SignatureDisplayProps {
 
 ```ts
 // src/lib/messages.ts（内部模块）
-import { core } from '@hai/core'
+import { core } from '@h-ai/core'
 import messagesEnUS from './messages/en-US.json'
 import messagesZhCN from './messages/zh-CN.json'
 
@@ -1107,14 +1107,14 @@ export function setUILocale(locale: string): void // 手动设置（通常不需
 
 ```svelte
 <script>
-  import { createLocaleStore, setGlobalLocale } from '@hai/ui'
+  import { createLocaleStore, setGlobalLocale } from '@h-ai/ui'
   import { setLocale } from '$lib/paraglide/runtime'
 
   const localeStore = createLocaleStore()
 
   function changeLocale(code: string) {
-    localeStore.set(code)           // 更新 UI store + 同步 @hai/core
-    setGlobalLocale(code)           // 显式同步到 @hai/core（可选，set 内部已同步）
+    localeStore.set(code)           // 更新 UI store + 同步 @h-ai/core
+    setGlobalLocale(code)           // 显式同步到 @h-ai/core（可选，set 内部已同步）
     setLocale(code)                 // 同步到 Paraglide（应用层 i18n）
   }
 </script>
@@ -1131,7 +1131,7 @@ function createLocaleStore(options?: {
 }): {
   current: Locale // 响应式，当前语言
   supported: LocaleInfo[] // 支持的语言列表
-  set: (locale: Locale) => void // 设置语言（自动同步 @hai/core + 持久化）
+  set: (locale: Locale) => void // 设置语言（自动同步 @h-ai/core + 持久化）
   isSupported: (locale: Locale) => boolean
 }
 ```
@@ -1232,7 +1232,7 @@ export function generateId(prefix?: string): string
 
 4. **不要修改内部翻译文件**：如需自定义文本，通过 `submitText`、`labels` 等 props 覆盖。
 
-5. **组件依赖 @hai/core**：确保项目已安装 `@hai/core`。
+5. **组件依赖 @h-ai/core**：确保项目已安装 `@h-ai/core`。
 
 6. **Snippet 插槽**：Svelte 5 使用 `{#snippet name()}...{/snippet}` 语法传递插槽内容，不再使用 `<slot>`。
 

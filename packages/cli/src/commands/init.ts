@@ -1,6 +1,6 @@
 /**
  * =============================================================================
- * @hai/cli - 项目初始化/校验命令
+ * @h-ai/cli - 项目初始化/校验命令
  * =============================================================================
  * 校验现有项目配置完整性，补全缺失的配置文件。
  *
@@ -10,7 +10,7 @@
 
 import type { GlobalOptions, ProjectInfo } from '../types.js'
 import path from 'node:path'
-import { core } from '@hai/core'
+import { core } from '@h-ai/core'
 import chalk from 'chalk'
 import ora from 'ora'
 import { fileExists, writeFile } from '../utils.js'
@@ -29,12 +29,12 @@ export interface InitOptions extends GlobalOptions {
  * 模块到配置文件的映射
  */
 const MODULE_CONFIG_MAP: Record<string, { configKey: string, label: string }> = {
-  '@hai/core': { configKey: 'core', label: 'Core' },
-  '@hai/db': { configKey: 'db', label: 'Database' },
-  '@hai/cache': { configKey: 'cache', label: 'Cache' },
-  '@hai/iam': { configKey: 'iam', label: 'IAM' },
-  '@hai/storage': { configKey: 'storage', label: 'Storage' },
-  '@hai/ai': { configKey: 'ai', label: 'AI' },
+  '@h-ai/core': { configKey: 'core', label: 'Core' },
+  '@h-ai/db': { configKey: 'db', label: 'Database' },
+  '@h-ai/cache': { configKey: 'cache', label: 'Cache' },
+  '@h-ai/iam': { configKey: 'iam', label: 'IAM' },
+  '@h-ai/storage': { configKey: 'storage', label: 'Storage' },
+  '@h-ai/ai': { configKey: 'ai', label: 'AI' },
 }
 
 /**

@@ -1,20 +1,20 @@
-# @hai/ui - UI 组件库
+# @h-ai/ui - UI 组件库
 
 > 基于 Svelte 5 Runes 的管理后台 UI 组件库，采用 DaisyUI + TailwindCSS 样式方案，内置 i18n（zh-CN / en-US），支持 32+ 主题。
 
 ## 安装
 
 ```bash
-pnpm add @hai/ui
+pnpm add @h-ai/ui
 ```
 
-依赖 `@hai/core`（会自动安装）。
+依赖 `@h-ai/core`（会自动安装）。
 
 ## 快速开始
 
 ```svelte
 <script>
-  import { Button, Input, Card } from '@hai/ui'
+  import { Button, Input, Card } from '@h-ai/ui'
 </script>
 
 <Card title="示例表单">
@@ -25,10 +25,10 @@ pnpm add @hai/ui
 
 ## 自动导入（推荐）
 
-启用预处理器后，页面中可直接使用 `@hai/ui` 组件，无需逐个 import：
+启用预处理器后，页面中可直接使用 `@h-ai/ui` 组件，无需逐个 import：
 
 ```js
-import { autoImportHaiUi } from '@hai/ui/auto-import'
+import { autoImportHaiUi } from '@h-ai/ui/auto-import'
 // svelte.config.js
 import adapter from '@sveltejs/adapter-auto'
 import { vitePreprocess } from '@sveltejs/vite-plugin-svelte'
@@ -45,7 +45,7 @@ export default config
 启用后可直接在模板中使用：
 
 ```svelte
-<!-- 无需 import { Button } from '@hai/ui' -->
+<!-- 无需 import { Button } from '@h-ai/ui' -->
 <Button variant="primary">提交</Button>
 ```
 
@@ -197,7 +197,7 @@ components/
 
 ```svelte
 <script>
-  import { toast, ToastContainer } from '@hai/ui'
+  import { toast, ToastContainer } from '@h-ai/ui'
 
   function notify() {
     toast.success('操作成功')
@@ -218,7 +218,7 @@ components/
   import {
     PageHeader, Card, DataTable, Button,
     Modal, Input, Select, toast, ToastContainer,
-  } from '@hai/ui'
+  } from '@h-ai/ui'
 
   let items = $state([])
   let showModal = $state(false)
@@ -283,7 +283,7 @@ components/
 
 ```svelte
 <script>
-  import { LoginForm } from '@hai/ui'
+  import { LoginForm } from '@h-ai/ui'
 
   let loading = $state(false)
   let errors = $state({})
@@ -309,7 +309,7 @@ components/
 
 ```svelte
 <script>
-  import { PasswordInput } from '@hai/ui'
+  import { PasswordInput } from '@h-ai/ui'
 
   let password = $state('')
 </script>
@@ -394,7 +394,7 @@ import {
   isDarkTheme, // 检查是否暗色主题
   THEME_GROUPS, // 按亮色/暗色分组
   THEMES, // ThemeInfo[] — 全部 32 个主题元数据
-} from '@hai/ui'
+} from '@h-ai/ui'
 ```
 
 在 `app.html` 中添加防闪烁脚本：
@@ -409,26 +409,26 @@ import {
 
 ## 国际化 (i18n)
 
-@hai/ui 采用**组件内置翻译**模式：
+@h-ai/ui 采用**组件内置翻译**模式：
 
 - 场景组件（`scenes/`）内置中英文翻译（zh-CN / en-US），开箱即用
-- 组件自动响应全局 locale 变化（通过 `@hai/core` 同步）
-- 应用层只需处理**页面级文本**，组件内部文本由 @hai/ui 统一管理
+- 组件自动响应全局 locale 变化（通过 `@h-ai/core` 同步）
+- 应用层只需处理**页面级文本**，组件内部文本由 @h-ai/ui 统一管理
 - 如需覆盖特定文本，通过 `submitText`、`labels` 等 props 传入
 
 ### createLocaleStore
 
-用于客户端 locale 状态管理，自动同步到 `@hai/core` 全局 locale 管理器：
+用于客户端 locale 状态管理，自动同步到 `@h-ai/core` 全局 locale 管理器：
 
 ```svelte
 <script>
-  import { createLocaleStore, setGlobalLocale } from '@hai/ui'
+  import { createLocaleStore, setGlobalLocale } from '@h-ai/ui'
   import { setLocale } from '$lib/paraglide/runtime'
 
   const localeStore = createLocaleStore()
 
   function changeLocale(code) {
-    localeStore.set(code)       // 更新 UI store + 同步到 @hai/core
+    localeStore.set(code)       // 更新 UI store + 同步到 @h-ai/core
     setLocale(code)             // 同步到 Paraglide（应用层）
   }
 </script>
@@ -452,23 +452,23 @@ import {
   interpolate, // 字符串插值（如 "Hello {name}"）
   isLocaleSupported, // 检查 locale 是否支持
   resolveLocale, // 解析 locale（支持回退）
-  setGlobalLocale, // 设置全局 locale（同步 @hai/core）
-} from '@hai/ui'
+  setGlobalLocale, // 设置全局 locale（同步 @h-ai/core）
+} from '@h-ai/ui'
 ```
 
 ## 其他导出
 
 ```ts
 // 类型
-import type { ButtonProps, InputProps, ModalProps } from '@hai/ui'
+import type { ButtonProps, InputProps, ModalProps } from '@h-ai/ui'
 ```
 
 ```ts
 // 样式工具
-import { cn, generateId, getSizeClass, getVariantClass } from '@hai/ui'
+import { cn, generateId, getSizeClass, getVariantClass } from '@h-ai/ui'
 ```
 
 ```ts
 // Toast 单例
-import { toast } from '@hai/ui'
+import { toast } from '@h-ai/ui'
 ```

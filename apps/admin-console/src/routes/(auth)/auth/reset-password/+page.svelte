@@ -2,13 +2,13 @@
   =============================================================================
   Admin Console - 重置密码页面
   =============================================================================
-  使用 @hai/ui 的 ResetPasswordForm 场景组件
+  使用 @h-ai/ui 的 ResetPasswordForm 场景组件
   =============================================================================
 -->
 <script lang="ts">
   import { page } from '$app/stores'
   import { goto } from '$app/navigation'
-  import type { ResetPasswordFormData } from '@hai/ui'
+  import type { ResetPasswordFormData } from '@h-ai/ui'
   import * as m from '$lib/paraglide/messages'
   
   let loading = $state(false)

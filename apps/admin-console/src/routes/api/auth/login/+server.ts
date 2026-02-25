@@ -8,9 +8,9 @@ import type { RequestHandler } from '@sveltejs/kit'
 import * as m from '$lib/paraglide/messages.js'
 import { LoginSchema } from '$lib/server/schemas/index.js'
 import { audit } from '$lib/server/services/index.js'
-import { core } from '@hai/core'
-import { iam } from '@hai/iam'
-import { kit } from '@hai/kit'
+import { core } from '@h-ai/core'
+import { iam } from '@h-ai/iam'
+import { kit } from '@h-ai/kit'
 import { json } from '@sveltejs/kit'
 
 export const POST: RequestHandler = async ({ request, cookies, getClientAddress }) => {

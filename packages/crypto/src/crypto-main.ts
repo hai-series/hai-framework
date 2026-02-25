@@ -1,4 +1,4 @@
-import type { Result } from '@hai/core'
+import type { Result } from '@h-ai/core'
 
 import type { CryptoConfig, CryptoConfigInput } from './crypto-config.js'
 import type {
@@ -10,7 +10,7 @@ import type {
   SM4Operations,
 } from './crypto-types.js'
 
-import { core, err, ok } from '@hai/core'
+import { core, err, ok } from '@h-ai/core'
 
 import { CryptoConfigSchema, CryptoErrorCode } from './crypto-config.js'
 import { cryptoM } from './crypto-i18n.js'
@@ -63,7 +63,7 @@ const notInitializedPassword = syncProxy<PasswordOperations>()
  *
  * @example
  * ```ts
- * import { crypto } from '@hai/crypto'
+ * import { crypto } from '@h-ai/crypto'
  *
  * const result = await crypto.init({})
  * if (result.success) {

@@ -1,6 +1,6 @@
 /**
  * =============================================================================
- * @hai/core - 浏览器入口
+ * @h-ai/core - 浏览器入口
  * =============================================================================
  * 浏览器环境的完整功能入口。
  *
@@ -18,9 +18,9 @@
  *
  * @example
  * ```ts
- * import { core } from '@hai/core'
- * import type { Result, Logger } from '@hai/core'
- * import { CoreConfigSchema, CommonErrorCode } from '@hai/core'
+ * import { core } from '@h-ai/core'
+ * import type { Result, Logger } from '@h-ai/core'
+ * import { CoreConfigSchema, CommonErrorCode } from '@h-ai/core'
  *
  * // 日志
  * core.logger.info('Hello')

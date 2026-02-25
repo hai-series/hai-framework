@@ -1,14 +1,14 @@
-# @hai/db - AI 助手参考
+# @h-ai/db - AI 助手参考
 
 ## 模块概述
 
-`@hai/db` 提供统一的关系型数据库访问能力，支持 SQLite / PostgreSQL / MySQL，统一异步 API 与统一错误码。架构为**无子功能 + 有 Provider（模块级）**。
+`@h-ai/db` 提供统一的关系型数据库访问能力，支持 SQLite / PostgreSQL / MySQL，统一异步 API 与统一错误码。架构为**无子功能 + 有 Provider（模块级）**。
 
 ## 入口与初始化
 
 ```ts
-import type { DbConfig, DbConfigInput, DbError, DbFunctions } from '@hai/db'
-import { BaseCrudRepository, db, DbErrorCode } from '@hai/db'
+import type { DbConfig, DbConfigInput, DbError, DbFunctions } from '@h-ai/db'
+import { BaseCrudRepository, db, DbErrorCode } from '@h-ai/db'
 
 // 初始化
 await db.init({ type: 'sqlite', database: ':memory:' })

@@ -1,6 +1,6 @@
 /**
  * =============================================================================
- * @hai/iam - 认证通用工具
+ * @h-ai/iam - 认证通用工具
  * =============================================================================
  *
  * 提供认证策略中的通用校验与工具函数。
@@ -9,12 +9,12 @@
  * =============================================================================
  */
 
-import type { Result } from '@hai/core'
+import type { Result } from '@h-ai/core'
 import type { IamError } from '../iam-types.js'
 import type { UserRepository } from '../user/iam-user-repository-user.js'
 import type { StoredUser } from '../user/iam-user-types.js'
 import type { Credentials } from './iam-authn-types.js'
-import { err, ok } from '@hai/core'
+import { err, ok } from '@h-ai/core'
 
 import { IamErrorCode } from '../iam-config.js'
 import { iamM } from '../iam-i18n.js'

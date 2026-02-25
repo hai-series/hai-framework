@@ -1,5 +1,5 @@
 /**
- * @hai/storage — 配置 Schema 与错误码测试
+ * @h-ai/storage — 配置 Schema 与错误码测试
  */
 
 import { describe, expect, it } from 'vitest'

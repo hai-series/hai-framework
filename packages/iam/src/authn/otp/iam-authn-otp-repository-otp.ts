@@ -1,19 +1,19 @@
 /**
  * =============================================================================
- * @hai/iam - OTP 存储实现
+ * @h-ai/iam - OTP 存储实现
  * =============================================================================
  *
- * 基于 @hai/db 的 OTP 存储实现。
+ * 基于 @h-ai/db 的 OTP 存储实现。
  *
  * @module authn/otp/iam-authn-otp-repository-otp
  * =============================================================================
  */
 
-import type { Result } from '@hai/core'
-import type { CrudCountOptions, CrudFieldDefinition, DbError, DbFunctions, TxHandle } from '@hai/db'
+import type { Result } from '@h-ai/core'
+import type { CrudCountOptions, CrudFieldDefinition, DbError, DbFunctions, TxHandle } from '@h-ai/db'
 import type { IamError } from '../../iam-types.js'
-import { err, ok } from '@hai/core'
-import { BaseCrudRepository } from '@hai/db'
+import { err, ok } from '@h-ai/core'
+import { BaseCrudRepository } from '@h-ai/db'
 import { IamErrorCode } from '../../iam-config.js'
 import { iamM } from '../../iam-i18n.js'
 

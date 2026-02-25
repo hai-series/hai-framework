@@ -1,10 +1,10 @@
 /**
- * @hai/storage — 存储服务主入口
+ * @h-ai/storage — 存储服务主入口
  *
  * 提供统一的 `storage` 对象，管理运行时状态与生命周期。
  */
 
-import type { Result } from '@hai/core'
+import type { Result } from '@h-ai/core'
 
 import type { StorageConfig, StorageConfigInput } from './storage-config.js'
 import type {
@@ -16,7 +16,7 @@ import type {
   StorageProvider,
 } from './storage-types.js'
 
-import { core, err, ok } from '@hai/core'
+import { core, err, ok } from '@h-ai/core'
 
 import { createLocalProvider } from './providers/storage-provider-local.js'
 import { createS3Provider } from './providers/storage-provider-s3.js'
@@ -90,7 +90,7 @@ const notInitializedPresign = new Proxy(
  *
  * @example
  * ```ts
- * import { storage } from '@hai/storage'
+ * import { storage } from '@h-ai/storage'
  *
  * // 初始化
  * await storage.init({ type: 'local', root: '/data/uploads' })

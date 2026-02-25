@@ -1,17 +1,17 @@
 /**
- * @hai/ai — AI 服务主入口
+ * @h-ai/ai — AI 服务主入口
  *
  * 提供统一的 `ai` 对象，聚合所有 AI 操作功能。
  */
 
-import type { Result } from '@hai/core'
+import type { Result } from '@h-ai/core'
 
 import type { AIConfig, AIConfigInput, AIError } from './ai-config.js'
 import type { AIFunctions } from './ai-types.js'
 import type { LLMOperations, StreamOperations, ToolsOperations } from './llm/ai-llm-types.js'
 import type { MCPOperations } from './mcp/ai-mcp-types.js'
 
-import { core, err, ok } from '@hai/core'
+import { core, err, ok } from '@h-ai/core'
 
 import { AIConfigSchema, AIErrorCode } from './ai-config.js'
 import { aiM } from './ai-i18n.js'
@@ -77,7 +77,7 @@ const streamOperations: StreamOperations = {
  *
  * @example
  * ```ts
- * import { ai } from '@hai/ai'
+ * import { ai } from '@h-ai/ai'
  *
  * // 初始化
  * ai.init({ llm: { model: 'gpt-4o-mini', apiKey: process.env.OPENAI_API_KEY } })

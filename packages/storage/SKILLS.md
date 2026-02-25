@@ -1,14 +1,14 @@
-# @hai/storage — AI 助手参考
+# @h-ai/storage — AI 助手参考
 
 ## 模块概述
 
-`@hai/storage` 提供统一的对象存储访问能力，支持 S3 兼容存储与本地文件系统。
+`@h-ai/storage` 提供统一的对象存储访问能力，支持 S3 兼容存储与本地文件系统。
 
 ## 入口与初始化
 
-- Node.js 入口：`import { storage } from '@hai/storage'`
-- 浏览器入口：`import { uploadWithPresignedUrl } from '@hai/storage'`（仅客户端能力）
-- 客户端单独导入：`import { uploadWithPresignedUrl } from '@hai/storage/client'`
+- Node.js 入口：`import { storage } from '@h-ai/storage'`
+- 浏览器入口：`import { uploadWithPresignedUrl } from '@h-ai/storage'`（仅客户端能力）
+- 客户端单独导入：`import { uploadWithPresignedUrl } from '@h-ai/storage/client'`
 
 ```ts
 // 初始化
@@ -112,7 +112,7 @@ packages/storage/
 
 ## Client 接口（浏览器端）
 
-从 `@hai/storage/client` 或 `@hai/storage`（浏览器构建）导入：
+从 `@h-ai/storage/client` 或 `@h-ai/storage`（浏览器构建）导入：
 
 | 函数                       | 签名                                                          | 说明              |
 | -------------------------- | ------------------------------------------------------------- | ----------------- |

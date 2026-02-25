@@ -1,6 +1,6 @@
 /**
  * =============================================================================
- * @hai/db - 数据库配置 Schema
+ * @h-ai/db - 数据库配置 Schema
  * =============================================================================
  *
  * 本文件定义数据库模块的配置结构，使用 Zod 进行运行时校验。
@@ -14,7 +14,7 @@
  *
  * @example
  * ```ts
- * import { DbConfigSchema, DbErrorCode } from '@hai/db'
+ * import { DbConfigSchema, DbErrorCode } from '@h-ai/db'
  *
  * // 校验配置
  * const config = DbConfigSchema.parse({
@@ -45,7 +45,7 @@ import { z } from 'zod'
  *
  * @example
  * ```ts
- * import { DbErrorCode } from '@hai/db'
+ * import { DbErrorCode } from '@h-ai/db'
  *
  * if (result.error?.code === DbErrorCode.CONNECTION_FAILED) {
  *     // 处理错误：数据库连接失败

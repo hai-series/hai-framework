@@ -175,7 +175,7 @@
   "iam_roles_permission_count": "{count} 个权限",
   "iam_roles_action_menu": "角色操作菜单",
   "gallery_title": "UI 组件库",
-  "gallery_desc": "基于 @hai/ui 的全部组件展示，封装自 DaisyUI",
+  "gallery_desc": "基于 @h-ai/ui 的全部组件展示，封装自 DaisyUI",
   "gallery_tab_primitives": "原子组件",
   "gallery_tab_compounds": "组合组件",
   "gallery_tab_scenes": "场景组件",
@@ -234,5 +234,17 @@
   "profile_password_rule_not_same": "新密码不能与旧密码相同",
   "profile_password_rule_confirm_match": "确认密码必须与新密码一致",
   "api_auth_avatar_invalid_type": "仅支持 PNG/JPEG/WEBP/GIF 图片文件",
-  "api_auth_avatar_size_exceeded": "头像文件大小必须小于 2MB"
+  "api_auth_avatar_size_exceeded": "头像文件大小必须小于 2MB",
+  "logs_title": "审计日志",
+  "logs_subtitle": "查看系统操作记录与安全事件",
+  "logs_search_placeholder": "搜索用户、操作或资源...",
+  "logs_col_time": "时间",
+  "logs_col_user": "用户",
+  "logs_col_action": "操作",
+  "logs_col_resource": "资源",
+  "logs_col_detail": "详情",
+  "logs_col_ip": "IP 地址",
+  "logs_filter_all": "全部",
+  "logs_total_count": "共 {count} 条记录",
+  "logs_system_user": "系统"
 }

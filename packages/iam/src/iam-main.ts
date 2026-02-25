@@ -1,10 +1,10 @@
 /**
- * @hai/iam — IAM 服务主入口
+ * @h-ai/iam — IAM 服务主入口
  *
  * 管理运行时状态、实现生命周期（init / close）、通过 get 访问器暴露子功能。
  */
 
-import type { Result } from '@hai/core'
+import type { Result } from '@h-ai/core'
 
 import type { PasswordStrategy } from './authn/password/iam-authn-password-strategy.js'
 import type { IamConfig } from './iam-config.js'
@@ -19,8 +19,8 @@ import type {
   IamUserFunctions,
 } from './iam-types.js'
 
-import { core, err, ok } from '@hai/core'
-import { crypto } from '@hai/crypto'
+import { core, err, ok } from '@h-ai/core'
+import { crypto } from '@h-ai/crypto'
 
 import { createIamAuthnFunctions } from './authn/iam-authn-functions.js'
 import { createIamAuthzFunctions } from './authz/iam-authz-functions.js'

@@ -8,5 +8,5 @@ export default defineConfig({
     'browser': 'src/ai-index.browser.ts',
     'client/index': 'src/client/index.ts',
   },
-  external: ['@hai/core', 'openai', '@modelcontextprotocol/sdk', 'zod'],
+  external: ['@h-ai/core', 'openai', '@modelcontextprotocol/sdk', 'zod'],
 })

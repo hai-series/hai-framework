@@ -1,8 +1,8 @@
 /**
  * =============================================================================
- * @hai/ui - 自动导入预处理器
+ * @h-ai/ui - 自动导入预处理器
  * =============================================================================
- * 目标：在 Svelte 编译阶段自动注入 @hai/ui 组件 import，避免页面显式引入。
+ * 目标：在 Svelte 编译阶段自动注入 @h-ai/ui 组件 import，避免页面显式引入。
  * 说明：该预处理器会在 svelte-check 与 Vite 编译时生效。
  * =============================================================================
  */
@@ -83,7 +83,7 @@ const UI_COMPONENTS = new Set([
 
 const TAG_REGEX = /<([A-Z][A-Za-z0-9]*)\b/g
 const SCRIPT_REGEX = /<script\b([^>]*)>([\s\S]*?)<\/script>/g
-const UI_IMPORT_REGEX = /import\s*\{([^}]+)\}\s*from\s*['"]@hai\/ui['"];?/
+const UI_IMPORT_REGEX = /import\s*\{([^}]+)\}\s*from\s*['"]@h-ai\/ui['"];?/
 
 function collectUsedComponents(content) {
   const used = new Set()
@@ -180,11 +180,11 @@ function mergeHaiUiImport(scriptContent, components) {
       .filter(Boolean)
 
     const merged = [...existing, ...components.filter(name => !existing.includes(name))]
-    const updated = `import { ${merged.join(', ')} } from '@hai/ui'`
+    const updated = `import { ${merged.join(', ')} } from '@h-ai/ui'`
     return scriptContent.replace(UI_IMPORT_REGEX, updated)
   }
 
-  return `import { ${components.join(', ')} } from '@hai/ui'\n${scriptContent}`
+  return `import { ${components.join(', ')} } from '@h-ai/ui'\n${scriptContent}`
 }
 
 function updateScriptBlock(scriptContent, usedComponents) {
@@ -201,9 +201,9 @@ function autoImportHaiUi() {
         return { code: content }
       }
 
-      // 跳过 @hai/ui 包自身的文件，避免重复导入
+      // 跳过 @h-ai/ui 包自身的文件，避免重复导入
       const normalizedPath = filename.replace(/\\/g, '/')
-      if (normalizedPath.includes('/packages/ui/') || normalizedPath.includes('/@hai/ui/')) {
+      if (normalizedPath.includes('/packages/ui/') || normalizedPath.includes('/@h-ai/ui/')) {
         return { code: content }
       }
 

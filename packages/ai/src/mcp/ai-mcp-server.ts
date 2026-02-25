@@ -1,5 +1,5 @@
 /**
- * @hai/ai — MCP Server 创建与传输层
+ * @h-ai/ai — MCP Server 创建与传输层
  *
  * 基于 `@modelcontextprotocol/sdk` 封装，提供便捷的 MCP 服务器创建。
  */
@@ -33,7 +33,7 @@ export { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/
  *
  * @example
  * ```ts
- * import { createMcpServer, StdioServerTransport } from '@hai/ai'
+ * import { createMcpServer, StdioServerTransport } from '@h-ai/ai'
  *
  * const server = createMcpServer({ name: 'my-server', version: '1.0.0' })
  * // 注册工具 / 资源 ...

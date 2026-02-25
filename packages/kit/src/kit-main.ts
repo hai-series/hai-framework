@@ -1,6 +1,6 @@
 /**
  * =============================================================================
- * @hai/kit - 服务对象主入口
+ * @h-ai/kit - 服务对象主入口
  * =============================================================================
  * SvelteKit 集成模块的统一命名空间出口。
  * 所有功能通过 kit 对象访问：
@@ -20,7 +20,7 @@
  *
  * @example
  * ```ts
- * import { kit } from '@hai/kit'
+ * import { kit } from '@h-ai/kit'
  *
  * // 创建 handle
  * export const handle = kit.createHandle({ logging: true })

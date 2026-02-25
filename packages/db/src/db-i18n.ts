@@ -1,20 +1,20 @@
 /**
  * =============================================================================
- * @hai/db - i18n
+ * @h-ai/db - i18n
  * =============================================================================
  *
  * 本文件提供数据库模块的 i18n 文案访问入口。
  *
  * @example
  * ```ts
- * import { dbM } from '@hai/db'
+ * import { dbM } from '@h-ai/db'
  *
  * const message = dbM('db_someMessageKey')
  * ```
  * =============================================================================
  */
 
-import { core } from '@hai/core'
+import { core } from '@h-ai/core'
 import messagesEnUS from '../messages/en-US.json'
 import messagesZhCN from '../messages/zh-CN.json'
 
@@ -36,7 +36,7 @@ type DbMessageKey = keyof typeof messagesZhCN
  *
  * @example
  * ```ts
- * import { dbM } from '@hai/db'
+ * import { dbM } from '@h-ai/db'
  *
  * const text = dbM('db_someMessageKey')
  * ```

@@ -1,8 +1,8 @@
 /**
  * =============================================================================
- * @hai/kit - Crypto Helpers
+ * @h-ai/kit - Crypto Helpers
  * =============================================================================
- * 集成 @hai/crypto 的 SvelteKit 工具
+ * 集成 @h-ai/crypto 的 SvelteKit 工具
  *
  * 功能：
  * - 请求签名验证（Webhook 等）
@@ -12,7 +12,7 @@
  * @example
  * ```ts
  * // src/routes/api/webhook/+server.ts
- * import { kit } from '@hai/kit'
+ * import { kit } from '@h-ai/kit'
  * import { crypto } from '$lib/server/crypto'
  *
  * export const POST = async (event) => {

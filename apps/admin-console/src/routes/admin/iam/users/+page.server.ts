@@ -7,7 +7,7 @@
 import type { RoleWithPermissions } from '$lib/server/services/role.js'
 import type { PageServerLoad } from './$types'
 import { roleService } from '$lib/server/services/index.js'
-import { iam } from '@hai/iam'
+import { iam } from '@h-ai/iam'
 
 interface UserData {
   id: string

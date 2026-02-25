@@ -1,7 +1,7 @@
 import type { RequestHandler } from '@sveltejs/kit'
 import { Buffer } from 'node:buffer'
 import * as m from '$lib/paraglide/messages.js'
-import { iam } from '@hai/iam'
+import { iam } from '@h-ai/iam'
 import { json } from '@sveltejs/kit'
 
 const MAX_AVATAR_SIZE = 2 * 1024 * 1024

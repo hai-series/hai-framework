@@ -1,5 +1,5 @@
 /**
- * @hai/storage — 错误码 + 配置 Schema
+ * @h-ai/storage — 错误码 + 配置 Schema
  */
 
 import { z } from 'zod'

@@ -1,5 +1,5 @@
 /**
- * @hai/storage — 前端客户端工具函数测试
+ * @h-ai/storage — 前端客户端工具函数测试
  */
 
 import { afterEach, describe, expect, it, vi } from 'vitest'

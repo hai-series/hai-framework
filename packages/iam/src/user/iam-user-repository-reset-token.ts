@@ -1,20 +1,20 @@
 /**
  * =============================================================================
- * @hai/iam - 密码重置令牌存储实现
+ * @h-ai/iam - 密码重置令牌存储实现
  * =============================================================================
  *
- * 基于 @hai/db 的密码重置令牌存储，支持令牌的创建、查询、
+ * 基于 @h-ai/db 的密码重置令牌存储，支持令牌的创建、查询、
  * 过期清理和使用标记等操作。
  *
  * @module user/iam-user-repository-reset-token
  * =============================================================================
  */
 
-import type { Result } from '@hai/core'
-import type { CrudFieldDefinition, DbFunctions, TxHandle } from '@hai/db'
+import type { Result } from '@h-ai/core'
+import type { CrudFieldDefinition, DbFunctions, TxHandle } from '@h-ai/db'
 import type { IamError } from '../iam-types.js'
-import { ok } from '@hai/core'
-import { BaseCrudRepository } from '@hai/db'
+import { ok } from '@h-ai/core'
+import { BaseCrudRepository } from '@h-ai/db'
 import { IamErrorCode } from '../iam-config.js'
 import { iamM } from '../iam-i18n.js'
 

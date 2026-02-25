@@ -1,4 +1,4 @@
-# @hai/crypto
+# @h-ai/crypto
 
 国密算法（SM2/SM3/SM4）加密模块，提供非对称加密、哈希、对称加密与密码哈希能力。
 
@@ -13,7 +13,7 @@
 ## 快速开始
 
 ```ts
-import { crypto } from '@hai/crypto'
+import { crypto } from '@h-ai/crypto'
 
 // 初始化
 await crypto.init({ defaultAlgorithm: 'sm' })
@@ -52,8 +52,8 @@ const standaloneHash = passwordProvider.hash('myPassword123')
 ## 配置
 
 ```ts
-import { core } from '@hai/core'
-import { crypto, CryptoConfigSchema } from '@hai/crypto'
+import { core } from '@h-ai/core'
+import { crypto, CryptoConfigSchema } from '@h-ai/crypto'
 
 core.config.validate('crypto', CryptoConfigSchema)
 const cfg = core.config.get('crypto')
@@ -76,7 +76,7 @@ if (!result.success) {
 ## 测试
 
 ```bash
-pnpm --filter @hai/crypto test
+pnpm --filter @h-ai/crypto test
 ```
 
 ## License

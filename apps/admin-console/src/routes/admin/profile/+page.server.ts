@@ -1,6 +1,6 @@
 import type { PageServerLoad } from './$types'
-import { core } from '@hai/core'
-import { iam } from '@hai/iam'
+import { core } from '@h-ai/core'
+import { iam } from '@h-ai/iam'
 
 interface ProfileData {
   id: string

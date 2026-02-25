@@ -1,5 +1,5 @@
 /**
- * @hai/storage — Node.js 服务端入口
+ * @h-ai/storage — Node.js 服务端入口
  *
  * 导出完整的存储能力：
  * - 存储服务单例 `storage`（init / close / file / dir / presign）

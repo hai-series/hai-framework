@@ -1,4 +1,4 @@
-# @hai/cache
+# @h-ai/cache
 
 统一的缓存访问模块，支持 Redis 与内存缓存（开发/测试场景）。
 
@@ -12,7 +12,7 @@
 ## 快速开始
 
 ```ts
-import { cache, CacheErrorCode } from '@hai/cache'
+import { cache, CacheErrorCode } from '@h-ai/cache'
 
 // 初始化
 await cache.init({ type: 'redis', host: 'localhost', port: 6379 })
@@ -93,7 +93,7 @@ else {
 ## 测试
 
 ```bash
-pnpm --filter @hai/cache test
+pnpm --filter @h-ai/cache test
 ```
 
 ## License

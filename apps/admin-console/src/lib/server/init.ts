@@ -27,13 +27,13 @@
  * =============================================================================
  */
 
-import type { CacheConfigInput } from '@hai/cache'
-import type { IamConfigSettingsInput } from '@hai/iam'
+import type { CacheConfigInput } from '@h-ai/cache'
+import type { IamConfigSettingsInput } from '@h-ai/iam'
 import * as m from '$lib/paraglide/messages.js'
-import { cache } from '@hai/cache'
-import { core } from '@hai/core'
-import { db } from '@hai/db'
-import { iam } from '@hai/iam'
+import { cache } from '@h-ai/cache'
+import { core } from '@h-ai/core'
+import { db } from '@h-ai/db'
+import { iam } from '@h-ai/iam'
 
 type DbConfigInput = Parameters<typeof db.init>[0]
 

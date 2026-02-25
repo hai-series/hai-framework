@@ -1,6 +1,6 @@
 /**
  * =============================================================================
- * @hai/iam - 配置 Schema
+ * @h-ai/iam - 配置 Schema
  * =============================================================================
  *
  * 本文件定义 IAM 模块的配置结构，使用 Zod 进行运行时校验。
@@ -44,7 +44,7 @@ import { z } from 'zod'
  *
  * @example
  * ```ts
- * import { iam } from '@hai/iam'
+ * import { iam } from '@h-ai/iam'
  *
  * if (result.error?.code === iam.errorCode.INVALID_CREDENTIALS) {
  *     // 处理错误：凭证无效

@@ -1,5 +1,5 @@
 {
-  "name": "@hai/ui",
+  "name": "@h-ai/ui",
   "type": "module",
   "version": "0.1.0",
   "description": "hai Admin Framework - UI 组件库 (Svelte 5 Runes)",
@@ -47,7 +47,7 @@
     "svelte": "^5.49.1"
   },
   "dependencies": {
-    "@hai/core": "workspace:*"
+    "@h-ai/core": "workspace:*"
   },
   "devDependencies": {
     "@sveltejs/package": "catalog:",

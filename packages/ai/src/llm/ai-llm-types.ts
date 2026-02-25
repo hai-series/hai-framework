@@ -1,10 +1,10 @@
 /**
- * @hai/ai — LLM 子功能类型
+ * @h-ai/ai — LLM 子功能类型
  *
  * 定义 LLM 消息、请求、响应、流、工具等公共类型。
  */
 
-import type { Result } from '@hai/core'
+import type { Result } from '@h-ai/core'
 
 import type { AIConfig, AIError } from '../ai-config.js'
 

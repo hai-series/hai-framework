@@ -1,5 +1,5 @@
-import { cache } from '@hai/cache'
-import { db } from '@hai/db'
+import { cache } from '@h-ai/cache'
+import { db } from '@h-ai/db'
 import { describe, expect, it } from 'vitest'
 import { iam } from '../src/index.js'
 

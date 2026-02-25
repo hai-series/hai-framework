@@ -1,8 +1,8 @@
 /**
  * =============================================================================
- * @hai/kit - IAM Handle
+ * @h-ai/kit - IAM Handle
  * =============================================================================
- * 集成 @hai/iam 的 SvelteKit Handle Hook
+ * 集成 @h-ai/iam 的 SvelteKit Handle Hook
  *
  * 功能：
  * - 自动验证会话令牌
@@ -12,7 +12,7 @@
  * @example
  * ```ts
  * // src/hooks.server.ts
- * import { kit } from '@hai/kit'
+ * import { kit } from '@h-ai/kit'
  * import { iam } from '$lib/server/iam'
  *
  * export const handle = kit.iam.createHandle({

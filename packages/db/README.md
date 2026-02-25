@@ -1,4 +1,4 @@
-# @hai/db
+# @h-ai/db
 
 关系型数据库访问模块，通过统一的 `db` 对象访问 SQLite、PostgreSQL、MySQL。
 
@@ -11,7 +11,7 @@
 ## 快速开始
 
 ```ts
-import { db, DbErrorCode } from '@hai/db'
+import { db, DbErrorCode } from '@h-ai/db'
 
 // 初始化
 await db.init({ type: 'sqlite', database: ':memory:' })
@@ -131,8 +131,8 @@ await db.tx.wrap(async (tx) => {
 业务仓库继承 `BaseCrudRepository`，通过 `fields` 定义字段映射，自动建表、类型转换：
 
 ```ts
-import type { CrudFieldDefinition, TxHandle } from '@hai/db'
-import { BaseCrudRepository, db } from '@hai/db'
+import type { CrudFieldDefinition, TxHandle } from '@h-ai/db'
+import { BaseCrudRepository, db } from '@h-ai/db'
 
 interface UserRow {
   id: number
@@ -199,7 +199,7 @@ if (!result.success) {
 ## 测试
 
 ```bash
-pnpm --filter @hai/db test
+pnpm --filter @h-ai/db test
 ```
 
 > MySQL/PostgreSQL 测试需要 Docker。

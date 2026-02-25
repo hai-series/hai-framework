@@ -1,4 +1,4 @@
-import { kit } from '@hai/kit'
+import { kit } from '@h-ai/kit'
 
 /**
  * SvelteKit 服务端钩子 — H5 应用

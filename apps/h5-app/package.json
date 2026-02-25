@@ -12,9 +12,9 @@
     "lint:fix": "eslint . --fix"
   },
   "dependencies": {
-    "@hai/core": "workspace:*",
-    "@hai/kit": "workspace:*",
-    "@hai/ui": "workspace:*",
+    "@h-ai/core": "workspace:*",
+    "@h-ai/kit": "workspace:*",
+    "@h-ai/ui": "workspace:*",
     "@sveltejs/adapter-auto": "catalog:",
     "@sveltejs/kit": "catalog:",
     "@sveltejs/vite-plugin-svelte": "catalog:",

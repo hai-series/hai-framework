@@ -1,6 +1,6 @@
 /**
  * =============================================================================
- * @hai/db - 数据库服务主入口
+ * @h-ai/db - 数据库服务主入口
  * =============================================================================
  *
  * 本文件提供统一的 `db` 对象，聚合所有数据库操作功能。
@@ -14,7 +14,7 @@
  *
  * @example
  * ```ts
- * import { db } from '@hai/db'
+ * import { db } from '@h-ai/db'
  *
  * // 1. 初始化数据库
  * await db.init({
@@ -57,7 +57,7 @@
  * =============================================================================
  */
 
-import type { Result } from '@hai/core'
+import type { Result } from '@h-ai/core'
 import type { DbConfig, DbConfigInput } from './db-config.js'
 import type {
   CrudManager,
@@ -69,7 +69,7 @@ import type {
   TxManager,
 } from './db-types.js'
 
-import { core, err, ok } from '@hai/core'
+import { core, err, ok } from '@h-ai/core'
 
 import { DbConfigSchema, DbErrorCode } from './db-config.js'
 import { createCrud } from './db-crud-kernel.js'
@@ -156,7 +156,7 @@ const notInitializedTx: TxManager = {
  *
  * @example
  * ```ts
- * import { db } from '@hai/db'
+ * import { db } from '@h-ai/db'
  *
  * // 初始化
  * await db.init({ type: 'sqlite', database: ':memory:' })

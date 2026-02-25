@@ -11,7 +11,7 @@
     PageHeader,
     ToastContainer,
     toast,
-  } from '@hai/ui'
+  } from '@h-ai/ui'
   import * as m from '$lib/paraglide/messages'
 
   let activeTab = $state('core')
@@ -116,7 +116,7 @@
   {#if activeTab === 'core'}
     <div class="grid gap-6">
       <Card>
-        <h3 class="text-lg font-semibold mb-2">@hai/core — 核心基础模块</h3>
+        <h3 class="text-lg font-semibold mb-2">@h-ai/core — 核心基础模块</h3>
         <p class="text-base-content/60 text-sm mb-4">
           提供配置管理、日志、i18n、模块生命周期等基础能力，是所有模块的公共依赖。
         </p>
@@ -138,7 +138,7 @@
       </Card>
       <Card>
         <h3 class="text-lg font-semibold mb-3">初始化示例</h3>
-        <pre class="bg-base-200 p-4 rounded-lg text-sm overflow-x-auto font-mono"><code>{`import { core } from '@hai/core'
+        <pre class="bg-base-200 p-4 rounded-lg text-sm overflow-x-auto font-mono"><code>{`import { core } from '@h-ai/core'
 
 // 加载 YAML 配置并初始化
 await core.init({
@@ -165,7 +165,7 @@ await core.close()`}</code></pre>
   {#if activeTab === 'db'}
     <div class="grid gap-6">
       <Card>
-        <h3 class="text-lg font-semibold mb-2">@hai/db — 数据库模块</h3>
+        <h3 class="text-lg font-semibold mb-2">@h-ai/db — 数据库模块</h3>
         <p class="text-base-content/60 text-sm mb-4">
           支持 SQLite、PostgreSQL、MySQL，基于 Drizzle ORM，提供类型安全的数据库操作。
         </p>
@@ -179,7 +179,7 @@ await core.close()`}</code></pre>
         <h3 class="text-lg font-semibold mb-4">SQL 操作示例</h3>
         <div class="space-y-4">
           {#each dbExamples as example}
-            <div class="border border-base-200 rounded-lg overflow-hidden">
+            <div class="bg-base-200/50 rounded-lg overflow-hidden">
               <div class="flex items-center gap-2 px-4 py-2 bg-base-200">
                 <Badge size="sm">{example.op}</Badge>
                 <span class="text-sm text-base-content/70">{example.desc}</span>
@@ -191,7 +191,7 @@ await core.close()`}</code></pre>
       </Card>
       <Card>
         <h3 class="text-lg font-semibold mb-3">Drizzle ORM 示例</h3>
-        <pre class="bg-base-200 p-4 rounded-lg text-sm overflow-x-auto font-mono"><code>{`import { db } from '@hai/db'
+        <pre class="bg-base-200 p-4 rounded-lg text-sm overflow-x-auto font-mono"><code>{`import { db } from '@h-ai/db'
 
 // 定义 Schema
 const users = sqliteTable('users', {
@@ -217,7 +217,7 @@ const page = await db.select().from(users).limit(10).offset(0)`}</code></pre>
   {#if activeTab === 'cache'}
     <div class="grid gap-6">
       <Card>
-        <h3 class="text-lg font-semibold mb-2">@hai/cache — 缓存模块</h3>
+        <h3 class="text-lg font-semibold mb-2">@h-ai/cache — 缓存模块</h3>
         <p class="text-base-content/60 text-sm mb-4">
           提供统一的缓存接口，支持内存缓存和 Redis 缓存，自动过期与命名空间隔离。
         </p>
@@ -242,7 +242,7 @@ const page = await db.select().from(users).limit(10).offset(0)`}</code></pre>
       </Card>
       <Card>
         <h3 class="text-lg font-semibold mb-3">初始化与使用</h3>
-        <pre class="bg-base-200 p-4 rounded-lg text-sm overflow-x-auto font-mono"><code>{`import { cache } from '@hai/cache'
+        <pre class="bg-base-200 p-4 rounded-lg text-sm overflow-x-auto font-mono"><code>{`import { cache } from '@h-ai/cache'
 
 // 初始化 (内存缓存)
 await cache.init({ provider: 'memory' })
@@ -273,7 +273,7 @@ await cache.close()`}</code></pre>
   {#if activeTab === 'storage'}
     <div class="grid gap-6">
       <Card>
-        <h3 class="text-lg font-semibold mb-2">@hai/storage — 存储模块</h3>
+        <h3 class="text-lg font-semibold mb-2">@h-ai/storage — 存储模块</h3>
         <p class="text-base-content/60 text-sm mb-4">
           统一文件存储接口，支持本地文件系统和 S3 兼容存储（AWS S3、MinIO、阿里云 OSS 等）。
         </p>
@@ -300,7 +300,7 @@ await cache.close()`}</code></pre>
       </Card>
       <Card>
         <h3 class="text-lg font-semibold mb-3">初始化与配置</h3>
-        <pre class="bg-base-200 p-4 rounded-lg text-sm overflow-x-auto font-mono"><code>{`import { storage } from '@hai/storage'
+        <pre class="bg-base-200 p-4 rounded-lg text-sm overflow-x-auto font-mono"><code>{`import { storage } from '@h-ai/storage'
 
 // 本地存储
 await storage.init({
@@ -330,7 +330,7 @@ const url = await storage.presign(key, { expires: 3600 })`}</code></pre>
   {#if activeTab === 'ai'}
     <div class="grid gap-6">
       <Card>
-        <h3 class="text-lg font-semibold mb-2">@hai/ai — AI 智能模块</h3>
+        <h3 class="text-lg font-semibold mb-2">@h-ai/ai — AI 智能模块</h3>
         <p class="text-base-content/60 text-sm mb-4">
           统一的 AI 接口层，支持多种 LLM 提供商，提供对话、嵌入、流式输出等能力。
         </p>
@@ -344,7 +344,7 @@ const url = await storage.presign(key, { expires: 3600 })`}</code></pre>
         <h3 class="text-lg font-semibold mb-4">AI 能力矩阵</h3>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           {#each aiFeatures as feature}
-            <div class="p-4 rounded-lg border border-base-200">
+            <div class="p-4 rounded-lg bg-base-200/50">
               <h4 class="font-medium text-base-content mb-1">{feature.name}</h4>
               <p class="text-sm text-base-content/60 mb-2">{feature.desc}</p>
               <code class="text-xs bg-base-200 px-2 py-1 rounded font-mono">{feature.api}</code>
@@ -354,7 +354,7 @@ const url = await storage.presign(key, { expires: 3600 })`}</code></pre>
       </Card>
       <Card>
         <h3 class="text-lg font-semibold mb-3">使用示例</h3>
-        <pre class="bg-base-200 p-4 rounded-lg text-sm overflow-x-auto font-mono"><code>{`import { ai } from '@hai/ai'
+        <pre class="bg-base-200 p-4 rounded-lg text-sm overflow-x-auto font-mono"><code>{`import { ai } from '@h-ai/ai'
 
 // 初始化
 await ai.init({
@@ -389,7 +389,7 @@ const embedding = await ai.embed('搜索查询文本')`}</code></pre>
   {#if activeTab === 'crypto'}
     <div class="grid gap-6">
       <Card>
-        <h3 class="text-lg font-semibold mb-2">@hai/crypto — 加密模块</h3>
+        <h3 class="text-lg font-semibold mb-2">@h-ai/crypto — 加密模块</h3>
         <p class="text-base-content/60 text-sm mb-4">
           国密算法支持（SM2/SM3/SM4），提供哈希、对称加密、非对称加密与数字签名。
         </p>
@@ -426,7 +426,7 @@ const embedding = await ai.embed('搜索查询文本')`}</code></pre>
       </Card>
       <Card>
         <h3 class="text-lg font-semibold mb-3">使用示例</h3>
-        <pre class="bg-base-200 p-4 rounded-lg text-sm overflow-x-auto font-mono"><code>{`import { crypto } from '@hai/crypto'
+        <pre class="bg-base-200 p-4 rounded-lg text-sm overflow-x-auto font-mono"><code>{`import { crypto } from '@h-ai/crypto'
 
 // 初始化
 await crypto.init()

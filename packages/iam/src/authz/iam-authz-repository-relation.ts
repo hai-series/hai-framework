@@ -1,6 +1,6 @@
 /**
  * =============================================================================
- * @hai/iam - 关联关系存储实现
+ * @h-ai/iam - 关联关系存储实现
  * =============================================================================
  *
  * 包含角色-权限、用户-角色关联存储。
@@ -9,14 +9,14 @@
  * =============================================================================
  */
 
-import type { CacheFunctions } from '@hai/cache'
-import type { Result } from '@hai/core'
-import type { DbFunctions, TxHandle } from '@hai/db'
+import type { CacheFunctions } from '@h-ai/cache'
+import type { Result } from '@h-ai/core'
+import type { DbFunctions, TxHandle } from '@h-ai/db'
 import type { IamError } from '../iam-types.js'
 import type { PermissionRepository } from './iam-authz-repository-permission.js'
 import type { RoleRepository } from './iam-authz-repository-role.js'
 import type { Permission, Role } from './iam-authz-types.js'
-import { core, err, ok } from '@hai/core'
+import { core, err, ok } from '@h-ai/core'
 import { IamErrorCode } from '../iam-config.js'
 import { iamM } from '../iam-i18n.js'
 import { buildTokenKey, buildUserTokensKey } from '../session/iam-session-repository-cache.js'

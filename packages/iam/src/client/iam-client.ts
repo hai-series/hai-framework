@@ -1,6 +1,6 @@
 /**
  * =============================================================================
- * @hai/iam - 前端 IAM 客户端
+ * @h-ai/iam - 前端 IAM 客户端
  * =============================================================================
  *
  * 提供前端通过 HTTP API 调用 IAM 服务的客户端实现。
@@ -8,7 +8,7 @@
  *
  * @example
  * ```ts
- * import { createIamClient } from '@hai/iam/client'
+ * import { createIamClient } from '@h-ai/iam/client'
  *
  * const client = createIamClient({
  *   baseUrl: '/api/iam',
@@ -33,8 +33,8 @@
  * =============================================================================
  */
 
-import type { Result } from '@hai/core'
-import { err, ok } from '@hai/core'
+import type { Result } from '@h-ai/core'
+import { err, ok } from '@h-ai/core'
 import { iamM } from '../iam-i18n.js'
 
 // =============================================================================

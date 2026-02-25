@@ -45,7 +45,7 @@ test.describe('Settings UI', () => {
     await page.waitForTimeout(1000)
 
     // 查找主题选择器中的某个选项并点击
-    // ThemeSelector 通常渲染为按钮或 radio（具体取决于 @hai/ui 实现）
+    // ThemeSelector 通常渲染为按钮或 radio（具体取决于 @h-ai/ui 实现）
     // 尝试点击 dark 主题选项
     const darkOption = page.locator('[data-theme="dark"]').first()
     if (await darkOption.isVisible()) {

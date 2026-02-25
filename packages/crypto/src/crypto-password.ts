@@ -1,8 +1,8 @@
-import type { Result } from '@hai/core'
+import type { Result } from '@h-ai/core'
 
 import type { CryptoError, PasswordConfig, PasswordOperations, SM3Operations } from './crypto-types.js'
 
-import { err, ok } from '@hai/core'
+import { err, ok } from '@h-ai/core'
 
 import { CryptoErrorCode } from './crypto-config.js'
 import { cryptoM } from './crypto-i18n.js'

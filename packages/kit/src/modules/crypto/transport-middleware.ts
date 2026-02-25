@@ -1,6 +1,6 @@
 /**
  * =============================================================================
- * @hai/kit - 传输加密中间件
+ * @h-ai/kit - 传输加密中间件
  * =============================================================================
  * SvelteKit 中间件，自动对请求/响应进行传输加密解密。
  *
@@ -26,8 +26,8 @@ import { createTransportEncryption, isValidEncryptedPayload } from './transport-
  *
  * @example
  * ```ts
- * import { kit } from '@hai/kit'
- * import { crypto } from '@hai/crypto'
+ * import { kit } from '@h-ai/kit'
+ * import { crypto } from '@h-ai/crypto'
  *
  * export const handle = kit.createHandle({
  *   middleware: [

@@ -1,15 +1,13 @@
 import type { RequestHandler } from '@sveltejs/kit'
 import * as m from '$lib/paraglide/messages.js'
 import { ChangeCurrentPasswordSchema } from '$lib/server/schemas/index.js'
-import { core } from '@hai/core'
-import { iam } from '@hai/iam'
-import { kit } from '@hai/kit'
+import { core } from '@h-ai/core'
+import { iam } from '@h-ai/iam'
+import { kit } from '@h-ai/kit'
 import { json } from '@sveltejs/kit'
 
 /**
- * 兼容不同 iam 版本的改密能力。
- * 新版本直接调用 `changeCurrentUserPassword`，
- * 旧版本回退为“先通过 token 获取当前用户，再调用 `changePassword(userId, ...)`”。
+ * 通过会话令牌定位当前用户并执行改密。
  *
  * @param token 当前会话令牌
  * @param oldPassword 原密码
@@ -17,26 +15,7 @@ import { json } from '@sveltejs/kit'
  * @returns 改密执行结果
  */
 async function changePasswordByToken(token: string, oldPassword: string, newPassword: string) {
-  const changeCurrentUserPassword = (iam.user as {
-    changeCurrentUserPassword?: (accessToken: string, oldPassword: string, newPassword: string) => Promise<{
-      success: boolean
-      error: { message: string }
-    }>
-  }).changeCurrentUserPassword
-
-  if (changeCurrentUserPassword) {
-    return changeCurrentUserPassword(token, oldPassword, newPassword)
-  }
-
-  const currentUserResult = await iam.user.getCurrentUser(token)
-  if (!currentUserResult.success) {
-    return {
-      success: false as const,
-      error: { message: currentUserResult.error.message },
-    }
-  }
-
-  return iam.user.changePassword(currentUserResult.data.id, oldPassword, newPassword)
+  return iam.user.changeCurrentUserPassword(token, oldPassword, newPassword)
 }
 
 /**

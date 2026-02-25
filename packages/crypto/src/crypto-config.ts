@@ -14,7 +14,7 @@ import { z } from 'zod'
  *
  * @example
  * ```ts
- * import { CryptoErrorCode } from '@hai/crypto'
+ * import { CryptoErrorCode } from '@h-ai/crypto'
  *
  * if (!result.success && result.error.code === CryptoErrorCode.INVALID_KEY) {
  *   // 处理无效密钥
@@ -68,7 +68,7 @@ export type CryptoErrorCodeType = (typeof CryptoErrorCode)[keyof typeof CryptoEr
  *
  * @example
  * ```ts
- * import { CryptoConfigSchema } from '@hai/crypto'
+ * import { CryptoConfigSchema } from '@h-ai/crypto'
  *
  * const config = CryptoConfigSchema.parse({}) // { defaultAlgorithm: 'sm' }
  * ```

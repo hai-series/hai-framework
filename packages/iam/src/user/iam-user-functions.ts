@@ -1,11 +1,11 @@
 /**
- * @hai/iam — 用户子功能工厂
+ * @h-ai/iam — 用户子功能工厂
  *
  * 提供用户管理相关操作：注册、查询、更新、密码管理等。
  */
 
-import type { PaginatedResult, Result } from '@hai/core'
-import type { DbFunctions } from '@hai/db'
+import type { PaginatedResult, Result } from '@h-ai/core'
+import type { DbFunctions } from '@h-ai/db'
 import type { PasswordStrategy } from '../authn/password/iam-authn-password-strategy.js'
 import type { IamAuthzFunctions } from '../authz/iam-authz-types.js'
 import type { IamConfig, IamErrorCodeType } from '../iam-config.js'
@@ -21,8 +21,8 @@ import type {
   RegisterResult,
   User,
 } from './iam-user-types.js'
-import { core, err, ok } from '@hai/core'
-import { crypto } from '@hai/crypto'
+import { core, err, ok } from '@h-ai/core'
+import { crypto } from '@h-ai/crypto'
 
 import { AgreementConfigSchema, IamErrorCode, PasswordResetConfigSchema, RegisterConfigSchema } from '../iam-config.js'
 import { iamM } from '../iam-i18n.js'

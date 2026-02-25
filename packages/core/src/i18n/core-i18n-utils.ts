@@ -1,6 +1,6 @@
 /**
  * =============================================================================
- * @hai/core - i18n 国际化工具
+ * @h-ai/core - i18n 国际化工具
  * =============================================================================
  * 国际化核心实现，为 JSON 消息字典提供通用类型支持。
  *
@@ -143,7 +143,7 @@ type LocaleChangeListener = (locale: Locale) => void
  * @example
  * ```ts
  * // 应用层设置全局 locale
- * import { localeManager } from '@hai/core'
+ * import { localeManager } from '@h-ai/core'
  *
  * localeManager.setGlobalLocale('en-US')
  *

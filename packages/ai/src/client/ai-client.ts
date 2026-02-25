@@ -1,5 +1,5 @@
 /**
- * @hai/ai — 前端 AI 客户端
+ * @h-ai/ai — 前端 AI 客户端
  *
  * 浏览器端 HTTP 客户端，零 Node.js 依赖。
  * 通过 `createAIClient()` 工厂函数创建。

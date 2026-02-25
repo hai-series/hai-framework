@@ -4,7 +4,7 @@
 
 ## 模块功能清单
 
-### @hai/ui 组件库
+### @h-ai/ui 组件库
 
 - **Primitives (14)**: Avatar, Badge, Button, Checkbox, IconButton, Input, Progress, Radio, Select, Spinner, Switch, Tag, Textarea
 - **Compounds (31)**: Alert, Breadcrumb, Card, Confirm, DataTable, Drawer, Dropdown, Empty, FeedbackModal, Form, FormField, LanguageSwitch, Modal, MultiSelect, PageHeader, Pagination, Popover, Result, ScoreBar, SettingsModal, SeverityBadge, Skeleton, Steps, Table, Tabs, TagInput, ThemeToggle, Toast, ToastContainer, Tooltip
@@ -12,9 +12,9 @@
   - IAM: LoginForm, RegisterForm, ForgotPasswordForm, ResetPasswordForm, ChangePasswordForm
   - Storage: FileUpload, ImageUpload, AvatarUpload, FileList
   - Crypto: PasswordInput, EncryptedInput, HashDisplay
-- **自动导入**：通过 `@hai/ui/auto-import` 预处理器在编译阶段自动注入 `@hai/ui` 组件 import
+- **自动导入**：通过 `@h-ai/ui/auto-import` 预处理器在编译阶段自动注入 `@h-ai/ui` 组件 import
 
-### @hai/kit SvelteKit 集成
+### @h-ai/kit SvelteKit 集成
 
 - Guards: authGuard, roleGuard, permissionGuard, allGuards, anyGuard, notGuard, conditionalGuard
 - Hooks: createHandle, sequence
@@ -23,20 +23,20 @@
 - Validation: validateForm, validateQuery, validateParams
 - Modules: createIamHandle, createIamActions, requireAuth, requireRole, requirePermission
 
-### @hai/core 核心工具
+### @h-ai/core 核心工具
 
 - Logger: info, warn, error, debug
 - ID: generate (nanoid)
 - Config: load, get, set
 - Utils: type, object, string, array, async, time
 
-### @hai/db 数据库
+### @h-ai/db 数据库
 
 - DDL: createTable, dropTable, addColumn, createIndex
 - SQL: query, execute, transaction
 - 支持: SQLite, PostgreSQL, MySQL
 
-### @hai/cache 缓存
+### @h-ai/cache 缓存
 
 - 基础: get, set, del, exists, expire, ttl
 - Hash: hget, hset, hdel, hgetall
@@ -44,26 +44,26 @@
 - Set: sadd, srem, smembers, sismember
 - SortedSet: zadd, zrem, zrange, zscore
 
-### @hai/storage 存储
+### @h-ai/storage 存储
 
 - File: put, get, delete, exists, copy, move
 - Directory: list, create, delete
 - Presign: getUploadUrl, getDownloadUrl
 
-### @hai/crypto 加密
+### @h-ai/crypto 加密
 
 - SM2: generateKeyPair, encrypt, decrypt, sign, verify
 - SM3: hash, hmac, verify
 - SM4: encrypt, decrypt, encryptWithIV, decryptWithIV, generateKey
 
-### @hai/iam 身份认证
+### @h-ai/iam 身份认证
 
 - Auth: login, logout, validateSession
 - User: register, getById, update, delete, list, changePassword, resetPassword
 - Role: create, update, delete, list, assignToUser, removeFromUser
 - Permission: create, update, delete, list, assignToRole, removeFromRole
 
-### @hai/ai 人工智能
+### @h-ai/ai 人工智能
 
 - LLM: chat, chatStream
 - MCP: registerTool, callTool, registerResource, getResource
@@ -343,7 +343,7 @@ CRYPTO_SM4_KEY=your-sm4-key-16-bytes
 1. 实现注册/登录/登出 API
 2. 实现找回密码/重置密码 API
 3. 创建认证相关页面
-4. 集成 @hai/kit 的 createIamHandle
+4. 集成 @h-ai/kit 的 createIamHandle
 
 ### Phase 3: 核心功能
 

@@ -5,7 +5,6 @@
 -->
 <script lang="ts">
   import type { PageData } from './$types'
-  import { Avatar, Badge, Button, Card, Checkbox, IconButton, Input, Modal, PageHeader, PasswordInput, Select } from '@hai/ui'
   import * as m from '$lib/paraglide/messages'
 
   // 定义本地类型（与 page.server.ts 中的 UserData 一致）
@@ -222,7 +221,7 @@
 
   <!-- 搜索栏 -->
   <Card>
-    <div class="p-4">
+    <div class="p-5">
       <div class="flex flex-col sm:flex-row gap-4">
         <div class="flex-1 relative">
           <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-base-content/40 z-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -233,10 +232,11 @@
             placeholder={m.iam_users_search_placeholder()}
             class="pl-10"
             bind:value={searchQuery}
+            autocomplete="off"
           />
         </div>
-        <div class="text-sm text-base-content/60 self-center">
-          共 {filteredUsers.length} 个用户
+        <div class="text-sm text-base-content/50 self-center whitespace-nowrap">
+          {m.logs_total_count({ count: filteredUsers.length })}
         </div>
       </div>
     </div>
@@ -246,39 +246,39 @@
   <Card>
     <div class="overflow-x-auto">
       <table class="w-full">
-        <thead class="bg-base-200 border-b border-base-content/10">
-          <tr>
-            <th class="px-6 py-3 text-left text-xs font-semibold text-base-content/60 uppercase tracking-wider">{m.iam_users_col_username()}</th>
-            <th class="px-6 py-3 text-left text-xs font-semibold text-base-content/60 uppercase tracking-wider">{m.iam_users_col_email()}</th>
-            <th class="px-6 py-3 text-left text-xs font-semibold text-base-content/60 uppercase tracking-wider">{m.iam_users_col_roles()}</th>
-            <th class="px-6 py-3 text-left text-xs font-semibold text-base-content/60 uppercase tracking-wider">{m.iam_users_col_status()}</th>
-            <th class="px-6 py-3 text-left text-xs font-semibold text-base-content/60 uppercase tracking-wider">{m.iam_users_col_created_at()}</th>
-            <th class="px-6 py-3 text-right text-xs font-semibold text-base-content/60 uppercase tracking-wider">{m.iam_users_col_actions()}</th>
+        <thead>
+          <tr class="border-b border-base-content/5">
+            <th class="px-5 py-3.5 text-left text-xs font-semibold text-base-content/50 uppercase tracking-wider">{m.iam_users_col_username()}</th>
+            <th class="px-5 py-3.5 text-left text-xs font-semibold text-base-content/50 uppercase tracking-wider">{m.iam_users_col_email()}</th>
+            <th class="px-5 py-3.5 text-left text-xs font-semibold text-base-content/50 uppercase tracking-wider">{m.iam_users_col_roles()}</th>
+            <th class="px-5 py-3.5 text-left text-xs font-semibold text-base-content/50 uppercase tracking-wider">{m.iam_users_col_status()}</th>
+            <th class="px-5 py-3.5 text-left text-xs font-semibold text-base-content/50 uppercase tracking-wider">{m.iam_users_col_created_at()}</th>
+            <th class="px-5 py-3.5 text-right text-xs font-semibold text-base-content/50 uppercase tracking-wider">{m.iam_users_col_actions()}</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-base-content/5">
           {#each filteredUsers as user}
-            <tr class="hover:bg-base-200/50 transition-colors">
-              <td class="px-6 py-4">
+            <tr class="hover:bg-base-200/30 transition-colors">
+              <td class="px-5 py-3.5">
                 <div class="flex items-center gap-3">
                   <Avatar name={user.username} size="sm" />
                   <div>
                     <div class="font-medium text-base-content">{user.username}</div>
                     {#if user.display_name}
-                      <div class="text-sm text-base-content/60">{user.display_name}</div>
+                      <div class="text-sm text-base-content/50">{user.display_name}</div>
                     {/if}
                   </div>
                 </div>
               </td>
-              <td class="px-6 py-4 text-sm text-base-content/80">{user.email}</td>
-              <td class="px-6 py-4">
+              <td class="px-5 py-3.5 text-sm text-base-content/70">{user.email}</td>
+              <td class="px-5 py-3.5">
                 <div class="flex flex-wrap gap-1">
                   {#each user.roles as role}
                     <Badge variant="secondary" size="sm">{role}</Badge>
                   {/each}
                 </div>
               </td>
-              <td class="px-6 py-4">
+              <td class="px-5 py-3.5">
                 <Badge 
                   variant={user.status === 'active' ? 'success' : user.status === 'inactive' ? 'warning' : 'error'}
                   size="sm"
@@ -286,11 +286,11 @@
                   {getStatusText(user.status)}
                 </Badge>
               </td>
-              <td class="px-6 py-4 text-sm text-base-content/60">
+              <td class="px-5 py-3.5 text-sm text-base-content/50">
                 {new Date(user.created_at).toLocaleDateString('zh-CN')}
               </td>
-              <td class="px-6 py-4 text-right">
-                <div class="flex justify-end gap-2">
+              <td class="px-5 py-3.5 text-right">
+                <div class="flex justify-end gap-1">
                   <IconButton
                     variant="ghost"
                     size="sm"
@@ -313,7 +313,7 @@
             </tr>
           {:else}
             <tr>
-              <td colspan="6" class="px-6 py-12 text-center text-base-content/60">
+              <td colspan="6" class="px-5 py-16 text-center text-base-content/40">
                 <svg class="w-12 h-12 mx-auto text-base-content/20 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
                 </svg>
@@ -445,7 +445,7 @@
         <legend class="block text-sm font-medium text-base-content mb-2">
           {m.iam_users_col_roles()}
         </legend>
-        <div class="flex flex-wrap gap-3 p-3 bg-base-200 rounded-lg border border-base-content/10">
+        <div class="flex flex-wrap gap-3 p-3 bg-base-200 rounded-lg">
           {#each data.roles as role}
             <label class="inline-flex items-center gap-2 cursor-pointer">
               <Checkbox
@@ -470,7 +470,7 @@
       </fieldset>
 
       <!-- 操作按钮 -->
-      <div class="flex justify-end gap-3 pt-4 border-t border-base-content/10">
+      <div class="flex justify-end gap-3 pt-4 border-t border-base-content/5">
         <Button variant="secondary" onclick={closeDialog} disabled={submitting}>
           {m.action_cancel()}
         </Button>

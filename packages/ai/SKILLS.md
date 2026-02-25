@@ -1,8 +1,8 @@
-# @hai/ai - AI 助手参考
+# @h-ai/ai - AI 助手参考
 
 ## 模块概述
 
-`@hai/ai` 是一个统一的 AI 能力模块，支持 LLM 调用、MCP 服务器和工具管理。
+`@h-ai/ai` 是一个统一的 AI 能力模块，支持 LLM 调用、MCP 服务器和工具管理。
 
 **核心对象**：通过 `ai` 对象访问所有功能，需先调用 `ai.init()` 初始化。
 
@@ -46,7 +46,7 @@ packages/ai/
 ## 核心 API
 
 ```ts
-import { ai, AIErrorCode, createMcpServer, createToolRegistry, defineTool } from '@hai/ai'
+import { ai, AIErrorCode, createMcpServer, createToolRegistry, defineTool } from '@h-ai/ai'
 ```
 
 ### 初始化与关闭
@@ -153,7 +153,7 @@ const prompt = await ai.mcp.getPrompt('translate', { text: 'hello' })
 
 ```ts
 import { randomUUID } from 'node:crypto'
-import { createMcpServer, SSEServerTransport, StdioServerTransport, StreamableHTTPServerTransport } from '@hai/ai'
+import { createMcpServer, SSEServerTransport, StdioServerTransport, StreamableHTTPServerTransport } from '@h-ai/ai'
 import { z } from 'zod'
 
 // 创建 MCP 服务器
@@ -206,7 +206,7 @@ await mcp.connect(transport)
 ### 工具定义与注册表
 
 ```ts
-import { createToolRegistry, defineTool } from '@hai/ai'
+import { createToolRegistry, defineTool } from '@h-ai/ai'
 import { z } from 'zod'
 
 // 定义工具（Zod schema 自动转换为 JSON Schema）
@@ -255,7 +255,7 @@ const messages = await registry.executeAll(toolCalls, { parallel: true })
 ### 流处理工具
 
 ```ts
-import { collectStream, createSSEDecoder, createStreamProcessor, encodeSSE } from '@hai/ai'
+import { collectStream, createSSEDecoder, createStreamProcessor, encodeSSE } from '@h-ai/ai'
 
 // 流处理器
 const processor = createStreamProcessor()
@@ -286,7 +286,7 @@ const encoded = encodeSSE({ data: '{"text":"hello"}' })
 ### 前端客户端
 
 ```ts
-import { collectStreamContent, createAIClient, parseSSE } from '@hai/ai/client'
+import { collectStreamContent, createAIClient, parseSSE } from '@h-ai/ai/client'
 
 const client = createAIClient({
   baseUrl: '/api/ai',
@@ -463,7 +463,7 @@ console.log(result.data?.choices[0].message.content)
 
 ```ts
 import { randomUUID } from 'node:crypto'
-import { createMcpServer, StreamableHTTPServerTransport } from '@hai/ai'
+import { createMcpServer, StreamableHTTPServerTransport } from '@h-ai/ai'
 import express from 'express'
 import { z } from 'zod'
 

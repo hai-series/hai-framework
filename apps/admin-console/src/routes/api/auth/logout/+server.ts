@@ -6,8 +6,8 @@
 
 import type { RequestHandler } from '@sveltejs/kit'
 import { audit } from '$lib/server/services/index.js'
-import { core } from '@hai/core'
-import { iam } from '@hai/iam'
+import { core } from '@h-ai/core'
+import { iam } from '@h-ai/iam'
 import { json } from '@sveltejs/kit'
 
 export const POST: RequestHandler = async ({ cookies, getClientAddress, request }) => {

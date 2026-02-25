@@ -1,6 +1,6 @@
 /**
  * =============================================================================
- * @hai/kit - IAM Actions
+ * @h-ai/kit - IAM Actions
  * =============================================================================
  * SvelteKit Form Actions 封装
  *
@@ -13,7 +13,7 @@
  * @example
  * ```ts
  * // src/routes/login/+page.server.ts
- * import { kit } from '@hai/kit'
+ * import { kit } from '@h-ai/kit'
  * import { iam } from '$lib/server/iam'
  *
  * export const actions = kit.iam.createActions({

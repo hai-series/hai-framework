@@ -1,6 +1,6 @@
 /**
  * =============================================================================
- * @hai/db - CRUD 抽象
+ * @h-ai/db - CRUD 抽象
  * =============================================================================
  *
  * 提供基于单表的通用 CRUD 操作封装，支持在 db.sql 与事务 tx 中复用。
@@ -9,7 +9,7 @@
  * =============================================================================
  */
 
-import type { PaginatedResult, Result } from '@hai/core'
+import type { PaginatedResult, Result } from '@h-ai/core'
 import type {
   CrudConfig,
   CrudCountOptions,
@@ -22,7 +22,7 @@ import type {
   QueryRow,
   TxHandle,
 } from './db-types.js'
-import { err, ok } from '@hai/core'
+import { err, ok } from '@h-ai/core'
 
 import { DbErrorCode } from './db-config.js'
 import { dbM } from './db-i18n.js'

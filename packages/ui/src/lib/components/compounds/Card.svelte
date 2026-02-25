@@ -1,6 +1,6 @@
 <!--
   =============================================================================
-  @hai/ui - Card 组件
+  @h-ai/ui - Card 组件
   =============================================================================
   卡片组件
   
@@ -13,8 +13,8 @@
   
   let {
     title = '',
-    bordered = true,
-    shadow = false,
+    bordered = false,
+    shadow = 'sm',
     padding = 'md',
     class: className = '',
     header,
@@ -41,7 +41,7 @@
   
   const cardClass = $derived(
     cn(
-      'card bg-base-100',
+      'card bg-base-100 rounded-xl',
       bordered && 'border border-base-300',
       typeof shadow === 'boolean' ? shadowMap[String(shadow) as 'true' | 'false'] : shadowMap[shadow],
       className,

@@ -5,7 +5,6 @@
 -->
 <script lang="ts">
   import type { PageData } from './$types'
-  import { Badge, BareButton, Button, Checkbox, IconButton, Input, PageHeader, Textarea } from '@hai/ui'
   import * as m from '$lib/paraglide/messages'
 
   interface RoleData {
@@ -211,7 +210,7 @@
               <IconButton variant="ghost" size="sm" ariaLabel={m.iam_roles_action_menu()}>
                 <span class="iconify tabler--dots-vertical size-5"></span>
               </IconButton>
-              <ul class="dropdown-content menu bg-base-100 rounded-box shadow-lg border border-base-content/10 w-40 p-2 z-10">
+              <ul class="dropdown-content menu bg-base-100 rounded-box shadow-lg w-40 p-2 z-10">
                 <li>
                   <Button variant="ghost" class="justify-start" onclick={() => openEditDialog(role)}>
                     <span class="iconify tabler--edit size-4"></span>
@@ -310,9 +309,9 @@
             </span>
           </legend>
 
-          <div class="border border-base-content/10 rounded-lg overflow-hidden max-h-64 overflow-y-auto">
+          <div class="rounded-lg overflow-hidden max-h-64 overflow-y-auto bg-base-200/50">
             {#each Object.entries(data.permissions) as [resource, perms]}
-              <div class="border-b border-base-content/10 last:border-b-0">
+              <div class="border-b border-base-content/5 last:border-b-0">
                 <BareButton
                   type="button"
                   class="flex w-full items-center justify-between px-4 py-2 bg-base-200/50 cursor-pointer hover:bg-base-200"

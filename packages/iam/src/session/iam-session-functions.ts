@@ -1,16 +1,16 @@
 /**
- * @hai/iam — 会话子功能工厂
+ * @h-ai/iam — 会话子功能工厂
  *
  * 基于缓存存储的会话实现：创建、查询、验证、更新、删除。
  */
 
-import type { CacheFunctions } from '@hai/cache'
-import type { Result } from '@hai/core'
+import type { CacheFunctions } from '@h-ai/cache'
+import type { Result } from '@h-ai/core'
 import type { IamConfig } from '../iam-config.js'
 import type { IamError } from '../iam-types.js'
 import type { SessionMappingRepository } from './iam-session-repository-cache.js'
 import type { CreateSessionOptions, IamSessionFunctions, Session } from './iam-session-types.js'
-import { core, err, ok } from '@hai/core'
+import { core, err, ok } from '@h-ai/core'
 import { IamErrorCode, SessionConfigSchema } from '../iam-config.js'
 import { iamM } from '../iam-i18n.js'
 import { createCacheSessionMappingRepository } from './iam-session-repository-cache.js'

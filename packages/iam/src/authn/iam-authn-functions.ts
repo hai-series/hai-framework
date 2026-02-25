@@ -1,11 +1,11 @@
 /**
- * @hai/iam — 认证子功能工厂
+ * @h-ai/iam — 认证子功能工厂
  *
  * 创建认证策略（密码/OTP/LDAP），组装成统一的认证操作接口。
  */
 
-import type { Result } from '@hai/core'
-import type { DbFunctions } from '@hai/db'
+import type { Result } from '@h-ai/core'
+import type { DbFunctions } from '@h-ai/db'
 
 import type { IamAuthzFunctions } from '../authz/iam-authz-types.js'
 import type { IamConfig } from '../iam-config.js'
@@ -17,7 +17,7 @@ import type { LdapClientFactory } from './ldap/iam-authn-ldap-strategy.js'
 import type { OtpStrategy } from './otp/iam-authn-otp-strategy.js'
 import type { PasswordStrategy } from './password/iam-authn-password-strategy.js'
 
-import { core, err, ok } from '@hai/core'
+import { core, err, ok } from '@h-ai/core'
 
 import { AgreementConfigSchema, IamErrorCode, LoginConfigSchema, OtpConfigSchema, SecurityConfigSchema } from '../iam-config.js'
 import { iamM } from '../iam-i18n.js'

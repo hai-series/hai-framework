@@ -1,12 +1,12 @@
 /**
  * =============================================================================
- * @hai/core - 配置管理（Node.js 专用）
+ * @h-ai/core - 配置管理（Node.js 专用）
  * =============================================================================
  * 提供 YAML 配置文件加载、环境变量插值、缓存管理。
  *
  * @example
  * ```ts
- * import { config, core } from '@hai/core'
+ * import { config, core } from '@h-ai/core'
  *
  * // 加载配置
  * const result = config.load('core', './config/_core.yml', CoreConfigSchema)

@@ -1,4 +1,4 @@
-# @hai/storage
+# @h-ai/storage
 
 对象存储模块，提供统一 `storage` 访问入口，支持 S3 兼容存储与本地文件系统。
 
@@ -12,7 +12,7 @@
 ### Node.js 服务端
 
 ```ts
-import { storage } from '@hai/storage'
+import { storage } from '@h-ai/storage'
 
 // 初始化（S3）
 await storage.init({
@@ -42,7 +42,7 @@ await storage.close()
 浏览器环境下仅导出客户端能力（签名 URL 上传/下载），不包含 `storage` 服务对象。
 
 ```ts
-import { downloadAndSave, uploadWithPresignedUrl } from '@hai/storage/client'
+import { downloadAndSave, uploadWithPresignedUrl } from '@h-ai/storage/client'
 
 const { uploadUrl } = await fetch('/api/storage/presign').then(r => r.json())
 await uploadWithPresignedUrl(uploadUrl, file)
@@ -56,7 +56,7 @@ await uploadWithPresignedUrl(uploadUrl, file)
 ## 错误处理
 
 ```ts
-import { storage, StorageErrorCode } from '@hai/storage'
+import { storage, StorageErrorCode } from '@h-ai/storage'
 
 const result = await storage.file.get('image.png')
 if (!result.success && result.error.code === StorageErrorCode.NOT_INITIALIZED) {

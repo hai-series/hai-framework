@@ -1,14 +1,14 @@
-# @hai/iam - AI 助手参考
+# @h-ai/iam - AI 助手参考
 
 ## 模块概述
 
-`@hai/iam` 是一个统一的身份与访问管理模块，支持多种认证策略、会话管理和 RBAC 授权。
+`@h-ai/iam` 是一个统一的身份与访问管理模块，支持多种认证策略、会话管理和 RBAC 授权。
 
 **依赖**：
 
-- `@hai/db` - 数据库服务（必需，持久化用户/角色/权限/OTP 数据）
-- `@hai/cache` - 缓存服务（必需，会话存储 + RBAC 权限缓存）
-- `@hai/crypto` - 密码哈希（内部使用）
+- `@h-ai/db` - 数据库服务（必需，持久化用户/角色/权限/OTP 数据）
+- `@h-ai/cache` - 缓存服务（必需，会话存储 + RBAC 权限缓存）
+- `@h-ai/crypto` - 密码哈希（内部使用）
 
 **重要**：所有操作返回 `Result<T, IamError>` 类型，需检查 `success` 属性。
 
@@ -55,7 +55,7 @@ packages/iam/
 
 ## 存储架构
 
-### 数据库表（@hai/db，初始化时自动创建）
+### 数据库表（@h-ai/db，初始化时自动创建）
 
 | 表名                   | 用途          | 主要字段                                                            |
 | ---------------------- | ------------- | ------------------------------------------------------------------- |
@@ -66,7 +66,7 @@ packages/iam/
 | `iam_role_permissions` | 角色-权限关联 | role_id, permission_id（联合唯一索引）                              |
 | `iam_user_roles`       | 用户-角色关联 | user_id, role_id（联合唯一索引）                                    |
 
-### 缓存键（@hai/cache）
+### 缓存键（@h-ai/cache）
 
 | Key                           | 数据结构      | 用途                            | TTL            |
 | ----------------------------- | ------------- | ------------------------------- | -------------- |
@@ -104,7 +104,7 @@ iam.auth.login({ identifier, password })
   ├─ passwordStrategy.authenticate()
   │   ├─ 【DB】userRepository.findByIdentifier() → 查 iam_users
   │   ├─ 校验账户状态（enabled, lockedUntil）
-  │   ├─ 【内存】passwordProvider.verify() → @hai/crypto 校验密码哈希
+  │   ├─ 【内存】passwordProvider.verify() → @h-ai/crypto 校验密码哈希
   │   ├─ 失败 → 【DB】recordLoginFailure() → UPDATE iam_users 失败计数/锁定时间
   │   ├─ 成功 → 【DB】resetLoginFailures() → UPDATE iam_users 重置计数
   │   └─ 检查密码是否过期（passwordConfig.expirationDays）
@@ -184,7 +184,7 @@ register({ username, email, password, ... }):
   ├─ 【内存】validatePassword() → 密码强度校验
   ├─ 【DB】existsByUsername() → 查 iam_users
   ├─ 【DB】existsByEmail() → 查 iam_users
-  ├─ 【内存】hashPassword() → @hai/crypto 哈希
+  ├─ 【内存】hashPassword() → @h-ai/crypto 哈希
   ├─ 【DB 事务】
   │   ├─ userRepository.create() → INSERT iam_users
   │   └─ userRepository.findByUsername() → 查回新用户
@@ -321,9 +321,9 @@ getRolePermissions(roleId):
 ## 核心 API
 
 ```ts
-import { cache } from '@hai/cache'
-import { db } from '@hai/db'
-import { iam } from '@hai/iam'
+import { cache } from '@h-ai/cache'
+import { db } from '@h-ai/db'
+import { iam } from '@h-ai/iam'
 ```
 
 ### 初始化与关闭
@@ -514,7 +514,7 @@ if (verifyResult.success) {
 ### 用户管理
 
 ```ts
-import type { PaginationOptionsInput } from '@hai/core'
+import type { PaginationOptionsInput } from '@h-ai/core'
 
 // 获取当前用户（通过令牌）
 const currentUser = await iam.user.getCurrentUser(accessToken)
@@ -687,7 +687,7 @@ await iam.session.deleteByUserId('user-id')
 ```ts
 // 方式 1：通过 iam 对象创建（Node.js 环境）
 // 方式 2：独立导入（前端/浏览器环境）
-import { createIamClient } from '@hai/iam/client'
+import { createIamClient } from '@h-ai/iam/client'
 
 const client = iam.client.create({ baseUrl: '/api/iam' })
 
@@ -743,7 +743,7 @@ await client.logout()
 ## 错误码
 
 ```ts
-import { IamErrorCode } from '@hai/iam'
+import { IamErrorCode } from '@h-ai/iam'
 
 if (!result.success) {
   switch (result.error.code) {

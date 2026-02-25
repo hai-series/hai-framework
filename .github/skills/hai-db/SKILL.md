@@ -1,11 +1,11 @@
 ---
 name: hai-db
-description: 使用 @hai/db 进行 SQLite/PostgreSQL/MySQL 的初始化、SQL/DDL/CRUD/事务与分页操作；当需求涉及数据库访问、CRUD 仓库、事务处理、分页查询或 DbErrorCode 分支处理时使用。
+description: 使用 @h-ai/db 进行 SQLite/PostgreSQL/MySQL 的初始化、SQL/DDL/CRUD/事务与分页操作；当需求涉及数据库访问、CRUD 仓库、事务处理、分页查询或 DbErrorCode 分支处理时使用。
 ---
 
 # hai-db
 
-本技能用于指导在本仓库中正确使用 `@hai/db` 模块进行数据库操作与代码改动。涵盖初始化、DDL、SQL、CRUD 抽象、事务、分页与错误处理的正确姿势，并遵循仓库规范（i18n、日志、导出与测试要求）。
+本技能用于指导在本仓库中正确使用 `@h-ai/db` 模块进行数据库操作与代码改动。涵盖初始化、DDL、SQL、CRUD 抽象、事务、分页与错误处理的正确姿势，并遵循仓库规范（i18n、日志、导出与测试要求）。
 
 ## 适用场景
 
@@ -27,7 +27,7 @@ description: 使用 @hai/db 进行 SQLite/PostgreSQL/MySQL 的初始化、SQL/DD
 ## 使用步骤
 
 1. **确认入口与初始化**
-   - 统一通过 `import { db, DbErrorCode } from '@hai/db'` 使用。
+   - 统一通过 `import { db, DbErrorCode } from '@h-ai/db'` 使用。
    - 初始化：`await db.init(config)`，操作完成后 `await db.close()`。
 
 2. **选择正确的操作接口**
@@ -65,7 +65,7 @@ description: 使用 @hai/db 进行 SQLite/PostgreSQL/MySQL 的初始化、SQL/DD
 ### 初始化与 SQL 查询
 
 ```ts
-import { db, DbErrorCode } from '@hai/db'
+import { db, DbErrorCode } from '@h-ai/db'
 
 await db.init({ type: 'sqlite', database: ':memory:' })
 

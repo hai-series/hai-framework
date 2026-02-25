@@ -1,11 +1,11 @@
-# @hai/kit - SvelteKit 集成
+# @h-ai/kit - SvelteKit 集成
 
 > hai-framework 与 SvelteKit 的服务端/客户端集成封装，提供 Handle Hook、中间件、路由守卫、API 响应工具、表单验证、模块集成（IAM/Storage/Cache/Crypto）和客户端 Store。
 
 ## 安装
 
 ```bash
-pnpm add @hai/kit
+pnpm add @h-ai/kit
 ```
 
 **Peer dependencies**：`@sveltejs/kit ^2.50.1`、`svelte ^5.49.11`
@@ -15,7 +15,7 @@ pnpm add @hai/kit
 所有功能通过 `kit` 对象统一访问：
 
 ```typescript
-import { kit } from '@hai/kit'
+import { kit } from '@h-ai/kit'
 
 kit.createHandle({ /* config */ })
 kit.guard.auth({ loginUrl: '/login' })
@@ -30,7 +30,7 @@ await kit.validate.form(request, schema)
 ```typescript
 // src/hooks.server.ts
 import { iam } from '$lib/server/iam'
-import { kit } from '@hai/kit'
+import { kit } from '@h-ai/kit'
 
 // IAM Handle — 自动验证会话、注入 session/user 到 event.locals
 const iamHandle = kit.iam.createHandle({
@@ -60,7 +60,7 @@ export const handle = kit.sequence(iamHandle, appHandle)
 
 ```typescript
 // src/routes/api/users/+server.ts
-import { kit } from '@hai/kit'
+import { kit } from '@h-ai/kit'
 import { z } from 'zod'
 
 const CreateUserSchema = z.object({
@@ -85,7 +85,7 @@ export async function POST(event) {
 
 ```svelte
 <script>
-  import { kit } from '@hai/kit'
+  import { kit } from '@h-ai/kit'
 
   const session = kit.client.useSession({ fetchUrl: '/api/session', refreshInterval: 300 })
   const upload  = kit.client.useUpload({ uploadUrl: '/api/storage', maxConcurrent: 3 })
@@ -120,7 +120,7 @@ export async function POST(event) {
 标准化 JSON 响应，返回统一的 `ApiResponse` 格式。
 
 ```typescript
-import { kit } from '@hai/kit'
+import { kit } from '@h-ai/kit'
 
 kit.response.ok({ id: '1' }) // 200
 kit.response.created({ id: '1' }) // 201
@@ -141,7 +141,7 @@ kit.response.error('CUSTOM', 'msg', 418) // 自定义状态码
 基于 Zod Schema 的请求数据验证。
 
 ```typescript
-import { kit } from '@hai/kit'
+import { kit } from '@h-ai/kit'
 
 // 验证请求体（JSON / FormData）
 const { valid, data, errors } = await kit.validate.form(request, schema)
@@ -156,7 +156,7 @@ const { valid, data, errors } = kit.validate.params(params, schema)
 ### 路由守卫
 
 ```typescript
-import { kit } from '@hai/kit'
+import { kit } from '@h-ai/kit'
 
 // 认证守卫
 kit.guard.auth({ loginUrl: '/login', apiMode: false })
@@ -188,7 +188,7 @@ kit.createHandle({
 ### 中间件
 
 ```typescript
-import { kit } from '@hai/kit'
+import { kit } from '@h-ai/kit'
 
 kit.createHandle({
   middleware: [
@@ -205,7 +205,7 @@ kit.createHandle({
 ```typescript
 // src/hooks.server.ts
 import { iam } from '$lib/server/iam'
-import { kit } from '@hai/kit'
+import { kit } from '@h-ai/kit'
 
 const iamHandle = kit.iam.createHandle({
   iam,
@@ -221,7 +221,7 @@ export const handle = iamHandle
 ```typescript
 // src/routes/login/+page.server.ts
 import { iam } from '$lib/server/iam'
-import { kit } from '@hai/kit'
+import { kit } from '@h-ai/kit'
 
 export const actions = kit.iam.createActions({
   iam,
@@ -235,7 +235,7 @@ export const actions = kit.iam.createActions({
 
 ```typescript
 import { cache } from '$lib/server/cache'
-import { kit } from '@hai/kit'
+import { kit } from '@h-ai/kit'
 
 const cacheHandle = kit.cache.createHandle({
   cache,
@@ -256,7 +256,7 @@ const cacheUtils = kit.cache.createUtils({ cache })
 ```typescript
 // src/routes/api/storage/[...path]/+server.ts
 import { storage } from '$lib/server/storage'
-import { kit } from '@hai/kit'
+import { kit } from '@h-ai/kit'
 
 const endpoint = kit.storage.createEndpoint({
   storage,
@@ -276,7 +276,7 @@ export const DELETE = endpoint.delete
 ```typescript
 // src/routes/api/webhook/+server.ts
 import { crypto } from '$lib/server/crypto'
-import { kit } from '@hai/kit'
+import { kit } from '@h-ai/kit'
 
 // Webhook 签名验证
 export async function POST(event) {
@@ -300,11 +300,11 @@ const secureCookie = kit.crypto.createEncryptedCookie({ crypto, encryptionKey: '
 
 ### i18n 集成
 
-`kit.setAllModulesLocale` 一次调用同步所有 hai 模块的语言，内部通过 `@hai/core` 的 `setGlobalLocale` 实现。
+`kit.setAllModulesLocale` 一次调用同步所有 hai 模块的语言，内部通过 `@h-ai/core` 的 `setGlobalLocale` 实现。
 
 ```typescript
 // src/hooks.server.ts
-import { kit } from '@hai/kit'
+import { kit } from '@h-ai/kit'
 
 export async function handle({ event, resolve }) {
   const locale = event.cookies.get('PARAGLIDE_LOCALE') ?? 'zh-CN'

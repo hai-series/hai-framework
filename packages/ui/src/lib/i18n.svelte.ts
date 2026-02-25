@@ -1,19 +1,19 @@
 /**
  * =============================================================================
- * @hai/ui - i18n Svelte 响应式封装
+ * @h-ai/ui - i18n Svelte 响应式封装
  * =============================================================================
  * 为 Svelte 5 应用提供 locale 状态管理的辅助工具
  *
  * 设计原则：
  * - Paraglide 优先：翻译由 Paraglide 生成，此模块仅提供 locale 状态管理
  * - 显式 locale：库组件通过 props 接收 locale，不依赖全局状态
- * - 集成 @hai/core：locale 变化会同步到 @hai/core 的全局 locale 管理器
+ * - 集成 @h-ai/core：locale 变化会同步到 @h-ai/core 的全局 locale 管理器
  * - 应用层使用：此工具主要在应用层（如 admin-console）使用
  *
  * 使用方式：
  * ```svelte
  * <script lang="ts">
- *   import { createLocaleStore } from '@hai/ui'
+ *   import { createLocaleStore } from '@h-ai/ui'
  *   import { m } from '$lib/paraglide/messages.js'
  *   import { setLocale } from '$lib/paraglide/runtime.js'
  *
@@ -36,8 +36,8 @@
  * =============================================================================
  */
 
-import type { Locale, LocaleInfo } from '@hai/core'
-import { core } from '@hai/core'
+import type { Locale, LocaleInfo } from '@h-ai/core'
+import { core } from '@h-ai/core'
 
 // 从 core.i18n 解构常用函数
 const {
@@ -100,7 +100,7 @@ export function createLocaleStore(options: {
     }
   }
 
-  // 同步初始 locale 到 @hai/core 的全局管理器
+  // 同步初始 locale 到 @h-ai/core 的全局管理器
   setGlobalLocale(initialLocale)
 
   // 使用 Svelte 5 runes 创建响应式状态
@@ -119,14 +119,14 @@ export function createLocaleStore(options: {
 
     /**
      * 设置当前语言
-     * 会同步到 @hai/core 的全局 locale 管理器
+     * 会同步到 @h-ai/core 的全局 locale 管理器
      * 注意：你还需要调用 Paraglide 的 setLocale 来更新 UI 翻译
      */
     set(locale: Locale) {
       const resolved = resolveLocale(locale, supportedLocales, defaultLocale)
       currentLocale = resolved
 
-      // 同步到 @hai/core 的全局 locale 管理器
+      // 同步到 @h-ai/core 的全局 locale 管理器
       setGlobalLocale(resolved)
 
       // 持久化到 localStorage
@@ -143,10 +143,10 @@ export function createLocaleStore(options: {
 }
 
 // =============================================================================
-// 类型重导出（从 @hai/core 导出类型，函数通过 core.i18n 访问）
+// 类型重导出（从 @h-ai/core 导出类型，函数通过 core.i18n 访问）
 // =============================================================================
 
-export type { InterpolationParams, Locale, LocaleInfo } from '@hai/core'
+export type { InterpolationParams, Locale, LocaleInfo } from '@h-ai/core'
 
 // 重导出常用常量和函数（便于应用层使用）
 export {

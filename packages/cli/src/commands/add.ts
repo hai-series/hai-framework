@@ -1,6 +1,6 @@
 /**
  * =============================================================================
- * @hai/cli - 模块增量添加命令
+ * @h-ai/cli - 模块增量添加命令
  * =============================================================================
  * 向现有 hai 项目增量启用模块。
  *
@@ -10,7 +10,7 @@
 
 import type { FeatureId, GlobalOptions } from '../types.js'
 import path from 'node:path'
-import { core } from '@hai/core'
+import { core } from '@h-ai/core'
 import chalk from 'chalk'
 import fse from 'fs-extra'
 import ora from 'ora'
@@ -31,14 +31,14 @@ export interface AddModuleOptions extends GlobalOptions {
 
 // 可添加的模块与对应包
 const MODULE_MAP: Record<string, { packages: string[], deps?: string[], configKey?: string, description: string }> = {
-  iam: { packages: ['@hai/iam'], deps: ['crypto'], configKey: 'iam', description: '身份与访问管理' },
-  db: { packages: ['@hai/db'], configKey: 'db', description: '数据库' },
-  cache: { packages: ['@hai/cache'], configKey: 'cache', description: '缓存' },
-  ai: { packages: ['@hai/ai'], configKey: 'ai', description: 'AI 集成' },
-  storage: { packages: ['@hai/storage'], configKey: 'storage', description: '文件存储' },
-  crypto: { packages: ['@hai/crypto'], description: '加密模块' },
-  kit: { packages: ['@hai/kit'], description: 'SvelteKit 集成工具' },
-  ui: { packages: ['@hai/ui'], description: 'UI 组件库' },
+  iam: { packages: ['@h-ai/iam'], deps: ['crypto'], configKey: 'iam', description: '身份与访问管理' },
+  db: { packages: ['@h-ai/db'], configKey: 'db', description: '数据库' },
+  cache: { packages: ['@h-ai/cache'], configKey: 'cache', description: '缓存' },
+  ai: { packages: ['@h-ai/ai'], configKey: 'ai', description: 'AI 集成' },
+  storage: { packages: ['@h-ai/storage'], configKey: 'storage', description: '文件存储' },
+  crypto: { packages: ['@h-ai/crypto'], description: '加密模块' },
+  kit: { packages: ['@h-ai/kit'], description: 'SvelteKit 集成工具' },
+  ui: { packages: ['@h-ai/ui'], description: 'UI 组件库' },
 }
 
 /**

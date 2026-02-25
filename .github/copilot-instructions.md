@@ -86,7 +86,7 @@
 - 覆盖率：`pnpm test:coverage`
 - 全量构建：`pnpm build`
 
-只运行某个 package/app：优先使用 pnpm filter（示例：`pnpm --filter @hai/storage test`）。
+只运行某个 package/app：优先使用 pnpm filter（示例：`pnpm --filter @h-ai/storage test`）。
 
 ---
 
@@ -124,7 +124,7 @@
 - 依赖方向必须向内收敛：上层可以依赖 Core 等基础能力，Core 不反向依赖上层。
 - 引入新依赖前先确认是否已有同类能力，避免重复建设。
 - 如各模块已有同类功能，必须优先复用，不得重复造轮子。
-- 如 @hai/ui 已有组件，应用/业务层必须直接使用，不得重复实现。
+- 如 @h-ai/ui 已有组件，应用/业务层必须直接使用，不得重复实现。
 
 ### 文本、日志与 i18n
 
@@ -134,11 +134,11 @@
 - 所有用户可见字符串必须使用 i18n key（UI 文案、Toast、Alert、标题、按钮、校验提示、错误信息等）。
 - ❌ 禁止直接修改 `src/lib/paraglide` 生成文件。
 
-### @hai/ui 组件 i18n 规则
+### @h-ai/ui 组件 i18n 规则
 
-- **组件内置翻译**：`@hai/ui` 场景组件（`scenes/`）内置中英文翻译，自动响应全局 locale。
+- **组件内置翻译**：`@h-ai/ui` 场景组件（`scenes/`）内置中英文翻译，自动响应全局 locale。
 - **应用层只管页面级文本**：标题、错误提示、导航链接等由应用层 i18n 处理。
-- **不要为 UI 组件传入翻译 props**：组件内部文本由 `@hai/ui` 统一管理。
+- **不要为 UI 组件传入翻译 props**：组件内部文本由 `@h-ai/ui` 统一管理。
 - **可选覆盖**：通过 `submitText` 等 props 覆盖特定文本（如需要自定义按钮文字）。
 - 翻译文件位于 `packages/ui/src/lib/messages/{zh-CN,en-US}.json`。
 

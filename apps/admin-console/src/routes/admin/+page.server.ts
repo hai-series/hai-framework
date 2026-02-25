@@ -6,7 +6,7 @@
 
 import type { PageServerLoad } from './$types'
 import { auditService } from '$lib/server/services/index.js'
-import { iam } from '@hai/iam'
+import { iam } from '@h-ai/iam'
 
 export const load: PageServerLoad = async () => {
   // 从 iam 获取统计数据

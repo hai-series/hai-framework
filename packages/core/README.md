@@ -1,4 +1,4 @@
-# @hai/core
+# @h-ai/core
 
 > hai Admin Framework 核心模块 — 提供统一的基础工具、类型定义、配置管理和日志功能。
 
@@ -16,7 +16,7 @@
 ### Node.js 服务端
 
 ```typescript
-import { core } from '@hai/core'
+import { core } from '@h-ai/core'
 
 // 初始化（可选，加载配置目录）
 core.init({ configDir: './config' })
@@ -38,7 +38,7 @@ core.time.formatDate(new Date())
 ### 浏览器端
 
 ```typescript
-import { core } from '@hai/core'
+import { core } from '@h-ai/core'
 
 core.init({ logging: { level: 'debug' } })
 core.logger.info('browser ready')
@@ -50,7 +50,7 @@ const id = core.id.generate()
 ### Node.js 配置加载
 
 ```typescript
-import { core, CoreConfigSchema } from '@hai/core'
+import { core, CoreConfigSchema } from '@h-ai/core'
 import { z } from 'zod'
 
 // 方式 1：通过 init 自动加载配置目录
@@ -79,8 +79,8 @@ unwatch()
 ## 错误处理
 
 ```typescript
-import type { Result } from '@hai/core'
-import { err, ok } from '@hai/core'
+import type { Result } from '@h-ai/core'
+import { err, ok } from '@h-ai/core'
 
 function divide(a: number, b: number): Result<number, string> {
   if (b === 0)
@@ -92,7 +92,7 @@ function divide(a: number, b: number): Result<number, string> {
 ## 测试
 
 ```bash
-pnpm --filter @hai/core test
+pnpm --filter @h-ai/core test
 ```
 
 ## License

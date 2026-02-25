@@ -1,6 +1,6 @@
 /**
  * =============================================================================
- * @hai/iam - OpenLDAP 测试容器管理
+ * @h-ai/iam - OpenLDAP 测试容器管理
  * =============================================================================
  *
  * 使用 Testcontainers 启动 OpenLDAP 实例，为 LDAP 认证策略提供集成测试环境。
@@ -11,7 +11,7 @@ import type { StartedTestContainer } from 'testcontainers'
 import type { LdapClient, LdapClientFactory, LdapSearchEntry } from '../../src/authn/ldap/iam-authn-ldap-strategy.js'
 import type { LdapConfig } from '../../src/iam-config.js'
 import type { IamError } from '../../src/iam-types.js'
-import { err, ok } from '@hai/core'
+import { err, ok } from '@h-ai/core'
 import { GenericContainer, Wait } from 'testcontainers'
 import { IamErrorCode } from '../../src/iam-config.js'
 

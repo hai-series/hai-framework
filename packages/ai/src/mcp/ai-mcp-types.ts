@@ -1,10 +1,10 @@
 /**
- * @hai/ai — MCP 子功能类型
+ * @h-ai/ai — MCP 子功能类型
  *
  * 定义 MCP 工具、资源、提示词的注册与调用接口。
  */
 
-import type { Result } from '@hai/core'
+import type { Result } from '@h-ai/core'
 
 import type { AIConfig, AIError } from '../ai-config.js'
 

@@ -1,4 +1,4 @@
-import type { Result } from '@hai/core'
+import type { Result } from '@h-ai/core'
 import type { Cluster, ClusterOptions, RedisOptions } from 'ioredis'
 import type { CacheConfig } from '../cache-config.js'
 import type {
@@ -15,7 +15,7 @@ import type {
   ZSetOperations,
 } from '../cache-types.js'
 
-import { core, err, ok } from '@hai/core'
+import { core, err, ok } from '@h-ai/core'
 import Redis from 'ioredis'
 import { CacheErrorCode } from '../cache-config.js'
 import { cacheM } from '../cache-i18n.js'

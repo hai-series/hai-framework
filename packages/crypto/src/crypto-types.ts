@@ -1,4 +1,4 @@
-import type { Result } from '@hai/core'
+import type { Result } from '@h-ai/core'
 
 import type { CryptoConfig, CryptoConfigInput, CryptoErrorCodeType } from './crypto-config.js'
 
@@ -301,7 +301,7 @@ export interface PasswordOperations {
  *
  * @example
  * ```ts
- * import { crypto } from '@hai/crypto'
+ * import { crypto } from '@h-ai/crypto'
  *
  * await crypto.init({})
  * const hash = crypto.sm3.hash('hello')
