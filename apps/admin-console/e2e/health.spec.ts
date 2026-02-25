@@ -8,8 +8,9 @@ import { expect, test } from '@playwright/test'
 import { registerAndLogin } from './helpers'
 
 test.describe('Health Check API', () => {
-  test('GET /api/health 未认证返回 401', async ({ request }) => {
-    const response = await request.get('/api/health')
+  test('GET /api/health 未认证返回 401', async ({ page }) => {
+    await page.context().clearCookies()
+    const response = await page.request.get('/api/health')
     expect(response.status()).toBe(401)
   })
 

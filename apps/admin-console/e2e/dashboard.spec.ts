@@ -10,6 +10,7 @@ import { registerAndLogin } from './helpers'
 // ---------------------------------------------------------------------------
 test.describe('Admin Dashboard', () => {
   test('未登录访问 /admin 重定向到登录页', async ({ page }) => {
+    await page.context().clearCookies()
     await page.goto('/admin')
     await page.waitForURL('**/auth/login**', { timeout: 10_000 })
     expect(page.url()).toContain('/auth/login')

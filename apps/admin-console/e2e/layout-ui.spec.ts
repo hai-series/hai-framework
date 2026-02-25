@@ -79,7 +79,7 @@ test.describe('Header', () => {
     await expect(header).toBeVisible()
 
     // 用户名应显示在顶栏
-    await expect(header.locator(`text=${user.username}`)).toBeVisible()
+    await expect(page.locator('.user-menu-container').getByText(user.username)).toBeVisible()
   })
 
   test('顶栏显示开发环境徽章', async ({ page, request }) => {
@@ -107,11 +107,11 @@ test.describe('User Menu', () => {
     await registerAndLogin(page, request, 'usermenu')
 
     // 点击用户菜单按钮（包含 Avatar 的按钮）
-    const userBtn = page.locator('.user-menu-container button').first()
+    const userBtn = page.locator('.user-menu-container > button').first()
     await userBtn.click()
 
     // 下拉菜单应出现
-    const dropdown = page.locator('.user-menu-container .absolute')
+    const dropdown = page.locator('.user-menu-container .absolute.right-0')
     await expect(dropdown).toBeVisible()
   })
 
@@ -119,7 +119,7 @@ test.describe('User Menu', () => {
     await registerAndLogin(page, request, 'usermenu')
 
     // 打开菜单
-    await page.locator('.user-menu-container button').first().click()
+    await page.locator('.user-menu-container > button').first().click()
 
     // 个人资料链接
     await expect(page.locator('a[href="/admin/profile"]')).toBeVisible()
@@ -130,7 +130,7 @@ test.describe('User Menu', () => {
   test('下拉菜单包含退出按钮', async ({ page, request }) => {
     await registerAndLogin(page, request, 'usermenu')
 
-    await page.locator('.user-menu-container button').first().click()
+    await page.locator('.user-menu-container > button').first().click()
 
     // 退出按钮（text-error 样式）
     const logoutBtn = page.locator('.user-menu-container .text-error')
@@ -141,7 +141,7 @@ test.describe('User Menu', () => {
     await registerAndLogin(page, request, 'usermenu')
 
     // 打开菜单
-    await page.locator('.user-menu-container button').first().click()
+    await page.locator('.user-menu-container > button').first().click()
     await page.waitForTimeout(300)
 
     // 点击退出
@@ -156,10 +156,10 @@ test.describe('User Menu', () => {
   test('用户下拉菜单显示角色信息', async ({ page, request }) => {
     await registerAndLogin(page, request, 'usermenu')
 
-    await page.locator('.user-menu-container button').first().click()
+    await page.locator('.user-menu-container > button').first().click()
 
     // 下拉菜单中应该有用户信息区域
-    const dropdown = page.locator('.user-menu-container .absolute')
+    const dropdown = page.locator('.user-menu-container .absolute.right-0')
     await expect(dropdown).toBeVisible()
 
     // 显示用户名

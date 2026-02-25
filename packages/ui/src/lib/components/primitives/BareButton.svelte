@@ -19,9 +19,15 @@
     ariaSelected = undefined,
     tabindex = undefined,
     onclick,
+    onClick,
     onkeydown,
     children,
   }: BareButtonProps = $props()
+
+  function handleClick(e: MouseEvent) {
+    onclick?.(e)
+    onClick?.(e)
+  }
 </script>
 
 <button
@@ -32,7 +38,7 @@
   role={role}
   aria-selected={ariaSelected}
   tabindex={tabindex}
-  onclick={onclick}
+  onclick={handleClick}
   onkeydown={onkeydown}
 >
   {#if children}

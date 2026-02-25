@@ -7,13 +7,21 @@
  */
 
 import type { Handle } from '@sveltejs/kit'
+import process from 'node:process'
 import { initApp } from '$lib/server/init.js'
 import { core } from '@hai/core'
 import { iam } from '@hai/iam'
 import { authGuard, createHandle, loggingMiddleware, rateLimitMiddleware, sequence, setAllModulesLocale } from '@hai/kit'
 
 // 初始化应用（包含数据库、缓存、IAM 等模块）
-initApp()
+let appInitPromise: Promise<void> | null = null
+
+async function ensureAppInitialized() {
+  if (!appInitPromise) {
+    appInitPromise = initApp()
+  }
+  await appInitPromise
+}
 
 // =============================================================================
 // Paraglide i18n Middleware
@@ -54,6 +62,8 @@ async function loadParaglideMiddleware() {
  * 2. paraglideMiddleware 内部 new Request(request) 会消耗 body
  */
 const i18nHandle: Handle = async ({ event, resolve }) => {
+  await ensureAppInitialized()
+
   // API 请求不需要 i18n 处理，直接跳过
   // 避免 paraglideMiddleware 消耗 request body
   if (event.url.pathname.startsWith('/api/')) {
@@ -89,7 +99,7 @@ async function validateSession(token: string) {
   try {
     // 使用 session token 获取当前用户
     const userResult = await iam.user.getCurrentUser(token)
-    if (!userResult.success || !userResult.data || !userResult.data.enabled) {
+    if (!userResult.success || !userResult.data || userResult.data.enabled === false) {
       return null
     }
 
@@ -127,7 +137,7 @@ const haiHandle = createHandle({
     loggingMiddleware({ logBody: false }),
     rateLimitMiddleware({
       windowMs: 60000, // 1分钟
-      maxRequests: 100, // 最多100请求
+      maxRequests: process.env.HAI_E2E === '1' ? 5000 : 100, // E2E 模式放宽限流
     }),
   ],
   guards: [

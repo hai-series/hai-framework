@@ -118,9 +118,9 @@ test.describe('IAM Roles UI', () => {
     await page.goto('/admin/iam/roles')
     await page.waitForLoadState('domcontentloaded')
 
-    const createBtn = page.getByRole('button', { name: /新建|创建|添加/ })
+    const createBtn = page.locator('main').getByRole('button', { name: /新建|创建|添加/ })
     await createBtn.first().click()
-    await page.waitForTimeout(500)
+    await expect(page.locator('#name')).toBeVisible()
 
     // 对话框（modal）可见
     const modal = page.locator('.modal.modal-open')
@@ -137,9 +137,9 @@ test.describe('IAM Roles UI', () => {
     await page.goto('/admin/iam/roles')
     await page.waitForLoadState('domcontentloaded')
 
-    const createBtn = page.getByRole('button', { name: /新建|创建|添加/ })
+    const createBtn = page.locator('main').getByRole('button', { name: /新建|创建|添加/ })
     await createBtn.first().click()
-    await page.waitForTimeout(500)
+    await expect(page.locator('fieldset')).toBeVisible()
 
     // 权限选择区域（fieldset）
     const permissionsFieldset = page.locator('fieldset')
@@ -151,9 +151,9 @@ test.describe('IAM Roles UI', () => {
     await page.goto('/admin/iam/roles')
     await page.waitForLoadState('domcontentloaded')
 
-    const createBtn = page.getByRole('button', { name: /新建|创建|添加/ })
+    const createBtn = page.locator('main').getByRole('button', { name: /新建|创建|添加/ })
     await createBtn.first().click()
-    await page.waitForTimeout(500)
+    await expect(page.locator('#name')).toBeVisible()
 
     // 点击取消
     const cancelBtn = page.getByRole('button', { name: /取消|Cancel/ })
@@ -169,9 +169,9 @@ test.describe('IAM Roles UI', () => {
     await page.goto('/admin/iam/roles')
     await page.waitForLoadState('domcontentloaded')
 
-    const createBtn = page.getByRole('button', { name: /新建|创建|添加/ })
+    const createBtn = page.locator('main').getByRole('button', { name: /新建|创建|添加/ })
     await createBtn.first().click()
-    await page.waitForTimeout(500)
+    await expect(page.locator('#name')).toBeVisible()
 
     // 点击背景遮罩
     const backdrop = page.locator('.modal-backdrop')

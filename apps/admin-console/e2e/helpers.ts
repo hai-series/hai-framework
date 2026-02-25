@@ -6,6 +6,10 @@
 
 import type { APIRequestContext, Page } from '@playwright/test'
 
+async function sleep(ms: number) {
+  await new Promise(resolve => setTimeout(resolve, ms))
+}
+
 /** 生成唯一测试用户 */
 export function uniqueUser(prefix = 'e2e') {
   const ts = Date.now().toString(36)
@@ -18,14 +22,25 @@ export function uniqueUser(prefix = 'e2e') {
 
 /** 通过 API 注册用户 */
 export async function registerViaApi(request: APIRequestContext, user: ReturnType<typeof uniqueUser>) {
-  return request.post('/api/auth/register', {
-    data: {
-      username: user.username,
-      email: user.email,
-      password: user.password,
-      confirmPassword: user.password,
-    },
-  })
+  for (let i = 0; i < 3; i++) {
+    const response = await request.post('/api/auth/register', {
+      data: {
+        username: user.username,
+        email: user.email,
+        password: user.password,
+        confirmPassword: user.password,
+      },
+    })
+
+    if (response.status() === 429 && i < 2) {
+      await sleep(300 * (i + 1))
+      continue
+    }
+
+    return response
+  }
+
+  throw new Error('registerViaApi retry exhausted')
 }
 
 /**
@@ -38,19 +53,27 @@ export async function loginOnPage(page: Page, username: string, password: string
   await page.goto('/auth/login')
   await page.waitForLoadState('domcontentloaded')
 
-  // 通过浏览器上下文调用登录 API（cookie 自动写入同源 cookie jar）
-  const loginResult = await page.evaluate(async (creds: { identifier: string, password: string }) => {
-    const res = await fetch('/api/auth/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'same-origin',
-      body: JSON.stringify(creds),
+  // 通过 page.request 调用登录 API（与当前浏览器上下文共享 cookie 存储）
+  let loginRes = await page.request.post('/api/auth/login', {
+    data: { identifier: username, password },
+  })
+  if (loginRes.status() === 429) {
+    await sleep(300)
+    loginRes = await page.request.post('/api/auth/login', {
+      data: { identifier: username, password },
     })
-    return res.json()
-  }, { identifier: username, password })
+  }
 
-  if (!loginResult.success) {
-    throw new Error(`Login failed: ${JSON.stringify(loginResult)}`)
+  const loginResult = await loginRes.json()
+  if (!loginRes.ok() || !loginResult.success) {
+    throw new Error(`Login failed: ${loginRes.status()} ${JSON.stringify(loginResult)}`)
+  }
+
+  // 显式验证会话已建立，避免后续 /admin 导航被重定向
+  const meRes = await page.request.get('/api/auth/me')
+  const meBody = await meRes.json()
+  if (!meRes.ok() || !meBody.success || !meBody.user) {
+    throw new Error(`Session not established on page: ${meRes.status()} ${JSON.stringify(meBody)}`)
   }
 
   // 导航到 /admin
@@ -63,7 +86,12 @@ export async function loginOnPage(page: Page, username: string, password: string
  */
 export async function registerAndLogin(page: Page, request: APIRequestContext, prefix = 'e2e') {
   const user = uniqueUser(prefix)
-  await registerViaApi(request, user)
+  const registerRes = await registerViaApi(request, user)
+  const registerBody = await registerRes.json()
+  if (!registerRes.ok() || !registerBody.success) {
+    throw new Error(`Register failed: ${registerRes.status()} ${JSON.stringify(registerBody)}`)
+  }
+
   await loginOnPage(page, user.username, user.password)
   return user
 }
@@ -74,9 +102,32 @@ export async function registerAndLogin(page: Page, request: APIRequestContext, p
  */
 export async function registerAndLoginViaApi(request: APIRequestContext, prefix = 'api') {
   const user = uniqueUser(prefix)
-  await registerViaApi(request, user)
-  await request.post('/api/auth/login', {
+  const registerRes = await registerViaApi(request, user)
+  const registerBody = await registerRes.json()
+  if (!registerRes.ok() || !registerBody.success) {
+    throw new Error(`Register failed: ${registerRes.status()} ${JSON.stringify(registerBody)}`)
+  }
+
+  let loginRes = await request.post('/api/auth/login', {
     data: { identifier: user.username, password: user.password },
   })
+  if (loginRes.status() === 429) {
+    await sleep(300)
+    loginRes = await request.post('/api/auth/login', {
+      data: { identifier: user.username, password: user.password },
+    })
+  }
+
+  const loginBody = await loginRes.json()
+  if (!loginRes.ok() || !loginBody.success) {
+    throw new Error(`Login failed: ${loginRes.status()} ${JSON.stringify(loginBody)}`)
+  }
+
+  const meRes = await request.get('/api/auth/me')
+  const meBody = await meRes.json()
+  if (!meRes.ok() || !meBody.success || !meBody.user) {
+    throw new Error(`Session not established: ${meRes.status()} ${JSON.stringify(meBody)}`)
+  }
+
   return user
 }

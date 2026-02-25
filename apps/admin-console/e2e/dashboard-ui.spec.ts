@@ -19,7 +19,7 @@ test.describe('Dashboard UI', () => {
     await expect(title).toBeVisible()
 
     // 副标题
-    const subtitle = page.locator('p.mt-1')
+    const subtitle = page.locator('h1.text-2xl + p')
     await expect(subtitle).toBeVisible()
   })
 
@@ -99,9 +99,8 @@ test.describe('Dashboard UI', () => {
   test('"查看全部"链接指向审计日志', async ({ page, request }) => {
     await registerAndLogin(page, request, 'dashui')
 
-    const viewAllLink = page.locator('a[href="/admin/logs"]')
-    if (await viewAllLink.isVisible()) {
-      await expect(viewAllLink).toBeVisible()
-    }
+    const viewAllLink = page.getByRole('link', { name: '查看全部' })
+    await expect(viewAllLink).toBeVisible()
+    await expect(viewAllLink).toHaveAttribute('href', '/admin/logs')
   })
 })
