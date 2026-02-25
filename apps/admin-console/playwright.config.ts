@@ -2,6 +2,8 @@ import process from 'node:process'
 
 import { defineConfig } from '@playwright/test'
 
+const baseURL = process.env.BASE_URL || 'http://localhost:4173'
+
 /**
  * Admin Console - Playwright E2E 测试配置
  *
@@ -17,16 +19,19 @@ export default defineConfig({
   timeout: 30_000,
 
   use: {
-    baseURL: process.env.BASE_URL || 'http://localhost:5173',
+    baseURL,
     channel: 'chrome',
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
   },
 
   webServer: {
-    command: 'pnpm dev',
-    url: process.env.BASE_URL || 'http://localhost:5173',
-    reuseExistingServer: true,
+    command: 'pnpm dev --port 4173 --strictPort',
+    env: {
+      HAI_E2E: '1',
+    },
+    url: baseURL,
+    reuseExistingServer: false,
     timeout: 60_000,
   },
 })

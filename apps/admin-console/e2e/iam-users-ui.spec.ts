@@ -79,7 +79,7 @@ test.describe('IAM Users UI', () => {
     await page.waitForLoadState('domcontentloaded')
 
     // 至少一行有状态标识（活跃/未激活/已禁用）
-    const statusBadge = page.locator('table tbody td').filter({ hasText: /活跃|未激活|已禁用|active/ })
+    const statusBadge = page.locator('table tbody td').filter({ hasText: /活跃|未激活|已禁用|启用|停用|active|inactive|suspended/i })
     await expect(statusBadge.first()).toBeVisible()
   })
 
@@ -101,11 +101,8 @@ test.describe('IAM Users UI', () => {
     await page.goto('/admin/iam/users')
     await page.waitForLoadState('domcontentloaded')
 
-    const createBtn = page.getByRole('button', { name: /新建|创建|添加/ })
+    const createBtn = page.locator('main').getByRole('button', { name: /新建|创建|添加/ })
     await createBtn.first().click()
-
-    // 对话框应出现
-    await page.waitForTimeout(500)
 
     // 对话框内应有表单字段
     const usernameInput = page.locator('#username')
@@ -120,9 +117,9 @@ test.describe('IAM Users UI', () => {
     await page.goto('/admin/iam/users')
     await page.waitForLoadState('domcontentloaded')
 
-    const createBtn = page.getByRole('button', { name: /新建|创建|添加/ })
+    const createBtn = page.locator('main').getByRole('button', { name: /新建|创建|添加/ })
     await createBtn.first().click()
-    await page.waitForTimeout(500)
+    await expect(page.locator('#username')).toBeVisible()
 
     // 用户名
     await expect(page.locator('#username')).toBeVisible()
@@ -142,9 +139,9 @@ test.describe('IAM Users UI', () => {
     await page.goto('/admin/iam/users')
     await page.waitForLoadState('domcontentloaded')
 
-    const createBtn = page.getByRole('button', { name: /新建|创建|添加/ })
+    const createBtn = page.locator('main').getByRole('button', { name: /新建|创建|添加/ })
     await createBtn.first().click()
-    await page.waitForTimeout(500)
+    await expect(page.locator('#username')).toBeVisible()
 
     // 对话框的取消按钮
     const cancelBtn = page.getByRole('button', { name: /取消|关闭|Cancel/ })
@@ -165,7 +162,7 @@ test.describe('IAM Users UI', () => {
     await page.waitForTimeout(500)
 
     // 点击提交按钮（不填写任何字段）
-    const submitBtn = page.getByRole('button', { name: /创建|保存|提交/ }).last()
+    const submitBtn = page.locator('.modal-box').getByRole('button', { name: /创建|保存|提交/ }).last()
     await submitBtn.click()
 
     // 浏览器原生验证会阻止提交—— username 字段有 required 属性

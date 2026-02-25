@@ -5,9 +5,15 @@
  */
 
 import type { LayoutServerLoad } from './$types'
+import { redirect } from '@sveltejs/kit'
 import { core } from '@hai/core'
 
-export const load: LayoutServerLoad = async ({ locals }) => {
+export const load: LayoutServerLoad = async ({ locals, url }) => {
+  if (!locals.session) {
+    const returnUrl = encodeURIComponent(url.pathname + url.search)
+    redirect(302, `/auth/login?returnUrl=${returnUrl}`)
+  }
+
   // 获取应用配置
   const coreConfig = core.config.get('core') as {
     name?: string
@@ -17,13 +23,11 @@ export const load: LayoutServerLoad = async ({ locals }) => {
   } | undefined
 
   return {
-    user: locals.session
-      ? {
-          id: locals.session.userId,
-          username: locals.session.username,
-          roles: locals.session.roles,
-        }
-      : null,
+    user: {
+      id: locals.session.userId,
+      username: locals.session.username,
+      roles: locals.session.roles,
+    },
     appConfig: {
       name: coreConfig?.name ?? 'hai Admin Console',
       version: coreConfig?.version ?? '0.1.0',

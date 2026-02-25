@@ -22,6 +22,7 @@
     class: className = '',
     type = 'button',
     onclick,
+    onClick,
     children,
   }: ButtonProps = $props()
   
@@ -43,6 +44,7 @@
       return
     }
     onclick?.(e)
+    onClick?.(e)
   }
 </script>
 

@@ -22,6 +22,7 @@
     loading = false,
     class: className = '',
     onclick,
+    onClick,
     children,
   }: IconButtonProps = $props()
   
@@ -52,6 +53,7 @@
       return
     }
     onclick?.(e)
+    onClick?.(e)
   }
 </script>
 

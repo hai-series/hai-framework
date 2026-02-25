@@ -90,7 +90,12 @@
 <div class="space-y-6">
   <PageHeader title={m.modules_title()} description={m.modules_desc()} />
 
-  <Tabs items={tabs} bind:active={activeTab} type="card" />
+  <Tabs
+    items={tabs}
+    active={activeTab}
+    onchange={(key) => activeTab = key}
+    type="card"
+  />
 
   <!-- ===== Core 核心 ===== -->
   {#if activeTab === 'core'}

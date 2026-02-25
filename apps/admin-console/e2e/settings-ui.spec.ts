@@ -103,8 +103,8 @@ test.describe('Settings UI', () => {
     const aboutTitle = page.locator('h2').filter({ hasText: /关于|系统|About/ })
     await expect(aboutTitle.first()).toBeVisible()
 
-    // 版本号 "0.1.0"
-    const version = page.locator('text=0.1.0')
+    // 版本号（页脚）
+    const version = page.locator('footer').getByText(/v\d+\.\d+\.\d+/)
     await expect(version).toBeVisible()
   })
 

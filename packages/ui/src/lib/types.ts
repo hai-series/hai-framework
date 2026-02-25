@@ -52,6 +52,8 @@ export interface ButtonProps {
   type?: 'button' | 'submit' | 'reset'
   /** 点击事件 */
   onclick?: (e: MouseEvent) => void
+  /** 兼容回调命名（同 onclick） */
+  onClick?: (event: MouseEvent) => void
   /** 子内容 */
   children?: Snippet
 }
@@ -76,6 +78,8 @@ export interface BareButtonProps {
   tabindex?: number
   /** 点击事件 */
   onclick?: (e: MouseEvent) => void
+  /** 兼容回调命名（同 onclick） */
+  onClick?: (event: MouseEvent) => void
   /** 键盘事件 */
   onkeydown?: (e: KeyboardEvent) => void
   /** 子内容 */
@@ -980,6 +984,8 @@ export interface IconButtonProps {
   class?: string
   /** 点击事件 */
   onclick?: (e: MouseEvent) => void
+  /** 兼容回调命名（同 onclick） */
+  onClick?: (event: MouseEvent) => void
   /** 图标插槽 */
   children?: Snippet
 }

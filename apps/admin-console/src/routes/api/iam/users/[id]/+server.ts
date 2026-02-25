@@ -160,7 +160,7 @@ export const PUT: RequestHandler = async ({ params, request, locals, getClientAd
 /**
  * DELETE /api/iam/users/[id] - 删除用户
  */
-export const DELETE: RequestHandler = async ({ params, locals, request, getClientAddress }) => {
+export const DELETE: RequestHandler = async ({ params, locals, request, cookies, getClientAddress }) => {
   try {
     const userId = params.id!
 
@@ -170,8 +170,19 @@ export const DELETE: RequestHandler = async ({ params, locals, request, getClien
       return json({ success: false, error: m.api_iam_users_not_found() }, { status: 404 })
     }
 
-    // 禁止删除自己
-    if (locals.session?.userId === userId) {
+    // 禁止删除自己（优先使用 session，兜底使用 token 解析）
+    let currentUserId = locals.session?.userId
+    if (!currentUserId) {
+      const token = cookies.get('session_token')
+      if (token) {
+        const currentUserResult = await iam.user.getCurrentUser(token)
+        if (currentUserResult.success) {
+          currentUserId = currentUserResult.data.id
+        }
+      }
+    }
+
+    if (currentUserId === userId) {
       return json({ success: false, error: m.api_iam_users_cannot_delete_self() }, { status: 400 })
     }
 

@@ -7,6 +7,13 @@
 import { expect, test } from '@playwright/test'
 import { registerAndLogin } from './helpers'
 
+async function clickModuleTab(page: import('@playwright/test').Page, index: number) {
+  const tablist = page.locator('[role="tablist"]').first()
+  const tab = tablist.locator('[role="tab"]').nth(index)
+  await expect(tab).toBeVisible()
+  await tab.click()
+}
+
 test.describe('Modules Page UI', () => {
   // ---------------------------------------------------------------------------
   // 页面结构
@@ -52,9 +59,7 @@ test.describe('Modules Page UI', () => {
     await page.waitForLoadState('domcontentloaded')
 
     // 点击 db 标签
-    const dbTab = page.locator('[role="tab"], .tab, button').filter({ hasText: /^db$/i })
-    await dbTab.first().click()
-    await page.waitForTimeout(300)
+    await clickModuleTab(page, 1)
 
     // db 内容应可见
     const dbContent = page.locator('text=@hai/db')
@@ -66,9 +71,7 @@ test.describe('Modules Page UI', () => {
     await page.goto('/admin/modules')
     await page.waitForLoadState('domcontentloaded')
 
-    const cacheTab = page.locator('[role="tab"], .tab, button').filter({ hasText: /^cache$/i })
-    await cacheTab.first().click()
-    await page.waitForTimeout(300)
+    await clickModuleTab(page, 2)
 
     const cacheContent = page.locator('text=@hai/cache')
     await expect(cacheContent.first()).toBeVisible()
@@ -79,9 +82,7 @@ test.describe('Modules Page UI', () => {
     await page.goto('/admin/modules')
     await page.waitForLoadState('domcontentloaded')
 
-    const cryptoTab = page.locator('[role="tab"], .tab, button').filter({ hasText: /^crypto$/i })
-    await cryptoTab.first().click()
-    await page.waitForTimeout(300)
+    await clickModuleTab(page, 5)
 
     const cryptoContent = page.locator('text=@hai/crypto')
     await expect(cryptoContent.first()).toBeVisible()
@@ -119,9 +120,7 @@ test.describe('Modules Page UI', () => {
     await page.waitForLoadState('domcontentloaded')
 
     // 切换到 crypto 标签
-    const cryptoTab = page.locator('[role="tab"], .tab, button').filter({ hasText: /^crypto$/i })
-    await cryptoTab.first().click()
-    await page.waitForTimeout(300)
+    await clickModuleTab(page, 5)
 
     // 明文输入框
     const plainInput = page.locator('#crypto-plain')
@@ -142,9 +141,7 @@ test.describe('Modules Page UI', () => {
     await page.waitForLoadState('domcontentloaded')
 
     // 切换到 crypto
-    const cryptoTab = page.locator('[role="tab"], .tab, button').filter({ hasText: /^crypto$/i })
-    await cryptoTab.first().click()
-    await page.waitForTimeout(300)
+    await clickModuleTab(page, 5)
 
     // 点击 SM3 哈希按钮
     const hashBtn = page.getByRole('button', { name: /SM3/ })
@@ -162,9 +159,7 @@ test.describe('Modules Page UI', () => {
     await page.waitForLoadState('domcontentloaded')
 
     // 切换到 crypto
-    const cryptoTab = page.locator('[role="tab"], .tab, button').filter({ hasText: /^crypto$/i })
-    await cryptoTab.first().click()
-    await page.waitForTimeout(300)
+    await clickModuleTab(page, 5)
 
     // 输入自定义文本
     const plainInput = page.locator('#crypto-plain')
@@ -185,9 +180,7 @@ test.describe('Modules Page UI', () => {
     await page.goto('/admin/modules')
     await page.waitForLoadState('domcontentloaded')
 
-    const cryptoTab = page.locator('[role="tab"], .tab, button').filter({ hasText: /^crypto$/i })
-    await cryptoTab.first().click()
-    await page.waitForTimeout(300)
+    await clickModuleTab(page, 5)
 
     const plainInput = page.locator('#crypto-plain')
     await plainInput.clear()

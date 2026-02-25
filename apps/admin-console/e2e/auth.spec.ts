@@ -85,8 +85,15 @@ test.describe('Logout', () => {
     // 先登录
     await loginOnPage(page, user.username, user.password)
 
-    // 通过 API 登出
-    await page.request.post('/api/auth/logout')
+    // 通过浏览器上下文调用 API 登出（确保同源 cookie 被清除）
+    const logoutResult = await page.evaluate(async () => {
+      const res = await fetch('/api/auth/logout', {
+        method: 'POST',
+        credentials: 'same-origin',
+      })
+      return res.json()
+    })
+    expect(logoutResult.success).toBe(true)
 
     // 访问受保护页面应重定向到登录
     await page.goto('/admin')

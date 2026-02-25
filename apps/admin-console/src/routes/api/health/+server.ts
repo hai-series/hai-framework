@@ -7,7 +7,11 @@
 import type { RequestHandler } from './$types'
 import { json } from '@sveltejs/kit'
 
-export const GET: RequestHandler = async () => {
+export const GET: RequestHandler = async ({ locals }) => {
+  if (!locals.session) {
+    return json({ success: false, error: 'Authentication required' }, { status: 401 })
+  }
+
   return json({
     success: true,
     data: {
