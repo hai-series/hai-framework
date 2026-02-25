@@ -11,7 +11,7 @@ import { audit } from '$lib/server/services/index.js'
 import { core } from '@hai/core'
 import { db } from '@hai/db'
 import { iam } from '@hai/iam'
-import { validateForm } from '@hai/kit'
+import { kit } from '@hai/kit'
 import { json } from '@sveltejs/kit'
 
 /**
@@ -71,7 +71,7 @@ export const GET: RequestHandler = async ({ params }) => {
 export const PUT: RequestHandler = async ({ params, request, locals, getClientAddress }) => {
   try {
     const userId = params.id!
-    const { valid, data, errors } = await validateForm(request, UpdateUserSchema)
+    const { valid, data, errors } = await kit.validate.form(request, UpdateUserSchema)
     if (!valid) {
       return json({ success: false, error: errors[0]?.message }, { status: 400 })
     }

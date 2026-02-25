@@ -3,8 +3,8 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        sans: ['"PingFang SC"', '"Helvetica Neue"', 'Arial', 'sans-serif']
-      }
-    }
-  }
+        sans: ['"PingFang SC"', '"Helvetica Neue"', 'Arial', 'sans-serif'],
+      },
+    },
+  },
 }

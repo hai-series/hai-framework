@@ -11,7 +11,7 @@ import process from 'node:process'
 import { initApp } from '$lib/server/init.js'
 import { core } from '@hai/core'
 import { iam } from '@hai/iam'
-import { authGuard, createHandle, loggingMiddleware, rateLimitMiddleware, sequence, setAllModulesLocale } from '@hai/kit'
+import { kit } from '@hai/kit'
 
 // 初始化应用（包含数据库、缓存、IAM 等模块）
 let appInitPromise: Promise<void> | null = null
@@ -69,7 +69,7 @@ const i18nHandle: Handle = async ({ event, resolve }) => {
   if (event.url.pathname.startsWith('/api/')) {
     const locale = event.cookies.get('PARAGLIDE_LOCALE') ?? 'zh-CN'
     event.locals.locale = locale
-    setAllModulesLocale(locale)
+    kit.setAllModulesLocale(locale)
     return resolve(event)
   }
 
@@ -77,7 +77,7 @@ const i18nHandle: Handle = async ({ event, resolve }) => {
   if (middleware) {
     return middleware(event.request, async ({ locale }) => {
       event.locals.locale = locale
-      setAllModulesLocale(locale)
+      kit.setAllModulesLocale(locale)
       return resolve(event, {
         transformPageChunk: ({ html }) => html.replace('%lang%', locale),
       })
@@ -86,7 +86,7 @@ const i18nHandle: Handle = async ({ event, resolve }) => {
 
   // Paraglide 未就绪时，使用默认语言
   event.locals.locale = 'zh-CN'
-  setAllModulesLocale('zh-CN')
+  kit.setAllModulesLocale('zh-CN')
   return resolve(event, {
     transformPageChunk: ({ html }) => html.replace('%lang%', 'zh-CN'),
   })
@@ -131,13 +131,13 @@ async function validateSession(token: string) {
 /**
  * hai handle hook
  */
-const haiHandle = createHandle({
+const haiHandle = kit.createHandle({
   sessionCookieName: 'session_token',
   validateSession,
   logging: true,
   middleware: [
-    loggingMiddleware({ logBody: false }),
-    rateLimitMiddleware({
+    kit.middleware.logging({ logBody: false }),
+    kit.middleware.rateLimit({
       windowMs: 60000, // 1分钟
       maxRequests: process.env.HAI_E2E === '1' ? 5000 : 100, // E2E 模式放宽限流
     }),
@@ -145,13 +145,13 @@ const haiHandle = createHandle({
   guards: [
     // 保护 /admin/* 路径
     {
-      guard: authGuard({ loginUrl: '/auth/login' }),
+      guard: kit.guard.auth({ loginUrl: '/auth/login' }),
       paths: ['/admin/*'],
       exclude: ['/admin/public/*'],
     },
     // 保护 /api/* 路径（API模式）
     {
-      guard: authGuard({ apiMode: true }),
+      guard: kit.guard.auth({ apiMode: true }),
       paths: ['/api/*'],
       exclude: ['/api/auth/*', '/api/public/*'],
     },
@@ -175,4 +175,4 @@ const haiHandle = createHandle({
   },
 })
 
-export const handle: Handle = sequence(i18nHandle, haiHandle)
+export const handle: Handle = kit.sequence(i18nHandle, haiHandle)

@@ -1,8 +1,8 @@
-import { core } from '@hai/core'
+import { kit } from '@hai/kit'
 
 /**
  * SvelteKit 服务端钩子 — H5 应用
  */
-export const handle = core.kit.createHandle({
-  logging: true
+export const handle = kit.createHandle({
+  logging: true,
 })

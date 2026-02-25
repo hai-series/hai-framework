@@ -8,6 +8,6 @@ export const GET: RequestHandler = async () => {
   return json({
     status: 'ok',
     timestamp: new Date().toISOString(),
-    version: '0.0.1'
+    version: '0.0.1',
   })
 }

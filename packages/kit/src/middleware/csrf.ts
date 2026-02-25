@@ -6,7 +6,7 @@
  * =============================================================================
  */
 
-import type { CsrfConfig, Middleware } from '../types.js'
+import type { CsrfConfig, Middleware } from '../kit-types.js'
 import { core } from '@hai/core'
 
 /**

@@ -10,32 +10,18 @@ pnpm add @hai/kit
 
 **Peer dependencies**：`@sveltejs/kit ^2.50.1`、`svelte ^5.49.11`
 
-## 导入路径
+## 导入方式
+
+所有功能通过 `kit` 对象统一访问：
 
 ```typescript
-// 主入口 — 包含所有服务端 + 客户端导出
-import { authGuard, createHandle, ok, validateForm } from '@hai/kit'
+import { kit } from '@hai/kit'
 
-// 客户端 Store（浏览器侧）
-import { useSession, useUpload } from '@hai/kit/client'
-import { createCacheHandle } from '@hai/kit/modules/cache'
-import { verifyWebhookSignature } from '@hai/kit/modules/crypto'
-// 模块化导入（按需拆分，减小 bundle）
-import { createIamActions, createIamHandle } from '@hai/kit/modules/iam'
-
-import { createStorageEndpoint } from '@hai/kit/modules/storage'
+kit.createHandle({ /* config */ })
+kit.guard.auth({ loginUrl: '/login' })
+kit.response.ok(data)
+await kit.validate.form(request, schema)
 ```
-
-对应 `package.json` exports：
-
-| 路径                       | 说明                |
-| -------------------------- | ------------------- |
-| `@hai/kit`                 | 全量入口            |
-| `@hai/kit/modules/iam`     | IAM 集成            |
-| `@hai/kit/modules/storage` | Storage 集成        |
-| `@hai/kit/modules/cache`   | Cache 集成          |
-| `@hai/kit/modules/crypto`  | Crypto 集成         |
-| `@hai/kit/client`          | Svelte 客户端 Store |
 
 ## 快速上手
 
@@ -44,18 +30,10 @@ import { createStorageEndpoint } from '@hai/kit/modules/storage'
 ```typescript
 // src/hooks.server.ts
 import { iam } from '$lib/server/iam'
-import {
-  authGuard,
-  corsMiddleware,
-  createHandle,
-  createIamHandle,
-  rateLimitMiddleware,
-  sequence,
-  setAllModulesLocale,
-} from '@hai/kit'
+import { kit } from '@hai/kit'
 
 // IAM Handle — 自动验证会话、注入 session/user 到 event.locals
-const iamHandle = createIamHandle({
+const iamHandle = kit.iam.createHandle({
   iam,
   publicPaths: ['/login', '/register', '/api/health'],
   sessionCookieName: 'session',
@@ -64,25 +42,25 @@ const iamHandle = createIamHandle({
 })
 
 // 通用 Handle — 中间件 + 守卫
-const appHandle = createHandle({
+const appHandle = kit.createHandle({
   middleware: [
-    corsMiddleware({ origin: ['https://example.com'], credentials: true }),
-    rateLimitMiddleware({ windowMs: 60_000, maxRequests: 100 }),
+    kit.middleware.cors({ origin: ['https://example.com'], credentials: true }),
+    kit.middleware.rateLimit({ windowMs: 60_000, maxRequests: 100 }),
   ],
   guards: [
-    { guard: authGuard({ apiMode: true }), paths: ['/api/*'], exclude: ['/api/health'] },
+    { guard: kit.guard.auth({ apiMode: true }), paths: ['/api/*'], exclude: ['/api/health'] },
   ],
 })
 
 // 组合多个 handle
-export const handle = sequence(iamHandle, appHandle)
+export const handle = kit.sequence(iamHandle, appHandle)
 ```
 
 ### 2. 创建 API 端点（验证 + 响应）
 
 ```typescript
-import { badRequest, ok, unauthorized, validateForm, validationError } from '@hai/kit'
 // src/routes/api/users/+server.ts
+import { kit } from '@hai/kit'
 import { z } from 'zod'
 
 const CreateUserSchema = z.object({
@@ -92,14 +70,14 @@ const CreateUserSchema = z.object({
 
 export async function POST(event) {
   if (!event.locals.session)
-    return unauthorized()
+    return kit.response.unauthorized()
 
-  const { valid, data, errors } = await validateForm(event.request, CreateUserSchema)
+  const { valid, data, errors } = await kit.validate.form(event.request, CreateUserSchema)
   if (!valid)
-    return validationError(errors)
+    return kit.response.validationError(errors)
 
   const user = await createUser(data!)
-  return ok(user)
+  return kit.response.ok(user)
 }
 ```
 
@@ -107,11 +85,11 @@ export async function POST(event) {
 
 ```svelte
 <script>
-  import { useSession, useUpload, useIsAuthenticated } from '@hai/kit/client'
+  import { kit } from '@hai/kit'
 
-  const session = useSession({ fetchUrl: '/api/session', refreshInterval: 300 })
-  const upload  = useUpload({ uploadUrl: '/api/storage', maxConcurrent: 3 })
-  const isAuth  = useIsAuthenticated(session)
+  const session = kit.client.useSession({ fetchUrl: '/api/session', refreshInterval: 300 })
+  const upload  = kit.client.useUpload({ uploadUrl: '/api/storage', maxConcurrent: 3 })
+  const isAuth  = kit.client.useIsAuthenticated(session)
 </script>
 
 {#if $session.loading}
@@ -142,20 +120,20 @@ export async function POST(event) {
 标准化 JSON 响应，返回统一的 `ApiResponse` 格式。
 
 ```typescript
-import { badRequest, conflict, created, error, forbidden, internalError, noContent, notFound, ok, redirect, unauthorized, validationError } from '@hai/kit'
+import { kit } from '@hai/kit'
 
-ok({ id: '1' }) // 200 { success: true, data: { id: '1' } }
-created({ id: '1' }) // 201
-noContent() // 204
-badRequest('invalid input') // 400
-unauthorized() // 401
-forbidden() // 403
-notFound() // 404
-conflict('duplicate') // 409
-validationError([{ field: 'email', message: 'invalid' }]) // 422
-internalError() // 500
-redirect('/login', 303) // 303 Location: /login
-error('CUSTOM', 'msg', 418) // 自定义状态码
+kit.response.ok({ id: '1' }) // 200
+kit.response.created({ id: '1' }) // 201
+kit.response.noContent() // 204
+kit.response.badRequest('invalid input') // 400
+kit.response.unauthorized() // 401
+kit.response.forbidden() // 403
+kit.response.notFound() // 404
+kit.response.conflict('duplicate') // 409
+kit.response.validationError([{ field: 'email', message: 'invalid' }]) // 422
+kit.response.internalError() // 500
+kit.response.redirect('/login', 303) // 303
+kit.response.error('CUSTOM', 'msg', 418) // 自定义状态码
 ```
 
 ### 表单验证
@@ -163,54 +141,46 @@ error('CUSTOM', 'msg', 418) // 自定义状态码
 基于 Zod Schema 的请求数据验证。
 
 ```typescript
-import { validateForm, validateParams, validateQuery } from '@hai/kit'
+import { kit } from '@hai/kit'
 
 // 验证请求体（JSON / FormData）
-const { valid, data, errors } = await validateForm(request, schema)
+const { valid, data, errors } = await kit.validate.form(request, schema)
 
 // 验证 URL 查询参数
-const { valid, data, errors } = validateQuery(url, schema)
+const { valid, data, errors } = kit.validate.query(url, schema)
 
 // 验证路由参数
-const { valid, data, errors } = validateParams(params, schema)
+const { valid, data, errors } = kit.validate.params(params, schema)
 ```
 
 ### 路由守卫
 
 ```typescript
-import {
-  allGuards,
-  anyGuard,
-  authGuard,
-  conditionalGuard,
-  notGuard,
-  permissionGuard,
-  roleGuard,
-} from '@hai/kit'
+import { kit } from '@hai/kit'
 
 // 认证守卫
-authGuard({ loginUrl: '/login', apiMode: false })
+kit.guard.auth({ loginUrl: '/login', apiMode: false })
 
 // 角色守卫（默认 OR 逻辑，requireAll: true 切换为 AND）
-roleGuard({ roles: ['admin', 'editor'], requireAll: false })
+kit.guard.role({ roles: ['admin', 'editor'], requireAll: false })
 
 // 权限守卫（支持通配符：admin:* 匹配 admin:read 等）
-permissionGuard({ permissions: ['posts:write'], apiMode: true })
+kit.guard.permission({ permissions: ['posts:write'], apiMode: true })
 
 // 组合守卫
-allGuards(authGuard(), roleGuard({ roles: ['admin'] })) // AND
-anyGuard(roleGuard({ roles: ['admin'] }), permissionGuard({ permissions: ['posts:*'] })) // OR
-notGuard(authGuard(), { redirect: '/dashboard' }) // 取反
-conditionalGuard(event => event.url.pathname.startsWith('/admin'), roleGuard({ roles: ['admin'] }))
+kit.guard.all(kit.guard.auth(), kit.guard.role({ roles: ['admin'] })) // AND
+kit.guard.any(kit.guard.role({ roles: ['admin'] }), kit.guard.permission({ permissions: ['posts:*'] })) // OR
+kit.guard.not(kit.guard.auth(), { redirect: '/dashboard' }) // 取反
+kit.guard.conditional(event => event.url.pathname.startsWith('/admin'), kit.guard.role({ roles: ['admin'] }))
 ```
 
 在 `createHandle` 中使用守卫：
 
 ```typescript
-createHandle({
+kit.createHandle({
   guards: [
-    { guard: authGuard({ apiMode: true }), paths: ['/api/*'], exclude: ['/api/health'] },
-    { guard: roleGuard({ roles: ['admin'] }), paths: ['/admin/**'] },
+    { guard: kit.guard.auth({ apiMode: true }), paths: ['/api/*'], exclude: ['/api/health'] },
+    { guard: kit.guard.role({ roles: ['admin'] }), paths: ['/admin/**'] },
   ],
 })
 ```
@@ -218,14 +188,14 @@ createHandle({
 ### 中间件
 
 ```typescript
-import { corsMiddleware, csrfMiddleware, loggingMiddleware, rateLimitMiddleware } from '@hai/kit'
+import { kit } from '@hai/kit'
 
-createHandle({
+kit.createHandle({
   middleware: [
-    corsMiddleware({ origin: ['https://example.com'], credentials: true, maxAge: 86400 }),
-    csrfMiddleware({ cookieName: 'hai_csrf', headerName: 'X-CSRF-Token', exclude: ['/api/webhook/*'] }),
-    loggingMiddleware({ logBody: true, redactFields: ['password', 'token'] }),
-    rateLimitMiddleware({ windowMs: 60_000, maxRequests: 100 }),
+    kit.middleware.cors({ origin: ['https://example.com'], credentials: true, maxAge: 86400 }),
+    kit.middleware.csrf({ cookieName: 'hai_csrf', headerName: 'X-CSRF-Token', exclude: ['/api/webhook/*'] }),
+    kit.middleware.logging({ logBody: true, redactFields: ['password', 'token'] }),
+    kit.middleware.rateLimit({ windowMs: 60_000, maxRequests: 100 }),
   ],
 })
 ```
@@ -235,9 +205,9 @@ createHandle({
 ```typescript
 // src/hooks.server.ts
 import { iam } from '$lib/server/iam'
-import { createIamHandle, sequence } from '@hai/kit'
+import { kit } from '@hai/kit'
 
-const iamHandle = createIamHandle({
+const iamHandle = kit.iam.createHandle({
   iam,
   publicPaths: ['/login', '/register', '/api/health'],
   sessionCookieName: 'session',
@@ -251,9 +221,9 @@ export const handle = iamHandle
 ```typescript
 // src/routes/login/+page.server.ts
 import { iam } from '$lib/server/iam'
-import { createIamActions } from '@hai/kit'
+import { kit } from '@hai/kit'
 
-export const actions = createIamActions({
+export const actions = kit.iam.createActions({
   iam,
   loginRedirect: '/dashboard',
   logoutRedirect: '/login',
@@ -265,9 +235,9 @@ export const actions = createIamActions({
 
 ```typescript
 import { cache } from '$lib/server/cache'
-import { createCacheHandle, createCacheUtils, sequence } from '@hai/kit'
+import { kit } from '@hai/kit'
 
-const cacheHandle = createCacheHandle({
+const cacheHandle = kit.cache.createHandle({
   cache,
   routes: {
     '/api/products': { ttl: 300, staleWhileRevalidate: 60 },
@@ -275,10 +245,10 @@ const cacheHandle = createCacheHandle({
   },
 })
 
-export const handle = sequence(iamHandle, cacheHandle)
+export const handle = kit.sequence(iamHandle, cacheHandle)
 
 // 缓存工具
-const cacheUtils = createCacheUtils({ cache })
+const cacheUtils = kit.cache.createUtils({ cache })
 ```
 
 ### Storage 集成
@@ -286,9 +256,9 @@ const cacheUtils = createCacheUtils({ cache })
 ```typescript
 // src/routes/api/storage/[...path]/+server.ts
 import { storage } from '$lib/server/storage'
-import { createStorageEndpoint } from '@hai/kit'
+import { kit } from '@hai/kit'
 
-const endpoint = createStorageEndpoint({
+const endpoint = kit.storage.createEndpoint({
   storage,
   bucket: 'uploads',
   allowedTypes: ['image/*', 'application/pdf'],
@@ -306,7 +276,7 @@ export const DELETE = endpoint.delete
 ```typescript
 // src/routes/api/webhook/+server.ts
 import { crypto } from '$lib/server/crypto'
-import { createCsrfManager, createEncryptedCookie, verifyWebhookSignature } from '@hai/kit'
+import { kit } from '@hai/kit'
 
 // Webhook 签名验证
 export async function POST(event) {
@@ -322,23 +292,23 @@ export async function POST(event) {
 }
 
 // CSRF Token 管理
-const csrf = createCsrfManager({ crypto, cookieName: 'csrf' })
+const csrf = kit.crypto.createCsrfManager({ crypto, cookieName: 'csrf' })
 
 // 加密 Cookie
-const secureCookie = createEncryptedCookie({ crypto, encryptionKey: 'key-32-bytes' })
+const secureCookie = kit.crypto.createEncryptedCookie({ crypto, encryptionKey: 'key-32-bytes' })
 ```
 
 ### i18n 集成
 
-`setAllModulesLocale` 一次调用同步所有 hai 模块的语言，内部通过 `@hai/core` 的 `setGlobalLocale` 实现。
+`kit.setAllModulesLocale` 一次调用同步所有 hai 模块的语言，内部通过 `@hai/core` 的 `setGlobalLocale` 实现。
 
 ```typescript
 // src/hooks.server.ts
-import { setAllModulesLocale } from '@hai/kit'
+import { kit } from '@hai/kit'
 
 export async function handle({ event, resolve }) {
   const locale = event.cookies.get('PARAGLIDE_LOCALE') ?? 'zh-CN'
-  setAllModulesLocale(locale)
+  kit.setAllModulesLocale(locale)
   return resolve(event)
 }
 ```

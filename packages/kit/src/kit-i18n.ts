@@ -24,11 +24,11 @@ export const getKitMessage
  *
  * @example
  * ```ts
- * import { setAllModulesLocale } from '@hai/kit'
+ * import { kit } from '@hai/kit'
  *
  * // 在 i18n handle 中
  * const locale = event.cookies.get('PARAGLIDE_LOCALE') ?? 'zh-CN'
- * setAllModulesLocale(locale)
+ * kit.setAllModulesLocale(locale)
  * ```
  */
 export function setAllModulesLocale(locale: string): void {

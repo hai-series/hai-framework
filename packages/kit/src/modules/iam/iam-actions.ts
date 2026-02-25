@@ -13,10 +13,10 @@
  * @example
  * ```ts
  * // src/routes/login/+page.server.ts
- * import { createIamActions } from '@hai/kit/modules/iam'
+ * import { kit } from '@hai/kit'
  * import { iam } from '$lib/server/iam'
  *
- * export const actions = createIamActions({
+ * export const actions = kit.iam.createActions({
  *     iam,
  *     sessionCookieName: 'session',
  *     onLoginSuccess: async ({ user, session }) => {

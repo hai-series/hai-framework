@@ -6,7 +6,7 @@
  * =============================================================================
  */
 
-import type { ApiResponse } from './types.js'
+import type { ApiResponse } from './kit-types.js'
 
 /**
  * 创建成功响应

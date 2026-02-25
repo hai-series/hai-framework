@@ -1,8 +1,8 @@
 /**
  * SvelteKit Server Hooks
  */
-import { createHandle } from '@hai/kit'
+import { kit } from '@hai/kit'
 
-export const handle = createHandle({
+export const handle = kit.createHandle({
   logging: true,
 })

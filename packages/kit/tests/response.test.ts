@@ -18,7 +18,7 @@ import {
   redirect,
   unauthorized,
   validationError,
-} from '../src/response.js'
+} from '../src/kit-response.js'
 
 describe('response Helpers', () => {
   describe('ok', () => {

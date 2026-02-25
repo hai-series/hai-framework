@@ -4,7 +4,7 @@
  * =============================================================================
  */
 
-import type { SessionData } from '../src/types.js'
+import type { SessionData } from '../src/kit-types.js'
 import { describe, expect, it, vi } from 'vitest'
 import {
   allGuards,

@@ -1,4 +1,4 @@
-import type { RequestHandler } from '../$types'
+import type { RequestHandler } from './$types'
 import { json } from '@sveltejs/kit'
 
 /**
@@ -23,8 +23,8 @@ export const PUT: RequestHandler = async ({ params, request }) => {
       id,
       name: body.name ?? `Item ${id}`,
       description: body.description ?? '',
-      updatedAt: now
-    }
+      updatedAt: now,
+    },
   })
 }
 

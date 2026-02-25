@@ -6,7 +6,7 @@
  * =============================================================================
  */
 
-import type { Middleware } from '../types.js'
+import type { Middleware } from '../kit-types.js'
 import { core } from '@hai/core'
 
 /**

@@ -29,6 +29,9 @@
     "auto-import.js",
     "dist"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "svelte-package -i src/lib",
     "dev": "svelte-package -i src/lib --watch",

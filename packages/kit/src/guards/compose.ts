@@ -7,7 +7,7 @@
  */
 
 import type { RequestEvent } from '@sveltejs/kit'
-import type { GuardResult, RouteGuard, SessionData } from '../types.js'
+import type { GuardResult, RouteGuard, SessionData } from '../kit-types.js'
 
 /**
  * 所有守卫都通过才允许访问（AND 逻辑）

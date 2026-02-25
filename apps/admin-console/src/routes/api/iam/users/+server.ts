@@ -10,7 +10,7 @@ import { CreateUserSchema, ListUsersQuerySchema } from '$lib/server/schemas/inde
 import { audit } from '$lib/server/services/index.js'
 import { core } from '@hai/core'
 import { iam } from '@hai/iam'
-import { validateForm, validateQuery } from '@hai/kit'
+import { kit } from '@hai/kit'
 import { json } from '@sveltejs/kit'
 
 /**
@@ -26,7 +26,7 @@ import { json } from '@sveltejs/kit'
  */
 export const GET: RequestHandler = async ({ url }) => {
   try {
-    const { valid, data: query, errors } = validateQuery(url, ListUsersQuerySchema)
+    const { valid, data: query, errors } = kit.validate.query(url, ListUsersQuerySchema)
     if (!valid) {
       return json({ success: false, error: errors[0]?.message }, { status: 400 })
     }
@@ -72,7 +72,7 @@ export const GET: RequestHandler = async ({ url }) => {
  */
 export const POST: RequestHandler = async ({ request, locals, getClientAddress }) => {
   try {
-    const { valid, data, errors } = await validateForm(request, CreateUserSchema)
+    const { valid, data, errors } = await kit.validate.form(request, CreateUserSchema)
     if (!valid) {
       return json({ success: false, error: errors[0]?.message }, { status: 400 })
     }

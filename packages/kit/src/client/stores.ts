@@ -11,9 +11,9 @@
  * @example
  * ```svelte
  * <script>
- * import { useSession } from '@hai/kit/client'
+ * import { kit } from '@hai/kit'
  *
- * const session = useSession()
+ * const session = kit.client.useSession()
  * </script>
  *
  * {#if $session.user}

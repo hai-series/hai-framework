@@ -12,10 +12,10 @@
  * @example
  * ```ts
  * // src/routes/api/storage/[...path]/+server.ts
- * import { createStorageEndpoint } from '@hai/kit/modules/storage'
+ * import { kit } from '@hai/kit'
  * import { storage } from '$lib/server/storage'
  *
- * const endpoint = createStorageEndpoint({
+ * const endpoint = kit.storage.createEndpoint({
  *     storage,
  *     bucket: 'uploads',
  *     allowedTypes: ['image/*', 'application/pdf'],

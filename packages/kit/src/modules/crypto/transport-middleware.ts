@@ -13,7 +13,7 @@
  * =============================================================================
  */
 
-import type { Middleware } from '../../types.js'
+import type { Middleware } from '../../kit-types.js'
 import type { TransportEncryptionConfig, TransportEncryptionManager } from './crypto-types.js'
 import { getKitMessage } from '../../kit-i18n.js'
 import { createTransportEncryption, isValidEncryptedPayload } from './transport-encryption.js'
@@ -26,13 +26,12 @@ import { createTransportEncryption, isValidEncryptedPayload } from './transport-
  *
  * @example
  * ```ts
- * import { createHandle } from '@hai/kit'
- * import { transportEncryptionMiddleware } from '@hai/kit/modules/crypto'
+ * import { kit } from '@hai/kit'
  * import { crypto } from '@hai/crypto'
  *
- * export const handle = createHandle({
+ * export const handle = kit.createHandle({
  *   middleware: [
- *     transportEncryptionMiddleware({
+ *     kit.crypto.transportEncryptionMiddleware({
  *       enabled: true,
  *       crypto,
  *       excludePaths: ['/api/public'],
