@@ -33,7 +33,7 @@
 import type { RequestEvent } from '@sveltejs/kit'
 import type { PresignResult, StorageEndpointConfig, StorageUploadResult } from './storage-types.js'
 import { Buffer } from 'node:buffer'
-import { getKitMessage } from '../../index.js'
+import { getKitMessage } from '../../kit-i18n.js'
 
 /**
  * 检查 MIME 类型是否匹配

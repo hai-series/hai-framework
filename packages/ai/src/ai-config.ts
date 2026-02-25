@@ -8,53 +8,53 @@ import { z } from 'zod'
 
 // ─── 错误码 ───
 
-/** AI 错误码（数值范围 4000-4999） */
+/** AI 错误码（数值范围 7000-7999） */
 export const AIErrorCode = {
-  // 通用 (4000-4009)
+  // 通用 (7000-7009)
   /** 内部错误 */
-  INTERNAL_ERROR: 4000,
+  INTERNAL_ERROR: 7000,
 
-  // 初始化 (4010-4019)
+  // 初始化 (7010-7019)
   /** 服务未初始化 */
-  NOT_INITIALIZED: 4010,
+  NOT_INITIALIZED: 7010,
   /** 配置错误 */
-  CONFIGURATION_ERROR: 4011,
+  CONFIGURATION_ERROR: 7011,
 
-  // LLM (4100-4199)
+  // LLM (7100-7199)
   /** API 调用错误 */
-  API_ERROR: 4100,
+  API_ERROR: 7100,
   /** 无效请求 */
-  INVALID_REQUEST: 4101,
+  INVALID_REQUEST: 7101,
   /** 速率限制 */
-  RATE_LIMITED: 4102,
+  RATE_LIMITED: 7102,
   /** 请求超时 */
-  TIMEOUT: 4103,
+  TIMEOUT: 7103,
   /** 模型未找到 */
-  MODEL_NOT_FOUND: 4104,
+  MODEL_NOT_FOUND: 7104,
   /** 上下文长度超限 */
-  CONTEXT_LENGTH_EXCEEDED: 4105,
+  CONTEXT_LENGTH_EXCEEDED: 7105,
 
-  // MCP (4200-4299)
+  // MCP (7200-7299)
   /** MCP 连接错误 */
-  MCP_CONNECTION_ERROR: 4200,
+  MCP_CONNECTION_ERROR: 7200,
   /** MCP 协议错误 */
-  MCP_PROTOCOL_ERROR: 4201,
+  MCP_PROTOCOL_ERROR: 7201,
   /** MCP 工具错误 */
-  MCP_TOOL_ERROR: 4202,
+  MCP_TOOL_ERROR: 7202,
   /** MCP 资源错误 */
-  MCP_RESOURCE_ERROR: 4203,
+  MCP_RESOURCE_ERROR: 7203,
   /** MCP 服务器错误 */
-  MCP_SERVER_ERROR: 4204,
+  MCP_SERVER_ERROR: 7204,
 
-  // 工具 (4400-4499)
+  // 工具 (7400-7499)
   /** 工具未找到 */
-  TOOL_NOT_FOUND: 4400,
+  TOOL_NOT_FOUND: 7400,
   /** 工具验证失败 */
-  TOOL_VALIDATION_FAILED: 4401,
+  TOOL_VALIDATION_FAILED: 7401,
   /** 工具执行失败 */
-  TOOL_EXECUTION_FAILED: 4402,
+  TOOL_EXECUTION_FAILED: 7402,
   /** 工具超时 */
-  TOOL_TIMEOUT: 4403,
+  TOOL_TIMEOUT: 7403,
 } as const
 
 /** 错误码值类型 */

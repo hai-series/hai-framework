@@ -5,40 +5,21 @@
  */
 
 import type { RequestHandler } from '@sveltejs/kit'
+import * as m from '$lib/paraglide/messages.js'
+import { RegisterSchema } from '$lib/server/schemas/index.js'
 import { audit } from '$lib/server/services/index.js'
 import { core } from '@hai/core'
 import { iam } from '@hai/iam'
+import { validateForm } from '@hai/kit'
 import { json } from '@sveltejs/kit'
 
 export const POST: RequestHandler = async ({ request, cookies, getClientAddress }) => {
   try {
-    const body = await request.json()
-    const { username, email, password, confirmPassword } = body as {
-      username: string
-      email: string
-      password: string
-      confirmPassword: string
+    const { valid, data, errors } = await validateForm(request, RegisterSchema)
+    if (!valid) {
+      return json({ success: false, error: errors[0]?.message }, { status: 400 })
     }
-
-    // 验证必填字段
-    if (!username || !email || !password) {
-      return json({ success: false, error: '请填写所有必填字段' }, { status: 400 })
-    }
-
-    // 验证密码确认
-    if (password !== confirmPassword) {
-      return json({ success: false, error: '两次输入的密码不一致' }, { status: 400 })
-    }
-
-    // 验证用户名格式（3-20位字母数字下划线）
-    if (!/^\w{3,20}$/.test(username)) {
-      return json({ success: false, error: '用户名需为3-20位字母、数字或下划线' }, { status: 400 })
-    }
-
-    // 验证邮箱格式
-    if (!/^[^\s@]+@[^\s@][^\s.@]*\.[^\s@]+$/.test(email)) {
-      return json({ success: false, error: '请输入有效的邮箱地址' }, { status: 400 })
-    }
+    const { username, email, password } = data
 
     // 使用 IAM 模块注册用户
     const registerResult = await iam.user.register({
@@ -50,12 +31,12 @@ export const POST: RequestHandler = async ({ request, cookies, getClientAddress 
     if (!registerResult.success) {
       // 根据错误码返回不同响应
       if (registerResult.error.code === 5002 || registerResult.error.code === 5502) {
-        return json({ success: false, error: '用户名或邮箱已被使用' }, { status: 409 })
+        return json({ success: false, error: m.api_auth_username_or_email_taken() }, { status: 409 })
       }
       return json({ success: false, error: registerResult.error.message }, { status: 400 })
     }
 
-    const user = registerResult.data
+    const { user } = registerResult.data
 
     // 分配默认角色 (user)
     await iam.authz.assignRole(user.id, 'role_user')
@@ -111,7 +92,7 @@ export const POST: RequestHandler = async ({ request, cookies, getClientAddress 
     })
   }
   catch (error) {
-    core.logger.error('注册失败:', { error })
-    return json({ success: false, error: '注册失败，请稍后重试' }, { status: 500 })
+    core.logger.error('Registration failed:', { error })
+    return json({ success: false, error: m.api_auth_register_failed() }, { status: 500 })
   }
 }

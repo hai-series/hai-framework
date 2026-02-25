@@ -37,7 +37,7 @@ import type {
   TransportEncryptionManager,
   TransportKeyPair,
 } from './crypto-types.js'
-import { getKitMessage } from '../../index.js'
+import { getKitMessage } from '../../kit-i18n.js'
 
 /**
  * 创建传输加密管理器

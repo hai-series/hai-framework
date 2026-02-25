@@ -9,10 +9,16 @@ import { auditService } from '$lib/server/services/index.js'
 import { iam } from '@hai/iam'
 
 export const load: PageServerLoad = async () => {
-  // 从 iam 获取角色和权限
-  const rolesResult = await iam.authz.getAllRoles({ page: 1, pageSize: 1 })
-  const permissionsResult = await iam.authz.getAllPermissions({ page: 1, pageSize: 1 })
+  // 从 iam 获取统计数据
+  const [usersResult, activeUsersResult, rolesResult, permissionsResult] = await Promise.all([
+    iam.user.listUsers({ page: 1, pageSize: 1 }),
+    iam.user.listUsers({ page: 1, pageSize: 1, enabled: true }),
+    iam.authz.getAllRoles({ page: 1, pageSize: 1 }),
+    iam.authz.getAllPermissions({ page: 1, pageSize: 1 }),
+  ])
 
+  const userTotal = usersResult.success ? usersResult.data.total : 0
+  const activeUserTotal = activeUsersResult.success ? activeUsersResult.data.total : 0
   const roleTotal = rolesResult.success ? rolesResult.data.total : 0
   const permissionTotal = permissionsResult.success ? permissionsResult.data.total : 0
 
@@ -24,11 +30,10 @@ export const load: PageServerLoad = async () => {
 
   return {
     stats: {
-      // TODO: 需要在 iam 中添加用户统计功能
-      userCount: 0,
+      userCount: userTotal,
       roleCount: roleTotal,
       permissionCount: permissionTotal,
-      activeUsers: 0,
+      activeUsers: activeUserTotal,
     },
     recentActivity: recentAudit.items,
     auditStats,

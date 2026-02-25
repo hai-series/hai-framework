@@ -34,7 +34,7 @@ export const POST: RequestHandler = async ({ cookies, getClientAddress, request 
     return json({ success: true })
   }
   catch (error) {
-    core.logger.error('登出失败:', { error })
+    core.logger.error('Logout failed:', { error })
     // 即使出错也清除 Cookie
     cookies.delete('session_token', { path: '/' })
     return json({ success: true })

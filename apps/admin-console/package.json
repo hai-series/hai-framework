@@ -39,7 +39,7 @@
     "@iconify/tailwind4": "catalog:",
     "@inlang/paraglide-js": "catalog:",
     "@inlang/plugin-message-format": "catalog:",
-    "@playwright/test": "^1.58.2",
+    "@playwright/test": "catalog:",
     "@sveltejs/adapter-auto": "catalog:",
     "@sveltejs/kit": "catalog:",
     "@sveltejs/vite-plugin-svelte": "catalog:",

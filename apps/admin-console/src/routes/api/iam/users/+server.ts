@@ -5,9 +5,12 @@
  */
 
 import type { RequestHandler } from '@sveltejs/kit'
+import * as m from '$lib/paraglide/messages.js'
+import { CreateUserSchema, ListUsersQuerySchema } from '$lib/server/schemas/index.js'
 import { audit } from '$lib/server/services/index.js'
 import { core } from '@hai/core'
 import { iam } from '@hai/iam'
+import { validateForm, validateQuery } from '@hai/kit'
 import { json } from '@sveltejs/kit'
 
 /**
@@ -23,11 +26,11 @@ import { json } from '@sveltejs/kit'
  */
 export const GET: RequestHandler = async ({ url }) => {
   try {
-    const page = Math.max(1, Number.parseInt(url.searchParams.get('page') ?? '1', 10) || 1)
-    const pageSize = Math.max(1, Number.parseInt(url.searchParams.get('pageSize') ?? '20', 10) || 20)
-    const search = url.searchParams.get('search') ?? undefined
-    const enabledParam = url.searchParams.get('enabled')
-    const enabled = enabledParam === 'true' ? true : enabledParam === 'false' ? false : undefined
+    const { valid, data: query, errors } = validateQuery(url, ListUsersQuerySchema)
+    if (!valid) {
+      return json({ success: false, error: errors[0]?.message }, { status: 400 })
+    }
+    const { page, pageSize, search, enabled } = query!
 
     const usersResult = await iam.user.listUsers({ page, pageSize, search, enabled })
     if (!usersResult.success) {
@@ -60,7 +63,7 @@ export const GET: RequestHandler = async ({ url }) => {
   }
   catch (error) {
     core.logger.error('Failed to list users', { error })
-    return json({ success: false, error: 'Failed to list users' }, { status: 500 })
+    return json({ success: false, error: m.api_iam_users_list_failed() }, { status: 500 })
   }
 }
 
@@ -69,35 +72,11 @@ export const GET: RequestHandler = async ({ url }) => {
  */
 export const POST: RequestHandler = async ({ request, locals, getClientAddress }) => {
   try {
-    const body = await request.json()
-    const { username, email, password, roles } = body as {
-      username: string
-      email: string
-      password: string
-      display_name?: string
-      status?: string
-      roles?: string[]
+    const { valid, data, errors } = await validateForm(request, CreateUserSchema)
+    if (!valid) {
+      return json({ success: false, error: errors[0]?.message }, { status: 400 })
     }
-
-    // 验证必填字段
-    if (!username || !email || !password) {
-      return json({ success: false, error: '请填写所有必填字段' }, { status: 400 })
-    }
-
-    // 验证用户名格式
-    if (!/^\w{3,20}$/.test(username)) {
-      return json({ success: false, error: '用户名需为3-20位字母、数字或下划线' }, { status: 400 })
-    }
-
-    // 验证邮箱格式
-    if (!/^[^\s@]+@[^\s@][^\s.@]*\.[^\s@]+$/.test(email)) {
-      return json({ success: false, error: '请输入有效的邮箱地址' }, { status: 400 })
-    }
-
-    // 验证密码强度
-    if (password.length < 8) {
-      return json({ success: false, error: '密码至少需要8位' }, { status: 400 })
-    }
+    const { username, email, password, roles } = data!
 
     // 使用 IAM 模块注册用户
     const registerResult = await iam.user.register({
@@ -108,12 +87,12 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
 
     if (!registerResult.success) {
       if (registerResult.error.code === 5002 || registerResult.error.code === 5502) {
-        return json({ success: false, error: '用户名或邮箱已被使用' }, { status: 409 })
+        return json({ success: false, error: m.api_auth_username_or_email_taken() }, { status: 409 })
       }
       return json({ success: false, error: registerResult.error.message }, { status: 400 })
     }
 
-    const user = registerResult.data
+    const { user } = registerResult.data
 
     // 分配角色
     const rolesToAssign = roles?.length ? roles : ['role_user']
@@ -154,7 +133,7 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
     })
   }
   catch (error) {
-    core.logger.error('创建用户失败:', { error })
-    return json({ success: false, error: '创建用户失败' }, { status: 500 })
+    core.logger.error('Failed to create user:', { error })
+    return json({ success: false, error: m.api_iam_users_create_failed() }, { status: 500 })
   }
 }

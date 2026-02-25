@@ -299,6 +299,10 @@ function createRbacManager(config: RbacManagerConfig): IamAuthzFunctions {
     async createRole(role): Promise<Result<Role, IamError>> {
       const createResult = await roleRepository.create(role)
       if (!createResult.success) {
+        const msg = createResult.error.message.toLowerCase()
+        if (msg.includes('unique') || msg.includes('duplicate')) {
+          return err({ code: IamErrorCode.ROLE_ALREADY_EXISTS, message: iamM('iam_roleAlreadyExist') })
+        }
         return mapRepositoryError('iam_createRoleFailed', createResult.error.message) as Result<Role, IamError>
       }
 
@@ -359,18 +363,37 @@ function createRbacManager(config: RbacManagerConfig): IamAuthzFunctions {
     },
 
     async deleteRole(roleId): Promise<Result<void, IamError>> {
+      // 校验角色存在且非系统角色
+      const roleResult = await roleRepository.findById(roleId)
+      if (!roleResult.success) {
+        return mapRepositoryError('iam_queryRoleFailed', roleResult.error.message) as Result<void, IamError>
+      }
+      if (!roleResult.data) {
+        return err({ code: IamErrorCode.ROLE_NOT_FOUND, message: iamM('iam_roleNotExist') })
+      }
+      if (roleResult.data.isSystem) {
+        return err({ code: IamErrorCode.PERMISSION_DENIED, message: iamM('iam_cannotDeleteSystemRole') })
+      }
+
+      // 级联清理：用户-角色关联（含会话同步）
+      const userRoleResult = await userRoleRepository.removeByRoleId(roleId)
+      if (!userRoleResult.success)
+        return userRoleResult
+
+      // 级联清理：角色-权限关联（含缓存）
+      const rolePermResult = await rolePermissionRepository.removeByRoleId(roleId)
+      if (!rolePermResult.success)
+        return rolePermResult
+
+      // 删除角色本身
       const deleteResult = await roleRepository.deleteById(roleId)
       if (!deleteResult.success) {
         return mapRepositoryError('iam_deleteRoleFailed', deleteResult.error.message) as Result<void, IamError>
-      }
-      if (deleteResult.data.changes === 0) {
-        return err({ code: IamErrorCode.ROLE_NOT_FOUND, message: iamM('iam_roleNotExist') })
       }
 
       if (superAdminRoleId && superAdminRoleId === roleId) {
         superAdminRoleId = null
       }
-      await rolePermissionRepository.clearRolePermissionsCache(roleId)
 
       logger.info('Role deleted', { roleId })
       return ok(undefined)
@@ -383,6 +406,10 @@ function createRbacManager(config: RbacManagerConfig): IamAuthzFunctions {
     async createPermission(permission): Promise<Result<Permission, IamError>> {
       const createResult = await permissionRepository.create(permission)
       if (!createResult.success) {
+        const msg = createResult.error.message.toLowerCase()
+        if (msg.includes('unique') || msg.includes('duplicate')) {
+          return err({ code: IamErrorCode.PERMISSION_ALREADY_EXISTS, message: iamM('iam_permissionAlreadyExist') })
+        }
         return mapRepositoryError('iam_createPermissionFailed', createResult.error.message) as Result<Permission, IamError>
       }
 
@@ -429,18 +456,16 @@ function createRbacManager(config: RbacManagerConfig): IamAuthzFunctions {
         })
       }
 
+      // 级联清理：角色-权限关联（含缓存）
+      const cascadeResult = await rolePermissionRepository.removeByPermissionId(permissionId)
+      if (!cascadeResult.success)
+        return cascadeResult
+
+      // 删除权限本身
       const deleteResult = await permissionRepository.deleteById(permissionId)
       if (!deleteResult.success) {
         return mapRepositoryError('iam_deletePermissionFailed', deleteResult.error.message) as Result<void, IamError>
       }
-      if (deleteResult.data.changes === 0) {
-        return err({
-          code: IamErrorCode.PERMISSION_NOT_FOUND,
-          message: iamM('iam_permissionNotExist'),
-        })
-      }
-
-      await rolePermissionRepository.removePermissionCodeFromCache(permissionResult.data.code)
 
       logger.info('Permission deleted', { permissionId })
       return ok(undefined)

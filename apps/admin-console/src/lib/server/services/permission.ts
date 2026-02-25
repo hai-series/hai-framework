@@ -8,6 +8,7 @@
  */
 
 import type { Permission } from '@hai/iam'
+import * as m from '$lib/paraglide/messages.js'
 import { iam } from '@hai/iam'
 
 // =============================================================================
@@ -106,7 +107,7 @@ export const permissionService = {
     })
 
     if (!result.success) {
-      throw new Error(`创建权限失败: ${result.error.message}`)
+      throw new Error(`${m.api_iam_permissions_create_failed()}: ${result.error.message}`)
     }
 
     return this.toPermissionWithSystem(result.data)
@@ -172,7 +173,7 @@ export const permissionService = {
    */
   async update(_id: string, _input: UpdatePermissionInput): Promise<Permission | null> {
     // IAM 模块目前不支持更新权限
-    throw new Error('暂不支持更新权限，请删除后重建')
+    throw new Error(m.api_iam_permissions_update_not_supported())
   },
 
   /**

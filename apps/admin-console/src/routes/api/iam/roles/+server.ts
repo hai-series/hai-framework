@@ -5,8 +5,11 @@
  */
 
 import type { RequestHandler } from '@sveltejs/kit'
+import * as m from '$lib/paraglide/messages.js'
+import { CreateRoleSchema } from '$lib/server/schemas/index.js'
 import { audit, permissionService, roleService } from '$lib/server/services/index.js'
 import { core } from '@hai/core'
+import { validateForm } from '@hai/kit'
 import { json } from '@sveltejs/kit'
 
 /**
@@ -18,8 +21,8 @@ export const GET: RequestHandler = async () => {
     return json({ success: true, data: roles })
   }
   catch (error) {
-    core.logger.error('获取角色列表失败:', { error })
-    return json({ success: false, error: '获取角色列表失败' }, { status: 500 })
+    core.logger.error('Failed to list roles:', { error })
+    return json({ success: false, error: m.api_iam_roles_list_failed() }, { status: 500 })
   }
 }
 
@@ -28,17 +31,11 @@ export const GET: RequestHandler = async () => {
  */
 export const POST: RequestHandler = async ({ request, locals, getClientAddress }) => {
   try {
-    const body = await request.json()
-    const { name, description, permissions } = body as {
-      name: string
-      description?: string
-      permissions?: string[]
+    const { valid, data, errors } = await validateForm(request, CreateRoleSchema)
+    if (!valid) {
+      return json({ success: false, error: errors[0]?.message }, { status: 400 })
     }
-
-    // 验证必填字段
-    if (!name?.trim()) {
-      return json({ success: false, error: '请输入角色名称' }, { status: 400 })
-    }
+    const { name, description, permissions } = data!
 
     // 生成角色 code（将名称转为 snake_case）
     const code = `role_${name.toLowerCase().replace(/\s+/g, '_')}`
@@ -78,7 +75,7 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
     return json({ success: true, data: role })
   }
   catch (error) {
-    core.logger.error('创建角色失败:', { error })
-    return json({ success: false, error: '创建角色失败' }, { status: 500 })
+    core.logger.error('Failed to create role:', { error })
+    return json({ success: false, error: m.api_iam_roles_create_failed() }, { status: 500 })
   }
 }

@@ -5,8 +5,11 @@
  */
 
 import type { RequestHandler } from '@sveltejs/kit'
+import * as m from '$lib/paraglide/messages.js'
+import { CreatePermissionSchema } from '$lib/server/schemas/index.js'
 import { audit, permissionService } from '$lib/server/services/index.js'
 import { core } from '@hai/core'
+import { validateForm } from '@hai/kit'
 import { json } from '@sveltejs/kit'
 
 /**
@@ -18,8 +21,8 @@ export const GET: RequestHandler = async () => {
     return json({ success: true, data: permissions })
   }
   catch (error) {
-    core.logger.error('获取权限列表失败:', { error })
-    return json({ success: false, error: '获取权限列表失败' }, { status: 500 })
+    core.logger.error('Failed to list permissions:', { error })
+    return json({ success: false, error: m.api_iam_permissions_list_failed() }, { status: 500 })
   }
 }
 
@@ -28,18 +31,11 @@ export const GET: RequestHandler = async () => {
  */
 export const POST: RequestHandler = async ({ request, locals, getClientAddress }) => {
   try {
-    const body = await request.json()
-    const { name, description, resource, action } = body as {
-      name: string
-      description?: string
-      resource: string
-      action: string
+    const { valid, data, errors } = await validateForm(request, CreatePermissionSchema)
+    if (!valid) {
+      return json({ success: false, error: errors[0]?.message }, { status: 400 })
     }
-
-    // 验证必填字段
-    if (!name?.trim() || !resource?.trim() || !action?.trim()) {
-      return json({ success: false, error: '请填写所有必填字段' }, { status: 400 })
-    }
+    const { name, description, resource, action } = data!
 
     // 生成权限 code
     const code = `${resource}:${action}`
@@ -47,7 +43,7 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
     // 检查权限名称是否已存在
     const existing = await permissionService.getByName(code)
     if (existing) {
-      return json({ success: false, error: '权限名称已存在' }, { status: 409 })
+      return json({ success: false, error: m.api_iam_permissions_name_exists() }, { status: 409 })
     }
 
     // 创建权限
@@ -75,7 +71,7 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
     return json({ success: true, data: permission })
   }
   catch (error) {
-    core.logger.error('创建权限失败:', { error })
-    return json({ success: false, error: '创建权限失败' }, { status: 500 })
+    core.logger.error('Failed to create permission:', { error })
+    return json({ success: false, error: m.api_iam_permissions_create_failed() }, { status: 500 })
   }
 }

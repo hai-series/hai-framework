@@ -36,7 +36,7 @@ describe('storage.init', () => {
       const result = await storage.file.put('test.txt', 'hello')
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.code).toBe(5010)
+        expect(result.error.code).toBe(6010)
       }
     })
 
@@ -67,7 +67,7 @@ describe('storage.init 配置校验', () => {
     const result = await storage.init({ type: 'local', root: '' } as unknown as StorageConfigInput)
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(5000)
+      expect(result.error.code).toBe(6000)
     }
   })
 
@@ -76,7 +76,7 @@ describe('storage.init 配置校验', () => {
     const result = await storage.init({ type: 'unknown' } as unknown as StorageConfigInput)
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(5000)
+      expect(result.error.code).toBe(6000)
     }
   })
 
@@ -85,7 +85,7 @@ describe('storage.init 配置校验', () => {
     const result = await storage.init({} as unknown as StorageConfigInput)
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(5000)
+      expect(result.error.code).toBe(6000)
     }
   })
 
@@ -99,7 +99,7 @@ describe('storage.init 配置校验', () => {
     } as unknown as StorageConfigInput)
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(5000)
+      expect(result.error.code).toBe(6000)
     }
   })
 
@@ -113,7 +113,7 @@ describe('storage.init 配置校验', () => {
     } as unknown as StorageConfigInput)
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(5000)
+      expect(result.error.code).toBe(6000)
     }
   })
 
@@ -129,7 +129,7 @@ describe('storage.init 配置校验', () => {
     } as unknown as StorageConfigInput)
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(5000)
+      expect(result.error.code).toBe(6000)
     }
   })
 

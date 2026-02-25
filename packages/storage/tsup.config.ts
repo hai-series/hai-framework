@@ -12,7 +12,6 @@ export default defineConfig({
     '@hai/core',
     '@aws-sdk/client-s3',
     '@aws-sdk/s3-request-presigner',
-    '@aws-sdk/lib-storage',
     'zod',
   ],
 })

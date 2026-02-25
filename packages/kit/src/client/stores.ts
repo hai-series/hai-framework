@@ -34,7 +34,7 @@ import type {
   UseUploadOptions,
 } from './client-types.js'
 import { derived, get, writable } from 'svelte/store'
-import { getKitMessage } from '../index.js'
+import { getKitMessage } from '../kit-i18n.js'
 
 /**
  * 创建会话 Store

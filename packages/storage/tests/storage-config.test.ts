@@ -13,10 +13,10 @@ import {
 } from '../src/index.js'
 
 describe('storageErrorCode', () => {
-  it('错误码应在 5000-5999 范围内', () => {
+  it('错误码应在 6000-6999 范围内', () => {
     for (const [, value] of Object.entries(StorageErrorCode)) {
-      expect(value).toBeGreaterThanOrEqual(5000)
-      expect(value).toBeLessThan(6000)
+      expect(value).toBeGreaterThanOrEqual(6000)
+      expect(value).toBeLessThan(7000)
     }
   })
 
@@ -27,21 +27,21 @@ describe('storageErrorCode', () => {
   })
 
   it('应包含所有预期的错误码', () => {
-    expect(StorageErrorCode.CONNECTION_FAILED).toBe(5000)
-    expect(StorageErrorCode.OPERATION_FAILED).toBe(5001)
-    expect(StorageErrorCode.NOT_FOUND).toBe(5002)
-    expect(StorageErrorCode.ALREADY_EXISTS).toBe(5003)
-    expect(StorageErrorCode.PERMISSION_DENIED).toBe(5004)
-    expect(StorageErrorCode.QUOTA_EXCEEDED).toBe(5005)
-    expect(StorageErrorCode.INVALID_PATH).toBe(5006)
-    expect(StorageErrorCode.IO_ERROR).toBe(5007)
-    expect(StorageErrorCode.NETWORK_ERROR).toBe(5008)
-    expect(StorageErrorCode.NOT_INITIALIZED).toBe(5010)
-    expect(StorageErrorCode.UNSUPPORTED_TYPE).toBe(5011)
-    expect(StorageErrorCode.CONFIG_ERROR).toBe(5012)
-    expect(StorageErrorCode.PRESIGN_FAILED).toBe(5013)
-    expect(StorageErrorCode.UPLOAD_FAILED).toBe(5014)
-    expect(StorageErrorCode.DOWNLOAD_FAILED).toBe(5015)
+    expect(StorageErrorCode.CONNECTION_FAILED).toBe(6000)
+    expect(StorageErrorCode.OPERATION_FAILED).toBe(6001)
+    expect(StorageErrorCode.NOT_FOUND).toBe(6002)
+    expect(StorageErrorCode.ALREADY_EXISTS).toBe(6003)
+    expect(StorageErrorCode.PERMISSION_DENIED).toBe(6004)
+    expect(StorageErrorCode.QUOTA_EXCEEDED).toBe(6005)
+    expect(StorageErrorCode.INVALID_PATH).toBe(6006)
+    expect(StorageErrorCode.IO_ERROR).toBe(6007)
+    expect(StorageErrorCode.NETWORK_ERROR).toBe(6008)
+    expect(StorageErrorCode.NOT_INITIALIZED).toBe(6010)
+    expect(StorageErrorCode.UNSUPPORTED_TYPE).toBe(6011)
+    expect(StorageErrorCode.CONFIG_ERROR).toBe(6012)
+    expect(StorageErrorCode.PRESIGN_FAILED).toBe(6013)
+    expect(StorageErrorCode.UPLOAD_FAILED).toBe(6014)
+    expect(StorageErrorCode.DOWNLOAD_FAILED).toBe(6015)
   })
 })
 

@@ -8,6 +8,7 @@
  */
 
 import type { Permission, Role } from '@hai/iam'
+import * as m from '$lib/paraglide/messages.js'
 import { iam } from '@hai/iam'
 
 // =============================================================================
@@ -90,7 +91,7 @@ export const roleService = {
     })
 
     if (!result.success) {
-      throw new Error(`创建角色失败: ${result.error.message}`)
+      throw new Error(`${m.api_iam_roles_create_failed()}: ${result.error.message}`)
     }
 
     const role = result.data
@@ -150,7 +151,7 @@ export const roleService = {
 
     // 检查是否为系统角色
     if (existing.isSystem && input.name) {
-      throw new Error('不能修改系统角色名称')
+      throw new Error(m.api_iam_roles_system_name_immutable())
     }
 
     // 更新角色基本信息
@@ -160,7 +161,7 @@ export const roleService = {
         description: input.description,
       })
       if (!updateResult.success) {
-        throw new Error(`更新角色失败: ${updateResult.error.message}`)
+        throw new Error(`${m.api_iam_roles_update_failed()}: ${updateResult.error.message}`)
       }
     }
 
@@ -196,7 +197,7 @@ export const roleService = {
     if (!existing)
       return false
     if (existing.isSystem) {
-      throw new Error('不能删除系统角色')
+      throw new Error(m.api_iam_roles_system_cannot_delete())
     }
 
     const result = await iam.authz.deleteRole(id)
@@ -224,10 +225,9 @@ export const roleService = {
   /**
    * 获取拥有某角色的用户数
    *
-   * TODO: 需要在 iam.authz 中添加此功能
+   * 当前 IAM 模块暂不支持按角色统计用户数，后续版本实现。
    */
   async getUserCount(_roleId: string): Promise<number> {
-    // 暂时返回 0，后续需要在 iam 模块中实现
     return 0
   },
 }

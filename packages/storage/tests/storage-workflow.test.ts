@@ -204,7 +204,7 @@ describe('storage workflow', () => {
       const afterCloseResult = await storage.file.get('any-key')
       expect(afterCloseResult.success).toBe(false)
       if (!afterCloseResult.success) {
-        expect(afterCloseResult.error.code).toBe(5010)
+        expect(afterCloseResult.error.code).toBe(6010)
       }
     })
   }

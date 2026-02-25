@@ -8,6 +8,7 @@
  */
 
 import type { User } from '@hai/iam'
+import * as m from '$lib/paraglide/messages.js'
 import { iam } from '@hai/iam'
 
 // =============================================================================
@@ -67,7 +68,7 @@ export const userService = {
     })
 
     if (!result.success) {
-      throw new Error(`创建用户失败: ${result.error.message}`)
+      throw new Error(`${m.api_iam_users_create_failed()}: ${result.error.message}`)
     }
 
     const user = result.data
@@ -122,20 +123,36 @@ export const userService = {
 
   /**
    * 获取用户列表
-   *
-   * TODO: 需要在 iam 模块中添加用户列表查询功能
    */
   async list(
-    _options: {
+    options: {
       page?: number
       pageSize?: number
       search?: string
       status?: string
     } = {},
   ): Promise<{ users: UserWithRoles[], total: number }> {
-    // IAM 模块目前不支持用户列表查询
-    // 返回空数据，后续需要在 iam 模块中实现
-    return { users: [], total: 0 }
+    const enabled = options.status === 'active' ? true : options.status === 'inactive' ? false : undefined
+
+    const result = await iam.user.listUsers({
+      page: options.page,
+      pageSize: options.pageSize,
+      search: options.search,
+      enabled,
+    })
+
+    if (!result.success) {
+      return { users: [], total: 0 }
+    }
+
+    // 为每个用户补全角色和权限
+    const users: UserWithRoles[] = []
+    for (const user of result.data.items) {
+      const { roles, permissions } = await this.getUserRolesAndPermissions(user.id)
+      users.push({ ...user, roles, permissions })
+    }
+
+    return { users, total: result.data.total }
   },
 
   /**
@@ -158,12 +175,10 @@ export const userService = {
 
   /**
    * 删除用户
-   *
-   * TODO: 需要在 iam 模块中添加删除用户功能
    */
-  async delete(_id: string): Promise<boolean> {
-    // IAM 模块目前不支持删除用户
-    throw new Error('暂不支持删除用户')
+  async delete(id: string): Promise<boolean> {
+    const result = await iam.user.deleteUser(id)
+    return result.success
   },
 
   /**
@@ -175,13 +190,11 @@ export const userService = {
   },
 
   /**
-   * 重置密码
-   *
-   * TODO: 需要在 iam 模块中添加管理员重置密码功能
+   * 重置密码（管理员操作）
    */
-  async resetPassword(_id: string, _newPassword: string): Promise<boolean> {
-    // IAM 模块目前不支持管理员重置密码
-    throw new Error('暂不支持管理员重置密码')
+  async resetPassword(id: string, newPassword: string): Promise<boolean> {
+    const result = await iam.user.adminResetPassword(id, newPassword)
+    return result.success
   },
 
   /**

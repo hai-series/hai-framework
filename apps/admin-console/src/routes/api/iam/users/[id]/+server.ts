@@ -5,9 +5,12 @@
  */
 
 import type { RequestHandler } from '@sveltejs/kit'
+import * as m from '$lib/paraglide/messages.js'
+import { UpdateUserSchema } from '$lib/server/schemas/index.js'
 import { audit } from '$lib/server/services/index.js'
 import { core } from '@hai/core'
 import { iam } from '@hai/iam'
+import { validateForm } from '@hai/kit'
 import { json } from '@sveltejs/kit'
 
 /**
@@ -17,7 +20,7 @@ export const GET: RequestHandler = async ({ params }) => {
   try {
     const userResult = await iam.user.getUser(params.id!)
     if (!userResult.success || !userResult.data) {
-      return json({ success: false, error: '用户不存在' }, { status: 404 })
+      return json({ success: false, error: m.api_iam_users_not_found() }, { status: 404 })
     }
 
     const user = userResult.data
@@ -42,8 +45,8 @@ export const GET: RequestHandler = async ({ params }) => {
     })
   }
   catch (error) {
-    core.logger.error('获取用户失败:', { error })
-    return json({ success: false, error: '获取用户失败' }, { status: 500 })
+    core.logger.error('Failed to get user:', { error })
+    return json({ success: false, error: m.api_iam_users_get_failed() }, { status: 500 })
   }
 }
 
@@ -53,30 +56,16 @@ export const GET: RequestHandler = async ({ params }) => {
 export const PUT: RequestHandler = async ({ params, request, locals, getClientAddress }) => {
   try {
     const userId = params.id!
-    const body = await request.json()
-    const { username, email, password, display_name, roles } = body as {
-      username?: string
-      email?: string
-      password?: string
-      display_name?: string
-      status?: string
-      roles?: string[]
+    const { valid, data, errors } = await validateForm(request, UpdateUserSchema)
+    if (!valid) {
+      return json({ success: false, error: errors[0]?.message }, { status: 400 })
     }
+    const { username, email, password, display_name, roles } = data!
 
     // 检查用户是否存在
     const existingResult = await iam.user.getUser(userId)
     if (!existingResult.success || !existingResult.data) {
-      return json({ success: false, error: '用户不存在' }, { status: 404 })
-    }
-
-    // 验证用户名格式（如果提供）
-    if (username && !/^\w{3,20}$/.test(username)) {
-      return json({ success: false, error: '用户名需为3-20位字母、数字或下划线' }, { status: 400 })
-    }
-
-    // 验证邮箱格式（如果提供）
-    if (email && !/^[^\s@]+@[^\s@][^\s.@]*\.[^\s@]+$/.test(email)) {
-      return json({ success: false, error: '请输入有效的邮箱地址' }, { status: 400 })
+      return json({ success: false, error: m.api_iam_users_not_found() }, { status: 404 })
     }
 
     // 更新用户信息
@@ -140,7 +129,7 @@ export const PUT: RequestHandler = async ({ params, request, locals, getClientAd
     // 获取更新后的用户信息
     const updatedResult = await iam.user.getUser(userId)
     if (!updatedResult.success || !updatedResult.data) {
-      return json({ success: false, error: '获取更新后的用户失败' }, { status: 500 })
+      return json({ success: false, error: m.api_iam_users_get_updated_failed() }, { status: 500 })
     }
 
     const user = updatedResult.data
@@ -163,8 +152,8 @@ export const PUT: RequestHandler = async ({ params, request, locals, getClientAd
     })
   }
   catch (error) {
-    core.logger.error('更新用户失败:', { error })
-    return json({ success: false, error: '更新用户失败' }, { status: 500 })
+    core.logger.error('Failed to update user:', { error })
+    return json({ success: false, error: m.api_iam_users_update_failed() }, { status: 500 })
   }
 }
 
@@ -178,12 +167,12 @@ export const DELETE: RequestHandler = async ({ params, locals, request, getClien
     // 检查用户是否存在
     const existingResult = await iam.user.getUser(userId)
     if (!existingResult.success || !existingResult.data) {
-      return json({ success: false, error: '用户不存在' }, { status: 404 })
+      return json({ success: false, error: m.api_iam_users_not_found() }, { status: 404 })
     }
 
     // 禁止删除自己
     if (locals.session?.userId === userId) {
-      return json({ success: false, error: '不能删除当前登录用户' }, { status: 400 })
+      return json({ success: false, error: m.api_iam_users_cannot_delete_self() }, { status: 400 })
     }
 
     const existing = existingResult.data
@@ -209,7 +198,7 @@ export const DELETE: RequestHandler = async ({ params, locals, request, getClien
     return json({ success: true })
   }
   catch (error) {
-    core.logger.error('删除用户失败', { error })
-    return json({ success: false, error: '删除用户失败' }, { status: 500 })
+    core.logger.error('Failed to delete user', { error })
+    return json({ success: false, error: m.api_iam_users_delete_failed() }, { status: 500 })
   }
 }

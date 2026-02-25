@@ -5,6 +5,7 @@
  */
 
 import type { RequestHandler } from '@sveltejs/kit'
+import * as m from '$lib/paraglide/messages.js'
 import { audit, permissionService, roleService } from '$lib/server/services/index.js'
 import { core } from '@hai/core'
 import { json } from '@sveltejs/kit'
@@ -16,13 +17,13 @@ export const GET: RequestHandler = async ({ params }) => {
   try {
     const role = await roleService.getById(params.id!)
     if (!role) {
-      return json({ success: false, error: '角色不存在' }, { status: 404 })
+      return json({ success: false, error: m.api_iam_roles_not_found() }, { status: 404 })
     }
     return json({ success: true, data: role })
   }
   catch (error) {
-    core.logger.error('获取角色失败:', { error })
-    return json({ success: false, error: '获取角色失败' }, { status: 500 })
+    core.logger.error('Failed to get role:', { error })
+    return json({ success: false, error: m.api_iam_roles_get_failed() }, { status: 500 })
   }
 }
 
@@ -42,7 +43,7 @@ export const PUT: RequestHandler = async ({ params, request, locals, getClientAd
     // 检查角色是否存在
     const existing = await roleService.getById(roleId)
     if (!existing) {
-      return json({ success: false, error: '角色不存在' }, { status: 404 })
+      return json({ success: false, error: m.api_iam_roles_not_found() }, { status: 404 })
     }
 
     // 转换权限名称为 ID
@@ -80,8 +81,8 @@ export const PUT: RequestHandler = async ({ params, request, locals, getClientAd
     return json({ success: true, data: role })
   }
   catch (error) {
-    core.logger.error('更新角色失败:', { error })
-    const message = error instanceof Error ? error.message : '更新角色失败'
+    core.logger.error('Failed to update role:', { error })
+    const message = error instanceof Error ? error.message : m.api_iam_roles_update_failed()
     return json({ success: false, error: message }, { status: 500 })
   }
 }
@@ -96,7 +97,7 @@ export const DELETE: RequestHandler = async ({ params, locals, request, getClien
     // 检查角色是否存在
     const existing = await roleService.getById(roleId)
     if (!existing) {
-      return json({ success: false, error: '角色不存在' }, { status: 404 })
+      return json({ success: false, error: m.api_iam_roles_not_found() }, { status: 404 })
     }
 
     // 删除角色
@@ -118,8 +119,8 @@ export const DELETE: RequestHandler = async ({ params, locals, request, getClien
     return json({ success: true })
   }
   catch (error) {
-    core.logger.error('删除角色失败:', { error })
-    const message = error instanceof Error ? error.message : '删除角色失败'
+    core.logger.error('Failed to delete role:', { error })
+    const message = error instanceof Error ? error.message : m.api_iam_roles_delete_failed()
     return json({ success: false, error: message }, { status: 500 })
   }
 }

@@ -4,6 +4,7 @@
  * =============================================================================
  */
 
+import * as m from '$lib/paraglide/messages.js'
 import { core } from '@hai/core'
 import { getDb } from '../init.js'
 
@@ -69,12 +70,12 @@ export const auditService = {
       ],
     )
     if (!insertResult.success) {
-      throw new Error(`记录审计日志失败: ${insertResult.error.message}`)
+      throw new Error(m.api_audit_log_failed({ message: insertResult.error.message }))
     }
 
     const log = await this.getById(id)
     if (!log) {
-      throw new Error('记录审计日志后无法获取日志信息')
+      throw new Error(m.api_audit_log_retrieve_failed())
     }
     return log
   },

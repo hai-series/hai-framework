@@ -249,20 +249,20 @@ interface SM4EncryptWithIVResult {
 
 | 错误码 | 常量                    | 说明          |
 | ------ | ----------------------- | ------------- |
-| 4000   | `OPERATION_FAILED`      | 操作失败      |
-| 4001   | `INVALID_INPUT`         | 无效输入      |
-| 4002   | `INVALID_KEY`           | 无效密钥      |
-| 4010   | `NOT_INITIALIZED`       | 未初始化      |
-| 4011   | `CONFIG_ERROR`          | 配置错误      |
-| 4012   | `UNSUPPORTED_ALGORITHM` | 不支持算法    |
-| 4020   | `KEY_GENERATION_FAILED` | 密钥生成失败  |
-| 4021   | `ENCRYPTION_FAILED`     | 加密失败      |
-| 4022   | `DECRYPTION_FAILED`     | 解密失败      |
-| 4023   | `SIGN_FAILED`           | 签名失败      |
-| 4024   | `VERIFY_FAILED`         | 验签失败      |
-| 4040   | `HASH_FAILED`           | 哈希计算失败  |
-| 4041   | `HMAC_FAILED`           | HMAC 计算失败 |
-| 4060   | `INVALID_IV`            | 无效 IV       |
+| 2000   | `OPERATION_FAILED`      | 操作失败      |
+| 2001   | `INVALID_INPUT`         | 无效输入      |
+| 2002   | `INVALID_KEY`           | 无效密钥      |
+| 2010   | `NOT_INITIALIZED`       | 未初始化      |
+| 2011   | `CONFIG_ERROR`          | 配置错误      |
+| 2012   | `UNSUPPORTED_ALGORITHM` | 不支持算法    |
+| 2020   | `KEY_GENERATION_FAILED` | 密钥生成失败  |
+| 2021   | `ENCRYPTION_FAILED`     | 加密失败      |
+| 2022   | `DECRYPTION_FAILED`     | 解密失败      |
+| 2023   | `SIGN_FAILED`           | 签名失败      |
+| 2024   | `VERIFY_FAILED`         | 验签失败      |
+| 2040   | `HASH_FAILED`           | 哈希计算失败  |
+| 2041   | `HMAC_FAILED`           | HMAC 计算失败 |
+| 2060   | `INVALID_IV`            | 无效 IV       |
 
 ---
 
