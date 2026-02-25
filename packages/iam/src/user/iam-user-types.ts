@@ -17,6 +17,20 @@ import type { PaginatedResult, PaginationOptionsInput, Result } from '@hai/core'
 import type { IamError } from '../iam-types.js'
 
 // =============================================================================
+// 用户查询选项
+// =============================================================================
+
+/**
+ * 用户列表查询选项
+ */
+export interface ListUsersOptions extends PaginationOptionsInput {
+  /** 搜索关键字（模糊匹配用户名、邮箱、手机号、显示名称） */
+  search?: string
+  /** 按启用状态过滤，不传则返回全部 */
+  enabled?: boolean
+}
+
+// =============================================================================
 // 用户类型
 // =============================================================================
 
@@ -154,12 +168,12 @@ export interface IamUserFunctions {
   getUser: (userId: string) => Promise<Result<User | null, IamError>>
 
   /**
-   * 获取所有用户列表（分页）
+   * 获取用户列表（分页 + 搜索 + 过滤）
    *
-   * @param options - 分页参数（页码、每页数量），可选
+   * @param options - 查询选项（页码、每页数量、搜索关键字、启用状态过滤）
    * @returns 成功返回分页用户列表
    */
-  listUsers: (options?: PaginationOptionsInput) => Promise<Result<PaginatedResult<User>, IamError>>
+  listUsers: (options?: ListUsersOptions) => Promise<Result<PaginatedResult<User>, IamError>>
 
   /**
    * 更新用户信息
@@ -171,6 +185,27 @@ export interface IamUserFunctions {
    * @returns 成功返回更新后的用户信息；用户不存在返回 USER_NOT_FOUND
    */
   updateUser: (userId: string, data: Partial<User>) => Promise<Result<User, IamError>>
+
+  /**
+   * 删除用户
+   *
+   * 同时清理用户的角色关联数据。
+   *
+   * @param userId - 用户 ID
+   * @returns 成功返回 ok；用户不存在返回 USER_NOT_FOUND
+   */
+  deleteUser: (userId: string) => Promise<Result<void, IamError>>
+
+  /**
+   * 管理员重置用户密码
+   *
+   * 无需旧密码，直接设置新密码（仅限管理员操作）。
+   *
+   * @param userId - 用户 ID
+   * @param newPassword - 新密码
+   * @returns 成功返回 ok；用户不存在返回 USER_NOT_FOUND，密码不合规返回 PASSWORD_POLICY_VIOLATION
+   */
+  adminResetPassword: (userId: string, newPassword: string) => Promise<Result<void, IamError>>
 
   /**
    * 修改密码
