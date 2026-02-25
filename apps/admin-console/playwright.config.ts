@@ -14,7 +14,7 @@ export default defineConfig({
   fullyParallel: false,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 2 : 0,
-  workers: 1,
+  workers: process.env.CI ? 2 : 4,
   reporter: 'list',
   timeout: 30_000,
 
@@ -26,7 +26,7 @@ export default defineConfig({
   },
 
   webServer: {
-    command: 'pnpm dev --port 4173 --strictPort',
+    command: 'pnpm build && pnpm preview --port 4173 --strictPort',
     env: {
       HAI_E2E: '1',
     },

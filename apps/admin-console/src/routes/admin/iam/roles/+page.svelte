@@ -5,6 +5,7 @@
 -->
 <script lang="ts">
   import type { PageData } from './$types'
+  import { Badge, BareButton, Button, Checkbox, IconButton, Input, PageHeader, Textarea } from '@hai/ui'
   import * as m from '$lib/paraglide/messages'
 
   interface RoleData {
@@ -350,11 +351,15 @@
         </div>
       </form>
     </div>
-    <BareButton
-      type="button"
-      class="modal-backdrop bg-black/50"
-      onclick={closeDialog}
-      ariaLabel={m.action_close()}
-    />
+    <form method="dialog" class="modal-backdrop fixed left-0 top-0 right-0 h-16">
+      <button
+        type="button"
+        class="h-full w-full bg-black/50"
+        onclick={closeDialog}
+        aria-label={m.action_close()}
+      >
+        close
+      </button>
+    </form>
   </div>
 {/if}

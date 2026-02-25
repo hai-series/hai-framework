@@ -7,10 +7,11 @@
 import { expect, test } from '@playwright/test'
 
 function uniqueUser() {
-  const ts = Date.now().toString(36)
+  const entropy = `${Date.now().toString(36)}${process.pid.toString(36)}${Math.random().toString(36).slice(2, 6)}`
+  const id = entropy.slice(-10)
   return {
-    username: `api_${ts}`,
-    email: `api_${ts}@test.local`,
+    username: `api_${id}`.slice(0, 20),
+    email: `api_${id}@test.local`,
     password: 'Test1234!@',
   }
 }

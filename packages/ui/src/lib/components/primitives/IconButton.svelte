@@ -22,7 +22,6 @@
     loading = false,
     class: className = '',
     onclick,
-    onClick,
     children,
   }: IconButtonProps = $props()
   
@@ -53,7 +52,6 @@
       return
     }
     onclick?.(e)
-    onClick?.(e)
   }
 </script>
 
@@ -70,6 +68,8 @@
         <span class="loading loading-spinner"></span>
       {:else if children}
         {@render children()}
+      {:else if typeof icon === 'function'}
+        {@render icon()}
       {:else if icon}
         <span class={iconSize}>
           {@html icon}
@@ -89,6 +89,8 @@
       <span class="loading loading-spinner"></span>
     {:else if children}
       {@render children()}
+    {:else if typeof icon === 'function'}
+      {@render icon()}
     {:else if icon}
       <span class={iconSize}>
         {@html icon}

@@ -12,10 +12,13 @@ async function sleep(ms: number) {
 
 /** 生成唯一测试用户 */
 export function uniqueUser(prefix = 'e2e') {
-  const ts = Date.now().toString(36)
+  const safePrefix = (prefix.replace(/[^a-zA-Z0-9_]/g, '') || 'e2e').slice(0, 8)
+  const entropy = `${Date.now().toString(36)}${process.pid.toString(36)}${Math.random().toString(36).slice(2, 6)}`
+  const id = entropy.slice(-10)
+  const username = `${safePrefix}_${id}`.slice(0, 20)
   return {
-    username: `${prefix}_${ts}`,
-    email: `${prefix}_${ts}@test.local`,
+    username,
+    email: `${safePrefix}_${id}@test.local`,
     password: 'Test1234!@',
   }
 }

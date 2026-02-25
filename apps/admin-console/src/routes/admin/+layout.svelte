@@ -8,6 +8,7 @@
   import { page } from '$app/stores'
   import { goto } from '$app/navigation'
   import * as m from '$lib/paraglide/messages'
+  import { Avatar, BareButton, Button } from '@hai/ui'
   
   interface Props {
     data: LayoutData

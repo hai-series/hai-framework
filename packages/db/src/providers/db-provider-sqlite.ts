@@ -63,6 +63,19 @@ const require = createRequire(import.meta.url)
 export function createSqliteProvider(): DbProvider {
   /** 数据库实例 */
   let database: Database.Database | null = null
+  /** 串行化 SQLite 事务，避免并发 BEGIN 导致 "cannot start a transaction within a transaction" */
+  let txChain: Promise<void> = Promise.resolve()
+
+  async function acquireTxLock(): Promise<() => void> {
+    let release!: () => void
+    const current = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    const prev = txChain
+    txChain = txChain.then(() => current)
+    await prev
+    return release
+  }
 
   // =========================================================================
   // 辅助函数
@@ -605,6 +618,7 @@ export function createSqliteProvider(): DbProvider {
       if (!connResult.success)
         return connResult
 
+      const releaseTxLock = await acquireTxLock()
       try {
         const db = connResult.data
         const transaction = db.transaction(() => {
@@ -619,6 +633,9 @@ export function createSqliteProvider(): DbProvider {
           message: dbM('db_sqliteBatchFailed', { params: { error: String(error) } }),
           cause: error,
         })
+      }
+      finally {
+        releaseTxLock()
       }
     },
 
@@ -652,11 +669,21 @@ export function createSqliteProvider(): DbProvider {
 
     const db = connResult.data
     let active = true
+    let released = false
+    const releaseTxLock = await acquireTxLock()
+
+    const finishTransaction = () => {
+      if (!released) {
+        released = true
+        releaseTxLock()
+      }
+    }
 
     try {
       db.exec('BEGIN TRANSACTION')
     }
     catch (error) {
+      finishTransaction()
       return err({
         code: DbErrorCode.TRANSACTION_FAILED,
         message: dbM('db_sqliteTxFailed', { params: { error: String(error) } }),
@@ -722,9 +749,12 @@ export function createSqliteProvider(): DbProvider {
         try {
           db.exec('COMMIT')
           active = false
+          finishTransaction()
           return ok(undefined)
         }
         catch (error) {
+          active = false
+          finishTransaction()
           return err({
             code: DbErrorCode.TRANSACTION_FAILED,
             message: dbM('db_sqliteTxFailed', { params: { error: String(error) } }),
@@ -740,9 +770,12 @@ export function createSqliteProvider(): DbProvider {
         try {
           db.exec('ROLLBACK')
           active = false
+          finishTransaction()
           return ok(undefined)
         }
         catch (error) {
+          active = false
+          finishTransaction()
           return err({
             code: DbErrorCode.TRANSACTION_FAILED,
             message: dbM('db_sqliteTxFailed', { params: { error: String(error) } }),
