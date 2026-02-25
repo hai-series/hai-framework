@@ -8,7 +8,7 @@
  * =============================================================================
  */
 
-import type { AppType, CreateProjectOptions, FeatureDefinition, FeatureId, ProjectInfo } from '../types.js'
+import type { AppType, CreateProjectOptions, FeatureDefinition, FeatureId, ModuleConfigs, ProjectInfo } from '../types.js'
 import { execSync } from 'node:child_process'
 import path from 'node:path'
 import process from 'node:process'
@@ -316,6 +316,10 @@ async function resolveOptions(options: CreateProjectOptions): Promise<Required<C
     selectedFeatures = resolveFeatureDependencies(Array.from(merged))
   }
 
+  // 模块配置（交互式收集关键配置项）
+  const projectName = options.name || baseAnswers.name
+  const moduleConfigs = options.moduleConfigs ?? await promptModuleConfigs(selectedFeatures, projectName)
+
   // 示例代码选项
   let addExamples = options.examples
   if (addExamples === undefined) {
@@ -395,6 +399,7 @@ async function resolveOptions(options: CreateProjectOptions): Promise<Required<C
     appType: selectedAppType,
     template: (selectedTemplate ?? 'default') as 'default' | 'minimal' | 'full' | 'custom',
     features: selectedFeatures,
+    moduleConfigs,
     examples: addExamples ?? true,
     install: install ?? true,
     packageManager: packageManager || 'pnpm',
@@ -420,6 +425,257 @@ function resolveFeatureDependencies(features: FeatureId[]): FeatureId[] {
   }
 
   return Array.from(result)
+}
+
+// ============================================================================
+// 模块配置交互
+// ============================================================================
+
+/**
+ * 交互式收集模块配置
+ *
+ * @param features - 选中的功能列表
+ * @param projectName - 项目名称（用于 core 配置默认值）
+ * @returns 模块配置对象
+ */
+async function promptModuleConfigs(features: FeatureId[], projectName: string): Promise<ModuleConfigs> {
+  const configs: ModuleConfigs = {}
+  const onCancel = () => {
+    core.logger.info(chalk.red('\n已取消'))
+    process.exit(1)
+  }
+
+  core.logger.info('')
+  core.logger.info(chalk.bold('  ⚙ 模块配置'))
+  core.logger.info(chalk.gray('     设置关键配置项（回车使用默认值）'))
+  core.logger.info('')
+
+  // core 配置（始终收集）
+  configs.core = await promptCoreConfig(projectName, onCancel)
+
+  // 按功能收集配置
+  if (features.includes('db')) {
+    configs.db = await promptDbConfig(projectName, onCancel)
+  }
+  if (features.includes('cache')) {
+    configs.cache = await promptCacheConfig(onCancel)
+  }
+  if (features.includes('iam')) {
+    configs.iam = await promptIamConfig(onCancel)
+  }
+  if (features.includes('storage')) {
+    configs.storage = await promptStorageConfig(onCancel)
+  }
+  if (features.includes('ai')) {
+    configs.ai = await promptAiConfig(onCancel)
+  }
+
+  return configs
+}
+
+/**
+ * 收集 core 模块配置
+ */
+async function promptCoreConfig(projectName: string, onCancel: () => void): Promise<ModuleConfigs['core']> {
+  core.logger.info(chalk.cyan('  [core] 应用基础配置'))
+
+  const { defaultLocale } = await prompts({
+    type: 'select',
+    name: 'defaultLocale',
+    message: '默认语言:',
+    choices: [
+      { title: '中文 (zh-CN)', value: 'zh-CN' },
+      { title: 'English (en-US)', value: 'en-US' },
+    ],
+    initial: 0,
+  }, { onCancel })
+
+  return {
+    name: projectName,
+    defaultLocale,
+  }
+}
+
+/**
+ * 收集 db 模块配置
+ */
+async function promptDbConfig(projectName: string, onCancel: () => void): Promise<ModuleConfigs['db']> {
+  core.logger.info(chalk.cyan('  [db] 数据库配置'))
+
+  const { type } = await prompts({
+    type: 'select',
+    name: 'type',
+    message: '数据库类型:',
+    choices: [
+      { title: 'SQLite (零配置，适合开发)', value: 'sqlite' },
+      { title: 'PostgreSQL', value: 'postgresql' },
+      { title: 'MySQL', value: 'mysql' },
+    ],
+    initial: 0,
+  }, { onCancel })
+
+  if (type === 'sqlite') {
+    const { database } = await prompts({
+      type: 'text',
+      name: 'database',
+      message: 'SQLite 数据库路径:',
+      initial: './data/app.db',
+    }, { onCancel })
+
+    return { type, database }
+  }
+
+  // postgresql / mysql
+  const answers = await prompts([
+    {
+      type: 'text',
+      name: 'host',
+      message: `${type === 'postgresql' ? 'PostgreSQL' : 'MySQL'} 主机:`,
+      initial: 'localhost',
+    },
+    {
+      type: 'number',
+      name: 'port',
+      message: '端口:',
+      initial: type === 'postgresql' ? 5432 : 3306,
+    },
+    {
+      type: 'text',
+      name: 'database',
+      message: '数据库名称:',
+      initial: projectName,
+    },
+  ], { onCancel })
+
+  return { type, host: answers.host, port: answers.port, database: answers.database }
+}
+
+/**
+ * 收集 cache 模块配置
+ */
+async function promptCacheConfig(onCancel: () => void): Promise<ModuleConfigs['cache']> {
+  core.logger.info(chalk.cyan('  [cache] 缓存配置'))
+
+  const { type } = await prompts({
+    type: 'select',
+    name: 'type',
+    message: '缓存类型:',
+    choices: [
+      { title: '内存缓存 (零配置，适合开发)', value: 'memory' },
+      { title: 'Redis', value: 'redis' },
+    ],
+    initial: 0,
+  }, { onCancel })
+
+  if (type === 'memory') {
+    return { type }
+  }
+
+  const answers = await prompts([
+    {
+      type: 'text',
+      name: 'host',
+      message: 'Redis 主机:',
+      initial: 'localhost',
+    },
+    {
+      type: 'number',
+      name: 'port',
+      message: 'Redis 端口:',
+      initial: 6379,
+    },
+  ], { onCancel })
+
+  return { type, host: answers.host, port: answers.port }
+}
+
+/**
+ * 收集 iam 模块配置
+ */
+async function promptIamConfig(onCancel: () => void): Promise<ModuleConfigs['iam']> {
+  core.logger.info(chalk.cyan('  [iam] 认证授权配置'))
+
+  const answers = await prompts([
+    {
+      type: 'confirm',
+      name: 'loginPassword',
+      message: '启用密码登录?',
+      initial: true,
+    },
+    {
+      type: 'confirm',
+      name: 'loginOtp',
+      message: '启用 OTP 验证码登录?',
+      initial: false,
+    },
+  ], { onCancel })
+
+  return { loginPassword: answers.loginPassword, loginOtp: answers.loginOtp }
+}
+
+/**
+ * 收集 storage 模块配置
+ */
+async function promptStorageConfig(onCancel: () => void): Promise<ModuleConfigs['storage']> {
+  core.logger.info(chalk.cyan('  [storage] 文件存储配置'))
+
+  const { type } = await prompts({
+    type: 'select',
+    name: 'type',
+    message: '存储类型:',
+    choices: [
+      { title: '本地存储 (零配置，适合开发)', value: 'local' },
+      { title: 'S3 / MinIO / OSS', value: 's3' },
+    ],
+    initial: 0,
+  }, { onCancel })
+
+  if (type === 'local') {
+    const { localPath } = await prompts({
+      type: 'text',
+      name: 'localPath',
+      message: '存储路径:',
+      initial: './data/uploads',
+    }, { onCancel })
+
+    return { type, localPath }
+  }
+
+  return { type }
+}
+
+/**
+ * 收集 ai 模块配置
+ */
+async function promptAiConfig(onCancel: () => void): Promise<ModuleConfigs['ai']> {
+  core.logger.info(chalk.cyan('  [ai] AI 集成配置'))
+
+  const { defaultProvider } = await prompts({
+    type: 'select',
+    name: 'defaultProvider',
+    message: 'AI Provider:',
+    choices: [
+      { title: 'OpenAI', value: 'openai' },
+      { title: 'Anthropic (Claude)', value: 'anthropic' },
+      { title: '其他 (OpenAI 兼容)', value: 'custom' },
+    ],
+    initial: 0,
+  }, { onCancel })
+
+  const defaultModel = defaultProvider === 'openai'
+    ? 'gpt-4o-mini'
+    : defaultProvider === 'anthropic'
+      ? 'claude-3-sonnet'
+      : ''
+
+  const { model } = await prompts({
+    type: 'text',
+    name: 'model',
+    message: '默认模型:',
+    initial: defaultModel,
+  }, { onCancel })
+
+  return { defaultProvider, model }
 }
 
 /**
@@ -547,17 +803,18 @@ async function generateProjectFiles(
   await fse.ensureDir(path.join(projectPath, 'static'))
 
   // 生成配置文件
+  const { generateConfigFile } = await import('./config-templates.js')
+  const configs = options.moduleConfigs
+
   for (const featureId of options.features || []) {
     const configKey = getFeatureConfigKey(featureId)
     if (configKey) {
-      const { generateConfigFile } = await import('./config-templates.js')
-      const content = generateConfigFile(configKey)
+      const content = generateConfigFile(configKey, configs)
       await writeFile(path.join(projectPath, 'config', `_${configKey}.yml`), content)
     }
   }
   // 始终生成 core 配置
-  const { generateConfigFile } = await import('./config-templates.js')
-  await writeFile(path.join(projectPath, 'config', '_core.yml'), generateConfigFile('core'))
+  await writeFile(path.join(projectPath, 'config', '_core.yml'), generateConfigFile('core', configs))
 }
 
 /**

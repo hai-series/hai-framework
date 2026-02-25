@@ -52,6 +52,90 @@ export interface GlobalOptions {
 export type AppType = 'admin' | 'website' | 'h5' | 'api'
 
 /**
+ * 模块配置值
+ */
+export interface ModuleConfigs {
+  /** core 模块配置 */
+  core?: CoreModuleConfig
+  /** db 模块配置 */
+  db?: DbModuleConfig
+  /** cache 模块配置 */
+  cache?: CacheModuleConfig
+  /** iam 模块配置 */
+  iam?: IamModuleConfig
+  /** storage 模块配置 */
+  storage?: StorageModuleConfig
+  /** ai 模块配置 */
+  ai?: AiModuleConfig
+}
+
+/**
+ * core 模块配置
+ */
+export interface CoreModuleConfig {
+  /** 应用名称 */
+  name?: string
+  /** 默认语言 */
+  defaultLocale?: string
+}
+
+/**
+ * db 模块配置
+ */
+export interface DbModuleConfig {
+  /** 数据库类型 */
+  type?: 'sqlite' | 'postgresql' | 'mysql'
+  /** 数据库路径或名称 */
+  database?: string
+  /** 主机（postgresql/mysql） */
+  host?: string
+  /** 端口（postgresql/mysql） */
+  port?: number
+}
+
+/**
+ * cache 模块配置
+ */
+export interface CacheModuleConfig {
+  /** 缓存类型 */
+  type?: 'memory' | 'redis'
+  /** Redis 主机 */
+  host?: string
+  /** Redis 端口 */
+  port?: number
+}
+
+/**
+ * iam 模块配置
+ */
+export interface IamModuleConfig {
+  /** 启用密码登录 */
+  loginPassword?: boolean
+  /** 启用 OTP 登录 */
+  loginOtp?: boolean
+}
+
+/**
+ * storage 模块配置
+ */
+export interface StorageModuleConfig {
+  /** 存储类型 */
+  type?: 'local' | 's3'
+  /** 本地存储路径 */
+  localPath?: string
+}
+
+/**
+ * ai 模块配置
+ */
+export interface AiModuleConfig {
+  /** 默认 Provider */
+  defaultProvider?: string
+  /** 模型名称 */
+  model?: string
+}
+
+/**
  * 项目创建选项
  */
 export interface CreateProjectOptions extends GlobalOptions {
@@ -63,6 +147,8 @@ export interface CreateProjectOptions extends GlobalOptions {
   template?: 'default' | 'minimal' | 'full' | 'custom'
   /** 选择的功能 */
   features?: FeatureId[]
+  /** 模块配置 */
+  moduleConfigs?: ModuleConfigs
   /** 是否添加示例代码 */
   examples?: boolean
   /** 是否安装依赖 */
