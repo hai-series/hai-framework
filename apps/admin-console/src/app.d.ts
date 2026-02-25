@@ -20,6 +20,8 @@ declare global {
       session?: {
         userId: string
         username: string
+        displayName?: string
+        avatarUrl?: string
         roles: string[]
         permissions: string[]
       }
@@ -32,6 +34,8 @@ declare global {
       user?: {
         id: string
         username: string
+        displayName?: string
+        avatarUrl?: string
         roles: string[]
       }
     }

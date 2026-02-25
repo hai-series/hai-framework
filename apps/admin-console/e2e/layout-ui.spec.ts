@@ -127,6 +127,16 @@ test.describe('User Menu', () => {
     await expect(page.locator('.user-menu-container a[href="/admin/settings"]')).toBeVisible()
   })
 
+  test('点击个人资料跳转到资料页', async ({ page, request }) => {
+    await registerAndLogin(page, request, 'usermenu')
+
+    await page.locator('.user-menu-container > button').first().click()
+    await page.locator('.user-menu-container a[href="/admin/profile"]').click()
+
+    await page.waitForURL('**/admin/profile**', { timeout: 10_000 })
+    await expect(page.locator('h1')).toContainText(/个人资料|Profile/)
+  })
+
   test('下拉菜单包含退出按钮', async ({ page, request }) => {
     await registerAndLogin(page, request, 'usermenu')
 

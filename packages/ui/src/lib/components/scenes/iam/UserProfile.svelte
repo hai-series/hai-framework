@@ -9,7 +9,7 @@
   =============================================================================
 -->
 <script lang="ts">
-  import type { UserProfileProps, UserProfileField } from '../types.js'
+  import type { UserProfileField, UserProfileProps, UserProfileSubmitData } from '../types.js'
   import { cn } from '../../../utils.js'
   import Input from '../../primitives/Input.svelte'
   import BareInput from '../../primitives/BareInput.svelte'
@@ -22,8 +22,9 @@
   let {
     user,
     editable = false,
+    alwaysEditable = false,
     loading = false,
-    fields = ['avatar', 'username', 'email', 'nickname', 'phone'],
+    fields = ['avatar', 'username', 'email', 'displayName', 'phone'],
     class: className = '',
     errors = {},
     onsubmit,
@@ -31,7 +32,13 @@
   }: UserProfileProps = $props()
   
   let editMode = $state(false)
-  let formData = $state<Record<string, string>>({})
+  let formData = $state<UserProfileSubmitData>({
+    username: '',
+    email: '',
+    displayName: '',
+    phone: '',
+    bio: '',
+  })
   
   // 初始化表单数据
   $effect(() => {
@@ -39,7 +46,7 @@
       formData = {
         username: user.username || '',
         email: user.email || '',
-        nickname: user.nickname || '',
+        displayName: user.displayName || user.nickname || '',
         phone: user.phone || '',
         bio: user.bio || '',
       }
@@ -60,16 +67,49 @@
       username: () => m('user_profile_username'),
       email: () => m('user_profile_email'),
       nickname: () => m('user_profile_nickname'),
+      displayName: () => m('user_profile_display_name'),
       phone: () => m('user_profile_phone'),
       bio: () => m('user_profile_bio'),
     }
     return labelMap[field]?.() || field
   }
+
+  /**
+   * 将展示字段名映射为提交数据字段名。
+   *
+   * @param field 展示字段名
+   * @returns 提交数据中的字段名
+   */
+  function getModelKey(field: UserProfileField): keyof UserProfileSubmitData {
+    if (field === 'nickname' || field === 'displayName') {
+      return 'displayName'
+    }
+    if (field === 'email') {
+      return 'email'
+    }
+    if (field === 'phone') {
+      return 'phone'
+    }
+    if (field === 'bio') {
+      return 'bio'
+    }
+    return 'username'
+  }
   
+  /**
+   * 进入编辑态（仅 alwaysEditable=false 时生效）。
+   *
+   * @returns 无返回值
+   */
   function startEdit() {
     editMode = true
   }
   
+  /**
+   * 退出编辑态，并使用当前用户数据重置表单。
+   *
+   * @returns 无返回值
+   */
   function cancelEdit() {
     editMode = false
     // 重置表单数据
@@ -77,13 +117,19 @@
       formData = {
         username: user.username || '',
         email: user.email || '',
-        nickname: user.nickname || '',
+        displayName: user.displayName || user.nickname || '',
         phone: user.phone || '',
         bio: user.bio || '',
       }
     }
   }
   
+  /**
+   * 提交资料数据，成功后退出编辑态。
+   *
+   * @param e 表单提交事件
+   * @returns 无返回值
+   */
   async function handleSubmit(e: SubmitEvent) {
     e.preventDefault()
     if (loading) return
@@ -92,6 +138,12 @@
     editMode = false
   }
   
+  /**
+   * 将选中的头像文件透传给父组件回调。
+   *
+   * @param e 文件输入事件
+   * @returns 无返回值
+   */
   function handleAvatarChange(e: Event & { currentTarget: HTMLInputElement }) {
     const file = e.currentTarget.files?.[0]
     if (file) {
@@ -104,17 +156,19 @@
   <form onsubmit={handleSubmit}>
     <div class="space-y-6">
       {#each fields as field (field)}
+        {@const modelKey = getModelKey(field)}
         {#if field === 'avatar'}
           <!-- 头像 -->
           <div class="flex items-center gap-4">
             <Avatar
-              src={user?.avatar}
+              src={user?.avatarUrl ?? user?.avatar}
               alt={m('user_profile_avatar')}
               size="lg"
               ring
+              class="shadow-sm"
               placeholder={user?.username?.charAt(0).toUpperCase() || 'U'}
             />
-            {#if editable && editMode}
+            {#if editable && (editMode || alwaysEditable)}
               <div>
                 <BareInput
                   type="file"
@@ -132,27 +186,27 @@
             <div class="label">
               <span class="label-text font-medium">{getFieldLabel(field)}</span>
             </div>
-            {#if editMode && field !== 'username'}
+            {#if editable && (editMode || alwaysEditable)}
               {#if field === 'bio'}
                 <Textarea
-                  name={field}
+                  name={modelKey}
                   rows={3}
-                  bind:value={formData[field]}
+                  bind:value={formData[modelKey]}
                   disabled={loading}
                   error={errors[field]}
                 />
               {:else}
                 <Input
                   type={field === 'email' ? 'email' : field === 'phone' ? 'tel' : 'text'}
-                  name={field}
-                  bind:value={formData[field]}
+                  name={modelKey}
+                  bind:value={formData[modelKey]}
                   disabled={loading}
                   error={errors[field]}
                 />
               {/if}
             {:else}
               <p class="py-2 px-1 text-base-content">
-                {formData[field] || '-'}
+                {formData[modelKey] || '-'}
               </p>
             {/if}
           </div>
@@ -169,7 +223,7 @@
       <!-- 操作按钮 -->
       {#if editable}
         <div class="flex gap-2 pt-4">
-          {#if editMode}
+          {#if editMode || alwaysEditable}
             <Button
               type="submit"
               variant="primary"
@@ -186,7 +240,8 @@
             >
               {m('user_profile_cancel')}
             </Button>
-          {:else}
+          {/if}
+          {#if !editMode && !alwaysEditable}
             <Button
               type="button"
               variant="outline"

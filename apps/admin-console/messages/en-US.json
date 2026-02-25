@@ -2,7 +2,6 @@
   "$schema": "https://inlang.com/schema/inlang-message-format",
   "app_title": "hai Admin Console",
   "app_description": "Modern Admin Dashboard",
-
   "nav_home": "Home",
   "nav_dashboard": "Dashboard",
   "nav_settings": "System Settings",
@@ -17,7 +16,11 @@
   "nav_collapse": "Collapse",
   "nav_page": "Page",
   "nav_modules": "Module Demos",
-
+  "profile_password_security_desc": "After changing your password, the current session will be signed out automatically. Please log in again with the new password.",
+  "profile_password_rules_title": "Password Rules",
+  "profile_password_rule_min_length": "At least {minLength} characters",
+  "profile_password_rule_not_same": "The new password must be different from the current password",
+  "profile_password_rule_confirm_match": "Confirm password must match the new password",
   "settings_title": "System Settings",
   "settings_subtitle": "Customize your system appearance and regional preferences",
   "settings_appearance": "Appearance",
@@ -33,7 +36,6 @@
   "settings_version": "Version",
   "settings_version_dev": "Development",
   "settings_save": "Save Settings",
-
   "dashboard_title": "Dashboard",
   "dashboard_subtitle": "System overview and quick access",
   "dashboard_welcome": "Welcome back",
@@ -49,7 +51,6 @@
   "dashboard_recent_activity": "Recent Activity",
   "dashboard_quick_actions": "Quick Actions",
   "dashboard_activity_stats": "7-Day Activity Stats",
-
   "user_management": "User Management",
   "user_list": "User List",
   "user_create": "Create User",
@@ -63,10 +64,8 @@
   "user_actions": "Actions",
   "user_enabled": "Enabled",
   "user_disabled": "Disabled",
-
   "role_management": "Role Management",
   "permission_management": "Permission Management",
-
   "action_create": "Create",
   "action_edit": "Edit",
   "action_delete": "Delete",
@@ -80,7 +79,6 @@
   "action_close": "Close",
   "action_open": "Open",
   "action_view_all": "View all",
-
   "common_loading": "Loading...",
   "common_no_data": "No data",
   "common_error": "An error occurred",
@@ -91,18 +89,15 @@
   "common_unknown_user": "Unknown user",
   "common_no_activity": "No activity records",
   "common_network_error": "Network error, please try again later",
-
   "server_init_db_failed": "Database initialization failed: {message}",
   "server_init_cache_failed": "Cache initialization failed: {message}",
   "server_init_iam_failed": "IAM initialization failed: {message}",
   "server_error_with_cause": "{message} (Cause: {cause})",
   "server_init_not_initialized": "Application not initialized. Call initApp() first.",
-
   "time_just_now": "Just now",
   "time_minutes_ago": "{count} minutes ago",
   "time_hours_ago": "{count} hours ago",
   "time_days_ago": "{count} days ago",
-
   "activity_login": "Login",
   "activity_logout": "Logout",
   "activity_register": "Register",
@@ -110,7 +105,6 @@
   "activity_update": "Update",
   "activity_delete": "Delete",
   "activity_password_reset": "Password Reset",
-
   "iam_users_title": "User Management",
   "iam_users_subtitle": "Manage system user accounts",
   "iam_users_search_placeholder": "Search by username, email or display name...",
@@ -141,7 +135,6 @@
   "iam_users_form_roles": "Roles",
   "iam_users_form_status": "Status",
   "iam_users_form_password_hint": "Leave blank to keep current password",
-
   "iam_permissions_title": "Permission Management",
   "iam_permissions_subtitle": "Manage system permission configuration",
   "iam_permissions_create": "Create Permission",
@@ -167,7 +160,6 @@
   "iam_permissions_stat_resources": "Resources",
   "iam_permissions_stat_actions": "Action Types",
   "iam_permissions_stat_system": "System Permissions",
-
   "iam_roles_title": "Role Management",
   "iam_roles_subtitle": "Manage system roles and permission assignments",
   "iam_roles_create": "New Role",
@@ -187,14 +179,12 @@
   "iam_roles_user_count": "{count} users",
   "iam_roles_permission_count": "{count} permissions",
   "iam_roles_action_menu": "Role action menu",
-
   "gallery_title": "UI Gallery",
   "gallery_desc": "Complete component showcase based on @hai/ui, powered by DaisyUI",
   "gallery_tab_primitives": "Primitives",
   "gallery_tab_compounds": "Compounds",
   "gallery_tab_scenes": "Scenes",
   "gallery_tab_overlays": "Overlays / Theme",
-
   "modules_title": "Module Demos",
   "modules_desc": "Showcase and usage examples for hai-framework backend modules",
   "modules_tab_core": "Core",
@@ -203,7 +193,6 @@
   "modules_tab_storage": "Storage",
   "modules_tab_ai": "AI",
   "modules_tab_crypto": "Crypto",
-
   "api_auth_identifier_password_required": "Please enter username/email and password",
   "api_auth_login_failed": "Login failed, please try again later",
   "api_common_required_fields": "Please fill in all required fields",
@@ -219,6 +208,8 @@
   "api_auth_password_reset_success": "Password reset successful, please login with your new password",
   "api_auth_reset_password_failed": "Password reset failed, please try again later",
   "api_auth_password_too_short": "Password must be at least 8 characters",
+  "api_auth_avatar_invalid_type": "Only PNG/JPEG/WEBP/GIF image files are supported",
+  "api_auth_avatar_size_exceeded": "Avatar file size must be less than 2MB",
   "api_iam_users_list_failed": "Failed to list users",
   "api_iam_users_create_failed": "Failed to create user",
   "api_iam_users_not_found": "User not found",

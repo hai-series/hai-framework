@@ -280,5 +280,84 @@ export function createIamActions(config: IamActionsConfig) {
         message: getKitMessage('kit_changePasswordSuccess'),
       }
     },
+
+    /**
+     * 更新当前用户资料 Action
+     */
+    updateProfile: async (event: RequestEvent) => {
+      const formData = await event.request.formData()
+      const displayNameRaw = formData.get('displayName')
+      const emailRaw = formData.get('email')
+      const phoneRaw = formData.get('phone')
+      const avatarUrlRaw = formData.get('avatarUrl')
+
+      const displayName = typeof displayNameRaw === 'string' ? displayNameRaw.trim() || undefined : undefined
+      const email = typeof emailRaw === 'string' ? emailRaw.trim() || undefined : undefined
+      const phone = typeof phoneRaw === 'string' ? phoneRaw.trim() || undefined : undefined
+      const avatarUrl = typeof avatarUrlRaw === 'string' ? avatarUrlRaw.trim() || undefined : undefined
+
+      if (!displayName && !email && !phone && !avatarUrl) {
+        return fail(400, {
+          error: getKitMessage('kit_registerFieldsRequired'),
+        })
+      }
+
+      if (email && !/^[^\s@]+@[^\s@][^\s.@]*\.[^\s@]+$/.test(email)) {
+        return fail(400, {
+          error: getKitMessage('kit_emailInvalid'),
+        })
+      }
+
+      const token = event.cookies.get(sessionCookieName)
+      if (!token) {
+        return fail(401, {
+          error: getKitMessage('kit_loginRequired'),
+        })
+      }
+
+      const updatePayload = {
+        displayName,
+        email,
+        phone,
+        avatarUrl,
+      }
+
+      if (iam.user.updateCurrentUser) {
+        const updateResult = await iam.user.updateCurrentUser(token, updatePayload)
+        if (!updateResult.success) {
+          return fail(400, {
+            error: updateResult.error?.message ?? getKitMessage('kit_internalError'),
+          })
+        }
+        return {
+          success: true,
+          message: getKitMessage('kit_commonSuccess'),
+          user: updateResult.data,
+        }
+      }
+
+      const currentUserResult = iam.user.getCurrentUser
+        ? await iam.user.getCurrentUser(token)
+        : null
+      const currentUserId = currentUserResult?.success ? currentUserResult.data?.id : undefined
+      if (!currentUserId || !iam.user.updateUser) {
+        return fail(500, {
+          error: getKitMessage('kit_internalError'),
+        })
+      }
+
+      const updateResult = await iam.user.updateUser(currentUserId, updatePayload)
+      if (!updateResult.success) {
+        return fail(400, {
+          error: updateResult.error?.message ?? getKitMessage('kit_internalError'),
+        })
+      }
+
+      return {
+        success: true,
+        message: getKitMessage('kit_commonSuccess'),
+        user: updateResult.data,
+      }
+    },
   }
 }

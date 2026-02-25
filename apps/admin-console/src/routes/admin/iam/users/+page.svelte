@@ -334,6 +334,7 @@
     onclose={closeDialog}
     title={editingUser ? m.iam_users_edit() : m.iam_users_create()}
     size="lg"
+    closeOnBackdrop={false}
   >
     <form onsubmit={handleSubmit} class="space-y-5">
       {#if error}

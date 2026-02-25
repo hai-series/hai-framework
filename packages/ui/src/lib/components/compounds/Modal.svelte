@@ -12,7 +12,6 @@
   import type { ModalProps } from '../../types.js'
   import { cn } from '../../utils.js'
   import IconButton from '../primitives/IconButton.svelte'
-  import BareButton from '../primitives/BareButton.svelte'
   
   let {
     open = $bindable(false),
@@ -116,7 +115,12 @@
     {/if}
   </div>
   
-  <form method="dialog" class="modal-backdrop">
-    <BareButton type="submit" onclick={handleBackdropClick}>close</BareButton>
-  </form>
+  <button
+    type="button"
+    class="modal-backdrop"
+    aria-label="Close modal"
+    onclick={handleBackdropClick}
+  >
+    close
+  </button>
 </dialog>

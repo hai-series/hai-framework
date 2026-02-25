@@ -139,6 +139,24 @@ function buildUserFunctions(deps: UserBuilderDeps): IamUserFunctions {
   }
 
   /**
+   * 将底层更新错误转换为领域层 IAM 错误。
+   *
+   * @param message 底层错误消息
+   * @returns 领域层错误结果
+   */
+  function mapUpdateErrorAsDomainError(message: string): Result<never, IamError> {
+    const loweredMessage = message.toLowerCase()
+    if (loweredMessage.includes('unique') || loweredMessage.includes('duplicate')) {
+      return err({
+        code: IamErrorCode.USER_ALREADY_EXISTS,
+        message: iamM('iam_userAlreadyExist'),
+      })
+    }
+
+    return mapRepositoryError('iam_updateUserFailed', message)
+  }
+
+  /**
    * 构建注册页协议展示信息
    *
    * 根据配置决定是否在注册时展示用户协议/隐私协议链接。
@@ -186,6 +204,54 @@ function buildUserFunctions(deps: UserBuilderDeps): IamUserFunctions {
       const emailExistsResult = await userRepository.existsByEmail(options.email)
       if (emailExistsResult.success && emailExistsResult.data) {
         return err({ code: IamErrorCode.USER_ALREADY_EXISTS, message: iamM('iam_emailAlreadyUsed') })
+      }
+    }
+
+    return ok(undefined)
+  }
+
+  /**
+   * 更新用户前校验用户名和邮箱唯一性。
+   *
+   * @param userId 用户 ID
+   * @param data 待更新用户字段
+   * @returns 唯一性校验结果
+   */
+  async function validateUniqueFieldsForUpdate(userId: string, data: Partial<User>): Promise<Result<void, IamError>> {
+    const currentResult = await userRepository.findById(userId)
+    if (!currentResult.success) {
+      return mapRepositoryError('iam_queryUserFailed', currentResult.error.message) as Result<void, IamError>
+    }
+    if (!currentResult.data) {
+      return err({
+        code: IamErrorCode.USER_NOT_FOUND,
+        message: iamM('iam_userNotExist'),
+      })
+    }
+
+    if (data.username && data.username !== currentResult.data.username) {
+      const usernameExistsResult = await userRepository.existsByUsername(data.username)
+      if (!usernameExistsResult.success) {
+        return mapRepositoryError('iam_queryUserFailed', usernameExistsResult.error.message) as Result<void, IamError>
+      }
+      if (usernameExistsResult.data) {
+        return err({
+          code: IamErrorCode.USER_ALREADY_EXISTS,
+          message: iamM('iam_usernameAlreadyExist'),
+        })
+      }
+    }
+
+    if (data.email && data.email !== currentResult.data.email) {
+      const emailExistsResult = await userRepository.existsByEmail(data.email)
+      if (!emailExistsResult.success) {
+        return mapRepositoryError('iam_queryUserFailed', emailExistsResult.error.message) as Result<void, IamError>
+      }
+      if (emailExistsResult.data) {
+        return err({
+          code: IamErrorCode.USER_ALREADY_EXISTS,
+          message: iamM('iam_emailAlreadyUsed'),
+        })
       }
     }
 
@@ -290,6 +356,62 @@ function buildUserFunctions(deps: UserBuilderDeps): IamUserFunctions {
       return ok(toUser(userResult.data))
     },
 
+    async updateCurrentUser(accessToken: string, data: Partial<User>): Promise<Result<User, IamError>> {
+      const verifyResult = await sessionFunctions.verifyToken(accessToken)
+      if (!verifyResult.success) {
+        return verifyResult as Result<User, IamError>
+      }
+
+      const userId = verifyResult.data.userId
+      if (!hasUpdateFields(data)) {
+        const currentResult = await userRepository.findById(userId)
+        if (!currentResult.success) {
+          return mapRepositoryError('iam_queryUserFailed', currentResult.error.message) as Result<User, IamError>
+        }
+        if (!currentResult.data) {
+          return err({
+            code: IamErrorCode.USER_NOT_FOUND,
+            message: iamM('iam_userNotExist'),
+          })
+        }
+        return ok(toUser(currentResult.data))
+      }
+
+      const uniqueResult = await validateUniqueFieldsForUpdate(userId, data)
+      if (!uniqueResult.success) {
+        return uniqueResult as Result<User, IamError>
+      }
+
+      const updateResult = await userRepository.updateById(userId, data)
+      if (!updateResult.success) {
+        return mapUpdateErrorAsDomainError(updateResult.error.message) as Result<User, IamError>
+      }
+
+      if (updateResult.data.changes === 0) {
+        return err({
+          code: IamErrorCode.USER_NOT_FOUND,
+          message: iamM('iam_userNotExist'),
+        })
+      }
+
+      if (data.enabled === false) {
+        await sessionFunctions.deleteByUserId(userId)
+      }
+
+      const updatedResult = await userRepository.findById(userId)
+      if (!updatedResult.success) {
+        return mapRepositoryError('iam_queryUserFailed', updatedResult.error.message) as Result<User, IamError>
+      }
+      if (!updatedResult.data) {
+        return err({
+          code: IamErrorCode.USER_NOT_FOUND,
+          message: iamM('iam_userNotExist'),
+        })
+      }
+
+      return ok(toUser(updatedResult.data))
+    },
+
     async getUser(userId: string): Promise<Result<User | null, IamError>> {
       const userResult = await userRepository.findById(userId)
       if (!userResult.success) {
@@ -350,9 +472,14 @@ function buildUserFunctions(deps: UserBuilderDeps): IamUserFunctions {
         return ok(toUser(currentResult.data))
       }
 
+      const uniqueResult = await validateUniqueFieldsForUpdate(userId, data)
+      if (!uniqueResult.success) {
+        return uniqueResult as Result<User, IamError>
+      }
+
       const updateResult = await userRepository.updateById(userId, data)
       if (!updateResult.success) {
-        return mapRepositoryError('iam_updateUserFailed', updateResult.error.message) as Result<User, IamError>
+        return mapUpdateErrorAsDomainError(updateResult.error.message) as Result<User, IamError>
       }
 
       if (updateResult.data.changes === 0) {
@@ -492,6 +619,23 @@ function buildUserFunctions(deps: UserBuilderDeps): IamUserFunctions {
 
       logger.info('Password changed', { userId })
       return ok(undefined)
+    },
+
+    /**
+     * 通过访问令牌定位当前用户并执行改密。
+     *
+     * @param accessToken 访问令牌
+     * @param oldPassword 原密码
+     * @param newPassword 新密码
+     * @returns 改密执行结果
+     */
+    async changeCurrentUserPassword(accessToken: string, oldPassword: string, newPassword: string): Promise<Result<void, IamError>> {
+      const verifyResult = await sessionFunctions.verifyToken(accessToken)
+      if (!verifyResult.success) {
+        return verifyResult as Result<void, IamError>
+      }
+
+      return this.changePassword(verifyResult.data.userId, oldPassword, newPassword)
     },
 
     async requestPasswordReset(identifier: string): Promise<Result<void, IamError>> {
