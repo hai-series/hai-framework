@@ -34,13 +34,13 @@
 
 import type { Cookies, RequestEvent } from '@sveltejs/kit'
 import type {
+  CryptoCsrfConfig,
   CryptoServiceLike,
-  CsrfConfig,
   EncryptedCookieConfig,
   WebhookVerifyConfig,
 } from './crypto-types.js'
 import { Buffer } from 'node:buffer'
-import { getKitMessage } from '../../index.js'
+import { getKitMessage } from '../../kit-i18n.js'
 
 /**
  * 验证 Webhook 签名
@@ -89,7 +89,7 @@ export async function signRequest(
 /**
  * 创建 CSRF Token 管理器
  */
-export function createCsrfManager(config: CsrfConfig) {
+export function createCsrfManager(config: CryptoCsrfConfig) {
   const {
     crypto,
     cookieName = 'csrf_token',

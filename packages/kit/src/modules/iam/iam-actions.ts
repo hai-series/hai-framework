@@ -30,7 +30,7 @@
 import type { RequestEvent } from '@sveltejs/kit'
 import type { IamActionsConfig } from './iam-types.js'
 import { fail, redirect } from '@sveltejs/kit'
-import { getKitMessage } from '../../index.js'
+import { getKitMessage } from '../../kit-i18n.js'
 
 /**
  * 创建 IAM Form Actions

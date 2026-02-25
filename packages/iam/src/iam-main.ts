@@ -82,7 +82,7 @@ export const iam: IamFunctions = {
     }
 
     try {
-      const { db, cache, ldapClientFactory, ldapSyncUser, ...settingsInput } = config
+      const { db, cache, ldapClientFactory, ldapSyncUser, onPasswordResetRequest, ...settingsInput } = config
 
       logger.debug('Initializing IAM module')
 
@@ -132,6 +132,7 @@ export const iam: IamFunctions = {
         passwordStrategy: authnResult.data._passwordStrategy as PasswordStrategy,
         sessionFunctions: currentSession,
         authzFunctions: currentAuthz,
+        onPasswordResetRequest,
       })
       if (!userResult.success) {
         return userResult

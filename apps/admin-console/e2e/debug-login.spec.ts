@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 /**
  * Debug test to understand the login cookie issue
  */

@@ -8,39 +8,39 @@ import { storageM } from './storage-i18n.js'
 // ─── 错误码 ───
 
 /**
- * 存储错误码（数值范围 5000-5999）
+ * 存储错误码（数值范围 6000-6999）
  */
 export const StorageErrorCode = {
   /** 连接失败 */
-  CONNECTION_FAILED: 5000,
+  CONNECTION_FAILED: 6000,
   /** 操作失败 */
-  OPERATION_FAILED: 5001,
+  OPERATION_FAILED: 6001,
   /** 文件不存在 */
-  NOT_FOUND: 5002,
+  NOT_FOUND: 6002,
   /** 文件已存在 */
-  ALREADY_EXISTS: 5003,
+  ALREADY_EXISTS: 6003,
   /** 权限拒绝 */
-  PERMISSION_DENIED: 5004,
+  PERMISSION_DENIED: 6004,
   /** 配额超限 */
-  QUOTA_EXCEEDED: 5005,
+  QUOTA_EXCEEDED: 6005,
   /** 无效路径 */
-  INVALID_PATH: 5006,
+  INVALID_PATH: 6006,
   /** IO 错误 */
-  IO_ERROR: 5007,
+  IO_ERROR: 6007,
   /** 网络错误 */
-  NETWORK_ERROR: 5008,
+  NETWORK_ERROR: 6008,
   /** 存储未初始化 */
-  NOT_INITIALIZED: 5010,
+  NOT_INITIALIZED: 6010,
   /** 不支持的存储类型 */
-  UNSUPPORTED_TYPE: 5011,
+  UNSUPPORTED_TYPE: 6011,
   /** 配置错误 */
-  CONFIG_ERROR: 5012,
+  CONFIG_ERROR: 6012,
   /** 签名 URL 生成失败 */
-  PRESIGN_FAILED: 5013,
+  PRESIGN_FAILED: 6013,
   /** 上传失败 */
-  UPLOAD_FAILED: 5014,
+  UPLOAD_FAILED: 6014,
   /** 下载失败 */
-  DOWNLOAD_FAILED: 5015,
+  DOWNLOAD_FAILED: 6015,
 } as const
 
 /** 存储错误码类型 */

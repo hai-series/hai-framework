@@ -11,6 +11,7 @@ import type { IamAuthzFunctions } from '../authz/iam-authz-types.js'
 import type { IamConfig, IamErrorCodeType } from '../iam-config.js'
 import type { IamError } from '../iam-types.js'
 import type { IamSessionFunctions } from '../session/iam-session-types.js'
+import type { ResetTokenRepository } from './iam-user-repository-reset-token.js'
 import type { UserRepository } from './iam-user-repository-user.js'
 import type {
   AgreementDisplay,
@@ -23,8 +24,9 @@ import type {
 import { core, err, ok } from '@hai/core'
 import { crypto } from '@hai/crypto'
 
-import { AgreementConfigSchema, IamErrorCode, RegisterConfigSchema } from '../iam-config.js'
+import { AgreementConfigSchema, IamErrorCode, PasswordResetConfigSchema, RegisterConfigSchema } from '../iam-config.js'
 import { iamM } from '../iam-i18n.js'
+import { createDbResetTokenRepository } from './iam-user-repository-reset-token.js'
 import { createDbUserRepository } from './iam-user-repository-user.js'
 import { toUser } from './iam-user-utils.js'
 
@@ -41,6 +43,8 @@ export interface IamUserFunctionsDeps {
   passwordStrategy: PasswordStrategy
   sessionFunctions: IamSessionFunctions
   authzFunctions: IamAuthzFunctions
+  /** 密码重置令牌回调（由业务层注入） */
+  onPasswordResetRequest?: (user: User, token: string, expiresAt: Date) => Promise<void>
 }
 
 /**
@@ -50,17 +54,20 @@ export interface IamUserFunctionsDeps {
  */
 export async function createIamUserFunctions(deps: IamUserFunctionsDeps): Promise<Result<IamUserFunctions, IamError>> {
   try {
-    const { config, db, passwordStrategy, sessionFunctions, authzFunctions } = deps
+    const { config, db, passwordStrategy, sessionFunctions, authzFunctions, onPasswordResetRequest } = deps
 
     const userRepository = await createDbUserRepository(db)
+    const resetTokenRepository = await createDbResetTokenRepository(db)
 
     const functions = buildUserFunctions({
       db,
       userRepository,
+      resetTokenRepository,
       passwordStrategy,
       sessionFunctions,
       authzFunctions,
       config,
+      onPasswordResetRequest,
     })
 
     logger.info('User sub-feature initialized')
@@ -81,10 +88,12 @@ export async function createIamUserFunctions(deps: IamUserFunctionsDeps): Promis
 interface UserBuilderDeps {
   db: DbFunctions
   userRepository: UserRepository
+  resetTokenRepository: ResetTokenRepository
   passwordStrategy: PasswordStrategy
   sessionFunctions: IamSessionFunctions
   authzFunctions: IamAuthzFunctions
   config: IamConfig
+  onPasswordResetRequest?: (user: User, token: string, expiresAt: Date) => Promise<void>
 }
 
 /**
@@ -94,10 +103,12 @@ function buildUserFunctions(deps: UserBuilderDeps): IamUserFunctions {
   const {
     db,
     userRepository,
+    resetTokenRepository,
     passwordStrategy,
     sessionFunctions,
     authzFunctions,
     config,
+    onPasswordResetRequest,
   } = deps
 
   const registerConfig = RegisterConfigSchema.parse(config.register ?? {})
@@ -351,6 +362,11 @@ function buildUserFunctions(deps: UserBuilderDeps): IamUserFunctions {
         })
       }
 
+      // 禁用用户时注销所有活跃会话
+      if (data.enabled === false) {
+        await sessionFunctions.deleteByUserId(userId)
+      }
+
       const updatedResult = await userRepository.findById(userId)
       if (!updatedResult.success) {
         return mapRepositoryError('iam_queryUserFailed', updatedResult.error.message) as Result<User, IamError>
@@ -383,6 +399,9 @@ function buildUserFunctions(deps: UserBuilderDeps): IamUserFunctions {
           await authzFunctions.removeRole(userId, role.id)
         }
       }
+
+      // 注销该用户所有活跃会话
+      await sessionFunctions.deleteByUserId(userId)
 
       const deleteResult = await userRepository.deleteById(userId)
       if (!deleteResult.success) {
@@ -419,6 +438,9 @@ function buildUserFunctions(deps: UserBuilderDeps): IamUserFunctions {
       if (!updateResult.success) {
         return mapRepositoryError('iam_updateUserFailed', updateResult.error.message)
       }
+
+      // 密码重置后注销该用户所有活跃会话
+      await sessionFunctions.deleteByUserId(userId)
 
       logger.info('Admin reset password', { userId })
       return ok(undefined)
@@ -465,21 +487,138 @@ function buildUserFunctions(deps: UserBuilderDeps): IamUserFunctions {
         return mapRepositoryError('iam_updateUserFailed', updateResult.error.message)
       }
 
+      // 密码修改后注销该用户所有活跃会话
+      await sessionFunctions.deleteByUserId(userId)
+
       logger.info('Password changed', { userId })
       return ok(undefined)
     },
 
-    async requestPasswordReset(_identifier: string): Promise<Result<void, IamError>> {
-      // TODO: 实现密码重置邮件发送
+    async requestPasswordReset(identifier: string): Promise<Result<void, IamError>> {
+      logger.debug('Password reset requested', { identifier })
+
+      const resetConfig = PasswordResetConfigSchema.parse(config.passwordReset ?? {})
+
+      // 根据标识符查找用户
+      const userResult = await userRepository.findByIdentifier(identifier)
+      if (!userResult.success) {
+        // 防止用户枚举：无论是否查找失败都返回 ok
+        logger.warn('Failed to look up user for password reset', { identifier })
+        return ok(undefined)
+      }
+      if (!userResult.data) {
+        // 防止用户枚举：用户不存在也返回 ok
+        logger.debug('User not found for password reset, returning ok to prevent enumeration', { identifier })
+        return ok(undefined)
+      }
+
+      const user = toUser(userResult.data)
+
+      // 生成令牌
+      const token = globalThis.crypto.randomUUID()
+      const expiresAt = new Date(Date.now() + resetConfig.tokenExpiresIn * 1000)
+
+      // 清理该用户的旧令牌
+      await resetTokenRepository.removeByUserId(user.id)
+
+      // 保存新令牌
+      const saveResult = await resetTokenRepository.saveToken({
+        id: globalThis.crypto.randomUUID(),
+        userId: user.id,
+        token,
+        expiresAt,
+      })
+      if (!saveResult.success) {
+        return saveResult
+      }
+
+      // 通过回调通知业务层（如发送邮件）
+      if (onPasswordResetRequest) {
+        try {
+          await onPasswordResetRequest(user, token, expiresAt)
+        }
+        catch (callbackError) {
+          logger.error('Password reset callback failed', { userId: user.id, error: callbackError })
+          // 回调失败不影响令牌生成，仍返回成功
+        }
+      }
+      else {
+        logger.warn('No password reset callback configured, token will not be delivered to user', { userId: user.id })
+      }
+
+      logger.info('Password reset token generated', { userId: user.id })
       return ok(undefined)
     },
 
-    async confirmPasswordReset(_token: string, _newPassword: string): Promise<Result<void, IamError>> {
-      // TODO: 实现密码重置确认
-      return err({
-        code: IamErrorCode.INTERNAL_ERROR,
-        message: iamM('iam_featureNotImplemented'),
+    async confirmPasswordReset(token: string, newPassword: string): Promise<Result<void, IamError>> {
+      logger.debug('Confirming password reset')
+
+      const resetConfig = PasswordResetConfigSchema.parse(config.passwordReset ?? {})
+
+      // 查找令牌
+      const tokenResult = await resetTokenRepository.findByToken(token)
+      if (!tokenResult.success) {
+        return tokenResult as Result<void, IamError>
+      }
+      if (!tokenResult.data) {
+        return err({
+          code: IamErrorCode.RESET_TOKEN_INVALID,
+          message: iamM('iam_resetTokenInvalid'),
+        })
+      }
+
+      const tokenRecord = tokenResult.data
+
+      // 检查尝试次数
+      if (tokenRecord.attempts >= resetConfig.maxAttempts) {
+        return err({
+          code: IamErrorCode.RESET_TOKEN_MAX_ATTEMPTS,
+          message: iamM('iam_resetTokenMaxAttempts'),
+        })
+      }
+
+      // 增加尝试次数
+      await resetTokenRepository.incrementAttempts(tokenRecord.id)
+
+      // 验证新密码强度
+      const validateResult = passwordStrategy.validatePassword(newPassword)
+      if (!validateResult.success)
+        return validateResult
+
+      // 查找用户
+      const userResult = await userRepository.findById(tokenRecord.userId)
+      if (!userResult.success) {
+        return mapRepositoryError('iam_queryUserFailed', userResult.error.message) as Result<void, IamError>
+      }
+      if (!userResult.data) {
+        return err({
+          code: IamErrorCode.USER_NOT_FOUND,
+          message: iamM('iam_userNotExist'),
+        })
+      }
+
+      // 哈希新密码
+      const hashResult = passwordStrategy.hashPassword(newPassword)
+      if (!hashResult.success)
+        return hashResult as Result<void, IamError>
+
+      // 更新密码
+      const updateResult = await userRepository.updateById(tokenRecord.userId, {
+        passwordHash: hashResult.data,
+        passwordUpdatedAt: new Date(),
       })
+      if (!updateResult.success) {
+        return mapRepositoryError('iam_updateUserFailed', updateResult.error.message)
+      }
+
+      // 标记令牌为已使用
+      await resetTokenRepository.markUsed(tokenRecord.id)
+
+      // 注销该用户所有活跃会话
+      await sessionFunctions.deleteByUserId(tokenRecord.userId)
+
+      logger.info('Password reset confirmed', { userId: tokenRecord.userId })
+      return ok(undefined)
     },
 
     validatePassword(password: string): Result<void, IamError> {

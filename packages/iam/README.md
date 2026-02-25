@@ -4,13 +4,13 @@
 
 ## 功能特性
 
-| 功能           | 说明                              |
-| -------------- | --------------------------------- |
-| **认证**       | 密码、OTP、LDAP 多策略认证        |
-| **会话**       | 有状态会话（随机访问令牌 + 缓存） |
-| **授权**       | RBAC 角色与权限管理（DB + 缓存）  |
-| **用户管理**   | 注册、查询、更新、密码管理        |
-| **前端客户端** | HTTP API 客户端，支持独立前端使用 |
+| 功能           | 说明                                 |
+| -------------- | ------------------------------------ |
+| **认证**       | 密码、OTP、LDAP 多策略认证           |
+| **会话**       | 有状态会话（随机访问令牌 + 缓存）    |
+| **授权**       | RBAC 角色与权限管理（DB + 缓存）     |
+| **用户管理**   | 注册、查询、更新、密码管理、密码重置 |
+| **前端客户端** | HTTP API 客户端，支持独立前端使用    |
 
 ## 安装
 
@@ -34,7 +34,7 @@ import { iam } from '@hai/iam'
 // 1. 初始化
 await db.init({ type: 'sqlite', database: './data.db' })
 await cache.init({ type: 'memory' })
-await iam.init(db, { session: { maxAge: 86400, sliding: true } }, { cache })
+await iam.init({ db, cache, session: { maxAge: 86400, sliding: true } })
 
 // 2. 注册
 const userResult = await iam.user.register({
@@ -99,6 +99,26 @@ await client.changePassword({
   oldPassword: 'Password123',
   newPassword: 'NewPassword456',
 })
+```
+
+## 密码重置
+
+```ts
+// 初始化时注入重置回调（发送邮件等）
+await iam.init({
+  db,
+  cache,
+  onPasswordResetRequest: async (user, token, expiresAt) => {
+    await sendEmail(user.email, `重置链接: https://example.com/reset?token=${token}`)
+  },
+  passwordReset: { tokenExpiresIn: 3600, maxAttempts: 3 },
+})
+
+// 请求重置（即使用户不存在也返回 ok，防止枚举）
+await iam.user.requestPasswordReset('admin@example.com')
+
+// 确认重置
+const result = await iam.user.confirmPasswordReset(token, 'NewPassword456')
 ```
 
 ## 错误处理

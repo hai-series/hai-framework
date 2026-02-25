@@ -53,7 +53,8 @@
     "@hai/cache": "workspace:*",
     "@hai/core": "workspace:*",
     "@hai/db": "workspace:*",
-    "@hai/iam": "workspace:*"
+    "@hai/iam": "workspace:*",
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@sveltejs/kit": "catalog:",

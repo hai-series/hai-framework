@@ -141,7 +141,7 @@ describe('iam.authz', () => {
         const result = await getIam().authz.createRole({ code: 'dup_role_code', name: '角色2' })
         expect(result.success).toBe(false)
         if (!result.success) {
-          expect(result.error.code).toBe(IamErrorCode.REPOSITORY_ERROR)
+          expect(result.error.code).toBe(IamErrorCode.ROLE_ALREADY_EXISTS)
         }
       })
 
@@ -240,7 +240,7 @@ describe('iam.authz', () => {
         const result = await getIam().authz.createPermission({ code: 'dup:perm', name: '权限2' })
         expect(result.success).toBe(false)
         if (!result.success) {
-          expect(result.error.code).toBe(IamErrorCode.REPOSITORY_ERROR)
+          expect(result.error.code).toBe(IamErrorCode.PERMISSION_ALREADY_EXISTS)
         }
       })
 

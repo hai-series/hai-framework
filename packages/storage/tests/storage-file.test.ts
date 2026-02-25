@@ -113,7 +113,7 @@ describe('storage.file', () => {
       const result = await storage.file.get('nonexistent.txt')
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.code).toBe(5002)
+        expect(result.error.code).toBe(6002)
       }
     })
 
@@ -152,7 +152,7 @@ describe('storage.file', () => {
       const result = await storage.file.head('nope.txt')
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.code).toBe(5002)
+        expect(result.error.code).toBe(6002)
       }
     })
 

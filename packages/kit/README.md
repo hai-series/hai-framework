@@ -14,27 +14,27 @@ pnpm add @hai/kit
 
 ```typescript
 // 主入口 — 包含所有服务端 + 客户端导出
-import { createHandle, ok, validateForm, authGuard } from '@hai/kit'
-
-// 模块化导入（按需拆分，减小 bundle）
-import { createIamHandle, createIamActions } from '@hai/kit/modules/iam'
-import { createStorageEndpoint }              from '@hai/kit/modules/storage'
-import { createCacheHandle }                  from '@hai/kit/modules/cache'
-import { verifyWebhookSignature }             from '@hai/kit/modules/crypto'
+import { authGuard, createHandle, ok, validateForm } from '@hai/kit'
 
 // 客户端 Store（浏览器侧）
 import { useSession, useUpload } from '@hai/kit/client'
+import { createCacheHandle } from '@hai/kit/modules/cache'
+import { verifyWebhookSignature } from '@hai/kit/modules/crypto'
+// 模块化导入（按需拆分，减小 bundle）
+import { createIamActions, createIamHandle } from '@hai/kit/modules/iam'
+
+import { createStorageEndpoint } from '@hai/kit/modules/storage'
 ```
 
 对应 `package.json` exports：
 
-| 路径                    | 说明                 |
-| ----------------------- | -------------------- |
-| `@hai/kit`              | 全量入口             |
-| `@hai/kit/modules/iam`  | IAM 集成             |
-| `@hai/kit/modules/storage` | Storage 集成      |
-| `@hai/kit/modules/cache`   | Cache 集成        |
-| `@hai/kit/modules/crypto`  | Crypto 集成       |
+| 路径                       | 说明                |
+| -------------------------- | ------------------- |
+| `@hai/kit`                 | 全量入口            |
+| `@hai/kit/modules/iam`     | IAM 集成            |
+| `@hai/kit/modules/storage` | Storage 集成        |
+| `@hai/kit/modules/cache`   | Cache 集成          |
+| `@hai/kit/modules/crypto`  | Crypto 集成         |
 | `@hai/kit/client`          | Svelte 客户端 Store |
 
 ## 快速上手
@@ -45,12 +45,12 @@ import { useSession, useUpload } from '@hai/kit/client'
 // src/hooks.server.ts
 import { iam } from '$lib/server/iam'
 import {
-  createIamHandle,
-  createHandle,
-  sequence,
-  corsMiddleware,
-  rateLimitMiddleware,
   authGuard,
+  corsMiddleware,
+  createHandle,
+  createIamHandle,
+  rateLimitMiddleware,
+  sequence,
   setAllModulesLocale,
 } from '@hai/kit'
 
@@ -81,9 +81,9 @@ export const handle = sequence(iamHandle, appHandle)
 ### 2. 创建 API 端点（验证 + 响应）
 
 ```typescript
+import { badRequest, ok, unauthorized, validateForm, validationError } from '@hai/kit'
 // src/routes/api/users/+server.ts
 import { z } from 'zod'
-import { validateForm, ok, badRequest, validationError, unauthorized } from '@hai/kit'
 
 const CreateUserSchema = z.object({
   username: z.string().min(3),
@@ -91,10 +91,12 @@ const CreateUserSchema = z.object({
 })
 
 export async function POST(event) {
-  if (!event.locals.session) return unauthorized()
+  if (!event.locals.session)
+    return unauthorized()
 
   const { valid, data, errors } = await validateForm(event.request, CreateUserSchema)
-  if (!valid) return validationError(errors)
+  if (!valid)
+    return validationError(errors)
 
   const user = await createUser(data!)
   return ok(user)
@@ -140,20 +142,19 @@ export async function POST(event) {
 标准化 JSON 响应，返回统一的 `ApiResponse` 格式。
 
 ```typescript
-import { ok, created, noContent, badRequest, unauthorized, forbidden,
-         notFound, conflict, validationError, internalError, redirect, error } from '@hai/kit'
+import { badRequest, conflict, created, error, forbidden, internalError, noContent, notFound, ok, redirect, unauthorized, validationError } from '@hai/kit'
 
-ok({ id: '1' })            // 200 { success: true, data: { id: '1' } }
-created({ id: '1' })       // 201
-noContent()                 // 204
+ok({ id: '1' }) // 200 { success: true, data: { id: '1' } }
+created({ id: '1' }) // 201
+noContent() // 204
 badRequest('invalid input') // 400
-unauthorized()              // 401
-forbidden()                 // 403
-notFound()                  // 404
-conflict('duplicate')       // 409
+unauthorized() // 401
+forbidden() // 403
+notFound() // 404
+conflict('duplicate') // 409
 validationError([{ field: 'email', message: 'invalid' }]) // 422
-internalError()             // 500
-redirect('/login', 303)     // 303 Location: /login
+internalError() // 500
+redirect('/login', 303) // 303 Location: /login
 error('CUSTOM', 'msg', 418) // 自定义状态码
 ```
 
@@ -162,7 +163,7 @@ error('CUSTOM', 'msg', 418) // 自定义状态码
 基于 Zod Schema 的请求数据验证。
 
 ```typescript
-import { validateForm, validateQuery, validateParams } from '@hai/kit'
+import { validateForm, validateParams, validateQuery } from '@hai/kit'
 
 // 验证请求体（JSON / FormData）
 const { valid, data, errors } = await validateForm(request, schema)
@@ -178,8 +179,13 @@ const { valid, data, errors } = validateParams(params, schema)
 
 ```typescript
 import {
-  authGuard, roleGuard, permissionGuard,
-  allGuards, anyGuard, notGuard, conditionalGuard,
+  allGuards,
+  anyGuard,
+  authGuard,
+  conditionalGuard,
+  notGuard,
+  permissionGuard,
+  roleGuard,
 } from '@hai/kit'
 
 // 认证守卫
@@ -192,10 +198,10 @@ roleGuard({ roles: ['admin', 'editor'], requireAll: false })
 permissionGuard({ permissions: ['posts:write'], apiMode: true })
 
 // 组合守卫
-allGuards(authGuard(), roleGuard({ roles: ['admin'] }))         // AND
+allGuards(authGuard(), roleGuard({ roles: ['admin'] })) // AND
 anyGuard(roleGuard({ roles: ['admin'] }), permissionGuard({ permissions: ['posts:*'] })) // OR
-notGuard(authGuard(), { redirect: '/dashboard' })               // 取反
-conditionalGuard((event) => event.url.pathname.startsWith('/admin'), roleGuard({ roles: ['admin'] }))
+notGuard(authGuard(), { redirect: '/dashboard' }) // 取反
+conditionalGuard(event => event.url.pathname.startsWith('/admin'), roleGuard({ roles: ['admin'] }))
 ```
 
 在 `createHandle` 中使用守卫：
@@ -235,7 +241,7 @@ const iamHandle = createIamHandle({
   iam,
   publicPaths: ['/login', '/register', '/api/health'],
   sessionCookieName: 'session',
-  onUnauthenticated: (event) =>
+  onUnauthenticated: event =>
     new Response(null, { status: 303, headers: { Location: '/login' } }),
 })
 
@@ -300,16 +306,18 @@ export const DELETE = endpoint.delete
 ```typescript
 // src/routes/api/webhook/+server.ts
 import { crypto } from '$lib/server/crypto'
-import { verifyWebhookSignature, createCsrfManager, createEncryptedCookie } from '@hai/kit'
+import { createCsrfManager, createEncryptedCookie, verifyWebhookSignature } from '@hai/kit'
 
 // Webhook 签名验证
 export async function POST(event) {
   const isValid = await verifyWebhookSignature({
-    crypto, event,
+    crypto,
+    event,
     secretKey: 'webhook_secret',
     signatureHeader: 'X-Signature',
   })
-  if (!isValid) return new Response('Invalid signature', { status: 401 })
+  if (!isValid)
+    return new Response('Invalid signature', { status: 401 })
   // 处理 webhook ...
 }
 

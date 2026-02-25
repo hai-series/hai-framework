@@ -4,4 +4,4 @@
  * =============================================================================
  */
 
-export { createHandle, sequence } from './handle.js'
+export * from './handle.js'

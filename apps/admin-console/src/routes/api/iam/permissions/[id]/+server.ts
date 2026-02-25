@@ -5,6 +5,7 @@
  */
 
 import type { RequestHandler } from '@sveltejs/kit'
+import * as m from '$lib/paraglide/messages.js'
 import { audit, permissionService } from '$lib/server/services/index.js'
 import { core } from '@hai/core'
 import { json } from '@sveltejs/kit'
@@ -19,7 +20,7 @@ export const DELETE: RequestHandler = async ({ params, locals, request, getClien
     // 检查权限是否存在
     const existing = await permissionService.getById(permId)
     if (!existing) {
-      return json({ success: false, error: '权限不存在' }, { status: 404 })
+      return json({ success: false, error: m.api_iam_permissions_not_found() }, { status: 404 })
     }
 
     // 删除权限
@@ -41,8 +42,8 @@ export const DELETE: RequestHandler = async ({ params, locals, request, getClien
     return json({ success: true })
   }
   catch (error) {
-    core.logger.error('删除权限失败:', { error })
-    const message = error instanceof Error ? error.message : '删除权限失败'
+    core.logger.error('Failed to delete permission:', { error })
+    const message = error instanceof Error ? error.message : m.api_iam_permissions_delete_failed()
     return json({ success: false, error: message }, { status: 500 })
   }
 }

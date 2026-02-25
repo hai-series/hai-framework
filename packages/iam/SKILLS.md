@@ -80,11 +80,11 @@ packages/iam/
 ### 1. 初始化流程 (`iam.init`)
 
 ```
-iam.init(db, config, { cache })
+iam.init({ db, cache, ...settings })
   ├─ 校验配置（Zod Schema）
   ├─ initializeComponents()
   │   ├─ 【DB】创建表：iam_users, iam_otp, iam_roles, iam_permissions,
-  │   │                  iam_role_permissions, iam_user_roles（含索引）
+  │   │                  iam_role_permissions, iam_user_roles, iam_password_reset_tokens（含索引）
   │   ├─ 创建密码策略（PasswordStrategy）
   │   ├─ 创建 OTP 策略（OtpStrategy, 可选, 取决于 login.otp + otp 配置）
   │   ├─ 创建 LDAP 策略（LdapStrategy, 可选, 取决于 login.ldap + ldap 配置 + ldapClientFactory）
@@ -336,16 +336,18 @@ await db.init({ type: 'sqlite', database: ':memory:' })
 await cache.init({ type: 'memory' })
 
 // 3. 初始化 IAM（db/cache 为必需参数）
-await iam.init(db, {
-  password: {
-    minLength: 8
-  }
-}, {
+await iam.init({
+  db,
   cache,
+  password: {
+    minLength: 8,
+  },
 })
 
 // 完整配置
-await iam.init(db, {
+await iam.init({
+  db,
+  cache,
   password: {
     minLength: 8,
     maxLength: 128,
@@ -366,32 +368,32 @@ await iam.init(db, {
     length: 6,
     expiresIn: 300,
     maxAttempts: 3,
-    resendInterval: 60
+    resendInterval: 60,
   },
 
   login: {
     password: true,
     otp: true,
-    ldap: false
+    ldap: false,
   },
 
   // 认证策略启用规则：提供对应配置且 login 未禁用时启用
 
   register: {
     enabled: true,
-    defaultEnabled: true
+    defaultEnabled: true,
   },
 
   agreements: {
     userAgreementUrl: 'https://example.com/terms',
     privacyPolicyUrl: 'https://example.com/privacy',
     showOnRegister: true,
-    showOnLogin: false
+    showOnLogin: false,
   },
 
   security: {
     maxLoginAttempts: 5,
-    lockoutDuration: 900
+    lockoutDuration: 900,
   },
 
   rbac: {
@@ -400,32 +402,26 @@ await iam.init(db, {
   },
 
   seedDefaultData: false, // 初始化时是否种子默认角色/权限
-}, {
-  cache,
 })
 
 // LDAP 登录需额外传入 ldapClientFactory
-await iam.init(
+await iam.init({
   db,
-  {
-    login: { ldap: true },
-    ldap: {
-      url: 'ldap://localhost:389',
-      bindDn: 'cn=admin,dc=example,dc=com',
-      bindPassword: 'secret',
-      searchBase: 'dc=example,dc=com'
+  cache,
+  login: { ldap: true },
+  ldap: {
+    url: 'ldap://localhost:389',
+    bindDn: 'cn=admin,dc=example,dc=com',
+    bindPassword: 'secret',
+    searchBase: 'dc=example,dc=com',
+  },
+  ldapClientFactory: async () => {
+    return {
+      success: false,
+      error: { code: IamErrorCode.LDAP_CONNECTION_FAILED, message: 'LDAP client not configured' },
     }
   },
-  {
-    cache,
-    ldapClientFactory: async () => {
-      return {
-        success: false,
-        error: { code: iam.errorCode.LDAP_CONNECTION_FAILED, message: 'LDAP client not configured' }
-      }
-    }
-  }
-)
+})
 
 // 关闭
 await iam.close()
@@ -542,6 +538,42 @@ const updated = await iam.user.updateUser('user-id', {
 const changeResult = await iam.user.changePassword('user-id', 'oldPassword', 'newPassword')
 ```
 
+### 密码重置 (iam.user)
+
+> 支持完整的忘记密码流程。需在 `iam.init` 时配置 `onPasswordResetRequest` 回调和 `passwordReset` 参数。
+
+```ts
+// 初始化时注入回调
+await iam.init({
+  db,
+  cache,
+  onPasswordResetRequest: async (user, token, expiresAt) => {
+    // user: User 对象, token: UUID 令牌, expiresAt: 过期时间
+    await sendResetEmail(user.email!, token, expiresAt)
+  },
+  passwordReset: {
+    tokenExpiresIn: 3600, // 令牌有效期（秒），默认 3600
+    maxAttempts: 3, // 最大尝试次数，默认 3
+  },
+})
+
+// 请求密码重置（防枚举：无论用户是否存在，都返回 ok）
+const requestResult = await iam.user.requestPasswordReset('user@example.com')
+// requestResult.success === true（始终）
+
+// 确认密码重置（使用令牌 + 新密码）
+const confirmResult = await iam.user.confirmPasswordReset(token, 'NewPassword123')
+// 成功后：旧密码失效、所有活跃会话被清除、令牌标记为已使用
+```
+
+**错误码：**
+
+| 错误码 | 常量                       | 说明             |
+| ------ | -------------------------- | ---------------- |
+| 5020   | `RESET_TOKEN_INVALID`      | 令牌无效或已使用 |
+| 5021   | `RESET_TOKEN_EXPIRED`      | 令牌已过期       |
+| 5022   | `RESET_TOKEN_MAX_ATTEMPTS` | 超过最大尝试次数 |
+
 ### RBAC 授权 (iam.authz)
 
 > 注意：角色/权限创建使用 `code` 字段，`id` 由系统自动生成。授权上下文中的 `roles` 使用 **角色 ID**。
@@ -602,9 +634,14 @@ const permissionsResult = await iam.authz.getAllPermissions({ page: 1, pageSize:
 // 移除角色权限（同步清理双向缓存）
 await iam.authz.removePermissionFromRole('role_admin', 'perm_users_write')
 
-// 删除角色/权限（同步清理关联缓存）
-await iam.authz.deleteRole('role_admin') // 清理 iam:role:{id}:perms + 反向索引
-await iam.authz.deletePermission('perm_id') // 清理 iam:permission:{code}:roles + 角色缓存
+// 删除角色（级联清理：用户-角色关联 + 角色-权限关联 + 缓存 + 受影响用户会话同步）
+// 系统角色（isSystem: true）不可删除，返回 PERMISSION_DENIED
+await iam.authz.deleteRole('role_admin')
+
+// 删除权限（级联清理：角色-权限关联 + 缓存）
+await iam.authz.deletePermission('perm_id')
+
+// 重复创建 code 相同的角色/权限返回 ROLE_ALREADY_EXISTS / PERMISSION_ALREADY_EXISTS
 ```
 
 ### 会话管理 (iam.session)
@@ -630,6 +667,20 @@ await iam.session.delete(accessToken)
 // 删除用户所有会话（强制下线）
 await iam.session.deleteByUserId('user-id')
 ```
+
+**自动会话失效场景：**
+
+以下操作会自动清除受影响用户的所有活跃会话：
+
+| 操作                                                | 说明                                    |
+| --------------------------------------------------- | --------------------------------------- |
+| `iam.user.deleteUser(userId)`                       | 删除用户时清除所有会话                  |
+| `iam.user.updateUser(userId, { enabled: false })`   | 禁用用户时清除所有会话                  |
+| `iam.user.adminResetPassword(userId, newPassword)`  | 管理员重置密码后清除所有会话            |
+| `iam.user.changePassword(userId, old, new)`         | 用户修改密码后清除所有会话              |
+| `iam.user.confirmPasswordReset(token, newPassword)` | 密码重置完成后清除所有会话              |
+| `iam.authz.deleteRole(roleId)`                      | 删除角色时同步受影响用户的会话角色列表  |
+| `iam.authz.assignRole / removeRole`                 | 分配/移除角色时同步用户会话中的角色列表 |
 
 ### 前端客户端 (iam.client)
 
@@ -692,26 +743,31 @@ await client.logout()
 ## 错误码
 
 ```ts
-import { iam } from '@hai/iam'
+import { IamErrorCode } from '@hai/iam'
 
 if (!result.success) {
   switch (result.error.code) {
-    case iam.errorCode.INVALID_CREDENTIALS: // 5001 凭证无效
-    case iam.errorCode.USER_NOT_FOUND: // 5002 用户不存在
-    case iam.errorCode.USER_DISABLED: // 5003 用户已禁用
-    case iam.errorCode.USER_LOCKED: // 5004 用户已锁定
-    case iam.errorCode.USER_ALREADY_EXISTS: // 5005 用户已存在
-    case iam.errorCode.PASSWORD_EXPIRED: // 5006 密码已过期
-    case iam.errorCode.PASSWORD_POLICY_VIOLATION: // 5007 密码不符合策略
-    case iam.errorCode.OTP_INVALID: // 5010 验证码无效
-    case iam.errorCode.OTP_RESEND_TOO_FAST: // 5012 发送过于频繁
-    case iam.errorCode.LOGIN_DISABLED: // 5013 登录方式已禁用
-    case iam.errorCode.REGISTER_DISABLED: // 5014 注册已禁用
-    case iam.errorCode.SESSION_INVALID: // 5102 会话无效
-    case iam.errorCode.ROLE_NOT_FOUND: // 5200 角色不存在
-    case iam.errorCode.PERMISSION_NOT_FOUND: // 5201 权限不存在
-    case iam.errorCode.REPOSITORY_ERROR: // 5300 存储层错误
-    case iam.errorCode.CONFIG_ERROR: // 5400 配置错误
+    case IamErrorCode.INVALID_CREDENTIALS: // 5001 凭证无效
+    case IamErrorCode.USER_NOT_FOUND: // 5002 用户不存在
+    case IamErrorCode.USER_DISABLED: // 5003 用户已禁用
+    case IamErrorCode.USER_LOCKED: // 5004 用户已锁定
+    case IamErrorCode.USER_ALREADY_EXISTS: // 5005 用户已存在
+    case IamErrorCode.PASSWORD_EXPIRED: // 5006 密码已过期
+    case IamErrorCode.PASSWORD_POLICY_VIOLATION: // 5007 密码不符合策略
+    case IamErrorCode.OTP_INVALID: // 5010 验证码无效
+    case IamErrorCode.OTP_RESEND_TOO_FAST: // 5012 发送过于频繁
+    case IamErrorCode.LOGIN_DISABLED: // 5013 登录方式已禁用
+    case IamErrorCode.REGISTER_DISABLED: // 5014 注册已禁用
+    case IamErrorCode.RESET_TOKEN_INVALID: // 5020 密码重置令牌无效
+    case IamErrorCode.RESET_TOKEN_EXPIRED: // 5021 密码重置令牌已过期
+    case IamErrorCode.RESET_TOKEN_MAX_ATTEMPTS: // 5022 密码重置超过最大尝试次数
+    case IamErrorCode.SESSION_INVALID: // 5102 会话无效
+    case IamErrorCode.ROLE_NOT_FOUND: // 5201 角色不存在
+    case IamErrorCode.PERMISSION_NOT_FOUND: // 5202 权限不存在
+    case IamErrorCode.ROLE_ALREADY_EXISTS: // 5203 角色已存在
+    case IamErrorCode.PERMISSION_ALREADY_EXISTS: // 5204 权限已存在
+    case IamErrorCode.REPOSITORY_ERROR: // 5500 存储层错误
+    case IamErrorCode.CONFIG_ERROR: // 5900 配置错误
       break
   }
 }
@@ -802,18 +858,12 @@ interface Permission {
 }
 ```
 
-## 创建独立实例
+## 属性
 
-```ts
-import { iam } from '@hai/iam'
-
-// 多租户场景
-const tenant1Iam = iam.create()
-const tenant2Iam = iam.create()
-
-await tenant1Iam.init(db, { password: { minLength: 8 } }, { cache })
-await tenant2Iam.init(db2, { otp: { length: 6 } }, { cache })
-```
+| 属性                | 类型                | 说明                          |
+| ------------------- | ------------------- | ----------------------------- |
+| `iam.config`        | `IamConfig \| null` | 当前配置（未初始化时为 null） |
+| `iam.isInitialized` | `boolean`           | 是否已初始化                  |
 
 ## 常见使用场景
 

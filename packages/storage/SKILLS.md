@@ -127,21 +127,21 @@ packages/storage/
 
 | 名称                | 数值 | 说明              |
 | ------------------- | ---- | ----------------- |
-| `CONNECTION_FAILED` | 5000 | 连接失败          |
-| `OPERATION_FAILED`  | 5001 | 操作失败          |
-| `NOT_FOUND`         | 5002 | 文件不存在        |
-| `ALREADY_EXISTS`    | 5003 | 文件已存在        |
-| `PERMISSION_DENIED` | 5004 | 权限拒绝          |
-| `QUOTA_EXCEEDED`    | 5005 | 配额超限          |
-| `INVALID_PATH`      | 5006 | 无效路径          |
-| `IO_ERROR`          | 5007 | IO 错误           |
-| `NETWORK_ERROR`     | 5008 | 网络错误          |
-| `NOT_INITIALIZED`   | 5010 | 存储未初始化      |
-| `UNSUPPORTED_TYPE`  | 5011 | 不支持的存储类型  |
-| `CONFIG_ERROR`      | 5012 | 配置错误          |
-| `PRESIGN_FAILED`    | 5013 | 签名 URL 生成失败 |
-| `UPLOAD_FAILED`     | 5014 | 上传失败          |
-| `DOWNLOAD_FAILED`   | 5015 | 下载失败          |
+| `CONNECTION_FAILED` | 6000 | 连接失败          |
+| `OPERATION_FAILED`  | 6001 | 操作失败          |
+| `NOT_FOUND`         | 6002 | 文件不存在        |
+| `ALREADY_EXISTS`    | 6003 | 文件已存在        |
+| `PERMISSION_DENIED` | 6004 | 权限拒绝          |
+| `QUOTA_EXCEEDED`    | 6005 | 配额超限          |
+| `INVALID_PATH`      | 6006 | 无效路径          |
+| `IO_ERROR`          | 6007 | IO 错误           |
+| `NETWORK_ERROR`     | 6008 | 网络错误          |
+| `NOT_INITIALIZED`   | 6010 | 存储未初始化      |
+| `UNSUPPORTED_TYPE`  | 6011 | 不支持的存储类型  |
+| `CONFIG_ERROR`      | 6012 | 配置错误          |
+| `PRESIGN_FAILED`    | 6013 | 签名 URL 生成失败 |
+| `UPLOAD_FAILED`     | 6014 | 上传失败          |
+| `DOWNLOAD_FAILED`   | 6015 | 下载失败          |
 
 ## 注意事项
 

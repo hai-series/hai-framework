@@ -39,7 +39,7 @@ export function createHandle(config: HookConfig = {}): Handle {
     const requestId = generateId('req')
 
       // 添加请求 ID 到 event.locals
-      ; (event.locals as any).requestId = requestId
+      ; (event.locals as Record<string, unknown>).requestId = requestId
 
     if (logging) {
       core.logger.info('Request started', {
@@ -58,7 +58,7 @@ export function createHandle(config: HookConfig = {}): Handle {
 
         if (sessionToken) {
           session = await validateSession(sessionToken) ?? undefined
-          ; (event.locals as any).session = session
+          ; (event.locals as Record<string, unknown>).session = session
         }
       }
 

@@ -43,7 +43,7 @@ export const GET: RequestHandler = async ({ cookies }) => {
     })
   }
   catch (error) {
-    core.logger.error('获取用户信息失败:', { error })
+    core.logger.error('Failed to get user info:', { error })
     return json({ success: false, user: null }, { status: 500 })
   }
 }

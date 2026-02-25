@@ -6,16 +6,18 @@
  *
  * 命令:
  *   create <name>  - 创建新项目
+ *   add [module]   - 向现有项目添加模块
+ *   init           - 初始化/校验配置
  *   generate <type> <name> - 生成代码
  * =============================================================================
  */
 
-import type { CreateProjectOptions, GeneratorType } from './types.js'
+import type { CreateProjectOptions, FeatureId, GeneratorType } from './types.js'
 import process from 'node:process'
 import { core } from '@hai/core'
 import { cac } from 'cac'
 import chalk from 'chalk'
-import { createProject, generate } from './commands/index.js'
+import { addModule, createProject, generate, initProject } from './commands/index.js'
 
 // CLI 版本
 const VERSION = '0.0.1'
@@ -52,6 +54,41 @@ cli
         install: options.install as boolean,
         packageManager: options.packageManager as CreateProjectOptions['packageManager'],
         git: options.git as boolean,
+        verbose: options.verbose as boolean,
+        cwd: options.cwd as string,
+      })
+    }
+    catch {
+      process.exit(1)
+    }
+  })
+
+// 增量添加模块
+cli
+  .command('add [module]', '向现有项目添加模块')
+  .option('--no-install', '不安装依赖')
+  .action(async (module: string | undefined, options: Record<string, unknown>) => {
+    try {
+      await addModule({
+        module: module as FeatureId,
+        install: options.install as boolean,
+        verbose: options.verbose as boolean,
+        cwd: options.cwd as string,
+      })
+    }
+    catch {
+      process.exit(1)
+    }
+  })
+
+// 初始化/校验配置
+cli
+  .command('init', '初始化/校验项目配置')
+  .option('-f, --force', '强制重新生成配置')
+  .action(async (options: Record<string, unknown>) => {
+    try {
+      await initProject({
+        force: options.force as boolean,
         verbose: options.verbose as boolean,
         cwd: options.cwd as string,
       })

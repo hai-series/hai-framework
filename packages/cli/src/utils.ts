@@ -156,8 +156,8 @@ export function formatDuration(ms: number): string {
  */
 export function registerHelpers(): void {
   // 条件判断
-  Handlebars.registerHelper('if_eq', function (this: unknown, a, b, options) {
-    return a === b ? (options as any).fn(this) : (options as any).inverse(this)
+  Handlebars.registerHelper('if_eq', function (this: unknown, a: unknown, b: unknown, options: Handlebars.HelperOptions) {
+    return a === b ? options.fn(this) : options.inverse(this)
   })
 
   // 日期格式化

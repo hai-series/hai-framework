@@ -36,7 +36,6 @@
     "cac": "catalog:",
     "chalk": "catalog:",
     "fs-extra": "catalog:",
-    "glob": "catalog:",
     "handlebars": "catalog:",
     "ora": "catalog:",
     "prompts": "catalog:"

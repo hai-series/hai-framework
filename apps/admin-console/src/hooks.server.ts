@@ -38,7 +38,7 @@ async function loadParaglideMiddleware() {
       })
       .catch(() => {
         // Paraglide 尚未编译，跳过
-        core.logger.warn('[i18n] Paraglide 尚未编译，跳过 i18n middleware')
+        core.logger.warn('[i18n] Paraglide not compiled, skipping i18n middleware')
         return null
       })
   }
@@ -111,7 +111,7 @@ async function validateSession(token: string) {
     }
   }
   catch (error) {
-    core.logger.error('会话验证失败:', { error })
+    core.logger.error('Session validation failed:', { error })
     return null
   }
 }

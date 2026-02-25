@@ -5,20 +5,21 @@
  */
 
 import type { RequestHandler } from '@sveltejs/kit'
+import * as m from '$lib/paraglide/messages.js'
+import { LoginSchema } from '$lib/server/schemas/index.js'
 import { audit } from '$lib/server/services/index.js'
 import { core } from '@hai/core'
 import { iam } from '@hai/iam'
+import { validateForm } from '@hai/kit'
 import { json } from '@sveltejs/kit'
 
 export const POST: RequestHandler = async ({ request, cookies, getClientAddress }) => {
   try {
-    const body = await request.json()
-    const { identifier, password } = body as { identifier: string, password: string }
-
-    // 验证必填字段
-    if (!identifier || !password) {
-      return json({ success: false, error: '请输入用户名/邮箱和密码' }, { status: 400 })
+    const { valid, data, errors } = await validateForm(request, LoginSchema)
+    if (!valid) {
+      return json({ success: false, error: errors[0]?.message }, { status: 400 })
     }
+    const { identifier, password } = data
 
     // 使用 IAM 模块登录
     const loginResult = await iam.auth.login({ identifier, password })
@@ -77,7 +78,7 @@ export const POST: RequestHandler = async ({ request, cookies, getClientAddress 
     })
   }
   catch (error) {
-    core.logger.error('登录失败:', { error })
-    return json({ success: false, error: '登录失败，请稍后重试' }, { status: 500 })
+    core.logger.error('Login failed:', { error })
+    return json({ success: false, error: m.api_auth_login_failed() }, { status: 500 })
   }
 }

@@ -68,6 +68,16 @@ export interface RolePermissionRepository {
    * 检查角色是否有某权限
    */
   hasPermission: (roleId: string, permissionCode: string, tx?: TxHandle) => Promise<Result<boolean, IamError>>
+
+  /**
+   * 删除角色的所有权限关联（级联删除用）
+   */
+  removeByRoleId: (roleId: string) => Promise<Result<void, IamError>>
+
+  /**
+   * 删除权限的所有角色关联（级联删除用）
+   */
+  removeByPermissionId: (permissionId: string) => Promise<Result<void, IamError>>
 }
 
 // =============================================================================
@@ -97,6 +107,11 @@ export interface UserRoleRepository {
    * 获取用户的所有角色
    */
   getRoles: (userId: string, tx?: TxHandle) => Promise<Result<Role[], IamError>>
+
+  /**
+   * 删除角色的所有用户关联并同步会话（级联删除用）
+   */
+  removeByRoleId: (roleId: string) => Promise<Result<void, IamError>>
 }
 
 // =============================================================================
@@ -518,6 +533,64 @@ export async function createDbRolePermissionRepository(
 
       return ok(codesResult.data.includes(permissionCode))
     },
+
+    async removeByRoleId(roleId): Promise<Result<void, IamError>> {
+      // 先查出当前缓存的权限代码，以便清理反向缓存
+      const cachedCodes = await cache.set_.smembers<string>(buildRolePermsKey(roleId))
+      if (cachedCodes.success && cachedCodes.data.length > 0) {
+        const removeRoleResult = await removeRoleFromPermissionCache(roleId, cachedCodes.data)
+        if (!removeRoleResult.success)
+          return removeRoleResult
+      }
+      // 删除正向缓存
+      await cache.kv.del(buildRolePermsKey(roleId))
+
+      // 删除 DB 行
+      const result = await db.sql.execute(
+        `DELETE FROM ${ROLE_PERMISSION_TABLE} WHERE role_id = ?`,
+        [roleId],
+      )
+      if (!result.success) {
+        return err({
+          code: IamErrorCode.REPOSITORY_ERROR,
+          message: iamM('iam_removePermissionFailed', { params: { message: result.error.message } }),
+          cause: result.error,
+        })
+      }
+      return ok(undefined)
+    },
+
+    async removeByPermissionId(permissionId): Promise<Result<void, IamError>> {
+      // 查出权限代码，用于清缓存
+      const permResult = await permissionRepository.findById(permissionId)
+      const permCode = permResult.success ? permResult.data?.code : undefined
+
+      // 删除 DB 行
+      const result = await db.sql.execute(
+        `DELETE FROM ${ROLE_PERMISSION_TABLE} WHERE permission_id = ?`,
+        [permissionId],
+      )
+      if (!result.success) {
+        return err({
+          code: IamErrorCode.REPOSITORY_ERROR,
+          message: iamM('iam_removePermissionFailed', { params: { message: result.error.message } }),
+          cause: result.error,
+        })
+      }
+
+      // 清缓存
+      if (permCode) {
+        const roleIdsResult = await cache.set_.smembers<string>(buildPermissionRolesKey(permCode))
+        if (roleIdsResult.success) {
+          await Promise.all(
+            roleIdsResult.data.map(rId => cache.set_.srem(buildRolePermsKey(rId), permCode)),
+          )
+        }
+        await cache.kv.del(buildPermissionRolesKey(permCode))
+      }
+
+      return ok(undefined)
+    },
   }
 }
 
@@ -761,6 +834,41 @@ export async function createDbUserRoleRepository(
       }
 
       return ok(roleResult.data)
+    },
+
+    async removeByRoleId(roleId): Promise<Result<void, IamError>> {
+      // 查出受影响的用户 ID
+      const usersResult = await db.sql.query<{ user_id: string }>(
+        `SELECT user_id FROM ${USER_ROLE_TABLE} WHERE role_id = ?`,
+        [roleId],
+      )
+      if (!usersResult.success) {
+        return err({
+          code: IamErrorCode.REPOSITORY_ERROR,
+          message: iamM('iam_queryRoleFailed', { params: { message: usersResult.error.message } }),
+          cause: usersResult.error,
+        })
+      }
+
+      // 删除关联行
+      const deleteResult = await db.sql.execute(
+        `DELETE FROM ${USER_ROLE_TABLE} WHERE role_id = ?`,
+        [roleId],
+      )
+      if (!deleteResult.success) {
+        return err({
+          code: IamErrorCode.REPOSITORY_ERROR,
+          message: iamM('iam_removeRoleFailed', { params: { message: deleteResult.error.message } }),
+          cause: deleteResult.error,
+        })
+      }
+
+      // 同步受影响用户的会话角色
+      for (const { user_id } of usersResult.data) {
+        await syncUserSessionRoles(user_id)
+      }
+
+      return ok(undefined)
     },
 
   }

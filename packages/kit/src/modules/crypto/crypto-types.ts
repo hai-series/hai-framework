@@ -102,7 +102,7 @@ export interface WebhookVerifyConfig {
 /**
  * CSRF 配置
  */
-export interface CsrfConfig {
+export interface CryptoCsrfConfig {
   /** Crypto 服务实例 */
   crypto: CryptoServiceLike
   /** Cookie 名称 */

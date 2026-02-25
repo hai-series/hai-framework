@@ -19,7 +19,7 @@ import type { IamAuthzFunctions } from './authz/iam-authz-types.js'
 import type { IamClient, IamClientConfig } from './client/iam-client.js'
 import type { IamConfig, IamConfigSettingsInput, IamErrorCodeType } from './iam-config.js'
 import type { IamSessionFunctions } from './session/iam-session-types.js'
-import type { IamUserFunctions } from './user/iam-user-types.js'
+import type { IamUserFunctions, User } from './user/iam-user-types.js'
 
 // ─── 错误类型 ───
 
@@ -54,6 +54,18 @@ export interface IamConfigInput extends IamConfigSettingsInput {
   ldapClientFactory?: LdapClientFactory
   /** LDAP 用户同步开关（默认 true） */
   ldapSyncUser?: boolean
+  /**
+   * 密码重置令牌回调（可选）
+   *
+   * 当用户请求密码重置时，框架生成令牌后通过此回调通知业务层，
+   * 业务层负责将令牌通过邮件/短信等渠道发送给用户。
+   * 若未提供此回调，requestPasswordReset 将仅记录日志不发送通知。
+   *
+   * @param user - 请求重置的用户信息
+   * @param token - 重置令牌（明文，需发送给用户）
+   * @param expiresAt - 令牌过期时间
+   */
+  onPasswordResetRequest?: (user: User, token: string, expiresAt: Date) => Promise<void>
 }
 
 // ─── 客户端操作 ───

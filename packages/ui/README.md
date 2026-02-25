@@ -28,10 +28,10 @@ pnpm add @hai/ui
 启用预处理器后，页面中可直接使用 `@hai/ui` 组件，无需逐个 import：
 
 ```js
+import { autoImportHaiUi } from '@hai/ui/auto-import'
 // svelte.config.js
 import adapter from '@sveltejs/adapter-auto'
 import { vitePreprocess } from '@sveltejs/vite-plugin-svelte'
-import { autoImportHaiUi } from '@hai/ui/auto-import'
 
 /** @type {import('@sveltejs/kit').Config} */
 const config = {
@@ -67,129 +67,129 @@ components/
 
 ### 原子组件 Primitives（20 个）
 
-| 组件 | 描述 | 主要属性 |
-|------|------|----------|
-| `Button` | 按钮 | `variant`, `size`, `loading`, `disabled`, `outline`, `circle` |
-| `IconButton` | 图标按钮 | `icon`, `variant`, `size`, `tooltip`, `loading` |
-| `BareButton` | 无样式按钮 | `class`, `ariaLabel`, `role`, `tabindex` |
-| `Input` | 输入框 | `type`, `value`, `size`, `error`, `validationMessage` |
-| `BareInput` | 无样式输入框 | `type`, `class`, `accept`, `multiple` |
-| `Textarea` | 文本域 | `value`, `rows`, `size`, `autoResize`, `error` |
-| `Select` | 下拉选择 | `options`, `value`, `placeholder`, `size` |
-| `Checkbox` | 复选框 | `checked`, `label`, `size`, `indeterminate` |
-| `Switch` | 开关 | `checked`, `label`, `size` |
-| `Radio` | 单选组 | `options`, `value`, `direction`, `size` |
-| `ToggleCheckbox` | 原生开关输入 | `checked`, `name`, `onchange` |
-| `ToggleInput` | 原生切换输入 | `checked`, `name` |
-| `ToggleRadio` | 原生单选输入 | `checked`, `name`, `onchange` |
-| `Range` | 滑块 | `value`, `min`, `max`, `step` |
-| `Rating` | 评分 | `value`, `max` |
-| `Badge` | 徽章 | `variant`, `size`, `outline` |
-| `Avatar` | 头像 | `src`, `name`, `size`, `shape`, `ring` |
-| `Tag` | 标签 | `text`, `variant`, `size`, `closable` |
-| `Spinner` | 加载动画 | `size`, `variant` |
-| `Progress` | 进度条 | `value`, `max`, `variant`, `striped`, `animated` |
+| 组件             | 描述         | 主要属性                                                      |
+| ---------------- | ------------ | ------------------------------------------------------------- |
+| `Button`         | 按钮         | `variant`, `size`, `loading`, `disabled`, `outline`, `circle` |
+| `IconButton`     | 图标按钮     | `icon`, `variant`, `size`, `tooltip`, `loading`               |
+| `BareButton`     | 无样式按钮   | `class`, `ariaLabel`, `role`, `tabindex`                      |
+| `Input`          | 输入框       | `type`, `value`, `size`, `error`, `validationMessage`         |
+| `BareInput`      | 无样式输入框 | `type`, `class`, `accept`, `multiple`                         |
+| `Textarea`       | 文本域       | `value`, `rows`, `size`, `autoResize`, `error`                |
+| `Select`         | 下拉选择     | `options`, `value`, `placeholder`, `size`                     |
+| `Checkbox`       | 复选框       | `checked`, `label`, `size`, `indeterminate`                   |
+| `Switch`         | 开关         | `checked`, `label`, `size`                                    |
+| `Radio`          | 单选组       | `options`, `value`, `direction`, `size`                       |
+| `ToggleCheckbox` | 原生开关输入 | `checked`, `name`, `onchange`                                 |
+| `ToggleInput`    | 原生切换输入 | `checked`, `name`                                             |
+| `ToggleRadio`    | 原生单选输入 | `checked`, `name`, `onchange`                                 |
+| `Range`          | 滑块         | `value`, `min`, `max`, `step`                                 |
+| `Rating`         | 评分         | `value`, `max`                                                |
+| `Badge`          | 徽章         | `variant`, `size`, `outline`                                  |
+| `Avatar`         | 头像         | `src`, `name`, `size`, `shape`, `ring`                        |
+| `Tag`            | 标签         | `text`, `variant`, `size`, `closable`                         |
+| `Spinner`        | 加载动画     | `size`, `variant`                                             |
+| `Progress`       | 进度条       | `value`, `max`, `variant`, `striped`, `animated`              |
 
-### 组合组件 Compounds（35 个）
+### 组合组件 Compounds（33 个）
 
 #### 表单
 
-| 组件 | 描述 | 主要属性 |
-|------|------|----------|
-| `Form` | 表单容器 | `loading`, `disabled`, `onsubmit` |
-| `FormField` | 表单字段 | `label`, `error`, `hint`, `required` |
-| `TagInput` | 标签输入 | `tags`, `maxTags`, `allowDuplicates`, `size` |
-| `MultiSelect` | 多选下拉 | `options`, `selected`, `onchange` |
+| 组件          | 描述     | 主要属性                                     |
+| ------------- | -------- | -------------------------------------------- |
+| `Form`        | 表单容器 | `loading`, `disabled`, `onsubmit`            |
+| `FormField`   | 表单字段 | `label`, `error`, `hint`, `required`         |
+| `TagInput`    | 标签输入 | `tags`, `maxTags`, `allowDuplicates`, `size` |
+| `MultiSelect` | 多选下拉 | `options`, `selected`, `onchange`            |
 
 #### 反馈
 
-| 组件 | 描述 | 主要属性 |
-|------|------|----------|
-| `Alert` | 警告框 | `variant`, `title`, `dismissible` |
-| `Toast` | 通知消息 | `message`, `variant`, `duration`, `position` |
-| `ToastContainer` | 通知容器 | 全局放置，配合 `toast` 单例使用 |
+| 组件             | 描述     | 主要属性                                     |
+| ---------------- | -------- | -------------------------------------------- |
+| `Alert`          | 警告框   | `variant`, `title`, `dismissible`            |
+| `Toast`          | 通知消息 | `message`, `variant`, `duration`, `position` |
+| `ToastContainer` | 通知容器 | 全局放置，配合 `toast` 单例使用              |
 
 #### 弹层
 
-| 组件 | 描述 | 主要属性 |
-|------|------|----------|
-| `Modal` | 模态框 | `open`, `title`, `size`, `closeOnBackdrop`, `showClose` |
-| `Drawer` | 抽屉 | `open`, `position`, `title`, `size` |
-| `Confirm` | 确认框 | `open`, `title`, `message`, `variant`, `onconfirm` |
-| `Popover` | 弹出层 | `open`, `position`, `trigger`, `offset` |
+| 组件      | 描述   | 主要属性                                                |
+| --------- | ------ | ------------------------------------------------------- |
+| `Modal`   | 模态框 | `open`, `title`, `size`, `closeOnBackdrop`, `showClose` |
+| `Drawer`  | 抽屉   | `open`, `position`, `title`, `size`                     |
+| `Confirm` | 确认框 | `open`, `title`, `message`, `variant`, `onconfirm`      |
+| `Popover` | 弹出层 | `open`, `position`, `trigger`, `offset`                 |
 
 #### 数据展示
 
-| 组件 | 描述 | 主要属性 |
-|------|------|----------|
-| `Card` | 卡片容器 | `title`, `bordered`, `shadow`, `padding` |
-| `Table` | 基础表格 | `data`, `columns`, `striped`, `hoverable` |
-| `DataTable` | 数据表格 | `data`, `columns`, `keyField`, `loading` |
-| `Accordion` | 手风琴 | `items: AccordionItem[]` |
-| `Timeline` | 时间线 | `items: TimelineItem[]` |
-| `ScoreBar` | 分数条 | `value`, `max`, `size` |
-| `SeverityBadge` | 严重程度标签 | `type`, `size` |
+| 组件            | 描述         | 主要属性                                  |
+| --------------- | ------------ | ----------------------------------------- |
+| `Card`          | 卡片容器     | `title`, `bordered`, `shadow`, `padding`  |
+| `Table`         | 基础表格     | `data`, `columns`, `striped`, `hoverable` |
+| `DataTable`     | 数据表格     | `data`, `columns`, `keyField`, `loading`  |
+| `Accordion`     | 手风琴       | `items: AccordionItem[]`                  |
+| `Timeline`      | 时间线       | `items: TimelineItem[]`                   |
+| `ScoreBar`      | 分数条       | `value`, `max`, `size`                    |
+| `SeverityBadge` | 严重程度标签 | `type`, `size`                            |
 
 #### 导航
 
-| 组件 | 描述 | 主要属性 |
-|------|------|----------|
-| `Tabs` | 标签页 | `items`, `active`, `type`, `size` |
-| `Pagination` | 分页 | `page`, `total`, `pageSize`, `showTotal` |
-| `Breadcrumb` | 面包屑 | `items`, `separator` |
-| `Steps` | 步骤条 | `items`, `current`, `direction`, `clickable` |
-| `Dropdown` | 下拉菜单 | `items`, `trigger`, `position` |
-| `Tooltip` | 提示 | `content`, `position`, `delay` |
+| 组件         | 描述     | 主要属性                                     |
+| ------------ | -------- | -------------------------------------------- |
+| `Tabs`       | 标签页   | `items`, `active`, `type`, `size`            |
+| `Pagination` | 分页     | `page`, `total`, `pageSize`, `showTotal`     |
+| `Breadcrumb` | 面包屑   | `items`, `separator`                         |
+| `Steps`      | 步骤条   | `items`, `current`, `direction`, `clickable` |
+| `Dropdown`   | 下拉菜单 | `items`, `trigger`, `position`               |
+| `Tooltip`    | 提示     | `content`, `position`, `delay`               |
 
 #### 状态占位
 
-| 组件 | 描述 | 主要属性 |
-|------|------|----------|
+| 组件       | 描述   | 主要属性                              |
+| ---------- | ------ | ------------------------------------- |
 | `Skeleton` | 骨架屏 | `variant`, `width`, `height`, `count` |
-| `Empty` | 空状态 | `title`, `description`, `icon` |
-| `Result` | 结果页 | `status`, `title`, `description` |
+| `Empty`    | 空状态 | `title`, `description`, `icon`        |
+| `Result`   | 结果页 | `status`, `title`, `description`      |
 
 #### 业务 / 应用级
 
-| 组件 | 描述 | 主要属性 |
-|------|------|----------|
-| `PageHeader` | 页面头部 | `title`, `description`，支持 `actions` 插槽 |
-| `FeedbackModal` | 反馈模态框 | `open`, `onsubmit` |
-| `SettingsModal` | 设置模态框 | `open`, `currentLanguage`, `currentTheme` |
-| `LanguageSwitch` | 语言切换 | `currentLanguage`, `languages`, `onchange` |
-| `ThemeSelector` | 主题选择器 | 完整主题选择面板 |
-| `ThemeToggle` | 主题切换 | `currentTheme`, `onchange` |
+| 组件             | 描述       | 主要属性                                    |
+| ---------------- | ---------- | ------------------------------------------- |
+| `PageHeader`     | 页面头部   | `title`, `description`，支持 `actions` 插槽 |
+| `FeedbackModal`  | 反馈模态框 | `open`, `onsubmit`                          |
+| `SettingsModal`  | 设置模态框 | `open`, `currentLanguage`, `currentTheme`   |
+| `LanguageSwitch` | 语言切换   | `currentLanguage`, `languages`, `onchange`  |
+| `ThemeSelector`  | 主题选择器 | 完整主题选择面板                            |
+| `ThemeToggle`    | 主题切换   | `currentTheme`, `onchange`                  |
 
 ### 场景组件 Scenes（14 个）
 
 #### IAM 身份认证（7 个）
 
-| 组件 | 描述 | 主要属性 |
-|------|------|----------|
-| `LoginForm` | 登录表单 | `loading`, `errors`, `showRememberMe`, `onsubmit` |
-| `RegisterForm` | 注册表单 | `loading`, `errors`, `fields`, `onsubmit` |
-| `ForgotPasswordForm` | 忘记密码 | `mode`, `loading`, `errors`, `onsubmit` |
-| `ResetPasswordForm` | 重置密码 | `loading`, `errors`, `showCode`, `onsubmit` |
-| `ChangePasswordForm` | 修改密码 | `loading`, `errors`, `requireOldPassword`, `onsubmit` |
-| `PasswordInput` | 密码输入框 | `value`, `showToggle`, `showStrength`, `minLength` |
-| `UserProfile` | 用户资料 | `user`, `editable`, `fields`, `onsubmit` |
+| 组件                 | 描述       | 主要属性                                              |
+| -------------------- | ---------- | ----------------------------------------------------- |
+| `LoginForm`          | 登录表单   | `loading`, `errors`, `showRememberMe`, `onsubmit`     |
+| `RegisterForm`       | 注册表单   | `loading`, `errors`, `fields`, `onsubmit`             |
+| `ForgotPasswordForm` | 忘记密码   | `mode`, `loading`, `errors`, `onsubmit`               |
+| `ResetPasswordForm`  | 重置密码   | `loading`, `errors`, `showCode`, `onsubmit`           |
+| `ChangePasswordForm` | 修改密码   | `loading`, `errors`, `requireOldPassword`, `onsubmit` |
+| `PasswordInput`      | 密码输入框 | `value`, `showToggle`, `showStrength`, `minLength`    |
+| `UserProfile`        | 用户资料   | `user`, `editable`, `fields`, `onsubmit`              |
 
 #### Storage 存储（4 个）
 
-| 组件 | 描述 | 主要属性 |
-|------|------|----------|
-| `FileUpload` | 文件上传 | `accept`, `maxSize`, `maxFiles`, `multiple`, `uploadUrl` |
-| `ImageUpload` | 图片上传 | `value`, `accept`, `maxSize`, `aspectRatio` |
-| `AvatarUpload` | 头像上传 | `value`, `size`, `maxSize`, `fallback` |
-| `FileList` | 文件列表 | `files`, `layout`, `showDelete`, `showDownload` |
+| 组件           | 描述     | 主要属性                                                 |
+| -------------- | -------- | -------------------------------------------------------- |
+| `FileUpload`   | 文件上传 | `accept`, `maxSize`, `maxFiles`, `multiple`, `uploadUrl` |
+| `ImageUpload`  | 图片上传 | `value`, `accept`, `maxSize`, `aspectRatio`              |
+| `AvatarUpload` | 头像上传 | `value`, `size`, `maxSize`, `fallback`                   |
+| `FileList`     | 文件列表 | `files`, `layout`, `showDelete`, `showDownload`          |
 
 #### Crypto 加密展示（3 个）
 
-| 组件 | 描述 | 主要属性 |
-|------|------|----------|
-| `EncryptedInput` | 加密输入 | `value`, `encryptedValue`, `algorithm`, `showEncrypted` |
-| `HashDisplay` | 哈希展示 | `value`, `algorithm`, `copyable`, `truncate` |
-| `SignatureDisplay` | 签名展示 | `signature`, `publicKey`, `algorithm`, `verified` |
+| 组件               | 描述     | 主要属性                                                |
+| ------------------ | -------- | ------------------------------------------------------- |
+| `EncryptedInput`   | 加密输入 | `value`, `encryptedValue`, `algorithm`, `showEncrypted` |
+| `HashDisplay`      | 哈希展示 | `value`, `algorithm`, `copyable`, `truncate`            |
+| `SignatureDisplay` | 签名展示 | `signature`, `publicKey`, `algorithm`, `verified`       |
 
 ## 使用示例
 
@@ -331,11 +331,39 @@ components/
 @import 'tailwindcss';
 
 @plugin "daisyui" {
-  themes: light --default, dark --prefersdark, cupcake, bumblebee, emerald,
-    corporate, retro, valentine, garden, aqua, lofi, pastel, fantasy,
-    wireframe, cmyk, autumn, acid, lemonade, winter, nord,
-    synthwave, cyberpunk, halloween, forest, black, luxury, dracula,
-    business, night, coffee, dim, sunset
+  themes:
+    light --default,
+    dark --prefersdark,
+    cupcake,
+    bumblebee,
+    emerald,
+    corporate,
+    retro,
+    valentine,
+    garden,
+    aqua,
+    lofi,
+    pastel,
+    fantasy,
+    wireframe,
+    cmyk,
+    autumn,
+    acid,
+    lemonade,
+    winter,
+    nord,
+    synthwave,
+    cyberpunk,
+    halloween,
+    forest,
+    black,
+    luxury,
+    dracula,
+    business,
+    night,
+    coffee,
+    dim,
+    sunset;
 }
 ```
 
@@ -350,7 +378,7 @@ pnpm add -D @iconify/tailwind4 @iconify-json/tabler
 ```css
 /* app.css */
 @plugin "@iconify/tailwind4" {
-  prefixes: tabler
+  prefixes: tabler;
 }
 ```
 
@@ -360,12 +388,12 @@ pnpm add -D @iconify/tailwind4 @iconify-json/tabler
 
 ```ts
 import {
-  THEMES,           // ThemeInfo[] — 全部 32 个主题元数据
-  THEME_GROUPS,     // 按亮色/暗色分组
-  applyTheme,       // 应用主题（自动持久化到 localStorage）
-  getCurrentTheme,  // 获取当前主题
-  isDarkTheme,      // 检查是否暗色主题
+  applyTheme, // 应用主题（自动持久化到 localStorage）
+  getCurrentTheme, // 获取当前主题
   getThemeInitScript, // 防闪烁脚本（放在 app.html <head> 中）
+  isDarkTheme, // 检查是否暗色主题
+  THEME_GROUPS, // 按亮色/暗色分组
+  THEMES, // ThemeInfo[] — 全部 32 个主题元数据
 } from '@hai/ui'
 ```
 
@@ -373,7 +401,9 @@ import {
 
 ```html
 <head>
-  <script>{@html getThemeInitScript()}</script>
+  <script>
+    {@html getThemeInitScript()}
+  </script>
 </head>
 ```
 
@@ -414,27 +444,31 @@ import {
 
 ```ts
 import {
-  createLocaleStore,    // Svelte 响应式 locale store
-  DEFAULT_LOCALE,       // 默认 locale: 'zh-CN'
-  DEFAULT_LOCALES,      // 支持的 locale 列表
-  detectBrowserLocale,  // 检测浏览器语言
-  getGlobalLocale,      // 获取当前全局 locale
-  interpolate,          // 字符串插值（如 "Hello {name}"）
-  isLocaleSupported,    // 检查 locale 是否支持
-  resolveLocale,        // 解析 locale（支持回退）
-  setGlobalLocale,      // 设置全局 locale（同步 @hai/core）
+  createLocaleStore, // Svelte 响应式 locale store
+  DEFAULT_LOCALE, // 默认 locale: 'zh-CN'
+  DEFAULT_LOCALES, // 支持的 locale 列表
+  detectBrowserLocale, // 检测浏览器语言
+  getGlobalLocale, // 获取当前全局 locale
+  interpolate, // 字符串插值（如 "Hello {name}"）
+  isLocaleSupported, // 检查 locale 是否支持
+  resolveLocale, // 解析 locale（支持回退）
+  setGlobalLocale, // 设置全局 locale（同步 @hai/core）
 } from '@hai/ui'
 ```
 
 ## 其他导出
 
 ```ts
-// 样式工具
-import { cn, getVariantClass, getSizeClass, generateId } from '@hai/ui'
+// 类型
+import type { ButtonProps, InputProps, ModalProps } from '@hai/ui'
+```
 
+```ts
+// 样式工具
+import { cn, generateId, getSizeClass, getVariantClass } from '@hai/ui'
+```
+
+```ts
 // Toast 单例
 import { toast } from '@hai/ui'
-
-// 类型（50+ 接口）
-import type { ButtonProps, InputProps, ModalProps, ... } from '@hai/ui'
 ```

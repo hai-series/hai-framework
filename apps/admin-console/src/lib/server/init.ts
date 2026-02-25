@@ -29,19 +29,13 @@
 
 import type { CacheConfigInput } from '@hai/cache'
 import type { IamConfigSettingsInput } from '@hai/iam'
+import * as m from '$lib/paraglide/messages.js'
 import { cache } from '@hai/cache'
 import { core } from '@hai/core'
 import { db } from '@hai/db'
 import { iam } from '@hai/iam'
-import messagesEnUS from '../../../messages/en-US.json'
-import messagesZhCN from '../../../messages/zh-CN.json'
 
 type DbConfigInput = Parameters<typeof db.init>[0]
-
-const getMessage = core.i18n.createMessageGetter({
-  'zh-CN': messagesZhCN,
-  'en-US': messagesEnUS,
-})
 
 // =============================================================================
 // 状态
@@ -85,7 +79,7 @@ async function createBusinessTables(): Promise<void> {
     if (statement.trim()) {
       const result = await db.sql.execute(statement)
       if (!result.success) {
-        throw new Error(getMessage('server_init_db_failed', { message: result.error.message }))
+        throw new Error(m.server_init_db_failed({ message: result.error.message }))
       }
     }
   }
@@ -131,13 +125,13 @@ export async function initApp(): Promise<void> {
   // 4. 初始化数据库连接
   const dbResult = await db.init(dbConfig)
   if (!dbResult.success) {
-    throw new Error(getMessage('server_init_db_failed', { message: dbResult.error.message }))
+    throw new Error(m.server_init_db_failed({ message: dbResult.error.message }))
   }
 
   // 5. 初始化缓存
   const cacheResult = await cache.init(cacheConfig)
   if (!cacheResult.success) {
-    throw new Error(getMessage('server_init_cache_failed', { message: cacheResult.error.message }))
+    throw new Error(m.server_init_cache_failed({ message: cacheResult.error.message }))
   }
 
   // 6. 初始化 IAM 模块
@@ -145,9 +139,9 @@ export async function initApp(): Promise<void> {
   if (!iamResult.success) {
     const cause = iamResult.error.cause
     const causeMsg = cause instanceof Error ? cause.message : String(cause)
-    const baseMessage = getMessage('server_init_iam_failed', { message: iamResult.error.message })
+    const baseMessage = m.server_init_iam_failed({ message: iamResult.error.message })
     const fullMessage = cause
-      ? getMessage('server_error_with_cause', { message: baseMessage, cause: causeMsg })
+      ? m.server_error_with_cause({ message: baseMessage, cause: causeMsg })
       : baseMessage
     throw new Error(fullMessage)
   }
@@ -171,7 +165,7 @@ export function isAppInitialized(): boolean {
  */
 export function getDb() {
   if (!initialized) {
-    throw new Error(getMessage('server_init_not_initialized'))
+    throw new Error(m.server_init_not_initialized())
   }
   return db
 }

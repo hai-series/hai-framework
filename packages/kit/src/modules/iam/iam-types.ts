@@ -40,12 +40,12 @@ export interface IamServiceLike {
     }>
     get: (sessionId: string) => Promise<{
       success: boolean
-      data?: SessionData | null
+      data?: IamSessionData | null
       error?: { code: number, message: string }
     }>
     verifyToken: (token: string) => Promise<{
       success: boolean
-      data?: SessionData
+      data?: IamSessionData
       error?: { code: number, message: string }
     }>
     delete: (sessionId: string) => Promise<{
@@ -111,7 +111,7 @@ export interface UserData {
 /**
  * 会话数据
  */
-export interface SessionData {
+export interface IamSessionData {
   userId: string
   roles: string[]
   source?: string
@@ -124,7 +124,7 @@ export interface SessionData {
  * IAM Locals（注入到 event.locals）
  */
 export interface IamLocals {
-  session: SessionData | null
+  session: IamSessionData | null
   user: UserData | null
 }
 
@@ -165,7 +165,7 @@ export interface IamActionsConfig {
   /** 登录成功回调 */
   onLoginSuccess?: (ctx: {
     user: UserData
-    session: SessionData
+    session: IamSessionData
     event: RequestEvent
   }) => void | Promise<void>
   /** 注册成功回调 */

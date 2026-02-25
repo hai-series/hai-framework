@@ -15,7 +15,7 @@
 
 import type { Middleware } from '../../types.js'
 import type { TransportEncryptionConfig, TransportEncryptionManager } from './crypto-types.js'
-import { getKitMessage } from '../../index.js'
+import { getKitMessage } from '../../kit-i18n.js'
 import { createTransportEncryption, isValidEncryptedPayload } from './transport-encryption.js'
 
 /**

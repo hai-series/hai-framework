@@ -84,6 +84,13 @@ export const IamErrorCode = {
   /** 认证策略不支持 */
   STRATEGY_NOT_SUPPORTED: 5015,
 
+  /** 密码重置令牌无效 */
+  RESET_TOKEN_INVALID: 5020,
+  /** 密码重置令牌已过期 */
+  RESET_TOKEN_EXPIRED: 5021,
+  /** 密码重置验证次数超限 */
+  RESET_TOKEN_MAX_ATTEMPTS: 5022,
+
   // =========================================================================
   // 会话错误 (5100-5199)
   // =========================================================================
@@ -150,7 +157,7 @@ export const IamErrorCode = {
   /** 配置错误 */
   CONFIG_ERROR: 5900,
   /** 未初始化 */
-  NOT_INITIALIZED: 5010,
+  NOT_INITIALIZED: 5910,
   /** 内部错误 */
   INTERNAL_ERROR: 5999,
 } as const
@@ -216,6 +223,19 @@ export const OtpConfigSchema = z.object({
 
 /** OTP 配置类型 */
 export type OtpConfig = z.infer<typeof OtpConfigSchema>
+
+/**
+ * 密码重置配置 Schema
+ */
+export const PasswordResetConfigSchema = z.object({
+  /** 重置令牌有效期（秒，默认 3600 = 1小时） */
+  tokenExpiresIn: z.number().int().min(300).default(3600),
+  /** 最大验证尝试次数（默认 3） */
+  maxAttempts: z.number().int().min(1).default(3),
+})
+
+/** 密码重置配置类型 */
+export type PasswordResetConfig = z.infer<typeof PasswordResetConfigSchema>
 
 /**
  * LDAP 配置 Schema
@@ -368,6 +388,9 @@ export const IamConfigSchema = z.object({
 
   /** LDAP 配置 */
   ldap: LdapConfigSchema.optional(),
+
+  /** 密码重置配置 */
+  passwordReset: PasswordResetConfigSchema.optional(),
 
   /** 登录启用配置 */
   login: LoginConfigSchema.default({

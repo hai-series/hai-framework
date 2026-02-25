@@ -6,11 +6,11 @@ import { z } from 'zod'
  * 加密模块错误码常量表
  *
  * 按功能分段编号：
- * - 4000–4009：通用错误
- * - 4010–4019：初始化与配置
- * - 4020–4029：SM2（非对称加密/签名）
- * - 4040–4049：SM3（哈希/HMAC）
- * - 4060–4069：SM4（对称加密）
+ * - 2000–2009：通用错误
+ * - 2010–2019：初始化与配置
+ * - 2020–2029：SM2（非对称加密/签名）
+ * - 2040–2049：SM3（哈希/HMAC）
+ * - 2060–2069：SM4（对称加密）
  *
  * @example
  * ```ts
@@ -23,37 +23,37 @@ import { z } from 'zod'
  */
 export const CryptoErrorCode = {
   /** 操作失败 */
-  OPERATION_FAILED: 4000,
+  OPERATION_FAILED: 2000,
   /** 无效输入 */
-  INVALID_INPUT: 4001,
+  INVALID_INPUT: 2001,
   /** 无效密钥 */
-  INVALID_KEY: 4002,
+  INVALID_KEY: 2002,
 
   /** 未初始化 */
-  NOT_INITIALIZED: 4010,
+  NOT_INITIALIZED: 2010,
   /** 配置错误 */
-  CONFIG_ERROR: 4011,
+  CONFIG_ERROR: 2011,
   /** 不支持的算法 */
-  UNSUPPORTED_ALGORITHM: 4012,
+  UNSUPPORTED_ALGORITHM: 2012,
 
   /** 密钥生成失败 */
-  KEY_GENERATION_FAILED: 4020,
+  KEY_GENERATION_FAILED: 2020,
   /** 加密失败 */
-  ENCRYPTION_FAILED: 4021,
+  ENCRYPTION_FAILED: 2021,
   /** 解密失败 */
-  DECRYPTION_FAILED: 4022,
+  DECRYPTION_FAILED: 2022,
   /** 签名失败 */
-  SIGN_FAILED: 4023,
+  SIGN_FAILED: 2023,
   /** 验签失败 */
-  VERIFY_FAILED: 4024,
+  VERIFY_FAILED: 2024,
 
   /** 哈希计算失败 */
-  HASH_FAILED: 4040,
+  HASH_FAILED: 2040,
   /** HMAC 计算失败 */
-  HMAC_FAILED: 4041,
+  HMAC_FAILED: 2041,
 
   /** 无效 IV */
-  INVALID_IV: 4060,
+  INVALID_IV: 2060,
 } as const
 
 /** 错误码类型（CryptoErrorCode 值的联合类型） */
