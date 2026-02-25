@@ -1,4 +1,4 @@
-# @hai/cli
+# @h-ai/cli
 
 > hai Admin Framework CLI — 交互式项目脚手架与代码生成工具。
 
@@ -82,7 +82,7 @@ npx hai g:model order
 
 | 模板      | 说明     | 包含功能                         |
 | --------- | -------- | -------------------------------- |
-| `minimal` | 最小模板 | 仅 SvelteKit + @hai/core         |
+| `minimal` | 最小模板 | 仅 SvelteKit + @h-ai/core        |
 | `default` | 标准模板 | IAM + DB + Crypto                |
 | `full`    | 完整模板 | IAM + DB + Crypto + AI + Storage |
 | `custom`  | 自定义   | 按需选择                         |
@@ -97,7 +97,7 @@ npx hai g:model order
 ## 测试
 
 ```bash
-pnpm --filter @hai/cli test
+pnpm --filter @h-ai/cli test
 ```
 
 ## License

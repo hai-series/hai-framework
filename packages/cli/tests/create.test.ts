@@ -1,6 +1,6 @@
 /**
  * =============================================================================
- * @hai/cli - create 命令测试
+ * @h-ai/cli - create 命令测试
  * =============================================================================
  * 测试项目创建命令的核心逻辑（不执行实际文件 I/O）
  */
@@ -45,9 +45,9 @@ describe('create command - feature definitions', () => {
     expect(expectedIamDeps).toContain('crypto')
   })
 
-  it('cache 特性应映射到 @hai/cache', () => {
-    const expectedPackages = ['@hai/cache']
-    expect(expectedPackages).toEqual(['@hai/cache'])
+  it('cache 特性应映射到 @h-ai/cache', () => {
+    const expectedPackages = ['@h-ai/cache']
+    expect(expectedPackages).toEqual(['@h-ai/cache'])
   })
 
   it('功能模板 full 应包含 cache', () => {

@@ -1,5 +1,5 @@
 {
-  "name": "@hai/db",
+  "name": "@h-ai/db",
   "type": "module",
   "version": "0.1.0",
   "description": "Relational database access module for Hai framework .",
@@ -30,7 +30,7 @@
     "clean": "rimraf dist .turbo"
   },
   "dependencies": {
-    "@hai/core": "workspace:*",
+    "@h-ai/core": "workspace:*",
     "better-sqlite3": "catalog:",
     "zod": "catalog:"
   },

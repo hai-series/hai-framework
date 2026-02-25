@@ -9,7 +9,7 @@ export default defineConfig({
     'client/index': 'src/client/index.ts',
   },
   external: [
-    '@hai/core',
+    '@h-ai/core',
     '@aws-sdk/client-s3',
     '@aws-sdk/s3-request-presigner',
     'zod',

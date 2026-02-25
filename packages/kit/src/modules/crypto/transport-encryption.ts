@@ -1,6 +1,6 @@
 /**
  * =============================================================================
- * @hai/kit - 传输加密核心
+ * @h-ai/kit - 传输加密核心
  * =============================================================================
  * 基于 SM2（非对称）+ SM4（对称）的混合传输加密。
  *
@@ -11,11 +11,11 @@
  *
  * @example
  * ```ts
- * import { kit } from '@hai/kit'
- * import { crypto } from '@hai/crypto'
+ * import { kit } from '@h-ai/kit'
+ * import { crypto } from '@h-ai/crypto'
  *
  * const te = kit.crypto.createTransportEncryption({
- *   crypto: crypto,  // 注入 @hai/crypto 实例
+ *   crypto: crypto,  // 注入 @h-ai/crypto 实例
  * })
  *
  * // 密钥交换

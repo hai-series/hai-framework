@@ -1,6 +1,6 @@
 /**
  * =============================================================================
- * @hai/iam — 授权子功能类型定义（RBAC）
+ * @h-ai/iam — 授权子功能类型定义（RBAC）
  * =============================================================================
  *
  * 包含：
@@ -14,7 +14,7 @@
  * =============================================================================
  */
 
-import type { PaginatedResult, PaginationOptionsInput, Result } from '@hai/core'
+import type { PaginatedResult, PaginationOptionsInput, Result } from '@h-ai/core'
 import type { IamError } from '../iam-types.js'
 
 // =============================================================================

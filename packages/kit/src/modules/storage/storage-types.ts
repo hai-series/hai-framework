@@ -1,6 +1,6 @@
 /**
  * =============================================================================
- * @hai/kit - Storage 类型定义
+ * @h-ai/kit - Storage 类型定义
  * =============================================================================
  * Storage 模块集成相关类型
  * =============================================================================
@@ -10,7 +10,7 @@ import type { RequestEvent } from '@sveltejs/kit'
 import type { Buffer } from 'node:buffer'
 
 /**
- * Storage 服务接口（简化版，与 @hai/storage 兼容）
+ * Storage 服务接口（简化版，与 @h-ai/storage 兼容）
  */
 export interface StorageServiceLike {
   put: (

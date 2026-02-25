@@ -1,11 +1,11 @@
 /**
- * @module @hai/crypto
+ * @module @h-ai/crypto
  *
  * 国密算法加密模块，提供 SM2（非对称加密/签名）、SM3（哈希/HMAC）、SM4（对称加密）及密码哈希功能。
  *
  * @example
  * ```ts
- * import { crypto } from '@hai/crypto'
+ * import { crypto } from '@h-ai/crypto'
  *
  * await crypto.init({})
  * const hash = crypto.sm3.hash('hello')

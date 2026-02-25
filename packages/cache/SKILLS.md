@@ -1,14 +1,14 @@
-# @hai/cache - AI 助手参考
+# @h-ai/cache - AI 助手参考
 
 ## 模块概述
 
-`@hai/cache` 提供统一的缓存访问能力，支持 Memory / Redis，统一异步 API 与统一错误码。架构为**无子功能 + 有 Provider（模块级）**。
+`@h-ai/cache` 提供统一的缓存访问能力，支持 Memory / Redis，统一异步 API 与统一错误码。架构为**无子功能 + 有 Provider（模块级）**。
 
 ## 入口与初始化
 
 ```ts
-import type { CacheConfig, CacheConfigInput, CacheError, CacheFunctions } from '@hai/cache'
-import { cache, CacheErrorCode } from '@hai/cache'
+import type { CacheConfig, CacheConfigInput, CacheError, CacheFunctions } from '@h-ai/cache'
+import { cache, CacheErrorCode } from '@h-ai/cache'
 
 // 初始化
 await cache.init({ type: 'redis', host: 'localhost', port: 6379 })

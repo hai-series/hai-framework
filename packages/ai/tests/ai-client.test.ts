@@ -1,7 +1,7 @@
 /**
  * createAIClient / parseSSE / collectStreamContent 测试
  *
- * 客户端通过 @hai/ai/client 导入，使用 mock fetch 隔离网络依赖。
+ * 客户端通过 @h-ai/ai/client 导入，使用 mock fetch 隔离网络依赖。
  */
 
 import type { ChatCompletionChunk, ChatCompletionResponse } from '../src/index.js'

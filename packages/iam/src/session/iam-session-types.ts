@@ -1,6 +1,6 @@
 /**
  * =============================================================================
- * @hai/iam - 会话相关类型定义
+ * @h-ai/iam - 会话相关类型定义
  * =============================================================================
  *
  * 包含：
@@ -12,7 +12,7 @@
  * =============================================================================
  */
 
-import type { Result } from '@hai/core'
+import type { Result } from '@h-ai/core'
 import type { IamError } from '../iam-types.js'
 import type { AgreementDisplay, User } from '../user/iam-user-types.js'
 

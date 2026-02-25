@@ -1,6 +1,6 @@
 /**
  * =============================================================================
- * @hai/cli - 项目创建命令
+ * @h-ai/cli - 项目创建命令
  * =============================================================================
  * 类似 SvelteKit 的交互式项目创建
  *
@@ -12,7 +12,7 @@ import type { AppType, CreateProjectOptions, FeatureDefinition, FeatureId, Modul
 import { execSync } from 'node:child_process'
 import path from 'node:path'
 import process from 'node:process'
-import { core } from '@hai/core'
+import { core } from '@h-ai/core'
 import chalk from 'chalk'
 import fse from 'fs-extra'
 import ora from 'ora'
@@ -53,52 +53,52 @@ const FEATURES: Record<string, FeatureDefinition> = {
     id: 'iam',
     name: '身份与访问管理',
     description: 'Session/JWT 会话管理、RBAC 权限控制',
-    packages: ['@hai/iam'],
+    packages: ['@h-ai/iam'],
     dependencies: ['crypto'],
   },
   db: {
     id: 'db',
     name: '数据库',
     description: 'Drizzle ORM 多数据库支持 (SQLite/PostgreSQL/MySQL)',
-    packages: ['@hai/db'],
+    packages: ['@h-ai/db'],
   },
   cache: {
     id: 'cache',
     name: '缓存',
     description: 'Redis / 内存缓存',
-    packages: ['@hai/cache'],
+    packages: ['@h-ai/cache'],
   },
   ai: {
     id: 'ai',
     name: 'AI 集成',
     description: 'LLM 适配器、MCP 协议、技能系统、流式响应',
-    packages: ['@hai/ai'],
+    packages: ['@h-ai/ai'],
   },
   storage: {
     id: 'storage',
     name: '文件存储',
     description: '本地存储、S3/OSS/COS 云存储',
-    packages: ['@hai/storage'],
+    packages: ['@h-ai/storage'],
   },
   crypto: {
     id: 'crypto',
     name: '加密模块',
     description: '国密 SM2/SM3/SM4、Argon2 密码哈希',
-    packages: ['@hai/crypto'],
+    packages: ['@h-ai/crypto'],
   },
   // 兼容性别名
   auth: {
     id: 'auth',
     name: '认证授权（别名）',
     description: '已合并到 iam 模块',
-    packages: ['@hai/iam'],
+    packages: ['@h-ai/iam'],
     dependencies: ['crypto'],
   },
   mcp: {
     id: 'mcp',
     name: 'MCP 协议（别名）',
     description: '已合并到 ai 模块',
-    packages: ['@hai/ai'],
+    packages: ['@h-ai/ai'],
   },
 }
 
@@ -700,13 +700,13 @@ async function generateProjectFiles(
 
   // 基础依赖（所有应用类型都需要 core + kit）
   const baseDeps: Record<string, string> = {
-    '@hai/core': 'workspace:*',
-    '@hai/kit': 'workspace:*',
+    '@h-ai/core': 'workspace:*',
+    '@h-ai/kit': 'workspace:*',
   }
 
   // API 类型不需要 UI
   if (appType !== 'api') {
-    baseDeps['@hai/ui'] = 'workspace:*'
+    baseDeps['@h-ai/ui'] = 'workspace:*'
   }
 
   // package.json
@@ -893,7 +893,7 @@ declare global {
   namespace App {
     interface Locals {
       requestId: string
-      session?: import('@hai/kit').SessionData
+      session?: import('@h-ai/kit').SessionData
     }
   }
 }
@@ -906,7 +906,7 @@ function generateHooksServer(): string {
   return `/**
  * SvelteKit Server Hooks
  */
-import { kit } from '@hai/kit'
+import { kit } from '@h-ai/kit'
 
 export const handle = kit.createHandle({
   logging: true,
@@ -1106,7 +1106,7 @@ async function generateAdminRoutes(
  * 健康检查端点
  */
 import type { RequestHandler } from './$types'
-import { kit } from '@hai/kit'
+import { kit } from '@h-ai/kit'
 
 export const GET: RequestHandler = async ({ locals }) => {
   return kit.response.ok({ status: 'ok', timestamp: new Date().toISOString() }, locals.requestId)
@@ -1487,7 +1487,7 @@ async function generateApiRoutes(
  * 健康检查端点
  */
 import type { RequestHandler } from './$types'
-import { kit } from '@hai/kit'
+import { kit } from '@h-ai/kit'
 
 export const GET: RequestHandler = async ({ locals }) => {
   return kit.response.ok({
@@ -1504,7 +1504,7 @@ export const GET: RequestHandler = async ({ locals }) => {
  * Items API - 列表与创建
  */
 import type { RequestHandler } from './$types'
-import { kit } from '@hai/kit'
+import { kit } from '@h-ai/kit'
 
 /**
  * GET /api/v1/items - 获取列表
@@ -1550,7 +1550,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
  * Items API - 单项操作
  */
 import type { RequestHandler } from './$types'
-import { kit } from '@hai/kit'
+import { kit } from '@h-ai/kit'
 
 /**
  * GET /api/v1/items/:id - 获取详情
@@ -1622,7 +1622,7 @@ export async function detectProject(cwd: string): Promise<ProjectInfo | null> {
     const pkg = await fse.readJson(pkgPath)
     const deps = { ...pkg.dependencies, ...pkg.devDependencies }
 
-    const haiPackages = Object.keys(deps).filter(name => name.startsWith('@hai/'))
+    const haiPackages = Object.keys(deps).filter(name => name.startsWith('@h-ai/'))
 
     return {
       name: pkg.name,

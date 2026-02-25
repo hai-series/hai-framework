@@ -1,11 +1,11 @@
 /**
- * @hai/storage — S3 Provider 实现
+ * @h-ai/storage — S3 Provider 实现
  *
  * 基于 AWS SDK v3 实现的 S3 协议存储 Provider。
  * 支持 AWS S3、MinIO、阿里云 OSS 等兼容 S3 协议的存储服务。
  */
 
-import type { Result } from '@hai/core'
+import type { Result } from '@h-ai/core'
 import type { S3Config, StorageConfig } from '../storage-config.js'
 import type {
   DirOperations,
@@ -29,7 +29,7 @@ import {
 } from '@aws-sdk/client-s3'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 
-import { err, ok } from '@hai/core'
+import { err, ok } from '@h-ai/core'
 
 import { StorageErrorCode } from '../storage-config.js'
 import { storageM } from '../storage-i18n.js'

@@ -1,6 +1,6 @@
 /**
  * =============================================================================
- * @hai/kit - SvelteKit Handle Hook
+ * @h-ai/kit - SvelteKit Handle Hook
  * =============================================================================
  * 提供 SvelteKit handle hook 的创建和组合功能
  * =============================================================================
@@ -8,7 +8,7 @@
 
 import type { Handle, RequestEvent } from '@sveltejs/kit'
 import type { GuardConfig, GuardResult, HookConfig, Middleware, MiddlewareContext, SessionData } from '../kit-types.js'
-import { core } from '@hai/core'
+import { core } from '@h-ai/core'
 
 /**
  * 生成唯一 ID

@@ -1,13 +1,13 @@
 /**
  * =============================================================================
- * @hai/core - Core 服务聚合（浏览器）
+ * @h-ai/core - Core 服务聚合（浏览器）
  * =============================================================================
  * 提供浏览器环境的 core 对象，聚合常用功能。
  * 所有功能统一通过 core 对象访问（不含 config 能力）。
  *
  * @example
  * ```ts
- * import { core } from '@hai/core'
+ * import { core } from '@h-ai/core'
  *
  * // 初始化（可选）
  * core.init({ logging: { level: 'debug' } })
@@ -39,7 +39,7 @@ import { logger } from './functions/core-function-logger.browser.js'
  *
  * @example
  * ```ts
- * import { core } from '@hai/core'
+ * import { core } from '@h-ai/core'
  * core.logger.info('ready')
  * ```
  */
@@ -65,7 +65,7 @@ function createBrowserCore() {
  *
  * @example
  * ```ts
- * import { core } from '@hai/core'
+ * import { core } from '@h-ai/core'
  * core.logger.info('browser ready')
  * ```
  */
@@ -79,7 +79,7 @@ export const core = createBrowserCore()
  *
  * @example
  * ```ts
- * import { core } from '@hai/core'
+ * import { core } from '@h-ai/core'
  * core.init({ logging: { level: 'debug' } })
  * ```
  */

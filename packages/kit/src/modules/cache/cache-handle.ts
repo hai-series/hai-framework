@@ -1,8 +1,8 @@
 /**
  * =============================================================================
- * @hai/kit - Cache Middleware
+ * @h-ai/kit - Cache Middleware
  * =============================================================================
- * 集成 @hai/cache 的 SvelteKit 中间件
+ * 集成 @h-ai/cache 的 SvelteKit 中间件
  *
  * 功能：
  * - 请求级缓存
@@ -12,7 +12,7 @@
  * @example
  * ```ts
  * // src/hooks.server.ts
- * import { kit } from '@hai/kit'
+ * import { kit } from '@h-ai/kit'
  * import { cache } from '$lib/server/cache'
  *
  * const cacheHandle = kit.cache.createHandle({

@@ -1,6 +1,6 @@
 /**
  * =============================================================================
- * @hai/iam - 认证类型定义
+ * @h-ai/iam - 认证类型定义
  * =============================================================================
  *
  * 包含：
@@ -12,7 +12,7 @@
  * =============================================================================
  */
 
-import type { Result } from '@hai/core'
+import type { Result } from '@h-ai/core'
 import type { AuthStrategyType } from '../iam-config.js'
 import type { IamError } from '../iam-types.js'
 import type { AuthResult, Session } from '../session/iam-session-types.js'

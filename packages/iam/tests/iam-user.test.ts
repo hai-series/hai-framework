@@ -1,6 +1,6 @@
 /**
  * =============================================================================
- * @hai/iam - 用户管理测试
+ * @h-ai/iam - 用户管理测试
  * =============================================================================
  *
  * 覆盖范围：
@@ -14,7 +14,7 @@
  */
 
 import type { IamFunctions } from '../src/iam-types.js'
-import { db } from '@hai/db'
+import { db } from '@h-ai/db'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { IamErrorCode } from '../src/iam-config.js'
 import { defineIamSuite, initIam, postgresRedisEnv, sqliteMemoryEnv, TEST_PASSWORD, WEAK_PASSWORD } from './helpers/iam-test-suite.js'

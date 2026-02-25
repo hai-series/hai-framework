@@ -8,7 +8,6 @@
   import { page } from '$app/stores'
   import { goto } from '$app/navigation'
   import * as m from '$lib/paraglide/messages'
-  import { Avatar, BareButton, Button } from '@hai/ui'
   
   interface Props {
     data: LayoutData
@@ -155,13 +154,13 @@
   
   <!-- 侧边栏 -->
   <aside
-    class="fixed lg:static top-0 left-0 z-50 h-full flex flex-col bg-base-100 border-r border-base-200
+    class="fixed lg:static top-0 left-0 z-50 h-full flex flex-col bg-base-100
       transition-all duration-300 ease-out
       {sidebarCollapsed ? 'w-18' : 'w-65'}
       {mobileMenuOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'}"
   >
     <!-- Logo 区域 -->
-    <div class="h-16 flex items-center gap-3 px-4 border-b border-base-200 shrink-0">
+    <div class="h-16 flex items-center gap-3 px-4 shrink-0">
       <div class="w-10 h-10 rounded-xl bg-primary flex items-center justify-center shrink-0">
         <span class="text-primary-content font-bold text-lg">h</span>
       </div>
@@ -245,7 +244,7 @@
     </nav>
     
     <!-- 侧边栏底部 -->
-    <div class="p-3 border-t border-base-200 shrink-0">
+    <div class="p-3 shrink-0">
       <BareButton
         type="button"
         class="flex items-center w-full rounded-lg px-3 py-2.5 text-base-content/60 hover:bg-base-200 hover:text-base-content transition-colors"
@@ -267,7 +266,7 @@
   <!-- 主内容区 -->
   <div class="flex-1 flex flex-col min-w-0 overflow-hidden">
     <!-- 顶部导航 -->
-    <header class="h-16 bg-base-100 border-b border-base-200 shrink-0">
+    <header class="h-16 bg-base-100 shadow-sm shrink-0">
       <div class="h-full flex items-center justify-between px-4 lg:px-6">
         <!-- 左侧：移动端菜单按钮 + 面包屑 -->
         <div class="flex items-center gap-4">
@@ -323,8 +322,8 @@
             </BareButton>
             
             {#if userMenuOpen}
-              <div class="absolute right-0 top-full mt-2 w-56 bg-base-100 rounded-xl shadow-lg border border-base-200 py-1 z-50">
-                <div class="px-4 py-3 border-b border-base-200">
+              <div class="absolute right-0 top-full mt-2 w-56 bg-base-100 rounded-xl shadow-lg py-1 z-50">
+                <div class="px-4 py-3 border-b border-base-content/5">
                   <p class="text-sm font-medium text-base-content">{data.user?.displayName || data.user?.username || 'Guest'}</p>
                   <p class="text-xs text-base-content/50 mt-0.5">@{data.user?.username ?? 'guest'}</p>
                   <p class="text-xs text-base-content/60 mt-0.5">{data.user?.roles?.join(', ') ?? m.common_guest()}</p>
@@ -352,7 +351,7 @@
                     {m.nav_settings()}
                   </a>
                 </div>
-                <div class="border-t border-base-200 py-1">
+                <div class="border-t border-base-content/5 py-1">
                   <Button
                     variant="ghost"
                     class="flex items-center gap-3 w-full justify-start text-error hover:bg-error/10"
@@ -377,7 +376,7 @@
     </main>
     
     <!-- 页脚 -->
-    <footer class="h-12 bg-base-100 border-t border-base-200 flex items-center justify-center px-6 shrink-0">
+    <footer class="h-12 bg-base-100 flex items-center justify-center px-6 shrink-0">
       <p class="text-xs text-base-content/50">
         {appName} v{appVersion}
       </p>

@@ -3,13 +3,13 @@
  * Admin Console - 用户服务
  * =============================================================================
  *
- * 委托给 @hai/iam 的 user 和 authz 模块实现用户管理。
+ * 委托给 @h-ai/iam 的 user 和 authz 模块实现用户管理。
  * =============================================================================
  */
 
-import type { User } from '@hai/iam'
+import type { User } from '@h-ai/iam'
 import * as m from '$lib/paraglide/messages.js'
-import { iam } from '@hai/iam'
+import { iam } from '@h-ai/iam'
 
 // =============================================================================
 // 类型定义（兼容旧接口）

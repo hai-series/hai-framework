@@ -1,6 +1,6 @@
 /**
  * =============================================================================
- * @hai/db - 分页工具
+ * @h-ai/db - 分页工具
  * =============================================================================
  *
  * 数据库无关的分页参数规范化与结果构建工具。
@@ -9,7 +9,7 @@
  * =============================================================================
  */
 
-import type { PaginatedResult, PaginationOptions, PaginationOptionsInput } from '@hai/core'
+import type { PaginatedResult, PaginationOptions, PaginationOptionsInput } from '@h-ai/core'
 import type { NormalizedPagination, PaginationOverrides } from './db-types.js'
 
 /** 默认起始页码 */
@@ -143,7 +143,7 @@ export function buildPaginatedResult<T>(
  *
  * @example
  * ```ts
- * import { db } from '@hai/db'
+ * import { db } from '@h-ai/db'
  *
  * const pag = db.pagination.normalize({ page: 2, pageSize: 10 })
  * // pag.offset = 10, pag.limit = 10

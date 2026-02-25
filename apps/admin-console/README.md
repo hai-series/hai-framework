@@ -5,13 +5,13 @@
 ## ✨ 特性
 
 - 🎨 **现代化 UI** — Svelte 5 Runes + TailwindCSS v4 + DaisyUI，32 套主题随时切换
-- 🔐 **完整认证流** — 登录 / 注册 / 忘记密码 / 重置密码，均基于 @hai/ui 场景组件
+- 🔐 **完整认证流** — 登录 / 注册 / 忘记密码 / 重置密码，均基于 @h-ai/ui 场景组件
 - 👥 **IAM 管理** — 用户、角色、权限 CRUD，操作审计日志
-- 🧩 **UI Gallery** — 69+ @hai/ui 组件的交互式展览（4 分类标签页）
+- 🧩 **UI Gallery** — 69+ @h-ai/ui 组件的交互式展览（4 分类标签页）
 - 🔧 **模块演示** — Core、DB、Cache、Storage、AI、Crypto 交互式示例
 - 🌍 **国际化** — Paraglide 集成，189+ message keys，中英文实时切换
 - 📱 **响应式布局** — Sidebar + TopBar 自适应，移动端友好
-- 🧩 **组件自动导入** — 页面中使用 @hai/ui 组件无需显式 import
+- 🧩 **组件自动导入** — 页面中使用 @h-ai/ui 组件无需显式 import
 
 ## 🚀 快速开始
 
@@ -146,19 +146,19 @@ HAI_STORAGE_TYPE=local
 
 添加新翻译：在 `messages/zh-CN.json` 和 `messages/en-US.json` 中同时添加对应 key 即可。
 
-## 🧩 @hai/ui 组件自动导入
+## 🧩 @h-ai/ui 组件自动导入
 
-`svelte.config.js` 中启用了 `@hai/ui/auto-import` 预处理器：
+`svelte.config.js` 中启用了 `@h-ai/ui/auto-import` 预处理器：
 
-- 所有 `.svelte` 文件中使用 @hai/ui 组件标签时，自动注入 import 语句
-- 无需手动编写 `import { Button } from '@hai/ui'`
+- 所有 `.svelte` 文件中使用 @h-ai/ui 组件标签时，自动注入 import 语句
+- 无需手动编写 `import { Button } from '@h-ai/ui'`
 
 ## 🔧 扩展指南
 
 ### 添加新页面
 
 1. 在 `src/routes/admin/` 下创建目录和 `+page.svelte`
-2. 页面可直接使用 @hai/ui 组件（自动导入）
+2. 页面可直接使用 @h-ai/ui 组件（自动导入）
 3. 如需服务端数据，添加 `+page.server.ts` 配合 load 函数
 4. 在 Sidebar 导航配置中添加菜单项
 5. 在 `messages/` 下的两个语言文件中添加相关翻译 key
@@ -166,7 +166,7 @@ HAI_STORAGE_TYPE=local
 ### 添加新 API 端点
 
 1. 在 `src/routes/api/` 下创建 `+server.ts`
-2. 使用 @hai/kit 的 response helper 返回标准格式
+2. 使用 @h-ai/kit 的 response helper 返回标准格式
 3. 如需认证保护，路由会自动走 `hooks.server.ts` 中的 guard 逻辑（`/api/auth/*` 和 `/api/public/*` 除外）
 
 ### 添加新业务服务
@@ -197,15 +197,15 @@ pnpm paraglide:compile # 编译 i18n 翻译文件
 
 ## 📦 框架依赖
 
-- `@hai/core`：配置管理、日志、Result 模式、错误处理
-- `@hai/db`：数据库抽象（SQLite / PostgreSQL / MySQL）
-- `@hai/iam`：用户、角色、权限、认证、RBAC
-- `@hai/cache`：缓存（Memory / Redis）
-- `@hai/storage`：文件存储（Local / S3）
-- `@hai/crypto`：加密（SM2 / SM3 / SM4、Argon2）
-- `@hai/ai`：AI 集成
-- `@hai/kit`：SvelteKit hooks、guards、中间件、校验
-- `@hai/ui`：UI 组件库（69+ 组件、场景组件、自动导入）
+- `@h-ai/core`：配置管理、日志、Result 模式、错误处理
+- `@h-ai/db`：数据库抽象（SQLite / PostgreSQL / MySQL）
+- `@h-ai/iam`：用户、角色、权限、认证、RBAC
+- `@h-ai/cache`：缓存（Memory / Redis）
+- `@h-ai/storage`：文件存储（Local / S3）
+- `@h-ai/crypto`：加密（SM2 / SM3 / SM4、Argon2）
+- `@h-ai/ai`：AI 集成
+- `@h-ai/kit`：SvelteKit hooks、guards、中间件、校验
+- `@h-ai/ui`：UI 组件库（69+ 组件、场景组件、自动导入）
 
 ## 📄 许可证
 

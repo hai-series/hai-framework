@@ -189,7 +189,7 @@ export type XxConfigInput = z.input<typeof XxConfigSchema>
 ```ts
 // ⚠️ 示例 — 替换类型名和字段，按模块实际需求增删接口
 
-import type { Result } from '@hai/core'
+import type { Result } from '@h-ai/core'
 import type { XxConfig, XxConfigInput, XxErrorCodeType } from './xx-config.js'
 
 // ─── 错误类型 ───
@@ -246,7 +246,7 @@ export interface XxProvider {
 ```ts
 // ⚠️ 示例 — 替换 Xx/xx 为实际模块名
 
-import { core } from '@hai/core'
+import { core } from '@h-ai/core'
 import messagesEnUS from '../messages/en-US.json'
 import messagesZhCN from '../messages/zh-CN.json'
 
@@ -296,10 +296,10 @@ export const xxM = core.i18n.createMessageGetter<XxMessageKey>({
 ```ts
 // ⚠️ 示例 — 最简模式，功能由 functions.ts 直接实现
 
-import type { Result } from '@hai/core'
+import type { Result } from '@h-ai/core'
 import type { XxConfigInput, XxConfig } from './xx-config.js'
 import type { XxError, XxFunctions, ZzOperations } from './xx-types.js'
-import { core, err, ok } from '@hai/core'
+import { core, err, ok } from '@h-ai/core'
 import { XxConfigSchema, XxErrorCode } from './xx-config.js'
 import { xxM } from './xx-i18n.js'
 import { createXxFunctions } from './xx-functions.js'
@@ -349,10 +349,10 @@ export const xx: XxFunctions = {
 ```ts
 // ⚠️ 示例 — Provider 在模块级管理，按 config.type 选择后端实现
 
-import type { Result } from '@hai/core'
+import type { Result } from '@h-ai/core'
 import type { XxConfigInput, XxConfig } from './xx-config.js'
 import type { XxError, XxFunctions, XxProvider, ZzOperations } from './xx-types.js'
-import { core, err, ok } from '@hai/core'
+import { core, err, ok } from '@h-ai/core'
 import { XxConfigSchema, XxErrorCode } from './xx-config.js'
 import { xxM } from './xx-i18n.js'
 import { createTypeAProvider } from './providers/xx-provider-typeA.js'
@@ -419,12 +419,12 @@ export const xx: XxFunctions = {
 ```ts
 // ⚠️ 示例 — main.ts 只创建和组装子功能，不关心子功能是否内部使用 Provider
 
-import type { Result } from '@hai/core'
+import type { Result } from '@h-ai/core'
 import type { XxConfigInput, XxConfig } from './xx-config.js'
 import type { XxError, XxFunctions } from './xx-types.js'
 import type { XxYyFunctions } from './yy/xx-yy-types.js'
 import type { XxZzFunctions } from './zz/xx-zz-types.js'
-import { core, err, ok } from '@hai/core'
+import { core, err, ok } from '@h-ai/core'
 import { XxConfigSchema, XxErrorCode } from './xx-config.js'
 import { xxM } from './xx-i18n.js'
 import { createXxYyFunctions } from './yy/xx-yy-functions.js'
@@ -535,10 +535,10 @@ export * from './xx-types.js'
 ```ts
 // ⚠️ 示例 — 模块级 Provider 实现，替换类型名和操作
 
-import type { Result } from '@hai/core'
+import type { Result } from '@h-ai/core'
 import type { XxConfig } from './xx-config.js'
 import type { XxError, XxProvider, ZzOperations } from './xx-types.js'
-import { err, ok } from '@hai/core'
+import { err, ok } from '@h-ai/core'
 import { XxErrorCode } from './xx-config.js'
 
 function toXxError(error: unknown): XxError {
@@ -665,7 +665,7 @@ export async function createXxYyFunctions(
 ```ts
 // ⚠️ 示例 — 替换 Yy 为实际子功能名，按业务需求定义实体和操作
 
-import type { Result } from '@hai/core'
+import type { Result } from '@h-ai/core'
 import type { XxConfig } from '../xx-config.js'
 import type { XxError } from '../xx-types.js'
 
@@ -711,7 +711,7 @@ export interface XxYyFunctionsDeps {
 
 import type { XxError } from '../xx-types.js'
 import type { CreateYyInput, XxYyFunctions, XxYyFunctionsDeps } from './xx-yy-types.js'
-import { core, err, ok } from '@hai/core'
+import { core, err, ok } from '@h-ai/core'
 import { XxErrorCode } from '../xx-config.js'
 import { xxM } from '../xx-i18n.js'
 
@@ -758,7 +758,7 @@ export function createXxYyFunctions(deps: XxYyFunctionsDeps): XxYyFunctions {
 
 #### 3.7.3 类型聚合
 
-模块根 `xx-types.ts` 必须 re-export 子功能类型，使外部通过 `@hai/xx` 一站式引入：
+模块根 `xx-types.ts` 必须 re-export 子功能类型，使外部通过 `@h-ai/xx` 一站式引入：
 
 ```ts
 // xx-types.ts 底部追加
@@ -924,13 +924,13 @@ function createService(
 
 ```ts
 // 1. type-only imports（第三方）
-import type { Result } from '@hai/core'
+import type { Result } from '@h-ai/core'
 
 // 2. type-only imports（内部）
 import type { XxConfig } from './xx-config.js'
 
 // 3. value imports（第三方）
-import { core, err, ok } from '@hai/core'
+import { core, err, ok } from '@h-ai/core'
 
 // 4. value imports（内部）
 import { XxConfigSchema } from './xx-config.js'
@@ -963,7 +963,7 @@ import { XxConfigSchema } from './xx-config.js'
 每个文件使用 `core.logger.child` 创建局部 logger，标注模块与作用域：
 
 ```ts
-import { core } from '@hai/core'
+import { core } from '@h-ai/core'
 
 // main.ts
 const logger = core.logger.child({ module: 'xx', scope: 'main' })
@@ -1124,7 +1124,7 @@ async logout(accessToken: string) {
 
 ```jsonc
 {
-  "name": "@hai/xx",
+  "name": "@h-ai/xx",
   "version": "0.1.0",
   "type": "module",
   "exports": {
@@ -1145,7 +1145,7 @@ async logout(accessToken: string) {
     "test:watch": "vitest watch"
   },
   "dependencies": {
-    "@hai/core": "workspace:*",
+    "@h-ai/core": "workspace:*",
     "zod": "catalog:"
   },
   "devDependencies": {
@@ -1160,7 +1160,7 @@ async logout(accessToken: string) {
 
 ```jsonc
 {
-  "name": "@hai/xx",
+  "name": "@h-ai/xx",
   "version": "0.1.0",
   "type": "module",
   "exports": {
@@ -1206,7 +1206,7 @@ import { baseConfig } from '../tsup.base'
 export default defineConfig({
   ...baseConfig,
   entry: { index: 'src/index.ts' },
-  external: ['@hai/core', 'zod'],
+  external: ['@h-ai/core', 'zod'],
 })
 ```
 
@@ -1223,7 +1223,7 @@ export default defineConfig({
     browser: 'src/xx-index.browser.ts',
     'client/index': 'src/client/index.ts',
   },
-  external: ['@hai/core', 'zod'],
+  external: ['@h-ai/core', 'zod'],
 })
 ```
 
@@ -1245,7 +1245,7 @@ export default defineConfig({ ...baseVitestConfig })
 只写"是什么 / 怎么用"，不写接口清单与内部实现。固定结构：
 
 ```markdown
-# @hai/xx
+# @h-ai/xx
 
 一句话描述。
 
@@ -1302,7 +1302,7 @@ export default defineConfig({ ...baseVitestConfig })
 
 ## 示例触发语句
 
-- "创建一个 @hai/notification 模块，支持 email 和 sms 两种 Provider"
+- "创建一个 @h-ai/notification 模块，支持 email 和 sms 两种 Provider"
 - "给 iam 模块新增一个 oauth 子功能"
 - "给 storage 模块新增一个 oss Provider"
 - "创建一个新模块，包含浏览器端客户端"

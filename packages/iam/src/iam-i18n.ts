@@ -1,6 +1,6 @@
 /**
  * =============================================================================
- * @hai/iam - i18n
+ * @h-ai/iam - i18n
  * =============================================================================
  *
  * 本文件提供 IAM 模块的 i18n 文案访问入口。
@@ -9,7 +9,7 @@
  * @internal
  */
 
-import { core } from '@hai/core'
+import { core } from '@h-ai/core'
 import messagesEnUS from '../messages/en-US.json'
 import messagesZhCN from '../messages/zh-CN.json'
 

@@ -1,4 +1,4 @@
-import type { Result } from '@hai/core'
+import type { Result } from '@h-ai/core'
 import type { CacheConfig, CacheConfigInput, CacheErrorCodeType } from './cache-config.js'
 
 export type { CacheConfig, CacheConfigInput } from './cache-config.js'
@@ -280,7 +280,7 @@ export interface CacheCompositeOperations {
  *
  * @example
  * ```ts
- * import { cache } from '@hai/cache'
+ * import { cache } from '@h-ai/cache'
  *
  * await cache.init({ type: 'redis', host: 'localhost' })
  * await cache.kv.set('key', 'value', { ex: 3600 })

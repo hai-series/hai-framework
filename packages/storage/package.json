@@ -1,5 +1,5 @@
 {
-  "name": "@hai/storage",
+  "name": "@h-ai/storage",
   "type": "module",
   "version": "0.1.0",
   "description": "Object storage module for Hai framework .",
@@ -38,7 +38,7 @@
   "dependencies": {
     "@aws-sdk/client-s3": "catalog:",
     "@aws-sdk/s3-request-presigner": "catalog:",
-    "@hai/core": "workspace:*",
+    "@h-ai/core": "workspace:*",
     "zod": "catalog:"
   },
   "devDependencies": {

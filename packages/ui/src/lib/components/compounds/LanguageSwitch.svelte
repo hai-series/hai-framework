@@ -9,7 +9,7 @@
   @example
   ```svelte
   <script>
-    import { LanguageSwitch, createLocaleStore, setGlobalLocale } from '@hai/ui'
+    import { LanguageSwitch, createLocaleStore, setGlobalLocale } from '@h-ai/ui'
     import { setLocale, getLocale } from '$lib/paraglide/runtime.js'
     
     const localeStore = createLocaleStore()
@@ -22,7 +22,7 @@
       { value: 'en-US', label: 'English' }
     ]}
     onchange={(lang) => {
-      localeStore.set(lang)  // 同步到 @hai/core 全局 locale
+      localeStore.set(lang)  // 同步到 @h-ai/core 全局 locale
       setLocale(lang)        // 同步到 Paraglide
     }}
   />

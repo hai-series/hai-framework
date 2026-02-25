@@ -1,6 +1,6 @@
 /**
  * =============================================================================
- * @hai/db - CRUD 仓库基类
+ * @h-ai/db - CRUD 仓库基类
  * =============================================================================
  *
  * 提供 CrudRepository 的默认实现，供业务仓库继承复用。
@@ -9,7 +9,7 @@
  * =============================================================================
  */
 
-import type { PaginatedResult, Result } from '@hai/core'
+import type { PaginatedResult, Result } from '@h-ai/core'
 import type { DbConfig } from './db-config.js'
 import type {
   BaseCrudRepositoryConfig,
@@ -27,7 +27,7 @@ import type {
   TxHandle,
 } from './db-types.js'
 
-import { err, ok } from '@hai/core'
+import { err, ok } from '@h-ai/core'
 import { DbErrorCode } from './db-config.js'
 import { dbM } from './db-i18n.js'
 

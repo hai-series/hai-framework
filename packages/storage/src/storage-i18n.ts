@@ -1,11 +1,11 @@
 /**
- * @hai/storage — i18n 消息获取器
+ * @h-ai/storage — i18n 消息获取器
  *
  * 加载存储模块的中英文翻译文件，提供统一的文案获取函数。
  * 内部使用，不对外导出。
  */
 
-import { core } from '@hai/core'
+import { core } from '@h-ai/core'
 import messagesEnUS from '../messages/en-US.json'
 import messagesZhCN from '../messages/zh-CN.json'
 

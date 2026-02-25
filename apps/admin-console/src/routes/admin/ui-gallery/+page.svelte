@@ -1,5 +1,5 @@
 <!--
-  UI 组件库展示页面 - 全部 @hai/ui 组件综合展示
+  UI 组件库展示页面 - 全部 @h-ai/ui 组件综合展示
 -->
 <script lang="ts">
   import {
@@ -70,7 +70,7 @@
     Tooltip,
     UserProfile,
     toast,
-  } from '@hai/ui'
+  } from '@h-ai/ui'
   import * as m from '$lib/paraglide/messages'
 
   // === 顶层标签状态 ===
@@ -550,7 +550,7 @@
 
       <Card>
         <h3 class="text-lg font-semibold mb-4">PageHeader 页面头部</h3>
-        <div class="border border-base-200 rounded-lg p-4">
+        <div class="bg-base-200/50 rounded-lg p-4">
           <PageHeader title="用户管理" description="管理系统中的所有用户账号">
             {#snippet actions()}
               <Button variant="primary" size="sm">新建用户</Button>

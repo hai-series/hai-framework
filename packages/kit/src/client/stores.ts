@@ -1,6 +1,6 @@
 /**
  * =============================================================================
- * @hai/kit - Client Stores
+ * @h-ai/kit - Client Stores
  * =============================================================================
  * Svelte 客户端 Store 封装
  *
@@ -11,7 +11,7 @@
  * @example
  * ```svelte
  * <script>
- * import { kit } from '@hai/kit'
+ * import { kit } from '@h-ai/kit'
  *
  * const session = kit.client.useSession()
  * </script>

@@ -180,7 +180,7 @@
   "iam_roles_permission_count": "{count} permissions",
   "iam_roles_action_menu": "Role action menu",
   "gallery_title": "UI Gallery",
-  "gallery_desc": "Complete component showcase based on @hai/ui, powered by DaisyUI",
+  "gallery_desc": "Complete component showcase based on @h-ai/ui, powered by DaisyUI",
   "gallery_tab_primitives": "Primitives",
   "gallery_tab_compounds": "Compounds",
   "gallery_tab_scenes": "Scenes",
@@ -234,5 +234,17 @@
   "api_iam_permissions_delete_failed": "Failed to delete permission",
   "api_iam_permissions_update_not_supported": "Updating permissions is not supported, please delete and recreate",
   "api_audit_log_failed": "Failed to insert audit log: {message}",
-  "api_audit_log_retrieve_failed": "Failed to retrieve audit log after insertion"
+  "api_audit_log_retrieve_failed": "Failed to retrieve audit log after insertion",
+  "logs_title": "Audit Logs",
+  "logs_subtitle": "View system operation records and security events",
+  "logs_search_placeholder": "Search users, actions or resources...",
+  "logs_col_time": "Time",
+  "logs_col_user": "User",
+  "logs_col_action": "Action",
+  "logs_col_resource": "Resource",
+  "logs_col_detail": "Details",
+  "logs_col_ip": "IP Address",
+  "logs_filter_all": "All",
+  "logs_total_count": "{count} records total",
+  "logs_system_user": "System"
 }

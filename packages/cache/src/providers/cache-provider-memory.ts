@@ -1,4 +1,4 @@
-import type { Result } from '@hai/core'
+import type { Result } from '@h-ai/core'
 import type { CacheConfig, CacheErrorCodeType } from '../cache-config.js'
 import type {
   CacheError,
@@ -13,7 +13,7 @@ import type {
   ZMember,
   ZSetOperations,
 } from '../cache-types.js'
-import { err, ok } from '@hai/core'
+import { err, ok } from '@h-ai/core'
 import { CacheErrorCode } from '../cache-config.js'
 import { cacheM } from '../cache-i18n.js'
 

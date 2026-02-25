@@ -8,5 +8,5 @@ export default defineConfig({
     'browser': 'src/iam-index.browser.ts',
     'client/index': 'src/client/index.ts',
   },
-  external: ['@hai/core', '@hai/crypto', '@hai/db', '@hai/cache'],
+  external: ['@h-ai/core', '@h-ai/crypto', '@h-ai/db', '@h-ai/cache'],
 })

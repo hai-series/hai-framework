@@ -1,5 +1,5 @@
 {
-  "name": "@hai/iam",
+  "name": "@h-ai/iam",
   "type": "module",
   "version": "0.1.0",
   "description": "Identity & Access Management module for Hai framework.",
@@ -36,10 +36,10 @@
     "clean": "rimraf dist .turbo"
   },
   "dependencies": {
-    "@hai/cache": "workspace:*",
-    "@hai/core": "workspace:*",
-    "@hai/crypto": "workspace:*",
-    "@hai/db": "workspace:*",
+    "@h-ai/cache": "workspace:*",
+    "@h-ai/core": "workspace:*",
+    "@h-ai/crypto": "workspace:*",
+    "@h-ai/db": "workspace:*",
     "zod": "catalog:"
   },
   "devDependencies": {

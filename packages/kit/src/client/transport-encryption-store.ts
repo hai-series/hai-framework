@@ -1,14 +1,14 @@
 /**
  * =============================================================================
- * @hai/kit - 客户端传输加密 Store
+ * @h-ai/kit - 客户端传输加密 Store
  * =============================================================================
  * 浏览器端传输加密管理，封装密钥生成、密钥交换与加密 fetch。
  *
  * @example
  * ```svelte
  * <script>
- * import { kit } from '@hai/kit'
- * import { crypto } from '@hai/crypto'
+ * import { kit } from '@h-ai/kit'
+ * import { crypto } from '@h-ai/crypto'
  *
  * const te = kit.client.useTransportEncryption({ crypto })
  *

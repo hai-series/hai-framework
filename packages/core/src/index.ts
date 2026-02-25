@@ -1,6 +1,6 @@
 /**
  * =============================================================================
- * @hai/core - Node.js 入口
+ * @h-ai/core - Node.js 入口
  * =============================================================================
  * Node.js 环境的完整功能入口。
  *
@@ -18,9 +18,9 @@
  *
  * @example
  * ```ts
- * import { core } from '@hai/core'
- * import type { Result, Logger } from '@hai/core'
- * import { CoreConfigSchema, CommonErrorCode } from '@hai/core'
+ * import { core } from '@h-ai/core'
+ * import type { Result, Logger } from '@h-ai/core'
+ * import { CoreConfigSchema, CommonErrorCode } from '@h-ai/core'
  *
  * // 初始化
  * core.init({ configDir: './config' })

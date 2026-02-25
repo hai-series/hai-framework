@@ -1,10 +1,10 @@
 /**
- * @hai/ai — 公共类型定义
+ * @h-ai/ai — 公共类型定义
  *
- * 聚合导出模块根类型和子功能类型，供外部通过 `@hai/ai` 一站式引入。
+ * 聚合导出模块根类型和子功能类型，供外部通过 `@h-ai/ai` 一站式引入。
  */
 
-import type { Result } from '@hai/core'
+import type { Result } from '@h-ai/core'
 
 import type { AIConfig, AIConfigInput, AIError } from './ai-config.js'
 import type { LLMOperations, StreamOperations, ToolsOperations } from './llm/ai-llm-types.js'
@@ -20,7 +20,7 @@ import type { MCPOperations } from './mcp/ai-mcp-types.js'
  *
  * @example
  * ```ts
- * import { ai } from '@hai/ai'
+ * import { ai } from '@h-ai/ai'
  *
  * ai.init({ llm: { model: 'gpt-4o-mini' } })
  * const result = await ai.llm.chat({ messages: [{ role: 'user', content: '你好' }] })

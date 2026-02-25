@@ -1,6 +1,6 @@
 /**
  * =============================================================================
- * @hai/db - MySQL Provider
+ * @h-ai/db - MySQL Provider
  * =============================================================================
  *
  * 基于 mysql2 的 MySQL 数据库实现。
@@ -24,7 +24,7 @@
  * =============================================================================
  */
 
-import type { PaginatedResult, Result } from '@hai/core'
+import type { PaginatedResult, Result } from '@h-ai/core'
 import type { DbConfig } from '../db-config.js'
 import type {
   ColumnDef,
@@ -43,7 +43,7 @@ import type {
   TxWrapCallback,
 } from '../db-types.js'
 
-import { err, ok } from '@hai/core'
+import { err, ok } from '@h-ai/core'
 
 import { DbErrorCode } from '../db-config.js'
 import { createCrud } from '../db-crud-kernel.js'

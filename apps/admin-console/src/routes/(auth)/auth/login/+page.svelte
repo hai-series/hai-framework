@@ -2,12 +2,12 @@
   =============================================================================
   Admin Console - 登录页面
   =============================================================================
-  使用 @hai/ui 的 LoginForm 场景组件
+  使用 @h-ai/ui 的 LoginForm 场景组件
   =============================================================================
 -->
 <script lang="ts">
   import { goto } from '$app/navigation'
-  import type { LoginFormData } from '@hai/ui'
+  import type { LoginFormData } from '@h-ai/ui'
   import * as m from '$lib/paraglide/messages'
   
   let loading = $state(false)

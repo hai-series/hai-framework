@@ -1,10 +1,10 @@
 /**
- * @hai/ai — LLM 工具定义与注册表
+ * @h-ai/ai — LLM 工具定义与注册表
  *
  * 提供 OpenAI function calling 的工具定义、参数校验和批量执行功能。
  */
 
-import type { Result } from '@hai/core'
+import type { Result } from '@h-ai/core'
 import type { z } from 'zod'
 
 import type {
@@ -17,7 +17,7 @@ import type {
   ToolRegistryOperations,
 } from './ai-llm-types.js'
 
-import { err, ok } from '@hai/core'
+import { err, ok } from '@h-ai/core'
 import { z as zod } from 'zod'
 
 import { aiM } from '../ai-i18n.js'

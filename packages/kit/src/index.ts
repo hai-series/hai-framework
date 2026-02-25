@@ -1,11 +1,11 @@
 /**
  * =============================================================================
- * @hai/kit - 主入口
+ * @h-ai/kit - 主入口
  * =============================================================================
  * SvelteKit 集成模块，所有功能通过 kit 对象统一访问：
  *
  * ```ts
- * import { kit } from '@hai/kit'
+ * import { kit } from '@h-ai/kit'
  *
  * kit.createHandle({ /* config *\/ })
  * kit.guard.auth({ loginUrl: '/login' })

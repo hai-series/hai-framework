@@ -11,5 +11,5 @@ export default defineConfig({
     'src/modules/crypto/index.ts',
     'src/client/index.ts',
   ],
-  external: ['@sveltejs/kit', '@hai/core', '@hai/iam', 'svelte', 'svelte/store'],
+  external: ['@sveltejs/kit', '@h-ai/core', '@h-ai/iam', 'svelte', 'svelte/store'],
 })

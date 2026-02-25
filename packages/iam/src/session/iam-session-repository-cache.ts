@@ -1,9 +1,9 @@
 /**
  * =============================================================================
- * @hai/iam - 会话映射缓存实现
+ * @h-ai/iam - 会话映射缓存实现
  * =============================================================================
  *
- * 基于 @hai/cache 的会话映射实现：
+ * 基于 @h-ai/cache 的会话映射实现：
  * - token -> session: iam:token:{token}
  * - user -> tokens: iam:user:{userId}:tokens
  *
@@ -11,11 +11,11 @@
  * =============================================================================
  */
 
-import type { CacheFunctions } from '@hai/cache'
-import type { Result } from '@hai/core'
+import type { CacheFunctions } from '@h-ai/cache'
+import type { Result } from '@h-ai/core'
 import type { IamError } from '../iam-types.js'
 import type { Session } from './iam-session-types.js'
-import { err, ok } from '@hai/core'
+import { err, ok } from '@h-ai/core'
 
 import { IamErrorCode } from '../iam-config.js'
 import { iamM } from '../iam-i18n.js'
@@ -102,7 +102,7 @@ export interface SessionMappingRepository {
 /**
  * 创建基于缓存的会话映射存储
  *
- * 使用 @hai/cache 实现 token→session 和 user→tokens 的映射存储。
+ * 使用 @h-ai/cache 实现 token→session 和 user→tokens 的映射存储。
  *
  * @param cache - 缓存服务实例
  * @returns 会话映射存储接口实现

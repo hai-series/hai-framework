@@ -42,16 +42,16 @@ hai Framework 是一个**面向 AI 智能应用**的全栈开发框架。
 
 | 包名           | 职责                                                                      |     Provider 支持      |
 | -------------- | ------------------------------------------------------------------------- | :--------------------: |
-| `@hai/core`    | 基础能力：`Result` 类型、日志、配置加载、ID 生成、i18n、工具函数          |           —            |
-| `@hai/crypto`  | 国密算法：SM2 非对称加密/签名、SM3 哈希、SM4 对称加密、密码哈希           |           —            |
-| `@hai/db`      | 数据库访问：DDL、原生 SQL、事务、分页、CRUD 仓库                          | ✅ SQLite / PG / MySQL |
-| `@hai/cache`   | 缓存：KV、Hash、List、Set、SortedSet，Redis 风格 API                      |   ✅ Memory / Redis    |
-| `@hai/storage` | 文件存储：上传/下载/删除/复制/预签名 URL                                  |     ✅ Local / S3      |
-| `@hai/iam`     | 身份与访问管理：认证（密码/OTP/LDAP）、RBAC 授权、会话管理、用户管理      |           —            |
-| `@hai/ai`      | AI 集成：LLM 调用（同步/流式）、MCP Server、工具定义与注册                |           —            |
-| `@hai/kit`     | SvelteKit 集成：Handle Hook、中间件（CORS/CSRF/限流）、路由守卫、表单校验 |           —            |
-| `@hai/ui`      | UI 组件库：57+ Svelte 5 Runes 组件（原子 + 复合 + 业务场景）              |           —            |
-| `@hai/cli`     | CLI 脚手架：项目创建、模块添加、代码生成                                  |           —            |
+| `@h-ai/core`    | 基础能力：`Result` 类型、日志、配置加载、ID 生成、i18n、工具函数          |           —            |
+| `@h-ai/crypto`  | 国密算法：SM2 非对称加密/签名、SM3 哈希、SM4 对称加密、密码哈希           |           —            |
+| `@h-ai/db`      | 数据库访问：DDL、原生 SQL、事务、分页、CRUD 仓库                          | ✅ SQLite / PG / MySQL |
+| `@h-ai/cache`   | 缓存：KV、Hash、List、Set、SortedSet，Redis 风格 API                      |   ✅ Memory / Redis    |
+| `@h-ai/storage` | 文件存储：上传/下载/删除/复制/预签名 URL                                  |     ✅ Local / S3      |
+| `@h-ai/iam`     | 身份与访问管理：认证（密码/OTP/LDAP）、RBAC 授权、会话管理、用户管理      |           —            |
+| `@h-ai/ai`      | AI 集成：LLM 调用（同步/流式）、MCP Server、工具定义与注册                |           —            |
+| `@h-ai/kit`     | SvelteKit 集成：Handle Hook、中间件（CORS/CSRF/限流）、路由守卫、表单校验 |           —            |
+| `@h-ai/ui`      | UI 组件库：57+ Svelte 5 Runes 组件（原子 + 复合 + 业务场景）              |           —            |
+| `@h-ai/cli`     | CLI 脚手架：项目创建、模块添加、代码生成                                  |           —            |
 
 ## 架构
 
@@ -62,32 +62,32 @@ hai Framework 是一个**面向 AI 智能应用**的全栈开发框架。
                          └────────────┬────────────┘
                                       │
                          ┌────────────▼────────────┐
-                         │ @hai/kit  SvelteKit 集成  │
+                         │ @h-ai/kit  SvelteKit 集成  │
                          │ hooks · guards · middleware│
                          └────────────┬────────────┘
                                       │
          ┌────────────┬───────────────┼───────────────┬────────────┐
          │            │               │               │            │
     ┌────▼────┐  ┌────▼────┐   ┌──────▼──────┐  ┌────▼────┐  ┌───▼───┐
-    │ @hai/iam│  │ @hai/ai │   │@hai/storage  │  │@hai/ui  │  │  ...  │
+    │ @h-ai/iam│  │ @h-ai/ai │   │@h-ai/storage  │  │@h-ai/ui  │  │  ...  │
     │ 认证授权 │  │ LLM+MCP │   │  文件存储    │  │ 组件库  │  │       │
     └────┬────┘  └─────────┘   └──────┬──────┘  └─────────┘  └───────┘
          │                            │
     ┌────▼────┐  ┌─────────┐   ┌──────▼──────┐
-    │ @hai/db │  │@hai/cache│   │ S3 / Local  │
+    │ @h-ai/db │  │@h-ai/cache│   │ S3 / Local  │
     │  数据库  │  │   缓存   │   │  Provider   │
     └────┬────┘  └────┬────┘   └─────────────┘
          │            │
    SQLite│PG│MySQL  Memory│Redis
          │            │
     ┌────▼────────────▼────┐
-    │      @hai/core       │
+    │      @h-ai/core       │
     │ Result · Logger · ID │
     │ Config · i18n · Utils│
     └──────────────────────┘
 ```
 
-**依赖方向**：上层依赖下层，`@hai/core` 是最底层基础，不反向依赖任何模块。
+**依赖方向**：上层依赖下层，`@h-ai/core` 是最底层基础，不反向依赖任何模块。
 
 ## 快速开始
 
@@ -95,7 +95,7 @@ hai Framework 是一个**面向 AI 智能应用**的全栈开发框架。
 
 ```bash
 # 全局安装 CLI
-pnpm add -g @hai/cli
+pnpm add -g @h-ai/cli
 
 # 交互式创建项目（选择应用类型、功能模块）
 hai create my-app
@@ -107,15 +107,15 @@ cd my-app && pnpm install && pnpm dev
 ### 在现有项目中使用
 
 ```bash
-pnpm add @hai/core              # 基础能力（必装）
-pnpm add @hai/db                # 数据库
-pnpm add @hai/cache             # 缓存
-pnpm add @hai/iam               # 身份认证/授权
-pnpm add @hai/ai                # AI / LLM / MCP
-pnpm add @hai/storage           # 文件存储
-pnpm add @hai/crypto            # 国密加密
-pnpm add @hai/kit               # SvelteKit 集成
-pnpm add @hai/ui                # UI 组件库
+pnpm add @h-ai/core              # 基础能力（必装）
+pnpm add @h-ai/db                # 数据库
+pnpm add @h-ai/cache             # 缓存
+pnpm add @h-ai/iam               # 身份认证/授权
+pnpm add @h-ai/ai                # AI / LLM / MCP
+pnpm add @h-ai/storage           # 文件存储
+pnpm add @h-ai/crypto            # 国密加密
+pnpm add @h-ai/kit               # SvelteKit 集成
+pnpm add @h-ai/ui                # UI 组件库
 ```
 
 ## 使用示例
@@ -125,8 +125,8 @@ pnpm add @hai/ui                # UI 组件库
 所有模块操作都返回 `Result` 类型，不抛异常：
 
 ```typescript
-import type { Result } from '@hai/core'
-import { err, ok } from '@hai/core'
+import type { Result } from '@h-ai/core'
+import { err, ok } from '@h-ai/core'
 
 function divide(a: number, b: number): Result<number, string> {
   if (b === 0)
@@ -146,7 +146,7 @@ else {
 ### 数据库
 
 ```typescript
-import { db } from '@hai/db'
+import { db } from '@h-ai/db'
 
 // 初始化（SQLite）
 await db.init({ type: 'sqlite', database: './data/app.db' })
@@ -185,7 +185,7 @@ const user = await userRepo.findById('1')
 ### 缓存
 
 ```typescript
-import { cache } from '@hai/cache'
+import { cache } from '@h-ai/cache'
 
 // 初始化（内存 or Redis）
 await cache.init({ type: 'memory' })
@@ -206,7 +206,7 @@ await cache.zset.zadd('leaderboard', { score: 100, member: 'Alice' })
 ### AI / LLM / MCP
 
 ```typescript
-import { ai, createMcpServer } from '@hai/ai'
+import { ai, createMcpServer } from '@h-ai/ai'
 import { z } from 'zod'
 
 // 初始化（OpenAI 兼容 API）
@@ -244,7 +244,7 @@ const mcp = createMcpServer({ name: 'my-app', version: '1.0.0' })
 ### 文件存储
 
 ```typescript
-import { storage } from '@hai/storage'
+import { storage } from '@h-ai/storage'
 
 // 初始化（本地 or S3 兼容）
 await storage.init({ type: 'local', root: './uploads' })
@@ -262,9 +262,9 @@ const url = await storage.presign.putUrl('uploads/image.png', { expiresIn: 3600 
 ### 身份认证 & 授权
 
 ```typescript
-import { cache } from '@hai/cache'
-import { db } from '@hai/db'
-import { iam } from '@hai/iam'
+import { cache } from '@h-ai/cache'
+import { db } from '@h-ai/db'
+import { iam } from '@h-ai/iam'
 
 // IAM 依赖 db 和 cache，通过参数注入
 await iam.init({
@@ -288,7 +288,7 @@ const allowed = await iam.authz.checkPermission(userId, 'users:read')
 
 ```typescript
 // src/hooks.server.ts
-import { kit } from '@hai/kit'
+import { kit } from '@h-ai/kit'
 
 export const handle = kit.createHandle({
   logging: true,
@@ -305,7 +305,7 @@ export const handle = kit.createHandle({
 ### 国密加密
 
 ```typescript
-import { crypto } from '@hai/crypto'
+import { crypto } from '@h-ai/crypto'
 
 await crypto.init({})
 
@@ -327,7 +327,7 @@ const valid = crypto.password.verify('MyPassword123', hashed.data)
 
 ```svelte
 <script lang="ts">
-  import { Button, Input, Modal, DataTable, Card } from '@hai/ui'
+  import { Button, Input, Modal, DataTable, Card } from '@h-ai/ui'
 
   let showModal = $state(false)
   let users = $state([])
@@ -362,7 +362,7 @@ const valid = crypto.password.verify('MyPassword123', hashed.data)
 
 | 应用                | 说明                     | 使用的模块         |
 | ------------------- | ------------------------ | ------------------ |
-| `admin-console`     | 管理后台（完整功能参考） | 全部 @hai/\* 模块  |
+| `admin-console`     | 管理后台（完整功能参考） | 全部 @h-ai/\* 模块  |
 | `api-service`       | 纯 API 后端服务          | core, db, iam, kit |
 | `corporate-website` | 企业官网                 | core, kit, ui      |
 | `h5-app`            | H5 移动应用              | core, kit, ui      |
@@ -386,7 +386,7 @@ pnpm lint
 pnpm test
 
 # 只运行某个模块
-pnpm --filter @hai/db test
+pnpm --filter @h-ai/db test
 ```
 
 ## 环境变量

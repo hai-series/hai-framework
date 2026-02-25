@@ -1,4 +1,4 @@
-import type { Result } from '@hai/core'
+import type { Result } from '@h-ai/core'
 
 import type {
   CryptoError,
@@ -8,7 +8,7 @@ import type {
   SM2SignOptions,
 } from './crypto-types.js'
 
-import { err, ok } from '@hai/core'
+import { err, ok } from '@h-ai/core'
 // @ts-expect-error sm-crypto 无类型定义
 import smCrypto from 'sm-crypto'
 

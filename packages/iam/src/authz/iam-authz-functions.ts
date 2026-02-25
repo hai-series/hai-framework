@@ -1,12 +1,12 @@
 /**
- * @hai/iam — 授权子功能工厂（RBAC）
+ * @h-ai/iam — 授权子功能工厂（RBAC）
  *
  * 提供角色/权限的 CRUD、用户角色分配、权限检查等能力。
  */
 
-import type { CacheFunctions } from '@hai/cache'
-import type { PaginatedResult, PaginationOptionsInput, Result } from '@hai/core'
-import type { DbFunctions } from '@hai/db'
+import type { CacheFunctions } from '@h-ai/cache'
+import type { PaginatedResult, PaginationOptionsInput, Result } from '@h-ai/core'
+import type { DbFunctions } from '@h-ai/db'
 
 import type { IamConfig, RbacConfig } from '../iam-config.js'
 import type { IamError } from '../iam-types.js'
@@ -20,7 +20,7 @@ import type {
   Role,
 } from './iam-authz-types.js'
 
-import { core, err, ok } from '@hai/core'
+import { core, err, ok } from '@h-ai/core'
 
 import { IamErrorCode, RbacConfigSchema } from '../iam-config.js'
 import { iamM } from '../iam-i18n.js'

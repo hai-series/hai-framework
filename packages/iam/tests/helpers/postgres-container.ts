@@ -1,9 +1,9 @@
 /**
  * =============================================================================
- * @hai/iam - PostgreSQL 测试容器管理
+ * @h-ai/iam - PostgreSQL 测试容器管理
  * =============================================================================
  *
- * 复用与 @hai/db 相同的 PostgreSQL 容器模式。
+ * 复用与 @h-ai/db 相同的 PostgreSQL 容器模式。
  */
 
 import type { StartedTestContainer } from 'testcontainers'

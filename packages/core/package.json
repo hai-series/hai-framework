@@ -1,5 +1,5 @@
 {
-  "name": "@hai/core",
+  "name": "@h-ai/core",
   "type": "module",
   "version": "0.1.0",
   "description": "Core utilities, types and functions module for Hai framework .",

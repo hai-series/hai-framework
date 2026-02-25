@@ -1,6 +1,6 @@
 /**
  * =============================================================================
- * @hai/db - 类型定义
+ * @h-ai/db - 类型定义
  * =============================================================================
  *
  * 本文件定义数据库模块的核心接口和类型（非配置相关）。
@@ -19,7 +19,7 @@
  *
  * @example
  * ```ts
- * import type { DbFunctions, TableDef, ColumnDef } from '@hai/db'
+ * import type { DbFunctions, TableDef, ColumnDef } from '@h-ai/db'
  *
  * // 定义表结构
  * const userTable: TableDef = {
@@ -33,7 +33,7 @@
  * =============================================================================
  */
 
-import type { PaginatedResult, PaginationOptions, PaginationOptionsInput, Result } from '@hai/core'
+import type { PaginatedResult, PaginationOptions, PaginationOptionsInput, Result } from '@h-ai/core'
 import type { DbConfig, DbConfigInput, DbErrorCodeType } from './db-config.js'
 
 // =============================================================================
@@ -617,7 +617,7 @@ export interface DbPagination {
  *
  * @example
  * ```ts
- * import { db } from '@hai/db'
+ * import { db } from '@h-ai/db'
  *
  * // 初始化
  * await db.init({ type: 'sqlite', database: ':memory:' })

@@ -1,9 +1,9 @@
 /**
  * =============================================================================
- * @hai/iam - 完整工作流测试
+ * @h-ai/iam - 完整工作流测试
  * =============================================================================
  *
- * 参照 @hai/storage 的 workflow 测试风格，从实际使用场景出发，
+ * 参照 @h-ai/storage 的 workflow 测试风格，从实际使用场景出发，
  * 覆盖完整的前端 + 后端操作流程。
  *
  * 工作流：
@@ -14,7 +14,7 @@
  */
 
 import type { IamFunctions } from '../src/iam-types.js'
-import { db } from '@hai/db'
+import { db } from '@h-ai/db'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { IamErrorCode } from '../src/iam-config.js'
 import { defineIamSuite, initIam, postgresRedisEnv, sqliteMemoryEnv, TEST_PASSWORD } from './helpers/iam-test-suite.js'

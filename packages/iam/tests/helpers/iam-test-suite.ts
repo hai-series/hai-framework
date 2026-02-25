@@ -1,7 +1,7 @@
 /**
- * @hai/iam — 测试套件辅助
+ * @h-ai/iam — 测试套件辅助
  *
- * 参照 @hai/storage 测试风格，提供多环境 IAM 测试支撑：
+ * 参照 @h-ai/storage 测试风格，提供多环境 IAM 测试支撑：
  * - sqlite + memory：轻量快速（默认，无需 Docker）
  * - postgresql + redis：真实外部服务（需 Docker）
  *
@@ -13,8 +13,8 @@ import type { IamConfigInput, IamFunctions } from '../../src/iam-types.js'
 import type { LdapContainerLease } from './ldap-container.js'
 import type { PostgresContainerLease } from './postgres-container.js'
 import type { RedisContainerLease } from './redis-container.js'
-import { cache } from '@hai/cache'
-import { db } from '@hai/db'
+import { cache } from '@h-ai/cache'
+import { db } from '@h-ai/db'
 import { afterAll, beforeAll, describe } from 'vitest'
 import { iam } from '../../src/index.js'
 import { acquireLdapContainer } from './ldap-container.js'

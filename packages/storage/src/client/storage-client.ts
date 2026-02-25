@@ -1,6 +1,6 @@
 /**
  * =============================================================================
- * @hai/storage - 前端存储客户端
+ * @h-ai/storage - 前端存储客户端
  * =============================================================================
  *
  * 提供前端通过签名 URL 直接上传下载文件的功能。
@@ -11,7 +11,7 @@
  *
  * @example
  * ```ts
- * import { uploadWithPresignedUrl, downloadWithPresignedUrl } from '@hai/storage/client'
+ * import { uploadWithPresignedUrl, downloadWithPresignedUrl } from '@h-ai/storage/client'
  *
  * // 上传文件
  * const uploadResult = await uploadWithPresignedUrl(presignedUrl, file, {

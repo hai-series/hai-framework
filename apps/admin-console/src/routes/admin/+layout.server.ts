@@ -5,7 +5,7 @@
  */
 
 import type { LayoutServerLoad } from './$types'
-import { core } from '@hai/core'
+import { core } from '@h-ai/core'
 import { redirect } from '@sveltejs/kit'
 
 export const load: LayoutServerLoad = async ({ locals, url }) => {

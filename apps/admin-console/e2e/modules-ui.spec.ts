@@ -49,7 +49,7 @@ test.describe('Modules Page UI', () => {
     await page.waitForLoadState('domcontentloaded')
 
     // core 标签页应默认显示
-    const coreContent = page.locator('text=@hai/core')
+    const coreContent = page.locator('text=@h-ai/core')
     await expect(coreContent.first()).toBeVisible()
   })
 
@@ -62,7 +62,7 @@ test.describe('Modules Page UI', () => {
     await clickModuleTab(page, 1)
 
     // db 内容应可见
-    const dbContent = page.locator('text=@hai/db')
+    const dbContent = page.locator('text=@h-ai/db')
     await expect(dbContent.first()).toBeVisible()
   })
 
@@ -73,7 +73,7 @@ test.describe('Modules Page UI', () => {
 
     await clickModuleTab(page, 2)
 
-    const cacheContent = page.locator('text=@hai/cache')
+    const cacheContent = page.locator('text=@h-ai/cache')
     await expect(cacheContent.first()).toBeVisible()
   })
 
@@ -84,7 +84,7 @@ test.describe('Modules Page UI', () => {
 
     await clickModuleTab(page, 5)
 
-    const cryptoContent = page.locator('text=@hai/crypto')
+    const cryptoContent = page.locator('text=@h-ai/crypto')
     await expect(cryptoContent.first()).toBeVisible()
   })
 

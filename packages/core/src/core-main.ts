@@ -1,13 +1,13 @@
 /**
  * =============================================================================
- * @hai/core - Core 服务聚合（通用部分）
+ * @h-ai/core - Core 服务聚合（通用部分）
  * =============================================================================
  * 提供 Node.js 与浏览器共用的 core 对象结构。
  * 所有功能统一通过 core 对象访问，确保 API 一致性。
  *
  * @example
  * ```ts
- * import { core } from '@hai/core'
+ * import { core } from '@h-ai/core'
  *
  * // 日志
  * core.logger.info('Hello')
@@ -54,8 +54,8 @@ import { typeUtils } from './utils/core-util-type.js'
  *
  * @example
  * ```ts
- * import { createCore } from '@hai/core'
- * import { logger } from '@hai/core'
+ * import { createCore } from '@h-ai/core'
+ * import { logger } from '@h-ai/core'
  *
  * const core = createCore({
  *   createLogger: logger.createLogger,
@@ -264,7 +264,7 @@ export function createCore(loggerFns: LoggerFunctions) {
  *
  * @example
  * ```ts
- * import type { Core } from '@hai/core'
+ * import type { Core } from '@h-ai/core'
  * const coreRef: Core = core
  * ```
  */

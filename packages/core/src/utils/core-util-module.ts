@@ -1,12 +1,12 @@
 /**
  * =============================================================================
- * @hai/core - 模块初始化工具
+ * @h-ai/core - 模块初始化工具
  * =============================================================================
  * 封装各模块共同的「未初始化」错误处理模式，消除跨模块冗余。
  *
  * @example
  * ```ts
- * import { core } from '@hai/core'
+ * import { core } from '@h-ai/core'
  * import type { MyError } from './my-types.js'
  *
  * const notInitialized = core.module.createNotInitializedKit<MyError>(
@@ -98,7 +98,7 @@ export interface NotInitializedKit<E extends BaseModuleError> {
  *
  * @example
  * ```ts
- * import { core } from '@hai/core'
+ * import { core } from '@h-ai/core'
  *
  * const notInitialized = core.module.createNotInitializedKit<DbError>(
  *   DbErrorCode.NOT_INITIALIZED,

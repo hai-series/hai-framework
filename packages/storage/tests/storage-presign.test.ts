@@ -1,5 +1,5 @@
 /**
- * @hai/storage — 签名 URL 操作测试
+ * @h-ai/storage — 签名 URL 操作测试
  */
 
 import { describe, expect, it } from 'vitest'

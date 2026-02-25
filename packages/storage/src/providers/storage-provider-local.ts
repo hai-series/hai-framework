@@ -1,10 +1,10 @@
 /**
- * @hai/storage — Local Provider 实现
+ * @h-ai/storage — Local Provider 实现
  *
  * 基于本地文件系统的存储 Provider。
  */
 
-import type { Result } from '@hai/core'
+import type { Result } from '@h-ai/core'
 import type { LocalConfig, StorageConfig } from '../storage-config.js'
 import type {
   DirOperations,
@@ -21,7 +21,7 @@ import * as fs from 'node:fs'
 import * as fsp from 'node:fs/promises'
 
 import * as path from 'node:path'
-import { err, ok } from '@hai/core'
+import { err, ok } from '@h-ai/core'
 
 import { StorageErrorCode } from '../storage-config.js'
 

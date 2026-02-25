@@ -1,5 +1,5 @@
 /**
- * @hai/ai — 错误码 + 配置 Schema
+ * @h-ai/ai — 错误码 + 配置 Schema
  *
  * 定义 AI 模块的错误码常量、Zod Schema 和配置类型。
  */

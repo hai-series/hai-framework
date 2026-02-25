@@ -1,5 +1,5 @@
 /**
- * @hai/ai — LLM 子功能工厂
+ * @h-ai/ai — LLM 子功能工厂
  *
  * 组装 LLM 操作：Provider + 工具 + 流处理器。
  */

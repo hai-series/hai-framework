@@ -1,6 +1,6 @@
 /**
  * =============================================================================
- * @hai/cli - 主入口
+ * @h-ai/cli - 主入口
  * =============================================================================
  * hai Admin Framework CLI
  *
@@ -14,7 +14,7 @@
 
 import type { AppType, CreateProjectOptions, FeatureId, GeneratorType } from './types.js'
 import process from 'node:process'
-import { core } from '@hai/core'
+import { core } from '@h-ai/core'
 import { cac } from 'cac'
 import chalk from 'chalk'
 import { addModule, createProject, generate, initProject } from './commands/index.js'

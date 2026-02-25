@@ -1,8 +1,8 @@
 /**
  * =============================================================================
- * @hai/kit - Storage Handle
+ * @h-ai/kit - Storage Handle
  * =============================================================================
- * 集成 @hai/storage 的 SvelteKit 封装
+ * 集成 @h-ai/storage 的 SvelteKit 封装
  *
  * 功能：
  * - 文件上传 API 端点
@@ -12,7 +12,7 @@
  * @example
  * ```ts
  * // src/routes/api/storage/[...path]/+server.ts
- * import { kit } from '@hai/kit'
+ * import { kit } from '@h-ai/kit'
  * import { storage } from '$lib/server/storage'
  *
  * const endpoint = kit.storage.createEndpoint({

@@ -1,4 +1,4 @@
-# @hai/iam
+# @h-ai/iam
 
 身份与访问管理模块，提供统一的 `iam` 对象实现认证与授权功能。
 
@@ -15,21 +15,21 @@
 ## 安装
 
 ```bash
-pnpm add @hai/iam
+pnpm add @h-ai/iam
 ```
 
 ## 依赖
 
-- `@hai/db` - 数据库服务（必需，用户/角色/权限/OTP 持久化）
-- `@hai/cache` - 缓存服务（必需，会话/权限缓存）
-- `@hai/crypto` - 密码哈希（内部使用）
+- `@h-ai/db` - 数据库服务（必需，用户/角色/权限/OTP 持久化）
+- `@h-ai/cache` - 缓存服务（必需，会话/权限缓存）
+- `@h-ai/crypto` - 密码哈希（内部使用）
 
 ## 快速开始
 
 ```ts
-import { cache } from '@hai/cache'
-import { db } from '@hai/db'
-import { iam } from '@hai/iam'
+import { cache } from '@h-ai/cache'
+import { db } from '@h-ai/db'
+import { iam } from '@h-ai/iam'
 
 // 1. 初始化
 await db.init({ type: 'sqlite', database: './data.db' })
@@ -72,7 +72,7 @@ await iam.close()
 ## 前端客户端
 
 ```ts
-import { createIamClient } from '@hai/iam/client'
+import { createIamClient } from '@h-ai/iam/client'
 
 const client = createIamClient({
   baseUrl: '/api/iam',
@@ -126,7 +126,7 @@ const result = await iam.user.confirmPasswordReset(token, 'NewPassword456')
 所有操作返回 `Result<T, IamError>`，通过 `IamErrorCode` 做分支判断：
 
 ```ts
-import { iam, IamErrorCode } from '@hai/iam'
+import { iam, IamErrorCode } from '@h-ai/iam'
 
 const result = await iam.auth.login({ identifier: 'admin', password: 'wrong' })
 if (!result.success) {

@@ -1,13 +1,13 @@
 /**
  * =============================================================================
- * @hai/core - Core 服务聚合（Node.js）
+ * @h-ai/core - Core 服务聚合（Node.js）
  * =============================================================================
  * 提供 Node.js 环境的 core 对象，聚合常用功能。
  * 所有功能统一通过 core 对象访问，并提供配置加载能力。
  *
  * @example
  * ```ts
- * import { core } from '@hai/core'
+ * import { core } from '@h-ai/core'
  *
  * // 约定优于配置模式（推荐）
  * core.init({ configDir: './config' })
@@ -47,7 +47,7 @@ import { logger } from './functions/core-function-logger.node.js'
  *
  * @example
  * ```ts
- * import { core } from '@hai/core'
+ * import { core } from '@h-ai/core'
  * core.logger.info('ready')
  * ```
  */
@@ -75,7 +75,7 @@ function createNodeCore() {
  *
  * @example
  * ```ts
- * import { core } from '@hai/core'
+ * import { core } from '@h-ai/core'
  * core.init({ configDir: './config' })
  * ```
  */

@@ -5,7 +5,7 @@
  */
 
 import * as m from '$lib/paraglide/messages.js'
-import { core } from '@hai/core'
+import { core } from '@h-ai/core'
 import { getDb } from '../init.js'
 
 export interface AuditLog {

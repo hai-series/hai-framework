@@ -1,5 +1,5 @@
 /**
- * @hai/storage — 公共类型定义
+ * @h-ai/storage — 公共类型定义
  *
  * 包含：
  * - 错误类型（StorageError）
@@ -12,7 +12,7 @@
  * - Provider 接口（StorageProvider）
  */
 
-import type { Result } from '@hai/core'
+import type { Result } from '@h-ai/core'
 import type { Buffer } from 'node:buffer'
 import type { PresignOptions, PresignUploadOptions, StorageConfig, StorageConfigInput, StorageErrorCodeType } from './storage-config.js'
 

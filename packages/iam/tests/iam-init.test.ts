@@ -1,5 +1,5 @@
 /**
- * @hai/iam — 初始化与生命周期测试
+ * @h-ai/iam — 初始化与生命周期测试
  *
  * 覆盖范围：
  * - 未初始化守卫：auth/user/authz/session/validatePassword 均返回 NOT_INITIALIZED
@@ -10,8 +10,8 @@
  * - 自定义密码/session 配置后 config 反映正确值
  */
 
-import { cache } from '@hai/cache'
-import { db } from '@hai/db'
+import { cache } from '@h-ai/cache'
+import { db } from '@h-ai/db'
 import { describe, expect, it } from 'vitest'
 import { IamErrorCode } from '../src/iam-config.js'
 import { iam } from '../src/index.js'

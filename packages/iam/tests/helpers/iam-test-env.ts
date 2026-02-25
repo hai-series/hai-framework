@@ -1,5 +1,5 @@
 /**
- * @hai/iam — 测试辅助工具
+ * @h-ai/iam — 测试辅助工具
  *
  * 提供 IAM 测试的统一初始化/清理逻辑。
  * 使用 SQLite 内存数据库 + 内存缓存，无需外部依赖。
@@ -7,8 +7,8 @@
 
 import type { IamConfigSettingsInput } from '../../src/iam-config.js'
 import type { IamFunctions } from '../../src/iam-types.js'
-import { cache } from '@hai/cache'
-import { db } from '@hai/db'
+import { cache } from '@h-ai/cache'
+import { db } from '@h-ai/db'
 import { afterAll, beforeAll } from 'vitest'
 import { iam } from '../../src/index.js'
 

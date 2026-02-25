@@ -2,12 +2,12 @@
   =============================================================================
   Admin Console - 注册页面
   =============================================================================
-  使用 @hai/ui 的 RegisterForm 场景组件
+  使用 @h-ai/ui 的 RegisterForm 场景组件
   =============================================================================
 -->
 <script lang="ts">
   import { goto } from '$app/navigation'
-  import type { RegisterFormData } from '@hai/ui'
+  import type { RegisterFormData } from '@h-ai/ui'
   import * as m from '$lib/paraglide/messages'
   
   let loading = $state(false)

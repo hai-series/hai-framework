@@ -1,4 +1,4 @@
-# @hai/crypto SKILLS
+# @h-ai/crypto SKILLS
 
 > AI 助手参考文档，包含详细接口、参数定义、错误码与使用示例。
 
@@ -6,14 +6,14 @@
 
 ## 模块概述
 
-`@hai/crypto` 提供 SM2/SM3/SM4 国密能力与密码哈希能力，统一通过 `crypto` 入口访问。前后端通用。
+`@h-ai/crypto` 提供 SM2/SM3/SM4 国密能力与密码哈希能力，统一通过 `crypto` 入口访问。前后端通用。
 
 ---
 
 ## 入口与初始化
 
 ```ts
-import { crypto } from '@hai/crypto'
+import { crypto } from '@h-ai/crypto'
 
 // 初始化（必须）
 const result = await crypto.init({ defaultAlgorithm: 'sm' })

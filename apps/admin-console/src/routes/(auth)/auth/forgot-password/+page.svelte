@@ -2,11 +2,11 @@
   =============================================================================
   Admin Console - 忘记密码页面
   =============================================================================
-  使用 @hai/ui 的 ForgotPasswordForm 场景组件
+  使用 @h-ai/ui 的 ForgotPasswordForm 场景组件
   =============================================================================
 -->
 <script lang="ts">
-  import type { ForgotPasswordFormData } from '@hai/ui'
+  import type { ForgotPasswordFormData } from '@h-ai/ui'
   import * as m from '$lib/paraglide/messages'
   
   let loading = $state(false)

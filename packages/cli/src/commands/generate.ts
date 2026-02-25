@@ -1,12 +1,12 @@
 /**
  * =============================================================================
- * @hai/cli - 代码生成命令
+ * @h-ai/cli - 代码生成命令
  * =============================================================================
  */
 
 import type { GenerateOptions, GeneratorType, TemplateContext } from '../types.js'
 import path from 'node:path'
-import { core } from '@hai/core'
+import { core } from '@h-ai/core'
 import chalk from 'chalk'
 import ora from 'ora'
 import prompts from 'prompts'
@@ -253,7 +253,7 @@ async function generateApi(
  * ${context.pascalCase} API
  */
 import type { RequestHandler } from './$types'
-import { kit } from '@hai/kit'
+import { kit } from '@h-ai/kit'
 
 /**
  * GET ${context.kebabCase}
@@ -310,7 +310,7 @@ async function generateModel(
  */
 import { z } from 'zod'
 import { sqliteTable, text, integer } from 'drizzle-orm/sqlite-core'
-import { createId } from '@hai/core'
+import { createId } from '@h-ai/core'
 
 /**
  * ${context.pascalCase} 表
@@ -377,7 +377,7 @@ async function generateMigration(
  * 迁移: ${context.pascalCase}
  * 时间: ${new Date().toISOString()}
  */
-import type { MigrationFn } from '@hai/db'
+import type { MigrationFn } from '@h-ai/db'
 
 export const up: MigrationFn = async (db) => {
   // 升级逻辑
