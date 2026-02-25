@@ -71,7 +71,7 @@ export async function generate(options: GenerateOptions): Promise<void> {
       throw new Error(`未知的生成器类型: ${resolvedOptions.type}`)
     }
 
-    const outputDir = path.resolve(cwd, resolvedOptions.output ?? generator.defaultPath)
+    const outputDir = path.resolve(cwd, resolvedOptions.output || generator.defaultPath)
     const context = createTemplateContext(resolvedOptions.name, {
       projectName: project?.name,
     })
@@ -145,7 +145,7 @@ async function resolveGenerateOptions(options: GenerateOptions): Promise<Require
  * 生成页面
  */
 async function generatePage(
-  name: string,
+  _name: string,
   context: TemplateContext,
   outputDir: string,
 ): Promise<string[]> {
@@ -204,7 +204,7 @@ export const actions: Actions = {
  * 生成组件
  */
 async function generateComponent(
-  name: string,
+  _name: string,
   context: TemplateContext,
   outputDir: string,
 ): Promise<string[]> {
@@ -241,7 +241,7 @@ async function generateComponent(
  * 生成 API 端点
  */
 async function generateApi(
-  name: string,
+  _name: string,
   context: TemplateContext,
   outputDir: string,
 ): Promise<string[]> {
@@ -298,7 +298,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
  * 生成数据模型
  */
 async function generateModel(
-  name: string,
+  _name: string,
   context: TemplateContext,
   outputDir: string,
 ): Promise<string[]> {
@@ -365,7 +365,7 @@ export type Update${context.pascalCase} = z.infer<typeof update${context.pascalC
  * 生成迁移
  */
 async function generateMigration(
-  name: string,
+  _name: string,
   context: TemplateContext,
   outputDir: string,
 ): Promise<string[]> {

@@ -8,11 +8,14 @@
  * 可选功能
  */
 export type FeatureId
-  = | 'iam' // 身份与访问管理（新）
+  = | 'iam' // 身份与访问管理
     | 'db' // 数据库
+    | 'cache' // 缓存
     | 'ai' // AI 集成（含 MCP）
     | 'storage' // 文件存储
     | 'crypto' // 加密模块
+    | 'kit' // SvelteKit 集成
+    | 'ui' // UI 组件库
     // 兼容性别名
     | 'auth' // 认证授权 → iam
     | 'mcp' // MCP 协议 → ai
@@ -44,11 +47,18 @@ export interface GlobalOptions {
 }
 
 /**
+ * 应用类型
+ */
+export type AppType = 'admin' | 'website' | 'h5' | 'api'
+
+/**
  * 项目创建选项
  */
 export interface CreateProjectOptions extends GlobalOptions {
   /** 项目名称 */
   name: string
+  /** 应用类型 */
+  appType?: AppType
   /** 项目模板 */
   template?: 'default' | 'minimal' | 'full' | 'custom'
   /** 选择的功能 */

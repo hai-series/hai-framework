@@ -12,7 +12,7 @@
  * =============================================================================
  */
 
-import type { CreateProjectOptions, FeatureId, GeneratorType } from './types.js'
+import type { AppType, CreateProjectOptions, FeatureId, GeneratorType } from './types.js'
 import process from 'node:process'
 import { core } from '@hai/core'
 import { cac } from 'cac'
@@ -32,8 +32,9 @@ cli.option('-C, --cwd <path>', '工作目录')
 // 创建项目命令
 cli
   .command('create [name]', '创建新的 hai 项目')
+  .option('--type <type>', '应用类型 (admin, website, h5, api)')
   .option('-t, --template <template>', '项目模板 (minimal, default, full, custom)')
-  .option('-f, --features <features>', '功能列表 (逗号分隔: auth,db,ai,storage,mcp,crypto)')
+  .option('-f, --features <features>', '功能列表 (逗号分隔: iam,db,cache,ai,storage,crypto)')
   .option('--examples', '添加示例代码')
   .option('--no-examples', '不添加示例代码')
   .option('--no-install', '不安装依赖')
@@ -48,6 +49,7 @@ cli
 
       await createProject({
         name: name ?? '',
+        appType: options.type as AppType,
         template: options.template as CreateProjectOptions['template'],
         features,
         examples: options.examples as boolean,
@@ -150,10 +152,10 @@ cli.version(VERSION)
 cli.help()
 
 // 解析参数
-cli.parse()
+const parsed = cli.parse()
 
-// 无命令时显示帮助
-if (!cli.matchedCommand) {
+// 无命令且未请求帮助/版本时显示帮助
+if (!cli.matchedCommand && !parsed.options.help && !parsed.options.version) {
   core.logger.info('', {})
   core.logger.info(chalk.cyan('hai Admin Framework CLI'))
   core.logger.info('', {})
