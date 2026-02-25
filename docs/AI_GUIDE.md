@@ -287,17 +287,17 @@ await db.transaction(async (tx) => {
 
 ---
 
-## @hai/auth - 认证模块
+## @hai/iam - 身份与访问管理模块
 
-### 配置认证
+### 配置 IAM
 
 ```typescript
-import { createAuth } from '@hai/auth'
+import { iam } from '@hai/iam'
 
-const auth = createAuth({
+// 初始化
+await iam.init({
+  provider: 'hai',
   secret: process.env.JWT_SECRET!,
-  tokenExpiry: '7d',
-  refreshExpiry: '30d',
 })
 ```
 
@@ -305,45 +305,41 @@ const auth = createAuth({
 
 ```typescript
 // 注册
-const result = await auth.register({
+const result = await iam.ident.register({
   email: 'user@example.com',
   password: 'password123',
   name: '用户名',
 })
 
 // 登录
-const result = await auth.login('user@example.com', 'password123')
+const result = await iam.ident.login({
+  identifier: 'user@example.com',
+  password: 'password123',
+})
 if (result.ok) {
   const { user, accessToken } = result.value
 }
 
 // 验证 Token
-const user = await auth.verify(accessToken)
-
-// 刷新 Token
+const user = await iam.ident.verify(accessToken)
 
 // 登出
-await auth.logout(userId)
+await iam.ident.logout(userId)
 ```
 
 ### RBAC 权限
 
 ```typescript
-// 定义权限
-const permissions = {
-  'users:read': ['admin', 'user'],
-  'users:write': ['admin'],
-  'users:delete': ['admin'],
-}
-
 // 检查权限
-const canEdit = auth.can(user, 'users:write') // true/false
+const canEdit = await iam.authz.checkPermission(ctx, 'users:write')
 
-// 守卫装饰器
-@requirePermission('users:write')
-async function updateUser(id: string, data: any) {
-  // ...
-}
+// 守卫（在 SvelteKit 中使用）
+import { requireRole } from '@hai/kit'
+
+export const load = requireRole(['admin'], async ({ locals }) => {
+  // 只有 admin 角色可以访问
+  return { ... }
+})
 ```
 
 ---
@@ -656,14 +652,24 @@ export const load = requireRole(['admin'], async ({ locals }) => {
 ### 创建项目
 
 ```bash
-# 交互式创建
-pnpm create hai
+# 交互式创建（选择应用类型和功能模块）
+pnpm hai create my-app
 
-# 指定项目名
-pnpm create hai my-admin
+# 指定应用类型
+pnpm hai create my-admin --type admin      # 管理后台
+pnpm hai create my-site --type website     # 企业官网
+pnpm hai create my-h5 --type h5            # H5 移动应用
+pnpm hai create my-api --type api          # API 服务
 
 # 使用模板
-pnpm create hai my-admin --template admin-console
+pnpm hai create my-app --template full     # 启用全部功能
+```
+
+### 添加模块
+
+```bash
+# 向现有项目添加模块
+pnpm hai add iam db cache
 ```
 
 ### 代码生成
@@ -680,20 +686,4 @@ hai generate component UserCard
 
 # 生成服务
 hai generate service user
-```
-
-### 数据库命令
-
-```bash
-# 生成迁移
-hai db:generate
-
-# 执行迁移
-hai db:migrate
-
-# 推送 schema（开发用）
-hai db:push
-
-# 打开 Drizzle Studio
-hai db:studio
 ```

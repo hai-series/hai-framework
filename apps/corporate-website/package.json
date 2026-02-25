@@ -1,0 +1,46 @@
+{
+  "name": "corporate-website",
+  "type": "module",
+  "version": "0.1.0",
+  "private": true,
+  "description": "hai Admin Framework - 企业官网脚手架",
+  "keywords": [
+    "hai",
+    "website",
+    "corporate",
+    "sveltekit",
+    "svelte5",
+    "seo"
+  ],
+  "scripts": {
+    "dev": "vite dev",
+    "build": "vite build",
+    "preview": "vite preview",
+    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "clean": "rimraf .svelte-kit build .turbo"
+  },
+  "dependencies": {
+    "@hai/core": "workspace:*",
+    "@hai/kit": "workspace:*",
+    "@hai/ui": "workspace:*",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@sveltejs/adapter-auto": "catalog:",
+    "@sveltejs/kit": "catalog:",
+    "@sveltejs/vite-plugin-svelte": "catalog:",
+    "@tailwindcss/vite": "catalog:",
+    "@types/node": "catalog:",
+    "daisyui": "catalog:",
+    "rimraf": "catalog:",
+    "svelte": "catalog:",
+    "svelte-check": "catalog:",
+    "tailwindcss": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vitest": "catalog:"
+  }
+}

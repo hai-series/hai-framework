@@ -20,16 +20,16 @@ hai Admin Framework 是专为 AI 编程助手设计的框架，核心目标：
 ## 模块架构
 
 ```
-@hai/core       核心工具（Result、错误处理、依赖注入、工具函数）
-@hai/core     配置管理（环境变量、分层配置、类型安全）
+@hai/core       核心工具（Result、错误处理、依赖注入、工具函数、配置管理）
 @hai/crypto     加密模块（密码哈希、JWT、加解密）
 @hai/db         数据库抽象（Drizzle ORM、迁移、事务）
+@hai/cache      缓存模块（内存缓存、Redis、自定义 Provider）
 @hai/iam        身份与访问管理（认证、授权、会话、OAuth）
 @hai/ai         AI 集成（LLM、MCP 协议、技能系统、流式响应）
 @hai/storage    存储抽象（本地文件、S3、OSS、COS）
-@hai/kit        SvelteKit 集成（Hooks、中间件、守卫）
+@hai/kit        SvelteKit 集成（Hooks、中间件、守卫、校验）
 @hai/ui         UI 组件库（Svelte 5 Runes 组件）
-@hai/cli        脚手架工具（项目生成、代码生成）
+@hai/cli        脚手架工具（项目生成、代码生成、多应用类型支持）
 ```
 
 ## 架构特性：能力聚合 + Provider 模式
@@ -70,18 +70,23 @@ await ai.mcp.callTool('translate', { text: 'hello', to: 'zh' })
 ### 1. 创建新项目
 
 ```bash
-# 全局安装 CLI
-pnpm add -g @hai/cli
+# 创建项目（交互式选择应用类型和功能）
+pnpm hai create my-app
 
-# 创建项目（交互式选择功能）
-pnpm hai create my-admin-app
+# 或指定应用类型
+pnpm hai create my-app --type admin      # 管理后台（含 IAM、DB、完整 UI）
+pnpm hai create my-app --type website    # 企业官网（展示型，含 UI）
+pnpm hai create my-app --type h5         # H5 移动应用（移动优先，含 UI）
+pnpm hai create my-app --type api        # API 服务（无 UI，纯后端）
 
-# 或使用命令行参数
-pnpm hai create my-admin-app --template full --examples
+# 使用功能模板
+pnpm hai create my-app --template full   # 启用全部功能
+pnpm hai create my-app --template minimal # 仅 core
 
 # 选项说明:
-# -t, --template <template>  项目模板 (minimal, default, full, custom)
-# -f, --features <features>  功能列表 (iam,db,ai,storage,crypto)
+# --type <type>              应用类型 (admin, website, h5, api)
+# -t, --template <template>  功能模板 (minimal, default, full, custom)
+# -f, --features <features>  功能列表 (iam,db,ai,storage,crypto,cache)
 # --examples                 添加示例代码
 # --no-install              不安装依赖
 # -p, --package-manager <pm> 包管理器 (pnpm, npm, yarn)
@@ -451,4 +456,8 @@ vercel deploy
 
 - 文档: https://hai-framework.dev
 - GitHub: https://github.com/200hub/hai-framework
-- 示例: apps/admin-console
+- 示例项目:
+  - `apps/admin-console` — 管理后台（完整功能参考）
+  - `apps/corporate-website` — 企业官网（展示型站点）
+  - `apps/h5-app` — H5 移动应用（移动端商城）
+  - `apps/api-service` — API 服务（纯后端 RESTful）
