@@ -4,7 +4,7 @@
  * 提供用户管理相关操作：注册、查询、更新、密码管理等。
  */
 
-import type { PaginatedResult, PaginationOptionsInput, Result } from '@hai/core'
+import type { PaginatedResult, Result } from '@hai/core'
 import type { DbFunctions } from '@hai/db'
 import type { PasswordStrategy } from '../authn/password/iam-authn-password-strategy.js'
 import type { IamAuthzFunctions } from '../authz/iam-authz-types.js'
@@ -15,6 +15,7 @@ import type { UserRepository } from './iam-user-repository-user.js'
 import type {
   AgreementDisplay,
   IamUserFunctions,
+  ListUsersOptions,
   RegisterOptions,
   RegisterResult,
   User,
@@ -287,10 +288,28 @@ function buildUserFunctions(deps: UserBuilderDeps): IamUserFunctions {
       return ok(userResult.data ? toUser(userResult.data) : null)
     },
 
-    async listUsers(options?: PaginationOptionsInput): Promise<Result<PaginatedResult<User>, IamError>> {
+    async listUsers(options?: ListUsersOptions): Promise<Result<PaginatedResult<User>, IamError>> {
+      const conditions: string[] = []
+      const params: unknown[] = []
+
+      if (options?.search) {
+        const keyword = `%${options.search}%`
+        conditions.push('(username LIKE ? OR email LIKE ? OR phone LIKE ? OR display_name LIKE ?)')
+        params.push(keyword, keyword, keyword, keyword)
+      }
+
+      if (options?.enabled !== undefined) {
+        conditions.push('enabled = ?')
+        params.push(options.enabled ? 1 : 0)
+      }
+
+      const where = conditions.length > 0 ? conditions.join(' AND ') : undefined
+
       const usersResult = await userRepository.findPage({
+        where,
+        params: params.length > 0 ? params : undefined,
         orderBy: 'created_at DESC',
-        pagination: options,
+        pagination: options ? { page: options.page, pageSize: options.pageSize } : undefined,
       })
       if (!usersResult.success) {
         return mapRepositoryError('iam_queryUserListFailed', usersResult.error.message) as Result<PaginatedResult<User>, IamError>
@@ -344,6 +363,65 @@ function buildUserFunctions(deps: UserBuilderDeps): IamUserFunctions {
       }
 
       return ok(toUser(updatedResult.data))
+    },
+
+    async deleteUser(userId: string): Promise<Result<void, IamError>> {
+      logger.debug('Deleting user', { userId })
+
+      const userResult = await userRepository.findById(userId)
+      if (!userResult.success) {
+        return mapRepositoryError('iam_queryUserFailed', userResult.error.message) as Result<void, IamError>
+      }
+      if (!userResult.data) {
+        return err({ code: IamErrorCode.USER_NOT_FOUND, message: iamM('iam_userNotExist') })
+      }
+
+      // 清理用户角色关联
+      const rolesResult = await authzFunctions.getUserRoles(userId)
+      if (rolesResult.success) {
+        for (const role of rolesResult.data) {
+          await authzFunctions.removeRole(userId, role.id)
+        }
+      }
+
+      const deleteResult = await userRepository.deleteById(userId)
+      if (!deleteResult.success) {
+        return mapRepositoryError('iam_deleteUserFailed', deleteResult.error.message) as Result<void, IamError>
+      }
+
+      logger.info('User deleted', { userId })
+      return ok(undefined)
+    },
+
+    async adminResetPassword(userId: string, newPassword: string): Promise<Result<void, IamError>> {
+      logger.debug('Admin resetting user password', { userId })
+
+      const userResult = await userRepository.findById(userId)
+      if (!userResult.success) {
+        return mapRepositoryError('iam_queryUserFailed', userResult.error.message) as Result<void, IamError>
+      }
+      if (!userResult.data) {
+        return err({ code: IamErrorCode.USER_NOT_FOUND, message: iamM('iam_userNotExist') })
+      }
+
+      const validateResult = passwordStrategy.validatePassword(newPassword)
+      if (!validateResult.success)
+        return validateResult
+
+      const hashResult = passwordStrategy.hashPassword(newPassword)
+      if (!hashResult.success)
+        return hashResult as Result<void, IamError>
+
+      const updateResult = await userRepository.updateById(userId, {
+        passwordHash: hashResult.data,
+        passwordUpdatedAt: new Date(),
+      })
+      if (!updateResult.success) {
+        return mapRepositoryError('iam_updateUserFailed', updateResult.error.message)
+      }
+
+      logger.info('Admin reset password', { userId })
+      return ok(undefined)
     },
 
     async changePassword(userId: string, oldPassword: string, newPassword: string): Promise<Result<void, IamError>> {
