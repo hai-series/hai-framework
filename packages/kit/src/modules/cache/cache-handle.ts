@@ -12,10 +12,10 @@
  * @example
  * ```ts
  * // src/hooks.server.ts
- * import { createCacheHandle } from '@hai/kit/modules/cache'
+ * import { kit } from '@hai/kit'
  * import { cache } from '$lib/server/cache'
  *
- * const cacheHandle = createCacheHandle({
+ * const cacheHandle = kit.cache.createHandle({
  *     cache,
  *     routes: {
  *         '/api/products': { ttl: 300, staleWhileRevalidate: 60 },

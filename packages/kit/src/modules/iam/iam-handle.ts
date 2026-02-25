@@ -12,10 +12,10 @@
  * @example
  * ```ts
  * // src/hooks.server.ts
- * import { createIamHandle } from '@hai/kit/modules/iam'
+ * import { kit } from '@hai/kit'
  * import { iam } from '$lib/server/iam'
  *
- * export const handle = createIamHandle({
+ * export const handle = kit.iam.createHandle({
  *     iam,
  *     publicPaths: ['/login', '/register', '/api/health'],
  *     sessionCookieName: 'session',

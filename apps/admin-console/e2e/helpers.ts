@@ -12,7 +12,8 @@ async function sleep(ms: number) {
 
 /** 生成唯一测试用户 */
 export function uniqueUser(prefix = 'e2e') {
-  const safePrefix = (prefix.replace(/[^a-zA-Z0-9_]/g, '') || 'e2e').slice(0, 8)
+  const safePrefix = (prefix.replace(/\W/g, '') || 'e2e').slice(0, 8)
+  // eslint-disable-next-line node/prefer-global/process -- e2e 测试运行在 Node 环境
   const entropy = `${Date.now().toString(36)}${process.pid.toString(36)}${Math.random().toString(36).slice(2, 6)}`
   const id = entropy.slice(-10)
   const username = `${safePrefix}_${id}`.slice(0, 20)

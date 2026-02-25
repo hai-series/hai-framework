@@ -1,262 +1,438 @@
-# hai Admin Framework - AI 构建指南
+# hai Framework - AI 构建指南
 
-> 这是一个 AI-First 的全栈管理后台框架，专为 AI 助手构建企业级管理应用而设计。
+> 面向 AI 智能应用的全栈 TypeScript 开发框架。本文件为 AI 编程助手提供准确的框架 API 参考。
 
-## 框架定位
+## 框架概览
 
-hai Admin Framework 是专为 AI 编程助手设计的框架，核心目标：
-- **AI 可理解**: 类型完整、文档清晰、约定优于配置
-- **快速构建**: 从零到生产级管理后台只需几分钟
-- **企业级能力**: 认证授权、AI 集成、数据库、存储一应俱全
+hai Framework 将 AI 能力、安全能力和数据能力以统一 API 风格整合，每个模块遵循相同的模式：
+
+- **生命周期**：`module.init(config) → 使用 → module.close()`
+- **配置校验**：所有配置通过 Zod Schema 验证，init 时完成
+- **错误处理**：所有操作返回 `Result<T, E>`，不抛异常
+- **未初始化安全**：未 init 就调用方法，返回 `NOT_INITIALIZED` 错误（Proxy 实现，不会 throw）
 
 ## 技术栈
 
-- **前端**: Svelte 5 (Runes) + SvelteKit 2 + TailwindCSS + DaisyUI
-- **后端**: SvelteKit Server + TypeScript
-- **数据库**: Drizzle ORM (SQLite/PostgreSQL/MySQL)
-- **AI**: OpenAI/Anthropic SDK, LangChain
-- **构建**: pnpm + Turbo + Vite
+- **前端**: Svelte 5 (Runes) + SvelteKit 2 + TailwindCSS 4 + DaisyUI 5
+- **后端**: SvelteKit Server + TypeScript 5.7+（严格模式）
+- **数据库**: 原生 SQL（better-sqlite3 / pg / mysql2），不使用 ORM
+- **AI**: OpenAI 兼容 API + MCP 协议（@modelcontextprotocol/sdk）
+- **加密**: 国密 SM2/SM3/SM4（sm-crypto）
+- **构建**: pnpm workspace + Turborepo + Vite + tsup
 
-## 模块架构
+## Result 类型（@hai/core）
 
-```
-@hai/core       核心工具（Result、错误处理、依赖注入、工具函数、配置管理）
-@hai/crypto     加密模块（密码哈希、JWT、加解密）
-@hai/db         数据库抽象（Drizzle ORM、迁移、事务）
-@hai/cache      缓存模块（内存缓存、Redis、自定义 Provider）
-@hai/iam        身份与访问管理（认证、授权、会话、OAuth）
-@hai/ai         AI 集成（LLM、MCP 协议、技能系统、流式响应）
-@hai/storage    存储抽象（本地文件、S3、OSS、COS）
-@hai/kit        SvelteKit 集成（Hooks、中间件、守卫、校验）
-@hai/ui         UI 组件库（Svelte 5 Runes 组件）
-@hai/cli        脚手架工具（项目生成、代码生成、多应用类型支持）
-```
+所有模块方法的返回类型：
 
-## 架构特性：能力聚合 + Provider 模式
+```typescript
+type Result<T, E = Error> =
+  | { success: true, data: T }
+  | { success: false, error: E }
 
-hai Framework 采用能力聚合架构，每个模块都支持多种 Provider：
-
-```
-┌─────────────────────────────────────────────────────────┐
-│                    hai Framework                        │
-├─────────────────────────────────────────────────────────┤
-│  @hai/iam          @hai/ai           @hai/storage       │
-│  ├─ hai (默认)     ├─ hai (默认)     ├─ hai (默认)      │
-│  ├─ firebase       ├─ openai         ├─ s3              │
-│  ├─ supabase       ├─ anthropic      ├─ oss             │
-│  ├─ auth0          ├─ google         ├─ cos             │
-│  └─ custom         └─ custom         └─ custom          │
-└─────────────────────────────────────────────────────────┘
+import { ok, err } from '@hai/core'
+ok(value)   // → { success: true, data: value }
+err(error)  // → { success: false, error }
 ```
 
-使用方式:
+## 模块 API 参考
+
+### @hai/core — 基础能力
+
+核心模块提供日志、配置、ID 生成、i18n 和工具函数。Node 和 Browser 双端入口自动适配。
+
+```typescript
+import { core, ok, err, type Result } from '@hai/core'
+
+// Node.js 初始化（加载 YAML 配置、pino 日志）
+core.init({ configDir: './config', logging: { level: 'info' } })
+
+// 日志
+core.logger.info('message', { key: 'value' })
+const logger = core.createLogger({ name: 'my-module' })
+
+// ID 生成
+const id = core.id.generate()     // nanoid
+const uuid = core.id.uuid()       // UUID v4
+
+// 配置（Node.js only，从 configDir 加载 YAML 文件）
+const dbConfig = core.config.get('db')
+core.config.validate('db', DbConfigSchema)
+
+// i18n
+core.i18n.setGlobalLocale('zh-CN')
+const m = core.i18n.createMessageGetter(messages)
+
+// 工具函数
+core.string.capitalize('hello')
+core.object.deepMerge(a, b)
+core.array.unique([1, 2, 2])
+core.async.delay(1000)
+```
+
+### @hai/db — 数据库
+
+原生 SQL 数据库访问，支持 SQLite / PostgreSQL / MySQL，通过 Provider 模式切换。
+
+```typescript
+import { db } from '@hai/db'
+
+// 初始化（配置是 discriminated union on `type`）
+await db.init({ type: 'sqlite', database: './data/app.db' })
+// await db.init({ type: 'postgresql', host: 'localhost', database: 'mydb', user: 'root', password: '...' })
+// await db.init({ type: 'mysql', host: 'localhost', database: 'mydb', user: 'root', password: '...' })
+
+// --- DDL ---
+await db.ddl.createTable('users', {
+  id:    { type: 'TEXT', primaryKey: true },
+  email: { type: 'TEXT', notNull: true, unique: true },
+  name:  { type: 'TEXT' },
+  age:   { type: 'INTEGER' },
+}, true)  // ifNotExists
+await db.ddl.addColumn('users', 'avatar', { type: 'TEXT' })
+await db.ddl.createIndex('users', 'idx_users_email', { columns: ['email'], unique: true })
+await db.ddl.dropTable('temp', true)
+
+// --- SQL 查询 ---
+const users = await db.sql.query<User>('SELECT * FROM users WHERE age > ?', [18])
+// → Result<User[], DbError>
+
+const user = await db.sql.get<User>('SELECT * FROM users WHERE id = ?', ['1'])
+// → Result<User | null, DbError>
+
+const result = await db.sql.execute('INSERT INTO users (id, email) VALUES (?, ?)', ['1', 'a@b.com'])
+// → Result<{ changes: number, lastInsertRowid?: number | bigint }, DbError>
+
+// --- 分页 ---
+const page = await db.sql.queryPage<User>({
+  sql: 'SELECT * FROM users',
+  page: 1,
+  pageSize: 20,
+  countSql: 'SELECT COUNT(*) as count FROM users',  // 可选
+})
+// → Result<PaginatedResult<User>, DbError>
+
+// --- 事务 ---
+await db.tx.wrap(async (tx) => {
+  await tx.execute('INSERT INTO users ...', [...])
+  await tx.execute('INSERT INTO logs ...', [...])
+})
+// 或手动控制
+const txResult = await db.tx.begin()
+if (txResult.success) {
+  const tx = txResult.data
+  await tx.execute(...)
+  await tx.commit()  // 或 tx.rollback()
+}
+
+// --- CRUD 仓库 ---
+const userRepo = db.crud.table<User>({
+  tableName: 'users',
+  primaryKey: 'id',
+  columns: ['id', 'email', 'name', 'age'],
+  searchColumns: ['name', 'email'],  // 可选，用于模糊搜索
+})
+await userRepo.create({ id: '1', email: 'a@b.com', name: 'Alice' })
+await userRepo.createMany([...])
+const u = await userRepo.findById('1')
+const all = await userRepo.findAll({ orderBy: 'name', order: 'ASC' })
+const pg = await userRepo.findPage({ page: 1, pageSize: 10 })
+await userRepo.updateById('1', { name: 'Bob' })
+await userRepo.deleteById('1')
+const exists = await userRepo.existsById('1')
+const count = await userRepo.count()
+
+await db.close()
+```
+
+### @hai/cache — 缓存
+
+统一缓存 API（Redis 风格），支持 Memory 和 Redis 两种 Provider。
+
+```typescript
+import { cache } from '@hai/cache'
+
+// 初始化
+await cache.init({ type: 'memory' })
+// await cache.init({ type: 'redis', url: 'redis://localhost:6379' })
+
+// --- KV ---
+await cache.kv.set('key', { name: 'Alice' }, { ex: 3600 })  // TTL 3600秒
+const val = await cache.kv.get<{ name: string }>('key')      // Result<{name}|null>
+await cache.kv.del('key1', 'key2')
+await cache.kv.incr('counter')
+await cache.kv.mset([{ key: 'a', value: 1 }, { key: 'b', value: 2 }])
+const vals = await cache.kv.mget<number>('a', 'b')
+
+// --- Hash ---
+await cache.hash.hset('user:1', { name: 'Alice', age: 30 })
+await cache.hash.hset('user:1', 'email', 'a@b.com')
+const name = await cache.hash.hget<string>('user:1', 'name')
+const all = await cache.hash.hgetall<Record<string, unknown>>('user:1')
+
+// --- List ---
+await cache.list.rpush('queue', 'task1', 'task2')
+const item = await cache.list.lpop<string>('queue')
+
+// --- Set ---
+await cache.set_.sadd('tags', 'js', 'ts')
+const members = await cache.set_.smembers<string>('tags')
+
+// --- Sorted Set ---
+await cache.zset.zadd('leaderboard', { score: 100, member: 'Alice' })
+const top = await cache.zset.zrevrange('leaderboard', 0, 9)
+
+await cache.close()
+```
+
+### @hai/storage — 文件存储
+
+文件存储抽象，支持 Local（本地文件系统）和 S3（兼容 OSS/COS 等）两种 Provider。
+
+```typescript
+import { storage } from '@hai/storage'
+
+// 初始化
+await storage.init({ type: 'local', root: './uploads' })
+// await storage.init({
+//   type: 's3',
+//   bucket: 'my-bucket', region: 'us-east-1',
+//   accessKeyId: '...', secretAccessKey: '...',
+//   endpoint: 'https://s3.amazonaws.com',  // OSS/COS 换对应 endpoint
+// })
+
+// --- 文件操作 ---
+await storage.file.put('docs/readme.txt', Buffer.from('Hello'), { contentType: 'text/plain' })
+const data = await storage.file.get('docs/readme.txt')     // Result<Buffer>
+const meta = await storage.file.head('docs/readme.txt')    // Result<FileMetadata>
+const exists = await storage.file.exists('docs/readme.txt') // Result<boolean>
+await storage.file.copy('docs/readme.txt', 'backup/readme.txt')
+await storage.file.delete('docs/readme.txt')
+await storage.file.deleteMany(['a.txt', 'b.txt'])
+
+// --- 目录操作 ---
+const list = await storage.dir.list({ prefix: 'docs/', maxKeys: 100 })
+await storage.dir.delete('old-folder/')
+
+// --- 预签名 URL ---
+const uploadUrl = await storage.presign.putUrl('uploads/image.png', { expiresIn: 3600 })
+const downloadUrl = await storage.presign.getUrl('uploads/image.png', { expiresIn: 3600 })
+
+await storage.close()
+```
+
+Browser 端子入口（`@hai/storage/client`）提供 `uploadWithPresignedUrl`、`downloadAndSave` 等前端工具。
+
+### @hai/iam — 身份与访问管理
+
+完整 IAM 模块：密码/OTP/LDAP 认证、RBAC 授权、会话管理。依赖 @hai/db 和 @hai/cache。
+
 ```typescript
 import { iam } from '@hai/iam'
-import { ai } from '@hai/ai'
+import { db } from '@hai/db'
+import { cache } from '@hai/cache'
 
-// 配置使用 hai 默认 provider（或其他 provider）
-iam.configure({ provider: 'hai' })
-ai.configure({ provider: 'hai' })
+// 初始化（需先 init db 和 cache）
+await iam.init({
+  db,                        // 注入已初始化的 db 实例
+  cache,                     // 注入已初始化的 cache 实例
+  session: { secret: 'min-32-chars-secret-string-here!' },
+  seedDefaultData: true,     // 自动创建默认角色/权限表
+})
 
-// 统一 API 访问
-await iam.ident.login({ identifier: 'user', password: 'pass' })
-await iam.authz.checkPermission(ctx, 'users:read')
-await ai.llm.chat({ model: 'gpt-4', messages: [...] })
-await ai.mcp.callTool('translate', { text: 'hello', to: 'zh' })
+// --- 用户管理 (iam.user) ---
+await iam.user.register({ username: 'alice', password: 'StrongPass!' })
+const user = await iam.user.findByUsername('alice')
+await iam.user.updatePassword(userId, 'NewPass!')
+
+// --- 认证 (iam.auth) ---
+const loginResult = await iam.auth.login({
+  identifier: 'alice',
+  password: 'StrongPass!',
+})
+// loginResult.data → { user, session, token }
+
+await iam.auth.logout(sessionId)
+
+// --- RBAC 授权 (iam.authz) ---
+await iam.authz.createRole({ name: 'editor', description: '...' })
+await iam.authz.createPermission({ name: 'posts:write', description: '...' })
+await iam.authz.assignRole(userId, 'editor')
+const allowed = await iam.authz.checkPermission(userId, 'posts:write')
+
+// --- 会话 (iam.session) ---
+const session = await iam.session.findById(sessionId)
+await iam.session.deleteByUserId(userId)  // 强制下线
+
+// --- 浏览器端 HTTP Client ---
+import { iam } from '@hai/iam'
+const client = iam.client.create({ baseUrl: '/api/iam' })
+await client.login({ identifier: 'alice', password: '...' })
+
+await iam.close()
 ```
 
-## 快速开始
+### @hai/ai — AI 集成
 
-### 1. 创建新项目
-
-```bash
-# 创建项目（交互式选择应用类型和功能）
-pnpm hai create my-app
-
-# 或指定应用类型
-pnpm hai create my-app --type admin      # 管理后台（含 IAM、DB、完整 UI）
-pnpm hai create my-app --type website    # 企业官网（展示型，含 UI）
-pnpm hai create my-app --type h5         # H5 移动应用（移动优先，含 UI）
-pnpm hai create my-app --type api        # API 服务（无 UI，纯后端）
-
-# 使用功能模板
-pnpm hai create my-app --template full   # 启用全部功能
-pnpm hai create my-app --template minimal # 仅 core
-
-# 选项说明:
-# --type <type>              应用类型 (admin, website, h5, api)
-# -t, --template <template>  功能模板 (minimal, default, full, custom)
-# -f, --features <features>  功能列表 (iam,db,ai,storage,crypto,cache)
-# --examples                 添加示例代码
-# --no-install              不安装依赖
-# -p, --package-manager <pm> 包管理器 (pnpm, npm, yarn)
-```
-
-也可以克隆示例项目:
-
-```bash
-# 克隆 app 示例
-git clone https://github.com/200hub/hai-framework-app
-cd hai-framework-app
-pnpm install
-```
-
-### 2. 配置环境
-
-```bash
-# .env
-DATABASE_URL=file:./data/app.db
-JWT_SECRET=your-secret-key
-OPENAI_API_KEY=sk-xxx
-HAI_LOG_LEVEL=info        # 日志级别
-HAI_LOG_FORMAT=logfmt     # 日志格式 (logfmt/json)
-```
-
-### 3. 启动开发
-
-```bash
-pnpm dev
-```
-
-## 核心模式
-
-### Result 模式（错误处理）
+LLM 调用（同步/流式）+ MCP Server + 工具系统 + SSE 流处理。
 
 ```typescript
-import { ok, err, type Result } from '@hai/core'
+import { ai, createMcpServer } from '@hai/ai'
+import { z } from 'zod'
 
-async function createUser(data: UserInput): Promise<Result<User, AppError>> {
-  // 验证
-  if (!data.email) {
-    return err(AppError.validation('邮箱不能为空'))
-  }
-  
-  // 执行业务逻辑
-  const user = await db.insert(users).values(data).returning()
-  return ok(user)
-}
-
-// 使用
-const result = await createUser(input)
-if (result.ok) {
-  console.log(result.value) // User
-} else {
-  console.error(result.error) // AppError
-}
-```
-
-### 配置管理
-
-```typescript
-import { defineConfig } from '@hai/core'
-
-// config/app.ts
-export const appConfig = defineConfig({
-  name: { default: 'My App' },
-  port: { default: 3000, env: 'PORT' },
-  database: {
-    url: { required: true, env: 'DATABASE_URL' },
-    maxConnections: { default: 10 },
+// 初始化（同步，不是 async）— 只有 OpenAI 兼容的 Provider
+ai.init({
+  llm: {
+    apiKey: process.env.OPENAI_API_KEY,       // 或 OPENAI_API_KEY 环境变量
+    baseUrl: process.env.OPENAI_BASE_URL,     // 可指向任何 OpenAI 兼容端点
+    model: 'gpt-4o-mini',                     // 默认模型
+    maxTokens: 4096,
+    temperature: 0.7,
+    timeout: 60000,
   },
 })
 
-// 使用
-const config = appConfig.load()
-console.log(config.database.url)
-```
-
-### 认证守卫
-
-```typescript
-// src/hooks.server.ts
-import { authHook } from '@hai/kit'
-
-export const handle = authHook({
-  publicPaths: ['/login', '/register', '/api/health'],
-  loginPath: '/login',
+// --- LLM 同步调用 ---
+const result = await ai.llm.chat({
+  messages: [
+    { role: 'system', content: '你是一个助手' },
+    { role: 'user', content: '你好' },
+  ],
+  model: 'gpt-4o',  // 可选，覆盖默认
+  temperature: 0.5,
+  tools: [toolDef],  // 可选，Function Calling
 })
+// result.data → { id, choices: [{ message: { role, content, tool_calls? } }], usage }
 
-// 路由中获取用户
-export const load = async ({ locals }) => {
-  const user = locals.user // 已认证用户
-  return { user }
-}
-```
-
-### AI 调用
-
-```typescript
-import { createAI } from '@hai/ai'
-
-const ai = createAI({
-  provider: 'openai',
-  model: 'gpt-4o',
+// --- LLM 流式调用 ---
+const stream = ai.llm.chatStream({
+  messages: [{ role: 'user', content: '讲个故事' }],
 })
-
-// 简单调用
-const response = await ai.chat('你好')
-
-// 流式响应
-for await (const chunk of ai.stream('讲个故事')) {
-  process.stdout.write(chunk)
+for await (const chunk of stream) {
+  // chunk.choices[0]?.delta?.content
+  process.stdout.write(chunk.choices[0]?.delta?.content ?? '')
 }
 
-// 结构化输出
-const result = await ai.structured(
-  '分析这段代码的问题',
-  z.object({
-    issues: z.array(z.object({
-      severity: z.enum(['critical', 'high', 'medium', 'low']),
-      description: z.string(),
-      suggestion: z.string(),
-    })),
-    score: z.number(),
-  })
-)
+// 收集流到完整结果
+const collected = await ai.stream.collect(stream)
+
+// --- 工具定义 ---
+const searchTool = ai.tools.define({
+  name: 'search',
+  description: '搜索知识库',
+  parameters: z.object({ query: z.string() }),
+  execute: async ({ query }) => ({ results: [`关于 ${query} 的结果`] }),
+})
+
+// 工具注册表
+const registry = ai.tools.createRegistry()
+registry.register(searchTool)
+
+// --- MCP Server ---
+const mcp = createMcpServer({ name: 'my-app', version: '1.0.0' })
+// mcp.registerTool / mcp.registerResource / mcp.registerPrompt
+
+// --- SSE ---
+const encoded = ai.stream.encodeSSE({ event: 'message', data: '...' })
+const decoder = ai.stream.createSSEDecoder()
+
+ai.close()
 ```
 
-### 数据库操作
+### @hai/crypto — 国密加密
+
+SM2（非对称加密/签名）、SM3（哈希/HMAC）、SM4（对称加密），以及密码哈希。所有加密方法是同步的，返回 `Result`。
 
 ```typescript
-import { createDB, defineSchema } from '@hai/db'
-import { text, integer } from 'drizzle-orm/sqlite-core'
+import { crypto } from '@hai/crypto'
 
-// 定义 Schema
-export const users = defineSchema('users', {
-  id: text('id').primaryKey(),
-  email: text('email').unique().notNull(),
-  name: text('name'),
-  createdAt: integer('created_at', { mode: 'timestamp' }).default(Date.now()),
-})
+await crypto.init({})
 
-// 使用
-const db = createDB({ url: 'file:./app.db' })
+// --- SM2 非对称 ---
+const keyPair = crypto.sm2.generateKeyPair()             // Result<{ publicKey, privateKey }>
+const enc = crypto.sm2.encrypt('明文', keyPair.data.publicKey)
+const dec = crypto.sm2.decrypt(enc.data, keyPair.data.privateKey)
+const sig = crypto.sm2.sign('data', keyPair.data.privateKey)
+const ok = crypto.sm2.verify('data', sig.data, keyPair.data.publicKey)
 
-// 查询
-const allUsers = await db.select().from(users)
-const user = await db.select().from(users).where(eq(users.id, 'xxx'))
+// --- SM3 哈希 ---
+const hash = crypto.sm3.hash('data')                     // Result<string>
+const hmac = crypto.sm3.hmac('data', 'key')
 
-// 插入
-await db.insert(users).values({ id: 'xxx', email: 'a@b.com' })
+// --- SM4 对称 ---
+const key = crypto.sm4.generateKey()                     // 16字节 hex
+const iv = crypto.sm4.generateIV()
+const encrypted = crypto.sm4.encrypt('明文', key)         // ECB 模式
+const withIV = crypto.sm4.encryptWithIV('明文', key)      // CBC 模式，自动生成 IV
+const plain = crypto.sm4.decryptWithIV(withIV.data.ciphertext, key, withIV.data.iv)
 
-// 更新
-await db.update(users).set({ name: '新名字' }).where(eq(users.id, 'xxx'))
+// --- 密码哈希 ---
+const hashed = crypto.password.hash('MyPassword')         // SM3 + salt + 迭代
+const valid = crypto.password.verify('MyPassword', hashed.data)
 
-// 事务
-await db.transaction(async (tx) => {
-  await tx.insert(users).values(...)
-  await tx.insert(logs).values(...)
-})
+await crypto.close()
 ```
 
-### UI 组件
+### @hai/kit — SvelteKit 集成
+
+将框架模块桥接到 SvelteKit 约定：Hook、中间件、守卫、校验、响应工具。不是服务单例，没有 init()。
+
+```typescript
+// --- hooks.server.ts ---
+import { kit } from '@hai/kit'
+
+export const handle = kit.createHandle({
+  logging: true,
+  middleware: [
+    kit.middleware.cors({ origins: ['https://example.com'] }),
+    kit.middleware.rateLimit({ windowMs: 60000, maxRequests: 100 }),
+  ],
+  guards: [
+    { guard: kit.guard.auth(), paths: ['/admin/*'] },
+    { guard: kit.guard.role('admin'), paths: ['/admin/settings/*'] },
+  ],
+})
+
+// --- 路由中的表单校验 ---
+import { kit } from '@hai/kit'
+import { z } from 'zod'
+
+export const actions = {
+  default: async ({ request }) => {
+    const result = await kit.validate.form(request, z.object({
+      email: z.string().email(),
+      name: z.string().min(2),
+    }))
+    if (!result.success) return { errors: result.error }
+    // result.data → { email, name }
+  }
+}
+
+// --- API 响应工具 ---
+export const GET = async () => kit.response.ok({ users: [] })
+export const POST = async () => kit.response.created({ id: '1' })
+
+// --- 模块集成 ---
+const iamHandle = kit.iam.createHandle({ iam, publicPaths: ['/login'] })
+const storageEndpoint = kit.storage.createEndpoint({ storage, bucket: 'uploads' })
+
+// --- 浏览器端状态 ---
+const session = kit.client.useSession()
+const user = kit.client.useUser(session)
+```
+
+### @hai/ui — UI 组件库
+
+57+ Svelte 5 Runes 组件，分三层：
+
+- **primitives/**（21）：Avatar, Badge, Button, Checkbox, Input, Progress, Radio, Range, Rating, Select, Spinner, Switch, Tag, Textarea...
+- **compounds/**（36）：Accordion, Alert, Breadcrumb, Card, Confirm, DataTable, Drawer, Dropdown, Form, Modal, Pagination, Steps, Tabs, Timeline, Toast, Tooltip...
+- **scenes/**：IAM、Storage、Crypto 业务场景组件（内置中英文翻译）
 
 ```svelte
-<script>
-  import { Button, Card, Input, Modal, DataTable, PageHeader } from '@hai/ui'
-  
+<script lang="ts">
+  import { Button, Input, Modal, DataTable, Card, Toast, PageHeader } from '@hai/ui'
+
   let showModal = $state(false)
-  let users = $state([])
 </script>
 
 <PageHeader title="用户管理">
@@ -266,198 +442,88 @@ await db.transaction(async (tx) => {
 </PageHeader>
 
 <Card>
-  <DataTable 
+  <DataTable
     data={users}
     columns={[
       { key: 'name', label: '姓名' },
       { key: 'email', label: '邮箱' },
     ]}
     keyField="id"
-  >
-    {#snippet actions(user)}
-      <Button size="xs" onclick={() => edit(user)}>编辑</Button>
-    {/snippet}
-  </DataTable>
+  />
 </Card>
 
 <Modal bind:open={showModal} title="新建用户">
   <Input label="姓名" bind:value={name} />
-  <Input label="邮箱" bind:value={email} type="email" />
 </Modal>
 ```
 
-## 目录结构约定
+### @hai/cli — CLI 脚手架
+
+```bash
+# 创建项目（交互式选择类型和功能）
+hai create my-app
+hai create my-app --type admin       # 管理后台
+hai create my-app --type website     # 企业官网
+hai create my-app --type h5          # H5 移动应用
+hai create my-app --type api         # API 服务
+
+# 代码生成
+hai generate page dashboard          # 生成页面
+hai generate component UserCard      # 生成组件
+hai generate api users               # 生成 API 路由
+
+# 快捷别名
+hai g:page dashboard
+hai g:component UserCard
+```
+
+## 目录结构
 
 ```
-my-admin/
-├── src/
-│   ├── lib/
-│   │   ├── components/     # 业务组件
-│   │   ├── services/       # 业务逻辑
-│   │   ├── stores/         # 状态管理
-│   │   └── utils/          # 工具函数
-│   ├── routes/
-│   │   ├── (app)/          # 需要认证的路由
-│   │   │   ├── users/      # 用户管理
-│   │   │   ├── settings/   # 设置页面
-│   │   │   └── +layout.svelte
-│   │   ├── (auth)/         # 认证相关
-│   │   │   ├── login/
-│   │   │   └── register/
-│   │   ├── api/            # API 路由
-│   │   │   └── v1/
-│   │   └── +layout.svelte
-│   └── hooks.server.ts     # 服务端钩子
-├── drizzle/                # 数据库迁移
-├── static/                 # 静态资源
-├── .env                    # 环境变量
+hai-framework/
+├── packages/
+│   ├── core/         @hai/core
+│   ├── crypto/       @hai/crypto
+│   ├── db/           @hai/db
+│   ├── cache/        @hai/cache
+│   ├── storage/      @hai/storage
+│   ├── iam/          @hai/iam
+│   ├── ai/           @hai/ai
+│   ├── kit/          @hai/kit
+│   ├── ui/           @hai/ui
+│   └── cli/          @hai/cli
+├── apps/
+│   ├── admin-console/       管理后台（完整 demo）
+│   ├── api-service/         API 后端服务
+│   ├── corporate-website/   企业官网
+│   └── h5-app/              H5 移动应用
+├── pnpm-workspace.yaml
+├── turbo.json
 └── package.json
 ```
 
-## 最佳实践
+## 跨模块模式总结
 
-### 1. 类型优先
+| 模式 | 说明 |
+|------|------|
+| `module.init(config)` | 所有模块统一入口，config 用 Zod 校验 |
+| `module.close()` | 释放资源（连接池、Redis 客户端等） |
+| `module.isInitialized` | 布尔属性，检查是否已初始化 |
+| `module.config` | 只读属性，当前生效配置 |
+| `Result<T, E>` | `{ success: true, data: T }` 或 `{ success: false, error: E }` |
+| `ModuleError` | `{ code: ErrorCode, message: string, cause?: unknown }` |
+| Provider 模式 | db / cache / storage 支持多后端，通过 `config.type` 切换 |
+| 双端入口 | core / storage 等按环境自动选择 Node / Browser 实现 |
 
-所有数据结构必须有 TypeScript 类型定义：
-
-```typescript
-// types.ts
-export interface User {
-  id: string
-  email: string
-  name: string | null
-  role: 'admin' | 'user'
-  createdAt: Date
-}
-
-export interface CreateUserInput {
-  email: string
-  name?: string
-  password: string
-}
-```
-
-### 2. 服务层分离
-
-业务逻辑放在服务层，路由只做数据传递：
-
-```typescript
-// lib/services/user.service.ts
-export class UserService {
-  async create(input: CreateUserInput): Promise<Result<User, AppError>> {
-    // 业务逻辑
-  }
-  
-  async findById(id: string): Promise<User | null> {
-    // 查询逻辑
-  }
-}
-
-// routes/api/users/+server.ts
-export const POST = async ({ request }) => {
-  const input = await request.json()
-  const result = await userService.create(input)
-  
-  if (!result.ok) {
-    return json({ error: result.error }, { status: 400 })
-  }
-  
-  return json({ data: result.value })
-}
-```
-
-### 3. 响应式状态 (Svelte 5 Runes)
-
-```svelte
-<script>
-  // 使用 $state 替代 let
-  let count = $state(0)
-  
-  // 使用 $derived 替代 $:
-  let doubled = $derived(count * 2)
-  
-  // 使用 $effect 替代 $:
-  $effect(() => {
-    console.log('count changed:', count)
-  })
-</script>
-```
-
-### 4. 表单验证
-
-使用 Zod 进行验证：
-
-```typescript
-import { z } from 'zod'
-
-const createUserSchema = z.object({
-  email: z.string().email('邮箱格式不正确'),
-  name: z.string().min(2, '姓名至少2个字符').optional(),
-  password: z.string().min(8, '密码至少8个字符'),
-})
-
-// 使用
-const result = createUserSchema.safeParse(input)
-if (!result.success) {
-  return err(AppError.validation(result.error.message))
-}
-```
-
-## 常见任务
-
-### 添加新的管理页面
-
-1. 创建路由: `src/routes/(app)/新页面/+page.svelte`
-2. 添加服务: `src/lib/services/新服务.service.ts`
-3. 添加类型: `src/lib/types/新类型.ts`
-4. 添加导航: 在 Sidebar 中添加链接
-
-### 添加 API 端点
-
-1. 创建文件: `src/routes/api/v1/资源/+server.ts`
-2. 实现 GET/POST/PUT/DELETE
-3. 使用 Result 模式处理错误
-
-### 添加数据库表
-
-1. 在 `drizzle/schema.ts` 定义表结构
-2. 运行 `pnpm db:generate` 生成迁移
-3. 运行 `pnpm db:migrate` 执行迁移
-
-### 添加 AI 功能
-
-1. 配置 API Key: `.env` 中设置 `OPENAI_API_KEY`
-2. 创建 AI 服务: 使用 `@hai/ai` 的 `createAI`
-3. 实现流式响应: 使用 `ai.stream()` 配合 SSE
-
-## 部署
-
-### Docker 部署
-
-```dockerfile
-FROM node:20-alpine
-WORKDIR /app
-COPY . .
-RUN pnpm install --frozen-lockfile
-RUN pnpm build
-EXPOSE 3000
-CMD ["node", "build"]
-```
-
-### Vercel 部署
+## 环境变量
 
 ```bash
-pnpm add -D @sveltejs/adapter-vercel
-# 修改 svelte.config.js 使用 adapter-vercel
-vercel deploy
+HAI_ENV=development
+HAI_LOG_LEVEL=info          # trace|debug|info|warn|error|fatal
+HAI_DB_TYPE=sqlite          # sqlite|postgresql|mysql
+HAI_DB_DATABASE=./data/app.db
+HAI_SESSION_SECRET=...      # ≥32 chars
+HAI_CACHE_TYPE=memory       # memory|redis
+HAI_STORAGE_TYPE=local      # local|s3
+OPENAI_API_KEY=sk-xxx       # 按需
 ```
-
-## 获取帮助
-
-- 文档: https://hai-framework.dev
-- GitHub: https://github.com/200hub/hai-framework
-- 示例项目:
-  - `apps/admin-console` — 管理后台（完整功能参考）
-  - `apps/corporate-website` — 企业官网（展示型站点）
-  - `apps/h5-app` — H5 移动应用（移动端商城）
-  - `apps/api-service` — API 服务（纯后端 RESTful）

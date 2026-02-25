@@ -253,7 +253,7 @@ async function generateApi(
  * ${context.pascalCase} API
  */
 import type { RequestHandler } from './$types'
-import { ok, badRequest, internalError } from '@hai/kit'
+import { kit } from '@hai/kit'
 
 /**
  * GET ${context.kebabCase}
@@ -262,10 +262,10 @@ export const GET: RequestHandler = async ({ locals }) => {
   try {
     const { requestId } = locals
     
-    return ok({ message: 'Hello from ${context.kebabCase}' }, requestId)
+    return kit.response.ok({ message: 'Hello from ${context.kebabCase}' }, requestId)
   }
   catch (error) {
-    return internalError()
+    return kit.response.internalError()
   }
 }
 
@@ -279,10 +279,10 @@ export const POST: RequestHandler = async ({ request, locals }) => {
     
     // 处理请求
     
-    return ok({ success: true }, requestId)
+    return kit.response.ok({ success: true }, requestId)
   }
   catch (error) {
-    return internalError()
+    return kit.response.internalError()
   }
 }
 `

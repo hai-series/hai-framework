@@ -7,7 +7,7 @@
  */
 
 import type { Handle, RequestEvent } from '@sveltejs/kit'
-import type { GuardConfig, GuardResult, HookConfig, Middleware, MiddlewareContext, SessionData } from '../types.js'
+import type { GuardConfig, GuardResult, HookConfig, Middleware, MiddlewareContext, SessionData } from '../kit-types.js'
 import { core } from '@hai/core'
 
 /**

@@ -12,11 +12,11 @@
  * @example
  * ```ts
  * // src/routes/api/webhook/+server.ts
- * import { verifyWebhookSignature } from '@hai/kit/modules/crypto'
+ * import { kit } from '@hai/kit'
  * import { crypto } from '$lib/server/crypto'
  *
  * export const POST = async (event) => {
- *     const isValid = await verifyWebhookSignature({
+ *     const isValid = await kit.crypto.verifyWebhookSignature({
  *         crypto,
  *         event,
  *         secretKey: 'webhook_secret',

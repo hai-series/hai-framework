@@ -871,7 +871,7 @@ export default defineConfig({
 }
 
 function generateAppHtml(): string {
-  return `<!DOCTYPE html>
+  return `<!doctype html>
 <html lang="zh-CN">
   <head>
     <meta charset="utf-8" />
@@ -906,9 +906,9 @@ function generateHooksServer(): string {
   return `/**
  * SvelteKit Server Hooks
  */
-import { createHandle } from '@hai/kit'
+import { kit } from '@hai/kit'
 
-export const handle = createHandle({
+export const handle = kit.createHandle({
   logging: true,
 })
 `
@@ -1106,10 +1106,10 @@ async function generateAdminRoutes(
  * 健康检查端点
  */
 import type { RequestHandler } from './$types'
-import { ok } from '@hai/kit'
+import { kit } from '@hai/kit'
 
 export const GET: RequestHandler = async ({ locals }) => {
-  return ok({ status: 'ok', timestamp: new Date().toISOString() }, locals.requestId)
+  return kit.response.ok({ status: 'ok', timestamp: new Date().toISOString() }, locals.requestId)
 }
 `)
 }
@@ -1487,10 +1487,10 @@ async function generateApiRoutes(
  * 健康检查端点
  */
 import type { RequestHandler } from './$types'
-import { ok } from '@hai/kit'
+import { kit } from '@hai/kit'
 
 export const GET: RequestHandler = async ({ locals }) => {
-  return ok({
+  return kit.response.ok({
     status: 'ok',
     service: '${options.name}',
     version: '0.0.1',
@@ -1504,7 +1504,7 @@ export const GET: RequestHandler = async ({ locals }) => {
  * Items API - 列表与创建
  */
 import type { RequestHandler } from './$types'
-import { ok, badRequest, internalError } from '@hai/kit'
+import { kit } from '@hai/kit'
 
 /**
  * GET /api/v1/items - 获取列表
@@ -1514,7 +1514,7 @@ export const GET: RequestHandler = async ({ url, locals }) => {
     const page = Number(url.searchParams.get('page') || '1')
     const pageSize = Number(url.searchParams.get('pageSize') || '20')
 
-    return ok({
+    return kit.response.ok({
       items: [],
       total: 0,
       page,
@@ -1522,7 +1522,7 @@ export const GET: RequestHandler = async ({ url, locals }) => {
     }, locals.requestId)
   }
   catch (error) {
-    return internalError()
+    return kit.response.internalError()
   }
 }
 
@@ -1534,13 +1534,13 @@ export const POST: RequestHandler = async ({ request, locals }) => {
     const body = await request.json()
 
     if (!body.name) {
-      return badRequest('name is required')
+      return kit.response.badRequest('name is required')
     }
 
-    return ok({ id: '1', ...body, createdAt: new Date().toISOString() }, locals.requestId)
+    return kit.response.ok({ id: '1', ...body, createdAt: new Date().toISOString() }, locals.requestId)
   }
   catch (error) {
-    return internalError()
+    return kit.response.internalError()
   }
 }
 `)
@@ -1550,7 +1550,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
  * Items API - 单项操作
  */
 import type { RequestHandler } from './$types'
-import { ok, notFound, internalError } from '@hai/kit'
+import { kit } from '@hai/kit'
 
 /**
  * GET /api/v1/items/:id - 获取详情
@@ -1558,10 +1558,10 @@ import { ok, notFound, internalError } from '@hai/kit'
 export const GET: RequestHandler = async ({ params, locals }) => {
   try {
     const { id } = params
-    return ok({ id, name: 'Example Item' }, locals.requestId)
+    return kit.response.ok({ id, name: 'Example Item' }, locals.requestId)
   }
   catch (error) {
-    return internalError()
+    return kit.response.internalError()
   }
 }
 
@@ -1572,10 +1572,10 @@ export const PUT: RequestHandler = async ({ params, request, locals }) => {
   try {
     const { id } = params
     const body = await request.json()
-    return ok({ id, ...body, updatedAt: new Date().toISOString() }, locals.requestId)
+    return kit.response.ok({ id, ...body, updatedAt: new Date().toISOString() }, locals.requestId)
   }
   catch (error) {
-    return internalError()
+    return kit.response.internalError()
   }
 }
 
@@ -1585,10 +1585,10 @@ export const PUT: RequestHandler = async ({ params, request, locals }) => {
 export const DELETE: RequestHandler = async ({ params, locals }) => {
   try {
     const { id } = params
-    return ok({ id, deleted: true }, locals.requestId)
+    return kit.response.ok({ id, deleted: true }, locals.requestId)
   }
   catch (error) {
-    return internalError()
+    return kit.response.internalError()
   }
 }
 `)

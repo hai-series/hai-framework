@@ -6,7 +6,7 @@
  * =============================================================================
  */
 
-import type { CorsConfig, Middleware } from '../types.js'
+import type { CorsConfig, Middleware } from '../kit-types.js'
 
 /**
  * 默认 CORS 配置

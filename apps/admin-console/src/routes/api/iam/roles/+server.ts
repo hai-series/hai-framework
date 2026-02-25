@@ -9,7 +9,7 @@ import * as m from '$lib/paraglide/messages.js'
 import { CreateRoleSchema } from '$lib/server/schemas/index.js'
 import { audit, permissionService, roleService } from '$lib/server/services/index.js'
 import { core } from '@hai/core'
-import { validateForm } from '@hai/kit'
+import { kit } from '@hai/kit'
 import { json } from '@sveltejs/kit'
 
 /**
@@ -31,7 +31,7 @@ export const GET: RequestHandler = async () => {
  */
 export const POST: RequestHandler = async ({ request, locals, getClientAddress }) => {
   try {
-    const { valid, data, errors } = await validateForm(request, CreateRoleSchema)
+    const { valid, data, errors } = await kit.validate.form(request, CreateRoleSchema)
     if (!valid) {
       return json({ success: false, error: errors[0]?.message }, { status: 400 })
     }

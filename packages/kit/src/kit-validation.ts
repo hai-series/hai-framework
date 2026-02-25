@@ -7,7 +7,7 @@
  */
 
 import type { z } from 'zod'
-import type { FormError, FormValidationResult } from './types.js'
+import type { FormError, FormValidationResult } from './kit-types.js'
 
 // =============================================================================
 // 内部工具

@@ -6,7 +6,7 @@
  * =============================================================================
  */
 
-import type { Middleware, RateLimitConfig } from '../types.js'
+import type { Middleware, RateLimitConfig } from '../kit-types.js'
 import { core } from '@hai/core'
 
 /**

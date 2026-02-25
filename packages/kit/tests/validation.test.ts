@@ -6,7 +6,7 @@
 
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
-import { validateForm, validateParams, validateQuery } from '../src/validation.js'
+import { validateForm, validateParams, validateQuery } from '../src/kit-validation.js'
 
 describe('validateForm', () => {
   const userSchema = z.object({

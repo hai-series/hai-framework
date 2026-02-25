@@ -33,7 +33,7 @@ export const GET: RequestHandler = async ({ url }) => {
     data,
     total: allItems.length,
     page,
-    pageSize
+    pageSize,
   })
 }
 
@@ -53,7 +53,7 @@ export const POST: RequestHandler = async ({ request }) => {
     name: body.name,
     description: body.description ?? '',
     createdAt: now,
-    updatedAt: now
+    updatedAt: now,
   }
 
   items.set(item.id, item)

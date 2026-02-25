@@ -1,4 +1,5 @@
 import type { RequestHandler } from '@sveltejs/kit'
+import { Buffer } from 'node:buffer'
 import * as m from '$lib/paraglide/messages.js'
 import { iam } from '@hai/iam'
 import { json } from '@sveltejs/kit'

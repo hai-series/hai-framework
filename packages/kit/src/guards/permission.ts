@@ -6,7 +6,7 @@
  * =============================================================================
  */
 
-import type { GuardResult, RouteGuard } from '../types.js'
+import type { GuardResult, RouteGuard } from '../kit-types.js'
 
 /**
  * 权限守卫配置

@@ -11,10 +11,10 @@
  *
  * @example
  * ```ts
+ * import { kit } from '@hai/kit'
  * import { crypto } from '@hai/crypto'
- * import { createTransportEncryption } from '@hai/kit/modules/crypto'
  *
- * const te = createTransportEncryption({
+ * const te = kit.crypto.createTransportEncryption({
  *   crypto: crypto,  // 注入 @hai/crypto 实例
  * })
  *

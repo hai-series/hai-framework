@@ -7,10 +7,10 @@
  * @example
  * ```svelte
  * <script>
- * import { useTransportEncryption } from '@hai/kit/client'
+ * import { kit } from '@hai/kit'
  * import { crypto } from '@hai/crypto'
  *
- * const te = useTransportEncryption({ crypto })
+ * const te = kit.client.useTransportEncryption({ crypto })
  *
  * async function loadData() {
  *   const response = await $te.encryptedFetch('/api/data')

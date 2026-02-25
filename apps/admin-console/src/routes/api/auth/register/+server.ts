@@ -10,12 +10,12 @@ import { RegisterSchema } from '$lib/server/schemas/index.js'
 import { audit } from '$lib/server/services/index.js'
 import { core } from '@hai/core'
 import { iam } from '@hai/iam'
-import { validateForm } from '@hai/kit'
+import { kit } from '@hai/kit'
 import { json } from '@sveltejs/kit'
 
 export const POST: RequestHandler = async ({ request, cookies, getClientAddress }) => {
   try {
-    const { valid, data, errors } = await validateForm(request, RegisterSchema)
+    const { valid, data, errors } = await kit.validate.form(request, RegisterSchema)
     if (!valid) {
       return json({ success: false, error: errors[0]?.message }, { status: 400 })
     }

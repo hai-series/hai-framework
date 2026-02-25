@@ -3,7 +3,7 @@ import * as m from '$lib/paraglide/messages.js'
 import { UpdateProfileSchema } from '$lib/server/schemas/index.js'
 import { core } from '@hai/core'
 import { iam } from '@hai/iam'
-import { validateForm } from '@hai/kit'
+import { kit } from '@hai/kit'
 import { json } from '@sveltejs/kit'
 
 /**
@@ -66,7 +66,7 @@ export const PUT: RequestHandler = async ({ cookies, request }) => {
       return json({ success: false, error: m.common_error() }, { status: 401 })
     }
 
-    const { valid, data, errors } = await validateForm(request, UpdateProfileSchema)
+    const { valid, data, errors } = await kit.validate.form(request, UpdateProfileSchema)
     if (!valid) {
       const fieldErrors = Object.fromEntries(
         errors.map(error => [error.field, error.message]),

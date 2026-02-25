@@ -1,0 +1,239 @@
+# =============================================================================
+# hai-framework Release Workflow
+# =============================================================================
+#
+# 触发条件：main 分支的 push 事件
+# 工作流程：
+#   1. 检测根 package.json 版本号是否变更
+#   2. 全量单元测试 + E2E 测试
+#   3. 同步版本号到所有子模块并提交
+#   4. 创建 Git Tag + GitHub Release（含分类变更日志）
+#   5. 发布公共包到 npm
+# =============================================================================
+
+name: Release
+
+on:
+  push:
+    branches: [main]
+
+# 同一时间只允许一个发布流程
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  # ===========================================================================
+  # 检测版本变更
+  # ===========================================================================
+  detect-version:
+    name: Detect Version Change
+    runs-on: ubuntu-latest
+    outputs:
+      changed: ${{ steps.check.outputs.changed }}
+      version: ${{ steps.check.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Check version change
+        id: check
+        run: |
+          # 获取当前版本
+          CURRENT=$(node -p "require('./package.json').version")
+          echo "Current version: $CURRENT"
+
+          # 获取上一个 commit 的版本
+          PREVIOUS=$(git show HEAD~1:package.json 2>/dev/null | node -p "JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')).version" 2>/dev/null || echo "")
+          echo "Previous version: $PREVIOUS"
+
+          if [ "$CURRENT" != "$PREVIOUS" ] && [ -n "$PREVIOUS" ]; then
+            echo "Version changed: $PREVIOUS -> $CURRENT"
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "version=$CURRENT" >> "$GITHUB_OUTPUT"
+          else
+            echo "No version change detected"
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  # ===========================================================================
+  # 测试
+  # ===========================================================================
+  test:
+    name: Test
+    needs: detect-version
+    if: needs.detect-version.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm build
+
+      - name: Unit tests
+        run: pnpm test
+
+      - name: Install Playwright browsers
+        run: pnpm --filter admin-console exec playwright install --with-deps chromium
+
+      - name: E2E tests
+        run: pnpm --filter admin-console test:e2e
+
+  # ===========================================================================
+  # 同步版本 + 创建 Release + 发布 npm
+  # ===========================================================================
+  release:
+    name: Release
+    needs: [detect-version, test]
+    if: needs.detect-version.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm build
+
+      # ----- 同步版本号 -----
+      - name: Sync versions
+        run: node scripts/sync-versions.mjs
+
+      - name: Commit version sync
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --staged --quiet; then
+            echo "No version changes to commit"
+          else
+            git commit -m "chore: sync version to v${{ needs.detect-version.outputs.version }} [skip ci]"
+            git push
+          fi
+
+      # ----- 创建 Tag + Release -----
+      - name: Generate release notes
+        id: notes
+        run: |
+          VERSION="v${{ needs.detect-version.outputs.version }}"
+
+          # 查找上一个 tag
+          PREV_TAG=$(git tag --sort=-version:refname | head -n 1 || echo "")
+          echo "Previous tag: $PREV_TAG"
+
+          if [ -z "$PREV_TAG" ]; then
+            RANGE="HEAD"
+          else
+            RANGE="${PREV_TAG}..HEAD"
+          fi
+
+          # 收集 commits 并分类
+          FEATURES=""
+          FIXES=""
+          REFACTORS=""
+          DOCS=""
+          PERF=""
+          TESTS=""
+          CHORES=""
+          OTHER=""
+
+          while IFS= read -r line; do
+            [ -z "$line" ] && continue
+            # 提取 commit message（去掉 hash 前缀）
+            MSG="${line#* }"
+            case "$MSG" in
+              feat:*|feat\(*) FEATURES="${FEATURES}\n- ${MSG}" ;;
+              fix:*|fix\(*)   FIXES="${FIXES}\n- ${MSG}" ;;
+              refactor:*|refactor\(*) REFACTORS="${REFACTORS}\n- ${MSG}" ;;
+              docs:*|docs\(*) DOCS="${DOCS}\n- ${MSG}" ;;
+              perf:*|perf\(*) PERF="${PERF}\n- ${MSG}" ;;
+              test:*|test\(*) TESTS="${TESTS}\n- ${MSG}" ;;
+              chore:*|chore\(*|ci:*|ci\(*|build:*|build\(*) CHORES="${CHORES}\n- ${MSG}" ;;
+              *)              OTHER="${OTHER}\n- ${MSG}" ;;
+            esac
+          done <<< "$(git log "$RANGE" --oneline --no-merges 2>/dev/null)"
+
+          # 组装 release notes
+          NOTES=""
+          [ -n "$FEATURES" ] && NOTES="${NOTES}## ✨ Features\n${FEATURES}\n\n"
+          [ -n "$FIXES" ]    && NOTES="${NOTES}## 🐛 Bug Fixes\n${FIXES}\n\n"
+          [ -n "$REFACTORS" ] && NOTES="${NOTES}## ♻️ Refactoring\n${REFACTORS}\n\n"
+          [ -n "$PERF" ]     && NOTES="${NOTES}## ⚡ Performance\n${PERF}\n\n"
+          [ -n "$DOCS" ]     && NOTES="${NOTES}## 📖 Documentation\n${DOCS}\n\n"
+          [ -n "$TESTS" ]    && NOTES="${NOTES}## 🧪 Tests\n${TESTS}\n\n"
+          [ -n "$CHORES" ]   && NOTES="${NOTES}## 🔧 Chores\n${CHORES}\n\n"
+          [ -n "$OTHER" ]    && NOTES="${NOTES}## 📦 Other\n${OTHER}\n\n"
+
+          if [ -z "$NOTES" ]; then
+            NOTES="Initial release ${VERSION}"
+          fi
+
+          # 写入文件以避免多行变量问题
+          echo -e "$NOTES" > /tmp/release-notes.md
+          cat /tmp/release-notes.md
+
+      - name: Create tag
+        run: |
+          VERSION="v${{ needs.detect-version.outputs.version }}"
+          git tag -a "$VERSION" -m "Release $VERSION"
+          git push origin "$VERSION"
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ needs.detect-version.outputs.version }}
+          name: v${{ needs.detect-version.outputs.version }}
+          body_path: /tmp/release-notes.md
+          draft: false
+          prerelease: false
+
+      # ----- 发布到 npm -----
+      - name: Publish to npm
+        run: |
+          echo "Publishing public packages to npm..."
+          for pkg in packages/*/; do
+            PKG_JSON="${pkg}package.json"
+            if [ ! -f "$PKG_JSON" ]; then
+              continue
+            fi
+
+            IS_PRIVATE=$(node -p "require('./${PKG_JSON}').private || false")
+            PKG_NAME=$(node -p "require('./${PKG_JSON}').name")
+
+            if [ "$IS_PRIVATE" = "true" ]; then
+              echo "Skipping private package: $PKG_NAME"
+              continue
+            fi
+
+            echo "Publishing $PKG_NAME..."
+            (cd "$pkg" && pnpm publish --access public --no-git-checks) || {
+              echo "Warning: Failed to publish $PKG_NAME"
+            }
+          done
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
