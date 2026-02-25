@@ -9,6 +9,7 @@ import * as m from '$lib/paraglide/messages.js'
 import { UpdateUserSchema } from '$lib/server/schemas/index.js'
 import { audit } from '$lib/server/services/index.js'
 import { core } from '@hai/core'
+import { db } from '@hai/db'
 import { iam } from '@hai/iam'
 import { validateForm } from '@hai/kit'
 import { json } from '@sveltejs/kit'
@@ -188,9 +189,49 @@ export const DELETE: RequestHandler = async ({ params, locals, request, cookies,
 
     const existing = existingResult.data
 
-    const deleteResult = await iam.user.deleteUser(userId)
-    if (!deleteResult.success) {
-      return json({ success: false, error: deleteResult.error.message }, { status: 500 })
+    // Best effort: session cleanup should not block user deletion.
+    try {
+      await iam.session.deleteByUserId(userId)
+    }
+    catch (error) {
+      core.logger.warn('Failed to clear user sessions before deletion', { userId, error })
+    }
+
+    // Prefer iam.user.deleteUser; fall back to manual transactional delete for older runtimes.
+    const deleteUserFn = (iam.user as { deleteUser?: (id: string) => Promise<{ success: boolean, error?: { message: string } }> }).deleteUser
+    if (typeof deleteUserFn === 'function') {
+      const deleteResult = await deleteUserFn(userId)
+      if (!deleteResult.success) {
+        core.logger.error('Failed to delete user via iam.user.deleteUser', {
+          userId,
+          error: deleteResult.error?.message,
+        })
+        return json({ success: false, error: m.api_iam_users_delete_failed() }, { status: 500 })
+      }
+    }
+    else {
+      const txResult = await db.tx.wrap(async (tx) => {
+        const deleteUserRolesResult = await tx.execute('DELETE FROM iam_user_roles WHERE user_id = ?', [userId])
+        if (!deleteUserRolesResult.success) {
+          throw new Error(deleteUserRolesResult.error.message)
+        }
+
+        const deleteUserResult = await tx.execute('DELETE FROM iam_users WHERE id = ?', [userId])
+        if (!deleteUserResult.success) {
+          throw new Error(deleteUserResult.error.message)
+        }
+        if (deleteUserResult.data.changes === 0) {
+          throw new Error(m.api_iam_users_not_found())
+        }
+      })
+
+      if (!txResult.success) {
+        core.logger.error('Failed to delete user via fallback SQL transaction', {
+          userId,
+          error: txResult.error.message,
+        })
+        return json({ success: false, error: m.api_iam_users_delete_failed() }, { status: 500 })
+      }
     }
 
     // 记录审计日志

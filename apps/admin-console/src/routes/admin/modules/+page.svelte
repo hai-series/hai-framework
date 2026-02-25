@@ -2,7 +2,16 @@
   模块功能示例页面 - 展示 hai-framework 各后端模块的使用方式
 -->
 <script lang="ts">
-  import { toast } from '@hai/ui'
+  import {
+    Alert,
+    Badge,
+    Button,
+    Card,
+    Input,
+    PageHeader,
+    ToastContainer,
+    toast,
+  } from '@hai/ui'
   import * as m from '$lib/paraglide/messages'
 
   let activeTab = $state('core')
@@ -90,12 +99,18 @@
 <div class="space-y-6">
   <PageHeader title={m.modules_title()} description={m.modules_desc()} />
 
-  <Tabs
-    items={tabs}
-    active={activeTab}
-    onchange={(key) => activeTab = key}
-    type="card"
-  />
+  <div role="tablist" class="tabs tabs-boxed">
+    {#each tabs as tab}
+      <button
+        type="button"
+        role="tab"
+        class="tab {activeTab === tab.key ? 'tab-active' : ''}"
+        onclick={() => activeTab = tab.key}
+      >
+        {tab.label}
+      </button>
+    {/each}
+  </div>
 
   <!-- ===== Core 核心 ===== -->
   {#if activeTab === 'core'}

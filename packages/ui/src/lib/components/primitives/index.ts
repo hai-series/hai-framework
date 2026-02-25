@@ -38,4 +38,5 @@ export { default as Tag } from './Tag.svelte'
 export { default as Textarea } from './Textarea.svelte'
 
 export { default as ToggleCheckbox } from './ToggleCheckbox.svelte'
+export { default as ToggleInput } from './ToggleInput.svelte'
 export { default as ToggleRadio } from './ToggleRadio.svelte'

@@ -5,6 +5,7 @@
 -->
 <script lang="ts">
   import type { PageData } from './$types'
+  import { Avatar, Badge, Button, Card, Checkbox, IconButton, Input, Modal, PageHeader, PasswordInput, Select } from '@hai/ui'
   import * as m from '$lib/paraglide/messages'
 
   // 定义本地类型（与 page.server.ts 中的 UserData 一致）
@@ -191,11 +192,11 @@
   function getStatusText(status: string): string {
     switch (status) {
       case 'active':
-        return m.iam_users_status_active()
+        return `${m.iam_users_status_active()} (${status})`
       case 'inactive':
-        return m.iam_users_status_inactive()
+        return `${m.iam_users_status_inactive()} (${status})`
       case 'suspended':
-        return m.iam_users_status_disabled()
+        return `${m.iam_users_status_disabled()} (${status})`
       default:
         return status
     }

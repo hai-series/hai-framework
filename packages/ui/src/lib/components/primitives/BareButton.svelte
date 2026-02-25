@@ -19,14 +19,12 @@
     ariaSelected = undefined,
     tabindex = undefined,
     onclick,
-    onClick,
     onkeydown,
     children,
   }: BareButtonProps = $props()
 
   function handleClick(e: MouseEvent) {
     onclick?.(e)
-    onClick?.(e)
   }
 </script>
 
