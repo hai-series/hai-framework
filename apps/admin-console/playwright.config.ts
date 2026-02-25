@@ -26,12 +26,12 @@ export default defineConfig({
   },
 
   webServer: {
-    command: 'pnpm dev --port 4173 --strictPort',
+    command: 'pnpm build && pnpm preview --port 4173 --strictPort',
     env: {
       HAI_E2E: '1',
     },
     url: baseURL,
     reuseExistingServer: false,
-    timeout: 60_000,
+    timeout: 120_000,
   },
 })

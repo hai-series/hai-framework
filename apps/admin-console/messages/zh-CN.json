@@ -120,7 +120,7 @@
   "iam_users_password_mismatch": "两次输入的密码不一致",
   "iam_users_operation_failed": "操作失败",
   "iam_users_delete_failed": "删除失败",
-  "iam_users_status_active": "正常",
+  "iam_users_status_active": "活跃",
   "iam_users_status_inactive": "未激活",
   "iam_users_status_disabled": "已禁用",
   "iam_users_col_username": "用户名",
