@@ -309,18 +309,6 @@ async function generateModel(
  * ${context.pascalCase} 模型
  */
 import { z } from 'zod'
-import { sqliteTable, text, integer } from 'drizzle-orm/sqlite-core'
-import { createId } from '@h-ai/core'
-
-/**
- * ${context.pascalCase} 表
- */
-export const ${context.camelCase}Table = sqliteTable('${context.snakeCase}', {
-  id: text('id').primaryKey().$defaultFn(() => createId('${context.snakeCase.slice(0, 3)}')),
-  name: text('name').notNull(),
-  createdAt: integer('created_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
-  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().$defaultFn(() => new Date()),
-})
 
 /**
  * ${context.pascalCase} Schema

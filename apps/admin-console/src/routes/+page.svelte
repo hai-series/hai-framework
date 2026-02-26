@@ -86,7 +86,6 @@
       <span class="badge badge-primary badge-lg">SvelteKit 2.x</span>
       <span class="badge badge-primary badge-lg">Svelte 5 Runes</span>
       <span class="badge badge-primary badge-lg">TypeScript 5.7+</span>
-      <span class="badge badge-primary badge-lg">Drizzle ORM</span>
       <span class="badge badge-primary badge-lg">国密算法</span>
       <span class="badge badge-primary badge-lg">Pino 日志</span>
       <span class="badge badge-primary badge-lg">Zod 验证</span>

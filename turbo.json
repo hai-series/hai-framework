@@ -33,15 +33,10 @@
       "cache": false
     },
     "lint": {
-      "dependsOn": [
-        "^build"
-      ],
       "cache": true
     },
     "lint:fix": {
-      "dependsOn": [
-        "^build"
-      ],
+      "dependsOn": [],
       "cache": false
     },
     "test": {
