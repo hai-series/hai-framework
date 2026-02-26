@@ -48,6 +48,28 @@ const { uploadUrl } = await fetch('/api/storage/presign').then(r => r.json())
 await uploadWithPresignedUrl(uploadUrl, file)
 ```
 
+## API 概览
+
+- `storage.file`
+  - `put/get/head/exists/delete/deleteMany/copy`
+- `storage.dir`
+  - `list/delete`
+- `storage.presign`
+  - `getUrl/putUrl/publicUrl`
+
+> 注意：`publicUrl` 仅在 S3 配置了 `publicUrl` 时返回字符串；否则返回 `null`。
+
+## 客户端辅助函数
+
+`@h-ai/storage/client` 还提供以下浏览器侧工具：
+
+- `uploadWithPresignedUrl(url, data, options)`
+- `downloadWithPresignedUrl(url, options)`
+- `downloadAndSave(url, { filename })`
+- `getFileExtension(file)`
+- `getMimeType(extension)`
+- `formatFileSize(bytes)`
+
 ## 配置
 
 - **S3**：`bucket / region / accessKeyId / secretAccessKey` 必填，可选 `endpoint / forcePathStyle / prefix / publicUrl`
@@ -64,11 +86,23 @@ if (!result.success && result.error.code === StorageErrorCode.NOT_INITIALIZED) {
 }
 ```
 
+常用错误码：
+
+- `NOT_INITIALIZED`
+- `CONNECTION_FAILED`
+- `OPERATION_FAILED`
+- `NOT_FOUND`
+- `PERMISSION_DENIED`
+- `PRESIGN_FAILED`
+- `CONFIG_ERROR`
+
 ## 测试
 
 ```bash
-pnpm test
+pnpm --filter @h-ai/storage test
 ```
+
+> MinIO/S3 相关测试需要 Docker 环境。
 
 ## License
 

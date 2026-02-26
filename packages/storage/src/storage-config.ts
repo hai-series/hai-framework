@@ -181,7 +181,7 @@ export type StorageConfigInput = z.input<typeof StorageConfigSchema>
  * ```
  */
 export const PresignOptionsSchema = z.object({
-  /** 过期时间（秒），范围 1“604800（7 天），默认 3600（1 小时） */
+  /** 过期时间（秒），范围 1~604800（7 天），默认 3600（1 小时） */
   expiresIn: z.number().min(1).max(604800).default(3600), // 最长 7 天
 
   /** 响应内容类型（用于下载时设置 Content-Type） */
