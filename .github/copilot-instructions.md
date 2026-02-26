@@ -42,7 +42,7 @@
 
 - 引用点：哪些文件引用了被修改的模块？（用 `grep_search` 列出关键引用位置）
 - 测试：哪些测试需要更新/新增？（单测优先，必要时集成测试）
-- 文档：哪些文档需要同步？（README / SKILLS / 本文件）
+- 文档：哪些文档需要同步？（README / Skill 模板 / 本文件）
 
 #### 一致性与分层（两组三问）
 
@@ -70,7 +70,7 @@
 4. `pnpm lint` 通过
 5. `pnpm test` 通过
 6. 引用点已更新（用 `grep_search` 复核）
-7. 文档已同步（README / SKILLS / 本文件）
+7. 文档已同步（README / Skill 模板 / 本文件）
 
 #### 最小可执行命令清单（仓库根目录）
 
@@ -177,7 +177,7 @@
 ### 导出与文档同步
 
 - 公共入口只做 `export *` 聚合，避免新增隐式导出。
-- 任何 API 变更必须同步 README / SKILLS / 测试。
+- 任何 API 变更必须同步 README / Skill 模板 / 测试。
 
 ### 日志与 i18n
 
@@ -186,18 +186,21 @@
 
 ---
 
-## 文档要求（README 与 SKILLS）
+## 文档要求（README 与 Skill 模板）
 
-- 各模块 README 与 `SKILLS.md` 的描述必须与实现一致。
+- 各模块 README 的描述必须与实现一致。
+- Skill 模板统一管理在 `packages/cli/templates/skills/` 中，通过 CLI 分发到用户项目。
 
 ### README（给人看的）
 
-- 聚焦“是什么 / 怎么用”，以使用示例为主。
+- 聚焦"是什么 / 怎么用"，以使用示例为主。
 - 不要包含接口清单与内部实现细节。
 
-### SKILLS（给 AI 看的）
+### Skill 模板（给 AI 看的）
 
-- 必须包含：模块介绍、使用方式（初始化/关闭/常见场景）、详细接口参数（字段含义/默认值/错误码）。
+- 位于 `packages/cli/templates/skills/hai-<模块名>/SKILL.md`。
+- 必须包含：YAML frontmatter（name + description）、模块概述、使用步骤、核心 API、错误码、常见模式。
+- 遵循 agentskills.io 标准。
 
 ---
 
@@ -218,7 +221,7 @@
 - 只改一处，不改关联处
 - 重命名后不更新引用点/测试/文档
 - 添加用户可见文本但不走 i18n
-- 修改架构但不更新 README / SKILLS
+- 修改架构但不更新 README / Skill 模板
 - 提交 typecheck/lint/test 不通过的代码
 - UI 层写业务逻辑，或 services 层写 UI 代码
 - 使用 `console.log`

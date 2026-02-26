@@ -155,6 +155,13 @@ export async function addModule(options: AddModuleOptions): Promise<void> {
       }
     }
 
+    // 生成模块 Skill 文件
+    const { generateModuleSkillFile } = await import('./skill-templates.js')
+    const skillFile = await generateModuleSkillFile(cwd, moduleName)
+    if (skillFile) {
+      core.logger.info(chalk.gray(`  + ${skillFile} (AI Skill)`))
+    }
+
     // 安装依赖
     const doInstall = options.install !== false
     if (doInstall) {

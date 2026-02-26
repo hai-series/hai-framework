@@ -67,7 +67,7 @@ await iam.close()
 
 ## 更多信息
 
-详细 API 参数、错误码及内部流程请参考 [SKILLS.md](./SKILLS.md)。
+详细 API 参数、错误码及使用模式请参考源代码和 Skill 模板。
 
 ## 前端客户端
 
