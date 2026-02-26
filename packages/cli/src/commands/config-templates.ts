@@ -6,7 +6,7 @@
  * =============================================================================
  */
 
-import type { AiModuleConfig, CacheModuleConfig, CoreModuleConfig, DbModuleConfig, IamModuleConfig, ModuleConfigs, StorageModuleConfig } from '../types.js'
+import type { AiModuleConfig, CacheModuleConfig, CoreModuleConfig, DbModuleConfig, FeatureId, IamModuleConfig, ModuleConfigs, StorageModuleConfig } from '../types.js'
 
 /**
  * 生成模块配置文件内容
@@ -48,7 +48,7 @@ function generateCoreConfig(cfg?: CoreModuleConfig): string {
 name: ${name}
 version: 0.1.0
 env: \${HAI_ENV:development}
-debug: false
+debug: \${HAI_DEBUG:false}
 
 defaultLocale: ${locale}
 supportedLocales:
@@ -196,16 +196,18 @@ defaultProvider: local
 providers:
   local:
     type: local
-    basePath: \${HAI_STORAGE_PATH:${localPath}}
+    root: \${HAI_STORAGE_PATH:${localPath}}
     maxFileSize: 10485760  # 10MB
 
   # S3 配置（可选）
   # s3:
   #   type: s3
-  #   bucket: \${HAI_S3_BUCKET}
-  #   region: \${HAI_S3_REGION:us-east-1}
-  #   accessKeyId: \${HAI_S3_ACCESS_KEY}
-  #   secretAccessKey: \${HAI_S3_SECRET_KEY}
+  #   bucket: \${HAI_STORAGE_S3_BUCKET}
+  #   region: \${HAI_STORAGE_S3_REGION:us-east-1}
+  #   accessKeyId: \${HAI_STORAGE_S3_ACCESS_KEY}
+  #   secretAccessKey: \${HAI_STORAGE_S3_SECRET_KEY}
+  #   endpoint: \${HAI_STORAGE_S3_ENDPOINT}
+  #   forcePathStyle: \${HAI_STORAGE_S3_FORCE_PATH_STYLE:false}
 `
   }
 
@@ -220,15 +222,17 @@ defaultProvider: s3
 providers:
   s3:
     type: s3
-    bucket: \${HAI_S3_BUCKET}
-    region: \${HAI_S3_REGION:us-east-1}
-    accessKeyId: \${HAI_S3_ACCESS_KEY}
-    secretAccessKey: \${HAI_S3_SECRET_KEY}
+    bucket: \${HAI_STORAGE_S3_BUCKET}
+    region: \${HAI_STORAGE_S3_REGION:us-east-1}
+    accessKeyId: \${HAI_STORAGE_S3_ACCESS_KEY}
+    secretAccessKey: \${HAI_STORAGE_S3_SECRET_KEY}
+    # endpoint: \${HAI_STORAGE_S3_ENDPOINT}
+    # forcePathStyle: \${HAI_STORAGE_S3_FORCE_PATH_STYLE:false}
 
   # 本地存储（可选）
   # local:
   #   type: local
-  #   basePath: \${HAI_STORAGE_PATH:./data/uploads}
+  #   root: \${HAI_STORAGE_PATH:./data/uploads}
   #   maxFileSize: 10485760  # 10MB
 `
 }
@@ -299,4 +303,198 @@ providers:
     model: ${model}
     # baseUrl: \${HAI_AI_BASE_URL}
 `
+}
+
+/**
+ * 根据选中的功能模块生成 .env.example 内容
+ *
+ * @param features - 选中的功能模块列表
+ * @param configs - 用户自定义配置值
+ * @returns .env.example 文件内容
+ */
+export function generateEnvExample(features: FeatureId[], configs?: ModuleConfigs): string {
+  const sections: string[] = []
+
+  // 文件头
+  sections.push(`# =============================================================================
+# Environment Variables
+# =============================================================================
+#
+# Copy this file to .env and fill in actual values.
+# Config files in config/ reference these variables via \${VAR_NAME:default} syntax.
+#
+# Naming convention: HAI_<MODULE>_<SETTING>
+# =============================================================================`)
+
+  // 应用基础（始终生成）
+  sections.push(`
+# =============================================================================
+# Application
+# =============================================================================
+# Environment: development | production | test
+HAI_ENV=development
+# Enable debug mode
+HAI_DEBUG=false`)
+
+  // 数据库
+  if (features.includes('db')) {
+    const dbType = configs?.db?.type ?? 'sqlite'
+    const dbDatabase = configs?.db?.database ?? (dbType === 'sqlite' ? './data/app.db' : 'hai')
+    const isSqlite = dbType === 'sqlite'
+    sections.push(`
+# =============================================================================
+# Database (@h-ai/db)
+# =============================================================================
+# Database type: sqlite | postgresql | mysql
+HAI_DB_TYPE=${dbType}
+# SQLite: file path; PostgreSQL/MySQL: database name
+HAI_DB_DATABASE=${dbDatabase}${isSqlite
+  ? `
+# PostgreSQL/MySQL connection (uncomment when not using sqlite)
+# HAI_DB_HOST=localhost
+# HAI_DB_PORT=5432
+# HAI_DB_USER=postgres
+# HAI_DB_PASSWORD=`
+  : `
+# Connection
+HAI_DB_HOST=${configs?.db?.host ?? 'localhost'}
+HAI_DB_PORT=${configs?.db?.port ?? (dbType === 'postgresql' ? 5432 : 3306)}
+HAI_DB_USER=${dbType === 'postgresql' ? 'postgres' : 'root'}
+HAI_DB_PASSWORD=`}`)
+  }
+
+  // IAM / Session
+  if (features.includes('iam')) {
+    sections.push(`
+# =============================================================================
+# Session / IAM (@h-ai/iam)
+# =============================================================================
+# JWT signing secret (REQUIRED, min 32 chars)
+HAI_SESSION_SECRET=change-me-to-a-strong-random-string-min-32-chars`)
+  }
+
+  // 缓存
+  if (features.includes('cache')) {
+    const cacheType = configs?.cache?.type ?? 'memory'
+    if (cacheType === 'redis') {
+      sections.push(`
+# =============================================================================
+# Cache (@h-ai/cache)
+# =============================================================================
+# Cache type: memory | redis
+HAI_CACHE_TYPE=redis
+# Redis connection
+HAI_CACHE_REDIS_HOST=${configs?.cache?.host ?? 'localhost'}
+HAI_CACHE_REDIS_PORT=${configs?.cache?.port ?? 6379}
+HAI_CACHE_REDIS_PASSWORD=
+# HAI_CACHE_REDIS_URL=redis://localhost:6379/0
+# HAI_CACHE_REDIS_DB=0
+# HAI_CACHE_CONNECT_TIMEOUT=10000
+# HAI_CACHE_COMMAND_TIMEOUT=5000
+# HAI_CACHE_KEY_PREFIX=hai:`)
+    }
+    else {
+      sections.push(`
+# =============================================================================
+# Cache (@h-ai/cache)
+# =============================================================================
+# Cache type: memory | redis
+HAI_CACHE_TYPE=memory
+# Redis connection (uncomment when type=redis)
+# HAI_CACHE_REDIS_URL=redis://localhost:6379/0
+# HAI_CACHE_REDIS_HOST=localhost
+# HAI_CACHE_REDIS_PORT=6379
+# HAI_CACHE_REDIS_PASSWORD=
+# HAI_CACHE_REDIS_DB=0
+# HAI_CACHE_CONNECT_TIMEOUT=10000
+# HAI_CACHE_COMMAND_TIMEOUT=5000
+# HAI_CACHE_KEY_PREFIX=hai:`)
+    }
+  }
+
+  // 存储
+  if (features.includes('storage')) {
+    const storageType = configs?.storage?.type ?? 'local'
+    if (storageType === 's3') {
+      sections.push(`
+# =============================================================================
+# Storage (@h-ai/storage)
+# =============================================================================
+# Storage type: local | s3
+HAI_STORAGE_TYPE=s3
+# S3 / S3-compatible
+HAI_STORAGE_S3_BUCKET=
+HAI_STORAGE_S3_REGION=us-east-1
+HAI_STORAGE_S3_ACCESS_KEY=
+HAI_STORAGE_S3_SECRET_KEY=
+# HAI_STORAGE_S3_ENDPOINT=          # Custom endpoint for MinIO / Aliyun OSS etc.
+# HAI_STORAGE_S3_FORCE_PATH_STYLE=false
+# Local storage (uncomment when type=local)
+# HAI_STORAGE_PATH=./data/uploads`)
+    }
+    else {
+      sections.push(`
+# =============================================================================
+# Storage (@h-ai/storage)
+# =============================================================================
+# Storage type: local | s3
+HAI_STORAGE_TYPE=local
+# Local storage root path
+HAI_STORAGE_PATH=${configs?.storage?.localPath ?? './data/uploads'}
+# S3 / S3-compatible (uncomment when type=s3)
+# HAI_STORAGE_S3_BUCKET=
+# HAI_STORAGE_S3_REGION=us-east-1
+# HAI_STORAGE_S3_ACCESS_KEY=
+# HAI_STORAGE_S3_SECRET_KEY=
+# HAI_STORAGE_S3_ENDPOINT=          # Custom endpoint for MinIO / Aliyun OSS etc.
+# HAI_STORAGE_S3_FORCE_PATH_STYLE=false`)
+    }
+  }
+
+  // AI
+  if (features.includes('ai')) {
+    const provider = configs?.ai?.defaultProvider ?? 'openai'
+    if (provider === 'anthropic') {
+      sections.push(`
+# =============================================================================
+# AI (@h-ai/ai)
+# =============================================================================
+# Anthropic
+HAI_ANTHROPIC_API_KEY=
+# OpenAI / OpenAI-compatible (uncomment if needed)
+# HAI_OPENAI_API_KEY=
+# HAI_OPENAI_BASE_URL=`)
+    }
+    else if (provider === 'openai') {
+      sections.push(`
+# =============================================================================
+# AI (@h-ai/ai)
+# =============================================================================
+# OpenAI / OpenAI-compatible
+HAI_OPENAI_API_KEY=
+# HAI_OPENAI_BASE_URL=               # Custom base URL (e.g. local proxy, Azure)
+# Anthropic (uncomment if needed)
+# HAI_ANTHROPIC_API_KEY=`)
+    }
+    else {
+      sections.push(`
+# =============================================================================
+# AI (@h-ai/ai)
+# =============================================================================
+# Generic OpenAI-compatible provider
+HAI_AI_API_KEY=
+# HAI_AI_BASE_URL=`)
+    }
+  }
+
+  // 测试（始终生成）
+  sections.push(`
+# =============================================================================
+# Testing
+# =============================================================================
+# E2E test mode (relaxes rate limiting etc.)
+# HAI_E2E=1
+`)
+
+  return sections.join('\n')
 }

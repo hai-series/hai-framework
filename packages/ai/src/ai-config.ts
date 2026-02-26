@@ -76,9 +76,9 @@ export interface AIError {
 
 /** LLM 配置 Schema */
 export const LLMConfigSchema = z.object({
-  /** API Key，未提供时回退到 `process.env.OPENAI_API_KEY` */
+  /** API Key，未提供时回退到 `process.env.HAI_OPENAI_API_KEY` 或 `process.env.OPENAI_API_KEY` */
   apiKey: z.string().optional(),
-  /** API 基础 URL，未提供时回退到 `process.env.OPENAI_BASE_URL` 或 OpenAI 官方地址 */
+  /** API 基础 URL，未提供时回退到 `process.env.HAI_OPENAI_BASE_URL` 或 `process.env.OPENAI_BASE_URL` 或 OpenAI 官方地址 */
   baseUrl: z.string().url().optional(),
   /** 默认模型名称（默认 `'gpt-4o-mini'`） */
   model: z.string().optional().default('gpt-4o-mini'),

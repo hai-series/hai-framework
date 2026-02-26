@@ -27,7 +27,7 @@ import { ai } from '@h-ai/ai'
 ai.init({
   llm: {
     model: 'gpt-4o-mini',
-    apiKey: process.env.OPENAI_API_KEY,
+    apiKey: process.env.HAI_OPENAI_API_KEY,
   },
 })
 

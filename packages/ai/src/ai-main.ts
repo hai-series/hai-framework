@@ -80,7 +80,7 @@ const streamOperations: StreamOperations = {
  * import { ai } from '@h-ai/ai'
  *
  * // 初始化
- * ai.init({ llm: { model: 'gpt-4o-mini', apiKey: process.env.OPENAI_API_KEY } })
+ * ai.init({ llm: { model: 'gpt-4o-mini', apiKey: process.env.HAI_OPENAI_API_KEY } })
  *
  * // LLM 调用
  * const result = await ai.llm.chat({

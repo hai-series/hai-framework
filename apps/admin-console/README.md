@@ -107,23 +107,29 @@ src/routes/
 复制 `.env.example` 到 `.env` 并按需修改：
 
 ```bash
-# 运行环境
+# Application
 HAI_ENV=development
 HAI_DEBUG=false
 
-# 数据库（默认 SQLite）
+# Database (sqlite | postgresql | mysql)
 HAI_DB_TYPE=sqlite
 HAI_DB_DATABASE=./data/admin.db
 
-# Session 密钥（必填，≥ 32 字符）
+# Session (REQUIRED, min 32 chars)
 HAI_SESSION_SECRET=change-me-to-a-strong-random-string-min-32-chars
 
-# 缓存（memory | redis）
+# Cache (memory | redis)
 HAI_CACHE_TYPE=memory
 
-# 存储（local | s3）
+# Storage (local | s3)
 HAI_STORAGE_TYPE=local
+HAI_STORAGE_PATH=./data/uploads
+
+# AI (uncomment to enable)
+# HAI_OPENAI_API_KEY=
 ```
+
+完整列表见 `.env.example`。
 
 ### YAML 配置文件
 

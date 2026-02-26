@@ -40,8 +40,8 @@ hai Framework 是一个**面向 AI 智能应用**的全栈开发框架。
 
 ## 模块总览
 
-| 包名           | 职责                                                                      |     Provider 支持      |
-| -------------- | ------------------------------------------------------------------------- | :--------------------: |
+| 包名            | 职责                                                                      |     Provider 支持      |
+| --------------- | ------------------------------------------------------------------------- | :--------------------: |
 | `@h-ai/core`    | 基础能力：`Result` 类型、日志、配置加载、ID 生成、i18n、工具函数          |           —            |
 | `@h-ai/crypto`  | 国密算法：SM2 非对称加密/签名、SM3 哈希、SM4 对称加密、密码哈希           |           —            |
 | `@h-ai/db`      | 数据库访问：DDL、原生 SQL、事务、分页、CRUD 仓库                          | ✅ SQLite / PG / MySQL |
@@ -211,7 +211,7 @@ import { z } from 'zod'
 
 // 初始化（OpenAI 兼容 API）
 ai.init({
-  llm: { apiKey: process.env.OPENAI_API_KEY, model: 'gpt-4o-mini' },
+  llm: { apiKey: process.env.HAI_OPENAI_API_KEY, model: 'gpt-4o-mini' },
 })
 
 // 同步调用
@@ -362,7 +362,7 @@ const valid = crypto.password.verify('MyPassword123', hashed.data)
 
 | 应用                | 说明                     | 使用的模块         |
 | ------------------- | ------------------------ | ------------------ |
-| `admin-console`     | 管理后台（完整功能参考） | 全部 @h-ai/\* 模块  |
+| `admin-console`     | 管理后台（完整功能参考） | 全部 @h-ai/\* 模块 |
 | `api-service`       | 纯 API 后端服务          | core, db, iam, kit |
 | `corporate-website` | 企业官网                 | core, kit, ui      |
 | `h5-app`            | H5 移动应用              | core, kit, ui      |
@@ -391,18 +391,33 @@ pnpm --filter @h-ai/db test
 
 ## 环境变量
 
-复制 `.env.example` 为 `.env` 填入实际值。主要变量：
+复制 `.env.example` 为 `.env` 填入实际值。命名规范：`HAI_<MODULE>_<SETTING>`。
 
-| 变量                 | 说明                   | 默认值          |
-| -------------------- | ---------------------- | --------------- |
-| `HAI_ENV`            | 运行环境               | `development`   |
-| `HAI_LOG_LEVEL`      | 日志级别               | `info`          |
-| `HAI_DB_TYPE`        | 数据库类型             | `sqlite`        |
-| `HAI_DB_DATABASE`    | 数据库地址             | `./data/app.db` |
-| `HAI_SESSION_SECRET` | 会话密钥（≥32 字符）   | —               |
-| `HAI_CACHE_TYPE`     | 缓存类型               | `memory`        |
-| `HAI_STORAGE_TYPE`   | 存储类型               | `local`         |
-| `OPENAI_API_KEY`     | OpenAI API Key（按需） | —               |
+| 变量                        | 说明                                      | 默认值           |
+| --------------------------- | ----------------------------------------- | ---------------- |
+| `HAI_ENV`                   | 运行环境                                  | `development`    |
+| `HAI_DEBUG`                 | 调试模式                                  | `false`          |
+| `HAI_DB_TYPE`               | 数据库类型（sqlite / postgresql / mysql） | `sqlite`         |
+| `HAI_DB_DATABASE`           | 数据库路径或名称                          | `./data/app.db`  |
+| `HAI_DB_HOST`               | 数据库主机                                | `localhost`      |
+| `HAI_DB_PORT`               | 数据库端口                                | `5432`           |
+| `HAI_DB_USER`               | 数据库用户                                | `postgres`       |
+| `HAI_DB_PASSWORD`           | 数据库密码                                | —                |
+| `HAI_SESSION_SECRET`        | JWT 签名密钥（**必填**，≥32 字符）        | —                |
+| `HAI_CACHE_TYPE`            | 缓存类型（memory / redis）                | `memory`         |
+| `HAI_CACHE_REDIS_URL`       | Redis 连接 URL                            | —                |
+| `HAI_STORAGE_TYPE`          | 存储类型（local / s3）                    | `local`          |
+| `HAI_STORAGE_PATH`          | 本地存储路径                              | `./data/uploads` |
+| `HAI_STORAGE_S3_BUCKET`     | S3 存储桶                                 | —                |
+| `HAI_STORAGE_S3_REGION`     | S3 区域                                   | `us-east-1`      |
+| `HAI_STORAGE_S3_ACCESS_KEY` | S3 Access Key                             | —                |
+| `HAI_STORAGE_S3_SECRET_KEY` | S3 Secret Key                             | —                |
+| `HAI_OPENAI_API_KEY`        | OpenAI API Key                            | —                |
+| `HAI_OPENAI_BASE_URL`       | OpenAI 兼容 Base URL                      | —                |
+| `HAI_ANTHROPIC_API_KEY`     | Anthropic API Key                         | —                |
+| `HAI_E2E`                   | E2E 测试模式                              | —                |
+
+完整列表见各应用的 `.env.example`。
 
 ## 许可证
 

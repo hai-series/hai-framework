@@ -314,8 +314,8 @@ await storage.init({
   s3: {
     bucket: 'my-bucket',
     region: 'us-east-1',
-    accessKeyId: process.env.AWS_KEY,
-    secretAccessKey: process.env.AWS_SECRET,
+    accessKeyId: process.env.HAI_STORAGE_S3_ACCESS_KEY,
+    secretAccessKey: process.env.HAI_STORAGE_S3_SECRET_KEY,
   },
 })
 
@@ -359,7 +359,7 @@ const url = await storage.presign(key, { expires: 3600 })`}</code></pre>
 // 初始化
 await ai.init({
   provider: 'openai',
-  apiKey: process.env.OPENAI_API_KEY,
+  apiKey: process.env.HAI_OPENAI_API_KEY,
   model: 'gpt-4',
 })
 

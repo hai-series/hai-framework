@@ -157,8 +157,8 @@ export function createOpenAIProvider(deps: AILLMFunctionsDeps): LLMProvider {
   const { config } = deps
 
   const client = new OpenAI({
-    apiKey: config.llm?.apiKey || process.env.OPENAI_API_KEY || '',
-    baseURL: config.llm?.baseUrl || process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1',
+    apiKey: config.llm?.apiKey || process.env.HAI_OPENAI_API_KEY || process.env.OPENAI_API_KEY || '',
+    baseURL: config.llm?.baseUrl || process.env.HAI_OPENAI_BASE_URL || process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1',
     timeout: config.llm?.timeout || 60000,
   })
 
