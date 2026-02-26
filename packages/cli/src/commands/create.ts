@@ -819,6 +819,10 @@ async function generateProjectFiles(
   // 生成 .env.example
   const { generateEnvExample } = await import('./config-templates.js')
   await writeFile(path.join(projectPath, '.env.example'), generateEnvExample(options.features || [], configs))
+
+  // 生成 Skill 文件（供 AI 编程助手使用）
+  const { generateSkillFiles } = await import('./skill-templates.js')
+  await generateSkillFiles(projectPath, options.features || [], appType)
 }
 
 /**

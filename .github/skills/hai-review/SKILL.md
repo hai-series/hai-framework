@@ -1,6 +1,6 @@
 ---
 name: hai-review
-description: 对 hai-framework 模块进行代码审查与规范化：对照 hai-create 规范优化代码、完善注释、确保测试与 lint 通过，并按规范重写 README/SKILLS。
+description: 对 hai-framework 模块进行代码审查与规范化：对照 hai-create 规范优化代码、完善注释、确保测试与 lint 通过，并按规范重写 README 与 Skill 模板。
 ---
 
 # hai-review
@@ -9,7 +9,7 @@ description: 对 hai-framework 模块进行代码审查与规范化：对照 hai
 
 - 对单个模块进行整体审查与规范化（代码、注释、文档、测试）
 - 需要确保测试与 lint 通过，并输出可追溯的改动
-- 需要按仓库规范重写 README 与 SKILLS
+- 需要按仓库规范重写 README 与 Skill 模板
 
 ## 工作准则
 
@@ -18,7 +18,7 @@ description: 对 hai-framework 模块进行代码审查与规范化：对照 hai
 3. **注释规范**：公共 API 与内部函数补齐中文 JSDoc，包含参数、返回值、示例、边界说明。
 4. **文档规范**：
    - README：只写"是什么/怎么用"，不写接口清单与内部实现（hai-create §6.1）。
-   - SKILLS：面向 AI，需包含模块概述、入口、初始化/关闭、目录结构、详细参数与错误码（hai-create §6.2）。
+   - Skill 模板：面向 AI，位于 `packages/cli/templates/skills/hai-<模块名>/SKILL.md`，需包含 YAML frontmatter、模块概述、API、错误码、常见模式（hai-create §6.2）。
 5. **质量门禁**：按顺序执行 `pnpm typecheck` → `pnpm lint` → `pnpm test`（优先 filter 指定模块）。
 6. **参照 hai-create 规范**：审查前先读取 `.github/skills/hai-create/SKILL.md`，以其中的目录结构、架构决策、代码规范作为审查基准。
 
@@ -72,7 +72,7 @@ if (input) {
 
 // ✅ 提前返回
 if (!input?.name?.length) {
-  return err(...)
+  return err({ code: XxErrorCode.VALIDATION, message: xxM('xx_nameRequired') })
 }
 // 实际逻辑
 ```
@@ -82,14 +82,16 @@ if (!input?.name?.length) {
 
 ```ts
 // ❌ 重新包装
-const result = await sql.query(...)
+const result = await sql.query(sql)
 if (!result.success) {
   return err({ code: XxErrorCode.QUERY_FAILED, message: result.error.message })
 }
 
 // ✅ 直接透传
-const result = await sql.query(...)
-if (!result.success) { return result }
+const result = await sql.query(sql)
+if (!result.success) {
+  return result
+}
 ```
 
 - **错误创建**：错误码 + i18n 消息（`xxM('key')`），禁止硬编码消息字符串。
@@ -113,21 +115,22 @@ if (!result.success) { return result }
 
 审查时必须确认以下位置**已输出日志且级别正确**：
 
-| 位置 | 必须级别 | 审查项 |
-|---|---|---|
-| `init()` 成功 | `info` | 模块/服务初始化完成，附带配置类型等关键参数 |
-| `init()` 失败 | `error` | 初始化异常，附带 `{ error }` |
-| `close()` | `info` | 模块/服务关闭 |
-| 业务写操作成功（create/update/delete） | `info` | 携带业务标识（`id`、`userId` 等） |
-| 业务写操作进入 | `debug` | 携带输入参数概要 |
-| 业务写操作失败 | `warn` 或 `error` | 校验失败用 `warn`，系统异常用 `error`，附带 `{ error }` 或 `{ reason }` |
-| Provider connect 成功/失败 | `info` / `error` | 附带连接目标信息（`host`、`type`） |
-| Provider disconnect | `info` | — |
-| 安全敏感操作（登录/登出/授权） | `info`（成功）/ `warn`（失败） | 附带 `userId`、`type`；禁止输出密码/token 明文 |
-| 读操作 / 查询 | `debug` | 不使用 `info`，避免日志过多 |
-| 循环体内详细记录 | `trace` | 生产环境默认不输出 |
+| 位置                                   | 必须级别                       | 审查项                                                                  |
+| -------------------------------------- | ------------------------------ | ----------------------------------------------------------------------- |
+| `init()` 成功                          | `info`                         | 模块/服务初始化完成，附带配置类型等关键参数                             |
+| `init()` 失败                          | `error`                        | 初始化异常，附带 `{ error }`                                            |
+| `close()`                              | `info`                         | 模块/服务关闭                                                           |
+| 业务写操作成功（create/update/delete） | `info`                         | 携带业务标识（`id`、`userId` 等）                                       |
+| 业务写操作进入                         | `debug`                        | 携带输入参数概要                                                        |
+| 业务写操作失败                         | `warn` 或 `error`              | 校验失败用 `warn`，系统异常用 `error`，附带 `{ error }` 或 `{ reason }` |
+| Provider connect 成功/失败             | `info` / `error`               | 附带连接目标信息（`host`、`type`）                                      |
+| Provider disconnect                    | `info`                         | —                                                                       |
+| 安全敏感操作（登录/登出/授权）         | `info`（成功）/ `warn`（失败） | 附带 `userId`、`type`；禁止输出密码/token 明文                          |
+| 读操作 / 查询                          | `debug`                        | 不使用 `info`，避免日志过多                                             |
+| 循环体内详细记录                       | `trace`                        | 生产环境默认不输出                                                      |
 
 **日志内容规范**：
+
 - 消息文本：英文，简洁动宾结构（如 `'XX module initialized'`、`'Failed to create yy item'`）
 - 上下文对象：携带关键业务标识（`id`、`userId`、`type`），禁止输出密码、token 明文等敏感信息
 - 错误上下文：失败日志携带 `{ error }` 或 `{ reason: errorCode }`，便于排查
@@ -136,48 +139,60 @@ if (!result.success) { return result }
 
 ```ts
 // ❌ init 成功后没有日志
-async init(config) {
-  const parsed = XxConfigSchema.parse(config)
-  currentConfig = parsed
-  return ok(undefined)
+const badExample = {
+  async init(config) {
+    const parsed = XxConfigSchema.parse(config)
+    currentConfig = parsed
+    return ok(undefined)
+  },
 }
 
 // ✅ init 成功必须输出 info 日志
-async init(config) {
-  const parsed = XxConfigSchema.parse(config)
-  currentConfig = parsed
-  logger.info('XX module initialized', { type: parsed.type })
-  return ok(undefined)
+const goodExample = {
+  async init(config) {
+    const parsed = XxConfigSchema.parse(config)
+    currentConfig = parsed
+    logger.info('XX module initialized', { type: parsed.type })
+    return ok(undefined)
+  },
 }
 ```
 
 ```ts
 // ❌ 业务操作成功没有日志
-async create(input) {
-  const item = await doCreate(input)
-  return ok(item)
+const badExample = {
+  async create(input) {
+    const item = await doCreate(input)
+    return ok(item)
+  },
 }
 
 // ✅ 写操作需有 debug 进入 + info 成功
-async create(input) {
-  logger.debug('Creating yy item', { name: input.name })
-  const item = await doCreate(input)
-  logger.info('Yy item created', { itemId: item.id })
-  return ok(item)
+const goodExample = {
+  async create(input) {
+    logger.debug('Creating yy item', { name: input.name })
+    const item = await doCreate(input)
+    logger.info('Yy item created', { itemId: item.id })
+    return ok(item)
+  },
 }
 ```
 
 ```ts
 // ❌ 日志级别不当：把每次查询都用 info
-async get(id) {
-  logger.info('Getting item', { id })  // 读操作不应用 info
-  return ok(await dataSource.get(id))
+const badExample = {
+  async get(id) {
+    logger.info('Getting item', { id }) // 读操作不应用 info
+    return ok(await dataSource.get(id))
+  },
 }
 
 // ✅ 读操作用 debug
-async get(id) {
-  logger.debug('Getting item', { id })
-  return ok(await dataSource.get(id))
+const goodExample = {
+  async get(id) {
+    logger.debug('Getting item', { id })
+    return ok(await dataSource.get(id))
+  },
 }
 ```
 
@@ -278,7 +293,7 @@ async get(id) {
 ### 文档
 
 - [ ] README 符合 hai-create §6.1（是什么/怎么用，无接口清单）
-- [ ] SKILLS 符合 hai-create §6.2（8 个必须板块）
+- [ ] Skill 模板符合 hai-create §6.2（YAML frontmatter、模块概述、API、错误码、常见模式）
 - [ ] 依赖方向向内收敛，未引入重复能力
 
 ---
@@ -293,5 +308,5 @@ async get(id) {
 
 - "对 crypto 模块做一次整体审查"
 - "review storage 模块"
-- "优化代码并重写 README/SKILLS"
+- "优化代码并重写 README/Skill 模板"
 - "完善注释并确保测试通过"
