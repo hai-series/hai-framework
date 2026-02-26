@@ -73,7 +73,7 @@ function toAIError(error: unknown): AIError {
 /**
  * 将 OpenAI SDK 响应映射为内部 ChatCompletionResponse
  *
- * 处理 `tool_calls` 字段拐角，确保 `usage` 字段默认值为 0。
+ * 处理 `tool_calls` 字段可选性，确保 `usage` 字段默认值为 0。
  *
  * @param response - OpenAI SDK 原始响应
  * @returns 内部统一类型

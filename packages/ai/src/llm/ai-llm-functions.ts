@@ -1,7 +1,8 @@
 /**
  * @h-ai/ai — LLM 子功能工厂
  *
- * 组装 LLM 操作：Provider + 工具 + 流处理器。
+ * 根据配置创建 OpenAI Provider，组装 LLM 操作接口。
+ * 同时导出工具与流处理的纯函数包装器（不依赖配置，可独立使用）。
  */
 
 import type { AIConfig } from '../ai-config.js'

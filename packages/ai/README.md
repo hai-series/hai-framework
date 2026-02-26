@@ -84,10 +84,11 @@ app.post('/mcp', async (req, res) => {
 ## 工具调用
 
 ```ts
-import { createToolRegistry, defineTool } from '@h-ai/ai'
+import { ai } from '@h-ai/ai'
 import { z } from 'zod'
 
-const weatherTool = defineTool({
+// 定义工具（Zod Schema 自动转 JSON Schema + 参数校验）
+const weatherTool = ai.tools.define({
   name: 'get_weather',
   description: '获取天气信息',
   parameters: z.object({
@@ -96,7 +97,8 @@ const weatherTool = defineTool({
   handler: async ({ city }) => ({ temperature: 20, city }),
 })
 
-const registry = createToolRegistry()
+// 注册表管理
+const registry = ai.tools.createRegistry()
 registry.register(weatherTool)
 
 // 获取工具定义（传递给 LLM）
@@ -129,9 +131,10 @@ const reply = await client.sendMessage('你好', '你是一个助手')
 ## 流处理工具
 
 ```ts
-import { collectStream, createStreamProcessor } from '@h-ai/ai'
+import { ai } from '@h-ai/ai'
 
-const processor = createStreamProcessor()
+// 逐块处理流
+const processor = ai.stream.createProcessor()
 for await (const chunk of stream) {
   const delta = processor.process(chunk)
   if (delta?.content)
@@ -139,8 +142,8 @@ for await (const chunk of stream) {
 }
 const result = processor.getResult()
 
-// 或直接收集
-const result = await collectStream(stream)
+// 快捷收集完整内容
+const collected = await ai.stream.collect(stream)
 ```
 
 ## 错误处理
