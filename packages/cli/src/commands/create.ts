@@ -59,7 +59,7 @@ const FEATURES: Record<string, FeatureDefinition> = {
   db: {
     id: 'db',
     name: '数据库',
-    description: 'Drizzle ORM 多数据库支持 (SQLite/PostgreSQL/MySQL)',
+    description: '多数据库支持 (SQLite/PostgreSQL/MySQL)',
     packages: ['@h-ai/db'],
   },
   cache: {

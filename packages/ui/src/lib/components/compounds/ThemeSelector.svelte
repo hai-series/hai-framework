@@ -1,6 +1,6 @@
 <!--
   @component ThemeSelector
-  主题选择器组件，支持 FlyonUI 所有 17 个主题的选择和预览。
+  主题选择器组件，支持内置主题集合的选择和预览。
 
   @prop {string} currentTheme - 当前主题
   @prop {function} onchange - 主题变更回调

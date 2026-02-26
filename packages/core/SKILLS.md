@@ -192,7 +192,6 @@ core.i18n.detectBrowserLocale()
 core.i18n.resolveLocale('fr-FR') // 回退到 zh-CN
 core.i18n.isLocaleSupported('zh-CN')
 core.i18n.interpolate('Hello, {name}!', { name: 'World' })
-
 ```
 
 ### 类型检查 — core.typeUtils

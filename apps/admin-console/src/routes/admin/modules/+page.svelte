@@ -167,7 +167,7 @@ await core.close()`}</code></pre>
       <Card>
         <h3 class="text-lg font-semibold mb-2">@h-ai/db — 数据库模块</h3>
         <p class="text-base-content/60 text-sm mb-4">
-          支持 SQLite、PostgreSQL、MySQL，基于 Drizzle ORM，提供类型安全的数据库操作。
+          支持 SQLite、PostgreSQL、MySQL，提供统一且类型安全的数据库操作能力。
         </p>
         <div class="flex gap-2 mb-4">
           <Badge variant="success">SQLite</Badge>
@@ -190,7 +190,7 @@ await core.close()`}</code></pre>
         </div>
       </Card>
       <Card>
-        <h3 class="text-lg font-semibold mb-3">Drizzle ORM 示例</h3>
+        <h3 class="text-lg font-semibold mb-3">数据库操作示例</h3>
         <pre class="bg-base-200 p-4 rounded-lg text-sm overflow-x-auto font-mono"><code>{`import { db } from '@h-ai/db'
 
 // 定义 Schema
