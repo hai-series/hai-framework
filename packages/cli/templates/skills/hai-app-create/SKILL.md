@@ -1,11 +1,11 @@
 ---
 name: hai-app-create
-description: 在 hai-framework 应用中创建新页面、API 端点、服务层模块、数据模型等；当需求涉及新增页面/路由、API、服务、数据模型、组件时使用。
+description: 以 TDD 方式在应用中创建新功能：先编写测试定义行为，再编码实现直至测试通过；当需求涉及新增页面/路由、API、服务、数据模型、组件时使用。
 ---
 
-# hai-app-create — 应用功能创建规范
+# hai-app-create — TDD 驱动的应用功能创建规范
 
-> 面向 AI 助手的应用功能创建指南。适用于使用 hai-framework 构建的 SvelteKit 应用。
+> 面向 AI 助手的应用功能创建指南。**必须遵循 TDD**：先写测试（Red）→ 再实现（Green）→ 再重构（Refactor）。
 
 ---
 
@@ -16,6 +16,38 @@ description: 在 hai-framework 应用中创建新页面、API 端点、服务层
 - 新增服务层模块（`$lib/server/services/`）
 - 新增数据库表 / 数据模型
 - 新增业务组件
+
+---
+
+## TDD 开发流程（强制）
+
+创建任何新功能时，必须按以下顺序执行：
+
+### Step 1：需求分析与测试设计
+
+1. 明确功能的输入、输出、边界条件、错误场景
+2. 确定需要创建的文件（服务、路由、Schema、组件等）
+3. 设计测试用例清单（参照 `hai-app-tests` 技能的覆盖范围要求）
+
+### Step 2：编写测试（Red 阶段）
+
+1. **创建单元测试**：在 `tests/` 下为服务层、Schema 编写 Vitest 测试
+2. **创建 E2E 测试**：在 `e2e/` 下为 API 端点、页面交互编写 Playwright 测试
+3. **创建空的实现文件**：仅包含函数签名和类型定义，不写实际逻辑（确保 import 不报错）
+4. **运行测试确认全部失败**：
+   ```bash
+   pnpm --filter <app-name> test        # 应全部 FAIL
+   ```
+
+### Step 3：编写实现（Green 阶段）
+
+按照下文的「创建指南」编写实际功能代码，每完成一个功能点立即运行测试确认通过。
+
+### Step 4：重构与验证（Refactor 阶段）
+
+1. 参照 `hai-app-review` 审查代码规范
+2. 运行质量门禁：`pnpm typecheck && pnpm lint && pnpm test`
+3. 运行 E2E：`pnpm --filter <app-name> test:e2e`
 
 ---
 
@@ -319,6 +351,9 @@ core.init() → db.init() → cache.init() → iam.init() → createBusinessTabl
 
 ## 检查清单
 
+- [ ] **TDD 流程已执行**：先写测试 → 确认失败 → 再实现 → 确认通过
+- [ ] 单元测试已编写（服务层、Schema）
+- [ ] E2E 测试已编写（API 端点、页面交互）
 - [ ] 页面使用 Svelte 5 Runes 语法
 - [ ] API 端点有权限守卫与输入校验
 - [ ] 服务层统一返回 `Result<T>`
@@ -327,12 +362,15 @@ core.init() → db.init() → cache.init() → iam.init() → createBusinessTabl
 - [ ] 用户可见文本走 i18n
 - [ ] 新增表有索引定义
 - [ ] 组件优先使用 `@h-ai/ui`
+- [ ] `pnpm typecheck && pnpm lint && pnpm test` 通过
 
 ---
 
 ## 相关 Skills
 
 - `hai-build`：项目架构与模块初始化顺序
+- `hai-app-tests`：TDD 测试规范（Red 阶段详细指引）
+- `hai-app-review`：代码审查规范（Refactor 阶段参照）
 - `hai-kit`：SvelteKit 集成的完整 API
 - `hai-ui`：UI 组件库使用
 - `hai-db`：数据库操作详细 API

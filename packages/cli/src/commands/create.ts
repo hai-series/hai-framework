@@ -717,18 +717,20 @@ async function generateProjectFiles(
     license: 'Apache-2.0',
     type: 'module',
     scripts: {
-      dev: 'vite dev',
-      build: 'vite build',
-      preview: 'vite preview',
-      check: 'svelte-kit sync && svelte-check --tsconfig ./tsconfig.json',
-      lint: 'eslint .',
-      test: 'vitest run',
+      'dev': 'vite dev',
+      'build': 'vite build',
+      'preview': 'vite preview',
+      'check': 'svelte-kit sync && svelte-check --tsconfig ./tsconfig.json',
+      'lint': 'eslint .',
+      'test': 'vitest run',
+      'test:e2e': 'playwright test',
     },
     dependencies: {
       ...baseDeps,
       ...featurePackages,
     },
     devDependencies: {
+      '@playwright/test': '^1.50.0',
       '@sveltejs/adapter-auto': '^3.0.0',
       '@sveltejs/kit': '^2.0.0',
       '@sveltejs/vite-plugin-svelte': '^4.0.0',
@@ -778,6 +780,12 @@ async function generateProjectFiles(
 
   // .gitignore
   await writeFile(path.join(projectPath, '.gitignore'), generateGitignore())
+
+  // playwright.config.ts（E2E 测试配置）
+  await writeFile(path.join(projectPath, 'playwright.config.ts'), generatePlaywrightConfig())
+
+  // e2e/helpers.ts（E2E 工具函数）
+  await writeFile(path.join(projectPath, 'e2e/helpers.ts'), generateE2eHelpers())
 
   // 按应用类型生成路由和页面
   switch (appType) {
@@ -931,6 +939,110 @@ build
 !.env.example
 *.log
 .DS_Store
+test-results/
+playwright-report/
+`
+}
+
+/**
+ * 生成 Playwright E2E 测试配置
+ */
+function generatePlaywrightConfig(): string {
+  return `import process from 'node:process'
+
+import { defineConfig } from '@playwright/test'
+
+const baseURL = process.env.BASE_URL || 'http://localhost:4173'
+
+/**
+ * Playwright E2E 测试配置
+ *
+ * 使用本地安装的 Chrome 浏览器，无需额外下载 Chromium
+ */
+export default defineConfig({
+  testDir: './e2e',
+  fullyParallel: false,
+  forbidOnly: !!process.env.CI,
+  retries: process.env.CI ? 2 : 0,
+  workers: 2,
+  reporter: 'list',
+  timeout: 30_000,
+
+  use: {
+    baseURL,
+    channel: 'chrome',
+    trace: 'on-first-retry',
+    screenshot: 'only-on-failure',
+  },
+
+  webServer: {
+    command: 'pnpm build && pnpm preview --port 4173 --strictPort',
+    env: {
+      HAI_E2E: '1',
+    },
+    url: baseURL,
+    reuseExistingServer: false,
+    timeout: 180_000,
+  },
+})
+`
+}
+
+/**
+ * 生成 E2E 测试共用工具函数
+ */
+function generateE2eHelpers(): string {
+  return `/**
+ * =============================================================================
+ * E2E 测试 - 共用工具函数
+ * =============================================================================
+ */
+
+import type { APIRequestContext, Page } from '@playwright/test'
+
+/** 生成唯一测试用户 */
+export function uniqueUser(prefix = 'e2e') {
+  const safePrefix = (prefix.replace(/\\W/g, '') || 'e2e').slice(0, 8)
+  const entropy = \`\${Date.now().toString(36)}\${Math.random().toString(36).slice(2, 6)}\`
+  const id = entropy.slice(-10)
+  const username = \`\${safePrefix}_\${id}\`.slice(0, 20)
+  return {
+    username,
+    email: \`\${safePrefix}_\${id}@test.local\`,
+    password: 'Test1234!@',
+  }
+}
+
+/** 通过 API 注册用户 */
+export async function registerViaApi(
+  request: APIRequestContext,
+  user: ReturnType<typeof uniqueUser>,
+) {
+  return request.post('/api/auth/register', {
+    data: {
+      username: user.username,
+      email: user.email,
+      password: user.password,
+      confirmPassword: user.password,
+    },
+  })
+}
+
+/** 注册并登录，返回已认证的 Page */
+export async function registerAndLogin(
+  page: Page,
+  request: APIRequestContext,
+  prefix = 'e2e',
+) {
+  const user = uniqueUser(prefix)
+  await registerViaApi(request, user)
+  await page.goto('/login')
+  await page.fill('[name="username"]', user.username)
+  await page.fill('[name="password"]', user.password)
+  await page.click('button[type="submit"]')
+  await page.waitForURL('/')
+  return user
+}
 `
 }
 
