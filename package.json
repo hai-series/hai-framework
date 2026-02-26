@@ -25,7 +25,6 @@
   },
   "devDependencies": {
     "@antfu/eslint-config": "catalog:",
-    "@changesets/cli": "catalog:",
     "@types/node": "catalog:",
     "eslint": "catalog:",
     "husky": "catalog:",
