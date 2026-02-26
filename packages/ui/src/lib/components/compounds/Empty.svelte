@@ -10,9 +10,10 @@
 <script lang="ts">
   import type { EmptyProps } from '../../types.js'
   import { cn } from '../../utils.js'
+  import { m } from '../../messages.js'
   
   let {
-    title = 'No data',
+    title,
     description = '',
     icon = 'inbox',
     size = 'md',
@@ -21,6 +22,8 @@
     children,
   }: EmptyProps = $props()
   
+  const displayTitle = $derived(title ?? m('empty_title'))
+
   const containerClass = $derived(
     cn(
       'flex flex-col items-center justify-center py-8 text-center',
@@ -64,7 +67,7 @@
   </div>
   
   <!-- 标题 -->
-  <h3 class="font-medium text-base-content/70 {titleSize}">{title}</h3>
+  <h3 class="font-medium text-base-content/70 {titleSize}">{displayTitle}</h3>
   
   <!-- 描述 -->
   {#if description}

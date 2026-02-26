@@ -45,7 +45,7 @@
 </script>
 
 <svelte:head>
-  <title>Register - Admin Console</title>
+  <title>{m.auth_register_title()} - {m.app_title()}</title>
 </svelte:head>
 
 <RegisterForm

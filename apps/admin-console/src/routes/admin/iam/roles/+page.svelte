@@ -175,7 +175,7 @@
 </script>
 
 <svelte:head>
-  <title>{m.iam_roles_title()} - Admin Console</title>
+  <title>{m.iam_roles_title()} - {m.app_title()}</title>
 </svelte:head>
 
 <div class="space-y-6">

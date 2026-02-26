@@ -61,7 +61,7 @@
 </script>
 
 <svelte:head>
-  <title>{m.dashboard_title()} - {data.appConfig?.name ?? 'Admin Console'}</title>
+  <title>{m.dashboard_title()} - {data.appConfig?.name ?? m.app_title()}</title>
 </svelte:head>
 
 <div class="space-y-6">

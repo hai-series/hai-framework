@@ -135,7 +135,7 @@
 </script>
 
 <svelte:head>
-  <title>{m.iam_permissions_title()} - Admin Console</title>
+  <title>{m.iam_permissions_title()} - {m.app_title()}</title>
 </svelte:head>
 
 <div class="space-y-6">

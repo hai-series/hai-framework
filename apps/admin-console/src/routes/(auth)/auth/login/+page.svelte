@@ -43,7 +43,7 @@
 </script>
 
 <svelte:head>
-  <title>Login - Admin Console</title>
+  <title>{m.auth_login_title()} - {m.app_title()}</title>
 </svelte:head>
 
 <LoginForm

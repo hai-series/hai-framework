@@ -5,36 +5,48 @@
  * 使用 TypeScript 类型检查验证类型定义正确性
  */
 
+import type { Snippet } from 'svelte'
 import type {
   AlertProps,
+  Alignment,
   AvatarProps,
   BadgeProps,
   BareButtonProps,
   BareInputProps,
+  BreadcrumbItem,
+  BreadcrumbProps,
   ButtonProps,
   CardProps,
   CheckboxProps,
   ConfirmProps,
   DrawerProps,
+  DropdownItem,
+  DropdownProps,
   EmptyProps,
   FormFieldProps,
   FormProps,
+  IconButtonProps,
   InputProps,
   ModalProps,
   PaginationProps,
   PopoverProps,
+  Position,
   ProgressProps,
   RadioProps,
   ResultProps,
+  SelectOption,
   SelectProps,
   Size,
   SkeletonProps,
   SpinnerProps,
+  StepItem,
   StepsProps,
   SwitchProps,
+  TabItem,
   TabsProps,
   TagInputProps,
   TagProps,
+  TextareaProps,
   ToastProps,
   ToggleCheckboxProps,
   ToggleRadioProps,
@@ -48,10 +60,18 @@ describe('基础类型', () => {
     expectTypeOf<Size>().toEqualTypeOf<'xs' | 'sm' | 'md' | 'lg' | 'xl'>()
   })
 
-  it('variant 类型应该正确', () => {
+  it('variant 类型应包含全部 10 个变体', () => {
     expectTypeOf<Variant>().toEqualTypeOf<
-      'default' | 'primary' | 'secondary' | 'success' | 'warning' | 'error' | 'info'
+      'default' | 'primary' | 'secondary' | 'success' | 'warning' | 'error' | 'info' | 'ghost' | 'link' | 'outline'
     >()
+  })
+
+  it('position 类型应该正确', () => {
+    expectTypeOf<Position>().toEqualTypeOf<'top' | 'right' | 'bottom' | 'left'>()
+  })
+
+  it('alignment 类型应该正确', () => {
+    expectTypeOf<Alignment>().toEqualTypeOf<'start' | 'center' | 'end'>()
   })
 })
 
@@ -246,5 +266,73 @@ describe('组合组件 Props', () => {
     expectTypeOf<TagInputProps>().toHaveProperty('tags')
     expectTypeOf<TagInputProps>().toHaveProperty('maxTags')
     expectTypeOf<TagInputProps>().toHaveProperty('placeholder')
+  })
+})
+
+describe('新增类型覆盖', () => {
+  it('iconButtonProps.icon 应支持 string 和 Snippet', () => {
+    expectTypeOf<IconButtonProps>().toHaveProperty('icon')
+    // icon 类型应该是 string | Snippet | undefined
+    type IconType = IconButtonProps['icon']
+    expectTypeOf<string>().toMatchTypeOf<NonNullable<IconType>>()
+    expectTypeOf<Snippet>().toMatchTypeOf<NonNullable<IconType>>()
+  })
+
+  it('iconButtonProps 应该包含其他必要属性', () => {
+    expectTypeOf<IconButtonProps>().toHaveProperty('label')
+    expectTypeOf<IconButtonProps>().toHaveProperty('ariaLabel')
+    expectTypeOf<IconButtonProps>().toHaveProperty('tooltip')
+    expectTypeOf<IconButtonProps>().toHaveProperty('variant')
+    expectTypeOf<IconButtonProps>().toHaveProperty('size')
+    expectTypeOf<IconButtonProps>().toHaveProperty('disabled')
+    expectTypeOf<IconButtonProps>().toHaveProperty('loading')
+    expectTypeOf<IconButtonProps>().toHaveProperty('class')
+    expectTypeOf<IconButtonProps>().toHaveProperty('onclick')
+  })
+
+  it('textareaProps 应该包含正确的属性', () => {
+    expectTypeOf<TextareaProps>().toHaveProperty('value')
+    expectTypeOf<TextareaProps>().toHaveProperty('placeholder')
+    expectTypeOf<TextareaProps>().toHaveProperty('rows')
+    expectTypeOf<TextareaProps>().toHaveProperty('disabled')
+  })
+
+  it('selectOption 应该有 label 和 value', () => {
+    expectTypeOf<SelectOption>().toHaveProperty('label')
+    expectTypeOf<SelectOption>().toHaveProperty('value')
+  })
+
+  it('breadcrumbItem 应该有 label', () => {
+    expectTypeOf<BreadcrumbItem>().toHaveProperty('label')
+    expectTypeOf<BreadcrumbItem>().toHaveProperty('href')
+  })
+
+  it('breadcrumbProps 应该有 items', () => {
+    expectTypeOf<BreadcrumbProps>().toHaveProperty('items')
+  })
+
+  it('tabItem 应该有 label 和 value', () => {
+    expectTypeOf<TabItem>().toHaveProperty('label')
+    expectTypeOf<TabItem>().toHaveProperty('value')
+  })
+
+  it('dropdownItem 应该有 label', () => {
+    expectTypeOf<DropdownItem>().toHaveProperty('label')
+    expectTypeOf<DropdownItem>().toHaveProperty('onclick')
+  })
+
+  it('dropdownProps 应该有 items 和 trigger', () => {
+    expectTypeOf<DropdownProps>().toHaveProperty('items')
+    expectTypeOf<DropdownProps>().toHaveProperty('trigger')
+  })
+
+  it('stepItem 应该有 label', () => {
+    expectTypeOf<StepItem>().toHaveProperty('label')
+  })
+
+  it('popoverProps 应该有 trigger 和 position', () => {
+    expectTypeOf<PopoverProps>().toHaveProperty('open')
+    expectTypeOf<PopoverProps>().toHaveProperty('position')
+    expectTypeOf<PopoverProps>().toHaveProperty('trigger')
   })
 })

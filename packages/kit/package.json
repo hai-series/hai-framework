@@ -30,7 +30,7 @@
   },
   "peerDependencies": {
     "@sveltejs/kit": "^2.50.1",
-    "svelte": "^5.49.11"
+    "svelte": "^5.53.5"
   },
   "dependencies": {
     "@h-ai/cache": "workspace:*",

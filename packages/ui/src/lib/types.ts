@@ -562,46 +562,6 @@ export interface ToastProps {
 }
 
 /**
- * 表格列定义
- */
-export interface TableColumn<T = unknown> {
-  /** 列 key */
-  key: string
-  /** 列标题 */
-  title: string
-  /** 宽度 */
-  width?: string | number
-  /** 对齐方式 */
-  align?: Alignment
-  /** 是否可排序 */
-  sortable?: boolean
-  /** 自定义渲染 */
-  render?: (row: T, index: number) => string
-}
-
-/**
- * 表格属性
- */
-export interface TableProps<T = unknown> {
-  /** 数据 */
-  data: T[]
-  /** 列定义 */
-  columns: TableColumn<T>[]
-  /** 是否有边框 */
-  bordered?: boolean
-  /** 是否有条纹 */
-  striped?: boolean
-  /** 是否有悬停效果 */
-  hoverable?: boolean
-  /** 是否紧凑 */
-  compact?: boolean
-  /** 是否加载中 */
-  loading?: boolean
-  /** 自定义类名 */
-  class?: string
-}
-
-/**
  * 分页属性
  */
 export interface PaginationProps {
@@ -960,8 +920,8 @@ export interface StepsProps {
  * 图标按钮属性
  */
 export interface IconButtonProps {
-  /** 图标（HTML/SVG） */
-  icon?: string
+  /** 图标（HTML/SVG 字符串或 Snippet） */
+  icon?: string | Snippet
   /** 标签（无障碍） */
   label?: string
   /** aria-label（无障碍标签，别名） */

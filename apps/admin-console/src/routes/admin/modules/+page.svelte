@@ -2,16 +2,7 @@
   模块功能示例页面 - 展示 hai-framework 各后端模块的使用方式
 -->
 <script lang="ts">
-  import {
-    Alert,
-    Badge,
-    Button,
-    Card,
-    Input,
-    PageHeader,
-    ToastContainer,
-    toast,
-  } from '@h-ai/ui'
+  import { toast } from '@h-ai/ui'
   import * as m from '$lib/paraglide/messages'
 
   let activeTab = $state('core')
@@ -91,7 +82,7 @@
 </script>
 
 <svelte:head>
-  <title>{m.modules_title()} - hai Admin</title>
+  <title>{m.modules_title()} - {m.app_title()}</title>
 </svelte:head>
 
 <ToastContainer />

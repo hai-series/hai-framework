@@ -28,6 +28,7 @@
 -->
 <script lang='ts' generics='T'>
   import type { Snippet } from 'svelte'
+  import { m } from '../../messages.js'
 
   let {
     data,
@@ -90,7 +91,7 @@
           </th>
         {/each}
         {#if actions}
-          <th class='w-24 text-center'>操作</th>
+          <th class='w-24 text-center'>{m('data_table_actions')}</th>
         {/if}
       </tr>
     </thead>
@@ -107,7 +108,7 @@
             {#if empty}
               {@render empty()}
             {:else}
-              暂无数据
+              {m('data_table_empty')}
             {/if}
           </td>
         </tr>

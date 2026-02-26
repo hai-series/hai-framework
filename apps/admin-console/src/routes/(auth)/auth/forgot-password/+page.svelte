@@ -40,17 +40,17 @@
 </script>
 
 <svelte:head>
-  <title>Forgot Password - Admin Console</title>
+  <title>{m.auth_forgot_password_title()} - {m.app_title()}</title>
 </svelte:head>
 
 {#if success}
   <Result
     status="success"
-    title="Email Sent"
-    description="If this email is registered, you will receive a password reset email. Please check your inbox."
+    title={m.auth_forgot_email_sent_title()}
+    description={m.auth_forgot_email_sent_desc()}
   >
     {#snippet actions()}
-      <a href="/auth/login" class="btn btn-primary">Back to Login</a>
+      <a href="/auth/login" class="btn btn-primary">{m.auth_back_to_login()}</a>
     {/snippet}
   </Result>
 {:else}

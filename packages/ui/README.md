@@ -1,6 +1,6 @@
 # @h-ai/ui - UI 组件库
 
-> 基于 Svelte 5 Runes 的管理后台 UI 组件库，采用 DaisyUI + TailwindCSS 样式方案，内置 i18n（zh-CN / en-US），支持 32+ 主题。
+> 基于 Svelte 5 Runes 的管理后台 UI 组件库，采用 DaisyUI v5 + Tailwind CSS v4 样式 + Bits UI v2 headless 交互，内置 i18n（zh-CN / en-US），支持 32+ 主题。
 
 ## 安装
 
@@ -56,8 +56,9 @@ export default config
 ```
 components/
 ├── primitives/   # 原子组件（不可再分的基础 UI 单元）
-├── compounds/    # 组合组件（由原子组件组合而成）
+├── compounds/    # 组合组件（由原子组件 + Bits UI headless 组合而成）
 └── scenes/       # 场景组件（面向具体业务场景的完整 UI 流程）
+    ├── app/      # 应用级（设置/反馈/主题/语言切换）
     ├── iam/      # 身份认证
     ├── storage/  # 存储管理
     └── crypto/   # 加密展示
@@ -65,49 +66,47 @@ components/
 
 ## 组件清单
 
-### 原子组件 Primitives（20 个）
+### 原子组件 Primitives（21 个）
 
-| 组件             | 描述         | 主要属性                                                      |
-| ---------------- | ------------ | ------------------------------------------------------------- |
-| `Button`         | 按钮         | `variant`, `size`, `loading`, `disabled`, `outline`, `circle` |
-| `IconButton`     | 图标按钮     | `icon`, `variant`, `size`, `tooltip`, `loading`               |
-| `BareButton`     | 无样式按钮   | `class`, `ariaLabel`, `role`, `tabindex`                      |
-| `Input`          | 输入框       | `type`, `value`, `size`, `error`, `validationMessage`         |
-| `BareInput`      | 无样式输入框 | `type`, `class`, `accept`, `multiple`                         |
-| `Textarea`       | 文本域       | `value`, `rows`, `size`, `autoResize`, `error`                |
-| `Select`         | 下拉选择     | `options`, `value`, `placeholder`, `size`                     |
-| `Checkbox`       | 复选框       | `checked`, `label`, `size`, `indeterminate`                   |
-| `Switch`         | 开关         | `checked`, `label`, `size`                                    |
-| `Radio`          | 单选组       | `options`, `value`, `direction`, `size`                       |
-| `ToggleCheckbox` | 原生开关输入 | `checked`, `name`, `onchange`                                 |
-| `ToggleInput`    | 原生切换输入 | `checked`, `name`                                             |
-| `ToggleRadio`    | 原生单选输入 | `checked`, `name`, `onchange`                                 |
-| `Range`          | 滑块         | `value`, `min`, `max`, `step`                                 |
-| `Rating`         | 评分         | `value`, `max`                                                |
-| `Badge`          | 徽章         | `variant`, `size`, `outline`                                  |
-| `Avatar`         | 头像         | `src`, `name`, `size`, `shape`, `ring`                        |
-| `Tag`            | 标签         | `text`, `variant`, `size`, `closable`                         |
-| `Spinner`        | 加载动画     | `size`, `variant`                                             |
-| `Progress`       | 进度条       | `value`, `max`, `variant`, `striped`, `animated`              |
+| 组件             | 描述         | 主要属性                                                           |
+| ---------------- | ------------ | ------------------------------------------------------------------ |
+| `Button`         | 按钮         | `variant`, `size`, `loading`, `disabled`, `outline`, `circle`      |
+| `IconButton`     | 图标按钮     | `icon: string \| Snippet`, `variant`, `size`, `tooltip`, `loading` |
+| `BareButton`     | 无样式按钮   | `class`, `ariaLabel`, `role`, `tabindex`                           |
+| `Input`          | 输入框       | `type`, `value`, `size`, `error`, `validationMessage`              |
+| `BareInput`      | 无样式输入框 | `type`, `class`, `accept`, `multiple`                              |
+| `Textarea`       | 文本域       | `value`, `rows`, `size`, `autoResize`, `error`                     |
+| `Select`         | 下拉选择     | `options`, `value`, `placeholder`, `size`                          |
+| `Checkbox`       | 复选框       | `checked`, `label`, `size`, `indeterminate`                        |
+| `Switch`         | 开关         | `checked`, `label`, `size`                                         |
+| `Radio`          | 单选组       | `options`, `value`, `direction`, `size`                            |
+| `ToggleCheckbox` | 原生开关输入 | `checked`, `name`, `onchange`                                      |
+| `ToggleInput`    | 原生切换输入 | `checked`, `name`                                                  |
+| `ToggleRadio`    | 原生单选输入 | `checked`, `name`, `onchange`                                      |
+| `Range`          | 滑块         | `value`, `min`, `max`, `step`                                      |
+| `Rating`         | 评分         | `value`, `max`                                                     |
+| `Badge`          | 徽章         | `variant`, `size`, `outline`                                       |
+| `Avatar`         | 头像         | `src`, `name`, `size`, `shape`, `ring`                             |
+| `Tag`            | 标签         | `text`, `variant`, `size`, `closable`                              |
+| `Spinner`        | 加载动画     | `size`, `variant`                                                  |
+| `Progress`       | 进度条       | `value`, `max`, `variant`, `striped`, `animated`                   |
 
-### 组合组件 Compounds（33 个）
+### 组合组件 Compounds（25 个）
 
 #### 表单
 
-| 组件          | 描述     | 主要属性                                     |
-| ------------- | -------- | -------------------------------------------- |
-| `Form`        | 表单容器 | `loading`, `disabled`, `onsubmit`            |
-| `FormField`   | 表单字段 | `label`, `error`, `hint`, `required`         |
-| `TagInput`    | 标签输入 | `tags`, `maxTags`, `allowDuplicates`, `size` |
-| `MultiSelect` | 多选下拉 | `options`, `selected`, `onchange`            |
+| 组件        | 描述     | 主要属性                                     |
+| ----------- | -------- | -------------------------------------------- |
+| `Form`      | 表单容器 | `loading`, `disabled`, `onsubmit`            |
+| `FormField` | 表单字段 | `label`, `error`, `hint`, `required`         |
+| `TagInput`  | 标签输入 | `tags`, `maxTags`, `allowDuplicates`, `size` |
 
 #### 反馈
 
-| 组件             | 描述     | 主要属性                                     |
-| ---------------- | -------- | -------------------------------------------- |
-| `Alert`          | 警告框   | `variant`, `title`, `dismissible`            |
-| `Toast`          | 通知消息 | `message`, `variant`, `duration`, `position` |
-| `ToastContainer` | 通知容器 | 全局放置，配合 `toast` 单例使用              |
+| 组件             | 描述     | 主要属性                          |
+| ---------------- | -------- | --------------------------------- |
+| `Alert`          | 警告框   | `variant`, `title`, `dismissible` |
+| `ToastContainer` | 通知容器 | 全局放置，配合 `toast` 单例使用   |
 
 #### 弹层
 
@@ -120,15 +119,22 @@ components/
 
 #### 数据展示
 
-| 组件            | 描述         | 主要属性                                  |
-| --------------- | ------------ | ----------------------------------------- |
-| `Card`          | 卡片容器     | `title`, `bordered`, `shadow`, `padding`  |
-| `Table`         | 基础表格     | `data`, `columns`, `striped`, `hoverable` |
-| `DataTable`     | 数据表格     | `data`, `columns`, `keyField`, `loading`  |
-| `Accordion`     | 手风琴       | `items: AccordionItem[]`                  |
-| `Timeline`      | 时间线       | `items: TimelineItem[]`                   |
-| `ScoreBar`      | 分数条       | `value`, `max`, `size`                    |
-| `SeverityBadge` | 严重程度标签 | `type`, `size`                            |
+| 组件        | 描述     | 主要属性                                 |
+| ----------- | -------- | ---------------------------------------- |
+| `Card`      | 卡片容器 | `title`, `bordered`, `shadow`, `padding` |
+| `DataTable` | 数据表格 | `data`, `columns`, `keyField`, `loading` |
+| `Accordion` | 手风琴   | `items: AccordionItem[]`                 |
+| `Timeline`  | 时间线   | `items: TimelineItem[]`                  |
+
+#### Bits UI headless 交互
+
+| 组件         | 描述                        | 主要属性                                            |
+| ------------ | --------------------------- | --------------------------------------------------- |
+| `Combobox`   | 可搜索下拉选择（单选/多选） | `options`, `value`, `multiple`, `placeholder`       |
+| `Calendar`   | 独立日历                    | `value: DateValue`, `minValue`, `maxValue`          |
+| `DatePicker` | 日期输入+弹出               | `value: DateValue`, `minValue`, `maxValue`, `error` |
+
+> 日期值使用 `@internationalized/date` 的 `DateValue` / `CalendarDate` 类型。
 
 #### 导航
 
@@ -149,18 +155,23 @@ components/
 | `Empty`    | 空状态 | `title`, `description`, `icon`        |
 | `Result`   | 结果页 | `status`, `title`, `description`      |
 
-#### 业务 / 应用级
+#### 页面级
 
-| 组件             | 描述       | 主要属性                                    |
-| ---------------- | ---------- | ------------------------------------------- |
-| `PageHeader`     | 页面头部   | `title`, `description`，支持 `actions` 插槽 |
-| `FeedbackModal`  | 反馈模态框 | `open`, `onsubmit`                          |
-| `SettingsModal`  | 设置模态框 | `open`, `currentLanguage`, `currentTheme`   |
-| `LanguageSwitch` | 语言切换   | `currentLanguage`, `languages`, `onchange`  |
-| `ThemeSelector`  | 主题选择器 | 完整主题选择面板                            |
-| `ThemeToggle`    | 主题切换   | `currentTheme`, `onchange`                  |
+| 组件         | 描述     | 主要属性                                    |
+| ------------ | -------- | ------------------------------------------- |
+| `PageHeader` | 页面头部 | `title`, `description`，支持 `actions` 插槽 |
 
-### 场景组件 Scenes（14 个）
+### 场景组件 Scenes（19 个）
+
+#### App 应用级（5 个）
+
+| 组件             | 描述             | 主要属性           |
+| ---------------- | ---------------- | ------------------ |
+| `FeedbackModal`  | 反馈模态框       | `open`, `onsubmit` |
+| `SettingsModal`  | 设置模态框       | `open`, `onclose`  |
+| `LanguageSwitch` | 语言切换         | 无需 Props         |
+| `ThemeSelector`  | 完整主题选择面板 | 无需 Props         |
+| `ThemeToggle`    | 明/暗主题切换    | 无需 Props         |
 
 #### IAM 身份认证（7 个）
 

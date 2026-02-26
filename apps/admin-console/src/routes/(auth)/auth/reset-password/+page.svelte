@@ -6,7 +6,7 @@
   =============================================================================
 -->
 <script lang="ts">
-  import { page } from '$app/stores'
+  import { page } from '$app/state'
   import { goto } from '$app/navigation'
   import type { ResetPasswordFormData } from '@h-ai/ui'
   import * as m from '$lib/paraglide/messages'
@@ -16,13 +16,13 @@
   let success = $state(false)
 
   // 从 URL 获取 token
-  const token = $derived($page.url.searchParams.get('token') ?? '')
+  const token = $derived(page.url.searchParams.get('token') ?? '')
 
   async function handleResetPassword(data: ResetPasswordFormData) {
     errors = {}
 
     if (!token) {
-      errors = { general: 'Invalid reset link' }
+      errors = { general: m.auth_reset_invalid_link() }
       return
     }
 
@@ -46,7 +46,7 @@
         // 3秒后跳转到登录页
         setTimeout(() => goto('/auth/login'), 3000)
       } else {
-        errors = { general: result.error || 'Reset failed' }
+        errors = { general: result.error || m.auth_reset_failed() }
       }
     } catch {
       errors = { general: m.common_network_error() }
@@ -57,27 +57,27 @@
 </script>
 
 <svelte:head>
-  <title>Reset Password - Admin Console</title>
+  <title>{m.auth_reset_password_title()} - {m.app_title()}</title>
 </svelte:head>
 
 {#if success}
   <Result
     status="success"
-    title="Password Reset Successful"
-    description="Your password has been reset. Redirecting to login page..."
+    title={m.auth_reset_success_title()}
+    description={m.auth_reset_success_desc()}
   >
     {#snippet actions()}
-      <a href="/auth/login" class="btn btn-primary">Login Now</a>
+      <a href="/auth/login" class="btn btn-primary">{m.auth_reset_login_now()}</a>
     {/snippet}
   </Result>
 {:else if !token}
   <Result
     status="warning"
-    title="Invalid Link"
-    description="The reset link is invalid or has expired. Please request a new one."
+    title={m.auth_reset_invalid_link_title()}
+    description={m.auth_reset_invalid_link_desc()}
   >
     {#snippet actions()}
-      <a href="/auth/forgot-password" class="btn btn-primary">Request Again</a>
+      <a href="/auth/forgot-password" class="btn btn-primary">{m.auth_reset_request_again()}</a>
     {/snippet}
   </Result>
 {:else}
