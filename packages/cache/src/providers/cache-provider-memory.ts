@@ -498,6 +498,9 @@ export function createMemoryProvider(): CacheProvider {
       return ok(undefined)
     },
 
+    /**
+     * Memory 版本的 blpop 为“非阻塞模拟”：忽略 timeout，立即按 keys 顺序尝试弹出。
+     */
     async blpop<T = CacheValue>(_timeout: number, ...keys: string[]): Promise<Result<[string, T] | null, CacheError>> {
       for (const key of keys) {
         const arr = listStore.get(key)
@@ -509,6 +512,9 @@ export function createMemoryProvider(): CacheProvider {
       return ok(null)
     },
 
+    /**
+     * Memory 版本的 brpop 为“非阻塞模拟”：忽略 timeout，立即按 keys 顺序尝试弹出。
+     */
     async brpop<T = CacheValue>(_timeout: number, ...keys: string[]): Promise<Result<[string, T] | null, CacheError>> {
       for (const key of keys) {
         const arr = listStore.get(key)

@@ -1,11 +1,11 @@
 ---
 name: hai-cache
-description: 使用 @h-ai/cache 进行内存或 Redis 缓存操作，包括 get/set/delete/TTL/集合/分布式锁；当需求涉及缓存读写、TTL 管理、Redis 集合操作或缓存失效策略时使用。
+description: 使用 @h-ai/cache 进行内存或 Redis 缓存操作（kv/hash/list/set/zset）；当需求涉及缓存读写、TTL 管理、集合运算、排行榜或缓存一致性策略时使用。
 ---
 
 # hai-cache
 
-> `@h-ai/cache` 提供统一的缓存接口，支持内存缓存（MemoryProvider）和 Redis 缓存（RedisProvider），包含基础键值、TTL 管理、集合操作与分布式锁。
+> `@h-ai/cache` 提供统一缓存接口，支持 Memory 与 Redis 后端，包含 KV / Hash / List / Set / ZSet 五类操作。
 
 ---
 
@@ -13,9 +13,9 @@ description: 使用 @h-ai/cache 进行内存或 Redis 缓存操作，包括 get/
 
 - 缓存热点数据减少数据库查询
 - 会话存储（配合 IAM）
-- 分布式缓存（Redis）
-- 集合操作（权限缓存等）
-- 分布式锁与并发控制
+- 分布式缓存（Redis）与本地测试缓存（Memory）
+- 集合操作（权限缓存、标签集合）
+- 排行榜（ZSet）与队列（List）
 
 ---
 
@@ -48,77 +48,55 @@ await cache.close()
 
 ## 核心 API
 
-### 基础操作
+### KV 操作（`cache.kv`）
 
-| 方法     | 签名                                          | 说明                 |
-| -------- | --------------------------------------------- | -------------------- |
-| `get`    | `<T>(key) => Promise<Result<T \| null>>`      | 获取缓存值           |
-| `set`    | `(key, value, ttl?) => Promise<Result<void>>` | 设置缓存值（ttl 秒） |
-| `delete` | `(key) => Promise<Result<void>>`              | 删除缓存             |
-| `exists` | `(key) => Promise<Result<boolean>>`           | 检查 key 是否存在    |
-| `ttl`    | `(key) => Promise<Result<number>>`            | 获取剩余 TTL（秒）   |
-| `expire` | `(key, ttl) => Promise<Result<void>>`         | 设置/更新 TTL        |
-| `keys`   | `(pattern) => Promise<Result<string[]>>`      | 按模式搜索 key       |
-| `clear`  | `() => Promise<Result<void>>`                 | 清空所有缓存         |
+| 方法                                | 说明                 |
+| ----------------------------------- | -------------------- |
+| `get / set / del / exists`          | 基础读写与存在性判断 |
+| `expire / expireAt / ttl / persist` | TTL 管理             |
+| `incr / incrBy / decr / decrBy`     | 计数器操作           |
+| `mget / mset`                       | 批量读写             |
+| `scan / keys / type`                | Key 检索与类型判断   |
 
 ```typescript
-// 基本用法
-await cache.set('user:123', { name: '张三' }, 3600) // 1 小时 TTL
-const result = await cache.get<{ name: string }>('user:123')
+await cache.kv.set('user:123', { name: '张三' }, { ex: 3600 })
+const result = await cache.kv.get<{ name: string }>('user:123')
 if (result.success && result.data) {
   // result.data.name === '张三'
 }
 
-await cache.delete('user:123')
+await cache.kv.del('user:123')
 ```
 
-### 集合操作
+### Hash/List/Set/ZSet（`cache.hash/list/set_/zset`）
 
-| 方法        | 签名                                           | 说明             |
-| ----------- | ---------------------------------------------- | ---------------- |
-| `sadd`      | `(key, ...members) => Promise<Result<number>>` | 添加集合成员     |
-| `srem`      | `(key, ...members) => Promise<Result<number>>` | 移除集合成员     |
-| `smembers`  | `(key) => Promise<Result<string[]>>`           | 获取所有成员     |
-| `sismember` | `(key, member) => Promise<Result<boolean>>`    | 检查成员是否存在 |
+- `cache.hash`：对象字段读写（如用户 profile 局部更新）
+- `cache.list`：队列/消息顺序处理
+- `cache.set_`：去重集合（成员关系、权限集合）
+- `cache.zset`：分数排序（排行榜、权重调度）
 
 ```typescript
-// 权限缓存示例
-await cache.sadd('role:admin:perms', 'users:read', 'users:write', 'users:delete')
-const perms = await cache.smembers('role:admin:perms')
-const hasRead = await cache.sismember('role:admin:perms', 'users:read')
-```
-
-### 分布式锁（仅 Redis）
-
-| 方法     | 签名                                     | 说明                |
-| -------- | ---------------------------------------- | ------------------- |
-| `lock`   | `(key, ttl?) => Promise<Result<string>>` | 获取锁（返回锁 ID） |
-| `unlock` | `(key, lockId) => Promise<Result<void>>` | 释放锁              |
-
-```typescript
-const lockResult = await cache.lock('process:order:123', 30)
-if (lockResult.success) {
-  try {
-    // 执行互斥操作
-  }
-  finally {
-    await cache.unlock('process:order:123', lockResult.data)
-  }
-}
+await cache.hash.hset('profile:1', { nickname: 'alice' })
+await cache.list.lpush('queue:jobs', 'job-1', 'job-2')
+await cache.set_.sadd('role:admin:perms', 'user.read', 'user.write')
+await cache.zset.zadd('rank:daily', { member: 'u1', score: 100 })
 ```
 
 ---
 
 ## 错误码 — `CacheErrorCode`
 
-| 错误码                | 说明                |
-| --------------------- | ------------------- |
-| `NOT_INITIALIZED`     | 未初始化            |
-| `CONNECTION_ERROR`    | 连接失败（Redis）   |
-| `OPERATION_ERROR`     | 操作失败            |
-| `SERIALIZATION_ERROR` | 序列化/反序列化失败 |
-| `LOCK_ERROR`          | 锁操作失败          |
-| `CONFIG_ERROR`        | 配置错误            |
+| 错误码                   | 说明              |
+| ------------------------ | ----------------- |
+| `NOT_INITIALIZED`        | 未初始化          |
+| `CONNECTION_FAILED`      | 连接失败（Redis） |
+| `OPERATION_FAILED`       | 操作失败          |
+| `SERIALIZATION_FAILED`   | 序列化失败        |
+| `DESERIALIZATION_FAILED` | 反序列化失败      |
+| `KEY_NOT_FOUND`          | 键不存在          |
+| `TIMEOUT`                | 超时              |
+| `UNSUPPORTED_TYPE`       | 不支持的缓存类型  |
+| `CONFIG_ERROR`           | 配置错误          |
 
 ---
 
@@ -128,13 +106,13 @@ if (lockResult.success) {
 
 ```typescript
 async function getUserCached(userId: string) {
-  const cached = await cache.get<User>(`user:${userId}`)
+  const cached = await cache.kv.get<User>(`user:${userId}`)
   if (cached.success && cached.data)
     return cached.data
 
   const result = await db.sql.get<User>('SELECT * FROM users WHERE id = ?', [userId])
   if (result.success && result.data) {
-    await cache.set(`user:${userId}`, result.data, 3600)
+    await cache.kv.set(`user:${userId}`, result.data, { ex: 3600 })
     return result.data
   }
   return null
