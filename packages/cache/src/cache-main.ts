@@ -32,7 +32,7 @@ let currentConfig: CacheConfig | null = null
  *
  * @param config - 已经过 Zod Schema 校验的配置对象
  * @returns 未连接的 Provider 实例，需后续调用 connect()
- * @throws 配置中 type 不支持时抛出异常
+ * @throws 理论上仅当出现未覆盖的 type 分支时抛出异常（正常情况下由 CacheConfigSchema 保证不会发生）
  */
 function createProvider(config: CacheConfig): CacheProvider {
   switch (config.type) {
@@ -81,18 +81,20 @@ const notInitializedZSet = notInitialized.proxy<ZSetOperations>()
  */
 export const cache: CacheFunctions = {
   /**
-   * 初始化缓存连接
+   * 初始化缓存连接。
    *
    * 会先关闭已有连接，再用新配置重新初始化。
    * 配置经 Zod Schema parse 后传给 Provider。
    *
-   * @param config - 缓存配置（支持 memory / redis）
-   * @returns 成功时 ok(undefined)，失败时返回 CONNECTION_FAILED 错误
+   * @param config 缓存配置（支持 memory / redis）。
+   * @returns 成功时返回 ok(undefined)；失败时返回 Provider 错误（如 CONNECTION_FAILED）。
    *
    * @example
    * ```ts
    * const result = await cache.init({ type: 'redis', host: 'localhost' })
-   * if (!result.success) console.error(result.error)
+   * if (!result.success) {
+   *   // 生产代码中请使用项目 logger 输出错误
+   * }
    * ```
    */
   async init(config: CacheConfigInput): Promise<Result<void, CacheError>> {

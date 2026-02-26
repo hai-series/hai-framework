@@ -17,7 +17,11 @@ export interface CacheError {
 
 // ─── 缓存值类型 ───
 
-/** 可缓存的值类型 */
+/**
+ * 可缓存的值类型
+ *
+ * 说明：`object` 包含普通对象与数组；函数、Symbol、BigInt 等不建议直接缓存。
+ */
 export type CacheValue = string | number | boolean | object | null
 
 /** 缓存设置选项 */
@@ -34,7 +38,7 @@ export interface SetOptions {
   nx?: boolean
   /** 仅在键存在时设置 */
   xx?: boolean
-  /** 保留原有的 TTL */
+  /** 保留原有的 TTL（与 ex/px/exat/pxat 互斥，冲突时以后端实现行为为准） */
   keepTtl?: boolean
 }
 
@@ -166,9 +170,9 @@ export interface ListOperations {
   lset: (key: string, index: number, value: CacheValue) => Promise<Result<void, CacheError>>
   /** 保留指定范围的元素，范围外的元素被删除 */
   ltrim: (key: string, start: number, stop: number) => Promise<Result<void, CacheError>>
-  /** 阻塞式从左侧弹出；返回 [key, value] 或超时返回 null */
+  /** 阻塞式从左侧弹出；返回 [key, value] 或超时返回 null。memory 实现为非阻塞立即返回。 */
   blpop: <T = CacheValue>(timeout: number, ...keys: string[]) => Promise<Result<[string, T] | null, CacheError>>
-  /** 阻塞式从右侧弹出；返回 [key, value] 或超时返回 null */
+  /** 阻塞式从右侧弹出；返回 [key, value] 或超时返回 null。memory 实现为非阻塞立即返回。 */
   brpop: <T = CacheValue>(timeout: number, ...keys: string[]) => Promise<Result<[string, T] | null, CacheError>>
 }
 
@@ -309,7 +313,7 @@ export interface CacheFunctions extends CacheCompositeOperations {
 export interface CacheProvider extends CacheCompositeOperations {
   /** Provider 名称（如 'memory' / 'redis'） */
   readonly name: string
-  /** 连接缓存服务；config 已经过 Zod schema 校验 */
+  /** 连接缓存服务；config 已经过 Zod Schema 校验 */
   connect: (config: CacheConfig) => Promise<Result<void, CacheError>>
   /** 关闭连接并释放资源 */
   close: () => Promise<void>
