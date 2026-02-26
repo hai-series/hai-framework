@@ -80,14 +80,14 @@ for await (const chunk of ai.llm.chatStream({ messages })) {
 }
 ```
 
-### 工具定义 — `ai.tools` / `defineTool`
+### 工具定义 — `ai.tools`
 
 ```typescript
-import { createToolRegistry, defineTool } from '@h-ai/ai'
+import { ai } from '@h-ai/ai'
 import { z } from 'zod'
 
 // 定义工具（Zod Schema 自动转 JSON Schema）
-const weatherTool = defineTool({
+const weatherTool = ai.tools.define({
   name: 'get_weather',
   description: '获取天气信息',
   parameters: z.object({
@@ -100,7 +100,7 @@ const weatherTool = defineTool({
 })
 
 // 注册表管理
-const registry = createToolRegistry()
+const registry = ai.tools.createRegistry()
 registry.register(weatherTool)
 
 // 获取 OpenAI 工具定义（传递给 LLM）
@@ -111,12 +111,14 @@ const toolMessage = await registry.execute(toolCall)
 const toolMessages = await registry.executeAll(toolCalls, { parallel: true })
 ```
 
+> `ai.tools.define` 和 `ai.tools.createRegistry` 也可通过 `defineTool` / `createToolRegistry` 直接导入，两者等价。
+
 ### 流处理 — `ai.stream`
 
 ```typescript
-import { collectStream, createStreamProcessor } from '@h-ai/ai'
+import { ai } from '@h-ai/ai'
 
-const processor = createStreamProcessor()
+const processor = ai.stream.createProcessor()
 for await (const chunk of ai.llm.chatStream({ messages })) {
   const delta = processor.process(chunk)
   if (delta?.content) { /* 实时显示 */ }
@@ -128,8 +130,10 @@ const message = processor.toAssistantMessage()
 // { role: 'assistant', content: '...', tool_calls?: [...] }
 
 // 快捷收集全部内容
-const collected = await collectStream(stream)
+const collected = await ai.stream.collect(stream)
 ```
+
+> `ai.stream.createProcessor` / `ai.stream.collect` 也可通过 `createStreamProcessor` / `collectStream` 直接导入。
 
 ### MCP 服务器 — `createMcpServer`
 
@@ -210,17 +214,24 @@ const reply = await client.sendMessage('你好', '系统提示')
 
 | 错误码                           | 说明           |
 | -------------------------------- | -------------- |
+| `INTERNAL_ERROR` (7000)          | 内部错误       |
 | `NOT_INITIALIZED` (7010)         | 服务未初始化   |
 | `CONFIGURATION_ERROR` (7011)     | 配置错误       |
 | `API_ERROR` (7100)               | API 调用错误   |
+| `INVALID_REQUEST` (7101)         | 无效请求       |
 | `RATE_LIMITED` (7102)            | 速率限制       |
 | `TIMEOUT` (7103)                 | 请求超时       |
 | `MODEL_NOT_FOUND` (7104)         | 模型未找到     |
 | `CONTEXT_LENGTH_EXCEEDED` (7105) | 上下文长度超限 |
+| `MCP_CONNECTION_ERROR` (7200)    | MCP 连接错误   |
+| `MCP_PROTOCOL_ERROR` (7201)      | MCP 协议错误   |
 | `MCP_TOOL_ERROR` (7202)          | MCP 工具错误   |
+| `MCP_RESOURCE_ERROR` (7203)      | MCP 资源错误   |
+| `MCP_SERVER_ERROR` (7204)        | MCP 服务器错误 |
 | `TOOL_NOT_FOUND` (7400)          | 工具未找到     |
 | `TOOL_VALIDATION_FAILED` (7401)  | 工具验证失败   |
 | `TOOL_EXECUTION_FAILED` (7402)   | 工具执行失败   |
+| `TOOL_TIMEOUT` (7403)            | 工具执行超时   |
 
 ---
 
@@ -229,7 +240,7 @@ const reply = await client.sendMessage('你好', '系统提示')
 ### 带工具调用的对话循环
 
 ```typescript
-const registry = createToolRegistry()
+const registry = ai.tools.createRegistry()
 registry.register(weatherTool)
 
 const messages: ChatMessage[] = [
