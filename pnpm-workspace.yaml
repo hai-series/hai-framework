@@ -32,7 +32,6 @@ catalog:
   '@aws-sdk/client-s3': ^3.723.0
   '@aws-sdk/s3-request-presigner': ^3.723.0
 
-  '@changesets/cli': ^2.27.12
   '@iconify-json/tabler': ^1.2.15
   '@playwright/test': ^1.58.2
   '@sveltejs/adapter-auto': ^7.0.0
