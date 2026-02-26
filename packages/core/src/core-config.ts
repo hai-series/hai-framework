@@ -125,10 +125,39 @@ export type LogFormat = z.infer<typeof LogFormatSchema>
 /**
  * 日志配置 Schema。
  *
- * @example
+ * @example 最小配置（全部使用默认值）
  * ```ts
- * LoggingConfigSchema.parse({ level: 'info', format: 'json' })
+ * LoggingConfigSchema.parse({})
  * // => { level: 'info', format: 'json', redact: [] }
+ * ```
+ *
+ * @example 开发环境（pretty 格式 + debug 级别）
+ * ```ts
+ * LoggingConfigSchema.parse({ level: 'debug', format: 'pretty' })
+ * // => { level: 'debug', format: 'pretty', redact: [] }
+ * ```
+ *
+ * @example 带上下文与脱敏
+ * ```ts
+ * LoggingConfigSchema.parse({
+ *   level: 'warn',
+ *   format: 'json',
+ *   context: { service: 'api-gateway', region: 'us-east-1' },
+ *   redact: ['password', 'token', 'headers.authorization'],
+ * })
+ * // => { level: 'warn', format: 'json', context: { service: 'api-gateway', region: 'us-east-1' }, redact: ['password', 'token', 'headers.authorization'] }
+ * ```
+ *
+ * @example 在 _core.yml 中配置
+ * ```yaml
+ * logging:
+ *   level: info
+ *   format: json
+ *   context:
+ *     service: my-app
+ *   redact:
+ *     - password
+ *     - token
  * ```
  */
 export const LoggingConfigSchema = z.object({

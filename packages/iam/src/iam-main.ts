@@ -55,14 +55,15 @@ const notInitializedSession = notInitialized.proxy<IamSessionFunctions>()
  * 用户子功能的未初始化代理
  *
  * 需要特殊处理 validatePassword：该方法是同步的，
- * 而默认 proxy 总是返回异步 operation，会导致同步调用方拿到 Promise 而非 Result。
+ * 其余方法为异步，因此不能统一使用 proxy('async') 或 proxy('sync')。
  */
-const notInitializedUser = new Proxy({} as IamUserFunctions, {
-  get(_target, prop) {
-    if (prop === 'validatePassword') {
-      return notInitialized.syncOperation
-    }
-    return notInitialized.operation
+const syncUserProxy = notInitialized.proxy<IamUserFunctions>('sync')
+const asyncUserProxy = notInitialized.proxy<IamUserFunctions>()
+const notInitializedUser: IamUserFunctions = new Proxy({} as IamUserFunctions, {
+  get(_, prop, receiver) {
+    return prop === 'validatePassword'
+      ? Reflect.get(syncUserProxy as object, prop, receiver)
+      : Reflect.get(asyncUserProxy as object, prop, receiver)
   },
 })
 

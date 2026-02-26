@@ -73,12 +73,13 @@ const notInitializedDir = notInitialized.proxy<DirOperations>()
  *
  * publicUrl 始终返回 null；其余方法返回 NOT_INITIALIZED 错误。
  */
+const notInitializedPresignBase = notInitialized.proxy<PresignOperations>()
 const notInitializedPresign = new Proxy(
-  {},
+  notInitializedPresignBase,
   {
-    get: (_target, prop) => (prop === 'publicUrl' ? () => null : notInitialized.operation),
+    get: (target, prop, receiver) => prop === 'publicUrl' ? () => null : Reflect.get(target, prop, receiver),
   },
-) as PresignOperations
+)
 
 // ─── 存储服务对象 ───
 

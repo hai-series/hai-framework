@@ -39,19 +39,10 @@ const notInitialized = core.module.createNotInitializedKit<CryptoError>(
   () => cryptoM('crypto_notInitialized'),
 )
 
-/**
- * 创建同步操作的 Proxy 代理。
- * core.module.createNotInitializedKit.proxy() 默认返回异步占位，
- * 但 SM2/SM3/SM4/Password 接口为同步方法，需要使用 syncOperation。
- */
-function syncProxy<T>(): T {
-  return new Proxy({}, { get: () => notInitialized.syncOperation }) as T
-}
-
-const notInitializedSm2 = syncProxy<SM2Operations>()
-const notInitializedSm3 = syncProxy<SM3Operations>()
-const notInitializedSm4 = syncProxy<SM4Operations>()
-const notInitializedPassword = syncProxy<PasswordOperations>()
+const notInitializedSm2 = notInitialized.proxy<SM2Operations>('sync')
+const notInitializedSm3 = notInitialized.proxy<SM3Operations>('sync')
+const notInitializedSm4 = notInitialized.proxy<SM4Operations>('sync')
+const notInitializedPassword = notInitialized.proxy<PasswordOperations>('sync')
 
 // ─── 服务对象 ───
 

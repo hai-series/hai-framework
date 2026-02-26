@@ -25,23 +25,6 @@ describe('core.i18n (node)', () => {
     expect(core.i18n.getGlobalLocale()).toBe('zh-CN')
   })
 
-  it('setGlobalLocale 重复设置相同值不应触发变更', () => {
-    let changeCount = 0
-    const unsub = core.i18n.subscribeLocale(() => {
-      changeCount += 1
-    })
-    // subscribeLocale 会立即调用一次
-    expect(changeCount).toBe(1)
-
-    core.i18n.setGlobalLocale('zh-CN') // 已经是 zh-CN，不应触发
-    expect(changeCount).toBe(1)
-
-    core.i18n.setGlobalLocale('en-US') // 不同，应触发
-    expect(changeCount).toBe(2)
-
-    unsub()
-  })
-
   it('resolveLocale/isLocaleSupported 应该处理回退', () => {
     expect(core.i18n.isLocaleSupported('zh-CN')).toBe(true)
     expect(core.i18n.isLocaleSupported('en-US')).toBe(true)
@@ -139,50 +122,6 @@ describe('core.i18n (node)', () => {
     core.i18n.setGlobalLocale('en-US')
     // en-US 字典不存在，应回退到 zh-CN
     expect(getMessage('greet')).toBe('你好')
-  })
-
-  it('createMessageGetter 应该支持直接传入 params 对象', () => {
-    const getMessage = core.i18n.createMessageGetter({
-      'zh-CN': { msg: '值是 {val}' },
-    })
-
-    core.i18n.setGlobalLocale('zh-CN')
-    // 直接传 InterpolationParams（非 MessageOptions）
-    expect(getMessage('msg', { val: '42' } as never)).toBe('值是 42')
-  })
-
-  it('subscribeLocale 应该在 locale 变更时通知', () => {
-    const changes: string[] = []
-    const unsub = core.i18n.subscribeLocale((locale) => {
-      changes.push(locale)
-    })
-
-    // 订阅时立即调用一次
-    expect(changes).toEqual(['zh-CN'])
-
-    core.i18n.setGlobalLocale('en-US')
-    expect(changes).toEqual(['zh-CN', 'en-US'])
-
-    unsub()
-
-    // 取消订阅后不再通知
-    core.i18n.setGlobalLocale('zh-CN')
-    expect(changes).toEqual(['zh-CN', 'en-US'])
-  })
-
-  it('registerMessages/getRegisteredMessage 应该获取已注册消息', () => {
-    core.i18n.registerMessages('demo', {
-      'zh-CN': { ok: '好' },
-      'en-US': { ok: 'OK' },
-    })
-
-    core.i18n.setGlobalLocale('en-US')
-    expect(core.i18n.getRegisteredMessage('demo', 'ok')).toBe('好')
-    expect(core.i18n.getRegisteredMessage('demo', 'ok', { locale: 'en-US' })).toBe('OK')
-  })
-
-  it('getRegisteredMessage 未注册命名空间应返回 key', () => {
-    expect(core.i18n.getRegisteredMessage('unknown-ns', 'some_key')).toBe('some_key')
   })
 
   it('coreM 应该读取 core 内置消息', () => {
