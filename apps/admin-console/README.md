@@ -189,6 +189,7 @@ pnpm preview          # 预览生产版本
 pnpm check            # Svelte + TypeScript 类型检查
 pnpm lint             # ESLint 代码检查
 pnpm test             # 运行单元测试（Vitest）
+pnpm test:e2e         # 运行 E2E 测试（Playwright）
 pnpm paraglide:compile # 编译 i18n 翻译文件
 ```
 

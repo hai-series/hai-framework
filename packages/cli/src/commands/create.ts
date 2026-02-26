@@ -206,7 +206,7 @@ export async function createProject(options: CreateProjectOptions): Promise<void
  */
 async function resolveOptions(options: CreateProjectOptions): Promise<Required<CreateProjectOptions>> {
   core.logger.info('', {})
-  core.logger.info(chalk.bold.cyan('  🚀 hai Admin Framework'))
+  core.logger.info(chalk.bold.cyan('  🚀 hai Agent Framework'))
   core.logger.info(chalk.gray('     AI-Native · Configuration-Driven · Security-First'))
   core.logger.info('', {})
 
@@ -933,7 +933,7 @@ build
 function generateReadme(name: string, appTypeLabel: string, pm: string): string {
   return `# ${name}
 
-基于 hai Admin Framework 构建的${appTypeLabel}应用。
+基于 hai Agent Framework 构建的${appTypeLabel}应用。
 
 ## 开发
 
@@ -951,7 +951,7 @@ ${pm} preview
 
 ## 文档
 
-- [hai Admin Framework](https://github.com/200hub/hai-framework)
+- [hai Agent Framework](https://github.com/200hub/hai-framework)
 - [SvelteKit](https://kit.svelte.dev/)
 - [Svelte 5](https://svelte.dev/)
 `

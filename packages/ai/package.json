@@ -2,7 +2,7 @@
   "name": "@h-ai/ai",
   "type": "module",
   "version": "0.1.0",
-  "description": "hai Admin Framework - AI module (LLM, MCP, Tools, Client)",
+  "description": "hai Agent Framework - AI module (LLM, MCP, Tools, Client)",
   "license": "Apache-2.0",
   "exports": {
     ".": {

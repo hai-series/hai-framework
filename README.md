@@ -385,6 +385,9 @@ pnpm lint
 # 单元测试
 pnpm test
 
+# E2E 测试（admin-console）
+pnpm --filter admin-console test:e2e
+
 # 只运行某个模块
 pnpm --filter @h-ai/db test
 ```

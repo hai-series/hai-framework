@@ -84,6 +84,7 @@
 
 - 自动修复 lint：`pnpm lint:fix`
 - 覆盖率：`pnpm test:coverage`
+- E2E 测试：`pnpm --filter admin-console test:e2e`
 - 全量构建：`pnpm build`
 
 只运行某个 package/app：优先使用 pnpm filter（示例：`pnpm --filter @h-ai/storage test`）。
