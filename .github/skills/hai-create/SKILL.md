@@ -890,6 +890,21 @@ return ok(user)
 
 ### 4.2 错误处理
 
+> 核心原则：**公共模块 API 不抛异常，统一返回 `Result<T, E>`**。
+
+所有 `packages/*/src/` 下对外暴露的函数/方法，返回值必须是 `Result<T, XxError>` 或 `Promise<Result<T, XxError>>`。调用方不应使用 `try/catch` 来处理模块返回的错误。
+
+**允许 throw 的合规场景**：
+
+| 场景                                 | 说明                                  |
+| ------------------------------------ | ------------------------------------- |
+| 内部 throw + 外层 try-catch → Result | 标准 catch-and-wrap 模式              |
+| SvelteKit 控制流                     | `throw redirect()`、`throw error()`   |
+| 浏览器端 Client 代码                 | `client/xx-client.ts`，非模块公共 API |
+| CLI 命令                             | `packages/cli/`，非模块 API           |
+| `getOrThrow()` 等显式命名            | 函数名已表达 throw 语义               |
+| async generator（如 `chatStream()`） | 无法返回 Result，需在 JSDoc 中注明    |
+
 ```ts
 // ✅ 错误码 + i18n
 return err({ code: XxErrorCode.OPERATION_FAILED, message: xxM('xx_failed'), cause: error })
@@ -1017,6 +1032,7 @@ import { XxConfigSchema } from './xx-config.js'
 - ❌ return 嵌套复杂逻辑
 - ❌ 超过 2 层 if 嵌套
 - ❌ 重新包装上游 Result 错误
+- ❌ 公共 API 中 `throw` — 返回 `Result<T, XxError>`（合规场景见 §4.2）
 
 ### 4.10 日志输出规范
 

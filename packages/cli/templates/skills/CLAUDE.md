@@ -12,6 +12,7 @@
 - 禁止 `any`（使用 `unknown` + 缩窄），禁止 `console.log`（使用 `core.logger`）
 - 用户可见文本走 i18n，代码注释中文，日志英文
 - Result 错误直接透传，不重新包装
+- 框架模块公共 API 不抛异常，统一返回 `Result<T, E>`；不要用 `try/catch` 处理模块返回的错误
 - 质量门禁：`pnpm typecheck && pnpm lint && pnpm test`
 
 ## Skills 参考

@@ -1,27 +1,49 @@
 # hai Framework
 
 <p align="center">
-  <strong>AI 原生 · 模块化 · 类型安全</strong>
+  <strong>AI-First · 模块化 · 类型安全</strong>
 </p>
 
 <p align="center">
-  面向智能应用的全栈 TypeScript 开发框架，基于 SvelteKit 2 + Svelte 5
+  先给 AI 用的全栈 TypeScript 框架 —— 让 AI 写出可维护的生产级代码
 </p>
 
 ---
 
 ## 框架定位
 
-hai Framework 是一个**面向 AI 智能应用**的全栈开发框架。
+hai Framework 是一个 **AI-First** 的全栈开发框架。
 
-它不只是另一个 Web 框架——它将 AI 能力（LLM 调用、MCP 协议、工具注册）、安全能力（国密加密、身份认证、权限控制）、数据能力（多数据库、缓存、对象存储）以统一的 API 风格整合在一起，让开发者可以用最少的代码构建功能完整的智能应用。
+**"AI-First"是什么意思？**
 
-**核心设计原则：**
+大多数框架为人类开发者设计——灵活、自由、约定不强制。但当 AI 来写代码时，这些"自由"反而是问题：AI 不知道选哪种模式、不知道错误怎么处理、不知道该不该加日志……
 
-- **统一的服务生命周期**：每个模块都遵循 `init() → use → close()` 模式，配置用 Zod 校验，初始化即完成全部验证
-- **一致的错误处理**：所有操作返回 `Result<T, E>` 类型（`{ success, data }` 或 `{ success, error }`），不抛异常，链路可控
-- **Provider 可替换**：数据库、缓存、存储等模块支持多种后端，通过配置切换，API 不变
-- **Node / Browser 双端**：核心模块自动适配运行环境，服务端用 pino 日志 + YAML 配置，浏览器端用 loglevel + 轻量 API
+hai Framework 的目标是：**让 AI 理解规范，自动完成应用开发，生成人类可理解可审查的代码。**
+
+具体而言：
+
+- **可预测的 API**：每个模块都是 `init() → use → close()`，AI 只需学一种模式就能操作所有模块
+- **不抛异常**：所有操作返回 `Result<T, E>` —— 成功是 `{ success: true, data }` ，失败是 `{ success: false, error }`。AI 不会遗漏错误处理，链路完全可控
+- **配置即校验**：Zod Schema 在 `init()` 时完成验证，配置错了立刻报错，不会在运行时炸
+- **Skill 文件教 AI 用法**：每个模块都有标准化的 Skill 文件（`.github/skills/`），AI 助手读取后就能正确使用所有 API
+- **编码规范可执行**：`.github/copilot-instructions.md` 定义了命名、分层、测试、文档的完整规范，AI 助手每次改动自动遵守
+- **LLMS.txt 作为 AI 参考手册**：根目录 `LLMS.txt` 提供完整的 API 签名与示例，AI 可直接检索
+
+**结果是**：AI 在这个框架中写的代码，风格一致、类型安全、错误处理完整、测试可验证——不再需要人类逐行审查"AI 写得对不对"。
+
+同时，框架将 AI 能力（LLM 调用、MCP 协议、工具注册）、安全能力（国密加密、身份认证、RBAC 权限）、数据能力（多数据库、缓存、对象存储）以统一的 API 风格整合在一起，让 AI 可以端到端地构建功能完整的智能应用。
+
+### AI-First 设计原则
+
+| 设计决策                          | 给 AI 带来的好处     | 给人类带来的好处               |
+| --------------------------------- | -------------------- | ------------------------------ |
+| 统一生命周期 `init → use → close` | 只需学一种模式       | 模块行为可预期                 |
+| `Result<T, E>` 返回值             | 永远不会遗漏错误处理 | 不用 try-catch，链路清晰       |
+| Zod 配置校验                      | 配置写错立刻知道     | 启动即验证，运行时不炸         |
+| Provider 模式                     | 切换后端只需改配置   | 不同环境无缝切换               |
+| 严格 TypeScript                   | 类型推断引导正确使用 | 重构有保障                     |
+| Skill / LLMS.txt                  | 自动获取正确用法     | AI 生成的代码质量更高          |
+| copilot-instructions              | 每次改动自动遵守规范 | 代码风格一致，减少 Review 成本 |
 
 ## 技术栈
 
@@ -37,6 +59,36 @@ hai Framework 是一个**面向 AI 智能应用**的全栈开发框架。
 | 加密     | 国密 SM2/SM3/SM4                                |
 | 验证     | Zod                                             |
 | 构建     | pnpm + Turborepo + Vite + tsup                  |
+
+## AI-First 基础设施
+
+使用 `hai create` 创建项目时，CLI 会自动生成一套完整的 AI 上下文体系，覆盖 GitHub Copilot、Claude Code、Cursor 等主流 AI 助手：
+
+```
+my-app/
+├── .github/
+│   ├── copilot-instructions.md       # GitHub Copilot 项目指令
+│   └── skills/                       # AI Skill 文件（教 AI 用框架）
+│       ├── hai-build/SKILL.md        # 项目架构总览与 Skill 导航（入口）
+│       ├── hai-core/SKILL.md         # @h-ai/core 用法
+│       ├── hai-db/SKILL.md           # @h-ai/db 用法
+│       ├── hai-iam/SKILL.md          # @h-ai/iam 用法
+│       ├── hai-cache/SKILL.md        # @h-ai/cache 用法
+│       ├── hai-storage/SKILL.md      # @h-ai/storage 用法
+│       ├── hai-ai/SKILL.md           # @h-ai/ai 用法
+│       ├── hai-crypto/SKILL.md       # @h-ai/crypto 用法
+│       ├── hai-kit/SKILL.md          # @h-ai/kit 用法
+│       ├── hai-ui/SKILL.md           # @h-ai/ui 组件用法
+│       ├── hai-app-create/SKILL.md   # 教 AI 创建新功能
+│       ├── hai-app-review/SKILL.md   # 教 AI 做代码审查
+│       └── hai-app-tests/SKILL.md    # 教 AI 编写测试
+├── AGENTS.md                         # Claude Code / 通用 AI 指引
+└── CLAUDE.md                         # Claude Code 专用指引
+```
+
+**工作方式**：AI 助手进入项目后，自动读取指令文件获得编码规范和框架用法，按需读取 Skill 文件获取各模块 API 细节，改动后自动执行 `typecheck → lint → test` 质量门禁 —— 整个过程无需人类干预。
+
+Skill 模板统一管理在 `packages/cli/templates/skills/` 中，通过 `@h-ai/cli` 分发到用户项目。
 
 ## 模块总览
 

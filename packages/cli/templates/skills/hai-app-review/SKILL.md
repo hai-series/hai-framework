@@ -39,6 +39,7 @@ description: 对 hai-framework 应用代码进行审查：检查架构分层、R
 
 - [ ] 所有框架模块调用都检查 `result.success`
 - [ ] 上游 Result 错误直接透传，不重新包装
+- [ ] 不使用 `try/catch` 来处理框架模块返回的错误（模块 API 不抛异常，统一返回 `Result<T, E>`）
 
 ```typescript
 // ❌ 重新包装

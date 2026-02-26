@@ -183,34 +183,40 @@ describe('未初始化时的 MCP 操作', () => {
     }
   })
 
-  it('ai.mcp.registerTool 抛出 NOT_INITIALIZED', () => {
+  it('ai.mcp.registerTool 返回 NOT_INITIALIZED', () => {
     ai.close()
-    expect(() => {
-      ai.mcp.registerTool(
-        { name: 'test', description: 'test', inputSchema: {} },
-        async () => ({}),
-      )
-    }).toThrow()
+    const result = ai.mcp.registerTool(
+      { name: 'test', description: 'test', inputSchema: {} },
+      async () => ({}),
+    )
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error.code).toBe(AIErrorCode.NOT_INITIALIZED)
+    }
   })
 
-  it('ai.mcp.registerResource 抛出 NOT_INITIALIZED', () => {
+  it('ai.mcp.registerResource 返回 NOT_INITIALIZED', () => {
     ai.close()
-    expect(() => {
-      ai.mcp.registerResource(
-        { uri: 'test://r', name: 'test' },
-        async () => ({ uri: 'test://r' }),
-      )
-    }).toThrow()
+    const result = ai.mcp.registerResource(
+      { uri: 'test://r', name: 'test' },
+      async () => ({ uri: 'test://r' }),
+    )
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error.code).toBe(AIErrorCode.NOT_INITIALIZED)
+    }
   })
 
-  it('ai.mcp.registerPrompt 抛出 NOT_INITIALIZED', () => {
+  it('ai.mcp.registerPrompt 返回 NOT_INITIALIZED', () => {
     ai.close()
-    expect(() => {
-      ai.mcp.registerPrompt(
-        { name: 'test' },
-        async () => [],
-      )
-    }).toThrow()
+    const result = ai.mcp.registerPrompt(
+      { name: 'test' },
+      async () => [],
+    )
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error.code).toBe(AIErrorCode.NOT_INITIALIZED)
+    }
   })
 })
 

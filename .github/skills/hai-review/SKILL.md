@@ -48,6 +48,24 @@ description: 对 hai-framework 模块进行代码审查与规范化：对照 hai
 
 ### 代码质量（hai-create §4）
 
+- **公共 API 不抛异常**：所有 `packages/*/src/` 下对外暴露的函数/方法，返回值必须是 `Result<T, XxError>` 或 `Promise<Result<T, XxError>>`，禁止 `throw`。
+- **允许 throw 的合规场景**：内部 throw + 外层 try-catch → Result、SvelteKit 控制流（`throw redirect()`）、浏览器端 Client 代码、CLI 命令、`getOrThrow()` 显式命名、async generator（如 `chatStream()`）。
+
+```ts
+// ❌ 公共 API 中 throw
+function register(tool: Tool): void {
+  if (!isInitialized)
+    throw new Error('Not initialized')
+}
+
+// ✅ 公共 API 中返回 Result
+function register(tool: Tool): Result<void, XxError> {
+  if (!isInitialized)
+    return notInitialized.result()
+  return ok(undefined)
+}
+```
+
 - **return 语句**：不得包含复杂逻辑（条件判断、循环、多级调用链），应只返回已计算的值。
 
 ```ts
@@ -266,6 +284,8 @@ const goodExample = {
 
 ### 代码规范
 
+- [ ] 公共 API 不使用 `throw`，统一返回 `Result<T, XxError>`
+- [ ] throw 仅出现在合规场景（内部 catch-and-wrap、SvelteKit 控制流、Client、CLI、getOrThrow、async generator）
 - [ ] return 仅返回已计算值，无嵌套条件/循环
 - [ ] 无超过 2 层的 if 嵌套
 - [ ] 单函数 ≤ 60 行
