@@ -1,6 +1,6 @@
 # @h-ai/cli
 
-> hai Admin Framework CLI — 交互式项目脚手架与代码生成工具。
+> hai Agent Framework CLI — 交互式项目脚手架与代码生成工具。
 
 ## 支持的能力
 

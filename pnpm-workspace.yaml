@@ -30,18 +30,16 @@ catalog:
   # 对象存储 (S3 协议)
   # ---------------------------------------------------------------------------
   '@aws-sdk/client-s3': ^3.723.0
-  '@aws-sdk/lib-storage': ^3.723.0
   '@aws-sdk/s3-request-presigner': ^3.723.0
 
   '@changesets/cli': ^2.27.12
-  '@iconify-json/lucide': ^1.2.25
   '@iconify-json/tabler': ^1.2.15
   '@playwright/test': ^1.58.2
   '@sveltejs/adapter-auto': ^7.0.0
   '@sveltejs/adapter-node': ^5.0.0
   '@sveltejs/kit': ^2.15.0
   '@sveltejs/package': ^2.3.7
-  '@sveltejs/vite-plugin-svelte': ^6.2.4
+  '@sveltejs/vite-plugin-svelte': ^7.0.0
 
   # ---------------------------------------------------------------------------
   # TypeScript & 构建工具

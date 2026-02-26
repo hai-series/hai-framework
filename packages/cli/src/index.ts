@@ -2,7 +2,7 @@
  * =============================================================================
  * @h-ai/cli - 主入口
  * =============================================================================
- * hai Admin Framework CLI
+ * hai Agent Framework CLI
  *
  * 命令:
  *   create <name>  - 创建新项目
@@ -157,7 +157,7 @@ const parsed = cli.parse()
 // 无命令且未请求帮助/版本时显示帮助
 if (!cli.matchedCommand && !parsed.options.help && !parsed.options.version) {
   core.logger.info('', {})
-  core.logger.info(chalk.cyan('hai Admin Framework CLI'))
+  core.logger.info(chalk.cyan('hai Agent Framework CLI'))
   core.logger.info('', {})
   cli.outputHelp()
 }

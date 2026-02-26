@@ -42,8 +42,8 @@
 </script>
 
 <svelte:head>
-  <title>hai Admin Framework</title>
-  <meta name="description" content="AI-Native, Configuration-Driven, Security-First Admin Framework" />
+  <title>hai Agent Framework</title>
+  <meta name="description" content="AI-Native, Configuration-Driven, Security-First Agent Framework" />
 </svelte:head>
 
 <div class="max-w-6xl mx-auto px-8 py-8">
@@ -51,7 +51,7 @@
   <header class="text-center py-16">
     <h1 class="text-5xl font-bold mb-4">
       <span class="text-primary font-extrabold">hai</span>
-      <span class="font-light text-base-content/60">Admin Framework</span>
+      <span class="font-light text-base-content/60">Agent Framework</span>
     </h1>
     <p class="text-xl text-base-content/50 mb-8">AI-Native · Configuration-Driven · Security-First</p>
     
@@ -96,6 +96,6 @@
   
   <!-- Footer -->
   <footer class="text-center py-8 text-base-content/50 text-sm">
-    <p>© {new Date().getFullYear()} hai Admin Framework. MIT License.</p>
+    <p>© {new Date().getFullYear()} hai Agent Framework. MIT License.</p>
   </footer>
 </div>

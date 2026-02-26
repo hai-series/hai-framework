@@ -4,7 +4,7 @@
   "version": "0.1.0",
   "private": true,
   "packageManager": "pnpm@9.15.0",
-  "description": "hai Admin Framework - AI-Native, Configuration-Driven, Security-First",
+  "description": "hai Agent Framework - AI-Native, Configuration-Driven, Security-First",
   "author": "200hub",
   "license": "Apache-2.0",
   "engines": {

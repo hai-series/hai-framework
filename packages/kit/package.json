@@ -2,7 +2,7 @@
   "name": "@h-ai/kit",
   "type": "module",
   "version": "0.1.0",
-  "description": "hai Admin Framework - SvelteKit 集成",
+  "description": "hai Agent Framework - SvelteKit 集成",
   "license": "Apache-2.0",
   "exports": {
     ".": {
