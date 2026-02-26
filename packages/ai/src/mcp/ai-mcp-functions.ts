@@ -86,27 +86,30 @@ export function createAIMCPFunctions(_deps: AIMCPFunctionsDeps): MCPOperations {
     registerTool<TInput, TOutput>(
       definition: MCPToolDefinition,
       handler: MCPToolHandler<TInput, TOutput>,
-    ): void {
+    ): Result<void, AIError> {
       tools.set(definition.name, {
         definition,
         handler: handler as MCPToolHandler,
       })
+      return ok(undefined)
     },
 
     /** 注册 MCP 资源（同 URI 覆盖） */
     registerResource(
       resource: MCPResource,
       handler: () => Promise<MCPResourceContent>,
-    ): void {
+    ): Result<void, AIError> {
       resources.set(resource.uri, { resource, handler })
+      return ok(undefined)
     },
 
     /** 注册 MCP 提示词模板（同名覆盖） */
     registerPrompt(
       prompt: MCPPrompt,
       handler: (args: Record<string, string>) => Promise<MCPPromptMessage[]>,
-    ): void {
+    ): Result<void, AIError> {
       prompts.set(prompt.name, { prompt, handler })
+      return ok(undefined)
     },
 
     /**

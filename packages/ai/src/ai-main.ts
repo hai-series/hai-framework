@@ -37,7 +37,13 @@ const notInitialized = core.module.createNotInitializedKit<AIError>(
   () => aiM('ai_notInitialized'),
 )
 
-/** LLM 未初始化占位：异步方法返回错误 Result，生成器方法抛出异常 */
+/**
+ * LLM 未初始化占位
+ *
+ * 异步方法返回 NOT_INITIALIZED Result。
+ * chatStream 是 async generator，无法返回 Result，
+ * 只能在迭代时抛出异常通知调用方。
+ */
 const notInitializedLLM: LLMOperations = {
   chat: () => Promise.resolve(notInitialized.result()),
   async* chatStream() {
@@ -46,11 +52,11 @@ const notInitializedLLM: LLMOperations = {
   listModels: () => Promise.resolve(notInitialized.result()),
 }
 
-/** MCP 未初始化占位：调用方法时抛出或返回 NOT_INITIALIZED */
+/** MCP 未初始化占位：所有方法返回 NOT_INITIALIZED 错误 */
 const notInitializedMCP: MCPOperations = {
-  registerTool: () => { throw notInitialized.error() },
-  registerResource: () => { throw notInitialized.error() },
-  registerPrompt: () => { throw notInitialized.error() },
+  registerTool: () => notInitialized.result(),
+  registerResource: () => notInitialized.result(),
+  registerPrompt: () => notInitialized.result(),
   callTool: () => Promise.resolve(notInitialized.result()),
   readResource: () => Promise.resolve(notInitialized.result()),
   getPrompt: () => Promise.resolve(notInitialized.result()),

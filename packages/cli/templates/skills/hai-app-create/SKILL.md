@@ -175,6 +175,7 @@ export const POST: RequestHandler = async (event) => {
 - 输入参数必须通过 Zod Schema 校验（`kit.validate`）
 - 返回统一使用 `kit.response.*`
 - Result 错误直接透传，不重新包装
+- 框架模块 API 不抛异常，不要用 `try/catch` 处理模块返回的错误，直接检查 `result.success`
 
 ---
 

@@ -127,15 +127,15 @@ export interface MCPProvider {
   registerTool: <TInput, TOutput>(
     definition: MCPToolDefinition,
     handler: MCPToolHandler<TInput, TOutput>,
-  ) => void
+  ) => Result<void, AIError>
   registerResource: (
     resource: MCPResource,
     handler: () => Promise<MCPResourceContent>,
-  ) => void
+  ) => Result<void, AIError>
   registerPrompt: (
     prompt: MCPPrompt,
     handler: (args: Record<string, string>) => Promise<MCPPromptMessage[]>,
-  ) => void
+  ) => Result<void, AIError>
   callTool: (name: string, args: unknown, context?: MCPContext) => Promise<Result<unknown, AIError>>
   readResource: (uri: string) => Promise<Result<MCPResourceContent, AIError>>
   getPrompt: (name: string, args: Record<string, string>) => Promise<Result<MCPPromptMessage[], AIError>>
@@ -146,21 +146,21 @@ export interface MCPProvider {
 /**
  * MCP 操作接口（通过 `ai.mcp` 访问）
  *
- * 需要先调用 `ai.init()` 初始化，否则注册方法抛异常，调用方法返回 `NOT_INITIALIZED`。
+ * 需要先调用 `ai.init()` 初始化，否则所有方法返回 `NOT_INITIALIZED` 错误。
  */
 export interface MCPOperations {
   registerTool: <TInput, TOutput>(
     definition: MCPToolDefinition,
     handler: MCPToolHandler<TInput, TOutput>,
-  ) => void
+  ) => Result<void, AIError>
   registerResource: (
     resource: MCPResource,
     handler: () => Promise<MCPResourceContent>,
-  ) => void
+  ) => Result<void, AIError>
   registerPrompt: (
     prompt: MCPPrompt,
     handler: (args: Record<string, string>) => Promise<MCPPromptMessage[]>,
-  ) => void
+  ) => Result<void, AIError>
   callTool: (name: string, args: unknown, context?: MCPContext) => Promise<Result<unknown, AIError>>
   readResource: (uri: string) => Promise<Result<MCPResourceContent, AIError>>
   getPrompt: (name: string, args: Record<string, string>) => Promise<Result<MCPPromptMessage[], AIError>>

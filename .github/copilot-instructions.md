@@ -143,6 +143,58 @@
 - **可选覆盖**：通过 `submitText` 等 props 覆盖特定文本（如需要自定义按钮文字）。
 - 翻译文件位于 `packages/ui/src/lib/messages/{zh-CN,en-US}.json`。
 
+### 错误处理与异常规范
+
+> 核心原则：**公共模块 API 不抛异常，统一返回 `Result<T, E>`**。
+
+#### 禁止在公共 API 中 throw
+
+- 所有 `packages/*/src/` 下对外暴露的函数/方法，返回值必须是 `Result<T, XxError>` 或 `Promise<Result<T, XxError>>`。
+- ❌ 禁止在公共 API 中 `throw`；调用方不应使用 `try/catch` 来处理模块返回的错误。
+
+#### 允许 throw 的场景（合规模式）
+
+以下场景中的 `throw` 是合规的，不违反此规范：
+
+| 场景                                     | 说明                                                                                                            |
+| ---------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| **内部 throw + 外层 try-catch → Result** | 模块内部函数 throw，由外层 `try { } catch { return err(...) }` 转为 Result 返回。这是标准 catch-and-wrap 模式。 |
+| **SvelteKit 控制流**                     | `throw redirect()`、`throw error()` 等 SvelteKit 框架约定的控制流用法。                                         |
+| **浏览器端 Client 代码**                 | `client/xx-client.ts` 等浏览器端封装，不属于模块公共 API。                                                      |
+| **CLI 命令**                             | `packages/cli/` 中的命令行工具，非模块 API。                                                                    |
+| **`getOrThrow()` 等显式命名的函数**      | 函数名已明确表达会 throw 的语义。                                                                               |
+| **async generator（如 `chatStream()`）** | 异步生成器无法返回 Result，只能 throw。需在 JSDoc 中注明。                                                      |
+
+#### 使用模式
+
+```ts
+// ✅ 返回 Result
+async function create(input: Input): Promise<Result<Item, XxError>> {
+  try {
+    const item = await doCreate(input)
+    return ok(item)
+  }
+  catch (error) {
+    return err({ code: XxErrorCode.CREATE_FAILED, message: xxM('xx_createFailed'), cause: error })
+  }
+}
+
+// ❌ 公共 API 中直接 throw
+function register(tool: Tool): void {
+  if (!isInitialized)
+    throw new Error('Not initialized')
+  // ...
+}
+
+// ✅ 公共 API 中返回 Result
+function register(tool: Tool): Result<void, XxError> {
+  if (!isInitialized)
+    return notInitialized.result()
+  // ...
+  return ok(undefined)
+}
+```
+
 ### 环境变量与密钥
 
 - ❌ 禁止硬编码 API Key / 密钥。
@@ -173,6 +225,13 @@
 - `core.init` 会统一加载配置文件，但不会自动校验其他模块配置。
 - **模块在使用配置前必须显式调用** `core.config.validate(name, schema)` 做合法性校验。
 - 不允许在模块入口做隐式注册/自动校验（避免副作用和隐藏依赖）。
+
+### 错误处理与异常
+
+- 公共模块 API **禁止 throw**，必须返回 `Result<T, XxError>`。
+- 允许在内部函数中 throw，但外层必须 catch 并转为 Result。
+- 合规的 throw 场景：内部 throw + 外层 catch、SvelteKit 控制流、浏览器 Client、CLI、`getOrThrow()` 显式命名、async generator。
+- 详细规范见"编码约定 > 错误处理与异常规范"。
 
 ### 导出与文档同步
 
@@ -229,4 +288,5 @@
 - 使用 `any`
 - 修改 `src/lib/paraglide` 生成文件
 - README 描述内部实现细节
+- 在公共模块 API 中使用 `throw`（必须返回 `Result<T, E>`）
 - 做兼容性处理。目前处于开发期，不用考虑兼容旧版本
