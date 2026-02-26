@@ -1,15 +1,15 @@
 import { beforeAll, describe, expect, it } from 'vitest'
 import { crypto } from '../src/index.js'
 
-describe('crypto.sm3', () => {
+describe('crypto.hash', () => {
   beforeAll(async () => {
-    await crypto.init({})
+    await crypto.init()
   })
 
   // ─── 哈希基本功能 ───
 
   it('should hash string and produce 64-char hex', () => {
-    const hash = crypto.sm3.hash('hello')
+    const hash = crypto.hash.hash('hello')
     expect(hash.success).toBe(true)
     if (!hash.success)
       return
@@ -19,8 +19,8 @@ describe('crypto.sm3', () => {
   })
 
   it('should produce deterministic hash for same input', () => {
-    const hash1 = crypto.sm3.hash('hello')
-    const hash2 = crypto.sm3.hash('hello')
+    const hash1 = crypto.hash.hash('hello')
+    const hash2 = crypto.hash.hash('hello')
     expect(hash1.success && hash2.success).toBe(true)
     if (!hash1.success || !hash2.success)
       return
@@ -29,8 +29,8 @@ describe('crypto.sm3', () => {
   })
 
   it('should produce different hashes for different inputs', () => {
-    const hash1 = crypto.sm3.hash('hello')
-    const hash2 = crypto.sm3.hash('world')
+    const hash1 = crypto.hash.hash('hello')
+    const hash2 = crypto.hash.hash('world')
     expect(hash1.success && hash2.success).toBe(true)
     if (!hash1.success || !hash2.success)
       return
@@ -39,7 +39,7 @@ describe('crypto.sm3', () => {
   })
 
   it('should hash empty string', () => {
-    const hash = crypto.sm3.hash('')
+    const hash = crypto.hash.hash('')
     expect(hash.success).toBe(true)
     if (!hash.success)
       return
@@ -48,7 +48,7 @@ describe('crypto.sm3', () => {
   })
 
   it('should hash Chinese text', () => {
-    const hash = crypto.sm3.hash('你好世界')
+    const hash = crypto.hash.hash('你好世界')
     expect(hash.success).toBe(true)
     if (!hash.success)
       return
@@ -60,7 +60,7 @@ describe('crypto.sm3', () => {
 
   it('should hash Uint8Array input', () => {
     const input = new TextEncoder().encode('hello')
-    const hash = crypto.sm3.hash(input)
+    const hash = crypto.hash.hash(input)
     expect(hash.success).toBe(true)
     if (!hash.success)
       return
@@ -69,7 +69,7 @@ describe('crypto.sm3', () => {
   })
 
   it('should hash hex input when inputEncoding is hex', () => {
-    const hash = crypto.sm3.hash('68656c6c6f', { inputEncoding: 'hex' })
+    const hash = crypto.hash.hash('68656c6c6f', { inputEncoding: 'hex' })
     expect(hash.success).toBe(true)
     if (!hash.success)
       return
@@ -80,12 +80,12 @@ describe('crypto.sm3', () => {
   // ─── 验证 ───
 
   it('should hash and verify', () => {
-    const hash = crypto.sm3.hash('hello')
+    const hash = crypto.hash.hash('hello')
     expect(hash.success).toBe(true)
     if (!hash.success)
       return
 
-    const verified = crypto.sm3.verify('hello', hash.data)
+    const verified = crypto.hash.verify('hello', hash.data)
     expect(verified.success).toBe(true)
     if (!verified.success)
       return
@@ -94,12 +94,12 @@ describe('crypto.sm3', () => {
   })
 
   it('should verify false when hash does not match', () => {
-    const hash = crypto.sm3.hash('hello')
+    const hash = crypto.hash.hash('hello')
     expect(hash.success).toBe(true)
     if (!hash.success)
       return
 
-    const verified = crypto.sm3.verify('hello', `${hash.data}00`)
+    const verified = crypto.hash.verify('hello', `${hash.data}00`)
     expect(verified.success).toBe(true)
     if (!verified.success)
       return
@@ -108,13 +108,13 @@ describe('crypto.sm3', () => {
   })
 
   it('should verify case-insensitively', () => {
-    const hash = crypto.sm3.hash('hello')
+    const hash = crypto.hash.hash('hello')
     expect(hash.success).toBe(true)
     if (!hash.success)
       return
 
     const upperHash = hash.data.toUpperCase()
-    const verified = crypto.sm3.verify('hello', upperHash)
+    const verified = crypto.hash.verify('hello', upperHash)
     expect(verified.success).toBe(true)
     if (!verified.success)
       return
@@ -125,7 +125,7 @@ describe('crypto.sm3', () => {
   // ─── HMAC ───
 
   it('should calculate hmac', () => {
-    const hmac = crypto.sm3.hmac('data', 'secret')
+    const hmac = crypto.hash.hmac('data', 'secret')
     expect(hmac.success).toBe(true)
     if (!hmac.success)
       return
@@ -134,8 +134,8 @@ describe('crypto.sm3', () => {
   })
 
   it('should produce stable hmac with same inputs', () => {
-    const first = crypto.sm3.hmac('data', 'secret')
-    const second = crypto.sm3.hmac('data', 'secret')
+    const first = crypto.hash.hmac('data', 'secret')
+    const second = crypto.hash.hmac('data', 'secret')
     expect(first.success && second.success).toBe(true)
     if (!first.success || !second.success)
       return
@@ -144,8 +144,8 @@ describe('crypto.sm3', () => {
   })
 
   it('should produce different hmac with different keys', () => {
-    const hmac1 = crypto.sm3.hmac('data', 'key1')
-    const hmac2 = crypto.sm3.hmac('data', 'key2')
+    const hmac1 = crypto.hash.hmac('data', 'key1')
+    const hmac2 = crypto.hash.hmac('data', 'key2')
     expect(hmac1.success && hmac2.success).toBe(true)
     if (!hmac1.success || !hmac2.success)
       return
@@ -154,8 +154,8 @@ describe('crypto.sm3', () => {
   })
 
   it('should produce different hmac with different data', () => {
-    const hmac1 = crypto.sm3.hmac('data1', 'secret')
-    const hmac2 = crypto.sm3.hmac('data2', 'secret')
+    const hmac1 = crypto.hash.hmac('data1', 'secret')
+    const hmac2 = crypto.hash.hmac('data2', 'secret')
     expect(hmac1.success && hmac2.success).toBe(true)
     if (!hmac1.success || !hmac2.success)
       return
@@ -165,7 +165,7 @@ describe('crypto.sm3', () => {
 
   it('should calculate hmac with long key', () => {
     const longKey = 'k'.repeat(100)
-    const hmac = crypto.sm3.hmac('data', longKey)
+    const hmac = crypto.hash.hmac('data', longKey)
     expect(hmac.success).toBe(true)
     if (!hmac.success)
       return

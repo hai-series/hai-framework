@@ -1,18 +1,17 @@
 import type { Result } from '@h-ai/core'
 
-import type { CryptoConfig, CryptoConfigInput } from './crypto-config.js'
 import type {
+  AsymmetricOperations,
   CryptoError,
   CryptoFunctions,
+  HashOperations,
   PasswordOperations,
-  SM2Operations,
-  SM3Operations,
-  SM4Operations,
+  SymmetricOperations,
 } from './crypto-types.js'
 
 import { core, err, ok } from '@h-ai/core'
 
-import { CryptoConfigSchema, CryptoErrorCode } from './crypto-config.js'
+import { CryptoErrorCode } from './crypto-config.js'
 import { cryptoM } from './crypto-i18n.js'
 import { createPasswordFunctions } from './crypto-password.js'
 import { createSM2 } from './crypto-sm2.js'
@@ -21,14 +20,14 @@ import { createSM4 } from './crypto-sm4.js'
 
 // ─── 内部状态 ───
 
-/** 当前配置（init 后赋值，close 后置 null） */
-let currentConfig: CryptoConfig | null = null
-/** 当前 SM2 操作实例 */
-let currentSm2: SM2Operations | null = null
-/** 当前 SM3 操作实例 */
-let currentSm3: SM3Operations | null = null
-/** 当前 SM4 操作实例 */
-let currentSm4: SM4Operations | null = null
+/** 是否已初始化 */
+let initialized = false
+/** 当前非对称加密操作实例 */
+let currentAsymmetric: AsymmetricOperations | null = null
+/** 当前哈希操作实例 */
+let currentHash: HashOperations | null = null
+/** 当前对称加密操作实例 */
+let currentSymmetric: SymmetricOperations | null = null
 /** 当前密码哈希操作实例 */
 let currentPassword: PasswordOperations | null = null
 
@@ -39,9 +38,9 @@ const notInitialized = core.module.createNotInitializedKit<CryptoError>(
   () => cryptoM('crypto_notInitialized'),
 )
 
-const notInitializedSm2 = notInitialized.proxy<SM2Operations>('sync')
-const notInitializedSm3 = notInitialized.proxy<SM3Operations>('sync')
-const notInitializedSm4 = notInitialized.proxy<SM4Operations>('sync')
+const notInitializedAsymmetric = notInitialized.proxy<AsymmetricOperations>('sync')
+const notInitializedHash = notInitialized.proxy<HashOperations>('sync')
+const notInitializedSymmetric = notInitialized.proxy<SymmetricOperations>('sync')
 const notInitializedPassword = notInitialized.proxy<PasswordOperations>('sync')
 
 // ─── 服务对象 ───
@@ -50,40 +49,40 @@ const notInitializedPassword = notInitialized.proxy<PasswordOperations>('sync')
  * 加密模块服务对象（统一入口）
  *
  * 使用前必须调用 `crypto.init()` 进行初始化。
- * 未初始化时访问 sm2/sm3/sm4/password 的任何方法均返回 NOT_INITIALIZED 错误。
+ * 未初始化时访问 asymmetric/hash/symmetric/password 的任何方法均返回 NOT_INITIALIZED 错误。
  *
  * @example
  * ```ts
  * import { crypto } from '@h-ai/crypto'
  *
- * const result = await crypto.init({})
- * if (result.success) {
- *   const hash = crypto.sm3.hash('hello')
- *   const keyPair = crypto.sm2.generateKeyPair()
- * }
+ * await crypto.init()
+ * const hash = crypto.hash.hash('hello')
+ * const keyPair = crypto.asymmetric.generateKeyPair()
  * await crypto.close()
  * ```
  */
 export const crypto: CryptoFunctions = {
-  createHaiPasswordProvider(): PasswordOperations {
-    const sm3 = createSM3()
-    return createPasswordFunctions({ sm3 })
-  },
-
-  async init(config: CryptoConfigInput): Promise<Result<void, CryptoError>> {
+  /**
+   * 初始化加密模块
+   *
+   * 创建非对称/哈希/对称/密码哈希操作实例。
+   * 重复调用会先关闭再重新初始化。
+   *
+   * @returns 成功时返回 ok(undefined)；失败时返回 INIT_FAILED
+   */
+  async init(): Promise<Result<void, CryptoError>> {
     await crypto.close()
     try {
-      const parsed = CryptoConfigSchema.parse(config)
-      currentSm2 = createSM2()
-      currentSm3 = createSM3()
-      currentSm4 = createSM4()
-      currentPassword = createPasswordFunctions({ sm3: currentSm3 })
-      currentConfig = parsed
+      currentAsymmetric = createSM2()
+      currentHash = createSM3()
+      currentSymmetric = createSM4()
+      currentPassword = createPasswordFunctions({ hash: currentHash })
+      initialized = true
       return ok(undefined)
     }
     catch (error) {
       return err({
-        code: CryptoErrorCode.CONFIG_ERROR,
+        code: CryptoErrorCode.INIT_FAILED,
         message: cryptoM('crypto_initFailed', {
           params: { error: error instanceof Error ? error.message : String(error) },
         }),
@@ -92,18 +91,27 @@ export const crypto: CryptoFunctions = {
     }
   },
 
-  get sm2(): SM2Operations { return currentSm2 ?? notInitializedSm2 },
-  get sm3(): SM3Operations { return currentSm3 ?? notInitializedSm3 },
-  get sm4(): SM4Operations { return currentSm4 ?? notInitializedSm4 },
+  /** 非对称加密操作（未初始化时所有方法返回 NOT_INITIALIZED） */
+  get asymmetric(): AsymmetricOperations { return currentAsymmetric ?? notInitializedAsymmetric },
+  /** 哈希操作（未初始化时所有方法返回 NOT_INITIALIZED） */
+  get hash(): HashOperations { return currentHash ?? notInitializedHash },
+  /** 对称加密操作（未初始化时所有方法返回 NOT_INITIALIZED） */
+  get symmetric(): SymmetricOperations { return currentSymmetric ?? notInitializedSymmetric },
+  /** 密码哈希操作（未初始化时所有方法返回 NOT_INITIALIZED） */
   get password(): PasswordOperations { return currentPassword ?? notInitializedPassword },
-  get config() { return currentConfig },
-  get isInitialized() { return currentConfig !== null },
+  /** 是否已初始化 */
+  get isInitialized() { return initialized },
 
+  /**
+   * 关闭加密模块，释放内部状态
+   *
+   * 关闭后访问 asymmetric/hash/symmetric/password 会返回 NOT_INITIALIZED 错误。
+   */
   async close() {
-    currentSm2 = null
-    currentSm3 = null
-    currentSm4 = null
+    currentAsymmetric = null
+    currentHash = null
+    currentSymmetric = null
     currentPassword = null
-    currentConfig = null
+    initialized = false
   },
 }

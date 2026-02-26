@@ -1,11 +1,11 @@
 import type { Result } from '@h-ai/core'
 
 import type {
+  AsymmetricEncryptOptions,
+  AsymmetricOperations,
   CryptoError,
-  SM2EncryptOptions,
-  SM2KeyPair,
-  SM2Operations,
-  SM2SignOptions,
+  KeyPair,
+  SignOptions,
 } from './crypto-types.js'
 
 import { err, ok } from '@h-ai/core'
@@ -26,11 +26,16 @@ const { sm2 } = smCrypto
  * 公钥支持带/不带 04 前缀两种格式（内部统一补齐）。
  * 密文支持 hex/base64 两种格式（解密时自动检测）。
  *
- * @returns SM2Operations 接口实现
+ * @returns AsymmetricOperations 接口实现
  */
-export function createSM2(): SM2Operations {
+export function createSM2(): AsymmetricOperations {
   return {
-    generateKeyPair(): Result<SM2KeyPair, CryptoError> {
+    /**
+     * 生成 SM2 密钥对
+     *
+     * @returns 成功时返回包含公钥（130 字符含 04 前缀）和私钥（64 字符）的密钥对
+     */
+    generateKeyPair(): Result<KeyPair, CryptoError> {
       try {
         const keyPair = sm2.generateKeyPairHex()
         return ok({
@@ -47,10 +52,20 @@ export function createSM2(): SM2Operations {
       }
     },
 
+    /**
+     * SM2 非对称加密
+     *
+     * 公钥自动补齐 04 前缀；支持 hex/base64 输出。
+     *
+     * @param data - 待加密明文
+     * @param publicKey - 公钥（支持带/不带 04 前缀）
+     * @param options - 加密选项（密文模式、输出格式）
+     * @returns 成功时返回密文；失败时返回 INVALID_KEY 或 ENCRYPTION_FAILED
+     */
     encrypt(
       data: string,
       publicKey: string,
-      options: SM2EncryptOptions = {},
+      options: AsymmetricEncryptOptions = {},
     ): Result<string, CryptoError> {
       const { cipherMode = 1, outputFormat = 'hex' } = options
 
@@ -88,10 +103,20 @@ export function createSM2(): SM2Operations {
       }
     },
 
+    /**
+     * SM2 非对称解密
+     *
+     * 自动检测 base64 格式输入并转换为 hex 后解密。
+     *
+     * @param ciphertext - 密文（hex 或 base64）
+     * @param privateKey - 私钥（64 字符十六进制）
+     * @param options - 解密选项（密文模式需与加密时一致）
+     * @returns 成功时返回明文；失败时返回 INVALID_KEY 或 DECRYPTION_FAILED
+     */
     decrypt(
       ciphertext: string,
       privateKey: string,
-      options: SM2EncryptOptions = {},
+      options: AsymmetricEncryptOptions = {},
     ): Result<string, CryptoError> {
       const { cipherMode = 1 } = options
 
@@ -129,10 +154,20 @@ export function createSM2(): SM2Operations {
       }
     },
 
+    /**
+     * SM2 数字签名
+     *
+     * 默认对数据先做哈希（hash=true），使用 userId 作为签名附加参数。
+     *
+     * @param data - 待签名数据
+     * @param privateKey - 私钥（64 字符十六进制）
+     * @param options - 签名选项（hash 开关、userId）
+     * @returns 成功时返回签名字符串；失败时返回 INVALID_KEY 或 SIGN_FAILED
+     */
     sign(
       data: string,
       privateKey: string,
-      options: SM2SignOptions = {},
+      options: SignOptions = {},
     ): Result<string, CryptoError> {
       const { hash = true, userId = '1234567812345678' } = options
 
@@ -164,11 +199,22 @@ export function createSM2(): SM2Operations {
       }
     },
 
+    /**
+     * SM2 签名验证
+     *
+     * 公钥自动补齐 04 前缀；hash/userId 需与签名时一致。
+     *
+     * @param data - 原始数据
+     * @param signature - 签名值
+     * @param publicKey - 公钥（支持带/不带 04 前缀）
+     * @param options - 验签选项（hash 开关、userId）
+     * @returns 成功时返回 boolean；失败时返回 INVALID_KEY 或 VERIFY_FAILED
+     */
     verify(
       data: string,
       signature: string,
       publicKey: string,
-      options: SM2SignOptions = {},
+      options: SignOptions = {},
     ): Result<boolean, CryptoError> {
       const { hash = true, userId = '1234567812345678' } = options
 
@@ -194,6 +240,14 @@ export function createSM2(): SM2Operations {
       }
     },
 
+    /**
+     * 校验公钥格式是否合法
+     *
+     * 合法格式：128 字符十六进制（无前缀）或 130 字符（含 04 前缀）。
+     *
+     * @param key - 待校验公钥
+     * @returns 格式合法返回 true
+     */
     isValidPublicKey(key: string): boolean {
       if (!key || typeof key !== 'string')
         return false
@@ -202,6 +256,14 @@ export function createSM2(): SM2Operations {
       return /^[0-9a-f]{128}$/i.test(cleanKey)
     },
 
+    /**
+     * 校验私钥格式是否合法
+     *
+     * 合法格式：64 字符十六进制。
+     *
+     * @param key - 待校验私钥
+     * @returns 格式合法返回 true
+     */
     isValidPrivateKey(key: string): boolean {
       if (!key || typeof key !== 'string')
         return false

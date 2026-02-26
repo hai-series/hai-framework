@@ -581,9 +581,6 @@ importers:
       sm-crypto:
         specifier: 'catalog:'
         version: 0.4.0
-      zod:
-        specifier: 'catalog:'
-        version: 4.3.6
     devDependencies:
       '@types/node':
         specifier: 'catalog:'

@@ -1,6 +1,6 @@
 import type { Result } from '@h-ai/core'
 
-import type { CryptoConfig, CryptoConfigInput, CryptoErrorCodeType } from './crypto-config.js'
+import type { CryptoErrorCodeType } from './crypto-config.js'
 
 // ─── 错误类型 ───
 
@@ -18,29 +18,29 @@ export interface CryptoError {
   cause?: unknown
 }
 
-// ─── SM2 类型 ───
+// ─── 非对称加密类型 ───
 
-/** SM2 密文模式：0=C1C2C3（旧版），1=C1C3C2（国标） */
-export type SM2CipherMode = 0 | 1
+/** 密文模式：0=C1C2C3（旧版），1=C1C3C2（国标） */
+export type CipherMode = 0 | 1
 
-/** SM2 密钥对 */
-export interface SM2KeyPair {
+/** 非对称密钥对 */
+export interface KeyPair {
   /** 公钥（十六进制字符串，包含 04 前缀为非压缩格式） */
   publicKey: string
   /** 私钥（十六进制字符串，64 字符） */
   privateKey: string
 }
 
-/** SM2 加密选项 */
-export interface SM2EncryptOptions {
+/** 非对称加密选项 */
+export interface AsymmetricEncryptOptions {
   /** 密文模式：0=C1C2C3（旧版），1=C1C3C2（国标，默认） */
-  cipherMode?: SM2CipherMode
+  cipherMode?: CipherMode
   /** 输出格式 */
   outputFormat?: 'hex' | 'base64'
 }
 
-/** SM2 签名选项 */
-export interface SM2SignOptions {
+/** 签名选项 */
+export interface SignOptions {
   /** 是否对数据进行哈希（默认 true） */
   hash?: boolean
   /** 用户 ID（默认 "1234567812345678"） */
@@ -49,25 +49,25 @@ export interface SM2SignOptions {
   outputFormat?: 'hex' | 'der'
 }
 
-// ─── SM3 类型 ───
+// ─── 哈希类型 ───
 
-/** SM3 哈希选项 */
-export interface SM3Options {
+/** 哈希选项 */
+export interface HashOptions {
   /** 输入编码 */
   inputEncoding?: 'utf8' | 'hex'
   /** 输出格式 */
   outputFormat?: 'hex' | 'array'
 }
 
-// ─── SM4 类型 ───
+// ─── 对称加密类型 ───
 
-/** SM4 加密模式 */
-export type SM4Mode = 'ecb' | 'cbc'
+/** 对称加密模式 */
+export type SymmetricMode = 'ecb' | 'cbc'
 
-/** SM4 加密选项 */
-export interface SM4Options {
+/** 对称加密选项 */
+export interface SymmetricOptions {
   /** 加密模式 */
-  mode?: SM4Mode
+  mode?: SymmetricMode
   /** IV 向量（CBC 模式必需，32 个十六进制字符） */
   iv?: string
   /** 输入编码 */
@@ -76,8 +76,8 @@ export interface SM4Options {
   outputFormat?: 'hex' | 'base64'
 }
 
-/** SM4 带 IV 加密结果 */
-export interface SM4EncryptWithIVResult {
+/** 带 IV 加密结果 */
+export interface EncryptWithIVResult {
   /** 密文 */
   ciphertext: string
   /** IV 向量 */
@@ -97,28 +97,28 @@ export interface PasswordConfig {
 // ─── 操作接口 ───
 
 /**
- * SM2 非对称加密操作接口
+ * 非对称加密操作接口
  *
- * 通过 `crypto.sm2` 访问，需先调用 `crypto.init()`。
+ * 通过 `crypto.asymmetric` 访问，需先调用 `crypto.init()`。
  */
-export interface SM2Operations {
+export interface AsymmetricOperations {
   /**
-   * 生成 SM2 密钥对
+   * 生成密钥对
    *
    * @returns 成功时包含公私钥对；失败时返回 KEY_GENERATION_FAILED
    */
-  generateKeyPair: () => Result<SM2KeyPair, CryptoError>
+  generateKeyPair: () => Result<KeyPair, CryptoError>
   /**
-   * SM2 加密
+   * 非对称加密
    *
    * @param data - 待加密明文
    * @param publicKey - 公钥（十六进制，支持带/不带 04 前缀）
    * @param options - 加密选项（密文模式、输出格式）
    * @returns 成功时返回密文字符串；失败时返回 INVALID_KEY 或 ENCRYPTION_FAILED
    */
-  encrypt: (data: string, publicKey: string, options?: SM2EncryptOptions) => Result<string, CryptoError>
+  encrypt: (data: string, publicKey: string, options?: AsymmetricEncryptOptions) => Result<string, CryptoError>
   /**
-   * SM2 解密
+   * 非对称解密
    *
    * 自动检测 base64 格式输入并转换为 hex。
    *
@@ -127,18 +127,18 @@ export interface SM2Operations {
    * @param options - 解密选项（密文模式需与加密时一致）
    * @returns 成功时返回明文；失败时返回 INVALID_KEY 或 DECRYPTION_FAILED
    */
-  decrypt: (ciphertext: string, privateKey: string, options?: SM2EncryptOptions) => Result<string, CryptoError>
+  decrypt: (ciphertext: string, privateKey: string, options?: AsymmetricEncryptOptions) => Result<string, CryptoError>
   /**
-   * SM2 签名
+   * 签名
    *
    * @param data - 待签名数据
    * @param privateKey - 私钥（64 字符十六进制）
    * @param options - 签名选项（hash 开关、userId）
    * @returns 成功时返回签名字符串；失败时返回 INVALID_KEY 或 SIGN_FAILED
    */
-  sign: (data: string, privateKey: string, options?: SM2SignOptions) => Result<string, CryptoError>
+  sign: (data: string, privateKey: string, options?: SignOptions) => Result<string, CryptoError>
   /**
-   * SM2 验签
+   * 验签
    *
    * @param data - 原始数据
    * @param signature - 签名（需与签名时使用相同的 hash/userId 选项）
@@ -146,7 +146,7 @@ export interface SM2Operations {
    * @param options - 验签选项
    * @returns 成功时返回 boolean；失败时返回 INVALID_KEY 或 VERIFY_FAILED
    */
-  verify: (data: string, signature: string, publicKey: string, options?: SM2SignOptions) => Result<boolean, CryptoError>
+  verify: (data: string, signature: string, publicKey: string, options?: SignOptions) => Result<boolean, CryptoError>
   /**
    * 校验公钥格式是否合法
    *
@@ -162,23 +162,23 @@ export interface SM2Operations {
 }
 
 /**
- * SM3 哈希操作接口
+ * 哈希操作接口
  *
- * 通过 `crypto.sm3` 访问，需先调用 `crypto.init()`。
+ * 通过 `crypto.hash` 访问，需先调用 `crypto.init()`。
  */
-export interface SM3Operations {
+export interface HashOperations {
   /**
-   * 计算 SM3 哈希
+   * 计算哈希
    *
    * @param data - 待哈希数据（字符串或 Uint8Array）
    * @param options - 输入编码与输出格式
    * @returns 成功时返回 64 字符十六进制哈希值；失败时返回 HASH_FAILED
    */
-  hash: (data: string | Uint8Array, options?: SM3Options) => Result<string, CryptoError>
+  hash: (data: string | Uint8Array, options?: HashOptions) => Result<string, CryptoError>
   /**
-   * 计算 SM3-HMAC
+   * 计算 HMAC
    *
-   * 使用 HMAC 算法（RFC 2104）结合 SM3 计算消息认证码。
+   * 使用 HMAC 算法（RFC 2104）计算消息认证码。
    * 当密钥长度超过块大小（64 字节）时，会先对密钥进行哈希。
    *
    * @param data - 待计算数据
@@ -187,7 +187,7 @@ export interface SM3Operations {
    */
   hmac: (data: string, key: string) => Result<string, CryptoError>
   /**
-   * 验证数据的 SM3 哈希是否匹配
+   * 验证数据的哈希是否匹配
    *
    * 比较时忽略大小写。
    *
@@ -199,27 +199,27 @@ export interface SM3Operations {
 }
 
 /**
- * SM4 对称加密操作接口
+ * 对称加密操作接口
  *
- * 通过 `crypto.sm4` 访问，需先调用 `crypto.init()`。
+ * 通过 `crypto.symmetric` 访问，需先调用 `crypto.init()`。
  * 支持 ECB/CBC 两种模式，CBC 模式需要提供 IV。
  */
-export interface SM4Operations {
+export interface SymmetricOperations {
   /** 生成随机密钥（16 字节 = 32 个十六进制字符） */
   generateKey: () => string
   /** 生成随机 IV（16 字节 = 32 个十六进制字符） */
   generateIV: () => string
   /**
-   * SM4 加密
+   * 对称加密
    *
    * @param data - 待加密明文
    * @param key - 密钥（32 字符十六进制）
    * @param options - 加密模式/IV/输出格式
    * @returns 成功时返回密文；失败时返回 INVALID_KEY/INVALID_IV/ENCRYPTION_FAILED
    */
-  encrypt: (data: string, key: string, options?: SM4Options) => Result<string, CryptoError>
+  encrypt: (data: string, key: string, options?: SymmetricOptions) => Result<string, CryptoError>
   /**
-   * SM4 解密
+   * 对称解密
    *
    * 自动检测 base64 格式输入并转换为 hex。
    *
@@ -228,7 +228,7 @@ export interface SM4Operations {
    * @param options - 解密模式/IV（需与加密时一致）
    * @returns 成功时返回明文；失败时返回 INVALID_KEY/INVALID_IV/DECRYPTION_FAILED
    */
-  decrypt: (ciphertext: string, key: string, options?: SM4Options) => Result<string, CryptoError>
+  decrypt: (ciphertext: string, key: string, options?: SymmetricOptions) => Result<string, CryptoError>
   /**
    * 带 IV 加密（CBC 模式，自动生成随机 IV）
    *
@@ -236,7 +236,7 @@ export interface SM4Operations {
    * @param key - 密钥（32 字符十六进制）
    * @returns 成功时返回 { ciphertext, iv }；失败时同 encrypt
    */
-  encryptWithIV: (data: string, key: string) => Result<SM4EncryptWithIVResult, CryptoError>
+  encryptWithIV: (data: string, key: string) => Result<EncryptWithIVResult, CryptoError>
   /**
    * 带 IV 解密（CBC 模式）
    *
@@ -249,7 +249,7 @@ export interface SM4Operations {
   /**
    * 从密码和盐值派生密钥
    *
-   * 内部使用 SM3(password + salt) 取前 32 字符作为密钥。
+   * 内部使用哈希(password + salt) 取前 32 字符作为密钥。
    * 注意：此为简单派生，不适用于高安全场景。
    *
    * @param password - 密码
@@ -267,7 +267,7 @@ export interface SM4Operations {
  * 密码哈希操作接口
  *
  * 通过 `crypto.password` 访问，需先调用 `crypto.init()`。
- * 使用 SM3 + 迭代加盐的方式生成密码哈希。
+ * 使用迭代加盐的方式生成密码哈希。
  */
 export interface PasswordOperations {
   /**
@@ -303,45 +303,35 @@ export interface PasswordOperations {
  * ```ts
  * import { crypto } from '@h-ai/crypto'
  *
- * await crypto.init({})
- * const hash = crypto.sm3.hash('hello')
+ * await crypto.init()
+ * const hash = crypto.hash.hash('hello')
  * await crypto.close()
  * ```
  */
 export interface CryptoFunctions {
   /**
-   * 创建独立密码提供者（无需依赖 init 生命周期）
-   *
-   * 适用于需要在未初始化全局 crypto 服务时，
-   * 单独进行密码哈希/校验的场景。
-   */
-  createHaiPasswordProvider: () => PasswordOperations
-  /**
    * 初始化加密模块
    *
-   * 解析配置并创建 SM2/SM3/SM4/Password 操作实例。
+   * 创建非对称/哈希/对称/密码哈希操作实例。
    * 重复调用会先关闭再重新初始化。
    *
-   * @param config - 配置（所有字段可选，有默认值）
-   * @returns 成功时返回 ok(undefined)；配置无效时返回 CONFIG_ERROR
+   * @returns 成功时返回 ok(undefined)；失败时返回 INIT_FAILED
    */
-  init: (config: CryptoConfigInput) => Promise<Result<void, CryptoError>>
+  init: () => Promise<Result<void, CryptoError>>
   /**
    * 关闭加密模块，释放内部状态
    *
-   * 关闭后再访问 sm2/sm3/sm4/password 会返回 NOT_INITIALIZED 错误。
+   * 关闭后再访问 asymmetric/hash/symmetric/password 会返回 NOT_INITIALIZED 错误。
    */
   close: () => Promise<void>
-  /** 当前配置（未初始化时为 null） */
-  readonly config: CryptoConfig | null
   /** 是否已初始化 */
   readonly isInitialized: boolean
-  /** SM2 非对称加密操作（未初始化时所有方法返回 NOT_INITIALIZED） */
-  readonly sm2: SM2Operations
-  /** SM3 哈希操作（未初始化时所有方法返回 NOT_INITIALIZED） */
-  readonly sm3: SM3Operations
-  /** SM4 对称加密操作（未初始化时所有方法返回 NOT_INITIALIZED） */
-  readonly sm4: SM4Operations
+  /** 非对称加密操作（未初始化时所有方法返回 NOT_INITIALIZED） */
+  readonly asymmetric: AsymmetricOperations
+  /** 哈希操作（未初始化时所有方法返回 NOT_INITIALIZED） */
+  readonly hash: HashOperations
+  /** 对称加密操作（未初始化时所有方法返回 NOT_INITIALIZED） */
+  readonly symmetric: SymmetricOperations
   /** 密码哈希操作（未初始化时所有方法返回 NOT_INITIALIZED） */
   readonly password: PasswordOperations
 }

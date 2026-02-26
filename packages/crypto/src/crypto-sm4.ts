@@ -2,9 +2,9 @@ import type { Result } from '@h-ai/core'
 
 import type {
   CryptoError,
-  SM4EncryptWithIVResult,
-  SM4Operations,
-  SM4Options,
+  EncryptWithIVResult,
+  SymmetricOperations,
+  SymmetricOptions,
 } from './crypto-types.js'
 
 import { err, ok } from '@h-ai/core'
@@ -25,22 +25,35 @@ const { sm3, sm4 } = smCrypto
  * 支持 ECB（默认）和 CBC 两种模式，使用 PKCS#7 填充。
  * 密文支持 hex/base64 两种格式（解密时自动检测）。
  *
- * @returns SM4Operations 接口实现
+ * @returns SymmetricOperations 接口实现
  */
-export function createSM4(): SM4Operations {
+export function createSM4(): SymmetricOperations {
   return {
+    /** 生成随机密钥（16 字节 = 32 个十六进制字符） */
     generateKey(): string {
       return generateRandomHex(16)
     },
 
+    /** 生成随机 IV（16 字节 = 32 个十六进制字符） */
     generateIV(): string {
       return generateRandomHex(16)
     },
 
+    /**
+     * SM4 对称加密
+     *
+     * 支持 ECB（默认）和 CBC 两种模式，使用 PKCS#7 填充。
+     * CBC 模式需提供合法 IV。
+     *
+     * @param data - 待加密明文
+     * @param key - 密钥（32 字符十六进制）
+     * @param options - 加密模式/IV/输出格式
+     * @returns 成功时返回密文；失败时返回 INVALID_KEY/INVALID_IV/ENCRYPTION_FAILED
+     */
     encrypt(
       data: string,
       key: string,
-      options: SM4Options = {},
+      options: SymmetricOptions = {},
     ): Result<string, CryptoError> {
       const {
         mode = 'ecb',
@@ -103,10 +116,21 @@ export function createSM4(): SM4Operations {
       }
     },
 
+    /**
+     * SM4 对称解密
+     *
+     * 自动检测 base64 格式输入并转换为 hex。
+     * 解密模式和 IV 需与加密时一致。
+     *
+     * @param ciphertext - 密文（hex 或 base64）
+     * @param key - 密钥（32 字符十六进制）
+     * @param options - 解密模式/IV
+     * @returns 成功时返回明文；失败时返回 INVALID_KEY/INVALID_IV/DECRYPTION_FAILED
+     */
     decrypt(
       ciphertext: string,
       key: string,
-      options: SM4Options = {},
+      options: SymmetricOptions = {},
     ): Result<string, CryptoError> {
       const { mode = 'ecb', iv } = options
 
@@ -160,10 +184,17 @@ export function createSM4(): SM4Operations {
       }
     },
 
+    /**
+     * 带 IV 加密（CBC 模式，自动生成随机 IV）
+     *
+     * @param data - 待加密明文
+     * @param key - 密钥（32 字符十六进制）
+     * @returns 成功时返回 { ciphertext, iv }；失败时同 encrypt
+     */
     encryptWithIV(
       data: string,
       key: string,
-    ): Result<SM4EncryptWithIVResult, CryptoError> {
+    ): Result<EncryptWithIVResult, CryptoError> {
       const iv = this.generateIV()
       const result = this.encrypt(data, key, { mode: 'cbc', iv })
 
@@ -174,6 +205,14 @@ export function createSM4(): SM4Operations {
       return ok({ ciphertext: result.data, iv })
     },
 
+    /**
+     * 带 IV 解密（CBC 模式）
+     *
+     * @param ciphertext - 密文
+     * @param key - 密钥
+     * @param iv - 加密时使用的 IV
+     * @returns 成功时返回明文；失败时同 decrypt
+     */
     decryptWithIV(
       ciphertext: string,
       key: string,
@@ -182,6 +221,16 @@ export function createSM4(): SM4Operations {
       return this.decrypt(ciphertext, key, { mode: 'cbc', iv })
     },
 
+    /**
+     * 从密码和盐值派生密钥
+     *
+     * 内部使用 SM3 哈希(password + salt) 取前 32 字符作为密钥。
+     * 注意：此为简单派生，不适用于高安全场景。
+     *
+     * @param password - 密码
+     * @param salt - 盐值
+     * @returns 32 字符十六进制密钥
+     */
     deriveKey(password: string, salt: string): string {
       const combined = password + salt
       const hash = sm3(combined)
@@ -189,10 +238,12 @@ export function createSM4(): SM4Operations {
       return hash.slice(0, 32)
     },
 
+    /** 校验密钥格式是否合法（32 字符十六进制） */
     isValidKey(key: string): boolean {
       return /^[0-9a-f]{32}$/i.test(key)
     },
 
+    /** 校验 IV 格式是否合法（32 字符十六进制） */
     isValidIV(iv: string): boolean {
       return /^[0-9a-f]{32}$/i.test(iv)
     },

@@ -29,14 +29,14 @@ import { transportEncryptionMiddleware } from '../src/modules/crypto/transport-m
 /**
  * 创建一个可实际完成加密/解密往返的 Mock 加密服务
  *
- * SM2：使用简单的 XOR + base16 模拟非对称加密
- * SM4：使用 reverse + prefix 模拟对称加密
+ * 非对称：使用简单的 XOR + base16 模拟非对称加密
+ * 对称：使用 reverse + prefix 模拟对称加密
  */
 function createMockCryptoService(): TransportCryptoServiceLike {
   let keyPairCounter = 0
 
   return {
-    sm2: {
+    asymmetric: {
       generateKeyPair: () => {
         keyPairCounter++
         return {
@@ -61,8 +61,8 @@ function createMockCryptoService(): TransportCryptoServiceLike {
         return { success: true, data: decoded }
       },
     },
-    sm4: {
-      generateKey: () => `sm4key_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+    symmetric: {
+      generateKey: () => `symkey_${Date.now()}_${Math.random().toString(36).slice(2)}`,
       encryptWithIV: (data: string, _key: string) => {
         // 简单模拟：base64 编码
         const iv = `mock_iv_${Math.random().toString(36).slice(2, 10)}`
@@ -83,15 +83,15 @@ function createMockCryptoService(): TransportCryptoServiceLike {
  */
 function createFailingCryptoService(): TransportCryptoServiceLike {
   return {
-    sm2: {
+    asymmetric: {
       generateKeyPair: () => ({ success: false, error: { code: 1, message: 'Key generation failed' } }),
       encrypt: () => ({ success: false, error: { code: 2, message: 'Encrypt failed' } }),
       decrypt: () => ({ success: false, error: { code: 3, message: 'Decrypt failed' } }),
     },
-    sm4: {
+    symmetric: {
       generateKey: () => 'dummy',
-      encryptWithIV: () => ({ success: false, error: { code: 4, message: 'SM4 encrypt failed' } }),
-      decryptWithIV: () => ({ success: false, error: { code: 5, message: 'SM4 decrypt failed' } }),
+      encryptWithIV: () => ({ success: false, error: { code: 4, message: 'Symmetric encrypt failed' } }),
+      decryptWithIV: () => ({ success: false, error: { code: 5, message: 'Symmetric decrypt failed' } }),
     },
   }
 }
@@ -429,14 +429,14 @@ describe('transportEncryptionMiddleware', () => {
 
     // 2. 客户端构造加密请求
     const originalBody = JSON.stringify({ action: 'test', value: 42 })
-    const sm4Key = cryptoService.sm4.generateKey()
-    const sm4Enc = cryptoService.sm4.encryptWithIV(originalBody, sm4Key)
-    const sm2EncKey = cryptoService.sm2.encrypt(sm4Key, exchangeData.serverPublicKey)
+    const symKey = cryptoService.symmetric.generateKey()
+    const symEnc = cryptoService.symmetric.encryptWithIV(originalBody, symKey)
+    const asymEncKey = cryptoService.asymmetric.encrypt(symKey, exchangeData.serverPublicKey)
 
     const encryptedPayload: EncryptedPayload = {
-      encryptedKey: sm2EncKey.data!,
-      ciphertext: sm4Enc.data!.ciphertext,
-      iv: sm4Enc.data!.iv,
+      encryptedKey: asymEncKey.data!,
+      ciphertext: symEnc.data!.ciphertext,
+      iv: symEnc.data!.iv,
     }
 
     // 3. 发送加密请求
@@ -530,7 +530,7 @@ describe('端到端加解密往返', () => {
     const serverManager = createTransportEncryption(cryptoService)
 
     // 客户端：生成密钥对
-    const clientKeyPair = cryptoService.sm2.generateKeyPair().data!
+    const clientKeyPair = cryptoService.asymmetric.generateKeyPair().data!
     const serverPublicKey = serverManager.getServerPublicKey()
 
     // 密钥交换
@@ -541,14 +541,14 @@ describe('端到端加解密往返', () => {
     const requestData = JSON.stringify({ query: 'SELECT * FROM users', page: 1 })
 
     // 客户端加密
-    const sm4Key1 = cryptoService.sm4.generateKey()
-    const sm4Enc1 = cryptoService.sm4.encryptWithIV(requestData, sm4Key1)
-    const sm2EncKey1 = cryptoService.sm2.encrypt(sm4Key1, serverPublicKey)
+    const symKey1 = cryptoService.symmetric.generateKey()
+    const symEnc1 = cryptoService.symmetric.encryptWithIV(requestData, symKey1)
+    const asymEncKey1 = cryptoService.asymmetric.encrypt(symKey1, serverPublicKey)
 
     const requestPayload: EncryptedPayload = {
-      encryptedKey: sm2EncKey1.data!,
-      ciphertext: sm4Enc1.data!.ciphertext,
-      iv: sm4Enc1.data!.iv,
+      encryptedKey: asymEncKey1.data!,
+      ciphertext: symEnc1.data!.ciphertext,
+      iv: symEnc1.data!.iv,
     }
 
     // 服务端解密
@@ -563,10 +563,10 @@ describe('端到端加解密往返', () => {
     const responsePayload = serverManager.encryptResponse(clientId, responseData)
 
     // 客户端解密
-    const keyDecResult = cryptoService.sm2.decrypt(responsePayload.encryptedKey, clientKeyPair.privateKey)
+    const keyDecResult = cryptoService.asymmetric.decrypt(responsePayload.encryptedKey, clientKeyPair.privateKey)
     expect(keyDecResult.success).toBe(true)
 
-    const contentDecResult = cryptoService.sm4.decryptWithIV(
+    const contentDecResult = cryptoService.symmetric.decryptWithIV(
       responsePayload.ciphertext,
       keyDecResult.data!,
       responsePayload.iv,

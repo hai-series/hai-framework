@@ -3,23 +3,7 @@ import { crypto, CryptoErrorCode } from '../src/index.js'
 
 describe('crypto.password', () => {
   beforeAll(async () => {
-    await crypto.init({})
-  })
-
-  it('should create standalone password provider via crypto.createHaiPasswordProvider', () => {
-    const provider = crypto.createHaiPasswordProvider()
-
-    const hashResult = provider.hash('standalonePassword123')
-    expect(hashResult.success).toBe(true)
-    if (!hashResult.success)
-      return
-
-    const verifyResult = provider.verify('standalonePassword123', hashResult.data)
-    expect(verifyResult.success).toBe(true)
-    if (!verifyResult.success)
-      return
-
-    expect(verifyResult.data).toBe(true)
+    await crypto.init()
   })
 
   // ─── 正常流 ───
