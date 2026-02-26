@@ -38,7 +38,7 @@ let currentConfig: StorageConfig | null = null
  *
  * @param config - 经 Schema 校验后的存储配置
  * @returns 对应类型的 Provider 实例（尚未连接）
- * @throws 当 config.type 不在 's3' | 'local' 范围内时抛出异常
+ * @throws 理论上仅在出现未覆盖分支时抛出异常（正常情况下由 Schema 保证不会发生）
  */
 function createProvider(config: StorageConfig): StorageProvider {
   switch (config.type) {
@@ -105,13 +105,13 @@ const notInitializedPresign = new Proxy(
  */
 export const storage: StorageFunctions = {
   /**
-   * 初始化存储连接
+   * 初始化存储连接。
    *
    * 如果当前已有活跃连接，会先自动 close 再重新初始化。
-   * 配置会通过 Zod Schema 校验，校验失败会返回 CONNECTION_FAILED 错误。
+   * 配置会通过 Zod Schema 校验；校验失败或连接异常会返回 `CONNECTION_FAILED`。
    *
-   * @param config - 存储配置（S3 或本地），支持省略带默认值的字段
-   * @returns 成功时返回 ok(undefined)；失败时返回包含错误码和消息的 err
+   * @param config 存储配置（S3 或本地），支持省略带默认值的字段。
+   * @returns 成功时返回 ok(undefined)；失败时返回包含错误码和消息的 err。
    */
   async init(config: StorageConfigInput): Promise<Result<void, StorageError>> {
     await storage.close()

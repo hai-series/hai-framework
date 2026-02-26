@@ -20,8 +20,8 @@
  *     }
  * })
  *
- * // 下载文件
- * await downloadWithPresignedUrl(presignedUrl, {
+ * // 下载文件并保存
+ * await downloadAndSave(presignedUrl, {
  *     filename: 'download.pdf'
  * })
  * ```
@@ -56,7 +56,7 @@ export interface UploadProgress {
 export interface ClientUploadOptions {
   /** 内容类型（设置后会加到请求 Content-Type 头） */
   contentType?: string
-  /** 进度回调（设置后会使用 XMLHttpRequest 以支持上传进度） */
+  /** 进度回调（设置后会使用 XMLHttpRequest；仅 lengthComputable=true 时回调） */
   onProgress?: (progress: UploadProgress) => void
   /** AbortController 用于取消上传（abort 后返回 {success: false}） */
   abortController?: AbortController
@@ -208,7 +208,7 @@ export async function uploadWithPresignedUrl(
  *
  * @param url - 后端生成的下载签名 URL
  * @param options - 下载选项
- * @returns 下载的数据
+ * @returns 下载结果（成功时 data 为 Blob）
  *
  * @example
  * ```ts
