@@ -56,7 +56,7 @@ import { ai, AIErrorCode, createMcpServer, createToolRegistry, defineTool } from
 ai.init({
   llm: {
     model: 'gpt-4o-mini',
-    apiKey: process.env.OPENAI_API_KEY,
+    apiKey: process.env.HAI_OPENAI_API_KEY,
     baseUrl: 'https://api.openai.com/v1', // 可选，默认 OpenAI
     maxTokens: 4096, // 可选
     temperature: 0.7, // 可选

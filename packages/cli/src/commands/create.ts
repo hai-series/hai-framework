@@ -815,6 +815,10 @@ async function generateProjectFiles(
   }
   // 始终生成 core 配置
   await writeFile(path.join(projectPath, 'config', '_core.yml'), generateConfigFile('core', configs))
+
+  // 生成 .env.example
+  const { generateEnvExample } = await import('./config-templates.js')
+  await writeFile(path.join(projectPath, '.env.example'), generateEnvExample(options.features || [], configs))
 }
 
 /**
