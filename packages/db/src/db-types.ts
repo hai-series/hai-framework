@@ -72,15 +72,18 @@ export interface DbError {
  *
  * 统一的列类型定义，会根据不同数据库自动映射：
  *
- * | 类型        | SQLite  | PostgreSQL       | MySQL      |
- * |------------|---------|------------------|------------|
- * | TEXT       | TEXT    | TEXT             | TEXT       |
- * | INTEGER    | INTEGER | INTEGER          | INT        |
- * | REAL       | REAL    | DOUBLE PRECISION | DOUBLE     |
- * | BLOB       | BLOB    | BYTEA            | BLOB       |
- * | BOOLEAN    | INTEGER | BOOLEAN          | TINYINT(1) |
- * | TIMESTAMP  | INTEGER | TIMESTAMPTZ      | DATETIME   |
- * | JSON       | TEXT    | JSONB            | JSON       |
+ * | 类型        | SQLite  | PostgreSQL       | MySQL        |
+ * |------------|---------|------------------|--------------|
+ * | TEXT       | TEXT    | TEXT             | VARCHAR(255) |
+ * | INTEGER    | INTEGER | INTEGER/SERIAL   | INT/BIGINT   |
+ * | REAL       | REAL    | DOUBLE PRECISION | DOUBLE       |
+ * | BLOB       | BLOB    | BYTEA            | BLOB         |
+ * | BOOLEAN    | INTEGER | BOOLEAN          | TINYINT(1)   |
+ * | TIMESTAMP  | INTEGER | TIMESTAMPTZ      | DATETIME     |
+ * | JSON       | TEXT    | JSONB            | JSON         |
+ *
+ * 注：MySQL 将 TEXT 映射为 VARCHAR(255) 以支持索引和 UNIQUE 约束。
+ * INTEGER 在 MySQL autoIncrement 时映射为 BIGINT，否则映射为 INT。
  */
 export type ColumnType
   = | 'TEXT'

@@ -187,14 +187,36 @@ if (txResult.success) {
 
 ## 错误处理
 
+所有操作返回 `Result<T, DbError>`，通过 `result.success` 判断成功或失败。
+
 ```ts
+import { db, DbErrorCode } from '@h-ai/db'
+
 const result = await db.sql.query('SELECT * FROM users')
 if (!result.success) {
-  if (result.error.code === DbErrorCode.NOT_INITIALIZED) {
-    // 请先调用 db.init()
+  switch (result.error.code) {
+    case DbErrorCode.NOT_INITIALIZED:
+      // 请先调用 db.init()
+      break
+    case DbErrorCode.QUERY_FAILED:
+      // SQL 执行错误
+      break
+    case DbErrorCode.CONSTRAINT_VIOLATION:
+      // 约束违反（如唯一约束、外键等）
+      break
   }
 }
 ```
+
+常用错误码：
+
+- `NOT_INITIALIZED` — 未初始化
+- `CONNECTION_FAILED` — 连接失败
+- `QUERY_FAILED` — 查询/执行失败
+- `CONSTRAINT_VIOLATION` — 约束违反
+- `TRANSACTION_FAILED` — 事务失败
+- `DDL_FAILED` — DDL 操作失败
+- `CONFIG_ERROR` — 配置错误
 
 ## 测试
 
