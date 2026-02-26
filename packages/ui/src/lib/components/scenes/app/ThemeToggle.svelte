@@ -14,9 +14,9 @@
   />
 -->
 <script lang='ts'>
-  import { isDarkTheme } from '../../theme-config.js'
-  import IconButton from '../primitives/IconButton.svelte'
-  import { m } from '../../messages.js'
+  import { isDarkTheme } from '../../../theme-config.js'
+  import IconButton from '../../primitives/IconButton.svelte'
+  import { m } from '../../../messages.js'
 
   interface Props {
     currentTheme?: string

@@ -203,7 +203,7 @@
 </script>
 
 <svelte:head>
-  <title>{m.iam_users_title()} - Admin Console</title>
+  <title>{m.iam_users_title()} - {m.app_title()}</title>
 </svelte:head>
 
 <div class="space-y-6">

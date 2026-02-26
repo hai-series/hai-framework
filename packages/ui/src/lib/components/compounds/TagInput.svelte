@@ -10,15 +10,13 @@
 <script lang="ts">
   import type { TagInputProps } from '../../types.js'
   import { cn, getInputSizeClass } from '../../utils.js'
+  import { m } from '../../messages.js'
   import Tag from '../primitives/Tag.svelte'
   import BareInput from '../primitives/BareInput.svelte'
   
-  // 默认占位符
-  const defaultPlaceholder = 'Press Enter to add'
-  
   let {
     tags = $bindable([]),
-    placeholder = defaultPlaceholder,
+    placeholder,
     maxTags = 0,
     allowDuplicates = false,
     disabled = false,
@@ -30,6 +28,8 @@
   let inputValue = $state('')
   let inputElement = $state<HTMLInputElement | undefined>(undefined)
   
+  const displayPlaceholder = $derived(placeholder ?? m('tag_input_placeholder'))
+
   const containerClass = $derived(
     cn(
       'input input-bordered flex flex-wrap items-center gap-1 min-h-[2.5rem] h-auto py-1',
@@ -95,7 +95,7 @@
       class="flex-1 min-w-[100px] bg-transparent border-none outline-none text-sm"
       bind:value={inputValue}
       bind:inputRef={inputElement}
-      {placeholder}
+      placeholder={displayPlaceholder}
       {disabled}
       onkeydown={handleKeydown}
       onblur={handleBlur}

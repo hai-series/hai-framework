@@ -5,7 +5,7 @@
 <script lang="ts">
   import type { Snippet } from 'svelte'
   import type { LayoutData } from './$types'
-  import { page } from '$app/stores'
+  import { page } from '$app/state'
   import { goto } from '$app/navigation'
   import * as m from '$lib/paraglide/messages'
   
@@ -17,7 +17,7 @@
   let { data, children }: Props = $props()
   
   // 从配置获取应用信息
-  const appName = $derived(data.appConfig?.name ?? 'hai Admin')
+  const appName = $derived(data.appConfig?.name ?? m.app_title())
   const appVersion = $derived(data.appConfig?.version ?? '0.1.0')
   
   /** 侧边栏收起状态 */
@@ -75,7 +75,7 @@
   let expandedMenus = $state<Set<string>>(new Set(['/admin/iam']))
   
   /** 当前路径 */
-  const currentPath = $derived($page.url.pathname)
+  const currentPath = $derived(page.url.pathname)
   
   /** 检查是否为当前菜单 */
   function isActive(path: string): boolean {

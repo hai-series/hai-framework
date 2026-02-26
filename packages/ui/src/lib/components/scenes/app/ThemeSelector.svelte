@@ -16,9 +16,10 @@
   />
 -->
 <script lang='ts'>
-  import { cn } from '../../utils.js'
-  import { THEMES, THEME_GROUPS, type ThemeInfo } from '../../theme-config.js'
-  import BareButton from '../primitives/BareButton.svelte'
+  import { cn } from '../../../utils.js'
+  import { m } from '../../../messages.js'
+  import { THEMES, THEME_GROUPS, type ThemeInfo } from '../../../theme-config.js'
+  import BareButton from '../../primitives/BareButton.svelte'
 
   interface Props {
     currentTheme?: string
@@ -32,12 +33,14 @@
 
   let {
     currentTheme = 'light',
-    selectLabel = 'Select theme',
+    selectLabel,
     onchange,
     showPreview = true,
     grouped = true,
     class: className = '',
   }: Props = $props()
+
+  const displaySelectLabel = $derived(selectLabel ?? m('theme_selector_label'))
 
   let open = $state(false)
   let containerRef = $state<HTMLDivElement | null>(null)
@@ -78,7 +81,7 @@
     type='button'
     class='btn btn-ghost gap-2'
     onclick={() => (open = !open)}
-    ariaLabel={selectLabel}
+    ariaLabel={displaySelectLabel}
   >
     <!-- 当前主题预览 -->
     {#if showPreview}

@@ -12,11 +12,11 @@
   />
 -->
 <script lang='ts'>
-  import Button from '../primitives/Button.svelte'
-  import Modal from './Modal.svelte'
-  import Input from '../primitives/Input.svelte'
-  import Select from '../primitives/Select.svelte'
-  import Textarea from '../primitives/Textarea.svelte'
+  import Button from '../../primitives/Button.svelte'
+  import Modal from '../../compounds/Modal.svelte'
+  import Input from '../../primitives/Input.svelte'
+  import Select from '../../primitives/Select.svelte'
+  import Textarea from '../../primitives/Textarea.svelte'
 
   type FeedbackType = 'bug' | 'feature' | 'question' | 'other'
 
@@ -47,7 +47,7 @@
     }
   }
   
-  import { m } from '../../messages.js'
+  import { m } from '../../../messages.js'
 
   interface Props {
     open?: boolean

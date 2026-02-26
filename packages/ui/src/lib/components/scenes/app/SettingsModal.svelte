@@ -10,9 +10,9 @@
   @prop {function} onthemechange - 主题变更回调
 -->
 <script lang='ts'>
-  import IconButton from '../primitives/IconButton.svelte'
-  import BareButton from '../primitives/BareButton.svelte'
-  import { m } from '../../messages.js'
+  import IconButton from '../../primitives/IconButton.svelte'
+  import BareButton from '../../primitives/BareButton.svelte'
+  import { m } from '../../../messages.js'
   
   interface Props {
     open?: boolean

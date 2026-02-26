@@ -11,6 +11,7 @@
 <script lang="ts">
   import type { DrawerProps } from '../../types.js'
   import { cn, generateId } from '../../utils.js'
+  import { m } from '../../messages.js'
   import IconButton from '../primitives/IconButton.svelte'
   import ToggleCheckbox from '../primitives/ToggleCheckbox.svelte'
   
@@ -76,7 +77,7 @@
     <div
       role="button"
       tabindex="0"
-      aria-label="close sidebar"
+      aria-label={m('drawer_close')}
       class="drawer-overlay"
       onclick={handleBackdropClick}
       onkeydown={(e) => e.key === 'Enter' && handleBackdropClick()}
@@ -91,7 +92,7 @@
         {/if}
         
         {#if showClose}
-          <IconButton size="sm" variant="ghost" label="Close" onclick={handleClose}>
+          <IconButton size="sm" variant="ghost" label={m('common_close')} onclick={handleClose}>
             {#snippet children()}
               <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />

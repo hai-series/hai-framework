@@ -8,6 +8,7 @@
   import { browser } from '$app/environment'
   import { core } from '@h-ai/core'
   import { getLocale } from '$lib/paraglide/runtime.js'
+  import * as m from '$lib/paraglide/messages'
   
   interface Props {
     children: Snippet
@@ -25,7 +26,7 @@
 
 <svelte:head>
   <meta name="theme-color" content="#570df8" />
-  <meta name="description" content="hai Admin Console - 现代化管理后台" />
+  <meta name="description" content={m.meta_description()} />
 </svelte:head>
 
 {@render children()}
