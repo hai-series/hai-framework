@@ -89,7 +89,7 @@ export const iam: IamFunctions = {
 
       // 确保 crypto 已初始化（密码哈希依赖）
       if (!crypto.isInitialized) {
-        const cryptoResult = await crypto.init({})
+        const cryptoResult = await crypto.init()
         if (!cryptoResult.success) {
           return err({
             code: IamErrorCode.CONFIG_ERROR,

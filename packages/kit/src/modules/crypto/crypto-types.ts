@@ -156,23 +156,23 @@ export interface TransportKeyPair {
 /**
  * 传输加密服务接口（解耦 @h-ai/crypto）
  *
- * 只声明传输加密所需的 SM2 + SM4 子集，由使用者注入实际实现。
+ * 只声明传输加密所需的非对称 + 对称加密子集，由使用者注入实际实现。
  */
 export interface TransportCryptoServiceLike {
-  sm2: {
-    /** 生成 SM2 密钥对 */
+  asymmetric: {
+    /** 生成非对称密钥对 */
     generateKeyPair: () => { success: boolean, data?: TransportKeyPair, error?: { code: number, message: string } }
-    /** SM2 加密 */
+    /** 非对称加密 */
     encrypt: (data: string, publicKey: string) => { success: boolean, data?: string, error?: { code: number, message: string } }
-    /** SM2 解密 */
+    /** 非对称解密 */
     decrypt: (ciphertext: string, privateKey: string) => { success: boolean, data?: string, error?: { code: number, message: string } }
   }
-  sm4: {
-    /** 生成随机 SM4 密钥 */
+  symmetric: {
+    /** 生成随机对称密钥 */
     generateKey: () => string
-    /** SM4 带 IV 加密（CBC 模式，自动生成 IV） */
+    /** 带 IV 加密（CBC 模式，自动生成 IV） */
     encryptWithIV: (data: string, key: string) => { success: boolean, data?: { ciphertext: string, iv: string }, error?: { code: number, message: string } }
-    /** SM4 带 IV 解密（CBC 模式） */
+    /** 带 IV 解密（CBC 模式） */
     decryptWithIV: (ciphertext: string, key: string, iv: string) => { success: boolean, data?: string, error?: { code: number, message: string } }
   }
 }

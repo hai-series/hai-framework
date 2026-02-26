@@ -143,8 +143,8 @@ export function useTransportEncryption(options: UseTransportEncryptionOptions): 
    */
   async function init(): Promise<void> {
     try {
-      // 1. 生成客户端 SM2 密钥对
-      const keyPairResult = cryptoService.sm2.generateKeyPair()
+      // 1. 生成客户端非对称密钥对
+      const keyPairResult = cryptoService.asymmetric.generateKeyPair()
       if (!keyPairResult.success || !keyPairResult.data) {
         state.set({ ready: false, error: 'Failed to generate key pair', encryptedFetch: noopFetch })
         return
@@ -211,19 +211,19 @@ function encryptData(
   data: string,
   serverPublicKey: string,
 ): EncryptedPayload {
-  // 1. 生成 SM4 对称密钥
-  const symmetricKey = cryptoService.sm4.generateKey()
+  // 1. 生成对称密钥
+  const symmetricKey = cryptoService.symmetric.generateKey()
 
-  // 2. SM4 加密内容
-  const encResult = cryptoService.sm4.encryptWithIV(data, symmetricKey)
+  // 2. 对称加密内容
+  const encResult = cryptoService.symmetric.encryptWithIV(data, symmetricKey)
   if (!encResult.success || !encResult.data) {
-    throw new Error('SM4 encryption failed')
+    throw new Error('Symmetric encryption failed')
   }
 
-  // 3. SM2 加密对称密钥（使用服务端公钥）
-  const keyEncResult = cryptoService.sm2.encrypt(symmetricKey, serverPublicKey)
+  // 3. 非对称加密对称密钥（使用服务端公钥）
+  const keyEncResult = cryptoService.asymmetric.encrypt(symmetricKey, serverPublicKey)
   if (!keyEncResult.success || !keyEncResult.data) {
-    throw new Error('SM2 key encryption failed')
+    throw new Error('Asymmetric key encryption failed')
   }
 
   return {
@@ -241,16 +241,16 @@ function decryptData(
   payload: EncryptedPayload,
   clientPrivateKey: string,
 ): string {
-  // 1. SM2 解密对称密钥（使用客户端私钥）
-  const keyDecResult = cryptoService.sm2.decrypt(payload.encryptedKey, clientPrivateKey)
+  // 1. 非对称解密对称密钥（使用客户端私钥）
+  const keyDecResult = cryptoService.asymmetric.decrypt(payload.encryptedKey, clientPrivateKey)
   if (!keyDecResult.success || !keyDecResult.data) {
-    throw new Error('SM2 key decryption failed')
+    throw new Error('Asymmetric key decryption failed')
   }
 
-  // 2. SM4 解密内容
-  const decResult = cryptoService.sm4.decryptWithIV(payload.ciphertext, keyDecResult.data, payload.iv)
+  // 2. 对称解密内容
+  const decResult = cryptoService.symmetric.decryptWithIV(payload.ciphertext, keyDecResult.data, payload.iv)
   if (!decResult.success || typeof decResult.data !== 'string') {
-    throw new Error('SM4 decryption failed')
+    throw new Error('Symmetric decryption failed')
   }
 
   return decResult.data

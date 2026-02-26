@@ -250,7 +250,7 @@ import { storage } from '@h-ai/storage'
 await storage.init({ type: 'local', root: './uploads' })
 
 // 上传
-await storage.file.put('docs/readme.txt', Buffer.from('Hello'))
+await storage.file.put('docs/readme.txt', new TextEncoder().encode('Hello'))
 
 // 下载
 const data = await storage.file.get('docs/readme.txt')
@@ -307,16 +307,16 @@ export const handle = kit.createHandle({
 ```typescript
 import { crypto } from '@h-ai/crypto'
 
-await crypto.init({})
+await crypto.init()
 
-// SM2 非对称加密
-const keyPair = crypto.sm2.generateKeyPair()
-const encrypted = crypto.sm2.encrypt('敏感数据', keyPair.data.publicKey)
-const decrypted = crypto.sm2.decrypt(encrypted.data, keyPair.data.privateKey)
+// 非对称加密
+const keyPair = crypto.asymmetric.generateKeyPair()
+const encrypted = crypto.asymmetric.encrypt('敏感数据', keyPair.data.publicKey)
+const decrypted = crypto.asymmetric.decrypt(encrypted.data, keyPair.data.privateKey)
 
-// SM4 对称加密
-const key = crypto.sm4.generateKey()
-const cipher = crypto.sm4.encrypt('明文', key)
+// 对称加密
+const key = crypto.symmetric.generateKey()
+const cipher = crypto.symmetric.encrypt('明文', key)
 
 // 密码哈希
 const hashed = crypto.password.hash('MyPassword123')

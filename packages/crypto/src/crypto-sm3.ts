@@ -2,8 +2,8 @@ import type { Result } from '@h-ai/core'
 
 import type {
   CryptoError,
-  SM3Operations,
-  SM3Options,
+  HashOperations,
+  HashOptions,
 } from './crypto-types.js'
 
 import { err, ok } from '@h-ai/core'
@@ -24,13 +24,22 @@ const { sm3 } = smCrypto
  * 支持字符串（UTF-8/Hex）和 Uint8Array 输入。
  * HMAC 实现遵循 RFC 2104 标准。
  *
- * @returns SM3Operations 接口实现
+ * @returns HashOperations 接口实现
  */
-export function createSM3(): SM3Operations {
+export function createSM3(): HashOperations {
   return {
+    /**
+     * 计算 SM3 哈希
+     *
+     * 支持字符串（UTF-8/Hex）和 Uint8Array 输入。
+     *
+     * @param data - 待哈希数据
+     * @param options - 输入编码与输出格式
+     * @returns 成功时返回 64 字符十六进制哈希值；失败时返回 HASH_FAILED
+     */
     hash(
       data: string | Uint8Array,
-      options: SM3Options = {},
+      options: HashOptions = {},
     ): Result<string, CryptoError> {
       const { inputEncoding = 'utf8', outputFormat = 'hex' } = options
 
@@ -75,6 +84,15 @@ export function createSM3(): SM3Operations {
       }
     },
 
+    /**
+     * 计算 HMAC-SM3 消息认证码
+     *
+     * 实现遵循 RFC 2104；密钥超过块大小（64 字节）时先对密钥做哈希。
+     *
+     * @param data - 待计算数据
+     * @param key - HMAC 密钥
+     * @returns 成功时返回 64 字符十六进制 HMAC 值；失败时返回 HMAC_FAILED
+     */
     hmac(data: string, key: string): Result<string, CryptoError> {
       try {
         const blockSize = 64
@@ -119,6 +137,15 @@ export function createSM3(): SM3Operations {
       }
     },
 
+    /**
+     * 验证数据的哈希是否匹配
+     *
+     * 对数据做 SM3 哈希后与期望值比较（忽略大小写）。
+     *
+     * @param data - 原始数据
+     * @param expectedHash - 期望的哈希值
+     * @returns 成功时返回 boolean；失败时返回 HASH_FAILED
+     */
     verify(data: string, expectedHash: string): Result<boolean, CryptoError> {
       try {
         const hashResult = sm3(data)

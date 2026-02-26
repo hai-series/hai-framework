@@ -340,33 +340,33 @@ ai.close()
 
 ### @hai/crypto — 国密加密
 
-SM2（非对称加密/签名）、SM3（哈希/HMAC）、SM4（对称加密），以及密码哈希。所有加密方法是同步的，返回 `Result`。
+非对称加密/签名、哈希/HMAC、对称加密，以及密码哈希。所有加密方法是同步的，返回 `Result`。
 
 ```typescript
 import { crypto } from '@hai/crypto'
 
-await crypto.init({})
+await crypto.init()
 
-// --- SM2 非对称 ---
-const keyPair = crypto.sm2.generateKeyPair()             // Result<{ publicKey, privateKey }>
-const enc = crypto.sm2.encrypt('明文', keyPair.data.publicKey)
-const dec = crypto.sm2.decrypt(enc.data, keyPair.data.privateKey)
-const sig = crypto.sm2.sign('data', keyPair.data.privateKey)
-const ok = crypto.sm2.verify('data', sig.data, keyPair.data.publicKey)
+// --- 非对称加密 ---
+const keyPair = crypto.asymmetric.generateKeyPair()       // Result<{ publicKey, privateKey }>
+const enc = crypto.asymmetric.encrypt('明文', keyPair.data.publicKey)
+const dec = crypto.asymmetric.decrypt(enc.data, keyPair.data.privateKey)
+const sig = crypto.asymmetric.sign('data', keyPair.data.privateKey)
+const ok = crypto.asymmetric.verify('data', sig.data, keyPair.data.publicKey)
 
-// --- SM3 哈希 ---
-const hash = crypto.sm3.hash('data')                     // Result<string>
-const hmac = crypto.sm3.hmac('data', 'key')
+// --- 哈希 ---
+const hash = crypto.hash.hash('data')                     // Result<string>
+const hmac = crypto.hash.hmac('data', 'key')
 
-// --- SM4 对称 ---
-const key = crypto.sm4.generateKey()                     // 16字节 hex
-const iv = crypto.sm4.generateIV()
-const encrypted = crypto.sm4.encrypt('明文', key)         // ECB 模式
-const withIV = crypto.sm4.encryptWithIV('明文', key)      // CBC 模式，自动生成 IV
-const plain = crypto.sm4.decryptWithIV(withIV.data.ciphertext, key, withIV.data.iv)
+// --- 对称加密 ---
+const key = crypto.symmetric.generateKey()                // 16字节 hex
+const iv = crypto.symmetric.generateIV()
+const encrypted = crypto.symmetric.encrypt('明文', key)    // ECB 模式
+const withIV = crypto.symmetric.encryptWithIV('明文', key) // CBC 模式，自动生成 IV
+const plain = crypto.symmetric.decryptWithIV(withIV.data.ciphertext, key, withIV.data.iv)
 
 // --- 密码哈希 ---
-const hashed = crypto.password.hash('MyPassword')         // SM3 + salt + 迭代
+const hashed = crypto.password.hash('MyPassword')         // salt + 迭代
 const valid = crypto.password.verify('MyPassword', hashed.data)
 
 await crypto.close()

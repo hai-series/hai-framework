@@ -2,7 +2,7 @@
   "name": "@h-ai/crypto",
   "type": "module",
   "version": "0.1.0",
-  "description": "Chinese National Cryptographic Algorithms (SM2/SM3/SM4) module for hai Framework.",
+  "description": "Cryptographic module (asymmetric/hash/symmetric) for hai Framework.",
   "license": "Apache-2.0",
   "exports": {
     ".": {
@@ -30,8 +30,7 @@
   },
   "dependencies": {
     "@h-ai/core": "workspace:*",
-    "sm-crypto": "catalog:",
-    "zod": "catalog:"
+    "sm-crypto": "catalog:"
   },
   "devDependencies": {
     "@types/node": "catalog:",
