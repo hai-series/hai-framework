@@ -679,6 +679,9 @@ export function createMysqlProvider(): DbProvider {
           statements,
         )
         if (!batchResult.success) {
+          if (connection) {
+            await connection.rollback().catch(() => { })
+          }
           return batchResult
         }
         await connection.commit()

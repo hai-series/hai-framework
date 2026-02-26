@@ -46,7 +46,8 @@
  * const result = await db.tx.wrap(async (tx) => {
  *     await tx.execute('INSERT INTO users (name) VALUES (?)', ['用户1'])
  *     await tx.execute('INSERT INTO users (name) VALUES (?)', ['用户2'])
- *     return tx.query('SELECT COUNT(*) as count FROM users')
+ *     const count = await tx.get<{ cnt: number }>('SELECT COUNT(*) as cnt FROM users')
+ *     return count
  * })
  *
  * // 6. 关闭连接
@@ -175,7 +176,7 @@ const notInitializedTx: TxManager = {
  * await db.tx.wrap(async (tx) => {
  *     await tx.execute('INSERT INTO users (name) VALUES (?)', ['用户1'])
  *     await tx.execute('INSERT INTO users (name) VALUES (?)', ['用户2'])
- *     return tx.query('SELECT * FROM users').length
+ *     return 'done'
  * })
  *
  * // 关闭连接
