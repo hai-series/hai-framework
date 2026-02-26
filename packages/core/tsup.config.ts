@@ -7,6 +7,6 @@ export default defineConfig({
     node: 'src/index.ts',
     browser: 'src/core-index.browser.ts',
   },
-  external: ['yaml', 'pino', 'pino-pretty', 'loglevel', 'nanoid'],
+  external: ['yaml', 'pino', 'loglevel', 'nanoid'],
   noExternal: ['zod'],
 })

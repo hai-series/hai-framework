@@ -13,10 +13,10 @@
  * core.init({ configDir: './config' })
  *
  * // 配置文件命名约定：
- * // - _db.yml     → 自动使用 DbConfigSchema
- * // - _cache.yml  → 自动使用 CacheConfigSchema
- * // - _iam.yml    → 自动使用 IamConfigSchema
- * // - app.yml     → key 为 'app'，需在 schemas 中指定
+ * // - _core.yml   → 自动使用 CoreConfigSchema 校验
+ * // - _db.yml     → 加载为 'db'（模块自行调用 config.validate 校验）
+ * // - _cache.yml  → 加载为 'cache'（模块自行调用 config.validate 校验）
+ * // - app.yml     → 加载为 'app'（模块自行调用 config.validate 校验）
  *
  * // 日志
  * core.logger.info('Hello')

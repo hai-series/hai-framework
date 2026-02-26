@@ -247,11 +247,9 @@ export interface CoreOptions {
    * 配置目录（约定优于配置模式）
    *
    * 指定后会自动扫描目录中的 yml/yaml 文件：
-   * - `_core.yml` → 使用 CoreConfigSchema
-   * - `_db.yml` → 使用 DbConfigSchema
-   * - `_cache.yml` → 使用 CacheConfigSchema
-   * - `_iam.yml` → 使用 IamConfigSchema
-   * - `app.yml` → key 为 'app'（需提供 schemas）
+   * - `_core.yml` → 自动使用 CoreConfigSchema 校验
+   * - `_xx.yml` → 加载为 'xx'（各模块自行调用 `config.validate` 校验）
+   * - `app.yml` → 加载为 'app'（需使用方自行校验）
    *
    * @example
    * ```ts

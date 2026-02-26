@@ -35,24 +35,6 @@ describe('core.module', () => {
     }
   })
 
-  it('operation 应该返回异步的失败 Result', async () => {
-    const kit = createKit()
-    const result = await kit.operation()
-    expect(result.success).toBe(false)
-    if (!result.success) {
-      expect(result.error.code).toBe(ERROR_CODE)
-    }
-  })
-
-  it('syncOperation 应该返回同步的失败 Result', () => {
-    const kit = createKit()
-    const result = kit.syncOperation()
-    expect(result.success).toBe(false)
-    if (!result.success) {
-      expect(result.error.code).toBe(ERROR_CODE)
-    }
-  })
-
   it('proxy 应该拦截所有属性访问并返回异步失败操作', async () => {
     const kit = createKit()
     interface FakeOps {
@@ -61,7 +43,6 @@ describe('core.module', () => {
     }
     const ops = kit.proxy<FakeOps>()
 
-    // 任意属性访问都返回 operation 函数
     const result1 = await ops.doSomething()
     expect(result1.success).toBe(false)
     if (!result1.success) {
@@ -69,6 +50,24 @@ describe('core.module', () => {
     }
 
     const result2 = await ops.doAnother()
+    expect(result2.success).toBe(false)
+  })
+
+  it('proxy("sync") 应该拦截所有属性访问并返回同步失败操作', () => {
+    const kit = createKit()
+    interface FakeSyncOps {
+      hash: () => { success: boolean, error?: { code: number } }
+      verify: () => { success: boolean, error?: { code: number } }
+    }
+    const ops = kit.proxy<FakeSyncOps>('sync')
+
+    const result1 = ops.hash()
+    expect(result1.success).toBe(false)
+    if (!result1.success) {
+      expect(result1.error?.code).toBe(ERROR_CODE)
+    }
+
+    const result2 = ops.verify()
     expect(result2.success).toBe(false)
   })
 

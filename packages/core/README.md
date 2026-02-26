@@ -1,6 +1,6 @@
 # @h-ai/core
 
-> hai Admin Framework 核心模块 — 提供统一的基础工具、类型定义、配置管理和日志功能。
+> hai Agent Framework 核心模块 — 提供统一的基础工具、类型定义、配置管理和日志功能。
 
 ## 支持的能力
 
@@ -60,8 +60,8 @@ core.init({ configDir: './config', watchConfig: true })
 const AppSchema = z.object({ name: z.string() })
 core.config.load('app', './config/app.yml', AppSchema)
 
-// 使用前校验
-core.config.validate('db', DbConfigSchema)
+// 校验已加载的配置（模块使用 configDir 自动加载的配置前，需显式校验）
+core.config.validate('app', AppSchema)
 
 // 监听变更
 const unwatch = core.config.watch('app', (newConfig, error) => {
