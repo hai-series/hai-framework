@@ -1,17 +1,18 @@
 ---
 name: hai-app-review
-description: 对 hai-framework 应用代码进行审查：检查架构分层、Result 处理、权限守卫、日志规范、类型安全与 i18n 合规；当需求涉及代码审查、规范化、质量检查时使用。
+description: 对应用代码进行审查：检查 TDD 合规性、架构分层、Result 处理、权限守卫、日志规范、类型安全、测试覆盖与 i18n 合规；当需求涉及代码审查、规范化、质量检查时使用。
 ---
 
 # hai-app-review — 应用代码审查规范
 
-> 面向 AI 助手的应用代码审查指南。用于审查使用 hai-framework 构建的 SvelteKit 应用。
+> 面向 AI 助手的应用代码审查指南。用于审查使用 hai-framework 构建的 SvelteKit 应用。本技能也是 TDD Refactor 阶段的执行入口。
 
 ---
 
 ## 适用场景
 
 - 审查应用代码是否符合 hai-framework 规范
+- TDD Refactor 阶段：在测试通过后进行代码重构与规范化
 - 规范化现有代码（分层、命名、日志、i18n）
 - 安全审查（权限、输入校验、密钥管理）
 
@@ -22,6 +23,21 @@ description: 对 hai-framework 应用代码进行审查：检查架构分层、R
 1. **先搜索再改动**：用全局检索确认引用关系，避免遗漏更新。
 2. **最小变更**：除非测试暴露缺陷，不改业务行为。
 3. **成套更新**：代码 / 测试 / 文档同步。
+4. **重构后测试必须仍通过**：任何重构都不能破坏已有测试。
+
+---
+
+## 审查清单
+
+### TDD 合规性
+
+- [ ] 每个功能都有对应的单元测试（`tests/` 目录）
+- [ ] 关键流程有对应的 E2E 测试（`e2e/` 目录）
+- [ ] 单元测试覆盖四种路径：正常、边界、权限、错误
+- [ ] E2E 测试覆盖 API 端点的未认证/认证场景
+- [ ] 测试先于实现编写（TDD 流程已遵循）
+- [ ] `pnpm test` 单元测试全部通过
+- [ ] `pnpm test:e2e` E2E 测试全部通过
 
 ---
 
@@ -117,7 +133,8 @@ if (!result.success)
 
 1. `pnpm typecheck`
 2. `pnpm lint`
-3. `pnpm test`
+3. `pnpm test`（单元测试）
+4. `pnpm --filter <app-name> test:e2e`（E2E 测试）
 
 优先使用 `pnpm --filter <app-name>` 指定应用。
 
@@ -127,12 +144,13 @@ if (!result.success)
 
 - 列出改动文件与原因
 - 说明是否修复了缺陷或仅做规范化
-- 明确测试与 lint 结果
+- 明确测试（单元 + E2E）与 lint 结果
+- 确认重构后所有测试仍然通过
 
 ---
 
 ## 相关 Skills
 
-- `hai-build`：项目架构总览
-- `hai-app-create`：应用功能创建规范
-- `hai-app-tests`：应用测试规范
+- `hai-build`：项目架构总览与 TDD 工作流导航
+- `hai-app-create`：TDD 驱动的应用功能创建规范
+- `hai-app-tests`：TDD 测试规范（Red 阶段详细指引）

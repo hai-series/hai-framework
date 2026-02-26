@@ -13,7 +13,8 @@
 - **样式**：TailwindCSS 4 + DaisyUI 5
 - **后端框架**：hai-framework (`@h-ai/core`, `@h-ai/kit`, `@h-ai/db`, `@h-ai/iam` 等)
 - **统一模式**：`module.init(config) → use → module.close()`，所有操作返回 `Result<T, E>`
-- **测试**：Vitest
+- **单元测试**：Vitest
+- **E2E 测试**：Playwright
 - **包管理**：pnpm
 
 ## 编码规范
@@ -43,12 +44,17 @@
 | `hai-cache`      | 缓存：内存/Redis、TTL、集合操作、分布式锁             |
 | `hai-storage`    | 存储：本地/S3、上传下载、预签名 URL                   |
 | `hai-ai`         | AI：LLM 调用、MCP 服务器、工具定义、流处理            |
-| `hai-app-create` | 创建页面、API、服务、数据模型                         |
-| `hai-app-review` | 应用代码审查清单                                      |
-| `hai-app-tests`  | 应用测试规范                                          |
+| `hai-app-create` | TDD 驱动的功能创建（先测试后实现）                    |
+| `hai-app-review` | 应用代码审查（含 TDD 合规检查）                       |
+| `hai-app-tests`  | TDD 测试规范（Vitest 单元测试 + Playwright E2E）      |
+
+## 开发流程
+
+**必须遵循 TDD**：先写测试（Red）→ 确认失败 → 再实现（Green）→ 确认通过 → 重构（Refactor）。
 
 ## 质量门禁
 
 ```bash
 pnpm typecheck && pnpm lint && pnpm test
+pnpm --filter <app-name> test:e2e     # E2E 测试
 ```

@@ -9,11 +9,12 @@
 ## 核心规范
 
 - 统一模式：`module.init(config) → use → module.close()`，所有操作返回 `Result<T, E>`
+- **TDD 驱动开发**：先写测试（Red）→ 确认失败 → 再实现（Green）→ 确认通过 → 重构（Refactor）
 - 禁止 `any`（使用 `unknown` + 缩窄），禁止 `console.log`（使用 `core.logger`）
 - 用户可见文本走 i18n，代码注释中文，日志英文
 - Result 错误直接透传，不重新包装
 - 框架模块公共 API 不抛异常，统一返回 `Result<T, E>`；不要用 `try/catch` 处理模块返回的错误
-- 质量门禁：`pnpm typecheck && pnpm lint && pnpm test`
+- 质量门禁：`pnpm typecheck && pnpm lint && pnpm test && pnpm --filter <app> test:e2e`
 
 ## Skills 参考
 
@@ -22,4 +23,4 @@
 - **入口**：`hai-build/SKILL.md` — 项目架构总览与 Skill 导航
 - **框架模块**：`hai-core/`、`hai-kit/`、`hai-db/`、`hai-iam/`、`hai-crypto/`、`hai-cache/`、`hai-storage/`、`hai-ai/`
 - **UI 组件**：`hai-ui/SKILL.md`
-- **开发流程**：`hai-app-create/`（创建功能）、`hai-app-review/`（代码审查）、`hai-app-tests/`（测试）
+- **TDD 开发流程**：`hai-app-tests/`（TDD 测试先行）、`hai-app-create/`（TDD 实现）、`hai-app-review/`（TDD 重构审查）

@@ -1,19 +1,21 @@
 ---
 name: hai-ui
-description: 使用 @h-ai/ui 构建应用界面，包含三层组件架构（原子/组合/场景）、自动导入、主题系统与 i18n 集成；当需求涉及表单、表格、Modal、Toast、上传组件、登录/注册表单或主题切换时使用。
+description: 使用 @h-ai/ui 构建应用界面，包含三层组件架构（原子/组合/场景）、DaisyUI 样式 + Bits UI headless 交互、自动导入、主题系统与 i18n 集成；当需求涉及界面、表单、表格、Modal、Toast、Combobox、DatePicker、日历、上传组件、登录/注册表单或主题切换时使用。
 ---
 
 # hai-ui
 
-> `@h-ai/ui` 是基于 Svelte 5 Runes 的应用界面 UI 组件库，采用 DaisyUI + TailwindCSS v4，支持 32 主题、内置中英文 i18n、自动导入。
+> `@h-ai/ui` 是基于 Svelte 5 Runes 的应用界面 UI 组件库，采用 DaisyUI v5 + Tailwind CSS v4 样式 + Bits UI v2 headless 交互，支持 32 主题、内置中英文 i18n、自动导入。
 
 ---
 
 ## 适用场景
 
 - 构建管理后台页面（表单、表格、弹窗、导航等）
+- 使用 Bits UI headless 交互组件（Combobox、DatePicker、Calendar）
 - 使用 IAM 场景组件（登录/注册/密码/用户资料表单）
 - 使用 Storage 场景组件（文件上传/图片上传/文件列表）
+- 使用 App 场景组件（反馈、设置、主题/语言切换）
 - 配置主题切换与 i18n 多语言
 - 需要了解组件 Props 接口
 
@@ -32,7 +34,7 @@ const config = {
 }
 ```
 
-配置后，模板中直接使用组件名，无需手动 import（支持全部 58 个组件）。
+配置后，模板中直接使用组件名，无需手动 import。
 
 ### 2. 在模板中使用
 
@@ -83,32 +85,37 @@ type Size = 'xs' | 'sm' | 'md' | 'lg' | 'xl'
 
 ### 组合组件（Compounds）
 
-由原子组件组合，处理通用交互模式。
+由原子组件 + Bits UI headless 交互组合，处理通用交互模式。
 
-| 组件                       | Props 要点                                   | 说明     |
-| -------------------------- | -------------------------------------------- | -------- |
-| `Form`                     | `loading`, `disabled`, `onsubmit`            | 表单容器 |
-| `FormField`                | `label`, `name`, `error`, `hint`, `required` | 表单字段 |
-| `Alert`                    | `variant`, `title`, `dismissible`            | 提示框   |
-| `Toast` + `ToastContainer` | 通过 `toast.success()` 等调用                | 全局消息 |
-| `Modal`                    | `open`, `title`, `size`, `closeOnBackdrop`   | 模态框   |
-| `Drawer`                   | `open`, `position`, `size`                   | 抽屉     |
-| `Confirm`                  | `open`, `title`, `message`, `onconfirm`      | 确认框   |
-| `Card`                     | `title`, `bordered`, `shadow`, `padding`     | 卡片     |
-| `Table`                    | `data`, `columns: TableColumn[]`, `loading`  | 表格     |
-| `Tabs`                     | `items: TabItem[]`, `active`, `type`         | 标签页   |
-| `Pagination`               | `page`, `total`, `pageSize`, `onchange`      | 分页     |
-| `Breadcrumb`               | `items: BreadcrumbItem[]`                    | 面包屑   |
-| `Steps`                    | `items: StepItem[]`, `current`               | 步骤条   |
-| `Dropdown`                 | `items: DropdownItem[]`, `trigger`           | 下拉菜单 |
-| `Tooltip`                  | `content`, `position`, `delay`               | 文字提示 |
-| `Popover`                  | `open`, `position`, `trigger`                | 弹出层   |
-| `TagInput`                 | `tags`, `maxTags`, `allowDuplicates`         | 标签输入 |
-| `Accordion`                | `items: AccordionItem[]`                     | 折叠面板 |
-| `Timeline`                 | `items: TimelineItem[]`                      | 时间线   |
-| `Skeleton`                 | `variant`, `count`, `animation`              | 骨架屏   |
-| `Empty`                    | `title`, `description`, `icon`               | 空状态   |
-| `Result`                   | `status`, `title`, `description`             | 结果页   |
+| 组件             | Props 要点                                   | 技术基座      | 说明           |
+| ---------------- | -------------------------------------------- | ------------- | -------------- |
+| `Form`           | `loading`, `disabled`, `onsubmit`            | DaisyUI       | 表单容器       |
+| `FormField`      | `label`, `name`, `error`, `hint`, `required` | DaisyUI       | 表单字段       |
+| `Alert`          | `variant`, `title`, `dismissible`            | DaisyUI       | 提示框         |
+| `ToastContainer` | 通过 `toast.success()` 等调用                | DaisyUI store | 全局消息       |
+| `Modal`          | `open`, `title`, `size`, `closeOnBackdrop`   | DaisyUI       | 模态框         |
+| `Drawer`         | `open`, `position`, `size`                   | DaisyUI       | 抽屉           |
+| `Confirm`        | `open`, `title`, `message`, `onconfirm`      | DaisyUI       | 确认框         |
+| `Card`           | `title`, `bordered`, `shadow`, `padding`     | DaisyUI       | 卡片           |
+| `DataTable`      | `data`, `columns`, `keyField`, snippet slots | DaisyUI       | 数据表格       |
+| `Combobox`       | `options`, `value`, `placeholder`, `error`   | **Bits UI**   | 可搜索下拉选择 |
+| `Calendar`       | `value`, `minValue`, `maxValue`              | **Bits UI**   | 独立日历       |
+| `DatePicker`     | `value`, `minValue`, `maxValue`, `error`     | **Bits UI**   | 日期输入+弹出  |
+| `Tabs`           | `items: TabItem[]`, `active`, `type`         | DaisyUI       | 标签页         |
+| `Pagination`     | `page`, `total`, `pageSize`, `onchange`      | DaisyUI       | 分页           |
+| `Breadcrumb`     | `items: BreadcrumbItem[]`                    | DaisyUI       | 面包屑         |
+| `Steps`          | `items: StepItem[]`, `current`               | DaisyUI       | 步骤条         |
+| `Dropdown`       | `items: DropdownItem[]`, `trigger`           | DaisyUI       | 下拉菜单       |
+| `Tooltip`        | `content`, `position`, `delay`               | DaisyUI       | 文字提示       |
+| `Popover`        | `open`, `position`, `trigger`                | DaisyUI       | 弹出层         |
+| `TagInput`       | `tags`, `maxTags`, `allowDuplicates`         | DaisyUI       | 标签输入       |
+| `MultiSelect`    | `options`, `selected`, `placeholder`         | DaisyUI       | 多选           |
+| `Accordion`      | `items: AccordionItem[]`                     | DaisyUI       | 折叠面板       |
+| `Timeline`       | `items: TimelineItem[]`                      | DaisyUI       | 时间线         |
+| `Skeleton`       | `variant`, `count`, `animation`              | DaisyUI       | 骨架屏         |
+| `Empty`          | `title`, `description`, `icon`               | DaisyUI       | 空状态         |
+| `Result`         | `status`, `title`, `description`             | DaisyUI       | 结果页         |
+| `PageHeader`     | `title`, `description`, snippet `actions`    | DaisyUI       | 页面头部       |
 
 #### Toast 用法
 
@@ -123,9 +130,70 @@ type Size = 'xs' | 'sm' | 'md' | 'lg' | 'xl'
 <Button onclick={() => toast.error('操作失败', 5000)}>测试</Button>
 ```
 
+#### Bits UI 组件用法
+
+Combobox、Calendar、DatePicker 基于 Bits UI headless + DaisyUI 样式，日期值使用 `@internationalized/date`。
+
+**Combobox（可搜索选择）**：
+
+```svelte
+<script lang="ts">
+  let role = $state<string>('')
+  const roles = [
+    { value: 'admin', label: '管理员' },
+    { value: 'editor', label: '编辑' },
+    { value: 'viewer', label: '访客' },
+  ]
+</script>
+
+<FormField label="角色" required>
+  <Combobox options={roles} bind:value={role} placeholder="搜索角色..." />
+</FormField>
+```
+
+**Calendar（独立日历）**：
+
+```svelte
+<script lang="ts">
+  import { CalendarDate } from '@internationalized/date'
+  import type { DateValue } from '@internationalized/date'
+
+  let date = $state<DateValue>(new CalendarDate(2025, 1, 1))
+</script>
+
+<Calendar bind:value={date} weekStartsOn={1} />
+```
+
+**DatePicker（日期输入 + 弹出日历）**：
+
+```svelte
+<script lang="ts">
+  import { CalendarDate } from '@internationalized/date'
+  import type { DateValue } from '@internationalized/date'
+
+  let birthday = $state<DateValue>(new CalendarDate(2000, 1, 1))
+</script>
+
+<FormField label="出生日期">
+  <DatePicker bind:value={birthday} />
+</FormField>
+```
+
 ### 场景组件（Scenes）
 
 面向业务场景的完整功能组件，**内置中英文翻译**。
+
+#### App 场景组件
+
+应用级通用功能，可直接用于后台、设置页。
+
+| 组件             | Props 要点         | 说明                  |
+| ---------------- | ------------------ | --------------------- |
+| `FeedbackModal`  | `open`, `onsubmit` | 用户反馈模态框        |
+| `SettingsModal`  | `open`, `onclose`  | 应用设置（语言+主题） |
+| `LanguageSwitch` | 无需 Props         | 语言切换下拉          |
+| `ThemeSelector`  | 无需 Props         | 完整主题列表选择器    |
+| `ThemeToggle`    | 无需 Props         | 明/暗主题快速切换     |
 
 #### IAM 场景组件
 
@@ -189,6 +257,100 @@ type Size = 'xs' | 'sm' | 'md' | 'lg' | 'xl'
 
 ---
 
+## 统一组件模式
+
+### 列表页模式
+
+```svelte
+<PageHeader title="用户管理" description="管理系统中的所有用户">
+  {#snippet actions()}
+    <Button variant="primary" onclick={handleCreate}>新建</Button>
+  {/snippet}
+</PageHeader>
+
+<Card>
+  <DataTable
+    data={users}
+    columns={[
+      { key: 'name', label: '姓名' },
+      { key: 'email', label: '邮箱' },
+      { key: 'role', label: '角色' },
+    ]}
+    keyField="id"
+    loading={isLoading}
+  >
+    {#snippet actions(item)}
+      <Button size="xs" variant="ghost" onclick={() => handleEdit(item)}>编辑</Button>
+      <Button size="xs" variant="ghost" onclick={() => handleDelete(item)}>删除</Button>
+    {/snippet}
+  </DataTable>
+  <Pagination total={total} bind:page={currentPage} pageSize={20} onchange={loadPage} />
+</Card>
+```
+
+### 表单页模式
+
+```svelte
+<PageHeader title="编辑用户" />
+
+<Card>
+  <Form onsubmit={handleSubmit} loading={saving}>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <FormField label="姓名" required error={errors.name}>
+        <Input bind:value={form.name} />
+      </FormField>
+      <FormField label="角色" required>
+        <Combobox options={roleOptions} bind:value={form.role} placeholder="选择角色" />
+      </FormField>
+      <FormField label="入职日期">
+        <DatePicker bind:value={form.joinDate} />
+      </FormField>
+    </div>
+    <div class="mt-6 flex gap-2">
+      <Button variant="primary" type="submit">保存</Button>
+      <Button onclick={goBack}>取消</Button>
+    </div>
+  </Form>
+</Card>
+
+<Confirm
+  bind:open={showDiscard}
+  title="放弃编辑？"
+  message="未保存的更改将丢失"
+  onconfirm={goBack}
+/>
+```
+
+### 详情页模式
+
+```svelte
+<PageHeader title={item.name}>
+  {#snippet actions()}
+    <Button variant="primary" onclick={handleEdit}>编辑</Button>
+    <Button variant="error" outline onclick={() => confirmOpen = true}>删除</Button>
+  {/snippet}
+</PageHeader>
+
+<Tabs items={detailTabs} bind:active={activeTab} />
+
+{#if activeTab === 'info'}
+  <Card>
+    <div class="grid grid-cols-2 gap-4">
+      <FormField label="名称"><span>{item.name}</span></FormField>
+      <FormField label="状态"><Badge variant={item.active ? 'success' : 'default'}>{item.status}</Badge></FormField>
+    </div>
+  </Card>
+{:else if activeTab === 'logs'}
+  <Card>
+    <Timeline items={logItems} />
+  </Card>
+{/if}
+
+<Confirm bind:open={confirmOpen} title="确认删除" variant="error" onconfirm={handleDelete} />
+```
+
+---
+
 ## 主题系统
 
 支持 32 个 DaisyUI 主题（19 亮色 + 13 暗色）。
@@ -241,10 +403,12 @@ function changeLocale(code: string) {
 
 1. **Svelte 5 Runes**：使用 `$state`、`$derived`、`$effect`，不使用 Svelte 4 的 `$:` 或 stores
 2. **Snippet 插槽**：使用 `{#snippet name()}...{/snippet}` 语法，不使用 `<slot>`
-3. **双向绑定**：支持 `bind:open`（Modal/Drawer）、`bind:value`（Input/Select）
+3. **双向绑定**：支持 `bind:open`（Modal/Drawer）、`bind:value`（Input/Select/Combobox/DatePicker/Calendar）
 4. **PasswordInput 推荐受控模式**：`value` + `oninput` 保证状态同步
-5. **三层依赖红线**：primitives 不依赖上层，compounds 只依赖 primitives，scenes 可依赖两者
+5. **三层依赖红线**：primitives 不依赖上层，compounds 只依赖 primitives + Bits UI，scenes 可依赖两者
 6. **不修改内部翻译文件**：自定义文本通过 Props 覆盖
+7. **日期类型**：Bits UI 日历/日期选择器使用 `@internationalized/date` 的 `DateValue` / `CalendarDate` 类型
+8. **新增 headless 组件**：优先使用 Bits UI 构建，DaisyUI 仅负责样式，保持交互与样式分离
 
 ---
 
