@@ -1,0 +1,17 @@
+{
+  "$schema": "https://inlang.com/schema/inlang-message-format",
+  "reach_notInitialized": "触达模块尚未初始化，请先调用 reach.init()",
+  "reach_initFailed": "触达模块初始化失败: {error}",
+  "reach_unsupportedType": "不支持的触达类型: {type}",
+  "reach_sendFailed": "发送失败: {error}",
+  "reach_templateNotFound": "模板未找到: {template}",
+  "reach_templateRenderFailed": "模板渲染失败: {error}",
+  "reach_invalidRecipient": "无效的接收方: {recipient}",
+  "reach_providerNotFound": "Provider 未找到: {provider}",
+  "reach_providerRequired": "未指定 Provider，请在消息或模板中设置 provider 字段",
+  "reach_dndBlocked": "当前处于免打扰时段，消息已丢弃",
+  "reach_dndDeferred": "当前处于免打扰时段，消息已暂存待发送",
+  "reach_smsSendFailed": "短信发送失败: {error}",
+  "reach_emailSendFailed": "邮件发送失败: {error}",
+  "reach_apiSendFailed": "API 回调发送失败: {error}"
+}
