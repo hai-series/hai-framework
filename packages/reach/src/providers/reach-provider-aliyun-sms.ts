@@ -65,8 +65,8 @@ export function createAliyunSmsProvider(): ReachProvider {
           endpoint: config.endpoint,
         })
 
-        // eslint-disable-next-line new-cap
-        client = new Dysmsapi.default(apiConfig)
+        const DysmsapiClient = Dysmsapi.default
+        client = new DysmsapiClient(apiConfig)
         smsConfig = config
 
         logger.info('Aliyun SMS provider connected', { endpoint: config.endpoint })
