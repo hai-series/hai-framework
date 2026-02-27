@@ -9,8 +9,11 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   allGuards,
   anyGuard,
+  assertPermission,
   authGuard,
   conditionalGuard,
+  hasPermission,
+  matchPermission,
   notGuard,
   permissionGuard,
   roleGuard,
@@ -258,5 +261,96 @@ describe('conditionalGuard', () => {
 
     expect(innerGuard).not.toHaveBeenCalled()
     expect(result.allowed).toBe(true)
+  })
+})
+
+// =============================================================================
+// matchPermission / hasPermission / assertPermission
+// =============================================================================
+
+describe('matchPermission', () => {
+  it('完全匹配时返回 true', () => {
+    expect(matchPermission('user:read', ['user:read', 'user:create'])).toBe(true)
+  })
+
+  it('无匹配时返回 false', () => {
+    expect(matchPermission('user:delete', ['user:read', 'user:create'])).toBe(false)
+  })
+
+  it('通配符 * 匹配所有权限', () => {
+    expect(matchPermission('user:read', ['*'])).toBe(true)
+    expect(matchPermission('role:delete', ['*'])).toBe(true)
+  })
+
+  it('前缀通配符 admin:* 匹配同前缀权限', () => {
+    expect(matchPermission('admin:read', ['admin:*'])).toBe(true)
+    expect(matchPermission('admin:write', ['admin:*'])).toBe(true)
+  })
+
+  it('前缀通配符不匹配不同前缀', () => {
+    expect(matchPermission('user:read', ['admin:*'])).toBe(false)
+  })
+
+  it('空权限列表返回 false', () => {
+    expect(matchPermission('user:read', [])).toBe(false)
+  })
+})
+
+describe('hasPermission', () => {
+  it('session 为 null/undefined 时返回 false', () => {
+    expect(hasPermission(null, 'user:read')).toBe(false)
+    expect(hasPermission(undefined, 'user:read')).toBe(false)
+  })
+
+  it('有对应权限时返回 true', () => {
+    const session: SessionData = { userId: 'u1', roles: [], permissions: ['user:read', 'role:read'] }
+    expect(hasPermission(session, 'user:read')).toBe(true)
+  })
+
+  it('无对应权限时返回 false', () => {
+    const session: SessionData = { userId: 'u1', roles: [], permissions: ['user:read'] }
+    expect(hasPermission(session, 'user:delete')).toBe(false)
+  })
+
+  it('支持通配符', () => {
+    const session: SessionData = { userId: 'u1', roles: [], permissions: ['user:*'] }
+    expect(hasPermission(session, 'user:read')).toBe(true)
+    expect(hasPermission(session, 'user:delete')).toBe(true)
+    expect(hasPermission(session, 'role:read')).toBe(false)
+  })
+})
+
+describe('assertPermission', () => {
+  it('session 为 undefined 时返回 401 Response', () => {
+    const result = assertPermission(undefined, 'user:read')
+    expect(result).toBeInstanceOf(Response)
+    expect(result!.status).toBe(401)
+  })
+
+  it('session 为 null 时返回 401 Response', () => {
+    const result = assertPermission(null, 'user:read')
+    expect(result).toBeInstanceOf(Response)
+    expect(result!.status).toBe(401)
+  })
+
+  it('权限不足时返回 403 Response', async () => {
+    const session: SessionData = { userId: 'u1', roles: [], permissions: ['user:read'] }
+    const result = assertPermission(session, 'user:delete')
+    expect(result).toBeInstanceOf(Response)
+    expect(result!.status).toBe(403)
+    const body = await result!.json()
+    expect(body.success).toBe(false)
+  })
+
+  it('有权限时返回 undefined', () => {
+    const session: SessionData = { userId: 'u1', roles: [], permissions: ['user:read'] }
+    const result = assertPermission(session, 'user:read')
+    expect(result).toBeUndefined()
+  })
+
+  it('通配符权限时返回 undefined', () => {
+    const session: SessionData = { userId: 'u1', roles: [], permissions: ['*'] }
+    const result = assertPermission(session, 'user:delete')
+    expect(result).toBeUndefined()
   })
 })

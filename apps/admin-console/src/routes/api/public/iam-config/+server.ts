@@ -1,31 +1,19 @@
 /**
  * =============================================================================
- * hai Admin Console - 后台布局服务端
+ * Admin Console - 公开 API: IAM 配置
+ * =============================================================================
+ * 返回 IAM 的公开配置子集（密码策略、注册开关、登录方式、协议等），
+ * 供前端表单校验和 UI 展示使用。
  * =============================================================================
  */
 
-import type { LayoutServerLoad } from './$types'
-import { core } from '@h-ai/core'
+import type { RequestHandler } from '@sveltejs/kit'
 import { iam } from '@h-ai/iam'
-import { redirect } from '@sveltejs/kit'
+import { json } from '@sveltejs/kit'
 
-export const load: LayoutServerLoad = async ({ locals, url }) => {
-  if (!locals.session) {
-    const returnUrl = encodeURIComponent(url.pathname + url.search)
-    redirect(302, `/auth/login?returnUrl=${returnUrl}`)
-  }
-
-  // 获取应用配置
-  const coreConfig = core.config.get('core') as {
-    name?: string
-    version?: string
-    env?: string
-    defaultLocale?: string
-  } | undefined
-
-  // 获取 IAM 公开配置（安全子集，用于前端表单校验等）
+export const GET: RequestHandler = async () => {
   const iamConfig = iam.config
-  const iamPublicConfig = {
+  return json({
     password: {
       minLength: iamConfig?.password?.minLength ?? 8,
       maxLength: iamConfig?.password?.maxLength ?? 128,
@@ -51,23 +39,5 @@ export const load: LayoutServerLoad = async ({ locals, url }) => {
     session: {
       maxAge: iamConfig?.session?.maxAge ?? 86400,
     },
-  }
-
-  return {
-    user: {
-      id: locals.session.userId,
-      username: locals.session.username,
-      displayName: locals.session.displayName,
-      avatarUrl: locals.session.avatarUrl,
-      roles: locals.session.roles,
-      permissions: locals.session.permissions,
-    },
-    appConfig: {
-      name: coreConfig?.name ?? 'hai Admin Console',
-      version: coreConfig?.version ?? '0.1.0',
-      env: coreConfig?.env ?? 'development',
-      locale: coreConfig?.defaultLocale ?? 'zh-CN',
-    },
-    iamPublicConfig,
-  }
+  })
 }

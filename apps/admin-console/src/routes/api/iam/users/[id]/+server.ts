@@ -6,10 +6,9 @@
 
 import type { RequestHandler } from '@sveltejs/kit'
 import * as m from '$lib/paraglide/messages.js'
-import { UpdateUserSchema } from '$lib/server/schemas/index.js'
+import { createUpdateUserSchema } from '$lib/server/schemas/index.js'
 import { audit } from '$lib/server/services/index.js'
 import { core } from '@h-ai/core'
-import { db } from '@h-ai/db'
 import { iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
 import { json } from '@sveltejs/kit'
@@ -30,8 +29,14 @@ function normalizeUpdateUserError(message: string | undefined): string {
 
 /**
  * GET /api/iam/users/[id] - 获取单个用户
+ *
+ * 需要权限：user:read
  */
-export const GET: RequestHandler = async ({ params }) => {
+export const GET: RequestHandler = async ({ params, locals }) => {
+  const denied = kit.guard.assertPermission(locals.session, 'user:read')
+  if (denied)
+    return denied
+
   try {
     const userResult = await iam.user.getUser(params.id!)
     if (!userResult.success || !userResult.data) {
@@ -67,11 +72,17 @@ export const GET: RequestHandler = async ({ params }) => {
 
 /**
  * PUT /api/iam/users/[id] - 更新用户
+ *
+ * 需要权限：user:update
  */
 export const PUT: RequestHandler = async ({ params, request, locals, getClientAddress }) => {
+  const denied = kit.guard.assertPermission(locals.session, 'user:update')
+  if (denied)
+    return denied
+
   try {
     const userId = params.id!
-    const { valid, data, errors } = await kit.validate.form(request, UpdateUserSchema)
+    const { valid, data, errors } = await kit.validate.form(request, createUpdateUserSchema())
     if (!valid) {
       return json({ success: false, error: errors[0]?.message }, { status: 400 })
     }
@@ -178,8 +189,14 @@ export const PUT: RequestHandler = async ({ params, request, locals, getClientAd
 
 /**
  * DELETE /api/iam/users/[id] - 删除用户
+ *
+ * 需要权限：user:delete
  */
 export const DELETE: RequestHandler = async ({ params, locals, request, cookies, getClientAddress }) => {
+  const denied = kit.guard.assertPermission(locals.session, 'user:delete')
+  if (denied)
+    return denied
+
   try {
     const userId = params.id!
 
@@ -215,41 +232,14 @@ export const DELETE: RequestHandler = async ({ params, locals, request, cookies,
       core.logger.warn('Failed to clear user sessions before deletion', { userId, error })
     }
 
-    // 优先使用 iam.user.deleteUser；老版本运行时回退到手动事务删除。
-    const deleteUserFn = (iam.user as { deleteUser?: (id: string) => Promise<{ success: boolean, error?: { message: string } }> }).deleteUser
-    if (typeof deleteUserFn === 'function') {
-      const deleteResult = await deleteUserFn(userId)
-      if (!deleteResult.success) {
-        core.logger.error('Failed to delete user via iam.user.deleteUser', {
-          userId,
-          error: deleteResult.error?.message,
-        })
-        return json({ success: false, error: m.api_iam_users_delete_failed() }, { status: 500 })
-      }
-    }
-    else {
-      const txResult = await db.tx.wrap(async (tx) => {
-        const deleteUserRolesResult = await tx.execute('DELETE FROM iam_user_roles WHERE user_id = ?', [userId])
-        if (!deleteUserRolesResult.success) {
-          throw new Error(deleteUserRolesResult.error.message)
-        }
-
-        const deleteUserResult = await tx.execute('DELETE FROM iam_users WHERE id = ?', [userId])
-        if (!deleteUserResult.success) {
-          throw new Error(deleteUserResult.error.message)
-        }
-        if (deleteUserResult.data.changes === 0) {
-          throw new Error(m.api_iam_users_not_found())
-        }
+    // 使用 iam.user.deleteUser（内部清理角色关联等数据）
+    const deleteResult = await iam.user.deleteUser(userId)
+    if (!deleteResult.success) {
+      core.logger.error('Failed to delete user', {
+        userId,
+        error: deleteResult.error.message,
       })
-
-      if (!txResult.success) {
-        core.logger.error('Failed to delete user via fallback SQL transaction', {
-          userId,
-          error: txResult.error.message,
-        })
-        return json({ success: false, error: m.api_iam_users_delete_failed() }, { status: 500 })
-      }
+      return json({ success: false, error: m.api_iam_users_delete_failed() }, { status: 500 })
     }
 
     // 记录审计日志

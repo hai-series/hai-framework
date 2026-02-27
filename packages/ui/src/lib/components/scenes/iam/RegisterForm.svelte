@@ -27,6 +27,7 @@
     fields = ['username', 'email', 'password'],
     showLoginLink = false,
     loginUrl = '/login',
+    agreements,
     submitText,
     class: className = '',
     errors = {},
@@ -34,6 +35,10 @@
     header,
     footer,
   }: RegisterFormProps = $props()
+
+  const hasAgreements = $derived(
+    !!(agreements?.userAgreementUrl || agreements?.privacyPolicyUrl)
+  )
   
   // 表单数据
   let username = $state('')
@@ -236,6 +241,22 @@
   >
     {submitText || m('register_submit')}
   </Button>
+
+  <!-- 协议提示 -->
+  {#if hasAgreements}
+    <p class="text-xs text-base-content/50 text-center">
+      {m('agreement_prefix')}
+      {#if agreements?.userAgreementUrl}
+        <a href={agreements.userAgreementUrl} target="_blank" rel="noopener noreferrer" class="link link-primary">{m('agreement_user_agreement')}</a>
+      {/if}
+      {#if agreements?.userAgreementUrl && agreements?.privacyPolicyUrl}
+        {m('agreement_and')}
+      {/if}
+      {#if agreements?.privacyPolicyUrl}
+        <a href={agreements.privacyPolicyUrl} target="_blank" rel="noopener noreferrer" class="link link-primary">{m('agreement_privacy_policy')}</a>
+      {/if}
+    </p>
+  {/if}
   
   <!-- 自定义底部 -->
   {#if footer}

@@ -21,7 +21,7 @@ export const POST: RequestHandler = async ({ cookies, getClientAddress, request 
         // 记录审计日志
         const ip = getClientAddress()
         const ua = request.headers.get('user-agent') ?? undefined
-        await audit.logout(verifyResult.data.sub, ip, ua)
+        await audit.logout(verifyResult.data.userId, ip, ua)
       }
 
       // 登出（使会话失效）

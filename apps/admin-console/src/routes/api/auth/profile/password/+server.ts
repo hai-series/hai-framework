@@ -1,6 +1,6 @@
 import type { RequestHandler } from '@sveltejs/kit'
 import * as m from '$lib/paraglide/messages.js'
-import { ChangeCurrentPasswordSchema } from '$lib/server/schemas/index.js'
+import { createChangeCurrentPasswordSchema } from '$lib/server/schemas/index.js'
 import { core } from '@h-ai/core'
 import { iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
@@ -30,7 +30,7 @@ export const PUT: RequestHandler = async ({ cookies, request }) => {
       return json({ success: false, error: m.common_error() }, { status: 401 })
     }
 
-    const { valid, data, errors } = await kit.validate.form(request, ChangeCurrentPasswordSchema)
+    const { valid, data, errors } = await kit.validate.form(request, createChangeCurrentPasswordSchema())
     if (!valid) {
       const fieldErrors = Object.fromEntries(
         errors.map(error => [error.field, error.message]),

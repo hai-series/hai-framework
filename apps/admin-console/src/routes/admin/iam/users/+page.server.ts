@@ -8,6 +8,8 @@ import type { RoleWithPermissions } from '$lib/server/services/role.js'
 import type { PageServerLoad } from './$types'
 import { roleService } from '$lib/server/services/index.js'
 import { iam } from '@h-ai/iam'
+import { kit } from '@h-ai/kit'
+import { error } from '@sveltejs/kit'
 
 interface UserData {
   id: string
@@ -34,7 +36,12 @@ function parsePositiveInt(value: string | null, fallback: number): number {
   return parsed
 }
 
-export const load: PageServerLoad = async ({ url }) => {
+export const load: PageServerLoad = async ({ url, locals }) => {
+  // 权限检查：user:read
+  if (!kit.guard.hasPermission(locals.session, 'user:read')) {
+    error(403, { message: 'Forbidden' })
+  }
+
   const page = parsePositiveInt(url.searchParams.get('page'), 1)
   const pageSize = parsePositiveInt(url.searchParams.get('pageSize'), 20)
 

@@ -7,11 +7,24 @@
 -->
 <script lang="ts">
   import { goto } from '$app/navigation'
+  import { page } from '$app/state'
   import type { RegisterFormData } from '@h-ai/ui'
   import * as m from '$lib/paraglide/messages'
   
   let loading = $state(false)
   let errors = $state<Record<string, string>>({})
+
+  // 从 layout server data 读取 IAM 配置
+  const iamPublicConfig = $derived(page.data.iamPublicConfig as { password?: { minLength?: number }, agreements?: { showOnRegister?: boolean, userAgreementUrl?: string, privacyPolicyUrl?: string } } | undefined)
+  const passwordMinLength = $derived(iamPublicConfig?.password?.minLength ?? 8)
+  const registerAgreements = $derived(
+    iamPublicConfig?.agreements?.showOnRegister !== false
+      ? {
+          userAgreementUrl: iamPublicConfig?.agreements?.userAgreementUrl,
+          privacyPolicyUrl: iamPublicConfig?.agreements?.privacyPolicyUrl,
+        }
+      : undefined
+  )
 
   async function handleRegister(data: RegisterFormData) {
     errors = {}
@@ -56,7 +69,8 @@
   fields={['username', 'email', 'password']}
   requireConfirmPassword={true}
   showPasswordStrength={true}
-  minPasswordLength={8}
+  minPasswordLength={passwordMinLength}
   loginUrl="/auth/login"
+  agreements={registerAgreements}
   onsubmit={handleRegister}
 />

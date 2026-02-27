@@ -6,7 +6,7 @@
 
 import type { RequestHandler } from '@sveltejs/kit'
 import * as m from '$lib/paraglide/messages.js'
-import { ResetPasswordSchema } from '$lib/server/schemas/index.js'
+import { createResetPasswordSchema } from '$lib/server/schemas/index.js'
 import { audit } from '$lib/server/services/index.js'
 import { core } from '@h-ai/core'
 import { iam } from '@h-ai/iam'
@@ -15,7 +15,7 @@ import { json } from '@sveltejs/kit'
 
 export const POST: RequestHandler = async ({ request, getClientAddress }) => {
   try {
-    const { valid, data, errors } = await kit.validate.form(request, ResetPasswordSchema)
+    const { valid, data, errors } = await kit.validate.form(request, createResetPasswordSchema())
     if (!valid) {
       return json({ success: false, error: errors[0]?.message }, { status: 400 })
     }

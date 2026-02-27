@@ -6,7 +6,7 @@
 
 import type { RequestHandler } from '@sveltejs/kit'
 import * as m from '$lib/paraglide/messages.js'
-import { CreateUserSchema, ListUsersQuerySchema } from '$lib/server/schemas/index.js'
+import { createCreateUserSchema, ListUsersQuerySchema } from '$lib/server/schemas/index.js'
 import { audit } from '$lib/server/services/index.js'
 import { core } from '@h-ai/core'
 import { iam } from '@h-ai/iam'
@@ -16,6 +16,8 @@ import { json } from '@sveltejs/kit'
 /**
  * GET /api/iam/users - 获取用户列表
  *
+ * 需要权限：user:read
+ *
  * 支持分页、搜索关键字和启用状态过滤。
  *
  * 查询参数：
@@ -24,7 +26,11 @@ import { json } from '@sveltejs/kit'
  * - search: 搜索关键字（模糊匹配用户名/邮箱）
  * - enabled: 启用状态过滤（true/false，不传则返回全部）
  */
-export const GET: RequestHandler = async ({ url }) => {
+export const GET: RequestHandler = async ({ url, locals }) => {
+  const denied = kit.guard.assertPermission(locals.session, 'user:read')
+  if (denied)
+    return denied
+
   try {
     const { valid, data: query, errors } = kit.validate.query(url, ListUsersQuerySchema)
     if (!valid) {
@@ -69,10 +75,16 @@ export const GET: RequestHandler = async ({ url }) => {
 
 /**
  * POST /api/iam/users - 创建用户
+ *
+ * 需要权限：user:create
  */
 export const POST: RequestHandler = async ({ request, locals, getClientAddress }) => {
+  const denied = kit.guard.assertPermission(locals.session, 'user:create')
+  if (denied)
+    return denied
+
   try {
-    const { valid, data, errors } = await kit.validate.form(request, CreateUserSchema)
+    const { valid, data, errors } = await kit.validate.form(request, createCreateUserSchema())
     if (!valid) {
       return json({ success: false, error: errors[0]?.message }, { status: 400 })
     }
@@ -94,10 +106,12 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
 
     const { user } = registerResult.data
 
-    // 分配角色
-    const rolesToAssign = roles?.length ? roles : ['role_user']
-    for (const roleId of rolesToAssign) {
-      await iam.authz.assignRole(user.id, roleId)
+    // 分配角色（iam.user.register 已分配 config.rbac.defaultRole）
+    // 管理员创建时额外分配指定角色
+    if (roles?.length) {
+      for (const roleId of roles) {
+        await iam.authz.assignRole(user.id, roleId)
+      }
     }
 
     // 记录审计日志

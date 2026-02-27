@@ -37,6 +37,7 @@ declare global {
         displayName?: string
         avatarUrl?: string
         roles: string[]
+        permissions: string[]
       }
     }
 

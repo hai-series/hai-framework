@@ -6,8 +6,15 @@
 
 import type { PageServerLoad } from './$types'
 import { permissionService, roleService } from '$lib/server/services/index.js'
+import { kit } from '@h-ai/kit'
+import { error } from '@sveltejs/kit'
 
-export const load: PageServerLoad = async () => {
+export const load: PageServerLoad = async ({ locals }) => {
+  // 权限检查：role:read
+  if (!kit.guard.hasPermission(locals.session, 'role:read')) {
+    error(403, { message: 'Forbidden' })
+  }
+
   const [roles, permissions] = await Promise.all([
     roleService.list(),
     permissionService.listGroupedByResource(),

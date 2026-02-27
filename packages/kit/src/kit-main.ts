@@ -7,7 +7,7 @@
  *
  * - kit.createHandle()  — SvelteKit Handle Hook
  * - kit.sequence()      — 组合多个 Handle
- * - kit.guard           — 路由守卫（auth / role / permission / all / any / not / conditional）
+ * - kit.guard           — 路由守卫（auth / role / permission / hasPermission / assertPermission / all / any / not / conditional）
  * - kit.middleware       — 中间件（cors / csrf / logging / rateLimit）
  * - kit.response        — API 标准响应（ok / error / unauthorized / ...）
  * - kit.validate        — 请求验证（form / query / params）
@@ -41,7 +41,7 @@ import { useIsAuthenticated, useSession, useUpload, useUser } from './client/sto
 import { useTransportEncryption } from './client/transport-encryption-store.js'
 import { authGuard } from './guards/auth.js'
 import { allGuards, anyGuard, conditionalGuard, notGuard } from './guards/compose.js'
-import { permissionGuard } from './guards/permission.js'
+import { assertPermission, hasPermission, permissionGuard } from './guards/permission.js'
 import { roleGuard } from './guards/role.js'
 import { createHandle, sequence } from './hooks/handle.js'
 import { setAllModulesLocale } from './kit-i18n.js'
@@ -82,6 +82,10 @@ export const kit = {
     role: roleGuard,
     /** 权限守卫（验证指定权限） */
     permission: permissionGuard,
+    /** 检查会话是否具有指定权限（布尔） */
+    hasPermission,
+    /** 断言权限，不满足时返回 403 Response（用于 API Handler） */
+    assertPermission,
     /** 所有守卫通过（AND 逻辑） */
     all: allGuards,
     /** 任一守卫通过（OR 逻辑） */

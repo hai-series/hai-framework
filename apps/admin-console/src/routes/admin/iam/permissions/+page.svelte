@@ -5,6 +5,7 @@
 -->
 <script lang="ts">
   import * as m from '$lib/paraglide/messages'
+  import { invalidateAll } from '$app/navigation'
   import type { PageData } from './$types'
 
   interface PermissionItem {
@@ -94,7 +95,7 @@
 
       if (result.success) {
         closeDialog()
-        location.reload()
+        await invalidateAll()
       } else {
         error = result.error || m.iam_users_operation_failed()
       }
@@ -124,7 +125,7 @@
       const result = await response.json()
 
       if (result.success) {
-        location.reload()
+        await invalidateAll()
       } else {
         alert(result.error || m.iam_users_delete_failed())
       }

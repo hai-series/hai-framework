@@ -41,14 +41,15 @@ export const POST: RequestHandler = async ({ request, cookies, getClientAddress 
 
     const { user, accessToken } = loginResult.data
 
-    // 设置 Cookie
+    // 设置 Cookie（从 IAM 配置读取会话有效期，回退到 7 天）
+    const sessionMaxAge = iam.config?.session?.maxAge ?? 60 * 60 * 24 * 7
     cookies.set('session_token', accessToken, {
       path: '/',
       httpOnly: true,
       // eslint-disable-next-line node/prefer-global/process
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      maxAge: 60 * 60 * 24 * 7, // 7 天
+      maxAge: sessionMaxAge,
     })
 
     // 记录审计日志

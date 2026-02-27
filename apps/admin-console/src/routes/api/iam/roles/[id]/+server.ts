@@ -8,12 +8,19 @@ import type { RequestHandler } from '@sveltejs/kit'
 import * as m from '$lib/paraglide/messages.js'
 import { audit, permissionService, roleService } from '$lib/server/services/index.js'
 import { core } from '@h-ai/core'
+import { kit } from '@h-ai/kit'
 import { json } from '@sveltejs/kit'
 
 /**
  * GET /api/iam/roles/[id] - 获取单个角色
+ *
+ * 需要权限：role:read
  */
-export const GET: RequestHandler = async ({ params }) => {
+export const GET: RequestHandler = async ({ params, locals }) => {
+  const denied = kit.guard.assertPermission(locals.session, 'role:read')
+  if (denied)
+    return denied
+
   try {
     const role = await roleService.getById(params.id!)
     if (!role) {
@@ -29,8 +36,14 @@ export const GET: RequestHandler = async ({ params }) => {
 
 /**
  * PUT /api/iam/roles/[id] - 更新角色
+ *
+ * 需要权限：role:update
  */
 export const PUT: RequestHandler = async ({ params, request, locals, getClientAddress }) => {
+  const denied = kit.guard.assertPermission(locals.session, 'role:update')
+  if (denied)
+    return denied
+
   try {
     const roleId = params.id!
     const body = await request.json()
@@ -89,8 +102,14 @@ export const PUT: RequestHandler = async ({ params, request, locals, getClientAd
 
 /**
  * DELETE /api/iam/roles/[id] - 删除角色
+ *
+ * 需要权限：role:delete
  */
 export const DELETE: RequestHandler = async ({ params, locals, request, getClientAddress }) => {
+  const denied = kit.guard.assertPermission(locals.session, 'role:delete')
+  if (denied)
+    return denied
+
   try {
     const roleId = params.id!
 

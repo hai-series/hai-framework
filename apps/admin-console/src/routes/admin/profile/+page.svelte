@@ -11,7 +11,9 @@
 
   const USERNAME_PATTERN = /^\w{3,20}$/
   const EMAIL_PATTERN = /^[^\s@]+@[^\s@][^\s.@]*\.[^\s@]+$/
-  const MIN_PASSWORD_LENGTH = 8
+
+  // 从 IAM 配置读取密码最小长度（通过 layout server data 传递）
+  const MIN_PASSWORD_LENGTH = $derived(data.iamPublicConfig?.password?.minLength ?? 8)
 
   /**
    * 将接口返回的 profile 结构转换为页面使用的用户模型。

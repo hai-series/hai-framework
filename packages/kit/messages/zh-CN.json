@@ -1,6 +1,7 @@
 {
   "$schema": "https://inlang.com/schema/inlang-message-format",
   "kit_unauthorized": "未授权",
+  "kit_forbidden": "权限不足：缺少 {permission} 权限",
   "kit_missingFilename": "缺少 filename 参数",
   "kit_presignUrlFailed": "生成预签名 URL 失败",
   "kit_listFailed": "获取列表失败",

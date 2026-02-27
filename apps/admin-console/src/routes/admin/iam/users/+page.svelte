@@ -5,6 +5,7 @@
 -->
 <script lang="ts">
   import type { PageData } from './$types'
+  import { invalidateAll } from '$app/navigation'
   import * as m from '$lib/paraglide/messages'
 
   // 定义本地类型（与 page.server.ts 中的 UserData 一致）
@@ -32,6 +33,9 @@
   }
 
   let { data }: Props = $props()
+
+  // 从 IAM 配置读取密码最小长度
+  const passwordMinLength = $derived(data.iamPublicConfig?.password?.minLength ?? 8)
 
   /** 搜索关键字 */
   let searchQuery = $state('')
@@ -139,7 +143,7 @@
       if (result.success) {
         closeDialog()
         // 刷新页面数据
-        location.reload()
+        await invalidateAll()
       } else {
         error = result.error || m.iam_users_operation_failed()
       }
@@ -164,7 +168,7 @@
       const result = await response.json()
 
       if (result.success) {
-        location.reload()
+        await invalidateAll()
       } else {
         alert(result.error || m.iam_users_delete_failed())
       }
@@ -402,7 +406,7 @@
             placeholder={editingUser ? m.iam_users_form_password_hint() : m.iam_users_form_password_placeholder()}
             required={!editingUser}
             disabled={submitting}
-            minLength={8}
+            minLength={passwordMinLength}
             showStrength={!editingUser}
             size="sm"
           />

@@ -48,6 +48,16 @@ export interface PasswordInputProps {
 }
 
 /**
+ * 协议展示配置
+ */
+export interface AgreementDisplay {
+  /** 用户协议 URL */
+  userAgreementUrl?: string
+  /** 隐私协议 URL */
+  privacyPolicyUrl?: string
+}
+
+/**
  * 登录表单数据
  */
 export interface LoginFormData {
@@ -76,6 +86,8 @@ export interface LoginFormProps {
   showRegisterLink?: boolean
   /** 注册页面链接 */
   registerUrl?: string
+  /** 协议展示配置 */
+  agreements?: AgreementDisplay
   /** 提交按钮文本 */
   submitText?: string
   /** 自定义类名 */
@@ -131,6 +143,8 @@ export interface RegisterFormProps {
   showLoginLink?: boolean
   /** 登录页面链接 */
   loginUrl?: string
+  /** 协议展示配置 */
+  agreements?: AgreementDisplay
   /** 提交按钮文本 */
   submitText?: string
   /** 自定义类名 */
