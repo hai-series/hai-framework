@@ -736,13 +736,13 @@ importers:
       '@h-ai/core':
         specifier: workspace:*
         version: link:../core
+      '@h-ai/db':
+        specifier: workspace:*
+        version: link:../db
       zod:
         specifier: 'catalog:'
         version: 4.3.6
     optionalDependencies:
-      '@h-ai/db':
-        specifier: workspace:*
-        version: link:../db
       nodemailer:
         specifier: 'catalog:'
         version: 8.0.1

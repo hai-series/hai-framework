@@ -31,10 +31,10 @@
   },
   "dependencies": {
     "@h-ai/core": "workspace:*",
+    "@h-ai/db": "workspace:*",
     "zod": "catalog:"
   },
   "optionalDependencies": {
-    "@h-ai/db": "workspace:*",
     "nodemailer": "catalog:"
   },
   "devDependencies": {
