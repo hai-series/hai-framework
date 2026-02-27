@@ -8,64 +8,79 @@ import { describe, expect, it } from 'vitest'
 import { ReachConfigSchema, ReachErrorCode } from '../src/index.js'
 
 describe('reach config', () => {
-  it('console 配置应正确解析', () => {
-    const result = ReachConfigSchema.safeParse({ type: 'console' })
+  it('单个 console provider 配置应正确解析', () => {
+    const result = ReachConfigSchema.safeParse({
+      providers: [{ name: 'dev', type: 'console' }],
+    })
     expect(result.success).toBe(true)
     if (result.success) {
-      expect(result.data.type).toBe('console')
+      expect(result.data.providers).toHaveLength(1)
+      expect(result.data.providers[0].type).toBe('console')
+      expect(result.data.providers[0].name).toBe('dev')
     }
   })
 
-  it('smtp 配置应正确解析并补齐默认值', () => {
+  it('多个 provider 配置应正确解析', () => {
     const result = ReachConfigSchema.safeParse({
-      type: 'smtp',
-      host: 'smtp.example.com',
-      from: 'no-reply@example.com',
+      providers: [
+        { name: 'email', type: 'smtp', host: 'smtp.example.com', from: 'no-reply@example.com' },
+        { name: 'sms', type: 'aliyun-sms', accessKeyId: 'AK', accessKeySecret: 'SK', signName: '签名' },
+        { name: 'webhook', type: 'api', url: 'https://api.example.com/notify' },
+      ],
     })
     expect(result.success).toBe(true)
-    if (result.success && result.data.type === 'smtp') {
-      expect(result.data.host).toBe('smtp.example.com')
-      expect(result.data.port).toBe(465)
-      expect(result.data.secure).toBe(true)
-      expect(result.data.from).toBe('no-reply@example.com')
+    if (result.success) {
+      expect(result.data.providers).toHaveLength(3)
     }
   })
 
-  it('aliyun-sms 配置应正确解析并补齐默认值', () => {
+  it('smtp 配置应补齐默认值', () => {
     const result = ReachConfigSchema.safeParse({
-      type: 'aliyun-sms',
-      accessKeyId: 'LTAI_test',
-      accessKeySecret: 'secret_test',
-      signName: '测试签名',
+      providers: [{ name: 'email', type: 'smtp', host: 'smtp.example.com', from: 'no-reply@example.com' }],
     })
     expect(result.success).toBe(true)
-    if (result.success && result.data.type === 'aliyun-sms') {
-      expect(result.data.accessKeyId).toBe('LTAI_test')
-      expect(result.data.signName).toBe('测试签名')
-      expect(result.data.endpoint).toBe('dysmsapi.aliyuncs.com')
+    if (result.success && result.data.providers[0].type === 'smtp') {
+      expect(result.data.providers[0].port).toBe(465)
+      expect(result.data.providers[0].secure).toBe(true)
     }
+  })
+
+  it('aliyun-sms 配置应补齐默认值', () => {
+    const result = ReachConfigSchema.safeParse({
+      providers: [{ name: 'sms', type: 'aliyun-sms', accessKeyId: 'AK', accessKeySecret: 'SK', signName: '签名' }],
+    })
+    expect(result.success).toBe(true)
+    if (result.success && result.data.providers[0].type === 'aliyun-sms') {
+      expect(result.data.providers[0].endpoint).toBe('dysmsapi.aliyuncs.com')
+    }
+  })
+
+  it('api 配置应补齐默认值', () => {
+    const result = ReachConfigSchema.safeParse({
+      providers: [{ name: 'webhook', type: 'api', url: 'https://api.example.com' }],
+    })
+    expect(result.success).toBe(true)
+    if (result.success && result.data.providers[0].type === 'api') {
+      expect(result.data.providers[0].method).toBe('POST')
+      expect(result.data.providers[0].timeout).toBe(10000)
+    }
+  })
+
+  it('空 providers 数组应校验失败', () => {
+    const result = ReachConfigSchema.safeParse({ providers: [] })
+    expect(result.success).toBe(false)
   })
 
   it('无效 type 应校验失败', () => {
-    const result = ReachConfigSchema.safeParse({ type: 'invalid' })
+    const result = ReachConfigSchema.safeParse({
+      providers: [{ name: 'x', type: 'invalid' }],
+    })
     expect(result.success).toBe(false)
   })
 
   it('smtp 缺少必填字段应校验失败', () => {
     const result = ReachConfigSchema.safeParse({
-      type: 'smtp',
-      host: '',
-      from: 'test@example.com',
-    })
-    expect(result.success).toBe(false)
-  })
-
-  it('aliyun-sms 缺少必填字段应校验失败', () => {
-    const result = ReachConfigSchema.safeParse({
-      type: 'aliyun-sms',
-      accessKeyId: '',
-      accessKeySecret: 'secret',
-      signName: '签名',
+      providers: [{ name: 'email', type: 'smtp', host: '', from: 'test@example.com' }],
     })
     expect(result.success).toBe(false)
   })
@@ -74,6 +89,7 @@ describe('reach config', () => {
     expect(ReachErrorCode.SEND_FAILED).toBe(8000)
     expect(ReachErrorCode.NOT_INITIALIZED).toBe(8010)
     expect(ReachErrorCode.TEMPLATE_NOT_FOUND).toBe(8001)
+    expect(ReachErrorCode.PROVIDER_NOT_FOUND).toBe(8004)
     expect(ReachErrorCode.CONFIG_ERROR).toBe(8012)
   })
 })

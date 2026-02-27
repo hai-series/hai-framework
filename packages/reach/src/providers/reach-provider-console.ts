@@ -10,7 +10,7 @@
  */
 
 import type { Result } from '@h-ai/core'
-import type { ReachConfig } from '../reach-config.js'
+import type { ProviderConfig } from '../reach-config.js'
 import type { ReachError, ReachMessage, ReachProvider, SendResult } from '../reach-types.js'
 
 import { core, ok } from '@h-ai/core'
@@ -28,7 +28,7 @@ export function createConsoleProvider(): ReachProvider {
   return {
     name: 'console',
 
-    async connect(_config: ReachConfig): Promise<Result<void, ReachError>> {
+    async connect(_config: ProviderConfig): Promise<Result<void, ReachError>> {
       connected = true
       logger.info('Console provider connected')
       return ok(undefined)
@@ -45,7 +45,7 @@ export function createConsoleProvider(): ReachProvider {
 
     async send(message: ReachMessage): Promise<Result<SendResult, ReachError>> {
       logger.info('Sending message via console', {
-        channel: message.channel,
+        provider: message.provider,
         to: message.to,
         subject: message.subject,
         body: message.body,

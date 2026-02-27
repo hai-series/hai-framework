@@ -3,17 +3,21 @@
  * @h-ai/reach - 阿里云短信 Provider
  * =============================================================================
  *
- * 使用阿里云 dysmsapi SDK 发送短信的 Provider 实现。
+ * 通过阿里云 SMS HTTP API 发送短信的 Provider 实现（无需 SDK）。
  *
+ * 使用阿里云 POP API 签名机制（SignatureMethod=HMAC-SHA1）直接调用
+ * dysmsapi.aliyuncs.com 的 SendSms 接口。
+ *
+ * @see https://help.aliyun.com/document_detail/419298.html
  * @module reach-provider-aliyun-sms
  * =============================================================================
  */
 
 import type { Result } from '@h-ai/core'
-import type { AliyunSmsConfig, ReachConfig } from '../reach-config.js'
+import type { AliyunSmsProviderConfig, ProviderConfig } from '../reach-config.js'
 import type { ReachError, ReachMessage, ReachProvider, SendResult } from '../reach-types.js'
 
-import { createRequire } from 'node:module'
+import { createHmac, randomUUID } from 'node:crypto'
 import { core, err, ok } from '@h-ai/core'
 
 import { ReachErrorCode } from '../reach-config.js'
@@ -35,18 +39,47 @@ function toReachError(error: unknown): ReachError {
 }
 
 /**
- * 创建阿里云短信 Provider
+ * 对字符串做 RFC 3986 编码
+ */
+function percentEncode(str: string): string {
+  return encodeURIComponent(str)
+    .replace(/\+/g, '%20')
+    .replace(/\*/g, '%2A')
+    .replace(/~/g, '%7E')
+}
+
+/**
+ * 构造阿里云 POP API 签名
+ *
+ * @param params - 请求参数（不含 Signature）
+ * @param accessKeySecret - AccessKey Secret
+ * @param method - HTTP 方法
+ * @returns 签名值
+ */
+function signRequest(params: Record<string, string>, accessKeySecret: string, method: string): string {
+  const sortedKeys = Object.keys(params).sort()
+  const canonicalQuery = sortedKeys
+    .map(k => `${percentEncode(k)}=${percentEncode(params[k])}`)
+    .join('&')
+
+  const stringToSign = `${method}&${percentEncode('/')}&${percentEncode(canonicalQuery)}`
+  const hmac = createHmac('sha1', `${accessKeySecret}&`)
+  hmac.update(stringToSign)
+  return hmac.digest('base64')
+}
+
+/**
+ * 创建阿里云短信 Provider（直接调用 HTTP API）
  *
  * @returns 阿里云短信 Provider 实例
  */
 export function createAliyunSmsProvider(): ReachProvider {
-  let client: unknown = null
-  let smsConfig: AliyunSmsConfig | null = null
+  let smsConfig: AliyunSmsProviderConfig | null = null
 
   return {
     name: 'aliyun-sms',
 
-    async connect(config: ReachConfig): Promise<Result<void, ReachError>> {
+    async connect(config: ProviderConfig): Promise<Result<void, ReachError>> {
       if (config.type !== 'aliyun-sms') {
         return err({
           code: ReachErrorCode.CONFIG_ERROR,
@@ -54,42 +87,22 @@ export function createAliyunSmsProvider(): ReachProvider {
         })
       }
 
-      try {
-        const require = createRequire(import.meta.url)
-        const Dysmsapi = require('@alicloud/dysmsapi20170525')
-        const OpenApi = require('@alicloud/openapi-client')
-
-        const apiConfig = new OpenApi.Config({
-          accessKeyId: config.accessKeyId,
-          accessKeySecret: config.accessKeySecret,
-          endpoint: config.endpoint,
-        })
-
-        const DysmsapiClient = Dysmsapi.default
-        client = new DysmsapiClient(apiConfig)
-        smsConfig = config
-
-        logger.info('Aliyun SMS provider connected', { endpoint: config.endpoint })
-        return ok(undefined)
-      }
-      catch (error) {
-        logger.error('Aliyun SMS connection failed', { error })
-        return err(toReachError(error))
-      }
+      smsConfig = config
+      logger.info('Aliyun SMS provider connected', { endpoint: config.endpoint })
+      return ok(undefined)
     },
 
     async close(): Promise<void> {
-      client = null
       smsConfig = null
       logger.info('Aliyun SMS provider disconnected')
     },
 
     isConnected(): boolean {
-      return client !== null
+      return smsConfig !== null
     },
 
     async send(message: ReachMessage): Promise<Result<SendResult, ReachError>> {
-      if (!client || !smsConfig) {
+      if (!smsConfig) {
         return err({
           code: ReachErrorCode.NOT_INITIALIZED,
           message: reachM('reach_notInitialized'),
@@ -99,29 +112,44 @@ export function createAliyunSmsProvider(): ReachProvider {
       logger.debug('Sending SMS', { to: message.to, templateCode: message.templateCode })
 
       try {
-        const require = createRequire(import.meta.url)
-        const Dysmsapi = require('@alicloud/dysmsapi20170525')
+        const params: Record<string, string> = {
+          AccessKeyId: smsConfig.accessKeyId,
+          Action: 'SendSms',
+          Format: 'JSON',
+          PhoneNumbers: message.to,
+          SignName: smsConfig.signName,
+          SignatureMethod: 'HMAC-SHA1',
+          SignatureNonce: randomUUID(),
+          SignatureVersion: '1.0',
+          TemplateCode: message.templateCode ?? '',
+          Timestamp: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'),
+          Version: '2017-05-25',
+        }
 
-        const request = new Dysmsapi.SendSmsRequest({
-          phoneNumbers: message.to,
-          signName: smsConfig.signName,
-          templateCode: message.templateCode ?? '',
-          templateParam: message.vars ? JSON.stringify(message.vars) : undefined,
-        })
+        if (message.vars) {
+          params.TemplateParam = JSON.stringify(message.vars)
+        }
 
-        const sendSms = (client as { sendSms: (req: unknown) => Promise<{ body: { code: string, message: string, bizId: string } }> }).sendSms.bind(client)
-        const response = await sendSms(request)
+        params.Signature = signRequest(params, smsConfig.accessKeySecret, 'GET')
 
-        if (response.body.code !== 'OK') {
-          logger.warn('SMS send returned non-OK status', { code: response.body.code, message: response.body.message })
+        const queryString = Object.entries(params)
+          .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
+          .join('&')
+
+        const url = `https://${smsConfig.endpoint}/?${queryString}`
+        const response = await fetch(url)
+        const body = await response.json() as { Code: string, Message: string, BizId?: string }
+
+        if (body.Code !== 'OK') {
+          logger.warn('SMS send returned non-OK status', { code: body.Code, message: body.Message })
           return err({
             code: ReachErrorCode.SEND_FAILED,
-            message: reachM('reach_smsSendFailed', { params: { error: response.body.message } }),
+            message: reachM('reach_smsSendFailed', { params: { error: body.Message } }),
           })
         }
 
-        logger.info('SMS sent', { to: message.to, bizId: response.body.bizId })
-        return ok({ success: true, messageId: response.body.bizId })
+        logger.info('SMS sent', { to: message.to, bizId: body.BizId })
+        return ok({ success: true, messageId: body.BizId })
       }
       catch (error) {
         logger.error('SMS send failed', { to: message.to, error })

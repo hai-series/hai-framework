@@ -34,8 +34,6 @@
     "zod": "catalog:"
   },
   "optionalDependencies": {
-    "@alicloud/dysmsapi20170525": "catalog:",
-    "@alicloud/openapi-client": "catalog:",
     "nodemailer": "catalog:"
   },
   "devDependencies": {

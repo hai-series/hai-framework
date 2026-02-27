@@ -5,43 +5,41 @@
  *
  * 本文件提供统一的 `reach` 对象，聚合消息发送和模板管理功能。
  *
+ * 支持同时注册多个 Provider，每个 Provider 有唯一名称。
+ * 发送时通过 `provider` 字段路由到目标 Provider。
+ *
  * 使用方式：
- * 1. 调用 `reach.init()` 初始化触达服务
- * 2. 通过 `reach.template` 注册消息模板
- * 3. 通过 `reach.send()` 发送消息
- * 4. 调用 `reach.close()` 关闭连接
+ * 1. 调用 `reach.init()` 初始化（传入多个 Provider 配置）
+ * 2. 通过 `reach.template` 注册消息模板（模板绑定 Provider）
+ * 3. 通过 `reach.send()` 发送消息（指定 Provider 或从模板自动推导）
+ * 4. 调用 `reach.close()` 关闭所有连接
  *
  * @example
  * ```ts
  * import { reach } from '@h-ai/reach'
  *
- * // 1. 初始化（SMTP 邮件）
  * await reach.init({
- *   type: 'smtp',
- *   host: 'smtp.example.com',
- *   port: 465,
- *   secure: true,
- *   user: 'noreply@example.com',
- *   pass: 'password',
- *   from: 'noreply@example.com',
+ *   providers: [
+ *     { name: 'email', type: 'smtp', host: 'smtp.example.com', from: 'no-reply@example.com' },
+ *     { name: 'sms', type: 'aliyun-sms', accessKeyId: '...', accessKeySecret: '...', signName: '...' },
+ *     { name: 'webhook', type: 'api', url: 'https://api.example.com/notify' },
+ *   ],
  * })
  *
- * // 2. 注册模板
  * reach.template.register({
  *   name: 'welcome',
+ *   provider: 'email',
  *   subject: '欢迎 {userName}',
  *   body: '亲爱的 {userName}，欢迎使用我们的服务！',
  * })
  *
- * // 3. 发送（使用模板）
- * const result = await reach.send({
- *   channel: 'email',
+ * await reach.send({
+ *   provider: 'email',
  *   to: 'user@example.com',
  *   template: 'welcome',
  *   vars: { userName: '张三' },
  * })
  *
- * // 4. 关闭
  * await reach.close()
  * ```
  *
@@ -50,7 +48,7 @@
  */
 
 import type { Result } from '@h-ai/core'
-import type { ReachConfig, ReachConfigInput } from './reach-config.js'
+import type { ProviderConfig, ReachConfig, ReachConfigInput } from './reach-config.js'
 import type {
   ReachError,
   ReachFunctions,
@@ -63,6 +61,7 @@ import type {
 import { core, err, ok } from '@h-ai/core'
 
 import { createAliyunSmsProvider } from './providers/reach-provider-aliyun-sms.js'
+import { createApiProvider } from './providers/reach-provider-api.js'
 import { createConsoleProvider } from './providers/reach-provider-console.js'
 import { createSmtpProvider } from './providers/reach-provider-smtp.js'
 import { ReachConfigSchema, ReachErrorCode } from './reach-config.js'
@@ -75,8 +74,8 @@ const logger = core.logger.child({ module: 'reach', scope: 'main' })
 // 内部状态
 // =============================================================================
 
-/** 当前活跃的 Provider（未初始化时为 null） */
-let currentProvider: ReachProvider | null = null
+/** 已注册的 Provider 实例（name → Provider） */
+let providers: Map<string, ReachProvider> = new Map()
 
 /** 当前配置（未初始化时为 null） */
 let currentConfig: ReachConfig | null = null
@@ -91,10 +90,10 @@ let templateRegistry: ReachTemplateRegistry = createTemplateRegistry()
 /**
  * 根据配置创建对应的 Provider
  *
- * @param config - 已校验的配置
+ * @param config - 已校验的单个 Provider 配置
  * @returns Provider 实例
  */
-function createProvider(config: ReachConfig): ReachProvider {
+function createProvider(config: ProviderConfig): ReachProvider {
   switch (config.type) {
     case 'console':
       return createConsoleProvider()
@@ -102,6 +101,8 @@ function createProvider(config: ReachConfig): ReachProvider {
       return createSmtpProvider()
     case 'aliyun-sms':
       return createAliyunSmsProvider()
+    case 'api':
+      return createApiProvider()
   }
 }
 
@@ -116,11 +117,12 @@ const notInitialized = core.module.createNotInitializedKit<ReachError>(
 )
 
 // =============================================================================
-// 消息预处理（模板渲染）
+// 消息预处理（模板渲染 + Provider 路由）
 // =============================================================================
 
 /**
- * 预处理消息：如果指定了模板，渲染模板并填充 subject/body
+ * 预处理消息：如果指定了模板，渲染模板并填充 subject/body，
+ * 同时从模板中推导 Provider 名称。
  *
  * @param message - 原始消息
  * @returns 预处理后的消息，或错误
@@ -130,6 +132,14 @@ function preprocessMessage(message: ReachMessage): Result<ReachMessage, ReachErr
     return ok(message)
   }
 
+  const template = templateRegistry.get(message.template)
+  if (!template) {
+    return err({
+      code: ReachErrorCode.TEMPLATE_NOT_FOUND,
+      message: reachM('reach_templateNotFound', { params: { template: message.template } }),
+    })
+  }
+
   const rendered = templateRegistry.render(message.template, message.vars ?? {})
   if (!rendered.success) {
     return rendered
@@ -137,6 +147,7 @@ function preprocessMessage(message: ReachMessage): Result<ReachMessage, ReachErr
 
   const processed: ReachMessage = {
     ...message,
+    provider: message.provider || template.provider,
     subject: message.subject ?? rendered.data.subject,
     body: message.body ?? rendered.data.body,
   }
@@ -150,17 +161,17 @@ function preprocessMessage(message: ReachMessage): Result<ReachMessage, ReachErr
 /**
  * 触达服务对象
  *
- * 统一的用户触达入口，支持邮件和短信发送。
+ * 统一的用户触达入口，支持同时使用邮件、短信、API 回调等多种 Provider。
  */
 export const reach: ReachFunctions = {
   /**
    * 初始化触达模块
    *
-   * @param config - 触达配置
+   * @param config - 触达配置（包含多个 Provider）
    * @returns 初始化结果
    */
   async init(config: ReachConfigInput): Promise<Result<void, ReachError>> {
-    if (currentProvider) {
+    if (providers.size > 0) {
       logger.warn('Reach module is already initialized, reinitializing')
       await reach.close()
     }
@@ -169,18 +180,31 @@ export const reach: ReachFunctions = {
 
     try {
       const parsed = ReachConfigSchema.parse(config)
-      const provider = createProvider(parsed)
-      const connectResult = await provider.connect(parsed)
-      if (!connectResult.success) {
-        logger.error('Reach module initialization failed', {
-          code: connectResult.error.code,
-          message: connectResult.error.message,
-        })
-        return connectResult
+      const newProviders = new Map<string, ReachProvider>()
+
+      for (const providerConfig of parsed.providers) {
+        const provider = createProvider(providerConfig)
+        const connectResult = await provider.connect(providerConfig)
+        if (!connectResult.success) {
+          logger.error('Provider initialization failed', {
+            name: providerConfig.name,
+            type: providerConfig.type,
+            code: connectResult.error.code,
+            message: connectResult.error.message,
+          })
+          // 回滚已连接的 Provider
+          for (const p of newProviders.values()) {
+            await p.close()
+          }
+          return connectResult
+        }
+        newProviders.set(providerConfig.name, provider)
       }
-      currentProvider = provider
+
+      providers = newProviders
       currentConfig = parsed
-      logger.info('Reach module initialized', { type: parsed.type })
+      const providerNames = parsed.providers.map(p => p.name)
+      logger.info('Reach module initialized', { providers: providerNames })
       return ok(undefined)
     }
     catch (error) {
@@ -198,13 +222,14 @@ export const reach: ReachFunctions = {
   /**
    * 发送触达消息
    *
-   * 支持直接发送和模板发送两种方式。
+   * 通过 `provider` 字段路由到目标 Provider。
+   * 如果使用模板且未指定 `provider`，从模板绑定的 Provider 推导。
    *
    * @param message - 触达消息
    * @returns 发送结果
    */
   async send(message: ReachMessage): Promise<Result<SendResult, ReachError>> {
-    if (!currentProvider) {
+    if (providers.size === 0) {
       return notInitialized.result()
     }
 
@@ -220,16 +245,32 @@ export const reach: ReachFunctions = {
       return preprocessed
     }
 
+    const providerName = preprocessed.data.provider
+    if (!providerName) {
+      return err({
+        code: ReachErrorCode.PROVIDER_NOT_FOUND,
+        message: reachM('reach_providerNotFound', { params: { provider: '' } }),
+      })
+    }
+
+    const provider = providers.get(providerName)
+    if (!provider) {
+      return err({
+        code: ReachErrorCode.PROVIDER_NOT_FOUND,
+        message: reachM('reach_providerNotFound', { params: { provider: providerName } }),
+      })
+    }
+
     logger.debug('Sending message', {
-      channel: preprocessed.data.channel,
+      provider: providerName,
       to: preprocessed.data.to,
       template: message.template,
     })
 
-    const result = await currentProvider.send(preprocessed.data)
+    const result = await provider.send(preprocessed.data)
     if (!result.success) {
       logger.warn('Message send failed', {
-        channel: message.channel,
+        provider: providerName,
         to: message.to,
         error: result.error.code,
       })
@@ -249,17 +290,17 @@ export const reach: ReachFunctions = {
 
   /** 检查是否已初始化 */
   get isInitialized(): boolean {
-    return currentProvider !== null && currentProvider.isConnected()
+    return providers.size > 0
   },
 
   /**
-   * 关闭触达连接
+   * 关闭所有 Provider 连接
    *
    * 多次调用安全，未初始化时直接返回。
    * 关闭后模板注册表会被重置。
    */
   async close(): Promise<void> {
-    if (!currentProvider) {
+    if (providers.size === 0) {
       currentConfig = null
       logger.info('Reach module already closed, skipping')
       return
@@ -268,7 +309,9 @@ export const reach: ReachFunctions = {
     logger.info('Closing reach module')
 
     try {
-      await currentProvider.close()
+      for (const provider of providers.values()) {
+        await provider.close()
+      }
       logger.info('Reach module closed')
     }
     catch (error) {
@@ -276,7 +319,7 @@ export const reach: ReachFunctions = {
       throw error
     }
     finally {
-      currentProvider = null
+      providers = new Map()
       currentConfig = null
       templateRegistry = createTemplateRegistry()
     }

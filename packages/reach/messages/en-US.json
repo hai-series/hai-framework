@@ -7,10 +7,8 @@
   "reach_templateNotFound": "Template not found: {template}",
   "reach_templateRenderFailed": "Template render failed: {error}",
   "reach_invalidRecipient": "Invalid recipient: {recipient}",
+  "reach_providerNotFound": "Provider not found: {provider}",
   "reach_smsSendFailed": "SMS send failed: {error}",
   "reach_emailSendFailed": "Email send failed: {error}",
-  "reach_configHostRequired": "SMTP host is required",
-  "reach_configAccessKeyRequired": "Aliyun AccessKey ID is required",
-  "reach_configAccessSecretRequired": "Aliyun AccessKey Secret is required",
-  "reach_configSignNameRequired": "SMS sign name is required"
+  "reach_apiSendFailed": "API callback send failed: {error}"
 }

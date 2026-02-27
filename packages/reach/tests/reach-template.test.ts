@@ -14,6 +14,7 @@ describe('reach template', () => {
 
     registry.register({
       name: 'welcome',
+      provider: 'email',
       subject: '欢迎 {userName}',
       body: '亲爱的 {userName}，欢迎使用 {appName}！',
     })
@@ -30,8 +31,8 @@ describe('reach template', () => {
     const registry = createTemplateRegistry()
 
     registry.registerMany([
-      { name: 'tpl1', body: 'body1' },
-      { name: 'tpl2', body: 'body2' },
+      { name: 'tpl1', provider: 'email', body: 'body1' },
+      { name: 'tpl2', provider: 'sms', body: 'body2' },
     ])
 
     expect(registry.has('tpl1')).toBe(true)
@@ -39,14 +40,15 @@ describe('reach template', () => {
     expect(registry.list()).toHaveLength(2)
   })
 
-  it('get 应返回已注册的模板', () => {
+  it('get 应返回已注册的模板（含 provider 字段）', () => {
     const registry = createTemplateRegistry()
 
-    registry.register({ name: 'test', body: 'hello {name}' })
+    registry.register({ name: 'test', provider: 'sms', body: 'hello {name}' })
 
     const tpl = registry.get('test')
     expect(tpl).toBeDefined()
     expect(tpl!.name).toBe('test')
+    expect(tpl!.provider).toBe('sms')
     expect(tpl!.body).toBe('hello {name}')
   })
 
@@ -60,7 +62,7 @@ describe('reach template', () => {
   it('has 应正确检查模板存在性', () => {
     const registry = createTemplateRegistry()
 
-    registry.register({ name: 'exists', body: 'test' })
+    registry.register({ name: 'exists', provider: 'email', body: 'test' })
 
     expect(registry.has('exists')).toBe(true)
     expect(registry.has('not_exists')).toBe(false)
@@ -81,6 +83,7 @@ describe('reach template', () => {
 
     registry.register({
       name: 'partial',
+      provider: 'email',
       body: '{greeting} {name}, code: {code}',
     })
 
@@ -94,7 +97,7 @@ describe('reach template', () => {
   it('无 subject 的模板渲染后 subject 应为 undefined', () => {
     const registry = createTemplateRegistry()
 
-    registry.register({ name: 'sms', body: '验证码: {code}' })
+    registry.register({ name: 'sms', provider: 'sms', body: '验证码: {code}' })
 
     const result = registry.render('sms', { code: '123456' })
     expect(result.success).toBe(true)
@@ -107,8 +110,8 @@ describe('reach template', () => {
   it('同名模板注册应覆盖', () => {
     const registry = createTemplateRegistry()
 
-    registry.register({ name: 'test', body: 'version 1' })
-    registry.register({ name: 'test', body: 'version 2' })
+    registry.register({ name: 'test', provider: 'email', body: 'version 1' })
+    registry.register({ name: 'test', provider: 'sms', body: 'version 2' })
 
     const result = registry.render('test', {})
     expect(result.success).toBe(true)

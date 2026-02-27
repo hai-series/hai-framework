@@ -18,7 +18,7 @@
  */
 
 import type { Result } from '@h-ai/core'
-import type { ReachConfig, ReachConfigInput, ReachErrorCodeType } from './reach-config.js'
+import type { ProviderConfig, ReachConfig, ReachConfigInput, ReachErrorCodeType } from './reach-config.js'
 
 // =============================================================================
 // 错误类型
@@ -55,19 +55,21 @@ export type ReachChannel = 'email' | 'sms'
 /**
  * 触达消息（发送请求）
  *
+ * 通过 `provider` 字段指定目标 Provider，通过 `template` 字段指定模板。
+ *
  * @example
  * ```ts
- * // 直接指定内容
+ * // 使用模板发送邮件
  * const msg: ReachMessage = {
- *   channel: 'email',
+ *   provider: 'email',
  *   to: 'user@example.com',
- *   subject: '欢迎',
- *   body: '欢迎使用我们的服务！',
+ *   template: 'welcome',
+ *   vars: { userName: '张三' },
  * }
  *
- * // 使用模板
+ * // 使用模板发送短信
  * const msg: ReachMessage = {
- *   channel: 'sms',
+ *   provider: 'sms',
  *   to: '13800138000',
  *   template: 'verification_code',
  *   vars: { code: '123456' },
@@ -75,11 +77,11 @@ export type ReachChannel = 'email' | 'sms'
  * ```
  */
 export interface ReachMessage {
-  /** 触达渠道 */
-  channel: ReachChannel
+  /** 目标 Provider 名称（对应 Provider 配置中的 name） */
+  provider: string
   /** 接收方（邮箱地址或手机号） */
   to: string
-  /** 邮件主题（仅 email 渠道，直接发送时使用） */
+  /** 邮件主题（直接发送时使用） */
   subject?: string
   /** 消息正文（直接发送时使用） */
   body?: string
@@ -87,7 +89,7 @@ export interface ReachMessage {
   template?: string
   /** 模板变量（使用模板发送时传入） */
   vars?: Record<string, string>
-  /** 阿里云短信模板编码（仅 aliyun-sms 使用） */
+  /** 阿里云短信模板编码（仅 aliyun-sms Provider 使用） */
   templateCode?: string
 }
 
@@ -104,10 +106,13 @@ export interface SendResult {
 /**
  * 触达模板定义
  *
+ * 每个模板绑定到一个 Provider，发送时按模板中的 `provider` 路由。
+ *
  * @example
  * ```ts
  * const template: ReachTemplate = {
  *   name: 'verification_code',
+ *   provider: 'email',
  *   subject: '验证码: {code}',
  *   body: '您的验证码是 {code}，有效期 {minutes} 分钟。',
  * }
@@ -116,6 +121,8 @@ export interface SendResult {
 export interface ReachTemplate {
   /** 模板名称（唯一标识） */
   name: string
+  /** 绑定的 Provider 名称 */
+  provider: string
   /** 邮件主题模板（支持 `{var}` 占位符，仅 email） */
   subject?: string
   /** 消息正文模板（支持 `{var}` 占位符） */
@@ -149,7 +156,7 @@ export interface SendOperations {
    * @example
    * ```ts
    * const result = await reach.send({
-   *   channel: 'email',
+   *   provider: 'email',
    *   to: 'user@example.com',
    *   template: 'welcome',
    *   vars: { userName: '张三' },
@@ -192,25 +199,31 @@ export interface ReachTemplateRegistry {
  * ```ts
  * import { reach } from '@h-ai/reach'
  *
- * // 初始化
- * await reach.init({ type: 'smtp', host: 'smtp.example.com', from: 'no-reply@example.com' })
+ * // 初始化（同时注册多个 Provider）
+ * await reach.init({
+ *   providers: [
+ *     { name: 'email', type: 'smtp', host: 'smtp.example.com', from: 'no-reply@example.com' },
+ *     { name: 'sms', type: 'aliyun-sms', accessKeyId: '...', accessKeySecret: '...', signName: '...' },
+ *   ],
+ * })
  *
- * // 注册模板
+ * // 注册模板（绑定到 Provider）
  * reach.template.register({
  *   name: 'welcome',
+ *   provider: 'email',
  *   subject: '欢迎 {userName}',
  *   body: '亲爱的 {userName}，欢迎使用我们的服务！',
  * })
  *
- * // 发送
- * await reach.send({ channel: 'email', to: 'user@example.com', template: 'welcome', vars: { userName: '张三' } })
+ * // 发送（指定 Provider）
+ * await reach.send({ provider: 'email', to: 'user@example.com', template: 'welcome', vars: { userName: '张三' } })
  *
  * // 关闭
  * await reach.close()
  * ```
  */
 export interface ReachFunctions extends SendOperations {
-  /** 初始化触达模块 */
+  /** 初始化触达模块（注册多个 Provider） */
   init: (config: ReachConfigInput) => Promise<Result<void, ReachError>>
   /** 当前配置（未初始化时为 null） */
   readonly config: ReachConfig | null
@@ -229,13 +242,15 @@ export interface ReachFunctions extends SendOperations {
 /**
  * 触达 Provider 接口
  *
- * 由具体实现（console / smtp / aliyun-sms）提供。
+ * 由具体实现（console / smtp / aliyun-sms / api）提供。
  */
-export interface ReachProvider extends SendOperations {
+export interface ReachProvider {
   /** Provider 名称 */
   readonly name: string
   /** 连接/初始化 Provider */
-  connect: (config: ReachConfig) => Promise<Result<void, ReachError>>
+  connect: (config: ProviderConfig) => Promise<Result<void, ReachError>>
+  /** 发送消息 */
+  send: (message: ReachMessage) => Promise<Result<SendResult, ReachError>>
   /** 关闭连接 */
   close: () => Promise<void>
   /** 是否已连接 */
