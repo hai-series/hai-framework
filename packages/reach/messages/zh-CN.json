@@ -1,0 +1,16 @@
+{
+  "$schema": "https://inlang.com/schema/inlang-message-format",
+  "reach_notInitialized": "触达模块尚未初始化，请先调用 reach.init()",
+  "reach_initFailed": "触达模块初始化失败: {error}",
+  "reach_unsupportedType": "不支持的触达类型: {type}",
+  "reach_sendFailed": "发送失败: {error}",
+  "reach_templateNotFound": "模板未找到: {template}",
+  "reach_templateRenderFailed": "模板渲染失败: {error}",
+  "reach_invalidRecipient": "无效的接收方: {recipient}",
+  "reach_smsSendFailed": "短信发送失败: {error}",
+  "reach_emailSendFailed": "邮件发送失败: {error}",
+  "reach_configHostRequired": "SMTP 主机地址不能为空",
+  "reach_configAccessKeyRequired": "阿里云 AccessKey ID 不能为空",
+  "reach_configAccessSecretRequired": "阿里云 AccessKey Secret 不能为空",
+  "reach_configSignNameRequired": "短信签名不能为空"
+}
