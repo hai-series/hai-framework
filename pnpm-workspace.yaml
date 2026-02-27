@@ -51,7 +51,7 @@ catalog:
   # UI (Tailwind CSS / DaisyUI / Bits UI / Icons)
   # ---------------------------------------------------------------------------
   '@internationalized/date': ^3.8.0
-  '@modelcontextprotocol/sdk': ^1.0.4
+  '@modelcontextprotocol/sdk': ^1.26.0
 
   '@playwright/test': ^1.58.2
   '@sveltejs/adapter-auto': ^7.0.0
