@@ -110,8 +110,8 @@ async function tryInitSendLogRepo(): Promise<SendLogRepository | null> {
     }
     return await createSendLogRepository(db)
   }
-  catch {
-    logger.debug('Send log repository not initialized (db module unavailable)')
+  catch (error) {
+    logger.debug('Send log repository not initialized', { error: error instanceof Error ? error.message : String(error) })
     return null
   }
 }

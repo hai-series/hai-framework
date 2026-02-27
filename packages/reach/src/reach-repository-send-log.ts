@@ -205,7 +205,11 @@ export async function createSendLogRepository(db: DbFunctions): Promise<SendLogR
     return sendLogRepoInstance
 
   const repo = new DbSendLogRepository(db)
-  await repo.count()
+  // 触发表创建（BaseCrudRepository 的表创建是异步的）
+  const initResult = await repo.count()
+  if (!initResult.success) {
+    throw new Error(`Failed to initialize send log table: ${initResult.error.message}`)
+  }
   sendLogRepoInstance = repo
   sendLogRepoDbConfig = db.config
   return repo
