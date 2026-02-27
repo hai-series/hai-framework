@@ -1,6 +1,6 @@
 # @h-ai/reach
 
-用户触达模块，支持同时注册多个 Provider（邮件、短信、API 回调等），通过模板绑定 Provider 实现按场景路由发送。
+用户触达模块，支持同时注册多个 Provider（邮件、短信、API 回调等），通过模板绑定 Provider 实现按场景路由发送。内置免打扰（DND）机制，支持通过配置文件定义模板。
 
 ## 支持的 Provider
 
@@ -26,27 +26,18 @@ pnpm add @h-ai/reach
 ```ts
 import { reach } from '@h-ai/reach'
 
-// 同时注册邮件和短信 Provider
+// 同时注册邮件和短信 Provider，并通过配置定义模板和 DND
 await reach.init({
   providers: [
     { name: 'email', type: 'smtp', host: 'smtp.example.com', from: 'noreply@example.com' },
     { name: 'sms', type: 'aliyun-sms', accessKeyId: '...', accessKeySecret: '...', signName: '某某科技' },
     { name: 'webhook', type: 'api', url: 'https://api.example.com/notify' },
   ],
-})
-
-// 注册模板（模板绑定到 Provider）
-reach.template.register({
-  name: 'welcome_email',
-  provider: 'email',
-  subject: '欢迎 {userName}',
-  body: '亲爱的 {userName}，欢迎使用 {appName}！',
-})
-
-reach.template.register({
-  name: 'sms_code',
-  provider: 'sms',
-  body: '验证码: {code}，{minutes} 分钟内有效。',
+  templates: [
+    { name: 'welcome_email', provider: 'email', subject: '欢迎 {userName}', body: '亲爱的 {userName}，欢迎！' },
+    { name: 'sms_code', provider: 'sms', body: '验证码: {code}，{minutes} 分钟内有效。' },
+  ],
+  dnd: { enabled: true, start: '22:00', end: '08:00' },
 })
 
 // 通过 provider 字段选择发送渠道
@@ -54,23 +45,15 @@ await reach.send({
   provider: 'email',
   to: 'user@example.com',
   template: 'welcome_email',
-  vars: { userName: '张三', appName: 'Hai' },
+  vars: { userName: '张三' },
 })
 
-// 发送短信（指定 provider）
+// 发送短信（通过 extra 传递 Provider 特有参数）
 await reach.send({
   provider: 'sms',
   to: '13800138000',
-  templateCode: 'SMS_123456',
+  extra: { templateCode: 'SMS_123456' },
   vars: { code: '123456' },
-})
-
-// 直接发送（无模板）
-await reach.send({
-  provider: 'email',
-  to: 'user@example.com',
-  subject: '通知',
-  body: '这是一封通知邮件。',
 })
 
 // 关闭所有 Provider
@@ -119,6 +102,14 @@ const config = { name: 'dev', type: 'console' }
 | `method`  | `'POST' \| 'PUT'`        | —    | `POST`  | HTTP 方法     |
 | `headers` | `Record<string, string>` | —    | —       | 自定义请求头  |
 | `timeout` | `number`                 | —    | `10000` | 超时毫秒数    |
+
+### DND（免打扰）
+
+| 字段      | 类型      | 必填 | 默认值  | 说明                   |
+| --------- | --------- | ---- | ------- | ---------------------- |
+| `enabled` | `boolean` | —    | `false` | 是否启用               |
+| `start`   | `string`  | —    | `00:00` | 开始时间（HH:mm 格式） |
+| `end`     | `string`  | —    | `00:00` | 结束时间（HH:mm 格式） |
 
 ## 错误处理
 

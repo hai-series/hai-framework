@@ -47,6 +47,8 @@ export const ReachErrorCode = {
   INVALID_RECIPIENT: 8003,
   /** Provider 未找到 */
   PROVIDER_NOT_FOUND: 8004,
+  /** 免打扰时段拦截 */
+  DND_BLOCKED: 8005,
   /** 触达模块未初始化 */
   NOT_INITIALIZED: 8010,
   /** 不支持的 Provider 类型 */
@@ -189,6 +191,67 @@ export type AliyunSmsProviderConfig = z.infer<typeof AliyunSmsProviderConfigSche
 export type ApiProviderConfig = z.infer<typeof ApiProviderConfigSchema>
 
 // =============================================================================
+// DND（免打扰）配置 Schema
+// =============================================================================
+
+/**
+ * 免打扰时间段配置
+ *
+ * 在指定的时间段内，消息不会被发送，而是返回 DND_BLOCKED 错误。
+ * 时间使用 HH:mm 格式（24 小时制），支持跨午夜（如 22:00-08:00）。
+ *
+ * @example
+ * ```ts
+ * {
+ *   enabled: true,
+ *   start: '22:00',
+ *   end: '08:00'
+ * }
+ * ```
+ */
+export const DndConfigSchema = z.object({
+  /** 是否启用免打扰（默认 false） */
+  enabled: z.boolean().default(false),
+  /** 免打扰开始时间（HH:mm 格式） */
+  start: z.string().regex(/^\d{2}:\d{2}$/).default('00:00'),
+  /** 免打扰结束时间（HH:mm 格式） */
+  end: z.string().regex(/^\d{2}:\d{2}$/).default('00:00'),
+})
+
+/** DND 配置类型 */
+export type DndConfig = z.infer<typeof DndConfigSchema>
+
+// =============================================================================
+// 模板配置 Schema
+// =============================================================================
+
+/**
+ * 模板配置 Schema（通过配置文件定义模板）
+ *
+ * @example
+ * ```yaml
+ * templates:
+ *   - name: verification_code
+ *     provider: email
+ *     subject: "验证码: {code}"
+ *     body: "您的验证码是 {code}，有效期 {minutes} 分钟。"
+ * ```
+ */
+export const TemplateConfigSchema = z.object({
+  /** 模板名称 */
+  name: z.string().min(1),
+  /** 绑定的 Provider 名称 */
+  provider: z.string().min(1),
+  /** 邮件主题模板 */
+  subject: z.string().optional(),
+  /** 正文模板 */
+  body: z.string().min(1),
+})
+
+/** 模板配置类型 */
+export type TemplateConfig = z.infer<typeof TemplateConfigSchema>
+
+// =============================================================================
 // 模块配置 Schema
 // =============================================================================
 
@@ -196,10 +259,15 @@ export type ApiProviderConfig = z.infer<typeof ApiProviderConfigSchema>
  * 触达模块配置 Schema
  *
  * 接受一个 Provider 配置数组，支持同时注册多个 Provider。
+ * 支持通过配置文件定义模板和免打扰时间段。
  */
 export const ReachConfigSchema = z.object({
   /** Provider 配置列表 */
   providers: z.array(ProviderConfigSchema).min(1),
+  /** 模板配置（通过配置文件注册） */
+  templates: z.array(TemplateConfigSchema).optional(),
+  /** 免打扰配置 */
+  dnd: DndConfigSchema.optional(),
 })
 
 /** 触达模块配置类型（parse 后） */

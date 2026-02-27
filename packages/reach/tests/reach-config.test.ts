@@ -5,7 +5,7 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { ReachConfigSchema, ReachErrorCode } from '../src/index.js'
+import { DndConfigSchema, ReachConfigSchema, ReachErrorCode, TemplateConfigSchema } from '../src/index.js'
 
 describe('reach config', () => {
   it('单个 console provider 配置应正确解析', () => {
@@ -90,6 +90,80 @@ describe('reach config', () => {
     expect(ReachErrorCode.NOT_INITIALIZED).toBe(8010)
     expect(ReachErrorCode.TEMPLATE_NOT_FOUND).toBe(8001)
     expect(ReachErrorCode.PROVIDER_NOT_FOUND).toBe(8004)
+    expect(ReachErrorCode.DND_BLOCKED).toBe(8005)
     expect(ReachErrorCode.CONFIG_ERROR).toBe(8012)
+  })
+
+  it('模板配置 schema 应正确解析', () => {
+    const result = TemplateConfigSchema.safeParse({
+      name: 'welcome',
+      provider: 'email',
+      subject: '欢迎 {userName}',
+      body: '亲爱的 {userName}，欢迎使用！',
+    })
+    expect(result.success).toBe(true)
+  })
+
+  it('模板配置缺少 body 应校验失败', () => {
+    const result = TemplateConfigSchema.safeParse({
+      name: 'test',
+      provider: 'email',
+    })
+    expect(result.success).toBe(false)
+  })
+
+  it('配置中包含模板数组应正确解析', () => {
+    const result = ReachConfigSchema.safeParse({
+      providers: [{ name: 'email', type: 'console' }],
+      templates: [
+        { name: 'welcome', provider: 'email', subject: '欢迎', body: '欢迎使用！' },
+        { name: 'code', provider: 'email', body: '验证码: {code}' },
+      ],
+    })
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.templates).toHaveLength(2)
+    }
+  })
+
+  it('dnd 配置应正确解析并补齐默认值', () => {
+    const result = DndConfigSchema.safeParse({
+      enabled: true,
+      start: '22:00',
+      end: '08:00',
+    })
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.enabled).toBe(true)
+      expect(result.data.start).toBe('22:00')
+      expect(result.data.end).toBe('08:00')
+    }
+  })
+
+  it('dnd 配置默认应禁用', () => {
+    const result = DndConfigSchema.safeParse({})
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.enabled).toBe(false)
+    }
+  })
+
+  it('dnd 时间格式不合法应校验失败', () => {
+    const result = DndConfigSchema.safeParse({
+      enabled: true,
+      start: '9pm',
+    })
+    expect(result.success).toBe(false)
+  })
+
+  it('配置中包含 DND 应正确解析', () => {
+    const result = ReachConfigSchema.safeParse({
+      providers: [{ name: 'email', type: 'console' }],
+      dnd: { enabled: true, start: '22:00', end: '08:00' },
+    })
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.dnd?.enabled).toBe(true)
+    }
   })
 })

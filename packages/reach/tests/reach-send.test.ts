@@ -61,7 +61,6 @@ describe.sequential('reach.send (multi-provider)', () => {
       body: '验证码: {code}',
     })
 
-    // provider 设为空字符串，应从模板推导
     const result = await reach.send({
       provider: '',
       to: '13800138000',
@@ -148,5 +147,62 @@ describe.sequential('reach.send (multi-provider)', () => {
     await reach.init({ providers: [{ name: 'email', type: 'console' }] })
 
     expect(reach.template.has('temp')).toBe(false)
+  })
+
+  it('extra 字段应传递到 Provider', async () => {
+    const result = await reach.send({
+      provider: 'sms',
+      to: '13800138000',
+      body: '测试',
+      extra: { templateCode: 'SMS_123456' },
+    })
+
+    expect(result.success).toBe(true)
+  })
+})
+
+describe.sequential('reach.send (template from config)', () => {
+  afterEach(async () => {
+    await reach.close()
+  })
+
+  it('配置中的模板应自动注册', async () => {
+    await reach.init({
+      providers: [{ name: 'email', type: 'console' }],
+      templates: [
+        { name: 'config_tpl', provider: 'email', subject: '来自配置 {name}', body: '内容 {name}' },
+      ],
+    })
+
+    expect(reach.template.has('config_tpl')).toBe(true)
+
+    const result = await reach.send({
+      provider: 'email',
+      to: 'user@example.com',
+      template: 'config_tpl',
+      vars: { name: '张三' },
+    })
+    expect(result.success).toBe(true)
+  })
+})
+
+describe.sequential('reach.send (DND)', () => {
+  afterEach(async () => {
+    await reach.close()
+  })
+
+  it('dnd 禁用时消息应正常发送', async () => {
+    await reach.init({
+      providers: [{ name: 'email', type: 'console' }],
+      dnd: { enabled: false, start: '00:00', end: '23:59' },
+    })
+
+    const result = await reach.send({
+      provider: 'email',
+      to: 'user@example.com',
+      body: 'test',
+    })
+
+    expect(result.success).toBe(true)
   })
 })

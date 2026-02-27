@@ -45,8 +45,9 @@ export interface ReachError {
  *
  * - `email` — 邮件
  * - `sms` — 短信
+ * - `api` — API 回调
  */
-export type ReachChannel = 'email' | 'sms'
+export type ReachChannel = 'email' | 'sms' | 'api'
 
 // =============================================================================
 // 消息与模板
@@ -89,8 +90,8 @@ export interface ReachMessage {
   template?: string
   /** 模板变量（使用模板发送时传入） */
   vars?: Record<string, string>
-  /** 阿里云短信模板编码（仅 aliyun-sms Provider 使用） */
-  templateCode?: string
+  /** Provider 扩展参数（如短信 Provider 的模板编码、签名等） */
+  extra?: Record<string, unknown>
 }
 
 /**

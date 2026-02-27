@@ -51,6 +51,7 @@ export function createConsoleProvider(): ReachProvider {
         body: message.body,
         template: message.template,
         vars: message.vars,
+        extra: message.extra,
       })
 
       const messageId = `console-${Date.now()}`

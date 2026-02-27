@@ -84,8 +84,8 @@ export function createApiProvider(): ReachProvider {
           subject: message.subject,
           body: message.body,
           template: message.template,
-          templateCode: message.templateCode,
           vars: message.vars,
+          extra: message.extra,
         }
 
         const controller = new AbortController()
