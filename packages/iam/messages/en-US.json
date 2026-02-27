@@ -115,6 +115,7 @@
   "iam_queryOtpFailed": "Failed to query OTP: {message}",
   "iam_updateOtpAttemptsFailed": "Failed to update OTP attempts: {message}",
   "iam_deleteOtpFailed": "Failed to delete OTP: {message}",
+  "iam_otpSendFailed": "Failed to send OTP: {message}",
   "iam_resetTokenInvalid": "Invalid or expired password reset token",
   "iam_resetTokenExpired": "Password reset token has expired",
   "iam_resetTokenMaxAttempts": "Too many verification attempts, please request a new reset token",

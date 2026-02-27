@@ -4,6 +4,7 @@
  * 创建认证策略（密码/OTP/LDAP），组装成统一的认证操作接口。
  */
 
+import type { CacheFunctions } from '@h-ai/cache'
 import type { Result } from '@h-ai/core'
 import type { DbFunctions } from '@h-ai/db'
 
@@ -23,7 +24,7 @@ import { AgreementConfigSchema, IamErrorCode, LoginConfigSchema, OtpConfigSchema
 import { iamM } from '../iam-i18n.js'
 import { createDbUserRepository } from '../user/iam-user-repository-user.js'
 import { createLdapStrategy } from './ldap/iam-authn-ldap-strategy.js'
-import { createDbOtpRepository } from './otp/iam-authn-otp-repository-otp.js'
+import { createCacheOtpRepository } from './otp/iam-authn-otp-repository-otp.js'
 import { createOtpStrategy } from './otp/iam-authn-otp-strategy.js'
 import { createPasswordStrategy } from './password/iam-authn-password-strategy.js'
 
@@ -37,10 +38,15 @@ const logger = core.logger.child({ module: 'iam', scope: 'authn' })
 export interface IamAuthnFunctionsDeps {
   config: IamConfig
   db: DbFunctions
+  cache: CacheFunctions
   sessionFunctions: IamSessionFunctions
   authzFunctions: IamAuthzFunctions
   ldapClientFactory?: LdapClientFactory
   ldapSyncUser?: boolean
+  /** OTP 邮件发送回调（由业务层注入） */
+  onOtpSendEmail?: (email: string, code: string) => Promise<void>
+  /** OTP 短信发送回调（由业务层注入） */
+  onOtpSendSms?: (phone: string, code: string) => Promise<void>
 }
 
 /**
@@ -62,7 +68,7 @@ export interface IamAuthnFunctionsResult {
  */
 export async function createIamAuthnFunctions(deps: IamAuthnFunctionsDeps): Promise<Result<IamAuthnFunctionsResult, IamError>> {
   try {
-    const { config, db, sessionFunctions, authzFunctions, ldapClientFactory, ldapSyncUser } = deps
+    const { config, db, cache, sessionFunctions, authzFunctions, ldapClientFactory, ldapSyncUser, onOtpSendEmail, onOtpSendSms } = deps
 
     const userRepository = await createDbUserRepository(db)
     const securityConfig = SecurityConfigSchema.parse(config.security ?? {})
@@ -94,7 +100,7 @@ export async function createIamAuthnFunctions(deps: IamAuthnFunctionsDeps): Prom
     let otpStrategy: OtpStrategy | undefined
     const otpConfig = config.otp ? OtpConfigSchema.parse(config.otp) : undefined
     if (loginConfig.otp && otpConfig) {
-      const otpRepository = await createDbOtpRepository(db)
+      const otpRepository = createCacheOtpRepository(cache, { onOtpSendEmail, onOtpSendSms })
       otpStrategy = createOtpStrategy({
         otpConfig,
         userRepository,

@@ -3,17 +3,20 @@
  * @h-ai/iam - OTP 存储实现
  * =============================================================================
  *
- * 基于 @h-ai/db 的 OTP 存储实现。
+ * 基于 @h-ai/cache 的 OTP 存储实现。
+ *
+ * 缓存键设计：
+ * - `iam:otp:{identifier}` → OtpRecord JSON（KV，TTL = expiresIn）
  *
  * @module authn/otp/iam-authn-otp-repository-otp
  * =============================================================================
  */
 
+import type { CacheFunctions } from '@h-ai/cache'
 import type { Result } from '@h-ai/core'
-import type { CrudCountOptions, CrudFieldDefinition, DbError, DbFunctions, TxHandle } from '@h-ai/db'
 import type { IamError } from '../../iam-types.js'
 import { err, ok } from '@h-ai/core'
-import { BaseCrudRepository } from '@h-ai/db'
+
 import { IamErrorCode } from '../../iam-config.js'
 import { iamM } from '../../iam-i18n.js'
 
@@ -44,22 +47,22 @@ export interface OtpRepository {
   /**
    * 存储验证码
    */
-  saveOtp: (identifier: string, code: string, expiresIn: number, tx?: TxHandle) => Promise<Result<void, IamError>>
+  saveOtp: (identifier: string, code: string, expiresIn: number) => Promise<Result<void, IamError>>
 
   /**
    * 获取验证码
    */
-  fetchOtp: (identifier: string, tx?: TxHandle) => Promise<Result<OtpRecord | null, IamError>>
+  fetchOtp: (identifier: string) => Promise<Result<OtpRecord | null, IamError>>
 
   /**
    * 增加尝试次数
    */
-  incrementOtpAttempts: (identifier: string, tx?: TxHandle) => Promise<Result<number, IamError>>
+  incrementOtpAttempts: (identifier: string) => Promise<Result<number, IamError>>
 
   /**
    * 删除验证码
    */
-  removeOtp: (identifier: string, tx?: TxHandle) => Promise<Result<void, IamError>>
+  removeOtp: (identifier: string) => Promise<Result<void, IamError>>
 
   /**
    * 发送邮件验证码
@@ -73,268 +76,213 @@ export interface OtpRepository {
 }
 
 // =============================================================================
-// OTP 存储实现
+// 缓存键构建
+// =============================================================================
+
+/** OTP 缓存键前缀 */
+const OTP_KEY_PREFIX = 'iam:otp:'
+
+/**
+ * 构建 OTP 缓存 key
+ *
+ * @param identifier - 标识符（邮箱/手机号）
+ * @returns 格式：`iam:otp:{identifier}`
+ */
+function buildOtpKey(identifier: string): string {
+  return `${OTP_KEY_PREFIX}${identifier}`
+}
+
+/**
+ * 修复从缓存反序列化后的日期字段
+ *
+ * 缓存存储后日期可能为字符串，需要重新转为 Date 对象。
+ */
+function restoreOtpDates(record: OtpRecord): OtpRecord {
+  return {
+    ...record,
+    expiresAt: record.expiresAt instanceof Date ? record.expiresAt : new Date(record.expiresAt),
+    createdAt: record.createdAt instanceof Date ? record.createdAt : new Date(record.createdAt),
+  }
+}
+
+// =============================================================================
+// OTP 发送回调
 // =============================================================================
 
 /**
- * OTP 表名
- */
-const TABLE_NAME = 'iam_otp'
-
-const OTP_FIELDS: CrudFieldDefinition[] = [
-  {
-    fieldName: 'identifier',
-    columnName: 'identifier',
-    def: { type: 'TEXT' as const, primaryKey: true },
-    select: true,
-    create: true,
-    update: false,
-  },
-  {
-    fieldName: 'code',
-    columnName: 'code',
-    def: { type: 'TEXT' as const, notNull: true },
-    select: true,
-    create: true,
-    update: true,
-  },
-  {
-    fieldName: 'attempts',
-    columnName: 'attempts',
-    def: { type: 'INTEGER' as const, notNull: true, defaultValue: 0 },
-    select: true,
-    create: true,
-    update: true,
-  },
-  {
-    fieldName: 'expiresAt',
-    columnName: 'expires_at',
-    def: { type: 'TIMESTAMP' as const, notNull: true },
-    select: true,
-    create: true,
-    update: true,
-  },
-  {
-    fieldName: 'createdAt',
-    columnName: 'created_at',
-    def: { type: 'TIMESTAMP' as const, notNull: true },
-    select: true,
-    create: true,
-    update: true,
-  },
-]
-
-/**
- * 判断 OTP 是否已过期
+ * OTP 发送回调（由业务层注入）
  *
- * @param expiresAt - 过期时间戳（毫秒）
- * @param now - 当前时间戳（默认 Date.now()）
- * @returns 已过期返回 true
+ * 用于将 OTP 验证码通过邮件/短信发送给用户。
+ * 若回调未提供，OTP challenge 将返回"发送方式未配置"错误。
  */
-function isExpired(expiresAt: number, now = Date.now()): boolean {
-  return now > expiresAt
+export interface OtpSendCallbacks {
+  /** 邮件发送回调 */
+  onOtpSendEmail?: (email: string, code: string) => Promise<void>
+  /** 短信发送回调 */
+  onOtpSendSms?: (phone: string, code: string) => Promise<void>
 }
 
-/** OTP 存储单例缓存（通过 db.config 引用比较检测 db 重新初始化） */
+// =============================================================================
+// 缓存实现
+// =============================================================================
+
+/** OTP 存储单例缓存 */
 let otpRepoInstance: OtpRepository | null = null
-let otpRepoDbConfig: unknown = null
 
 /**
  * 重置 OTP 存储单例
  *
- * 在 iam.close() 时调用，释放对旧 db 实例的引用。
+ * 在 iam.close() 时调用，释放对旧 cache 实例的引用。
  */
 export function resetOtpRepoSingleton(): void {
   otpRepoInstance = null
-  otpRepoDbConfig = null
 }
 
 /**
- * 创建基于数据库的 OTP 存储实例
+ * 创建基于缓存的 OTP 存储实例
  *
- * 单例模式：同一 db 生命周期内重复调用返回缓存实例，
- * db 重新初始化后自动创建新实例。
+ * 单例模式：重复调用返回缓存实例。
  *
- * @param db - 数据库服务实例
+ * @param cache - 缓存服务实例
+ * @param callbacks - OTP 发送回调（邮件/短信，由业务层注入）
  * @returns OTP 存储接口实现
  */
-export async function createDbOtpRepository(db: DbFunctions): Promise<OtpRepository> {
-  if (otpRepoInstance && otpRepoDbConfig === db.config)
+export function createCacheOtpRepository(cache: CacheFunctions, callbacks?: OtpSendCallbacks): OtpRepository {
+  if (otpRepoInstance)
     return otpRepoInstance
 
-  const repo = new DbOtpRepository(db)
-  await repo.count()
-  otpRepoInstance = repo
-  otpRepoDbConfig = db.config
-  return repo
-}
+  const repo: OtpRepository = {
+    async saveOtp(identifier, code, expiresIn): Promise<Result<void, IamError>> {
+      const now = Date.now()
+      const record: OtpRecord = {
+        identifier,
+        code,
+        expiresAt: new Date(now + expiresIn * 1000),
+        attempts: 0,
+        createdAt: new Date(now),
+      }
 
-/**
- * 基于数据库的 OTP 存储实现
- *
- * 继承 BaseCrudRepository，提供验证码的存储/查询/删除以及发送能力。
- * 内置过期自动清理：查询时发现过期会自动删除并返回 null。
- */
-class DbOtpRepository extends BaseCrudRepository<OtpRecord> implements OtpRepository {
-  constructor(db: DbFunctions) {
-    super(db, {
-      table: TABLE_NAME,
-      idColumn: 'identifier',
-      idField: 'identifier',
-      fields: OTP_FIELDS,
-    })
-  }
+      // 直接 set 覆盖（cache 天然支持 upsert 语义）
+      const result = await cache.kv.set(buildOtpKey(identifier), record, { ex: expiresIn })
+      if (!result.success) {
+        return err({
+          code: IamErrorCode.REPOSITORY_ERROR,
+          message: iamM('iam_saveOtpFailed', { params: { message: result.error.message } }),
+          cause: result.error,
+        })
+      }
 
-  /**
-   * 存储验证码
-   *
-   * 先尝试更新已有记录，若不存在则创建新记录。
-   *
-   * @param identifier - 标识符（邮箱/手机号）
-   * @param code - 验证码
-   * @param expiresIn - 有效期（秒）
-   * @param tx - 可选事务句柄
-   */
-  async saveOtp(identifier: string, code: string, expiresIn: number, tx?: TxHandle): Promise<Result<void, IamError>> {
-    const now = Date.now()
-    const expiresAt = new Date(now + expiresIn * 1000)
-    const payload = {
-      code,
-      attempts: 0,
-      expiresAt,
-      createdAt: new Date(now),
-    }
-
-    const updateResult = await this.updateById(identifier, payload, tx)
-    if (updateResult.success && updateResult.data.changes > 0) {
       return ok(undefined)
-    }
-    if (!updateResult.success) {
-      return err({
-        code: IamErrorCode.REPOSITORY_ERROR,
-        message: iamM('iam_saveOtpFailed', { params: { message: updateResult.error.message } }),
-        cause: updateResult.error,
-      })
-    }
+    },
 
-    const createResult = await this.create({ identifier, ...payload }, tx)
-    if (!createResult.success) {
-      return err({
-        code: IamErrorCode.REPOSITORY_ERROR,
-        message: iamM('iam_saveOtpFailed', { params: { message: createResult.error.message } }),
-        cause: createResult.error,
-      })
-    }
+    async fetchOtp(identifier): Promise<Result<OtpRecord | null, IamError>> {
+      const result = await cache.kv.get<OtpRecord>(buildOtpKey(identifier))
+      if (!result.success) {
+        return err({
+          code: IamErrorCode.REPOSITORY_ERROR,
+          message: iamM('iam_queryOtpFailed', { params: { message: result.error.message } }),
+          cause: result.error,
+        })
+      }
 
-    return ok(undefined)
+      if (!result.data) {
+        return ok(null)
+      }
+
+      return ok(restoreOtpDates(result.data))
+    },
+
+    async incrementOtpAttempts(identifier): Promise<Result<number, IamError>> {
+      const otpKey = buildOtpKey(identifier)
+      const current = await cache.kv.get<OtpRecord>(otpKey)
+      if (!current.success) {
+        return err({
+          code: IamErrorCode.REPOSITORY_ERROR,
+          message: iamM('iam_queryOtpFailed', { params: { message: current.error.message } }),
+          cause: current.error,
+        })
+      }
+
+      if (!current.data) {
+        return ok(0)
+      }
+
+      const record = restoreOtpDates(current.data)
+      const nextAttempts = record.attempts + 1
+
+      // 获取剩余 TTL，保持原有过期时间
+      const ttlResult = await cache.kv.ttl(otpKey)
+      const ttl = ttlResult.success && ttlResult.data > 0 ? ttlResult.data : 1
+
+      const updateResult = await cache.kv.set(otpKey, { ...record, attempts: nextAttempts }, { ex: ttl })
+      if (!updateResult.success) {
+        return err({
+          code: IamErrorCode.REPOSITORY_ERROR,
+          message: iamM('iam_updateOtpAttemptsFailed', { params: { message: updateResult.error.message } }),
+          cause: updateResult.error,
+        })
+      }
+
+      return ok(nextAttempts)
+    },
+
+    async removeOtp(identifier): Promise<Result<void, IamError>> {
+      const result = await cache.kv.del(buildOtpKey(identifier))
+      if (!result.success) {
+        return err({
+          code: IamErrorCode.REPOSITORY_ERROR,
+          message: iamM('iam_deleteOtpFailed', { params: { message: result.error.message } }),
+          cause: result.error,
+        })
+      }
+      return ok(undefined)
+    },
+
+    /**
+     * 发送邮件验证码（通过业务层回调）
+     *
+     * 若未注入 onOtpSendEmail 回调，此方法为 undefined，
+     * OTP 策略将返回"发送方式未配置"错误。
+     */
+    sendEmail: callbacks?.onOtpSendEmail
+      ? async (email: string, code: string): Promise<Result<void, IamError>> => {
+        try {
+          await callbacks.onOtpSendEmail!(email, code)
+          return ok(undefined)
+        }
+        catch (error) {
+          return err({
+            code: IamErrorCode.INTERNAL_ERROR,
+            message: iamM('iam_otpSendFailed', { params: { message: String(error) } }),
+            cause: error,
+          })
+        }
+      }
+      : undefined,
+
+    /**
+     * 发送短信验证码（通过业务层回调）
+     *
+     * 若未注入 onOtpSendSms 回调，此方法为 undefined，
+     * OTP 策略将返回"发送方式未配置"错误。
+     */
+    sendSms: callbacks?.onOtpSendSms
+      ? async (phone: string, code: string): Promise<Result<void, IamError>> => {
+        try {
+          await callbacks.onOtpSendSms!(phone, code)
+          return ok(undefined)
+        }
+        catch (error) {
+          return err({
+            code: IamErrorCode.INTERNAL_ERROR,
+            message: iamM('iam_otpSendFailed', { params: { message: String(error) } }),
+            cause: error,
+          })
+        }
+      }
+      : undefined,
   }
 
-  /**
-   * 检查是否存在 OTP 记录
-   *
-   * @param options - 查询条件
-   * @param tx - 可选事务句柄
-   * @returns 存在返回 true
-   */
-  async exists(options?: CrudCountOptions, tx?: TxHandle): Promise<Result<boolean, DbError>> {
-    const result = await this.count(options, tx)
-    if (!result.success) {
-      return result as Result<boolean, DbError>
-    }
-    return ok(result.data > 0)
-  }
-
-  /**
-   * 获取验证码
-   *
-   * 若验证码已过期则自动删除并返回 null。
-   *
-   * @param identifier - 标识符
-   * @param tx - 可选事务句柄
-   * @returns OTP 记录，或 null（不存在/已过期）
-   */
-  async fetchOtp(identifier: string, tx?: TxHandle): Promise<Result<OtpRecord | null, IamError>> {
-    const result = await this.findById(identifier, tx)
-    if (!result.success) {
-      return err({
-        code: IamErrorCode.REPOSITORY_ERROR,
-        message: iamM('iam_queryOtpFailed', { params: { message: result.error.message } }),
-        cause: result.error,
-      })
-    }
-    if (!result.data) {
-      return ok(null)
-    }
-    if (isExpired(result.data.expiresAt.getTime())) {
-      await this.removeOtp(identifier, tx)
-      return ok(null)
-    }
-    return ok(result.data)
-  }
-
-  /**
-   * 增加 OTP 尝试次数
-   *
-   * @param identifier - 标识符
-   * @param tx - 可选事务句柄
-   * @returns 更新后的尝试次数，记录不存在时返回 0
-   */
-  async incrementOtpAttempts(identifier: string, tx?: TxHandle): Promise<Result<number, IamError>> {
-    const current = await this.findById(identifier, tx)
-    if (!current.success) {
-      return err({
-        code: IamErrorCode.REPOSITORY_ERROR,
-        message: iamM('iam_queryOtpFailed', { params: { message: current.error.message } }),
-        cause: current.error,
-      })
-    }
-
-    if (!current.data) {
-      return ok(0)
-    }
-
-    const nextAttempts = current.data.attempts + 1
-    const updateResult = await this.updateById(identifier, { attempts: nextAttempts }, tx)
-    if (!updateResult.success) {
-      return err({
-        code: IamErrorCode.REPOSITORY_ERROR,
-        message: iamM('iam_updateOtpAttemptsFailed', { params: { message: updateResult.error.message } }),
-        cause: updateResult.error,
-      })
-    }
-
-    return ok(nextAttempts)
-  }
-
-  /**
-   * 删除验证码
-   *
-   * @param identifier - 标识符
-   * @param tx - 可选事务句柄
-   */
-  async removeOtp(identifier: string, tx?: TxHandle): Promise<Result<void, IamError>> {
-    const result = await this.deleteById(identifier, tx)
-    if (!result.success) {
-      return err({
-        code: IamErrorCode.REPOSITORY_ERROR,
-        message: iamM('iam_deleteOtpFailed', { params: { message: result.error.message } }),
-        cause: result.error,
-      })
-    }
-    return ok(undefined)
-  }
-
-  /**
-   * 发送邮件验证码（默认空实现，需业务层覆写）
-   */
-  async sendEmail(_email: string, _code: string): Promise<Result<void, IamError>> {
-    return ok(undefined)
-  }
-
-  /**
-   * 发送短信验证码（默认空实现，需业务层覆写）
-   */
-  async sendSms(_phone: string, _code: string): Promise<Result<void, IamError>> {
-    return ok(undefined)
-  }
+  otpRepoInstance = repo
+  return repo
 }

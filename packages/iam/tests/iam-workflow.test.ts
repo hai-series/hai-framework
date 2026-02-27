@@ -11,6 +11,7 @@
  * 2. RBAC 设置 → 角色创建 → 权限创建 → 关联 → 分配给用户 → 权限检查
  * 3. 多会话管理：多端登录 → 单设备模式 → 会话清理
  * 4. 管理员操作：创建角色/权限 → 分配用户 → 用户验证权限 → 管理员撤销
+ * 10. OTP 验证码登录：配置回调 → sendOtp → 回调接收验证码 → loginWithOtp
  */
 
 import type { IamFunctions } from '../src/iam-types.js'
@@ -169,19 +170,19 @@ describe('iam.workflow', () => {
 
         // ⑧ 检查权限：应有 read 和 write，不应有 delete
         const hasRead = await iam.authz.checkPermission(
-          { userId, roles: [roleId] },
+          userId,
           'wf_content:read',
         )
         expect(hasRead.success && hasRead.data).toBe(true)
 
         const hasWrite = await iam.authz.checkPermission(
-          { userId, roles: [roleId] },
+          userId,
           'wf_content:write',
         )
         expect(hasWrite.success && hasWrite.data).toBe(true)
 
         const hasDelete = await iam.authz.checkPermission(
-          { userId, roles: [roleId] },
+          userId,
           'wf_content:delete',
         )
         expect(hasDelete.success).toBe(true)
@@ -230,13 +231,13 @@ describe('iam.workflow', () => {
 
         // ⑥ 检查权限：应有 view，不应有 approve
         const hasView = await iam.authz.checkPermission(
-          { userId: reg.data.user.id, roles: [role.data.id] },
+          reg.data.user.id,
           'wf_review:view',
         )
         expect(hasView.success && hasView.data).toBe(true)
 
         const hasApprove = await iam.authz.checkPermission(
-          { userId: reg.data.user.id, roles: [role.data.id] },
+          reg.data.user.id,
           'wf_review:approve',
         )
         expect(hasApprove.success).toBe(true)
@@ -248,7 +249,7 @@ describe('iam.workflow', () => {
 
         // ⑧ 用户无需重新登录即有新权限（缓存刷新后）
         const hasApproveNow = await iam.authz.checkPermission(
-          { userId: reg.data.user.id, roles: [role.data.id] },
+          reg.data.user.id,
           'wf_review:approve',
         )
         expect(hasApproveNow.success && hasApproveNow.data).toBe(true)
@@ -258,7 +259,7 @@ describe('iam.workflow', () => {
 
         // ⑩ view 权限应不再可用
         const hasViewAfterRemoval = await iam.authz.checkPermission(
-          { userId: reg.data.user.id, roles: [role.data.id] },
+          reg.data.user.id,
           'wf_review:view',
         )
         expect(hasViewAfterRemoval.success).toBe(true)
@@ -518,18 +519,9 @@ describe('iam.workflow', () => {
         await iam.authz.assignRole(reg.data.user.id, roleB.data.id)
 
         // ③ 用户应拥有 X, Y, Z 三个权限
-        const checkX = await iam.authz.checkPermission(
-          { userId: reg.data.user.id, roles: [roleA.data.id, roleB.data.id] },
-          'wf_perm:x',
-        )
-        const checkY = await iam.authz.checkPermission(
-          { userId: reg.data.user.id, roles: [roleA.data.id, roleB.data.id] },
-          'wf_perm:y',
-        )
-        const checkZ = await iam.authz.checkPermission(
-          { userId: reg.data.user.id, roles: [roleA.data.id, roleB.data.id] },
-          'wf_perm:z',
-        )
+        const checkX = await iam.authz.checkPermission(reg.data.user.id, 'wf_perm:x')
+        const checkY = await iam.authz.checkPermission(reg.data.user.id, 'wf_perm:y')
+        const checkZ = await iam.authz.checkPermission(reg.data.user.id, 'wf_perm:z')
         expect(checkX.success && checkX.data).toBe(true)
         expect(checkY.success && checkY.data).toBe(true)
         expect(checkZ.success && checkZ.data).toBe(true)
@@ -538,24 +530,15 @@ describe('iam.workflow', () => {
         await iam.authz.removeRole(reg.data.user.id, roleA.data.id)
 
         // ⑤ 检查权限：X 应失效（仅 A 拥有），Y 仍有效（B 也有），Z 仍有效
-        const checkXAfter = await iam.authz.checkPermission(
-          { userId: reg.data.user.id, roles: [roleB.data.id] },
-          'wf_perm:x',
-        )
+        const checkXAfter = await iam.authz.checkPermission(reg.data.user.id, 'wf_perm:x')
         expect(checkXAfter.success).toBe(true)
         if (checkXAfter.success)
           expect(checkXAfter.data).toBe(false)
 
-        const checkYAfter = await iam.authz.checkPermission(
-          { userId: reg.data.user.id, roles: [roleB.data.id] },
-          'wf_perm:y',
-        )
+        const checkYAfter = await iam.authz.checkPermission(reg.data.user.id, 'wf_perm:y')
         expect(checkYAfter.success && checkYAfter.data).toBe(true)
 
-        const checkZAfter = await iam.authz.checkPermission(
-          { userId: reg.data.user.id, roles: [roleB.data.id] },
-          'wf_perm:z',
-        )
+        const checkZAfter = await iam.authz.checkPermission(reg.data.user.id, 'wf_perm:z')
         expect(checkZAfter.success && checkZAfter.data).toBe(true)
       })
     })
@@ -607,6 +590,141 @@ describe('iam.workflow', () => {
         // ④ 令牌有效（协议确认由前端负责，后端不阻塞）
         const verify = await agreementIam.auth.verifyToken(login.data.accessToken)
         expect(verify.success).toBe(true)
+      })
+    })
+    // =========================================================================
+    // 工作流 10：OTP 验证码登录流程
+    // =========================================================================
+
+    describe('oTP 验证码登录流程', () => {
+      it('配置 onOtpSendEmail → sendOtp → 回调接收验证码 → loginWithOtp 成功', async () => {
+        let capturedEmail = ''
+        let capturedCode = ''
+
+        const otpIam = await initIam({
+          login: { password: true, otp: true },
+          otp: { length: 6, expiresIn: 300, maxAttempts: 3, resendInterval: 30 },
+          onOtpSendEmail: async (email, code) => {
+            capturedEmail = email
+            capturedCode = code
+          },
+        })
+
+        // ① 先注册一个用户（邮箱可用于 OTP）
+        await otpIam.user.register({
+          username: 'wf_otp_user',
+          email: 'wf_otp@test.com',
+          password: TEST_PASSWORD,
+        })
+
+        // ② 发送验证码
+        const sendResult = await otpIam.auth.sendOtp('wf_otp@test.com')
+        expect(sendResult.success).toBe(true)
+        expect(capturedEmail).toBe('wf_otp@test.com')
+        expect(capturedCode).toBeTruthy()
+        expect(capturedCode.length).toBe(6)
+
+        // ③ 用验证码登录
+        const loginResult = await otpIam.auth.loginWithOtp({
+          identifier: 'wf_otp@test.com',
+          code: capturedCode,
+        })
+        expect(loginResult.success).toBe(true)
+        if (loginResult.success) {
+          expect(loginResult.data.user.email).toBe('wf_otp@test.com')
+          expect(loginResult.data.accessToken).toBeTruthy()
+        }
+
+        await initIam()
+      })
+
+      it('配置 onOtpSendSms → sendOtp(手机号) → 回调接收验证码', async () => {
+        let capturedPhone = ''
+        let capturedCode = ''
+
+        const otpIam = await initIam({
+          login: { password: true, otp: true },
+          otp: { length: 4, expiresIn: 300, maxAttempts: 3, resendInterval: 30 },
+          onOtpSendSms: async (phone, code) => {
+            capturedPhone = phone
+            capturedCode = code
+          },
+        })
+
+        // 发送验证码到手机号
+        const sendResult = await otpIam.auth.sendOtp('+8613800138000')
+        expect(sendResult.success).toBe(true)
+        expect(capturedPhone).toBe('+8613800138000')
+        expect(capturedCode).toBeTruthy()
+        expect(capturedCode.length).toBe(4)
+
+        await initIam()
+      })
+
+      it('未配置 onOtpSendEmail 时 sendOtp 应返回 INTERNAL_ERROR', async () => {
+        const otpIam = await initIam({
+          login: { password: true, otp: true },
+          otp: { length: 6, expiresIn: 300, maxAttempts: 3, resendInterval: 30 },
+          // 不注入 onOtpSendEmail
+        })
+
+        const sendResult = await otpIam.auth.sendOtp('nohandler@test.com')
+        expect(sendResult.success).toBe(false)
+        if (!sendResult.success) {
+          expect(sendResult.error.code).toBe(IamErrorCode.INTERNAL_ERROR)
+        }
+
+        await initIam()
+      })
+
+      it('onOtpSendEmail 抛异常时应返回 INTERNAL_ERROR', async () => {
+        const otpIam = await initIam({
+          login: { password: true, otp: true },
+          otp: { length: 6, expiresIn: 300, maxAttempts: 3, resendInterval: 30 },
+          onOtpSendEmail: async () => {
+            throw new Error('SMTP connection failed')
+          },
+        })
+
+        const sendResult = await otpIam.auth.sendOtp('fail@test.com')
+        expect(sendResult.success).toBe(false)
+        if (!sendResult.success) {
+          expect(sendResult.error.code).toBe(IamErrorCode.INTERNAL_ERROR)
+        }
+
+        await initIam()
+      })
+
+      it('错误验证码应返回 OTP_INVALID', async () => {
+        let capturedCode = ''
+
+        const otpIam = await initIam({
+          login: { password: true, otp: true },
+          otp: { length: 6, expiresIn: 300, maxAttempts: 3, resendInterval: 30 },
+          onOtpSendEmail: async (_email, code) => {
+            capturedCode = code
+          },
+        })
+
+        await otpIam.user.register({
+          username: 'wf_otp_wrong',
+          email: 'wf_otp_wrong@test.com',
+          password: TEST_PASSWORD,
+        })
+
+        await otpIam.auth.sendOtp('wf_otp_wrong@test.com')
+        expect(capturedCode).toBeTruthy()
+
+        const loginResult = await otpIam.auth.loginWithOtp({
+          identifier: 'wf_otp_wrong@test.com',
+          code: '000000',
+        })
+        expect(loginResult.success).toBe(false)
+        if (!loginResult.success) {
+          expect(loginResult.error.code).toBe(IamErrorCode.OTP_INVALID)
+        }
+
+        await initIam()
       })
     })
   }

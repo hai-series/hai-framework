@@ -7,7 +7,6 @@
  * - 权限类型（Permission）
  * - 角色类型（Role）
  * - 关联类型（RolePermission、UserRole）
- * - 授权上下文（AuthzContext）
  * - 授权管理接口（IamAuthzFunctions）
  *
  * @module authz/iam-authz-types
@@ -83,22 +82,6 @@ export interface UserRole {
   roleId: string
 }
 
-/**
- * 授权检查上下文
- */
-export interface AuthzContext {
-  /** 用户 ID */
-  userId: string
-  /** 用户角色 ID 列表 */
-  roles: string[]
-  /** 资源标识 */
-  resource?: string
-  /** 操作类型 */
-  action?: string
-  /** 扩展上下文 */
-  context?: Record<string, unknown>
-}
-
 // =============================================================================
 // 授权管理接口
 // =============================================================================
@@ -113,16 +96,20 @@ export interface IamAuthzFunctions {
    * 超级管理员角色自动拥有所有权限。
    * 支持通配符匹配（如 `user:*` 匹配 `user:read`）。
    *
-   * @param ctx - 授权上下文（用户 ID、角色列表）
+   * **数据来源**：角色列表从数据库实时查询；权限代码走缓存优先策略（可能非最新）。
+   *
+   * @param userId - 用户 ID
    * @param permission - 权限代码（如 `user:read`）
    * @returns 成功返回 true/false
    */
-  checkPermission: (ctx: AuthzContext, permission: string) => Promise<Result<boolean, IamError>>
+  checkPermission: (userId: string, permission: string) => Promise<Result<boolean, IamError>>
 
   /**
    * 获取用户权限列表
    *
    * 通过用户角色聚合所有权限（自动去重）。
+   *
+   * **数据来源**：直接查询数据库，返回最新数据。
    *
    * @param userId - 用户 ID
    * @returns 成功返回去重后的权限列表
@@ -131,6 +118,8 @@ export interface IamAuthzFunctions {
 
   /**
    * 获取用户角色列表
+   *
+   * **数据来源**：直接查询数据库，返回最新数据。
    *
    * @param userId - 用户 ID
    * @returns 成功返回角色列表
@@ -268,6 +257,8 @@ export interface IamAuthzFunctions {
 
   /**
    * 获取角色的权限列表
+   *
+   * **数据来源**：直接查询数据库，返回最新数据。
    *
    * @param roleId - 角色 ID
    * @returns 成功返回角色关联的权限列表

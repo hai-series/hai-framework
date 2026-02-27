@@ -47,7 +47,7 @@ describe('iam.init', () => {
 
     it('未初始化时调用 authz 操作应返回 NOT_INITIALIZED', async () => {
       await iam.close()
-      const result = await iam.authz.checkPermission({ userId: 'x', roles: [] }, 'read')
+      const result = await iam.authz.checkPermission('x', 'read')
       expect(result.success).toBe(false)
       if (!result.success) {
         expect(result.error.code).toBe(IamErrorCode.NOT_INITIALIZED)
@@ -127,7 +127,7 @@ describe('iam.init', () => {
       expect(iam.config?.seedDefaultData).toBe(false)
 
       const checkResult = await iam.authz.checkPermission(
-        { userId: 'test-user', roles: [] },
+        'test-user',
         'any:perm',
       )
       expect(checkResult.success).toBe(true)

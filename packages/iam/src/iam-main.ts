@@ -87,7 +87,7 @@ export const iam: IamFunctions = {
     }
 
     try {
-      const { db, cache, ldapClientFactory, ldapSyncUser, onPasswordResetRequest, ...settingsInput } = config
+      const { db, cache, ldapClientFactory, ldapSyncUser, onPasswordResetRequest, onOtpSendEmail, onOtpSendSms, ...settingsInput } = config
 
       logger.info('Initializing IAM module')
 
@@ -121,10 +121,13 @@ export const iam: IamFunctions = {
       const authnResult = await createIamAuthnFunctions({
         config: parsed,
         db,
+        cache,
         sessionFunctions: currentSession,
         authzFunctions: currentAuthz,
         ldapClientFactory,
         ldapSyncUser,
+        onOtpSendEmail,
+        onOtpSendSms,
       })
       if (!authnResult.success) {
         return authnResult
@@ -134,6 +137,7 @@ export const iam: IamFunctions = {
       const userResult = await createIamUserFunctions({
         config: parsed,
         db,
+        cache,
         passwordStrategy: authnResult.data.passwordStrategy,
         sessionFunctions: currentSession,
         authzFunctions: currentAuthz,

@@ -251,6 +251,16 @@ export interface IamUserFunctions {
    */
   changePassword: (userId: string, oldPassword: string, newPassword: string) => Promise<Result<void, IamError>>
 
+  /**
+   * 当前登录用户修改密码
+   *
+   * 通过访问令牌识别用户 → 验证旧密码 → 校验新密码强度 → 哈希并更新 → 清除该用户所有会话。
+   *
+   * @param accessToken - 当前用户的访问令牌
+   * @param oldPassword - 旧密码
+   * @param newPassword - 新密码
+   * @returns 成功返回 ok；旧密码错误返回 INVALID_CREDENTIALS，新密码不合规返回 PASSWORD_POLICY_VIOLATION
+   */
   changeCurrentUserPassword: (
     accessToken: string,
     oldPassword: string,
@@ -258,19 +268,24 @@ export interface IamUserFunctions {
   ) => Promise<Result<void, IamError>>
 
   /**
-   * 重置密码（发送重置链接）
+   * 请求密码重置
    *
-   * @param identifier - 用户标识（邮箱/手机号）
-   * @returns 成功返回 ok（目前为占位实现）
+   * 查找用户 → 生成重置令牌（缓存存储、SHA-256 哈希）→ 调用 onPasswordResetRequest 回调通知业务层。
+   * 即使用户不存在也返回 ok（防止用户枚举攻击）。
+   *
+   * @param identifier - 用户标识（邮箱）
+   * @returns 始终返回 ok（防枚举）；内部异常返回 INTERNAL_ERROR
    */
   requestPasswordReset: (identifier: string) => Promise<Result<void, IamError>>
 
   /**
-   * 确认重置密码
+   * 确认密码重置
    *
-   * @param token - 重置令牌
+   * 查询令牌 → 校验有效期与尝试次数 → 验证新密码强度 → 哈希并更新密码 → 标记令牌已使用 → 清除该用户所有会话。
+   *
+   * @param token - 重置令牌（明文，由 requestPasswordReset 生成并由业务层发送给用户）
    * @param newPassword - 新密码
-   * @returns 目前返回 INTERNAL_ERROR（未实现）
+   * @returns 成功返回 ok；令牌无效返回 RESET_TOKEN_INVALID，已过期返回 RESET_TOKEN_EXPIRED，尝试超限返回 RESET_TOKEN_MAX_ATTEMPTS
    */
   confirmPasswordReset: (token: string, newPassword: string) => Promise<Result<void, IamError>>
 

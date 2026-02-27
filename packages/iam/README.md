@@ -1,16 +1,16 @@
 # @h-ai/iam
 
-身份与访问管理模块，提供统一的 `iam` 对象实现认证与授权功能。
+身份与访问管理模块，提供统一的 `iam` 对象实现认证、会话、授权与用户管理。
 
 ## 功能特性
 
-| 功能           | 说明                                 |
-| -------------- | ------------------------------------ |
-| **认证**       | 密码、OTP、LDAP 多策略认证           |
-| **会话**       | 有状态会话（随机访问令牌 + 缓存）    |
-| **授权**       | RBAC 角色与权限管理（DB + 缓存）     |
-| **用户管理**   | 注册、查询、更新、密码管理、密码重置 |
-| **前端客户端** | HTTP API 客户端，支持独立前端使用    |
+| 功能           | 说明                                             |
+| -------------- | ------------------------------------------------ |
+| **认证**       | 密码、OTP（邮箱/短信验证码）、LDAP 多策略认证    |
+| **会话**       | 有状态会话（随机访问令牌 + 缓存，滑动续期可选）  |
+| **授权**       | RBAC 角色与权限管理（DB + 缓存，通配符权限匹配） |
+| **用户管理**   | 注册、查询、更新、密码重置、管理员重置密码       |
+| **前端客户端** | HTTP API 客户端，支持独立前端使用                |
 
 ## 安装
 
@@ -20,9 +20,9 @@ pnpm add @h-ai/iam
 
 ## 依赖
 
-- `@h-ai/db` - 数据库服务（必需，用户/角色/权限/OTP 持久化）
-- `@h-ai/cache` - 缓存服务（必需，会话/权限缓存）
-- `@h-ai/crypto` - 密码哈希（内部使用）
+- `@h-ai/db` — 数据库（用户/角色/权限持久化）
+- `@h-ai/cache` — 缓存（会话/OTP/重置令牌/权限缓存）
+- `@h-ai/crypto` — 密码哈希（内部使用，自动初始化）
 
 ## 快速开始
 
@@ -34,7 +34,19 @@ import { iam } from '@h-ai/iam'
 // 1. 初始化
 await db.init({ type: 'sqlite', database: './data.db' })
 await cache.init({ type: 'memory' })
-await iam.init({ db, cache, session: { maxAge: 86400, sliding: true } })
+await iam.init({
+  db,
+  cache,
+  session: { maxAge: 86400, sliding: true },
+  // OTP 回调（启用 OTP 登录时注入发送逻辑）
+  onOtpSendEmail: async (email, code) => {
+    await sendEmail(email, `验证码: ${code}`)
+  },
+  // 密码重置回调（启用密码重置时注入通知逻辑）
+  onPasswordResetRequest: async (user, token, expiresAt) => {
+    await sendEmail(user.email!, `重置链接: https://example.com/reset?token=${token}`)
+  },
+})
 
 // 2. 注册
 const userResult = await iam.user.register({
@@ -55,19 +67,26 @@ if (loginResult.success) {
 // 4. 验证令牌
 const session = await iam.auth.verifyToken(loginResult.data.accessToken)
 
-// 5. 检查权限
+// 5. OTP 验证码登录
+await iam.auth.sendOtp('user@example.com')
+const otpResult = await iam.auth.loginWithOtp({
+  identifier: 'user@example.com',
+  code: '123456',
+})
+
+// 6. 检查权限
 const hasPermission = await iam.authz.checkPermission(
-  { userId: user.id, roles: ['role_admin'] },
+  user.id,
   'user:read',
 )
 
-// 6. 关闭
+// 7. 关闭
 await iam.close()
 ```
 
-## 更多信息
+## 更多用法
 
-详细 API 参数、错误码及使用模式请参考源代码和 Skill 模板。
+详细 API 参数、错误码及集成模式请参考 Skill 模板（`packages/cli/templates/skills/hai-iam/SKILL.md`）。
 
 ## 前端客户端
 
@@ -104,21 +123,14 @@ await client.changePassword({
 ## 密码重置
 
 ```ts
-// 初始化时注入重置回调（发送邮件等）
-await iam.init({
-  db,
-  cache,
-  onPasswordResetRequest: async (user, token, expiresAt) => {
-    await sendEmail(user.email, `重置链接: https://example.com/reset?token=${token}`)
-  },
-  passwordReset: { tokenExpiresIn: 3600, maxAttempts: 3 },
-})
-
 // 请求重置（即使用户不存在也返回 ok，防止枚举）
 await iam.user.requestPasswordReset('admin@example.com')
 
-// 确认重置
+// 确认重置（校验令牌有效期和尝试次数 → 更新密码 → 清除所有会话）
 const result = await iam.user.confirmPasswordReset(token, 'NewPassword456')
+
+// 管理员重置（无需旧密码）
+await iam.user.adminResetPassword(userId, 'TempPassword123')
 ```
 
 ## 错误处理

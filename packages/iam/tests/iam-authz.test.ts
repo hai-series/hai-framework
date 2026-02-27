@@ -559,7 +559,7 @@ describe('iam.authz', () => {
         await getIam().authz.assignRole(regResult.data.user.id, role.data.id)
 
         const result = await getIam().authz.checkPermission(
-          { userId: regResult.data.user.id, roles: [role.data.id] },
+          regResult.data.user.id,
           'check:access',
         )
         expect(result.success).toBe(true)
@@ -583,7 +583,7 @@ describe('iam.authz', () => {
         await getIam().authz.assignRole(regResult.data.user.id, role.data.id)
 
         const result = await getIam().authz.checkPermission(
-          { userId: regResult.data.user.id, roles: [role.data.id] },
+          regResult.data.user.id,
           'nonexistent:permission',
         )
         expect(result.success).toBe(true)
@@ -603,7 +603,7 @@ describe('iam.authz', () => {
         await getIam().authz.assignRole(regResult.data.user.id, superAdminRoleId)
 
         const result = await getIam().authz.checkPermission(
-          { userId: regResult.data.user.id, roles: [superAdminRoleId] },
+          regResult.data.user.id,
           'any:permission:whatsoever',
         )
         expect(result.success).toBe(true)
@@ -630,7 +630,7 @@ describe('iam.authz', () => {
         await getIam().authz.assignRole(regResult.data.user.id, role.data.id)
 
         const result = await getIam().authz.checkPermission(
-          { userId: regResult.data.user.id, roles: [role.data.id] },
+          regResult.data.user.id,
           'wildcard:read',
         )
         expect(result.success).toBe(true)
@@ -639,7 +639,7 @@ describe('iam.authz', () => {
         }
 
         const noMatchResult = await getIam().authz.checkPermission(
-          { userId: regResult.data.user.id, roles: [role.data.id] },
+          regResult.data.user.id,
           'other:read',
         )
         expect(noMatchResult.success).toBe(true)
@@ -664,7 +664,7 @@ describe('iam.authz', () => {
           return
         await getIam().authz.assignRole(regResult.data.user.id, role.data.id)
         await getIam().authz.checkPermission(
-          { userId: regResult.data.user.id, roles: [role.data.id] },
+          regResult.data.user.id,
           'del_cache:perm',
         )
 
@@ -685,15 +685,25 @@ describe('iam.authz', () => {
 
         await getIam().authz.assignPermissionToRole(role.data.id, perm.data.id)
 
+        // 使用真实用户以确保角色从可信数据源解析
+        const regResult = await getIam().user.register({
+          username: 'authz_del_perm_cache_user',
+          password: TEST_PASSWORD,
+        })
+        if (!regResult.success)
+          return
+        await getIam().authz.assignRole(regResult.data.user.id, role.data.id)
+
+        // 首次检查填充缓存
         await getIam().authz.checkPermission(
-          { userId: 'any-user', roles: [role.data.id] },
+          regResult.data.user.id,
           'del_perm_cache:perm',
         )
 
         await getIam().authz.deletePermission(perm.data.id)
 
         const result = await getIam().authz.checkPermission(
-          { userId: 'any-user', roles: [role.data.id] },
+          regResult.data.user.id,
           'del_perm_cache:perm',
         )
         expect(result.success).toBe(true)

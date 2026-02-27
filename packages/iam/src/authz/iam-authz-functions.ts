@@ -14,7 +14,6 @@ import type { PermissionRepository } from './iam-authz-repository-permission.js'
 import type { RolePermissionRepository, UserRoleRepository } from './iam-authz-repository-relation.js'
 import type { RoleRepository } from './iam-authz-repository-role.js'
 import type {
-  AuthzContext,
   IamAuthzFunctions,
   Permission,
   Role,
@@ -57,6 +56,7 @@ export async function createIamAuthzFunctions(deps: IamAuthzFunctionsDeps): Prom
 
     const manager = createRbacManager({
       rbacConfig: config.rbac,
+      db,
       roleRepository,
       permissionRepository,
       rolePermissionRepository,
@@ -83,6 +83,7 @@ export async function createIamAuthzFunctions(deps: IamAuthzFunctionsDeps): Prom
  */
 interface RbacManagerConfig {
   rbacConfig?: RbacConfig
+  db: DbFunctions
   roleRepository: RoleRepository
   permissionRepository: PermissionRepository
   rolePermissionRepository: RolePermissionRepository
@@ -104,6 +105,7 @@ function createRbacManager(config: RbacManagerConfig): IamAuthzFunctions {
     : RbacConfigSchema.parse({})
 
   const {
+    db,
     roleRepository,
     permissionRepository,
     rolePermissionRepository,
@@ -169,32 +171,11 @@ function createRbacManager(config: RbacManagerConfig): IamAuthzFunctions {
   }
 
   /**
-   * 解析用户角色 ID 列表
-   *
-   * 优先使用上下文中已有的 roles，若为空则从数据库查询。
-   *
-   * @param ctx - 授权上下文
-   * @returns 角色 ID 数组
-   */
-  async function resolveRoleIds(ctx: AuthzContext): Promise<Result<string[], IamError>> {
-    if (ctx.roles.length > 0) {
-      return ok(ctx.roles)
-    }
-
-    const rolesResult = await userRoleRepository.getRoleIds(ctx.userId)
-    if (!rolesResult.success) {
-      return rolesResult
-    }
-
-    return ok(rolesResult.data)
-  }
-
-  /**
    * 批量查询多个角色的权限代码，并判断是否匹配指定权限
    */
   async function hasPermissionInRoles(roleIds: string[], permission: string): Promise<Result<boolean, IamError>> {
     const codesResults = await Promise.all(
-      roleIds.map(id => rolePermissionRepository.getPermissionCodes(id)),
+      roleIds.map(id => rolePermissionRepository.getPermissionCodesCached(id)),
     )
 
     for (const codesResult of codesResults) {
@@ -240,23 +221,32 @@ function createRbacManager(config: RbacManagerConfig): IamAuthzFunctions {
   }
 
   return {
-    async checkPermission(ctx: AuthzContext, permission: string): Promise<Result<boolean, IamError>> {
-      const roleIdsResult = await resolveRoleIds(ctx)
+    async checkPermission(userId: string, permission: string): Promise<Result<boolean, IamError>> {
+      // RBAC 未启用时，所有权限检查直接放行
+      if (!rbacConfig.enabled) {
+        return ok(true)
+      }
+      const roleIdsResult = await userRoleRepository.getRoleIds(userId)
       if (!roleIdsResult.success)
         return roleIdsResult as Result<boolean, IamError>
+
+      const roleIds = roleIdsResult.data
+
+      // 无角色用户直接返回 false，跳过超管解析和权限缓存查询
+      if (roleIds.length === 0) {
+        return ok(false)
+      }
 
       const superAdminResult = await resolveSuperAdminRoleId()
       if (!superAdminResult.success)
         return superAdminResult as Result<boolean, IamError>
-
-      const roleIds = roleIdsResult.data
 
       // 超级管理员拥有所有权限
       if (superAdminResult.data && roleIds.includes(superAdminResult.data)) {
         return ok(true)
       }
 
-      // 并行查询所有角色的权限
+      // 并行查询所有角色的权限（缓存优先）
       return hasPermissionInRoles(roleIds, permission)
     },
 
@@ -315,6 +305,12 @@ function createRbacManager(config: RbacManagerConfig): IamAuthzFunctions {
       }
 
       logger.info('Role created', { roleId: createdResult.data.id, code: role.code })
+
+      // 创建的角色可能是超管角色，强制下次 checkPermission 重新解析
+      if (role.code === rbacConfig.superAdminRole) {
+        superAdminRoleId = undefined
+      }
+
       return ok(createdResult.data)
     },
 
@@ -367,6 +363,10 @@ function createRbacManager(config: RbacManagerConfig): IamAuthzFunctions {
           message: iamM('iam_roleNotExist'),
         })
       }
+
+      // 角色代码可能变更，强制下次 checkPermission 重新解析超管角色
+      superAdminRoleId = undefined
+
       return ok(updatedResult.data)
     },
 
@@ -383,25 +383,67 @@ function createRbacManager(config: RbacManagerConfig): IamAuthzFunctions {
         return err({ code: IamErrorCode.PERMISSION_DENIED, message: iamM('iam_cannotDeleteSystemRole') })
       }
 
-      // 级联清理：用户-角色关联（含会话同步）
-      const userRoleResult = await userRoleRepository.removeByRoleId(roleId)
-      if (!userRoleResult.success)
-        return userRoleResult
+      // 事务：所有 DB 删除原子执行
+      const txResult = await db.tx.begin()
+      if (!txResult.success) {
+        return mapRepositoryError('iam_deleteRoleFailed', txResult.error.message) as Result<void, IamError>
+      }
+      const tx = txResult.data
 
-      // 级联清理：角色-权限关联（含缓存）
-      const rolePermResult = await rolePermissionRepository.removeByRoleId(roleId)
-      if (!rolePermResult.success)
-        return rolePermResult
+      let affectedUserIds: string[] = []
+      try {
+        // 级联删除：用户-角色关联
+        const userIdsResult = await userRoleRepository.removeByRoleId(roleId, tx)
+        if (!userIdsResult.success) {
+          await tx.rollback()
+          return userIdsResult as Result<void, IamError>
+        }
+        affectedUserIds = userIdsResult.data
 
-      // 删除角色本身
-      const deleteResult = await roleRepository.deleteById(roleId)
-      if (!deleteResult.success) {
-        return mapRepositoryError('iam_deleteRoleFailed', deleteResult.error.message) as Result<void, IamError>
+        // 级联删除：角色-权限关联
+        const rpResult = await rolePermissionRepository.removeByRoleId(roleId, tx)
+        if (!rpResult.success) {
+          await tx.rollback()
+          return rpResult
+        }
+
+        // 删除角色本身
+        const delResult = await roleRepository.deleteById(roleId, tx)
+        if (!delResult.success) {
+          await tx.rollback()
+          return mapRepositoryError('iam_deleteRoleFailed', delResult.error.message) as Result<void, IamError>
+        }
+
+        const commitResult = await tx.commit()
+        if (!commitResult.success) {
+          return mapRepositoryError('iam_deleteRoleFailed', commitResult.error.message) as Result<void, IamError>
+        }
+      }
+      catch (error) {
+        await tx.rollback()
+        return err({
+          code: IamErrorCode.REPOSITORY_ERROR,
+          message: iamM('iam_deleteRoleFailed', { params: { message: String(error) } }),
+          cause: error,
+        })
       }
 
-      if (superAdminRoleId && superAdminRoleId === roleId) {
-        superAdminRoleId = null
+      // 事务提交后：缓存清理（最大努力）
+      const cacheResult = await rolePermissionRepository.clearRolePermissionsCache(roleId)
+      if (!cacheResult.success) {
+        logger.error('Failed to clear role permission cache after deleteRole', { roleId, error: cacheResult.error.message })
       }
+
+      // 事务提交后：同步受影响用户的会话角色（最大努力）
+      for (const userId of affectedUserIds) {
+        const syncResult = await userRoleRepository.syncUserSessionRoles(userId)
+        if (!syncResult.success) {
+          logger.error('Failed to sync user session after deleteRole', { userId, roleId, error: syncResult.error.message })
+        }
+      }
+
+      // 强制下次 checkPermission 重新解析超管角色
+      superAdminRoleId = undefined
 
       logger.info('Role deleted', { roleId })
       return ok(undefined)
@@ -464,15 +506,48 @@ function createRbacManager(config: RbacManagerConfig): IamAuthzFunctions {
         })
       }
 
-      // 级联清理：角色-权限关联（含缓存）
-      const cascadeResult = await rolePermissionRepository.removeByPermissionId(permissionId)
-      if (!cascadeResult.success)
-        return cascadeResult
+      const permCode = permissionResult.data.code
 
-      // 删除权限本身
-      const deleteResult = await permissionRepository.deleteById(permissionId)
-      if (!deleteResult.success) {
-        return mapRepositoryError('iam_deletePermissionFailed', deleteResult.error.message) as Result<void, IamError>
+      // 事务：所有 DB 删除原子执行
+      const txResult = await db.tx.begin()
+      if (!txResult.success) {
+        return mapRepositoryError('iam_deletePermissionFailed', txResult.error.message) as Result<void, IamError>
+      }
+      const tx = txResult.data
+
+      try {
+        // 级联删除：角色-权限关联
+        const cascadeResult = await rolePermissionRepository.removeByPermissionId(permissionId, tx)
+        if (!cascadeResult.success) {
+          await tx.rollback()
+          return cascadeResult
+        }
+
+        // 删除权限本身
+        const delResult = await permissionRepository.deleteById(permissionId, tx)
+        if (!delResult.success) {
+          await tx.rollback()
+          return mapRepositoryError('iam_deletePermissionFailed', delResult.error.message) as Result<void, IamError>
+        }
+
+        const commitResult = await tx.commit()
+        if (!commitResult.success) {
+          return mapRepositoryError('iam_deletePermissionFailed', commitResult.error.message) as Result<void, IamError>
+        }
+      }
+      catch (error) {
+        await tx.rollback()
+        return err({
+          code: IamErrorCode.REPOSITORY_ERROR,
+          message: iamM('iam_deletePermissionFailed', { params: { message: String(error) } }),
+          cause: error,
+        })
+      }
+
+      // 事务提交后：缓存清理（最大努力）
+      const cacheResult = await rolePermissionRepository.removePermissionCodeFromCache(permCode)
+      if (!cacheResult.success) {
+        logger.error('Failed to clear permission cache after deletePermission', { permissionId, permCode, error: cacheResult.error.message })
       }
 
       logger.info('Permission deleted', { permissionId })

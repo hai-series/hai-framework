@@ -22,7 +22,7 @@
  * })
  *
  * // 使用错误码
- * if (error.code === iam.errorCode.INVALID_CREDENTIALS) {
+ * if (error.code === IamErrorCode.INVALID_CREDENTIALS) {
  *     // 处理错误：凭证无效
  * }
  * ```
@@ -46,7 +46,7 @@ import { z } from 'zod'
  * ```ts
  * import { iam } from '@h-ai/iam'
  *
- * if (result.error?.code === iam.errorCode.INVALID_CREDENTIALS) {
+ * if (result.error?.code === IamErrorCode.INVALID_CREDENTIALS) {
  *     // 处理错误：凭证无效
  * }
  * ```
