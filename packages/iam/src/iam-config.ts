@@ -198,8 +198,6 @@ export const PasswordConfigSchema = z.object({
   requireNumber: z.boolean().default(true),
   /** 需要特殊字符 */
   requireSpecialChar: z.boolean().default(false),
-  /** 密码历史记录数量（不能重复使用） */
-  historyCount: z.number().int().min(0).default(0),
   /** 密码过期天数（0 表示不过期） */
   expirationDays: z.number().int().min(0).default(0),
 })

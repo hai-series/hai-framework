@@ -103,11 +103,13 @@ export interface SessionMappingRepository {
  * 创建基于缓存的会话映射存储
  *
  * 使用 @h-ai/cache 实现 token→session 和 user→tokens 的映射存储。
+ * 用户令牌集合（Set）会在每次添加令牌时刷新 TTL，防止僵尸键无限膨胀。
  *
  * @param cache - 缓存服务实例
+ * @param sessionMaxAge - 会话最大有效期（秒），用于设置用户令牌集合的 TTL
  * @returns 会话映射存储接口实现
  */
-export function createCacheSessionMappingRepository(cache: CacheFunctions): SessionMappingRepository {
+export function createCacheSessionMappingRepository(cache: CacheFunctions, sessionMaxAge = 86400): SessionMappingRepository {
   return {
     async set(token, session, ttl): Promise<Result<void, IamError>> {
       const result = await cache.kv.set(buildTokenKey(token), session, { ex: ttl })
@@ -169,6 +171,9 @@ export function createCacheSessionMappingRepository(cache: CacheFunctions): Sess
           cause: result.error,
         })
       }
+      // 刷新用户令牌集合 TTL，防止僵尸键无限膨胀
+      // TTL 为会话最大有效期的 2 倍，确保活跃会话不会被误清理
+      await cache.kv.expire(buildUserTokensKey(userId), sessionMaxAge * 2)
       return ok(undefined)
     },
 

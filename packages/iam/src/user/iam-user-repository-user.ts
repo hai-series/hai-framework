@@ -214,6 +214,16 @@ let userRepoInstance: UserRepository | null = null
 let userRepoDbConfig: unknown = null
 
 /**
+ * 重置用户存储单例
+ *
+ * 在 iam.close() 时调用，释放对旧 db 实例的引用。
+ */
+export function resetUserRepoSingleton(): void {
+  userRepoInstance = null
+  userRepoDbConfig = null
+}
+
+/**
  * 创建基于数据库的用户存储实例
  *
  * 单例模式：同一 db 生命周期内重复调用返回缓存实例，

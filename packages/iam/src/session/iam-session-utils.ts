@@ -12,12 +12,17 @@ import type { CreateSessionOptions, Session } from './iam-session-types.js'
 /**
  * 生成访问令牌
  *
- * 使用 `crypto.randomUUID()` 生成唯一的 UUID v4 令牌。
+ * 使用 256 位（32 字节）加密安全随机数，编码为 base64url 格式。
+ * 相比 UUID v4（122 位），提供更高的熵值和抗碰撞能力。
  *
- * @returns UUID 字符串
+ * @returns base64url 编码的 256 位随机令牌
  */
 export function generateToken(): string {
-  return crypto.randomUUID()
+  const bytes = new Uint8Array(32)
+  crypto.getRandomValues(bytes)
+  // base64url 编码（RFC 4648 §5）
+  const base64 = btoa(String.fromCharCode(...bytes))
+  return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
 }
 
 /**

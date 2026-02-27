@@ -37,7 +37,7 @@ export async function createIamSessionFunctions(deps: IamSessionFunctionsDeps): 
   try {
     const { config, cache } = deps
     const sessionConfig = SessionConfigSchema.parse(config.session ?? {})
-    const sessionMappingRepository = createCacheSessionMappingRepository(cache)
+    const sessionMappingRepository = createCacheSessionMappingRepository(cache, sessionConfig.maxAge)
 
     const functions = buildSessionFunctions({
       maxAge: sessionConfig.maxAge,

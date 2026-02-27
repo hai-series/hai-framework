@@ -82,25 +82,25 @@ describe('iam.auth', () => {
         }
       })
 
-      it('用户不存在应返回错误', async () => {
+      it('用户不存在应返回 INVALID_CREDENTIALS（防止用户枚举）', async () => {
         const result = await getIam().auth.login({
           identifier: 'nonexistent_user',
           password: TEST_PASSWORD,
         })
         expect(result.success).toBe(false)
         if (!result.success) {
-          expect(result.error.code).toBe(IamErrorCode.USER_NOT_FOUND)
+          expect(result.error.code).toBe(IamErrorCode.INVALID_CREDENTIALS)
         }
       })
 
-      it('identifier 为空字符串应返回错误', async () => {
+      it('identifier 为空字符串应返回 INVALID_CREDENTIALS', async () => {
         const result = await getIam().auth.login({
           identifier: '',
           password: TEST_PASSWORD,
         })
         expect(result.success).toBe(false)
         if (!result.success) {
-          expect(result.error.code).toBe(IamErrorCode.USER_NOT_FOUND)
+          expect(result.error.code).toBe(IamErrorCode.INVALID_CREDENTIALS)
         }
       })
 

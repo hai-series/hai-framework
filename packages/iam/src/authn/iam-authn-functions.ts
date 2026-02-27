@@ -44,11 +44,15 @@ export interface IamAuthnFunctionsDeps {
 }
 
 /**
- * 认证子功能返回值（带内部引用）
+ * 认证子功能工厂返回值
+ *
+ * 将公共 API 与内部依赖分离，避免将密码策略暴露在公共接口上。
  */
-export type IamAuthnFunctionsResult = IamAuthnFunctions & {
-  /** 密码策略引用（供 user 子功能复用） */
-  _passwordStrategy: PasswordStrategy
+export interface IamAuthnFunctionsResult {
+  /** 对外暴露的认证操作 */
+  authn: IamAuthnFunctions
+  /** 密码策略引用（仅供内部 user 子功能复用，对外不可见） */
+  passwordStrategy: PasswordStrategy
 }
 
 /**
@@ -63,6 +67,20 @@ export async function createIamAuthnFunctions(deps: IamAuthnFunctionsDeps): Prom
     const userRepository = await createDbUserRepository(db)
     const securityConfig = SecurityConfigSchema.parse(config.security ?? {})
     const loginConfig = LoginConfigSchema.parse(config.login ?? {})
+
+    /**
+     * 用户自动注册后分配默认角色的回调
+     *
+     * 供 OTP/LDAP 策略在自动创建用户后调用。
+     */
+    async function onUserAutoRegistered(userId: string): Promise<void> {
+      if (!config.rbac?.defaultRole)
+        return
+      const roleResult = await authzFunctions.getRoleByCode(config.rbac.defaultRole)
+      if (roleResult.success && roleResult.data) {
+        await authzFunctions.assignRole(userId, roleResult.data.id)
+      }
+    }
 
     // 密码策略
     const passwordStrategy = createPasswordStrategy({
@@ -85,6 +103,7 @@ export async function createIamAuthnFunctions(deps: IamAuthnFunctionsDeps): Prom
         registerConfig: config.register,
         maxLoginAttempts: securityConfig.maxLoginAttempts,
         lockoutDuration: securityConfig.lockoutDuration,
+        onUserAutoRegistered,
       })
     }
 
@@ -98,6 +117,7 @@ export async function createIamAuthnFunctions(deps: IamAuthnFunctionsDeps): Prom
         syncUser: ldapSyncUser ?? true,
         maxLoginAttempts: securityConfig.maxLoginAttempts,
         lockoutDuration: securityConfig.lockoutDuration,
+        onUserAutoRegistered,
       })
     }
 
@@ -112,7 +132,7 @@ export async function createIamAuthnFunctions(deps: IamAuthnFunctionsDeps): Prom
     })
 
     logger.info('Authn sub-feature initialized')
-    return ok(Object.assign(operations, { _passwordStrategy: passwordStrategy }))
+    return ok({ authn: operations, passwordStrategy })
   }
   catch (error) {
     logger.error('Authn sub-feature initialization failed', { error })

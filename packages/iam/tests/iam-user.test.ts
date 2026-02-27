@@ -14,7 +14,6 @@
  */
 
 import type { IamFunctions } from '../src/iam-types.js'
-import { db } from '@h-ai/db'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { IamErrorCode } from '../src/iam-config.js'
 import { defineIamSuite, initIam, postgresRedisEnv, sqliteMemoryEnv, TEST_PASSWORD, WEAK_PASSWORD } from './helpers/iam-test-suite.js'
@@ -643,9 +642,17 @@ describe('iam.user', () => {
         }
       })
 
-      it('完整密码重置流程', async () => {
+      it('完整密码重置流程（通过回调捕获令牌）', async () => {
+        // 通过回调捕获明文令牌（DB 中存储的是哈希值）
+        let capturedToken = ''
+        const resetIam = await initIam({
+          onPasswordResetRequest: async (_user, token) => {
+            capturedToken = token
+          },
+        })
+
         // 注册用户
-        const regResult = await getIam().user.register({
+        const regResult = await resetIam.user.register({
           username: 'reset_test_user',
           email: 'reset@test.com',
           password: 'OldPass123',
@@ -655,55 +662,49 @@ describe('iam.user', () => {
           return
 
         // 用旧密码登录以确认可用
-        const loginResult = await getIam().auth.login({
+        const loginResult = await resetIam.auth.login({
           identifier: 'reset_test_user',
           password: 'OldPass123',
         })
         expect(loginResult.success).toBe(true)
 
-        // 定义回调捕获令牌
-        let capturedToken = ''
-        // 重新初始化以注入回调 — 由于 iam.init 是幂等的，这里直接测试内部
-        // 通过 requestPasswordReset 请求重置（无回调时仅记录日志）
-        const requestResult = await getIam().user.requestPasswordReset('reset@test.com')
-        if (!requestResult.success) {
-          console.error('requestPasswordReset failed:', JSON.stringify(requestResult.error))
-        }
+        // 请求重置
+        const requestResult = await resetIam.user.requestPasswordReset('reset@test.com')
         expect(requestResult.success).toBe(true)
+        expect(capturedToken).toBeTruthy()
 
-        // 直接查数据库获取令牌（测试用）
-        const tokenQuery = await db.sql.query<{ token: string }>(
-          'SELECT token FROM iam_password_reset_tokens WHERE user_id = ?',
-          [regResult.data.user.id],
-        )
-        expect(tokenQuery.success).toBe(true)
-        if (!tokenQuery.success)
-          return
-        expect(tokenQuery.data.length).toBe(1)
-        capturedToken = tokenQuery.data[0].token
-
-        // 用捕获的令牌确认重置
-        const confirmResult = await getIam().user.confirmPasswordReset(capturedToken, 'NewPass456!')
+        // 用捕获的明文令牌确认重置
+        const confirmResult = await resetIam.user.confirmPasswordReset(capturedToken, 'NewPass456!')
         expect(confirmResult.success).toBe(true)
 
         // 旧密码登录应失败
-        const oldLoginResult = await getIam().auth.login({
+        const oldLoginResult = await resetIam.auth.login({
           identifier: 'reset_test_user',
           password: 'OldPass123',
         })
         expect(oldLoginResult.success).toBe(false)
 
         // 新密码应可登录
-        const newLoginResult = await getIam().auth.login({
+        const newLoginResult = await resetIam.auth.login({
           identifier: 'reset_test_user',
           password: 'NewPass456!',
         })
         expect(newLoginResult.success).toBe(true)
+
+        // 还原默认配置
+        await initIam()
       })
 
       it('已使用令牌不可重复使用', async () => {
+        let capturedToken = ''
+        const resetIam = await initIam({
+          onPasswordResetRequest: async (_user, token) => {
+            capturedToken = token
+          },
+        })
+
         // 注册用户
-        const regResult = await getIam().user.register({
+        const regResult = await resetIam.user.register({
           username: 'reset_reuse_user',
           email: 'resetreuse@test.com',
           password: 'OldPass123',
@@ -713,28 +714,22 @@ describe('iam.user', () => {
           return
 
         // 请求重置
-        await getIam().user.requestPasswordReset('resetreuse@test.com')
-
-        // 获取令牌
-        const tokenQuery = await db.sql.query<{ token: string }>(
-          'SELECT token FROM iam_password_reset_tokens WHERE user_id = ?',
-          [regResult.data.user.id],
-        )
-        expect(tokenQuery.success).toBe(true)
-        if (!tokenQuery.success)
-          return
-        const token = tokenQuery.data[0].token
+        await resetIam.user.requestPasswordReset('resetreuse@test.com')
+        expect(capturedToken).toBeTruthy()
 
         // 第一次确认应成功
-        const firstConfirm = await getIam().user.confirmPasswordReset(token, 'NewPass456!')
+        const firstConfirm = await resetIam.user.confirmPasswordReset(capturedToken, 'NewPass456!')
         expect(firstConfirm.success).toBe(true)
 
-        // 第二次确认应失败（令牌已使用）
-        const secondConfirm = await getIam().user.confirmPasswordReset(token, 'AnotherPass789!')
+        // 第二次确认应失败（令牌已使用/删除）
+        const secondConfirm = await resetIam.user.confirmPasswordReset(capturedToken, 'AnotherPass789!')
         expect(secondConfirm.success).toBe(false)
         if (!secondConfirm.success) {
           expect(secondConfirm.error.code).toBe(IamErrorCode.RESET_TOKEN_INVALID)
         }
+
+        // 还原默认配置
+        await initIam()
       })
     })
   }

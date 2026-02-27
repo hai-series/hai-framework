@@ -131,6 +131,26 @@ export interface RegisterResult {
 }
 
 // =============================================================================
+// 当前用户更新类型
+// =============================================================================
+
+/**
+ * 当前登录用户可自行修改的字段白名单
+ *
+ * 仅允许修改个人资料相关字段，禁止修改安全字段（enabled、emailVerified、roles 等）。
+ */
+export interface UpdateCurrentUserInput {
+  /** 显示名称 */
+  displayName?: string
+  /** 头像 URL */
+  avatarUrl?: string
+  /** 手机号 */
+  phone?: string
+  /** 扩展属性 */
+  metadata?: Record<string, unknown>
+}
+
+// =============================================================================
 // 用户操作接口
 // =============================================================================
 
@@ -162,11 +182,14 @@ export interface IamUserFunctions {
   /**
    * 更新当前登录用户信息（通过 accessToken 识别用户）
    *
+   * 仅允许修改白名单字段（displayName、avatarUrl、phone、metadata），
+   * 禁止修改安全字段（enabled、emailVerified 等）。
+   *
    * @param accessToken - 访问令牌
-   * @param data - 要更新的字段
+   * @param data - 要更新的字段（仅白名单字段）
    * @returns 成功返回更新后的用户信息
    */
-  updateCurrentUser: (accessToken: string, data: Partial<User>) => Promise<Result<User, IamError>>
+  updateCurrentUser: (accessToken: string, data: UpdateCurrentUserInput) => Promise<Result<User, IamError>>
 
   /**
    * 获取用户信息
