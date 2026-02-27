@@ -115,6 +115,7 @@
   "iam_queryOtpFailed": "查询 OTP 失败: {message}",
   "iam_updateOtpAttemptsFailed": "更新 OTP 尝试次数失败: {message}",
   "iam_deleteOtpFailed": "删除 OTP 失败: {message}",
+  "iam_otpSendFailed": "验证码发送失败: {message}",
   "iam_resetTokenInvalid": "密码重置令牌无效或已过期",
   "iam_resetTokenExpired": "密码重置令牌已过期",
   "iam_resetTokenMaxAttempts": "验证次数过多，请重新申请重置令牌",

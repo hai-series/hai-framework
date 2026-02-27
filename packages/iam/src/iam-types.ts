@@ -66,6 +66,30 @@ export interface IamConfigInput extends IamConfigSettingsInput {
    * @param expiresAt - 令牌过期时间
    */
   onPasswordResetRequest?: (user: User, token: string, expiresAt: Date) => Promise<void>
+
+  /**
+   * OTP 邮件验证码发送回调（可选）
+   *
+   * 当用户请求 OTP 验证码时，框架生成验证码后通过此回调通知业务层，
+   * 业务层负责将验证码通过邮件发送给用户。
+   * 若未提供此回调，sendOtp 将返回"发送方式未配置"错误。
+   *
+   * @param email - 目标邮箱
+   * @param code - 验证码
+   */
+  onOtpSendEmail?: (email: string, code: string) => Promise<void>
+
+  /**
+   * OTP 短信验证码发送回调（可选）
+   *
+   * 当用户请求 OTP 验证码时，框架生成验证码后通过此回调通知业务层，
+   * 业务层负责将验证码通过短信发送给用户。
+   * 若未提供此回调，sendOtp 将返回"发送方式未配置"错误。
+   *
+   * @param phone - 目标手机号
+   * @param code - 验证码
+   */
+  onOtpSendSms?: (phone: string, code: string) => Promise<void>
 }
 
 // ─── 客户端操作 ───
@@ -135,6 +159,6 @@ export interface IamFunctions {
 // ─── 子功能类型 re-export ───
 
 export type { AuthStrategy, Credentials, IamAuthnFunctions, LdapCredentials, OtpCredentials, PasswordCredentials } from './authn/iam-authn-types.js'
-export type { AuthzContext, IamAuthzFunctions, Permission, Role, RolePermission, UserRole } from './authz/iam-authz-types.js'
+export type { IamAuthzFunctions, Permission, Role, RolePermission, UserRole } from './authz/iam-authz-types.js'
 export type { AuthResult, CreateSessionOptions, IamSessionFunctions, Session } from './session/iam-session-types.js'
 export type { AgreementDisplay, IamUserFunctions, ListUsersOptions, RegisterOptions, RegisterResult, StoredUser, UpdateCurrentUserInput, User } from './user/iam-user-types.js'

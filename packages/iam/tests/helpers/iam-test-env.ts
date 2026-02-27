@@ -6,7 +6,7 @@
  */
 
 import type { IamConfigSettingsInput } from '../../src/iam-config.js'
-import type { IamFunctions } from '../../src/iam-types.js'
+import type { IamConfigInput, IamFunctions } from '../../src/iam-types.js'
 import { cache } from '@h-ai/cache'
 import { db } from '@h-ai/db'
 import { afterAll, beforeAll } from 'vitest'
@@ -19,11 +19,16 @@ export const TEST_PASSWORD = 'TestPass123'
 export const WEAK_PASSWORD = 'abc'
 
 /**
+ * 初始化配置（不含 db / cache，由测试环境自动注入）
+ */
+type IamTestInitConfig = IamConfigSettingsInput & Omit<IamConfigInput, keyof IamConfigSettingsInput | 'db' | 'cache'>
+
+/**
  * 初始化 IAM 单例
  *
  * db / cache 需已初始化。用于需要不同配置的子场景。
  */
-export async function initIam(settings?: IamConfigSettingsInput): Promise<IamFunctions> {
+export async function initIam(settings?: IamTestInitConfig): Promise<IamFunctions> {
   const result = await iam.init({ db, cache, ...(settings ?? {}) })
   if (!result.success) {
     throw new Error(`IAM init failed: ${result.error.message}`)
@@ -39,7 +44,7 @@ export async function initIam(settings?: IamConfigSettingsInput): Promise<IamFun
  */
 export function defineIamTestEnv(
   _label: string,
-  settings?: IamConfigSettingsInput,
+  settings?: IamTestInitConfig,
 ) {
   beforeAll(async () => {
     if (!db.isInitialized) {

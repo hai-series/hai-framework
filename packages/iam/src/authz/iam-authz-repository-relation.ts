@@ -50,9 +50,12 @@ export interface RolePermissionRepository {
   getPermissions: (roleId: string, tx?: TxHandle) => Promise<Result<Permission[], IamError>>
 
   /**
-   * 获取角色的权限代码（带缓存）
+   * 获取角色的权限代码（缓存优先）
+   *
+   * 优先从缓存读取，未命中时回源数据库并回写缓存。
+   * 可能返回非最新数据；写操作已自动同步缓存。
    */
-  getPermissionCodes: (roleId: string, tx?: TxHandle) => Promise<Result<string[], IamError>>
+  getPermissionCodesCached: (roleId: string, tx?: TxHandle) => Promise<Result<string[], IamError>>
 
   /**
    * 清理角色权限缓存
@@ -65,19 +68,25 @@ export interface RolePermissionRepository {
   removePermissionCodeFromCache: (permissionCode: string) => Promise<Result<void, IamError>>
 
   /**
-   * 检查角色是否有某权限
+   * 检查角色是否有某权限（缓存优先）
+   *
+   * 优先从缓存判断，未命中时加载全量权限代码到缓存后再判断。
    */
-  hasPermission: (roleId: string, permissionCode: string, tx?: TxHandle) => Promise<Result<boolean, IamError>>
+  hasPermissionCached: (roleId: string, permissionCode: string, tx?: TxHandle) => Promise<Result<boolean, IamError>>
 
   /**
-   * 删除角色的所有权限关联（级联删除用）
+   * 删除角色的所有权限关联（仅 DB 操作）
+   *
+   * 不清理缓存；调用方应在事务提交后调用 `clearRolePermissionsCache` 清理缓存。
    */
-  removeByRoleId: (roleId: string) => Promise<Result<void, IamError>>
+  removeByRoleId: (roleId: string, tx?: TxHandle) => Promise<Result<void, IamError>>
 
   /**
-   * 删除权限的所有角色关联（级联删除用）
+   * 删除权限的所有角色关联（仅 DB 操作）
+   *
+   * 不清理缓存；调用方应在事务提交后调用 `removePermissionCodeFromCache` 清理缓存。
    */
-  removeByPermissionId: (permissionId: string) => Promise<Result<void, IamError>>
+  removeByPermissionId: (permissionId: string, tx?: TxHandle) => Promise<Result<void, IamError>>
 }
 
 // =============================================================================
@@ -109,9 +118,19 @@ export interface UserRoleRepository {
   getRoles: (userId: string, tx?: TxHandle) => Promise<Result<Role[], IamError>>
 
   /**
-   * 删除角色的所有用户关联并同步会话（级联删除用）
+   * 删除角色的所有用户关联（仅 DB 操作）
+   *
+   * 返回受影响的用户 ID 列表。
+   * 不同步会话；调用方应在事务提交后调用 `syncUserSessionRoles` 逐一同步。
    */
-  removeByRoleId: (roleId: string) => Promise<Result<void, IamError>>
+  removeByRoleId: (roleId: string, tx?: TxHandle) => Promise<Result<string[], IamError>>
+
+  /**
+   * 同步用户会话中的角色列表
+   *
+   * 角色变更后将用户最新角色列表回写到缓存中的所有活跃会话。
+   */
+  syncUserSessionRoles: (userId: string) => Promise<Result<void, IamError>>
 }
 
 // =============================================================================
@@ -438,7 +457,7 @@ export async function createDbRolePermissionRepository(
       return getPermissionsInternal(roleId, tx)
     },
 
-    async getPermissionCodes(roleId, tx): Promise<Result<string[], IamError>> {
+    async getPermissionCodesCached(roleId, tx): Promise<Result<string[], IamError>> {
       return getPermissionCodesCached(roleId, tx)
     },
 
@@ -503,7 +522,7 @@ export async function createDbRolePermissionRepository(
       return ok(undefined)
     },
 
-    async hasPermission(roleId, permissionCode, tx): Promise<Result<boolean, IamError>> {
+    async hasPermissionCached(roleId, permissionCode, tx): Promise<Result<boolean, IamError>> {
       const cacheKey = buildRolePermsKey(roleId)
       const existsResult = await cache.kv.exists(cacheKey)
       if (!existsResult.success) {
@@ -534,19 +553,9 @@ export async function createDbRolePermissionRepository(
       return ok(codesResult.data.includes(permissionCode))
     },
 
-    async removeByRoleId(roleId): Promise<Result<void, IamError>> {
-      // 先查出当前缓存的权限代码，以便清理反向缓存
-      const cachedCodes = await cache.set_.smembers<string>(buildRolePermsKey(roleId))
-      if (cachedCodes.success && cachedCodes.data.length > 0) {
-        const removeRoleResult = await removeRoleFromPermissionCache(roleId, cachedCodes.data)
-        if (!removeRoleResult.success)
-          return removeRoleResult
-      }
-      // 删除正向缓存
-      await cache.kv.del(buildRolePermsKey(roleId))
-
-      // 删除 DB 行
-      const result = await db.sql.execute(
+    async removeByRoleId(roleId, tx): Promise<Result<void, IamError>> {
+      const runner = tx ?? db.sql
+      const result = await runner.execute(
         `DELETE FROM ${ROLE_PERMISSION_TABLE} WHERE role_id = ?`,
         [roleId],
       )
@@ -560,13 +569,9 @@ export async function createDbRolePermissionRepository(
       return ok(undefined)
     },
 
-    async removeByPermissionId(permissionId): Promise<Result<void, IamError>> {
-      // 查出权限代码，用于清缓存
-      const permResult = await permissionRepository.findById(permissionId)
-      const permCode = permResult.success ? permResult.data?.code : undefined
-
-      // 删除 DB 行
-      const result = await db.sql.execute(
+    async removeByPermissionId(permissionId, tx): Promise<Result<void, IamError>> {
+      const runner = tx ?? db.sql
+      const result = await runner.execute(
         `DELETE FROM ${ROLE_PERMISSION_TABLE} WHERE permission_id = ?`,
         [permissionId],
       )
@@ -577,18 +582,6 @@ export async function createDbRolePermissionRepository(
           cause: result.error,
         })
       }
-
-      // 清缓存
-      if (permCode) {
-        const roleIdsResult = await cache.set_.smembers<string>(buildPermissionRolesKey(permCode))
-        if (roleIdsResult.success) {
-          await Promise.all(
-            roleIdsResult.data.map(rId => cache.set_.srem(buildRolePermsKey(rId), permCode)),
-          )
-        }
-        await cache.kv.del(buildPermissionRolesKey(permCode))
-      }
-
       return ok(undefined)
     },
   }
@@ -836,9 +829,11 @@ export async function createDbUserRoleRepository(
       return ok(roleResult.data)
     },
 
-    async removeByRoleId(roleId): Promise<Result<void, IamError>> {
+    async removeByRoleId(roleId, tx): Promise<Result<string[], IamError>> {
+      const runner = tx ?? db.sql
+
       // 查出受影响的用户 ID
-      const usersResult = await db.sql.query<{ user_id: string }>(
+      const usersResult = await runner.query<{ user_id: string }>(
         `SELECT user_id FROM ${USER_ROLE_TABLE} WHERE role_id = ?`,
         [roleId],
       )
@@ -851,7 +846,7 @@ export async function createDbUserRoleRepository(
       }
 
       // 删除关联行
-      const deleteResult = await db.sql.execute(
+      const deleteResult = await runner.execute(
         `DELETE FROM ${USER_ROLE_TABLE} WHERE role_id = ?`,
         [roleId],
       )
@@ -863,13 +858,10 @@ export async function createDbUserRoleRepository(
         })
       }
 
-      // 同步受影响用户的会话角色
-      for (const { user_id } of usersResult.data) {
-        await syncUserSessionRoles(user_id)
-      }
-
-      return ok(undefined)
+      return ok(usersResult.data.map(r => r.user_id))
     },
+
+    syncUserSessionRoles,
 
   }
 }
