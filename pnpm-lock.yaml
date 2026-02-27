@@ -236,6 +236,9 @@ importers:
       '@h-ai/kit':
         specifier: workspace:*
         version: link:../../packages/kit
+      '@h-ai/reach':
+        specifier: workspace:*
+        version: link:../../packages/reach
       '@h-ai/storage':
         specifier: workspace:*
         version: link:../../packages/storage

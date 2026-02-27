@@ -1,0 +1,28 @@
+# =============================================================================
+# Admin Console - Reach（触达服务）配置
+# =============================================================================
+
+# Provider 配置
+providers:
+  # 开发环境使用 console provider（输出到日志）
+  - name: email
+    type: console
+  - name: sms
+    type: console
+
+# 模板配置
+templates:
+  # 密码重置邮件
+  - name: password_reset
+    provider: email
+    subject: Password Reset Request
+    body: 'Your password reset token is: {token}. It will expire at {expiresAt}.'
+  # 邮箱 OTP 验证码
+  - name: otp_email
+    provider: email
+    subject: 'Verification Code: {code}'
+    body: 'Your verification code is: {code}'
+  # 短信 OTP 验证码
+  - name: otp_sms
+    provider: sms
+    body: 'Your verification code is: {code}'

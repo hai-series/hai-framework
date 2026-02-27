@@ -108,7 +108,12 @@ async function tryInitSendLogRepo(): Promise<SendLogRepository | null> {
     if (!db) {
       return null
     }
-    return await createSendLogRepository(db)
+    const result = await createSendLogRepository(db)
+    if (!result.success) {
+      logger.debug('Send log repository not initialized', { error: result.error.message })
+      return null
+    }
+    return result.data
   }
   catch (error) {
     logger.debug('Send log repository not initialized', { error: error instanceof Error ? error.message : String(error) })
