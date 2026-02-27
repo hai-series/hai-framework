@@ -6,8 +6,11 @@
  * 本文件封装触达模块的发送逻辑，包括：
  * - 消息预处理（模板渲染 + Provider 路由推导）
  * - DND（免打扰）时间段检查与策略处理（discard / delay）
- * - 发送记录持久化（状态：sent / pending）
+ * - 通过 SendLogRepository 持久化发送记录
  * - DND 恢复定时任务（flush pending 消息）
+ *
+ * 数据库基本操作封装在 reach-repository-send-log.ts 中，
+ * 本文件仅负责业务逻辑编排。
  *
  * @module reach-send
  * =============================================================================
@@ -15,6 +18,7 @@
 
 import type { Result } from '@h-ai/core'
 import type { DndConfig } from './reach-config.js'
+import type { SendLogRepository } from './reach-repository-send-log.js'
 import type {
   ReachError,
   ReachMessage,
@@ -29,70 +33,6 @@ import { ReachErrorCode } from './reach-config.js'
 import { reachM } from './reach-i18n.js'
 
 const logger = core.logger.child({ module: 'reach', scope: 'send' })
-
-// =============================================================================
-// 发送日志状态
-// =============================================================================
-
-/** 发送日志状态 */
-export type SendLogStatus = 'sent' | 'pending'
-
-// =============================================================================
-// DB 动态引用（可选依赖）
-// =============================================================================
-
-/** db 模块的最小接口（避免硬依赖） */
-interface DbLike {
-  isInitialized: boolean
-  ddl: { createTable: (name: string, columns: Record<string, unknown>) => Promise<unknown> }
-  sql: {
-    execute: (sql: string, params?: unknown[]) => Promise<{ success: boolean, data?: { changes: number } }>
-    query: <T>(sql: string, params?: unknown[]) => Promise<{ success: boolean, data?: T[] }>
-  }
-}
-
-/** 表是否已创建标记 */
-let tableCreated = false
-
-/**
- * 动态获取 db 实例（可选依赖，不可用时返回 null）
- */
-async function getDb(): Promise<DbLike | null> {
-  try {
-    const dbModuleName = '@h-ai/db'
-    const mod = await (import(/* @vite-ignore */ dbModuleName) as Promise<{ db: DbLike }>)
-    if (!mod.db.isInitialized) {
-      return null
-    }
-    return mod.db
-  }
-  catch {
-    return null
-  }
-}
-
-/**
- * 确保 reach_send_log 表存在
- */
-async function ensureTable(db: DbLike): Promise<void> {
-  if (tableCreated) {
-    return
-  }
-  await db.ddl.createTable('reach_send_log', {
-    id: { type: 'INTEGER', primaryKey: true, autoIncrement: true },
-    provider: { type: 'TEXT', notNull: true },
-    to_addr: { type: 'TEXT', notNull: true },
-    subject: { type: 'TEXT' },
-    body: { type: 'TEXT' },
-    template: { type: 'TEXT' },
-    vars_json: { type: 'TEXT' },
-    extra_json: { type: 'TEXT' },
-    status: { type: 'TEXT', notNull: true },
-    message_id: { type: 'TEXT' },
-    created_at: { type: 'TIMESTAMP', notNull: true },
-  })
-  tableCreated = true
-}
 
 // =============================================================================
 // DND（免打扰）检查
@@ -190,61 +130,38 @@ export function preprocessMessage(
 }
 
 // =============================================================================
-// 发送记录持久化
+// 发送记录持久化（通过 Repository）
 // =============================================================================
 
 /**
  * 保存发送记录到数据库
  */
 async function saveSendRecord(
+  repo: SendLogRepository | null,
   message: ReachMessage,
-  status: SendLogStatus,
+  status: 'sent' | 'pending',
   provider: string,
   messageId?: string,
 ): Promise<void> {
+  if (!repo) {
+    return
+  }
   try {
-    const db = await getDb()
-    if (!db) {
-      return
-    }
-    await ensureTable(db)
-    await db.sql.execute(
-      `INSERT INTO reach_send_log (provider, to_addr, subject, body, template, vars_json, extra_json, status, message_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        provider,
-        message.to,
-        message.subject ?? null,
-        message.body ?? null,
-        message.template ?? null,
-        message.vars ? JSON.stringify(message.vars) : null,
-        message.extra ? JSON.stringify(message.extra) : null,
-        status,
-        messageId ?? null,
-        Date.now(),
-      ],
-    )
+    await repo.create({
+      provider,
+      toAddr: message.to,
+      subject: message.subject ?? null,
+      body: message.body ?? null,
+      template: message.template ?? null,
+      varsJson: message.vars ? JSON.stringify(message.vars) : null,
+      extraJson: message.extra ? JSON.stringify(message.extra) : null,
+      status,
+      messageId: messageId ?? null,
+      createdAt: Date.now(),
+    })
   }
   catch {
     logger.debug('Send record not saved (db module unavailable)')
-  }
-}
-
-/**
- * 将 pending 记录标记为 sent
- */
-async function markRecordSent(id: number, messageId?: string): Promise<void> {
-  try {
-    const db = await getDb()
-    if (!db) {
-      return
-    }
-    await db.sql.execute(
-      `UPDATE reach_send_log SET status = ?, message_id = ? WHERE id = ?`,
-      ['sent', messageId ?? null, id],
-    )
-  }
-  catch {
-    logger.debug('Failed to update send record status')
   }
 }
 
@@ -263,6 +180,7 @@ let dndTimer: ReturnType<typeof setTimeout> | null = null
 export function startDndScheduler(
   dndConfig: DndConfig,
   providers: Map<string, ReachProvider>,
+  repo: SendLogRepository | null,
 ): void {
   stopDndScheduler()
 
@@ -273,7 +191,7 @@ export function startDndScheduler(
   // 如果当前不在 DND 时段，不需要启动定时器
   if (!isDndBlocked(dndConfig)) {
     // 但仍然尝试 flush 一次（可能上次 DND 结束后有残留 pending）
-    flushPendingMessages(providers).catch((error) => {
+    flushPendingMessages(providers, repo).catch((error) => {
       logger.warn('Failed to flush pending messages on init', { error })
     })
     return
@@ -284,7 +202,7 @@ export function startDndScheduler(
 
   dndTimer = setTimeout(() => {
     logger.info('DND period ended, flushing pending messages')
-    flushPendingMessages(providers).catch((error) => {
+    flushPendingMessages(providers, repo).catch((error) => {
       logger.error('Failed to flush pending messages', { error })
     })
   }, delayMs)
@@ -301,23 +219,10 @@ export function stopDndScheduler(): void {
 }
 
 /**
- * 重置内部表创建标记（close 时调用）
+ * 重置内部状态（close 时调用）
  */
 export function resetSendState(): void {
-  tableCreated = false
   stopDndScheduler()
-}
-
-/** pending 记录行结构 */
-interface PendingRecord {
-  id: number
-  provider: string
-  to_addr: string
-  subject: string | null
-  body: string | null
-  template: string | null
-  vars_json: string | null
-  extra_json: string | null
 }
 
 /**
@@ -325,19 +230,14 @@ interface PendingRecord {
  */
 async function flushPendingMessages(
   providers: Map<string, ReachProvider>,
+  repo: SendLogRepository | null,
 ): Promise<void> {
-  const db = await getDb()
-  if (!db) {
+  if (!repo) {
     return
   }
 
-  await ensureTable(db)
-  const result = await db.sql.query<PendingRecord>(
-    `SELECT id, provider, to_addr, subject, body, template, vars_json, extra_json FROM reach_send_log WHERE status = ? ORDER BY created_at ASC`,
-    ['pending'],
-  )
-
-  if (!result.success || !result.data?.length) {
+  const result = await repo.findPending()
+  if (!result.success || !result.data.length) {
     return
   }
 
@@ -353,8 +253,8 @@ async function flushPendingMessages(
     let vars: Record<string, string> | undefined
     let extra: Record<string, unknown> | undefined
     try {
-      vars = row.vars_json ? JSON.parse(row.vars_json) as Record<string, string> : undefined
-      extra = row.extra_json ? JSON.parse(row.extra_json) as Record<string, unknown> : undefined
+      vars = row.varsJson ? JSON.parse(row.varsJson) as Record<string, string> : undefined
+      extra = row.extraJson ? JSON.parse(row.extraJson) as Record<string, unknown> : undefined
     }
     catch {
       logger.warn('Failed to parse pending message JSON, skipping', { id: row.id })
@@ -363,7 +263,7 @@ async function flushPendingMessages(
 
     const message: ReachMessage = {
       provider: row.provider,
-      to: row.to_addr,
+      to: row.toAddr,
       subject: row.subject ?? undefined,
       body: row.body ?? undefined,
       template: row.template ?? undefined,
@@ -373,11 +273,11 @@ async function flushPendingMessages(
 
     const sendResult = await provider.send(message)
     if (sendResult.success) {
-      await markRecordSent(row.id, sendResult.data.messageId)
-      logger.info('Pending message sent', { id: row.id, to: row.to_addr, provider: row.provider })
+      await repo.markSent(row.id, sendResult.data.messageId)
+      logger.info('Pending message sent', { id: row.id, to: row.toAddr, provider: row.provider })
     }
     else {
-      logger.warn('Pending message send failed', { id: row.id, to: row.to_addr, error: sendResult.error.code })
+      logger.warn('Pending message send failed', { id: row.id, to: row.toAddr, error: sendResult.error.code })
     }
   }
 }
@@ -404,6 +304,7 @@ export async function executeSend(
   providers: Map<string, ReachProvider>,
   templateRegistry: ReachTemplateRegistry,
   dndConfig?: DndConfig,
+  repo?: SendLogRepository | null,
 ): Promise<Result<SendResult, ReachError>> {
   if (!message.to) {
     return err({
@@ -440,7 +341,7 @@ export async function executeSend(
     if (strategy === 'delay') {
       // delay 策略：暂存消息到 DB
       logger.info('Message deferred by DND (delay strategy)', { provider: providerName, to: message.to })
-      saveSendRecord(preprocessed.data, 'pending', providerName).catch((error) => {
+      saveSendRecord(repo ?? null, preprocessed.data, 'pending', providerName).catch((error) => {
         logger.warn('Failed to save deferred message to DB', { provider: providerName, to: message.to, error })
       })
       return ok({ success: true, deferred: true })
@@ -473,7 +374,7 @@ export async function executeSend(
   }
 
   // 异步保存发送记录（sent 状态）
-  saveSendRecord(preprocessed.data, 'sent', providerName, result.data.messageId).catch((error) => {
+  saveSendRecord(repo ?? null, preprocessed.data, 'sent', providerName, result.data.messageId).catch((error) => {
     logger.warn('Failed to save send record', { provider: providerName, to: message.to, error })
   })
 

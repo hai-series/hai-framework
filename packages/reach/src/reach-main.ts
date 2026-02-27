@@ -5,14 +5,17 @@
  *
  * 本文件提供统一的 `reach` 对象，聚合模块生命周期管理。
  *
- * 发送逻辑委托给 reach-send.ts 处理。
+ * 发送逻辑委托给 reach-send.ts 处理，
+ * 数据库操作封装在 reach-repository-send-log.ts 中。
  *
  * @module reach-main
  * =============================================================================
  */
 
 import type { Result } from '@h-ai/core'
+import type { DbFunctions } from '@h-ai/db'
 import type { DndConfig, ProviderConfig, ReachConfig, ReachConfigInput } from './reach-config.js'
+import type { SendLogRepository } from './reach-repository-send-log.js'
 import type {
   ReachError,
   ReachFunctions,
@@ -30,6 +33,7 @@ import { createConsoleProvider } from './providers/reach-provider-console.js'
 import { createSmtpProvider } from './providers/reach-provider-smtp.js'
 import { ReachConfigSchema, ReachErrorCode } from './reach-config.js'
 import { reachM } from './reach-i18n.js'
+import { createSendLogRepository, resetSendLogRepoSingleton } from './reach-repository-send-log.js'
 import { executeSend, resetSendState, startDndScheduler } from './reach-send.js'
 import { createTemplateRegistry } from './reach-template.js'
 
@@ -51,6 +55,9 @@ let dndConfig: DndConfig | undefined
 /** 模板注册表（始终可用） */
 let templateRegistry: ReachTemplateRegistry = createTemplateRegistry()
 
+/** 发送日志存储（db 可用时初始化） */
+let sendLogRepo: SendLogRepository | null = null
+
 // =============================================================================
 // Provider 工厂
 // =============================================================================
@@ -68,6 +75,44 @@ function createProvider(config: ProviderConfig): ReachProvider {
       return createAliyunSmsProvider()
     case 'api':
       return createApiProvider()
+  }
+}
+
+// =============================================================================
+// DB 动态引用（可选依赖）
+// =============================================================================
+
+/**
+ * 尝试获取 db 实例（可选依赖，不可用时返回 null）
+ */
+async function tryGetDb(): Promise<DbFunctions | null> {
+  try {
+    const dbModuleName = '@h-ai/db'
+    const mod = await (import(/* @vite-ignore */ dbModuleName) as Promise<{ db: DbFunctions }>)
+    if (!mod.db.isInitialized) {
+      return null
+    }
+    return mod.db
+  }
+  catch {
+    return null
+  }
+}
+
+/**
+ * 尝试初始化发送日志存储
+ */
+async function tryInitSendLogRepo(): Promise<SendLogRepository | null> {
+  try {
+    const db = await tryGetDb()
+    if (!db) {
+      return null
+    }
+    return await createSendLogRepository(db)
+  }
+  catch {
+    logger.debug('Send log repository not initialized (db module unavailable)')
+    return null
   }
 }
 
@@ -129,9 +174,12 @@ export const reach: ReachFunctions = {
         templateRegistry.registerMany(parsed.templates)
       }
 
+      // 尝试初始化发送日志存储
+      sendLogRepo = await tryInitSendLogRepo()
+
       // 启动 DND 恢复定时器
       if (dndConfig) {
-        startDndScheduler(dndConfig, providers)
+        startDndScheduler(dndConfig, providers, sendLogRepo)
       }
 
       const providerNames = parsed.providers.map(p => p.name)
@@ -155,7 +203,7 @@ export const reach: ReachFunctions = {
       return notInitialized.result()
     }
 
-    return executeSend(message, providers, templateRegistry, dndConfig)
+    return executeSend(message, providers, templateRegistry, dndConfig, sendLogRepo)
   },
 
   get template(): ReachTemplateRegistry {
@@ -174,6 +222,8 @@ export const reach: ReachFunctions = {
     if (providers.size === 0) {
       currentConfig = null
       dndConfig = undefined
+      sendLogRepo = null
+      resetSendLogRepoSingleton()
       resetSendState()
       logger.info('Reach module already closed, skipping')
       return
@@ -196,6 +246,8 @@ export const reach: ReachFunctions = {
       currentConfig = null
       dndConfig = undefined
       templateRegistry = createTemplateRegistry()
+      sendLogRepo = null
+      resetSendLogRepoSingleton()
       resetSendState()
     }
   },
