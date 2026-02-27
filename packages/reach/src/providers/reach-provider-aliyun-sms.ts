@@ -63,6 +63,7 @@ function signRequest(params: Record<string, string>, accessKeySecret: string, me
     .join('&')
 
   const stringToSign = `${method}&${percentEncode('/')}&${percentEncode(canonicalQuery)}`
+  // 阿里云 POP API 规范要求使用 HMAC-SHA1 签名
   const hmac = createHmac('sha1', `${accessKeySecret}&`)
   hmac.update(stringToSign)
   return hmac.digest('base64')
@@ -133,7 +134,7 @@ export function createAliyunSmsProvider(): ReachProvider {
         params.Signature = signRequest(params, smsConfig.accessKeySecret, 'GET')
 
         const queryString = Object.entries(params)
-          .map(([k, v]) => `${encodeURIComponent(k)}=${encodeURIComponent(v)}`)
+          .map(([k, v]) => `${percentEncode(k)}=${percentEncode(v)}`)
           .join('&')
 
         const url = `https://${smsConfig.endpoint}/?${queryString}`
