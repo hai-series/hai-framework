@@ -9,6 +9,7 @@
   "reach_invalidRecipient": "无效的接收方: {recipient}",
   "reach_providerNotFound": "Provider 未找到: {provider}",
   "reach_providerRequired": "未指定 Provider，请在消息或模板中设置 provider 字段",
+  "reach_dndBlocked": "当前处于免打扰时段，消息未发送",
   "reach_smsSendFailed": "短信发送失败: {error}",
   "reach_emailSendFailed": "邮件发送失败: {error}",
   "reach_apiSendFailed": "API 回调发送失败: {error}"

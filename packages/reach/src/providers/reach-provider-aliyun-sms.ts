@@ -110,7 +110,8 @@ export function createAliyunSmsProvider(): ReachProvider {
         })
       }
 
-      logger.debug('Sending SMS', { to: message.to, templateCode: message.templateCode })
+      const templateCode = message.extra?.templateCode as string | undefined
+      logger.debug('Sending SMS', { to: message.to, templateCode })
 
       try {
         const params: Record<string, string> = {
@@ -122,7 +123,7 @@ export function createAliyunSmsProvider(): ReachProvider {
           SignatureMethod: 'HMAC-SHA1',
           SignatureNonce: randomUUID(),
           SignatureVersion: '1.0',
-          TemplateCode: message.templateCode ?? '',
+          TemplateCode: templateCode ?? '',
           Timestamp: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'),
           Version: '2017-05-25',
         }

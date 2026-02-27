@@ -9,6 +9,7 @@
   "reach_invalidRecipient": "Invalid recipient: {recipient}",
   "reach_providerNotFound": "Provider not found: {provider}",
   "reach_providerRequired": "No provider specified, set provider field in message or template",
+  "reach_dndBlocked": "Message blocked by Do Not Disturb period",
   "reach_smsSendFailed": "SMS send failed: {error}",
   "reach_emailSendFailed": "Email send failed: {error}",
   "reach_apiSendFailed": "API callback send failed: {error}"
