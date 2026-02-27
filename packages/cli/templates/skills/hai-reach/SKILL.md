@@ -226,6 +226,41 @@ async function sendCode(channel: 'email' | 'sms', target: string, code: string) 
 }
 ```
 
+### 与 IAM 集成（密码重置 / OTP 验证码）
+
+```typescript
+import { iam } from '@h-ai/iam'
+import { reach } from '@h-ai/reach'
+
+// 初始化 reach（注册 email 和 sms Provider）
+await reach.init({
+  providers: [
+    { name: 'email', type: 'smtp', host: 'smtp.example.com', from: 'noreply@example.com' },
+    { name: 'sms', type: 'aliyun-sms', accessKeyId: '...', accessKeySecret: '...', signName: '...' },
+  ],
+  templates: [
+    { name: 'password_reset', provider: 'email', subject: 'Password Reset', body: 'Token: {token}, expires: {expiresAt}' },
+    { name: 'otp_email', provider: 'email', subject: 'Code: {code}', body: 'Your code is {code}' },
+    { name: 'otp_sms', provider: 'sms', body: 'Your code is {code}' },
+  ],
+})
+
+// 初始化 IAM，使用 reach 发送通知
+await iam.init({
+  db,
+  cache,
+  onPasswordResetRequest: async (user, token, expiresAt) => {
+    await reach.send({ provider: 'email', to: user.email ?? '', template: 'password_reset', vars: { token, expiresAt: expiresAt.toISOString() } })
+  },
+  onOtpSendEmail: async (email, code) => {
+    await reach.send({ provider: 'email', to: email, template: 'otp_email', vars: { code } })
+  },
+  onOtpSendSms: async (phone, code) => {
+    await reach.send({ provider: 'sms', to: phone, template: 'otp_sms', vars: { code } })
+  },
+})
+```
+
 ### 错误处理
 
 ```typescript
