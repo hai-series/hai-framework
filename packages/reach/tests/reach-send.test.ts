@@ -205,4 +205,59 @@ describe.sequential('reach.send (DND)', () => {
 
     expect(result.success).toBe(true)
   })
+
+  it('dnd discard 策略应返回 DND_BLOCKED', async () => {
+    // 设置一个全天的 DND（00:00 - 23:59），确保当前时间在 DND 内
+    await reach.init({
+      providers: [{ name: 'email', type: 'console' }],
+      dnd: { enabled: true, strategy: 'discard', start: '00:00', end: '23:59' },
+    })
+
+    const result = await reach.send({
+      provider: 'email',
+      to: 'user@example.com',
+      body: 'test',
+    })
+
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error.code).toBe(ReachErrorCode.DND_BLOCKED)
+    }
+  })
+
+  it('dnd delay 策略应返回 deferred 结果', async () => {
+    await reach.init({
+      providers: [{ name: 'email', type: 'console' }],
+      dnd: { enabled: true, strategy: 'delay', start: '00:00', end: '23:59' },
+    })
+
+    const result = await reach.send({
+      provider: 'email',
+      to: 'user@example.com',
+      body: 'deferred test',
+    })
+
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.deferred).toBe(true)
+    }
+  })
+
+  it('dnd delay 策略下不存在的 provider 仍应返回 PROVIDER_NOT_FOUND', async () => {
+    await reach.init({
+      providers: [{ name: 'email', type: 'console' }],
+      dnd: { enabled: true, strategy: 'delay', start: '00:00', end: '23:59' },
+    })
+
+    const result = await reach.send({
+      provider: 'nonexistent',
+      to: 'user@example.com',
+      body: 'test',
+    })
+
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error.code).toBe(ReachErrorCode.PROVIDER_NOT_FOUND)
+    }
+  })
 })

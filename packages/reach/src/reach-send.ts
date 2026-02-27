@@ -5,8 +5,9 @@
  *
  * 本文件封装触达模块的发送逻辑，包括：
  * - 消息预处理（模板渲染 + Provider 路由推导）
- * - DND（免打扰）时间段检查
- * - 消息发送与记录保存
+ * - DND（免打扰）时间段检查与策略处理（discard / delay）
+ * - 发送记录持久化（状态：sent / pending）
+ * - DND 恢复定时任务（flush pending 消息）
  *
  * @module reach-send
  * =============================================================================
@@ -28,6 +29,70 @@ import { ReachErrorCode } from './reach-config.js'
 import { reachM } from './reach-i18n.js'
 
 const logger = core.logger.child({ module: 'reach', scope: 'send' })
+
+// =============================================================================
+// 发送日志状态
+// =============================================================================
+
+/** 发送日志状态 */
+export type SendLogStatus = 'sent' | 'pending'
+
+// =============================================================================
+// DB 动态引用（可选依赖）
+// =============================================================================
+
+/** db 模块的最小接口（避免硬依赖） */
+interface DbLike {
+  isInitialized: boolean
+  ddl: { createTable: (name: string, columns: Record<string, unknown>) => Promise<unknown> }
+  sql: {
+    execute: (sql: string, params?: unknown[]) => Promise<{ success: boolean, data?: { changes: number } }>
+    query: <T>(sql: string, params?: unknown[]) => Promise<{ success: boolean, data?: T[] }>
+  }
+}
+
+/** 表是否已创建标记 */
+let tableCreated = false
+
+/**
+ * 动态获取 db 实例（可选依赖，不可用时返回 null）
+ */
+async function getDb(): Promise<DbLike | null> {
+  try {
+    const dbModuleName = '@h-ai/db'
+    const mod = await (import(/* @vite-ignore */ dbModuleName) as Promise<{ db: DbLike }>)
+    if (!mod.db.isInitialized) {
+      return null
+    }
+    return mod.db
+  }
+  catch {
+    return null
+  }
+}
+
+/**
+ * 确保 reach_send_log 表存在
+ */
+async function ensureTable(db: DbLike): Promise<void> {
+  if (tableCreated) {
+    return
+  }
+  await db.ddl.createTable('reach_send_log', {
+    id: { type: 'INTEGER', primaryKey: true, autoIncrement: true },
+    provider: { type: 'TEXT', notNull: true },
+    to_addr: { type: 'TEXT', notNull: true },
+    subject: { type: 'TEXT' },
+    body: { type: 'TEXT' },
+    template: { type: 'TEXT' },
+    vars_json: { type: 'TEXT' },
+    extra_json: { type: 'TEXT' },
+    status: { type: 'TEXT', notNull: true },
+    message_id: { type: 'TEXT' },
+    created_at: { type: 'TIMESTAMP', notNull: true },
+  })
+  tableCreated = true
+}
 
 // =============================================================================
 // DND（免打扰）检查
@@ -67,12 +132,29 @@ export function isDndBlocked(dnd: DndConfig | undefined, now: Date = new Date())
   }
 
   if (startMin < endMin) {
-    // 同一天：如 08:00 → 22:00
     return currentMin >= startMin && currentMin < endMin
   }
 
-  // 跨午夜：如 22:00 → 08:00
   return currentMin >= startMin || currentMin < endMin
+}
+
+/**
+ * 计算距离 DND 结束还有多少毫秒
+ *
+ * @param dnd - DND 配置
+ * @param now - 当前时间
+ * @returns 毫秒数
+ */
+export function msUntilDndEnd(dnd: DndConfig, now: Date = new Date()): number {
+  const endMin = parseTimeToMinutes(dnd.end)
+  const currentMin = now.getHours() * 60 + now.getMinutes()
+  const currentSec = now.getSeconds()
+
+  let diffMin = endMin - currentMin
+  if (diffMin <= 0) {
+    diffMin += 24 * 60
+  }
+  return diffMin * 60 * 1000 - currentSec * 1000
 }
 
 // =============================================================================
@@ -82,10 +164,6 @@ export function isDndBlocked(dnd: DndConfig | undefined, now: Date = new Date())
 /**
  * 预处理消息：如果指定了模板，渲染模板并填充 subject/body，
  * 同时从模板中推导 Provider 名称。
- *
- * @param message - 原始消息
- * @param templateRegistry - 模板注册表
- * @returns 预处理后的消息，或错误
  */
 export function preprocessMessage(
   message: ReachMessage,
@@ -100,7 +178,6 @@ export function preprocessMessage(
     return rendered
   }
 
-  // 从模板获取绑定的 Provider（用于路由推导）
   const template = templateRegistry.get(message.template)
 
   const processed: ReachMessage = {
@@ -113,59 +190,182 @@ export function preprocessMessage(
 }
 
 // =============================================================================
-// 发送记录保存
+// 发送记录持久化
 // =============================================================================
 
 /**
- * 保存发送记录到数据库（如果 db 模块可用）
- *
- * @param message - 发送的消息
- * @param result - 发送结果
- * @param provider - Provider 名称
+ * 保存发送记录到数据库
  */
 async function saveSendRecord(
   message: ReachMessage,
-  result: SendResult,
+  status: SendLogStatus,
   provider: string,
+  messageId?: string,
 ): Promise<void> {
   try {
-    // 使用变量阻止 Vite 静态分析，避免 db 未安装时构建失败
-    const dbModuleName = '@h-ai/db'
-    const mod = await (import(/* @vite-ignore */ dbModuleName) as Promise<{ db: { isInitialized: boolean, ddl: { createTable: (name: string, columns: Record<string, unknown>) => Promise<unknown> }, sql: { execute: (sql: string, params: unknown[]) => Promise<unknown> } } }>)
-    const { db } = mod
-    if (!db.isInitialized) {
+    const db = await getDb()
+    if (!db) {
       return
     }
-
-    await db.ddl.createTable('reach_send_log', {
-      id: { type: 'INTEGER', primaryKey: true, autoIncrement: true },
-      provider: { type: 'TEXT', notNull: true },
-      to_addr: { type: 'TEXT', notNull: true },
-      subject: { type: 'TEXT' },
-      body: { type: 'TEXT' },
-      template: { type: 'TEXT' },
-      success: { type: 'BOOLEAN', notNull: true },
-      message_id: { type: 'TEXT' },
-      created_at: { type: 'TIMESTAMP', notNull: true },
-    })
-
+    await ensureTable(db)
     await db.sql.execute(
-      `INSERT INTO reach_send_log (provider, to_addr, subject, body, template, success, message_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO reach_send_log (provider, to_addr, subject, body, template, vars_json, extra_json, status, message_id, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         provider,
         message.to,
         message.subject ?? null,
         message.body ?? null,
         message.template ?? null,
-        result.success ? 1 : 0,
-        result.messageId ?? null,
+        message.vars ? JSON.stringify(message.vars) : null,
+        message.extra ? JSON.stringify(message.extra) : null,
+        status,
+        messageId ?? null,
         Date.now(),
       ],
     )
   }
   catch {
-    // db 模块未安装或不可用时静默忽略
     logger.debug('Send record not saved (db module unavailable)')
+  }
+}
+
+/**
+ * 将 pending 记录标记为 sent
+ */
+async function markRecordSent(id: number, messageId?: string): Promise<void> {
+  try {
+    const db = await getDb()
+    if (!db) {
+      return
+    }
+    await db.sql.execute(
+      `UPDATE reach_send_log SET status = ?, message_id = ? WHERE id = ?`,
+      ['sent', messageId ?? null, id],
+    )
+  }
+  catch {
+    logger.debug('Failed to update send record status')
+  }
+}
+
+// =============================================================================
+// DND 恢复定时任务
+// =============================================================================
+
+/** 定时器引用 */
+let dndTimer: ReturnType<typeof setTimeout> | null = null
+
+/**
+ * 启动 DND 恢复定时器
+ *
+ * 在 DND 结束时自动获取所有 pending 状态记录并逐条发送。
+ */
+export function startDndScheduler(
+  dndConfig: DndConfig,
+  providers: Map<string, ReachProvider>,
+): void {
+  stopDndScheduler()
+
+  if (!dndConfig.enabled || dndConfig.strategy !== 'delay') {
+    return
+  }
+
+  // 如果当前不在 DND 时段，不需要启动定时器
+  if (!isDndBlocked(dndConfig)) {
+    // 但仍然尝试 flush 一次（可能上次 DND 结束后有残留 pending）
+    flushPendingMessages(providers).catch(() => {})
+    return
+  }
+
+  const delayMs = msUntilDndEnd(dndConfig)
+  logger.info('DND scheduler started', { delayMs, dndEnd: dndConfig.end })
+
+  dndTimer = setTimeout(() => {
+    logger.info('DND period ended, flushing pending messages')
+    flushPendingMessages(providers).catch((error) => {
+      logger.error('Failed to flush pending messages', { error })
+    })
+  }, delayMs)
+}
+
+/**
+ * 停止 DND 恢复定时器
+ */
+export function stopDndScheduler(): void {
+  if (dndTimer !== null) {
+    clearTimeout(dndTimer)
+    dndTimer = null
+  }
+}
+
+/**
+ * 重置内部表创建标记（close 时调用）
+ */
+export function resetSendState(): void {
+  tableCreated = false
+  stopDndScheduler()
+}
+
+/** pending 记录行结构 */
+interface PendingRecord {
+  id: number
+  provider: string
+  to_addr: string
+  subject: string | null
+  body: string | null
+  template: string | null
+  vars_json: string | null
+  extra_json: string | null
+}
+
+/**
+ * 从数据库获取所有 pending 记录并逐条发送
+ */
+async function flushPendingMessages(
+  providers: Map<string, ReachProvider>,
+): Promise<void> {
+  const db = await getDb()
+  if (!db) {
+    return
+  }
+
+  await ensureTable(db)
+  const result = await db.sql.query<PendingRecord>(
+    `SELECT id, provider, to_addr, subject, body, template, vars_json, extra_json FROM reach_send_log WHERE status = ? ORDER BY created_at ASC`,
+    ['pending'],
+  )
+
+  if (!result.success || !result.data?.length) {
+    return
+  }
+
+  logger.info('Flushing pending messages', { count: result.data.length })
+
+  for (const row of result.data) {
+    const provider = providers.get(row.provider)
+    if (!provider) {
+      logger.warn('Provider not found for pending message, skipping', { provider: row.provider, id: row.id })
+      continue
+    }
+
+    const message: ReachMessage = {
+      provider: row.provider,
+      to: row.to_addr,
+      subject: row.subject ?? undefined,
+      body: row.body ?? undefined,
+      template: row.template ?? undefined,
+      vars: row.vars_json ? JSON.parse(row.vars_json) as Record<string, string> : undefined,
+      extra: row.extra_json ? JSON.parse(row.extra_json) as Record<string, unknown> : undefined,
+    }
+
+    const sendResult = await provider.send(message)
+    if (sendResult.success) {
+      await markRecordSent(row.id, sendResult.data.messageId)
+      logger.info('Pending message sent', { id: row.id, to: row.to_addr, provider: row.provider })
+    }
+    else {
+      logger.warn('Pending message send failed', { id: row.id, to: row.to_addr, error: sendResult.error.code })
+    }
   }
 }
 
@@ -177,19 +377,14 @@ async function saveSendRecord(
  * 执行消息发送
  *
  * 包含完整的发送流程：
- * 1. 检查初始化状态
- * 2. 校验接收方
- * 3. 预处理消息（模板渲染）
- * 4. 检查 DND 免打扰
- * 5. 路由到目标 Provider
- * 6. 发送消息
- * 7. 保存发送记录
- *
- * @param message - 触达消息
- * @param providers - 已注册的 Provider 实例
- * @param templateRegistry - 模板注册表
- * @param dndConfig - DND 配置
- * @returns 发送结果
+ * 1. 校验接收方
+ * 2. 预处理消息（模板渲染）
+ * 3. 检查 DND 免打扰：
+ *    - discard 策略：返回 DND_BLOCKED 错误
+ *    - delay 策略：暂存到 DB（pending），返回 deferred 结果
+ * 4. 路由到目标 Provider
+ * 5. 发送消息
+ * 6. 保存发送记录（sent 状态）
  */
 export async function executeSend(
   message: ReachMessage,
@@ -209,15 +404,7 @@ export async function executeSend(
     return preprocessed
   }
 
-  // DND 检查
-  if (isDndBlocked(dndConfig)) {
-    logger.info('Message blocked by DND', { provider: preprocessed.data.provider, to: message.to })
-    return err({
-      code: ReachErrorCode.DND_BLOCKED,
-      message: reachM('reach_dndBlocked'),
-    })
-  }
-
+  // 校验 Provider 存在性（在 DND 检查前，确保 delay 也能正确路由）
   const providerName = preprocessed.data.provider
   if (!providerName) {
     return err({
@@ -226,13 +413,33 @@ export async function executeSend(
     })
   }
 
-  const provider = providers.get(providerName)
-  if (!provider) {
+  if (!providers.has(providerName)) {
     return err({
       code: ReachErrorCode.PROVIDER_NOT_FOUND,
       message: reachM('reach_providerNotFound', { params: { provider: providerName } }),
     })
   }
+
+  // DND 检查
+  if (isDndBlocked(dndConfig)) {
+    const strategy = dndConfig?.strategy ?? 'discard'
+
+    if (strategy === 'delay') {
+      // delay 策略：暂存消息到 DB
+      logger.info('Message deferred by DND (delay strategy)', { provider: providerName, to: message.to })
+      saveSendRecord(preprocessed.data, 'pending', providerName).catch(() => {})
+      return ok({ success: true, deferred: true })
+    }
+
+    // discard 策略：直接拒绝
+    logger.info('Message blocked by DND (discard strategy)', { provider: providerName, to: message.to })
+    return err({
+      code: ReachErrorCode.DND_BLOCKED,
+      message: reachM('reach_dndBlocked'),
+    })
+  }
+
+  const provider = providers.get(providerName)!
 
   logger.debug('Sending message', {
     provider: providerName,
@@ -247,12 +454,11 @@ export async function executeSend(
       to: message.to,
       error: result.error.code,
     })
+    return result
   }
 
-  // 异步保存发送记录（不阻塞返回）
-  if (result.success) {
-    saveSendRecord(message, result.data, providerName).catch(() => {})
-  }
+  // 异步保存发送记录（sent 状态）
+  saveSendRecord(preprocessed.data, 'sent', providerName, result.data.messageId).catch(() => {})
 
   return result
 }

@@ -47,8 +47,10 @@ export const ReachErrorCode = {
   INVALID_RECIPIENT: 8003,
   /** Provider 未找到 */
   PROVIDER_NOT_FOUND: 8004,
-  /** 免打扰时段拦截 */
+  /** 免打扰时段拦截（discard 策略） */
   DND_BLOCKED: 8005,
+  /** 免打扰时段延时（delay 策略，消息已暂存） */
+  DND_DEFERRED: 8006,
   /** 触达模块未初始化 */
   NOT_INITIALIZED: 8010,
   /** 不支持的 Provider 类型 */
@@ -197,13 +199,17 @@ export type ApiProviderConfig = z.infer<typeof ApiProviderConfigSchema>
 /**
  * 免打扰时间段配置
  *
- * 在指定的时间段内，消息不会被发送，而是返回 DND_BLOCKED 错误。
+ * 在指定的时间段内，根据策略处理消息：
+ * - `discard`：直接丢弃，返回 DND_BLOCKED 错误
+ * - `delay`：暂存到数据库（状态为 pending），DND 结束后由定时任务集中发送
+ *
  * 时间使用 HH:mm 格式（24 小时制），支持跨午夜（如 22:00-08:00）。
  *
  * @example
  * ```ts
  * {
  *   enabled: true,
+ *   strategy: 'delay',
  *   start: '22:00',
  *   end: '08:00'
  * }
@@ -212,6 +218,8 @@ export type ApiProviderConfig = z.infer<typeof ApiProviderConfigSchema>
 export const DndConfigSchema = z.object({
   /** 是否启用免打扰（默认 false） */
   enabled: z.boolean().default(false),
+  /** 免打扰策略：discard 丢弃 / delay 延时发送（默认 discard） */
+  strategy: z.enum(['discard', 'delay']).default('discard'),
   /** 免打扰开始时间（HH:mm 格式） */
   start: z.string().regex(/^\d{2}:\d{2}$/).default('00:00'),
   /** 免打扰结束时间（HH:mm 格式） */

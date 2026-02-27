@@ -30,7 +30,7 @@ import { createConsoleProvider } from './providers/reach-provider-console.js'
 import { createSmtpProvider } from './providers/reach-provider-smtp.js'
 import { ReachConfigSchema, ReachErrorCode } from './reach-config.js'
 import { reachM } from './reach-i18n.js'
-import { executeSend } from './reach-send.js'
+import { executeSend, resetSendState, startDndScheduler } from './reach-send.js'
 import { createTemplateRegistry } from './reach-template.js'
 
 const logger = core.logger.child({ module: 'reach', scope: 'main' })
@@ -129,6 +129,11 @@ export const reach: ReachFunctions = {
         templateRegistry.registerMany(parsed.templates)
       }
 
+      // 启动 DND 恢复定时器
+      if (dndConfig) {
+        startDndScheduler(dndConfig, providers)
+      }
+
       const providerNames = parsed.providers.map(p => p.name)
       logger.info('Reach module initialized', { providers: providerNames })
       return ok(undefined)
@@ -169,6 +174,7 @@ export const reach: ReachFunctions = {
     if (providers.size === 0) {
       currentConfig = null
       dndConfig = undefined
+      resetSendState()
       logger.info('Reach module already closed, skipping')
       return
     }
@@ -190,6 +196,7 @@ export const reach: ReachFunctions = {
       currentConfig = null
       dndConfig = undefined
       templateRegistry = createTemplateRegistry()
+      resetSendState()
     }
   },
 }

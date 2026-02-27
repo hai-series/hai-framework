@@ -91,6 +91,7 @@ describe('reach config', () => {
     expect(ReachErrorCode.TEMPLATE_NOT_FOUND).toBe(8001)
     expect(ReachErrorCode.PROVIDER_NOT_FOUND).toBe(8004)
     expect(ReachErrorCode.DND_BLOCKED).toBe(8005)
+    expect(ReachErrorCode.DND_DEFERRED).toBe(8006)
     expect(ReachErrorCode.CONFIG_ERROR).toBe(8012)
   })
 
@@ -135,6 +136,7 @@ describe('reach config', () => {
     expect(result.success).toBe(true)
     if (result.success) {
       expect(result.data.enabled).toBe(true)
+      expect(result.data.strategy).toBe('discard')
       expect(result.data.start).toBe('22:00')
       expect(result.data.end).toBe('08:00')
     }
@@ -145,6 +147,7 @@ describe('reach config', () => {
     expect(result.success).toBe(true)
     if (result.success) {
       expect(result.data.enabled).toBe(false)
+      expect(result.data.strategy).toBe('discard')
     }
   })
 
@@ -164,6 +167,19 @@ describe('reach config', () => {
     expect(result.success).toBe(true)
     if (result.success) {
       expect(result.data.dnd?.enabled).toBe(true)
+    }
+  })
+
+  it('dnd strategy delay 应正确解析', () => {
+    const result = DndConfigSchema.safeParse({
+      enabled: true,
+      strategy: 'delay',
+      start: '22:00',
+      end: '08:00',
+    })
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.strategy).toBe('delay')
     }
   })
 })
