@@ -17,7 +17,7 @@ import process from 'node:process'
 import { core } from '@h-ai/core'
 import { cac } from 'cac'
 import chalk from 'chalk'
-import { addModule, createProject, generate, initProject } from './commands/index.js'
+import { addModule, createProject, deployCommand, generate, initProject } from './commands/index.js'
 
 // CLI 版本
 const VERSION = '0.0.1'
@@ -113,6 +113,28 @@ cli
         name: name ?? '',
         output: options.output as string,
         force: options.force as boolean,
+        verbose: options.verbose as boolean,
+        cwd: options.cwd as string,
+      })
+    }
+    catch {
+      process.exit(1)
+    }
+  })
+
+// 部署命令
+cli
+  .command('deploy [appDir]', '部署应用到云平台')
+  .option('--project-name <name>', '项目名称（默认从 package.json 读取）')
+  .option('--skip-provision', '跳过基础设施开通')
+  .option('--skip-build', '跳过构建')
+  .action(async (appDir: string | undefined, options: Record<string, unknown>) => {
+    try {
+      await deployCommand({
+        appDir,
+        projectName: options.projectName as string,
+        skipProvision: options.skipProvision as boolean,
+        skipBuild: options.skipBuild as boolean,
         verbose: options.verbose as boolean,
         cwd: options.cwd as string,
       })

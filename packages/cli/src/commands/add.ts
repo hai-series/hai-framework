@@ -39,6 +39,7 @@ const MODULE_MAP: Record<string, { packages: string[], deps?: string[], configKe
   crypto: { packages: ['@h-ai/crypto'], description: '加密模块' },
   kit: { packages: ['@h-ai/kit'], description: 'SvelteKit 集成工具' },
   ui: { packages: ['@h-ai/ui'], description: 'UI 组件库' },
+  deploy: { packages: ['@h-ai/deploy'], configKey: 'deploy', description: '自动化部署' },
 }
 
 /**

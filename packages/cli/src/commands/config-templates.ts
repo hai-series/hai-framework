@@ -29,6 +29,8 @@ export function generateConfigFile(moduleKey: string, configs?: ModuleConfigs): 
       return generateStorageConfig(configs?.storage)
     case 'ai':
       return generateAiConfig(configs?.ai)
+    case 'deploy':
+      return generateDeployConfig()
     default:
       return `# ${moduleKey} 配置\n`
   }
@@ -497,4 +499,48 @@ HAI_AI_API_KEY=
 `)
 
   return sections.join('\n')
+}
+
+function generateDeployConfig(): string {
+  return `# =============================================================================
+# 部署配置 (@h-ai/deploy)
+# =============================================================================
+# 部署平台凭证通过 ~/.hai/credentials.yml 管理
+# 环境变量引用格式: \${VAR_NAME:default_value}
+
+# 部署平台
+provider:
+  type: vercel
+  token: \${HAI_DEPLOY_VERCEL_TOKEN}
+
+# 基础设施服务（按需开启）
+services:
+  # PostgreSQL 数据库 (Neon)
+  # db:
+  #   provisioner: neon
+  #   apiKey: \${HAI_DEPLOY_NEON_API_KEY}
+
+  # Redis 缓存 (Upstash)
+  # cache:
+  #   provisioner: upstash
+  #   email: \${HAI_DEPLOY_UPSTASH_EMAIL}
+  #   apiKey: \${HAI_DEPLOY_UPSTASH_API_KEY}
+
+  # S3 存储 (Cloudflare R2)
+  # storage:
+  #   provisioner: cloudflare-r2
+  #   accountId: \${HAI_DEPLOY_CF_ACCOUNT_ID}
+  #   apiToken: \${HAI_DEPLOY_CF_API_TOKEN}
+
+  # 邮件 (Resend)
+  # email:
+  #   provisioner: resend
+  #   apiKey: \${HAI_DEPLOY_RESEND_API_KEY}
+
+  # 短信 (阿里云)
+  # sms:
+  #   provisioner: aliyun
+  #   accessKeyId: \${HAI_DEPLOY_ALIYUN_ACCESS_KEY_ID}
+  #   accessKeySecret: \${HAI_DEPLOY_ALIYUN_ACCESS_KEY_SECRET}
+`
 }

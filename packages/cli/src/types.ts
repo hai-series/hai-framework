@@ -16,6 +16,7 @@ export type FeatureId
     | 'crypto' // 加密模块
     | 'kit' // SvelteKit 集成
     | 'ui' // UI 组件库
+    | 'deploy' // 自动化部署
     // 兼容性别名
     | 'auth' // 认证授权 → iam
     | 'mcp' // MCP 协议 → ai

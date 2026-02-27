@@ -1,0 +1,21 @@
+{
+  "deploy_notInitialized": "Deploy 模块尚未初始化，请先调用 deploy.init()",
+  "deploy_initFailed": "Deploy 模块初始化失败：{error}",
+  "deploy_unsupportedProviderType": "不支持的部署平台类型：{type}",
+  "deploy_unsupportedProvisionerType": "不支持的服务 Provisioner 类型：{type}",
+  "deploy_configTokenRequired": "部署平台 Token 不能为空",
+  "deploy_authRequired": "请先完成认证",
+  "deploy_authFailed": "认证失败：{error}",
+  "deploy_projectCreateFailed": "项目创建失败：{error}",
+  "deploy_buildFailed": "应用构建失败：{error}",
+  "deploy_uploadFailed": "构建产物上传失败：{error}",
+  "deploy_deployFailed": "部署失败：{error}",
+  "deploy_provisionFailed": "基础设施开通失败：{service} - {error}",
+  "deploy_adapterMissing": "未检测到目标平台 adapter，请安装 {adapter}",
+  "deploy_scanFailed": "应用扫描失败：{error}",
+  "deploy_envVarFailed": "环境变量设置失败：{error}",
+  "deploy_credentialError": "凭证读写失败：{error}",
+  "deploy_credentialSaved": "凭证已保存",
+  "deploy_credentialLoaded": "凭证已加载",
+  "deploy_configError": "部署配置错误：{error}"
+}
