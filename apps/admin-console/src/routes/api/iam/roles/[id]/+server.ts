@@ -6,10 +6,10 @@
 
 import type { RequestHandler } from '@sveltejs/kit'
 import * as m from '$lib/paraglide/messages.js'
+import { IdParamSchema } from '$lib/server/schemas/index.js'
 import { audit, permissionService, roleService } from '$lib/server/services/index.js'
 import { core } from '@h-ai/core'
 import { kit } from '@h-ai/kit'
-import { json } from '@sveltejs/kit'
 
 /**
  * GET /api/iam/roles/[id] - 获取单个角色
@@ -21,16 +21,20 @@ export const GET: RequestHandler = async ({ params, locals }) => {
   if (denied)
     return denied
 
+  const { valid: paramsValid, data: validatedParams } = kit.validate.params(params, IdParamSchema)
+  if (!paramsValid)
+    return kit.response.badRequest('Invalid role ID')
+
   try {
-    const role = await roleService.getById(params.id!)
+    const role = await roleService.getById(validatedParams!.id)
     if (!role) {
-      return json({ success: false, error: m.api_iam_roles_not_found() }, { status: 404 })
+      return kit.response.notFound(m.api_iam_roles_not_found())
     }
-    return json({ success: true, data: role })
+    return kit.response.ok(role)
   }
   catch (error) {
     core.logger.error('Failed to get role:', { error })
-    return json({ success: false, error: m.api_iam_roles_get_failed() }, { status: 500 })
+    return kit.response.internalError(m.api_iam_roles_get_failed())
   }
 }
 
@@ -45,7 +49,11 @@ export const PUT: RequestHandler = async ({ params, request, locals, getClientAd
     return denied
 
   try {
-    const roleId = params.id!
+    const { valid: paramsValid, data: validatedParams } = kit.validate.params(params, IdParamSchema)
+    if (!paramsValid)
+      return kit.response.badRequest('Invalid role ID')
+
+    const roleId = validatedParams!.id
     const body = await request.json()
     const { name, description, permissions } = body as {
       name?: string
@@ -56,7 +64,7 @@ export const PUT: RequestHandler = async ({ params, request, locals, getClientAd
     // 检查角色是否存在
     const existing = await roleService.getById(roleId)
     if (!existing) {
-      return json({ success: false, error: m.api_iam_roles_not_found() }, { status: 404 })
+      return kit.response.notFound(m.api_iam_roles_not_found())
     }
 
     // 转换权限名称为 ID
@@ -91,12 +99,12 @@ export const PUT: RequestHandler = async ({ params, request, locals, getClientAd
       ua,
     )
 
-    return json({ success: true, data: role })
+    return kit.response.ok(role)
   }
   catch (error) {
     core.logger.error('Failed to update role:', { error })
     const message = error instanceof Error ? error.message : m.api_iam_roles_update_failed()
-    return json({ success: false, error: message }, { status: 500 })
+    return kit.response.internalError(message)
   }
 }
 
@@ -111,12 +119,16 @@ export const DELETE: RequestHandler = async ({ params, locals, request, getClien
     return denied
 
   try {
-    const roleId = params.id!
+    const { valid: paramsValid, data: validatedParams } = kit.validate.params(params, IdParamSchema)
+    if (!paramsValid)
+      return kit.response.badRequest('Invalid role ID')
+
+    const roleId = validatedParams!.id
 
     // 检查角色是否存在
     const existing = await roleService.getById(roleId)
     if (!existing) {
-      return json({ success: false, error: m.api_iam_roles_not_found() }, { status: 404 })
+      return kit.response.notFound(m.api_iam_roles_not_found())
     }
 
     // 删除角色
@@ -135,11 +147,11 @@ export const DELETE: RequestHandler = async ({ params, locals, request, getClien
       ua,
     )
 
-    return json({ success: true })
+    return kit.response.ok(null)
   }
   catch (error) {
     core.logger.error('Failed to delete role:', { error })
     const message = error instanceof Error ? error.message : m.api_iam_roles_delete_failed()
-    return json({ success: false, error: message }, { status: 500 })
+    return kit.response.internalError(message)
   }
 }

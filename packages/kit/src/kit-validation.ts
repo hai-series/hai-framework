@@ -13,20 +13,38 @@ import type { FormError, FormValidationResult } from './kit-types.js'
 // 内部工具
 // =============================================================================
 
-/** Zod 错误 issue 类型 */
+/**
+ * Zod 错误 issue 类型
+ *
+ * 用于从 Zod v3/v4 SafeParseError 中统一提取错误信息。
+ */
 interface ZodIssue {
   path: (string | number)[]
   message: string
 }
 
-/** 从 Zod SafeParseError 提取 issues 列表 */
+/**
+ * 从 Zod SafeParseError 提取 issues 列表
+ *
+ * 兼容 Zod v3（`errors`）和 v4（`issues`）。
+ *
+ * @param error - Zod 校验错误对象
+ * @returns 平坦化的 issue 列表
+ */
 function extractZodIssues(error: z.ZodError): ZodIssue[] {
   // Zod v4 使用 issues，兼容旧版 errors
   const zodError = error as unknown as { issues?: ZodIssue[], errors?: ZodIssue[] }
   return zodError.issues ?? zodError.errors ?? []
 }
 
-/** 将 Zod issues 转换为 FormError 列表 */
+/**
+ * 将 Zod issues 转换为 `FormError` 列表
+ *
+ * 字段路径用点号拼接（如 `'address.city'`）。
+ *
+ * @param issues - Zod issue 数组
+ * @returns FormError 数组
+ */
 function zodIssuesToFormErrors(issues: ZodIssue[]): FormError[] {
   return issues.map(issue => ({
     field: issue.path.join('.'),
@@ -34,7 +52,12 @@ function zodIssuesToFormErrors(issues: ZodIssue[]): FormError[] {
   }))
 }
 
-/** 创建验证失败结果 */
+/**
+ * 创建验证失败结果
+ *
+ * @param error - Zod 校验错误
+ * @returns `{ valid: false, errors: FormError[] }`
+ */
 function createValidationResult<T>(error: z.ZodError): FormValidationResult<T> {
   return {
     valid: false,
@@ -48,6 +71,19 @@ function createValidationResult<T>(error: z.ZodError): FormValidationResult<T> {
 
 /**
  * 从 Request 解析并验证表单数据
+ *
+ * 支持 `application/json` 和 `multipart/form-data` / `application/x-www-form-urlencoded`。
+ * 其他 Content-Type 返回全局错误 `{ field: '_', message: 'Unsupported content type' }`。
+ *
+ * @param request - SvelteKit 请求对象
+ * @param schema - Zod Schema
+ * @returns 验证结果；成功时 `valid: true` 且 `data` 类型安全
+ *
+ * @example
+ * ```ts
+ * const { valid, data, errors } = await kit.validate.form(event.request, CreateUserSchema)
+ * if (!valid) return kit.response.validationError(errors)
+ * ```
  */
 export async function validateForm<T extends z.ZodType>(
   request: Request,
@@ -89,7 +125,19 @@ export async function validateForm<T extends z.ZodType>(
 }
 
 /**
- * 从 URL 参数验证查询参数
+ * 从 URL 查询参数验证
+ *
+ * 将 `url.searchParams` 转为普通对象后交给 Zod 校验。
+ * 适用于 GET 请求的分页、搜索等场景。
+ *
+ * @param url - 请求 URL 对象
+ * @param schema - Zod Schema
+ * @returns 验证结果
+ *
+ * @example
+ * ```ts
+ * const { valid, data } = kit.validate.query(event.url, PaginationSchema)
+ * ```
  */
 export function validateQuery<T extends z.ZodType>(
   url: URL,
@@ -106,7 +154,18 @@ export function validateQuery<T extends z.ZodType>(
 }
 
 /**
- * 从路径参数验证
+ * 验证路径参数
+ *
+ * 将 SvelteKit 路由 `params` 交给 Zod 校验，适用于动态路由段的类型安全校验。
+ *
+ * @param params - SvelteKit 路由参数（`event.params`）
+ * @param schema - Zod Schema
+ * @returns 验证结果
+ *
+ * @example
+ * ```ts
+ * const { valid, data } = kit.validate.params(event.params, z.object({ id: z.string().uuid() }))
+ * ```
  */
 export function validateParams<T extends z.ZodType>(
   params: Record<string, string>,

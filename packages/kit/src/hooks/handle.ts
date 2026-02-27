@@ -11,7 +11,12 @@ import type { GuardConfig, GuardResult, HookConfig, Middleware, MiddlewareContex
 import { core } from '@h-ai/core'
 
 /**
- * 生成唯一 ID
+ * 生成唯一请求级 ID
+ *
+ * 由时间戳（base36）+ 6 位随机串拼接，用于日志追踪与响应头 `X-Request-Id`。
+ *
+ * @param prefix - ID 前缀，如 `'req'`
+ * @returns 格式为 `{prefix}_{timestamp}{random}` 的唯一 ID
  */
 function generateId(prefix: string): string {
   const timestamp = Date.now().toString(36)
@@ -22,7 +27,28 @@ function generateId(prefix: string): string {
 /**
  * 创建 hai handle hook
  *
- * @param config - hook 配置
+ * 整合会话解析、路由守卫、中间件链与统一错误处理的 SvelteKit handle hook 工厂。
+ *
+ * 执行顺序：
+ * 1. 生成 `requestId` 并写入 `event.locals`
+ * 2. 根据 Cookie 调用 `validateSession` 解析会话
+ * 3. 按顺序执行 `guards`（路径过滤 → 权限判断）
+ * 4. 构建 `MiddlewareContext` 并执行中间件链
+ * 5. 调用 `resolve(event)` 获取业务响应
+ * 6. 附加 `X-Request-Id` 响应头
+ *
+ * @param config - Hook 配置（均有合理默认值，可零配置使用）
+ * @returns SvelteKit Handle 函数
+ *
+ * @example
+ * ```ts
+ * // src/hooks.server.ts
+ * export const handle = kit.hook.create({
+ *   validateSession: token => iam.session.validate(token),
+ *   guards: [{ guard: kit.guard.auth(), paths: ['/api/*'] }],
+ *   middleware: [kit.middleware.logging()],
+ * })
+ * ```
  */
 export function createHandle(config: HookConfig = {}): Handle {
   const {
@@ -42,7 +68,7 @@ export function createHandle(config: HookConfig = {}): Handle {
       ; (event.locals as Record<string, unknown>).requestId = requestId
 
     if (logging) {
-      core.logger.info('Request started', {
+      core.logger.trace('Request started', {
         requestId,
         method: event.request.method,
         path: event.url.pathname,
@@ -157,7 +183,15 @@ export function createHandle(config: HookConfig = {}): Handle {
 }
 
 /**
- * 执行守卫
+ * 执行单个守卫（含路径过滤逻辑）
+ *
+ * 先检查 `exclude` 排除列表，再检查 `paths` 白名单。
+ * 若路径不在守卫保护范围内，直接返回 `{ allowed: true }`。
+ *
+ * @param config - 守卫配置（含路径过滤）
+ * @param event - SvelteKit 请求事件
+ * @param session - 已解析的会话信息（可能为空）
+ * @returns 守卫判定结果
  */
 async function executeGuard(
   config: GuardConfig,
@@ -181,7 +215,15 @@ async function executeGuard(
 }
 
 /**
- * 执行中间件链
+ * 递归执行中间件链
+ *
+ * 采用"洋葱模型"：每个中间件调用 `next()` 交给下一层，
+ * 链末端调用 `final` 取得业务 Response。
+ *
+ * @param middleware - 待执行的中间件数组
+ * @param context - 中间件共享上下文
+ * @param final - 链末端的 resolve 回调
+ * @returns 最终 Response
  */
 async function executeMiddlewareChain(
   middleware: Middleware[],
@@ -198,7 +240,16 @@ async function executeMiddlewareChain(
 }
 
 /**
- * 简单路径匹配
+ * 简单路径通配符匹配
+ *
+ * 支持三种模式：
+ * - 精确匹配：`/api/users` 仅匹配 `/api/users`
+ * - 单层通配：`/api/*` 匹配 `/api/` 开头的所有路径
+ * - 递归通配：`/api/**` 同上（语义等价）
+ *
+ * @param pathname - 当前请求路径
+ * @param pattern - 匹配模式
+ * @returns 是否匹配
  */
 function matchPath(pathname: string, pattern: string): boolean {
   // 支持简单的通配符
@@ -216,7 +267,20 @@ function matchPath(pathname: string, pattern: string): boolean {
 }
 
 /**
- * 组合多个 handle
+ * 组合多个 SvelteKit handle 为单一 handle
+ *
+ * 从右到左嵌套：`sequence(a, b, c)` 执行顺序为 a → b → c → resolve。
+ *
+ * @param handles - 待组合的 handle 函数列表
+ * @returns 组合后的单一 Handle 函数
+ *
+ * @example
+ * ```ts
+ * // src/hooks.server.ts
+ * const haiHandle = kit.hook.create({ ... })
+ * const iamHandle = kit.iam.createHandle({ ... })
+ * export const handle = kit.hook.sequence(haiHandle, iamHandle)
+ * ```
  */
 export function sequence(...handles: Handle[]): Handle {
   return async ({ event, resolve }) => {

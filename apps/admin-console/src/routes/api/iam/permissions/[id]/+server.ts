@@ -6,10 +6,10 @@
 
 import type { RequestHandler } from '@sveltejs/kit'
 import * as m from '$lib/paraglide/messages.js'
+import { IdParamSchema } from '$lib/server/schemas/index.js'
 import { audit, permissionService } from '$lib/server/services/index.js'
 import { core } from '@h-ai/core'
 import { kit } from '@h-ai/kit'
-import { json } from '@sveltejs/kit'
 
 /**
  * DELETE /api/iam/permissions/[id] - 删除权限
@@ -22,12 +22,16 @@ export const DELETE: RequestHandler = async ({ params, locals, request, getClien
     return denied
 
   try {
-    const permId = params.id!
+    const { valid: paramsValid, data: validatedParams } = kit.validate.params(params, IdParamSchema)
+    if (!paramsValid)
+      return kit.response.badRequest('Invalid permission ID')
+
+    const permId = validatedParams!.id
 
     // 检查权限是否存在
     const existing = await permissionService.getById(permId)
     if (!existing) {
-      return json({ success: false, error: m.api_iam_permissions_not_found() }, { status: 404 })
+      return kit.response.notFound(m.api_iam_permissions_not_found())
     }
 
     // 删除权限
@@ -46,11 +50,11 @@ export const DELETE: RequestHandler = async ({ params, locals, request, getClien
       ua,
     )
 
-    return json({ success: true })
+    return kit.response.ok(null)
   }
   catch (error) {
     core.logger.error('Failed to delete permission:', { error })
     const message = error instanceof Error ? error.message : m.api_iam_permissions_delete_failed()
-    return json({ success: false, error: message }, { status: 500 })
+    return kit.response.internalError(message)
   }
 }

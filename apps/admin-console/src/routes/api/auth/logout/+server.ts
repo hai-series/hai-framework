@@ -8,7 +8,7 @@ import type { RequestHandler } from '@sveltejs/kit'
 import { audit } from '$lib/server/services/index.js'
 import { core } from '@h-ai/core'
 import { iam } from '@h-ai/iam'
-import { json } from '@sveltejs/kit'
+import { kit } from '@h-ai/kit'
 
 export const POST: RequestHandler = async ({ cookies, getClientAddress, request }) => {
   try {
@@ -31,12 +31,12 @@ export const POST: RequestHandler = async ({ cookies, getClientAddress, request 
     // 清除 Cookie
     cookies.delete('session_token', { path: '/' })
 
-    return json({ success: true })
+    return kit.response.ok(null)
   }
   catch (error) {
     core.logger.error('Logout failed:', { error })
     // 即使出错也清除 Cookie
     cookies.delete('session_token', { path: '/' })
-    return json({ success: true })
+    return kit.response.ok(null)
   }
 }

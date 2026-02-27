@@ -99,12 +99,6 @@ describe('kit 统一出口', () => {
     })
   })
 
-  describe('kit.storage', () => {
-    it('包含 Storage 集成函数', () => {
-      expect(typeof kit.storage.createEndpoint).toBe('function')
-    })
-  })
-
   describe('kit.crypto', () => {
     it('包含 Crypto 集成函数', () => {
       expect(typeof kit.crypto.createCsrfManager).toBe('function')

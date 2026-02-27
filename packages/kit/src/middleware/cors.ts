@@ -22,6 +22,20 @@ const defaultConfig: Required<CorsConfig> = {
 
 /**
  * 创建 CORS 中间件
+ *
+ * 处理跨域资源共享：
+ * - OPTIONS 预检请求返回 204 + CORS 头
+ * - 其他请求在业务响应上附加 CORS 头
+ *
+ * @param config - CORS 配置（省略则允许所有 origin）
+ * @returns Middleware 实例
+ *
+ * @example
+ * ```ts
+ * middleware: [
+ *   kit.middleware.cors({ origin: ['https://example.com'], credentials: true }),
+ * ]
+ * ```
  */
 export function corsMiddleware(config: CorsConfig = {}): Middleware {
   const mergedConfig = { ...defaultConfig, ...config }
@@ -54,7 +68,11 @@ export function corsMiddleware(config: CorsConfig = {}): Middleware {
 }
 
 /**
- * 获取允许的源
+ * 计算允许的 origin
+ *
+ * @param origin - 请求中的 Origin 头
+ * @param configOrigin - 配置的允许规则（'*'、字符串、数组或函数）
+ * @returns 匹配到的 origin 或 null
  */
 function getAllowedOrigin(
   origin: string,
@@ -80,7 +98,14 @@ function getAllowedOrigin(
 }
 
 /**
- * 获取 CORS 响应头
+ * 构建 CORS 响应头
+ *
+ * 预检请求时额外设置 `Allow-Methods`、`Allow-Headers`、`Max-Age`。
+ *
+ * @param allowedOrigin - 已匹配的 origin（null 则返回空 Headers）
+ * @param config - 已合并的完整 CORS 配置
+ * @param request - 原始 Request（用于判断是否为 OPTIONS）
+ * @returns Headers 对象
  */
 function getCorsHeaders(
   allowedOrigin: string | null,

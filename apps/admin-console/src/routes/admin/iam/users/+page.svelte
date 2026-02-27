@@ -7,6 +7,7 @@
   import type { PageData } from './$types'
   import { invalidateAll } from '$app/navigation'
   import * as m from '$lib/paraglide/messages'
+  import { apiFetch } from '$lib/utils/api'
 
   // 定义本地类型（与 page.server.ts 中的 UserData 一致）
   interface UserData {
@@ -125,7 +126,7 @@
       const url = editingUser ? `/api/iam/users/${editingUser.id}` : '/api/iam/users'
       const method = editingUser ? 'PUT' : 'POST'
 
-      const response = await fetch(url, {
+      const response = await apiFetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -145,7 +146,7 @@
         // 刷新页面数据
         await invalidateAll()
       } else {
-        error = result.error || m.iam_users_operation_failed()
+        error = result.error?.message || m.iam_users_operation_failed()
       }
     } catch (e) {
       error = m.common_network_error()
@@ -161,7 +162,7 @@
     }
 
     try {
-      const response = await fetch(`/api/iam/users/${user.id}`, {
+      const response = await apiFetch(`/api/iam/users/${user.id}`, {
         method: 'DELETE',
       })
 
@@ -170,7 +171,7 @@
       if (result.success) {
         await invalidateAll()
       } else {
-        alert(result.error || m.iam_users_delete_failed())
+        alert(result.error?.message || m.iam_users_delete_failed())
       }
     } catch (e) {
       alert(m.common_network_error())

@@ -38,6 +38,22 @@ import { getKitMessage } from '../kit-i18n.js'
 
 /**
  * 创建会话 Store
+ *
+ * 提供会话获取、刷新、登出、自动刷新等能力。
+ * 初始化时自动 fetch 一次，`refreshInterval > 0` 时启动定时刷新。
+ *
+ * @param options - 会话 Store 配置
+ * @returns Svelte Store（含 subscribe / fetch / refresh / logout / startAutoRefresh / stopAutoRefresh）
+ *
+ * @example
+ * ```svelte
+ * <script>
+ * const session = kit.client.useSession({ fetchUrl: '/api/session' })
+ * </script>
+ * {#if $session.user}
+ *   <p>欢迎, {$session.user.username}</p>
+ * {/if}
+ * ```
  */
 export function useSession(options: UseSessionOptions = {}): SessionStore {
   const {
@@ -152,7 +168,23 @@ export function useSession(options: UseSessionOptions = {}): SessionStore {
 }
 
 /**
- * 创建上传 Store
+ * 创建文件上传 Store
+ *
+ * 支持多文件并发上传、进度跟踪、重试、取消、预签名 URL 上传等。
+ *
+ * @param options - 上传 Store 配置
+ * @returns Svelte Store（含 subscribe / addFiles / removeFile / retryFile / clear / cancel）
+ *
+ * @example
+ * ```svelte
+ * <script>
+ * const upload = kit.client.useUpload({ uploadUrl: '/api/storage' })
+ * function handleFiles(e) {
+ *   upload.addFiles(Array.from(e.target.files))
+ * }
+ * </script>
+ * <input type="file" multiple on:change={handleFiles} />
+ * ```
  */
 export function useUpload(options: UseUploadOptions = {}): UploadStore {
   const {
@@ -420,12 +452,21 @@ export function useUpload(options: UseUploadOptions = {}): UploadStore {
 }
 
 /**
- * 派生的便捷 store
+ * 派生布尔 Store：当前是否已认证
+ *
+ * @param sessionStore - 会话 Store 实例
+ * @returns `Readable<boolean>`
  */
 export function useIsAuthenticated(sessionStore: SessionStore) {
   return derived(sessionStore, $session => !!$session.user)
 }
 
+/**
+ * 派生 Store：当前用户对象（未登录时为 null）
+ *
+ * @param sessionStore - 会话 Store 实例
+ * @returns `Readable<User | null>`
+ */
 export function useUser(sessionStore: SessionStore) {
   return derived(sessionStore, $session => $session.user)
 }

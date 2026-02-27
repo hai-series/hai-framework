@@ -71,8 +71,23 @@ export interface UseTransportEncryptionOptions {
 /**
  * 创建客户端传输加密 Store
  *
- * @param options - 配置
- * @returns Svelte Store
+ * 管理客户端密钥生成、密钥交换和加密 fetch：
+ * - `init()` 生成非对称密钥对，与服务端交换公钥
+ * - `encryptedFetch()` 自动加密请求体、解密响应体
+ * - 默认 `autoInit: true`，创建后自动发起密钥交换
+ *
+ * @param options - 配置（含 crypto 实例、密钥交换 URL 等）
+ * @returns Svelte Store（含 subscribe / init / destroy）
+ *
+ * @example
+ * ```svelte
+ * <script>
+ * const te = kit.client.useTransportEncryption({ crypto })
+ * async function load() {
+ *   const res = await $te.encryptedFetch('/api/data')
+ * }
+ * </script>
+ * ```
  */
 export function useTransportEncryption(options: UseTransportEncryptionOptions): TransportEncryptionStore {
   const {
@@ -205,6 +220,13 @@ export function useTransportEncryption(options: UseTransportEncryptionOptions): 
 
 /**
  * 加密数据（客户端 → 服务端）
+ *
+ * 生成随机对称密钥加密内容，用服务端公钥加密对称密钥。
+ *
+ * @param cryptoService - 传输加密服务实例
+ * @param data - 明文字符串
+ * @param serverPublicKey - 服务端公钥
+ * @returns 加密载荷
  */
 function encryptData(
   cryptoService: TransportCryptoServiceLike,
@@ -235,6 +257,13 @@ function encryptData(
 
 /**
  * 解密数据（服务端 → 客户端）
+ *
+ * 用客户端私钥解密对称密钥，再用对称密钥解密内容。
+ *
+ * @param cryptoService - 传输加密服务实例
+ * @param payload - 加密载荷
+ * @param clientPrivateKey - 客户端私钥
+ * @returns 解密后的明文字符串
  */
 function decryptData(
   cryptoService: TransportCryptoServiceLike,

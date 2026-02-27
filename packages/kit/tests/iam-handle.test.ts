@@ -171,10 +171,6 @@ describe('createIamHandle', () => {
         lastActiveAt: new Date(),
       },
     })
-    mockIam.user.getUser.mockResolvedValue({
-      success: true,
-      data: { id: 'user-1', username: 'testuser', enabled: true, createdAt: new Date(), updatedAt: new Date() },
-    })
 
     const handle = createIamHandle({
       iam: mockIam as unknown as IamHandleConfig['iam'],
@@ -187,7 +183,14 @@ describe('createIamHandle', () => {
     await handle({ event, resolve })
 
     expect(mockIam.auth.verifyToken).toHaveBeenCalledWith('valid-token')
-    expect((event.locals as IamLocals).user).toEqual({ id: 'user-1', username: 'testuser', enabled: true, createdAt: expect.any(Date), updatedAt: expect.any(Date) })
+    expect((event.locals as IamLocals).session).toEqual({
+      userId: 'user-1',
+      roles: [],
+      accessToken: 'valid-token',
+      expiresAt: expect.any(Date),
+      createdAt: expect.any(Date),
+      lastActiveAt: expect.any(Date),
+    })
     expect(resolve).toHaveBeenCalled()
   })
 
@@ -253,10 +256,6 @@ describe('createIamHandle', () => {
         lastActiveAt: new Date(),
       },
     })
-    mockIam.user.getUser.mockResolvedValue({
-      success: true,
-      data: { id: 'user-1', username: 'testuser', enabled: true, createdAt: new Date(), updatedAt: new Date() },
-    })
 
     const handle = createIamHandle({
       iam: mockIam as unknown as IamHandleConfig['iam'],
@@ -278,12 +277,10 @@ describe('requireAuth', () => {
   it('应该返回已认证的 locals', () => {
     const event = createMockEvent('/api/data')
     ;(event.locals as IamLocals).session = { userId: 'session-user', roles: [], accessToken: 'token', expiresAt: new Date(), createdAt: new Date(), lastActiveAt: new Date() } as any
-    ;(event.locals as IamLocals).user = { id: 'user-1', username: 'testuser', enabled: true, createdAt: new Date(), updatedAt: new Date() } as any
 
     const result = requireAuth(event)
 
     expect(result.session).toBeDefined()
-    expect(result.user).toBeDefined()
   })
 
   it('应该在未认证时抛出 401', () => {

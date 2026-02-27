@@ -11,13 +11,12 @@ import { audit } from '$lib/server/services/index.js'
 import { core } from '@h-ai/core'
 import { iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
-import { json } from '@sveltejs/kit'
 
 export const POST: RequestHandler = async ({ request, cookies, getClientAddress }) => {
   try {
     const { valid, data, errors } = await kit.validate.form(request, LoginSchema)
     if (!valid) {
-      return json({ success: false, error: errors[0]?.message }, { status: 400 })
+      return kit.response.badRequest(errors[0]?.message ?? 'Validation failed')
     }
     const { identifier, password } = data
 
@@ -36,7 +35,7 @@ export const POST: RequestHandler = async ({ request, cookies, getClientAddress 
       else if (errorCode === 5003 || errorCode === 5004) {
         status = 403
       }
-      return json({ success: false, error: loginResult.error.message }, { status })
+      return kit.response.error('AUTH_FAILED', loginResult.error.message, status)
     }
 
     const { user, accessToken } = loginResult.data
@@ -65,8 +64,7 @@ export const POST: RequestHandler = async ({ request, cookies, getClientAddress 
     const permissionsResult = await iam.authz.getUserPermissions(user.id)
     const permissions = permissionsResult.success ? permissionsResult.data.map(p => p.code) : []
 
-    return json({
-      success: true,
+    return kit.response.ok({
       user: {
         id: user.id,
         username: user.username,
@@ -80,6 +78,6 @@ export const POST: RequestHandler = async ({ request, cookies, getClientAddress 
   }
   catch (error) {
     core.logger.error('Login failed:', { error })
-    return json({ success: false, error: m.api_auth_login_failed() }, { status: 500 })
+    return kit.response.internalError(m.api_auth_login_failed())
   }
 }

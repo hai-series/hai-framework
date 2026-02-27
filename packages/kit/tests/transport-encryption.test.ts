@@ -373,10 +373,30 @@ describe('transportEncryptionMiddleware', () => {
     expect(await response.text()).toBe('health ok')
   })
 
-  it('无 X-Client-Id 请求头时不解密', async () => {
+  it('无 X-Client-Id 请求头时默认返回 400（requireEncryption 默认 true）', async () => {
     const middleware = transportEncryptionMiddleware({
       enabled: true,
       crypto: cryptoService,
+    })
+
+    const context = createContext({
+      pathname: '/api/data',
+      method: 'GET',
+    })
+    const next = vi.fn()
+
+    const response = await middleware(context, next)
+    expect(response.status).toBe(400)
+    expect(next).not.toHaveBeenCalled()
+    const body = await response.json() as { error: string }
+    expect(body.error).toBeTruthy()
+  })
+
+  it('requireEncryption=false 时无 X-Client-Id 透传明文', async () => {
+    const middleware = transportEncryptionMiddleware({
+      enabled: true,
+      crypto: cryptoService,
+      requireEncryption: false,
     })
 
     const context = createContext({

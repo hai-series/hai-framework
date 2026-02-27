@@ -11,13 +11,12 @@ import { audit } from '$lib/server/services/index.js'
 import { core } from '@h-ai/core'
 import { iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
-import { json } from '@sveltejs/kit'
 
 export const POST: RequestHandler = async ({ request, getClientAddress }) => {
   try {
     const { valid, data, errors } = await kit.validate.form(request, ForgotPasswordSchema)
     if (!valid) {
-      return json({ success: false, error: errors[0]?.message }, { status: 400 })
+      return kit.response.badRequest(errors[0]?.message ?? 'Validation failed')
     }
     const { email } = data
 
@@ -32,10 +31,10 @@ export const POST: RequestHandler = async ({ request, getClientAddress }) => {
     await iam.user.requestPasswordReset(email)
 
     // 无论用户是否存在，都返回成功（防止邮箱枚举攻击）
-    return json({ success: true, message: m.api_auth_password_reset_email_sent() })
+    return kit.response.ok({ message: m.api_auth_password_reset_email_sent() })
   }
   catch (error) {
     core.logger.error('Forgot password request failed:', { error })
-    return json({ success: false, error: m.api_auth_request_failed() }, { status: 500 })
+    return kit.response.internalError(m.api_auth_request_failed())
   }
 }

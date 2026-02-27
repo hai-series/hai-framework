@@ -33,6 +33,12 @@ import type { CacheHandleConfig, CacheRouteConfig } from './cache-types.js'
 
 /**
  * 生成缓存键
+ *
+ * 优先使用自定义 `keyGenerator`，否则拼接 `kit:cache:{pathname}{search}`。
+ *
+ * @param event - SvelteKit 请求事件
+ * @param keyGenerator - 可选的自定义键生成器
+ * @returns 缓存键字符串
  */
 function generateCacheKey(event: RequestEvent, keyGenerator?: CacheRouteConfig['keyGenerator']): string {
   if (keyGenerator) {
@@ -46,6 +52,12 @@ function generateCacheKey(event: RequestEvent, keyGenerator?: CacheRouteConfig['
 
 /**
  * 匹配路由配置
+ *
+ * 先尝试精确匹配，再尝试通配符 `/*` 匹配。
+ *
+ * @param pathname - 当前请求路径
+ * @param routes - 路由 → 缓存配置映射
+ * @returns 匹配到的路由配置，或 null
  */
 function matchRoute(
   pathname: string,
@@ -71,6 +83,24 @@ function matchRoute(
 
 /**
  * 创建缓存 Handle
+ *
+ * 在 SvelteKit handle 层拦截请求，按路由规则对响应进行缓存：
+ * - 命中时返回缓存响应（`X-Cache: HIT`）
+ * - 未命中时执行业务并写入缓存（`X-Cache: MISS`）
+ * - 支持 `staleWhileRevalidate`：过期后先返回旧值，后台刷新
+ * - 支持 `bypassHeader` 绕过缓存
+ *
+ * @param config - 缓存 Handle 配置
+ * @returns SvelteKit Handle 函数
+ *
+ * @example
+ * ```ts
+ * const cacheHandle = kit.cache.createHandle({
+ *   cache,
+ *   routes: { '/api/products': { ttl: 300 } },
+ * })
+ * export const handle = kit.hook.sequence(cacheHandle, mainHandle)
+ * ```
  */
 export function createCacheHandle(config: CacheHandleConfig): Handle {
   const {
@@ -196,7 +226,18 @@ export function createCacheHandle(config: CacheHandleConfig): Handle {
 }
 
 /**
- * 缓存工具函数
+ * 创建缓存工具函数
+ *
+ * 提供主动清理与预热能力，配合 `createCacheHandle` 使用。
+ *
+ * @param cache - @h-ai/cache 实例
+ * @returns `{ invalidatePrefix, invalidatePath, warmup }`
+ *
+ * @example
+ * ```ts
+ * const utils = kit.cache.createUtils(cache)
+ * await utils.invalidatePath('/api/products')
+ * ```
  */
 export function createCacheUtils(cache: CacheHandleConfig['cache']) {
   return {

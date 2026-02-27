@@ -11,18 +11,17 @@ import { audit } from '$lib/server/services/index.js'
 import { core } from '@h-ai/core'
 import { iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
-import { json } from '@sveltejs/kit'
 
 export const POST: RequestHandler = async ({ request, cookies, getClientAddress }) => {
   try {
     // 检查注册是否启用
     if (iam.config?.register?.enabled === false) {
-      return json({ success: false, error: m.api_auth_register_disabled?.() ?? 'Registration is disabled' }, { status: 403 })
+      return kit.response.forbidden(m.api_auth_register_disabled?.() ?? 'Registration is disabled')
     }
 
     const { valid, data, errors } = await kit.validate.form(request, createRegisterSchema())
     if (!valid || !data) {
-      return json({ success: false, error: errors[0]?.message }, { status: 400 })
+      return kit.response.badRequest(errors[0]?.message ?? 'Validation failed')
     }
     const { username, email, password } = data
 
@@ -36,9 +35,9 @@ export const POST: RequestHandler = async ({ request, cookies, getClientAddress 
     if (!registerResult.success) {
       // 根据错误码返回不同响应
       if (registerResult.error.code === 5002 || registerResult.error.code === 5502) {
-        return json({ success: false, error: m.api_auth_username_or_email_taken() }, { status: 409 })
+        return kit.response.conflict(m.api_auth_username_or_email_taken())
       }
-      return json({ success: false, error: registerResult.error.message }, { status: 400 })
+      return kit.response.badRequest(registerResult.error.message)
     }
 
     const { user } = registerResult.data
@@ -47,8 +46,7 @@ export const POST: RequestHandler = async ({ request, cookies, getClientAddress 
     const loginResult = await iam.auth.login({ identifier: username, password })
     if (!loginResult.success) {
       // 注册成功但登录失败，返回成功但不设置 cookie
-      return json({
-        success: true,
+      return kit.response.ok({
         user: {
           id: user.id,
           username: user.username,
@@ -82,8 +80,7 @@ export const POST: RequestHandler = async ({ request, cookies, getClientAddress 
     const rolesResult = await iam.authz.getUserRoles(user.id)
     const roles = rolesResult.success ? rolesResult.data.map(r => r.code) : ['user']
 
-    return json({
-      success: true,
+    return kit.response.ok({
       user: {
         id: user.id,
         username: user.username,
@@ -96,6 +93,6 @@ export const POST: RequestHandler = async ({ request, cookies, getClientAddress 
   }
   catch (error) {
     core.logger.error('Registration failed:', { error })
-    return json({ success: false, error: m.api_auth_register_failed() }, { status: 500 })
+    return kit.response.internalError(m.api_auth_register_failed())
   }
 }

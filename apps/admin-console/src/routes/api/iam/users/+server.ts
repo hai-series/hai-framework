@@ -11,7 +11,6 @@ import { audit } from '$lib/server/services/index.js'
 import { core } from '@h-ai/core'
 import { iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
-import { json } from '@sveltejs/kit'
 
 /**
  * GET /api/iam/users - 获取用户列表
@@ -34,14 +33,14 @@ export const GET: RequestHandler = async ({ url, locals }) => {
   try {
     const { valid, data: query, errors } = kit.validate.query(url, ListUsersQuerySchema)
     if (!valid) {
-      return json({ success: false, error: errors[0]?.message }, { status: 400 })
+      return kit.response.badRequest(errors[0]?.message ?? 'Validation failed')
     }
     const { page, pageSize, search, enabled } = query!
 
     const usersResult = await iam.user.listUsers({ page, pageSize, search, enabled })
     if (!usersResult.success) {
       core.logger.error('Failed to list users', { error: usersResult.error })
-      return json({ success: false, error: usersResult.error.message }, { status: 500 })
+      return kit.response.internalError(usersResult.error.message)
     }
 
     const { items, total } = usersResult.data
@@ -65,11 +64,11 @@ export const GET: RequestHandler = async ({ url, locals }) => {
       }),
     )
 
-    return json({ success: true, data: { users, total, page, pageSize } })
+    return kit.response.ok({ users, total, page, pageSize })
   }
   catch (error) {
     core.logger.error('Failed to list users', { error })
-    return json({ success: false, error: m.api_iam_users_list_failed() }, { status: 500 })
+    return kit.response.internalError(m.api_iam_users_list_failed())
   }
 }
 
@@ -86,7 +85,7 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
   try {
     const { valid, data, errors } = await kit.validate.form(request, createCreateUserSchema())
     if (!valid) {
-      return json({ success: false, error: errors[0]?.message }, { status: 400 })
+      return kit.response.badRequest(errors[0]?.message ?? 'Validation failed')
     }
     const { username, email, password, roles } = data!
 
@@ -99,9 +98,9 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
 
     if (!registerResult.success) {
       if (registerResult.error.code === 5002 || registerResult.error.code === 5502) {
-        return json({ success: false, error: m.api_auth_username_or_email_taken() }, { status: 409 })
+        return kit.response.conflict(m.api_auth_username_or_email_taken())
       }
-      return json({ success: false, error: registerResult.error.message }, { status: 400 })
+      return kit.response.badRequest(registerResult.error.message)
     }
 
     const { user } = registerResult.data
@@ -131,23 +130,20 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
     const rolesResult = await iam.authz.getUserRoles(user.id)
     const userRoles = rolesResult.success ? rolesResult.data.map(r => r.code) : []
 
-    return json({
-      success: true,
-      data: {
-        id: user.id,
-        username: user.username,
-        email: user.email,
-        display_name: user.displayName,
-        avatar: user.avatarUrl,
-        status: user.enabled ? 'active' : 'inactive',
-        roles: userRoles,
-        created_at: user.createdAt,
-        updated_at: user.updatedAt,
-      },
+    return kit.response.ok({
+      id: user.id,
+      username: user.username,
+      email: user.email,
+      display_name: user.displayName,
+      avatar: user.avatarUrl,
+      status: user.enabled ? 'active' : 'inactive',
+      roles: userRoles,
+      created_at: user.createdAt,
+      updated_at: user.updatedAt,
     })
   }
   catch (error) {
     core.logger.error('Failed to create user:', { error })
-    return json({ success: false, error: m.api_iam_users_create_failed() }, { status: 500 })
+    return kit.response.internalError(m.api_iam_users_create_failed())
   }
 }

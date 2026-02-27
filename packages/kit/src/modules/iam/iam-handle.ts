@@ -31,7 +31,11 @@ import type { Handle, RequestEvent } from '@sveltejs/kit'
 import type { IamHandleConfig, IamLocals } from './iam-types.js'
 
 /**
- * 检查路径是否匹配
+ * 检查路径是否与模式列表匹配
+ *
+ * @param pathname - 当前请求路径
+ * @param patterns - 匹配模式列表（支持尾部 `*` 通配）
+ * @returns 是否匹配
  */
 function matchPath(pathname: string, patterns: string[]): boolean {
   return patterns.some((pattern) => {
@@ -46,10 +50,23 @@ function matchPath(pathname: string, patterns: string[]): boolean {
 /**
  * 创建 IAM Handle Hook
  *
- * 验证会话令牌 → 查询用户信息 → 注入到 event.locals
+ * 执行顺序：
+ * 1. 初始化 `event.locals.session` 为 `null`
+ * 2. 读取会话 Cookie，调用 `iam.auth.verifyToken` 验证令牌
+ * 3. 验证成功则将 session 填充到 locals
+ * 4. 非公开路径且未认证时，调用 `onUnauthenticated` 或返回 401
  *
- * @param config - 配置选项
+ * @param config - IAM Handle 配置
  * @returns SvelteKit Handle 函数
+ *
+ * @example
+ * ```ts
+ * export const handle = kit.iam.createHandle({
+ *   iam,
+ *   publicPaths: ['/login', '/register', '/api/health'],
+ *   onUnauthenticated: (event) => { throw redirect(303, '/login') },
+ * })
+ * ```
  */
 export function createIamHandle(config: IamHandleConfig): Handle {
   const {
@@ -65,7 +82,6 @@ export function createIamHandle(config: IamHandleConfig): Handle {
     // 初始化 locals
     const locals = event.locals as unknown as IamLocals
     locals.session = null
-    locals.user = null
 
     // 检查是否是公开路径
     const isPublicPath = matchPath(pathname, publicPaths)
@@ -80,12 +96,6 @@ export function createIamHandle(config: IamHandleConfig): Handle {
 
         if (sessionResult.success) {
           locals.session = sessionResult.data
-
-          // 查询用户信息
-          const userResult = await iam.user.getUser(sessionResult.data.userId)
-          if (userResult.success && userResult.data) {
-            locals.user = userResult.data
-          }
         }
       }
       catch {
@@ -108,14 +118,27 @@ export function createIamHandle(config: IamHandleConfig): Handle {
 }
 
 /**
- * 创建 API 路由守卫中间件
+ * API 路由认证断言
  *
- * 验证当前请求是否已认证，未认证时抛出 401 Response。
+ * 从 `event.locals` 取出会话信息，若未认证则抛出 401 Response。
+ * 仅适用于已经经过 `createIamHandle` 处理过的请求。
+ *
+ * @param event - SvelteKit 请求事件
+ * @returns 受认证保护的 IamLocals（含 session）
+ * @throws Response - 401 Unauthorized
+ *
+ * @example
+ * ```ts
+ * export const POST: RequestHandler = async (event) => {
+ *   const { session } = kit.iam.requireAuth(event)
+ *   // session 必不为 null
+ * }
+ * ```
  */
 export function requireAuth(event: RequestEvent): IamLocals {
   const locals = event.locals as unknown as IamLocals
 
-  if (!locals.session || !locals.user) {
+  if (!locals.session) {
     throw new Response('Unauthorized', { status: 401 })
   }
 

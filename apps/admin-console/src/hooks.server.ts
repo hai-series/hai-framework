@@ -141,6 +141,9 @@ const haiHandle = kit.createHandle({
       windowMs: 60000, // 1分钟
       maxRequests: process.env.HAI_E2E === '1' ? 5000 : 100, // E2E 模式放宽限流
     }),
+    kit.middleware.csrf({
+      exclude: ['/api/auth/*', '/api/public/*'],
+    }),
   ],
   guards: [
     // 保护 /admin/* 路径
