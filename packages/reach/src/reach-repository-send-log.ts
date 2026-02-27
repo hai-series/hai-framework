@@ -198,21 +198,25 @@ export function resetSendLogRepoSingleton(): void {
  * db 重新初始化后自动创建新实例。
  *
  * @param db - 数据库服务实例
- * @returns 发送日志存储接口实现
+ * @returns 成功返回发送日志存储接口实现；失败返回含错误信息的 Result
  */
-export async function createSendLogRepository(db: DbFunctions): Promise<SendLogRepository> {
+export async function createSendLogRepository(db: DbFunctions): Promise<Result<SendLogRepository, ReachError>> {
   if (sendLogRepoInstance && sendLogRepoDbConfig === db.config)
-    return sendLogRepoInstance
+    return ok(sendLogRepoInstance)
 
   const repo = new DbSendLogRepository(db)
   // 触发表创建（BaseCrudRepository 的表创建是异步的）
   const initResult = await repo.count()
   if (!initResult.success) {
-    throw new Error(`Failed to initialize send log table: ${initResult.error.message}`)
+    return err({
+      code: ReachErrorCode.SEND_FAILED,
+      message: reachM('reach_sendFailed', { params: { error: initResult.error.message } }),
+      cause: initResult.error,
+    })
   }
   sendLogRepoInstance = repo
   sendLogRepoDbConfig = db.config
-  return repo
+  return ok(repo)
 }
 
 /**
