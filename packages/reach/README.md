@@ -37,7 +37,7 @@ await reach.init({
     { name: 'welcome_email', provider: 'email', subject: '欢迎 {userName}', body: '亲爱的 {userName}，欢迎！' },
     { name: 'sms_code', provider: 'sms', body: '验证码: {code}，{minutes} 分钟内有效。' },
   ],
-  dnd: { enabled: true, start: '22:00', end: '08:00' },
+  dnd: { enabled: true, strategy: 'delay', start: '22:00', end: '08:00' },
 })
 
 // 通过 provider 字段选择发送渠道
@@ -105,11 +105,12 @@ const config = { name: 'dev', type: 'console' }
 
 ### DND（免打扰）
 
-| 字段      | 类型      | 必填 | 默认值  | 说明                   |
-| --------- | --------- | ---- | ------- | ---------------------- |
-| `enabled` | `boolean` | —    | `false` | 是否启用               |
-| `start`   | `string`  | —    | `00:00` | 开始时间（HH:mm 格式） |
-| `end`     | `string`  | —    | `00:00` | 结束时间（HH:mm 格式） |
+| 字段       | 类型                   | 必填 | 默认值    | 说明                                    |
+| ---------- | ---------------------- | ---- | --------- | --------------------------------------- |
+| `enabled`  | `boolean`              | —    | `false`   | 是否启用                                |
+| `strategy` | `'discard' \| 'delay'` | —    | `discard` | discard 丢弃 / delay 延时（DND 后发送） |
+| `start`    | `string`               | —    | `00:00`   | 开始时间（HH:mm 格式）                  |
+| `end`      | `string`               | —    | `00:00`   | 结束时间（HH:mm 格式）                  |
 
 ## 错误处理
 

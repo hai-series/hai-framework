@@ -102,6 +102,8 @@ export interface SendResult {
   success: boolean
   /** Provider 返回的消息 ID（如有） */
   messageId?: string
+  /** 是否被延时（DND delay 策略暂存，待 DND 结束后发送） */
+  deferred?: boolean
 }
 
 /**

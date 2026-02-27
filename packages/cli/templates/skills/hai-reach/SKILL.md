@@ -58,6 +58,7 @@ templates:
 # 免打扰（可选）
 dnd:
   enabled: true
+  strategy: delay # discard（丢弃）或 delay（延时，DND 结束后集中发送）
   start: '22:00'
   end: '08:00'
 ```
@@ -146,7 +147,12 @@ await reach.send({
 interface ReachConfigInput {
   providers: ProviderConfig[] // 多个 Provider 配置
   templates?: TemplateConfig[] // 通过配置文件定义的模板
-  dnd?: { enabled: boolean, start: string, end: string } // 免打扰配置
+  dnd?: {
+    enabled: boolean // 是否启用
+    strategy: 'discard' | 'delay' // discard 丢弃 / delay 延时发送
+    start: string // 开始时间 HH:mm
+    end: string // 结束时间 HH:mm
+  }
 }
 ```
 
@@ -182,7 +188,8 @@ interface ReachConfigInput {
 | `ReachErrorCode.TEMPLATE_RENDER_FAILED` | 8002 | 模板渲染失败    |
 | `ReachErrorCode.INVALID_RECIPIENT`      | 8003 | 无效接收方      |
 | `ReachErrorCode.PROVIDER_NOT_FOUND`     | 8004 | Provider 未找到 |
-| `ReachErrorCode.DND_BLOCKED`            | 8005 | 免打扰时段拦截  |
+| `ReachErrorCode.DND_BLOCKED`            | 8005 | 免打扰丢弃      |
+| `ReachErrorCode.DND_DEFERRED`           | 8006 | 免打扰延时暂存  |
 | `ReachErrorCode.NOT_INITIALIZED`        | 8010 | 模块未初始化    |
 | `ReachErrorCode.UNSUPPORTED_TYPE`       | 8011 | 不支持的类型    |
 | `ReachErrorCode.CONFIG_ERROR`           | 8012 | 配置错误        |
@@ -232,7 +239,7 @@ if (!result.success) {
     case ReachErrorCode.PROVIDER_NOT_FOUND:
       break
     case ReachErrorCode.DND_BLOCKED:
-      // 免打扰时段，可延迟发送
+      // 免打扰时段（discard 策略），消息已丢弃
       break
     case ReachErrorCode.TEMPLATE_NOT_FOUND:
       break
