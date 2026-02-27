@@ -10,7 +10,7 @@
  */
 
 import type { Result } from '@h-ai/core'
-import type { ReachConfig, SmtpConfig } from '../reach-config.js'
+import type { ProviderConfig, SmtpProviderConfig } from '../reach-config.js'
 import type { ReachError, ReachMessage, ReachProvider, SendResult } from '../reach-types.js'
 
 import { createRequire } from 'node:module'
@@ -41,12 +41,12 @@ function toReachError(error: unknown): ReachError {
  */
 export function createSmtpProvider(): ReachProvider {
   let transporter: unknown = null
-  let smtpConfig: SmtpConfig | null = null
+  let smtpConfig: SmtpProviderConfig | null = null
 
   return {
     name: 'smtp',
 
-    async connect(config: ReachConfig): Promise<Result<void, ReachError>> {
+    async connect(config: ProviderConfig): Promise<Result<void, ReachError>> {
       if (config.type !== 'smtp') {
         return err({
           code: ReachErrorCode.CONFIG_ERROR,

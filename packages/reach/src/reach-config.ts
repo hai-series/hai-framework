@@ -5,10 +5,14 @@
  *
  * 本文件定义触达模块的错误码、Zod Schema 和配置类型。
  *
+ * 支持同时注册多个 Provider，每个 Provider 有唯一名称（name），
+ * 发送时通过 `provider` 字段选择目标 Provider。
+ *
  * 支持的 Provider 类型：
  * - `console` — 控制台输出（开发/测试用）
  * - `smtp` — SMTP 邮件发送
- * - `aliyun-sms` — 阿里云短信服务
+ * - `aliyun-sms` — 阿里云短信服务（直接调用 HTTP API，无需 SDK）
+ * - `api` — HTTP API 回调（通用 webhook）
  *
  * @module reach-config
  * =============================================================================
@@ -41,6 +45,8 @@ export const ReachErrorCode = {
   TEMPLATE_RENDER_FAILED: 8002,
   /** 无效接收方 */
   INVALID_RECIPIENT: 8003,
+  /** Provider 未找到 */
+  PROVIDER_NOT_FOUND: 8004,
   /** 触达模块未初始化 */
   NOT_INITIALIZED: 8010,
   /** 不支持的 Provider 类型 */
@@ -53,13 +59,15 @@ export const ReachErrorCode = {
 export type ReachErrorCodeType = (typeof ReachErrorCode)[keyof typeof ReachErrorCode]
 
 // =============================================================================
-// 配置 Schema
+// 单个 Provider 配置 Schema
 // =============================================================================
 
 /**
  * Console Provider 配置（开发/测试用，将消息输出到日志）
  */
-export const ConsoleConfigSchema = z.object({
+export const ConsoleProviderConfigSchema = z.object({
+  /** Provider 唯一名称 */
+  name: z.string().min(1),
   type: z.literal('console'),
 })
 
@@ -69,6 +77,7 @@ export const ConsoleConfigSchema = z.object({
  * @example
  * ```ts
  * {
+ *   name: 'email',
  *   type: 'smtp',
  *   host: 'smtp.example.com',
  *   port: 465,
@@ -79,7 +88,9 @@ export const ConsoleConfigSchema = z.object({
  * }
  * ```
  */
-export const SmtpConfigSchema = z.object({
+export const SmtpProviderConfigSchema = z.object({
+  /** Provider 唯一名称 */
+  name: z.string().min(1),
   type: z.literal('smtp'),
   /** SMTP 服务器地址 */
   host: z.string().min(1),
@@ -96,11 +107,12 @@ export const SmtpConfigSchema = z.object({
 })
 
 /**
- * 阿里云短信 Provider 配置
+ * 阿里云短信 Provider 配置（通过 HTTP API 调用，无需 SDK）
  *
  * @example
  * ```ts
  * {
+ *   name: 'sms',
  *   type: 'aliyun-sms',
  *   accessKeyId: 'LTAI...',
  *   accessKeySecret: '...',
@@ -109,7 +121,9 @@ export const SmtpConfigSchema = z.object({
  * }
  * ```
  */
-export const AliyunSmsConfigSchema = z.object({
+export const AliyunSmsProviderConfigSchema = z.object({
+  /** Provider 唯一名称 */
+  name: z.string().min(1),
   type: z.literal('aliyun-sms'),
   /** 阿里云 AccessKey ID */
   accessKeyId: z.string().min(1),
@@ -122,31 +136,76 @@ export const AliyunSmsConfigSchema = z.object({
 })
 
 /**
- * 触达模块配置 Schema（判别联合体）
+ * API 回调 Provider 配置（通用 HTTP 回调）
  *
- * 根据 `type` 字段区分不同 Provider 类型的配置。
+ * @example
+ * ```ts
+ * {
+ *   name: 'webhook',
+ *   type: 'api',
+ *   url: 'https://api.example.com/notify',
+ *   method: 'POST',
+ *   headers: { 'Authorization': 'Bearer xxx' }
+ * }
+ * ```
  */
-export const ReachConfigSchema = z.discriminatedUnion('type', [
-  ConsoleConfigSchema,
-  SmtpConfigSchema,
-  AliyunSmsConfigSchema,
+export const ApiProviderConfigSchema = z.object({
+  /** Provider 唯一名称 */
+  name: z.string().min(1),
+  type: z.literal('api'),
+  /** 回调 URL */
+  url: z.string().min(1),
+  /** HTTP 方法（默认 POST） */
+  method: z.enum(['POST', 'PUT']).default('POST'),
+  /** 自定义请求头 */
+  headers: z.record(z.string(), z.string()).optional(),
+  /** 请求超时毫秒数（默认 10000） */
+  timeout: z.number().int().min(0).default(10000),
+})
+
+/**
+ * 单个 Provider 配置 Schema（判别联合体）
+ */
+export const ProviderConfigSchema = z.discriminatedUnion('type', [
+  ConsoleProviderConfigSchema,
+  SmtpProviderConfigSchema,
+  AliyunSmsProviderConfigSchema,
+  ApiProviderConfigSchema,
 ])
+
+/** 单个 Provider 配置类型（parse 后） */
+export type ProviderConfig = z.infer<typeof ProviderConfigSchema>
+
+/** Console 配置类型 */
+export type ConsoleProviderConfig = z.infer<typeof ConsoleProviderConfigSchema>
+
+/** SMTP 配置类型 */
+export type SmtpProviderConfig = z.infer<typeof SmtpProviderConfigSchema>
+
+/** 阿里云短信配置类型 */
+export type AliyunSmsProviderConfig = z.infer<typeof AliyunSmsProviderConfigSchema>
+
+/** API 回调配置类型 */
+export type ApiProviderConfig = z.infer<typeof ApiProviderConfigSchema>
+
+// =============================================================================
+// 模块配置 Schema
+// =============================================================================
+
+/**
+ * 触达模块配置 Schema
+ *
+ * 接受一个 Provider 配置数组，支持同时注册多个 Provider。
+ */
+export const ReachConfigSchema = z.object({
+  /** Provider 配置列表 */
+  providers: z.array(ProviderConfigSchema).min(1),
+})
 
 /** 触达模块配置类型（parse 后） */
 export type ReachConfig = z.infer<typeof ReachConfigSchema>
 
-/** Console 配置类型 */
-export type ConsoleConfig = z.infer<typeof ConsoleConfigSchema>
-
-/** SMTP 配置类型 */
-export type SmtpConfig = z.infer<typeof SmtpConfigSchema>
-
-/** 阿里云短信配置类型 */
-export type AliyunSmsConfig = z.infer<typeof AliyunSmsConfigSchema>
-
 /**
  * 触达模块配置输入类型
- *
- * 说明：Zod 的 default 会让输入端字段可省略，但输出端字段为必填。
  */
 export type ReachConfigInput = z.input<typeof ReachConfigSchema>

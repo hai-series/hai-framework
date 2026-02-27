@@ -14,7 +14,7 @@ describe.sequential('reach (not initialized)', () => {
 
   it('send 操作应返回 NOT_INITIALIZED', async () => {
     const result = await reach.send({
-      channel: 'email',
+      provider: 'email',
       to: 'test@example.com',
       body: 'test',
     })
