@@ -11,13 +11,12 @@ import { audit } from '$lib/server/services/index.js'
 import { core } from '@h-ai/core'
 import { iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
-import { json } from '@sveltejs/kit'
 
 export const POST: RequestHandler = async ({ request, getClientAddress }) => {
   try {
     const { valid, data, errors } = await kit.validate.form(request, createResetPasswordSchema())
     if (!valid) {
-      return json({ success: false, error: errors[0]?.message }, { status: 400 })
+      return kit.response.badRequest(errors[0]?.message ?? 'Validation failed')
     }
     const { token, password } = data
 
@@ -26,9 +25,9 @@ export const POST: RequestHandler = async ({ request, getClientAddress }) => {
     if (!resetResult.success) {
       // 根据错误码返回不同响应
       if (resetResult.error.code === 5105) {
-        return json({ success: false, error: m.api_auth_reset_link_invalid() }, { status: 400 })
+        return kit.response.badRequest(m.api_auth_reset_link_invalid())
       }
-      return json({ success: false, error: resetResult.error.message }, { status: 400 })
+      return kit.response.badRequest(resetResult.error.message)
     }
 
     // 记录审计日志
@@ -37,10 +36,10 @@ export const POST: RequestHandler = async ({ request, getClientAddress }) => {
     // 因为 token 已用，无法获取 userId，记录 token 信息
     await audit.passwordResetComplete(token, ip, ua)
 
-    return json({ success: true, message: m.api_auth_password_reset_success() })
+    return kit.response.ok({ message: m.api_auth_password_reset_success() })
   }
   catch (error) {
     core.logger.error('Password reset failed:', { error })
-    return json({ success: false, error: m.api_auth_reset_password_failed() }, { status: 500 })
+    return kit.response.internalError(m.api_auth_reset_password_failed())
   }
 }

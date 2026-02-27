@@ -7,6 +7,7 @@
   import type { PageData } from './$types'
   import { invalidateAll } from '$app/navigation'
   import * as m from '$lib/paraglide/messages'
+  import { apiFetch } from '$lib/utils/api'
 
   interface RoleData {
     id: string
@@ -121,7 +122,7 @@
       const url = editingRole ? `/api/iam/roles/${editingRole.id}` : '/api/iam/roles'
       const method = editingRole ? 'PUT' : 'POST'
 
-      const response = await fetch(url, {
+      const response = await apiFetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -137,7 +138,7 @@
         closeDialog()
         await invalidateAll()
       } else {
-        error = result.error || m.iam_roles_operation_failed()
+        error = result.error?.message || m.iam_roles_operation_failed()
       }
     } catch (e) {
       error = m.common_network_error()
@@ -158,7 +159,7 @@
     }
 
     try {
-      const response = await fetch(`/api/iam/roles/${role.id}`, {
+      const response = await apiFetch(`/api/iam/roles/${role.id}`, {
         method: 'DELETE',
       })
 
@@ -167,7 +168,7 @@
       if (result.success) {
         await invalidateAll()
       } else {
-        alert(result.error || m.iam_roles_delete_failed())
+        alert(result.error?.message || m.iam_roles_delete_failed())
       }
     } catch (e) {
       alert(m.common_network_error())

@@ -6,12 +6,11 @@
 
 import type { RequestHandler } from '@sveltejs/kit'
 import * as m from '$lib/paraglide/messages.js'
-import { createUpdateUserSchema } from '$lib/server/schemas/index.js'
+import { createUpdateUserSchema, IdParamSchema } from '$lib/server/schemas/index.js'
 import { audit } from '$lib/server/services/index.js'
 import { core } from '@h-ai/core'
 import { iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
-import { json } from '@sveltejs/kit'
 
 /**
  * 统一处理唯一键冲突错误，避免 API 响应泄露底层 SQL 细节。
@@ -37,10 +36,14 @@ export const GET: RequestHandler = async ({ params, locals }) => {
   if (denied)
     return denied
 
+  const { valid: paramsValid, data: validatedParams } = kit.validate.params(params, IdParamSchema)
+  if (!paramsValid)
+    return kit.response.badRequest('Invalid user ID')
+
   try {
-    const userResult = await iam.user.getUser(params.id!)
+    const userResult = await iam.user.getUser(validatedParams!.id)
     if (!userResult.success || !userResult.data) {
-      return json({ success: false, error: m.api_iam_users_not_found() }, { status: 404 })
+      return kit.response.notFound(m.api_iam_users_not_found())
     }
 
     const user = userResult.data
@@ -49,24 +52,21 @@ export const GET: RequestHandler = async ({ params, locals }) => {
     const rolesResult = await iam.authz.getUserRoles(user.id)
     const roles = rolesResult.success ? rolesResult.data.map(r => r.code) : []
 
-    return json({
-      success: true,
-      data: {
-        id: user.id,
-        username: user.username,
-        email: user.email,
-        display_name: user.displayName,
-        avatar: user.avatarUrl,
-        status: user.enabled ? 'active' : 'inactive',
-        roles,
-        created_at: user.createdAt,
-        updated_at: user.updatedAt,
-      },
+    return kit.response.ok({
+      id: user.id,
+      username: user.username,
+      email: user.email,
+      display_name: user.displayName,
+      avatar: user.avatarUrl,
+      status: user.enabled ? 'active' : 'inactive',
+      roles,
+      created_at: user.createdAt,
+      updated_at: user.updatedAt,
     })
   }
   catch (error) {
     core.logger.error('Failed to get user:', { error })
-    return json({ success: false, error: m.api_iam_users_get_failed() }, { status: 500 })
+    return kit.response.internalError(m.api_iam_users_get_failed())
   }
 }
 
@@ -81,17 +81,21 @@ export const PUT: RequestHandler = async ({ params, request, locals, getClientAd
     return denied
 
   try {
-    const userId = params.id!
+    const { valid: paramsValid, data: validatedParams } = kit.validate.params(params, IdParamSchema)
+    if (!paramsValid)
+      return kit.response.badRequest('Invalid user ID')
+
+    const userId = validatedParams!.id
     const { valid, data, errors } = await kit.validate.form(request, createUpdateUserSchema())
     if (!valid) {
-      return json({ success: false, error: errors[0]?.message }, { status: 400 })
+      return kit.response.badRequest(errors[0]?.message ?? 'Validation failed')
     }
     const { username, email, password, display_name, roles } = data!
 
     // 检查用户是否存在
     const existingResult = await iam.user.getUser(userId)
     if (!existingResult.success || !existingResult.data) {
-      return json({ success: false, error: m.api_iam_users_not_found() }, { status: 404 })
+      return kit.response.notFound(m.api_iam_users_not_found())
     }
 
     // 更新用户信息
@@ -106,7 +110,7 @@ export const PUT: RequestHandler = async ({ params, request, locals, getClientAd
     if (Object.keys(updateData).length > 0) {
       const updateResult = await iam.user.updateUser(userId, updateData)
       if (!updateResult.success) {
-        return json({ success: false, error: normalizeUpdateUserError(updateResult.error.message) }, { status: 400 })
+        return kit.response.badRequest(normalizeUpdateUserError(updateResult.error.message))
       }
     }
 
@@ -114,7 +118,7 @@ export const PUT: RequestHandler = async ({ params, request, locals, getClientAd
     if (password) {
       const resetResult = await iam.user.adminResetPassword(userId, password)
       if (!resetResult.success) {
-        return json({ success: false, error: resetResult.error.message }, { status: 400 })
+        return kit.response.badRequest(resetResult.error.message)
       }
     }
 
@@ -155,35 +159,32 @@ export const PUT: RequestHandler = async ({ params, request, locals, getClientAd
     // 获取更新后的用户信息
     const updatedResult = await iam.user.getUser(userId)
     if (!updatedResult.success || !updatedResult.data) {
-      return json({ success: false, error: m.api_iam_users_get_updated_failed() }, { status: 500 })
+      return kit.response.internalError(m.api_iam_users_get_updated_failed())
     }
 
     const user = updatedResult.data
     const rolesResult = await iam.authz.getUserRoles(userId)
     const userRoles = rolesResult.success ? rolesResult.data.map(r => r.code) : []
 
-    return json({
-      success: true,
-      data: {
-        id: user.id,
-        username: user.username,
-        email: user.email,
-        display_name: user.displayName,
-        avatar: user.avatarUrl,
-        status: user.enabled ? 'active' : 'inactive',
-        roles: userRoles,
-        created_at: user.createdAt,
-        updated_at: user.updatedAt,
-      },
+    return kit.response.ok({
+      id: user.id,
+      username: user.username,
+      email: user.email,
+      display_name: user.displayName,
+      avatar: user.avatarUrl,
+      status: user.enabled ? 'active' : 'inactive',
+      roles: userRoles,
+      created_at: user.createdAt,
+      updated_at: user.updatedAt,
     })
   }
   catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error)
     if (errorMessage.toLowerCase().includes('unique constraint') || errorMessage.toLowerCase().includes('duplicate')) {
-      return json({ success: false, error: m.api_auth_username_or_email_taken() }, { status: 409 })
+      return kit.response.conflict(m.api_auth_username_or_email_taken())
     }
     core.logger.error('Failed to update user:', { error })
-    return json({ success: false, error: m.api_iam_users_update_failed() }, { status: 500 })
+    return kit.response.internalError(m.api_iam_users_update_failed())
   }
 }
 
@@ -198,12 +199,16 @@ export const DELETE: RequestHandler = async ({ params, locals, request, cookies,
     return denied
 
   try {
-    const userId = params.id!
+    const { valid: paramsValid, data: validatedParams } = kit.validate.params(params, IdParamSchema)
+    if (!paramsValid)
+      return kit.response.badRequest('Invalid user ID')
+
+    const userId = validatedParams!.id
 
     // 检查用户是否存在
     const existingResult = await iam.user.getUser(userId)
     if (!existingResult.success || !existingResult.data) {
-      return json({ success: false, error: m.api_iam_users_not_found() }, { status: 404 })
+      return kit.response.notFound(m.api_iam_users_not_found())
     }
 
     // 禁止删除自己（优先使用 session，兜底使用 token 解析）
@@ -219,7 +224,7 @@ export const DELETE: RequestHandler = async ({ params, locals, request, cookies,
     }
 
     if (currentUserId === userId) {
-      return json({ success: false, error: m.api_iam_users_cannot_delete_self() }, { status: 400 })
+      return kit.response.badRequest(m.api_iam_users_cannot_delete_self())
     }
 
     const existing = existingResult.data
@@ -239,7 +244,7 @@ export const DELETE: RequestHandler = async ({ params, locals, request, cookies,
         userId,
         error: deleteResult.error.message,
       })
-      return json({ success: false, error: m.api_iam_users_delete_failed() }, { status: 500 })
+      return kit.response.internalError(m.api_iam_users_delete_failed())
     }
 
     // 记录审计日志
@@ -255,10 +260,10 @@ export const DELETE: RequestHandler = async ({ params, locals, request, cookies,
       ua,
     )
 
-    return json({ success: true })
+    return kit.response.ok(null)
   }
   catch (error) {
     core.logger.error('Failed to delete user', { error })
-    return json({ success: false, error: m.api_iam_users_delete_failed() }, { status: 500 })
+    return kit.response.internalError(m.api_iam_users_delete_failed())
   }
 }

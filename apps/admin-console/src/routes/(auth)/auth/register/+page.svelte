@@ -10,6 +10,7 @@
   import { page } from '$app/state'
   import type { RegisterFormData } from '@h-ai/ui'
   import * as m from '$lib/paraglide/messages'
+  import { apiFetch } from '$lib/utils/api'
   
   let loading = $state(false)
   let errors = $state<Record<string, string>>({})
@@ -31,7 +32,7 @@
     loading = true
 
     try {
-      const response = await fetch('/api/auth/register', {
+      const response = await apiFetch('/api/auth/register', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -47,7 +48,7 @@
       if (result.success) {
         goto('/admin')
       } else {
-        errors = { general: result.error || m.common_error() }
+        errors = { general: result.error?.message || m.common_error() }
       }
     } catch {
       errors = { general: m.common_network_error() }

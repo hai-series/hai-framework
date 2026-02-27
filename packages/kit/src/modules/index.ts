@@ -14,6 +14,3 @@ export * from './crypto/index.js'
 
 // IAM
 export * from './iam/index.js'
-
-// Storage
-export * from './storage/index.js'

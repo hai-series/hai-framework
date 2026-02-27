@@ -18,18 +18,32 @@ import { getKitMessage } from '../kit-i18n.js'
  * 权限守卫配置
  */
 export interface PermissionGuardConfig {
-  /** 需要的权限（满足任意一个即可） */
+  /** 需要的权限列表（默认 OR 逻辑，满足任一即通过） */
   permissions: string[]
-  /** 是否需要全部权限 */
+  /** 为 `true` 时要求用户拥有 **全部** 权限（AND 逻辑） */
   requireAll?: boolean
-  /** 无权限时重定向 URL */
+  /** 无权限时重定向 URL（默认 `'/403'`） */
   forbiddenUrl?: string
-  /** 是否返回 JSON 错误（API 模式） */
+  /** 为 `true` 时返回 JSON 403 而非重定向 */
   apiMode?: boolean
 }
 
 /**
  * 创建权限守卫
+ *
+ * 检查用户 `session.permissions` 是否满足配置中的权限要求。
+ * 支持通配符匹配：`admin:*` 可匹配 `admin:read`、`admin:write` 等。
+ * 未认证时返回 401；权限不匹配时根据 `apiMode` 返回 JSON 403 或重定向。
+ *
+ * @param config - 权限守卫配置
+ * @returns RouteGuard 实例
+ *
+ * @example
+ * ```ts
+ * guards: [
+ *   { guard: kit.guard.permission({ permissions: ['user:read', 'user:write'], requireAll: true }), paths: ['/api/users/*'] },
+ * ]
+ * ```
  */
 export function permissionGuard(config: PermissionGuardConfig): RouteGuard {
   const { permissions, requireAll = false, forbiddenUrl = '/403', apiMode = false } = config

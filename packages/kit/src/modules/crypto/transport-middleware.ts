@@ -49,6 +49,7 @@ export function transportEncryptionMiddleware(config: TransportEncryptionConfig)
   const keyExchangePath = config.keyExchangePath ?? '/api/kit/key-exchange'
   const excludePaths = config.excludePaths ?? []
   const encryptResponse = config.encryptResponse ?? true
+  const requireEncryption = config.requireEncryption ?? true
 
   // 初始化传输加密管理器
   let manager: TransportEncryptionManager
@@ -75,9 +76,17 @@ export function transportEncryptionMiddleware(config: TransportEncryptionConfig)
       return next()
     }
 
-    // 请求头中无 X-Client-Id 时不解密（可能是未经密钥交换的请求）
+    // 请求头中无 X-Client-Id 时的处理
     const clientId = event.request.headers.get('X-Client-Id')
     if (!clientId) {
+      if (requireEncryption) {
+        // 强制加密模式：缺少 X-Client-Id 说明未完成密钥交换，拒绝请求
+        return new Response(
+          JSON.stringify({ error: getKitMessage('kit_transportClientIdRequired') }),
+          { status: 400, headers: { 'Content-Type': 'application/json' } },
+        )
+      }
+      // 非强制模式：透传明文（渐进式迁移兼容）
       return next()
     }
 
@@ -157,7 +166,13 @@ export function transportEncryptionMiddleware(config: TransportEncryptionConfig)
 }
 
 /**
- * 处理密钥交换请求
+ * 处理密钥交换 POST 请求
+ *
+ * 接收客户端公钥，注册并返回服务端公钥与 clientId。
+ *
+ * @param manager - 传输加密管理器
+ * @param request - 原始 Request
+ * @returns JSON Response
  */
 async function handleKeyExchange(
   manager: TransportEncryptionManager,
@@ -190,7 +205,12 @@ async function handleKeyExchange(
 }
 
 /**
- * 判断路径是否应排除加解密
+ * 判断路径是否应排除传输加解密
+ *
+ * @param pathname - 当前请求路径
+ * @param excludePaths - 配置的排除列表
+ * @param keyExchangePath - 密钥交换端点路径
+ * @returns 是否排除
  */
 function shouldExclude(pathname: string, excludePaths: string[], keyExchangePath: string): boolean {
   if (pathname === keyExchangePath)
@@ -199,7 +219,10 @@ function shouldExclude(pathname: string, excludePaths: string[], keyExchangePath
 }
 
 /**
- * 判断请求方法是否可能有 body
+ * 判断 HTTP 方法是否可能携带请求体
+ *
+ * @param method - HTTP 方法字符串
+ * @returns `true` 表示 POST / PUT / PATCH / DELETE
  */
 function hasBody(method: string): boolean {
   return ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method.toUpperCase())

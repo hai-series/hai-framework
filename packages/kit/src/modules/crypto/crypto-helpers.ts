@@ -44,6 +44,19 @@ import { getKitMessage } from '../../kit-i18n.js'
 
 /**
  * 验证 Webhook 签名
+ *
+ * 从请求头取出签名，用 HMAC 对原始 Body 进行比较验证。
+ *
+ * @param config - 签名验证配置
+ * @returns 签名是否合法
+ *
+ * @example
+ * ```ts
+ * const valid = await kit.crypto.verifyWebhookSignature({
+ *   crypto, event, secretKey: 'wh_secret', signatureHeader: 'X-Signature',
+ * })
+ * if (!valid) return new Response('Invalid signature', { status: 401 })
+ * ```
  */
 export async function verifyWebhookSignature(config: WebhookVerifyConfig): Promise<boolean> {
   const {
@@ -71,7 +84,14 @@ export async function verifyWebhookSignature(config: WebhookVerifyConfig): Promi
 }
 
 /**
- * 生成请求签名（用于调用外部服务）
+ * 生成请求 HMAC 签名（用于调用外部服务）
+ *
+ * @param crypto - @h-ai/crypto 服务实例
+ * @param body - 请求体字符串
+ * @param secretKey - 共享密钥
+ * @param algorithm - 哈希算法（默认 `'sha256'`）
+ * @returns 签名字符串
+ * @throws 签名失败时抛出 Error
  */
 export async function signRequest(
   crypto: CryptoServiceLike,
@@ -88,6 +108,21 @@ export async function signRequest(
 
 /**
  * 创建 CSRF Token 管理器
+ *
+ * 基于 `@h-ai/crypto` 随机字节 + 时间安全比较，
+ * 提供 token 生成、验证和 SvelteKit handle 中间件。
+ *
+ * @param config - CSRF 配置（crypto 实例、Cookie 名、Header 名等）
+ * @returns `{ generate, verify, createHandle }`
+ *
+ * @example
+ * ```ts
+ * const csrf = kit.crypto.createCsrfManager({ crypto })
+ * // 在 load 中生成
+ * const token = await csrf.generate(cookies)
+ * // 在 action 中验证
+ * const ok = await csrf.verify(event)
+ * ```
  */
 export function createCsrfManager(config: CryptoCsrfConfig) {
   const {
@@ -177,6 +212,18 @@ export function createCsrfManager(config: CryptoCsrfConfig) {
 
 /**
  * 创建加密 Cookie 管理器
+ *
+ * 使用 AES 对 Cookie 值进行加解密，防止客户端篡改。
+ *
+ * @param config - 加密 Cookie 配置（含加密密钥）
+ * @returns `{ set, get, delete }`
+ *
+ * @example
+ * ```ts
+ * const enc = kit.crypto.createEncryptedCookie({ crypto, encryptionKey: 'my-32byte-key' })
+ * await enc.set(cookies, 'prefs', { theme: 'dark' })
+ * const prefs = await enc.get(cookies, 'prefs')
+ * ```
  */
 export function createEncryptedCookie(config: EncryptedCookieConfig) {
   const { crypto, encryptionKey, cookieOptions = {} } = config

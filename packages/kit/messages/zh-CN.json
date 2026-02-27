@@ -34,5 +34,6 @@
   "kit_transportDecryptKeyFailed": "对称密钥解密失败",
   "kit_transportDecryptFailed": "传输解密失败",
   "kit_transportInvalidPayload": "无效的加密载荷",
-  "kit_transportKeyExchangeFailed": "密钥交换失败"
+  "kit_transportKeyExchangeFailed": "密钥交换失败",
+  "kit_transportClientIdRequired": "缺少 X-Client-Id 请求头，传输加密必须先完成密钥交换"
 }

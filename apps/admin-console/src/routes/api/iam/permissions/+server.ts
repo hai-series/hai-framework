@@ -10,7 +10,6 @@ import { CreatePermissionSchema } from '$lib/server/schemas/index.js'
 import { audit, permissionService } from '$lib/server/services/index.js'
 import { core } from '@h-ai/core'
 import { kit } from '@h-ai/kit'
-import { json } from '@sveltejs/kit'
 
 /**
  * GET /api/iam/permissions - 获取权限列表
@@ -24,11 +23,11 @@ export const GET: RequestHandler = async ({ locals }) => {
 
   try {
     const permissions = await permissionService.list()
-    return json({ success: true, data: permissions })
+    return kit.response.ok(permissions)
   }
   catch (error) {
     core.logger.error('Failed to list permissions:', { error })
-    return json({ success: false, error: m.api_iam_permissions_list_failed() }, { status: 500 })
+    return kit.response.internalError(m.api_iam_permissions_list_failed())
   }
 }
 
@@ -45,7 +44,7 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
   try {
     const { valid, data, errors } = await kit.validate.form(request, CreatePermissionSchema)
     if (!valid) {
-      return json({ success: false, error: errors[0]?.message }, { status: 400 })
+      return kit.response.badRequest(errors[0]?.message ?? 'Validation failed')
     }
     const { name, description, resource, action } = data!
 
@@ -55,7 +54,7 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
     // 检查权限名称是否已存在
     const existing = await permissionService.getByName(code)
     if (existing) {
-      return json({ success: false, error: m.api_iam_permissions_name_exists() }, { status: 409 })
+      return kit.response.conflict(m.api_iam_permissions_name_exists())
     }
 
     // 创建权限
@@ -80,10 +79,10 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
       ua,
     )
 
-    return json({ success: true, data: permission })
+    return kit.response.ok(permission)
   }
   catch (error) {
     core.logger.error('Failed to create permission:', { error })
-    return json({ success: false, error: m.api_iam_permissions_create_failed() }, { status: 500 })
+    return kit.response.internalError(m.api_iam_permissions_create_failed())
   }
 }

@@ -19,6 +19,15 @@ function getPasswordMinLength(): number {
   return iam.config?.password?.minLength ?? 8
 }
 
+/**
+ * 路径参数 id 校验 Schema
+ *
+ * 验证 `event.params.id` 非空字符串。
+ */
+export const IdParamSchema = z.object({
+  id: z.string().min(1, 'ID is required'),
+})
+
 /** 用户列表查询参数 Schema */
 export const ListUsersQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),

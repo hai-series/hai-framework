@@ -13,7 +13,6 @@
  * - kit.validate        — 请求验证（form / query / params）
  * - kit.iam             — IAM 模块集成
  * - kit.cache           — Cache 模块集成
- * - kit.storage         — Storage 模块集成
  * - kit.crypto          — Crypto 模块集成
  * - kit.client          — 客户端 Stores
  * - kit.setAllModulesLocale() — i18n 全局语言设置
@@ -57,7 +56,6 @@ import { createKeyExchangeHandler, createTransportEncryption, isValidEncryptedPa
 import { transportEncryptionMiddleware } from './modules/crypto/transport-middleware.js'
 import { createIamActions } from './modules/iam/iam-actions.js'
 import { createIamHandle, requireAuth } from './modules/iam/iam-handle.js'
-import { createStorageEndpoint } from './modules/storage/storage-handle.js'
 
 /**
  * Kit 模块统一出口。
@@ -167,13 +165,6 @@ export const kit = {
     createHandle: createCacheHandle,
     /** 创建缓存工具（手动缓存操作） */
     createUtils: createCacheUtils,
-  },
-
-  // ─── 模块集成: Storage ───
-
-  storage: {
-    /** 创建存储端点（文件上传/下载/列表等） */
-    createEndpoint: createStorageEndpoint,
   },
 
   // ─── 模块集成: Crypto ───

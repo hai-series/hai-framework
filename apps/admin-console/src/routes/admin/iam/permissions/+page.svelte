@@ -7,6 +7,7 @@
   import * as m from '$lib/paraglide/messages'
   import { invalidateAll } from '$app/navigation'
   import type { PageData } from './$types'
+  import { apiFetch } from '$lib/utils/api'
 
   interface PermissionItem {
     id: string
@@ -85,7 +86,7 @@
     submitting = true
 
     try {
-      const response = await fetch('/api/iam/permissions', {
+      const response = await apiFetch('/api/iam/permissions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form),
@@ -97,7 +98,7 @@
         closeDialog()
         await invalidateAll()
       } else {
-        error = result.error || m.iam_users_operation_failed()
+        error = result.error?.message || m.iam_users_operation_failed()
       }
     } catch (e) {
       error = m.common_network_error()
@@ -118,7 +119,7 @@
     }
 
     try {
-      const response = await fetch(`/api/iam/permissions/${perm.id}`, {
+      const response = await apiFetch(`/api/iam/permissions/${perm.id}`, {
         method: 'DELETE',
       })
 
@@ -127,7 +128,7 @@
       if (result.success) {
         await invalidateAll()
       } else {
-        alert(result.error || m.iam_users_delete_failed())
+        alert(result.error?.message || m.iam_users_delete_failed())
       }
     } catch (e) {
       alert(m.common_network_error())

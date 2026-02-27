@@ -38,6 +38,18 @@ import { getKitMessage } from '../../kit-i18n.js'
 
 /**
  * 创建 IAM Form Actions
+ *
+ * 返回一组 SvelteKit Form Actions（login / logout / register / changePassword / updateProfile），
+ * 全部委托给 `@h-ai/iam` 执行，自动处理 Cookie 设置与清理。
+ *
+ * @param config - Form Actions 配置（含 iam 实例、重定向路由、回调等）
+ * @returns `{ login, logout, register, changePassword, updateProfile }`
+ *
+ * @example
+ * ```ts
+ * // src/routes/login/+page.server.ts
+ * export const actions = kit.iam.createActions({ iam, loginRedirect: '/dashboard' })
+ * ```
  */
 export function createIamActions(config: IamActionsConfig) {
   const {

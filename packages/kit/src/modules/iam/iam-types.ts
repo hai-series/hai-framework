@@ -70,8 +70,6 @@ export interface IamActionsConfig {
 export interface IamLocals {
   /** 当前会话 */
   session: Session | null
-  /** 当前用户 */
-  user: User | null
 }
 
 // ─── Action 返回结果 ───

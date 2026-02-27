@@ -4,7 +4,6 @@ import { UpdateProfileSchema } from '$lib/server/schemas/index.js'
 import { core } from '@h-ai/core'
 import { iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
-import { json } from '@sveltejs/kit'
 
 /**
  * 将底层唯一键冲突错误映射为稳定的用户可读提示。
@@ -24,19 +23,18 @@ export const GET: RequestHandler = async ({ cookies }) => {
   try {
     const token = cookies.get('session_token')
     if (!token) {
-      return json({ success: false, error: m.common_error() }, { status: 401 })
+      return kit.response.unauthorized(m.common_error())
     }
 
     const userResult = await iam.user.getCurrentUser(token)
     if (!userResult.success) {
-      return json({ success: false, error: m.common_error() }, { status: 401 })
+      return kit.response.unauthorized(m.common_error())
     }
 
     const rolesResult = await iam.authz.getUserRoles(userResult.data.id)
     const roles = rolesResult.success ? rolesResult.data.map(r => r.code) : []
 
-    return json({
-      success: true,
+    return kit.response.ok({
       user: {
         id: userResult.data.id,
         username: userResult.data.username,
@@ -50,7 +48,7 @@ export const GET: RequestHandler = async ({ cookies }) => {
   }
   catch (error) {
     core.logger.error('Failed to get current profile', { error })
-    return json({ success: false, error: m.common_error() }, { status: 500 })
+    return kit.response.internalError(m.common_error())
   }
 }
 
@@ -63,7 +61,7 @@ export const PUT: RequestHandler = async ({ cookies, request }) => {
   try {
     const token = cookies.get('session_token')
     if (!token) {
-      return json({ success: false, error: m.common_error() }, { status: 401 })
+      return kit.response.unauthorized(m.common_error())
     }
 
     const { valid, data, errors } = await kit.validate.form(request, UpdateProfileSchema)
@@ -71,11 +69,11 @@ export const PUT: RequestHandler = async ({ cookies, request }) => {
       const fieldErrors = Object.fromEntries(
         errors.map(error => [error.field, error.message]),
       )
-      return json({
-        success: false,
-        error: errors[0]?.message ?? m.common_error(),
-        fieldErrors,
-      }, { status: 400 })
+      return kit.response.badRequest(
+        errors[0]?.message ?? m.common_error(),
+        undefined,
+        { fieldErrors },
+      )
     }
 
     const patch: {
@@ -111,18 +109,17 @@ export const PUT: RequestHandler = async ({ cookies, request }) => {
     const updateResult = await iam.user.updateCurrentUser(token, patch)
     if (!updateResult.success) {
       const normalizedError = normalizeProfileUpdateError(updateResult.error.message)
-      return json({
-        success: false,
-        error: normalizedError,
-        fieldErrors: { general: normalizedError },
-      }, { status: 400 })
+      return kit.response.badRequest(
+        normalizedError,
+        undefined,
+        { fieldErrors: { general: normalizedError } },
+      )
     }
 
     const rolesResult = await iam.authz.getUserRoles(updateResult.data.id)
     const roles = rolesResult.success ? rolesResult.data.map(r => r.code) : []
 
-    return json({
-      success: true,
+    return kit.response.ok({
       user: {
         id: updateResult.data.id,
         username: updateResult.data.username,
@@ -137,13 +134,9 @@ export const PUT: RequestHandler = async ({ cookies, request }) => {
   catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error)
     if (errorMessage.toLowerCase().includes('unique constraint') || errorMessage.toLowerCase().includes('duplicate')) {
-      return json({
-        success: false,
-        error: m.api_auth_username_or_email_taken(),
-        fieldErrors: { general: m.api_auth_username_or_email_taken() },
-      }, { status: 409 })
+      return kit.response.error('CONFLICT', m.api_auth_username_or_email_taken(), 409, undefined, { fieldErrors: { general: m.api_auth_username_or_email_taken() } })
     }
     core.logger.error('Failed to update current profile', { error })
-    return json({ success: false, error: m.common_error() }, { status: 500 })
+    return kit.response.internalError(m.common_error())
   }
 }

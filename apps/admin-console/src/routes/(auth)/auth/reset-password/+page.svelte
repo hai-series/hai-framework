@@ -10,6 +10,7 @@
   import { goto } from '$app/navigation'
   import type { ResetPasswordFormData } from '@h-ai/ui'
   import * as m from '$lib/paraglide/messages'
+  import { apiFetch } from '$lib/utils/api'
   
   let loading = $state(false)
   let errors = $state<Record<string, string>>({})
@@ -32,7 +33,7 @@
     loading = true
 
     try {
-      const response = await fetch('/api/auth/reset-password', {
+      const response = await apiFetch('/api/auth/reset-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
@@ -49,7 +50,7 @@
         // 3秒后跳转到登录页
         setTimeout(() => goto('/auth/login'), 3000)
       } else {
-        errors = { general: result.error || m.auth_reset_failed() }
+        errors = { general: result.error?.message || m.auth_reset_failed() }
       }
     } catch {
       errors = { general: m.common_network_error() }

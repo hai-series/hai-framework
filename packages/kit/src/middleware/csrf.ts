@@ -10,7 +10,10 @@ import type { CsrfConfig, Middleware } from '../kit-types.js'
 import { core } from '@h-ai/core'
 
 /**
- * 生成唯一 ID
+ * 生成唯一 CSRF token
+ *
+ * @param prefix - ID 前缀
+ * @returns 格式为 `{prefix}_{timestamp}{random}` 的唯一 ID
  */
 function generateId(prefix: string): string {
   const timestamp = Date.now().toString(36)
@@ -28,7 +31,21 @@ const defaultConfig: Required<CsrfConfig> = {
 }
 
 /**
- * 创建 CSRF 中间件
+ * 创建 CSRF 防护中间件
+ *
+ * Double Submit Cookie 模式：
+ * 1. 安全方法（GET/HEAD/OPTIONS）：确保 Cookie 中存在 CSRF token（无则自动创建）
+ * 2. 写方法（POST/PUT/DELETE等）：比较 Cookie token 与 Header token，不一致时返回 403
+ *
+ * @param config - CSRF 配置
+ * @returns Middleware 实例
+ *
+ * @example
+ * ```ts
+ * middleware: [
+ *   kit.middleware.csrf({ exclude: ['/api/webhook/*'] }),
+ * ]
+ * ```
  */
 export function csrfMiddleware(config: CsrfConfig = {}): Middleware {
   const mergedConfig = { ...defaultConfig, ...config }
@@ -91,7 +108,11 @@ export function csrfMiddleware(config: CsrfConfig = {}): Middleware {
 }
 
 /**
- * 简单路径匹配
+ * 简单路径通配符匹配
+ *
+ * @param pathname - 当前请求路径
+ * @param pattern - 匹配模式（支持 `/*` 和 `/**` 通配符）
+ * @returns 是否匹配
  */
 function matchPath(pathname: string, pattern: string): boolean {
   if (pattern.endsWith('/*')) {

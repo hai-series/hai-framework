@@ -13,16 +13,32 @@ import { core } from '@h-ai/core'
  * 日志中间件配置
  */
 export interface LoggingMiddlewareConfig {
-  /** 是否记录请求体 */
+  /** 为 `true` 时记录非 GET 请求体（自动脱敏） */
   logBody?: boolean
-  /** 是否记录响应 */
+  /** 为 `true` 时记录响应头 */
   logResponse?: boolean
-  /** 要屏蔽的字段 */
+  /** 指定需要脱敏的字段名（默认 `['password', 'token', 'secret']`） */
   redactFields?: string[]
 }
 
 /**
  * 创建日志中间件
+ *
+ * 以 `core.logger.trace` 级别记录请求进出信息，包含：
+ * - 请求：method / path / query / userAgent / ip
+ * - 响应：status / duration
+ *
+ * 敏感字段会被自动替换为 `[REDACTED]`。
+ *
+ * @param config - 日志配置
+ * @returns Middleware 实例
+ *
+ * @example
+ * ```ts
+ * middleware: [
+ *   kit.middleware.logging({ logBody: true, redactFields: ['password', 'creditCard'] }),
+ * ]
+ * ```
  */
 export function loggingMiddleware(config: LoggingMiddlewareConfig = {}): Middleware {
   const { logBody = false, logResponse = false, redactFields = ['password', 'token', 'secret'] } = config
@@ -83,7 +99,13 @@ export function loggingMiddleware(config: LoggingMiddlewareConfig = {}): Middlew
 }
 
 /**
- * 屏蔽对象中的敏感字段
+ * 递归屏蔽对象中的敏感字段
+ *
+ * 匹配规则：字段名转小写后与 `fields` 列表比较。
+ *
+ * @param obj - 待处理对象
+ * @param fields - 需要屏蔽的字段名列表（全小写）
+ * @returns 屏蔽后的副本
  */
 function redactObject(obj: unknown, fields: string[]): unknown {
   if (typeof obj !== 'object' || obj === null) {

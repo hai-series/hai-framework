@@ -8,6 +8,7 @@
   import { page } from '$app/state'
   import { goto } from '$app/navigation'
   import * as m from '$lib/paraglide/messages'
+  import { apiFetch } from '$lib/utils/api'
   
   interface Props {
     data: LayoutData
@@ -172,7 +173,7 @@
   async function handleLogout() {
     userMenuOpen = false
     try {
-      await fetch('/api/auth/logout', { method: 'POST' })
+      await apiFetch('/api/auth/logout', { method: 'POST' })
     } catch {
       // 忽略错误
     }

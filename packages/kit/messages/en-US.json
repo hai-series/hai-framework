@@ -34,5 +34,6 @@
   "kit_transportDecryptKeyFailed": "Symmetric key decryption failed",
   "kit_transportDecryptFailed": "Transport decryption failed",
   "kit_transportInvalidPayload": "Invalid encrypted payload",
-  "kit_transportKeyExchangeFailed": "Key exchange failed"
+  "kit_transportKeyExchangeFailed": "Key exchange failed",
+  "kit_transportClientIdRequired": "Missing X-Client-Id header, key exchange is required for transport encryption"
 }

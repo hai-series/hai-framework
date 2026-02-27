@@ -10,20 +10,35 @@ import type { Middleware, RateLimitConfig } from '../kit-types.js'
 import { core } from '@h-ai/core'
 
 /**
- * 速率限制存储
+ * 速率限制存储条目
  */
 interface RateLimitEntry {
+  /** 当前窗口内的请求次数 */
   count: number
+  /** 窗口重置时间戳（ms） */
   resetAt: number
 }
 
-/**
- * 内存速率限制存储
- */
+/** 内存速率限制存储（以客户端 key 为索引） */
 const store = new Map<string, RateLimitEntry>()
 
 /**
  * 创建速率限制中间件
+ *
+ * 基于内存存储的滑动窗口限流：
+ * - 超限时返回 429，并在响应头中告知重置时间
+ * - 正常响应附带 `X-RateLimit-*` 头
+ * - 定期清理过期条目（每个 `windowMs` 周期）
+ *
+ * @param config - 限流配置
+ * @returns Middleware 实例
+ *
+ * @example
+ * ```ts
+ * middleware: [
+ *   kit.middleware.rateLimit({ windowMs: 60_000, maxRequests: 100 }),
+ * ]
+ * ```
  */
 export function rateLimitMiddleware(config: RateLimitConfig): Middleware {
   const {

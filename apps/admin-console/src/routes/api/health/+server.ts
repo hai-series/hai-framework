@@ -5,19 +5,16 @@
  */
 
 import type { RequestHandler } from './$types'
-import { json } from '@sveltejs/kit'
+import { kit } from '@h-ai/kit'
 
 export const GET: RequestHandler = async ({ locals }) => {
   if (!locals.session) {
-    return json({ success: false, error: 'Authentication required' }, { status: 401 })
+    return kit.response.unauthorized()
   }
 
-  return json({
-    success: true,
-    data: {
-      status: 'healthy',
-      timestamp: new Date().toISOString(),
-      version: '0.0.1',
-    },
+  return kit.response.ok({
+    status: 'healthy',
+    timestamp: new Date().toISOString(),
+    version: '0.0.1',
   })
 }

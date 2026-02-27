@@ -2,6 +2,7 @@
   import type { PageData } from './$types'
   import type { ChangePasswordFormData, UserProfileSubmitData } from '@h-ai/ui'
   import * as m from '$lib/paraglide/messages.js'
+  import { apiFetch } from '$lib/utils/api'
 
   interface Props {
     data: PageData
@@ -93,7 +94,7 @@
     phone?: string
     avatar?: string
   }) {
-    const response = await fetch('/api/auth/profile', {
+    const response = await apiFetch('/api/auth/profile', {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -121,27 +122,27 @@
       const formData = new FormData()
       formData.set('file', file)
 
-      const uploadResponse = await fetch('/api/auth/profile/avatar', {
+      const uploadResponse = await apiFetch('/api/auth/profile/avatar', {
         method: 'POST',
         body: formData,
       })
       const uploadBody = await uploadResponse.json()
       if (!uploadResponse.ok || !uploadBody.success) {
-        profileErrors = { avatar: uploadBody.error ?? m.common_error() }
+        profileErrors = { avatar: uploadBody.error?.message ?? m.common_error() }
         return
       }
 
       const { response, body } = await saveProfile({
-        avatar: uploadBody.avatar,
+        avatar: uploadBody.data?.avatar,
       })
       if (!response.ok || !body.success) {
-        profileErrors = { general: body.error ?? m.common_error() }
+        profileErrors = { general: body.error?.message ?? m.common_error() }
         return
       }
 
       profileUser = {
         ...profileUser,
-        avatarUrl: body.user.avatar ?? uploadBody.avatar,
+        avatarUrl: body.data?.user?.avatar ?? uploadBody.data?.avatar,
       }
       profileSuccess = m.common_success()
     }
@@ -194,19 +195,19 @@
 
       if (!response.ok || !body.success) {
         profileErrors = {
-          ...normalizeProfileFieldErrors(body.fieldErrors),
-          general: body.error ?? m.common_error(),
+          ...normalizeProfileFieldErrors(body.error?.details?.fieldErrors),
+          general: body.error?.message ?? m.common_error(),
         }
         return
       }
 
       profileUser = {
         ...profileUser,
-        username: body.user.username ?? '',
-        email: body.user.email ?? '',
-        displayName: body.user.display_name ?? '',
-        phone: body.user.phone ?? '',
-        avatarUrl: body.user.avatar ?? '',
+        username: body.data?.user?.username ?? '',
+        email: body.data?.user?.email ?? '',
+        displayName: body.data?.user?.display_name ?? '',
+        phone: body.data?.user?.phone ?? '',
+        avatarUrl: body.data?.user?.avatar ?? '',
       }
       profileSuccess = m.common_success()
     }
@@ -252,7 +253,7 @@
     }
 
     try {
-      const response = await fetch('/api/auth/profile/password', {
+      const response = await apiFetch('/api/auth/profile/password', {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -264,18 +265,18 @@
 
       const body = await response.json()
       if (!response.ok || !body.success) {
-        const fields = body.fieldErrors ?? {}
+        const fields = body.error?.details?.fieldErrors ?? {}
         passwordErrors = {
           oldPassword: fields.old_password,
           newPassword: fields.new_password,
           confirmPassword: fields.confirm_password,
-          general: body.error ?? m.common_error(),
+          general: body.error?.message ?? m.common_error(),
         }
         return
       }
 
       passwordSuccess = m.common_success()
-      if (body.reloginRequired && typeof window !== 'undefined') {
+      if (body.data?.reloginRequired && typeof window !== 'undefined') {
         window.setTimeout(() => {
           window.location.assign('/auth/login')
         }, 300)

@@ -10,7 +10,6 @@ import { CreateRoleSchema } from '$lib/server/schemas/index.js'
 import { audit, permissionService, roleService } from '$lib/server/services/index.js'
 import { core } from '@h-ai/core'
 import { kit } from '@h-ai/kit'
-import { json } from '@sveltejs/kit'
 
 /**
  * GET /api/iam/roles - 获取角色列表
@@ -24,11 +23,11 @@ export const GET: RequestHandler = async ({ locals }) => {
 
   try {
     const roles = await roleService.list()
-    return json({ success: true, data: roles })
+    return kit.response.ok(roles)
   }
   catch (error) {
     core.logger.error('Failed to list roles:', { error })
-    return json({ success: false, error: m.api_iam_roles_list_failed() }, { status: 500 })
+    return kit.response.internalError(m.api_iam_roles_list_failed())
   }
 }
 
@@ -45,7 +44,7 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
   try {
     const { valid, data, errors } = await kit.validate.form(request, CreateRoleSchema)
     if (!valid) {
-      return json({ success: false, error: errors[0]?.message }, { status: 400 })
+      return kit.response.badRequest(errors[0]?.message ?? 'Validation failed')
     }
     const { name, description, permissions } = data!
 
@@ -84,10 +83,10 @@ export const POST: RequestHandler = async ({ request, locals, getClientAddress }
       ua,
     )
 
-    return json({ success: true, data: role })
+    return kit.response.ok(role)
   }
   catch (error) {
     core.logger.error('Failed to create role:', { error })
-    return json({ success: false, error: m.api_iam_roles_create_failed() }, { status: 500 })
+    return kit.response.internalError(m.api_iam_roles_create_failed())
   }
 }

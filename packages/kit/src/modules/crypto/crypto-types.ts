@@ -191,6 +191,13 @@ export interface TransportEncryptionConfig {
   excludePaths?: string[]
   /** 是否加密响应（默认 true） */
   encryptResponse?: boolean
+  /**
+   * 是否强制要求传输加密（默认 true）
+   *
+   * - `true`：非排除路径上缺少 X-Client-Id 请求头时返回 400，防止绕过加密。
+   * - `false`：缺少 X-Client-Id 时透传明文，适用于渐进式迁移场景。
+   */
+  requireEncryption?: boolean
 }
 
 /**
