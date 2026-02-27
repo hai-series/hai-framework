@@ -11,26 +11,72 @@ import { createIamHandle, requireAuth } from '../src/modules/iam/iam-handle.js'
 
 /**
  * 创建模拟的 IAM 服务
+ *
+ * 模拟 IamFunctions 的子功能接口，仅包含 Handle 和 Actions 需要的方法。
  */
 function createMockIam() {
   return {
-    session: {
+    config: {
+      session: { maxAge: 604800 },
+      password: { minLength: 8 },
+    },
+    isInitialized: true,
+    auth: {
+      login: vi.fn(),
+      loginWithOtp: vi.fn(),
+      loginWithLdap: vi.fn(),
+      logout: vi.fn(),
       verifyToken: vi.fn(),
-      get: vi.fn(),
+      sendOtp: vi.fn(),
+    },
+    session: {
       create: vi.fn(),
+      get: vi.fn(),
+      verifyToken: vi.fn(),
+      update: vi.fn(),
       delete: vi.fn(),
+      deleteByUserId: vi.fn(),
     },
     user: {
-      getById: vi.fn(),
       register: vi.fn(),
-    },
-    auth: {
-      authenticate: vi.fn(),
+      getCurrentUser: vi.fn(),
+      updateCurrentUser: vi.fn(),
+      getUser: vi.fn(),
+      listUsers: vi.fn(),
+      updateUser: vi.fn(),
+      deleteUser: vi.fn(),
+      adminResetPassword: vi.fn(),
+      changePassword: vi.fn(),
+      changeCurrentUserPassword: vi.fn(),
+      requestPasswordReset: vi.fn(),
+      confirmPasswordReset: vi.fn(),
+      validatePassword: vi.fn(),
     },
     authz: {
       checkPermission: vi.fn(),
+      getUserPermissions: vi.fn(),
       getUserRoles: vi.fn(),
+      assignRole: vi.fn(),
+      removeRole: vi.fn(),
+      createRole: vi.fn(),
+      getRole: vi.fn(),
+      getRoleByCode: vi.fn(),
+      getAllRoles: vi.fn(),
+      updateRole: vi.fn(),
+      deleteRole: vi.fn(),
+      createPermission: vi.fn(),
+      getPermission: vi.fn(),
+      getAllPermissions: vi.fn(),
+      deletePermission: vi.fn(),
+      assignPermissionToRole: vi.fn(),
+      removePermissionFromRole: vi.fn(),
+      getRolePermissions: vi.fn(),
     },
+    client: {
+      create: vi.fn(),
+    },
+    init: vi.fn(),
+    close: vi.fn(),
   }
 }
 
@@ -114,7 +160,7 @@ describe('createIamHandle', () => {
   })
 
   it('应该验证有效的会话令牌', async () => {
-    mockIam.session.verifyToken.mockResolvedValue({
+    mockIam.auth.verifyToken.mockResolvedValue({
       success: true,
       data: {
         userId: 'user-1',
@@ -122,15 +168,12 @@ describe('createIamHandle', () => {
         accessToken: 'valid-token',
         expiresAt: new Date(),
         createdAt: new Date(),
+        lastActiveAt: new Date(),
       },
     })
-    mockIam.session.get.mockResolvedValue({
+    mockIam.user.getUser.mockResolvedValue({
       success: true,
-      data: { userId: 'user-1', roles: [], accessToken: 'valid-token', expiresAt: new Date(), createdAt: new Date() },
-    })
-    mockIam.user.getById.mockResolvedValue({
-      success: true,
-      data: { id: 'user-1', username: 'testuser' },
+      data: { id: 'user-1', username: 'testuser', enabled: true, createdAt: new Date(), updatedAt: new Date() },
     })
 
     const handle = createIamHandle({
@@ -143,8 +186,8 @@ describe('createIamHandle', () => {
 
     await handle({ event, resolve })
 
-    expect(mockIam.session.verifyToken).toHaveBeenCalledWith('valid-token')
-    expect((event.locals as IamLocals).user).toEqual({ id: 'user-1', username: 'testuser' })
+    expect(mockIam.auth.verifyToken).toHaveBeenCalledWith('valid-token')
+    expect((event.locals as IamLocals).user).toEqual({ id: 'user-1', username: 'testuser', enabled: true, createdAt: expect.any(Date), updatedAt: expect.any(Date) })
     expect(resolve).toHaveBeenCalled()
   })
 
@@ -183,7 +226,7 @@ describe('createIamHandle', () => {
   })
 
   it('应该清除无效的会话 Cookie', async () => {
-    mockIam.session.verifyToken.mockRejectedValue(new Error('Invalid token'))
+    mockIam.auth.verifyToken.mockRejectedValue(new Error('Invalid token'))
 
     const handle = createIamHandle({
       iam: mockIam as unknown as IamHandleConfig['iam'],
@@ -199,7 +242,7 @@ describe('createIamHandle', () => {
   })
 
   it('应该使用自定义 Cookie 名称', async () => {
-    mockIam.session.verifyToken.mockResolvedValue({
+    mockIam.auth.verifyToken.mockResolvedValue({
       success: true,
       data: {
         userId: 'user-1',
@@ -207,15 +250,12 @@ describe('createIamHandle', () => {
         accessToken: 'valid-token',
         expiresAt: new Date(),
         createdAt: new Date(),
+        lastActiveAt: new Date(),
       },
     })
-    mockIam.session.get.mockResolvedValue({
+    mockIam.user.getUser.mockResolvedValue({
       success: true,
-      data: { userId: 'user-1', roles: [], accessToken: 'valid-token', expiresAt: new Date(), createdAt: new Date() },
-    })
-    mockIam.user.getById.mockResolvedValue({
-      success: true,
-      data: { id: 'user-1', username: 'testuser' },
+      data: { id: 'user-1', username: 'testuser', enabled: true, createdAt: new Date(), updatedAt: new Date() },
     })
 
     const handle = createIamHandle({
@@ -237,8 +277,8 @@ describe('createIamHandle', () => {
 describe('requireAuth', () => {
   it('应该返回已认证的 locals', () => {
     const event = createMockEvent('/api/data')
-    ;(event.locals as IamLocals).session = { userId: 'session-user', roles: [], accessToken: 'token', expiresAt: new Date(), createdAt: new Date() } as any
-    ;(event.locals as IamLocals).user = { id: 'user-1' } as any
+    ;(event.locals as IamLocals).session = { userId: 'session-user', roles: [], accessToken: 'token', expiresAt: new Date(), createdAt: new Date(), lastActiveAt: new Date() } as any
+    ;(event.locals as IamLocals).user = { id: 'user-1', username: 'testuser', enabled: true, createdAt: new Date(), updatedAt: new Date() } as any
 
     const result = requireAuth(event)
 

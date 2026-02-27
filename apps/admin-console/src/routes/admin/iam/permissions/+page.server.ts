@@ -6,8 +6,15 @@
 
 import type { PageServerLoad } from './$types'
 import { permissionService } from '$lib/server/services/index.js'
+import { kit } from '@h-ai/kit'
+import { error } from '@sveltejs/kit'
 
-export const load: PageServerLoad = async () => {
+export const load: PageServerLoad = async ({ locals }) => {
+  // 权限检查：permission:read
+  if (!kit.guard.hasPermission(locals.session, 'permission:read')) {
+    error(403, { message: 'Forbidden' })
+  }
+
   const [permissions, resources, actions] = await Promise.all([
     permissionService.listGroupedByResource(),
     permissionService.getResources(),

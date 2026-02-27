@@ -28,6 +28,7 @@
     forgotPasswordUrl = '/forgot-password',
     showRegisterLink = false,
     registerUrl = '/register',
+    agreements,
     submitText,
     class: className = '',
     errors = {},
@@ -36,6 +37,10 @@
     header,
     footer,
   }: LoginFormProps = $props()
+
+  const hasAgreements = $derived(
+    !!(agreements?.userAgreementUrl || agreements?.privacyPolicyUrl)
+  )
   
   let username = $state('')
   let password = $state('')
@@ -160,6 +165,22 @@
   >
     {submitText || m('login_submit')}
   </Button>
+
+  <!-- 协议提示 -->
+  {#if hasAgreements}
+    <p class="text-xs text-base-content/50 text-center">
+      {m('agreement_prefix')}
+      {#if agreements?.userAgreementUrl}
+        <a href={agreements.userAgreementUrl} target="_blank" rel="noopener noreferrer" class="link link-primary">{m('agreement_user_agreement')}</a>
+      {/if}
+      {#if agreements?.userAgreementUrl && agreements?.privacyPolicyUrl}
+        {m('agreement_and')}
+      {/if}
+      {#if agreements?.privacyPolicyUrl}
+        <a href={agreements.privacyPolicyUrl} target="_blank" rel="noopener noreferrer" class="link link-primary">{m('agreement_privacy_policy')}</a>
+      {/if}
+    </p>
+  {/if}
   
   <!-- 自定义底部 -->
   {#if footer}

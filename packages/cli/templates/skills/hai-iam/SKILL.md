@@ -65,7 +65,9 @@ await iam.init({
 })
 ```
 
-初始化时自动创建数据库表：`iam_users`、`iam_roles`、`iam_permissions`、`iam_role_permissions`、`iam_user_roles`、`iam_otp`。
+初始化时自动创建数据库表（5 张）：`iam_users`、`iam_roles`、`iam_permissions`、`iam_role_permissions`、`iam_user_roles`。
+
+会话、OTP 验证码、密码重置令牌均存储在 cache 中（不落库）。
 
 ---
 
@@ -73,31 +75,34 @@ await iam.init({
 
 ### 认证 — `iam.auth`
 
-| 方法            | 签名                                                        | 说明                           |
-| --------------- | ----------------------------------------------------------- | ------------------------------ |
-| `login`         | `({ identifier, password }) => Promise<Result<AuthResult>>` | 密码登录（用户名/邮箱/手机号） |
-| `loginWithOtp`  | `({ identifier, code }) => Promise<Result<AuthResult>>`     | OTP 验证码登录                 |
-| `sendOtp`       | `(identifier) => Promise<Result<{ expiresAt }>>`            | 发送 OTP 验证码                |
-| `loginWithLdap` | `({ username, password }) => Promise<Result<AuthResult>>`   | LDAP 登录                      |
-| `verifyToken`   | `(token) => Promise<Result<Session>>`                       | 验证令牌                       |
-| `logout`        | `(token) => Promise<Result<void>>`                          | 登出                           |
+| 方法            | 签名                                                        | 说明                               |
+| --------------- | ----------------------------------------------------------- | ---------------------------------- |
+| `login`         | `({ identifier, password }) => Promise<Result<AuthResult>>` | 密码登录（用户名/邮箱/手机号）     |
+| `loginWithOtp`  | `({ identifier, code }) => Promise<Result<AuthResult>>`     | OTP 验证码登录                     |
+| `sendOtp`       | `(identifier) => Promise<Result<{ expiresAt }>>`            | 发送 OTP 验证码                    |
+| `loginWithLdap` | `({ username, password }) => Promise<Result<AuthResult>>`   | LDAP 登录                          |
+| `verifyToken`   | `(token) => Promise<Result<Session>>`                       | 验证令牌（推荐入口，委托 session） |
+| `logout`        | `(token) => Promise<Result<void>>`                          | 登出                               |
 
 **AuthResult**：`{ user: User, accessToken: string, accessTokenExpiresAt: Date, agreements?: AgreementDisplay }`
 
 ### 用户管理 — `iam.user`
 
-| 方法                   | 签名                                            | 说明                     |
-| ---------------------- | ----------------------------------------------- | ------------------------ |
-| `register`             | `(input) => Promise<Result<RegisterResult>>`    | 用户注册                 |
-| `getUser`              | `(id) => Promise<Result<User>>`                 | 获取用户                 |
-| `getCurrentUser`       | `(token) => Promise<Result<User>>`              | 通过令牌获取当前用户     |
-| `listUsers`            | `(pagination?) => Promise<Result<PageResult>>`  | 用户分页列表             |
-| `updateUser`           | `(id, data) => Promise<Result<User>>`           | 更新用户信息             |
-| `deleteUser`           | `(id) => Promise<Result<void>>`                 | 删除用户（自动清除会话） |
-| `changePassword`       | `(id, old, new) => Promise<Result<void>>`       | 修改密码（自动清除会话） |
-| `validatePassword`     | `(password) => Result<void>`                    | 密码强度校验（同步）     |
-| `requestPasswordReset` | `(email) => Promise<Result<void>>`              | 请求密码重置（防枚举）   |
-| `confirmPasswordReset` | `(token, newPassword) => Promise<Result<void>>` | 确认密码重置             |
+| 方法                        | 签名                                             | 说明                               |
+| --------------------------- | ------------------------------------------------ | ---------------------------------- |
+| `register`                  | `(input) => Promise<Result<RegisterResult>>`     | 用户注册                           |
+| `getUser`                   | `(id) => Promise<Result<User>>`                  | 获取用户                           |
+| `getCurrentUser`            | `(token) => Promise<Result<User>>`               | 通过令牌获取当前用户               |
+| `listUsers`                 | `(pagination?) => Promise<Result<PageResult>>`   | 用户分页列表                       |
+| `updateUser`                | `(id, data) => Promise<Result<User>>`            | 更新用户信息                       |
+| `deleteUser`                | `(id) => Promise<Result<void>>`                  | 删除用户（自动清除会话）           |
+| `changePassword`            | `(id, old, new) => Promise<Result<void>>`        | 修改密码（自动清除会话）           |
+| `validatePassword`          | `(password) => Result<void>`                     | 密码强度校验（同步）               |
+| `requestPasswordReset`      | `(email) => Promise<Result<void>>`               | 请求密码重置（防枚举）             |
+| `confirmPasswordReset`      | `(token, newPassword) => Promise<Result<void>>`  | 确认密码重置（自动清除会话）       |
+| `adminResetPassword`        | `(userId, newPassword) => Promise<Result<void>>` | 管理员直接重置密码（自动清除会话） |
+| `changeCurrentUserPassword` | `(token, old, new) => Promise<Result<void>>`     | 当前用户修改密码（自动清除会话）   |
+| `updateCurrentUser`         | `(token, data) => Promise<Result<User>>`         | 当前用户更新个人信息               |
 
 **User 类型**：
 
@@ -145,25 +150,25 @@ interface Session {
 
 ### RBAC 授权 — `iam.authz`
 
-| 方法                       | 签名                                                            | 说明                               |
-| -------------------------- | --------------------------------------------------------------- | ---------------------------------- |
-| `createRole`               | `({ code, name, description? }) => Promise<Result<Role>>`       | 创建角色                           |
-| `updateRole`               | `(id, data) => Promise<Result<Role>>`                           | 更新角色                           |
-| `deleteRole`               | `(id) => Promise<Result<void>>`                                 | 删除角色（级联清理缓存+会话）      |
-| `getRole`                  | `(id) => Promise<Result<Role>>`                                 | 获取角色                           |
-| `getAllRoles`              | `(pagination?) => Promise<Result<PageResult>>`                  | 角色分页列表                       |
-| `createPermission`         | `({ code, name, description? }) => Promise<Result<Permission>>` | 创建权限                           |
-| `deletePermission`         | `(id) => Promise<Result<void>>`                                 | 删除权限（级联清理缓存）           |
-| `getPermission`            | `(id) => Promise<Result<Permission>>`                           | 获取权限                           |
-| `getAllPermissions`        | `(pagination?) => Promise<Result<PageResult>>`                  | 权限分页列表                       |
-| `assignRole`               | `(userId, roleId) => Promise<Result<void>>`                     | 分配角色给用户（自动同步活跃会话） |
-| `removeRole`               | `(userId, roleId) => Promise<Result<void>>`                     | 移除用户角色（自动同步活跃会话）   |
-| `getUserRoles`             | `(userId) => Promise<Result<Role[]>>`                           | 获取用户角色列表                   |
-| `assignPermissionToRole`   | `(roleId, permId) => Promise<Result<void>>`                     | 分配权限给角色                     |
-| `removePermissionFromRole` | `(roleId, permId) => Promise<Result<void>>`                     | 移除角色权限                       |
-| `getRolePermissions`       | `(roleId) => Promise<Result<Permission[]>>`                     | 获取角色权限列表                   |
-| `getUserPermissions`       | `(userId) => Promise<Result<Permission[]>>`                     | 获取用户所有权限                   |
-| `checkPermission`          | `(context, permission) => Promise<Result<boolean>>`             | 检查权限                           |
+| 方法                       | 签名                                                            | 说明                                     |
+| -------------------------- | --------------------------------------------------------------- | ---------------------------------------- |
+| `createRole`               | `({ code, name, description? }) => Promise<Result<Role>>`       | 创建角色                                 |
+| `updateRole`               | `(id, data) => Promise<Result<Role>>`                           | 更新角色                                 |
+| `deleteRole`               | `(id) => Promise<Result<void>>`                                 | 删除角色（级联清理缓存+会话）            |
+| `getRole`                  | `(id) => Promise<Result<Role>>`                                 | 获取角色                                 |
+| `getAllRoles`              | `(pagination?) => Promise<Result<PageResult>>`                  | 角色分页列表                             |
+| `createPermission`         | `({ code, name, description? }) => Promise<Result<Permission>>` | 创建权限                                 |
+| `deletePermission`         | `(id) => Promise<Result<void>>`                                 | 删除权限（级联清理缓存）                 |
+| `getPermission`            | `(id) => Promise<Result<Permission>>`                           | 获取权限                                 |
+| `getAllPermissions`        | `(pagination?) => Promise<Result<PageResult>>`                  | 权限分页列表                             |
+| `assignRole`               | `(userId, roleId) => Promise<Result<void>>`                     | 分配角色给用户（自动同步活跃会话）       |
+| `removeRole`               | `(userId, roleId) => Promise<Result<void>>`                     | 移除用户角色（自动同步活跃会话）         |
+| `getUserRoles`             | `(userId) => Promise<Result<Role[]>>`                           | 获取用户角色列表                         |
+| `assignPermissionToRole`   | `(roleId, permId) => Promise<Result<void>>`                     | 分配权限给角色                           |
+| `removePermissionFromRole` | `(roleId, permId) => Promise<Result<void>>`                     | 移除角色权限                             |
+| `getRolePermissions`       | `(roleId) => Promise<Result<Permission[]>>`                     | 获取角色权限列表                         |
+| `getUserPermissions`       | `(userId) => Promise<Result<Permission[]>>`                     | 获取用户所有权限                         |
+| `checkPermission`          | `(userId, permission) => Promise<Result<boolean>>`              | 检查权限（角色从 DB 解析，权限缓存优先） |
 
 **通配符规则**：`admin:*` 匹配 `admin:read`、`admin:write` 等。超管角色自动拥有所有权限。
 
@@ -171,26 +176,27 @@ interface Session {
 
 ## 错误码 — `IamErrorCode`
 
-| 错误码 | 常量                        | 说明           |
-| ------ | --------------------------- | -------------- |
-| 5001   | `INVALID_CREDENTIALS`       | 凭证无效       |
-| 5002   | `USER_NOT_FOUND`            | 用户不存在     |
-| 5003   | `USER_DISABLED`             | 用户已禁用     |
-| 5004   | `USER_LOCKED`               | 用户已锁定     |
-| 5005   | `USER_ALREADY_EXISTS`       | 用户已存在     |
-| 5006   | `PASSWORD_EXPIRED`          | 密码已过期     |
-| 5007   | `PASSWORD_POLICY_VIOLATION` | 密码不符合策略 |
-| 5010   | `OTP_INVALID`               | 验证码无效     |
-| 5012   | `OTP_RESEND_TOO_FAST`       | 发送过于频繁   |
-| 5013   | `LOGIN_DISABLED`            | 登录方式已禁用 |
-| 5014   | `REGISTER_DISABLED`         | 注册已禁用     |
-| 5020   | `RESET_TOKEN_INVALID`       | 重置令牌无效   |
-| 5021   | `RESET_TOKEN_EXPIRED`       | 重置令牌已过期 |
-| 5102   | `SESSION_INVALID`           | 会话无效       |
-| 5201   | `ROLE_NOT_FOUND`            | 角色不存在     |
-| 5202   | `PERMISSION_NOT_FOUND`      | 权限不存在     |
-| 5203   | `ROLE_ALREADY_EXISTS`       | 角色已存在     |
-| 5204   | `PERMISSION_ALREADY_EXISTS` | 权限已存在     |
+| 错误码 | 常量                        | 说明                 |
+| ------ | --------------------------- | -------------------- |
+| 5001   | `INVALID_CREDENTIALS`       | 凭证无效             |
+| 5002   | `USER_NOT_FOUND`            | 用户不存在           |
+| 5003   | `USER_DISABLED`             | 用户已禁用           |
+| 5004   | `USER_LOCKED`               | 用户已锁定           |
+| 5005   | `USER_ALREADY_EXISTS`       | 用户已存在           |
+| 5006   | `PASSWORD_EXPIRED`          | 密码已过期           |
+| 5007   | `PASSWORD_POLICY_VIOLATION` | 密码不符合策略       |
+| 5010   | `OTP_INVALID`               | 验证码无效           |
+| 5012   | `OTP_RESEND_TOO_FAST`       | 发送过于频繁         |
+| 5013   | `LOGIN_DISABLED`            | 登录方式已禁用       |
+| 5014   | `REGISTER_DISABLED`         | 注册已禁用           |
+| 5020   | `RESET_TOKEN_INVALID`       | 重置令牌无效         |
+| 5021   | `RESET_TOKEN_EXPIRED`       | 重置令牌已过期       |
+| 5022   | `RESET_TOKEN_MAX_ATTEMPTS`  | 重置令牌尝试次数超限 |
+| 5102   | `SESSION_INVALID`           | 会话无效             |
+| 5201   | `ROLE_NOT_FOUND`            | 角色不存在           |
+| 5202   | `PERMISSION_NOT_FOUND`      | 权限不存在           |
+| 5203   | `ROLE_ALREADY_EXISTS`       | 角色已存在           |
+| 5204   | `PERMISSION_ALREADY_EXISTS` | 权限已存在           |
 
 ---
 
@@ -238,11 +244,7 @@ if (result.success) {
 ### 权限检查
 
 ```typescript
-const context = {
-  userId: event.locals.session.userId,
-  roles: event.locals.session.roles,
-}
-const canEdit = await iam.authz.checkPermission(context, 'articles:write')
+const canEdit = await iam.authz.checkPermission(event.locals.session.userId, 'articles:write')
 
 if (!canEdit.success || !canEdit.data) {
   return kit.response.forbidden()

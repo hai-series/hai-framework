@@ -2,11 +2,17 @@
  * =============================================================================
  * @h-ai/kit - 权限守卫
  * =============================================================================
- * 验证用户是否具有指定权限
+ * 验证用户是否具有指定权限。
+ *
+ * 提供三层权限检查能力：
+ * - `permissionGuard()`：Hook 级路由守卫，用于 `kit.createHandle({ guards })` 配置
+ * - `hasPermission()`：布尔判断，适用于条件分支
+ * - `assertPermission()`：断言式检查，不满足时返回 403 Response，适用于 API Handler
  * =============================================================================
  */
 
-import type { GuardResult, RouteGuard } from '../kit-types.js'
+import type { GuardResult, RouteGuard, SessionData } from '../kit-types.js'
+import { getKitMessage } from '../kit-i18n.js'
 
 /**
  * 权限守卫配置
@@ -65,11 +71,16 @@ export function permissionGuard(config: PermissionGuardConfig): RouteGuard {
 
 /**
  * 匹配权限
+ *
  * 支持通配符：
- * - admin:* 匹配 admin:read, admin:write 等
- * - * 匹配所有权限
+ * - `admin:*` 匹配 `admin:read`、`admin:write` 等
+ * - `*` 匹配所有权限
+ *
+ * @param required - 需要的权限码
+ * @param userPermissions - 用户已有的权限列表
+ * @returns 是否匹配
  */
-function matchPermission(required: string, userPermissions: string[]): boolean {
+export function matchPermission(required: string, userPermissions: string[]): boolean {
   for (const userPerm of userPermissions) {
     // 完全匹配
     if (userPerm === required) {
@@ -91,4 +102,69 @@ function matchPermission(required: string, userPermissions: string[]): boolean {
   }
 
   return false
+}
+
+/**
+ * 检查会话是否具有指定权限（布尔判断）
+ *
+ * 适用于条件分支场景（如菜单过滤、按钮显示等）。
+ *
+ * @param session - 当前会话数据，null/undefined 视为无权限
+ * @param permission - 需要的权限码，如 `user:read`
+ * @returns 是否拥有权限
+ *
+ * @example
+ * ```ts
+ * if (kit.guard.hasPermission(locals.session, 'user:read')) {
+ *   // 有权限
+ * }
+ * ```
+ */
+export function hasPermission(
+  session: SessionData | null | undefined,
+  permission: string,
+): boolean {
+  if (!session)
+    return false
+  return matchPermission(permission, session.permissions ?? [])
+}
+
+/**
+ * 断言会话具有指定权限，不满足时返回 403 Response
+ *
+ * 适用于 SvelteKit API Handler 内部，不满足权限时直接返回 JSON 错误响应。
+ * 调用者需检查返回值：若有返回值则表示权限不足，应直接 return。
+ *
+ * @param session - 当前会话数据，null/undefined 视为未认证
+ * @param permission - 需要的权限码，如 `user:create`
+ * @returns 权限不足时返回 Response；有权限时返回 undefined
+ *
+ * @example
+ * ```ts
+ * export const POST: RequestHandler = async ({ locals }) => {
+ *   const denied = kit.guard.assertPermission(locals.session, 'user:create')
+ *   if (denied) return denied
+ *   // ... 正常逻辑
+ * }
+ * ```
+ */
+export function assertPermission(
+  session: SessionData | null | undefined,
+  permission: string,
+): Response | undefined {
+  if (!session) {
+    return new Response(
+      JSON.stringify({ success: false, error: getKitMessage('kit_unauthorized') }),
+      { status: 401, headers: { 'Content-Type': 'application/json' } },
+    )
+  }
+
+  if (!matchPermission(permission, session.permissions ?? [])) {
+    return new Response(
+      JSON.stringify({ success: false, error: getKitMessage('kit_forbidden', { params: { permission } }) }),
+      { status: 403, headers: { 'Content-Type': 'application/json' } },
+    )
+  }
+
+  return undefined
 }

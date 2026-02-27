@@ -6,7 +6,7 @@
 
 import type { RequestHandler } from '@sveltejs/kit'
 import * as m from '$lib/paraglide/messages.js'
-import { RegisterSchema } from '$lib/server/schemas/index.js'
+import { createRegisterSchema } from '$lib/server/schemas/index.js'
 import { audit } from '$lib/server/services/index.js'
 import { core } from '@h-ai/core'
 import { iam } from '@h-ai/iam'
@@ -15,8 +15,13 @@ import { json } from '@sveltejs/kit'
 
 export const POST: RequestHandler = async ({ request, cookies, getClientAddress }) => {
   try {
-    const { valid, data, errors } = await kit.validate.form(request, RegisterSchema)
-    if (!valid) {
+    // 检查注册是否启用
+    if (iam.config?.register?.enabled === false) {
+      return json({ success: false, error: m.api_auth_register_disabled?.() ?? 'Registration is disabled' }, { status: 403 })
+    }
+
+    const { valid, data, errors } = await kit.validate.form(request, createRegisterSchema())
+    if (!valid || !data) {
       return json({ success: false, error: errors[0]?.message }, { status: 400 })
     }
     const { username, email, password } = data
@@ -38,9 +43,6 @@ export const POST: RequestHandler = async ({ request, cookies, getClientAddress 
 
     const { user } = registerResult.data
 
-    // 分配默认角色 (user)
-    await iam.authz.assignRole(user.id, 'role_user')
-
     // 登录获取 token
     const loginResult = await iam.auth.login({ identifier: username, password })
     if (!loginResult.success) {
@@ -60,14 +62,15 @@ export const POST: RequestHandler = async ({ request, cookies, getClientAddress 
 
     const { accessToken } = loginResult.data
 
-    // 设置 Cookie
+    // 设置 Cookie（从 IAM 配置读取会话有效期，回退到 7 天）
+    const sessionMaxAge = iam.config?.session?.maxAge ?? 60 * 60 * 24 * 7
     cookies.set('session_token', accessToken, {
       path: '/',
       httpOnly: true,
       // eslint-disable-next-line node/prefer-global/process
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      maxAge: 60 * 60 * 24 * 7, // 7 天
+      maxAge: sessionMaxAge,
     })
 
     // 记录审计日志

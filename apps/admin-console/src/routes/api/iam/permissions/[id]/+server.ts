@@ -8,12 +8,19 @@ import type { RequestHandler } from '@sveltejs/kit'
 import * as m from '$lib/paraglide/messages.js'
 import { audit, permissionService } from '$lib/server/services/index.js'
 import { core } from '@h-ai/core'
+import { kit } from '@h-ai/kit'
 import { json } from '@sveltejs/kit'
 
 /**
  * DELETE /api/iam/permissions/[id] - 删除权限
+ *
+ * 需要权限：permission:manage
  */
 export const DELETE: RequestHandler = async ({ params, locals, request, getClientAddress }) => {
+  const denied = kit.guard.assertPermission(locals.session, 'permission:manage')
+  if (denied)
+    return denied
+
   try {
     const permId = params.id!
 

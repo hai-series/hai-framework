@@ -18,6 +18,9 @@
   // 从 URL 获取 token
   const token = $derived(page.url.searchParams.get('token') ?? '')
 
+  // 从 layout server data 读取 IAM 配置
+  const passwordMinLength = $derived((page.data as { iamPublicConfig?: { password?: { minLength?: number } } }).iamPublicConfig?.password?.minLength ?? 8)
+
   async function handleResetPassword(data: ResetPasswordFormData) {
     errors = {}
 
@@ -89,7 +92,7 @@
     showBackLink
     showCode={false}
     showPasswordStrength={true}
-    minPasswordLength={8}
+    minPasswordLength={passwordMinLength}
     loginUrl="/auth/login"
     onsubmit={handleResetPassword}
   />

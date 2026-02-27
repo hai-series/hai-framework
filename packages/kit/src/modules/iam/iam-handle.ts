@@ -13,7 +13,7 @@
  * ```ts
  * // src/hooks.server.ts
  * import { kit } from '@h-ai/kit'
- * import { iam } from '$lib/server/iam'
+ * import { iam } from '@h-ai/iam'
  *
  * export const handle = kit.iam.createHandle({
  *     iam,
@@ -46,6 +46,8 @@ function matchPath(pathname: string, patterns: string[]): boolean {
 /**
  * 创建 IAM Handle Hook
  *
+ * 验证会话令牌 → 查询用户信息 → 注入到 event.locals
+ *
  * @param config - 配置选项
  * @returns SvelteKit Handle 函数
  */
@@ -73,18 +75,16 @@ export function createIamHandle(config: IamHandleConfig): Handle {
 
     if (sessionToken) {
       try {
-        // 验证令牌
-        const result = await iam.session.verifyToken(sessionToken)
+        // 验证令牌（verifyToken 已包含会话查询和滑动续期逻辑）
+        const sessionResult = await iam.auth.verifyToken(sessionToken)
 
-        if (result.success && result.data) {
-          const sessionResult = await iam.session.get(sessionToken)
-          if (sessionResult.success && sessionResult.data) {
-            locals.session = sessionResult.data
+        if (sessionResult.success) {
+          locals.session = sessionResult.data
 
-            const userResult = await iam.user.getById(result.data.userId)
-            if (userResult.success && userResult.data) {
-              locals.user = userResult.data
-            }
+          // 查询用户信息
+          const userResult = await iam.user.getUser(sessionResult.data.userId)
+          if (userResult.success && userResult.data) {
+            locals.user = userResult.data
           }
         }
       }
@@ -109,54 +109,14 @@ export function createIamHandle(config: IamHandleConfig): Handle {
 
 /**
  * 创建 API 路由守卫中间件
+ *
+ * 验证当前请求是否已认证，未认证时抛出 401 Response。
  */
 export function requireAuth(event: RequestEvent): IamLocals {
   const locals = event.locals as unknown as IamLocals
 
   if (!locals.session || !locals.user) {
     throw new Response('Unauthorized', { status: 401 })
-  }
-
-  return locals
-}
-
-/**
- * 检查用户是否有指定角色
- */
-export async function requireRole(
-  event: RequestEvent,
-  roleId: string,
-  config: IamHandleConfig,
-): Promise<IamLocals> {
-  const locals = requireAuth(event)
-
-  if (locals.session?.roles?.includes(roleId)) {
-    return locals
-  }
-
-  const rolesResult = await config.iam.authz.getUserRoles(locals.user!.id)
-  const roles = rolesResult.success ? (rolesResult.data ?? []) : []
-  if (!rolesResult.success || !roles.some(role => role.id === roleId)) {
-    throw new Response('Forbidden', { status: 403 })
-  }
-
-  return locals
-}
-
-/**
- * 检查用户是否有指定权限
- */
-export async function requirePermission(
-  event: RequestEvent,
-  permission: string,
-  config: IamHandleConfig,
-): Promise<IamLocals> {
-  const locals = requireAuth(event)
-
-  const result = await config.iam.authz.checkPermission({ userId: locals.user!.id }, permission)
-
-  if (!result.success || !result.data) {
-    throw new Response('Forbidden', { status: 403 })
   }
 
   return locals

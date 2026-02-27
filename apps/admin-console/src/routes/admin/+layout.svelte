@@ -19,6 +19,21 @@
   // 从配置获取应用信息
   const appName = $derived(data.appConfig?.name ?? m.app_title())
   const appVersion = $derived(data.appConfig?.version ?? '0.1.0')
+
+  /** 用户权限列表 */
+  const userPermissions = $derived(data.user?.permissions ?? [])
+
+  /**
+   * 检查当前用户是否具有指定权限。
+   * 支持通配符（`admin:*` 匹配 `admin:read` 等）。
+   */
+  function hasPerm(permission: string): boolean {
+    for (const p of userPermissions) {
+      if (p === permission || p === '*') return true
+      if (p.endsWith(':*') && permission.startsWith(p.slice(0, -1))) return true
+    }
+    return false
+  }
   
   /** 侧边栏收起状态 */
   let sidebarCollapsed = $state(false)
@@ -52,24 +67,62 @@
     </svg>`,
   }
 
-  /** 主菜单配置（使用 $derived 响应语言切换） */
-  const menuItems = $derived([
+  /** 菜单项类型 */
+  interface MenuItem {
+    icon: string
+    title: string
+    path: string
+    /** 访问此菜单需要的权限（满足任一即可；为空表示无需特殊权限） */
+    requiredPermissions?: string[]
+    children?: { title: string, path: string, requiredPermissions?: string[] }[]
+  }
+
+  /** 全部菜单配置（使用 $derived 响应语言切换） */
+  const allMenuItems: MenuItem[] = $derived([
     { icon: 'dashboard', title: m.nav_dashboard(), path: '/admin' },
     {
       icon: 'shield',
       title: m.nav_iam(),
       path: '/admin/iam',
+      requiredPermissions: ['user:read', 'role:read', 'permission:read'],
       children: [
-        { title: m.nav_users(), path: '/admin/iam/users' },
-        { title: m.nav_roles(), path: '/admin/iam/roles' },
-        { title: m.nav_permissions(), path: '/admin/iam/permissions' },
+        { title: m.nav_users(), path: '/admin/iam/users', requiredPermissions: ['user:read'] },
+        { title: m.nav_roles(), path: '/admin/iam/roles', requiredPermissions: ['role:read'] },
+        { title: m.nav_permissions(), path: '/admin/iam/permissions', requiredPermissions: ['permission:read'] },
       ],
     },
     { icon: 'grid', title: m.nav_ui_gallery(), path: '/admin/ui-gallery' },
     { icon: 'modules', title: m.nav_modules(), path: '/admin/modules' },
-    { icon: 'file', title: m.nav_logs(), path: '/admin/logs' },
-    { icon: 'settings', title: m.nav_settings(), path: '/admin/settings' },
+    { icon: 'file', title: m.nav_logs(), path: '/admin/logs', requiredPermissions: ['system:logs'] },
+    { icon: 'settings', title: m.nav_settings(), path: '/admin/settings', requiredPermissions: ['system:settings'] },
   ])
+
+  /**
+   * 经权限过滤后的菜单。
+   * - 无 requiredPermissions 的菜单项始终可见
+   * - 有 requiredPermissions 的菜单项需满足任一权限
+   * - 父菜单自动隐藏当所有子项都不可见时
+   */
+  const menuItems = $derived(
+    allMenuItems
+      .map((item) => {
+        // 过滤子菜单
+        if (item.children) {
+          const visibleChildren = item.children.filter(
+            child => !child.requiredPermissions?.length || child.requiredPermissions.some(p => hasPerm(p)),
+          )
+          // 无可见子菜单 → 隐藏父菜单
+          if (visibleChildren.length === 0) return null
+          return { ...item, children: visibleChildren }
+        }
+        // 无需权限或有权限 → 可见
+        if (!item.requiredPermissions?.length || item.requiredPermissions.some(p => hasPerm(p))) {
+          return item
+        }
+        return null
+      })
+      .filter((item): item is MenuItem => item !== null),
+  )
   
   /** 展开的子菜单 */
   let expandedMenus = $state<Set<string>>(new Set(['/admin/iam']))

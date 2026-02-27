@@ -14,8 +14,14 @@ import { json } from '@sveltejs/kit'
 
 /**
  * GET /api/iam/roles - 获取角色列表
+ *
+ * 需要权限：role:read
  */
-export const GET: RequestHandler = async () => {
+export const GET: RequestHandler = async ({ locals }) => {
+  const denied = kit.guard.assertPermission(locals.session, 'role:read')
+  if (denied)
+    return denied
+
   try {
     const roles = await roleService.list()
     return json({ success: true, data: roles })
@@ -28,8 +34,14 @@ export const GET: RequestHandler = async () => {
 
 /**
  * POST /api/iam/roles - 创建角色
+ *
+ * 需要权限：role:create
  */
 export const POST: RequestHandler = async ({ request, locals, getClientAddress }) => {
+  const denied = kit.guard.assertPermission(locals.session, 'role:create')
+  if (denied)
+    return denied
+
   try {
     const { valid, data, errors } = await kit.validate.form(request, CreateRoleSchema)
     if (!valid) {

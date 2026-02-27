@@ -5,6 +5,7 @@
 -->
 <script lang="ts">
   import type { PageData } from './$types'
+  import { invalidateAll } from '$app/navigation'
   import * as m from '$lib/paraglide/messages'
 
   interface RoleData {
@@ -134,7 +135,7 @@
 
       if (result.success) {
         closeDialog()
-        location.reload()
+        await invalidateAll()
       } else {
         error = result.error || m.iam_roles_operation_failed()
       }
@@ -164,7 +165,7 @@
       const result = await response.json()
 
       if (result.success) {
-        location.reload()
+        await invalidateAll()
       } else {
         alert(result.error || m.iam_roles_delete_failed())
       }
@@ -344,7 +345,7 @@
         </fieldset>
 
         <div class="modal-action">
-          <Button variant="ghost" type="button" onclick={closeDialog} disabled={submitting}>
+          <Button variant="ghost" type="button" onclick={() => closeDialog()} disabled={submitting}>
             {m.action_cancel()}
           </Button>
           <Button variant="primary" type="submit" disabled={submitting}>

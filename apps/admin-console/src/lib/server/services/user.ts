@@ -71,12 +71,14 @@ export const userService = {
       throw new Error(`${m.api_iam_users_create_failed()}: ${result.error.message}`)
     }
 
-    const user = result.data
+    const user = result.data.user
 
-    // 分配角色
-    const rolesToAssign = input.roles?.length ? input.roles : ['role_user']
-    for (const roleId of rolesToAssign) {
-      await iam.authz.assignRole(user.id, roleId)
+    // 分配角色（iam.user.register 已分配 config.rbac.defaultRole）
+    // 管理员创建时额外分配指定角色
+    if (input.roles?.length) {
+      for (const roleId of input.roles) {
+        await iam.authz.assignRole(user.id, roleId)
+      }
     }
 
     // 获取用户角色和权限
@@ -117,7 +119,7 @@ export const userService = {
     if (!tokenResult.success)
       return null
 
-    const userResult = await iam.user.getUser(tokenResult.data.sub)
+    const userResult = await iam.user.getUser(tokenResult.data.userId)
     return userResult.success ? userResult.data : null
   },
 

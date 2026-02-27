@@ -14,8 +14,14 @@ import { json } from '@sveltejs/kit'
 
 /**
  * GET /api/iam/permissions - 获取权限列表
+ *
+ * 需要权限：permission:read
  */
-export const GET: RequestHandler = async () => {
+export const GET: RequestHandler = async ({ locals }) => {
+  const denied = kit.guard.assertPermission(locals.session, 'permission:read')
+  if (denied)
+    return denied
+
   try {
     const permissions = await permissionService.list()
     return json({ success: true, data: permissions })
@@ -28,8 +34,14 @@ export const GET: RequestHandler = async () => {
 
 /**
  * POST /api/iam/permissions - 创建权限
+ *
+ * 需要权限：permission:manage
  */
 export const POST: RequestHandler = async ({ request, locals, getClientAddress }) => {
+  const denied = kit.guard.assertPermission(locals.session, 'permission:manage')
+  if (denied)
+    return denied
+
   try {
     const { valid, data, errors } = await kit.validate.form(request, CreatePermissionSchema)
     if (!valid) {

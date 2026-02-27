@@ -7,12 +7,23 @@
 -->
 <script lang="ts">
   import { goto } from '$app/navigation'
+  import { page } from '$app/state'
   import type { LoginFormData } from '@h-ai/ui'
   import * as m from '$lib/paraglide/messages'
   
   let loading = $state(false)
   let errors = $state<Record<string, string>>({})
 
+  const iamPublicConfig = $derived(page.data.iamPublicConfig)
+  const showRegisterLink = $derived(iamPublicConfig?.register?.enabled ?? true)
+  const loginAgreements = $derived(
+    iamPublicConfig?.agreements?.showOnLogin
+      ? {
+          userAgreementUrl: iamPublicConfig.agreements.userAgreementUrl,
+          privacyPolicyUrl: iamPublicConfig.agreements.privacyPolicyUrl,
+        }
+      : undefined
+  )
   async function handleLogin(data: LoginFormData) {
     errors = {}
     loading = true
@@ -50,8 +61,9 @@
   {loading}
   {errors}
   showTitle
-  showRegisterLink
+  showRegisterLink={showRegisterLink}
   forgotPasswordUrl="/auth/forgot-password"
   registerUrl="/auth/register"
+  agreements={loginAgreements}
   onsubmit={handleLogin}
 />
