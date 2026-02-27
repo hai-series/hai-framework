@@ -159,32 +159,41 @@ export async function initApp(): Promise<void> {
     ...iamConfig,
     onPasswordResetRequest: reach.isInitialized
       ? async (user, token, expiresAt) => {
-        await reach.send({
+        const result = await reach.send({
           provider: 'email',
           to: user.email ?? '',
           template: 'password_reset',
           vars: { token, expiresAt: expiresAt.toISOString() },
         })
+        if (!result.success) {
+          core.logger.warn('Failed to send password reset email', { to: user.email, error: result.error.message })
+        }
       }
       : undefined,
     onOtpSendEmail: reach.isInitialized
       ? async (email, code) => {
-        await reach.send({
+        const result = await reach.send({
           provider: 'email',
           to: email,
           template: 'otp_email',
           vars: { code },
         })
+        if (!result.success) {
+          core.logger.warn('Failed to send OTP email', { to: email, error: result.error.message })
+        }
       }
       : undefined,
     onOtpSendSms: reach.isInitialized
       ? async (phone, code) => {
-        await reach.send({
+        const result = await reach.send({
           provider: 'sms',
           to: phone,
           template: 'otp_sms',
           vars: { code },
         })
+        if (!result.success) {
+          core.logger.warn('Failed to send OTP SMS', { to: phone, error: result.error.message })
+        }
       }
       : undefined,
   })
