@@ -14,7 +14,6 @@
  */
 
 import type { IamFunctions } from '../src/iam-types.js'
-import { db } from '@h-ai/db'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { IamErrorCode } from '../src/iam-config.js'
 import { defineIamSuite, initIam, postgresRedisEnv, sqliteMemoryEnv, TEST_PASSWORD } from './helpers/iam-test-suite.js'
@@ -375,45 +374,45 @@ describe('iam.workflow', () => {
 
     describe('密码找回流程', () => {
       it('请求重置 → 用令牌确认重置 → 新密码可登录', async () => {
-        const iam = getIam()
+        // 通过回调捕获明文令牌（DB 中存储的是哈希值）
+        let capturedToken = ''
+        const resetIam = await initIam({
+          onPasswordResetRequest: async (_user, token) => {
+            capturedToken = token
+          },
+        })
 
-        await iam.user.register({
+        await resetIam.user.register({
           username: 'wf_reset_user',
           email: 'wf_reset@test.com',
           password: TEST_PASSWORD,
         })
 
         // 请求密码重置
-        const requestResult = await iam.user.requestPasswordReset('wf_reset@test.com')
+        const requestResult = await resetIam.user.requestPasswordReset('wf_reset@test.com')
         expect(requestResult.success).toBe(true)
-
-        // 从数据库获取令牌
-        const tokenQuery = await db.sql.query<{ token: string, user_id: string }>(
-          'SELECT token, user_id FROM iam_password_reset_tokens',
-        )
-        expect(tokenQuery.success).toBe(true)
-        if (!tokenQuery.success)
-          return
-        const token = tokenQuery.data.find(t => t.user_id !== undefined)?.token
-        expect(token).toBeDefined()
+        expect(capturedToken).toBeTruthy()
 
         // 用令牌确认重置
-        const confirmResult = await iam.user.confirmPasswordReset(token!, 'NewPass789')
+        const confirmResult = await resetIam.user.confirmPasswordReset(capturedToken, 'NewPass789')
         expect(confirmResult.success).toBe(true)
 
         // 新密码应可登录
-        const loginResult = await iam.auth.login({
+        const loginResult = await resetIam.auth.login({
           identifier: 'wf_reset_user',
           password: 'NewPass789',
         })
         expect(loginResult.success).toBe(true)
 
         // 旧密码应不可登录
-        const oldLoginResult = await iam.auth.login({
+        const oldLoginResult = await resetIam.auth.login({
           identifier: 'wf_reset_user',
           password: TEST_PASSWORD,
         })
         expect(oldLoginResult.success).toBe(false)
+
+        // 还原默认配置
+        await initIam()
       })
 
       it('无效令牌 → confirmPasswordReset 返回 RESET_TOKEN_INVALID', async () => {

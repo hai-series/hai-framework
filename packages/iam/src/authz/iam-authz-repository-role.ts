@@ -105,6 +105,16 @@ let roleRepoInstance: RoleRepository | null = null
 let roleRepoDbConfig: unknown = null
 
 /**
+ * 重置角色存储单例
+ *
+ * 在 iam.close() 时调用，释放对旧 db 实例的引用。
+ */
+export function resetRoleRepoSingleton(): void {
+  roleRepoInstance = null
+  roleRepoDbConfig = null
+}
+
+/**
  * 创建基于数据库的角色存储实例
  *
  * 单例模式：同一 db 生命周期内重复调用返回缓存实例，

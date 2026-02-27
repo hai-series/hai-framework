@@ -176,6 +176,14 @@ export interface IamAuthzFunctions {
   getRole: (roleId: string) => Promise<Result<Role | null, IamError>>
 
   /**
+   * 根据角色代码获取角色
+   *
+   * @param code - 角色代码（如 'admin'、'user'）
+   * @returns 成功返回角色或 null（不存在时）
+   */
+  getRoleByCode: (code: string) => Promise<Result<Role | null, IamError>>
+
+  /**
    * 获取所有角色（分页）
    *
    * @param options - 分页参数，可选

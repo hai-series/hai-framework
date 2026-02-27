@@ -14,6 +14,7 @@ import type { Result } from '@h-ai/core'
 import type { CrudFieldDefinition, DbFunctions, TxHandle } from '@h-ai/db'
 import type { IamError } from '../iam-types.js'
 import { ok } from '@h-ai/core'
+import { crypto as haiCrypto } from '@h-ai/crypto'
 import { BaseCrudRepository } from '@h-ai/db'
 import { IamErrorCode } from '../iam-config.js'
 import { iamM } from '../iam-i18n.js'
@@ -30,7 +31,7 @@ export interface ResetTokenRecord {
   id: string
   /** 用户 ID */
   userId: string
-  /** 重置令牌（明文） */
+  /** 重置令牌（SHA-256 哈希值，不存储明文） */
   token: string
   /** 过期时间 */
   expiresAt: Date
@@ -40,6 +41,23 @@ export interface ResetTokenRecord {
   used: boolean
   /** 创建时间 */
   createdAt: Date
+}
+
+/**
+ * 对令牌进行 SHA-256 哈希
+ *
+ * 数据库中只存储令牌的哈希值，不存储明文。
+ * 查询时也先哈希再匹配。
+ *
+ * @param token - 明文令牌
+ * @returns 十六进制 SHA-256 哈希值
+ */
+export function hashResetToken(token: string): string {
+  const result = haiCrypto.hash.hash(token)
+  if (!result.success) {
+    throw new Error(`Failed to hash reset token: ${result.error.message}`)
+  }
+  return result.data
 }
 
 /**
@@ -163,6 +181,16 @@ let resetTokenRepoInstance: ResetTokenRepository | null = null
 let resetTokenRepoDbConfig: unknown = null
 
 /**
+ * 重置令牌存储单例
+ *
+ * 在 iam.close() 时调用，释放对旧 db 实例的引用。
+ */
+export function resetResetTokenRepoSingleton(): void {
+  resetTokenRepoInstance = null
+  resetTokenRepoDbConfig = null
+}
+
+/**
  * 创建基于数据库的密码重置令牌存储实例
  *
  * 单例模式：同一 db 生命周期内重复调用返回缓存实例。
@@ -198,7 +226,7 @@ class DbResetTokenRepository extends BaseCrudRepository<ResetTokenRecord> implem
   }
 
   /**
-   * 保存重置令牌
+   * 保存重置令牌（存储时自动哈希令牌值）
    */
   async saveToken(
     record: Pick<ResetTokenRecord, 'id' | 'userId' | 'token' | 'expiresAt'>,
@@ -208,6 +236,7 @@ class DbResetTokenRepository extends BaseCrudRepository<ResetTokenRecord> implem
     const createResult = await this.create(
       {
         ...record,
+        token: hashResetToken(record.token),
         attempts: 0,
         used: false,
         createdAt: new Date(now),
@@ -227,11 +256,13 @@ class DbResetTokenRepository extends BaseCrudRepository<ResetTokenRecord> implem
   /**
    * 根据令牌值查找有效记录
    *
+   * 查询时先对明文令牌做 SHA-256 哈希，再与数据库中的哈希值匹配。
    * 自动删除已过期的记录。
    */
   async findByToken(token: string, tx?: TxHandle): Promise<Result<ResetTokenRecord | null, IamError>> {
+    const tokenHash = hashResetToken(token)
     const result = await this.findAll(
-      { where: 'token = ?', params: [token], limit: 1 },
+      { where: 'token = ?', params: [tokenHash], limit: 1 },
       tx,
     )
     if (!result.success) {
@@ -307,8 +338,9 @@ class DbResetTokenRepository extends BaseCrudRepository<ResetTokenRecord> implem
   /**
    * 删除用户的所有重置令牌
    */
-  async removeByUserId(userId: string, _tx?: TxHandle): Promise<Result<void, IamError>> {
-    const result = await this.db.sql.execute(
+  async removeByUserId(userId: string, tx?: TxHandle): Promise<Result<void, IamError>> {
+    const executor = tx ?? this.db.sql
+    const result = await executor.execute(
       `DELETE FROM ${TABLE_NAME} WHERE user_id = ?`,
       [userId],
     )

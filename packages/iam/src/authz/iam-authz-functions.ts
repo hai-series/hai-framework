@@ -326,6 +326,14 @@ function createRbacManager(config: RbacManagerConfig): IamAuthzFunctions {
       return ok(result.data)
     },
 
+    async getRoleByCode(code): Promise<Result<Role | null, IamError>> {
+      const result = await roleRepository.findByCode(code)
+      if (!result.success) {
+        return mapRepositoryError('iam_queryRoleFailed', result.error.message) as Result<Role | null, IamError>
+      }
+      return ok(result.data)
+    },
+
     async getAllRoles(options?: PaginationOptionsInput): Promise<Result<PaginatedResult<Role>, IamError>> {
       const result = await roleRepository.findPage({
         orderBy: 'created_at DESC',

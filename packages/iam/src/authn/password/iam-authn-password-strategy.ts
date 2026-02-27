@@ -173,7 +173,9 @@ export function createPasswordStrategy(config: PasswordStrategyConfig): Password
 
       const storedUser = userResult.data
       if (!storedUser) {
-        return err({ code: IamErrorCode.USER_NOT_FOUND, message: iamM('iam_userNotExist') })
+        // 防止用户枚举：执行伪哈希验证以消除时序差异，统一返回 INVALID_CREDENTIALS
+        passwordOps.hash('dummy-password-to-prevent-timing-leak')
+        return err({ code: IamErrorCode.INVALID_CREDENTIALS, message: iamM('iam_passwordWrong') })
       }
 
       // 校验账户状态

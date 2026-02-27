@@ -19,6 +19,7 @@ import type {
   ListUsersOptions,
   RegisterOptions,
   RegisterResult,
+  UpdateCurrentUserInput,
   User,
 } from './iam-user-types.js'
 import { core, err, ok } from '@h-ai/core'
@@ -261,6 +262,7 @@ function buildUserFunctions(deps: UserBuilderDeps): IamUserFunctions {
   /**
    * 为新用户分配默认角色
    *
+   * 通过 getRoleByCode 查找配置中指定的默认角色，再分配给用户。
    * 在事务外执行，失败不影响注册结果。
    *
    * @param userId - 新用户 ID
@@ -268,7 +270,7 @@ function buildUserFunctions(deps: UserBuilderDeps): IamUserFunctions {
   async function assignDefaultRole(userId: string): Promise<void> {
     if (!config.rbac?.defaultRole)
       return
-    const roleResult = await authzFunctions.getRole(config.rbac.defaultRole)
+    const roleResult = await authzFunctions.getRoleByCode(config.rbac.defaultRole)
     if (roleResult.success && roleResult.data) {
       await authzFunctions.assignRole(userId, roleResult.data.id)
     }
@@ -356,14 +358,26 @@ function buildUserFunctions(deps: UserBuilderDeps): IamUserFunctions {
       return ok(toUser(userResult.data))
     },
 
-    async updateCurrentUser(accessToken: string, data: Partial<User>): Promise<Result<User, IamError>> {
+    async updateCurrentUser(accessToken: string, data: UpdateCurrentUserInput): Promise<Result<User, IamError>> {
       const verifyResult = await sessionFunctions.verifyToken(accessToken)
       if (!verifyResult.success) {
         return verifyResult as Result<User, IamError>
       }
 
       const userId = verifyResult.data.userId
-      if (!hasUpdateFields(data)) {
+
+      // 提取白名单字段，防止修改安全字段
+      const safeData: Partial<User> = {}
+      if (data.displayName !== undefined)
+        safeData.displayName = data.displayName
+      if (data.avatarUrl !== undefined)
+        safeData.avatarUrl = data.avatarUrl
+      if (data.phone !== undefined)
+        safeData.phone = data.phone
+      if (data.metadata !== undefined)
+        safeData.metadata = data.metadata
+
+      if (!hasUpdateFields(safeData)) {
         const currentResult = await userRepository.findById(userId)
         if (!currentResult.success) {
           return mapRepositoryError('iam_queryUserFailed', currentResult.error.message) as Result<User, IamError>
@@ -377,12 +391,12 @@ function buildUserFunctions(deps: UserBuilderDeps): IamUserFunctions {
         return ok(toUser(currentResult.data))
       }
 
-      const uniqueResult = await validateUniqueFieldsForUpdate(userId, data)
+      const uniqueResult = await validateUniqueFieldsForUpdate(userId, safeData)
       if (!uniqueResult.success) {
         return uniqueResult as Result<User, IamError>
       }
 
-      const updateResult = await userRepository.updateById(userId, data)
+      const updateResult = await userRepository.updateById(userId, safeData)
       if (!updateResult.success) {
         return mapUpdateErrorAsDomainError(updateResult.error.message) as Result<User, IamError>
       }
@@ -394,9 +408,7 @@ function buildUserFunctions(deps: UserBuilderDeps): IamUserFunctions {
         })
       }
 
-      if (data.enabled === false) {
-        await sessionFunctions.deleteByUserId(userId)
-      }
+      // 注意：updateCurrentUser 不允许修改 enabled 字段，无需注销会话
 
       const updatedResult = await userRepository.findById(userId)
       if (!updatedResult.success) {
@@ -713,6 +725,14 @@ function buildUserFunctions(deps: UserBuilderDeps): IamUserFunctions {
 
       const tokenRecord = tokenResult.data
 
+      // 检查是否过期（findByToken 已自动清理过期记录，此处做显式判断以返回精确错误码）
+      if (new Date() > tokenRecord.expiresAt) {
+        return err({
+          code: IamErrorCode.RESET_TOKEN_EXPIRED,
+          message: iamM('iam_resetTokenExpired'),
+        })
+      }
+
       // 检查尝试次数
       if (tokenRecord.attempts >= resetConfig.maxAttempts) {
         return err({
@@ -721,13 +741,13 @@ function buildUserFunctions(deps: UserBuilderDeps): IamUserFunctions {
         })
       }
 
-      // 增加尝试次数
-      await resetTokenRepository.incrementAttempts(tokenRecord.id)
-
-      // 验证新密码强度
+      // 先验证新密码强度（不消耗尝试次数）
       const validateResult = passwordStrategy.validatePassword(newPassword)
       if (!validateResult.success)
         return validateResult
+
+      // 密码合规后再增加尝试次数
+      await resetTokenRepository.incrementAttempts(tokenRecord.id)
 
       // 查找用户
       const userResult = await userRepository.findById(tokenRecord.userId)

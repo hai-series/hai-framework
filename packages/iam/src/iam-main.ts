@@ -6,7 +6,6 @@
 
 import type { Result } from '@h-ai/core'
 
-import type { PasswordStrategy } from './authn/password/iam-authn-password-strategy.js'
 import type { IamConfig } from './iam-config.js'
 import type {
   IamAuthnFunctions,
@@ -23,12 +22,17 @@ import { core, err, ok } from '@h-ai/core'
 import { crypto } from '@h-ai/crypto'
 
 import { createIamAuthnFunctions } from './authn/iam-authn-functions.js'
+import { resetOtpRepoSingleton } from './authn/otp/iam-authn-otp-repository-otp.js'
 import { createIamAuthzFunctions } from './authz/iam-authz-functions.js'
+import { resetPermissionRepoSingleton } from './authz/iam-authz-repository-permission.js'
+import { resetRoleRepoSingleton } from './authz/iam-authz-repository-role.js'
 import { createIamClient } from './client/iam-client.js'
 import { IamConfigSchema, IamErrorCode } from './iam-config.js'
 import { iamM } from './iam-i18n.js'
 import { createIamSessionFunctions } from './session/iam-session-functions.js'
 import { createIamUserFunctions } from './user/iam-user-functions.js'
+import { resetResetTokenRepoSingleton } from './user/iam-user-repository-reset-token.js'
+import { resetUserRepoSingleton } from './user/iam-user-repository-user.js'
 
 const logger = core.logger.child({ module: 'iam', scope: 'main' })
 
@@ -85,7 +89,7 @@ export const iam: IamFunctions = {
     try {
       const { db, cache, ldapClientFactory, ldapSyncUser, onPasswordResetRequest, ...settingsInput } = config
 
-      logger.debug('Initializing IAM module')
+      logger.info('Initializing IAM module')
 
       // 确保 crypto 已初始化（密码哈希依赖）
       if (!crypto.isInitialized) {
@@ -125,12 +129,12 @@ export const iam: IamFunctions = {
       if (!authnResult.success) {
         return authnResult
       }
-      currentAuth = authnResult.data
+      currentAuth = authnResult.data.authn
 
       const userResult = await createIamUserFunctions({
         config: parsed,
         db,
-        passwordStrategy: authnResult.data._passwordStrategy as PasswordStrategy,
+        passwordStrategy: authnResult.data.passwordStrategy,
         sessionFunctions: currentSession,
         authzFunctions: currentAuthz,
         onPasswordResetRequest,
@@ -176,34 +180,42 @@ export const iam: IamFunctions = {
     currentAuthz = null
     currentSession = null
     currentConfig = null
+
+    // 重置所有仓库单例，释放对旧 db 实例的引用
+    resetOtpRepoSingleton()
+    resetUserRepoSingleton()
+    resetResetTokenRepoSingleton()
+    resetRoleRepoSingleton()
+    resetPermissionRepoSingleton()
+
     logger.info('IAM module closed')
   },
 }
 
 // ─── 种子数据 ───
 
-/** 默认角色 */
+/** 默认角色（名称通过 i18n 获取） */
 const DEFAULT_ROLES = [
-  { code: 'admin', name: '管理员', description: '系统管理员，拥有所有权限', isSystem: true },
-  { code: 'user', name: '普通用户', description: '普通用户', isSystem: true },
-  { code: 'guest', name: '访客', description: '访客，只读权限', isSystem: true },
-] as const
+  { code: 'admin', name: () => iamM('iam_seedRoleAdminName'), description: () => iamM('iam_seedRoleAdminDesc'), isSystem: true },
+  { code: 'user', name: () => iamM('iam_seedRoleUserName'), description: () => iamM('iam_seedRoleUserDesc'), isSystem: true },
+  { code: 'guest', name: () => iamM('iam_seedRoleGuestName'), description: () => iamM('iam_seedRoleGuestDesc'), isSystem: true },
+]
 
-/** 默认权限 */
+/** 默认权限（名称通过 i18n 获取） */
 const DEFAULT_PERMISSIONS = [
-  { code: 'user:read', name: '查看用户', resource: 'user', action: 'read' },
-  { code: 'user:create', name: '创建用户', resource: 'user', action: 'create' },
-  { code: 'user:update', name: '更新用户', resource: 'user', action: 'update' },
-  { code: 'user:delete', name: '删除用户', resource: 'user', action: 'delete' },
-  { code: 'role:read', name: '查看角色', resource: 'role', action: 'read' },
-  { code: 'role:create', name: '创建角色', resource: 'role', action: 'create' },
-  { code: 'role:update', name: '更新角色', resource: 'role', action: 'update' },
-  { code: 'role:delete', name: '删除角色', resource: 'role', action: 'delete' },
-  { code: 'permission:read', name: '查看权限', resource: 'permission', action: 'read' },
-  { code: 'permission:manage', name: '管理权限', resource: 'permission', action: 'manage' },
-  { code: 'system:settings', name: '系统设置', resource: 'system', action: 'settings' },
-  { code: 'system:logs', name: '查看日志', resource: 'system', action: 'logs' },
-] as const
+  { code: 'user:read', name: () => iamM('iam_seedPermUserRead'), resource: 'user', action: 'read' },
+  { code: 'user:create', name: () => iamM('iam_seedPermUserCreate'), resource: 'user', action: 'create' },
+  { code: 'user:update', name: () => iamM('iam_seedPermUserUpdate'), resource: 'user', action: 'update' },
+  { code: 'user:delete', name: () => iamM('iam_seedPermUserDelete'), resource: 'user', action: 'delete' },
+  { code: 'role:read', name: () => iamM('iam_seedPermRoleRead'), resource: 'role', action: 'read' },
+  { code: 'role:create', name: () => iamM('iam_seedPermRoleCreate'), resource: 'role', action: 'create' },
+  { code: 'role:update', name: () => iamM('iam_seedPermRoleUpdate'), resource: 'role', action: 'update' },
+  { code: 'role:delete', name: () => iamM('iam_seedPermRoleDelete'), resource: 'role', action: 'delete' },
+  { code: 'permission:read', name: () => iamM('iam_seedPermPermRead'), resource: 'permission', action: 'read' },
+  { code: 'permission:manage', name: () => iamM('iam_seedPermPermManage'), resource: 'permission', action: 'manage' },
+  { code: 'system:settings', name: () => iamM('iam_seedPermSystemSettings'), resource: 'system', action: 'settings' },
+  { code: 'system:logs', name: () => iamM('iam_seedPermSystemLogs'), resource: 'system', action: 'logs' },
+]
 
 /**
  * 执行种子数据初始化（幂等）
@@ -231,7 +243,7 @@ async function seedIamData(
         roleMap.set(role.code, existingId)
         continue
       }
-      const result = await authz.createRole({ code: role.code, name: role.name, description: role.description, isSystem: role.isSystem })
+      const result = await authz.createRole({ code: role.code, name: role.name(), description: role.description(), isSystem: role.isSystem })
       if (result.success) {
         roleMap.set(role.code, result.data.id)
       }
@@ -256,7 +268,7 @@ async function seedIamData(
         permMap.set(perm.code, existingId)
         continue
       }
-      const result = await authz.createPermission({ code: perm.code, name: perm.name, resource: perm.resource, action: perm.action })
+      const result = await authz.createPermission({ code: perm.code, name: perm.name(), resource: perm.resource, action: perm.action })
       if (result.success) {
         permMap.set(perm.code, result.data.id)
       }

@@ -25,6 +25,22 @@ import { ensureCredentialType, isAccountLocked, recordLoginFailure, resetLoginFa
 const logger = core.logger.child({ module: 'iam', scope: 'ldap-strategy' })
 
 /**
+ * 转义 LDAP 搜索过滤器中的特殊字符（RFC 4515）
+ *
+ * 防止 LDAP 注入攻击：将用户输入中的特殊字符转义为 `\xx` 形式。
+ * 需转义字符：`*`、`(`、`)`、`\`、NUL（`\0`）。
+ *
+ * @param value - 用户输入值
+ * @returns 转义后的安全字符串
+ */
+export function escapeLdapFilterValue(value: string): string {
+  return value.replace(/[\\*()/\0]/g, (ch) => {
+    const hex = ch.charCodeAt(0).toString(16).padStart(2, '0')
+    return `\\${hex}`
+  })
+}
+
+/**
  * LDAP 客户端接口
  */
 export interface LdapClient {
@@ -75,6 +91,14 @@ export interface LdapStrategyConfig {
   maxLoginAttempts?: number
   /** 锁定时间（秒，默认 900 = 15分钟） */
   lockoutDuration?: number
+  /**
+   * 用户自动注册后的回调
+   *
+   * LDAP 同步创建本地新用户后调用，用于分配默认角色等后处理操作。
+   *
+   * @param userId - 新创建的用户 ID
+   */
+  onUserAutoRegistered?: (userId: string) => Promise<void>
 }
 
 /**
@@ -177,8 +201,8 @@ export function createLdapStrategy(config: LdapStrategyConfig): AuthStrategy {
           })
         }
 
-        // 搜索用户
-        const searchFilter = ldapConfig.searchFilter.replace('{{username}}', username)
+        // 搜索用户（转义用户输入，防止 LDAP 注入）
+        const searchFilter = ldapConfig.searchFilter.replace('{{username}}', escapeLdapFilterValue(username))
         const searchResult = await client.search(
           ldapConfig.searchBase,
           searchFilter,
@@ -271,6 +295,16 @@ export function createLdapStrategy(config: LdapStrategyConfig): AuthStrategy {
             return createdResult as Result<User, IamError>
           }
           storedUser = createdResult.data
+
+          // LDAP 新用户同步后回调（分配默认角色等）
+          if (storedUser && config.onUserAutoRegistered) {
+            try {
+              await config.onUserAutoRegistered(storedUser.id)
+            }
+            catch (callbackError) {
+              logger.warn('onUserAutoRegistered callback failed', { userId: storedUser?.id, error: callbackError })
+            }
+          }
         }
         else if (storedUser && syncUser) {
           // 更新本地用户信息
