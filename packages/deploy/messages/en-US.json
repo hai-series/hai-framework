@@ -1,0 +1,21 @@
+{
+  "deploy_notInitialized": "Deploy module not initialized, call deploy.init() first",
+  "deploy_initFailed": "Deploy module initialization failed: {error}",
+  "deploy_unsupportedProviderType": "Unsupported deploy provider type: {type}",
+  "deploy_unsupportedProvisionerType": "Unsupported service provisioner type: {type}",
+  "deploy_configTokenRequired": "Deploy provider token is required",
+  "deploy_authRequired": "Authentication required",
+  "deploy_authFailed": "Authentication failed: {error}",
+  "deploy_projectCreateFailed": "Project creation failed: {error}",
+  "deploy_buildFailed": "Application build failed: {error}",
+  "deploy_uploadFailed": "Build output upload failed: {error}",
+  "deploy_deployFailed": "Deployment failed: {error}",
+  "deploy_provisionFailed": "Service provisioning failed: {service} - {error}",
+  "deploy_adapterMissing": "Target platform adapter not found, please install {adapter}",
+  "deploy_scanFailed": "Application scan failed: {error}",
+  "deploy_envVarFailed": "Environment variable setup failed: {error}",
+  "deploy_credentialError": "Credential read/write failed: {error}",
+  "deploy_credentialSaved": "Credentials saved",
+  "deploy_credentialLoaded": "Credentials loaded",
+  "deploy_configError": "Deploy config error: {error}"
+}
