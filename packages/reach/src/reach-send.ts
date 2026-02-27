@@ -273,7 +273,9 @@ export function startDndScheduler(
   // 如果当前不在 DND 时段，不需要启动定时器
   if (!isDndBlocked(dndConfig)) {
     // 但仍然尝试 flush 一次（可能上次 DND 结束后有残留 pending）
-    flushPendingMessages(providers).catch(() => {})
+    flushPendingMessages(providers).catch((error) => {
+      logger.warn('Failed to flush pending messages on init', { error })
+    })
     return
   }
 
@@ -348,14 +350,25 @@ async function flushPendingMessages(
       continue
     }
 
+    let vars: Record<string, string> | undefined
+    let extra: Record<string, unknown> | undefined
+    try {
+      vars = row.vars_json ? JSON.parse(row.vars_json) as Record<string, string> : undefined
+      extra = row.extra_json ? JSON.parse(row.extra_json) as Record<string, unknown> : undefined
+    }
+    catch {
+      logger.warn('Failed to parse pending message JSON, skipping', { id: row.id })
+      continue
+    }
+
     const message: ReachMessage = {
       provider: row.provider,
       to: row.to_addr,
       subject: row.subject ?? undefined,
       body: row.body ?? undefined,
       template: row.template ?? undefined,
-      vars: row.vars_json ? JSON.parse(row.vars_json) as Record<string, string> : undefined,
-      extra: row.extra_json ? JSON.parse(row.extra_json) as Record<string, unknown> : undefined,
+      vars,
+      extra,
     }
 
     const sendResult = await provider.send(message)
@@ -427,7 +440,9 @@ export async function executeSend(
     if (strategy === 'delay') {
       // delay 策略：暂存消息到 DB
       logger.info('Message deferred by DND (delay strategy)', { provider: providerName, to: message.to })
-      saveSendRecord(preprocessed.data, 'pending', providerName).catch(() => {})
+      saveSendRecord(preprocessed.data, 'pending', providerName).catch((error) => {
+        logger.warn('Failed to save deferred message to DB', { provider: providerName, to: message.to, error })
+      })
       return ok({ success: true, deferred: true })
     }
 
@@ -458,7 +473,9 @@ export async function executeSend(
   }
 
   // 异步保存发送记录（sent 状态）
-  saveSendRecord(preprocessed.data, 'sent', providerName, result.data.messageId).catch(() => {})
+  saveSendRecord(preprocessed.data, 'sent', providerName, result.data.messageId).catch((error) => {
+    logger.warn('Failed to save send record', { provider: providerName, to: message.to, error })
+  })
 
   return result
 }
