@@ -18,6 +18,8 @@ import { createSM2 } from './crypto-sm2.js'
 import { createSM3 } from './crypto-sm3.js'
 import { createSM4 } from './crypto-sm4.js'
 
+const logger = core.logger.child({ module: 'crypto', scope: 'main' })
+
 // ─── 内部状态 ───
 
 /** 是否已初始化 */
@@ -71,16 +73,24 @@ export const crypto: CryptoFunctions = {
    * @returns 成功时返回 ok(undefined)；失败时返回 INIT_FAILED
    */
   async init(): Promise<Result<void, CryptoError>> {
-    await crypto.close()
+    if (initialized) {
+      logger.warn('Crypto module is already initialized, reinitializing')
+      await crypto.close()
+    }
+
+    logger.info('Initializing crypto module')
+
     try {
       currentAsymmetric = createSM2()
       currentHash = createSM3()
       currentSymmetric = createSM4()
       currentPassword = createPasswordFunctions({ hash: currentHash })
       initialized = true
+      logger.info('Crypto module initialized')
       return ok(undefined)
     }
     catch (error) {
+      logger.error('Crypto module initialization failed', { error })
       return err({
         code: CryptoErrorCode.INIT_FAILED,
         message: cryptoM('crypto_initFailed', {
@@ -108,10 +118,19 @@ export const crypto: CryptoFunctions = {
    * 关闭后访问 asymmetric/hash/symmetric/password 会返回 NOT_INITIALIZED 错误。
    */
   async close() {
+    if (!initialized) {
+      logger.info('Crypto module already closed, skipping')
+      return
+    }
+
+    logger.info('Closing crypto module')
+
     currentAsymmetric = null
     currentHash = null
     currentSymmetric = null
     currentPassword = null
     initialized = false
+
+    logger.info('Crypto module closed')
   },
 }

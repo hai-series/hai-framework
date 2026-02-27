@@ -20,6 +20,8 @@ import { collectStream, createSSEDecoder, createStreamProcessor, encodeSSE } fro
 import { createToolRegistry, defineTool } from './llm/ai-llm-tool.js'
 import { createAIMCPFunctions } from './mcp/ai-mcp-functions.js'
 
+const logger = core.logger.child({ module: 'ai', scope: 'main' })
+
 // ─── 内部状态 ───
 
 /** 当前配置（`null` 表示未初始化） */
@@ -101,10 +103,13 @@ export const ai: AIFunctions = {
   init(config?: AIConfigInput): Result<void, AIError> {
     // 关闭旧实例
     if (currentConfig) {
+      logger.warn('AI module is already initialized, reinitializing')
       currentLLM = null
       currentMCP = null
       currentConfig = null
     }
+
+    logger.info('Initializing AI module')
 
     try {
       const parsed = AIConfigSchema.parse(config ?? {})
@@ -117,9 +122,11 @@ export const ai: AIFunctions = {
       currentMCP = createAIMCPFunctions({ config: parsed })
 
       currentConfig = parsed
+      logger.info('AI module initialized')
       return ok(undefined)
     }
     catch (error) {
+      logger.error('AI module initialization failed', { error })
       return err({
         code: AIErrorCode.CONFIGURATION_ERROR,
         message: aiM('ai_initFailed', {
@@ -138,8 +145,17 @@ export const ai: AIFunctions = {
   get isInitialized() { return currentConfig !== null },
 
   close(): void {
+    if (!currentConfig) {
+      logger.info('AI module already closed, skipping')
+      return
+    }
+
+    logger.info('Closing AI module')
+
     currentLLM = null
     currentMCP = null
     currentConfig = null
+
+    logger.info('AI module closed')
   },
 }

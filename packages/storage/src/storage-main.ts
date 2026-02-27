@@ -23,6 +23,8 @@ import { createS3Provider } from './providers/storage-provider-s3.js'
 import { StorageConfigSchema, StorageErrorCode } from './storage-config.js'
 import { storageM } from './storage-i18n.js'
 
+const logger = core.logger.child({ module: 'storage', scope: 'main' })
+
 // ─── 内部状态 ───
 
 /** 当前使用的存储 Provider 实例（init 后非空，close 后置空） */
@@ -114,19 +116,31 @@ export const storage: StorageFunctions = {
    * @returns 成功时返回 ok(undefined)；失败时返回包含错误码和消息的 err。
    */
   async init(config: StorageConfigInput): Promise<Result<void, StorageError>> {
-    await storage.close()
+    if (currentProvider) {
+      logger.warn('Storage module is already initialized, reinitializing')
+      await storage.close()
+    }
+
+    logger.info('Initializing storage module')
+
     try {
       const parsed = StorageConfigSchema.parse(config)
       const provider = createProvider(parsed)
       const connectResult = await provider.connect(parsed)
       if (!connectResult.success) {
+        logger.error('Storage module initialization failed', {
+          code: connectResult.error.code,
+          message: connectResult.error.message,
+        })
         return connectResult
       }
       currentProvider = provider
       currentConfig = parsed
+      logger.info('Storage module initialized')
       return ok(undefined)
     }
     catch (error) {
+      logger.error('Storage module initialization failed', { error })
       return err({
         code: StorageErrorCode.CONNECTION_FAILED,
         message: storageM('storage_operationFailed', {
@@ -159,10 +173,25 @@ export const storage: StorageFunctions = {
    * 重复调用不会报错。
    */
   async close() {
-    if (currentProvider) {
-      await currentProvider.close()
-      currentProvider = null
+    if (!currentProvider) {
+      currentConfig = null
+      logger.info('Storage module already closed, skipping')
+      return
     }
-    currentConfig = null
+
+    logger.info('Closing storage module')
+
+    try {
+      await currentProvider.close()
+      logger.info('Storage module closed')
+    }
+    catch (error) {
+      logger.error('Storage module close failed', { error })
+      throw error
+    }
+    finally {
+      currentProvider = null
+      currentConfig = null
+    }
   },
 }

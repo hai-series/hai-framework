@@ -82,7 +82,7 @@ export const iam: IamFunctions = {
   async init(config: IamConfigInput): Promise<Result<void, IamError>> {
     // 幂等：已初始化时直接返回
     if (currentConfig !== null) {
-      logger.debug('IAM already initialized, skipping')
+      logger.warn('IAM module is already initialized, skipping')
       return ok(undefined)
     }
 
@@ -175,6 +175,13 @@ export const iam: IamFunctions = {
   get isInitialized() { return currentConfig !== null },
 
   async close() {
+    if (currentConfig === null && currentAuth === null && currentUser === null && currentAuthz === null && currentSession === null) {
+      logger.info('IAM module already closed, skipping')
+      return
+    }
+
+    logger.info('Closing IAM module')
+
     currentAuth = null
     currentUser = null
     currentAuthz = null
