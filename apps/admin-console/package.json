@@ -30,6 +30,7 @@
     "@h-ai/db": "workspace:*",
     "@h-ai/iam": "workspace:*",
     "@h-ai/kit": "workspace:*",
+    "@h-ai/reach": "workspace:*",
     "@h-ai/storage": "workspace:*",
     "@h-ai/ui": "workspace:*",
     "zod": "catalog:"

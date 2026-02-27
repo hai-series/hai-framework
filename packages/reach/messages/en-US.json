@@ -1,0 +1,17 @@
+{
+  "$schema": "https://inlang.com/schema/inlang-message-format",
+  "reach_notInitialized": "Reach module not initialized, call reach.init() first",
+  "reach_initFailed": "Reach module initialization failed: {error}",
+  "reach_unsupportedType": "Unsupported reach type: {type}",
+  "reach_sendFailed": "Send failed: {error}",
+  "reach_templateNotFound": "Template not found: {template}",
+  "reach_templateRenderFailed": "Template render failed: {error}",
+  "reach_invalidRecipient": "Invalid recipient: {recipient}",
+  "reach_providerNotFound": "Provider not found: {provider}",
+  "reach_providerRequired": "No provider specified, set provider field in message or template",
+  "reach_dndBlocked": "Message discarded by Do Not Disturb period",
+  "reach_dndDeferred": "Message deferred by Do Not Disturb period, will be sent after DND ends",
+  "reach_smsSendFailed": "SMS send failed: {error}",
+  "reach_emailSendFailed": "Email send failed: {error}",
+  "reach_apiSendFailed": "API callback send failed: {error}"
+}

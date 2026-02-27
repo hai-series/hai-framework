@@ -73,6 +73,7 @@ my-app/
 │       ├── hai-core/SKILL.md         # @h-ai/core 用法
 │       ├── hai-db/SKILL.md           # @h-ai/db 用法
 │       ├── hai-iam/SKILL.md          # @h-ai/iam 用法
+│       ├── hai-reach/SKILL.md       # @h-ai/reach 用法
 │       ├── hai-cache/SKILL.md        # @h-ai/cache 用法
 │       ├── hai-storage/SKILL.md      # @h-ai/storage 用法
 │       ├── hai-ai/SKILL.md           # @h-ai/ai 用法
@@ -100,6 +101,7 @@ Skill 模板统一管理在 `packages/cli/templates/skills/` 中，通过 `@h-ai
 | `@h-ai/cache`   | 缓存：KV、Hash、List、Set、SortedSet，Redis 风格 API                      |   ✅ Memory / Redis    |
 | `@h-ai/storage` | 文件存储：上传/下载/删除/复制/预签名 URL                                  |     ✅ Local / S3      |
 | `@h-ai/iam`     | 身份与访问管理：认证（密码/OTP/LDAP）、RBAC 授权、会话管理、用户管理      |           —            |
+| `@h-ai/reach`   | 用户触达：邮件、短信、API 回调，模板引擎、免打扰（DND）、发送日志         |  ✅ SMTP / SMS / API   |
 | `@h-ai/ai`      | AI 集成：LLM 调用（同步/流式）、MCP Server、工具定义与注册                |           —            |
 | `@h-ai/kit`     | SvelteKit 集成：Handle Hook、中间件（CORS/CSRF/限流）、路由守卫、表单校验 |           —            |
 | `@h-ai/ui`      | UI 组件库：57+ Svelte 5 Runes 组件（原子 + 复合 + 业务场景）              |           —            |
@@ -118,25 +120,25 @@ Skill 模板统一管理在 `packages/cli/templates/skills/` 中，通过 `@h-ai
                          │ hooks · guards · middleware│
                          └────────────┬────────────┘
                                       │
-         ┌────────────┬───────────────┼───────────────┬────────────┐
-         │            │               │               │            │
-    ┌────▼────┐  ┌────▼────┐   ┌──────▼──────┐  ┌────▼────┐  ┌───▼───┐
-    │ @h-ai/iam│  │ @h-ai/ai │   │@h-ai/storage  │  │@h-ai/ui  │  │  ...  │
-    │ 认证授权 │  │ LLM+MCP │   │  文件存储    │  │ 组件库  │  │       │
-    └────┬────┘  └─────────┘   └──────┬──────┘  └─────────┘  └───────┘
-         │                            │
-    ┌────▼────┐  ┌─────────┐   ┌──────▼──────┐
-    │ @h-ai/db │  │@h-ai/cache│   │ S3 / Local  │
-    │  数据库  │  │   缓存   │   │  Provider   │
-    └────┬────┘  └────┬────┘   └─────────────┘
-         │            │
-   SQLite│PG│MySQL  Memory│Redis
-         │            │
-    ┌────▼────────────▼────┐
-    │      @h-ai/core       │
-    │ Result · Logger · ID │
-    │ Config · i18n · Utils│
-    └──────────────────────┘
+     ┌────────────┬───────────────┬───┴───┬───────────────┬────────────┐
+     │            │               │       │               │            │
+┌────▼────┐  ┌────▼─────┐  ┌─────▼─────┐ │         ┌────▼────┐  ┌───▼───┐
+│ @h-ai/iam│  │@h-ai/reach│  │ @h-ai/ai │ │         │@h-ai/ui  │  │  ...  │
+│ 认证授权 │  │ 用户触达  │  │ LLM+MCP  │ │         │ 组件库  │  │       │
+└────┬────┘  └──────────┘  └──────────┘  │         └─────────┘  └───────┘
+     │                            ┌──────▼──────┐
+┌────▼────┐  ┌─────────┐   │@h-ai/storage  │
+│ @h-ai/db │  │@h-ai/cache│   │  文件存储    │
+│  数据库  │  │   缓存   │   └──────┬──────┘
+└────┬────┘  └────┬────┘          │
+     │            │          S3 / Local
+SQLite│PG│MySQL  Memory│Redis
+     │            │
+┌────▼────────────▼────┐
+│      @h-ai/core       │
+│ Result · Logger · ID │
+│ Config · i18n · Utils│
+└──────────────────────┘
 ```
 
 **依赖方向**：上层依赖下层，`@h-ai/core` 是最底层基础，不反向依赖任何模块。
@@ -163,6 +165,7 @@ pnpm add @h-ai/core              # 基础能力（必装）
 pnpm add @h-ai/db                # 数据库
 pnpm add @h-ai/cache             # 缓存
 pnpm add @h-ai/iam               # 身份认证/授权
+pnpm add @h-ai/reach             # 用户触达（邮件/短信/API）
 pnpm add @h-ai/ai                # AI / LLM / MCP
 pnpm add @h-ai/storage           # 文件存储
 pnpm add @h-ai/crypto            # 国密加密
