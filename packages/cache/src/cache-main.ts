@@ -18,6 +18,8 @@ import { cacheM } from './cache-i18n.js'
 import { createMemoryProvider } from './providers/cache-provider-memory.js'
 import { createRedisProvider } from './providers/cache-provider-redis.js'
 
+const logger = core.logger.child({ module: 'cache', scope: 'main' })
+
 // ─── 内部状态 ───
 
 /** 当前活跃的 Provider 实例；init 后赋值，close 后置 null */
@@ -98,19 +100,31 @@ export const cache: CacheFunctions = {
    * ```
    */
   async init(config: CacheConfigInput): Promise<Result<void, CacheError>> {
-    await cache.close()
+    if (currentProvider) {
+      logger.warn('Cache module is already initialized, reinitializing')
+      await cache.close()
+    }
+
+    logger.info('Initializing cache module')
+
     try {
       const parsed = CacheConfigSchema.parse(config)
       const provider = createProvider(parsed)
       const connectResult = await provider.connect(parsed)
       if (!connectResult.success) {
+        logger.error('Cache module initialization failed', {
+          code: connectResult.error.code,
+          message: connectResult.error.message,
+        })
         return connectResult
       }
       currentProvider = provider
       currentConfig = parsed
+      logger.info('Cache module initialized')
       return ok(undefined)
     }
     catch (error) {
+      logger.error('Cache module initialization failed', { error })
       return err({
         code: CacheErrorCode.CONNECTION_FAILED,
         message: cacheM('cache_initFailed', {
@@ -147,8 +161,23 @@ export const cache: CacheFunctions = {
 
   /** 关闭缓存连接并释放资源；未初始化时调用安全无副作用 */
   async close(): Promise<void> {
-    if (currentProvider) {
+    if (!currentProvider) {
+      currentConfig = null
+      logger.info('Cache module already closed, skipping')
+      return
+    }
+
+    logger.info('Closing cache module')
+
+    try {
       await currentProvider.close()
+      logger.info('Cache module closed')
+    }
+    catch (error) {
+      logger.error('Cache module close failed', { error })
+      throw error
+    }
+    finally {
       currentProvider = null
       currentConfig = null
     }

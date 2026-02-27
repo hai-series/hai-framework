@@ -81,6 +81,8 @@ import { createMysqlProvider } from './providers/db-provider-mysql.js'
 import { createPostgresProvider } from './providers/db-provider-postgres.js'
 import { createSqliteProvider } from './providers/db-provider-sqlite.js'
 
+const logger = core.logger.child({ module: 'db', scope: 'main' })
+
 // =============================================================================
 // 内部状态
 // =============================================================================
@@ -191,19 +193,31 @@ export const db: DbFunctions = {
    * @returns 初始化结果，失败时包含错误信息
    */
   async init(config: DbConfigInput): Promise<Result<void, DbError>> {
-    await db.close()
+    if (currentProvider) {
+      logger.warn('DB module is already initialized, reinitializing')
+      await db.close()
+    }
+
+    logger.info('Initializing DB module')
+
     try {
       const parsed = DbConfigSchema.parse(config)
       const provider = createProvider(parsed)
       const connectResult = await provider.connect(parsed)
       if (!connectResult.success) {
+        logger.error('DB module initialization failed', {
+          code: connectResult.error.code,
+          message: connectResult.error.message,
+        })
         return connectResult
       }
       currentProvider = provider
       currentConfig = parsed
+      logger.info('DB module initialized')
       return ok(undefined)
     }
     catch (error) {
+      logger.error('DB module initialization failed', { error })
       return err({
         code: DbErrorCode.CONNECTION_FAILED,
         message: dbM('db_initFailed', { params: { error: error instanceof Error ? error.message : String(error) } }),
@@ -271,8 +285,23 @@ export const db: DbFunctions = {
    * 多次调用安全，未初始化时直接返回。
    */
   async close(): Promise<void> {
-    if (currentProvider) {
+    if (!currentProvider) {
+      currentConfig = null
+      logger.info('DB module already closed, skipping')
+      return
+    }
+
+    logger.info('Closing DB module')
+
+    try {
       await currentProvider.close()
+      logger.info('DB module closed')
+    }
+    catch (error) {
+      logger.error('DB module close failed', { error })
+      throw error
+    }
+    finally {
       currentProvider = null
       currentConfig = null
     }
