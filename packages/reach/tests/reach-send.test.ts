@@ -127,6 +127,19 @@ describe.sequential('reach.send (multi-provider)', () => {
     }
   })
 
+  it('空 provider 且无模板应返回 PROVIDER_NOT_FOUND', async () => {
+    const result = await reach.send({
+      provider: '',
+      to: 'user@example.com',
+      body: 'test',
+    })
+
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error.code).toBe(ReachErrorCode.PROVIDER_NOT_FOUND)
+    }
+  })
+
   it('close 后模板注册表应被重置', async () => {
     reach.template.register({ name: 'temp', provider: 'email', body: 'test' })
     expect(reach.template.has('temp')).toBe(true)

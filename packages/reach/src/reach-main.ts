@@ -132,22 +132,17 @@ function preprocessMessage(message: ReachMessage): Result<ReachMessage, ReachErr
     return ok(message)
   }
 
-  const template = templateRegistry.get(message.template)
-  if (!template) {
-    return err({
-      code: ReachErrorCode.TEMPLATE_NOT_FOUND,
-      message: reachM('reach_templateNotFound', { params: { template: message.template } }),
-    })
-  }
-
   const rendered = templateRegistry.render(message.template, message.vars ?? {})
   if (!rendered.success) {
     return rendered
   }
 
+  // 从模板获取绑定的 Provider（用于路由推导）
+  const template = templateRegistry.get(message.template)
+
   const processed: ReachMessage = {
     ...message,
-    provider: message.provider || template.provider,
+    provider: message.provider || template?.provider || '',
     subject: message.subject ?? rendered.data.subject,
     body: message.body ?? rendered.data.body,
   }
@@ -249,7 +244,7 @@ export const reach: ReachFunctions = {
     if (!providerName) {
       return err({
         code: ReachErrorCode.PROVIDER_NOT_FOUND,
-        message: reachM('reach_providerNotFound', { params: { provider: '' } }),
+        message: reachM('reach_providerRequired'),
       })
     }
 
