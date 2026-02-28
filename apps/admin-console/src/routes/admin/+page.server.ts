@@ -6,6 +6,7 @@
 
 import type { PageServerLoad } from './$types'
 import { audit } from '@h-ai/audit'
+import { core } from '@h-ai/core'
 import { iam } from '@h-ai/iam'
 
 export const load: PageServerLoad = async () => {
@@ -30,6 +31,13 @@ export const load: PageServerLoad = async () => {
 
   const recentActivity = recentAuditResult.success ? recentAuditResult.data.items : []
   const auditStats = auditStatsResult.success ? auditStatsResult.data : []
+
+  if (!recentAuditResult.success) {
+    core.logger.warn('Failed to fetch recent audit logs', { error: recentAuditResult.error.message })
+  }
+  if (!auditStatsResult.success) {
+    core.logger.warn('Failed to fetch audit statistics', { error: auditStatsResult.error.message })
+  }
 
   return {
     stats: {
