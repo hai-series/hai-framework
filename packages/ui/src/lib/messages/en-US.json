@@ -173,5 +173,7 @@
   "signature_not_verified": "Not Verified",
   "signature_no_signature": "No signature",
   "signature_copy_signature": "Copy signature",
-  "signature_copy_public_key": "Copy public key"
+  "signature_copy_public_key": "Copy public key",
+  "theme_group_light": "Light Themes",
+  "theme_group_dark": "Dark Themes"
 }

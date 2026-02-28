@@ -173,5 +173,7 @@
   "signature_not_verified": "未验证",
   "signature_no_signature": "无签名",
   "signature_copy_signature": "复制签名",
-  "signature_copy_public_key": "复制公钥"
+  "signature_copy_public_key": "复制公钥",
+  "theme_group_light": "亮色主题",
+  "theme_group_dark": "暗色主题"
 }
