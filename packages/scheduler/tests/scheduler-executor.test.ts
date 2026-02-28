@@ -96,7 +96,7 @@ describe('executeApiTask', () => {
     vi.unstubAllGlobals()
   })
 
-  it('pOST 请求应携带请求体', async () => {
+  it('发送 POST 请求应携带请求体', async () => {
     const mockFetch = vi.fn().mockResolvedValue({
       ok: true,
       status: 200,
@@ -126,7 +126,7 @@ describe('executeApiTask', () => {
     vi.unstubAllGlobals()
   })
 
-  it('hTTP 错误应返回 API_EXECUTION_FAILED', async () => {
+  it('非 2xx 响应应返回 API_EXECUTION_FAILED', async () => {
     const mockFetch = vi.fn().mockResolvedValue({
       ok: false,
       status: 500,
@@ -166,7 +166,7 @@ describe('executeApiTask', () => {
 })
 
 describe('executeTask', () => {
-  it('jS 任务应生成正确的执行日志', async () => {
+  it('执行 JS 任务应生成正确的执行日志', async () => {
     const log = await executeTask({
       id: 'test',
       name: '测试任务',

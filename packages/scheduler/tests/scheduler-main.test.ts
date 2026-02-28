@@ -31,7 +31,7 @@ describe('scheduler', () => {
       expect(scheduler.config?.enableDb).toBe(true)
     })
 
-    it('dB 未初始化时应自动禁用 DB 记录', async () => {
+    it('当数据库未初始化时应自动禁用 DB 记录', async () => {
       const result = await scheduler.init({ enableDb: true })
       expect(result.success).toBe(true)
       expect(scheduler.config?.enableDb).toBe(false)
@@ -240,7 +240,7 @@ describe('scheduler', () => {
     })
   })
 
-  describe('dB 集成', () => {
+  describe('数据库集成', () => {
     it('应保存执行日志到数据库', async () => {
       await db.init({ type: 'sqlite', database: ':memory:' })
       await scheduler.init({ enableDb: true })
@@ -304,7 +304,7 @@ describe('scheduler', () => {
       }
     })
 
-    it('dB 未初始化时 getLogs 应返回错误', async () => {
+    it('数据库未初始化时 getLogs 应返回错误', async () => {
       await scheduler.init({ enableDb: false })
 
       const result = await scheduler.getLogs()
@@ -339,7 +339,7 @@ describe('scheduler', () => {
     })
   })
 
-  describe('aPI 任务触发', () => {
+  describe('接口任务触发', () => {
     it('应成功触发 API 任务', async () => {
       const mockFetch = vi.fn().mockResolvedValue({
         ok: true,

@@ -112,7 +112,7 @@ export type JsTaskHandler = (taskId: string) => unknown | Promise<unknown>
  * const apiTask: TaskDefinition = {
  *   id: 'health-check',
  *   name: '健康检查',
- *   cron: '* / 5 * * * *',  // 每 5 分钟
+ *   cron: '&#42;/5 * * * *',  // 每 5 分钟
  *   type: 'api',
  *   api: { url: 'https://api.example.com/health', method: 'GET' },
  * }
