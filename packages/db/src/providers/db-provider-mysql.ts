@@ -49,6 +49,7 @@ import { DbErrorCode } from '../db-config.js'
 import { createCrud } from '../db-crud-kernel.js'
 import { dbM } from '../db-i18n.js'
 import { buildPaginatedResult, normalizePagination } from '../db-pagination.js'
+import { escapeSqlString, validateIdentifier, validateIdentifiers } from '../db-security.js'
 
 // =============================================================================
 // mysql2 类型定义（避免强依赖）
@@ -166,7 +167,7 @@ export function createMysqlProvider(): DbProvider {
           parts.push(`DEFAULT ${def.defaultValue}`)
         }
         else {
-          parts.push(`DEFAULT '${def.defaultValue}'`)
+          parts.push(`DEFAULT '${escapeSqlString(def.defaultValue)}'`)
         }
       }
       else if (typeof def.defaultValue === 'boolean') {
@@ -440,6 +441,15 @@ export function createMysqlProvider(): DbProvider {
       if (!connResult.success)
         return connResult
 
+      // 校验表名与列名
+      const tableValid = validateIdentifier(tableName)
+      if (!tableValid.success)
+        return tableValid
+      const colNames = Object.keys(columns)
+      const colsValid = validateIdentifiers(colNames)
+      if (!colsValid.success)
+        return colsValid
+
       const columnDefs: string[] = []
       let primaryKeyCol: string | null = null
 
@@ -489,6 +499,10 @@ export function createMysqlProvider(): DbProvider {
       if (!connResult.success)
         return connResult
 
+      const tableValid = validateIdentifier(tableName)
+      if (!tableValid.success)
+        return tableValid
+
       const ifExistsClause = ifExists ? 'IF EXISTS ' : ''
       try {
         await connResult.data.query(`DROP TABLE ${ifExistsClause}\`${tableName}\``)
@@ -507,6 +521,13 @@ export function createMysqlProvider(): DbProvider {
       const connResult = ensureConnected()
       if (!connResult.success)
         return connResult
+
+      const tableValid = validateIdentifier(tableName)
+      if (!tableValid.success)
+        return tableValid
+      const colValid = validateIdentifier(columnName)
+      if (!colValid.success)
+        return colValid
 
       const colSql = buildColumnSql(columnName, columnDef)
       try {
@@ -527,6 +548,13 @@ export function createMysqlProvider(): DbProvider {
       if (!connResult.success)
         return connResult
 
+      const tableValid = validateIdentifier(tableName)
+      if (!tableValid.success)
+        return tableValid
+      const colValid = validateIdentifier(columnName)
+      if (!colValid.success)
+        return colValid
+
       try {
         await connResult.data.query(`ALTER TABLE \`${tableName}\` DROP COLUMN \`${columnName}\``)
         return ok(undefined)
@@ -545,6 +573,13 @@ export function createMysqlProvider(): DbProvider {
       if (!connResult.success)
         return connResult
 
+      const oldValid = validateIdentifier(oldName)
+      if (!oldValid.success)
+        return oldValid
+      const newValid = validateIdentifier(newName)
+      if (!newValid.success)
+        return newValid
+
       try {
         await connResult.data.query(`RENAME TABLE \`${oldName}\` TO \`${newName}\``)
         return ok(undefined)
@@ -562,6 +597,16 @@ export function createMysqlProvider(): DbProvider {
       const connResult = ensureConnected()
       if (!connResult.success)
         return connResult
+
+      const tableValid = validateIdentifier(tableName)
+      if (!tableValid.success)
+        return tableValid
+      const idxValid = validateIdentifier(indexName)
+      if (!idxValid.success)
+        return idxValid
+      const colsValid = validateIdentifiers(indexDef.columns)
+      if (!colsValid.success)
+        return colsValid
 
       const uniqueClause = indexDef.unique ? 'UNIQUE ' : ''
       const columns = indexDef.columns.map(c => `\`${c}\``).join(', ')
@@ -585,6 +630,10 @@ export function createMysqlProvider(): DbProvider {
       const connResult = ensureConnected()
       if (!connResult.success)
         return connResult
+
+      const idxValid = validateIdentifier(indexName)
+      if (!idxValid.success)
+        return idxValid
 
       const tableResult = await findIndexTableName((sql, values) => connResult.data.query(sql, values), indexName)
       if (!tableResult.success)
