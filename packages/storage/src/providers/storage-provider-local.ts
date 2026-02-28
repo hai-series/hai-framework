@@ -26,6 +26,7 @@ import { err, ok } from '@h-ai/core'
 import { StorageErrorCode } from '../storage-config.js'
 
 import { storageM } from '../storage-i18n.js'
+import { MIME_TYPE_DEFAULT, MIME_TYPES } from '../storage-mime.js'
 
 // =============================================================================
 // 辅助函数
@@ -95,42 +96,14 @@ function toStorageError(error: unknown, key?: string): StorageError {
 /**
  * 根据文件扩展名获取 MIME 类型
  *
- * 内置常见扩展名映射，未匹配时返回 'application/octet-stream'。
+ * 使用共享 MIME_TYPES 映射表，未匹配时返回 'application/octet-stream'。
  *
  * @param filePath - 文件路径或文件名
  * @returns MIME 类型字符串
  */
 function getMimeType(filePath: string): string {
-  const ext = path.extname(filePath).toLowerCase()
-  const mimeTypes: Record<string, string> = {
-    '.html': 'text/html',
-    '.css': 'text/css',
-    '.js': 'application/javascript',
-    '.json': 'application/json',
-    '.xml': 'application/xml',
-    '.txt': 'text/plain',
-    '.md': 'text/markdown',
-    '.png': 'image/png',
-    '.jpg': 'image/jpeg',
-    '.jpeg': 'image/jpeg',
-    '.gif': 'image/gif',
-    '.webp': 'image/webp',
-    '.svg': 'image/svg+xml',
-    '.ico': 'image/x-icon',
-    '.pdf': 'application/pdf',
-    '.zip': 'application/zip',
-    '.tar': 'application/x-tar',
-    '.gz': 'application/gzip',
-    '.mp3': 'audio/mpeg',
-    '.mp4': 'video/mp4',
-    '.webm': 'video/webm',
-    '.wav': 'audio/wav',
-    '.woff': 'font/woff',
-    '.woff2': 'font/woff2',
-    '.ttf': 'font/ttf',
-    '.otf': 'font/otf',
-  }
-  return mimeTypes[ext] || 'application/octet-stream'
+  const ext = path.extname(filePath).toLowerCase().replace('.', '')
+  return MIME_TYPES[ext] || MIME_TYPE_DEFAULT
 }
 
 /**
