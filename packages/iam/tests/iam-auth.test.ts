@@ -8,7 +8,7 @@
  * - loginWithOtp / loginWithLdap：无策略时应返回 STRATEGY_NOT_SUPPORTED
  * - sendOtp：无策略时应返回 STRATEGY_NOT_SUPPORTED
  * - login 禁用配置：关闭密码登录后应返回 LOGIN_DISABLED
- * - verifyToken：有效/无效/空令牌、登出后令牌验证
+ * - verifyToken：有效/无效/空令牌、登出后令牌验证、Session 含 roleCodes/permissionCodes/displayName
  * - logout：正常登出、令牌失效、重复登出、不存在令牌幂等
  * - 禁用用户登录：register(defaultEnabled:false) → login 应返回 USER_DISABLED
  * - 账户锁定：超过最大尝试次数后锁定
@@ -170,6 +170,74 @@ describe('iam.auth', () => {
         expect(result.success).toBe(false)
         if (!result.success) {
           expect(result.error.code).toBe(IamErrorCode.SESSION_INVALID)
+        }
+      })
+    })
+
+    // =========================================================================
+    // verifyToken 会话字段（roleCodes / permissionCodes / displayName）
+    // =========================================================================
+
+    describe('verifyToken session fields', () => {
+      it('有效令牌应返回 Session 含 roleCodes / permissionCodes', async () => {
+        await registerUser('auth_resolve_user')
+        const loginResult = await getIam().auth.login({
+          identifier: 'auth_resolve_user',
+          password: TEST_PASSWORD,
+        })
+        expect(loginResult.success).toBe(true)
+        if (!loginResult.success)
+          return
+
+        const result = await getIam().auth.verifyToken(loginResult.data.accessToken)
+        expect(result.success).toBe(true)
+        if (result.success) {
+          expect(result.data.userId).toBeTruthy()
+          expect(result.data.username).toBe('auth_resolve_user')
+          expect(Array.isArray(result.data.roleCodes)).toBe(true)
+          expect(Array.isArray(result.data.permissionCodes)).toBe(true)
+        }
+      })
+
+      it('登出后 verifyToken 应返回 SESSION_INVALID', async () => {
+        await registerUser('auth_resolve_after_logout')
+        const loginResult = await getIam().auth.login({
+          identifier: 'auth_resolve_after_logout',
+          password: TEST_PASSWORD,
+        })
+        if (!loginResult.success)
+          return
+
+        await getIam().auth.logout(loginResult.data.accessToken)
+        const result = await getIam().auth.verifyToken(loginResult.data.accessToken)
+        expect(result.success).toBe(false)
+        if (!result.success) {
+          expect(result.error.code).toBe(IamErrorCode.SESSION_INVALID)
+        }
+      })
+
+      it('返回的 Session 应包含 displayName（登录时写入缓存）', async () => {
+        await registerUser('auth_resolve_display')
+
+        // 设置 displayName
+        await getIam().user.updateCurrentUser(
+          (await getIam().auth.login({ identifier: 'auth_resolve_display', password: TEST_PASSWORD }))
+            .data!.accessToken,
+          { displayName: 'Test Display Name' },
+        )
+
+        // 重新登录，使 session 包含最新的 displayName
+        const loginResult = await getIam().auth.login({
+          identifier: 'auth_resolve_display',
+          password: TEST_PASSWORD,
+        })
+        if (!loginResult.success)
+          return
+
+        const result = await getIam().auth.verifyToken(loginResult.data.accessToken)
+        expect(result.success).toBe(true)
+        if (result.success) {
+          expect(result.data.displayName).toBe('Test Display Name')
         }
       })
     })

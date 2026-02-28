@@ -32,14 +32,14 @@ describe('iam.session', () => {
         const result = await getIam().session.create({
           userId: 'session-user-1',
           username: 'testuser',
-          roles: ['role_a'],
+          roleCodes: ['role_a'],
           source: 'pc',
         })
         expect(result.success).toBe(true)
         if (result.success) {
           expect(result.data.userId).toBe('session-user-1')
           expect(result.data.username).toBe('testuser')
-          expect(result.data.roles).toContain('role_a')
+          expect(result.data.roleCodes).toContain('role_a')
           expect(result.data.accessToken).toBeTruthy()
           expect(result.data.createdAt).toBeInstanceOf(Date)
           expect(result.data.expiresAt).toBeInstanceOf(Date)
@@ -49,7 +49,6 @@ describe('iam.session', () => {
       it('get 应返回已创建的会话', async () => {
         const createResult = await getIam().session.create({
           userId: 'session-user-2',
-          roles: [],
         })
         expect(createResult.success).toBe(true)
         if (!createResult.success)
@@ -79,7 +78,7 @@ describe('iam.session', () => {
       it('有效令牌应返回 Session', async () => {
         const createResult = await getIam().session.create({
           userId: 'session-verify-user',
-          roles: ['admin'],
+          roleCodes: ['admin'],
         })
         if (!createResult.success)
           return
@@ -116,7 +115,6 @@ describe('iam.session', () => {
       it('应能更新会话数据', async () => {
         const createResult = await getIam().session.create({
           userId: 'session-update-user',
-          roles: [],
         })
         if (!createResult.success)
           return
@@ -154,7 +152,6 @@ describe('iam.session', () => {
       it('删除会话后应无法获取', async () => {
         const createResult = await getIam().session.create({
           userId: 'session-del-user',
-          roles: [],
         })
         if (!createResult.success)
           return
@@ -183,8 +180,8 @@ describe('iam.session', () => {
       it('应删除指定用户的所有会话', async () => {
         const userId = 'session-del-all-user'
 
-        const s1 = await getIam().session.create({ userId, roles: [] })
-        const s2 = await getIam().session.create({ userId, roles: [] })
+        const s1 = await getIam().session.create({ userId })
+        const s2 = await getIam().session.create({ userId })
         expect(s1.success && s2.success).toBe(true)
         if (!s1.success || !s2.success)
           return
@@ -219,7 +216,7 @@ describe('iam.session', () => {
       it('创建会话时可传入 source 和 data', async () => {
         const result = await getIam().session.create({
           userId: 'session-opts-user',
-          roles: ['r1'],
+          roleCodes: ['r1'],
           source: 'android',
           data: { deviceId: 'abc123' },
         })
@@ -233,7 +230,6 @@ describe('iam.session', () => {
       it('创建会话时可自定义 maxAge', async () => {
         const result = await getIam().session.create({
           userId: 'session-custom-maxage',
-          roles: [],
           maxAge: 60,
         })
         expect(result.success).toBe(true)
@@ -244,14 +240,13 @@ describe('iam.session', () => {
         }
       })
 
-      it('创建会话时 roles 为空数组应成功', async () => {
+      it('创建会话时 roleCodes 为空数组应成功', async () => {
         const result = await getIam().session.create({
           userId: 'session-empty-roles',
-          roles: [],
         })
         expect(result.success).toBe(true)
         if (result.success) {
-          expect(result.data.roles).toEqual([])
+          expect(result.data.roleCodes).toEqual([])
         }
       })
     })
@@ -276,7 +271,6 @@ describe('iam.session', () => {
       it('get 操作应更新 lastActiveAt', async () => {
         const createResult = await slidingIam.session.create({
           userId: 'sliding-user',
-          roles: [],
         })
         if (!createResult.success)
           return
@@ -301,7 +295,6 @@ describe('iam.session', () => {
       it('超过 maxAge 后会话应过期（get 返回 null）', async () => {
         const createResult = await getIam().session.create({
           userId: 'expired-session-user',
-          roles: [],
           maxAge: 1,
         })
         if (!createResult.success)
@@ -320,7 +313,6 @@ describe('iam.session', () => {
       it('超过 maxAge 后 verifyToken 应返回 SESSION_INVALID', async () => {
         const createResult = await getIam().session.create({
           userId: 'expired-verify-user',
-          roles: [],
           maxAge: 1,
         })
         if (!createResult.success)
@@ -413,7 +405,7 @@ describe('iam.session', () => {
         const session = await getIam().auth.verifyToken(loginResult.data.accessToken)
         expect(session.success).toBe(true)
         if (session.success) {
-          expect(session.data.roles).toContain(role.data.id)
+          expect(session.data.roleCodes).toContain(role.data.code)
         }
       })
 
@@ -440,7 +432,7 @@ describe('iam.session', () => {
         const session = await getIam().auth.verifyToken(loginResult.data.accessToken)
         expect(session.success).toBe(true)
         if (session.success) {
-          expect(session.data.roles).toContain(role.data.id)
+          expect(session.data.roleCodes).toContain(role.data.code)
         }
       })
     })

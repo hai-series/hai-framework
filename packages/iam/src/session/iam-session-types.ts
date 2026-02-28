@@ -46,8 +46,14 @@ export interface Session {
   userId: string
   /** 用户名 */
   username?: string
-  /** 角色 ID 列表 */
-  roles: string[]
+  /** 显示名称 */
+  displayName?: string
+  /** 头像 URL */
+  avatarUrl?: string
+  /** 角色 code 列表（登录时写入，用于会话解析） */
+  roleCodes: string[]
+  /** 权限 code 列表（登录时写入，用于会话解析） */
+  permissionCodes: string[]
   /** 来源（如 pc/android/ios） */
   source?: string
   /** 访问令牌 */
@@ -70,8 +76,14 @@ export interface CreateSessionOptions {
   userId: string
   /** 用户名 */
   username?: string
-  /** 角色 ID 列表 */
-  roles: string[]
+  /** 显示名称 */
+  displayName?: string
+  /** 头像 URL */
+  avatarUrl?: string
+  /** 角色 code 列表 */
+  roleCodes?: string[]
+  /** 权限 code 列表 */
+  permissionCodes?: string[]
   /** 来源（如 pc/android/ios） */
   source?: string
   /** 过期时间（秒） */

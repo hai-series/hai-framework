@@ -38,7 +38,10 @@ export function buildSession(options: CreateSessionOptions, now: Date, sessionTt
   return {
     userId: options.userId,
     username: options.username,
-    roles: options.roles,
+    displayName: options.displayName,
+    avatarUrl: options.avatarUrl,
+    roleCodes: options.roleCodes ?? [],
+    permissionCodes: options.permissionCodes ?? [],
     source: options.source,
     accessToken,
     createdAt: now,
@@ -74,11 +77,20 @@ export function applySessionPatch(session: Session, patch: Partial<Session>): Se
   if (patch.data !== undefined) {
     nextSession.data = { ...nextSession.data, ...patch.data }
   }
-  if (patch.roles !== undefined) {
-    nextSession.roles = patch.roles
+  if (patch.roleCodes !== undefined) {
+    nextSession.roleCodes = patch.roleCodes
+  }
+  if (patch.permissionCodes !== undefined) {
+    nextSession.permissionCodes = patch.permissionCodes
   }
   if (patch.username !== undefined) {
     nextSession.username = patch.username
+  }
+  if (patch.displayName !== undefined) {
+    nextSession.displayName = patch.displayName
+  }
+  if (patch.avatarUrl !== undefined) {
+    nextSession.avatarUrl = patch.avatarUrl
   }
   if (patch.source !== undefined) {
     nextSession.source = patch.source
