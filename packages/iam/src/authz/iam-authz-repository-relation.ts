@@ -180,13 +180,13 @@ const ROLE_PERMISSION_SCHEMA = {
  * @param db - 数据库服务实例
  * @param permissionRepository - 权限存储（用于查询权限详情）
  * @param cache - 缓存服务（用于权限代码缓存）
- * @returns 角色-权限关联存储接口实现
+ * @returns 角色-权限关联存储接口实现（失败返回 IamError）
  */
 export async function createDbRolePermissionRepository(
   db: DbFunctions,
   permissionRepository: PermissionRepository,
   cache: CacheFunctions,
-): Promise<RolePermissionRepository> {
+): Promise<Result<RolePermissionRepository, IamError>> {
   // 确保表存在
   async function ensureTable(): Promise<Result<void, IamError>> {
     const result = await db.ddl.createTable(ROLE_PERMISSION_TABLE, ROLE_PERMISSION_SCHEMA, true)
@@ -217,7 +217,11 @@ export async function createDbRolePermissionRepository(
 
   const initResult = await ensureTable()
   if (!initResult.success) {
-    throw new Error(initResult.error.message)
+    return err({
+      code: IamErrorCode.REPOSITORY_ERROR,
+      message: initResult.error.message,
+      cause: initResult.error,
+    })
   }
 
   /**
@@ -410,8 +414,8 @@ export async function createDbRolePermissionRepository(
     return ok(codes)
   }
 
-  return {
-    async assign(roleId, permissionId, permissionCode, tx): Promise<Result<void, IamError>> {
+  return ok({
+    async assign(roleId: string, permissionId: string, permissionCode: string, tx?: TxHandle): Promise<Result<void, IamError>> {
       const runner = tx ?? db.sql
       const result = await runner.execute(
         `INSERT INTO ${ROLE_PERMISSION_TABLE} (role_id, permission_id) VALUES (?, ?) ON CONFLICT DO NOTHING`,
@@ -443,7 +447,7 @@ export async function createDbRolePermissionRepository(
       return ok(undefined)
     },
 
-    async remove(roleId, permissionId, permissionCode, tx): Promise<Result<void, IamError>> {
+    async remove(roleId: string, permissionId: string, permissionCode: string, tx?: TxHandle): Promise<Result<void, IamError>> {
       const runner = tx ?? db.sql
       const result = await runner.execute(
         `DELETE FROM ${ROLE_PERMISSION_TABLE} WHERE role_id = ? AND permission_id = ?`,
@@ -475,19 +479,19 @@ export async function createDbRolePermissionRepository(
       return ok(undefined)
     },
 
-    async getPermissionIds(roleId, tx): Promise<Result<string[], IamError>> {
+    async getPermissionIds(roleId: string, tx?: TxHandle): Promise<Result<string[], IamError>> {
       return getPermissionIdsInternal(roleId, tx)
     },
 
-    async getPermissions(roleId, tx): Promise<Result<Permission[], IamError>> {
+    async getPermissions(roleId: string, tx?: TxHandle): Promise<Result<Permission[], IamError>> {
       return getPermissionsInternal(roleId, tx)
     },
 
-    async getPermissionCodesCached(roleId, tx): Promise<Result<string[], IamError>> {
+    async getPermissionCodesCached(roleId: string, tx?: TxHandle): Promise<Result<string[], IamError>> {
       return getPermissionCodesCached(roleId, tx)
     },
 
-    async clearRolePermissionsCache(roleId): Promise<Result<void, IamError>> {
+    async clearRolePermissionsCache(roleId: string): Promise<Result<void, IamError>> {
       const cachedCodes = await cache.set_.smembers<string>(buildRolePermsKey(roleId))
       if (!cachedCodes.success) {
         return err({
@@ -513,7 +517,7 @@ export async function createDbRolePermissionRepository(
       return ok(undefined)
     },
 
-    async removePermissionCodeFromCache(permissionCode): Promise<Result<void, IamError>> {
+    async removePermissionCodeFromCache(permissionCode: string): Promise<Result<void, IamError>> {
       const roleIdsResult = await cache.set_.smembers<string>(buildPermissionRolesKey(permissionCode))
       if (!roleIdsResult.success) {
         return err({
@@ -548,7 +552,7 @@ export async function createDbRolePermissionRepository(
       return ok(undefined)
     },
 
-    async hasPermissionCached(roleId, permissionCode, tx): Promise<Result<boolean, IamError>> {
+    async hasPermissionCached(roleId: string, permissionCode: string, tx?: TxHandle): Promise<Result<boolean, IamError>> {
       const cacheKey = buildRolePermsKey(roleId)
       const existsResult = await cache.kv.exists(cacheKey)
       if (!existsResult.success) {
@@ -579,7 +583,7 @@ export async function createDbRolePermissionRepository(
       return ok(codesResult.data.includes(permissionCode))
     },
 
-    async removeByRoleId(roleId, tx): Promise<Result<void, IamError>> {
+    async removeByRoleId(roleId: string, tx?: TxHandle): Promise<Result<void, IamError>> {
       const runner = tx ?? db.sql
       const result = await runner.execute(
         `DELETE FROM ${ROLE_PERMISSION_TABLE} WHERE role_id = ?`,
@@ -595,7 +599,7 @@ export async function createDbRolePermissionRepository(
       return ok(undefined)
     },
 
-    async removeByPermissionId(permissionId, tx): Promise<Result<void, IamError>> {
+    async removeByPermissionId(permissionId: string, tx?: TxHandle): Promise<Result<void, IamError>> {
       const runner = tx ?? db.sql
       const result = await runner.execute(
         `DELETE FROM ${ROLE_PERMISSION_TABLE} WHERE permission_id = ?`,
@@ -611,7 +615,7 @@ export async function createDbRolePermissionRepository(
       return ok(undefined)
     },
 
-    async getRoleIdsByPermissionId(permissionId): Promise<Result<string[], IamError>> {
+    async getRoleIdsByPermissionId(permissionId: string): Promise<Result<string[], IamError>> {
       const result = await db.sql.query<{ role_id: string }>(
         `SELECT role_id FROM ${ROLE_PERMISSION_TABLE} WHERE permission_id = ?`,
         [permissionId],
@@ -625,7 +629,7 @@ export async function createDbRolePermissionRepository(
       }
       return ok(result.data.map(r => r.role_id))
     },
-  }
+  })
 }
 
 // =============================================================================
@@ -646,13 +650,13 @@ const USER_ROLE_SCHEMA = {
  * @param db - 数据库服务实例
  * @param roleRepository - 角色存储（用于查询角色详情）
  * @param cache - 缓存服务（用于同步会话角色）
- * @returns 用户-角色关联存储接口实现
+ * @returns 用户-角色关联存储接口实现（失败返回 IamError）
  */
 export async function createDbUserRoleRepository(
   db: DbFunctions,
   roleRepository: RoleRepository,
   cache: CacheFunctions,
-): Promise<UserRoleRepository> {
+): Promise<Result<UserRoleRepository, IamError>> {
   /**
    * 确保关联表和索引已创建
    *
@@ -687,7 +691,11 @@ export async function createDbUserRoleRepository(
 
   const initResult = await ensureTable()
   if (!initResult.success) {
-    throw new Error(initResult.error.message)
+    return err({
+      code: IamErrorCode.REPOSITORY_ERROR,
+      message: initResult.error.message,
+      cause: initResult.error,
+    })
   }
 
   /**
@@ -888,8 +896,8 @@ export async function createDbUserRoleRepository(
     return ok(undefined)
   }
 
-  return {
-    async assign(userId, roleId, tx): Promise<Result<void, IamError>> {
+  return ok({
+    async assign(userId: string, roleId: string, tx?: TxHandle): Promise<Result<void, IamError>> {
       const runner = tx ?? db.sql
       const result = await runner.execute(
         `INSERT INTO ${USER_ROLE_TABLE} (user_id, role_id) VALUES (?, ?) ON CONFLICT DO NOTHING`,
@@ -912,7 +920,7 @@ export async function createDbUserRoleRepository(
       return ok(undefined)
     },
 
-    async remove(userId, roleId, tx): Promise<Result<void, IamError>> {
+    async remove(userId: string, roleId: string, tx?: TxHandle): Promise<Result<void, IamError>> {
       const runner = tx ?? db.sql
       const result = await runner.execute(
         `DELETE FROM ${USER_ROLE_TABLE} WHERE user_id = ? AND role_id = ?`,
@@ -935,11 +943,11 @@ export async function createDbUserRoleRepository(
       return ok(undefined)
     },
 
-    async getRoleIds(userId, tx): Promise<Result<string[], IamError>> {
+    async getRoleIds(userId: string, tx?: TxHandle): Promise<Result<string[], IamError>> {
       return getRoleIdsInternal(userId, tx)
     },
 
-    async getRoles(userId, tx): Promise<Result<Role[], IamError>> {
+    async getRoles(userId: string, tx?: TxHandle): Promise<Result<Role[], IamError>> {
       const idsResult = await getRoleIdsInternal(userId, tx)
       if (!idsResult.success)
         return idsResult
@@ -963,7 +971,7 @@ export async function createDbUserRoleRepository(
       return ok(roleResult.data)
     },
 
-    async removeByRoleId(roleId, tx): Promise<Result<string[], IamError>> {
+    async removeByRoleId(roleId: string, tx?: TxHandle): Promise<Result<string[], IamError>> {
       const runner = tx ?? db.sql
 
       // 查出受影响的用户 ID
@@ -995,7 +1003,7 @@ export async function createDbUserRoleRepository(
       return ok(usersResult.data.map(r => r.user_id))
     },
 
-    async getUserIdsByRoleId(roleId): Promise<Result<string[], IamError>> {
+    async getUserIdsByRoleId(roleId: string): Promise<Result<string[], IamError>> {
       const result = await db.sql.query<{ user_id: string }>(
         `SELECT user_id FROM ${USER_ROLE_TABLE} WHERE role_id = ?`,
         [roleId],
@@ -1012,5 +1020,5 @@ export async function createDbUserRoleRepository(
 
     syncUserSessionRoles,
     syncUserSessionPermissions,
-  }
+  })
 }
