@@ -52,6 +52,13 @@ describe('neon provisioner', () => {
     expect(result.success).toBe(true)
   })
 
+  it('should authenticate with camelCase apiKey from config', async () => {
+    mockFetch.mockResolvedValueOnce(mockJsonResponse({ projects: [] }))
+    const neon = createNeonProvisioner()
+    const result = await neon.authenticate({ apiKey: 'neon_camel' })
+    expect(result.success).toBe(true)
+  })
+
   it('should fail authenticate without token', async () => {
     const neon = createNeonProvisioner()
     const result = await neon.authenticate({})
@@ -113,6 +120,16 @@ describe('upstash provisioner', () => {
     }
   })
 
+  it('should authenticate with camelCase apiKey from config', async () => {
+    mockFetch.mockResolvedValueOnce(mockJsonResponse([]))
+    const up = createUpstashProvisioner()
+    const result = await up.authenticate({ email: 'a@b.com', apiKey: 'up_camel' })
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data).toBe('a@b.com')
+    }
+  })
+
   it('should fail authenticate without credentials', async () => {
     const up = createUpstashProvisioner()
     const result = await up.authenticate({})
@@ -160,6 +177,16 @@ describe('r2 provisioner', () => {
     }
   })
 
+  it('should authenticate with camelCase keys from config', async () => {
+    mockFetch.mockResolvedValueOnce(mockJsonResponse({ result: [] }))
+    const r2 = createR2Provisioner()
+    const result = await r2.authenticate({ accountId: 'acc_123', apiToken: 'cf_token' })
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data).toBe('acc_123')
+    }
+  })
+
   it('should fail authenticate without credentials', async () => {
     const r2 = createR2Provisioner()
     const result = await r2.authenticate({})
@@ -182,6 +209,13 @@ describe('resend provisioner', () => {
     mockFetch.mockResolvedValueOnce(mockJsonResponse({ data: [] }))
     const resend = createResendProvisioner()
     const result = await resend.authenticate({ api_key: 're_xxx' })
+    expect(result.success).toBe(true)
+  })
+
+  it('should authenticate with camelCase apiKey from config', async () => {
+    mockFetch.mockResolvedValueOnce(mockJsonResponse({ data: [] }))
+    const resend = createResendProvisioner()
+    const result = await resend.authenticate({ apiKey: 're_camel' })
     expect(result.success).toBe(true)
   })
 
@@ -219,6 +253,18 @@ describe('aliyun provisioner', () => {
     expect(result.success).toBe(true)
     if (result.success) {
       expect(result.data).toBe('LTAI_xxx')
+    }
+  })
+
+  it('should authenticate with camelCase keys from config', async () => {
+    const aliyun = createAliyunProvisioner()
+    const result = await aliyun.authenticate({
+      accessKeyId: 'LTAI_camel',
+      accessKeySecret: 'secret_camel',
+    })
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data).toBe('LTAI_camel')
     }
   })
 

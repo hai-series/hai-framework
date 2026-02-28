@@ -42,7 +42,7 @@ export function createResendProvisioner(): ServiceProvisioner {
     async authenticate(credentials: Record<string, string>): Promise<Result<string, DeployError>> {
       logger.debug('Authenticating with Resend')
       try {
-        const apiToken = credentials.api_key ?? credentials.token ?? ''
+        const apiToken = credentials.apiKey ?? credentials.api_key ?? credentials.token ?? ''
         if (!apiToken) {
           throw new Error('Missing "api_key" in credentials')
         }
