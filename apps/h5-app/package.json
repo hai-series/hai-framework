@@ -12,14 +12,19 @@
     "lint:fix": "eslint . --fix"
   },
   "dependencies": {
+    "@h-ai/cache": "workspace:*",
     "@h-ai/core": "workspace:*",
+    "@h-ai/db": "workspace:*",
+    "@h-ai/iam": "workspace:*",
     "@h-ai/kit": "workspace:*",
+    "@h-ai/storage": "workspace:*",
     "@h-ai/ui": "workspace:*",
     "@sveltejs/adapter-auto": "catalog:",
     "@sveltejs/kit": "catalog:",
     "@sveltejs/vite-plugin-svelte": "catalog:",
     "svelte": "catalog:",
-    "vite": "catalog:"
+    "vite": "catalog:",
+    "zod": "catalog:"
   },
   "devDependencies": {
     "@tailwindcss/vite": "catalog:",

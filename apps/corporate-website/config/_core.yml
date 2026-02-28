@@ -1,0 +1,17 @@
+# =============================================================================
+# Corporate Website - 应用配置
+# =============================================================================
+
+name: hai Corporate Website
+version: 0.1.0
+env: ${HAI_ENV:development}
+debug: ${HAI_DEBUG:false}
+
+defaultLocale: zh-CN
+supportedLocales:
+  - zh-CN
+  - en-US
+
+features:
+  aiAssistant: true
+  contactForm: true
