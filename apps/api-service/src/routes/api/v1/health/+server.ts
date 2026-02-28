@@ -11,8 +11,8 @@ export const GET = kit.handler(async () => {
 
   // 数据库检查
   try {
-    await db.sql.get('SELECT 1')
-    checks.database = 'ok'
+    const dbResult = await db.sql.get('SELECT 1')
+    checks.database = dbResult.success ? 'ok' : 'error'
   }
   catch {
     checks.database = 'error'
