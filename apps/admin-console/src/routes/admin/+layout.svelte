@@ -95,7 +95,7 @@
     { icon: 'grid', title: m.nav_ui_gallery(), path: '/admin/ui-gallery' },
     { icon: 'modules', title: m.nav_modules(), path: '/admin/modules' },
     { icon: 'file', title: m.nav_logs(), path: '/admin/logs', requiredPermissions: ['system:logs'] },
-    { icon: 'settings', title: m.nav_settings(), path: '/admin/settings', requiredPermissions: ['system:settings'] },
+    { icon: 'settings', title: m.nav_settings(), path: '/admin/settings' },
   ])
 
   /**

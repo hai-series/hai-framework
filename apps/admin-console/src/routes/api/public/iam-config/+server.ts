@@ -7,13 +7,12 @@
  * =============================================================================
  */
 
-import type { RequestHandler } from '@sveltejs/kit'
 import { iam } from '@h-ai/iam'
-import { json } from '@sveltejs/kit'
+import { kit } from '@h-ai/kit'
 
-export const GET: RequestHandler = async () => {
+export const GET = kit.handler(async () => {
   const iamConfig = iam.config
-  return json({
+  return kit.response.ok({
     password: {
       minLength: iamConfig?.password?.minLength ?? 8,
       maxLength: iamConfig?.password?.maxLength ?? 128,
@@ -40,4 +39,4 @@ export const GET: RequestHandler = async () => {
       maxAge: iamConfig?.session?.maxAge ?? 86400,
     },
   })
-}
+})

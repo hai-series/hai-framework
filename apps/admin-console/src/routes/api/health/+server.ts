@@ -4,10 +4,9 @@
  * =============================================================================
  */
 
-import type { RequestHandler } from './$types'
 import { kit } from '@h-ai/kit'
 
-export const GET: RequestHandler = async ({ locals }) => {
+export const GET = kit.handler(async ({ locals }) => {
   if (!locals.session) {
     return kit.response.unauthorized()
   }
@@ -17,4 +16,4 @@ export const GET: RequestHandler = async ({ locals }) => {
     timestamp: new Date().toISOString(),
     version: '0.0.1',
   })
-}
+})

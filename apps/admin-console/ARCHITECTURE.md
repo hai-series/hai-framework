@@ -1,368 +1,228 @@
 # Admin Console 架构设计
 
-> 这是一个可直接使用的管理后台模板，基于 hai-framework 构建，支持 SQLite 数据存储。
-
-## 模块功能清单
-
-### @h-ai/ui 组件库
-
-- **Primitives (14)**: Avatar, Badge, Button, Checkbox, IconButton, Input, Progress, Radio, Select, Spinner, Switch, Tag, Textarea
-- **Compounds (31)**: Alert, Breadcrumb, Card, Confirm, DataTable, Drawer, Dropdown, Empty, FeedbackModal, Form, FormField, LanguageSwitch, Modal, MultiSelect, PageHeader, Pagination, Popover, Result, ScoreBar, SettingsModal, SeverityBadge, Skeleton, Steps, Table, Tabs, TagInput, ThemeToggle, Toast, ToastContainer, Tooltip
-- **Scenes**:
-  - IAM: LoginForm, RegisterForm, ForgotPasswordForm, ResetPasswordForm, ChangePasswordForm
-  - Storage: FileUpload, ImageUpload, AvatarUpload, FileList
-  - Crypto: PasswordInput, EncryptedInput, HashDisplay
-- **自动导入**：通过 `@h-ai/ui/auto-import` 预处理器在编译阶段自动注入 `@h-ai/ui` 组件 import
-
-### @h-ai/kit SvelteKit 集成
-
-- Guards: authGuard, roleGuard, permissionGuard, allGuards, anyGuard, notGuard, conditionalGuard
-- Hooks: createHandle, sequence
-- Middleware: loggingMiddleware, rateLimitMiddleware, corsMiddleware, csrfMiddleware
-- Response: ok, created, badRequest, unauthorized, forbidden, notFound, conflict, validationError, error, redirect
-- Validation: validateForm, validateQuery, validateParams
-- Modules: createIamHandle, createIamActions, requireAuth, requireRole, requirePermission
-
-### @h-ai/core 核心工具
-
-- Logger: info, warn, error, debug
-- ID: generate (nanoid)
-- Config: load, get, set
-- Utils: type, object, string, array, async, time
-
-### @h-ai/db 数据库
-
-- DDL: createTable, dropTable, addColumn, createIndex
-- SQL: query, execute, transaction
-- 支持: SQLite, PostgreSQL, MySQL
-
-### @h-ai/cache 缓存
-
-- 基础: get, set, del, exists, expire, ttl
-- Hash: hget, hset, hdel, hgetall
-- List: lpush, rpush, lpop, rpop, lrange
-- Set: sadd, srem, smembers, sismember
-- SortedSet: zadd, zrem, zrange, zscore
-
-### @h-ai/storage 存储
-
-- File: put, get, delete, exists, copy, move
-- Directory: list, create, delete
-- Presign: getUploadUrl, getDownloadUrl
-
-### @h-ai/crypto 加密
-
-- SM2: generateKeyPair, encrypt, decrypt, sign, verify
-- SM3: hash, hmac, verify
-- SM4: encrypt, decrypt, encryptWithIV, decryptWithIV, generateKey
-
-### @h-ai/iam 身份认证
-
-- Auth: login, logout, validateSession
-- User: register, getById, update, delete, list, changePassword, resetPassword
-- Role: create, update, delete, list, assignToUser, removeFromUser
-- Permission: create, update, delete, list, assignToRole, removeFromRole
-
-### @h-ai/ai 人工智能
-
-- LLM: chat, chatStream
-- MCP: registerTool, callTool, registerResource, getResource
-- Skills: register, execute, list
+> 基于 hai-framework 构建的 SvelteKit 管理后台示例应用，展示框架全模块集成能力。
 
 ---
 
-## 导航结构
+## 已实现功能
 
-```
-├── Dashboard (/)
-│   └── 概览统计、快速入口
-│
-├── IAM 身份管理
-│   ├── 用户管理 (/admin/iam/users)
-│   │   ├── 用户列表
-│   │   ├── 新建用户
-│   │   └── 用户详情/编辑
-│   ├── 角色管理 (/admin/iam/roles)
-│   │   ├── 角色列表
-│   │   ├── 新建角色
-│   │   └── 角色权限配置
-│   └── 权限管理 (/admin/iam/permissions)
-│       ├── 权限列表
-│       └── 新建权限
-│
-├── 数据服务
-│   ├── 数据库 (/admin/services/database)
-│   │   ├── 表管理
-│   │   ├── SQL 控制台
-│   │   └── 数据导入导出
-│   ├── 缓存 (/admin/services/cache)
-│   │   ├── Key 浏览
-│   │   ├── 数据操作
-│   │   └── 统计信息
-│   └── 存储 (/admin/services/storage)
-│       ├── 文件浏览器
-│       ├── 上传文件
-│       └── Bucket 设置
-│
-├── 工具
-│   ├── 加密工具 (/admin/tools/crypto)
-│   │   ├── SM2 加解密
-│   │   ├── SM3 哈希
-│   │   └── SM4 对称加密
-│   └── AI 助手 (/admin/tools/ai)
-│       └── 对话界面
-│
-├── UI 组件库
-│   ├── Primitives (/admin/ui/primitives)
-│   │   └── 所有原子组件示例
-│   ├── Compounds (/admin/ui/compounds)
-│   │   └── 所有组合组件示例
-│   └── Scenes (/admin/ui/scenes)
-│       └── 所有场景组件示例
-│
-└── 系统设置 (/admin/settings)
-    ├── 个人资料
-    ├── 安全设置（修改密码）
-    ├── 主题设置
-    └── 语言设置
-```
+### 认证流
+
+- 登录：用户名密码登录（`/auth/login`）
+- 注册：新用户注册（`/auth/register`）
+- 忘记密码：邮箱验证找回密码（`/auth/forgot-password`）
+- 重置密码：Token 验证重置密码（`/auth/reset-password`）
+- 登出：清除会话（`/api/auth/logout`）
+
+### IAM 管理
+
+- 用户管理：用户 CRUD、角色分配（`/admin/iam/users`）
+- 角色管理：角色 CRUD、权限绑定（`/admin/iam/roles`）
+- 权限管理：权限 CRUD（`/admin/iam/permissions`）
+
+### 个人中心
+
+- 个人资料：查看/编辑用户名、邮箱、头像、手机号（`/admin/profile`）
+- 修改密码：旧密码验证 + 新密码设置（集成 `@h-ai/ui` ChangePasswordForm）
+
+### Dashboard
+
+- 统计卡片：用户数、角色数、权限数、活跃用户数
+- 近期活动：审计日志时间线
+- 审计统计：近 7 天操作分布
+
+### 审计日志
+
+- 操作日志：记录所有 IAM CRUD、认证事件（通过 `audit.ts` 服务记录）
+
+### UI Gallery
+
+- 分类展示：Primitives / Compounds / Overlays / Scenes（`/admin/ui-gallery`）
+
+### 模块演示
+
+- 交互式示例：Core / DB / Cache / Storage / AI / Crypto 等（`/admin/modules`）
+
+### 设置
+
+- 主题切换：DaisyUI 主题（`/admin/settings`）
+- 语言切换：中文 / English（Paraglide i18n）
 
 ---
 
-## 路由规划
+## 路由结构
 
 ```
 src/routes/
-├── +layout.svelte              # 根布局
-├── +page.svelte                # 首页重定向
+├── +layout.svelte                      # 全局根布局（ThemeProvider + Toast）
+├── +page.server.ts                     # 首页（重定向到 /admin）
 │
-├── (auth)/                     # 认证相关（无侧边栏布局）
-│   ├── +layout.svelte
-│   ├── login/+page.svelte
-│   ├── register/+page.svelte
-│   ├── forgot-password/+page.svelte
-│   └── reset-password/+page.svelte
+├── (auth)/                             # 认证页面（无 Sidebar 布局）
+│   ├── +layout.svelte                  # 居中卡片布局
+│   ├── +layout.server.ts               # 已登录则重定向到 /admin
+│   └── auth/
+│       ├── login/+page.svelte
+│       ├── register/
+│       │   ├── +page.svelte
+│       │   └── +page.server.ts         # 加载 IAM 注册配置
+│       ├── forgot-password/+page.svelte
+│       └── reset-password/+page.svelte
 │
-├── admin/                      # 管理后台（需登录）
-│   ├── +layout.svelte          # 后台布局（侧边栏+顶栏）
-│   ├── +layout.server.ts       # 会话验证
-│   ├── +page.svelte            # Dashboard
-│   │
+├── admin/                              # 管理后台（需登录）
+│   ├── +layout.svelte                  # Sidebar + TopBar 布局
+│   ├── +layout.server.ts               # Session 校验 + 用户/权限注入
+│   ├── +page.svelte                    # Dashboard
+│   ├── +page.server.ts                 # Dashboard 数据加载
 │   ├── iam/
+│   │   ├── +page.server.ts             # IAM 子路由重定向
 │   │   ├── users/
-│   │   │   ├── +page.svelte    # 用户列表
-│   │   │   ├── new/+page.svelte
-│   │   │   └── [id]/+page.svelte
+│   │   │   ├── +page.svelte            # 用户列表 + CRUD 弹窗
+│   │   │   └── +page.server.ts         # 加载用户/角色数据
 │   │   ├── roles/
-│   │   │   ├── +page.svelte
-│   │   │   ├── new/+page.svelte
-│   │   │   └── [id]/+page.svelte
+│   │   │   ├── +page.svelte            # 角色列表 + 权限配置弹窗
+│   │   │   └── +page.server.ts         # 加载角色/权限数据
 │   │   └── permissions/
-│   │       ├── +page.svelte
-│   │       └── new/+page.svelte
-│   │
-│   ├── services/
-│   │   ├── database/+page.svelte
-│   │   ├── cache/+page.svelte
-│   │   └── storage/+page.svelte
-│   │
-│   ├── tools/
-│   │   ├── crypto/+page.svelte
-│   │   └── ai/+page.svelte
-│   │
-│   ├── ui/
-│   │   ├── primitives/+page.svelte
-│   │   ├── compounds/+page.svelte
-│   │   └── scenes/+page.svelte
-│   │
-│   └── settings/
-│       ├── +page.svelte        # 个人资料
-│       ├── security/+page.svelte
-│       └── preferences/+page.svelte
+│   │       ├── +page.svelte            # 权限列表 + CRUD 弹窗
+│   │       └── +page.server.ts         # 加载权限数据
+│   ├── profile/
+│   │   ├── +page.svelte                # 个人资料 + 修改密码
+│   │   └── +page.server.ts             # 加载当前用户信息
+│   ├── ui-gallery/
+│   │   ├── +layout.svelte              # Gallery 分类导航布局
+│   │   ├── +page.svelte                # Gallery 首页
+│   │   ├── primitives/+page.svelte     # 原子组件
+│   │   ├── compounds/+page.svelte      # 组合组件
+│   │   ├── overlays/+page.svelte       # 覆盖层组件
+│   │   └── scenes/+page.svelte         # 场景组件
+│   ├── logs/
+│   │   ├── +page.svelte                # 审计日志
+│   │   └── +page.server.ts             # 权限检查 + 分页加载
+│   ├── modules/+page.svelte            # 模块演示
+│   └── settings/+page.svelte           # 主题 + 语言设置
 │
-├── api/
-│   ├── auth/
-│   │   ├── login/+server.ts
-│   │   ├── register/+server.ts
-│   │   ├── logout/+server.ts
-│   │   ├── forgot-password/+server.ts
-│   │   └── reset-password/+server.ts
-│   │
-│   ├── users/
-│   │   ├── +server.ts          # GET(list), POST(create)
-│   │   └── [id]/+server.ts     # GET, PUT, DELETE
-│   │
-│   ├── roles/
-│   │   ├── +server.ts
-│   │   └── [id]/+server.ts
-│   │
-│   ├── permissions/
-│   │   ├── +server.ts
-│   │   └── [id]/+server.ts
-│   │
-│   ├── database/
-│   │   ├── tables/+server.ts
-│   │   └── query/+server.ts
-│   │
-│   ├── cache/
-│   │   ├── keys/+server.ts
-│   │   └── [key]/+server.ts
-│   │
-│   ├── storage/
-│   │   ├── files/+server.ts
-│   │   └── presign/+server.ts
-│   │
-│   └── crypto/
-│       ├── sm2/+server.ts
-│       ├── sm3/+server.ts
-│       └── sm4/+server.ts
-│
-└── logout/+server.ts
+└── api/                                # REST API
+    ├── auth/
+    │   ├── login/+server.ts
+    │   ├── register/+server.ts
+    │   ├── logout/+server.ts
+    │   ├── forgot-password/+server.ts
+    │   ├── reset-password/+server.ts
+    │   ├── me/+server.ts               # GET 当前用户信息
+    │   └── profile/
+    │       ├── +server.ts              # PUT 更新资料
+    │       ├── avatar/+server.ts       # POST 上传头像
+    │       └── password/+server.ts     # PUT 修改密码
+    ├── iam/
+    │   ├── users/+server.ts            # GET(list), POST(create)
+    │   ├── users/[id]/+server.ts       # GET, PUT, DELETE
+    │   ├── roles/+server.ts            # GET(list), POST(create)
+    │   ├── roles/[id]/+server.ts       # GET, PUT, DELETE
+    │   ├── permissions/+server.ts      # GET(list), POST(create)
+    │   └── permissions/[id]/+server.ts # GET, PUT, DELETE
+    ├── health/+server.ts               # 健康检查
+    └── public/
+        └── iam-config/+server.ts       # 无需认证的 IAM 公共配置
 ```
 
 ---
 
-## 数据库 Schema (SQLite)
+## 服务端架构
+
+### 初始化流程（`src/lib/server/init.ts`）
+
+```
+core.init → db.init → cache.init → reach.init(可选) → iam.init → createBusinessTables
+```
+
+- 配置文件位于 `config/_<module>.yml`，支持 `${ENV_VAR:default}` 语法
+- 初始化失败后 promise 自动清除，下次请求触发重试
+
+### 数据库
+
+IAM 相关表（users, roles, permissions, sessions 等）由 `@h-ai/iam` 模块自动创建管理。
+
+admin-console 仅维护一张业务表：
 
 ```sql
--- 用户表
-CREATE TABLE users (
+CREATE TABLE IF NOT EXISTS audit_logs (
   id TEXT PRIMARY KEY,
-  username TEXT UNIQUE NOT NULL,
-  email TEXT UNIQUE NOT NULL,
-  password_hash TEXT NOT NULL,
-  avatar TEXT,
-  status TEXT DEFAULT 'active',  -- active, inactive, banned
-  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-  updated_at TEXT DEFAULT CURRENT_TIMESTAMP
-);
-
--- 角色表
-CREATE TABLE roles (
-  id TEXT PRIMARY KEY,
-  name TEXT UNIQUE NOT NULL,
-  description TEXT,
+  user_id TEXT,
+  username TEXT,
+  action TEXT NOT NULL,
+  resource TEXT NOT NULL,
+  resource_id TEXT,
+  details TEXT,
+  ip TEXT,
   created_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
+```
 
--- 权限表
-CREATE TABLE permissions (
-  id TEXT PRIMARY KEY,
-  name TEXT UNIQUE NOT NULL,
-  description TEXT,
-  resource TEXT,
-  action TEXT,
-  created_at TEXT DEFAULT CURRENT_TIMESTAMP
-);
+### 服务层（`src/lib/server/services/`）
 
--- 用户-角色关联
-CREATE TABLE user_roles (
-  user_id TEXT NOT NULL,
-  role_id TEXT NOT NULL,
-  PRIMARY KEY (user_id, role_id),
-  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-  FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE CASCADE
-);
+| 文件            | 职责                                                                       |
+| --------------- | -------------------------------------------------------------------------- |
+| `audit.ts`      | 审计日志 CRUD + 快捷记录函数（`logCreate` / `logUpdate` / `logDelete` 等） |
+| `permission.ts` | 权限业务封装（查询、CRUD、角色绑定）                                       |
+| `role.ts`       | 角色业务封装（查询、CRUD、权限 / 用户关联）                                |
+| `user.ts`       | 用户类型定义（`AdminUser` / `UserDetail`）                                 |
+| `index.ts`      | 服务统一导出                                                               |
 
--- 角色-权限关联
-CREATE TABLE role_permissions (
-  role_id TEXT NOT NULL,
-  permission_id TEXT NOT NULL,
-  PRIMARY KEY (role_id, permission_id),
-  FOREIGN KEY (role_id) REFERENCES roles(id) ON DELETE CASCADE,
-  FOREIGN KEY (permission_id) REFERENCES permissions(id) ON DELETE CASCADE
-);
+### Hooks 架构（`src/hooks.server.ts`）
 
--- 会话表
-CREATE TABLE sessions (
-  id TEXT PRIMARY KEY,
-  user_id TEXT NOT NULL,
-  token TEXT UNIQUE NOT NULL,
-  expires_at TEXT NOT NULL,
-  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-);
-
--- 密码重置令牌
-CREATE TABLE password_resets (
-  id TEXT PRIMARY KEY,
-  user_id TEXT NOT NULL,
-  token TEXT UNIQUE NOT NULL,
-  expires_at TEXT NOT NULL,
-  used INTEGER DEFAULT 0,
-  created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-);
+```
+i18nHandle → haiHandle
+                ├── Cookie 加密代理（SM4-CBC，可配置加密字段）
+                ├── Session 解析（validateSession → iam.user / iam.authz 查询）
+                ├── Guards（authGuard → /admin/* 和 /api/* 需登录）
+                ├── Middleware chain
+                │   ├── 传输加密（配置 SM2 公钥时自动注入）
+                │   ├── loggingMiddleware
+                │   ├── rateLimitMiddleware
+                │   └── csrfMiddleware
+                └── resolve(event)
 ```
 
 ---
 
-## 环境变量
+## 框架模块依赖
 
-```env
-# 应用配置
-PUBLIC_APP_NAME=hai Admin Console
-PUBLIC_APP_URL=http://localhost:5173
-
-# 数据库 (SQLite)
-DATABASE_PATH=./data/admin.db
-
-# 会话配置
-SESSION_SECRET=your-session-secret-min-32-chars
-SESSION_COOKIE_NAME=hai_session
-SESSION_MAX_AGE=604800  # 7 days
-
-# 存储配置 (可选，默认本地存储)
-STORAGE_TYPE=local
-STORAGE_PATH=./data/uploads
-
-# 缓存配置 (可选，默认内存)
-CACHE_TYPE=memory
-
-# AI 配置 (可选)
-OPENAI_API_KEY=
-OPENAI_MODEL=gpt-4o-mini
-
-# 加密配置
-CRYPTO_SM4_KEY=your-sm4-key-16-bytes
-```
+| 模块            | 用途                                                          |
+| --------------- | ------------------------------------------------------------- |
+| `@h-ai/core`    | 配置管理、日志、Result 模式、ID 生成                          |
+| `@h-ai/db`      | SQLite（可切换 PostgreSQL / MySQL）                           |
+| `@h-ai/iam`     | 用户认证、RBAC、会话管理                                      |
+| `@h-ai/cache`   | 内存缓存（可切换 Redis）                                      |
+| `@h-ai/storage` | 文件存储（本地 / S3，用于头像上传）                           |
+| `@h-ai/crypto`  | SM2 / SM3 / SM4（Cookie 加密 + 传输加密）                     |
+| `@h-ai/ai`      | AI 集成（模块演示页面使用）                                   |
+| `@h-ai/reach`   | 通知触达（密码重置邮件，可选）                                |
+| `@h-ai/kit`     | SvelteKit hooks / guards / middleware / validation / response |
+| `@h-ai/ui`      | UI 组件库（自动导入）                                         |
 
 ---
 
-## 实现步骤
+## 配置文件
 
-### Phase 1: 基础设施
+### config/ 目录
 
-1. 创建 `src/lib/server/` 目录结构
-2. 初始化 SQLite 数据库和 Schema
-3. 实现基础服务层 (db, auth, user, role, permission)
-4. 配置环境变量和类型定义
+| 文件          | 模块          | 说明           |
+| ------------- | ------------- | -------------- |
+| `_core.yml`   | @h-ai/core    | 日志级别、环境 |
+| `_db.yml`     | @h-ai/db      | 数据库连接     |
+| `_cache.yml`  | @h-ai/cache   | 缓存类型与连接 |
+| `_iam.yml`    | @h-ai/iam     | 会话、密码策略 |
+| `_reach.yml`  | @h-ai/reach   | 邮件通知       |
+| `storage.yml` | @h-ai/storage | 存储后端       |
 
-### Phase 2: 认证流程
+### 环境变量
 
-1. 实现注册/登录/登出 API
-2. 实现找回密码/重置密码 API
-3. 创建认证相关页面
-4. 集成 @h-ai/kit 的 createIamHandle
+参见 `.env.example`。核心变量：
 
-### Phase 3: 核心功能
-
-1. 实现用户管理 CRUD
-2. 实现角色管理 CRUD
-3. 实现权限管理 CRUD
-4. 实现数据库管理页面
-5. 实现缓存管理页面
-6. 实现存储管理页面
-
-### Phase 4: 工具页面
-
-1. 实现加密工具页面
-2. 实现 AI 助手页面
-3. 实现 UI 组件展示页面
-
-### Phase 5: 完善体验
-
-1. 优化布局和导航
-2. 添加主题/语言设置
-3. 完善文档和示例
-4. 添加测试用例
+| 变量                 | 说明                     | 默认值            |
+| -------------------- | ------------------------ | ----------------- |
+| `HAI_ENV`            | 运行环境                 | `development`     |
+| `HAI_DB_TYPE`        | 数据库类型               | `sqlite`          |
+| `HAI_DB_DATABASE`    | 数据库路径/名称          | `./data/admin.db` |
+| `HAI_SESSION_SECRET` | 会话签名密钥（≥32 字符） | —                 |
+| `HAI_CACHE_TYPE`     | 缓存类型                 | `memory`          |
+| `HAI_STORAGE_TYPE`   | 存储类型                 | `local`           |

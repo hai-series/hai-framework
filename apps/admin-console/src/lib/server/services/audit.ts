@@ -56,8 +56,8 @@ export const auditService = {
     const id = core.id.withPrefix('audit_')
 
     const insertResult = await db.sql.execute(
-      `INSERT INTO audit_logs (id, user_id, action, resource, resource_id, details, ip_address, user_agent)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO audit_logs (id, user_id, action, resource, resource_id, details, ip_address, user_agent, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         id,
         input.userId ?? null,
@@ -67,6 +67,7 @@ export const auditService = {
         input.details ? JSON.stringify(input.details) : null,
         input.ipAddress ?? null,
         input.userAgent ?? null,
+        new Date().toISOString(),
       ],
     )
     if (!insertResult.success) {

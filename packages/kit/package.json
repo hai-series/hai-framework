@@ -8,6 +8,14 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./client": {
+      "types": "./dist/client/index.d.ts",
+      "import": "./dist/client/index.js"
+    },
+    "./crypto": {
+      "types": "./dist/modules/crypto/index.d.ts",
+      "import": "./dist/modules/crypto/index.js"
     }
   },
   "main": "./dist/index.js",
@@ -29,14 +37,11 @@
     "clean": "rimraf dist .turbo"
   },
   "peerDependencies": {
-    "@sveltejs/kit": "^2.50.1",
-    "svelte": "^5.53.5"
+    "@sveltejs/kit": "^2.53.4",
+    "svelte": "^5.53.6"
   },
   "dependencies": {
-    "@h-ai/cache": "workspace:*",
     "@h-ai/core": "workspace:*",
-    "@h-ai/db": "workspace:*",
-    "@h-ai/iam": "workspace:*",
     "zod": "catalog:"
   },
   "devDependencies": {

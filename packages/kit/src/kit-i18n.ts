@@ -28,7 +28,7 @@ export const getKitMessage
  *
  * // 在 i18n handle 中
  * const locale = event.cookies.get('PARAGLIDE_LOCALE') ?? 'zh-CN'
- * kit.setAllModulesLocale(locale)
+ * kit.i18n.setLocale(locale)
  * ```
  */
 export function setAllModulesLocale(locale: string): void {

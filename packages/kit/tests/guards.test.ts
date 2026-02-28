@@ -16,6 +16,7 @@ import {
   matchPermission,
   notGuard,
   permissionGuard,
+  requirePermission,
   roleGuard,
 } from '../src/guards/index.js'
 
@@ -352,5 +353,53 @@ describe('assertPermission', () => {
     const session: SessionData = { userId: 'u1', roles: [], permissions: ['*'] }
     const result = assertPermission(session, 'user:delete')
     expect(result).toBeUndefined()
+  })
+})
+
+describe('requirePermission', () => {
+  it('session 为 undefined 时 throw 401 Response', () => {
+    expect(() => requirePermission(undefined, 'user:read')).toThrow()
+    try {
+      requirePermission(undefined, 'user:read')
+    }
+    catch (error) {
+      expect(error).toBeInstanceOf(Response)
+      expect((error as Response).status).toBe(401)
+    }
+  })
+
+  it('session 为 null 时 throw 401 Response', () => {
+    expect(() => requirePermission(null, 'user:read')).toThrow()
+    try {
+      requirePermission(null, 'user:read')
+    }
+    catch (error) {
+      expect(error).toBeInstanceOf(Response)
+      expect((error as Response).status).toBe(401)
+    }
+  })
+
+  it('权限不足时 throw 403 Response', async () => {
+    const session: SessionData = { userId: 'u1', roles: [], permissions: ['user:read'] }
+    try {
+      requirePermission(session, 'user:delete')
+      expect.fail('Should have thrown')
+    }
+    catch (error) {
+      expect(error).toBeInstanceOf(Response)
+      expect((error as Response).status).toBe(403)
+      const body = await (error as Response).json()
+      expect(body.success).toBe(false)
+    }
+  })
+
+  it('有权限时不 throw', () => {
+    const session: SessionData = { userId: 'u1', roles: [], permissions: ['user:read'] }
+    expect(() => requirePermission(session, 'user:read')).not.toThrow()
+  })
+
+  it('通配符权限时不 throw', () => {
+    const session: SessionData = { userId: 'u1', roles: [], permissions: ['*'] }
+    expect(() => requirePermission(session, 'user:delete')).not.toThrow()
   })
 })

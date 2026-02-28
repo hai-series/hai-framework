@@ -4,14 +4,15 @@
  * =============================================================================
  * 验证用户是否具有指定权限。
  *
- * 提供三层权限检查能力：
+ * 提供四层权限检查能力：
  * - `permissionGuard()`：Hook 级路由守卫，用于 `kit.createHandle({ guards })` 配置
  * - `hasPermission()`：布尔判断，适用于条件分支
  * - `assertPermission()`：断言式检查，不满足时返回 403 Response，适用于 API Handler
+ * - `requirePermission()`：强制要求，不满足时 throw Response（SvelteKit 控制流）
  * =============================================================================
  */
 
-import type { GuardResult, RouteGuard, SessionData } from '../kit-types.js'
+import type { GuardResult, RouteGuard, SessionLike } from '../kit-types.js'
 import { getKitMessage } from '../kit-i18n.js'
 
 /**
@@ -135,7 +136,7 @@ export function matchPermission(required: string, userPermissions: string[]): bo
  * ```
  */
 export function hasPermission(
-  session: SessionData | null | undefined,
+  session: SessionLike | null | undefined,
   permission: string,
 ): boolean {
   if (!session)
@@ -163,7 +164,7 @@ export function hasPermission(
  * ```
  */
 export function assertPermission(
-  session: SessionData | null | undefined,
+  session: SessionLike | null | undefined,
   permission: string,
 ): Response | undefined {
   if (!session) {
@@ -181,4 +182,33 @@ export function assertPermission(
   }
 
   return undefined
+}
+
+/**
+ * 要求会话具有指定权限，不满足时 throw Response
+ *
+ * 利用 SvelteKit 控制流机制：throw 的 Response 对象会被框架捕获并直接作为响应返回。
+ * 搭配 `kit.handler()` 使用时，无需手动检查返回值。
+ *
+ * @param session - 当前会话数据，null/undefined 视为未认证
+ * @param permission - 需要的权限码，如 `user:create`
+ * @throws Response - 未认证 401 / 无权限 403
+ *
+ * @example
+ * ```ts
+ * export const GET = kit.handler(async ({ locals }) => {
+ *   kit.guard.requirePermission(locals.session, 'user:read')
+ *   // 执行到这里说明权限已通过
+ *   return kit.response.ok(data)
+ * })
+ * ```
+ */
+export function requirePermission(
+  session: SessionLike | null | undefined,
+  permission: string,
+): void {
+  const denied = assertPermission(session, permission)
+  if (denied) {
+    throw denied
+  }
 }

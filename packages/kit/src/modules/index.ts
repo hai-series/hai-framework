@@ -6,11 +6,5 @@
  * =============================================================================
  */
 
-// Cache
-export * from './cache/index.js'
-
 // Crypto
 export * from './crypto/index.js'
-
-// IAM
-export * from './iam/index.js'

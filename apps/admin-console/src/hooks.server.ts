@@ -10,6 +10,7 @@ import type { Handle } from '@sveltejs/kit'
 import process from 'node:process'
 import { initApp } from '$lib/server/init.js'
 import { core } from '@h-ai/core'
+import { crypto } from '@h-ai/crypto'
 import { iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
 
@@ -18,7 +19,11 @@ let appInitPromise: Promise<void> | null = null
 
 async function ensureAppInitialized() {
   if (!appInitPromise) {
-    appInitPromise = initApp()
+    appInitPromise = initApp().catch((err) => {
+      // 初始化失败时清除缓存，允许下次请求重试
+      appInitPromise = null
+      throw err
+    })
   }
   await appInitPromise
 }
@@ -69,7 +74,7 @@ const i18nHandle: Handle = async ({ event, resolve }) => {
   if (event.url.pathname.startsWith('/api/')) {
     const locale = event.cookies.get('PARAGLIDE_LOCALE') ?? 'zh-CN'
     event.locals.locale = locale
-    kit.setAllModulesLocale(locale)
+    kit.i18n.setLocale(locale)
     return resolve(event)
   }
 
@@ -77,7 +82,7 @@ const i18nHandle: Handle = async ({ event, resolve }) => {
   if (middleware) {
     return middleware(event.request, async ({ locale }) => {
       event.locals.locale = locale
-      kit.setAllModulesLocale(locale)
+      kit.i18n.setLocale(locale)
       return resolve(event, {
         transformPageChunk: ({ html }) => html.replace('%lang%', locale),
       })
@@ -86,7 +91,7 @@ const i18nHandle: Handle = async ({ event, resolve }) => {
 
   // Paraglide 未就绪时，使用默认语言
   event.locals.locale = 'zh-CN'
-  kit.setAllModulesLocale('zh-CN')
+  kit.i18n.setLocale('zh-CN')
   return resolve(event, {
     transformPageChunk: ({ html }) => html.replace('%lang%', 'zh-CN'),
   })
@@ -132,9 +137,8 @@ async function validateSession(token: string) {
  * hai handle hook
  */
 const haiHandle = kit.createHandle({
-  sessionCookieName: 'session_token',
+  sessionCookieName: 'hai_session',
   validateSession,
-  logging: true,
   middleware: [
     kit.middleware.logging({ logBody: false }),
     kit.middleware.rateLimit({
@@ -159,6 +163,12 @@ const haiHandle = kit.createHandle({
       exclude: ['/api/auth/*', '/api/public/*'],
     },
   ],
+  crypto: {
+    crypto,
+    transport: true,
+    encryptedCookies: ['hai_session'],
+    cookieEncryptionKey: process.env.HAI_COOKIE_KEY ?? '',
+  },
   onError: (error: unknown, _event: unknown) => {
     core.logger.error('Request error:', { error })
 

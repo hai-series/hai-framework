@@ -67,7 +67,7 @@ CREATE TABLE IF NOT EXISTS audit_logs (
   details TEXT,
   ip_address TEXT,
   user_agent TEXT,
-  created_at TEXT DEFAULT (datetime('now'))
+  created_at TEXT DEFAULT CURRENT_TIMESTAMP
 );
 
 -- 创建索引

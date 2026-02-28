@@ -5,11 +5,8 @@ export default defineConfig({
   ...baseConfig,
   entry: [
     'src/index.ts',
-    'src/modules/iam/index.ts',
-    'src/modules/storage/index.ts',
-    'src/modules/cache/index.ts',
-    'src/modules/crypto/index.ts',
     'src/client/index.ts',
+    'src/modules/crypto/index.ts',
   ],
-  external: ['@sveltejs/kit', '@h-ai/core', '@h-ai/iam', 'svelte', 'svelte/store'],
+  external: ['@sveltejs/kit', '@h-ai/core', 'zod'],
 })

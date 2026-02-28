@@ -6,7 +6,7 @@
 
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
-import { validateForm, validateParams, validateQuery } from '../src/kit-validation.js'
+import { validateForm, validateFormOrFail, validateParams, validateParamsOrFail, validateQuery, validateQueryOrFail } from '../src/kit-validation.js'
 
 describe('validateForm', () => {
   const userSchema = z.object({
@@ -144,5 +144,95 @@ describe('validateParams', () => {
 
     expect(result.valid).toBe(false)
     expect(result.errors.length).toBeGreaterThan(0)
+  })
+})
+
+// =============================================================================
+// OrFail 变体
+// =============================================================================
+
+describe('validateFormOrFail', () => {
+  const schema = z.object({
+    name: z.string().min(1),
+    email: z.string().email(),
+  })
+
+  it('校验通过时返回数据', async () => {
+    const request = new Request('http://localhost', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: 'John', email: 'john@example.com' }),
+    })
+
+    const data = await validateFormOrFail(request, schema)
+    expect(data).toEqual({ name: 'John', email: 'john@example.com' })
+  })
+
+  it('校验失败时 throw 400 Response', async () => {
+    const request = new Request('http://localhost', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name: '', email: 'invalid' }),
+    })
+
+    try {
+      await validateFormOrFail(request, schema)
+      expect.fail('Should have thrown')
+    }
+    catch (error) {
+      expect(error).toBeInstanceOf(Response)
+      expect((error as Response).status).toBe(400)
+    }
+  })
+})
+
+describe('validateQueryOrFail', () => {
+  const schema = z.object({
+    page: z.coerce.number().min(1),
+    limit: z.coerce.number().min(1).max(100),
+  })
+
+  it('校验通过时返回数据', () => {
+    const url = new URL('http://localhost?page=2&limit=50')
+    const data = validateQueryOrFail(url, schema)
+    expect(data).toEqual({ page: 2, limit: 50 })
+  })
+
+  it('校验失败时 throw 400 Response', () => {
+    const url = new URL('http://localhost?page=0&limit=200')
+
+    expect(() => validateQueryOrFail(url, schema)).toThrow()
+    try {
+      validateQueryOrFail(url, schema)
+    }
+    catch (error) {
+      expect(error).toBeInstanceOf(Response)
+      expect((error as Response).status).toBe(400)
+    }
+  })
+})
+
+describe('validateParamsOrFail', () => {
+  const schema = z.object({
+    id: z.string().uuid(),
+  })
+
+  it('校验通过时返回数据', () => {
+    const params = { id: '550e8400-e29b-41d4-a716-446655440000' }
+    const data = validateParamsOrFail(params, schema)
+    expect(data).toEqual(params)
+  })
+
+  it('校验失败时 throw 400 Response', () => {
+    const params = { id: 'not-a-uuid' }
+
+    expect(() => validateParamsOrFail(params, schema)).toThrow()
+    try {
+      validateParamsOrFail(params, schema)
+    }
+    catch (error) {
+      expect(error).toBeInstanceOf(Response)
+      expect((error as Response).status).toBe(400)
+    }
   })
 })

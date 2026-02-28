@@ -5,57 +5,60 @@
  * SvelteKit 集成模块的统一命名空间出口。
  * 所有功能通过 kit 对象访问：
  *
- * - kit.createHandle()  — SvelteKit Handle Hook
+ * - kit.createHandle()  — SvelteKit Handle Hook（含透明加密）
  * - kit.sequence()      — 组合多个 Handle
- * - kit.guard           — 路由守卫（auth / role / permission / hasPermission / assertPermission / all / any / not / conditional）
+ * - kit.handler()       — API Handler 包装器（自动错误边界）
+ * - kit.guard           — 路由守卫（auth / role / permission / ...）
  * - kit.middleware       — 中间件（cors / csrf / logging / rateLimit）
  * - kit.response        — API 标准响应（ok / error / unauthorized / ...）
- * - kit.validate        — 请求验证（form / query / params）
- * - kit.iam             — IAM 模块集成
- * - kit.cache           — Cache 模块集成
- * - kit.crypto          — Crypto 模块集成
- * - kit.client          — 客户端 Stores
- * - kit.setAllModulesLocale() — i18n 全局语言设置
+ * - kit.validate        — 请求验证（form / query / params / ...）
+ * - kit.session         — 会话 Cookie 管理
+ * - kit.client          — 客户端工具（create：CSRF + 传输加密）
+ * - kit.i18n            — 国际化（setLocale）
+ *
+ * 加密能力已内置于 createHandle（服务端）与 client.create（客户端），
+ * 业务代码无需直接操作底层 crypto API。
  *
  * @example
  * ```ts
  * import { kit } from '@h-ai/kit'
  *
- * // 创建 handle
- * export const handle = kit.createHandle({ logging: true })
+ * // 创建 handle（含透明加密）
+ * export const handle = kit.createHandle({
+ *   crypto: { crypto, transport: true, encryptedCookies: ['hai_session'] },
+ * })
  *
- * // 路由守卫
- * kit.guard.auth({ loginUrl: '/login' })
+ * // API Handler（自动错误边界）
+ * export const GET = kit.handler(async ({ locals, url }) => {
+ *   kit.guard.requirePermission(locals.session, 'user:read')
+ *   const query = kit.validate.queryOrFail(url, ListSchema)
+ *   return kit.response.ok(await fetchData(query))
+ * })
  *
- * // API 响应
- * return kit.response.ok(data)
+ * // 会话管理
+ * kit.session.setCookie(cookies, token)
  *
- * // 表单验证
- * const { valid, data } = await kit.validate.form(request, schema)
+ * // i18n
+ * kit.i18n.setLocale('zh-CN')
  * ```
  * =============================================================================
  */
 
-import { useIsAuthenticated, useSession, useUpload, useUser } from './client/stores.js'
-import { useTransportEncryption } from './client/transport-encryption-store.js'
+import { createKitClient } from './client/kit-client.js'
 import { authGuard } from './guards/auth.js'
 import { allGuards, anyGuard, conditionalGuard, notGuard } from './guards/compose.js'
-import { assertPermission, hasPermission, permissionGuard } from './guards/permission.js'
+import { assertPermission, hasPermission, permissionGuard, requirePermission } from './guards/permission.js'
 import { roleGuard } from './guards/role.js'
 import { createHandle, sequence } from './hooks/handle.js'
+import { handler } from './kit-handler.js'
 import { setAllModulesLocale } from './kit-i18n.js'
 import { badRequest, conflict, created, error, forbidden, internalError, noContent, notFound, ok, redirect, unauthorized, validationError } from './kit-response.js'
-import { validateForm, validateParams, validateQuery } from './kit-validation.js'
+import { clearSessionCookie, setSessionCookie } from './kit-session.js'
+import { validateForm, validateFormOrFail, validateParams, validateParamsOrFail, validateQuery, validateQueryOrFail } from './kit-validation.js'
 import { corsMiddleware } from './middleware/cors.js'
 import { csrfMiddleware } from './middleware/csrf.js'
 import { loggingMiddleware } from './middleware/logging.js'
 import { rateLimitMiddleware } from './middleware/ratelimit.js'
-import { createCacheHandle, createCacheUtils } from './modules/cache/cache-handle.js'
-import { createCsrfManager, createEncryptedCookie } from './modules/crypto/crypto-helpers.js'
-import { createKeyExchangeHandler, createTransportEncryption, isValidEncryptedPayload } from './modules/crypto/transport-encryption.js'
-import { transportEncryptionMiddleware } from './modules/crypto/transport-middleware.js'
-import { createIamActions } from './modules/iam/iam-actions.js'
-import { createIamHandle, requireAuth } from './modules/iam/iam-handle.js'
 
 /**
  * Kit 模块统一出口。
@@ -70,6 +73,8 @@ export const kit = {
   createHandle,
   /** 组合多个 Handle */
   sequence,
+  /** API Handler 包装器（自动错误边界） */
+  handler,
 
   // ─── 路由守卫 ───
 
@@ -84,6 +89,8 @@ export const kit = {
     hasPermission,
     /** 断言权限，不满足时返回 403 Response（用于 API Handler） */
     assertPermission,
+    /** 要求权限，不满足时 throw Response（SvelteKit 控制流） */
+    requirePermission,
     /** 所有守卫通过（AND 逻辑） */
     all: allGuards,
     /** 任一守卫通过（OR 逻辑） */
@@ -145,62 +152,34 @@ export const kit = {
     query: validateQuery,
     /** 验证路径参数 */
     params: validateParams,
+    /** 验证表单/JSON，失败 throw Response（SvelteKit 控制流） */
+    formOrFail: validateFormOrFail,
+    /** 验证查询参数，失败 throw Response（SvelteKit 控制流） */
+    queryOrFail: validateQueryOrFail,
+    /** 验证路径参数，失败 throw Response（SvelteKit 控制流） */
+    paramsOrFail: validateParamsOrFail,
   },
 
-  // ─── 模块集成: IAM ───
+  // ─── 会话管理 ───
 
-  iam: {
-    /** 创建 IAM Handle（会话验证 + 权限注入） */
-    createHandle: createIamHandle,
-    /** 要求认证（未认证抛 401） */
-    requireAuth,
-    /** 创建 IAM 操作（注册/登录/登出等） */
-    createActions: createIamActions,
+  session: {
+    /** 设置会话 Cookie */
+    setCookie: setSessionCookie,
+    /** 清除会话 Cookie */
+    clearCookie: clearSessionCookie,
   },
 
-  // ─── 模块集成: Cache ───
-
-  cache: {
-    /** 创建缓存 Handle（路由级缓存） */
-    createHandle: createCacheHandle,
-    /** 创建缓存工具（手动缓存操作） */
-    createUtils: createCacheUtils,
-  },
-
-  // ─── 模块集成: Crypto ───
-
-  crypto: {
-    /** 创建 CSRF 令牌管理器 */
-    createCsrfManager,
-    /** 创建加密 Cookie 管理器 */
-    createEncryptedCookie,
-    /** 创建传输加密管理器 */
-    createTransportEncryption,
-    /** 创建密钥交换 API Handler */
-    createKeyExchangeHandler,
-    /** 检查是否为有效的加密载荷 */
-    isValidEncryptedPayload,
-    /** 传输加密中间件 */
-    transportEncryptionMiddleware,
-  },
-
-  // ─── 客户端 Stores ───
+  // ─── 客户端工具 ───
 
   client: {
-    /** 会话状态管理 Store */
-    useSession,
-    /** 文件上传状态管理 Store */
-    useUpload,
-    /** 认证状态派生 Store */
-    useIsAuthenticated,
-    /** 用户信息派生 Store */
-    useUser,
-    /** 传输加密 Store */
-    useTransportEncryption,
+    /** 创建统一客户端（CSRF + 传输加密透明合并） */
+    create: createKitClient,
   },
 
   // ─── i18n ───
 
-  /** 统一设置所有 hai 模块的默认语言 */
-  setAllModulesLocale,
+  i18n: {
+    /** 统一设置所有 hai 模块的默认语言 */
+    setLocale: setAllModulesLocale,
+  },
 }
