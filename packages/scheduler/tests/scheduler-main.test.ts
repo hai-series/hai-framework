@@ -180,6 +180,14 @@ describe('scheduler', () => {
         expect(result.error.code).toBe(SchedulerErrorCode.NOT_INITIALIZED)
       }
     })
+
+    it('未初始化时注销应返回 NOT_INITIALIZED', async () => {
+      const result = await scheduler.unregister('any-task')
+      expect(result.success).toBe(false)
+      if (!result.success) {
+        expect(result.error.code).toBe(SchedulerErrorCode.NOT_INITIALIZED)
+      }
+    })
   })
 
   describe('start / stop', () => {
@@ -218,6 +226,14 @@ describe('scheduler', () => {
 
     it('未初始化时启动应返回 NOT_INITIALIZED', () => {
       const result = scheduler.start()
+      expect(result.success).toBe(false)
+      if (!result.success) {
+        expect(result.error.code).toBe(SchedulerErrorCode.NOT_INITIALIZED)
+      }
+    })
+
+    it('未初始化时停止应返回 NOT_INITIALIZED', () => {
+      const result = scheduler.stop()
       expect(result.success).toBe(false)
       if (!result.success) {
         expect(result.error.code).toBe(SchedulerErrorCode.NOT_INITIALIZED)
@@ -626,6 +642,63 @@ describe('scheduler', () => {
       await scheduler.init({ enableDb: false })
       expect(scheduler.tasks.size).toBe(0)
     })
+
+    it('多个 API 任务应全部持久化并在重新初始化后加载', async () => {
+      await db.init({ type: 'sqlite', database: ':memory:' })
+      await scheduler.init({ enableDb: true })
+
+      await scheduler.register({
+        id: 'api-1',
+        name: 'API 任务 1',
+        cron: '0 * * * *',
+        type: 'api',
+        api: { url: 'https://example.com/1' },
+      })
+      await scheduler.register({
+        id: 'api-2',
+        name: 'API 任务 2',
+        cron: '*/10 * * * *',
+        type: 'api',
+        api: { url: 'https://example.com/2', method: 'POST', body: { key: 'value' } },
+      })
+
+      expect(scheduler.tasks.size).toBe(2)
+
+      await scheduler.close()
+      await scheduler.init({ enableDb: true })
+
+      expect(scheduler.tasks.size).toBe(2)
+      expect(scheduler.tasks.has('api-1')).toBe(true)
+      expect(scheduler.tasks.has('api-2')).toBe(true)
+
+      const task2 = scheduler.tasks.get('api-2')!
+      expect(task2.type).toBe('api')
+      if (task2.type === 'api') {
+        expect(task2.api.method).toBe('POST')
+      }
+    })
+
+    it('updateTask enabled 状态应同步到 DB 并在重新加载后保持', async () => {
+      await db.init({ type: 'sqlite', database: ':memory:' })
+      await scheduler.init({ enableDb: true })
+
+      await scheduler.register({
+        id: 'toggle-api',
+        name: '开关 API 任务',
+        cron: '0 * * * *',
+        type: 'api',
+        api: { url: 'https://example.com' },
+      })
+
+      await scheduler.updateTask('toggle-api', { enabled: false })
+      expect(scheduler.tasks.get('toggle-api')!.enabled).toBe(false)
+
+      await scheduler.close()
+      await scheduler.init({ enableDb: true })
+
+      const reloaded = scheduler.tasks.get('toggle-api')!
+      expect(reloaded.enabled).toBe(false)
+    })
   })
 
   describe('close', () => {
@@ -651,6 +724,16 @@ describe('scheduler', () => {
     it('多次 close 应安全', async () => {
       await scheduler.close()
       await scheduler.close()
+      expect(scheduler.isInitialized).toBe(false)
+    })
+
+    it('运行中 close 应同时停止定时器', async () => {
+      await scheduler.init({ enableDb: false })
+      scheduler.start()
+      expect(scheduler.isRunning).toBe(true)
+
+      await scheduler.close()
+      expect(scheduler.isRunning).toBe(false)
       expect(scheduler.isInitialized).toBe(false)
     })
   })
