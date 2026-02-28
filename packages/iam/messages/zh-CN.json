@@ -120,6 +120,7 @@
   "iam_resetTokenExpired": "密码重置令牌已过期",
   "iam_resetTokenMaxAttempts": "验证次数过多，请重新申请重置令牌",
   "iam_saveResetTokenFailed": "保存密码重置令牌失败: {message}",
+  "iam_hashResetTokenFailed": "密码重置令牌哈希失败: {message}",
   "iam_queryResetTokenFailed": "查询密码重置令牌失败: {message}",
   "iam_updateResetTokenFailed": "更新密码重置令牌失败: {message}",
   "iam_deleteResetTokenFailed": "删除密码重置令牌失败: {message}",

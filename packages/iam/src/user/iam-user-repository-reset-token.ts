@@ -55,14 +55,18 @@ export interface ResetTokenRecord {
  * 查询时也先哈希再匹配。
  *
  * @param token - 明文令牌
- * @returns 十六进制 SHA-256 哈希值
+ * @returns 十六进制 SHA-256 哈希值，失败时返回 IamError
  */
-export function hashResetToken(token: string): string {
+export function hashResetToken(token: string): Result<string, IamError> {
   const result = haiCrypto.hash.hash(token)
   if (!result.success) {
-    throw new Error(`Failed to hash reset token: ${result.error.message}`)
+    return err({
+      code: IamErrorCode.REPOSITORY_ERROR,
+      message: iamM('iam_hashResetTokenFailed', { params: { message: result.error.message } }),
+      cause: result.error,
+    })
   }
-  return result.data
+  return ok(result.data)
 }
 
 /**
@@ -198,7 +202,11 @@ export function createCacheResetTokenRepository(cache: CacheFunctions): ResetTok
   const repo: ResetTokenRepository = {
     async saveToken(record): Promise<Result<void, IamError>> {
       const now = Date.now()
-      const hashedToken = hashResetToken(record.token)
+      const hashResult = hashResetToken(record.token)
+      if (!hashResult.success) {
+        return hashResult
+      }
+      const hashedToken = hashResult.data
       const ttlSeconds = Math.max(1, Math.ceil((record.expiresAt.getTime() - now) / 1000))
 
       const fullRecord: ResetTokenRecord = {
@@ -246,7 +254,11 @@ export function createCacheResetTokenRepository(cache: CacheFunctions): ResetTok
     },
 
     async findByToken(token): Promise<Result<ResetTokenRecord | null, IamError>> {
-      const hashedToken = hashResetToken(token)
+      const hashResult = hashResetToken(token)
+      if (!hashResult.success) {
+        return hashResult
+      }
+      const hashedToken = hashResult.data
       const result = await cache.kv.get<ResetTokenRecord>(buildResetTokenKey(hashedToken))
       if (!result.success) {
         return err({

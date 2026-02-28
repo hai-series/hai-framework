@@ -70,8 +70,8 @@ export interface SessionData {
  *
  * 在 SvelteKit 原生 `RequestEvent` 基础上注入会话和请求 ID。
  */
-export interface HaiRequestEvent<Params extends Record<string, string> = Record<string, string>>
-  extends RequestEvent<Params> {
+export interface HaiRequestEvent
+  extends RequestEvent {
   /** 会话数据 */
   session?: SessionData
   /** 请求 ID */
