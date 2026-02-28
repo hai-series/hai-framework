@@ -45,7 +45,7 @@ ai.init(core.config.get('ai'))
 ai.close()
 ```
 
-**特殊说明**：`ai.tools` 和 `ai.stream` 无需 init 即可使用；仅 `ai.llm` 操作需要先 init。
+**特殊说明**：`ai.tools` 和 `ai.stream` 无需 init 即可使用；`ai.llm` 和 `ai.mcp` 操作需要先 init。
 
 ---
 
@@ -201,7 +201,7 @@ const response = await client.chat({ messages })
 
 // 流式
 for await (const chunk of client.chatStream({ messages }, {
-  onProgress: p => console.log(p.content, p.done),
+  onProgress: (p) => { /* 处理进度 */ },
 })) { /* ... */ }
 
 // 便捷方法

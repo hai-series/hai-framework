@@ -39,7 +39,7 @@ const result = await ai.llm.chat({
   ],
 })
 if (result.success) {
-  console.log(result.data.choices[0].message.content)
+  core.logger.info('AI response', { content: result.data.choices[0].message.content })
 }
 
 // 3. 流式调用
@@ -121,7 +121,7 @@ const client = createAIClient({
 for await (const chunk of client.chatStream({ messages })) {
   const delta = chunk.choices[0]?.delta?.content
   if (delta)
-    console.log(delta)
+    process.stdout.write(delta)
 }
 
 // 便捷方法
@@ -138,7 +138,7 @@ const processor = ai.stream.createProcessor()
 for await (const chunk of stream) {
   const delta = processor.process(chunk)
   if (delta?.content)
-    console.log(delta.content)
+    process.stdout.write(delta.content)
 }
 const result = processor.getResult()
 
@@ -155,16 +155,16 @@ const result = await ai.llm.chat({ messages })
 if (!result.success) {
   switch (result.error.code) {
     case AIErrorCode.NOT_INITIALIZED:
-      console.error('请先调用 ai.init()')
+      core.logger.error('AI not initialized')
       break
     case AIErrorCode.RATE_LIMITED:
-      console.error('请求过于频繁')
+      core.logger.warn('AI rate limited')
       break
     case AIErrorCode.TIMEOUT:
-      console.error('请求超时')
+      core.logger.error('AI request timeout')
       break
     default:
-      console.error(result.error.message)
+      core.logger.error('AI error', { error: result.error })
   }
 }
 ```

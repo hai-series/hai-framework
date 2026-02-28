@@ -104,9 +104,11 @@ if (!result.success) {
 常用错误码：
 
 - `NOT_INITIALIZED` — 调度器未初始化
+- `INIT_FAILED` — 初始化失败
 - `TASK_NOT_FOUND` — 任务未找到
 - `TASK_ALREADY_EXISTS` — 重复注册
 - `INVALID_CRON` — cron 表达式无效
+- `EXECUTION_FAILED` — 任务执行失败（通用）
 - `JS_EXECUTION_FAILED` — JS 函数执行失败
 - `API_EXECUTION_FAILED` — API 调用失败
 - `DB_SAVE_FAILED` — 数据库操作失败

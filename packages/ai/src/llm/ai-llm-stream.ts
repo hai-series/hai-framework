@@ -128,7 +128,7 @@ export function createStreamProcessor(): StreamProcessor {
  * @example
  * ```ts
  * const result = await collectStream(ai.llm.chatStream({ messages }))
- * console.log(result.content, result.finishReason)
+ * core.logger.info({ content: result.content, finishReason: result.finishReason })
  * ```
  */
 export async function collectStream(
@@ -155,7 +155,7 @@ export async function collectStream(
  * ```ts
  * const decoder = createSSEDecoder()
  * for (const event of decoder.decode(rawText)) {
- *   console.log(event.data) // SSE data 内容
+ *   core.logger.info({ data: event.data }) // SSE data 内容
  * }
  * ```
  */
