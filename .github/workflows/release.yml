@@ -29,6 +29,7 @@ jobs:
   detect-version:
     name: Detect Version Change
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     outputs:
       changed: ${{ steps.check.outputs.changed }}
       version: ${{ steps.check.outputs.version }}
@@ -65,6 +66,7 @@ jobs:
     needs: detect-version
     if: needs.detect-version.outputs.changed == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
 
@@ -98,6 +100,7 @@ jobs:
     needs: [detect-version, test]
     if: needs.detect-version.outputs.changed == 'true'
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     permissions:
       contents: write
     steps:
@@ -133,6 +136,7 @@ jobs:
             echo "No version changes to commit"
           else
             git commit -m "chore: sync version to v${{ needs.detect-version.outputs.version }} [skip ci]"
+            git pull --rebase origin main || { echo "Error: rebase failed, manual intervention required"; exit 1; }
             git push
           fi
 
@@ -142,8 +146,8 @@ jobs:
         run: |
           VERSION="v${{ needs.detect-version.outputs.version }}"
 
-          # 查找上一个 tag
-          PREV_TAG=$(git tag --sort=-version:refname | head -n 1 || echo "")
+          # 查找上一个 tag（排除当前版本 tag，防止重跑时取到自身）
+          PREV_TAG=$(git tag --sort=-version:refname | grep -v "^${VERSION}$" | head -n 1 || echo "")
           echo "Previous tag: $PREV_TAG"
 
           if [ -z "$PREV_TAG" ]; then
@@ -193,15 +197,19 @@ jobs:
             NOTES="Initial release ${VERSION}"
           fi
 
-          # 写入文件以避免多行变量问题
-          echo -e "$NOTES" > /tmp/release-notes.md
+          # 写入文件以避免多行变量问题（printf '%b' 比 echo -e 更可靠，不会误解释 commit 中的转义字符）
+          printf '%b' "$NOTES" > /tmp/release-notes.md
           cat /tmp/release-notes.md
 
       - name: Create tag
         run: |
           VERSION="v${{ needs.detect-version.outputs.version }}"
-          git tag -a "$VERSION" -m "Release $VERSION"
-          git push origin "$VERSION"
+          if git rev-parse "$VERSION" >/dev/null 2>&1; then
+            echo "Tag $VERSION already exists, skipping creation"
+          else
+            git tag -a "$VERSION" -m "Release $VERSION"
+            git push origin "$VERSION" || echo "Tag $VERSION already pushed to remote"
+          fi
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
