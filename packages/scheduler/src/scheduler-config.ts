@@ -78,8 +78,8 @@ export type SchedulerErrorCodeType = typeof SchedulerErrorCode[keyof typeof Sche
 export const SchedulerConfigSchema = z.object({
   /** 是否启用数据库记录（默认 true，需要 @h-ai/db 已初始化） */
   enableDb: z.boolean().default(true),
-  /** 执行日志表名（默认 'scheduler_logs'） */
-  tableName: z.string().default('scheduler_logs'),
+  /** 执行日志表名（默认 'scheduler_logs'，仅允许字母、数字和下划线） */
+  tableName: z.string().regex(/^\w+$/, 'Table name must only contain letters, digits, and underscores').default('scheduler_logs'),
   /** 调度检查间隔，单位毫秒（默认 1000，即每秒检查一次） */
   tickInterval: z.number().int().min(100).default(1000),
 })
