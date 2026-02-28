@@ -7,12 +7,35 @@
  */
 
 import type { RequestEvent } from '@sveltejs/kit'
+import type { RateLimitStore } from './middleware/ratelimit.js'
+import type { TransportCryptoServiceLike } from './modules/crypto/crypto-types.js'
+
+/**
+ * 会话数据最小接口
+ *
+ * 守卫和权限检查函数所需的最小会话形状。
+ * 应用层扩展的 session（如添加 displayName / avatarUrl 等字段）
+ * 只要包含此接口的字段即可直接传入守卫函数，无需类型断言。
+ */
+export interface SessionLike {
+  /** 用户 ID */
+  userId: string
+  /** 角色列表 */
+  roles: string[]
+  /** 权限列表 */
+  permissions: string[]
+  /** 允许任意扩展字段 */
+  [key: string]: unknown
+}
 
 /**
  * 用户会话数据
  *
  * 在 Handle Hook 中通过 `validateSession` 解析后注入 `event.locals.session`。
  * 守卫和中间件通过此结构判断用户身份、角色与权限。
+ *
+ * 应用层可通过 `& { displayName: string }` 等方式扩展，
+ * 扩展后的类型自动兼容所有守卫和权限检查函数（它们接受 `SessionLike`）。
  *
  * @example
  * ```ts
@@ -22,6 +45,9 @@ import type { RequestEvent } from '@sveltejs/kit'
  *   roles: ['admin'],
  *   permissions: ['user:read', 'user:write'],
  * }
+ *
+ * // 应用层扩展
+ * type AppSession = SessionData & { displayName: string, avatarUrl: string }
  * ```
  */
 export interface SessionData {
@@ -35,6 +61,8 @@ export interface SessionData {
   permissions: string[]
   /** 自定义数据 */
   data?: Record<string, unknown>
+  /** 允许任意扩展字段 */
+  [key: string]: unknown
 }
 
 /**
@@ -170,8 +198,85 @@ export interface HookConfig {
   guards?: GuardConfig[]
   /** 错误处理 */
   onError?: (error: unknown, event: RequestEvent) => Response | Promise<Response>
-  /** 请求日志 */
+  /**
+   * 请求生命周期日志
+   *
+   * 为 `true` 时在 handle 层面记录请求开始/结束日志。
+   * 注意：若同时使用 `kit.middleware.logging()`，建议将此项设为 `false` 以避免重复日志。
+   * 默认 `false`。
+   */
   logging?: boolean
+  /**
+   * 加密配置（传输加密 + Cookie 加密）
+   *
+   * 启用后 kit 自动在 Handle 中完成：
+   * - 传输加密：请求体解密 / 响应体加密 / 密钥交换端点
+   * - Cookie 加密：对指定 Cookie 的 get/set 自动 AES 加解密
+   *
+   * 应用层业务代码无需感知加密细节。
+   */
+  crypto?: HookCryptoConfig
+}
+
+/**
+ * 传输加密详细配置
+ */
+export interface TransportEncryptionOptions {
+  /** 密钥交换端点路径（默认 `'/api/kit/key-exchange'`） */
+  keyExchangePath?: string
+  /** 排除路径（不加密），支持精确匹配和前缀匹配 */
+  excludePaths?: string[]
+  /**
+   * 是否强制要求传输加密（默认 `true`）
+   *
+   * - `true`：非排除路径上缺少 X-Client-Id 请求头时返回 400
+   * - `false`：缺少 X-Client-Id 时透传明文（渐进式迁移）
+   */
+  requireEncryption?: boolean
+  /** 是否加密响应体（默认 `true`） */
+  encryptResponse?: boolean
+}
+
+/**
+ * Handle Hook 加密配置
+ *
+ * 在 `kit.createHandle({ crypto: { ... } })` 中使用。
+ *
+ * @example
+ * ```ts
+ * kit.createHandle({
+ *   crypto: {
+ *     crypto: cryptoInstance,
+ *     transport: true,
+ *     encryptedCookies: ['hai_session'],
+ *     cookieEncryptionKey: process.env.HAI_COOKIE_KEY,
+ *   },
+ * })
+ * ```
+ */
+export interface HookCryptoConfig {
+  /** 注入 @h-ai/crypto 实例（传输加密所需的非对称 + 对称子集） */
+  crypto: TransportCryptoServiceLike
+  /**
+   * 启用传输加密。
+   * - `true`：使用默认配置
+   * - 对象：自定义配置
+   */
+  transport?: boolean | TransportEncryptionOptions
+  /**
+   * 需要加密的 Cookie 名称列表
+   *
+   * 列出的 Cookie 在 set 时自动 SM4-CBC 加密，get 时自动解密。
+   * 应用层代码（包括 kit.session.setCookie）完全透明。
+   */
+  encryptedCookies?: string[]
+  /**
+   * Cookie 加密密钥（32 字符十六进制 = 16 字节 SM4 密钥）
+   *
+   * 如不提供，则从环境变量 `HAI_COOKIE_KEY` 读取。
+   * 两者都未设置时 Cookie 加密不生效并输出警告。
+   */
+  cookieEncryptionKey?: string
 }
 
 /**
@@ -240,7 +345,8 @@ export interface FormValidationResult<T> {
 /**
  * 速率限制配置
  *
- * 基于内存滑动窗口实现。超限后返回 429 状态码与 `Retry-After` 响应头。
+ * 基于可插拔存储的滑动窗口限流。超限后返回 429 状态码与 `Retry-After` 响应头。
+ * 默认使用内存存储（单进程），多实例部署请传入分布式 `store` 实现。
  *
  * @example
  * ```ts
@@ -259,6 +365,13 @@ export interface RateLimitConfig {
   keyGenerator?: (event: RequestEvent) => string
   /** 超限处理 */
   onLimitReached?: (event: RequestEvent) => Response
+  /**
+   * 自定义存储实现
+   *
+   * 默认使用 `MemoryRateLimitStore`（单进程）。
+   * 多实例部署时传入基于 Redis / @h-ai/cache 的分布式 Store。
+   */
+  store?: RateLimitStore
 }
 
 /**

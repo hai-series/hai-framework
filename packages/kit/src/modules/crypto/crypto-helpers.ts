@@ -12,11 +12,11 @@
  * @example
  * ```ts
  * // src/routes/api/webhook/+server.ts
- * import { kit } from '@h-ai/kit'
+ * import { verifyWebhookSignature } from '../modules/crypto/crypto-helpers.js'
  * import { crypto } from '$lib/server/crypto'
  *
  * export const POST = async (event) => {
- *     const isValid = await kit.crypto.verifyWebhookSignature({
+ *     const isValid = await verifyWebhookSignature({
  *         crypto,
  *         event,
  *         secretKey: 'webhook_secret',
@@ -39,7 +39,6 @@ import type {
   EncryptedCookieConfig,
   WebhookVerifyConfig,
 } from './crypto-types.js'
-import { Buffer } from 'node:buffer'
 import { getKitMessage } from '../../kit-i18n.js'
 
 /**
@@ -52,7 +51,7 @@ import { getKitMessage } from '../../kit-i18n.js'
  *
  * @example
  * ```ts
- * const valid = await kit.crypto.verifyWebhookSignature({
+ * const valid = await verifyWebhookSignature({
  *   crypto, event, secretKey: 'wh_secret', signatureHeader: 'X-Signature',
  * })
  * if (!valid) return new Response('Invalid signature', { status: 401 })
@@ -117,7 +116,7 @@ export async function signRequest(
  *
  * @example
  * ```ts
- * const csrf = kit.crypto.createCsrfManager({ crypto })
+ * const csrf = createCsrfManager({ crypto })
  * // 在 load 中生成
  * const token = await csrf.generate(cookies)
  * // 在 action 中验证
@@ -144,7 +143,9 @@ export function createCsrfManager(config: CryptoCsrfConfig) {
         throw new Error(getKitMessage('kit_csrfTokenFailed'))
       }
 
-      const token = Buffer.from(result.data!).toString('hex')
+      const token = Array.from(result.data!)
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join('')
 
       cookies.set(cookieName, token, {
         path: '/',
@@ -220,7 +221,7 @@ export function createCsrfManager(config: CryptoCsrfConfig) {
  *
  * @example
  * ```ts
- * const enc = kit.crypto.createEncryptedCookie({ crypto, encryptionKey: 'my-32byte-key' })
+ * const enc = createEncryptedCookie({ crypto, encryptionKey: 'my-32byte-key' })
  * await enc.set(cookies, 'prefs', { theme: 'dark' })
  * const prefs = await enc.get(cookies, 'prefs')
  * ```

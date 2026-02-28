@@ -26,17 +26,12 @@ import { createTransportEncryption, isValidEncryptedPayload } from './transport-
  *
  * @example
  * ```ts
- * import { kit } from '@h-ai/kit'
  * import { crypto } from '@h-ai/crypto'
+ * import { kit } from '@h-ai/kit'
  *
+ * // 传输加密通过 createHandle 的 crypto 配置自动启用：
  * export const handle = kit.createHandle({
- *   middleware: [
- *     kit.crypto.transportEncryptionMiddleware({
- *       enabled: true,
- *       crypto,
- *       excludePaths: ['/api/public'],
- *     }),
- *   ],
+ *   crypto: { crypto, transport: true },
  * })
  * ```
  */

@@ -2,7 +2,8 @@
  * =============================================================================
  * @h-ai/kit - 组合守卫
  * =============================================================================
- * 组合多个守卫
+ * 提供守卫组合器，支持 AND（allGuards）/ OR（anyGuard）/ NOT（notGuard）/
+ * 条件分支（conditionalGuard）等逻辑组合，将多个 RouteGuard 聚合为一个。
  * =============================================================================
  */
 
@@ -82,6 +83,8 @@ export function anyGuard(...guards: RouteGuard[]): RouteGuard {
  *
  * @param guard - 需要取反的守卫
  * @param options - 拒绝时的重定向/消息
+ * @param options.redirect - 拒绝时重定向 URL
+ * @param options.message - 拒绝时的提示消息
  * @returns 取反后的 RouteGuard
  *
  * @example

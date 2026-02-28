@@ -1,7 +1,5 @@
-import type { RequestHandler } from '@sveltejs/kit'
 import * as m from '$lib/paraglide/messages.js'
 import { createChangeCurrentPasswordSchema } from '$lib/server/schemas/index.js'
-import { core } from '@h-ai/core'
 import { iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
 
@@ -22,40 +20,24 @@ async function changePasswordByToken(token: string, oldPassword: string, newPass
  *
  * @returns 改密结果，成功时返回 `reloginRequired: true`
  */
-export const PUT: RequestHandler = async ({ cookies, request }) => {
-  try {
-    const token = cookies.get('session_token')
-    if (!token) {
-      return kit.response.unauthorized(m.common_error())
-    }
-
-    const { valid, data, errors } = await kit.validate.form(request, createChangeCurrentPasswordSchema())
-    if (!valid) {
-      const fieldErrors = Object.fromEntries(
-        errors.map(error => [error.field, error.message]),
-      )
-      return kit.response.badRequest(
-        errors[0]?.message ?? m.common_error(),
-        undefined,
-        { fieldErrors },
-      )
-    }
-
-    const result = await changePasswordByToken(token, data!.old_password, data!.new_password)
-
-    if (!result.success) {
-      return kit.response.badRequest(
-        result.error.message,
-        undefined,
-        { fieldErrors: { general: result.error.message } },
-      )
-    }
-
-    cookies.delete('session_token', { path: '/' })
-    return kit.response.ok({ reloginRequired: true })
+export const PUT = kit.handler(async ({ cookies, request }) => {
+  const token = cookies.get('session_token')
+  if (!token) {
+    return kit.response.unauthorized(m.common_error())
   }
-  catch (error) {
-    core.logger.error('Failed to change current user password', { error })
-    return kit.response.internalError(m.common_error())
+
+  const data = await kit.validate.formOrFail(request, createChangeCurrentPasswordSchema())
+
+  const result = await changePasswordByToken(token, data.old_password, data.new_password)
+
+  if (!result.success) {
+    return kit.response.badRequest(
+      result.error.message,
+      undefined,
+      { fieldErrors: { general: result.error.message } },
+    )
   }
-}
+
+  kit.session.clearCookie(cookies)
+  return kit.response.ok({ reloginRequired: true })
+})

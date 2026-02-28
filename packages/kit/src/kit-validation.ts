@@ -1,13 +1,16 @@
 /**
  * =============================================================================
- * @h-ai/kit - 表单验证
+ * @h-ai/kit - 请求数据验证
  * =============================================================================
- * 表单数据验证工具
+ * 基于 Zod 的请求数据验证工具，支持表单/JSON Body、URL 查询参数和路由参数的
+ * 解析与校验。每种数据源提供安全返回（FormValidationResult）与抛出控制流
+ * （OrFail / throw Response）两种变体。
  * =============================================================================
  */
 
 import type { z } from 'zod'
 import type { FormError, FormValidationResult } from './kit-types.js'
+import { badRequest } from './kit-response.js'
 
 // =============================================================================
 // 内部工具
@@ -178,4 +181,98 @@ export function validateParams<T extends z.ZodType>(
   }
 
   return createValidationResult(result.error)
+}
+
+// =============================================================================
+// OrFail 变体 — 校验失败时 throw Response（SvelteKit 控制流）
+// =============================================================================
+
+/**
+ * 从 Request 解析并验证表单数据，失败时 throw Response
+ *
+ * 与 `validateForm` 功能相同，但校验失败时 throw 400 Response（SvelteKit 控制流），
+ * 搭配 `kit.handler()` 使用可精简 handler 代码。
+ *
+ * @param request - SvelteKit 请求对象
+ * @param schema - Zod Schema
+ * @returns 校验通过的数据（类型安全）
+ * @throws Response - 400 BadRequest（含首条错误消息）
+ *
+ * @example
+ * ```ts
+ * export const POST = kit.handler(async ({ request }) => {
+ *   const data = await kit.validate.formOrFail(request, CreateUserSchema)
+ *   // data 类型安全，校验已通过
+ * })
+ * ```
+ */
+export async function validateFormOrFail<T extends z.ZodType>(
+  request: Request,
+  schema: T,
+): Promise<z.infer<T>> {
+  const result = await validateForm(request, schema)
+  if (!result.valid || !result.data) {
+    throw badRequest(
+      result.errors[0]?.message ?? 'Validation failed',
+      undefined,
+      { errors: result.errors },
+    )
+  }
+  return result.data
+}
+
+/**
+ * 从 URL 查询参数验证，失败时 throw Response
+ *
+ * @param url - 请求 URL 对象
+ * @param schema - Zod Schema
+ * @returns 校验通过的数据
+ * @throws Response - 400 BadRequest
+ *
+ * @example
+ * ```ts
+ * const query = kit.validate.queryOrFail(event.url, PaginationSchema)
+ * ```
+ */
+export function validateQueryOrFail<T extends z.ZodType>(
+  url: URL,
+  schema: T,
+): z.infer<T> {
+  const result = validateQuery(url, schema)
+  if (!result.valid || !result.data) {
+    throw badRequest(
+      result.errors[0]?.message ?? 'Validation failed',
+      undefined,
+      { errors: result.errors },
+    )
+  }
+  return result.data
+}
+
+/**
+ * 验证路径参数，失败时 throw Response
+ *
+ * @param params - SvelteKit 路由参数
+ * @param schema - Zod Schema
+ * @returns 校验通过的数据
+ * @throws Response - 400 BadRequest
+ *
+ * @example
+ * ```ts
+ * const { id } = kit.validate.paramsOrFail(event.params, IdParamSchema)
+ * ```
+ */
+export function validateParamsOrFail<T extends z.ZodType>(
+  params: Record<string, string>,
+  schema: T,
+): z.infer<T> {
+  const result = validateParams(params, schema)
+  if (!result.valid || !result.data) {
+    throw badRequest(
+      result.errors[0]?.message ?? 'Validation failed',
+      undefined,
+      { errors: result.errors },
+    )
+  }
+  return result.data
 }

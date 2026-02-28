@@ -2,7 +2,8 @@
  * =============================================================================
  * @h-ai/kit - 速率限制中间件
  * =============================================================================
- * 请求速率限制
+ * 基于滑动窗口的请求速率限制中间件，内置内存存储（MemoryRateLimitStore），
+ * 支持通过 RateLimitStore 接口接入 Redis 等外部存储后端。
  * =============================================================================
  */
 
@@ -12,23 +13,91 @@ import { core } from '@h-ai/core'
 /**
  * 速率限制存储条目
  */
-interface RateLimitEntry {
+export interface RateLimitEntry {
   /** 当前窗口内的请求次数 */
   count: number
   /** 窗口重置时间戳（ms） */
   resetAt: number
 }
 
-/** 内存速率限制存储（以客户端 key 为索引） */
-const store = new Map<string, RateLimitEntry>()
+/**
+ * 速率限制存储接口
+ *
+ * 内置 `MemoryRateLimitStore` 适合单进程开发；
+ * 多实例部署需传入基于 Redis / @h-ai/cache 的分布式实现。
+ *
+ * @example
+ * ```ts
+ * // 自定义 Redis 存储
+ * const redisStore: RateLimitStore = {
+ *   async get(key) { ... },
+ *   async set(key, entry) { ... },
+ *   async delete(key) { ... },
+ * }
+ * kit.middleware.rateLimit({ windowMs: 60_000, maxRequests: 100, store: redisStore })
+ * ```
+ */
+export interface RateLimitStore {
+  /** 获取指定 key 的限流条目 */
+  get: (key: string) => Promise<RateLimitEntry | undefined> | RateLimitEntry | undefined
+  /** 设置限流条目 */
+  set: (key: string, entry: RateLimitEntry) => Promise<void> | void
+  /** 删除指定 key 的限流条目 */
+  delete: (key: string) => Promise<void> | void
+}
+
+/**
+ * 内存速率限制存储
+ *
+ * 基于 Map 实现，适合单进程/开发环境。
+ * 多实例部署时限流上限会乘以实例数，建议使用分布式 Store。
+ */
+export class MemoryRateLimitStore implements RateLimitStore {
+  private store = new Map<string, RateLimitEntry>()
+  private cleanupTimer: ReturnType<typeof setInterval> | null = null
+
+  /**
+   * 启动定期清理过期条目
+   *
+   * @param intervalMs - 清理间隔（毫秒）
+   */
+  startCleanup(intervalMs: number): void {
+    if (this.cleanupTimer)
+      return
+    this.cleanupTimer = setInterval(() => {
+      const now = Date.now()
+      for (const [key, entry] of this.store) {
+        if (entry.resetAt < now) {
+          this.store.delete(key)
+        }
+      }
+    }, intervalMs)
+    // 允许进程正常退出
+    if (this.cleanupTimer && typeof this.cleanupTimer === 'object' && 'unref' in this.cleanupTimer) {
+      this.cleanupTimer.unref()
+    }
+  }
+
+  get(key: string): RateLimitEntry | undefined {
+    return this.store.get(key)
+  }
+
+  set(key: string, entry: RateLimitEntry): void {
+    this.store.set(key, entry)
+  }
+
+  delete(key: string): void {
+    this.store.delete(key)
+  }
+}
 
 /**
  * 创建速率限制中间件
  *
- * 基于内存存储的滑动窗口限流：
+ * 基于可插拔存储的滑动窗口限流：
  * - 超限时返回 429，并在响应头中告知重置时间
  * - 正常响应附带 `X-RateLimit-*` 头
- * - 定期清理过期条目（每个 `windowMs` 周期）
+ * - 默认使用内存存储（单进程），可传入 `store` 实现分布式限流
  *
  * @param config - 限流配置
  * @returns Middleware 实例
@@ -56,32 +125,29 @@ export function rateLimitMiddleware(config: RateLimitConfig): Middleware {
     onLimitReached,
   } = config
 
-  // 定期清理过期条目
-  setInterval(() => {
-    const now = Date.now()
-    for (const [key, entry] of store) {
-      if (entry.resetAt < now) {
-        store.delete(key)
-      }
-    }
-  }, windowMs)
+  // 构建存储：支持外部注入，默认内存
+  const store: RateLimitStore = config.store ?? (() => {
+    const memStore = new MemoryRateLimitStore()
+    memStore.startCleanup(windowMs)
+    return memStore
+  })()
 
   return async (context, next) => {
     const { event, requestId } = context
     const key = keyGenerator(event)
     const now = Date.now()
 
-    let entry = store.get(key)
+    let entry = await store.get(key)
 
     if (!entry || entry.resetAt < now) {
       entry = {
         count: 0,
         resetAt: now + windowMs,
       }
-      store.set(key, entry)
     }
 
     entry.count++
+    await store.set(key, entry)
 
     // 设置速率限制头
     const remaining = Math.max(0, maxRequests - entry.count)

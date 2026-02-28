@@ -24,10 +24,6 @@ describe('kit 统一出口', () => {
     expect(typeof kit.sequence).toBe('function')
   })
 
-  it('kit.setAllModulesLocale 是函数', () => {
-    expect(typeof kit.setAllModulesLocale).toBe('function')
-  })
-
   // ─── guard 子命名空间 ───
 
   describe('kit.guard', () => {
@@ -35,6 +31,9 @@ describe('kit 统一出口', () => {
       expect(typeof kit.guard.auth).toBe('function')
       expect(typeof kit.guard.role).toBe('function')
       expect(typeof kit.guard.permission).toBe('function')
+      expect(typeof kit.guard.hasPermission).toBe('function')
+      expect(typeof kit.guard.assertPermission).toBe('function')
+      expect(typeof kit.guard.requirePermission).toBe('function')
       expect(typeof kit.guard.all).toBe('function')
       expect(typeof kit.guard.any).toBe('function')
       expect(typeof kit.guard.not).toBe('function')
@@ -79,46 +78,40 @@ describe('kit 统一出口', () => {
       expect(typeof kit.validate.form).toBe('function')
       expect(typeof kit.validate.query).toBe('function')
       expect(typeof kit.validate.params).toBe('function')
+      expect(typeof kit.validate.formOrFail).toBe('function')
+      expect(typeof kit.validate.queryOrFail).toBe('function')
+      expect(typeof kit.validate.paramsOrFail).toBe('function')
     })
   })
 
-  // ─── 模块集成子命名空间 ───
+  // ─── handler ───
 
-  describe('kit.iam', () => {
-    it('包含 IAM 集成函数', () => {
-      expect(typeof kit.iam.createHandle).toBe('function')
-      expect(typeof kit.iam.requireAuth).toBe('function')
-      expect(typeof kit.iam.createActions).toBe('function')
-    })
+  it('kit.handler 是函数', () => {
+    expect(typeof kit.handler).toBe('function')
   })
 
-  describe('kit.cache', () => {
-    it('包含 Cache 集成函数', () => {
-      expect(typeof kit.cache.createHandle).toBe('function')
-      expect(typeof kit.cache.createUtils).toBe('function')
-    })
-  })
+  // ─── session 子命名空间 ───
 
-  describe('kit.crypto', () => {
-    it('包含 Crypto 集成函数', () => {
-      expect(typeof kit.crypto.createCsrfManager).toBe('function')
-      expect(typeof kit.crypto.createEncryptedCookie).toBe('function')
-      expect(typeof kit.crypto.createTransportEncryption).toBe('function')
-      expect(typeof kit.crypto.createKeyExchangeHandler).toBe('function')
-      expect(typeof kit.crypto.isValidEncryptedPayload).toBe('function')
-      expect(typeof kit.crypto.transportEncryptionMiddleware).toBe('function')
+  describe('kit.session', () => {
+    it('包含会话 Cookie 管理函数', () => {
+      expect(typeof kit.session.setCookie).toBe('function')
+      expect(typeof kit.session.clearCookie).toBe('function')
     })
   })
 
   // ─── 客户端子命名空间 ───
 
   describe('kit.client', () => {
-    it('包含客户端 Store 工厂', () => {
-      expect(typeof kit.client.useSession).toBe('function')
-      expect(typeof kit.client.useUpload).toBe('function')
-      expect(typeof kit.client.useIsAuthenticated).toBe('function')
-      expect(typeof kit.client.useUser).toBe('function')
-      expect(typeof kit.client.useTransportEncryption).toBe('function')
+    it('包含 create 统一客户端工厂', () => {
+      expect(typeof kit.client.create).toBe('function')
+    })
+  })
+
+  // ─── i18n 子命名空间 ───
+
+  describe('kit.i18n', () => {
+    it('包含 setLocale', () => {
+      expect(typeof kit.i18n.setLocale).toBe('function')
     })
   })
 })

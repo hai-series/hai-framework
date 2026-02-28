@@ -11,10 +11,10 @@
  *
  * @example
  * ```ts
- * import { kit } from '@h-ai/kit'
+ * import { createTransportEncryption } from './transport-encryption.js'
  * import { crypto } from '@h-ai/crypto'
  *
- * const te = kit.crypto.createTransportEncryption({
+ * const te = createTransportEncryption({
  *   crypto: crypto,  // 注入 @h-ai/crypto 实例
  * })
  *

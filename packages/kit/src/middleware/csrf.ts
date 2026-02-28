@@ -2,7 +2,9 @@
  * =============================================================================
  * @h-ai/kit - CSRF 中间件
  * =============================================================================
- * CSRF 防护
+ * 基于 Double-Submit Cookie 模式的 CSRF 防护中间件。
+ * 使用 Web Crypto API 生成密码学安全 Token，写请求时自动校验
+ * Cookie 与 Header 中的 Token 一致性。
  * =============================================================================
  */
 
@@ -10,15 +12,16 @@ import type { CsrfConfig, Middleware } from '../kit-types.js'
 import { core } from '@h-ai/core'
 
 /**
- * 生成唯一 CSRF token
+ * 生成密码学安全的 CSRF token
  *
- * @param prefix - ID 前缀
- * @returns 格式为 `{prefix}_{timestamp}{random}` 的唯一 ID
+ * 使用 Web Crypto API 生成 32 字节随机值，确保 token 不可预测。
+ *
+ * @returns 64 字符十六进制 token
  */
-function generateId(prefix: string): string {
-  const timestamp = Date.now().toString(36)
-  const random = Math.random().toString(36).substring(2, 8)
-  return `${prefix}_${timestamp}${random}`
+function generateSecureToken(): string {
+  const bytes = new Uint8Array(32)
+  globalThis.crypto.getRandomValues(bytes)
+  return Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('')
 }
 
 /**
@@ -68,7 +71,7 @@ export function csrfMiddleware(config: CsrfConfig = {}): Middleware {
       let token = event.cookies.get(cookieName)
 
       if (!token) {
-        token = generateId('csrf')
+        token = generateSecureToken()
         event.cookies.set(cookieName, token, {
           path: '/',
           httpOnly: false, // 前端需要读取
@@ -110,16 +113,20 @@ export function csrfMiddleware(config: CsrfConfig = {}): Middleware {
 /**
  * 简单路径通配符匹配
  *
+ * 注意：`/api/*` 不会匹配 `/api-docs`，仅匹配 `/api` 或 `/api/...` 路径。
+ *
  * @param pathname - 当前请求路径
  * @param pattern - 匹配模式（支持 `/*` 和 `/**` 通配符）
  * @returns 是否匹配
  */
 function matchPath(pathname: string, pattern: string): boolean {
   if (pattern.endsWith('/*')) {
-    return pathname.startsWith(pattern.slice(0, -2))
+    const base = pattern.slice(0, -2)
+    return pathname === base || pathname.startsWith(`${base}/`)
   }
   if (pattern.endsWith('/**')) {
-    return pathname.startsWith(pattern.slice(0, -3))
+    const base = pattern.slice(0, -3)
+    return pathname === base || pathname.startsWith(`${base}/`)
   }
   return pathname === pattern
 }

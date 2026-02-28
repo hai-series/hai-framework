@@ -2,13 +2,17 @@
  * =============================================================================
  * @h-ai/kit - SvelteKit Handle Hook
  * =============================================================================
- * 提供 SvelteKit handle hook 的创建和组合功能
+ * 创建 SvelteKit Handle Hook，集成请求 ID 生成、会话验证、Cookie 加密代理、
+ * 路由守卫、中间件链与传输加密。另提供 sequence() 用于组合多个 Handle。
  * =============================================================================
  */
 
 import type { Handle, RequestEvent } from '@sveltejs/kit'
 import type { GuardConfig, GuardResult, HookConfig, Middleware, MiddlewareContext, SessionData } from '../kit-types.js'
+import type { CookieProxyConfig } from './cookie-proxy.js'
 import { core } from '@h-ai/core'
+import { transportEncryptionMiddleware } from '../modules/crypto/transport-middleware.js'
+import { createEncryptedCookieProxy } from './cookie-proxy.js'
 
 /**
  * 生成唯一请求级 ID
@@ -43,7 +47,7 @@ function generateId(prefix: string): string {
  * @example
  * ```ts
  * // src/hooks.server.ts
- * export const handle = kit.hook.create({
+ * export const handle = kit.createHandle({
  *   validateSession: token => iam.session.validate(token),
  *   guards: [{ guard: kit.guard.auth(), paths: ['/api/*'] }],
  *   middleware: [kit.middleware.logging()],
@@ -57,15 +61,33 @@ export function createHandle(config: HookConfig = {}): Handle {
     middleware = [],
     guards = [],
     onError,
-    logging = true,
+    logging = false,
+    crypto: cryptoConfig,
   } = config
+
+  // ── 构建最终中间件链（传输加密中间件自动注入到最外层） ──
+  const finalMiddleware = buildMiddlewareChain(middleware, cryptoConfig)
+
+  // ── Cookie 加密配置预处理 ──
+  const cookieProxyConfig = buildCookieProxyConfig(cryptoConfig)
 
   return async ({ event, resolve }) => {
     const startTime = Date.now()
     const requestId = generateId('req')
 
-      // 添加请求 ID 到 event.locals
-      ; (event.locals as Record<string, unknown>).requestId = requestId
+    // 添加请求 ID 到 event.locals
+    const locals = event.locals as Record<string, unknown>
+    locals.requestId = requestId
+
+    // ── Cookie 加密代理（透明） ──
+    if (cookieProxyConfig) {
+      const proxiedCookies = createEncryptedCookieProxy(event.cookies, cookieProxyConfig)
+      Object.defineProperty(event, 'cookies', {
+        value: proxiedCookies,
+        writable: true,
+        configurable: true,
+      })
+    }
 
     if (logging) {
       core.logger.trace('Request started', {
@@ -84,7 +106,8 @@ export function createHandle(config: HookConfig = {}): Handle {
 
         if (sessionToken) {
           session = await validateSession(sessionToken) ?? undefined
-          ; (event.locals as Record<string, unknown>).session = session
+          const sessionLocals = event.locals as Record<string, unknown>
+          sessionLocals.session = session
         }
       }
 
@@ -126,7 +149,7 @@ export function createHandle(config: HookConfig = {}): Handle {
 
       // 执行中间件链
       const response = await executeMiddlewareChain(
-        middleware,
+        finalMiddleware,
         context,
         () => resolve(event),
       )
@@ -244,32 +267,98 @@ async function executeMiddlewareChain(
  *
  * 支持三种模式：
  * - 精确匹配：`/api/users` 仅匹配 `/api/users`
- * - 单层通配：`/api/*` 匹配 `/api/` 开头的所有路径
+ * - 单层通配：`/api/*` 匹配 `/api` 本身及 `/api/` 开头的所有路径
  * - 递归通配：`/api/**` 同上（语义等价）
+ *
+ * 注意：`/api/*` 不会匹配 `/api-docs`，仅匹配 `/api` 或 `/api/...` 路径。
  *
  * @param pathname - 当前请求路径
  * @param pattern - 匹配模式
  * @returns 是否匹配
  */
 function matchPath(pathname: string, pattern: string): boolean {
-  // 支持简单的通配符
   if (pattern.endsWith('/*')) {
-    const prefix = pattern.slice(0, -2)
-    return pathname.startsWith(prefix)
+    const base = pattern.slice(0, -2)
+    return pathname === base || pathname.startsWith(`${base}/`)
   }
 
   if (pattern.endsWith('/**')) {
-    const prefix = pattern.slice(0, -3)
-    return pathname.startsWith(prefix)
+    const base = pattern.slice(0, -3)
+    return pathname === base || pathname.startsWith(`${base}/`)
   }
 
   return pathname === pattern
 }
 
+// ─── Crypto 配置构建 ───
+
+/**
+ * 构建最终中间件链：将传输加密中间件自动插入到最外层
+ *
+ * 传输加密中间件位于链头，确保：请求进来时第一个解密，响应出去时最后一个加密。
+ *
+ * @param userMiddleware - 用户配置的中间件
+ * @param cryptoConfig - 加密配置
+ * @returns 最终中间件链
+ */
+function buildMiddlewareChain(
+  userMiddleware: Middleware[],
+  cryptoConfig: HookConfig['crypto'],
+): Middleware[] {
+  if (!cryptoConfig?.transport)
+    return userMiddleware
+
+  const transportOpts = typeof cryptoConfig.transport === 'object' ? cryptoConfig.transport : {}
+
+  const transportMw = transportEncryptionMiddleware({
+    enabled: true,
+    crypto: cryptoConfig.crypto,
+    keyExchangePath: transportOpts.keyExchangePath,
+    excludePaths: transportOpts.excludePaths,
+    encryptResponse: transportOpts.encryptResponse,
+    requireEncryption: transportOpts.requireEncryption,
+  })
+
+  // 传输加密在最外层
+  return [transportMw, ...userMiddleware]
+}
+
+/**
+ * 构建 Cookie 加密代理配置
+ *
+ * 从 HookCryptoConfig 中提取 Cookie 加密所需信息。
+ * 密钥优先使用显式配置，回退到环境变量 HAI_COOKIE_KEY。
+ *
+ * @param cryptoConfig - 加密配置
+ * @returns CookieProxyConfig 或 null（不需要 Cookie 加密时）
+ */
+function buildCookieProxyConfig(
+  cryptoConfig: HookConfig['crypto'],
+): CookieProxyConfig | null {
+  if (!cryptoConfig?.encryptedCookies?.length)
+    return null
+
+  // eslint-disable-next-line node/prefer-global/process
+  const key = cryptoConfig.cookieEncryptionKey ?? (typeof process !== 'undefined' ? process.env?.HAI_COOKIE_KEY : undefined)
+  if (!key) {
+    core.logger.warn('Cookie encryption configured but no key provided (set crypto.cookieEncryptionKey or HAI_COOKIE_KEY env)')
+    return null
+  }
+
+  return {
+    names: new Set(cryptoConfig.encryptedCookies),
+    symmetric: cryptoConfig.crypto.symmetric,
+    encryptionKey: key,
+  }
+}
+
 /**
  * 组合多个 SvelteKit handle 为单一 handle
  *
- * 从右到左嵌套：`sequence(a, b, c)` 执行顺序为 a → b → c → resolve。
+ * 洋葱模型：`sequence(a, b, c)` 执行顺序为 a → b → c → resolve → c → b → a。
+ *
+ * > 注意：未直接委托 `@sveltejs/kit/hooks` 的 `sequence`，因为其依赖内部 request store，
+ * > 在单元测试环境中不可用。本实现行为与 SvelteKit 原生版本一致。
  *
  * @param handles - 待组合的 handle 函数列表
  * @returns 组合后的单一 Handle 函数
@@ -277,22 +366,23 @@ function matchPath(pathname: string, pattern: string): boolean {
  * @example
  * ```ts
  * // src/hooks.server.ts
- * const haiHandle = kit.hook.create({ ... })
- * const iamHandle = kit.iam.createHandle({ ... })
- * export const handle = kit.hook.sequence(haiHandle, iamHandle)
+ * const haiHandle = kit.createHandle({ ... })
+ * const iamHandle = kit.createHandle({ ... })
+ * export const handle = kit.sequence(haiHandle, iamHandle)
  * ```
  */
 export function sequence(...handles: Handle[]): Handle {
+  const filtered = handles.filter(Boolean)
+  if (filtered.length === 0) {
+    return ({ event, resolve }) => resolve(event)
+  }
+  if (filtered.length === 1) {
+    return filtered[0]
+  }
   return async ({ event, resolve }) => {
-    let currentResolve = resolve
-
-    for (let i = handles.length - 1; i >= 0; i--) {
-      const handle = handles[i]
-      const nextResolve = currentResolve
-
-      currentResolve = event => handle({ event, resolve: nextResolve })
-    }
-
-    return currentResolve(event)
+    return filtered.reduceRight(
+      (next, handle) => (event: any) => handle({ event, resolve: next }),
+      resolve,
+    )(event)
   }
 }
