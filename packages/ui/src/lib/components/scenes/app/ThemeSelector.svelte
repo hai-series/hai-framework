@@ -105,7 +105,7 @@
         {#each THEME_GROUPS as group}
           <div class='mb-4 last:mb-0'>
             <div class='text-xs font-semibold text-base-content/50 uppercase tracking-wider px-2 mb-2'>
-              {group.name}
+              {m(group.nameKey)}
             </div>
             <div class='flex flex-wrap gap-2'>
               {#each group.themes as theme (theme.id)}

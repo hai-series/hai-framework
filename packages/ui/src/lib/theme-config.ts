@@ -8,6 +8,8 @@
  * =============================================================================
  */
 
+import type { UIMessageKey } from './messages.js'
+
 /**
  * 主题信息
  */
@@ -30,8 +32,8 @@ export interface ThemeInfo {
 export interface ThemeGroup {
   /** 分组标识 */
   id: string
-  /** 分组名称 */
-  name: string
+  /** 分组名称 i18n key */
+  nameKey: UIMessageKey
   /** 分组内的主题 */
   themes: ThemeInfo[]
 }
@@ -82,12 +84,12 @@ export const THEMES: ThemeInfo[] = [
 export const THEME_GROUPS: ThemeGroup[] = [
   {
     id: 'light',
-    name: '亮色主题',
+    nameKey: 'theme_group_light',
     themes: THEMES.filter(t => !t.dark),
   },
   {
     id: 'dark',
-    name: '暗色主题',
+    nameKey: 'theme_group_dark',
     themes: THEMES.filter(t => t.dark),
   },
 ]
