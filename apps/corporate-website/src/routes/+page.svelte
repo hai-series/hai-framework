@@ -2,6 +2,38 @@
   /**
    * 企业官网首页 — SEO 友好的着陆页
    */
+  let chatMessages = $state<Array<{ role: 'user' | 'assistant', content: string }>>([
+    { role: 'assistant', content: '您好！我是智能助手，有什么可以帮您的吗？' },
+  ])
+  let chatInput = $state('')
+  let chatLoading = $state(false)
+
+  async function handleChat(e: Event) {
+    e.preventDefault()
+    const msg = chatInput.trim()
+    if (!msg) return
+
+    chatMessages = [...chatMessages, { role: 'user', content: msg }]
+    chatInput = ''
+    chatLoading = true
+
+    try {
+      const res = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: msg }),
+      })
+      const data = await res.json()
+      const reply = data.data?.reply ?? '抱歉，暂时无法回复。'
+      chatMessages = [...chatMessages, { role: 'assistant', content: reply }]
+    }
+    catch {
+      chatMessages = [...chatMessages, { role: 'assistant', content: '网络错误，请稍后重试。' }]
+    }
+    finally {
+      chatLoading = false
+    }
+  }
 </script>
 
 <svelte:head>
@@ -81,6 +113,50 @@
       <div class="stat place-items-center">
         <div class="stat-value">24/7</div>
         <div class="stat-desc text-primary-content/70">技术支持</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- AI 智能助手 -->
+<section class="py-20 px-4 lg:px-8 bg-base-100">
+  <div class="max-w-3xl mx-auto">
+    <h2 class="text-3xl font-bold text-center mb-4">智能助手</h2>
+    <p class="text-center text-gray-500 mb-8">有任何问题？试试我们的 AI 助手，powered by @h-ai/ai</p>
+
+    <div class="card bg-base-200 shadow-lg">
+      <div class="card-body">
+        <!-- 聊天消息区域 -->
+        <div class="min-h-[200px] max-h-[300px] overflow-y-auto space-y-3 mb-4">
+          {#each chatMessages as msg}
+            <div class="chat {msg.role === 'user' ? 'chat-end' : 'chat-start'}">
+              <div class="chat-bubble {msg.role === 'user' ? 'chat-bubble-primary' : ''}">
+                {msg.content}
+              </div>
+            </div>
+          {/each}
+          {#if chatLoading}
+            <div class="chat chat-start">
+              <div class="chat-bubble">
+                <span class="loading loading-dots loading-sm"></span>
+              </div>
+            </div>
+          {/if}
+        </div>
+
+        <!-- 输入区域 -->
+        <form class="flex gap-2" onsubmit={handleChat}>
+          <input
+            type="text"
+            placeholder="输入您的问题..."
+            class="input input-bordered flex-1"
+            bind:value={chatInput}
+            disabled={chatLoading}
+          />
+          <button type="submit" class="btn btn-primary" disabled={chatLoading || !chatInput.trim()}>
+            发送
+          </button>
+        </form>
       </div>
     </div>
   </div>

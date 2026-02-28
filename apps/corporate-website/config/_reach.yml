@@ -1,0 +1,14 @@
+# =============================================================================
+# Corporate Website - 触达服务配置
+# =============================================================================
+# 用于联系表单的邮件发送
+
+providers:
+  - name: email
+    type: console
+
+templates:
+  - name: contact_form
+    provider: email
+    subject: 'New contact from website: {name}'
+    body: "Name: {name}\nEmail: {email}\nMessage: {message}"

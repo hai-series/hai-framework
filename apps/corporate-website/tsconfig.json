@@ -10,7 +10,9 @@
       "@h-ai/kit": ["../../packages/kit/src/index.ts"],
       "@h-ai/kit/client": ["../../packages/kit/src/client/index.ts"],
       "@h-ai/kit/crypto": ["../../packages/kit/src/modules/crypto/index.ts"],
-      "@h-ai/ui": ["../../packages/ui/src/lib/index.ts"]
+      "@h-ai/ui": ["../../packages/ui/src/lib/index.ts"],
+      "@h-ai/ai": ["../../packages/ai/src/index.ts"],
+      "@h-ai/reach": ["../../packages/reach/src/index.ts"]
     },
     "allowImportingTsExtensions": true,
     "allowJs": true,
