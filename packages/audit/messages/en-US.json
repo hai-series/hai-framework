@@ -1,0 +1,9 @@
+{
+  "$schema": "https://inlang.com/schema/inlang-message-format",
+  "audit_notInitialized": "Audit module not initialized, call audit.init() first",
+  "audit_initFailed": "Audit module initialization failed: {error}",
+  "audit_logFailed": "Failed to record audit log: {error}",
+  "audit_queryFailed": "Failed to query audit logs: {error}",
+  "audit_cleanupFailed": "Failed to cleanup audit logs: {error}",
+  "audit_statsFailed": "Failed to query audit statistics: {error}"
+}

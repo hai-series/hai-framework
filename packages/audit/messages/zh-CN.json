@@ -1,0 +1,9 @@
+{
+  "$schema": "https://inlang.com/schema/inlang-message-format",
+  "audit_notInitialized": "审计模块尚未初始化，请先调用 audit.init()",
+  "audit_initFailed": "审计模块初始化失败：{error}",
+  "audit_logFailed": "审计日志记录失败：{error}",
+  "audit_queryFailed": "审计日志查询失败：{error}",
+  "audit_cleanupFailed": "审计日志清理失败：{error}",
+  "audit_statsFailed": "审计统计查询失败：{error}"
+}
