@@ -5,6 +5,7 @@
 
     /* 开发期路径映射：让 IDE "Go to Definition" 导航到 src 源码 */
     "paths": {
+      "$lib/*": ["./src/lib/*"],
       "$app/types": ["./.svelte-kit/types/index.d.ts"],
       "@h-ai/core": ["../../packages/core/src/index.ts"],
       "@h-ai/kit": ["../../packages/kit/src/index.ts"],

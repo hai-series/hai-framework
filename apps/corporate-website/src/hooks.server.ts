@@ -10,7 +10,7 @@ let appInitPromise: Promise<void> | null = null
 
 async function ensureAppInitialized() {
   if (!appInitPromise) {
-    appInitPromise = initApp().catch((err) => {
+    appInitPromise = initApp().catch((err: unknown) => {
       appInitPromise = null
       throw err
     })

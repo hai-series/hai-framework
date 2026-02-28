@@ -41,5 +41,5 @@ export const POST = kit.handler(async ({ request }) => {
     })
   }
 
-  return kit.response.ok({ reply: result.data.content })
+  return kit.response.ok({ reply: result.data.choices[0]?.message.content ?? '' })
 })
