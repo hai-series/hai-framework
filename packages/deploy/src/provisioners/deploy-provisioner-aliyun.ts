@@ -41,8 +41,8 @@ export function createAliyunProvisioner(): ServiceProvisioner {
     async authenticate(credentials: Record<string, string>): Promise<Result<string, DeployError>> {
       logger.debug('Authenticating with Aliyun')
       try {
-        const akId = credentials.access_key_id ?? credentials.access_key ?? ''
-        const akSecret = credentials.access_key_secret ?? credentials.secret_key ?? ''
+        const akId = credentials.accessKeyId ?? credentials.access_key_id ?? credentials.access_key ?? ''
+        const akSecret = credentials.accessKeySecret ?? credentials.access_key_secret ?? credentials.secret_key ?? ''
 
         if (!akId || !akSecret) {
           throw new Error('Missing "access_key_id" and "access_key_secret" in credentials')

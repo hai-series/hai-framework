@@ -49,7 +49,7 @@ export function createNeonProvisioner(): ServiceProvisioner {
     async authenticate(credentials: Record<string, string>): Promise<Result<string, DeployError>> {
       logger.debug('Authenticating with Neon')
       try {
-        const apiToken = credentials.token ?? credentials.api_key ?? ''
+        const apiToken = credentials.apiKey ?? credentials.token ?? credentials.api_key ?? ''
         if (!apiToken) {
           throw new Error('Missing "token" in credentials')
         }

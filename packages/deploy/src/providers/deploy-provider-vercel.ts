@@ -20,6 +20,7 @@
  */
 
 import type { Result } from '@h-ai/core'
+import type { DeployErrorCodeType } from '../deploy-config.js'
 import type { DeployError, DeployProvider, DeployResult } from '../deploy-types.js'
 import { createHash } from 'node:crypto'
 import { readdirSync, readFileSync, statSync } from 'node:fs'
@@ -53,8 +54,6 @@ function toDeployError(code: DeployErrorCodeType, messageKey: string, error: unk
     cause: error,
   }
 }
-
-type DeployErrorCodeType = (typeof DeployErrorCode)[keyof typeof DeployErrorCode]
 
 /**
  * 发送 Vercel API 请求

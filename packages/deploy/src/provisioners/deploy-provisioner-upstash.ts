@@ -45,7 +45,7 @@ export function createUpstashProvisioner(): ServiceProvisioner {
       logger.debug('Authenticating with Upstash')
       try {
         const userEmail = credentials.email ?? ''
-        const userKey = credentials.api_key ?? credentials.token ?? ''
+        const userKey = credentials.apiKey ?? credentials.api_key ?? credentials.token ?? ''
         if (!userEmail || !userKey) {
           throw new Error('Missing "email" and "api_key" in credentials')
         }
