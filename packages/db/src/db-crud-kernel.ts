@@ -26,6 +26,7 @@ import { err, ok } from '@h-ai/core'
 
 import { DbErrorCode } from './db-config.js'
 import { dbM } from './db-i18n.js'
+import { validateIdentifier, validateIdentifiers } from './db-security.js'
 
 // =============================================================================
 // CRUD 工具方法
@@ -113,6 +114,63 @@ export function createCrud<TItem>(
   const selectColumns = buildSelectColumns(config.select)
   const mapRow = config.mapRow ?? ((row: QueryRow) => row as TItem)
 
+  // 校验表名与主键列名，防止标识符注入
+  const tableValid = validateIdentifier(table)
+  if (!tableValid.success) {
+    // 配置校验失败，所有后续操作将返回此错误
+    const configError = tableValid.error
+    const failResult = <T>(): Promise<Result<T, DbError>> => Promise.resolve(err(configError))
+    return {
+      create: () => failResult(),
+      createMany: () => failResult(),
+      findById: () => failResult(),
+      findAll: () => failResult(),
+      findPage: () => failResult(),
+      updateById: () => failResult(),
+      deleteById: () => failResult(),
+      count: () => failResult(),
+      exists: () => failResult(),
+      existsById: () => failResult(),
+    }
+  }
+  const idColumnValid = validateIdentifier(idColumn)
+  if (!idColumnValid.success) {
+    const configError = idColumnValid.error
+    const failResult = <T>(): Promise<Result<T, DbError>> => Promise.resolve(err(configError))
+    return {
+      create: () => failResult(),
+      createMany: () => failResult(),
+      findById: () => failResult(),
+      findAll: () => failResult(),
+      findPage: () => failResult(),
+      updateById: () => failResult(),
+      deleteById: () => failResult(),
+      count: () => failResult(),
+      exists: () => failResult(),
+      existsById: () => failResult(),
+    }
+  }
+  // 校验 select / createColumns / updateColumns 列名
+  if (config.select) {
+    const selectValid = validateIdentifiers(config.select)
+    if (!selectValid.success) {
+      const configError = selectValid.error
+      const failResult = <T>(): Promise<Result<T, DbError>> => Promise.resolve(err(configError))
+      return {
+        create: () => failResult(),
+        createMany: () => failResult(),
+        findById: () => failResult(),
+        findAll: () => failResult(),
+        findPage: () => failResult(),
+        updateById: () => failResult(),
+        deleteById: () => failResult(),
+        count: () => failResult(),
+        exists: () => failResult(),
+        existsById: () => failResult(),
+      }
+    }
+  }
+
   // SQL 片段拼接工具（仅在传入值时附加）
 
   /** 构建 WHERE 子句，无条件时返回空字符串 */
@@ -168,6 +226,12 @@ export function createCrud<TItem>(
         return createColumnsError()
       }
 
+      // 校验列名合法性，防止通过 data key 注入
+      const colValid = validateIdentifiers(columns)
+      if (!colValid.success) {
+        return colValid as unknown as Result<ExecuteResult, DbError>
+      }
+
       const placeholders = columns.map(() => '?').join(', ')
       const sql = `INSERT INTO ${table} (${columns.join(', ')}) VALUES (${placeholders})`
       return resolveOps(tx).execute(sql, values)
@@ -206,6 +270,12 @@ export function createCrud<TItem>(
             code: DbErrorCode.CONFIG_ERROR,
             message: dbM('db_crudNoValidColumns'),
           })
+        }
+
+        // 校验列名合法性
+        const colValid = validateIdentifiers(columns)
+        if (!colValid.success) {
+          return colValid as unknown as Result<void, DbError>
         }
 
         const placeholders = columns.map(() => '?').join(', ')
@@ -304,6 +374,12 @@ export function createCrud<TItem>(
       if (filtered.length === 0) {
         // 过滤后无可更新列
         return createColumnsError()
+      }
+
+      // 校验列名合法性，防止通过 data key 注入
+      const colValid = validateIdentifiers(filtered)
+      if (!colValid.success) {
+        return colValid as unknown as Result<ExecuteResult, DbError>
       }
 
       const setClause = filtered.map(column => `${column} = ?`).join(', ')

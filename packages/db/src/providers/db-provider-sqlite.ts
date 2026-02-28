@@ -48,6 +48,7 @@ import { DbErrorCode } from '../db-config.js'
 import { createCrud } from '../db-crud-kernel.js'
 import { dbM } from '../db-i18n.js'
 import { buildPaginatedResult, normalizePagination } from '../db-pagination.js'
+import { escapeSqlString, validateIdentifier, validateIdentifiers } from '../db-security.js'
 
 const require = createRequire(import.meta.url)
 
@@ -141,7 +142,7 @@ export function createSqliteProvider(): DbProvider {
           parts.push(`DEFAULT ${def.defaultValue}`)
         }
         else {
-          parts.push(`DEFAULT '${def.defaultValue}'`)
+          parts.push(`DEFAULT '${escapeSqlString(def.defaultValue)}'`)
         }
       }
       else {
@@ -398,6 +399,15 @@ export function createSqliteProvider(): DbProvider {
       if (!connResult.success)
         return connResult
 
+      // 校验表名与列名
+      const tableValid = validateIdentifier(tableName)
+      if (!tableValid.success)
+        return tableValid
+      const colNames = Object.keys(columns)
+      const colsValid = validateIdentifiers(colNames)
+      if (!colsValid.success)
+        return colsValid
+
       try {
         const columnDefs = Object.entries(columns)
           .map(([name, def]) => buildColumnSql(name, def))
@@ -426,6 +436,10 @@ export function createSqliteProvider(): DbProvider {
       if (!connResult.success)
         return connResult
 
+      const tableValid = validateIdentifier(tableName)
+      if (!tableValid.success)
+        return tableValid
+
       try {
         const ifExistsClause = ifExists ? 'IF EXISTS ' : ''
         connResult.data.exec(`DROP TABLE ${ifExistsClause}${tableName}`)
@@ -447,6 +461,13 @@ export function createSqliteProvider(): DbProvider {
       const connResult = ensureConnected()
       if (!connResult.success)
         return connResult
+
+      const tableValid = validateIdentifier(tableName)
+      if (!tableValid.success)
+        return tableValid
+      const colValid = validateIdentifier(columnName)
+      if (!colValid.success)
+        return colValid
 
       try {
         const colSql = buildColumnSql(columnName, columnDef)
@@ -470,6 +491,13 @@ export function createSqliteProvider(): DbProvider {
       if (!connResult.success)
         return connResult
 
+      const tableValid = validateIdentifier(tableName)
+      if (!tableValid.success)
+        return tableValid
+      const colValid = validateIdentifier(columnName)
+      if (!colValid.success)
+        return colValid
+
       try {
         connResult.data.exec(`ALTER TABLE ${tableName} DROP COLUMN ${columnName}`)
         return ok(undefined)
@@ -491,6 +519,13 @@ export function createSqliteProvider(): DbProvider {
       if (!connResult.success)
         return connResult
 
+      const oldValid = validateIdentifier(oldName)
+      if (!oldValid.success)
+        return oldValid
+      const newValid = validateIdentifier(newName)
+      if (!newValid.success)
+        return newValid
+
       try {
         connResult.data.exec(`ALTER TABLE ${oldName} RENAME TO ${newName}`)
         return ok(undefined)
@@ -511,6 +546,16 @@ export function createSqliteProvider(): DbProvider {
       const connResult = ensureConnected()
       if (!connResult.success)
         return connResult
+
+      const tableValid = validateIdentifier(tableName)
+      if (!tableValid.success)
+        return tableValid
+      const idxValid = validateIdentifier(indexName)
+      if (!idxValid.success)
+        return idxValid
+      const colsValid = validateIdentifiers(indexDef.columns)
+      if (!colsValid.success)
+        return colsValid
 
       try {
         const uniqueClause = indexDef.unique ? 'UNIQUE ' : ''
@@ -538,6 +583,10 @@ export function createSqliteProvider(): DbProvider {
       const connResult = ensureConnected()
       if (!connResult.success)
         return connResult
+
+      const idxValid = validateIdentifier(indexName)
+      if (!idxValid.success)
+        return idxValid
 
       try {
         const ifExistsClause = ifExists ? 'IF EXISTS ' : ''
