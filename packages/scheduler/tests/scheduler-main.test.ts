@@ -11,6 +11,7 @@ import { scheduler } from '../src/scheduler-main.js'
 
 describe('scheduler', () => {
   afterEach(async () => {
+    vi.unstubAllGlobals()
     await scheduler.close()
     await db.close()
   })
@@ -762,8 +763,6 @@ describe('scheduler', () => {
         expect(result.data.status).toBe('success')
         expect(result.data.result).toBe('{"status":"healthy"}')
       }
-
-      vi.unstubAllGlobals()
     })
   })
 })

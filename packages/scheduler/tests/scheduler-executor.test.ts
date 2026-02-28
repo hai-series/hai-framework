@@ -4,7 +4,7 @@
  * =============================================================================
  */
 
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { SchedulerErrorCode } from '../src/scheduler-config.js'
 import { executeApiTask, executeJsTask, executeTask } from '../src/scheduler-executor.js'
 
@@ -100,6 +100,10 @@ describe('executeJsTask', () => {
 })
 
 describe('executeApiTask', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
   it('成功的 GET 请求应返回响应体', async () => {
     const mockFetch = vi.fn().mockResolvedValue({
       ok: true,
@@ -117,8 +121,6 @@ describe('executeApiTask', () => {
     if (result.success) {
       expect(result.data).toBe('{"status":"ok"}')
     }
-
-    vi.unstubAllGlobals()
   })
 
   it('发送 POST 请求应携带请求体', async () => {
@@ -147,8 +149,6 @@ describe('executeApiTask', () => {
         }),
       }),
     )
-
-    vi.unstubAllGlobals()
   })
 
   it('非 2xx 响应应返回 API_EXECUTION_FAILED', async () => {
@@ -168,8 +168,6 @@ describe('executeApiTask', () => {
       expect(result.error.code).toBe(SchedulerErrorCode.API_EXECUTION_FAILED)
       expect(result.error.message).toContain('500')
     }
-
-    vi.unstubAllGlobals()
   })
 
   it('网络错误应返回 API_EXECUTION_FAILED', async () => {
@@ -185,8 +183,6 @@ describe('executeApiTask', () => {
       expect(result.error.code).toBe(SchedulerErrorCode.API_EXECUTION_FAILED)
       expect(result.error.message).toContain('Network error')
     }
-
-    vi.unstubAllGlobals()
   })
 
   it('空响应体应返回 null', async () => {
@@ -206,8 +202,6 @@ describe('executeApiTask', () => {
     if (result.success) {
       expect(result.data).toBeNull()
     }
-
-    vi.unstubAllGlobals()
   })
 
   it('默认使用 GET 方法', async () => {
@@ -226,12 +220,14 @@ describe('executeApiTask', () => {
       'https://example.com/api',
       expect.objectContaining({ method: 'GET' }),
     )
-
-    vi.unstubAllGlobals()
   })
 })
 
 describe('executeTask', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
   it('执行 JS 任务应生成正确的执行日志', async () => {
     const log = await executeTask({
       id: 'test',
@@ -295,8 +291,6 @@ describe('executeTask', () => {
     expect(log.result).toBe('{"status":"ok"}')
     expect(log.error).toBeNull()
     expect(log.duration).toBeGreaterThanOrEqual(0)
-
-    vi.unstubAllGlobals()
   })
 
   it('日志 id 初始值应为 0（由数据库赋值）', async () => {
