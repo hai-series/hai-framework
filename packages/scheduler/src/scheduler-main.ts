@@ -55,10 +55,10 @@
  */
 
 import type { Result } from '@h-ai/core'
-import type { SchedulerConfig, SchedulerConfigInput } from './scheduler-config.js'
+import type { Cron } from 'croner'
 
+import type { SchedulerConfig, SchedulerConfigInput } from './scheduler-config.js'
 import type {
-  CronFields,
   LogQueryOptions,
   SchedulerError,
   SchedulerFunctions,
@@ -70,7 +70,7 @@ import { core, err, ok } from '@h-ai/core'
 import { db } from '@h-ai/db'
 
 import { SchedulerConfigSchema, SchedulerErrorCode } from './scheduler-config.js'
-import { matchesCron, parseCronExpression } from './scheduler-cron.js'
+import { parseCronExpression } from './scheduler-cron.js'
 import { executeTask } from './scheduler-executor.js'
 import { schedulerM } from './scheduler-i18n.js'
 
@@ -86,8 +86,8 @@ let currentConfig: SchedulerConfig | null = null
 /** 注册的任务 */
 const taskRegistry = new Map<string, TaskDefinition>()
 
-/** 解析后的 cron 字段缓存 */
-const cronCache = new Map<string, CronFields>()
+/** 解析后的 Cron 实例缓存 */
+const cronCache = new Map<string, Cron>()
 
 /** 调度器定时器 ID */
 let tickTimer: ReturnType<typeof setInterval> | null = null
@@ -246,11 +246,11 @@ function tick(): void {
     if (task.enabled === false)
       continue
 
-    const cronFields = cronCache.get(taskId)
-    if (!cronFields)
+    const cron = cronCache.get(taskId)
+    if (!cron)
       continue
 
-    if (matchesCron(cronFields, now)) {
+    if (cron.match(now)) {
       logger.info('Triggering scheduled task', { taskId, taskName: task.name })
       // 异步执行，不阻塞 tick
       void runTask(task)

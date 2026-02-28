@@ -32,6 +32,7 @@
   "dependencies": {
     "@h-ai/core": "workspace:*",
     "@h-ai/db": "workspace:*",
+    "croner": "catalog:",
     "zod": "catalog:"
   },
   "devDependencies": {

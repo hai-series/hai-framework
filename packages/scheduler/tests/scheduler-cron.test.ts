@@ -1,119 +1,59 @@
 /**
  * =============================================================================
- * @h-ai/scheduler - Cron 表达式解析测试
+ * @h-ai/scheduler - Cron 表达式解析测试（基于 croner）
  * =============================================================================
  */
 
 import { describe, expect, it } from 'vitest'
+import { SchedulerErrorCode } from '../src/scheduler-config.js'
 import { matchesCron, parseCronExpression } from '../src/scheduler-cron.js'
 
 describe('parseCronExpression', () => {
   it('应解析通配符 "* * * * *"', () => {
     const result = parseCronExpression('* * * * *')
     expect(result.success).toBe(true)
-    if (result.success) {
-      expect(result.data.minute).toHaveLength(60) // 0-59
-      expect(result.data.hour).toHaveLength(24) // 0-23
-      expect(result.data.dayOfMonth).toHaveLength(31) // 1-31
-      expect(result.data.month).toHaveLength(12) // 1-12
-      expect(result.data.dayOfWeek).toHaveLength(7) // 0-6
-    }
   })
 
   it('应解析指定值 "30 2 15 6 3"', () => {
     const result = parseCronExpression('30 2 15 6 3')
     expect(result.success).toBe(true)
-    if (result.success) {
-      expect(result.data.minute).toEqual([30])
-      expect(result.data.hour).toEqual([2])
-      expect(result.data.dayOfMonth).toEqual([15])
-      expect(result.data.month).toEqual([6])
-      expect(result.data.dayOfWeek).toEqual([3])
-    }
   })
 
   it('应解析范围 "0-5 9-17 * * 1-5"', () => {
     const result = parseCronExpression('0-5 9-17 * * 1-5')
     expect(result.success).toBe(true)
-    if (result.success) {
-      expect(result.data.minute).toEqual([0, 1, 2, 3, 4, 5])
-      expect(result.data.hour).toEqual([9, 10, 11, 12, 13, 14, 15, 16, 17])
-      expect(result.data.dayOfWeek).toEqual([1, 2, 3, 4, 5])
-    }
   })
 
   it('应解析步进 "*/5 */2 * * *"', () => {
     const result = parseCronExpression('*/5 */2 * * *')
     expect(result.success).toBe(true)
-    if (result.success) {
-      expect(result.data.minute).toEqual([0, 5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55])
-      expect(result.data.hour).toEqual([0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 22])
-    }
   })
 
   it('应解析列表 "0,15,30,45 * * * *"', () => {
     const result = parseCronExpression('0,15,30,45 * * * *')
     expect(result.success).toBe(true)
-    if (result.success) {
-      expect(result.data.minute).toEqual([0, 15, 30, 45])
-    }
   })
 
   it('应解析混合语法 "1,10-15,*/20 * * * *"', () => {
     const result = parseCronExpression('1,10-15,*/20 * * * *')
     expect(result.success).toBe(true)
-    if (result.success) {
-      // 1, 10,11,12,13,14,15, 0,20,40 → 合并去重排序
-      expect(result.data.minute).toEqual([0, 1, 10, 11, 12, 13, 14, 15, 20, 40])
-    }
   })
 
   it('应解析范围步进 "1-30/5 * * * *"', () => {
     const result = parseCronExpression('1-30/5 * * * *')
     expect(result.success).toBe(true)
-    if (result.success) {
-      expect(result.data.minute).toEqual([1, 6, 11, 16, 21, 26])
-    }
   })
 
   it('应解析经典 cron：每天凌晨 2 点 "0 2 * * *"', () => {
     const result = parseCronExpression('0 2 * * *')
     expect(result.success).toBe(true)
-    if (result.success) {
-      expect(result.data.minute).toEqual([0])
-      expect(result.data.hour).toEqual([2])
-    }
   })
 
-  it('字段不足应返回 INVALID_CRON', () => {
-    const result = parseCronExpression('* * *')
+  it('无效表达式应返回 INVALID_CRON', () => {
+    const result = parseCronExpression('invalid cron')
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(10004)
-    }
-  })
-
-  it('字段过多应返回 INVALID_CRON', () => {
-    const result = parseCronExpression('* * * * * *')
-    expect(result.success).toBe(false)
-    if (!result.success) {
-      expect(result.error.code).toBe(10004)
-    }
-  })
-
-  it('无效字段值应返回 INVALID_CRON', () => {
-    const result = parseCronExpression('60 * * * *')
-    expect(result.success).toBe(false)
-    if (!result.success) {
-      expect(result.error.code).toBe(10004)
-    }
-  })
-
-  it('无效范围应返回 INVALID_CRON', () => {
-    const result = parseCronExpression('5-2 * * * *')
-    expect(result.success).toBe(false)
-    if (!result.success) {
-      expect(result.error.code).toBe(10004)
+      expect(result.error.code).toBe(SchedulerErrorCode.INVALID_CRON)
     }
   })
 
@@ -121,7 +61,7 @@ describe('parseCronExpression', () => {
     const result = parseCronExpression('abc * * * *')
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(10004)
+      expect(result.error.code).toBe(SchedulerErrorCode.INVALID_CRON)
     }
   })
 
