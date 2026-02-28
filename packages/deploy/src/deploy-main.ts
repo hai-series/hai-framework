@@ -29,12 +29,9 @@ import type {
   ServiceProvisioner,
   ServiceType,
 } from './deploy-types.js'
-import { execSync } from 'node:child_process'
-import { existsSync } from 'node:fs'
-import { join } from 'node:path'
-import process from 'node:process'
 import { core, err, ok } from '@h-ai/core'
 import { DeployConfigSchema, DeployErrorCode } from './deploy-config.js'
+import { buildApp, resolveOutputDir } from './deploy-functions.js'
 import { deployM } from './deploy-i18n.js'
 import { scanApp } from './deploy-scanner.js'
 import { createVercelProvider } from './providers/deploy-provider-vercel.js'
@@ -78,7 +75,7 @@ function createProviderByType(type: string): DeployProvider {
     case 'vercel':
       return createVercelProvider()
     default:
-      throw new Error(`Unsupported provider type: ${type}`)
+      throw new Error(deployM('deploy_unsupportedProviderType', { params: { type } }))
   }
 }
 
@@ -105,7 +102,7 @@ function createProvisionerByName(provisioner: string): ServiceProvisioner {
     case 'aliyun':
       return createAliyunProvisioner()
     default:
-      throw new Error(`Unsupported provisioner: ${provisioner}`)
+      throw new Error(deployM('deploy_unsupportedProvisionerType', { params: { type: provisioner } }))
   }
 }
 
@@ -346,58 +343,4 @@ export const deploy: DeployFunctions = {
 
     return ok(result)
   },
-}
-
-// =============================================================================
-// 内部辅助
-// =============================================================================
-
-/**
- * 执行应用构建
- *
- * @param appDir - 应用根目录
- * @param buildCommand - 构建命令
- * @returns 构建结果
- */
-function buildApp(appDir: string, buildCommand: string): Result<void, DeployError> {
-  logger.info('Building application', { appDir, buildCommand })
-  try {
-    execSync(buildCommand, {
-      cwd: appDir,
-      stdio: 'inherit',
-      env: { ...process.env },
-    })
-    return ok(undefined)
-  }
-  catch (error) {
-    return err({
-      code: DeployErrorCode.BUILD_FAILED,
-      message: deployM('deploy_buildFailed', {
-        params: { error: error instanceof Error ? error.message : String(error) },
-      }),
-      cause: error,
-    })
-  }
-}
-
-/**
- * 解析构建产物目录
- *
- * @param appDir - 应用根目录
- * @param providerType - Provider 类型
- * @returns 产物目录路径
- */
-function resolveOutputDir(appDir: string, providerType: string): string {
-  switch (providerType) {
-    case 'vercel': {
-      const vercelOutput = join(appDir, '.vercel', 'output')
-      if (existsSync(vercelOutput)) {
-        return vercelOutput
-      }
-      // 回退到标准 build 目录
-      return join(appDir, 'build')
-    }
-    default:
-      return join(appDir, 'build')
-  }
 }
