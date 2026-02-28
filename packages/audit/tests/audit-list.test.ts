@@ -126,18 +126,18 @@ describe('audit.list', () => {
 
   it('应按日期范围过滤', async () => {
     const now = new Date()
-    const future = new Date(now.getTime() + 86400000)
-    const past = new Date(now.getTime() - 86400000)
+    const tomorrow = new Date(now.getTime() + 86400000)
+    const yesterday = new Date(now.getTime() - 86400000)
 
-    // 所有记录在 past~future 之间
-    const result = await audit.list({ startDate: past, endDate: future })
+    // 所有记录在 yesterday~tomorrow 之间
+    const result = await audit.list({ startDate: yesterday, endDate: tomorrow })
     expect(result.success).toBe(true)
     if (result.success) {
       expect(result.data.items.length).toBe(3)
     }
 
     // 未来的起始时间应不返回任何记录
-    const emptyResult = await audit.list({ startDate: future })
+    const emptyResult = await audit.list({ startDate: tomorrow })
     expect(emptyResult.success).toBe(true)
     if (emptyResult.success) {
       expect(emptyResult.data.items.length).toBe(0)
