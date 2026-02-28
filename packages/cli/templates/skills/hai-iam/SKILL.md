@@ -208,22 +208,29 @@ interface Session {
 import { iam } from '$lib/server/init'
 import { kit } from '@h-ai/kit'
 
-const iamHandle = kit.iam.createHandle({
-  iam,
-  publicPaths: ['/login', '/register', '/api/public/**'],
-  onUnauthenticated: (event) => {
-    if (event.url.pathname.startsWith('/api/'))
-      return kit.response.unauthorized()
-    return kit.response.redirect('/login')
+const haiHandle = kit.createHandle({
+  sessionCookieName: 'hai_session',
+  validateSession: async (token) => {
+    const result = await iam.auth.verifyToken(token)
+    if (!result.success)
+      return null
+    const roles = await iam.authz.getUserRoles(result.data.userId)
+    return {
+      userId: result.data.userId,
+      roles: roles.success ? roles.data.map(r => r.code) : [],
+      permissions: [],
+    }
   },
+  guards: [
+    {
+      guard: kit.guard.auth({ apiMode: true }),
+      paths: ['/api/*'],
+      exclude: ['/api/auth/*'],
+    },
+  ],
 })
 
-// Form Actions（登录/注册/登出/改密）
-export const actions = kit.iam.createActions({
-  iam,
-  loginRedirect: '/dashboard',
-  logoutRedirect: '/login',
-})
+export const handle = kit.sequence(haiHandle)
 ```
 
 ### 注册 + 分配角色
@@ -263,7 +270,7 @@ if (!canEdit.success || !canEdit.data) {
 ## 相关 Skills
 
 - `hai-build`：模块初始化顺序（db → cache → iam）
-- `hai-kit`：SvelteKit 集成（`kit.iam.createHandle` / `kit.iam.createActions`）
+- `hai-kit`：SvelteKit 集成（`kit.createHandle` + `kit.guard`）
 - `hai-db`：底层数据存储
 - `hai-cache`：会话与权限缓存
 - `hai-crypto`：密码哈希（内部依赖）

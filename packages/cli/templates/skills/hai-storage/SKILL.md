@@ -126,18 +126,26 @@ const downloadUrl = await storage.presign.getUrl('uploads/doc.pdf', {
 import { storage } from '$lib/server/init'
 // src/routes/api/storage/+server.ts
 import { kit } from '@h-ai/kit'
+import { z } from 'zod'
 
-const endpoint = kit.storage.createEndpoint({
-  storage,
-  bucket: 'uploads',
-  allowedTypes: ['image/*', 'application/pdf'],
-  maxFileSize: 10 * 1024 * 1024, // 10MB
-  requireAuth: true,
+const UploadSchema = z.object({
+  key: z.string().min(1),
 })
 
-export const GET = endpoint.get // 列表/下载
-export const POST = endpoint.post // 上传
-export const DELETE = endpoint.delete // 删除
+export const POST = kit.handler(async ({ request, locals }) => {
+  kit.guard.requirePermission(locals.session, 'storage:write')
+  const formData = await request.formData()
+  const file = formData.get('file') as File
+  if (!file)
+    return kit.response.badRequest('Missing file')
+
+  const key = `uploads/${locals.session.userId}/${file.name}`
+  const buffer = new Uint8Array(await file.arrayBuffer())
+  const result = await storage.file.put(key, buffer, { contentType: file.type })
+  if (!result.success)
+    return kit.response.internalError()
+  return kit.response.created({ key })
+})
 ```
 
 ### 头像上传
@@ -159,5 +167,5 @@ if (result.success) {
 
 - `hai-build`：模块初始化顺序
 - `hai-core`：配置与 Result 模型
-- `hai-kit`：`kit.storage.createEndpoint` 快速创建上传 API
+- `hai-kit`：SvelteKit API 端点集成（`kit.handler` + `kit.guard`）
 - `hai-ui`：Storage 场景组件（FileUpload/ImageUpload/AvatarUpload）

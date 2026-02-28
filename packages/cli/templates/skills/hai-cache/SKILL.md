@@ -119,18 +119,21 @@ async function getUserCached(userId: string) {
 }
 ```
 
-### 与 kit 集成（路由缓存）
+### 缓存穿透保护（配合数据库）
 
 ```typescript
-const cacheHandle = kit.cache.createHandle({
-  cache,
-  routes: {
-    '/api/products': { ttl: 300 },
-    '/api/config': { ttl: 3600, staleWhileRevalidate: 60 },
-  },
-})
+async function getUserCached(userId: string) {
+  const cached = await cache.kv.get<User>(`user:${userId}`)
+  if (cached.success && cached.data)
+    return cached.data
 
-export const handle = kit.sequence(cacheHandle, appHandle)
+  const user = await userRepo.findById(userId)
+  if (user.success && user.data) {
+    await cache.kv.set(`user:${userId}`, user.data, { ex: 3600 })
+    return user.data
+  }
+  return null
+}
 ```
 
 ---
@@ -140,4 +143,4 @@ export const handle = kit.sequence(cacheHandle, appHandle)
 - `hai-build`：模块初始化顺序（cache 在 db 之后、iam 之前）
 - `hai-core`：配置与 Result 模型
 - `hai-iam`：会话存储与权限缓存（底层使用 cache）
-- `hai-kit`：路由缓存集成（`kit.cache.createHandle`）
+- `hai-kit`：SvelteKit 集成层
