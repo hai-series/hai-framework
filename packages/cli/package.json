@@ -44,7 +44,8 @@
     "fs-extra": "catalog:",
     "handlebars": "catalog:",
     "ora": "catalog:",
-    "prompts": "catalog:"
+    "prompts": "catalog:",
+    "yaml": "catalog:"
   },
   "devDependencies": {
     "@types/fs-extra": "catalog:",
