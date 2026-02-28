@@ -325,14 +325,23 @@ export async function loadTaskDefinitions(taskTableName: string): Promise<Result
       })
     }
 
-    const tasks: TaskDefinitionApi[] = queryResult.data.map(row => ({
-      id: row.task_id as string,
-      name: row.task_name as string,
-      cron: row.cron as string,
-      type: 'api' as const,
-      enabled: (row.enabled as number) === 1,
-      api: JSON.parse(row.api_config as string),
-    }))
+    const tasks: TaskDefinitionApi[] = []
+    for (const row of queryResult.data) {
+      const taskId = row.task_id as string
+      try {
+        tasks.push({
+          id: taskId,
+          name: row.task_name as string,
+          cron: row.cron as string,
+          type: 'api' as const,
+          enabled: (row.enabled as number) === 1,
+          api: JSON.parse(row.api_config as string),
+        })
+      }
+      catch (parseError) {
+        logger.warn('Skipping task with invalid api_config JSON', { taskId, error: parseError })
+      }
+    }
 
     return ok(tasks)
   }

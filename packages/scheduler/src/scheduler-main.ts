@@ -403,17 +403,10 @@ export const scheduler: SchedulerFunctions = {
 
     // 同步到数据库
     if (currentConfig.enableDb && db.isInitialized && existingTask.type === 'api') {
-      const dbUpdates: { name?: string, cron?: string, enabled?: boolean, api?: Record<string, unknown> } = {}
-      if (updates.name !== undefined)
-        dbUpdates.name = updates.name
-      if (updates.cron !== undefined)
-        dbUpdates.cron = updates.cron
-      if (updates.enabled !== undefined)
-        dbUpdates.enabled = updates.enabled
-      if (updates.api !== undefined)
-        dbUpdates.api = updates.api as Record<string, unknown>
-
-      const updateResult = await updateTaskDefinition(currentConfig.taskTableName, taskId, dbUpdates)
+      const updateResult = await updateTaskDefinition(currentConfig.taskTableName, taskId, {
+        ...updates,
+        ...(updates.api !== undefined ? { api: updates.api as Record<string, unknown> } : {}),
+      })
       if (!updateResult.success) {
         logger.warn('Failed to update persisted task definition', { taskId, error: updateResult.error.message })
       }
