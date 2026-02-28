@@ -86,6 +86,8 @@ export const SchedulerConfigSchema = z.object({
   enableDb: z.boolean().default(true),
   /** 执行日志表名（默认 'scheduler_logs'，仅允许字母、数字和下划线） */
   tableName: z.string().regex(/^\w+$/, 'Table name must only contain letters, digits, and underscores').default('scheduler_logs'),
+  /** 任务定义持久化表名（默认 'scheduler_tasks'，仅允许字母、数字和下划线） */
+  taskTableName: z.string().regex(/^\w+$/, 'Table name must only contain letters, digits, and underscores').default('scheduler_tasks'),
   /** 调度检查间隔，单位毫秒（默认 1000，即每秒检查一次） */
   tickInterval: z.number().int().min(100).default(1000),
 })

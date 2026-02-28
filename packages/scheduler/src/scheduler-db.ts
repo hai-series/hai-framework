@@ -7,13 +7,14 @@
  * - 日志表的创建与初始化
  * - 执行日志的持久化
  * - 执行日志的查询
+ * - 任务定义的持久化与加载
  *
  * @module scheduler-db
  * =============================================================================
  */
 
 import type { Result } from '@h-ai/core'
-import type { LogQueryOptions, SchedulerError, TaskExecutionLog } from './scheduler-types.js'
+import type { LogQueryOptions, SchedulerError, TaskDefinitionApi, TaskExecutionLog } from './scheduler-types.js'
 
 import { core, err, ok } from '@h-ai/core'
 
@@ -78,6 +79,265 @@ export async function ensureLogTable(tableName: string): Promise<Result<void, Sc
     return ok(undefined)
   }
   catch (error) {
+    return err({
+      code: SchedulerErrorCode.DB_SAVE_FAILED,
+      message: schedulerM('scheduler_dbSaveFailed', {
+        params: { error: error instanceof Error ? error.message : String(error) },
+      }),
+      cause: error,
+    })
+  }
+}
+
+// =============================================================================
+// 任务定义表初始化
+// =============================================================================
+
+/**
+ * 创建任务定义持久化表
+ *
+ * 用于存储 API 类型的任务定义，启动时加载。
+ * task_id 列设置唯一索引。
+ *
+ * @param taskTableName - 任务定义表名（仅允许字母、数字、下划线）
+ * @returns 成功返回 `ok(undefined)`；失败返回 `DB_SAVE_FAILED` 错误
+ */
+export async function ensureTaskTable(taskTableName: string): Promise<Result<void, SchedulerError>> {
+  if (!VALID_TABLE_NAME.test(taskTableName)) {
+    return err({
+      code: SchedulerErrorCode.DB_SAVE_FAILED,
+      message: schedulerM('scheduler_dbSaveFailed', { params: { error: `Invalid table name: ${taskTableName}` } }),
+    })
+  }
+
+  try {
+    const ddlResult = await db.ddl.createTable(taskTableName, {
+      id: { type: 'INTEGER', primaryKey: true, autoIncrement: true },
+      task_id: { type: 'TEXT', notNull: true, unique: true },
+      task_name: { type: 'TEXT', notNull: true },
+      cron: { type: 'TEXT', notNull: true },
+      task_type: { type: 'TEXT', notNull: true },
+      enabled: { type: 'INTEGER', notNull: true, defaultValue: 1 },
+      api_config: { type: 'TEXT' },
+      created_at: { type: 'INTEGER', notNull: true },
+      updated_at: { type: 'INTEGER', notNull: true },
+    })
+
+    if (!ddlResult.success) {
+      return err({
+        code: SchedulerErrorCode.DB_SAVE_FAILED,
+        message: schedulerM('scheduler_dbSaveFailed', { params: { error: ddlResult.error.message } }),
+        cause: ddlResult.error,
+      })
+    }
+
+    return ok(undefined)
+  }
+  catch (error) {
+    return err({
+      code: SchedulerErrorCode.DB_SAVE_FAILED,
+      message: schedulerM('scheduler_dbSaveFailed', {
+        params: { error: error instanceof Error ? error.message : String(error) },
+      }),
+      cause: error,
+    })
+  }
+}
+
+// =============================================================================
+// 任务定义持久化
+// =============================================================================
+
+/**
+ * 保存 API 任务定义到数据库
+ *
+ * 仅 API 类型任务可持久化（JS 任务的 handler 不可序列化）。
+ * 使用 INSERT 方式写入，task_id 唯一约束保证不重复。
+ *
+ * @param taskTableName - 任务定义表名
+ * @param task - API 类型任务定义
+ * @returns 成功返回 `ok(undefined)`；失败返回 `DB_SAVE_FAILED` 错误
+ */
+export async function saveTaskDefinition(taskTableName: string, task: TaskDefinitionApi): Promise<Result<void, SchedulerError>> {
+  if (!VALID_TABLE_NAME.test(taskTableName)) {
+    return err({
+      code: SchedulerErrorCode.DB_SAVE_FAILED,
+      message: schedulerM('scheduler_dbSaveFailed', { params: { error: `Invalid table name: ${taskTableName}` } }),
+    })
+  }
+
+  try {
+    const now = Date.now()
+    await db.sql.execute(
+      `INSERT INTO ${taskTableName} (task_id, task_name, cron, task_type, enabled, api_config, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [task.id, task.name, task.cron, task.type, task.enabled !== false ? 1 : 0, JSON.stringify(task.api), now, now],
+    )
+    logger.debug('Task definition saved', { taskId: task.id })
+    return ok(undefined)
+  }
+  catch (error) {
+    logger.error('Failed to save task definition', { taskId: task.id, error })
+    return err({
+      code: SchedulerErrorCode.DB_SAVE_FAILED,
+      message: schedulerM('scheduler_dbSaveFailed', {
+        params: { error: error instanceof Error ? error.message : String(error) },
+      }),
+      cause: error,
+    })
+  }
+}
+
+/**
+ * 更新持久化的任务定义
+ *
+ * 根据 task_id 更新指定字段（name、cron、enabled、api_config）。
+ *
+ * @param taskTableName - 任务定义表名
+ * @param taskId - 任务 ID
+ * @param updates - 需要更新的字段
+ * @param updates.name - 任务名称
+ * @param updates.cron - cron 表达式
+ * @param updates.enabled - 是否启用
+ * @param updates.api - API 调用配置
+ * @returns 成功返回 `ok(undefined)`；失败返回 `DB_SAVE_FAILED` 错误
+ */
+export async function updateTaskDefinition(
+  taskTableName: string,
+  taskId: string,
+  updates: { name?: string, cron?: string, enabled?: boolean, api?: Record<string, unknown> },
+): Promise<Result<void, SchedulerError>> {
+  if (!VALID_TABLE_NAME.test(taskTableName)) {
+    return err({
+      code: SchedulerErrorCode.DB_SAVE_FAILED,
+      message: schedulerM('scheduler_dbSaveFailed', { params: { error: `Invalid table name: ${taskTableName}` } }),
+    })
+  }
+
+  const setClauses: string[] = []
+  const params: unknown[] = []
+
+  if (updates.name !== undefined) {
+    setClauses.push('task_name = ?')
+    params.push(updates.name)
+  }
+  if (updates.cron !== undefined) {
+    setClauses.push('cron = ?')
+    params.push(updates.cron)
+  }
+  if (updates.enabled !== undefined) {
+    setClauses.push('enabled = ?')
+    params.push(updates.enabled ? 1 : 0)
+  }
+  if (updates.api !== undefined) {
+    setClauses.push('api_config = ?')
+    params.push(JSON.stringify(updates.api))
+  }
+
+  if (setClauses.length === 0) {
+    return ok(undefined)
+  }
+
+  setClauses.push('updated_at = ?')
+  params.push(Date.now())
+  params.push(taskId)
+
+  try {
+    await db.sql.execute(
+      `UPDATE ${taskTableName} SET ${setClauses.join(', ')} WHERE task_id = ?`,
+      params,
+    )
+    logger.debug('Task definition updated', { taskId })
+    return ok(undefined)
+  }
+  catch (error) {
+    logger.error('Failed to update task definition', { taskId, error })
+    return err({
+      code: SchedulerErrorCode.DB_SAVE_FAILED,
+      message: schedulerM('scheduler_dbSaveFailed', {
+        params: { error: error instanceof Error ? error.message : String(error) },
+      }),
+      cause: error,
+    })
+  }
+}
+
+/**
+ * 从数据库中删除任务定义
+ *
+ * @param taskTableName - 任务定义表名
+ * @param taskId - 任务 ID
+ * @returns 成功返回 `ok(undefined)`；失败返回 `DB_SAVE_FAILED` 错误
+ */
+export async function deleteTaskDefinition(taskTableName: string, taskId: string): Promise<Result<void, SchedulerError>> {
+  if (!VALID_TABLE_NAME.test(taskTableName)) {
+    return err({
+      code: SchedulerErrorCode.DB_SAVE_FAILED,
+      message: schedulerM('scheduler_dbSaveFailed', { params: { error: `Invalid table name: ${taskTableName}` } }),
+    })
+  }
+
+  try {
+    await db.sql.execute(
+      `DELETE FROM ${taskTableName} WHERE task_id = ?`,
+      [taskId],
+    )
+    logger.debug('Task definition deleted', { taskId })
+    return ok(undefined)
+  }
+  catch (error) {
+    logger.error('Failed to delete task definition', { taskId, error })
+    return err({
+      code: SchedulerErrorCode.DB_SAVE_FAILED,
+      message: schedulerM('scheduler_dbSaveFailed', {
+        params: { error: error instanceof Error ? error.message : String(error) },
+      }),
+      cause: error,
+    })
+  }
+}
+
+/**
+ * 从数据库加载所有持久化的任务定义
+ *
+ * 仅加载 API 类型任务。返回 TaskDefinitionApi 数组。
+ *
+ * @param taskTableName - 任务定义表名
+ * @returns 成功返回 API 任务定义数组；失败返回 `DB_SAVE_FAILED` 错误
+ */
+export async function loadTaskDefinitions(taskTableName: string): Promise<Result<TaskDefinitionApi[], SchedulerError>> {
+  if (!VALID_TABLE_NAME.test(taskTableName)) {
+    return err({
+      code: SchedulerErrorCode.DB_SAVE_FAILED,
+      message: schedulerM('scheduler_dbSaveFailed', { params: { error: `Invalid table name: ${taskTableName}` } }),
+    })
+  }
+
+  try {
+    const queryResult = await db.sql.query<Record<string, unknown>>(
+      `SELECT task_id, task_name, cron, task_type, enabled, api_config FROM ${taskTableName}`,
+    )
+
+    if (!queryResult.success) {
+      return err({
+        code: SchedulerErrorCode.DB_SAVE_FAILED,
+        message: schedulerM('scheduler_dbSaveFailed', { params: { error: queryResult.error.message } }),
+        cause: queryResult.error,
+      })
+    }
+
+    const tasks: TaskDefinitionApi[] = queryResult.data.map(row => ({
+      id: row.task_id as string,
+      name: row.task_name as string,
+      cron: row.cron as string,
+      type: 'api' as const,
+      enabled: (row.enabled as number) === 1,
+      api: JSON.parse(row.api_config as string),
+    }))
+
+    return ok(tasks)
+  }
+  catch (error) {
+    logger.error('Failed to load task definitions', { error })
     return err({
       code: SchedulerErrorCode.DB_SAVE_FAILED,
       message: schedulerM('scheduler_dbSaveFailed', {

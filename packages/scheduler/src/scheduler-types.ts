@@ -181,6 +181,27 @@ export interface LogQueryOptions {
 }
 
 // =============================================================================
+// 任务更新
+// =============================================================================
+
+/**
+ * 任务更新输入
+ *
+ * 可更新的字段包括：名称、cron 表达式、启用状态、API 配置。
+ * 任务 ID 和类型不可更新。
+ */
+export interface TaskUpdateInput {
+  /** 任务名称 */
+  name?: string
+  /** cron 表达式 */
+  cron?: string
+  /** 是否启用 */
+  enabled?: boolean
+  /** API 调用配置（仅 API 类型任务可更新） */
+  api?: ApiTaskConfig
+}
+
+// =============================================================================
 // 调度器接口
 // =============================================================================
 
@@ -221,11 +242,28 @@ export interface SchedulerFunctions {
   /** 初始化调度器 */
   init: (config?: SchedulerConfigInput) => Promise<Result<void, SchedulerError>>
 
-  /** 注册任务 */
-  register: (task: TaskDefinition) => Result<void, SchedulerError>
+  /**
+   * 注册任务
+   *
+   * 若启用 DB 且任务类型为 API，任务定义将持久化到数据库。
+   * JS 任务因 handler 不可序列化，不会持久化。
+   */
+  register: (task: TaskDefinition) => Promise<Result<void, SchedulerError>>
 
-  /** 注销任务 */
-  unregister: (taskId: string) => Result<void, SchedulerError>
+  /**
+   * 注销任务
+   *
+   * 若启用 DB，同时从数据库中删除持久化的任务定义。
+   */
+  unregister: (taskId: string) => Promise<Result<void, SchedulerError>>
+
+  /**
+   * 更新任务
+   *
+   * 更新已注册任务的配置（cron、name、enabled、api 等）。
+   * 若启用 DB 且任务类型为 API，更新后的任务定义将同步到数据库。
+   */
+  updateTask: (taskId: string, updates: TaskUpdateInput) => Promise<Result<void, SchedulerError>>
 
   /** 启动调度 */
   start: () => Result<void, SchedulerError>

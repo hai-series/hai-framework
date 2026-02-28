@@ -49,6 +49,7 @@ describe('scheduler', () => {
       const result = await scheduler.init({ enableDb: false })
       expect(result.success).toBe(true)
       expect(scheduler.config?.tableName).toBe('scheduler_logs')
+      expect(scheduler.config?.taskTableName).toBe('scheduler_tasks')
       expect(scheduler.config?.tickInterval).toBe(1000)
     })
 
@@ -72,7 +73,7 @@ describe('scheduler', () => {
     it('应成功注册 JS 任务', async () => {
       await scheduler.init({ enableDb: false })
 
-      const result = scheduler.register({
+      const result = await scheduler.register({
         id: 'task-1',
         name: '测试任务',
         cron: '*/5 * * * *',
@@ -88,7 +89,7 @@ describe('scheduler', () => {
     it('应成功注册 API 任务', async () => {
       await scheduler.init({ enableDb: false })
 
-      const result = scheduler.register({
+      const result = await scheduler.register({
         id: 'api-task',
         name: 'API 任务',
         cron: '0 * * * *',
@@ -102,7 +103,7 @@ describe('scheduler', () => {
 
     it('重复注册同一 ID 应返回 TASK_ALREADY_EXISTS', async () => {
       await scheduler.init({ enableDb: false })
-      scheduler.register({
+      await scheduler.register({
         id: 'dup',
         name: '任务1',
         cron: '* * * * *',
@@ -110,7 +111,7 @@ describe('scheduler', () => {
         handler: () => {},
       })
 
-      const result = scheduler.register({
+      const result = await scheduler.register({
         id: 'dup',
         name: '任务2',
         cron: '* * * * *',
@@ -127,7 +128,7 @@ describe('scheduler', () => {
     it('无效 cron 表达式应返回 INVALID_CRON', async () => {
       await scheduler.init({ enableDb: false })
 
-      const result = scheduler.register({
+      const result = await scheduler.register({
         id: 'bad-cron',
         name: '无效 cron',
         cron: 'invalid',
@@ -143,7 +144,7 @@ describe('scheduler', () => {
 
     it('应成功注销任务', async () => {
       await scheduler.init({ enableDb: false })
-      scheduler.register({
+      await scheduler.register({
         id: 'rm-task',
         name: '待删除',
         cron: '* * * * *',
@@ -151,7 +152,7 @@ describe('scheduler', () => {
         handler: () => {},
       })
 
-      const result = scheduler.unregister('rm-task')
+      const result = await scheduler.unregister('rm-task')
       expect(result.success).toBe(true)
       expect(scheduler.tasks.size).toBe(0)
     })
@@ -159,15 +160,15 @@ describe('scheduler', () => {
     it('注销不存在的任务应返回 TASK_NOT_FOUND', async () => {
       await scheduler.init({ enableDb: false })
 
-      const result = scheduler.unregister('nonexistent')
+      const result = await scheduler.unregister('nonexistent')
       expect(result.success).toBe(false)
       if (!result.success) {
         expect(result.error.code).toBe(SchedulerErrorCode.TASK_NOT_FOUND)
       }
     })
 
-    it('未初始化时注册应返回 NOT_INITIALIZED', () => {
-      const result = scheduler.register({
+    it('未初始化时注册应返回 NOT_INITIALIZED', async () => {
+      const result = await scheduler.register({
         id: 'x',
         name: 'x',
         cron: '* * * * *',
@@ -227,10 +228,10 @@ describe('scheduler', () => {
   describe('trigger', () => {
     it('应手动触发 JS 任务并返回执行日志', async () => {
       await scheduler.init({ enableDb: false })
-      scheduler.register({
+      await scheduler.register({
         id: 'manual-js',
         name: '手动 JS',
-        cron: '0 0 1 1 *', // 不会自动触发
+        cron: '0 0 1 1 *',
         type: 'js',
         handler: () => ({ result: 'manual' }),
       })
@@ -256,7 +257,7 @@ describe('scheduler', () => {
 
     it('触发失败的 JS 任务应记录错误信息', async () => {
       await scheduler.init({ enableDb: false })
-      scheduler.register({
+      await scheduler.register({
         id: 'fail-js',
         name: '失败任务',
         cron: '* * * * *',
@@ -288,7 +289,7 @@ describe('scheduler', () => {
       await db.init({ type: 'sqlite', database: ':memory:' })
       await scheduler.init({ enableDb: true })
 
-      scheduler.register({
+      await scheduler.register({
         id: 'db-task',
         name: 'DB 任务',
         cron: '* * * * *',
@@ -296,10 +297,8 @@ describe('scheduler', () => {
         handler: () => 'saved',
       })
 
-      // 手动触发
       await scheduler.trigger('db-task')
 
-      // 查询日志
       const logsResult = await scheduler.getLogs({ taskId: 'db-task' })
       expect(logsResult.success).toBe(true)
       if (logsResult.success) {
@@ -314,14 +313,14 @@ describe('scheduler', () => {
       await db.init({ type: 'sqlite', database: ':memory:' })
       await scheduler.init({ enableDb: true })
 
-      scheduler.register({
+      await scheduler.register({
         id: 'ok-task',
         name: '成功任务',
         cron: '* * * * *',
         type: 'js',
         handler: () => 'ok',
       })
-      scheduler.register({
+      await scheduler.register({
         id: 'fail-task',
         name: '失败任务',
         cron: '* * * * *',
@@ -351,14 +350,14 @@ describe('scheduler', () => {
       await db.init({ type: 'sqlite', database: ':memory:' })
       await scheduler.init({ enableDb: true })
 
-      scheduler.register({
+      await scheduler.register({
         id: 'mixed-task',
         name: '混合任务',
         cron: '* * * * *',
         type: 'js',
         handler: () => 'ok',
       })
-      scheduler.register({
+      await scheduler.register({
         id: 'other-task',
         name: '其他任务',
         cron: '* * * * *',
@@ -369,7 +368,6 @@ describe('scheduler', () => {
       await scheduler.trigger('mixed-task')
       await scheduler.trigger('other-task')
 
-      // 组合过滤：指定 taskId + status
       const logsResult = await scheduler.getLogs({ taskId: 'mixed-task', status: 'success' })
       expect(logsResult.success).toBe(true)
       if (logsResult.success) {
@@ -382,7 +380,7 @@ describe('scheduler', () => {
       await db.init({ type: 'sqlite', database: ':memory:' })
       await scheduler.init({ enableDb: true })
 
-      scheduler.register({
+      await scheduler.register({
         id: 'multi-task',
         name: '多次触发',
         cron: '* * * * *',
@@ -398,7 +396,6 @@ describe('scheduler', () => {
       expect(logsResult.success).toBe(true)
       if (logsResult.success) {
         expect(logsResult.data).toHaveLength(3)
-        // 按 id 降序排列（最新在前）
         expect(logsResult.data[0].id).toBeGreaterThan(logsResult.data[2].id)
       }
     })
@@ -407,7 +404,7 @@ describe('scheduler', () => {
       await db.init({ type: 'sqlite', database: ':memory:' })
       await scheduler.init({ enableDb: true })
 
-      scheduler.register({
+      await scheduler.register({
         id: 'page-task',
         name: '分页任务',
         cron: '* * * * *',
@@ -415,26 +412,22 @@ describe('scheduler', () => {
         handler: () => 'data',
       })
 
-      // 触发 5 次
       for (let i = 0; i < 5; i++) {
         await scheduler.trigger('page-task')
       }
 
-      // 第一页：limit 2
       const page1 = await scheduler.getLogs({ taskId: 'page-task', limit: 2 })
       expect(page1.success).toBe(true)
       if (page1.success) {
         expect(page1.data).toHaveLength(2)
       }
 
-      // 第二页：limit 2, offset 2
       const page2 = await scheduler.getLogs({ taskId: 'page-task', limit: 2, offset: 2 })
       expect(page2.success).toBe(true)
       if (page2.success) {
         expect(page2.data).toHaveLength(2)
       }
 
-      // 第三页：limit 2, offset 4（只剩1条）
       const page3 = await scheduler.getLogs({ taskId: 'page-task', limit: 2, offset: 4 })
       expect(page3.success).toBe(true)
       if (page3.success) {
@@ -461,10 +454,184 @@ describe('scheduler', () => {
     })
   })
 
+  describe('任务持久化', () => {
+    it('api 任务应持久化到数据库，重新初始化后自动加载', async () => {
+      await db.init({ type: 'sqlite', database: ':memory:' })
+      await scheduler.init({ enableDb: true })
+
+      await scheduler.register({
+        id: 'persisted-api',
+        name: '持久化 API 任务',
+        cron: '0 * * * *',
+        type: 'api',
+        api: { url: 'https://example.com/health', method: 'GET' },
+      })
+
+      expect(scheduler.tasks.size).toBe(1)
+
+      await scheduler.close()
+      await scheduler.init({ enableDb: true })
+
+      expect(scheduler.tasks.size).toBe(1)
+      expect(scheduler.tasks.has('persisted-api')).toBe(true)
+      const task = scheduler.tasks.get('persisted-api')!
+      expect(task.name).toBe('持久化 API 任务')
+      expect(task.cron).toBe('0 * * * *')
+      expect(task.type).toBe('api')
+    })
+
+    it('js 任务不应持久化，重新初始化后不加载', async () => {
+      await db.init({ type: 'sqlite', database: ':memory:' })
+      await scheduler.init({ enableDb: true })
+
+      await scheduler.register({
+        id: 'js-task',
+        name: 'JS 任务',
+        cron: '* * * * *',
+        type: 'js',
+        handler: () => 'done',
+      })
+
+      expect(scheduler.tasks.size).toBe(1)
+
+      await scheduler.close()
+      await scheduler.init({ enableDb: true })
+
+      expect(scheduler.tasks.size).toBe(0)
+    })
+
+    it('注销 API 任务应同时删除持久化数据', async () => {
+      await db.init({ type: 'sqlite', database: ':memory:' })
+      await scheduler.init({ enableDb: true })
+
+      await scheduler.register({
+        id: 'to-remove',
+        name: '待删除',
+        cron: '0 * * * *',
+        type: 'api',
+        api: { url: 'https://example.com' },
+      })
+
+      expect(scheduler.tasks.size).toBe(1)
+
+      await scheduler.unregister('to-remove')
+      expect(scheduler.tasks.size).toBe(0)
+
+      await scheduler.close()
+      await scheduler.init({ enableDb: true })
+      expect(scheduler.tasks.size).toBe(0)
+    })
+
+    it('updateTask 应更新内存和持久化数据', async () => {
+      await db.init({ type: 'sqlite', database: ':memory:' })
+      await scheduler.init({ enableDb: true })
+
+      await scheduler.register({
+        id: 'update-task',
+        name: '原始名称',
+        cron: '0 * * * *',
+        type: 'api',
+        api: { url: 'https://example.com/old' },
+      })
+
+      const updateResult = await scheduler.updateTask('update-task', {
+        name: '更新后名称',
+        cron: '*/10 * * * *',
+        api: { url: 'https://example.com/new', method: 'POST' },
+      })
+      expect(updateResult.success).toBe(true)
+
+      const task = scheduler.tasks.get('update-task')!
+      expect(task.name).toBe('更新后名称')
+      expect(task.cron).toBe('*/10 * * * *')
+      if (task.type === 'api') {
+        expect(task.api.url).toBe('https://example.com/new')
+        expect(task.api.method).toBe('POST')
+      }
+
+      await scheduler.close()
+      await scheduler.init({ enableDb: true })
+      expect(scheduler.tasks.size).toBe(1)
+      const reloaded = scheduler.tasks.get('update-task')!
+      expect(reloaded.name).toBe('更新后名称')
+      expect(reloaded.cron).toBe('*/10 * * * *')
+    })
+
+    it('updateTask 不存在的任务应返回 TASK_NOT_FOUND', async () => {
+      await scheduler.init({ enableDb: false })
+
+      const result = await scheduler.updateTask('nonexistent', { name: 'new' })
+      expect(result.success).toBe(false)
+      if (!result.success) {
+        expect(result.error.code).toBe(SchedulerErrorCode.TASK_NOT_FOUND)
+      }
+    })
+
+    it('updateTask 使用无效 cron 应返回 INVALID_CRON', async () => {
+      await scheduler.init({ enableDb: false })
+      await scheduler.register({
+        id: 'cron-update',
+        name: '测试',
+        cron: '* * * * *',
+        type: 'js',
+        handler: () => {},
+      })
+
+      const result = await scheduler.updateTask('cron-update', { cron: 'invalid' })
+      expect(result.success).toBe(false)
+      if (!result.success) {
+        expect(result.error.code).toBe(SchedulerErrorCode.INVALID_CRON)
+      }
+    })
+
+    it('updateTask 可更新 enabled 状态', async () => {
+      await scheduler.init({ enableDb: false })
+      await scheduler.register({
+        id: 'toggle-task',
+        name: '开关任务',
+        cron: '* * * * *',
+        type: 'js',
+        handler: () => {},
+      })
+
+      const result = await scheduler.updateTask('toggle-task', { enabled: false })
+      expect(result.success).toBe(true)
+
+      const task = scheduler.tasks.get('toggle-task')!
+      expect(task.enabled).toBe(false)
+    })
+
+    it('未初始化时 updateTask 应返回 NOT_INITIALIZED', async () => {
+      const result = await scheduler.updateTask('any', { name: 'x' })
+      expect(result.success).toBe(false)
+      if (!result.success) {
+        expect(result.error.code).toBe(SchedulerErrorCode.NOT_INITIALIZED)
+      }
+    })
+
+    it('禁用 DB 时 API 任务不应持久化', async () => {
+      await scheduler.init({ enableDb: false })
+
+      await scheduler.register({
+        id: 'no-persist',
+        name: '不持久化',
+        cron: '0 * * * *',
+        type: 'api',
+        api: { url: 'https://example.com' },
+      })
+
+      expect(scheduler.tasks.size).toBe(1)
+
+      await scheduler.close()
+      await scheduler.init({ enableDb: false })
+      expect(scheduler.tasks.size).toBe(0)
+    })
+  })
+
   describe('close', () => {
     it('close 后应恢复到未初始化状态', async () => {
       await scheduler.init({ enableDb: false })
-      scheduler.register({
+      await scheduler.register({
         id: 'task',
         name: '任务',
         cron: '* * * * *',
@@ -498,7 +665,7 @@ describe('scheduler', () => {
       vi.stubGlobal('fetch', mockFetch)
 
       await scheduler.init({ enableDb: false })
-      scheduler.register({
+      await scheduler.register({
         id: 'api-check',
         name: '健康检查',
         cron: '* * * * *',
