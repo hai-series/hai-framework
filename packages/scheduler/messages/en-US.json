@@ -1,0 +1,15 @@
+{
+  "$schema": "https://inlang.com/schema/inlang-message-format",
+  "scheduler_notInitialized": "Scheduler not initialized, please call scheduler.init() first",
+  "scheduler_initFailed": "Failed to initialize scheduler: {error}",
+  "scheduler_alreadyRunning": "Scheduler is already running",
+  "scheduler_notRunning": "Scheduler is not running",
+  "scheduler_taskNotFound": "Task not found: {taskId}",
+  "scheduler_taskAlreadyExists": "Task already exists: {taskId}",
+  "scheduler_invalidCron": "Invalid cron expression: {expression}",
+  "scheduler_executionFailed": "Task execution failed: {error}",
+  "scheduler_jsExecutionFailed": "JS code execution failed: {error}",
+  "scheduler_apiExecutionFailed": "API call failed: {error}",
+  "scheduler_dbSaveFailed": "Failed to save execution log: {error}",
+  "scheduler_dbNotInitialized": "Database not initialized, cannot save execution logs"
+}

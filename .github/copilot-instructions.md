@@ -95,7 +95,7 @@
 
 ### 文件命名与职责
 
-- `xx-main.ts`：模块主入口（运行时对象 / 初始化 / 关闭等）
+- `xx-main.ts`：模块主入口（运行时对象 / 初始化 / 关闭等）。**必须保持精简**：仅包含生命周期管理（`init` / `close`）和 API 编排，**禁止在 main 中编写具体业务逻辑、调度循环、数据处理等重操作**。所有具体逻辑应委托给 `xx-functions.ts`、`xx-runner.ts` 或其他职责文件。
 - `xx-types.ts`：对外接口类型定义（public types）
 - `xx-config.ts`：对外配置定义与默认值
 
@@ -283,6 +283,7 @@ function register(tool: Tool): Result<void, XxError> {
 - 修改架构但不更新 README / Skill 模板
 - 提交 typecheck/lint/test 不通过的代码
 - UI 层写业务逻辑，或 services 层写 UI 代码
+- 在 `xx-main.ts` 中编写具体业务逻辑（调度循环、数据处理等），main 仅做生命周期管理和 API 编排
 - 使用 `console.log`
 - 硬编码密钥
 - 使用 `any`
