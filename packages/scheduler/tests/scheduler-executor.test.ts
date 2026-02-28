@@ -5,6 +5,7 @@
  */
 
 import { describe, expect, it, vi } from 'vitest'
+import { SchedulerErrorCode } from '../src/scheduler-config.js'
 import { executeApiTask, executeJsTask, executeTask } from '../src/scheduler-executor.js'
 
 describe('executeJsTask', () => {
@@ -51,7 +52,7 @@ describe('executeJsTask', () => {
     const result = await executeJsTask('test-task', handler)
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(10006)
+      expect(result.error.code).toBe(SchedulerErrorCode.JS_EXECUTION_FAILED)
       expect(result.error.message).toContain('test error')
     }
   })
@@ -63,7 +64,7 @@ describe('executeJsTask', () => {
     const result = await executeJsTask('test-task', handler)
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(10006)
+      expect(result.error.code).toBe(SchedulerErrorCode.JS_EXECUTION_FAILED)
     }
   })
 
@@ -71,6 +72,30 @@ describe('executeJsTask', () => {
     const handler = vi.fn((id: string) => id)
     await executeJsTask('my-task', handler)
     expect(handler).toHaveBeenCalledWith('my-task')
+  })
+
+  it('handler 返回数字应正确序列化', async () => {
+    const result = await executeJsTask('test-task', () => 42)
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data).toBe('42')
+    }
+  })
+
+  it('handler 返回数组应正确序列化', async () => {
+    const result = await executeJsTask('test-task', () => [1, 2, 3])
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data).toBe('[1,2,3]')
+    }
+  })
+
+  it('handler 返回 null 应序列化为 "null"', async () => {
+    const result = await executeJsTask('test-task', () => null)
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data).toBe('null')
+    }
   })
 })
 
@@ -140,7 +165,7 @@ describe('executeApiTask', () => {
 
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(10007)
+      expect(result.error.code).toBe(SchedulerErrorCode.API_EXECUTION_FAILED)
       expect(result.error.message).toContain('500')
     }
 
@@ -157,9 +182,50 @@ describe('executeApiTask', () => {
 
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(10007)
+      expect(result.error.code).toBe(SchedulerErrorCode.API_EXECUTION_FAILED)
       expect(result.error.message).toContain('Network error')
     }
+
+    vi.unstubAllGlobals()
+  })
+
+  it('空响应体应返回 null', async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 204,
+      text: () => Promise.resolve(''),
+    })
+    vi.stubGlobal('fetch', mockFetch)
+
+    const result = await executeApiTask('api-task', {
+      url: 'https://example.com/api',
+      method: 'DELETE',
+    })
+
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data).toBeNull()
+    }
+
+    vi.unstubAllGlobals()
+  })
+
+  it('默认使用 GET 方法', async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: () => Promise.resolve('ok'),
+    })
+    vi.stubGlobal('fetch', mockFetch)
+
+    await executeApiTask('api-task', {
+      url: 'https://example.com/api',
+    })
+
+    expect(mockFetch).toHaveBeenCalledWith(
+      'https://example.com/api',
+      expect.objectContaining({ method: 'GET' }),
+    )
 
     vi.unstubAllGlobals()
   })
@@ -206,5 +272,41 @@ describe('executeTask', () => {
     })
 
     expect(log.status).toBe('failed')
+  })
+
+  it('执行 API 任务应生成正确的执行日志', async () => {
+    const mockFetch = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      text: () => Promise.resolve('{"status":"ok"}'),
+    })
+    vi.stubGlobal('fetch', mockFetch)
+
+    const log = await executeTask({
+      id: 'api-test',
+      name: 'API 测试',
+      type: 'api',
+      api: { url: 'https://example.com/api' },
+    })
+
+    expect(log.taskId).toBe('api-test')
+    expect(log.taskType).toBe('api')
+    expect(log.status).toBe('success')
+    expect(log.result).toBe('{"status":"ok"}')
+    expect(log.error).toBeNull()
+    expect(log.duration).toBeGreaterThanOrEqual(0)
+
+    vi.unstubAllGlobals()
+  })
+
+  it('日志 id 初始值应为 0（由数据库赋值）', async () => {
+    const log = await executeTask({
+      id: 'id-test',
+      name: '测试',
+      type: 'js',
+      handler: () => 'ok',
+    })
+
+    expect(log.id).toBe(0)
   })
 })
