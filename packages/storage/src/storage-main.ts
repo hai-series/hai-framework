@@ -187,7 +187,6 @@ export const storage: StorageFunctions = {
     }
     catch (error) {
       logger.error('Storage module close failed', { error })
-      throw error
     }
     finally {
       currentProvider = null
