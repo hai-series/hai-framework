@@ -1,16 +1,14 @@
 /**
  * =============================================================================
- * hai Admin Console - API 健康检查
+ * Admin Console - 公开 API: 健康检查
+ * =============================================================================
+ * 供监控系统探活使用，无需认证。
  * =============================================================================
  */
 
 import { kit } from '@h-ai/kit'
 
-export const GET = kit.handler(async ({ locals }) => {
-  if (!locals.session) {
-    return kit.response.unauthorized()
-  }
-
+export const GET = kit.handler(async () => {
   return kit.response.ok({
     status: 'healthy',
     timestamp: new Date().toISOString(),

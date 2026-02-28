@@ -5,8 +5,8 @@
  */
 
 import type { LayoutServerLoad } from './$types'
+import { buildIamPublicConfig } from '$lib/server/iam-public-config'
 import { core } from '@h-ai/core'
-import { iam } from '@h-ai/iam'
 import { redirect } from '@sveltejs/kit'
 
 export const load: LayoutServerLoad = async ({ locals, url }) => {
@@ -23,36 +23,6 @@ export const load: LayoutServerLoad = async ({ locals, url }) => {
     defaultLocale?: string
   } | undefined
 
-  // 获取 IAM 公开配置（安全子集，用于前端表单校验等）
-  const iamConfig = iam.config
-  const iamPublicConfig = {
-    password: {
-      minLength: iamConfig?.password?.minLength ?? 8,
-      maxLength: iamConfig?.password?.maxLength ?? 128,
-      requireUppercase: iamConfig?.password?.requireUppercase ?? true,
-      requireLowercase: iamConfig?.password?.requireLowercase ?? true,
-      requireNumber: iamConfig?.password?.requireNumber ?? true,
-      requireSpecialChar: iamConfig?.password?.requireSpecialChar ?? false,
-    },
-    register: {
-      enabled: iamConfig?.register?.enabled ?? true,
-    },
-    login: {
-      password: iamConfig?.login?.password ?? true,
-      otp: iamConfig?.login?.otp ?? true,
-      ldap: iamConfig?.login?.ldap ?? true,
-    },
-    agreements: {
-      userAgreementUrl: iamConfig?.agreements?.userAgreementUrl,
-      privacyPolicyUrl: iamConfig?.agreements?.privacyPolicyUrl,
-      showOnRegister: iamConfig?.agreements?.showOnRegister ?? true,
-      showOnLogin: iamConfig?.agreements?.showOnLogin ?? false,
-    },
-    session: {
-      maxAge: iamConfig?.session?.maxAge ?? 86400,
-    },
-  }
-
   return {
     user: {
       id: locals.session.userId,
@@ -68,6 +38,6 @@ export const load: LayoutServerLoad = async ({ locals, url }) => {
       env: coreConfig?.env ?? 'development',
       locale: coreConfig?.defaultLocale ?? 'zh-CN',
     },
-    iamPublicConfig,
+    iamPublicConfig: buildIamPublicConfig({ includeSession: true }),
   }
 }

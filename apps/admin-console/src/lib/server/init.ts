@@ -34,6 +34,7 @@ import type { CacheConfigInput } from '@h-ai/cache'
 import type { IamConfigSettingsInput } from '@h-ai/iam'
 import type { ReachConfigInput } from '@h-ai/reach'
 import * as m from '$lib/paraglide/messages.js'
+import { initAuditRepository } from '$lib/server/services/audit.js'
 import { cache } from '@h-ai/cache'
 import { core } from '@h-ai/core'
 import { db } from '@h-ai/db'
@@ -51,44 +52,6 @@ let initialized = false
 // =============================================================================
 // 业务表 Schema
 // =============================================================================
-
-/**
- * Admin Console 业务表 Schema
- * 只包含本应用特有的业务表，不包含 IAM 相关表
- */
-const BUSINESS_SCHEMA = `
--- 操作日志表（admin-console 业务表）
-CREATE TABLE IF NOT EXISTS audit_logs (
-  id TEXT PRIMARY KEY,
-  user_id TEXT,
-  action TEXT NOT NULL,
-  resource TEXT NOT NULL,
-  resource_id TEXT,
-  details TEXT,
-  ip_address TEXT,
-  user_agent TEXT,
-  created_at TEXT DEFAULT CURRENT_TIMESTAMP
-);
-
--- 创建索引
-CREATE INDEX IF NOT EXISTS idx_audit_logs_user_id ON audit_logs(user_id);
-CREATE INDEX IF NOT EXISTS idx_audit_logs_created_at ON audit_logs(created_at);
-`
-
-/**
- * 创建业务表
- */
-async function createBusinessTables(): Promise<void> {
-  const statements = BUSINESS_SCHEMA.split(';').filter(s => s.trim())
-  for (const statement of statements) {
-    if (statement.trim()) {
-      const result = await db.sql.execute(statement)
-      if (!result.success) {
-        throw new Error(m.server_init_db_failed({ message: result.error.message }))
-      }
-    }
-  }
-}
 
 // =============================================================================
 // 初始化函数
@@ -207,8 +170,8 @@ export async function initApp(): Promise<void> {
     throw new Error(fullMessage)
   }
 
-  // 8. 创建业务表
-  await createBusinessTables()
+  // 8. 初始化审计日志仓库（BaseCrudRepository 自动建表）
+  initAuditRepository(db)
 
   initialized = true
   core.logger.info('Application initialized.')
@@ -219,14 +182,4 @@ export async function initApp(): Promise<void> {
  */
 export function isAppInitialized(): boolean {
   return initialized
-}
-
-/**
- * 获取数据库实例（用于业务表操作）
- */
-export function getDb() {
-  if (!initialized) {
-    throw new Error(m.server_init_not_initialized())
-  }
-  return db
 }

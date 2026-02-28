@@ -185,34 +185,6 @@ export const permissionService = {
   },
 
   /**
-   * 获取所有资源名称
-   */
-  async getResources(): Promise<string[]> {
-    const permissions = await this.list()
-    const resources = new Set<string>()
-    for (const perm of permissions) {
-      if (perm.resource) {
-        resources.add(perm.resource)
-      }
-    }
-    return [...resources].sort()
-  },
-
-  /**
-   * 获取所有操作名称
-   */
-  async getActions(): Promise<string[]> {
-    const permissions = await this.list()
-    const actions = new Set<string>()
-    for (const perm of permissions) {
-      if (perm.action) {
-        actions.add(perm.action)
-      }
-    }
-    return [...actions].sort()
-  },
-
-  /**
    * 转换为带 is_system 的权限对象（兼容旧 UI）
    */
   toPermissionWithSystem(perm: Permission): PermissionWithSystem {

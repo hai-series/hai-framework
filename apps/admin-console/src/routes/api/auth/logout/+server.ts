@@ -10,7 +10,7 @@ import { iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
 
 export const POST = kit.handler(async ({ cookies, getClientAddress, request }) => {
-  const token = cookies.get('session_token')
+  const token = cookies.get('hai_session')
 
   if (token) {
     // 验证 token 获取用户 ID

@@ -15,15 +15,23 @@ export const load: PageServerLoad = async ({ locals }) => {
     error(403, { message: 'Forbidden' })
   }
 
-  const [permissions, resources, actions] = await Promise.all([
-    permissionService.listGroupedByResource(),
-    permissionService.getResources(),
-    permissionService.getActions(),
-  ])
+  const permissions = await permissionService.listGroupedByResource()
+
+  // 从分组数据中派生资源与操作列表（避免重复调用 list()）
+  const resourceSet = new Set<string>()
+  const actionSet = new Set<string>()
+  for (const perms of Object.values(permissions)) {
+    for (const p of perms) {
+      if (p.resource)
+        resourceSet.add(p.resource)
+      if (p.action)
+        actionSet.add(p.action)
+    }
+  }
 
   return {
     permissions,
-    resources,
-    actions,
+    resources: [...resourceSet].sort(),
+    actions: [...actionSet].sort(),
   }
 }
