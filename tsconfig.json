@@ -30,6 +30,7 @@
       "@h-ai/kit/client": ["./packages/kit/src/client/index.ts"],
       "@h-ai/kit/crypto": ["./packages/kit/src/modules/crypto/index.ts"],
       "@h-ai/reach": ["./packages/reach/src/index.ts"],
+      "@h-ai/scheduler": ["./packages/scheduler/src/index.ts"],
       "@h-ai/storage": ["./packages/storage/src/index.ts"],
       "@h-ai/storage/client": ["./packages/storage/src/client/index.ts"],
       "@h-ai/ui": ["./packages/ui/src/lib/index.ts"]
