@@ -101,7 +101,11 @@ let lastTickMinute = -1
 // =============================================================================
 
 /**
- * 调度 tick：每秒检查一次，在分钟变化时检测并执行匹配的任务
+ * 调度 tick：定时器回调
+ *
+ * 每次调用检查当前分钟是否已变化，若变化则遍历注册表，
+ * 对匹配 cron 的任务异步执行（不阻塞后续任务检测）。
+ * 同一分钟内只触发一次，防止重复执行。
  */
 function tick(): void {
   const now = new Date()
@@ -134,6 +138,12 @@ function tick(): void {
 
 /**
  * 执行任务并保存日志
+ *
+ * 调用 `executeTask` 获取执行结果，若启用 DB 则持久化日志。
+ * 执行成功/失败均记录到日志。
+ *
+ * @param task - 已注册的任务定义
+ * @returns 任务执行日志
  */
 async function runTask(task: TaskDefinition): Promise<TaskExecutionLog> {
   const log = await executeTask({
@@ -179,6 +189,13 @@ const notInitialized = core.module.createNotInitializedKit<SchedulerError>(
 export const scheduler: SchedulerFunctions = {
   /**
    * 初始化调度器
+   *
+   * 解析配置、创建日志表（若 enableDb 为 true）。
+   * 若 DB 未初始化或日志表创建失败，自动降级为 `enableDb: false`。
+   * 重复调用会先关闭前一次实例。
+   *
+   * @param config - 调度器配置（可选，所有字段有默认值）
+   * @returns 成功返回 `ok(undefined)`；配置异常返回 `INIT_FAILED` 错误
    */
   async init(config?: SchedulerConfigInput): Promise<Result<void, SchedulerError>> {
     if (currentConfig) {
@@ -225,6 +242,12 @@ export const scheduler: SchedulerFunctions = {
 
   /**
    * 注册任务
+   *
+   * 解析 cron 表达式并缓存，将任务存入注册表。
+   * 同一 taskId 不允许重复注册，需先 `unregister` 后再注册。
+   *
+   * @param task - 任务定义（JS 或 API 类型）
+   * @returns 成功返回 `ok(undefined)`；重复注册返回 `TASK_ALREADY_EXISTS`，cron 无效返回 `INVALID_CRON`
    */
   register(task: TaskDefinition): Result<void, SchedulerError> {
     if (!currentConfig)
@@ -251,6 +274,11 @@ export const scheduler: SchedulerFunctions = {
 
   /**
    * 注销任务
+   *
+   * 从注册表和 cron 缓存中移除指定任务。
+   *
+   * @param taskId - 任务 ID
+   * @returns 成功返回 `ok(undefined)`；任务不存在返回 `TASK_NOT_FOUND`
    */
   unregister(taskId: string): Result<void, SchedulerError> {
     if (!currentConfig)
@@ -272,6 +300,11 @@ export const scheduler: SchedulerFunctions = {
 
   /**
    * 启动调度
+   *
+   * 以 `tickInterval` 间隔启动定时器，每分钟检测并执行匹配的任务。
+   * 不允许重复启动。
+   *
+   * @returns 成功返回 `ok(undefined)`；已在运行返回 `ALREADY_RUNNING`
    */
   start(): Result<void, SchedulerError> {
     if (!currentConfig)
@@ -293,6 +326,10 @@ export const scheduler: SchedulerFunctions = {
 
   /**
    * 停止调度
+   *
+   * 清除定时器，已提交的异步任务不受影响。
+   *
+   * @returns 成功返回 `ok(undefined)`；未运行时返回 `NOT_RUNNING`
    */
   stop(): Result<void, SchedulerError> {
     if (!currentConfig)
@@ -314,6 +351,12 @@ export const scheduler: SchedulerFunctions = {
 
   /**
    * 手动触发任务
+   *
+   * 立即执行指定任务，不受 cron 调度约束。
+   * 执行日志会自动保存到数据库（若启用 DB）。
+   *
+   * @param taskId - 任务 ID
+   * @returns 成功返回执行日志；任务不存在返回 `TASK_NOT_FOUND`
    */
   async trigger(taskId: string): Promise<Result<TaskExecutionLog, SchedulerError>> {
     if (!currentConfig)
@@ -334,6 +377,11 @@ export const scheduler: SchedulerFunctions = {
 
   /**
    * 查询执行日志
+   *
+   * 需启用 DB（`enableDb: true` 且 `@h-ai/db` 已初始化）。
+   *
+   * @param options - 查询选项（taskId、status、limit、offset）
+   * @returns 成功返回日志数组；DB 未启用返回 `DB_SAVE_FAILED`
    */
   async getLogs(options?: LogQueryOptions): Promise<Result<TaskExecutionLog[], SchedulerError>> {
     if (!currentConfig) {
@@ -375,6 +423,9 @@ export const scheduler: SchedulerFunctions = {
 
   /**
    * 关闭调度器
+   *
+   * 停止定时器、清空任务注册表和 cron 缓存、重置所有内部状态。
+   * 多次调用安全。
    */
   async close(): Promise<void> {
     if (tickTimer !== null) {

@@ -32,10 +32,13 @@ const VALID_TABLE_NAME = /^\w+$/
 // =============================================================================
 
 /**
- * 创建执行日志表
+ * 创建执行日志表（含 task_id 索引）
  *
- * @param tableName - 日志表名
- * @returns 创建结果
+ * 若表已存在，由 `db.ddl.createTable` 内部处理幂等。
+ * 表名必须满足 `/^\w+$/`，否则直接返回失败 Result。
+ *
+ * @param tableName - 日志表名（仅允许字母、数字、下划线）
+ * @returns 成功返回 `ok(undefined)`；失败返回 `DB_SAVE_FAILED` 错误
  */
 export async function ensureLogTable(tableName: string): Promise<Result<void, SchedulerError>> {
   if (!VALID_TABLE_NAME.test(tableName)) {
@@ -92,7 +95,10 @@ export async function ensureLogTable(tableName: string): Promise<Result<void, Sc
 /**
  * 保存执行日志到数据库
  *
- * @param tableName - 日志表名
+ * 使用参数化查询写入，不会抛出异常——写入失败仅记录日志。
+ * 表名不合法时静默跳过。
+ *
+ * @param tableName - 日志表名（仅允许字母、数字、下划线）
  * @param log - 任务执行日志
  */
 export async function saveLog(tableName: string, log: TaskExecutionLog): Promise<void> {
@@ -117,9 +123,13 @@ export async function saveLog(tableName: string, log: TaskExecutionLog): Promise
 /**
  * 查询执行日志
  *
- * @param tableName - 日志表名
- * @param options - 查询选项
- * @returns 日志列表
+ * 支持按 taskId、status 过滤，以及分页（limit/offset）。
+ * 所有过滤条件均使用参数化查询，防止 SQL 注入。
+ * 结果按 id 降序排列（最新日志在前）。
+ *
+ * @param tableName - 日志表名（仅允许字母、数字、下划线）
+ * @param options - 查询选项（taskId、status、limit、offset）
+ * @returns 成功返回日志数组；表名非法或查询失败返回 `DB_SAVE_FAILED` 错误
  */
 export async function queryLogs(tableName: string, options?: LogQueryOptions): Promise<Result<TaskExecutionLog[], SchedulerError>> {
   if (!VALID_TABLE_NAME.test(tableName)) {
