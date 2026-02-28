@@ -284,7 +284,9 @@ export const deploy: DeployFunctions = {
     if (scan.isSvelteKit && !scan.adapterInstalled) {
       return err({
         code: DeployErrorCode.ADAPTER_MISSING,
-        message: deployM('deploy_adapterMissing'),
+        message: deployM('deploy_adapterMissing', {
+          params: { adapter: '@sveltejs/adapter-vercel' },
+        }),
       })
     }
 
