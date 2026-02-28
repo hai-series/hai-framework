@@ -306,7 +306,7 @@ export const db: DbFunctions = {
       logger.error('DB module close failed', { error })
       return err({
         code: DbErrorCode.CONNECTION_FAILED,
-        message: dbM('db_initFailed', { params: { error: error instanceof Error ? error.message : String(error) } }),
+        message: dbM('db_closeFailed', { params: { error: error instanceof Error ? error.message : String(error) } }),
         cause: error,
       })
     }

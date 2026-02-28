@@ -2,6 +2,7 @@
   "$schema": "https://inlang.com/schema/inlang-message-format",
   "db_notInitialized": "数据库未初始化，请先调用 db.init()",
   "db_initFailed": "初始化数据库失败: {error}",
+  "db_closeFailed": "关闭数据库失败: {error}",
   "db_unsupportedType": "不支持的数据库类型: {type}",
   "db_ddlFailed": "DDL 操作失败: {error}",
   "db_queryFailed": "查询失败: {error}",
