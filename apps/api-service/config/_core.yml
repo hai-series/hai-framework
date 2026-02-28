@@ -1,0 +1,16 @@
+# =============================================================================
+# API Service - 应用配置
+# =============================================================================
+
+name: hai API Service
+version: 0.1.0
+env: ${HAI_ENV:development}
+debug: ${HAI_DEBUG:false}
+
+defaultLocale: en-US
+supportedLocales:
+  - en-US
+  - zh-CN
+
+features:
+  apiAccess: true

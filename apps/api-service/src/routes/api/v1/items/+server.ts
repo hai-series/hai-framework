@@ -1,62 +1,94 @@
-import type { RequestHandler } from './$types'
-import { json } from '@sveltejs/kit'
+/**
+ * =============================================================================
+ * Items API — 列表与创建
+ * =============================================================================
+ */
 
-/** 内存中的示例数据存储 */
-interface Item {
-  id: string
-  name: string
-  description: string
-  createdAt: string
-  updatedAt: string
-}
+import { cache } from '@h-ai/cache'
+import { core } from '@h-ai/core'
+import { db } from '@h-ai/db'
+import { kit } from '@h-ai/kit'
+import { z } from 'zod'
 
-const items: Map<string, Item> = new Map()
+const CreateItemSchema = z.object({
+  name: z.string().min(1).max(100),
+  description: z.string().max(500).optional().default(''),
+})
 
-let idCounter = 0
+const ListQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(20),
+  search: z.string().optional(),
+})
 
-function nextId(): string {
-  return String(++idCounter)
-}
+const CACHE_KEY = 'api:items:list'
 
 /**
- * 获取所有 items
+ * GET /api/v1/items — 分页查询 items
  */
-export const GET: RequestHandler = async ({ url }) => {
-  const page = Number(url.searchParams.get('page') ?? '1')
-  const pageSize = Number(url.searchParams.get('pageSize') ?? '20')
+export const GET = kit.handler(async ({ url }) => {
+  const { page, pageSize, search } = kit.validate.queryOrFail(url, ListQuerySchema)
 
-  const allItems = Array.from(items.values())
-  const start = (page - 1) * pageSize
-  const data = allItems.slice(start, start + pageSize)
+  // 无搜索条件时尝试缓存
+  if (!search) {
+    const cacheKey = `${CACHE_KEY}:${page}:${pageSize}`
+    const cached = await cache.kv.get<string>(cacheKey)
+    if (cached.success && cached.data) {
+      return kit.response.ok(JSON.parse(cached.data))
+    }
+  }
 
-  return json({
-    data,
-    total: allItems.length,
-    page,
-    pageSize,
+  let sql = 'SELECT * FROM items'
+  const params: unknown[] = []
+
+  if (search) {
+    sql += ' WHERE name LIKE ?'
+    params.push(`%${search}%`)
+  }
+
+  sql += ' ORDER BY created_at DESC'
+
+  const result = await db.sql.queryPage<Record<string, unknown>>({
+    sql,
+    params,
+    pagination: { page, pageSize },
   })
-}
+
+  if (!result.success) {
+    return kit.response.internalError(result.error.message)
+  }
+
+  const data = { items: result.data.items, total: result.data.total, page, pageSize }
+
+  // 缓存无搜索条件的结果
+  if (!search) {
+    const cacheKey = `${CACHE_KEY}:${page}:${pageSize}`
+    await cache.kv.set(cacheKey, JSON.stringify(data), { ex: 30 })
+  }
+
+  return kit.response.ok(data)
+})
 
 /**
- * 创建 item
+ * POST /api/v1/items — 创建 item
  */
-export const POST: RequestHandler = async ({ request }) => {
-  const body = await request.json()
+export const POST = kit.handler(async ({ request }) => {
+  const { name, description } = await kit.validate.formOrFail(request, CreateItemSchema)
 
-  if (!body.name || typeof body.name !== 'string') {
-    return json({ error: 'name is required' }, { status: 400 })
-  }
-
+  const id = core.id.generate()
   const now = new Date().toISOString()
-  const item: Item = {
-    id: nextId(),
-    name: body.name,
-    description: body.description ?? '',
-    createdAt: now,
-    updatedAt: now,
+
+  const execResult = await db.sql.execute(
+    'INSERT INTO items (id, name, description, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
+    [id, name, description, 'active', now, now],
+  )
+
+  if (!execResult.success) {
+    return kit.response.internalError(execResult.error.message)
   }
 
-  items.set(item.id, item)
+  // 清除列表缓存
+  await cache.kv.del(`${CACHE_KEY}:1:20`)
 
-  return json({ data: item }, { status: 201 })
-}
+  return kit.response.created({ id, name, description, status: 'active', createdAt: now, updatedAt: now })
+})

@@ -306,9 +306,15 @@ importers:
 
   apps/api-service:
     dependencies:
+      '@h-ai/cache':
+        specifier: workspace:*
+        version: link:../../packages/cache
       '@h-ai/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@h-ai/crypto':
+        specifier: workspace:*
+        version: link:../../packages/crypto
       '@h-ai/db':
         specifier: workspace:*
         version: link:../../packages/db
@@ -333,6 +339,9 @@ importers:
       vite:
         specifier: 'catalog:'
         version: 7.3.1(@types/node@25.1.0)(jiti@2.6.1)(lightningcss@1.30.2)(yaml@2.8.2)
+      zod:
+        specifier: 'catalog:'
+        version: 4.3.6
     devDependencies:
       svelte-check:
         specifier: 'catalog:'
