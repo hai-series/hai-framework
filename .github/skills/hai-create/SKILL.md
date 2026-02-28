@@ -292,6 +292,7 @@ export const xxM = core.i18n.createMessageGetter<XxMessageKey>({
 - `close` 流程：关闭连接/子功能 → 置空
 - `get` 访问器：`currentXxx ?? notInitializedXxx`
 - return 语句不含复杂逻辑（见 §4.1）
+- **❌ 禁止在 main.ts 中编写具体业务逻辑**（如调度循环、数据处理、任务执行等重操作）。所有具体逻辑必须委托给 `xx-functions.ts`、`xx-runner.ts` 或其他职责文件，main.ts 仅做 API 编排和委托调用。
 
 根据 §2 决策表选择对应模式：
 
@@ -1028,6 +1029,7 @@ import { XxConfigSchema } from './xx-config.js'
 - ❌ 硬编码字符串 — 用 `xxM('key')`
 - ❌ 硬编码密钥 — 用环境变量
 - ❌ `index.ts` 写逻辑 — 仅 `export *`
+- ❌ `main.ts` 写业务逻辑 — 仅做生命周期管理和 API 编排，具体逻辑委托给 `functions.ts` / `runner.ts` 等
 - ❌ class 实现 Provider — 用工厂函数 + 闭包
 - ❌ return 嵌套复杂逻辑
 - ❌ 超过 2 层 if 嵌套
