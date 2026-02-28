@@ -4,10 +4,10 @@
  * =============================================================================
  */
 
-export { addModule } from './add.js'
-export { generateConfigFile } from './config-templates.js'
-export { createProject, detectProject } from './create.js'
-export { deployCommand } from './deploy.js'
-export { generate } from './generate.js'
-export { initProject } from './init.js'
-export { generateModuleSkillFile, generateSkillFiles } from './skill-templates.js'
+export * from './add.js'
+export * from './config-templates.js'
+export * from './create.js'
+export * from './deploy.js'
+export * from './generate.js'
+export * from './init.js'
+export * from './skill-templates.js'

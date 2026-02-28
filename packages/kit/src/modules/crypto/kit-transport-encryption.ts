@@ -31,12 +31,14 @@
  * =============================================================================
  */
 
+import type { Result } from '@h-ai/core'
 import type {
   EncryptedPayload,
   TransportCryptoServiceLike,
   TransportEncryptionManager,
   TransportKeyPair,
 } from './kit-crypto-types.js'
+import { err, ok } from '@h-ai/core'
 import { getKitMessage } from '../../kit-i18n.js'
 
 /**
@@ -45,16 +47,15 @@ import { getKitMessage } from '../../kit-i18n.js'
  * 启动时生成服务端非对称密钥对，通过 clientId → publicKey 的内存 Map 管理客户端密钥。
  *
  * @param cryptoService - 传输加密服务实例（非对称 + 对称）
- * @returns 传输加密管理器
- * @throws 密钥对生成失败时抛出异常
+ * @returns 成功返回传输加密管理器，密钥对生成失败时返回错误
  */
 export function createTransportEncryption(
   cryptoService: TransportCryptoServiceLike,
-): TransportEncryptionManager {
+): Result<TransportEncryptionManager, Error> {
   // 生成服务端密钥对
   const keyPairResult = cryptoService.asymmetric.generateKeyPair()
   if (!keyPairResult.success || !keyPairResult.data) {
-    throw new Error(getKitMessage('kit_transportKeyGenerationFailed'))
+    return err(new Error(getKitMessage('kit_transportKeyGenerationFailed')))
   }
   const serverKeyPair: TransportKeyPair = keyPairResult.data
 
@@ -62,7 +63,7 @@ export function createTransportEncryption(
   const clientKeys = new Map<string, string>()
   let clientIdCounter = 0
 
-  return {
+  return ok({
     getServerPublicKey(): string {
       return serverKeyPair.publicKey
     },
@@ -121,7 +122,7 @@ export function createTransportEncryption(
 
       return decResult.data
     },
-  }
+  })
 }
 
 /**

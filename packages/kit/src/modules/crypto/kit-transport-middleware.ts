@@ -47,15 +47,12 @@ export function transportEncryptionMiddleware(config: TransportEncryptionConfig)
   const requireEncryption = config.requireEncryption ?? true
 
   // 初始化传输加密管理器
-  let manager: TransportEncryptionManager
-
-  try {
-    manager = createTransportEncryption(config.crypto)
-  }
-  catch {
+  const result = createTransportEncryption(config.crypto)
+  if (!result.success) {
     // 密钥生成失败时降级为透传
     return async (_context, next) => next()
   }
+  const manager = result.data
 
   return async (context, next) => {
     const { event } = context

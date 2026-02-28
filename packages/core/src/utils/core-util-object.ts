@@ -8,18 +8,19 @@ import { typeUtils } from './core-util-type.js'
 
 /**
  * 深度克隆对象。
- * 注意：仅适用于可 JSON 序列化的数据（如 Date、Map、函数等会丢失信息）。
+ * 使用 structuredClone（Node 17+ / 现代浏览器），支持 Date、Map、Set、RegExp、
+ * ArrayBuffer、循环引用等 JSON 方案无法处理的类型。
+ *
  * @param obj - 目标对象
  * @returns 深度克隆结果
- * @remarks 不适用于循环引用对象。
  *
  * @example
  * ```ts
- * const cloned = object.deepClone({ a: 1 })
+ * const cloned = object.deepClone({ a: 1, d: new Date() })
  * ```
  */
 function deepClone<T>(obj: T): T {
-  return JSON.parse(JSON.stringify(obj))
+  return structuredClone(obj)
 }
 
 /**

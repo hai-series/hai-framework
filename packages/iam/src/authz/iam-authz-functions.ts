@@ -51,16 +51,24 @@ export async function createIamAuthzFunctions(deps: IamAuthzFunctionsDeps): Prom
 
     const roleRepository = await createDbRoleRepository(db)
     const permissionRepository = await createDbPermissionRepository(db)
-    const rolePermissionRepository = await createDbRolePermissionRepository(db, permissionRepository, cache)
-    const userRoleRepository = await createDbUserRoleRepository(db, roleRepository, cache)
+
+    const rolePermResult = await createDbRolePermissionRepository(db, permissionRepository, cache)
+    if (!rolePermResult.success) {
+      return rolePermResult
+    }
+
+    const userRoleResult = await createDbUserRoleRepository(db, roleRepository, cache)
+    if (!userRoleResult.success) {
+      return userRoleResult
+    }
 
     const manager = createRbacManager({
       rbacConfig: config.rbac,
       db,
       roleRepository,
       permissionRepository,
-      rolePermissionRepository,
-      userRoleRepository,
+      rolePermissionRepository: rolePermResult.data,
+      userRoleRepository: userRoleResult.data,
     })
 
     logger.info('Authz sub-feature initialized')

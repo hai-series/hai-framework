@@ -96,6 +96,17 @@ function createFailingCryptoService(): TransportCryptoServiceLike {
   }
 }
 
+/**
+ * 辅助函数：解包 createTransportEncryption 的 Result，失败时抛出异常
+ */
+function createManager(cryptoService: TransportCryptoServiceLike) {
+  const result = createTransportEncryption(cryptoService)
+  if (!result.success) {
+    throw result.error
+  }
+  return result.data
+}
+
 // =============================================================================
 // createTransportEncryption
 // =============================================================================
@@ -108,19 +119,20 @@ describe('createTransportEncryption', () => {
   })
 
   it('生成服务端密钥对并返回公钥', () => {
-    const manager = createTransportEncryption(cryptoService)
+    const manager = createManager(cryptoService)
     const pubKey = manager.getServerPublicKey()
     expect(pubKey).toBeTruthy()
     expect(pubKey).toContain('mock_pub_key')
   })
 
-  it('密钥对生成失败时抛出异常', () => {
+  it('密钥对生成失败时返回错误 Result', () => {
     const failing = createFailingCryptoService()
-    expect(() => createTransportEncryption(failing)).toThrow()
+    const result = createTransportEncryption(failing)
+    expect(result.success).toBe(false)
   })
 
   it('注册客户端公钥并返回唯一 clientId', () => {
-    const manager = createTransportEncryption(cryptoService)
+    const manager = createManager(cryptoService)
     const id1 = manager.registerClientKey('client_pub_1')
     const id2 = manager.registerClientKey('client_pub_2')
     expect(id1).toBeTruthy()
@@ -129,14 +141,14 @@ describe('createTransportEncryption', () => {
   })
 
   it('可通过 clientId 查询已注册的客户端公钥', () => {
-    const manager = createTransportEncryption(cryptoService)
+    const manager = createManager(cryptoService)
     const id = manager.registerClientKey('my_client_pub')
     expect(manager.getClientPublicKey(id)).toBe('my_client_pub')
     expect(manager.getClientPublicKey('nonexistent')).toBeUndefined()
   })
 
   it('加密响应 → 解密请求完整往返', () => {
-    const manager = createTransportEncryption(cryptoService)
+    const manager = createManager(cryptoService)
     const clientId = manager.registerClientKey('client_pub_key')
 
     const originalData = JSON.stringify({ message: 'hello world', count: 42 })
@@ -153,12 +165,12 @@ describe('createTransportEncryption', () => {
   })
 
   it('加密时客户端不存在应抛出异常', () => {
-    const manager = createTransportEncryption(cryptoService)
+    const manager = createManager(cryptoService)
     expect(() => manager.encryptResponse('nonexistent', 'data')).toThrow()
   })
 
   it('多客户端密钥隔离', () => {
-    const manager = createTransportEncryption(cryptoService)
+    const manager = createManager(cryptoService)
     const id1 = manager.registerClientKey('pub_A')
     const id2 = manager.registerClientKey('pub_B')
 
@@ -180,7 +192,7 @@ describe('createKeyExchangeHandler', () => {
   })
 
   it('正常密钥交换返回 serverPublicKey 和 clientId', async () => {
-    const manager = createTransportEncryption(cryptoService)
+    const manager = createManager(cryptoService)
     const handler = createKeyExchangeHandler(manager)
 
     const request = new Request('http://localhost/api/kit/key-exchange', {
@@ -201,7 +213,7 @@ describe('createKeyExchangeHandler', () => {
   })
 
   it('缺少 clientPublicKey 返回 400', async () => {
-    const manager = createTransportEncryption(cryptoService)
+    const manager = createManager(cryptoService)
     const handler = createKeyExchangeHandler(manager)
 
     const request = new Request('http://localhost/api/kit/key-exchange', {
@@ -215,7 +227,7 @@ describe('createKeyExchangeHandler', () => {
   })
 
   it('无效 JSON 返回 500', async () => {
-    const manager = createTransportEncryption(cryptoService)
+    const manager = createManager(cryptoService)
     const handler = createKeyExchangeHandler(manager)
 
     const request = new Request('http://localhost/api/kit/key-exchange', {
@@ -547,7 +559,7 @@ describe('端到端加解密往返', () => {
     const cryptoService = createMockCryptoService()
 
     // 服务端：创建传输加密管理器
-    const serverManager = createTransportEncryption(cryptoService)
+    const serverManager = createManager(cryptoService)
 
     // 客户端：生成密钥对
     const clientKeyPair = cryptoService.asymmetric.generateKeyPair().data!
@@ -597,7 +609,7 @@ describe('端到端加解密往返', () => {
 
   it('大量数据加解密', () => {
     const cryptoService = createMockCryptoService()
-    const manager = createTransportEncryption(cryptoService)
+    const manager = createManager(cryptoService)
     const clientId = manager.registerClientKey('client_pub')
 
     // 生成大量数据
@@ -616,7 +628,7 @@ describe('端到端加解密往返', () => {
 
   it('特殊字符加解密', () => {
     const cryptoService = createMockCryptoService()
-    const manager = createTransportEncryption(cryptoService)
+    const manager = createManager(cryptoService)
     const clientId = manager.registerClientKey('client_pub')
 
     const specialData = JSON.stringify({
@@ -634,7 +646,7 @@ describe('端到端加解密往返', () => {
 
   it('空字符串加解密', () => {
     const cryptoService = createMockCryptoService()
-    const manager = createTransportEncryption(cryptoService)
+    const manager = createManager(cryptoService)
     const clientId = manager.registerClientKey('client_pub')
 
     const encrypted = manager.encryptResponse(clientId, '')
