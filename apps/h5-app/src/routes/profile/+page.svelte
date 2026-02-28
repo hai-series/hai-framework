@@ -2,7 +2,6 @@
   /**
    * 个人中心页 — 集成 @h-ai/iam 用户认证和 @h-ai/storage 头像上传
    */
-  import { goto } from '$app/navigation'
 
   let user = $state<{ id: string, username: string, displayName?: string, avatarUrl?: string, email?: string } | null>(null)
   let loading = $state(true)
