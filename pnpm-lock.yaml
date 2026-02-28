@@ -84,6 +84,9 @@ catalogs:
     chalk:
       specifier: ^5.4.1
       version: 5.6.2
+    croner:
+      specifier: ^10.0.1
+      version: 10.0.1
     daisyui:
       specifier: ^5.0.0
       version: 5.5.14
@@ -836,6 +839,37 @@ importers:
       '@types/nodemailer':
         specifier: 'catalog:'
         version: 7.0.11
+      rimraf:
+        specifier: 'catalog:'
+        version: 6.1.2
+      tsup:
+        specifier: 'catalog:'
+        version: 8.5.1(jiti@2.6.1)(postcss@8.5.6)(typescript@5.9.3)(yaml@2.8.2)
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+      vitest:
+        specifier: 'catalog:'
+        version: 4.0.18(@types/node@25.1.0)(jiti@2.6.1)(jsdom@27.4.0)(lightningcss@1.30.2)(yaml@2.8.2)
+
+  packages/scheduler:
+    dependencies:
+      '@h-ai/core':
+        specifier: workspace:*
+        version: link:../core
+      '@h-ai/db':
+        specifier: workspace:*
+        version: link:../db
+      croner:
+        specifier: 'catalog:'
+        version: 10.0.1
+      zod:
+        specifier: 'catalog:'
+        version: 4.3.6
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 25.1.0
       rimraf:
         specifier: 'catalog:'
         version: 6.1.2
@@ -2835,6 +2869,10 @@ packages:
   crc32-stream@6.0.0:
     resolution: {integrity: sha512-piICUB6ei4IlTv1+653yq5+KoqfBYmj9bw6LqXoOneTMDXk5nM1qt12mFW1caG3LlJXEKW1Bp0WggEmIfQB34g==}
     engines: {node: '>= 14'}
+
+  croner@10.0.1:
+    resolution: {integrity: sha512-ixNtAJndqh173VQ4KodSdJEI6nuioBWI0V1ITNKhZZsO0pEMoDxz539T4FTTbSZ/xIOSuDnzxLVRqBVSvPNE2g==}
+    engines: {node: '>=18.0'}
 
   cross-spawn@7.0.6:
     resolution: {integrity: sha512-uV2QOWP2nWzsy2aMp8aRibhi9dlzF5Hgh5SHaB9OiTGEyDTiJJyx0uy51QXdyWbtAHNua4XJzUKca3OzKUd3vA==}
@@ -7759,6 +7797,8 @@ snapshots:
     dependencies:
       crc-32: 1.2.2
       readable-stream: 4.7.0
+
+  croner@10.0.1: {}
 
   cross-spawn@7.0.6:
     dependencies:
