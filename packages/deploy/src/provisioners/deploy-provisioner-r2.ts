@@ -47,8 +47,8 @@ export function createR2Provisioner(): ServiceProvisioner {
     async authenticate(credentials: Record<string, string>): Promise<Result<string, DeployError>> {
       logger.debug('Authenticating with Cloudflare')
       try {
-        const acctId = credentials.account_id ?? ''
-        const apiTok = credentials.api_token ?? credentials.token ?? ''
+        const acctId = credentials.accountId ?? credentials.account_id ?? ''
+        const apiTok = credentials.apiToken ?? credentials.api_token ?? credentials.token ?? ''
         if (!acctId || !apiTok) {
           throw new Error('Missing "account_id" and "api_token" in credentials')
         }
