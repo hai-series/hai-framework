@@ -100,7 +100,7 @@ export async function signRequest(
 ): Promise<string> {
   const result = await crypto.hmac.sign(body, secretKey, algorithm)
   if (!result.success) {
-    throw new Error(result.error?.message || '签名失败')
+    throw new Error(result.error?.message || getKitMessage('kit_signFailed'))
   }
   return result.data!
 }
