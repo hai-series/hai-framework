@@ -120,6 +120,7 @@
   "iam_resetTokenExpired": "Password reset token has expired",
   "iam_resetTokenMaxAttempts": "Too many verification attempts, please request a new reset token",
   "iam_saveResetTokenFailed": "Failed to save password reset token: {message}",
+  "iam_hashResetTokenFailed": "Failed to hash reset token: {message}",
   "iam_queryResetTokenFailed": "Failed to query password reset token: {message}",
   "iam_updateResetTokenFailed": "Failed to update password reset token: {message}",
   "iam_deleteResetTokenFailed": "Failed to delete password reset token: {message}",
