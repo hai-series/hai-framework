@@ -6,7 +6,7 @@
 
 import * as m from '$lib/paraglide/messages.js'
 import { createRegisterSchema } from '$lib/server/schemas/index.js'
-import { audit } from '$lib/server/services/index.js'
+import { audit } from '@h-ai/audit'
 import { iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
 
@@ -62,7 +62,7 @@ export const POST = kit.handler(async ({ request, cookies, getClientAddress }) =
   const ip = getClientAddress()
   const ua = request.headers.get('user-agent') ?? undefined
   const [, rolesResult] = await Promise.all([
-    audit.register(user.id, ip, ua),
+    audit.helper.register(user.id, ip, ua),
     iam.authz.getUserRoles(user.id),
   ])
   const roles = rolesResult.success ? rolesResult.data.map(r => r.code) : ['user']

@@ -6,7 +6,7 @@
 
 import * as m from '$lib/paraglide/messages.js'
 import { createResetPasswordSchema } from '$lib/server/schemas/index.js'
-import { audit } from '$lib/server/services/index.js'
+import { audit } from '@h-ai/audit'
 import { iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
 
@@ -27,7 +27,7 @@ export const POST = kit.handler(async ({ request, getClientAddress }) => {
   const ip = getClientAddress()
   const ua = request.headers.get('user-agent') ?? undefined
   // 因为 token 已用，无法获取 userId，记录 token 信息
-  await audit.passwordResetComplete(token, ip, ua)
+  await audit.helper.passwordResetComplete(token, ip, ua)
 
   return kit.response.ok({ message: m.api_auth_password_reset_success() })
 })
