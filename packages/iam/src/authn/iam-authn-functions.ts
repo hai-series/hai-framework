@@ -216,17 +216,31 @@ function buildAuthnOperations(deps: AuthnOperationsDeps): IamAuthnFunctions {
   }
 
   /**
-   * 查询用户角色 ID 列表
+   * 查询用户角色 code 列表
    *
    * @param userId - 用户 ID
-   * @returns 角色 ID 数组
+   * @returns 角色 code 数组
    */
-  async function resolveUserRoles(userId: string): Promise<Result<string[], IamError>> {
+  async function resolveUserRoleCodes(userId: string): Promise<Result<string[], IamError>> {
     const rolesResult = await authzFunctions.getUserRoles(userId)
     if (!rolesResult.success) {
       return rolesResult as Result<string[], IamError>
     }
-    return ok(rolesResult.data.map(role => role.id))
+    return ok(rolesResult.data.map(role => role.code))
+  }
+
+  /**
+   * 查询用户权限 code 列表
+   *
+   * @param userId - 用户 ID
+   * @returns 权限 code 数组
+   */
+  async function resolveUserPermissionCodes(userId: string): Promise<Result<string[], IamError>> {
+    const permissionsResult = await authzFunctions.getUserPermissions(userId)
+    if (!permissionsResult.success) {
+      return permissionsResult as Result<string[], IamError>
+    }
+    return ok(permissionsResult.data.map(p => p.code))
   }
 
   /**
@@ -272,15 +286,25 @@ function buildAuthnOperations(deps: AuthnOperationsDeps): IamAuthnFunctions {
    * @returns 包含用户信息、访问令牌、过期时间和协议展示的认证结果
    */
   async function buildAuthResult(user: User): Promise<Result<AuthResult, IamError>> {
-    const rolesResult = await resolveUserRoles(user.id)
-    if (!rolesResult.success) {
-      return rolesResult as Result<AuthResult, IamError>
+    // 并行获取角色和权限，登录时一次性查 DB，后续纯缓存
+    const [roleCodesResult, permCodesResult] = await Promise.all([
+      resolveUserRoleCodes(user.id),
+      resolveUserPermissionCodes(user.id),
+    ])
+    if (!roleCodesResult.success) {
+      return roleCodesResult as Result<AuthResult, IamError>
+    }
+    if (!permCodesResult.success) {
+      return permCodesResult as Result<AuthResult, IamError>
     }
 
     const sessionResult = await sessionFunctions.create({
       userId: user.id,
       username: user.username,
-      roles: rolesResult.data,
+      displayName: user.displayName,
+      avatarUrl: user.avatarUrl,
+      roleCodes: roleCodesResult.data,
+      permissionCodes: permCodesResult.data,
     })
 
     if (!sessionResult.success) {

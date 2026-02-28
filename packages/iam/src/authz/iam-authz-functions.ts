@@ -220,6 +220,65 @@ function createRbacManager(config: RbacManagerConfig): IamAuthzFunctions {
     return ok(permissions)
   }
 
+  /**
+   * 解析用户所有权限 code（通过角色聚合，权限缓存优先）
+   *
+   * 用于会话权限同步：查用户角色 → 并行获取各角色的缓存权限 code → 去重。
+   */
+  async function resolveUserPermissionCodes(userId: string): Promise<Result<string[], IamError>> {
+    const roleIdsResult = await userRoleRepository.getRoleIds(userId)
+    if (!roleIdsResult.success) {
+      return roleIdsResult as Result<string[], IamError>
+    }
+    if (roleIdsResult.data.length === 0) {
+      return ok([])
+    }
+
+    const codesResults = await Promise.all(
+      roleIdsResult.data.map(id => rolePermissionRepository.getPermissionCodesCached(id)),
+    )
+
+    const seen = new Set<string>()
+    for (const codesResult of codesResults) {
+      if (!codesResult.success) {
+        return codesResult as Result<string[], IamError>
+      }
+      for (const code of codesResult.data) {
+        seen.add(code)
+      }
+    }
+
+    return ok([...seen])
+  }
+
+  /**
+   * 角色权限变更后，同步所有持有该角色用户的 session permissionCodes
+   *
+   * 最大努力：单用户同步失败仅记录日志，不阻塞其他用户。
+   *
+   * @param roleId - 发生权限变更的角色 ID
+   */
+  async function syncSessionPermissionsForRole(roleId: string): Promise<void> {
+    const userIdsResult = await userRoleRepository.getUserIdsByRoleId(roleId)
+    if (!userIdsResult.success) {
+      logger.error('Failed to query users for permission sync', { roleId, error: userIdsResult.error.message })
+      return
+    }
+
+    for (const userId of userIdsResult.data) {
+      const permResult = await resolveUserPermissionCodes(userId)
+      if (!permResult.success) {
+        logger.error('Failed to resolve permissions for session sync', { userId, roleId, error: permResult.error.message })
+        continue
+      }
+
+      const syncResult = await userRoleRepository.syncUserSessionPermissions(userId, permResult.data)
+      if (!syncResult.success) {
+        logger.error('Failed to sync session permissions', { userId, roleId, error: syncResult.error.message })
+      }
+    }
+  }
+
   return {
     async checkPermission(userId: string, permission: string): Promise<Result<boolean, IamError>> {
       // RBAC 未启用时，所有权限检查直接放行
@@ -270,6 +329,17 @@ function createRbacManager(config: RbacManagerConfig): IamAuthzFunctions {
       const result = await userRoleRepository.assign(userId, roleId)
       if (result.success) {
         logger.info('Role assigned to user', { userId, roleId })
+        // 角色变更后同步会话权限（新角色可能带来新权限）
+        const permResult = await resolveUserPermissionCodes(userId)
+        if (permResult.success) {
+          const syncResult = await userRoleRepository.syncUserSessionPermissions(userId, permResult.data)
+          if (!syncResult.success) {
+            logger.error('Failed to sync session permissions after assignRole', { userId, roleId, error: syncResult.error.message })
+          }
+        }
+        else {
+          logger.error('Failed to resolve permissions after assignRole', { userId, roleId, error: permResult.error.message })
+        }
       }
       return result
     },
@@ -278,6 +348,17 @@ function createRbacManager(config: RbacManagerConfig): IamAuthzFunctions {
       const result = await userRoleRepository.remove(userId, roleId)
       if (result.success) {
         logger.info('Role removed from user', { userId, roleId })
+        // 角色移除后同步会话权限（旧角色权限应立即失效）
+        const permResult = await resolveUserPermissionCodes(userId)
+        if (permResult.success) {
+          const syncResult = await userRoleRepository.syncUserSessionPermissions(userId, permResult.data)
+          if (!syncResult.success) {
+            logger.error('Failed to sync session permissions after removeRole', { userId, roleId, error: syncResult.error.message })
+          }
+        }
+        else {
+          logger.error('Failed to resolve permissions after removeRole', { userId, roleId, error: permResult.error.message })
+        }
       }
       return result
     },
@@ -367,6 +448,20 @@ function createRbacManager(config: RbacManagerConfig): IamAuthzFunctions {
       // 角色代码可能变更，强制下次 checkPermission 重新解析超管角色
       superAdminRoleId = undefined
 
+      // 角色代码变更后同步受影响用户的会话 roleCodes（最大努力）
+      const affectedUsersResult = await userRoleRepository.getUserIdsByRoleId(roleId)
+      if (affectedUsersResult.success) {
+        for (const userId of affectedUsersResult.data) {
+          const syncResult = await userRoleRepository.syncUserSessionRoles(userId)
+          if (!syncResult.success) {
+            logger.error('Failed to sync session roles after updateRole', { userId, roleId, error: syncResult.error.message })
+          }
+        }
+      }
+      else {
+        logger.error('Failed to query affected users after updateRole', { roleId, error: affectedUsersResult.error.message })
+      }
+
       return ok(updatedResult.data)
     },
 
@@ -434,11 +529,21 @@ function createRbacManager(config: RbacManagerConfig): IamAuthzFunctions {
         logger.error('Failed to clear role permission cache after deleteRole', { roleId, error: cacheResult.error.message })
       }
 
-      // 事务提交后：同步受影响用户的会话角色（最大努力）
+      // 事务提交后：同步受影响用户的会话角色和权限（最大努力）
       for (const userId of affectedUserIds) {
         const syncResult = await userRoleRepository.syncUserSessionRoles(userId)
         if (!syncResult.success) {
-          logger.error('Failed to sync user session after deleteRole', { userId, roleId, error: syncResult.error.message })
+          logger.error('Failed to sync user session roles after deleteRole', { userId, roleId, error: syncResult.error.message })
+        }
+        // 角色删除后用户权限可能减少，重新计算并同步
+        const permResult = await resolveUserPermissionCodes(userId)
+        if (!permResult.success) {
+          logger.error('Failed to resolve permissions for session sync after deleteRole', { userId, roleId, error: permResult.error.message })
+          continue
+        }
+        const permSyncResult = await userRoleRepository.syncUserSessionPermissions(userId, permResult.data)
+        if (!permSyncResult.success) {
+          logger.error('Failed to sync session permissions after deleteRole', { userId, roleId, error: permSyncResult.error.message })
         }
       }
 
@@ -508,6 +613,10 @@ function createRbacManager(config: RbacManagerConfig): IamAuthzFunctions {
 
       const permCode = permissionResult.data.code
 
+      // 事务前：从 DB 查询哪些角色关联此权限（事务中会删除关联行）
+      const affectedRoleIdsResult = await rolePermissionRepository.getRoleIdsByPermissionId(permissionId)
+      const affectedRoleIds = affectedRoleIdsResult.success ? affectedRoleIdsResult.data : []
+
       // 事务：所有 DB 删除原子执行
       const txResult = await db.tx.begin()
       if (!txResult.success) {
@@ -550,6 +659,11 @@ function createRbacManager(config: RbacManagerConfig): IamAuthzFunctions {
         logger.error('Failed to clear permission cache after deletePermission', { permissionId, permCode, error: cacheResult.error.message })
       }
 
+      // 同步受影响角色下用户的会话权限（最大努力）
+      for (const roleId of affectedRoleIds) {
+        await syncSessionPermissionsForRole(roleId)
+      }
+
       logger.info('Permission deleted', { permissionId })
       return ok(undefined)
     },
@@ -584,6 +698,8 @@ function createRbacManager(config: RbacManagerConfig): IamAuthzFunctions {
       const assignResult = await rolePermissionRepository.assign(roleId, permissionId, permResult.data.code)
       if (assignResult.success) {
         logger.info('Permission assigned to role', { roleId, permissionId })
+        // 最大努力同步受影响用户的会话权限
+        await syncSessionPermissionsForRole(roleId)
       }
       return assignResult
     },
@@ -603,6 +719,8 @@ function createRbacManager(config: RbacManagerConfig): IamAuthzFunctions {
       const removeResult = await rolePermissionRepository.remove(roleId, permissionId, permResult.data.code)
       if (removeResult.success) {
         logger.info('Permission removed from role', { roleId, permissionId })
+        // 最大努力同步受影响用户的会话权限
+        await syncSessionPermissionsForRole(roleId)
       }
       return removeResult
     },

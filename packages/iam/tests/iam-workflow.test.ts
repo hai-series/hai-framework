@@ -161,11 +161,11 @@ describe('iam.workflow', () => {
         if (!loginResult.success)
           return
 
-        // ⑦ 验证令牌获取会话信息（包含角色）
+        // ⑦ 验证令牌获取会话信息（包含角色 code）
         const session = await iam.auth.verifyToken(loginResult.data.accessToken)
         expect(session.success).toBe(true)
         if (session.success) {
-          expect(session.data.roles).toContain(roleId)
+          expect(session.data.roleCodes).toContain('wf_editor')
         }
 
         // ⑧ 检查权限：应有 read 和 write，不应有 delete
@@ -265,6 +265,283 @@ describe('iam.workflow', () => {
         expect(hasViewAfterRemoval.success).toBe(true)
         if (hasViewAfterRemoval.success)
           expect(hasViewAfterRemoval.data).toBe(false)
+      })
+
+      it('权限变更后会话 permissionCodes 实时同步', async () => {
+        const iam = getIam()
+
+        // ① 创建角色和权限
+        const role = await iam.authz.createRole({ code: 'wf_sync_role', name: '同步测试角色' })
+        expect(role.success).toBe(true)
+        if (!role.success)
+          return
+
+        const permA = await iam.authz.createPermission({ code: 'wf_sync:a', name: '权限A' })
+        const permB = await iam.authz.createPermission({ code: 'wf_sync:b', name: '权限B' })
+        expect(permA.success && permB.success).toBe(true)
+        if (!permA.success || !permB.success)
+          return
+
+        // ② 关联权限 A
+        await iam.authz.assignPermissionToRole(role.data.id, permA.data.id)
+
+        // ③ 注册用户 → 分配角色 → 登录
+        const reg = await iam.user.register({ username: 'wf_sync_user', password: TEST_PASSWORD })
+        if (!reg.success)
+          return
+        await iam.authz.assignRole(reg.data.user.id, role.data.id)
+
+        const login = await iam.auth.login({ identifier: 'wf_sync_user', password: TEST_PASSWORD })
+        expect(login.success).toBe(true)
+        if (!login.success)
+          return
+
+        // ④ 登录后会话应包含权限 A
+        const session1 = await iam.auth.verifyToken(login.data.accessToken)
+        expect(session1.success).toBe(true)
+        if (!session1.success)
+          return
+        expect(session1.data.permissionCodes).toContain('wf_sync:a')
+        expect(session1.data.permissionCodes).not.toContain('wf_sync:b')
+
+        // ⑤ 管理员给角色新增权限 B → 会话实时同步
+        await iam.authz.assignPermissionToRole(role.data.id, permB.data.id)
+
+        const session2 = await iam.auth.verifyToken(login.data.accessToken)
+        expect(session2.success).toBe(true)
+        if (!session2.success)
+          return
+        expect(session2.data.permissionCodes).toContain('wf_sync:a')
+        expect(session2.data.permissionCodes).toContain('wf_sync:b')
+
+        // ⑥ 管理员移除权限 A → 会话实时同步
+        await iam.authz.removePermissionFromRole(role.data.id, permA.data.id)
+
+        const session3 = await iam.auth.verifyToken(login.data.accessToken)
+        expect(session3.success).toBe(true)
+        if (!session3.success)
+          return
+        expect(session3.data.permissionCodes).not.toContain('wf_sync:a')
+        expect(session3.data.permissionCodes).toContain('wf_sync:b')
+      })
+
+      it('删除权限后会话 permissionCodes 实时同步', async () => {
+        const iam = getIam()
+
+        // ① 创建角色和权限
+        const role = await iam.authz.createRole({ code: 'wf_delperm_role', name: '删除权限测试角色' })
+        expect(role.success).toBe(true)
+        if (!role.success)
+          return
+
+        const perm = await iam.authz.createPermission({ code: 'wf_delperm:target', name: '待删权限' })
+        const permKeep = await iam.authz.createPermission({ code: 'wf_delperm:keep', name: '保留权限' })
+        expect(perm.success && permKeep.success).toBe(true)
+        if (!perm.success || !permKeep.success)
+          return
+
+        // ② 关联权限
+        await iam.authz.assignPermissionToRole(role.data.id, perm.data.id)
+        await iam.authz.assignPermissionToRole(role.data.id, permKeep.data.id)
+
+        // ③ 注册用户 → 分配角色 → 登录
+        const reg = await iam.user.register({ username: 'wf_delperm_user', password: TEST_PASSWORD })
+        if (!reg.success)
+          return
+        await iam.authz.assignRole(reg.data.user.id, role.data.id)
+
+        const login = await iam.auth.login({ identifier: 'wf_delperm_user', password: TEST_PASSWORD })
+        if (!login.success)
+          return
+
+        // ④ 登录后会话应包含两个权限
+        const session1 = await iam.auth.verifyToken(login.data.accessToken)
+        expect(session1.success).toBe(true)
+        if (!session1.success)
+          return
+        expect(session1.data.permissionCodes).toContain('wf_delperm:target')
+        expect(session1.data.permissionCodes).toContain('wf_delperm:keep')
+
+        // ⑤ 管理员删除权限 → 会话实时同步
+        await iam.authz.deletePermission(perm.data.id)
+
+        const session2 = await iam.auth.verifyToken(login.data.accessToken)
+        expect(session2.success).toBe(true)
+        if (!session2.success)
+          return
+        expect(session2.data.permissionCodes).not.toContain('wf_delperm:target')
+        expect(session2.data.permissionCodes).toContain('wf_delperm:keep')
+      })
+
+      it('删除角色后会话 permissionCodes 实时同步', async () => {
+        const iam = getIam()
+
+        // ① 创建角色和权限
+        const role = await iam.authz.createRole({ code: 'wf_delrole_role', name: '删除角色测试' })
+        expect(role.success).toBe(true)
+        if (!role.success)
+          return
+
+        const perm = await iam.authz.createPermission({ code: 'wf_delrole:perm', name: '角色权限' })
+        expect(perm.success).toBe(true)
+        if (!perm.success)
+          return
+
+        await iam.authz.assignPermissionToRole(role.data.id, perm.data.id)
+
+        // ② 注册用户 → 分配角色 → 登录
+        const reg = await iam.user.register({ username: 'wf_delrole_user', password: TEST_PASSWORD })
+        if (!reg.success)
+          return
+        await iam.authz.assignRole(reg.data.user.id, role.data.id)
+
+        const login = await iam.auth.login({ identifier: 'wf_delrole_user', password: TEST_PASSWORD })
+        if (!login.success)
+          return
+
+        // ③ 登录后会话应包含权限
+        const session1 = await iam.auth.verifyToken(login.data.accessToken)
+        expect(session1.success).toBe(true)
+        if (!session1.success)
+          return
+        expect(session1.data.permissionCodes).toContain('wf_delrole:perm')
+        expect(session1.data.roleCodes).toContain('wf_delrole_role')
+
+        // ④ 管理员删除角色 → 会话角色和权限都同步
+        await iam.authz.deleteRole(role.data.id)
+
+        const session2 = await iam.auth.verifyToken(login.data.accessToken)
+        expect(session2.success).toBe(true)
+        if (!session2.success)
+          return
+        expect(session2.data.roleCodes).not.toContain('wf_delrole_role')
+        expect(session2.data.permissionCodes).not.toContain('wf_delrole:perm')
+      })
+
+      it('分配角色后会话 permissionCodes 实时同步', async () => {
+        const iam = getIam()
+
+        // ① 创建角色和权限并关联
+        const role = await iam.authz.createRole({ code: 'wf_assign_role', name: '分配测试角色' })
+        expect(role.success).toBe(true)
+        if (!role.success)
+          return
+
+        const perm = await iam.authz.createPermission({ code: 'wf_assign:perm', name: '分配权限' })
+        expect(perm.success).toBe(true)
+        if (!perm.success)
+          return
+
+        await iam.authz.assignPermissionToRole(role.data.id, perm.data.id)
+
+        // ② 注册用户并登录（无角色）
+        const reg = await iam.user.register({ username: 'wf_assign_user', password: TEST_PASSWORD })
+        if (!reg.success)
+          return
+
+        const login = await iam.auth.login({ identifier: 'wf_assign_user', password: TEST_PASSWORD })
+        if (!login.success)
+          return
+
+        // ③ 登录后无角色无权限
+        const session1 = await iam.auth.verifyToken(login.data.accessToken)
+        expect(session1.success).toBe(true)
+        if (!session1.success)
+          return
+        expect(session1.data.roleCodes).not.toContain('wf_assign_role')
+        expect(session1.data.permissionCodes).not.toContain('wf_assign:perm')
+
+        // ④ 管理员分配角色 → 会话角色和权限都实时同步
+        await iam.authz.assignRole(reg.data.user.id, role.data.id)
+
+        const session2 = await iam.auth.verifyToken(login.data.accessToken)
+        expect(session2.success).toBe(true)
+        if (!session2.success)
+          return
+        expect(session2.data.roleCodes).toContain('wf_assign_role')
+        expect(session2.data.permissionCodes).toContain('wf_assign:perm')
+      })
+
+      it('移除角色后会话 permissionCodes 实时失效', async () => {
+        const iam = getIam()
+
+        // ① 创建角色和权限
+        const role = await iam.authz.createRole({ code: 'wf_rmrole_role', name: '移除测试角色' })
+        expect(role.success).toBe(true)
+        if (!role.success)
+          return
+
+        const perm = await iam.authz.createPermission({ code: 'wf_rmrole:perm', name: '移除权限' })
+        expect(perm.success).toBe(true)
+        if (!perm.success)
+          return
+
+        await iam.authz.assignPermissionToRole(role.data.id, perm.data.id)
+
+        // ② 注册用户 → 分配角色 → 登录
+        const reg = await iam.user.register({ username: 'wf_rmrole_user', password: TEST_PASSWORD })
+        if (!reg.success)
+          return
+        await iam.authz.assignRole(reg.data.user.id, role.data.id)
+
+        const login = await iam.auth.login({ identifier: 'wf_rmrole_user', password: TEST_PASSWORD })
+        if (!login.success)
+          return
+
+        // ③ 登录后有角色有权限
+        const session1 = await iam.auth.verifyToken(login.data.accessToken)
+        expect(session1.success).toBe(true)
+        if (!session1.success)
+          return
+        expect(session1.data.roleCodes).toContain('wf_rmrole_role')
+        expect(session1.data.permissionCodes).toContain('wf_rmrole:perm')
+
+        // ④ 管理员移除角色 → 会话角色和权限都立即失效
+        await iam.authz.removeRole(reg.data.user.id, role.data.id)
+
+        const session2 = await iam.auth.verifyToken(login.data.accessToken)
+        expect(session2.success).toBe(true)
+        if (!session2.success)
+          return
+        expect(session2.data.roleCodes).not.toContain('wf_rmrole_role')
+        expect(session2.data.permissionCodes).not.toContain('wf_rmrole:perm')
+      })
+
+      it('修改角色 code 后会话 roleCodes 实时同步', async () => {
+        const iam = getIam()
+
+        // ① 创建角色
+        const role = await iam.authz.createRole({ code: 'wf_updrole_old', name: '待改名角色' })
+        expect(role.success).toBe(true)
+        if (!role.success)
+          return
+
+        // ② 注册用户 → 分配角色 → 登录
+        const reg = await iam.user.register({ username: 'wf_updrole_user', password: TEST_PASSWORD })
+        if (!reg.success)
+          return
+        await iam.authz.assignRole(reg.data.user.id, role.data.id)
+
+        const login = await iam.auth.login({ identifier: 'wf_updrole_user', password: TEST_PASSWORD })
+        if (!login.success)
+          return
+
+        // ③ 登录后应有旧 code
+        const session1 = await iam.auth.verifyToken(login.data.accessToken)
+        expect(session1.success).toBe(true)
+        if (!session1.success)
+          return
+        expect(session1.data.roleCodes).toContain('wf_updrole_old')
+
+        // ④ 管理员修改角色 code → 会话实时同步新 code
+        await iam.authz.updateRole(role.data.id, { code: 'wf_updrole_new', name: '已改名角色' })
+
+        const session2 = await iam.auth.verifyToken(login.data.accessToken)
+        expect(session2.success).toBe(true)
+        if (!session2.success)
+          return
+        expect(session2.data.roleCodes).not.toContain('wf_updrole_old')
+        expect(session2.data.roleCodes).toContain('wf_updrole_new')
       })
     })
 
