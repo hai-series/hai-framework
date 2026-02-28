@@ -1,13 +1,39 @@
-import type { RequestHandler } from './$types'
-import { json } from '@sveltejs/kit'
-
 /**
- * 健康检查接口
+ * 健康检查接口 — 报告各模块状态
  */
-export const GET: RequestHandler = async () => {
-  return json({
-    status: 'ok',
+
+import { cache } from '@h-ai/cache'
+import { db } from '@h-ai/db'
+import { kit } from '@h-ai/kit'
+
+export const GET = kit.handler(async () => {
+  const checks: Record<string, string> = {}
+
+  // 数据库检查
+  try {
+    await db.sql.get('SELECT 1')
+    checks.database = 'ok'
+  }
+  catch {
+    checks.database = 'error'
+  }
+
+  // 缓存检查
+  try {
+    await cache.kv.set('health:ping', 'pong', { ex: 5 })
+    const val = await cache.kv.get('health:ping')
+    checks.cache = (val.success && val.data === 'pong') ? 'ok' : 'error'
+  }
+  catch {
+    checks.cache = 'error'
+  }
+
+  const allOk = Object.values(checks).every(v => v === 'ok')
+
+  return kit.response.ok({
+    status: allOk ? 'healthy' : 'degraded',
     timestamp: new Date().toISOString(),
-    version: '0.0.1',
+    version: '0.1.0',
+    checks,
   })
-}
+})
