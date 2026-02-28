@@ -133,7 +133,7 @@ export interface TaskDefinitionApi {
 // 执行日志
 // =============================================================================
 
-/** 执行状态 */
+/** 执行状态：`'success'` 表示成功，`'failed'` 表示失败 */
 export type ExecutionStatus = 'success' | 'failed'
 
 /**
