@@ -4,6 +4,7 @@
  * =============================================================================
  *
  * 基于 @h-ai/db BaseCrudRepository 实现审计日志的持久化与查询。
+ * 仅在需要 JOIN / 聚合时使用自定义 SQL，其余 CRUD 操作由基类处理。
  *
  * @module audit-repository
  * =============================================================================
@@ -21,11 +22,13 @@ import { auditM } from './audit-i18n.js'
 
 const logger = core.logger.child({ module: 'audit', scope: 'repository' })
 
-// =============================================================================
-// 仓库配置
-// =============================================================================
+// ─── 仓库配置 ───
 
-/** 审计日志仓库配置 */
+/**
+ * 审计日志仓库配置（内部使用）
+ *
+ * 由 audit-main.ts 在 init() 时构造并传入。
+ */
 export interface AuditRepositoryConfig {
   /** 审计日志表名 */
   tableName: string
@@ -37,20 +40,24 @@ export interface AuditRepositoryConfig {
   userNameColumn: string
 }
 
-// =============================================================================
-// 仓库
-// =============================================================================
+// ─── 仓库 ───
 
 /**
  * 审计日志仓库
  *
  * 通过 BaseCrudRepository 自动建表、字段映射与类型转换，
  * 仅在需要 JOIN / 聚合时使用自定义 SQL。
+ *
+ * @remarks 此类仅供 audit-main.ts 内部使用，不通过 index.ts 对外导出。
  */
 export class AuditLogRepository extends BaseCrudRepository<AuditLog> {
   private readonly repoConfig: AuditRepositoryConfig
   private readonly isSqlite: boolean
 
+  /**
+   * @param db - 已初始化的数据库服务实例
+   * @param config - 仓库配置（表名与用户表映射）
+   */
   constructor(db: DbFunctions, config: AuditRepositoryConfig) {
     super(db, {
       table: config.tableName,
@@ -76,13 +83,26 @@ export class AuditLogRepository extends BaseCrudRepository<AuditLog> {
    * 将 Date 转为适合当前数据库类型的 SQL 参数
    *
    * SQLite 存储 TIMESTAMP 为毫秒时间戳，其他数据库使用 ISO 字符串。
+   *
+   * @param date - 要转换的日期
+   * @returns SQLite 返回毫秒时间戳（number），其他返回 ISO 字符串
    */
   private toDateParam(date: Date): number | string {
     return this.isSqlite ? date.getTime() : date.toISOString()
   }
 
   /**
-   * 记录审计日志
+   * 记录一条审计日志
+   *
+   * @param input - 日志内容
+   * @param input.userId - 操作用户 ID（系统操作可省略）
+   * @param input.action - 操作类型（如 login / create）
+   * @param input.resource - 资源类型（如 auth / users）
+   * @param input.resourceId - 资源 ID（可选）
+   * @param input.details - 操作详情对象（可选）
+   * @param input.ipAddress - 客户端 IP（可选）
+   * @param input.userAgent - 客户端 User-Agent（可选）
+   * @returns 成功时返回创建的 AuditLog；失败时返回 LOG_FAILED
    */
   async log(input: {
     userId?: string | null
@@ -93,6 +113,8 @@ export class AuditLogRepository extends BaseCrudRepository<AuditLog> {
     ipAddress?: string | null
     userAgent?: string | null
   }): Promise<Result<AuditLog, AuditError>> {
+    logger.debug('Recording audit log', { action: input.action, resource: input.resource })
+
     const id = core.id.withPrefix('audit_')
     const now = new Date()
     const data: Record<string, unknown> = {
@@ -130,7 +152,7 @@ export class AuditLogRepository extends BaseCrudRepository<AuditLog> {
         createdAt: now,
       }
 
-      logger.debug('Audit log recorded', { id, action: input.action, resource: input.resource })
+      logger.info('Audit log recorded', { id, action: input.action, resource: input.resource })
       return ok(auditLog)
     }
     catch (error) {
@@ -144,9 +166,14 @@ export class AuditLogRepository extends BaseCrudRepository<AuditLog> {
   }
 
   /**
-   * 获取日志列表（分页，含用户名 JOIN）
+   * 分页查询日志列表（含用户名 LEFT JOIN）
+   *
+   * @param options - 过滤条件与分页参数
+   * @returns 成功时返回 { items, total }；失败时返回 QUERY_FAILED
    */
   async listWithUser(options: ListAuditLogsOptions = {}): Promise<Result<{ items: AuditLogWithUser[], total: number }, AuditError>> {
+    logger.debug('Querying audit logs', { userId: options.userId, action: options.action, resource: options.resource })
+
     const conditions: string[] = []
     const params: unknown[] = []
     const { userTable, userIdColumn, userNameColumn, tableName } = this.repoConfig
@@ -210,9 +237,15 @@ export class AuditLogRepository extends BaseCrudRepository<AuditLog> {
   }
 
   /**
-   * 获取用户最近的活动
+   * 获取指定用户的最近活动
+   *
+   * @param userId - 用户 ID
+   * @param limit - 最大返回条数，默认 10
+   * @returns 成功时返回 AuditLog 数组（按时间倒序）；失败时返回 QUERY_FAILED
    */
   async getUserRecent(userId: string, limit = 10): Promise<Result<AuditLog[], AuditError>> {
+    logger.debug('Getting user recent activity', { userId, limit })
+
     try {
       const result = await this.findAll({
         where: 'user_id = ?',
@@ -241,9 +274,14 @@ export class AuditLogRepository extends BaseCrudRepository<AuditLog> {
   }
 
   /**
-   * 清理旧日志
+   * 清理指定天数之前的旧日志
+   *
+   * @param olderThanDays - 保留天数，默认 90；清理此天数之前的日志
+   * @returns 成功时返回删除的记录数；失败时返回 CLEANUP_FAILED
    */
   async cleanupOld(olderThanDays = 90): Promise<Result<number, AuditError>> {
+    logger.debug('Cleaning up old audit logs', { olderThanDays })
+
     const cutoff = new Date()
     cutoff.setDate(cutoff.getDate() - olderThanDays)
 
@@ -277,9 +315,14 @@ export class AuditLogRepository extends BaseCrudRepository<AuditLog> {
   }
 
   /**
-   * 获取统计数据
+   * 获取指定天数内的操作统计（按 action 分组计数）
+   *
+   * @param days - 统计天数，默认 7
+   * @returns 成功时返回 AuditStatItem 数组（按 count 倒序）；失败时返回 STATS_FAILED
    */
   async getStats(days = 7): Promise<Result<AuditStatItem[], AuditError>> {
+    logger.debug('Getting audit statistics', { days })
+
     const cutoff = new Date()
     cutoff.setDate(cutoff.getDate() - days)
 
