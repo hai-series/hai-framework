@@ -140,8 +140,36 @@ export function createCrud<TItem>(
 
   /** 构建 WHERE 子句，无条件时返回空字符串 */
   const buildWhereClause = (where?: string): string => (where ? ` WHERE ${where}` : '')
-  /** 构建 ORDER BY 子句，无排序时返回空字符串 */
-  const buildOrderClause = (orderBy?: string): string => (orderBy ? ` ORDER BY ${orderBy}` : '')
+
+  /**
+   * 构建 ORDER BY 子句
+   *
+   * 对 orderBy 中的标识符逐一校验，防止 SQL 注入。
+   * 仅允许 `column`、`column ASC`、`column DESC` 格式。
+   * 校验失败时返回空字符串（静默忽略非法排序）。
+   */
+  const buildOrderClause = (orderBy?: string): string => {
+    if (!orderBy)
+      return ''
+    // 解析并校验每个排序字段
+    const parts = orderBy.split(',').map(s => s.trim()).filter(Boolean)
+    const safeParts: string[] = []
+    for (const part of parts) {
+      // 匹配 "column" 或 "column ASC/DESC" 格式
+      const match = part.match(/^(\w+)(?:\s+(ASC|DESC))?$/i)
+      if (!match)
+        continue
+      const colName = match[1]
+      const direction = match[2] ?? ''
+      const colValid = validateIdentifier(colName)
+      if (!colValid.success)
+        continue
+      safeParts.push(direction ? `${colName} ${direction.toUpperCase()}` : colName)
+    }
+    if (safeParts.length === 0)
+      return ''
+    return ` ORDER BY ${safeParts.join(', ')}`
+  }
   /** 构建 LIMIT/OFFSET 子句，仅在传入值时生效 */
   const buildLimitOffset = (limit?: number, offset?: number): string => {
     const parts: string[] = []

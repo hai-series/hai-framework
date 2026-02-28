@@ -25,6 +25,25 @@ import { aiM } from '../../ai-i18n.js'
 // ─── 辅助函数 ───
 
 /**
+ * 清理错误对象中可能包含的敏感信息
+ *
+ * OpenAI SDK 的 APIError 可能在 headers 中携带 Authorization Bearer Token，
+ * 直接作为 cause 传递会泄漏 API Key。此函数仅保留安全字段。
+ *
+ * @param error - 原始错误对象
+ * @returns 去除敏感信息的错误摘要
+ */
+function sanitizeErrorCause(error: unknown): { message: string, status?: number, code?: string } {
+  if (error instanceof OpenAI.APIError) {
+    return { message: error.message, status: error.status, code: error.code ?? undefined }
+  }
+  if (error instanceof Error) {
+    return { message: error.message }
+  }
+  return { message: String(error) }
+}
+
+/**
  * 将 OpenAI SDK 异常映射为 AIError
  *
  * 映射规则：
@@ -36,7 +55,7 @@ import { aiM } from '../../ai-i18n.js'
  * - 其他 → `INTERNAL_ERROR`
  *
  * @param error - 捕获的异常
- * @returns 统一的 AIError
+ * @returns 统一的 AIError（cause 已脱敏，不含 API Key）
  */
 function toAIError(error: unknown): AIError {
   if (error instanceof OpenAI.APIError) {
@@ -50,14 +69,14 @@ function toAIError(error: unknown): AIError {
     else if (error.status === 400) {
       code = AIErrorCode.INVALID_REQUEST
     }
-    return { code, message: error.message, cause: error }
+    return { code, message: error.message, cause: sanitizeErrorCause(error) }
   }
 
   if (error instanceof Error && error.name === 'AbortError') {
     return {
       code: AIErrorCode.TIMEOUT,
       message: aiM('ai_requestTimeout'),
-      cause: error,
+      cause: sanitizeErrorCause(error),
     }
   }
 
@@ -66,7 +85,7 @@ function toAIError(error: unknown): AIError {
     message: aiM('ai_internalError', {
       params: { error: error instanceof Error ? error.message : 'Unknown error' },
     }),
-    cause: error,
+    cause: sanitizeErrorCause(error),
   }
 }
 

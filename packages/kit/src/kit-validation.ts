@@ -10,6 +10,7 @@
 
 import type { z } from 'zod'
 import type { FormError, FormValidationResult } from './kit-types.js'
+import { getKitMessage } from './kit-i18n.js'
 import { badRequest } from './kit-response.js'
 
 // =============================================================================
@@ -107,7 +108,7 @@ export async function validateForm<T extends z.ZodType>(
     else {
       return {
         valid: false,
-        errors: [{ field: '_', message: 'Unsupported content type' }],
+        errors: [{ field: '_', message: getKitMessage('kit_unsupportedContentType') }],
       }
     }
 
@@ -122,7 +123,7 @@ export async function validateForm<T extends z.ZodType>(
   catch {
     return {
       valid: false,
-      errors: [{ field: '_', message: 'Failed to parse request body' }],
+      errors: [{ field: '_', message: getKitMessage('kit_parseBodyFailed') }],
     }
   }
 }

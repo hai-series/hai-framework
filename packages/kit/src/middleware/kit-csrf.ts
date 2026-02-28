@@ -10,6 +10,7 @@
 
 import type { CsrfConfig, Middleware } from '../kit-types.js'
 import { core } from '@h-ai/core'
+import { getKitMessage } from '../kit-i18n.js'
 
 /**
  * 生成密码学安全的 CSRF token
@@ -87,7 +88,12 @@ export function csrfMiddleware(config: CsrfConfig = {}): Middleware {
     const cookieToken = event.cookies.get(cookieName)
     const headerToken = event.request.headers.get(headerName)
 
-    if (!cookieToken || !headerToken || cookieToken !== headerToken) {
+    // 使用恒定时间比较，防止时序侧信道攻击
+    const tokensMatch = cookieToken && headerToken
+      && cookieToken.length === headerToken.length
+      && safeTokenCompare(cookieToken, headerToken)
+
+    if (!tokensMatch) {
       core.logger.warn('CSRF token validation failed', { requestId, pathname })
 
       return new Response(
@@ -95,7 +101,7 @@ export function csrfMiddleware(config: CsrfConfig = {}): Middleware {
           success: false,
           error: {
             code: 'CSRF_VALIDATION_FAILED',
-            message: 'Invalid CSRF token',
+            message: getKitMessage('kit_csrfValidationFailed'),
           },
           requestId,
         }),
@@ -108,6 +114,25 @@ export function csrfMiddleware(config: CsrfConfig = {}): Middleware {
 
     return next()
   }
+}
+
+/**
+ * 恒定时间 Token 比较
+ *
+ * 使用逐字节异或的方式比较，无论字符在哪个位置不同，
+ * 比较耗时恒定，防止时序侧信道攻击。
+ * 调用方必须先确保两个字符串长度相同。
+ *
+ * @param a - 第一个 Token
+ * @param b - 第二个 Token
+ * @returns 是否相同
+ */
+function safeTokenCompare(a: string, b: string): boolean {
+  let mismatch = 0
+  for (let i = 0; i < a.length; i++) {
+    mismatch |= a.charCodeAt(i) ^ b.charCodeAt(i)
+  }
+  return mismatch === 0
 }
 
 /**

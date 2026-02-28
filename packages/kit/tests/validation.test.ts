@@ -71,7 +71,8 @@ describe('validateForm', () => {
     const result = await validateForm(request, userSchema)
 
     expect(result.valid).toBe(false)
-    expect(result.errors.some(e => e.message.includes('Unsupported'))).toBe(true)
+    expect(result.errors.length).toBeGreaterThan(0)
+    expect(result.errors[0].field).toBe('_')
   })
 })
 

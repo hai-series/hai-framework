@@ -186,13 +186,13 @@ export function createHandle(config: HookConfig = {}): Handle {
         return onError(error, event)
       }
 
-      // 默认错误响应
+      // 默认错误响应（生产环境不暴露内部错误详情）
       return new Response(
         JSON.stringify({
           success: false,
           error: {
             code: 'INTERNAL_ERROR',
-            message: error instanceof Error ? error.message : 'Internal server error',
+            message: 'Internal server error',
           },
           requestId,
         }),
