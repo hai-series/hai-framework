@@ -7,7 +7,6 @@
  *
  * 包含：
  * - 错误类型（SchedulerError）
- * - Cron 解析类型（CronFields）
  * - 任务定义（TaskDefinition、ApiTaskConfig）
  * - 执行日志（TaskExecutionLog）
  * - 调度器接口（SchedulerFunctions）
@@ -33,28 +32,6 @@ export interface SchedulerError {
   message: string
   /** 原始错误 */
   cause?: unknown
-}
-
-// =============================================================================
-// Cron 类型
-// =============================================================================
-
-/**
- * Cron 表达式解析后的字段结构
- *
- * 标准 5 字段格式：分 时 日 月 周
- */
-export interface CronFields {
-  /** 分钟（0-59） */
-  minute: number[]
-  /** 小时（0-23） */
-  hour: number[]
-  /** 日期（1-31） */
-  dayOfMonth: number[]
-  /** 月份（1-12） */
-  month: number[]
-  /** 星期（0-6，0=周日） */
-  dayOfWeek: number[]
 }
 
 // =============================================================================
