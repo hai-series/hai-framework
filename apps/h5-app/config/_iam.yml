@@ -1,0 +1,24 @@
+# =============================================================================
+# H5 App - IAM 配置
+# =============================================================================
+
+login:
+  password: true
+  otp: false
+
+password:
+  minLength: 6
+  maxLength: 128
+
+session:
+  type: jwt
+  jwt:
+    secret: ${HAI_SESSION_SECRET:h5-app-dev-secret-change-in-production}
+    algorithm: HS256
+    accessTokenExpiresIn: 3600
+    refreshTokenExpiresIn: 604800
+
+rbac:
+  defaultRole: user
+
+seedDefaultData: true

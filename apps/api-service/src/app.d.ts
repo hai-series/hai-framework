@@ -1,8 +1,11 @@
 /// <reference types="@sveltejs/kit" />
 
-declare namespace App {
-  interface Locals {
-    requestId: string
-    userId?: string
+declare global {
+  namespace App {
+    interface Locals {
+      requestId: string
+    }
   }
 }
+
+export {}

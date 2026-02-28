@@ -37,6 +37,9 @@ logs/
 packages/*/src/**/*.d.ts
 packages/*/src/**/*.d.ts.map
 
+# 运行时数据（SQLite 数据库、上传文件等）
+data/
+
 # 临时文件
 tmp/
 temp/
