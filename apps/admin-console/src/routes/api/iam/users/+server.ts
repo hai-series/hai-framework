@@ -7,7 +7,7 @@
 import * as m from '$lib/paraglide/messages.js'
 import { toIamUserResponse } from '$lib/server/iam-helpers.js'
 import { createCreateUserSchema, ListUsersQuerySchema } from '$lib/server/schemas/index.js'
-import { audit } from '$lib/server/services/index.js'
+import { audit } from '@h-ai/audit'
 import { iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
 
@@ -80,7 +80,7 @@ export const POST = kit.handler(async ({ request, locals, getClientAddress }) =>
   const ip = getClientAddress()
   const ua = request.headers.get('user-agent') ?? undefined
   const [, userResponse] = await Promise.all([
-    audit.crud(
+    audit.helper.crud(
       locals.session?.userId ?? null,
       'create',
       'user',

@@ -4,7 +4,7 @@
  * =============================================================================
  */
 
-import { audit } from '$lib/server/services/index.js'
+import { audit } from '@h-ai/audit'
 import { core } from '@h-ai/core'
 import { iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
@@ -19,7 +19,7 @@ export const POST = kit.handler(async ({ cookies, getClientAddress, request }) =
       // 记录审计日志
       const ip = getClientAddress()
       const ua = request.headers.get('user-agent') ?? undefined
-      await audit.logout(verifyResult.data.userId, ip, ua)
+      await audit.helper.logout(verifyResult.data.userId, ip, ua)
     }
 
     // 登出（使会话失效）
