@@ -14,7 +14,7 @@
   let { data }: Props = $props()
 
   /** 格式化时间（响应式 i18n） */
-  function formatTime(isoString: string): string {
+  function formatTime(isoString: string | Date): string {
     const date = new Date(isoString)
     const now = new Date()
     const diff = now.getTime() - date.getTime()
@@ -232,7 +232,7 @@
                 {/if}
               </div>
               <div class="text-xs text-base-content/40 whitespace-nowrap">
-                {formatTime(activity.created_at)}
+                {formatTime(activity.createdAt)}
               </div>
             </div>
           {:else}

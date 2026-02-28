@@ -17,7 +17,7 @@ const ALLOWED_IMAGE_TYPES = new Set([
  * @returns 上传处理结果，成功时返回可持久化的头像 data URL
  */
 export const POST = kit.handler(async ({ cookies, request }) => {
-  const token = cookies.get('session_token')
+  const token = cookies.get('hai_session')
   if (!token) {
     return kit.response.unauthorized(m.common_error())
   }

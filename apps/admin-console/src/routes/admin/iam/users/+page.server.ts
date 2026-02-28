@@ -4,7 +4,6 @@
  * =============================================================================
  */
 
-import type { RoleWithPermissions } from '$lib/server/services/role.js'
 import type { PageServerLoad } from './$types'
 import { roleService } from '$lib/server/services/index.js'
 import { iam } from '@h-ai/iam'
@@ -45,22 +44,17 @@ export const load: PageServerLoad = async ({ url, locals }) => {
   const page = parsePositiveInt(url.searchParams.get('page'), 1)
   const pageSize = parsePositiveInt(url.searchParams.get('pageSize'), 20)
 
-  // 从 iam 获取角色列表
-  const rolesResult = await iam.authz.getAllRoles({ page: 1, pageSize: 200 })
-  const iamRoles = rolesResult.success ? rolesResult.data.items : []
-
-  // 获取带权限的角色列表（用于角色分配界面）
-  const roles = await roleService.list()
-
-  // 从 iam 获取用户列表
-  const usersResult = await iam.user.listUsers({ page, pageSize })
+  // 角色列表 + 用户列表并行获取
+  const [roles, usersResult] = await Promise.all([
+    roleService.list(),
+    iam.user.listUsers({ page, pageSize }),
+  ])
   const iamUsers = usersResult.success ? usersResult.data.items : []
   const total = usersResult.success ? usersResult.data.total : 0
 
   // 获取每个用户的角色
   const usersWithRoles: UserData[] = await Promise.all(
     iamUsers.map(async (user) => {
-      // 获取用户的角色列表
       const userRolesResult = await iam.authz.getUserRoles(user.id)
       const userRoles = userRolesResult.success ? userRolesResult.data.map(r => r.name) : []
 
@@ -84,6 +78,5 @@ export const load: PageServerLoad = async ({ url, locals }) => {
     page,
     pageSize,
     roles,
-    iamRoles,
-  } satisfies { users: UserData[], total: number, page: number, pageSize: number, roles: RoleWithPermissions[], iamRoles: typeof iamRoles }
+  }
 }

@@ -8,6 +8,7 @@
 
 import type { Handle } from '@sveltejs/kit'
 import process from 'node:process'
+import { paraglideMiddleware } from '$lib/paraglide/server.js'
 import { initApp } from '$lib/server/init.js'
 import { core } from '@h-ai/core'
 import { crypto } from '@h-ai/crypto'
@@ -32,33 +33,6 @@ async function ensureAppInitialized() {
 // Paraglide i18n Middleware
 // =============================================================================
 
-// NOTE: paraglideMiddleware 会在 Paraglide 首次编译后自动生成
-// 在 src/lib/paraglide/server.js 中
-// 首次运行前请先执行 pnpm paraglide:compile 或 pnpm build
-
-let paraglideMiddleware: ((request: Request, callback: (args: { request: Request, locale: string }) => Response | Promise<Response>) => Response | Promise<Response>) | null = null
-let paraglideMiddlewarePromise: Promise<((request: Request, callback: (args: { request: Request, locale: string }) => Response | Promise<Response>) => Response | Promise<Response>) | null> | null = null
-
-async function loadParaglideMiddleware() {
-  if (paraglideMiddleware)
-    return paraglideMiddleware
-
-  if (!paraglideMiddlewarePromise) {
-    paraglideMiddlewarePromise = import('$lib/paraglide/server.js')
-      .then((paraglideServer) => {
-        paraglideMiddleware = paraglideServer.paraglideMiddleware
-        return paraglideMiddleware
-      })
-      .catch(() => {
-        // Paraglide 尚未编译，跳过
-        core.logger.warn('[i18n] Paraglide not compiled, skipping i18n middleware')
-        return null
-      })
-  }
-
-  return paraglideMiddlewarePromise
-}
-
 /**
  * i18n Handle - 使用 Paraglide middleware 处理语言
  *
@@ -78,58 +52,31 @@ const i18nHandle: Handle = async ({ event, resolve }) => {
     return resolve(event)
   }
 
-  const middleware = await loadParaglideMiddleware()
-  if (middleware) {
-    return middleware(event.request, async ({ locale }) => {
-      event.locals.locale = locale
-      kit.i18n.setLocale(locale)
-      return resolve(event, {
-        transformPageChunk: ({ html }) => html.replace('%lang%', locale),
-      })
+  return paraglideMiddleware(event.request, async ({ locale }) => {
+    event.locals.locale = locale
+    kit.i18n.setLocale(locale)
+    return resolve(event, {
+      transformPageChunk: ({ html }) => html.replace('%lang%', locale),
     })
-  }
-
-  // Paraglide 未就绪时，使用默认语言
-  event.locals.locale = 'zh-CN'
-  kit.i18n.setLocale('zh-CN')
-  return resolve(event, {
-    transformPageChunk: ({ html }) => html.replace('%lang%', 'zh-CN'),
   })
 }
 
 /**
- * 会话验证 - 使用 IAM 模块验证 session token
+ * 会话验证 - 使用 IAM verifyToken（纯缓存，零 DB 查询）
  */
 async function validateSession(token: string) {
-  try {
-    // 使用 session token 获取当前用户
-    const userResult = await iam.user.getCurrentUser(token)
-    if (!userResult.success || !userResult.data || userResult.data.enabled === false) {
-      return null
-    }
-
-    const user = userResult.data
-
-    // 获取用户角色
-    const rolesResult = await iam.authz.getUserRoles(user.id)
-    const roles = rolesResult.success ? rolesResult.data.map(r => r.code) : []
-
-    // 获取用户权限
-    const permissionsResult = await iam.authz.getUserPermissions(user.id)
-    const permissions = permissionsResult.success ? permissionsResult.data.map(p => p.code) : []
-
-    return {
-      userId: user.id,
-      username: user.username,
-      displayName: user.displayName,
-      avatarUrl: user.avatarUrl,
-      roles,
-      permissions,
-    }
-  }
-  catch (error) {
-    core.logger.error('Session validation failed:', { error })
+  const result = await iam.auth.verifyToken(token)
+  if (!result.success)
     return null
+
+  const s = result.data
+  return {
+    userId: s.userId,
+    username: s.username,
+    displayName: s.displayName,
+    avatarUrl: s.avatarUrl,
+    roles: s.roleCodes,
+    permissions: s.permissionCodes,
   }
 }
 

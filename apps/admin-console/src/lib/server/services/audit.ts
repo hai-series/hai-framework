@@ -2,22 +2,29 @@
  * =============================================================================
  * Admin Console - 审计日志服务
  * =============================================================================
+ *
+ * 基于 @h-ai/db BaseCrudRepository 实现审计日志的持久化与查询。
+ * =============================================================================
  */
 
-import * as m from '$lib/paraglide/messages.js'
+import type { DbFunctions } from '@h-ai/db'
 import { core } from '@h-ai/core'
-import { getDb } from '../init.js'
+import { BaseCrudRepository } from '@h-ai/db'
+
+// =============================================================================
+// 类型定义
+// =============================================================================
 
 export interface AuditLog {
   id: string
-  user_id: string | null
+  userId: string | null
   action: string
   resource: string
-  resource_id: string | null
+  resourceId: string | null
   details: string | null
-  ip_address: string | null
-  user_agent: string | null
-  created_at: string
+  ipAddress: string | null
+  userAgent: string | null
+  createdAt: Date
 }
 
 export interface AuditLogWithUser extends AuditLog {
@@ -44,60 +51,77 @@ export interface ListAuditLogsOptions {
   pageSize?: number
 }
 
+// =============================================================================
+// 仓库
+// =============================================================================
+
 /**
- * 审计日志服务
+ * 审计日志仓库
+ *
+ * 通过 BaseCrudRepository 自动建表、字段映射与类型转换，
+ * 仅在需要 JOIN / 聚合时使用自定义 SQL。
  */
-export const auditService = {
+class AuditLogRepository extends BaseCrudRepository<AuditLog> {
+  constructor(db: DbFunctions) {
+    super(db, {
+      table: 'audit_logs',
+      idColumn: 'id',
+      generateId: () => core.id.withPrefix('audit_'),
+      fields: [
+        { fieldName: 'id', columnName: 'id', def: { type: 'TEXT', primaryKey: true }, select: true, create: true, update: false },
+        { fieldName: 'userId', columnName: 'user_id', def: { type: 'TEXT' }, select: true, create: true, update: false },
+        { fieldName: 'action', columnName: 'action', def: { type: 'TEXT', notNull: true }, select: true, create: true, update: false },
+        { fieldName: 'resource', columnName: 'resource', def: { type: 'TEXT', notNull: true }, select: true, create: true, update: false },
+        { fieldName: 'resourceId', columnName: 'resource_id', def: { type: 'TEXT' }, select: true, create: true, update: false },
+        { fieldName: 'details', columnName: 'details', def: { type: 'JSON' }, select: true, create: true, update: false },
+        { fieldName: 'ipAddress', columnName: 'ip_address', def: { type: 'TEXT' }, select: true, create: true, update: false },
+        { fieldName: 'userAgent', columnName: 'user_agent', def: { type: 'TEXT' }, select: true, create: true, update: false },
+        { fieldName: 'createdAt', columnName: 'created_at', def: { type: 'TIMESTAMP' }, select: true, create: true, update: false },
+      ],
+    })
+  }
+
   /**
    * 记录审计日志
    */
   async log(input: CreateAuditLogInput): Promise<AuditLog> {
-    const db = getDb()
     const id = core.id.withPrefix('audit_')
-
-    const insertResult = await db.sql.execute(
-      `INSERT INTO audit_logs (id, user_id, action, resource, resource_id, details, ip_address, user_agent, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
-        id,
-        input.userId ?? null,
-        input.action,
-        input.resource,
-        input.resourceId ?? null,
-        input.details ? JSON.stringify(input.details) : null,
-        input.ipAddress ?? null,
-        input.userAgent ?? null,
-        new Date().toISOString(),
-      ],
-    )
-    if (!insertResult.success) {
-      throw new Error(m.api_audit_log_failed({ message: insertResult.error.message }))
+    const data: Record<string, unknown> = {
+      id,
+      userId: input.userId ?? null,
+      action: input.action,
+      resource: input.resource,
+      resourceId: input.resourceId ?? null,
+      details: input.details ?? null,
+      ipAddress: input.ipAddress ?? null,
+      userAgent: input.userAgent ?? null,
     }
 
-    const log = await this.getById(id)
-    if (!log) {
-      throw new Error(m.api_audit_log_retrieve_failed())
+    const createResult = await this.create(data)
+    if (!createResult.success) {
+      throw new Error(createResult.error.message)
     }
-    return log
-  },
+
+    // 所有调用方（audit.*）均不使用返回值，直接构造即可
+    return {
+      id,
+      userId: input.userId ?? null,
+      action: input.action,
+      resource: input.resource,
+      resourceId: input.resourceId ?? null,
+      details: input.details ? JSON.stringify(input.details) : null,
+      ipAddress: input.ipAddress ?? null,
+      userAgent: input.userAgent ?? null,
+      createdAt: new Date(),
+    }
+  }
 
   /**
-   * 根据 ID 获取日志
-   */
-  async getById(id: string): Promise<AuditLog | null> {
-    const db = getDb()
-    const logsResult = await db.sql.query<AuditLog>(`SELECT * FROM audit_logs WHERE id = ?`, [id])
-    return logsResult.success && logsResult.data.length ? logsResult.data[0] : null
-  },
-
-  /**
-   * 获取日志列表（分页）
+   * 获取日志列表（分页，含用户名 JOIN）
+   *
+   * 使用 DataOperations.queryPage 自动处理 COUNT + LIMIT/OFFSET。
    */
   async list(options: ListAuditLogsOptions = {}): Promise<{ items: AuditLogWithUser[], total: number }> {
-    const db = getDb()
-    const { page = 1, pageSize = 20 } = options
-    const offset = (page - 1) * pageSize
-
     const conditions: string[] = []
     const params: unknown[] = []
 
@@ -124,57 +148,59 @@ export const auditService = {
 
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
 
-    // 获取总数
-    const countResult = await db.sql.query<{ count: number }>(`SELECT COUNT(*) as count FROM audit_logs a ${whereClause}`, params)
-    const total = countResult.success ? (countResult.data[0]?.count ?? 0) : 0
-
-    // 获取分页数据
-    const itemsResult = await db.sql.query<AuditLogWithUser>(
-      `SELECT a.*, u.username
+    const result = await this.sql().queryPage<AuditLogWithUser>({
+      sql: `SELECT a.id, a.user_id AS userId, a.action, a.resource, a.resource_id AS resourceId,
+              a.details, a.ip_address AS ipAddress, a.user_agent AS userAgent,
+              a.created_at AS createdAt, u.username
        FROM audit_logs a
        LEFT JOIN users u ON a.user_id = u.id
        ${whereClause}
-       ORDER BY a.created_at DESC
-       LIMIT ? OFFSET ?`,
-      [...params, pageSize, offset],
-    )
+       ORDER BY a.created_at DESC`,
+      params,
+      pagination: { page: options.page, pageSize: options.pageSize },
+      overrides: { defaultPageSize: 20 },
+    })
 
-    return { items: itemsResult.success ? itemsResult.data : [], total }
-  },
+    return result.success
+      ? { items: result.data.items, total: result.data.total }
+      : { items: [], total: 0 }
+  }
 
   /**
    * 获取用户最近的活动
    */
   async getUserRecent(userId: string, limit = 10): Promise<AuditLog[]> {
-    const db = getDb()
-    const result = await db.sql.query<AuditLog>(
-      `SELECT * FROM audit_logs WHERE user_id = ? ORDER BY created_at DESC LIMIT ?`,
-      [userId, limit],
-    )
+    const result = await this.findAll({
+      where: 'user_id = ?',
+      params: [userId],
+      orderBy: 'created_at DESC',
+      limit,
+    })
     return result.success ? result.data : []
-  },
+  }
 
   /**
    * 清理旧日志
    */
   async cleanup(olderThanDays = 90): Promise<number> {
-    const db = getDb()
     const cutoff = new Date()
     cutoff.setDate(cutoff.getDate() - olderThanDays)
 
-    const result = await db.sql.execute(`DELETE FROM audit_logs WHERE created_at < ?`, [cutoff.toISOString()])
+    const result = await this.sql().execute(
+      `DELETE FROM audit_logs WHERE created_at < ?`,
+      [cutoff.toISOString()],
+    )
     return result.success ? result.data.changes : 0
-  },
+  }
 
   /**
    * 获取统计数据
    */
   async getStats(days = 7): Promise<{ action: string, count: number }[]> {
-    const db = getDb()
     const cutoff = new Date()
     cutoff.setDate(cutoff.getDate() - days)
 
-    const result = await db.sql.query<{ action: string, count: number }>(
+    const result = await this.sql().query<{ action: string, count: number }>(
       `SELECT action, COUNT(*) as count
        FROM audit_logs
        WHERE created_at >= ?
@@ -183,7 +209,41 @@ export const auditService = {
       [cutoff.toISOString()],
     )
     return result.success ? result.data : []
-  },
+  }
+}
+
+// =============================================================================
+// 单例与门面
+// =============================================================================
+
+let _repo: AuditLogRepository | null = null
+
+/**
+ * 初始化审计日志仓库（在 initApp 中调用）
+ */
+export function initAuditRepository(db: DbFunctions): void {
+  _repo = new AuditLogRepository(db)
+}
+
+/**
+ * 获取审计日志仓库实例
+ */
+function getRepo(): AuditLogRepository {
+  if (!_repo) {
+    throw new Error('AuditLogRepository not initialized. Call initAuditRepository(db) first.')
+  }
+  return _repo
+}
+
+/**
+ * 审计日志服务（供页面 load 函数使用）
+ */
+export const auditService = {
+  log: (input: CreateAuditLogInput) => getRepo().log(input),
+  list: (options?: ListAuditLogsOptions) => getRepo().list(options),
+  getUserRecent: (userId: string, limit?: number) => getRepo().getUserRecent(userId, limit),
+  cleanup: (olderThanDays?: number) => getRepo().cleanup(olderThanDays),
+  getStats: (days?: number) => getRepo().getStats(days),
 }
 
 /**

@@ -8,7 +8,7 @@ import { iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
 
 export const GET = kit.handler(async ({ cookies }) => {
-  const token = cookies.get('session_token')
+  const token = cookies.get('hai_session')
 
   if (!token) {
     return kit.response.unauthorized()

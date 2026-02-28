@@ -5,6 +5,7 @@
  */
 
 import * as m from '$lib/paraglide/messages.js'
+import { toIamUserResponse } from '$lib/server/iam-helpers.js'
 import { createCreateUserSchema, ListUsersQuerySchema } from '$lib/server/schemas/index.js'
 import { audit } from '$lib/server/services/index.js'
 import { iam } from '@h-ai/iam'
@@ -36,23 +37,7 @@ export const GET = kit.handler(async ({ url, locals }) => {
   const { items, total } = usersResult.data
 
   // 获取每个用户的角色
-  const users = await Promise.all(
-    items.map(async (user) => {
-      const rolesResult = await iam.authz.getUserRoles(user.id)
-      const roles = rolesResult.success ? rolesResult.data.map(r => r.code) : []
-      return {
-        id: user.id,
-        username: user.username,
-        email: user.email,
-        display_name: user.displayName,
-        avatar: user.avatarUrl,
-        status: user.enabled ? 'active' : 'inactive',
-        roles,
-        created_at: user.createdAt,
-        updated_at: user.updatedAt,
-      }
-    }),
-  )
+  const users = await Promise.all(items.map(toIamUserResponse))
 
   return kit.response.ok({ users, total, page, pageSize })
 })
@@ -91,32 +76,21 @@ export const POST = kit.handler(async ({ request, locals, getClientAddress }) =>
     }
   }
 
-  // 记录审计日志
+  // 审计日志 + 用户信息并行获取
   const ip = getClientAddress()
   const ua = request.headers.get('user-agent') ?? undefined
-  await audit.crud(
-    locals.session?.userId ?? null,
-    'create',
-    'user',
-    user.id,
-    { username, email },
-    ip,
-    ua,
-  )
+  const [, userResponse] = await Promise.all([
+    audit.crud(
+      locals.session?.userId ?? null,
+      'create',
+      'user',
+      user.id,
+      { username, email },
+      ip,
+      ua,
+    ),
+    toIamUserResponse(user),
+  ])
 
-  // 获取用户角色
-  const rolesResult = await iam.authz.getUserRoles(user.id)
-  const userRoles = rolesResult.success ? rolesResult.data.map(r => r.code) : []
-
-  return kit.response.ok({
-    id: user.id,
-    username: user.username,
-    email: user.email,
-    display_name: user.displayName,
-    avatar: user.avatarUrl,
-    status: user.enabled ? 'active' : 'inactive',
-    roles: userRoles,
-    created_at: user.createdAt,
-    updated_at: user.updatedAt,
-  })
+  return kit.response.ok(userResponse)
 })

@@ -1,24 +1,28 @@
 import * as m from '$lib/paraglide/messages.js'
+import { normalizeUniqueConstraintError } from '$lib/server/iam-helpers.js'
 import { UpdateProfileSchema } from '$lib/server/schemas/index.js'
 import { iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
 
 /**
- * 将底层唯一键冲突错误映射为稳定的用户可读提示。
- *
- * @param message 底层错误消息
- * @returns 用户可读错误提示
+ * 构造含角色列表的用户响应对象（GET / PUT 共用）。
  */
-function normalizeProfileUpdateError(message: string | undefined): string {
-  const lowerMessage = message?.toLowerCase() ?? ''
-  if (lowerMessage.includes('unique constraint') || lowerMessage.includes('duplicate')) {
-    return m.api_auth_username_or_email_taken()
+async function toUserResponse(user: { id: string, username: string, email?: string | null, displayName?: string | null, phone?: string | null, avatarUrl?: string | null }) {
+  const rolesResult = await iam.authz.getUserRoles(user.id)
+  const roles = rolesResult.success ? rolesResult.data.map(r => r.code) : []
+  return {
+    id: user.id,
+    username: user.username,
+    email: user.email ?? '',
+    display_name: user.displayName ?? '',
+    phone: user.phone ?? '',
+    avatar: user.avatarUrl ?? '',
+    roles,
   }
-  return message ?? m.common_error()
 }
 
 export const GET = kit.handler(async ({ cookies }) => {
-  const token = cookies.get('session_token')
+  const token = cookies.get('hai_session')
   if (!token) {
     return kit.response.unauthorized(m.common_error())
   }
@@ -28,20 +32,7 @@ export const GET = kit.handler(async ({ cookies }) => {
     return kit.response.unauthorized(m.common_error())
   }
 
-  const rolesResult = await iam.authz.getUserRoles(userResult.data.id)
-  const roles = rolesResult.success ? rolesResult.data.map(r => r.code) : []
-
-  return kit.response.ok({
-    user: {
-      id: userResult.data.id,
-      username: userResult.data.username,
-      email: userResult.data.email ?? '',
-      display_name: userResult.data.displayName ?? '',
-      phone: userResult.data.phone ?? '',
-      avatar: userResult.data.avatarUrl ?? '',
-      roles,
-    },
-  })
+  return kit.response.ok({ user: await toUserResponse(userResult.data) })
 })
 
 /**
@@ -50,7 +41,7 @@ export const GET = kit.handler(async ({ cookies }) => {
  * @returns 更新结果，成功返回最新用户信息
  */
 export const PUT = kit.handler(async ({ cookies, request }) => {
-  const token = cookies.get('session_token')
+  const token = cookies.get('hai_session')
   if (!token) {
     return kit.response.unauthorized(m.common_error())
   }
@@ -89,7 +80,7 @@ export const PUT = kit.handler(async ({ cookies, request }) => {
 
   const updateResult = await iam.user.updateCurrentUser(token, patch)
   if (!updateResult.success) {
-    const normalizedError = normalizeProfileUpdateError(updateResult.error.message)
+    const normalizedError = normalizeUniqueConstraintError(updateResult.error.message, m.common_error())
     return kit.response.badRequest(
       normalizedError,
       undefined,
@@ -97,18 +88,5 @@ export const PUT = kit.handler(async ({ cookies, request }) => {
     )
   }
 
-  const rolesResult = await iam.authz.getUserRoles(updateResult.data.id)
-  const roles = rolesResult.success ? rolesResult.data.map(r => r.code) : []
-
-  return kit.response.ok({
-    user: {
-      id: updateResult.data.id,
-      username: updateResult.data.username,
-      email: updateResult.data.email ?? '',
-      display_name: updateResult.data.displayName ?? '',
-      phone: updateResult.data.phone ?? '',
-      avatar: updateResult.data.avatarUrl ?? '',
-      roles,
-    },
-  })
+  return kit.response.ok({ user: await toUserResponse(updateResult.data) })
 })

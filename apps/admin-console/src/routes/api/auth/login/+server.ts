@@ -36,17 +36,15 @@ export const POST = kit.handler(async ({ request, cookies, getClientAddress }) =
     maxAge: iam.config?.session?.maxAge,
   })
 
-  // 记录审计日志
+  // 审计日志 + 角色权限并行获取
   const ip = getClientAddress()
   const ua = request.headers.get('user-agent') ?? undefined
-  await audit.login(user.id, ip, ua)
-
-  // 获取用户角色
-  const rolesResult = await iam.authz.getUserRoles(user.id)
+  const [, rolesResult, permissionsResult] = await Promise.all([
+    audit.login(user.id, ip, ua),
+    iam.authz.getUserRoles(user.id),
+    iam.authz.getUserPermissions(user.id),
+  ])
   const roles = rolesResult.success ? rolesResult.data.map(r => r.code) : []
-
-  // 获取用户权限
-  const permissionsResult = await iam.authz.getUserPermissions(user.id)
   const permissions = permissionsResult.success ? permissionsResult.data.map(p => p.code) : []
 
   return kit.response.ok({
