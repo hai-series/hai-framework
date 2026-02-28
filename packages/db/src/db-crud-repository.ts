@@ -88,8 +88,10 @@ export abstract class BaseCrudRepository<TItem> implements CrudRepository<TItem>
   private readonly createColumns: string[]
   /** 可更新列 */
   private readonly updateColumns: string[]
-  /** 当前数据库类型（用于值转换） */
-  private readonly dbType?: DbConfig['type']
+  /** 当前数据库类型（延迟读取，确保获取初始化后的值） */
+  private get dbType(): DbConfig['type'] | undefined {
+    return this.db.config?.type
+  }
 
   /**
    * 创建 BaseCrudRepository
@@ -101,7 +103,6 @@ export abstract class BaseCrudRepository<TItem> implements CrudRepository<TItem>
    */
   protected constructor(db: DbFunctions, config: BaseCrudRepositoryConfig<TItem>) {
     this.db = db
-    this.dbType = db.config?.type
     this.fields = config.fields
     this.idColumn = config.idColumn ?? 'id'
     this.idField = config.idField ?? this.resolveIdField(config.fields, this.idColumn)
