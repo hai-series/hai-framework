@@ -48,7 +48,7 @@ import { err, ok } from '@h-ai/core'
 import { DbErrorCode } from '../db-config.js'
 import { createCrud } from '../db-crud-kernel.js'
 import { dbM } from '../db-i18n.js'
-import { buildPaginatedResult, normalizePagination } from '../db-pagination.js'
+import { buildPaginatedResult, normalizePagination, parseCount } from '../db-pagination.js'
 import { escapeSqlString, validateIdentifier, validateIdentifiers } from '../db-security.js'
 
 // =============================================================================
@@ -194,34 +194,6 @@ export function createMysqlProvider(): DbProvider {
       })
     }
     return ok(pool)
-  }
-
-  /**
-   * 解析统计数量
-   *
-   * 兼容不同 SQL 别名（total、__total__、cnt）和数据类型（bigint）。
-   *
-   * @param row - 查询返回的记录
-   * @returns 解析后的数值
-   */
-  function parseCount(row: Record<string, unknown> | null | undefined): number {
-    if (!row) {
-      return 0
-    }
-    if ('total' in row) {
-      return Number(row.total ?? 0)
-    }
-    if ('__total__' in row) {
-      return Number(row.__total__ ?? 0)
-    }
-    if ('cnt' in row) {
-      return Number(row.cnt ?? 0)
-    }
-    const value = Object.values(row)[0]
-    if (typeof value === 'bigint') {
-      return Number(value)
-    }
-    return Number(value ?? 0)
   }
 
   /**
@@ -979,11 +951,22 @@ export function createMysqlProvider(): DbProvider {
   /**
    * 关闭连接池
    */
-  const close: DbProvider['close'] = async (): Promise<void> => {
+  const close: DbProvider['close'] = async (): Promise<Result<void, DbError>> => {
     if (pool) {
-      await pool.end()
+      try {
+        await pool.end()
+      }
+      catch (error) {
+        pool = null
+        return err({
+          code: DbErrorCode.CONNECTION_FAILED,
+          message: dbM('db_mysqlConnectionFailed', { params: { error: String(error) } }),
+          cause: error,
+        })
+      }
       pool = null
     }
+    return ok(undefined)
   }
 
   /**

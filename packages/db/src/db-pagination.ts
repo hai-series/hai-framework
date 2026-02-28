@@ -155,3 +155,48 @@ export const pagination = {
   normalize: normalizePagination,
   build: buildPaginatedResult,
 }
+
+// =============================================================================
+// 计数解析
+// =============================================================================
+
+/**
+ * 解析 COUNT 查询返回值
+ *
+ * 兼容不同驱动/SQL 的列别名与返回类型（`total` / `__total__` / `cnt` / 首列值）。
+ * 支持 bigint 类型的安全转换。
+ *
+ * @param row - 查询返回行（可能为 null/undefined）
+ * @returns 解析后的数值，无数据时返回 0
+ *
+ * @example
+ * ```ts
+ * parseCount({ cnt: 42 })   // 42
+ * parseCount({ total: 10 }) // 10
+ * parseCount(null)           // 0
+ * ```
+ */
+export function parseCount(row: Record<string, unknown> | null | undefined): number {
+  if (!row) {
+    // 无数据默认 0
+    return 0
+  }
+  if ('total' in row) {
+    // 常见别名 total
+    return Number(row.total ?? 0)
+  }
+  if ('__total__' in row) {
+    // 某些驱动使用 __total__
+    return Number(row.__total__ ?? 0)
+  }
+  if ('cnt' in row) {
+    // 默认别名 cnt
+    return Number(row.cnt ?? 0)
+  }
+  const value = Object.values(row)[0]
+  if (typeof value === 'bigint') {
+    // SQLite/PG bigint 处理
+    return Number(value)
+  }
+  return Number(value ?? 0)
+}
