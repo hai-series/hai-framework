@@ -60,11 +60,14 @@ describe('audit.getStats', () => {
     }
   })
 
-  it('统计 0 天（未来时间）应不返回任何记录', async () => {
-    // 0 天 = cutoff 就是当前时间，所有记录都在 cutoff 之前（几乎同时）
-    // 由于时间精度问题，这个测试验证 days 参数起作用
+  it('统计天数为 0 应返回空或极少结果', async () => {
+    // days=0 → cutoff 就是当前时间，几乎所有记录都在 cutoff 之前（几乎同时插入）
     const result = await audit.getStats(0)
     expect(result.success).toBe(true)
+    // 由于时间精度，结果可能为空或包含极少记录
+    if (result.success) {
+      expect(result.data.length).toBeLessThanOrEqual(3)
+    }
   })
 
   it('无记录时应返回空数组', async () => {
