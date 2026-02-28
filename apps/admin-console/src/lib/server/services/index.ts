@@ -4,10 +4,10 @@
  * =============================================================================
  *
  * 注意：IAM 相关服务（用户、会话）已迁移到 @h-ai/iam 模块
+ * 注意：审计日志服务已迁移到 @h-ai/audit 模块
  * 本文件只导出 admin-console 业务服务
  */
 
-export * from './audit.js'
 export * from './permission.js'
 export * from './role.js'
 
