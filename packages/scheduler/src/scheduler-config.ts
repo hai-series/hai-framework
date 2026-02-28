@@ -6,7 +6,7 @@
  * 本文件定义定时任务模块的配置结构，使用 Zod 进行运行时校验。
  *
  * 包含：
- * - 错误码常量（10000-10999 范围）
+ * - 错误码常量（11000-11999 范围）
  * - 调度器配置 Schema
  *
  * @module scheduler-config
@@ -22,7 +22,7 @@ import { z } from 'zod'
 /**
  * 定时任务模块错误码常量
  *
- * 数值范围 10000–10999，与其他模块互不冲突。
+ * 数值范围 11000–11999，与其他模块互不冲突。
  * 可用于 `Result.error.code` 的精确匹配与分支处理。
  *
  * @example
@@ -36,27 +36,27 @@ import { z } from 'zod'
  */
 export const SchedulerErrorCode = {
   /** 模块未初始化（调用 init 前使用了其他 API） */
-  NOT_INITIALIZED: 10000,
+  NOT_INITIALIZED: 11000,
   /** 初始化失败（配置校验或日志表创建异常） */
-  INIT_FAILED: 10001,
+  INIT_FAILED: 11001,
   /** 任务未找到（taskId 不在注册表中） */
-  TASK_NOT_FOUND: 10002,
+  TASK_NOT_FOUND: 11002,
   /** 任务已存在（重复注册同一 taskId） */
-  TASK_ALREADY_EXISTS: 10003,
+  TASK_ALREADY_EXISTS: 11003,
   /** 无效的 cron 表达式（croner 解析失败） */
-  INVALID_CRON: 10004,
+  INVALID_CRON: 11004,
   /** 任务执行失败（通用，含无效配置等） */
-  EXECUTION_FAILED: 10005,
+  EXECUTION_FAILED: 11005,
   /** JS 处理函数执行失败（handler 抛出异常） */
-  JS_EXECUTION_FAILED: 10006,
+  JS_EXECUTION_FAILED: 11006,
   /** API 调用失败（网络错误或非 2xx 响应） */
-  API_EXECUTION_FAILED: 10007,
+  API_EXECUTION_FAILED: 11007,
   /** 数据库操作失败（日志写入或查询异常） */
-  DB_SAVE_FAILED: 10008,
+  DB_SAVE_FAILED: 11008,
   /** 调度器已在运行（重复调用 start） */
-  ALREADY_RUNNING: 10009,
+  ALREADY_RUNNING: 11009,
   /** 调度器未运行（未启动时调用 stop） */
-  NOT_RUNNING: 10010,
+  NOT_RUNNING: 11010,
 } as const
 
 /** 定时任务错误码类型 */
