@@ -1,0 +1,279 @@
+/**
+ * =============================================================================
+ * @h-ai/scheduler - 类型定义
+ * =============================================================================
+ *
+ * 本文件定义定时任务模块的核心接口和类型。
+ *
+ * 包含：
+ * - 错误类型（SchedulerError）
+ * - Cron 解析类型（CronFields）
+ * - 任务定义（TaskDefinition、ApiTaskConfig）
+ * - 执行日志（TaskExecutionLog）
+ * - 调度器接口（SchedulerFunctions）
+ *
+ * @module scheduler-types
+ * =============================================================================
+ */
+
+import type { Result } from '@h-ai/core'
+import type { SchedulerConfig, SchedulerConfigInput, SchedulerErrorCodeType } from './scheduler-config.js'
+
+// =============================================================================
+// 错误类型
+// =============================================================================
+
+/**
+ * 定时任务错误接口
+ */
+export interface SchedulerError {
+  /** 错误码 */
+  code: SchedulerErrorCodeType
+  /** 错误消息 */
+  message: string
+  /** 原始错误 */
+  cause?: unknown
+}
+
+// =============================================================================
+// Cron 类型
+// =============================================================================
+
+/**
+ * Cron 表达式解析后的字段结构
+ *
+ * 标准 5 字段格式：分 时 日 月 周
+ */
+export interface CronFields {
+  /** 分钟（0-59） */
+  minute: number[]
+  /** 小时（0-23） */
+  hour: number[]
+  /** 日期（1-31） */
+  dayOfMonth: number[]
+  /** 月份（1-12） */
+  month: number[]
+  /** 星期（0-6，0=周日） */
+  dayOfWeek: number[]
+}
+
+// =============================================================================
+// 任务定义
+// =============================================================================
+
+/**
+ * API 任务配置
+ *
+ * @example
+ * ```ts
+ * const apiConfig: ApiTaskConfig = {
+ *   url: 'https://api.example.com/webhook',
+ *   method: 'POST',
+ *   headers: { 'Authorization': 'Bearer token' },
+ *   body: { event: 'scheduled' },
+ * }
+ * ```
+ */
+export interface ApiTaskConfig {
+  /** 请求 URL */
+  url: string
+  /** HTTP 方法（默认 GET） */
+  method?: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH'
+  /** 请求头 */
+  headers?: Record<string, string>
+  /** 请求体（POST/PUT/PATCH 时使用） */
+  body?: unknown
+  /** 超时时间，单位毫秒（默认 30000） */
+  timeout?: number
+}
+
+/**
+ * JS 任务处理函数
+ *
+ * 接收任务 ID 作为参数，返回任意结果。
+ */
+export type JsTaskHandler = (taskId: string) => unknown | Promise<unknown>
+
+/**
+ * 任务定义
+ *
+ * @example
+ * ```ts
+ * // JS 函数任务
+ * const jsTask: TaskDefinition = {
+ *   id: 'cleanup',
+ *   name: '清理过期数据',
+ *   cron: '0 2 * * *',  // 每天凌晨 2 点
+ *   type: 'js',
+ *   handler: async () => { await cleanupExpiredData() },
+ * }
+ *
+ * // API 调用任务
+ * const apiTask: TaskDefinition = {
+ *   id: 'health-check',
+ *   name: '健康检查',
+ *   cron: '* / 5 * * * *',  // 每 5 分钟
+ *   type: 'api',
+ *   api: { url: 'https://api.example.com/health', method: 'GET' },
+ * }
+ * ```
+ */
+export type TaskDefinition = TaskDefinitionJs | TaskDefinitionApi
+
+/** JS 类型任务定义 */
+export interface TaskDefinitionJs {
+  /** 任务唯一标识 */
+  id: string
+  /** 任务名称 */
+  name: string
+  /** cron 表达式（标准 5 字段：分 时 日 月 周） */
+  cron: string
+  /** 任务类型 */
+  type: 'js'
+  /** JS 处理函数 */
+  handler: JsTaskHandler
+  /** 是否启用（默认 true） */
+  enabled?: boolean
+}
+
+/** API 类型任务定义 */
+export interface TaskDefinitionApi {
+  /** 任务唯一标识 */
+  id: string
+  /** 任务名称 */
+  name: string
+  /** cron 表达式（标准 5 字段：分 时 日 月 周） */
+  cron: string
+  /** 任务类型 */
+  type: 'api'
+  /** API 调用配置 */
+  api: ApiTaskConfig
+  /** 是否启用（默认 true） */
+  enabled?: boolean
+}
+
+// =============================================================================
+// 执行日志
+// =============================================================================
+
+/** 执行状态 */
+export type ExecutionStatus = 'success' | 'failed'
+
+/**
+ * 任务执行日志
+ */
+export interface TaskExecutionLog {
+  /** 日志 ID */
+  id: number
+  /** 任务 ID */
+  taskId: string
+  /** 任务名称 */
+  taskName: string
+  /** 任务类型 */
+  taskType: 'js' | 'api'
+  /** 执行状态 */
+  status: ExecutionStatus
+  /** 执行结果（JSON 字符串） */
+  result: string | null
+  /** 错误信息 */
+  error: string | null
+  /** 开始时间（Unix 时间戳，毫秒） */
+  startedAt: number
+  /** 结束时间（Unix 时间戳，毫秒） */
+  finishedAt: number
+  /** 执行耗时（毫秒） */
+  duration: number
+}
+
+// =============================================================================
+// 日志查询
+// =============================================================================
+
+/**
+ * 执行日志查询选项
+ */
+export interface LogQueryOptions {
+  /** 按任务 ID 过滤 */
+  taskId?: string
+  /** 按状态过滤 */
+  status?: ExecutionStatus
+  /** 最大返回条数（默认 50） */
+  limit?: number
+  /** 偏移量（默认 0） */
+  offset?: number
+}
+
+// =============================================================================
+// 调度器接口
+// =============================================================================
+
+/**
+ * 调度器函数接口
+ *
+ * @example
+ * ```ts
+ * import { scheduler } from '@h-ai/scheduler'
+ *
+ * // 初始化
+ * await scheduler.init({ enableDb: true })
+ *
+ * // 注册任务
+ * scheduler.register({
+ *   id: 'cleanup',
+ *   name: '清理过期数据',
+ *   cron: '0 2 * * *',
+ *   type: 'js',
+ *   handler: async () => { ... },
+ * })
+ *
+ * // 启动调度器
+ * scheduler.start()
+ *
+ * // 手动触发任务
+ * await scheduler.trigger('cleanup')
+ *
+ * // 查询执行日志
+ * const logs = await scheduler.getLogs({ taskId: 'cleanup', limit: 10 })
+ *
+ * // 停止并关闭
+ * scheduler.stop()
+ * await scheduler.close()
+ * ```
+ */
+export interface SchedulerFunctions {
+  /** 初始化调度器 */
+  init: (config?: SchedulerConfigInput) => Promise<Result<void, SchedulerError>>
+
+  /** 注册任务 */
+  register: (task: TaskDefinition) => Result<void, SchedulerError>
+
+  /** 注销任务 */
+  unregister: (taskId: string) => Result<void, SchedulerError>
+
+  /** 启动调度 */
+  start: () => Result<void, SchedulerError>
+
+  /** 停止调度 */
+  stop: () => Result<void, SchedulerError>
+
+  /** 手动触发任务 */
+  trigger: (taskId: string) => Promise<Result<TaskExecutionLog, SchedulerError>>
+
+  /** 查询执行日志（需启用 DB） */
+  getLogs: (options?: LogQueryOptions) => Promise<Result<TaskExecutionLog[], SchedulerError>>
+
+  /** 获取已注册任务列表 */
+  readonly tasks: ReadonlyMap<string, TaskDefinition>
+
+  /** 当前配置 */
+  readonly config: SchedulerConfig | null
+
+  /** 是否已初始化 */
+  readonly isInitialized: boolean
+
+  /** 调度器是否正在运行 */
+  readonly isRunning: boolean
+
+  /** 关闭调度器 */
+  close: () => Promise<void>
+}
