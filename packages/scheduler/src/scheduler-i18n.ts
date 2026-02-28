@@ -28,10 +28,16 @@ import messagesZhCN from '../messages/zh-CN.json'
 type SchedulerMessageKey = keyof typeof messagesZhCN
 
 /**
- * 获取定时任务模块文案。
+ * 获取定时任务模块文案
+ *
  * @param key - 文案 Key
  * @param options - 插值参数与格式化选项
  * @returns 本地化后的文案字符串
+ *
+ * @example
+ * ```ts
+ * schedulerM('scheduler_taskNotFound', { params: { taskId: 'my-task' } })
+ * ```
  */
 export const schedulerM = core.i18n.createMessageGetter<SchedulerMessageKey>({
   'zh-CN': messagesZhCN,
