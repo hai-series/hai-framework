@@ -10,10 +10,10 @@
  * =============================================================================
  */
 
-import type { CookieProxyConfig } from '../src/hooks/cookie-proxy.js'
+import type { CookieProxyConfig } from '../src/hooks/kit-cookie-proxy.js'
 import { Buffer } from 'node:buffer'
 import { describe, expect, it, vi } from 'vitest'
-import { createEncryptedCookieProxy } from '../src/hooks/cookie-proxy.js'
+import { createEncryptedCookieProxy } from '../src/hooks/kit-cookie-proxy.js'
 
 // ─── Mock Cookies ───
 

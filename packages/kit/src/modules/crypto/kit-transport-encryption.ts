@@ -11,7 +11,7 @@
  *
  * @example
  * ```ts
- * import { createTransportEncryption } from './transport-encryption.js'
+ * import { createTransportEncryption } from './kit-transport-encryption.js'
  * import { crypto } from '@h-ai/crypto'
  *
  * const te = createTransportEncryption({
@@ -36,7 +36,7 @@ import type {
   TransportCryptoServiceLike,
   TransportEncryptionManager,
   TransportKeyPair,
-} from './crypto-types.js'
+} from './kit-crypto-types.js'
 import { getKitMessage } from '../../kit-i18n.js'
 
 /**

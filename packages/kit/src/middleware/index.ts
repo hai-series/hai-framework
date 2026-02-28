@@ -4,7 +4,7 @@
  * =============================================================================
  */
 
-export * from './cors.js'
-export * from './csrf.js'
-export * from './logging.js'
-export * from './ratelimit.js'
+export * from './kit-cors.js'
+export * from './kit-csrf.js'
+export * from './kit-logging.js'
+export * from './kit-ratelimit.js'

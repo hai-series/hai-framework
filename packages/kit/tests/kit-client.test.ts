@@ -11,7 +11,7 @@
  * =============================================================================
  */
 
-import type { TransportCryptoServiceLike } from '../src/modules/crypto/crypto-types.js'
+import type { TransportCryptoServiceLike } from '../src/modules/crypto/kit-crypto-types.js'
 import { Buffer } from 'node:buffer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createKitClient } from '../src/client/kit-client.js'

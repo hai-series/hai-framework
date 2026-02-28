@@ -7,8 +7,8 @@
  */
 
 import type { RequestEvent } from '@sveltejs/kit'
-import type { RateLimitStore } from './middleware/ratelimit.js'
-import type { TransportCryptoServiceLike } from './modules/crypto/crypto-types.js'
+import type { RateLimitStore } from './middleware/kit-ratelimit.js'
+import type { TransportCryptoServiceLike } from './modules/crypto/kit-crypto-types.js'
 
 /**
  * 会话数据最小接口

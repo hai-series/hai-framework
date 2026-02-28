@@ -14,9 +14,9 @@
  */
 
 import type { Middleware } from '../../kit-types.js'
-import type { TransportEncryptionConfig, TransportEncryptionManager } from './crypto-types.js'
+import type { TransportEncryptionConfig, TransportEncryptionManager } from './kit-crypto-types.js'
 import { getKitMessage } from '../../kit-i18n.js'
-import { createTransportEncryption, isValidEncryptedPayload } from './transport-encryption.js'
+import { createTransportEncryption, isValidEncryptedPayload } from './kit-transport-encryption.js'
 
 /**
  * 创建传输加密中间件

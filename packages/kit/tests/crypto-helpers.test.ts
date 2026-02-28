@@ -5,14 +5,14 @@
  */
 
 import type { Cookies, RequestEvent } from '@sveltejs/kit'
-import type { CryptoServiceLike } from '../src/modules/crypto/crypto-types.js'
+import type { CryptoServiceLike } from '../src/modules/crypto/kit-crypto-types.js'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   createCsrfManager,
   createEncryptedCookie,
   signRequest,
   verifyWebhookSignature,
-} from '../src/modules/crypto/crypto-helpers.js'
+} from '../src/modules/crypto/kit-crypto-helpers.js'
 
 /**
  * 创建模拟的 Crypto 服务

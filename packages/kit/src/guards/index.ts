@@ -4,7 +4,7 @@
  * =============================================================================
  */
 
-export * from './auth.js'
-export * from './compose.js'
-export * from './permission.js'
-export * from './role.js'
+export * from './kit-auth.js'
+export * from './kit-compose.js'
+export * from './kit-permission.js'
+export * from './kit-role.js'

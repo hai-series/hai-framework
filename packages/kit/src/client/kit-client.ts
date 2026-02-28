@@ -29,8 +29,8 @@
  * =============================================================================
  */
 
-import type { EncryptedPayload, TransportCryptoServiceLike, TransportKeyPair } from '../modules/crypto/crypto-types.js'
-import { isValidEncryptedPayload } from '../modules/crypto/transport-encryption.js'
+import type { EncryptedPayload, TransportCryptoServiceLike, TransportKeyPair } from '../modules/crypto/kit-crypto-types.js'
+import { isValidEncryptedPayload } from '../modules/crypto/kit-transport-encryption.js'
 
 // ─── 类型 ───
 

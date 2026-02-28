@@ -45,20 +45,20 @@
  */
 
 import { createKitClient } from './client/kit-client.js'
-import { authGuard } from './guards/auth.js'
-import { allGuards, anyGuard, conditionalGuard, notGuard } from './guards/compose.js'
-import { assertPermission, hasPermission, permissionGuard, requirePermission } from './guards/permission.js'
-import { roleGuard } from './guards/role.js'
-import { createHandle, sequence } from './hooks/handle.js'
+import { authGuard } from './guards/kit-auth.js'
+import { allGuards, anyGuard, conditionalGuard, notGuard } from './guards/kit-compose.js'
+import { assertPermission, hasPermission, permissionGuard, requirePermission } from './guards/kit-permission.js'
+import { roleGuard } from './guards/kit-role.js'
+import { createHandle, sequence } from './hooks/kit-handle.js'
 import { handler } from './kit-handler.js'
 import { setAllModulesLocale } from './kit-i18n.js'
 import { badRequest, conflict, created, error, forbidden, internalError, noContent, notFound, ok, redirect, unauthorized, validationError } from './kit-response.js'
 import { clearSessionCookie, setSessionCookie } from './kit-session.js'
 import { validateForm, validateFormOrFail, validateParams, validateParamsOrFail, validateQuery, validateQueryOrFail } from './kit-validation.js'
-import { corsMiddleware } from './middleware/cors.js'
-import { csrfMiddleware } from './middleware/csrf.js'
-import { loggingMiddleware } from './middleware/logging.js'
-import { rateLimitMiddleware } from './middleware/ratelimit.js'
+import { corsMiddleware } from './middleware/kit-cors.js'
+import { csrfMiddleware } from './middleware/kit-csrf.js'
+import { loggingMiddleware } from './middleware/kit-logging.js'
+import { rateLimitMiddleware } from './middleware/kit-ratelimit.js'
 
 /**
  * Kit 模块统一出口。
