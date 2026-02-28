@@ -6,7 +6,7 @@
 
 import * as m from '$lib/paraglide/messages.js'
 import { ForgotPasswordSchema } from '$lib/server/schemas/index.js'
-import { audit } from '$lib/server/services/index.js'
+import { audit } from '@h-ai/audit'
 import { iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
 
@@ -17,7 +17,7 @@ export const POST = kit.handler(async ({ request, getClientAddress }) => {
   const ua = request.headers.get('user-agent') ?? undefined
 
   // 记录审计日志
-  await audit.passwordResetRequest(email, ip, ua)
+  await audit.helper.passwordResetRequest(email, ip, ua)
 
   // 使用 IAM 模块发起密码重置请求
   // 该方法内部会处理用户是否存在的逻辑

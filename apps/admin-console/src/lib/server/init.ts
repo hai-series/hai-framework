@@ -34,7 +34,7 @@ import type { CacheConfigInput } from '@h-ai/cache'
 import type { IamConfigSettingsInput } from '@h-ai/iam'
 import type { ReachConfigInput } from '@h-ai/reach'
 import * as m from '$lib/paraglide/messages.js'
-import { initAuditRepository } from '$lib/server/services/audit.js'
+import { audit } from '@h-ai/audit'
 import { cache } from '@h-ai/cache'
 import { core } from '@h-ai/core'
 import { db } from '@h-ai/db'
@@ -170,8 +170,11 @@ export async function initApp(): Promise<void> {
     throw new Error(fullMessage)
   }
 
-  // 8. 初始化审计日志仓库（BaseCrudRepository 自动建表）
-  initAuditRepository(db)
+  // 8. 初始化审计日志模块
+  const auditResult = await audit.init({ db })
+  if (!auditResult.success) {
+    core.logger.warn('Audit module initialization failed', { error: auditResult.error.message })
+  }
 
   initialized = true
   core.logger.info('Application initialized.')

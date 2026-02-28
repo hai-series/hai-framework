@@ -5,7 +5,7 @@
  */
 
 import { LoginSchema } from '$lib/server/schemas/index.js'
-import { audit } from '$lib/server/services/index.js'
+import { audit } from '@h-ai/audit'
 import { iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
 
@@ -40,7 +40,7 @@ export const POST = kit.handler(async ({ request, cookies, getClientAddress }) =
   const ip = getClientAddress()
   const ua = request.headers.get('user-agent') ?? undefined
   const [, rolesResult, permissionsResult] = await Promise.all([
-    audit.login(user.id, ip, ua),
+    audit.helper.login(user.id, ip, ua),
     iam.authz.getUserRoles(user.id),
     iam.authz.getUserPermissions(user.id),
   ])

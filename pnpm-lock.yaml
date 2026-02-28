@@ -218,6 +218,9 @@ importers:
       '@h-ai/ai':
         specifier: workspace:*
         version: link:../../packages/ai
+      '@h-ai/audit':
+        specifier: workspace:*
+        version: link:../../packages/audit
       '@h-ai/cache':
         specifier: workspace:*
         version: link:../../packages/cache

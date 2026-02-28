@@ -5,7 +5,7 @@
  */
 
 import type { PageServerLoad } from './$types'
-import { auditService } from '$lib/server/services/index.js'
+import { audit } from '@h-ai/audit'
 import { iam } from '@h-ai/iam'
 
 export const load: PageServerLoad = async () => {
@@ -23,10 +23,13 @@ export const load: PageServerLoad = async () => {
   const permissionTotal = permissionsResult.success ? permissionsResult.data.total : 0
 
   // 获取审计数据
-  const [recentAudit, auditStats] = await Promise.all([
-    auditService.list({ pageSize: 10 }),
-    auditService.getStats(7),
+  const [recentAuditResult, auditStatsResult] = await Promise.all([
+    audit.list({ pageSize: 10 }),
+    audit.getStats(7),
   ])
+
+  const recentActivity = recentAuditResult.success ? recentAuditResult.data.items : []
+  const auditStats = auditStatsResult.success ? auditStatsResult.data : []
 
   return {
     stats: {
@@ -35,7 +38,7 @@ export const load: PageServerLoad = async () => {
       permissionCount: permissionTotal,
       activeUsers: activeUserTotal,
     },
-    recentActivity: recentAudit.items,
+    recentActivity,
     auditStats,
   }
 }
