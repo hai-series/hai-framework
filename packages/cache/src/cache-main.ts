@@ -175,7 +175,6 @@ export const cache: CacheFunctions = {
     }
     catch (error) {
       logger.error('Cache module close failed', { error })
-      throw error
     }
     finally {
       currentProvider = null
