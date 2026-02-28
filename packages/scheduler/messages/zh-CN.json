@@ -1,0 +1,15 @@
+{
+  "$schema": "https://inlang.com/schema/inlang-message-format",
+  "scheduler_notInitialized": "定时任务模块未初始化，请先调用 scheduler.init()",
+  "scheduler_initFailed": "定时任务模块初始化失败: {error}",
+  "scheduler_alreadyRunning": "定时任务调度器已在运行中",
+  "scheduler_notRunning": "定时任务调度器未运行",
+  "scheduler_taskNotFound": "任务未找到: {taskId}",
+  "scheduler_taskAlreadyExists": "任务已存在: {taskId}",
+  "scheduler_invalidCron": "无效的 cron 表达式: {expression}",
+  "scheduler_executionFailed": "任务执行失败: {error}",
+  "scheduler_jsExecutionFailed": "JS 代码执行失败: {error}",
+  "scheduler_apiExecutionFailed": "API 调用失败: {error}",
+  "scheduler_dbSaveFailed": "保存执行记录失败: {error}",
+  "scheduler_dbNotInitialized": "数据库未初始化，无法保存执行记录"
+}
