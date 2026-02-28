@@ -244,7 +244,6 @@ export const reach: ReachFunctions = {
     }
     catch (error) {
       logger.error('Reach module close failed', { error })
-      throw error
     }
     finally {
       providers = new Map()
