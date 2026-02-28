@@ -88,12 +88,14 @@
       </div>
     {:else if user}
       <div class="flex items-center gap-4">
-        <label class="avatar placeholder cursor-pointer relative">
-          <div class="bg-neutral text-neutral-content w-16 rounded-full">
+        <label class="avatar cursor-pointer relative">
+          <div class="w-16 rounded-full">
             {#if user.avatarUrl}
-              <span class="text-2xl">😊</span>
+              <img src={`/api/upload/${user.avatarUrl}`} alt={user.username} class="rounded-full" />
             {:else}
-              <span class="text-2xl">{user.username.charAt(0).toUpperCase()}</span>
+              <div class="bg-neutral text-neutral-content w-16 h-16 rounded-full flex items-center justify-center">
+                <span class="text-2xl">{user.username.charAt(0).toUpperCase()}</span>
+              </div>
             {/if}
           </div>
           <input type="file" accept="image/*" class="hidden" onchange={handleAvatarUpload} />
