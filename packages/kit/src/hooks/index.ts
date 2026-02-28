@@ -4,5 +4,5 @@
  * =============================================================================
  */
 
-export * from './cookie-proxy.js'
-export * from './handle.js'
+export * from './kit-cookie-proxy.js'
+export * from './kit-handle.js'

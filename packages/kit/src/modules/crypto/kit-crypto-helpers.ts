@@ -12,7 +12,7 @@
  * @example
  * ```ts
  * // src/routes/api/webhook/+server.ts
- * import { verifyWebhookSignature } from '../modules/crypto/crypto-helpers.js'
+ * import { verifyWebhookSignature } from '../modules/crypto/kit-crypto-helpers.js'
  * import { crypto } from '$lib/server/crypto'
  *
  * export const POST = async (event) => {
@@ -38,7 +38,7 @@ import type {
   CryptoServiceLike,
   EncryptedCookieConfig,
   WebhookVerifyConfig,
-} from './crypto-types.js'
+} from './kit-crypto-types.js'
 import { getKitMessage } from '../../kit-i18n.js'
 
 /**

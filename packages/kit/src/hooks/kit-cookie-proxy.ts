@@ -22,7 +22,7 @@
  */
 
 import type { Cookies } from '@sveltejs/kit'
-import type { TransportCryptoServiceLike } from '../modules/crypto/crypto-types.js'
+import type { TransportCryptoServiceLike } from '../modules/crypto/kit-crypto-types.js'
 import { core } from '@h-ai/core'
 
 /**

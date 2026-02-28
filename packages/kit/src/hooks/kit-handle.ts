@@ -9,10 +9,10 @@
 
 import type { Handle, RequestEvent } from '@sveltejs/kit'
 import type { GuardConfig, GuardResult, HookConfig, Middleware, MiddlewareContext, SessionData } from '../kit-types.js'
-import type { CookieProxyConfig } from './cookie-proxy.js'
+import type { CookieProxyConfig } from './kit-cookie-proxy.js'
 import { core } from '@h-ai/core'
-import { transportEncryptionMiddleware } from '../modules/crypto/transport-middleware.js'
-import { createEncryptedCookieProxy } from './cookie-proxy.js'
+import { transportEncryptionMiddleware } from '../modules/crypto/kit-transport-middleware.js'
+import { createEncryptedCookieProxy } from './kit-cookie-proxy.js'
 
 /**
  * 生成唯一请求级 ID

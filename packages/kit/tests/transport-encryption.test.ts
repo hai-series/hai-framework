@@ -14,15 +14,15 @@
 import type {
   EncryptedPayload,
   TransportCryptoServiceLike,
-} from '../src/modules/crypto/crypto-types.js'
+} from '../src/modules/crypto/kit-crypto-types.js'
 import { Buffer } from 'node:buffer'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   createKeyExchangeHandler,
   createTransportEncryption,
   isValidEncryptedPayload,
-} from '../src/modules/crypto/transport-encryption.js'
-import { transportEncryptionMiddleware } from '../src/modules/crypto/transport-middleware.js'
+} from '../src/modules/crypto/kit-transport-encryption.js'
+import { transportEncryptionMiddleware } from '../src/modules/crypto/kit-transport-middleware.js'
 
 // ─── Mock 加密服务 ───
 
