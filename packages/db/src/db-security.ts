@@ -78,6 +78,26 @@ export function validateIdentifiers(names: string[]): Result<void, DbError> {
 // =============================================================================
 
 /**
+ * 用双引号包裹 SQL 标识符（适用于 PostgreSQL / SQLite / 标准 SQL）
+ *
+ * 标识符内的双引号会被转义为两个双引号。
+ * 使用场景：DDL 中的表名、列名、索引名。
+ * 调用前应先通过 `validateIdentifier` 校验合法性。
+ *
+ * @param name - 已校验的标识符
+ * @returns 双引号包裹的安全标识符
+ *
+ * @example
+ * ```ts
+ * quoteIdentifier('users')  // '"users"'
+ * quoteIdentifier('order')  // '"order"'  （安全引用 SQL 保留字）
+ * ```
+ */
+export function quoteIdentifier(name: string): string {
+  return `"${name.replace(/"/g, '""')}"`
+}
+
+/**
  * 转义 SQL 字符串字面量中的单引号
  *
  * 将 `'` 转义为 `''`，用于 DDL 中 DEFAULT 值等需要直接拼接的场景。

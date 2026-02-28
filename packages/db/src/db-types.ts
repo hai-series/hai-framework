@@ -310,10 +310,19 @@ export interface DdlOperations {
 
   /**
    * 执行原始 DDL SQL
-   * @param sql - DDL SQL 语句
+   *
+   * **⚠️ 安全警告：** `sql` 参数不会经过标识符校验或参数化处理，
+   * **禁止**将用户输入直接拼接到 SQL 中，否则会导致 SQL 注入风险。
+   * 仅用于开发者编写的静态 DDL 语句（如 ALTER TABLE）。
+   *
+   * @param sql - DDL SQL 语句（必须为开发者静态构造，禁止包含用户输入）
    * @example
    * ```ts
+   * // ✅ 安全：静态 SQL
    * await db.ddl.raw('ALTER TABLE users ADD COLUMN status TEXT')
+   *
+   * // ❌ 危险：拼接用户输入
+   * await db.ddl.raw(`ALTER TABLE ${userInput} ADD COLUMN status TEXT`)
    * ```
    */
   raw: (sql: string) => Promise<Result<void, DbError>>
@@ -404,7 +413,21 @@ export interface DataOperations {
 
 /** CRUD 查询条件 */
 export interface CrudQueryOptions {
-  /** WHERE 子句（不包含 WHERE 关键字） */
+  /**
+   * WHERE 子句（不包含 WHERE 关键字）
+   *
+   * **⚠️ 安全警告：** `where` 为原始 SQL 片段，**禁止**将用户输入直接拼接。
+   * 动态值必须通过 `params` 占位符（`?`）传入。
+   *
+   * @example
+   * ```ts
+   * // ✅ 安全：占位符 + params
+   * crud.findAll({ where: 'status = ? AND age > ?', params: ['active', 18] })
+   *
+   * // ❌ 危险：拼接用户输入
+   * crud.findAll({ where: `name = '${userInput}'` })
+   * ```
+   */
   where?: string
   /** 参数列表 */
   params?: unknown[]
@@ -418,7 +441,12 @@ export interface CrudQueryOptions {
 
 /** CRUD 分页查询条件 */
 export interface CrudPageOptions {
-  /** WHERE 子句（不包含 WHERE 关键字） */
+  /**
+   * WHERE 子句（不包含 WHERE 关键字）
+   *
+   * **⚠️ 安全警告：** `where` 为原始 SQL 片段，**禁止**将用户输入直接拼接。
+   * 动态值必须通过 `params` 占位符（`?`）传入。
+   */
   where?: string
   /** 参数列表 */
   params?: unknown[]
@@ -432,7 +460,12 @@ export interface CrudPageOptions {
 
 /** CRUD 统计条件 */
 export interface CrudCountOptions {
-  /** WHERE 子句（不包含 WHERE 关键字） */
+  /**
+   * WHERE 子句（不包含 WHERE 关键字）
+   *
+   * **⚠️ 安全警告：** `where` 为原始 SQL 片段，**禁止**将用户输入直接拼接。
+   * 动态值必须通过 `params` 占位符（`?`）传入。
+   */
   where?: string
   /** 参数列表 */
   params?: unknown[]
@@ -662,7 +695,7 @@ export interface DbFunctions extends DbCompositeOperations {
   readonly pagination: DbPagination
 
   /** 关闭数据库连接 */
-  close: () => Promise<void>
+  close: () => Promise<Result<void, DbError>>
 }
 
 // =============================================================================
@@ -679,7 +712,7 @@ export interface DbProvider extends DbCompositeOperations {
   /** 连接数据库 */
   connect: (config: DbConfig) => Promise<Result<void, DbError>>
   /** 关闭连接 */
-  close: () => Promise<void>
+  close: () => Promise<Result<void, DbError>>
   /** 是否已连接 */
   isConnected: () => boolean
 }

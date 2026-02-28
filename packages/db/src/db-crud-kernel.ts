@@ -26,6 +26,7 @@ import { err, ok } from '@h-ai/core'
 
 import { DbErrorCode } from './db-config.js'
 import { dbM } from './db-i18n.js'
+import { parseCount } from './db-pagination.js'
 import { validateIdentifier, validateIdentifiers } from './db-security.js'
 
 // =============================================================================
@@ -65,38 +66,31 @@ function pickColumns(
 }
 
 /**
- * 解析 COUNT 查询返回值
- *
- * 兼容不同驱动/SQL 的列别名与返回类型。
- */
-function parseCount(row: QueryRow | null | undefined): number {
-  if (!row) {
-    // 无数据默认 0
-    return 0
-  }
-  if ('total' in row) {
-    // 常见别名 total
-    return Number(row.total ?? 0)
-  }
-  if ('__total__' in row) {
-    // 某些驱动使用 __total__
-    return Number(row.__total__ ?? 0)
-  }
-  if ('cnt' in row) {
-    // 默认别名 cnt
-    return Number(row.cnt ?? 0)
-  }
-  const value = Object.values(row)[0]
-  if (typeof value === 'bigint') {
-    // SQLite/PG bigint 处理
-    return Number(value)
-  }
-  return Number(value ?? 0)
-}
-
 // =============================================================================
 // CRUD 工厂
 // =============================================================================
+
+/**
+ * 创建一个所有方法均返回同一错误的 CrudRepository，用于配置校验失败时短路返回
+ *
+ * @param configError - 校验失败产生的 DbError
+ * @returns 所有操作均返回 configError 的 CrudRepository
+ */
+function createFailCrudRepository<TItem>(configError: DbError): CrudRepository<TItem> {
+  const failResult = <T>(): Promise<Result<T, DbError>> => Promise.resolve(err(configError))
+  return {
+    create: () => failResult(),
+    createMany: () => failResult(),
+    findById: () => failResult(),
+    findAll: () => failResult(),
+    findPage: () => failResult(),
+    updateById: () => failResult(),
+    deleteById: () => failResult(),
+    count: () => failResult(),
+    exists: () => failResult(),
+    existsById: () => failResult(),
+  }
+}
 
 /**
  * 创建 CRUD 仓库
@@ -117,57 +111,29 @@ export function createCrud<TItem>(
   // 校验表名与主键列名，防止标识符注入
   const tableValid = validateIdentifier(table)
   if (!tableValid.success) {
-    // 配置校验失败，所有后续操作将返回此错误
-    const configError = tableValid.error
-    const failResult = <T>(): Promise<Result<T, DbError>> => Promise.resolve(err(configError))
-    return {
-      create: () => failResult(),
-      createMany: () => failResult(),
-      findById: () => failResult(),
-      findAll: () => failResult(),
-      findPage: () => failResult(),
-      updateById: () => failResult(),
-      deleteById: () => failResult(),
-      count: () => failResult(),
-      exists: () => failResult(),
-      existsById: () => failResult(),
-    }
+    return createFailCrudRepository(tableValid.error)
   }
   const idColumnValid = validateIdentifier(idColumn)
   if (!idColumnValid.success) {
-    const configError = idColumnValid.error
-    const failResult = <T>(): Promise<Result<T, DbError>> => Promise.resolve(err(configError))
-    return {
-      create: () => failResult(),
-      createMany: () => failResult(),
-      findById: () => failResult(),
-      findAll: () => failResult(),
-      findPage: () => failResult(),
-      updateById: () => failResult(),
-      deleteById: () => failResult(),
-      count: () => failResult(),
-      exists: () => failResult(),
-      existsById: () => failResult(),
-    }
+    return createFailCrudRepository(idColumnValid.error)
   }
   // 校验 select / createColumns / updateColumns 列名
   if (config.select) {
     const selectValid = validateIdentifiers(config.select)
     if (!selectValid.success) {
-      const configError = selectValid.error
-      const failResult = <T>(): Promise<Result<T, DbError>> => Promise.resolve(err(configError))
-      return {
-        create: () => failResult(),
-        createMany: () => failResult(),
-        findById: () => failResult(),
-        findAll: () => failResult(),
-        findPage: () => failResult(),
-        updateById: () => failResult(),
-        deleteById: () => failResult(),
-        count: () => failResult(),
-        exists: () => failResult(),
-        existsById: () => failResult(),
-      }
+      return createFailCrudRepository(selectValid.error)
+    }
+  }
+  if (config.createColumns) {
+    const createColsValid = validateIdentifiers(config.createColumns)
+    if (!createColsValid.success) {
+      return createFailCrudRepository(createColsValid.error)
+    }
+  }
+  if (config.updateColumns) {
+    const updateColsValid = validateIdentifiers(config.updateColumns)
+    if (!updateColsValid.success) {
+      return createFailCrudRepository(updateColsValid.error)
     }
   }
 

@@ -44,8 +44,8 @@ import { err, ok } from '@h-ai/core'
 import { DbErrorCode } from '../db-config.js'
 import { createCrud } from '../db-crud-kernel.js'
 import { dbM } from '../db-i18n.js'
-import { buildPaginatedResult, normalizePagination } from '../db-pagination.js'
-import { escapeSqlString, validateIdentifier, validateIdentifiers } from '../db-security.js'
+import { buildPaginatedResult, normalizePagination, parseCount } from '../db-pagination.js'
+import { escapeSqlString, quoteIdentifier, validateIdentifier, validateIdentifiers } from '../db-security.js'
 
 // =============================================================================
 // pg 类型定义（避免强依赖）
@@ -91,7 +91,7 @@ export function createPostgresProvider(): DbProvider {
    * @returns 列定义 SQL 片段
    */
   function buildColumnSql(name: string, def: ColumnDef): string {
-    const parts: string[] = [name]
+    const parts: string[] = [quoteIdentifier(name)]
 
     switch (def.type) {
       case 'TEXT':
@@ -160,7 +160,7 @@ export function createPostgresProvider(): DbProvider {
     }
 
     if (def.references) {
-      parts.push(`REFERENCES ${def.references.table}(${def.references.column})`)
+      parts.push(`REFERENCES ${quoteIdentifier(def.references.table)}(${quoteIdentifier(def.references.column)})`)
       if (def.references.onDelete) {
         parts.push(`ON DELETE ${def.references.onDelete}`)
       }
@@ -199,40 +199,10 @@ export function createPostgresProvider(): DbProvider {
   }
 
   /**
-   * 解析统计数量
-   *
-   * 兼容不同 SQL 别名（total、__total__、cnt）和数据类型（bigint）。
-   *
-   * @param row - 查询返回的记录
-   * @returns 解析后的数值
-   */
-  function parseCount(row: Record<string, unknown> | null | undefined): number {
-    if (!row) {
-      return 0
-    }
-    if ('total' in row) {
-      return Number(row.total ?? 0)
-    }
-    if ('__total__' in row) {
-      return Number(row.__total__ ?? 0)
-    }
-    if ('cnt' in row) {
-      return Number(row.cnt ?? 0)
-    }
-    const value = Object.values(row)[0]
-    if (typeof value === 'bigint') {
-      return Number(value)
-    }
-    return Number(value ?? 0)
-  }
-
-  /**
    * 执行分页查询
    *
-   * 使用 `COUNT(*) OVER()` 窗口函数在一次查询中同时获取数据和总数。
-   *
-   * 注意：当 OFFSET 超过数据总量时，PostgreSQL 返回 0 行，此时 total 为 0。
-   * 这与 SQLite/MySQL 的独立 COUNT 查询行为不同。
+   * 使用独立的 COUNT(*) 查询获取总数，再执行 LIMIT/OFFSET 获取当前页数据。
+   * 与 SQLite/MySQL 的分页行为一致，OFFSET 超出数据范围时 total 仍返回精确值。
    *
    * @param executor - SQL 执行器
    * @param options - 分页查询参数
@@ -243,13 +213,19 @@ export function createPostgresProvider(): DbProvider {
     options: PaginationQueryOptions,
   ): Promise<PaginatedResult<T>> {
     const pagination = normalizePagination(options.pagination, options.overrides)
-    const dataSql = `SELECT *, COUNT(*) OVER() AS __total__ FROM (${options.sql}) AS t LIMIT ? OFFSET ?`
+
+    // 独立 COUNT 查询（与 OFFSET 无关，始终返回精确值）
+    const countSql = convertPlaceholders(`SELECT COUNT(*) as cnt FROM (${options.sql}) AS t`)
+    const countResult = await executor(countSql, options.params)
+    const countRows = countResult.rows as Record<string, unknown>[]
+    const total = countRows.length > 0 ? parseCount(countRows[0]) : 0
+
+    // 数据查询
+    const dataSql = convertPlaceholders(`${options.sql} LIMIT ? OFFSET ?`)
     const dataParams = [...(options.params ?? []), pagination.limit, pagination.offset]
-    const dataQuerySql = convertPlaceholders(dataSql)
-    const dataResult = await executor(dataQuerySql, dataParams)
-    const rows = dataResult.rows as Record<string, unknown>[]
-    const total = rows.length > 0 ? parseCount(rows[0]) : 0
-    const items = rows.map(({ __total__, ...rest }) => rest) as T[]
+    const dataResult = await executor(dataSql, dataParams)
+    const items = dataResult.rows as T[]
+
     return buildPaginatedResult(items, total, pagination)
   }
 
@@ -436,7 +412,7 @@ export function createPostgresProvider(): DbProvider {
         .join(', ')
 
       const ifNotExistsClause = ifNotExists ? 'IF NOT EXISTS ' : ''
-      const sql = `CREATE TABLE ${ifNotExistsClause}${tableName} (${columnDefs})`
+      const sql = `CREATE TABLE ${ifNotExistsClause}${quoteIdentifier(tableName)} (${columnDefs})`
 
       try {
         await connResult.data.query(sql)
@@ -462,7 +438,7 @@ export function createPostgresProvider(): DbProvider {
 
       const ifExistsClause = ifExists ? 'IF EXISTS ' : ''
       try {
-        await connResult.data.query(`DROP TABLE ${ifExistsClause}${tableName}`)
+        await connResult.data.query(`DROP TABLE ${ifExistsClause}${quoteIdentifier(tableName)}`)
         return ok(undefined)
       }
       catch (error) {
@@ -488,7 +464,7 @@ export function createPostgresProvider(): DbProvider {
 
       const colSql = buildColumnSql(columnName, columnDef)
       try {
-        await connResult.data.query(`ALTER TABLE ${tableName} ADD COLUMN ${colSql}`)
+        await connResult.data.query(`ALTER TABLE ${quoteIdentifier(tableName)} ADD COLUMN ${colSql}`)
         return ok(undefined)
       }
       catch (error) {
@@ -513,7 +489,7 @@ export function createPostgresProvider(): DbProvider {
         return colValid
 
       try {
-        await connResult.data.query(`ALTER TABLE ${tableName} DROP COLUMN ${columnName}`)
+        await connResult.data.query(`ALTER TABLE ${quoteIdentifier(tableName)} DROP COLUMN ${quoteIdentifier(columnName)}`)
         return ok(undefined)
       }
       catch (error) {
@@ -538,7 +514,7 @@ export function createPostgresProvider(): DbProvider {
         return newValid
 
       try {
-        await connResult.data.query(`ALTER TABLE ${oldName} RENAME TO ${newName}`)
+        await connResult.data.query(`ALTER TABLE ${quoteIdentifier(oldName)} RENAME TO ${quoteIdentifier(newName)}`)
         return ok(undefined)
       }
       catch (error) {
@@ -566,12 +542,12 @@ export function createPostgresProvider(): DbProvider {
         return colsValid
 
       const uniqueClause = indexDef.unique ? 'UNIQUE ' : ''
-      const columns = indexDef.columns.join(', ')
+      const columns = indexDef.columns.map(c => quoteIdentifier(c)).join(', ')
       const whereClause = indexDef.where ? ` WHERE ${indexDef.where}` : ''
 
       try {
         await connResult.data.query(
-          `CREATE ${uniqueClause}INDEX IF NOT EXISTS ${indexName} ON ${tableName} (${columns})${whereClause}`,
+          `CREATE ${uniqueClause}INDEX IF NOT EXISTS ${quoteIdentifier(indexName)} ON ${quoteIdentifier(tableName)} (${columns})${whereClause}`,
         )
         return ok(undefined)
       }
@@ -595,7 +571,7 @@ export function createPostgresProvider(): DbProvider {
 
       const ifExistsClause = ifExists ? 'IF EXISTS ' : ''
       try {
-        await connResult.data.query(`DROP INDEX ${ifExistsClause}${indexName}`)
+        await connResult.data.query(`DROP INDEX ${ifExistsClause}${quoteIdentifier(indexName)}`)
         return ok(undefined)
       }
       catch (error) {
@@ -902,11 +878,22 @@ export function createPostgresProvider(): DbProvider {
   /**
    * 关闭连接池
    */
-  const close: DbProvider['close'] = async (): Promise<void> => {
+  const close: DbProvider['close'] = async (): Promise<Result<void, DbError>> => {
     if (pool) {
-      await pool.end()
+      try {
+        await pool.end()
+      }
+      catch (error) {
+        pool = null
+        return err({
+          code: DbErrorCode.CONNECTION_FAILED,
+          message: dbM('db_postgresConnectionFailed', { params: { error: String(error) } }),
+          cause: error,
+        })
+      }
       pool = null
     }
+    return ok(undefined)
   }
 
   /**

@@ -47,8 +47,8 @@ import { err, ok } from '@h-ai/core'
 import { DbErrorCode } from '../db-config.js'
 import { createCrud } from '../db-crud-kernel.js'
 import { dbM } from '../db-i18n.js'
-import { buildPaginatedResult, normalizePagination } from '../db-pagination.js'
-import { escapeSqlString, validateIdentifier, validateIdentifiers } from '../db-security.js'
+import { buildPaginatedResult, normalizePagination, parseCount } from '../db-pagination.js'
+import { escapeSqlString, quoteIdentifier, validateIdentifier, validateIdentifiers } from '../db-security.js'
 
 const require = createRequire(import.meta.url)
 
@@ -67,6 +67,14 @@ export function createSqliteProvider(): DbProvider {
   /** 串行化 SQLite 事务，避免并发 BEGIN 导致 "cannot start a transaction within a transaction" */
   let txChain: Promise<void> = Promise.resolve()
 
+  /** 事务锁获取超时（毫秒），防止永久阻塞 */
+  const TX_LOCK_TIMEOUT_MS = 30_000
+
+  /**
+   * 获取事务锁，带超时保护
+   *
+   * 当锁等待超过 TX_LOCK_TIMEOUT_MS 时抛出超时错误，防止无限阻塞。
+   */
   async function acquireTxLock(): Promise<() => void> {
     let release!: () => void
     const current = new Promise<void>((resolve) => {
@@ -74,7 +82,26 @@ export function createSqliteProvider(): DbProvider {
     })
     const prev = txChain
     txChain = txChain.then(() => current)
-    await prev
+
+    // 带超时的等待
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => {
+        // 超时后释放锁链，避免后续事务也阻塞
+        release()
+        reject(new Error(`SQLite transaction lock acquisition timed out after ${TX_LOCK_TIMEOUT_MS}ms`))
+      }, TX_LOCK_TIMEOUT_MS)
+    })
+
+    try {
+      await Promise.race([prev, timeoutPromise])
+    }
+    finally {
+      if (timer !== undefined) {
+        clearTimeout(timer)
+      }
+    }
+
     return release
   }
 
@@ -92,7 +119,7 @@ export function createSqliteProvider(): DbProvider {
    * @returns SQL 列定义字符串
    */
   function buildColumnSql(name: string, def: ColumnDef): string {
-    const parts: string[] = [name]
+    const parts: string[] = [quoteIdentifier(name)]
 
     // 类型映射
     switch (def.type) {
@@ -151,7 +178,7 @@ export function createSqliteProvider(): DbProvider {
     }
 
     if (def.references) {
-      parts.push(`REFERENCES ${def.references.table}(${def.references.column})`)
+      parts.push(`REFERENCES ${quoteIdentifier(def.references.table)}(${quoteIdentifier(def.references.column)})`)
       if (def.references.onDelete) {
         parts.push(`ON DELETE ${def.references.onDelete}`)
       }
@@ -176,29 +203,6 @@ export function createSqliteProvider(): DbProvider {
       })
     }
     return ok(database)
-  }
-
-  /**
-   * 解析统计数量
-   */
-  function parseCount(row: Record<string, unknown> | null | undefined): number {
-    if (!row) {
-      return 0
-    }
-    if ('total' in row) {
-      return Number(row.total ?? 0)
-    }
-    if ('__total__' in row) {
-      return Number(row.__total__ ?? 0)
-    }
-    if ('cnt' in row) {
-      return Number(row.cnt ?? 0)
-    }
-    const value = Object.values(row)[0]
-    if (typeof value === 'bigint') {
-      return Number(value)
-    }
-    return Number(value ?? 0)
   }
 
   /**
@@ -414,7 +418,7 @@ export function createSqliteProvider(): DbProvider {
           .join(', ')
 
         const ifNotExistsClause = ifNotExists ? 'IF NOT EXISTS ' : ''
-        const sql = `CREATE TABLE ${ifNotExistsClause}${tableName} (${columnDefs})`
+        const sql = `CREATE TABLE ${ifNotExistsClause}${quoteIdentifier(tableName)} (${columnDefs})`
 
         connResult.data.exec(sql)
         return ok(undefined)
@@ -442,7 +446,7 @@ export function createSqliteProvider(): DbProvider {
 
       try {
         const ifExistsClause = ifExists ? 'IF EXISTS ' : ''
-        connResult.data.exec(`DROP TABLE ${ifExistsClause}${tableName}`)
+        connResult.data.exec(`DROP TABLE ${ifExistsClause}${quoteIdentifier(tableName)}`)
         return ok(undefined)
       }
       catch (error) {
@@ -471,7 +475,7 @@ export function createSqliteProvider(): DbProvider {
 
       try {
         const colSql = buildColumnSql(columnName, columnDef)
-        connResult.data.exec(`ALTER TABLE ${tableName} ADD COLUMN ${colSql}`)
+        connResult.data.exec(`ALTER TABLE ${quoteIdentifier(tableName)} ADD COLUMN ${colSql}`)
         return ok(undefined)
       }
       catch (error) {
@@ -499,7 +503,7 @@ export function createSqliteProvider(): DbProvider {
         return colValid
 
       try {
-        connResult.data.exec(`ALTER TABLE ${tableName} DROP COLUMN ${columnName}`)
+        connResult.data.exec(`ALTER TABLE ${quoteIdentifier(tableName)} DROP COLUMN ${quoteIdentifier(columnName)}`)
         return ok(undefined)
       }
       catch (error) {
@@ -527,7 +531,7 @@ export function createSqliteProvider(): DbProvider {
         return newValid
 
       try {
-        connResult.data.exec(`ALTER TABLE ${oldName} RENAME TO ${newName}`)
+        connResult.data.exec(`ALTER TABLE ${quoteIdentifier(oldName)} RENAME TO ${quoteIdentifier(newName)}`)
         return ok(undefined)
       }
       catch (error) {
@@ -559,11 +563,11 @@ export function createSqliteProvider(): DbProvider {
 
       try {
         const uniqueClause = indexDef.unique ? 'UNIQUE ' : ''
-        const columns = indexDef.columns.join(', ')
+        const columns = indexDef.columns.map(c => quoteIdentifier(c)).join(', ')
         const whereClause = indexDef.where ? ` WHERE ${indexDef.where}` : ''
 
         connResult.data.exec(
-          `CREATE ${uniqueClause}INDEX IF NOT EXISTS ${indexName} ON ${tableName} (${columns})${whereClause}`,
+          `CREATE ${uniqueClause}INDEX IF NOT EXISTS ${quoteIdentifier(indexName)} ON ${quoteIdentifier(tableName)} (${columns})${whereClause}`,
         )
         return ok(undefined)
       }
@@ -590,7 +594,7 @@ export function createSqliteProvider(): DbProvider {
 
       try {
         const ifExistsClause = ifExists ? 'IF EXISTS ' : ''
-        connResult.data.exec(`DROP INDEX ${ifExistsClause}${indexName}`)
+        connResult.data.exec(`DROP INDEX ${ifExistsClause}${quoteIdentifier(indexName)}`)
         return ok(undefined)
       }
       catch (error) {
@@ -919,11 +923,22 @@ export function createSqliteProvider(): DbProvider {
   /**
    * 关闭数据库连接
    */
-  const close: DbProvider['close'] = async (): Promise<void> => {
+  const close: DbProvider['close'] = async (): Promise<Result<void, DbError>> => {
     if (database) {
-      database.close()
+      try {
+        database.close()
+      }
+      catch (error) {
+        database = null
+        return err({
+          code: DbErrorCode.CONNECTION_FAILED,
+          message: dbM('db_sqliteConnectionFailed', { params: { error: String(error) } }),
+          cause: error,
+        })
+      }
       database = null
     }
+    return ok(undefined)
   }
 
   /**

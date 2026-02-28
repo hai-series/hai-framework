@@ -284,22 +284,31 @@ export const db: DbFunctions = {
    *
    * 多次调用安全，未初始化时直接返回。
    */
-  async close(): Promise<void> {
+  async close(): Promise<Result<void, DbError>> {
     if (!currentProvider) {
       currentConfig = null
       logger.info('DB module already closed, skipping')
-      return
+      return ok(undefined)
     }
 
     logger.info('Closing DB module')
 
     try {
-      await currentProvider.close()
+      const closeResult = await currentProvider.close()
+      if (!closeResult.success) {
+        logger.error('DB module close failed', { code: closeResult.error.code, message: closeResult.error.message })
+        return closeResult
+      }
       logger.info('DB module closed')
+      return ok(undefined)
     }
     catch (error) {
       logger.error('DB module close failed', { error })
-      throw error
+      return err({
+        code: DbErrorCode.CONNECTION_FAILED,
+        message: dbM('db_initFailed', { params: { error: error instanceof Error ? error.message : String(error) } }),
+        cause: error,
+      })
     }
     finally {
       currentProvider = null
