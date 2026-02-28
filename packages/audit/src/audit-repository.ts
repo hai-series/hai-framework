@@ -94,6 +94,7 @@ export class AuditLogRepository extends BaseCrudRepository<AuditLog> {
     userAgent?: string | null
   }): Promise<Result<AuditLog, AuditError>> {
     const id = core.id.withPrefix('audit_')
+    const now = new Date()
     const data: Record<string, unknown> = {
       id,
       userId: input.userId ?? null,
@@ -103,6 +104,7 @@ export class AuditLogRepository extends BaseCrudRepository<AuditLog> {
       details: input.details ?? null,
       ipAddress: input.ipAddress ?? null,
       userAgent: input.userAgent ?? null,
+      createdAt: now,
     }
 
     try {
@@ -125,7 +127,7 @@ export class AuditLogRepository extends BaseCrudRepository<AuditLog> {
         details: input.details ? JSON.stringify(input.details) : null,
         ipAddress: input.ipAddress ?? null,
         userAgent: input.userAgent ?? null,
-        createdAt: new Date(),
+        createdAt: now,
       }
 
       logger.debug('Audit log recorded', { id, action: input.action, resource: input.resource })
