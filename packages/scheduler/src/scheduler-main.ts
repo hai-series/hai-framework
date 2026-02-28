@@ -4,6 +4,8 @@
  * =============================================================================
  *
  * 本文件提供统一的 `scheduler` 对象，聚合所有定时任务功能。
+ * 仅负责生命周期管理（init / close）和 API 编排，
+ * 调度运行逻辑委托给 scheduler-runner.ts。
  *
  * 使用方式：
  * 1. 调用 `scheduler.init()` 初始化（自动加载持久化任务）
@@ -55,7 +57,6 @@
  */
 
 import type { Result } from '@h-ai/core'
-import type { Cron } from 'croner'
 
 import type { SchedulerConfig, SchedulerConfigInput } from './scheduler-config.js'
 import type {
@@ -72,9 +73,9 @@ import { db } from '@h-ai/db'
 
 import { SchedulerConfigSchema, SchedulerErrorCode } from './scheduler-config.js'
 import { parseCronExpression } from './scheduler-cron.js'
-import { deleteTaskDefinition, ensureLogTable, ensureTaskTable, loadTaskDefinitions, queryLogs, saveLog, saveTaskDefinition, updateTaskDefinition } from './scheduler-db.js'
-import { executeTask } from './scheduler-executor.js'
+import { deleteTaskDefinition, ensureLogTable, ensureTaskTable, loadTaskDefinitions, queryLogs, saveTaskDefinition, updateTaskDefinition } from './scheduler-db.js'
 import { schedulerM } from './scheduler-i18n.js'
+import { getTask, getTaskRegistry, hasTask, isTimerRunning, registerInMemory, resetRunner, runTask, setCronCache, setTask, startTimer, stopTimer, unregisterFromMemory } from './scheduler-runner.js'
 
 const logger = core.logger.child({ module: 'scheduler', scope: 'main' })
 
@@ -84,106 +85,6 @@ const logger = core.logger.child({ module: 'scheduler', scope: 'main' })
 
 /** 当前配置 */
 let currentConfig: SchedulerConfig | null = null
-
-/** 注册的任务 */
-const taskRegistry = new Map<string, TaskDefinition>()
-
-/** 解析后的 Cron 实例缓存 */
-const cronCache = new Map<string, Cron>()
-
-/** 调度器定时器 ID */
-let tickTimer: ReturnType<typeof setInterval> | null = null
-
-/** 上一次检查的分钟标记（防止同一分钟重复触发） */
-let lastTickMinute = -1
-
-// =============================================================================
-// 调度逻辑
-// =============================================================================
-
-/**
- * 调度 tick：定时器回调
- *
- * 每次调用检查当前分钟是否已变化，若变化则遍历注册表，
- * 对匹配 cron 的任务异步执行（不阻塞后续任务检测）。
- * 同一分钟内只触发一次，防止重复执行。
- */
-function tick(): void {
-  const now = new Date()
-  const currentMinute = now.getFullYear() * 100000000
-    + (now.getMonth() + 1) * 1000000
-    + now.getDate() * 10000
-    + now.getHours() * 100
-    + now.getMinutes()
-
-  // 同一分钟只触发一次
-  if (currentMinute === lastTickMinute)
-    return
-  lastTickMinute = currentMinute
-
-  for (const [taskId, task] of taskRegistry) {
-    if (task.enabled === false)
-      continue
-
-    const cron = cronCache.get(taskId)
-    if (!cron)
-      continue
-
-    if (cron.match(now)) {
-      logger.info('Triggering scheduled task', { taskId, taskName: task.name })
-      // 异步执行，不阻塞 tick
-      void runTask(task)
-    }
-  }
-}
-
-/**
- * 执行任务并保存日志
- *
- * 调用 `executeTask` 获取执行结果，若启用 DB 则持久化日志。
- * 执行成功/失败均记录到日志。
- *
- * @param task - 已注册的任务定义
- * @returns 任务执行日志
- */
-async function runTask(task: TaskDefinition): Promise<TaskExecutionLog> {
-  const log = await executeTask({
-    id: task.id,
-    name: task.name,
-    type: task.type,
-    handler: task.type === 'js' ? task.handler : undefined,
-    api: task.type === 'api' ? task.api : undefined,
-  })
-
-  if (currentConfig?.enableDb && db.isInitialized) {
-    await saveLog(currentConfig.tableName, log)
-  }
-
-  if (log.status === 'failed') {
-    logger.warn('Task execution failed', { taskId: task.id, error: log.error })
-  }
-  else {
-    logger.info('Task execution succeeded', { taskId: task.id, duration: log.duration })
-  }
-
-  return log
-}
-
-/**
- * 在内存中注册任务（不触发持久化）
- *
- * @param task - 任务定义
- * @returns 成功返回 `ok(undefined)`；cron 无效返回 `INVALID_CRON`
- */
-function registerInMemory(task: TaskDefinition): Result<void, SchedulerError> {
-  const cronResult = parseCronExpression(task.cron)
-  if (!cronResult.success)
-    return cronResult
-
-  taskRegistry.set(task.id, task)
-  cronCache.set(task.id, cronResult.data)
-  return ok(undefined)
-}
 
 // =============================================================================
 // 未初始化工具集
@@ -301,7 +202,7 @@ export const scheduler: SchedulerFunctions = {
     if (!currentConfig)
       return notInitialized.result()
 
-    if (taskRegistry.has(task.id)) {
+    if (hasTask(task.id)) {
       return err({
         code: SchedulerErrorCode.TASK_ALREADY_EXISTS,
         message: schedulerM('scheduler_taskAlreadyExists', { params: { taskId: task.id } }),
@@ -337,15 +238,14 @@ export const scheduler: SchedulerFunctions = {
     if (!currentConfig)
       return notInitialized.result()
 
-    if (!taskRegistry.has(taskId)) {
+    if (!hasTask(taskId)) {
       return err({
         code: SchedulerErrorCode.TASK_NOT_FOUND,
         message: schedulerM('scheduler_taskNotFound', { params: { taskId } }),
       })
     }
 
-    taskRegistry.delete(taskId)
-    cronCache.delete(taskId)
+    unregisterFromMemory(taskId)
 
     // 从数据库中删除持久化的任务定义
     if (currentConfig.enableDb && db.isInitialized) {
@@ -374,7 +274,7 @@ export const scheduler: SchedulerFunctions = {
     if (!currentConfig)
       return notInitialized.result()
 
-    const existingTask = taskRegistry.get(taskId)
+    const existingTask = getTask(taskId)
     if (!existingTask) {
       return err({
         code: SchedulerErrorCode.TASK_NOT_FOUND,
@@ -387,7 +287,7 @@ export const scheduler: SchedulerFunctions = {
       const cronResult = parseCronExpression(updates.cron)
       if (!cronResult.success)
         return cronResult
-      cronCache.set(taskId, cronResult.data)
+      setCronCache(taskId, cronResult.data)
     }
 
     // 构建更新后的任务
@@ -399,7 +299,7 @@ export const scheduler: SchedulerFunctions = {
       ...(updates.api !== undefined && existingTask.type === 'api' ? { api: updates.api } : {}),
     } as TaskDefinition
 
-    taskRegistry.set(taskId, updatedTask)
+    setTask(taskId, updatedTask)
 
     // 同步到数据库
     if (currentConfig.enableDb && db.isInitialized && existingTask.type === 'api') {
@@ -428,15 +328,14 @@ export const scheduler: SchedulerFunctions = {
     if (!currentConfig)
       return notInitialized.result()
 
-    if (tickTimer !== null) {
+    if (isTimerRunning()) {
       return err({
         code: SchedulerErrorCode.ALREADY_RUNNING,
         message: schedulerM('scheduler_alreadyRunning'),
       })
     }
 
-    lastTickMinute = -1
-    tickTimer = setInterval(tick, currentConfig.tickInterval)
+    startTimer(currentConfig)
 
     logger.info('Scheduler started', { tickInterval: currentConfig.tickInterval })
     return ok(undefined)
@@ -453,15 +352,14 @@ export const scheduler: SchedulerFunctions = {
     if (!currentConfig)
       return notInitialized.result()
 
-    if (tickTimer === null) {
+    if (!isTimerRunning()) {
       return err({
         code: SchedulerErrorCode.NOT_RUNNING,
         message: schedulerM('scheduler_notRunning'),
       })
     }
 
-    clearInterval(tickTimer)
-    tickTimer = null
+    stopTimer()
 
     logger.info('Scheduler stopped')
     return ok(undefined)
@@ -480,7 +378,7 @@ export const scheduler: SchedulerFunctions = {
     if (!currentConfig)
       return notInitialized.result()
 
-    const task = taskRegistry.get(taskId)
+    const task = getTask(taskId)
     if (!task) {
       return err({
         code: SchedulerErrorCode.TASK_NOT_FOUND,
@@ -489,7 +387,7 @@ export const scheduler: SchedulerFunctions = {
     }
 
     logger.info('Manually triggering task', { taskId })
-    const log = await runTask(task)
+    const log = await runTask(task, currentConfig)
     return ok(log)
   },
 
@@ -521,7 +419,7 @@ export const scheduler: SchedulerFunctions = {
 
   /** 获取已注册任务 */
   get tasks(): ReadonlyMap<string, TaskDefinition> {
-    return taskRegistry
+    return getTaskRegistry()
   },
 
   /** 当前配置 */
@@ -536,7 +434,7 @@ export const scheduler: SchedulerFunctions = {
 
   /** 是否正在运行 */
   get isRunning(): boolean {
-    return tickTimer !== null
+    return isTimerRunning()
   },
 
   /**
@@ -546,15 +444,8 @@ export const scheduler: SchedulerFunctions = {
    * 多次调用安全。
    */
   async close(): Promise<void> {
-    if (tickTimer !== null) {
-      clearInterval(tickTimer)
-      tickTimer = null
-    }
-
-    taskRegistry.clear()
-    cronCache.clear()
+    resetRunner()
     currentConfig = null
-    lastTickMinute = -1
 
     logger.info('Scheduler module closed')
   },
