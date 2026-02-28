@@ -30,7 +30,7 @@
  *   name: '清理过期数据',
  *   cron: '0 2 * * *',
  *   type: 'js',
- *   handler: async () => { console.log('cleanup') },
+ *   handler: async () => 'cleanup done',
  * })
  *
  * // 注册 API 任务
