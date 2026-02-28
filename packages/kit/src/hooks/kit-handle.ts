@@ -76,7 +76,7 @@ export function createHandle(config: HookConfig = {}): Handle {
     const requestId = generateId('req')
 
     // 添加请求 ID 到 event.locals
-    const locals = event.locals as Record<string, unknown>
+    const locals = event.locals as unknown as Record<string, unknown>
     locals.requestId = requestId
 
     // ── Cookie 加密代理（透明） ──
@@ -106,7 +106,7 @@ export function createHandle(config: HookConfig = {}): Handle {
 
         if (sessionToken) {
           session = await validateSession(sessionToken) ?? undefined
-          const sessionLocals = event.locals as Record<string, unknown>
+          const sessionLocals = event.locals as unknown as Record<string, unknown>
           sessionLocals.session = session
         }
       }
@@ -381,7 +381,7 @@ export function sequence(...handles: Handle[]): Handle {
   }
   return async ({ event, resolve }) => {
     return filtered.reduceRight(
-      (next, handle) => (event: any) => handle({ event, resolve: next }),
+      (next, handle) => (event: RequestEvent) => handle({ event, resolve: next }),
       resolve,
     )(event)
   }

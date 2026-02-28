@@ -489,6 +489,8 @@ hai-framework/
 │   ├── storage/      @hai/storage
 │   ├── iam/          @hai/iam
 │   ├── ai/           @hai/ai
+│   ├── reach/        @hai/reach
+│   ├── deploy/       @hai/deploy
 │   ├── kit/          @hai/kit
 │   ├── ui/           @hai/ui
 │   └── cli/          @hai/cli

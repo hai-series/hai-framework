@@ -33,6 +33,10 @@ logs/
 # 类型生成
 *.tsbuildinfo
 
+# 构建生成的声明文件（tsup 输出到 dist/，src/ 下的为误生成）
+packages/*/src/**/*.d.ts
+packages/*/src/**/*.d.ts.map
+
 # 临时文件
 tmp/
 temp/
