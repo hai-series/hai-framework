@@ -6,7 +6,8 @@
 
 import * as m from '$lib/paraglide/messages.js'
 import { IdParamSchema } from '$lib/server/schemas/index.js'
-import { audit, permissionService, roleService } from '$lib/server/services/index.js'
+import { permissionService, roleService } from '$lib/server/services/index.js'
+import { audit } from '@h-ai/audit'
 import { kit } from '@h-ai/kit'
 
 /**
@@ -70,7 +71,7 @@ export const PUT = kit.handler(async ({ params, request, locals, getClientAddres
   // 记录审计日志
   const ip = getClientAddress()
   const ua = request.headers.get('user-agent') ?? undefined
-  await audit.crud(
+  await audit.helper.crud(
     locals.session?.userId ?? null,
     'update',
     'role',
@@ -105,7 +106,7 @@ export const DELETE = kit.handler(async ({ params, locals, request, getClientAdd
   // 记录审计日志
   const ip = getClientAddress()
   const ua = request.headers.get('user-agent') ?? undefined
-  await audit.crud(
+  await audit.helper.crud(
     locals.session?.userId ?? null,
     'delete',
     'role',
