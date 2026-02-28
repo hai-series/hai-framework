@@ -9,6 +9,7 @@
 
 import type { Middleware, RateLimitConfig } from '../kit-types.js'
 import { core } from '@h-ai/core'
+import { getKitMessage } from '../kit-i18n.js'
 
 /**
  * 速率限制存储条目
@@ -44,6 +45,18 @@ export interface RateLimitStore {
   set: (key: string, entry: RateLimitEntry) => Promise<void> | void
   /** 删除指定 key 的限流条目 */
   delete: (key: string) => Promise<void> | void
+  /**
+   * 原子自增并返回当前计数和重置时间
+   *
+   * 实现时必须保证 get→increment→set 操作的原子性，
+   * 防止并发请求在窗口切换时产生竞态绕过限流。
+   * 若未实现，则退回非原子 get+set 流程。
+   *
+   * @param key - 限流键
+   * @param windowMs - 窗口时长（ms）
+   * @returns 自增后的计数和窗口重置时间
+   */
+  increment?: (key: string, windowMs: number) => Promise<RateLimitEntry> | RateLimitEntry
 }
 
 /**
@@ -88,6 +101,26 @@ export class MemoryRateLimitStore implements RateLimitStore {
 
   delete(key: string): void {
     this.store.delete(key)
+  }
+
+  /**
+   * 原子自增（内存实现为同步操作，天然原子）
+   *
+   * @param key - 限流键
+   * @param windowMs - 窗口时长
+   * @returns 自增后的条目
+   */
+  increment(key: string, windowMs: number): RateLimitEntry {
+    const now = Date.now()
+    let entry = this.store.get(key)
+    if (!entry || entry.resetAt < now) {
+      entry = { count: 1, resetAt: now + windowMs }
+    }
+    else {
+      entry.count++
+    }
+    this.store.set(key, entry)
+    return entry
   }
 }
 
@@ -137,17 +170,22 @@ export function rateLimitMiddleware(config: RateLimitConfig): Middleware {
     const key = keyGenerator(event)
     const now = Date.now()
 
-    let entry = await store.get(key)
-
-    if (!entry || entry.resetAt < now) {
-      entry = {
-        count: 0,
-        resetAt: now + windowMs,
-      }
+    // 优先使用原子 increment，防止并发竞态
+    let entry: RateLimitEntry
+    if (store.increment) {
+      entry = await store.increment(key, windowMs)
     }
-
-    entry.count++
-    await store.set(key, entry)
+    else {
+      // 退回非原子流程（仅用于未实现 increment 的存储后端）
+      const existing = await store.get(key)
+      if (!existing || existing.resetAt < now) {
+        entry = { count: 1, resetAt: now + windowMs }
+      }
+      else {
+        entry = { ...existing, count: existing.count + 1 }
+      }
+      await store.set(key, entry)
+    }
 
     // 设置速率限制头
     const remaining = Math.max(0, maxRequests - entry.count)
@@ -165,7 +203,7 @@ export function rateLimitMiddleware(config: RateLimitConfig): Middleware {
           success: false,
           error: {
             code: 'RATE_LIMIT_EXCEEDED',
-            message: 'Too many requests, please try again later',
+            message: getKitMessage('kit_rateLimitExceeded'),
           },
           requestId,
         }),

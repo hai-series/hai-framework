@@ -131,6 +131,11 @@ function calculateEtag(data: Buffer): string {
  * @throws 当解析后路径超出 root 范围时抛出异常
  */
 function safePath(root: string, key: string): string {
+  // 拒绝绝对路径输入，防止 Windows 盘符绕过（如 D:\etc\passwd）
+  if (path.isAbsolute(key)) {
+    throw new Error(storageM('storage_pathTraversal'))
+  }
+
   // 规范化路径，移除 ../ 等
   const normalized = path.normalize(key).replace(/^(\.\.(\/|\\|$))+/, '')
   const fullPath = path.join(root, normalized)
@@ -297,9 +302,8 @@ export function createLocalProvider(): StorageProvider {
           // 元数据文件不存在，忽略
         }
 
-        // 计算 ETag
-        const data = await fsp.readFile(filePath)
-        const etag = calculateEtag(data)
+        // 基于文件大小和修改时间生成 ETag（无需读取整个文件）
+        const etag = `"${stat.size.toString(16)}-${stat.mtimeMs.toString(16)}"`
 
         return ok({
           key,

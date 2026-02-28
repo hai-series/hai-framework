@@ -40,6 +40,9 @@ const taskRegistry = new Map<string, TaskDefinition>()
 /** 解析后的 Cron 实例缓存 */
 const cronCache = new Map<string, Cron>()
 
+/** 当前正在执行中的任务 ID 集合（防止同一任务并发执行） */
+const runningTasks = new Set<string>()
+
 /** 调度器定时器 ID */
 let tickTimer: ReturnType<typeof setInterval> | null = null
 
@@ -81,9 +84,16 @@ function tick(config: SchedulerConfig): void {
       continue
 
     if (cron.match(now)) {
+      // 跳过正在执行的任务，防止并发重复执行
+      if (runningTasks.has(taskId)) {
+        logger.debug('Skipping task already running', { taskId, taskName: task.name })
+        continue
+      }
       logger.info('Triggering scheduled task', { taskId, taskName: task.name })
-      // 异步执行，不阻塞 tick
-      void runTask(task, config)
+      // 异步执行，不阻塞 tick；捕获未处理拒绝
+      void runTask(task, config).catch((error) => {
+        logger.error('Unhandled task execution error', { taskId, error })
+      })
     }
   }
 }
@@ -99,26 +109,32 @@ function tick(config: SchedulerConfig): void {
  * @returns 任务执行日志
  */
 export async function runTask(task: TaskDefinition, config: SchedulerConfig): Promise<TaskExecutionLog> {
-  const log = await executeTask({
-    id: task.id,
-    name: task.name,
-    type: task.type,
-    handler: task.type === 'js' ? task.handler : undefined,
-    api: task.type === 'api' ? task.api : undefined,
-  })
+  runningTasks.add(task.id)
+  try {
+    const log = await executeTask({
+      id: task.id,
+      name: task.name,
+      type: task.type,
+      handler: task.type === 'js' ? task.handler : undefined,
+      api: task.type === 'api' ? task.api : undefined,
+    })
 
-  if (config.enableDb && db.isInitialized) {
-    await saveLog(config.tableName, log)
-  }
+    if (config.enableDb && db.isInitialized) {
+      await saveLog(config.tableName, log)
+    }
 
-  if (log.status === 'failed') {
-    logger.warn('Task execution failed', { taskId: task.id, error: log.error })
-  }
-  else {
-    logger.info('Task execution succeeded', { taskId: task.id, duration: log.duration })
-  }
+    if (log.status === 'failed') {
+      logger.warn('Task execution failed', { taskId: task.id, error: log.error })
+    }
+    else {
+      logger.info('Task execution succeeded', { taskId: task.id, duration: log.duration })
+    }
 
-  return log
+    return log
+  }
+  finally {
+    runningTasks.delete(task.id)
+  }
 }
 
 // =============================================================================
@@ -245,5 +261,6 @@ export function resetRunner(): void {
   stopTimer()
   taskRegistry.clear()
   cronCache.clear()
+  runningTasks.clear()
   lastTickMinute = -1
 }
