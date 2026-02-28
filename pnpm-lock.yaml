@@ -352,12 +352,18 @@ importers:
 
   apps/corporate-website:
     dependencies:
+      '@h-ai/ai':
+        specifier: workspace:*
+        version: link:../../packages/ai
       '@h-ai/core':
         specifier: workspace:*
         version: link:../../packages/core
       '@h-ai/kit':
         specifier: workspace:*
         version: link:../../packages/kit
+      '@h-ai/reach':
+        specifier: workspace:*
+        version: link:../../packages/reach
       '@h-ai/ui':
         specifier: workspace:*
         version: link:../../packages/ui
