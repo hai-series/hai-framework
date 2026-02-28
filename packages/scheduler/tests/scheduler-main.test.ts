@@ -51,6 +51,21 @@ describe('scheduler', () => {
       expect(scheduler.config?.tableName).toBe('scheduler_logs')
       expect(scheduler.config?.tickInterval).toBe(1000)
     })
+
+    it('含特殊字符的 tableName 应被 Zod 校验拒绝', async () => {
+      const result = await scheduler.init({ enableDb: false, tableName: 'logs; DROP TABLE users' })
+      expect(result.success).toBe(false)
+      if (!result.success) {
+        expect(result.error.code).toBe(SchedulerErrorCode.INIT_FAILED)
+      }
+    })
+
+    it('自定义 tableName 和 tickInterval 应生效', async () => {
+      const result = await scheduler.init({ enableDb: false, tableName: 'custom_logs', tickInterval: 500 })
+      expect(result.success).toBe(true)
+      expect(scheduler.config?.tableName).toBe('custom_logs')
+      expect(scheduler.config?.tickInterval).toBe(500)
+    })
   })
 
   describe('register / unregister', () => {
@@ -238,6 +253,34 @@ describe('scheduler', () => {
         expect(result.error.code).toBe(SchedulerErrorCode.TASK_NOT_FOUND)
       }
     })
+
+    it('触发失败的 JS 任务应记录错误信息', async () => {
+      await scheduler.init({ enableDb: false })
+      scheduler.register({
+        id: 'fail-js',
+        name: '失败任务',
+        cron: '* * * * *',
+        type: 'js',
+        handler: () => { throw new Error('handler error') },
+      })
+
+      const result = await scheduler.trigger('fail-js')
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data.status).toBe('failed')
+        expect(result.data.error).toContain('handler error')
+        expect(result.data.result).toBeNull()
+        expect(result.data.duration).toBeGreaterThanOrEqual(0)
+      }
+    })
+
+    it('未初始化时触发应返回 NOT_INITIALIZED', async () => {
+      const result = await scheduler.trigger('any-task')
+      expect(result.success).toBe(false)
+      if (!result.success) {
+        expect(result.error.code).toBe(SchedulerErrorCode.NOT_INITIALIZED)
+      }
+    })
   })
 
   describe('数据库集成', () => {
@@ -304,11 +347,117 @@ describe('scheduler', () => {
       }
     })
 
+    it('应按 taskId 和 status 组合过滤日志', async () => {
+      await db.init({ type: 'sqlite', database: ':memory:' })
+      await scheduler.init({ enableDb: true })
+
+      scheduler.register({
+        id: 'mixed-task',
+        name: '混合任务',
+        cron: '* * * * *',
+        type: 'js',
+        handler: () => 'ok',
+      })
+      scheduler.register({
+        id: 'other-task',
+        name: '其他任务',
+        cron: '* * * * *',
+        type: 'js',
+        handler: () => 'ok',
+      })
+
+      await scheduler.trigger('mixed-task')
+      await scheduler.trigger('other-task')
+
+      // 组合过滤：指定 taskId + status
+      const logsResult = await scheduler.getLogs({ taskId: 'mixed-task', status: 'success' })
+      expect(logsResult.success).toBe(true)
+      if (logsResult.success) {
+        expect(logsResult.data).toHaveLength(1)
+        expect(logsResult.data[0].taskId).toBe('mixed-task')
+      }
+    })
+
+    it('多次触发应创建多条日志', async () => {
+      await db.init({ type: 'sqlite', database: ':memory:' })
+      await scheduler.init({ enableDb: true })
+
+      scheduler.register({
+        id: 'multi-task',
+        name: '多次触发',
+        cron: '* * * * *',
+        type: 'js',
+        handler: () => 'run',
+      })
+
+      await scheduler.trigger('multi-task')
+      await scheduler.trigger('multi-task')
+      await scheduler.trigger('multi-task')
+
+      const logsResult = await scheduler.getLogs({ taskId: 'multi-task' })
+      expect(logsResult.success).toBe(true)
+      if (logsResult.success) {
+        expect(logsResult.data).toHaveLength(3)
+        // 按 id 降序排列（最新在前）
+        expect(logsResult.data[0].id).toBeGreaterThan(logsResult.data[2].id)
+      }
+    })
+
+    it('应支持分页查询（limit/offset）', async () => {
+      await db.init({ type: 'sqlite', database: ':memory:' })
+      await scheduler.init({ enableDb: true })
+
+      scheduler.register({
+        id: 'page-task',
+        name: '分页任务',
+        cron: '* * * * *',
+        type: 'js',
+        handler: () => 'data',
+      })
+
+      // 触发 5 次
+      for (let i = 0; i < 5; i++) {
+        await scheduler.trigger('page-task')
+      }
+
+      // 第一页：limit 2
+      const page1 = await scheduler.getLogs({ taskId: 'page-task', limit: 2 })
+      expect(page1.success).toBe(true)
+      if (page1.success) {
+        expect(page1.data).toHaveLength(2)
+      }
+
+      // 第二页：limit 2, offset 2
+      const page2 = await scheduler.getLogs({ taskId: 'page-task', limit: 2, offset: 2 })
+      expect(page2.success).toBe(true)
+      if (page2.success) {
+        expect(page2.data).toHaveLength(2)
+      }
+
+      // 第三页：limit 2, offset 4（只剩1条）
+      const page3 = await scheduler.getLogs({ taskId: 'page-task', limit: 2, offset: 4 })
+      expect(page3.success).toBe(true)
+      if (page3.success) {
+        expect(page3.data).toHaveLength(1)
+      }
+    })
+
     it('数据库未初始化时 getLogs 应返回错误', async () => {
       await scheduler.init({ enableDb: false })
 
       const result = await scheduler.getLogs()
       expect(result.success).toBe(false)
+      if (!result.success) {
+        expect(result.error.code).toBe(SchedulerErrorCode.DB_SAVE_FAILED)
+      }
+    })
+
+    it('未初始化时 getLogs 应返回 NOT_INITIALIZED', async () => {
+      const result = await scheduler.getLogs()
+      expect(result.success).toBe(false)
+      if (!result.success) {
+        expect(result.error.code).toBe(SchedulerErrorCode.NOT_INITIALIZED)
+      }
     })
   })
 
