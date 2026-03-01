@@ -36,43 +36,26 @@ export interface ThemeGroup {
 }
 
 /**
- * DaisyUI 内置主题配置
+ * DaisyUI 内置主题配置（精选）
  */
 export const THEMES: ThemeInfo[] = [
   // 亮色主题
   { id: 'light', name: 'Light', dark: false, primaryColor: '#570df8', bgColor: '#ffffff' },
   { id: 'cupcake', name: 'Cupcake', dark: false, primaryColor: '#65c3c8', bgColor: '#faf7f5' },
-  { id: 'bumblebee', name: 'Bumblebee', dark: false, primaryColor: '#e0a82e', bgColor: '#ffffff' },
   { id: 'emerald', name: 'Emerald', dark: false, primaryColor: '#66cc8a', bgColor: '#ffffff' },
   { id: 'corporate', name: 'Corporate', dark: false, primaryColor: '#4b6bfb', bgColor: '#ffffff' },
-  { id: 'retro', name: 'Retro', dark: false, primaryColor: '#ef9995', bgColor: '#e4d8b4' },
-  { id: 'valentine', name: 'Valentine', dark: false, primaryColor: '#e96d7b', bgColor: '#f0d6e8' },
-  { id: 'garden', name: 'Garden', dark: false, primaryColor: '#5c7f67', bgColor: '#e9e7e7' },
-  { id: 'aqua', name: 'Aqua', dark: false, primaryColor: '#09ecf3', bgColor: '#345da7' },
   { id: 'lofi', name: 'Lo-Fi', dark: false, primaryColor: '#0d0d0d', bgColor: '#ffffff' },
-  { id: 'pastel', name: 'Pastel', dark: false, primaryColor: '#d1c1d7', bgColor: '#f5f0fa' },
-  { id: 'fantasy', name: 'Fantasy', dark: false, primaryColor: '#6e0b75', bgColor: '#ffffff' },
-  { id: 'wireframe', name: 'Wireframe', dark: false, primaryColor: '#b8b8b8', bgColor: '#ffffff' },
-  { id: 'cmyk', name: 'CMYK', dark: false, primaryColor: '#45aeee', bgColor: '#ffffff' },
-  { id: 'autumn', name: 'Autumn', dark: false, primaryColor: '#8c0327', bgColor: '#f1f1f1' },
-  { id: 'acid', name: 'Acid', dark: false, primaryColor: '#ff00f4', bgColor: '#fafafa' },
-  { id: 'lemonade', name: 'Lemonade', dark: false, primaryColor: '#519903', bgColor: '#ffffff' },
   { id: 'winter', name: 'Winter', dark: false, primaryColor: '#047aff', bgColor: '#ffffff' },
   { id: 'nord', name: 'Nord', dark: false, primaryColor: '#5e81ac', bgColor: '#eceff4' },
   // 暗色主题
   { id: 'dark', name: 'Dark', dark: true, primaryColor: '#661ae6', bgColor: '#1d232a' },
-  { id: 'synthwave', name: 'Synthwave', dark: true, primaryColor: '#e779c1', bgColor: '#1a103d' },
-  { id: 'cyberpunk', name: 'Cyberpunk', dark: true, primaryColor: '#ff7598', bgColor: '#ffee00' },
-  { id: 'halloween', name: 'Halloween', dark: true, primaryColor: '#f28c18', bgColor: '#212121' },
-  { id: 'forest', name: 'Forest', dark: true, primaryColor: '#1eb854', bgColor: '#171212' },
-  { id: 'black', name: 'Black', dark: true, primaryColor: '#ffffff', bgColor: '#000000' },
-  { id: 'luxury', name: 'Luxury', dark: true, primaryColor: '#c9a53d', bgColor: '#171618' },
   { id: 'dracula', name: 'Dracula', dark: true, primaryColor: '#ff79c6', bgColor: '#282a36' },
   { id: 'business', name: 'Business', dark: true, primaryColor: '#1c4f82', bgColor: '#202020' },
   { id: 'night', name: 'Night', dark: true, primaryColor: '#38bdf8', bgColor: '#0f172a' },
-  { id: 'coffee', name: 'Coffee', dark: true, primaryColor: '#db924b', bgColor: '#20161f' },
   { id: 'dim', name: 'Dim', dark: true, primaryColor: '#9fe88d', bgColor: '#2a303c' },
   { id: 'sunset', name: 'Sunset', dark: true, primaryColor: '#ff865b', bgColor: '#1a1919' },
+  { id: 'luxury', name: 'Luxury', dark: true, primaryColor: '#c9a53d', bgColor: '#171618' },
+  { id: 'coffee', name: 'Coffee', dark: true, primaryColor: '#db924b', bgColor: '#20161f' },
 ]
 
 /**

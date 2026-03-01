@@ -48,6 +48,7 @@ export function createCreateUserSchema() {
     password: z.string().min(minLen, m.api_auth_password_too_short()),
     display_name: z.string().optional(),
     roles: z.array(z.string()).optional(),
+    status: z.enum(['active', 'inactive', 'suspended']).optional(),
   })
 }
 
@@ -60,6 +61,7 @@ export function createUpdateUserSchema() {
     password: z.string().min(minLen).optional(),
     display_name: z.string().optional(),
     roles: z.array(z.string()).optional(),
+    status: z.enum(['active', 'inactive', 'suspended']).optional(),
   })
 }
 

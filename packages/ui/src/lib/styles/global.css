@@ -9,10 +9,10 @@
  * =============================================================================
  */
 
-/* 自定义滚动条 */
+/* ─── 滚动条 ─── */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
 }
 
 ::-webkit-scrollbar-track {
@@ -20,98 +20,131 @@
 }
 
 ::-webkit-scrollbar-thumb {
-  background: oklch(0.7 0 0 / 0.3);
-  border-radius: 3px;
+  background: oklch(0.7 0 0 / 0.2);
+  border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: oklch(0.6 0 0 / 0.5);
+  background: oklch(0.55 0 0 / 0.35);
 }
 
-/* 平滑滚动 */
+/* ─── 基础 ─── */
 html {
   scroll-behavior: smooth;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-/* 表单焦点样式增强 */
+/* ─── 表单焦点 ─── */
 .input:focus,
 .select:focus,
 .textarea:focus {
   outline: none;
-  box-shadow: 0 0 0 2px oklch(var(--p) / 0.2);
+  box-shadow: 0 0 0 2px oklch(var(--p) / 0.15);
 }
 
-/* 卡片悬停效果 */
+/* ─── 隐藏浏览器原生密码显示按钮（使用自定义切换） ─── */
+input::-ms-reveal,
+input::-ms-clear {
+  display: none;
+}
+
+/* ─── 卡片 ─── */
 .card {
-  transition: box-shadow 0.2s ease;
+  transition: box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+              transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.card:hover {
-  box-shadow: 0 4px 12px -2px oklch(0 0 0 / 0.1);
-}
-
-/* 按钮过渡 */
+/* ─── 按钮 ─── */
 .btn {
-  transition: all 0.2s ease;
+  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* 动画：从右滑入 */
-@keyframes slide-in-from-right {
-  from {
-    transform: translateX(100%);
-    opacity: 0;
-  }
-  to {
-    transform: translateX(0);
-    opacity: 1;
-  }
+/* ─── 动画 keyframes ─── */
+@keyframes hai-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
-/* 动画：从右滑出 */
-@keyframes slide-out-to-right {
-  from {
-    transform: translateX(0);
-    opacity: 1;
-  }
-  to {
-    transform: translateX(100%);
-    opacity: 0;
-  }
+@keyframes hai-fade-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
 }
 
-/* 动画：淡入 */
-@keyframes fade-in {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
+@keyframes hai-slide-up {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
-/* 动画：淡出 */
-@keyframes fade-out {
-  from {
-    opacity: 1;
-  }
-  to {
-    opacity: 0;
-  }
+@keyframes hai-slide-down {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
-/* 动画类 */
-.animate-slide-in-from-right {
-  animation: slide-in-from-right 0.3s ease-out;
+@keyframes hai-scale-in {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
 }
 
-.animate-slide-out-to-right {
-  animation: slide-out-to-right 0.3s ease-in forwards;
+@keyframes hai-scale-out {
+  from { opacity: 1; transform: scale(1); }
+  to { opacity: 0; transform: scale(0.96); }
 }
 
-.animate-fade-in {
-  animation: fade-in 0.2s ease-out;
+@keyframes hai-slide-in-right {
+  from { opacity: 0; transform: translateX(100%); }
+  to { opacity: 1; transform: translateX(0); }
 }
 
-.animate-fade-out {
-  animation: fade-out 0.2s ease-in forwards;
+@keyframes hai-slide-out-right {
+  from { opacity: 1; transform: translateX(0); }
+  to { opacity: 0; transform: translateX(100%); }
 }
+
+@keyframes hai-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* ─── 动画工具类 ─── */
+.hai-fade-in {
+  animation: hai-fade-in 0.2s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+.hai-fade-out {
+  animation: hai-fade-out 0.15s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+.hai-slide-up {
+  animation: hai-slide-up 0.2s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.hai-slide-down {
+  animation: hai-slide-down 0.2s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.hai-scale-in {
+  animation: hai-scale-in 0.15s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.hai-scale-out {
+  animation: hai-scale-out 0.1s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+.hai-slide-in-right {
+  animation: hai-slide-in-right 0.25s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.hai-slide-out-right {
+  animation: hai-slide-out-right 0.2s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+/* 兼容旧动画类名 */
+.animate-slide-in-from-right { animation: hai-slide-in-right 0.3s ease-out; }
+.animate-slide-out-to-right { animation: hai-slide-out-right 0.3s ease-in forwards; }
+.animate-fade-in { animation: hai-fade-in 0.2s ease-out; }
+.animate-fade-out { animation: hai-fade-out 0.2s ease-in forwards; }
+.animate-in { animation-duration: 0.3s; animation-timing-function: ease-out; animation-fill-mode: both; }
+.slide-in-from-right { animation-name: hai-slide-in-right; }
+.slide-in-from-left { animation-name: hai-slide-in-right; animation-direction: reverse; }
+.fade-in { animation-name: hai-fade-in; }

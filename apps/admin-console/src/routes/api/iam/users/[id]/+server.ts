@@ -39,7 +39,7 @@ export const PUT = kit.handler(async ({ params, request, locals, getClientAddres
   kit.guard.requirePermission(locals.session, 'user:update')
 
   const { id: userId } = kit.validate.paramsOrFail(params, IdParamSchema)
-  const { username, email, password, display_name, roles } = await kit.validate.formOrFail(request, createUpdateUserSchema())
+  const { username, email, password, display_name, roles, status } = await kit.validate.formOrFail(request, createUpdateUserSchema())
 
   // 检查用户是否存在
   const existingResult = await iam.user.getUser(userId)
@@ -47,14 +47,16 @@ export const PUT = kit.handler(async ({ params, request, locals, getClientAddres
     return kit.response.notFound(m.api_iam_users_not_found())
   }
 
-  // 更新用户信息
-  const updateData: Partial<{ username: string, email: string, displayName: string }> = {}
+  // 更新用户信息（含启用/禁用状态）
+  const updateData: Partial<{ username: string, email: string, displayName: string, enabled: boolean }> = {}
   if (username)
     updateData.username = username
   if (email)
     updateData.email = email
   if (display_name !== undefined)
     updateData.displayName = display_name
+  if (status !== undefined)
+    updateData.enabled = status === 'active'
 
   if (Object.keys(updateData).length > 0) {
     const updateResult = await iam.user.updateUser(userId, updateData)

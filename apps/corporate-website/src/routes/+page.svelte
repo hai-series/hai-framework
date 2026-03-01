@@ -149,7 +149,7 @@
           <input
             type="text"
             placeholder="输入您的问题..."
-            class="input input-bordered flex-1"
+            class="input flex-1"
             bind:value={chatInput}
             disabled={chatLoading}
           />

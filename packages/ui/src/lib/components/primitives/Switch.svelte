@@ -36,7 +36,7 @@
   }
 </script>
 
-<div class="form-control">
+<div class="inline-flex">
   <label class="label cursor-pointer gap-2" for={id}>
     <input
       {id}
@@ -47,7 +47,7 @@
       onchange={handleChange}
     />
     {#if label}
-      <span class="label-text">{label}</span>
+      <span>{label}</span>
     {/if}
   </label>
 </div>

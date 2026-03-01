@@ -2,10 +2,15 @@
  * =============================================================================
  * E2E 测试 - IAM 用户管理页面 UI
  * =============================================================================
+ * 覆盖范围：
+ * - 页面结构（标题、按钮、表格、对话框）
+ * - 搜索功能
+ * - 通过 UI 对话框创建、编辑、删除用户（走 apiFetch 传输加密链路）
+ * =============================================================================
  */
 
 import { expect, test } from '@playwright/test'
-import { registerAndLogin } from './helpers'
+import { registerAndLogin, uniqueUser } from './helpers'
 
 test.describe('IAM Users UI', () => {
   // ---------------------------------------------------------------------------
@@ -78,8 +83,8 @@ test.describe('IAM Users UI', () => {
     await page.goto('/admin/iam/users')
     await page.waitForLoadState('domcontentloaded')
 
-    // 至少一行有状态标识（活跃/未激活/已禁用）
-    const statusBadge = page.locator('table tbody td').filter({ hasText: /活跃|未激活|已禁用|启用|停用|active|inactive|suspended/i })
+    // 至少一行有状态标识（正常/未激活/已禁用/Active/Inactive/Disabled）
+    const statusBadge = page.locator('table tbody td').filter({ hasText: /正常|未激活|已禁用|Active|Inactive|Disabled/i })
     await expect(statusBadge.first()).toBeVisible()
   })
 
@@ -173,5 +178,104 @@ test.describe('IAM Users UI', () => {
     const usernameInput = page.locator('#username')
     const validity = await usernameInput.evaluate((el: HTMLInputElement) => el.validity.valid)
     expect(validity).toBe(false)
+  })
+
+  // ---------------------------------------------------------------------------
+  // 通过 UI 对话框创建用户
+  // ---------------------------------------------------------------------------
+  test('通过对话框创建用户后出现在列表中', async ({ page, request }) => {
+    await registerAndLogin(page, request, 'usrui')
+    await page.goto('/admin/iam/users')
+    await page.waitForLoadState('domcontentloaded')
+
+    const newUser = uniqueUser('create')
+
+    // 打开新建对话框
+    const createBtn = page.locator('main').getByRole('button', { name: /新建|创建|添加/ })
+    await createBtn.first().click()
+    await expect(page.locator('#username')).toBeVisible()
+
+    // 填写表单
+    await page.locator('#username').fill(newUser.username)
+    await page.locator('#email').fill(newUser.email)
+    await page.locator('input[type="password"]').first().fill(newUser.password)
+    // 确认密码（第二个密码输入框）
+    await page.locator('input[type="password"]').nth(1).fill(newUser.password)
+
+    // 点击创建按钮
+    const submitBtn = page.locator('.modal-box, dialog').getByRole('button', { name: /创建|保存|提交/ }).last()
+    await submitBtn.click()
+
+    // 对话框应关闭
+    await expect(page.locator('#username')).not.toBeVisible({ timeout: 10_000 })
+
+    // 新用户出现在表格中
+    const row = page.locator('table tbody tr').filter({ hasText: newUser.username })
+    await expect(row.first()).toBeVisible({ timeout: 5_000 })
+  })
+
+  // ---------------------------------------------------------------------------
+  // 通过 UI 对话框编辑用户
+  // ---------------------------------------------------------------------------
+  test('通过对话框编辑用户后更新生效', async ({ page, request }) => {
+    await registerAndLogin(page, request, 'usrui')
+    await page.goto('/admin/iam/users')
+    await page.waitForLoadState('domcontentloaded')
+
+    // 等待表格渲染
+    await expect(page.locator('table tbody tr').first()).toBeVisible()
+
+    // 点击第一个用户行的编辑按钮
+    const editBtn = page.locator('table tbody tr').first().locator('button[aria-label]').first()
+    await editBtn.click()
+
+    // 等待编辑对话框打开
+    await expect(page.locator('#username')).toBeVisible()
+
+    // 修改显示名称
+    const newDisplayName = `UI_Edited_${Date.now().toString(36)}`
+    await page.locator('#display_name').fill(newDisplayName)
+
+    // 点击保存按钮
+    const saveBtn = page.locator('.modal-box, dialog').getByRole('button', { name: /保存|提交/ }).last()
+    await saveBtn.click()
+
+    // 对话框应关闭
+    await expect(page.locator('#username')).not.toBeVisible({ timeout: 10_000 })
+  })
+
+  // ---------------------------------------------------------------------------
+  // 通过 UI 删除用户
+  // ---------------------------------------------------------------------------
+  test('通过 UI 删除用户后从列表中消失', async ({ page, request }) => {
+    await registerAndLogin(page, request, 'usrui')
+
+    // 先通过 API 创建一个待删除的用户
+    const victim = uniqueUser('victim')
+    await request.post('/api/iam/users', {
+      data: {
+        username: victim.username,
+        email: victim.email,
+        password: victim.password,
+        status: 'active',
+      },
+    })
+
+    await page.goto('/admin/iam/users')
+    await page.waitForLoadState('domcontentloaded')
+
+    // 找到待删除用户的行
+    const row = page.locator('table tbody tr').filter({ hasText: victim.username })
+    await expect(row.first()).toBeVisible({ timeout: 5_000 })
+
+    // 监听 confirm 对话框并点击确认
+    page.on('dialog', dialog => dialog.accept())
+
+    // 点击删除按钮
+    const deleteBtn = row.first().locator('button[aria-label]').last()
+    await deleteBtn.click()
+
+    // 用户应从列表中消失
+    await expect(row.first()).not.toBeVisible({ timeout: 10_000 })
   })
 })

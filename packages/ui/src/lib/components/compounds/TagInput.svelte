@@ -32,7 +32,7 @@
 
   const containerClass = $derived(
     cn(
-      'input input-bordered flex flex-wrap items-center gap-1 min-h-[2.5rem] h-auto py-1',
+      'input flex flex-wrap items-center gap-1 min-h-[2.5rem] h-auto py-1',
       getInputSizeClass(size),
       disabled && 'input-disabled',
       className,

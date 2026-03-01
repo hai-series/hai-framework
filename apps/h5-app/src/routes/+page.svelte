@@ -33,7 +33,7 @@
 
 <!-- 搜索栏 -->
 <div class="sticky top-0 z-10 bg-base-100 p-3">
-  <div class="input input-bordered flex items-center gap-2 w-full">
+  <div class="input flex items-center gap-2 w-full">
     <span>🔍</span>
     <input type="text" class="grow" placeholder="搜索商品" />
   </div>

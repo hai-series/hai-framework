@@ -10,7 +10,7 @@
 name: hai Admin Console
 version: 0.1.0
 env: ${HAI_ENV:development}
-debug: ${HAI_DEBUG:false}
+debug: false
 
 # 语言设置
 defaultLocale: zh-CN

@@ -5,7 +5,7 @@
  */
 
 import type { PageServerLoad } from './$types'
-import { permissionService } from '$lib/server/services/index.js'
+import { permissionService, roleService } from '$lib/server/services/index.js'
 import { kit } from '@h-ai/kit'
 import { error } from '@sveltejs/kit'
 
@@ -15,9 +15,23 @@ export const load: PageServerLoad = async ({ locals }) => {
     error(403, { message: 'Forbidden' })
   }
 
-  const permissions = await permissionService.listGroupedByResource()
+  const [permissions, roles] = await Promise.all([
+    permissionService.listGroupedByResource(),
+    roleService.list(),
+  ])
 
-  // 从分组数据中派生资源与操作列表（避免重复调用 list()）
+  // 构建权限 → 角色的映射（permissionName → [roleName, ...]）
+  const permissionRolesMap: Record<string, string[]> = {}
+  for (const role of roles) {
+    for (const permName of role.permissions) {
+      if (!permissionRolesMap[permName]) {
+        permissionRolesMap[permName] = []
+      }
+      permissionRolesMap[permName].push(role.name)
+    }
+  }
+
+  // 从分组数据中派生资源与操作列表
   const resourceSet = new Set<string>()
   const actionSet = new Set<string>()
   for (const perms of Object.values(permissions)) {
@@ -31,6 +45,7 @@ export const load: PageServerLoad = async ({ locals }) => {
 
   return {
     permissions,
+    permissionRolesMap,
     resources: [...resourceSet].sort(),
     actions: [...actionSet].sort(),
   }

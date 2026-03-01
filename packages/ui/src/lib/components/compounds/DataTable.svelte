@@ -79,19 +79,19 @@
 </script>
 
 <div class='overflow-x-auto {className}'>
-  <table class='table w-full' class:table-zebra={striped}>
+  <table class='table w-full text-[13px]' class:table-zebra={striped}>
     <thead>
-      <tr>
+      <tr class='text-xs text-base-content/50 border-b border-base-content/6'>
         {#each columns as col}
           <th 
             style={col.width ? `width: ${col.width}` : ''}
-            class={getAlignClass(col.align)}
+            class="{getAlignClass(col.align)} font-medium"
           >
             {col.label}
           </th>
         {/each}
         {#if actions}
-          <th class='w-24 text-center'>{m('data_table_actions')}</th>
+          <th class='w-24 text-center font-medium'>{m('data_table_actions')}</th>
         {/if}
       </tr>
     </thead>
@@ -99,12 +99,12 @@
       {#if loading}
         <tr>
           <td colspan={columns.length + (actions ? 1 : 0)} class='text-center py-8'>
-            <span class='loading loading-spinner loading-md'></span>
+            <span class='loading loading-spinner loading-sm'></span>
           </td>
         </tr>
       {:else if data.length === 0}
         <tr>
-          <td colspan={columns.length + (actions ? 1 : 0)} class='text-center py-8 text-base-content/60'>
+          <td colspan={columns.length + (actions ? 1 : 0)} class='text-center py-8 text-base-content/40'>
             {#if empty}
               {@render empty()}
             {:else}
@@ -114,7 +114,7 @@
         </tr>
       {:else}
         {#each data as item (item[keyField])}
-          <tr class={hoverable ? 'hover' : ''}>
+          <tr class={hoverable ? 'hover:bg-base-content/3 transition-colors' : ''}>
             {#each columns as col}
               <td class={getAlignClass(col.align)}>{getValue(item, col)}</td>
             {/each}

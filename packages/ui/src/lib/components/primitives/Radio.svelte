@@ -54,7 +54,7 @@
         disabled={disabled || option.disabled}
         onchange={() => handleChange(option.value)}
       />
-      <span class="label-text">{option.label}</span>
+      <span>{option.label}</span>
     </label>
   {/each}
 </div>

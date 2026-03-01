@@ -24,7 +24,7 @@
   
   const fieldClass = $derived(
     cn(
-      'form-control w-full',
+      'fieldset w-full',
       className,
     )
   )
@@ -32,14 +32,12 @@
 
 <div class={fieldClass}>
   {#if label}
-    <label class="label" for={fieldId}>
-      <span class="label-text">
-        {label}
-        {#if required}
-          <span class="text-error">*</span>
-        {/if}
-      </span>
-    </label>
+    <legend class="fieldset-legend">
+      {label}
+      {#if required}
+        <span class="text-error">*</span>
+      {/if}
+    </legend>
   {/if}
   
   <div class="field-content">
@@ -49,11 +47,11 @@
   </div>
   
   {#if error || hint}
-    <div class="label">
+    <div>
       {#if error}
-        <span class="label-text-alt text-error">{error}</span>
+        <span class="fieldset-label text-error">{error}</span>
       {:else if hint}
-        <span class="label-text-alt text-base-content/60">{hint}</span>
+        <span class="fieldset-label text-base-content/60">{hint}</span>
       {/if}
     </div>
   {/if}

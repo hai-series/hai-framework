@@ -6,12 +6,18 @@ export default {
       fontFamily: {
         sans: [
           'Inter',
+          'ui-sans-serif',
           '-apple-system',
           'BlinkMacSystemFont',
           'Segoe UI',
           'Roboto',
+          'Helvetica Neue',
+          'Noto Sans',
           'sans-serif',
         ],
+      },
+      fontSize: {
+        '2xs': ['0.625rem', { lineHeight: '0.875rem' }],
       },
     },
   },

@@ -4,6 +4,7 @@
  * =============================================================================
  */
 
+import path from 'node:path'
 import process from 'node:process'
 import { paraglideVitePlugin } from '@inlang/paraglide-js'
 import { sveltekit } from '@sveltejs/kit/vite'
@@ -26,8 +27,16 @@ export default defineConfig(({ mode }) => {
         strategy: ['cookie', 'baseLocale'],
       }),
     ],
+    optimizeDeps: {
+      exclude: ['bits-ui'],
+    },
     server: {
       port: 5173,
+      fs: {
+        allow: [
+          path.resolve(process.cwd(), '..', '..'),
+        ],
+      },
     },
   }
 })

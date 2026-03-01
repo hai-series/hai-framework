@@ -56,7 +56,7 @@ test.describe('Sidebar', () => {
     await registerAndLogin(page, request, 'layout')
 
     // Logo 区域在 aside 内
-    const logoArea = page.locator('aside .h-16').first()
+    const logoArea = page.locator('aside .h-14').first()
     await expect(logoArea).toBeVisible()
   })
 
@@ -86,7 +86,7 @@ test.describe('Header', () => {
     await registerAndLogin(page, request, 'header')
 
     // 开发环境徽章
-    const devBadge = page.locator('header .bg-amber-100')
+    const devBadge = page.locator('header [class*="bg-amber"]')
     await expect(devBadge).toBeVisible()
   })
 
@@ -143,7 +143,7 @@ test.describe('User Menu', () => {
     await page.locator('.user-menu-container > button').first().click()
 
     // 退出按钮（text-error 样式）
-    const logoutBtn = page.locator('.user-menu-container .text-error')
+    const logoutBtn = page.locator('.user-menu-container [class*="text-error"]')
     await expect(logoutBtn).toBeVisible()
   })
 
@@ -155,7 +155,7 @@ test.describe('User Menu', () => {
     await page.waitForTimeout(300)
 
     // 点击退出
-    const logoutBtn = page.locator('.user-menu-container .text-error')
+    const logoutBtn = page.locator('.user-menu-container [class*="text-error"]')
     await logoutBtn.click()
 
     // 应跳转到登录页

@@ -172,7 +172,7 @@
               <div>
                 <BareInput
                   type="file"
-                  class="file-input file-input-bordered file-input-sm w-full max-w-xs"
+                  class="file-input file-input-sm w-full max-w-xs"
                   accept="image/*"
                   onchange={handleAvatarChange}
                 />
@@ -182,10 +182,8 @@
           </div>
         {:else}
           <!-- 其他字段 -->
-          <div class="form-control">
-            <div class="label">
-              <span class="label-text font-medium">{getFieldLabel(field)}</span>
-            </div>
+          <div class="fieldset">
+            <legend class="fieldset-legend font-medium">{getFieldLabel(field)}</legend>
             {#if editable && (editMode || alwaysEditable)}
               {#if field === 'bio'}
                 <Textarea

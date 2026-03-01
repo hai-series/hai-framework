@@ -27,7 +27,7 @@ test.describe('Admin Dashboard', () => {
     await registerAndLogin(page, request, 'dash')
 
     // 仪表盘应包含统计数据（数字）
-    await expect(page.locator('.stat-value, .text-3xl, .text-4xl').first()).toBeVisible({ timeout: 5000 })
+    await expect(page.locator('.stat-value, .text-2xl, .text-3xl, .text-4xl').first()).toBeVisible({ timeout: 5000 })
   })
 
   test('侧边栏导航可见', async ({ page, request }) => {

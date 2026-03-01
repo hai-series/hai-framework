@@ -59,15 +59,13 @@
     {/if}
 
     <form class="space-y-4" onsubmit={handleRegister}>
-      <div class="form-control">
-        <label class="label" for="username">
-          <span class="label-text">用户名</span>
-        </label>
+      <div class="fieldset">
+        <legend class="fieldset-legend">用户名</legend>
         <input
           id="username"
           type="text"
           placeholder="3-30 个字符"
-          class="input input-bordered w-full"
+          class="input w-full"
           bind:value={username}
           required
           minlength="3"
@@ -75,29 +73,25 @@
         />
       </div>
 
-      <div class="form-control">
-        <label class="label" for="email">
-          <span class="label-text">邮箱</span>
-        </label>
+      <div class="fieldset">
+        <legend class="fieldset-legend">邮箱</legend>
         <input
           id="email"
           type="email"
           placeholder="请输入邮箱"
-          class="input input-bordered w-full"
+          class="input w-full"
           bind:value={email}
           required
         />
       </div>
 
-      <div class="form-control">
-        <label class="label" for="password">
-          <span class="label-text">密码</span>
-        </label>
+      <div class="fieldset">
+        <legend class="fieldset-legend">密码</legend>
         <input
           id="password"
           type="password"
           placeholder="至少 6 个字符"
-          class="input input-bordered w-full"
+          class="input w-full"
           bind:value={password}
           required
           minlength="6"

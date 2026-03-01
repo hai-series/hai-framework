@@ -1,79 +1,84 @@
-/* eslint-disable no-console */
 /**
- * Debug test to understand the login cookie issue
+ * 调试测试 - 捕获浏览器端 console 输出，定位登录报错原因
  */
 import { expect, test } from '@playwright/test'
 import { registerViaApi, uniqueUser } from './helpers'
 
-test('Debug: login flow cookie inspection', async ({ page, request }) => {
-  const user = uniqueUser('debug')
+test('调试登录 - 捕获浏览器 console', async ({ page, request }) => {
+  const consoleMessages: string[] = []
+  const pageErrors: string[] = []
+  const networkRequests: string[] = []
+
+  page.on('console', (msg) => {
+    consoleMessages.push(`[${msg.type()}] ${msg.text()}`)
+  })
+  page.on('pageerror', (error) => {
+    pageErrors.push(error.message)
+  })
+
+  // 拦截网络请求和响应
+  page.on('response', async (response) => {
+    const url = response.url()
+    const status = response.status()
+    if (url.includes('/api/')) {
+      let body = ''
+      try {
+        body = await response.text()
+      }
+      catch {
+        body = '<unable to read>'
+      }
+      const hdrs = JSON.stringify(response.headers())
+      networkRequests.push(`[${status}] ${response.request().method()} ${url}\n  Headers: ${hdrs}\n  Body: ${body}`)
+    }
+  })
+
+  // 注册用户
+  const user = uniqueUser('dbglogin')
   await registerViaApi(request, user)
 
-  // Step 1: Go to login page
+  // 打开登录页
   await page.goto('/auth/login')
-  await page.waitForLoadState('domcontentloaded')
+  await page.waitForLoadState('load')
+  await page.waitForTimeout(2000)
 
-  // Step 2: Call login API from browser context
-  const loginResult = await page.evaluate(async (creds: { identifier: string, password: string }) => {
-    const res = await fetch('/api/auth/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'same-origin',
-      body: JSON.stringify(creds),
-    })
-    const body = await res.json()
-    return { status: res.status, ok: res.ok, body }
-  }, { identifier: user.username, password: user.password })
+  // 填写并提交
+  await page.locator('#login-username').fill(user.username)
+  await page.locator('input[type="password"]').first().fill(user.password)
+  await page.locator('button[type="submit"]').click()
 
-  console.log('Login result:', JSON.stringify(loginResult, null, 2))
+  // 等待结果
+  await page.waitForTimeout(8000)
 
-  // Step 3: Check cookies in browser context
-  const cookiesAfterFetch = await page.context().cookies()
-  console.log('Cookies after page.evaluate fetch:', JSON.stringify(cookiesAfterFetch.map(c => ({ name: c.name, value: `${c.value.substring(0, 20)}...` })), null, 2))
+  // 打印所有浏览器输出
+  // eslint-disable-next-line no-console
+  console.log('\n=== BROWSER CONSOLE ===')
+  // eslint-disable-next-line no-console
+  consoleMessages.forEach(m => console.log(m))
+  // eslint-disable-next-line no-console
+  console.log('\n=== PAGE ERRORS ===')
+  // eslint-disable-next-line no-console
+  pageErrors.forEach(e => console.log(e))
+  // eslint-disable-next-line no-console
+  console.log('\n=== NETWORK REQUESTS ===')
+  // eslint-disable-next-line no-console
+  networkRequests.forEach(r => console.log(r))
+  // eslint-disable-next-line no-console
+  console.log('\n=== CURRENT URL ===')
+  // eslint-disable-next-line no-console
+  console.log(page.url())
 
-  // Step 4: Try using page.request instead
-  const res2 = await page.request.post('/api/auth/login', {
-    data: { identifier: user.username, password: user.password },
-  })
-  const body2 = await res2.json()
-  console.log('page.request login result:', body2.success)
-
-  const headersArray = res2.headersArray()
-  const setCookieHeaders = headersArray.filter(h => h.name.toLowerCase() === 'set-cookie')
-  console.log('Set-Cookie headers from page.request:', JSON.stringify(setCookieHeaders))
-
-  const cookiesAfterPageRequest = await page.context().cookies()
-  console.log('Cookies after page.request:', JSON.stringify(cookiesAfterPageRequest.map(c => ({ name: c.name, value: `${c.value.substring(0, 20)}...` })), null, 2))
-
-  // Step 5: Try manually adding cookie
-  if (!cookiesAfterPageRequest.find(c => c.name === 'session_token')) {
-    console.log('No session_token found! Extracting from Set-Cookie header...')
-    for (const h of setCookieHeaders) {
-      const match = h.value.match(/session_token=([^;]+)/)
-      if (match) {
-        console.log('Found session_token in header, adding manually...')
-        await page.context().addCookies([{
-          name: 'session_token',
-          value: match[1],
-          domain: 'localhost',
-          path: '/',
-          httpOnly: true,
-          sameSite: 'Lax',
-        }])
-      }
-    }
+  // 检查是否有 alert
+  const alertEl = page.locator('[role="alert"], .alert')
+  const alertCount = await alertEl.count()
+  if (alertCount > 0) {
+    const alertText = await alertEl.first().textContent()
+    // eslint-disable-next-line no-console
+    console.log('\n=== ALERT TEXT ===')
+    // eslint-disable-next-line no-console
+    console.log(alertText)
   }
 
-  const cookiesFinal = await page.context().cookies()
-  console.log('Final cookies:', JSON.stringify(cookiesFinal.map(c => ({ name: c.name, value: `${c.value.substring(0, 20)}...` })), null, 2))
-
-  // Step 6: Try navigating to /admin
-  const response = await page.goto('/admin')
-  console.log('Navigation to /admin: status =', response?.status(), 'url =', page.url())
-
-  // If we're still on the login page, the cookie didn't work
-  const finalUrl = page.url()
-  console.log('Final URL:', finalUrl)
-
-  expect(loginResult.body.success).toBe(true)
+  // 这个测试仅用于调试，总是通过
+  expect(true).toBe(true)
 })

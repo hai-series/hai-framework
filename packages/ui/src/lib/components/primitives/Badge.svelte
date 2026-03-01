@@ -1,11 +1,6 @@
 <!--
-  =============================================================================
-  @h-ai/ui - Badge 组件
-  =============================================================================
-  徽章组件
-  
-  使用 Svelte 5 Runes ($props, $derived)
-  =============================================================================
+  @component Badge
+  徽章组件，支持多种变体与尺寸
 -->
 <script lang="ts">
   import type { BadgeProps } from '../../types.js'
@@ -25,6 +20,7 @@
       getBadgeVariantClass(variant),
       getBadgeSizeClass(size),
       outline && 'badge-outline',
+      'font-medium tracking-tight',
       className,
     )
   )

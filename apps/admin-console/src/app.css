@@ -1,59 +1,63 @@
 @import 'tailwindcss';
+@source "../../../packages/ui/src/lib/**/*.svelte";
+
+/* ─── hai-light / hai-dark 自有主题 ─── */
 @plugin "daisyui" {
   themes:
     light --default,
     dark --prefersdark,
     cupcake,
-    bumblebee,
     emerald,
     corporate,
-    synthwave,
-    retro,
-    cyberpunk,
-    valentine,
-    halloween,
-    garden,
-    forest,
-    aqua,
-    lofi,
-    pastel,
-    fantasy,
-    wireframe,
-    black,
-    luxury,
-    dracula,
-    cmyk,
-    autumn,
-    business,
-    acid,
-    lemonade,
-    night,
-    coffee,
-    winter,
-    dim,
     nord,
-    sunset;
+    lofi,
+    winter,
+    dracula,
+    night,
+    dim,
+    business,
+    sunset,
+    luxury,
+    coffee;
 }
 @plugin "@iconify/tailwind4" {
   prefixes: tabler;
 }
 
-/* DaisyUI 主题配置 */
+/* ─── 设计 token ─── */
 @theme {
-  /* 自定义颜色 */
   --color-brand: oklch(0.6 0.2 275);
+
+  /* 自定义阴影层级 */
+  --shadow-xs: 0 1px 2px oklch(0 0 0 / 0.04);
+  --shadow-soft: 0 2px 8px -2px oklch(0 0 0 / 0.06), 0 1px 2px -1px oklch(0 0 0 / 0.04);
+  --shadow-lifted: 0 4px 16px -4px oklch(0 0 0 / 0.08), 0 2px 4px -2px oklch(0 0 0 / 0.04);
+  --shadow-float: 0 8px 32px -8px oklch(0 0 0 / 0.12), 0 4px 8px -4px oklch(0 0 0 / 0.06);
+  --shadow-overlay: 0 16px 48px -12px oklch(0 0 0 / 0.18);
+
+  /* 动效曲线 */
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* tabular 数字 */
+  --font-feature-tabular: 'tnum';
 }
 
 /**
  * 全局样式
- * 注意：@hai/ui/styles/global.css 提供了可复用的全局样式
- * 但由于 Tailwind v4 CSS 导入限制，这里直接内联
  */
 
-/* 自定义滚动条 */
+/* ─── 字体渲染 ─── */
+html {
+  scroll-behavior: smooth;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ─── 滚动条 ─── */
 ::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
 }
 
 ::-webkit-scrollbar-track {
@@ -61,90 +65,65 @@
 }
 
 ::-webkit-scrollbar-thumb {
-  background: oklch(0.7 0 0 / 0.3);
-  border-radius: 3px;
+  background: oklch(0.7 0 0 / 0.2);
+  border-radius: 9999px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: oklch(0.6 0 0 / 0.5);
+  background: oklch(0.55 0 0 / 0.35);
 }
 
-/* 平滑滚动 */
-html {
-  scroll-behavior: smooth;
-}
-
-/* 表单焦点样式 */
+/* ─── 表单焦点 ─── */
 .input:focus,
 .select:focus,
 .textarea:focus {
   outline: none;
-  box-shadow: 0 0 0 2px oklch(var(--p) / 0.2);
+  box-shadow: 0 0 0 2px oklch(var(--p) / 0.15);
 }
 
-/* 卡片悬停效果 */
+/* ─── 隐藏浏览器原生密码显示按钮（使用自定义切换） ─── */
+input::-ms-reveal,
+input::-ms-clear,
+input::-webkit-credentials-auto-fill-button {
+  display: none !important;
+}
+
+/* ─── 卡片 ─── */
 .card {
-  transition: box-shadow 0.2s ease;
+  transition: box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+              transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-.card:hover {
-  box-shadow: 0 4px 12px -2px oklch(0 0 0 / 0.1);
-}
-
-/* 按钮过渡 */
+/* ─── 按钮 ─── */
 .btn {
-  transition: all 0.2s ease;
+  transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* 动画 */
-@keyframes slide-in-from-right {
-  from {
-    transform: translateX(100%);
-    opacity: 0;
-  }
-
-  to {
-    transform: translateX(0);
-    opacity: 1;
-  }
+/* ─── 动画 ─── */
+@keyframes hai-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
-@keyframes slide-in-from-left {
-  from {
-    transform: translateX(-100%);
-    opacity: 0;
-  }
-
-  to {
-    transform: translateX(0);
-    opacity: 1;
-  }
+@keyframes hai-scale-in {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
 }
 
-@keyframes fade-in {
-  from {
-    opacity: 0;
-  }
-
-  to {
-    opacity: 1;
-  }
+@keyframes hai-slide-up {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
 }
 
-.animate-in {
-  animation-duration: 0.3s;
-  animation-timing-function: ease-out;
-  animation-fill-mode: both;
+@keyframes hai-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
 }
 
-.slide-in-from-right {
-  animation-name: slide-in-from-right;
-}
+.hai-fade-in { animation: hai-fade-in 0.2s cubic-bezier(0.4, 0, 0.2, 1) both; }
+.hai-scale-in { animation: hai-scale-in 0.15s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.hai-slide-up { animation: hai-slide-up 0.2s cubic-bezier(0.16, 1, 0.3, 1) both; }
 
-.slide-in-from-left {
-  animation-name: slide-in-from-left;
-}
-
-.fade-in {
-  animation-name: fade-in;
-}
+/* 兼容旧类 */
+.animate-in { animation-duration: 0.3s; animation-timing-function: ease-out; animation-fill-mode: both; }
+.fade-in { animation-name: hai-fade-in; }

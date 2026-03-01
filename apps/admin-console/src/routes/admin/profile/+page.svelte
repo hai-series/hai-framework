@@ -295,39 +295,39 @@
   <title>{m.nav_profile()} - {m.app_title()}</title>
 </svelte:head>
 
-<div class="space-y-6">
+<div class="space-y-5">
   <div class="flex items-end justify-between gap-4">
     <div>
-      <h1 class="text-3xl font-bold tracking-tight text-base-content">{m.nav_profile()}</h1>
-      <p class="text-base-content/60 mt-2">{m.settings_subtitle()}</p>
+      <h1 class="text-xl font-semibold tracking-tight text-base-content">{m.nav_profile()}</h1>
+      <p class="text-sm text-base-content/45 mt-0.5">{m.settings_subtitle()}</p>
     </div>
-    <div class="badge badge-outline h-8 px-3 text-xs" data-testid="profile-roles">
+    <div class="badge badge-outline h-7 px-2.5 text-xs" data-testid="profile-roles">
       {data.profile.roles.join(', ') || '-'}
     </div>
   </div>
 
-  <div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
-    <aside class="card bg-base-100 shadow-sm rounded-xl xl:col-span-1">
-      <div class="card-body gap-5">
+  <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
+    <aside class="card bg-base-100 border border-base-content/6 rounded-xl xl:col-span-1">
+      <div class="card-body gap-4">
         <div class="space-y-1">
-          <p class="text-xs uppercase tracking-wider text-base-content/50">{m.iam_users_form_username()}</p>
-          <p class="text-lg font-semibold text-base-content" data-testid="profile-username">{profileUser.username || '-'}</p>
+          <p class="text-xs uppercase tracking-wider text-base-content/40">{m.iam_users_form_username()}</p>
+          <p class="text-base font-semibold text-base-content" data-testid="profile-username">{profileUser.username || '-'}</p>
         </div>
         <div class="space-y-1">
-          <p class="text-xs uppercase tracking-wider text-base-content/50">{m.iam_users_form_display_name()}</p>
-          <p class="text-base text-base-content">{profileUser.displayName || '-'}</p>
+          <p class="text-xs uppercase tracking-wider text-base-content/40">{m.iam_users_form_display_name()}</p>
+          <p class="text-sm text-base-content">{profileUser.displayName || '-'}</p>
         </div>
         <div class="space-y-1">
-          <p class="text-xs uppercase tracking-wider text-base-content/50">{m.iam_users_form_email()}</p>
-          <p class="text-sm text-base-content/80 break-all" data-testid="profile-email">{profileUser.email || '-'}</p>
+          <p class="text-xs uppercase tracking-wider text-base-content/40">{m.iam_users_form_email()}</p>
+          <p class="text-sm text-base-content/70 break-all" data-testid="profile-email">{profileUser.email || '-'}</p>
         </div>
       </div>
     </aside>
 
-    <section class="card bg-base-100 shadow-sm rounded-xl xl:col-span-2">
+    <section class="card bg-base-100 border border-base-content/6 rounded-xl xl:col-span-2">
       <div class="card-body gap-4">
         <div class="flex items-center justify-between">
-          <h2 class="text-lg font-semibold text-base-content">{m.nav_profile()}</h2>
+          <h2 class="text-sm font-semibold text-base-content">{m.nav_profile()}</h2>
         </div>
 
         {#if profileSuccess}
@@ -348,12 +348,12 @@
     </section>
   </div>
 
-  <section class="card bg-base-100 shadow-sm rounded-xl overflow-hidden" data-testid="profile-password-card">
+  <section class="card bg-base-100 border border-base-content/6 rounded-xl overflow-hidden" data-testid="profile-password-card">
     <div class="grid grid-cols-1 lg:grid-cols-12">
-      <aside class="lg:col-span-4 bg-base-200/50 border-b lg:border-b-0 lg:border-r border-base-content/5 p-6 space-y-4">
+      <aside class="lg:col-span-4 bg-base-content/2 border-b lg:border-b-0 lg:border-r border-base-content/6 p-5 space-y-4">
         <div>
-          <h2 class="text-lg font-semibold text-base-content">{m.iam_users_form_password()}</h2>
-          <p class="text-sm text-base-content/70 mt-2">
+          <h2 class="text-sm font-semibold text-base-content">{m.iam_users_form_password()}</h2>
+          <p class="text-xs text-base-content/50 mt-1.5">
             {m.profile_password_security_desc()}
           </p>
         </div>
@@ -372,7 +372,7 @@
 
       <div class="lg:col-span-8 p-6 lg:p-8">
         <ChangePasswordForm
-          class="max-w-2xl"
+          class="w-full"
           loading={passwordLoading}
           errors={passwordErrors}
           minPasswordLength={MIN_PASSWORD_LENGTH}

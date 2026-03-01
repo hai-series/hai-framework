@@ -18,9 +18,12 @@ const config = {
   },
   kit: {
     adapter: adapter(),
-    // E2E 测试时关闭 SvelteKit 内置 Origin 检查（Playwright 的 APIRequestContext 不发 Origin 头）
+    // 使用 trustedOrigins 取代已弃用的 checkOrigin
+    // E2E 场景允许本地测试域名
     csrf: {
-      checkOrigin: process.env.HAI_E2E !== '1',
+      trustedOrigins: process.env.HAI_E2E === '1'
+        ? ['http://localhost:4173', 'http://127.0.0.1:4173']
+        : [],
     },
     alias: {
       '$components': './src/lib/components',

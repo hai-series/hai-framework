@@ -59,29 +59,25 @@
     {/if}
 
     <form class="space-y-4" onsubmit={handleLogin}>
-      <div class="form-control">
-        <label class="label" for="identifier">
-          <span class="label-text">用户名 / 邮箱</span>
-        </label>
+      <div class="fieldset">
+        <legend class="fieldset-legend">用户名 / 邮箱</legend>
         <input
           id="identifier"
           type="text"
           placeholder="请输入用户名或邮箱"
-          class="input input-bordered w-full"
+          class="input w-full"
           bind:value={identifier}
           required
         />
       </div>
 
-      <div class="form-control">
-        <label class="label" for="password">
-          <span class="label-text">密码</span>
-        </label>
+      <div class="fieldset">
+        <legend class="fieldset-legend">密码</legend>
         <input
           id="password"
           type="password"
           placeholder="请输入密码"
-          class="input input-bordered w-full"
+          class="input w-full"
           bind:value={password}
           required
         />

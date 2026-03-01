@@ -1,12 +1,6 @@
 <!--
-  =============================================================================
-  @h-ai/ui - ResetPasswordForm 组件
-  =============================================================================
-  重置密码表单组件（配合验证码/链接使用）
-  
-  使用 Svelte 5 Runes ($props, $state, $derived)
-  使用 primitives/compounds 组件：Input, Button, Alert
-  =============================================================================
+  @component ResetPasswordForm
+  重置密码表单组件（配合验证码/链接使用）。
 -->
 <script lang="ts">
   import type { ResetPasswordFormProps, ResetPasswordFormData } from '../types.js'
@@ -71,21 +65,21 @@
 <form class={formClass} onsubmit={handleSubmit}>
   <!-- 标题 -->
   {#if showTitle}
-    <h2 class="text-2xl font-semibold text-center mb-4">{m('reset_password_title')}</h2>
+    <h2 class="text-xl font-semibold text-center mb-4">{m('reset_password_title')}</h2>
   {/if}
 
   <!-- 描述 -->
   {#if showDescription}
-    <p class="text-center text-base-content/60 text-sm mb-6">
+    <p class="text-center text-base-content/45 text-sm mb-5">
       {m('reset_password_desc')}
     </p>
   {/if}
 
   <!-- 验证码 -->
   {#if showCode}
-    <div class="form-control">
-      <label class="label" for="reset-code">
-        <span class="label-text">{m('reset_password_code_label')}</span>
+    <div class="space-y-1.5">
+      <label class="text-sm font-medium text-base-content/70" for="reset-code">
+        {m('reset_password_code_label')}
       </label>
       <Input
         id="reset-code"
@@ -101,9 +95,9 @@
   {/if}
   
   <!-- 新密码 -->
-  <div class="form-control">
-    <label class="label" for="reset-new-password">
-      <span class="label-text">{m('reset_password_new_label')}</span>
+  <div class="space-y-1.5">
+    <label class="text-sm font-medium text-base-content/70" for="reset-new-password">
+      {m('reset_password_new_label')}
     </label>
     <PasswordInput
       bind:value={newPassword}
@@ -116,9 +110,9 @@
   </div>
   
   <!-- 确认新密码 -->
-  <div class="form-control">
-    <label class="label" for="reset-confirm-password">
-      <span class="label-text">{m('reset_password_confirm_label')}</span>
+  <div class="space-y-1.5">
+    <label class="text-sm font-medium text-base-content/70" for="reset-confirm-password">
+      {m('reset_password_confirm_label')}
     </label>
     <PasswordInput
       bind:value={confirmPassword}

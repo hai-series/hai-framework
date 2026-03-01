@@ -1,11 +1,6 @@
 <!--
-  =============================================================================
-  @h-ai/ui - Avatar 组件
-  =============================================================================
-  头像组件
-  
-  使用 Svelte 5 Runes ($props, $derived)
-  =============================================================================
+  @component Avatar
+  头像组件，支持图片、名字首字母 fallback
 -->
 <script lang="ts">
   import type { AvatarProps } from '../../types.js'
@@ -23,20 +18,20 @@
   const sizeMap = {
     xs: 'w-6 h-6',
     sm: 'w-8 h-8',
-    md: 'w-12 h-12',
-    lg: 'w-16 h-16',
-    xl: 'w-24 h-24',
+    md: 'w-10 h-10',
+    lg: 'w-14 h-14',
+    xl: 'w-20 h-20',
   }
   
   const textSizeMap = {
-    xs: 'text-xs',
-    sm: 'text-sm',
-    md: 'text-lg',
-    lg: 'text-xl',
-    xl: 'text-3xl',
+    xs: 'text-2xs',
+    sm: 'text-xs',
+    md: 'text-sm',
+    lg: 'text-lg',
+    xl: 'text-2xl',
   }
   
-  // 获取名称首字母
+  /* 获取名称首字母 */
   const initials = $derived(() => {
     if (!name) return ''
     const parts = name.trim().split(/\s+/)
@@ -46,12 +41,20 @@
     return name.slice(0, 2).toUpperCase()
   })
   
-  // 根据名称生成颜色
-  const bgColor = $derived(() => {
-    if (!name) return 'bg-neutral'
-    const colors = ['bg-primary', 'bg-secondary', 'bg-accent', 'bg-info', 'bg-success', 'bg-warning']
+  /* 根据名称 hash 生成渐变色 */
+  const gradientPairs = [
+    ['from-blue-400 to-indigo-500', 'text-white'],
+    ['from-emerald-400 to-teal-500', 'text-white'],
+    ['from-amber-400 to-orange-500', 'text-white'],
+    ['from-rose-400 to-pink-500', 'text-white'],
+    ['from-violet-400 to-purple-500', 'text-white'],
+    ['from-cyan-400 to-sky-500', 'text-white'],
+  ] as const
+
+  const colorPair = $derived(() => {
+    if (!name) return gradientPairs[0]
     const hash = name.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0)
-    return colors[hash % colors.length]
+    return gradientPairs[hash % gradientPairs.length]
   })
   
   const sizeValue = $derived(typeof size === 'number' ? `${size}px` : undefined)
@@ -65,11 +68,10 @@
   
   const innerClass = $derived(
     cn(
-      'flex items-center justify-center',
+      'flex items-center justify-center font-semibold',
       typeof size === 'string' && sizeMap[size],
       shape === 'circle' ? 'rounded-full' : 'rounded-lg',
-      !src && bgColor(),
-      !src && 'text-neutral-content',
+      !src && `bg-gradient-to-br ${colorPair()[0]} ${colorPair()[1]}`,
       className,
     )
   )

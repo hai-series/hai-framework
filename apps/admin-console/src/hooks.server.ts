@@ -18,6 +18,11 @@ import { kit } from '@h-ai/kit'
 // 初始化应用（包含数据库、缓存、IAM 等模块）
 let appInitPromise: Promise<void> | null = null
 
+// 服务端初始化加密模块 —— kit.createHandle 在模块加载时同步执行，
+// 需要 crypto 模块就绪才能生成传输加密密钥对。
+// crypto.init() 虽然签名为 async，但函数体无 await，副作用同步生效。
+crypto.init()
+
 async function ensureAppInitialized() {
   if (!appInitPromise) {
     appInitPromise = initApp().catch((err) => {
@@ -28,6 +33,8 @@ async function ensureAppInitialized() {
   }
   await appInitPromise
 }
+
+const cookieEncryptionKey = process.env.HAI_COOKIE_KEY?.trim() || undefined
 
 // =============================================================================
 // Paraglide i18n Middleware
@@ -134,14 +141,14 @@ const haiHandle = kit.createHandle({
     {
       guard: kit.guard.auth({ apiMode: true }),
       paths: ['/api/*'],
-      exclude: ['/api/auth/*', '/api/public/*'],
+      exclude: ['/api/auth/*', '/api/public/*', '/api/kit/*'],
     },
   ],
   crypto: {
     crypto,
-    transport: true,
-    encryptedCookies: ['hai_session'],
-    cookieEncryptionKey: process.env.HAI_COOKIE_KEY ?? '',
+    transport: { requireEncryption: false },
+    encryptedCookies: cookieEncryptionKey ? ['hai_session'] : [],
+    cookieEncryptionKey,
   },
   onError: (error: unknown, _event: unknown) => {
     core.logger.error('Request error:', { error })

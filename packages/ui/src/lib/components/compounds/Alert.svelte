@@ -1,12 +1,6 @@
 <!--
-  =============================================================================
-  @h-ai/ui - Alert 组件
-  =============================================================================
-  警告框组件
-  
-  使用 Svelte 5 Runes ($props, $derived)
-  使用 primitives 组件：IconButton
-  =============================================================================
+  @component Alert
+  警告框组件，使用 tabler icon 替代 emoji，更精致。
 -->
 <script lang="ts">
   import type { AlertProps } from '../../types.js'
@@ -33,12 +27,12 @@
     )
   )
   
-  // 图标映射
-  const icons: Record<string, string> = {
-    info: 'ℹ️',
-    success: '✅',
-    warning: '⚠️',
-    error: '❌',
+  // 图标映射：使用 tabler icon 类
+  const iconMap: Record<string, string> = {
+    info: 'icon-[tabler--info-circle]',
+    success: 'icon-[tabler--circle-check]',
+    warning: 'icon-[tabler--alert-triangle]',
+    error: 'icon-[tabler--circle-x]',
   }
   
   function handleClose() {
@@ -49,11 +43,11 @@
 
 {#if visible}
   <div class={alertClass} role="alert">
-    <span class="text-lg">{icons[variant] ?? icons.info}</span>
+    <span class="{iconMap[variant] ?? iconMap.info} size-5 shrink-0"></span>
     
     <div>
       {#if title}
-        <h3 class="font-bold">{title}</h3>
+        <h3 class="font-semibold text-sm">{title}</h3>
       {/if}
       {#if children}
         <div class="text-sm">
@@ -65,9 +59,7 @@
     {#if dismissible}
       <IconButton size="sm" variant="ghost" label={m('common_close')} onclick={handleClose}>
         {#snippet children()}
-          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-          </svg>
+          <span class="icon-[tabler--x] size-4"></span>
         {/snippet}
       </IconButton>
     {/if}
