@@ -10,6 +10,7 @@
  * - 签名 URL 操作接口（PresignOperations）
  * - 函数接口（StorageFunctions）
  * - Provider 接口（StorageProvider）
+ * @module storage-types
  */
 
 import type { Result } from '@h-ai/core'

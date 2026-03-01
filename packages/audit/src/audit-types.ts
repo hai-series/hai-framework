@@ -1,18 +1,12 @@
 /**
- * =============================================================================
- * @h-ai/audit - 公共类型定义
- * =============================================================================
+ * @h-ai/audit — 公共类型定义
  *
  * 审计模块对外类型：错误接口、实体类型、操作接口、函数接口。
- *
- * 所有公共 API 统一返回 {@link Result}<T, {@link AuditError}>。
- *
  * @module audit-types
- * =============================================================================
  */
 
 import type { Result } from '@h-ai/core'
-import type { AuditErrorCodeType, AuditInitConfig } from './audit-config.js'
+import type { AuditErrorCodeType, AuditInitConfigInput } from './audit-config.js'
 
 // ─── 错误类型 ───
 
@@ -241,7 +235,7 @@ export interface AuditFunctions {
    * @param config - 初始化配置，需包含已初始化的 db 实例
    * @returns 成功时返回 ok(undefined)；失败时返回 CONFIG_ERROR
    */
-  init: (config: AuditInitConfig) => Promise<Result<void, AuditError>>
+  init: (config: AuditInitConfigInput) => Promise<Result<void, AuditError>>
   /**
    * 关闭审计模块，释放内部状态
    */

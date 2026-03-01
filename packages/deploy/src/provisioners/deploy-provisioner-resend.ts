@@ -1,19 +1,8 @@
 /**
- * =============================================================================
- * @h-ai/deploy - Resend Email Provisioner
- * =============================================================================
+ * @h-ai/deploy — Resend Email Provisioner
  *
- * 通过 Resend REST API 验证 API Key 并获取域信息。
- * Resend 不支持通过 API 创建账户，此 Provisioner 仅验证已有凭证。
- *
- * API 端点：
- * - GET /domains — 验证 Token 并列出域
- *
- * 输出环境变量：
- * - HAI_REACH_RESEND_KEY — Resend API Key
- *
+ * 通过 Resend REST API 验证 API Key 并获取域信息。 Resend 不支持通过 API 创建账户，此 Provisioner 仅验证已有凭证。
  * @module deploy-provisioner-resend
- * =============================================================================
  */
 
 import type { Result } from '@h-ai/core'

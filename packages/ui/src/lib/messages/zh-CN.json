@@ -175,5 +175,8 @@
   "signature_copy_signature": "复制签名",
   "signature_copy_public_key": "复制公钥",
   "theme_group_light": "亮色主题",
-  "theme_group_dark": "暗色主题"
+  "theme_group_dark": "暗色主题",
+  "markdown_copy_code": "复制代码",
+  "markdown_copied": "已复制",
+  "markdown_copy_failed": "复制失败"
 }

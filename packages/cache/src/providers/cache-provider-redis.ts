@@ -1,3 +1,10 @@
+/**
+ * @h-ai/cache — Redis Provider
+ *
+ * 基于 ioredis 的 Redis/Cluster 缓存实现。
+ * @module cache-provider-redis
+ */
+
 import type { Result } from '@h-ai/core'
 import type { Cluster, ClusterOptions, RedisOptions } from 'ioredis'
 import type { CacheConfig } from '../cache-config.js'

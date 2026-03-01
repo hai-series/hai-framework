@@ -1,18 +1,8 @@
 /**
- * =============================================================================
- * @h-ai/audit - i18n
- * =============================================================================
+ * @h-ai/audit — i18n
  *
  * 本文件提供审计模块的 i18n 文案访问入口。
- *
- * @example
- * ```ts
- * import { auditM } from './audit-i18n.js'
- *
- * const message = auditM('audit_notInitialized')
- * const withParam = auditM('audit_logFailed', { params: { error: 'timeout' } })
- * ```
- * =============================================================================
+ * @module audit-i18n
  */
 
 import { core } from '@h-ai/core'

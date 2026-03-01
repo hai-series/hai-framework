@@ -1,23 +1,8 @@
 /**
- * =============================================================================
- * @h-ai/deploy - Cloudflare R2 Provisioner
- * =============================================================================
+ * @h-ai/deploy — Cloudflare R2 Provisioner
  *
  * 通过 Cloudflare API 自动创建 R2 存储桶。
- *
- * API 端点：
- * - GET  /accounts/{account_id}/r2/buckets          — 列出桶
- * - POST /accounts/{account_id}/r2/buckets           — 创建桶
- * - POST /accounts/{account_id}/r2/buckets/{name}/tokens — 创建桶 Token
- *
- * 输出环境变量：
- * - HAI_STORAGE_S3_ENDPOINT   — R2 S3 兼容端点
- * - HAI_STORAGE_S3_BUCKET     — 桶名称
- * - HAI_STORAGE_S3_ACCESS_KEY — 访问密钥
- * - HAI_STORAGE_S3_SECRET_KEY — 秘密密钥
- *
  * @module deploy-provisioner-r2
- * =============================================================================
  */
 
 import type { Result } from '@h-ai/core'
@@ -50,14 +35,14 @@ export function createR2Provisioner(): ServiceProvisioner {
         const acctId = credentials.accountId ?? credentials.account_id ?? ''
         const apiTok = credentials.apiToken ?? credentials.api_token ?? credentials.token ?? ''
         if (!acctId || !apiTok) {
-          throw new Error('Missing "account_id" and "api_token" in credentials')
+          throw new Error(deployM('deploy_credentialMissing', { params: { fields: 'account_id, api_token' } }))
         }
 
         const res = await fetch(`${CF_API}/accounts/${acctId}/r2/buckets`, {
           headers: { Authorization: `Bearer ${apiTok}` },
         })
         if (!res.ok) {
-          throw new Error(`Cloudflare API ${res.status}: ${await res.text()}`)
+          throw new Error(deployM('deploy_apiError', { params: { service: 'Cloudflare', status: String(res.status), body: await res.text() } }))
         }
 
         accountId = acctId
@@ -104,7 +89,7 @@ export function createR2Provisioner(): ServiceProvisioner {
 
         // 409 表示桶已存在，可继续
         if (!createRes.ok && createRes.status !== 409) {
-          throw new Error(`Cloudflare API ${createRes.status}: ${await createRes.text()}`)
+          throw new Error(deployM('deploy_apiError', { params: { service: 'Cloudflare', status: String(createRes.status), body: await createRes.text() } }))
         }
 
         // 创建 API Token（S3 兼容访问）

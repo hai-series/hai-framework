@@ -1,3 +1,10 @@
+/**
+ * @h-ai/cache — 内存 Provider
+ *
+ * 基于 Map 的内存缓存实现，适用于开发与测试环境。
+ * @module cache-provider-memory
+ */
+
 import type { Result } from '@h-ai/core'
 import type { CacheConfig, CacheErrorCodeType } from '../cache-config.js'
 import type {

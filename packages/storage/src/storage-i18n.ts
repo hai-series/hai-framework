@@ -3,6 +3,7 @@
  *
  * 加载存储模块的中英文翻译文件，提供统一的文案获取函数。
  * 内部使用，不对外导出。
+ * @module storage-i18n
  */
 
 import { core } from '@h-ai/core'

@@ -37,20 +37,20 @@ describe('cache.init', () => {
       await cache.close()
     })
 
-    it('init 传入非法 type 应返回 CONNECTION_FAILED', async () => {
+    it('init 传入非法 type 应返回 CONFIG_ERROR', async () => {
       const result = await cache.init({ type: 'unknown' } as never)
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.code).toBe(CacheErrorCode.CONNECTION_FAILED)
+        expect(result.error.code).toBe(CacheErrorCode.CONFIG_ERROR)
       }
       expect(cache.isInitialized).toBe(false)
     })
 
-    it('init 传入空对象应返回 CONNECTION_FAILED', async () => {
+    it('init 传入空对象应返回 CONFIG_ERROR', async () => {
       const result = await cache.init({} as never)
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.code).toBe(CacheErrorCode.CONNECTION_FAILED)
+        expect(result.error.code).toBe(CacheErrorCode.CONFIG_ERROR)
       }
     })
   })

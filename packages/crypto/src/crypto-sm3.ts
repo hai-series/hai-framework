@@ -1,5 +1,11 @@
-import type { Result } from '@h-ai/core'
+/**
+ * @h-ai/crypto — SM3 哈希
+ *
+ * 提供 SM3 消息摘要与 HMAC 操作。
+ * @module crypto-sm3
+ */
 
+import type { Result } from '@h-ai/core'
 import type {
   CryptoError,
   HashOperations,

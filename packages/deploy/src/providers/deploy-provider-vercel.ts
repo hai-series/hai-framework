@@ -1,22 +1,8 @@
 /**
- * =============================================================================
- * @h-ai/deploy - Vercel 部署 Provider
- * =============================================================================
+ * @h-ai/deploy — Vercel 部署 Provider
  *
- * 封装 Vercel REST API，实现 DeployProvider 接口。
- * 使用原生 fetch 调用，零外部 SDK 依赖。
- *
- * API 端点：
- * - GET  /v2/user               — 验证 Token
- * - GET  /v10/projects           — 列出项目
- * - POST /v10/projects           — 创建项目
- * - POST /v10/projects/{id}/env  — 设置环境变量
- * - POST /v2/files               — 上传文件
- * - POST /v13/deployments        — 创建部署
- * - GET  /v13/deployments/{id}   — 查询部署状态
- *
+ * 封装 Vercel REST API，实现 DeployProvider 接口。 使用原生 fetch 调用，零外部 SDK 依赖。
  * @module deploy-provider-vercel
- * =============================================================================
  */
 
 import type { Result } from '@h-ai/core'
@@ -40,9 +26,7 @@ const POLL_INTERVAL = 3000
 /** 部署状态轮询最大次数 */
 const MAX_POLL_ATTEMPTS = 60
 
-// =============================================================================
-// 内部工具
-// =============================================================================
+// ─── 内部工具 ───
 
 /** 构造标准错误对象 */
 function toDeployError(code: DeployErrorCodeType, messageKey: string, error: unknown): DeployError {
@@ -76,7 +60,7 @@ async function vercelFetch<T>(token: string, path: string, options?: RequestInit
 
   if (!response.ok) {
     const body = await response.text()
-    throw new Error(`Vercel API ${response.status}: ${body}`)
+    throw new Error(deployM('deploy_apiError', { params: { service: 'Vercel', status: String(response.status), body } }))
   }
 
   return response.json() as Promise<T>
@@ -106,9 +90,7 @@ function collectFiles(dir: string, baseDir: string): string[] {
   return results
 }
 
-// =============================================================================
-// Provider 工厂
-// =============================================================================
+// ─── Provider 工厂 ───
 
 /**
  * 创建 Vercel 部署 Provider
@@ -285,9 +267,7 @@ export function createVercelProvider(): DeployProvider {
   }
 }
 
-// =============================================================================
-// 内部辅助
-// =============================================================================
+// ─── 内部辅助 ───
 
 /**
  * 查找已有的 Vercel 项目
@@ -328,7 +308,7 @@ async function uploadFile(token: string, content: Uint8Array, sha: string): Prom
   if (!response.ok && response.status !== 409) {
     // 409 表示文件已存在，可忽略
     const body = await response.text()
-    throw new Error(`File upload failed: ${response.status} ${body}`)
+    throw new Error(deployM('deploy_fileUploadFailed', { params: { status: String(response.status), body } }))
   }
 }
 

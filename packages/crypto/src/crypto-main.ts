@@ -1,3 +1,10 @@
+/**
+ * @h-ai/crypto — 加密服务主入口
+ *
+ * 提供统一的 `crypto` 对象，聚合所有结构化加密操作。
+ * @module crypto-main
+ */
+
 import type { Result } from '@h-ai/core'
 
 import type {

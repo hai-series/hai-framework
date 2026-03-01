@@ -1,3 +1,10 @@
+/**
+ * @h-ai/cache — i18n
+ *
+ * 本文件提供缓存模块的 i18n 文案访问入口。
+ * @module cache-i18n
+ */
+
 import { core } from '@h-ai/core'
 import messagesEnUS from '../messages/en-US.json'
 import messagesZhCN from '../messages/zh-CN.json'

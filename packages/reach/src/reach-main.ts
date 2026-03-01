@@ -1,15 +1,8 @@
 /**
- * =============================================================================
- * @h-ai/reach - 触达服务主入口
- * =============================================================================
+ * @h-ai/reach — 触达服务主入口
  *
  * 本文件提供统一的 `reach` 对象，聚合模块生命周期管理。
- *
- * 发送逻辑委托给 reach-send.ts 处理，
- * 数据库操作封装在 reach-repository-send-log.ts 中。
- *
  * @module reach-main
- * =============================================================================
  */
 
 import type { Result } from '@h-ai/core'
@@ -39,9 +32,7 @@ import { createTemplateRegistry } from './reach-template.js'
 
 const logger = core.logger.child({ module: 'reach', scope: 'main' })
 
-// =============================================================================
-// 内部状态
-// =============================================================================
+// ─── 内部状态 ───
 
 /** 已注册的 Provider 实例（name → Provider） */
 let providers: Map<string, ReachProvider> = new Map()
@@ -58,9 +49,7 @@ let templateRegistry: ReachTemplateRegistry = createTemplateRegistry()
 /** 发送日志存储（db 可用时初始化） */
 let sendLogRepo: SendLogRepository | null = null
 
-// =============================================================================
-// Provider 工厂
-// =============================================================================
+// ─── Provider 工厂 ───
 
 /**
  * 根据配置创建对应的 Provider
@@ -78,9 +67,7 @@ function createProvider(config: ProviderConfig): ReachProvider {
   }
 }
 
-// =============================================================================
-// DB 动态引用（可选依赖）
-// =============================================================================
+// ─── DB 动态引用（可选依赖） ───
 
 /**
  * 尝试获取 db 实例（可选依赖，不可用时返回 null）
@@ -121,18 +108,14 @@ async function tryInitSendLogRepo(): Promise<SendLogRepository | null> {
   }
 }
 
-// =============================================================================
-// 未初始化工具集
-// =============================================================================
+// ─── 未初始化工具集 ───
 
 const notInitialized = core.module.createNotInitializedKit<ReachError>(
   ReachErrorCode.NOT_INITIALIZED,
   () => reachM('reach_notInitialized'),
 )
 
-// =============================================================================
-// 触达服务对象
-// =============================================================================
+// ─── 触达服务对象 ───
 
 /**
  * 触达服务对象
@@ -148,8 +131,18 @@ export const reach: ReachFunctions = {
 
     logger.info('Initializing reach module')
 
+    const parseResult = ReachConfigSchema.safeParse(config)
+    if (!parseResult.success) {
+      logger.error('Reach config validation failed', { error: parseResult.error.message })
+      return err({
+        code: ReachErrorCode.CONFIG_ERROR,
+        message: reachM('reach_configError', { params: { error: parseResult.error.message } }),
+        cause: parseResult.error,
+      })
+    }
+    const parsed = parseResult.data
+
     try {
-      const parsed = ReachConfigSchema.parse(config)
       const newProviders = new Map<string, ReachProvider>()
 
       for (const providerConfig of parsed.providers) {

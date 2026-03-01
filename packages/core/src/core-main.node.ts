@@ -1,33 +1,8 @@
 /**
- * =============================================================================
- * @h-ai/core - Core 服务聚合（Node.js）
- * =============================================================================
- * 提供 Node.js 环境的 core 对象，聚合常用功能。
- * 所有功能统一通过 core 对象访问，并提供配置加载能力。
+ * @h-ai/core — Core 服务聚合（Node.js）
  *
- * @example
- * ```ts
- * import { core } from '@h-ai/core'
- *
- * // 约定优于配置模式（推荐）
- * core.init({ configDir: './config' })
- *
- * // 配置文件命名约定：
- * // - _core.yml   → 自动使用 CoreConfigSchema 校验
- * // - _db.yml     → 加载为 'db'（模块自行调用 config.validate 校验）
- * // - _cache.yml  → 加载为 'cache'（模块自行调用 config.validate 校验）
- * // - app.yml     → 加载为 'app'（模块自行调用 config.validate 校验）
- *
- * // 日志
- * core.logger.info('Hello')
- *
- * // ID 生成
- * const myId = core.id.generate()
- *
- * // 配置管理
- * const dbConfig = core.config.get('db')
- * ```
- * =============================================================================
+ * 提供 Node.js 环境的 core 对象，聚合常用功能。 所有功能统一通过 core 对象访问，并提供配置加载能力。
+ * @module core-main.node
  */
 
 import type { CoreOptions } from './core-types.js'
@@ -38,9 +13,7 @@ import { createCore } from './core-main.js'
 import { config } from './functions/core-function-config.js'
 import { logger } from './functions/core-function-logger.node.js'
 
-// =============================================================================
-// Core 实例
-// =============================================================================
+// ─── Core 实例 ───
 
 /**
  * 创建 Node.js 版本的 core 对象。
@@ -81,9 +54,7 @@ function createNodeCore() {
  */
 export const core = createNodeCore()
 
-// =============================================================================
-// Initialization
-// =============================================================================
+// ─── Initialization ───
 
 /**
  * 配置加载项（描述单个待加载的配置文件）。

@@ -2,6 +2,7 @@
  * @h-ai/ai — MCP Server 创建与传输层
  *
  * 基于 `@modelcontextprotocol/sdk` 封装，提供便捷的 MCP 服务器创建。
+ * @module ai-mcp-server
  */
 
 import type { McpServerOptions } from './ai-mcp-types.js'

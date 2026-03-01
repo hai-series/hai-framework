@@ -1,21 +1,8 @@
 /**
- * =============================================================================
- * @h-ai/ui - 组合组件 (Compounds)
- * =============================================================================
+ * @h-ai/ui — 组合组件 (Compounds)
  *
  * 由多个原子组件组合而成的复杂 UI 模式，提供更完整的交互体验。
- *
- * 包含：
- * - Form, FormField, TagInput - 表单组合
- * - Combobox - 可搜索下拉选择（单选/多选，Bits UI headless）
- * - Alert, ToastContainer - 反馈提示
- * - Modal, Drawer, Confirm, Popover - 弹层容器
- * - Card, DataTable - 数据展示
- * - Tabs, Pagination, Breadcrumb, Steps, Timeline - 导航控件
- * - Dropdown, Tooltip, Accordion - 悬浮/折叠交互
- * - Skeleton, Empty, Result - 状态占位
- * - PageHeader - 页面头部
- * =============================================================================
+ * @module index
  */
 
 // 折叠面板

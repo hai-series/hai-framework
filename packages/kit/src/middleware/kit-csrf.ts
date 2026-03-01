@@ -1,16 +1,13 @@
 /**
- * =============================================================================
- * @h-ai/kit - CSRF 中间件
- * =============================================================================
- * 基于 Double-Submit Cookie 模式的 CSRF 防护中间件。
- * 使用 Web Crypto API 生成密码学安全 Token，写请求时自动校验
- * Cookie 与 Header 中的 Token 一致性。
- * =============================================================================
+ * @h-ai/kit — CSRF 中间件
+ *
+ * 基于 Double-Submit Cookie 模式的 CSRF 防护中间件。 使用 Web Crypto API 生成密码学安全 Token，写请求时自动校验 Cookie 与 Header 中的 Token 一致性。
+ * @module kit-csrf
  */
 
 import type { CsrfConfig, Middleware } from '../kit-types.js'
 import { core } from '@h-ai/core'
-import { getKitMessage } from '../kit-i18n.js'
+import { kitM } from '../kit-i18n.js'
 
 /**
  * 生成密码学安全的 CSRF token
@@ -101,7 +98,7 @@ export function csrfMiddleware(config: CsrfConfig = {}): Middleware {
           success: false,
           error: {
             code: 'CSRF_VALIDATION_FAILED',
-            message: getKitMessage('kit_csrfValidationFailed'),
+            message: kitM('kit_csrfValidationFailed'),
           },
           requestId,
         }),

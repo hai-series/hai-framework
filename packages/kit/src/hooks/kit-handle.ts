@@ -1,10 +1,8 @@
 /**
- * =============================================================================
- * @h-ai/kit - SvelteKit Handle Hook
- * =============================================================================
- * 创建 SvelteKit Handle Hook，集成请求 ID 生成、会话验证、Cookie 加密代理、
- * 路由守卫、中间件链与传输加密。另提供 sequence() 用于组合多个 Handle。
- * =============================================================================
+ * @h-ai/kit — SvelteKit Handle Hook
+ *
+ * 创建 SvelteKit Handle Hook，集成请求 ID 生成、会话验证、Cookie 加密代理、 路由守卫、中间件链与传输加密。另提供 sequence() 用于组合多个 Handle。
+ * @module kit-handle
  */
 
 import type { Handle, RequestEvent } from '@sveltejs/kit'

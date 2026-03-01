@@ -1,15 +1,8 @@
 /**
- * =============================================================================
- * @h-ai/cli - 主入口
- * =============================================================================
- * hai Agent Framework CLI
+ * @h-ai/cli — 主入口
  *
- * 命令:
- *   create <name>  - 创建新项目
- *   add [module]   - 向现有项目添加模块
- *   init           - 初始化/校验配置
- *   generate <type> <name> - 生成代码
- * =============================================================================
+ * hai Agent Framework CLI
+ * @module index
  */
 
 import type { AppType, CreateProjectOptions, FeatureId, GeneratorType } from './types.js'

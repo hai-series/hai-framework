@@ -1,9 +1,8 @@
 /**
- * =============================================================================
- * @h-ai/cli - 配置文件模板
- * =============================================================================
+ * @h-ai/cli — 配置文件模板
+ *
  * 为各模块生成默认配置文件内容。
- * =============================================================================
+ * @module config-templates
  */
 
 import type { AiModuleConfig, CacheModuleConfig, CoreModuleConfig, DbModuleConfig, FeatureId, IamModuleConfig, ModuleConfigs, StorageModuleConfig } from '../types.js'

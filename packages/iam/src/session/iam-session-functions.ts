@@ -2,6 +2,7 @@
  * @h-ai/iam — 会话子功能工厂
  *
  * 基于缓存存储的会话实现：创建、查询、验证、更新、删除。
+ * @module iam-session-functions
  */
 
 import type { CacheFunctions } from '@h-ai/cache'

@@ -2,11 +2,12 @@
  * @h-ai/ai — MCP 子功能工厂
  *
  * 提供 MCP 工具/资源/提示词的注册与调用功能。
+ * @module ai-mcp-functions
  */
 
 import type { Result } from '@h-ai/core'
 
-import type { AIError } from '../ai-config.js'
+import type { AIError } from '../ai-types.js'
 import type {
   AIMCPFunctionsDeps,
   MCPContext,

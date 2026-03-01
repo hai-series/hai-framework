@@ -1,15 +1,8 @@
 /**
- * =============================================================================
- * @h-ai/iam - OTP 存储实现
- * =============================================================================
+ * @h-ai/iam — OTP 存储实现
  *
  * 基于 @h-ai/cache 的 OTP 存储实现。
- *
- * 缓存键设计：
- * - `iam:otp:{identifier}` → OtpRecord JSON（KV，TTL = expiresIn）
- *
- * @module authn/otp/iam-authn-otp-repository-otp
- * =============================================================================
+ * @module iam-authn-otp-repository-otp
  */
 
 import type { CacheFunctions } from '@h-ai/cache'
@@ -20,9 +13,7 @@ import { err, ok } from '@h-ai/core'
 import { IamErrorCode } from '../../iam-config.js'
 import { iamM } from '../../iam-i18n.js'
 
-// =============================================================================
-// OTP 存储接口与类型
-// =============================================================================
+// ─── OTP 存储接口与类型 ───
 
 /**
  * OTP 记录
@@ -75,9 +66,7 @@ export interface OtpRepository {
   sendSms?: (phone: string, code: string) => Promise<Result<void, IamError>>
 }
 
-// =============================================================================
-// 缓存键构建
-// =============================================================================
+// ─── 缓存键构建 ───
 
 /** OTP 缓存键前缀 */
 const OTP_KEY_PREFIX = 'iam:otp:'
@@ -105,9 +94,7 @@ function restoreOtpDates(record: OtpRecord): OtpRecord {
   }
 }
 
-// =============================================================================
-// OTP 发送回调
-// =============================================================================
+// ─── OTP 发送回调 ───
 
 /**
  * OTP 发送回调（由业务层注入）
@@ -122,9 +109,7 @@ export interface OtpSendCallbacks {
   onOtpSendSms?: (phone: string, code: string) => Promise<void>
 }
 
-// =============================================================================
-// 缓存实现
-// =============================================================================
+// ─── 缓存实现 ───
 
 /** OTP 存储单例缓存 */
 let otpRepoInstance: OtpRepository | null = null

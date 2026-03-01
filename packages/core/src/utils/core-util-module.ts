@@ -1,40 +1,14 @@
 /**
- * =============================================================================
- * @h-ai/core - 模块初始化工具
- * =============================================================================
+ * @h-ai/core — 模块初始化工具
+ *
  * 封装各模块共同的「未初始化」错误处理模式，消除跨模块冗余。
- *
- * @example
- * ```ts
- * import { core } from '@h-ai/core'
- * import type { MyError } from './my-types.js'
- *
- * const notInitialized = core.module.createNotInitializedKit<MyError>(
- *   MyErrorCode.NOT_INITIALIZED,
- *   () => myM('my_notInitialized'),
- * )
- *
- * // 创建错误对象
- * const error = notInitialized.error()
- *
- * // 创建失败 Result
- * const result = notInitialized.result<string>()
- *
- * // 异步 Proxy 代理（默认，所有方法均返回 Promise<Result>）
- * const asyncOps = notInitialized.proxy<FileOperations>()
- *
- * // 同步 Proxy 代理（所有方法均返回 Result）
- * const syncOps = notInitialized.proxy<HashOperations>('sync')
- * ```
- * =============================================================================
+ * @module core-util-module
  */
 
 import type { Result } from '../core-types.js'
 import { err } from '../core-types.js'
 
-// =============================================================================
-// 基础类型
-// =============================================================================
+// ─── 基础类型 ───
 
 /**
  * 模块错误基础接口。
@@ -57,9 +31,7 @@ export interface BaseModuleError {
   message: string
 }
 
-// =============================================================================
-// 未初始化工具集
-// =============================================================================
+// ─── 未初始化工具集 ───
 
 /**
  * 未初始化工具集返回类型。

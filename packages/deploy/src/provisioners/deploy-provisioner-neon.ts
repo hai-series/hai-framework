@@ -1,19 +1,8 @@
 /**
- * =============================================================================
- * @h-ai/deploy - Neon PostgreSQL Provisioner
- * =============================================================================
+ * @h-ai/deploy — Neon PostgreSQL Provisioner
  *
  * 通过 Neon REST API 自动创建 PostgreSQL 数据库。
- *
- * API 端点：
- * - GET  /projects          — 列出项目（验证 Token）
- * - POST /projects          — 创建项目
- *
- * 输出环境变量：
- * - HAI_DB_URL — 数据库连接字符串
- *
  * @module deploy-provisioner-neon
- * =============================================================================
  */
 
 import type { Result } from '@h-ai/core'
@@ -51,14 +40,14 @@ export function createNeonProvisioner(): ServiceProvisioner {
       try {
         const apiToken = credentials.apiKey ?? credentials.token ?? credentials.api_key ?? ''
         if (!apiToken) {
-          throw new Error('Missing "token" in credentials')
+          throw new Error(deployM('deploy_credentialMissing', { params: { fields: 'token' } }))
         }
 
         const res = await fetch(`${NEON_API}/projects`, {
           headers: { Authorization: `Bearer ${apiToken}` },
         })
         if (!res.ok) {
-          throw new Error(`Neon API ${res.status}: ${await res.text()}`)
+          throw new Error(deployM('deploy_apiError', { params: { service: 'Neon', status: String(res.status), body: await res.text() } }))
         }
         token = apiToken
         logger.info('Neon authenticated')
@@ -101,7 +90,7 @@ export function createNeonProvisioner(): ServiceProvisioner {
         })
 
         if (!res.ok) {
-          throw new Error(`Neon API ${res.status}: ${await res.text()}`)
+          throw new Error(deployM('deploy_apiError', { params: { service: 'Neon', status: String(res.status), body: await res.text() } }))
         }
 
         const data = await res.json() as {
@@ -111,7 +100,7 @@ export function createNeonProvisioner(): ServiceProvisioner {
 
         const connectionUri = data.connection_uris?.[0]?.connection_uri
         if (!connectionUri) {
-          throw new Error('No connection URI returned from Neon')
+          throw new Error(deployM('deploy_provisionNoResult', { params: { service: 'Neon' } }))
         }
 
         logger.info('Neon database provisioned', { projectId: data.project.id })

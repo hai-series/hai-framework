@@ -1,59 +1,8 @@
 /**
- * =============================================================================
- * @h-ai/scheduler - 定时任务服务主入口
- * =============================================================================
+ * @h-ai/scheduler — 定时任务服务主入口
  *
- * 本文件提供统一的 `scheduler` 对象，聚合所有定时任务功能。
- * 仅负责生命周期管理（init / close）和 API 编排，
- * 调度运行逻辑委托给 scheduler-runner.ts。
- *
- * 使用方式：
- * 1. 调用 `scheduler.init()` 初始化（自动加载持久化任务）
- * 2. 通过 `scheduler.register()` 注册任务（API 任务自动持久化）
- * 3. 调用 `scheduler.start()` 启动调度
- * 4. 可选：`scheduler.trigger()` 手动触发
- * 5. `scheduler.stop()` 停止调度
- * 6. `scheduler.close()` 关闭
- *
- * @example
- * ```ts
- * import { scheduler } from '@h-ai/scheduler'
- * import { db } from '@h-ai/db'
- *
- * // 初始化 DB（可选，用于持久化任务和记录执行日志）
- * await db.init({ type: 'sqlite', database: './scheduler.db' })
- *
- * // 初始化调度器（自动加载之前持久化的 API 任务）
- * await scheduler.init({ enableDb: true })
- *
- * // 注册 API 任务（自动持久化到 DB）
- * await scheduler.register({
- *   id: 'health-check',
- *   name: '健康检查',
- *   cron: '0 * * * *',
- *   type: 'api',
- *   api: { url: 'https://api.example.com/health' },
- * })
- *
- * // 注册 JS 任务（不持久化，仅存在于内存）
- * await scheduler.register({
- *   id: 'cleanup',
- *   name: '清理过期数据',
- *   cron: '0 2 * * *',
- *   type: 'js',
- *   handler: async () => ({ cleaned: true }),
- * })
- *
- * // 启动调度
- * scheduler.start()
- *
- * // 关闭
- * scheduler.stop()
- * await scheduler.close()
- * ```
- *
+ * 本文件提供统一的 `scheduler` 对象，聚合所有定时任务功能。 仅负责生命周期管理（init / close）和 API 编排， 调度运行逻辑委托给 scheduler-runner.ts。
  * @module scheduler-main
- * =============================================================================
  */
 
 import type { Result } from '@h-ai/core'
@@ -79,25 +28,19 @@ import { getTask, getTaskRegistry, hasTask, isTimerRunning, registerInMemory, re
 
 const logger = core.logger.child({ module: 'scheduler', scope: 'main' })
 
-// =============================================================================
-// 内部状态
-// =============================================================================
+// ─── 内部状态 ───
 
 /** 当前配置 */
 let currentConfig: SchedulerConfig | null = null
 
-// =============================================================================
-// 未初始化工具集
-// =============================================================================
+// ─── 未初始化工具集 ───
 
 const notInitialized = core.module.createNotInitializedKit<SchedulerError>(
   SchedulerErrorCode.NOT_INITIALIZED,
   () => schedulerM('scheduler_notInitialized'),
 )
 
-// =============================================================================
-// 统一调度器服务对象
-// =============================================================================
+// ─── 统一调度器服务对象 ───
 
 /**
  * 定时任务调度器服务对象
@@ -118,14 +61,24 @@ export const scheduler: SchedulerFunctions = {
    */
   async init(config?: SchedulerConfigInput): Promise<Result<void, SchedulerError>> {
     if (currentConfig) {
-      logger.warn('Scheduler already initialized, reinitializing')
+      logger.warn('Scheduler module is already initialized, reinitializing')
       await scheduler.close()
     }
 
     logger.info('Initializing scheduler module')
 
+    const parseResult = SchedulerConfigSchema.safeParse(config ?? {})
+    if (!parseResult.success) {
+      logger.error('Scheduler config validation failed', { error: parseResult.error.message })
+      return err({
+        code: SchedulerErrorCode.CONFIG_ERROR,
+        message: schedulerM('scheduler_configError', { params: { error: parseResult.error.message } }),
+        cause: parseResult.error,
+      })
+    }
+    const parsed = parseResult.data
+
     try {
-      const parsed = SchedulerConfigSchema.parse(config ?? {})
       currentConfig = parsed
 
       // 如果启用 DB，创建日志表和任务表
@@ -305,7 +258,7 @@ export const scheduler: SchedulerFunctions = {
     if (currentConfig.enableDb && db.isInitialized && existingTask.type === 'api') {
       const updateResult = await updateTaskDefinition(currentConfig.taskTableName, taskId, {
         ...updates,
-        ...(updates.api !== undefined ? { api: updates.api as Record<string, unknown> } : {}),
+        ...(updates.api !== undefined ? { api: updates.api } : {}),
       })
       if (!updateResult.success) {
         logger.warn('Failed to update persisted task definition', { taskId, error: updateResult.error.message })
@@ -444,9 +397,14 @@ export const scheduler: SchedulerFunctions = {
    * 多次调用安全。
    */
   async close(): Promise<void> {
+    if (!currentConfig) {
+      logger.info('Scheduler module already closed, skipping')
+      return
+    }
+
+    logger.info('Closing scheduler module')
     resetRunner()
     currentConfig = null
-
     logger.info('Scheduler module closed')
   },
 }

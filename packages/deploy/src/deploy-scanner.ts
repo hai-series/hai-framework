@@ -1,28 +1,8 @@
 /**
- * =============================================================================
- * @h-ai/deploy - 应用扫描器
- * =============================================================================
+ * @h-ai/deploy — 应用扫描器
  *
  * 扫描应用目录，检测框架类型、模块依赖和所需基础设施。
- *
- * 检测逻辑：
- * 1. 读取 package.json → 提取应用名、检测 @h-ai/* 依赖
- * 2. 检测 svelte.config.js → 确认是否为 SvelteKit 项目
- * 3. 检测 adapter 安装状态（如 @sveltejs/adapter-vercel）
- * 4. 扫描 config/_*.yml → 推断所需基础设施服务
- *
- * @example
- * ```ts
- * import { scanApp } from '@h-ai/deploy'
- *
- * const result = await scanApp('./apps/my-app')
- * if (result.success) {
- *   console.log(result.data.requiredServices) // ['db', 'cache']
- * }
- * ```
- *
  * @module deploy-scanner
- * =============================================================================
  */
 
 import type { Result } from '@h-ai/core'
@@ -36,9 +16,7 @@ import { deployM } from './deploy-i18n.js'
 
 const logger = core.logger.child({ module: 'deploy', scope: 'scanner' })
 
-// =============================================================================
-// 内部工具
-// =============================================================================
+// ─── 内部工具 ───
 
 /**
  * 安全读取并解析 YAML 文件
@@ -205,9 +183,7 @@ function detectReachServices(config: Record<string, unknown>, services: ServiceT
   }
 }
 
-// =============================================================================
-// 公共 API
-// =============================================================================
+// ─── 公共 API ───
 
 /**
  * 扫描应用目录，检测框架类型、模块依赖和所需基础设施

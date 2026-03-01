@@ -1,25 +1,8 @@
 /**
- * =============================================================================
- * @h-ai/deploy - 凭证管理
- * =============================================================================
+ * @h-ai/deploy — 凭证管理
  *
- * 管理全局凭证文件 `~/.hai/credentials.yml`。
- * CLI 在加载 `_deploy.yml` 之前调用 `loadCredentials()` 将凭证注入 process.env，
- * 使 core 的 `interpolateEnv()` 能自动解析 `${HAI_DEPLOY_*}` 变量。
- *
- * @example
- * ```ts
- * import { loadCredentials, saveCredential } from '@h-ai/deploy'
- *
- * // 保存凭证
- * saveCredential('HAI_DEPLOY_VERCEL_TOKEN', 'vel_xxx')
- *
- * // 加载凭证到 process.env
- * loadCredentials()
- * ```
- *
+ * 管理全局凭证文件 `~/.hai/credentials.yml`。 CLI 在加载 `_deploy.yml` 之前调用 `loadCredentials()` 将凭证注入 process.env， 使 core 的 `interpolateEnv()` 能自动解析 `${HAI_DEPLOY_*}` 变量。
  * @module deploy-credentials
- * =============================================================================
  */
 
 import type { Result } from '@h-ai/core'
@@ -35,9 +18,7 @@ import { deployM } from './deploy-i18n.js'
 
 const logger = core.logger.child({ module: 'deploy', scope: 'credentials' })
 
-// =============================================================================
-// 内部工具
-// =============================================================================
+// ─── 内部工具 ───
 
 /**
  * 获取凭证文件路径
@@ -91,9 +72,7 @@ function writeCredentialsFile(data: Record<string, string>): void {
   writeFileSync(filePath, content, { encoding: 'utf-8', mode: 0o600 })
 }
 
-// =============================================================================
-// 公共 API
-// =============================================================================
+// ─── 公共 API ───
 
 /**
  * 加载全局凭证文件并注入到 process.env

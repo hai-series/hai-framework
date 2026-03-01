@@ -1,47 +1,8 @@
 /**
- * =============================================================================
- * @h-ai/kit - 服务对象主入口
- * =============================================================================
- * SvelteKit 集成模块的统一命名空间出口。
- * 所有功能通过 kit 对象访问：
+ * @h-ai/kit — 服务对象主入口
  *
- * - kit.createHandle()  — SvelteKit Handle Hook（含透明加密）
- * - kit.sequence()      — 组合多个 Handle
- * - kit.handler()       — API Handler 包装器（自动错误边界）
- * - kit.guard           — 路由守卫（auth / role / permission / ...）
- * - kit.middleware       — 中间件（cors / csrf / logging / rateLimit）
- * - kit.response        — API 标准响应（ok / error / unauthorized / ...）
- * - kit.validate        — 请求验证（form / query / params / ...）
- * - kit.session         — 会话 Cookie 管理
- * - kit.client          — 客户端工具（create：CSRF + 传输加密）
- * - kit.i18n            — 国际化（setLocale）
- *
- * 加密能力已内置于 createHandle（服务端）与 client.create（客户端），
- * 业务代码无需直接操作底层 crypto API。
- *
- * @example
- * ```ts
- * import { kit } from '@h-ai/kit'
- *
- * // 创建 handle（含透明加密）
- * export const handle = kit.createHandle({
- *   crypto: { crypto, transport: true, encryptedCookies: ['hai_session'] },
- * })
- *
- * // API Handler（自动错误边界）
- * export const GET = kit.handler(async ({ locals, url }) => {
- *   kit.guard.requirePermission(locals.session, 'user:read')
- *   const query = kit.validate.queryOrFail(url, ListSchema)
- *   return kit.response.ok(await fetchData(query))
- * })
- *
- * // 会话管理
- * kit.session.setCookie(cookies, token)
- *
- * // i18n
- * kit.i18n.setLocale('zh-CN')
- * ```
- * =============================================================================
+ * SvelteKit 集成模块的统一命名空间出口。 所有功能通过 kit 对象访问：
+ * @module kit-main
  */
 
 import { createKitClient } from './client/kit-client.js'

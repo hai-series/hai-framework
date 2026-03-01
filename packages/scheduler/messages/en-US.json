@@ -11,5 +11,6 @@
   "scheduler_jsExecutionFailed": "JS code execution failed: {error}",
   "scheduler_apiExecutionFailed": "API call failed: {error}",
   "scheduler_dbSaveFailed": "Failed to save execution log: {error}",
-  "scheduler_dbNotInitialized": "Database not initialized, cannot save execution logs"
+  "scheduler_dbNotInitialized": "Database not initialized, cannot save execution logs",
+  "scheduler_configError": "Scheduler config validation failed: {error}"
 }

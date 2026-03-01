@@ -1,8 +1,12 @@
+/**
+ * @h-ai/crypto — 公共类型
+ *
+ * 定义加密模块的对外接口类型。
+ * @module crypto-types
+ */
+
 import type { Result } from '@h-ai/core'
-
 import type { CryptoErrorCodeType } from './crypto-config.js'
-
-// ─── 错误类型 ───
 
 /**
  * 加密模块统一错误类型

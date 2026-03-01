@@ -1,26 +1,15 @@
 /**
- * =============================================================================
- * @h-ai/core - Logger（浏览器版本，基于 loglevel）
- * =============================================================================
+ * @h-ai/core — Logger（浏览器版本，基于 loglevel）
+ *
  * 提供统一的日志接口，浏览器环境使用 loglevel 实现。
- *
- * @example
- * ```ts
- * import { logger } from './core-function-logger.browser.js'
- *
- * const appLogger = logger.createLogger({ name: 'my-app' })
- * appLogger.info('Hello', { userId: 123 })
- * ```
- * =============================================================================
+ * @module core-function-logger.browser
  */
 
 import type { LoggingConfig, LogLevel } from '../core-config.js'
 import type { LogContext, Logger, LoggerFunctions, LoggerOptions } from '../core-types.js'
 import log from 'loglevel'
 
-// =============================================================================
-// 全局配置
-// =============================================================================
+// ─── 全局配置 ───
 
 /** 全局日志级别（默认 'info'） */
 let globalLevel: LogLevel = 'info'
@@ -89,9 +78,7 @@ function getLogLevel(): LogLevel {
   return globalLevel
 }
 
-// =============================================================================
-// Logger 实现
-// =============================================================================
+// ─── Logger 实现 ───
 
 /**
  * 格式化日志消息。
@@ -169,9 +156,7 @@ function createLogger(options: LoggerOptions = {}): Logger {
   return wrapLoglevel(loggerInstance, { ...globalContext, ...context })
 }
 
-// =============================================================================
-// 默认 Logger 实例
-// =============================================================================
+// ─── 默认 Logger 实例 ───
 
 let defaultLogger: Logger | null = null
 
@@ -190,9 +175,7 @@ function getLogger(): Logger {
   return defaultLogger
 }
 
-// =============================================================================
-// 对外出口
-// =============================================================================
+// ─── 对外出口 ───
 
 /**
  * 浏览器 Logger 函数集合。

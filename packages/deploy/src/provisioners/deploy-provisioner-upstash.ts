@@ -1,20 +1,8 @@
 /**
- * =============================================================================
- * @h-ai/deploy - Upstash Redis Provisioner
- * =============================================================================
+ * @h-ai/deploy — Upstash Redis Provisioner
  *
  * 通过 Upstash REST API 自动创建 Redis 数据库。
- *
- * API 端点：
- * - GET  /v2/redis/databases       — 列出数据库（验证 Token）
- * - POST /v2/redis/database         — 创建数据库
- *
- * 输出环境变量：
- * - HAI_CACHE_UPSTASH_URL   — Upstash Redis REST URL
- * - HAI_CACHE_UPSTASH_TOKEN — Upstash Redis REST Token
- *
  * @module deploy-provisioner-upstash
- * =============================================================================
  */
 
 import type { Result } from '@h-ai/core'
@@ -47,7 +35,7 @@ export function createUpstashProvisioner(): ServiceProvisioner {
         const userEmail = credentials.email ?? ''
         const userKey = credentials.apiKey ?? credentials.api_key ?? credentials.token ?? ''
         if (!userEmail || !userKey) {
-          throw new Error('Missing "email" and "api_key" in credentials')
+          throw new Error(deployM('deploy_credentialMissing', { params: { fields: 'email, api_key' } }))
         }
 
         const res = await fetch(`${UPSTASH_API}/v2/redis/databases`, {
@@ -56,7 +44,7 @@ export function createUpstashProvisioner(): ServiceProvisioner {
           },
         })
         if (!res.ok) {
-          throw new Error(`Upstash API ${res.status}: ${await res.text()}`)
+          throw new Error(deployM('deploy_apiError', { params: { service: 'Upstash', status: String(res.status), body: await res.text() } }))
         }
 
         email = userEmail
@@ -100,7 +88,7 @@ export function createUpstashProvisioner(): ServiceProvisioner {
         })
 
         if (!res.ok) {
-          throw new Error(`Upstash API ${res.status}: ${await res.text()}`)
+          throw new Error(deployM('deploy_apiError', { params: { service: 'Upstash', status: String(res.status), body: await res.text() } }))
         }
 
         const data = await res.json() as {

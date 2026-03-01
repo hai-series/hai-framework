@@ -31,5 +31,6 @@
   "storage_saveFileFailed": "Failed to save file",
   "storage_downloadDefaultFilename": "download",
   "storage_pathTraversal": "Path traversal attack detected",
-  "storage_localNotInitialized": "Local storage not initialized"
+  "storage_localNotInitialized": "Local storage not initialized",
+  "storage_configError": "Storage config validation failed: {error}"
 }

@@ -1,26 +1,15 @@
 /**
- * =============================================================================
- * @h-ai/scheduler - i18n
- * =============================================================================
+ * @h-ai/scheduler — i18n
  *
  * 本文件提供定时任务模块的 i18n 文案访问入口。
- *
- * @example
- * ```ts
- * import { schedulerM } from './scheduler-i18n.js'
- *
- * const message = schedulerM('scheduler_notInitialized')
- * ```
- * =============================================================================
+ * @module scheduler-i18n
  */
 
 import { core } from '@h-ai/core'
 import messagesEnUS from '../messages/en-US.json'
 import messagesZhCN from '../messages/zh-CN.json'
 
-// =============================================================================
-// i18n
-// =============================================================================
+// ─── i18n ───
 
 /**
  * 定时任务模块文案 Key 类型

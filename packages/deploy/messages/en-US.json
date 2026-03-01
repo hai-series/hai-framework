@@ -17,5 +17,9 @@
   "deploy_credentialError": "Credential read/write failed: {error}",
   "deploy_credentialSaved": "Credentials saved",
   "deploy_credentialLoaded": "Credentials loaded",
-  "deploy_configError": "Deploy config error: {error}"
+  "deploy_configError": "Deploy config error: {error}",
+  "deploy_credentialMissing": "Missing credential fields: {fields}",
+  "deploy_apiError": "{service} API error ({status}): {body}",
+  "deploy_fileUploadFailed": "File upload failed ({status}): {body}",
+  "deploy_provisionNoResult": "No connection info returned from {service}"
 }

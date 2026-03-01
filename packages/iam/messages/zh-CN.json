@@ -146,5 +146,6 @@
   "iam_seedPermPermRead": "查看权限",
   "iam_seedPermPermManage": "管理权限",
   "iam_seedPermSystemSettings": "系统设置",
-  "iam_seedPermSystemLogs": "查看日志"
+  "iam_seedPermSystemLogs": "查看日志",
+  "iam_configError": "IAM 配置校验失败：{error}"
 }

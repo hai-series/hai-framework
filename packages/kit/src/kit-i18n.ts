@@ -1,9 +1,8 @@
 /**
- * =============================================================================
- * @h-ai/kit - i18n 工具
- * =============================================================================
+ * @h-ai/kit — i18n 工具
+ *
  * Kit 模块的国际化消息工具，从 @h-ai/core 调用 i18n API。
- * =============================================================================
+ * @module kit-i18n
  */
 
 import { core } from '@h-ai/core'
@@ -13,7 +12,7 @@ import messagesZhCN from '../messages/zh-CN.json'
 type KitMessageKey = keyof typeof messagesZhCN
 
 /** 获取 Kit 模块的 i18n 消息 */
-export const getKitMessage
+export const kitM
   = core.i18n.createMessageGetter<KitMessageKey>({ 'zh-CN': messagesZhCN, 'en-US': messagesEnUS })
 
 /**

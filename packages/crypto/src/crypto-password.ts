@@ -1,5 +1,11 @@
-import type { Result } from '@h-ai/core'
+/**
+ * @h-ai/crypto — 密码操作
+ *
+ * 提供 argon2id 密码哈希与校验功能。
+ * @module crypto-password
+ */
 
+import type { Result } from '@h-ai/core'
 import type { CryptoError, HashOperations, PasswordConfig, PasswordOperations } from './crypto-types.js'
 
 import { err, ok } from '@h-ai/core'

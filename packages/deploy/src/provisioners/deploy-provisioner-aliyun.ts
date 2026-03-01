@@ -1,20 +1,8 @@
 /**
- * =============================================================================
- * @h-ai/deploy - Aliyun SMS Provisioner
- * =============================================================================
+ * @h-ai/deploy — Aliyun SMS Provisioner
  *
- * 验证阿里云 API 凭证用于短信服务。
- * 阿里云短信资源（签名/模板）通常在控制台预配置，此 Provisioner 仅验证凭证。
- *
- * API 端点：
- * - POST dysmsapi.aliyuncs.com (DescribeSmsSign) — 验证凭证
- *
- * 输出环境变量：
- * - HAI_REACH_SMS_ACCESS_KEY — 阿里云 AccessKey ID
- * - HAI_REACH_SMS_SECRET_KEY — 阿里云 AccessKey Secret
- *
+ * 验证阿里云 API 凭证用于短信服务。 阿里云短信资源（签名/模板）通常在控制台预配置，此 Provisioner 仅验证凭证。
  * @module deploy-provisioner-aliyun
- * =============================================================================
  */
 
 import type { Result } from '@h-ai/core'
@@ -45,7 +33,7 @@ export function createAliyunProvisioner(): ServiceProvisioner {
         const akSecret = credentials.accessKeySecret ?? credentials.access_key_secret ?? credentials.secret_key ?? ''
 
         if (!akId || !akSecret) {
-          throw new Error('Missing "access_key_id" and "access_key_secret" in credentials')
+          throw new Error(deployM('deploy_credentialMissing', { params: { fields: 'access_key_id, access_key_secret' } }))
         }
 
         accessKey = akId

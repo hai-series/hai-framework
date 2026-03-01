@@ -3,6 +3,7 @@
  *
  * 基于 AWS SDK v3 实现的 S3 协议存储 Provider。
  * 支持 AWS S3、MinIO、阿里云 OSS 等兼容 S3 协议的存储服务。
+ * @module storage-provider-s3
  */
 
 import type { Result } from '@h-ai/core'
@@ -34,9 +35,7 @@ import { err, ok } from '@h-ai/core'
 import { StorageErrorCode } from '../storage-config.js'
 import { storageM } from '../storage-i18n.js'
 
-// =============================================================================
-// 辅助函数
-// =============================================================================
+// ─── 辅助函数 ───
 
 /**
  * 将 S3 SDK 错误转换为 StorageError
@@ -131,9 +130,7 @@ function withoutPrefix(key: string, prefix: string): string {
   return key
 }
 
-// =============================================================================
-// S3 Provider 实现
-// =============================================================================
+// ─── S3 Provider 实现 ───
 
 /**
  * 创建 S3 存储 Provider

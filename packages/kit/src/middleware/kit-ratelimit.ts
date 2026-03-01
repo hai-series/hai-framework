@@ -1,15 +1,13 @@
 /**
- * =============================================================================
- * @h-ai/kit - 速率限制中间件
- * =============================================================================
- * 基于滑动窗口的请求速率限制中间件，内置内存存储（MemoryRateLimitStore），
- * 支持通过 RateLimitStore 接口接入 Redis 等外部存储后端。
- * =============================================================================
+ * @h-ai/kit — 速率限制中间件
+ *
+ * 基于滑动窗口的请求速率限制中间件，内置内存存储（MemoryRateLimitStore）， 支持通过 RateLimitStore 接口接入 Redis 等外部存储后端。
+ * @module kit-ratelimit
  */
 
 import type { Middleware, RateLimitConfig } from '../kit-types.js'
 import { core } from '@h-ai/core'
-import { getKitMessage } from '../kit-i18n.js'
+import { kitM } from '../kit-i18n.js'
 
 /**
  * 速率限制存储条目
@@ -203,7 +201,7 @@ export function rateLimitMiddleware(config: RateLimitConfig): Middleware {
           success: false,
           error: {
             code: 'RATE_LIMIT_EXCEEDED',
-            message: getKitMessage('kit_rateLimitExceeded'),
+            message: kitM('kit_rateLimitExceeded'),
           },
           requestId,
         }),

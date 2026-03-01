@@ -1,27 +1,8 @@
 /**
- * =============================================================================
- * @h-ai/core - 配置管理（Node.js 专用）
- * =============================================================================
+ * @h-ai/core — 配置管理（Node.js 专用）
+ *
  * 提供 YAML 配置文件加载、环境变量插值、缓存管理。
- *
- * @example
- * ```ts
- * import { config, core } from '@h-ai/core'
- *
- * // 加载配置
- * const result = config.load('core', './config/_core.yml', CoreConfigSchema)
- *
- * // 获取配置
- * const coreConfig = config.get<CoreConfig>('core')
- *
- * // 监听文件变更并自动重载
- * const unwatch = config.watch('app', (cfg, error) => {
- *   if (error) core.logger.error('重载失败', { error })
- *   else core.logger.info('配置已更新', { cfg })
- * })
- * // 取消监听：unwatch()
- * ```
- * =============================================================================
+ * @module core-function-config
  */
 
 import type { ZodType } from 'zod'
@@ -31,18 +12,14 @@ import { existsSync, readFileSync, watch } from 'node:fs'
 import process from 'node:process'
 import { parse } from 'yaml'
 
-// =============================================================================
-// 配置文件监听
-// =============================================================================
+// ─── 配置文件监听 ───
 
 import { ConfigErrorCode } from '../core-config.js'
 import { err, ok } from '../core-types.js'
 import { i18n } from '../i18n/core-i18n-utils.js'
 import { typeUtils } from '../utils/core-util-type.js'
 
-// =============================================================================
-// 类型定义
-// =============================================================================
+// ─── 类型定义 ───
 
 /**
  * 配置错误结构。
@@ -81,9 +58,7 @@ interface CacheEntry<T = unknown> {
   loadedAt: number
 }
 
-// =============================================================================
-// 内部工具
-// =============================================================================
+// ─── 内部工具 ───
 
 /** 环境变量插值正则（支持 ${VAR} 与 ${VAR:default}） */
 const ENV_VAR_PATTERN = /\$\{([^}:]+)(?::([^}]*))?\}/g
@@ -147,9 +122,7 @@ function interpolateEnv(value: unknown): Result<unknown, ConfigError> {
   return ok(value)
 }
 
-// =============================================================================
-// 配置管理器
-// =============================================================================
+// ─── 配置管理器 ───
 
 /** 配置缓存 */
 const configCache = new Map<string, CacheEntry>()

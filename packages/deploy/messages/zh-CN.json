@@ -17,5 +17,9 @@
   "deploy_credentialError": "凭证读写失败：{error}",
   "deploy_credentialSaved": "凭证已保存",
   "deploy_credentialLoaded": "凭证已加载",
-  "deploy_configError": "部署配置错误：{error}"
+  "deploy_configError": "部署配置错误：{error}",
+  "deploy_credentialMissing": "缺少凭证字段：{fields}",
+  "deploy_apiError": "{service} API 请求失败（{status}）：{body}",
+  "deploy_fileUploadFailed": "文件上传失败（{status}）：{body}",
+  "deploy_provisionNoResult": "{service} 未返回连接信息"
 }

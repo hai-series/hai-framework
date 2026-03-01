@@ -1,35 +1,8 @@
 /**
- * =============================================================================
- * @h-ai/kit - Crypto Helpers
- * =============================================================================
+ * @h-ai/kit — Crypto Helpers
+ *
  * 集成 @h-ai/crypto 的 SvelteKit 工具
- *
- * 功能：
- * - 请求签名验证（Webhook 等）
- * - CSRF Token 管理
- * - 加密 Cookie
- *
- * @example
- * ```ts
- * // src/routes/api/webhook/+server.ts
- * import { verifyWebhookSignature } from '../modules/crypto/kit-crypto-helpers.js'
- * import { crypto } from '$lib/server/crypto'
- *
- * export const POST = async (event) => {
- *     const isValid = await verifyWebhookSignature({
- *         crypto,
- *         event,
- *         secretKey: 'webhook_secret',
- *         signatureHeader: 'X-Signature',
- *     })
- *
- *     if (!isValid) {
- *         return new Response('Invalid signature', { status: 401 })
- *     }
- *     // ...
- * }
- * ```
- * =============================================================================
+ * @module kit-crypto-helpers
  */
 
 import type { Cookies, RequestEvent } from '@sveltejs/kit'
@@ -39,7 +12,7 @@ import type {
   EncryptedCookieConfig,
   WebhookVerifyConfig,
 } from './kit-crypto-types.js'
-import { getKitMessage } from '../../kit-i18n.js'
+import { kitM } from '../../kit-i18n.js'
 
 /**
  * 验证 Webhook 签名
@@ -100,7 +73,7 @@ export async function signRequest(
 ): Promise<string> {
   const result = await crypto.hmac.sign(body, secretKey, algorithm)
   if (!result.success) {
-    throw new Error(result.error?.message || getKitMessage('kit_signFailed'))
+    throw new Error(result.error?.message || kitM('kit_signFailed'))
   }
   return result.data!
 }
@@ -140,7 +113,7 @@ export function createCsrfManager(config: CryptoCsrfConfig) {
     async generate(cookies: Cookies): Promise<string> {
       const result = await crypto.random.bytes(tokenLength)
       if (!result.success) {
-        throw new Error(getKitMessage('kit_csrfTokenFailed'))
+        throw new Error(kitM('kit_csrfTokenFailed'))
       }
 
       const token = Array.from(result.data!)
@@ -202,7 +175,7 @@ export function createCsrfManager(config: CryptoCsrfConfig) {
 
         const isValid = await this.verify(event)
         if (!isValid) {
-          return new Response(getKitMessage('kit_csrfVerifyFailed'), { status: 403 })
+          return new Response(kitM('kit_csrfVerifyFailed'), { status: 403 })
         }
 
         return resolve(event)
@@ -238,7 +211,7 @@ export function createEncryptedCookie(config: EncryptedCookieConfig) {
       const result = await crypto.aes.encrypt(json, encryptionKey)
 
       if (!result.success) {
-        throw new Error(getKitMessage('kit_encryptFailed'))
+        throw new Error(kitM('kit_encryptFailed'))
       }
 
       cookies.set(name, result.data!, {

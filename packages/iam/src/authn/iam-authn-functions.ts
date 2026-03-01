@@ -2,6 +2,7 @@
  * @h-ai/iam — 认证子功能工厂
  *
  * 创建认证策略（密码/OTP/LDAP），组装成统一的认证操作接口。
+ * @module iam-authn-functions
  */
 
 import type { CacheFunctions } from '@h-ai/cache'

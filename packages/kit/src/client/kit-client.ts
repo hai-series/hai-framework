@@ -1,32 +1,8 @@
 /**
- * =============================================================================
- * @h-ai/kit - 统一客户端
- * =============================================================================
- * 合并 CSRF Token 附加与传输加密为一个透明的 fetch 函数。
- * 应用层只需调用一次 `createKitClient()`，后续所有 API 调用
- * 自动完成 CSRF + 加密，业务代码无需感知。
+ * @h-ai/kit — 统一客户端
  *
- * @example
- * ```ts
- * // src/lib/utils/api.ts
- * import { createKitClient } from '@h-ai/kit/client'
- * import { crypto } from '@h-ai/crypto'
- *
- * // 启用传输加密 + CSRF
- * export const { apiFetch } = createKitClient({
- *   transport: { crypto },
- * })
- *
- * // 不启用传输加密（仅 CSRF）
- * export const { apiFetch } = createKitClient()
- *
- * // 业务代码完全不变
- * const res = await apiFetch('/api/users', {
- *   method: 'POST',
- *   body: JSON.stringify({ name: 'Alice' }),
- * })
- * ```
- * =============================================================================
+ * 合并 CSRF Token 附加与传输加密为一个透明的 fetch 函数。 应用层只需调用一次 `createKitClient()`，后续所有 API 调用 自动完成 CSRF + 加密，业务代码无需感知。
+ * @module kit-client
  */
 
 import type { EncryptedPayload, TransportCryptoServiceLike, TransportKeyPair } from '../modules/crypto/kit-crypto-types.js'

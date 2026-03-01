@@ -2,6 +2,7 @@
  * @h-ai/ai — 错误码 + 配置 Schema
  *
  * 定义 AI 模块的错误码常量、Zod Schema 和配置类型。
+ * @module ai-config
  */
 
 import { z } from 'zod'
@@ -59,18 +60,6 @@ export const AIErrorCode = {
 
 /** 错误码值类型 */
 export type AIErrorCodeType = (typeof AIErrorCode)[keyof typeof AIErrorCode]
-
-// ─── 错误接口 ───
-
-/** AI 错误接口，所有 AI 操作的错误统一遵循此结构 */
-export interface AIError {
-  /** 错误码（数值，参见 AIErrorCode） */
-  code: AIErrorCodeType
-  /** 错误消息 */
-  message: string
-  /** 原始错误（可选） */
-  cause?: unknown
-}
 
 // ─── LLM 配置 Schema ───
 

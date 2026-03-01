@@ -2,6 +2,7 @@
  * @h-ai/iam — 用户子功能工厂
  *
  * 提供用户管理相关操作：注册、查询、更新、密码管理等。
+ * @module iam-user-functions
  */
 
 import type { CacheFunctions } from '@h-ai/cache'

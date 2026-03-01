@@ -1,12 +1,8 @@
 /**
- * =============================================================================
- * @h-ai/iam - 关联关系存储实现
- * =============================================================================
+ * @h-ai/iam — 关联关系存储实现
  *
  * 包含角色-权限、用户-角色关联存储。
- *
- * @module authz/iam-authz-repository-relation
- * =============================================================================
+ * @module iam-authz-repository-relation
  */
 
 import type { CacheFunctions } from '@h-ai/cache'
@@ -21,9 +17,7 @@ import { IamErrorCode } from '../iam-config.js'
 import { iamM } from '../iam-i18n.js'
 import { buildTokenKey, buildUserTokensKey } from '../session/iam-session-repository-cache.js'
 
-// =============================================================================
-// 角色-权限关联存储接口
-// =============================================================================
+// ─── 角色-权限关联存储接口 ───
 
 /**
  * 角色-权限关联存储接口
@@ -97,9 +91,7 @@ export interface RolePermissionRepository {
   getRoleIdsByPermissionId: (permissionId: string) => Promise<Result<string[], IamError>>
 }
 
-// =============================================================================
-// 用户-角色关联存储接口
-// =============================================================================
+// ─── 用户-角色关联存储接口 ───
 
 /**
  * 用户-角色关联存储接口
@@ -159,9 +151,7 @@ export interface UserRoleRepository {
   syncUserSessionPermissions: (userId: string, permissionCodes: string[]) => Promise<Result<void, IamError>>
 }
 
-// =============================================================================
-// 角色-权限关联存储实现
-// =============================================================================
+// ─── 角色-权限关联存储实现 ───
 
 const ROLE_PERMISSION_TABLE = 'iam_role_permissions'
 const ROLE_PERMS_PREFIX = 'iam:role:'
@@ -632,9 +622,7 @@ export async function createDbRolePermissionRepository(
   })
 }
 
-// =============================================================================
-// 用户-角色关联存储实现
-// =============================================================================
+// ─── 用户-角色关联存储实现 ───
 
 const USER_ROLE_TABLE = 'iam_user_roles'
 const USER_ROLE_SCHEMA = {

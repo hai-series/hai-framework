@@ -1,61 +1,8 @@
 /**
- * =============================================================================
- * @h-ai/db - 数据库服务主入口
- * =============================================================================
+ * @h-ai/db — 数据库服务主入口
  *
  * 本文件提供统一的 `db` 对象，聚合所有数据库操作功能。
- *
- * 使用方式：
- * 1. 调用 `db.init()` 初始化数据库连接
- * 2. 通过 `db.ddl` 进行表结构操作
- * 3. 通过 `db.sql` 进行数据查询和修改
- * 4. 通过 `db.tx.wrap()` 执行事务
- * 5. 调用 `db.close()` 关闭连接
- *
- * @example
- * ```ts
- * import { db } from '@h-ai/db'
- *
- * // 1. 初始化数据库
- * await db.init({
- *     type: 'sqlite',
- *     database: './data.db'
- * })
- *
- * // 2. 创建表
- * await db.ddl.createTable('users', {
- *     id: { type: 'INTEGER', primaryKey: true, autoIncrement: true },
- *     name: { type: 'TEXT', notNull: true },
- *     email: { type: 'TEXT', unique: true },
- *     created_at: { type: 'TIMESTAMP', defaultValue: '(unixepoch())' }
- * })
- *
- * // 3. 插入数据
- * await db.sql.execute(
- *     'INSERT INTO users (name, email) VALUES (?, ?)',
- *     ['张三', 'zhangsan@example.com']
- * )
- *
- * // 4. 查询数据
- * const users = await db.sql.query<{ id: number; name: string }>('SELECT * FROM users')
- * if (users.success) {
- *     // 使用查询结果 users.data
- * }
- *
- * // 5. 事务操作
- * const result = await db.tx.wrap(async (tx) => {
- *     await tx.execute('INSERT INTO users (name) VALUES (?)', ['用户1'])
- *     await tx.execute('INSERT INTO users (name) VALUES (?)', ['用户2'])
- *     const count = await tx.get<{ cnt: number }>('SELECT COUNT(*) as cnt FROM users')
- *     return count
- * })
- *
- * // 6. 关闭连接
- * await db.close()
- * ```
- *
  * @module db-main
- * =============================================================================
  */
 
 import type { Result } from '@h-ai/core'
@@ -83,9 +30,7 @@ import { createSqliteProvider } from './providers/db-provider-sqlite.js'
 
 const logger = core.logger.child({ module: 'db', scope: 'main' })
 
-// =============================================================================
-// 内部状态
-// =============================================================================
+// ─── 内部状态 ───
 
 /** 当前活跃的数据库 Provider（未初始化时为 null） */
 let currentProvider: DbProvider | null = null
@@ -93,9 +38,7 @@ let currentProvider: DbProvider | null = null
 /** 当前数据库配置（未初始化时为 null） */
 let currentConfig: DbConfig | null = null
 
-// =============================================================================
-// Provider 工厂
-// =============================================================================
+// ─── Provider 工厂 ───
 
 /**
  * 根据配置创建对应的数据库 Provider
@@ -114,9 +57,7 @@ function createProvider(config: DbConfig): DbProvider {
   }
 }
 
-// =============================================================================
-// 未初始化时的占位操作
-// =============================================================================
+// ─── 未初始化时的占位操作 ───
 
 /** 未初始化工具集 */
 const notInitialized = core.module.createNotInitializedKit<DbError>(
@@ -141,9 +82,7 @@ const notInitializedTx: TxManager = {
   wrap: async () => notInitialized.result(),
 }
 
-// =============================================================================
-// 统一数据库服务对象
-// =============================================================================
+// ─── 统一数据库服务对象 ───
 
 /**
  * 数据库服务对象
@@ -200,8 +139,18 @@ export const db: DbFunctions = {
 
     logger.info('Initializing DB module')
 
+    const parseResult = DbConfigSchema.safeParse(config)
+    if (!parseResult.success) {
+      logger.error('DB config validation failed', { error: parseResult.error.message })
+      return err({
+        code: DbErrorCode.CONFIG_ERROR,
+        message: dbM('db_configError', { params: { error: parseResult.error.message } }),
+        cause: parseResult.error,
+      })
+    }
+    const parsed = parseResult.data
+
     try {
-      const parsed = DbConfigSchema.parse(config)
       const provider = createProvider(parsed)
       const connectResult = await provider.connect(parsed)
       if (!connectResult.success) {

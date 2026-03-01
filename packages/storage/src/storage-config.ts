@@ -1,5 +1,6 @@
 /**
  * @h-ai/storage — 错误码 + 配置 Schema
+ * @module storage-config
  */
 
 import { z } from 'zod'

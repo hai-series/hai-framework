@@ -7,6 +7,7 @@
  * - 初始化配置（IamConfigInput）
  * - 客户端操作（IamClientOperations）
  * - 子功能类型 re-export
+ * @module iam-types
  */
 
 import type { CacheFunctions } from '@h-ai/cache'

@@ -58,7 +58,7 @@ describe('scheduler', () => {
       const result = await scheduler.init({ enableDb: false, tableName: 'logs; DROP TABLE users' })
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.code).toBe(SchedulerErrorCode.INIT_FAILED)
+        expect(result.error.code).toBe(SchedulerErrorCode.CONFIG_ERROR)
       }
     })
 

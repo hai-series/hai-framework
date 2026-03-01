@@ -1,33 +1,8 @@
 /**
- * =============================================================================
- * @h-ai/storage - 前端存储客户端
- * =============================================================================
+ * @h-ai/storage — 前端存储客户端
  *
  * 提供前端通过签名 URL 直接上传下载文件的功能。
- *
- * 使用方式：
- * 1. 后端生成签名 URL 并返回给前端
- * 2. 前端使用此客户端直接上传到存储服务
- *
- * @example
- * ```ts
- * import { uploadWithPresignedUrl, downloadWithPresignedUrl } from '@h-ai/storage/client'
- *
- * // 上传文件
- * const uploadResult = await uploadWithPresignedUrl(presignedUrl, file, {
- *     onProgress: (progress) => {
- *         // 在此更新进度条：progress.percent
- *     }
- * })
- *
- * // 下载文件并保存
- * await downloadAndSave(presignedUrl, {
- *     filename: 'download.pdf'
- * })
- * ```
- *
  * @module storage-client
- * =============================================================================
  */
 
 import { storageM } from '../storage-i18n.js'
@@ -75,9 +50,7 @@ export interface ClientDownloadOptions {
   abortController?: AbortController
 }
 
-// =============================================================================
-// 上传功能
-// =============================================================================
+// ─── 上传功能 ───
 
 /**
  * 使用签名 URL 上传文件
@@ -200,9 +173,7 @@ export async function uploadWithPresignedUrl(
   }
 }
 
-// =============================================================================
-// 下载功能
-// =============================================================================
+// ─── 下载功能 ───
 
 /**
  * 使用签名 URL 下载文件

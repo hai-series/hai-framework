@@ -1,21 +1,13 @@
 /**
- * =============================================================================
- * @h-ai/kit - 传输加密中间件
- * =============================================================================
- * SvelteKit 中间件，自动对请求/响应进行传输加密解密。
+ * @h-ai/kit — 传输加密中间件
  *
- * 行为：
- * - 请求阶段：读取加密请求体 → 解密 → 重建 Request
- * - 响应阶段：读取响应体 → 加密 → 重建 Response
- * - 密钥交换端点和 excludePaths 不加密
- * - 通过 X-Client-Id 请求头关联客户端
- * - 加密响应添加 X-Encrypted: true 头
- * =============================================================================
+ * SvelteKit 中间件，自动对请求/响应进行传输加密解密。
+ * @module kit-transport-middleware
  */
 
 import type { Middleware } from '../../kit-types.js'
 import type { TransportEncryptionConfig, TransportEncryptionManager } from './kit-crypto-types.js'
-import { getKitMessage } from '../../kit-i18n.js'
+import { kitM } from '../../kit-i18n.js'
 import { createTransportEncryption, isValidEncryptedPayload } from './kit-transport-encryption.js'
 
 /**
@@ -74,7 +66,7 @@ export function transportEncryptionMiddleware(config: TransportEncryptionConfig)
       if (requireEncryption) {
         // 强制加密模式：缺少 X-Client-Id 说明未完成密钥交换，拒绝请求
         return new Response(
-          JSON.stringify({ error: getKitMessage('kit_transportClientIdRequired') }),
+          JSON.stringify({ error: kitM('kit_transportClientIdRequired') }),
           { status: 400, headers: { 'Content-Type': 'application/json' } },
         )
       }
@@ -86,7 +78,7 @@ export function transportEncryptionMiddleware(config: TransportEncryptionConfig)
     const clientPublicKey = manager.getClientPublicKey(clientId)
     if (!clientPublicKey) {
       return new Response(
-        JSON.stringify({ error: getKitMessage('kit_transportClientKeyNotFound') }),
+        JSON.stringify({ error: kitM('kit_transportClientKeyNotFound') }),
         { status: 400, headers: { 'Content-Type': 'application/json' } },
       )
     }
@@ -117,7 +109,7 @@ export function transportEncryptionMiddleware(config: TransportEncryptionConfig)
     }
     catch {
       return new Response(
-        JSON.stringify({ error: getKitMessage('kit_transportDecryptFailed') }),
+        JSON.stringify({ error: kitM('kit_transportDecryptFailed') }),
         { status: 400, headers: { 'Content-Type': 'application/json' } },
       )
     }
@@ -175,7 +167,7 @@ async function handleKeyExchange(
 
     if (!body.clientPublicKey || typeof body.clientPublicKey !== 'string') {
       return new Response(
-        JSON.stringify({ error: getKitMessage('kit_transportInvalidPayload') }),
+        JSON.stringify({ error: kitM('kit_transportInvalidPayload') }),
         { status: 400, headers: { 'Content-Type': 'application/json' } },
       )
     }
@@ -190,7 +182,7 @@ async function handleKeyExchange(
   }
   catch {
     return new Response(
-      JSON.stringify({ error: getKitMessage('kit_transportKeyExchangeFailed') }),
+      JSON.stringify({ error: kitM('kit_transportKeyExchangeFailed') }),
       { status: 500, headers: { 'Content-Type': 'application/json' } },
     )
   }
