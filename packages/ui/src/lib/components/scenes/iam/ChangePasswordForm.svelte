@@ -1,14 +1,12 @@
 <!--
-  =============================================================================
-  @h-ai/ui - ChangePasswordForm 组件
-  =============================================================================
-  修改密码表单组件
-  =============================================================================
+  @component ChangePasswordForm
+  修改密码表单组件。
 -->
 <script lang="ts">
   import type { ChangePasswordFormData, ChangePasswordFormProps } from '../types.js'
   import { cn } from '../../../utils.js'
   import Button from '../../primitives/Button.svelte'
+  import Alert from '../../compounds/Alert.svelte'
   import PasswordInput from './PasswordInput.svelte'
   import { arePasswordsEqual } from './password-utils.js'
   import { m } from '../../../messages.js'
@@ -68,9 +66,9 @@
 
 <form class={formClass} onsubmit={handleSubmit}>
   {#if requireOldPassword}
-    <div class="form-control rounded-xl border border-base-200 bg-base-100 p-4">
-      <label class="label" for="old-password">
-        <span class="label-text">{m('change_password_old')}</span>
+    <div class="space-y-1.5">
+      <label class="text-sm font-medium text-base-content/70" for="old-password">
+        {m('change_password_old')}
       </label>
       <PasswordInput
         value={oldPassword}
@@ -83,9 +81,9 @@
     </div>
   {/if}
 
-  <div class="form-control rounded-xl border border-base-200 bg-base-100 p-4">
-    <label class="label" for="new-password">
-      <span class="label-text">{m('change_password_new')}</span>
+  <div class="space-y-1.5">
+    <label class="text-sm font-medium text-base-content/70" for="new-password">
+      {m('change_password_new')}
     </label>
     <PasswordInput
       value={newPassword}
@@ -98,9 +96,9 @@
     />
   </div>
 
-  <div class="form-control rounded-xl border border-base-200 bg-base-100 p-4">
-    <label class="label" for="confirm-password">
-      <span class="label-text">{m('change_password_confirm')}</span>
+  <div class="space-y-1.5">
+    <label class="text-sm font-medium text-base-content/70" for="confirm-password">
+      {m('change_password_confirm')}
     </label>
     <PasswordInput
       value={confirmPassword}
@@ -112,17 +110,14 @@
     />
   </div>
 
-  <div class="rounded-lg bg-base-200/60 px-4 py-3 text-xs text-base-content/70">
+  <div class="rounded-lg bg-base-content/3 px-3.5 py-2.5 text-xs text-base-content/50">
     {m('change_password_relogin_hint')}
   </div>
 
   {#if errors.general}
-    <div class="alert alert-error text-sm">
-      <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
-      </svg>
-      <span>{errors.general}</span>
-    </div>
+    <Alert variant="error">
+      {errors.general}
+    </Alert>
   {/if}
 
   <Button

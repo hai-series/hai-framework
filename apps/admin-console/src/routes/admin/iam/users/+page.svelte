@@ -1,11 +1,9 @@
 <!--
-  =============================================================================
   Admin Console - 用户管理页面
-  =============================================================================
 -->
 <script lang="ts">
   import type { PageData } from './$types'
-  import { invalidateAll } from '$app/navigation'
+  import { goto, invalidateAll } from '$app/navigation'
   import * as m from '$lib/paraglide/messages'
   import { apiFetch } from '$lib/utils/api'
 
@@ -18,11 +16,13 @@
     avatar: string | null
     status: 'active' | 'inactive' | 'suspended'
     roles: string[]
+    roleIds: string[]
     created_at: Date
     updated_at: Date
   }
 
   interface RoleData {
+    id: string
     name: string
   }
 
@@ -30,16 +30,42 @@
     data: PageData & {
       users: UserData[]
       roles: RoleData[]
+      total: number
+      page: number
+      pageSize: number
+      search: string
+      status: string
+      role: string
     }
   }
 
   let { data }: Props = $props()
 
+  // ─── 权限判断 ───
+  const userPermissions = $derived(data.user?.permissions ?? [])
+
+  /** 检查当前用户是否拥有指定权限 */
+  function hasPerm(permission: string): boolean {
+    for (const p of userPermissions) {
+      if (p === permission || p === '*') return true
+      if (p.endsWith(':*') && permission.startsWith(p.slice(0, -1))) return true
+    }
+    return false
+  }
+
+  const canCreate = $derived(hasPerm('user:create'))
+  const canUpdate = $derived(hasPerm('user:update'))
+  const canDelete = $derived(hasPerm('user:delete'))
+
   // 从 IAM 配置读取密码最小长度
   const passwordMinLength = $derived(data.iamPublicConfig?.password?.minLength ?? 8)
 
-  /** 搜索关键字 */
+  /** 搜索关键字（与 URL 同步） */
   let searchQuery = $state('')
+  /** 状态筛选 */
+  let statusFilter = $state('')
+  /** 角色筛选 */
+  let roleFilter = $state('')
 
   /** 新建/编辑对话框状态 */
   let showDialog = $state(false)
@@ -60,15 +86,62 @@
   let submitting = $state(false)
   let error = $state('')
 
-  /** 过滤后的用户列表 */
-  const filteredUsers = $derived(
-    data.users.filter(
-      (user) =>
-        user.username.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        user.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (user.display_name?.toLowerCase().includes(searchQuery.toLowerCase()) ?? false),
-    ),
-  )
+  /** 搜索防抖定时器 */
+  let searchTimer: ReturnType<typeof setTimeout> | undefined
+
+  /** 当 data 更新时同步本地筛选状态 */
+  $effect(() => {
+    searchQuery = data.search
+    statusFilter = data.status
+    roleFilter = data.role
+  })
+
+  /** 构建带查询参数的 URL 并导航 */
+  function navigateWithParams(overrides: Record<string, string | number>) {
+    const params = new URLSearchParams()
+    const merged = {
+      search: searchQuery,
+      status: statusFilter,
+      role: roleFilter,
+      page: data.page,
+      pageSize: data.pageSize,
+      ...overrides,
+    }
+    if (merged.search) params.set('search', String(merged.search))
+    if (merged.status) params.set('status', String(merged.status))
+    if (merged.role) params.set('role', String(merged.role))
+    if (merged.page && merged.page !== 1) params.set('page', String(merged.page))
+    if (merged.pageSize && merged.pageSize !== 20) params.set('pageSize', String(merged.pageSize))
+    const qs = params.toString()
+    goto(`/admin/iam/users${qs ? `?${qs}` : ''}`, { invalidateAll: true })
+  }
+
+  /** 搜索输入防抖 */
+  function handleSearchInput() {
+    clearTimeout(searchTimer)
+    searchTimer = setTimeout(() => {
+      navigateWithParams({ search: searchQuery, page: 1 })
+    }, 400)
+  }
+
+  /** 状态筛选变更 */
+  function handleStatusChange(e: Event) {
+    const target = e.target as HTMLSelectElement
+    statusFilter = target.value
+    navigateWithParams({ status: statusFilter, page: 1 })
+  }
+
+  /** 角色筛选变更 */
+  function handleRoleChange(e: Event) {
+    const target = e.target as HTMLSelectElement
+    roleFilter = target.value
+    navigateWithParams({ role: roleFilter, page: 1 })
+  }
+
+  /** 分页变更 */
+  function handlePageChange(newPage: number) {
+    navigateWithParams({ page: newPage })
+  }
 
   /** 打开新建对话框 */
   function openCreateDialog() {
@@ -96,7 +169,7 @@
       password: '',
       confirmPassword: '',
       status: user.status as 'active' | 'inactive' | 'suspended',
-      roles: user.roles,
+      roles: [...user.roleIds],
     }
     error = ''
     showDialog = true
@@ -178,29 +251,15 @@
     }
   }
 
-  /** 获取状态标签样式 */
-  function getStatusBadge(status: string): string {
-    switch (status) {
-      case 'active':
-        return 'badge-success'
-      case 'inactive':
-        return 'badge-warning'
-      case 'suspended':
-        return 'badge-error'
-      default:
-        return 'badge-ghost'
-    }
-  }
-
   /** 获取状态显示文本 */
   function getStatusText(status: string): string {
     switch (status) {
       case 'active':
-        return `${m.iam_users_status_active()} (${status})`
+        return m.iam_users_status_active()
       case 'inactive':
-        return `${m.iam_users_status_inactive()} (${status})`
+        return m.iam_users_status_inactive()
       case 'suspended':
-        return `${m.iam_users_status_disabled()} (${status})`
+        return m.iam_users_status_disabled()
       default:
         return status
     }
@@ -211,37 +270,59 @@
   <title>{m.iam_users_title()} - {m.app_title()}</title>
 </svelte:head>
 
-<div class="space-y-6">
+<div class="space-y-4">
   <!-- 页面标题 -->
   <PageHeader title={m.iam_users_title()} description={m.iam_users_subtitle()}>
     {#snippet actions()}
-      <Button variant="primary" onclick={openCreateDialog}>
-        <svg class="w-5 h-5 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
-        </svg>
-        {m.iam_users_create()}
-      </Button>
+      {#if canCreate}
+        <Button variant="primary" onclick={openCreateDialog}>
+          <span class="icon-[tabler--plus] size-4.5 mr-1"></span>
+          {m.iam_users_create()}
+        </Button>
+      {/if}
     {/snippet}
   </PageHeader>
 
-  <!-- 搜索栏 -->
+  <!-- 搜索 + 筛选栏 -->
   <Card>
-    <div class="p-5">
-      <div class="flex flex-col sm:flex-row gap-4">
+    <div class="p-4">
+      <div class="flex flex-col sm:flex-row gap-3">
+        <!-- 搜索框 -->
         <div class="flex-1 relative">
-          <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-base-content/40 z-10" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-          </svg>
+          <span class="icon-[tabler--search] size-4.5 absolute left-3 top-1/2 -translate-y-1/2 text-base-content/35 z-10"></span>
           <Input
             type="text"
             placeholder={m.iam_users_search_placeholder()}
             class="pl-10"
             bind:value={searchQuery}
+            oninput={handleSearchInput}
             autocomplete="off"
           />
         </div>
+        <!-- 状态筛选 -->
+        <select
+          class="select select-sm h-10 min-w-32"
+          value={statusFilter}
+          onchange={handleStatusChange}
+        >
+          <option value="">{m.iam_users_filter_all_statuses()}</option>
+          <option value="active">{m.iam_users_status_active()}</option>
+          <option value="suspended">{m.iam_users_status_disabled()}</option>
+        </select>
+        <!-- 角色筛选 -->
+        <select
+          class="select select-sm h-10 min-w-32"
+          value={roleFilter}
+          onchange={handleRoleChange}
+        >
+          <option value="">{m.iam_users_filter_all_roles()}</option>
+          {#each data.roles as role}
+            <option value={role.name}>{role.name}</option>
+          {/each}
+        </select>
+        <!-- 总数 -->
         <div class="text-sm text-base-content/50 self-center whitespace-nowrap">
-          {m.logs_total_count({ count: filteredUsers.length })}
+          {m.logs_total_count({ count: data.total })}
         </div>
       </div>
     </div>
@@ -250,19 +331,21 @@
   <!-- 用户列表 -->
   <Card>
     <div class="overflow-x-auto">
-      <table class="w-full">
+      <table class="w-full text-[13px]">
         <thead>
-          <tr class="border-b border-base-content/5">
+          <tr class="border-b border-base-content/6">
             <th class="px-5 py-3.5 text-left text-xs font-semibold text-base-content/50 uppercase tracking-wider">{m.iam_users_col_username()}</th>
             <th class="px-5 py-3.5 text-left text-xs font-semibold text-base-content/50 uppercase tracking-wider">{m.iam_users_col_email()}</th>
             <th class="px-5 py-3.5 text-left text-xs font-semibold text-base-content/50 uppercase tracking-wider">{m.iam_users_col_roles()}</th>
             <th class="px-5 py-3.5 text-left text-xs font-semibold text-base-content/50 uppercase tracking-wider">{m.iam_users_col_status()}</th>
             <th class="px-5 py-3.5 text-left text-xs font-semibold text-base-content/50 uppercase tracking-wider">{m.iam_users_col_created_at()}</th>
-            <th class="px-5 py-3.5 text-right text-xs font-semibold text-base-content/50 uppercase tracking-wider">{m.iam_users_col_actions()}</th>
+            {#if canUpdate || canDelete}
+              <th class="px-5 py-3.5 text-right text-xs font-semibold text-base-content/50 uppercase tracking-wider">{m.iam_users_col_actions()}</th>
+            {/if}
           </tr>
         </thead>
         <tbody class="divide-y divide-base-content/5">
-          {#each filteredUsers as user}
+          {#each data.users as user}
             <tr class="hover:bg-base-200/30 transition-colors">
               <td class="px-5 py-3.5">
                 <div class="flex items-center gap-3">
@@ -294,34 +377,38 @@
               <td class="px-5 py-3.5 text-sm text-base-content/50">
                 {new Date(user.created_at).toLocaleDateString('zh-CN')}
               </td>
+              {#if canUpdate || canDelete}
               <td class="px-5 py-3.5 text-right">
                 <div class="flex justify-end gap-1">
-                  <IconButton
-                    variant="ghost"
-                    size="sm"
-                    onclick={() => openEditDialog(user)}
-                    ariaLabel={m.action_edit()}
-                  >
-                    <span class="iconify tabler--edit size-4"></span>
-                  </IconButton>
-                  <IconButton
-                    variant="ghost"
-                    size="sm"
-                    onclick={() => handleDelete(user)}
-                    ariaLabel={m.action_delete()}
-                    class="hover:text-error"
-                  >
-                    <span class="iconify tabler--trash size-4"></span>
-                  </IconButton>
+                  {#if canUpdate}
+                    <IconButton
+                      variant="ghost"
+                      size="sm"
+                      onclick={() => openEditDialog(user)}
+                      ariaLabel={m.action_edit()}
+                    >
+                      <span class="icon-[tabler--edit] size-4"></span>
+                    </IconButton>
+                  {/if}
+                  {#if canDelete}
+                    <IconButton
+                      variant="ghost"
+                      size="sm"
+                      onclick={() => handleDelete(user)}
+                      ariaLabel={m.action_delete()}
+                      class="hover:text-error"
+                    >
+                      <span class="icon-[tabler--trash] size-4"></span>
+                    </IconButton>
+                  {/if}
                 </div>
               </td>
+              {/if}
             </tr>
           {:else}
             <tr>
-              <td colspan="6" class="px-5 py-16 text-center text-base-content/40">
-                <svg class="w-12 h-12 mx-auto text-base-content/20 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                </svg>
+              <td colspan={canUpdate || canDelete ? 6 : 5} class="px-5 py-16 text-center text-base-content/30">
+                <span class="icon-[tabler--users] size-12 mx-auto text-base-content/15 block mb-3"></span>
                 {m.common_no_data()}
               </td>
             </tr>
@@ -329,6 +416,19 @@
         </tbody>
       </table>
     </div>
+    <!-- 分页 -->
+    {#if data.total > data.pageSize}
+      <div class="flex justify-center p-4 border-t border-base-content/5">
+        <Pagination
+          page={data.page}
+          total={data.total}
+          pageSize={data.pageSize}
+          size="sm"
+          showTotal
+          onchange={handlePageChange}
+        />
+      </div>
+    {/if}
   </Card>
 </div>
 
@@ -338,15 +438,13 @@
     open={showDialog} 
     onclose={closeDialog}
     title={editingUser ? m.iam_users_edit() : m.iam_users_create()}
-    size="lg"
+    size="3xl"
     closeOnBackdrop={false}
   >
     <form onsubmit={handleSubmit} class="space-y-5">
       {#if error}
         <div class="p-3 bg-error/10 border border-error/20 rounded-lg text-sm text-error flex items-center gap-2">
-          <svg class="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
+          <span class="icon-[tabler--alert-circle] size-4 shrink-0"></span>
           <span>{error}</span>
         </div>
       {/if}
@@ -455,12 +553,12 @@
             <label class="inline-flex items-center gap-2 cursor-pointer">
               <Checkbox
                 size="sm"
-                checked={form.roles.includes(role.name)}
+                checked={form.roles.includes(role.id)}
                 onchange={(checked: boolean) => {
                   if (checked) {
-                    form.roles = [...form.roles, role.name]
+                    form.roles = [...form.roles, role.id]
                   } else {
-                    form.roles = form.roles.filter((r) => r !== role.name)
+                    form.roles = form.roles.filter((r) => r !== role.id)
                   }
                 }}
                 disabled={submitting}
@@ -481,10 +579,7 @@
         </Button>
         <Button variant="primary" type="submit" disabled={submitting}>
           {#if submitting}
-            <svg class="animate-spin -ml-1 mr-2 h-4 w-4" fill="none" viewBox="0 0 24 24">
-              <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-              <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-            </svg>
+            <span class="loading loading-spinner loading-xs mr-2"></span>
           {/if}
           {editingUser ? m.action_save() : m.action_create()}
         </Button>

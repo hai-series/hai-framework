@@ -2,6 +2,11 @@
  * =============================================================================
  * E2E 测试 - IAM 角色管理页面 UI
  * =============================================================================
+ * 覆盖范围：
+ * - 页面结构（标题、按钮、卡片、下拉菜单）
+ * - 新建角色对话框（结构、权限选择、关闭）
+ * - 通过 UI 对话框创建、编辑、删除角色（走 apiFetch 传输加密链路）
+ * =============================================================================
  */
 
 import { expect, test } from '@playwright/test'
@@ -34,7 +39,7 @@ test.describe('IAM Roles UI', () => {
     await page.waitForLoadState('domcontentloaded')
 
     // 角色卡片容器（grid 布局）
-    const cardGrid = page.locator('.grid.gap-4')
+    const cardGrid = page.locator('.grid.gap-3')
     await expect(cardGrid).toBeVisible()
 
     // 至少有一个 card（系统预设角色）
@@ -74,11 +79,11 @@ test.describe('IAM Roles UI', () => {
     if (count > 0) {
       const firstCard = cards.first()
       // 用户数统计（包含 tabler--users 图标）
-      const userCount = firstCard.locator('.tabler--users')
+      const userCount = firstCard.locator('[class*="tabler--users"]')
       await expect(userCount).toBeVisible()
 
       // 权限数统计（包含 tabler--key 图标）
-      const permCount = firstCard.locator('.tabler--key')
+      const permCount = firstCard.locator('[class*="tabler--key"]')
       await expect(permCount).toBeVisible()
     }
   })
@@ -105,7 +110,7 @@ test.describe('IAM Roles UI', () => {
       await expect(dropdown).toBeVisible()
 
       // 编辑按钮
-      const editIcon = dropdown.locator('.tabler--edit')
+      const editIcon = dropdown.locator('[class*="tabler--edit"]')
       await expect(editIcon).toBeVisible()
     }
   })
@@ -179,5 +184,113 @@ test.describe('IAM Roles UI', () => {
     await page.waitForTimeout(300)
 
     await expect(page.locator('.modal.modal-open')).not.toBeVisible()
+  })
+
+  // ---------------------------------------------------------------------------
+  // 通过 UI 对话框创建角色
+  // ---------------------------------------------------------------------------
+  test('通过对话框创建角色后出现在卡片列表中', async ({ page, request }) => {
+    await registerAndLogin(page, request, 'roleui')
+    await page.goto('/admin/iam/roles')
+    await page.waitForLoadState('domcontentloaded')
+
+    const roleName = `role_${Date.now().toString(36)}`
+    const roleDesc = 'E2E 测试创建的角色'
+
+    // 打开新建对话框
+    const createBtn = page.locator('main').getByRole('button', { name: /新建|创建|添加/ })
+    await createBtn.first().click()
+    await expect(page.locator('#name')).toBeVisible()
+
+    // 填写表单
+    await page.locator('#name').fill(roleName)
+    await page.locator('#description').fill(roleDesc)
+
+    // 点击创建按钮
+    const submitBtn = page.locator('.modal.modal-open').getByRole('button', { name: /创建|保存|提交/ }).last()
+    await submitBtn.click()
+
+    // 对话框应关闭
+    await expect(page.locator('.modal.modal-open')).not.toBeVisible({ timeout: 10_000 })
+
+    // 新角色出现在卡片列表中
+    const card = page.locator('.card').filter({ hasText: roleName })
+    await expect(card.first()).toBeVisible({ timeout: 5_000 })
+  })
+
+  // ---------------------------------------------------------------------------
+  // 通过 UI 对话框编辑角色
+  // ---------------------------------------------------------------------------
+  test('通过对话框编辑角色描述', async ({ page, request }) => {
+    await registerAndLogin(page, request, 'roleui')
+
+    // 先通过 API 创建一个角色
+    const roleName = `edit_${Date.now().toString(36)}`
+    await request.post('/api/iam/roles', {
+      data: { name: roleName, description: 'original', permissions: [] },
+    })
+
+    await page.goto('/admin/iam/roles')
+    await page.waitForLoadState('domcontentloaded')
+
+    // 找到角色卡片并点击操作菜单
+    const card = page.locator('.card').filter({ hasText: roleName })
+    await expect(card.first()).toBeVisible({ timeout: 5_000 })
+    const menuBtn = card.first().locator('.dropdown button[aria-label]')
+    await menuBtn.click()
+    await page.waitForTimeout(300)
+
+    // 点击编辑
+    const editIcon = card.first().locator('.dropdown-content').locator('[class*="tabler--edit"]')
+    await editIcon.click()
+
+    // 等待编辑对话框打开
+    await expect(page.locator('#name')).toBeVisible()
+
+    // 修改描述
+    const newDesc = 'UI 编辑后的描述'
+    await page.locator('#description').fill(newDesc)
+
+    // 点击保存
+    const saveBtn = page.locator('.modal.modal-open').getByRole('button', { name: /保存|提交/ }).last()
+    await saveBtn.click()
+
+    // 对话框应关闭
+    await expect(page.locator('.modal.modal-open')).not.toBeVisible({ timeout: 10_000 })
+  })
+
+  // ---------------------------------------------------------------------------
+  // 通过 UI 删除角色
+  // ---------------------------------------------------------------------------
+  test('通过 UI 删除自定义角色', async ({ page, request }) => {
+    await registerAndLogin(page, request, 'roleui')
+
+    // 先通过 API 创建一个角色
+    const roleName = `del_${Date.now().toString(36)}`
+    await request.post('/api/iam/roles', {
+      data: { name: roleName, description: 'to be deleted', permissions: [] },
+    })
+
+    await page.goto('/admin/iam/roles')
+    await page.waitForLoadState('domcontentloaded')
+
+    // 找到角色卡片
+    const card = page.locator('.card').filter({ hasText: roleName })
+    await expect(card.first()).toBeVisible({ timeout: 5_000 })
+
+    // 打开下拉菜单
+    const menuBtn = card.first().locator('.dropdown button[aria-label]')
+    await menuBtn.click()
+    await page.waitForTimeout(300)
+
+    // 监听 confirm 对话框并点击确认
+    page.on('dialog', dialog => dialog.accept())
+
+    // 点击删除
+    const deleteItem = card.first().locator('.dropdown-content').locator('[class*="tabler--trash"]')
+    await deleteItem.click()
+
+    // 角色应从列表中消失
+    await expect(card.first()).not.toBeVisible({ timeout: 10_000 })
   })
 })

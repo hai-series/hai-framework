@@ -15,7 +15,7 @@ export type Variant = 'default' | 'primary' | 'secondary' | 'success' | 'warning
 /**
  * 尺寸类型
  */
-export type Size = 'xs' | 'sm' | 'md' | 'lg' | 'xl'
+export type Size = 'xs' | 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl' | '4xl'
 
 /**
  * 位置类型

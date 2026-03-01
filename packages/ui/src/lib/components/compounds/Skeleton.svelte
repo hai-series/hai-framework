@@ -1,11 +1,6 @@
 <!--
-  =============================================================================
-  @h-ai/ui - Skeleton 组件
-  =============================================================================
-  骨架屏占位组件，用于加载状态展示
-  
-  使用 Svelte 5 Runes ($props, $derived)
-  =============================================================================
+  @component Skeleton
+  骨架屏占位组件，用于加载状态展示。
 -->
 <script lang="ts">
   import type { SkeletonProps } from '../../types.js'
@@ -28,10 +23,10 @@
       circle && 'rounded-full',
       variant === 'text' && 'h-4',
       variant === 'title' && 'h-6 w-3/4',
-      variant === 'avatar' && 'w-12 h-12 rounded-full',
-      variant === 'thumbnail' && 'w-24 h-24 rounded',
-      variant === 'button' && 'h-10 w-24 rounded-btn',
-      variant === 'input' && 'h-12 w-full rounded-btn',
+      variant === 'avatar' && 'w-10 h-10 rounded-full',
+      variant === 'thumbnail' && 'w-24 h-24 rounded-lg',
+      variant === 'button' && 'h-10 w-24 rounded-lg',
+      variant === 'input' && 'h-10 w-full rounded-lg',
       className,
     )
   )

@@ -63,23 +63,17 @@
           {/if}
 
           <form class="space-y-4" onsubmit={handleSubmit}>
-            <div class="form-control">
-              <label class="label" for="name">
-                <span class="label-text">姓名</span>
-              </label>
-              <input id="name" type="text" placeholder="请输入您的姓名" class="input input-bordered w-full" bind:value={name} required />
+            <div class="fieldset">
+              <legend class="fieldset-legend">姓名</legend>
+              <input id="name" type="text" placeholder="请输入您的姓名" class="input w-full" bind:value={name} required />
             </div>
-            <div class="form-control">
-              <label class="label" for="email">
-                <span class="label-text">邮箱</span>
-              </label>
-              <input id="email" type="email" placeholder="请输入您的邮箱" class="input input-bordered w-full" bind:value={email} required />
+            <div class="fieldset">
+              <legend class="fieldset-legend">邮箱</legend>
+              <input id="email" type="email" placeholder="请输入您的邮箱" class="input w-full" bind:value={email} required />
             </div>
-            <div class="form-control">
-              <label class="label" for="message">
-                <span class="label-text">留言</span>
-              </label>
-              <textarea id="message" placeholder="请输入留言内容" class="textarea textarea-bordered w-full" rows="4" bind:value={message} required></textarea>
+            <div class="fieldset">
+              <legend class="fieldset-legend">留言</legend>
+              <textarea id="message" placeholder="请输入留言内容" class="textarea w-full" rows="4" bind:value={message} required></textarea>
             </div>
             <button type="submit" class="btn btn-primary w-full" disabled={submitting}>
               {#if submitting}

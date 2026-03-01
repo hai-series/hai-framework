@@ -1,12 +1,6 @@
 <!--
-  =============================================================================
-  @h-ai/ui - LoginForm 组件
-  =============================================================================
-  用户登录表单组件
-  
-  使用 Svelte 5 Runes ($props, $state)
-  使用 primitives/compounds 组件：Input, Button, Checkbox, Alert
-  =============================================================================
+  @component LoginForm
+  用户登录表单组件，搭配 primitives/compounds 使用。
 -->
 <script lang="ts">
   import type { LoginFormProps, LoginFormData } from '../types.js'
@@ -74,7 +68,7 @@
 <form class={formClass} onsubmit={handleSubmit}>
   <!-- 标题 -->
   {#if showTitle}
-    <h2 class="text-2xl font-semibold text-center mb-6">{m('login_title')}</h2>
+    <h2 class="text-xl font-semibold text-center mb-5">{m('login_title')}</h2>
   {/if}
 
   <!-- 自定义头部 -->
@@ -85,9 +79,9 @@
   {/if}
   
   <!-- 用户名 -->
-  <div class="form-control">
-    <label class="label" for="login-username">
-      <span class="label-text">{m('login_username')}</span>
+  <div class="space-y-1.5">
+    <label class="text-sm font-medium text-base-content/70" for="login-username">
+      {m('login_username')}
     </label>
     <Input
       id="login-username"
@@ -102,9 +96,9 @@
   </div>
   
   <!-- 密码 -->
-  <div class="form-control">
-    <label class="label" for="login-password">
-      <span class="label-text">{m('login_password')}</span>
+  <div class="space-y-1.5">
+    <label class="text-sm font-medium text-base-content/70" for="login-password">
+      {m('login_password')}
     </label>
     <PasswordInput
       bind:value={password}

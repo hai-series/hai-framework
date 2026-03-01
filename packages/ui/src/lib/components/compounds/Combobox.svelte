@@ -142,11 +142,9 @@
   }
 </script>
 
-<div class="form-control w-full {className}">
+<div class="fieldset w-full {className}">
   {#if fieldLabel}
-    <div class="label">
-      <span class="label-text font-medium">{fieldLabel}</span>
-    </div>
+    <legend class="fieldset-legend font-medium">{fieldLabel}</legend>
   {/if}
 
   {#if multiple}
@@ -249,7 +247,7 @@
     >
       <div class="relative">
         <Combobox.Input
-          class="input input-bordered w-full pr-8 {error ? 'input-error' : ''}"
+          class="input w-full pr-8 {error ? 'input-error' : ''}"
           {placeholder}
           {disabled}
           oninput={handleInput}
@@ -301,8 +299,6 @@
   {/if}
 
   {#if error}
-    <div class="label">
-      <span class="label-text-alt text-error">{error}</span>
-    </div>
+    <span class="fieldset-label text-error">{error}</span>
   {/if}
 </div>

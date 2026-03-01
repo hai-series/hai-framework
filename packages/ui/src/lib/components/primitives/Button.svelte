@@ -1,11 +1,6 @@
 <!--
-  =============================================================================
-  @h-ai/ui - Button 组件
-  =============================================================================
-  通用按钮组件，支持多种变体和尺寸
-  
-  使用 Svelte 5 Runes ($props, $derived)
-  =============================================================================
+  @component Button
+  通用按钮组件，支持多种变体和尺寸。
 -->
 <script lang="ts">
   import type { ButtonProps } from '../../types.js'
@@ -27,12 +22,15 @@
   
   const buttonClass = $derived(
     cn(
-      'btn',
+      'btn no-animation',
       getVariantClass(variant),
       getSizeClass(size),
       outline && 'btn-outline',
       circle && 'btn-circle',
-      loading && 'btn-loading',
+      loading && 'opacity-70 pointer-events-none',
+      'font-medium tracking-[-0.01em]',
+      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 focus-visible:ring-offset-base-100',
+      'active:scale-[0.97]',
       className,
     )
   )
@@ -54,7 +52,7 @@
   onclick={handleClick}
 >
   {#if loading}
-    <span class="loading loading-spinner"></span>
+    <span class="loading loading-spinner loading-xs"></span>
   {/if}
   {#if children}
     {@render children()}

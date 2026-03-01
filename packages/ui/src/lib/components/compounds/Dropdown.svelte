@@ -1,11 +1,6 @@
 <!--
-  =============================================================================
-  @h-ai/ui - Dropdown 组件
-  =============================================================================
-  下拉菜单组件
-  
-  使用 Svelte 5 Runes ($props, $derived, $state)
-  =============================================================================
+  @component Dropdown
+  下拉菜单组件，支持 click/hover 触发。
 -->
 <script lang="ts">
   import type { DropdownProps } from '../../types.js'
@@ -74,14 +69,14 @@
   </BareButton>
   
   <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-  <ul tabindex="0" class="dropdown-content menu bg-base-100 rounded-box z-[1] w-52 p-2 shadow">
+  <ul tabindex="0" class="dropdown-content menu bg-base-100 rounded-xl z-[1] w-52 p-1.5 shadow-lg border border-base-content/6 animate-[hai-scale-in_0.15s_cubic-bezier(0.16,1,0.3,1)]">
     {#each items as item}
       {#if item.divider}
         <li class="divider"></li>
       {:else}
         <li>
           <BareButton
-            class={cn('w-full text-left', item.disabled && 'disabled')}
+            class={cn('w-full text-left text-[13px] rounded-lg', item.disabled && 'disabled')}
             disabled={item.disabled}
             onclick={() => handleSelect(item.key)}
           >

@@ -18,6 +18,7 @@ interface UserData {
   avatar: string | null
   status: 'active' | 'inactive' | 'suspended'
   roles: string[]
+  roleIds: string[]
   created_at: Date
   updated_at: Date
 }
@@ -43,11 +44,21 @@ export const load: PageServerLoad = async ({ url, locals }) => {
 
   const page = parsePositiveInt(url.searchParams.get('page'), 1)
   const pageSize = parsePositiveInt(url.searchParams.get('pageSize'), 20)
+  const search = url.searchParams.get('search') || undefined
+  const statusParam = url.searchParams.get('status') || undefined
+  const roleFilter = url.searchParams.get('role') || undefined
+
+  // 将前端 status 值映射为 enabled 布尔值
+  let enabled: boolean | undefined
+  if (statusParam === 'active')
+    enabled = true
+  else if (statusParam === 'suspended')
+    enabled = false
 
   // 角色列表 + 用户列表并行获取
   const [roles, usersResult] = await Promise.all([
     roleService.list(),
-    iam.user.listUsers({ page, pageSize }),
+    iam.user.listUsers({ page, pageSize, search, enabled }),
   ])
   const iamUsers = usersResult.success ? usersResult.data.items : []
   const total = usersResult.success ? usersResult.data.total : 0
@@ -56,7 +67,7 @@ export const load: PageServerLoad = async ({ url, locals }) => {
   const usersWithRoles: UserData[] = await Promise.all(
     iamUsers.map(async (user) => {
       const userRolesResult = await iam.authz.getUserRoles(user.id)
-      const userRoles = userRolesResult.success ? userRolesResult.data.map(r => r.name) : []
+      const userRoles = userRolesResult.success ? userRolesResult.data : []
 
       return {
         id: user.id,
@@ -65,18 +76,30 @@ export const load: PageServerLoad = async ({ url, locals }) => {
         display_name: user.displayName ?? null,
         avatar: user.avatarUrl ?? null,
         status: user.enabled ? 'active' : 'suspended' as const,
-        roles: userRoles,
+        roles: userRoles.map(r => r.name),
+        roleIds: userRoles.map(r => r.id),
         created_at: user.createdAt,
         updated_at: user.updatedAt,
       }
     }),
   )
 
+  // 如果指定了角色筛选则过滤
+  const filteredUsers = roleFilter
+    ? usersWithRoles.filter(u => u.roles.includes(roleFilter))
+    : usersWithRoles
+
+  // 角色筛选后的 total 可能需要修正（因 API 层不支持按角色过滤）
+  const filteredTotal = roleFilter ? filteredUsers.length : total
+
   return {
-    users: usersWithRoles,
-    total,
+    users: filteredUsers,
+    total: filteredTotal,
     page,
     pageSize,
     roles,
+    search: search ?? '',
+    status: statusParam ?? '',
+    role: roleFilter ?? '',
   }
 }

@@ -33,6 +33,7 @@
 import type { CacheConfigInput } from '@h-ai/cache'
 import type { IamConfigSettingsInput } from '@h-ai/iam'
 import type { ReachConfigInput } from '@h-ai/reach'
+import { randomBytes } from 'node:crypto'
 import process from 'node:process'
 import * as m from '$lib/paraglide/messages.js'
 import { audit } from '@h-ai/audit'
@@ -188,8 +189,66 @@ export async function initApp(): Promise<void> {
     core.logger.warn('Audit module initialization failed', { error: auditResult.error.message })
   }
 
+  // 9. 如果没有任何用户，自动创建默认管理员
+  await ensureDefaultAdmin()
+
   initialized = true
   core.logger.info('Application initialized.')
+}
+
+// =============================================================================
+// 默认管理员创建
+// =============================================================================
+
+/**
+ * 检查用户表是否为空，若为空则创建默认管理员并输出密码到控制台
+ *
+ * 仅在首次启动（无任何用户）时触发，后续启动跳过。
+ */
+async function ensureDefaultAdmin(): Promise<void> {
+  const usersResult = await iam.user.listUsers({ page: 1, pageSize: 1 })
+  if (!usersResult.success) {
+    core.logger.warn(m.server_init_default_admin_failed({ message: usersResult.error.message }))
+    return
+  }
+
+  // 已有用户，跳过
+  if (usersResult.data.total > 0) {
+    return
+  }
+
+  // 生成随机密码（16 字节 → 32 位十六进制字符串）
+  const password = randomBytes(16).toString('hex')
+
+  // 注册管理员用户
+  const registerResult = await iam.user.register({
+    username: 'admin',
+    email: 'admin@localhost',
+    password,
+  })
+
+  if (!registerResult.success) {
+    core.logger.warn(m.server_init_default_admin_failed({ message: registerResult.error.message }))
+    return
+  }
+
+  const adminUser = registerResult.data.user
+
+  // 查找 admin 角色并分配
+  const adminRoleResult = await iam.authz.getRoleByCode('admin')
+  if (adminRoleResult.success && adminRoleResult.data) {
+    await iam.authz.assignRole(adminUser.id, adminRoleResult.data.id)
+  }
+
+  // 输出到控制台
+  core.logger.info(m.server_init_default_admin_created())
+  const separator = '='.repeat(60)
+  core.logger.info(separator)
+  core.logger.info(`  Default admin account created`)
+  core.logger.info(`  Username: admin`)
+  core.logger.info(`  Password: ${password}`)
+  core.logger.info(`  Please login and change the password immediately.`)
+  core.logger.info(separator)
 }
 
 /**

@@ -51,7 +51,8 @@
     "@internationalized/date": "catalog:",
     "bits-ui": "catalog:",
     "highlight.js": "catalog:",
-    "marked": "catalog:"
+    "marked": "catalog:",
+    "tailwind-merge": "catalog:"
   },
   "devDependencies": {
     "@sveltejs/package": "catalog:",

@@ -115,10 +115,8 @@
   {/if}
 
   <div class='space-y-4'>
-    <div class='form-control'>
-      <label class='label' for='feedback-type'>
-        <span class='label-text'>{labels.typeLabel ?? m('feedback_type_label')}</span>
-      </label>
+    <div class='fieldset'>
+      <legend class='fieldset-legend'>{labels.typeLabel ?? m('feedback_type_label')}</legend>
       <Select
         id='feedback-type'
         options={typeOptions}
@@ -126,10 +124,8 @@
       />
     </div>
 
-    <div class='form-control'>
-      <label class='label' for='feedback-desc'>
-        <span class='label-text'>{labels.contentLabel ?? m('feedback_content_label')} <span class='text-error'>*</span></span>
-      </label>
+    <div class='fieldset'>
+      <legend class='fieldset-legend'>{labels.contentLabel ?? m('feedback_content_label')} <span class='text-error'>*</span></legend>
       <Textarea
         id='feedback-desc'
         class='h-32'
@@ -138,10 +134,8 @@
       />
     </div>
 
-    <div class='form-control'>
-      <label class='label' for='feedback-contact'>
-        <span class='label-text'>{labels.contactLabel ?? m('feedback_contact_label')}</span>
-      </label>
+    <div class='fieldset'>
+      <legend class='fieldset-legend'>{labels.contactLabel ?? m('feedback_contact_label')}</legend>
       <Input
         id='feedback-contact'
         type='text'

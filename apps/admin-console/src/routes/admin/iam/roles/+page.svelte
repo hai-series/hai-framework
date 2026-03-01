@@ -1,7 +1,5 @@
 <!--
-  =============================================================================
   Admin Console - 角色管理页面
-  =============================================================================
 -->
 <script lang="ts">
   import type { PageData } from './$types'
@@ -32,6 +30,22 @@
   }
 
   let { data }: Props = $props()
+
+  // ─── 权限判断 ───
+  const userPermissions = $derived(data.user?.permissions ?? [])
+
+  /** 检查当前用户是否拥有指定权限 */
+  function hasPerm(permission: string): boolean {
+    for (const p of userPermissions) {
+      if (p === permission || p === '*') return true
+      if (p.endsWith(':*') && permission.startsWith(p.slice(0, -1))) return true
+    }
+    return false
+  }
+
+  const canCreate = $derived(hasPerm('role:create'))
+  const canUpdate = $derived(hasPerm('role:update'))
+  const canDelete = $derived(hasPerm('role:delete'))
 
   /** 新建/编辑对话框状态 */
   let showDialog = $state(false)
@@ -180,66 +194,72 @@
   <title>{m.iam_roles_title()} - {m.app_title()}</title>
 </svelte:head>
 
-<div class="space-y-6">
+<div class="space-y-4">
   <!-- 页面标题 -->
   <PageHeader title={m.iam_roles_title()} description={m.iam_roles_subtitle()}>
     {#snippet actions()}
-      <Button variant="primary" class="gap-2" onclick={openCreateDialog}>
-        <span class="iconify tabler--plus size-5"></span>
-        {m.iam_roles_create()}
-      </Button>
+      {#if canCreate}
+        <Button variant="primary" class="gap-2" onclick={openCreateDialog}>
+          <span class="icon-[tabler--plus] size-4.5"></span>
+          {m.iam_roles_create()}
+        </Button>
+      {/if}
     {/snippet}
   </PageHeader>
 
   <!-- 角色列表 -->
-  <div class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+  <div class="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
     {#each data.roles as role}
-      <div class="card bg-base-100 shadow-sm">
-        <div class="card-body">
+      <div class="card bg-base-100 border border-base-content/6 rounded-xl">
+        <div class="card-body p-4">
           <div class="flex items-start justify-between">
             <div>
-              <h3 class="card-title text-lg">
+              <h3 class="card-title text-sm font-semibold">
                 {role.name}
                 {#if role.isSystem}
                   <Badge variant="default" size="sm" outline>{m.iam_roles_type_system()}</Badge>
                 {/if}
               </h3>
               {#if role.description}
-                <p class="text-sm text-base-content/60 mt-1">{role.description}</p>
+                <p class="text-xs text-base-content/45 mt-0.5">{role.description}</p>
               {/if}
             </div>
+            {#if canUpdate || canDelete}
             <div class="dropdown dropdown-end">
               <IconButton variant="ghost" size="sm" ariaLabel={m.iam_roles_action_menu()}>
-                <span class="iconify tabler--dots-vertical size-5"></span>
+                <span class="icon-[tabler--dots-vertical] size-5"></span>
               </IconButton>
-              <ul class="dropdown-content menu bg-base-100 rounded-box shadow-lg w-40 p-2 z-10">
-                <li>
-                  <Button variant="ghost" class="justify-start" onclick={() => openEditDialog(role)}>
-                    <span class="iconify tabler--edit size-4"></span>
-                    {m.action_edit()}
-                  </Button>
-                </li>
-                {#if !role.isSystem}
+              <ul class="dropdown-content menu bg-base-100 rounded-xl shadow-lg border border-base-content/6 w-40 p-1.5 z-10">
+                {#if canUpdate}
+                  <li>
+                    <Button variant="ghost" class="justify-start" onclick={() => openEditDialog(role)}>
+                      <span class="icon-[tabler--edit] size-4"></span>
+                      {m.action_edit()}
+                    </Button>
+                  </li>
+                {/if}
+                {#if canDelete && !role.isSystem}
                   <li>
                     <Button variant="ghost" class="justify-start text-error" onclick={() => handleDelete(role)}>
-                      <span class="iconify tabler--trash size-4"></span>
+                      <span class="icon-[tabler--trash] size-4"></span>
                       {m.action_delete()}
                     </Button>
                   </li>
                 {/if}
               </ul>
             </div>
+            {/if}
           </div>
 
           <div class="divider my-2"></div>
 
           <div class="flex items-center justify-between text-sm">
             <span class="text-base-content/60">
-              <span class="iconify tabler--users size-4 inline-block align-middle mr-1"></span>
+              <span class="icon-[tabler--users] size-4 inline-block align-middle mr-1"></span>
               {m.iam_roles_user_count({ count: role.userCount })}
             </span>
             <span class="text-base-content/60">
-              <span class="iconify tabler--key size-4 inline-block align-middle mr-1"></span>
+              <span class="icon-[tabler--key] size-4 inline-block align-middle mr-1"></span>
               {m.iam_roles_permission_count({ count: role.permissions.length })}
             </span>
           </div>
@@ -271,15 +291,13 @@
       <form onsubmit={handleSubmit} class="space-y-4">
         {#if error}
           <div class="alert alert-error">
-            <span class="iconify tabler--alert-circle size-5"></span>
+            <span class="icon-[tabler--alert-circle] size-5"></span>
             <span>{error}</span>
           </div>
         {/if}
 
-        <div class="form-control">
-          <label class="label" for="name">
-            <span class="label-text">{m.iam_roles_form_name()} <span class="text-error">*</span></span>
-          </label>
+        <div class="fieldset">
+          <legend class="fieldset-legend">{m.iam_roles_form_name()} <span class="text-error">*</span></legend>
           <Input
             type="text"
             id="name"
@@ -290,10 +308,8 @@
           />
         </div>
 
-        <div class="form-control">
-          <label class="label" for="description">
-            <span class="label-text">{m.iam_roles_form_description()}</span>
-          </label>
+        <div class="fieldset">
+          <legend class="fieldset-legend">{m.iam_roles_form_description()}</legend>
           <Textarea
             id="description"
             bind:value={form.description}
@@ -303,10 +319,10 @@
           />
         </div>
 
-        <fieldset class="form-control">
-          <legend class="label">
-            <span class="label-text">{m.iam_roles_form_permissions()}</span>
-            <span class="label-text-alt text-base-content/60">
+        <fieldset class="fieldset">
+          <legend class="fieldset-legend flex items-center justify-between w-full">
+            <span>{m.iam_roles_form_permissions()}</span>
+            <span class="fieldset-label text-base-content/60">
               {m.iam_roles_form_permissions_selected({ count: form.permissions.length })}
             </span>
           </legend>

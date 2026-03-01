@@ -1,12 +1,6 @@
 <!--
-  =============================================================================
-  @h-ai/ui - Modal 组件
-  =============================================================================
-  模态框组件
-  
-  使用 Svelte 5 Runes ($props, $derived, $effect)
-  使用 primitives 组件：IconButton
-  =============================================================================
+  @component Modal
+  模态框组件，支持 backdrop-blur 和 scale-in 动画。
 -->
 <script lang="ts">
   import type { ModalProps } from '../../types.js'
@@ -28,18 +22,22 @@
     children,
   }: ModalProps = $props()
   
-  const sizeMap = {
+  const sizeMap: Record<string, string> = {
     xs: 'max-w-xs',
     sm: 'max-w-sm',
     md: 'max-w-md',
     lg: 'max-w-lg',
     xl: 'max-w-xl',
+    '2xl': 'max-w-2xl',
+    '3xl': 'max-w-3xl',
+    '4xl': 'max-w-4xl',
     full: 'max-w-full h-full',
   }
   
   const modalBoxClass = $derived(
     cn(
-      'modal-box',
+      'modal-box border border-base-content/6 shadow-xl',
+      'animate-[hai-scale-in_0.2s_cubic-bezier(0.16,1,0.3,1)]',
       sizeMap[size],
       className,
     )
@@ -72,16 +70,16 @@
   })
 </script>
 
-<dialog class="modal" class:modal-open={open}>
+<dialog class="modal backdrop-blur-xs" class:modal-open={open}>
   <div class={modalBoxClass}>
     <!-- 头部：标题 + 关闭按钮 -->
     <div class="flex items-start justify-between gap-4">
       {#if header}
-        <div class="font-bold text-lg flex-1">
+        <div class="font-semibold text-base flex-1">
           {@render header()}
         </div>
       {:else if title}
-        <h3 class="font-bold text-lg flex-1">{title}</h3>
+        <h3 class="font-semibold text-base flex-1">{title}</h3>
       {:else}
         <div class="flex-1"></div>
       {/if}
@@ -95,9 +93,7 @@
           class="-mt-1 -mr-2"
         >
           {#snippet children()}
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-            </svg>
+            <span class="icon-[tabler--x] size-4.5"></span>
           {/snippet}
         </IconButton>
       {/if}

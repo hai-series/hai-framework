@@ -58,7 +58,7 @@
   }: Props = $props()
 </script>
 
-<div class="form-control w-full {className}">
+<div class="fieldset w-full {className}">
   <BitsDatePicker.Root
     bind:value
     {minValue}
@@ -68,7 +68,7 @@
     {disabled}
     onValueChange={(v) => onchange?.(v)}
   >
-    <BitsDatePicker.Input class="input input-bordered flex items-center gap-0.5 pr-2 {error ? 'input-error' : ''}">
+    <BitsDatePicker.Input class="input flex items-center gap-0.5 pr-2 {error ? 'input-error' : ''}">
       {#snippet children({ segments })}
         {#each segments as { part, value: segValue }}
           <BitsDatePicker.Segment
@@ -130,8 +130,6 @@
   </BitsDatePicker.Root>
 
   {#if error}
-    <div class="label">
-      <span class="label-text-alt text-error">{error}</span>
-    </div>
+    <span class="fieldset-label text-error">{error}</span>
   {/if}
 </div>

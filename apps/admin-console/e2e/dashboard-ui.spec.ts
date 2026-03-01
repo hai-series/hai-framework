@@ -15,11 +15,11 @@ test.describe('Dashboard UI', () => {
     await registerAndLogin(page, request, 'dashui')
 
     // h1 标题
-    const title = page.locator('h1.text-2xl')
+    const title = page.locator('h1.text-xl')
     await expect(title).toBeVisible()
 
     // 副标题
-    const subtitle = page.locator('h1.text-2xl + p')
+    const subtitle = page.locator('h1.text-xl + p')
     await expect(subtitle).toBeVisible()
   })
 
@@ -30,7 +30,7 @@ test.describe('Dashboard UI', () => {
     await registerAndLogin(page, request, 'dashui')
 
     // 4 个统计卡片在 grid 布局中
-    const statsGrid = page.locator('.grid.gap-4.grid-cols-2')
+    const statsGrid = page.locator('.grid.gap-3.grid-cols-2')
     await expect(statsGrid).toBeVisible()
 
     const cards = statsGrid.locator('.bg-base-100.rounded-xl')
@@ -40,8 +40,8 @@ test.describe('Dashboard UI', () => {
   test('统计卡片显示数字值', async ({ page, request }) => {
     await registerAndLogin(page, request, 'dashui')
 
-    // 每个卡片都应包含数字（text-3xl font-bold）
-    const statValues = page.locator('.grid.gap-4.grid-cols-2 .text-3xl.font-bold')
+    // 每个卡片都应包含数字（text-2xl font-bold）
+    const statValues = page.locator('.grid.gap-3.grid-cols-2 .text-2xl.font-bold')
     const count = await statValues.count()
     expect(count).toBe(4)
 
@@ -56,10 +56,10 @@ test.describe('Dashboard UI', () => {
     await registerAndLogin(page, request, 'dashui')
 
     // 各卡片数值有不同颜色
-    await expect(page.locator('.grid.gap-4.grid-cols-2 .text-primary').first()).toBeVisible()
-    await expect(page.locator('.grid.gap-4.grid-cols-2 .text-success').first()).toBeVisible()
-    await expect(page.locator('.grid.gap-4.grid-cols-2 .text-warning').first()).toBeVisible()
-    await expect(page.locator('.grid.gap-4.grid-cols-2 .text-info').first()).toBeVisible()
+    await expect(page.locator('.grid.gap-3.grid-cols-2 .text-primary').first()).toBeVisible()
+    await expect(page.locator('.grid.gap-3.grid-cols-2 .text-emerald-600').first()).toBeVisible()
+    await expect(page.locator('.grid.gap-3.grid-cols-2 .text-amber-600').first()).toBeVisible()
+    await expect(page.locator('.grid.gap-3.grid-cols-2 .text-sky-600').first()).toBeVisible()
   })
 
   // ---------------------------------------------------------------------------

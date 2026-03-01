@@ -11,6 +11,11 @@
 import { crypto } from '@h-ai/crypto'
 import { kit } from '@h-ai/kit'
 
+// 浏览器端初始化加密模块（服务端由 hooks.server.ts 初始化，此处仅在客户端生效）
+if (typeof window !== 'undefined') {
+  crypto.init()
+}
+
 /**
  * 统一 API 客户端：自动 CSRF + 传输加密
  *

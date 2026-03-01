@@ -10,7 +10,7 @@
   // === 覆盖层状态 ===
   let modalOpen = $state(false)
   let modalSizeOpen = $state(false)
-  let modalSize = $state<'sm' | 'md' | 'lg' | 'xl' | 'full'>('md')
+  let modalSize = $state<'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl' | '4xl' | 'full'>('md')
   let drawerOpen = $state(false)
   let drawerLeftOpen = $state(false)
   let confirmOpen = $state(false)
@@ -45,7 +45,7 @@
       <div>
         <p class="text-sm font-medium mb-2">不同尺寸</p>
         <div class="flex flex-wrap gap-2">
-          {#each ['sm', 'md', 'lg', 'xl', 'full'] as size}
+          {#each ['sm', 'md', 'lg', 'xl', '2xl', '3xl', '4xl', 'full'] as size}
             <Button variant="secondary" outline onclick={() => { modalSize = size as typeof modalSize; modalSizeOpen = true }}>
               {size}
             </Button>
@@ -72,7 +72,7 @@
     </Modal>
 
     <Modal open={modalSizeOpen} title="尺寸: {modalSize}" size={modalSize} onclose={() => modalSizeOpen = false}>
-      <p class="text-base-content/70">当前对话框尺寸为 <strong>{modalSize}</strong>，共支持 sm / md / lg / xl / full 五种尺寸。</p>
+      <p class="text-base-content/70">当前对话框尺寸为 <strong>{modalSize}</strong>，共支持 sm / md / lg / xl / 2xl / 3xl / 4xl / full 八种尺寸。</p>
       {#snippet footer()}
         <div class="flex justify-end">
           <Button variant="primary" onclick={() => modalSizeOpen = false}>关闭</Button>

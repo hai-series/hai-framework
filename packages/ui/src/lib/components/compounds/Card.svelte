@@ -1,11 +1,6 @@
 <!--
-  =============================================================================
-  @h-ai/ui - Card 组件
-  =============================================================================
-  卡片组件
-  
-  使用 Svelte 5 Runes ($props, $derived)
-  =============================================================================
+  @component Card
+  卡片组件，默认使用 border 而非 shadow，更现代克制。
 -->
 <script lang="ts">
   import type { CardProps } from '../../types.js'
@@ -41,8 +36,8 @@
   
   const cardClass = $derived(
     cn(
-      'card bg-base-100 rounded-xl',
-      bordered && 'border border-base-300',
+      'card bg-base-100 rounded-xl border border-base-content/6',
+      bordered && 'border-base-300',
       typeof shadow === 'boolean' ? shadowMap[String(shadow) as 'true' | 'false'] : shadowMap[shadow],
       className,
     )
@@ -59,11 +54,11 @@
 <div class={cardClass}>
   <div class={bodyClass}>
     {#if header}
-      <div class="card-title">
+      <div class="card-title text-sm font-semibold">
         {@render header()}
       </div>
     {:else if title}
-      <h2 class="card-title">{title}</h2>
+      <h2 class="card-title text-sm font-semibold">{title}</h2>
     {/if}
     
     {#if children}

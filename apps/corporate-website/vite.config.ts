@@ -10,4 +10,7 @@ export default defineConfig({
     sveltekit(),
     tailwindcss(),
   ],
+  optimizeDeps: {
+    exclude: ['bits-ui'],
+  },
 })

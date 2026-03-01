@@ -1,16 +1,11 @@
 <!--
-  =============================================================================
-  @h-ai/ui - RegisterForm 组件
-  =============================================================================
-  用户注册表单组件
-  
-  使用 Svelte 5 Runes ($props, $state, $derived)
-  使用 PasswordInput 组件处理密码输入
-  =============================================================================
+  @component RegisterForm
+  用户注册表单组件，搭配 primitives/compounds 使用。
 -->
 <script lang="ts">
   import Button from '../../primitives/Button.svelte'
   import Input from '../../primitives/Input.svelte'
+  import Alert from '../../compounds/Alert.svelte'
   import type { RegisterFormProps, RegisterFormData, RegisterField } from '../types.js'
   import type { InputProps } from '../../../types.js'
   import { cn } from '../../../utils.js'
@@ -148,7 +143,7 @@
 <form class={formClass} onsubmit={handleSubmit}>
   <!-- 标题 -->
   {#if showTitle}
-    <h2 class="text-2xl font-semibold text-center mb-6">{m('register_title')}</h2>
+    <h2 class="text-xl font-semibold text-center mb-5">{m('register_title')}</h2>
   {/if}
 
   <!-- 自定义头部 -->
@@ -162,9 +157,9 @@
   {#each fields as field (field)}
     {#if field === 'password'}
       <!-- 密码字段 -->
-      <div class="form-control">
-        <label class="label" for="register-password">
-          <span class="label-text">{getFieldLabel('password')}</span>
+      <div class="space-y-1.5">
+        <label class="text-sm font-medium text-base-content/70" for="register-password">
+          {getFieldLabel('password')}
         </label>
         <PasswordInput
           id="register-password"
@@ -180,9 +175,9 @@
       
       <!-- 确认密码字段 -->
       {#if requireConfirmPassword}
-        <div class="form-control">
-          <label class="label" for="register-confirm-password">
-            <span class="label-text">{getFieldLabel('confirmPassword')}</span>
+        <div class="space-y-1.5">
+          <label class="text-sm font-medium text-base-content/70" for="register-confirm-password">
+            {getFieldLabel('confirmPassword')}
           </label>
           <PasswordInput
             id="register-confirm-password"
@@ -196,39 +191,31 @@
         </div>
       {/if}
     {:else if field !== 'confirmPassword'}
-      <div class="form-control">
-        <label class="label" for="register-{field}">
-          <span class="label-text">{getFieldLabel(field)}</span>
+      <div class="space-y-1.5">
+        <label class="text-sm font-medium text-base-content/70" for="register-{field}">
+          {getFieldLabel(field)}
         </label>
         <Input
           id={`register-${field}`}
           type={getFieldType(field)}
           name={field}
           placeholder={getFieldPlaceholder(field)}
-          class={errors[field] ? 'input-error' : ''}
           value={getFieldValue(field)}
           oninput={(e: Event & { currentTarget: HTMLInputElement }) => setFieldValue(field, e.currentTarget.value)}
           {disabled}
           required={field === 'username' || field === 'email'}
           autocomplete={field === 'username' ? 'username' : field === 'email' ? 'email' : undefined}
+          error={errors[field]}
         />
-        {#if errors[field]}
-          <div class="label">
-            <span class="label-text-alt text-error">{errors[field]}</span>
-          </div>
-        {/if}
       </div>
     {/if}
   {/each}
   
   <!-- 通用错误 -->
   {#if errors.general}
-    <div class="alert alert-error">
-      <svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
-        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
-      </svg>
-      <span>{errors.general}</span>
-    </div>
+    <Alert variant="error">
+      {errors.general}
+    </Alert>
   {/if}
   
   <!-- 提交按钮 -->

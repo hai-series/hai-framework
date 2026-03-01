@@ -149,8 +149,8 @@ export const roleService = {
     if (!existing)
       return null
 
-    // 检查是否为系统角色
-    if (existing.isSystem && input.name) {
+    // 检查是否为系统角色：仅当名称实际变更时才拦截
+    if (existing.isSystem && input.name && input.name !== existing.name) {
       throw new Error(m.api_iam_roles_system_name_immutable())
     }
 
@@ -165,13 +165,14 @@ export const roleService = {
       }
     }
 
-    // 更新权限
+    // 更新权限（input.permissions 是权限 ID 列表）
     if (input.permissions !== undefined) {
-      // 先获取当前权限
-      const currentPermissions = await this.getRolePermissions(id)
+      // 获取当前权限 ID 列表
+      const currentResult = await iam.authz.getRolePermissions(id)
+      const currentIds = currentResult.success ? currentResult.data.map(p => p.id) : []
 
       // 移除不在新列表中的权限
-      for (const permId of currentPermissions) {
+      for (const permId of currentIds) {
         if (!input.permissions.includes(permId)) {
           await iam.authz.removePermissionFromRole(id, permId)
         }
@@ -179,7 +180,7 @@ export const roleService = {
 
       // 添加新权限
       for (const permId of input.permissions) {
-        if (!currentPermissions.includes(permId)) {
+        if (!currentIds.includes(permId)) {
           await iam.authz.assignPermissionToRole(id, permId)
         }
       }
@@ -205,13 +206,13 @@ export const roleService = {
   },
 
   /**
-   * 获取角色权限（权限 ID 列表）
+   * 获取角色权限（权限名称列表，用于页面展示与表单匹配）
    */
   async getRolePermissions(roleId: string): Promise<string[]> {
     const result = await iam.authz.getRolePermissions(roleId)
     if (!result.success)
       return []
-    return result.data.map(p => p.id)
+    return result.data.map(p => p.name)
   },
 
   /**

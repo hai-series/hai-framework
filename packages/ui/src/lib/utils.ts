@@ -6,15 +6,16 @@
  */
 
 import type { Size, Variant } from './types.js'
+import { twMerge } from 'tailwind-merge'
 
 /**
- * 合并类名
+ * 合并类名（支持 Tailwind 类冲突消解）
  *
  * @param classes - 类名列表
  * @returns 合并后的类名字符串
  */
 export function cn(...classes: (string | boolean | undefined | null)[]): string {
-  return classes.filter(Boolean).join(' ')
+  return twMerge(classes.filter(Boolean).join(' '))
 }
 
 /**

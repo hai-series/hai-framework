@@ -16,7 +16,7 @@ test.describe('Settings UI', () => {
     await page.goto('/admin/settings')
     await page.waitForLoadState('domcontentloaded')
 
-    const title = page.locator('h1.text-2xl')
+    const title = page.locator('h1.text-xl')
     await expect(title).toBeVisible()
   })
 

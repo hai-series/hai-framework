@@ -115,18 +115,9 @@ export async function seedIamData(
       }
     }
 
-    // 普通用户分配基本权限
-    const userRoleId = roleMap.get('user')
-    const userReadPermId = permMap.get('user:read')
-    if (userRoleId && userReadPermId) {
-      await authz.assignPermissionToRole(userRoleId, userReadPermId)
-    }
-
-    // 访客分配只读权限
-    const guestRoleId = roleMap.get('guest')
-    if (guestRoleId && userReadPermId) {
-      await authz.assignPermissionToRole(guestRoleId, userReadPermId)
-    }
+    // 普通用户（user）和访客（guest）不分配任何 IAM 管理权限。
+    // 所有 user:*、role:*、permission:*、system:* 权限仅限 admin 角色。
+    // 未来如需普通用户自助权限（如 profile:read），可在此处扩展。
 
     logger.info('IAM seed data initialized')
     return ok(undefined)

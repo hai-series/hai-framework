@@ -154,4 +154,139 @@ test.describe('Profile UI', () => {
     expect(newLogin.ok()).toBeTruthy()
     expect(newBody.success).toBeTruthy()
   })
+
+  // ---------------------------------------------------------------------------
+  // 通过 UI 表单提交修改个人资料
+  // ---------------------------------------------------------------------------
+  test('通过 UI 表单修改显示名称并保存', async ({ page, request }) => {
+    await registerAndLogin(page, request, 'profile')
+    await page.goto('/admin/profile')
+    await page.waitForLoadState('domcontentloaded')
+
+    const displayName = `UIEdit_${Date.now().toString(36)}`
+    const displayNameInput = page.locator('input[name="displayName"]')
+    await expect(displayNameInput).toBeVisible()
+
+    await displayNameInput.fill(displayName)
+
+    // 点击保存按钮
+    const saveBtn = page.getByRole('button', { name: /save|保存/i }).first()
+    await saveBtn.click()
+
+    // 应显示保存成功提示
+    await expect(page.locator('[data-testid="profile-save-success"]')).toBeVisible({ timeout: 10_000 })
+  })
+
+  test('通过 UI 表单修改邮箱并保存', async ({ page, request }) => {
+    await registerAndLogin(page, request, 'profile')
+    await page.goto('/admin/profile')
+    await page.waitForLoadState('domcontentloaded')
+
+    const newEmail = `uiedit_${Date.now()}@test.local`
+    const emailInput = page.locator('input[name="email"]')
+    await expect(emailInput).toBeVisible()
+
+    await emailInput.fill(newEmail)
+
+    const saveBtn = page.getByRole('button', { name: /save|保存/i }).first()
+    await saveBtn.click()
+
+    // 保存成功
+    await expect(page.locator('[data-testid="profile-save-success"]')).toBeVisible({ timeout: 10_000 })
+
+    // 刷新后邮箱已更新
+    await page.reload()
+    await expect(page.locator('[data-testid="profile-email"]')).toContainText(newEmail)
+  })
+
+  // ---------------------------------------------------------------------------
+  // 通过 UI 表单修改密码
+  // ---------------------------------------------------------------------------
+  test('通过 UI 表单修改密码', async ({ page, request }) => {
+    const user = await registerAndLogin(page, request, 'profile')
+    await page.goto('/admin/profile')
+    await page.waitForLoadState('domcontentloaded')
+
+    const newPassword = 'NewUIPass789!'
+    const passwordCard = page.locator('[data-testid="profile-password-card"]')
+    await expect(passwordCard).toBeVisible()
+
+    // 找到密码区域的 3 个密码输入框
+    const pwdInputs = passwordCard.locator('input[type="password"]')
+    await expect(pwdInputs.first()).toBeVisible()
+
+    // 旧密码、新密码、确认密码
+    await pwdInputs.nth(0).fill(user.password)
+    await pwdInputs.nth(1).fill(newPassword)
+    await pwdInputs.nth(2).fill(newPassword)
+
+    // 点击提交按钮
+    const submitBtn = passwordCard.getByRole('button', { name: /修改|提交|save|保存|change/i })
+    await submitBtn.click()
+
+    // 应显示成功提示或跳转到登录页
+    const successOrRedirect = await Promise.race([
+      page.locator('[data-testid="profile-password-success"]').waitFor({ timeout: 10_000 }).then(() => 'success'),
+      page.waitForURL('**/auth/login**', { timeout: 10_000 }).then(() => 'redirect'),
+    ])
+    expect(['success', 'redirect']).toContain(successOrRedirect)
+  })
+
+  test('密码不一致时提交按钮禁用', async ({ page, request }) => {
+    await registerAndLogin(page, request, 'profile')
+    await page.goto('/admin/profile')
+    await page.waitForLoadState('domcontentloaded')
+
+    const passwordCard = page.locator('[data-testid="profile-password-card"]')
+    const pwdInputs = passwordCard.locator('input[type="password"]')
+    await expect(pwdInputs.first()).toBeVisible()
+
+    // 旧密码正确，新密码与确认不一致
+    await pwdInputs.nth(0).fill('Test1234!@')
+    await pwdInputs.nth(1).fill('NewPass111!')
+    await pwdInputs.nth(2).fill('DifferentPass222!')
+    await page.waitForTimeout(500)
+
+    // 提交按钮应为禁用状态（客户端验证密码不一致）
+    const submitBtn = passwordCard.getByRole('button', { name: /修改|提交|save|保存|change/i })
+    await expect(submitBtn).toBeDisabled()
+
+    // 应显示密码不一致提示
+    await expect(passwordCard.getByText(/不一致/)).toBeVisible()
+  })
+
+  // ---------------------------------------------------------------------------
+  // 通过 UI 上传头像
+  // ---------------------------------------------------------------------------
+  test('通过文件选择框上传头像', async ({ page, request }) => {
+    await registerAndLogin(page, request, 'profile')
+    await page.goto('/admin/profile')
+    await page.waitForLoadState('domcontentloaded')
+
+    // 准备一个 1x1 透明 PNG
+    const pngBuffer = Buffer.from(
+      'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO5n0q8AAAAASUVORK5CYII=',
+      'base64',
+    )
+
+    // 找到文件输入框
+    const fileInput = page.locator('input[type="file"][accept*="image"]')
+    if (await fileInput.count() > 0) {
+      await fileInput.setInputFiles({
+        name: 'avatar.png',
+        mimeType: 'image/png',
+        buffer: pngBuffer,
+      })
+
+      // 等待上传处理
+      await page.waitForTimeout(2000)
+
+      // 头像区域应有变化（srcset 或 img 标签更新）
+      const avatarImg = page.locator('img[alt*="avatar" i], .avatar img, img[src*="data:image"]')
+      if (await avatarImg.count() > 0) {
+        const src = await avatarImg.first().getAttribute('src')
+        expect(src).toBeTruthy()
+      }
+    }
+  })
 })

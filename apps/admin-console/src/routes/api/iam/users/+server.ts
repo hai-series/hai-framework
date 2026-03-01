@@ -50,7 +50,7 @@ export const GET = kit.handler(async ({ url, locals }) => {
 export const POST = kit.handler(async ({ request, locals, getClientAddress }) => {
   kit.guard.requirePermission(locals.session, 'user:create')
 
-  const { username, email, password, roles } = await kit.validate.formOrFail(request, createCreateUserSchema())
+  const { username, email, password, roles, status } = await kit.validate.formOrFail(request, createCreateUserSchema())
 
   // 使用 IAM 模块注册用户
   const registerResult = await iam.user.register({
@@ -67,6 +67,11 @@ export const POST = kit.handler(async ({ request, locals, getClientAddress }) =>
   }
 
   const { user } = registerResult.data
+
+  // 如果管理员创建时指定了非 active 状态，需要禁用用户
+  if (status && status !== 'active') {
+    await iam.user.updateUser(user.id, { enabled: false })
+  }
 
   // 分配角色（iam.user.register 已分配 config.rbac.defaultRole）
   // 管理员创建时额外分配指定角色

@@ -77,10 +77,8 @@
   
   <!-- 邮箱输入 -->
   {#if mode === 'email'}
-    <div class="form-control">
-      <label class="label" for="forgot-email">
-        <span class="label-text">{m('forgot_password_email_label')}</span>
-      </label>
+    <div class="fieldset">
+      <legend class="fieldset-legend">{m('forgot_password_email_label')}</legend>
       <Input
         id="forgot-email"
         name="email"
@@ -93,10 +91,8 @@
       />
     </div>
   {:else}
-    <div class="form-control">
-      <label class="label" for="forgot-phone">
-        <span class="label-text">{m('forgot_password_phone_label')}</span>
-      </label>
+    <div class="fieldset">
+      <legend class="fieldset-legend">{m('forgot_password_phone_label')}</legend>
       <Input
         id="forgot-phone"
         name="phone"

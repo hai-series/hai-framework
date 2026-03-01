@@ -29,11 +29,11 @@
   let { title, description, actions, class: className = '' }: Props = $props()
 </script>
 
-<div class='flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6 {className}'>
+<div class='flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5 {className}'>
   <div>
-    <h1 class='text-2xl font-bold'>{title}</h1>
+    <h1 class='text-xl font-semibold tracking-tight'>{title}</h1>
     {#if description}
-      <p class='text-base-content/60 mt-1'>{description}</p>
+      <p class='text-sm text-base-content/45 mt-0.5'>{description}</p>
     {/if}
   </div>
   {#if actions}

@@ -31,7 +31,7 @@
   
   const selectClass = $derived(
     cn(
-      'select select-bordered w-full',
+      'select w-full',
       getInputSizeClass(size),
       error && 'select-error',
       className,
@@ -62,7 +62,7 @@
   }
 </script>
 
-<div class="form-control w-full">
+<div class="fieldset w-full">
   <select
     bind:this={selectRef}
     {id}
@@ -90,8 +90,6 @@
     {/if}
   </select>
   {#if error}
-    <div class="label">
-      <span class="label-text-alt text-error">{error}</span>
-    </div>
+    <span class="fieldset-label text-error">{error}</span>
   {/if}
 </div>

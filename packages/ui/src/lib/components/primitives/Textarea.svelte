@@ -33,7 +33,7 @@
   
   const textareaClass = $derived(
     cn(
-      'textarea textarea-bordered w-full',
+      'textarea w-full',
       getInputSizeClass(size),
       error && 'textarea-error',
       className,
@@ -71,7 +71,7 @@
   }
 </script>
 
-<div class="form-control w-full">
+<div class="fieldset w-full">
   <textarea
     bind:this={textareaRef}
     {id}
@@ -87,8 +87,6 @@
     oninvalid={handleInvalid}
   ></textarea>
   {#if error}
-    <div class="label">
-      <span class="label-text-alt text-error">{error}</span>
-    </div>
+    <span class="fieldset-label text-error">{error}</span>
   {/if}
 </div>

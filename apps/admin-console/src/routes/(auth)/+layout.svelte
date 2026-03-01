@@ -1,9 +1,5 @@
 <!--
-  =============================================================================
   Admin Console - 认证页面布局
-  =============================================================================
-  使用 DaisyUI 样式，保持与 @h-ai/ui 组件的一致性
-  =============================================================================
 -->
 <script lang="ts">
   import type { Snippet } from 'svelte'
@@ -15,30 +11,28 @@
   let { children }: Props = $props()
 </script>
 
-<div class="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary to-secondary p-4">
+<div class="min-h-screen flex items-center justify-center bg-base-200/60 p-4">
   <div class="w-full max-w-md">
     <!-- Logo -->
-    <div class="text-center mb-8 text-primary-content">
+    <div class="text-center mb-6">
       <div class="flex justify-center mb-2">
-        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="text-primary-content">
-          <path d="M12 2L2 7l10 5 10-5-10-5z" />
-          <path d="M2 17l10 5 10-5" />
-          <path d="M2 12l10 5 10-5" />
-        </svg>
+        <div class="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
+          <span class="icon-[tabler--box] size-5 text-primary"></span>
+        </div>
       </div>
-      <h1 class="text-2xl font-semibold">Admin Console</h1>
+      <h1 class="text-lg font-semibold text-base-content tracking-tight">Admin Console</h1>
     </div>
     
     <!-- Card -->
-    <div class="card bg-base-100 shadow-xl">
-      <div class="card-body">
+    <div class="card bg-base-100 border border-base-content/6 rounded-xl shadow-lg">
+      <div class="card-body p-6">
         {@render children()}
       </div>
     </div>
     
     <!-- Footer -->
-    <div class="text-center mt-6 text-primary-content/80 text-sm">
-      <p>Powered by <strong class="text-primary-content">hai-framework</strong></p>
+    <div class="text-center mt-5 text-base-content/25 text-2xs">
+      <p>Powered by hai-framework</p>
     </div>
   </div>
 </div>

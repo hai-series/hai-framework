@@ -87,10 +87,10 @@
 
 <ToastContainer />
 
-<div class="space-y-6">
+<div class="space-y-4">
   <PageHeader title={m.modules_title()} description={m.modules_desc()} />
 
-  <div role="tablist" class="tabs tabs-boxed">
+  <div role="tablist" class="tabs tabs-box">
     {#each tabs as tab}
       <button
         type="button"

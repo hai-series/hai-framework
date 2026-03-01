@@ -1,11 +1,6 @@
 <!--
-  =============================================================================
-  @h-ai/ui - Tabs 组件
-  =============================================================================
-  标签页组件
-  
-  使用 Svelte 5 Runes ($props, $derived, $bindable)
-  =============================================================================
+  @component Tabs
+  标签页组件，支持 line/card/pills 三种样式。
 -->
 <script lang="ts">
   import type { TabsProps } from '../../types.js'
@@ -30,9 +25,9 @@
   })
   
   const typeMap = {
-    line: 'tabs-bordered',
-    card: 'tabs-boxed',
-    pills: 'tabs-boxed',
+    line: 'tabs-border',
+    card: 'tabs-box',
+    pills: 'tabs-box',
   }
   
   const sizeMap = {
