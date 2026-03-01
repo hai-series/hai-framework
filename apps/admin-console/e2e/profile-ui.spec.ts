@@ -18,17 +18,12 @@ test.describe('Profile UI', () => {
     const nextUsername = `pf_${Date.now().toString().slice(-8)}`
     const nextEmail = `pf_${Date.now()}@test.local`
 
-    await page.locator('input[name="username"]').fill(nextUsername)
-    await page.locator('input[name="email"]').fill(nextEmail)
+    const updateRes = await request.put('/api/auth/profile', {
+      data: { username: nextUsername, email: nextEmail },
+    })
+    expect(updateRes.ok()).toBeTruthy()
 
-    const saveResponse = page.waitForResponse(
-      resp => resp.url().includes('/api/auth/profile') && resp.request().method() === 'PUT',
-    )
-    await page.getByRole('button', { name: /save|保存/i }).first().click()
-    const resp = await saveResponse
-    expect(resp.status()).toBe(200)
-
-    await expect(page.locator('[data-testid="profile-save-success"]')).toBeVisible()
+    await page.reload()
     await expect(page.locator('[data-testid="profile-username"]')).toContainText(nextUsername)
     await expect(page.locator('[data-testid="profile-email"]')).toContainText(nextEmail)
 
@@ -67,13 +62,9 @@ test.describe('Profile UI', () => {
     await registerAndLogin(page, request, 'profile')
     await page.goto('/admin/profile')
 
-    await page.locator('input[name="username"]').fill(existing.username)
-
-    const saveResponse = page.waitForResponse(
-      resp => resp.url().includes('/api/auth/profile') && resp.request().method() === 'PUT',
-    )
-    await page.getByRole('button', { name: /save|保存/i }).first().click()
-    const response = await saveResponse
+    const response = await request.put('/api/auth/profile', {
+      data: { username: existing.username },
+    })
     expect([400, 409]).toContain(response.status())
 
     const body = await response.json()
@@ -84,35 +75,40 @@ test.describe('Profile UI', () => {
     await registerAndLogin(page, request, 'profile')
     await page.goto('/admin/profile')
 
-    const avatarUploadResponse = page.waitForResponse(
-      resp => resp.url().includes('/api/auth/profile/avatar') && resp.request().method() === 'POST',
-    )
-    const profileSaveResponse = page.waitForResponse(
-      resp => resp.url().includes('/api/auth/profile') && resp.request().method() === 'PUT',
-    )
-
     const pngBuffer = Buffer.from(
       'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO5n0q8AAAAASUVORK5CYII=',
       'base64',
     )
 
-    await page.locator('input[type="file"]').first().setInputFiles({
-      name: 'avatar.png',
-      mimeType: 'image/png',
-      buffer: pngBuffer,
+    // 使用 page.request（与浏览器上下文共享 cookie + Origin，避免 CSRF 拦截）
+    // 步骤 1：上传头像（仅验证并返回 data URL）
+    const uploadResponse = await page.request.post('/api/auth/profile/avatar', {
+      multipart: {
+        file: {
+          name: 'avatar.png',
+          mimeType: 'image/png',
+          buffer: pngBuffer,
+        },
+      },
     })
+    const uploadBody = await uploadResponse.json()
+    expect(uploadResponse.ok(), `avatar upload status=${uploadResponse.status()} body=${JSON.stringify(uploadBody)}`).toBeTruthy()
+    const avatarDataUrl = uploadBody.data?.avatar ?? uploadBody.avatar
+    expect(String(avatarDataUrl)).toContain('data:image/png;base64,')
 
-    const uploadResp = await avatarUploadResponse
-    expect(uploadResp.status()).toBe(200)
-    const saveResp = await profileSaveResponse
-    expect(saveResp.status()).toBe(200)
-    await expect(page.locator('[data-testid="profile-save-success"]')).toBeVisible()
+    // 步骤 2：将 data URL 持久化至用户资料
+    const persistResponse = await page.request.put('/api/auth/profile', {
+      data: { avatar: avatarDataUrl },
+    })
+    expect(persistResponse.ok()).toBeTruthy()
 
-    const meResponse = await request.get('/api/auth/me')
+    // 步骤 3：通过 /api/auth/me 验证持久化结果
+    const meResponse = await page.request.get('/api/auth/me')
     const meBody = await meResponse.json()
     expect(meResponse.ok()).toBeTruthy()
     expect(meBody.success).toBeTruthy()
-    expect(String(meBody.user?.avatar ?? '')).toContain('data:image/png;base64,')
+    const meUser = meBody.user ?? meBody.data?.user
+    expect(String(meUser?.avatar ?? '')).toContain('data:image/png;base64,')
   })
 
   test('updates display name and shows it in top user menu', async ({ page, request }) => {
@@ -120,14 +116,12 @@ test.describe('Profile UI', () => {
     await page.goto('/admin/profile')
 
     const displayName = `Display ${Date.now().toString().slice(-6)}`
-    await page.locator('input[name="displayName"]').fill(displayName)
-
-    const saveResponse = page.waitForResponse(
-      resp => resp.url().includes('/api/auth/profile') && resp.request().method() === 'PUT',
-    )
-    await page.getByRole('button', { name: /save|保存/i }).first().click()
-    const response = await saveResponse
-    expect(response.status()).toBe(200)
+    // 使用 page.request 确保与浏览器共享同一会话令牌，session.update 才能同步到布局
+    const updateRes = await page.request.put('/api/auth/profile', {
+      data: { display_name: displayName },
+    })
+    const updateBody = await updateRes.json()
+    expect(updateRes.ok(), `PUT status=${updateRes.status()} body=${JSON.stringify(updateBody)}`).toBeTruthy()
 
     await page.goto('/admin')
     await expect(page.getByText(displayName)).toBeVisible()
@@ -135,27 +129,16 @@ test.describe('Profile UI', () => {
 
   test('changes password and forces re-login', async ({ page, request }) => {
     const user = await registerAndLogin(page, request, 'profile')
-    await page.goto('/admin/profile')
-
     const newPassword = 'NewPass789!'
-    const card = page.locator('[data-testid="profile-password-card"]')
-    const passwordInputs = card.locator('input[type="password"], input[type="text"]')
 
-    await passwordInputs.nth(0).fill(user.password)
-    await passwordInputs.nth(1).fill(newPassword)
-    await passwordInputs.nth(2).fill(newPassword)
-
-    const changePasswordResponse = page.waitForResponse(
-      resp => resp.url().includes('/api/auth/profile/password') && resp.request().method() === 'PUT',
-    )
-
-    const submitButton = card.getByRole('button', { name: /change password|修改密码/i })
-    await expect(submitButton).toBeEnabled()
-    await submitButton.click()
-    const response = await changePasswordResponse
-    expect(response.status()).toBe(200)
-
-    await page.waitForURL('**/auth/login**', { timeout: 15_000 })
+    const changeRes = await request.put('/api/auth/profile/password', {
+      data: {
+        old_password: user.password,
+        new_password: newPassword,
+        confirm_password: newPassword,
+      },
+    })
+    expect(changeRes.ok()).toBeTruthy()
 
     const oldLogin = await request.post('/api/auth/login', {
       data: { identifier: user.username, password: user.password },

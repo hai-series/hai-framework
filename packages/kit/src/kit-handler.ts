@@ -20,7 +20,7 @@ import { internalError } from './kit-response.js'
  */
 function isSvelteKitControlFlow(value: unknown): boolean {
   if (value instanceof Response)
-    return true
+    return false
   if (typeof value === 'object' && value !== null && 'status' in value) {
     const status = (value as { status: unknown }).status
     return typeof status === 'number'
@@ -54,7 +54,12 @@ export function handler(fn: (event: RequestEvent) => Promise<Response> | Respons
       return await fn(event)
     }
     catch (error) {
-      // SvelteKit 控制流（Response / redirect / error）必须 re-throw
+      // validate.*OrFail 等场景会 throw Response，直接返回即可
+      if (error instanceof Response) {
+        return error
+      }
+
+      // redirect/error 等 SvelteKit 控制流必须继续抛出
       if (isSvelteKitControlFlow(error)) {
         throw error
       }

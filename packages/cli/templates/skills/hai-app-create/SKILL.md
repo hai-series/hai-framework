@@ -172,38 +172,33 @@ const CreateSchema = z.object({
 })
 
 // GET - 列表
-export const GET: RequestHandler = async (event) => {
-  const guard = kit.guard.requirePermission(event, 'resource:read')
-  if (!guard.success)
-    return kit.response.forbidden()
+export const GET = kit.handler(async ({ locals }) => {
+  kit.guard.requirePermission(locals.session, 'resource:read')
 
   const result = await service.list()
   if (!result.success)
     return kit.response.error(500, result.error.message)
   return kit.response.ok(result.data)
-}
+})
 
 // POST - 创建
-export const POST: RequestHandler = async (event) => {
-  const guard = kit.guard.requirePermission(event, 'resource:create')
-  if (!guard.success)
-    return kit.response.forbidden()
+export const POST = kit.handler(async ({ request, locals }) => {
+  kit.guard.requirePermission(locals.session, 'resource:create')
 
-  const { valid, data } = await kit.validate.form(event.request, CreateSchema)
-  if (!valid)
-    return kit.response.badRequest('Invalid input')
+  const data = await kit.validate.formOrFail(request, CreateSchema)
 
-  const result = await service.create(data!)
+  const result = await service.create(data)
   if (!result.success)
     return kit.response.error(500, result.error.message)
   return kit.response.created(result.data)
-}
+})
 ```
 
 ### 要点
 
-- 所有端点必须进行权限守卫（`kit.guard`）
-- 输入参数必须通过 Zod Schema 校验（`kit.validate`）
+- 所有端点**必须**用 `kit.handler(async ({ locals, request, ... }) => { ... })` 包裹，由 handler 统一处理 throw 的 Response
+- 权限守卫使用 `kit.guard.requirePermission(locals.session, 'xxx:yyy')`，它本身就是 throw 模式（未通过时 throw 403 Response），**无需**检查返回值
+- 输入校验使用 `await kit.validate.formOrFail(request, Schema)`，校验失败时 throw 400 Response，**无需**手动判断 valid
 - 返回统一使用 `kit.response.*`
 - Result 错误直接透传，不重新包装
 - 框架模块 API 不抛异常，不要用 `try/catch` 处理模块返回的错误，直接检查 `result.success`

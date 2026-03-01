@@ -10,6 +10,24 @@ async function sleep(ms: number) {
   await new Promise(resolve => setTimeout(resolve, ms))
 }
 
+function extractMeUser(meBody: unknown) {
+  if (!meBody || typeof meBody !== 'object') {
+    return null
+  }
+
+  const body = meBody as {
+    success?: boolean
+    user?: unknown
+    data?: { user?: unknown }
+  }
+
+  if (body.success !== true) {
+    return null
+  }
+
+  return body.user ?? body.data?.user ?? null
+}
+
 /** 生成唯一测试用户 */
 export function uniqueUser(prefix = 'e2e') {
   const safePrefix = (prefix.replace(/\W/g, '') || 'e2e').slice(0, 8)
@@ -76,7 +94,8 @@ export async function loginOnPage(page: Page, username: string, password: string
   // 显式验证会话已建立，避免后续 /admin 导航被重定向
   const meRes = await page.request.get('/api/auth/me')
   const meBody = await meRes.json()
-  if (!meRes.ok() || !meBody.success || !meBody.user) {
+  const meUser = extractMeUser(meBody)
+  if (!meRes.ok() || !meUser) {
     throw new Error(`Session not established on page: ${meRes.status()} ${JSON.stringify(meBody)}`)
   }
 
@@ -129,7 +148,8 @@ export async function registerAndLoginViaApi(request: APIRequestContext, prefix 
 
   const meRes = await request.get('/api/auth/me')
   const meBody = await meRes.json()
-  if (!meRes.ok() || !meBody.success || !meBody.user) {
+  const meUser = extractMeUser(meBody)
+  if (!meRes.ok() || !meUser) {
     throw new Error(`Session not established: ${meRes.status()} ${JSON.stringify(meBody)}`)
   }
 

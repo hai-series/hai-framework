@@ -16,6 +16,10 @@ function uniqueUser() {
   }
 }
 
+function getUserPayload(body: { user?: unknown, data?: { user?: unknown } }) {
+  return body.user ?? body.data?.user
+}
+
 // ---------------------------------------------------------------------------
 // POST /api/auth/register
 // ---------------------------------------------------------------------------
@@ -34,8 +38,9 @@ test.describe('POST /api/auth/register', () => {
 
     const body = await res.json()
     expect(body.success).toBe(true)
-    expect(body.user).toBeDefined()
-    expect(body.user).toHaveProperty('roles')
+    const user = getUserPayload(body)
+    expect(user).toBeDefined()
+    expect(user).toHaveProperty('roles')
   })
 
   test('重复用户名返回 400', async ({ request }) => {
@@ -94,8 +99,9 @@ test.describe('POST /api/auth/login', () => {
 
     const body = await res.json()
     expect(body.success).toBe(true)
-    expect(body.user).toHaveProperty('id')
-    expect(body.user.username).toBe(user.username)
+    const loginUser = getUserPayload(body) as { id: string, username: string }
+    expect(loginUser).toHaveProperty('id')
+    expect(loginUser.username).toBe(user.username)
   })
 
   test('用邮箱登录成功', async ({ request }) => {
@@ -164,7 +170,8 @@ test.describe('GET /api/auth/me', () => {
     const res = await request.get('/api/auth/me')
     const body = await res.json()
     expect(body.success).toBe(true)
-    expect(body.user).toHaveProperty('id')
-    expect(body.user.username).toBe(u.username)
+    const meUser = getUserPayload(body) as { id: string, username: string }
+    expect(meUser).toHaveProperty('id')
+    expect(meUser.username).toBe(u.username)
   })
 })

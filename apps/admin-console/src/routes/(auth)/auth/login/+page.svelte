@@ -17,6 +17,7 @@
 
   const iamPublicConfig = $derived(page.data.iamPublicConfig)
   const showRegisterLink = $derived(iamPublicConfig?.register?.enabled ?? true)
+  const returnUrl = $derived(page.url.searchParams.get('returnUrl') ?? '')
   const loginAgreements = $derived(
     iamPublicConfig?.agreements?.showOnLogin
       ? {
@@ -25,6 +26,27 @@
         }
       : undefined
   )
+
+  /**
+   * 规范化登录后的跳转地址。
+   * 仅允许站内受保护路径，避免开放重定向风险。
+   */
+  function resolveRedirectTarget(url: string) {
+    if (!url) {
+      return '/admin'
+    }
+
+    if (!url.startsWith('/') || url.startsWith('//')) {
+      return '/admin'
+    }
+
+    if (!url.startsWith('/admin')) {
+      return '/admin'
+    }
+
+    return url
+  }
+
   async function handleLogin(data: LoginFormData) {
     errors = {}
     loading = true
@@ -42,7 +64,7 @@
       const result = await response.json()
 
       if (result.success) {
-        goto('/admin')
+        goto(resolveRedirectTarget(returnUrl))
       } else {
         errors = { general: result.error?.message || m.common_error() }
       }
