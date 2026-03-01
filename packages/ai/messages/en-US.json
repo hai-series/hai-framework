@@ -16,5 +16,6 @@
   "ai_mcpPromptFailed": "MCP prompt '{name}' execution failed: {error}",
 
   "ai_toolNotFound": "Tool '{name}' not found",
-  "ai_toolInvalidJson": "Invalid JSON in tool call arguments"
+  "ai_toolInvalidJson": "Invalid JSON in tool call arguments",
+  "ai_configError": "AI config validation failed: {error}"
 }

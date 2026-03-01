@@ -2,6 +2,7 @@
  * @h-ai/iam — 授权子功能工厂（RBAC）
  *
  * 提供角色/权限的 CRUD、用户角色分配、权限检查等能力。
+ * @module iam-authz-functions
  */
 
 import type { CacheFunctions } from '@h-ai/cache'
@@ -371,9 +372,7 @@ function createRbacManager(config: RbacManagerConfig): IamAuthzFunctions {
       return result
     },
 
-    // =========================================================================
-    // 角色管理
-    // =========================================================================
+    // ─── 角色管理 ───
 
     async createRole(role): Promise<Result<Role, IamError>> {
       const createResult = await roleRepository.create(role)
@@ -562,9 +561,7 @@ function createRbacManager(config: RbacManagerConfig): IamAuthzFunctions {
       return ok(undefined)
     },
 
-    // =========================================================================
-    // 权限管理
-    // =========================================================================
+    // ─── 权限管理 ───
 
     async createPermission(permission): Promise<Result<Permission, IamError>> {
       const createResult = await permissionRepository.create(permission)

@@ -7,5 +7,6 @@
   "cache_unsupportedType": "Unsupported cache type: {type}",
   "cache_valueNotNumber": "Value is not a number",
   "cache_keyNotFound": "Key not found",
-  "cache_indexOutOfRange": "Index out of range"
+  "cache_indexOutOfRange": "Index out of range",
+  "cache_configError": "Cache config validation failed: {error}"
 }

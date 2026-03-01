@@ -1,21 +1,8 @@
 /**
- * =============================================================================
- * @h-ai/kit - Session Cookie 工具
- * =============================================================================
- * 统一管理 SvelteKit 的会话 Cookie 设置与清除，
- * 避免在多个 API Handler 中重复拼写 cookie 选项。
+ * @h-ai/kit — Session Cookie 工具
  *
- * @example
- * ```ts
- * import { kit } from '@h-ai/kit'
- *
- * // 登录成功后
- * kit.session.setCookie(cookies, accessToken, { maxAge: 86400 })
- *
- * // 登出时
- * kit.session.clearCookie(cookies)
- * ```
- * =============================================================================
+ * 统一管理 SvelteKit 的会话 Cookie 设置与清除， 避免在多个 API Handler 中重复拼写 cookie 选项。
+ * @module kit-session
  */
 
 import type { Cookies } from '@sveltejs/kit'

@@ -1,3 +1,10 @@
+/**
+ * @h-ai/cache — 错误码 + 配置 Schema
+ *
+ * 定义缓存模块的错误码常量、Zod Schema 和配置类型。
+ * @module cache-config
+ */
+
 import { z } from 'zod'
 
 // ─── 错误码 ───

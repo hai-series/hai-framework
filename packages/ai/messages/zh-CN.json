@@ -16,5 +16,6 @@
   "ai_mcpPromptFailed": "MCP 提示词 '{name}' 执行失败：{error}",
 
   "ai_toolNotFound": "工具 '{name}' 未找到",
-  "ai_toolInvalidJson": "工具调用参数 JSON 格式无效"
+  "ai_toolInvalidJson": "工具调用参数 JSON 格式无效",
+  "ai_configError": "AI 配置校验失败：{error}"
 }

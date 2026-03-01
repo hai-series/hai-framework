@@ -2,13 +2,26 @@
  * @h-ai/ai — 公共类型定义
  *
  * 聚合导出模块根类型和子功能类型，供外部通过 `@h-ai/ai` 一站式引入。
+ * @module ai-types
  */
 
 import type { Result } from '@h-ai/core'
 
-import type { AIConfig, AIConfigInput, AIError } from './ai-config.js'
+import type { AIConfig, AIConfigInput, AIErrorCodeType } from './ai-config.js'
 import type { LLMOperations, StreamOperations, ToolsOperations } from './llm/ai-llm-types.js'
 import type { MCPOperations } from './mcp/ai-mcp-types.js'
+
+// ─── 错误类型 ───
+
+/** AI 错误接口，所有 AI 操作的错误统一遵循此结构 */
+export interface AIError {
+  /** 错误码（数值，参见 AIErrorCode） */
+  code: AIErrorCodeType
+  /** 错误消息 */
+  message: string
+  /** 原始错误（可选） */
+  cause?: unknown
+}
 
 // ─── AIFunctions 接口 ───
 

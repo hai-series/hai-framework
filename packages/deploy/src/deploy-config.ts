@@ -1,41 +1,14 @@
 /**
- * =============================================================================
- * @h-ai/deploy - 部署配置 Schema
- * =============================================================================
+ * @h-ai/deploy — 部署配置 Schema
  *
  * 本文件定义部署模块的错误码、Zod Schema 和配置类型。
- *
- * 包含：
- * - 错误码常量（9000-9099 范围）
- * - Provider 配置 Schema（Vercel 等部署平台）
- * - Provisioner 配置 Schema（Neon / Upstash / R2 / Resend / Aliyun）
- * - 统一 DeployConfig 配置结构
- *
- * @example
- * ```ts
- * import { DeployConfigSchema, DeployErrorCode } from '@h-ai/deploy'
- *
- * // 校验配置
- * const config = DeployConfigSchema.parse({
- *   provider: { type: 'vercel', token: 'xxx' },
- * })
- *
- * // 使用错误码
- * if (error.code === DeployErrorCode.NOT_INITIALIZED) {
- *   // 处理错误：请先调用 deploy.init()
- * }
- * ```
- *
  * @module deploy-config
- * =============================================================================
  */
 
 import { z } from 'zod'
 import { deployM } from './deploy-i18n.js'
 
-// =============================================================================
-// 错误码常量
-// =============================================================================
+// ─── 错误码常量 ───
 
 /**
  * 部署错误码（数值范围 9000-9099）
@@ -85,9 +58,7 @@ export const DeployErrorCode = {
 /** 部署错误码类型 */
 export type DeployErrorCodeType = (typeof DeployErrorCode)[keyof typeof DeployErrorCode]
 
-// =============================================================================
-// Provider 配置 Schema
-// =============================================================================
+// ─── Provider 配置 Schema ───
 
 /** Vercel 部署平台配置 */
 const VercelProviderConfigSchema = z.object({
@@ -100,9 +71,7 @@ export const ProviderConfigSchema = z.discriminatedUnion('type', [
   VercelProviderConfigSchema,
 ])
 
-// =============================================================================
-// Provisioner 配置 Schema
-// =============================================================================
+// ─── Provisioner 配置 Schema ───
 
 /** Neon PostgreSQL 服务配置 */
 const NeonServiceSchema = z.object({
@@ -146,9 +115,7 @@ const ServicesConfigSchema = z.object({
   sms: z.discriminatedUnion('provisioner', [AliyunSmsServiceSchema]).optional(),
 }).optional()
 
-// =============================================================================
-// 完整配置 Schema
-// =============================================================================
+// ─── 完整配置 Schema ───
 
 /** 部署模块完整配置 Schema */
 export const DeployConfigSchema = z.object({

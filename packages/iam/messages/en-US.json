@@ -146,5 +146,6 @@
   "iam_seedPermPermRead": "View Permissions",
   "iam_seedPermPermManage": "Manage Permissions",
   "iam_seedPermSystemSettings": "System Settings",
-  "iam_seedPermSystemLogs": "View Logs"
+  "iam_seedPermSystemLogs": "View Logs",
+  "iam_configError": "IAM config validation failed: {error}"
 }

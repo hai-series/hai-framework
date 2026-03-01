@@ -1,3 +1,10 @@
+/**
+ * @h-ai/cache — 缓存服务主入口
+ *
+ * 提供统一的 `cache` 对象，聚合所有缓存操作功能。
+ * @module cache-main
+ */
+
 import type { Result } from '@h-ai/core'
 import type { CacheConfig, CacheConfigInput } from './cache-config.js'
 import type {
@@ -107,8 +114,18 @@ export const cache: CacheFunctions = {
 
     logger.info('Initializing cache module')
 
+    const parseResult = CacheConfigSchema.safeParse(config)
+    if (!parseResult.success) {
+      logger.error('Cache config validation failed', { error: parseResult.error.message })
+      return err({
+        code: CacheErrorCode.CONFIG_ERROR,
+        message: cacheM('cache_configError', { params: { error: parseResult.error.message } }),
+        cause: parseResult.error,
+      })
+    }
+    const parsed = parseResult.data
+
     try {
-      const parsed = CacheConfigSchema.parse(config)
       const provider = createProvider(parsed)
       const connectResult = await provider.connect(parsed)
       if (!connectResult.success) {

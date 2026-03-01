@@ -1,19 +1,12 @@
 /**
- * =============================================================================
- * @h-ai/kit - 权限守卫
- * =============================================================================
- * 验证用户是否具有指定权限。
+ * @h-ai/kit — 权限守卫
  *
- * 提供四层权限检查能力：
- * - `permissionGuard()`：Hook 级路由守卫，用于 `kit.createHandle({ guards })` 配置
- * - `hasPermission()`：布尔判断，适用于条件分支
- * - `assertPermission()`：断言式检查，不满足时返回 403 Response，适用于 API Handler
- * - `requirePermission()`：强制要求，不满足时 throw Response（SvelteKit 控制流）
- * =============================================================================
+ * 验证用户是否具有指定权限。
+ * @module kit-permission
  */
 
 import type { GuardResult, RouteGuard, SessionLike } from '../kit-types.js'
-import { getKitMessage } from '../kit-i18n.js'
+import { kitM } from '../kit-i18n.js'
 
 /**
  * 权限守卫配置
@@ -169,14 +162,14 @@ export function assertPermission(
 ): Response | undefined {
   if (!session) {
     return new Response(
-      JSON.stringify({ success: false, error: getKitMessage('kit_unauthorized') }),
+      JSON.stringify({ success: false, error: kitM('kit_unauthorized') }),
       { status: 401, headers: { 'Content-Type': 'application/json' } },
     )
   }
 
   if (!matchPermission(permission, session.permissions ?? [])) {
     return new Response(
-      JSON.stringify({ success: false, error: getKitMessage('kit_forbidden', { params: { permission } }) }),
+      JSON.stringify({ success: false, error: kitM('kit_forbidden', { params: { permission } }) }),
       { status: 403, headers: { 'Content-Type': 'application/json' } },
     )
   }

@@ -1,16 +1,8 @@
 /**
- * =============================================================================
- * @h-ai/reach - 阿里云短信 Provider
- * =============================================================================
+ * @h-ai/reach — 阿里云短信 Provider
  *
  * 通过阿里云 SMS HTTP API 发送短信的 Provider 实现（无需 SDK）。
- *
- * 使用阿里云 POP API 签名机制（SignatureMethod=HMAC-SHA1）直接调用
- * dysmsapi.aliyuncs.com 的 SendSms 接口。
- *
- * @see https://help.aliyun.com/document_detail/419298.html
  * @module reach-provider-aliyun-sms
- * =============================================================================
  */
 
 import type { Result } from '@h-ai/core'

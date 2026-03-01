@@ -1,21 +1,16 @@
 /**
- * =============================================================================
- * @h-ai/kit - 请求数据验证
- * =============================================================================
- * 基于 Zod 的请求数据验证工具，支持表单/JSON Body、URL 查询参数和路由参数的
- * 解析与校验。每种数据源提供安全返回（FormValidationResult）与抛出控制流
- * （OrFail / throw Response）两种变体。
- * =============================================================================
+ * @h-ai/kit — 请求数据验证
+ *
+ * 基于 Zod 的请求数据验证工具，支持表单/JSON Body、URL 查询参数和路由参数的 解析与校验。每种数据源提供安全返回（FormValidationResult）与抛出控制流 （OrFail / throw Response）两种变体。
+ * @module kit-validation
  */
 
 import type { z } from 'zod'
 import type { FormError, FormValidationResult } from './kit-types.js'
-import { getKitMessage } from './kit-i18n.js'
+import { kitM } from './kit-i18n.js'
 import { badRequest } from './kit-response.js'
 
-// =============================================================================
-// 内部工具
-// =============================================================================
+// ─── 内部工具 ───
 
 /**
  * Zod 错误 issue 类型
@@ -69,9 +64,7 @@ function createValidationResult<T>(error: z.ZodError): FormValidationResult<T> {
   }
 }
 
-// =============================================================================
-// 公共验证函数
-// =============================================================================
+// ─── 公共验证函数 ───
 
 /**
  * 从 Request 解析并验证表单数据
@@ -108,7 +101,7 @@ export async function validateForm<T extends z.ZodType>(
     else {
       return {
         valid: false,
-        errors: [{ field: '_', message: getKitMessage('kit_unsupportedContentType') }],
+        errors: [{ field: '_', message: kitM('kit_unsupportedContentType') }],
       }
     }
 
@@ -123,7 +116,7 @@ export async function validateForm<T extends z.ZodType>(
   catch {
     return {
       valid: false,
-      errors: [{ field: '_', message: getKitMessage('kit_parseBodyFailed') }],
+      errors: [{ field: '_', message: kitM('kit_parseBodyFailed') }],
     }
   }
 }
@@ -184,9 +177,7 @@ export function validateParams<T extends z.ZodType>(
   return createValidationResult(result.error)
 }
 
-// =============================================================================
-// OrFail 变体 — 校验失败时 throw Response（SvelteKit 控制流）
-// =============================================================================
+// ─── OrFail 变体 — 校验失败时 throw Response（SvelteKit 控制流） ───
 
 /**
  * 从 Request 解析并验证表单数据，失败时 throw Response

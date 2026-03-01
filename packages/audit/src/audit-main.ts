@@ -1,45 +1,12 @@
 /**
- * =============================================================================
- * @h-ai/audit - 审计日志服务主入口
- * =============================================================================
+ * @h-ai/audit — 审计日志服务主入口
  *
  * 本文件提供统一的 `audit` 对象，聚合所有审计日志操作功能。
- *
- * 使用方式：
- * 1. 调用 `audit.init({ db })` 初始化审计模块
- * 2. 通过 `audit.log()` 记录审计日志
- * 3. 通过 `audit.list()` 查询审计日志
- * 4. 通过 `audit.helper` 快速记录常见操作
- * 5. 调用 `audit.close()` 关闭模块
- *
- * @example
- * ```ts
- * import { audit } from '@h-ai/audit'
- * import { db } from '@h-ai/db'
- *
- * // 初始化
- * await db.init({ type: 'sqlite', database: ':memory:' })
- * await audit.init({ db })
- *
- * // 记录日志
- * await audit.log({ action: 'login', resource: 'auth', userId: 'user_1' })
- *
- * // 便捷记录
- * await audit.helper.login('user_1', '127.0.0.1')
- *
- * // 查询
- * const logs = await audit.list({ pageSize: 20 })
- *
- * // 关闭
- * await audit.close()
- * ```
- *
  * @module audit-main
- * =============================================================================
  */
 
 import type { Result } from '@h-ai/core'
-import type { AuditInitConfig } from './audit-config.js'
+import type { AuditInitConfigInput } from './audit-config.js'
 import type {
   AuditError,
   AuditFunctions,
@@ -53,7 +20,7 @@ import type {
 
 import { core, err, ok } from '@h-ai/core'
 
-import { AuditErrorCode } from './audit-config.js'
+import { AuditErrorCode, AuditInitConfigSchema } from './audit-config.js'
 import { auditM } from './audit-i18n.js'
 import { AuditLogRepository } from './audit-repository.js'
 
@@ -196,7 +163,7 @@ export const audit: AuditFunctions = {
    * }
    * ```
    */
-  async init(config: AuditInitConfig): Promise<Result<void, AuditError>> {
+  async init(config: AuditInitConfigInput): Promise<Result<void, AuditError>> {
     if (currentRepo) {
       logger.warn('Audit module is already initialized, reinitializing')
       await audit.close()
@@ -204,20 +171,26 @@ export const audit: AuditFunctions = {
 
     logger.debug('Initializing audit module')
 
-    try {
-      const tableName = config.tableName ?? 'audit_logs'
-      const userTable = config.userTable ?? 'users'
-      const userIdColumn = config.userIdColumn ?? 'id'
-      const userNameColumn = config.userNameColumn ?? 'username'
+    const parseResult = AuditInitConfigSchema.safeParse(config)
+    if (!parseResult.success) {
+      logger.error('Audit config validation failed', { error: parseResult.error.message })
+      return err({
+        code: AuditErrorCode.CONFIG_ERROR,
+        message: auditM('audit_configError', { params: { error: parseResult.error.message } }),
+        cause: parseResult.error,
+      })
+    }
+    const parsed = parseResult.data
 
-      currentRepo = new AuditLogRepository(config.db, {
-        tableName,
-        userTable,
-        userIdColumn,
-        userNameColumn,
+    try {
+      currentRepo = new AuditLogRepository(parsed.db, {
+        tableName: parsed.tableName,
+        userTable: parsed.userTable,
+        userIdColumn: parsed.userIdColumn,
+        userNameColumn: parsed.userNameColumn,
       })
 
-      logger.info('Audit module initialized', { tableName })
+      logger.info('Audit module initialized', { tableName: parsed.tableName })
       return ok(undefined)
     }
     catch (error) {
@@ -317,6 +290,12 @@ export const audit: AuditFunctions = {
    * 关闭审计模块，释放内部状态
    */
   async close(): Promise<void> {
+    if (!currentRepo) {
+      logger.info('Audit module already closed, skipping')
+      return
+    }
+
+    logger.info('Closing audit module')
     currentRepo = null
     logger.info('Audit module closed')
   },

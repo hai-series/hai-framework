@@ -2,6 +2,7 @@
  * @h-ai/ai — LLM 工具定义与注册表
  *
  * 提供 OpenAI function calling 的工具定义、参数校验和批量执行功能。
+ * @module ai-llm-tool
  */
 
 import type { Result } from '@h-ai/core'

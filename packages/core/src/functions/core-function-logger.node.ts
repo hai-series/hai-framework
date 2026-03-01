@@ -1,20 +1,8 @@
 /**
- * =============================================================================
- * @h-ai/core - Logger（Node.js 版本，基于 pino）
- * =============================================================================
+ * @h-ai/core — Logger（Node.js 版本，基于 pino）
+ *
  * 提供统一的日志接口，Node.js 环境使用 pino 实现。
- *
- * @example
- * ```ts
- * import { logger } from './core-function-logger.node.js'
- *
- * const appLogger = logger.createLogger({ name: 'my-service' })
- * appLogger.info('Hello', { userId: 123 })
- *
- * // 动态调整级别
- * logger.setLogLevel('debug')
- * ```
- * =============================================================================
+ * @module core-function-logger.node
  */
 
 import type { LogFormat, LoggingConfig, LogLevel } from '../core-config.js'
@@ -49,9 +37,7 @@ if (process.platform === 'win32' && process.stdout.isTTY) {
   }
 }
 
-// =============================================================================
-// 全局配置
-// =============================================================================
+// ─── 全局配置 ───
 
 /** 全局日志级别（默认 'info'） */
 let globalLevel: LogLevel = 'info'
@@ -112,9 +98,7 @@ function getLogLevel(): LogLevel {
   return globalLevel
 }
 
-// =============================================================================
-// Logger 实现
-// =============================================================================
+// ─── Logger 实现 ───
 
 /**
  * 包装 pino 实例为统一 Logger 接口。
@@ -206,9 +190,7 @@ function createLogger(options: LoggerOptions = {}): Logger {
   return wrapPino(pinoInstance, context)
 }
 
-// =============================================================================
-// 默认 Logger 实例
-// =============================================================================
+// ─── 默认 Logger 实例 ───
 
 let defaultLogger: Logger | null = null
 
@@ -227,9 +209,7 @@ function getLogger(): Logger {
   return defaultLogger
 }
 
-// =============================================================================
-// 对外出口
-// =============================================================================
+// ─── 对外出口 ───
 
 /**
  * Node.js Logger 函数集合。

@@ -2,11 +2,12 @@
  * @h-ai/ai — LLM Provider: OpenAI 兼容实现
  *
  * 工厂函数创建，基于 OpenAI SDK 支持所有 OpenAI 兼容的 API 端点。
+ * @module ai-llm-provider-openai
  */
 
 import type { Result } from '@h-ai/core'
 
-import type { AIError } from '../../ai-config.js'
+import type { AIError } from '../../ai-types.js'
 import type {
   AILLMFunctionsDeps,
   ChatCompletionChunk,

@@ -2,6 +2,7 @@
  * @h-ai/storage — 存储服务主入口
  *
  * 提供统一的 `storage` 对象，管理运行时状态与生命周期。
+ * @module storage-main
  */
 
 import type { Result } from '@h-ai/core'
@@ -123,8 +124,18 @@ export const storage: StorageFunctions = {
 
     logger.info('Initializing storage module')
 
+    const parseResult = StorageConfigSchema.safeParse(config)
+    if (!parseResult.success) {
+      logger.error('Storage config validation failed', { error: parseResult.error.message })
+      return err({
+        code: StorageErrorCode.CONFIG_ERROR,
+        message: storageM('storage_configError', { params: { error: parseResult.error.message } }),
+        cause: parseResult.error,
+      })
+    }
+    const parsed = parseResult.data
+
     try {
-      const parsed = StorageConfigSchema.parse(config)
       const provider = createProvider(parsed)
       const connectResult = await provider.connect(parsed)
       if (!connectResult.success) {

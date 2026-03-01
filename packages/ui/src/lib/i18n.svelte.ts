@@ -1,39 +1,8 @@
 /**
- * =============================================================================
- * @h-ai/ui - i18n Svelte 响应式封装
- * =============================================================================
+ * @h-ai/ui — i18n Svelte 响应式封装
+ *
  * 为 Svelte 5 应用提供 locale 状态管理的辅助工具
- *
- * 设计原则：
- * - Paraglide 优先：翻译由 Paraglide 生成，此模块仅提供 locale 状态管理
- * - 显式 locale：库组件通过 props 接收 locale，不依赖全局状态
- * - 集成 @h-ai/core：locale 变化会同步到 @h-ai/core 的全局 locale 管理器
- * - 应用层使用：此工具主要在应用层（如 admin-console）使用
- *
- * 使用方式：
- * ```svelte
- * <script lang="ts">
- *   import { createLocaleStore } from '@h-ai/ui'
- *   import { m } from '$lib/paraglide/messages.js'
- *   import { setLocale } from '$lib/paraglide/runtime.js'
- *
- *   const localeStore = createLocaleStore()
- * </script>
- *
- * <p>{m.greeting({ name: 'World' })}</p>
- * <select
- *   value={localeStore.current}
- *   onchange={(e) => {
- *     localeStore.set(e.currentTarget.value)
- *     setLocale(e.currentTarget.value)
- *   }}
- * >
- *   {#each localeStore.supported as l}
- *     <option value={l.code}>{l.label}</option>
- *   {/each}
- * </select>
- * ```
- * =============================================================================
+ * @module i18n.svelte
  */
 
 import type { Locale, LocaleInfo } from '@h-ai/core'
@@ -49,15 +18,11 @@ const {
   setGlobalLocale,
 } = core.i18n
 
-// =============================================================================
-// LocalStorage Key
-// =============================================================================
+// ─── LocalStorage Key ───
 
 const LOCALE_STORAGE_KEY = 'hai-locale'
 
-// =============================================================================
-// Locale Store
-// =============================================================================
+// ─── Locale Store ───
 
 /**
  * 创建 locale 状态管理器
@@ -142,9 +107,7 @@ export function createLocaleStore(options: {
   }
 }
 
-// =============================================================================
-// 类型重导出（从 @h-ai/core 导出类型，函数通过 core.i18n 访问）
-// =============================================================================
+// ─── 类型重导出（从 @h-ai/core 导出类型，函数通过 core.i18n 访问） ───
 
 export type { InterpolationParams, Locale, LocaleInfo } from '@h-ai/core'
 

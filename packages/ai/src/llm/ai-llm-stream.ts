@@ -2,6 +2,7 @@
  * @h-ai/ai — LLM 流式响应处理
  *
  * 提供流处理器、SSE 编解码等纯函数工具。
+ * @module ai-llm-stream
  */
 
 import type {

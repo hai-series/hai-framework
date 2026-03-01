@@ -1,5 +1,6 @@
 <!--
   场景组件（Scenes）展示
+  AI: MarkdownRenderer
   IAM: LoginForm / RegisterForm / ForgotPasswordForm / ResetPasswordForm /
        ChangePasswordForm / PasswordInput / UserProfile
   Storage: FileUpload / FileList / ImageUpload / AvatarUpload
@@ -7,11 +8,200 @@
 -->
 <script lang="ts">
   // FileList 与 DOM 全局类型同名，必须显式导入
-  import { FileList, toast } from '@h-ai/ui'
+  import { FileList, MarkdownRenderer, toast } from '@h-ai/ui'
 
   // === 状态 ===
   let pwdVal = $state('')
   let encVal = $state('')
+
+  // === Markdown 示例内容 ===
+  const demoMarkdown = `# Markdown 渲染器演示
+
+这是一个**全功能的 Markdown 渲染器**，专为 AI 输出显示而设计。支持 [GitHub Flavored Markdown](https://github.github.com/gfm/) 全量语法。
+
+## 文本格式化
+
+这段文字包含 **粗体**、*斜体*、~~删除线~~、以及 \`行内代码\` 等格式。\
+还可以组合使用：***粗斜体***、**\`粗体代码\`**。
+
+## 列表
+
+### 无序列表
+
+- 第一项内容
+- 第二项内容
+  - 嵌套子项
+  - 另一个子项
+    - 更深层嵌套
+- 第三项
+
+### 有序列表
+
+1. 安装依赖
+2. 配置项目
+3. 启动开发服务器
+4. 开始编码
+
+### 任务列表
+
+- [x] 项目初始化
+- [x] 组件开发
+- [ ] 单元测试
+- [ ] 文档编写
+
+## 引用
+
+> "好的代码就是最好的文档。当你要为代码写注释的时候，先想想是不是可以改善代码使其不需要注释。"
+>
+> — Steve McConnell
+
+> **提示：** 这是一个多行引用块。
+> 它可以包含 **富文本格式**、\`代码\` 和其他元素。
+>
+> > 还可以嵌套引用。
+
+## 代码块
+
+### TypeScript
+
+\`\`\`typescript
+interface User {
+  id: string
+  name: string
+  email: string
+  roles: string[]
+}
+
+async function fetchUser(id: string): Promise<User> {
+  const response = await fetch(\\\`/api/users/\\\${id}\\\`)
+  if (!response.ok) {
+    throw new Error(\\\`Failed to fetch user: \\\${response.status}\\\`)
+  }
+  return response.json()
+}
+\`\`\`
+
+### Python
+
+\`\`\`python
+from dataclasses import dataclass
+from typing import Optional
+
+@dataclass
+class Config:
+    """应用配置"""
+    host: str = "localhost"
+    port: int = 8080
+    debug: bool = False
+    secret: Optional[str] = None
+
+def create_app(config: Config) -> "App":
+    app = App(config)
+    app.register_middleware(auth_middleware)
+    app.register_routes(api_routes)
+    return app
+\`\`\`
+
+### Bash
+
+\`\`\`bash
+#!/bin/bash
+# 部署脚本
+echo "开始部署..."
+pnpm install --frozen-lockfile
+pnpm build
+docker build -t myapp:latest .
+docker push myapp:latest
+echo "部署完成 ✅"
+\`\`\`
+
+### JSON
+
+\`\`\`json
+{
+  "name": "@h-ai/ui",
+  "version": "0.1.0",
+  "dependencies": {
+    "marked": "^15.0.0",
+    "highlight.js": "^11.11.0"
+  }
+}
+\`\`\`
+
+### SQL
+
+\`\`\`sql
+SELECT u.id, u.name, COUNT(o.id) AS order_count
+FROM users u
+LEFT JOIN orders o ON u.id = o.user_id
+WHERE u.created_at >= '2024-01-01'
+GROUP BY u.id, u.name
+HAVING COUNT(o.id) > 5
+ORDER BY order_count DESC
+LIMIT 10;
+\`\`\`
+
+## 表格
+
+| 功能 | 状态 | 说明 |
+|------|------|------|
+| 标题渲染 | ✅ 已完成 | h1 ~ h6 全支持 |
+| 代码高亮 | ✅ 已完成 | 30+ 编程语言 |
+| 表格显示 | ✅ 已完成 | 响应式滚动容器 |
+| 任务列表 | ✅ 已完成 | GFM 规范 |
+| 一键复制 | ✅ 已完成 | 代码块复制按钮 |
+| 主题适配 | ✅ 已完成 | DaisyUI 主题 |
+
+## 水平线
+
+上方内容
+
+---
+
+下方内容
+
+## 图片
+
+> 注意：以下为占位图片示例链接
+
+![示例图片](https://placehold.co/600x200/EEE/999?text=Markdown+Image+Demo)
+
+## 综合示例
+
+下面是一个混合了**多种元素**的段落：
+
+在 \`packages/ui\` 模块中，我们使用 [Svelte 5](https://svelte.dev) 的 Runes 语法构建组件。核心依赖包括：
+
+1. **marked** — Markdown 解析引擎
+2. **highlight.js** — 语法高亮
+3. **DaisyUI** — 主题系统
+
+> 所有组件均通过 \`@h-ai/ui\` 统一导出，使用 \`export *\` 聚合模式。
+`
+
+  // === 简短 AI 对话示例 ===
+  const aiResponseMarkdown = `当然可以！下面是一个使用 TypeScript 创建简单 HTTP 服务器的示例：
+
+\`\`\`typescript
+import { createServer } from 'node:http'
+
+const server = createServer((req, res) => {
+  res.writeHead(200, { 'Content-Type': 'application/json' })
+  res.end(JSON.stringify({ message: 'Hello, World!' }))
+})
+
+server.listen(3000, () => {
+  console.log('Server running at http://localhost:3000')
+})
+\`\`\`
+
+**关键要点：**
+- 使用 \`node:http\` 内置模块，无需安装第三方依赖
+- \`createServer\` 接受一个回调函数处理每个请求
+- 通过 \`writeHead\` 设置响应状态码和头部
+- 调用 \`listen\` 启动服务器
+
+你还可以使用 **Express** 或 **Fastify** 来构建更复杂的应用。`
 
   // === 示例数据 ===
   const demoUser = {
@@ -33,6 +223,47 @@
 </script>
 
 <div class="space-y-10">
+  <!-- ====================================================================== -->
+  <!-- AI Markdown 渲染                                                       -->
+  <!-- ====================================================================== -->
+  <section>
+    <div class="flex items-center gap-3 mb-6">
+      <div class="flex items-center justify-center w-10 h-10 rounded-xl bg-primary/10 text-primary">
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a4 4 0 0 1 4 4v1h2a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h2V6a4 4 0 0 1 4-4z"/><circle cx="12" cy="14" r="2"/></svg>
+      </div>
+      <div>
+        <h2 class="text-xl font-bold">AI — Markdown 渲染器</h2>
+        <p class="text-sm text-base-content/60">用于渲染 AI 输出的 Markdown 内容，支持代码高亮、复制、表格等</p>
+      </div>
+      <Badge variant="primary" outline size="sm">1 组件</Badge>
+    </div>
+
+    <!-- AI 对话场景 -->
+    <Card bordered class="mb-6">
+      <div class="flex items-center gap-2 mb-5">
+        <Badge variant="info" size="sm">MarkdownRenderer</Badge>
+        <span class="text-sm text-base-content/60">AI 对话回复示例</span>
+      </div>
+      <div class="bg-base-200/30 rounded-xl p-6">
+        <div class="flex gap-3">
+          <div class="shrink-0 w-8 h-8 rounded-full bg-primary flex items-center justify-center text-primary-content text-sm font-bold">AI</div>
+          <div class="flex-1 min-w-0">
+            <MarkdownRenderer content={aiResponseMarkdown} />
+          </div>
+        </div>
+      </div>
+    </Card>
+
+    <!-- 全功能演示 -->
+    <Card bordered>
+      <div class="flex items-center gap-2 mb-5">
+        <Badge variant="success" size="sm">全功能演示</Badge>
+        <span class="text-sm text-base-content/60">展示所有支持的 Markdown 语法元素</span>
+      </div>
+      <MarkdownRenderer content={demoMarkdown} />
+    </Card>
+  </section>
+
   <!-- ====================================================================== -->
   <!-- IAM 身份认证                                                           -->
   <!-- ====================================================================== -->

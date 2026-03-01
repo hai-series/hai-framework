@@ -49,7 +49,9 @@
   "dependencies": {
     "@h-ai/core": "workspace:*",
     "@internationalized/date": "catalog:",
-    "bits-ui": "catalog:"
+    "bits-ui": "catalog:",
+    "highlight.js": "catalog:",
+    "marked": "catalog:"
   },
   "devDependencies": {
     "@sveltejs/package": "catalog:",

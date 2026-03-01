@@ -1,16 +1,8 @@
 /**
- * =============================================================================
- * @h-ai/ui - 原子组件 (Primitives)
- * =============================================================================
+ * @h-ai/ui — 原子组件 (Primitives)
  *
  * 不可再分的基础 UI 单元，职责单一，无业务逻辑。
- *
- * 包含：
- * - Button, IconButton - 按钮
- * - Input, Textarea, Select, Checkbox, Switch, Radio, Range - 表单控件
- * - Badge, Avatar, Tag - 展示标签
- * - Spinner, Progress, Rating - 状态指示
- * =============================================================================
+ * @module index
  */
 
 export { default as Avatar } from './Avatar.svelte'

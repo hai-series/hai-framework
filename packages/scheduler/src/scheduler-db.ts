@@ -1,20 +1,12 @@
 /**
- * =============================================================================
- * @h-ai/scheduler - 数据库操作
- * =============================================================================
+ * @h-ai/scheduler — 数据库操作
  *
- * 本文件封装定时任务模块的数据库相关逻辑，包括：
- * - 日志表的创建与初始化
- * - 执行日志的持久化
- * - 执行日志的查询
- * - 任务定义的持久化与加载
- *
+ * 本文件封装定时任务模块的数据库相关逻辑，包括： - 日志表的创建与初始化 - 执行日志的持久化 - 执行日志的查询 - 任务定义的持久化与加载
  * @module scheduler-db
- * =============================================================================
  */
 
 import type { Result } from '@h-ai/core'
-import type { LogQueryOptions, SchedulerError, TaskDefinitionApi, TaskExecutionLog } from './scheduler-types.js'
+import type { ApiTaskConfig, LogQueryOptions, SchedulerError, TaskDefinitionApi, TaskExecutionLog } from './scheduler-types.js'
 
 import { core, err, ok } from '@h-ai/core'
 
@@ -28,9 +20,7 @@ const logger = core.logger.child({ module: 'scheduler', scope: 'db' })
 /** 校验表名只包含合法 SQL 标识符字符 */
 const VALID_TABLE_NAME = /^\w+$/
 
-// =============================================================================
-// 日志表初始化
-// =============================================================================
+// ─── 日志表初始化 ───
 
 /**
  * 创建执行日志表（含 task_id 索引）
@@ -89,9 +79,7 @@ export async function ensureLogTable(tableName: string): Promise<Result<void, Sc
   }
 }
 
-// =============================================================================
-// 任务定义表初始化
-// =============================================================================
+// ─── 任务定义表初始化 ───
 
 /**
  * 创建任务定义持久化表
@@ -144,9 +132,7 @@ export async function ensureTaskTable(taskTableName: string): Promise<Result<voi
   }
 }
 
-// =============================================================================
-// 任务定义持久化
-// =============================================================================
+// ─── 任务定义持久化 ───
 
 /**
  * 保存 API 任务定义到数据库
@@ -204,7 +190,7 @@ export async function saveTaskDefinition(taskTableName: string, task: TaskDefini
 export async function updateTaskDefinition(
   taskTableName: string,
   taskId: string,
-  updates: { name?: string, cron?: string, enabled?: boolean, api?: Record<string, unknown> },
+  updates: { name?: string, cron?: string, enabled?: boolean, api?: ApiTaskConfig },
 ): Promise<Result<void, SchedulerError>> {
   if (!VALID_TABLE_NAME.test(taskTableName)) {
     return err({
@@ -357,9 +343,7 @@ export async function loadTaskDefinitions(taskTableName: string): Promise<Result
   }
 }
 
-// =============================================================================
-// 日志持久化
-// =============================================================================
+// ─── 日志持久化 ───
 
 /**
  * 保存执行日志到数据库
@@ -385,9 +369,7 @@ export async function saveLog(tableName: string, log: TaskExecutionLog): Promise
   }
 }
 
-// =============================================================================
-// 日志查询
-// =============================================================================
+// ─── 日志查询 ───
 
 /**
  * 查询执行日志

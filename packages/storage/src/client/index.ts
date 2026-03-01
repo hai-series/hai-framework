@@ -3,5 +3,6 @@
  *
  * 提供通过签名 URL 直接上传/下载文件的能力，
  * 以及 MIME 类型查询、文件大小格式化等辅助函数。
+ * @module index
  */
 export * from './storage-client.js'

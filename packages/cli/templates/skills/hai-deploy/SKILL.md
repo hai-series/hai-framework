@@ -187,13 +187,16 @@ const result = await deploy.provisionAll('my-project')
 await deploy.close()
 ```
 
-### 自定义 Provider
+### 自定义部署流程
 
 ```typescript
-import { createVercelProvider } from '@h-ai/deploy'
+import { deploy } from '@h-ai/deploy'
 
-const provider = createVercelProvider()
-await provider.authenticate('vel_xxx')
-const projectId = await provider.createProject('my-app')
-await provider.setEnvVars(projectId.data, { KEY: 'value' })
+// Provider 通过 init 配置自动创建，不需要手动导入
+await deploy.init({
+  provider: { type: 'vercel', token: 'vel_xxx' },
+})
+
+// 使用 deploy API 部署
+const result = await deploy.deployApp('./apps/my-app')
 ```

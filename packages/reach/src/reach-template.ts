@@ -1,31 +1,8 @@
 /**
- * =============================================================================
- * @h-ai/reach - 模板引擎
- * =============================================================================
+ * @h-ai/reach — 模板引擎
  *
  * 本文件提供触达模块的模板定义与渲染功能。
- *
- * 模板支持变量插值，使用 `{variableName}` 语法。
- *
- * @example
- * ```ts
- * import { createTemplateRegistry } from '@h-ai/reach'
- *
- * const registry = createTemplateRegistry()
- *
- * // 注册模板
- * registry.register({
- *   name: 'verification_code',
- *   subject: '验证码: {code}',
- *   body: '您的验证码是 {code}，有效期 {minutes} 分钟。',
- * })
- *
- * // 渲染模板
- * const result = registry.render('verification_code', { code: '123456', minutes: '5' })
- * ```
- *
  * @module reach-template
- * =============================================================================
  */
 
 import type { Result } from '@h-ai/core'
@@ -36,9 +13,7 @@ import { err, ok } from '@h-ai/core'
 import { ReachErrorCode } from './reach-config.js'
 import { reachM } from './reach-i18n.js'
 
-// =============================================================================
-// 变量渲染
-// =============================================================================
+// ─── 变量渲染 ───
 
 /**
  * 将模板字符串中的 `{key}` 占位符替换为实际值
@@ -53,9 +28,7 @@ function renderString(template: string, vars: Record<string, string>): string {
   })
 }
 
-// =============================================================================
-// 模板注册表工厂
-// =============================================================================
+// ─── 模板注册表工厂 ───
 
 /**
  * 创建模板注册表

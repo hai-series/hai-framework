@@ -37,5 +37,6 @@
   "db_mysqlTxExecuteHint": "MySQL 事务中请使用 await tx.execute()",
   "db_crudEmptyPayload": "CRUD 数据为空，请提供数据",
   "db_crudNoValidColumns": "CRUD 数据没有有效列",
-  "db_invalidIdentifier": "非法的 SQL 标识符: {name}（仅允许字母、数字和下划线）"
+  "db_invalidIdentifier": "非法的 SQL 标识符: {name}（仅允许字母、数字和下划线）",
+  "db_configError": "数据库配置校验失败：{error}"
 }

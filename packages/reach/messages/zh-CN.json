@@ -13,5 +13,6 @@
   "reach_dndDeferred": "当前处于免打扰时段，消息已暂存待发送",
   "reach_smsSendFailed": "短信发送失败: {error}",
   "reach_emailSendFailed": "邮件发送失败: {error}",
-  "reach_apiSendFailed": "API 回调发送失败: {error}"
+  "reach_apiSendFailed": "API 回调发送失败: {error}",
+  "reach_configError": "触达配置校验失败：{error}"
 }

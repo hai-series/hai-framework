@@ -1,10 +1,8 @@
 /**
- * =============================================================================
- * @h-ai/kit - 组合守卫
- * =============================================================================
- * 提供守卫组合器，支持 AND（allGuards）/ OR（anyGuard）/ NOT（notGuard）/
- * 条件分支（conditionalGuard）等逻辑组合，将多个 RouteGuard 聚合为一个。
- * =============================================================================
+ * @h-ai/kit — 组合守卫
+ *
+ * 提供守卫组合器，支持 AND（allGuards）/ OR（anyGuard）/ NOT（notGuard）/ 条件分支（conditionalGuard）等逻辑组合，将多个 RouteGuard 聚合为一个。
+ * @module kit-compose
  */
 
 import type { RequestEvent } from '@sveltejs/kit'

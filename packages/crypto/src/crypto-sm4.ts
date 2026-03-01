@@ -1,5 +1,11 @@
-import type { Result } from '@h-ai/core'
+/**
+ * @h-ai/crypto — SM4 对称加密
+ *
+ * 提供 SM4 对称加解密操作（CBC/ECB 模式）。
+ * @module crypto-sm4
+ */
 
+import type { Result } from '@h-ai/core'
 import type {
   CryptoError,
   EncryptWithIVResult,

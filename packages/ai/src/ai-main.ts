@@ -2,12 +2,13 @@
  * @h-ai/ai — AI 服务主入口
  *
  * 提供统一的 `ai` 对象，聚合所有 AI 操作功能。
+ * @module ai-main
  */
 
 import type { Result } from '@h-ai/core'
 
-import type { AIConfig, AIConfigInput, AIError } from './ai-config.js'
-import type { AIFunctions } from './ai-types.js'
+import type { AIConfig, AIConfigInput } from './ai-config.js'
+import type { AIError, AIFunctions } from './ai-types.js'
 import type { LLMOperations, StreamOperations, ToolsOperations } from './llm/ai-llm-types.js'
 import type { MCPOperations } from './mcp/ai-mcp-types.js'
 
@@ -104,16 +105,23 @@ export const ai: AIFunctions = {
     // 关闭旧实例
     if (currentConfig) {
       logger.warn('AI module is already initialized, reinitializing')
-      currentLLM = null
-      currentMCP = null
-      currentConfig = null
+      ai.close()
     }
 
     logger.info('Initializing AI module')
 
-    try {
-      const parsed = AIConfigSchema.parse(config ?? {})
+    const parseResult = AIConfigSchema.safeParse(config ?? {})
+    if (!parseResult.success) {
+      logger.error('AI config validation failed', { error: parseResult.error.message })
+      return err({
+        code: AIErrorCode.CONFIGURATION_ERROR,
+        message: aiM('ai_configError', { params: { error: parseResult.error.message } }),
+        cause: parseResult.error,
+      })
+    }
+    const parsed = parseResult.data
 
+    try {
       // 创建 LLM 子功能
       const llmFunctions = createAILLMFunctions(parsed)
       currentLLM = llmFunctions.llm

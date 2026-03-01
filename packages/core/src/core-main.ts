@@ -1,33 +1,8 @@
 /**
- * =============================================================================
- * @h-ai/core - Core 服务聚合（通用部分）
- * =============================================================================
- * 提供 Node.js 与浏览器共用的 core 对象结构。
- * 所有功能统一通过 core 对象访问，确保 API 一致性。
+ * @h-ai/core — Core 服务聚合（通用部分）
  *
- * @example
- * ```ts
- * import { core } from '@h-ai/core'
- *
- * // 日志
- * core.logger.info('Hello')
- *
- * // ID 生成
- * const myId = core.id.generate()
- *
- * // 国际化工具
- * core.i18n.detectBrowserLocale()
- * core.i18n.resolveLocale(userLocale)
- *
- * // 工具函数（命名空间方式）
- * core.typeUtils.isDefined(value)
- * core.object.deepMerge(a, b)
- * core.string.capitalize('hello')
- * core.array.unique([1, 1, 2])
- * core.async.delay(1000)
- * core.time.formatDate(new Date())
- * ```
- * =============================================================================
+ * 提供 Node.js 与浏览器共用的 core 对象结构。 所有功能统一通过 core 对象访问，确保 API 一致性。
+ * @module core-main
  */
 
 import type { LoggingConfig } from './core-config.js'
@@ -43,9 +18,7 @@ import { string as stringUtils } from './utils/core-util-string.js'
 import { time as timeUtils } from './utils/core-util-time.js'
 import { typeUtils } from './utils/core-util-type.js'
 
-// =============================================================================
-// Core 对象工厂
-// =============================================================================
+// ─── Core 对象工厂 ───
 
 /**
  * 创建 Core 对象（通用内核）。
@@ -72,9 +45,7 @@ export function createCore(loggerFns: LoggerFunctions) {
   let cachedLogger: Logger | null = null
 
   return {
-    // =====================================================================
-    // Logger
-    // =====================================================================
+    // ─── Logger ───
 
     /**
      * 获取默认 Logger（懒加载单例）。
@@ -135,9 +106,7 @@ export function createCore(loggerFns: LoggerFunctions) {
      */
     getLogLevel: loggerFns.getLogLevel,
 
-    // =====================================================================
-    // i18n 国际化工具
-    // =====================================================================
+    // ─── i18n 国际化工具 ───
 
     /**
      * 国际化工具集合。
@@ -157,9 +126,7 @@ export function createCore(loggerFns: LoggerFunctions) {
      */
     i18n,
 
-    // =====================================================================
-    // ID
-    // =====================================================================
+    // ─── ID ───
 
     /**
      * ID 生成工具。
@@ -172,9 +139,7 @@ export function createCore(loggerFns: LoggerFunctions) {
      */
     id,
 
-    // =====================================================================
-    // 工具函数（命名空间方式）
-    // =====================================================================
+    // ─── 工具函数（命名空间方式） ───
 
     /**
      * 类型检查工具。
@@ -236,9 +201,7 @@ export function createCore(loggerFns: LoggerFunctions) {
      */
     time: timeUtils,
 
-    // =====================================================================
-    // 模块基础能力
-    // =====================================================================
+    // ─── 模块基础能力 ───
 
     /**
      * 模块基础工具集。

@@ -1,14 +1,8 @@
 /**
- * =============================================================================
- * @h-ai/iam - 会话映射缓存实现
- * =============================================================================
+ * @h-ai/iam — 会话映射缓存实现
  *
- * 基于 @h-ai/cache 的会话映射实现：
- * - token -> session: iam:token:{token}
- * - user -> tokens: iam:user:{userId}:tokens
- *
- * @module session/iam-session-repository-cache
- * =============================================================================
+ * 基于 @h-ai/cache 的会话映射实现： - token -> session: iam:token:{token} - user -> tokens: iam:user:{userId}:tokens
+ * @module iam-session-repository-cache
  */
 
 import type { CacheFunctions } from '@h-ai/cache'
@@ -60,9 +54,7 @@ function restoreSessionDates(session: Session): Session {
   }
 }
 
-// =============================================================================
-// 会话映射存储接口
-// =============================================================================
+// ─── 会话映射存储接口 ───
 
 /**
  * 会话映射存储接口

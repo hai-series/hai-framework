@@ -1,24 +1,8 @@
 /**
- * =============================================================================
- * @h-ai/kit - API Handler 包装器
- * =============================================================================
+ * @h-ai/kit — API Handler 包装器
+ *
  * 统一封装 SvelteKit API Handler 的错误处理逻辑。
- *
- * 自动捕获未处理异常并返回 500 标准响应，同时 re-throw SvelteKit 控制流
- * （`Response` / `redirect` / `error`）。
- *
- * @example
- * ```ts
- * import { kit } from '@h-ai/kit'
- *
- * export const GET = kit.handler(async ({ locals, url }) => {
- *   kit.guard.requirePermission(locals.session, 'user:read')
- *   const query = kit.validate.queryOrFail(url, ListUsersSchema)
- *   const data = await fetchUsers(query)
- *   return kit.response.ok(data)
- * })
- * ```
- * =============================================================================
+ * @module kit-handler
  */
 
 import type { RequestEvent, RequestHandler } from '@sveltejs/kit'

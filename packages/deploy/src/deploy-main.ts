@@ -1,19 +1,8 @@
 /**
- * =============================================================================
- * @h-ai/deploy - 模块主入口
- * =============================================================================
+ * @h-ai/deploy — 模块主入口
  *
  * 提供 deploy 单例对象，暴露完整的自动化部署 API。
- *
- * 工作流：
- * 1. `deploy.init(config)` — 解析配置，创建 Provider 和 Provisioner 实例
- * 2. `deploy.scan(appDir)` — 扫描应用依赖，返回所需服务列表
- * 3. `deploy.provisionAll(projectName)` — 开通所有已配置的基础设施
- * 4. `deploy.deployApp(appDir)` — 执行完整部署流程
- * 5. `deploy.close()` — 释放资源
- *
  * @module deploy-main
- * =============================================================================
  */
 
 import type { Result } from '@h-ai/core'
@@ -41,28 +30,22 @@ import { createR2Provisioner } from './provisioners/deploy-provisioner-r2.js'
 import { createResendProvisioner } from './provisioners/deploy-provisioner-resend.js'
 import { createUpstashProvisioner } from './provisioners/deploy-provisioner-upstash.js'
 
-const logger = core.logger.child({ module: 'deploy' })
+const logger = core.logger.child({ module: 'deploy', scope: 'main' })
 
-// =============================================================================
-// 内部状态
-// =============================================================================
+// ─── 内部状态 ───
 
 let currentConfig: DeployConfig | null = null
 let currentProvider: DeployProvider | null = null
 const currentProvisioners: Map<ServiceType, ServiceProvisioner> = new Map()
 
-// =============================================================================
-// 未初始化错误辅助
-// =============================================================================
+// ─── 未初始化占位 ───
 
-const notInitializedError: DeployError = {
-  code: DeployErrorCode.NOT_INITIALIZED,
-  message: deployM('deploy_notInitialized'),
-}
+const notInitialized = core.module.createNotInitializedKit<DeployError>(
+  DeployErrorCode.NOT_INITIALIZED,
+  () => deployM('deploy_notInitialized'),
+)
 
-// =============================================================================
-// Provider 工厂
-// =============================================================================
+// ─── Provider 工厂 ───
 
 /**
  * 根据配置类型创建对应的 DeployProvider
@@ -79,9 +62,7 @@ function createProviderByType(type: string): DeployProvider {
   }
 }
 
-// =============================================================================
-// Provisioner 工厂
-// =============================================================================
+// ─── Provisioner 工厂 ───
 
 /**
  * 根据 provisioner 名称创建对应的 ServiceProvisioner
@@ -122,9 +103,7 @@ function extractCredentials(serviceConfig: Record<string, unknown>): Record<stri
   return result
 }
 
-// =============================================================================
-// 模块单例
-// =============================================================================
+// ─── 模块单例 ───
 
 /**
  * Deploy 模块单例
@@ -147,10 +126,18 @@ export const deploy: DeployFunctions = {
 
     logger.info('Initializing deploy module')
 
-    try {
-      // 解析并校验配置
-      const parsed = DeployConfigSchema.parse(config)
+    const parseResult = DeployConfigSchema.safeParse(config)
+    if (!parseResult.success) {
+      logger.error('Deploy config validation failed', { error: parseResult.error.message })
+      return err({
+        code: DeployErrorCode.CONFIG_ERROR,
+        message: deployM('deploy_configError', { params: { error: parseResult.error.message } }),
+        cause: parseResult.error,
+      })
+    }
+    const parsed = parseResult.data
 
+    try {
       // 创建 Provider
       const provider = createProviderByType(parsed.provider.type)
       const authResult = await provider.authenticate(parsed.provider.token)
@@ -235,7 +222,7 @@ export const deploy: DeployFunctions = {
 
   async provisionAll(projectName: string): Promise<Result<ProvisionResult[], DeployError>> {
     if (!currentProvider) {
-      return err(notInitializedError)
+      return notInitialized.result()
     }
 
     logger.info('Provisioning all services', { projectName, count: currentProvisioners.size })
@@ -264,7 +251,7 @@ export const deploy: DeployFunctions = {
     options?: DeployAppOptions,
   ): Promise<Result<DeployResult, DeployError>> {
     if (!currentProvider) {
-      return err(notInitializedError)
+      return notInitialized.result()
     }
 
     logger.info('Starting deployment', { appDir, options })

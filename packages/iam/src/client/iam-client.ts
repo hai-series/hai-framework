@@ -1,45 +1,15 @@
 /**
- * =============================================================================
- * @h-ai/iam - 前端 IAM 客户端
- * =============================================================================
+ * @h-ai/iam — 前端 IAM 客户端
  *
- * 提供前端通过 HTTP API 调用 IAM 服务的客户端实现。
- * 支持认证与用户管理等操作。
- *
- * @example
- * ```ts
- * import { createIamClient } from '@h-ai/iam/client'
- *
- * const client = createIamClient({
- *   baseUrl: '/api/iam',
- * })
- *
- * // 登录
- * const result = await client.login({
- *   identifier: 'admin',
- *   password: 'Password123',
- * })
- *
- * if (result.success) {
- *   // 保存令牌
- *   localStorage.setItem('accessToken', result.data.accessToken)
- * }
- *
- * // 获取当前用户
- * const user = await client.getCurrentUser()
- * ```
- *
- * @module client/iam-client
- * =============================================================================
+ * 提供前端通过 HTTP API 调用 IAM 服务的客户端实现。 支持认证与用户管理等操作。
+ * @module iam-client
  */
 
 import type { Result } from '@h-ai/core'
 import { err, ok } from '@h-ai/core'
 import { iamM } from '../iam-i18n.js'
 
-// =============================================================================
-// 类型定义
-// =============================================================================
+// ─── 类型定义 ───
 
 /**
  * API 路径配置
@@ -268,9 +238,7 @@ export interface IamClient {
   validatePassword: (password: string) => Promise<Result<void, IamClientError>>
 }
 
-// =============================================================================
-// 客户端实现
-// =============================================================================
+// ─── 客户端实现 ───
 
 /**
  * 创建 IAM 客户端
@@ -392,9 +360,7 @@ export function createIamClient(config: IamClientConfig): IamClient {
   }
 
   return {
-    // =========================================================================
-    // 认证操作
-    // =========================================================================
+    // ─── 认证操作 ───
 
     async login(credentials) {
       const result = await request<LoginResult>('POST', paths.login, credentials, { requireAuth: false })
@@ -438,9 +404,7 @@ export function createIamClient(config: IamClientConfig): IamClient {
       return await request<void>('POST', paths.logout)
     },
 
-    // =========================================================================
-    // 用户操作
-    // =========================================================================
+    // ─── 用户操作 ───
 
     async register(options) {
       const result = await request<RegisterResult>('POST', paths.register, options, { requireAuth: false })

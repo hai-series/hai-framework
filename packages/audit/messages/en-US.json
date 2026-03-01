@@ -5,5 +5,6 @@
   "audit_logFailed": "Failed to record audit log: {error}",
   "audit_queryFailed": "Failed to query audit logs: {error}",
   "audit_cleanupFailed": "Failed to cleanup audit logs: {error}",
-  "audit_statsFailed": "Failed to query audit statistics: {error}"
+  "audit_statsFailed": "Failed to query audit statistics: {error}",
+  "audit_configError": "Audit config validation failed: {error}"
 }

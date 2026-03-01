@@ -1,38 +1,15 @@
 /**
- * =============================================================================
- * @h-ai/core - Core 服务聚合（浏览器）
- * =============================================================================
- * 提供浏览器环境的 core 对象，聚合常用功能。
- * 所有功能统一通过 core 对象访问（不含 config 能力）。
+ * @h-ai/core — Core 服务聚合（浏览器）
  *
- * @example
- * ```ts
- * import { core } from '@h-ai/core'
- *
- * // 初始化（可选）
- * core.init({ logging: { level: 'debug' } })
- *
- * // 日志
- * core.logger.info('Hello')
- *
- * // ID 生成
- * const myId = core.id.generate()
- *
- * // 工具函数
- * core.typeUtils.isDefined(value)
- * core.object.deepMerge(a, b)
- * core.string.capitalize('hello')
- * ```
- * =============================================================================
+ * 提供浏览器环境的 core 对象，聚合常用功能。 所有功能统一通过 core 对象访问（不含 config 能力）。
+ * @module core-main.browser
  */
 
 import type { CoreOptions } from './core-types.js'
 import { createCore } from './core-main.js'
 import { logger } from './functions/core-function-logger.browser.js'
 
-// =============================================================================
-// Core 实例
-// =============================================================================
+// ─── Core 实例 ───
 
 /**
  * 创建 Browser 版本的 core 对象。

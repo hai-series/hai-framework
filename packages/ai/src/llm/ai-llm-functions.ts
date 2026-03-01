@@ -3,6 +3,7 @@
  *
  * 根据配置创建 OpenAI Provider，组装 LLM 操作接口。
  * 同时导出工具与流处理的纯函数包装器（不依赖配置，可独立使用）。
+ * @module ai-llm-functions
  */
 
 import type { AIConfig } from '../ai-config.js'

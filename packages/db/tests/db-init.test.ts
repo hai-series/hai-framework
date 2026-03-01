@@ -39,13 +39,13 @@ describe('db.init', () => {
       expect(db.config?.type).toBe('sqlite')
     })
 
-    it(`${label}: 无效配置应返回 CONNECTION_FAILED`, async () => {
+    it(`${label}: 无效配置应返回 CONFIG_ERROR`, async () => {
       await db.close()
 
       const result = await db.init({ type: 'invalid_type' } as never)
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.code).toBe(DbErrorCode.CONNECTION_FAILED)
+        expect(result.error.code).toBe(DbErrorCode.CONFIG_ERROR)
       }
     })
 

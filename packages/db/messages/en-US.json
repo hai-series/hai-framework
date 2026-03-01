@@ -37,5 +37,6 @@
   "db_mysqlTxExecuteHint": "In MySQL transaction, please use await tx.execute()",
   "db_crudEmptyPayload": "CRUD payload is empty, please provide data",
   "db_crudNoValidColumns": "CRUD payload has no valid columns",
-  "db_invalidIdentifier": "Invalid SQL identifier: {name} (only letters, digits and underscores allowed)"
+  "db_invalidIdentifier": "Invalid SQL identifier: {name} (only letters, digits and underscores allowed)",
+  "db_configError": "Database config validation failed: {error}"
 }

@@ -1,15 +1,8 @@
 /**
- * =============================================================================
- * @h-ai/cli - Skill 模板生成
- * =============================================================================
- * 将 Skill 模板文件复制到用户项目中，供 AI 编程助手使用。
+ * @h-ai/cli — Skill 模板生成
  *
- * 目录结构：
- * - `.github/skills/`        — Skill 文件（GitHub Copilot 标准位置）
- * - `.github/copilot-instructions.md` — GitHub Copilot 项目指引
- * - `CLAUDE.md`              — Claude Code 桥接文件
- * - `AGENTS.md`              — 通用 AI 助手桥接文件
- * =============================================================================
+ * 将 Skill 模板文件复制到用户项目中，供 AI 编程助手使用。
+ * @module skill-templates
  */
 
 import path from 'node:path'

@@ -1,28 +1,13 @@
 /**
- * =============================================================================
- * @h-ai/reach - 配置 Schema
- * =============================================================================
+ * @h-ai/reach — 配置 Schema
  *
  * 本文件定义触达模块的错误码、Zod Schema 和配置类型。
- *
- * 支持同时注册多个 Provider，每个 Provider 有唯一名称（name），
- * 发送时通过 `provider` 字段选择目标 Provider。
- *
- * 支持的 Provider 类型：
- * - `console` — 控制台输出（开发/测试用）
- * - `smtp` — SMTP 邮件发送
- * - `aliyun-sms` — 阿里云短信服务（直接调用 HTTP API，无需 SDK）
- * - `api` — HTTP API 回调（通用 webhook）
- *
  * @module reach-config
- * =============================================================================
  */
 
 import { z } from 'zod'
 
-// =============================================================================
-// 错误码常量
-// =============================================================================
+// ─── 错误码常量 ───
 
 /**
  * 触达模块错误码（数值范围 8000-8099）
@@ -62,9 +47,7 @@ export const ReachErrorCode = {
 /** 触达模块错误码类型 */
 export type ReachErrorCodeType = (typeof ReachErrorCode)[keyof typeof ReachErrorCode]
 
-// =============================================================================
-// 单个 Provider 配置 Schema
-// =============================================================================
+// ─── 单个 Provider 配置 Schema ───
 
 /**
  * Console Provider 配置（开发/测试用，将消息输出到日志）
@@ -192,9 +175,7 @@ export type AliyunSmsProviderConfig = z.infer<typeof AliyunSmsProviderConfigSche
 /** API 回调配置类型 */
 export type ApiProviderConfig = z.infer<typeof ApiProviderConfigSchema>
 
-// =============================================================================
-// DND（免打扰）配置 Schema
-// =============================================================================
+// ─── DND（免打扰）配置 Schema ───
 
 /**
  * 免打扰时间段配置
@@ -229,9 +210,7 @@ export const DndConfigSchema = z.object({
 /** DND 配置类型 */
 export type DndConfig = z.infer<typeof DndConfigSchema>
 
-// =============================================================================
-// 模板配置 Schema
-// =============================================================================
+// ─── 模板配置 Schema ───
 
 /**
  * 模板配置 Schema（通过配置文件定义模板）
@@ -259,9 +238,7 @@ export const TemplateConfigSchema = z.object({
 /** 模板配置类型 */
 export type TemplateConfig = z.infer<typeof TemplateConfigSchema>
 
-// =============================================================================
-// 模块配置 Schema
-// =============================================================================
+// ─── 模块配置 Schema ───
 
 /**
  * 触达模块配置 Schema

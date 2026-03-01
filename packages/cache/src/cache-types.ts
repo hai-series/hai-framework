@@ -1,3 +1,10 @@
+/**
+ * @h-ai/cache — 公共类型
+ *
+ * 定义缓存模块的对外接口类型。
+ * @module cache-types
+ */
+
 import type { Result } from '@h-ai/core'
 import type { CacheConfig, CacheConfigInput, CacheErrorCodeType } from './cache-config.js'
 

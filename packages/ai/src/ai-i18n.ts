@@ -4,6 +4,7 @@
  * 模块内部使用，不对外导出。
  *
  * @internal
+ * @module ai-i18n
  */
 
 import { core } from '@h-ai/core'

@@ -2,6 +2,7 @@
  * @h-ai/storage — Local Provider 实现
  *
  * 基于本地文件系统的存储 Provider。
+ * @module storage-provider-local
  */
 
 import type { Result } from '@h-ai/core'
@@ -28,9 +29,7 @@ import { StorageErrorCode } from '../storage-config.js'
 import { storageM } from '../storage-i18n.js'
 import { MIME_TYPE_DEFAULT, MIME_TYPES } from '../storage-mime.js'
 
-// =============================================================================
-// 辅助函数
-// =============================================================================
+// ─── 辅助函数 ───
 
 /**
  * 将 Node.js 文件系统错误转换为 StorageError
@@ -151,9 +150,7 @@ function safePath(root: string, key: string): string {
   return fullPath
 }
 
-// =============================================================================
-// Local Provider 实现
-// =============================================================================
+// ─── Local Provider 实现 ───
 
 /**
  * 创建本地存储 Provider

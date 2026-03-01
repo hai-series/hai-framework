@@ -5,5 +5,6 @@
   "audit_logFailed": "审计日志记录失败：{error}",
   "audit_queryFailed": "审计日志查询失败：{error}",
   "audit_cleanupFailed": "审计日志清理失败：{error}",
-  "audit_statsFailed": "审计统计查询失败：{error}"
+  "audit_statsFailed": "审计统计查询失败：{error}",
+  "audit_configError": "审计配置校验失败：{error}"
 }

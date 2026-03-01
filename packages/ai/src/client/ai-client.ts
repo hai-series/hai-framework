@@ -3,6 +3,7 @@
  *
  * 浏览器端 HTTP 客户端，零 Node.js 依赖。
  * 通过 `createAIClient()` 工厂函数创建。
+ * @module ai-client
  */
 
 import type {

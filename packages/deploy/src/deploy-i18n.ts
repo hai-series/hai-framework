@@ -1,26 +1,15 @@
 /**
- * =============================================================================
- * @h-ai/deploy - i18n
- * =============================================================================
+ * @h-ai/deploy — i18n
  *
  * 本文件提供部署模块的 i18n 文案访问入口。
- *
- * @example
- * ```ts
- * import { deployM } from '@h-ai/deploy'
- *
- * const message = deployM('deploy_notInitialized')
- * ```
- * =============================================================================
+ * @module deploy-i18n
  */
 
 import { core } from '@h-ai/core'
 import messagesEnUS from '../messages/en-US.json'
 import messagesZhCN from '../messages/zh-CN.json'
 
-// =============================================================================
-// i18n
-// =============================================================================
+// ─── i18n ───
 
 /** 部署模块文案 Key 类型 */
 type DeployMessageKey = keyof typeof messagesZhCN

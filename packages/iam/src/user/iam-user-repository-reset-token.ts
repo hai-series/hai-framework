@@ -1,18 +1,8 @@
 /**
- * =============================================================================
- * @h-ai/iam - 密码重置令牌存储实现
- * =============================================================================
+ * @h-ai/iam — 密码重置令牌存储实现
  *
- * 基于 @h-ai/cache 的密码重置令牌存储，通过 KV + Set 结构实现
- * 令牌的创建、查询、过期自动清理和使用标记等操作。
- *
- * 缓存键设计：
- * - `iam:reset:{hashedToken}` → ResetTokenRecord JSON（KV，TTL = tokenExpiresIn）
- * - `iam:reset:user:{userId}` → Set<hashedToken>（关联用户所有令牌，用于按用户删除）
- * - `iam:reset:id:{id}` → hashedToken（ID 反向索引，用于 incrementAttempts / markUsed）
- *
- * @module user/iam-user-repository-reset-token
- * =============================================================================
+ * 基于 @h-ai/cache 的密码重置令牌存储，通过 KV + Set 结构实现 令牌的创建、查询、过期自动清理和使用标记等操作。
+ * @module iam-user-repository-reset-token
  */
 
 import type { CacheFunctions } from '@h-ai/cache'
@@ -24,9 +14,7 @@ import { crypto as haiCrypto } from '@h-ai/crypto'
 import { IamErrorCode } from '../iam-config.js'
 import { iamM } from '../iam-i18n.js'
 
-// =============================================================================
-// 密码重置令牌类型
-// =============================================================================
+// ─── 密码重置令牌类型 ───
 
 /**
  * 密码重置令牌记录
@@ -113,9 +101,7 @@ export interface ResetTokenRepository {
   removeByUserId: (userId: string) => Promise<Result<void, IamError>>
 }
 
-// =============================================================================
-// 缓存键构建
-// =============================================================================
+// ─── 缓存键构建 ───
 
 /** 令牌缓存键前缀 */
 const RESET_TOKEN_KEY_PREFIX = 'iam:reset:'
@@ -171,9 +157,7 @@ function restoreRecordDates(record: ResetTokenRecord): ResetTokenRecord {
   }
 }
 
-// =============================================================================
-// 缓存实现
-// =============================================================================
+// ─── 缓存实现 ───
 
 /** 令牌存储单例缓存 */
 let resetTokenRepoInstance: ResetTokenRepository | null = null

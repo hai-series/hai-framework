@@ -2,11 +2,13 @@
  * @h-ai/ai — LLM 子功能类型
  *
  * 定义 LLM 消息、请求、响应、流、工具等公共类型。
+ * @module ai-llm-types
  */
 
 import type { Result } from '@h-ai/core'
 
-import type { AIConfig, AIError } from '../ai-config.js'
+import type { AIConfig } from '../ai-config.js'
+import type { AIError } from '../ai-types.js'
 
 // ─── 消息类型 ───
 

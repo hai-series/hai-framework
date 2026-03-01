@@ -1,24 +1,8 @@
 /**
- * =============================================================================
- * @h-ai/kit - Cookie 加密代理
- * =============================================================================
- * 通过 Proxy 拦截 SvelteKit Cookies 对象的 get/set 方法，
- * 对指定名称的 Cookie 自动进行 SM4-CBC 加解密。
+ * @h-ai/kit — Cookie 加密代理
  *
- * 应用层代码（包括 kit.session.setCookie）完全透明，无需感知加密细节。
- *
- * @example
- * ```ts
- * // 在 createHandle 内部使用
- * const proxied = createEncryptedCookieProxy(event.cookies, {
- *   names: new Set(['hai_session']),
- *   symmetric: crypto.symmetric,
- *   encryptionKey: '0123456789abcdef0123456789abcdef',
- * })
- * // 之后 proxied.set('hai_session', token) 会自动加密
- * // proxied.get('hai_session') 会自动解密
- * ```
- * =============================================================================
+ * 通过 Proxy 拦截 SvelteKit Cookies 对象的 get/set 方法， 对指定名称的 Cookie 自动进行 SM4-CBC 加解密。
+ * @module kit-cookie-proxy
  */
 
 import type { Cookies } from '@sveltejs/kit'

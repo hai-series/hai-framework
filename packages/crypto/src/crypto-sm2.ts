@@ -1,5 +1,11 @@
-import type { Result } from '@h-ai/core'
+/**
+ * @h-ai/crypto — SM2 非对称加密
+ *
+ * 提供 SM2 密钥对生成、加解密、签名与验签操作。
+ * @module crypto-sm2
+ */
 
+import type { Result } from '@h-ai/core'
 import type {
   AsymmetricEncryptOptions,
   AsymmetricOperations,

@@ -175,5 +175,8 @@
   "signature_copy_signature": "Copy signature",
   "signature_copy_public_key": "Copy public key",
   "theme_group_light": "Light Themes",
-  "theme_group_dark": "Dark Themes"
+  "theme_group_dark": "Dark Themes",
+  "markdown_copy_code": "Copy code",
+  "markdown_copied": "Copied",
+  "markdown_copy_failed": "Copy failed"
 }

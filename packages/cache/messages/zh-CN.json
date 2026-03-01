@@ -7,5 +7,6 @@
   "cache_unsupportedType": "不支持的缓存类型：{type}",
   "cache_valueNotNumber": "值不是数字",
   "cache_keyNotFound": "键不存在",
-  "cache_indexOutOfRange": "索引越界"
+  "cache_indexOutOfRange": "索引越界",
+  "cache_configError": "缓存配置校验失败：{error}"
 }
