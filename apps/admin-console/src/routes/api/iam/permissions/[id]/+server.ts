@@ -13,10 +13,10 @@ import { kit } from '@h-ai/kit'
 /**
  * DELETE /api/iam/permissions/[id] - 删除权限
  *
- * 需要权限：permission:manage
+ * 需要权限：permission:api:delete
  */
 export const DELETE = kit.handler(async ({ params, locals, request, getClientAddress }) => {
-  kit.guard.requirePermission(locals.session, 'permission:manage')
+  kit.guard.requirePermission(locals.session, 'permission:api:delete')
 
   const { id: permId } = kit.validate.paramsOrFail(params, IdParamSchema)
 
@@ -26,6 +26,11 @@ export const DELETE = kit.handler(async ({ params, locals, request, getClientAdd
     return kit.response.notFound(m.api_iam_permissions_not_found())
   }
 
+  // 系统权限不可删除
+  if (existing.is_system) {
+    return kit.response.badRequest(m.api_iam_permissions_system_cannot_delete())
+  }
+
   // 删除权限
   await permissionService.delete(permId)
 
@@ -33,7 +38,7 @@ export const DELETE = kit.handler(async ({ params, locals, request, getClientAdd
   const ip = getClientAddress()
   const ua = request.headers.get('user-agent') ?? undefined
   await audit.helper.crud(
-    locals.session?.userId ?? null,
+    locals.session!.userId,
     'delete',
     'permission',
     permId,

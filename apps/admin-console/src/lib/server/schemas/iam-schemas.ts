@@ -28,10 +28,13 @@ export const IdParamSchema = z.object({
   id: z.string().min(1, 'ID is required'),
 })
 
+/** 分页 pageSize 上限，防止一次性拉取全表造成 DoS */
+const MAX_PAGE_SIZE = 100
+
 /** 用户列表查询参数 Schema */
 export const ListUsersQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
-  pageSize: z.coerce.number().int().min(1).default(20),
+  pageSize: z.coerce.number().int().min(1).max(MAX_PAGE_SIZE).default(20),
   search: z.string().optional(),
   enabled: z
     .enum(['true', 'false'])
@@ -95,10 +98,34 @@ export const CreateRoleSchema = z.object({
   permissions: z.array(z.string()).optional(),
 })
 
+/** 更新角色请求 Schema */
+export const UpdateRoleSchema = z.object({
+  name: z.string().trim().min(1, m.api_iam_roles_name_required()).optional(),
+  description: z.string().optional(),
+  permissions: z.array(z.string()).optional(),
+})
+
+/** 权限列表查询参数 Schema */
+export const ListPermissionsQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(MAX_PAGE_SIZE).default(20),
+  search: z.string().optional(),
+  type: z.enum(['menu', 'api', 'button']).optional(),
+})
+
+/**
+ * 权限 resource / action 字段格式校验
+ *
+ * 仅允许小写字母、数字、下划线，禁止 `*` 等通配符字符，
+ * 防止通过创建 `resource:*` 等通配权限进行权限提升。
+ */
+const SAFE_IDENTIFIER = /^[a-z][a-z0-9_]*$/
+
 /** 创建权限请求 Schema */
 export const CreatePermissionSchema = z.object({
   name: z.string().trim().min(1, m.api_common_required_fields()),
   description: z.string().optional(),
-  resource: z.string().trim().min(1, m.api_common_required_fields()),
-  action: z.string().trim().min(1, m.api_common_required_fields()),
+  resource: z.string().trim().min(1, m.api_common_required_fields()).regex(SAFE_IDENTIFIER, m.api_common_invalid_format()),
+  action: z.string().trim().min(1, m.api_common_required_fields()).regex(SAFE_IDENTIFIER, m.api_common_invalid_format()),
+  type: z.enum(['menu', 'api', 'button']).optional(),
 })

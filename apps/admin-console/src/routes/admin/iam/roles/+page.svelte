@@ -3,9 +3,10 @@
 -->
 <script lang="ts">
   import type { PageData } from './$types'
-  import { invalidateAll } from '$app/navigation'
+  import { goto, invalidateAll } from '$app/navigation'
   import * as m from '$lib/paraglide/messages'
   import { apiFetch } from '$lib/utils/api'
+  import { usePermission } from '@h-ai/ui'
 
   interface RoleData {
     id: string
@@ -17,6 +18,7 @@
   }
 
   interface PermissionItem {
+    code: string
     name: string
   }
 
@@ -25,27 +27,73 @@
   interface Props {
     data: PageData & {
       roles: RoleData[]
+      total: number
+      page: number
+      pageSize: number
       permissions: PermissionsByResource
+      search: string
     }
   }
 
   let { data }: Props = $props()
 
-  // ─── 权限判断 ───
-  const userPermissions = $derived(data.user?.permissions ?? [])
-
-  /** 检查当前用户是否拥有指定权限 */
-  function hasPerm(permission: string): boolean {
-    for (const p of userPermissions) {
-      if (p === permission || p === '*') return true
-      if (p.endsWith(':*') && permission.startsWith(p.slice(0, -1))) return true
-    }
-    return false
-  }
+  // ─── 权限判断（使用上下文） ───
+  const { hasPerm } = usePermission()
 
   const canCreate = $derived(hasPerm('role:create'))
   const canUpdate = $derived(hasPerm('role:update'))
   const canDelete = $derived(hasPerm('role:delete'))
+
+  /** 权限 code → name 映射，用于将 code 显示为可读名称 */
+  const permNameMap = $derived.by(() => {
+    const map: Record<string, string> = {}
+    for (const perms of Object.values(data.permissions)) {
+      for (const p of perms) {
+        map[p.code] = p.name
+      }
+    }
+    return map
+  })
+
+  /** 搜索关键字 */
+  let searchQuery = $state('')
+
+  /** 搜索防抖定时器 */
+  let searchTimer: ReturnType<typeof setTimeout> | undefined
+
+  /** 当 data 更新时同步本地筛选状态 */
+  $effect(() => {
+    searchQuery = data.search
+  })
+
+  /** 构建带查询参数的 URL 并导航 */
+  function navigateWithParams(overrides: Record<string, string | number>) {
+    const params = new URLSearchParams()
+    const merged = {
+      search: searchQuery,
+      page: data.page,
+      pageSize: data.pageSize,
+      ...overrides,
+    }
+    if (merged.search) params.set('search', String(merged.search))
+    if (merged.page && merged.page !== 1) params.set('page', String(merged.page))
+    if (merged.pageSize && merged.pageSize !== 20) params.set('pageSize', String(merged.pageSize))
+    const qs = params.toString()
+    goto(`/admin/iam/roles${qs ? `?${qs}` : ''}`, { invalidateAll: true })
+  }
+
+  /** 搜索输入防抖 */
+  function handleSearchInput() {
+    clearTimeout(searchTimer)
+    searchTimer = setTimeout(() => {
+      navigateWithParams({ search: searchQuery, page: 1 })
+    }, 400)
+  }
+
+  /** 分页变更 */
+  function handlePageChange(newPage: number) {
+    navigateWithParams({ page: newPage })
+  }
 
   /** 新建/编辑对话框状态 */
   let showDialog = $state(false)
@@ -100,23 +148,23 @@
   }
 
   /** 切换权限选择 */
-  function togglePermission(permName: string) {
-    if (form.permissions.includes(permName)) {
-      form.permissions = form.permissions.filter((p) => p !== permName)
+  function togglePermission(permCode: string) {
+    if (form.permissions.includes(permCode)) {
+      form.permissions = form.permissions.filter((p) => p !== permCode)
     } else {
-      form.permissions = [...form.permissions, permName]
+      form.permissions = [...form.permissions, permCode]
     }
   }
 
   /** 切换资源组所有权限 */
   function toggleResourcePermissions(resource: string, permissions: PermissionItem[]) {
-    const permNames = permissions.map((p) => p.name)
-    const allSelected = permNames.every((p) => form.permissions.includes(p))
+    const permCodes = permissions.map((p) => p.code)
+    const allSelected = permCodes.every((p) => form.permissions.includes(p))
 
     if (allSelected) {
-      form.permissions = form.permissions.filter((p) => !permNames.includes(p))
+      form.permissions = form.permissions.filter((p) => !permCodes.includes(p))
     } else {
-      form.permissions = [...new Set([...form.permissions, ...permNames])]
+      form.permissions = [...new Set([...form.permissions, ...permCodes])]
     }
   }
 
@@ -207,6 +255,23 @@
     {/snippet}
   </PageHeader>
 
+  <!-- 搜索栏 -->
+  <Card>
+    <div class="p-4">
+      <div class="relative flex-1">
+        <span class="icon-[tabler--search] size-4.5 absolute left-3 top-1/2 -translate-y-1/2 text-base-content/35 z-10"></span>
+        <Input
+          type="text"
+          placeholder={m.iam_roles_search_placeholder()}
+          class="pl-10"
+          bind:value={searchQuery}
+          oninput={handleSearchInput}
+          autocomplete="off"
+        />
+      </div>
+    </div>
+  </Card>
+
   <!-- 角色列表 -->
   <div class="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
     {#each data.roles as role}
@@ -267,7 +332,7 @@
           {#if role.permissions.length > 0}
             <div class="flex flex-wrap gap-1 mt-2">
               {#each role.permissions.slice(0, 5) as perm}
-                <Badge variant="ghost" size="sm">{perm}</Badge>
+                <Badge variant="ghost" size="sm">{permNameMap[perm] ?? perm}</Badge>
               {/each}
               {#if role.permissions.length > 5}
                 <Badge variant="ghost" size="sm">+{role.permissions.length - 5}</Badge>
@@ -278,6 +343,20 @@
       </div>
     {/each}
   </div>
+
+  <!-- 分页 -->
+  {#if data.total > data.pageSize}
+    <div class="flex justify-center">
+      <Pagination
+        page={data.page}
+        total={data.total}
+        pageSize={data.pageSize}
+        size="sm"
+        showTotal
+        onchange={handlePageChange}
+      />
+    </div>
+  {/if}
 </div>
 
 <!-- 新建/编辑对话框 -->
@@ -335,11 +414,12 @@
                   class="flex w-full items-center justify-between px-4 py-2 bg-base-200/50 cursor-pointer hover:bg-base-200"
                   onclick={() => toggleResourcePermissions(resource, perms)}
                   ariaLabel={m.iam_roles_form_permissions()}
+                  disabled={editingRole?.isSystem}
                 >
                   <span class="font-medium capitalize">{resource}</span>
                   <Checkbox
                     size="sm"
-                    checked={perms.every((p) => form.permissions.includes(p.name))}
+                    checked={perms.every((p) => form.permissions.includes(p.code))}
                     readonly
                   />
                 </BareButton>
@@ -348,9 +428,9 @@
                     <label class="flex items-center gap-2 cursor-pointer">
                       <Checkbox
                         size="sm"
-                        checked={form.permissions.includes(perm.name)}
-                        onchange={() => togglePermission(perm.name)}
-                        disabled={submitting}
+                        checked={form.permissions.includes(perm.code)}
+                        onchange={() => togglePermission(perm.code)}
+                        disabled={submitting || editingRole?.isSystem}
                       />
                       <span class="text-sm">{perm.name}</span>
                     </label>

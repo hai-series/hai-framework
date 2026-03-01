@@ -78,7 +78,8 @@ async function validateSession(token: string) {
 
   const s = result.data
 
-  if (process.env.HAI_E2E === '1') {
+  // E2E 测试模式：仅在 NODE_ENV=test 时允许，防止生产环境误配导致权限提升
+  if (process.env.HAI_E2E === '1' && process.env.NODE_ENV === 'test') {
     return {
       userId: s.userId,
       username: s.username,
@@ -86,18 +87,35 @@ async function validateSession(token: string) {
       avatarUrl: s.avatarUrl,
       roles: ['admin'],
       permissions: [
+        'dashboard:view',
         'user:read',
+        'user:list',
         'user:create',
         'user:update',
         'user:delete',
+        'user:api:create',
+        'user:api:update',
+        'user:api:delete',
         'role:read',
+        'role:list',
         'role:create',
         'role:update',
         'role:delete',
+        'role:api:create',
+        'role:api:update',
+        'role:api:delete',
         'permission:read',
+        'permission:list',
         'permission:manage',
+        'permission:create',
+        'permission:delete',
+        'permission:api:create',
+        'permission:api:delete',
         'system:settings',
         'system:logs',
+        'system:modules',
+        'profile:read',
+        'audit:read',
       ],
     }
   }

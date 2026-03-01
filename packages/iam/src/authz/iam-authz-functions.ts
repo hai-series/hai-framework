@@ -17,6 +17,7 @@ import type { RoleRepository } from './iam-authz-repository-role.js'
 import type {
   IamAuthzFunctions,
   Permission,
+  PermissionQueryOptions,
   Role,
 } from './iam-authz-types.js'
 
@@ -593,8 +594,32 @@ function createRbacManager(config: RbacManagerConfig): IamAuthzFunctions {
       return ok(result.data)
     },
 
-    async getAllPermissions(options?: PaginationOptionsInput): Promise<Result<PaginatedResult<Permission>, IamError>> {
+    async getPermissionByCode(code): Promise<Result<Permission | null, IamError>> {
+      const result = await permissionRepository.findByCode(code)
+      if (!result.success) {
+        return mapRepositoryError('iam_queryPermissionFailed', result.error.message) as Result<Permission | null, IamError>
+      }
+      return ok(result.data)
+    },
+
+    async getAllPermissions(options?: PermissionQueryOptions): Promise<Result<PaginatedResult<Permission>, IamError>> {
+      const whereClauses: string[] = []
+      const whereParams: unknown[] = []
+
+      if (options?.type) {
+        whereClauses.push('type = ?')
+        whereParams.push(options.type)
+      }
+
+      if (options?.search) {
+        whereClauses.push('(code LIKE ? OR name LIKE ?)')
+        const pattern = `%${options.search}%`
+        whereParams.push(pattern, pattern)
+      }
+
       const result = await permissionRepository.findPage({
+        where: whereClauses.length > 0 ? whereClauses.join(' AND ') : undefined,
+        params: whereParams.length > 0 ? whereParams : undefined,
         orderBy: 'created_at DESC',
         pagination: options,
       })

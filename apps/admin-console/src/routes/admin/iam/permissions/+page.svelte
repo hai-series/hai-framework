@@ -1,12 +1,13 @@
 <!--
   Admin Console - 权限管理页面
-  权限按资源分组展示，支持搜索、CRUD、关联角色查看
+  支持分页、按类型筛选、搜索
 -->
 <script lang="ts">
   import * as m from '$lib/paraglide/messages'
-  import { invalidateAll } from '$app/navigation'
+  import { goto, invalidateAll } from '$app/navigation'
   import type { PageData } from './$types'
   import { apiFetch } from '$lib/utils/api'
+  import { usePermission } from '@h-ai/ui'
 
   interface PermissionItem {
     id: string
@@ -15,39 +16,77 @@
     description?: string | null
     resource?: string
     action?: string
+    type?: 'menu' | 'api' | 'button'
     is_system: boolean
   }
 
   interface Props {
     data: PageData & {
-      permissions: Record<string, PermissionItem[]>
+      permissions: PermissionItem[]
+      total: number
+      page: number
+      pageSize: number
       permissionRolesMap: Record<string, string[]>
       resources: string[]
       actions: string[]
+      search: string
+      type: string
     }
   }
 
   let { data }: Props = $props()
 
-  // ─── 权限判断 ───
-  const userPermissions = $derived(data.user?.permissions ?? [])
+  // ─── 权限判断（使用上下文） ───
+  const { hasPerm } = usePermission()
 
-  /** 检查当前用户是否拥有指定权限 */
-  function hasPerm(permission: string): boolean {
-    for (const p of userPermissions) {
-      if (p === permission || p === '*') return true
-      if (p.endsWith(':*') && permission.startsWith(p.slice(0, -1))) return true
-    }
-    return false
-  }
-
-  const canManage = $derived(hasPerm('permission:manage'))
+  const canCreate = $derived(hasPerm('permission:create'))
+  const canDelete = $derived(hasPerm('permission:delete'))
 
   /** 搜索关键字 */
   let searchQuery = $state('')
 
   /** 类型筛选 */
   let typeFilter = $state('')
+
+  /** 搜索防抖定时器 */
+  let searchTimer: ReturnType<typeof setTimeout> | undefined
+
+  /** 当 data 更新时同步本地筛选状态 */
+  $effect(() => {
+    searchQuery = data.search
+    typeFilter = data.type
+  })
+
+  /** 构建带查询参数的 URL 并导航 */
+  function navigateWithParams(overrides: Record<string, string | number>) {
+    const params = new URLSearchParams()
+    const merged = {
+      search: searchQuery,
+      type: typeFilter,
+      page: data.page,
+      pageSize: data.pageSize,
+      ...overrides,
+    }
+    if (merged.search) params.set('search', String(merged.search))
+    if (merged.type) params.set('type', String(merged.type))
+    if (merged.page && merged.page !== 1) params.set('page', String(merged.page))
+    if (merged.pageSize && merged.pageSize !== 20) params.set('pageSize', String(merged.pageSize))
+    const qs = params.toString()
+    goto(`/admin/iam/permissions${qs ? `?${qs}` : ''}`, { invalidateAll: true })
+  }
+
+  /** 搜索输入防抖 */
+  function handleSearchInput() {
+    clearTimeout(searchTimer)
+    searchTimer = setTimeout(() => {
+      navigateWithParams({ search: searchQuery, page: 1 })
+    }, 400)
+  }
+
+  /** 分页变更 */
+  function handlePageChange(newPage: number) {
+    navigateWithParams({ page: newPage })
+  }
 
   /** 新建对话框状态 */
   let showDialog = $state(false)
@@ -65,53 +104,9 @@
   let submitting = $state(false)
   let error = $state('')
 
-  /** 计算权限总数 */
-  const totalPermissions = $derived(
-    Object.values(data.permissions).reduce((sum, perms) => sum + perms.length, 0),
-  )
-
-  /**
-   * 根据 resource + action 推断权限类型
-   *
-   * 分类规则：
-   * - menu: resource 以 menu 开头，或 action 为 read（用于菜单/导航可见性控制）
-   * - button: resource 以 btn/button 开头，或 action 为 create/update/delete（用于操作按钮控制）
-   * - api: 其他（如 manage/settings/logs 等系统级权限）
-   */
-  function getPermType(resource?: string, action?: string): 'menu' | 'button' | 'api' {
-    const r = (resource ?? '').toLowerCase()
-    const a = (action ?? '').toLowerCase()
-    // 显式前缀优先
-    if (r === 'menu' || r.startsWith('menu:') || r.startsWith('menu_')) return 'menu'
-    if (r === 'btn' || r === 'button' || r.startsWith('btn:') || r.startsWith('btn_') || r.startsWith('button:')) return 'button'
-    // 按 action 推断
-    if (a === 'read') return 'menu'
-    if (a === 'create' || a === 'update' || a === 'delete') return 'button'
-    return 'api'
-  }
-
-  /** 搜索过滤后的权限分组 */
-  const filteredPermissions = $derived.by(() => {
-    const result: Record<string, PermissionItem[]> = {}
-    const q = searchQuery.toLowerCase().trim()
-    for (const [resource, perms] of Object.entries(data.permissions)) {
-      const filtered = perms.filter((p) => {
-        // 类型筛选
-        if (typeFilter && getPermType(p.resource, p.action) !== typeFilter) return false
-        // 关键字搜索
-        if (q) {
-          return p.name.toLowerCase().includes(q) || p.code.toLowerCase().includes(q) || (p.description ?? '').toLowerCase().includes(q)
-        }
-        return true
-      })
-      if (filtered.length > 0) result[resource] = filtered
-    }
-    return result
-  })
-
   /** 获取权限关联角色 */
-  function getRoles(permName: string): string[] {
-    return data.permissionRolesMap[permName] ?? []
+  function getRoles(permCode: string): string[] {
+    return data.permissionRolesMap[permCode] ?? []
   }
 
   /** 打开新建对话框 */
@@ -211,7 +206,7 @@
   <!-- 页面标题 -->
   <PageHeader title={m.iam_permissions_title()} description={m.iam_permissions_subtitle()}>
     {#snippet actions()}
-      {#if canManage}
+      {#if canCreate}
         <Button variant="primary" class="gap-2" onclick={openCreateDialog}>
           <span class="icon-[tabler--plus] size-4.5"></span>
           {m.iam_permissions_create()}
@@ -224,7 +219,7 @@
   <div class="grid gap-3 grid-cols-2 lg:grid-cols-4">
     <div class="bg-base-100 rounded-xl border border-base-content/6 p-4">
       <p class="text-xs text-base-content/45">{m.iam_permissions_stat_total()}</p>
-      <p class="text-2xl font-bold text-primary mt-1 tabular-nums">{totalPermissions}</p>
+      <p class="text-2xl font-bold text-primary mt-1 tabular-nums">{data.total}</p>
     </div>
     <div class="bg-base-100 rounded-xl border border-base-content/6 p-4">
       <p class="text-xs text-base-content/45">{m.iam_permissions_stat_resources()}</p>
@@ -237,7 +232,7 @@
     <div class="bg-base-100 rounded-xl border border-base-content/6 p-4">
       <p class="text-xs text-base-content/45">{m.iam_permissions_stat_system()}</p>
       <p class="text-2xl font-bold text-secondary mt-1 tabular-nums">
-        {Object.values(data.permissions).flat().filter((p) => p.is_system).length}
+        {data.permissions.filter((p) => p.is_system).length}
       </p>
     </div>
   </div>
@@ -252,6 +247,7 @@
           placeholder={m.iam_permissions_search_placeholder()}
           class="pl-10"
           bind:value={searchQuery}
+          oninput={handleSearchInput}
           autocomplete="off"
         />
       </div>
@@ -259,6 +255,7 @@
         size="md"
         class="w-full sm:w-40"
         bind:value={typeFilter}
+        onchange={() => navigateWithParams({ type: typeFilter, page: 1 })}
       >
         <option value="">{m.iam_permissions_filter_all_types()}</option>
         <option value="menu">{m.iam_permissions_type_menu()}</option>
@@ -268,106 +265,108 @@
     </div>
   </Card>
 
-  <!-- 权限列表（按资源分组） -->
-  <div class="space-y-4">
-    {#each Object.entries(filteredPermissions) as [resource, perms]}
-      <Card>
-        <div class="p-4">
-          <h3 class="text-sm font-semibold flex items-center gap-2 mb-3">
-            <span class="icon-[tabler--folder] size-4 text-base-content/40"></span>
-            <span class="capitalize">{resource}</span>
-            <Badge size="sm" outline>{perms.length}</Badge>
-          </h3>
-
-          <div class="overflow-x-auto">
-            <table class="w-full text-[13px]">
-              <thead>
-                <tr class="border-b border-base-content/6">
-                  <th class="px-4 py-3 text-left text-xs font-semibold text-base-content/50 uppercase tracking-wider">{m.iam_permissions_col_name()}</th>
-                  <th class="px-4 py-3 text-left text-xs font-semibold text-base-content/50 uppercase tracking-wider">{m.iam_permissions_col_code()}</th>
-                  <th class="px-4 py-3 text-left text-xs font-semibold text-base-content/50 uppercase tracking-wider">{m.iam_permissions_form_action()}</th>
-                  <th class="px-4 py-3 text-left text-xs font-semibold text-base-content/50 uppercase tracking-wider">{m.iam_permissions_col_description()}</th>
-                  <th class="px-4 py-3 text-left text-xs font-semibold text-base-content/50 uppercase tracking-wider">{m.iam_permissions_col_type()}</th>
-                  <th class="px-4 py-3 text-left text-xs font-semibold text-base-content/50 uppercase tracking-wider">{m.iam_permissions_col_roles()}</th>
-                  {#if canManage}
-                    <th class="px-4 py-3 text-right text-xs font-semibold text-base-content/50 uppercase tracking-wider">{m.iam_permissions_col_actions()}</th>
-                  {/if}
-                </tr>
-              </thead>
-              <tbody class="divide-y divide-base-content/5">
-                {#each perms as perm}
-                  {@const linkedRoles = getRoles(perm.name)}
-                  <tr class="hover:bg-base-200/30 transition-colors">
-                    <td class="px-4 py-3 font-medium text-base-content">{perm.name}</td>
-                    <td class="px-4 py-3">
-                      <code class="text-xs bg-base-content/5 px-1.5 py-0.5 rounded font-mono">{perm.code}</code>
-                    </td>
-                    <td class="px-4 py-3">
-                      {#if perm.action}
-                        <Badge size="sm" outline>{perm.action}</Badge>
-                      {:else}
-                        <span class="text-base-content/30">-</span>
-                      {/if}
-                    </td>
-                    <td class="px-4 py-3 text-base-content/60 text-sm max-w-48 truncate">
-                      {perm.description ?? '-'}
-                    </td>
-                    <td class="px-4 py-3">
-                      {#if getPermType(perm.resource, perm.action) === 'menu'}
-                        <Badge variant="primary" size="sm">{m.iam_permissions_type_menu()}</Badge>
-                      {:else if getPermType(perm.resource, perm.action) === 'button'}
-                        <Badge variant="warning" size="sm">{m.iam_permissions_type_button()}</Badge>
-                      {:else}
-                        <Badge variant="ghost" size="sm">{m.iam_permissions_type_api()}</Badge>
-                      {/if}
-                      {#if perm.is_system}
-                        <Badge variant="secondary" size="sm" class="ml-1">{m.iam_permissions_type_system()}</Badge>
-                      {/if}
-                    </td>
-                    <td class="px-4 py-3">
-                      {#if linkedRoles.length > 0}
-                        <div class="flex flex-wrap gap-1">
-                          {#each linkedRoles.slice(0, 3) as roleName}
-                            <Badge variant="ghost" size="sm">{roleName}</Badge>
-                          {/each}
-                          {#if linkedRoles.length > 3}
-                            <Badge variant="ghost" size="sm">+{linkedRoles.length - 3}</Badge>
-                          {/if}
-                        </div>
-                      {:else}
-                        <span class="text-xs text-base-content/30">{m.iam_permissions_no_roles()}</span>
-                      {/if}
-                    </td>
-                    {#if canManage}
-                      <td class="px-4 py-3 text-right">
-                        {#if !perm.is_system}
-                          <IconButton
-                            size="xs"
-                            class="btn-ghost text-error"
-                            ariaLabel={m.action_delete()}
-                            onclick={() => handleDelete(perm)}
-                          >
-                            <span class="icon-[tabler--trash] size-3.5"></span>
-                          </IconButton>
-                        {/if}
-                      </td>
+  <!-- 权限列表（扁平分页） -->
+  <Card>
+    <div class="overflow-x-auto">
+      <table class="w-full text-[13px]">
+        <thead>
+          <tr class="border-b border-base-content/6">
+            <th class="px-4 py-3 text-left text-xs font-semibold text-base-content/50 uppercase tracking-wider">{m.iam_permissions_col_name()}</th>
+            <th class="px-4 py-3 text-left text-xs font-semibold text-base-content/50 uppercase tracking-wider">{m.iam_permissions_col_code()}</th>
+            <th class="px-4 py-3 text-left text-xs font-semibold text-base-content/50 uppercase tracking-wider">{m.iam_permissions_form_action()}</th>
+            <th class="px-4 py-3 text-left text-xs font-semibold text-base-content/50 uppercase tracking-wider">{m.iam_permissions_col_description()}</th>
+            <th class="px-4 py-3 text-left text-xs font-semibold text-base-content/50 uppercase tracking-wider">{m.iam_permissions_col_type()}</th>
+            <th class="px-4 py-3 text-left text-xs font-semibold text-base-content/50 uppercase tracking-wider">{m.iam_permissions_col_roles()}</th>
+            {#if canDelete}
+              <th class="px-4 py-3 text-right text-xs font-semibold text-base-content/50 uppercase tracking-wider">{m.iam_permissions_col_actions()}</th>
+            {/if}
+          </tr>
+        </thead>
+        <tbody class="divide-y divide-base-content/5">
+          {#each data.permissions as perm}
+            {@const linkedRoles = getRoles(perm.code)}
+            <tr class="hover:bg-base-200/30 transition-colors">
+              <td class="px-4 py-3 font-medium text-base-content">{perm.name}</td>
+              <td class="px-4 py-3">
+                <code class="text-xs bg-base-content/5 px-1.5 py-0.5 rounded font-mono">{perm.code}</code>
+              </td>
+              <td class="px-4 py-3">
+                {#if perm.action}
+                  <Badge size="sm" outline>{perm.action}</Badge>
+                {:else}
+                  <span class="text-base-content/30">-</span>
+                {/if}
+              </td>
+              <td class="px-4 py-3 text-base-content/60 text-sm max-w-48 truncate">
+                {perm.description ?? '-'}
+              </td>
+              <td class="px-4 py-3">
+                {#if perm.type === 'menu'}
+                  <Badge variant="primary" size="sm">{m.iam_permissions_type_menu()}</Badge>
+                {:else if perm.type === 'button'}
+                  <Badge variant="warning" size="sm">{m.iam_permissions_type_button()}</Badge>
+                {:else}
+                  <Badge variant="ghost" size="sm">{m.iam_permissions_type_api()}</Badge>
+                {/if}
+                {#if perm.is_system}
+                  <Badge variant="secondary" size="sm" class="ml-1">{m.iam_permissions_type_system()}</Badge>
+                {/if}
+              </td>
+              <td class="px-4 py-3">
+                {#if linkedRoles.length > 0}
+                  <div class="flex flex-wrap gap-1">
+                    {#each linkedRoles.slice(0, 3) as roleName}
+                      <Badge variant="ghost" size="sm">{roleName}</Badge>
+                    {/each}
+                    {#if linkedRoles.length > 3}
+                      <Badge variant="ghost" size="sm">+{linkedRoles.length - 3}</Badge>
                     {/if}
-                  </tr>
-                {/each}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </Card>
-    {:else}
-      <Card>
-        <div class="p-8 text-center text-base-content/30">
-          <span class="icon-[tabler--key] size-12 mx-auto text-base-content/15 block mb-3"></span>
-          {m.common_no_data()}
-        </div>
-      </Card>
-    {/each}
-  </div>
+                  </div>
+                {:else}
+                  <span class="text-xs text-base-content/30">{m.iam_permissions_no_roles()}</span>
+                {/if}
+              </td>
+              {#if canDelete}
+                <td class="px-4 py-3 text-right">
+                  {#if !perm.is_system}
+                    <IconButton
+                      size="xs"
+                      class="btn-ghost text-error"
+                      ariaLabel={m.action_delete()}
+                      onclick={() => handleDelete(perm)}
+                    >
+                      <span class="icon-[tabler--trash] size-3.5"></span>
+                    </IconButton>
+                  {/if}
+                </td>
+              {/if}
+            </tr>
+          {:else}
+            <tr>
+              <td colspan="7" class="p-8 text-center text-base-content/30">
+                <span class="icon-[tabler--key] size-12 mx-auto text-base-content/15 block mb-3"></span>
+                {m.common_no_data()}
+              </td>
+            </tr>
+          {/each}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- 分页 -->
+    {#if data.total > data.pageSize}
+      <div class="flex justify-center p-4 border-t border-base-content/5">
+        <Pagination
+          page={data.page}
+          total={data.total}
+          pageSize={data.pageSize}
+          size="sm"
+          showTotal
+          onchange={handlePageChange}
+        />
+      </div>
+    {/if}
+  </Card>
 </div>
 
 <!-- 新建对话框 -->

@@ -12,10 +12,10 @@ import { kit } from '@h-ai/kit'
 /**
  * GET /api/iam/roles - 获取角色列表
  *
- * 需要权限：role:read
+ * 需要权限：role:list
  */
 export const GET = kit.handler(async ({ locals }) => {
-  kit.guard.requirePermission(locals.session, 'role:read')
+  kit.guard.requirePermission(locals.session, 'role:list')
 
   const roles = await roleService.list()
   return kit.response.ok(roles)
@@ -24,21 +24,21 @@ export const GET = kit.handler(async ({ locals }) => {
 /**
  * POST /api/iam/roles - 创建角色
  *
- * 需要权限：role:create
+ * 需要权限：role:api:create
  */
 export const POST = kit.handler(async ({ request, locals, getClientAddress }) => {
-  kit.guard.requirePermission(locals.session, 'role:create')
+  kit.guard.requirePermission(locals.session, 'role:api:create')
 
   const { name, description, permissions } = await kit.validate.formOrFail(request, CreateRoleSchema)
 
-  // 生成角色 code（将名称转为 snake_case）
-  const code = `role_${name.toLowerCase().replace(/\s+/g, '_')}`
+  // 生成角色 code：仅保留字母、数字、下划线，防止特殊字符注入
+  const code = `role_${name.toLowerCase().replace(/[^a-z0-9_]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '')}`
 
   // 转换权限名称为 ID
   const permissionIds: string[] = []
   if (permissions?.length) {
-    for (const permName of permissions) {
-      const perm = await permissionService.getByName(permName)
+    for (const permCode of permissions) {
+      const perm = await permissionService.getByCode(permCode)
       if (perm) {
         permissionIds.push(perm.id)
       }
@@ -57,7 +57,7 @@ export const POST = kit.handler(async ({ request, locals, getClientAddress }) =>
   const ip = getClientAddress()
   const ua = request.headers.get('user-agent') ?? undefined
   await audit.helper.crud(
-    locals.session?.userId ?? null,
+    locals.session!.userId,
     'create',
     'role',
     role.id,

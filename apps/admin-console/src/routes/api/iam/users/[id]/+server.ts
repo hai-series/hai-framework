@@ -15,10 +15,10 @@ import { kit } from '@h-ai/kit'
 /**
  * GET /api/iam/users/[id] - 获取单个用户
  *
- * 需要权限：user:read
+ * 需要权限：user:list
  */
 export const GET = kit.handler(async ({ params, locals }) => {
-  kit.guard.requirePermission(locals.session, 'user:read')
+  kit.guard.requirePermission(locals.session, 'user:list')
 
   const { id } = kit.validate.paramsOrFail(params, IdParamSchema)
 
@@ -33,10 +33,10 @@ export const GET = kit.handler(async ({ params, locals }) => {
 /**
  * PUT /api/iam/users/[id] - 更新用户
  *
- * 需要权限：user:update
+ * 需要权限：user:api:update
  */
 export const PUT = kit.handler(async ({ params, request, locals, getClientAddress }) => {
-  kit.guard.requirePermission(locals.session, 'user:update')
+  kit.guard.requirePermission(locals.session, 'user:api:update')
 
   const { id: userId } = kit.validate.paramsOrFail(params, IdParamSchema)
   const { username, email, password, display_name, roles, status } = await kit.validate.formOrFail(request, createUpdateUserSchema())
@@ -94,15 +94,15 @@ export const PUT = kit.handler(async ({ params, request, locals, getClientAddres
     }
   }
 
-  // 记录审计日志
+  // 记录审计日志（包含密码重置标记）
   const ip = getClientAddress()
   const ua = request.headers.get('user-agent') ?? undefined
   await audit.helper.crud(
-    locals.session?.userId ?? null,
+    locals.session!.userId,
     'update',
     'user',
     userId,
-    { username, email },
+    { username, email, passwordReset: !!password },
     ip,
     ua,
   )
@@ -119,10 +119,10 @@ export const PUT = kit.handler(async ({ params, request, locals, getClientAddres
 /**
  * DELETE /api/iam/users/[id] - 删除用户
  *
- * 需要权限：user:delete
+ * 需要权限：user:api:delete
  */
 export const DELETE = kit.handler(async ({ params, locals, request, getClientAddress }) => {
-  kit.guard.requirePermission(locals.session, 'user:delete')
+  kit.guard.requirePermission(locals.session, 'user:api:delete')
 
   const { id: userId } = kit.validate.paramsOrFail(params, IdParamSchema)
 
@@ -133,7 +133,7 @@ export const DELETE = kit.handler(async ({ params, locals, request, getClientAdd
   }
 
   // 禁止删除自己（此路由受 auth guard 保护，session 必定存在）
-  const currentUserId = locals.session?.userId
+  const currentUserId = locals.session!.userId
 
   if (currentUserId === userId) {
     return kit.response.badRequest(m.api_iam_users_cannot_delete_self())
@@ -163,7 +163,7 @@ export const DELETE = kit.handler(async ({ params, locals, request, getClientAdd
   const ip = getClientAddress()
   const ua = request.headers.get('user-agent') ?? undefined
   await audit.helper.crud(
-    locals.session?.userId ?? null,
+    locals.session!.userId,
     'delete',
     'user',
     userId,

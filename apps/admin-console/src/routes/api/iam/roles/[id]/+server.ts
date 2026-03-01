@@ -5,7 +5,7 @@
  */
 
 import * as m from '$lib/paraglide/messages.js'
-import { IdParamSchema } from '$lib/server/schemas/index.js'
+import { IdParamSchema, UpdateRoleSchema } from '$lib/server/schemas/index.js'
 import { permissionService, roleService } from '$lib/server/services/index.js'
 import { audit } from '@h-ai/audit'
 import { kit } from '@h-ai/kit'
@@ -13,10 +13,10 @@ import { kit } from '@h-ai/kit'
 /**
  * GET /api/iam/roles/[id] - 获取单个角色
  *
- * 需要权限：role:read
+ * 需要权限：role:list
  */
 export const GET = kit.handler(async ({ params, locals }) => {
-  kit.guard.requirePermission(locals.session, 'role:read')
+  kit.guard.requirePermission(locals.session, 'role:list')
 
   const { id } = kit.validate.paramsOrFail(params, IdParamSchema)
 
@@ -30,18 +30,13 @@ export const GET = kit.handler(async ({ params, locals }) => {
 /**
  * PUT /api/iam/roles/[id] - 更新角色
  *
- * 需要权限：role:update
+ * 需要权限：role:api:update
  */
 export const PUT = kit.handler(async ({ params, request, locals, getClientAddress }) => {
-  kit.guard.requirePermission(locals.session, 'role:update')
+  kit.guard.requirePermission(locals.session, 'role:api:update')
 
   const { id: roleId } = kit.validate.paramsOrFail(params, IdParamSchema)
-  const body = await request.json()
-  const { name, description, permissions } = body as {
-    name?: string
-    description?: string
-    permissions?: string[]
-  }
+  const input = await kit.validate.formOrFail(request, UpdateRoleSchema)
 
   // 检查角色是否存在
   const existing = await roleService.getById(roleId)
@@ -49,12 +44,12 @@ export const PUT = kit.handler(async ({ params, request, locals, getClientAddres
     return kit.response.notFound(m.api_iam_roles_not_found())
   }
 
-  // 转换权限名称为 ID
+  // 转换权限代码为 ID
   let permissionIds: string[] | undefined
-  if (permissions !== undefined) {
+  if (input.permissions !== undefined) {
     permissionIds = []
-    for (const permName of permissions) {
-      const perm = await permissionService.getByName(permName)
+    for (const permCode of input.permissions) {
+      const perm = await permissionService.getByCode(permCode)
       if (perm) {
         permissionIds.push(perm.id)
       }
@@ -63,8 +58,8 @@ export const PUT = kit.handler(async ({ params, request, locals, getClientAddres
 
   // 更新角色
   const role = await roleService.update(roleId, {
-    name,
-    description,
+    name: input.name,
+    description: input.description,
     permissions: permissionIds,
   })
 
@@ -72,11 +67,11 @@ export const PUT = kit.handler(async ({ params, request, locals, getClientAddres
   const ip = getClientAddress()
   const ua = request.headers.get('user-agent') ?? undefined
   await audit.helper.crud(
-    locals.session?.userId ?? null,
+    locals.session!.userId,
     'update',
     'role',
     roleId,
-    { name, permissions },
+    { name: input.name, permissions: input.permissions },
     ip,
     ua,
   )
@@ -87,10 +82,10 @@ export const PUT = kit.handler(async ({ params, request, locals, getClientAddres
 /**
  * DELETE /api/iam/roles/[id] - 删除角色
  *
- * 需要权限：role:delete
+ * 需要权限：role:api:delete
  */
 export const DELETE = kit.handler(async ({ params, locals, request, getClientAddress }) => {
-  kit.guard.requirePermission(locals.session, 'role:delete')
+  kit.guard.requirePermission(locals.session, 'role:api:delete')
 
   const { id: roleId } = kit.validate.paramsOrFail(params, IdParamSchema)
 
@@ -107,7 +102,7 @@ export const DELETE = kit.handler(async ({ params, locals, request, getClientAdd
   const ip = getClientAddress()
   const ua = request.headers.get('user-agent') ?? undefined
   await audit.helper.crud(
-    locals.session?.userId ?? null,
+    locals.session!.userId,
     'delete',
     'role',
     roleId,

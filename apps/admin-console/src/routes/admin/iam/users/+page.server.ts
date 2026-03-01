@@ -43,7 +43,7 @@ export const load: PageServerLoad = async ({ url, locals }) => {
   }
 
   const page = parsePositiveInt(url.searchParams.get('page'), 1)
-  const pageSize = parsePositiveInt(url.searchParams.get('pageSize'), 20)
+  const pageSize = Math.min(parsePositiveInt(url.searchParams.get('pageSize'), 20), 100)
   const search = url.searchParams.get('search') || undefined
   const statusParam = url.searchParams.get('status') || undefined
   const roleFilter = url.searchParams.get('role') || undefined
