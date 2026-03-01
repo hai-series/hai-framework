@@ -6,6 +6,7 @@
   import { goto, invalidateAll } from '$app/navigation'
   import * as m from '$lib/paraglide/messages'
   import { apiFetch } from '$lib/utils/api'
+  import { usePermission } from '@h-ai/ui'
 
   // 定义本地类型（与 page.server.ts 中的 UserData 一致）
   interface UserData {
@@ -41,17 +42,8 @@
 
   let { data }: Props = $props()
 
-  // ─── 权限判断 ───
-  const userPermissions = $derived(data.user?.permissions ?? [])
-
-  /** 检查当前用户是否拥有指定权限 */
-  function hasPerm(permission: string): boolean {
-    for (const p of userPermissions) {
-      if (p === permission || p === '*') return true
-      if (p.endsWith(':*') && permission.startsWith(p.slice(0, -1))) return true
-    }
-    return false
-  }
+  // ─── 权限判断（使用上下文） ───
+  const { hasPerm } = usePermission()
 
   const canCreate = $derived(hasPerm('user:create'))
   const canUpdate = $derived(hasPerm('user:update'))

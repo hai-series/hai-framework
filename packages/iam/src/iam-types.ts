@@ -160,6 +160,6 @@ export interface IamFunctions {
 // ─── 子功能类型 re-export ───
 
 export type { AuthStrategy, Credentials, IamAuthnFunctions, LdapCredentials, OtpCredentials, PasswordCredentials } from './authn/iam-authn-types.js'
-export type { IamAuthzFunctions, Permission, Role, RolePermission, UserRole } from './authz/iam-authz-types.js'
+export type { IamAuthzFunctions, Permission, PermissionQueryOptions, PermissionType, Role, RolePermission, UserRole } from './authz/iam-authz-types.js'
 export type { AuthResult, CreateSessionOptions, IamSessionFunctions, Session } from './session/iam-session-types.js'
 export type { AgreementDisplay, IamUserFunctions, ListUsersOptions, RegisterOptions, RegisterResult, StoredUser, UpdateCurrentUserInput, User } from './user/iam-user-types.js'

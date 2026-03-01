@@ -14,7 +14,7 @@ import { kit } from '@h-ai/kit'
 /**
  * GET /api/iam/users - 获取用户列表
  *
- * 需要权限：user:read
+ * 需要权限：user:list
  *
  * 支持分页、搜索关键字和启用状态过滤。
  *
@@ -25,7 +25,7 @@ import { kit } from '@h-ai/kit'
  * - enabled: 启用状态过滤（true/false，不传则返回全部）
  */
 export const GET = kit.handler(async ({ url, locals }) => {
-  kit.guard.requirePermission(locals.session, 'user:read')
+  kit.guard.requirePermission(locals.session, 'user:list')
 
   const { page, pageSize, search, enabled } = kit.validate.queryOrFail(url, ListUsersQuerySchema)
 
@@ -45,10 +45,10 @@ export const GET = kit.handler(async ({ url, locals }) => {
 /**
  * POST /api/iam/users - 创建用户
  *
- * 需要权限：user:create
+ * 需要权限：user:api:create
  */
 export const POST = kit.handler(async ({ request, locals, getClientAddress }) => {
-  kit.guard.requirePermission(locals.session, 'user:create')
+  kit.guard.requirePermission(locals.session, 'user:api:create')
 
   const { username, email, password, roles, status } = await kit.validate.formOrFail(request, createCreateUserSchema())
 
@@ -86,7 +86,7 @@ export const POST = kit.handler(async ({ request, locals, getClientAddress }) =>
   const ua = request.headers.get('user-agent') ?? undefined
   const [, userResponse] = await Promise.all([
     audit.helper.crud(
-      locals.session?.userId ?? null,
+      locals.session!.userId,
       'create',
       'user',
       user.id,

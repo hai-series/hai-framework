@@ -11,6 +11,27 @@ import type { IamError } from '../iam-types.js'
 // ─── 授权类型（RBAC） ───
 
 /**
+ * 权限类型
+ *
+ * - menu：菜单/导航可见性控制
+ * - api：接口级访问控制
+ * - button：操作按钮显隐控制
+ */
+export type PermissionType = 'menu' | 'api' | 'button'
+
+/**
+ * 权限查询参数
+ *
+ * 扩展分页参数，支持按类型和关键字筛选。
+ */
+export interface PermissionQueryOptions extends PaginationOptionsInput {
+  /** 按权限类型筛选 */
+  type?: PermissionType
+  /** 按关键字搜索（匹配 code 或 name） */
+  search?: string
+}
+
+/**
  * 权限
  */
 export interface Permission {
@@ -22,6 +43,8 @@ export interface Permission {
   name: string
   /** 权限描述 */
   description?: string
+  /** 权限类型（menu / api / button） */
+  type?: PermissionType
   /** 资源类型 */
   resource?: string
   /** 操作类型（create/read/update/delete） */
@@ -204,12 +227,22 @@ export interface IamAuthzFunctions {
   getPermission: (permissionId: string) => Promise<Result<Permission | null, IamError>>
 
   /**
+   * 根据权限代码获取权限
+   *
+   * @param code - 权限代码（如 `user:read`）
+   * @returns 成功返回权限或 null（不存在时）
+   */
+  getPermissionByCode: (code: string) => Promise<Result<Permission | null, IamError>>
+
+  /**
    * 获取所有权限（分页）
    *
-   * @param options - 分页参数，可选
+   * 支持按权限类型（menu/api/button）和关键字（code/name）筛选。
+   *
+   * @param options - 分页及筛选参数，可选
    * @returns 成功返回分页权限列表
    */
-  getAllPermissions: (options?: PaginationOptionsInput) => Promise<Result<PaginatedResult<Permission>, IamError>>
+  getAllPermissions: (options?: PermissionQueryOptions) => Promise<Result<PaginatedResult<Permission>, IamError>>
 
   /**
    * 删除权限

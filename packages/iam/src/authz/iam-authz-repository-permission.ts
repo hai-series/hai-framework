@@ -83,6 +83,14 @@ const PERMISSION_FIELDS: CrudFieldDefinition[] = [
     update: true,
   },
   {
+    fieldName: 'type',
+    columnName: 'type',
+    def: { type: 'TEXT' as const },
+    select: true,
+    create: true,
+    update: true,
+  },
+  {
     fieldName: 'createdAt',
     columnName: 'created_at',
     def: { type: 'TIMESTAMP' as const, notNull: true },

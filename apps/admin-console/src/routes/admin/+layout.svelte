@@ -9,6 +9,7 @@
   import { goto } from '$app/navigation'
   import * as m from '$lib/paraglide/messages'
   import { apiFetch } from '$lib/utils/api'
+  import { setPermissionContext, usePermission } from '@h-ai/ui'
   
   interface Props {
     data: LayoutData
@@ -21,13 +22,9 @@
   const appVersion = $derived(data.appConfig?.version ?? '0.1.0')
   const userPermissions = $derived(data.user?.permissions ?? [])
 
-  function hasPerm(permission: string): boolean {
-    for (const p of userPermissions) {
-      if (p === permission || p === '*') return true
-      if (p.endsWith(':*') && permission.startsWith(p.slice(0, -1))) return true
-    }
-    return false
-  }
+  // 注入权限上下文，子组件通过 usePermission() 消费
+  setPermissionContext(() => userPermissions)
+  const { hasPerm } = usePermission()
   
   let sidebarCollapsed = $state(false)
   let mobileMenuOpen = $state(false)

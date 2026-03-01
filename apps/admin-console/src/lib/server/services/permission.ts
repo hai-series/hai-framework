@@ -7,12 +7,12 @@
  * =============================================================================
  */
 
-import type { Permission } from '@h-ai/iam'
+import type { Permission, PermissionQueryOptions, PermissionType } from '@h-ai/iam'
 import * as m from '$lib/paraglide/messages.js'
 import { iam } from '@h-ai/iam'
 
 // =============================================================================
-// 类型定义（兼容旧接口）
+// 类型定义
 // =============================================================================
 
 /**
@@ -29,10 +29,12 @@ export interface CreatePermissionInput {
   resource?: string
   /** 操作类型 */
   action?: string
+  /** 权限类型 */
+  type?: PermissionType
 }
 
 /**
- * 带 is_system 的权限（兼容旧 UI）
+ * 带 is_system 的权限
  */
 export interface PermissionWithSystem {
   id: string
@@ -41,9 +43,10 @@ export interface PermissionWithSystem {
   description?: string
   resource?: string
   action?: string
+  type?: PermissionType
   createdAt: Date
   updatedAt: Date
-  /** 是否系统权限（兼容旧 UI 的 is_system） */
+  /** 是否系统权限 */
   is_system: boolean
 }
 
@@ -54,6 +57,47 @@ export interface UpdatePermissionInput {
   name?: string
   description?: string
 }
+
+/**
+ * 种子权限代码集合
+ *
+ * 与 @h-ai/iam iam-seed.ts 中定义的默认权限保持一致。
+ * 用于判断权限是否为系统内置——系统权限不可删除。
+ */
+const SEED_PERMISSION_CODES = new Set([
+  // 菜单
+  'dashboard:view',
+  'user:read',
+  'role:read',
+  'permission:read',
+  'system:logs',
+  'system:settings',
+  'system:modules',
+  'profile:read',
+  // API
+  'user:list',
+  'user:api:create',
+  'user:api:update',
+  'user:api:delete',
+  'role:list',
+  'role:api:create',
+  'role:api:update',
+  'role:api:delete',
+  'permission:list',
+  'permission:manage',
+  'permission:api:create',
+  'permission:api:delete',
+  'audit:read',
+  // 按钮
+  'user:create',
+  'user:update',
+  'user:delete',
+  'role:create',
+  'role:update',
+  'role:delete',
+  'permission:create',
+  'permission:delete',
+])
 
 // =============================================================================
 // 内部辅助
@@ -104,6 +148,7 @@ export const permissionService = {
       description: input.description,
       resource: input.resource,
       action: input.action,
+      type: input.type,
     })
 
     if (!result.success) {
@@ -124,11 +169,15 @@ export const permissionService = {
   },
 
   /**
-   * 根据名称（code）获取权限
+   * 根据权限代码（code）查找权限
+   *
+   * 通过 IAM 层 getPermissionByCode 直接查询，避免加载全表。
    */
-  async getByName(name: string): Promise<PermissionWithSystem | null> {
-    const all = await this.list()
-    return all.find(p => p.code === name || p.name === name) ?? null
+  async getByCode(code: string): Promise<PermissionWithSystem | null> {
+    const result = await iam.authz.getPermissionByCode(code)
+    if (!result.success || !result.data)
+      return null
+    return this.toPermissionWithSystem(result.data)
   },
 
   /**
@@ -146,6 +195,29 @@ export const permissionService = {
     }
 
     return permissions
+  },
+
+  /**
+   * 分页获取权限列表（支持按类型和关键词过滤）
+   */
+  async listPaginated(options: PermissionQueryOptions): Promise<{
+    items: PermissionWithSystem[]
+    total: number
+    page: number
+    pageSize: number
+  }> {
+    const result = await iam.authz.getAllPermissions(options)
+    if (!result.success) {
+      return { items: [], total: 0, page: options.page ?? 1, pageSize: options.pageSize ?? 20 }
+    }
+
+    const { items, total } = result.data
+    return {
+      items: items.map(p => this.toPermissionWithSystem(p)),
+      total,
+      page: options.page ?? 1,
+      pageSize: options.pageSize ?? 20,
+    }
   },
 
   /**
@@ -185,13 +257,15 @@ export const permissionService = {
   },
 
   /**
-   * 转换为带 is_system 的权限对象（兼容旧 UI）
+   * 转换为带 is_system 的权限对象
+   *
+   * 系统权限 = 种子数据中定义的权限，不可删除。
    */
   toPermissionWithSystem(perm: Permission): PermissionWithSystem {
     return {
       ...perm,
-      // 系统权限以 system: 开头
-      is_system: perm.code.startsWith('system:'),
+      type: perm.type,
+      is_system: SEED_PERMISSION_CODES.has(perm.code),
     }
   },
 }

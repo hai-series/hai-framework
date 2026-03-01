@@ -149,17 +149,20 @@ export const roleService = {
     if (!existing)
       return null
 
-    // 检查是否为系统角色：仅当名称实际变更时才拦截
-    if (existing.isSystem && input.name && input.name !== existing.name) {
-      throw new Error(m.api_iam_roles_system_name_immutable())
+    // 系统角色保护：忽略名称和权限变更，仅允许修改描述
+    if (existing.isSystem) {
+      input = { description: input.description }
     }
 
-    // 更新角色基本信息
-    if (input.name !== undefined || input.description !== undefined) {
-      const updateResult = await iam.authz.updateRole(id, {
-        name: input.name,
-        description: input.description,
-      })
+    // 更新角色基本信息（仅传入已定义的字段，避免传 undefined 给 DB 层）
+    const updateData: Record<string, unknown> = {}
+    if (input.name !== undefined)
+      updateData.name = input.name
+    if (input.description !== undefined)
+      updateData.description = input.description
+
+    if (Object.keys(updateData).length > 0) {
+      const updateResult = await iam.authz.updateRole(id, updateData)
       if (!updateResult.success) {
         throw new Error(`${m.api_iam_roles_update_failed()}: ${updateResult.error.message}`)
       }
@@ -206,13 +209,13 @@ export const roleService = {
   },
 
   /**
-   * 获取角色权限（权限名称列表，用于页面展示与表单匹配）
+   * 获取角色权限（权限代码列表，用于表单匹配与 API 调用）
    */
   async getRolePermissions(roleId: string): Promise<string[]> {
     const result = await iam.authz.getRolePermissions(roleId)
     if (!result.success)
       return []
-    return result.data.map(p => p.name)
+    return result.data.map(p => p.code)
   },
 
   /**
