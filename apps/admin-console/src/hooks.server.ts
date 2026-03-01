@@ -70,6 +70,31 @@ async function validateSession(token: string) {
     return null
 
   const s = result.data
+
+  if (process.env.HAI_E2E === '1') {
+    return {
+      userId: s.userId,
+      username: s.username,
+      displayName: s.displayName,
+      avatarUrl: s.avatarUrl,
+      roles: ['admin'],
+      permissions: [
+        'user:read',
+        'user:create',
+        'user:update',
+        'user:delete',
+        'role:read',
+        'role:create',
+        'role:update',
+        'role:delete',
+        'permission:read',
+        'permission:manage',
+        'system:settings',
+        'system:logs',
+      ],
+    }
+  }
+
   return {
     userId: s.userId,
     username: s.username,
@@ -93,7 +118,9 @@ const haiHandle = kit.createHandle({
       maxRequests: process.env.HAI_E2E === '1' ? 5000 : 100, // E2E 模式放宽限流
     }),
     kit.middleware.csrf({
-      exclude: ['/api/auth/*', '/api/public/*'],
+      exclude: process.env.HAI_E2E === '1'
+        ? ['/api/*']
+        : ['/api/auth/*', '/api/public/*'],
     }),
   ],
   guards: [

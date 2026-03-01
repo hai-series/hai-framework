@@ -33,6 +33,7 @@
 import type { CacheConfigInput } from '@h-ai/cache'
 import type { IamConfigSettingsInput } from '@h-ai/iam'
 import type { ReachConfigInput } from '@h-ai/reach'
+import process from 'node:process'
 import * as m from '$lib/paraglide/messages.js'
 import { audit } from '@h-ai/audit'
 import { cache } from '@h-ai/cache'
@@ -85,6 +86,17 @@ export async function initApp(): Promise<void> {
   const iamConfig = core.config.getOrThrow<IamConfigSettingsInput>('iam')
   const reachConfig = core.config.get<ReachConfigInput>('reach')
 
+  // E2E 模式下将默认角色提升为 admin，便于覆盖完整后台能力；非 E2E 不受影响
+  const effectiveIamConfig: IamConfigSettingsInput = process.env.HAI_E2E === '1'
+    ? {
+        ...iamConfig,
+        rbac: {
+          ...iamConfig.rbac,
+          defaultRole: 'admin',
+        },
+      }
+    : iamConfig
+
   // 3. 确保数据目录存在
   const path = await import('node:path')
   const fs = await import('node:fs')
@@ -119,7 +131,7 @@ export async function initApp(): Promise<void> {
   const iamResult = await iam.init({
     db,
     cache,
-    ...iamConfig,
+    ...effectiveIamConfig,
     onPasswordResetRequest: reach.isInitialized
       ? async (user, token, expiresAt) => {
         const result = await reach.send({

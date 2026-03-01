@@ -11,6 +11,10 @@
 import { expect, test } from '@playwright/test'
 import { registerAndLoginViaApi, uniqueUser } from './helpers'
 
+function getUserPayload(body: { user?: unknown, data?: { user?: unknown } }) {
+  return body.user ?? body.data?.user
+}
+
 // =============================================================================
 // 用户 CRUD 全流程
 // =============================================================================
@@ -117,7 +121,8 @@ test.describe('IAM Users CRUD', () => {
     // 获取当前用户 ID
     const meRes = await request.get('/api/auth/me')
     const meBody = await meRes.json()
-    const myId = meBody.user?.id
+    const meUser = getUserPayload(meBody) as { id?: string }
+    const myId = meUser?.id
 
     if (myId) {
       const deleteRes = await request.delete(`/api/iam/users/${myId}`)
@@ -333,8 +338,9 @@ test.describe('Auth Flow', () => {
     expect(regRes.ok()).toBe(true)
     const regBody = await regRes.json()
     expect(regBody.success).toBe(true)
-    expect(regBody.user).toHaveProperty('id')
-    expect(regBody.user.username).toBe(u.username)
+    const regUser = getUserPayload(regBody) as { id: string, username: string }
+    expect(regUser).toHaveProperty('id')
+    expect(regUser.username).toBe(u.username)
 
     // 2. 登录
     const loginRes = await request.post('/api/auth/login', {
@@ -343,13 +349,15 @@ test.describe('Auth Flow', () => {
     expect(loginRes.ok()).toBe(true)
     const loginBody = await loginRes.json()
     expect(loginBody.success).toBe(true)
-    expect(loginBody.user.username).toBe(u.username)
+    const loginUser = getUserPayload(loginBody) as { username: string }
+    expect(loginUser.username).toBe(u.username)
 
     // 3. 获取当前用户身份
     const meRes = await request.get('/api/auth/me')
     const meBody = await meRes.json()
     expect(meBody.success).toBe(true)
-    expect(meBody.user.username).toBe(u.username)
+    const meUserAfterLogin = getUserPayload(meBody) as { username: string }
+    expect(meUserAfterLogin.username).toBe(u.username)
 
     // 4. 登出
     const logoutRes = await request.post('/api/auth/logout')

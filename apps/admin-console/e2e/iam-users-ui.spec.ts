@@ -141,7 +141,11 @@ test.describe('IAM Users UI', () => {
 
     const createBtn = page.locator('main').getByRole('button', { name: /新建|创建|添加/ })
     await createBtn.first().click()
-    await expect(page.locator('#username')).toBeVisible()
+    const usernameInput = page.locator('#username')
+    if (!(await usernameInput.isVisible())) {
+      await createBtn.first().click()
+    }
+    await expect(usernameInput).toBeVisible()
 
     // 对话框的取消按钮
     const cancelBtn = page.getByRole('button', { name: /取消|关闭|Cancel/ })
@@ -149,7 +153,7 @@ test.describe('IAM Users UI', () => {
     await page.waitForTimeout(300)
 
     // 对话框关闭后，username 输入框不可见
-    await expect(page.locator('#username')).not.toBeVisible()
+    await expect(usernameInput).not.toBeVisible()
   })
 
   test('新建用户提交空表单显示验证', async ({ page, request }) => {

@@ -206,10 +206,8 @@ test.describe('Reset Password UI', () => {
     await page.goto('/auth/reset-password')
     await page.waitForLoadState('domcontentloaded')
 
-    // 无 token 应显示警告/错误提示（Result 组件 status="warning"）
-    // 或者显示表单但 token 为空
-    const body = page.locator('body')
-    await expect(body).toBeVisible()
+    await expect(page.locator('form')).toHaveCount(0)
+    await expect(page.locator('a[href="/auth/forgot-password"].btn')).toBeVisible()
   })
 
   test('带 token 参数时显示重置表单', async ({ page }) => {
@@ -218,5 +216,6 @@ test.describe('Reset Password UI', () => {
 
     // 页面应包含表单
     await expect(page.locator('form')).toBeVisible()
+    await expect(page.locator('button[type="submit"]')).toBeVisible()
   })
 })

@@ -13,7 +13,7 @@ import { kit } from '@h-ai/kit'
 export const POST = kit.handler(async ({ request, cookies, getClientAddress }) => {
   // 检查注册是否启用
   if (iam.config?.register?.enabled === false) {
-    return kit.response.forbidden(m.api_auth_register_disabled?.() ?? 'Registration is disabled')
+    return kit.response.forbidden(m.common_error())
   }
 
   const { username, email, password } = await kit.validate.formOrFail(request, createRegisterSchema())

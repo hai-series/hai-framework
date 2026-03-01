@@ -38,6 +38,12 @@ export const GET = kit.handler(async ({ cookies }) => {
 /**
  * 根据当前会话令牌更新用户资料字段。
  *
+ * `username` / `email` 属于身份字段，不在 `updateCurrentUser` 白名单内，
+ * 需通过 `iam.user.updateUser(userId, ...)` 进行更新。
+ * 其余字段（displayName / avatarUrl / phone）走 `updateCurrentUser` 安全白名单。
+ *
+ * 更新完成后同步刷新缓存会话，使布局顶栏等立即读到最新值。
+ *
  * @returns 更新结果，成功返回最新用户信息
  */
 export const PUT = kit.handler(async ({ cookies, request }) => {
@@ -46,15 +52,14 @@ export const PUT = kit.handler(async ({ cookies, request }) => {
     return kit.response.unauthorized(m.common_error())
   }
 
-  const data = await kit.validate.formOrFail(request, UpdateProfileSchema)
+  // 验证令牌并获取 userId（后续 updateUser 需要）
+  const verifyResult = await iam.auth.verifyToken(token)
+  if (!verifyResult.success) {
+    return kit.response.unauthorized(m.common_error())
+  }
+  const userId = verifyResult.data.userId
 
-  const patch: {
-    username?: string
-    displayName?: string
-    email?: string
-    phone?: string
-    avatarUrl?: string
-  } = {}
+  const data = await kit.validate.formOrFail(request, UpdateProfileSchema)
 
   const username = data?.username?.trim()
   const displayName = data?.display_name?.trim()
@@ -62,31 +67,59 @@ export const PUT = kit.handler(async ({ cookies, request }) => {
   const phone = data?.phone?.trim()
   const avatar = data?.avatar?.trim()
 
-  if (username) {
-    patch.username = username
-  }
-  if (displayName) {
-    patch.displayName = displayName
-  }
-  if (email) {
-    patch.email = email
-  }
-  if (phone) {
-    patch.phone = phone
-  }
-  if (avatar) {
-    patch.avatarUrl = avatar
+  // ── 身份字段（username / email）通过 updateUser 更新 ──
+  const identityPatch: Partial<{ username: string, email: string }> = {}
+  if (username)
+    identityPatch.username = username
+  if (email)
+    identityPatch.email = email
+
+  if (Object.keys(identityPatch).length > 0) {
+    const identityResult = await iam.user.updateUser(userId, identityPatch)
+    if (!identityResult.success) {
+      const normalizedError = normalizeUniqueConstraintError(identityResult.error.message, m.common_error())
+      return kit.response.badRequest(
+        normalizedError,
+        undefined,
+        { fieldErrors: { general: normalizedError } },
+      )
+    }
   }
 
-  const updateResult = await iam.user.updateCurrentUser(token, patch)
-  if (!updateResult.success) {
-    const normalizedError = normalizeUniqueConstraintError(updateResult.error.message, m.common_error())
-    return kit.response.badRequest(
-      normalizedError,
-      undefined,
-      { fieldErrors: { general: normalizedError } },
-    )
+  // ── 个人资料字段走 updateCurrentUser 白名单 ──
+  const profilePatch: { displayName?: string, avatarUrl?: string, phone?: string } = {}
+  if (displayName)
+    profilePatch.displayName = displayName
+  if (avatar)
+    profilePatch.avatarUrl = avatar
+  if (phone)
+    profilePatch.phone = phone
+
+  if (Object.keys(profilePatch).length > 0) {
+    const profileResult = await iam.user.updateCurrentUser(token, profilePatch)
+    if (!profileResult.success) {
+      return kit.response.badRequest(profileResult.error.message)
+    }
   }
 
-  return kit.response.ok({ user: await toUserResponse(updateResult.data) })
+  // ── 同步会话缓存，使布局顶栏等立即读到最新值 ──
+  const sessionPatch: Partial<{ username: string, displayName: string, avatarUrl: string }> = {}
+  if (username)
+    sessionPatch.username = username
+  if (displayName)
+    sessionPatch.displayName = displayName
+  if (avatar)
+    sessionPatch.avatarUrl = avatar
+
+  if (Object.keys(sessionPatch).length > 0) {
+    await iam.session.update(token, sessionPatch)
+  }
+
+  // ── 查询最新用户信息返回 ──
+  const updatedResult = await iam.user.getUser(userId)
+  if (!updatedResult.success || !updatedResult.data) {
+    return kit.response.internalError(m.common_error())
+  }
+
+  return kit.response.ok({ user: await toUserResponse(updatedResult.data) })
 })

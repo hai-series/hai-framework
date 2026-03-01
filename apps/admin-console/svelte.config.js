@@ -4,6 +4,7 @@
  * =============================================================================
  */
 
+import process from 'node:process'
 import { autoImportHaiUi } from '@h-ai/ui/auto-import'
 import adapter from '@sveltejs/adapter-auto'
 import { vitePreprocess } from '@sveltejs/vite-plugin-svelte'
@@ -17,6 +18,10 @@ const config = {
   },
   kit: {
     adapter: adapter(),
+    // E2E 测试时关闭 SvelteKit 内置 Origin 检查（Playwright 的 APIRequestContext 不发 Origin 头）
+    csrf: {
+      checkOrigin: process.env.HAI_E2E !== '1',
+    },
     alias: {
       '$components': './src/lib/components',
       '$stores': './src/lib/stores',
