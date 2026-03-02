@@ -67,38 +67,28 @@ export const PUT = kit.handler(async ({ cookies, request }) => {
   const phone = data?.phone?.trim()
   const avatar = data?.avatar?.trim()
 
-  // ── 身份字段（username / email）通过 updateUser 更新 ──
-  const identityPatch: Partial<{ username: string, email: string }> = {}
+  // ── 合并所有字段为单次 updateUser 调用，保证原子性 ──
+  const updatePatch: Partial<{ username: string, email: string, displayName: string, avatarUrl: string, phone: string }> = {}
   if (username)
-    identityPatch.username = username
+    updatePatch.username = username
   if (email)
-    identityPatch.email = email
+    updatePatch.email = email
+  if (displayName)
+    updatePatch.displayName = displayName
+  if (avatar)
+    updatePatch.avatarUrl = avatar
+  if (phone)
+    updatePatch.phone = phone
 
-  if (Object.keys(identityPatch).length > 0) {
-    const identityResult = await iam.user.updateUser(userId, identityPatch)
-    if (!identityResult.success) {
-      const normalizedError = normalizeUniqueConstraintError(identityResult.error.message, m.common_error())
+  if (Object.keys(updatePatch).length > 0) {
+    const updateResult = await iam.user.updateUser(userId, updatePatch)
+    if (!updateResult.success) {
+      const normalizedError = normalizeUniqueConstraintError(updateResult.error.message, m.common_error())
       return kit.response.badRequest(
         normalizedError,
         undefined,
         { fieldErrors: { general: normalizedError } },
       )
-    }
-  }
-
-  // ── 个人资料字段走 updateCurrentUser 白名单 ──
-  const profilePatch: { displayName?: string, avatarUrl?: string, phone?: string } = {}
-  if (displayName)
-    profilePatch.displayName = displayName
-  if (avatar)
-    profilePatch.avatarUrl = avatar
-  if (phone)
-    profilePatch.phone = phone
-
-  if (Object.keys(profilePatch).length > 0) {
-    const profileResult = await iam.user.updateCurrentUser(token, profilePatch)
-    if (!profileResult.success) {
-      return kit.response.badRequest(profileResult.error.message)
     }
   }
 

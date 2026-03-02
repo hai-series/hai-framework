@@ -90,7 +90,7 @@ function createHelper(logFn: (input: CreateAuditLogInput) => Promise<Result<Audi
       return toVoid(result)
     },
 
-    async passwordResetComplete(userId: string, ip?: string, ua?: string): Promise<Result<void, AuditError>> {
+    async passwordResetComplete(userId: string | null, ip?: string, ua?: string): Promise<Result<void, AuditError>> {
       const result = await logFn({ userId, action: 'password_reset', resource: 'auth', ipAddress: ip, userAgent: ua })
       return toVoid(result)
     },

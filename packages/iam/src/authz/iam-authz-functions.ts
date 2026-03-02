@@ -758,5 +758,13 @@ function createRbacManager(config: RbacManagerConfig): IamAuthzFunctions {
     async getRolePermissions(roleId): Promise<Result<Permission[], IamError>> {
       return rolePermissionRepository.getPermissions(roleId)
     },
+
+    async getUserRolesForMany(userIds): Promise<Result<Map<string, Role[]>, IamError>> {
+      return userRoleRepository.getRolesForUsers(userIds)
+    },
+
+    async getRolePermissionsForMany(roleIds): Promise<Result<Map<string, Permission[]>, IamError>> {
+      return rolePermissionRepository.getPermissionsForRoles(roleIds)
+    },
   }
 }

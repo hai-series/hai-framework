@@ -7,13 +7,22 @@
  * =============================================================================
  */
 
+import type { Result } from '@h-ai/core'
 import type { Permission, Role } from '@h-ai/iam'
 import * as m from '$lib/paraglide/messages.js'
+import { err, ok } from '@h-ai/core'
 import { iam } from '@h-ai/iam'
 
 // =============================================================================
 // 类型定义
 // =============================================================================
+
+/**
+ * 服务层统一错误
+ */
+export interface ServiceError {
+  message: string
+}
 
 /**
  * 带权限的角色
@@ -82,8 +91,10 @@ async function listAllRoles(pageSize = 200): Promise<Role[]> {
 export const roleService = {
   /**
    * 创建角色
+   *
+   * @returns 成功返回带权限的角色；失败返回 ServiceError
    */
-  async create(input: CreateRoleInput): Promise<RoleWithPermissions> {
+  async create(input: CreateRoleInput): Promise<Result<RoleWithPermissions, ServiceError>> {
     const result = await iam.authz.createRole({
       code: input.code,
       name: input.name,
@@ -91,22 +102,27 @@ export const roleService = {
     })
 
     if (!result.success) {
-      throw new Error(`${m.api_iam_roles_create_failed()}: ${result.error.message}`)
+      return err({ message: `${m.api_iam_roles_create_failed()}: ${result.error.message}` })
     }
 
     const role = result.data
 
-    // 分配权限
+    // 分配权限（逐条检查结果，任一失败则回滚角色）
     if (input.permissions?.length) {
       for (const permId of input.permissions) {
-        await iam.authz.assignPermissionToRole(role.id, permId)
+        const assignResult = await iam.authz.assignPermissionToRole(role.id, permId)
+        if (!assignResult.success) {
+          // 回滚：删除刚创建的角色
+          await iam.authz.deleteRole(role.id)
+          return err({ message: `${m.api_iam_roles_create_failed()}: ${assignResult.error.message}` })
+        }
       }
     }
 
-    return {
+    return ok({
       ...role,
       permissions: input.permissions ?? [],
-    }
+    })
   },
 
   /**
@@ -132,22 +148,27 @@ export const roleService = {
       return []
     }
 
-    return Promise.all(
-      result.map(async (role) => {
-        const permissions = await this.getRolePermissions(role.id)
-        return { ...role, permissions }
-      }),
-    )
+    // 批量获取所有角色的权限（避免 N+1）
+    const roleIds = result.map(r => r.id)
+    const permsMapResult = await iam.authz.getRolePermissionsForMany(roleIds)
+    const permsMap = permsMapResult.success ? permsMapResult.data : new Map<string, { code: string }[]>()
+
+    return result.map(role => ({
+      ...role,
+      permissions: (permsMap.get(role.id) ?? []).map(p => p.code),
+    }))
   },
 
   /**
    * 更新角色
+   *
+   * @returns 成功返回更新后角色；角色不存在返回 ok(null)；失败返回 ServiceError
    */
-  async update(id: string, input: UpdateRoleInput): Promise<RoleWithPermissions | null> {
+  async update(id: string, input: UpdateRoleInput): Promise<Result<RoleWithPermissions | null, ServiceError>> {
     // 检查角色是否存在
     const existing = await this.getById(id)
     if (!existing)
-      return null
+      return ok(null)
 
     // 系统角色保护：忽略名称和权限变更，仅允许修改描述
     if (existing.isSystem) {
@@ -164,7 +185,7 @@ export const roleService = {
     if (Object.keys(updateData).length > 0) {
       const updateResult = await iam.authz.updateRole(id, updateData)
       if (!updateResult.success) {
-        throw new Error(`${m.api_iam_roles_update_failed()}: ${updateResult.error.message}`)
+        return err({ message: `${m.api_iam_roles_update_failed()}: ${updateResult.error.message}` })
       }
     }
 
@@ -189,23 +210,25 @@ export const roleService = {
       }
     }
 
-    return this.getById(id)
+    return ok(await this.getById(id))
   },
 
   /**
    * 删除角色
+   *
+   * @returns 成功返回 ok(true)；不存在返回 ok(false)；系统角色返回 ServiceError
    */
-  async delete(id: string): Promise<boolean> {
+  async delete(id: string): Promise<Result<boolean, ServiceError>> {
     // 检查是否为系统角色
     const existing = await this.getById(id)
     if (!existing)
-      return false
+      return ok(false)
     if (existing.isSystem) {
-      throw new Error(m.api_iam_roles_system_cannot_delete())
+      return err({ message: m.api_iam_roles_system_cannot_delete() })
     }
 
     const result = await iam.authz.deleteRole(id)
-    return result.success
+    return ok(result.success)
   },
 
   /**

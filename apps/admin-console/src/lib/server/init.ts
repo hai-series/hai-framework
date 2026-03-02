@@ -9,9 +9,10 @@
  * 1. core.init 加载配置文件（约定优于配置）
  * 2. 数据库连接
  * 3. 缓存初始化
- * 4. Reach 触达服务初始化
- * 5. IAM 模块（使用 reach 发送验证码和密码重置通知）
- * 6. 业务表创建
+ * 4. 存储初始化（可选）
+ * 5. Reach 触达服务初始化
+ * 6. IAM 模块（使用 reach 发送验证码和密码重置通知）
+ * 7. 业务表创建
  *
  * 配置文件约定：
  * - `config/_core.yml`  → 使用 CoreConfigSchema
@@ -33,6 +34,7 @@
 import type { CacheConfigInput } from '@h-ai/cache'
 import type { IamConfigSettingsInput } from '@h-ai/iam'
 import type { ReachConfigInput } from '@h-ai/reach'
+import type { StorageConfigInput } from '@h-ai/storage'
 import { randomBytes } from 'node:crypto'
 import process from 'node:process'
 import * as m from '$lib/paraglide/messages.js'
@@ -42,6 +44,7 @@ import { core } from '@h-ai/core'
 import { db } from '@h-ai/db'
 import { iam } from '@h-ai/iam'
 import { reach } from '@h-ai/reach'
+import { storage } from '@h-ai/storage'
 
 type DbConfigInput = Parameters<typeof db.init>[0]
 
@@ -66,9 +69,10 @@ let initialized = false
  * 1. 使用 core.init 加载配置文件（约定优于配置）
  * 2. 初始化数据库连接
  * 3. 初始化缓存
- * 4. 初始化 Reach 触达服务
- * 5. 初始化 IAM 模块（使用 reach 发送通知）
- * 6. 创建业务表
+ * 4. 初始化存储（可选）
+ * 5. 初始化 Reach 触达服务
+ * 6. 初始化 IAM 模块（使用 reach 发送通知）
+ * 7. 创建业务表
  */
 export async function initApp(): Promise<void> {
   if (initialized)
@@ -86,6 +90,7 @@ export async function initApp(): Promise<void> {
   const cacheConfig = core.config.getOrThrow<CacheConfigInput>('cache')
   const iamConfig = core.config.getOrThrow<IamConfigSettingsInput>('iam')
   const reachConfig = core.config.get<ReachConfigInput>('reach')
+  const storageConfig = core.config.get<StorageConfigInput>('storage')
 
   // E2E 模式下将默认角色提升为 admin，便于覆盖完整后台能力；非 E2E 不受影响
   const effectiveIamConfig: IamConfigSettingsInput = process.env.HAI_E2E === '1'
@@ -118,7 +123,17 @@ export async function initApp(): Promise<void> {
     throw new Error(m.server_init_cache_failed({ message: cacheResult.error.message }))
   }
 
-  // 6. 初始化 Reach 触达服务（可选，配置不存在时跳过）
+  // 6. 初始化存储（可选，配置不存在时跳过）
+  if (storageConfig) {
+    const storageResult = await storage.init(storageConfig)
+    if (!storageResult.success) {
+      core.logger.warn('Storage module initialization failed, file upload features will be unavailable', {
+        error: storageResult.error.message,
+      })
+    }
+  }
+
+  // 7. 初始化 Reach 触达服务（可选，配置不存在时跳过）
   if (reachConfig) {
     const reachResult = await reach.init(reachConfig)
     if (!reachResult.success) {
@@ -128,7 +143,7 @@ export async function initApp(): Promise<void> {
     }
   }
 
-  // 7. 初始化 IAM 模块（使用 reach 发送密码重置和 OTP 通知）
+  // 8. 初始化 IAM 模块（使用 reach 发送密码重置和 OTP 通知）
   const iamResult = await iam.init({
     db,
     cache,
@@ -183,13 +198,13 @@ export async function initApp(): Promise<void> {
     throw new Error(fullMessage)
   }
 
-  // 8. 初始化审计日志模块（IAM 用户表为 iam_users）
+  // 9. 初始化审计日志模块（IAM 用户表为 iam_users）
   const auditResult = await audit.init({ db, userTable: 'iam_users' })
   if (!auditResult.success) {
     core.logger.warn('Audit module initialization failed', { error: auditResult.error.message })
   }
 
-  // 9. 如果没有任何用户，自动创建默认管理员
+  // 10. 如果没有任何用户，自动创建默认管理员
   await ensureDefaultAdmin()
 
   initialized = true

@@ -281,4 +281,30 @@ export interface IamAuthzFunctions {
    * @returns 成功返回角色关联的权限列表
    */
   getRolePermissions: (roleId: string) => Promise<Result<Permission[], IamError>>
+
+  /**
+   * 批量获取多个用户的角色列表
+   *
+   * 单次查询替代 N 次 getUserRoles 调用，避免 N+1 问题。
+   * 返回 Map：key 为 userId，value 为该用户的角色列表；无角色的用户返回空数组。
+   *
+   * **数据来源**：直接查询数据库，返回最新数据。
+   *
+   * @param userIds - 用户 ID 列表
+   * @returns Map<userId, Role[]>
+   */
+  getUserRolesForMany: (userIds: string[]) => Promise<Result<Map<string, Role[]>, IamError>>
+
+  /**
+   * 批量获取多个角色的权限列表
+   *
+   * 单次查询替代 N 次 getRolePermissions 调用，避免 N+1 问题。
+   * 返回 Map：key 为 roleId，value 为该角色的权限列表；无权限的角色返回空数组。
+   *
+   * **数据来源**：直接查询数据库，返回最新数据。
+   *
+   * @param roleIds - 角色 ID 列表
+   * @returns Map<roleId, Permission[]>
+   */
+  getRolePermissionsForMany: (roleIds: string[]) => Promise<Result<Map<string, Permission[]>, IamError>>
 }

@@ -145,7 +145,7 @@ const haiHandle = kit.createHandle({
     kit.middleware.csrf({
       exclude: process.env.HAI_E2E === '1'
         ? ['/api/*']
-        : ['/api/auth/*', '/api/public/*'],
+        : ['/api/auth/login', '/api/auth/register', '/api/auth/forgot-password', '/api/auth/reset-password', '/api/public/*'],
     }),
   ],
   guards: [
@@ -176,7 +176,7 @@ const haiHandle = kit.createHandle({
         success: false,
         error: {
           code: 'INTERNAL_ERROR',
-          message: error instanceof Error ? error.message : 'Unknown error',
+          message: 'An unexpected error occurred',
         },
       }),
       {
