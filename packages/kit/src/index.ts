@@ -14,5 +14,7 @@ export type * from './hooks/index.js'
 // 运行时导出 — kit 统一命名空间
 export { kit } from './kit-main.js'
 export * from './kit-types.js'
+// 运行时导出 — 通用 Schema（支持 import { IdParamSchema } from '@h-ai/kit'）
+export { IdParamSchema, PaginationQuerySchema } from './kit-validation.js'
 export type * from './middleware/index.js'
 export type * from './modules/index.js'

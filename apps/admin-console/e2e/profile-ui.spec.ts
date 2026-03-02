@@ -81,7 +81,7 @@ test.describe('Profile UI', () => {
     )
 
     // 使用 page.request（与浏览器上下文共享 cookie + Origin，避免 CSRF 拦截）
-    // 步骤 1：上传头像（仅验证并返回 data URL）
+    // 步骤 1：上传头像到存储服务，返回头像 URL
     const uploadResponse = await page.request.post('/api/auth/profile/avatar', {
       multipart: {
         file: {
@@ -93,12 +93,13 @@ test.describe('Profile UI', () => {
     })
     const uploadBody = await uploadResponse.json()
     expect(uploadResponse.ok(), `avatar upload status=${uploadResponse.status()} body=${JSON.stringify(uploadBody)}`).toBeTruthy()
-    const avatarDataUrl = uploadBody.data?.avatar ?? uploadBody.avatar
-    expect(String(avatarDataUrl)).toContain('data:image/png;base64,')
+    const avatarUrl = uploadBody.data?.avatar ?? uploadBody.avatar
+    // 上传后返回存储 URL（本地存储为 /api/storage/avatars/... ，S3 为完整 URL）
+    expect(String(avatarUrl)).toMatch(/\/api\/storage\/avatars\/|^https?:\/\//)
 
-    // 步骤 2：将 data URL 持久化至用户资料
+    // 步骤 2：将头像 URL 持久化至用户资料
     const persistResponse = await page.request.put('/api/auth/profile', {
-      data: { avatar: avatarDataUrl },
+      data: { avatar: avatarUrl },
     })
     expect(persistResponse.ok()).toBeTruthy()
 
@@ -108,7 +109,12 @@ test.describe('Profile UI', () => {
     expect(meResponse.ok()).toBeTruthy()
     expect(meBody.success).toBeTruthy()
     const meUser = meBody.user ?? meBody.data?.user
-    expect(String(meUser?.avatar ?? '')).toContain('data:image/png;base64,')
+    expect(String(meUser?.avatar ?? '')).toMatch(/\/api\/storage\/avatars\/|^https?:\/\//)
+
+    // 步骤 4：验证存储文件可通过 URL 访问
+    const fileResponse = await page.request.get(String(avatarUrl))
+    expect(fileResponse.ok(), `avatar file fetch status=${fileResponse.status()}`).toBeTruthy()
+    expect(fileResponse.headers()['content-type']).toContain('image/png')
   })
 
   test('updates display name and shows it in top user menu', async ({ page, request }) => {
@@ -281,8 +287,8 @@ test.describe('Profile UI', () => {
       // 等待上传处理
       await page.waitForTimeout(2000)
 
-      // 头像区域应有变化（srcset 或 img 标签更新）
-      const avatarImg = page.locator('img[alt*="avatar" i], .avatar img, img[src*="data:image"]')
+      // 头像区域应有变化（存储 URL 或 img 标签更新）
+      const avatarImg = page.locator('img[alt*="avatar" i], .avatar img, img[src*="/api/storage/"]')
       if (await avatarImg.count() > 0) {
         const src = await avatarImg.first().getAttribute('src')
         expect(src).toBeTruthy()

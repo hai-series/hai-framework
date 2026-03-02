@@ -320,6 +320,85 @@ test.describe('IAM Role-Permission Linkage', () => {
 })
 
 // =============================================================================
+// 批量 API（Batch）行为验证
+// =============================================================================
+test.describe('IAM Batch API Behavior', () => {
+  test('GET /api/iam/users 列表中每个用户都包含 roles 数组', async ({ request }) => {
+    await registerAndLoginViaApi(request, 'batch')
+    const listRes = await request.get('/api/iam/users?page=1&pageSize=10')
+    expect(listRes.ok()).toBe(true)
+    const body = await listRes.json()
+    expect(body.success).toBe(true)
+
+    // 每个用户对象都应包含 roles 字段（由 batch API 填充）
+    for (const user of body.data.users) {
+      expect(user).toHaveProperty('roles')
+      expect(Array.isArray(user.roles)).toBe(true)
+    }
+  })
+
+  test('GET /api/iam/users 新注册用户列表中 roles 包含默认角色', async ({ request }) => {
+    const user = await registerAndLoginViaApi(request, 'brole')
+    const listRes = await request.get(`/api/iam/users?search=${user.username}`)
+    expect(listRes.ok()).toBe(true)
+    const body = await listRes.json()
+    expect(body.success).toBe(true)
+
+    const match = body.data.users.find((u: Record<string, unknown>) => u.username === user.username)
+    expect(match).toBeTruthy()
+    // 新注册用户应至少有一个默认角色
+    expect(Array.isArray(match.roles)).toBe(true)
+    expect(match.roles.length).toBeGreaterThanOrEqual(1)
+  })
+
+  test('GET /api/iam/roles 列表中每个角色都包含 permissions 数组', async ({ request }) => {
+    await registerAndLoginViaApi(request, 'bperm')
+    const listRes = await request.get('/api/iam/roles')
+    expect(listRes.ok()).toBe(true)
+    const body = await listRes.json()
+    expect(body.success).toBe(true)
+
+    // 每个角色对象都应包含 permissions 字段（由 batch API 填充）
+    for (const role of body.data) {
+      expect(role).toHaveProperty('permissions')
+      expect(Array.isArray(role.permissions)).toBe(true)
+    }
+  })
+
+  test('创建角色关联权限后在列表中可见', async ({ request }) => {
+    await registerAndLoginViaApi(request, 'blink')
+    const ts = Date.now().toString(36)
+
+    // 创建权限
+    const permRes = await request.post('/api/iam/permissions', {
+      data: { name: `BatchPerm_${ts}`, resource: `batch_${ts}`, action: 'read' },
+    })
+    expect(permRes.ok()).toBe(true)
+    const permBody = await permRes.json()
+    const permCode = permBody.data?.code ?? permBody.data?.name
+
+    // 创建角色并关联权限
+    const roleRes = await request.post('/api/iam/roles', {
+      data: {
+        name: `BatchRole_${ts}`,
+        description: 'Batch test role',
+        permissions: [permCode],
+      },
+    })
+    expect(roleRes.ok()).toBe(true)
+    const roleId = roleRes.json().then(b => b.data.id)
+
+    // 通过列表 API 验证权限在角色上（由 batch API getRolePermissionsForMany 填充）
+    const listRes = await request.get('/api/iam/roles')
+    expect(listRes.ok()).toBe(true)
+    const listBody = await listRes.json()
+    const matchedRole = listBody.data.find((r: Record<string, unknown>) => r.id === await roleId)
+    expect(matchedRole).toBeTruthy()
+    expect(matchedRole.permissions).toContain(permCode)
+  })
+})
+
+// =============================================================================
 // 认证流程补充测试
 // =============================================================================
 test.describe('Auth Flow', () => {
