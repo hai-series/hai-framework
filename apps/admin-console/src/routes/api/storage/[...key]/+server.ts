@@ -54,7 +54,7 @@ export const GET = kit.handler(async ({ params }) => {
     contentType = CONTENT_TYPE_MAP[ext] ?? 'application/octet-stream'
   }
 
-  return new Response(getResult.data, {
+  return new Response(new Uint8Array(getResult.data), {
     status: 200,
     headers: {
       'Content-Type': contentType,

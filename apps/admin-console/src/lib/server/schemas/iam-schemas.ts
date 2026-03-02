@@ -10,6 +10,7 @@
 
 import * as m from '$lib/paraglide/messages.js'
 import { iam } from '@h-ai/iam'
+import { IdParamSchema, PaginationQuerySchema } from '@h-ai/kit'
 import { z } from 'zod'
 
 /**
@@ -22,20 +23,12 @@ function getPasswordMinLength(): number {
 /**
  * 路径参数 id 校验 Schema
  *
- * 验证 `event.params.id` 非空字符串。
+ * 从 @h-ai/kit 导出，保持向后兼容。
  */
-export const IdParamSchema = z.object({
-  id: z.string().min(1, 'ID is required'),
-})
+export { IdParamSchema }
 
-/** 分页 pageSize 上限，防止一次性拉取全表造成 DoS */
-const MAX_PAGE_SIZE = 100
-
-/** 用户列表查询参数 Schema */
-export const ListUsersQuerySchema = z.object({
-  page: z.coerce.number().int().min(1).default(1),
-  pageSize: z.coerce.number().int().min(1).max(MAX_PAGE_SIZE).default(20),
-  search: z.string().optional(),
+/** 用户列表查询参数 Schema（扩展通用分页参数） */
+export const ListUsersQuerySchema = PaginationQuerySchema.extend({
   enabled: z
     .enum(['true', 'false'])
     .transform(v => v === 'true')
@@ -105,11 +98,8 @@ export const UpdateRoleSchema = z.object({
   permissions: z.array(z.string()).optional(),
 })
 
-/** 权限列表查询参数 Schema */
-export const ListPermissionsQuerySchema = z.object({
-  page: z.coerce.number().int().min(1).default(1),
-  pageSize: z.coerce.number().int().min(1).max(MAX_PAGE_SIZE).default(20),
-  search: z.string().optional(),
+/** 权限列表查询参数 Schema（扩展通用分页参数） */
+export const ListPermissionsQuerySchema = PaginationQuerySchema.extend({
   type: z.enum(['menu', 'api', 'button']).optional(),
 })
 

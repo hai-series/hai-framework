@@ -15,7 +15,7 @@ import { handler } from './kit-handler.js'
 import { setAllModulesLocale } from './kit-i18n.js'
 import { badRequest, conflict, created, error, forbidden, internalError, noContent, notFound, ok, redirect, unauthorized, validationError } from './kit-response.js'
 import { clearSessionCookie, setSessionCookie } from './kit-session.js'
-import { validateForm, validateFormOrFail, validateParams, validateParamsOrFail, validateQuery, validateQueryOrFail } from './kit-validation.js'
+import { IdParamSchema, PaginationQuerySchema, validateForm, validateFormOrFail, validateParams, validateParamsOrFail, validateQuery, validateQueryOrFail } from './kit-validation.js'
 import { corsMiddleware } from './middleware/kit-cors.js'
 import { csrfMiddleware } from './middleware/kit-csrf.js'
 import { loggingMiddleware } from './middleware/kit-logging.js'
@@ -119,6 +119,10 @@ export const kit = {
     queryOrFail: validateQueryOrFail,
     /** 验证路径参数，失败 throw Response（SvelteKit 控制流） */
     paramsOrFail: validateParamsOrFail,
+    /** 路径参数 id Schema（{id: string}） */
+    IdParamSchema,
+    /** 通用分页查询 Schema（page / pageSize / search） */
+    PaginationQuerySchema,
   },
 
   // ─── 会话管理 ───
