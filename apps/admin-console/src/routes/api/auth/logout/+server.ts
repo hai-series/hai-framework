@@ -5,7 +5,6 @@
  */
 
 import { audit } from '@h-ai/audit'
-import { core } from '@h-ai/core'
 import { iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
 
@@ -22,13 +21,8 @@ export const POST = kit.handler(async ({ cookies, getClientAddress, request }) =
       await audit.helper.logout(verifyResult.data.userId, ip, ua)
     }
 
-    // 登出（使会话失效）
-    try {
-      await iam.auth.logout(token)
-    }
-    catch (error) {
-      core.logger.warn('Logout session invalidation failed', { error })
-    }
+    // 登出（使会话失效）—— iam.auth.logout 返回 Result，永不 throw
+    await iam.auth.logout(token)
   }
 
   // 清除 Cookie（无论是否出错都执行）

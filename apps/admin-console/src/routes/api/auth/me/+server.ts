@@ -2,8 +2,13 @@
  * =============================================================================
  * Admin Console - 认证 API: 获取当前用户
  * =============================================================================
+ *
+ * 与 /api/auth/profile GET 返回相同数据结构。
+ * 保留此端点为兼容旧测试与外部调用；内部逻辑委托给共享辅助函数。
+ * =============================================================================
  */
 
+import { toIamUserResponse } from '$lib/server/iam-helpers.js'
 import { iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
 
@@ -21,20 +26,7 @@ export const GET = kit.handler(async ({ cookies }) => {
     return kit.response.unauthorized()
   }
 
-  const user = userResult.data
+  const user = await toIamUserResponse(userResult.data)
 
-  // 获取用户角色
-  const rolesResult = await iam.authz.getUserRoles(user.id)
-  const roles = rolesResult.success ? rolesResult.data.map(r => r.code) : []
-
-  return kit.response.ok({
-    user: {
-      id: user.id,
-      username: user.username,
-      email: user.email,
-      display_name: user.displayName,
-      avatar: user.avatarUrl,
-      roles,
-    },
-  })
+  return kit.response.ok({ user })
 })

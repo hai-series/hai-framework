@@ -46,12 +46,18 @@ export const POST = kit.handler(async ({ request, locals, getClientAddress }) =>
   }
 
   // 创建角色
-  const role = await roleService.create({
+  const createResult = await roleService.create({
     code,
     name,
     description,
     permissions: permissionIds,
   })
+
+  if (!createResult.success) {
+    return kit.response.badRequest(createResult.error.message)
+  }
+
+  const role = createResult.data
 
   // 记录审计日志
   const ip = getClientAddress()

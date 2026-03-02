@@ -8,7 +8,6 @@ import * as m from '$lib/paraglide/messages.js'
 import { normalizeUniqueConstraintError, toIamUserResponse } from '$lib/server/iam-helpers.js'
 import { createUpdateUserSchema, IdParamSchema } from '$lib/server/schemas/index.js'
 import { audit } from '@h-ai/audit'
-import { core } from '@h-ai/core'
 import { iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
 
@@ -141,21 +140,9 @@ export const DELETE = kit.handler(async ({ params, locals, request, getClientAdd
 
   const existing = existingResult.data
 
-  // 尽力清理会话，但不应阻断用户删除主流程。
-  try {
-    await iam.session.deleteByUserId(userId)
-  }
-  catch (error) {
-    core.logger.warn('Failed to clear user sessions before deletion', { userId, error })
-  }
-
-  // 使用 iam.user.deleteUser（内部清理角色关联等数据）
+  // 使用 iam.user.deleteUser（内部清理角色关联、会话等数据）
   const deleteResult = await iam.user.deleteUser(userId)
   if (!deleteResult.success) {
-    core.logger.error('Failed to delete user', {
-      userId,
-      error: deleteResult.error.message,
-    })
     return kit.response.internalError(m.api_iam_users_delete_failed())
   }
 

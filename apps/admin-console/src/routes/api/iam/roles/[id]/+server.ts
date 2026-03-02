@@ -57,11 +57,17 @@ export const PUT = kit.handler(async ({ params, request, locals, getClientAddres
   }
 
   // 更新角色
-  const role = await roleService.update(roleId, {
+  const updateResult = await roleService.update(roleId, {
     name: input.name,
     description: input.description,
     permissions: permissionIds,
   })
+
+  if (!updateResult.success) {
+    return kit.response.badRequest(updateResult.error.message)
+  }
+
+  const role = updateResult.data
 
   // 记录审计日志
   const ip = getClientAddress()
@@ -96,7 +102,10 @@ export const DELETE = kit.handler(async ({ params, locals, request, getClientAdd
   }
 
   // 删除角色
-  await roleService.delete(roleId)
+  const deleteResult = await roleService.delete(roleId)
+  if (!deleteResult.success) {
+    return kit.response.badRequest(deleteResult.error.message)
+  }
 
   // 记录审计日志
   const ip = getClientAddress()

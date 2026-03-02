@@ -44,7 +44,7 @@ export const POST = kit.handler(async ({ request, locals, getClientAddress }) =>
   }
 
   // 创建权限
-  const permission = await permissionService.create({
+  const createResult = await permissionService.create({
     code,
     name,
     description,
@@ -52,6 +52,12 @@ export const POST = kit.handler(async ({ request, locals, getClientAddress }) =>
     action,
     type,
   })
+
+  if (!createResult.success) {
+    return kit.response.badRequest(createResult.error.message)
+  }
+
+  const permission = createResult.data
 
   // 记录审计日志
   const ip = getClientAddress()

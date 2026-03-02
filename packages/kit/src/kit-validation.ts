@@ -7,6 +7,7 @@
 
 import type { z } from 'zod'
 import type { FormError, FormValidationResult } from './kit-types.js'
+import { z as zod } from 'zod'
 import { kitM } from './kit-i18n.js'
 import { badRequest } from './kit-response.js'
 
@@ -268,3 +269,45 @@ export function validateParamsOrFail<T extends z.ZodType>(
   }
   return result.data
 }
+
+// ─── 通用 Schema ───
+
+/**
+ * 路径参数 id 校验 Schema
+ *
+ * 验证 `event.params.id` 为非空字符串。
+ *
+ * @example
+ * ```ts
+ * const { id } = kit.validate.paramsOrFail(event.params, IdParamSchema)
+ * ```
+ */
+export const IdParamSchema = zod.object({
+  id: zod.string().min(1, 'ID is required'),
+})
+
+/** 分页 pageSize 上限 */
+const MAX_PAGE_SIZE = 100
+
+/**
+ * 通用分页查询参数 Schema
+ *
+ * 包含 page（默认 1）、pageSize（默认 20，上限 100）、search（可选）。
+ * 可通过 `.extend()` 扩展业务字段。
+ *
+ * @example
+ * ```ts
+ * // 直接使用
+ * const { page, pageSize, search } = kit.validate.queryOrFail(url, PaginationQuerySchema)
+ *
+ * // 扩展业务字段
+ * const ListUsersSchema = PaginationQuerySchema.extend({
+ *   enabled: z.enum(['true', 'false']).transform(v => v === 'true').optional(),
+ * })
+ * ```
+ */
+export const PaginationQuerySchema = zod.object({
+  page: zod.coerce.number().int().min(1).default(1),
+  pageSize: zod.coerce.number().int().min(1).max(MAX_PAGE_SIZE).default(20),
+  search: zod.string().optional(),
+})

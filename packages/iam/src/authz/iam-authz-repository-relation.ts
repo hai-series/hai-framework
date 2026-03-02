@@ -89,6 +89,17 @@ export interface RolePermissionRepository {
    * @returns 角色 ID 数组
    */
   getRoleIdsByPermissionId: (permissionId: string) => Promise<Result<string[], IamError>>
+
+  /**
+   * 批量获取多个角色的权限列表
+   *
+   * 单次查询替代 N 次 getPermissions 调用，避免 N+1 问题。
+   * 返回 Map：key 为 roleId，value 为该角色的权限列表；无权限的角色返回空数组。
+   *
+   * @param roleIds - 角色 ID 列表
+   * @returns Map<roleId, Permission[]>
+   */
+  getPermissionsForRoles: (roleIds: string[]) => Promise<Result<Map<string, Permission[]>, IamError>>
 }
 
 // ─── 用户-角色关联存储接口 ───
@@ -149,6 +160,17 @@ export interface UserRoleRepository {
    * @param permissionCodes - 预计算的权限 code 列表
    */
   syncUserSessionPermissions: (userId: string, permissionCodes: string[]) => Promise<Result<void, IamError>>
+
+  /**
+   * 批量获取多个用户的角色列表
+   *
+   * 单次查询替代 N 次 getRoles 调用，避免 N+1 问题。
+   * 返回 Map：key 为 userId，value 为该用户的角色列表；无角色的用户返回空数组。
+   *
+   * @param userIds - 用户 ID 列表
+   * @returns Map<userId, Role[]>
+   */
+  getRolesForUsers: (userIds: string[]) => Promise<Result<Map<string, Role[]>, IamError>>
 }
 
 // ─── 角色-权限关联存储实现 ───
@@ -619,6 +641,68 @@ export async function createDbRolePermissionRepository(
       }
       return ok(result.data.map(r => r.role_id))
     },
+
+    async getPermissionsForRoles(roleIds: string[]): Promise<Result<Map<string, Permission[]>, IamError>> {
+      const result = new Map<string, Permission[]>()
+      // 空列表直接返回空 Map
+      if (roleIds.length === 0) {
+        return ok(result)
+      }
+
+      // 批量查询所有角色的权限关联
+      const placeholders = roleIds.map(() => '?').join(', ')
+      const relationsResult = await db.sql.query<{ role_id: string, permission_id: string }>(
+        `SELECT role_id, permission_id FROM ${ROLE_PERMISSION_TABLE} WHERE role_id IN (${placeholders})`,
+        roleIds,
+      )
+      if (!relationsResult.success) {
+        return err({
+          code: IamErrorCode.REPOSITORY_ERROR,
+          message: iamM('iam_queryPermissionFailed', { params: { message: relationsResult.error.message } }),
+          cause: relationsResult.error,
+        })
+      }
+
+      // 初始化所有 roleId → 空数组
+      for (const rid of roleIds) {
+        result.set(rid, [])
+      }
+
+      if (relationsResult.data.length === 0) {
+        return ok(result)
+      }
+
+      // 收集去重的 permissionId，批量查询权限详情
+      const uniquePermIds = [...new Set(relationsResult.data.map(r => r.permission_id))]
+      const permPlaceholders = uniquePermIds.map(() => '?').join(', ')
+      const permsResult = await permissionRepository.findAll({
+        where: `id IN (${permPlaceholders})`,
+        params: uniquePermIds,
+      })
+      if (!permsResult.success) {
+        return err({
+          code: IamErrorCode.REPOSITORY_ERROR,
+          message: iamM('iam_queryPermissionFailed', { params: { message: permsResult.error.message } }),
+          cause: permsResult.error,
+        })
+      }
+
+      // permissionId → Permission 索引
+      const permMap = new Map<string, Permission>()
+      for (const perm of permsResult.data) {
+        permMap.set(perm.id, perm)
+      }
+
+      // 按 roleId 分组填充
+      for (const rel of relationsResult.data) {
+        const perm = permMap.get(rel.permission_id)
+        if (perm) {
+          result.get(rel.role_id)!.push(perm)
+        }
+      }
+
+      return ok(result)
+    },
   })
 }
 
@@ -1008,5 +1092,67 @@ export async function createDbUserRoleRepository(
 
     syncUserSessionRoles,
     syncUserSessionPermissions,
+
+    async getRolesForUsers(userIds: string[]): Promise<Result<Map<string, Role[]>, IamError>> {
+      const result = new Map<string, Role[]>()
+      // 空列表直接返回空 Map
+      if (userIds.length === 0) {
+        return ok(result)
+      }
+
+      // 批量查询所有用户的角色关联
+      const placeholders = userIds.map(() => '?').join(', ')
+      const relationsResult = await db.sql.query<{ user_id: string, role_id: string }>(
+        `SELECT user_id, role_id FROM ${USER_ROLE_TABLE} WHERE user_id IN (${placeholders})`,
+        userIds,
+      )
+      if (!relationsResult.success) {
+        return err({
+          code: IamErrorCode.REPOSITORY_ERROR,
+          message: iamM('iam_queryRoleFailed', { params: { message: relationsResult.error.message } }),
+          cause: relationsResult.error,
+        })
+      }
+
+      // 初始化所有 userId → 空数组
+      for (const uid of userIds) {
+        result.set(uid, [])
+      }
+
+      if (relationsResult.data.length === 0) {
+        return ok(result)
+      }
+
+      // 收集去重的 roleId，批量查询角色详情
+      const uniqueRoleIds = [...new Set(relationsResult.data.map(r => r.role_id))]
+      const rolePlaceholders = uniqueRoleIds.map(() => '?').join(', ')
+      const rolesResult = await roleRepository.findAll({
+        where: `id IN (${rolePlaceholders})`,
+        params: uniqueRoleIds,
+      })
+      if (!rolesResult.success) {
+        return err({
+          code: IamErrorCode.REPOSITORY_ERROR,
+          message: iamM('iam_queryRoleFailed', { params: { message: rolesResult.error.message } }),
+          cause: rolesResult.error,
+        })
+      }
+
+      // roleId → Role 索引
+      const roleMap = new Map<string, Role>()
+      for (const role of rolesResult.data) {
+        roleMap.set(role.id, role)
+      }
+
+      // 按 userId 分组填充
+      for (const rel of relationsResult.data) {
+        const role = roleMap.get(rel.role_id)
+        if (role) {
+          result.get(rel.user_id)!.push(role)
+        }
+      }
+
+      return ok(result)
+    },
   })
 }

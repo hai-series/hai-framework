@@ -6,7 +6,7 @@
 
 import { LoginSchema } from '$lib/server/schemas/index.js'
 import { audit } from '@h-ai/audit'
-import { iam } from '@h-ai/iam'
+import { iam, IamErrorCode } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
 
 export const POST = kit.handler(async ({ request, cookies, getClientAddress }) => {
@@ -18,12 +18,10 @@ export const POST = kit.handler(async ({ request, cookies, getClientAddress }) =
     const errorCode = loginResult.error.code
     // 根据错误码决定 HTTP 状态码
     let status = 400
-    // 5001 = INVALID_CREDENTIALS, 5002 = USER_NOT_FOUND
-    if (errorCode === 5001 || errorCode === 5002) {
+    if (errorCode === IamErrorCode.INVALID_CREDENTIALS || errorCode === IamErrorCode.USER_NOT_FOUND) {
       status = 401
     }
-    // 5003 = USER_DISABLED, 5004 = USER_LOCKED
-    else if (errorCode === 5003 || errorCode === 5004) {
+    else if (errorCode === IamErrorCode.USER_DISABLED || errorCode === IamErrorCode.USER_LOCKED) {
       status = 403
     }
     return kit.response.error('AUTH_FAILED', loginResult.error.message, status)

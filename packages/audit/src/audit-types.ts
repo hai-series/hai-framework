@@ -181,11 +181,11 @@ export interface AuditHelper {
   /**
    * 记录密码重置完成
    *
-   * @param userId - 重置密码的用户 ID
+   * @param userId - 重置密码的用户 ID（匿名重置场景传 null）
    * @param ip - 客户端 IP（可选）
    * @param ua - 客户端 User-Agent（可选）
    */
-  passwordResetComplete: (userId: string, ip?: string, ua?: string) => Promise<Result<void, AuditError>>
+  passwordResetComplete: (userId: string | null, ip?: string, ua?: string) => Promise<Result<void, AuditError>>
   /**
    * 记录 CRUD 操作
    *

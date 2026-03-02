@@ -7,8 +7,11 @@
  * =============================================================================
  */
 
+import type { Result } from '@h-ai/core'
 import type { Permission, PermissionQueryOptions, PermissionType } from '@h-ai/iam'
+import type { ServiceError } from './role.js'
 import * as m from '$lib/paraglide/messages.js'
+import { err, ok } from '@h-ai/core'
 import { iam } from '@h-ai/iam'
 
 // =============================================================================
@@ -140,8 +143,10 @@ async function listAllPermissions(pageSize = 200): Promise<Permission[]> {
 export const permissionService = {
   /**
    * 创建权限
+   *
+   * @returns 成功返回权限对象；失败返回 ServiceError
    */
-  async create(input: CreatePermissionInput): Promise<PermissionWithSystem> {
+  async create(input: CreatePermissionInput): Promise<Result<PermissionWithSystem, ServiceError>> {
     const result = await iam.authz.createPermission({
       code: input.code,
       name: input.name,
@@ -152,10 +157,10 @@ export const permissionService = {
     })
 
     if (!result.success) {
-      throw new Error(`${m.api_iam_permissions_create_failed()}: ${result.error.message}`)
+      return err({ message: `${m.api_iam_permissions_create_failed()}: ${result.error.message}` })
     }
 
-    return this.toPermissionWithSystem(result.data)
+    return ok(this.toPermissionWithSystem(result.data))
   },
 
   /**
@@ -243,9 +248,8 @@ export const permissionService = {
    *
    * 注意：IAM 模块目前不支持更新权限，只能删除后重建
    */
-  async update(_id: string, _input: UpdatePermissionInput): Promise<Permission | null> {
-    // IAM 模块目前不支持更新权限
-    throw new Error(m.api_iam_permissions_update_not_supported())
+  async update(_id: string, _input: UpdatePermissionInput): Promise<Result<Permission, ServiceError>> {
+    return err({ message: m.api_iam_permissions_update_not_supported() })
   },
 
   /**

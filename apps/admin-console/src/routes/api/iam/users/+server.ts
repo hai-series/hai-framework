@@ -5,10 +5,10 @@
  */
 
 import * as m from '$lib/paraglide/messages.js'
-import { toIamUserResponse } from '$lib/server/iam-helpers.js'
+import { toIamUserResponse, toIamUserResponses } from '$lib/server/iam-helpers.js'
 import { createCreateUserSchema, ListUsersQuerySchema } from '$lib/server/schemas/index.js'
 import { audit } from '@h-ai/audit'
-import { iam } from '@h-ai/iam'
+import { iam, IamErrorCode } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
 
 /**
@@ -36,8 +36,8 @@ export const GET = kit.handler(async ({ url, locals }) => {
 
   const { items, total } = usersResult.data
 
-  // 获取每个用户的角色
-  const users = await Promise.all(items.map(toIamUserResponse))
+  // 批量获取所有用户的角色（避免 N+1）
+  const users = await toIamUserResponses(items)
 
   return kit.response.ok({ users, total, page, pageSize })
 })
@@ -60,7 +60,7 @@ export const POST = kit.handler(async ({ request, locals, getClientAddress }) =>
   })
 
   if (!registerResult.success) {
-    if (registerResult.error.code === 5002 || registerResult.error.code === 5502) {
+    if (registerResult.error.code === IamErrorCode.USER_NOT_FOUND || registerResult.error.code === IamErrorCode.USER_ALREADY_EXISTS) {
       return kit.response.conflict(m.api_auth_username_or_email_taken())
     }
     return kit.response.badRequest(registerResult.error.message)
