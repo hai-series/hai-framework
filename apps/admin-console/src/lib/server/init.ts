@@ -183,8 +183,8 @@ export async function initApp(): Promise<void> {
     throw new Error(fullMessage)
   }
 
-  // 8. 初始化审计日志模块
-  const auditResult = await audit.init({ db })
+  // 8. 初始化审计日志模块（IAM 用户表为 iam_users）
+  const auditResult = await audit.init({ db, userTable: 'iam_users' })
   if (!auditResult.success) {
     core.logger.warn('Audit module initialization failed', { error: auditResult.error.message })
   }
