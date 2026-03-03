@@ -2,9 +2,12 @@
   /**
    * 购物车页
    */
+  import * as m from '$lib/paraglide/messages.js'
+  import { Button, IconButton, Card, Empty } from '@h-ai/ui'
+
   let items = $state([
-    { id: 1, name: '智能手表 Pro', price: 299, qty: 1, icon: '⌚' },
-    { id: 2, name: '无线蓝牙耳机', price: 129, qty: 2, icon: '🎧' }
+    { id: 1, name: m.home_rec_watch(), price: 299, qty: 1, icon: '⌚' },
+    { id: 2, name: m.home_rec_earbuds(), price: 129, qty: 2, icon: '🎧' },
   ])
 
   const total = $derived(items.reduce((sum, item) => sum + item.price * item.qty, 0))
@@ -15,40 +18,58 @@
 </script>
 
 <svelte:head>
-  <title>购物车 - H5 应用</title>
+  <title>{m.cart_title()} - {m.app_title()}</title>
 </svelte:head>
 
 <div class="p-4">
-  <h1 class="text-xl font-bold mb-4">购物车</h1>
+  <h1 class="text-xl font-bold mb-4 flex items-center gap-2">
+    <span class="icon-[tabler--shopping-cart] text-primary text-2xl"></span>
+    {m.cart_title()}
+  </h1>
 
   {#if items.length === 0}
-    <div class="flex flex-col items-center justify-center py-20 text-gray-400">
-      <span class="text-5xl mb-4">🛒</span>
-      <p>购物车是空的</p>
-      <a href="/" class="btn btn-primary btn-sm mt-4">去逛逛</a>
-    </div>
+    <Empty title={m.cart_empty()} icon="inbox">
+      {#snippet action()}
+        <a href="/">
+          <Button variant="primary" size="sm">
+            <span class="icon-[tabler--arrow-left] text-base"></span>
+            {m.cart_go_shopping()}
+          </Button>
+        </a>
+      {/snippet}
+    </Empty>
   {:else}
     <div class="space-y-3">
       {#each items as item (item.id)}
-        <div class="flex items-center gap-3 p-3 bg-base-200 rounded-lg">
-          <span class="text-3xl">{item.icon}</span>
-          <div class="flex-1">
-            <h3 class="font-medium text-sm">{item.name}</h3>
-            <p class="text-primary font-bold text-sm">¥{item.price}</p>
+        <Card padding="sm" shadow="sm">
+          <div class="flex items-center gap-3">
+            <div class="w-14 h-14 rounded-lg bg-base-200 flex items-center justify-center text-2xl shrink-0">
+              {item.icon}
+            </div>
+            <div class="flex-1 min-w-0">
+              <h3 class="font-medium text-sm truncate">{item.name}</h3>
+              <p class="text-primary font-bold text-sm mt-0.5">¥{item.price}</p>
+              <div class="flex items-center gap-1.5 mt-1.5">
+                <IconButton variant="outline" size="xs" ariaLabel="decrease" onclick={() => { if (item.qty > 1) item.qty-- }}>
+                  <span class="icon-[tabler--minus] text-sm"></span>
+                </IconButton>
+                <span class="text-sm w-6 text-center font-medium">{item.qty}</span>
+                <IconButton variant="outline" size="xs" ariaLabel="increase" onclick={() => item.qty++}>
+                  <span class="icon-[tabler--plus] text-sm"></span>
+                </IconButton>
+              </div>
+            </div>
+            <IconButton variant="ghost" size="xs" ariaLabel="remove" class="text-base-content/30 hover:text-error" onclick={() => removeItem(item.id)}>
+              <span class="icon-[tabler--trash] text-lg"></span>
+            </IconButton>
           </div>
-          <div class="flex items-center gap-2">
-            <button class="btn btn-xs btn-outline" onclick={() => { if (item.qty > 1) item.qty-- }}>-</button>
-            <span class="text-sm w-6 text-center">{item.qty}</span>
-            <button class="btn btn-xs btn-outline" onclick={() => item.qty++}>+</button>
-          </div>
-          <button class="btn btn-ghost btn-xs text-error" onclick={() => removeItem(item.id)}>✕</button>
-        </div>
+        </Card>
       {/each}
     </div>
 
-    <div class="fixed bottom-16 left-0 right-0 max-w-lg mx-auto bg-base-100 border-t p-3 flex items-center justify-between">
-      <span class="text-lg font-bold">合计：<span class="text-primary">¥{total}</span></span>
-      <button class="btn btn-primary btn-sm">去结算</button>
+    <div class="sticky bottom-0 bg-base-100 border-t border-base-200 p-3 mt-4 -mx-4 px-4 flex items-center justify-between">
+      <span class="font-bold">{m.cart_total_label()}: <span class="text-primary text-lg">¥{total}</span></span>
+      <Button variant="primary" size="sm" class="rounded-full px-6">{m.cart_checkout()}</Button>
     </div>
   {/if}
 </div>

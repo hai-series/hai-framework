@@ -9,6 +9,14 @@ login:
 password:
   minLength: 6
   maxLength: 128
+  requireUppercase: false
+  requireLowercase: false
+  requireNumber: false
+  requireSpecialChar: false
+
+register:
+  enabled: true
+  defaultEnabled: true
 
 session:
   type: jwt

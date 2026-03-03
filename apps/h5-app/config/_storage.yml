@@ -3,6 +3,4 @@
 # =============================================================================
 
 type: ${HAI_STORAGE_TYPE:local}
-
-local:
-  root: ${HAI_STORAGE_PATH:./data/uploads}
+root: ${HAI_STORAGE_PATH:./data/uploads}

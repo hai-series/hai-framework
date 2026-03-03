@@ -1,8 +1,12 @@
 /**
- * SvelteKit 服务端钩子 — H5 应用
+ * =============================================================================
+ * hai H5 App - Server Hooks
+ * =============================================================================
  */
+
 import type { Handle } from '@sveltejs/kit'
-import { initApp } from '$lib/server/init'
+import { paraglideMiddleware } from '$lib/paraglide/server.js'
+import { initApp } from '$lib/server/init.js'
 import { core } from '@h-ai/core'
 import { iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
@@ -19,9 +23,33 @@ async function ensureAppInitialized() {
   await appInitPromise
 }
 
-/**
- * 会话验证
- */
+// =============================================================================
+// 初始化 + i18n Handle
+// =============================================================================
+
+const i18nHandle: Handle = async ({ event, resolve }) => {
+  await ensureAppInitialized()
+
+  if (event.url.pathname.startsWith('/api/')) {
+    const locale = event.cookies.get('PARAGLIDE_LOCALE') ?? 'zh-CN'
+    event.locals.locale = locale
+    kit.i18n.setLocale(locale)
+    return resolve(event)
+  }
+
+  return paraglideMiddleware(event.request, async ({ locale }) => {
+    event.locals.locale = locale
+    kit.i18n.setLocale(locale)
+    return resolve(event, {
+      transformPageChunk: ({ html }) => html.replace('%lang%', locale),
+    })
+  })
+}
+
+// =============================================================================
+// 会话验证
+// =============================================================================
+
 async function validateSession(token: string) {
   const result = await iam.auth.verifyToken(token)
   if (!result.success)
@@ -38,10 +66,9 @@ async function validateSession(token: string) {
   }
 }
 
-const initHandle: Handle = async ({ event, resolve }) => {
-  await ensureAppInitialized()
-  return resolve(event)
-}
+// =============================================================================
+// hai Handle
+// =============================================================================
 
 const haiHandle = kit.createHandle({
   sessionCookieName: 'h5_session',
@@ -49,11 +76,15 @@ const haiHandle = kit.createHandle({
   middleware: [
     kit.middleware.logging({ logBody: false }),
     kit.middleware.rateLimit({ windowMs: 60000, maxRequests: 200 }),
+    kit.middleware.csrf({
+      exclude: ['/api/auth/*'],
+    }),
   ],
   guards: [
     {
       guard: kit.guard.auth({ apiMode: true }),
-      paths: ['/api/user/*'],
+      paths: ['/api/user/*', '/api/vision/*', '/api/upload'],
+      exclude: ['/api/auth/*'],
     },
   ],
   onError: (error: unknown) => {
@@ -65,4 +96,4 @@ const haiHandle = kit.createHandle({
   },
 })
 
-export const handle: Handle = kit.sequence(initHandle, haiHandle)
+export const handle: Handle = kit.sequence(i18nHandle, haiHandle)
