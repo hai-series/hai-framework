@@ -1,7 +1,8 @@
 /**
  * @h-ai/kit — SvelteKit Handle Hook
  *
- * 创建 SvelteKit Handle Hook，集成请求 ID 生成、会话验证、Cookie 加密代理、 路由守卫、中间件链与传输加密。另提供 sequence() 用于组合多个 Handle。
+ * 创建 SvelteKit Handle Hook，集成请求 ID 生成、会话验证、Cookie 加密代理、
+ * 路由守卫、中间件链与可选传输加密；同时提供 `sequence()` 组合多个 Handle。
  * @module kit-handle
  */
 
@@ -29,7 +30,7 @@ function generateId(prefix: string): string {
 /**
  * 创建 hai handle hook
  *
- * 整合会话解析、路由守卫、中间件链与统一错误处理的 SvelteKit handle hook 工厂。
+ * 整合会话解析、路由守卫、中间件链与统一错误处理的 SvelteKit Handle 工厂。
  *
  * 执行顺序：
  * 1. 生成 `requestId` 并写入 `event.locals`

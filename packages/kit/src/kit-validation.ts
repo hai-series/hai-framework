@@ -1,7 +1,10 @@
 /**
  * @h-ai/kit — 请求数据验证
  *
- * 基于 Zod 的请求数据验证工具，支持表单/JSON Body、URL 查询参数和路由参数的 解析与校验。每种数据源提供安全返回（FormValidationResult）与抛出控制流 （OrFail / throw Response）两种变体。
+ * 基于 Zod 的请求数据验证工具，支持表单/JSON Body、URL 查询参数与路由参数。
+ * 每种数据源都提供两类 API：
+ * - 安全返回：`FormValidationResult`
+ * - 失败抛出：`OrFail`（抛出 `Response` 以走 SvelteKit 控制流）
  * @module kit-validation
  */
 
@@ -178,7 +181,7 @@ export function validateParams<T extends z.ZodType>(
   return createValidationResult(result.error)
 }
 
-// ─── OrFail 变体 — 校验失败时 throw Response（SvelteKit 控制流） ───
+// ─── OrFail 变体 — 校验失败时抛出 Response（SvelteKit 控制流） ───
 
 /**
  * 从 Request 解析并验证表单数据，失败时 throw Response

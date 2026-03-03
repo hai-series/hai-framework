@@ -1,7 +1,8 @@
 /**
  * @h-ai/kit — CORS 中间件
  *
- * 配置跨域资源共享（CORS）策略，自动处理 OPTIONS 预检请求与响应头注入。 支持精确 origin / 通配符 / 函数匹配三种模式。
+ * 配置跨域资源共享（CORS）策略，自动处理 OPTIONS 预检请求与响应头注入。
+ * 支持精确 origin、数组白名单与函数匹配三种模式。
  * @module kit-cors
  */
 

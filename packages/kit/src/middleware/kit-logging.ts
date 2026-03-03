@@ -1,7 +1,8 @@
 /**
  * @h-ai/kit — 日志中间件
  *
- * HTTP 请求日志中间件，记录请求/响应摘要（方法、路径、状态码、耗时）， 并自动脱敏敏感字段（password / token / secret 等）。
+ * HTTP 请求日志中间件，记录请求/响应摘要（方法、路径、状态码、耗时），
+ * 并自动脱敏敏感字段（password / token / secret 等）。
  * @module kit-logging
  */
 

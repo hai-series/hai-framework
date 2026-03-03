@@ -1,7 +1,8 @@
 /**
  * @h-ai/kit — Session Cookie 工具
  *
- * 统一管理 SvelteKit 的会话 Cookie 设置与清除， 避免在多个 API Handler 中重复拼写 cookie 选项。
+ * 统一管理 SvelteKit 会话 Cookie 的设置与清除，
+ * 避免在多个 API Handler / Action 中重复拼写 Cookie 选项。
  * @module kit-session
  */
 
@@ -15,7 +16,7 @@ export interface SetSessionCookieOptions {
   cookieName?: string
   /** Cookie 有效期（秒），默认 7 天 */
   maxAge?: number
-  /** 是否仅 HTTPS（默认 `true` 当 NODE_ENV 为 production） */
+  /** 是否仅 HTTPS（默认在 production 环境为 `true`） */
   secure?: boolean
   /** SameSite 属性（默认 `'lax'`） */
   sameSite?: 'strict' | 'lax' | 'none'
