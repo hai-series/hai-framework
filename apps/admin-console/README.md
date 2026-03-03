@@ -87,6 +87,9 @@ src/routes/
     │   ├── login/+server.ts
     │   ├── register/+server.ts
     │   ├── logout/+server.ts
+    │   ├── profile/+server.ts
+    │   ├── profile/avatar/+server.ts
+    │   ├── profile/password/+server.ts
     │   ├── forgot-password/+server.ts
     │   ├── reset-password/+server.ts
     │   └── me/+server.ts
@@ -99,6 +102,8 @@ src/routes/
     │   └── permissions/[id]/+server.ts
     └── health/+server.ts
 ```
+
+> 说明：`admin-console` 不提供 `/api/storage/[...key]` 本地文件转发路由。头像上传接口返回 `storage.presign.publicUrl(...)` 生成的公开 URL。
 
 ## ⚙️ 配置
 

@@ -124,7 +124,7 @@ const downloadUrl = await storage.presign.getUrl('uploads/doc.pdf', {
 
 ```typescript
 import { storage } from '$lib/server/init'
-// src/routes/api/storage/+server.ts
+// src/routes/api/files/upload/+server.ts
 import { kit } from '@h-ai/kit'
 import { z } from 'zod'
 
@@ -147,6 +147,8 @@ export const POST = kit.handler(async ({ request, locals }) => {
   return kit.response.created({ key })
 })
 ```
+
+> 说明：`@h-ai/storage` 只提供存储能力，不强制要求 `/api/storage` 路由命名。应用可按业务语义自定义 API 路径。
 
 ### 头像上传
 

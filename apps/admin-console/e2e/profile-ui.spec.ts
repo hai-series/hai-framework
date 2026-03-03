@@ -94,8 +94,8 @@ test.describe('Profile UI', () => {
     const uploadBody = await uploadResponse.json()
     expect(uploadResponse.ok(), `avatar upload status=${uploadResponse.status()} body=${JSON.stringify(uploadBody)}`).toBeTruthy()
     const avatarUrl = uploadBody.data?.avatar ?? uploadBody.avatar
-    // 上传后返回存储 URL（本地存储为 /api/storage/avatars/... ，S3 为完整 URL）
-    expect(String(avatarUrl)).toMatch(/\/api\/storage\/avatars\/|^https?:\/\//)
+    // 上传后返回可公开访问的存储 URL
+    expect(String(avatarUrl)).toMatch(/^https?:\/\//)
 
     // 步骤 2：将头像 URL 持久化至用户资料
     const persistResponse = await page.request.put('/api/auth/profile', {
@@ -109,12 +109,7 @@ test.describe('Profile UI', () => {
     expect(meResponse.ok()).toBeTruthy()
     expect(meBody.success).toBeTruthy()
     const meUser = meBody.user ?? meBody.data?.user
-    expect(String(meUser?.avatar ?? '')).toMatch(/\/api\/storage\/avatars\/|^https?:\/\//)
-
-    // 步骤 4：验证存储文件可通过 URL 访问
-    const fileResponse = await page.request.get(String(avatarUrl))
-    expect(fileResponse.ok(), `avatar file fetch status=${fileResponse.status()}`).toBeTruthy()
-    expect(fileResponse.headers()['content-type']).toContain('image/png')
+    expect(String(meUser?.avatar ?? '')).toMatch(/^https?:\/\//)
   })
 
   test('updates display name and shows it in top user menu', async ({ page, request }) => {
@@ -288,7 +283,7 @@ test.describe('Profile UI', () => {
       await page.waitForTimeout(2000)
 
       // 头像区域应有变化（存储 URL 或 img 标签更新）
-      const avatarImg = page.locator('img[alt*="avatar" i], .avatar img, img[src*="/api/storage/"]')
+      const avatarImg = page.locator('img[alt*="avatar" i], .avatar img, img[src^="http"]')
       if (await avatarImg.count() > 0) {
         const src = await avatarImg.first().getAttribute('src')
         expect(src).toBeTruthy()

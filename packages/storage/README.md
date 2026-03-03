@@ -44,9 +44,12 @@ await storage.close()
 ```ts
 import { downloadAndSave, uploadWithPresignedUrl } from '@h-ai/storage/client'
 
-const { uploadUrl } = await fetch('/api/storage/presign').then(r => r.json())
+// 业务端点路径由应用自行定义（例如 /api/files/presign-put）
+const { uploadUrl } = await fetch('/api/files/presign-put').then(r => r.json())
 await uploadWithPresignedUrl(uploadUrl, file)
 ```
+
+> 注意：`@h-ai/storage` 不内置 HTTP 路由；请在应用层自行实现签名 URL API。
 
 ## API 概览
 

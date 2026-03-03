@@ -6,7 +6,7 @@
   import type { Snippet } from 'svelte'
   import '../app.css'
   import { browser } from '$app/environment'
-  import { core } from '@h-ai/core'
+  import { setGlobalLocale } from '@h-ai/ui'
   import { getLocale } from '$lib/paraglide/runtime.js'
   import * as m from '$lib/paraglide/messages'
   
@@ -16,11 +16,11 @@
   
   let { children }: Props = $props()
 
-  // 客户端加载时，同步 Paraglide locale 到 @h-ai/core
-  // 这确保 @h-ai/ui 等模块使用正确的 locale
+  // 客户端加载时，同步 Paraglide locale 到全局 i18n（由 @h-ai/ui 转发到 core）
+  // 这确保 UI 组件与框架模块使用一致的 locale
   if (browser) {
     const paraglideLocale = getLocale()
-    core.i18n.setGlobalLocale(paraglideLocale)
+    setGlobalLocale(paraglideLocale)
   }
 </script>
 
