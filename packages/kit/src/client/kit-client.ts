@@ -1,7 +1,8 @@
 /**
  * @h-ai/kit — 统一客户端
  *
- * 合并 CSRF Token 附加与传输加密为一个透明的 fetch 函数。 应用层只需调用一次 `createKitClient()`，后续所有 API 调用 自动完成 CSRF + 加密，业务代码无需感知。
+ * 将 CSRF Token 附加与可选传输加密封装为统一 `apiFetch`。
+ * 应用层只需调用一次 `createKitClient()`，后续 API 调用即可复用同一套安全能力。
  * @module kit-client
  */
 
@@ -40,7 +41,7 @@ export interface KitClientConfig {
  * Kit 客户端实例
  */
 export interface KitClient {
-  /** 统一 API fetch（自动 CSRF + 传输加密） */
+  /** 统一 API fetch（写请求自动附加 CSRF，启用 transport 时自动加解密） */
   apiFetch: (url: string, init?: RequestInit) => Promise<Response>
   /** 传输加密是否就绪（未启用传输加密时始终为 true） */
   readonly ready: boolean

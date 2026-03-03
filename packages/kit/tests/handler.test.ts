@@ -62,7 +62,7 @@ describe('handler', () => {
     expect(response.status).toBe(500)
   })
 
-  it('re-throw Response 对象（SvelteKit 控制流）', async () => {
+  it('直接返回 throw 的 Response 对象', async () => {
     const thrownResponse = new Response('Forbidden', { status: 403 })
 
     const h = handler(async () => {
@@ -70,7 +70,7 @@ describe('handler', () => {
     })
 
     const event = createMockEvent()
-    await expect(h(event)).rejects.toBe(thrownResponse)
+    await expect(h(event)).resolves.toBe(thrownResponse)
   })
 
   it('re-throw SvelteKit redirect 控制流', async () => {

@@ -1,7 +1,9 @@
 /**
  * @h-ai/kit — 速率限制中间件
  *
- * 基于滑动窗口的请求速率限制中间件，内置内存存储（MemoryRateLimitStore）， 支持通过 RateLimitStore 接口接入 Redis 等外部存储后端。
+ * 基于滑动窗口的请求速率限制中间件。
+ * 内置内存存储（`MemoryRateLimitStore`），并支持通过 `RateLimitStore` 接入
+ * Redis 等外部存储后端。
  * @module kit-ratelimit
  */
 

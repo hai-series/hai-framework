@@ -1,7 +1,9 @@
 /**
  * @h-ai/kit — CSRF 中间件
  *
- * 基于 Double-Submit Cookie 模式的 CSRF 防护中间件。 使用 Web Crypto API 生成密码学安全 Token，写请求时自动校验 Cookie 与 Header 中的 Token 一致性。
+ * 基于 Double-Submit Cookie 模式的 CSRF 防护中间件。
+ * 使用 Web Crypto API 生成密码学安全 Token，并在写请求中校验
+ * Cookie 与 Header 的 Token 一致性。
  * @module kit-csrf
  */
 

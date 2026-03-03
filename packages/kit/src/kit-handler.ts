@@ -13,7 +13,7 @@ import { internalError } from './kit-response.js'
  * 检测是否为 SvelteKit 控制流对象（redirect / error）
  *
  * SvelteKit 的 `redirect()` 和 `error()` 会抛出带 `status` 属性的特殊对象，
- * 框架在上层捕获后做控制流处理。此类对象必须 re-throw，不可拦截。
+ * 框架在上层捕获后做控制流处理。此类对象必须继续抛出，不可吞掉。
  *
  * @param value - 被捕获的异常
  * @returns 是否为 SvelteKit 控制流
@@ -33,8 +33,8 @@ function isSvelteKitControlFlow(value: unknown): boolean {
  *
  * 将业务逻辑包裹在统一的异常边界中：
  * 1. 正常执行 `fn(event)` 返回 Response
- * 2. 若 `fn` throw 了 `Response`（如 `requirePermission` / `formOrFail`），re-throw 给 SvelteKit
- * 3. 若 `fn` throw 了 SvelteKit 控制流（`redirect()` / `error()`），re-throw
+ * 2. 若 `fn` throw 了 `Response`（如 `requirePermission` / `formOrFail`），直接返回该 Response
+ * 3. 若 `fn` throw 了 SvelteKit 控制流（`redirect()` / `error()`），继续抛出
  * 4. 其他异常：记录日志 → 返回 `kit.response.internalError()`
  *
  * @param fn - 业务处理函数
@@ -54,7 +54,7 @@ export function handler(fn: (event: RequestEvent) => Promise<Response> | Respons
       return await fn(event)
     }
     catch (error) {
-      // validate.*OrFail 等场景会 throw Response，直接返回即可
+      // validate.*OrFail / requirePermission 等场景会 throw Response，直接返回即可
       if (error instanceof Response) {
         return error
       }

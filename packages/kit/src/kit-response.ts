@@ -1,7 +1,10 @@
 /**
  * @h-ai/kit — API 响应工具
  *
- * 标准化 API 响应工具集，统一 `{ success, data?, error?, requestId? }` 格式。 提供成功（ok / created / noContent）、错误（badRequest / unauthorized / forbidden / notFound / conflict / validationError / internalError）与重定向等常用响应。
+ * 标准化 API 响应工具集，统一 `{ success, data?, error?, requestId? }` 结构。
+ * 提供成功响应（ok / created / noContent）、错误响应
+ * （badRequest / unauthorized / forbidden / notFound / conflict / validationError / internalError）
+ * 以及重定向响应。
  * @module kit-response
  */
 
