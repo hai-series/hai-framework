@@ -1,17 +1,31 @@
 {
   "name": "h5-app",
   "type": "module",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "private": true,
+  "description": "hai Agent Framework - 移动端拍照识别示例应用",
+  "keywords": [
+    "hai",
+    "h5",
+    "mobile",
+    "sveltekit",
+    "svelte5"
+  ],
   "scripts": {
+    "paraglide:compile": "paraglide-js compile --project ./project.inlang --outdir ./src/lib/paraglide",
     "dev": "vite dev",
     "build": "vite build",
     "preview": "vite preview",
-    "typecheck": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "lint": "eslint .",
-    "lint:fix": "eslint . --fix"
+    "lint:fix": "eslint . --fix",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "clean": "rimraf .svelte-kit build .turbo"
   },
   "dependencies": {
+    "@h-ai/ai": "workspace:*",
     "@h-ai/cache": "workspace:*",
     "@h-ai/core": "workspace:*",
     "@h-ai/db": "workspace:*",
@@ -19,18 +33,26 @@
     "@h-ai/kit": "workspace:*",
     "@h-ai/storage": "workspace:*",
     "@h-ai/ui": "workspace:*",
-    "@sveltejs/adapter-auto": "catalog:",
-    "@sveltejs/kit": "catalog:",
-    "@sveltejs/vite-plugin-svelte": "catalog:",
-    "svelte": "catalog:",
-    "vite": "catalog:",
     "zod": "catalog:"
   },
   "devDependencies": {
+    "@iconify-json/tabler": "catalog:",
+    "@iconify/tailwind4": "catalog:",
+    "@inlang/paraglide-js": "catalog:",
+    "@inlang/plugin-message-format": "catalog:",
+    "@playwright/test": "catalog:",
+    "@sveltejs/adapter-auto": "catalog:",
+    "@sveltejs/kit": "catalog:",
+    "@sveltejs/vite-plugin-svelte": "catalog:",
     "@tailwindcss/vite": "catalog:",
+    "@types/node": "catalog:",
     "daisyui": "catalog:",
+    "rimraf": "catalog:",
+    "svelte": "catalog:",
     "svelte-check": "catalog:",
     "tailwindcss": "catalog:",
-    "typescript": "catalog:"
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vitest": "catalog:"
   }
 }

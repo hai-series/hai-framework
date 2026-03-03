@@ -40,6 +40,7 @@ export const POST = kit.handler(async ({ request, cookies }) => {
   }
 
   kit.session.setCookie(cookies, loginResult.data.accessToken, {
+    cookieName: 'h5_session',
     maxAge: iam.config?.session?.maxAge,
   })
 

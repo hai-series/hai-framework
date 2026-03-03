@@ -2,18 +2,20 @@
   /**
    * 个人中心页 — 集成 @h-ai/iam 用户认证和 @h-ai/storage 头像上传
    */
+  import * as m from '$lib/paraglide/messages.js'
+  import { Avatar, Badge, Button, Card, Skeleton, Spinner } from '@h-ai/ui'
 
   let user = $state<{ id: string, username: string, displayName?: string, avatarUrl?: string, email?: string } | null>(null)
   let loading = $state(true)
   let uploading = $state(false)
 
   const menuItems = [
-    { icon: '📦', label: '我的订单', badge: '3' },
-    { icon: '💳', label: '我的钱包', badge: '' },
-    { icon: '📍', label: '收货地址', badge: '' },
-    { icon: '⭐', label: '我的收藏', badge: '12' },
-    { icon: '🎫', label: '优惠券', badge: '5' },
-    { icon: '⚙️', label: '设置', badge: '' },
+    { icon: 'icon-[tabler--package]', label: m.profile_menu_orders, badge: '3' },
+    { icon: 'icon-[tabler--wallet]', label: m.profile_menu_wallet, badge: '' },
+    { icon: 'icon-[tabler--map-pin]', label: m.profile_menu_address, badge: '' },
+    { icon: 'icon-[tabler--star]', label: m.profile_menu_favorites, badge: '12' },
+    { icon: 'icon-[tabler--ticket]', label: m.profile_menu_coupon, badge: '5' },
+    { icon: 'icon-[tabler--settings]', label: m.profile_menu_settings, badge: '' },
   ]
 
   $effect(() => {
@@ -71,35 +73,33 @@
 </script>
 
 <svelte:head>
-  <title>我的 - H5 应用</title>
+  <title>{m.profile_title()} - {m.app_title()}</title>
 </svelte:head>
 
 <div>
   <!-- 用户信息卡片 -->
-  <div class="bg-primary text-primary-content p-6 pb-10">
+  <div class="bg-linear-to-br from-primary to-primary/80 text-primary-content p-6 pb-10">
     {#if loading}
       <div class="flex items-center gap-4">
-        <div class="skeleton w-16 h-16 rounded-full bg-primary-content/20"></div>
-        <div>
-          <div class="skeleton h-5 w-24 mb-2 bg-primary-content/20"></div>
-          <div class="skeleton h-4 w-32 bg-primary-content/20"></div>
+        <Skeleton variant="avatar" class="w-16 h-16 bg-primary-content/20" />
+        <div class="space-y-2">
+          <Skeleton variant="title" width="6rem" class="bg-primary-content/20" />
+          <Skeleton variant="text" width="8rem" class="bg-primary-content/20" />
         </div>
       </div>
     {:else if user}
       <div class="flex items-center gap-4">
-        <label class="avatar cursor-pointer relative">
-          <div class="w-16 rounded-full">
-            {#if user.avatarUrl}
-              <img src={`/api/upload/${user.avatarUrl}`} alt={user.username} class="rounded-full" />
-            {:else}
-              <div class="bg-neutral text-neutral-content w-16 h-16 rounded-full flex items-center justify-center">
-                <span class="text-2xl">{user.username.charAt(0).toUpperCase()}</span>
-              </div>
-            {/if}
-          </div>
+        <label class="relative cursor-pointer">
+          {#if user.avatarUrl}
+            <Avatar src={`/api/upload/${user.avatarUrl}`} alt={user.username} size="xl" />
+          {:else}
+            <Avatar name={user.displayName ?? user.username} size="xl" />
+          {/if}
           <input type="file" accept="image/*" class="hidden" onchange={handleAvatarUpload} />
           {#if uploading}
-            <span class="loading loading-spinner loading-xs absolute bottom-0 right-0"></span>
+            <span class="absolute bottom-0 right-0">
+              <Spinner size="xs" />
+            </span>
           {/if}
         </label>
         <div>
@@ -109,14 +109,10 @@
       </div>
     {:else}
       <div class="flex items-center gap-4">
-        <div class="avatar placeholder">
-          <div class="bg-neutral text-neutral-content w-16 rounded-full">
-            <span class="text-2xl">👤</span>
-          </div>
-        </div>
+        <Avatar name="?" size="xl" class="opacity-60" />
         <div>
-          <h2 class="text-lg font-bold">未登录</h2>
-          <a href="/auth/login" class="text-sm opacity-80 underline">点击登录享更多权益</a>
+          <h2 class="text-lg font-bold">{m.profile_guest_title()}</h2>
+          <a href="/auth/login" class="text-sm opacity-80 underline">{m.profile_guest_login_hint()}</a>
         </div>
       </div>
     {/if}
@@ -124,48 +120,55 @@
 
   <!-- 统计 -->
   <div class="bg-base-100 rounded-t-2xl -mt-4 pt-4 px-4">
-    <div class="grid grid-cols-4 text-center py-3">
-      <div>
-        <p class="font-bold">0</p>
-        <p class="text-xs text-gray-500">待付款</p>
+    <Card padding="sm" shadow="sm">
+      <div class="grid grid-cols-4 text-center py-1">
+        <div>
+          <p class="font-bold text-base-content">0</p>
+          <p class="text-xs text-base-content/50">{m.profile_stat_pending_pay()}</p>
+        </div>
+        <div>
+          <p class="font-bold text-base-content">0</p>
+          <p class="text-xs text-base-content/50">{m.profile_stat_pending_ship()}</p>
+        </div>
+        <div>
+          <p class="font-bold text-base-content">0</p>
+          <p class="text-xs text-base-content/50">{m.profile_stat_pending_receive()}</p>
+        </div>
+        <div>
+          <p class="font-bold text-base-content">0</p>
+          <p class="text-xs text-base-content/50">{m.profile_stat_pending_review()}</p>
+        </div>
       </div>
-      <div>
-        <p class="font-bold">0</p>
-        <p class="text-xs text-gray-500">待发货</p>
-      </div>
-      <div>
-        <p class="font-bold">0</p>
-        <p class="text-xs text-gray-500">待收货</p>
-      </div>
-      <div>
-        <p class="font-bold">0</p>
-        <p class="text-xs text-gray-500">待评价</p>
-      </div>
-    </div>
-
-    <div class="divider my-0"></div>
+    </Card>
 
     <!-- 菜单列表 -->
-    <ul class="menu p-0">
-      {#each menuItems as item}
-        <li>
-          <button class="flex items-center justify-between w-full">
-            <span class="flex items-center gap-3">
-              <span>{item.icon}</span>
-              <span>{item.label}</span>
+    <div class="mt-4">
+      <Card padding="none" shadow="sm">
+        {#each menuItems as item, i}
+          <button class="flex items-center w-full px-4 py-3 active:bg-base-200/60 transition-colors">
+            <span class="{item.icon} text-xl text-primary/70 mr-3"></span>
+            <span class="flex-1 text-left text-sm">{item.label()}</span>
+            <span class="flex items-center gap-2 text-base-content/40">
+              {#if item.badge}
+                <Badge variant="primary" size="sm">{item.badge}</Badge>
+              {/if}
+              <span class="icon-[tabler--chevron-right] text-lg"></span>
             </span>
-            {#if item.badge}
-              <span class="badge badge-sm badge-primary">{item.badge}</span>
-            {/if}
           </button>
-        </li>
-      {/each}
-    </ul>
+          {#if i < menuItems.length - 1}
+            <div class="border-b border-base-200 ml-12"></div>
+          {/if}
+        {/each}
+      </Card>
+    </div>
 
     <!-- 登出按钮 -->
     {#if user}
-      <div class="px-2 py-4">
-        <button class="btn btn-outline btn-error w-full btn-sm" onclick={handleLogout}>退出登录</button>
+      <div class="px-4 py-6">
+        <Button variant="error" outline class="w-full" size="sm" onclick={handleLogout}>
+          <span class="icon-[tabler--logout] text-lg"></span>
+          {m.profile_logout()}
+        </Button>
       </div>
     {/if}
   </div>
