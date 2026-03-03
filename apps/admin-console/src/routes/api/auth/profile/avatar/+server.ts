@@ -6,7 +6,10 @@ import { iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
 import { storage } from '@h-ai/storage'
 
+/** 头像上传大小上限：2MB */
 const MAX_AVATAR_SIZE = 2 * 1024 * 1024
+
+/** 允许上传的头像 MIME 类型白名单 */
 const ALLOWED_IMAGE_TYPES = new Set([
   'image/png',
   'image/jpeg',
@@ -23,7 +26,12 @@ const EXT_MAP: Record<string, string> = {
 }
 
 /**
- * 上传头像文件到存储服务，返回可访问的 URL。
+ * 上传头像文件到存储服务，返回公开可访问 URL。
+ *
+ * 说明：
+ * - admin-console 不再提供 `/api/storage/[...key]` 本地文件转发路由
+ * - 因此此接口要求 `storage.presign.publicUrl(key)` 可用
+ * - 若未配置公开 URL（返回 null），接口返回内部错误
  *
  * @returns 上传处理结果，成功时返回头像 URL
  */
@@ -53,6 +61,7 @@ export const POST = kit.handler(async ({ cookies, request }) => {
 
   const userId = userResult.data.id
   const ext = EXT_MAP[file.type] ?? extname(file.name) ?? '.bin'
+  // 使用随机后缀避免同名覆盖，路径按用户隔离
   const hash = randomBytes(8).toString('hex')
   const key = `avatars/${userId}/${hash}${ext}`
 
@@ -62,8 +71,11 @@ export const POST = kit.handler(async ({ cookies, request }) => {
     return kit.response.internalError(m.common_error())
   }
 
-  // 优先使用 storage publicUrl（S3 场景），本地存储回退到内部服务路由
-  const avatarUrl = storage.presign.publicUrl(key) ?? `/api/storage/${key}`
+  // 仅返回可公开访问的 URL；admin-console 不再提供本地文件转发路由
+  const avatarUrl = storage.presign.publicUrl(key)
+  if (!avatarUrl) {
+    return kit.response.internalError(m.common_error())
+  }
 
   return kit.response.ok({ avatar: avatarUrl })
 })

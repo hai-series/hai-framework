@@ -5,62 +5,30 @@
   - 系统信息
 -->
 <script lang="ts">
-  import type { PageData } from './$types'
-  import { getThemeFontUrl } from '@h-ai/ui'
-  import { core } from '@h-ai/core'
+  import { applyTheme, getCurrentTheme, getSavedTheme, setGlobalLocale } from '@h-ai/ui'
   import { browser } from '$app/environment'
   import { setLocale, getLocale } from '$lib/paraglide/runtime.js'
   import * as m from '$lib/paraglide/messages.js'
-  
-  interface Props {
-    data: PageData
-  }
-
-  let { data }: Props = $props()
 
   // ========== 主题设置 ==========
-  let currentTheme = $state(browser ? document.documentElement.getAttribute('data-theme') ?? 'light' : 'light')
+  let currentTheme = $state(browser ? getCurrentTheme() : 'light')
   
   // 处理主题变更
   function handleThemeChange(theme: string) {
-    if (browser) {
-      document.documentElement.setAttribute('data-theme', theme)
-      localStorage.setItem('theme', theme)
-      currentTheme = theme
-      
-      // 加载主题字体
-      const fontUrl = getThemeFontUrl(theme)
-      if (fontUrl) {
-        loadFont(fontUrl)
-      }
-    }
-  }
-  
-  // 动态加载字体
-  function loadFont(url: string) {
-    const existingLink = document.querySelector(`link[href="${url}"]`)
-    if (existingLink) return
-    
-    const link = document.createElement('link')
-    link.rel = 'stylesheet'
-    link.href = url
-    document.head.appendChild(link)
+    if (!browser) return
+    applyTheme(theme)
+    currentTheme = theme
   }
 
   // ========== 语言设置 ==========
-  const languages = [
-    { value: 'zh-CN', label: '简体中文', flag: 'CN' },
-    { value: 'en-US', label: 'English', flag: 'US' },
-  ]
-  
   let currentLanguage = $state(browser ? getLocale() : 'zh-CN')
   
   function handleLanguageChange(lang: string) {
     if (!browser) return
     if (lang === getLocale()) return
-    // 同步到 @h-ai/core 全局 locale（影响所有模块的错误消息等）
-    core.i18n.setGlobalLocale(lang)
-    // setLocale 会设置 cookie 并刷新页面（Paraglide UI 翻译）
+    // 同步到全局 locale（经 @h-ai/ui 转发，影响核心模块错误消息等）
+    setGlobalLocale(lang)
+    // setLocale 会设置 cookie 并触发页面语言切换（Paraglide UI 翻译）
     setLocale(lang as 'zh-CN' | 'en-US')
   }
 
@@ -68,13 +36,9 @@
   $effect(() => {
     if (browser) {
       // 主题初始化
-      const savedTheme = localStorage.getItem('theme')
-      if (savedTheme) {
-        currentTheme = savedTheme
-        document.documentElement.setAttribute('data-theme', savedTheme)
-        const fontUrl = getThemeFontUrl(savedTheme)
-        if (fontUrl) loadFont(fontUrl)
-      }
+      const savedTheme = getSavedTheme()
+      applyTheme(savedTheme, false)
+      currentTheme = savedTheme
       
       // 语言从 Paraglide getLocale() 获取
       currentLanguage = getLocale()
@@ -133,7 +97,6 @@
           </div>
           <LanguageSwitch
             {currentLanguage}
-            {languages}
             onchange={handleLanguageChange}
           />
         </div>
