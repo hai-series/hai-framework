@@ -23,6 +23,15 @@ const ListQuerySchema = z.object({
 
 const CACHE_KEY = 'api:items:list'
 
+async function clearListCache(): Promise<void> {
+  const keysResult = await cache.kv.keys(`${CACHE_KEY}:*`)
+  if (!keysResult.success || keysResult.data.length === 0) {
+    return
+  }
+
+  await cache.kv.del(...keysResult.data)
+}
+
 /**
  * GET /api/v1/items — 分页查询 items
  */
@@ -88,7 +97,7 @@ export const POST = kit.handler(async ({ request }) => {
   }
 
   // 清除列表缓存
-  await cache.kv.del(`${CACHE_KEY}:1:20`)
+  await clearListCache()
 
   return kit.response.created({ id, name, description, status: 'active', createdAt: now, updatedAt: now })
 })

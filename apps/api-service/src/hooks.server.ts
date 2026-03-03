@@ -1,11 +1,13 @@
+/**
+ * =============================================================================
+ * hai API Service - Server Hooks
+ * =============================================================================
+ */
+
 import type { Handle } from '@sveltejs/kit'
 import { initApp } from '$lib/server/init.js'
 import { core } from '@h-ai/core'
 import { kit } from '@h-ai/kit'
-
-/**
- * SvelteKit 服务端钩子 — API 服务
- */
 
 let appInitPromise: Promise<void> | null = null
 
@@ -19,10 +21,18 @@ async function ensureAppInitialized() {
   await appInitPromise
 }
 
+// =============================================================================
+// 初始化 Handle
+// =============================================================================
+
 const initHandle: Handle = async ({ event, resolve }) => {
   await ensureAppInitialized()
   return resolve(event)
 }
+
+// =============================================================================
+// hai Handle
+// =============================================================================
 
 const haiHandle = kit.createHandle({
   middleware: [
