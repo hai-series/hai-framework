@@ -2,29 +2,19 @@
   "extends": "./.svelte-kit/tsconfig.json",
   "compilerOptions": {
     "moduleResolution": "bundler",
-
-    /* 开发期路径映射：让 IDE "Go to Definition" 导航到 src 源码 */
-    "paths": {
-      "$lib": ["./src/lib"],
-      "$lib/*": ["./src/lib/*"],
-      "$app/types": ["./.svelte-kit/types/index.d.ts"],
-      "@h-ai/core": ["../../packages/core/src/index.ts"],
-      "@h-ai/db": ["../../packages/db/src/index.ts"],
-      "@h-ai/iam": ["../../packages/iam/src/index.ts"],
-      "@h-ai/iam/client": ["../../packages/iam/src/client/index.ts"],
-      "@h-ai/kit": ["../../packages/kit/src/index.ts"],
-      "@h-ai/kit/client": ["../../packages/kit/src/client/index.ts"],
-      "@h-ai/kit/crypto": ["../../packages/kit/src/modules/crypto/index.ts"],
-      "@h-ai/cache": ["../../packages/cache/src/index.ts"],
-      "@h-ai/crypto": ["../../packages/crypto/src/index.ts"]
-    },
-    "resolveJsonModule": true,
+    "allowImportingTsExtensions": true,
     "allowJs": true,
-    "checkJs": true,
+    "checkJs": false,
     "strict": true,
-    "sourceMap": true,
-    "esModuleInterop": true,
-    "forceConsistentCasingInFileNames": true,
+    "verbatimModuleSyntax": true,
     "skipLibCheck": true
-  }
+  },
+  "include": [
+    "src/**/*",
+    "src/**/*.svelte"
+  ],
+  "exclude": [
+    "node_modules",
+    ".svelte-kit"
+  ]
 }

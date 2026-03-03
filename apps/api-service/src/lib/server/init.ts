@@ -11,9 +11,9 @@
  */
 
 import type { CacheConfigInput } from '@h-ai/cache'
-import { cache } from '@h-ai/cache'
+import { cache, CacheConfigSchema } from '@h-ai/cache'
 import { core } from '@h-ai/core'
-import { db } from '@h-ai/db'
+import { db, DbConfigSchema } from '@h-ai/db'
 
 type DbConfigInput = Parameters<typeof db.init>[0]
 
@@ -29,15 +29,27 @@ export async function initApp(): Promise<void> {
     logging: { level: 'info' },
   })
 
+  const dbValidation = core.config.validate('db', DbConfigSchema)
+  if (!dbValidation.success) {
+    throw new Error(`DB config invalid: ${dbValidation.error.message}`)
+  }
+
+  const cacheValidation = core.config.validate('cache', CacheConfigSchema)
+  if (!cacheValidation.success) {
+    throw new Error(`Cache config invalid: ${cacheValidation.error.message}`)
+  }
+
   const dbConfig = core.config.getOrThrow<DbConfigInput>('db')
   const cacheConfig = core.config.getOrThrow<CacheConfigInput>('cache')
 
   // 2. 确保数据目录存在
-  const path = await import('node:path')
-  const fs = await import('node:fs')
-  const dbDir = path.dirname(dbConfig.database)
-  if (!fs.existsSync(dbDir)) {
-    fs.mkdirSync(dbDir, { recursive: true })
+  if (dbConfig.type === 'sqlite') {
+    const path = await import('node:path')
+    const fs = await import('node:fs')
+    const dbDir = path.dirname(dbConfig.database)
+    if (!fs.existsSync(dbDir)) {
+      fs.mkdirSync(dbDir, { recursive: true })
+    }
   }
 
   // 3. 初始化数据库
@@ -60,7 +72,7 @@ export async function initApp(): Promise<void> {
 }
 
 async function ensureTables(): Promise<void> {
-  await db.ddl.createTable('items', {
+  const createResult = await db.ddl.createTable('items', {
     id: { type: 'TEXT', primaryKey: true },
     name: { type: 'TEXT', notNull: true },
     description: { type: 'TEXT', defaultValue: '' },
@@ -68,4 +80,8 @@ async function ensureTables(): Promise<void> {
     created_at: { type: 'TEXT', notNull: true },
     updated_at: { type: 'TEXT', notNull: true },
   })
+
+  if (!createResult.success) {
+    throw new Error(`Items table initialization failed: ${createResult.error.message}`)
+  }
 }

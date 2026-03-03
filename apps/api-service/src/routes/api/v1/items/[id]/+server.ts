@@ -15,13 +15,26 @@ const UpdateItemSchema = z.object({
   status: z.enum(['active', 'archived']).optional(),
 })
 
+const IdParamSchema = z.object({
+  id: z.string().min(1),
+})
+
 const CACHE_PREFIX = 'api:items'
+
+async function clearListCache(): Promise<void> {
+  const keysResult = await cache.kv.keys(`${CACHE_PREFIX}:list:*`)
+  if (!keysResult.success || keysResult.data.length === 0) {
+    return
+  }
+
+  await cache.kv.del(...keysResult.data)
+}
 
 /**
  * GET /api/v1/items/:id — 获取单个 item
  */
 export const GET = kit.handler(async ({ params }) => {
-  const { id } = params
+  const { id } = kit.validate.paramsOrFail(params, IdParamSchema)
 
   // 尝试缓存
   const cacheKey = `${CACHE_PREFIX}:${id}`
@@ -46,7 +59,7 @@ export const GET = kit.handler(async ({ params }) => {
  * PUT /api/v1/items/:id — 更新 item
  */
 export const PUT = kit.handler(async ({ params, request }) => {
-  const { id } = params
+  const { id } = kit.validate.paramsOrFail(params, IdParamSchema)
   const updates = await kit.validate.formOrFail(request, UpdateItemSchema)
 
   const existing = await db.sql.get<Record<string, unknown>>('SELECT * FROM items WHERE id = ?', [id])
@@ -75,11 +88,14 @@ export const PUT = kit.handler(async ({ params, request }) => {
   }
 
   values.push(id)
-  await db.sql.execute(`UPDATE items SET ${sets.join(', ')} WHERE id = ?`, values)
+  const updateResult = await db.sql.execute(`UPDATE items SET ${sets.join(', ')} WHERE id = ?`, values)
+  if (!updateResult.success) {
+    return kit.response.internalError(updateResult.error.message)
+  }
 
   // 清除缓存
   await cache.kv.del(`${CACHE_PREFIX}:${id}`)
-  await cache.kv.del(`${CACHE_PREFIX}:list:1:20`)
+  await clearListCache()
 
   const updated = await db.sql.get<Record<string, unknown>>('SELECT * FROM items WHERE id = ?', [id])
   if (!updated.success || !updated.data) {
@@ -93,7 +109,7 @@ export const PUT = kit.handler(async ({ params, request }) => {
  * DELETE /api/v1/items/:id — 删除 item
  */
 export const DELETE = kit.handler(async ({ params }) => {
-  const { id } = params
+  const { id } = kit.validate.paramsOrFail(params, IdParamSchema)
 
   const existing = await db.sql.get<Record<string, unknown>>('SELECT * FROM items WHERE id = ?', [id])
   if (!existing.success) {
@@ -103,11 +119,14 @@ export const DELETE = kit.handler(async ({ params }) => {
     return kit.response.notFound('Item not found')
   }
 
-  await db.sql.execute('DELETE FROM items WHERE id = ?', [id])
+  const deleteResult = await db.sql.execute('DELETE FROM items WHERE id = ?', [id])
+  if (!deleteResult.success) {
+    return kit.response.internalError(deleteResult.error.message)
+  }
 
   // 清除缓存
   await cache.kv.del(`${CACHE_PREFIX}:${id}`)
-  await cache.kv.del(`${CACHE_PREFIX}:list:1:20`)
+  await clearListCache()
 
   return kit.response.ok({ id, deleted: true })
 })

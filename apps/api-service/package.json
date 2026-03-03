@@ -1,32 +1,42 @@
 {
   "name": "api-service",
   "type": "module",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "private": true,
+  "description": "hai Agent Framework - 无头 REST API 服务示例应用",
+  "keywords": [
+    "hai",
+    "api",
+    "sveltekit",
+    "svelte5"
+  ],
   "scripts": {
     "dev": "vite dev",
     "build": "vite build",
     "preview": "vite preview",
-    "typecheck": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "lint": "eslint .",
-    "lint:fix": "eslint . --fix"
+    "lint:fix": "eslint . --fix",
+    "test:e2e": "playwright test",
+    "clean": "rimraf .svelte-kit build .turbo"
   },
   "dependencies": {
     "@h-ai/cache": "workspace:*",
     "@h-ai/core": "workspace:*",
-    "@h-ai/crypto": "workspace:*",
     "@h-ai/db": "workspace:*",
-    "@h-ai/iam": "workspace:*",
     "@h-ai/kit": "workspace:*",
-    "@sveltejs/adapter-node": "catalog:",
-    "@sveltejs/kit": "catalog:",
-    "@sveltejs/vite-plugin-svelte": "catalog:",
-    "svelte": "catalog:",
-    "vite": "catalog:",
     "zod": "catalog:"
   },
   "devDependencies": {
+    "@playwright/test": "catalog:",
+    "@sveltejs/adapter-node": "catalog:",
+    "@sveltejs/kit": "catalog:",
+    "@sveltejs/vite-plugin-svelte": "catalog:",
+    "@types/node": "catalog:",
+    "rimraf": "catalog:",
+    "svelte": "catalog:",
     "svelte-check": "catalog:",
-    "typescript": "catalog:"
+    "typescript": "catalog:",
+    "vite": "catalog:"
   }
 }

@@ -5,7 +5,7 @@
 name: hai API Service
 version: 0.1.0
 env: ${HAI_ENV:development}
-debug: ${HAI_DEBUG:false}
+debug: false
 
 defaultLocale: en-US
 supportedLocales:
