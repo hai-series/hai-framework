@@ -7,6 +7,7 @@ export default defineConfig({
     'src/index.ts',
     'src/client/index.ts',
     'src/modules/crypto/index.ts',
+    'src/vite/index.ts',
   ],
   external: ['@sveltejs/kit', '@h-ai/core', 'zod'],
 })
