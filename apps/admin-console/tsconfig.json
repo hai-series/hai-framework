@@ -6,7 +6,8 @@
     "allowJs": true,
     "checkJs": false,
     "strict": true,
-    "verbatimModuleSyntax": true
+    "verbatimModuleSyntax": true,
+    "skipLibCheck": true
   },
   "include": [
     "src/**/*",
