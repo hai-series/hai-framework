@@ -28,6 +28,9 @@
     md: 'h-3',
     lg: 'h-4',
     xl: 'h-5',
+    '2xl': 'h-6',
+    '3xl': 'h-7',
+    '4xl': 'h-8',
   }
   
   const percentage = $derived(Math.min(100, Math.max(0, (value / max) * 100)))

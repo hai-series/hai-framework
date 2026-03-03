@@ -35,6 +35,9 @@
     md: 'w-80',
     lg: 'w-96',
     xl: 'w-[30rem]',
+    '2xl': 'w-[34rem]',
+    '3xl': 'w-[38rem]',
+    '4xl': 'w-[42rem]',
   }
   
   const drawerClass = $derived(

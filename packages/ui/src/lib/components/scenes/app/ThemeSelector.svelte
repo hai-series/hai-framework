@@ -27,6 +27,8 @@
     selectLabel?: string
     onchange?: (theme: string) => void
     showPreview?: boolean
+    /** 紧凑模式：仅显示预览色块，适用于移动端头部 */
+    compact?: boolean
     grouped?: boolean
     class?: string
   }
@@ -36,6 +38,7 @@
     selectLabel,
     onchange,
     showPreview = true,
+    compact = false,
     grouped = true,
     class: className = '',
   }: Props = $props()
@@ -79,27 +82,29 @@
 <div bind:this={containerRef} class='dropdown dropdown-end {open ? "dropdown-open" : ""} {className}'>
   <BareButton
     type='button'
-    class='btn btn-ghost gap-2'
+    class='btn btn-ghost {compact ? "btn-sm btn-square" : "gap-2"}'
     onclick={() => (open = !open)}
     ariaLabel={displaySelectLabel}
   >
     <!-- 当前主题预览 -->
     {#if showPreview}
       <div
-        class='w-5 h-5 rounded-md border-2'
+        class='w-5 h-5 rounded-full border-2 shrink-0'
         style={renderThemePreview(currentInfo)}
       ></div>
     {/if}
-    <span class='text-sm'>{currentInfo.name}</span>
-    <!-- 下拉箭头 -->
-    <svg xmlns='http://www.w3.org/2000/svg' class='h-4 w-4' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'>
-      <path stroke-linecap='round' stroke-linejoin='round' d='M19 9l-7 7-7-7' />
-    </svg>
+    {#if !compact}
+      <span class='text-sm'>{currentInfo.name}</span>
+      <!-- 下拉箭头 -->
+      <svg xmlns='http://www.w3.org/2000/svg' class='h-4 w-4' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'>
+        <path stroke-linecap='round' stroke-linejoin='round' d='M19 9l-7 7-7-7' />
+      </svg>
+    {/if}
   </BareButton>
 
   {#if open}
     <!-- 主题列表 -->
-    <div class='dropdown-content bg-base-100 rounded-box shadow-xl border border-base-content/10 z-50 p-4 max-h-[80vh] overflow-y-auto'>
+    <div class='dropdown-content bg-base-100 rounded-box shadow-xl border border-base-content/10 z-50 p-4 max-h-[80vh] overflow-y-auto {compact ? "w-56 right-0" : ""}'>
       {#if grouped}
         <!-- 分组显示 -->
         {#each THEME_GROUPS as group}

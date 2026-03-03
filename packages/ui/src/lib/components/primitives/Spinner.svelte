@@ -23,6 +23,9 @@
     md: 'loading-md',
     lg: 'loading-lg',
     xl: 'loading-lg', // DaisyUI 没有 xl，使用 lg
+    '2xl': 'loading-lg',
+    '3xl': 'loading-lg',
+    '4xl': 'loading-lg',
   }
   
   const variantMap = {

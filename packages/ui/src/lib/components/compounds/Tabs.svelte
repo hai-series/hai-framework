@@ -36,6 +36,9 @@
     md: '',
     lg: 'tabs-lg',
     xl: 'tabs-lg',
+    '2xl': 'tabs-lg',
+    '3xl': 'tabs-lg',
+    '4xl': 'tabs-lg',
   }
   
   const tabsClass = $derived(
