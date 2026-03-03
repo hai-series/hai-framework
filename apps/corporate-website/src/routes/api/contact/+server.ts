@@ -6,7 +6,6 @@
 
 import { core } from '@h-ai/core'
 import { kit } from '@h-ai/kit'
-import { reach } from '@h-ai/reach'
 import { z } from 'zod'
 
 const ContactSchema = z.object({
@@ -18,12 +17,16 @@ const ContactSchema = z.object({
 export const POST = kit.handler(async ({ request }) => {
   const { name, email, message } = await kit.validate.formOrFail(request, ContactSchema)
 
-  if (!reach.isInitialized) {
+  const reachModule = await import('@h-ai/reach')
+    .then(mod => mod.reach)
+    .catch(() => null)
+
+  if (!reachModule?.isInitialized) {
     core.logger.info('Contact form submission (reach not initialized)', { name, email, message })
     return kit.response.ok({ sent: false, message: 'Message received, but email delivery is not configured' })
   }
 
-  const result = await reach.send({
+  const result = await reachModule.send({
     provider: 'email',
     to: 'admin@example.com',
     template: 'contact_form',
@@ -31,7 +34,7 @@ export const POST = kit.handler(async ({ request }) => {
   })
 
   if (!result.success) {
-    core.logger.error('Failed to send contact email', { error: result.error.message })
+    core.logger.error('Failed to send contact email', { error: result.error?.message ?? 'unknown error' })
     return kit.response.ok({ sent: false, message: 'Message received, but email delivery failed' })
   }
 
