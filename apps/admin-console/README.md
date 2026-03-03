@@ -56,55 +56,6 @@ pnpm --filter admin-console preview
 - 🔧 模块演示：Core / DB / Cache / Storage / AI / Crypto 演示（`/admin/modules`）
 - ⚙️ 设置：主题切换（32 套）、语言切换（`/admin/settings`）
 
-## 🗂️ 路由结构
-
-```
-src/routes/
-├── +layout.svelte                  # 全局根布局
-├── +page.svelte                    # 首页（重定向）
-│
-├── (auth)/                         # 认证页面（无 Sidebar 布局）
-│   └── auth/
-│       ├── login/+page.svelte
-│       ├── register/+page.svelte
-│       ├── forgot-password/+page.svelte
-│       └── reset-password/+page.svelte
-│
-├── admin/                          # 管理后台（需登录，Sidebar 布局）
-│   ├── +layout.svelte
-│   ├── +layout.server.ts           # Session 校验
-│   ├── +page.svelte                # Dashboard
-│   ├── iam/
-│   │   ├── users/+page.svelte
-│   │   ├── roles/+page.svelte
-│   │   └── permissions/+page.svelte
-│   ├── ui-gallery/+page.svelte
-│   ├── modules/+page.svelte
-│   └── settings/+page.svelte
-│
-└── api/                            # REST API
-    ├── auth/
-    │   ├── login/+server.ts
-    │   ├── register/+server.ts
-    │   ├── logout/+server.ts
-    │   ├── profile/+server.ts
-    │   ├── profile/avatar/+server.ts
-    │   ├── profile/password/+server.ts
-    │   ├── forgot-password/+server.ts
-    │   ├── reset-password/+server.ts
-    │   └── me/+server.ts
-    ├── iam/
-    │   ├── users/+server.ts
-    │   ├── users/[id]/+server.ts
-    │   ├── roles/+server.ts
-    │   ├── roles/[id]/+server.ts
-    │   ├── permissions/+server.ts
-    │   └── permissions/[id]/+server.ts
-    └── health/+server.ts
-```
-
-> 说明：`admin-console` 不提供 `/api/storage/[...key]` 本地文件转发路由。头像上传接口返回 `storage.presign.publicUrl(...)` 生成的公开 URL。
-
 ## ⚙️ 配置
 
 ### 环境变量
@@ -142,7 +93,7 @@ HAI_STORAGE_PATH=./data/uploads
 - `config/_db.yml`：数据库连接（SQLite / PostgreSQL / MySQL）
 - `config/_cache.yml`：缓存类型与连接参数（memory / redis）
 - `config/_iam.yml`：认证策略、密码策略、JWT、RBAC、种子数据
-- `config/storage.yml`：存储类型及参数（local / S3）
+- `config/_storage.yml`：存储类型及参数（local / S3）
 
 配置值支持 `${ENV_VAR:default}` 语法引用环境变量。
 

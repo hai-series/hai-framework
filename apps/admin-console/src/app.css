@@ -90,8 +90,9 @@ input::-webkit-credentials-auto-fill-button {
 
 /* ─── 卡片 ─── */
 .card {
-  transition: box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1),
-              transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transition:
+    box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+    transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* ─── 按钮 ─── */
@@ -101,29 +102,61 @@ input::-webkit-credentials-auto-fill-button {
 
 /* ─── 动画 ─── */
 @keyframes hai-fade-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 @keyframes hai-scale-in {
-  from { opacity: 0; transform: scale(0.96); }
-  to { opacity: 1; transform: scale(1); }
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 @keyframes hai-slide-up {
-  from { opacity: 0; transform: translateY(6px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @keyframes hai-shimmer {
-  0% { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
 }
 
-.hai-fade-in { animation: hai-fade-in 0.2s cubic-bezier(0.4, 0, 0.2, 1) both; }
-.hai-scale-in { animation: hai-scale-in 0.15s cubic-bezier(0.16, 1, 0.3, 1) both; }
-.hai-slide-up { animation: hai-slide-up 0.2s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.hai-fade-in {
+  animation: hai-fade-in 0.2s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+.hai-scale-in {
+  animation: hai-scale-in 0.15s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.hai-slide-up {
+  animation: hai-slide-up 0.2s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
 
 /* 兼容旧类 */
-.animate-in { animation-duration: 0.3s; animation-timing-function: ease-out; animation-fill-mode: both; }
-.fade-in { animation-name: hai-fade-in; }
+.animate-in {
+  animation-duration: 0.3s;
+  animation-timing-function: ease-out;
+  animation-fill-mode: both;
+}
+.fade-in {
+  animation-name: hai-fade-in;
+}

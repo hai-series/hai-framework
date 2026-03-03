@@ -20,6 +20,7 @@
  * - `config/_cache.yml` → 使用 CacheConfigSchema
  * - `config/_iam.yml`   → 使用 IamConfigSchema
  * - `config/_reach.yml` → 使用 ReachConfigSchema
+ * - `config/_storage.yml` → 使用 StorageConfigSchema（可选）
  *
  * @example
  * ```ts
