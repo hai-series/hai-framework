@@ -19,6 +19,7 @@ export default antfu({
   ignores: [
     '**/.svelte-kit/**',
     '**/build/**',
+    '**/project.inlang/**', // inlang 工程元数据（工具生成）
     '**/paraglide/**', // Paraglide 自动生成的文件
   ],
 })
