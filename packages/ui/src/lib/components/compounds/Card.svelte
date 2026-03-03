@@ -24,6 +24,9 @@
     md: 'p-4',
     lg: 'p-6',
     xl: 'p-8',
+    '2xl': 'p-10',
+    '3xl': 'p-12',
+    '4xl': 'p-16',
   }
   
   const shadowMap = {

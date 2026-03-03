@@ -44,6 +44,8 @@
     languages?: Language[]
     /** 语言变更回调 */
     onchange?: (lang: string) => void
+    /** 紧凑模式：仅显示图标，适用于移动端头部 */
+    compact?: boolean
     /** 自定义类名 */
     class?: string
   }
@@ -55,6 +57,7 @@
       { value: 'en-US', label: 'English', flag: 'US' },
     ],
     onchange,
+    compact = false,
     class: className = '',
   }: Props = $props()
 
@@ -90,20 +93,22 @@
 <div bind:this={containerRef} class='dropdown dropdown-end {open ? "dropdown-open" : ""} {className}'>
   <BareButton
     type='button'
-    class='btn btn-ghost btn-sm gap-2 min-w-fit'
+    class='btn btn-ghost {compact ? "btn-sm btn-square" : "btn-sm gap-2 min-w-fit"}'
     onclick={() => (open = !open)}
     ariaLabel={m('language_switch_label')}
   >
     <svg xmlns='http://www.w3.org/2000/svg' class='h-4 w-4 shrink-0' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'>
       <path d='M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129' />
     </svg>
-    {#if currentLangInfo?.flag}
-      <span class='shrink-0 text-xs'>{currentLangInfo.flag}</span>
+    {#if !compact}
+      {#if currentLangInfo?.flag}
+        <span class='shrink-0 text-xs'>{currentLangInfo.flag}</span>
+      {/if}
+      <span class='text-sm whitespace-nowrap'>{currentLangInfo?.label ?? currentLanguage}</span>
+      <svg xmlns='http://www.w3.org/2000/svg' class='h-4 w-4 shrink-0 opacity-50' viewBox='0 0 20 20' fill='currentColor'>
+        <path fill-rule='evenodd' d='M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z' clip-rule='evenodd' />
+      </svg>
     {/if}
-    <span class='text-sm whitespace-nowrap'>{currentLangInfo?.label ?? currentLanguage}</span>
-    <svg xmlns='http://www.w3.org/2000/svg' class='h-4 w-4 shrink-0 opacity-50' viewBox='0 0 20 20' fill='currentColor'>
-      <path fill-rule='evenodd' d='M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z' clip-rule='evenodd' />
-    </svg>
   </BareButton>
 
   {#if open}

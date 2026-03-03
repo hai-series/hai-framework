@@ -57,11 +57,14 @@ export function getVariantClass(variant: Variant, prefix = 'btn'): string {
  * 尺寸到 CSS 类名映射
  */
 export const sizeClasses: Record<Size, string> = {
-  xs: 'btn-xs',
-  sm: 'btn-sm',
-  md: '',
-  lg: 'btn-lg',
-  xl: 'btn-xl',
+  'xs': 'btn-xs',
+  'sm': 'btn-sm',
+  'md': '',
+  'lg': 'btn-lg',
+  'xl': 'btn-xl',
+  '2xl': 'btn-xl',
+  '3xl': 'btn-xl',
+  '4xl': 'btn-xl',
 }
 
 /**
@@ -78,11 +81,14 @@ export function getSizeClass(size: Size, prefix = 'btn'): string {
  */
 export function getInputSizeClass(size: Size): string {
   const map: Record<Size, string> = {
-    xs: 'input-xs',
-    sm: 'input-sm',
-    md: '',
-    lg: 'input-lg',
-    xl: 'input-xl',
+    'xs': 'input-xs',
+    'sm': 'input-sm',
+    'md': '',
+    'lg': 'input-lg',
+    'xl': 'input-xl',
+    '2xl': 'input-xl',
+    '3xl': 'input-xl',
+    '4xl': 'input-xl',
   }
   return map[size] ?? ''
 }
