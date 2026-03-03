@@ -1,8 +1,13 @@
 /**
- * SvelteKit Server Hooks — 企业官网
+ * =============================================================================
+ * hai Corporate Website - Server Hooks
+ * =============================================================================
  */
+
 import type { Handle } from '@sveltejs/kit'
+import { paraglideMiddleware } from '$lib/paraglide/server.js'
 import { initApp } from '$lib/server/init.js'
+import { getPartnerAdminSessionByToken } from '$lib/server/partner-service.js'
 import { core } from '@h-ai/core'
 import { kit } from '@h-ai/kit'
 
@@ -18,14 +23,73 @@ async function ensureAppInitialized() {
   await appInitPromise
 }
 
-const initHandle: Handle = async ({ event, resolve }) => {
+// =============================================================================
+// 初始化 + i18n Handle
+// =============================================================================
+
+const i18nHandle: Handle = async ({ event, resolve }) => {
   await ensureAppInitialized()
-  return resolve(event)
+
+  if (event.url.pathname.startsWith('/api/')) {
+    const locale = event.cookies.get('PARAGLIDE_LOCALE') ?? 'zh-CN'
+    event.locals.locale = locale
+    kit.i18n.setLocale(locale)
+    return resolve(event)
+  }
+
+  return paraglideMiddleware(event.request, async ({ locale }: { locale: string }) => {
+    event.locals.locale = locale
+    kit.i18n.setLocale(locale)
+
+    return resolve(event, {
+      transformPageChunk: ({ html }) => html.replace('%lang%', locale),
+    })
+  })
 }
 
+// =============================================================================
+// 会话验证
+// =============================================================================
+
+async function validateSession(token: string) {
+  const session = await getPartnerAdminSessionByToken(token)
+  if (!session) {
+    return null
+  }
+
+  return {
+    userId: session.userId,
+    username: session.username,
+    roles: [session.role],
+    permissions: ['partner:records:read'],
+  }
+}
+
+// =============================================================================
+// hai Handle
+// =============================================================================
+
 const haiHandle = kit.createHandle({
+  sessionCookieName: 'corp_partner_session',
+  validateSession,
   middleware: [
     kit.middleware.logging({ logBody: false }),
+    kit.middleware.rateLimit({ windowMs: 60000, maxRequests: 120 }),
+    kit.middleware.csrf({
+      exclude: ['/api/contact', '/api/chat', '/api/partners/register', '/api/partners/admin/login'],
+    }),
+  ],
+  guards: [
+    {
+      guard: kit.guard.auth({ loginUrl: '/partners/admin/login' }),
+      paths: ['/partners/admin', '/partners/admin/*'],
+      exclude: ['/partners/admin/login'],
+    },
+    {
+      guard: kit.guard.auth({ apiMode: true }),
+      paths: ['/api/partners/admin/*'],
+      exclude: ['/api/partners/admin/login'],
+    },
   ],
   onError: (error: unknown) => {
     core.logger.error('Request error:', { error })
@@ -36,4 +100,4 @@ const haiHandle = kit.createHandle({
   },
 })
 
-export const handle: Handle = kit.sequence(initHandle, haiHandle)
+export const handle: Handle = kit.sequence(i18nHandle, haiHandle)

@@ -13,6 +13,7 @@
     "seo"
   ],
   "scripts": {
+    "paraglide:compile": "paraglide-js compile --project ./project.inlang --outdir ./src/lib/paraglide",
     "dev": "vite dev",
     "build": "vite build",
     "preview": "vite preview",
@@ -20,17 +21,26 @@
     "lint": "eslint .",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:e2e": "playwright test",
     "clean": "rimraf .svelte-kit build .turbo"
   },
   "dependencies": {
     "@h-ai/ai": "workspace:*",
+    "@h-ai/cache": "workspace:*",
     "@h-ai/core": "workspace:*",
+    "@h-ai/db": "workspace:*",
     "@h-ai/kit": "workspace:*",
     "@h-ai/reach": "workspace:*",
+    "@h-ai/storage": "workspace:*",
     "@h-ai/ui": "workspace:*",
     "zod": "catalog:"
   },
   "devDependencies": {
+    "@iconify-json/tabler": "catalog:",
+    "@iconify/tailwind4": "catalog:",
+    "@inlang/paraglide-js": "catalog:",
+    "@inlang/plugin-message-format": "catalog:",
+    "@playwright/test": "catalog:",
     "@sveltejs/adapter-auto": "catalog:",
     "@sveltejs/kit": "catalog:",
     "@sveltejs/vite-plugin-svelte": "catalog:",

@@ -2,59 +2,73 @@
   /**
    * 新闻动态页面
    */
-  const articles = [
+  import { Badge, Button } from '@h-ai/ui'
+  import * as m from '$lib/paraglide/messages.js'
+
+  const tagVariantMap: Record<string, 'primary' | 'secondary' | 'success' | 'info'> = {
+    award: 'primary',
+    product: 'info',
+    partnership: 'success',
+    event: 'secondary',
+  }
+
+  const articles = $derived([
     {
-      title: '公司荣获年度最佳技术创新奖',
+      title: m.news_article_1_title(),
       date: '2025-01-15',
-      summary: '在第十届技术创新峰会上，公司凭借卓越的技术能力和创新产品荣获年度最佳技术创新奖。',
-      tag: '荣誉'
+      summary: m.news_article_1_summary(),
+      tag: m.news_tag_award(),
+      tagKey: 'award',
     },
     {
-      title: '新一代云平台正式发布',
+      title: m.news_article_2_title(),
       date: '2025-01-10',
-      summary: '经过一年多的研发迭代，全新云平台正式对外发布，提供更强大的计算和存储能力。',
-      tag: '产品'
+      summary: m.news_article_2_summary(),
+      tag: m.news_tag_product(),
+      tagKey: 'product',
     },
     {
-      title: '与某大型企业达成战略合作',
+      title: m.news_article_3_title(),
       date: '2024-12-20',
-      summary: '双方将在云计算、大数据、人工智能等领域展开深度合作，共同推动数字化转型。',
-      tag: '合作'
+      summary: m.news_article_3_summary(),
+      tag: m.news_tag_partnership(),
+      tagKey: 'partnership',
     },
     {
-      title: '年终技术沙龙圆满举办',
+      title: m.news_article_4_title(),
       date: '2024-12-05',
-      summary: '年度技术沙龙吸引了超过 500 名开发者参与，共同探讨前沿技术趋势。',
-      tag: '活动'
-    }
-  ]
+      summary: m.news_article_4_summary(),
+      tag: m.news_tag_event(),
+      tagKey: 'event',
+    },
+  ])
 </script>
 
 <svelte:head>
-  <title>新闻动态 - 企业名称</title>
-  <meta name="description" content="了解企业最新动态、行业资讯与技术分享。" />
+  <title>{m.news_page_title()} - {m.brand()}</title>
+  <meta name="description" content={m.news_page_description()} />
 </svelte:head>
 
 <section class="py-20 px-4 lg:px-8">
   <div class="max-w-4xl mx-auto">
-    <h1 class="text-4xl font-bold text-center mb-4">新闻动态</h1>
-    <p class="text-center text-gray-500 mb-12">了解我们的最新动态</p>
+    <div class="text-center mb-12">
+      <h1 class="text-4xl font-bold tracking-tight text-base-content">{m.news_page_title()}</h1>
+      <p class="text-base-content/50 mt-2">{m.news_page_subtitle()}</p>
+    </div>
 
-    <div class="space-y-6">
+    <div class="space-y-4">
       {#each articles as article}
-        <article class="card bg-base-100 shadow-md hover:shadow-lg transition-shadow">
-          <div class="card-body">
-            <div class="flex items-center gap-3 mb-2">
-              <span class="badge badge-primary">{article.tag}</span>
-              <time class="text-sm text-gray-400">{article.date}</time>
-            </div>
-            <h2 class="card-title text-lg">{article.title}</h2>
-            <p class="text-gray-600">{article.summary}</p>
-            <div class="card-actions justify-end mt-2">
-              <button class="btn btn-ghost btn-sm">阅读更多 →</button>
-            </div>
+        <Card shadow="sm" class="hover:-translate-y-0.5 hover:shadow-(--shadow-soft) transition-all duration-200">
+          <div class="flex items-start gap-3 mb-2">
+            <Badge variant={tagVariantMap[article.tagKey] ?? 'primary'} size="sm">{article.tag}</Badge>
+            <time class="text-xs text-base-content/40 tabular-nums">{article.date}</time>
           </div>
-        </article>
+          <h2 class="text-base font-semibold text-base-content mb-1">{article.title}</h2>
+          <p class="text-sm text-base-content/60 leading-relaxed">{article.summary}</p>
+          <div class="mt-3">
+            <Button variant="ghost" size="sm">{m.news_read_more()}</Button>
+          </div>
+        </Card>
       {/each}
     </div>
   </div>

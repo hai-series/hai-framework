@@ -2,66 +2,90 @@
   /**
    * 关于我们
    */
+  import { Badge } from '@h-ai/ui'
+  import * as m from '$lib/paraglide/messages.js'
+
+  const teamMembers = $derived([
+    {
+      name: m.about_team_ceo_name(),
+      role: m.about_team_ceo_role(),
+      abbr: 'CEO',
+      color: 'text-primary',
+      accent: 'bg-primary/8',
+    },
+    {
+      name: m.about_team_cto_name(),
+      role: m.about_team_cto_role(),
+      abbr: 'CTO',
+      color: 'text-secondary',
+      accent: 'bg-secondary/8',
+    },
+    {
+      name: m.about_team_coo_name(),
+      role: m.about_team_coo_role(),
+      abbr: 'COO',
+      color: 'text-accent',
+      accent: 'bg-accent/8',
+    },
+  ])
 </script>
 
 <svelte:head>
-  <title>关于我们 - 企业名称</title>
-  <meta name="description" content="了解企业名称的发展历程、团队和愿景。" />
+  <title>{m.about_page_title()} - {m.brand()}</title>
+  <meta name="description" content={m.about_page_description()} />
 </svelte:head>
 
 <section class="py-20 px-4 lg:px-8">
-  <div class="max-w-4xl mx-auto">
-    <h1 class="text-4xl font-bold mb-8">关于我们</h1>
+  <div class="max-w-5xl mx-auto">
+    <PageHeader title={m.about_page_title()} description={m.about_page_description()} />
 
-    <div class="prose max-w-none">
-      <p class="text-lg text-gray-600 mb-8">
-        我们是一家专注于企业数字化转型的科技公司，致力于为客户提供高质量的技术服务和解决方案。
+    <Card shadow="sm" padding="lg" class="mb-8">
+      <p class="text-lg text-base-content/70 leading-relaxed">
+        {m.about_intro()}
       </p>
+    </Card>
 
-      <h2>我们的愿景</h2>
-      <p>成为行业领先的企业服务提供商，用技术驱动商业创新。</p>
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-16">
+      <Card shadow="sm">
+        <div class="flex items-start gap-3">
+          <div class="w-10 h-10 rounded-xl bg-primary/8 flex items-center justify-center shrink-0">
+            <span class="icon-[tabler--eye] size-5 text-primary"></span>
+          </div>
+          <div>
+            <h2 class="text-lg font-semibold text-base-content mb-2">{m.about_vision_title()}</h2>
+            <p class="text-sm text-base-content/60 leading-relaxed">{m.about_vision_content()}</p>
+          </div>
+        </div>
+      </Card>
 
-      <h2>我们的使命</h2>
-      <p>帮助每一家企业实现数字化升级，提高运营效率，创造更大价值。</p>
+      <Card shadow="sm">
+        <div class="flex items-start gap-3">
+          <div class="w-10 h-10 rounded-xl bg-secondary/8 flex items-center justify-center shrink-0">
+            <span class="icon-[tabler--target] size-5 text-secondary"></span>
+          </div>
+          <div>
+            <h2 class="text-lg font-semibold text-base-content mb-2">{m.about_mission_title()}</h2>
+            <p class="text-sm text-base-content/60 leading-relaxed">{m.about_mission_content()}</p>
+          </div>
+        </div>
+      </Card>
     </div>
 
     <!-- 团队介绍 -->
-    <div class="mt-16">
-      <h2 class="text-3xl font-bold mb-8">我们的团队</h2>
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
-        <div class="card bg-base-200">
-          <div class="card-body items-center text-center">
-            <div class="avatar placeholder mb-4">
-              <div class="bg-primary text-primary-content rounded-full w-20">
-                <span class="text-2xl">CEO</span>
+    <div>
+      <h2 class="text-2xl font-bold tracking-tight text-base-content mb-6">{m.about_team_title()}</h2>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {#each teamMembers as member}
+          <Card shadow="sm" class="hover:-translate-y-1 hover:shadow-(--shadow-lifted) transition-all duration-200">
+            <div class="flex flex-col items-center text-center">
+              <div class="w-16 h-16 rounded-2xl {member.accent} flex items-center justify-center mb-3">
+                <span class="text-lg font-bold {member.color}">{member.abbr}</span>
               </div>
+              <h3 class="font-semibold text-base-content">{member.name}</h3>
+              <Badge variant="default" size="sm" class="mt-1">{member.role}</Badge>
             </div>
-            <h3 class="card-title">创始人</h3>
-            <p class="text-sm text-gray-500">首席执行官</p>
-          </div>
-        </div>
-        <div class="card bg-base-200">
-          <div class="card-body items-center text-center">
-            <div class="avatar placeholder mb-4">
-              <div class="bg-secondary text-secondary-content rounded-full w-20">
-                <span class="text-2xl">CTO</span>
-              </div>
-            </div>
-            <h3 class="card-title">技术负责人</h3>
-            <p class="text-sm text-gray-500">首席技术官</p>
-          </div>
-        </div>
-        <div class="card bg-base-200">
-          <div class="card-body items-center text-center">
-            <div class="avatar placeholder mb-4">
-              <div class="bg-accent text-accent-content rounded-full w-20">
-                <span class="text-2xl">COO</span>
-              </div>
-            </div>
-            <h3 class="card-title">运营负责人</h3>
-            <p class="text-sm text-gray-500">首席运营官</p>
-          </div>
-        </div>
+          </Card>
+        {/each}
       </div>
     </div>
   </div>
