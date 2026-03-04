@@ -132,10 +132,10 @@ const notInitializedHelper = notInitialized.proxy<AuditHelper>()
  * @example
  * ```ts
  * import { audit } from '@h-ai/audit'
- * import { db } from '@h-ai/db'
+ * import { reldb } from '@h-ai/reldb'
  *
- * await db.init({ type: 'sqlite', database: ':memory:' })
- * const result = await audit.init({ db })
+ * await reldb.init({ type: 'sqlite', database: ':memory:' })
+ * const result = await audit.init({ reldb })
  * if (!result.success) {
  *   // 处理初始化错误
  * }
@@ -150,14 +150,14 @@ export const audit: AuditFunctions = {
    * 初始化审计模块
    *
    * 会先关闭已有实例（如已初始化），再用新配置重新初始化。
-   * 内部创建 AuditLogRepository 实例（BaseCrudRepository 自动建表）。
+   * 内部创建 AuditLogRepository 实例（BaseReldbCrudRepository 自动建表）。
    *
    * @param config - 初始化配置（需包含已初始化的 db 实例）
    * @returns 成功时返回 ok(undefined)；失败时返回 CONFIG_ERROR
    *
    * @example
    * ```ts
-   * const result = await audit.init({ db })
+   * const result = await audit.init({ reldb })
    * if (!result.success) {
    *   logger.error('Audit init failed', { error: result.error.message })
    * }

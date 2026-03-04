@@ -6,7 +6,7 @@
  */
 
 import type { Result } from '@h-ai/core'
-import type { DbFunctions } from '@h-ai/db'
+import type { ReldbFunctions } from '@h-ai/reldb'
 import type { DndConfig, ProviderConfig, ReachConfig, ReachConfigInput } from './reach-config.js'
 import type { SendLogRepository } from './reach-repository-send-log.js'
 import type {
@@ -72,14 +72,14 @@ function createProvider(config: ProviderConfig): ReachProvider {
 /**
  * 尝试获取 db 实例（可选依赖，不可用时返回 null）
  */
-async function tryGetDb(): Promise<DbFunctions | null> {
+async function tryGetDb(): Promise<ReldbFunctions | null> {
   try {
-    const dbModuleName = '@h-ai/db'
-    const mod = await (import(/* @vite-ignore */ dbModuleName) as Promise<{ db: DbFunctions }>)
-    if (!mod.db.isInitialized) {
+    const dbModuleName = '@h-ai/reldb'
+    const mod = await (import(/* @vite-ignore */ dbModuleName) as Promise<{ reldb: ReldbFunctions }>)
+    if (!mod.reldb.isInitialized) {
       return null
     }
-    return mod.db
+    return mod.reldb
   }
   catch {
     return null

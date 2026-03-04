@@ -218,10 +218,10 @@ export interface AuditHelper {
  * @example
  * ```ts
  * import { audit } from '@h-ai/audit'
- * import { db } from '@h-ai/db'
+ * import { reldb } from '@h-ai/reldb'
  *
- * await db.init({ type: 'sqlite', database: './data.db' })
- * await audit.init({ db })
+ * await reldb.init({ type: 'sqlite', database: './data.db' })
+ * await audit.init({ reldb })
  *
  * await audit.log({ userId: 'user_1', action: 'login', resource: 'auth' })
  * const logs = await audit.list({ pageSize: 10 })

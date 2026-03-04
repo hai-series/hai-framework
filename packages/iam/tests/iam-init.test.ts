@@ -11,7 +11,7 @@
  */
 
 import { cache } from '@h-ai/cache'
-import { db } from '@h-ai/db'
+import { reldb } from '@h-ai/reldb'
 import { describe, expect, it } from 'vitest'
 import { IamErrorCode } from '../src/iam-config.js'
 import { iam } from '../src/index.js'
@@ -83,7 +83,7 @@ describe('iam.init', () => {
 
     it('正常初始化应成功', async () => {
       await iam.close()
-      const result = await iam.init({ db, cache })
+      const result = await iam.init({ db: reldb, cache })
       expect(result.success).toBe(true)
       expect(iam.isInitialized).toBe(true)
       expect(iam.config).not.toBeNull()
@@ -92,14 +92,14 @@ describe('iam.init', () => {
 
     it('重复初始化应幂等（直接返回 ok）', async () => {
       await iam.close()
-      await iam.init({ db, cache })
-      const result = await iam.init({ db, cache })
+      await iam.init({ db: reldb, cache })
+      const result = await iam.init({ db: reldb, cache })
       expect(result.success).toBe(true)
       await iam.close()
     })
 
     it('close 后应恢复未初始化状态', async () => {
-      await iam.init({ db, cache })
+      await iam.init({ db: reldb, cache })
       expect(iam.isInitialized).toBe(true)
 
       await iam.close()
@@ -115,7 +115,7 @@ describe('iam.init', () => {
 
     it('seedDefaultData: false 时初始化应成功且不触发种子流程', async () => {
       await iam.close()
-      const result = await iam.init({ db, cache, seedDefaultData: false })
+      const result = await iam.init({ db: reldb, cache, seedDefaultData: false })
       expect(result.success).toBe(true)
       expect(iam.isInitialized).toBe(true)
       expect(iam.config?.seedDefaultData).toBe(false)
@@ -131,7 +131,7 @@ describe('iam.init', () => {
     it('自定义密码配置后 config 应反映正确值', async () => {
       await iam.close()
       const result = await iam.init({
-        db,
+        db: reldb,
         cache,
         password: { minLength: 12, requireUppercase: true, requireNumber: true },
       })
@@ -145,7 +145,7 @@ describe('iam.init', () => {
     it('自定义 session 配置后 config 应反映正确值', async () => {
       await iam.close()
       const result = await iam.init({
-        db,
+        db: reldb,
         cache,
         session: { maxAge: 7200, sliding: true },
       })

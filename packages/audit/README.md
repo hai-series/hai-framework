@@ -1,6 +1,6 @@
 # @h-ai/audit
 
-统一审计日志模块，通过 `audit` 对象提供审计日志的记录、查询、清理与统计功能，基于 `@h-ai/db` 实现持久化。
+统一审计日志模块，通过 `audit` 对象提供审计日志的记录、查询、清理与统计功能，基于 `@h-ai/reldb` 实现持久化。
 
 ## 适用场景
 
@@ -13,13 +13,13 @@
 
 ```ts
 import { audit } from '@h-ai/audit'
-import { db } from '@h-ai/db'
+import { reldb } from '@h-ai/reldb'
 
 // 1. 初始化数据库
-await db.init({ type: 'sqlite', database: './data.db' })
+await reldb.init({ type: 'sqlite', database: './data.db' })
 
 // 2. 初始化审计模块
-const result = await audit.init({ db })
+const result = await audit.init({ reldb })
 if (!result.success) {
   throw new Error(result.error.message)
 }
@@ -53,7 +53,7 @@ await audit.close()
 
 ```ts
 await audit.init({
-  db, // 已初始化的 @h-ai/db 实例（必须）
+  db, // 已初始化的 @h-ai/reldb 实例（必须）
   tableName: 'audit_logs', // 审计日志表名（默认 'audit_logs'）
   userTable: 'users', // 用户表名（默认 'users'）
   userIdColumn: 'id', // 用户表主键列名（默认 'id'）

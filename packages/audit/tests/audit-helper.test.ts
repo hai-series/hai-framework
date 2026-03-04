@@ -4,22 +4,22 @@
  * =============================================================================
  */
 
-import { db } from '@h-ai/db'
+import { reldb } from '@h-ai/reldb'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { audit } from '../src/index.js'
 
 // ─── 测试辅助 ───
 
 async function setupDb(): Promise<void> {
-  const result = await db.init({ type: 'sqlite', database: ':memory:' })
+  const result = await reldb.init({ type: 'sqlite', database: ':memory:' })
   if (!result.success) {
     throw new Error(`DB init failed: ${result.error.message}`)
   }
-  await db.ddl.createTable('users', {
+  await reldb.ddl.createTable('users', {
     id: { type: 'TEXT', primaryKey: true },
     username: { type: 'TEXT', notNull: true },
   }, true)
-  await db.sql.execute(
+  await reldb.sql.execute(
     'INSERT INTO users (id, username) VALUES (?, ?)',
     ['user_1', 'testuser'],
   )
@@ -30,12 +30,12 @@ async function setupDb(): Promise<void> {
 describe('audit.helper', () => {
   beforeEach(async () => {
     await setupDb()
-    await audit.init({ db })
+    await audit.init({ db: reldb })
   })
 
   afterEach(async () => {
     await audit.close()
-    await db.close()
+    await reldb.close()
   })
 
   // ─── login ───

@@ -13,7 +13,7 @@ import type { SchedulerError, TaskDefinition, TaskExecutionLog } from './schedul
 
 import { core, ok } from '@h-ai/core'
 
-import { db } from '@h-ai/db'
+import { reldb } from '@h-ai/reldb'
 
 import { parseCronExpression } from './scheduler-cron.js'
 import { saveLog } from './scheduler-db.js'
@@ -106,7 +106,7 @@ export async function runTask(task: TaskDefinition, config: SchedulerConfig): Pr
       api: task.type === 'api' ? task.api : undefined,
     })
 
-    if (config.enableDb && db.isInitialized) {
+    if (config.enableDb && reldb.isInitialized) {
       await saveLog(config.tableName, log)
     }
 

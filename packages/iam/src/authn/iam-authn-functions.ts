@@ -7,7 +7,7 @@
 
 import type { CacheFunctions } from '@h-ai/cache'
 import type { Result } from '@h-ai/core'
-import type { DbFunctions } from '@h-ai/db'
+import type { ReldbFunctions } from '@h-ai/reldb'
 
 import type { IamAuthzFunctions } from '../authz/iam-authz-types.js'
 import type { IamConfig } from '../iam-config.js'
@@ -38,7 +38,7 @@ const logger = core.logger.child({ module: 'iam', scope: 'authn' })
  */
 export interface IamAuthnFunctionsDeps {
   config: IamConfig
-  db: DbFunctions
+  db: ReldbFunctions
   cache: CacheFunctions
   sessionFunctions: IamSessionFunctions
   authzFunctions: IamAuthzFunctions

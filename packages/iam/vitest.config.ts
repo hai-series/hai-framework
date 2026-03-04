@@ -7,7 +7,7 @@ export default mergeConfig(baseTestConfig, {
       '@h-ai/cache': '../cache/src/index.ts',
       '@h-ai/core': '../core/src/index.ts',
       '@h-ai/crypto': '../crypto/src/index.ts',
-      '@h-ai/db': '../db/src/index.ts',
+      '@h-ai/reldb': '../reldb/src/index.ts',
     },
   },
 })

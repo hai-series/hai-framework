@@ -1,16 +1,16 @@
 /**
  * @h-ai/audit — 审计日志仓库
  *
- * 基于 @h-ai/db BaseCrudRepository 实现审计日志的持久化与查询。 仅在需要 JOIN / 聚合时使用自定义 SQL，其余 CRUD 操作由基类处理。
+ * 基于 @h-ai/reldb BaseReldbCrudRepository 实现审计日志的持久化与查询。 仅在需要 JOIN / 聚合时使用自定义 SQL，其余 CRUD 操作由基类处理。
  * @module audit-repository
  */
 
 import type { Result } from '@h-ai/core'
-import type { DbFunctions } from '@h-ai/db'
+import type { ReldbFunctions } from '@h-ai/reldb'
 import type { AuditError, AuditLog, AuditLogWithUser, AuditStatItem, ListAuditLogsOptions } from './audit-types.js'
 
 import { core, err, ok } from '@h-ai/core'
-import { BaseCrudRepository } from '@h-ai/db'
+import { BaseReldbCrudRepository } from '@h-ai/reldb'
 
 import { AuditErrorCode } from './audit-config.js'
 import { auditM } from './audit-i18n.js'
@@ -40,12 +40,12 @@ export interface AuditRepositoryConfig {
 /**
  * 审计日志仓库
  *
- * 通过 BaseCrudRepository 自动建表、字段映射与类型转换，
+ * 通过 BaseReldbCrudRepository 自动建表、字段映射与类型转换，
  * 仅在需要 JOIN / 聚合时使用自定义 SQL。
  *
  * @remarks 此类仅供 audit-main.ts 内部使用，不通过 index.ts 对外导出。
  */
-export class AuditLogRepository extends BaseCrudRepository<AuditLog> {
+export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
   private readonly repoConfig: AuditRepositoryConfig
   private readonly isSqlite: boolean
 
@@ -53,7 +53,7 @@ export class AuditLogRepository extends BaseCrudRepository<AuditLog> {
    * @param db - 已初始化的数据库服务实例
    * @param config - 仓库配置（表名与用户表映射）
    */
-  constructor(db: DbFunctions, config: AuditRepositoryConfig) {
+  constructor(db: ReldbFunctions, config: AuditRepositoryConfig) {
     super(db, {
       table: config.tableName,
       idColumn: 'id',
@@ -71,7 +71,7 @@ export class AuditLogRepository extends BaseCrudRepository<AuditLog> {
       ],
     })
     this.repoConfig = config
-    this.isSqlite = db.config?.type === 'sqlite'
+    this.isSqlite = this.db.config?.type === 'sqlite'
   }
 
   /**

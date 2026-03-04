@@ -7,7 +7,7 @@
 
 import type { CacheFunctions } from '@h-ai/cache'
 import type { PaginatedResult, Result } from '@h-ai/core'
-import type { DbFunctions } from '@h-ai/db'
+import type { ReldbFunctions } from '@h-ai/reldb'
 import type { PasswordStrategy } from '../authn/password/iam-authn-password-strategy.js'
 import type { IamAuthzFunctions } from '../authz/iam-authz-types.js'
 import type { IamConfig, IamErrorCodeType } from '../iam-config.js'
@@ -42,7 +42,7 @@ const logger = core.logger.child({ module: 'iam', scope: 'user' })
  */
 export interface IamUserFunctionsDeps {
   config: IamConfig
-  db: DbFunctions
+  db: ReldbFunctions
   cache: CacheFunctions
   passwordStrategy: PasswordStrategy
   sessionFunctions: IamSessionFunctions
@@ -90,7 +90,7 @@ export async function createIamUserFunctions(deps: IamUserFunctionsDeps): Promis
 // ─── 内部实现 ───
 
 interface UserBuilderDeps {
-  db: DbFunctions
+  db: ReldbFunctions
   userRepository: UserRepository
   resetTokenRepository: ResetTokenRepository
   passwordStrategy: PasswordStrategy

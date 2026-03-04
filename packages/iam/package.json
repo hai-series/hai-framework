@@ -39,7 +39,7 @@
     "@h-ai/cache": "workspace:*",
     "@h-ai/core": "workspace:*",
     "@h-ai/crypto": "workspace:*",
-    "@h-ai/db": "workspace:*",
+    "@h-ai/reldb": "workspace:*",
     "zod": "catalog:"
   },
   "devDependencies": {

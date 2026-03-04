@@ -1,6 +1,6 @@
 # @h-ai/scheduler
 
-定时任务调度模块，支持 cron 表达式、JS 函数 / HTTP API 执行，以及通过 `@h-ai/db` 持久化执行日志和任务定义。
+定时任务调度模块，支持 cron 表达式、JS 函数 / HTTP API 执行，以及通过 `@h-ai/reldb` 持久化执行日志和任务定义。
 
 ## 支持的任务类型
 
@@ -10,11 +10,11 @@
 ## 快速开始
 
 ```ts
-import { db } from '@h-ai/db'
+import { reldb } from '@h-ai/reldb'
 import { scheduler } from '@h-ai/scheduler'
 
 // 初始化 DB（用于持久化任务定义和执行日志）
-await db.init({ type: 'sqlite', database: './scheduler.db' })
+await reldb.init({ type: 'sqlite', database: './scheduler.db' })
 
 // 初始化调度器（自动加载之前持久化的 API 任务）
 await scheduler.init({ enableDb: true })
@@ -64,14 +64,14 @@ await scheduler.close()
 
 ```ts
 await scheduler.init({
-  enableDb: true, // 是否启用数据库（默认 true，需 @h-ai/db 已初始化）
+  enableDb: true, // 是否启用数据库（默认 true，需 @h-ai/reldb 已初始化）
   tableName: 'scheduler_logs', // 执行日志表名（默认 'scheduler_logs'）
   taskTableName: 'scheduler_tasks', // 任务定义表名（默认 'scheduler_tasks'）
   tickInterval: 1000, // 调度检查间隔，毫秒（默认 1000）
 })
 ```
 
-若 `enableDb: true` 但 `@h-ai/db` 未初始化，调度器会自动降级为 `enableDb: false`。
+若 `enableDb: true` 但 `@h-ai/reldb` 未初始化，调度器会自动降级为 `enableDb: false`。
 
 ## 任务持久化
 

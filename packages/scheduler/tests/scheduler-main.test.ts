@@ -4,7 +4,7 @@
  * =============================================================================
  */
 
-import { db } from '@h-ai/db'
+import { reldb } from '@h-ai/reldb'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { SchedulerErrorCode } from '../src/scheduler-config.js'
 import { scheduler } from '../src/scheduler-main.js'
@@ -13,7 +13,7 @@ describe('scheduler', () => {
   afterEach(async () => {
     vi.unstubAllGlobals()
     await scheduler.close()
-    await db.close()
+    await reldb.close()
   })
 
   describe('init', () => {
@@ -26,7 +26,7 @@ describe('scheduler', () => {
     })
 
     it('应成功初始化（启用 DB）', async () => {
-      await db.init({ type: 'sqlite', database: ':memory:' })
+      await reldb.init({ type: 'sqlite', database: ':memory:' })
       const result = await scheduler.init({ enableDb: true })
       expect(result.success).toBe(true)
       expect(scheduler.config?.enableDb).toBe(true)
@@ -303,7 +303,7 @@ describe('scheduler', () => {
 
   describe('数据库集成', () => {
     it('应保存执行日志到数据库', async () => {
-      await db.init({ type: 'sqlite', database: ':memory:' })
+      await reldb.init({ type: 'sqlite', database: ':memory:' })
       await scheduler.init({ enableDb: true })
 
       await scheduler.register({
@@ -327,7 +327,7 @@ describe('scheduler', () => {
     })
 
     it('应按状态过滤执行日志', async () => {
-      await db.init({ type: 'sqlite', database: ':memory:' })
+      await reldb.init({ type: 'sqlite', database: ':memory:' })
       await scheduler.init({ enableDb: true })
 
       await scheduler.register({
@@ -364,7 +364,7 @@ describe('scheduler', () => {
     })
 
     it('应按 taskId 和 status 组合过滤日志', async () => {
-      await db.init({ type: 'sqlite', database: ':memory:' })
+      await reldb.init({ type: 'sqlite', database: ':memory:' })
       await scheduler.init({ enableDb: true })
 
       await scheduler.register({
@@ -394,7 +394,7 @@ describe('scheduler', () => {
     })
 
     it('多次触发应创建多条日志', async () => {
-      await db.init({ type: 'sqlite', database: ':memory:' })
+      await reldb.init({ type: 'sqlite', database: ':memory:' })
       await scheduler.init({ enableDb: true })
 
       await scheduler.register({
@@ -418,7 +418,7 @@ describe('scheduler', () => {
     })
 
     it('应支持分页查询（limit/offset）', async () => {
-      await db.init({ type: 'sqlite', database: ':memory:' })
+      await reldb.init({ type: 'sqlite', database: ':memory:' })
       await scheduler.init({ enableDb: true })
 
       await scheduler.register({
@@ -473,7 +473,7 @@ describe('scheduler', () => {
 
   describe('任务持久化', () => {
     it('api 任务应持久化到数据库，重新初始化后自动加载', async () => {
-      await db.init({ type: 'sqlite', database: ':memory:' })
+      await reldb.init({ type: 'sqlite', database: ':memory:' })
       await scheduler.init({ enableDb: true })
 
       await scheduler.register({
@@ -498,7 +498,7 @@ describe('scheduler', () => {
     })
 
     it('js 任务不应持久化，重新初始化后不加载', async () => {
-      await db.init({ type: 'sqlite', database: ':memory:' })
+      await reldb.init({ type: 'sqlite', database: ':memory:' })
       await scheduler.init({ enableDb: true })
 
       await scheduler.register({
@@ -518,7 +518,7 @@ describe('scheduler', () => {
     })
 
     it('注销 API 任务应同时删除持久化数据', async () => {
-      await db.init({ type: 'sqlite', database: ':memory:' })
+      await reldb.init({ type: 'sqlite', database: ':memory:' })
       await scheduler.init({ enableDb: true })
 
       await scheduler.register({
@@ -540,7 +540,7 @@ describe('scheduler', () => {
     })
 
     it('updateTask 应更新内存和持久化数据', async () => {
-      await db.init({ type: 'sqlite', database: ':memory:' })
+      await reldb.init({ type: 'sqlite', database: ':memory:' })
       await scheduler.init({ enableDb: true })
 
       await scheduler.register({
@@ -645,7 +645,7 @@ describe('scheduler', () => {
     })
 
     it('多个 API 任务应全部持久化并在重新初始化后加载', async () => {
-      await db.init({ type: 'sqlite', database: ':memory:' })
+      await reldb.init({ type: 'sqlite', database: ':memory:' })
       await scheduler.init({ enableDb: true })
 
       await scheduler.register({
@@ -680,7 +680,7 @@ describe('scheduler', () => {
     })
 
     it('updateTask enabled 状态应同步到 DB 并在重新加载后保持', async () => {
-      await db.init({ type: 'sqlite', database: ':memory:' })
+      await reldb.init({ type: 'sqlite', database: ':memory:' })
       await scheduler.init({ enableDb: true })
 
       await scheduler.register({

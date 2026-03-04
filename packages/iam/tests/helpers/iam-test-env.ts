@@ -8,7 +8,7 @@
 import type { IamConfigSettingsInput } from '../../src/iam-config.js'
 import type { IamConfigInput, IamFunctions } from '../../src/iam-types.js'
 import { cache } from '@h-ai/cache'
-import { db } from '@h-ai/db'
+import { reldb } from '@h-ai/reldb'
 import { afterAll, beforeAll } from 'vitest'
 import { iam } from '../../src/index.js'
 
@@ -29,7 +29,7 @@ type IamTestInitConfig = IamConfigSettingsInput & Omit<IamConfigInput, keyof Iam
  * db / cache 需已初始化。用于需要不同配置的子场景。
  */
 export async function initIam(settings?: IamTestInitConfig): Promise<IamFunctions> {
-  const result = await iam.init({ db, cache, ...(settings ?? {}) })
+  const result = await iam.init({ db: reldb, cache, ...(settings ?? {}) })
   if (!result.success) {
     throw new Error(`IAM init failed: ${result.error.message}`)
   }
@@ -47,14 +47,14 @@ export function defineIamTestEnv(
   settings?: IamTestInitConfig,
 ) {
   beforeAll(async () => {
-    if (!db.isInitialized) {
-      await db.init({ type: 'sqlite', database: ':memory:' })
+    if (!reldb.isInitialized) {
+      await reldb.init({ type: 'sqlite', database: ':memory:' })
     }
     if (!cache.isInitialized) {
       await cache.init({ type: 'memory' })
     }
 
-    const result = await iam.init({ db, cache, ...(settings ?? {}) })
+    const result = await iam.init({ db: reldb, cache, ...(settings ?? {}) })
     if (!result.success) {
       throw new Error(`IAM init failed in "${_label}": ${result.error.message}`)
     }
@@ -63,7 +63,7 @@ export function defineIamTestEnv(
   afterAll(async () => {
     await iam.close()
     await cache.close()
-    await db.close()
+    await reldb.close()
   })
 
   return iam
@@ -76,8 +76,8 @@ export function defineIamTestEnv(
  */
 export function setupGlobalDeps() {
   beforeAll(async () => {
-    if (!db.isInitialized) {
-      await db.init({ type: 'sqlite', database: ':memory:' })
+    if (!reldb.isInitialized) {
+      await reldb.init({ type: 'sqlite', database: ':memory:' })
     }
     if (!cache.isInitialized) {
       await cache.init({ type: 'memory' })
@@ -86,6 +86,6 @@ export function setupGlobalDeps() {
 
   afterAll(async () => {
     await cache.close()
-    await db.close()
+    await reldb.close()
   })
 }

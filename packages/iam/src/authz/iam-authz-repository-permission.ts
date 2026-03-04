@@ -1,16 +1,16 @@
 /**
  * @h-ai/iam — 权限存储实现
  *
- * 基于 @h-ai/db 的权限存储实现。
+ * 基于 @h-ai/reldb 的权限存储实现。
  * @module iam-authz-repository-permission
  */
 
 import type { Result } from '@h-ai/core'
-import type { CrudCountOptions, CrudFieldDefinition, CrudRepository, DbError, DbFunctions, TxHandle } from '@h-ai/db'
+import type { ReldbCrudCountOptions, ReldbCrudFieldDefinition, ReldbCrudRepository, ReldbError, ReldbFunctions, ReldbTxHandle } from '@h-ai/reldb'
 import type { IamError } from '../iam-types.js'
 import type { Permission } from './iam-authz-types.js'
 import { err, ok } from '@h-ai/core'
-import { BaseCrudRepository } from '@h-ai/db'
+import { BaseReldbCrudRepository } from '@h-ai/reldb'
 import { IamErrorCode } from '../iam-config.js'
 import { iamM } from '../iam-i18n.js'
 
@@ -19,7 +19,7 @@ import { iamM } from '../iam-i18n.js'
 /**
  * 权限存储接口
  */
-export interface PermissionRepository extends CrudRepository<Permission> {
+export interface PermissionRepository extends ReldbCrudRepository<Permission> {
   /**
    * 根据代码获取权限
    */
@@ -33,7 +33,7 @@ export interface PermissionRepository extends CrudRepository<Permission> {
  */
 const TABLE_NAME = 'iam_permissions'
 
-const PERMISSION_FIELDS: CrudFieldDefinition[] = [
+const PERMISSION_FIELDS: ReldbCrudFieldDefinition[] = [
   {
     fieldName: 'id',
     columnName: 'id',
@@ -108,7 +108,7 @@ const PERMISSION_FIELDS: CrudFieldDefinition[] = [
   },
 ]
 
-/** 权限存储单例缓存（通过 db.config 引用比较检测 db 重新初始化） */
+/** 权限存储单例缓存（通过 reldb.config 引用比较检测 db 重新初始化） */
 let permRepoInstance: PermissionRepository | null = null
 let permRepoDbConfig: unknown = null
 
@@ -131,7 +131,7 @@ export function resetPermissionRepoSingleton(): void {
  * @param db - 数据库服务实例
  * @returns 权限存储接口实现
  */
-export async function createDbPermissionRepository(db: DbFunctions): Promise<PermissionRepository> {
+export async function createDbPermissionRepository(db: ReldbFunctions): Promise<PermissionRepository> {
   if (permRepoInstance && permRepoDbConfig === db.config)
     return permRepoInstance
 
@@ -145,10 +145,10 @@ export async function createDbPermissionRepository(db: DbFunctions): Promise<Per
 /**
  * 基于数据库的权限存储实现
  *
- * 继承 BaseCrudRepository，提供按 code 查找权限的能力。
+ * 继承 BaseReldbCrudRepository，提供按 code 查找权限的能力。
  */
-class DbPermissionRepository extends BaseCrudRepository<Permission> implements PermissionRepository {
-  constructor(db: DbFunctions) {
+class DbPermissionRepository extends BaseReldbCrudRepository<Permission> implements PermissionRepository {
+  constructor(db: ReldbFunctions) {
     super(db, {
       table: TABLE_NAME,
       fields: PERMISSION_FIELDS,
@@ -160,10 +160,10 @@ class DbPermissionRepository extends BaseCrudRepository<Permission> implements P
     return this.findOneBy('code = ?', [code])
   }
 
-  async exists(options?: CrudCountOptions, tx?: TxHandle): Promise<Result<boolean, DbError>> {
+  async exists(options?: ReldbCrudCountOptions, tx?: ReldbTxHandle): Promise<Result<boolean, ReldbError>> {
     const result = await this.count(options, tx)
     if (!result.success) {
-      return result as Result<boolean, DbError>
+      return result as Result<boolean, ReldbError>
     }
     return ok(result.data > 0)
   }

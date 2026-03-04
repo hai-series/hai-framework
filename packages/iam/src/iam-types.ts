@@ -11,7 +11,7 @@
 
 import type { CacheFunctions } from '@h-ai/cache'
 import type { Result } from '@h-ai/core'
-import type { DbFunctions } from '@h-ai/db'
+import type { ReldbFunctions } from '@h-ai/reldb'
 
 import type { IamAuthnFunctions } from './authn/iam-authn-types.js'
 import type { LdapClientFactory } from './authn/ldap/iam-authn-ldap-strategy.js'
@@ -46,7 +46,7 @@ export interface IamError {
  */
 export interface IamConfigInput extends IamConfigSettingsInput {
   /** 数据库服务（必需） */
-  db: DbFunctions
+  db: ReldbFunctions
   /** 缓存服务（必需） */
   cache: CacheFunctions
   /** LDAP 客户端工厂（启用 LDAP 登录时必填） */

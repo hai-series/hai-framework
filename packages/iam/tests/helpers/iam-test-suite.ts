@@ -14,7 +14,7 @@ import type { LdapContainerLease } from './ldap-container.js'
 import type { PostgresContainerLease } from './postgres-container.js'
 import type { RedisContainerLease } from './redis-container.js'
 import { cache } from '@h-ai/cache'
-import { db } from '@h-ai/db'
+import { reldb } from '@h-ai/reldb'
 import { afterAll, beforeAll, describe } from 'vitest'
 import { iam } from '../../src/index.js'
 import { acquireLdapContainer } from './ldap-container.js'
@@ -47,8 +47,8 @@ export function sqliteMemoryEnv(): IamTestEnv {
   return {
     label: 'sqlite+memory',
     async setup() {
-      if (!db.isInitialized) {
-        await db.init({ type: 'sqlite', database: ':memory:' })
+      if (!reldb.isInitialized) {
+        await reldb.init({ type: 'sqlite', database: ':memory:' })
       }
       if (!cache.isInitialized) {
         await cache.init({ type: 'memory' })
@@ -56,7 +56,7 @@ export function sqliteMemoryEnv(): IamTestEnv {
     },
     async cleanup() {
       await cache.close()
-      await db.close()
+      await reldb.close()
     },
   }
 }
@@ -64,7 +64,7 @@ export function sqliteMemoryEnv(): IamTestEnv {
 /** 等待数据库连接就绪（PostgreSQL 连接池可能需要时间建立） */
 async function waitForDbReady(maxAttempts = 10, intervalMs = 1000): Promise<void> {
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-    const ping = await db.sql.query('SELECT 1')
+    const ping = await reldb.sql.query('SELECT 1')
     if (ping.success)
       return
     await new Promise(resolve => setTimeout(resolve, intervalMs))
@@ -87,8 +87,8 @@ export async function postgresRedisEnv(): Promise<IamTestEnv> {
         acquireRedisContainer(),
       ])
 
-      if (!db.isInitialized) {
-        await db.init({
+      if (!reldb.isInitialized) {
+        await reldb.init({
           type: 'postgresql',
           host: pgLease!.host,
           port: pgLease!.port,
@@ -109,7 +109,7 @@ export async function postgresRedisEnv(): Promise<IamTestEnv> {
     },
     async cleanup() {
       await cache.close()
-      await db.close()
+      await reldb.close()
       await pgLease?.release()
       await redisLease?.release()
     },
@@ -139,8 +139,8 @@ export async function fullIntegrationEnv(): Promise<IamTestEnv & { ldapLease: Ld
         acquireLdapContainer(),
       ])
 
-      if (!db.isInitialized) {
-        await db.init({
+      if (!reldb.isInitialized) {
+        await reldb.init({
           type: 'postgresql',
           host: pgLease!.host,
           port: pgLease!.port,
@@ -161,7 +161,7 @@ export async function fullIntegrationEnv(): Promise<IamTestEnv & { ldapLease: Ld
     },
     async cleanup() {
       await cache.close()
-      await db.close()
+      await reldb.close()
       await pgLease?.release()
       await redisLease?.release()
       await ldapLease?.release()
@@ -202,7 +202,7 @@ export function defineIamSuite(
 
       const resolvedSettings = typeof iamSettings === 'function' ? iamSettings() : (iamSettings ?? {})
 
-      const result = await iam.init({ db, cache, ...resolvedSettings } as IamConfigInput)
+      const result = await iam.init({ db: reldb, cache, ...resolvedSettings } as IamConfigInput)
       if (!result.success) {
         throw new Error(`IAM init failed in "${label}": ${JSON.stringify(result.error)}`)
       }
@@ -259,7 +259,7 @@ export function defineIamEnvSuite(
  */
 export async function initIam(settings?: Omit<IamConfigInput, 'db' | 'cache'>): Promise<IamFunctions> {
   await iam.close()
-  const result = await iam.init({ db, cache, ...(settings ?? {}) } as IamConfigInput)
+  const result = await iam.init({ db: reldb, cache, ...(settings ?? {}) } as IamConfigInput)
   if (!result.success) {
     throw new Error(`IAM init failed: ${JSON.stringify(result.error)}`)
   }

@@ -4,26 +4,26 @@
  * =============================================================================
  */
 
-import { db } from '@h-ai/db'
+import { reldb } from '@h-ai/reldb'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { audit } from '../src/index.js'
 
 // ─── 测试辅助 ───
 
 async function setupDb(): Promise<void> {
-  const result = await db.init({ type: 'sqlite', database: ':memory:' })
+  const result = await reldb.init({ type: 'sqlite', database: ':memory:' })
   if (!result.success) {
     throw new Error(`DB init failed: ${result.error.message}`)
   }
-  await db.ddl.createTable('users', {
+  await reldb.ddl.createTable('users', {
     id: { type: 'TEXT', primaryKey: true },
     username: { type: 'TEXT', notNull: true },
   }, true)
-  await db.sql.execute(
+  await reldb.sql.execute(
     'INSERT INTO users (id, username) VALUES (?, ?)',
     ['user_1', 'testuser'],
   )
-  await db.sql.execute(
+  await reldb.sql.execute(
     'INSERT INTO users (id, username) VALUES (?, ?)',
     ['user_2', 'anotheruser'],
   )
@@ -34,7 +34,7 @@ async function setupDb(): Promise<void> {
 describe('audit.list', () => {
   beforeEach(async () => {
     await setupDb()
-    await audit.init({ db })
+    await audit.init({ db: reldb })
     // 插入测试数据
     await audit.log({ userId: 'user_1', action: 'login', resource: 'auth' })
     await audit.log({ userId: 'user_1', action: 'update', resource: 'users', resourceId: 'user_2' })
@@ -43,7 +43,7 @@ describe('audit.list', () => {
 
   afterEach(async () => {
     await audit.close()
-    await db.close()
+    await reldb.close()
   })
 
   // ─── 分页 ───
@@ -163,7 +163,7 @@ describe('audit.list', () => {
 describe('audit.getUserRecent', () => {
   beforeEach(async () => {
     await setupDb()
-    await audit.init({ db })
+    await audit.init({ db: reldb })
     await audit.log({ userId: 'user_1', action: 'login', resource: 'auth' })
     await audit.log({ userId: 'user_1', action: 'update', resource: 'users' })
     await audit.log({ userId: 'user_1', action: 'logout', resource: 'auth' })
@@ -172,7 +172,7 @@ describe('audit.getUserRecent', () => {
 
   afterEach(async () => {
     await audit.close()
-    await db.close()
+    await reldb.close()
   })
 
   it('应返回指定用户的活动记录', async () => {
