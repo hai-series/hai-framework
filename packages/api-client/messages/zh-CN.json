@@ -1,0 +1,11 @@
+{
+  "apiClient_networkError": "网络请求失败",
+  "apiClient_timeout": "请求超时",
+  "apiClient_serverError": "服务器错误（{status}）",
+  "apiClient_unauthorized": "未授权，请重新登录",
+  "apiClient_forbidden": "无权限访问",
+  "apiClient_notFound": "请求的资源不存在",
+  "apiClient_validationFailed": "请求参数校验失败",
+  "apiClient_tokenRefreshFailed": "Token刷新失败，请重新登录",
+  "apiClient_unknown": "未知错误"
+}

@@ -1,10 +1,13 @@
 /**
  * createAIClient / parseSSE / collectStreamContent 测试
  *
- * 客户端通过 @h-ai/ai/client 导入，使用 mock fetch 隔离网络依赖。
+ * 客户端通过 @h-ai/ai/client 导入，使用 mock api adapter 隔离 HTTP 依赖。
  */
 
+import type { Result } from '@h-ai/core'
+import type { AIApiAdapter } from '../src/client/ai-client.js'
 import type { ChatCompletionChunk, ChatCompletionResponse } from '../src/index.js'
+import { err, ok } from '@h-ai/core'
 import { describe, expect, it, vi } from 'vitest'
 import { collectStreamContent, createAIClient, parseSSE } from '../src/client/ai-client.js'
 
@@ -55,25 +58,28 @@ function makeSSEStream(lines: string[]): ReadableStream<Uint8Array> {
   })
 }
 
-/** 创建返回指定 JSON 的 mock fetch */
-function mockFetch(body: unknown, status = 200): typeof globalThis.fetch {
-  return vi.fn().mockResolvedValue({
-    ok: status >= 200 && status < 300,
-    status,
-    json: () => Promise.resolve(body),
-    text: () => Promise.resolve(JSON.stringify(body)),
-    body: null,
-  }) as unknown as typeof globalThis.fetch
-}
+/** 创建返回指定结果的 mock api adapter */
+function createMockApi(options: {
+  postResult?: Result<unknown, { message: string }>
+  streamChunks?: ChatCompletionChunk[]
+} = {}): { api: AIApiAdapter, postSpy: ReturnType<typeof vi.fn>, streamSpy: ReturnType<typeof vi.fn> } {
+  const postSpy = vi.fn().mockResolvedValue(
+    options.postResult ?? ok(makeChatResponse('default')),
+  )
 
-/** 创建返回 SSE 流的 mock fetch */
-function mockStreamFetch(chunks: ChatCompletionChunk[]): typeof globalThis.fetch {
-  const lines = chunks.map(c => `data: ${JSON.stringify(c)}`).concat(['data: [DONE]'])
-  return vi.fn().mockResolvedValue({
-    ok: true,
-    status: 200,
-    body: makeSSEStream(lines),
-  }) as unknown as typeof globalThis.fetch
+  const chunks = options.streamChunks ?? []
+  async function* mockStream(): AsyncIterable<string> {
+    for (const chunk of chunks) {
+      yield JSON.stringify(chunk)
+    }
+  }
+  const streamSpy = vi.fn().mockReturnValue(mockStream())
+
+  return {
+    api: { post: postSpy, stream: streamSpy },
+    postSpy,
+    streamSpy,
+  }
 }
 
 /** 将 AsyncIterable 收集为数组 */
@@ -92,94 +98,31 @@ async function collectAsyncIterable<T>(iterable: AsyncIterable<T>): Promise<T[]>
 describe('createAIClient — chat', () => {
   it('发送请求并获取响应', async () => {
     const response = makeChatResponse('你好！')
-    const fetchFn = mockFetch(response)
+    const { api, postSpy } = createMockApi({ postResult: ok(response) })
 
-    const client = createAIClient({
-      baseUrl: 'http://localhost:3000/api',
-      fetch: fetchFn,
-    })
-
+    const client = createAIClient({ api })
     const result = await client.chat({
       messages: [{ role: 'user', content: '你好' }],
     })
 
     expect(result.choices[0].message.content).toBe('你好！')
-    expect(fetchFn).toHaveBeenCalledOnce()
-    // 验证请求 URL 和参数
-    const [url, init] = (fetchFn as ReturnType<typeof vi.fn>).mock.calls[0]
-    expect(url).toBe('http://localhost:3000/api/chat')
-    expect(init.method).toBe('POST')
-    const body = JSON.parse(init.body)
-    expect(body.stream).toBe(false)
-    expect(body.messages[0].content).toBe('你好')
+    expect(postSpy).toHaveBeenCalledOnce()
+    // 验证调用路径和参数
+    expect(postSpy).toHaveBeenCalledWith('/ai/chat', expect.objectContaining({
+      stream: false,
+      messages: [{ role: 'user', content: '你好' }],
+    }))
   })
 
   it('请求失败时抛出错误', async () => {
-    const fetchFn = mockFetch({ error: 'Unauthorized' }, 401)
-    const client = createAIClient({ baseUrl: '/api', fetch: fetchFn })
+    const { api } = createMockApi({
+      postResult: err({ message: 'Unauthorized' }),
+    })
+    const client = createAIClient({ api })
 
     await expect(
       client.chat({ messages: [{ role: 'user', content: 'hi' }] }),
-    ).rejects.toThrow('AI API request failed')
-  })
-
-  it('自定义请求头', async () => {
-    const fetchFn = mockFetch(makeChatResponse('ok'))
-    const client = createAIClient({
-      baseUrl: '/api',
-      fetch: fetchFn,
-      headers: { 'X-Custom': 'test-value' },
-    })
-
-    await client.chat({ messages: [{ role: 'user', content: 'hi' }] })
-
-    const [, init] = (fetchFn as ReturnType<typeof vi.fn>).mock.calls[0]
-    expect(init.headers['X-Custom']).toBe('test-value')
-    expect(init.headers['Content-Type']).toBe('application/json')
-  })
-
-  it('getAccessToken 注入 Authorization 头', async () => {
-    const fetchFn = mockFetch(makeChatResponse('ok'))
-    const client = createAIClient({
-      baseUrl: '/api',
-      fetch: fetchFn,
-      getAccessToken: () => 'my-token-123',
-    })
-
-    await client.chat({ messages: [{ role: 'user', content: 'hi' }] })
-
-    const [, init] = (fetchFn as ReturnType<typeof vi.fn>).mock.calls[0]
-    expect(init.headers.Authorization).toBe('Bearer my-token-123')
-  })
-
-  it('getAccessToken 支持异步', async () => {
-    const fetchFn = mockFetch(makeChatResponse('ok'))
-    const client = createAIClient({
-      baseUrl: '/api',
-      fetch: fetchFn,
-      getAccessToken: async () => 'async-token',
-    })
-
-    await client.chat({ messages: [{ role: 'user', content: 'hi' }] })
-
-    const [, init] = (fetchFn as ReturnType<typeof vi.fn>).mock.calls[0]
-    expect(init.headers.Authorization).toBe('Bearer async-token')
-  })
-
-  it('401 响应触发 onAuthError 回调', async () => {
-    const onAuthError = vi.fn()
-    const fetchFn = mockFetch({ error: 'Unauthorized' }, 401)
-    const client = createAIClient({
-      baseUrl: '/api',
-      fetch: fetchFn,
-      onAuthError,
-    })
-
-    await expect(
-      client.chat({ messages: [{ role: 'user', content: 'hi' }] }),
-    ).rejects.toThrow()
-
-    expect(onAuthError).toHaveBeenCalledOnce()
+    ).rejects.toThrow('AI chat request failed: Unauthorized')
   })
 })
 
@@ -190,9 +133,9 @@ describe('createAIClient — chat', () => {
 describe('createAIClient — chatStream', () => {
   it('流式接收响应', async () => {
     const chunks = [makeChunk('Hello'), makeChunk(' World', 'stop')]
-    const fetchFn = mockStreamFetch(chunks)
+    const { api, streamSpy } = createMockApi({ streamChunks: chunks })
 
-    const client = createAIClient({ baseUrl: '/api', fetch: fetchFn })
+    const client = createAIClient({ api })
     const received = await collectAsyncIterable(
       client.chatStream({ messages: [{ role: 'user', content: 'hi' }] }),
     )
@@ -200,14 +143,18 @@ describe('createAIClient — chatStream', () => {
     expect(received).toHaveLength(2)
     expect(received[0].choices[0].delta.content).toBe('Hello')
     expect(received[1].choices[0].delta.content).toBe(' World')
+    // 验证调用路径
+    expect(streamSpy).toHaveBeenCalledWith('/ai/chat/stream', expect.objectContaining({
+      stream: true,
+    }))
   })
 
   it('onProgress 回调逐步汇报进度', async () => {
     const chunks = [makeChunk('A'), makeChunk('B'), makeChunk('C', 'stop')]
-    const fetchFn = mockStreamFetch(chunks)
+    const { api } = createMockApi({ streamChunks: chunks })
     const progresses: Array<{ content: string, done: boolean }> = []
 
-    const client = createAIClient({ baseUrl: '/api', fetch: fetchFn })
+    const client = createAIClient({ api })
     await collectAsyncIterable(
       client.chatStream(
         { messages: [{ role: 'user', content: 'hi' }] },
@@ -223,31 +170,26 @@ describe('createAIClient — chatStream', () => {
     expect(progresses[0].done).toBe(false)
   })
 
-  it('请求失败时抛出错误', async () => {
-    const fetchFn = mockFetch({}, 500)
-    const client = createAIClient({ baseUrl: '/api', fetch: fetchFn })
+  it('忽略解析错误的行', async () => {
+    // 混入无效 JSON
+    async function* mockStream(): AsyncIterable<string> {
+      yield JSON.stringify(makeChunk('Hello'))
+      yield 'invalid-json'
+      yield JSON.stringify(makeChunk(' World', 'stop'))
+    }
+    const api: AIApiAdapter = {
+      post: vi.fn(),
+      stream: vi.fn().mockReturnValue(mockStream()),
+    }
 
-    await expect(async () => {
-      for await (const _chunk of client.chatStream({ messages: [{ role: 'user', content: 'hi' }] })) {
-        // 不应进入
-      }
-    }).rejects.toThrow('AI API request failed')
-  })
+    const client = createAIClient({ api })
+    const received = await collectAsyncIterable(
+      client.chatStream({ messages: [{ role: 'user', content: 'hi' }] }),
+    )
 
-  it('无 body 时抛出错误', async () => {
-    const fetchFn = vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-      body: null,
-    }) as unknown as typeof globalThis.fetch
-
-    const client = createAIClient({ baseUrl: '/api', fetch: fetchFn })
-
-    await expect(async () => {
-      for await (const _chunk of client.chatStream({ messages: [{ role: 'user', content: 'hi' }] })) {
-        // 不应进入
-      }
-    }).rejects.toThrow('Response body is not readable')
+    expect(received).toHaveLength(2)
+    expect(received[0].choices[0].delta.content).toBe('Hello')
+    expect(received[1].choices[0].delta.content).toBe(' World')
   })
 })
 
@@ -257,43 +199,41 @@ describe('createAIClient — chatStream', () => {
 
 describe('createAIClient — sendMessage', () => {
   it('发送消息并获取响应文本', async () => {
-    const fetchFn = mockFetch(makeChatResponse('Hi there!'))
-    const client = createAIClient({ baseUrl: '/api', fetch: fetchFn })
+    const { api } = createMockApi({ postResult: ok(makeChatResponse('Hi there!')) })
+    const client = createAIClient({ api })
 
     const reply = await client.sendMessage('你好')
     expect(reply).toBe('Hi there!')
   })
 
   it('带 systemPrompt 发送', async () => {
-    const fetchFn = mockFetch(makeChatResponse('Expert answer'))
-    const client = createAIClient({ baseUrl: '/api', fetch: fetchFn })
+    const { api, postSpy } = createMockApi({ postResult: ok(makeChatResponse('Expert answer')) })
+    const client = createAIClient({ api })
 
     await client.sendMessage('问题', '你是专家')
 
-    const [, init] = (fetchFn as ReturnType<typeof vi.fn>).mock.calls[0]
-    const body = JSON.parse(init.body)
-    expect(body.messages).toHaveLength(2)
-    expect(body.messages[0]).toEqual({ role: 'system', content: '你是专家' })
-    expect(body.messages[1]).toEqual({ role: 'user', content: '问题' })
+    const callArgs = postSpy.mock.calls[0][1]
+    expect(callArgs.messages).toHaveLength(2)
+    expect(callArgs.messages[0]).toEqual({ role: 'system', content: '你是专家' })
+    expect(callArgs.messages[1]).toEqual({ role: 'user', content: '问题' })
   })
 
   it('不传 systemPrompt 时只有 user 消息', async () => {
-    const fetchFn = mockFetch(makeChatResponse('ok'))
-    const client = createAIClient({ baseUrl: '/api', fetch: fetchFn })
+    const { api, postSpy } = createMockApi({ postResult: ok(makeChatResponse('ok')) })
+    const client = createAIClient({ api })
 
     await client.sendMessage('hello')
 
-    const [, init] = (fetchFn as ReturnType<typeof vi.fn>).mock.calls[0]
-    const body = JSON.parse(init.body)
-    expect(body.messages).toHaveLength(1)
-    expect(body.messages[0].role).toBe('user')
+    const callArgs = postSpy.mock.calls[0][1]
+    expect(callArgs.messages).toHaveLength(1)
+    expect(callArgs.messages[0].role).toBe('user')
   })
 
   it('响应无 content 时返回空串', async () => {
     const resp = makeChatResponse('')
     resp.choices[0].message.content = null as unknown as string
-    const fetchFn = mockFetch(resp)
-    const client = createAIClient({ baseUrl: '/api', fetch: fetchFn })
+    const { api } = createMockApi({ postResult: ok(resp) })
+    const client = createAIClient({ api })
 
     const reply = await client.sendMessage('hi')
     expect(reply).toBe('')
@@ -307,8 +247,8 @@ describe('createAIClient — sendMessage', () => {
 describe('createAIClient — sendMessageStream', () => {
   it('流式发送并收集完整回复', async () => {
     const chunks = [makeChunk('Hello'), makeChunk(' World', 'stop')]
-    const fetchFn = mockStreamFetch(chunks)
-    const client = createAIClient({ baseUrl: '/api', fetch: fetchFn })
+    const { api } = createMockApi({ streamChunks: chunks })
+    const client = createAIClient({ api })
 
     const content = await client.sendMessageStream('你好')
     expect(content).toBe('Hello World')
@@ -316,14 +256,13 @@ describe('createAIClient — sendMessageStream', () => {
 
   it('带 systemPrompt 流式发送', async () => {
     const chunks = [makeChunk('Response', 'stop')]
-    const fetchFn = mockStreamFetch(chunks)
-    const client = createAIClient({ baseUrl: '/api', fetch: fetchFn })
+    const { api, streamSpy } = createMockApi({ streamChunks: chunks })
+    const client = createAIClient({ api })
 
     await client.sendMessageStream('问题', undefined, '你是助手')
 
-    const [, init] = (fetchFn as ReturnType<typeof vi.fn>).mock.calls[0]
-    const body = JSON.parse(init.body)
-    expect(body.messages[0].role).toBe('system')
+    const callArgs = streamSpy.mock.calls[0][1]
+    expect(callArgs.messages[0].role).toBe('system')
   })
 })
 

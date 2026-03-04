@@ -1,0 +1,11 @@
+{
+  "apiClient_networkError": "Network request failed",
+  "apiClient_timeout": "Request timeout",
+  "apiClient_serverError": "Server error ({status})",
+  "apiClient_unauthorized": "Unauthorized, please log in again",
+  "apiClient_forbidden": "Access forbidden",
+  "apiClient_notFound": "Resource not found",
+  "apiClient_validationFailed": "Request validation failed",
+  "apiClient_tokenRefreshFailed": "Token refresh failed, please log in again",
+  "apiClient_unknown": "Unknown error"
+}

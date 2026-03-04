@@ -1,11 +1,13 @@
 /**
  * @h-ai/ai — 前端 AI 客户端
  *
- * 浏览器端 HTTP 客户端，零 Node.js 依赖。
- * 通过 `createAIClient()` 工厂函数创建。
+ * 基于 @h-ai/api-client 的 AI 领域客户端。
+ * 通过 `createAIClient()` 工厂函数创建，消除自建 HTTP 层，
+ * 复用 api-client 提供的 Token 管理、超时、拦截器等基础能力。
  * @module ai-client
  */
 
+import type { Result } from '@h-ai/core'
 import type {
   ChatCompletionChunk,
   ChatCompletionRequest,
@@ -13,22 +15,43 @@ import type {
   ChatMessage,
 } from '../llm/ai-llm-types.js'
 
+// ─── API 适配器接口 ───
+
+/**
+ * AI 客户端所需的 API 调用能力
+ *
+ * 结构兼容 `@h-ai/api-client` 的 `ApiClient` 实例（鸭子类型）。
+ * 传入 `createApiClient()` 返回值即可，无需额外适配。
+ */
+export interface AIApiAdapter {
+  /** POST 请求（返回 Result） */
+  post: <T>(path: string, body?: unknown) => Promise<Result<T, { message: string }>>
+  /** 流式请求（返回 SSE data 行的 AsyncIterable） */
+  stream: (path: string, body?: unknown) => AsyncIterable<string>
+}
+
 // ─── 客户端配置 ───
 
-/** AI 客户端配置 */
+/**
+ * AI 客户端配置
+ *
+ * @example
+ * ```ts
+ * import { createApiClient } from '@h-ai/api-client'
+ * import { createAIClient } from '@h-ai/ai/client'
+ *
+ * const api = createApiClient({ baseUrl: '/api', auth: { ... } })
+ * const aiClient = createAIClient({ api })
+ * ```
+ */
 export interface AIClientConfig {
-  /** API 基础 URL（不含尾部斜杠，如 `'https://api.example.com'`） */
-  baseUrl: string
-  /** 请求超时（毫秒，默认 `60000`） */
-  timeout?: number
-  /** 自定义请求头（每次请求合并） */
-  headers?: Record<string, string>
-  /** 获取 access token 的回调（每次请求前调用，自动设置 Bearer 头） */
-  getAccessToken?: () => string | Promise<string>
-  /** 认证失败回调（HTTP 401 时触发，可用于跳转登录页） */
-  onAuthError?: () => void
-  /** 自定义 fetch 实现（默认 `globalThis.fetch`） */
-  fetch?: typeof globalThis.fetch
+  /**
+   * API 调用适配器
+   *
+   * 传入 `createApiClient()` 返回的实例。
+   * baseUrl、Token 管理、超时等通过 api-client 配置。
+   */
+  api: AIApiAdapter
 }
 
 /** 流式响应进度（`onProgress` 回调参数） */
@@ -45,8 +68,6 @@ export interface StreamProgress {
 export interface StreamOptions {
   /** 进度回调（每次收到 chunk 时触发） */
   onProgress?: (progress: StreamProgress) => void
-  /** 中止控制器（用于取消流式请求） */
-  abortController?: AbortController
 }
 
 // ─── 客户端接口 ───
@@ -54,7 +75,7 @@ export interface StreamOptions {
 /**
  * AI 客户端接口
  *
- * 提供浏览器端 HTTP 调用 AI API 的能力，零 Node.js 依赖。
+ * 提供浏览器端调用 AI API 的能力，HTTP 基础设施委托给 @h-ai/api-client。
  */
 export interface AIClient {
   /** 发送对话请求（非流式） */
@@ -67,146 +88,76 @@ export interface AIClient {
   sendMessageStream: (message: string, options?: StreamOptions, systemPrompt?: string) => Promise<string>
 }
 
+// ─── AI API 路径（与 ai-api-contract 保持一致） ───
+
+const AI_PATH = {
+  /** 非流式聊天 */
+  chat: '/ai/chat',
+  /** 流式聊天（SSE） */
+  chatStream: '/ai/chat/stream',
+} as const
+
 // ─── 工厂函数 ───
 
 /**
  * 创建 AI 客户端
  *
- * 浏览器端使用，通过 HTTP 调用后端 AI API。
- * 支持非流式、流式、便捷文本调用。
+ * 通过 @h-ai/api-client 的 ApiClient 实例调用后端 AI API。
+ * HTTP 层（Token、超时、拦截器）全部复用 api-client，本模块仅负责：
+ * - 非流式 / 流式 ChatCompletion 协议适配
+ * - SSE 解析与 ChatCompletionChunk 类型化
+ * - onProgress 进度回调
  *
  * @param config - 客户端配置
  * @returns AI 客户端实例
  *
  * @example
  * ```ts
- * const client = createAIClient({ baseUrl: '/api/ai' })
+ * import { createApiClient } from '@h-ai/api-client'
+ * import { createAIClient } from '@h-ai/ai/client'
+ *
+ * const api = createApiClient({ baseUrl: '/api' })
+ * const client = createAIClient({ api })
  * const reply = await client.sendMessage('你好')
  * ```
  */
 export function createAIClient(config: AIClientConfig): AIClient {
-  const {
-    baseUrl,
-    timeout = 60000,
-    headers: configHeaders = {},
-    getAccessToken,
-    onAuthError,
-    fetch: customFetch,
-  } = config
-  const fetchFn = customFetch ?? globalThis.fetch
-
-  /** 内部 fetch 封装：统一处理 URL 拼接、超时、请求头、认证 */
-  async function request(path: string, init: RequestInit): Promise<Response> {
-    const url = `${baseUrl}${path}`
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), timeout)
-
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      ...configHeaders,
-      ...(init.headers as Record<string, string> | undefined),
-    }
-
-    if (getAccessToken) {
-      const token = await getAccessToken()
-      if (token) {
-        headers.Authorization = `Bearer ${token}`
-      }
-    }
-
-    try {
-      const response = await fetchFn(url, {
-        ...init,
-        headers,
-        signal: init.signal ?? controller.signal,
-      })
-      if (response.status === 401) {
-        onAuthError?.()
-      }
-      return response
-    }
-    finally {
-      clearTimeout(timeoutId)
-    }
-  }
+  const { api } = config
 
   return {
     async chat(req: ChatCompletionRequest): Promise<ChatCompletionResponse> {
-      const response = await request('/chat', {
-        method: 'POST',
-        body: JSON.stringify({ ...req, stream: false }),
-      })
-      if (!response.ok) {
-        const errorText = await response.text()
-        throw new Error(`AI API request failed: ${response.status} ${errorText}`)
+      const result = await api.post<ChatCompletionResponse>(AI_PATH.chat, { ...req, stream: false })
+      if (!result.success) {
+        throw new Error(`AI chat request failed: ${result.error.message}`)
       }
-      return response.json()
+      return result.data
     },
 
     async* chatStream(
       req: ChatCompletionRequest,
       options?: StreamOptions,
     ): AsyncIterable<ChatCompletionChunk> {
-      const response = await request('/chat', {
-        method: 'POST',
-        body: JSON.stringify({ ...req, stream: true }),
-        signal: options?.abortController?.signal,
-      })
-      if (!response.ok) {
-        const errorText = await response.text()
-        throw new Error(`AI API request failed: ${response.status} ${errorText}`)
-      }
-
-      const reader = response.body?.getReader()
-      if (!reader) {
-        throw new Error('Response body is not readable')
-      }
-
-      const decoder = new TextDecoder()
-      let buffer = ''
       let content = ''
 
-      try {
-        while (true) {
-          const { done, value } = await reader.read()
-          if (done)
-            break
-
-          buffer += decoder.decode(value, { stream: true })
-          const lines = buffer.split('\n')
-          buffer = lines.pop() ?? ''
-
-          for (const line of lines) {
-            if (line.startsWith('data: ')) {
-              const data = line.slice(6)
-              if (data === '[DONE]') {
-                options?.onProgress?.({ content, done: true })
-                return
-              }
-              try {
-                const chunk: ChatCompletionChunk = JSON.parse(data)
-                const delta = chunk.choices[0]?.delta?.content
-                if (delta) {
-                  content += delta
-                }
-                const finishReason = chunk.choices[0]?.finish_reason
-                if (finishReason) {
-                  options?.onProgress?.({ content, done: true, finishReason })
-                }
-                else {
-                  options?.onProgress?.({ content, done: false })
-                }
-                yield chunk
-              }
-              catch {
-                // 忽略解析错误的行
-              }
-            }
+      for await (const data of api.stream(AI_PATH.chatStream, { ...req, stream: true })) {
+        try {
+          const chunk: ChatCompletionChunk = JSON.parse(data)
+          const delta = chunk.choices[0]?.delta?.content
+          if (delta) {
+            content += delta
           }
+          const finishReason = chunk.choices[0]?.finish_reason
+          if (finishReason) {
+            options?.onProgress?.({ content, done: true, finishReason })
+          }
+          else {
+            options?.onProgress?.({ content, done: false })
+          }
+          yield chunk
         }
-      }
-      finally {
-        reader.releaseLock()
+        catch {
+          // 忽略解析错误的行
+        }
       }
     },
 
@@ -305,7 +256,7 @@ export async function* parseSSE(response: Response): AsyncIterable<string> {
  *
  * @example
  * ```ts
- * const client = createAIClient({ baseUrl: '/api/ai' })
+ * const client = createAIClient({ api })
  * const stream = client.chatStream({ messages })
  * const fullText = await collectStreamContent(stream)
  * ```
