@@ -257,7 +257,7 @@ export async function scanApp(appDir: string): Promise<Result<ScanResult, Deploy
  * 从 package.json 的 @h-ai/* 依赖推断所需服务
  *
  * 依赖映射规则：
- * - @h-ai/db → 'db'
+ * - @h-ai/reldb → 'db'
  * - @h-ai/cache → 'cache'
  * - @h-ai/storage → 'storage'
  *
@@ -266,7 +266,7 @@ export async function scanApp(appDir: string): Promise<Result<ScanResult, Deploy
  */
 function detectServicesFromDependencies(pkg: Record<string, unknown>): ServiceType[] {
   const depMap: Record<string, ServiceType> = {
-    '@h-ai/db': 'db',
+    '@h-ai/reldb': 'db',
     '@h-ai/cache': 'cache',
     '@h-ai/storage': 'storage',
   }
