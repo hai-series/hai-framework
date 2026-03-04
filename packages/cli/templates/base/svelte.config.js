@@ -1,5 +1,5 @@
 /**
- * {{projectName}} - Svelte 配置
+ * Svelte 配置
  */
 import adapter from '@sveltejs/adapter-auto'
 import { vitePreprocess } from '@sveltejs/vite-plugin-svelte'

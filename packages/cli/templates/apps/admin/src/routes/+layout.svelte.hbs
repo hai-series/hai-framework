@@ -1,0 +1,30 @@
+{{!-- 管理后台根布局 --}}
+<script lang="ts">
+  /**
+   * 管理后台根布局
+   */
+  import type { Snippet } from 'svelte'
+  import '../app.css'
+{{#if hasI18n}}
+  import { browser } from '$app/environment'
+  import { setGlobalLocale } from '@h-ai/ui'
+  import { getLocale } from '$lib/paraglide/runtime.js'
+{{/if}}
+
+  interface Props {
+    children: Snippet
+  }
+
+  let { children }: Props = $props()
+{{#if hasI18n}}
+
+  if (browser) {
+    const paraglideLocale = getLocale()
+    setGlobalLocale(paraglideLocale)
+  }
+{{/if}}
+</script>
+
+<div class="min-h-screen bg-base-200">
+  {@render children()}
+</div>

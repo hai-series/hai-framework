@@ -1,0 +1,124 @@
+{{!-- Admin 注册页面 --}}
+<script lang="ts">
+  /**
+   * 注册页面
+   */
+{{#if hasI18n}}
+  import * as m from '$lib/paraglide/messages'
+{{/if}}
+
+  let username = $state('')
+  let email = $state('')
+  let password = $state('')
+  let confirmPassword = $state('')
+  let error = $state('')
+  let loading = $state(false)
+
+  async function handleRegister() {
+    error = ''
+    if (password !== confirmPassword) {
+{{#if hasI18n}}
+      error = m.auth_error_password_mismatch()
+{{else}}
+      error = '密码不一致'
+{{/if}}
+      return
+    }
+    loading = true
+    try {
+      const res = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, email, password, confirmPassword }),
+      })
+      const data = await res.json()
+      if (data.success) {
+        window.location.href = '/auth/login'
+      } else {
+{{#if hasI18n}}
+        error = data.error?.message || m.auth_register_failed()
+{{else}}
+        error = data.error?.message || '注册失败'
+{{/if}}
+      }
+    } catch {
+{{#if hasI18n}}
+      error = m.auth_error_network()
+{{else}}
+      error = '网络错误'
+{{/if}}
+    } finally {
+      loading = false
+    }
+  }
+</script>
+
+<svelte:head>
+{{#if hasI18n}}
+  <title>{m.auth_register_title()}</title>
+{{else}}
+  <title>注册</title>
+{{/if}}
+</svelte:head>
+
+{{#if hasI18n}}
+<h2 class="card-title justify-center mb-4">{m.auth_register_title()}</h2>
+{{else}}
+<h2 class="card-title justify-center mb-4">注册</h2>
+{{/if}}
+
+{#if error}
+  <div class="alert alert-error mb-4">
+    <span>{error}</span>
+  </div>
+{/if}
+
+<form onsubmit={(e) => { e.preventDefault(); handleRegister() }} class="space-y-4">
+  <div class="form-control">
+{{#if hasI18n}}
+    <label class="label" for="username"><span class="label-text">{m.auth_label_username()}</span></label>
+{{else}}
+    <label class="label" for="username"><span class="label-text">用户名</span></label>
+{{/if}}
+    <input id="username" type="text" class="input input-bordered w-full" bind:value={username} required />
+  </div>
+  <div class="form-control">
+{{#if hasI18n}}
+    <label class="label" for="email"><span class="label-text">{m.auth_label_email()}</span></label>
+{{else}}
+    <label class="label" for="email"><span class="label-text">邮箱</span></label>
+{{/if}}
+    <input id="email" type="email" class="input input-bordered w-full" bind:value={email} required />
+  </div>
+  <div class="form-control">
+{{#if hasI18n}}
+    <label class="label" for="password"><span class="label-text">{m.auth_label_password()}</span></label>
+{{else}}
+    <label class="label" for="password"><span class="label-text">密码</span></label>
+{{/if}}
+    <input id="password" type="password" class="input input-bordered w-full" bind:value={password} required />
+  </div>
+  <div class="form-control">
+{{#if hasI18n}}
+    <label class="label" for="confirmPassword"><span class="label-text">{m.auth_label_confirm_password()}</span></label>
+{{else}}
+    <label class="label" for="confirmPassword"><span class="label-text">确认密码</span></label>
+{{/if}}
+    <input id="confirmPassword" type="password" class="input input-bordered w-full" bind:value={confirmPassword} required />
+  </div>
+  <button type="submit" class="btn btn-primary w-full" disabled={loading}>
+{{#if hasI18n}}
+    {loading ? m.auth_register_loading() : m.auth_register_submit()}
+{{else}}
+    {loading ? '注册中...' : '注册'}
+{{/if}}
+  </button>
+</form>
+
+<div class="text-center mt-4">
+{{#if hasI18n}}
+  <a href="/auth/login" class="link link-primary text-sm">{m.auth_register_to_login()}</a>
+{{else}}
+  <a href="/auth/login" class="link link-primary text-sm">已有账号？立即登录</a>
+{{/if}}
+</div>

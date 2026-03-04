@@ -1,0 +1,33 @@
+{{!-- 官网首页 --}}
+<script lang="ts">
+  /**
+   * 官网首页
+   */
+{{#if hasI18n}}
+  import * as m from '$lib/paraglide/messages'
+{{/if}}
+</script>
+
+<svelte:head>
+{{#if hasI18n}}
+  <title>{m.app_title()}</title>
+{{else}}
+  <title>官网</title>
+{{/if}}
+</svelte:head>
+
+<section class="hero min-h-[60vh] bg-base-200">
+  <div class="hero-content text-center">
+    <div class="max-w-md">
+{{#if hasI18n}}
+      <h1 class="text-5xl font-bold">{m.page_home_title()}</h1>
+      <p class="py-6">{m.page_home_subtitle()}</p>
+      <a href="/about" class="btn btn-primary">{m.page_home_cta()}</a>
+{{else}}
+      <h1 class="text-5xl font-bold">欢迎</h1>
+      <p class="py-6">基于 hai Agent Framework 构建</p>
+      <a href="/about" class="btn btn-primary">了解更多</a>
+{{/if}}
+    </div>
+  </div>
+</section>

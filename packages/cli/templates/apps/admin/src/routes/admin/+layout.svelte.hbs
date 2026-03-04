@@ -1,0 +1,44 @@
+{{!-- 后台管理布局（侧边栏 + 内容区） --}}
+<script lang="ts">
+  /**
+   * 后台管理布局（侧边栏 + 内容区）
+   */
+  import type { Snippet } from 'svelte'
+{{#if hasI18n}}
+  import * as m from '$lib/paraglide/messages'
+{{/if}}
+
+  interface Props {
+    children: Snippet
+  }
+
+  let { children }: Props = $props()
+</script>
+
+<div class="drawer lg:drawer-open">
+  <input id="admin-drawer" type="checkbox" class="drawer-toggle" />
+  <div class="drawer-content p-6">
+    <label for="admin-drawer" class="btn btn-ghost drawer-button lg:hidden mb-4">
+      ☰
+    </label>
+    {@render children()}
+  </div>
+  <div class="drawer-side">
+    <label for="admin-drawer" class="drawer-overlay"></label>
+    <nav class="menu p-4 w-64 min-h-full bg-base-100 text-base-content">
+{{#if hasI18n}}
+      <div class="text-xl font-bold mb-6 px-2">{m.app_title()}</div>
+      <ul>
+        <li><a href="/admin">{m.nav_dashboard()}</a></li>
+        <li><a href="/admin/settings">{m.nav_settings()}</a></li>
+      </ul>
+{{else}}
+      <div class="text-xl font-bold mb-6 px-2">管理后台</div>
+      <ul>
+        <li><a href="/admin">仪表盘</a></li>
+        <li><a href="/admin/settings">设置</a></li>
+      </ul>
+{{/if}}
+    </nav>
+  </div>
+</div>

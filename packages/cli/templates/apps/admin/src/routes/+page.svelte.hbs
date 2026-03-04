@@ -1,0 +1,35 @@
+{{!-- 管理后台首页 --}}
+<script lang="ts">
+  /**
+   * 管理后台首页 — 入口导航
+   */
+{{#if hasI18n}}
+  import * as m from '$lib/paraglide/messages'
+{{/if}}
+</script>
+
+<svelte:head>
+{{#if hasI18n}}
+  <title>{m.app_title()}</title>
+{{else}}
+  <title>管理后台</title>
+{{/if}}
+</svelte:head>
+
+<main class="min-h-screen flex items-center justify-center">
+  <div class="text-center">
+{{#if hasI18n}}
+    <h1 class="text-4xl font-bold mb-4">{m.app_title()}</h1>
+    <p class="text-gray-600 mb-8">{m.page_home_subtitle()}</p>
+    <div class="flex gap-4 justify-center">
+      <a href="/admin" class="btn btn-primary">{m.nav_admin()}</a>
+    </div>
+{{else}}
+    <h1 class="text-4xl font-bold mb-4">管理后台</h1>
+    <p class="text-gray-600 mb-8">基于 hai Agent Framework 构建</p>
+    <div class="flex gap-4 justify-center">
+      <a href="/admin" class="btn btn-primary">进入后台</a>
+    </div>
+{{/if}}
+  </div>
+</main>

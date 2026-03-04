@@ -1,0 +1,27 @@
+{{!-- 关于页面 --}}
+<script lang="ts">
+  /**
+   * 关于页面
+   */
+{{#if hasI18n}}
+  import * as m from '$lib/paraglide/messages'
+{{/if}}
+</script>
+
+<svelte:head>
+{{#if hasI18n}}
+  <title>{m.page_about_title()}</title>
+{{else}}
+  <title>关于我们</title>
+{{/if}}
+</svelte:head>
+
+<section class="py-16 px-4 max-w-4xl mx-auto">
+{{#if hasI18n}}
+  <h1 class="text-3xl font-bold mb-8">{m.page_about_title()}</h1>
+  <p class="text-lg text-gray-600">{m.page_about_desc()}</p>
+{{else}}
+  <h1 class="text-3xl font-bold mb-8">关于我们</h1>
+  <p class="text-lg text-gray-600">了解我们的团队与使命。</p>
+{{/if}}
+</section>

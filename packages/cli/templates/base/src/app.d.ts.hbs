@@ -3,8 +3,14 @@
 declare global {
   namespace App {
     interface Locals {
+      /** 请求 ID */
       requestId: string
+      /** 语言 */
+      locale: string
+{{#if features.iam}}
+      /** 会话信息 */
       session?: import('@h-ai/kit').SessionData
+{{/if}}
     }
   }
 }

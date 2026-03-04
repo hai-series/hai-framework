@@ -1,0 +1,98 @@
+{{!-- Admin 登录页面 --}}
+<script lang="ts">
+  /**
+   * 登录页面
+   */
+{{#if hasI18n}}
+  import * as m from '$lib/paraglide/messages'
+{{/if}}
+
+  let username = $state('')
+  let password = $state('')
+  let error = $state('')
+  let loading = $state(false)
+
+  async function handleLogin() {
+    error = ''
+    loading = true
+    try {
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password }),
+      })
+      const data = await res.json()
+      if (data.success) {
+        window.location.href = '/admin'
+      } else {
+{{#if hasI18n}}
+        error = data.error?.message || m.auth_login_failed()
+{{else}}
+        error = data.error?.message || '登录失败'
+{{/if}}
+      }
+    } catch {
+{{#if hasI18n}}
+      error = m.auth_error_network()
+{{else}}
+      error = '网络错误'
+{{/if}}
+    } finally {
+      loading = false
+    }
+  }
+</script>
+
+<svelte:head>
+{{#if hasI18n}}
+  <title>{m.auth_login_title()}</title>
+{{else}}
+  <title>登录</title>
+{{/if}}
+</svelte:head>
+
+{{#if hasI18n}}
+<h2 class="card-title justify-center mb-4">{m.auth_login_title()}</h2>
+{{else}}
+<h2 class="card-title justify-center mb-4">登录</h2>
+{{/if}}
+
+{#if error}
+  <div class="alert alert-error mb-4">
+    <span>{error}</span>
+  </div>
+{/if}
+
+<form onsubmit={(e) => { e.preventDefault(); handleLogin() }} class="space-y-4">
+  <div class="form-control">
+{{#if hasI18n}}
+    <label class="label" for="username"><span class="label-text">{m.auth_label_username()}</span></label>
+{{else}}
+    <label class="label" for="username"><span class="label-text">用户名</span></label>
+{{/if}}
+    <input id="username" type="text" class="input input-bordered w-full" bind:value={username} required />
+  </div>
+  <div class="form-control">
+{{#if hasI18n}}
+    <label class="label" for="password"><span class="label-text">{m.auth_label_password()}</span></label>
+{{else}}
+    <label class="label" for="password"><span class="label-text">密码</span></label>
+{{/if}}
+    <input id="password" type="password" class="input input-bordered w-full" bind:value={password} required />
+  </div>
+  <button type="submit" class="btn btn-primary w-full" disabled={loading}>
+{{#if hasI18n}}
+    {loading ? m.auth_login_loading() : m.auth_login_submit()}
+{{else}}
+    {loading ? '登录中...' : '登录'}
+{{/if}}
+  </button>
+</form>
+
+<div class="text-center mt-4">
+{{#if hasI18n}}
+  <a href="/auth/register" class="link link-primary text-sm">{m.auth_login_to_register()}</a>
+{{else}}
+  <a href="/auth/register" class="link link-primary text-sm">没有账号？立即注册</a>
+{{/if}}
+</div>

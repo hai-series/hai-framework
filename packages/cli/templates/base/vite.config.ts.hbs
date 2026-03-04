@@ -1,0 +1,27 @@
+/**
+ * {{projectName}} - Vite 配置
+ */
+import { sveltekit } from '@sveltejs/kit/vite'
+{{#if hasUi}}
+import tailwindcss from '@tailwindcss/vite'
+{{/if}}
+{{#if hasI18n}}
+import { paraglideVitePlugin } from '@inlang/paraglide-js'
+{{/if}}
+import { defineConfig } from 'vite'
+
+export default defineConfig({
+  plugins: [
+    sveltekit(),
+{{#if hasUi}}
+    tailwindcss(),
+{{/if}}
+{{#if hasI18n}}
+    paraglideVitePlugin({
+      project: './project.inlang',
+      outdir: './src/lib/paraglide',
+      strategy: ['cookie', 'baseLocale'],
+    }),
+{{/if}}
+  ],
+})

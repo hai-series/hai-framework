@@ -1,0 +1,190 @@
+/**
+ * =============================================================================
+ * {{projectName}} - 应用初始化
+ * =============================================================================
+ *
+ * 统一管理所有模块的初始化流程。
+ *
+ * 初始化顺序：
+ * 1. core.init — 加载配置文件（约定优于配置）
+{{#if features.db}}
+ * 2. db.init — 数据库连接
+{{/if}}
+{{#if features.cache}}
+ * 3. cache.init — 缓存
+{{/if}}
+{{#if features.storage}}
+ * 4. storage.init — 文件存储（可选）
+{{/if}}
+{{#if features.reach}}
+ * 5. reach.init — 触达服务（可选）
+{{/if}}
+{{#if features.iam}}
+ * 6. iam.init — 身份认证
+{{/if}}
+{{#if features.ai}}
+ * 7. ai.init — AI 集成（可选）
+{{/if}}
+ */
+
+import { core } from '@h-ai/core'
+{{#if features.db}}
+import { db, DbConfigSchema } from '@h-ai/db'
+{{/if}}
+{{#if features.cache}}
+import { cache, CacheConfigSchema } from '@h-ai/cache'
+{{/if}}
+{{#if features.iam}}
+import type { IamConfigSettingsInput } from '@h-ai/iam'
+import { iam } from '@h-ai/iam'
+{{/if}}
+{{#if features.storage}}
+import type { StorageConfigInput } from '@h-ai/storage'
+import { storage, StorageConfigSchema } from '@h-ai/storage'
+{{/if}}
+{{#if features.ai}}
+import type { AIConfigInput } from '@h-ai/ai'
+import { ai } from '@h-ai/ai'
+{{/if}}
+{{#if features.reach}}
+import type { ReachConfigInput } from '@h-ai/reach'
+import { reach } from '@h-ai/reach'
+{{/if}}
+{{#if features.audit}}
+import { audit } from '@h-ai/audit'
+{{/if}}
+
+{{#if features.db}}
+type DbConfigInput = Parameters<typeof db.init>[0]
+{{/if}}
+{{#if features.cache}}
+type CacheConfigInput = Parameters<typeof cache.init>[0]
+{{/if}}
+
+let initialized = false
+
+/**
+ * 初始化应用
+ */
+export async function initApp(): Promise<void> {
+  if (initialized)
+    return
+
+  // 1. 加载配置
+  core.init({
+    configDir: './config',
+    logging: { level: 'info' },
+  })
+
+{{#if features.db}}
+  // ─── 配置校验 ───
+  const dbValidation = core.config.validate('db', DbConfigSchema)
+  if (!dbValidation.success) {
+    throw new Error(`DB config invalid: ${dbValidation.error.message}`)
+  }
+{{/if}}
+{{#if features.cache}}
+  const cacheValidation = core.config.validate('cache', CacheConfigSchema)
+  if (!cacheValidation.success) {
+    throw new Error(`Cache config invalid: ${cacheValidation.error.message}`)
+  }
+{{/if}}
+
+{{#if features.db}}
+  // ─── 获取配置 ───
+  const dbConfig = core.config.getOrThrow<DbConfigInput>('db')
+{{/if}}
+{{#if features.cache}}
+  const cacheConfig = core.config.getOrThrow<CacheConfigInput>('cache')
+{{/if}}
+{{#if features.iam}}
+  const iamConfig = core.config.getOrThrow<IamConfigSettingsInput>('iam')
+{{/if}}
+{{#if features.storage}}
+  const storageConfig = core.config.get<StorageConfigInput>('storage')
+{{/if}}
+{{#if features.ai}}
+  const aiConfig = core.config.get<AIConfigInput>('ai')
+{{/if}}
+{{#if features.reach}}
+  const reachConfig = core.config.get<ReachConfigInput>('reach')
+{{/if}}
+
+{{#if features.db}}
+  // ─── 确保数据目录存在（SQLite） ───
+  if (dbConfig.type === 'sqlite') {
+    const path = await import('node:path')
+    const fs = await import('node:fs')
+    const dbDir = path.dirname(dbConfig.database)
+    if (!fs.existsSync(dbDir)) {
+      fs.mkdirSync(dbDir, { recursive: true })
+    }
+  }
+
+  // ─── 初始化数据库 ───
+  const dbResult = await db.init(dbConfig)
+  if (!dbResult.success) {
+    throw new Error(`Database initialization failed: ${dbResult.error.message}`)
+  }
+{{/if}}
+
+{{#if features.cache}}
+  // ─── 初始化缓存 ───
+  const cacheResult = await cache.init(cacheConfig)
+  if (!cacheResult.success) {
+    throw new Error(`Cache initialization failed: ${cacheResult.error.message}`)
+  }
+{{/if}}
+
+{{#if features.storage}}
+  // ─── 初始化存储（可选） ───
+  if (storageConfig) {
+    const storageValidation = core.config.validate('storage', StorageConfigSchema)
+    if (storageValidation.success) {
+      const storageResult = await storage.init(storageConfig)
+      if (!storageResult.success) {
+        core.logger.warn('Storage initialization failed', { error: storageResult.error.message })
+      }
+    }
+  }
+{{/if}}
+
+{{#if features.reach}}
+  // ─── 初始化触达服务（可选） ───
+  if (reachConfig) {
+    const reachResult = await reach.init(reachConfig)
+    if (!reachResult.success) {
+      core.logger.warn('Reach initialization failed', { error: reachResult.error.message })
+    }
+  }
+{{/if}}
+
+{{#if features.iam}}
+  // ─── 初始化 IAM ───
+  const iamResult = await iam.init(iamConfig)
+  if (!iamResult.success) {
+    throw new Error(`IAM initialization failed: ${iamResult.error.message}`)
+  }
+{{/if}}
+
+{{#if features.audit}}
+  // ─── 初始化审计 ───
+  const auditResult = await audit.init()
+  if (!auditResult.success) {
+    core.logger.warn('Audit initialization failed', { error: auditResult.error.message })
+  }
+{{/if}}
+
+{{#if features.ai}}
+  // ─── 初始化 AI（可选） ───
+  if (aiConfig?.llm?.apiKey) {
+    const aiResult = await ai.init(aiConfig)
+    if (!aiResult.success) {
+      core.logger.warn('AI initialization failed', { error: aiResult.error.message })
+    }
+  }
+{{/if}}
+
+  initialized = true
+  core.logger.info('{{projectName}} initialized.')
+}

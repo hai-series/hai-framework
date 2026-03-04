@@ -1,0 +1,59 @@
+{{!-- 联系页面 --}}
+<script lang="ts">
+  /**
+   * 联系我们页面
+   */
+{{#if hasI18n}}
+  import * as m from '$lib/paraglide/messages'
+{{/if}}
+</script>
+
+<svelte:head>
+{{#if hasI18n}}
+  <title>{m.page_contact_title()}</title>
+{{else}}
+  <title>联系我们</title>
+{{/if}}
+</svelte:head>
+
+<section class="py-16 px-4 max-w-2xl mx-auto">
+{{#if hasI18n}}
+  <h1 class="text-3xl font-bold mb-8">{m.page_contact_title()}</h1>
+  <p class="text-lg text-gray-600 mb-8">{m.page_contact_desc()}</p>
+{{else}}
+  <h1 class="text-3xl font-bold mb-8">联系我们</h1>
+  <p class="text-lg text-gray-600 mb-8">有任何疑问？欢迎联系我们。</p>
+{{/if}}
+
+  <form class="space-y-4">
+    <div class="form-control">
+{{#if hasI18n}}
+      <label class="label" for="name"><span class="label-text">{m.page_contact_name()}</span></label>
+{{else}}
+      <label class="label" for="name"><span class="label-text">姓名</span></label>
+{{/if}}
+      <input id="name" type="text" class="input input-bordered w-full" />
+    </div>
+    <div class="form-control">
+{{#if hasI18n}}
+      <label class="label" for="email"><span class="label-text">{m.page_contact_email()}</span></label>
+{{else}}
+      <label class="label" for="email"><span class="label-text">邮箱</span></label>
+{{/if}}
+      <input id="email" type="email" class="input input-bordered w-full" />
+    </div>
+    <div class="form-control">
+{{#if hasI18n}}
+      <label class="label" for="message"><span class="label-text">{m.page_contact_message()}</span></label>
+{{else}}
+      <label class="label" for="message"><span class="label-text">留言</span></label>
+{{/if}}
+      <textarea id="message" class="textarea textarea-bordered w-full" rows="4"></textarea>
+    </div>
+{{#if hasI18n}}
+    <button type="submit" class="btn btn-primary w-full">{m.page_contact_submit()}</button>
+{{else}}
+    <button type="submit" class="btn btn-primary w-full">发送</button>
+{{/if}}
+  </form>
+</section>

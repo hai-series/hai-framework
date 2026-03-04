@@ -1,0 +1,27 @@
+{{!-- 发现页面 --}}
+<script lang="ts">
+  /**
+   * 发现页面
+   */
+{{#if hasI18n}}
+  import * as m from '$lib/paraglide/messages'
+{{/if}}
+</script>
+
+<svelte:head>
+{{#if hasI18n}}
+  <title>{m.page_discover_title()}</title>
+{{else}}
+  <title>发现</title>
+{{/if}}
+</svelte:head>
+
+<section class="p-4">
+{{#if hasI18n}}
+  <h1 class="text-2xl font-bold mb-4">{m.page_discover_title()}</h1>
+  <p class="text-gray-600">{m.page_discover_desc()}</p>
+{{else}}
+  <h1 class="text-2xl font-bold mb-4">发现</h1>
+  <p class="text-gray-600">探索更多精彩内容</p>
+{{/if}}
+</section>
