@@ -1,0 +1,14 @@
+{
+  "payment_createOrderFailed": "Failed to create payment order",
+  "payment_queryOrderFailed": "Failed to query order status",
+  "payment_refundFailed": "Refund request failed",
+  "payment_closeOrderFailed": "Failed to close order",
+  "payment_notifyVerifyFailed": "Payment notification verification failed",
+  "payment_notifyParseFailed": "Failed to parse payment notification",
+  "payment_signFailed": "Payment signature generation failed",
+  "payment_providerNotFound": "Payment provider not found",
+  "payment_invalidAmount": "Invalid payment amount",
+  "payment_notInitialized": "Payment module not initialized",
+  "payment_invokeWebFailed": "Failed to invoke web payment",
+  "payment_invokeAppFailed": "Failed to invoke app payment"
+}

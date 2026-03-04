@@ -2,7 +2,7 @@
   "name": "@h-ai/ui",
   "type": "module",
   "version": "0.1.0",
-  "description": "hai Agent Framework - UI 组件库 (Svelte 5 Runes)",
+  "description": "Hai Framework UI component library for Svelte 5 Runes.",
   "license": "Apache-2.0",
   "svelte": "./dist/index.js",
   "exports": {

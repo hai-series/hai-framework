@@ -2,7 +2,7 @@
   "name": "@h-ai/deploy",
   "type": "module",
   "version": "0.1.0",
-  "description": "Automated deployment module for Hai framework.",
+  "description": "Hai Framework deployment automation module.",
   "license": "Apache-2.0",
   "exports": {
     ".": {

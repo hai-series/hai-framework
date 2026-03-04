@@ -2,7 +2,7 @@
   "name": "@h-ai/audit",
   "type": "module",
   "version": "0.1.0",
-  "description": "Audit logging module for hai Framework.",
+  "description": "Hai Framework audit logging module.",
   "license": "Apache-2.0",
   "exports": {
     ".": {

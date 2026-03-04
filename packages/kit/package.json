@@ -2,7 +2,7 @@
   "name": "@h-ai/kit",
   "type": "module",
   "version": "0.1.0",
-  "description": "hai Agent Framework - SvelteKit 集成",
+  "description": "Hai Framework SvelteKit integration module.",
   "license": "Apache-2.0",
   "exports": {
     ".": {
@@ -20,6 +20,10 @@
     "./vite": {
       "types": "./dist/vite/index.d.ts",
       "import": "./dist/vite/index.js"
+    },
+    "./adapter": {
+      "types": "./dist/adapter/index.d.ts",
+      "import": "./dist/adapter/index.js"
     }
   },
   "main": "./dist/index.js",
@@ -41,8 +45,14 @@
     "clean": "rimraf dist .turbo"
   },
   "peerDependencies": {
+    "@sveltejs/adapter-node": "^5.0.0",
+    "@sveltejs/adapter-static": "^3.0.0",
     "@sveltejs/kit": "^2.53.4",
     "svelte": "^5.53.6"
+  },
+  "peerDependenciesMeta": {
+    "@sveltejs/adapter-node": { "optional": true },
+    "@sveltejs/adapter-static": { "optional": true }
   },
   "dependencies": {
     "@h-ai/core": "workspace:*",

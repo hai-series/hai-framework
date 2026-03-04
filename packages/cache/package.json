@@ -2,7 +2,7 @@
   "name": "@h-ai/cache",
   "type": "module",
   "version": "0.1.0",
-  "description": "Cache module(based on Redis) for hai Framework.",
+  "description": "Hai Framework cache module with memory and Redis backends.",
   "license": "Apache-2.0",
   "exports": {
     ".": {

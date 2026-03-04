@@ -2,7 +2,7 @@
   "name": "@h-ai/core",
   "type": "module",
   "version": "0.1.0",
-  "description": "Core utilities, types and functions module for Hai framework .",
+  "description": "Hai Framework core module with shared utilities, types, configuration, and logging.",
   "license": "Apache-2.0",
   "exports": {
     ".": {

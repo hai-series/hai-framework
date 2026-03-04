@@ -11,6 +11,9 @@ export type * from './guards/index.js'
 // 运行时导出 — 权限匹配纯函数（客户端/服务端通用）
 export { matchPermission } from './guards/kit-permission.js'
 export type * from './hooks/index.js'
+// 运行时导出 — 契约定义工具
+export { defineEndpoint } from './kit-contract.js'
+export type { EndpointDef } from './kit-contract.js'
 // 运行时导出 — kit 统一命名空间
 export { kit } from './kit-main.js'
 export * from './kit-types.js'

@@ -2,7 +2,7 @@
   "name": "@h-ai/db",
   "type": "module",
   "version": "0.1.0",
-  "description": "Relational database access module for Hai framework .",
+  "description": "Hai Framework relational database module for SQLite, PostgreSQL, and MySQL.",
   "license": "Apache-2.0",
   "exports": {
     ".": {

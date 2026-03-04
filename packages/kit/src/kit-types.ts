@@ -187,9 +187,7 @@ export interface GuardConfig {
  * ```
  */
 export interface HookConfig {
-  /** 会话 Cookie 名称 */
-  sessionCookieName?: string
-  /** 会话验证函数 */
+  /** 会话验证函数（从 Bearer Token 验证会话） */
   validateSession?: (token: string) => Promise<SessionData | null>
   /** 中间件列表 */
   middleware?: Middleware[]
@@ -374,21 +372,6 @@ export interface RateLimitConfig {
 }
 
 /**
- * CSRF 中间件配置
- *
- * 安全方法（GET/HEAD/OPTIONS）自动签发 Token Cookie；
- * 写操作方法要求 Header 与 Cookie 的 Token 一致，不一致返回 403。
- */
-export interface CsrfConfig {
-  /** Token Cookie 名称 */
-  cookieName?: string
-  /** Token Header 名称 */
-  headerName?: string
-  /** 排除路径 */
-  exclude?: string[]
-}
-
-/**
  * CORS 中间件配置
  *
  * 配置跨域资源共享策略。预检请求（OPTIONS）自动返回 204。
@@ -403,7 +386,7 @@ export interface CsrfConfig {
  * ```
  */
 export interface CorsConfig {
-  /** 允许的源 */
+  /** 允许的源（支持通配符，如 `*.example.com`） */
   origin?: string | string[] | ((origin: string) => boolean)
   /** 允许的方法 */
   methods?: string[]
@@ -415,4 +398,6 @@ export interface CorsConfig {
   credentials?: boolean
   /** 预检缓存时间 (秒) */
   maxAge?: number
+  /** 是否自动允许 Capacitor WebView origin（默认 true） */
+  capacitor?: boolean
 }

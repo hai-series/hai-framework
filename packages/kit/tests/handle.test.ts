@@ -15,13 +15,14 @@ function createMockEvent(options: {
   method?: string
   path?: string
   cookies?: Record<string, string>
+  headers?: Record<string, string>
 } = {}) {
-  const { method = 'GET', path = '/', cookies = {} } = options
+  const { method = 'GET', path = '/', cookies = {}, headers = {} } = options
 
   const url = new URL(`http://localhost${path}`)
 
   return {
-    request: new Request(url, { method }),
+    request: new Request(url, { method, headers }),
     url,
     cookies: {
       get: vi.fn((name: string) => cookies[name]),
@@ -55,7 +56,7 @@ describe('createHandle', () => {
     expect(resolve).toHaveBeenCalledWith(event)
   })
 
-  it('应该验证会话', async () => {
+  it('应该通过 Authorization header 验证会话', async () => {
     const mockSession: SessionData = {
       userId: 'user1',
       username: 'testuser',
@@ -68,17 +69,42 @@ describe('createHandle', () => {
     const handle = createHandle({
       logging: false,
       validateSession,
-      sessionCookieName: 'test_session',
     })
 
     const event = createMockEvent({
-      cookies: { test_session: 'token123' },
+      headers: { Authorization: 'Bearer token123' },
     })
     const resolve = vi.fn().mockResolvedValue(new Response('OK'))
 
     await handle({ event, resolve })
 
     expect(validateSession).toHaveBeenCalledWith('token123')
+    expect((event.locals as any).session).toEqual(mockSession)
+  })
+
+  it('应该通过 hai_token cookie 回退验证会话', async () => {
+    const mockSession: SessionData = {
+      userId: 'user1',
+      username: 'testuser',
+      roles: ['user'],
+      permissions: ['read'],
+    }
+
+    const validateSession = vi.fn().mockResolvedValue(mockSession)
+
+    const handle = createHandle({
+      logging: false,
+      validateSession,
+    })
+
+    const event = createMockEvent({
+      cookies: { hai_token: 'token456' },
+    })
+    const resolve = vi.fn().mockResolvedValue(new Response('OK'))
+
+    await handle({ event, resolve })
+
+    expect(validateSession).toHaveBeenCalledWith('token456')
     expect((event.locals as any).session).toEqual(mockSession)
   })
 
