@@ -17,5 +17,26 @@
 
   "ai_toolNotFound": "Tool '{name}' not found",
   "ai_toolInvalidJson": "Invalid JSON in tool call arguments",
-  "ai_configError": "AI config validation failed: {error}"
+  "ai_configError": "AI config validation failed: {error}",
+
+  "ai_embeddingApiFailed": "Embedding API call failed: {error}",
+  "ai_embeddingModelNotFound": "Embedding model '{model}' not found",
+  "ai_embeddingInputTooLong": "Embedding input text exceeds maximum length",
+
+  "ai_reasoningFailed": "Reasoning execution failed: {error}",
+  "ai_reasoningMaxRounds": "Reasoning rounds limit reached ({rounds} rounds)",
+  "ai_reasoningStrategyNotFound": "Reasoning strategy '{strategy}' not found",
+
+  "ai_retrievalFailed": "Retrieval execution failed: {error}",
+  "ai_retrievalSourceNotFound": "Retrieval source '{source}' not configured",
+
+  "ai_ragFailed": "RAG execution failed: {error}",
+  "ai_ragContextBuildFailed": "RAG context build failed: {error}",
+
+  "ai_knowledgeSetupFailed": "Knowledge base setup failed: {error}",
+  "ai_knowledgeIngestFailed": "Knowledge ingestion failed: {error}",
+  "ai_knowledgeRetrieveFailed": "Knowledge retrieval failed: {error}",
+  "ai_knowledgeEntityExtractFailed": "Entity extraction failed: {error}",
+  "ai_knowledgeNotSetup": "Knowledge base not initialized. Call ai.knowledge.setup() first.",
+  "ai_knowledgeCollectionNotFound": "Knowledge collection '{collection}' not found"
 }

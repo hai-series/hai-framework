@@ -8,8 +8,13 @@
 import type { Result } from '@h-ai/core'
 
 import type { AIConfig, AIConfigInput, AIErrorCodeType } from './ai-config.js'
+import type { EmbeddingOperations } from './embedding/ai-embedding-types.js'
+import type { KnowledgeOperations } from './knowledge/ai-knowledge-types.js'
 import type { LLMOperations, StreamOperations, ToolsOperations } from './llm/ai-llm-types.js'
 import type { MCPOperations } from './mcp/ai-mcp-types.js'
+import type { RagOperations } from './rag/ai-rag-types.js'
+import type { ReasoningOperations } from './reasoning/ai-reasoning-types.js'
+import type { RetrievalOperations } from './retrieval/ai-retrieval-types.js'
 
 // ─── 错误类型 ───
 
@@ -70,9 +75,50 @@ export interface AIFunctions {
   readonly tools: ToolsOperations
   /** 流处理操作（流处理器、SSE 编解码），纯函数，无需初始化 */
   readonly stream: StreamOperations
+  /** Embedding 操作（向量嵌入），需要先调用 `init()` */
+  readonly embedding: EmbeddingOperations
+  /** 推理操作（ReAct / CoT / Plan-Execute），需要先调用 `init()` */
+  readonly reasoning: ReasoningOperations
+  /** 检索操作（向量检索），需要先调用 `init()` */
+  readonly retrieval: RetrievalOperations
+  /** RAG 操作（检索增强生成），需要先调用 `init()` */
+  readonly rag: RagOperations
+  /** Knowledge 操作（知识库管理与检索），需要先调用 `init()` 和 `knowledge.setup()` */
+  readonly knowledge: KnowledgeOperations
 }
 
 // ─── 子功能类型 re-export ───
+
+// ─── Embedding 类型 re-export ───
+
+export type {
+  EmbeddingItem,
+  EmbeddingOperations,
+  EmbeddingProvider,
+  EmbeddingRequest,
+  EmbeddingResponse,
+} from './embedding/ai-embedding-types.js'
+
+// ─── Knowledge 类型 re-export ───
+
+export type {
+  EntityDocumentRelation,
+  EntityDocumentResult,
+  EntityListOptions,
+  EntityQueryOptions,
+  KnowledgeAskOptions,
+  KnowledgeAskResult,
+  KnowledgeEntity,
+  KnowledgeIngestInput,
+  KnowledgeIngestResult,
+  KnowledgeOperations,
+  KnowledgeRetrieveItem,
+  KnowledgeRetrieveOptions,
+  KnowledgeRetrieveResult,
+  KnowledgeSetupOptions,
+} from './knowledge/ai-knowledge-types.js'
+
+// ─── LLM 类型 re-export ───
 
 export type {
   AssistantMessage,
@@ -107,6 +153,8 @@ export type {
   UserMessage,
 } from './llm/ai-llm-types.js'
 
+// ─── MCP 类型 re-export ───
+
 export type {
   MCPContext,
   MCPOperations,
@@ -121,3 +169,34 @@ export type {
   MCPToolDefinition,
   MCPToolHandler,
 } from './mcp/ai-mcp-types.js'
+
+// ─── RAG 类型 re-export ───
+
+export type {
+  RagContextItem,
+  RagOperations,
+  RagOptions,
+  RagResult,
+} from './rag/ai-rag-types.js'
+
+// ─── Reasoning 类型 re-export ───
+
+export type {
+  ReasoningOperations,
+  ReasoningOptions,
+  ReasoningResult,
+  ReasoningStep,
+  ReasoningStepType,
+  ReasoningStrategy,
+} from './reasoning/ai-reasoning-types.js'
+
+// ─── Retrieval 类型 re-export ───
+
+export type {
+  Citation,
+  RetrievalOperations,
+  RetrievalRequest,
+  RetrievalResult,
+  RetrievalResultItem,
+  RetrievalSource,
+} from './retrieval/ai-retrieval-types.js'

@@ -1,0 +1,162 @@
+/**
+ * @h-ai/ai — RAG 子功能实现
+ *
+ * 组合 Retrieval + LLM 实现检索增强生成。
+ * @module ai-rag-functions
+ */
+
+import type { Result } from '@h-ai/core'
+import type { AIError } from '../ai-types.js'
+import type { ChatMessage, LLMOperations } from '../llm/ai-llm-types.js'
+import type { Citation, RetrievalOperations } from '../retrieval/ai-retrieval-types.js'
+import type {
+  RagContextItem,
+  RagOperations,
+  RagOptions,
+  RagResult,
+} from './ai-rag-types.js'
+
+import { core, err, ok } from '@h-ai/core'
+
+import { AIErrorCode } from '../ai-config.js'
+import { aiM } from '../ai-i18n.js'
+
+const logger = core.logger.child({ module: 'ai', scope: 'rag' })
+
+// ─── 默认提示词 ───
+
+const DEFAULT_RAG_SYSTEM_PROMPT = `You are a helpful assistant. Answer the user's question based on the provided context.
+If the context doesn't contain relevant information, say so honestly.
+Always cite the source when using information from the context.`
+
+/**
+ * 默认上下文格式化：将检索结果格式化为编号列表
+ */
+function defaultFormatContext(items: RagContextItem[]): string {
+  if (items.length === 0)
+    return 'No relevant context found.'
+
+  return items
+    .map((item, i) => `[${i + 1}] (score: ${item.score.toFixed(3)}, source: ${item.sourceId})\n${item.content}`)
+    .join('\n\n')
+}
+
+/**
+ * 创建 RAG 操作接口
+ *
+ * @param llm - LLM 操作（用于生成回答）
+ * @param retrieval - Retrieval 操作（用于检索上下文）
+ * @returns RagOperations 实例
+ */
+export function createRagOperations(llm: LLMOperations, retrieval: RetrievalOperations): RagOperations {
+  return {
+    async query(query: string, options?: RagOptions): Promise<Result<RagResult, AIError>> {
+      logger.info('Starting RAG query', { query: query.slice(0, 100) })
+
+      try {
+        // 阶段1：检索相关上下文
+        const retrieveResult = await retrieval.retrieve({
+          query,
+          sources: options?.sources,
+          topK: options?.topK ?? 5,
+          minScore: options?.minScore,
+        })
+
+        if (!retrieveResult.success) {
+          return err({
+            code: AIErrorCode.RAG_CONTEXT_BUILD_FAILED,
+            message: aiM('ai_internalError', { params: { error: 'Failed to retrieve context' } }),
+            cause: retrieveResult.error,
+          })
+        }
+
+        // 构建上下文
+        const contextItems: RagContextItem[] = retrieveResult.data.items.map(item => ({
+          content: item.content,
+          score: item.score,
+          sourceId: item.sourceId,
+          metadata: item.metadata,
+          citation: item.citation,
+        }))
+
+        // 格式化上下文
+        const formatFn = options?.formatContext ?? defaultFormatContext
+        const contextText = formatFn(contextItems)
+
+        // 阶段2：构建 LLM 消息
+        const systemPrompt = options?.systemPrompt ?? DEFAULT_RAG_SYSTEM_PROMPT
+        const systemContent = `${systemPrompt}\n\n--- Context ---\n${contextText}\n--- End Context ---`
+
+        const messages: ChatMessage[] = [
+          { role: 'system', content: systemContent },
+        ]
+
+        // 添加消息历史（多轮对话）
+        if (options?.messages) {
+          messages.push(...options.messages)
+        }
+
+        // 添加当前查询
+        messages.push({ role: 'user', content: query })
+
+        // 阶段3：调用 LLM 生成回答
+        const chatResult = await llm.chat({
+          model: options?.model,
+          messages,
+          temperature: options?.temperature,
+        })
+
+        if (!chatResult.success) {
+          return err({
+            code: AIErrorCode.RAG_FAILED,
+            message: aiM('ai_internalError', { params: { error: 'LLM generation failed' } }),
+            cause: chatResult.error,
+          })
+        }
+
+        const choice = chatResult.data.choices[0]
+        const answer = choice?.message?.content ?? ''
+
+        logger.info('RAG query completed', {
+          contextCount: contextItems.length,
+          model: chatResult.data.model,
+        })
+
+        // 从上下文项中去重聚合信源引用
+        const citationMap = new Map<string, Citation>()
+        for (const ctx of contextItems) {
+          if (ctx.citation) {
+            const key = ctx.citation.documentId ?? ctx.citation.chunkId ?? ctx.citation.url ?? `${ctx.sourceId}:${ctx.content.slice(0, 50)}`
+            if (!citationMap.has(key)) {
+              citationMap.set(key, ctx.citation)
+            }
+          }
+        }
+        const citations = Array.from(citationMap.values())
+
+        return ok({
+          answer,
+          context: contextItems,
+          citations,
+          query,
+          model: chatResult.data.model,
+          usage: chatResult.data.usage
+            ? {
+                prompt_tokens: chatResult.data.usage.prompt_tokens,
+                completion_tokens: chatResult.data.usage.completion_tokens,
+                total_tokens: chatResult.data.usage.total_tokens,
+              }
+            : undefined,
+        })
+      }
+      catch (error) {
+        logger.error('RAG query failed', { error })
+        return err({
+          code: AIErrorCode.RAG_FAILED,
+          message: aiM('ai_internalError', { params: { error: String(error) } }),
+          cause: error,
+        })
+      }
+    },
+  }
+}
