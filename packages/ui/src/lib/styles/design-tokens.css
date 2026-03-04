@@ -1,0 +1,58 @@
+/**
+ * =============================================================================
+ * @hai/ui - Design Token 系统
+ * =============================================================================
+ * 所有视觉变量通过 CSS Variables 定义，多端复用。
+ *
+ * 在 app.css 中导入：
+ * @import '@hai/ui/styles/design-tokens.css';
+ * =============================================================================
+ */
+
+:root {
+  /* ─── 间距 ─── */
+  --hai-spacing-xs: 4px;
+  --hai-spacing-sm: 8px;
+  --hai-spacing-md: 16px;
+  --hai-spacing-lg: 24px;
+  --hai-spacing-xl: 32px;
+
+  /* ─── 圆角 ─── */
+  --hai-radius-sm: 4px;
+  --hai-radius-md: 8px;
+  --hai-radius-lg: 16px;
+  --hai-radius-full: 9999px;
+
+  /* ─── 字体大小 ─── */
+  --hai-font-size-xs: 12px;
+  --hai-font-size-sm: 14px;
+  --hai-font-size-md: 16px;
+  --hai-font-size-lg: 18px;
+  --hai-font-size-xl: 20px;
+  --hai-font-size-2xl: 24px;
+
+  /* ─── 最小点击区域 ─── */
+  --hai-touch-target-min: 44px;
+
+  /* ─── 安全区域 ─── */
+  --hai-safe-area-top: env(safe-area-inset-top, 0px);
+  --hai-safe-area-bottom: env(safe-area-inset-bottom, 0px);
+  --hai-safe-area-left: env(safe-area-inset-left, 0px);
+  --hai-safe-area-right: env(safe-area-inset-right, 0px);
+
+  /* ─── z-index 层级 ─── */
+  --hai-z-dropdown: 1000;
+  --hai-z-modal: 1100;
+  --hai-z-toast: 1200;
+  --hai-z-tooltip: 1300;
+
+  /* ─── 动画时长 ─── */
+  --hai-transition-fast: 150ms;
+  --hai-transition-normal: 250ms;
+  --hai-transition-slow: 350ms;
+
+  /* ─── 阴影 ─── */
+  --hai-shadow-sm: 0 1px 2px 0 oklch(0 0 0 / 0.05);
+  --hai-shadow-md: 0 4px 6px -1px oklch(0 0 0 / 0.1);
+  --hai-shadow-lg: 0 10px 15px -3px oklch(0 0 0 / 0.1);
+}

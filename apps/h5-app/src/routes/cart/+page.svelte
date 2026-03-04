@@ -1,9 +1,9 @@
 <script lang="ts">
   /**
-   * 购物车页
+   * 购物车页 — 使用 SwipeCell 滑动删除
    */
   import * as m from '$lib/paraglide/messages.js'
-  import { Button, IconButton, Card, Empty } from '@h-ai/ui'
+  import { Button, IconButton, Card, Empty, SwipeCell } from '@h-ai/ui'
 
   let items = $state([
     { id: 1, name: m.home_rec_watch(), price: 299, qty: 1, icon: '⌚' },
@@ -14,6 +14,12 @@
 
   function removeItem(id: number) {
     items = items.filter((item) => item.id !== id)
+  }
+
+  function handleSwipeAction(itemId: number, actionId: string) {
+    if (actionId === 'delete') {
+      removeItem(itemId)
+    }
   }
 </script>
 
@@ -41,29 +47,37 @@
   {:else}
     <div class="space-y-3">
       {#each items as item (item.id)}
-        <Card padding="sm" shadow="sm">
-          <div class="flex items-center gap-3">
-            <div class="w-14 h-14 rounded-lg bg-base-200 flex items-center justify-center text-2xl shrink-0">
-              {item.icon}
-            </div>
-            <div class="flex-1 min-w-0">
-              <h3 class="font-medium text-sm truncate">{item.name}</h3>
-              <p class="text-primary font-bold text-sm mt-0.5">¥{item.price}</p>
-              <div class="flex items-center gap-1.5 mt-1.5">
-                <IconButton variant="outline" size="xs" ariaLabel="decrease" onclick={() => { if (item.qty > 1) item.qty-- }}>
-                  <span class="icon-[tabler--minus] text-sm"></span>
-                </IconButton>
-                <span class="text-sm w-6 text-center font-medium">{item.qty}</span>
-                <IconButton variant="outline" size="xs" ariaLabel="increase" onclick={() => item.qty++}>
-                  <span class="icon-[tabler--plus] text-sm"></span>
-                </IconButton>
+        <SwipeCell
+          actions={[
+            { id: 'collect', label: m.swipe_collect(), variant: 'warning' },
+            { id: 'delete', label: m.swipe_delete(), variant: 'error' },
+          ]}
+          onaction={(actionId) => handleSwipeAction(item.id, actionId)}
+        >
+          <Card padding="sm" shadow="sm">
+            <div class="flex items-center gap-3">
+              <div class="w-14 h-14 rounded-lg bg-base-200 flex items-center justify-center text-2xl shrink-0">
+                {item.icon}
               </div>
+              <div class="flex-1 min-w-0">
+                <h3 class="font-medium text-sm truncate">{item.name}</h3>
+                <p class="text-primary font-bold text-sm mt-0.5">¥{item.price}</p>
+                <div class="flex items-center gap-1.5 mt-1.5">
+                  <IconButton variant="outline" size="xs" ariaLabel="decrease" onclick={() => { if (item.qty > 1) item.qty-- }}>
+                    <span class="icon-[tabler--minus] text-sm"></span>
+                  </IconButton>
+                  <span class="text-sm w-6 text-center font-medium">{item.qty}</span>
+                  <IconButton variant="outline" size="xs" ariaLabel="increase" onclick={() => item.qty++}>
+                    <span class="icon-[tabler--plus] text-sm"></span>
+                  </IconButton>
+                </div>
+              </div>
+              <IconButton variant="ghost" size="xs" ariaLabel="remove" class="text-base-content/30 hover:text-error" onclick={() => removeItem(item.id)}>
+                <span class="icon-[tabler--trash] text-lg"></span>
+              </IconButton>
             </div>
-            <IconButton variant="ghost" size="xs" ariaLabel="remove" class="text-base-content/30 hover:text-error" onclick={() => removeItem(item.id)}>
-              <span class="icon-[tabler--trash] text-lg"></span>
-            </IconButton>
-          </div>
-        </Card>
+          </Card>
+        </SwipeCell>
       {/each}
     </div>
 

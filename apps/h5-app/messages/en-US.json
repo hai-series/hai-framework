@@ -82,5 +82,18 @@
   "auth_register_has_account": "Already have an account?",
   "auth_register_login_link": "Sign in",
   "auth_register_error_generic": "Registration failed",
-  "auth_register_error_network": "Network error, please retry"
+  "auth_register_error_network": "Network error, please retry",
+
+  "action_share": "Share",
+  "action_edit_profile": "Edit Profile",
+  "action_clear_cache": "Clear Cache",
+  "action_cancel": "Cancel",
+  "action_more": "More Actions",
+
+  "swipe_delete": "Delete",
+  "swipe_collect": "Collect",
+
+  "pull_refresh_done": "Refreshed",
+  "load_no_more": "No more data",
+  "load_loading": "Loading..."
 }

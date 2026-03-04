@@ -51,8 +51,9 @@ input::-ms-clear {
 
 /* ─── 卡片 ─── */
 .card {
-  transition: box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1),
-              transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  transition:
+    box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1),
+    transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* ─── 按钮 ─── */
@@ -62,48 +63,96 @@ input::-ms-clear {
 
 /* ─── 动画 keyframes ─── */
 @keyframes hai-fade-in {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 @keyframes hai-fade-out {
-  from { opacity: 1; }
-  to { opacity: 0; }
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
 }
 
 @keyframes hai-slide-up {
-  from { opacity: 0; transform: translateY(6px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @keyframes hai-slide-down {
-  from { opacity: 0; transform: translateY(-6px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 @keyframes hai-scale-in {
-  from { opacity: 0; transform: scale(0.96); }
-  to { opacity: 1; transform: scale(1); }
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
 @keyframes hai-scale-out {
-  from { opacity: 1; transform: scale(1); }
-  to { opacity: 0; transform: scale(0.96); }
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.96);
+  }
 }
 
 @keyframes hai-slide-in-right {
-  from { opacity: 0; transform: translateX(100%); }
-  to { opacity: 1; transform: translateX(0); }
+  from {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
 
 @keyframes hai-slide-out-right {
-  from { opacity: 1; transform: translateX(0); }
-  to { opacity: 0; transform: translateX(100%); }
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(100%);
+  }
 }
 
 @keyframes hai-shimmer {
-  0% { background-position: 200% 0; }
-  100% { background-position: -200% 0; }
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
 }
 
 /* ─── 动画工具类 ─── */
@@ -140,11 +189,30 @@ input::-ms-clear {
 }
 
 /* 兼容旧动画类名 */
-.animate-slide-in-from-right { animation: hai-slide-in-right 0.3s ease-out; }
-.animate-slide-out-to-right { animation: hai-slide-out-right 0.3s ease-in forwards; }
-.animate-fade-in { animation: hai-fade-in 0.2s ease-out; }
-.animate-fade-out { animation: hai-fade-out 0.2s ease-in forwards; }
-.animate-in { animation-duration: 0.3s; animation-timing-function: ease-out; animation-fill-mode: both; }
-.slide-in-from-right { animation-name: hai-slide-in-right; }
-.slide-in-from-left { animation-name: hai-slide-in-right; animation-direction: reverse; }
-.fade-in { animation-name: hai-fade-in; }
+.animate-slide-in-from-right {
+  animation: hai-slide-in-right 0.3s ease-out;
+}
+.animate-slide-out-to-right {
+  animation: hai-slide-out-right 0.3s ease-in forwards;
+}
+.animate-fade-in {
+  animation: hai-fade-in 0.2s ease-out;
+}
+.animate-fade-out {
+  animation: hai-fade-out 0.2s ease-in forwards;
+}
+.animate-in {
+  animation-duration: 0.3s;
+  animation-timing-function: ease-out;
+  animation-fill-mode: both;
+}
+.slide-in-from-right {
+  animation-name: hai-slide-in-right;
+}
+.slide-in-from-left {
+  animation-name: hai-slide-in-right;
+  animation-direction: reverse;
+}
+.fade-in {
+  animation-name: hai-fade-in;
+}

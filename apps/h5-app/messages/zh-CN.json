@@ -82,5 +82,18 @@
   "auth_register_has_account": "已有账户？",
   "auth_register_login_link": "去登录",
   "auth_register_error_generic": "注册失败",
-  "auth_register_error_network": "网络错误，请重试"
+  "auth_register_error_network": "网络错误，请重试",
+
+  "action_share": "分享",
+  "action_edit_profile": "编辑资料",
+  "action_clear_cache": "清除缓存",
+  "action_cancel": "取消",
+  "action_more": "更多操作",
+
+  "swipe_delete": "删除",
+  "swipe_collect": "收藏",
+
+  "pull_refresh_done": "已刷新",
+  "load_no_more": "没有更多了",
+  "load_loading": "加载中..."
 }
