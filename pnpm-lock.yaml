@@ -57,12 +57,18 @@ catalogs:
     '@internationalized/date':
       specifier: ^3.8.0
       version: 3.11.0
+    '@lancedb/lancedb':
+      specifier: ^0.17.0
+      version: 0.17.0
     '@modelcontextprotocol/sdk':
       specifier: ^1.26.0
       version: 1.27.1
     '@playwright/test':
       specifier: ^1.58.2
       version: 1.58.2
+    '@qdrant/js-client-rest':
+      specifier: ^1.13.0
+      version: 1.17.0
     '@sveltejs/adapter-auto':
       specifier: ^7.0.0
       version: 7.0.0
@@ -272,9 +278,6 @@ importers:
       '@h-ai/crypto':
         specifier: workspace:*
         version: link:../../packages/crypto
-      '@h-ai/db':
-        specifier: workspace:*
-        version: link:../../packages/db
       '@h-ai/iam':
         specifier: workspace:*
         version: link:../../packages/iam
@@ -284,6 +287,9 @@ importers:
       '@h-ai/reach':
         specifier: workspace:*
         version: link:../../packages/reach
+      '@h-ai/reldb':
+        specifier: workspace:*
+        version: link:../../packages/reldb
       '@h-ai/storage':
         specifier: workspace:*
         version: link:../../packages/storage
@@ -445,12 +451,12 @@ importers:
       '@h-ai/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@h-ai/db':
-        specifier: workspace:*
-        version: link:../../packages/db
       '@h-ai/kit':
         specifier: workspace:*
         version: link:../../packages/kit
+      '@h-ai/reldb':
+        specifier: workspace:*
+        version: link:../../packages/reldb
       zod:
         specifier: 'catalog:'
         version: 4.3.6
@@ -497,15 +503,15 @@ importers:
       '@h-ai/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@h-ai/db':
-        specifier: workspace:*
-        version: link:../../packages/db
       '@h-ai/kit':
         specifier: workspace:*
         version: link:../../packages/kit
       '@h-ai/reach':
         specifier: workspace:*
         version: link:../../packages/reach
+      '@h-ai/reldb':
+        specifier: workspace:*
+        version: link:../../packages/reldb
       '@h-ai/storage':
         specifier: workspace:*
         version: link:../../packages/storage
@@ -582,15 +588,15 @@ importers:
       '@h-ai/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@h-ai/db':
-        specifier: workspace:*
-        version: link:../../packages/db
       '@h-ai/iam':
         specifier: workspace:*
         version: link:../../packages/iam
       '@h-ai/kit':
         specifier: workspace:*
         version: link:../../packages/kit
+      '@h-ai/reldb':
+        specifier: workspace:*
+        version: link:../../packages/reldb
       '@h-ai/storage':
         specifier: workspace:*
         version: link:../../packages/storage
@@ -664,12 +670,25 @@ importers:
       '@modelcontextprotocol/sdk':
         specifier: 'catalog:'
         version: 1.27.1(zod@4.3.6)
+      nanoid:
+        specifier: 'catalog:'
+        version: 5.1.6
       openai:
         specifier: 'catalog:'
         version: 6.17.0(ws@8.19.0)(zod@4.3.6)
       zod:
         specifier: 'catalog:'
         version: 4.3.6
+    optionalDependencies:
+      '@h-ai/datapipe':
+        specifier: workspace:*
+        version: link:../datapipe
+      '@h-ai/reldb':
+        specifier: workspace:*
+        version: link:../reldb
+      '@h-ai/vecdb':
+        specifier: workspace:*
+        version: link:../vecdb
     devDependencies:
       '@types/node':
         specifier: 'catalog:'
@@ -717,9 +736,9 @@ importers:
       '@h-ai/core':
         specifier: workspace:*
         version: link:../core
-      '@h-ai/db':
+      '@h-ai/reldb':
         specifier: workspace:*
-        version: link:../db
+        version: link:../reldb
     devDependencies:
       '@types/node':
         specifier: 'catalog:'
@@ -929,49 +948,21 @@ importers:
         specifier: 'catalog:'
         version: 4.0.18(@types/node@25.1.0)(jiti@2.6.1)(jsdom@27.4.0)(lightningcss@1.30.2)(yaml@2.8.2)
 
-  packages/db:
+  packages/datapipe:
     dependencies:
       '@h-ai/core':
         specifier: workspace:*
         version: link:../core
-      better-sqlite3:
-        specifier: 'catalog:'
-        version: 12.6.2
       zod:
         specifier: 'catalog:'
         version: 4.3.6
-    optionalDependencies:
-      mysql2:
-        specifier: 'catalog:'
-        version: 3.16.2
-      pg:
-        specifier: 'catalog:'
-        version: 8.17.2
     devDependencies:
-      '@types/better-sqlite3':
-        specifier: 'catalog:'
-        version: 7.6.13
-      '@types/node':
-        specifier: 'catalog:'
-        version: 25.1.0
-      '@types/pg':
-        specifier: 'catalog:'
-        version: 8.16.0
-      rimraf:
-        specifier: 'catalog:'
-        version: 6.1.2
-      testcontainers:
-        specifier: 'catalog:'
-        version: 11.11.0
       tsup:
         specifier: 'catalog:'
         version: 8.5.1(jiti@2.6.1)(postcss@8.5.6)(typescript@5.9.3)(yaml@2.8.2)
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
-      vitest:
-        specifier: 'catalog:'
-        version: 4.0.18(@types/node@25.1.0)(jiti@2.6.1)(jsdom@27.4.0)(lightningcss@1.30.2)(yaml@2.8.2)
 
   packages/deploy:
     dependencies:
@@ -1012,9 +1003,9 @@ importers:
       '@h-ai/crypto':
         specifier: workspace:*
         version: link:../crypto
-      '@h-ai/db':
+      '@h-ai/reldb':
         specifier: workspace:*
-        version: link:../db
+        version: link:../reldb
       zod:
         specifier: 'catalog:'
         version: 4.3.6
@@ -1105,9 +1096,9 @@ importers:
       '@h-ai/core':
         specifier: workspace:*
         version: link:../core
-      '@h-ai/db':
+      '@h-ai/reldb':
         specifier: workspace:*
-        version: link:../db
+        version: link:../reldb
       zod:
         specifier: 'catalog:'
         version: 4.3.6
@@ -1135,14 +1126,58 @@ importers:
         specifier: 'catalog:'
         version: 4.0.18(@types/node@25.1.0)(jiti@2.6.1)(jsdom@27.4.0)(lightningcss@1.30.2)(yaml@2.8.2)
 
+  packages/reldb:
+    dependencies:
+      '@h-ai/core':
+        specifier: workspace:*
+        version: link:../core
+      better-sqlite3:
+        specifier: 'catalog:'
+        version: 12.6.2
+      zod:
+        specifier: 'catalog:'
+        version: 4.3.6
+    optionalDependencies:
+      mysql2:
+        specifier: 'catalog:'
+        version: 3.16.2
+      pg:
+        specifier: 'catalog:'
+        version: 8.17.2
+    devDependencies:
+      '@types/better-sqlite3':
+        specifier: 'catalog:'
+        version: 7.6.13
+      '@types/node':
+        specifier: 'catalog:'
+        version: 25.1.0
+      '@types/pg':
+        specifier: 'catalog:'
+        version: 8.16.0
+      rimraf:
+        specifier: 'catalog:'
+        version: 6.1.2
+      testcontainers:
+        specifier: 'catalog:'
+        version: 11.11.0
+      tsup:
+        specifier: 'catalog:'
+        version: 8.5.1(jiti@2.6.1)(postcss@8.5.6)(typescript@5.9.3)(yaml@2.8.2)
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
+      vitest:
+        specifier: 'catalog:'
+        version: 4.0.18(@types/node@25.1.0)(jiti@2.6.1)(jsdom@27.4.0)(lightningcss@1.30.2)(yaml@2.8.2)
+
   packages/scheduler:
     dependencies:
       '@h-ai/core':
         specifier: workspace:*
         version: link:../core
-      '@h-ai/db':
+      '@h-ai/reldb':
         specifier: workspace:*
-        version: link:../db
+        version: link:../reldb
       croner:
         specifier: 'catalog:'
         version: 10.0.1
@@ -1248,6 +1283,47 @@ importers:
       vite:
         specifier: 'catalog:'
         version: 7.3.1(@types/node@25.1.0)(jiti@2.6.1)(lightningcss@1.30.2)(yaml@2.8.2)
+      vitest:
+        specifier: 'catalog:'
+        version: 4.0.18(@types/node@25.1.0)(jiti@2.6.1)(jsdom@27.4.0)(lightningcss@1.30.2)(yaml@2.8.2)
+
+  packages/vecdb:
+    dependencies:
+      '@h-ai/core':
+        specifier: workspace:*
+        version: link:../core
+      zod:
+        specifier: 'catalog:'
+        version: 4.3.6
+    optionalDependencies:
+      '@lancedb/lancedb':
+        specifier: 'catalog:'
+        version: 0.17.0(apache-arrow@18.1.0)
+      '@qdrant/js-client-rest':
+        specifier: 'catalog:'
+        version: 1.17.0(typescript@5.9.3)
+      pg:
+        specifier: 'catalog:'
+        version: 8.17.2
+    devDependencies:
+      '@types/node':
+        specifier: 'catalog:'
+        version: 25.1.0
+      '@types/pg':
+        specifier: 'catalog:'
+        version: 8.16.0
+      rimraf:
+        specifier: 'catalog:'
+        version: 6.1.2
+      testcontainers:
+        specifier: 'catalog:'
+        version: 11.11.0
+      tsup:
+        specifier: 'catalog:'
+        version: 8.5.1(jiti@2.6.1)(postcss@8.5.6)(typescript@5.9.3)(yaml@2.8.2)
+      typescript:
+        specifier: 'catalog:'
+        version: 5.9.3
       vitest:
         specifier: 'catalog:'
         version: 4.0.18(@types/node@25.1.0)(jiti@2.6.1)(jsdom@27.4.0)(lightningcss@1.30.2)(yaml@2.8.2)
@@ -2022,6 +2098,66 @@ packages:
   '@js-sdsl/ordered-map@4.4.2':
     resolution: {integrity: sha512-iUKgm52T8HOE/makSxjqoWhe95ZJA1/G1sYsGev2JDKUSS14KAgg1LHb+Ba+IPow0xflbnSkOsZcO08C7w1gYw==}
 
+  '@lancedb/lancedb-darwin-arm64@0.17.0':
+    resolution: {integrity: sha512-lYzjA9ZX5VEr2TjSIVS2CutI+VjD0InnoyI2cbPESM3qIrjR+qOLG5dt2TFRzQZdzAbWHaB61Mr43yZv//KUag==}
+    engines: {node: '>= 18'}
+    cpu: [arm64]
+    os: [darwin]
+
+  '@lancedb/lancedb-darwin-x64@0.17.0':
+    resolution: {integrity: sha512-yZeTQth/y2IoOWCAViK5V0ZWUWII1Me5eICJUkXw+0U62IMniOsQUbVXQOPViTe/9hyvlIS3GFw6gAqBZETuaA==}
+    engines: {node: '>= 18'}
+    cpu: [x64]
+    os: [darwin]
+
+  '@lancedb/lancedb-linux-arm64-gnu@0.17.0':
+    resolution: {integrity: sha512-AZ+jkFqzzDmOUEuQVRz5Qc+PxEGD7CLnmvHaK05dx+yMg//767n1ffUO8YcNGuYeaWwq5SjAvVBT1azbOvME2w==}
+    engines: {node: '>= 18'}
+    cpu: [arm64]
+    os: [linux]
+    libc: [glibc]
+
+  '@lancedb/lancedb-linux-arm64-musl@0.17.0':
+    resolution: {integrity: sha512-2MBtQuX9BFO14WC49Tsp5W8IajKf7q+/0CNOYvESTqsz8QXGZhMMxeipiTcLGpECV18zkSuhBYibeeo5IXxviQ==}
+    engines: {node: '>= 18'}
+    cpu: [arm64]
+    os: [linux]
+    libc: [musl]
+
+  '@lancedb/lancedb-linux-x64-gnu@0.17.0':
+    resolution: {integrity: sha512-xkGZef0z3idtvij+dflB827zq9Crrb2BvXIESzygl5Y8WzsfwioNKlcAZ5LKHfVSh+seQcPGj7AmXZaPX8f38Q==}
+    engines: {node: '>= 18'}
+    cpu: [x64]
+    os: [linux]
+    libc: [glibc]
+
+  '@lancedb/lancedb-linux-x64-musl@0.17.0':
+    resolution: {integrity: sha512-PktOkmJrM+WTpf3AIgQjD3kiFNO27APDuxvpacOgqWC0lGmFOFcxtJoUYarhiylD0prfUQLXdVW+6hawuTg4rQ==}
+    engines: {node: '>= 18'}
+    cpu: [x64]
+    os: [linux]
+    libc: [musl]
+
+  '@lancedb/lancedb-win32-arm64-msvc@0.17.0':
+    resolution: {integrity: sha512-NrBUokcsqHEkNgVoiS0oa4iUhY+Zkra4SW32nk5n3bzdaeyQ4tEDiqBUJVcu51POqVh86ngDtNSlt+UpSnCBQA==}
+    engines: {node: '>= 18'}
+    cpu: [arm64]
+    os: [win32]
+
+  '@lancedb/lancedb-win32-x64-msvc@0.17.0':
+    resolution: {integrity: sha512-D5e56RDnKzCr41XriNQyeycAWpE2UMZJF5oVocIaFnwqje0emtOWXieVUpRb1it8Tycc76VCNxvjXvMDNhAD0Q==}
+    engines: {node: '>= 18'}
+    cpu: [x64]
+    os: [win32]
+
+  '@lancedb/lancedb@0.17.0':
+    resolution: {integrity: sha512-AgQ4dqHBjoEpVdND5tmzhy0OJxwP4gJnEjOz3jVh7ip+8EYhR44wO6XbEhpxvvGfXyyepDrulo3bpL1323eNSg==}
+    engines: {node: '>= 18'}
+    cpu: [x64, arm64]
+    os: [darwin, linux, win32]
+    peerDependencies:
+      apache-arrow: '>=15.0.0 <=18.1.0'
+
   '@lix-js/sdk@0.4.7':
     resolution: {integrity: sha512-pRbW+joG12L0ULfMiWYosIW0plmW4AsUdiPCp+Z8rAsElJ+wJ6in58zhD3UwUcd4BNcpldEGjg6PdA7e0RgsDQ==}
     engines: {node: '>=18'}
@@ -2087,6 +2223,16 @@ packages:
 
   '@protobufjs/utf8@1.1.0':
     resolution: {integrity: sha512-Vvn3zZrhQZkkBE8LSuW3em98c0FwgO4nxzv6OdSxPKJIEKY2bGbHn+mhGIPerzI4twdxaP8/0+06HBpwf345Lw==}
+
+  '@qdrant/js-client-rest@1.17.0':
+    resolution: {integrity: sha512-aZFQeirWVqWAa1a8vJ957LMzcXkFHGbsoRhzc8AkGfg6V0jtK8PlG8/eyyc2xhYsR961FDDx1Tx6nyE0K7lS+A==}
+    engines: {node: '>=18.17.0', pnpm: '>=8'}
+    peerDependencies:
+      typescript: '>=4.7'
+
+  '@qdrant/openapi-typescript-fetch@1.2.6':
+    resolution: {integrity: sha512-oQG/FejNpItrxRHoyctYvT3rwGZOnK4jr3JdppO/c78ktDvkWiPXPHNsrDf33K9sZdRb6PR7gi4noIapu5q4HA==}
+    engines: {node: '>=18.0.0', pnpm: '>=8'}
 
   '@rollup/plugin-commonjs@29.0.0':
     resolution: {integrity: sha512-U2YHaxR2cU/yAiwKJtJRhnyLk7cifnQw0zUpISsocBDoHDJn+HTV74ABqnwr5bEgWUwFZC9oFL6wLe21lHu5eQ==}
@@ -2651,6 +2797,12 @@ packages:
   '@types/chai@5.2.3':
     resolution: {integrity: sha512-Mw558oeA9fFbv65/y4mHtXDs9bPnFMZAL/jxdPFUpOHHIXX91mcgEHbS5Lahr+pwZFR8A7GQleRWeI6cGFC2UA==}
 
+  '@types/command-line-args@5.2.3':
+    resolution: {integrity: sha512-uv0aG6R0Y8WHZLTamZwtfsDLVRnOa+n+n5rEvFWL5Na5gZ8V2Teab/duDPFzIIIhs9qizDpcavCusCLJZu62Kw==}
+
+  '@types/command-line-usage@5.0.4':
+    resolution: {integrity: sha512-BwR5KP3Es/CSht0xqBcUXS3qCAUVXwpRKsV2+arxeb65atasuXG9LykC9Ab10Cw3s2raH92ZqOeILaQbsB2ACg==}
+
   '@types/cookie@0.6.0':
     resolution: {integrity: sha512-4Kh9a6B2bQciAhf7FSuMRRkUWecJgJu9nPnx3yzpsfXX/c50REIqpHY4C82bXP90qrLtXtkDxTZosYO3UpOwlA==}
 
@@ -2689,6 +2841,9 @@ packages:
 
   '@types/node@18.19.130':
     resolution: {integrity: sha512-GRaXQx6jGfL8sKfaIDD6OupbIHBr9jv7Jnaml9tB7l4v068PAOXqfcujMMo5PhbIs6ggR1XODELqahT2R8v0fg==}
+
+  '@types/node@20.19.35':
+    resolution: {integrity: sha512-Uarfe6J91b9HAUXxjvSOdiO2UPOKLm07Q1oh0JHxoZ1y8HoqxDAu3gVrsrOHeiio0kSsoVBt4wFrKOm0dKxVPQ==}
 
   '@types/node@25.1.0':
     resolution: {integrity: sha512-t7frlewr6+cbx+9Ohpl0NOTKXZNV9xHRmNOvql47BFJKcEG1CxtxlPEEe+gR9uhVWM4DwhnvTF110mIL4yP9RA==}
@@ -2906,6 +3061,10 @@ packages:
   any-promise@1.3.0:
     resolution: {integrity: sha512-7UvmKalWRt1wgjL1RrGxoSJW/0QZFIegpeGvZG9kjp8vrRu55XTHbwnqq2GpXm9uLbcuhxm3IqX9OB4MZR1b2A==}
 
+  apache-arrow@18.1.0:
+    resolution: {integrity: sha512-v/ShMp57iBnBp4lDgV8Jx3d3Q5/Hac25FWmQ98eMahUiHPXcvwIMKJD0hBIgclm/FCG+LwPkAKtkRO1O/W0YGg==}
+    hasBin: true
+
   archiver-utils@5.0.2:
     resolution: {integrity: sha512-wuLJMmIBQYCsGZgYLTy5FIB2pF6Lfb6cXMSF8Qywwk3t20zWnAi7zLcQFdKQmIB8wyZpY5ER38x08GbwtR2cLA==}
     engines: {node: '>= 14'}
@@ -2924,6 +3083,14 @@ packages:
   aria-query@5.3.1:
     resolution: {integrity: sha512-Z/ZeOgVl7bcSYZ/u/rh0fOpvEpq//LZmdbkXyc7syVzjPAhfOa9ebsdTSjEBDU4vs5nC98Kfduj1uFo0qyET3g==}
     engines: {node: '>= 0.4'}
+
+  array-back@3.1.0:
+    resolution: {integrity: sha512-TkuxA4UCOvxuDK6NZYXCalszEzj+TLszyASooky+i742l9TqsOdYCMJJupxRic61hwquNtppB3hgcuq9SVSH1Q==}
+    engines: {node: '>=6'}
+
+  array-back@6.2.2:
+    resolution: {integrity: sha512-gUAZ7HPyb4SJczXAMUXMGAvI976JoK3qEx9v1FTmeYuJj0IBiaKttG1ydtGKdkfqWkIkouke7nG8ufGy77+Cvw==}
+    engines: {node: '>=12.17'}
 
   array-timsort@1.0.3:
     resolution: {integrity: sha512-/+3GRL7dDAGEfM6TseQk/U+mi18TU2Ms9I3UlLdUMhz2hbvGNTKdj9xniwXfUqgYhHxRx0+8UnKkvlNwVU+cWQ==}
@@ -3134,6 +3301,10 @@ packages:
     resolution: {integrity: sha512-NUPRluOfOiTKBKvWPtSD4PhFvWCqOi0BGStNWs57X9js7XGTprSmFoz5F0tWhR4WPjNeR9jXqdC7/UpSJTnlRg==}
     engines: {node: '>=18'}
 
+  chalk-template@0.4.0:
+    resolution: {integrity: sha512-/ghrgmhfY8RaSdeo43hNXxpoHAtxdbskUHjPpfqUWGttFgycUhYPGx3YZBCnUCvOa7Doivn1IZec3DEGFoMgLg==}
+    engines: {node: '>=12'}
+
   chalk@4.1.2:
     resolution: {integrity: sha512-oKnbhFyRIXpUuez8iBMmyEa4nbj4IOQyuhc/wy9kY7/WVPcwIO9VA668Pu8RkO7+0G76SLROeyw9CpQ061i4mA==}
     engines: {node: '>=10'}
@@ -3204,6 +3375,14 @@ packages:
 
   colorette@2.0.20:
     resolution: {integrity: sha512-IfEDxwoWIjkeXL1eXcDiow4UbKjhLdq6/EuSVR9GMN7KVH3r9gQ83e73hsz1Nd1T3ijd5xv1wcWRYO+D6kCI2w==}
+
+  command-line-args@5.2.1:
+    resolution: {integrity: sha512-H4UfQhZyakIjC74I9d34fGYDwk3XpSr17QhEd0Q3I9Xq1CETHo4Hcuo87WyWHpAF1aSLjLRf5lD9ZGX2qStUvg==}
+    engines: {node: '>=4.0.0'}
+
+  command-line-usage@7.0.4:
+    resolution: {integrity: sha512-85UdvzTNx/+s5CkSgBm/0hzP80RFHAa7PsfeADE5ezZF3uHz3/Tqj9gIKGT9PTtpycc3Ua64T0oVulGfKxzfqg==}
+    engines: {node: '>=12.20.0'}
 
   commander@11.1.0:
     resolution: {integrity: sha512-yPVavfyCcRhmorC7rWlkHn15b4wDVgVmBA7kV4QVBsF7kv/9TKJAbAXVTxvTnwP8HHKjRCJDClKbciiYS7p0DQ==}
@@ -3885,6 +4064,10 @@ packages:
     resolution: {integrity: sha512-S8KoZgRZN+a5rNwqTxlZZePjT/4cnm0ROV70LedRHZ0p8u9fRID0hJUZQpkKLzro8LfmC8sx23bY6tVNxv8pQA==}
     engines: {node: '>= 18.0.0'}
 
+  find-replace@3.0.0:
+    resolution: {integrity: sha512-6Tb2myMioCAgv5kfvP5/PkZZ/ntTpVK39fHY7WkWBgvbeE+VHd/tZuZ4mrC+bxh4cfOZeYKVPaJIZtZXV7GNCQ==}
+    engines: {node: '>=4.0.0'}
+
   find-up-simple@1.0.1:
     resolution: {integrity: sha512-afd4O7zpqHeRyg4PfDQsXmlDe2PfdHtJt6Akt8jOWaApLOZk5JXs6VMR29lz03pRe9mpykrRCYIYxaJYcfpncQ==}
     engines: {node: '>=18'}
@@ -3904,6 +4087,9 @@ packages:
     resolution: {integrity: sha512-/3FfIa8mbrg3xE7+wAhWeV+bd7L2Mof+xtZb5dRDKZ+wDvYJK4WDYeIOuOhre5Yv5aQObZrlbRmk3RTSiuQBtw==}
     engines: {node: '>=18'}
     hasBin: true
+
+  flatbuffers@24.12.23:
+    resolution: {integrity: sha512-dLVCAISd5mhls514keQzmEG6QHmUUsNuWsb4tFafIUwvvgDjXhtfAYSKOzt5SWOy+qByV5pbsDZ+Vb7HUOBEdA==}
 
   flatted@3.3.3:
     resolution: {integrity: sha512-GX+ysw4PBCz0PzosHDepZGANEuFCMLrnRTiEy9McGjmkCQYwRq4A/X786G/fjM/+OjsWSU1ZrY5qyARZmO/uwg==}
@@ -4252,6 +4438,10 @@ packages:
     resolution: {integrity: sha512-/sM3dO2FOzXjKQhJuo0Q173wf2KOo8t4I8vHy6lF9poUp7bKT0/NHE8fPX23PwfhnykfqnC2xRxOnVw5XuGIaA==}
     engines: {node: '>=6'}
     hasBin: true
+
+  json-bignum@0.0.3:
+    resolution: {integrity: sha512-2WHyXj3OfHSgNyuzDbSxI1w2jgw5gkWSWhS7Qg4bWXx1nLk3jnbwfUeS0PSba3IzpTUWdHxBieELUzXRjQB2zg==}
+    engines: {node: '>=0.8'}
 
   json-buffer@3.0.1:
     resolution: {integrity: sha512-4bV5BfR2mqfQTJm+V5tPPdf+ZpuhiIvTuAB5g8kcrXOZpTT/QwwVRWBywX1ozr6lEuPdbHxwaJlm9G6mI2sfSQ==}
@@ -5123,6 +5313,9 @@ packages:
     resolution: {integrity: sha512-J8rn6v4DBb2nnFqkqwy6/NnTYMcgLA+sLr0iIO41qpv0n+ngb7ksag2tMRl0inb1bbO/esUwzW1vbJi7K0sI0g==}
     engines: {node: ^12.0.0 || ^14.0.0 || >=16.0.0}
 
+  reflect-metadata@0.2.2:
+    resolution: {integrity: sha512-urBwgfrvVP/eAyXx4hluJivBKzuEbSQs9rKWCrCkbSxNv8mxPcUZKeuoF3Uy4mJl3Lwprp6yy5/39VWigZ4K6Q==}
+
   regexp-ast-analysis@0.7.1:
     resolution: {integrity: sha512-sZuz1dYW/ZsfG17WSAG7eS85r5a0dDsvg+7BiiYR5o6lKCAtUrEwdmRmaGF6rwVj3LcmAeYkOWKEPlbPzN3Y3A==}
     engines: {node: ^12.0.0 || ^14.0.0 || >=16.0.0}
@@ -5490,6 +5683,10 @@ packages:
   tabbable@6.4.0:
     resolution: {integrity: sha512-05PUHKSNE8ou2dwIxTngl4EzcnsCDZGJ/iCLtDflR/SHB/ny14rXc+qU5P4mG9JkusiV7EivzY9Mhm55AzAvCg==}
 
+  table-layout@4.1.1:
+    resolution: {integrity: sha512-iK5/YhZxq5GO5z8wb0bY1317uDF3Zjpha0QFFLA8/trAoiLbQD0HUbMesEaxyzUgDxi2QlcbM8IvqOlEjgoXBA==}
+    engines: {node: '>=12.17'}
+
   tailwind-merge@3.5.0:
     resolution: {integrity: sha512-I8K9wewnVDkL1NTGoqWmVEIlUcB9gFriAEkXkfCjX5ib8ezGxtR3xD7iZIxrfArjEsH7F1CHD4RFUtxefdqV/A==}
 
@@ -5687,6 +5884,14 @@ packages:
     engines: {node: '>=14.17'}
     hasBin: true
 
+  typical@4.0.0:
+    resolution: {integrity: sha512-VAH4IvQ7BDFYglMd7BPRDfLgxZZX4O4TFcRDA6EN5X7erNJJq+McIEp8np9aVtxrCJ6qx4GTYVfOWNjcqwZgRw==}
+    engines: {node: '>=8'}
+
+  typical@7.3.0:
+    resolution: {integrity: sha512-ya4mg/30vm+DOWfBg4YK3j2WD6TWtRkCbasOJr40CseYENzCUby/7rIvXA99JGsQHeNxLbnXdyLLxKSv3tauFw==}
+    engines: {node: '>=12.17'}
+
   ufo@1.6.3:
     resolution: {integrity: sha512-yDJTmhydvl5lJzBmy/hyOAA0d+aqCBuwl818haVdYCRrWV84o7YyeVm4QlVHStqNrrJSTb6jKuFAVqAFsr+K3Q==}
 
@@ -5698,8 +5903,15 @@ packages:
   undici-types@5.26.5:
     resolution: {integrity: sha512-JlCMO+ehdEIKqlFxk6IfVoAUVmgz7cU7zD/h9XZ0qzeosSHmUJVOzSQvvYSYWXkFXC+IfLKSIffhv0sVZup6pA==}
 
+  undici-types@6.21.0:
+    resolution: {integrity: sha512-iwDZqg0QAGrg9Rav5H4n0M64c3mkR59cJ6wQp+7C4nI0gsmExaedaYLNO44eT4AtBBwjbTiGPMlt2Md0T9H9JQ==}
+
   undici-types@7.16.0:
     resolution: {integrity: sha512-Zz+aZWSj8LE6zoxD+xrjh4VfkIG8Ya6LvYkZqtUQGJPZjYl53ypCaUwWqo7eI0x66KBGeRo+mlBEkMSeSZ38Nw==}
+
+  undici@6.23.0:
+    resolution: {integrity: sha512-VfQPToRA5FZs/qJxLIinmU59u0r7LXqoJkCzinq3ckNJp3vKEh7jTWN589YQ5+aoAC/TGRLyJLCPKcLQbM8r9g==}
+    engines: {node: '>=18.17'}
 
   undici@7.19.2:
     resolution: {integrity: sha512-4VQSpGEGsWzk0VYxyB/wVX/Q7qf9t5znLRgs0dzszr9w9Fej/8RVNQ+S20vdXSAyra/bJ7ZQfGv6ZMj7UEbzSg==}
@@ -5887,6 +6099,10 @@ packages:
 
   wordwrap@1.0.0:
     resolution: {integrity: sha512-gvVzJFlPycKc5dZN4yPkP8w7Dc37BtP1yczEneOb4uq34pXZcvrtRTmWV8W+Ume+XCxKgbjM+nevkyFPMybd4Q==}
+
+  wordwrapjs@5.1.1:
+    resolution: {integrity: sha512-0yweIbkINJodk27gX9LBGMzyQdBDan3s/dEAiwBOj+Mf0PPyWL6/rikalkv8EeD0E8jm4o5RXEOrFTP3NXbhJg==}
+    engines: {node: '>=12.17'}
 
   wrap-ansi@7.0.0:
     resolution: {integrity: sha512-YVGIj2kamLSTxw6NsZjoBxfSwsn0ycdesmc4p+Q21c5zPuZ1pl+NfxVdxPtdHvmNVOQ6XSYG4AUtyt/Fi7D16Q==}
@@ -7143,6 +7359,45 @@ snapshots:
 
   '@js-sdsl/ordered-map@4.4.2': {}
 
+  '@lancedb/lancedb-darwin-arm64@0.17.0':
+    optional: true
+
+  '@lancedb/lancedb-darwin-x64@0.17.0':
+    optional: true
+
+  '@lancedb/lancedb-linux-arm64-gnu@0.17.0':
+    optional: true
+
+  '@lancedb/lancedb-linux-arm64-musl@0.17.0':
+    optional: true
+
+  '@lancedb/lancedb-linux-x64-gnu@0.17.0':
+    optional: true
+
+  '@lancedb/lancedb-linux-x64-musl@0.17.0':
+    optional: true
+
+  '@lancedb/lancedb-win32-arm64-msvc@0.17.0':
+    optional: true
+
+  '@lancedb/lancedb-win32-x64-msvc@0.17.0':
+    optional: true
+
+  '@lancedb/lancedb@0.17.0(apache-arrow@18.1.0)':
+    dependencies:
+      apache-arrow: 18.1.0
+      reflect-metadata: 0.2.2
+    optionalDependencies:
+      '@lancedb/lancedb-darwin-arm64': 0.17.0
+      '@lancedb/lancedb-darwin-x64': 0.17.0
+      '@lancedb/lancedb-linux-arm64-gnu': 0.17.0
+      '@lancedb/lancedb-linux-arm64-musl': 0.17.0
+      '@lancedb/lancedb-linux-x64-gnu': 0.17.0
+      '@lancedb/lancedb-linux-x64-musl': 0.17.0
+      '@lancedb/lancedb-win32-arm64-msvc': 0.17.0
+      '@lancedb/lancedb-win32-x64-msvc': 0.17.0
+    optional: true
+
   '@lix-js/sdk@0.4.7':
     dependencies:
       '@lix-js/server-protocol-schema': 0.1.1
@@ -7215,6 +7470,16 @@ snapshots:
   '@protobufjs/pool@1.1.0': {}
 
   '@protobufjs/utf8@1.1.0': {}
+
+  '@qdrant/js-client-rest@1.17.0(typescript@5.9.3)':
+    dependencies:
+      '@qdrant/openapi-typescript-fetch': 1.2.6
+      typescript: 5.9.3
+      undici: 6.23.0
+    optional: true
+
+  '@qdrant/openapi-typescript-fetch@1.2.6':
+    optional: true
 
   '@rollup/plugin-commonjs@29.0.0(rollup@4.57.0)':
     dependencies:
@@ -7825,6 +8090,12 @@ snapshots:
       '@types/deep-eql': 4.0.2
       assertion-error: 2.0.1
 
+  '@types/command-line-args@5.2.3':
+    optional: true
+
+  '@types/command-line-usage@5.0.4':
+    optional: true
+
   '@types/cookie@0.6.0': {}
 
   '@types/debug@4.1.12':
@@ -7870,6 +8141,11 @@ snapshots:
   '@types/node@18.19.130':
     dependencies:
       undici-types: 5.26.5
+
+  '@types/node@20.19.35':
+    dependencies:
+      undici-types: 6.21.0
+    optional: true
 
   '@types/node@25.1.0':
     dependencies:
@@ -8139,6 +8415,19 @@ snapshots:
 
   any-promise@1.3.0: {}
 
+  apache-arrow@18.1.0:
+    dependencies:
+      '@swc/helpers': 0.5.19
+      '@types/command-line-args': 5.2.3
+      '@types/command-line-usage': 5.0.4
+      '@types/node': 20.19.35
+      command-line-args: 5.2.1
+      command-line-usage: 7.0.4
+      flatbuffers: 24.12.23
+      json-bignum: 0.0.3
+      tslib: 2.8.1
+    optional: true
+
   archiver-utils@5.0.2:
     dependencies:
       glob: 10.5.0
@@ -8167,6 +8456,12 @@ snapshots:
   argparse@2.0.1: {}
 
   aria-query@5.3.1: {}
+
+  array-back@3.1.0:
+    optional: true
+
+  array-back@6.2.2:
+    optional: true
 
   array-timsort@1.0.3: {}
 
@@ -8365,6 +8660,11 @@ snapshots:
 
   chai@6.2.2: {}
 
+  chalk-template@0.4.0:
+    dependencies:
+      chalk: 4.1.2
+    optional: true
+
   chalk@4.1.2:
     dependencies:
       ansi-styles: 4.3.0
@@ -8422,6 +8722,22 @@ snapshots:
   color-name@1.1.4: {}
 
   colorette@2.0.20: {}
+
+  command-line-args@5.2.1:
+    dependencies:
+      array-back: 3.1.0
+      find-replace: 3.0.0
+      lodash.camelcase: 4.3.0
+      typical: 4.0.0
+    optional: true
+
+  command-line-usage@7.0.4:
+    dependencies:
+      array-back: 6.2.2
+      chalk-template: 0.4.0
+      table-layout: 4.1.1
+      typical: 7.3.0
+    optional: true
 
   commander@11.1.0: {}
 
@@ -9165,6 +9481,11 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
+  find-replace@3.0.0:
+    dependencies:
+      array-back: 3.1.0
+    optional: true
+
   find-up-simple@1.0.1: {}
 
   find-up@5.0.0:
@@ -9184,6 +9505,9 @@ snapshots:
       keyv: 4.5.4
 
   flat@6.0.1: {}
+
+  flatbuffers@24.12.23:
+    optional: true
 
   flatted@3.3.3: {}
 
@@ -9505,6 +9829,9 @@ snapshots:
       - utf-8-validate
 
   jsesc@3.1.0: {}
+
+  json-bignum@0.0.3:
+    optional: true
 
   json-buffer@3.0.1: {}
 
@@ -10535,6 +10862,9 @@ snapshots:
     dependencies:
       '@eslint-community/regexpp': 4.12.2
 
+  reflect-metadata@0.2.2:
+    optional: true
+
   regexp-ast-analysis@0.7.1:
     dependencies:
       '@eslint-community/regexpp': 4.12.2
@@ -10963,6 +11293,12 @@ snapshots:
 
   tabbable@6.4.0: {}
 
+  table-layout@4.1.1:
+    dependencies:
+      array-back: 6.2.2
+      wordwrapjs: 5.1.1
+    optional: true
+
   tailwind-merge@3.5.0: {}
 
   tailwindcss@4.1.18: {}
@@ -11193,6 +11529,12 @@ snapshots:
 
   typescript@5.9.3: {}
 
+  typical@4.0.0:
+    optional: true
+
+  typical@7.3.0:
+    optional: true
+
   ufo@1.6.3: {}
 
   uglify-js@3.19.3:
@@ -11200,7 +11542,13 @@ snapshots:
 
   undici-types@5.26.5: {}
 
+  undici-types@6.21.0:
+    optional: true
+
   undici-types@7.16.0: {}
+
+  undici@6.23.0:
+    optional: true
 
   undici@7.19.2: {}
 
@@ -11354,6 +11702,9 @@ snapshots:
   word-wrap@1.2.5: {}
 
   wordwrap@1.0.0: {}
+
+  wordwrapjs@5.1.1:
+    optional: true
 
   wrap-ansi@7.0.0:
     dependencies:

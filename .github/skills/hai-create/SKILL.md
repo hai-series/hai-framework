@@ -990,11 +990,11 @@ function createService(
 | ------------- | ---------------------------------------- | ----------------------------------------------------- |
 | 文件名        | `{模块}-{职责}.ts` kebab-case            | `db-main.ts`、`iam-authn-functions.ts`                |
 | 服务对象      | 小写模块名                               | `export const db`                                     |
-| 错误码        | `{Module}ErrorCode` UPPER_SNAKE          | `DbErrorCode.NOT_INITIALIZED`                         |
+| 错误码        | `{Module}ErrorCode` UPPER_SNAKE          | `ReldbErrorCode.NOT_INITIALIZED`                      |
 | 配置 Schema   | `{Module}ConfigSchema`                   | `StorageConfigSchema`                                 |
 | 配置类型      | `{Module}Config` / `{Module}ConfigInput` | `DbConfig` / `DbConfigInput`                          |
 | Provider 工厂 | `create{Impl}Provider`                   | `createSqliteProvider()`                              |
-| i18n 获取器   | `{缩写}M`                                | `dbM()`、`storageM()`                                 |
+| i18n 获取器   | `{缩写}M`                                | `reldbM()`、`storageM()`                              |
 | 日志          | `core.logger.child(...)`                 | `core.logger.child({ module: 'iam', scope: 'auth' })` |
 | 消息键        | `{module}_{camelCase}`                   | `storage_notInitialized`、`db_initFailed`             |
 

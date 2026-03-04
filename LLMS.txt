@@ -56,7 +56,7 @@ const uuid = core.id.uuid()       // UUID v4
 
 // 配置（Node.js only，从 configDir 加载 YAML 文件）
 const dbConfig = core.config.get('db')
-core.config.validate('db', DbConfigSchema)
+core.config.validate('db', ReldbConfigSchema)
 
 // i18n
 core.i18n.setGlobalLocale('zh-CN')
@@ -74,50 +74,50 @@ core.async.delay(1000)
 原生 SQL 数据库访问，支持 SQLite / PostgreSQL / MySQL，通过 Provider 模式切换。
 
 ```typescript
-import { db } from '@hai/db'
+import { reldb } from '@hai/db'
 
 // 初始化（配置是 discriminated union on `type`）
-await db.init({ type: 'sqlite', database: './data/app.db' })
-// await db.init({ type: 'postgresql', host: 'localhost', database: 'mydb', user: 'root', password: '...' })
-// await db.init({ type: 'mysql', host: 'localhost', database: 'mydb', user: 'root', password: '...' })
+await reldb.init({ type: 'sqlite', database: './data/app.db' })
+// await reldb.init({ type: 'postgresql', host: 'localhost', database: 'mydb', user: 'root', password: '...' })
+// await reldb.init({ type: 'mysql', host: 'localhost', database: 'mydb', user: 'root', password: '...' })
 
 // --- DDL ---
-await db.ddl.createTable('users', {
+await reldb.ddl.createTable('users', {
   id:    { type: 'TEXT', primaryKey: true },
   email: { type: 'TEXT', notNull: true, unique: true },
   name:  { type: 'TEXT' },
   age:   { type: 'INTEGER' },
 }, true)  // ifNotExists
-await db.ddl.addColumn('users', 'avatar', { type: 'TEXT' })
-await db.ddl.createIndex('users', 'idx_users_email', { columns: ['email'], unique: true })
-await db.ddl.dropTable('temp', true)
+await reldb.ddl.addColumn('users', 'avatar', { type: 'TEXT' })
+await reldb.ddl.createIndex('users', 'idx_users_email', { columns: ['email'], unique: true })
+await reldb.ddl.dropTable('temp', true)
 
 // --- SQL 查询 ---
-const users = await db.sql.query<User>('SELECT * FROM users WHERE age > ?', [18])
-// → Result<User[], DbError>
+const users = await reldb.sql.query<User>('SELECT * FROM users WHERE age > ?', [18])
+// → Result<User[], ReldbError>
 
-const user = await db.sql.get<User>('SELECT * FROM users WHERE id = ?', ['1'])
-// → Result<User | null, DbError>
+const user = await reldb.sql.get<User>('SELECT * FROM users WHERE id = ?', ['1'])
+// → Result<User | null, ReldbError>
 
-const result = await db.sql.execute('INSERT INTO users (id, email) VALUES (?, ?)', ['1', 'a@b.com'])
-// → Result<{ changes: number, lastInsertRowid?: number | bigint }, DbError>
+const result = await reldb.sql.execute('INSERT INTO users (id, email) VALUES (?, ?)', ['1', 'a@b.com'])
+// → Result<{ changes: number, lastInsertRowid?: number | bigint }, ReldbError>
 
 // --- 分页 ---
-const page = await db.sql.queryPage<User>({
+const page = await reldb.sql.queryPage<User>({
   sql: 'SELECT * FROM users',
   page: 1,
   pageSize: 20,
   countSql: 'SELECT COUNT(*) as count FROM users',  // 可选
 })
-// → Result<PaginatedResult<User>, DbError>
+// → Result<PaginatedResult<User>, ReldbError>
 
 // --- 事务 ---
-await db.tx.wrap(async (tx) => {
+await reldb.tx.wrap(async (tx) => {
   await tx.execute('INSERT INTO users ...', [...])
   await tx.execute('INSERT INTO logs ...', [...])
 })
 // 或手动控制
-const txResult = await db.tx.begin()
+const txResult = await reldb.tx.begin()
 if (txResult.success) {
   const tx = txResult.data
   await tx.execute(...)
@@ -125,7 +125,7 @@ if (txResult.success) {
 }
 
 // --- CRUD 仓库 ---
-const userRepo = db.crud.table<User>({
+const userRepo = reldb.crud.table<User>({
   tableName: 'users',
   primaryKey: 'id',
   columns: ['id', 'email', 'name', 'age'],
@@ -141,7 +141,7 @@ await userRepo.deleteById('1')
 const exists = await userRepo.existsById('1')
 const count = await userRepo.count()
 
-await db.close()
+await reldb.close()
 ```
 
 ### @hai/cache — 缓存
@@ -228,7 +228,7 @@ Browser 端子入口（`@hai/storage/client`）提供 `uploadWithPresignedUrl`�
 
 ```typescript
 import { iam } from '@hai/iam'
-import { db } from '@hai/db'
+import { reldb } from '@hai/db'
 import { cache } from '@hai/cache'
 
 // 初始化（需先 init db 和 cache）
@@ -525,7 +525,7 @@ hai-framework/
 HAI_ENV=development         # development|production|test
 HAI_DEBUG=false
 
-# Database (@h-ai/db)
+# Database (@h-ai/reldb)
 HAI_DB_TYPE=sqlite          # sqlite|postgresql|mysql
 HAI_DB_DATABASE=./data/app.db
 # HAI_DB_HOST=localhost
