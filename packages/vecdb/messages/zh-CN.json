@@ -1,0 +1,19 @@
+{
+  "$schema": "https://inlang.com/schema/inlang-message-format",
+  "vecdb_notInitialized": "向量数据库未初始化，请先调用 vecdb.init()",
+  "vecdb_initFailed": "初始化向量数据库失败: {error}",
+  "vecdb_closeFailed": "关闭向量数据库失败: {error}",
+  "vecdb_configError": "向量数据库配置校验失败：{error}",
+  "vecdb_unsupportedType": "不支持的向量数据库类型: {type}",
+  "vecdb_driverNotFound": "向量数据库驱动未安装: {driver}，请执行 pnpm add {driver}",
+  "vecdb_connectionFailed": "连接向量数据库失败: {error}",
+  "vecdb_collectionNotFound": "集合不存在: {name}",
+  "vecdb_collectionAlreadyExists": "集合已存在: {name}",
+  "vecdb_dimensionMismatch": "向量维度不匹配: 期望 {expected}，实际 {actual}",
+  "vecdb_insertFailed": "插入向量失败: {error}",
+  "vecdb_deleteFailed": "删除向量失败: {error}",
+  "vecdb_updateFailed": "更新向量失败: {error}",
+  "vecdb_queryFailed": "查询向量失败: {error}",
+  "vecdb_indexBuildFailed": "构建索引失败: {error}",
+  "vecdb_serializationFailed": "序列化/反序列化失败: {error}"
+}

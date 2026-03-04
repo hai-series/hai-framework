@@ -1,0 +1,19 @@
+{
+  "$schema": "https://inlang.com/schema/inlang-message-format",
+  "vecdb_notInitialized": "Vector database not initialized, please call vecdb.init() first",
+  "vecdb_initFailed": "Failed to initialize vector database: {error}",
+  "vecdb_closeFailed": "Failed to close vector database: {error}",
+  "vecdb_configError": "Vector database config validation failed: {error}",
+  "vecdb_unsupportedType": "Unsupported vector database type: {type}",
+  "vecdb_driverNotFound": "Vector database driver not installed: {driver}, please run pnpm add {driver}",
+  "vecdb_connectionFailed": "Failed to connect to vector database: {error}",
+  "vecdb_collectionNotFound": "Collection not found: {name}",
+  "vecdb_collectionAlreadyExists": "Collection already exists: {name}",
+  "vecdb_dimensionMismatch": "Vector dimension mismatch: expected {expected}, actual {actual}",
+  "vecdb_insertFailed": "Failed to insert vectors: {error}",
+  "vecdb_deleteFailed": "Failed to delete vectors: {error}",
+  "vecdb_updateFailed": "Failed to update vectors: {error}",
+  "vecdb_queryFailed": "Failed to query vectors: {error}",
+  "vecdb_indexBuildFailed": "Failed to build index: {error}",
+  "vecdb_serializationFailed": "Serialization/deserialization failed: {error}"
+}
