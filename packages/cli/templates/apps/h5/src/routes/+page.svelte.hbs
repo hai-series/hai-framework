@@ -1,0 +1,27 @@
+{{!-- H5 首页 --}}
+<script lang="ts">
+  /**
+   * H5 首页
+   */
+{{#if hasI18n}}
+  import * as m from '$lib/paraglide/messages'
+{{/if}}
+</script>
+
+<svelte:head>
+{{#if hasI18n}}
+  <title>{m.app_title()}</title>
+{{else}}
+  <title>H5 应用</title>
+{{/if}}
+</svelte:head>
+
+<section class="p-4">
+{{#if hasI18n}}
+  <h1 class="text-2xl font-bold mb-4">{m.page_home_title()}</h1>
+  <p class="text-gray-600">{m.page_home_desc()}</p>
+{{else}}
+  <h1 class="text-2xl font-bold mb-4">首页</h1>
+  <p class="text-gray-600">欢迎使用 H5 应用</p>
+{{/if}}
+</section>

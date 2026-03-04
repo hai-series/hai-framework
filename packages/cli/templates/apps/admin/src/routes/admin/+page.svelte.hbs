@@ -1,0 +1,45 @@
+{{!-- 仪表盘页面 --}}
+<script lang="ts">
+  /**
+   * 仪表盘页面
+   */
+{{#if hasI18n}}
+  import * as m from '$lib/paraglide/messages'
+{{/if}}
+</script>
+
+<svelte:head>
+{{#if hasI18n}}
+  <title>{m.page_dashboard_title()}</title>
+{{else}}
+  <title>仪表盘</title>
+{{/if}}
+</svelte:head>
+
+{{#if hasI18n}}
+<h1 class="text-2xl font-bold mb-6">{m.page_dashboard_title()}</h1>
+
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+  <div class="stat bg-base-100 rounded-box shadow">
+    <div class="stat-title">{m.page_dashboard_total_users()}</div>
+    <div class="stat-value">0</div>
+  </div>
+  <div class="stat bg-base-100 rounded-box shadow">
+    <div class="stat-title">{m.page_dashboard_today_active()}</div>
+    <div class="stat-value">0</div>
+  </div>
+</div>
+{{else}}
+<h1 class="text-2xl font-bold mb-6">仪表盘</h1>
+
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+  <div class="stat bg-base-100 rounded-box shadow">
+    <div class="stat-title">总用户</div>
+    <div class="stat-value">0</div>
+  </div>
+  <div class="stat bg-base-100 rounded-box shadow">
+    <div class="stat-title">今日活跃</div>
+    <div class="stat-value">0</div>
+  </div>
+</div>
+{{/if}}

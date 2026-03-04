@@ -1,0 +1,21 @@
+{{!-- 认证布局（登录/注册共用） --}}
+<script lang="ts">
+  /**
+   * 认证布局（登录/注册共用）
+   */
+  import type { Snippet } from 'svelte'
+
+  interface Props {
+    children: Snippet
+  }
+
+  let { children }: Props = $props()
+</script>
+
+<div class="min-h-screen flex items-center justify-center bg-base-200">
+  <div class="card w-full max-w-md bg-base-100 shadow-xl">
+    <div class="card-body">
+      {@render children()}
+    </div>
+  </div>
+</div>

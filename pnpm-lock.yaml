@@ -327,18 +327,19 @@ importers:
       '@h-ai/core':
         specifier: workspace:*
         version: link:../../packages/core
-      '@h-ai/crypto':
-        specifier: workspace:*
-        version: link:../../packages/crypto
       '@h-ai/db':
         specifier: workspace:*
         version: link:../../packages/db
-      '@h-ai/iam':
-        specifier: workspace:*
-        version: link:../../packages/iam
       '@h-ai/kit':
         specifier: workspace:*
         version: link:../../packages/kit
+      zod:
+        specifier: 'catalog:'
+        version: 4.3.6
+    devDependencies:
+      '@playwright/test':
+        specifier: 'catalog:'
+        version: 1.58.2
       '@sveltejs/adapter-node':
         specifier: 'catalog:'
         version: 5.5.3(@sveltejs/kit@2.50.1(@sveltejs/vite-plugin-svelte@7.0.0(svelte@5.53.5)(vite@7.3.1(@types/node@25.1.0)(jiti@2.6.1)(lightningcss@1.30.2)(yaml@2.8.2)))(svelte@5.53.5)(typescript@5.9.3)(vite@7.3.1(@types/node@25.1.0)(jiti@2.6.1)(lightningcss@1.30.2)(yaml@2.8.2)))
@@ -348,25 +349,24 @@ importers:
       '@sveltejs/vite-plugin-svelte':
         specifier: 'catalog:'
         version: 7.0.0(svelte@5.53.5)(vite@7.3.1(@types/node@25.1.0)(jiti@2.6.1)(lightningcss@1.30.2)(yaml@2.8.2))
+      '@types/node':
+        specifier: 'catalog:'
+        version: 25.1.0
+      rimraf:
+        specifier: 'catalog:'
+        version: 6.1.2
       svelte:
         specifier: 'catalog:'
         version: 5.53.5
-      vite:
-        specifier: 'catalog:'
-        version: 7.3.1(@types/node@25.1.0)(jiti@2.6.1)(lightningcss@1.30.2)(yaml@2.8.2)
-      zod:
-        specifier: 'catalog:'
-        version: 4.3.6
-    devDependencies:
-      '@playwright/test':
-        specifier: 'catalog:'
-        version: 1.58.2
       svelte-check:
         specifier: 'catalog:'
         version: 4.3.5(picomatch@4.0.3)(svelte@5.53.5)(typescript@5.9.3)
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
+      vite:
+        specifier: 'catalog:'
+        version: 7.3.1(@types/node@25.1.0)(jiti@2.6.1)(lightningcss@1.30.2)(yaml@2.8.2)
 
   apps/corporate-website:
     dependencies:
@@ -479,21 +479,6 @@ importers:
       '@h-ai/ui':
         specifier: workspace:*
         version: link:../../packages/ui
-      '@sveltejs/adapter-auto':
-        specifier: 'catalog:'
-        version: 7.0.0(@sveltejs/kit@2.50.1(@sveltejs/vite-plugin-svelte@7.0.0(svelte@5.53.5)(vite@7.3.1(@types/node@25.1.0)(jiti@2.6.1)(lightningcss@1.30.2)(yaml@2.8.2)))(svelte@5.53.5)(typescript@5.9.3)(vite@7.3.1(@types/node@25.1.0)(jiti@2.6.1)(lightningcss@1.30.2)(yaml@2.8.2)))
-      '@sveltejs/kit':
-        specifier: 'catalog:'
-        version: 2.50.1(@sveltejs/vite-plugin-svelte@7.0.0(svelte@5.53.5)(vite@7.3.1(@types/node@25.1.0)(jiti@2.6.1)(lightningcss@1.30.2)(yaml@2.8.2)))(svelte@5.53.5)(typescript@5.9.3)(vite@7.3.1(@types/node@25.1.0)(jiti@2.6.1)(lightningcss@1.30.2)(yaml@2.8.2))
-      '@sveltejs/vite-plugin-svelte':
-        specifier: 'catalog:'
-        version: 7.0.0(svelte@5.53.5)(vite@7.3.1(@types/node@25.1.0)(jiti@2.6.1)(lightningcss@1.30.2)(yaml@2.8.2))
-      svelte:
-        specifier: 'catalog:'
-        version: 5.53.5
-      vite:
-        specifier: 'catalog:'
-        version: 7.3.1(@types/node@25.1.0)(jiti@2.6.1)(lightningcss@1.30.2)(yaml@2.8.2)
       zod:
         specifier: 'catalog:'
         version: 4.3.6
@@ -513,12 +498,30 @@ importers:
       '@playwright/test':
         specifier: 'catalog:'
         version: 1.58.2
+      '@sveltejs/adapter-auto':
+        specifier: 'catalog:'
+        version: 7.0.0(@sveltejs/kit@2.50.1(@sveltejs/vite-plugin-svelte@7.0.0(svelte@5.53.5)(vite@7.3.1(@types/node@25.1.0)(jiti@2.6.1)(lightningcss@1.30.2)(yaml@2.8.2)))(svelte@5.53.5)(typescript@5.9.3)(vite@7.3.1(@types/node@25.1.0)(jiti@2.6.1)(lightningcss@1.30.2)(yaml@2.8.2)))
+      '@sveltejs/kit':
+        specifier: 'catalog:'
+        version: 2.50.1(@sveltejs/vite-plugin-svelte@7.0.0(svelte@5.53.5)(vite@7.3.1(@types/node@25.1.0)(jiti@2.6.1)(lightningcss@1.30.2)(yaml@2.8.2)))(svelte@5.53.5)(typescript@5.9.3)(vite@7.3.1(@types/node@25.1.0)(jiti@2.6.1)(lightningcss@1.30.2)(yaml@2.8.2))
+      '@sveltejs/vite-plugin-svelte':
+        specifier: 'catalog:'
+        version: 7.0.0(svelte@5.53.5)(vite@7.3.1(@types/node@25.1.0)(jiti@2.6.1)(lightningcss@1.30.2)(yaml@2.8.2))
       '@tailwindcss/vite':
         specifier: 'catalog:'
         version: 4.1.18(vite@7.3.1(@types/node@25.1.0)(jiti@2.6.1)(lightningcss@1.30.2)(yaml@2.8.2))
+      '@types/node':
+        specifier: 'catalog:'
+        version: 25.1.0
       daisyui:
         specifier: 'catalog:'
         version: 5.5.14
+      rimraf:
+        specifier: 'catalog:'
+        version: 6.1.2
+      svelte:
+        specifier: 'catalog:'
+        version: 5.53.5
       svelte-check:
         specifier: 'catalog:'
         version: 4.3.5(picomatch@4.0.3)(svelte@5.53.5)(typescript@5.9.3)
@@ -528,6 +531,9 @@ importers:
       typescript:
         specifier: 'catalog:'
         version: 5.9.3
+      vite:
+        specifier: 'catalog:'
+        version: 7.3.1(@types/node@25.1.0)(jiti@2.6.1)(lightningcss@1.30.2)(yaml@2.8.2)
       vitest:
         specifier: 'catalog:'
         version: 4.0.18(@types/node@25.1.0)(jiti@2.6.1)(jsdom@27.4.0)(lightningcss@1.30.2)(yaml@2.8.2)

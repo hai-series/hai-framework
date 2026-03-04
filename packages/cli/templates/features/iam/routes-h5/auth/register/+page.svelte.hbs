@@ -1,0 +1,114 @@
+{{!-- H5 注册页面 --}}
+<script lang="ts">
+  /**
+   * H5 注册页面
+   */
+{{#if hasI18n}}
+  import * as m from '$lib/paraglide/messages'
+{{/if}}
+
+  let username = $state('')
+  let password = $state('')
+  let confirmPassword = $state('')
+  let error = $state('')
+  let loading = $state(false)
+
+  async function handleRegister() {
+    error = ''
+    if (password !== confirmPassword) {
+{{#if hasI18n}}
+      error = m.auth_error_password_mismatch()
+{{else}}
+      error = '密码不一致'
+{{/if}}
+      return
+    }
+    loading = true
+    try {
+      const res = await fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password, confirmPassword }),
+      })
+      const data = await res.json()
+      if (data.success) {
+        window.location.href = '/auth/login'
+      } else {
+{{#if hasI18n}}
+        error = data.error?.message || m.auth_register_failed()
+{{else}}
+        error = data.error?.message || '注册失败'
+{{/if}}
+      }
+    } catch {
+{{#if hasI18n}}
+      error = m.auth_error_network()
+{{else}}
+      error = '网络错误'
+{{/if}}
+    } finally {
+      loading = false
+    }
+  }
+</script>
+
+<svelte:head>
+{{#if hasI18n}}
+  <title>{m.auth_register_title()}</title>
+{{else}}
+  <title>注册</title>
+{{/if}}
+</svelte:head>
+
+<div class="p-4 pt-12">
+{{#if hasI18n}}
+  <h1 class="text-2xl font-bold text-center mb-8">{m.auth_register_title()}</h1>
+{{else}}
+  <h1 class="text-2xl font-bold text-center mb-8">注册</h1>
+{{/if}}
+
+  {#if error}
+    <div class="alert alert-error mb-4">
+      <span>{error}</span>
+    </div>
+  {/if}
+
+  <form onsubmit={(e) => { e.preventDefault(); handleRegister() }} class="space-y-4">
+    <div class="form-control">
+{{#if hasI18n}}
+      <input type="text" placeholder={m.auth_label_username()} class="input input-bordered w-full" bind:value={username} required />
+{{else}}
+      <input type="text" placeholder="用户名" class="input input-bordered w-full" bind:value={username} required />
+{{/if}}
+    </div>
+    <div class="form-control">
+{{#if hasI18n}}
+      <input type="password" placeholder={m.auth_label_password()} class="input input-bordered w-full" bind:value={password} required />
+{{else}}
+      <input type="password" placeholder="密码" class="input input-bordered w-full" bind:value={password} required />
+{{/if}}
+    </div>
+    <div class="form-control">
+{{#if hasI18n}}
+      <input type="password" placeholder={m.auth_label_confirm_password()} class="input input-bordered w-full" bind:value={confirmPassword} required />
+{{else}}
+      <input type="password" placeholder="确认密码" class="input input-bordered w-full" bind:value={confirmPassword} required />
+{{/if}}
+    </div>
+    <button type="submit" class="btn btn-primary w-full" disabled={loading}>
+{{#if hasI18n}}
+      {loading ? m.auth_register_loading() : m.auth_register_submit()}
+{{else}}
+      {loading ? '注册中...' : '注册'}
+{{/if}}
+    </button>
+  </form>
+
+  <div class="text-center mt-6">
+{{#if hasI18n}}
+    <a href="/auth/login" class="link link-primary text-sm">{m.auth_register_to_login()}</a>
+{{else}}
+    <a href="/auth/login" class="link link-primary text-sm">已有账号？立即登录</a>
+{{/if}}
+  </div>
+</div>

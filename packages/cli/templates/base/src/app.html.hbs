@@ -1,5 +1,9 @@
-<!DOCTYPE html>
-<html lang="zh-CN">
+<!doctype html>
+{{#if hasI18n}}
+<html lang="%lang%">
+{{else}}
+<html lang="{{defaultLocale}}">
+{{/if}}
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />

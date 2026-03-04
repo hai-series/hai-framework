@@ -1,0 +1,57 @@
+{{!-- H5 应用根布局 --}}
+<script lang="ts">
+  /**
+   * H5 应用根布局
+   */
+  import type { Snippet } from 'svelte'
+  import '../app.css'
+{{#if hasI18n}}
+  import { browser } from '$app/environment'
+  import { setGlobalLocale } from '@h-ai/ui'
+  import { getLocale } from '$lib/paraglide/runtime.js'
+  import * as m from '$lib/paraglide/messages'
+{{/if}}
+
+  interface Props {
+    children: Snippet
+  }
+
+  let { children }: Props = $props()
+{{#if hasI18n}}
+
+  if (browser) {
+    const paraglideLocale = getLocale()
+    setGlobalLocale(paraglideLocale)
+  }
+{{/if}}
+</script>
+
+<div class="min-h-screen flex flex-col bg-base-200">
+  <main class="flex-1 pb-16">
+    {@render children()}
+  </main>
+
+  <nav class="btm-nav btm-nav-sm">
+    <a href="/" class="text-primary">
+{{#if hasI18n}}
+      <span class="btm-nav-label">{m.nav_home()}</span>
+{{else}}
+      <span class="btm-nav-label">首页</span>
+{{/if}}
+    </a>
+    <a href="/discover">
+{{#if hasI18n}}
+      <span class="btm-nav-label">{m.nav_discover()}</span>
+{{else}}
+      <span class="btm-nav-label">发现</span>
+{{/if}}
+    </a>
+    <a href="/profile">
+{{#if hasI18n}}
+      <span class="btm-nav-label">{m.nav_profile()}</span>
+{{else}}
+      <span class="btm-nav-label">我的</span>
+{{/if}}
+    </a>
+  </nav>
+</div>

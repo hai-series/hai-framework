@@ -41,11 +41,18 @@ const UI_SKILLS = ['hai-ui']
 
 /**
  * 获取 templates/skills/ 目录的绝对路径
+ *
+ * 兼容两种运行环境：
+ * - 构建后：dist/skill-templates.js → ../templates/skills
+ * - 测试时：src/commands/skill-templates.ts → ../../templates/skills
  */
 function getSkillTemplatesDir(): string {
   const currentDir = path.dirname(fileURLToPath(import.meta.url))
-  // 运行时在 dist/ 下，templates/ 与 dist/ 同级
-  return path.resolve(currentDir, '..', 'templates', 'skills')
+  const distPath = path.resolve(currentDir, '..', 'templates', 'skills')
+  if (fse.pathExistsSync(distPath)) {
+    return distPath
+  }
+  return path.resolve(currentDir, '..', '..', 'templates', 'skills')
 }
 
 /**

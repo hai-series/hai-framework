@@ -1,0 +1,27 @@
+{{!-- 个人中心页面 --}}
+<script lang="ts">
+  /**
+   * 个人中心页面
+   */
+{{#if hasI18n}}
+  import * as m from '$lib/paraglide/messages'
+{{/if}}
+</script>
+
+<svelte:head>
+{{#if hasI18n}}
+  <title>{m.page_profile_title()}</title>
+{{else}}
+  <title>我的</title>
+{{/if}}
+</svelte:head>
+
+<section class="p-4">
+{{#if hasI18n}}
+  <h1 class="text-2xl font-bold mb-4">{m.page_profile_title()}</h1>
+  <p class="text-gray-600">{m.page_profile_desc()}</p>
+{{else}}
+  <h1 class="text-2xl font-bold mb-4">我的</h1>
+  <p class="text-gray-600">管理您的个人信息</p>
+{{/if}}
+</section>

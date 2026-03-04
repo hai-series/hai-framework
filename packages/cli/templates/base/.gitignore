@@ -6,3 +6,6 @@ build
 !.env.example
 *.log
 .DS_Store
+test-results/
+playwright-report/
+data/

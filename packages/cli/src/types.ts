@@ -13,12 +13,11 @@ export type FeatureId
     | 'ai' // AI 集成（含 MCP）
     | 'storage' // 文件存储
     | 'crypto' // 加密模块
+    | 'audit' // 审计日志
+    | 'reach' // 触达服务
     | 'kit' // SvelteKit 集成
     | 'ui' // UI 组件库
     | 'deploy' // 自动化部署
-    // 兼容性别名
-    | 'auth' // 认证授权 → iam
-    | 'mcp' // MCP 协议 → ai
 
 /**
  * 功能定义

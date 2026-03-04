@@ -1,0 +1,159 @@
+/**
+ * =============================================================================
+ * {{projectName}} - Server Hooks
+ * =============================================================================
+ */
+
+import type { Handle } from '@sveltejs/kit'
+import { initApp } from '$lib/server/init.js'
+import { core } from '@h-ai/core'
+import { kit } from '@h-ai/kit'
+{{#if features.iam}}
+import { iam } from '@h-ai/iam'
+{{/if}}
+{{#if features.crypto}}
+import { crypto } from '@h-ai/crypto'
+{{/if}}
+{{#if hasI18n}}
+import { paraglideMiddleware } from '$lib/paraglide/server.js'
+{{/if}}
+
+{{#if features.crypto}}
+// 初始化加密模块（同步）
+crypto.init()
+
+{{/if}}
+// =============================================================================
+// 应用初始化
+// =============================================================================
+
+let appInitPromise: Promise<void> | null = null
+
+async function ensureAppInitialized() {
+  if (!appInitPromise) {
+    appInitPromise = initApp().catch((err: unknown) => {
+      appInitPromise = null
+      throw err
+    })
+  }
+  await appInitPromise
+}
+
+// =============================================================================
+// 初始化 Handle
+// =============================================================================
+
+const initHandle: Handle = async ({ event, resolve }) => {
+  await ensureAppInitialized()
+  return resolve(event)
+}
+
+{{#if features.iam}}
+// =============================================================================
+// 会话验证
+// =============================================================================
+
+/** 无需认证的公共路径 */
+const PUBLIC_PATHS = [
+  '/api/health',
+  '/api/public/',
+  '/api/auth/login',
+  '/api/auth/register',
+  '/api/auth/forgot-password',
+  '/api/auth/reset-password',
+  '/auth/',
+]
+
+function isPublicPath(pathname: string): boolean {
+  return PUBLIC_PATHS.some(p => pathname.startsWith(p)) || !pathname.startsWith('/api/')
+}
+
+const authHandle: Handle = async ({ event, resolve }) => {
+  // 从 cookie 获取 token
+  const token = event.cookies.get('session_token')
+
+  if (token) {
+    const sessionResult = await iam.session.verify(token)
+    if (sessionResult.success) {
+      event.locals.session = sessionResult.data
+    }
+  }
+
+  // 受保护的 API 路径需要认证
+  if (!isPublicPath(event.url.pathname) && !event.locals.session) {
+    return new Response(JSON.stringify({ success: false, error: { code: 'UNAUTHORIZED', message: 'Authentication required' } }), {
+      status: 401,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
+
+  return resolve(event)
+}
+
+{{/if}}
+{{#if hasI18n}}
+// =============================================================================
+// Paraglide i18n Middleware
+// =============================================================================
+
+/**
+ * i18n Handle - 使用 Paraglide middleware 处理语言
+ *
+ * API 请求跳过 paraglideMiddleware（不需要页面级 locale + 避免消耗 body）
+ */
+const i18nHandle: Handle = async ({ event, resolve }) => {
+  if (event.url.pathname.startsWith('/api/')) {
+    const locale = event.cookies.get('PARAGLIDE_LOCALE') ?? '{{defaultLocale}}'
+    event.locals.locale = locale
+    kit.i18n.setLocale(locale)
+    return resolve(event)
+  }
+
+  return paraglideMiddleware(event.request, async ({ locale }) => {
+    event.locals.locale = locale
+    kit.i18n.setLocale(locale)
+    return resolve(event, {
+      transformPageChunk: ({ html }) => html.replace('%lang%', locale),
+    })
+  })
+}
+
+{{/if}}
+// =============================================================================
+// hai Handle
+// =============================================================================
+
+const haiHandle = kit.createHandle({
+  middleware: [
+    kit.middleware.logging({ logBody: false }),
+    kit.middleware.rateLimit({ windowMs: 60000, maxRequests: 200 }),
+  ],
+  onError: (error: unknown) => {
+    core.logger.error('Request error:', { error })
+    return new Response(
+      JSON.stringify({
+        success: false,
+        error: {
+          code: 'INTERNAL_ERROR',
+          message: error instanceof Error ? error.message : 'Unknown error',
+        },
+      }),
+      { status: 500, headers: { 'Content-Type': 'application/json' } },
+    )
+  },
+})
+
+// =============================================================================
+// 组合 Handle
+// =============================================================================
+
+export const handle = kit.sequenceHandles(
+  initHandle,
+{{#if hasI18n}}
+  i18nHandle,
+{{/if}}
+{{#if features.iam}}
+  authHandle,
+{{/if}}
+  haiHandle,
+)

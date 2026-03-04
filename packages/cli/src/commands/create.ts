@@ -1,7 +1,12 @@
 /**
  * @h-ai/cli — 项目创建命令
  *
- * 类似 SvelteKit 的交互式项目创建
+ * 基于模板的交互式项目创建：
+ * 1. 交互式收集选项（appType / features / moduleConfigs）
+ * 2. 拷贝 base 骨架 + appType 路由 + feature 路由
+ * 3. 渲染动态模板（init.ts / hooks.server.ts / package.json）
+ * 4. 生成配置文件、.env、Skill 文件
+ *
  * @module create
  */
 
@@ -15,6 +20,11 @@ import fse from 'fs-extra'
 import ora from 'ora'
 import prompts from 'prompts'
 import { detectPackageManager, fileExists, writeFile } from '../utils.js'
+import { buildTemplateContext, generateFromTemplates } from './template-engine.js'
+
+// =============================================================================
+// 应用类型定义
+// =============================================================================
 
 /**
  * 应用类型定义
@@ -28,19 +38,23 @@ const APP_TYPES: Record<AppType, { name: string, description: string, defaultFea
   website: {
     name: '企业官网',
     description: 'SSR/SSG 企业官网，SEO 友好、响应式布局',
-    defaultFeatures: [],
+    defaultFeatures: ['db', 'cache'],
   },
   h5: {
     name: 'H5 应用',
     description: '移动端 H5 应用，触摸优化、PWA 支持',
-    defaultFeatures: [],
+    defaultFeatures: ['db', 'cache'],
   },
   api: {
     name: 'API 服务',
     description: '纯 API 后端服务，RESTful 路由、无 UI',
-    defaultFeatures: ['db'],
+    defaultFeatures: ['db', 'cache'],
   },
 }
+
+// =============================================================================
+// 功能定义
+// =============================================================================
 
 /**
  * 功能定义
@@ -51,7 +65,7 @@ const FEATURES: Record<string, FeatureDefinition> = {
     name: '身份与访问管理',
     description: 'Session/JWT 会话管理、RBAC 权限控制',
     packages: ['@h-ai/iam'],
-    dependencies: ['crypto'],
+    dependencies: ['crypto', 'db', 'cache'],
   },
   db: {
     id: 'db',
@@ -83,47 +97,56 @@ const FEATURES: Record<string, FeatureDefinition> = {
     description: '国密 SM2/SM3/SM4、Argon2 密码哈希',
     packages: ['@h-ai/crypto'],
   },
-  // 兼容性别名
-  auth: {
-    id: 'auth',
-    name: '认证授权（别名）',
-    description: '已合并到 iam 模块',
-    packages: ['@h-ai/iam'],
-    dependencies: ['crypto'],
+  audit: {
+    id: 'audit',
+    name: '审计日志',
+    description: '操作审计、安全追踪',
+    packages: ['@h-ai/audit'],
+    dependencies: ['db'],
   },
-  mcp: {
-    id: 'mcp',
-    name: 'MCP 协议（别名）',
-    description: '已合并到 ai 模块',
-    packages: ['@h-ai/ai'],
+  reach: {
+    id: 'reach',
+    name: '触达服务',
+    description: '邮件、短信、微信等消息触达',
+    packages: ['@h-ai/reach'],
   },
 }
 
 /**
- * 项目模板定义
+ * 可选择的功能列表
  */
+const SELECTABLE_FEATURES: FeatureId[] = ['iam', 'db', 'cache', 'ai', 'storage', 'crypto', 'audit', 'reach']
+
+// =============================================================================
+// 项目模板定义
+// =============================================================================
+
 const PROJECT_TEMPLATES = {
   minimal: {
     name: 'minimal',
-    description: '最小模板 - 仅核心功能',
+    description: '最小模板 — 仅核心功能',
     features: [] as FeatureId[],
   },
   default: {
     name: 'default',
-    description: '标准模板 - IAM + 数据库',
-    features: ['iam', 'db', 'crypto'] as FeatureId[],
+    description: '标准模板 — IAM + 数据库 + 缓存',
+    features: ['iam', 'db', 'cache', 'crypto'] as FeatureId[],
   },
   full: {
     name: 'full',
-    description: '完整模板 - 所有功能',
-    features: ['iam', 'db', 'cache', 'crypto', 'ai', 'storage'] as FeatureId[],
+    description: '完整模板 — 所有功能',
+    features: ['iam', 'db', 'cache', 'crypto', 'ai', 'storage', 'audit', 'reach'] as FeatureId[],
   },
   custom: {
     name: 'custom',
-    description: '自定义 - 选择需要的功能',
+    description: '自定义 — 选择需要的功能',
     features: [] as FeatureId[],
   },
 }
+
+// =============================================================================
+// 创建项目（主入口）
+// =============================================================================
 
 /**
  * 创建项目
@@ -157,9 +180,54 @@ export async function createProject(options: CreateProjectOptions): Promise<void
     await fse.ensureDir(projectPath)
     spinner.succeed()
 
-    // 生成项目文件
+    // ─── 基于模板生成项目文件 ───
     spinner.start('生成项目文件...')
-    await generateProjectFiles(projectPath, resolvedOptions)
+
+    const context = buildTemplateContext({
+      name: resolvedOptions.name,
+      appType: resolvedOptions.appType,
+      features: resolvedOptions.features,
+      moduleConfigs: resolvedOptions.moduleConfigs,
+      packageManager: resolvedOptions.packageManager!,
+    })
+
+    // 拷贝模板 + 渲染动态文件
+    await generateFromTemplates(projectPath, context)
+
+    // 生成配置文件（config/*.yml）
+    const { generateConfigFile } = await import('./config-templates.js')
+    const configs = resolvedOptions.moduleConfigs
+    for (const featureId of resolvedOptions.features) {
+      const configKey = getFeatureConfigKey(featureId)
+      if (configKey) {
+        const content = generateConfigFile(configKey, configs)
+        await writeFile(path.join(projectPath, 'config', `_${configKey}.yml`), content)
+      }
+    }
+    // 始终生成 core 配置
+    await writeFile(
+      path.join(projectPath, 'config', '_core.yml'),
+      generateConfigFile('core', configs),
+    )
+
+    // 生成 .env.example
+    const { generateEnvExample } = await import('./config-templates.js')
+    await writeFile(
+      path.join(projectPath, '.env.example'),
+      generateEnvExample(resolvedOptions.features, configs),
+    )
+
+    // 生成 Skill 文件
+    const { generateSkillFiles } = await import('./skill-templates.js')
+    await generateSkillFiles(projectPath, resolvedOptions.features, resolvedOptions.appType)
+
+    // 生成 README
+    const appTypeLabel = APP_TYPES[resolvedOptions.appType].name
+    await writeFile(
+      path.join(projectPath, 'README.md'),
+      generateReadme(resolvedOptions.name, appTypeLabel, resolvedOptions.packageManager!),
+    )
+
     spinner.succeed()
 
     // 初始化 Git
@@ -178,18 +246,7 @@ export async function createProject(options: CreateProjectOptions): Promise<void
     }
 
     // 完成提示
-    core.logger.info('', {})
-    core.logger.info(chalk.green('✔ 项目创建成功！'))
-    core.logger.info('', {})
-    core.logger.info('下一步：')
-    core.logger.info(chalk.cyan(`  cd ${resolvedOptions.name}`))
-
-    if (!resolvedOptions.install) {
-      core.logger.info(chalk.cyan(`  ${resolvedOptions.packageManager} install`))
-    }
-
-    core.logger.info(chalk.cyan(`  ${resolvedOptions.packageManager} dev`))
-    core.logger.info('', {})
+    printCompletionMessage(resolvedOptions)
   }
   catch (error) {
     spinner.fail()
@@ -197,6 +254,10 @@ export async function createProject(options: CreateProjectOptions): Promise<void
     throw error
   }
 }
+
+// =============================================================================
+// 交互式选项解析
+// =============================================================================
 
 /**
  * 解析选项（交互式）
@@ -207,11 +268,15 @@ async function resolveOptions(options: CreateProjectOptions): Promise<Required<C
   core.logger.info(chalk.gray('     AI-Native · Configuration-Driven · Security-First'))
   core.logger.info('', {})
 
-  const questions: prompts.PromptObject[] = []
+  const onCancel = () => {
+    core.logger.info(chalk.red('\n已取消'))
+    process.exit(1)
+  }
 
-  // 项目名称
-  if (!options.name) {
-    questions.push({
+  // 项目名称（逐条询问，避免 prompts 数组模式在 Windows 终端重复渲染）
+  let projectName = options.name
+  if (!projectName) {
+    const { name } = await prompts({
       type: 'text',
       name: 'name',
       message: '项目名称:',
@@ -223,12 +288,14 @@ async function resolveOptions(options: CreateProjectOptions): Promise<Required<C
           return '项目名称只能包含小写字母、数字和连字符'
         return true
       },
-    })
+    }, { onCancel })
+    projectName = name
   }
 
-  // 应用类型选择
-  if (!options.appType) {
-    questions.push({
+  // 应用类型
+  let resolvedAppType = options.appType
+  if (!resolvedAppType) {
+    const { appType } = await prompts({
       type: 'select',
       name: 'appType',
       message: '应用类型:',
@@ -237,20 +304,11 @@ async function resolveOptions(options: CreateProjectOptions): Promise<Required<C
         value: key,
       })),
       initial: 0,
-    })
+    }, { onCancel })
+    resolvedAppType = appType
   }
 
-  // 先获取基础选项
-  const baseAnswers = questions.length > 0
-    ? await prompts(questions, {
-        onCancel: () => {
-          core.logger.info(chalk.red('\n已取消'))
-          process.exit(1)
-        },
-      })
-    : {}
-
-  const selectedAppType = (options.appType || baseAnswers.appType || 'admin') as AppType
+  const selectedAppType = (resolvedAppType || 'admin') as AppType
 
   // 模板选择
   let selectedTemplate = options.template
@@ -264,12 +322,7 @@ async function resolveOptions(options: CreateProjectOptions): Promise<Required<C
         value: t.name,
       })),
       initial: 1,
-    }, {
-      onCancel: () => {
-        core.logger.info(chalk.red('\n已取消'))
-        process.exit(1)
-      },
-    })
+    }, { onCancel })
     selectedTemplate = template
   }
 
@@ -278,12 +331,10 @@ async function resolveOptions(options: CreateProjectOptions): Promise<Required<C
   const appTypeDefaults = APP_TYPES[selectedAppType].defaultFeatures
 
   if (selectedTemplate === 'custom' && !options.features) {
-    // 过滤掉别名，只显示正式功能
-    const selectableFeatures = ['iam', 'db', 'cache', 'ai', 'storage', 'crypto']
-    const featureChoices = selectableFeatures.map(id => ({
+    const featureChoices = SELECTABLE_FEATURES.map(id => ({
       title: `${chalk.bold(FEATURES[id].name.padEnd(10))} ${chalk.gray(FEATURES[id].description)}`,
       value: id,
-      selected: appTypeDefaults.includes(id as FeatureId),
+      selected: appTypeDefaults.includes(id),
     }))
 
     const { features } = await prompts({
@@ -293,12 +344,7 @@ async function resolveOptions(options: CreateProjectOptions): Promise<Required<C
       choices: featureChoices,
       hint: '- 空格选择，回车确认',
       instructions: false,
-    }, {
-      onCancel: () => {
-        core.logger.info(chalk.red('\n已取消'))
-        process.exit(1)
-      },
-    })
+    }, { onCancel })
 
     selectedFeatures = features || []
     selectedFeatures = resolveFeatureDependencies(selectedFeatures)
@@ -307,17 +353,15 @@ async function resolveOptions(options: CreateProjectOptions): Promise<Required<C
     selectedFeatures = resolveFeatureDependencies(options.features)
   }
   else {
-    // 合并模板功能与应用类型默认功能
     const templateFeatures = PROJECT_TEMPLATES[selectedTemplate as keyof typeof PROJECT_TEMPLATES]?.features || []
     const merged = new Set([...templateFeatures, ...appTypeDefaults])
     selectedFeatures = resolveFeatureDependencies(Array.from(merged))
   }
 
-  // 模块配置（交互式收集关键配置项）
-  const projectName = options.name || baseAnswers.name
-  const moduleConfigs = options.moduleConfigs ?? await promptModuleConfigs(selectedFeatures, projectName)
+  // 模块配置
+  const moduleConfigs = options.moduleConfigs ?? await promptModuleConfigs(selectedFeatures, projectName!)
 
-  // 示例代码选项
+  // 示例代码
   let addExamples = options.examples
   if (addExamples === undefined) {
     const { examples } = await prompts({
@@ -325,12 +369,7 @@ async function resolveOptions(options: CreateProjectOptions): Promise<Required<C
       name: 'examples',
       message: '是否添加示例代码?',
       initial: true,
-    }, {
-      onCancel: () => {
-        core.logger.info(chalk.red('\n已取消'))
-        process.exit(1)
-      },
-    })
+    }, { onCancel })
     addExamples = examples
   }
 
@@ -348,12 +387,7 @@ async function resolveOptions(options: CreateProjectOptions): Promise<Required<C
         { title: 'yarn', value: 'yarn' },
       ],
       initial: detected === 'pnpm' ? 0 : detected === 'npm' ? 1 : 2,
-    }, {
-      onCancel: () => {
-        core.logger.info(chalk.red('\n已取消'))
-        process.exit(1)
-      },
-    })
+    }, { onCancel })
     packageManager = pm
   }
 
@@ -365,16 +399,11 @@ async function resolveOptions(options: CreateProjectOptions): Promise<Required<C
       name: 'doInstall',
       message: '是否安装依赖?',
       initial: true,
-    }, {
-      onCancel: () => {
-        core.logger.info(chalk.red('\n已取消'))
-        process.exit(1)
-      },
-    })
+    }, { onCancel })
     install = doInstall
   }
 
-  // Git 初始化
+  // Git
   let git = options.git
   if (git === undefined) {
     const { initGit } = await prompts({
@@ -382,17 +411,12 @@ async function resolveOptions(options: CreateProjectOptions): Promise<Required<C
       name: 'initGit',
       message: '是否初始化 Git?',
       initial: true,
-    }, {
-      onCancel: () => {
-        core.logger.info(chalk.red('\n已取消'))
-        process.exit(1)
-      },
-    })
+    }, { onCancel })
     git = initGit
   }
 
   return {
-    name: options.name || baseAnswers.name,
+    name: projectName!,
     appType: selectedAppType,
     template: (selectedTemplate ?? 'default') as 'default' | 'minimal' | 'full' | 'custom',
     features: selectedFeatures,
@@ -406,15 +430,19 @@ async function resolveOptions(options: CreateProjectOptions): Promise<Required<C
   }
 }
 
+// =============================================================================
+// 功能依赖解析
+// =============================================================================
+
 /**
- * 解析功能依赖
+ * 解析功能依赖（自动补全传递依赖）
  */
 function resolveFeatureDependencies(features: FeatureId[]): FeatureId[] {
   const result = new Set(features)
 
   for (const featureId of features) {
     const feature = FEATURES[featureId]
-    if (feature.dependencies) {
+    if (feature?.dependencies) {
       for (const dep of feature.dependencies) {
         result.add(dep)
       }
@@ -424,14 +452,12 @@ function resolveFeatureDependencies(features: FeatureId[]): FeatureId[] {
   return Array.from(result)
 }
 
-// ─── 模块配置交互 ───
+// =============================================================================
+// 模块配置交互
+// =============================================================================
 
 /**
  * 交互式收集模块配置
- *
- * @param features - 选中的功能列表
- * @param projectName - 项目名称（用于 core 配置默认值）
- * @returns 模块配置对象
  */
 async function promptModuleConfigs(features: FeatureId[], projectName: string): Promise<ModuleConfigs> {
   const configs: ModuleConfigs = {}
@@ -448,7 +474,6 @@ async function promptModuleConfigs(features: FeatureId[], projectName: string): 
   // core 配置（始终收集）
   configs.core = await promptCoreConfig(projectName, onCancel)
 
-  // 按功能收集配置
   if (features.includes('db')) {
     configs.db = await promptDbConfig(projectName, onCancel)
   }
@@ -473,7 +498,6 @@ async function promptModuleConfigs(features: FeatureId[], projectName: string): 
  */
 async function promptCoreConfig(projectName: string, onCancel: () => void): Promise<ModuleConfigs['core']> {
   core.logger.info(chalk.cyan('  [core] 应用基础配置'))
-
   const { defaultLocale } = await prompts({
     type: 'select',
     name: 'defaultLocale',
@@ -484,11 +508,7 @@ async function promptCoreConfig(projectName: string, onCancel: () => void): Prom
     ],
     initial: 0,
   }, { onCancel })
-
-  return {
-    name: projectName,
-    defaultLocale,
-  }
+  return { name: projectName, defaultLocale }
 }
 
 /**
@@ -496,7 +516,6 @@ async function promptCoreConfig(projectName: string, onCancel: () => void): Prom
  */
 async function promptDbConfig(projectName: string, onCancel: () => void): Promise<ModuleConfigs['db']> {
   core.logger.info(chalk.cyan('  [db] 数据库配置'))
-
   const { type } = await prompts({
     type: 'select',
     name: 'type',
@@ -516,30 +535,13 @@ async function promptDbConfig(projectName: string, onCancel: () => void): Promis
       message: 'SQLite 数据库路径:',
       initial: './data/app.db',
     }, { onCancel })
-
     return { type, database }
   }
 
-  // postgresql / mysql
   const answers = await prompts([
-    {
-      type: 'text',
-      name: 'host',
-      message: `${type === 'postgresql' ? 'PostgreSQL' : 'MySQL'} 主机:`,
-      initial: 'localhost',
-    },
-    {
-      type: 'number',
-      name: 'port',
-      message: '端口:',
-      initial: type === 'postgresql' ? 5432 : 3306,
-    },
-    {
-      type: 'text',
-      name: 'database',
-      message: '数据库名称:',
-      initial: projectName,
-    },
+    { type: 'text', name: 'host', message: `${type === 'postgresql' ? 'PostgreSQL' : 'MySQL'} 主机:`, initial: 'localhost' },
+    { type: 'number', name: 'port', message: '端口:', initial: type === 'postgresql' ? 5432 : 3306 },
+    { type: 'text', name: 'database', message: '数据库名称:', initial: projectName },
   ], { onCancel })
 
   return { type, host: answers.host, port: answers.port, database: answers.database }
@@ -550,7 +552,6 @@ async function promptDbConfig(projectName: string, onCancel: () => void): Promis
  */
 async function promptCacheConfig(onCancel: () => void): Promise<ModuleConfigs['cache']> {
   core.logger.info(chalk.cyan('  [cache] 缓存配置'))
-
   const { type } = await prompts({
     type: 'select',
     name: 'type',
@@ -562,23 +563,12 @@ async function promptCacheConfig(onCancel: () => void): Promise<ModuleConfigs['c
     initial: 0,
   }, { onCancel })
 
-  if (type === 'memory') {
+  if (type === 'memory')
     return { type }
-  }
 
   const answers = await prompts([
-    {
-      type: 'text',
-      name: 'host',
-      message: 'Redis 主机:',
-      initial: 'localhost',
-    },
-    {
-      type: 'number',
-      name: 'port',
-      message: 'Redis 端口:',
-      initial: 6379,
-    },
+    { type: 'text', name: 'host', message: 'Redis 主机:', initial: 'localhost' },
+    { type: 'number', name: 'port', message: 'Redis 端口:', initial: 6379 },
   ], { onCancel })
 
   return { type, host: answers.host, port: answers.port }
@@ -589,22 +579,10 @@ async function promptCacheConfig(onCancel: () => void): Promise<ModuleConfigs['c
  */
 async function promptIamConfig(onCancel: () => void): Promise<ModuleConfigs['iam']> {
   core.logger.info(chalk.cyan('  [iam] 认证授权配置'))
-
   const answers = await prompts([
-    {
-      type: 'confirm',
-      name: 'loginPassword',
-      message: '启用密码登录?',
-      initial: true,
-    },
-    {
-      type: 'confirm',
-      name: 'loginOtp',
-      message: '启用 OTP 验证码登录?',
-      initial: false,
-    },
+    { type: 'confirm', name: 'loginPassword', message: '启用密码登录?', initial: true },
+    { type: 'confirm', name: 'loginOtp', message: '启用 OTP 验证码登录?', initial: false },
   ], { onCancel })
-
   return { loginPassword: answers.loginPassword, loginOtp: answers.loginOtp }
 }
 
@@ -613,7 +591,6 @@ async function promptIamConfig(onCancel: () => void): Promise<ModuleConfigs['iam
  */
 async function promptStorageConfig(onCancel: () => void): Promise<ModuleConfigs['storage']> {
   core.logger.info(chalk.cyan('  [storage] 文件存储配置'))
-
   const { type } = await prompts({
     type: 'select',
     name: 'type',
@@ -632,7 +609,6 @@ async function promptStorageConfig(onCancel: () => void): Promise<ModuleConfigs[
       message: '存储路径:',
       initial: './data/uploads',
     }, { onCancel })
-
     return { type, localPath }
   }
 
@@ -644,7 +620,6 @@ async function promptStorageConfig(onCancel: () => void): Promise<ModuleConfigs[
  */
 async function promptAiConfig(onCancel: () => void): Promise<ModuleConfigs['ai']> {
   core.logger.info(chalk.cyan('  [ai] AI 集成配置'))
-
   const { defaultProvider } = await prompts({
     type: 'select',
     name: 'defaultProvider',
@@ -673,163 +648,12 @@ async function promptAiConfig(onCancel: () => void): Promise<ModuleConfigs['ai']
   return { defaultProvider, model }
 }
 
-/**
- * 生成项目文件
- */
-async function generateProjectFiles(
-  projectPath: string,
-  options: Required<CreateProjectOptions>,
-): Promise<void> {
-  const appType = options.appType || 'admin'
-
-  // 收集需要的包
-  const featurePackages: Record<string, string> = {}
-  for (const featureId of options.features || []) {
-    const feature = FEATURES[featureId]
-    if (feature) {
-      for (const pkg of feature.packages) {
-        featurePackages[pkg] = 'workspace:*'
-      }
-    }
-  }
-
-  // 基础依赖（所有应用类型都需要 core + kit）
-  const baseDeps: Record<string, string> = {
-    '@h-ai/core': 'workspace:*',
-    '@h-ai/kit': 'workspace:*',
-  }
-
-  // API 类型不需要 UI
-  if (appType !== 'api') {
-    baseDeps['@h-ai/ui'] = 'workspace:*'
-  }
-
-  // package.json
-  const packageJson = {
-    name: options.name,
-    version: '0.0.1',
-    private: true,
-    license: 'Apache-2.0',
-    type: 'module',
-    scripts: {
-      'dev': 'vite dev',
-      'build': 'vite build',
-      'preview': 'vite preview',
-      'check': 'svelte-kit sync && svelte-check --tsconfig ./tsconfig.json',
-      'lint': 'eslint .',
-      'test': 'vitest run',
-      'test:e2e': 'playwright test',
-    },
-    dependencies: {
-      ...baseDeps,
-      ...featurePackages,
-    },
-    devDependencies: {
-      '@playwright/test': '^1.50.0',
-      '@sveltejs/adapter-auto': '^3.0.0',
-      '@sveltejs/kit': '^2.0.0',
-      '@sveltejs/vite-plugin-svelte': '^4.0.0',
-      'svelte': '^5.0.0',
-      'svelte-check': '^4.0.0',
-      'typescript': '^5.7.0',
-      'vite': '^6.0.0',
-      'vitest': '^2.0.0',
-      ...(appType !== 'api' ? { tailwindcss: '^4.0.0', daisyui: '^5.0.0' } : {}),
-    },
-  }
-
-  await writeFile(
-    path.join(projectPath, 'package.json'),
-    JSON.stringify(packageJson, null, 2),
-  )
-
-  // tsconfig.json
-  const tsconfig = {
-    extends: './.svelte-kit/tsconfig.json',
-    compilerOptions: {
-      strict: true,
-      moduleResolution: 'bundler',
-      verbatimModuleSyntax: true,
-    },
-  }
-
-  await writeFile(
-    path.join(projectPath, 'tsconfig.json'),
-    JSON.stringify(tsconfig, null, 2),
-  )
-
-  // svelte.config.js
-  await writeFile(path.join(projectPath, 'svelte.config.js'), generateSvelteConfig())
-
-  // vite.config.ts
-  await writeFile(path.join(projectPath, 'vite.config.ts'), generateViteConfig(options.name))
-
-  // src/app.html
-  await writeFile(path.join(projectPath, 'src/app.html'), generateAppHtml())
-
-  // src/app.d.ts
-  await writeFile(path.join(projectPath, 'src/app.d.ts'), generateAppDts())
-
-  // src/hooks.server.ts
-  await writeFile(path.join(projectPath, 'src/hooks.server.ts'), generateHooksServer())
-
-  // .gitignore
-  await writeFile(path.join(projectPath, '.gitignore'), generateGitignore())
-
-  // playwright.config.ts（E2E 测试配置）
-  await writeFile(path.join(projectPath, 'playwright.config.ts'), generatePlaywrightConfig())
-
-  // e2e/helpers.ts（E2E 工具函数）
-  await writeFile(path.join(projectPath, 'e2e/helpers.ts'), generateE2eHelpers())
-
-  // 按应用类型生成路由和页面
-  switch (appType) {
-    case 'admin':
-      await generateAdminRoutes(projectPath, options)
-      break
-    case 'website':
-      await generateWebsiteRoutes(projectPath, options)
-      break
-    case 'h5':
-      await generateH5Routes(projectPath, options)
-      break
-    case 'api':
-      await generateApiRoutes(projectPath, options)
-      break
-  }
-
-  // README.md
-  const appTypeLabel = APP_TYPES[appType].name
-  await writeFile(path.join(projectPath, 'README.md'), generateReadme(options.name, appTypeLabel, options.packageManager!))
-
-  // static/favicon.png（空占位）
-  await fse.ensureDir(path.join(projectPath, 'static'))
-
-  // 生成配置文件
-  const { generateConfigFile } = await import('./config-templates.js')
-  const configs = options.moduleConfigs
-
-  for (const featureId of options.features || []) {
-    const configKey = getFeatureConfigKey(featureId)
-    if (configKey) {
-      const content = generateConfigFile(configKey, configs)
-      await writeFile(path.join(projectPath, 'config', `_${configKey}.yml`), content)
-    }
-  }
-  // 始终生成 core 配置
-  await writeFile(path.join(projectPath, 'config', '_core.yml'), generateConfigFile('core', configs))
-
-  // 生成 .env.example
-  const { generateEnvExample } = await import('./config-templates.js')
-  await writeFile(path.join(projectPath, '.env.example'), generateEnvExample(options.features || [], configs))
-
-  // 生成 Skill 文件（供 AI 编程助手使用）
-  const { generateSkillFiles } = await import('./skill-templates.js')
-  await generateSkillFiles(projectPath, options.features || [], appType)
-}
+// =============================================================================
+// 工具函数
+// =============================================================================
 
 /**
- * 获取功能模块对应的配置 key
+ * 获取功能对应的配置 key
  */
 function getFeatureConfigKey(featureId: FeatureId): string | null {
   const map: Record<string, string> = {
@@ -842,203 +666,20 @@ function getFeatureConfigKey(featureId: FeatureId): string | null {
   return map[featureId] ?? null
 }
 
-// ─── 共用文件生成器 ───
-
-function generateSvelteConfig(): string {
-  return `/**
- * Svelte 配置
+/**
+ * 获取安装命令
  */
-import adapter from '@sveltejs/adapter-auto'
-import { vitePreprocess } from '@sveltejs/vite-plugin-svelte'
-
-/** @type {import('@sveltejs/kit').Config} */
-const config = {
-  preprocess: vitePreprocess(),
-  compilerOptions: {
-    runes: true,
-  },
-  kit: {
-    adapter: adapter(),
-  },
-}
-
-export default config
-`
-}
-
-function generateViteConfig(name: string): string {
-  return `/**
- * ${name} - Vite 配置
- */
-import { sveltekit } from '@sveltejs/kit/vite'
-import { defineConfig } from 'vite'
-
-export default defineConfig({
-  plugins: [sveltekit()],
-})
-`
-}
-
-function generateAppHtml(): string {
-  return `<!doctype html>
-<html lang="zh-CN">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <link rel="icon" href="%sveltekit.assets%/favicon.png" />
-    %sveltekit.head%
-  </head>
-  <body data-sveltekit-preload-data="hover">
-    <div style="display: contents">%sveltekit.body%</div>
-  </body>
-</html>
-`
-}
-
-function generateAppDts(): string {
-  return `/// <reference types="@sveltejs/kit" />
-
-declare global {
-  namespace App {
-    interface Locals {
-      requestId: string
-      session?: import('@h-ai/kit').SessionData
-    }
+function getInstallCommand(pm: 'pnpm' | 'npm' | 'yarn'): string {
+  switch (pm) {
+    case 'pnpm': return 'pnpm install'
+    case 'yarn': return 'yarn'
+    default: return 'npm install'
   }
 }
 
-export {}
-`
-}
-
-function generateHooksServer(): string {
-  return `/**
- * SvelteKit Server Hooks
- */
-import { kit } from '@h-ai/kit'
-
-export const handle = kit.createHandle({
-  logging: true,
-})
-`
-}
-
-function generateGitignore(): string {
-  return `node_modules
-.svelte-kit
-build
-.env
-.env.*
-!.env.example
-*.log
-.DS_Store
-test-results/
-playwright-report/
-`
-}
-
 /**
- * 生成 Playwright E2E 测试配置
+ * 生成 README
  */
-function generatePlaywrightConfig(): string {
-  return `import process from 'node:process'
-
-import { defineConfig } from '@playwright/test'
-
-const baseURL = process.env.BASE_URL || 'http://localhost:4173'
-
-/**
- * Playwright E2E 测试配置
- *
- * 使用本地安装的 Chrome 浏览器，无需额外下载 Chromium
- */
-export default defineConfig({
-  testDir: './e2e',
-  fullyParallel: false,
-  forbidOnly: !!process.env.CI,
-  retries: process.env.CI ? 2 : 0,
-  workers: 2,
-  reporter: 'list',
-  timeout: 30_000,
-
-  use: {
-    baseURL,
-    channel: 'chrome',
-    trace: 'on-first-retry',
-    screenshot: 'only-on-failure',
-  },
-
-  webServer: {
-    command: 'pnpm build && pnpm preview --port 4173 --strictPort',
-    env: {
-      HAI_E2E: '1',
-    },
-    url: baseURL,
-    reuseExistingServer: false,
-    timeout: 180_000,
-  },
-})
-`
-}
-
-/**
- * 生成 E2E 测试共用工具函数
- */
-function generateE2eHelpers(): string {
-  return `/**
- * =============================================================================
- * E2E 测试 - 共用工具函数
- * =============================================================================
- */
-
-import type { APIRequestContext, Page } from '@playwright/test'
-
-/** 生成唯一测试用户 */
-export function uniqueUser(prefix = 'e2e') {
-  const safePrefix = (prefix.replace(/\\W/g, '') || 'e2e').slice(0, 8)
-  const entropy = \`\${Date.now().toString(36)}\${Math.random().toString(36).slice(2, 6)}\`
-  const id = entropy.slice(-10)
-  const username = \`\${safePrefix}_\${id}\`.slice(0, 20)
-  return {
-    username,
-    email: \`\${safePrefix}_\${id}@test.local\`,
-    password: 'Test1234!@',
-  }
-}
-
-/** 通过 API 注册用户 */
-export async function registerViaApi(
-  request: APIRequestContext,
-  user: ReturnType<typeof uniqueUser>,
-) {
-  return request.post('/api/auth/register', {
-    data: {
-      username: user.username,
-      email: user.email,
-      password: user.password,
-      confirmPassword: user.password,
-    },
-  })
-}
-
-/** 注册并登录，返回已认证的 Page */
-export async function registerAndLogin(
-  page: Page,
-  request: APIRequestContext,
-  prefix = 'e2e',
-) {
-  const user = uniqueUser(prefix)
-  await registerViaApi(request, user)
-  await page.goto('/login')
-  await page.fill('[name="username"]', user.username)
-  await page.fill('[name="password"]', user.password)
-  await page.click('button[type="submit"]')
-  await page.waitForURL('/')
-  return user
-}
-`
-}
-
 function generateReadme(name: string, appTypeLabel: string, pm: string): string {
   return `# ${name}
 
@@ -1066,652 +707,38 @@ ${pm} preview
 `
 }
 
-function generateLayout(): string {
-  return `<script lang="ts">
-  /**
-   * 根布局
-   */
-  import type { Snippet } from 'svelte'
-
-  interface Props {
-    children: Snippet
-  }
-
-  let { children }: Props = $props()
-</script>
-
-{@render children()}
-`
-}
-
-// ─── 管理后台路由生成 ───
-
-async function generateAdminRoutes(
-  projectPath: string,
-  options: Required<CreateProjectOptions>,
-): Promise<void> {
-  // 根布局
-  await writeFile(path.join(projectPath, 'src/routes/+layout.svelte'), `<script lang="ts">
-  /**
-   * 管理后台根布局
-   */
-  import type { Snippet } from 'svelte'
-
-  interface Props {
-    children: Snippet
-  }
-
-  let { children }: Props = $props()
-</script>
-
-<div class="min-h-screen bg-base-200">
-  {@render children()}
-</div>
-`)
-
-  // 首页（仪表盘）
-  await writeFile(path.join(projectPath, 'src/routes/+page.svelte'), `<script lang="ts">
-  /**
-   * 管理后台首页
-   */
-</script>
-
-<svelte:head>
-  <title>${options.name} - 管理后台</title>
-</svelte:head>
-
-<main class="min-h-screen flex items-center justify-center">
-  <div class="text-center">
-    <h1 class="text-4xl font-bold mb-4">${options.name}</h1>
-    <p class="text-gray-600 mb-8">管理后台</p>
-    <div class="flex gap-4 justify-center">
-      <a href="/admin" class="btn btn-primary">进入后台</a>
-    </div>
-  </div>
-</main>
-`)
-
-  // 后台布局
-  await writeFile(path.join(projectPath, 'src/routes/admin/+layout.svelte'), `<script lang="ts">
-  /**
-   * 后台管理布局（侧边栏 + 内容区）
-   */
-  import type { Snippet } from 'svelte'
-
-  interface Props {
-    children: Snippet
-  }
-
-  let { children }: Props = $props()
-</script>
-
-<div class="drawer lg:drawer-open">
-  <input id="admin-drawer" type="checkbox" class="drawer-toggle" />
-  <div class="drawer-content p-6">
-    <label for="admin-drawer" class="btn btn-ghost drawer-button lg:hidden mb-4">
-      ☰
-    </label>
-    {@render children()}
-  </div>
-  <div class="drawer-side">
-    <label for="admin-drawer" class="drawer-overlay"></label>
-    <nav class="menu p-4 w-64 min-h-full bg-base-100 text-base-content">
-      <div class="text-xl font-bold mb-6 px-2">${options.name}</div>
-      <ul>
-        <li><a href="/admin">仪表盘</a></li>
-        <li><a href="/admin/settings">设置</a></li>
-      </ul>
-    </nav>
-  </div>
-</div>
-`)
-
-  // 后台仪表盘
-  await writeFile(path.join(projectPath, 'src/routes/admin/+page.svelte'), `<script lang="ts">
-  /**
-   * 仪表盘页面
-   */
-</script>
-
-<svelte:head>
-  <title>仪表盘 - ${options.name}</title>
-</svelte:head>
-
-<h1 class="text-2xl font-bold mb-6">仪表盘</h1>
-
-<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-  <div class="stat bg-base-100 rounded-box shadow">
-    <div class="stat-title">总用户</div>
-    <div class="stat-value">0</div>
-  </div>
-  <div class="stat bg-base-100 rounded-box shadow">
-    <div class="stat-title">今日活跃</div>
-    <div class="stat-value">0</div>
-  </div>
-</div>
-`)
-
-  // 设置页
-  await writeFile(path.join(projectPath, 'src/routes/admin/settings/+page.svelte'), `<script lang="ts">
-  /**
-   * 设置页面
-   */
-</script>
-
-<svelte:head>
-  <title>设置 - ${options.name}</title>
-</svelte:head>
-
-<h1 class="text-2xl font-bold mb-6">系统设置</h1>
-
-<div class="card bg-base-100 shadow">
-  <div class="card-body">
-    <h2 class="card-title">基本配置</h2>
-    <p>在此管理系统设置。</p>
-  </div>
-</div>
-`)
-
-  // API 健康检查
-  await writeFile(path.join(projectPath, 'src/routes/api/health/+server.ts'), `/**
- * 健康检查端点
- */
-import type { RequestHandler } from './$types'
-import { kit } from '@h-ai/kit'
-
-export const GET: RequestHandler = async ({ locals }) => {
-  return kit.response.ok({ status: 'ok', timestamp: new Date().toISOString() }, locals.requestId)
-}
-`)
-}
-
-// ─── 企业官网路由生成 ───
-
-async function generateWebsiteRoutes(
-  projectPath: string,
-  options: Required<CreateProjectOptions>,
-): Promise<void> {
-  // 根布局
-  await writeFile(path.join(projectPath, 'src/routes/+layout.svelte'), `<script lang="ts">
-  /**
-   * 官网根布局（导航 + 页脚）
-   */
-  import type { Snippet } from 'svelte'
-
-  interface Props {
-    children: Snippet
-  }
-
-  let { children }: Props = $props()
-</script>
-
-<div class="min-h-screen flex flex-col">
-  <!-- 导航栏 -->
-  <header class="navbar bg-base-100 shadow-sm px-4 lg:px-8">
-    <div class="flex-1">
-      <a href="/" class="text-xl font-bold">${options.name}</a>
-    </div>
-    <nav class="flex-none">
-      <ul class="menu menu-horizontal px-1">
-        <li><a href="/">首页</a></li>
-        <li><a href="/about">关于我们</a></li>
-        <li><a href="/services">服务</a></li>
-        <li><a href="/contact">联系我们</a></li>
-      </ul>
-    </nav>
-  </header>
-
-  <!-- 主内容 -->
-  <main class="flex-1">
-    {@render children()}
-  </main>
-
-  <!-- 页脚 -->
-  <footer class="footer footer-center p-6 bg-base-200 text-base-content">
-    <p>Copyright © ${new Date().getFullYear()} ${options.name}. All rights reserved.</p>
-  </footer>
-</div>
-`)
-
-  // 首页
-  await writeFile(path.join(projectPath, 'src/routes/+page.svelte'), `<script lang="ts">
-  /**
-   * 官网首页
-   */
-</script>
-
-<svelte:head>
-  <title>${options.name}</title>
-  <meta name="description" content="${options.name} - 企业官方网站" />
-</svelte:head>
-
-<!-- Hero -->
-<section class="hero min-h-[60vh] bg-base-200">
-  <div class="hero-content text-center">
-    <div class="max-w-2xl">
-      <h1 class="text-5xl font-bold mb-6">${options.name}</h1>
-      <p class="text-lg mb-8">专业、可靠的企业服务</p>
-      <a href="/contact" class="btn btn-primary btn-lg">联系我们</a>
-    </div>
-  </div>
-</section>
-
-<!-- 特性 -->
-<section class="py-16 px-4 lg:px-8">
-  <div class="max-w-6xl mx-auto">
-    <h2 class="text-3xl font-bold text-center mb-12">我们的优势</h2>
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
-      <div class="card bg-base-100 shadow">
-        <div class="card-body items-center text-center">
-          <h3 class="card-title">专业团队</h3>
-          <p>拥有多年行业经验的专业团队。</p>
-        </div>
-      </div>
-      <div class="card bg-base-100 shadow">
-        <div class="card-body items-center text-center">
-          <h3 class="card-title">优质服务</h3>
-          <p>提供全方位的优质服务支持。</p>
-        </div>
-      </div>
-      <div class="card bg-base-100 shadow">
-        <div class="card-body items-center text-center">
-          <h3 class="card-title">创新技术</h3>
-          <p>引领行业的创新技术解决方案。</p>
-        </div>
-      </div>
-    </div>
-  </div>
-</section>
-`)
-
-  // 关于页面
-  await writeFile(path.join(projectPath, 'src/routes/about/+page.svelte'), `<script lang="ts">
-  /**
-   * 关于我们
-   */
-</script>
-
-<svelte:head>
-  <title>关于我们 - ${options.name}</title>
-  <meta name="description" content="了解 ${options.name}" />
-</svelte:head>
-
-<section class="py-16 px-4 lg:px-8">
-  <div class="max-w-4xl mx-auto">
-    <h1 class="text-4xl font-bold mb-8">关于我们</h1>
-    <div class="prose max-w-none">
-      <p>在此介绍公司信息和发展历程。</p>
-    </div>
-  </div>
-</section>
-`)
-
-  // 服务页面
-  await writeFile(path.join(projectPath, 'src/routes/services/+page.svelte'), `<script lang="ts">
-  /**
-   * 服务页面
-   */
-</script>
-
-<svelte:head>
-  <title>服务 - ${options.name}</title>
-  <meta name="description" content="${options.name} 提供的服务" />
-</svelte:head>
-
-<section class="py-16 px-4 lg:px-8">
-  <div class="max-w-6xl mx-auto">
-    <h1 class="text-4xl font-bold text-center mb-12">我们的服务</h1>
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-      <div class="card bg-base-100 shadow">
-        <div class="card-body">
-          <h2 class="card-title">服务一</h2>
-          <p>服务描述内容。</p>
-        </div>
-      </div>
-      <div class="card bg-base-100 shadow">
-        <div class="card-body">
-          <h2 class="card-title">服务二</h2>
-          <p>服务描述内容。</p>
-        </div>
-      </div>
-    </div>
-  </div>
-</section>
-`)
-
-  // 联系页面
-  await writeFile(path.join(projectPath, 'src/routes/contact/+page.svelte'), `<script lang="ts">
-  /**
-   * 联系我们
-   */
-</script>
-
-<svelte:head>
-  <title>联系我们 - ${options.name}</title>
-  <meta name="description" content="联系 ${options.name}" />
-</svelte:head>
-
-<section class="py-16 px-4 lg:px-8">
-  <div class="max-w-2xl mx-auto">
-    <h1 class="text-4xl font-bold mb-8">联系我们</h1>
-    <form class="space-y-4">
-      <div class="form-control">
-        <label class="label" for="name"><span class="label-text">姓名</span></label>
-        <input id="name" type="text" class="input input-bordered w-full" />
-      </div>
-      <div class="form-control">
-        <label class="label" for="email"><span class="label-text">邮箱</span></label>
-        <input id="email" type="email" class="input input-bordered w-full" />
-      </div>
-      <div class="form-control">
-        <label class="label" for="message"><span class="label-text">留言</span></label>
-        <textarea id="message" class="textarea textarea-bordered w-full" rows="5"></textarea>
-      </div>
-      <button type="submit" class="btn btn-primary">发送</button>
-    </form>
-  </div>
-</section>
-`)
-}
-
-// ─── H5 移动端路由生成 ───
-
-async function generateH5Routes(
-  projectPath: string,
-  options: Required<CreateProjectOptions>,
-): Promise<void> {
-  // 根布局（移动端优化）
-  await writeFile(path.join(projectPath, 'src/routes/+layout.svelte'), `<script lang="ts">
-  /**
-   * H5 移动端根布局
-   */
-  import type { Snippet } from 'svelte'
-
-  interface Props {
-    children: Snippet
-  }
-
-  let { children }: Props = $props()
-</script>
-
-<div class="max-w-lg mx-auto min-h-screen flex flex-col bg-base-100">
-  <!-- 顶部导航 -->
-  <header class="navbar bg-primary text-primary-content sticky top-0 z-50">
-    <div class="flex-1">
-      <span class="text-lg font-bold">${options.name}</span>
-    </div>
-  </header>
-
-  <!-- 主内容（可滚动） -->
-  <main class="flex-1 overflow-y-auto">
-    {@render children()}
-  </main>
-
-  <!-- 底部标签栏 -->
-  <nav class="btm-nav btm-nav-sm">
-    <a href="/" class="text-primary">
-      <span class="btm-nav-label">首页</span>
-    </a>
-    <a href="/discover">
-      <span class="btm-nav-label">发现</span>
-    </a>
-    <a href="/profile">
-      <span class="btm-nav-label">我的</span>
-    </a>
-  </nav>
-</div>
-`)
-
-  // 首页
-  await writeFile(path.join(projectPath, 'src/routes/+page.svelte'), `<script lang="ts">
-  /**
-   * H5 首页
-   */
-</script>
-
-<svelte:head>
-  <title>${options.name}</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
-</svelte:head>
-
-<div class="p-4 space-y-4">
-  <!-- 搜索栏 -->
-  <div class="form-control">
-    <input type="text" placeholder="搜索..." class="input input-bordered w-full" />
-  </div>
-
-  <!-- 功能入口 -->
-  <div class="grid grid-cols-4 gap-4 py-4">
-    <a href="/discover" class="flex flex-col items-center gap-1">
-      <div class="w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center">📱</div>
-      <span class="text-xs">功能一</span>
-    </a>
-    <a href="/discover" class="flex flex-col items-center gap-1">
-      <div class="w-12 h-12 bg-secondary/10 rounded-full flex items-center justify-center">🎯</div>
-      <span class="text-xs">功能二</span>
-    </a>
-    <a href="/discover" class="flex flex-col items-center gap-1">
-      <div class="w-12 h-12 bg-accent/10 rounded-full flex items-center justify-center">📊</div>
-      <span class="text-xs">功能三</span>
-    </a>
-    <a href="/discover" class="flex flex-col items-center gap-1">
-      <div class="w-12 h-12 bg-info/10 rounded-full flex items-center justify-center">⚙️</div>
-      <span class="text-xs">功能四</span>
-    </a>
-  </div>
-
-  <!-- 内容列表 -->
-  <div class="space-y-3">
-    <h2 class="text-lg font-bold">最新内容</h2>
-    <div class="card bg-base-200">
-      <div class="card-body p-4">
-        <p class="text-sm">欢迎使用 ${options.name}</p>
-      </div>
-    </div>
-  </div>
-</div>
-`)
-
-  // 发现页
-  await writeFile(path.join(projectPath, 'src/routes/discover/+page.svelte'), `<script lang="ts">
-  /**
-   * 发现页
-   */
-</script>
-
-<svelte:head>
-  <title>发现 - ${options.name}</title>
-</svelte:head>
-
-<div class="p-4">
-  <h1 class="text-xl font-bold mb-4">发现</h1>
-  <p class="text-gray-600">探索更多精彩内容。</p>
-</div>
-`)
-
-  // 个人中心
-  await writeFile(path.join(projectPath, 'src/routes/profile/+page.svelte'), `<script lang="ts">
-  /**
-   * 个人中心
-   */
-</script>
-
-<svelte:head>
-  <title>我的 - ${options.name}</title>
-</svelte:head>
-
-<div class="p-4 space-y-4">
-  <!-- 用户头像区 -->
-  <div class="flex items-center gap-4 p-4 bg-base-200 rounded-box">
-    <div class="avatar placeholder">
-      <div class="bg-primary text-primary-content rounded-full w-16">
-        <span class="text-xl">U</span>
-      </div>
-    </div>
-    <div>
-      <div class="font-bold">用户名</div>
-      <div class="text-sm text-gray-500">点击登录</div>
-    </div>
-  </div>
-
-  <!-- 设置列表 -->
-  <ul class="menu bg-base-200 rounded-box w-full">
-    <li><a>个人信息</a></li>
-    <li><a>设置</a></li>
-    <li><a>关于</a></li>
-  </ul>
-</div>
-`)
-}
-
-// ─── API 服务路由生成 ───
-
-async function generateApiRoutes(
-  projectPath: string,
-  options: Required<CreateProjectOptions>,
-): Promise<void> {
-  // API 不需要 UI 布局
-  await writeFile(path.join(projectPath, 'src/routes/+layout.svelte'), generateLayout())
-
-  // 根页面（API 文档入口）
-  await writeFile(path.join(projectPath, 'src/routes/+page.svelte'), `<svelte:head>
-  <title>${options.name} API</title>
-</svelte:head>
-
-<main class="min-h-screen flex items-center justify-center font-mono">
-  <div class="text-center">
-    <h1 class="text-3xl font-bold mb-4">${options.name} API</h1>
-    <p class="text-gray-600 mb-4">RESTful API Service</p>
-    <p class="text-sm text-gray-400">GET /api/health - 健康检查</p>
-  </div>
-</main>
-`)
-
-  // 健康检查
-  await writeFile(path.join(projectPath, 'src/routes/api/health/+server.ts'), `/**
- * 健康检查端点
- */
-import type { RequestHandler } from './$types'
-import { kit } from '@h-ai/kit'
-
-export const GET: RequestHandler = async ({ locals }) => {
-  return kit.response.ok({
-    status: 'ok',
-    service: '${options.name}',
-    version: '0.0.1',
-    timestamp: new Date().toISOString(),
-  }, locals.requestId)
-}
-`)
-
-  // 示例 CRUD API
-  await writeFile(path.join(projectPath, 'src/routes/api/v1/items/+server.ts'), `/**
- * Items API - 列表与创建
- */
-import type { RequestHandler } from './$types'
-import { kit } from '@h-ai/kit'
-
 /**
- * GET /api/v1/items - 获取列表
+ * 打印完成提示
  */
-export const GET: RequestHandler = async ({ url, locals }) => {
-  try {
-    const page = Number(url.searchParams.get('page') || '1')
-    const pageSize = Number(url.searchParams.get('pageSize') || '20')
+function printCompletionMessage(options: Required<CreateProjectOptions>): void {
+  core.logger.info('', {})
+  core.logger.info(chalk.green('✔ 项目创建成功！'))
+  core.logger.info('', {})
 
-    return kit.response.ok({
-      items: [],
-      total: 0,
-      page,
-      pageSize,
-    }, locals.requestId)
-  }
-  catch (error) {
-    return kit.response.internalError()
-  }
-}
-
-/**
- * POST /api/v1/items - 创建
- */
-export const POST: RequestHandler = async ({ request, locals }) => {
-  try {
-    const body = await request.json()
-
-    if (!body.name) {
-      return kit.response.badRequest('name is required')
+  // 功能摘要
+  if (options.features.length > 0) {
+    core.logger.info(chalk.bold('已启用功能:'))
+    for (const featureId of options.features) {
+      const feature = FEATURES[featureId]
+      if (feature) {
+        core.logger.info(chalk.gray(`  • ${feature.name} (${featureId})`))
+      }
     }
+    core.logger.info('', {})
+  }
 
-    return kit.response.ok({ id: '1', ...body, createdAt: new Date().toISOString() }, locals.requestId)
+  core.logger.info('下一步：')
+  core.logger.info(chalk.cyan(`  cd ${options.name}`))
+  if (!options.install) {
+    core.logger.info(chalk.cyan(`  ${options.packageManager} install`))
   }
-  catch (error) {
-    return kit.response.internalError()
-  }
-}
-`)
-
-  // 示例单项 API
-  await writeFile(path.join(projectPath, 'src/routes/api/v1/items/[id]/+server.ts'), `/**
- * Items API - 单项操作
- */
-import type { RequestHandler } from './$types'
-import { kit } from '@h-ai/kit'
-
-/**
- * GET /api/v1/items/:id - 获取详情
- */
-export const GET: RequestHandler = async ({ params, locals }) => {
-  try {
-    const { id } = params
-    return kit.response.ok({ id, name: 'Example Item' }, locals.requestId)
-  }
-  catch (error) {
-    return kit.response.internalError()
-  }
+  core.logger.info(chalk.cyan(`  ${options.packageManager} dev`))
+  core.logger.info('', {})
 }
 
-/**
- * PUT /api/v1/items/:id - 更新
- */
-export const PUT: RequestHandler = async ({ params, request, locals }) => {
-  try {
-    const { id } = params
-    const body = await request.json()
-    return kit.response.ok({ id, ...body, updatedAt: new Date().toISOString() }, locals.requestId)
-  }
-  catch (error) {
-    return kit.response.internalError()
-  }
-}
-
-/**
- * DELETE /api/v1/items/:id - 删除
- */
-export const DELETE: RequestHandler = async ({ params, locals }) => {
-  try {
-    const { id } = params
-    return kit.response.ok({ id, deleted: true }, locals.requestId)
-  }
-  catch (error) {
-    return kit.response.internalError()
-  }
-}
-`)
-}
-
-/**
- * 获取安装命令
- */
-function getInstallCommand(pm: 'pnpm' | 'npm' | 'yarn'): string {
-  switch (pm) {
-    case 'pnpm':
-      return 'pnpm install'
-    case 'yarn':
-      return 'yarn'
-    default:
-      return 'npm install'
-  }
-}
+// =============================================================================
+// 项目检测（供 init 命令使用）
+// =============================================================================
 
 /**
  * 检测项目信息

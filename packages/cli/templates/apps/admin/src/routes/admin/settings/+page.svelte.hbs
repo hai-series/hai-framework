@@ -1,0 +1,37 @@
+{{!-- 设置页面 --}}
+<script lang="ts">
+  /**
+   * 设置页面
+   */
+{{#if hasI18n}}
+  import * as m from '$lib/paraglide/messages'
+{{/if}}
+</script>
+
+<svelte:head>
+{{#if hasI18n}}
+  <title>{m.page_settings_title()}</title>
+{{else}}
+  <title>设置</title>
+{{/if}}
+</svelte:head>
+
+{{#if hasI18n}}
+<h1 class="text-2xl font-bold mb-6">{m.page_settings_title()}</h1>
+
+<div class="card bg-base-100 shadow">
+  <div class="card-body">
+    <h2 class="card-title">{m.page_settings_basic()}</h2>
+    <p>{m.page_settings_desc()}</p>
+  </div>
+</div>
+{{else}}
+<h1 class="text-2xl font-bold mb-6">系统设置</h1>
+
+<div class="card bg-base-100 shadow">
+  <div class="card-body">
+    <h2 class="card-title">基本配置</h2>
+    <p>在此管理系统设置。</p>
+  </div>
+</div>
+{{/if}}

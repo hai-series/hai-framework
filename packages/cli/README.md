@@ -94,10 +94,72 @@ npx hai g:model order
 | `-v, --verbose`    | 显示详细输出 |
 | `-C, --cwd <path>` | 指定工作目录 |
 
-## 测试
+## 开发阶段本地使用
+
+> 适用于尚未发布到 npm、在 monorepo 中本地调试 CLI 的场景。
+
+### 1. 构建
 
 ```bash
+# 构建 CLI（生成 dist/）
+pnpm --filter @h-ai/cli build
+
+# 或启动 watch 模式（修改源码后自动重建）
+pnpm --filter @h-ai/cli dev
+```
+
+### 2. 直接运行（无需安装）
+
+构建完成后，可以用 `node` 直接调用 `dist/index.js`：
+
+```bash
+# 从仓库根目录运行
+node packages/cli/dist/index.js create my-app
+node packages/cli/dist/index.js create my-app --type admin --features iam,db
+```
+
+或者在任意目录通过绝对路径调用：
+
+```bash
+node /path/to/hai-framework/packages/cli/dist/index.js create my-app
+```
+
+### 3. 全局链接（`pnpm link`）
+
+如果希望在终端里直接用 `hai` 命令，可以全局链接：
+
+```bash
+# 在 packages/cli 目录下执行
+cd packages/cli
+pnpm link --global
+
+# 验证
+hai --version
+hai create my-app
+```
+
+> 使用完毕后可解除链接：`pnpm unlink --global @h-ai/cli`
+
+### 4. 在 monorepo 内的其他 app 中使用
+
+monorepo 内的 `apps/*` 项目已通过 `workspace:*` 协议引用本地包，可直接使用：
+
+```bash
+# 在仓库根目录执行，对任意 app 类型生成项目
+node packages/cli/dist/index.js create ../my-new-project
+```
+
+### 5. 运行测试
+
+```bash
+# 单元测试 + E2E 模板生成测试
 pnpm --filter @h-ai/cli test
+
+# watch 模式
+pnpm --filter @h-ai/cli test:watch
+
+# 覆盖率
+pnpm --filter @h-ai/cli test:coverage
 ```
 
 ## License

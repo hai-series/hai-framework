@@ -1,0 +1,66 @@
+{{!-- 官网根布局 --}}
+<script lang="ts">
+  /**
+   * 官网根布局
+   */
+  import type { Snippet } from 'svelte'
+  import '../app.css'
+{{#if hasI18n}}
+  import { browser } from '$app/environment'
+  import { setGlobalLocale } from '@h-ai/ui'
+  import { getLocale } from '$lib/paraglide/runtime.js'
+  import * as m from '$lib/paraglide/messages'
+{{/if}}
+
+  interface Props {
+    children: Snippet
+  }
+
+  let { children }: Props = $props()
+{{#if hasI18n}}
+
+  if (browser) {
+    const paraglideLocale = getLocale()
+    setGlobalLocale(paraglideLocale)
+  }
+{{/if}}
+</script>
+
+<div class="min-h-screen flex flex-col">
+  <header class="navbar bg-base-100 shadow-sm">
+    <div class="flex-1">
+{{#if hasI18n}}
+      <a href="/" class="btn btn-ghost text-xl">{m.app_title()}</a>
+{{else}}
+      <a href="/" class="btn btn-ghost text-xl">官网</a>
+{{/if}}
+    </div>
+    <nav class="flex-none">
+      <ul class="menu menu-horizontal px-1">
+{{#if hasI18n}}
+        <li><a href="/">{m.nav_home()}</a></li>
+        <li><a href="/about">{m.nav_about()}</a></li>
+        <li><a href="/services">{m.nav_services()}</a></li>
+        <li><a href="/contact">{m.nav_contact()}</a></li>
+{{else}}
+        <li><a href="/">首页</a></li>
+        <li><a href="/about">关于</a></li>
+        <li><a href="/services">服务</a></li>
+        <li><a href="/contact">联系我们</a></li>
+{{/if}}
+      </ul>
+    </nav>
+  </header>
+
+  <main class="flex-1">
+    {@render children()}
+  </main>
+
+  <footer class="footer footer-center p-4 bg-base-300 text-base-content">
+{{#if hasI18n}}
+    <p>{m.footer_copyright()}</p>
+{{else}}
+    <p>Copyright © 2025 - All rights reserved</p>
+{{/if}}
+  </footer>
+</div>
