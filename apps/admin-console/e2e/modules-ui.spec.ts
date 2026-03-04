@@ -37,7 +37,7 @@ test.describe('Modules Page UI', () => {
     await page.waitForLoadState('domcontentloaded')
 
     // Tabs 组件渲染的标签项
-    // 6 个标签：core, db, cache, storage, ai, crypto
+    // 6 个标签：core, reldb, cache, storage, ai, crypto
     const tabItems = page.locator('[role="tab"], .tab, button').filter({ hasText: /core|db|cache|storage|ai|crypto/i })
     const count = await tabItems.count()
     expect(count).toBeGreaterThanOrEqual(6)
@@ -62,7 +62,7 @@ test.describe('Modules Page UI', () => {
     await clickModuleTab(page, 1)
 
     // db 内容应可见
-    const dbContent = page.locator('text=@h-ai/db')
+    const dbContent = page.locator('text=@h-ai/reldb')
     await expect(dbContent.first()).toBeVisible()
   })
 

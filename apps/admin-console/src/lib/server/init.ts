@@ -16,7 +16,7 @@
  *
  * 配置文件约定：
  * - `config/_core.yml`  → 使用 CoreConfigSchema
- * - `config/_db.yml`    → 使用 DbConfigSchema
+ * - `config/_db.yml`    → 使用 ReldbConfigSchema
  * - `config/_cache.yml` → 使用 CacheConfigSchema
  * - `config/_iam.yml`   → 使用 IamConfigSchema
  * - `config/_reach.yml` → 使用 ReachConfigSchema
@@ -42,12 +42,12 @@ import * as m from '$lib/paraglide/messages.js'
 import { audit } from '@h-ai/audit'
 import { cache } from '@h-ai/cache'
 import { core } from '@h-ai/core'
-import { db } from '@h-ai/db'
 import { iam } from '@h-ai/iam'
 import { reach } from '@h-ai/reach'
+import { reldb } from '@h-ai/reldb'
 import { storage } from '@h-ai/storage'
 
-type DbConfigInput = Parameters<typeof db.init>[0]
+type DbConfigInput = Parameters<typeof reldb.init>[0]
 
 // =============================================================================
 // 状态
@@ -113,7 +113,7 @@ export async function initApp(): Promise<void> {
   }
 
   // 4. 初始化数据库连接
-  const dbResult = await db.init(dbConfig)
+  const dbResult = await reldb.init(dbConfig)
   if (!dbResult.success) {
     throw new Error(m.server_init_db_failed({ message: dbResult.error.message }))
   }
@@ -200,7 +200,7 @@ export async function initApp(): Promise<void> {
   }
 
   // 9. 初始化审计日志模块（IAM 用户表为 iam_users）
-  const auditResult = await audit.init({ db, userTable: 'iam_users' })
+  const auditResult = await audit.init({ reldb, userTable: 'iam_users' })
   if (!auditResult.success) {
     core.logger.warn('Audit module initialization failed', { error: auditResult.error.message })
   }

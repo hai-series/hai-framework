@@ -33,7 +33,7 @@ const config = {
       '@h-ai/audit': '../../packages/audit/src/index.ts',
       '@h-ai/cache': '../../packages/cache/src/index.ts',
       '@h-ai/crypto': '../../packages/crypto/src/index.ts',
-      '@h-ai/db': '../../packages/db/src/index.ts',
+      '@h-ai/reldb': '../../packages/reldb/src/index.ts',
       '@h-ai/kit': '../../packages/kit/src/index.ts',
       '@h-ai/reach': '../../packages/reach/src/index.ts',
       '@h-ai/ui': '../../packages/ui/src/lib/index.ts',

@@ -9,7 +9,7 @@ describe('svelte.config.js alias', () => {
     expect(alias['@h-ai/cache']).toBe('../../packages/cache')
     expect(alias['@h-ai/core']).toBe('../../packages/core')
     expect(alias['@h-ai/crypto']).toBe('../../packages/crypto')
-    expect(alias['@h-ai/db']).toBe('../../packages/db')
+    expect(alias['@h-ai/reldb']).toBe('../../packages/db')
     expect(alias['@h-ai/iam']).toBe('../../packages/iam')
     expect(alias['@h-ai/kit']).toBe('../../packages/kit')
     expect(alias['@h-ai/storage']).toBe('../../packages/storage')
