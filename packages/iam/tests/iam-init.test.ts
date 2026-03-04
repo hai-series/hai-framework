@@ -113,12 +113,6 @@ describe('iam.init', () => {
       }
     })
 
-    it('client 操作无需 init 即可使用', async () => {
-      await iam.close()
-      expect(iam.client).toBeDefined()
-      expect(typeof iam.client.create).toBe('function')
-    })
-
     it('seedDefaultData: false 时初始化应成功且不触发种子流程', async () => {
       await iam.close()
       const result = await iam.init({ db, cache, seedDefaultData: false })

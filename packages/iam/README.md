@@ -88,33 +88,27 @@ await iam.close()
 
 详细 API 参数、错误码及集成模式请参考 Skill 模板（`packages/cli/templates/skills/hai-iam/SKILL.md`）。
 
-## 前端客户端
+## 前端 API 契约
+
+前端通过 `@h-ai/iam/api` 导出的契约定义（`iamEndpoints`）与 `@h-ai/api-client` 配合调用：
 
 ```ts
-import { createIamClient } from '@h-ai/iam/client'
+import { createApiClient } from '@h-ai/api-client'
+import { iamEndpoints } from '@h-ai/iam/api'
 
-const client = createIamClient({
-  baseUrl: '/api/iam',
-  getAccessToken: () => localStorage.getItem('accessToken'),
-  onTokenRefresh: (tokens) => {
-    localStorage.setItem('accessToken', tokens.accessToken)
-  },
-  onAuthError: () => {
-    window.location.href = '/login'
-  },
-})
+const api = createApiClient({ baseUrl: '/api/iam' })
 
 // 登录
-const result = await client.login({
+const result = await api.call(iamEndpoints.login, {
   identifier: 'admin',
   password: 'Password123',
 })
 
 // 获取当前用户
-const user = await client.getCurrentUser()
+const user = await api.call(iamEndpoints.currentUser, {})
 
 // 修改密码
-await client.changePassword({
+await api.call(iamEndpoints.changePassword, {
   oldPassword: 'Password123',
   newPassword: 'NewPassword456',
 })

@@ -280,6 +280,8 @@ export const SessionConfigSchema = z.object({
   sliding: z.boolean().default(true),
   /** 单设备登录（踢掉其他设备） */
   singleDevice: z.boolean().default(false),
+  /** refreshToken 过期时间（秒，默认 604800 = 7天） */
+  refreshTokenMaxAge: z.number().int().min(3600).default(604800),
 })
 
 /** 会话配置类型 */

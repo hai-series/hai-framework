@@ -10,7 +10,7 @@ import type { Result } from '@h-ai/core'
 import type { IamConfig } from '../iam-config.js'
 import type { IamError } from '../iam-types.js'
 import type { SessionMappingRepository } from './iam-session-repository-cache.js'
-import type { CreateSessionOptions, IamSessionFunctions, Session } from './iam-session-types.js'
+import type { CreateSessionOptions, IamSessionFunctions, Session, TokenPair } from './iam-session-types.js'
 import { core, err, ok } from '@h-ai/core'
 import { IamErrorCode, SessionConfigSchema } from '../iam-config.js'
 import { iamM } from '../iam-i18n.js'
@@ -18,6 +18,9 @@ import { createCacheSessionMappingRepository } from './iam-session-repository-ca
 import { applySessionPatch, buildSession, generateToken, getSessionTtl } from './iam-session-utils.js'
 
 const logger = core.logger.child({ module: 'iam', scope: 'session' })
+
+/** refreshToken → userId 映射的缓存 key 前缀 */
+const REFRESH_TOKEN_PREFIX = 'iam:refresh:'
 
 // ─── 子功能依赖 ───
 
@@ -44,6 +47,8 @@ export async function createIamSessionFunctions(deps: IamSessionFunctionsDeps): 
       maxAge: sessionConfig.maxAge,
       sliding: sessionConfig.sliding,
       singleDevice: sessionConfig.singleDevice,
+      refreshTokenMaxAge: sessionConfig.refreshTokenMaxAge,
+      cache,
       sessionMappingRepository,
     })
 
@@ -72,6 +77,10 @@ interface SessionBuilderConfig {
   sliding?: boolean
   /** 单设备登录（踢掉其他设备） */
   singleDevice?: boolean
+  /** refreshToken 过期时间（秒，默认 604800 = 7天） */
+  refreshTokenMaxAge?: number
+  /** 缓存服务（用于存储 refreshToken 映射） */
+  cache: CacheFunctions
   /** 会话映射存储 */
   sessionMappingRepository: SessionMappingRepository
 }
@@ -83,6 +92,37 @@ function buildSessionFunctions(config: SessionBuilderConfig): IamSessionFunction
   const maxAge = config.maxAge ?? 86400
   const sliding = config.sliding ?? true
   const singleDevice = config.singleDevice ?? false
+  const refreshTokenMaxAge = config.refreshTokenMaxAge ?? 604800
+
+  /**
+   * 构建 refreshToken 的缓存 key
+   */
+  function buildRefreshKey(refreshToken: string): string {
+    return `${REFRESH_TOKEN_PREFIX}${refreshToken}`
+  }
+
+  /**
+   * 存储 refreshToken → { userId, accessToken } 映射
+   */
+  async function storeRefreshToken(refreshToken: string, userId: string, accessToken: string): Promise<Result<void, IamError>> {
+    const result = await config.cache.kv.set(buildRefreshKey(refreshToken), { userId, accessToken }, { ex: refreshTokenMaxAge })
+    if (!result.success) {
+      return err({ code: IamErrorCode.SESSION_CREATE_FAILED, message: iamM('iam_createSessionFailed'), cause: result.error })
+    }
+    return ok(undefined)
+  }
+
+  /**
+   * 创建 TokenPair（accessToken + refreshToken）
+   */
+  function createTokenPair(accessToken: string): TokenPair {
+    return {
+      accessToken,
+      refreshToken: generateToken(),
+      expiresIn: maxAge,
+      tokenType: 'Bearer',
+    }
+  }
 
   /**
    * 清除用户的所有会话令牌
@@ -116,16 +156,27 @@ function buildSessionFunctions(config: SessionBuilderConfig): IamSessionFunction
         }
 
         const accessToken = generateToken()
+        const tokenPair = createTokenPair(accessToken)
         const now = new Date()
         const sessionTtl = options.maxAge ?? maxAge
         const session = buildSession(options, now, sessionTtl, accessToken)
 
+        // 存储 accessToken → session
         const storeResult = await config.sessionMappingRepository.set(accessToken, session, sessionTtl)
         if (!storeResult.success) {
           return storeResult as Result<Session, IamError>
         }
 
+        // 存储 refreshToken → { userId, accessToken }
+        const refreshResult = await storeRefreshToken(tokenPair.refreshToken, options.userId, accessToken)
+        if (!refreshResult.success) {
+          return refreshResult as Result<Session, IamError>
+        }
+
         await config.sessionMappingRepository.addUserToken(options.userId, accessToken)
+
+        // 将 tokenPair 附加到 session 的 data 字段，供上层 authn 读取
+        session.data = { ...session.data, _tokenPair: tokenPair }
 
         logger.debug('Session created', { userId: options.userId })
         return ok(session)
@@ -226,6 +277,77 @@ function buildSessionFunctions(config: SessionBuilderConfig): IamSessionFunction
       }
 
       return ok(count)
+    },
+
+    async refresh(refreshToken: string): Promise<Result<TokenPair, IamError>> {
+      try {
+        // 读取 refreshToken 映射
+        const mappingResult = await config.cache.kv.get<{ userId: string, accessToken: string }>(buildRefreshKey(refreshToken))
+        if (!mappingResult.success) {
+          return err({ code: IamErrorCode.TOKEN_REFRESH_FAILED, message: iamM('iam_refreshTokenFailed'), cause: mappingResult.error })
+        }
+
+        const mapping = mappingResult.data
+        if (!mapping) {
+          return err({ code: IamErrorCode.TOKEN_EXPIRED, message: iamM('iam_refreshTokenExpired') })
+        }
+
+        // 获取旧会话
+        const oldSessionResult = await this.get(mapping.accessToken)
+        if (!oldSessionResult.success) {
+          return oldSessionResult as Result<TokenPair, IamError>
+        }
+
+        const oldSession = oldSessionResult.data
+        if (!oldSession) {
+          // 旧 accessToken 已过期，但 refreshToken 还活着 → 重建会话
+          // 此场景下无法重建（缺少用户上下文），返回过期错误
+          await config.cache.kv.del(buildRefreshKey(refreshToken))
+          return err({ code: IamErrorCode.SESSION_EXPIRED, message: iamM('iam_sessionExpired') })
+        }
+
+        // 删除旧 refreshToken（Rotation 策略）
+        await config.cache.kv.del(buildRefreshKey(refreshToken))
+
+        // 删除旧的 accessToken 会话
+        await this.delete(mapping.accessToken)
+
+        // 创建新会话（复用旧会话的用户数据）
+        const newSessionResult = await this.create({
+          userId: oldSession.userId,
+          username: oldSession.username,
+          displayName: oldSession.displayName,
+          avatarUrl: oldSession.avatarUrl,
+          roleCodes: oldSession.roleCodes,
+          permissionCodes: oldSession.permissionCodes,
+          source: oldSession.source,
+          data: oldSession.data ? { ...oldSession.data, _tokenPair: undefined } : undefined,
+        })
+
+        if (!newSessionResult.success) {
+          return newSessionResult as Result<TokenPair, IamError>
+        }
+
+        // 从新会话中提取 tokenPair
+        const tokenPair = newSessionResult.data.data?._tokenPair as TokenPair
+        if (!tokenPair) {
+          return err({ code: IamErrorCode.TOKEN_REFRESH_FAILED, message: iamM('iam_refreshTokenFailed') })
+        }
+
+        logger.debug('Token refreshed', { userId: oldSession.userId })
+        return ok(tokenPair)
+      }
+      catch (error) {
+        return err({ code: IamErrorCode.TOKEN_REFRESH_FAILED, message: iamM('iam_refreshTokenFailed'), cause: error })
+      }
+    },
+
+    async revokeRefresh(refreshToken: string): Promise<Result<void, IamError>> {
+      const result = await config.cache.kv.del(buildRefreshKey(refreshToken))
+      if (!result.success) {
+        return err({ code: IamErrorCode.REPOSITORY_ERROR, message: iamM('iam_deleteSessionMappingCacheFailed', { params: { message: result.error.message } }), cause: result.error })
+      }
+      return ok(undefined)
     },
   }
 }

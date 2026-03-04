@@ -9,6 +9,25 @@ import type { Result } from '@h-ai/core'
 import type { IamError } from '../iam-types.js'
 import type { AgreementDisplay, User } from '../user/iam-user-types.js'
 
+// ─── 令牌类型 ───
+
+/**
+ * 认证令牌对（登录成功返回）
+ *
+ * 所有端（Web SSR / H5 SPA / Capacitor App / 未来小程序）
+ * 使用完全相同的 Bearer Token 认证流程。
+ */
+export interface TokenPair {
+  /** 访问令牌（短期，用于 API 认证） */
+  accessToken: string
+  /** 刷新令牌（长期，用于换取新 accessToken） */
+  refreshToken: string
+  /** accessToken 过期时间（秒） */
+  expiresIn: number
+  /** 令牌类型，固定为 'Bearer' */
+  tokenType: 'Bearer'
+}
+
 // ─── 认证结果类型 ───
 
 /**
@@ -17,10 +36,8 @@ import type { AgreementDisplay, User } from '../user/iam-user-types.js'
 export interface AuthResult {
   /** 用户信息 */
   user: User
-  /** 访问令牌 */
-  accessToken: string
-  /** 访问令牌过期时间 */
-  accessTokenExpiresAt: Date
+  /** 令牌对（替代原来的单个 accessToken） */
+  tokens: TokenPair
   /** 协议展示信息（可选） */
   agreements?: AgreementDisplay
 }
@@ -148,4 +165,23 @@ export interface IamSessionFunctions {
    * @returns 成功返回实际删除的会话数量
    */
   deleteByUserId: (userId: string) => Promise<Result<number, IamError>>
+
+  /**
+   * 通过 refreshToken 换取新的 TokenPair
+   *
+   * 验证 refreshToken 有效性，签发新的 accessToken + refreshToken，
+   * 旧 refreshToken 自动失效（Rotation 策略）。
+   *
+   * @param refreshToken - 刷新令牌
+   * @returns 成功返回新的 TokenPair；失败返回 TOKEN_REFRESH_FAILED / TOKEN_EXPIRED
+   */
+  refresh: (refreshToken: string) => Promise<Result<TokenPair, IamError>>
+
+  /**
+   * 吊销 refreshToken（登出时调用）
+   *
+   * @param refreshToken - 刷新令牌
+   * @returns 成功返回 ok；令牌不存在时静默成功
+   */
+  revokeRefresh: (refreshToken: string) => Promise<Result<void, IamError>>
 }

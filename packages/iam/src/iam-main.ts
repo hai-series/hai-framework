@@ -11,7 +11,6 @@ import type { IamConfig } from './iam-config.js'
 import type {
   IamAuthnFunctions,
   IamAuthzFunctions,
-  IamClientOperations,
   IamConfigInput,
   IamError,
   IamFunctions,
@@ -27,7 +26,6 @@ import { resetOtpRepoSingleton } from './authn/otp/iam-authn-otp-repository-otp.
 import { createIamAuthzFunctions } from './authz/iam-authz-functions.js'
 import { resetPermissionRepoSingleton } from './authz/iam-authz-repository-permission.js'
 import { resetRoleRepoSingleton } from './authz/iam-authz-repository-role.js'
-import { createIamClient } from './client/iam-client.js'
 import { IamConfigSchema, IamErrorCode } from './iam-config.js'
 import { iamM } from './iam-i18n.js'
 import { seedIamData } from './iam-seed.js'
@@ -72,11 +70,6 @@ const notInitializedUser: IamUserFunctions = new Proxy({} as IamUserFunctions, {
       : Reflect.get(asyncUserProxy as object, prop, receiver)
   },
 })
-
-/** 客户端操作（无状态，无需初始化） */
-const iamClientOperations: IamClientOperations = {
-  create: createIamClient,
-}
 
 // ─── 服务对象 ───
 
@@ -184,7 +177,6 @@ export const iam: IamFunctions = {
   get user(): IamUserFunctions { return currentUser ?? notInitializedUser },
   get authz(): IamAuthzFunctions { return currentAuthz ?? notInitializedAuthz },
   get session(): IamSessionFunctions { return currentSession ?? notInitializedSession },
-  get client(): IamClientOperations { return iamClientOperations },
   get config() { return currentConfig },
   get isInitialized() { return currentConfig !== null },
 
