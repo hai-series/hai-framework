@@ -364,7 +364,7 @@ async function generateMigration(
  * 迁移: ${context.pascalCase}
  * 时间: ${new Date().toISOString()}
  */
-import type { MigrationFn } from '@h-ai/db'
+import type { MigrationFn } from '@h-ai/reldb'
 
 export const up: MigrationFn = async (db) => {
   // 升级逻辑

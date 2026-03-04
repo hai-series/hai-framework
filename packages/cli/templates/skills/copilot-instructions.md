@@ -11,7 +11,7 @@
 - **前端框架**：Svelte 5 (Runes: `$props()`, `$state()`, `$derived()`, `$effect()`)
 - **路由/SSR**：SvelteKit 2（文件路由、Handle Hook、load 函数）
 - **样式**：TailwindCSS 4 + DaisyUI 5
-- **后端框架**：hai-framework (`@h-ai/core`, `@h-ai/kit`, `@h-ai/db`, `@h-ai/iam` 等)
+- **后端框架**：hai-framework (`@h-ai/core`, `@h-ai/kit`, `@h-ai/reldb`, `@h-ai/iam` 等)
 - **统一模式**：`module.init(config) → use → module.close()`，所有操作返回 `Result<T, E>`
 - **单元测试**：Vitest
 - **E2E 测试**：Playwright

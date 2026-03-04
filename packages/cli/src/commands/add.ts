@@ -29,7 +29,7 @@ export interface AddModuleOptions extends GlobalOptions {
 // 可添加的模块与对应包
 const MODULE_MAP: Record<string, { packages: string[], deps?: string[], configKey?: string, description: string }> = {
   iam: { packages: ['@h-ai/iam'], deps: ['crypto'], configKey: 'iam', description: '身份与访问管理' },
-  db: { packages: ['@h-ai/db'], configKey: 'db', description: '数据库' },
+  reldb: { packages: ['@h-ai/reldb'], configKey: 'reldb', description: '数据库' },
   cache: { packages: ['@h-ai/cache'], configKey: 'cache', description: '缓存' },
   ai: { packages: ['@h-ai/ai'], configKey: 'ai', description: 'AI 集成' },
   storage: { packages: ['@h-ai/storage'], configKey: 'storage', description: '文件存储' },

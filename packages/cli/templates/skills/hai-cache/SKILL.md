@@ -110,7 +110,7 @@ async function getUserCached(userId: string) {
   if (cached.success && cached.data)
     return cached.data
 
-  const result = await db.sql.get<User>('SELECT * FROM users WHERE id = ?', [userId])
+  const result = await reldb.sql.get<User>('SELECT * FROM users WHERE id = ?', [userId])
   if (result.success && result.data) {
     await cache.kv.set(`user:${userId}`, result.data, { ex: 3600 })
     return result.data

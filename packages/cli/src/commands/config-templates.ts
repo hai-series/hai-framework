@@ -344,7 +344,7 @@ HAI_DEBUG=false`)
     const isSqlite = dbType === 'sqlite'
     sections.push(`
 # =============================================================================
-# Database (@h-ai/db)
+# Database (@h-ai/reldb)
 # =============================================================================
 # Database type: sqlite | postgresql | mysql
 HAI_DB_TYPE=${dbType}

@@ -113,7 +113,7 @@ describe('admin 应用类型生成', () => {
       const content = await readGenerated(projectPath, 'package.json')
       const pkg = JSON.parse(content)
       expect(pkg.dependencies['@h-ai/iam']).toBeDefined()
-      expect(pkg.dependencies['@h-ai/db']).toBeDefined()
+      expect(pkg.dependencies['@h-ai/reldb']).toBeDefined()
       expect(pkg.dependencies['@h-ai/cache']).toBeDefined()
       expect(pkg.dependencies['@h-ai/crypto']).toBeDefined()
     })
@@ -261,7 +261,7 @@ describe('admin 应用类型生成', () => {
     it('应生成 init.ts 并引入 iam / db / cache', async () => {
       const content = await readGenerated(projectPath, 'src/lib/server/init.ts')
       expect(content).toContain('from \'@h-ai/iam\'')
-      expect(content).toContain('from \'@h-ai/db\'')
+      expect(content).toContain('from \'@h-ai/reldb\'')
       expect(content).toContain('from \'@h-ai/cache\'')
     })
 
@@ -294,7 +294,7 @@ describe('website 应用类型生成', () => {
       const pkg = JSON.parse(content)
       expect(pkg.name).toBe('test-website')
       expect(pkg.dependencies['@h-ai/iam']).toBeUndefined()
-      expect(pkg.dependencies['@h-ai/db']).toBeUndefined()
+      expect(pkg.dependencies['@h-ai/reldb']).toBeUndefined()
     })
 
     it('应包含 UI 依赖', async () => {
@@ -511,7 +511,7 @@ describe('api 应用类型生成', () => {
 
     it('应生成 init.ts 并引入 db / cache', async () => {
       const content = await readGenerated(projectPath, 'src/lib/server/init.ts')
-      expect(content).toContain('from \'@h-ai/db\'')
+      expect(content).toContain('from \'@h-ai/reldb\'')
       expect(content).toContain('from \'@h-ai/cache\'')
       expect(content).not.toContain('from \'@h-ai/iam\'')
     })
@@ -537,7 +537,7 @@ describe('feature 叠加', () => {
     const content = await readGenerated(projectPath, 'package.json')
     const pkg = JSON.parse(content)
     expect(pkg.dependencies['@h-ai/iam']).toBeDefined()
-    expect(pkg.dependencies['@h-ai/db']).toBeDefined()
+    expect(pkg.dependencies['@h-ai/reldb']).toBeDefined()
     expect(pkg.dependencies['@h-ai/cache']).toBeDefined()
     expect(pkg.dependencies['@h-ai/crypto']).toBeDefined()
     expect(pkg.dependencies['@h-ai/storage']).toBeDefined()
@@ -555,7 +555,7 @@ describe('feature 叠加', () => {
   it('init.ts 应引入所有模块', async () => {
     const content = await readGenerated(projectPath, 'src/lib/server/init.ts')
     expect(content).toContain('from \'@h-ai/iam\'')
-    expect(content).toContain('from \'@h-ai/db\'')
+    expect(content).toContain('from \'@h-ai/reldb\'')
     expect(content).toContain('from \'@h-ai/cache\'')
     expect(content).toContain('from \'@h-ai/storage\'')
     expect(content).toContain('from \'@h-ai/ai\'')

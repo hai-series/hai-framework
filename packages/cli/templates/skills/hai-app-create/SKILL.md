@@ -213,7 +213,7 @@ export const POST = kit.handler(async ({ request, locals }) => {
 import type { Result } from '@h-ai/core'
 // src/lib/server/services/article.ts
 import { core } from '@h-ai/core'
-import { db } from '@h-ai/db'
+import { reldb } from '@h-ai/reldb'
 
 const logger = core.logger
 
@@ -221,7 +221,7 @@ const logger = core.logger
 export async function createArticle(input: CreateArticleInput): Promise<Result<Article>> {
   logger.debug('Creating article', { title: input.title })
 
-  const result = await db.crud.create('articles', {
+  const result = await reldb.crud.create('articles', {
     id: crypto.randomUUID(),
     ...input,
     created_at: new Date().toISOString(),
@@ -236,7 +236,7 @@ export async function createArticle(input: CreateArticleInput): Promise<Result<A
 /** 获取文章列表 */
 export async function listArticles(params: ListParams): Promise<Result<PaginatedResult<Article>>> {
   logger.debug('Listing articles', { page: params.page })
-  return db.crud.paginate('articles', params)
+  return reldb.crud.paginate('articles', params)
 }
 ```
 
@@ -336,7 +336,7 @@ interface CreateArticleInput {
 在 `$lib/server/init.ts` 中管理模块初始化顺序：
 
 ```
-core.init() → db.init() → cache.init() → iam.init() → createBusinessTables()
+core.init() → reldb.init() → cache.init() → iam.init() → createBusinessTables()
 ```
 
 新增模块时需在此文件中按依赖顺序添加初始化调用。

@@ -211,26 +211,42 @@ const reply = await client.sendMessage('你好', '系统提示')
 
 ## 错误码 — `AIErrorCode`
 
-| 错误码                           | 说明           |
-| -------------------------------- | -------------- |
-| `INTERNAL_ERROR` (7000)          | 内部错误       |
-| `NOT_INITIALIZED` (7010)         | 服务未初始化   |
-| `CONFIGURATION_ERROR` (7011)     | 配置错误       |
-| `API_ERROR` (7100)               | API 调用错误   |
-| `INVALID_REQUEST` (7101)         | 无效请求       |
-| `RATE_LIMITED` (7102)            | 速率限制       |
-| `TIMEOUT` (7103)                 | 请求超时       |
-| `MODEL_NOT_FOUND` (7104)         | 模型未找到     |
-| `CONTEXT_LENGTH_EXCEEDED` (7105) | 上下文长度超限 |
-| `MCP_CONNECTION_ERROR` (7200)    | MCP 连接错误   |
-| `MCP_PROTOCOL_ERROR` (7201)      | MCP 协议错误   |
-| `MCP_TOOL_ERROR` (7202)          | MCP 工具错误   |
-| `MCP_RESOURCE_ERROR` (7203)      | MCP 资源错误   |
-| `MCP_SERVER_ERROR` (7204)        | MCP 服务器错误 |
-| `TOOL_NOT_FOUND` (7400)          | 工具未找到     |
-| `TOOL_VALIDATION_FAILED` (7401)  | 工具验证失败   |
-| `TOOL_EXECUTION_FAILED` (7402)   | 工具执行失败   |
-| `TOOL_TIMEOUT` (7403)            | 工具执行超时   |
+| 错误码                                    | 说明               |
+| ----------------------------------------- | ------------------ |
+| `INTERNAL_ERROR` (7000)                   | 内部错误           |
+| `NOT_INITIALIZED` (7010)                  | 服务未初始化       |
+| `CONFIGURATION_ERROR` (7011)              | 配置错误           |
+| `API_ERROR` (7100)                        | API 调用错误       |
+| `INVALID_REQUEST` (7101)                  | 无效请求           |
+| `RATE_LIMITED` (7102)                     | 速率限制           |
+| `TIMEOUT` (7103)                          | 请求超时           |
+| `MODEL_NOT_FOUND` (7104)                  | 模型未找到         |
+| `CONTEXT_LENGTH_EXCEEDED` (7105)          | 上下文长度超限     |
+| `MCP_CONNECTION_ERROR` (7200)             | MCP 连接错误       |
+| `MCP_PROTOCOL_ERROR` (7201)              | MCP 协议错误       |
+| `MCP_TOOL_ERROR` (7202)                  | MCP 工具错误       |
+| `MCP_RESOURCE_ERROR` (7203)              | MCP 资源错误       |
+| `MCP_SERVER_ERROR` (7204)                | MCP 服务器错误     |
+| `EMBEDDING_API_ERROR` (7300)             | Embedding 调用错误 |
+| `EMBEDDING_MODEL_NOT_FOUND` (7301)       | Embedding 模型未找到 |
+| `EMBEDDING_INPUT_TOO_LONG` (7302)        | Embedding 输入过长 |
+| `TOOL_NOT_FOUND` (7400)                  | 工具未找到         |
+| `TOOL_VALIDATION_FAILED` (7401)          | 工具验证失败       |
+| `TOOL_EXECUTION_FAILED` (7402)           | 工具执行失败       |
+| `TOOL_TIMEOUT` (7403)                    | 工具执行超时       |
+| `REASONING_FAILED` (7500)                | 推理执行失败       |
+| `REASONING_MAX_ROUNDS` (7501)            | 推理轮次超限       |
+| `REASONING_STRATEGY_NOT_FOUND` (7502)    | 推理策略未找到     |
+| `RETRIEVAL_FAILED` (7600)                | 检索执行失败       |
+| `RETRIEVAL_SOURCE_NOT_FOUND` (7601)      | 检索源未配置       |
+| `RAG_FAILED` (7700)                      | RAG 执行失败       |
+| `RAG_CONTEXT_BUILD_FAILED` (7701)        | RAG 上下文构建失败 |
+| `KNOWLEDGE_SETUP_FAILED` (7800)          | 知识库初始化失败   |
+| `KNOWLEDGE_INGEST_FAILED` (7801)         | 知识入库失败       |
+| `KNOWLEDGE_RETRIEVE_FAILED` (7802)       | 知识检索失败       |
+| `KNOWLEDGE_ENTITY_EXTRACT_FAILED` (7803) | 实体提取失败       |
+| `KNOWLEDGE_NOT_SETUP` (7804)             | 知识库未初始化     |
+| `KNOWLEDGE_COLLECTION_NOT_FOUND` (7805)  | 集合不存在         |
 
 ---
 
@@ -263,6 +279,43 @@ while (result.success && result.data.choices[0].finish_reason === 'tool_calls') 
 }
 ```
 
+### 知识库完整流程（文档入库 → 问答）
+
+```typescript
+import { ai } from '@h-ai/ai'
+
+// 初始化
+await ai.knowledge.setup()
+
+// 导入多篇文档
+for (const doc of documents) {
+  const result = await ai.knowledge.ingest({
+    documentId: doc.id,
+    content: doc.content,
+    title: doc.title,
+    enableEntityExtraction: true,
+  })
+  if (!result.success) {
+    // 按错误码处理
+    switch (result.error.code) {
+      case AIErrorCode.KNOWLEDGE_INGEST_FAILED:
+        // 入库失败
+        break
+      case AIErrorCode.EMBEDDING_API_ERROR:
+        // 嵌入调用失败
+        break
+    }
+  }
+}
+
+// 问答
+const answer = await ai.knowledge.ask('项目核心架构是什么？')
+if (answer.success) {
+  // answer.data.answer — LLM 生成的回答
+  // answer.data.citations — 信源引用列表
+}
+```
+
 ### SvelteKit API 端点
 
 ```typescript
@@ -287,3 +340,6 @@ export async function POST(event) {
 - `hai-build`：模块初始化顺序
 - `hai-core`：配置与 Result 模型
 - `hai-kit`：SvelteKit API 端点集成
+- `hai-vecdb`：向量数据库（Retrieval / RAG / Knowledge 的存储层）
+- `hai-db`：关系数据库（Knowledge 实体索引的存储层）
+- `hai-datapipe`：数据清洗与分块（Knowledge 入库前的数据处理）

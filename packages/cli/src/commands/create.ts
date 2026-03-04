@@ -76,7 +76,7 @@ const FEATURES: Record<string, FeatureDefinition> = {
     id: 'db',
     name: '数据库',
     description: '多数据库支持 (SQLite/PostgreSQL/MySQL)',
-    packages: ['@h-ai/db'],
+    packages: ['@h-ai/reldb'],
   },
   cache: {
     id: 'cache',

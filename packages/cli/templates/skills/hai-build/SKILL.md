@@ -120,7 +120,7 @@ core（基础能力：配置、日志、i18n、Result）
 ```typescript
 import { cache } from '@h-ai/cache'
 import { core } from '@h-ai/core'
-import { db } from '@h-ai/db'
+import { reldb } from '@h-ai/reldb'
 import { iam } from '@h-ai/iam'
 import { payment } from '@h-ai/payment' // 按需
 
@@ -134,13 +134,13 @@ export async function initModules() {
   await core.init()
 
   // 2. 基础设施层（无相互依赖，可任意顺序）
-  await db.init(core.config.get('db'))
+  await reldb.init(core.config.get('db'))
   await cache.init(core.config.get('cache'))
 
   // 3. 业务层（依赖基础设施）
-  await iam.init({ ...core.config.get('iam'), db, cache })
+  await iam.init({ ...core.config.get('iam'), reldb, cache })
   // 支付模块（按需）
-  await payment.init({ ...core.config.get('payment'), db })
+  await payment.init({ ...core.config.get('payment'), reldb })
 
   // 4. 集成层
   // kit 无需 init，通过 createHandle 配置
@@ -194,7 +194,7 @@ log:
 | 任务                  | 技能             | 触发关键词                                        |
 | --------------------- | ---------------- | ------------------------------------------------- |
 | 配置/日志/i18n/Result | `hai-core`       | core.init, core.logger, core.config, Result       |
-| 数据库操作            | `hai-db`         | db.init, SQL, CRUD, 事务, 分页, DDL               |
+| 数据库操作            | `hai-db`         | reldb.init, SQL, CRUD, 事务, 分页, DDL               |
 | 缓存操作              | `hai-cache`      | cache.init, cache.get/set, TTL, Redis             |
 | 文件存储              | `hai-storage`    | storage.init, 上传, 下载, S3, 本地存储            |
 | 加密/签名/哈希        | `hai-crypto`     | crypto.init, SM2, SM3, SM4, 加密, 签名            |
@@ -269,7 +269,7 @@ pnpm typecheck && pnpm lint && pnpm test
 所有 hai 模块操作均返回 `Result<T, E>` 类型：
 
 ```typescript
-const result = await db.sql.query('SELECT * FROM users')
+const result = await reldb.sql.query('SELECT * FROM users')
 if (!result.success) {
   // result.error: { code, message, details? }
   core.logger.error('Query failed', { error: result.error })

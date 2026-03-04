@@ -198,9 +198,9 @@ if (!result.success)
 
 ```typescript
 // 在模块 main.ts 中使用
-const notInitialized = core.module.createNotInitializedKit<DbError>(
-  DbErrorCode.NOT_INITIALIZED,
-  () => dbM('db_notInitialized'),
+const notInitialized = core.module.createNotInitializedKit<ReldbError>(
+  ReldbErrorCode.NOT_INITIALIZED,
+  () => reldbM('db_notInitialized'),
 )
 
 // 创建占位 Proxy（异步接口，默认）
