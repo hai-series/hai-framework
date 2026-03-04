@@ -47,6 +47,14 @@ export const AIErrorCode = {
   /** MCP 服务器错误 */
   MCP_SERVER_ERROR: 7204,
 
+  // Embedding (7300-7399)
+  /** Embedding API 调用错误 */
+  EMBEDDING_API_ERROR: 7300,
+  /** Embedding 模型未找到 */
+  EMBEDDING_MODEL_NOT_FOUND: 7301,
+  /** Embedding 输入过长 */
+  EMBEDDING_INPUT_TOO_LONG: 7302,
+
   // 工具 (7400-7499)
   /** 工具未找到 */
   TOOL_NOT_FOUND: 7400,
@@ -56,12 +64,99 @@ export const AIErrorCode = {
   TOOL_EXECUTION_FAILED: 7402,
   /** 工具超时 */
   TOOL_TIMEOUT: 7403,
+
+  // Reasoning (7500-7599)
+  /** 推理执行失败 */
+  REASONING_FAILED: 7500,
+  /** 推理轮次超限 */
+  REASONING_MAX_ROUNDS: 7501,
+  /** 推理策略未找到 */
+  REASONING_STRATEGY_NOT_FOUND: 7502,
+
+  // Retrieval (7600-7699)
+  /** 检索执行失败 */
+  RETRIEVAL_FAILED: 7600,
+  /** 检索源未配置 */
+  RETRIEVAL_SOURCE_NOT_FOUND: 7601,
+
+  // RAG (7700-7799)
+  /** RAG 执行失败 */
+  RAG_FAILED: 7700,
+  /** RAG 上下文构建失败 */
+  RAG_CONTEXT_BUILD_FAILED: 7701,
+
+  // Knowledge (7800-7899)
+  /** 知识库初始化失败 */
+  KNOWLEDGE_SETUP_FAILED: 7800,
+  /** 知识入库失败 */
+  KNOWLEDGE_INGEST_FAILED: 7801,
+  /** 知识检索失败 */
+  KNOWLEDGE_RETRIEVE_FAILED: 7802,
+  /** 实体提取失败 */
+  KNOWLEDGE_ENTITY_EXTRACT_FAILED: 7803,
+  /** 知识库未初始化 */
+  KNOWLEDGE_NOT_SETUP: 7804,
+  /** 集合不存在 */
+  KNOWLEDGE_COLLECTION_NOT_FOUND: 7805,
 } as const
 
 /** 错误码值类型 */
 export type AIErrorCodeType = (typeof AIErrorCode)[keyof typeof AIErrorCode]
 
 // ─── LLM 配置 Schema ───
+
+// ─── 多模型配置 ───
+
+/**
+ * 模型场景枚举
+ *
+ * 预定义的模型使用场景，用于自动选择合适的模型。
+ *
+ * - `default` — 默认场景
+ * - `chat` — 对话场景
+ * - `reasoning` — 推理场景（需要强逻辑能力）
+ * - `embedding` — 向量嵌入场景
+ * - `fast` — 快速响应场景（低延迟优先）
+ */
+export const ModelScenarioSchema = z.enum(['default', 'chat', 'reasoning', 'embedding', 'fast'])
+
+/** 模型场景类型 */
+export type ModelScenario = z.infer<typeof ModelScenarioSchema>
+
+/**
+ * 模型条目 Schema
+ *
+ * 定义单个模型的配置信息，包含唯一 ID、模型名称和可选参数覆盖。
+ *
+ * @example
+ * ```ts
+ * const model = {
+ *   id: 'gpt-4o',
+ *   model: 'gpt-4o',
+ *   maxTokens: 8192,
+ *   temperature: 0.3,
+ * }
+ * ```
+ */
+export const ModelEntrySchema = z.object({
+  /** 模型唯一标识（用于 ModelResolver 解析） */
+  id: z.string(),
+  /** 模型名称（传给 API 的实际模型名） */
+  model: z.string(),
+  /** API Key 覆盖（可选，未提供时使用全局配置） */
+  apiKey: z.string().optional(),
+  /** Base URL 覆盖（可选） */
+  baseUrl: z.string().url().optional(),
+  /** 最大 Token 数覆盖（可选） */
+  maxTokens: z.number().positive().optional(),
+  /** 温度覆盖（可选） */
+  temperature: z.number().min(0).max(2).optional(),
+  /** 超时覆盖（可选，毫秒） */
+  timeout: z.number().positive().optional(),
+})
+
+/** 模型条目类型 */
+export type ModelEntry = z.infer<typeof ModelEntrySchema>
 
 /** LLM 配置 Schema */
 export const LLMConfigSchema = z.object({
@@ -77,6 +172,10 @@ export const LLMConfigSchema = z.object({
   temperature: z.number().min(0).max(2).optional().default(0.7),
   /** 请求超时时间（毫秒，默认 `60000`） */
   timeout: z.number().positive().optional().default(60000),
+  /** 多模型配置列表（可选，配置多个模型及其参数） */
+  models: z.array(ModelEntrySchema).optional(),
+  /** 场景默认模型映射（场景名 → 模型 ID） */
+  defaults: z.record(ModelScenarioSchema, z.string()).optional(),
 })
 
 /** LLM 配置类型 */
@@ -121,12 +220,68 @@ export type MCPConfig = z.infer<typeof MCPConfigSchema>
 
 // ─── 统一 AI 配置 ───
 
+/** Embedding 配置 Schema */
+export const EmbeddingConfigSchema = z.object({
+  /** 嵌入模型名称（默认 `'text-embedding-3-small'`） */
+  model: z.string().default('text-embedding-3-small'),
+  /** API Key 覆盖（可选，默认使用 LLM 配置的 apiKey） */
+  apiKey: z.string().optional(),
+  /** Base URL 覆盖（可选，默认使用 LLM 配置的 baseUrl） */
+  baseUrl: z.string().url().optional(),
+  /** 向量维度（可选，部分模型支持指定维度） */
+  dimensions: z.number().int().positive().optional(),
+  /** 批量大小（单次请求最多处理的文本数，默认 100） */
+  batchSize: z.number().int().positive().default(100),
+})
+
+/** Embedding 配置类型 */
+export type EmbeddingConfig = z.infer<typeof EmbeddingConfigSchema>
+
+// ─── Knowledge 配置 Schema ───
+
+/**
+ * 实体类型枚举
+ *
+ * 预定义的实体类型，用于实体提取和倒排索引分类。
+ */
+export const EntityTypeSchema = z.enum(['person', 'project', 'concept', 'organization', 'location', 'event', 'other'])
+
+/** 实体类型 */
+export type EntityType = z.infer<typeof EntityTypeSchema>
+
+/** Knowledge 配置 Schema */
+export const KnowledgeConfigSchema = z.object({
+  /** 默认向量集合名（默认 'knowledge'） */
+  collection: z.string().default('knowledge'),
+  /** 向量维度（默认 1536，需与 embedding 模型匹配） */
+  dimension: z.number().int().positive().default(1536),
+  /** 是否启用实体提取（默认 true） */
+  enableEntityExtraction: z.boolean().default(true),
+  /** 实体提取使用的模型（可选，默认使用 LLM 配置中的默认模型） */
+  entityExtractionModel: z.string().optional(),
+  /** 默认分块模式（默认 'markdown'） */
+  chunkMode: z.enum(['sentence', 'paragraph', 'markdown', 'page']).default('markdown'),
+  /** 默认分块最大大小（默认 1500） */
+  chunkMaxSize: z.number().int().positive().default(1500),
+  /** 默认分块重叠（默认 200） */
+  chunkOverlap: z.number().int().min(0).default(200),
+  /** 实体查询命中的额外加权系数（默认 0.15，叠加到向量分数上） */
+  entityBoostWeight: z.number().min(0).max(1).default(0.15),
+})
+
+/** Knowledge 配置类型 */
+export type KnowledgeConfig = z.infer<typeof KnowledgeConfigSchema>
+
 /** AI 配置 Schema */
 export const AIConfigSchema = z.object({
   /** LLM 配置 */
   llm: LLMConfigSchema.optional(),
   /** MCP 配置 */
   mcp: MCPConfigSchema.optional(),
+  /** Embedding 配置 */
+  embedding: EmbeddingConfigSchema.optional(),
+  /** Knowledge 配置 */
+  knowledge: KnowledgeConfigSchema.optional(),
 })
 
 /** AI 配置类型（校验后的完整类型） */

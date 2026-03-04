@@ -9,17 +9,27 @@ import type { Result } from '@h-ai/core'
 
 import type { AIConfig, AIConfigInput } from './ai-config.js'
 import type { AIError, AIFunctions } from './ai-types.js'
+import type { EmbeddingOperations } from './embedding/ai-embedding-types.js'
+import type { KnowledgeOperations } from './knowledge/ai-knowledge-types.js'
 import type { LLMOperations, StreamOperations, ToolsOperations } from './llm/ai-llm-types.js'
 import type { MCPOperations } from './mcp/ai-mcp-types.js'
+import type { RagOperations } from './rag/ai-rag-types.js'
+import type { ReasoningOperations } from './reasoning/ai-reasoning-types.js'
+import type { RetrievalOperations } from './retrieval/ai-retrieval-types.js'
 
 import { core, err, ok } from '@h-ai/core'
 
-import { AIConfigSchema, AIErrorCode } from './ai-config.js'
+import { AIConfigSchema, AIErrorCode, KnowledgeConfigSchema } from './ai-config.js'
 import { aiM } from './ai-i18n.js'
+import { createEmbeddingOperations } from './embedding/ai-embedding-functions.js'
+import { createKnowledgeOperations } from './knowledge/ai-knowledge-functions.js'
 import { createAILLMFunctions } from './llm/ai-llm-functions.js'
 import { collectStream, createSSEDecoder, createStreamProcessor, encodeSSE } from './llm/ai-llm-stream.js'
 import { createToolRegistry, defineTool } from './llm/ai-llm-tool.js'
 import { createAIMCPFunctions } from './mcp/ai-mcp-functions.js'
+import { createRagOperations } from './rag/ai-rag-functions.js'
+import { createReasoningOperations } from './reasoning/ai-reasoning-functions.js'
+import { createRetrievalOperations } from './retrieval/ai-retrieval-functions.js'
 
 const logger = core.logger.child({ module: 'ai', scope: 'main' })
 
@@ -31,6 +41,16 @@ let currentConfig: AIConfig | null = null
 let currentLLM: LLMOperations | null = null
 /** 当前 MCP 操作实例 */
 let currentMCP: MCPOperations | null = null
+/** 当前 Embedding 操作实例 */
+let currentEmbedding: EmbeddingOperations | null = null
+/** 当前 Reasoning 操作实例 */
+let currentReasoning: ReasoningOperations | null = null
+/** 当前 Retrieval 操作实例 */
+let currentRetrieval: RetrievalOperations | null = null
+/** 当前 RAG 操作实例 */
+let currentRag: RagOperations | null = null
+/** 当前 Knowledge 操作实例 */
+let currentKnowledge: KnowledgeOperations | null = null
 
 // ─── 未初始化占位 ───
 
@@ -63,6 +83,41 @@ const notInitializedMCP: MCPOperations = {
   callTool: () => Promise.resolve(notInitialized.result()),
   readResource: () => Promise.resolve(notInitialized.result()),
   getPrompt: () => Promise.resolve(notInitialized.result()),
+}
+
+/** Embedding 未初始化占位 */
+const notInitializedEmbedding: EmbeddingOperations = {
+  embed: () => Promise.resolve(notInitialized.result()),
+  embedText: () => Promise.resolve(notInitialized.result()),
+  embedBatch: () => Promise.resolve(notInitialized.result()),
+}
+
+/** Reasoning 未初始化占位 */
+const notInitializedReasoning: ReasoningOperations = {
+  run: () => Promise.resolve(notInitialized.result()),
+}
+
+/** Retrieval 未初始化占位 */
+const notInitializedRetrieval: RetrievalOperations = {
+  addSource: () => notInitialized.result(),
+  removeSource: () => notInitialized.result(),
+  listSources: () => [],
+  retrieve: () => Promise.resolve(notInitialized.result()),
+}
+
+/** RAG 未初始化占位 */
+const notInitializedRag: RagOperations = {
+  query: () => Promise.resolve(notInitialized.result()),
+}
+
+/** Knowledge 未初始化占位 */
+const notInitializedKnowledge: KnowledgeOperations = {
+  setup: () => Promise.resolve(notInitialized.result()),
+  ingest: () => Promise.resolve(notInitialized.result()),
+  retrieve: () => Promise.resolve(notInitialized.result()),
+  ask: () => Promise.resolve(notInitialized.result()),
+  findByEntity: () => Promise.resolve(notInitialized.result()),
+  listEntities: () => Promise.resolve(notInitialized.result()),
 }
 
 // ─── 纯函数操作（不依赖初始化） ───
@@ -129,8 +184,51 @@ export const ai: AIFunctions = {
       // 创建 MCP 子功能
       currentMCP = createAIMCPFunctions({ config: parsed })
 
+      // 创建 Embedding 子功能
+      currentEmbedding = createEmbeddingOperations(parsed)
+
+      // 创建 Reasoning 子功能（依赖 LLM）
+      currentReasoning = createReasoningOperations(parsed, currentLLM)
+
+      // 创建 Retrieval 子功能（依赖 Embedding）
+      currentRetrieval = createRetrievalOperations(currentEmbedding)
+
+      // 创建 RAG 子功能（依赖 LLM + Retrieval）
+      currentRag = createRagOperations(currentLLM, currentRetrieval)
+
+      // 创建 Knowledge 子功能（依赖 LLM + Embedding + vecdb + reldb + datapipe）
+      const knowledgeConfig = parsed.knowledge ?? {}
+      const knowledgeParsed = KnowledgeConfigSchema.parse(knowledgeConfig)
+
+      currentKnowledge = createKnowledgeOperations(
+        knowledgeParsed,
+        currentLLM,
+        currentEmbedding,
+        async () => {
+          try {
+            const { vecdb } = await import('@h-ai/vecdb')
+            return vecdb.isInitialized ? vecdb : null
+          }
+          catch { return null }
+        },
+        async () => {
+          try {
+            const { reldb } = await import('@h-ai/reldb')
+            return reldb.isInitialized ? reldb.sql : null
+          }
+          catch { return null }
+        },
+        async () => {
+          try {
+            const { datapipe } = await import('@h-ai/datapipe')
+            return datapipe as unknown as { clean: (text: string, options?: Record<string, unknown>) => import('@h-ai/core').Result<string, unknown>, chunk: (text: string, options: Record<string, unknown>) => import('@h-ai/core').Result<Array<{ index: number, content: string, metadata?: Record<string, unknown> }>, unknown> }
+          }
+          catch { return null }
+        },
+      )
+
       currentConfig = parsed
-      logger.info('AI module initialized')
+      logger.info('AI module initialized', { model: parsed.llm?.model })
       return ok(undefined)
     }
     catch (error) {
@@ -149,6 +247,11 @@ export const ai: AIFunctions = {
   get mcp(): MCPOperations { return currentMCP ?? notInitializedMCP },
   get tools(): ToolsOperations { return toolsOperations },
   get stream(): StreamOperations { return streamOperations },
+  get embedding(): EmbeddingOperations { return currentEmbedding ?? notInitializedEmbedding },
+  get reasoning(): ReasoningOperations { return currentReasoning ?? notInitializedReasoning },
+  get retrieval(): RetrievalOperations { return currentRetrieval ?? notInitializedRetrieval },
+  get rag(): RagOperations { return currentRag ?? notInitializedRag },
+  get knowledge(): KnowledgeOperations { return currentKnowledge ?? notInitializedKnowledge },
   get config() { return currentConfig },
   get isInitialized() { return currentConfig !== null },
 
@@ -162,6 +265,11 @@ export const ai: AIFunctions = {
 
     currentLLM = null
     currentMCP = null
+    currentEmbedding = null
+    currentReasoning = null
+    currentRetrieval = null
+    currentRag = null
+    currentKnowledge = null
     currentConfig = null
 
     logger.info('AI module closed')

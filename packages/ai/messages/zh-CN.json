@@ -17,5 +17,26 @@
 
   "ai_toolNotFound": "工具 '{name}' 未找到",
   "ai_toolInvalidJson": "工具调用参数 JSON 格式无效",
-  "ai_configError": "AI 配置校验失败：{error}"
+  "ai_configError": "AI 配置校验失败：{error}",
+
+  "ai_embeddingApiFailed": "Embedding API 调用失败：{error}",
+  "ai_embeddingModelNotFound": "Embedding 模型 '{model}' 未找到",
+  "ai_embeddingInputTooLong": "Embedding 输入文本超过最大长度限制",
+
+  "ai_reasoningFailed": "推理执行失败：{error}",
+  "ai_reasoningMaxRounds": "推理轮次已达上限（{rounds} 轮）",
+  "ai_reasoningStrategyNotFound": "推理策略 '{strategy}' 不存在",
+
+  "ai_retrievalFailed": "检索执行失败：{error}",
+  "ai_retrievalSourceNotFound": "检索源 '{source}' 未配置",
+
+  "ai_ragFailed": "RAG 执行失败：{error}",
+  "ai_ragContextBuildFailed": "RAG 上下文构建失败：{error}",
+
+  "ai_knowledgeSetupFailed": "知识库初始化失败：{error}",
+  "ai_knowledgeIngestFailed": "知识入库失败：{error}",
+  "ai_knowledgeRetrieveFailed": "知识检索失败：{error}",
+  "ai_knowledgeEntityExtractFailed": "实体提取失败：{error}",
+  "ai_knowledgeNotSetup": "知识库未初始化，请先调用 ai.knowledge.setup()",
+  "ai_knowledgeCollectionNotFound": "知识集合 '{collection}' 不存在"
 }

@@ -39,7 +39,7 @@ const result = await ai.llm.chat({
   ],
 })
 if (result.success) {
-  core.logger.info('AI response', { content: result.data.choices[0].message.content })
+  console.log(result.data.choices[0].message.content)
 }
 
 // 3. 流式调用
@@ -155,16 +155,17 @@ const result = await ai.llm.chat({ messages })
 if (!result.success) {
   switch (result.error.code) {
     case AIErrorCode.NOT_INITIALIZED:
-      core.logger.error('AI not initialized')
+      // 请先调用 ai.init()
       break
     case AIErrorCode.RATE_LIMITED:
-      core.logger.warn('AI rate limited')
+      // API 限流，稍后重试
       break
     case AIErrorCode.TIMEOUT:
-      core.logger.error('AI request timeout')
+      // 请求超时
       break
     default:
-      core.logger.error('AI error', { error: result.error })
+      // 其他错误
+      break
   }
 }
 ```

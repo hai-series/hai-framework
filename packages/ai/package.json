@@ -43,8 +43,14 @@
   "dependencies": {
     "@h-ai/core": "workspace:*",
     "@modelcontextprotocol/sdk": "catalog:",
+    "nanoid": "catalog:",
     "openai": "catalog:",
     "zod": "catalog:"
+  },
+  "optionalDependencies": {
+    "@h-ai/datapipe": "workspace:*",
+    "@h-ai/reldb": "workspace:*",
+    "@h-ai/vecdb": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "catalog:",
