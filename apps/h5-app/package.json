@@ -28,9 +28,9 @@
     "@h-ai/ai": "workspace:*",
     "@h-ai/cache": "workspace:*",
     "@h-ai/core": "workspace:*",
-    "@h-ai/db": "workspace:*",
     "@h-ai/iam": "workspace:*",
     "@h-ai/kit": "workspace:*",
+    "@h-ai/reldb": "workspace:*",
     "@h-ai/storage": "workspace:*",
     "@h-ai/ui": "workspace:*",
     "zod": "catalog:"

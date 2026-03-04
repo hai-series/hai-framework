@@ -9,7 +9,7 @@
 - 🛒 **购物车** — 移动端购物车功能
 - 👤 **个人中心** — 用户档案管理
 - 📂 **图片存储** — @h-ai/storage 存储原图
-- 💾 **数据持久化** — @h-ai/db 保存识别历史
+- 💾 **数据持久化** — @h-ai/reldb 保存识别历史
 - ⚡ **缓存加速** — @h-ai/cache（memory / Redis）
 - 🌍 **国际化** — Paraglide 集成，中英文实时切换
 - 🎨 **主题切换** — 基于 @h-ai/ui 的 DaisyUI 多主题支持
@@ -106,7 +106,7 @@ pnpm --filter h5-app paraglide:compile # 编译 i18n 翻译文件
 ## 📦 框架依赖
 
 - `@h-ai/core`：配置管理、日志、Result 模式、错误处理
-- `@h-ai/db`：数据库抽象（SQLite / PostgreSQL / MySQL）
+- `@h-ai/reldb`：数据库抽象（SQLite / PostgreSQL / MySQL）
 - `@h-ai/iam`：用户认证（登录 / 注册 / Session）
 - `@h-ai/cache`：缓存（Memory / Redis）
 - `@h-ai/storage`：文件存储（Local / S3）

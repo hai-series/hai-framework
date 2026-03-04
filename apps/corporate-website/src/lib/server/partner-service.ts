@@ -1,7 +1,7 @@
 import { createHash, timingSafeEqual } from 'node:crypto'
 import { cache } from '@h-ai/cache'
 import { core } from '@h-ai/core'
-import { db } from '@h-ai/db'
+import { reldb } from '@h-ai/reldb'
 import { storage } from '@h-ai/storage'
 import { z } from 'zod'
 
@@ -71,7 +71,7 @@ export function getPartnerAdminConfig(): PartnerAdminConfig {
 }
 
 export async function ensurePartnerTables(): Promise<void> {
-  const tableResult = await db.ddl.createTable('partner_leads', {
+  const tableResult = await reldb.ddl.createTable('partner_leads', {
     id: { type: 'TEXT', primaryKey: true },
     company_name: { type: 'TEXT', notNull: true },
     contact_name: { type: 'TEXT', notNull: true },
@@ -95,7 +95,7 @@ export async function createPartnerLead(input: PartnerLeadInput) {
   const id = core.id.generate()
   const now = new Date().toISOString()
 
-  const insertResult = await db.sql.execute(
+  const insertResult = await reldb.sql.execute(
     `INSERT INTO partner_leads
       (id, company_name, contact_name, email, phone, cooperation_type, budget_range, message, source, status, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -186,7 +186,7 @@ export async function listPartnerLeads(options: z.infer<typeof PartnerLeadQueryS
 
   sql += ' ORDER BY created_at DESC'
 
-  const queryResult = await db.sql.queryPage<Record<string, unknown>>({
+  const queryResult = await reldb.sql.queryPage<Record<string, unknown>>({
     sql,
     params,
     pagination: {

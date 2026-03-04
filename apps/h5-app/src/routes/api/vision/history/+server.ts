@@ -4,8 +4,8 @@
  * =============================================================================
  */
 
-import { db } from '@h-ai/db'
 import { kit } from '@h-ai/kit'
+import { reldb } from '@h-ai/reldb'
 import { storage } from '@h-ai/storage'
 
 interface VisionRow {
@@ -21,7 +21,7 @@ interface VisionRow {
 }
 
 export const GET = kit.handler(async () => {
-  const rowsResult = await db.sql.query<VisionRow>(
+  const rowsResult = await reldb.sql.query<VisionRow>(
     `SELECT id, storage_key, file_name, mime_type, prompt, analysis, tags_json, confidence, created_at
      FROM vision_records
      ORDER BY created_at DESC

@@ -7,7 +7,7 @@
 - 🏢 **企业展示** — 首页、关于我们、服务介绍、新闻资讯、联系我们
 - 🤝 **合作登记** — 公开表单提交合作申请，管理后台审核记录
 - 🤖 **AI 客服** — 在线智能客服对话（@h-ai/ai）
-- 💾 **数据持久化** — @h-ai/db（SQLite / PostgreSQL / MySQL）
+- 💾 **数据持久化** — @h-ai/reldb（SQLite / PostgreSQL / MySQL）
 - ⚡ **缓存加速** — @h-ai/cache（memory / Redis）
 - 📂 **文件归档** — @h-ai/storage（local / S3）
 - 📧 **消息触达** — @h-ai/reach（邮件 / 短信通知）
@@ -102,7 +102,7 @@ pnpm --filter corporate-website paraglide:compile # 编译 i18n 翻译文件
 ## 📦 框架依赖
 
 - `@h-ai/core`：配置管理、日志、Result 模式、错误处理
-- `@h-ai/db`：数据库抽象（SQLite / PostgreSQL / MySQL）
+- `@h-ai/reldb`：数据库抽象（SQLite / PostgreSQL / MySQL）
 - `@h-ai/cache`：缓存（Memory / Redis）
 - `@h-ai/storage`：文件存储（Local / S3）
 - `@h-ai/ai`：AI 集成（智能客服）

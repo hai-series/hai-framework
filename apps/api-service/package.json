@@ -23,8 +23,8 @@
   "dependencies": {
     "@h-ai/cache": "workspace:*",
     "@h-ai/core": "workspace:*",
-    "@h-ai/db": "workspace:*",
     "@h-ai/kit": "workspace:*",
+    "@h-ai/reldb": "workspace:*",
     "zod": "catalog:"
   },
   "devDependencies": {
