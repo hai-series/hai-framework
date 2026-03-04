@@ -71,7 +71,7 @@ my-app/
 │   └── skills/                       # AI Skill 文件（教 AI 用框架）
 │       ├── hai-build/SKILL.md        # 项目架构总览与 Skill 导航（入口）
 │       ├── hai-core/SKILL.md         # @h-ai/core 用法
-│       ├── hai-db/SKILL.md           # @h-ai/db 用法
+│       ├── hai-db/SKILL.md           # @h-ai/reldb 用法
 │       ├── hai-iam/SKILL.md          # @h-ai/iam 用法
 │       ├── hai-reach/SKILL.md       # @h-ai/reach 用法
 │       ├── hai-cache/SKILL.md        # @h-ai/cache 用法
@@ -97,7 +97,7 @@ Skill 模板统一管理在 `packages/cli/templates/skills/` 中，通过 `@h-ai
 | --------------- | ------------------------------------------------------------------------- | :--------------------: |
 | `@h-ai/core`    | 基础能力：`Result` 类型、日志、配置加载、ID 生成、i18n、工具函数          |           —            |
 | `@h-ai/crypto`  | 国密算法：SM2 非对称加密/签名、SM3 哈希、SM4 对称加密、密码哈希           |           —            |
-| `@h-ai/db`      | 数据库访问：DDL、原生 SQL、事务、分页、CRUD 仓库                          | ✅ SQLite / PG / MySQL |
+| `@h-ai/reldb`   | 数据库访问：DDL、原生 SQL、事务、分页、CRUD 仓库                          | ✅ SQLite / PG / MySQL |
 | `@h-ai/cache`   | 缓存：KV、Hash、List、Set、SortedSet，Redis 风格 API                      |   ✅ Memory / Redis    |
 | `@h-ai/storage` | 文件存储：上传/下载/删除/复制/预签名 URL                                  |     ✅ Local / S3      |
 | `@h-ai/iam`     | 身份与访问管理：认证（密码/OTP/LDAP）、RBAC 授权、会话管理、用户管理      |           —            |
@@ -128,7 +128,7 @@ Skill 模板统一管理在 `packages/cli/templates/skills/` 中，通过 `@h-ai
 └────┬────┘  └──────────┘  └──────────┘  │         └─────────┘  └───────┘
      │                            ┌──────▼──────┐
 ┌────▼────┐  ┌─────────┐   │@h-ai/storage  │
-│ @h-ai/db │  │@h-ai/cache│   │  文件存储    │
+│ @h-ai/reldb │  │@h-ai/cache│   │  文件存储    │
 │  数据库  │  │   缓存   │   └──────┬──────┘
 └────┬────┘  └────┬────┘          │
      │            │          S3 / Local
@@ -162,7 +162,7 @@ cd my-app && pnpm install && pnpm dev
 
 ```bash
 pnpm add @h-ai/core              # 基础能力（必装）
-pnpm add @h-ai/db                # 数据库
+pnpm add @h-ai/reldb                # 数据库
 pnpm add @h-ai/cache             # 缓存
 pnpm add @h-ai/iam               # 身份认证/授权
 pnpm add @h-ai/reach             # 用户触达（邮件/短信/API）
@@ -201,38 +201,38 @@ else {
 ### 数据库
 
 ```typescript
-import { db } from '@h-ai/db'
+import { reldb } from '@h-ai/reldb'
 
 // 初始化（SQLite）
-await db.init({ type: 'sqlite', database: './data/app.db' })
+await reldb.init({ type: 'sqlite', database: './data/app.db' })
 
 // DDL — 建表
-await db.ddl.createTable('users', {
+await reldb.ddl.createTable('users', {
   id: { type: 'TEXT', primaryKey: true },
   email: { type: 'TEXT', notNull: true, unique: true },
   name: { type: 'TEXT' },
 }, true)
 
 // 查询
-const users = await db.sql.query<User>('SELECT * FROM users WHERE name = ?', ['Alice'])
+const users = await reldb.sql.query<User>('SELECT * FROM users WHERE name = ?', ['Alice'])
 if (users.success)
   console.log(users.data)
 
 // 分页查询
-const page = await db.sql.queryPage<User>({
+const page = await reldb.sql.queryPage<User>({
   sql: 'SELECT * FROM users',
   page: 1,
   pageSize: 20,
 })
 
 // 事务
-await db.tx.wrap(async (tx) => {
+await reldb.tx.wrap(async (tx) => {
   await tx.execute('INSERT INTO users (id, email) VALUES (?, ?)', ['1', 'a@b.com'])
   await tx.execute('INSERT INTO logs (action) VALUES (?)', ['user_created'])
 })
 
 // CRUD 仓库（自动生成 SQL）
-const userRepo = db.crud.table<User>({ tableName: 'users', primaryKey: 'id' })
+const userRepo = reldb.crud.table<User>({ tableName: 'users', primaryKey: 'id' })
 await userRepo.create({ id: '1', email: 'a@b.com', name: 'Alice' })
 const user = await userRepo.findById('1')
 ```
@@ -318,8 +318,8 @@ const url = await storage.presign.putUrl('uploads/image.png', { expiresIn: 3600 
 
 ```typescript
 import { cache } from '@h-ai/cache'
-import { db } from '@h-ai/db'
 import { iam } from '@h-ai/iam'
+import { reldb } from '@h-ai/reldb'
 
 // IAM 依赖 db 和 cache，通过参数注入
 await iam.init({
@@ -415,12 +415,12 @@ const valid = crypto.password.verify('MyPassword123', hashed.data)
 
 仓库 `apps/` 目录包含 4 种应用模板：
 
-| 应用                | 说明                     | 使用的模块         |
-| ------------------- | ------------------------ | ------------------ |
-| `admin-console`     | 管理后台（完整功能参考） | 全部 @h-ai/\* 模块 |
-| `api-service`       | 纯 API 后端服务          | core, db, iam, kit |
-| `corporate-website` | 企业官网                 | core, kit, ui      |
-| `h5-app`            | H5 移动应用              | core, kit, ui      |
+| 应用                | 说明                     | 使用的模块            |
+| ------------------- | ------------------------ | --------------------- |
+| `admin-console`     | 管理后台（完整功能参考） | 全部 @h-ai/\* 模块    |
+| `api-service`       | 纯 API 后端服务          | core, reldb, iam, kit |
+| `corporate-website` | 企业官网                 | core, kit, ui         |
+| `h5-app`            | H5 移动应用              | core, kit, ui         |
 
 ## 开发
 
@@ -444,7 +444,7 @@ pnpm test
 pnpm --filter admin-console test:e2e
 
 # 只运行某个模块
-pnpm --filter @h-ai/db test
+pnpm --filter @h-ai/reldb test
 ```
 
 ## 环境变量
