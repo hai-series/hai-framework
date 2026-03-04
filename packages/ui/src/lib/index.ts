@@ -21,7 +21,11 @@ export * from './theme-config.js'
 
 export * from './toast.svelte.js'
 
-// ─── 基础类型与工具 ───
+// ─── 平台检测与移动端工具 ───
 
 export * from './types.js'
+
+// ─── 基础类型与工具 ───
+
 export * from './utils.js'
+export { detectPlatform, isMobile, isNativeApp, type Platform, usePlatform } from './utils/platform.svelte.js'

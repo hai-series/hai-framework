@@ -376,6 +376,7 @@ components/
     dim,
     sunset;
 }
+
 ```
 
 ### 图标
@@ -391,6 +392,7 @@ pnpm add -D @iconify/tailwind4 @iconify-json/tabler
 @plugin "@iconify/tailwind4" {
   prefixes: tabler;
 }
+
 ```
 
 ### 主题切换
@@ -416,6 +418,7 @@ import {
     {@html getThemeInitScript()}
   </script>
 </head>
+
 ```
 
 ## 国际化 (i18n)

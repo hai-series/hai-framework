@@ -1,0 +1,105 @@
+/**
+ * =============================================================================
+ * @hai/ui - 移动端全局样式
+ * =============================================================================
+ * 触摸优化、安全区域、点击区域增强。
+ *
+ * 在 app.css 中导入：
+ * @import '@hai/ui/styles/mobile.css';
+ * =============================================================================
+ */
+
+/* ─── 全局触摸优化 ─── */
+* {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+/* ─── Hover 仅在支持鼠标设备上生效 ─── */
+@media (hover: hover) and (pointer: fine) {
+  .hai-hover\:opacity:hover {
+    opacity: 0.8;
+  }
+}
+
+/* ─── 移动端最小点击区域（Apple HIG 44x44） ─── */
+@media (pointer: coarse) {
+  .btn,
+  .input,
+  .select,
+  .checkbox,
+  .radio,
+  .toggle {
+    min-height: var(--hai-touch-target-min, 44px);
+  }
+
+  /* DaisyUI btn 尺寸覆盖 */
+  .btn-sm {
+    min-height: 36px;
+  }
+
+  .btn-xs {
+    min-height: 32px;
+  }
+}
+
+/* ─── 安全区域 padding 工具类 ─── */
+.hai-safe-top {
+  padding-top: var(--hai-safe-area-top);
+}
+
+.hai-safe-bottom {
+  padding-bottom: var(--hai-safe-area-bottom);
+}
+
+.hai-safe-left {
+  padding-left: var(--hai-safe-area-left);
+}
+
+.hai-safe-right {
+  padding-right: var(--hai-safe-area-right);
+}
+
+.hai-safe-x {
+  padding-left: var(--hai-safe-area-left);
+  padding-right: var(--hai-safe-area-right);
+}
+
+.hai-safe-y {
+  padding-top: var(--hai-safe-area-top);
+  padding-bottom: var(--hai-safe-area-bottom);
+}
+
+.hai-safe-all {
+  padding-top: var(--hai-safe-area-top);
+  padding-bottom: var(--hai-safe-area-bottom);
+  padding-left: var(--hai-safe-area-left);
+  padding-right: var(--hai-safe-area-right);
+}
+
+/* ─── 虚拟键盘适配 ─── */
+.hai-keyboard-aware {
+  transition: padding-bottom var(--hai-transition-normal, 250ms) ease;
+}
+
+/* ─── 禁止文本选择（在交互元素上） ─── */
+.hai-no-select {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* ─── 移动端滚动容器 ─── */
+.hai-scroll-x {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.hai-scroll-x::-webkit-scrollbar {
+  display: none;
+}
+
+.hai-scroll-y {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}

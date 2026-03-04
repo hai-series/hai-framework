@@ -1,13 +1,14 @@
 <script lang="ts">
   /**
-   * 个人中心页 — 集成 @h-ai/iam 用户认证和 @h-ai/storage 头像上传
+   * 个人中心页 — 集成 @h-ai/iam 用户认证、@h-ai/storage 头像上传、ActionSheet 操作菜单
    */
   import * as m from '$lib/paraglide/messages.js'
-  import { Avatar, Badge, Button, Card, Skeleton, Spinner } from '@h-ai/ui'
+  import { Avatar, Badge, Button, Card, Skeleton, Spinner, ActionSheet } from '@h-ai/ui'
 
   let user = $state<{ id: string, username: string, displayName?: string, avatarUrl?: string, email?: string } | null>(null)
   let loading = $state(true)
   let uploading = $state(false)
+  let showActions = $state(false)
 
   const menuItems = [
     { icon: 'icon-[tabler--package]', label: m.profile_menu_orders, badge: '3' },
@@ -57,7 +58,6 @@
       const data = await res.json()
 
       if (data.success) {
-        // 头像上传成功
         if (user) {
           user = { ...user, avatarUrl: data.data.key }
         }
@@ -68,6 +68,18 @@
     }
     finally {
       uploading = false
+    }
+  }
+
+  function handleActionSelect(id: string) {
+    if (id === 'share') {
+      // 分享逻辑
+    }
+    else if (id === 'edit') {
+      // 编辑资料
+    }
+    else if (id === 'clear') {
+      // 清缓存
     }
   }
 </script>
@@ -164,7 +176,13 @@
 
     <!-- 登出按钮 -->
     {#if user}
-      <div class="px-4 py-6">
+      <div class="px-4 pt-2 pb-2">
+        <Button variant="ghost" size="sm" class="w-full" onclick={() => showActions = true}>
+          <span class="icon-[tabler--dots] text-lg"></span>
+          {m.action_more()}
+        </Button>
+      </div>
+      <div class="px-4 pb-6">
         <Button variant="error" outline class="w-full" size="sm" onclick={handleLogout}>
           <span class="icon-[tabler--logout] text-lg"></span>
           {m.profile_logout()}
@@ -173,3 +191,17 @@
     {/if}
   </div>
 </div>
+
+<!-- 更多操作菜单 -->
+<ActionSheet
+  open={showActions}
+  title={m.action_more()}
+  cancelText={m.action_cancel()}
+  items={[
+    { id: 'share', label: m.action_share() },
+    { id: 'edit', label: m.action_edit_profile() },
+    { id: 'clear', label: m.action_clear_cache(), destructive: true },
+  ]}
+  onselect={handleActionSelect}
+  onclose={() => showActions = false}
+/>
