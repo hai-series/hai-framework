@@ -20,7 +20,7 @@ pnpm add @h-ai/iam
 
 ## 依赖
 
-- `@h-ai/db` — 数据库（用户/角色/权限持久化）
+- `@h-ai/reldb` — 数据库（用户/角色/权限持久化）
 - `@h-ai/cache` — 缓存（会话/OTP/重置令牌/权限缓存）
 - `@h-ai/crypto` — 密码哈希（内部使用，自动初始化）
 
@@ -28,11 +28,11 @@ pnpm add @h-ai/iam
 
 ```ts
 import { cache } from '@h-ai/cache'
-import { db } from '@h-ai/db'
 import { iam } from '@h-ai/iam'
+import { reldb } from '@h-ai/reldb'
 
 // 1. 初始化
-await db.init({ type: 'sqlite', database: './data.db' })
+await reldb.init({ type: 'sqlite', database: './data.db' })
 await cache.init({ type: 'memory' })
 await iam.init({
   db,

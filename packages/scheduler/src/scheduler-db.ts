@@ -10,7 +10,7 @@ import type { ApiTaskConfig, LogQueryOptions, SchedulerError, TaskDefinitionApi,
 
 import { core, err, ok } from '@h-ai/core'
 
-import { db } from '@h-ai/db'
+import { reldb } from '@h-ai/reldb'
 
 import { SchedulerErrorCode } from './scheduler-config.js'
 import { schedulerM } from './scheduler-i18n.js'
@@ -25,7 +25,7 @@ const VALID_TABLE_NAME = /^\w+$/
 /**
  * 创建执行日志表（含 task_id 索引）
  *
- * 若表已存在，由 `db.ddl.createTable` 内部处理幂等。
+ * 若表已存在，由 `reldb.ddl.createTable` 内部处理幂等。
  * 表名必须满足 `/^\w+$/`，否则直接返回失败 Result。
  *
  * @param tableName - 日志表名（仅允许字母、数字、下划线）
@@ -40,7 +40,7 @@ export async function ensureLogTable(tableName: string): Promise<Result<void, Sc
   }
 
   try {
-    const ddlResult = await db.ddl.createTable(tableName, {
+    const ddlResult = await reldb.ddl.createTable(tableName, {
       id: { type: 'INTEGER', primaryKey: true, autoIncrement: true },
       task_id: { type: 'TEXT', notNull: true },
       task_name: { type: 'TEXT', notNull: true },
@@ -62,7 +62,7 @@ export async function ensureLogTable(tableName: string): Promise<Result<void, Sc
     }
 
     // 为 task_id 创建索引
-    await db.ddl.createIndex(tableName, `idx_${tableName}_task_id`, {
+    await reldb.ddl.createIndex(tableName, `idx_${tableName}_task_id`, {
       columns: ['task_id'],
     })
 
@@ -99,7 +99,7 @@ export async function ensureTaskTable(taskTableName: string): Promise<Result<voi
   }
 
   try {
-    const ddlResult = await db.ddl.createTable(taskTableName, {
+    const ddlResult = await reldb.ddl.createTable(taskTableName, {
       id: { type: 'INTEGER', primaryKey: true, autoIncrement: true },
       task_id: { type: 'TEXT', notNull: true, unique: true },
       task_name: { type: 'TEXT', notNull: true },
@@ -154,7 +154,7 @@ export async function saveTaskDefinition(taskTableName: string, task: TaskDefini
 
   try {
     const now = Date.now()
-    await db.sql.execute(
+    await reldb.sql.execute(
       `INSERT INTO ${taskTableName} (task_id, task_name, cron, task_type, enabled, api_config, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
       [task.id, task.name, task.cron, task.type, task.enabled !== false ? 1 : 0, JSON.stringify(task.api), now, now],
     )
@@ -228,7 +228,7 @@ export async function updateTaskDefinition(
   params.push(taskId)
 
   try {
-    await db.sql.execute(
+    await reldb.sql.execute(
       `UPDATE ${taskTableName} SET ${setClauses.join(', ')} WHERE task_id = ?`,
       params,
     )
@@ -263,7 +263,7 @@ export async function deleteTaskDefinition(taskTableName: string, taskId: string
   }
 
   try {
-    await db.sql.execute(
+    await reldb.sql.execute(
       `DELETE FROM ${taskTableName} WHERE task_id = ?`,
       [taskId],
     )
@@ -299,7 +299,7 @@ export async function loadTaskDefinitions(taskTableName: string): Promise<Result
   }
 
   try {
-    const queryResult = await db.sql.query<Record<string, unknown>>(
+    const queryResult = await reldb.sql.query<Record<string, unknown>>(
       `SELECT task_id, task_name, cron, task_type, enabled, api_config FROM ${taskTableName}`,
     )
 
@@ -359,7 +359,7 @@ export async function saveLog(tableName: string, log: TaskExecutionLog): Promise
     return
 
   try {
-    await db.sql.execute(
+    await reldb.sql.execute(
       `INSERT INTO ${tableName} (task_id, task_name, task_type, status, result, error, started_at, finished_at, duration) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [log.taskId, log.taskName, log.taskType, log.status, log.result, log.error, log.startedAt, log.finishedAt, log.duration],
     )
@@ -408,7 +408,7 @@ export async function queryLogs(tableName: string, options?: LogQueryOptions): P
   const sql = `SELECT id, task_id, task_name, task_type, status, result, error, started_at, finished_at, duration FROM ${tableName} ${where} ORDER BY id DESC LIMIT ? OFFSET ?`
   params.push(limit, offset)
 
-  const queryResult = await db.sql.query<Record<string, unknown>>(sql, params)
+  const queryResult = await reldb.sql.query<Record<string, unknown>>(sql, params)
   if (!queryResult.success) {
     return err({
       code: SchedulerErrorCode.DB_SAVE_FAILED,

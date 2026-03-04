@@ -1,14 +1,14 @@
 import { cache } from '@h-ai/cache'
-import { db } from '@h-ai/db'
+import { reldb } from '@h-ai/reldb'
 import { describe, expect, it } from 'vitest'
 import { iam } from '../src/index.js'
 
 describe('debug init', () => {
   it('should init', async () => {
-    await db.init({ type: 'sqlite', database: ':memory:' })
+    await reldb.init({ type: 'sqlite', database: ':memory:' })
     await cache.init({ type: 'memory' })
 
-    const result = await iam.init({ db, cache })
+    const result = await iam.init({ db: reldb, cache })
     if (!result.success) {
       console.error('INIT FAILED:', JSON.stringify(result.error, null, 2))
     }
@@ -16,6 +16,6 @@ describe('debug init', () => {
 
     await iam.close()
     await cache.close()
-    await db.close()
+    await reldb.close()
   })
 })

@@ -31,7 +31,7 @@
   },
   "dependencies": {
     "@h-ai/core": "workspace:*",
-    "@h-ai/db": "workspace:*",
+    "@h-ai/reldb": "workspace:*",
     "zod": "catalog:"
   },
   "optionalDependencies": {

@@ -4,18 +4,18 @@
  * =============================================================================
  */
 
-import { db } from '@h-ai/db'
+import { reldb } from '@h-ai/reldb'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { audit } from '../src/index.js'
 
 // ─── 测试辅助 ───
 
 async function setupDb(): Promise<void> {
-  const result = await db.init({ type: 'sqlite', database: ':memory:' })
+  const result = await reldb.init({ type: 'sqlite', database: ':memory:' })
   if (!result.success) {
     throw new Error(`DB init failed: ${result.error.message}`)
   }
-  await db.ddl.createTable('users', {
+  await reldb.ddl.createTable('users', {
     id: { type: 'TEXT', primaryKey: true },
     username: { type: 'TEXT', notNull: true },
   }, true)
@@ -26,7 +26,7 @@ async function setupDb(): Promise<void> {
 describe('audit.getStats', () => {
   beforeEach(async () => {
     await setupDb()
-    await audit.init({ db })
+    await audit.init({ db: reldb })
     await audit.log({ userId: 'user_1', action: 'login', resource: 'auth' })
     await audit.log({ userId: 'user_1', action: 'login', resource: 'auth' })
     await audit.log({ userId: 'user_1', action: 'login', resource: 'auth' })
@@ -36,7 +36,7 @@ describe('audit.getStats', () => {
 
   afterEach(async () => {
     await audit.close()
-    await db.close()
+    await reldb.close()
   })
 
   it('应返回按 action 分组的统计', async () => {
@@ -73,15 +73,15 @@ describe('audit.getStats', () => {
   it('无记录时应返回空数组', async () => {
     await audit.close()
     // 新数据库
-    await db.close()
-    const initResult = await db.init({ type: 'sqlite', database: ':memory:' })
+    await reldb.close()
+    const initResult = await reldb.init({ type: 'sqlite', database: ':memory:' })
     if (!initResult.success)
       throw new Error('DB re-init failed')
-    await db.ddl.createTable('users', {
+    await reldb.ddl.createTable('users', {
       id: { type: 'TEXT', primaryKey: true },
       username: { type: 'TEXT', notNull: true },
     }, true)
-    await audit.init({ db })
+    await audit.init({ db: reldb })
 
     const result = await audit.getStats(7)
     expect(result.success).toBe(true)
@@ -94,18 +94,18 @@ describe('audit.getStats', () => {
 describe('audit.cleanup', () => {
   beforeEach(async () => {
     await setupDb()
-    await audit.init({ db })
+    await audit.init({ db: reldb })
   })
 
   afterEach(async () => {
     await audit.close()
-    await db.close()
+    await reldb.close()
   })
 
   it('应清理旧日志', async () => {
     // 直接插入一条"旧"记录（时间戳为 2 天前）
     const oldTime = Date.now() - 2 * 86400000
-    await db.sql.execute(
+    await reldb.sql.execute(
       'INSERT INTO audit_logs (id, action, resource, created_at) VALUES (?, ?, ?, ?)',
       ['audit_old_1', 'test', 'test', oldTime],
     )
@@ -138,11 +138,11 @@ describe('audit.cleanup', () => {
 
   it('应正确返回删除的记录数', async () => {
     const oldTime = Date.now() - 2 * 86400000
-    await db.sql.execute(
+    await reldb.sql.execute(
       'INSERT INTO audit_logs (id, action, resource, created_at) VALUES (?, ?, ?, ?)',
       ['audit_old_1', 'test1', 'test', oldTime],
     )
-    await db.sql.execute(
+    await reldb.sql.execute(
       'INSERT INTO audit_logs (id, action, resource, created_at) VALUES (?, ?, ?, ?)',
       ['audit_old_2', 'test2', 'test', oldTime],
     )

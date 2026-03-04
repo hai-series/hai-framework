@@ -7,7 +7,7 @@
 
 import type { CacheFunctions } from '@h-ai/cache'
 import type { PaginatedResult, PaginationOptionsInput, Result } from '@h-ai/core'
-import type { DbFunctions } from '@h-ai/db'
+import type { ReldbFunctions } from '@h-ai/reldb'
 
 import type { IamConfig, RbacConfig } from '../iam-config.js'
 import type { IamError } from '../iam-types.js'
@@ -38,7 +38,7 @@ const logger = core.logger.child({ module: 'iam', scope: 'authz' })
  */
 export interface IamAuthzFunctionsDeps {
   config: IamConfig
-  db: DbFunctions
+  db: ReldbFunctions
   cache: CacheFunctions
 }
 
@@ -93,7 +93,7 @@ export async function createIamAuthzFunctions(deps: IamAuthzFunctionsDeps): Prom
  */
 interface RbacManagerConfig {
   rbacConfig?: RbacConfig
-  db: DbFunctions
+  db: ReldbFunctions
   roleRepository: RoleRepository
   permissionRepository: PermissionRepository
   rolePermissionRepository: RolePermissionRepository

@@ -1,16 +1,16 @@
 /**
  * @h-ai/iam — 角色存储实现
  *
- * 基于 @h-ai/db 的角色存储实现。
+ * 基于 @h-ai/reldb 的角色存储实现。
  * @module iam-authz-repository-role
  */
 
 import type { Result } from '@h-ai/core'
-import type { CrudCountOptions, CrudFieldDefinition, CrudRepository, DbError, DbFunctions, TxHandle } from '@h-ai/db'
+import type { ReldbCrudCountOptions, ReldbCrudFieldDefinition, ReldbCrudRepository, ReldbError, ReldbFunctions, ReldbTxHandle } from '@h-ai/reldb'
 import type { IamError } from '../iam-types.js'
 import type { Role } from './iam-authz-types.js'
 import { err, ok } from '@h-ai/core'
-import { BaseCrudRepository } from '@h-ai/db'
+import { BaseReldbCrudRepository } from '@h-ai/reldb'
 import { IamErrorCode } from '../iam-config.js'
 import { iamM } from '../iam-i18n.js'
 
@@ -19,7 +19,7 @@ import { iamM } from '../iam-i18n.js'
 /**
  * 角色存储接口
  */
-export interface RoleRepository extends CrudRepository<Role> {
+export interface RoleRepository extends ReldbCrudRepository<Role> {
   /**
    * 根据代码获取角色
    */
@@ -33,7 +33,7 @@ export interface RoleRepository extends CrudRepository<Role> {
  */
 const TABLE_NAME = 'iam_roles'
 
-const ROLE_FIELDS: CrudFieldDefinition[] = [
+const ROLE_FIELDS: ReldbCrudFieldDefinition[] = [
   {
     fieldName: 'id',
     columnName: 'id',
@@ -92,7 +92,7 @@ const ROLE_FIELDS: CrudFieldDefinition[] = [
   },
 ]
 
-/** 角色存储单例缓存（通过 db.config 引用比较检测 db 重新初始化） */
+/** 角色存储单例缓存（通过 reldb.config 引用比较检测 db 重新初始化） */
 let roleRepoInstance: RoleRepository | null = null
 let roleRepoDbConfig: unknown = null
 
@@ -115,7 +115,7 @@ export function resetRoleRepoSingleton(): void {
  * @param db - 数据库服务实例
  * @returns 角色存储接口实现
  */
-export async function createDbRoleRepository(db: DbFunctions): Promise<RoleRepository> {
+export async function createDbRoleRepository(db: ReldbFunctions): Promise<RoleRepository> {
   if (roleRepoInstance && roleRepoDbConfig === db.config)
     return roleRepoInstance
 
@@ -129,10 +129,10 @@ export async function createDbRoleRepository(db: DbFunctions): Promise<RoleRepos
 /**
  * 基于数据库的角色存储实现
  *
- * 继承 BaseCrudRepository，提供按 code 查找角色的能力。
+ * 继承 BaseReldbCrudRepository，提供按 code 查找角色的能力。
  */
-class DbRoleRepository extends BaseCrudRepository<Role> implements RoleRepository {
-  constructor(db: DbFunctions) {
+class DbRoleRepository extends BaseReldbCrudRepository<Role> implements RoleRepository {
+  constructor(db: ReldbFunctions) {
     super(db, {
       table: TABLE_NAME,
       fields: ROLE_FIELDS,
@@ -144,10 +144,10 @@ class DbRoleRepository extends BaseCrudRepository<Role> implements RoleRepositor
     return this.findOneBy('code = ?', [code])
   }
 
-  async exists(options?: CrudCountOptions, tx?: TxHandle): Promise<Result<boolean, DbError>> {
+  async exists(options?: ReldbCrudCountOptions, tx?: ReldbTxHandle): Promise<Result<boolean, ReldbError>> {
     const result = await this.count(options, tx)
     if (!result.success) {
-      return result as Result<boolean, DbError>
+      return result as Result<boolean, ReldbError>
     }
     return ok(result.data > 0)
   }

@@ -1,16 +1,16 @@
 /**
  * @h-ai/iam — 用户存储实现
  *
- * 基于 @h-ai/db 的用户存储实现。
+ * 基于 @h-ai/reldb 的用户存储实现。
  * @module iam-user-repository-user
  */
 
 import type { Result } from '@h-ai/core'
-import type { CrudCountOptions, CrudFieldDefinition, CrudRepository, DbError, DbFunctions, TxHandle } from '@h-ai/db'
+import type { ReldbCrudCountOptions, ReldbCrudFieldDefinition, ReldbCrudRepository, ReldbError, ReldbFunctions, ReldbTxHandle } from '@h-ai/reldb'
 import type { IamError } from '../iam-types.js'
 import type { StoredUser } from './iam-user-types.js'
 import { err, ok } from '@h-ai/core'
-import { BaseCrudRepository } from '@h-ai/db'
+import { BaseReldbCrudRepository } from '@h-ai/reldb'
 import { IamErrorCode } from '../iam-config.js'
 import { iamM } from '../iam-i18n.js'
 
@@ -19,36 +19,36 @@ import { iamM } from '../iam-i18n.js'
 /**
  * 用户存储接口
  */
-export interface UserRepository extends CrudRepository<StoredUser> {
+export interface UserRepository extends ReldbCrudRepository<StoredUser> {
   /**
    * 根据用户名获取用户
    */
-  findByUsername: (username: string, tx?: TxHandle) => Promise<Result<StoredUser | null, IamError>>
+  findByUsername: (username: string, tx?: ReldbTxHandle) => Promise<Result<StoredUser | null, IamError>>
 
   /**
    * 根据邮箱获取用户
    */
-  findByEmail: (email: string, tx?: TxHandle) => Promise<Result<StoredUser | null, IamError>>
+  findByEmail: (email: string, tx?: ReldbTxHandle) => Promise<Result<StoredUser | null, IamError>>
 
   /**
    * 根据手机号获取用户
    */
-  findByPhone: (phone: string, tx?: TxHandle) => Promise<Result<StoredUser | null, IamError>>
+  findByPhone: (phone: string, tx?: ReldbTxHandle) => Promise<Result<StoredUser | null, IamError>>
 
   /**
    * 根据标识符获取用户（用户名/邮箱/手机号）
    */
-  findByIdentifier: (identifier: string, tx?: TxHandle) => Promise<Result<StoredUser | null, IamError>>
+  findByIdentifier: (identifier: string, tx?: ReldbTxHandle) => Promise<Result<StoredUser | null, IamError>>
 
   /**
    * 检查用户名是否存在
    */
-  existsByUsername: (username: string, tx?: TxHandle) => Promise<Result<boolean, IamError>>
+  existsByUsername: (username: string, tx?: ReldbTxHandle) => Promise<Result<boolean, IamError>>
 
   /**
    * 检查邮箱是否存在
    */
-  existsByEmail: (email: string, tx?: TxHandle) => Promise<Result<boolean, IamError>>
+  existsByEmail: (email: string, tx?: ReldbTxHandle) => Promise<Result<boolean, IamError>>
 
 }
 
@@ -62,7 +62,7 @@ const TABLE_NAME = 'iam_users'
 /**
  * 用户字段定义
  */
-const USER_FIELDS: CrudFieldDefinition[] = [
+const USER_FIELDS: ReldbCrudFieldDefinition[] = [
   {
     fieldName: 'id',
     columnName: 'id',
@@ -201,7 +201,7 @@ const USER_FIELDS: CrudFieldDefinition[] = [
   },
 ]
 
-/** 用户存储单例缓存（通过 db.config 引用比较检测 db 重新初始化） */
+/** 用户存储单例缓存（通过 reldb.config 引用比较检测 db 重新初始化） */
 let userRepoInstance: UserRepository | null = null
 let userRepoDbConfig: unknown = null
 
@@ -224,12 +224,12 @@ export function resetUserRepoSingleton(): void {
  * @param db - 数据库服务实例
  * @returns 用户存储接口实现
  */
-export async function createDbUserRepository(db: DbFunctions): Promise<UserRepository> {
+export async function createDbUserRepository(db: ReldbFunctions): Promise<UserRepository> {
   if (userRepoInstance && userRepoDbConfig === db.config)
     return userRepoInstance
 
   const repo = new DbUserRepository(db)
-  // 确保底层表创建完成（BaseCrudRepository 的表创建是异步的）
+  // 确保底层表创建完成（BaseReldbCrudRepository 的表创建是异步的）
   await repo.count()
   userRepoInstance = repo
   userRepoDbConfig = db.config
@@ -239,10 +239,10 @@ export async function createDbUserRepository(db: DbFunctions): Promise<UserRepos
 /**
  * 基于数据库的用户存储实现
  *
- * 继承 BaseCrudRepository，提供按用户名/邮箱/手机号/标识符的查询能力。
+ * 继承 BaseReldbCrudRepository，提供按用户名/邮箱/手机号/标识符的查询能力。
  */
-class DbUserRepository extends BaseCrudRepository<StoredUser> implements UserRepository {
-  constructor(db: DbFunctions) {
+class DbUserRepository extends BaseReldbCrudRepository<StoredUser> implements UserRepository {
+  constructor(db: ReldbFunctions) {
     super(db, {
       table: TABLE_NAME,
       fields: USER_FIELDS,
@@ -250,32 +250,32 @@ class DbUserRepository extends BaseCrudRepository<StoredUser> implements UserRep
   }
 
   /** 根据用户名查找用户 */
-  async findByUsername(username: string, tx?: TxHandle): Promise<Result<StoredUser | null, IamError>> {
+  async findByUsername(username: string, tx?: ReldbTxHandle): Promise<Result<StoredUser | null, IamError>> {
     return this.findOneBy('username = ?', [username], tx)
   }
 
   /** 根据邮箱查找用户 */
-  async findByEmail(email: string, tx?: TxHandle): Promise<Result<StoredUser | null, IamError>> {
+  async findByEmail(email: string, tx?: ReldbTxHandle): Promise<Result<StoredUser | null, IamError>> {
     return this.findOneBy('email = ?', [email], tx)
   }
 
   /** 根据手机号查找用户 */
-  async findByPhone(phone: string, tx?: TxHandle): Promise<Result<StoredUser | null, IamError>> {
+  async findByPhone(phone: string, tx?: ReldbTxHandle): Promise<Result<StoredUser | null, IamError>> {
     return this.findOneBy('phone = ?', [phone], tx)
   }
 
   /** 根据标识符查找用户（同时匹配用户名、邮箱、手机号） */
-  async findByIdentifier(identifier: string, tx?: TxHandle): Promise<Result<StoredUser | null, IamError>> {
+  async findByIdentifier(identifier: string, tx?: ReldbTxHandle): Promise<Result<StoredUser | null, IamError>> {
     return this.findOneBy('username = ? OR email = ? OR phone = ?', [identifier, identifier, identifier], tx)
   }
 
   /** 检查用户名是否已存在 */
-  async existsByUsername(username: string, tx?: TxHandle): Promise<Result<boolean, IamError>> {
+  async existsByUsername(username: string, tx?: ReldbTxHandle): Promise<Result<boolean, IamError>> {
     return this.existsBy('username = ?', [username], tx)
   }
 
   /** 检查邮箱是否已存在 */
-  async existsByEmail(email: string, tx?: TxHandle): Promise<Result<boolean, IamError>> {
+  async existsByEmail(email: string, tx?: ReldbTxHandle): Promise<Result<boolean, IamError>> {
     return this.existsBy('email = ?', [email], tx)
   }
 
@@ -301,7 +301,7 @@ class DbUserRepository extends BaseCrudRepository<StoredUser> implements UserRep
    * @param params - 绑定参数
    * @param tx - 可选事务句柄
    */
-  private async existsBy(where: string, params: unknown[], tx?: TxHandle): Promise<Result<boolean, IamError>> {
+  private async existsBy(where: string, params: unknown[], tx?: ReldbTxHandle): Promise<Result<boolean, IamError>> {
     const result = await this.exists({ where, params }, tx)
     if (!result.success) {
       return this.buildQueryError(result.error, result.error)
@@ -317,7 +317,7 @@ class DbUserRepository extends BaseCrudRepository<StoredUser> implements UserRep
    * @param tx - 可选事务句柄
    * @returns 单条用户记录，或 null
    */
-  private async findOneBy(where: string, params: unknown[], tx?: TxHandle): Promise<Result<StoredUser | null, IamError>> {
+  private async findOneBy(where: string, params: unknown[], tx?: ReldbTxHandle): Promise<Result<StoredUser | null, IamError>> {
     const result = await this.findAll({ where, params, limit: 1 }, tx)
     if (!result.success) {
       return this.buildQueryError(result.error, result.error)
@@ -332,10 +332,10 @@ class DbUserRepository extends BaseCrudRepository<StoredUser> implements UserRep
    * @param tx - 可选事务句柄
    * @returns 存在返回 true
    */
-  async exists(options?: CrudCountOptions, tx?: TxHandle): Promise<Result<boolean, DbError>> {
+  async exists(options?: ReldbCrudCountOptions, tx?: ReldbTxHandle): Promise<Result<boolean, ReldbError>> {
     const result = await this.count(options, tx)
     if (!result.success) {
-      return result as Result<boolean, DbError>
+      return result as Result<boolean, ReldbError>
     }
     return ok(result.data > 0)
   }

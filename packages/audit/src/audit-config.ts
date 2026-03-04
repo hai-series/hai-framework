@@ -5,7 +5,7 @@
  * @module audit-config
  */
 
-import type { DbFunctions } from '@h-ai/db'
+import type { ReldbFunctions } from '@h-ai/reldb'
 import { z } from 'zod'
 
 // ─── 错误码 ───
@@ -58,9 +58,9 @@ export type AuditErrorCodeType = (typeof AuditErrorCode)[keyof typeof AuditError
  * @example
  * ```ts
  * import { audit } from '@h-ai/audit'
- * import { db } from '@h-ai/db'
+ * import { reldb } from '@h-ai/reldb'
  *
- * await audit.init({ db })
+ * await audit.init({ reldb })
  *
  * // 自定义表名与用户表映射
  * await audit.init({
@@ -73,9 +73,9 @@ export type AuditErrorCodeType = (typeof AuditErrorCode)[keyof typeof AuditError
  * ```
  */
 export const AuditInitConfigSchema = z.object({
-  /** 数据库服务实例，必须是已初始化的 @h-ai/db 实例 */
-  db: z.custom<DbFunctions>(val => val != null && typeof val === 'object' && 'isInitialized' in val, {
-    message: 'db must be a valid @h-ai/db instance',
+  /** 数据库服务实例，必须是已初始化的 @h-ai/reldb 实例 */
+  db: z.custom<ReldbFunctions>(val => val != null && typeof val === 'object' && 'isInitialized' in val, {
+    message: 'db must be a valid @h-ai/reldb instance',
   }),
   /** 审计日志表名 */
   tableName: z.string().default('audit_logs'),

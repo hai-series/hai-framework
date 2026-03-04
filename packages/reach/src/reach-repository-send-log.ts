@@ -1,16 +1,16 @@
 /**
  * @h-ai/reach — 发送日志存储实现
  *
- * 基于 @h-ai/db 的发送日志存储实现。
+ * 基于 @h-ai/reldb 的发送日志存储实现。
  * @module reach-repository-send-log
  */
 
 import type { Result } from '@h-ai/core'
-import type { CrudFieldDefinition, CrudRepository, DbError, DbFunctions, TxHandle } from '@h-ai/db'
+import type { ReldbCrudFieldDefinition, ReldbCrudRepository, ReldbError, ReldbFunctions, ReldbTxHandle } from '@h-ai/reldb'
 import type { ReachError } from './reach-types.js'
 
 import { err, ok } from '@h-ai/core'
-import { BaseCrudRepository } from '@h-ai/db'
+import { BaseReldbCrudRepository } from '@h-ai/reldb'
 
 import { ReachErrorCode } from './reach-config.js'
 import { reachM } from './reach-i18n.js'
@@ -53,16 +53,16 @@ export interface StoredSendLog {
 /**
  * 发送日志存储接口
  */
-export interface SendLogRepository extends CrudRepository<StoredSendLog> {
+export interface SendLogRepository extends ReldbCrudRepository<StoredSendLog> {
   /**
    * 获取所有待发送记录（按创建时间升序）
    */
-  findPending: (tx?: TxHandle) => Promise<Result<StoredSendLog[], ReachError>>
+  findPending: (tx?: ReldbTxHandle) => Promise<Result<StoredSendLog[], ReachError>>
 
   /**
    * 将记录标记为已发送
    */
-  markSent: (id: number, messageId?: string, tx?: TxHandle) => Promise<Result<void, ReachError>>
+  markSent: (id: number, messageId?: string, tx?: ReldbTxHandle) => Promise<Result<void, ReachError>>
 }
 
 // ─── 发送日志存储实现 ───
@@ -71,7 +71,7 @@ export interface SendLogRepository extends CrudRepository<StoredSendLog> {
 const TABLE_NAME = 'reach_send_log'
 
 /** 字段定义 */
-const SEND_LOG_FIELDS: CrudFieldDefinition[] = [
+const SEND_LOG_FIELDS: ReldbCrudFieldDefinition[] = [
   {
     fieldName: 'id',
     columnName: 'id',
@@ -185,12 +185,12 @@ export function resetSendLogRepoSingleton(): void {
  * @param db - 数据库服务实例
  * @returns 成功返回发送日志存储接口实现；失败返回含错误信息的 Result
  */
-export async function createSendLogRepository(db: DbFunctions): Promise<Result<SendLogRepository, ReachError>> {
+export async function createSendLogRepository(db: ReldbFunctions): Promise<Result<SendLogRepository, ReachError>> {
   if (sendLogRepoInstance && sendLogRepoDbConfig === db.config)
     return ok(sendLogRepoInstance)
 
   const repo = new DbSendLogRepository(db)
-  // 触发表创建（BaseCrudRepository 的表创建是异步的）
+  // 触发表创建（BaseReldbCrudRepository 的表创建是异步的）
   const initResult = await repo.count()
   if (!initResult.success) {
     return err({
@@ -207,8 +207,8 @@ export async function createSendLogRepository(db: DbFunctions): Promise<Result<S
 /**
  * 基于数据库的发送日志存储实现
  */
-class DbSendLogRepository extends BaseCrudRepository<StoredSendLog> implements SendLogRepository {
-  constructor(db: DbFunctions) {
+class DbSendLogRepository extends BaseReldbCrudRepository<StoredSendLog> implements SendLogRepository {
+  constructor(db: ReldbFunctions) {
     super(db, {
       table: TABLE_NAME,
       fields: SEND_LOG_FIELDS,
@@ -219,7 +219,7 @@ class DbSendLogRepository extends BaseCrudRepository<StoredSendLog> implements S
   }
 
   /** 获取所有待发送记录 */
-  async findPending(tx?: TxHandle): Promise<Result<StoredSendLog[], ReachError>> {
+  async findPending(tx?: ReldbTxHandle): Promise<Result<StoredSendLog[], ReachError>> {
     const result = await this.findAll({ where: 'status = ?', params: ['pending'], orderBy: 'created_at ASC' }, tx)
     if (!result.success) {
       return this.buildQueryError(result.error)
@@ -228,7 +228,7 @@ class DbSendLogRepository extends BaseCrudRepository<StoredSendLog> implements S
   }
 
   /** 将记录标记为已发送 */
-  async markSent(id: number, messageId?: string, tx?: TxHandle): Promise<Result<void, ReachError>> {
+  async markSent(id: number, messageId?: string, tx?: ReldbTxHandle): Promise<Result<void, ReachError>> {
     const result = await this.updateById(id, { status: 'sent', messageId: messageId ?? null }, tx)
     if (!result.success) {
       return this.buildQueryError(result.error)
@@ -239,7 +239,7 @@ class DbSendLogRepository extends BaseCrudRepository<StoredSendLog> implements S
   /**
    * 构建查询错误响应
    */
-  private buildQueryError(error: DbError): Result<never, ReachError> {
+  private buildQueryError(error: ReldbError): Result<never, ReachError> {
     return err({
       code: ReachErrorCode.SEND_FAILED,
       message: reachM('reach_sendFailed', { params: { error: error.message } }),

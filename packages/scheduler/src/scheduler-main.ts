@@ -18,7 +18,7 @@ import type {
 } from './scheduler-types.js'
 import { core, err, ok } from '@h-ai/core'
 
-import { db } from '@h-ai/db'
+import { reldb } from '@h-ai/reldb'
 
 import { SchedulerConfigSchema, SchedulerErrorCode } from './scheduler-config.js'
 import { parseCronExpression } from './scheduler-cron.js'
@@ -83,7 +83,7 @@ export const scheduler: SchedulerFunctions = {
 
       // 如果启用 DB，创建日志表和任务表
       if (parsed.enableDb) {
-        if (!db.isInitialized) {
+        if (!reldb.isInitialized) {
           logger.warn('DB not initialized, disabling DB logging')
           currentConfig = { ...parsed, enableDb: false }
         }
@@ -104,7 +104,7 @@ export const scheduler: SchedulerFunctions = {
       }
 
       // 加载持久化的任务
-      if (currentConfig.enableDb && db.isInitialized) {
+      if (currentConfig.enableDb && reldb.isInitialized) {
         const loadResult = await loadTaskDefinitions(currentConfig.taskTableName)
         if (loadResult.success) {
           for (const task of loadResult.data) {
@@ -167,7 +167,7 @@ export const scheduler: SchedulerFunctions = {
       return regResult
 
     // 持久化 API 任务到数据库
-    if (currentConfig.enableDb && db.isInitialized && task.type === 'api') {
+    if (currentConfig.enableDb && reldb.isInitialized && task.type === 'api') {
       const saveResult = await saveTaskDefinition(currentConfig.taskTableName, task)
       if (!saveResult.success) {
         logger.warn('Failed to persist task definition', { taskId: task.id, error: saveResult.error.message })
@@ -201,7 +201,7 @@ export const scheduler: SchedulerFunctions = {
     unregisterFromMemory(taskId)
 
     // 从数据库中删除持久化的任务定义
-    if (currentConfig.enableDb && db.isInitialized) {
+    if (currentConfig.enableDb && reldb.isInitialized) {
       const deleteResult = await deleteTaskDefinition(currentConfig.taskTableName, taskId)
       if (!deleteResult.success) {
         logger.warn('Failed to delete persisted task definition', { taskId, error: deleteResult.error.message })
@@ -255,7 +255,7 @@ export const scheduler: SchedulerFunctions = {
     setTask(taskId, updatedTask)
 
     // 同步到数据库
-    if (currentConfig.enableDb && db.isInitialized && existingTask.type === 'api') {
+    if (currentConfig.enableDb && reldb.isInitialized && existingTask.type === 'api') {
       const updateResult = await updateTaskDefinition(currentConfig.taskTableName, taskId, {
         ...updates,
         ...(updates.api !== undefined ? { api: updates.api } : {}),
@@ -347,7 +347,7 @@ export const scheduler: SchedulerFunctions = {
   /**
    * 查询执行日志
    *
-   * 需启用 DB（`enableDb: true` 且 `@h-ai/db` 已初始化）。
+   * 需启用 DB（`enableDb: true` 且 `@h-ai/reldb` 已初始化）。
    *
    * @param options - 查询选项（taskId、status、limit、offset）
    * @returns 成功返回日志数组；DB 未启用返回 `DB_SAVE_FAILED`
@@ -360,7 +360,7 @@ export const scheduler: SchedulerFunctions = {
       })
     }
 
-    if (!currentConfig.enableDb || !db.isInitialized) {
+    if (!currentConfig.enableDb || !reldb.isInitialized) {
       return err({
         code: SchedulerErrorCode.DB_SAVE_FAILED,
         message: schedulerM('scheduler_dbNotInitialized'),
