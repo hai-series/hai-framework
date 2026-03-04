@@ -1,0 +1,11 @@
+{
+  "capacitor_initFailed": "Capacitor 初始化失败",
+  "capacitor_notAvailable": "当前环境不支持 Capacitor",
+  "capacitor_preferencesGetFailed": "读取 Capacitor Preferences 失败",
+  "capacitor_preferencesSetFailed": "写入 Capacitor Preferences 失败",
+  "capacitor_preferencesRemoveFailed": "删除 Capacitor Preferences 失败",
+  "capacitor_deviceInfoFailed": "获取设备信息失败",
+  "capacitor_pushRegisterFailed": "注册推送通知失败",
+  "capacitor_cameraFailed": "访问相机失败",
+  "capacitor_statusBarFailed": "配置状态栏失败"
+}
