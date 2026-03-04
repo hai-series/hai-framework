@@ -5,7 +5,7 @@
  *
  * 初始化顺序：
  * 1. core.init — 加载配置文件
- * 2. db.init — 数据库连接
+ * 2. reldb.init — 数据库连接
  * 3. cache.init — 缓存初始化
  * 4. iam.init — 身份认证
  * 5. storage.init — 文件存储（可选）
@@ -17,11 +17,11 @@ import type { IamConfigSettingsInput } from '@h-ai/iam'
 import { ai } from '@h-ai/ai'
 import { cache, CacheConfigSchema } from '@h-ai/cache'
 import { core } from '@h-ai/core'
-import { db, DbConfigSchema } from '@h-ai/db'
 import { iam } from '@h-ai/iam'
+import { reldb, ReldbConfigSchema } from '@h-ai/reldb'
 import { storage } from '@h-ai/storage'
 
-type DbConfigInput = Parameters<typeof db.init>[0]
+type DbConfigInput = Parameters<typeof reldb.init>[0]
 type StorageConfigInput = Parameters<typeof storage.init>[0]
 
 let initialized = false
@@ -30,7 +30,7 @@ let initialized = false
  * 初始化拍照识别记录表
  */
 async function ensureVisionTable(): Promise<void> {
-  const createResult = await db.ddl.createTable('vision_records', {
+  const createResult = await reldb.ddl.createTable('vision_records', {
     id: { type: 'TEXT', primaryKey: true, notNull: true },
     storage_key: { type: 'TEXT', notNull: true },
     file_name: { type: 'TEXT', notNull: true },
@@ -46,7 +46,7 @@ async function ensureVisionTable(): Promise<void> {
     throw new Error(`Vision table initialization failed: ${createResult.error.message}`)
   }
 
-  const indexResult = await db.ddl.createIndex('vision_records', 'idx_vision_records_created_at', {
+  const indexResult = await reldb.ddl.createIndex('vision_records', 'idx_vision_records_created_at', {
     columns: ['created_at'],
   })
   if (!indexResult.success) {
@@ -67,7 +67,7 @@ export async function initApp(): Promise<void> {
   })
 
   // 1.1 配置校验
-  const dbValidation = core.config.validate('db', DbConfigSchema)
+  const dbValidation = core.config.validate('db', ReldbConfigSchema)
   if (!dbValidation.success) {
     throw new Error(`DB config invalid: ${dbValidation.error.message}`)
   }
@@ -92,7 +92,7 @@ export async function initApp(): Promise<void> {
   }
 
   // 3. 初始化数据库
-  const dbResult = await db.init(dbConfig)
+  const dbResult = await reldb.init(dbConfig)
   if (!dbResult.success) {
     throw new Error(`Database initialization failed: ${dbResult.error.message}`)
   }
@@ -107,7 +107,7 @@ export async function initApp(): Promise<void> {
   }
 
   // 5. 初始化 IAM
-  const iamResult = await iam.init({ db, cache, ...iamConfig })
+  const iamResult = await iam.init({ reldb, cache, ...iamConfig })
   if (!iamResult.success) {
     throw new Error(`IAM initialization failed: ${iamResult.error.message}`)
   }

@@ -5,8 +5,8 @@
  */
 
 import { cache } from '@h-ai/cache'
-import { db } from '@h-ai/db'
 import { kit } from '@h-ai/kit'
+import { reldb } from '@h-ai/reldb'
 import { z } from 'zod'
 
 const UpdateItemSchema = z.object({
@@ -43,7 +43,7 @@ export const GET = kit.handler(async ({ params }) => {
     return kit.response.ok(JSON.parse(cached.data))
   }
 
-  const result = await db.sql.get<Record<string, unknown>>('SELECT * FROM items WHERE id = ?', [id])
+  const result = await reldb.sql.get<Record<string, unknown>>('SELECT * FROM items WHERE id = ?', [id])
   if (!result.success) {
     return kit.response.internalError(result.error.message)
   }
@@ -62,7 +62,7 @@ export const PUT = kit.handler(async ({ params, request }) => {
   const { id } = kit.validate.paramsOrFail(params, IdParamSchema)
   const updates = await kit.validate.formOrFail(request, UpdateItemSchema)
 
-  const existing = await db.sql.get<Record<string, unknown>>('SELECT * FROM items WHERE id = ?', [id])
+  const existing = await reldb.sql.get<Record<string, unknown>>('SELECT * FROM items WHERE id = ?', [id])
   if (!existing.success) {
     return kit.response.internalError(existing.error.message)
   }
@@ -88,7 +88,7 @@ export const PUT = kit.handler(async ({ params, request }) => {
   }
 
   values.push(id)
-  const updateResult = await db.sql.execute(`UPDATE items SET ${sets.join(', ')} WHERE id = ?`, values)
+  const updateResult = await reldb.sql.execute(`UPDATE items SET ${sets.join(', ')} WHERE id = ?`, values)
   if (!updateResult.success) {
     return kit.response.internalError(updateResult.error.message)
   }
@@ -97,7 +97,7 @@ export const PUT = kit.handler(async ({ params, request }) => {
   await cache.kv.del(`${CACHE_PREFIX}:${id}`)
   await clearListCache()
 
-  const updated = await db.sql.get<Record<string, unknown>>('SELECT * FROM items WHERE id = ?', [id])
+  const updated = await reldb.sql.get<Record<string, unknown>>('SELECT * FROM items WHERE id = ?', [id])
   if (!updated.success || !updated.data) {
     return kit.response.internalError('Failed to retrieve updated item')
   }
@@ -111,7 +111,7 @@ export const PUT = kit.handler(async ({ params, request }) => {
 export const DELETE = kit.handler(async ({ params }) => {
   const { id } = kit.validate.paramsOrFail(params, IdParamSchema)
 
-  const existing = await db.sql.get<Record<string, unknown>>('SELECT * FROM items WHERE id = ?', [id])
+  const existing = await reldb.sql.get<Record<string, unknown>>('SELECT * FROM items WHERE id = ?', [id])
   if (!existing.success) {
     return kit.response.internalError(existing.error.message)
   }
@@ -119,7 +119,7 @@ export const DELETE = kit.handler(async ({ params }) => {
     return kit.response.notFound('Item not found')
   }
 
-  const deleteResult = await db.sql.execute('DELETE FROM items WHERE id = ?', [id])
+  const deleteResult = await reldb.sql.execute('DELETE FROM items WHERE id = ?', [id])
   if (!deleteResult.success) {
     return kit.response.internalError(deleteResult.error.message)
   }

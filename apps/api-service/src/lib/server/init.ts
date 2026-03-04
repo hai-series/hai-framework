@@ -5,7 +5,7 @@
  *
  * 初始化顺序：
  * 1. core.init — 加载配置文件
- * 2. db.init — 数据库连接
+ * 2. reldb.init — 数据库连接
  * 3. cache.init — 缓存初始化
  * 4. 创建业务表
  */
@@ -13,9 +13,9 @@
 import type { CacheConfigInput } from '@h-ai/cache'
 import { cache, CacheConfigSchema } from '@h-ai/cache'
 import { core } from '@h-ai/core'
-import { db, DbConfigSchema } from '@h-ai/db'
+import { reldb, ReldbConfigSchema } from '@h-ai/reldb'
 
-type DbConfigInput = Parameters<typeof db.init>[0]
+type DbConfigInput = Parameters<typeof reldb.init>[0]
 
 let initialized = false
 
@@ -29,7 +29,7 @@ export async function initApp(): Promise<void> {
     logging: { level: 'info' },
   })
 
-  const dbValidation = core.config.validate('db', DbConfigSchema)
+  const dbValidation = core.config.validate('db', ReldbConfigSchema)
   if (!dbValidation.success) {
     throw new Error(`DB config invalid: ${dbValidation.error.message}`)
   }
@@ -53,7 +53,7 @@ export async function initApp(): Promise<void> {
   }
 
   // 3. 初始化数据库
-  const dbResult = await db.init(dbConfig)
+  const dbResult = await reldb.init(dbConfig)
   if (!dbResult.success) {
     throw new Error(`Database initialization failed: ${dbResult.error.message}`)
   }
@@ -72,7 +72,7 @@ export async function initApp(): Promise<void> {
 }
 
 async function ensureTables(): Promise<void> {
-  const createResult = await db.ddl.createTable('items', {
+  const createResult = await reldb.ddl.createTable('items', {
     id: { type: 'TEXT', primaryKey: true },
     name: { type: 'TEXT', notNull: true },
     description: { type: 'TEXT', defaultValue: '' },

@@ -6,8 +6,8 @@
 
 import { cache } from '@h-ai/cache'
 import { core } from '@h-ai/core'
-import { db } from '@h-ai/db'
 import { kit } from '@h-ai/kit'
+import { reldb } from '@h-ai/reldb'
 import { z } from 'zod'
 
 const CreateItemSchema = z.object({
@@ -57,7 +57,7 @@ export const GET = kit.handler(async ({ url }) => {
 
   sql += ' ORDER BY created_at DESC'
 
-  const result = await db.sql.queryPage<Record<string, unknown>>({
+  const result = await reldb.sql.queryPage<Record<string, unknown>>({
     sql,
     params,
     pagination: { page, pageSize },
@@ -87,7 +87,7 @@ export const POST = kit.handler(async ({ request }) => {
   const id = core.id.generate()
   const now = new Date().toISOString()
 
-  const execResult = await db.sql.execute(
+  const execResult = await reldb.sql.execute(
     'INSERT INTO items (id, name, description, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
     [id, name, description, 'active', now, now],
   )

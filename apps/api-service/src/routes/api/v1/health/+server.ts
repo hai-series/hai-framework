@@ -3,15 +3,15 @@
  */
 
 import { cache } from '@h-ai/cache'
-import { db } from '@h-ai/db'
 import { kit } from '@h-ai/kit'
+import { reldb } from '@h-ai/reldb'
 
 export const GET = kit.handler(async () => {
   const checks: Record<string, string> = {}
 
   // 数据库检查
   try {
-    const dbResult = await db.sql.get('SELECT 1')
+    const dbResult = await reldb.sql.get('SELECT 1')
     checks.database = dbResult.success ? 'ok' : 'error'
   }
   catch {

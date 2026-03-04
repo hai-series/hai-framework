@@ -5,7 +5,7 @@
  *
  * 初始化顺序：
  * 1. core.init — 加载配置文件
- * 2. db.init — 数据库连接（合作登记）
+ * 2. reldb.init — 数据库连接（合作登记）
  * 3. cache.init — 缓存初始化（会话与查询缓存）
  * 4. storage.init — 本地归档（可选）
  * 5. ai.init — AI 助手（可选，配置不存在或 API Key 为空时跳过）
@@ -18,11 +18,11 @@ import type { StorageConfigInput } from '@h-ai/storage'
 import { ai } from '@h-ai/ai'
 import { cache, CacheConfigSchema } from '@h-ai/cache'
 import { core } from '@h-ai/core'
-import { db, DbConfigSchema } from '@h-ai/db'
+import { reldb, ReldbConfigSchema } from '@h-ai/reldb'
 import { storage, StorageConfigSchema } from '@h-ai/storage'
 import { ensurePartnerTables, PartnerAdminConfigSchema } from './partner-service.js'
 
-type DbConfigInput = Parameters<typeof db.init>[0]
+type DbConfigInput = Parameters<typeof reldb.init>[0]
 
 let initialized = false
 
@@ -36,7 +36,7 @@ export async function initApp(): Promise<void> {
     logging: { level: 'info' },
   })
 
-  const dbValidation = core.config.validate('db', DbConfigSchema)
+  const dbValidation = core.config.validate('db', ReldbConfigSchema)
   if (!dbValidation.success) {
     throw new Error(`DB config invalid: ${dbValidation.error.message}`)
   }
@@ -66,7 +66,7 @@ export async function initApp(): Promise<void> {
   }
 
   // 3. 初始化数据库
-  const dbResult = await db.init(dbConfig)
+  const dbResult = await reldb.init(dbConfig)
   if (!dbResult.success) {
     throw new Error(`Database initialization failed: ${dbResult.error.message}`)
   }

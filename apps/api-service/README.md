@@ -6,7 +6,7 @@
 
 - 🚀 **轻量 API 服务** — SvelteKit + Node Adapter，部署为独立 Node.js 服务
 - 📦 **标准 CRUD** — Items 资源的完整增删改查接口
-- 💾 **数据持久化** — @h-ai/db（SQLite / PostgreSQL / MySQL）
+- 💾 **数据持久化** — @h-ai/reldb（SQLite / PostgreSQL / MySQL）
 - ⚡ **缓存加速** — @h-ai/cache（memory / Redis），列表与详情自动缓存
 - 🛡️ **中间件** — 统一日志、限流、错误处理（@h-ai/kit）
 - 🔧 **配置校验** — 基于 Zod Schema 的启动前配置校验
