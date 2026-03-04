@@ -1,0 +1,57 @@
+{
+  "name": "@h-ai/capacitor",
+  "type": "module",
+  "version": "0.1.0",
+  "description": "Hai Framework Capacitor bridge module for native mobile capabilities.",
+  "license": "Apache-2.0",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "clean": "rimraf dist .turbo"
+  },
+  "peerDependencies": {
+    "@capacitor/core": "catalog:",
+    "@capacitor/preferences": "catalog:"
+  },
+  "peerDependenciesMeta": {
+    "@capacitor/camera": { "optional": true },
+    "@capacitor/device": { "optional": true },
+    "@capacitor/push-notifications": { "optional": true },
+    "@capacitor/status-bar": { "optional": true }
+  },
+  "dependencies": {
+    "@h-ai/api-client": "workspace:*",
+    "@h-ai/core": "workspace:*"
+  },
+  "devDependencies": {
+    "@capacitor/app": "catalog:",
+    "@capacitor/camera": "catalog:",
+    "@capacitor/device": "catalog:",
+    "@capacitor/push-notifications": "catalog:",
+    "@capacitor/status-bar": "catalog:",
+    "@types/node": "catalog:",
+    "rimraf": "catalog:",
+    "tsup": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}
