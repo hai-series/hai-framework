@@ -24,6 +24,7 @@
   "iam_otpStrategyRequiredForSend": "OTP requires OTP strategy configuration",
   "iam_userNotExistNoAutoRegister": "User does not exist and auto-registration is not enabled",
   "iam_refreshTokenFailed": "Failed to refresh token",
+  "iam_refreshTokenExpired": "Refresh token has expired",
   "iam_refreshTokenRequestFailed": "Refresh token request failed",
   "iam_ldapConnectionFailed": "Unable to connect to LDAP server",
   "iam_ldapAdminBindFailed": "LDAP admin bind failed",

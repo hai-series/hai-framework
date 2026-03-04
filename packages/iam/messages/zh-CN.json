@@ -24,6 +24,7 @@
   "iam_otpStrategyRequiredForSend": "OTP 需要配置 OTP 策略",
   "iam_userNotExistNoAutoRegister": "用户不存在且未启用自动注册",
   "iam_refreshTokenFailed": "刷新令牌失败",
+  "iam_refreshTokenExpired": "刷新令牌已过期",
   "iam_refreshTokenRequestFailed": "刷新令牌请求失败",
   "iam_ldapConnectionFailed": "无法连接到 LDAP 服务器",
   "iam_ldapAdminBindFailed": "LDAP 管理员绑定失败",

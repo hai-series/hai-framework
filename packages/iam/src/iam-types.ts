@@ -5,7 +5,6 @@
  * - 错误类型（IamError）
  * - 函数接口（IamFunctions）
  * - 初始化配置（IamConfigInput）
- * - 客户端操作（IamClientOperations）
  * - 子功能类型 re-export
  * @module iam-types
  */
@@ -17,7 +16,6 @@ import type { DbFunctions } from '@h-ai/db'
 import type { IamAuthnFunctions } from './authn/iam-authn-types.js'
 import type { LdapClientFactory } from './authn/ldap/iam-authn-ldap-strategy.js'
 import type { IamAuthzFunctions } from './authz/iam-authz-types.js'
-import type { IamClient, IamClientConfig } from './client/iam-client.js'
 import type { IamConfig, IamConfigSettingsInput, IamErrorCodeType } from './iam-config.js'
 import type { IamSessionFunctions } from './session/iam-session-types.js'
 import type { IamUserFunctions, User } from './user/iam-user-types.js'
@@ -93,18 +91,6 @@ export interface IamConfigInput extends IamConfigSettingsInput {
   onOtpSendSms?: (phone: string, code: string) => Promise<void>
 }
 
-// ─── 客户端操作 ───
-
-/**
- * IAM 客户端操作接口
- *
- * 通过 `iam.client` 访问，提供前端客户端的创建能力。
- */
-export interface IamClientOperations {
-  /** 创建 IAM 客户端实例 */
-  create: (config: IamClientConfig) => IamClient
-}
-
 // ─── 函数接口 ───
 
 /**
@@ -153,13 +139,11 @@ export interface IamFunctions {
   readonly authz: IamAuthzFunctions
   /** 会话管理（创建、查询、验证、删除会话） */
   readonly session: IamSessionFunctions
-  /** 前端客户端操作（无状态，无需 init 即可使用） */
-  readonly client: IamClientOperations
 }
 
 // ─── 子功能类型 re-export ───
 
 export type { AuthStrategy, Credentials, IamAuthnFunctions, LdapCredentials, OtpCredentials, PasswordCredentials } from './authn/iam-authn-types.js'
 export type { IamAuthzFunctions, Permission, PermissionQueryOptions, PermissionType, Role, RolePermission, UserRole } from './authz/iam-authz-types.js'
-export type { AuthResult, CreateSessionOptions, IamSessionFunctions, Session } from './session/iam-session-types.js'
+export type { AuthResult, CreateSessionOptions, IamSessionFunctions, Session, TokenPair } from './session/iam-session-types.js'
 export type { AgreementDisplay, IamUserFunctions, ListUsersOptions, RegisterOptions, RegisterResult, StoredUser, UpdateCurrentUserInput, User } from './user/iam-user-types.js'

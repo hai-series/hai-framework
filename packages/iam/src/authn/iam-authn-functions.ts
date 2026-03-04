@@ -314,10 +314,12 @@ function buildAuthnOperations(deps: AuthnOperationsDeps): IamAuthnFunctions {
 
     const session = sessionResult.data
 
+    // 从 session.data._tokenPair 提取 TokenPair（由 session.create 写入）
+    const tokenPair = session.data?._tokenPair as import('../session/iam-session-types.js').TokenPair
+
     return ok({
       user,
-      accessToken: session.accessToken,
-      accessTokenExpiresAt: session.expiresAt,
+      tokens: tokenPair,
       agreements: buildAgreementDisplay(),
     })
   }

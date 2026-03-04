@@ -2,7 +2,7 @@
   "name": "@h-ai/iam",
   "type": "module",
   "version": "0.1.0",
-  "description": "Identity & Access Management module for Hai framework.",
+  "description": "Hai Framework identity and access management module.",
   "license": "Apache-2.0",
   "exports": {
     ".": {
@@ -11,9 +11,9 @@
       "import": "./dist/index.js",
       "default": "./dist/index.js"
     },
-    "./client": {
-      "types": "./dist/client/index.d.ts",
-      "import": "./dist/client/index.js"
+    "./api": {
+      "types": "./dist/api/index.d.ts",
+      "import": "./dist/api/index.js"
     }
   },
   "main": "./dist/index.js",
