@@ -59,9 +59,9 @@ pnpm --filter corporate-website preview
 - `config/_db.yml`：数据库连接（SQLite / PostgreSQL / MySQL）
 - `config/_cache.yml`：缓存类型及连接参数（memory / Redis）
 - `config/_storage.yml`：存储类型及参数（local / S3）
-- `config/_partner.yml`：合作管理后台管理员账号配置
 - `config/_ai.yml`：AI 模型配置
 - `config/_reach.yml`：消息通知配置
+- `config/partner.yml`：合作管理后台管理员账号配置
 
 配置值支持 `${ENV_VAR:default}` 语法引用环境变量。
 
