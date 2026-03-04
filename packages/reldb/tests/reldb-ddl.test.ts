@@ -6,7 +6,7 @@
 
 import { describe, expect, it } from 'vitest'
 import { reldb, ReldbErrorCode } from '../src/index.js'
-import { defineDbSuite, mysqlEnv, postgresEnv, sqliteMemoryEnv } from './helpers/reldb-test-suite.js'
+import { defineDbSuite, mysqlDockerOpts, mysqlEnv, postgresDockerOpts, postgresEnv, sqliteMemoryEnv } from './helpers/reldb-test-suite.js'
 
 describe('reldb.ddl', () => {
   const defineCommon = (options: {
@@ -200,12 +200,12 @@ describe('reldb.ddl', () => {
     columnQuery: 'SELECT COLUMN_NAME as name FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = \'users\'',
     indexQuery: 'SELECT INDEX_NAME as name FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = \'users\' AND INDEX_NAME = ?',
     tableQuery: 'SELECT TABLE_NAME as name FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?',
-  }))
+  }), mysqlDockerOpts)
 
   defineDbSuite('postgresql', postgresEnv, () => defineCommon({
     label: 'postgresql',
     columnQuery: 'SELECT column_name as name FROM information_schema.columns WHERE table_schema = \'public\' AND table_name = \'users\'',
     indexQuery: 'SELECT indexname as name FROM pg_indexes WHERE schemaname = \'public\' AND tablename = \'users\' AND indexname = ?',
     tableQuery: 'SELECT tablename as name FROM pg_tables WHERE schemaname = \'public\' AND tablename = ?',
-  }))
+  }), postgresDockerOpts)
 })

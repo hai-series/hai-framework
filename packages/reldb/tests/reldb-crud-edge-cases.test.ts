@@ -16,7 +16,7 @@
 
 import { describe, expect, it } from 'vitest'
 import { reldb, ReldbErrorCode } from '../src/index.js'
-import { defineDbSuite, mysqlEnv, postgresEnv, sqliteMemoryEnv } from './helpers/reldb-test-suite.js'
+import { defineDbSuite, mysqlDockerOpts, mysqlEnv, postgresDockerOpts, postgresEnv, sqliteMemoryEnv } from './helpers/reldb-test-suite.js'
 
 interface UserRow {
   id: number
@@ -386,7 +386,7 @@ describe('reldb.crud edge cases', () => {
 
   defineDbSuite('sqlite', sqliteMemoryEnv, () => defineCommon('sqlite'))
 
-  defineDbSuite('mysql', mysqlEnv, () => defineCommon('mysql'))
+  defineDbSuite('mysql', mysqlEnv, () => defineCommon('mysql'), mysqlDockerOpts)
 
-  defineDbSuite('postgresql', postgresEnv, () => defineCommon('postgresql'))
+  defineDbSuite('postgresql', postgresEnv, () => defineCommon('postgresql'), postgresDockerOpts)
 })
