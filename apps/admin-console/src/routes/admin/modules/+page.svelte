@@ -28,7 +28,7 @@
     { op: 'CREATE TABLE', sql: 'CREATE TABLE users (\n  id INTEGER PRIMARY KEY,\n  name TEXT NOT NULL,\n  email TEXT UNIQUE\n)', desc: '创建用户表' },
     { op: 'INSERT', sql: "INSERT INTO users (name, email)\nVALUES ('张三', 'zhang@example.com')", desc: '插入数据' },
     { op: 'SELECT', sql: "SELECT * FROM users WHERE name LIKE '%张%'", desc: '查询数据' },
-    { op: 'TRANSACTION', sql: 'await db.transaction(async (tx) => {\n  await tx.insert(users).values(...)\n  await tx.update(accounts)...\n})', desc: '事务处理' },
+    { op: 'TRANSACTION', sql: 'await reldb.transaction(async (tx) => {\n  await tx.insert(users).values(...)\n  await tx.update(accounts)...\n})', desc: '事务处理' },
   ]
 
   // Cache 示例
@@ -156,7 +156,7 @@ await core.close()`}</code></pre>
   {#if activeTab === 'db'}
     <div class="grid gap-6">
       <Card>
-        <h3 class="text-lg font-semibold mb-2">@h-ai/db — 数据库模块</h3>
+        <h3 class="text-lg font-semibold mb-2">@h-ai/reldb — 数据库模块</h3>
         <p class="text-base-content/60 text-sm mb-4">
           支持 SQLite、PostgreSQL、MySQL，提供统一且类型安全的数据库操作能力。
         </p>
@@ -182,7 +182,7 @@ await core.close()`}</code></pre>
       </Card>
       <Card>
         <h3 class="text-lg font-semibold mb-3">数据库操作示例</h3>
-        <pre class="bg-base-200 p-4 rounded-lg text-sm overflow-x-auto font-mono"><code>{`import { db } from '@h-ai/db'
+        <pre class="bg-base-200 p-4 rounded-lg text-sm overflow-x-auto font-mono"><code>{`import { reldb } from '@h-ai/reldb'
 
 // 定义 Schema
 const users = sqliteTable('users', {
@@ -193,13 +193,13 @@ const users = sqliteTable('users', {
 })
 
 // CRUD 操作
-const allUsers = await db.select().from(users)
-await db.insert(users).values({ name: '张三', email: 'z@test.com' })
-await db.update(users).set({ name: '李四' }).where(eq(users.id, 1))
-await db.delete(users).where(eq(users.id, 1))
+const allUsers = await reldb.select().from(users)
+await reldb.insert(users).values({ name: '张三', email: 'z@test.com' })
+await reldb.update(users).set({ name: '李四' }).where(eq(users.id, 1))
+await reldb.delete(users).where(eq(users.id, 1))
 
 // 分页查询
-const page = await db.select().from(users).limit(10).offset(0)`}</code></pre>
+const page = await reldb.select().from(users).limit(10).offset(0)`}</code></pre>
       </Card>
     </div>
   {/if}

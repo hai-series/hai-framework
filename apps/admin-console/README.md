@@ -161,7 +161,7 @@ pnpm paraglide:compile # 编译 i18n 翻译文件
 ## 📦 框架依赖
 
 - `@h-ai/core`：配置管理、日志、Result 模式、错误处理
-- `@h-ai/db`：数据库抽象（SQLite / PostgreSQL / MySQL）
+- `@h-ai/reldb`：数据库抽象（SQLite / PostgreSQL / MySQL）
 - `@h-ai/iam`：用户、角色、权限、认证、RBAC
 - `@h-ai/cache`：缓存（Memory / Redis）
 - `@h-ai/storage`：文件存储（Local / S3）
