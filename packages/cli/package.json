@@ -2,7 +2,7 @@
   "name": "@h-ai/cli",
   "type": "module",
   "version": "0.1.0",
-  "description": "hai Agent Framework CLI - 项目脚手架和代码生成器",
+  "description": "Hai Framework CLI for project scaffolding and code generation.",
   "license": "Apache-2.0",
   "keywords": [
     "hai",

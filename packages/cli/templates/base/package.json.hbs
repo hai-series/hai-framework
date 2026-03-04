@@ -24,12 +24,23 @@
     "@h-ai/storage": "^0.1.0"{{/if}}{{#if features.ai}},
     "@h-ai/ai": "^0.1.0"{{/if}}{{#if features.audit}},
     "@h-ai/audit": "^0.1.0"{{/if}}{{#if features.reach}},
-    "@h-ai/reach": "^0.1.0"{{/if}},
+    "@h-ai/reach": "^0.1.0"{{/if}}{{#if features.payment}},
+    "@h-ai/payment": "^0.1.0"{{/if}}{{#if isCapacitorApp}},
+    "@h-ai/api-client": "^0.1.0",
+    "@h-ai/capacitor": "^0.1.0"{{/if}},
     "zod": "^3.23.0"
   },
   "devDependencies": {
     "@playwright/test": "^1.50.0",
+{{#if isCapacitorApp}}
+    "@capacitor/cli": "^7.0.0",
+    "@capacitor/core": "^7.0.0",
+    "@capacitor/android": "^7.0.0",
+    "@capacitor/preferences": "^7.0.0",
+    "@sveltejs/adapter-static": "^3.0.0",
+{{else}}
     "@sveltejs/adapter-auto": "^3.0.0",
+{{/if}}
     "@sveltejs/kit": "^2.0.0",
     "@sveltejs/vite-plugin-svelte": "^4.0.0",
     "@types/node": "^22.0.0",

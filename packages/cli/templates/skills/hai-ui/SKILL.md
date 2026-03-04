@@ -38,8 +38,8 @@ const config = {
 
 ```css
 /* src/app.css */
-@import '@h-ai/ui/styles/design-tokens.css';   /* Design Token */
-@import '@h-ai/ui/styles/mobile.css';   /* 移动端触摸/安全区域优化 */
+@import '@h-ai/ui/styles/design-tokens.css'; /* Design Token */
+@import '@h-ai/ui/styles/mobile.css'; /* 移动端触摸/安全区域优化 */
 @import 'tailwindcss';
 ```
 
@@ -49,9 +49,9 @@ const config = {
 import { detectPlatform, isMobile, isNativeApp, usePlatform } from '@h-ai/ui'
 
 // 一次性检测
-const platform = detectPlatform()   // 'ios' | 'android' | 'web'
-const mobile = isMobile()           // boolean
-const native = isNativeApp()        // boolean（Capacitor 环境）
+const platform = detectPlatform() // 'ios' | 'android' | 'web'
+const mobile = isMobile() // boolean
+const native = isNativeApp() // boolean（Capacitor 环境）
 
 // Svelte 5 响应式（组件中使用）
 const p = usePlatform()
@@ -64,23 +64,23 @@ const p = usePlatform()
 
 ### 原子组件（Primitives，21 个）
 
-| 组件             | Props 要点                                                    | 说明         |
-| ---------------- | ------------------------------------------------------------- | ------------ |
-| `Button`         | `variant`, `size`, `loading`, `disabled`, `outline`, `circle` | 按钮         |
-| `IconButton`     | `icon: string \| Snippet`, `tooltip`, `variant`, `size`       | 图标按钮     |
-| `Input`          | `value`, `type`, `size`, `error`, `placeholder`               | 输入框       |
-| `Textarea`       | `value`, `rows`, `autoResize`, `error`                        | 文本域       |
-| `Select`         | `value`, `options: SelectOption[]`, `placeholder`             | 下拉选择     |
-| `Checkbox`       | `checked`, `label`, `indeterminate`                           | 复选框       |
-| `Switch`         | `checked`, `label`, `size`                                    | 开关         |
-| `Radio`          | `value`, `options`, `direction`                               | 单选组       |
-| `Range`          | `value`, `min`, `max`, `step`, `variant`, `size`              | 滑块         |
-| `Rating`         | `value`, `max`                                                | 评分         |
-| `Badge`          | `variant`, `size`, `outline`                                  | 徽标         |
-| `Avatar`         | `src`, `name`, `size`, `shape`                                | 头像         |
-| `Tag`            | `text`, `variant`, `closable`                                 | 标签         |
-| `Spinner`        | `size`, `variant`                                             | 加载动画     |
-| `Progress`       | `value`, `max`, `striped`, `animated`                         | 进度条       |
+| 组件         | Props 要点                                                    | 说明     |
+| ------------ | ------------------------------------------------------------- | -------- |
+| `Button`     | `variant`, `size`, `loading`, `disabled`, `outline`, `circle` | 按钮     |
+| `IconButton` | `icon: string \| Snippet`, `tooltip`, `variant`, `size`       | 图标按钮 |
+| `Input`      | `value`, `type`, `size`, `error`, `placeholder`               | 输入框   |
+| `Textarea`   | `value`, `rows`, `autoResize`, `error`                        | 文本域   |
+| `Select`     | `value`, `options: SelectOption[]`, `placeholder`             | 下拉选择 |
+| `Checkbox`   | `checked`, `label`, `indeterminate`                           | 复选框   |
+| `Switch`     | `checked`, `label`, `size`                                    | 开关     |
+| `Radio`      | `value`, `options`, `direction`                               | 单选组   |
+| `Range`      | `value`, `min`, `max`, `step`, `variant`, `size`              | 滑块     |
+| `Rating`     | `value`, `max`                                                | 评分     |
+| `Badge`      | `variant`, `size`, `outline`                                  | 徽标     |
+| `Avatar`     | `src`, `name`, `size`, `shape`                                | 头像     |
+| `Tag`        | `text`, `variant`, `closable`                                 | 标签     |
+| `Spinner`    | `size`, `variant`                                             | 加载动画 |
+| `Progress`   | `value`, `max`, `striped`, `animated`                         | 进度条   |
 
 ### 组合组件（Compounds，25 + 7 移动端）
 
@@ -88,34 +88,34 @@ const p = usePlatform()
 
 #### 桌面端组合组件
 
-| 组件             | Props 要点                                                         | 说明                    |
-| ---------------- | ------------------------------------------------------------------ | ----------------------- |
-| `Form`           | `loading`, `disabled`, `onsubmit`                                  | 表单容器                |
-| `FormField`      | `label`, `name`, `error`, `hint`, `required`                       | 表单字段                |
-| `Modal`          | `open`, `title`, `size`, `closeOnBackdrop`                         | 模态框                  |
-| `Drawer`         | `open`, `position`, `size`                                         | 抽屉                    |
-| `DataTable`      | `data`, `columns`, `keyField`, snippet slots                       | 数据表格                |
-| `Combobox`       | `options`, `value`, `multiple`, `placeholder`, `error`, `onchange` | 可搜索选择              |
-| `Calendar`       | `value`, `minValue`, `maxValue`                                    | 独立日历                |
-| `DatePicker`     | `value`, `minValue`, `maxValue`, `error`                           | 日期输入+弹出           |
-| `Tabs`           | `items: TabItem[]`, `active`, `type`                               | 标签页                  |
-| `Pagination`     | `page`, `total`, `pageSize`, `onchange`                            | 分页                    |
-| `Dropdown`       | `items: DropdownItem[]`, `trigger`                                 | 下拉菜单                |
-| `Accordion`      | `items: AccordionItem[]`                                           | 折叠面板                |
-| `Skeleton`       | `variant`, `count`, `animation`                                    | 骨架屏                  |
-| `Empty`          | `title`, `description`, `icon`                                     | 空状态                  |
+| 组件         | Props 要点                                                         | 说明          |
+| ------------ | ------------------------------------------------------------------ | ------------- |
+| `Form`       | `loading`, `disabled`, `onsubmit`                                  | 表单容器      |
+| `FormField`  | `label`, `name`, `error`, `hint`, `required`                       | 表单字段      |
+| `Modal`      | `open`, `title`, `size`, `closeOnBackdrop`                         | 模态框        |
+| `Drawer`     | `open`, `position`, `size`                                         | 抽屉          |
+| `DataTable`  | `data`, `columns`, `keyField`, snippet slots                       | 数据表格      |
+| `Combobox`   | `options`, `value`, `multiple`, `placeholder`, `error`, `onchange` | 可搜索选择    |
+| `Calendar`   | `value`, `minValue`, `maxValue`                                    | 独立日历      |
+| `DatePicker` | `value`, `minValue`, `maxValue`, `error`                           | 日期输入+弹出 |
+| `Tabs`       | `items: TabItem[]`, `active`, `type`                               | 标签页        |
+| `Pagination` | `page`, `total`, `pageSize`, `onchange`                            | 分页          |
+| `Dropdown`   | `items: DropdownItem[]`, `trigger`                                 | 下拉菜单      |
+| `Accordion`  | `items: AccordionItem[]`                                           | 折叠面板      |
+| `Skeleton`   | `variant`, `count`, `animation`                                    | 骨架屏        |
+| `Empty`      | `title`, `description`, `icon`                                     | 空状态        |
 
 #### 移动端组合组件（新增 7 个）
 
-| 组件             | Props 要点                                                                  | 说明                     |
-| ---------------- | --------------------------------------------------------------------------- | ------------------------ |
-| `SafeArea`       | `top`, `bottom`, `left`, `right`                                            | 安全区域容器             |
-| `AppBar`         | `title`, `backHref`, `onback`, `fixed`, `transparent`, snippet `left`/`right` | 顶部导航栏             |
-| `BottomNav`      | `items: BottomNavItem[]`, `active`                                          | 底部导航栏               |
-| `ActionSheet`    | `open`, `title`, `items: ActionSheetItem[]`, `cancelText`, `onselect`       | 底部弹出操作面板         |
-| `PullRefresh`    | `refreshing`, `onrefresh`, `threshold`, `pullText`, `releaseText`           | 下拉刷新                 |
-| `InfiniteScroll` | `loading`, `finished`, `threshold`, `onload`, `loadingText`, `finishedText` | 无限滚动加载             |
-| `SwipeCell`      | `leftActions`, `rightActions: SwipeCellAction[]`, `threshold`               | 滑动操作单元格           |
+| 组件             | Props 要点                                                                    | 说明             |
+| ---------------- | ----------------------------------------------------------------------------- | ---------------- |
+| `SafeArea`       | `top`, `bottom`, `left`, `right`                                              | 安全区域容器     |
+| `AppBar`         | `title`, `backHref`, `onback`, `fixed`, `transparent`, snippet `left`/`right` | 顶部导航栏       |
+| `BottomNav`      | `items: BottomNavItem[]`, `active`                                            | 底部导航栏       |
+| `ActionSheet`    | `open`, `title`, `items: ActionSheetItem[]`, `cancelText`, `onselect`         | 底部弹出操作面板 |
+| `PullRefresh`    | `refreshing`, `onrefresh`, `threshold`, `pullText`, `releaseText`             | 下拉刷新         |
+| `InfiniteScroll` | `loading`, `finished`, `threshold`, `onload`, `loadingText`, `finishedText`   | 无限滚动加载     |
+| `SwipeCell`      | `leftActions`, `rightActions: SwipeCellAction[]`, `threshold`                 | 滑动操作单元格   |
 
 **移动端组件用法示例**：
 
@@ -181,19 +181,19 @@ const p = usePlatform()
 
 #### IAM 场景组件
 
-| 组件          | Props 要点                                      | 说明     |
-| ------------- | ----------------------------------------------- | -------- |
-| `LoginForm`   | `showRememberMe`, `showRegisterLink`, `errors`  | 登录表单 |
-| `RegisterForm`| `fields`, `minPasswordLength`, `errors`         | 注册表单 |
-| `UserProfile` | `user`, `editable`, `fields`, `avatarUploadUrl` | 用户资料 |
+| 组件           | Props 要点                                      | 说明     |
+| -------------- | ----------------------------------------------- | -------- |
+| `LoginForm`    | `showRememberMe`, `showRegisterLink`, `errors`  | 登录表单 |
+| `RegisterForm` | `fields`, `minPasswordLength`, `errors`         | 注册表单 |
+| `UserProfile`  | `user`, `editable`, `fields`, `avatarUploadUrl` | 用户资料 |
 
 #### Storage 场景组件
 
-| 组件          | Props 要点                                    | 说明     |
-| ------------- | --------------------------------------------- | -------- |
-| `FileUpload`  | `accept`, `maxSize`, `uploadUrl`, `autoUpload`| 文件上传 |
-| `ImageUpload` | `value`, `uploadUrl`, `aspectRatio`           | 图片上传 |
-| `FileList`    | `files: FileItem[]`, `layout`, `showPreview`  | 文件列表 |
+| 组件          | Props 要点                                     | 说明     |
+| ------------- | ---------------------------------------------- | -------- |
+| `FileUpload`  | `accept`, `maxSize`, `uploadUrl`, `autoUpload` | 文件上传 |
+| `ImageUpload` | `value`, `uploadUrl`, `aspectRatio`            | 图片上传 |
+| `FileList`    | `files: FileItem[]`, `layout`, `showPreview`   | 文件列表 |
 
 ---
 
@@ -216,7 +216,7 @@ CSS 自定义属性统一管理设计变量：
 --hai-font-size-sm: 14px;
 --hai-font-size-base: 16px;
 
---hai-touch-target-min: 44px;         /* 最小触摸目标 */
+--hai-touch-target-min: 44px; /* 最小触摸目标 */
 --hai-safe-area-top: env(safe-area-inset-top);
 --hai-safe-area-bottom: env(safe-area-inset-bottom);
 
@@ -230,13 +230,13 @@ CSS 自定义属性统一管理设计变量：
 
 ### mobile.css 提供的全局类
 
-| 类名                     | 用途                           |
-| ------------------------ | ------------------------------ |
-| `.hai-safe-top`          | 上方安全区域 padding           |
-| `.hai-safe-bottom`       | 下方安全区域 padding           |
-| `.hai-safe-all`          | 四周安全区域 padding           |
-| `.hai-scroll-container`  | 优化的滚动容器（momentum 滚动）|
-| `.hai-keyboard-aware`    | 虚拟键盘弹起时自动调整内容     |
+| 类名                    | 用途                            |
+| ----------------------- | ------------------------------- |
+| `.hai-safe-top`         | 上方安全区域 padding            |
+| `.hai-safe-bottom`      | 下方安全区域 padding            |
+| `.hai-safe-all`         | 四周安全区域 padding            |
+| `.hai-scroll-container` | 优化的滚动容器（momentum 滚动） |
+| `.hai-keyboard-aware`   | 虚拟键盘弹起时自动调整内容      |
 
 ---
 
@@ -271,3 +271,5 @@ const theme = getCurrentTheme()
 - `hai-iam`：IAM 模块 API（与 LoginForm/RegisterForm 配合）
 - `hai-capacitor`：原生 App 开发（与 SafeArea/AppBar 配合）
 - `hai-api-client`：客户端数据获取
+
+- `hai-capacitor`：原生 App 开发（与 SafeArea/AppBar 配合）

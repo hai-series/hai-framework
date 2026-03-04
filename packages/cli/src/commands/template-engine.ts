@@ -35,6 +35,8 @@ export interface TemplateContext {
   hasUi: boolean
   /** 是否有 i18n（非 api 类型） */
   hasI18n: boolean
+  /** 是否为 Capacitor 原生应用（android-app） */
+  isCapacitorApp: boolean
   /** 默认语言 */
   defaultLocale: string
   /** 包管理器 */
@@ -53,6 +55,7 @@ const FEATURE_ROUTE_DIRS: Record<string, string[]> = {
   iam: ['routes-shared'],
   storage: ['routes'],
   ai: ['routes'],
+  payment: ['routes'],
 }
 
 /**
@@ -163,6 +166,7 @@ export function buildTemplateContext(options: {
   }
 
   const isApi = options.appType === 'api'
+  const isCapacitorApp = options.appType === 'android-app'
 
   return {
     projectName: options.name,
@@ -170,6 +174,7 @@ export function buildTemplateContext(options: {
     features: featureMap,
     hasUi: !isApi,
     hasI18n: !isApi,
+    isCapacitorApp,
     defaultLocale: options.moduleConfigs?.core?.defaultLocale ?? 'zh-CN',
     packageManager: options.packageManager,
   }

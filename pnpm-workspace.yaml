@@ -33,6 +33,16 @@ catalog:
   '@aws-sdk/client-s3': ^3.723.0
   '@aws-sdk/s3-request-presigner': ^3.723.0
 
+  '@capacitor/android': ^7.0.0
+  '@capacitor/app': ^7.0.0
+  '@capacitor/camera': ^7.0.0
+  '@capacitor/cli': ^7.0.0
+  '@capacitor/core': ^7.0.0
+  '@capacitor/device': ^7.0.0
+  '@capacitor/preferences': ^7.0.0
+  '@capacitor/push-notifications': ^7.0.0
+  '@capacitor/status-bar': ^7.0.0
+
   '@iconify-json/tabler': ^1.2.15
   '@iconify/tailwind4': ^1.0.7
 
@@ -51,6 +61,7 @@ catalog:
   '@playwright/test': ^1.58.2
   '@sveltejs/adapter-auto': ^7.0.0
   '@sveltejs/adapter-node': ^5.0.0
+  '@sveltejs/adapter-static': ^3.0.0
   '@sveltejs/kit': ^2.15.0
   '@sveltejs/package': ^2.3.7
   '@sveltejs/vite-plugin-svelte': ^7.0.0

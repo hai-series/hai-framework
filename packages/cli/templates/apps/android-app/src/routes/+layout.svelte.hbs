@@ -1,0 +1,42 @@
+{{!-- Android App 根布局 --}}
+<script lang="ts">
+  /**
+   * Android App 根布局
+   *
+   * - 初始化 Capacitor 原生能力
+   * - 使用 SafeArea 包裹确保安全区域
+   */
+  import type { Snippet } from 'svelte'
+  import { onMount } from 'svelte'
+  import '../app.css'
+  import { initCapacitor } from '$lib/capacitor'
+{{#if hasI18n}}
+  import { browser } from '$app/environment'
+  import { setGlobalLocale } from '@h-ai/ui'
+  import { getLocale } from '$lib/paraglide/runtime.js'
+  import * as m from '$lib/paraglide/messages'
+{{/if}}
+
+  interface Props {
+    children: Snippet
+  }
+
+  let { children }: Props = $props()
+
+  onMount(() => {
+    initCapacitor()
+  })
+{{#if hasI18n}}
+
+  if (typeof window !== 'undefined') {
+    const paraglideLocale = getLocale()
+    setGlobalLocale(paraglideLocale)
+  }
+{{/if}}
+</script>
+
+<div class="hai-safe-all min-h-screen flex flex-col bg-base-200">
+  <main class="flex-1">
+    {@render children()}
+  </main>
+</div>

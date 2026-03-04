@@ -263,10 +263,9 @@ const allowed = await iam.authz.checkPermission(userId, 'posts:write')
 const session = await iam.session.findById(sessionId)
 await iam.session.deleteByUserId(userId)  // 强制下线
 
-// --- 浏览器端 HTTP Client ---
-import { iam } from '@hai/iam'
-const client = iam.client.create({ baseUrl: '/api/iam' })
-await client.login({ identifier: 'alice', password: '...' })
+// --- 浏览器端 API 契约调用 ---
+import { iamEndpoints } from '@h-ai/iam/api'
+const result = await api.call(iamEndpoints.login, { identifier: 'alice', password: '...' })
 
 await iam.close()
 ```

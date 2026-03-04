@@ -18,6 +18,7 @@ export type FeatureId
     | 'kit' // SvelteKit 集成
     | 'ui' // UI 组件库
     | 'deploy' // 自动化部署
+    | 'payment' // 统一支付（微信/支付宝/Stripe）
 
 /**
  * 功能定义
@@ -48,7 +49,7 @@ export interface GlobalOptions {
 /**
  * 应用类型
  */
-export type AppType = 'admin' | 'website' | 'h5' | 'api'
+export type AppType = 'admin' | 'website' | 'h5' | 'api' | 'android-app'
 
 /**
  * 模块配置值
