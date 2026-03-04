@@ -1,27 +1,17 @@
 {
-  "name": "@h-ai/ai",
+  "name": "@h-ai/api-client",
   "type": "module",
   "version": "0.1.0",
-  "description": "Hai Framework AI module (LLM, MCP, tools, and clients).",
+  "description": "Hai Framework universal HTTP client with Bearer token and API contract support.",
   "license": "Apache-2.0",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "browser": "./dist/browser.js",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
-    },
-    "./client": {
-      "types": "./dist/client/index.d.ts",
-      "import": "./dist/client/index.js"
-    },
-    "./api": {
-      "types": "./dist/api/index.d.ts",
-      "import": "./dist/api/index.js"
     }
   },
   "main": "./dist/index.js",
-  "browser": "./dist/browser.js",
   "types": "./dist/index.d.ts",
   "files": [
     "dist"
@@ -32,18 +22,15 @@
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
-    "test": "vitest run",
-    "test:watch": "vitest watch",
-    "test:coverage": "vitest run --coverage",
     "clean": "rimraf dist .turbo"
   },
   "dependencies": {
     "@h-ai/core": "workspace:*",
-    "@modelcontextprotocol/sdk": "catalog:",
-    "openai": "catalog:",
     "zod": "catalog:"
   },
   "devDependencies": {

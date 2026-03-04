@@ -8,6 +8,7 @@ export default defineConfig({
     'node': 'src/index.ts',
     'browser': 'src/storage-index.browser.ts',
     'client/index': 'src/client/index.ts',
+    'api/index': 'src/api/index.ts',
   },
   // 运行时依赖保持 external，避免重复打包
   external: [

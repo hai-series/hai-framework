@@ -4,7 +4,9 @@
  * 补充现有测试未覆盖的边界分支，确保实际使用中不会出现意外行为。
  */
 
+import type { AIApiAdapter } from '../src/client/ai-client.js'
 import type { ChatCompletionChunk } from '../src/index.js'
+import { err, ok } from '@h-ai/core'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { collectStreamContent, createAIClient } from '../src/client/ai-client.js'
@@ -235,19 +237,16 @@ describe('ai.stream.createProcessor — 工具调用边界', () => {
 })
 
 // =============================================================================
-// createAIClient — 认证边界
+// createAIClient — 认证边界（认证相关功能现已委托给 api-client）
 // =============================================================================
 
-describe('createAIClient — 认证边界', () => {
-  /** 构造返回指定 JSON 的 mock fetch */
-  function mockFetch(body: unknown, status = 200): typeof globalThis.fetch {
-    return vi.fn().mockResolvedValue({
-      ok: status >= 200 && status < 300,
-      status,
-      json: () => Promise.resolve(body),
-      text: () => Promise.resolve(JSON.stringify(body)),
-      body: null,
-    }) as unknown as typeof globalThis.fetch
+describe('createAIClient — 错误处理边界', () => {
+  /** 创建 mock api adapter */
+  function createMockApi(postResult: unknown): AIApiAdapter {
+    return {
+      post: vi.fn().mockResolvedValue(postResult),
+      stream: vi.fn(),
+    }
   }
 
   function makeChatResponse(content: string) {
@@ -265,31 +264,21 @@ describe('createAIClient — 认证边界', () => {
     }
   }
 
-  it('getAccessToken 返回空字符串时不设置 Authorization', async () => {
-    const fetchFn = mockFetch(makeChatResponse('ok'))
-    const client = createAIClient({
-      baseUrl: '/api',
-      fetch: fetchFn,
-      getAccessToken: () => '',
-    })
-
-    await client.chat({ messages: [{ role: 'user', content: 'hi' }] })
-
-    const [, init] = (fetchFn as ReturnType<typeof vi.fn>).mock.calls[0]
-    expect(init.headers.Authorization).toBeUndefined()
-  })
-
-  it('无 onAuthError 时 401 仍正常抛出', async () => {
-    const fetchFn = mockFetch({ error: 'unauth' }, 401)
-    const client = createAIClient({
-      baseUrl: '/api',
-      fetch: fetchFn,
-      // 不设 onAuthError
-    })
+  it('api.post 返回错误时抛出包含错误消息的异常', async () => {
+    const api = createMockApi(err({ message: 'Token expired' }))
+    const client = createAIClient({ api })
 
     await expect(
       client.chat({ messages: [{ role: 'user', content: 'hi' }] }),
-    ).rejects.toThrow('AI API request failed')
+    ).rejects.toThrow('AI chat request failed: Token expired')
+  })
+
+  it('api.post 返回成功时正常返回', async () => {
+    const api = createMockApi(ok(makeChatResponse('ok')))
+    const client = createAIClient({ api })
+
+    const result = await client.chat({ messages: [{ role: 'user', content: 'hi' }] })
+    expect(result.choices[0].message.content).toBe('ok')
   })
 })
 

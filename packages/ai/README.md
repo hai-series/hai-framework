@@ -112,10 +112,10 @@ const result = await registry.execute(toolCall)
 
 ```ts
 import { createAIClient } from '@h-ai/ai/client'
+import { createApiClient } from '@h-ai/api-client'
 
-const client = createAIClient({
-  baseUrl: '/api/ai',
-})
+const api = createApiClient({ baseUrl: '/api' })
+const client = createAIClient({ api })
 
 // 流式聊天
 for await (const chunk of client.chatStream({ messages })) {

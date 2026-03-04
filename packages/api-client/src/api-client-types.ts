@@ -1,0 +1,272 @@
+/**
+ * @h-ai/api-client — 类型定义
+ *
+ * 通用 HTTP 客户端的公共类型、EndpointDef 契约接口、
+ * TokenStorage 适配器接口等。
+ * @module api-client-types
+ */
+
+import type { Result } from '@h-ai/core'
+import type { z } from 'zod'
+
+// ─── API 契约 ───
+
+/**
+ * API 端点契约定义
+ *
+ * 描述单个 API 端点的 HTTP 方法、路径、入参/出参 Schema 与元数据。
+ * 客户端通过 `api.call(endpoint, input)` 调用，服务端通过
+ * `kit.fromContract(endpoint, handler)` 响应，两端共享同一份契约。
+ *
+ * @typeParam TInput - 入参类型（由 Zod Schema 推导）
+ * @typeParam TOutput - 出参类型（由 Zod Schema 推导）
+ *
+ * @example
+ * ```ts
+ * const loginEndpoint: EndpointDef<LoginInput, LoginOutput> = {
+ *   method: 'POST',
+ *   path: '/auth/login',
+ *   input: LoginInputSchema,
+ *   output: LoginOutputSchema,
+ *   requireAuth: false,
+ * }
+ * ```
+ */
+export interface EndpointDef<
+  TInput = unknown,
+  TOutput = unknown,
+> {
+  /** HTTP 方法 */
+  method: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH'
+  /** 相对路径（相对于 API 前缀，如 '/auth/login'） */
+  path: string
+  /** 入参 Zod Schema（GET 请求为 query params，其他为 body） */
+  input: z.ZodType<TInput>
+  /** 出参 Zod Schema */
+  output: z.ZodType<TOutput>
+  /** 是否需要认证（默认 true） */
+  requireAuth?: boolean
+  /** OpenAPI 描述元数据 */
+  meta?: {
+    summary?: string
+    tags?: string[]
+  }
+}
+
+// ─── Token ───
+
+/**
+ * Token 对（与 @h-ai/iam 的 TokenPair 对齐）
+ */
+export interface TokenPair {
+  /** Access Token */
+  accessToken: string
+  /** Refresh Token */
+  refreshToken: string
+  /** 过期时间（秒） */
+  expiresIn: number
+  /** Token 类型 */
+  tokenType: 'Bearer'
+}
+
+/**
+ * Token 存储适配器
+ *
+ * 可插拔存储后端（localStorage / memory / Capacitor Preferences / 自定义）。
+ */
+export interface TokenStorage {
+  /** 获取 Access Token */
+  getAccessToken: () => Promise<string | null>
+  /** 设置 Access Token */
+  setAccessToken: (token: string) => Promise<void>
+  /** 获取 Refresh Token */
+  getRefreshToken: () => Promise<string | null>
+  /** 设置 Refresh Token */
+  setRefreshToken: (token: string) => Promise<void>
+  /** 清空所有 Token */
+  clear: () => Promise<void>
+}
+
+// ─── 拦截器 ───
+
+/**
+ * 请求配置（传递给拦截器）
+ */
+export interface RequestConfig {
+  /** 完整 URL */
+  url: string
+  /** HTTP 方法 */
+  method: string
+  /** 请求头 */
+  headers: Record<string, string>
+  /** 请求体（已序列化） */
+  body?: string | FormData
+  /** 信号（abort） */
+  signal?: AbortSignal
+}
+
+/** 请求拦截器 */
+export type RequestInterceptor = (config: RequestConfig) => RequestConfig | Promise<RequestConfig>
+
+/** 响应拦截器 */
+export type ResponseInterceptor = (response: Response) => Response | Promise<Response>
+
+// ─── 配置 ───
+
+/**
+ * Token 刷新配置
+ */
+export interface AuthConfig {
+  /** Token 存储适配器 */
+  storage: TokenStorage
+  /** Refresh Token 接口路径（相对于 baseUrl） */
+  refreshUrl: string
+  /** Token 刷新回调 */
+  onTokenRefreshed?: (tokens: TokenPair) => void
+  /** Token 刷新失败回调（通常用于跳转登录页） */
+  onRefreshFailed?: () => void
+}
+
+/**
+ * ApiClient 配置
+ */
+export interface ApiClientConfig {
+  /** API 基础 URL（如 https://api.example.com/api/v1） */
+  baseUrl: string
+  /** Token 认证配置（省略则不启用自动 Token 管理） */
+  auth?: AuthConfig
+  /** 请求超时（毫秒，默认 30000） */
+  timeout?: number
+  /** 拦截器 */
+  interceptors?: {
+    request?: RequestInterceptor[]
+    response?: ResponseInterceptor[]
+  }
+  /** 自定义 fetch 实现（用于测试或特殊环境） */
+  fetch?: typeof globalThis.fetch
+}
+
+// ─── 错误 ───
+
+/**
+ * Api Client 错误码
+ */
+export const ApiClientErrorCode = {
+  /** 网络请求失败 */
+  NETWORK_ERROR: 6000,
+  /** 请求超时 */
+  TIMEOUT: 6001,
+  /** 服务器错误（5xx） */
+  SERVER_ERROR: 6002,
+  /** 未授权（401） */
+  UNAUTHORIZED: 6003,
+  /** 无权限（403） */
+  FORBIDDEN: 6004,
+  /** 资源不存在（404） */
+  NOT_FOUND: 6005,
+  /** 请求参数校验失败（400） */
+  VALIDATION_FAILED: 6006,
+  /** Token 刷新失败 */
+  TOKEN_REFRESH_FAILED: 6007,
+  /** 未知错误 */
+  UNKNOWN: 6099,
+} as const
+
+/** 错误码类型 */
+export type ApiClientErrorCodeType = (typeof ApiClientErrorCode)[keyof typeof ApiClientErrorCode]
+
+/**
+ * Api Client 错误
+ */
+export interface ApiClientError {
+  /** 错误码 */
+  code: ApiClientErrorCodeType
+  /** 错误消息 */
+  message: string
+  /** HTTP 状态码（如有） */
+  status?: number
+  /** 原始异常 */
+  cause?: unknown
+  /** 服务端返回的业务错误详情 */
+  details?: unknown
+}
+
+// ─── 上传选项 ───
+
+/**
+ * 文件上传选项
+ */
+export interface UploadOptions {
+  /** 上传进度回调 */
+  onProgress?: (percent: number) => void
+  /** 文件字段名（默认 'file'） */
+  fieldName?: string
+  /** 附加表单字段 */
+  extraFields?: Record<string, string>
+}
+
+// ─── ApiClient 接口 ───
+
+/**
+ * Api Client 实例接口
+ *
+ * 提供通用 HTTP 方法和契约调用能力。
+ */
+export interface ApiClient {
+  /** GET 请求 */
+  get: <T>(path: string, params?: Record<string, unknown>) => Promise<Result<T, ApiClientError>>
+  /** POST 请求 */
+  post: <T>(path: string, body?: unknown) => Promise<Result<T, ApiClientError>>
+  /** PUT 请求 */
+  put: <T>(path: string, body?: unknown) => Promise<Result<T, ApiClientError>>
+  /** PATCH 请求 */
+  patch: <T>(path: string, body?: unknown) => Promise<Result<T, ApiClientError>>
+  /** DELETE 请求 */
+  delete: <T>(path: string) => Promise<Result<T, ApiClientError>>
+
+  /** 文件上传 */
+  upload: (path: string, file: File | Blob, options?: UploadOptions) => Promise<Result<unknown, ApiClientError>>
+
+  /** 流式请求（返回 AsyncIterable） */
+  stream: (path: string, body?: unknown) => AsyncIterable<string>
+
+  /**
+   * 契约调用（推荐）
+   *
+   * 基于 EndpointDef 发起请求，路径、方法、入参、出参类型全由契约保证。
+   */
+  call: <TInput, TOutput>(
+    endpoint: EndpointDef<TInput, TOutput>,
+    input: TInput,
+  ) => Promise<Result<TOutput, ApiClientError>>
+
+  /** Token 管理 */
+  auth: {
+    /** 设置 Token */
+    setTokens: (tokens: TokenPair) => Promise<void>
+    /** 清空 Token */
+    clear: () => Promise<void>
+    /** Token 刷新回调 */
+    onTokenRefreshed: (callback: (tokens: TokenPair) => void) => void
+  }
+}
+
+/**
+ * 辅助函数：创建端点定义（获得类型推导）
+ *
+ * @example
+ * ```ts
+ * const login = defineEndpoint({
+ *   method: 'POST',
+ *   path: '/auth/login',
+ *   input: LoginInputSchema,
+ *   output: LoginOutputSchema,
+ *   requireAuth: false,
+ * })
+ * ```
+ */
+export function defineEndpoint<TInput, TOutput>(
+  def: EndpointDef<TInput, TOutput>,
+): EndpointDef<TInput, TOutput> {
+  return def
+}
