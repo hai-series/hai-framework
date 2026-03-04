@@ -55,7 +55,7 @@ describe('scanApp', () => {
       dependencies: {
         '@sveltejs/kit': '^2.0.0',
         '@sveltejs/adapter-vercel': '^5.0.0',
-        '@h-ai/db': 'workspace:*',
+        '@h-ai/reldb': 'workspace:*',
         '@h-ai/cache': 'workspace:*',
         '@h-ai/storage': 'workspace:*',
       },
