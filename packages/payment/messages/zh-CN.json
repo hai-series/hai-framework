@@ -1,0 +1,14 @@
+{
+  "payment_createOrderFailed": "创建支付订单失败",
+  "payment_queryOrderFailed": "查询订单状态失败",
+  "payment_refundFailed": "退款请求失败",
+  "payment_closeOrderFailed": "关闭订单失败",
+  "payment_notifyVerifyFailed": "支付回调验签失败",
+  "payment_notifyParseFailed": "解析支付回调失败",
+  "payment_signFailed": "支付签名生成失败",
+  "payment_providerNotFound": "未找到支付 Provider",
+  "payment_invalidAmount": "支付金额无效",
+  "payment_notInitialized": "支付模块未初始化",
+  "payment_invokeWebFailed": "调起网页支付失败",
+  "payment_invokeAppFailed": "调起 App 支付失败"
+}

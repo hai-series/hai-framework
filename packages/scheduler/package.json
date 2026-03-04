@@ -2,7 +2,7 @@
   "name": "@h-ai/scheduler",
   "type": "module",
   "version": "0.1.0",
-  "description": "Scheduled task module for Hai framework, supporting cron expressions, JS code execution, and API calls.",
+  "description": "Hai Framework task scheduling module with cron, function, and API jobs.",
   "license": "Apache-2.0",
   "exports": {
     ".": {

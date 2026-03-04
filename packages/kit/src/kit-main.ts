@@ -11,13 +11,12 @@ import { allGuards, anyGuard, conditionalGuard, notGuard } from './guards/kit-co
 import { assertPermission, hasPermission, permissionGuard, requirePermission } from './guards/kit-permission.js'
 import { roleGuard } from './guards/kit-role.js'
 import { createHandle, sequence } from './hooks/kit-handle.js'
+import { fromContract } from './kit-contract.js'
 import { handler } from './kit-handler.js'
 import { setAllModulesLocale } from './kit-i18n.js'
 import { badRequest, conflict, created, error, forbidden, internalError, noContent, notFound, ok, redirect, unauthorized, validationError } from './kit-response.js'
-import { clearSessionCookie, setSessionCookie } from './kit-session.js'
 import { IdParamSchema, PaginationQuerySchema, validateForm, validateFormOrFail, validateParams, validateParamsOrFail, validateQuery, validateQueryOrFail } from './kit-validation.js'
 import { corsMiddleware } from './middleware/kit-cors.js'
-import { csrfMiddleware } from './middleware/kit-csrf.js'
 import { loggingMiddleware } from './middleware/kit-logging.js'
 import { rateLimitMiddleware } from './middleware/kit-ratelimit.js'
 
@@ -36,6 +35,8 @@ export const kit = {
   sequence,
   /** API Handler 包装器（自动错误边界） */
   handler,
+  /** 基于 API 契约创建类型安全的路由 handler */
+  fromContract,
 
   // ─── 路由守卫 ───
 
@@ -67,8 +68,6 @@ export const kit = {
   middleware: {
     /** CORS 中间件 */
     cors: corsMiddleware,
-    /** CSRF 中间件 */
-    csrf: csrfMiddleware,
     /** 请求日志中间件 */
     logging: loggingMiddleware,
     /** 速率限制中间件 */
@@ -123,15 +122,6 @@ export const kit = {
     IdParamSchema,
     /** 通用分页查询 Schema（page / pageSize / search） */
     PaginationQuerySchema,
-  },
-
-  // ─── 会话管理 ───
-
-  session: {
-    /** 设置会话 Cookie */
-    setCookie: setSessionCookie,
-    /** 清除会话 Cookie */
-    clearCookie: clearSessionCookie,
   },
 
   // ─── 客户端工具 ───

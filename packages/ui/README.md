@@ -1,4 +1,4 @@
-# @h-ai/ui - UI 组件库
+# @h-ai/ui
 
 > 基于 Svelte 5 Runes 的管理后台 UI 组件库，采用 DaisyUI v5 + Tailwind CSS v4 样式 + Bits UI v2 headless 交互，内置 i18n（zh-CN / en-US），支持 32+ 主题。
 

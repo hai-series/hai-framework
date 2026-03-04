@@ -55,7 +55,6 @@ function generateId(prefix: string): string {
  */
 export function createHandle(config: HookConfig = {}): Handle {
   const {
-    sessionCookieName = 'hai_session',
     validateSession,
     middleware = [],
     guards = [],
@@ -97,14 +96,18 @@ export function createHandle(config: HookConfig = {}): Handle {
     }
 
     try {
-      // 解析会话
+      // 统一 Bearer Token 会话解析
       let session: SessionData | undefined
 
       if (validateSession) {
-        const sessionToken = event.cookies.get(sessionCookieName)
+        // 从 Authorization header 提取 Token（优先）
+        const authHeader = event.request.headers.get('Authorization')
+        const token = authHeader?.startsWith('Bearer ')
+          ? authHeader.slice(7)
+          : event.cookies.get('hai_token') // SSR 内部透传回退
 
-        if (sessionToken) {
-          session = await validateSession(sessionToken) ?? undefined
+        if (token) {
+          session = await validateSession(token) ?? undefined
           const sessionLocals = event.locals as unknown as Record<string, unknown>
           sessionLocals.session = session
         }

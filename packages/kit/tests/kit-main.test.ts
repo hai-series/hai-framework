@@ -46,7 +46,6 @@ describe('kit 统一出口', () => {
   describe('kit.middleware', () => {
     it('包含所有中间件工厂', () => {
       expect(typeof kit.middleware.cors).toBe('function')
-      expect(typeof kit.middleware.csrf).toBe('function')
       expect(typeof kit.middleware.logging).toBe('function')
       expect(typeof kit.middleware.rateLimit).toBe('function')
     })
@@ -90,13 +89,10 @@ describe('kit 统一出口', () => {
     expect(typeof kit.handler).toBe('function')
   })
 
-  // ─── session 子命名空间 ───
+  // ─── fromContract ───
 
-  describe('kit.session', () => {
-    it('包含会话 Cookie 管理函数', () => {
-      expect(typeof kit.session.setCookie).toBe('function')
-      expect(typeof kit.session.clearCookie).toBe('function')
-    })
+  it('kit.fromContract 是函数', () => {
+    expect(typeof kit.fromContract).toBe('function')
   })
 
   // ─── 客户端子命名空间 ───
