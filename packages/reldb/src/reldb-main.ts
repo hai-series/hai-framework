@@ -162,7 +162,7 @@ export const reldb: ReldbFunctions = {
       }
       currentProvider = provider
       currentConfig = parsed
-      logger.info('DB module initialized')
+      logger.info('DB module initialized', { type: parsed.type })
       return ok(undefined)
     }
     catch (error) {

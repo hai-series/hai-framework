@@ -7,6 +7,7 @@
 import type { ReldbConfigInput } from '../../src/index.js'
 import { afterAll, afterEach, beforeAll, beforeEach, describe } from 'vitest'
 import { reldb } from '../../src/index.js'
+import { isDockerAvailable } from './check-docker.js'
 import { acquireMysqlContainer } from './mysql-container.js'
 import { acquirePostgresContainer } from './postgres-container.js'
 
@@ -36,8 +37,14 @@ export function defineDbSuite(
   label: string,
   setup: () => Promise<DbTestEnv> | DbTestEnv,
   defineTests: () => void,
+  options?: { requiresDocker?: boolean },
 ): void {
-  describe.sequential(`db (${label})`, () => {
+  const needDocker = options?.requiresDocker ?? false
+  const suiteFn = needDocker && !isDockerAvailable()
+    ? describe.sequential.skip
+    : describe.sequential
+
+  suiteFn(`db (${label})`, () => {
     let env: DbTestEnv | null = null
 
     beforeAll(async () => {
@@ -86,6 +93,9 @@ export async function postgresEnv(): Promise<DbTestEnv> {
   }
 }
 
+/** postgresEnv 的 requiresDocker 配套选项 */
+export const postgresDockerOpts = { requiresDocker: true } as const
+
 export async function mysqlEnv(): Promise<DbTestEnv> {
   const lease = await acquireMysqlContainer()
   return {
@@ -102,3 +112,6 @@ export async function mysqlEnv(): Promise<DbTestEnv> {
     release: lease.release,
   }
 }
+
+/** mysqlEnv 的 requiresDocker 配套选项 */
+export const mysqlDockerOpts = { requiresDocker: true } as const

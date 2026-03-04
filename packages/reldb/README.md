@@ -126,13 +126,13 @@ await reldb.tx.wrap(async (tx) => {
 })
 ```
 
-## BaseReldbReldbCrudRepository
+## BaseReldbCrudRepository
 
-业务仓库继承 `BaseReldbReldbCrudRepository`，通过 `fields` 定义字段映射，自动建表、类型转换：
+业务仓库继承 `BaseReldbCrudRepository`，通过 `fields` 定义字段映射，自动建表、类型转换：
 
 ```ts
 import type { ReldbCrudFieldDefinition, ReldbTxHandle } from '@h-ai/reldb'
-import { BaseReldbReldbCrudRepository, db } from '@h-ai/reldb'
+import { BaseReldbCrudRepository, reldb } from '@h-ai/reldb'
 
 interface UserRow {
   id: number
@@ -150,9 +150,9 @@ const USER_FIELDS: ReldbCrudFieldDefinition[] = [
   { fieldName: 'updatedAt', columnName: 'updated_at', def: { type: 'TIMESTAMP', notNull: true }, select: true, create: true, update: false },
 ]
 
-class UserRepository extends BaseReldbReldbCrudRepository<UserRow> {
+class UserRepository extends BaseReldbCrudRepository<UserRow> {
   constructor() {
-    super(db, { table: 'users', idColumn: 'id', fields: USER_FIELDS })
+    super(reldb, { table: 'users', idColumn: 'id', fields: USER_FIELDS })
   }
 
   /** 自定义查询方法 */

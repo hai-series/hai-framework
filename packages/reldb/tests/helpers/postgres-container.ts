@@ -34,7 +34,9 @@ export async function acquirePostgresContainer(): Promise<PostgresContainerLease
         POSTGRES_USER,
         POSTGRES_PASSWORD,
       })
-      .withWaitStrategy(Wait.forLogMessage('database system is ready to accept connections'))
+      // PostgreSQL 在启动过程中会输出两次 "ready to accept connections"：
+      // 第一次是模板数据库初始化，第二次才是服务器真正就绪
+      .withWaitStrategy(Wait.forLogMessage('database system is ready to accept connections', 2))
       .start()
   }
 
