@@ -1,0 +1,10 @@
+{
+  "$schema": "https://inlang.com/schema/inlang-message-format",
+  "datapipe_cleanFailed": "清洗文本失败: {error}",
+  "datapipe_chunkFailed": "分块文本失败: {error}",
+  "datapipe_transformFailed": "转换文本失败: {error}",
+  "datapipe_pipelineFailed": "管线执行失败: {error}",
+  "datapipe_configError": "数据处理配置校验失败：{error}",
+  "datapipe_emptyInput": "输入文本为空",
+  "datapipe_missingSeparator": "自定义分块模式需要提供 separator 参数"
+}

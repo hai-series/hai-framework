@@ -1,0 +1,10 @@
+{
+  "$schema": "https://inlang.com/schema/inlang-message-format",
+  "datapipe_cleanFailed": "Failed to clean text: {error}",
+  "datapipe_chunkFailed": "Failed to chunk text: {error}",
+  "datapipe_transformFailed": "Failed to transform text: {error}",
+  "datapipe_pipelineFailed": "Pipeline execution failed: {error}",
+  "datapipe_configError": "Datapipe config validation failed: {error}",
+  "datapipe_emptyInput": "Input text is empty",
+  "datapipe_missingSeparator": "Custom chunk mode requires a separator parameter"
+}
