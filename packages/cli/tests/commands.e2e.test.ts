@@ -90,9 +90,9 @@ describe('createProject — api 类型', () => {
     expect(pkg.name).toBe('proj-api')
   })
 
-  it('package.json 包含 @h-ai/db 和 @h-ai/cache', async () => {
+  it('package.json 包含 @h-ai/reldb 和 @h-ai/cache', async () => {
     const pkg = await readJson(projectPath, 'package.json')
-    expect(pkg.dependencies['@h-ai/db']).toBeDefined()
+    expect(pkg.dependencies['@h-ai/reldb']).toBeDefined()
     expect(pkg.dependencies['@h-ai/cache']).toBeDefined()
   })
 
@@ -129,7 +129,7 @@ describe('createProject — api 类型', () => {
 
   it('应生成 src/lib/server/init.ts 含 db/cache 初始化', async () => {
     const content = await readText(projectPath, 'src/lib/server/init.ts')
-    expect(content).toContain('@h-ai/db')
+    expect(content).toContain('@h-ai/reldb')
     expect(content).toContain('@h-ai/cache')
   })
 
@@ -282,7 +282,7 @@ describe('detectProject', () => {
       version: '0.1.0',
       dependencies: {
         '@h-ai/core': 'workspace:*',
-        '@h-ai/db': 'workspace:*',
+        '@h-ai/reldb': 'workspace:*',
       },
     })
 
@@ -291,7 +291,7 @@ describe('detectProject', () => {
     expect(info!.name).toBe('my-hai-app')
     expect(info!.isHaiProject).toBe(true)
     expect(info!.haiPackages).toContain('@h-ai/core')
-    expect(info!.haiPackages).toContain('@h-ai/db')
+    expect(info!.haiPackages).toContain('@h-ai/reldb')
   })
 
   it('有 package.json 但无 @h-ai 依赖时 isHaiProject 为 false', async () => {
@@ -367,7 +367,7 @@ describe('addModule', () => {
       version: '0.1.0',
       dependencies: {
         '@h-ai/core': 'workspace:*',
-        '@h-ai/db': 'workspace:*',
+        '@h-ai/reldb': 'workspace:*',
         '@h-ai/cache': 'workspace:*',
       },
     }, { spaces: 2 })
@@ -387,7 +387,7 @@ describe('addModule', () => {
       version: '0.1.0',
       dependencies: {
         '@h-ai/core': 'workspace:*',
-        '@h-ai/db': 'workspace:*',
+        '@h-ai/reldb': 'workspace:*',
       },
     }
     await fse.writeJson(path.join(dir, 'package.json'), originalPkg, { spaces: 2 })
@@ -397,7 +397,7 @@ describe('addModule', () => {
 
     const pkg = await fse.readJson(path.join(dir, 'package.json'))
     // 版本号不应被更改
-    expect(pkg.dependencies['@h-ai/db']).toBe('workspace:*')
+    expect(pkg.dependencies['@h-ai/reldb']).toBe('workspace:*')
     // 不应多出无关依赖
     expect(Object.keys(pkg.dependencies)).toHaveLength(2)
   })
@@ -416,7 +416,7 @@ describe('initProject', () => {
       version: '0.1.0',
       dependencies: {
         '@h-ai/core': 'workspace:*',
-        '@h-ai/db': 'workspace:*',
+        '@h-ai/reldb': 'workspace:*',
         '@h-ai/cache': 'workspace:*',
       },
     }, { spaces: 2 })
@@ -437,7 +437,7 @@ describe('initProject', () => {
       version: '0.1.0',
       dependencies: {
         '@h-ai/core': 'workspace:*',
-        '@h-ai/db': 'workspace:*',
+        '@h-ai/reldb': 'workspace:*',
       },
     }, { spaces: 2 })
     const original = '# old config\n'

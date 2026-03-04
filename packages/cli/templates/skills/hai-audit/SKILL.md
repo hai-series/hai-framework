@@ -5,22 +5,22 @@ description: 使用 @h-ai/audit 进行审计日志的记录、查询、清理与
 
 # @h-ai/audit — 审计日志模块
 
-统一审计日志模块，基于 `@h-ai/db` 实现持久化，提供审计日志的记录、分页查询、清理与统计。
+统一审计日志模块，基于 `@h-ai/reldb` 实现持久化，提供审计日志的记录、分页查询、清理与统计。
 
 ## 使用步骤
 
 ### 1. 配置
 
-审计模块依赖已初始化的 `@h-ai/db` 实例，无需独立配置文件。
+审计模块依赖已初始化的 `@h-ai/reldb` 实例，无需独立配置文件。
 
 ### 2. 初始化
 
 ```ts
 import { audit } from '@h-ai/audit'
-import { db } from '@h-ai/db'
+import { reldb } from '@h-ai/reldb'
 
-await db.init({ type: 'sqlite', database: './data.db' })
-const result = await audit.init({ db })
+await reldb.init({ type: 'sqlite', database: './data.db' })
+const result = await audit.init({ reldb })
 if (!result.success) {
   // 处理错误
 }

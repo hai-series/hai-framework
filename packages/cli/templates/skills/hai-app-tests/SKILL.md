@@ -85,7 +85,7 @@ e2e/                               # E2E 测试（Playwright）
 ## 核心规则
 
 1. **测试先行**：先写测试定义预期行为，再写实现代码。
-2. **统一入口**：通过框架模块公共 API 测试（`db.sql`、`iam.authn`），不直接调用内部实现。
+2. **统一入口**：通过框架模块公共 API 测试（`reldb.sql`、`iam.authn`），不直接调用内部实现。
 3. **从实际场景出发**：测试用例验证真实业务行为，不做形式覆盖。
 4. **先审查后修复**：测试不通过时先审查业务逻辑是否有问题，不直接修改测试迎合通过。
 5. **Mock 外部依赖**：单元测试中，数据库、缓存、网络请求使用 mock，不直连真实服务。
@@ -113,11 +113,11 @@ e2e/                               # E2E 测试（Playwright）
 ```typescript
 import { createArticle, listArticles } from '$lib/server/services/article'
 // tests/services/article.test.ts
-import { db } from '@h-ai/db'
+import { reldb } from '@h-ai/reldb'
 import { describe, expect, it, vi } from 'vitest'
 
 // Mock 依赖模块
-vi.mock('@h-ai/db', () => ({
+vi.mock('@h-ai/reldb', () => ({
   db: {
     sql: { query: vi.fn(), execute: vi.fn() },
     crud: { create: vi.fn(), findById: vi.fn(), paginate: vi.fn() },
@@ -132,7 +132,7 @@ describe('ArticleService', () => {
   // 正常路径
   it('should create article successfully', async () => {
     const mockArticle = { id: '1', title: 'Test', authorId: 'u1' }
-    vi.mocked(db.crud.create).mockResolvedValue({ success: true, data: mockArticle })
+    vi.mocked(reldb.crud.create).mockResolvedValue({ success: true, data: mockArticle })
 
     const result = await createArticle({ title: 'Test', authorId: 'u1' })
 
@@ -154,7 +154,7 @@ describe('ArticleService', () => {
 
   // 错误路径
   it('should return error when db fails', async () => {
-    vi.mocked(db.crud.create).mockResolvedValue({
+    vi.mocked(reldb.crud.create).mockResolvedValue({
       success: false,
       error: { code: 'DB_ERROR', message: 'Connection lost' },
     })

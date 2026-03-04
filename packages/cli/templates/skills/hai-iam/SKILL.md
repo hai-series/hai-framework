@@ -5,7 +5,7 @@ description: 使用 @h-ai/iam 进行身份认证（密码/OTP/LDAP）、统一 B
 
 # hai-iam
 
-> `@h-ai/iam` 是统一的身份与访问管理模块，支持多种认证策略（密码/OTP/LDAP）、Bearer Token 管理和 RBAC 授权。依赖 `@h-ai/db`（持久化）、`@h-ai/cache`（Token + 权限缓存）、`@h-ai/crypto`（密码哈希）。
+> `@h-ai/iam` 是统一的身份与访问管理模块，支持多种认证策略（密码/OTP/LDAP）、Bearer Token 管理和 RBAC 授权。依赖 `@h-ai/reldb`（持久化）、`@h-ai/cache`（Token + 权限缓存）、`@h-ai/crypto`（密码哈希）。
 
 ---
 
@@ -53,11 +53,11 @@ rbac:
 
 ```typescript
 import { cache } from '@h-ai/cache'
-import { db } from '@h-ai/db'
+import { reldb } from '@h-ai/reldb'
 import { iam } from '@h-ai/iam'
 
 // 必须先初始化 db 和 cache
-await db.init(core.config.get('db'))
+await reldb.init(core.config.get('db'))
 await cache.init(core.config.get('cache'))
 
 await iam.init({

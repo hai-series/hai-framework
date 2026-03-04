@@ -1,20 +1,20 @@
 ---
 name: hai-db
-description: 使用 @h-ai/db 进行 SQLite/PostgreSQL/MySQL 的初始化、SQL/DDL/CRUD/事务与分页操作；当需求涉及数据库访问、CRUD 仓库、事务处理、分页查询或 DbErrorCode 分支处理时使用。
+description: 使用 @h-ai/reldb 进行 SQLite/PostgreSQL/MySQL 的初始化、SQL/DDL/CRUD/事务与分页操作；当需求涉及数据库访问、CRUD 仓库、事务处理、分页查询或 ReldbErrorCode 分支处理时使用。
 ---
 
 # hai-db
 
-> `@h-ai/db` 提供统一的数据库操作接口，支持 SQLite、PostgreSQL、MySQL，包含 DDL、SQL、CRUD 抽象、事务与分页。
+> `@h-ai/reldb` 提供统一的数据库操作接口，支持 SQLite、PostgreSQL、MySQL，包含 DDL、SQL、CRUD 抽象、事务与分页。
 
 ---
 
 ## 适用场景
 
 - 新增或修改数据库访问逻辑（SQL/DDL/CRUD/事务）
-- 使用 `db.crud.table` 或 `BaseCrudRepository` 构建数据仓库
+- 使用 `reldb.crud.table` 或 `BaseReldbCrudRepository` 构建数据仓库
 - 处理分页查询与分页结果规范化
-- 基于 `DbErrorCode` 做错误分支处理
+- 基于 `ReldbErrorCode` 做错误分支处理
 
 ---
 
@@ -37,29 +37,29 @@ database: ${DB_DATABASE:./data/app.db}
 
 ```typescript
 import { core } from '@h-ai/core'
-import { db } from '@h-ai/db'
+import { reldb } from '@h-ai/reldb'
 
-await db.init(core.config.get('db'))
+await reldb.init(core.config.get('db'))
 // ... 使用数据库
-await db.close()
+await reldb.close()
 ```
 
 ### 3. 选择操作接口
 
 | 接口 | 用途               | 入口                         |
 | ---- | ------------------ | ---------------------------- |
-| DDL  | 建表/索引/字段变更 | `db.ddl`                     |
-| SQL  | 原始查询/执行/分页 | `db.sql`                     |
-| CRUD | 通用增删改查       | `db.crud.table(config)`      |
-| 仓库 | 业务数据仓库封装   | `extends BaseCrudRepository` |
-| 事务 | 事务管理           | `db.tx`                      |
-| 分页 | 分页参数与结果     | `db.pagination`              |
+| DDL  | 建表/索引/字段变更 | `reldb.ddl`                     |
+| SQL  | 原始查询/执行/分页 | `reldb.sql`                     |
+| CRUD | 通用增删改查       | `reldb.crud.table(config)`      |
+| 仓库 | 业务数据仓库封装   | `extends BaseReldbCrudRepository` |
+| 事务 | 事务管理           | `reldb.tx`                      |
+| 分页 | 分页参数与结果     | `reldb.pagination`              |
 
 ---
 
 ## 核心 API
 
-### DDL — `db.ddl`
+### DDL — `reldb.ddl`
 
 | 方法          | 签名                                                                    | 说明                       |
 | ------------- | ----------------------------------------------------------------------- | -------------------------- |
@@ -72,7 +72,7 @@ await db.close()
 | `dropIndex`   | `(indexName, ifExists?: boolean) => Result<void>`                       | 删除索引                   |
 | `raw`         | `(sql: string) => Result<void>`                                         | 执行原始 DDL               |
 
-> 所有方法均返回 `Promise<Result<void, DbError>>`，上表省略异步与错误类型。
+> 所有方法均返回 `Promise<Result<void, ReldbError>>`，上表省略异步与错误类型。
 
 **TableDef**（列名到列定义的映射）：
 
@@ -116,7 +116,7 @@ interface ColumnDef {
 
 > MySQL 将 TEXT 映射为 VARCHAR(255) 以支持索引和 UNIQUE 约束。INTEGER + autoIncrement 在 MySQL 映射为 BIGINT。
 
-### SQL — `db.sql`
+### SQL — `reldb.sql`
 
 | 方法        | 签名                                                              | 说明         |
 | ----------- | ----------------------------------------------------------------- | ------------ |
@@ -126,12 +126,12 @@ interface ColumnDef {
 | `batch`     | `(statements: Array<{ sql, params? }>) => Result<void>`           | 批量执行     |
 | `queryPage` | `<T>(options: PaginationQueryOptions) => Result<PaginatedResult>` | 分页查询     |
 
-> 所有方法均返回 `Promise<Result<T, DbError>>`，上表省略异步与错误类型。
+> 所有方法均返回 `Promise<Result<T, ReldbError>>`，上表省略异步与错误类型。
 
 **参数占位符统一使用 `?`**（PostgreSQL 的 `$n` 由 Provider 自动转换）：
 
 ```typescript
-const result = await db.sql.query<User>(
+const result = await reldb.sql.query<User>(
   'SELECT * FROM users WHERE status = ? AND age > ?',
   ['active', 18],
 )
@@ -149,7 +149,7 @@ interface ExecuteResult {
 **分页查询**：
 
 ```typescript
-const page = await db.sql.queryPage<User>({
+const page = await reldb.sql.queryPage<User>({
   sql: 'SELECT * FROM users WHERE status = ? ORDER BY id',
   params: ['active'],
   pagination: { page: 1, pageSize: 20 },
@@ -158,10 +158,10 @@ const page = await db.sql.queryPage<User>({
 // page.data => { items, total, page, pageSize }
 ```
 
-### CRUD — `db.crud.table(config)`
+### CRUD — `reldb.crud.table(config)`
 
 ```typescript
-const userCrud = db.crud.table({
+const userCrud = reldb.crud.table({
   table: 'users',
   idColumn: 'id',
   select: ['id', 'name', 'email', 'created_at'],
@@ -170,7 +170,7 @@ const userCrud = db.crud.table({
 })
 ```
 
-返回的 CrudRepository 方法：
+返回的 ReldbCrudRepository 方法：
 
 | 方法         | 签名                                           | 说明         |
 | ------------ | ---------------------------------------------- | ------------ |
@@ -187,16 +187,16 @@ const userCrud = db.crud.table({
 
 > 所有方法均支持可选 `tx` 事务参数。`create`/`updateById` 中的 `data` 会根据 `createColumns`/`updateColumns` 白名单过滤列。
 
-### BaseCrudRepository
+### BaseReldbCrudRepository
 
 业务仓库基类，提供字段映射、自动建表与类型转换能力：
 
 ```typescript
-import { BaseCrudRepository } from '@h-ai/db'
+import { BaseReldbCrudRepository } from '@h-ai/reldb'
 
 interface User { id: number, name: string, email: string, createdAt: Date, updatedAt: Date }
 
-class UserRepository extends BaseCrudRepository<User> {
+class UserRepository extends BaseReldbCrudRepository<User> {
   constructor() {
     super(db, {
       table: 'users',
@@ -212,13 +212,13 @@ class UserRepository extends BaseCrudRepository<User> {
   }
 
   /** 自定义查询示例 */
-  async findByEmail(email: string, tx?: TxHandle) {
+  async findByEmail(email: string, tx?: ReldbTxHandle) {
     return this.sql(tx).get<User>('SELECT * FROM users WHERE email = ?', [email])
   }
 }
 ```
 
-**`this.sql(tx?)`**：返回 `DataOperations`（`db.sql` 或传入的事务句柄），自动适配事务场景。
+**`this.sql(tx?)`**：返回 `DataOperations`（`reldb.sql` 或传入的事务句柄），自动适配事务场景。
 
 **自动能力**：
 
@@ -228,11 +228,11 @@ class UserRepository extends BaseCrudRepository<User> {
 - TIMESTAMP → 毫秒时间戳（SQLite）或 Date（PG/MySQL）
 - JSON → 字符串序列化（SQLite/MySQL）或原生 JSONB（PG）
 
-### 事务 — `db.tx`
+### 事务 — `reldb.tx`
 
 ```typescript
 // 方式1：wrap（自动 commit/rollback）
-const result = await db.tx.wrap(async (tx) => {
+const result = await reldb.tx.wrap(async (tx) => {
   await tx.execute('INSERT INTO users (name) VALUES (?)', ['张三'])
   await tx.execute('INSERT INTO logs (action) VALUES (?)', ['user_created'])
   return 'done'
@@ -241,7 +241,7 @@ const result = await db.tx.wrap(async (tx) => {
 // 回调抛异常 → 自动 rollback → result.success === false
 
 // 方式2：手动管理
-const txResult = await db.tx.begin()
+const txResult = await reldb.tx.begin()
 if (txResult.success) {
   const tx = txResult.data
   try {
@@ -254,13 +254,13 @@ if (txResult.success) {
 }
 ```
 
-**事务内可用操作**（`TxHandle` 继承 `DataOperations`）：
+**事务内可用操作**（`ReldbTxHandle` 继承 `DataOperations`）：
 
 - `tx.query / tx.get / tx.execute / tx.batch / tx.queryPage`
 - `tx.crud.table(config)` — 事务内的 CRUD 仓库
 - `tx.commit() / tx.rollback()`
 
-### 分页 — `db.pagination`
+### 分页 — `reldb.pagination`
 
 | 方法        | 签名                                                  | 说明                                   |
 | ----------- | ----------------------------------------------------- | -------------------------------------- |
@@ -281,7 +281,7 @@ interface PaginatedResult<T> {
 
 ---
 
-## 错误码 — `DbErrorCode`
+## 错误码 — `ReldbErrorCode`
 
 | 错误码                 | 值   | 说明               |
 | ---------------------- | ---- | ------------------ |
@@ -307,7 +307,7 @@ interface PaginatedResult<T> {
 ### API 端点中使用
 
 ```typescript
-import { db, DbErrorCode } from '@h-ai/db'
+import { reldb, ReldbErrorCode } from '@h-ai/reldb'
 import { kit } from '@h-ai/kit'
 
 export async function GET(event) {
@@ -329,7 +329,7 @@ export async function GET(event) {
 ### 事务跨仓库
 
 ```typescript
-const result = await db.tx.wrap(async (tx) => {
+const result = await reldb.tx.wrap(async (tx) => {
   const user = await userRepo.create(userData, tx)
   if (!user.success)
     throw new Error(user.error.message)
@@ -339,10 +339,10 @@ const result = await db.tx.wrap(async (tx) => {
 })
 ```
 
-### BaseCrudRepository 事务集成
+### BaseReldbCrudRepository 事务集成
 
 ```typescript
-const txResult = await db.tx.begin()
+const txResult = await reldb.tx.begin()
 if (txResult.success) {
   const tx = txResult.data
   await userRepo.create({ name: '用户A', email: 'a@test.com' }, tx)
