@@ -1,0 +1,63 @@
+{
+  "name": "android-app",
+  "type": "module",
+  "version": "0.1.0",
+  "private": true,
+  "description": "hai Agent Framework - Android 原生应用（Capacitor + SvelteKit SPA）",
+  "keywords": [
+    "hai",
+    "android",
+    "capacitor",
+    "sveltekit",
+    "svelte5"
+  ],
+  "scripts": {
+    "paraglide:compile": "paraglide-js compile --project ./project.inlang --outdir ./src/lib/paraglide",
+    "dev": "vite dev --port 5175",
+    "build": "vite build",
+    "preview": "vite preview --port 5175",
+    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "clean": "rimraf .svelte-kit build .turbo",
+    "cap:sync": "cap sync",
+    "cap:android": "cap open android",
+    "cap:run:android": "cap run android",
+    "cap:build:android": "npm run build && cap sync && cd android && ./gradlew assembleRelease"
+  },
+  "dependencies": {
+    "@h-ai/api-client": "workspace:*",
+    "@h-ai/capacitor": "workspace:*",
+    "@h-ai/core": "workspace:*",
+    "@h-ai/iam": "workspace:*",
+    "@h-ai/ui": "workspace:*",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@capacitor/android": "catalog:",
+    "@capacitor/cli": "catalog:",
+    "@capacitor/core": "catalog:",
+    "@capacitor/preferences": "catalog:",
+    "@iconify-json/tabler": "catalog:",
+    "@iconify/tailwind4": "catalog:",
+    "@inlang/paraglide-js": "catalog:",
+    "@inlang/plugin-message-format": "catalog:",
+    "@playwright/test": "catalog:",
+    "@sveltejs/adapter-static": "catalog:",
+    "@sveltejs/kit": "catalog:",
+    "@sveltejs/vite-plugin-svelte": "catalog:",
+    "@tailwindcss/vite": "catalog:",
+    "@types/node": "catalog:",
+    "daisyui": "catalog:",
+    "rimraf": "catalog:",
+    "svelte": "catalog:",
+    "svelte-check": "catalog:",
+    "tailwindcss": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vitest": "catalog:"
+  }
+}

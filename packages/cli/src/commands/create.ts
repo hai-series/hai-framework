@@ -30,25 +30,30 @@ import { buildTemplateContext, generateFromTemplates } from './template-engine.j
  * 应用类型定义
  */
 const APP_TYPES: Record<AppType, { name: string, description: string, defaultFeatures: FeatureId[] }> = {
-  admin: {
+  'admin': {
     name: '管理后台',
     description: '企业级管理系统，含 IAM、数据库、完整 UI',
     defaultFeatures: ['iam', 'db', 'cache', 'crypto'],
   },
-  website: {
+  'website': {
     name: '企业官网',
     description: 'SSR/SSG 企业官网，SEO 友好、响应式布局',
     defaultFeatures: ['db', 'cache'],
   },
-  h5: {
+  'h5': {
     name: 'H5 应用',
     description: '移动端 H5 应用，触摸优化、PWA 支持',
     defaultFeatures: ['db', 'cache'],
   },
-  api: {
+  'api': {
     name: 'API 服务',
     description: '纯 API 后端服务，RESTful 路由、无 UI',
     defaultFeatures: ['db', 'cache'],
+  },
+  'android-app': {
+    name: 'Android 应用',
+    description: 'Android 原生应用（Capacitor + SvelteKit SPA），可打包为 APK',
+    defaultFeatures: ['iam', 'db', 'cache', 'crypto'],
   },
 }
 
@@ -110,12 +115,19 @@ const FEATURES: Record<string, FeatureDefinition> = {
     description: '邮件、短信、微信等消息触达',
     packages: ['@h-ai/reach'],
   },
+  payment: {
+    id: 'payment',
+    name: '统一支付',
+    description: '微信支付、支付宝、Stripe 统一接入',
+    packages: ['@h-ai/payment'],
+    dependencies: ['db'],
+  },
 }
 
 /**
  * 可选择的功能列表
  */
-const SELECTABLE_FEATURES: FeatureId[] = ['iam', 'db', 'cache', 'ai', 'storage', 'crypto', 'audit', 'reach']
+const SELECTABLE_FEATURES: FeatureId[] = ['iam', 'db', 'cache', 'ai', 'storage', 'crypto', 'audit', 'reach', 'payment']
 
 // =============================================================================
 // 项目模板定义

@@ -19,6 +19,7 @@ const MODULE_SKILL_MAP: Record<string, string> = {
   storage: 'hai-storage',
   ai: 'hai-ai',
   crypto: 'hai-crypto',
+  payment: 'hai-payment',
 }
 
 /**
@@ -33,6 +34,11 @@ const BASE_SKILLS = [
   'hai-app-review',
   'hai-app-tests',
 ]
+
+/**
+ * Capacitor 应用额外需要的 Skill
+ */
+const CAPACITOR_SKILLS = ['hai-api-client', 'hai-capacitor']
 
 /**
  * API 类型项目不需要的 UI 相关 Skill
@@ -123,6 +129,11 @@ export async function generateSkillFiles(
   const baseSkills = appType === 'api'
     ? BASE_SKILLS.filter(s => !UI_SKILLS.includes(s))
     : [...BASE_SKILLS]
+
+  // Capacitor 应用额外添加 api-client 和 capacitor Skill
+  if (appType === 'android-app') {
+    baseSkills.push(...CAPACITOR_SKILLS)
+  }
 
   // 复制基础 Skill
   for (const skillName of baseSkills) {

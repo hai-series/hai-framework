@@ -19,7 +19,10 @@ export default antfu({
   ignores: [
     '**/.svelte-kit/**',
     '**/build/**',
+    '**/*.d.ts', // 声明文件（生成产物）不参与 lint
     '**/project.inlang/**', // inlang 工程元数据（工具生成）
     '**/paraglide/**', // Paraglide 自动生成的文件
+    '**/packages/cli/templates/skills/**/*.md', // Skill 模板文档（示例代码片段）不参与 lint
+    '**/packages/ui/README.md', // markdown 规则冲突，临时忽略
   ],
 })

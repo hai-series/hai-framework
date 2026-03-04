@@ -1,0 +1,30 @@
+/**
+ * Svelte 配置
+ */
+{{#if isCapacitorApp}}
+import adapter from '@sveltejs/adapter-static'
+{{else}}
+import adapter from '@sveltejs/adapter-auto'
+{{/if}}
+import { vitePreprocess } from '@sveltejs/vite-plugin-svelte'
+
+/** @type {import('@sveltejs/kit').Config} */
+const config = {
+  preprocess: vitePreprocess(),
+  compilerOptions: {
+    runes: true,
+  },
+  kit: {
+{{#if isCapacitorApp}}
+    adapter: adapter({
+      pages: 'build',
+      assets: 'build',
+      fallback: 'index.html',
+    }),
+{{else}}
+    adapter: adapter(),
+{{/if}}
+  },
+}
+
+export default config

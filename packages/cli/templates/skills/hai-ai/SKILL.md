@@ -189,12 +189,11 @@ await mcp.connect(transport)
 ### 前端客户端
 
 ```typescript
+import { createApiClient } from '@h-ai/api-client'
 import { createAIClient } from '@h-ai/ai/client'
 
-const client = createAIClient({
-  baseUrl: '/api/ai',
-  headers: { Authorization: 'Bearer xxx' },
-})
+const api = createApiClient({ baseUrl: '/api', auth: { ... } })
+const client = createAIClient({ api })
 
 // 非流式
 const response = await client.chat({ messages })

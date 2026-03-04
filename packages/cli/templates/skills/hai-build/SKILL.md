@@ -1,11 +1,11 @@
 ---
 name: hai-build
-description: 应用开发入口技能。提供项目架构总览、TDD 开发工作流、模块初始化顺序与技能导航。当用户需要了解项目结构、查找正确的技能、或开始新任务时触发。
+description: 应用开发入口技能。提供项目架构总览（SSR/SPA/原生 App 多端）、TDD 开发工作流、模块初始化顺序与技能导航。当用户需要了解项目结构、查找正确的技能、或开始新任务时触发。
 ---
 
 # hai-build — 应用开发入口
 
-> 本技能是 hai-framework 应用开发的起点。帮助理解项目结构、定位正确的技能、并遵循 **TDD 驱动的标准工作流**。
+> 本技能是 hai-framework 应用开发的起点。帮助理解项目结构、定位正确的技能、并遵循 **TDD 驱动的标准工作流**。支持 SSR Web、SPA、Android/iOS 原生 App 等多端构建。
 
 ---
 
@@ -15,6 +15,7 @@ description: 应用开发入口技能。提供项目架构总览、TDD 开发工
 - 不确定应使用哪个技能来完成任务
 - 需要了解模块初始化顺序与依赖关系
 - 需要执行跨模块操作或全局配置变更
+- 多端构建切换（SSR ↔ SPA ↔ 原生 App）
 
 ---
 
@@ -31,6 +32,33 @@ description: 应用开发入口技能。提供项目架构总览、TDD 开发工
 | 包管理   | pnpm                           |
 | 单元测试 | Vitest                         |
 | E2E 测试 | Playwright                     |
+| 原生 App | Capacitor 7                    |
+| 认证     | Bearer Token（统一）           |
+
+### 多端构建模式
+
+| 模式    | Adapter        | 认证方式              | 部署目标                |
+| ------- | -------------- | --------------------- | ----------------------- |
+| SSR Web | adapter-node   | Bearer Token + Cookie | Node.js 服务器          |
+| SPA     | adapter-static | Bearer Token          | CDN / 静态托管          |
+| Android | adapter-static | Bearer Token          | Capacitor → Android APK |
+| iOS     | adapter-static | Bearer Token          | Capacitor → iOS IPA     |
+
+**Adapter 切换**：
+
+```typescript
+// svelte.config.js — 使用 kit 提供的 createAdapter
+import { createAdapter } from '@h-ai/kit/adapter'
+
+const config = {
+  kit: {
+    adapter: createAdapter(), // 根据 VITE_ADAPTER 环境变量自动选择
+  },
+}
+```
+
+- `VITE_ADAPTER=node`（默认）→ adapter-node（SSR）
+- `VITE_ADAPTER=static` → adapter-static（SPA / 原生 App）
 
 ### 目录结构
 
@@ -48,8 +76,10 @@ description: 应用开发入口技能。提供项目架构总览、TDD 开发工
     app.d.ts                      # 全局类型声明
     hooks.server.ts               # 服务端 Hook（模块初始化 + 请求管道）
     lib/
+      api.ts                      # API Client 初始化（SPA / 原生 App 使用）
+      capacitor.ts                # Capacitor 初始化（原生 App）
       server/
-        init.ts                   # 模块初始化入口（单例）
+        init.ts                   # 模块初始化入口（单例，SSR）
       paraglide/                  # i18n 生成文件（禁止手动修改）
       components/                 # 应用组件
     routes/
@@ -57,8 +87,11 @@ description: 应用开发入口技能。提供项目架构总览、TDD 开发工
       +page.svelte                # 首页
       (auth)/                     # 认证相关页面组
       api/                        # API 端点
+        v1/                       # API v1 版本
+          payment/                # 支付端点（按需）
   static/                         # 静态资源
   messages/                       # i18n 翻译文件
+  capacitor.config.ts             # Capacitor 配置（原生 App）
 ```
 
 ### 模块依赖图
@@ -71,11 +104,16 @@ core（基础能力：配置、日志、i18n、Result）
   ├── storage（存储：本地/S3）
   ├── ai（AI：LLM/MCP/Agent）
   ├── iam（身份管理）← 依赖 crypto + db + cache
+  ├── payment（支付）← 依赖 db + crypto
   ├── kit（SvelteKit 集成）← 依赖 iam + cache + storage + crypto
+  ├── api-client（HTTP 客户端）← 纯浏览器端，依赖 iam/api（类型）
+  ├── capacitor（原生能力）← 纯浏览器端
   └── ui（UI 组件库）← 依赖 core
 ```
 
 ### 模块初始化顺序
+
+#### SSR 模式（hooks.server.ts）
 
 在 `src/lib/server/init.ts` 中按依赖顺序初始化：
 
@@ -84,7 +122,7 @@ import { cache } from '@h-ai/cache'
 import { core } from '@h-ai/core'
 import { db } from '@h-ai/db'
 import { iam } from '@h-ai/iam'
-import { kit } from '@h-ai/kit'
+import { payment } from '@h-ai/payment' // 按需
 
 let initialized = false
 
@@ -101,11 +139,34 @@ export async function initModules() {
 
   // 3. 业务层（依赖基础设施）
   await iam.init({ ...core.config.get('iam'), db, cache })
+  // 支付模块（按需）
+  await payment.init({ ...core.config.get('payment'), db })
 
   // 4. 集成层
   // kit 无需 init，通过 createHandle 配置
 
   initialized = true
+}
+```
+
+#### SPA / 原生 App 模式（src/lib/api.ts）
+
+```typescript
+import { createApiClient } from '@h-ai/api-client'
+
+export const api = createApiClient({
+  baseURL: import.meta.env.VITE_API_BASE_URL,
+  timeout: 15_000,
+})
+```
+
+#### 原生 App 追加初始化（src/lib/capacitor.ts）
+
+```typescript
+import { capacitor } from '@h-ai/capacitor'
+
+export async function initCapacitor() {
+  await capacitor.init({ statusBar: { style: 'dark' } })
 }
 ```
 
@@ -130,17 +191,20 @@ log:
 
 ### 模块使用（API 与集成）
 
-| 任务                  | 技能          | 触发关键词                                    |
-| --------------------- | ------------- | --------------------------------------------- |
-| 配置/日志/i18n/Result | `hai-core`    | core.init, core.logger, core.config, Result   |
-| 数据库操作            | `hai-db`      | db.init, SQL, CRUD, 事务, 分页, DDL           |
-| 缓存操作              | `hai-cache`   | cache.init, cache.get/set, TTL, Redis         |
-| 文件存储              | `hai-storage` | storage.init, 上传, 下载, S3, 本地存储        |
-| 加密/签名/哈希        | `hai-crypto`  | crypto.init, SM2, SM3, SM4, 加密, 签名        |
-| 身份认证/授权         | `hai-iam`     | iam.init, 登录, 注册, RBAC, Session, JWT      |
-| AI/LLM/MCP            | `hai-ai`      | ai.init, LLM, MCP, Agent, 工具调用            |
-| SvelteKit 集成        | `hai-kit`     | kit.createHandle, guard, middleware, validate |
-| UI 组件               | `hai-ui`      | 表单, 按钮, 表格, Modal, Toast, 组件          |
+| 任务                  | 技能             | 触发关键词                                        |
+| --------------------- | ---------------- | ------------------------------------------------- |
+| 配置/日志/i18n/Result | `hai-core`       | core.init, core.logger, core.config, Result       |
+| 数据库操作            | `hai-db`         | db.init, SQL, CRUD, 事务, 分页, DDL               |
+| 缓存操作              | `hai-cache`      | cache.init, cache.get/set, TTL, Redis             |
+| 文件存储              | `hai-storage`    | storage.init, 上传, 下载, S3, 本地存储            |
+| 加密/签名/哈希        | `hai-crypto`     | crypto.init, SM2, SM3, SM4, 加密, 签名            |
+| 身份认证/授权         | `hai-iam`        | iam.init, 登录, 注册, RBAC, Token, Bearer         |
+| AI/LLM/MCP            | `hai-ai`         | ai.init, LLM, MCP, Agent, 工具调用                |
+| SvelteKit 集成        | `hai-kit`        | kit.createHandle, guard, fromContract, middleware |
+| UI 组件               | `hai-ui`         | 表单, 按钮, 表格, Modal, Toast, 移动端组件        |
+| HTTP 客户端           | `hai-api-client` | api.call, api.get, api.post, Bearer, 拦截器       |
+| 原生 App 能力         | `hai-capacitor`  | capacitor, 相机, 推送, 状态栏, 设备信息           |
+| 支付                  | `hai-payment`    | payment, 微信支付, 支付宝, Stripe, 订单           |
 
 ### 开发流程
 
