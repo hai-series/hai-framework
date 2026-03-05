@@ -23,11 +23,11 @@ import { core, err, ok } from '@h-ai/core'
 
 import { reldb } from '@h-ai/reldb'
 
-import { SchedulerLogRepository, SchedulerTaskRepository } from './repositories/index.js'
+import { SchedulerLockRepository, SchedulerLogRepository, SchedulerTaskRepository } from './repositories/index.js'
 import { SchedulerConfigSchema, SchedulerErrorCode } from './scheduler-config.js'
 import { parseCronExpression } from './scheduler-cron.js'
 import { schedulerM } from './scheduler-i18n.js'
-import { getTask, getTaskRegistry, hasTask, isTaskRunning, isTimerRunning, registerInMemory, resetRunner, runTask, setCronCache, setLogRepository, setTask, startTimer, stopTimer, unregisterFromMemory } from './scheduler-runner.js'
+import { getTask, getTaskRegistry, hasTask, isTaskRunning, isTimerRunning, registerInMemory, resetRunner, runTask, setCronCache, setLockRepository, setLogRepository, setTask, startTimer, stopTimer, unregisterFromMemory } from './scheduler-runner.js'
 
 const logger = core.logger.child({ module: 'scheduler', scope: 'main' })
 
@@ -41,6 +41,9 @@ let taskRepo: SchedulerTaskRepository | null = null
 
 /** 执行日志仓库 */
 let logRepo: SchedulerLogRepository | null = null
+
+/** 分布式锁仓库 */
+let lockRepo: SchedulerLockRepository | null = null
 
 // ─── 未初始化工具集 ───
 
@@ -63,9 +66,15 @@ async function initDatabase(parsed: SchedulerConfig): Promise<SchedulerConfig> {
 
   taskRepo = new SchedulerTaskRepository(reldb, parsed.taskTableName)
   logRepo = new SchedulerLogRepository(reldb, parsed.tableName)
+  lockRepo = new SchedulerLockRepository(reldb, parsed.lockTableName)
 
   // 通知 runner 使用日志仓库
   setLogRepository(logRepo)
+
+  // 配置分布式锁：使用配置的 nodeId 或自动生成
+  const nodeId = parsed.nodeId ?? crypto.randomUUID()
+  setLockRepository(lockRepo, nodeId, parsed.lockExpireMs)
+  logger.info('Distributed lock configured', { nodeId, lockExpireMs: parsed.lockExpireMs })
 
   return parsed
 }
@@ -185,7 +194,9 @@ export const scheduler: SchedulerFunctions = {
       currentConfig = null
       taskRepo = null
       logRepo = null
+      lockRepo = null
       setLogRepository(null)
+      setLockRepository(null, '', 300000)
       logger.error('Scheduler initialization failed', { error })
       return err({
         code: SchedulerErrorCode.INIT_FAILED,
@@ -481,6 +492,7 @@ export const scheduler: SchedulerFunctions = {
     currentConfig = null
     taskRepo = null
     logRepo = null
+    lockRepo = null
     logger.info('Scheduler module closed')
   },
 }

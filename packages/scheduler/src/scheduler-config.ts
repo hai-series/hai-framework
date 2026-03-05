@@ -54,6 +54,8 @@ export const SchedulerErrorCode = {
   ALREADY_RUNNING: 11027,
   /** 调度器未运行（未启动时调用 stop） */
   NOT_RUNNING: 11028,
+  /** 获取分布式锁失败（其他节点已获锁） */
+  LOCK_ACQUIRE_FAILED: 11029,
 } as const
 
 /** 定时任务错误码类型 */
@@ -85,6 +87,12 @@ export const SchedulerConfigSchema = z.object({
   taskTableName: z.string().regex(/^\w+$/, schedulerM('scheduler_config_tableNameInvalid')).default('scheduler_tasks'),
   /** 调度检查间隔，单位毫秒（默认 1000，即每秒检查一次） */
   tickInterval: z.number().int().min(100).default(1000),
+  /** 分布式锁表名（默认 'scheduler_locks'，仅允许字母、数字和下划线） */
+  lockTableName: z.string().regex(/^\w+$/, schedulerM('scheduler_config_tableNameInvalid')).default('scheduler_locks'),
+  /** 分布式锁过期时间，单位毫秒（默认 300000，即 5 分钟） */
+  lockExpireMs: z.number().int().min(10000).default(300000),
+  /** 节点标识（默认自动生成 UUID，多节点部署时建议设置固定标识以便审计） */
+  nodeId: z.string().min(1).optional(),
 })
 
 /** 调度器配置类型 */

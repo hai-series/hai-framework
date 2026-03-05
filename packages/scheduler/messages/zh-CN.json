@@ -16,5 +16,7 @@
   "scheduler_config_tableNameInvalid": "表名只能包含字母、数字和下划线",
   "scheduler_taskIdEmpty": "任务 ID 不能为空",
   "scheduler_taskRunning": "任务正在执行中: {taskId}",
-  "scheduler_invalidApiConfig": "任务 api_config 格式无效: {taskId}"
+  "scheduler_invalidApiConfig": "任务 api_config 格式无效: {taskId}",
+  "scheduler_lockAcquireFailed": "获取分布式锁失败，其他节点已获锁: {taskId}",
+  "scheduler_lockCleanupFailed": "清理过期锁记录失败: {error}"
 }
