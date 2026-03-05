@@ -21,6 +21,6 @@
 所有详细指南位于 `.github/skills/` 目录，按需阅读：
 
 - **入口**：`hai-build/SKILL.md` — 项目架构总览与 Skill 导航
-- **框架模块**：`hai-core/`、`hai-kit/`、`hai-db/`、`hai-iam/`、`hai-crypto/`、`hai-cache/`、`hai-storage/`、`hai-ai/`
+- **框架模块**：`hai-core/`、`hai-kit/`、`hai-reldb/`、`hai-iam/`、`hai-crypto/`、`hai-cache/`、`hai-storage/`、`hai-ai/`
 - **UI 组件**：`hai-ui/SKILL.md`
 - **TDD 开发流程**：`hai-app-tests/`（TDD 测试先行）、`hai-app-create/`（TDD 实现）、`hai-app-review/`（TDD 重构审查）

@@ -298,4 +298,4 @@ const config = result.data // 类型安全
 
 - `hai-build`：项目整体架构与技能导航
 - `hai-kit`：SvelteKit 集成层（Handle/Guard/Middleware）
-- `hai-db` / `hai-cache` / `hai-iam`：使用 core.config 读取配置的下游模块
+- `hai-reldb` / `hai-cache` / `hai-iam`：使用 core.config 读取配置的下游模块

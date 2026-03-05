@@ -11,9 +11,7 @@
   "reldb_postgresTxFailed": "Transaction failed: {error}",
   "reldb_postgresOnlyPostgresql": "PostgreSQL Provider only supports postgresql type",
   "reldb_postgresConnectionFailed": "Failed to connect to PostgreSQL: {error}",
-  "reldb_postgresTxQueryHint": "In PostgreSQL transaction, please use await tx.query()",
-  "reldb_postgresTxGetHint": "In PostgreSQL transaction, please use await tx.get()",
-  "reldb_postgresTxExecuteHint": "In PostgreSQL transaction, please use await tx.execute()",
+
   "reldb_sqliteOnlySqlite": "SQLite Provider only supports sqlite type",
   "reldb_sqliteNeedPath": "SQLite requires database path (database field)",
   "reldb_sqliteConnectionFailed": "Failed to connect to SQLite: {error}",
@@ -32,9 +30,7 @@
   "reldb_mysqlOnlyMysql": "MySQL Provider only supports mysql type",
   "reldb_mysqlConnectionFailed": "Failed to connect to MySQL: {error}",
   "reldb_mysqlTxFailed": "Transaction failed: {error}",
-  "reldb_mysqlTxQueryHint": "In MySQL transaction, please use await tx.query()",
-  "reldb_mysqlTxGetHint": "In MySQL transaction, please use await tx.get()",
-  "reldb_mysqlTxExecuteHint": "In MySQL transaction, please use await tx.execute()",
+
   "reldb_crudEmptyPayload": "CRUD payload is empty, please provide data",
   "reldb_crudNoValidColumns": "CRUD payload has no valid columns",
   "reldb_invalidIdentifier": "Invalid SQL identifier: {name} (only letters, digits and underscores allowed)",

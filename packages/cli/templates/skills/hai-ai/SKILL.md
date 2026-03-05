@@ -341,5 +341,5 @@ export async function POST(event) {
 - `hai-core`：配置与 Result 模型
 - `hai-kit`：SvelteKit API 端点集成
 - `hai-vecdb`：向量数据库（Retrieval / RAG / Knowledge 的存储层）
-- `hai-db`：关系数据库（Knowledge 实体索引的存储层）
+- `hai-reldb`：关系数据库（Knowledge 实体索引的存储层）
 - `hai-datapipe`：数据清洗与分块（Knowledge 入库前的数据处理）

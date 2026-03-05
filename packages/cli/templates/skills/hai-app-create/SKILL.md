@@ -367,5 +367,5 @@ core.init() → reldb.init() → cache.init() → iam.init() → createBusinessT
 - `hai-app-review`：代码审查规范（Refactor 阶段参照）
 - `hai-kit`：SvelteKit 集成的完整 API
 - `hai-ui`：UI 组件库使用
-- `hai-db`：数据库操作详细 API
+- `hai-reldb`：数据库操作详细 API
 - `hai-iam`：认证与权限管理

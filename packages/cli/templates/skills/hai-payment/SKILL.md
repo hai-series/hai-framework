@@ -254,5 +254,5 @@ export const POST = kit.handler(async ({ request, locals }) => {
 
 - `hai-kit`：服务端 API 路由与契约处理
 - `hai-api-client`：客户端契约调用
-- `hai-db`：订单持久化存储
+- `hai-reldb`：订单持久化存储
 - `hai-core`：Result 类型、日志、配置

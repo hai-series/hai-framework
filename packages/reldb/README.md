@@ -4,9 +4,9 @@
 
 ## 支持的数据库
 
-- SQLite（better-sqlite3）
-- PostgreSQL（pg）
-- MySQL（mysql2）
+- SQLite
+- PostgreSQL
+- MySQL
 
 ## 快速开始
 
@@ -123,6 +123,92 @@ await reldb.tx.wrap(async (tx) => {
     sql: 'SELECT id, name FROM users ORDER BY id',
     pagination: { page: 1, pageSize: 10 },
   })
+})
+```
+
+## Crud
+
+通过 `reldb.crud.table()` 创建单表 CRUD 仓库，免写 SQL：
+
+```ts
+const userCrud = reldb.crud.table<{ id: number, name: string, email: string }>({
+  table: 'users',
+  idColumn: 'id', // 主键列，默认 'id'
+  select: ['id', 'name', 'email'], // 查询列，默认 '*'
+  createColumns: ['name', 'email'], // 允许插入的列
+  updateColumns: ['name', 'email'], // 允许更新的列
+})
+```
+
+### create / createMany
+
+```ts
+// 单条插入
+const result = await userCrud.create({ name: '张三', email: 'test@example.com' })
+// result.data → { changes: 1, lastInsertRowid: 1 }
+
+// 批量插入
+await userCrud.createMany([
+  { name: '用户A', email: 'a@test.com' },
+  { name: '用户B', email: 'b@test.com' },
+])
+```
+
+### findById / findAll / findPage
+
+```ts
+// 主键查找
+const user = await userCrud.findById(1)
+// user.data → { id: 1, name: '张三', email: 'test@example.com' } | null
+
+// 条件查询（where + params 占位符）
+const actives = await userCrud.findAll({
+  where: 'name LIKE ?',
+  params: ['%张%'],
+  orderBy: 'id DESC',
+  limit: 10,
+  offset: 0,
+})
+
+// 分页查询
+const page = await userCrud.findPage({
+  where: 'name LIKE ?',
+  params: ['%张%'],
+  orderBy: 'id DESC',
+  pagination: { page: 1, pageSize: 20 },
+})
+// page.data → { items: [...], total: 100, page: 1, pageSize: 20 }
+```
+
+### updateById / deleteById
+
+```ts
+await userCrud.updateById(1, { name: '李四' })
+await userCrud.deleteById(1)
+```
+
+### count / exists / existsById
+
+```ts
+const total = await userCrud.count({ where: 'name LIKE ?', params: ['%张%'] })
+// total.data → 5
+
+const has = await userCrud.exists({ where: 'email = ?', params: ['test@example.com'] })
+// has.data → true
+
+const found = await userCrud.existsById(1)
+// found.data → true
+```
+
+### 事务中使用 Crud
+
+所有方法均支持传入 `tx` 参数，自动路由到事务上下文：
+
+```ts
+await reldb.tx.wrap(async (tx) => {
+  await userCrud.create({ name: '用户A', email: 'a@test.com' }, tx)
+  await userCrud.updateById(1, { name: '新名字' }, tx)
+  const user = await userCrud.findById(1, tx)
 })
 ```
 
