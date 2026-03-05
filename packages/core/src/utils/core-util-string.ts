@@ -181,6 +181,32 @@ function padEnd(str: string, length: number, char = ' '): string {
 }
 
 /**
+ * 常量时间字符串比较。
+ *
+ * 防止时序侧信道攻击：无论输入差异位置如何，执行时间恒定。
+ * 兼容 Node.js 与浏览器环境（纯 JS 实现，无平台依赖）。
+ *
+ * @param a - 字符串 a
+ * @param b - 字符串 b
+ * @returns 是否相等
+ *
+ * @example
+ * ```ts
+ * string.constantTimeEqual('abc', 'abc') // true
+ * string.constantTimeEqual('abc', 'abd') // false
+ * ```
+ */
+function constantTimeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length)
+    return false
+  let result = 0
+  for (let i = 0; i < a.length; i++) {
+    result |= a.charCodeAt(i) ^ b.charCodeAt(i)
+  }
+  return result === 0
+}
+
+/**
  * 字符串操作工具对象。
  *
  * @example
@@ -200,4 +226,5 @@ export const string = {
   isNotBlank,
   padStart,
   padEnd,
+  constantTimeEqual,
 }

@@ -8,7 +8,7 @@
 import type { Result } from '@h-ai/core'
 import type { CryptoError, HashOperations, PasswordConfig, PasswordOperations } from './crypto-types.js'
 
-import { err, ok } from '@h-ai/core'
+import { core, err, ok } from '@h-ai/core'
 
 import { CryptoErrorCode } from './crypto-config.js'
 import { cryptoM } from './crypto-i18n.js'
@@ -24,18 +24,20 @@ interface PasswordDeps {
 // ─── 工具函数 ───
 
 /**
- * 生成随机盐值
+ * 生成加密安全的随机盐值
  *
- * 从大小写字母和数字中随机选取字符组成盐值字符串。
+ * 使用 Web Crypto API（crypto.getRandomValues）从大小写字母和数字中随机选取字符。
  *
  * @param length - 盐值长度（字符数）
  * @returns 随机盐值字符串
  */
 function generateSalt(length: number): string {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'
+  const randomBytes = new Uint8Array(length)
+  globalThis.crypto.getRandomValues(randomBytes)
   let salt = ''
   for (let i = 0; i < length; i++) {
-    salt += chars.charAt(Math.floor(Math.random() * chars.length))
+    salt += chars.charAt(randomBytes[i] % chars.length)
   }
   return salt
 }
@@ -164,7 +166,7 @@ export function createPasswordFunctions(deps: PasswordDeps): PasswordOperations 
           return hashResult
         }
 
-        return ok(hashResult.data === storedHash)
+        return ok(core.string.constantTimeEqual(hashResult.data, storedHash))
       }
       catch (error) {
         return err({

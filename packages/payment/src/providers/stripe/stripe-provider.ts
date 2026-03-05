@@ -19,9 +19,8 @@ import type {
   RefundResult,
   StripeConfig,
 } from '../../payment-types.js'
-import { Buffer } from 'node:buffer'
-import { createHmac, timingSafeEqual } from 'node:crypto'
-import { err, ok } from '@h-ai/core'
+import { createHmac } from 'node:crypto'
+import { core, err, ok } from '@h-ai/core'
 import { paymentM } from '../../payment-i18n.js'
 import { PaymentErrorCode } from '../../payment-types.js'
 
@@ -68,7 +67,7 @@ export function createStripeProvider(config: StripeConfig): PaymentProvider {
       .digest('hex')
 
     try {
-      return timingSafeEqual(Buffer.from(v1), Buffer.from(expected))
+      return core.string.constantTimeEqual(v1, expected)
     }
     catch {
       return false

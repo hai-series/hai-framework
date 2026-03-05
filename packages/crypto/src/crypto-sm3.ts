@@ -12,7 +12,7 @@ import type {
   HashOptions,
 } from './crypto-types.js'
 
-import { err, ok } from '@h-ai/core'
+import { core, err, ok } from '@h-ai/core'
 // @ts-expect-error sm-crypto 无类型定义
 import smCrypto from 'sm-crypto'
 
@@ -47,7 +47,7 @@ export function createSM3(): HashOperations {
       data: string | Uint8Array,
       options: HashOptions = {},
     ): Result<string, CryptoError> {
-      const { inputEncoding = 'utf8', outputFormat = 'hex' } = options
+      const { inputEncoding = 'utf8' } = options
 
       try {
         let input: string | number[]
@@ -72,11 +72,6 @@ export function createSM3(): HashOperations {
             code: CryptoErrorCode.HASH_FAILED,
             message: cryptoM('crypto_sm3HashEmpty'),
           })
-        }
-
-        if (outputFormat === 'array') {
-          // 返回十六进制字符串（调用方可自行转换）
-          return ok(result)
         }
 
         return ok(result)
@@ -155,7 +150,7 @@ export function createSM3(): HashOperations {
     verify(data: string, expectedHash: string): Result<boolean, CryptoError> {
       try {
         const hashResult = sm3(data)
-        return ok(hashResult.toLowerCase() === expectedHash.toLowerCase())
+        return ok(core.string.constantTimeEqual(hashResult.toLowerCase(), expectedHash.toLowerCase()))
       }
       catch (error) {
         return err({
