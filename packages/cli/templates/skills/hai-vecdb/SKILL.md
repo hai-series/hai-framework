@@ -269,5 +269,5 @@ if (!result.success) {
 
 - `hai-ai`：LLM 与 Embedding 能力
 - `hai-datapipe`：文本清洗与分块
-- `hai-db`：关系型数据库（知识库需要同时使用 reldb 存储结构化数据）
+- `hai-reldb`：关系型数据库（知识库需要同时使用 reldb 存储结构化数据）
 - `hai-core`：配置管理、Result 模型

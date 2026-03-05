@@ -24,13 +24,15 @@ import type {
   TxWrapCallback,
 } from '../reldb-types.js'
 
-import { err, ok } from '@h-ai/core'
+import { core, err, ok } from '@h-ai/core'
 
 import { ReldbErrorCode } from '../reldb-config.js'
 import { createCrud } from '../reldb-crud-kernel.js'
 import { reldbM } from '../reldb-i18n.js'
 import { buildPaginatedResult, normalizePagination, parseCount } from '../reldb-pagination.js'
 import { escapeSqlString, validateIdentifier, validateIdentifiers } from '../reldb-security.js'
+
+const logger = core.logger.child({ module: 'reldb', scope: 'mysql' })
 
 // ─── mysql2 类型定义（避免强依赖） ───
 
@@ -904,9 +906,14 @@ export function createMysqlProvider(): ReldbProvider {
         charset: config.mysql?.charset ?? 'utf8mb4',
       }) as MysqlPool
 
+      // 验证连接可用性
+      await pool.query('SELECT 1')
+
+      logger.info('Connected to MySQL', { host: config.host, port: config.port, database: config.database })
       return ok(undefined)
     }
     catch (error) {
+      pool = null
       return err({
         code: ReldbErrorCode.CONNECTION_FAILED,
         message: reldbM('reldb_mysqlConnectionFailed', { params: { error: String(error) } }),
@@ -932,6 +939,7 @@ export function createMysqlProvider(): ReldbProvider {
         })
       }
       pool = null
+      logger.info('Disconnected from MySQL')
     }
     return ok(undefined)
   }

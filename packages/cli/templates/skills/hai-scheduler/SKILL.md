@@ -259,5 +259,5 @@ scheduler.start()
 
 ## 相关 Skills
 
-- `hai-db`：数据库初始化与操作
+- `hai-reldb`：数据库初始化与操作
 - `hai-core`：配置管理、Result 模型、日志

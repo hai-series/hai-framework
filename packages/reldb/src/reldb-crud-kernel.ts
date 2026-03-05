@@ -18,12 +18,14 @@ import type {
   ReldbError,
   ReldbTxHandle,
 } from './reldb-types.js'
-import { err, ok } from '@h-ai/core'
+import { core, err, ok } from '@h-ai/core'
 
 import { ReldbErrorCode } from './reldb-config.js'
 import { reldbM } from './reldb-i18n.js'
 import { parseCount } from './reldb-pagination.js'
 import { validateIdentifier, validateIdentifiers } from './reldb-security.js'
+
+const logger = core.logger.child({ module: 'reldb', scope: 'crud-kernel' })
 
 // ─── CRUD 工具方法 ───
 
@@ -138,7 +140,7 @@ export function createCrud<TItem>(
    *
    * 对 orderBy 中的标识符逐一校验，防止 SQL 注入。
    * 仅允许 `column`、`column ASC`、`column DESC` 格式。
-   * 校验失败时返回空字符串（静默忽略非法排序）。
+   * 校验失败时跳过非法排序字段并输出 debug 日志。
    */
   const buildOrderClause = (orderBy?: string): string => {
     if (!orderBy)
@@ -149,13 +151,17 @@ export function createCrud<TItem>(
     for (const part of parts) {
       // 匹配 "column" 或 "column ASC/DESC" 格式
       const match = part.match(/^(\w+)(?:\s+(ASC|DESC))?$/i)
-      if (!match)
+      if (!match) {
+        logger.debug('Skipped invalid orderBy segment', { table, segment: part })
         continue
+      }
       const colName = match[1]
       const direction = match[2] ?? ''
       const colValid = validateIdentifier(colName)
-      if (!colValid.success)
+      if (!colValid.success) {
+        logger.debug('Skipped invalid orderBy identifier', { table, column: colName })
         continue
+      }
       safeParts.push(direction ? `${colName} ${direction.toUpperCase()}` : colName)
     }
     if (safeParts.length === 0)

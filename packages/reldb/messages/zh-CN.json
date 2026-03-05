@@ -11,9 +11,7 @@
   "reldb_postgresTxFailed": "事务执行失败: {error}",
   "reldb_postgresOnlyPostgresql": "PostgreSQL Provider 仅支持 postgresql 类型",
   "reldb_postgresConnectionFailed": "连接 PostgreSQL 失败: {error}",
-  "reldb_postgresTxQueryHint": "PostgreSQL 事务中请使用 await tx.query()",
-  "reldb_postgresTxGetHint": "PostgreSQL 事务中请使用 await tx.get()",
-  "reldb_postgresTxExecuteHint": "PostgreSQL 事务中请使用 await tx.execute()",
+
   "reldb_sqliteOnlySqlite": "SQLite Provider 仅支持 sqlite 类型",
   "reldb_sqliteNeedPath": "SQLite 需要提供数据库路径（database 字段）",
   "reldb_sqliteConnectionFailed": "连接 SQLite 失败: {error}",
@@ -32,9 +30,7 @@
   "reldb_mysqlOnlyMysql": "MySQL Provider 仅支持 mysql 类型",
   "reldb_mysqlConnectionFailed": "连接 MySQL 失败: {error}",
   "reldb_mysqlTxFailed": "事务执行失败: {error}",
-  "reldb_mysqlTxQueryHint": "MySQL 事务中请使用 await tx.query()",
-  "reldb_mysqlTxGetHint": "MySQL 事务中请使用 await tx.get()",
-  "reldb_mysqlTxExecuteHint": "MySQL 事务中请使用 await tx.execute()",
+
   "reldb_crudEmptyPayload": "CRUD 数据为空，请提供数据",
   "reldb_crudNoValidColumns": "CRUD 数据没有有效列",
   "reldb_invalidIdentifier": "非法的 SQL 标识符: {name}（仅允许字母、数字和下划线）",

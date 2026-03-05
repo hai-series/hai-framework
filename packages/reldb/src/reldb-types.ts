@@ -157,7 +157,12 @@ export interface ReldbIndexDef {
   columns: string[]
   /** 是否为唯一索引 */
   unique?: boolean
-  /** 索引条件（WHERE 子句，用于部分索引） */
+  /**
+   * 索引条件（WHERE 子句，用于部分索引）
+   *
+   * **⚠️ 安全警告：** `where` 为原始 SQL 片段，不会经过参数化处理，
+   * **禁止**将用户输入直接拼接。仅用于开发者编写的静态条件。
+   */
   where?: string
 }
 

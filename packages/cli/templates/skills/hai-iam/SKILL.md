@@ -274,7 +274,7 @@ await api.tokenManager.clearTokens()
 - `hai-build`：模块初始化顺序（db → cache → iam）
 - `hai-kit`：SvelteKit 集成（Bearer Token + 契约处理）
 - `hai-api-client`：客户端契约调用
-- `hai-db`：底层数据存储
+- `hai-reldb`：底层数据存储
 - `hai-cache`：Token 与权限缓存
 - `hai-crypto`：密码哈希（内部依赖）
 - `hai-ui`：IAM 场景组件（LoginForm/RegisterForm 等）

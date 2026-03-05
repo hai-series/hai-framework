@@ -24,13 +24,15 @@ import type {
   TxWrapCallback,
 } from '../reldb-types.js'
 
-import { err, ok } from '@h-ai/core'
+import { core, err, ok } from '@h-ai/core'
 
 import { ReldbErrorCode } from '../reldb-config.js'
 import { createCrud } from '../reldb-crud-kernel.js'
 import { reldbM } from '../reldb-i18n.js'
 import { buildPaginatedResult, normalizePagination, parseCount } from '../reldb-pagination.js'
 import { escapeSqlString, quoteIdentifier, validateIdentifier, validateIdentifiers } from '../reldb-security.js'
+
+const logger = core.logger.child({ module: 'reldb', scope: 'postgres' })
 
 // ─── pg 类型定义（避免强依赖） ───
 
@@ -835,9 +837,14 @@ export function createPostgresProvider(): ReldbProvider {
         connectionTimeoutMillis: config.pool?.acquireTimeout,
       }) as PgPool
 
+      // 验证连接可用性
+      await pool.query('SELECT 1')
+
+      logger.info('Connected to PostgreSQL', { host: config.host, port: config.port, database: config.database })
       return ok(undefined)
     }
     catch (error) {
+      pool = null
       return err({
         code: ReldbErrorCode.CONNECTION_FAILED,
         message: reldbM('reldb_postgresConnectionFailed', { params: { error: String(error) } }),
@@ -863,6 +870,7 @@ export function createPostgresProvider(): ReldbProvider {
         })
       }
       pool = null
+      logger.info('Disconnected from PostgreSQL')
     }
     return ok(undefined)
   }

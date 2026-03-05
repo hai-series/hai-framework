@@ -39,7 +39,7 @@
 | `hai-core`       | 配置加载、日志、i18n、Result 模型、模块生命周期       |
 | `hai-kit`        | SvelteKit 集成：Handle Hook、守卫、中间件、响应、校验 |
 | `hai-ui`         | UI 组件库：三层架构、自动导入、主题、i18n             |
-| `hai-db`         | 数据库操作：DDL、SQL、CRUD、事务、分页                |
+| `hai-reldb`      | 数据库操作：DDL、SQL、CRUD、事务、分页                |
 | `hai-iam`        | 认证与权限：密码/OTP/LDAP、会话、RBAC                 |
 | `hai-crypto`     | 加密：SM2/SM3/SM4、密码哈希、随机生成                 |
 | `hai-cache`      | 缓存：内存/Redis、TTL、集合操作、分布式锁             |

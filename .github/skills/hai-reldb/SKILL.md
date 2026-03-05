@@ -23,8 +23,8 @@ description: 使用 @h-ai/reldb 进行 SQLite/PostgreSQL/MySQL 的初始化、DD
 - `packages/reldb/src/reldb-main.ts` — `reldb` 对象入口
 - `packages/reldb/src/reldb-types.ts` — 全部公共类型定义
 - `packages/reldb/src/reldb-config.ts` — 配置 Schema、错误码、DbType
-- `packages/reldb/src/crud/reldb-crud-kernel.ts` — `reldb.crud.table()` 实现
-- `packages/reldb/src/crud/reldb-crud-repository.ts` — `BaseReldbCrudRepository` 抽象类
+- `packages/reldb/src/reldb-crud-kernel.ts` — `reldb.crud.table()` 实现
+- `packages/reldb/src/reldb-crud-repository.ts` — `BaseReldbCrudRepository` 抽象类
 - `packages/reldb/src/reldb-pagination.ts` — 分页工具函数
 
 ---
@@ -137,35 +137,46 @@ const page = await reldb.sql.queryPage<{ id: number, name: string }>({
 
 ### 5. CRUD 操作（reldb.crud.table）
 
-轻量级 CRUD，适用于简单场景：
+轻量级 CRUD，适用于简单场景，免写 SQL：
 
 ```ts
 const userCrud = reldb.crud.table<{ id: number, name: string, email: string }>({
   table: 'users',
-  idColumn: 'id',
-  select: ['id', 'name', 'email'],
-  createColumns: ['name', 'email'],
-  updateColumns: ['name', 'email'],
+  idColumn: 'id', // 主键列，默认 'id'
+  select: ['id', 'name', 'email'], // 查询列，默认 '*'
+  createColumns: ['name', 'email'], // 允许插入的列
+  updateColumns: ['name', 'email'], // 允许更新的列
 })
+```
 
-// 创建
-await userCrud.create({ name: '李四', email: 'li@test.com' })
+#### create / createMany
 
-// 批量创建
+```ts
+// 单条插入
+const result = await userCrud.create({ name: '张三', email: 'test@example.com' })
+// result.data → { changes: 1, lastInsertRowid: 1 }
+
+// 批量插入
 await userCrud.createMany([
   { name: '用户A', email: 'a@test.com' },
   { name: '用户B', email: 'b@test.com' },
 ])
+```
 
-// 按 ID 查询
+#### findById / findAll / findPage
+
+```ts
+// 主键查找
 const user = await userCrud.findById(1)
+// user.data → { id: 1, name: '张三', email: 'test@example.com' } | null
 
-// 条件查询
-const filtered = await userCrud.findAll({
+// 条件查询（where + params 占位符）
+const actives = await userCrud.findAll({
   where: 'name LIKE ?',
   params: ['%张%'],
   orderBy: 'id DESC',
   limit: 10,
+  offset: 0,
 })
 
 // 分页查询
@@ -175,17 +186,39 @@ const page = await userCrud.findPage({
   orderBy: 'id DESC',
   pagination: { page: 1, pageSize: 20 },
 })
+// page.data → { items: [...], total: 100, page: 1, pageSize: 20 }
+```
 
-// 更新
+#### updateById / deleteById
+
+```ts
 await userCrud.updateById(1, { name: '新名字' })
-
-// 删除
 await userCrud.deleteById(1)
+```
 
-// 计数 / 存在性
-const cnt = await userCrud.count({ where: 'name = ?', params: ['张三'] })
-const has = await userCrud.exists({ where: 'email = ?', params: ['test@test.com'] })
-const hasId = await userCrud.existsById(1)
+#### count / exists / existsById
+
+```ts
+const total = await userCrud.count({ where: 'name LIKE ?', params: ['%张%'] })
+// total.data → 5
+
+const has = await userCrud.exists({ where: 'email = ?', params: ['test@example.com'] })
+// has.data → true
+
+const found = await userCrud.existsById(1)
+// found.data → true
+```
+
+#### 事务中使用 Crud
+
+所有方法均支持传入 `tx` 参数，自动路由到事务上下文：
+
+```ts
+await reldb.tx.wrap(async (tx) => {
+  await userCrud.create({ name: '用户A', email: 'a@test.com' }, tx)
+  await userCrud.updateById(1, { name: '新名字' }, tx)
+  const user = await userCrud.findById(1, tx)
+})
 ```
 
 ### 6. 事务

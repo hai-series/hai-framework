@@ -289,5 +289,5 @@ if (!result.success) {
 ## 相关 Skills
 
 - `hai-core` — 配置加载、日志、Result 模式
-- `hai-db` — 数据库操作（存储发送记录等）
+- `hai-reldb` — 数据库操作（存储发送记录等）
 - `hai-cache` — 缓存操作（验证码缓存等）

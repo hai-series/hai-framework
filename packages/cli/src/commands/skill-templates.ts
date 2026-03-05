@@ -13,7 +13,7 @@ import fse from 'fs-extra'
  * 模块名到 Skill 目录名的映射
  */
 const MODULE_SKILL_MAP: Record<string, string> = {
-  db: 'hai-db',
+  db: 'hai-reldb',
   cache: 'hai-cache',
   iam: 'hai-iam',
   storage: 'hai-storage',
@@ -65,7 +65,7 @@ function getSkillTemplatesDir(): string {
  * 复制单个 Skill 目录到项目
  *
  * @param templatesDir - Skill 模板根目录
- * @param skillName - Skill 目录名（如 'hai-db'）
+ * @param skillName - Skill 目录名（如 'hai-reldb'）
  * @param projectPath - 用户项目根目录
  */
 async function copySkill(templatesDir: string, skillName: string, projectPath: string): Promise<void> {

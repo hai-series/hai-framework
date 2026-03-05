@@ -1,9 +1,9 @@
 ---
-name: hai-db
+name: hai-reldb
 description: 使用 @h-ai/reldb 进行 SQLite/PostgreSQL/MySQL 的初始化、SQL/DDL/CRUD/事务与分页操作；当需求涉及数据库访问、CRUD 仓库、事务处理、分页查询或 ReldbErrorCode 分支处理时使用。
 ---
 
-# hai-db
+# hai-reldb
 
 > `@h-ai/reldb` 提供统一的数据库操作接口，支持 SQLite、PostgreSQL、MySQL，包含 DDL、SQL、CRUD 抽象、事务与分页。
 
@@ -160,13 +160,15 @@ const page = await reldb.sql.queryPage<User>({
 
 ### CRUD — `reldb.crud.table(config)`
 
+通过配置创建单表 CRUD 仓库，免写 SQL：
+
 ```typescript
-const userCrud = reldb.crud.table({
+const userCrud = reldb.crud.table<{ id: number, name: string, email: string }>({
   table: 'users',
-  idColumn: 'id',
-  select: ['id', 'name', 'email', 'created_at'],
-  createColumns: ['name', 'email'],
-  updateColumns: ['name', 'email'],
+  idColumn: 'id',           // 主键列，默认 'id'
+  select: ['id', 'name', 'email'],   // 查询列，默认 '*'
+  createColumns: ['name', 'email'],   // 允许插入的列
+  updateColumns: ['name', 'email'],   // 允许更新的列
 })
 ```
 
@@ -186,6 +188,58 @@ const userCrud = reldb.crud.table({
 | `existsById` | `(id, tx?) => Result<boolean>`                 | ID 是否存在  |
 
 > 所有方法均支持可选 `tx` 事务参数。`create`/`updateById` 中的 `data` 会根据 `createColumns`/`updateColumns` 白名单过滤列。
+
+**使用示例**：
+
+```typescript
+// 单条插入
+const result = await userCrud.create({ name: '张三', email: 'test@example.com' })
+// result.data → { changes: 1, lastInsertRowid: 1 }
+
+// 批量插入
+await userCrud.createMany([
+  { name: '用户A', email: 'a@test.com' },
+  { name: '用户B', email: 'b@test.com' },
+])
+
+// 主键查找
+const user = await userCrud.findById(1)
+// user.data → { id: 1, name: '张三', email: 'test@example.com' } | null
+
+// 条件查询（where + params 占位符）
+const actives = await userCrud.findAll({
+  where: 'name LIKE ?',
+  params: ['%张%'],
+  orderBy: 'id DESC',
+  limit: 10,
+  offset: 0,
+})
+
+// 分页查询
+const page = await userCrud.findPage({
+  where: 'name LIKE ?',
+  params: ['%张%'],
+  orderBy: 'id DESC',
+  pagination: { page: 1, pageSize: 20 },
+})
+// page.data → { items: [...], total: 100, page: 1, pageSize: 20 }
+
+// 更新 / 删除
+await userCrud.updateById(1, { name: '新名字' })
+await userCrud.deleteById(1)
+
+// 计数 / 存在性
+const total = await userCrud.count({ where: 'name LIKE ?', params: ['%张%'] })
+const has = await userCrud.exists({ where: 'email = ?', params: ['test@example.com'] })
+const found = await userCrud.existsById(1)
+
+// 事务中使用（所有方法均支持 tx 参数）
+await reldb.tx.wrap(async (tx) => {
+  await userCrud.create({ name: '用户A', email: 'a@test.com' }, tx)
+  await userCrud.updateById(1, { name: '新名字' }, tx)
+  const user = await userCrud.findById(1, tx)
+})
+```
 
 ### BaseReldbCrudRepository
 
@@ -357,5 +411,5 @@ if (txResult.success) {
 
 - `hai-build`：模块初始化顺序
 - `hai-core`：配置管理、Result 模型
-- `hai-iam`：IAM 模块内部使用 db 进行用户/角色/权限存储
-- `hai-cache`：缓存穿透保护中配合 db 使用
+- `hai-iam`：IAM 模块内部使用 reldb 进行用户/角色/权限存储
+- `hai-cache`：缓存穿透保护中配合 reldb 使用

@@ -116,6 +116,6 @@ if (result.success) {
 
 ## 相关 Skills
 
-- `hai-db` — 数据库模块（审计模块依赖）
+- `hai-reldb` — 数据库模块（审计模块依赖）
 - `hai-iam` — 身份认证与权限管理（审计的主要记录对象）
 - `hai-core` — 核心工具（日志、ID 生成、i18n）

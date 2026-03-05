@@ -26,7 +26,7 @@ import type {
 } from '../reldb-types.js'
 import { createRequire } from 'node:module'
 
-import { err, ok } from '@h-ai/core'
+import { core, err, ok } from '@h-ai/core'
 
 import { ReldbErrorCode } from '../reldb-config.js'
 import { createCrud } from '../reldb-crud-kernel.js'
@@ -35,6 +35,8 @@ import { buildPaginatedResult, normalizePagination, parseCount } from '../reldb-
 import { escapeSqlString, quoteIdentifier, validateIdentifier, validateIdentifiers } from '../reldb-security.js'
 
 const require = createRequire(import.meta.url)
+
+const logger = core.logger.child({ module: 'reldb', scope: 'sqlite' })
 
 // ─── SQLite Provider 实现 ───
 
@@ -881,6 +883,7 @@ export function createSqliteProvider(): ReldbProvider {
         database.pragma('journal_mode = WAL')
       }
 
+      logger.info('Connected to SQLite', { database: config.database })
       return ok(undefined)
     }
     catch (error) {
@@ -909,6 +912,7 @@ export function createSqliteProvider(): ReldbProvider {
         })
       }
       database = null
+      logger.info('Disconnected from SQLite')
     }
     return ok(undefined)
   }
