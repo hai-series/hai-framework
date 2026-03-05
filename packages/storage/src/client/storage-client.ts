@@ -288,7 +288,8 @@ export async function downloadAndSave(
  * @example
  * ```ts
  * getFileExtension(new File([], 'photo.PNG'))  // 'png'
- * getFileExtension(new File([], '.gitignore')) // ''
+ * getFileExtension(new File([], '.gitignore')) // 'gitignore'
+ * getFileExtension(new File([], 'noext'))      // ''
  * ```
  */
 export function getFileExtension(file: File): string {

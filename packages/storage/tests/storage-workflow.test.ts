@@ -20,6 +20,17 @@
 
 import { Buffer } from 'node:buffer'
 import { describe, expect, it } from 'vitest'
+import {
+  DeleteFileInputSchema,
+  DeleteFilesInputSchema,
+  FileInfoInputSchema,
+  FileMetadataSchema,
+  ListFilesOutputSchema,
+  PresignGetInputSchema,
+  PresignPutInputSchema,
+  PresignUrlOutputSchema,
+  storageEndpoints,
+} from '../src/api/index.js'
 import { downloadWithPresignedUrl, storage, uploadWithPresignedUrl } from '../src/index.js'
 import { defineStorageSuite, localStorageEnv, s3Env } from './helpers/storage-test-suite.js'
 
@@ -364,6 +375,91 @@ describe('storage workflow', () => {
         const text = await downloadResult.data.text()
         expect(text).toBe(content)
       }
+    })
+  })
+
+  // ===========================================================================
+  // API 契约可用性：验证 @h-ai/storage/api 导出的 Schema 和端点定义
+  // ===========================================================================
+
+  describe('api contract', () => {
+    it('storageEndpoints 应包含全部 6 个端点且结构完整', () => {
+      const endpointNames = ['presignDownload', 'presignUpload', 'fileInfo', 'listFiles', 'deleteFile', 'deleteFiles'] as const
+      for (const name of endpointNames) {
+        const ep = storageEndpoints[name]
+        expect(ep, `endpoint ${name} should exist`).toBeDefined()
+        expect(ep.method).toMatch(/^(GET|POST|PUT|DELETE|PATCH)$/)
+        expect(ep.path).toMatch(/^\/storage\//)
+        expect(ep.input).toBeDefined()
+        expect(ep.output).toBeDefined()
+        expect(typeof ep.input.safeParse).toBe('function')
+        expect(typeof ep.output.safeParse).toBe('function')
+      }
+    })
+
+    it('所有 Schema 导出可用且具备 safeParse 能力', () => {
+      const schemas = [
+        FileMetadataSchema,
+        PresignGetInputSchema,
+        PresignPutInputSchema,
+        PresignUrlOutputSchema,
+        ListFilesOutputSchema,
+        DeleteFileInputSchema,
+        DeleteFilesInputSchema,
+        FileInfoInputSchema,
+      ]
+      for (const schema of schemas) {
+        expect(schema).toBeDefined()
+        expect(typeof schema.safeParse).toBe('function')
+        // 空对象不会导致 throw，只会返回 success: false
+        const result = schema.safeParse({})
+        expect(typeof result.success).toBe('boolean')
+      }
+    })
+
+    it('端点 input schema 与独立 Schema 导出一致', () => {
+      // presignDownload 和 presignUpload 的 input 与独立 Schema 相同引用
+      expect(storageEndpoints.presignDownload.input).toBe(PresignGetInputSchema)
+      expect(storageEndpoints.presignUpload.input).toBe(PresignPutInputSchema)
+      expect(storageEndpoints.fileInfo.input).toBe(FileInfoInputSchema)
+      expect(storageEndpoints.deleteFile.input).toBe(DeleteFileInputSchema)
+      expect(storageEndpoints.deleteFiles.input).toBe(DeleteFilesInputSchema)
+      // fileInfo 的 output 与独立 FileMetadataSchema 是同一个引用
+      expect(storageEndpoints.fileInfo.output).toBe(FileMetadataSchema)
+      // listFiles 的 output 与独立 ListFilesOutputSchema 是同一个引用
+      expect(storageEndpoints.listFiles.output).toBe(ListFilesOutputSchema)
+    })
+
+    it('端点 method + path 组合与预期匹配', () => {
+      const expected: Record<string, { method: string, path: string }> = {
+        presignDownload: { method: 'POST', path: '/storage/presign/download' },
+        presignUpload: { method: 'POST', path: '/storage/presign/upload' },
+        fileInfo: { method: 'POST', path: '/storage/file/info' },
+        listFiles: { method: 'GET', path: '/storage/files' },
+        deleteFile: { method: 'POST', path: '/storage/file/delete' },
+        deleteFiles: { method: 'POST', path: '/storage/files/delete' },
+      }
+      for (const [name, { method, path }] of Object.entries(expected)) {
+        const ep = storageEndpoints[name as keyof typeof storageEndpoints]
+        expect(ep.method, `${name}.method`).toBe(method)
+        expect(ep.path, `${name}.path`).toBe(path)
+      }
+    })
+
+    it('listFiles inline input 支持 maxKeys coerce 与范围校验', () => {
+      const input = storageEndpoints.listFiles.input
+      // 字符串 coerce
+      const coerced = input.safeParse({ maxKeys: '100' })
+      expect(coerced.success).toBe(true)
+      if (coerced.success) {
+        expect(coerced.data.maxKeys).toBe(100)
+      }
+      // 超过 1000
+      expect(input.safeParse({ maxKeys: 1001 }).success).toBe(false)
+      // 小于 1
+      expect(input.safeParse({ maxKeys: 0 }).success).toBe(false)
+      // 全部可选
+      expect(input.safeParse({}).success).toBe(true)
     })
   })
 })
