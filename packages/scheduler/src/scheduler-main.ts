@@ -1,17 +1,20 @@
 /**
  * @h-ai/scheduler — 定时任务服务主入口
  *
- * 本文件提供统一的 `scheduler` 对象，聚合所有定时任务功能。 仅负责生命周期管理（init / close）和 API 编排， 调度运行逻辑委托给 scheduler-runner.ts。
+ * 本文件提供统一的 `scheduler` 对象，聚合所有定时任务功能。
+ * 仅负责生命周期管理（init / close）和 API 编排，
+ * 调度运行逻辑委托给 scheduler-runner.ts。
  * @module scheduler-main
  */
 
 import type { Result } from '@h-ai/core'
 
-import type { SchedulerConfig, SchedulerConfigInput } from './scheduler-config.js'
+import type { SchedulerConfig } from './scheduler-config.js'
 import type {
   LogQueryOptions,
   SchedulerError,
   SchedulerFunctions,
+  SchedulerInitInput,
   TaskDefinition,
   TaskExecutionLog,
   TaskUpdateInput,
@@ -20,11 +23,11 @@ import { core, err, ok } from '@h-ai/core'
 
 import { reldb } from '@h-ai/reldb'
 
+import { SchedulerLogRepository, SchedulerTaskRepository } from './repositories/index.js'
 import { SchedulerConfigSchema, SchedulerErrorCode } from './scheduler-config.js'
 import { parseCronExpression } from './scheduler-cron.js'
-import { deleteTaskDefinition, ensureLogTable, ensureTaskTable, loadTaskDefinitions, queryLogs, saveTaskDefinition, updateTaskDefinition } from './scheduler-db.js'
 import { schedulerM } from './scheduler-i18n.js'
-import { getTask, getTaskRegistry, hasTask, isTimerRunning, registerInMemory, resetRunner, runTask, setCronCache, setTask, startTimer, stopTimer, unregisterFromMemory } from './scheduler-runner.js'
+import { getTask, getTaskRegistry, hasTask, isTaskRunning, isTimerRunning, registerInMemory, resetRunner, runTask, setCronCache, setLogRepository, setTask, startTimer, stopTimer, unregisterFromMemory } from './scheduler-runner.js'
 
 const logger = core.logger.child({ module: 'scheduler', scope: 'main' })
 
@@ -33,12 +36,96 @@ const logger = core.logger.child({ module: 'scheduler', scope: 'main' })
 /** 当前配置 */
 let currentConfig: SchedulerConfig | null = null
 
+/** 任务定义仓库 */
+let taskRepo: SchedulerTaskRepository | null = null
+
+/** 执行日志仓库 */
+let logRepo: SchedulerLogRepository | null = null
+
 // ─── 未初始化工具集 ───
 
 const notInitialized = core.module.createNotInitializedKit<SchedulerError>(
   SchedulerErrorCode.NOT_INITIALIZED,
   () => schedulerM('scheduler_notInitialized'),
 )
+
+// ─── 内部辅助函数 ───
+
+/** DB 初始化：创建仓库实例，失败时自动降级 */
+async function initDatabase(parsed: SchedulerConfig): Promise<SchedulerConfig> {
+  if (!parsed.enableDb)
+    return parsed
+
+  if (!reldb.isInitialized) {
+    logger.warn('DB not initialized, disabling DB logging')
+    return { ...parsed, enableDb: false }
+  }
+
+  taskRepo = new SchedulerTaskRepository(reldb, parsed.taskTableName)
+  logRepo = new SchedulerLogRepository(reldb, parsed.tableName)
+
+  // 通知 runner 使用日志仓库
+  setLogRepository(logRepo)
+
+  return parsed
+}
+
+/** 加载持久化的 API 任务 */
+async function loadPersistedTasks(): Promise<void> {
+  if (!taskRepo)
+    return
+
+  const loadResult = await taskRepo.loadTasks()
+  if (!loadResult.success) {
+    logger.warn('Failed to load persisted tasks', { error: loadResult.error.message })
+    return
+  }
+
+  let loadedCount = 0
+  for (const task of loadResult.data) {
+    const regResult = registerInMemory(task)
+    if (regResult.success) {
+      loadedCount++
+      logger.debug('Loaded persisted task', { taskId: task.id, taskName: task.name })
+    }
+    else {
+      logger.warn('Failed to load persisted task', { taskId: task.id, error: regResult.error.message })
+    }
+  }
+
+  if (loadedCount > 0) {
+    logger.info('Loaded persisted tasks', { count: loadedCount })
+  }
+}
+
+/** 从配置加载预定义任务 */
+function loadConfigTasks(tasks: TaskDefinition[]): void {
+  let loadedCount = 0
+  for (const task of tasks) {
+    if (!task.id) {
+      logger.warn('Skipping config task with empty id')
+      continue
+    }
+
+    if (hasTask(task.id)) {
+      logger.debug('Skipping config task, already registered from DB', { taskId: task.id })
+      continue
+    }
+
+    const regResult = registerInMemory(task)
+    if (regResult.success) {
+      loadedCount++
+      logger.debug('Loaded config task', { taskId: task.id, taskName: task.name })
+    }
+    else {
+      logger.warn('Failed to load config task', { taskId: task.id, error: regResult.error.message })
+    }
+  }
+
+  if (loadedCount > 0) {
+    logger.info('Loaded config tasks', { count: loadedCount })
+  }
+}
 
 // ─── 统一调度器服务对象 ───
 
@@ -51,15 +138,16 @@ export const scheduler: SchedulerFunctions = {
   /**
    * 初始化调度器
    *
-   * 解析配置、创建日志表和任务表（若 enableDb 为 true）。
-   * 若 DB 未初始化或表创建失败，自动降级为 `enableDb: false`。
+   * 解析配置、创建仓库实例（若 enableDb 为 true）。
+   * 若 DB 未初始化，自动降级为 `enableDb: false`。
    * 启用 DB 时，自动加载之前持久化的 API 任务。
+   * 同时加载配置中传入的预定义任务（DB 中已存在的同 ID 任务优先）。
    * 重复调用会先关闭前一次实例。
    *
    * @param config - 调度器配置（可选，所有字段有默认值）
    * @returns 成功返回 `ok(undefined)`；配置异常返回 `INIT_FAILED` 错误
    */
-  async init(config?: SchedulerConfigInput): Promise<Result<void, SchedulerError>> {
+  async init(config?: SchedulerInitInput): Promise<Result<void, SchedulerError>> {
     if (currentConfig) {
       logger.warn('Scheduler module is already initialized, reinitializing')
       await scheduler.close()
@@ -67,7 +155,9 @@ export const scheduler: SchedulerFunctions = {
 
     logger.info('Initializing scheduler module')
 
-    const parseResult = SchedulerConfigSchema.safeParse(config ?? {})
+    const { tasks: configTasks, ...configOptions } = config ?? {}
+
+    const parseResult = SchedulerConfigSchema.safeParse(configOptions)
     if (!parseResult.success) {
       logger.error('Scheduler config validation failed', { error: parseResult.error.message })
       return err({
@@ -76,53 +166,16 @@ export const scheduler: SchedulerFunctions = {
         cause: parseResult.error,
       })
     }
-    const parsed = parseResult.data
 
     try {
-      currentConfig = parsed
+      currentConfig = await initDatabase(parseResult.data)
 
-      // 如果启用 DB，创建日志表和任务表
-      if (parsed.enableDb) {
-        if (!reldb.isInitialized) {
-          logger.warn('DB not initialized, disabling DB logging')
-          currentConfig = { ...parsed, enableDb: false }
-        }
-        else {
-          const logTableResult = await ensureLogTable(parsed.tableName)
-          if (!logTableResult.success) {
-            logger.warn('Failed to create log table, disabling DB logging', { error: logTableResult.error.message })
-            currentConfig = { ...parsed, enableDb: false }
-          }
-          else {
-            const taskTableResult = await ensureTaskTable(parsed.taskTableName)
-            if (!taskTableResult.success) {
-              logger.warn('Failed to create task table, disabling DB logging', { error: taskTableResult.error.message })
-              currentConfig = { ...parsed, enableDb: false }
-            }
-          }
-        }
-      }
+      // 先加载 DB 中持久化的任务（优先级高）
+      await loadPersistedTasks()
 
-      // 加载持久化的任务
-      if (currentConfig.enableDb && reldb.isInitialized) {
-        const loadResult = await loadTaskDefinitions(currentConfig.taskTableName)
-        if (loadResult.success) {
-          for (const task of loadResult.data) {
-            const regResult = registerInMemory(task)
-            if (regResult.success) {
-              logger.debug('Loaded persisted task', { taskId: task.id, taskName: task.name })
-            }
-            else {
-              logger.warn('Failed to load persisted task', { taskId: task.id, error: regResult.error.message })
-            }
-          }
-          if (loadResult.data.length > 0) {
-            logger.info('Loaded persisted tasks', { count: loadResult.data.length })
-          }
-        }
-        else {
-          logger.warn('Failed to load persisted tasks', { error: loadResult.error.message })
-        }
+      // 再加载配置中的预定义任务（不覆盖 DB 中已有的同 ID 任务）
+      if (configTasks && configTasks.length > 0) {
+        loadConfigTasks(configTasks)
       }
 
       logger.info('Scheduler module initialized', { enableDb: currentConfig.enableDb })
@@ -130,6 +183,9 @@ export const scheduler: SchedulerFunctions = {
     }
     catch (error) {
       currentConfig = null
+      taskRepo = null
+      logRepo = null
+      setLogRepository(null)
       logger.error('Scheduler initialization failed', { error })
       return err({
         code: SchedulerErrorCode.INIT_FAILED,
@@ -155,6 +211,13 @@ export const scheduler: SchedulerFunctions = {
     if (!currentConfig)
       return notInitialized.result()
 
+    if (!task.id) {
+      return err({
+        code: SchedulerErrorCode.EXECUTION_FAILED,
+        message: schedulerM('scheduler_taskIdEmpty'),
+      })
+    }
+
     if (hasTask(task.id)) {
       return err({
         code: SchedulerErrorCode.TASK_ALREADY_EXISTS,
@@ -167,14 +230,14 @@ export const scheduler: SchedulerFunctions = {
       return regResult
 
     // 持久化 API 任务到数据库
-    if (currentConfig.enableDb && reldb.isInitialized && task.type === 'api') {
-      const saveResult = await saveTaskDefinition(currentConfig.taskTableName, task)
+    if (taskRepo && task.type === 'api') {
+      const saveResult = await taskRepo.saveTask(task)
       if (!saveResult.success) {
         logger.warn('Failed to persist task definition', { taskId: task.id, error: saveResult.error.message })
       }
     }
 
-    logger.info('Task registered', { taskId: task.id, taskName: task.name, cron: task.cron, persisted: task.type === 'api' && currentConfig.enableDb })
+    logger.info('Task registered', { taskId: task.id, taskName: task.name, cron: task.cron, persisted: task.type === 'api' && !!taskRepo })
     return ok(undefined)
   },
 
@@ -201,8 +264,8 @@ export const scheduler: SchedulerFunctions = {
     unregisterFromMemory(taskId)
 
     // 从数据库中删除持久化的任务定义
-    if (currentConfig.enableDb && reldb.isInitialized) {
-      const deleteResult = await deleteTaskDefinition(currentConfig.taskTableName, taskId)
+    if (taskRepo) {
+      const deleteResult = await taskRepo.deleteTask(taskId)
       if (!deleteResult.success) {
         logger.warn('Failed to delete persisted task definition', { taskId, error: deleteResult.error.message })
       }
@@ -243,23 +306,31 @@ export const scheduler: SchedulerFunctions = {
       setCronCache(taskId, cronResult.data)
     }
 
-    // 构建更新后的任务
-    const updatedTask: TaskDefinition = {
-      ...existingTask,
-      ...(updates.name !== undefined ? { name: updates.name } : {}),
-      ...(updates.cron !== undefined ? { cron: updates.cron } : {}),
-      ...(updates.enabled !== undefined ? { enabled: updates.enabled } : {}),
-      ...(updates.api !== undefined && existingTask.type === 'api' ? { api: updates.api } : {}),
-    } as TaskDefinition
+    // 构建更新后的任务（按 type 分支构建，避免类型断言）
+    let updatedTask: TaskDefinition
+    if (existingTask.type === 'js') {
+      updatedTask = {
+        ...existingTask,
+        ...(updates.name !== undefined ? { name: updates.name } : {}),
+        ...(updates.cron !== undefined ? { cron: updates.cron } : {}),
+        ...(updates.enabled !== undefined ? { enabled: updates.enabled } : {}),
+      }
+    }
+    else {
+      updatedTask = {
+        ...existingTask,
+        ...(updates.name !== undefined ? { name: updates.name } : {}),
+        ...(updates.cron !== undefined ? { cron: updates.cron } : {}),
+        ...(updates.enabled !== undefined ? { enabled: updates.enabled } : {}),
+        ...(updates.api !== undefined ? { api: updates.api } : {}),
+      }
+    }
 
     setTask(taskId, updatedTask)
 
     // 同步到数据库
-    if (currentConfig.enableDb && reldb.isInitialized && existingTask.type === 'api') {
-      const updateResult = await updateTaskDefinition(currentConfig.taskTableName, taskId, {
-        ...updates,
-        ...(updates.api !== undefined ? { api: updates.api } : {}),
-      })
+    if (taskRepo && existingTask.type === 'api') {
+      const updateResult = await taskRepo.updateTask(taskId, updates)
       if (!updateResult.success) {
         logger.warn('Failed to update persisted task definition', { taskId, error: updateResult.error.message })
       }
@@ -339,8 +410,15 @@ export const scheduler: SchedulerFunctions = {
       })
     }
 
+    if (isTaskRunning(taskId)) {
+      return err({
+        code: SchedulerErrorCode.EXECUTION_FAILED,
+        message: schedulerM('scheduler_taskRunning', { params: { taskId } }),
+      })
+    }
+
     logger.info('Manually triggering task', { taskId })
-    const log = await runTask(task, currentConfig)
+    const log = await runTask(task)
     return ok(log)
   },
 
@@ -353,21 +431,17 @@ export const scheduler: SchedulerFunctions = {
    * @returns 成功返回日志数组；DB 未启用返回 `DB_SAVE_FAILED`
    */
   async getLogs(options?: LogQueryOptions): Promise<Result<TaskExecutionLog[], SchedulerError>> {
-    if (!currentConfig) {
-      return err({
-        code: SchedulerErrorCode.NOT_INITIALIZED,
-        message: schedulerM('scheduler_notInitialized'),
-      })
-    }
+    if (!currentConfig)
+      return notInitialized.result()
 
-    if (!currentConfig.enableDb || !reldb.isInitialized) {
+    if (!logRepo) {
       return err({
         code: SchedulerErrorCode.DB_SAVE_FAILED,
         message: schedulerM('scheduler_dbNotInitialized'),
       })
     }
 
-    return queryLogs(currentConfig.tableName, options)
+    return logRepo.queryLogs(options)
   },
 
   /** 获取已注册任务 */
@@ -405,6 +479,8 @@ export const scheduler: SchedulerFunctions = {
     logger.info('Closing scheduler module')
     resetRunner()
     currentConfig = null
+    taskRepo = null
+    logRepo = null
     logger.info('Scheduler module closed')
   },
 }

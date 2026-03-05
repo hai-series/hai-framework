@@ -19,6 +19,14 @@ await reldb.init({ type: 'sqlite', database: './scheduler.db' })
 // 初始化调度器（自动加载之前持久化的 API 任务）
 await scheduler.init({ enableDb: true })
 
+// 也可以在初始化时传入预定义任务（DB 中已有同 ID 的不会被覆盖）
+await scheduler.init({
+  enableDb: true,
+  tasks: [
+    { id: 'cleanup', name: '清理过期数据', cron: '0 2 * * *', type: 'js', handler: async () => { /* ... */ } },
+  ],
+})
+
 // 注册 API 任务（自动持久化到 DB，重启后自动恢复）
 await scheduler.register({
   id: 'health-check',
@@ -68,6 +76,9 @@ await scheduler.init({
   tableName: 'scheduler_logs', // 执行日志表名（默认 'scheduler_logs'）
   taskTableName: 'scheduler_tasks', // 任务定义表名（默认 'scheduler_tasks'）
   tickInterval: 1000, // 调度检查间隔，毫秒（默认 1000）
+  tasks: [ // 预定义任务列表（可选，DB 中已有同 ID 的不会被覆盖）
+    { id: 'health', name: '健康检查', cron: '*/5 * * * *', type: 'api', api: { url: 'https://...' } },
+  ],
 })
 ```
 
@@ -80,6 +91,7 @@ await scheduler.init({
 - **API 任务**在 `register()` 时自动持久化，`init()` 时自动加载，`unregister()` 时自动删除
 - **JS 任务**因 handler 函数不可序列化，不参与持久化，需每次启动时重新注册
 - `updateTask()` 同步更新内存和数据库中的任务定义
+- **配置任务**通过 `init({ tasks: [...] })` 传入，初始化时自动注册；DB 中已有同 ID 的任务优先，不会被配置覆盖
 
 ## 错误处理
 
@@ -105,6 +117,7 @@ if (!result.success) {
 
 - `NOT_INITIALIZED` — 调度器未初始化
 - `INIT_FAILED` — 初始化失败
+- `CONFIG_ERROR` — 配置校验失败
 - `TASK_NOT_FOUND` — 任务未找到
 - `TASK_ALREADY_EXISTS` — 重复注册
 - `INVALID_CRON` — cron 表达式无效

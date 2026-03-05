@@ -702,6 +702,121 @@ describe('scheduler', () => {
     })
   })
 
+  describe('配置任务加载', () => {
+    it('init 时通过 tasks 配置加载预定义任务', async () => {
+      await scheduler.init({
+        enableDb: false,
+        tasks: [
+          { id: 'config-js', name: '配置 JS 任务', cron: '* * * * *', type: 'js', handler: () => 'config' },
+          { id: 'config-api', name: '配置 API 任务', cron: '0 * * * *', type: 'api', api: { url: 'https://example.com' } },
+        ],
+      })
+
+      expect(scheduler.tasks.size).toBe(2)
+      expect(scheduler.tasks.has('config-js')).toBe(true)
+      expect(scheduler.tasks.has('config-api')).toBe(true)
+      expect(scheduler.tasks.get('config-js')!.name).toBe('配置 JS 任务')
+    })
+
+    it('不传 tasks 时任务列表为空', async () => {
+      await scheduler.init({ enableDb: false })
+      expect(scheduler.tasks.size).toBe(0)
+    })
+
+    it('空 tasks 数组不影响初始化', async () => {
+      const result = await scheduler.init({ enableDb: false, tasks: [] })
+      expect(result.success).toBe(true)
+      expect(scheduler.tasks.size).toBe(0)
+    })
+
+    it('配置任务的 cron 无效时应跳过该任务', async () => {
+      await scheduler.init({
+        enableDb: false,
+        tasks: [
+          { id: 'valid', name: '有效', cron: '* * * * *', type: 'js', handler: () => {} },
+          { id: 'invalid-cron', name: '无效 cron', cron: 'bad', type: 'js', handler: () => {} },
+        ],
+      })
+
+      expect(scheduler.tasks.size).toBe(1)
+      expect(scheduler.tasks.has('valid')).toBe(true)
+      expect(scheduler.tasks.has('invalid-cron')).toBe(false)
+    })
+
+    it('dB 已有同 ID 任务时，配置任务应被跳过（DB 优先）', async () => {
+      await reldb.init({ type: 'sqlite', database: ':memory:' })
+      await scheduler.init({ enableDb: true })
+
+      await scheduler.register({
+        id: 'dup-id',
+        name: 'DB 版本',
+        cron: '0 * * * *',
+        type: 'api',
+        api: { url: 'https://db.example.com' },
+      })
+
+      await scheduler.close()
+
+      await scheduler.init({
+        enableDb: true,
+        tasks: [
+          { id: 'dup-id', name: '配置版本', cron: '*/5 * * * *', type: 'api', api: { url: 'https://config.example.com' } },
+        ],
+      })
+
+      expect(scheduler.tasks.size).toBe(1)
+      const task = scheduler.tasks.get('dup-id')!
+      expect(task.name).toBe('DB 版本')
+      if (task.type === 'api') {
+        expect(task.api.url).toBe('https://db.example.com')
+      }
+    })
+
+    it('dB 无同 ID 任务时配置任务应正常注册', async () => {
+      await reldb.init({ type: 'sqlite', database: ':memory:' })
+      await scheduler.init({
+        enableDb: true,
+        tasks: [
+          { id: 'config-only', name: '仅配置', cron: '0 * * * *', type: 'api', api: { url: 'https://config.example.com' } },
+        ],
+      })
+
+      expect(scheduler.tasks.size).toBe(1)
+      expect(scheduler.tasks.get('config-only')!.name).toBe('仅配置')
+    })
+
+    it('配置任务可被手动触发', async () => {
+      await scheduler.init({
+        enableDb: false,
+        tasks: [
+          { id: 'trigger-me', name: '可触发', cron: '0 0 1 1 *', type: 'js', handler: () => 'from-config' },
+        ],
+      })
+
+      const result = await scheduler.trigger('trigger-me')
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data.taskId).toBe('trigger-me')
+        expect(result.data.status).toBe('success')
+        expect(result.data.result).toBe('"from-config"')
+      }
+    })
+
+    it('关闭后配置任务不保留（无 DB）', async () => {
+      await scheduler.init({
+        enableDb: false,
+        tasks: [
+          { id: 'temp-task', name: '临时', cron: '* * * * *', type: 'js', handler: () => {} },
+        ],
+      })
+      expect(scheduler.tasks.size).toBe(1)
+
+      await scheduler.close()
+      await scheduler.init({ enableDb: false })
+      expect(scheduler.tasks.size).toBe(0)
+    })
+  })
+
   describe('close', () => {
     it('close 后应恢复到未初始化状态', async () => {
       await scheduler.init({ enableDb: false })

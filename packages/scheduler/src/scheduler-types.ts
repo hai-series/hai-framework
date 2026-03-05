@@ -181,6 +181,31 @@ export interface TaskUpdateInput {
   api?: ApiTaskConfig
 }
 
+// ─── 初始化输入 ───
+
+/**
+ * 调度器初始化输入
+ *
+ * 包含调度器配置和可选的预定义任务列表。
+ * 通过 `tasks` 字段可在初始化时从配置中加载任务，
+ * 与数据库中持久化的任务共同注册。
+ *
+ * @example
+ * ```ts
+ * await scheduler.init({
+ *   enableDb: true,
+ *   tasks: [
+ *     { id: 'cleanup', name: '清理', cron: '0 2 * * *', type: 'js', handler: cleanupFn },
+ *     { id: 'health', name: '健康检查', cron: '&#42;/5 * * * *', type: 'api', api: { url: '...' } },
+ *   ],
+ * })
+ * ```
+ */
+export interface SchedulerInitInput extends SchedulerConfigInput {
+  /** 预定义任务列表（从配置中加载，初始化时自动注册） */
+  tasks?: TaskDefinition[]
+}
+
 // ─── 调度器接口 ───
 
 /**
@@ -190,16 +215,21 @@ export interface TaskUpdateInput {
  * ```ts
  * import { scheduler } from '@h-ai/scheduler'
  *
- * // 初始化
- * await scheduler.init({ enableDb: true })
+ * // 初始化（支持从配置中传入任务）
+ * await scheduler.init({
+ *   enableDb: true,
+ *   tasks: [
+ *     { id: 'cleanup', name: '清理过期数据', cron: '0 2 * * *', type: 'js', handler: async () => { ... } },
+ *   ],
+ * })
  *
- * // 注册任务
+ * // 也可以动态注册任务
  * scheduler.register({
- *   id: 'cleanup',
- *   name: '清理过期数据',
- *   cron: '0 2 * * *',
- *   type: 'js',
- *   handler: async () => { ... },
+ *   id: 'health-check',
+ *   name: '健康检查',
+ *   cron: '&#42;/5 * * * *',
+ *   type: 'api',
+ *   api: { url: 'https://api.example.com/health' },
  * })
  *
  * // 启动调度器
@@ -218,7 +248,7 @@ export interface TaskUpdateInput {
  */
 export interface SchedulerFunctions {
   /** 初始化调度器 */
-  init: (config?: SchedulerConfigInput) => Promise<Result<void, SchedulerError>>
+  init: (config?: SchedulerInitInput) => Promise<Result<void, SchedulerError>>
 
   /**
    * 注册任务
