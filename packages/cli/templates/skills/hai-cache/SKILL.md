@@ -110,23 +110,6 @@ async function getUserCached(userId: string) {
   if (cached.success && cached.data)
     return cached.data
 
-  const result = await reldb.sql.get<User>('SELECT * FROM users WHERE id = ?', [userId])
-  if (result.success && result.data) {
-    await cache.kv.set(`user:${userId}`, result.data, { ex: 3600 })
-    return result.data
-  }
-  return null
-}
-```
-
-### 缓存穿透保护（配合数据库）
-
-```typescript
-async function getUserCached(userId: string) {
-  const cached = await cache.kv.get<User>(`user:${userId}`)
-  if (cached.success && cached.data)
-    return cached.data
-
   const user = await userRepo.findById(userId)
   if (user.success && user.data) {
     await cache.kv.set(`user:${userId}`, user.data, { ex: 3600 })
