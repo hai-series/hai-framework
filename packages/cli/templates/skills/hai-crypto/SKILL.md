@@ -81,7 +81,7 @@ const hmac = crypto.hash.hmac('hello', 'secret-key')
 const valid = crypto.hash.verify('hello', hash.data!)
 ```
 
-**HashOptions**：`{ inputEncoding?: 'utf8' | 'hex', outputFormat?: 'hex' | 'array' }`
+**HashOptions**：`{ inputEncoding?: 'utf8' | 'hex' }`
 
 ### 对称加密 — `crypto.symmetric`
 

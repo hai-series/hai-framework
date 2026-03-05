@@ -59,8 +59,6 @@ export interface SignOptions {
 export interface HashOptions {
   /** 输入编码 */
   inputEncoding?: 'utf8' | 'hex'
-  /** 输出格式 */
-  outputFormat?: 'hex' | 'array'
 }
 
 // ─── 对称加密类型 ───
@@ -175,7 +173,7 @@ export interface HashOperations {
    * 计算哈希
    *
    * @param data - 待哈希数据（字符串或 Uint8Array）
-   * @param options - 输入编码与输出格式
+   * @param options - 输入编码选项
    * @returns 成功时返回 64 字符十六进制哈希值；失败时返回 HASH_FAILED
    */
   hash: (data: string | Uint8Array, options?: HashOptions) => Result<string, CryptoError>
