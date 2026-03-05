@@ -153,20 +153,23 @@ export interface SendOperations {
 
 /**
  * 模板注册表接口
+ *
+ * 所有模板通过数据库持久化存储，避免节点间状态不一致。
+ * 配置文件中的模板在 init 时写入数据库。
  */
 export interface ReachTemplateRegistry {
-  /** 注册单个模板 */
-  register: (template: ReachTemplate) => void
-  /** 批量注册模板 */
-  registerMany: (templates: ReachTemplate[]) => void
-  /** 获取模板（不存在返回 undefined） */
-  get: (name: string) => ReachTemplate | undefined
-  /** 检查模板是否存在 */
-  has: (name: string) => boolean
-  /** 列出所有已注册的模板 */
-  list: () => ReachTemplate[]
-  /** 渲染模板 */
-  render: (name: string, vars: Record<string, string>) => Result<RenderedTemplate, ReachError>
+  /** 按名称解析模板 */
+  resolve: (name: string) => Promise<Result<ReachTemplate, ReachError>>
+  /** 保存模板到数据库（upsert） */
+  save: (template: ReachTemplate) => Promise<Result<void, ReachError>>
+  /** 批量保存模板到数据库 */
+  saveBatch: (templates: ReachTemplate[]) => Promise<Result<void, ReachError>>
+  /** 从数据库删除模板 */
+  remove: (name: string) => Promise<Result<void, ReachError>>
+  /** 列出所有模板 */
+  list: () => Promise<Result<ReachTemplate[], ReachError>>
+  /** 渲染模板（从数据库解析后渲染） */
+  render: (name: string, vars: Record<string, string>) => Promise<Result<RenderedTemplate, ReachError>>
 }
 
 // ─── 函数接口 ───

@@ -7,6 +7,8 @@
 
 import { z } from 'zod'
 
+import { reachM } from './reach-i18n.js'
+
 // ─── 错误码常量 ───
 
 /**
@@ -54,7 +56,7 @@ export type ReachErrorCodeType = (typeof ReachErrorCode)[keyof typeof ReachError
  */
 export const ConsoleProviderConfigSchema = z.object({
   /** Provider 唯一名称 */
-  name: z.string().min(1),
+  name: z.string().min(1, reachM('reach_config_nameRequired')),
   type: z.literal('console'),
 })
 
@@ -77,10 +79,10 @@ export const ConsoleProviderConfigSchema = z.object({
  */
 export const SmtpProviderConfigSchema = z.object({
   /** Provider 唯一名称 */
-  name: z.string().min(1),
+  name: z.string().min(1, reachM('reach_config_nameRequired')),
   type: z.literal('smtp'),
   /** SMTP 服务器地址 */
-  host: z.string().min(1),
+  host: z.string().min(1, reachM('reach_config_hostRequired')),
   /** SMTP 端口（默认 465） */
   port: z.number().int().min(1).max(65535).default(465),
   /** 是否使用 TLS（默认 true） */
@@ -90,7 +92,7 @@ export const SmtpProviderConfigSchema = z.object({
   /** SMTP 认证密码 */
   pass: z.string().optional(),
   /** 发件人地址 */
-  from: z.string().min(1),
+  from: z.string().min(1, reachM('reach_config_fromRequired')),
 })
 
 /**
@@ -110,14 +112,14 @@ export const SmtpProviderConfigSchema = z.object({
  */
 export const AliyunSmsProviderConfigSchema = z.object({
   /** Provider 唯一名称 */
-  name: z.string().min(1),
+  name: z.string().min(1, reachM('reach_config_nameRequired')),
   type: z.literal('aliyun-sms'),
   /** 阿里云 AccessKey ID */
-  accessKeyId: z.string().min(1),
+  accessKeyId: z.string().min(1, reachM('reach_config_accessKeyIdRequired')),
   /** 阿里云 AccessKey Secret */
-  accessKeySecret: z.string().min(1),
+  accessKeySecret: z.string().min(1, reachM('reach_config_accessKeySecretRequired')),
   /** 短信签名 */
-  signName: z.string().min(1),
+  signName: z.string().min(1, reachM('reach_config_signNameRequired')),
   /** API 端点（默认 dysmsapi.aliyuncs.com） */
   endpoint: z.string().default('dysmsapi.aliyuncs.com'),
 })
@@ -138,10 +140,10 @@ export const AliyunSmsProviderConfigSchema = z.object({
  */
 export const ApiProviderConfigSchema = z.object({
   /** Provider 唯一名称 */
-  name: z.string().min(1),
+  name: z.string().min(1, reachM('reach_config_nameRequired')),
   type: z.literal('api'),
   /** 回调 URL */
-  url: z.string().min(1),
+  url: z.string().min(1, reachM('reach_config_urlRequired')),
   /** HTTP 方法（默认 POST） */
   method: z.enum(['POST', 'PUT']).default('POST'),
   /** 自定义请求头 */
@@ -202,9 +204,9 @@ export const DndConfigSchema = z.object({
   /** 免打扰策略：discard 丢弃 / delay 延时发送（默认 discard） */
   strategy: z.enum(['discard', 'delay']).default('discard'),
   /** 免打扰开始时间（HH:mm 格式） */
-  start: z.string().regex(/^\d{2}:\d{2}$/).default('00:00'),
+  start: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, reachM('reach_config_dndTimeInvalid')).default('00:00'),
   /** 免打扰结束时间（HH:mm 格式） */
-  end: z.string().regex(/^\d{2}:\d{2}$/).default('00:00'),
+  end: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, reachM('reach_config_dndTimeInvalid')).default('00:00'),
 })
 
 /** DND 配置类型 */
@@ -226,13 +228,13 @@ export type DndConfig = z.infer<typeof DndConfigSchema>
  */
 export const TemplateConfigSchema = z.object({
   /** 模板名称 */
-  name: z.string().min(1),
+  name: z.string().min(1, reachM('reach_config_templateNameRequired')),
   /** 绑定的 Provider 名称 */
-  provider: z.string().min(1),
+  provider: z.string().min(1, reachM('reach_config_templateProviderRequired')),
   /** 邮件主题模板 */
   subject: z.string().optional(),
   /** 正文模板 */
-  body: z.string().min(1),
+  body: z.string().min(1, reachM('reach_config_templateBodyRequired')),
 })
 
 /** 模板配置类型 */
@@ -248,7 +250,7 @@ export type TemplateConfig = z.infer<typeof TemplateConfigSchema>
  */
 export const ReachConfigSchema = z.object({
   /** Provider 配置列表 */
-  providers: z.array(ProviderConfigSchema).min(1),
+  providers: z.array(ProviderConfigSchema).min(1, reachM('reach_config_providersRequired')),
   /** 模板配置（通过配置文件注册） */
   templates: z.array(TemplateConfigSchema).optional(),
   /** 免打扰配置 */

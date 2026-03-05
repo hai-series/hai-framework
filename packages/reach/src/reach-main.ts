@@ -8,7 +8,6 @@
 import type { Result } from '@h-ai/core'
 import type { ReldbFunctions } from '@h-ai/reldb'
 import type { DndConfig, ProviderConfig, ReachConfig, ReachConfigInput } from './reach-config.js'
-import type { SendLogRepository } from './reach-repository-send-log.js'
 import type {
   ReachError,
   ReachFunctions,
@@ -17,6 +16,8 @@ import type {
   ReachTemplateRegistry,
   SendResult,
 } from './reach-types.js'
+import type { SendLogRepository } from './repositories/reach-repository-send-log.js'
+import type { TemplateRepository } from './repositories/reach-repository-template.js'
 
 import { core, err, ok } from '@h-ai/core'
 
@@ -26,9 +27,10 @@ import { createConsoleProvider } from './providers/reach-provider-console.js'
 import { createSmtpProvider } from './providers/reach-provider-smtp.js'
 import { ReachConfigSchema, ReachErrorCode } from './reach-config.js'
 import { reachM } from './reach-i18n.js'
-import { createSendLogRepository, resetSendLogRepoSingleton } from './reach-repository-send-log.js'
 import { executeSend, resetSendState, startDndScheduler } from './reach-send.js'
 import { createTemplateRegistry } from './reach-template.js'
+import { createSendLogRepository, resetSendLogRepoSingleton } from './repositories/reach-repository-send-log.js'
+import { createTemplateRepository, resetTemplateRepoSingleton } from './repositories/reach-repository-template.js'
 
 const logger = core.logger.child({ module: 'reach', scope: 'main' })
 
@@ -48,6 +50,9 @@ let templateRegistry: ReachTemplateRegistry = createTemplateRegistry()
 
 /** 发送日志存储（db 可用时初始化） */
 let sendLogRepo: SendLogRepository | null = null
+
+/** 模板存储（db 可用时初始化） */
+let templateRepo: TemplateRepository | null = null
 
 // ─── Provider 工厂 ───
 
@@ -108,6 +113,28 @@ async function tryInitSendLogRepo(): Promise<SendLogRepository | null> {
   }
 }
 
+/**
+ * 尝试初始化模板存储
+ */
+async function tryInitTemplateRepo(): Promise<TemplateRepository | null> {
+  try {
+    const db = await tryGetDb()
+    if (!db) {
+      return null
+    }
+    const result = await createTemplateRepository(db)
+    if (!result.success) {
+      logger.debug('Template repository not initialized', { error: result.error.message })
+      return null
+    }
+    return result.data
+  }
+  catch (error) {
+    logger.debug('Template repository not initialized', { error: error instanceof Error ? error.message : String(error) })
+    return null
+  }
+}
+
 // ─── 未初始化工具集 ───
 
 const notInitialized = core.module.createNotInitializedKit<ReachError>(
@@ -155,8 +182,14 @@ export const reach: ReachFunctions = {
             code: connectResult.error.code,
             message: connectResult.error.message,
           })
-          for (const p of newProviders.values()) {
-            await p.close()
+          logger.info('Rolling back connected providers', { count: newProviders.size })
+          for (const [name, p] of newProviders.entries()) {
+            try {
+              await p.close()
+            }
+            catch (rollbackError) {
+              logger.error('Provider rollback close failed', { name, error: rollbackError })
+            }
           }
           return connectResult
         }
@@ -167,9 +200,18 @@ export const reach: ReachFunctions = {
       currentConfig = parsed
       dndConfig = parsed.dnd
 
-      // 注册配置文件中定义的模板
-      if (parsed.templates) {
-        templateRegistry.registerMany(parsed.templates)
+      // 尝试初始化模板存储
+      templateRepo = await tryInitTemplateRepo()
+
+      // 创建模板注册表
+      templateRegistry = createTemplateRegistry(templateRepo)
+
+      // 配置文件中定义的模板写入数据库
+      if (parsed.templates && templateRepo) {
+        const saveResult = await templateRegistry.saveBatch(parsed.templates)
+        if (!saveResult.success) {
+          logger.warn('Failed to save config templates to database', { error: saveResult.error.message })
+        }
       }
 
       // 尝试初始化发送日志存储
@@ -217,35 +259,32 @@ export const reach: ReachFunctions = {
   },
 
   async close(): Promise<void> {
-    if (providers.size === 0) {
-      currentConfig = null
-      dndConfig = undefined
-      sendLogRepo = null
-      resetSendLogRepoSingleton()
-      resetSendState()
+    if (providers.size === 0 && currentConfig === null) {
       logger.info('Reach module already closed, skipping')
       return
     }
 
     logger.info('Closing reach module')
 
-    try {
-      for (const provider of providers.values()) {
+    for (const [name, provider] of providers.entries()) {
+      try {
         await provider.close()
       }
-      logger.info('Reach module closed')
+      catch (error) {
+        logger.error('Provider close failed', { name, error })
+      }
     }
-    catch (error) {
-      logger.error('Reach module close failed', { error })
-    }
-    finally {
-      providers = new Map()
-      currentConfig = null
-      dndConfig = undefined
-      templateRegistry = createTemplateRegistry()
-      sendLogRepo = null
-      resetSendLogRepoSingleton()
-      resetSendState()
-    }
+
+    providers = new Map()
+    currentConfig = null
+    dndConfig = undefined
+    templateRegistry = createTemplateRegistry()
+    sendLogRepo = null
+    templateRepo = null
+    resetSendLogRepoSingleton()
+    resetTemplateRepoSingleton()
+    resetSendState()
+
+    logger.info('Reach module closed')
   },
 }

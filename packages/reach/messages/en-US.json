@@ -14,5 +14,20 @@
   "reach_smsSendFailed": "SMS send failed: {error}",
   "reach_emailSendFailed": "Email send failed: {error}",
   "reach_apiSendFailed": "API callback send failed: {error}",
-  "reach_configError": "Reach config validation failed: {error}"
+  "reach_configError": "Reach config validation failed: {error}",
+  "reach_config_nameRequired": "Provider name is required",
+  "reach_config_hostRequired": "SMTP host is required",
+  "reach_config_fromRequired": "Sender address (from) is required",
+  "reach_config_accessKeyIdRequired": "AccessKey ID is required",
+  "reach_config_accessKeySecretRequired": "AccessKey Secret is required",
+  "reach_config_signNameRequired": "SMS sign name is required",
+  "reach_config_urlRequired": "Callback URL is required",
+  "reach_config_dndTimeInvalid": "Invalid time format, must be HH:mm (24-hour)",
+  "reach_config_templateNameRequired": "Template name is required",
+  "reach_config_templateProviderRequired": "Template provider is required",
+  "reach_config_templateBodyRequired": "Template body is required",
+  "reach_config_providersRequired": "At least one provider is required",
+  "reach_templateDbInitFailed": "Template database initialization failed: {error}",
+  "reach_templateSaveFailed": "Template save failed: {error}",
+  "reach_templateDeleteFailed": "Template delete failed: {error}"
 }

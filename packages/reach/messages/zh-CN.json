@@ -14,5 +14,20 @@
   "reach_smsSendFailed": "短信发送失败: {error}",
   "reach_emailSendFailed": "邮件发送失败: {error}",
   "reach_apiSendFailed": "API 回调发送失败: {error}",
-  "reach_configError": "触达配置校验失败：{error}"
+  "reach_configError": "触达配置校验失败：{error}",
+  "reach_config_nameRequired": "Provider 名称不能为空",
+  "reach_config_hostRequired": "SMTP 服务器地址不能为空",
+  "reach_config_fromRequired": "发件人地址不能为空",
+  "reach_config_accessKeyIdRequired": "AccessKey ID 不能为空",
+  "reach_config_accessKeySecretRequired": "AccessKey Secret 不能为空",
+  "reach_config_signNameRequired": "短信签名不能为空",
+  "reach_config_urlRequired": "回调 URL 不能为空",
+  "reach_config_dndTimeInvalid": "时间格式无效，须为 HH:mm（24 小时制）",
+  "reach_config_templateNameRequired": "模板名称不能为空",
+  "reach_config_templateProviderRequired": "模板绑定的 Provider 不能为空",
+  "reach_config_templateBodyRequired": "模板正文不能为空",
+  "reach_config_providersRequired": "至少需要配置一个 Provider",
+  "reach_templateDbInitFailed": "模板数据库初始化失败: {error}",
+  "reach_templateSaveFailed": "模板保存失败: {error}",
+  "reach_templateDeleteFailed": "模板删除失败: {error}"
 }
