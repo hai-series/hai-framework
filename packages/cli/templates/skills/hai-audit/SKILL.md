@@ -20,7 +20,7 @@ import { audit } from '@h-ai/audit'
 import { reldb } from '@h-ai/reldb'
 
 await reldb.init({ type: 'sqlite', database: './data.db' })
-const result = await audit.init({ reldb })
+const result = await audit.init({ db: reldb })
 if (!result.success) {
   // 处理错误
 }

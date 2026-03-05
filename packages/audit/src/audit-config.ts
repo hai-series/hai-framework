@@ -60,11 +60,11 @@ export type AuditErrorCodeType = (typeof AuditErrorCode)[keyof typeof AuditError
  * import { audit } from '@h-ai/audit'
  * import { reldb } from '@h-ai/reldb'
  *
- * await audit.init({ reldb })
+ * await audit.init({ db: reldb })
  *
  * // 自定义表名与用户表映射
  * await audit.init({
- *   db,
+ *   db: reldb,
  *   tableName: 'sys_audit_logs',
  *   userTable: 'sys_users',
  *   userIdColumn: 'user_id',

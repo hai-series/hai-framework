@@ -20,6 +20,8 @@ import type {
 
 import { core, err, ok } from '@h-ai/core'
 
+import { validateIdentifiers } from '@h-ai/reldb'
+
 import { AuditErrorCode, AuditInitConfigSchema } from './audit-config.js'
 import { auditM } from './audit-i18n.js'
 import { AuditLogRepository } from './audit-repository.js'
@@ -30,6 +32,9 @@ const logger = core.logger.child({ module: 'audit', scope: 'main' })
 
 /** 当前审计日志仓库实例；init 后赋值，close 后置 null */
 let currentRepo: AuditLogRepository | null = null
+
+/** 缓存的便捷记录器实例；init 时创建，close 时置 null */
+let currentHelper: AuditHelper | null = null
 
 // ─── 未初始化占位 ───
 
@@ -135,7 +140,7 @@ const notInitializedHelper = notInitialized.proxy<AuditHelper>()
  * import { reldb } from '@h-ai/reldb'
  *
  * await reldb.init({ type: 'sqlite', database: ':memory:' })
- * const result = await audit.init({ reldb })
+ * const result = await audit.init({ db: reldb })
  * if (!result.success) {
  *   // 处理初始化错误
  * }
@@ -157,7 +162,7 @@ export const audit: AuditFunctions = {
    *
    * @example
    * ```ts
-   * const result = await audit.init({ reldb })
+   * const result = await audit.init({ db: reldb })
    * if (!result.success) {
    *   logger.error('Audit init failed', { error: result.error.message })
    * }
@@ -169,7 +174,7 @@ export const audit: AuditFunctions = {
       await audit.close()
     }
 
-    logger.debug('Initializing audit module')
+    logger.info('Initializing audit module')
 
     const parseResult = AuditInitConfigSchema.safeParse(config)
     if (!parseResult.success) {
@@ -182,6 +187,16 @@ export const audit: AuditFunctions = {
     }
     const parsed = parseResult.data
 
+    const identifierResult = validateIdentifiers([parsed.tableName, parsed.userTable, parsed.userIdColumn, parsed.userNameColumn])
+    if (!identifierResult.success) {
+      logger.error('Audit config contains invalid identifiers', { error: identifierResult.error.message })
+      return err({
+        code: AuditErrorCode.CONFIG_ERROR,
+        message: auditM('audit_configError', { params: { error: identifierResult.error.message } }),
+        cause: identifierResult.error,
+      })
+    }
+
     try {
       currentRepo = new AuditLogRepository(parsed.db, {
         tableName: parsed.tableName,
@@ -189,6 +204,7 @@ export const audit: AuditFunctions = {
         userIdColumn: parsed.userIdColumn,
         userNameColumn: parsed.userNameColumn,
       })
+      currentHelper = createHelper(input => currentRepo!.log(input))
 
       logger.info('Audit module initialized', { tableName: parsed.tableName })
       return ok(undefined)
@@ -280,10 +296,10 @@ export const audit: AuditFunctions = {
    * 未初始化时调用任意方法均返回 NOT_INITIALIZED 错误。
    */
   get helper(): AuditHelper {
-    if (!currentRepo) {
+    if (!currentHelper) {
       return notInitializedHelper
     }
-    return createHelper(input => currentRepo!.log(input))
+    return currentHelper
   },
 
   /**
@@ -297,6 +313,7 @@ export const audit: AuditFunctions = {
 
     logger.info('Closing audit module')
     currentRepo = null
+    currentHelper = null
     logger.info('Audit module closed')
   },
 }

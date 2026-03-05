@@ -19,7 +19,7 @@ import type { AuditErrorCodeType, AuditInitConfigInput } from './audit-config.js
  * ```ts
  * const result = await audit.log({ action: 'login', resource: 'auth' })
  * if (!result.success) {
- *   console.error(result.error.code, result.error.message)
+ *   // result.error.code / result.error.message
  * }
  * ```
  */
@@ -221,7 +221,7 @@ export interface AuditHelper {
  * import { reldb } from '@h-ai/reldb'
  *
  * await reldb.init({ type: 'sqlite', database: './data.db' })
- * await audit.init({ reldb })
+ * await audit.init({ db: reldb })
  *
  * await audit.log({ userId: 'user_1', action: 'login', resource: 'auth' })
  * const logs = await audit.list({ pageSize: 10 })
