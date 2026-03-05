@@ -8,15 +8,13 @@
 import type { Result } from '@h-ai/core'
 import type { Cron } from 'croner'
 
+import type { SchedulerLogRepository } from './repositories/index.js'
 import type { SchedulerConfig } from './scheduler-config.js'
 import type { SchedulerError, TaskDefinition, TaskExecutionLog } from './scheduler-types.js'
 
 import { core, ok } from '@h-ai/core'
 
-import { reldb } from '@h-ai/reldb'
-
 import { parseCronExpression } from './scheduler-cron.js'
-import { saveLog } from './scheduler-db.js'
 import { executeTask } from './scheduler-executor.js'
 
 const logger = core.logger.child({ module: 'scheduler', scope: 'runner' })
@@ -38,6 +36,20 @@ let tickTimer: ReturnType<typeof setInterval> | null = null
 /** 上一次检查的分钟标记（防止同一分钟重复触发） */
 let lastTickMinute = -1
 
+/** 日志仓库实例（由 main.ts 在 init 时注入） */
+let currentLogRepo: SchedulerLogRepository | null = null
+
+/**
+ * 设置日志仓库实例
+ *
+ * 由 scheduler-main.ts 在 init/close 时调用，用于注入或清除日志仓库。
+ *
+ * @param repo - 日志仓库实例或 null
+ */
+export function setLogRepository(repo: SchedulerLogRepository | null): void {
+  currentLogRepo = repo
+}
+
 // ─── 调度逻辑 ───
 
 /**
@@ -46,16 +58,10 @@ let lastTickMinute = -1
  * 每次调用检查当前分钟是否已变化，若变化则遍历注册表，
  * 对匹配 cron 的任务异步执行（不阻塞后续任务检测）。
  * 同一分钟内只触发一次，防止重复执行。
- *
- * @param config - 当前调度器配置（用于判断是否启用 DB）
  */
-function tick(config: SchedulerConfig): void {
+function tick(): void {
   const now = new Date()
-  const currentMinute = now.getFullYear() * 100000000
-    + (now.getMonth() + 1) * 1000000
-    + now.getDate() * 10000
-    + now.getHours() * 100
-    + now.getMinutes()
+  const currentMinute = Math.floor(now.getTime() / 60000)
 
   // 同一分钟只触发一次
   if (currentMinute === lastTickMinute)
@@ -78,7 +84,7 @@ function tick(config: SchedulerConfig): void {
       }
       logger.info('Triggering scheduled task', { taskId, taskName: task.name })
       // 异步执行，不阻塞 tick；捕获未处理拒绝
-      void runTask(task, config).catch((error) => {
+      void runTask(task).catch((error) => {
         logger.error('Unhandled task execution error', { taskId, error })
       })
     }
@@ -92,10 +98,9 @@ function tick(config: SchedulerConfig): void {
  * 执行成功/失败均记录到日志。
  *
  * @param task - 已注册的任务定义
- * @param config - 当前调度器配置
  * @returns 任务执行日志
  */
-export async function runTask(task: TaskDefinition, config: SchedulerConfig): Promise<TaskExecutionLog> {
+export async function runTask(task: TaskDefinition): Promise<TaskExecutionLog> {
   runningTasks.add(task.id)
   try {
     const log = await executeTask({
@@ -106,8 +111,8 @@ export async function runTask(task: TaskDefinition, config: SchedulerConfig): Pr
       api: task.type === 'api' ? task.api : undefined,
     })
 
-    if (config.enableDb && reldb.isInitialized) {
-      await saveLog(config.tableName, log)
+    if (currentLogRepo) {
+      await currentLogRepo.saveLog(log)
     }
 
     if (log.status === 'failed') {
@@ -195,6 +200,16 @@ export function setCronCache(taskId: string, cron: Cron): void {
 }
 
 /**
+ * 检查任务是否正在执行中
+ *
+ * @param taskId - 任务 ID
+ * @returns 是否正在执行
+ */
+export function isTaskRunning(taskId: string): boolean {
+  return runningTasks.has(taskId)
+}
+
+/**
  * 获取任务注册表（只读）
  *
  * @returns 注册表的只读引用
@@ -212,7 +227,7 @@ export function getTaskRegistry(): ReadonlyMap<string, TaskDefinition> {
  */
 export function startTimer(config: SchedulerConfig): void {
   lastTickMinute = -1
-  tickTimer = setInterval(() => tick(config), config.tickInterval)
+  tickTimer = setInterval(() => tick(), config.tickInterval)
 }
 
 /**
@@ -246,4 +261,5 @@ export function resetRunner(): void {
   cronCache.clear()
   runningTasks.clear()
   lastTickMinute = -1
+  currentLogRepo = null
 }

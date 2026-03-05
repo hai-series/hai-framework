@@ -190,17 +190,18 @@ interface TaskUpdateInput {
 
 | 错误码                 | 值    | 说明                       |
 | ---------------------- | ----- | -------------------------- |
-| `NOT_INITIALIZED`      | 11000 | 调度器未初始化             |
-| `INIT_FAILED`          | 11001 | 初始化失败                 |
-| `TASK_NOT_FOUND`       | 11002 | 任务未找到                 |
-| `TASK_ALREADY_EXISTS`  | 11003 | 重复注册同一 taskId        |
-| `INVALID_CRON`         | 11004 | cron 表达式无效            |
-| `EXECUTION_FAILED`     | 11005 | 任务执行失败（通用）       |
-| `JS_EXECUTION_FAILED`  | 11006 | JS 处理函数抛出异常        |
-| `API_EXECUTION_FAILED` | 11007 | HTTP 请求失败或非 2xx 响应 |
-| `DB_SAVE_FAILED`       | 11008 | 数据库操作失败             |
-| `ALREADY_RUNNING`      | 11009 | 重复调用 start             |
-| `NOT_RUNNING`          | 11010 | 未启动时调用 stop          |
+| `NOT_INITIALIZED`      | 11010 | 调度器未初始化             |
+| `INIT_FAILED`          | 11011 | 初始化失败                 |
+| `CONFIG_ERROR`         | 11012 | 配置校验失败               |
+| `TASK_NOT_FOUND`       | 11020 | 任务未找到                 |
+| `TASK_ALREADY_EXISTS`  | 11021 | 重复注册同一 taskId        |
+| `INVALID_CRON`         | 11022 | cron 表达式无效            |
+| `EXECUTION_FAILED`     | 11023 | 任务执行失败（通用）       |
+| `JS_EXECUTION_FAILED`  | 11024 | JS 处理函数抛出异常        |
+| `API_EXECUTION_FAILED` | 11025 | HTTP 请求失败或非 2xx 响应 |
+| `DB_SAVE_FAILED`       | 11026 | 数据库操作失败             |
+| `ALREADY_RUNNING`      | 11027 | 重复调用 start             |
+| `NOT_RUNNING`          | 11028 | 未启动时调用 stop          |
 
 ---
 
