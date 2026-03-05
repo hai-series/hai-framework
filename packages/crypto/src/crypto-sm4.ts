@@ -206,7 +206,7 @@ export function createSM4(): SymmetricOperations {
       const result = this.encrypt(data, key, { mode: 'cbc', iv })
 
       if (!result.success) {
-        return result as Result<never, CryptoError>
+        return result
       }
 
       return ok({ ciphertext: result.data, iv })
