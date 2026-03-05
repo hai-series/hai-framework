@@ -34,10 +34,18 @@ function delay(ms: number): Promise<void> {
  * ```
  */
 async function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
-  // 使用 Promise.race + 定时器实现超时控制
-  const timeout = new Promise<never>((_, reject) =>
-    setTimeout(() => reject(new Error(i18n.coreM('core_errorTimeout'))), ms))
-  return Promise.race([promise, timeout])
+  // 使用 Promise.race + 定时器实现超时控制，结束后清理定时器
+  let timer: ReturnType<typeof setTimeout> | null = null
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(i18n.coreM('core_errorTimeout'))), ms)
+  })
+  try {
+    return await Promise.race([promise, timeout])
+  }
+  finally {
+    if (timer !== null)
+      clearTimeout(timer)
+  }
 }
 
 /**
@@ -60,14 +68,16 @@ async function retry<T>(
   options: { maxRetries?: number, delay?: number } = {},
 ): Promise<T> {
   const { maxRetries = 3, delay: retryDelay = 1000 } = options
+  // 至少执行一次，防止 maxRetries <= 0 时直接 throw undefined
+  const attempts = Math.max(1, maxRetries)
   let lastError: unknown
-  for (let i = 0; i < maxRetries; i++) {
+  for (let i = 0; i < attempts; i++) {
     try {
       return await fn()
     }
     catch (e) {
       lastError = e
-      if (i < maxRetries - 1)
+      if (i < attempts - 1)
         await delay(retryDelay)
     }
   }

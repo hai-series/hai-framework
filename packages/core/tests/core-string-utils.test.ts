@@ -19,9 +19,21 @@ describe('core.string', () => {
     expect(core.string.pascalCase('hello-world')).toBe('HelloWorld')
   })
 
+  it('kebabCase/snakeCase 应该处理连续大写字母', () => {
+    expect(core.string.kebabCase('getHTTPSUrl')).toBe('get-https-url')
+    expect(core.string.kebabCase('XMLParser')).toBe('xml-parser')
+    expect(core.string.snakeCase('getHTTPSUrl')).toBe('get_https_url')
+    expect(core.string.snakeCase('XMLParser')).toBe('xml_parser')
+  })
+
   it('truncate 应该截断并添加后缀', () => {
     expect(core.string.truncate('hello world', 5)).toBe('hello...')
     expect(core.string.truncate('hi', 5)).toBe('hi')
+  })
+
+  it('truncate length <= 0 应返回原字符串', () => {
+    expect(core.string.truncate('hello', 0)).toBe('hello')
+    expect(core.string.truncate('hello', -1)).toBe('hello')
   })
 
   it('trim/isBlank/isNotBlank 应该处理空白', () => {

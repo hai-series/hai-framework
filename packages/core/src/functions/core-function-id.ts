@@ -18,6 +18,9 @@ const SHORT_LENGTH = 10
 /** UUID v4 正则 */
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
+/** nanoid 正则缓存（按长度缓存，避免每次调用 isValidNanoId 时重建） */
+const NANOID_REGEX_CACHE = new Map<number, RegExp>()
+
 // ─── ID 生成 ───
 
 /**
@@ -170,7 +173,11 @@ export const id = {
    * ```
    */
   isValidNanoId(str: string, length: number = DEFAULT_LENGTH): boolean {
-    const regex = new RegExp(`^[A-Za-z0-9_-]{${length}}$`)
+    let regex = NANOID_REGEX_CACHE.get(length)
+    if (!regex) {
+      regex = new RegExp(`^[A-Za-z0-9_-]{${length}}$`)
+      NANOID_REGEX_CACHE.set(length, regex)
+    }
     return regex.test(str)
   },
 }

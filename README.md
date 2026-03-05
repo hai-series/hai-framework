@@ -1,20 +1,38 @@
 # hai Framework
 
 <p align="center">
-  <strong>AI-First · 模块化 · 类型安全</strong>
+  <strong>AI-First · 模块化 · 类型安全 · 全栈</strong>
 </p>
 
 <p align="center">
-  先给 AI 用的全栈 TypeScript 框架 —— 让 AI 写出可维护的生产级代码
+  给 AI 用的全栈 TypeScript 框架 —— 让 AI 写出可维护的生产级代码
 </p>
+
+<p align="center">
+  <b>19 个功能模块</b> · <b>65+ UI 组件</b> · <b>CLI 一键创建</b> · <b>一键部署</b>
+</p>
+
+---
+
+## 为什么选 hai？
+
+| 痛点                         | hai 的解法                                                                  |
+| ---------------------------- | --------------------------------------------------------------------------- |
+| AI 生成的代码风格不一致      | 统一 `init → use → close` 生命周期 + 可执行编码规范（copilot-instructions） |
+| AI 不知道怎么处理错误        | 所有 API 返回 `Result<T, E>`，永远不会遗漏错误处理                          |
+| 功能模块各自为政，集成成本高 | 19 个模块共享统一 API 模式、类型体系和 Provider 架构，开箱即用              |
+| 从 0 搭建项目要半天          | `hai create my-app` 一行命令创建完整项目（含 AI 上下文、配置、脚手架）      |
+| UI 组件不够用 / 不够现代     | 65+ Svelte 5 Runes 组件（原子 + 复合 + 业务场景），32+ 主题，内置 i18n      |
+| 部署复杂，需要手动配基础设施 | `hai deploy` 一键部署到 Vercel，自动开通数据库、缓存、存储                  |
+| AI 助手不了解你的框架        | 每个模块自带 Skill 文件 + LLMS.txt，AI 自动获取正确用法                     |
 
 ---
 
 ## 框架定位
 
-hai Framework 是一个 **AI-First** 的全栈开发框架。
+hai Framework 是一个 **AI-First** 的全栈 TypeScript 开发框架。
 
-**"AI-First"是什么意思？**
+**"AI-First"不是"只给 AI 用"，而是：框架的每一个设计决策，都优先考虑 AI 编程助手能否正确使用。** 当 AI 能正确使用时，人类开发者的体验同样更好。
 
 大多数框架为人类开发者设计——灵活、自由、约定不强制。但当 AI 来写代码时，这些"自由"反而是问题：AI 不知道选哪种模式、不知道错误怎么处理、不知道该不该加日志……
 
@@ -31,7 +49,7 @@ hai Framework 的目标是：**让 AI 理解规范，自动完成应用开发，
 
 **结果是**：AI 在这个框架中写的代码，风格一致、类型安全、错误处理完整、测试可验证——不再需要人类逐行审查"AI 写得对不对"。
 
-同时，框架将 AI 能力（LLM 调用、MCP 协议、工具注册）、安全能力（国密加密、身份认证、RBAC 权限）、数据能力（多数据库、缓存、对象存储）以统一的 API 风格整合在一起，让 AI 可以端到端地构建功能完整的智能应用。
+同时，框架将 AI 能力（LLM 调用、MCP 协议、向量数据库）、安全能力（国密加密、身份认证、RBAC 权限、审计日志）、数据能力（多数据库、缓存、对象存储、数据管线）、运营能力（支付、触达、定时任务、部署）以统一的 API 风格整合在一起，让 AI 可以端到端地构建功能完整的智能应用。
 
 ### AI-First 设计原则
 
@@ -47,18 +65,22 @@ hai Framework 的目标是：**让 AI 理解规范，自动完成应用开发，
 
 ## 技术栈
 
-| 层面     | 选型                                            |
-| -------- | ----------------------------------------------- |
-| 前端框架 | Svelte 5 (Runes) + SvelteKit 2                  |
-| UI       | TailwindCSS 4 + DaisyUI 5                       |
-| 语言     | TypeScript 5.7+（严格模式）                     |
-| 数据库   | SQLite / PostgreSQL / MySQL（原生 SQL，非 ORM） |
-| 缓存     | 内存 / Redis                                    |
-| 存储     | 本地文件系统 / S3 兼容云存储                    |
-| AI       | OpenAI 兼容 API + MCP 协议                      |
-| 加密     | 国密 SM2/SM3/SM4                                |
-| 验证     | Zod                                             |
-| 构建     | pnpm + Turborepo + Vite + tsup                  |
+| 层面       | 选型                                                      |
+| ---------- | --------------------------------------------------------- |
+| 前端框架   | Svelte 5 (Runes) + SvelteKit 2                            |
+| UI         | TailwindCSS 4 + DaisyUI 5 + Bits UI v2                    |
+| 语言       | TypeScript 5.7+（严格模式）                               |
+| 关系数据库 | SQLite / PostgreSQL / MySQL（原生 SQL，非 ORM）           |
+| 向量数据库 | LanceDB / pgvector / Qdrant                               |
+| 缓存       | 内存 / Redis（单机 / Cluster / Sentinel）                 |
+| 存储       | 本地文件系统 / S3 兼容云存储（AWS / MinIO / OSS）         |
+| AI         | OpenAI 兼容 API + MCP 协议                                |
+| 加密       | 国密 SM2/SM3/SM4                                          |
+| 支付       | 微信支付 / 支付宝 / Stripe                                |
+| 验证       | Zod                                                       |
+| 构建       | pnpm + Turborepo + Vite + tsup                            |
+| 部署       | Vercel + Neon (PG) + Upstash (Redis) + Cloudflare R2 (S3) |
+| 移动端     | Capacitor（Android / iOS）                                |
 
 ## AI-First 基础设施
 
@@ -71,15 +93,23 @@ my-app/
 │   └── skills/                       # AI Skill 文件（教 AI 用框架）
 │       ├── hai-build/SKILL.md        # 项目架构总览与 Skill 导航（入口）
 │       ├── hai-core/SKILL.md         # @h-ai/core 用法
-│       ├── hai-db/SKILL.md           # @h-ai/reldb 用法
+│       ├── hai-reldb/SKILL.md        # @h-ai/reldb 用法
+│       ├── hai-vecdb/SKILL.md        # @h-ai/vecdb 用法
+│       ├── hai-datapipe/SKILL.md     # @h-ai/datapipe 用法
 │       ├── hai-iam/SKILL.md          # @h-ai/iam 用法
-│       ├── hai-reach/SKILL.md       # @h-ai/reach 用法
+│       ├── hai-reach/SKILL.md        # @h-ai/reach 用法
 │       ├── hai-cache/SKILL.md        # @h-ai/cache 用法
 │       ├── hai-storage/SKILL.md      # @h-ai/storage 用法
 │       ├── hai-ai/SKILL.md           # @h-ai/ai 用法
 │       ├── hai-crypto/SKILL.md       # @h-ai/crypto 用法
+│       ├── hai-payment/SKILL.md       # @h-ai/payment 用法
+│       ├── hai-audit/SKILL.md         # @h-ai/audit 用法
+│       ├── hai-scheduler/SKILL.md     # @h-ai/scheduler 用法
+│       ├── hai-capacitor/SKILL.md        # @h-ai/capacitor 用法
+│       ├── hai-deploy/SKILL.md        # @h-ai/deploy 用法
 │       ├── hai-kit/SKILL.md          # @h-ai/kit 用法
 │       ├── hai-ui/SKILL.md           # @h-ai/ui 组件用法
+│       ├── hai-api-client/SKILL.md           # @h-ai/api-client 用法
 │       ├── hai-app-create/SKILL.md   # 教 AI 创建新功能
 │       ├── hai-app-review/SKILL.md   # 教 AI 做代码审查
 │       └── hai-app-tests/SKILL.md    # 教 AI 编写测试
@@ -91,54 +121,87 @@ my-app/
 
 Skill 模板统一管理在 `packages/cli/templates/skills/` 中，通过 `@h-ai/cli` 分发到用户项目。
 
-## 模块总览
+## 模块总览（19 个模块）
 
-| 包名            | 职责                                                                      |     Provider 支持      |
-| --------------- | ------------------------------------------------------------------------- | :--------------------: |
-| `@h-ai/core`    | 基础能力：`Result` 类型、日志、配置加载、ID 生成、i18n、工具函数          |           —            |
-| `@h-ai/crypto`  | 国密算法：SM2 非对称加密/签名、SM3 哈希、SM4 对称加密、密码哈希           |           —            |
-| `@h-ai/reldb`   | 数据库访问：DDL、原生 SQL、事务、分页、CRUD 仓库                          | ✅ SQLite / PG / MySQL |
-| `@h-ai/cache`   | 缓存：KV、Hash、List、Set、SortedSet，Redis 风格 API                      |   ✅ Memory / Redis    |
-| `@h-ai/storage` | 文件存储：上传/下载/删除/复制/预签名 URL                                  |     ✅ Local / S3      |
-| `@h-ai/iam`     | 身份与访问管理：认证（密码/OTP/LDAP）、RBAC 授权、会话管理、用户管理      |           —            |
-| `@h-ai/reach`   | 用户触达：邮件、短信、API 回调，模板引擎、免打扰（DND）、发送日志         |  ✅ SMTP / SMS / API   |
-| `@h-ai/ai`      | AI 集成：LLM 调用（同步/流式）、MCP Server、工具定义与注册                |           —            |
-| `@h-ai/kit`     | SvelteKit 集成：Handle Hook、中间件（CORS/CSRF/限流）、路由守卫、表单校验 |           —            |
-| `@h-ai/ui`      | UI 组件库：57+ Svelte 5 Runes 组件（原子 + 复合 + 业务场景）              |           —            |
-| `@h-ai/cli`     | CLI 脚手架：项目创建、模块添加、代码生成                                  |           —            |
+### 基础能力
+
+| 包名           | 职责                                                             | Provider 支持 |
+| -------------- | ---------------------------------------------------------------- | :-----------: |
+| `@h-ai/core`   | 框架基石：`Result` 类型、日志、配置加载、ID 生成、i18n、工具函数 |       —       |
+| `@h-ai/crypto` | 国密算法：SM2 非对称加密/签名、SM3 哈希、SM4 对称加密、密码哈希  |       —       |
+
+### 数据层
+
+| 包名             | 职责                                                              |         Provider 支持          |
+| ---------------- | ----------------------------------------------------------------- | :----------------------------: |
+| `@h-ai/reldb`    | 关系数据库：DDL、原生 SQL、事务、分页、CRUD 仓库                  |     ✅ SQLite / PG / MySQL     |
+| `@h-ai/vecdb`    | 向量数据库：集合管理、向量插入、相似度搜索                        | ✅ LanceDB / pgvector / Qdrant |
+| `@h-ai/cache`    | 缓存：KV、Hash、List、Set、SortedSet，Redis 风格 API              |       ✅ Memory / Redis        |
+| `@h-ai/storage`  | 文件存储：上传/下载/删除/复制/预签名 URL                          |         ✅ Local / S3          |
+| `@h-ai/datapipe` | 数据管线：文本清洗、7 种分块模式、可组合管线（纯函数，无需 init） |               —                |
+
+### 业务能力
+
+| 包名              | 职责                                                                   |       Provider 支持        |
+| ----------------- | ---------------------------------------------------------------------- | :------------------------: |
+| `@h-ai/iam`       | 身份与访问管理：认证（密码/OTP/LDAP）、RBAC 授权、会话管理、用户管理   |             —              |
+| `@h-ai/reach`     | 用户触达：邮件、短信、API 回调，模板引擎、免打扰（DND）                | ✅ SMTP / 阿里云短信 / API |
+| `@h-ai/ai`        | AI 集成：LLM 调用（同步/流式）、MCP Server、工具定义与注册、SSE 流处理 |       ✅ OpenAI 兼容       |
+| `@h-ai/payment`   | 统一支付：订单创建、多端调起、回调通知                                 | ✅ 微信 / 支付宝 / Stripe  |
+| `@h-ai/audit`     | 审计日志：操作记录、分页查询、统计聚合、定时清理                       |             —              |
+| `@h-ai/scheduler` | 定时任务：Cron 调度、JS 函数 / HTTP API 执行、DB 持久化                |             —              |
+
+### 集成层
+
+| 包名               | 职责                                                                      | Provider 支持 |
+| ------------------ | ------------------------------------------------------------------------- | :-----------: |
+| `@h-ai/kit`        | SvelteKit 集成：Handle Hook、中间件（CORS/CSRF/限流）、路由守卫、表单校验 |       —       |
+| `@h-ai/api-client` | HTTP 客户端：Bearer Token 自动管理、契约调用、文件上传、SSE 流式响应      |       —       |
+| `@h-ai/capacitor`  | 移动端桥接：安全 Token 存储、设备信息、推送通知、相机、状态栏             |       —       |
+
+### 界面与工具
+
+| 包名           | 职责                                                                   | Provider 支持 |
+| -------------- | ---------------------------------------------------------------------- | :-----------: |
+| `@h-ai/ui`     | UI 组件库：65+ Svelte 5 Runes 组件（原子 + 复合 + 业务场景），32+ 主题 |       —       |
+| `@h-ai/cli`    | CLI 脚手架：项目创建、模块添加、代码生成、一键部署                     |       —       |
+| `@h-ai/deploy` | 自动化部署：Vercel 部署 + 基础设施自动开通（Neon / Upstash / R2）      |   ✅ Vercel   |
 
 ## 架构
 
 ```
-                         ┌─────────────────────────┐
-                         │      应用层 (apps/)      │
-                         │   admin / website / h5   │
-                         └────────────┬────────────┘
-                                      │
-                         ┌────────────▼────────────┐
-                         │ @h-ai/kit  SvelteKit 集成  │
-                         │ hooks · guards · middleware│
-                         └────────────┬────────────┘
-                                      │
-     ┌────────────┬───────────────┬───┴───┬───────────────┬────────────┐
-     │            │               │       │               │            │
-┌────▼────┐  ┌────▼─────┐  ┌─────▼─────┐ │         ┌────▼────┐  ┌───▼───┐
-│ @h-ai/iam│  │@h-ai/reach│  │ @h-ai/ai │ │         │@h-ai/ui  │  │  ...  │
-│ 认证授权 │  │ 用户触达  │  │ LLM+MCP  │ │         │ 组件库  │  │       │
-└────┬────┘  └──────────┘  └──────────┘  │         └─────────┘  └───────┘
-     │                            ┌──────▼──────┐
-┌────▼────┐  ┌─────────┐   │@h-ai/storage  │
-│ @h-ai/reldb │  │@h-ai/cache│   │  文件存储    │
-│  数据库  │  │   缓存   │   └──────┬──────┘
-└────┬────┘  └────┬────┘          │
-     │            │          S3 / Local
-SQLite│PG│MySQL  Memory│Redis
-     │            │
-┌────▼────────────▼────┐
-│      @h-ai/core       │
-│ Result · Logger · ID │
-│ Config · i18n · Utils│
-└──────────────────────┘
+                              ┌──────────────────────────────┐
+                              │         应用层 (apps/)        │
+                              │  admin · api · website · h5  │
+                              └──────────────┬───────────────┘
+                                             │
+                  ┌──────────────────────────▼───────────────────────────┐
+                  │            @h-ai/kit   SvelteKit 集成                 │
+                  │         hooks · guards · middleware · response        │
+                  └──────────────────────────┬───────────────────────────┘
+                                             │
+    ┌──────────┬──────────┬──────────┬───────┴────┬──────────┬──────────┐
+    │          │          │          │            │          │          │
+┌───▼───┐ ┌───▼────┐ ┌───▼───┐ ┌───▼─────┐ ┌───▼────┐ ┌───▼───┐ ┌───▼────┐
+│  iam  │ │ reach  │ │  ai   │ │ payment │ │ audit  │ │sched. │ │  ui    │
+│认证授权│ │用户触达│ │LLM+MCP│ │统一支付 │ │审计日志│ │定时任务│ │组件库  │
+└───┬───┘ └────────┘ └───┬───┘ └─────────┘ └───┬────┘ └───┬───┘ └────────┘
+    │                    │                     │          │
+┌───▼────┐ ┌────────┐ ┌─▼──────┐ ┌─────────┐  │          │
+│ reldb  │ │ cache  │ │ vecdb  │ │ storage │  │          │
+│关系数据库│ │  缓存  │ │向量数据库│ │文件存储  │  │          │
+└───┬────┘ └───┬────┘ └────────┘ └────┬────┘  │          │
+    │          │                      │       │          │
+SQLite│PG│MySQL Memory│Redis  LanceDB│pgvec│Qdrant  S3│Local
+    │          │                      │       │          │
+┌───▼──────────▼──────────────────────▼───────▼──────────▼──┐
+│                       @h-ai/core                           │
+│        Result · Logger · ID · Config · i18n · Utils        │
+└───────────────────────────────────────────────────────────┘
+     ┌───────────┐  ┌──────────────┐  ┌──────────────┐
+     │ @h-ai/cli │  │ @h-ai/deploy │  │@h-ai/capacitor│
+     │ 脚手架    │  │ 一键部署     │  │ 移动端桥接    │
+     └───────────┘  └──────────────┘  └──────────────┘
 ```
 
 **依赖方向**：上层依赖下层，`@h-ai/core` 是最底层基础，不反向依赖任何模块。
@@ -154,23 +217,56 @@ pnpm add -g @h-ai/cli
 # 交互式创建项目（选择应用类型、功能模块）
 hai create my-app
 
+# 指定模板类型
+hai create my-app --type admin       # 管理后台
+hai create my-app --type api         # API 服务
+hai create my-app --type website     # 企业官网
+hai create my-app --type h5          # H5 移动应用
+
 # 进入项目并启动
 cd my-app && pnpm install && pnpm dev
+```
+
+### 代码生成
+
+```bash
+hai generate page dashboard          # 生成页面
+hai generate component UserCard      # 生成组件
+hai generate api users               # 生成 API 路由
+
+# 快捷别名
+hai g:page dashboard
+hai g:component UserCard
+```
+
+### 一键部署
+
+```bash
+hai deploy                           # 部署当前项目到 Vercel
+hai deploy --skip-provision          # 跳过基础设施开通
 ```
 
 ### 在现有项目中使用
 
 ```bash
 pnpm add @h-ai/core              # 基础能力（必装）
-pnpm add @h-ai/reldb                # 数据库
+pnpm add @h-ai/reldb             # 关系数据库
+pnpm add @h-ai/vecdb             # 向量数据库
 pnpm add @h-ai/cache             # 缓存
-pnpm add @h-ai/iam               # 身份认证/授权
-pnpm add @h-ai/reach             # 用户触达（邮件/短信/API）
-pnpm add @h-ai/ai                # AI / LLM / MCP
 pnpm add @h-ai/storage           # 文件存储
+pnpm add @h-ai/datapipe          # 数据管线
+pnpm add @h-ai/iam               # 身份认证 / 授权
+pnpm add @h-ai/reach             # 用户触达（邮件 / 短信 / API）
+pnpm add @h-ai/ai                # AI / LLM / MCP
+pnpm add @h-ai/payment           # 支付（微信 / 支付宝 / Stripe）
+pnpm add @h-ai/audit             # 审计日志
+pnpm add @h-ai/scheduler         # 定时任务
 pnpm add @h-ai/crypto            # 国密加密
 pnpm add @h-ai/kit               # SvelteKit 集成
+pnpm add @h-ai/api-client        # HTTP 客户端
 pnpm add @h-ai/ui                # UI 组件库
+pnpm add @h-ai/capacitor         # 移动端原生桥接
+pnpm add @h-ai/deploy            # 自动化部署
 ```
 
 ## 使用示例
@@ -237,6 +333,26 @@ await userRepo.create({ id: '1', email: 'a@b.com', name: 'Alice' })
 const user = await userRepo.findById('1')
 ```
 
+### 向量数据库
+
+```typescript
+import { vecdb } from '@h-ai/vecdb'
+
+// 初始化（LanceDB 嵌入式，零配置）
+await vecdb.init({ type: 'lancedb', path: './data/vecdb' })
+
+// 创建集合
+await vecdb.collection.create('docs', { dimension: 1536 })
+
+// 插入向量
+await vecdb.vector.insert('docs', [
+  { id: 'doc-1', vector: embeddings, content: '文档内容', metadata: { source: 'wiki' } },
+])
+
+// 相似度搜索
+const results = await vecdb.vector.search('docs', queryVector, { topK: 5, minScore: 0.7 })
+```
+
 ### 缓存
 
 ```typescript
@@ -296,6 +412,19 @@ const searchTool = ai.tools.define({
 const mcp = createMcpServer({ name: 'my-app', version: '1.0.0' })
 ```
 
+### 数据管线
+
+```typescript
+import { datapipe } from '@h-ai/datapipe'
+
+// 管线模式（清洗 → 转换 → 分块，无需 init）
+const result = await datapipe.pipeline()
+  .clean({ removeHtml: true, removeUrls: true })
+  .transform(text => text.toLowerCase())
+  .chunk({ mode: 'markdown', maxSize: 2000, overlap: 100 })
+  .run(rawText)
+```
+
 ### 文件存储
 
 ```typescript
@@ -331,12 +460,71 @@ await iam.init({
 // 用户注册
 await iam.user.register({ username: 'alice', password: 'StrongPass123!' })
 
-// 登录
+// 登录（密码 / OTP / LDAP）
 const loginResult = await iam.auth.login({ identifier: 'alice', password: 'StrongPass123!' })
 
 // RBAC 权限控制
 await iam.authz.assignRole(userId, 'admin')
 const allowed = await iam.authz.checkPermission(userId, 'users:read')
+```
+
+### 统一支付
+
+```typescript
+import { payment } from '@h-ai/payment'
+import { invokePayment } from '@h-ai/payment/client'
+
+await payment.init({
+  wechat: { mchId: '...', apiV3Key: '...', serialNo: '...', privateKey: '...', appId: '...' },
+  alipay: { appId: '...', privateKey: '...', alipayPublicKey: '...' },
+})
+
+// 创建订单（微信 JSAPI / H5 / App / Native，支付宝，Stripe）
+const result = await payment.createOrder('wechat', {
+  orderNo: 'ORD001',
+  amount: 100,
+  description: '商品',
+  tradeType: 'jsapi',
+  userId: 'openid-xxx',
+  notifyUrl: 'https://api.example.com/payment/notify/wechat',
+})
+if (result.success)
+  await invokePayment(result.data)
+```
+
+### 审计日志
+
+```typescript
+import { audit } from '@h-ai/audit'
+
+await audit.init({ reldb })
+
+// 记录操作
+await audit.helper.login('user_1', '127.0.0.1')
+await audit.helper.crud('user_1', 'create', 'users', 'user_2', { name: '张三' })
+
+// 查询与统计
+const logs = await audit.list({ pageSize: 20, action: 'login' })
+const stats = await audit.getStats(7) // 最近 7 天
+```
+
+### 定时任务
+
+```typescript
+import { scheduler } from '@h-ai/scheduler'
+
+await scheduler.init({ enableDb: true })
+
+// 注册 Cron 任务（API 任务自动持久化，重启自动恢复）
+await scheduler.register({
+  id: 'health-check',
+  name: '健康检查',
+  cron: '*/5 * * * *',
+  type: 'api',
+  api: { url: 'https://api.example.com/health', method: 'GET' },
+})
+
+scheduler.start()
 ```
 
 ### SvelteKit 集成
@@ -378,6 +566,42 @@ const hashed = crypto.password.hash('MyPassword123')
 const valid = crypto.password.verify('MyPassword123', hashed.data)
 ```
 
+### HTTP 客户端
+
+```typescript
+import { createApiClient, createLocalStorageTokenStorage } from '@h-ai/api-client'
+
+const api = createApiClient({
+  baseUrl: '/api/v1',
+  auth: { storage: createLocalStorageTokenStorage(), refreshUrl: '/auth/refresh' },
+})
+
+// 契约调用（类型安全）
+const result = await api.call(iamEndpoints.login, { identifier: 'alice', password: 'xxx' })
+
+// SSE 流式响应
+const stream = api.stream('/ai/chat', { messages: [] })
+```
+
+### 用户触达
+
+```typescript
+import { reach } from '@h-ai/reach'
+
+await reach.init({
+  providers: [
+    { name: 'email', type: 'smtp', host: 'smtp.example.com', from: 'noreply@example.com' },
+    { name: 'sms', type: 'aliyun-sms', accessKeyId: '...', accessKeySecret: '...', signName: '某某科技' },
+  ],
+  templates: [
+    { name: 'welcome', provider: 'email', subject: '欢迎 {userName}', body: '亲爱的 {userName}，欢迎！' },
+  ],
+  dnd: { enabled: true, strategy: 'delay', start: '22:00', end: '08:00' },
+})
+
+await reach.send({ provider: 'email', to: 'user@example.com', template: 'welcome', vars: { userName: '张三' } })
+```
+
 ### Svelte 5 UI 组件
 
 ```svelte
@@ -413,14 +637,15 @@ const valid = crypto.password.verify('MyPassword123', hashed.data)
 
 ## 示例应用
 
-仓库 `apps/` 目录包含 4 种应用模板：
+仓库 `apps/` 目录包含多种应用模板：
 
-| 应用                | 说明                     | 使用的模块            |
-| ------------------- | ------------------------ | --------------------- |
-| `admin-console`     | 管理后台（完整功能参考） | 全部 @h-ai/\* 模块    |
-| `api-service`       | 纯 API 后端服务          | core, reldb, iam, kit |
-| `corporate-website` | 企业官网                 | core, kit, ui         |
-| `h5-app`            | H5 移动应用              | core, kit, ui         |
+| 应用                | 说明                     | 使用的模块               |
+| ------------------- | ------------------------ | ------------------------ |
+| `admin-console`     | 管理后台（完整功能参考） | 全部 @h-ai/\* 模块       |
+| `api-service`       | 纯 API 后端服务          | core, reldb, iam, kit    |
+| `corporate-website` | 企业官网                 | core, kit, ui            |
+| `h5-app`            | H5 移动应用              | core, kit, ui            |
+| `android-app`       | Android 原生应用         | core, kit, ui, capacitor |
 
 ## 开发
 

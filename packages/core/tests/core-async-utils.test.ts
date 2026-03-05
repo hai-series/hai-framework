@@ -47,6 +47,20 @@ describe('core.async', () => {
     expect(result).toBe('done')
   })
 
+  it('withTimeout 正常返回后应清理超时定时器', async () => {
+    const clearTimeoutSpy = vi.spyOn(globalThis, 'clearTimeout')
+
+    const promise = core.async.withTimeout(
+      core.async.delay(50).then(() => 'done'),
+      200,
+    )
+    await vi.advanceTimersByTimeAsync(50)
+    await promise
+
+    expect(clearTimeoutSpy).toHaveBeenCalled()
+    clearTimeoutSpy.mockRestore()
+  })
+
   it('retry 应该按次数重试', async () => {
     let count = 0
     const promise = core.async.retry(async () => {
@@ -61,6 +75,27 @@ describe('core.async', () => {
 
     expect(result).toBe('ok')
     expect(count).toBe(3)
+  })
+
+  it('retry maxRetries=0 应至少执行一次', async () => {
+    let count = 0
+    const result = await core.async.retry(async () => {
+      count += 1
+      return 'ok'
+    }, { maxRetries: 0 })
+
+    expect(result).toBe('ok')
+    expect(count).toBe(1)
+  })
+
+  it('retry 全部失败应抛出最后一次错误', async () => {
+    vi.useRealTimers()
+    await expect(
+      core.async.retry(async () => {
+        throw new Error('always fail')
+      }, { maxRetries: 2, delay: 1 }),
+    ).rejects.toThrow('always fail')
+    vi.useFakeTimers()
   })
 
   it('parallel 应该限制并发并保持顺序', async () => {

@@ -49,6 +49,16 @@ describe('core.object', () => {
     expect(merged).toEqual({ a: 'string' })
   })
 
+  it('deepMerge 应该忽略 __proto__ 和 constructor 键防止原型污染', () => {
+    // 模拟 JSON.parse 产生的含 __proto__ 的对象
+    const malicious = JSON.parse('{"__proto__": {"polluted": true}, "safe": 1}')
+    const merged = core.object.deepMerge({}, malicious)
+    expect(merged.safe).toBe(1)
+    // __proto__ 被忽略，不会污染原型
+    expect((merged as Record<string, unknown>).polluted).toBeUndefined()
+    expect(({} as Record<string, unknown>).polluted).toBeUndefined()
+  })
+
   it('pick 应该选择指定键', () => {
     const obj = { a: 1, b: 2, c: 3 }
     expect(core.object.pick(obj, ['a', 'c'])).toEqual({ a: 1, c: 3 })

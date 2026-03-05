@@ -1,332 +1,229 @@
 ---
 name: hai-review
-description: 对 hai-framework 模块进行代码审查与规范化：对照 hai-create 规范优化代码、完善注释、确保测试与 lint 通过，并按规范重写 README 与 Skill 模板。
+description: 对 hai-framework 模块进行代码审查：4 角色独立评审 → 交叉辩论 → 优先级排序 → 修复 → 门禁验收。
 ---
 
 # hai-review
 
-## 适用场景
-
-- 对单个模块进行整体审查与规范化（代码、注释、文档、测试）
-- 需要确保测试与 lint 通过，并输出可追溯的改动
-- 需要按仓库规范重写 README 与 Skill 模板
-
 ## 工作准则
 
-1. **先搜索再改动**：用全局检索确认引用关系，避免遗漏更新。
-2. **最小变更**：除非测试暴露缺陷，不改业务行为；优化以可读性与安全为主。
-3. **注释规范**：公共 API 与内部函数补齐中文 JSDoc，包含参数、返回值、示例、边界说明。
-4. **文档规范**：
-   - README：只写"是什么/怎么用"，不写接口清单与内部实现（hai-create §6.1）。
-   - Skill 模板：面向 AI，位于 `packages/cli/templates/skills/hai-<模块名>/SKILL.md`，需包含 YAML frontmatter、模块概述、API、错误码、常见模式（hai-create §6.2）。
-5. **质量门禁**：按顺序执行 `pnpm typecheck` → `pnpm lint` → `pnpm test`（优先 filter 指定模块）。
-6. **参照 hai-create 规范**：审查前先读取 `.github/skills/hai-create/SKILL.md`，以其中的目录结构、架构决策、代码规范作为审查基准。
+1. **先搜索再改动**：用 `grep_search` 确认引用关系，避免遗漏。
+2. **最小变更**：除非测试暴露缺陷，不改业务行为。
+3. **成套更新**：代码 / 测试 / 文档同步，禁止只改一处。
+4. **参照 hai-create**：审查前先读取 `.github/skills/hai-create/SKILL.md`，以其规范作为审查基准。
 
 ---
 
-## 重要审查点
+## 审查要点
+
+> 以下各项均为强制审查内容。详细规范参照 hai-create 对应章节。
 
 ### 架构决策（hai-create §2）
 
-- **两个独立问题**：模块是否有子功能？是否需要 Provider？答案的组合决定 main.ts 写法和 Provider 位置。
-- **Provider 位置规则**：
-  - 不需要多后端 → 无 Provider
-  - 需要多后端 + 无子功能 → 模块级 Provider（`src/providers/xx-provider-aaa.ts`），由 main.ts 管理
-  - 需要多后端 + 有子功能 → 子功能级 Provider（`src/yy/providers/xx-yy-provider-aaa.ts`），由子功能工厂内部管理，main.ts 不感知
-- **影响分析必须写出**：直接影响（文件/类型/导入）+ 间接影响（引用点/测试/文档）。
-- **禁止只改一处**：代码/测试/文档必须成套更新。
-- **分层与依赖**：依赖方向向内收敛，禁止 UI 层写业务逻辑。
-- **core 对齐**：初始化 API、配置校验与导出规则需对齐 core 基线。
+- 子功能 / Provider 组合方式符合决策表；Provider 位置正确
+- main.ts 仅做生命周期管理和 API 编排，不含具体业务逻辑
+- 分层与依赖方向向内收敛；core 基线对齐（init API、配置校验、导出规则）
 
-### 导出与类型（hai-create §3.2 / §3.5）
+### 导出与类型（hai-create §3）
 
-- **导出规则**：`index.ts` 仅做 `export *` 聚合，禁止选择性导出/重命名导出。
-- **类型规则**：禁止 `any`，不确定用 `unknown` 并在边界缩窄。
-- **对外类型**：必须集中在 `xx-types.ts`，禁止把内部实现类型泄漏为 public API。
-- **配置类型**：必须导出 `XxConfig`（parse 后）和 `XxConfigInput`（用户输入）。
-- **子功能类型聚合**：有子功能时，`xx-types.ts` 必须 re-export 子功能类型（hai-create §3.7.3）。
+- `index.ts` 仅做 `export *` 聚合，禁止选择性导出
+- 禁止 `any`；对外类型集中在 `xx-types.ts`，不泄漏内部类型
+- 配置导出 `XxConfig`（parse 后）+ `XxConfigInput`（用户输入）
+- 有子功能时 `xx-types.ts` 须 re-export 子功能类型
 
 ### 代码质量（hai-create §4）
 
-- **公共 API 不抛异常**：所有 `packages/*/src/` 下对外暴露的函数/方法，返回值必须是 `Result<T, XxError>` 或 `Promise<Result<T, XxError>>`，禁止 `throw`。
-- **允许 throw 的合规场景**：内部 throw + 外层 try-catch → Result、SvelteKit 控制流（`throw redirect()`）、浏览器端 Client 代码、CLI 命令、`getOrThrow()` 显式命名、async generator（如 `chatStream()`）。
+- 公共 API 不 `throw`，返回 `Result<T, XxError>`（合规场景除外：内部 catch-and-wrap、SvelteKit 控制流、Client、CLI、`getOrThrow()`、async generator）
+- return 仅返回已计算值，禁止嵌套条件/循环
+- 提前返回，禁止 >2 层 if 嵌套；单函数 ≤ 60 行
+- 上游 Result 直接透传，不重新包装
+- 错误创建：错误码 + `xxM('key')`，禁止硬编码消息
+- Provider 用工厂 + 闭包，不用 class；子功能用 Deps 接口聚合依赖
 
-```ts
-// ❌ 公共 API 中 throw
-function register(tool: Tool): void {
-  if (!isInitialized)
-    throw new Error('Not initialized')
-}
+### 日志审查（hai-create §4.10）
 
-// ✅ 公共 API 中返回 Result
-function register(tool: Tool): Result<void, XxError> {
-  if (!isInitialized)
-    return notInitialized.result()
-  return ok(undefined)
-}
-```
+消息英文、动宾结构；上下文携带业务标识，禁止密码/token 明文。
 
-- **return 语句**：不得包含复杂逻辑（条件判断、循环、多级调用链），应只返回已计算的值。
+| 位置                          | 级别                               | 审查项                                      |
+| ----------------------------- | ---------------------------------- | ------------------------------------------- |
+| `init()` 成功 / 失败          | `info` / `error`                   | 附带关键配置参数 / `{ error }`              |
+| `close()`                     | `info`                             | —                                           |
+| 业务写操作进入 / 成功 / 失败  | `debug` / `info` / `warn`或`error` | 携带业务标识；校验失败 warn、系统异常 error |
+| Provider connect / disconnect | `info` / `info`                    | 附带连接目标信息                            |
+| 读操作 / 查询                 | `debug`                            | 不使用 info                                 |
+| 循环体内详细记录              | `trace`                            | —                                           |
 
-```ts
-// ❌ return 中嵌套复杂逻辑
-return items.filter(i => i.active).map(i => ({ ...i, createdAt: new Date(i.created_at) }))
+### 构建配置（tsup.config.ts）
 
-// ✅ 拆分为步骤
-const activeItems = items.filter(i => i.active)
-const result = activeItems.map(mapToItem)
-return result
-```
+- `defineConfig()` + `...baseConfig`，不覆盖基础属性（`format` / `dts` / `clean` / `sourcemap` / `treeshake` / `target`）
+- `@h-ai/core` 列入 `external`（core 自身除外）；原生/大体积依赖必须 external
+- entry 模式与模块类型匹配：
 
-- **提前返回**：使用 Early Return 减少嵌套，禁止超过 2 层的 if 嵌套。
+| 模式              | entry                                | 适用                      |
+| ----------------- | ------------------------------------ | ------------------------- |
+| 单入口 Node-only  | `{ index: 'src/index.ts' }`          | reldb, cache, crypto 等   |
+| 双端 Node+Browser | `{ index: …, browser: … }`           | core, storage, ai, iam    |
+| 多子路径          | 追加 `'client/index'`、`'api/index'` | storage, ai, iam, payment |
+| CLI               | `['src/index.ts']` + shebang banner  | cli                       |
 
-```ts
-// ❌ 深层嵌套
-if (input) {
-  if (input.name) {
-    if (input.name.length > 0) { /* ... */ }
-  }
-}
+### i18n / 安全 / 命名
 
-// ✅ 提前返回
-if (!input?.name?.length) {
-  return err({ code: XxErrorCode.VALIDATION, message: xxM('xx_nameRequired') })
-}
-// 实际逻辑
-```
-
-- **函数体量**：单个函数 ≤ 60 行（不含注释和空行），超过时拆分。
-- **错误透传**：上游 Result 错误直接透传，不要重新包装。
-
-```ts
-// ❌ 重新包装
-const result = await sql.query(sql)
-if (!result.success) {
-  return err({ code: XxErrorCode.QUERY_FAILED, message: result.error.message })
-}
-
-// ✅ 直接透传
-const result = await sql.query(sql)
-if (!result.success) {
-  return result
-}
-```
-
-- **错误创建**：错误码 + i18n 消息（`xxM('key')`），禁止硬编码消息字符串。
-- **Provider 实现**：使用工厂函数 + 闭包，不使用 class。
-- **依赖注入**：子功能使用 Deps 接口聚合依赖，不散乱传入回调（hai-create §4.5）。
-- **工厂返回形式**：无异步初始化时同步返回 `XxYyFunctions`；有异步初始化时返回 `Promise<Result<XxYyFunctions, XxError>>`。
-
-### i18n 与日志
-
-- **i18n**：用户可见文本必须走 i18n key（`xxM('key')`），禁止硬编码字符串。
-- **日志**：禁止 `console.log`，统一使用 `core.logger`（trace/debug/info/warn/error/fatal）。
-- **日志分级**：
-  - `trace`：详细调试（循环内、变量值）
-  - `debug`：流程节点（函数进入、参数）
-  - `info`：业务事件（初始化完成、连接就绪）
-  - `warn`：异常但可恢复（重试、降级）
-  - `error`：操作失败（需人工排查）
-  - `fatal`：致命错误（服务无法继续）
-
-#### 日志输出审查要点（hai-create §4.10）
-
-审查时必须确认以下位置**已输出日志且级别正确**：
-
-| 位置                                   | 必须级别                       | 审查项                                                                  |
-| -------------------------------------- | ------------------------------ | ----------------------------------------------------------------------- |
-| `init()` 成功                          | `info`                         | 模块/服务初始化完成，附带配置类型等关键参数                             |
-| `init()` 失败                          | `error`                        | 初始化异常，附带 `{ error }`                                            |
-| `close()`                              | `info`                         | 模块/服务关闭                                                           |
-| 业务写操作成功（create/update/delete） | `info`                         | 携带业务标识（`id`、`userId` 等）                                       |
-| 业务写操作进入                         | `debug`                        | 携带输入参数概要                                                        |
-| 业务写操作失败                         | `warn` 或 `error`              | 校验失败用 `warn`，系统异常用 `error`，附带 `{ error }` 或 `{ reason }` |
-| Provider connect 成功/失败             | `info` / `error`               | 附带连接目标信息（`host`、`type`）                                      |
-| Provider disconnect                    | `info`                         | —                                                                       |
-| 安全敏感操作（登录/登出/授权）         | `info`（成功）/ `warn`（失败） | 附带 `userId`、`type`；禁止输出密码/token 明文                          |
-| 读操作 / 查询                          | `debug`                        | 不使用 `info`，避免日志过多                                             |
-| 循环体内详细记录                       | `trace`                        | 生产环境默认不输出                                                      |
-
-**日志内容规范**：
-
-- 消息文本：英文，简洁动宾结构（如 `'XX module initialized'`、`'Failed to create yy item'`）
-- 上下文对象：携带关键业务标识（`id`、`userId`、`type`），禁止输出密码、token 明文等敏感信息
-- 错误上下文：失败日志携带 `{ error }` 或 `{ reason: errorCode }`，便于排查
-
-**常见审查不合格示例**：
-
-```ts
-// ❌ init 成功后没有日志
-const badExample = {
-  async init(config) {
-    const parsed = XxConfigSchema.parse(config)
-    currentConfig = parsed
-    return ok(undefined)
-  },
-}
-
-// ✅ init 成功必须输出 info 日志
-const goodExample = {
-  async init(config) {
-    const parsed = XxConfigSchema.parse(config)
-    currentConfig = parsed
-    logger.info('XX module initialized', { type: parsed.type })
-    return ok(undefined)
-  },
-}
-```
-
-```ts
-// ❌ 业务操作成功没有日志
-const badExample = {
-  async create(input) {
-    const item = await doCreate(input)
-    return ok(item)
-  },
-}
-
-// ✅ 写操作需有 debug 进入 + info 成功
-const goodExample = {
-  async create(input) {
-    logger.debug('Creating yy item', { name: input.name })
-    const item = await doCreate(input)
-    logger.info('Yy item created', { itemId: item.id })
-    return ok(item)
-  },
-}
-```
-
-```ts
-// ❌ 日志级别不当：把每次查询都用 info
-const badExample = {
-  async get(id) {
-    logger.info('Getting item', { id }) // 读操作不应用 info
-    return ok(await dataSource.get(id))
-  },
-}
-
-// ✅ 读操作用 debug
-const goodExample = {
-  async get(id) {
-    logger.debug('Getting item', { id })
-    return ok(await dataSource.get(id))
-  },
-}
-```
-
-### 安全与配置
-
-- **环境变量**：禁止硬编码密钥；新增变量需补 `.env` 占位与文档说明。
-- **配置校验**：模块在使用配置前必须显式通过 Zod Schema 校验。
-
-### 命名一致性（hai-create §4.6）
-
-- **命名三问**：看名字能知道它做什么？会和其他名字混淆？6 个月后还能理解？
-- **文件命名**：`{模块}-{职责}.ts`、`{模块}-{功能}-{角色}.ts`（kebab-case）
-- 服务对象：`export const xx`（小写模块名）
-- 错误码：`XxErrorCode.UPPER_SNAKE_CASE`
-- i18n 获取器：`xxM()`
-- 消息键前缀：`xx_camelCase`
-- Provider 工厂：`create{Impl}Provider()`
-
----
-
-## Skill 编写要求与最佳实践
-
-### 必要要求（SKILL.md）
-
-- 必须包含 YAML frontmatter，字段至少包括：
-  - `name`：小写字母/数字/连字符，长度合理，且与目录名一致
-  - `description`：描述"做什么 + 何时用"，包含关键触发词
-- Markdown 正文必须清晰可执行，避免空泛描述
-- 目录至少包含 `SKILL.md`，可选 `scripts/`、`references/`、`assets/`
-
-### 最佳实践
-
-- **保持精简**：只写必要信息，避免冗长背景
-- **描述具体**：说明触发场景与输出标准，避免"帮助处理"这类模糊描述
-- **渐进披露**：正文过长时拆分到引用文件，并在 SKILL.md 中建立导航
-- **示例驱动**：为关键任务提供输入/输出或命令示例
-- **测试迭代**：用真实场景测试 Skill，观察是否被正确触发
-- **安全注意**：不要硬编码密钥；对脚本执行保持谨慎
-
-### 资源指引
-
-- Skill 编写指南（权威参考）：
-  https://support.claude.com/en/articles/12512198-how-to-create-custom-skills
+- 用户可见文本全部走 i18n key，消息键前缀正确
+- 禁止 `console.log`；禁止硬编码密钥，新变量补 `.env` 占位
+- 命名三问：看名字能知道职责？不会混淆？6 个月后仍可理解？
+- 文件 kebab-case；服务对象 `export const xx`；错误码 `XxErrorCode.UPPER_SNAKE`
 
 ---
 
 ## 审查清单
 
+> 每次审查均须逐条确认。
+
 ### 目录与入口
 
-- [ ] 目录结构符合 hai-create §1 规范（命名、分层、子功能无 index.ts）
-- [ ] `index.ts` 仅做 `export *` 聚合，无选择性导出
+- [ ] 目录结构符合 hai-create §1（命名、分层、子功能无 index.ts）
+- [ ] `index.ts` 仅做 `export *` 聚合
 
-### 架构决策
+### 架构
 
-- [ ] 子功能 / Provider 组合方式符合 hai-create §2 决策表
-- [ ] Provider 位置正确（无子功能 → `src/providers/`；有子功能 → 子功能目录内 `providers/`）
+- [ ] 子功能 / Provider 组合方式与决策表一致
+- [ ] Provider 位置正确（无子功能 → `src/providers/`；有子功能 → 子功能目录内）
 - [ ] main.ts 不感知子功能内部的 Provider
 
-### 配置与类型
+### 类型与配置
 
 - [ ] 错误码段位正确、Zod Schema 完整、导出 Config + ConfigInput
 - [ ] 对外类型集中在 `xx-types.ts`，无内部类型泄漏
-- [ ] 有子功能时，`xx-types.ts` re-export 了子功能类型
+- [ ] 有子功能时 `xx-types.ts` re-export 了子功能类型
 
 ### main.ts
 
-- [ ] init 流程：close → Zod parse → 创建功能（或 Provider / 子功能） → save
-- [ ] get 访问器使用 `currentXxx ?? notInitializedXxx`
+- [ ] init 流程：close → Zod parse → 创建功能 → save
+- [ ] get 访问器：`currentXxx ?? notInitializedXxx`
 - [ ] 未初始化使用 `core.module.createNotInitializedKit`
 
-### 代码规范
+### 代码
 
-- [ ] 公共 API 不使用 `throw`，统一返回 `Result<T, XxError>`
-- [ ] throw 仅出现在合规场景（内部 catch-and-wrap、SvelteKit 控制流、Client、CLI、getOrThrow、async generator）
-- [ ] return 仅返回已计算值，无嵌套条件/循环
-- [ ] 无超过 2 层的 if 嵌套
-- [ ] 单函数 ≤ 60 行
-- [ ] 上游 Result 直接透传，未重新包装
-- [ ] 错误创建用错误码 + i18n，无硬编码消息
-- [ ] Provider 用工厂 + 闭包，非 class
+- [ ] 公共 API 不 `throw`，统一返回 `Result<T, XxError>`
+- [ ] throw 仅出现在合规场景
+- [ ] return 仅返回已计算值
+- [ ] 无 >2 层 if 嵌套；单函数 ≤ 60 行
+- [ ] 上游 Result 直接透传
+- [ ] 错误创建用错误码 + i18n
+- [ ] Provider 用工厂 + 闭包
 
-### 注释、i18n、日志
+### 日志与 i18n
 
-- [ ] 中文注释、英文日志、命名一致
-- [ ] 所有用户可见文本走 i18n key，消息键前缀正确
-- [ ] 无 `console.log`，日志级别符合场景
-- [ ] init/close 有 info 日志输出
-- [ ] 业务写操作有 debug（进入）+ info（成功）日志
-- [ ] 失败分支有 warn 或 error 日志，附带错误上下文
-- [ ] Provider connect/disconnect 有 info 日志
-- [ ] 读操作使用 debug 而非 info
-- [ ] 日志不包含密码、token 明文等敏感信息
+- [ ] 无 `console.log`；日志级别符合上表
+- [ ] init/close、写操作、connect/disconnect 均有对应级别日志
+- [ ] 失败分支有 warn/error + 错误上下文
+- [ ] 读操作使用 debug
+- [ ] 日志无敏感信息明文
+- [ ] 用户可见文本全部走 i18n key
+
+### 构建
+
+- [ ] tsup: `defineConfig()` + `...baseConfig`，未覆盖基础属性
+- [ ] `@h-ai/core` 在 external（core 除外）；原生依赖已 external
+- [ ] entry 模式正确
 
 ### 安全与类型
 
-- [ ] 无 `any`，全部使用 `unknown` + 缩窄
-- [ ] 无硬编码密钥，新变量有 `.env` 占位
+- [ ] 无 `any`
+- [ ] 无硬编码密钥
 
 ### 文档
 
 - [ ] README 符合 hai-create §6.1（是什么/怎么用，无接口清单）
-- [ ] Skill 模板符合 hai-create §6.2（YAML frontmatter、模块概述、API、错误码、常见模式）
-- [ ] 依赖方向向内收敛，未引入重复能力
+- [ ] Skill 模板符合 hai-create §6.2（YAML frontmatter、概述、API、错误码、模式）
 
 ---
 
-## 输出要求
+## 审查流程（7 阶段）
 
-- 列出改动文件与原因
-- 说明是否修复了缺陷或仅做规范化
-- 明确测试与 lint 结果
+> 每次审查均按此流程完整执行。
 
-## 示例触发语句
+### 阶段 1：4 角色独立评审
 
-- "对 crypto 模块做一次整体审查"
-- "review storage 模块"
-- "优化代码并重写 README/Skill 模板"
-- "完善注释并确保测试通过"
+| 角色             | 关注领域                                |
+| ---------------- | --------------------------------------- |
+| **架构师**       | 模块结构、分层、依赖方向、扩展性、解耦  |
+| **性能专家**     | 时间/空间复杂度、内存泄漏、并发、热路径 |
+| **安全专家**     | 注入、权限绕过、敏感信息泄漏、输入边界  |
+| **代码审查专家** | 可读性、维护性、规范合规、测试覆盖      |
+
+**强度要求**：
+
+- 每角色至少 **8 个问题**，必须指向具体代码行/函数/设计决策
+- 必须覆盖：逻辑漏洞、边界条件、异常处理、并发风险、性能瓶颈、可扩展性、安全漏洞、潜在崩溃、测试不足
+
+**输出格式**：
+
+```
+## {角色}评审
+### {角色缩写}-{序号} [{等级}] 问题标题
+- 位置：`src/xx.ts` L42-58
+- 问题：具体描述
+- 风险：后果
+- 建议：改进方案
+```
+
+### 阶段 2：交叉辩论
+
+至少 **2 轮**交叉质疑，允许观点冲突，必须引用代码或数据支撑。最终达成一致方案，分歧标注权衡取舍。
+
+### 阶段 3：问题汇总
+
+合并去重，按优先级排序输出统一表格：
+
+| 等级   | 含义                                  | 处理         |
+| ------ | ------------------------------------- | ------------ |
+| **P0** | 数据损坏 / 安全漏洞 / 服务崩溃        | 必须立即修复 |
+| **P1** | 内存泄漏 / 竞态 / 权限绕过 / 错误吞没 | 本轮修复     |
+| **P2** | 性能 / 可读性 / 冗余                  | 建议修复     |
+| **P3** | 风格 / 命名 / 注释                    | 顺手修复     |
+
+### 阶段 4：改进设计
+
+针对 P0 / P1 输出：受影响文件、接口变更、关键代码片段、下游影响分析。
+
+### 阶段 5：实施修复
+
+- 代码 / 测试 / 文档成套更新
+- 每个 P0/P1 必须有对应测试
+- `grep_search` 确认引用点已更新
+
+### 阶段 6：二次审查
+
+各角色重新审视修改后代码，确认 P0/P1 已清零且未引入新问题。
+
+### 阶段 7：质量门禁与发布判定
+
+按顺序执行 `pnpm typecheck` → `pnpm lint` → `pnpm test`（优先 `--filter` 指定模块）。
+
+输出判定：
+
+```
+## 发布判定
+- P0 剩余：0 | P1 剩余：0
+- P2/P3 剩余：N（已记录，不阻断）
+- typecheck：✅ | lint：✅ | test：✅
+✅ 可以进入生产
+```
+
+**P0 或 P1 未清零 → 回到阶段 4，直到清零。**
+
+---
+
+## 生产事故模拟
+
+审查过程中必须分析代码在以下场景的行为：
+
+| 场景           | 分析要点                                            |
+| -------------- | --------------------------------------------------- |
+| **高并发**     | 多请求同时 init / 写入 / 关闭——竞态？状态一致？     |
+| **恶意输入**   | 超长字符串、特殊字符、类型不匹配——校验完整？        |
+| **依赖不可用** | DB 断连、Redis 超时、API 限流——优雅降级？错误准确？ |
+| **资源耗尽**   | 内存不足、连接池打满——有积压？能恢复？              |
+| **数据损坏**   | 写入中途失败——事务回滚正确？有补偿？                |
+| **配置错误**   | 错误类型、缺必填、值越界——Zod 校验完整捕获？        |
