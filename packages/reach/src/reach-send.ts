@@ -7,7 +7,6 @@
 
 import type { Result } from '@h-ai/core'
 import type { DndConfig } from './reach-config.js'
-import type { SendLogRepository } from './reach-repository-send-log.js'
 import type {
   ReachError,
   ReachMessage,
@@ -15,6 +14,7 @@ import type {
   ReachTemplateRegistry,
   SendResult,
 } from './reach-types.js'
+import type { SendLogRepository } from './repositories/reach-repository-send-log.js'
 
 import { core, err, ok } from '@h-ai/core'
 
@@ -90,24 +90,24 @@ export function msUntilDndEnd(dnd: DndConfig, now: Date = new Date()): number {
  * 预处理消息：如果指定了模板，渲染模板并填充 subject/body，
  * 同时从模板中推导 Provider 名称。
  */
-export function preprocessMessage(
+export async function preprocessMessage(
   message: ReachMessage,
   templateRegistry: ReachTemplateRegistry,
-): Result<ReachMessage, ReachError> {
+): Promise<Result<ReachMessage, ReachError>> {
   if (!message.template) {
     return ok(message)
   }
 
-  const rendered = templateRegistry.render(message.template, message.vars ?? {})
+  const rendered = await templateRegistry.render(message.template, message.vars ?? {})
   if (!rendered.success) {
     return rendered
   }
 
-  const template = templateRegistry.get(message.template)
+  const template = await templateRegistry.resolve(message.template)
 
   const processed: ReachMessage = {
     ...message,
-    provider: message.provider || template?.provider || '',
+    provider: message.provider || (template.success ? template.data.provider : '') || '',
     subject: message.subject ?? rendered.data.subject,
     body: message.body ?? rendered.data.body,
   }
@@ -153,10 +153,14 @@ async function saveSendRecord(
 /** 定时器引用 */
 let dndTimer: ReturnType<typeof setTimeout> | null = null
 
+/** 保存调度器参数，用于循环调度 */
+let schedulerContext: { dndConfig: DndConfig, providers: Map<string, ReachProvider>, repo: SendLogRepository | null } | null = null
+
 /**
  * 启动 DND 恢复定时器
  *
- * 在 DND 结束时自动获取所有 pending 状态记录并逐条发送。
+ * 在 DND 结束时自动获取所有 pending 状态记录并逐条发送，
+ * 并在 flush 完成后重新调度下一个 DND 周期。
  */
 export function startDndScheduler(
   dndConfig: DndConfig,
@@ -169,24 +173,65 @@ export function startDndScheduler(
     return
   }
 
+  schedulerContext = { dndConfig, providers, repo }
+
   // 如果当前不在 DND 时段，不需要启动定时器
   if (!isDndBlocked(dndConfig)) {
     // 但仍然尝试 flush 一次（可能上次 DND 结束后有残留 pending）
     flushPendingMessages(providers, repo).catch((error) => {
       logger.warn('Failed to flush pending messages on init', { error })
     })
+    scheduleDndCheck()
     return
   }
+
+  scheduleFlushAtDndEnd()
+}
+
+/**
+ * 在 DND 结束时触发 flush 并重新调度
+ */
+function scheduleFlushAtDndEnd(): void {
+  if (!schedulerContext)
+    return
+  const { dndConfig, providers, repo } = schedulerContext
 
   const delayMs = msUntilDndEnd(dndConfig)
   logger.info('DND scheduler started', { delayMs, dndEnd: dndConfig.end })
 
   dndTimer = setTimeout(() => {
     logger.info('DND period ended, flushing pending messages')
-    flushPendingMessages(providers, repo).catch((error) => {
-      logger.error('Failed to flush pending messages', { error })
-    })
+    flushPendingMessages(providers, repo)
+      .catch((error) => {
+        logger.error('Failed to flush pending messages', { error })
+      })
+      .finally(() => {
+        // 重新调度：等待下一个 DND 周期
+        scheduleDndCheck()
+      })
   }, delayMs)
+}
+
+/**
+ * 定期检查是否进入 DND 时段，进入后切换到 flush 调度
+ */
+function scheduleDndCheck(): void {
+  if (!schedulerContext)
+    return
+  const { dndConfig } = schedulerContext
+
+  // 每分钟检查一次是否进入 DND
+  const CHECK_INTERVAL = 60 * 1000
+  dndTimer = setTimeout(() => {
+    if (!schedulerContext)
+      return
+    if (isDndBlocked(dndConfig)) {
+      scheduleFlushAtDndEnd()
+    }
+    else {
+      scheduleDndCheck()
+    }
+  }, CHECK_INTERVAL)
 }
 
 /**
@@ -204,6 +249,7 @@ export function stopDndScheduler(): void {
  */
 export function resetSendState(): void {
   stopDndScheduler()
+  schedulerContext = null
 }
 
 /**
@@ -292,7 +338,7 @@ export async function executeSend(
     })
   }
 
-  const preprocessed = preprocessMessage(message, templateRegistry)
+  const preprocessed = await preprocessMessage(message, templateRegistry)
   if (!preprocessed.success) {
     return preprocessed
   }
@@ -320,9 +366,17 @@ export async function executeSend(
     if (strategy === 'delay') {
       // delay 策略：暂存消息到 DB
       logger.info('Message deferred by DND (delay strategy)', { provider: providerName, to: message.to })
-      saveSendRecord(repo ?? null, preprocessed.data, 'pending', providerName).catch((error) => {
+      try {
+        await saveSendRecord(repo ?? null, preprocessed.data, 'pending', providerName)
+      }
+      catch (error) {
         logger.warn('Failed to save deferred message to DB', { provider: providerName, to: message.to, error })
-      })
+        return err({
+          code: ReachErrorCode.SEND_FAILED,
+          message: reachM('reach_dndDeferred'),
+          cause: error,
+        })
+      }
       return ok({ success: true, deferred: true })
     }
 

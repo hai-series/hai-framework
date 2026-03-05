@@ -4,11 +4,15 @@
  * =============================================================================
  */
 
+import { reldb } from '@h-ai/reldb'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { reach, ReachErrorCode } from '../src/index.js'
+import { resetTemplateRepoSingleton } from '../src/repositories/reach-repository-template.js'
 
 describe.sequential('reach.send (multi-provider)', () => {
   beforeEach(async () => {
+    resetTemplateRepoSingleton()
+    await reldb.init({ type: 'sqlite', database: ':memory:' })
     await reach.init({
       providers: [
         { name: 'email', type: 'console' },
@@ -19,6 +23,8 @@ describe.sequential('reach.send (multi-provider)', () => {
 
   afterEach(async () => {
     await reach.close()
+    resetTemplateRepoSingleton()
+    await reldb.close()
   })
 
   it('通过 provider 名称直接发送消息应成功', async () => {
@@ -37,7 +43,7 @@ describe.sequential('reach.send (multi-provider)', () => {
   })
 
   it('使用模板发送消息应成功（模板绑定 Provider）', async () => {
-    reach.template.register({
+    await reach.template.save({
       name: 'verification',
       provider: 'email',
       subject: '验证码: {code}',
@@ -55,7 +61,7 @@ describe.sequential('reach.send (multi-provider)', () => {
   })
 
   it('使用模板时可从模板推导 Provider', async () => {
-    reach.template.register({
+    await reach.template.save({
       name: 'sms_code',
       provider: 'sms',
       body: '验证码: {code}',
@@ -140,13 +146,19 @@ describe.sequential('reach.send (multi-provider)', () => {
   })
 
   it('close 后模板注册表应被重置', async () => {
-    reach.template.register({ name: 'temp', provider: 'email', body: 'test' })
-    expect(reach.template.has('temp')).toBe(true)
+    await reach.template.save({ name: 'temp', provider: 'email', body: 'test' })
+    const before = await reach.template.resolve('temp')
+    expect(before.success).toBe(true)
 
     await reach.close()
+    // 重新初始化 DB（模拟新节点启动，旧数据已丢失）
+    resetTemplateRepoSingleton()
+    await reldb.close()
+    await reldb.init({ type: 'sqlite', database: ':memory:' })
     await reach.init({ providers: [{ name: 'email', type: 'console' }] })
 
-    expect(reach.template.has('temp')).toBe(false)
+    const after = await reach.template.resolve('temp')
+    expect(after.success).toBe(false)
   })
 
   it('extra 字段应传递到 Provider', async () => {
@@ -162,8 +174,15 @@ describe.sequential('reach.send (multi-provider)', () => {
 })
 
 describe.sequential('reach.send (template from config)', () => {
+  beforeEach(async () => {
+    resetTemplateRepoSingleton()
+    await reldb.init({ type: 'sqlite', database: ':memory:' })
+  })
+
   afterEach(async () => {
     await reach.close()
+    resetTemplateRepoSingleton()
+    await reldb.close()
   })
 
   it('配置中的模板应自动注册', async () => {
@@ -174,7 +193,8 @@ describe.sequential('reach.send (template from config)', () => {
       ],
     })
 
-    expect(reach.template.has('config_tpl')).toBe(true)
+    const resolved = await reach.template.resolve('config_tpl')
+    expect(resolved.success).toBe(true)
 
     const result = await reach.send({
       provider: 'email',

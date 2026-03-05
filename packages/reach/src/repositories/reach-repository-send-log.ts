@@ -7,13 +7,13 @@
 
 import type { Result } from '@h-ai/core'
 import type { ReldbCrudFieldDefinition, ReldbCrudRepository, ReldbError, ReldbFunctions, ReldbTxHandle } from '@h-ai/reldb'
-import type { ReachError } from './reach-types.js'
+import type { ReachError } from '../reach-types.js'
 
 import { err, ok } from '@h-ai/core'
 import { BaseReldbCrudRepository } from '@h-ai/reldb'
 
-import { ReachErrorCode } from './reach-config.js'
-import { reachM } from './reach-i18n.js'
+import { ReachErrorCode } from '../reach-config.js'
+import { reachM } from '../reach-i18n.js'
 
 // ─── 发送日志实体类型 ───
 
