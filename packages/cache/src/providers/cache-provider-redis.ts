@@ -27,6 +27,25 @@ import Redis from 'ioredis'
 import { CacheErrorCode } from '../cache-config.js'
 import { cacheM } from '../cache-i18n.js'
 
+const logger = core.logger.child({ module: 'cache', scope: 'redis' })
+
+/**
+ * 剥离 URL 中的认证信息，避免密码泄露到日志
+ */
+function sanitizeRedisUrl(url: string): string {
+  try {
+    const u = new URL(url)
+    if (u.password)
+      u.password = '***'
+    if (u.username)
+      u.username = '***'
+    return u.toString()
+  }
+  catch {
+    return '(invalid url)'
+  }
+}
+
 // ─── Redis Provider ───
 
 /**
@@ -645,8 +664,8 @@ export function createRedisProvider(): CacheProvider {
         await client.connect()
         await client.ping()
 
-        const address = config.url || `${config.host}:${config.port}`
-        core.logger.info('Redis connected', { module: 'cache', address })
+        const address = config.url ? sanitizeRedisUrl(config.url) : `${config.host}:${config.port}`
+        logger.info('Redis connected', { address })
 
         return ok(undefined)
       }
@@ -661,8 +680,10 @@ export function createRedisProvider(): CacheProvider {
 
     async close(): Promise<void> {
       if (client) {
+        logger.info('Disconnecting Redis')
         await client.quit()
         client = null
+        logger.info('Redis disconnected')
       }
     },
 

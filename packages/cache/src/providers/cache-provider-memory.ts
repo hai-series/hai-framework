@@ -64,6 +64,21 @@ function deserializeValue(str: string): CacheValue {
   return JSON.parse(str)
 }
 
+/**
+ * 将 glob 通配符模式转为安全的正则表达式
+ *
+ * 先转义所有正则特殊字符，再将 `*` → `.*`、`?` → `.` 还原。
+ * 避免用户输入中的正则元字符导致 ReDoS。
+ *
+ * @param pattern - glob 风格的通配符（仅支持 `*` 和 `?`）
+ * @returns 匹配整个字符串的正则表达式
+ */
+function globToRegex(pattern: string): RegExp {
+  const escaped = pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const regexStr = escaped.replace(/\\\*/g, '.*').replace(/\\\?/g, '.')
+  return new RegExp(`^${regexStr}$`)
+}
+
 // ─── Memory Provider ───
 
 /**
@@ -162,13 +177,13 @@ export function createMemoryProvider(): CacheProvider {
     },
 
     async set(key: string, value: CacheValue, options?: SetOptions): Promise<Result<void, CacheError>> {
-      const existing = store.has(key)
+      const existing = getValidEntry(key) !== null
       if (options?.nx && existing)
         return ok(undefined)
       if (options?.xx && !existing)
         return ok(undefined)
 
-      const currentEntry = store.get(key)
+      const currentEntry = getValidEntry(key)
       const expiresAt = options?.keepTtl && currentEntry ? currentEntry.expiresAt : calculateExpiry(options)
       store.set(key, { value, expiresAt })
       return ok(undefined)
@@ -284,8 +299,8 @@ export function createMemoryProvider(): CacheProvider {
         const entry = store.get(key)
         return entry && !isExpired(entry)
       })
-      const pattern = options?.match?.replace(/\*/g, '.*').replace(/\?/g, '.')
-      const filtered = pattern ? allKeys.filter(k => new RegExp(`^${pattern}$`).test(k)) : allKeys
+      const regex = options?.match ? globToRegex(options.match) : null
+      const filtered = regex ? allKeys.filter(k => regex.test(k)) : allKeys
       const count = options?.count || 10
       const start = cursor
       const end = Math.min(start + count, filtered.length)
@@ -295,7 +310,7 @@ export function createMemoryProvider(): CacheProvider {
     },
 
     async keys(pattern: string): Promise<Result<string[], CacheError>> {
-      const regex = new RegExp(`^${pattern.replace(/\*/g, '.*').replace(/\?/g, '.')}$`)
+      const regex = globToRegex(pattern)
       const result: string[] = []
       for (const [key] of store.entries()) {
         if (regex.test(key) && getValidEntry(key)) {

@@ -137,7 +137,7 @@ export const cache: CacheFunctions = {
       }
       currentProvider = provider
       currentConfig = parsed
-      logger.info('Cache module initialized')
+      logger.info('Cache module initialized', { type: parsed.type })
       return ok(undefined)
     }
     catch (error) {
