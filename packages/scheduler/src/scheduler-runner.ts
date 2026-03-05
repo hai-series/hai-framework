@@ -8,7 +8,7 @@
 import type { Result } from '@h-ai/core'
 import type { Cron } from 'croner'
 
-import type { SchedulerLogRepository } from './repositories/index.js'
+import type { SchedulerLockRepository, SchedulerLogRepository } from './repositories/index.js'
 import type { SchedulerConfig } from './scheduler-config.js'
 import type { SchedulerError, TaskDefinition, TaskExecutionLog } from './scheduler-types.js'
 
@@ -39,6 +39,21 @@ let lastTickMinute = -1
 /** 日志仓库实例（由 main.ts 在 init 时注入） */
 let currentLogRepo: SchedulerLogRepository | null = null
 
+/** 分布式锁仓库实例（由 main.ts 在 init 时注入） */
+let currentLockRepo: SchedulerLockRepository | null = null
+
+/** 当前节点 ID */
+let currentNodeId: string = ''
+
+/** 锁过期时间（毫秒） */
+let currentLockExpireMs: number = 300000
+
+/** 上次锁清理的分钟时间戳 */
+let lastCleanupMinute: number = -1
+
+/** 锁清理间隔（每 10 分钟清理一次） */
+const LOCK_CLEANUP_INTERVAL_MINUTES = 10
+
 /**
  * 设置日志仓库实例
  *
@@ -48,6 +63,21 @@ let currentLogRepo: SchedulerLogRepository | null = null
  */
 export function setLogRepository(repo: SchedulerLogRepository | null): void {
   currentLogRepo = repo
+}
+
+/**
+ * 配置分布式锁
+ *
+ * 由 scheduler-main.ts 在 init 时调用，注入锁仓库与节点配置。
+ *
+ * @param repo - 锁仓库实例或 null
+ * @param nodeId - 当前节点标识
+ * @param expireMs - 锁过期时间（毫秒）
+ */
+export function setLockRepository(repo: SchedulerLockRepository | null, nodeId: string, expireMs: number): void {
+  currentLockRepo = repo
+  currentNodeId = nodeId
+  currentLockExpireMs = expireMs
 }
 
 // ─── 调度逻辑 ───
@@ -68,6 +98,14 @@ function tick(): void {
     return
   lastTickMinute = currentMinute
 
+  // 定期清理过期锁记录
+  if (currentLockRepo && currentMinute - lastCleanupMinute >= LOCK_CLEANUP_INTERVAL_MINUTES) {
+    lastCleanupMinute = currentMinute
+    void currentLockRepo.cleanupExpiredLocks().catch((error) => {
+      logger.warn('Lock cleanup error', { error })
+    })
+  }
+
   for (const [taskId, task] of taskRegistry) {
     if (task.enabled === false)
       continue
@@ -84,7 +122,7 @@ function tick(): void {
       }
       logger.info('Triggering scheduled task', { taskId, taskName: task.name })
       // 异步执行，不阻塞 tick；捕获未处理拒绝
-      void runTask(task).catch((error) => {
+      void runTask(task, currentMinute).catch((error) => {
         logger.error('Unhandled task execution error', { taskId, error })
       })
     }
@@ -94,13 +132,36 @@ function tick(): void {
 /**
  * 执行任务并保存日志
  *
+ * 若启用分布式锁，先尝试获锁，获锁成功后执行任务。
  * 调用 `executeTask` 获取执行结果，若启用 DB 则持久化日志。
  * 执行成功/失败均记录到日志。
  *
  * @param task - 已注册的任务定义
+ * @param minuteTimestamp - 当前分钟时间戳（用于分布式锁键），手动触发时可省略
  * @returns 任务执行日志
  */
-export async function runTask(task: TaskDefinition): Promise<TaskExecutionLog> {
+export async function runTask(task: TaskDefinition, minuteTimestamp?: number): Promise<TaskExecutionLog> {
+  // 分布式锁：多节点场景下确保同一任务同一分钟只执行一次
+  if (currentLockRepo && minuteTimestamp !== undefined) {
+    const acquired = await currentLockRepo.tryAcquire(task.id, minuteTimestamp, currentNodeId, currentLockExpireMs)
+    if (!acquired) {
+      logger.info('Skipping task, another node holds the lock', { taskId: task.id, minuteTimestamp })
+      // 返回一条跳过日志（不持久化）
+      return {
+        id: 0,
+        taskId: task.id,
+        taskName: task.name,
+        taskType: task.type,
+        status: 'failed',
+        result: null,
+        error: 'Skipped: another node holds the distributed lock',
+        startedAt: Date.now(),
+        finishedAt: Date.now(),
+        duration: 0,
+      }
+    }
+  }
+
   runningTasks.add(task.id)
   try {
     const log = await executeTask({
@@ -120,6 +181,11 @@ export async function runTask(task: TaskDefinition): Promise<TaskExecutionLog> {
     }
     else {
       logger.info('Task execution succeeded', { taskId: task.id, duration: log.duration })
+    }
+
+    // 释放分布式锁（更新状态）
+    if (currentLockRepo && minuteTimestamp !== undefined) {
+      await currentLockRepo.releaseLock(task.id, minuteTimestamp, log.status === 'success' ? 'completed' : 'failed')
     }
 
     return log
@@ -262,4 +328,8 @@ export function resetRunner(): void {
   runningTasks.clear()
   lastTickMinute = -1
   currentLogRepo = null
+  currentLockRepo = null
+  currentNodeId = ''
+  currentLockExpireMs = 300000
+  lastCleanupMinute = -1
 }

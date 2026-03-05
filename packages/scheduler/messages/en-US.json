@@ -16,5 +16,7 @@
   "scheduler_config_tableNameInvalid": "Table name must only contain letters, digits, and underscores",
   "scheduler_taskIdEmpty": "Task ID cannot be empty",
   "scheduler_taskRunning": "Task is currently running: {taskId}",
-  "scheduler_invalidApiConfig": "Invalid api_config for task: {taskId}"
+  "scheduler_invalidApiConfig": "Invalid api_config for task: {taskId}",
+  "scheduler_lockAcquireFailed": "Failed to acquire distributed lock, another node already holds it: {taskId}",
+  "scheduler_lockCleanupFailed": "Failed to cleanup expired lock records: {error}"
 }
