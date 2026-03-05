@@ -340,7 +340,7 @@ export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
         })
       }
 
-      return ok(result.data)
+      return ok(result.data.map(item => ({ action: item.action, count: Number(item.count) })))
     }
     catch (error) {
       logger.error('Failed to query audit statistics', { error })
