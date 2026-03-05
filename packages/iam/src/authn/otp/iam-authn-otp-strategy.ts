@@ -27,38 +27,6 @@ import {
 const logger = core.logger.child({ module: 'iam', scope: 'otp-strategy' })
 
 /**
- * 时间安全比较两个字符串
- *
- * 防止验证码的时序攻击：无论字符串内容是否匹配，恒定时间完成比较。
- * 使用 Node.js `crypto.timingSafeEqual`。
- *
- * @param a - 字符串 a
- * @param b - 字符串 b
- * @returns 相等返回 true
- */
-function timingSafeCompare(a: string, b: string): boolean {
-  if (a.length !== b.length)
-    return false
-  const encoder = new TextEncoder()
-  const bufA = encoder.encode(a)
-  const bufB = encoder.encode(b)
-  // 使用 Node.js crypto.timingSafeEqual（已在 globalThis.crypto 不可用时回退到逐字节异或）
-  try {
-    // eslint-disable-next-line ts/no-require-imports
-    const nodeCrypto = require('node:crypto') as typeof import('node:crypto')
-    return nodeCrypto.timingSafeEqual(bufA, bufB)
-  }
-  catch {
-    // 浏览器环境回退：恒定时间异或比较
-    let result = 0
-    for (let i = 0; i < bufA.length; i++) {
-      result |= bufA[i] ^ bufB[i]
-    }
-    return result === 0
-  }
-}
-
-/**
  * OTP 认证策略配置
  */
 export interface OtpStrategyConfig {
@@ -224,7 +192,7 @@ export function createOtpStrategy(config: OtpStrategyConfig): OtpStrategy {
       }
 
       // 验证验证码（时间安全比较，防止时序攻击）
-      if (!timingSafeCompare(storedOtp.code, code)) {
+      if (!core.string.constantTimeEqual(storedOtp.code, code)) {
         await config.otpRepository.incrementOtpAttempts(identifier)
         if (storedUser) {
           await recordLoginFailure(config.userRepository, storedUser, { maxLoginAttempts, lockoutDuration })
