@@ -22,15 +22,19 @@ function capitalize(str: string): string {
  * 转换为 kebab-case。
  * @param str - 输入字符串
  * @returns kebab-case 字符串
- * @remarks 仅处理驼峰到短横线的转换。
+ * @remarks 支持连续大写字母拆分（如 `getHTTPSUrl` → `get-https-url`）。
  *
  * @example
  * ```ts
  * string.kebabCase('helloWorld') // 'hello-world'
+ * string.kebabCase('getHTTPSUrl') // 'get-https-url'
  * ```
  */
 function kebabCase(str: string): string {
-  return str.replace(/([a-z])([A-Z])/g, '$1-$2').toLowerCase()
+  return str
+    .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
+    .replace(/([A-Z])([A-Z][a-z])/g, '$1-$2')
+    .toLowerCase()
 }
 
 /**
@@ -51,10 +55,9 @@ function camelCase(str: string): string {
 /**
  * 截断字符串。
  * @param str - 输入字符串
- * @param length - 最大长度
+ * @param length - 最大长度（小于等于 0 时返回原字符串）
  * @param suffix - 超出长度时的后缀
  * @returns 截断后的字符串
- * @remarks length 小于 0 时返回原字符串。
  *
  * @example
  * ```ts
@@ -62,6 +65,8 @@ function camelCase(str: string): string {
  * ```
  */
 function truncate(str: string, length: number, suffix = '...'): string {
+  if (length <= 0)
+    return str
   return str.length > length ? str.slice(0, length) + suffix : str
 }
 
@@ -69,15 +74,19 @@ function truncate(str: string, length: number, suffix = '...'): string {
  * 转换为 snake_case。
  * @param str - 输入字符串
  * @returns snake_case 字符串
- * @remarks 仅处理驼峰到下划线的转换。
+ * @remarks 支持连续大写字母拆分（如 `getHTTPSUrl` → `get_https_url`）。
  *
  * @example
  * ```ts
  * string.snakeCase('helloWorld') // 'hello_world'
+ * string.snakeCase('getHTTPSUrl') // 'get_https_url'
  * ```
  */
 function snakeCase(str: string): string {
-  return str.replace(/([a-z])([A-Z])/g, '$1_$2').toLowerCase()
+  return str
+    .replace(/([a-z0-9])([A-Z])/g, '$1_$2')
+    .replace(/([A-Z])([A-Z][a-z])/g, '$1_$2')
+    .toLowerCase()
 }
 
 /**

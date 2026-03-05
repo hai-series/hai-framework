@@ -1,10 +1,10 @@
 # hai Framework - AI 构建指南
 
-> 面向 AI 智能应用的全栈 TypeScript 开发框架。本文件为 AI 编程助手提供准确的框架 API 参考。
+> AI-First 全栈 TypeScript 框架，19 个模块覆盖从数据到 AI 到部署的完整链路。本文件为 AI 编程助手提供准确的框架 API 参考。
 
 ## 框架概览
 
-hai Framework 将 AI 能力、安全能力和数据能力以统一 API 风格整合，每个模块遵循相同的模式：
+hai Framework 将 AI 能力、安全能力、数据能力和运营能力以统一 API 风格整合，每个模块遵循相同的模式：
 
 - **生命周期**：`module.init(config) → 使用 → module.close()`
 - **配置校验**：所有配置通过 Zod Schema 验证，init 时完成
@@ -13,14 +13,19 @@ hai Framework 将 AI 能力、安全能力和数据能力以统一 API 风格整
 
 ## 技术栈
 
-- **前端**: Svelte 5 (Runes) + SvelteKit 2 + TailwindCSS 4 + DaisyUI 5
+- **前端**: Svelte 5 (Runes) + SvelteKit 2 + TailwindCSS 4 + DaisyUI 5 + Bits UI v2
 - **后端**: SvelteKit Server + TypeScript 5.7+（严格模式）
-- **数据库**: 原生 SQL（better-sqlite3 / pg / mysql2），不使用 ORM
+- **关系数据库**: 原生 SQL（better-sqlite3 / pg / mysql2），不使用 ORM
+- **向量数据库**: LanceDB / pgvector / Qdrant
+- **缓存**: Memory / Redis（单机 / Cluster / Sentinel）
 - **AI**: OpenAI 兼容 API + MCP 协议（@modelcontextprotocol/sdk）
 - **加密**: 国密 SM2/SM3/SM4（sm-crypto）
+- **支付**: 微信支付 / 支付宝 / Stripe
+- **部署**: Vercel + Neon (PG) + Upstash (Redis) + Cloudflare R2 (S3)
+- **移动端**: Capacitor（Android / iOS）
 - **构建**: pnpm workspace + Turborepo + Vite + tsup
 
-## Result 类型（@hai/core）
+## Result 类型（@h-ai/core）
 
 所有模块方法的返回类型：
 
@@ -29,19 +34,19 @@ type Result<T, E = Error> =
   | { success: true, data: T }
   | { success: false, error: E }
 
-import { ok, err } from '@hai/core'
+import { ok, err } from '@h-ai/core'
 ok(value)   // → { success: true, data: value }
 err(error)  // → { success: false, error }
 ```
 
 ## 模块 API 参考
 
-### @hai/core — 基础能力
+### @h-ai/core — 基础能力
 
 核心模块提供日志、配置、ID 生成、i18n 和工具函数。Node 和 Browser 双端入口自动适配。
 
 ```typescript
-import { core, ok, err, type Result } from '@hai/core'
+import { core, ok, err, type Result } from '@h-ai/core'
 
 // Node.js 初始化（加载 YAML 配置、pino 日志）
 core.init({ configDir: './config', logging: { level: 'info' } })
@@ -67,14 +72,15 @@ core.string.capitalize('hello')
 core.object.deepMerge(a, b)
 core.array.unique([1, 2, 2])
 core.async.delay(1000)
+core.time.format(new Date())
 ```
 
-### @hai/db — 数据库
+### @h-ai/reldb — 关系数据库
 
 原生 SQL 数据库访问，支持 SQLite / PostgreSQL / MySQL，通过 Provider 模式切换。
 
 ```typescript
-import { reldb } from '@hai/db'
+import { reldb } from '@h-ai/reldb'
 
 // 初始化（配置是 discriminated union on `type`）
 await reldb.init({ type: 'sqlite', database: './data/app.db' })
@@ -144,12 +150,38 @@ const count = await userRepo.count()
 await reldb.close()
 ```
 
-### @hai/cache — 缓存
+### @h-ai/vecdb — 向量数据库
+
+向量数据库访问，支持 LanceDB（嵌入式）/ pgvector / Qdrant，通过 Provider 模式切换。
+
+```typescript
+import { vecdb } from '@h-ai/vecdb'
+
+// 初始化
+await vecdb.init({ type: 'lancedb', path: './data/vecdb' })
+// await vecdb.init({ type: 'pgvector', url: 'postgres://user:pass@localhost:5432/mydb' })
+// await vecdb.init({ type: 'qdrant', url: 'http://localhost:6333', apiKey: '...' })
+
+// --- 集合管理 ---
+await vecdb.collection.create('docs', { dimension: 1536 })
+
+// --- 向量操作 ---
+await vecdb.vector.insert('docs', [
+  { id: 'doc-1', vector: [...], content: '文档内容', metadata: { source: 'wiki' } },
+])
+
+const results = await vecdb.vector.search('docs', queryVector, { topK: 5, minScore: 0.7 })
+// → Result<{ id, score, content, metadata }[], VecdbError>
+
+await vecdb.close()
+```
+
+### @h-ai/cache — 缓存
 
 统一缓存 API（Redis 风格），支持 Memory 和 Redis 两种 Provider。
 
 ```typescript
-import { cache } from '@hai/cache'
+import { cache } from '@h-ai/cache'
 
 // 初始化
 await cache.init({ type: 'memory' })
@@ -184,12 +216,12 @@ const top = await cache.zset.zrevrange('leaderboard', 0, 9)
 await cache.close()
 ```
 
-### @hai/storage — 文件存储
+### @h-ai/storage — 文件存储
 
 文件存储抽象，支持 Local（本地文件系统）和 S3（兼容 OSS/COS 等）两种 Provider。
 
 ```typescript
-import { storage } from '@hai/storage'
+import { storage } from '@h-ai/storage'
 
 // 初始化
 await storage.init({ type: 'local', root: './uploads' })
@@ -220,16 +252,40 @@ const downloadUrl = await storage.presign.getUrl('uploads/image.png', { expiresI
 await storage.close()
 ```
 
-Browser 端子入口（`@hai/storage/client`）提供 `uploadWithPresignedUrl`、`downloadAndSave` 等前端工具。
+Browser 端子入口（`@h-ai/storage/client`）提供 `uploadWithPresignedUrl`、`downloadAndSave` 等前端工具。
 
-### @hai/iam — 身份与访问管理
+### @h-ai/datapipe — 数据管线
 
-完整 IAM 模块：密码/OTP/LDAP 认证、RBAC 授权、会话管理。依赖 @hai/db 和 @hai/cache。
+文本清洗、分块和可组合管线。纯函数模块，无需初始化。
 
 ```typescript
-import { iam } from '@hai/iam'
-import { reldb } from '@hai/db'
-import { cache } from '@hai/cache'
+import { datapipe } from '@h-ai/datapipe'
+
+// --- 直接清洗 ---
+const cleaned = datapipe.clean('<p>Hello</p>', { removeHtml: true, removeUrls: true })
+
+// --- 分块（7 种模式）---
+const chunks = datapipe.chunk(text, { mode: 'markdown', maxSize: 2000, overlap: 100 })
+// 模式：sentence | paragraph | markdown | page | word | character | custom
+
+// --- 管线模式（链式组合多步操作）---
+const result = await datapipe.pipeline()
+  .clean({ removeHtml: true, removeUrls: true })
+  .transform(text => text.toLowerCase())
+  .chunk({ mode: 'paragraph', maxSize: 1000, overlap: 100 })
+  .chunkTransform(chunks => chunks.filter(c => c.content.length > 50))
+  .run(rawText)
+// → Result<Chunk[], DatapipeError>
+```
+
+### @h-ai/iam — 身份与访问管理
+
+完整 IAM 模块：密码/OTP/LDAP 认证、RBAC 授权、会话管理。依赖 @h-ai/reldb 和 @h-ai/cache。
+
+```typescript
+import { iam } from '@h-ai/iam'
+import { reldb } from '@h-ai/reldb'
+import { cache } from '@h-ai/cache'
 
 // 初始化（需先 init db 和 cache）
 await iam.init({
@@ -253,6 +309,10 @@ const loginResult = await iam.auth.login({
 
 await iam.auth.logout(sessionId)
 
+// --- OTP 认证 ---
+await iam.auth.sendOtp({ channel: 'email', target: 'alice@example.com' })
+await iam.auth.loginWithOtp({ channel: 'email', target: 'alice@example.com', code: '123456' })
+
 // --- RBAC 授权 (iam.authz) ---
 await iam.authz.createRole({ name: 'editor', description: '...' })
 await iam.authz.createPermission({ name: 'posts:write', description: '...' })
@@ -263,6 +323,9 @@ const allowed = await iam.authz.checkPermission(userId, 'posts:write')
 const session = await iam.session.findById(sessionId)
 await iam.session.deleteByUserId(userId)  // 强制下线
 
+// --- 密码重置 ---
+await iam.user.requestPasswordReset(userId)
+
 // --- 浏览器端 API 契约调用 ---
 import { iamEndpoints } from '@h-ai/iam/api'
 const result = await api.call(iamEndpoints.login, { identifier: 'alice', password: '...' })
@@ -270,12 +333,53 @@ const result = await api.call(iamEndpoints.login, { identifier: 'alice', passwor
 await iam.close()
 ```
 
-### @hai/ai — AI 集成
+### @h-ai/reach — 用户触达
+
+多 Provider 消息系统（邮件、短信、API 回调），支持模板绑定和免打扰（DND）。
+
+```typescript
+import { reach } from '@h-ai/reach'
+
+// 初始化（同时注册多个 Provider）
+await reach.init({
+  providers: [
+    { name: 'email', type: 'smtp', host: 'smtp.example.com', from: 'noreply@example.com' },
+    { name: 'sms', type: 'aliyun-sms', accessKeyId: '...', accessKeySecret: '...', signName: '某某科技' },
+    { name: 'webhook', type: 'api', url: 'https://api.example.com/notify' },
+    { name: 'dev', type: 'console' },  // 开发/测试用
+  ],
+  templates: [
+    { name: 'welcome', provider: 'email', subject: '欢迎 {userName}', body: '亲爱的 {userName}，欢迎！' },
+    { name: 'sms_code', provider: 'sms', body: '验证码: {code}，{minutes} 分钟内有效。' },
+  ],
+  dnd: { enabled: true, strategy: 'delay', start: '22:00', end: '08:00' },
+})
+
+// 发送邮件（模板 + 变量插值）
+await reach.send({
+  provider: 'email',
+  to: 'user@example.com',
+  template: 'welcome',
+  vars: { userName: '张三' },
+})
+
+// 发送短信
+await reach.send({
+  provider: 'sms',
+  to: '13800138000',
+  extra: { templateCode: 'SMS_123456' },
+  vars: { code: '123456' },
+})
+
+await reach.close()
+```
+
+### @h-ai/ai — AI 集成
 
 LLM 调用（同步/流式）+ MCP Server + 工具系统 + SSE 流处理。
 
 ```typescript
-import { ai, createMcpServer } from '@hai/ai'
+import { ai, createMcpServer } from '@h-ai/ai'
 import { z } from 'zod'
 
 // 初始化（同步，不是 async）— 只有 OpenAI 兼容的 Provider
@@ -334,30 +438,151 @@ const mcp = createMcpServer({ name: 'my-app', version: '1.0.0' })
 const encoded = ai.stream.encodeSSE({ event: 'message', data: '...' })
 const decoder = ai.stream.createSSEDecoder()
 
+// --- 前端客户端 ---
+import { createAIClient } from '@h-ai/ai/client'
+const aiClient = createAIClient({ baseUrl: '/api/ai' })
+
 ai.close()
 ```
 
-### @hai/crypto — 国密加密
+### @h-ai/payment — 统一支付
 
-非对称加密/签名、哈希/HMAC、对称加密，以及密码哈希。所有加密方法是同步的，返回 `Result`。
+微信支付、支付宝、Stripe，Provider 模式的后端处理 + 多端客户端调起。
 
 ```typescript
-import { crypto } from '@hai/crypto'
+import { payment } from '@h-ai/payment'
+import { invokePayment } from '@h-ai/payment/client'
+
+// 初始化（注册可用的 Provider）
+await payment.init({
+  wechat: { mchId: '...', apiV3Key: '...', serialNo: '...', privateKey: '...', appId: '...' },
+  alipay: { appId: '...', privateKey: '...', alipayPublicKey: '...' },
+  // stripe: { secretKey: 'sk_...' },
+})
+
+// 创建订单（tradeType: jsapi / h5 / app / native）
+const result = await payment.createOrder('wechat', {
+  orderNo: 'ORD001',
+  amount: 100,
+  description: '商品',
+  tradeType: 'jsapi',
+  userId: 'openid-xxx',
+  notifyUrl: 'https://api.example.com/payment/notify/wechat',
+})
+// → Result<PaymentResult, PaymentError>
+
+// 客户端调起支付
+if (result.success) await invokePayment(result.data)
+
+await payment.close()
+```
+
+### @h-ai/audit — 审计日志
+
+操作审计：记录、查询、统计、清理。基于 @h-ai/reldb 持久化。
+
+```typescript
+import { audit } from '@h-ai/audit'
+
+// 初始化（需先 init reldb）
+await audit.init({
+  reldb,                          // 已初始化的 @h-ai/reldb 实例
+  tableName: 'audit_logs',        // 可选，默认 'audit_logs'
+  userTable: 'users',             // 可选，用于 JOIN 查询用户名
+})
+
+// --- 记录审计日志 ---
+await audit.log({
+  userId: 'user_1',
+  action: 'login',
+  resource: 'auth',
+  ipAddress: '127.0.0.1',
+})
+
+// --- 便捷记录器 ---
+await audit.helper.login('user_1', '127.0.0.1')
+await audit.helper.logout('user_1', '127.0.0.1')
+await audit.helper.register('user_1', '127.0.0.1')
+await audit.helper.crud('user_1', 'create', 'users', 'user_2', { name: '张三' })
+
+// --- 查询 ---
+const logs = await audit.list({ pageSize: 20, action: 'login' })         // 分页查询
+const recent = await audit.getUserRecent('user_1', 10)                   // 用户最近活动
+
+// --- 统计 ---
+const stats = await audit.getStats(7)   // 最近 7 天操作统计
+
+// --- 清理 ---
+await audit.cleanup(90)   // 清理 90 天前的日志
+
+await audit.close()
+```
+
+### @h-ai/scheduler — 定时任务
+
+Cron 调度 + JS 函数 / HTTP API 执行，支持 DB 持久化（API 任务重启自动恢复）。
+
+```typescript
+import { scheduler } from '@h-ai/scheduler'
+
+// 初始化（可选启用 DB 持久化，需先 init reldb）
+await scheduler.init({ enableDb: true })
+
+// --- 注册任务 ---
+// API 任务（自动持久化，重启自动恢复）
+await scheduler.register({
+  id: 'health-check',
+  name: '健康检查',
+  cron: '*/5 * * * *',
+  type: 'api',
+  api: { url: 'https://api.example.com/health', method: 'GET' },
+})
+
+// JS 函数任务（仅内存，需每次启动重新注册）
+await scheduler.register({
+  id: 'cleanup',
+  name: '清理过期数据',
+  cron: '0 2 * * *',
+  type: 'js',
+  handler: async () => { /* 清理逻辑 */ },
+})
+
+// --- 控制 ---
+scheduler.start()                    // 启动调度
+scheduler.stop()                     // 停止调度
+await scheduler.trigger('cleanup')   // 手动触发
+
+// --- 管理 ---
+await scheduler.updateTask('health-check', { cron: '*/10 * * * *' })
+await scheduler.unregister('health-check')
+
+// --- 日志 ---
+const logs = await scheduler.getLogs({ taskId: 'cleanup', status: 'failed', limit: 20 })
+
+await scheduler.close()
+```
+
+### @h-ai/crypto — 国密加密
+
+非对称加密/签名、哈希/HMAC、对称加密，以及密码哈希。跨平台（Node.js / Browser）。
+
+```typescript
+import { crypto } from '@h-ai/crypto'
 
 await crypto.init()
 
-// --- 非对称加密 ---
+// --- 非对称加密（SM2）---
 const keyPair = crypto.asymmetric.generateKeyPair()       // Result<{ publicKey, privateKey }>
 const enc = crypto.asymmetric.encrypt('明文', keyPair.data.publicKey)
 const dec = crypto.asymmetric.decrypt(enc.data, keyPair.data.privateKey)
 const sig = crypto.asymmetric.sign('data', keyPair.data.privateKey)
 const ok = crypto.asymmetric.verify('data', sig.data, keyPair.data.publicKey)
 
-// --- 哈希 ---
+// --- 哈希（SM3）---
 const hash = crypto.hash.hash('data')                     // Result<string>
 const hmac = crypto.hash.hmac('data', 'key')
 
-// --- 对称加密 ---
+// --- 对称加密（SM4）---
 const key = crypto.symmetric.generateKey()                // 16字节 hex
 const iv = crypto.symmetric.generateIV()
 const encrypted = crypto.symmetric.encrypt('明文', key)    // ECB 模式
@@ -365,19 +590,19 @@ const withIV = crypto.symmetric.encryptWithIV('明文', key) // CBC 模式，自
 const plain = crypto.symmetric.decryptWithIV(withIV.data.ciphertext, key, withIV.data.iv)
 
 // --- 密码哈希 ---
-const hashed = crypto.password.hash('MyPassword')         // salt + 迭代
+const hashed = crypto.password.hash('MyPassword')         // salt + 迭代，$hai$ 格式
 const valid = crypto.password.verify('MyPassword', hashed.data)
 
 await crypto.close()
 ```
 
-### @hai/kit — SvelteKit 集成
+### @h-ai/kit — SvelteKit 集成
 
 将框架模块桥接到 SvelteKit 约定：Hook、中间件、守卫、校验、响应工具。不是服务单例，没有 init()。
 
 ```typescript
 // --- hooks.server.ts ---
-import { kit } from '@hai/kit'
+import { kit } from '@h-ai/kit'
 
 export const handle = kit.createHandle({
   logging: true,
@@ -388,11 +613,12 @@ export const handle = kit.createHandle({
   guards: [
     { guard: kit.guard.auth(), paths: ['/admin/*'] },
     { guard: kit.guard.role('admin'), paths: ['/admin/settings/*'] },
+    { guard: kit.guard.permission('users:read'), paths: ['/api/users/*'] },
   ],
 })
 
 // --- 路由中的表单校验 ---
-import { kit } from '@hai/kit'
+import { kit } from '@h-ai/kit'
 import { z } from 'zod'
 
 export const actions = {
@@ -414,22 +640,113 @@ export const POST = async () => kit.response.created({ id: '1' })
 const iamHandle = kit.iam.createHandle({ iam, publicPaths: ['/login'] })
 const storageEndpoint = kit.storage.createEndpoint({ storage, bucket: 'uploads' })
 
-// --- 浏览器端状态 ---
-const session = kit.client.useSession()
-const user = kit.client.useUser(session)
+// --- 浏览器端客户端 ---
+import { createKitClient } from '@h-ai/kit/client'
+const client = createKitClient({ baseUrl: '/api/v1' })
 ```
 
-### @hai/ui — UI 组件库
+### @h-ai/api-client — HTTP 客户端
 
-57+ Svelte 5 Runes 组件，分三层：
+Bearer Token 自动管理、契约调用、文件上传、SSE 流式响应。
+
+```typescript
+import { createApiClient, createLocalStorageTokenStorage } from '@h-ai/api-client'
+
+// 创建客户端
+const api = createApiClient({
+  baseUrl: 'https://api.example.com/api/v1',
+  auth: {
+    storage: createLocalStorageTokenStorage(),  // 或 memory / 自定义
+    refreshUrl: '/auth/refresh',                // 401 自动刷新
+  },
+})
+
+// --- 契约调用（类型安全，推荐）---
+import { iamEndpoints } from '@h-ai/iam/api'
+const loginResult = await api.call(iamEndpoints.login, { identifier: 'alice', password: 'xxx' })
+// → Result<LoginResponse, ApiClientError>
+
+// --- 通用 HTTP ---
+const users = await api.get<User[]>('/users', { page: 1 })
+const created = await api.post<User>('/users', { name: 'Alice' })
+await api.put('/users/1', { name: 'Bob' })
+await api.delete('/users/1')
+
+// --- 文件上传（支持进度）---
+await api.post('/upload', formData, {
+  onProgress: (percent) => console.log(`${percent}%`),
+})
+
+// --- SSE 流式响应 ---
+const stream = api.stream('/ai/chat', { messages: [...] })
+for await (const event of stream) {
+  console.log(event.data)
+}
+```
+
+### @h-ai/capacitor — 移动端原生桥接
+
+Capacitor 原生能力：安全 Token 存储、设备信息、推送通知、相机、状态栏。
+
+```typescript
+import { capacitor, createCapacitorTokenStorage } from '@h-ai/capacitor'
+
+// 初始化
+await capacitor.init()
+
+// 安全 Token 存储（替代 localStorage，搭配 api-client）
+import { createApiClient } from '@h-ai/api-client'
+const api = createApiClient({
+  baseUrl: '/api/v1',
+  auth: { storage: createCapacitorTokenStorage(), refreshUrl: '/auth/refresh' },
+})
+
+// 设备信息、推送通知、相机、状态栏等原生能力
+```
+
+### @h-ai/deploy — 自动化部署
+
+一键部署 SvelteKit 应用到 Vercel，自动开通基础设施（数据库、缓存、存储）。
+
+```typescript
+import { deploy } from '@h-ai/deploy'
+
+// 初始化
+await deploy.init({
+  provider: { type: 'vercel', token: 'vel_xxx' },
+  services: {
+    db: { provisioner: 'neon', apiKey: 'neon_xxx' },
+    cache: { provisioner: 'upstash', email: 'a@b.com', apiKey: 'up_xxx' },
+    storage: { provisioner: 'r2', accountId: '...', apiToken: '...' },
+  },
+})
+
+// 扫描应用（自动检测依赖和所需服务）
+const scan = await deploy.scan('./apps/my-app')
+
+// 开通基础设施
+const provisions = await deploy.provisionAll('my-app')
+
+// 完整部署
+const result = await deploy.deployApp('./apps/my-app')
+if (result.success) console.log(`Deployed: ${result.data.url}`)
+
+await deploy.close()
+```
+
+CLI: `hai deploy` / `hai deploy ./apps/admin-console --skip-provision`
+
+### @h-ai/ui — UI 组件库
+
+65+ Svelte 5 Runes 组件，分三层。内置 i18n（zh-CN / en-US），32+ 主题。
 
 - **primitives/**（21）：Avatar, Badge, Button, Checkbox, Input, Progress, Radio, Range, Rating, Select, Spinner, Switch, Tag, Textarea...
-- **compounds/**（36）：Accordion, Alert, Breadcrumb, Card, Confirm, DataTable, Drawer, Dropdown, Form, Modal, Pagination, Steps, Tabs, Timeline, Toast, Tooltip...
-- **scenes/**：IAM、Storage、Crypto 业务场景组件（内置中英文翻译）
+- **compounds/**（25）：Accordion, Alert, Breadcrumb, Card, Confirm, DataTable, Drawer, Dropdown, Form, Modal, Pagination, Steps, Tabs, Timeline, Toast, Tooltip, Calendar, DatePicker, Combobox, TagInput, Skeleton, Empty, Result, PageHeader, Popover
+- **scenes/**（19）：IAM（LoginForm, RegisterForm, ForgotPasswordForm, ResetPasswordForm, ChangePasswordForm, PasswordInput, UserProfile）, Storage（FileUpload, ImageUpload, AvatarUpload, FileList）, Crypto（EncryptedInput, HashDisplay, SignatureDisplay）, App（FeedbackModal, SettingsModal, LanguageSwitch, ThemeSelector, ThemeToggle）
 
 ```svelte
 <script lang="ts">
-  import { Button, Input, Modal, DataTable, Card, Toast, PageHeader } from '@hai/ui'
+  import { Button, Input, Modal, DataTable, Card, Toast, PageHeader } from '@h-ai/ui'
 
   let showModal = $state(false)
 </script>
@@ -456,7 +773,7 @@ const user = kit.client.useUser(session)
 </Modal>
 ```
 
-### @hai/cli — CLI 脚手架
+### @h-ai/cli — CLI 脚手架
 
 ```bash
 # 创建项目（交互式选择类型和功能）
@@ -466,6 +783,10 @@ hai create my-app --type website     # 企业官网
 hai create my-app --type h5          # H5 移动应用
 hai create my-app --type api         # API 服务
 
+# 模块添加
+hai add reldb                        # 添加数据库模块（含配置初始化）
+hai add iam                          # 添加 IAM 模块（自动处理依赖）
+
 # 代码生成
 hai generate page dashboard          # 生成页面
 hai generate component UserCard      # 生成组件
@@ -474,6 +795,10 @@ hai generate api users               # 生成 API 路由
 # 快捷别名
 hai g:page dashboard
 hai g:component UserCard
+
+# 一键部署
+hai deploy
+hai deploy ./apps/admin-console --skip-provision
 ```
 
 ## 目录结构
@@ -481,23 +806,31 @@ hai g:component UserCard
 ```
 hai-framework/
 ├── packages/
-│   ├── core/         @hai/core
-│   ├── crypto/       @hai/crypto
-│   ├── db/           @hai/db
-│   ├── cache/        @hai/cache
-│   ├── storage/      @hai/storage
-│   ├── iam/          @hai/iam
-│   ├── ai/           @hai/ai
-│   ├── reach/        @hai/reach
-│   ├── deploy/       @hai/deploy
-│   ├── kit/          @hai/kit
-│   ├── ui/           @hai/ui
-│   └── cli/          @hai/cli
+│   ├── core/          @h-ai/core         基础能力
+│   ├── crypto/        @h-ai/crypto       国密加密
+│   ├── reldb/         @h-ai/reldb        关系数据库
+│   ├── vecdb/         @h-ai/vecdb        向量数据库
+│   ├── cache/         @h-ai/cache        缓存
+│   ├── storage/       @h-ai/storage      文件存储
+│   ├── datapipe/      @h-ai/datapipe     数据管线
+│   ├── iam/           @h-ai/iam          身份与访问管理
+│   ├── reach/         @h-ai/reach        用户触达
+│   ├── ai/            @h-ai/ai           AI 集成
+│   ├── payment/       @h-ai/payment      统一支付
+│   ├── audit/         @h-ai/audit        审计日志
+│   ├── scheduler/     @h-ai/scheduler    定时任务
+│   ├── kit/           @h-ai/kit          SvelteKit 集成
+│   ├── api-client/    @h-ai/api-client   HTTP 客户端
+│   ├── capacitor/     @h-ai/capacitor    移动端桥接
+│   ├── ui/            @h-ai/ui           UI 组件库
+│   ├── cli/           @h-ai/cli          CLI 脚手架
+│   └── deploy/        @h-ai/deploy       自动化部署
 ├── apps/
 │   ├── admin-console/       管理后台（完整 demo）
 │   ├── api-service/         API 后端服务
 │   ├── corporate-website/   企业官网
-│   └── h5-app/              H5 移动应用
+│   ├── h5-app/              H5 移动应用
+│   └── android-app/         Android 原生应用
 ├── pnpm-workspace.yaml
 ├── turbo.json
 └── package.json
@@ -513,8 +846,10 @@ hai-framework/
 | `module.config` | 只读属性，当前生效配置 |
 | `Result<T, E>` | `{ success: true, data: T }` 或 `{ success: false, error: E }` |
 | `ModuleError` | `{ code: ErrorCode, message: string, cause?: unknown }` |
-| Provider 模式 | db / cache / storage 支持多后端，通过 `config.type` 切换 |
-| 双端入口 | core / storage 等按环境自动选择 Node / Browser 实现 |
+| Provider 模式 | reldb / vecdb / cache / storage / reach / payment 支持多后端，通过 `config.type` 切换 |
+| 双端入口 | core / crypto / storage 等按环境自动选择 Node / Browser 实现 |
+| 纯函数模块 | datapipe 无需 init，直接调用 |
+| 依赖注入 | iam / audit / scheduler 通过参数注入 reldb / cache 实例 |
 
 ## 环境变量
 
@@ -532,6 +867,10 @@ HAI_DB_DATABASE=./data/app.db
 # HAI_DB_PORT=5432
 # HAI_DB_USER=postgres
 # HAI_DB_PASSWORD=
+
+# Vector DB (@h-ai/vecdb)
+# HAI_VECDB_TYPE=lancedb    # lancedb|pgvector|qdrant
+# HAI_VECDB_PATH=./data/vecdb
 
 # Session / IAM (@h-ai/iam)
 HAI_SESSION_SECRET=...      # REQUIRED, ≥32 chars
@@ -552,4 +891,14 @@ HAI_STORAGE_PATH=./data/uploads
 # HAI_OPENAI_API_KEY=
 # HAI_OPENAI_BASE_URL=
 # HAI_ANTHROPIC_API_KEY=
+
+# Payment (@h-ai/payment)
+# HAI_WECHAT_MCH_ID=
+# HAI_ALIPAY_APP_ID=
+# HAI_STRIPE_SECRET_KEY=
+
+# Deploy (@h-ai/deploy)
+# HAI_DEPLOY_VERCEL_TOKEN=
+# HAI_DEPLOY_NEON_API_KEY=
+# HAI_DEPLOY_UPSTASH_API_KEY=
 ```

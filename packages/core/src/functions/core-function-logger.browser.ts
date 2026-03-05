@@ -17,6 +17,9 @@ let globalLevel: LogLevel = 'info'
 /** 全局默认上下文（每条日志自动附带） */
 let globalContext: Record<string, unknown> = {}
 
+/** 默认 Logger 单例缓存 */
+let defaultLogger: Logger | null = null
+
 /**
  * LogLevel 到 loglevel 库级别的映射。
  *
@@ -49,6 +52,8 @@ function configureLogger(config: Partial<LoggingConfig>): void {
   if (config.context) {
     globalContext = { ...globalContext, ...config.context }
   }
+  // 重置默认 logger 缓存，使下次 getLogger() 返回新配置的实例
+  defaultLogger = null
 }
 
 /**
@@ -157,8 +162,6 @@ function createLogger(options: LoggerOptions = {}): Logger {
 }
 
 // ─── 默认 Logger 实例 ───
-
-let defaultLogger: Logger | null = null
 
 /**
  * 获取默认 Logger 实例（单例）。

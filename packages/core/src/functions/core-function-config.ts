@@ -52,8 +52,8 @@ interface CacheEntry<T = unknown> {
   data: T
   /** 配置文件路径 */
   filePath: string
-  /** Zod 校验 Schema（重载时复用） */
-  schema: ZodType<T>
+  /** Zod 校验 Schema（重载时复用，无 Schema 加载时为 undefined） */
+  schema?: ZodType<T>
   /** 加载时间戳（毫秒） */
   loadedAt: number
 }
@@ -62,6 +62,9 @@ interface CacheEntry<T = unknown> {
 
 /** 环境变量插值正则（支持 ${VAR} 与 ${VAR:default}） */
 const ENV_VAR_PATTERN = /\$\{([^}:]+)(?::([^}]*))?\}/g
+
+/** 判断整个字符串是否恰好是单个 ${VAR} 或 ${VAR:default}（用于类型还原） */
+const FULL_VAR_PATTERN = /^\$\{[^}:]+(?::[^}]*)?\}$/
 
 /**
  * 递归替换环境变量。
@@ -94,6 +97,18 @@ function interpolateEnv(value: unknown): Result<unknown, ConfigError> {
       }
       result = result.replace(fullMatch, envValue ?? defaultValue ?? '')
     }
+
+    // 当原值整体是单个 ${VAR:default} 时，插值结果需还原为 YAML 原生类型
+    // 例如 ${DEBUG:false} → "false" 应还原为 boolean false
+    if (FULL_VAR_PATTERN.test(value)) {
+      try {
+        const coerced = parse(result)
+        if (coerced !== undefined)
+          return ok(coerced)
+      }
+      catch { /* 解析失败则保持字符串 */ }
+    }
+
     return ok(result)
   }
 
@@ -148,6 +163,8 @@ interface WatchEntry {
   watcher: ReturnType<typeof watch>
   /** 已注册的回调函数集合 */
   callbacks: Set<WatchCallback<unknown>>
+  /** 防抖定时器（用于 stopWatching 时清理） */
+  debounceTimer: ReturnType<typeof setTimeout> | null
 }
 
 /** 配置监听映射 */
@@ -179,12 +196,18 @@ function notifyWatchCallbacks(name: string, result: Result<unknown, ConfigError>
 
   if (result.success) {
     for (const callback of entry.callbacks) {
-      callback(result.data, undefined)
+      try {
+        callback(result.data, undefined)
+      }
+      catch { /* 隔离单个回调异常，不影响其他回调 */ }
     }
   }
   else {
     for (const callback of entry.callbacks) {
-      callback(null, result.error)
+      try {
+        callback(null, result.error)
+      }
+      catch { /* 隔离单个回调异常，不影响其他回调 */ }
     }
   }
 }
@@ -269,7 +292,7 @@ function loadAndCache<T>(
     configCache.set(name, {
       data: result.data,
       filePath,
-      schema: schema as ZodType<unknown>,
+      schema: schema as ZodType<unknown> | undefined,
       loadedAt: Date.now(),
     })
   }
@@ -328,7 +351,8 @@ function reloadAndNotify(name: string): Result<unknown, ConfigError> {
     return result
   }
 
-  const result = loadConfig(entry.filePath, entry.schema)
+  // 无 Schema 时直接加载 YAML（不做校验），避免 schema 为 undefined 导致运行时崩溃
+  const result = entry.schema ? loadConfig(entry.filePath, entry.schema) : loadYaml(entry.filePath)
   if (result.success) {
     configCache.set(name, {
       ...entry,
@@ -359,16 +383,25 @@ function startFileWatcher(name: string): WatchEntry | null {
     return null
 
   try {
+    const watchEntry: WatchEntry = {
+      watcher: null!,
+      callbacks: new Set(),
+      debounceTimer: null,
+    }
+
+    // 防抖定时器：fs.watch 可能对同一次文件保存触发多次 'change' 事件
     const watcher = watch(entry.filePath, (eventType) => {
       if (eventType === 'change') {
-        reloadAndNotify(name)
+        if (watchEntry.debounceTimer)
+          clearTimeout(watchEntry.debounceTimer)
+        watchEntry.debounceTimer = setTimeout(() => {
+          watchEntry.debounceTimer = null
+          reloadAndNotify(name)
+        }, 100)
       }
     })
 
-    const watchEntry: WatchEntry = {
-      watcher,
-      callbacks: new Set(),
-    }
+    watchEntry.watcher = watcher
     watchEntries.set(name, watchEntry)
     return watchEntry
   }
@@ -403,6 +436,8 @@ function registerWatch<T>(name: string, callback: WatchCallback<T>): () => void 
 
     current.callbacks.delete(callback as WatchCallback<unknown>)
     if (current.callbacks.size === 0) {
+      if (current.debounceTimer)
+        clearTimeout(current.debounceTimer)
       current.watcher.close()
       watchEntries.delete(name)
     }
@@ -418,12 +453,16 @@ function stopWatching(name?: string): void {
   if (name) {
     const entry = watchEntries.get(name)
     if (entry) {
+      if (entry.debounceTimer)
+        clearTimeout(entry.debounceTimer)
       entry.watcher.close()
       watchEntries.delete(name)
     }
   }
   else {
     for (const entry of watchEntries.values()) {
+      if (entry.debounceTimer)
+        clearTimeout(entry.debounceTimer)
       entry.watcher.close()
     }
     watchEntries.clear()

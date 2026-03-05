@@ -25,6 +25,11 @@ describe('core.array', () => {
     expect(core.array.chunk([1, 2, 3, 4, 5], 2)).toEqual([[1, 2], [3, 4], [5]])
   })
 
+  it('chunk size <= 0 应返回空数组', () => {
+    expect(core.array.chunk([1, 2, 3], 0)).toEqual([])
+    expect(core.array.chunk([1, 2, 3], -1)).toEqual([])
+  })
+
   it('first/last 应该返回首末元素', () => {
     expect(core.array.first([1, 2, 3])).toBe(1)
     expect(core.array.last([1, 2, 3])).toBe(3)

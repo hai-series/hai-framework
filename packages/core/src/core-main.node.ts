@@ -205,6 +205,7 @@ function setupConfigWatch(configs: ConfigLoadItem[]): void {
     config.watch(item.name, (_config, error) => {
       if (error) {
         logger.error(`[core] Config reload failed: ${item.name}`, { error })
+        return
       }
       logger.info(`[core] Config reloaded: ${item.name}`)
     })

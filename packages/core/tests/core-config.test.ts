@@ -30,6 +30,9 @@ describe('core.config', () => {
     core.config.clear()
     rmSync(tempDir, { recursive: true, force: true })
     delete process.env.FOO
+    delete process.env.HAI_DEBUG
+    delete process.env.HAI_PORT
+    delete process.env.HAI_HOST
   })
 
   // =========================================================================
@@ -102,6 +105,46 @@ describe('core.config', () => {
     expect(result.success).toBe(true)
     if (result.success) {
       expect(result.data).toEqual({ items: ['x', 'fixed'] })
+    }
+  })
+
+  it('load 环境变量默认值应还原为 YAML 原生类型（boolean/number）', () => {
+    const typedSchema = z.object({ debug: z.boolean(), port: z.number() })
+    // eslint-disable-next-line no-template-curly-in-string
+    writeFileSync(configPath, 'debug: ${HAI_DEBUG:false}\nport: ${HAI_PORT:8080}\n', 'utf-8')
+
+    const result = core.config.load('app', configPath, typedSchema)
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.debug).toBe(false)
+      expect(result.data.port).toBe(8080)
+    }
+  })
+
+  it('load 环境变量值应还原为 YAML 原生类型', () => {
+    process.env.HAI_DEBUG = 'true'
+    process.env.HAI_PORT = '3000'
+    const typedSchema = z.object({ debug: z.boolean(), port: z.number() })
+    // eslint-disable-next-line no-template-curly-in-string
+    writeFileSync(configPath, 'debug: ${HAI_DEBUG}\nport: ${HAI_PORT}\n', 'utf-8')
+
+    const result = core.config.load('app', configPath, typedSchema)
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.debug).toBe(true)
+      expect(result.data.port).toBe(3000)
+    }
+  })
+
+  it('load 混合文本中的环境变量应保持字符串类型', () => {
+    process.env.HAI_HOST = 'localhost'
+    // eslint-disable-next-line no-template-curly-in-string
+    writeFileSync(configPath, 'foo: http://${HAI_HOST}:3000\nbar: ok\n', 'utf-8')
+
+    const result = core.config.load('app', configPath, schema)
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data).toEqual({ foo: 'http://localhost:3000', bar: 'ok' })
     }
   })
 

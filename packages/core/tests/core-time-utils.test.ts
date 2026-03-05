@@ -50,8 +50,32 @@ describe('core.time', () => {
 
   it('timeAgo 应该返回天级相对时间', () => {
     const now = new Date('2025-01-01T00:00:00.000Z')
-    const earlier = new Date(now.getTime() - 7 * 86400 * 1000) // 7 天
-    expect(core.time.timeAgo(earlier)).toBe('7 days ago')
+    const earlier = new Date(now.getTime() - 5 * 86400 * 1000) // 5 天
+    expect(core.time.timeAgo(earlier)).toBe('5 days ago')
+  })
+
+  it('timeAgo 应该返回 "Just now" 当时间差小于 5 秒', () => {
+    const now = new Date('2025-01-01T00:00:00.000Z')
+    const earlier = new Date(now.getTime() - 3 * 1000) // 3 秒
+    expect(core.time.timeAgo(earlier)).toBe('Just now')
+  })
+
+  it('timeAgo 应该返回周级相对时间', () => {
+    const now = new Date('2025-01-01T00:00:00.000Z')
+    const earlier = new Date(now.getTime() - 14 * 86400 * 1000) // 14 天 → 2 周
+    expect(core.time.timeAgo(earlier)).toBe('2 weeks ago')
+  })
+
+  it('timeAgo 应该返回月级相对时间', () => {
+    const now = new Date('2025-01-01T00:00:00.000Z')
+    const earlier = new Date(now.getTime() - 60 * 86400 * 1000) // 60 天 → 2 个月
+    expect(core.time.timeAgo(earlier)).toBe('2 months ago')
+  })
+
+  it('timeAgo 应该返回年级相对时间', () => {
+    const now = new Date('2025-01-01T00:00:00.000Z')
+    const earlier = new Date(now.getTime() - 400 * 86400 * 1000) // 400 天 → 1 年
+    expect(core.time.timeAgo(earlier)).toBe('1 years ago')
   })
 
   it('timeAgo 中文 locale 应返回中文', () => {
