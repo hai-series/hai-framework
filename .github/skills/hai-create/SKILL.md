@@ -80,6 +80,21 @@ packages/xx/
       xx-client.ts        # 浏览器端 HTTP 客户端
 ```
 
+### 1.4 带 API 契约的模块（对外提供 HTTP 端点）
+
+如果模块需要对外暴露 HTTP API（如 storage、iam、ai、payment），则在 §1.1/§1.2/§1.3 基础上增加 `api/` 子目录：
+
+```
+packages/xx/
+  src/
+    api/                        # API 契约子模块（客户端/服务端共享）
+      index.ts                  # export * 聚合
+      xx-api-schemas.ts         # Zod Schema（入参/出参/实体）
+      xx-api-contract.ts        # 端点定义（xxEndpoints）
+```
+
+对应 `package.json` 需声明 `./api` 子路径导出（见 §5.1）；`tsup.config.ts` 需增加 `api/index` 入口（见 §5.3）。
+
 ---
 
 ## 2. 架构决策
@@ -805,7 +820,209 @@ export type { CreateYyInput, XxYyFunctions, YyItem } from './yy/xx-yy-types.js'
 export type { XxZzFunctions, ZzItem } from './zz/xx-zz-types.js'
 ```
 
-### 3.8 `client/xx-client.ts` — 浏览器端客户端
+### 3.8 `api/` — API 契约层（可选）
+
+> 当模块需要对外暴露 HTTP API 时，创建 `src/api/` 子目录。契约定义是客户端（`api.call`）和服务端（`kit.fromContract`）的**唯一真相源**，编译时保证两端 I/O 类型一致。
+
+#### 判断是否需要 API 契约
+
+| 条件                               | 需要 `api/` |
+| ---------------------------------- | ----------- |
+| 模块有面向浏览器/App 的 HTTP 端点  | ✅          |
+| 其他模块或应用需要类型安全地调用它 | ✅          |
+| 模块仅供服务端内部调用，无 HTTP 层 | ❌          |
+
+#### 3.8.1 `xx-api-schemas.ts` — Zod Schema 定义
+
+**职责**：定义所有入参/出参/实体的 Zod Schema 和推导类型。只包含 Schema 定义，不含端点路由信息。
+
+**规范**：
+
+- Schema 命名：`{Entity}Schema`、`{Action}{Direction}Schema`（如 `PresignGetInputSchema`、`ListFilesOutputSchema`）
+- 导出推导类型：`export type XxxInput = z.infer<typeof XxxInputSchema>`
+- 使用 `z.coerce.date()` 等 coerce 处理跨端序列化差异
+- 字符串类 key 字段统一 `z.string().min(1)` 防空值
+
+**示例**：
+
+```ts
+// ⚠️ 示例 — 替换 Xx 为实际模块名和业务字段
+
+import { z } from 'zod'
+
+/** 实体 Schema */
+export const XxItemSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  createdAt: z.coerce.date(),
+})
+
+/** 创建入参 */
+export const CreateXxInputSchema = z.object({
+  name: z.string().min(1),
+  type: z.string().optional(),
+})
+
+/** 创建出参 */
+export const CreateXxOutputSchema = XxItemSchema
+
+/** 列表出参 */
+export const ListXxOutputSchema = z.object({
+  items: z.array(XxItemSchema),
+  total: z.number(),
+  nextCursor: z.string().optional(),
+})
+
+/** 删除入参 */
+export const DeleteXxInputSchema = z.object({
+  id: z.string().min(1),
+})
+
+// ─── 推导类型 ───
+
+export type XxItem = z.infer<typeof XxItemSchema>
+export type CreateXxInput = z.infer<typeof CreateXxInputSchema>
+export type CreateXxOutput = z.infer<typeof CreateXxOutputSchema>
+export type ListXxOutput = z.infer<typeof ListXxOutputSchema>
+export type DeleteXxInput = z.infer<typeof DeleteXxInputSchema>
+```
+
+#### 3.8.2 `xx-api-contract.ts` — 端点定义
+
+**职责**：定义 `xxEndpoints` 对象，关联 HTTP method + path + Schema + 元数据。
+
+**规范**：
+
+- 内联 `EndpointDef` 接口和 `defineEndpoint` 辅助函数（避免对 `@h-ai/api-client` 的循环依赖）
+- 导出唯一的 `xxEndpoints` 对象（`as const`），以端点名为 key
+- `path` 以模块名开头（如 `/storage/...`、`/auth/...`）
+- `meta.tags` 至少包含模块名，便于 OpenAPI 文档分组
+
+**示例**：
+
+```ts
+// ⚠️ 示例 — 替换 Xx 为实际模块名和业务端点
+
+import { z } from 'zod'
+import {
+  CreateXxInputSchema,
+  CreateXxOutputSchema,
+  DeleteXxInputSchema,
+  ListXxOutputSchema,
+  XxItemSchema,
+} from './xx-api-schemas.js'
+
+// ─── 内联端点辅助（避免循环依赖 @h-ai/api-client） ───
+
+interface EndpointDef<TInput = unknown, TOutput = unknown> {
+  method: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH'
+  path: string
+  input: z.ZodType<TInput>
+  output: z.ZodType<TOutput>
+  requireAuth?: boolean
+  meta?: { summary?: string, tags?: string[] }
+}
+
+function defineEndpoint<TInput, TOutput>(def: EndpointDef<TInput, TOutput>): EndpointDef<TInput, TOutput> {
+  return def
+}
+
+// ─── 端点定义 ───
+
+export const xxEndpoints = {
+  create: defineEndpoint({
+    method: 'POST',
+    path: '/xx/create',
+    input: CreateXxInputSchema,
+    output: CreateXxOutputSchema,
+    meta: { summary: 'Create xx item', tags: ['xx'] },
+  }),
+
+  list: defineEndpoint({
+    method: 'GET',
+    path: '/xx/list',
+    input: z.object({
+      cursor: z.string().optional(),
+      limit: z.coerce.number().int().min(1).max(100).optional(),
+    }),
+    output: ListXxOutputSchema,
+    meta: { summary: 'List xx items', tags: ['xx'] },
+  }),
+
+  get: defineEndpoint({
+    method: 'POST',
+    path: '/xx/info',
+    input: z.object({ id: z.string().min(1) }),
+    output: XxItemSchema,
+    meta: { summary: 'Get xx item info', tags: ['xx'] },
+  }),
+
+  delete: defineEndpoint({
+    method: 'POST',
+    path: '/xx/delete',
+    input: DeleteXxInputSchema,
+    output: z.void(),
+    meta: { summary: 'Delete xx item', tags: ['xx'] },
+  }),
+} as const
+```
+
+#### 3.8.3 `api/index.ts` — 聚合导出
+
+```ts
+export * from './xx-api-contract.js'
+export * from './xx-api-schemas.js'
+```
+
+#### 3.8.4 客户端消费（`@h-ai/api-client`）
+
+```ts
+import { xxEndpoints } from '@h-ai/xx/api'
+
+// api.call 自动做入参 Zod 校验 + 出参类型推导
+const result = await api.call(xxEndpoints.create, { name: 'test' })
+if (result.success) {
+  // result.data 类型自动为 CreateXxOutput
+}
+```
+
+#### 3.8.5 服务端消费（`@h-ai/kit`）
+
+```ts
+import { kit } from '@h-ai/kit'
+import { xx } from '@h-ai/xx'
+import { xxEndpoints } from '@h-ai/xx/api'
+
+// kit.fromContract 自动做入参 Zod 校验，handler 入参类型安全
+export const POST = kit.fromContract(xxEndpoints.create, async (input, event) => {
+  kit.guard.requirePermission(event.locals.session, 'xx:write')
+  const result = await xx.create(input)
+  if (!result.success) {
+    return kit.response.internalError(result.error.message)
+  }
+  return kit.response.created(result.data)
+})
+```
+
+#### 3.8.6 端到端契约流
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    @h-ai/xx/api                             │
+│  xx-api-schemas.ts  ←  Zod Schema（唯一真相源）            │
+│  xx-api-contract.ts ←  xxEndpoints（method + path + schema）│
+└─────────────┬──────────────────────────┬────────────────────┘
+              │                          │
+     ┌────────▼────────┐       ┌─────────▼─────────┐
+     │  客户端（浏览器）│       │  服务端（SvelteKit）│
+     │  api.call(ep, i) │       │  kit.fromContract  │
+     │  @h-ai/api-client│       │  @h-ai/kit         │
+     └────────┬────────┘       └─────────┬─────────┘
+              │      HTTP（类型安全）     │
+              └──────────────────────────┘
+```
+
+### 3.9 `client/xx-client.ts` — 浏览器端客户端
 
 **规范**：
 
@@ -1267,6 +1484,20 @@ const authOperations = {
 }
 ```
 
+**示例**（有 API 契约的子路径导出 — 在任意入口模式基础上追加）：
+
+```jsonc
+{
+  "exports": {
+    // ... 原有 "." 和 "./client" 不变
+    "./api": {
+      "types": "./dist/api/index.d.ts",
+      "import": "./dist/api/index.js"
+    }
+  }
+}
+```
+
 ### 5.2 `tsconfig.json`
 
 ```jsonc
@@ -1308,6 +1539,22 @@ export default defineConfig({
     'node': 'src/index.ts',
     'browser': 'src/xx-index.browser.ts',
     'client/index': 'src/client/index.ts',
+  },
+  external: ['@h-ai/core', 'zod'],
+})
+```
+
+**示例**（有 API 契约 — 在任意入口模式基础上追加 `api/index` 入口）：
+
+```ts
+import { defineConfig } from 'tsup'
+import { baseConfig } from '../tsup.base'
+
+export default defineConfig({
+  ...baseConfig,
+  entry: {
+    // ... 原有入口不变
+    'api/index': 'src/api/index.ts', // ← 追加
   },
   external: ['@h-ai/core', 'zod'],
 })
@@ -1386,6 +1633,9 @@ export default defineConfig({ ...baseVitestConfig })
 - [ ] `package.json` / `tsconfig.json` / `tsup.config.ts` / `vitest.config.ts`
 - [ ] `README.md`
 - [ ] `packages/cli/templates/skills/hai-xx/SKILL.md`（Skill 模板）
+- [ ] `src/api/`（如需 HTTP API：`xx-api-schemas.ts` + `xx-api-contract.ts` + `index.ts`）
+- [ ] `package.json` 追加 `"./api"` 子路径导出（如有 `src/api/`）
+- [ ] `tsup.config.ts` 追加 `'api/index'` 入口（如有 `src/api/`）
 - [ ] `pnpm typecheck` → `pnpm lint` → `pnpm test`
 
 ---

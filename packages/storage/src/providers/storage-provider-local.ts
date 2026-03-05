@@ -22,12 +22,14 @@ import * as fs from 'node:fs'
 import * as fsp from 'node:fs/promises'
 
 import * as path from 'node:path'
-import { err, ok } from '@h-ai/core'
+import { core, err, ok } from '@h-ai/core'
 
 import { StorageErrorCode } from '../storage-config.js'
 
 import { storageM } from '../storage-i18n.js'
 import { MIME_TYPE_DEFAULT, MIME_TYPES } from '../storage-mime.js'
+
+const logger = core.logger.child({ module: 'storage', scope: 'provider-local' })
 
 // ─── 辅助函数 ───
 
@@ -106,14 +108,24 @@ function getMimeType(filePath: string): string {
 }
 
 /**
- * 计算文件内容的 ETag（MD5 哈希）
+ * 根据文件 stat 信息计算 ETag
  *
- * @param data - 文件内容 Buffer
- * @returns 带双引号的 MD5 哈希字符串，如 '"d41d8cd98f00b204e9800998ecf8427e"'
+ * 使用 "size-mtime" 格式，与 head 操作保持一致，无需读取文件内容。
+ *
+ * @param stat - 文件的 fs.Stats 对象
+ * @returns 带双引号的 ETag 字符串，如 '"a-18f7ec3b4c0"'
  */
-function calculateEtag(data: Buffer): string {
-  const hash = crypto.createHash('md5').update(data).digest('hex')
-  return `"${hash}"`
+function calculateEtag(stat: fs.Stats): string {
+  return `"${stat.size.toString(16)}-${stat.mtimeMs.toString(16)}"`
+}
+
+/**
+ * 检查 key 是否指向内部元数据文件（.meta.json）
+ *
+ * 拦截外部对 .meta.json 文件的直接访问，防止元数据泄漏。
+ */
+function isMetaFile(key: string): boolean {
+  return key.endsWith('.meta.json')
 }
 
 /**
@@ -208,9 +220,17 @@ export function createLocalProvider(): StorageProvider {
 
   const file: FileOperations = {
     async put(key, data, options = {}): Promise<Result<FileMetadata, StorageError>> {
+      if (isMetaFile(key)) {
+        return err({
+          code: StorageErrorCode.INVALID_PATH,
+          message: storageM('storage_metaFileAccess', { params: { key } }),
+          key,
+        })
+      }
       try {
         const filePath = fullPath(key)
         const buffer = toBuffer(data)
+        logger.debug('Putting file', { key, size: buffer.length })
 
         // 确保目录存在
         const dir = path.dirname(filePath)
@@ -226,7 +246,7 @@ export function createLocalProvider(): StorageProvider {
           size: stat.size,
           contentType: options.contentType || getMimeType(key),
           lastModified: stat.mtime,
-          etag: calculateEtag(buffer),
+          etag: calculateEtag(stat),
           metadata: options.metadata,
         }
 
@@ -242,11 +262,19 @@ export function createLocalProvider(): StorageProvider {
         return ok(metadata)
       }
       catch (error) {
+        logger.warn('Put file failed', { key, error })
         return err(toStorageError(error, key))
       }
     },
 
     async get(key, options = {}): Promise<Result<Buffer, StorageError>> {
+      if (isMetaFile(key)) {
+        return err({
+          code: StorageErrorCode.INVALID_PATH,
+          message: storageM('storage_metaFileAccess', { params: { key } }),
+          key,
+        })
+      }
       try {
         const filePath = fullPath(key)
 
@@ -276,6 +304,13 @@ export function createLocalProvider(): StorageProvider {
     },
 
     async head(key): Promise<Result<FileMetadata, StorageError>> {
+      if (isMetaFile(key)) {
+        return err({
+          code: StorageErrorCode.INVALID_PATH,
+          message: storageM('storage_metaFileAccess', { params: { key } }),
+          key,
+        })
+      }
       try {
         const filePath = fullPath(key)
         const stat = await fsp.stat(filePath)
@@ -317,19 +352,37 @@ export function createLocalProvider(): StorageProvider {
     },
 
     async exists(key): Promise<Result<boolean, StorageError>> {
+      if (isMetaFile(key)) {
+        return err({
+          code: StorageErrorCode.INVALID_PATH,
+          message: storageM('storage_metaFileAccess', { params: { key } }),
+          key,
+        })
+      }
       try {
         const filePath = fullPath(key)
         await fsp.access(filePath, fs.constants.F_OK)
         return ok(true)
       }
-      catch {
-        return ok(false)
+      catch (error) {
+        if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+          return ok(false)
+        }
+        return err(toStorageError(error, key))
       }
     },
 
     async delete(key): Promise<Result<void, StorageError>> {
+      if (isMetaFile(key)) {
+        return err({
+          code: StorageErrorCode.INVALID_PATH,
+          message: storageM('storage_metaFileAccess', { params: { key } }),
+          key,
+        })
+      }
       try {
         const filePath = fullPath(key)
+        logger.debug('Deleting file', { key })
         await fsp.unlink(filePath)
 
         // 尝试删除元数据文件
@@ -347,6 +400,7 @@ export function createLocalProvider(): StorageProvider {
         if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
           return ok(undefined)
         }
+        logger.warn('Delete file failed', { key, error })
         return err(toStorageError(error, key))
       }
     },
@@ -373,9 +427,17 @@ export function createLocalProvider(): StorageProvider {
     },
 
     async copy(sourceKey, destKey, options = {}): Promise<Result<FileMetadata, StorageError>> {
+      if (isMetaFile(sourceKey) || isMetaFile(destKey)) {
+        return err({
+          code: StorageErrorCode.INVALID_PATH,
+          message: storageM('storage_metaFileAccess', { params: { key: sourceKey } }),
+          key: sourceKey,
+        })
+      }
       try {
         const sourcePath = fullPath(sourceKey)
         const destPath = fullPath(destKey)
+        logger.debug('Copying file', { sourceKey, destKey })
 
         // 确保目标目录存在
         await fsp.mkdir(path.dirname(destPath), { recursive: true, mode: getConfig().directoryMode })
@@ -383,8 +445,7 @@ export function createLocalProvider(): StorageProvider {
         // 复制文件
         await fsp.copyFile(sourcePath, destPath)
 
-        // 获取新文件的元数据
-        const data = await fsp.readFile(destPath)
+        // 获取新文件的元数据（无需读取文件内容，使用 stat 计算 ETag）
         const stat = await fsp.stat(destPath)
 
         const metadata: FileMetadata = {
@@ -392,7 +453,7 @@ export function createLocalProvider(): StorageProvider {
           size: stat.size,
           contentType: options.contentType || getMimeType(destKey),
           lastModified: stat.mtime,
-          etag: calculateEtag(data),
+          etag: calculateEtag(stat),
           metadata: options.metadata,
         }
 
@@ -563,20 +624,24 @@ export function createLocalProvider(): StorageProvider {
 
       try {
         config = cfg
+        logger.info('Connecting local provider', { root: cfg.root })
 
         // 确保根目录存在
         await fsp.mkdir(cfg.root, { recursive: true, mode: cfg.directoryMode })
 
         connected = true
+        logger.info('Local provider connected', { root: cfg.root })
         return ok(undefined)
       }
       catch (error) {
+        logger.error('Local provider connect failed', { error })
         config = null
         return err(toStorageError(error))
       }
     },
 
     async close(): Promise<void> {
+      logger.info('Local provider disconnected')
       config = null
       connected = false
     },

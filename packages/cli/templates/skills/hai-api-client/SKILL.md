@@ -160,6 +160,73 @@ App 端使用 `@h-ai/capacitor` 的 `createCapacitorTokenStorage()`。
 
 ---
 
+## API 契约范式（端到端类型安全）
+
+> `@h-ai/api-client` 和 `@h-ai/kit` 共同消费模块 `api/` 下的 `EndpointDef` 定义，实现客户端↔服务端的全链路类型安全 + 运行时 Zod 校验。
+
+### 契约架构
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    @h-ai/xx/api                             │
+│  xx-api-schemas.ts  ←  Zod Schema（唯一真相源）            │
+│  xx-api-contract.ts ←  xxEndpoints（method + path + schema）│
+└─────────────┬──────────────────────────┬────────────────────┘
+              │                          │
+     ┌────────▼────────┐       ┌─────────▼─────────┐
+     │  客户端（浏览器）│       │  服务端（SvelteKit）│
+     │  api.call(ep, i) │       │  kit.fromContract  │
+     │  @h-ai/api-client│       │  @h-ai/kit         │
+     └────────┬────────┘       └─────────┬─────────┘
+              │      HTTP（类型安全）     │
+              └──────────────────────────┘
+```
+
+### 客户端流程（本模块责任）
+
+1. 从 `@h-ai/xx/api` 导入 `xxEndpoints`
+2. `api.call(xxEndpoints.xxx, input)` → 自动 Zod 校验入参 → 按 method/path 发起 HTTP → 自动 Zod 校验出参
+3. 返回 `Result<TOutput, ApiClientError>`
+
+```typescript
+import { storageEndpoints } from '@h-ai/storage/api'
+import { iamEndpoints } from '@h-ai/iam/api'
+import { aiEndpoints } from '@h-ai/ai/api'
+
+// 存储：获取上传签名 URL
+const upload = await api.call(storageEndpoints.presignUpload, {
+  key: 'avatars/user-1.png',
+  contentType: 'image/png',
+})
+
+// IAM：登录
+const login = await api.call(iamEndpoints.login, {
+  username: 'admin',
+  password: 'xxx',
+})
+
+// AI：发送消息
+const chat = await api.call(aiEndpoints.sendMessage, {
+  conversationId: 'conv-1',
+  content: 'Hello',
+})
+```
+
+### 已有契约模块一览
+
+| 模块       | 导入路径               | 端点对象             | 典型端点                        |
+| ---------- | -------------------- | -------------------- | ------------------------------- |
+| `storage`  | `@h-ai/storage/api`  | `storageEndpoints`   | presignUpload, listFiles, …     |
+| `iam`      | `@h-ai/iam/api`      | `iamEndpoints`       | login, logout, currentUser, …   |
+| `ai`       | `@h-ai/ai/api`       | `aiEndpoints`        | chat, chatStream, sendMessage   |
+| `payment`  | `@h-ai/payment/api`  | `paymentEndpoints`   | createOrder, queryOrder, …      |
+
+### 新模块接入契约
+
+在模块 `src/api/` 下创建 Schema + Contract，并在 `package.json` 中声明 `"./api"` 子路径导出。
+
+---
+
 ## 常见模式
 
 ### 与 @h-ai/iam/api 契约配合

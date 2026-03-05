@@ -173,6 +173,89 @@ const myEndpoint = defineEndpoint({
 | `kit_transportDecryptFailed`     | 请求体解密失败                     |
 | `kit_transportKeyExchangeFailed` | 密钥交换失败                       |
 
+## API 契约范式（端到端类型安全）
+
+> `kit.fromContract` 和 `api.call` 共同消费模块 `api/` 下的 `EndpointDef`，实现服务端↔客户端的全链路类型安全 + 运行时 Zod 校验。
+
+### 契约架构
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    @h-ai/xx/api                             │
+│  xx-api-schemas.ts  ←  Zod Schema（唯一真相源）            │
+│  xx-api-contract.ts ←  xxEndpoints（method + path + schema）│
+└─────────────┬──────────────────────────┬────────────────────┘
+              │                          │
+     ┌────────▼────────┐       ┌─────────▼─────────┐
+     │  客户端（浏览器）│       │  服务端（SvelteKit）│
+     │  api.call(ep, i) │       │  kit.fromContract  │
+     │  @h-ai/api-client│       │  @h-ai/kit         │
+     └────────┬────────┘       └─────────┬─────────┘
+              │      HTTP（类型安全）     │
+              └──────────────────────────┘
+```
+
+### 服务端流程（本模块责任）
+
+1. 从 `@h-ai/xx/api` 导入 `xxEndpoints`
+2. `kit.fromContract(xxEndpoints.xxx, handler)` → 自动 Zod 校验入参 → handler 获得类型安全的 `input`
+3. 需权限时在 handler 内调用 `kit.guard.requirePermission`
+
+### 多模块契约示例
+
+```typescript
+// ─── 存储：预签名上传 ───
+import { storageEndpoints } from '@h-ai/storage/api'
+import { storage } from '$lib/server/init'
+
+export const POST = kit.fromContract(storageEndpoints.presignUpload, async (input, event) => {
+  kit.guard.requirePermission(event.locals.session, 'storage:write')
+  const result = await storage.presign.putUrl(input.key, input)
+  if (!result.success) {
+    return kit.response.internalError(result.error.message)
+  }
+  return kit.response.ok({ url: result.data, key: input.key })
+})
+
+// ─── IAM：登录 ───
+import { iamEndpoints } from '@h-ai/iam/api'
+import { iam } from '$lib/server/init'
+
+export const POST = kit.fromContract(iamEndpoints.login, async (input) => {
+  const result = await iam.auth.login(input)
+  if (!result.success) {
+    return kit.response.unauthorized(result.error.message)
+  }
+  return kit.response.ok(result.data)
+})
+
+// ─── 支付：创建订单 ───
+import { paymentEndpoints } from '@h-ai/payment/api'
+import { payment } from '$lib/server/init'
+
+export const POST = kit.fromContract(paymentEndpoints.createOrder, async (input, event) => {
+  kit.guard.requirePermission(event.locals.session, 'payment:create')
+  const result = await payment.order.create(input)
+  if (!result.success) {
+    return kit.response.internalError(result.error.message)
+  }
+  return kit.response.created(result.data)
+})
+```
+
+### 已有契约模块一览
+
+| 模块       | 导入路径               | 端点对象             | 典型端点                        |
+| ---------- | -------------------- | -------------------- | ------------------------------- |
+| `storage`  | `@h-ai/storage/api`  | `storageEndpoints`   | presignUpload, listFiles, …     |
+| `iam`      | `@h-ai/iam/api`      | `iamEndpoints`       | login, logout, currentUser, …   |
+| `ai`       | `@h-ai/ai/api`       | `aiEndpoints`        | chat, chatStream, sendMessage   |
+| `payment`  | `@h-ai/payment/api`  | `paymentEndpoints`   | createOrder, queryOrder, …      |
+
+### 新模块接入契约
+
+在模块 `src/api/` 下创建 Schema + Contract，并在 `package.json` 中声明 `"./api"` 子路径导出。
+
 ## 常见模式
 
 ### Bearer Token 认证流程

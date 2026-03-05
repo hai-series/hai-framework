@@ -30,10 +30,12 @@ import {
 } from '@aws-sdk/client-s3'
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 
-import { err, ok } from '@h-ai/core'
+import { core, err, ok } from '@h-ai/core'
 
 import { StorageErrorCode } from '../storage-config.js'
 import { storageM } from '../storage-i18n.js'
+
+const logger = core.logger.child({ module: 'storage', scope: 'provider-s3' })
 
 // ─── 辅助函数 ───
 
@@ -409,8 +411,7 @@ export function createS3Provider(): StorageProvider {
 
     async delete(prefix): Promise<Result<void, StorageError>> {
       try {
-        // 列出所有文件并批量删除
-        const allKeys: string[] = []
+        // 分页列出并逐批删除，每批最多 1000 个对象
         let continuationToken: string | undefined
 
         do {
@@ -424,13 +425,16 @@ export function createS3Provider(): StorageProvider {
             return err(listResult.error)
           }
 
-          allKeys.push(...listResult.data.files.map(f => f.key))
+          const keys = listResult.data.files.map(f => f.key)
+          if (keys.length > 0) {
+            const deleteResult = await file.deleteMany(keys)
+            if (!deleteResult.success) {
+              return deleteResult
+            }
+          }
+
           continuationToken = listResult.data.nextContinuationToken
         } while (continuationToken)
-
-        if (allKeys.length > 0) {
-          return file.deleteMany(allKeys)
-        }
 
         return ok(undefined)
       }
@@ -533,6 +537,7 @@ export function createS3Provider(): StorageProvider {
 
       try {
         config = cfg
+        logger.info('Connecting S3 provider', { bucket: cfg.bucket, region: cfg.region, endpoint: cfg.endpoint })
 
         client = new S3Client({
           region: cfg.region,
@@ -550,9 +555,11 @@ export function createS3Provider(): StorageProvider {
           MaxKeys: 1,
         }))
 
+        logger.info('S3 provider connected', { bucket: cfg.bucket })
         return ok(undefined)
       }
       catch (error) {
+        logger.error('S3 provider connect failed', { error })
         config = null
         client = null
         return err(toStorageError(error))
@@ -564,6 +571,7 @@ export function createS3Provider(): StorageProvider {
         client.destroy()
         client = null
         config = null
+        logger.info('S3 provider disconnected')
       }
     },
 

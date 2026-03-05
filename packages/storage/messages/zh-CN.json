@@ -32,5 +32,6 @@
   "storage_downloadDefaultFilename": "下载",
   "storage_pathTraversal": "检测到路径穿越攻击",
   "storage_localNotInitialized": "本地存储未初始化",
-  "storage_configError": "存储配置校验失败：{error}"
+  "storage_configError": "存储配置校验失败：{error}",
+  "storage_metaFileAccess": "不允许直接访问元数据文件: {key}"
 }

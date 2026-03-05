@@ -51,6 +51,43 @@ await uploadWithPresignedUrl(uploadUrl, file)
 
 > 注意：`@h-ai/storage` 不内置 HTTP 路由；请在应用层自行实现签名 URL API。
 
+## API 契约（`@h-ai/storage/api`）
+
+独立子路径 `@h-ai/storage/api` 导出所有存储端点的 Zod Schema 和端点契约定义，客户端和服务端共享同一份类型定义，编译时保证 I/O 一致性。
+
+```ts
+import { PresignPutInputSchema, storageEndpoints } from '@h-ai/storage/api'
+
+// 端点契约包含 6 个端点：
+// presignDownload / presignUpload / fileInfo / listFiles / deleteFile / deleteFiles
+
+// 客户端调用
+const { url } = await api.call(storageEndpoints.presignUpload, { key: 'avatar.png' })
+
+// 服务端路由
+export const POST = kit.fromContract(storageEndpoints.presignUpload, async (input) => {
+  const result = await storage.presign.putUrl(input.key, input)
+  return result.success ? result.data : kit.response.internalError(result.error.message)
+})
+
+// 独立使用 Schema 做校验
+const parsed = PresignPutInputSchema.safeParse(requestBody)
+if (!parsed.success) { /* 校验失败 */ }
+```
+
+**导出的 Schema：**
+
+- `FileMetadataSchema` — 文件元数据
+- `PresignGetInputSchema` / `PresignPutInputSchema` — 签名 URL 入参
+- `PresignUrlOutputSchema` — 签名 URL 出参
+- `ListFilesOutputSchema` — 文件列表出参
+- `DeleteFileInputSchema` / `DeleteFilesInputSchema` — 删除入参
+- `FileInfoInputSchema` — 文件信息入参
+
+**导出的类型（从 Schema 推导）：**
+
+`PresignGetInput` / `PresignPutInput` / `PresignUrlOutput` / `ListFilesOutput` / `DeleteFileInput` / `DeleteFilesInput` / `FileInfoInput`
+
 ## API 概览
 
 - `storage.file`
