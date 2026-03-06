@@ -9,8 +9,8 @@ import type { Result } from '@h-ai/core'
 import type { PaymentError, PaymentOrder } from '../payment-types.js'
 import type { InvokePaymentResult } from './payment-client-types.js'
 import { err, ok } from '@h-ai/core'
+import { PaymentErrorCode } from '../payment-config.js'
 import { paymentM } from '../payment-i18n.js'
-import { PaymentErrorCode } from '../payment-types.js'
 
 /**
  * Web/H5 环境调起微信支付（JSAPI）

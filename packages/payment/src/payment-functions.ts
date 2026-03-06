@@ -18,8 +18,8 @@ import type {
   RefundResult,
 } from './payment-types.js'
 import { err } from '@h-ai/core'
+import { PaymentErrorCode } from './payment-config.js'
 import { paymentM } from './payment-i18n.js'
-import { PaymentErrorCode } from './payment-types.js'
 
 /** Provider 注册表 */
 const providers = new Map<string, PaymentProvider>()
@@ -46,15 +46,15 @@ export function getProvider(name: string): PaymentProvider | undefined {
 /**
  * 获取 Provider（不存在则返回 err）
  */
-function requireProvider(name: string): Result<PaymentProvider, PaymentError> | PaymentProvider {
+function requireProvider(name: string): Result<PaymentProvider, PaymentError> {
   const provider = providers.get(name)
   if (!provider) {
     return err({
       code: PaymentErrorCode.PROVIDER_NOT_FOUND,
       message: paymentM('payment_providerNotFound'),
-    }) as Result<PaymentProvider, PaymentError>
+    })
   }
-  return provider
+  return { success: true, data: provider } as Result<PaymentProvider, PaymentError>
 }
 
 /**
@@ -68,10 +68,9 @@ export async function createOrder(
   input: CreateOrderInput,
 ): Promise<Result<PaymentOrder, PaymentError>> {
   const result = requireProvider(providerName)
-  if ('success' in result && !result.success)
+  if (!result.success)
     return result
-  const provider = result as PaymentProvider
-  return provider.createOrder(input)
+  return result.data.createOrder(input)
 }
 
 /**
@@ -85,10 +84,9 @@ export async function handleNotify(
   request: PaymentNotifyRequest,
 ): Promise<Result<PaymentNotifyResult, PaymentError>> {
   const result = requireProvider(providerName)
-  if ('success' in result && !result.success)
+  if (!result.success)
     return result
-  const provider = result as PaymentProvider
-  return provider.handleNotify(request)
+  return result.data.handleNotify(request)
 }
 
 /**
@@ -102,10 +100,9 @@ export async function queryOrder(
   orderNo: string,
 ): Promise<Result<OrderStatus, PaymentError>> {
   const result = requireProvider(providerName)
-  if ('success' in result && !result.success)
+  if (!result.success)
     return result
-  const provider = result as PaymentProvider
-  return provider.queryOrder(orderNo)
+  return result.data.queryOrder(orderNo)
 }
 
 /**
@@ -119,10 +116,9 @@ export async function refund(
   input: RefundInput,
 ): Promise<Result<RefundResult, PaymentError>> {
   const result = requireProvider(providerName)
-  if ('success' in result && !result.success)
+  if (!result.success)
     return result
-  const provider = result as PaymentProvider
-  return provider.refund(input)
+  return result.data.refund(input)
 }
 
 /**
@@ -136,10 +132,9 @@ export async function closeOrder(
   orderNo: string,
 ): Promise<Result<void, PaymentError>> {
   const result = requireProvider(providerName)
-  if ('success' in result && !result.success)
+  if (!result.success)
     return result
-  const provider = result as PaymentProvider
-  return provider.closeOrder(orderNo)
+  return result.data.closeOrder(orderNo)
 }
 
 /**

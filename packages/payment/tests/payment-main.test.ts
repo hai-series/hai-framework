@@ -7,8 +7,8 @@
 import type { PaymentProvider } from '../src/payment-types'
 import { ok } from '@h-ai/core'
 import { afterEach, describe, expect, it } from 'vitest'
+import { PaymentErrorCode } from '../src/payment-config'
 import { payment } from '../src/payment-main'
-import { PaymentErrorCode } from '../src/payment-types'
 
 /** 创建 mock Provider */
 function createMockProvider(name: string): PaymentProvider {
@@ -182,6 +182,7 @@ describe('payment.registerProvider（手动注册）', () => {
 
 describe('payment.createOrder（通过入口调用）', () => {
   it('注册 Provider 后可正常创建订单', async () => {
+    await payment.init({})
     payment.registerProvider(createMockProvider('mock'))
 
     const result = await payment.createOrder('mock', {
@@ -200,6 +201,7 @@ describe('payment.createOrder（通过入口调用）', () => {
   })
 
   it('provider 不存在返回 PROVIDER_NOT_FOUND', async () => {
+    await payment.init({})
     const result = await payment.createOrder('nonexistent', {
       orderNo: 'ORD002',
       amount: 100,
@@ -217,6 +219,7 @@ describe('payment.createOrder（通过入口调用）', () => {
 
 describe('payment.handleNotify（通过入口调用）', () => {
   it('注册 Provider 后可处理回调', async () => {
+    await payment.init({})
     payment.registerProvider(createMockProvider('mock'))
 
     const result = await payment.handleNotify('mock', {
@@ -232,6 +235,7 @@ describe('payment.handleNotify（通过入口调用）', () => {
   })
 
   it('provider 不存在返回 PROVIDER_NOT_FOUND', async () => {
+    await payment.init({})
     const result = await payment.handleNotify('nonexistent', {
       body: '{}',
       headers: {},
@@ -246,6 +250,7 @@ describe('payment.handleNotify（通过入口调用）', () => {
 
 describe('payment.queryOrder（通过入口调用）', () => {
   it('注册 Provider 后可查询订单', async () => {
+    await payment.init({})
     payment.registerProvider(createMockProvider('mock'))
 
     const result = await payment.queryOrder('mock', 'ORD001')
@@ -258,6 +263,7 @@ describe('payment.queryOrder（通过入口调用）', () => {
   })
 
   it('provider 不存在返回 PROVIDER_NOT_FOUND', async () => {
+    await payment.init({})
     const result = await payment.queryOrder('nonexistent', 'ORD001')
     expect(result.success).toBe(false)
     if (!result.success) {
@@ -268,6 +274,7 @@ describe('payment.queryOrder（通过入口调用）', () => {
 
 describe('payment.refund（通过入口调用）', () => {
   it('注册 Provider 后可正常退款', async () => {
+    await payment.init({})
     payment.registerProvider(createMockProvider('mock'))
 
     const result = await payment.refund('mock', {
@@ -284,6 +291,7 @@ describe('payment.refund（通过入口调用）', () => {
   })
 
   it('provider 不存在返回 PROVIDER_NOT_FOUND', async () => {
+    await payment.init({})
     const result = await payment.refund('nonexistent', {
       orderNo: 'ORD001',
       refundNo: 'RF001',
@@ -299,6 +307,7 @@ describe('payment.refund（通过入口调用）', () => {
 
 describe('payment.closeOrder（通过入口调用）', () => {
   it('注册 Provider 后可正常关闭订单', async () => {
+    await payment.init({})
     payment.registerProvider(createMockProvider('mock'))
 
     const result = await payment.closeOrder('mock', 'ORD001')
@@ -306,6 +315,7 @@ describe('payment.closeOrder（通过入口调用）', () => {
   })
 
   it('provider 不存在返回 PROVIDER_NOT_FOUND', async () => {
+    await payment.init({})
     const result = await payment.closeOrder('nonexistent', 'ORD001')
     expect(result.success).toBe(false)
     if (!result.success) {

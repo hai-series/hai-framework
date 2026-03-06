@@ -4,19 +4,4 @@
  * @module api
  */
 
-export {
-  CreatePaymentOrderInputSchema,
-  CreatePaymentOrderOutputSchema,
-  paymentEndpoints,
-  QueryOrderOutputSchema,
-  RefundInputSchema,
-  RefundOutputSchema,
-} from './payment-api-contract.js'
-
-export type {
-  CreatePaymentOrderInput,
-  CreatePaymentOrderOutput,
-  QueryOrderOutput,
-  RefundInput,
-  RefundOutput,
-} from './payment-api-contract.js'
+export * from './payment-api-contract.js'

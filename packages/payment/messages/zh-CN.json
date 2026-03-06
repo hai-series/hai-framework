@@ -8,7 +8,10 @@
   "payment_signFailed": "支付签名生成失败",
   "payment_providerNotFound": "未找到支付 Provider",
   "payment_invalidAmount": "支付金额无效",
-  "payment_notInitialized": "支付模块未初始化",
+  "payment_notInitialized": "支付模块未初始化，请先调用 payment.init()",
   "payment_invokeWebFailed": "调起网页支付失败",
-  "payment_invokeAppFailed": "调起 App 支付失败"
+  "payment_invokeAppFailed": "调起 App 支付失败",
+  "payment_configError": "支付模块配置校验失败：{error}",
+  "payment_initFailed": "支付模块初始化失败：{error}",
+  "payment_configFieldRequired": "此配置字段必填"
 }

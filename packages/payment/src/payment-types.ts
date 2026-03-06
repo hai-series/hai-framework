@@ -1,46 +1,19 @@
 /**
  * @h-ai/payment — 类型定义
  *
- * 统一支付模块的公共类型、Provider 接口与错误码。
+ * 统一支付模块的公共类型、Provider 接口与错误类型。
  * @module payment-types
  */
 
 import type { Result } from '@h-ai/core'
+import type { PaymentConfig, PaymentConfigInput, PaymentErrorCodeType } from './payment-config.js'
 
-// ─── 错误码 ───
-
-/** 支付模块错误码（7000-7099） */
-export enum PaymentErrorCode {
-  /** 创建订单失败 */
-  CREATE_ORDER_FAILED = 7000,
-  /** 查询订单失败 */
-  QUERY_ORDER_FAILED = 7001,
-  /** 退款失败 */
-  REFUND_FAILED = 7002,
-  /** 关闭订单失败 */
-  CLOSE_ORDER_FAILED = 7003,
-  /** 回调验签失败 */
-  NOTIFY_VERIFY_FAILED = 7010,
-  /** 回调解析失败 */
-  NOTIFY_PARSE_FAILED = 7011,
-  /** 签名失败 */
-  SIGN_FAILED = 7020,
-  /** Provider 未找到 */
-  PROVIDER_NOT_FOUND = 7030,
-  /** 金额无效 */
-  INVALID_AMOUNT = 7040,
-  /** 模块未初始化 */
-  NOT_INITIALIZED = 7050,
-  /** Web 支付调起失败 */
-  INVOKE_WEB_FAILED = 7060,
-  /** App 支付调起失败 */
-  INVOKE_APP_FAILED = 7061,
-}
+// ─── 错误类型 ───
 
 /** 支付模块错误 */
 export interface PaymentError {
   /** 错误码 */
-  code: PaymentErrorCode
+  code: PaymentErrorCodeType
   /** 错误描述 */
   message: string
   /** 原始错误 */
@@ -141,6 +114,8 @@ export interface RefundInput {
   refundNo: string
   /** 退款金额（分） */
   amount: number
+  /** 订单总金额（分），微信退款必填 */
+  totalAmount?: number
   /** 退款原因 */
   reason?: string
 }
@@ -183,52 +158,19 @@ export interface PaymentProvider {
   closeOrder: (orderNo: string) => Promise<Result<void, PaymentError>>
 }
 
-// ─── 配置 ───
+// ─── 函数接口 ───
 
-/** 微信支付配置 */
-export interface WechatPayConfig {
-  /** 商户号 */
-  mchId: string
-  /** 商户 API v3 密钥 */
-  apiV3Key: string
-  /** 商户证书序列号 */
-  serialNo: string
-  /** 商户私钥（PEM 格式） */
-  privateKey: string
-  /** 微信支付平台证书（PEM 格式） */
-  platformCert?: string
-  /** 应用 ID */
-  appId: string
-}
-
-/** 支付宝配置 */
-export interface AlipayConfig {
-  /** 应用 ID */
-  appId: string
-  /** 应用私钥（PEM 格式） */
-  privateKey: string
-  /** 支付宝公钥（PEM 格式） */
-  alipayPublicKey: string
-  /** 签名类型（默认 RSA2） */
-  signType?: 'RSA2' | 'RSA'
-  /** 是否沙箱模式 */
-  sandbox?: boolean
-}
-
-/** Stripe 配置 */
-export interface StripeConfig {
-  /** Secret Key */
-  secretKey: string
-  /** Webhook Signing Secret */
-  webhookSecret: string
-}
-
-/** 支付模块配置 */
-export interface PaymentConfig {
-  /** 微信支付配置 */
-  wechat?: WechatPayConfig
-  /** 支付宝配置 */
-  alipay?: AlipayConfig
-  /** Stripe 配置 */
-  stripe?: StripeConfig
+/** 支付模块函数接口 */
+export interface PaymentFunctions {
+  init: (config: PaymentConfigInput) => Promise<Result<void, PaymentError>>
+  close: () => Promise<void>
+  readonly config: PaymentConfig | null
+  readonly isInitialized: boolean
+  createOrder: (providerName: string, input: CreateOrderInput) => Promise<Result<PaymentOrder, PaymentError>>
+  handleNotify: (providerName: string, request: PaymentNotifyRequest) => Promise<Result<PaymentNotifyResult, PaymentError>>
+  queryOrder: (providerName: string, orderNo: string) => Promise<Result<OrderStatus, PaymentError>>
+  refund: (providerName: string, input: RefundInput) => Promise<Result<RefundResult, PaymentError>>
+  closeOrder: (providerName: string, orderNo: string) => Promise<Result<void, PaymentError>>
+  getProvider: (name: string) => PaymentProvider | undefined
+  registerProvider: (provider: PaymentProvider) => void
 }

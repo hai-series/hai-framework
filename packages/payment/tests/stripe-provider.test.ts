@@ -6,7 +6,7 @@
 
 import { createHmac } from 'node:crypto'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { PaymentErrorCode } from '../src/payment-types'
+import { PaymentErrorCode } from '../src/payment-config'
 import { createStripeProvider } from '../src/providers/stripe/stripe-provider'
 
 const testConfig = {

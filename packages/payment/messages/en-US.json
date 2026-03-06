@@ -8,7 +8,10 @@
   "payment_signFailed": "Payment signature generation failed",
   "payment_providerNotFound": "Payment provider not found",
   "payment_invalidAmount": "Invalid payment amount",
-  "payment_notInitialized": "Payment module not initialized",
+  "payment_notInitialized": "Payment module not initialized, call payment.init() first",
   "payment_invokeWebFailed": "Failed to invoke web payment",
-  "payment_invokeAppFailed": "Failed to invoke app payment"
+  "payment_invokeAppFailed": "Failed to invoke app payment",
+  "payment_configError": "Payment config validation failed: {error}",
+  "payment_initFailed": "Payment module initialization failed: {error}",
+  "payment_configFieldRequired": "This config field is required"
 }
