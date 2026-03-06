@@ -15,5 +15,7 @@
   "vecdb_updateFailed": "Failed to update vectors: {error}",
   "vecdb_queryFailed": "Failed to query vectors: {error}",
   "vecdb_indexBuildFailed": "Failed to build index: {error}",
-  "vecdb_serializationFailed": "Serialization/deserialization failed: {error}"
+  "vecdb_serializationFailed": "Serialization/deserialization failed: {error}",
+  "vecdb_configPathRequired": "Database storage path is required",
+  "vecdb_configDatabaseRequired": "Database name is required"
 }

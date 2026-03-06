@@ -254,6 +254,8 @@ export interface VectorOperations {
  * 各后端实现需遵循此接口，提供统一的集合管理和向量操作能力。
  */
 export interface VecdbProvider {
+  /** Provider 名称标识 */
+  readonly name: string
   /** 连接到向量数据库 */
   connect: (config: VecdbConfig) => Promise<Result<void, VecdbError>>
   /** 关闭连接 */

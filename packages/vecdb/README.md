@@ -28,7 +28,7 @@ await vecdb.vector.insert('docs', [
 const searchResult = await vecdb.vector.search('docs', Array.from({ length: 1536 }).fill(0.2), { topK: 5, minScore: 0.7 })
 if (searchResult.success) {
   for (const item of searchResult.data) {
-    console.log(item.id, item.score, item.content)
+    // item.id, item.score, item.content
   }
 }
 

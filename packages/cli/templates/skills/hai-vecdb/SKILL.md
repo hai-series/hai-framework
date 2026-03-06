@@ -174,11 +174,11 @@ interface VectorSearchOptions {
 | `DELETE_FAILED`              | 3506 | 删除失败           |
 | `UPDATE_FAILED`              | 3507 | 更新失败           |
 | `INDEX_BUILD_FAILED`         | 3508 | 索引构建失败       |
-| `NOT_INITIALIZED`            | 3509 | 未初始化           |
-| `CONFIG_ERROR`               | 3510 | 配置错误           |
-| `UNSUPPORTED_TYPE`           | 3511 | 不支持的数据库类型 |
-| `DRIVER_NOT_FOUND`           | 3512 | 驱动未安装         |
-| `SERIALIZATION_FAILED`       | 3513 | 序列化失败         |
+| `NOT_INITIALIZED`            | 3510 | 未初始化           |
+| `CONFIG_ERROR`               | 3511 | 配置错误           |
+| `UNSUPPORTED_TYPE`           | 3512 | 不支持的数据库类型 |
+| `DRIVER_NOT_FOUND`           | 3513 | 驱动未安装         |
+| `SERIALIZATION_FAILED`       | 3514 | 序列化失败         |
 
 ---
 

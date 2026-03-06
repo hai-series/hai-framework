@@ -27,10 +27,35 @@ import { vecdbM } from '../vecdb-i18n.js'
 
 const logger = core.logger.child({ module: 'vecdb', scope: 'lancedb' })
 
-// ─── LanceDB 类型占位（动态 import 使用） ───
+// ─── LanceDB 类型接口（动态 import 使用，避免强依赖可选包） ───
 
-type LanceConnection = any
-type LanceTable = any
+/** LanceDB 连接的最小接口定义 */
+interface LanceConnection {
+  tableNames: () => Promise<string[]>
+  openTable: (name: string) => Promise<LanceTable>
+  createTable: (name: string, data: Record<string, unknown>[]) => Promise<LanceTable>
+  dropTable: (name: string) => Promise<void>
+}
+
+/** LanceDB Table 的最小接口定义 */
+interface LanceTable {
+  add: (data: Record<string, unknown>[]) => Promise<void>
+  delete: (filter: string) => Promise<void>
+  countRows: () => Promise<number>
+  search: (...args: unknown[]) => LanceSearchQuery
+}
+
+/** LanceDB 查询构建器的最小接口 */
+interface LanceSearchQuery {
+  limit: (n: number) => LanceSearchQuery
+  where: (filter: string) => LanceSearchQuery
+  toArray: () => Promise<Record<string, unknown>[]>
+}
+
+/** 转义 LanceDB filter 表达式中的字符串值（防注入） */
+function escapeLanceFilterValue(value: string): string {
+  return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
+}
 
 /**
  * 集合元信息（内存维护，LanceDB 不存储维度等信息）
@@ -100,6 +125,8 @@ export function createLancedbProvider(): VecdbProvider {
         return err({ code: VecdbErrorCode.NOT_INITIALIZED, message: vecdbM('vecdb_notInitialized') })
       }
 
+      logger.debug('Creating collection', { name, dimension: options.dimension, metric: options.metric })
+
       try {
         const tableNames = await connection.tableNames()
         if (tableNames.includes(name)) {
@@ -143,6 +170,8 @@ export function createLancedbProvider(): VecdbProvider {
         return err({ code: VecdbErrorCode.NOT_INITIALIZED, message: vecdbM('vecdb_notInitialized') })
       }
 
+      logger.debug('Dropping collection', { name })
+
       try {
         const tableNames = await connection.tableNames()
         if (!tableNames.includes(name)) {
@@ -173,6 +202,8 @@ export function createLancedbProvider(): VecdbProvider {
         return err({ code: VecdbErrorCode.NOT_INITIALIZED, message: vecdbM('vecdb_notInitialized') })
       }
 
+      logger.debug('Checking collection exists', { name })
+
       try {
         const tableNames = await connection.tableNames()
         return ok(tableNames.includes(name))
@@ -190,6 +221,8 @@ export function createLancedbProvider(): VecdbProvider {
       if (!connection) {
         return err({ code: VecdbErrorCode.NOT_INITIALIZED, message: vecdbM('vecdb_notInitialized') })
       }
+
+      logger.debug('Getting collection info', { name })
 
       try {
         const table = await openTable(name)
@@ -224,6 +257,8 @@ export function createLancedbProvider(): VecdbProvider {
         return err({ code: VecdbErrorCode.NOT_INITIALIZED, message: vecdbM('vecdb_notInitialized') })
       }
 
+      logger.debug('Listing collections')
+
       try {
         const tableNames = await connection.tableNames()
         return ok(tableNames)
@@ -245,6 +280,8 @@ export function createLancedbProvider(): VecdbProvider {
       if (!connection) {
         return err({ code: VecdbErrorCode.NOT_INITIALIZED, message: vecdbM('vecdb_notInitialized') })
       }
+
+      logger.debug('Inserting vectors', { collection, count: documents.length })
 
       try {
         const table = await openTable(collection)
@@ -282,6 +319,8 @@ export function createLancedbProvider(): VecdbProvider {
         return err({ code: VecdbErrorCode.NOT_INITIALIZED, message: vecdbM('vecdb_notInitialized') })
       }
 
+      logger.debug('Upserting vectors', { collection, count: documents.length })
+
       try {
         const table = await openTable(collection)
         if (!table) {
@@ -291,7 +330,9 @@ export function createLancedbProvider(): VecdbProvider {
           })
         }
 
-        // LanceDB 支持 merge insert（upsert）
+        // LanceDB 不支持原子 upsert，当前实现为 delete + add 两步操作。
+        // 若在 delete 之后、add 之前发生错误，已删除的记录将丢失。
+        // TODO: LanceDB 未来支持 mergeInsert 后可替换为原子操作
         const records = documents.map(doc => ({
           id: doc.id,
           vector: doc.vector,
@@ -300,7 +341,7 @@ export function createLancedbProvider(): VecdbProvider {
         }))
 
         // 先删除已存在的记录，再插入
-        const ids = documents.map(d => `"${d.id}"`).join(', ')
+        const ids = documents.map(d => `"${escapeLanceFilterValue(d.id)}"`).join(', ')
         await table.delete(`id IN (${ids})`)
         await table.add(records)
 
@@ -322,6 +363,8 @@ export function createLancedbProvider(): VecdbProvider {
         return err({ code: VecdbErrorCode.NOT_INITIALIZED, message: vecdbM('vecdb_notInitialized') })
       }
 
+      logger.debug('Deleting vectors', { collection, count: ids.length })
+
       try {
         const table = await openTable(collection)
         if (!table) {
@@ -331,7 +374,7 @@ export function createLancedbProvider(): VecdbProvider {
           })
         }
 
-        const idList = ids.map(id => `"${id}"`).join(', ')
+        const idList = ids.map(id => `"${escapeLanceFilterValue(id)}"`).join(', ')
         await table.delete(`id IN (${idList})`)
 
         logger.info('Vectors deleted', { collection, count: ids.length })
@@ -356,6 +399,8 @@ export function createLancedbProvider(): VecdbProvider {
         return err({ code: VecdbErrorCode.NOT_INITIALIZED, message: vecdbM('vecdb_notInitialized') })
       }
 
+      logger.debug('Searching vectors', { collection, topK: options?.topK, hasFilter: !!options?.filter })
+
       try {
         const table = await openTable(collection)
         if (!table) {
@@ -375,7 +420,7 @@ export function createLancedbProvider(): VecdbProvider {
           const filterParts: string[] = []
           for (const [key, value] of Object.entries(options.filter)) {
             // LanceDB 过滤基于 SQL WHERE 子句（metadata 为 JSON 字符串）
-            filterParts.push(`metadata LIKE '%"${key}":"${String(value)}"%'`)
+            filterParts.push(`metadata LIKE '%"${escapeLanceFilterValue(key)}":"${escapeLanceFilterValue(String(value))}"%'`)
           }
           if (filterParts.length > 0) {
             query = query.where(filterParts.join(' AND '))
@@ -416,6 +461,8 @@ export function createLancedbProvider(): VecdbProvider {
         return err({ code: VecdbErrorCode.NOT_INITIALIZED, message: vecdbM('vecdb_notInitialized') })
       }
 
+      logger.debug('Counting vectors', { collection })
+
       try {
         const table = await openTable(collection)
         if (!table) {
@@ -441,6 +488,8 @@ export function createLancedbProvider(): VecdbProvider {
   // ─── Provider 接口 ───
 
   return {
+    name: 'lancedb',
+
     async connect(cfg): Promise<Result<void, VecdbError>> {
       if (cfg.type !== 'lancedb') {
         return err({
@@ -457,15 +506,20 @@ export function createLancedbProvider(): VecdbProvider {
       const lancedb = loadResult.data
 
       try {
-        connection = await lancedb.connect(lanceConfig.path)
+        connection = await lancedb.connect(lanceConfig.path) as unknown as LanceConnection
         config = lanceConfig
 
         // 恢复已有集合的元信息
-        const tableNames = await connection.tableNames()
+        // 限制：LanceDB 不持久化维度/度量元信息，此处通过读取首条记录推断。
+        // 若表为空或向量维度与探测维度不匹配，dimension 将为 0。
+        const tableNames = await connection!.tableNames()
         for (const name of tableNames) {
-          // 尝试读取维度信息：打开表取第一条记录
           try {
             const table = await connection.openTable(name)
+            const count = await table.countRows()
+            if (count === 0)
+              continue
+            // 使用 1 维零向量探测，若真实维度不同 LanceDB 可能报错
             const rows = await table.search(Array.from({ length: 1 }).fill(0)).limit(1).toArray()
             if (rows.length > 0 && rows[0].vector) {
               collectionMetas.set(name, {
@@ -475,7 +529,7 @@ export function createLancedbProvider(): VecdbProvider {
             }
           }
           catch {
-            // 无法推断维度，跳过
+            // 无法推断维度（例如维度不匹配），跳过；info() 将返回 dimension=0
           }
         }
 

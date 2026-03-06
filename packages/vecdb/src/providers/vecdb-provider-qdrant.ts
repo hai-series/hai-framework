@@ -28,7 +28,16 @@ import { vecdbM } from '../vecdb-i18n.js'
 
 const logger = core.logger.child({ module: 'vecdb', scope: 'qdrant' })
 
-type QdrantClient = any
+/** Qdrant Client 的最小接口定义（避免强依赖可选包） */
+interface QdrantClient {
+  getCollections: () => Promise<{ collections: { name: string }[] }>
+  getCollection: (name: string) => Promise<{ config?: { params?: { vectors?: { size?: number, distance?: string } } }, points_count?: number }>
+  createCollection: (name: string, params: Record<string, unknown>) => Promise<unknown>
+  deleteCollection: (name: string) => Promise<unknown>
+  upsert: (collection: string, params: Record<string, unknown>) => Promise<unknown>
+  delete: (collection: string, params: Record<string, unknown>) => Promise<unknown>
+  search: (collection: string, params: Record<string, unknown>) => Promise<Record<string, unknown>[]>
+}
 
 /**
  * 将字符串 ID 转换为 UUID 格式（Qdrant 要求 UUID 或无符号整数作为 point ID）
@@ -37,7 +46,7 @@ type QdrantClient = any
  * @returns UUID 格式字符串
  */
 function hashToUuid(id: string): string {
-  const hash = createHash('md5').update(id).digest('hex')
+  const hash = createHash('sha256').update(id).digest('hex')
   return `${hash.slice(0, 8)}-${hash.slice(8, 12)}-${hash.slice(12, 16)}-${hash.slice(16, 20)}-${hash.slice(20, 32)}`
 }
 
@@ -69,6 +78,8 @@ export function createQdrantProvider(): VecdbProvider {
       if (!client) {
         return err({ code: VecdbErrorCode.NOT_INITIALIZED, message: vecdbM('vecdb_notInitialized') })
       }
+
+      logger.debug('Creating collection', { name, dimension: options.dimension, metric: options.metric })
 
       try {
         // 检查集合是否已存在
@@ -108,10 +119,14 @@ export function createQdrantProvider(): VecdbProvider {
         return err({ code: VecdbErrorCode.NOT_INITIALIZED, message: vecdbM('vecdb_notInitialized') })
       }
 
+      logger.debug('Dropping collection', { name })
+
       try {
-        const collections = await client.getCollections()
-        const exists = collections.collections.some((c: { name: string }) => c.name === name)
-        if (!exists) {
+        // 先用 getCollection 确认存在，不存在时会抛出异常
+        try {
+          await client.getCollection(name)
+        }
+        catch {
           return err({
             code: VecdbErrorCode.COLLECTION_NOT_FOUND,
             message: vecdbM('vecdb_collectionNotFound', { params: { name } }),
@@ -138,17 +153,15 @@ export function createQdrantProvider(): VecdbProvider {
         return err({ code: VecdbErrorCode.NOT_INITIALIZED, message: vecdbM('vecdb_notInitialized') })
       }
 
+      logger.debug('Checking collection exists', { name })
+
       try {
-        const collections = await client.getCollections()
-        const exists = collections.collections.some((c: { name: string }) => c.name === name)
-        return ok(exists)
+        await client.getCollection(name)
+        return ok(true)
       }
-      catch (error) {
-        return err({
-          code: VecdbErrorCode.QUERY_FAILED,
-          message: vecdbM('vecdb_queryFailed', { params: { error: String(error) } }),
-          cause: error,
-        })
+      catch {
+        // getCollection 在集合不存在时抛出异常
+        return ok(false)
       }
     },
 
@@ -157,18 +170,19 @@ export function createQdrantProvider(): VecdbProvider {
         return err({ code: VecdbErrorCode.NOT_INITIALIZED, message: vecdbM('vecdb_notInitialized') })
       }
 
+      logger.debug('Getting collection info', { name })
+
       try {
-        // 先检查集合是否存在，避免依赖不稳定的错误消息匹配
-        const collections = await client.getCollections()
-        const exists = collections.collections.some((c: { name: string }) => c.name === name)
-        if (!exists) {
+        let collectionInfo: Awaited<ReturnType<QdrantClient['getCollection']>>
+        try {
+          collectionInfo = await client.getCollection(name)
+        }
+        catch {
           return err({
             code: VecdbErrorCode.COLLECTION_NOT_FOUND,
             message: vecdbM('vecdb_collectionNotFound', { params: { name } }),
           })
         }
-
-        const collectionInfo = await client.getCollection(name)
 
         const vectorsConfig = collectionInfo.config?.params?.vectors
         const dimension = vectorsConfig?.size ?? 0
@@ -200,6 +214,8 @@ export function createQdrantProvider(): VecdbProvider {
         return err({ code: VecdbErrorCode.NOT_INITIALIZED, message: vecdbM('vecdb_notInitialized') })
       }
 
+      logger.debug('Listing collections')
+
       try {
         const collections = await client.getCollections()
         const names = collections.collections.map((c: { name: string }) => c.name)
@@ -222,6 +238,8 @@ export function createQdrantProvider(): VecdbProvider {
       if (!client) {
         return err({ code: VecdbErrorCode.NOT_INITIALIZED, message: vecdbM('vecdb_notInitialized') })
       }
+
+      logger.debug('Inserting vectors', { collection, count: documents.length })
 
       try {
         const points = documents.map(doc => ({
@@ -259,6 +277,8 @@ export function createQdrantProvider(): VecdbProvider {
         return err({ code: VecdbErrorCode.NOT_INITIALIZED, message: vecdbM('vecdb_notInitialized') })
       }
 
+      logger.debug('Deleting vectors', { collection, count: ids.length })
+
       try {
         const uuids = ids.map(hashToUuid)
         await client.delete(collection, { points: uuids })
@@ -287,6 +307,8 @@ export function createQdrantProvider(): VecdbProvider {
 
       const topK = options?.topK ?? 10
       const minScore = options?.minScore ?? 0
+
+      logger.debug('Searching vectors', { collection, topK, hasFilter: !!options?.filter })
 
       try {
         // 构建过滤条件
@@ -335,6 +357,8 @@ export function createQdrantProvider(): VecdbProvider {
         return err({ code: VecdbErrorCode.NOT_INITIALIZED, message: vecdbM('vecdb_notInitialized') })
       }
 
+      logger.debug('Counting vectors', { collection })
+
       try {
         const info = await client.getCollection(collection)
         return ok(info.points_count ?? 0)
@@ -352,6 +376,8 @@ export function createQdrantProvider(): VecdbProvider {
   // ─── Provider 接口 ───
 
   return {
+    name: 'qdrant',
+
     async connect(cfg): Promise<Result<void, VecdbError>> {
       if (cfg.type !== 'qdrant') {
         return err({
@@ -365,13 +391,15 @@ export function createQdrantProvider(): VecdbProvider {
       try {
         const { QdrantClient: QdrantClientClass } = await import('@qdrant/js-client-rest')
 
-        client = new QdrantClientClass({
+        const qdrantClient = new QdrantClientClass({
           url: qdrantConfig.url,
           apiKey: qdrantConfig.apiKey,
-        })
+        }) as unknown as QdrantClient
 
         // 验证连接
-        await client.getCollections()
+        await qdrantClient.getCollections()
+
+        client = qdrantClient
 
         config = qdrantConfig
         logger.info('Qdrant connected', { url: qdrantConfig.url })
