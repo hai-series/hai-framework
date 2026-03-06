@@ -6,11 +6,12 @@
  */
 
 import type { Result } from '@h-ai/core'
+import type { ApiClientError } from './api-client-config.js'
 import type { FetchClient } from './api-client-fetch.js'
-import type { ApiClientError, EndpointDef } from './api-client-types.js'
+import type { EndpointDef } from './api-client-types.js'
 import { err } from '@h-ai/core'
+import { ApiClientErrorCode } from './api-client-config.js'
 import { apiClientM } from './api-client-i18n.js'
-import { ApiClientErrorCode } from './api-client-types.js'
 
 /**
  * 创建契约调用函数
@@ -65,7 +66,7 @@ export function createContractCaller(fetchClient: FetchClient) {
         return fetchClient.patch<TOutput>(endpoint.path, validInput)
 
       case 'DELETE':
-        return fetchClient.delete<TOutput>(endpoint.path)
+        return fetchClient.delete<TOutput>(endpoint.path, validInput as Record<string, unknown>)
 
       default:
         return err({

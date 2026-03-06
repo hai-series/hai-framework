@@ -125,5 +125,237 @@ describe('createFetchClient', () => {
       const headers = (fetch.mock.calls[0] as { headers: Record<string, string> }[])[1]?.headers
       expect(headers).toHaveProperty('X-Custom', 'test')
     })
+
+    it('响应拦截器可以修改响应', async () => {
+      const originalBody = { data: { id: 1 } }
+      const fetch = mockFetch(200, originalBody)
+      const client = createFetchClient({
+        baseUrl: 'https://api.test.com',
+        fetch,
+        interceptors: {
+          response: [
+            (response) => {
+              // 透传响应（验证拦截器被调用）
+              return response
+            },
+          ],
+        },
+      })
+
+      const result = await client.get<{ id: number }>('/test')
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data).toEqual({ id: 1 })
+      }
+    })
+  })
+
+  describe('timeout', () => {
+    it('超时返回 TIMEOUT 错误', async () => {
+      const fetch = vi.fn().mockImplementation((_url: string, init: { signal: AbortSignal }) => {
+        return new Promise((_resolve, reject) => {
+          init.signal.addEventListener('abort', () => {
+            reject(new DOMException('The operation was aborted', 'AbortError'))
+          })
+        })
+      })
+      const client = createFetchClient({ baseUrl: 'https://api.test.com', fetch, timeout: 50 })
+
+      const result = await client.get('/slow')
+
+      expect(result.success).toBe(false)
+      if (!result.success) {
+        expect(result.error.code).toBe(6001) // TIMEOUT
+      }
+    })
+  })
+
+  describe('401 auto refresh', () => {
+    it('401 时自动刷新 Token 并重试', async () => {
+      let callCount = 0
+      const fetch = vi.fn().mockImplementation((url: string) => {
+        if (url.includes('/auth/refresh')) {
+          return Promise.resolve(new Response(
+            JSON.stringify({ data: { accessToken: 'new-at', refreshToken: 'new-rt', expiresIn: 3600, tokenType: 'Bearer' } }),
+            { status: 200, headers: { 'content-type': 'application/json' } },
+          ))
+        }
+        callCount++
+        if (callCount === 1) {
+          return Promise.resolve(new Response(JSON.stringify({ message: 'Unauthorized' }), {
+            status: 401,
+            headers: { 'content-type': 'application/json' },
+          }))
+        }
+        return Promise.resolve(new Response(JSON.stringify({ data: { id: 1 } }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        }))
+      })
+
+      const { createMemoryTokenStorage } = await import('../src/api-client-auth.js')
+      const { createTokenManager } = await import('../src/api-client-token-manager.js')
+      const storage = createMemoryTokenStorage()
+      await storage.setAccessToken('old-token')
+      await storage.setRefreshToken('old-refresh')
+      const tokenManager = createTokenManager(storage, 'https://api.test.com/auth/refresh', fetch)
+
+      const client = createFetchClient({ baseUrl: 'https://api.test.com', fetch }, tokenManager)
+      const result = await client.get<{ id: number }>('/protected')
+
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data).toEqual({ id: 1 })
+      }
+      // 原始请求 + 刷新请求 + 重试请求 = 3 次 fetch
+      expect(fetch).toHaveBeenCalledTimes(3)
+    })
+  })
+
+  describe('delete', () => {
+    it('dELETE 请求支持 query 参数', async () => {
+      const fetch = mockFetch(200, { data: null })
+      const client = createFetchClient({ baseUrl: 'https://api.test.com', fetch })
+
+      await client.delete('/items', { id: '123' })
+
+      const url = (fetch.mock.calls[0] as string[])[0]
+      expect(url).toContain('id=123')
+    })
+  })
+
+  describe('stream', () => {
+    it('请求失败时 throw 错误', async () => {
+      const fetch = vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ message: 'Server Error' }), {
+          status: 500,
+          headers: { 'content-type': 'application/json' },
+        }),
+      )
+      const client = createFetchClient({ baseUrl: 'https://api.test.com', fetch })
+
+      const chunks: string[] = []
+      await expect(async () => {
+        for await (const chunk of client.stream('/chat')) {
+          chunks.push(chunk)
+        }
+      }).rejects.toThrow()
+      expect(chunks).toHaveLength(0)
+    })
+
+    it('解析 SSE data: 行', async () => {
+      const sseData = 'data: hello\ndata: world\ndata: [DONE]\n'
+      const encoder = new TextEncoder()
+      const stream = new ReadableStream({
+        start(controller) {
+          controller.enqueue(encoder.encode(sseData))
+          controller.close()
+        },
+      })
+
+      const fetch = vi.fn().mockResolvedValue(new Response(stream, {
+        status: 200,
+        headers: { 'content-type': 'text/event-stream' },
+      }))
+      const client = createFetchClient({ baseUrl: 'https://api.test.com', fetch })
+
+      const chunks: string[] = []
+      for await (const chunk of client.stream('/chat', { message: 'hi' })) {
+        chunks.push(chunk)
+      }
+
+      expect(chunks).toEqual(['hello', 'world'])
+    })
+
+    it('跨 chunk SSE 行缓冲', async () => {
+      const encoder = new TextEncoder()
+      const stream = new ReadableStream({
+        start(controller) {
+          // 第一个 chunk 在 "data: hel" 处断开
+          controller.enqueue(encoder.encode('data: hel'))
+          // 第二个 chunk 包含剩余部分
+          controller.enqueue(encoder.encode('lo\ndata: world\n'))
+          controller.close()
+        },
+      })
+
+      const fetch = vi.fn().mockResolvedValue(new Response(stream, {
+        status: 200,
+        headers: { 'content-type': 'text/event-stream' },
+      }))
+      const client = createFetchClient({ baseUrl: 'https://api.test.com', fetch })
+
+      const chunks: string[] = []
+      for await (const chunk of client.stream('/chat')) {
+        chunks.push(chunk)
+      }
+
+      expect(chunks).toEqual(['hello', 'world'])
+    })
+
+    it('超时抛出错误', async () => {
+      const fetch = vi.fn().mockImplementation((_url: string, init: { signal: AbortSignal }) => {
+        return new Promise((_resolve, reject) => {
+          init.signal.addEventListener('abort', () => {
+            reject(new DOMException('The operation was aborted', 'AbortError'))
+          })
+        })
+      })
+      const client = createFetchClient({ baseUrl: 'https://api.test.com', fetch, timeout: 50 })
+
+      await expect(async () => {
+        for await (const _chunk of client.stream('/chat')) {
+          // 不应到达
+        }
+      }).rejects.toThrow()
+    })
+
+    it('401 时自动刷新 Token 并重试', async () => {
+      const encoder = new TextEncoder()
+      let callCount = 0
+      const fetch = vi.fn().mockImplementation((url: string) => {
+        if (url.includes('/auth/refresh')) {
+          return Promise.resolve(new Response(
+            JSON.stringify({ data: { accessToken: 'new-at', refreshToken: 'new-rt', expiresIn: 3600, tokenType: 'Bearer' } }),
+            { status: 200, headers: { 'content-type': 'application/json' } },
+          ))
+        }
+        callCount++
+        if (callCount === 1) {
+          return Promise.resolve(new Response(JSON.stringify({ message: 'Unauthorized' }), {
+            status: 401,
+            headers: { 'content-type': 'application/json' },
+          }))
+        }
+        const stream = new ReadableStream({
+          start(controller) {
+            controller.enqueue(encoder.encode('data: ok\n'))
+            controller.close()
+          },
+        })
+        return Promise.resolve(new Response(stream, {
+          status: 200,
+          headers: { 'content-type': 'text/event-stream' },
+        }))
+      })
+
+      const { createMemoryTokenStorage } = await import('../src/api-client-auth.js')
+      const { createTokenManager } = await import('../src/api-client-token-manager.js')
+      const storage = createMemoryTokenStorage()
+      await storage.setAccessToken('old-token')
+      await storage.setRefreshToken('old-refresh')
+      const tokenManager = createTokenManager(storage, 'https://api.test.com/auth/refresh', fetch)
+
+      const client = createFetchClient({ baseUrl: 'https://api.test.com', fetch }, tokenManager)
+
+      const chunks: string[] = []
+      for await (const chunk of client.stream('/chat')) {
+        chunks.push(chunk)
+      }
+
+      expect(chunks).toEqual(['ok'])
+      // 原始请求 + 刷新请求 + 重试请求 = 3 次 fetch
+      expect(fetch).toHaveBeenCalledTimes(3)
+    })
   })
 })

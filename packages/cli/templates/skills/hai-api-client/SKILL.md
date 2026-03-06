@@ -28,11 +28,14 @@ import { createApiClient } from '@h-ai/api-client'
 
 export const api = createApiClient({
   baseUrl: 'http://localhost:3000',
-  tokenStorage: 'localStorage', // 或 'memory'，App 端用 createCapacitorTokenStorage()
-  refreshUrl: '/api/v1/auth/refresh',
+  auth: {
+    refreshUrl: '/auth/refresh',
+  },
   timeout: 15000,
 })
 ```
+
+> `auth.storage` 可选：默认使用 `createLocalStorageTokenStorage()`；SSR/测试建议显式传 `createMemoryTokenStorage()`，App 端建议传 `createCapacitorTokenStorage()`。
 
 ### 2. 普通请求
 
@@ -42,13 +45,12 @@ const users = await api.get<User[]>('/api/v1/users')
 
 // POST 请求
 const result = await api.post<CreateResult>('/api/v1/users', {
-  body: { username: 'alice', email: 'alice@example.com' },
+  username: 'alice',
+  email: 'alice@example.com',
 })
 
-// 带查询参数
-const page = await api.get<PageResult>('/api/v1/users', {
-  params: { page: 1, pageSize: 20 },
-})
+// 带查询参数（直接传入 Record<string, unknown>）
+const page = await api.get<PageResult>('/api/v1/users', { page: 1, pageSize: 20 })
 ```
 
 ### 3. 契约调用（推荐）
@@ -72,7 +74,7 @@ if (loginResult.success) {
 
 ```typescript
 // 手动设置 Token（登录后）
-await api.tokenManager.setTokens({
+await api.auth.setTokens({
   accessToken: 'xxx',
   refreshToken: 'yyy',
   expiresIn: 3600,
@@ -80,22 +82,20 @@ await api.tokenManager.setTokens({
 })
 
 // 清除 Token（登出）
-await api.tokenManager.clearTokens()
+await api.auth.clear()
 
-// 获取当前 Token
-const token = await api.tokenManager.getAccessToken()
+// 监听 Token 刷新
+api.auth.onTokenRefreshed((tokens) => {
+  // tokens 包含新的 accessToken / refreshToken
+})
 ```
 
 ### 5. 流式响应
 
 ```typescript
-const stream = await api.stream('/api/v1/ai/chat', {
-  method: 'POST',
-  body: { message: 'Hello' },
-})
-
-for await (const chunk of stream) {
-  console.log(chunk)
+// stream(path, body?) — 返回 AsyncIterable<string>，按 SSE data: 行 yield
+for await (const chunk of api.stream('/api/v1/ai/chat', { message: 'Hello' })) {
+  // 每个 chunk 是 SSE data: 行的内容
 }
 ```
 
@@ -103,17 +103,20 @@ for await (const chunk of stream) {
 
 ## 核心 API
 
-| API                            | 用途           | 关键点                               |
-| ------------------------------ | -------------- | ------------------------------------ |
-| `createApiClient(config)`      | 创建客户端实例 | 返回 api 对象                        |
-| `api.get<T>(url, options?)`    | GET 请求       | 自动附加 Token                       |
-| `api.post<T>(url, options?)`   | POST 请求      | 自动序列化 body                      |
-| `api.put<T>(url, options?)`    | PUT 请求       | —                                    |
-| `api.delete<T>(url, options?)` | DELETE 请求    | —                                    |
-| `api.call(endpoint, input)`    | 契约调用       | 入参/出参自动 Zod 验证，类型安全     |
-| `api.stream(url, options?)`    | 流式请求       | 返回 AsyncIterable                   |
-| `api.tokenManager`             | Token 管理器   | setTokens/clearTokens/getAccessToken |
-| `api.addInterceptor(fn)`       | 添加拦截器     | 请求/响应拦截                        |
+| API                                | 用途           | 关键点                                |
+| ---------------------------------- | -------------- | ------------------------------------- |
+| `createApiClient(config)`          | 创建客户端实例 | 返回 ApiClient 对象                   |
+| `api.get<T>(path, params?)`        | GET 请求       | params 附加到 URL query string        |
+| `api.post<T>(path, body?)`         | POST 请求      | body 自动 JSON 序列化                 |
+| `api.put<T>(path, body?)`          | PUT 请求       | —                                     |
+| `api.patch<T>(path, body?)`        | PATCH 请求     | —                                     |
+| `api.delete<T>(path, params?)`     | DELETE 请求    | params 附加到 URL query string        |
+| `api.call(endpoint, input)`        | 契约调用       | 入参 Zod 校验，路径/方法由契约决定    |
+| `api.upload(path, file, options?)`  | 文件上传       | FormData，支持附加字段                |
+| `api.stream(path, body?)`          | 流式请求       | 返回 AsyncIterable<string>（SSE）     |
+| `api.auth.setTokens(tokens)`       | 设置 Token     | 存入 TokenStorage                     |
+| `api.auth.clear()`                 | 清空 Token     | 清空存储                              |
+| `api.auth.onTokenRefreshed(cb)`    | 刷新回调       | 返回取消订阅函数，Token 自动刷新成功时通知 |
 
 ### EndpointDef 契约结构
 
@@ -133,13 +136,14 @@ interface EndpointDef<TInput, TOutput> {
 ```typescript
 interface TokenStorage {
   getAccessToken: () => Promise<string | null>
+  setAccessToken: (token: string) => Promise<void>
   getRefreshToken: () => Promise<string | null>
-  setTokens: (tokens: TokenPair) => Promise<void>
-  clearTokens: () => Promise<void>
+  setRefreshToken: (token: string) => Promise<void>
+  clear: () => Promise<void>
 }
 ```
 
-内置实现：`'localStorage'`（Web）、`'memory'`（SSR/测试）。
+内置实现：`createLocalStorageTokenStorage()`（Web）、`createMemoryTokenStorage()`（SSR/测试）。
 App 端使用 `@h-ai/capacitor` 的 `createCapacitorTokenStorage()`。
 
 ---
@@ -150,13 +154,13 @@ App 端使用 `@h-ai/capacitor` 的 `createCapacitorTokenStorage()`。
 | ------ | ---------------------- | -------------------------- |
 | 6000   | `NETWORK_ERROR`        | 网络不可达                 |
 | 6001   | `TIMEOUT`              | 请求超时                   |
-| 6002   | `UNAUTHORIZED`         | 401 未认证                 |
-| 6003   | `FORBIDDEN`            | 403 无权限                 |
-| 6004   | `NOT_FOUND`            | 404 资源不存在             |
-| 6005   | `SERVER_ERROR`         | 5xx 服务端错误             |
-| 6010   | `VALIDATION_ERROR`     | 契约入参/出参 Zod 校验失败 |
-| 6011   | `TOKEN_REFRESH_FAILED` | Token 刷新失败             |
-| 6020   | `STREAM_ERROR`         | 流式响应错误               |
+| 6002   | `SERVER_ERROR`         | 5xx 服务端错误             |
+| 6003   | `UNAUTHORIZED`         | 401 未认证                 |
+| 6004   | `FORBIDDEN`            | 403 无权限                 |
+| 6005   | `NOT_FOUND`            | 404 资源不存在             |
+| 6006   | `VALIDATION_FAILED`    | 请求参数校验失败（400）    |
+| 6007   | `TOKEN_REFRESH_FAILED` | Token 刷新失败             |
+| 6099   | `UNKNOWN`              | 未知错误                   |
 
 ---
 
@@ -237,7 +241,7 @@ import { iamEndpoints } from '@h-ai/iam/api'
 // 登录
 const login = await api.call(iamEndpoints.login, { username, password })
 if (login.success) {
-  await api.tokenManager.setTokens(login.data.tokens)
+  await api.auth.setTokens(login.data.tokens)
 }
 
 // 获取当前用户
@@ -245,7 +249,7 @@ const me = await api.call(iamEndpoints.currentUser, {})
 
 // 登出
 await api.call(iamEndpoints.logout, {})
-await api.tokenManager.clearTokens()
+await api.auth.clear()
 ```
 
 ### Android App 中使用
@@ -256,8 +260,10 @@ import { createCapacitorTokenStorage } from '@h-ai/capacitor'
 
 const api = createApiClient({
   baseUrl: import.meta.env.PUBLIC_API_BASE,
-  tokenStorage: createCapacitorTokenStorage(),
-  refreshUrl: '/api/v1/auth/refresh',
+  auth: {
+    storage: createCapacitorTokenStorage(),
+    refreshUrl: '/api/v1/auth/refresh',
+  },
 })
 ```
 

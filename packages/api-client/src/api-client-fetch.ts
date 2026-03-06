@@ -6,17 +6,20 @@
  */
 
 import type { Result } from '@h-ai/core'
-import type { TokenManager } from './api-client-auth.js'
+import type { ApiClientError } from './api-client-config.js'
+import type { TokenManager } from './api-client-token-manager.js'
 import type {
   ApiClientConfig,
-  ApiClientError,
   RequestConfig,
   RequestInterceptor,
   ResponseInterceptor,
   UploadOptions,
 } from './api-client-types.js'
-import { ok } from '@h-ai/core'
+import { core, ok } from '@h-ai/core'
 import { networkErrorToResult, responseToError } from './api-client-error.js'
+import { apiClientM } from './api-client-i18n.js'
+
+const logger = core.logger.child({ module: 'api-client', scope: 'fetch' })
 
 /** 默认超时 30s */
 const DEFAULT_TIMEOUT = 30_000
@@ -69,6 +72,8 @@ export function createFetchClient(
     requestConfig: RequestConfig,
     retryOnUnauthorized = true,
   ): Promise<Result<T, ApiClientError>> {
+    logger.trace('Executing request', { method: requestConfig.method, url: requestConfig.url })
+
     // 1. Token 注入
     if (tokenManager) {
       const accessToken = await tokenManager.storage.getAccessToken()
@@ -105,12 +110,14 @@ export function createFetchClient(
 
       // 5. 401 自动刷新 + 重试
       if (response.status === 401 && retryOnUnauthorized && tokenManager) {
+        logger.trace('Received 401, attempting token refresh', { url: requestConfig.url })
         const tokens = await tokenManager.refresh()
         if (tokens) {
-          // 用新 Token 重试一次
+          logger.trace('Token refreshed, retrying request', { url: requestConfig.url })
           requestConfig.headers.Authorization = `Bearer ${tokens.accessToken}`
           return execute<T>(requestConfig, false)
         }
+        logger.warn('Token refresh failed, returning 401 error', { url: requestConfig.url })
       }
 
       // 6. 错误处理
@@ -134,6 +141,7 @@ export function createFetchClient(
     }
     catch (cause) {
       clearTimeout(timeoutId)
+      logger.warn('Request failed', { url: requestConfig.url, error: cause })
       return networkErrorToResult(cause)
     }
   }
@@ -175,9 +183,9 @@ export function createFetchClient(
     })
   }
 
-  async function del<T>(path: string): Promise<Result<T, ApiClientError>> {
+  async function del<T>(path: string, params?: Record<string, unknown>): Promise<Result<T, ApiClientError>> {
     return execute<T>({
-      url: buildUrl(path),
+      url: buildUrl(path, params),
       method: 'DELETE',
       headers: { Accept: 'application/json' },
     })
@@ -203,7 +211,7 @@ export function createFetchClient(
       url: buildUrl(path),
       method: 'POST',
       headers: { Accept: 'application/json' },
-      body: formData as unknown as string, // FormData 走浏览器原生 multipart
+      body: formData,
     })
   }
 
@@ -231,18 +239,56 @@ export function createFetchClient(
       finalConfig = await interceptor(finalConfig)
     }
 
-    const response = await fetchFn(finalConfig.url, {
-      method: finalConfig.method,
-      headers: finalConfig.headers,
-      body: finalConfig.body,
-    })
+    // 超时控制
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), timeout)
 
-    if (!response.ok || !response.body) {
-      return
+    async function doStreamFetch(): Promise<Response> {
+      try {
+        return await fetchFn(finalConfig.url, {
+          method: finalConfig.method,
+          headers: finalConfig.headers,
+          body: finalConfig.body,
+          signal: controller.signal,
+        })
+      }
+      catch (cause) {
+        clearTimeout(timeoutId)
+        if (cause instanceof DOMException && cause.name === 'AbortError') {
+          throw new Error(apiClientM('apiClient_timeout'), { cause })
+        }
+        throw cause
+      }
+    }
+
+    let response = await doStreamFetch()
+
+    // 401 自动刷新 + 重试（一次）
+    if (response.status === 401 && tokenManager) {
+      logger.info('Stream received 401, attempting token refresh', { url: requestConfig.url })
+      const tokens = await tokenManager.refresh()
+      if (tokens) {
+        finalConfig.headers.Authorization = `Bearer ${tokens.accessToken}`
+        response = await doStreamFetch()
+      }
+    }
+
+    if (!response.ok) {
+      clearTimeout(timeoutId)
+      const errorResult = await responseToError(response)
+      if (!errorResult.success) {
+        throw new Error(errorResult.error.message, { cause: errorResult.error })
+      }
+    }
+
+    if (!response.body) {
+      clearTimeout(timeoutId)
+      throw new Error(apiClientM('apiClient_networkError'))
     }
 
     const reader = response.body.getReader()
     const decoder = new TextDecoder()
+    let lineBuffer = ''
 
     try {
       while (true) {
@@ -250,10 +296,15 @@ export function createFetchClient(
         if (done)
           break
 
-        const text = decoder.decode(value, { stream: true })
-        // 按 SSE 格式解析 data: 行
-        const lines = text.split('\n')
-        for (const line of lines) {
+        // 每次 read 成功，重置超时
+        clearTimeout(timeoutId)
+
+        lineBuffer += decoder.decode(value, { stream: true })
+        // 按换行分割，保留最后一段（可能是不完整行）
+        const parts = lineBuffer.split('\n')
+        lineBuffer = parts.pop() ?? ''
+
+        for (const line of parts) {
           if (line.startsWith('data: ')) {
             const data = line.slice(6)
             if (data !== '[DONE]') {
@@ -262,8 +313,17 @@ export function createFetchClient(
           }
         }
       }
+
+      // 处理缓冲区剩余内容
+      if (lineBuffer.startsWith('data: ')) {
+        const data = lineBuffer.slice(6)
+        if (data !== '[DONE]') {
+          yield data
+        }
+      }
     }
     finally {
+      clearTimeout(timeoutId)
       reader.releaseLock()
     }
   }
