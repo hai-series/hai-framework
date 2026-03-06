@@ -86,13 +86,13 @@ describe('reach config', () => {
   })
 
   it('错误码应正确定义', () => {
-    expect(ReachErrorCode.SEND_FAILED).toBe(8000)
-    expect(ReachErrorCode.NOT_INITIALIZED).toBe(8010)
-    expect(ReachErrorCode.TEMPLATE_NOT_FOUND).toBe(8001)
-    expect(ReachErrorCode.PROVIDER_NOT_FOUND).toBe(8004)
-    expect(ReachErrorCode.DND_BLOCKED).toBe(8005)
-    expect(ReachErrorCode.DND_DEFERRED).toBe(8006)
-    expect(ReachErrorCode.CONFIG_ERROR).toBe(8012)
+    expect(ReachErrorCode.SEND_FAILED).toBe(8100)
+    expect(ReachErrorCode.NOT_INITIALIZED).toBe(8110)
+    expect(ReachErrorCode.TEMPLATE_NOT_FOUND).toBe(8101)
+    expect(ReachErrorCode.PROVIDER_NOT_FOUND).toBe(8104)
+    expect(ReachErrorCode.DND_BLOCKED).toBe(8105)
+    expect(ReachErrorCode.DND_DEFERRED).toBe(8106)
+    expect(ReachErrorCode.CONFIG_ERROR).toBe(8112)
   })
 
   it('模板配置 schema 应正确解析', () => {
