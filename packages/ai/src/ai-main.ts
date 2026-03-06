@@ -9,19 +9,20 @@ import type { Result } from '@h-ai/core'
 
 import type { AIConfig, AIConfigInput } from './ai-config.js'
 import type { AIError, AIFunctions } from './ai-types.js'
-import type { ContextOperations } from './context/ai-context-types.js'
+import type { ContextOperations, ContextSummary } from './context/ai-context-types.js'
 import type { EmbeddingOperations } from './embedding/ai-embedding-types.js'
 import type { KnowledgeOperations } from './knowledge/ai-knowledge-types.js'
-import type { LLMOperations, StreamOperations, ToolsOperations } from './llm/ai-llm-types.js'
+import type { ChatMessage, ChatRecord, LLMOperations, StreamOperations, ToolsOperations } from './llm/ai-llm-types.js'
 import type { MCPOperations } from './mcp/ai-mcp-types.js'
-import type { MemoryOperations } from './memory/ai-memory-types.js'
+import type { MemoryEntry, MemoryOperations } from './memory/ai-memory-types.js'
 import type { RagOperations } from './rag/ai-rag-types.js'
 import type { ReasoningOperations } from './reasoning/ai-reasoning-types.js'
 import type { RetrievalOperations } from './retrieval/ai-retrieval-types.js'
+import type { SessionInfo } from './store/ai-store-types.js'
 
 import { core, err, ok } from '@h-ai/core'
 
-import { AIConfigSchema, AIErrorCode, ContextConfigSchema, KnowledgeConfigSchema, MemoryConfigSchema } from './ai-config.js'
+import { AIConfigSchema, AIErrorCode, ContextConfigSchema, KnowledgeConfigSchema, MemoryConfigSchema, StoreConfigSchema } from './ai-config.js'
 import { aiM } from './ai-i18n.js'
 import { createContextOperations } from './context/ai-context-functions.js'
 import { createEmbeddingOperations } from './embedding/ai-embedding-functions.js'
@@ -34,6 +35,7 @@ import { createMemoryOperations } from './memory/ai-memory-functions.js'
 import { createRagOperations } from './rag/ai-rag-functions.js'
 import { createReasoningOperations } from './reasoning/ai-reasoning-functions.js'
 import { createRetrievalOperations } from './retrieval/ai-retrieval-functions.js'
+import { createAIStore, createAIVectorStore } from './store/ai-store-factory.js'
 
 const logger = core.logger.child({ module: 'ai', scope: 'main' })
 
@@ -81,6 +83,8 @@ const notInitializedLLM: LLMOperations = {
     throw notInitialized.error()
   },
   listModels: () => Promise.resolve(notInitialized.result()),
+  getHistory: () => Promise.resolve(notInitialized.result()),
+  listSessions: () => Promise.resolve(notInitialized.result()),
 }
 
 /** MCP 未初始化占位：所有方法返回 NOT_INITIALIZED 错误 */
@@ -132,19 +136,23 @@ const notInitializedKnowledge: KnowledgeOperations = {
 const notInitializedMemory: MemoryOperations = {
   extract: () => Promise.resolve(notInitialized.result()),
   add: () => Promise.resolve(notInitialized.result()),
+  get: () => Promise.resolve(notInitialized.result()),
   recall: () => Promise.resolve(notInitialized.result()),
-  inject: () => Promise.resolve(notInitialized.result()),
+  injectMemories: () => Promise.resolve(notInitialized.result()),
   remove: () => Promise.resolve(notInitialized.result()),
   list: () => Promise.resolve(notInitialized.result()),
+  listPage: () => Promise.resolve(notInitialized.result()),
   clear: () => Promise.resolve(notInitialized.result()),
 }
 
 /** Context 未初始化占位 */
 const notInitializedContext: ContextOperations = {
-  compress: () => Promise.resolve(notInitialized.result()),
+  tryCompress: () => Promise.resolve(notInitialized.result()),
   summarize: () => Promise.resolve(notInitialized.result()),
   estimateTokens: () => notInitialized.result(),
   createManager: () => notInitialized.result(),
+  restoreManager: () => Promise.resolve(notInitialized.result()),
+  listSessions: () => Promise.resolve(notInitialized.result()),
 }
 
 // ─── 纯函数操作（不依赖初始化） ───
@@ -204,8 +212,13 @@ export const ai: AIFunctions = {
     const parsed = parseResult.data
 
     try {
-      // 创建 LLM 子功能
-      const llmFunctions = createAILLMFunctions(parsed)
+      // 解析存储配置（全局共享）
+      const storeConfig = parsed.store ?? StoreConfigSchema.parse({})
+
+      // 创建 LLM 子功能（含对话记录存储）
+      const chatRecordStore = createAIStore<ChatRecord>('ai_chat_records', storeConfig.mode)
+      const sessionStore = createAIStore<SessionInfo>('ai_sessions', storeConfig.mode)
+      const llmFunctions = createAILLMFunctions(parsed, { recordStore: chatRecordStore, sessionStore })
       currentLLM = llmFunctions.llm
 
       // 创建 MCP 子功能
@@ -248,21 +261,24 @@ export const ai: AIFunctions = {
         async () => {
           try {
             const { datapipe } = await import('@h-ai/datapipe')
-            return datapipe as unknown as { clean: (text: string, options?: Record<string, unknown>) => import('@h-ai/core').Result<string, unknown>, chunk: (text: string, options: Record<string, unknown>) => import('@h-ai/core').Result<Array<{ index: number, content: string, metadata?: Record<string, unknown> }>, unknown> }
+            return datapipe as unknown as { clean: (text: string, options?: Record<string, unknown>) => Result<string, unknown>, chunk: (text: string, options: Record<string, unknown>) => Result<Array<{ index: number, content: string, metadata?: Record<string, unknown> }>, unknown> }
           }
           catch { return null }
         },
       )
 
-      // 创建 Memory 子功能（依赖 LLM + Embedding）
+      // 创建 Memory 子功能（依赖 LLM + Embedding + Store）
       const memoryConfig = parsed.memory ?? {}
       const memoryParsed = MemoryConfigSchema.parse(memoryConfig)
-      currentMemory = createMemoryOperations(memoryParsed, currentLLM, currentEmbedding)
+      const memoryStore = createAIStore<MemoryEntry>('ai_memory', storeConfig.mode)
+      const memoryVectorStore = createAIVectorStore('ai_memory_vectors', storeConfig.mode)
+      currentMemory = createMemoryOperations(memoryParsed, currentLLM, currentEmbedding, memoryStore, memoryVectorStore)
 
-      // 创建 Context 子功能（依赖 LLM）
+      // 创建 Context 子功能（依赖 LLM + Store）
       const contextConfig = parsed.context ?? {}
       const contextParsed = ContextConfigSchema.parse(contextConfig)
-      currentContext = createContextOperations(contextParsed, currentLLM, parsed.llm?.maxTokens ?? 4096)
+      const contextStore = createAIStore<{ messages: ChatMessage[], summaries: ContextSummary[], updatedAt: number }>('ai_context', storeConfig.mode)
+      currentContext = createContextOperations(contextParsed, currentLLM, parsed.llm?.maxTokens ?? 4096, contextStore, sessionStore)
 
       currentConfig = parsed
       logger.info('AI module initialized', { model: parsed.llm?.model })

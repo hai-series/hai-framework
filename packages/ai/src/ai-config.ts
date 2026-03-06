@@ -7,6 +7,11 @@
 
 import { z } from 'zod'
 
+// ─── Context 配置 Schema ───
+
+// CompressionStrategySchema / CompressionStrategy 定义在 context/ai-context-types.ts 中
+import { CompressionStrategySchema } from './context/ai-context-types.js'
+
 // ─── 错误码 ───
 
 /** AI 错误码（数值范围 12000-12999） */
@@ -34,6 +39,10 @@ export const AIErrorCode = {
   MODEL_NOT_FOUND: 12104,
   /** 上下文长度超限 */
   CONTEXT_LENGTH_EXCEEDED: 12105,
+  /** 对话记录保存失败 */
+  LLM_RECORD_FAILED: 12106,
+  /** 对话历史查询失败 */
+  LLM_HISTORY_FAILED: 12107,
 
   // MCP (12200-12299)
   /** MCP 连接错误 */
@@ -109,7 +118,7 @@ export const AIErrorCode = {
   /** 记忆不存在 */
   MEMORY_NOT_FOUND: 12903,
   /** 记忆注入失败 */
-  MEMORY_INJECT_FAILED: 12904,
+  MEMORY_ENRICH_FAILED: 12904,
 
   // Context (12950-12999)
   /** 上下文压缩失败 */
@@ -120,6 +129,18 @@ export const AIErrorCode = {
   CONTEXT_TOKEN_ESTIMATE_FAILED: 12952,
   /** 超出 Token 预算 */
   CONTEXT_BUDGET_EXCEEDED: 12953,
+
+  // Store (13000-13049)
+  /** 存储操作失败 */
+  STORE_FAILED: 13000,
+  /** 存储后端不可用 */
+  STORE_NOT_AVAILABLE: 13001,
+
+  // Session (13050-13099)
+  /** 会话未找到 */
+  SESSION_NOT_FOUND: 13050,
+  /** 会话操作失败 */
+  SESSION_FAILED: 13051,
 } as const
 
 /** 错误码值类型 */
@@ -134,13 +155,17 @@ export type AIErrorCodeType = (typeof AIErrorCode)[keyof typeof AIErrorCode]
  *
  * 预定义的模型使用场景，用于自动选择合适的模型。
  *
- * - `default` — 默认场景
+ * - `default` — 默认场景（兜底）
  * - `chat` — 对话场景
- * - `reasoning` — 推理场景（需要强逻辑能力）
+ * - `reasoning` — 推理场景（ReAct、CoT，需要强逻辑能力）
+ * - `plan` — Plan-Execute 规划阶段（需要强推理）
+ * - `execute` — Plan-Execute 执行阶段（需要工具调用能力）
+ * - `extraction` — 信息提取场景（记忆提取、实体抽取）
+ * - `summary` — 摘要/压缩场景（上下文摘要）
  * - `embedding` — 向量嵌入场景
  * - `fast` — 快速响应场景（低延迟优先）
  */
-export const ModelScenarioSchema = z.enum(['default', 'chat', 'reasoning', 'embedding', 'fast'])
+export const ModelScenarioSchema = z.enum(['default', 'chat', 'reasoning', 'plan', 'execute', 'extraction', 'summary', 'embedding', 'fast'])
 
 /** 模型场景类型 */
 export type ModelScenario = z.infer<typeof ModelScenarioSchema>
@@ -168,7 +193,7 @@ export const ModelEntrySchema = z.object({
   /** API Key 覆盖（可选，未提供时使用全局配置） */
   apiKey: z.string().optional(),
   /** Base URL 覆盖（可选） */
-  baseUrl: z.string().url().optional(),
+  baseUrl: z.url().optional(),
   /** 最大 Token 数覆盖（可选） */
   maxTokens: z.number().positive().optional(),
   /** 温度覆盖（可选） */
@@ -180,12 +205,34 @@ export const ModelEntrySchema = z.object({
 /** 模型条目类型 */
 export type ModelEntry = z.infer<typeof ModelEntrySchema>
 
-/** LLM 配置 Schema */
+/**
+ * LLM 配置 Schema
+ *
+ * 配置大模型调用参数：模型名称、API Key、Base URL、温度等。
+ * 支持多模型注册和场景映射。
+ *
+ * @example
+ * ```ts
+ * const llmConfig = {
+ *   apiKey: 'sk-xxx',
+ *   baseUrl: 'https://api.openai.com/v1',
+ *   model: 'gpt-4o-mini',
+ *   maxTokens: 4096,
+ *   temperature: 0.7,
+ *   timeout: 60000,
+ *   models: [
+ *     { id: 'fast', model: 'gpt-4o-mini', temperature: 0.3 },
+ *     { id: 'strong', model: 'gpt-4o', maxTokens: 8192 },
+ *   ],
+ *   scenarios: { chat: 'fast', reasoning: 'strong' },
+ * }
+ * ```
+ */
 export const LLMConfigSchema = z.object({
   /** API Key，未提供时回退到 `process.env.HAI_OPENAI_API_KEY` 或 `process.env.OPENAI_API_KEY` */
   apiKey: z.string().optional(),
   /** API 基础 URL，未提供时回退到 `process.env.HAI_OPENAI_BASE_URL` 或 `process.env.OPENAI_BASE_URL` 或 OpenAI 官方地址 */
-  baseUrl: z.string().url().optional(),
+  baseUrl: z.url().optional(),
   /** 默认模型名称（默认 `'gpt-4o-mini'`） */
   model: z.string().optional().default('gpt-4o-mini'),
   /** 单次请求最大 Token 数（默认 `4096`） */
@@ -196,12 +243,46 @@ export const LLMConfigSchema = z.object({
   timeout: z.number().positive().optional().default(60000),
   /** 多模型配置列表（可选，配置多个模型及其参数） */
   models: z.array(ModelEntrySchema).optional(),
-  /** 场景默认模型映射（场景名 → 模型 ID） */
-  defaults: z.record(ModelScenarioSchema, z.string()).optional(),
+  /** 场景模型映射（场景名 → 模型 ID，各场景均可选） */
+  scenarios: z.object(Object.fromEntries(ModelScenarioSchema.options.map(k => [k, z.string().optional()])) as Record<ModelScenario, z.ZodOptional<z.ZodString>>).optional(),
 })
 
 /** LLM 配置类型 */
 export type LLMConfig = z.infer<typeof LLMConfigSchema>
+
+/**
+ * 根据场景解析模型名称
+ *
+ * 解析优先级：`显式参数 > 场景映射 (scenarios) > 全局默认 (llm.model) > 'gpt-4o-mini'`
+ *
+ * 若 `scenarios` 映射的值在 `models` 列表中存在对应 `id`，返回该条目的 `model` 字段；
+ * 否则直接将映射值作为模型名称返回。
+ *
+ * @param llmConfig - LLM 配置（可选）
+ * @param scenario - 使用场景
+ * @param explicit - 调用方显式指定的模型名称（最高优先级）
+ * @returns 解析后的模型名称
+ */
+export function resolveModel(
+  llmConfig: Partial<LLMConfig> | undefined,
+  scenario: ModelScenario,
+  explicit?: string,
+): string {
+  // 显式指定的模型优先
+  if (explicit)
+    return explicit
+
+  // 从场景映射查找
+  const modelId = llmConfig?.scenarios?.[scenario] ?? llmConfig?.scenarios?.default
+  if (modelId) {
+    // 尝试从 models 列表中匹配条目
+    const entry = llmConfig?.models?.find(m => m.id === modelId)
+    return entry?.model ?? modelId
+  }
+
+  // 全局默认模型
+  return llmConfig?.model ?? 'gpt-4o-mini'
+}
 
 // ─── MCP 配置 Schema ───
 
@@ -231,7 +312,22 @@ export const MCPServerConfigSchema = z.object({
 /** MCP 服务器配置类型 */
 export type MCPServerConfig = z.infer<typeof MCPServerConfigSchema>
 
-/** MCP 配置 Schema */
+/**
+ * MCP 配置 Schema
+ *
+ * 配置 MCP（Model Context Protocol）服务器参数。
+ *
+ * @example
+ * ```ts
+ * const mcpConfig = {
+ *   server: {
+ *     name: 'my-app',
+ *     version: '1.0.0',
+ *     capabilities: { tools: true, resources: true, prompts: true },
+ *   },
+ * }
+ * ```
+ */
 export const MCPConfigSchema = z.object({
   /** 服务器配置 */
   server: MCPServerConfigSchema.optional(),
@@ -242,14 +338,22 @@ export type MCPConfig = z.infer<typeof MCPConfigSchema>
 
 // ─── 统一 AI 配置 ───
 
-/** Embedding 配置 Schema */
+/**
+ * Embedding 配置 Schema
+ *
+ * 配置文本向量化参数。
+ * 模型通过 LLMConfigSchema.scenarios.embedding 解析，
+ * apiKey / baseUrl 统一使用 LLM 配置。
+ *
+ * @example
+ * ```ts
+ * const embeddingConfig = {
+ *   dimensions: 1536,
+ *   batchSize: 100,
+ * }
+ * ```
+ */
 export const EmbeddingConfigSchema = z.object({
-  /** 嵌入模型名称（默认 `'text-embedding-3-small'`） */
-  model: z.string().default('text-embedding-3-small'),
-  /** API Key 覆盖（可选，默认使用 LLM 配置的 apiKey） */
-  apiKey: z.string().optional(),
-  /** Base URL 覆盖（可选，默认使用 LLM 配置的 baseUrl） */
-  baseUrl: z.string().url().optional(),
   /** 向量维度（可选，部分模型支持指定维度） */
   dimensions: z.number().int().positive().optional(),
   /** 批量大小（单次请求最多处理的文本数，默认 100） */
@@ -261,17 +365,28 @@ export type EmbeddingConfig = z.infer<typeof EmbeddingConfigSchema>
 
 // ─── Knowledge 配置 Schema ───
 
+export { CompressionStrategySchema } from './context/ai-context-types.js'
+export type { CompressionStrategy } from './context/ai-context-types.js'
+
 /**
- * 实体类型枚举
+ * Knowledge 配置 Schema
  *
- * 预定义的实体类型，用于实体提取和倒排索引分类。
+ * 配置知识库管理参数：向量集合、分块策略、实体提取等。
+ * 模型通过 LLMConfigSchema.scenarios 解析，
+ * apiKey / baseUrl 统一使用 LLM 配置。
+ *
+ * @example
+ * ```ts
+ * const knowledgeConfig = {
+ *   collection: 'my-knowledge',
+ *   dimension: 1536,
+ *   enableEntityExtraction: true,
+ *   chunkMode: 'markdown',
+ *   chunkMaxSize: 1500,
+ *   chunkOverlap: 200,
+ * }
+ * ```
  */
-export const EntityTypeSchema = z.enum(['person', 'project', 'concept', 'organization', 'location', 'event', 'other'])
-
-/** 实体类型 */
-export type EntityType = z.infer<typeof EntityTypeSchema>
-
-/** Knowledge 配置 Schema */
 export const KnowledgeConfigSchema = z.object({
   /** 默认向量集合名（默认 'knowledge'） */
   collection: z.string().default('knowledge'),
@@ -279,8 +394,6 @@ export const KnowledgeConfigSchema = z.object({
   dimension: z.number().int().positive().default(1536),
   /** 是否启用实体提取（默认 true） */
   enableEntityExtraction: z.boolean().default(true),
-  /** 实体提取使用的模型（可选，默认使用 LLM 配置中的默认模型） */
-  entityExtractionModel: z.string().optional(),
   /** 默认分块模式（默认 'markdown'） */
   chunkMode: z.enum(['sentence', 'paragraph', 'markdown', 'page']).default('markdown'),
   /** 默认分块最大大小（默认 1500） */
@@ -296,18 +409,32 @@ export type KnowledgeConfig = z.infer<typeof KnowledgeConfigSchema>
 
 // ─── Memory 配置 Schema ───
 
-/** 记忆类型枚举 */
-export const MemoryTypeSchema = z.enum(['fact', 'preference', 'event', 'entity', 'instruction'])
+// EntityTypeSchema / EntityType 定义在 knowledge/ai-knowledge-types.ts 中
+export { EntityTypeSchema } from './knowledge/ai-knowledge-types.js'
+export type { EntityType } from './knowledge/ai-knowledge-types.js'
 
-/** 记忆类型 */
-export type MemoryType = z.infer<typeof MemoryTypeSchema>
-
-/** Memory 配置 Schema */
+/**
+ * Memory 配置 Schema
+ *
+ * 配置对话记忆的提取、存储与检索参数。
+ * 模型通过 LLMConfigSchema.scenarios.extraction 解析，
+ * apiKey / baseUrl 统一使用 LLM 配置。
+ *
+ * @example
+ * ```ts
+ * const memoryConfig = {
+ *   maxEntries: 1000,
+ *   embeddingEnabled: true,
+ *   recencyDecay: 0.95,
+ *   defaultTopK: 10,
+ * }
+ * ```
+ */
 export const MemoryConfigSchema = z.object({
   /** 最大记忆条数（默认 1000） */
   maxEntries: z.number().int().positive().default(1000),
-  /** 提取用模型（可选，默认使用 LLM 配置中的默认模型） */
-  extractModel: z.string().optional(),
+  /** 自定义记忆提取 systemPrompt（可选，覆盖内置默认提示词） */
+  systemPrompt: z.string().optional(),
   /** 时间衰减系数（默认 0.95，每次检索乘以此系数调整 recency 权重） */
   recencyDecay: z.number().min(0).max(1).default(0.95),
   /** 是否启用向量检索（默认 true，关闭则仅使用关键词匹配） */
@@ -318,16 +445,27 @@ export const MemoryConfigSchema = z.object({
 
 /** Memory 配置类型 */
 export type MemoryConfig = z.infer<typeof MemoryConfigSchema>
+// MemoryTypeSchema / MemoryType 定义在 memory/ai-memory-types.ts 中
+export { MemoryTypeSchema } from './memory/ai-memory-types.js'
+export type { MemoryType } from './memory/ai-memory-types.js'
 
-// ─── Context 配置 Schema ───
-
-/** 压缩策略枚举 */
-export const CompressionStrategySchema = z.enum(['summary', 'sliding-window', 'hybrid'])
-
-/** 压缩策略类型 */
-export type CompressionStrategy = z.infer<typeof CompressionStrategySchema>
-
-/** Context 配置 Schema */
+/**
+ * Context 配置 Schema
+ *
+ * 配置对话上下文管理参数：压缩策略、Token 预算、摘要生成等。
+ * 模型通过 LLMConfigSchema.scenarios.summary 解析，
+ * apiKey / baseUrl 统一使用 LLM 配置。
+ *
+ * @example
+ * ```ts
+ * const contextConfig = {
+ *   defaultStrategy: 'hybrid',
+ *   defaultMaxTokens: 4000,
+ *   preserveLastN: 4,
+ *   tokenRatio: 0.25,
+ * }
+ * ```
+ */
 export const ContextConfigSchema = z.object({
   /** 默认压缩策略（默认 'hybrid'） */
   defaultStrategy: CompressionStrategySchema.default('hybrid'),
@@ -335,8 +473,8 @@ export const ContextConfigSchema = z.object({
   defaultMaxTokens: z.number().int().min(0).default(0),
   /** 默认保留最近消息数（默认 4） */
   preserveLastN: z.number().int().min(0).default(4),
-  /** 摘要用模型（可选，默认使用 LLM 配置中的默认模型） */
-  summaryModel: z.string().optional(),
+  /** 自定义摘要 systemPrompt（可选，覆盖内置默认提示词） */
+  systemPrompt: z.string().optional(),
   /** Token 估算每字符系数（默认 0.25，即 4 字符 ≈ 1 token） */
   tokenRatio: z.number().positive().default(0.25),
 })
@@ -344,7 +482,52 @@ export const ContextConfigSchema = z.object({
 /** Context 配置类型 */
 export type ContextConfig = z.infer<typeof ContextConfigSchema>
 
-/** AI 配置 Schema */
+// ─── Store 配置 Schema ───
+
+/**
+ * Store 配置 Schema
+ *
+ * 配置存储后端模式：`memory`（开发/测试用）或 `persistent`（生产用，需 reldb + vecdb）。
+ * `persistent` 模式不可用时自动降级为 `memory` 并输出 warn 日志。
+ *
+ * @example
+ * ```ts
+ * const storeConfig = {
+ *   mode: 'persistent', // 使用 reldb + vecdb
+ * }
+ * ```
+ */
+export const StoreConfigSchema = z.object({
+  /** 存储模式（默认 `'memory'`） */
+  mode: z.enum(['memory', 'persistent']).default('memory'),
+})
+
+/** Store 配置类型 */
+export type StoreConfig = z.infer<typeof StoreConfigSchema>
+
+/**
+ * AI 配置 Schema
+ *
+ * 统一 AI 模块配置：LLM、MCP、Embedding、Knowledge、Memory、Context、Store。
+ * 模型通过 LLM.scenarios 映射场景，子系统不再独立配置 apiKey / baseUrl / model。
+ *
+ * @example
+ * ```ts
+ * ai.init({
+ *   llm: {
+ *     apiKey: 'sk-xxx',
+ *     model: 'gpt-4o-mini',
+ *     maxTokens: 4096,
+ *     scenarios: { extraction: 'gpt-4o', summary: 'gpt-4o-mini', embedding: 'text-embedding-3-small' },
+ *   },
+ *   embedding: { dimensions: 1536 },
+ *   knowledge: { collection: 'docs', enableEntityExtraction: true },
+ *   memory: { maxEntries: 500, embeddingEnabled: true },
+ *   context: { defaultStrategy: 'hybrid', preserveLastN: 4 },
+ *   store: { mode: 'persistent' },
+ * })
+ * ```
+ */
 export const AIConfigSchema = z.object({
   /** LLM 配置 */
   llm: LLMConfigSchema.optional(),
@@ -358,6 +541,8 @@ export const AIConfigSchema = z.object({
   memory: MemoryConfigSchema.optional(),
   /** Context 配置 */
   context: ContextConfigSchema.optional(),
+  /** Store 配置 */
+  store: StoreConfigSchema.optional(),
 })
 
 /** AI 配置类型（校验后的完整类型） */

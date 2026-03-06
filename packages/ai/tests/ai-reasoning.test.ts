@@ -7,6 +7,7 @@
 import type { AIConfig } from '../src/ai-config.js'
 import type { LLMOperations } from '../src/llm/ai-llm-types.js'
 import { describe, expect, it, vi } from 'vitest'
+import { resolveModel } from '../src/ai-config.js'
 import { createReasoningOperations } from '../src/reasoning/ai-reasoning-functions.js'
 
 // ─── Mock LLM 工厂 ───
@@ -42,7 +43,7 @@ function createMockLLM(responses: Array<{ content: string | null, finish_reason?
 }
 
 const mockConfig: AIConfig = {
-  llm: { type: 'openai' as any, apiKey: 'test-key', model: 'gpt-4' },
+  llm: { apiKey: 'test-key', model: 'gpt-4' },
 } as AIConfig
 
 // ─── CoT 策略 ───
@@ -176,5 +177,132 @@ describe('reasoning 默认', () => {
 
     const result = await reasoning.run('test', { strategy: 'unknown' as any })
     expect(result.success).toBe(false)
+  })
+})
+
+// ─── resolveModel ───
+
+describe('resolveModel', () => {
+  it('显式指定模型优先', () => {
+    const result = resolveModel({ model: 'gpt-4o-mini' }, 'chat', 'gpt-4o')
+    expect(result).toBe('gpt-4o')
+  })
+
+  it('场景映射 (scenarios) 命中时返回映射值', () => {
+    const result = resolveModel({
+      model: 'gpt-4o-mini',
+      scenarios: { reasoning: 'gpt-4o' },
+    }, 'reasoning')
+    expect(result).toBe('gpt-4o')
+  })
+
+  it('场景映射到 models 列表中的条目时返回条目 model 字段', () => {
+    const result = resolveModel({
+      model: 'gpt-4o-mini',
+      models: [{ id: 'strong', model: 'gpt-4o' }],
+      scenarios: { reasoning: 'strong' },
+    }, 'reasoning')
+    expect(result).toBe('gpt-4o')
+  })
+
+  it('场景未命中时回退到 default 场景', () => {
+    const result = resolveModel({
+      model: 'gpt-4o-mini',
+      scenarios: { default: 'gpt-4' },
+    }, 'plan')
+    expect(result).toBe('gpt-4')
+  })
+
+  it('无 scenarios 时使用全局 model', () => {
+    const result = resolveModel({ model: 'gpt-4o' }, 'reasoning')
+    expect(result).toBe('gpt-4o')
+  })
+
+  it('config 为 undefined 时返回硬编码默认值', () => {
+    const result = resolveModel(undefined, 'chat')
+    expect(result).toBe('gpt-4o-mini')
+  })
+
+  it('支持新增的 plan/execute/extraction/summary 场景', () => {
+    const cfg = {
+      model: 'fallback',
+      scenarios: {
+        plan: 'plan-model',
+        execute: 'exec-model',
+        extraction: 'extract-model',
+        summary: 'summary-model',
+      },
+    }
+    expect(resolveModel(cfg, 'plan')).toBe('plan-model')
+    expect(resolveModel(cfg, 'execute')).toBe('exec-model')
+    expect(resolveModel(cfg, 'extraction')).toBe('extract-model')
+    expect(resolveModel(cfg, 'summary')).toBe('summary-model')
+  })
+})
+
+// ─── Plan-Execute 模型分离 ───
+
+describe('reasoning plan-execute 模型分离', () => {
+  it('planModel 用于规划阶段', async () => {
+    const mockLLM = createMockLLM([
+      { content: '1. Plan step' },
+      { content: 'Executed!', finish_reason: 'stop' },
+    ])
+    const configWithScenario: AIConfig = {
+      llm: { model: 'default-model' },
+    } as AIConfig
+
+    const reasoning = createReasoningOperations(configWithScenario, mockLLM)
+    const result = await reasoning.run('test', {
+      strategy: 'plan-execute',
+      planModel: 'gpt-4o',
+      executeModel: 'gpt-4o-mini',
+    })
+
+    expect(result.success).toBe(true)
+    // 验证规划阶段使用 planModel
+    const chatMock = mockLLM.chat as ReturnType<typeof vi.fn>
+    expect(chatMock).toHaveBeenCalledTimes(2)
+    expect(chatMock.mock.calls[0][0].model).toBe('gpt-4o')
+    // 验证执行阶段使用 executeModel
+    expect(chatMock.mock.calls[1][0].model).toBe('gpt-4o-mini')
+  })
+
+  it('未指定 planModel/executeModel 时回退到场景 scenarios', async () => {
+    const mockLLM = createMockLLM([
+      { content: '1. Plan' },
+      { content: 'Done', finish_reason: 'stop' },
+    ])
+    const configWithScenarios: AIConfig = {
+      llm: {
+        model: 'fallback-model',
+        scenarios: { plan: 'plan-default', execute: 'exec-default' },
+      },
+    } as AIConfig
+
+    const reasoning = createReasoningOperations(configWithScenarios, mockLLM)
+    await reasoning.run('test', { strategy: 'plan-execute' })
+
+    const chatMock = mockLLM.chat as ReturnType<typeof vi.fn>
+    expect(chatMock.mock.calls[0][0].model).toBe('plan-default')
+    expect(chatMock.mock.calls[1][0].model).toBe('exec-default')
+  })
+
+  it('reasoning 场景使用 scenarios.reasoning', async () => {
+    const mockLLM = createMockLLM([
+      { content: 'Done', finish_reason: 'stop' },
+    ])
+    const configWithScenarios: AIConfig = {
+      llm: {
+        model: 'fallback',
+        scenarios: { reasoning: 'gpt-4o' },
+      },
+    } as AIConfig
+
+    const reasoning = createReasoningOperations(configWithScenarios, mockLLM)
+    await reasoning.run('test', { strategy: 'react' })
+
+    const chatMock = mockLLM.chat as ReturnType<typeof vi.fn>
+    expect(chatMock.mock.calls[0][0].model).toBe('gpt-4o')
   })
 })

@@ -1,7 +1,8 @@
 /**
  * @h-ai/ai — Memory 子功能实现
  *
- * 编排记忆的提取、存储、检索与注入。
+ * 编排记忆的提取、存储、检索与注入。基于 AIStore + AIVectorStore 抽象，
+ * 根据配置自动选择内存或持久化存储后端。
  * @module ai-memory-functions
  */
 
@@ -11,13 +12,15 @@ import type { MemoryConfig } from '../ai-config.js'
 import type { AIError } from '../ai-types.js'
 import type { EmbeddingOperations } from '../embedding/ai-embedding-types.js'
 import type { ChatMessage, LLMOperations } from '../llm/ai-llm-types.js'
+import type { AIStore, AIVectorStore, StorePage, WhereClause } from '../store/ai-store-types.js'
 import type {
   MemoryClearOptions,
   MemoryEntry,
   MemoryEntryInput,
   MemoryExtractOptions,
-  MemoryInjectOptions,
+  MemoryInjectionOptions,
   MemoryListOptions,
+  MemoryListPageOptions,
   MemoryOperations,
   MemoryRecallOptions,
 } from './ai-memory-types.js'
@@ -27,9 +30,15 @@ import { core, err, ok } from '@h-ai/core'
 import { AIErrorCode } from '../ai-config.js'
 import { aiM } from '../ai-i18n.js'
 import { extractMemories } from './ai-memory-extractor.js'
-import { InMemoryStore } from './ai-memory-store.js'
 
 const logger = core.logger.child({ module: 'ai', scope: 'memory' })
+
+/**
+ * 生成唯一 ID
+ */
+function generateId(): string {
+  return `mem_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`
+}
 
 /**
  * 余弦相似度
@@ -68,15 +77,17 @@ function extractQueryFromMessages(messages: ChatMessage[]): string {
  * @param config - Memory 配置
  * @param llm - LLM 操作接口（用于提取记忆）
  * @param embedding - Embedding 操作接口（用于向量化 + 相似度检索）
+ * @param store - 记忆条目存储
+ * @param vectorStore - 向量存储（用于相似度检索）
  * @returns MemoryOperations 实例
  */
 export function createMemoryOperations(
   config: MemoryConfig,
   llm: LLMOperations,
   embedding: EmbeddingOperations | null,
+  store: AIStore<MemoryEntry>,
+  vectorStore: AIVectorStore,
 ): MemoryOperations {
-  const store = new InMemoryStore(config.maxEntries)
-
   /**
    * 为文本计算 embedding 向量（如果 embedding 可用）
    */
@@ -92,30 +103,97 @@ export function createMemoryOperations(
     return undefined
   }
 
+  /**
+   * 淘汰低优先级条目（当超过 maxEntries 时）
+   */
+  async function evictIfNeeded(): Promise<void> {
+    const total = await store.count()
+    if (total < config.maxEntries)
+      return
+
+    const all = await store.query({ orderBy: { field: 'createdAt', direction: 'asc' }, limit: total })
+    if (all.length === 0)
+      return
+
+    const now = Date.now()
+    const maxAge = 7 * 24 * 60 * 60 * 1000
+
+    let lowestScore = Infinity
+    let lowestId: string | null = null
+
+    for (const entry of all) {
+      const age = now - entry.createdAt
+      const recency = Math.max(0, 1 - age / maxAge)
+      const score = entry.importance * 0.7 + recency * 0.3
+      if (score < lowestScore) {
+        lowestScore = score
+        lowestId = entry.id
+      }
+    }
+
+    if (lowestId) {
+      await store.remove(lowestId)
+      await vectorStore.remove(lowestId)
+    }
+  }
+
+  /**
+   * 持久化一条记忆条目
+   */
+  async function saveEntry(input: MemoryEntryInput, vector?: number[]): Promise<MemoryEntry> {
+    await evictIfNeeded()
+
+    const now = Date.now()
+    const entry: MemoryEntry = {
+      id: generateId(),
+      content: input.content,
+      type: input.type,
+      importance: input.importance ?? 0.5,
+      objectId: input.objectId,
+      metadata: input.metadata,
+      vector,
+      createdAt: now,
+      lastAccessedAt: now,
+      accessCount: 0,
+    }
+
+    await store.save(entry.id, entry)
+
+    if (vector) {
+      await vectorStore.upsert(entry.id, vector, {
+        objectId: entry.objectId,
+        type: entry.type,
+      })
+    }
+
+    return entry
+  }
+
   return {
     async extract(messages: ChatMessage[], options?: MemoryExtractOptions): Promise<Result<MemoryEntry[], AIError>> {
-      logger.info('Extracting memories from conversation', { messageCount: messages.length })
+      logger.debug('Extracting memories from conversation', { messageCount: messages.length })
 
       try {
         const extractResult = await extractMemories(llm, messages, {
           types: options?.types,
-          model: options?.model ?? config.extractModel,
+          model: options?.model,
           minImportance: options?.minImportance,
-          source: options?.source,
+          objectId: options?.objectId,
+          systemPrompt: config.systemPrompt,
         })
 
         if (!extractResult.success)
           return extractResult
 
-        // 为每条记忆计算 embedding 并存储
         const entries: MemoryEntry[] = []
         for (const input of extractResult.data) {
           const vector = await computeVector(input.content)
-          const entry = store.add(input, vector)
+          const entryInput: MemoryEntryInput = { ...input, objectId: input.objectId ?? options?.objectId }
+          const entry = await saveEntry(entryInput, vector)
           entries.push(entry)
         }
 
-        logger.info('Memories extracted and stored', { count: entries.length })
+        logger.debug('Memories extracted and stored', { count: entries.length })
         return ok(entries)
       }
       catch (error) {
@@ -131,8 +209,8 @@ export function createMemoryOperations(
     async add(entry: MemoryEntryInput): Promise<Result<MemoryEntry, AIError>> {
       try {
         const vector = await computeVector(entry.content)
-        const stored = store.add(entry, vector)
-        logger.debug('Memory added', { id: stored.id, type: stored.type })
+        const stored = await saveEntry(entry, vector)
+        logger.trace('Memory added', { id: stored.id, type: stored.type })
         return ok(stored)
       }
       catch (error) {
@@ -145,28 +223,67 @@ export function createMemoryOperations(
       }
     },
 
+    async get(memoryId: string): Promise<Result<MemoryEntry, AIError>> {
+      const entry = await store.get(memoryId)
+      if (!entry) {
+        return err({
+          code: AIErrorCode.MEMORY_NOT_FOUND,
+          message: aiM('ai_memoryNotFound', { params: { id: memoryId } }),
+        })
+      }
+      entry.lastAccessedAt = Date.now()
+      entry.accessCount++
+      await store.save(memoryId, entry)
+      return ok(entry)
+    },
+
+    /**
+     * 根据查询文本检索最相关的记忆条目
+     *
+     * 分三阶段执行：
+     * 1. 筛选候选集 — 从 store 中检索并按 objectId / type / minImportance 过滤
+     * 2. 计算综合得分 — 融合向量相似度、重要性、时间新鲜度三个维度
+     * 3. 排序截取 — 按得分降序，返回前 topK 条并更新访问统计
+     */
     async recall(query: string, options?: MemoryRecallOptions): Promise<Result<MemoryEntry[], AIError>> {
       const topK = options?.topK ?? config.defaultTopK
       const recencyWeight = options?.recencyWeight ?? (1 - config.recencyDecay)
 
-      logger.debug('Recalling memories', { query: query.slice(0, 100), topK })
+      logger.trace('Recalling memories', { query: query.slice(0, 100), topK })
 
       try {
-        // 获取候选记忆
-        let candidates = store.list({
-          types: options?.types,
-        })
-
-        // 按 minImportance 过滤
-        if (options?.minImportance && options.minImportance > 0) {
-          candidates = candidates.filter(e => e.importance >= options.minImportance!)
+        // ── 第一阶段：筛选候选集 ──
+        // 使用 WhereClause 操作符将过滤条件下推到 store 层，减少内存中处理的数据量
+        const where: WhereClause<MemoryEntry> = {}
+        if (options?.objectId) {
+          where.objectId = options.objectId
         }
+
+        // type 过滤：单值用等值匹配，多值用 $in 操作符
+        const types = options?.types
+        if (types && types.length === 1) {
+          where.type = types[0]
+        }
+        else if (types && types.length > 1) {
+          where.type = { $in: types }
+        }
+
+        // minImportance 用 $gte 操作符下推
+        if (options?.minImportance && options.minImportance > 0) {
+          where.importance = { $gte: options.minImportance }
+        }
+
+        const candidates = await store.query({
+          where: Object.keys(where).length > 0 ? where : undefined,
+        })
 
         if (candidates.length === 0) {
           return ok([])
         }
 
-        // 计算综合分数
+        // ── 第二阶段：计算每条记忆的综合得分 ──
+
+        // 2a. 将查询文本转为向量（如启用 embedding）
         let queryVector: number[] | undefined
         if (config.embeddingEnabled && embedding) {
           const embedResult = await embedding.embedText(query)
@@ -175,44 +292,61 @@ export function createMemoryOperations(
           }
         }
 
+        // 2b. 从向量库批量获取预计算的相似度得分
+        const vectorScores = new Map<string, number>()
+        if (queryVector) {
+          const vectorResults = await vectorStore.search(queryVector, {
+            topK: topK * 3,
+            filter: options?.objectId ? { objectId: options.objectId } : undefined,
+          })
+          for (const r of vectorResults) {
+            vectorScores.set(r.id, r.score)
+          }
+        }
+
         const now = Date.now()
+        /** 7 天为时间衰减的基准周期 */
         const maxAge = 7 * 24 * 60 * 60 * 1000
 
+        // 2c. 为每条候选计算综合得分
         const scored = candidates.map((entry) => {
-          // 向量相似度
-          let similarity = 0
-          if (queryVector && entry.vector) {
+          // 向量相似度：优先用向量库预计算得分 → 实时计算余弦相似度 → 关键词匹配回退
+          let similarity = vectorScores.get(entry.id) ?? 0
+          if (!similarity && queryVector && entry.vector) {
             similarity = cosineSimilarity(queryVector, entry.vector)
           }
-          else {
-            // 无向量时使用关键词匹配
+          else if (!similarity) {
+            // 无向量时通过关键词包含关系进行粗略匹配
             const queryLower = query.toLowerCase()
             const contentLower = entry.content.toLowerCase()
             similarity = contentLower.includes(queryLower) ? 0.8 : 0
           }
 
-          // 时间衰减
+          // 时间新鲜度：创建时间越近越接近 1，超过 maxAge 后为 0
           const age = now - entry.createdAt
           const recency = Math.max(0, 1 - age / maxAge)
 
-          // 综合分数 = 相似度 * (1 - recencyWeight) + 重要性 * 0.2 + 时间 * recencyWeight
-          const score = similarity * (1 - recencyWeight) * 0.8
-            + entry.importance * 0.2
-            + recency * recencyWeight
+          // 语义相关度 = 向量相似度 (80%) + 重要性 (20%)
+          const relevance = similarity * 0.8 + entry.importance * 0.2
+
+          // 综合得分 = 相关度 × (1 - 时间权重) + 新鲜度 × 时间权重
+          // recencyWeight = 0 → 纯相关度排序；recencyWeight = 1 → 纯时间排序
+          const score = relevance * (1 - recencyWeight) + recency * recencyWeight
 
           return { entry, score }
         })
 
-        // 排序并截取
+        // ── 第三阶段：排序截取 + 更新访问统计 ──
         scored.sort((a, b) => b.score - a.score)
-        const results = scored.slice(0, topK).map(({ entry }) => {
-          // 更新访问统计
+        const results: MemoryEntry[] = []
+        for (const { entry } of scored.slice(0, topK)) {
           entry.lastAccessedAt = now
           entry.accessCount++
-          return entry
-        })
+          await store.save(entry.id, entry)
+          results.push(entry)
+        }
 
-        logger.debug('Memory recall completed', { query: query.slice(0, 50), resultCount: results.length })
+        logger.trace('Memory recall completed', { query: query.slice(0, 50), resultCount: results.length })
         return ok(results)
       }
       catch (error) {
@@ -225,23 +359,32 @@ export function createMemoryOperations(
       }
     },
 
-    async inject(messages: ChatMessage[], options?: MemoryInjectOptions): Promise<Result<ChatMessage[], AIError>> {
+    /**
+     * 将检索到的相关记忆注入消息列表
+     *
+     * 工作流程：
+     * 1. 从最后一条用户消息提取查询文本
+     * 2. 调用 recall 检索 topK 条相关记忆
+     * 3. 将记忆格式化为编号列表（如 [1] (preference) ...）
+     * 4. 按 position 注入：
+     *    - 'system'：追加到现有 system 消息末尾（无则插入新 system 消息）
+     *    - 'before-last'：在最后一条用户消息之前插入 system 消息
+     */
+    async injectMemories(messages: ChatMessage[], options?: MemoryInjectionOptions): Promise<Result<ChatMessage[], AIError>> {
       const topK = options?.topK ?? 5
       const position = options?.position ?? 'system'
 
       try {
-        // 提取查询文本
         const query = extractQueryFromMessages(messages)
         if (!query) {
           return ok([...messages])
         }
 
-        // 检索相关记忆
-        const recallResult = await this.recall(query, { topK })
+        const recallResult = await this.recall(query, { topK, objectId: options?.objectId })
         if (!recallResult.success) {
           return err({
-            code: AIErrorCode.MEMORY_INJECT_FAILED,
-            message: aiM('ai_memoryInjectFailed', { params: { error: recallResult.error.message } }),
+            code: AIErrorCode.MEMORY_ENRICH_FAILED,
+            message: aiM('ai_memoryEnrichFailed', { params: { error: recallResult.error.message } }),
             cause: recallResult.error,
           })
         }
@@ -251,12 +394,10 @@ export function createMemoryOperations(
           return ok([...messages])
         }
 
-        // 格式化记忆文本
         let memoryText = memories
           .map((m, i) => `[${i + 1}] (${m.type}) ${m.content}`)
           .join('\n')
 
-        // 按 maxTokens 截断
         if (options?.maxTokens && options.maxTokens > 0) {
           const estimatedTokens = memoryText.length * 0.25
           if (estimatedTokens > options.maxTokens) {
@@ -267,11 +408,9 @@ export function createMemoryOperations(
 
         const memoryBlock = `\n\n--- Relevant Memories ---\n${memoryText}\n--- End Memories ---`
 
-        // 注入到消息列表
         const result = [...messages]
 
         if (position === 'system') {
-          // 追加到 system 消息末尾，如果没有 system 消息则创建一个
           const systemIdx = result.findIndex(m => m.role === 'system')
           if (systemIdx >= 0) {
             const systemMsg = result[systemIdx]
@@ -288,7 +427,6 @@ export function createMemoryOperations(
           }
         }
         else {
-          // 插入在最后一条用户消息之前
           let lastUserIdx = -1
           for (let i = result.length - 1; i >= 0; i--) {
             if (result[i].role === 'user') {
@@ -304,38 +442,97 @@ export function createMemoryOperations(
           }
         }
 
-        logger.debug('Memories injected', { count: memories.length, position })
+        logger.trace('Memories enriched', { count: memories.length, position })
         return ok(result)
       }
       catch (error) {
-        logger.error('Memory injection failed', { error })
+        logger.error('Memory enrichment failed', { error })
         return err({
-          code: AIErrorCode.MEMORY_INJECT_FAILED,
-          message: aiM('ai_memoryInjectFailed', { params: { error: String(error) } }),
+          code: AIErrorCode.MEMORY_ENRICH_FAILED,
+          message: aiM('ai_memoryEnrichFailed', { params: { error: String(error) } }),
           cause: error,
         })
       }
     },
 
     async remove(memoryId: string): Promise<Result<void, AIError>> {
-      const removed = store.remove(memoryId)
+      const removed = await store.remove(memoryId)
       if (!removed) {
         return err({
           code: AIErrorCode.MEMORY_NOT_FOUND,
           message: aiM('ai_memoryNotFound', { params: { id: memoryId } }),
         })
       }
-      logger.debug('Memory removed', { id: memoryId })
+      await vectorStore.remove(memoryId)
+      logger.trace('Memory removed', { id: memoryId })
       return ok(undefined)
     },
 
     async list(options?: MemoryListOptions): Promise<Result<MemoryEntry[], AIError>> {
-      return ok(store.list(options))
+      const where: WhereClause<MemoryEntry> = {}
+      if (options?.objectId)
+        where.objectId = options.objectId
+      if (options?.types && options.types.length === 1)
+        where.type = options.types[0]
+      else if (options?.types && options.types.length > 1)
+        where.type = { $in: options.types }
+
+      const results = await store.query({
+        where: Object.keys(where).length > 0 ? where : undefined,
+        orderBy: { field: 'createdAt', direction: 'desc' },
+        limit: options?.limit,
+      })
+
+      return ok(results)
+    },
+
+    async listPage(options?: MemoryListPageOptions): Promise<Result<StorePage<MemoryEntry>, AIError>> {
+      const where: WhereClause<MemoryEntry> = {}
+      if (options?.objectId)
+        where.objectId = options.objectId
+      if (options?.types && options.types.length === 1)
+        where.type = options.types[0]
+      else if (options?.types && options.types.length > 1)
+        where.type = { $in: options.types }
+
+      const page = await store.queryPage(
+        {
+          where: Object.keys(where).length > 0 ? where : undefined,
+          orderBy: { field: 'createdAt', direction: 'desc' },
+        },
+        {
+          offset: options?.offset ?? 0,
+          limit: options?.limit ?? 20,
+        },
+      )
+
+      return ok(page)
     },
 
     async clear(options?: MemoryClearOptions): Promise<Result<void, AIError>> {
-      store.clear(options)
-      logger.info('Memories cleared', { options })
+      if (!options?.types && !options?.objectId) {
+        await store.clear()
+        await vectorStore.clear()
+      }
+      else {
+        const where: WhereClause<MemoryEntry> = {}
+        if (options.objectId)
+          where.objectId = options.objectId
+        if (options.types && options.types.length === 1)
+          where.type = options.types[0]
+        else if (options.types && options.types.length > 1)
+          where.type = { $in: options.types }
+
+        const toRemove = await store.query({
+          where: Object.keys(where).length > 0 ? where : undefined,
+        })
+
+        for (const entry of toRemove) {
+          await store.remove(entry.id)
+          await vectorStore.remove(entry.id)
+        }
+      }
+      logger.debug('Memories cleared', { options })
       return ok(undefined)
     },
   }

@@ -27,12 +27,20 @@ export type ReasoningStrategy = 'react' | 'cot' | 'plan-execute'
  * 推理执行选项
  */
 export interface ReasoningOptions {
+  /** 交互主体 ID */
+  objectId?: string
+  /** 会话 ID */
+  sessionId?: string
   /** 推理策略（默认 `'react'`） */
   strategy?: ReasoningStrategy
   /** 最大推理轮次（默认 10） */
   maxRounds?: number
   /** 使用的模型 ID 或名称（可选，默认使用 reasoning 场景的模型） */
   model?: string
+  /** Plan-Execute 规划阶段模型（可选，默认回退到 `model` → 场景 `plan` → 场景 `reasoning`） */
+  planModel?: string
+  /** Plan-Execute 执行阶段模型（可选，默认回退到 `model` → 场景 `execute` → 场景 `reasoning`） */
+  executeModel?: string
   /** 系统提示词（可选，覆盖默认的策略提示词） */
   systemPrompt?: string
   /** 可用工具注册表（可选，ReAct 和 Plan-Execute 策略可用） */

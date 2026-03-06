@@ -16,6 +16,10 @@ import type { Citation } from '../retrieval/ai-retrieval-types.js'
  * RAG 选项
  */
 export interface RagOptions {
+  /** 交互主体 ID */
+  objectId?: string
+  /** 会话 ID */
+  sessionId?: string
   /** 使用的检索源（不指定则使用全部已注册源） */
   sources?: string[]
   /** 返回的上下文条数（默认 5） */

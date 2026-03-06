@@ -13,7 +13,10 @@ import type {
   ChatCompletionRequest,
   ChatCompletionResponse,
   ChatMessage,
+  ChatRecord,
 } from '../llm/ai-llm-types.js'
+import type { MemoryEntry } from '../memory/ai-memory-types.js'
+import type { SessionInfo, StorePage } from '../store/ai-store-types.js'
 
 // ─── API 适配器接口 ───
 
@@ -86,6 +89,14 @@ export interface AIClient {
   sendMessage: (message: string, systemPrompt?: string) => Promise<string>
   /** 便捷方法：流式发送纯文本消息并返回完整回复 */
   sendMessageStream: (message: string, options?: StreamOptions, systemPrompt?: string) => Promise<string>
+  /** 检索相关记忆 */
+  recallMemories: (query: string, options?: { topK?: number, types?: string[], minImportance?: number, objectId?: string }) => Promise<MemoryEntry[]>
+  /** 列出记忆（分页） */
+  listMemories: (options?: { types?: string[], objectId?: string, offset?: number, limit?: number }) => Promise<StorePage<MemoryEntry>>
+  /** 列出会话 */
+  listSessions: (objectId: string) => Promise<SessionInfo[]>
+  /** 获取对话历史 */
+  chatHistory: (objectId: string, sessionId: string, options?: { limit?: number, order?: 'asc' | 'desc' }) => Promise<ChatRecord[]>
 }
 
 // ─── AI API 路径（与 ai-api-contract 保持一致） ───
@@ -95,6 +106,14 @@ const AI_PATH = {
   chat: '/ai/chat',
   /** 流式聊天（SSE） */
   chatStream: '/ai/chat/stream',
+  /** 对话历史 */
+  chatHistory: '/ai/chat/history',
+  /** 记忆检索 */
+  memoryRecall: '/ai/memory/recall',
+  /** 记忆列表 */
+  memoryList: '/ai/memory/list',
+  /** 会话列表 */
+  sessions: '/ai/sessions',
 } as const
 
 // ─── 工厂函数 ───
@@ -190,6 +209,38 @@ export function createAIClient(config: AIClientConfig): AIClient {
         }
       }
       return content
+    },
+
+    async recallMemories(query: string, options?: { topK?: number, types?: string[], minImportance?: number, objectId?: string }): Promise<MemoryEntry[]> {
+      const result = await api.post<{ items: MemoryEntry[] }>(AI_PATH.memoryRecall, { query, ...options })
+      if (!result.success) {
+        throw new Error(`Memory recall failed: ${result.error.message}`)
+      }
+      return result.data.items
+    },
+
+    async listMemories(options?: { types?: string[], objectId?: string, offset?: number, limit?: number }): Promise<StorePage<MemoryEntry>> {
+      const result = await api.post<StorePage<MemoryEntry>>(AI_PATH.memoryList, options ?? {})
+      if (!result.success) {
+        throw new Error(`Memory list failed: ${result.error.message}`)
+      }
+      return result.data
+    },
+
+    async listSessions(objectId: string): Promise<SessionInfo[]> {
+      const result = await api.post<{ items: SessionInfo[] }>(AI_PATH.sessions, { objectId })
+      if (!result.success) {
+        throw new Error(`Session list failed: ${result.error.message}`)
+      }
+      return result.data.items
+    },
+
+    async chatHistory(objectId: string, sessionId: string, options?: { limit?: number, order?: 'asc' | 'desc' }): Promise<ChatRecord[]> {
+      const result = await api.post<{ items: ChatRecord[] }>(AI_PATH.chatHistory, { objectId, sessionId, ...options })
+      if (!result.success) {
+        throw new Error(`Chat history failed: ${result.error.message}`)
+      }
+      return result.data.items
     },
   }
 }

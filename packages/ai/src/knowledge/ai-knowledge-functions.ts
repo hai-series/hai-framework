@@ -116,7 +116,7 @@ export function createKnowledgeOperations(
       const collection = options?.collection ?? config.collection
       const dimension = options?.dimension ?? config.dimension
 
-      logger.info('Setting up knowledge base', { collection, dimension })
+      logger.debug('Setting up knowledge base', { collection, dimension })
 
       try {
         // 创建 vecdb 集合
@@ -152,7 +152,7 @@ export function createKnowledgeOperations(
         }
 
         isSetup = true
-        logger.info('Knowledge base setup completed', { collection })
+        logger.debug('Knowledge base setup completed', { collection })
         return ok(undefined)
       }
       catch (error) {
@@ -181,7 +181,7 @@ export function createKnowledgeOperations(
       const chunkMaxSize = input.chunkMaxSize ?? config.chunkMaxSize
       const chunkOverlap = input.chunkOverlap ?? config.chunkOverlap
 
-      logger.info('Ingesting document', { documentId: input.documentId, collection, contentLength: input.content.length })
+      logger.debug('Ingesting document', { documentId: input.documentId, collection, contentLength: input.content.length })
 
       try {
         // 获取依赖
@@ -275,7 +275,7 @@ export function createKnowledgeOperations(
             chunkId: `${input.documentId}:chunk-${chunk.index}`,
           }))
 
-          const entityResult = await extractEntitiesBatch(llm, chunkInputs, config.entityExtractionModel)
+          const entityResult = await extractEntitiesBatch(llm, chunkInputs)
           if (entityResult.success) {
             // ⑥ 写入 reldb
             for (const entity of entityResult.data) {
@@ -319,7 +319,7 @@ export function createKnowledgeOperations(
         }
 
         const duration = Date.now() - startTime
-        logger.info('Document ingested', {
+        logger.debug('Document ingested', {
           documentId: input.documentId,
           chunkCount: chunks.length,
           entityCount: extractedEntities.length,
@@ -357,7 +357,7 @@ export function createKnowledgeOperations(
       const topK = options?.topK ?? 10
       const enableEntityBoost = options?.enableEntityBoost ?? true
 
-      logger.info('Knowledge retrieval', { query: query.slice(0, 100), collection, topK })
+      logger.debug('Knowledge retrieval', { query: query.slice(0, 100), collection, topK })
 
       try {
         const vecdbInstance = await getVecdb()
@@ -469,7 +469,7 @@ export function createKnowledgeOperations(
         }
 
         const duration = Date.now() - startTime
-        logger.info('Knowledge retrieval completed', { resultCount: items.length, duration })
+        logger.debug('Knowledge retrieval completed', { resultCount: items.length, duration })
 
         return ok({
           items,
@@ -545,7 +545,7 @@ export function createKnowledgeOperations(
       const choice = chatResult.data.choices[0]
       const answer = choice?.message?.content ?? ''
 
-      logger.info('Knowledge ask completed', {
+      logger.debug('Knowledge ask completed', {
         contextCount: items.length,
         model: chatResult.data.model,
       })

@@ -95,7 +95,7 @@ export interface AIFunctions {
 
 // ─── 子功能类型 re-export ───
 
-// ─── Embedding 类型 re-export ───
+// ─── Context 类型 re-export ───
 
 export type {
   ContextCompressOptions,
@@ -107,7 +107,7 @@ export type {
   ContextSummary,
 } from './context/ai-context-types.js'
 
-// ─── Knowledge 类型 re-export ───
+// ─── Embedding 类型 re-export ───
 
 export type {
   EmbeddingItem,
@@ -117,7 +117,7 @@ export type {
   EmbeddingResponse,
 } from './embedding/ai-embedding-types.js'
 
-// ─── LLM 类型 re-export ───
+// ─── Knowledge 类型 re-export ───
 
 export type {
   EntityDocumentRelation,
@@ -136,7 +136,7 @@ export type {
   KnowledgeSetupOptions,
 } from './knowledge/ai-knowledge-types.js'
 
-// ─── MCP 类型 re-export ───
+// ─── LLM 类型 re-export ───
 
 export type {
   AssistantMessage,
@@ -145,7 +145,9 @@ export type {
   ChatCompletionDelta,
   ChatCompletionRequest,
   ChatCompletionResponse,
+  ChatHistoryOptions,
   ChatMessage,
+  ChatRecord,
   DefineToolOptions,
   ImageContent,
   LLMOperations,
@@ -171,7 +173,7 @@ export type {
   UserMessage,
 } from './llm/ai-llm-types.js'
 
-// ─── RAG 类型 re-export ───
+// ─── MCP 类型 re-export ───
 
 export type {
   MCPContext,
@@ -188,20 +190,21 @@ export type {
   MCPToolHandler,
 } from './mcp/ai-mcp-types.js'
 
-// ─── Reasoning 类型 re-export ───
+// ─── Memory 类型 re-export ───
 
 export type {
   MemoryClearOptions,
   MemoryEntry,
   MemoryEntryInput,
   MemoryExtractOptions,
-  MemoryInjectOptions,
+  MemoryInjectionOptions,
   MemoryListOptions,
+  MemoryListPageOptions,
   MemoryOperations,
   MemoryRecallOptions,
 } from './memory/ai-memory-types.js'
 
-// ─── Retrieval 类型 re-export ───
+// ─── RAG 类型 re-export ───
 
 export type {
   RagContextItem,
@@ -210,7 +213,7 @@ export type {
   RagResult,
 } from './rag/ai-rag-types.js'
 
-// ─── Memory 类型 re-export ───
+// ─── Reasoning 类型 re-export ───
 
 export type {
   ReasoningOperations,
@@ -221,7 +224,7 @@ export type {
   ReasoningStrategy,
 } from './reasoning/ai-reasoning-types.js'
 
-// ─── Context 类型 re-export ───
+// ─── Retrieval 类型 re-export ───
 
 export type {
   Citation,
@@ -231,3 +234,18 @@ export type {
   RetrievalResultItem,
   RetrievalSource,
 } from './retrieval/ai-retrieval-types.js'
+
+// ─── Store 类型 re-export ───
+
+export type {
+  AIStore,
+  AIStoreMode,
+  AIVectorStore,
+  InteractionScope,
+  ObjectRef,
+  ReldbSql,
+  SessionInfo,
+  StoreFilter,
+  StorePage,
+  VecdbClient,
+} from './store/ai-store-types.js'

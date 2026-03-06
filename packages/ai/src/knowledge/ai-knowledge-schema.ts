@@ -99,7 +99,7 @@ export async function createKnowledgeSchema(dataOps: DataOps): Promise<Result<vo
       }
     }
 
-    logger.info('Knowledge schema created successfully')
+    logger.debug('Knowledge schema created successfully')
     return ok(undefined)
   }
   catch (error) {

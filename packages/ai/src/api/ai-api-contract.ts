@@ -15,8 +15,16 @@ import { z } from 'zod'
 import {
   ChatCompletionInputSchema,
   ChatCompletionOutputSchema,
+  ChatHistoryInputSchema,
+  ChatHistoryOutputSchema,
+  MemoryListInputSchema,
+  MemoryListOutputSchema,
+  MemoryRecallInputSchema,
+  MemoryRecallOutputSchema,
   SendMessageInputSchema,
   SendMessageOutputSchema,
+  SessionListInputSchema,
+  SessionListOutputSchema,
 } from './ai-api-schemas.js'
 
 // ─── 端点定义辅助（内联，避免对 @h-ai/api-client 的循环依赖） ───
@@ -92,5 +100,41 @@ export const aiEndpoints = {
     input: SendMessageInputSchema,
     output: SendMessageOutputSchema,
     meta: { summary: 'Send a single message (convenience)', tags: ['ai'] },
+  }),
+
+  /** 记忆检索 */
+  memoryRecall: defineEndpoint({
+    method: 'POST',
+    path: '/ai/memory/recall',
+    input: MemoryRecallInputSchema,
+    output: MemoryRecallOutputSchema,
+    meta: { summary: 'Recall relevant memories', tags: ['ai', 'memory'] },
+  }),
+
+  /** 记忆列表（分页） */
+  memoryList: defineEndpoint({
+    method: 'POST',
+    path: '/ai/memory/list',
+    input: MemoryListInputSchema,
+    output: MemoryListOutputSchema,
+    meta: { summary: 'List memories (paginated)', tags: ['ai', 'memory'] },
+  }),
+
+  /** 会话列表 */
+  sessionList: defineEndpoint({
+    method: 'POST',
+    path: '/ai/sessions',
+    input: SessionListInputSchema,
+    output: SessionListOutputSchema,
+    meta: { summary: 'List sessions for an object', tags: ['ai', 'session'] },
+  }),
+
+  /** 对话历史 */
+  chatHistory: defineEndpoint({
+    method: 'POST',
+    path: '/ai/chat/history',
+    input: ChatHistoryInputSchema,
+    output: ChatHistoryOutputSchema,
+    meta: { summary: 'Get chat history for a session', tags: ['ai', 'llm'] },
   }),
 } as const

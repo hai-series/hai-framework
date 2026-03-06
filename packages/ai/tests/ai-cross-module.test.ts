@@ -464,21 +464,20 @@ describe('配置变体初始化', () => {
 
   it('仅 embedding 配置', () => {
     ai.close()
-    const result = ai.init({ embedding: { model: 'text-embedding-3-small', apiKey: 'sk-test' } })
+    const result = ai.init({ llm: { apiKey: 'sk-test', scenarios: { embedding: 'text-embedding-3-small' } } })
     expect(result.success).toBe(true)
-    expect(ai.config?.embedding?.model).toBe('text-embedding-3-small')
+    expect(ai.config?.llm?.scenarios?.embedding).toBe('text-embedding-3-small')
     ai.close()
   })
 
   it('完整配置（LLM + Embedding）', () => {
     ai.close()
     const result = ai.init({
-      llm: { model: 'gpt-4o', apiKey: 'sk-test', temperature: 0.7, maxTokens: 4096 },
-      embedding: { model: 'text-embedding-3-large', apiKey: 'sk-test' },
+      llm: { model: 'gpt-4o', apiKey: 'sk-test', temperature: 0.7, maxTokens: 4096, scenarios: { embedding: 'text-embedding-3-large' } },
     })
     expect(result.success).toBe(true)
     expect(ai.config?.llm?.temperature).toBe(0.7)
-    expect(ai.config?.embedding?.model).toBe('text-embedding-3-large')
+    expect(ai.config?.llm?.scenarios?.embedding).toBe('text-embedding-3-large')
     ai.close()
   })
 

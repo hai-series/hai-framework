@@ -6,9 +6,11 @@
  */
 
 import type { Result } from '@h-ai/core'
+import type { ZodType } from 'zod'
 
 import type { AIConfig } from '../ai-config.js'
 import type { AIError } from '../ai-types.js'
+import type { InteractionScope, SessionInfo } from '../store/ai-store-types.js'
 
 // ─── 消息类型 ───
 
@@ -109,6 +111,10 @@ export interface ChatCompletionRequest {
   model?: string
   /** 消息列表 */
   messages: ChatMessage[]
+  /** 交互主体 ID（传入后 LLM 会自动关联到该主体） */
+  objectId?: string
+  /** 会话 ID（传入后 LLM 会自动关联到该会话） */
+  sessionId?: string
   /** 采样温度，范围 `[0, 2]`（值越高回复越随机） */
   temperature?: number
   /** 核采样概率，范围 `[0, 1]`（与 temperature 二选一） */
@@ -297,7 +303,7 @@ export interface DefineToolOptions<TInput, TOutput> {
   /** 工具功能描述（供模型理解何时调用） */
   description: string
   /** Zod schema，用于参数校验和 JSON Schema 转换 */
-  parameters: import('zod').ZodType<TInput>
+  parameters: ZodType<TInput>
   /** 执行函数，接收校验后的参数，支持同步/异步 */
   handler: (input: TInput) => Promise<TOutput> | TOutput
 }
@@ -314,7 +320,7 @@ export interface Tool<TInput = unknown, TOutput = unknown> {
   /** 工具功能描述 */
   description: string
   /** Zod 参数 schema */
-  parameters: import('zod').ZodType<TInput>
+  parameters: ZodType<TInput>
   /** 执行工具（自动校验参数），失败返回 ToolError */
   execute: (input: TInput) => Promise<Result<TOutput, ToolError>>
   /** 转换为 OpenAI function calling 定义格式（$schema 字段已移除） */
@@ -361,6 +367,48 @@ export interface ToolsOperations {
 
 // ─── LLM Provider 接口 ───
 
+// ─── 对话记录 ───
+
+/** 对话记录查询选项 */
+export interface ChatHistoryOptions {
+  /** 返回数量限制 */
+  limit?: number
+  /** 排序方向（默认 `'desc'` 最新在前） */
+  order?: 'asc' | 'desc'
+}
+
+/**
+ * 对话记录
+ *
+ * 每次 `llm.chat()` 调用在传入 `objectId` 时自动保存的请求+响应快照。
+ */
+export interface ChatRecord {
+  /** 记录唯一 ID */
+  id: string
+  /** 交互主体 ID */
+  objectId: string
+  /** 会话 ID */
+  sessionId: string
+  /** 请求摘要 */
+  request: {
+    model: string
+    messages: ChatMessage[]
+  }
+  /** 响应摘要 */
+  response: {
+    content: string
+    toolCalls?: ToolCall[]
+    finishReason: string
+    usage: TokenUsage
+  }
+  /** 创建时间（Unix 毫秒） */
+  createdAt: number
+  /** 耗时（毫秒） */
+  duration: number
+}
+
+// ─── LLM Provider 接口 ───
+
 /**
  * LLM Provider 接口
  *
@@ -389,6 +437,10 @@ export interface LLMOperations {
   chatStream: (request: ChatCompletionRequest) => AsyncIterable<ChatCompletionChunk>
   /** 获取可用模型名称列表 */
   listModels: () => Promise<Result<string[], AIError>>
+  /** 查询对话历史记录（需传入 objectId；可选 sessionId 以按会话过滤） */
+  getHistory: (scope: InteractionScope, options?: ChatHistoryOptions) => Promise<Result<ChatRecord[], AIError>>
+  /** 列出指定 objectId 下的所有会话 */
+  listSessions: (objectId: string) => Promise<Result<SessionInfo[], AIError>>
 }
 
 // ─── LLM 工厂依赖 ───
