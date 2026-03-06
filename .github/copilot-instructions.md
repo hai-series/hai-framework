@@ -118,6 +118,19 @@
 - 接口名与实现类名对应（例如 `StorageProvider` ↔ `S3StorageProvider`）。
 - 重命名必须同步更新：引用点、测试、注释、文档。
 - 禁止含糊命名（如 data / info / handle / process）。
+- 统一命名模式（详见 hai-create §4.6）：
+  - 服务对象：小写模块名（`export const storage`）
+  - 函数接口：`{Module}Functions`；错误码：`{Module}ErrorCode`；错误类型：`{Module}Error`
+  - 子操作接口：`{Domain}Operations`
+  - Provider 接口：`{Module}Provider`；Provider 工厂：`create{Impl}Provider`
+  - Repository 类：`{Module}{Entity}Repository`
+  - i18n 获取器：`{缩写}M()`；消息键：`{module}_{camelCase}`
+
+### 错误码段位
+
+- 每个模块拥有独占的千位段错误码，禁止与已有模块冲突。
+- `NOT_INITIALIZED` 固定为 `X010`。
+- 完整段位注册表见 hai-create §3.1。新模块必须在注册表中选取未占用段位。
 
 ### 分层与依赖约束（架构红线）
 
@@ -253,7 +266,10 @@ function register(tool: Tool): Result<void, XxError> {
 ### README（给人看的）
 
 - 聚焦"是什么 / 怎么用"，以使用示例为主。
-- 不要包含接口清单与内部实现细节。
+- 固定章节顺序：一句话描述 → 能力概览 → 快速开始 → API 契约（条件）→ API 概览（条件）→ 配置 → 错误处理 → 测试 → License。
+- 快速开始必须包含 init → 核心操作 → close 完整生命周期。
+- 不要包含完整接口清单、完整类型定义、内部实现细节。
+- 详细规范见 `hai-create` Skill §6.1。
 
 ### Skill 模板（给 AI 看的）
 
@@ -291,4 +307,6 @@ function register(tool: Tool): Result<void, XxError> {
 - README 描述内部实现细节
 - 在公共模块 API 中使用 `throw`（必须返回 `Result<T, E>`）
 - 用模块级 `Map` / `Set` 缓存需跨节点一致的业务数据（模板、锁、配置等），必须使用数据库持久化
+- 错误码段位与已有模块冲突（段位注册表见 hai-create §3.1）
+- 同一模块混用扁平方法与子操作对象两种 API 风格
 - 做兼容性处理。目前处于开发期，不用考虑兼容旧版本
