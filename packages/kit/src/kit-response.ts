@@ -9,6 +9,7 @@
  */
 
 import type { ApiResponse } from './kit-types.js'
+import { kitM } from './kit-i18n.js'
 
 /**
  * 创建 200 成功响应
@@ -128,8 +129,8 @@ export function badRequest(message: string, requestId?: string, details?: unknow
  * @param requestId - 可选请求 ID
  * @returns error code 为 `'UNAUTHORIZED'` 的 JSON Response
  */
-export function unauthorized(message = 'Authentication required', requestId?: string): Response {
-  return error('UNAUTHORIZED', message, 401, requestId)
+export function unauthorized(message?: string, requestId?: string): Response {
+  return error('UNAUTHORIZED', message ?? kitM('kit_authRequired'), 401, requestId)
 }
 
 /**
@@ -139,8 +140,8 @@ export function unauthorized(message = 'Authentication required', requestId?: st
  * @param requestId - 可选请求 ID
  * @returns error code 为 `'FORBIDDEN'` 的 JSON Response
  */
-export function forbidden(message = 'Access denied', requestId?: string): Response {
-  return error('FORBIDDEN', message, 403, requestId)
+export function forbidden(message?: string, requestId?: string): Response {
+  return error('FORBIDDEN', message ?? kitM('kit_accessDenied'), 403, requestId)
 }
 
 /**
@@ -150,8 +151,8 @@ export function forbidden(message = 'Access denied', requestId?: string): Respon
  * @param requestId - 可选请求 ID
  * @returns error code 为 `'NOT_FOUND'` 的 JSON Response
  */
-export function notFound(message = 'Resource not found', requestId?: string): Response {
-  return error('NOT_FOUND', message, 404, requestId)
+export function notFound(message?: string, requestId?: string): Response {
+  return error('NOT_FOUND', message ?? kitM('kit_resourceNotFound'), 404, requestId)
 }
 
 /**
@@ -183,7 +184,7 @@ export function validationError(
   errors: Array<{ field: string, message: string }>,
   requestId?: string,
 ): Response {
-  return error('VALIDATION_ERROR', 'Validation failed', 422, requestId, { errors })
+  return error('VALIDATION_ERROR', kitM('kit_validationFailed'), 422, requestId, { errors })
 }
 
 /**
@@ -193,8 +194,8 @@ export function validationError(
  * @param requestId - 可选请求 ID
  * @returns error code 为 `'INTERNAL_ERROR'` 的 JSON Response
  */
-export function internalError(message = 'Internal server error', requestId?: string): Response {
-  return error('INTERNAL_ERROR', message, 500, requestId)
+export function internalError(message?: string, requestId?: string): Response {
+  return error('INTERNAL_ERROR', message ?? kitM('kit_internalError'), 500, requestId)
 }
 
 /**

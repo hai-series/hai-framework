@@ -146,7 +146,8 @@ export function createCsrfManager(config: CryptoCsrfConfig) {
       if (!requestToken && event.request.method === 'POST') {
         try {
           const formData = await event.request.clone().formData()
-          requestToken = formData.get(formFieldName) as string | null
+          const fieldValue = formData.get(formFieldName)
+          requestToken = typeof fieldValue === 'string' ? fieldValue : null
         }
         catch {
           // 不是 form data

@@ -482,7 +482,9 @@ describe('transportEncryptionMiddleware', () => {
       body: JSON.stringify(encryptedPayload),
     })
 
-    const mockResponse = new Response(JSON.stringify({ result: 'ok' }))
+    const mockResponse = new Response(JSON.stringify({ result: 'ok' }), {
+      headers: { 'Content-Type': 'application/json' },
+    })
     const next = vi.fn().mockResolvedValue(mockResponse)
 
     const response = await middleware(requestContext, next)

@@ -6,6 +6,7 @@
  */
 
 import type { GuardResult, RouteGuard } from '../kit-types.js'
+import { kitM } from '../kit-i18n.js'
 
 /**
  * 认证守卫配置
@@ -44,7 +45,7 @@ export function authGuard(config: AuthGuardConfig = {}): RouteGuard {
       if (apiMode) {
         return {
           allowed: false,
-          message: 'Authentication required',
+          message: kitM('kit_authRequired'),
           status: 401,
         }
       }

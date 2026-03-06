@@ -209,7 +209,7 @@ export async function validateFormOrFail<T extends z.ZodType>(
   const result = await validateForm(request, schema)
   if (!result.valid || !result.data) {
     throw badRequest(
-      result.errors[0]?.message ?? 'Validation failed',
+      result.errors[0]?.message ?? kitM('kit_validationFailed'),
       undefined,
       { errors: result.errors },
     )
@@ -237,7 +237,7 @@ export function validateQueryOrFail<T extends z.ZodType>(
   const result = validateQuery(url, schema)
   if (!result.valid || !result.data) {
     throw badRequest(
-      result.errors[0]?.message ?? 'Validation failed',
+      result.errors[0]?.message ?? kitM('kit_validationFailed'),
       undefined,
       { errors: result.errors },
     )
@@ -265,7 +265,7 @@ export function validateParamsOrFail<T extends z.ZodType>(
   const result = validateParams(params, schema)
   if (!result.valid || !result.data) {
     throw badRequest(
-      result.errors[0]?.message ?? 'Validation failed',
+      result.errors[0]?.message ?? kitM('kit_validationFailed'),
       undefined,
       { errors: result.errors },
     )
@@ -286,7 +286,7 @@ export function validateParamsOrFail<T extends z.ZodType>(
  * ```
  */
 export const IdParamSchema = zod.object({
-  id: zod.string().min(1, 'ID is required'),
+  id: zod.string().min(1, kitM('kit_idRequired')),
 })
 
 /** 分页 pageSize 上限 */

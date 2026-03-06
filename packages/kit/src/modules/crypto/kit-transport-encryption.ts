@@ -19,12 +19,19 @@ import { kitM } from '../../kit-i18n.js'
  * 创建传输加密管理器
  *
  * 启动时生成服务端非对称密钥对，通过 clientId → publicKey 的内存 Map 管理客户端密钥。
+ * 内置 LRU 淘汰机制，超过 maxClients 上限时自动移除最早注册的客户端。
+ *
+ * 注意：clientKeys 存储在进程内存中，多节点部署时各节点状态独立。
+ * 客户端密钥交换后的后续请求必须路由到同一节点（如使用 sticky session），
+ * 否则传输加密功能不可用。
  *
  * @param cryptoService - 传输加密服务实例（非对称 + 对称）
+ * @param maxClients - 最大客户端数量（默认 10000），超过时淘汰最早注册的
  * @returns 成功返回传输加密管理器，密钥对生成失败时返回错误
  */
 export function createTransportEncryption(
   cryptoService: TransportCryptoServiceLike,
+  maxClients = 10000,
 ): Result<TransportEncryptionManager, Error> {
   // 生成服务端密钥对
   const keyPairResult = cryptoService.asymmetric.generateKeyPair()
@@ -33,7 +40,7 @@ export function createTransportEncryption(
   }
   const serverKeyPair: TransportKeyPair = keyPairResult.data
 
-  // 客户端公钥存储：clientId → publicKey
+  // 客户端公钥存储：clientId → publicKey（Map 保持插入顺序，用于 LRU 淘汰）
   const clientKeys = new Map<string, string>()
   let clientIdCounter = 0
 
@@ -45,6 +52,15 @@ export function createTransportEncryption(
     registerClientKey(clientPublicKey: string): string {
       clientIdCounter++
       const clientId = `client_${clientIdCounter}_${Date.now()}`
+
+      // LRU 淘汰：超过上限时移除最早注册的客户端
+      if (clientKeys.size >= maxClients) {
+        const oldestKey = clientKeys.keys().next().value
+        if (oldestKey !== undefined) {
+          clientKeys.delete(oldestKey)
+        }
+      }
+
       clientKeys.set(clientId, clientPublicKey)
       return clientId
     },

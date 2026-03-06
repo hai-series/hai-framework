@@ -7,6 +7,7 @@
 
 import type { RequestEvent } from '@sveltejs/kit'
 import type { GuardResult, RouteGuard, SessionData } from '../kit-types.js'
+import { kitM } from '../kit-i18n.js'
 
 /**
  * 所有守卫都通过才允许访问（AND 逻辑）
@@ -57,7 +58,7 @@ export function allGuards(...guards: RouteGuard[]): RouteGuard {
  */
 export function anyGuard(...guards: RouteGuard[]): RouteGuard {
   return async (event, session): Promise<GuardResult> => {
-    let lastResult: GuardResult = { allowed: false, message: 'No guards passed' }
+    let lastResult: GuardResult = { allowed: false, message: kitM('kit_noGuardsPassed') }
 
     for (const guard of guards) {
       const result = await guard(event, session)
@@ -99,7 +100,7 @@ export function notGuard(guard: RouteGuard, options: { redirect?: string, messag
       return {
         allowed: false,
         redirect: options.redirect,
-        message: options.message ?? 'Access denied',
+        message: options.message ?? kitM('kit_accessDenied'),
       }
     }
 

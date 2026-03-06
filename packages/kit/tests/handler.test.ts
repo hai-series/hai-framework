@@ -8,11 +8,16 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { handler } from '../src/kit-handler.js'
 
-// mock @h-ai/core 的 logger
+// mock @h-ai/core 的 logger 和 i18n
 vi.mock('@h-ai/core', () => ({
   core: {
     logger: {
       error: vi.fn(),
+    },
+    i18n: {
+      createMessageGetter: (messages: Record<string, Record<string, string>>) => {
+        return (key: string) => messages['zh-CN']?.[key] ?? key
+      },
     },
   },
 }))

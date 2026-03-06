@@ -10,6 +10,8 @@ import type { Handle, RequestEvent } from '@sveltejs/kit'
 import type { GuardConfig, GuardResult, HookConfig, Middleware, MiddlewareContext, SessionData } from '../kit-types.js'
 import type { CookieProxyConfig } from './kit-cookie-proxy.js'
 import { core } from '@h-ai/core'
+import { kitM } from '../kit-i18n.js'
+import { isSvelteKitControlFlow } from '../kit-utils.js'
 import { transportEncryptionMiddleware } from '../modules/crypto/kit-transport-middleware.js'
 import { createEncryptedCookieProxy } from './kit-cookie-proxy.js'
 
@@ -130,7 +132,7 @@ export function createHandle(config: HookConfig = {}): Handle {
               success: false,
               error: {
                 code: 'FORBIDDEN',
-                message: guardResult.message ?? 'Access denied',
+                message: guardResult.message ?? kitM('kit_accessDenied'),
               },
               requestId,
             }),
@@ -171,14 +173,8 @@ export function createHandle(config: HookConfig = {}): Handle {
       return response
     }
     catch (error) {
-      // 重新抛出 SvelteKit 的 redirect 和 error 异常
-      // 这些异常是 SvelteKit 内部使用的控制流机制
-      if (error && typeof error === 'object' && 'status' in error && 'location' in error) {
-        // 这是 redirect 异常
-        throw error
-      }
-      if (error && typeof error === 'object' && 'status' in error && 'body' in error) {
-        // 这是 error 异常
+      // 重新抛出 SvelteKit 控制流异常（redirect / error）
+      if (isSvelteKitControlFlow(error)) {
         throw error
       }
 
@@ -194,7 +190,7 @@ export function createHandle(config: HookConfig = {}): Handle {
           success: false,
           error: {
             code: 'INTERNAL_ERROR',
-            message: 'Internal server error',
+            message: kitM('kit_internalError'),
           },
           requestId,
         }),
