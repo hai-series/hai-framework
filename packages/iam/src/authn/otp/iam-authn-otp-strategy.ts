@@ -63,12 +63,17 @@ export interface OtpStrategyConfig {
  * @returns 纯数字验证码字符串
  */
 function generateOtpCode(length: number): string {
-  const digits = '0123456789'
   let code = ''
-  const randomValues = new Uint8Array(length)
-  crypto.getRandomValues(randomValues)
-  for (let i = 0; i < length; i++) {
-    code += digits[randomValues[i] % 10]
+  // 使用拒绝采样消除模偏（256 % 10 = 6，前 250 个值均匀映射到 0-9）
+  const threshold = 250
+  while (code.length < length) {
+    const randomValues = new Uint8Array(length - code.length)
+    crypto.getRandomValues(randomValues)
+    for (const byte of randomValues) {
+      if (byte < threshold && code.length < length) {
+        code += String(byte % 10)
+      }
+    }
   }
   return code
 }

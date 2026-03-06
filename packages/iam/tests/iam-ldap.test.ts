@@ -46,8 +46,8 @@ describe('iam.ldap', () => {
         expect(result.success).toBe(true)
         if (result.success) {
           expect(result.data.user.username).toBe(ldapLease.testUser.username)
-          expect(result.data.accessToken).toBeTruthy()
-          expect(result.data.accessTokenExpiresAt).toBeInstanceOf(Date)
+          expect(result.data.tokens.accessToken).toBeTruthy()
+          expect(result.data.tokens.expiresIn).toBeTypeOf('number')
         }
       })
 
@@ -60,7 +60,7 @@ describe('iam.ldap', () => {
         if (!loginResult.success)
           return
 
-        const verifyResult = await getIam().auth.verifyToken(loginResult.data.accessToken)
+        const verifyResult = await getIam().auth.verifyToken(loginResult.data.tokens.accessToken)
         expect(verifyResult.success).toBe(true)
         if (verifyResult.success) {
           expect(verifyResult.data.userId).toBeTruthy()

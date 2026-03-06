@@ -367,10 +367,10 @@ describe('iam.session', () => {
         if (!login2.success)
           return
 
-        const verify1 = await singleIam.auth.verifyToken(login1.data.accessToken)
+        const verify1 = await singleIam.auth.verifyToken(login1.data.tokens.accessToken)
         expect(verify1.success).toBe(false)
 
-        const verify2 = await singleIam.auth.verifyToken(login2.data.accessToken)
+        const verify2 = await singleIam.auth.verifyToken(login2.data.tokens.accessToken)
         expect(verify2.success).toBe(true)
       })
     })
@@ -402,7 +402,7 @@ describe('iam.session', () => {
         if (!loginResult.success)
           return
 
-        const session = await getIam().auth.verifyToken(loginResult.data.accessToken)
+        const session = await getIam().auth.verifyToken(loginResult.data.tokens.accessToken)
         expect(session.success).toBe(true)
         if (session.success) {
           expect(session.data.roleCodes).toContain(role.data.code)
@@ -429,7 +429,7 @@ describe('iam.session', () => {
           return
         await getIam().authz.assignRole(regResult.data.user.id, role.data.id)
 
-        const session = await getIam().auth.verifyToken(loginResult.data.accessToken)
+        const session = await getIam().auth.verifyToken(loginResult.data.tokens.accessToken)
         expect(session.success).toBe(true)
         if (session.success) {
           expect(session.data.roleCodes).toContain(role.data.code)

@@ -49,7 +49,7 @@ describe('iam.workflow', () => {
         expect(loginResult.success).toBe(true)
         if (!loginResult.success)
           return
-        const { accessToken } = loginResult.data
+        const accessToken = loginResult.data.tokens.accessToken
 
         // ③ 验证令牌
         const verifyResult = await iam.auth.verifyToken(accessToken)
@@ -98,11 +98,11 @@ describe('iam.workflow', () => {
           return
 
         // ⑨ 登出
-        const logoutResult = await iam.auth.logout(reLoginResult.data.accessToken)
+        const logoutResult = await iam.auth.logout(reLoginResult.data.tokens.accessToken)
         expect(logoutResult.success).toBe(true)
 
         // ⑩ 登出后令牌失效
-        const afterLogout = await iam.auth.verifyToken(reLoginResult.data.accessToken)
+        const afterLogout = await iam.auth.verifyToken(reLoginResult.data.tokens.accessToken)
         expect(afterLogout.success).toBe(false)
       })
     })
@@ -162,7 +162,7 @@ describe('iam.workflow', () => {
           return
 
         // ⑦ 验证令牌获取会话信息（包含角色 code）
-        const session = await iam.auth.verifyToken(loginResult.data.accessToken)
+        const session = await iam.auth.verifyToken(loginResult.data.tokens.accessToken)
         expect(session.success).toBe(true)
         if (session.success) {
           expect(session.data.roleCodes).toContain('wf_editor')
@@ -297,7 +297,7 @@ describe('iam.workflow', () => {
           return
 
         // ④ 登录后会话应包含权限 A
-        const session1 = await iam.auth.verifyToken(login.data.accessToken)
+        const session1 = await iam.auth.verifyToken(login.data.tokens.accessToken)
         expect(session1.success).toBe(true)
         if (!session1.success)
           return
@@ -307,7 +307,7 @@ describe('iam.workflow', () => {
         // ⑤ 管理员给角色新增权限 B → 会话实时同步
         await iam.authz.assignPermissionToRole(role.data.id, permB.data.id)
 
-        const session2 = await iam.auth.verifyToken(login.data.accessToken)
+        const session2 = await iam.auth.verifyToken(login.data.tokens.accessToken)
         expect(session2.success).toBe(true)
         if (!session2.success)
           return
@@ -317,7 +317,7 @@ describe('iam.workflow', () => {
         // ⑥ 管理员移除权限 A → 会话实时同步
         await iam.authz.removePermissionFromRole(role.data.id, permA.data.id)
 
-        const session3 = await iam.auth.verifyToken(login.data.accessToken)
+        const session3 = await iam.auth.verifyToken(login.data.tokens.accessToken)
         expect(session3.success).toBe(true)
         if (!session3.success)
           return
@@ -355,7 +355,7 @@ describe('iam.workflow', () => {
           return
 
         // ④ 登录后会话应包含两个权限
-        const session1 = await iam.auth.verifyToken(login.data.accessToken)
+        const session1 = await iam.auth.verifyToken(login.data.tokens.accessToken)
         expect(session1.success).toBe(true)
         if (!session1.success)
           return
@@ -365,7 +365,7 @@ describe('iam.workflow', () => {
         // ⑤ 管理员删除权限 → 会话实时同步
         await iam.authz.deletePermission(perm.data.id)
 
-        const session2 = await iam.auth.verifyToken(login.data.accessToken)
+        const session2 = await iam.auth.verifyToken(login.data.tokens.accessToken)
         expect(session2.success).toBe(true)
         if (!session2.success)
           return
@@ -400,7 +400,7 @@ describe('iam.workflow', () => {
           return
 
         // ③ 登录后会话应包含权限
-        const session1 = await iam.auth.verifyToken(login.data.accessToken)
+        const session1 = await iam.auth.verifyToken(login.data.tokens.accessToken)
         expect(session1.success).toBe(true)
         if (!session1.success)
           return
@@ -410,7 +410,7 @@ describe('iam.workflow', () => {
         // ④ 管理员删除角色 → 会话角色和权限都同步
         await iam.authz.deleteRole(role.data.id)
 
-        const session2 = await iam.auth.verifyToken(login.data.accessToken)
+        const session2 = await iam.auth.verifyToken(login.data.tokens.accessToken)
         expect(session2.success).toBe(true)
         if (!session2.success)
           return
@@ -444,7 +444,7 @@ describe('iam.workflow', () => {
           return
 
         // ③ 登录后无角色无权限
-        const session1 = await iam.auth.verifyToken(login.data.accessToken)
+        const session1 = await iam.auth.verifyToken(login.data.tokens.accessToken)
         expect(session1.success).toBe(true)
         if (!session1.success)
           return
@@ -454,7 +454,7 @@ describe('iam.workflow', () => {
         // ④ 管理员分配角色 → 会话角色和权限都实时同步
         await iam.authz.assignRole(reg.data.user.id, role.data.id)
 
-        const session2 = await iam.auth.verifyToken(login.data.accessToken)
+        const session2 = await iam.auth.verifyToken(login.data.tokens.accessToken)
         expect(session2.success).toBe(true)
         if (!session2.success)
           return
@@ -489,7 +489,7 @@ describe('iam.workflow', () => {
           return
 
         // ③ 登录后有角色有权限
-        const session1 = await iam.auth.verifyToken(login.data.accessToken)
+        const session1 = await iam.auth.verifyToken(login.data.tokens.accessToken)
         expect(session1.success).toBe(true)
         if (!session1.success)
           return
@@ -499,7 +499,7 @@ describe('iam.workflow', () => {
         // ④ 管理员移除角色 → 会话角色和权限都立即失效
         await iam.authz.removeRole(reg.data.user.id, role.data.id)
 
-        const session2 = await iam.auth.verifyToken(login.data.accessToken)
+        const session2 = await iam.auth.verifyToken(login.data.tokens.accessToken)
         expect(session2.success).toBe(true)
         if (!session2.success)
           return
@@ -527,7 +527,7 @@ describe('iam.workflow', () => {
           return
 
         // ③ 登录后应有旧 code
-        const session1 = await iam.auth.verifyToken(login.data.accessToken)
+        const session1 = await iam.auth.verifyToken(login.data.tokens.accessToken)
         expect(session1.success).toBe(true)
         if (!session1.success)
           return
@@ -536,7 +536,7 @@ describe('iam.workflow', () => {
         // ④ 管理员修改角色 code → 会话实时同步新 code
         await iam.authz.updateRole(role.data.id, { code: 'wf_updrole_new', name: '已改名角色' })
 
-        const session2 = await iam.auth.verifyToken(login.data.accessToken)
+        const session2 = await iam.auth.verifyToken(login.data.tokens.accessToken)
         expect(session2.success).toBe(true)
         if (!session2.success)
           return
@@ -569,19 +569,19 @@ describe('iam.workflow', () => {
           return
 
         // 两个令牌都应有效
-        const verifyPC = await iam.auth.verifyToken(loginPC.data.accessToken)
-        const verifyMobile = await iam.auth.verifyToken(loginMobile.data.accessToken)
+        const verifyPC = await iam.auth.verifyToken(loginPC.data.tokens.accessToken)
+        const verifyMobile = await iam.auth.verifyToken(loginMobile.data.tokens.accessToken)
         expect(verifyPC.success).toBe(true)
         expect(verifyMobile.success).toBe(true)
 
         // 登出 PC 端
-        await iam.auth.logout(loginPC.data.accessToken)
+        await iam.auth.logout(loginPC.data.tokens.accessToken)
 
         // PC 端令牌失效，Mobile 端不受影响
-        const verifyPCAfter = await iam.auth.verifyToken(loginPC.data.accessToken)
+        const verifyPCAfter = await iam.auth.verifyToken(loginPC.data.tokens.accessToken)
         expect(verifyPCAfter.success).toBe(false)
 
-        const verifyMobileAfter = await iam.auth.verifyToken(loginMobile.data.accessToken)
+        const verifyMobileAfter = await iam.auth.verifyToken(loginMobile.data.tokens.accessToken)
         expect(verifyMobileAfter.success).toBe(true)
       })
     })
@@ -629,19 +629,19 @@ describe('iam.workflow', () => {
           return
 
         // ④ 设备A令牌应已失效
-        const verifyA = await singleDeviceIam.auth.verifyToken(loginA.data.accessToken)
+        const verifyA = await singleDeviceIam.auth.verifyToken(loginA.data.tokens.accessToken)
         expect(verifyA.success).toBe(false)
 
         // ⑤ 设备B令牌应有效
-        const verifyB = await singleDeviceIam.auth.verifyToken(loginB.data.accessToken)
+        const verifyB = await singleDeviceIam.auth.verifyToken(loginB.data.tokens.accessToken)
         expect(verifyB.success).toBe(true)
 
         // ⑥ 登出设备B
-        const logoutB = await singleDeviceIam.auth.logout(loginB.data.accessToken)
+        const logoutB = await singleDeviceIam.auth.logout(loginB.data.tokens.accessToken)
         expect(logoutB.success).toBe(true)
 
         // ⑦ B也失效
-        const verifyBAfter = await singleDeviceIam.auth.verifyToken(loginB.data.accessToken)
+        const verifyBAfter = await singleDeviceIam.auth.verifyToken(loginB.data.tokens.accessToken)
         expect(verifyBAfter.success).toBe(false)
       })
     })
@@ -865,7 +865,7 @@ describe('iam.workflow', () => {
         expect(login.data.agreements?.privacyPolicyUrl).toBe('https://example.com/privacy')
 
         // ④ 令牌有效（协议确认由前端负责，后端不阻塞）
-        const verify = await agreementIam.auth.verifyToken(login.data.accessToken)
+        const verify = await agreementIam.auth.verifyToken(login.data.tokens.accessToken)
         expect(verify.success).toBe(true)
       })
     })
@@ -909,7 +909,7 @@ describe('iam.workflow', () => {
         expect(loginResult.success).toBe(true)
         if (loginResult.success) {
           expect(loginResult.data.user.email).toBe('wf_otp@test.com')
-          expect(loginResult.data.accessToken).toBeTruthy()
+          expect(loginResult.data.tokens.accessToken).toBeTruthy()
         }
 
         await initIam()

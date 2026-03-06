@@ -20,7 +20,7 @@ describe('iam.user current profile operations', () => {
       }
 
       const changed = await getIam().user.changeCurrentUserPassword(
-        loginResult.data.accessToken,
+        loginResult.data.tokens.accessToken,
         TEST_PASSWORD,
         'NewPass789!',
       )
@@ -54,7 +54,7 @@ describe('iam.user current profile operations', () => {
         return
       }
 
-      const updated = await getIam().user.updateCurrentUser(loginResult.data.accessToken, {
+      const updated = await getIam().user.updateCurrentUser(loginResult.data.tokens.accessToken, {
         displayName: 'New Display Name',
       })
       expect(updated.success).toBe(true)

@@ -315,7 +315,10 @@ function buildAuthnOperations(deps: AuthnOperationsDeps): IamAuthnFunctions {
     const session = sessionResult.data
 
     // 从 session.data._tokenPair 提取 TokenPair（由 session.create 写入）
-    const tokenPair = session.data?._tokenPair as import('../session/iam-session-types.js').TokenPair
+    const tokenPair = session.data?._tokenPair
+    if (!tokenPair) {
+      return err({ code: IamErrorCode.SESSION_CREATE_FAILED, message: iamM('iam_createSessionFailed') })
+    }
 
     return ok({
       user,
@@ -380,6 +383,11 @@ function buildAuthnOperations(deps: AuthnOperationsDeps): IamAuthnFunctions {
     async logout(accessToken: string): Promise<Result<void, IamError>> {
       const sessionResult = await sessionFunctions.get(accessToken)
       if (sessionResult.success && sessionResult.data) {
+        // 吊销 refreshToken，防止登出后被重用
+        const tokenPair = sessionResult.data.data?._tokenPair
+        if (tokenPair?.refreshToken) {
+          await sessionFunctions.revokeRefresh(tokenPair.refreshToken)
+        }
         await sessionFunctions.delete(sessionResult.data.accessToken)
         logger.info('User logged out', { userId: sessionResult.data.userId })
       }

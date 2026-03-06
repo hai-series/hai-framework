@@ -108,25 +108,23 @@ export const iam: IamFunctions = {
       }
       const parsed = parseResult.data
 
-      // 创建子功能（按依赖顺序）
+      // 创建子功能（按依赖顺序），使用局部变量暂存，全部成功后再原子性赋值
       const sessionResult = await createIamSessionFunctions({ config: parsed, cache })
       if (!sessionResult.success) {
         return sessionResult
       }
-      currentSession = sessionResult.data
 
       const authzResult = await createIamAuthzFunctions({ config: parsed, db, cache })
       if (!authzResult.success) {
         return authzResult
       }
-      currentAuthz = authzResult.data
 
       const authnResult = await createIamAuthnFunctions({
         config: parsed,
         db,
         cache,
-        sessionFunctions: currentSession,
-        authzFunctions: currentAuthz,
+        sessionFunctions: sessionResult.data,
+        authzFunctions: authzResult.data,
         ldapClientFactory,
         ldapSyncUser,
         onOtpSendEmail,
@@ -135,30 +133,33 @@ export const iam: IamFunctions = {
       if (!authnResult.success) {
         return authnResult
       }
-      currentAuth = authnResult.data.authn
 
       const userResult = await createIamUserFunctions({
         config: parsed,
         db,
         cache,
         passwordStrategy: authnResult.data.passwordStrategy,
-        sessionFunctions: currentSession,
-        authzFunctions: currentAuthz,
+        sessionFunctions: sessionResult.data,
+        authzFunctions: authzResult.data,
         onPasswordResetRequest,
       })
       if (!userResult.success) {
         return userResult
       }
-      currentUser = userResult.data
 
       // 种子数据
       if (parsed.seedDefaultData) {
-        const seedResult = await seedIamData(currentAuthz)
+        const seedResult = await seedIamData(authzResult.data)
         if (!seedResult.success) {
           return seedResult
         }
       }
 
+      // 所有子功能创建成功，原子性赋值到模块状态
+      currentSession = sessionResult.data
+      currentAuthz = authzResult.data
+      currentAuth = authnResult.data.authn
+      currentUser = userResult.data
       currentConfig = parsed
       logger.info('IAM module initialized')
       return ok(undefined)

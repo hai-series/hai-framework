@@ -10,6 +10,7 @@
  * - login 禁用配置：关闭密码登录后应返回 LOGIN_DISABLED
  * - verifyToken：有效/无效/空令牌、登出后令牌验证、Session 含 roleCodes/permissionCodes/displayName
  * - logout：正常登出、令牌失效、重复登出、不存在令牌幂等
+ * - logout 吊销 refreshToken：登出后 refreshToken 不可用
  * - 禁用用户登录：register(defaultEnabled:false) → login 应返回 USER_DISABLED
  * - 账户锁定：超过最大尝试次数后锁定
  * - 登录结果中的 agreements
@@ -51,8 +52,8 @@ describe('iam.auth', () => {
         expect(result.success).toBe(true)
         if (result.success) {
           expect(result.data.user.username).toBe('auth_login_user')
-          expect(result.data.accessToken).toBeTruthy()
-          expect(result.data.accessTokenExpiresAt).toBeInstanceOf(Date)
+          expect(result.data.tokens.accessToken).toBeTruthy()
+          expect(result.data.tokens.expiresIn).toBeTypeOf('number')
         }
       })
 
@@ -132,11 +133,11 @@ describe('iam.auth', () => {
         if (!loginResult.success)
           return
 
-        const verifyResult = await getIam().auth.verifyToken(loginResult.data.accessToken)
+        const verifyResult = await getIam().auth.verifyToken(loginResult.data.tokens.accessToken)
         expect(verifyResult.success).toBe(true)
         if (verifyResult.success) {
           expect(verifyResult.data.userId).toBeTruthy()
-          expect(verifyResult.data.accessToken).toBe(loginResult.data.accessToken)
+          expect(verifyResult.data.accessToken).toBe(loginResult.data.tokens.accessToken)
         }
       })
 
@@ -165,8 +166,8 @@ describe('iam.auth', () => {
         if (!loginResult.success)
           return
 
-        await getIam().auth.logout(loginResult.data.accessToken)
-        const result = await getIam().auth.verifyToken(loginResult.data.accessToken)
+        await getIam().auth.logout(loginResult.data.tokens.accessToken)
+        const result = await getIam().auth.verifyToken(loginResult.data.tokens.accessToken)
         expect(result.success).toBe(false)
         if (!result.success) {
           expect(result.error.code).toBe(IamErrorCode.SESSION_INVALID)
@@ -189,7 +190,7 @@ describe('iam.auth', () => {
         if (!loginResult.success)
           return
 
-        const result = await getIam().auth.verifyToken(loginResult.data.accessToken)
+        const result = await getIam().auth.verifyToken(loginResult.data.tokens.accessToken)
         expect(result.success).toBe(true)
         if (result.success) {
           expect(result.data.userId).toBeTruthy()
@@ -208,8 +209,8 @@ describe('iam.auth', () => {
         if (!loginResult.success)
           return
 
-        await getIam().auth.logout(loginResult.data.accessToken)
-        const result = await getIam().auth.verifyToken(loginResult.data.accessToken)
+        await getIam().auth.logout(loginResult.data.tokens.accessToken)
+        const result = await getIam().auth.verifyToken(loginResult.data.tokens.accessToken)
         expect(result.success).toBe(false)
         if (!result.success) {
           expect(result.error.code).toBe(IamErrorCode.SESSION_INVALID)
@@ -222,7 +223,7 @@ describe('iam.auth', () => {
         // 设置 displayName
         await getIam().user.updateCurrentUser(
           (await getIam().auth.login({ identifier: 'auth_resolve_display', password: TEST_PASSWORD }))
-            .data!.accessToken,
+            .data!.tokens.accessToken,
           { displayName: 'Test Display Name' },
         )
 
@@ -234,7 +235,7 @@ describe('iam.auth', () => {
         if (!loginResult.success)
           return
 
-        const result = await getIam().auth.verifyToken(loginResult.data.accessToken)
+        const result = await getIam().auth.verifyToken(loginResult.data.tokens.accessToken)
         expect(result.success).toBe(true)
         if (result.success) {
           expect(result.data.displayName).toBe('Test Display Name')
@@ -257,10 +258,10 @@ describe('iam.auth', () => {
         if (!loginResult.success)
           return
 
-        const logoutResult = await getIam().auth.logout(loginResult.data.accessToken)
+        const logoutResult = await getIam().auth.logout(loginResult.data.tokens.accessToken)
         expect(logoutResult.success).toBe(true)
 
-        const verifyResult = await getIam().auth.verifyToken(loginResult.data.accessToken)
+        const verifyResult = await getIam().auth.verifyToken(loginResult.data.tokens.accessToken)
         expect(verifyResult.success).toBe(false)
       })
 
@@ -273,8 +274,8 @@ describe('iam.auth', () => {
         if (!loginResult.success)
           return
 
-        await getIam().auth.logout(loginResult.data.accessToken)
-        const result = await getIam().auth.logout(loginResult.data.accessToken)
+        await getIam().auth.logout(loginResult.data.tokens.accessToken)
+        const result = await getIam().auth.logout(loginResult.data.tokens.accessToken)
         expect(result.success).toBe(true)
       })
 
@@ -491,6 +492,67 @@ describe('iam.auth', () => {
           expect(result.data.agreements).toBeDefined()
           expect(result.data.agreements?.userAgreementUrl).toBe('https://example.com/terms')
           expect(result.data.agreements?.privacyPolicyUrl).toBe('https://example.com/privacy')
+        }
+      })
+    })
+
+    // =========================================================================
+    // 登出吊销 refreshToken
+    // =========================================================================
+
+    describe('logout 吊销 refreshToken', () => {
+      it('登出后 refreshToken 应不可用', async () => {
+        await registerUser('auth_logout_refresh')
+        const loginResult = await getIam().auth.login({
+          identifier: 'auth_logout_refresh',
+          password: TEST_PASSWORD,
+        })
+        expect(loginResult.success).toBe(true)
+        if (!loginResult.success)
+          return
+
+        const { accessToken: _accessToken, refreshToken } = loginResult.data.tokens
+
+        // refreshToken 在登出前应有效
+        const refreshBefore = await getIam().session.refresh(refreshToken)
+        // refresh 会 rotate（创建新 session），此时旧 accessToken 已失效
+        expect(refreshBefore.success).toBe(true)
+        if (!refreshBefore.success)
+          return
+
+        // 用新 accessToken 登出
+        const logoutResult = await getIam().auth.logout(refreshBefore.data.accessToken)
+        expect(logoutResult.success).toBe(true)
+
+        // 登出后 refreshToken 应被吊销（新 refreshToken 也应被吊销）
+        const refreshAfter = await getIam().session.refresh(refreshBefore.data.refreshToken)
+        expect(refreshAfter.success).toBe(false)
+        if (!refreshAfter.success) {
+          expect(refreshAfter.error.code).toBe(IamErrorCode.TOKEN_EXPIRED)
+        }
+      })
+
+      it('登出后原始 refreshToken 也应不可用（旧 token 已被 rotation 删除）', async () => {
+        await registerUser('auth_logout_refresh2')
+        const loginResult = await getIam().auth.login({
+          identifier: 'auth_logout_refresh2',
+          password: TEST_PASSWORD,
+        })
+        expect(loginResult.success).toBe(true)
+        if (!loginResult.success)
+          return
+
+        const { accessToken, refreshToken } = loginResult.data.tokens
+
+        // 直接登出（不先 refresh）
+        const logoutResult = await getIam().auth.logout(accessToken)
+        expect(logoutResult.success).toBe(true)
+
+        // 登出后 refreshToken 应被吊销
+        const refreshAfter = await getIam().session.refresh(refreshToken)
+        expect(refreshAfter.success).toBe(false)
+        if (!refreshAfter.success) {
+          expect(refreshAfter.error.code).toBe(IamErrorCode.TOKEN_EXPIRED)
         }
       })
     })
