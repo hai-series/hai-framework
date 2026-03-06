@@ -11,9 +11,11 @@ import type { TokenStorage } from '@h-ai/api-client'
 import type { Result } from '@h-ai/core'
 import type { CapacitorError } from './capacitor-types.js'
 import { Preferences } from '@capacitor/preferences'
-import { err, ok } from '@h-ai/core'
+import { core, err, ok } from '@h-ai/core'
+import { CapacitorErrorCode } from './capacitor-config.js'
 import { capacitorM } from './capacitor-i18n.js'
-import { CapacitorErrorCode } from './capacitor-types.js'
+
+const logger = core.logger.child({ module: 'capacitor', scope: 'token-storage' })
 
 /** Preferences 存储 Key */
 const PREF_ACCESS_TOKEN = 'hai_access_token'
@@ -31,9 +33,9 @@ const PREF_REFRESH_TOKEN = 'hai_refresh_token'
  * @example
  * ```ts
  * import { createCapacitorTokenStorage } from '@h-ai/capacitor'
- * import { createApiClient } from '@h-ai/api-client'
+ * import { api } from '@h-ai/api-client'
  *
- * const api = createApiClient({
+ * await api.init({
  *   baseUrl: 'https://api.example.com/v1',
  *   auth: {
  *     storage: createCapacitorTokenStorage(),
@@ -45,28 +47,55 @@ const PREF_REFRESH_TOKEN = 'hai_refresh_token'
 export function createCapacitorTokenStorage(): TokenStorage {
   return {
     async getAccessToken(): Promise<string | null> {
-      const { value } = await Preferences.get({ key: PREF_ACCESS_TOKEN })
-      return value
+      try {
+        const { value } = await Preferences.get({ key: PREF_ACCESS_TOKEN })
+        return value
+      }
+      catch (error) {
+        logger.error('Failed to get access token from Preferences', { error })
+        return null
+      }
     },
 
     async getRefreshToken(): Promise<string | null> {
-      const { value } = await Preferences.get({ key: PREF_REFRESH_TOKEN })
-      return value
+      try {
+        const { value } = await Preferences.get({ key: PREF_REFRESH_TOKEN })
+        return value
+      }
+      catch (error) {
+        logger.error('Failed to get refresh token from Preferences', { error })
+        return null
+      }
     },
 
     async setAccessToken(token: string): Promise<void> {
-      await Preferences.set({ key: PREF_ACCESS_TOKEN, value: token })
+      try {
+        await Preferences.set({ key: PREF_ACCESS_TOKEN, value: token })
+      }
+      catch (error) {
+        logger.error('Failed to set access token in Preferences', { error })
+      }
     },
 
     async setRefreshToken(token: string): Promise<void> {
-      await Preferences.set({ key: PREF_REFRESH_TOKEN, value: token })
+      try {
+        await Preferences.set({ key: PREF_REFRESH_TOKEN, value: token })
+      }
+      catch (error) {
+        logger.error('Failed to set refresh token in Preferences', { error })
+      }
     },
 
     async clear(): Promise<void> {
-      await Promise.all([
-        Preferences.remove({ key: PREF_ACCESS_TOKEN }),
-        Preferences.remove({ key: PREF_REFRESH_TOKEN }),
-      ])
+      try {
+        await Promise.all([
+          Preferences.remove({ key: PREF_ACCESS_TOKEN }),
+          Preferences.remove({ key: PREF_REFRESH_TOKEN }),
+        ])
+      }
+      catch (error) {
+        logger.error('Failed to clear tokens from Preferences', { error })
+      }
     },
   }
 }

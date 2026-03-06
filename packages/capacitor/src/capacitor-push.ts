@@ -9,8 +9,8 @@
 import type { Result } from '@h-ai/core'
 import type { CapacitorError, PushNotificationCallbacks, PushRegistration } from './capacitor-types.js'
 import { err, ok } from '@h-ai/core'
+import { CapacitorErrorCode } from './capacitor-config.js'
 import { capacitorM } from './capacitor-i18n.js'
-import { CapacitorErrorCode } from './capacitor-types.js'
 
 /**
  * 注册推送通知
@@ -45,12 +45,24 @@ export async function registerPush(): Promise<Result<PushRegistration, Capacitor
 
     // 注册并等待 Token
     const token = await new Promise<string>((resolve, reject) => {
+      let regListener: { remove: () => Promise<void> } | undefined
+      let errListener: { remove: () => Promise<void> } | undefined
+
+      function cleanup() {
+        regListener?.remove()
+        errListener?.remove()
+      }
+
       PushNotifications.addListener('registration', (t) => {
+        cleanup()
         resolve(t.value)
-      })
+      }).then(l => regListener = l)
+
       PushNotifications.addListener('registrationError', (error) => {
+        cleanup()
         reject(error)
-      })
+      }).then(l => errListener = l)
+
       PushNotifications.register()
     })
 
@@ -84,7 +96,7 @@ export async function registerPush(): Promise<Result<PushRegistration, Capacitor
  * cleanup()
  * ```
  */
-export async function listenPush(callbacks: PushNotificationCallbacks): Promise<() => void> {
+export async function listenPush(callbacks: PushNotificationCallbacks): Promise<() => Promise<void>> {
   const { PushNotifications } = await import('@capacitor/push-notifications')
   const listeners: Array<{ remove: () => Promise<void> }> = []
 
@@ -118,7 +130,7 @@ export async function listenPush(callbacks: PushNotificationCallbacks): Promise<
     listeners.push(listener)
   }
 
-  return () => {
-    listeners.forEach(l => l.remove())
+  return async () => {
+    await Promise.all(listeners.map(l => l.remove()))
   }
 }

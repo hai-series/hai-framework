@@ -7,5 +7,6 @@
   "capacitor_deviceInfoFailed": "Failed to get device info",
   "capacitor_pushRegisterFailed": "Failed to register push notifications",
   "capacitor_cameraFailed": "Failed to access camera",
-  "capacitor_statusBarFailed": "Failed to configure status bar"
+  "capacitor_statusBarFailed": "Failed to configure status bar",
+  "capacitor_notInitialized": "Capacitor module is not initialized"
 }

@@ -7,5 +7,6 @@
   "capacitor_deviceInfoFailed": "获取设备信息失败",
   "capacitor_pushRegisterFailed": "注册推送通知失败",
   "capacitor_cameraFailed": "访问相机失败",
-  "capacitor_statusBarFailed": "配置状态栏失败"
+  "capacitor_statusBarFailed": "配置状态栏失败",
+  "capacitor_notInitialized": "Capacitor 模块未初始化"
 }

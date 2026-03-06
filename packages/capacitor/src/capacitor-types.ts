@@ -5,6 +5,92 @@
  * @module capacitor-types
  */
 
+import type { Result } from '@h-ai/core'
+import type { CapacitorErrorCodeType } from './capacitor-config.js'
+
+// ─── 错误类型 ───
+
+/** Capacitor 模块错误 */
+export interface CapacitorError {
+  /** 错误码 */
+  code: CapacitorErrorCodeType
+  /** 错误描述 */
+  message: string
+  /** 原始错误 */
+  cause?: unknown
+}
+
+// ─── 子操作接口 ───
+
+/** 设备信息操作 */
+export interface DeviceOperations {
+  /** 获取设备信息（平台、型号、系统版本等） */
+  getInfo: () => Promise<Result<DeviceInfo, CapacitorError>>
+  /** 获取应用版本信息 */
+  getAppVersion: () => Promise<Result<{ version: string, build: string }, CapacitorError>>
+}
+
+/** 相机操作 */
+export interface CameraOperations {
+  /** 拍照或选取相册图片 */
+  takePhoto: (options?: PhotoOptions) => Promise<Result<PhotoResult, CapacitorError>>
+}
+
+/** 推送通知操作 */
+export interface PushOperations {
+  /** 注册推送通知，返回设备 Token */
+  register: () => Promise<Result<PushRegistration, CapacitorError>>
+  /** 监听推送通知事件，返回清理函数 */
+  listen: (callbacks: PushNotificationCallbacks) => Promise<() => Promise<void>>
+}
+
+/** 状态栏操作 */
+export interface StatusBarOperations {
+  /** 配置状态栏（样式、背景色、沉浸式） */
+  configure: (config: StatusBarConfig) => Promise<Result<void, CapacitorError>>
+  /** 显示状态栏 */
+  show: () => Promise<Result<void, CapacitorError>>
+  /** 隐藏状态栏 */
+  hide: () => Promise<Result<void, CapacitorError>>
+}
+
+/** Preferences 操作（安全读写，返回 Result） */
+export interface PreferencesOperations {
+  /** 安全读取 Preference 值 */
+  get: (key: string) => Promise<Result<string | null, CapacitorError>>
+  /** 安全写入 Preference 值 */
+  set: (key: string, value: string) => Promise<Result<void, CapacitorError>>
+  /** 安全删除 Preference 值 */
+  remove: (key: string) => Promise<Result<void, CapacitorError>>
+}
+
+// ─── 函数接口 ───
+
+/** Capacitor 模块服务对象接口 */
+export interface CapacitorFunctions {
+  /** 初始化 Capacitor 模块 */
+  init: () => Promise<Result<void, CapacitorError>>
+  /** 关闭模块，重置状态 */
+  close: () => Promise<void>
+  /** 获取当前平台 */
+  getPlatform: () => string
+  /** 是否运行在原生 App 中 */
+  isNative: () => boolean
+  /** 是否已初始化 */
+  readonly isInitialized: boolean
+
+  /** 设备信息操作 */
+  readonly device: DeviceOperations
+  /** 相机操作 */
+  readonly camera: CameraOperations
+  /** 推送通知操作 */
+  readonly push: PushOperations
+  /** 状态栏操作 */
+  readonly statusBar: StatusBarOperations
+  /** Preferences 安全读写操作 */
+  readonly preferences: PreferencesOperations
+}
+
 // ─── 设备信息 ───
 
 /** 设备平台 */
@@ -96,38 +182,4 @@ export interface StatusBarConfig {
   backgroundColor?: string
   /** 是否覆盖在内容上（沉浸式） */
   overlay?: boolean
-}
-
-// ─── 错误码 ───
-
-/** Capacitor 模块错误码（8000-8099） */
-export enum CapacitorErrorCode {
-  /** 初始化失败 */
-  INIT_FAILED = 8000,
-  /** Capacitor 环境不可用 */
-  NOT_AVAILABLE = 8001,
-  /** Preferences 读取失败 */
-  PREFERENCES_GET_FAILED = 8010,
-  /** Preferences 写入失败 */
-  PREFERENCES_SET_FAILED = 8011,
-  /** Preferences 删除失败 */
-  PREFERENCES_REMOVE_FAILED = 8012,
-  /** 获取设备信息失败 */
-  DEVICE_INFO_FAILED = 8020,
-  /** 推送注册失败 */
-  PUSH_REGISTER_FAILED = 8030,
-  /** 相机访问失败 */
-  CAMERA_FAILED = 8040,
-  /** 状态栏设置失败 */
-  STATUS_BAR_FAILED = 8050,
-}
-
-/** Capacitor 模块错误 */
-export interface CapacitorError {
-  /** 错误码 */
-  code: CapacitorErrorCode
-  /** 错误描述 */
-  message: string
-  /** 原始错误 */
-  cause?: unknown
 }
