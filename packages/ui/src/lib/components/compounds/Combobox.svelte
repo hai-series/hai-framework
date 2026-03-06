@@ -34,7 +34,7 @@
 -->
 <script lang="ts">
   import { Combobox } from 'bits-ui'
-  import { m } from '../../messages.js'
+  import { uiM } from '../../messages.js'
   import BareButton from '../primitives/BareButton.svelte'
 
   /** 选项定义 */
@@ -173,7 +173,7 @@
                   type="button"
                   class="hover:bg-primary/20 rounded p-0.5 transition-colors"
                   onclick={(e) => removeItem(opt.value, e)}
-                  ariaLabel="{m('combobox_remove')} {opt.label}"
+                  ariaLabel="{uiM('combobox_remove')} {opt.label}"
                 >
                   <span class="icon-[tabler--x] size-3"></span>
                 </BareButton>
@@ -204,7 +204,7 @@
         >
           {#if filteredOptions.length === 0}
             <div class="px-3 py-2 text-sm text-base-content/50">
-              {m('combobox_no_match')}
+              {uiM('combobox_no_match')}
             </div>
           {:else}
             {#each filteredOptions as opt (opt.value)}
@@ -267,7 +267,7 @@
         >
           {#if filteredOptions.length === 0}
             <div class="px-3 py-2 text-sm text-base-content/50">
-              {m('combobox_no_match')}
+              {uiM('combobox_no_match')}
             </div>
           {:else}
             {#each filteredOptions as opt (opt.value)}

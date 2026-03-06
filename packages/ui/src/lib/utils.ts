@@ -19,22 +19,6 @@ export function cn(...classes: (string | boolean | undefined | null)[]): string 
 }
 
 /**
- * 变体到 CSS 类名映射
- */
-export const variantClasses: Record<Variant, string> = {
-  default: 'btn-neutral',
-  primary: 'btn-primary',
-  secondary: 'btn-secondary',
-  success: 'btn-success',
-  warning: 'btn-warning',
-  error: 'btn-error',
-  info: 'btn-info',
-  ghost: 'btn-ghost',
-  link: 'btn-link',
-  outline: 'btn-outline',
-}
-
-/**
  * 获取变体类名
  */
 export function getVariantClass(variant: Variant, prefix = 'btn'): string {
@@ -51,20 +35,6 @@ export function getVariantClass(variant: Variant, prefix = 'btn'): string {
     outline: `${prefix}-outline`,
   }
   return map[variant] ?? map.default
-}
-
-/**
- * 尺寸到 CSS 类名映射
- */
-export const sizeClasses: Record<Size, string> = {
-  'xs': 'btn-xs',
-  'sm': 'btn-sm',
-  'md': '',
-  'lg': 'btn-lg',
-  'xl': 'btn-xl',
-  '2xl': 'btn-xl',
-  '3xl': 'btn-xl',
-  '4xl': 'btn-xl',
 }
 
 /**

@@ -13,7 +13,7 @@
   import { cn } from '../../../utils.js'
   import IconButton from '../../primitives/IconButton.svelte'
   import Badge from '../../primitives/Badge.svelte'
-  import { m } from '../../../messages.js'
+  import { uiM } from '../../../messages.js'
   
   
   let {
@@ -78,7 +78,7 @@
       <IconButton
         size="xs"
         variant="ghost"
-        label={labels.copyHash ?? m('hash_copy')}
+        label={labels.copyHash ?? uiM('hash_copy')}
         onclick={copyToClipboard}
       >
         {#snippet children()}

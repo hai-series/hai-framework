@@ -17,7 +17,7 @@
   import Textarea from '../../primitives/Textarea.svelte'
   import Avatar from '../../primitives/Avatar.svelte'
   import Alert from '../../compounds/Alert.svelte'
-  import { m } from '../../../messages.js'
+  import { uiM } from '../../../messages.js'
   
   let {
     user,
@@ -63,13 +63,13 @@
   // 获取字段标签
   function getFieldLabel(field: UserProfileField): string {
     const labelMap: Record<UserProfileField, () => string> = {
-      avatar: () => m('user_profile_avatar'),
-      username: () => m('user_profile_username'),
-      email: () => m('user_profile_email'),
-      nickname: () => m('user_profile_nickname'),
-      displayName: () => m('user_profile_display_name'),
-      phone: () => m('user_profile_phone'),
-      bio: () => m('user_profile_bio'),
+      avatar: () => uiM('user_profile_avatar'),
+      username: () => uiM('user_profile_username'),
+      email: () => uiM('user_profile_email'),
+      nickname: () => uiM('user_profile_nickname'),
+      displayName: () => uiM('user_profile_display_name'),
+      phone: () => uiM('user_profile_phone'),
+      bio: () => uiM('user_profile_bio'),
     }
     return labelMap[field]?.() || field
   }
@@ -162,7 +162,7 @@
           <div class="flex items-center gap-4">
             <Avatar
               src={user?.avatarUrl ?? user?.avatar}
-              alt={m('user_profile_avatar')}
+              alt={uiM('user_profile_avatar')}
               size="lg"
               ring
               class="shadow-sm"
@@ -176,7 +176,7 @@
                   accept="image/*"
                   onchange={handleAvatarChange}
                 />
-                <p class="text-xs text-base-content/60 mt-1">{m('user_profile_avatar_hint')}</p>
+                <p class="text-xs text-base-content/60 mt-1">{uiM('user_profile_avatar_hint')}</p>
               </div>
             {/if}
           </div>
@@ -228,7 +228,7 @@
               {loading}
               disabled={loading}
             >
-              {m('user_profile_save')}
+              {uiM('user_profile_save')}
             </Button>
             <Button
               type="button"
@@ -236,7 +236,7 @@
               onclick={cancelEdit}
               disabled={loading}
             >
-              {m('user_profile_cancel')}
+              {uiM('user_profile_cancel')}
             </Button>
           {/if}
           {#if !editMode && !alwaysEditable}
@@ -245,7 +245,7 @@
               variant="outline"
               onclick={startEdit}
             >
-              {m('user_profile_edit')}
+              {uiM('user_profile_edit')}
             </Button>
           {/if}
         </div>

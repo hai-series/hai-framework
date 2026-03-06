@@ -14,7 +14,7 @@
   import BareInput from '../../primitives/BareInput.svelte'
   import Progress from '../../primitives/Progress.svelte'
   import IconButton from '../../primitives/IconButton.svelte'
-  import { m } from '../../../messages.js'
+  import { uiM } from '../../../messages.js'
   
   let {
     accept = '*',
@@ -66,7 +66,7 @@
   // 验证文件
   function validateFile(file: File): string | null {
     if (file.size > maxSize) {
-      return `${m('file_upload_size_exceeded')} ${formatSize(maxSize)}）`
+      return `${uiM('file_upload_size_exceeded')} ${formatSize(maxSize)}）`
     }
     
     if (accept !== '*') {
@@ -85,7 +85,7 @@
       })
       
       if (!isAccepted) {
-        return m('file_upload_unsupported_type')
+        return uiM('file_upload_unsupported_type')
       }
     }
     
@@ -100,7 +100,7 @@
     
     for (const file of Array.from(fileList)) {
       if (files.length + newFiles.length >= maxFiles) {
-        onerror?.(`${m('file_upload_max_files_exceeded')} ${maxFiles} ${m('file_upload_files_unit')}`)
+        onerror?.(`${uiM('file_upload_max_files_exceeded')} ${maxFiles} ${uiM('file_upload_files_unit')}`)
         break
       }
       
@@ -134,7 +134,7 @@
   // 上传单个文件
   async function uploadFile(uploadFile: UploadFile) {
     if (!uploadUrl && !presignUrl) {
-      uploadFile.error = m('file_upload_no_url')
+      uploadFile.error = uiM('file_upload_no_url')
       uploadFile.state = 'error'
       return
     }
@@ -161,10 +161,13 @@
         })
         
         if (!presignResponse.ok) {
-          throw new Error(m('file_upload_get_url_failed'))
+          throw new Error(uiM('file_upload_get_url_failed'))
         }
         
         const { url } = await presignResponse.json()
+        if (!/^https?:\/\//i.test(url)) {
+          throw new Error(uiM('file_upload_get_url_failed'))
+        }
         targetUrl = url
       }
       
@@ -190,11 +193,11 @@
             }
             resolve()
           } else {
-            reject(new Error(`${m('file_upload_failed')}: ${xhr.statusText}`))
+            reject(new Error(`${uiM('file_upload_failed')}: ${xhr.statusText}`))
           }
         }
         
-        xhr.onerror = () => reject(new Error(m('file_upload_network_error')))
+        xhr.onerror = () => reject(new Error(uiM('file_upload_network_error')))
         
         xhr.open('PUT', targetUrl!)
         xhr.setRequestHeader('Content-Type', uploadFile.type || 'application/octet-stream')
@@ -209,7 +212,7 @@
       onupload?.(uploadFile)
     } catch (error) {
       uploadFile.state = 'error'
-      uploadFile.error = error instanceof Error ? error.message : m('file_upload_failed')
+      uploadFile.error = error instanceof Error ? error.message : uiM('file_upload_failed')
       onerror?.(uploadFile.error)
     }
     
@@ -309,17 +312,17 @@
       </svg>
       <div class="text-base-content/70">
         {#if dragDrop}
-          <span>{m('file_upload_drag_hint')}</span>
+          <span>{uiM('file_upload_drag_hint')}</span>
         {/if}
-        <span class="text-primary">{m('file_upload_click_to_select')}</span>
+        <span class="text-primary">{uiM('file_upload_click_to_select')}</span>
       </div>
       <div class="text-xs text-base-content/50">
         {#if accept !== '*'}
-          {m('file_upload_supported_formats')} {accept}，
+          {uiM('file_upload_supported_formats')} {accept}，
         {/if}
-        {m('file_upload_max_size')} {formatSize(maxSize)}
+        {uiM('file_upload_max_size')} {formatSize(maxSize)}
         {#if maxFiles > 1}
-          ，{m('file_upload_max_files_hint')} {maxFiles} {m('file_upload_files_unit')}
+          ，{uiM('file_upload_max_files_hint')} {maxFiles} {uiM('file_upload_files_unit')}
         {/if}
       </div>
     </div>
@@ -352,7 +355,7 @@
             {:else if file.state === 'error'}
               <div class="text-xs text-error mt-1">{file.error}</div>
             {:else if file.state === 'success'}
-              <div class="text-xs text-success mt-1">{m('file_upload_success')}</div>
+              <div class="text-xs text-success mt-1">{uiM('file_upload_success')}</div>
             {/if}
           </div>
           
@@ -362,7 +365,7 @@
               <IconButton
                 size="xs"
                 variant="ghost"
-                label={m('file_upload_retry')}
+                label={uiM('file_upload_retry')}
                 onclick={() => retryUpload(file.id)}
               >
                 {#snippet children()}
@@ -375,7 +378,7 @@
             <IconButton
               size="xs"
               variant="ghost"
-              label={m('file_upload_remove')}
+              label={uiM('file_upload_remove')}
               onclick={() => removeFile(file.id)}
             >
               {#snippet children()}

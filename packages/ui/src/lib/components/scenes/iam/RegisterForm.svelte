@@ -10,7 +10,7 @@
   import type { InputProps } from '../../../types.js'
   import { cn } from '../../../utils.js'
   import PasswordInput from './PasswordInput.svelte'
-  import { m } from '../../../messages.js'
+  import { uiM } from '../../../messages.js'
   
   let {
     loading = false,
@@ -53,12 +53,12 @@
   // 获取字段标签
   function getFieldLabel(field: RegisterField): string {
     const labelMap: Record<RegisterField, () => string> = {
-      username: () => m('register_username'),
-      email: () => m('register_email'),
-      phone: () => m('register_phone'),
-      password: () => m('register_password'),
-      confirmPassword: () => m('register_confirm_password'),
-      nickname: () => m('register_nickname'),
+      username: () => uiM('register_username'),
+      email: () => uiM('register_email'),
+      phone: () => uiM('register_phone'),
+      password: () => uiM('register_password'),
+      confirmPassword: () => uiM('register_confirm_password'),
+      nickname: () => uiM('register_nickname'),
     }
     return labelMap[field]?.() || field
   }
@@ -66,12 +66,12 @@
   // 获取字段占位符
   function getFieldPlaceholder(field: RegisterField): string {
     const placeholderMap: Record<RegisterField, () => string> = {
-      username: () => m('register_username_placeholder'),
-      email: () => m('register_email_placeholder'),
-      phone: () => m('register_phone_placeholder'),
-      password: () => m('register_password_placeholder'),
-      confirmPassword: () => m('register_confirm_password_placeholder'),
-      nickname: () => m('register_nickname_placeholder'),
+      username: () => uiM('register_username_placeholder'),
+      email: () => uiM('register_email_placeholder'),
+      phone: () => uiM('register_phone_placeholder'),
+      password: () => uiM('register_password_placeholder'),
+      confirmPassword: () => uiM('register_confirm_password_placeholder'),
+      nickname: () => uiM('register_nickname_placeholder'),
     }
     return placeholderMap[field]?.() || ''
   }
@@ -97,7 +97,7 @@
   // 确认密码错误提示
   const confirmPasswordError = $derived(
     errors.confirmPassword || (!passwordsMatch && confirmPassword.length > 0 
-      ? m('register_password_mismatch')
+      ? uiM('register_password_mismatch')
       : '')
   )
   
@@ -143,7 +143,7 @@
 <form class={formClass} onsubmit={handleSubmit}>
   <!-- 标题 -->
   {#if showTitle}
-    <h2 class="text-xl font-semibold text-center mb-5">{m('register_title')}</h2>
+    <h2 class="text-xl font-semibold text-center mb-5">{uiM('register_title')}</h2>
   {/if}
 
   <!-- 自定义头部 -->
@@ -226,21 +226,21 @@
     disabled={loading || disabled || !passwordsMatch}
     loading={loading}
   >
-    {submitText || m('register_submit')}
+    {submitText || uiM('register_submit')}
   </Button>
 
   <!-- 协议提示 -->
   {#if hasAgreements}
     <p class="text-xs text-base-content/50 text-center">
-      {m('agreement_prefix')}
+      {uiM('agreement_prefix')}
       {#if agreements?.userAgreementUrl}
-        <a href={agreements.userAgreementUrl} target="_blank" rel="noopener noreferrer" class="link link-primary">{m('agreement_user_agreement')}</a>
+        <a href={agreements.userAgreementUrl} target="_blank" rel="noopener noreferrer" class="link link-primary">{uiM('agreement_user_agreement')}</a>
       {/if}
       {#if agreements?.userAgreementUrl && agreements?.privacyPolicyUrl}
-        {m('agreement_and')}
+        {uiM('agreement_and')}
       {/if}
       {#if agreements?.privacyPolicyUrl}
-        <a href={agreements.privacyPolicyUrl} target="_blank" rel="noopener noreferrer" class="link link-primary">{m('agreement_privacy_policy')}</a>
+        <a href={agreements.privacyPolicyUrl} target="_blank" rel="noopener noreferrer" class="link link-primary">{uiM('agreement_privacy_policy')}</a>
       {/if}
     </p>
   {/if}
@@ -252,8 +252,8 @@
     </div>
   {:else if showLoginLink}
     <div class="text-center mt-4 text-sm text-base-content/60">
-      <span>{m('register_has_account')}</span>
-      <a href={loginUrl} class="link link-primary ml-1">{m('register_login_now')}</a>
+      <span>{uiM('register_has_account')}</span>
+      <a href={loginUrl} class="link link-primary ml-1">{uiM('register_login_now')}</a>
     </div>
   {/if}
 </form>

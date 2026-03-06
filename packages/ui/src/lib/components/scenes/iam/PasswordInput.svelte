@@ -9,7 +9,7 @@
   import Progress from '../../primitives/Progress.svelte'
   import BareInput from '../../primitives/BareInput.svelte'
   import BareButton from '../../primitives/BareButton.svelte'
-  import { m } from '../../../messages.js'
+  import { uiM } from '../../../messages.js'
   
   interface Props {
     /** 元素 ID */
@@ -101,10 +101,10 @@
     if (/[^a-zA-Z0-9]/.test(value)) score += 1
     
     // 返回强度等级
-    if (score <= 2) return { score: 1, label: m('password_strength_weak'), color: 'bg-error' }
-    if (score <= 4) return { score: 2, label: m('password_strength_fair'), color: 'bg-warning' }
-    if (score <= 5) return { score: 3, label: m('password_strength_good'), color: 'bg-success' }
-    return { score: 4, label: m('password_strength_strong'), color: 'bg-primary' }
+    if (score <= 2) return { score: 1, label: uiM('password_strength_weak'), color: 'bg-error' }
+    if (score <= 4) return { score: 2, label: uiM('password_strength_fair'), color: 'bg-warning' }
+    if (score <= 5) return { score: 3, label: uiM('password_strength_good'), color: 'bg-success' }
+    return { score: 4, label: uiM('password_strength_strong'), color: 'bg-primary' }
   })
   
   function handleInput(e: Event & { currentTarget: HTMLInputElement }) {
@@ -156,7 +156,7 @@
         onclick={togglePassword}
         tabindex={-1}
         {disabled}
-        ariaLabel={showPassword ? m('password_hide') : m('password_show')}
+        ariaLabel={showPassword ? uiM('password_hide') : uiM('password_show')}
       >
         <span class={cn(
           showPassword ? 'icon-[tabler--eye-off]' : 'icon-[tabler--eye]',
@@ -175,7 +175,7 @@
         variant={strength.score <= 1 ? 'error' : strength.score <= 2 ? 'warning' : strength.score <= 3 ? 'success' : 'primary'}
       />
       <span class="text-xs text-base-content/40 mt-1 block">
-        {m('password_strength_label')} {strength.label}
+        {uiM('password_strength_label')} {strength.label}
       </span>
     </div>
   {/if}

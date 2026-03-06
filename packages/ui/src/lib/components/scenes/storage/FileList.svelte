@@ -10,7 +10,7 @@
 <script lang="ts">
   import type { FileListProps, FileItem } from '../types.js'
   import { cn } from '../../../utils.js'
-  import { m } from '../../../messages.js'
+  import { uiM } from '../../../messages.js'
   import Button from '../../primitives/Button.svelte'
   import IconButton from '../../primitives/IconButton.svelte'
   
@@ -108,7 +108,7 @@
     <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 mx-auto mb-4 opacity-30" fill="none" viewBox="0 0 24 24" stroke="currentColor">
       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
     </svg>
-    <p>{m('file_list_no_files')}</p>
+    <p>{uiM('file_list_no_files')}</p>
   </div>
 {:else}
   <div class={containerClass}>
@@ -133,17 +133,17 @@
             <div class="card-actions justify-end mt-2">
               {#if showPreview && canPreview(file)}
                 <Button variant="ghost" size="xs" onclick={() => handlePreview(file)}>
-                  {m('file_list_preview')}
+                  {uiM('file_list_preview')}
                 </Button>
               {/if}
               {#if showDownload}
                 <Button variant="ghost" size="xs" onclick={() => handleDownload(file)}>
-                  {m('file_list_download')}
+                  {uiM('file_list_download')}
                 </Button>
               {/if}
               {#if showDelete}
                 <Button variant="ghost" size="xs" class="text-error" onclick={() => handleDelete(file)}>
-                  {m('file_list_delete')}
+                  {uiM('file_list_delete')}
                 </Button>
               {/if}
             </div>
@@ -181,7 +181,7 @@
                 variant="ghost"
                 size="sm"
                 onclick={() => handlePreview(file)}
-                ariaLabel={m('file_list_preview')}
+                ariaLabel={uiM('file_list_preview')}
               >
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -194,7 +194,7 @@
                 variant="ghost"
                 size="sm"
                 onclick={() => handleDownload(file)}
-                ariaLabel={m('file_list_download')}
+                ariaLabel={uiM('file_list_download')}
               >
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
@@ -207,7 +207,7 @@
                 size="sm"
                 class="text-error"
                 onclick={() => handleDelete(file)}
-                ariaLabel={m('file_list_delete')}
+                ariaLabel={uiM('file_list_delete')}
               >
                 <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -231,7 +231,7 @@
       onclick={(e) => e.stopPropagation()}
       onkeydown={(e) => e.stopPropagation()}
     >
-      <IconButton variant="ghost" size="sm" class="absolute right-2 top-2" onclick={closePreview} ariaLabel={m('file_list_close')}>✕</IconButton>
+      <IconButton variant="ghost" size="sm" class="absolute right-2 top-2" onclick={closePreview} ariaLabel={uiM('file_list_close')}>✕</IconButton>
       <h3 class="font-bold text-lg mb-4">{previewFile.name}</h3>
       
       {#if previewFile.type.startsWith('image/')}
@@ -245,7 +245,7 @@
       {/if}
     </div>
     <form method="dialog" class="modal-backdrop">
-      <Button>{m('file_list_close')}</Button>
+      <Button>{uiM('file_list_close')}</Button>
     </form>
   </dialog>
 {/if}

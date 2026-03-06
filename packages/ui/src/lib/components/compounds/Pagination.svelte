@@ -13,7 +13,7 @@
   import Input from '../primitives/Input.svelte'
   import BareButton from '../primitives/BareButton.svelte'
   
-  import { m } from '../../messages.js'
+  import { uiM } from '../../messages.js'
 
   
   let {
@@ -28,7 +28,7 @@
     onchange,
   }: PaginationProps = $props()
   
-  // labels 优先，缺省回退到内置消息 m(...)
+  // labels 优先，缺省回退到内置消息 uiM(...)
   
   // 计算总页数
   const totalPages = $derived(Math.ceil(total / pageSize))
@@ -104,7 +104,7 @@
 <div class="flex items-center gap-4">
   {#if showTotal}
       <span class="text-sm text-base-content/70">
-      {(labels.total ?? m('pagination_total')).replace('{count}', String(total))}
+      {(labels.total ?? uiM('pagination_total')).replace('{count}', String(total))}
     </span>
   {/if}
   
@@ -141,7 +141,7 @@
   
   {#if showJumper}
     <div class="flex items-center gap-2">
-      <span class="text-sm">{labels.jumpTo ?? m('pagination_jump_to')}</span>
+      <span class="text-sm">{labels.jumpTo ?? uiM('pagination_jump_to')}</span>
       <Input
         type="number"
         size="sm"
@@ -151,7 +151,7 @@
         bind:value={jumperValue}
         onkeydown={(e: KeyboardEvent & { currentTarget: HTMLInputElement }) => e.key === 'Enter' && handleJump()}
       />
-      <span class="text-sm">{labels.page ?? m('pagination_page')}</span>
+      <span class="text-sm">{labels.page ?? uiM('pagination_page')}</span>
     </div>
   {/if}
 </div>

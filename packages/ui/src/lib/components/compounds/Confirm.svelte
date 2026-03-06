@@ -11,7 +11,7 @@
 <script lang="ts">
   import type { ConfirmProps } from '../../types.js'
   import { cn } from '../../utils.js'
-  import { m } from '../../messages.js'
+  import { uiM } from '../../messages.js'
   import Button from '../primitives/Button.svelte'
   
   let {
@@ -28,10 +28,10 @@
   }: ConfirmProps = $props()
 
   /** 响应式 i18n 显示值 */
-  const displayTitle = $derived(title ?? m('confirm_title'))
-  const displayMessage = $derived(message ?? m('confirm_message'))
-  const displayConfirmText = $derived(confirmText ?? m('confirm_ok'))
-  const displayCancelText = $derived(cancelText ?? m('confirm_cancel'))
+  const displayTitle = $derived(title ?? uiM('confirm_title'))
+  const displayMessage = $derived(message ?? uiM('confirm_message'))
+  const displayConfirmText = $derived(confirmText ?? uiM('confirm_ok'))
+  const displayCancelText = $derived(cancelText ?? uiM('confirm_cancel'))
   
   let modalElement: HTMLDialogElement
   

@@ -9,7 +9,7 @@
   import Alert from '../../compounds/Alert.svelte'
   import PasswordInput from './PasswordInput.svelte'
   import { arePasswordsEqual } from './password-utils.js'
-  import { m } from '../../../messages.js'
+  import { uiM } from '../../../messages.js'
 
   let {
     loading = false,
@@ -68,12 +68,12 @@
   {#if requireOldPassword}
     <div class="space-y-1.5">
       <label class="text-sm font-medium text-base-content/70" for="old-password">
-        {m('change_password_old')}
+        {uiM('change_password_old')}
       </label>
       <PasswordInput
         value={oldPassword}
         oninput={(e) => { oldPassword = e.currentTarget.value }}
-        placeholder={m('change_password_old_placeholder')}
+        placeholder={uiM('change_password_old_placeholder')}
         {disabled}
         error={errors.oldPassword}
         showStrength={false}
@@ -83,12 +83,12 @@
 
   <div class="space-y-1.5">
     <label class="text-sm font-medium text-base-content/70" for="new-password">
-      {m('change_password_new')}
+      {uiM('change_password_new')}
     </label>
     <PasswordInput
       value={newPassword}
       oninput={(e) => { newPassword = e.currentTarget.value }}
-      placeholder={m('change_password_new_placeholder')}
+      placeholder={uiM('change_password_new_placeholder')}
       {disabled}
       error={errors.newPassword}
       showStrength={showPasswordStrength}
@@ -98,20 +98,20 @@
 
   <div class="space-y-1.5">
     <label class="text-sm font-medium text-base-content/70" for="confirm-password">
-      {m('change_password_confirm')}
+      {uiM('change_password_confirm')}
     </label>
     <PasswordInput
       value={confirmPassword}
       oninput={(e) => { confirmPassword = e.currentTarget.value }}
-      placeholder={m('change_password_confirm_placeholder')}
+      placeholder={uiM('change_password_confirm_placeholder')}
       {disabled}
-      error={errors.confirmPassword || (!passwordsMatch && confirmPassword ? m('change_password_mismatch') : '')}
+      error={errors.confirmPassword || (!passwordsMatch && confirmPassword ? uiM('change_password_mismatch') : '')}
       showStrength={false}
     />
   </div>
 
   <div class="rounded-lg bg-base-content/3 px-3.5 py-2.5 text-xs text-base-content/50">
-    {m('change_password_relogin_hint')}
+    {uiM('change_password_relogin_hint')}
   </div>
 
   {#if errors.general}
@@ -127,6 +127,6 @@
     disabled={loading || disabled || !canSubmit}
     {loading}
   >
-    {submitText || m('change_password_submit')}
+    {submitText || uiM('change_password_submit')}
   </Button>
 </form>

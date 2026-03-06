@@ -11,7 +11,7 @@
   import BareButton from '../../primitives/BareButton.svelte'
   import Checkbox from '../../primitives/Checkbox.svelte'
   import Alert from '../../compounds/Alert.svelte'
-  import { m } from '../../../messages.js'
+  import { uiM } from '../../../messages.js'
   
   let {
     loading = false,
@@ -68,7 +68,7 @@
 <form class={formClass} onsubmit={handleSubmit}>
   <!-- 标题 -->
   {#if showTitle}
-    <h2 class="text-xl font-semibold text-center mb-5">{m('login_title')}</h2>
+    <h2 class="text-xl font-semibold text-center mb-5">{uiM('login_title')}</h2>
   {/if}
 
   <!-- 自定义头部 -->
@@ -81,13 +81,13 @@
   <!-- 用户名 -->
   <div class="space-y-1.5">
     <label class="text-sm font-medium text-base-content/70" for="login-username">
-      {m('login_username')}
+      {uiM('login_username')}
     </label>
     <Input
       id="login-username"
       name="username"
       type="text"
-      placeholder={m('login_username_placeholder')}
+      placeholder={uiM('login_username_placeholder')}
       bind:value={username}
       {disabled}
       required
@@ -98,11 +98,11 @@
   <!-- 密码 -->
   <div class="space-y-1.5">
     <label class="text-sm font-medium text-base-content/70" for="login-password">
-      {m('login_password')}
+      {uiM('login_password')}
     </label>
     <PasswordInput
       bind:value={password}
-      placeholder={m('login_password_placeholder')}
+      placeholder={uiM('login_password_placeholder')}
       {disabled}
       required
       error={errors.password}
@@ -116,7 +116,7 @@
       {#if showRememberMe}
         <Checkbox
           bind:checked={rememberMe}
-          label={m('login_remember_me')}
+          label={uiM('login_remember_me')}
           {disabled}
           size="sm"
         />
@@ -131,11 +131,11 @@
             class="link link-primary text-sm"
             onclick={handleForgotPassword}
           >
-            {m('login_forgot_password')}
+            {uiM('login_forgot_password')}
           </BareButton>
         {:else}
           <a href={forgotPasswordUrl} class="link link-primary text-sm">
-            {m('login_forgot_password')}
+            {uiM('login_forgot_password')}
           </a>
         {/if}
       {/if}
@@ -157,21 +157,21 @@
     disabled={loading || disabled}
     class="w-full"
   >
-    {submitText || m('login_submit')}
+    {submitText || uiM('login_submit')}
   </Button>
 
   <!-- 协议提示 -->
   {#if hasAgreements}
     <p class="text-xs text-base-content/50 text-center">
-      {m('agreement_prefix')}
+      {uiM('agreement_prefix')}
       {#if agreements?.userAgreementUrl}
-        <a href={agreements.userAgreementUrl} target="_blank" rel="noopener noreferrer" class="link link-primary">{m('agreement_user_agreement')}</a>
+        <a href={agreements.userAgreementUrl} target="_blank" rel="noopener noreferrer" class="link link-primary">{uiM('agreement_user_agreement')}</a>
       {/if}
       {#if agreements?.userAgreementUrl && agreements?.privacyPolicyUrl}
-        {m('agreement_and')}
+        {uiM('agreement_and')}
       {/if}
       {#if agreements?.privacyPolicyUrl}
-        <a href={agreements.privacyPolicyUrl} target="_blank" rel="noopener noreferrer" class="link link-primary">{m('agreement_privacy_policy')}</a>
+        <a href={agreements.privacyPolicyUrl} target="_blank" rel="noopener noreferrer" class="link link-primary">{uiM('agreement_privacy_policy')}</a>
       {/if}
     </p>
   {/if}
@@ -183,8 +183,8 @@
     </div>
   {:else if showRegisterLink}
     <div class="text-center mt-4 text-sm text-base-content/60">
-      <span>{m('login_no_account')}</span>
-      <a href={registerUrl} class="link link-primary ml-1">{m('login_register_now')}</a>
+      <span>{uiM('login_no_account')}</span>
+      <a href={registerUrl} class="link link-primary ml-1">{uiM('login_register_now')}</a>
     </div>
   {/if}
 </form>

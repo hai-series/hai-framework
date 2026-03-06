@@ -5,7 +5,7 @@
 <script lang="ts">
   import type { ModalProps } from '../../types.js'
   import { cn } from '../../utils.js'
-  import { m } from '../../messages.js'
+  import { uiM } from '../../messages.js'
   import IconButton from '../primitives/IconButton.svelte'
   
   let {
@@ -88,7 +88,7 @@
         <IconButton
           size="sm"
           variant="ghost"
-          label={m('common_close')}
+          label={uiM('common_close')}
           onclick={handleClose}
           class="-mt-1 -mr-2"
         >
@@ -115,9 +115,9 @@
   <button
     type="button"
     class="modal-backdrop"
-    aria-label={m('modal_close')}
+    aria-label={uiM('modal_close')}
     onclick={handleBackdropClick}
   >
-    {m('common_close')}
+    {uiM('common_close')}
   </button>
 </dialog>

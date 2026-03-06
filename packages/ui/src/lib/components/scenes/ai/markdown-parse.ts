@@ -73,22 +73,31 @@ function createRendererObject(options: Required<MarkdownParseOptions>): Renderer
         + `</div>`
     },
 
-    // 链接：外部链接自动添加 target="_blank"
+    // 原始 HTML 块：转义以防止 XSS
+    html(token: Tokens.HTML | Tokens.Tag): string {
+      return escapeHtml('text' in token ? token.text : '')
+    },
+
+    // 链接：外部链接自动添加 target="_blank"，阻止危险协议
     link({ href, title, tokens }: Tokens.Link): string {
       const text = this.parser.parseInline(tokens)
-      const isExternal = href && (href.startsWith('http://') || href.startsWith('https://'))
+      // 安全检查：仅允许安全协议
+      const safeHref = href && /^(?:https?:\/\/|\/|#|mailto:)/i.test(href) ? href : ''
+      const isExternal = safeHref && (safeHref.startsWith('http://') || safeHref.startsWith('https://'))
       const attrs = [
-        `href="${escapeHtml(href || '')}"`,
+        `href="${escapeHtml(safeHref)}"`,
         title ? `title="${escapeHtml(title)}"` : '',
         isExternal ? 'target="_blank" rel="noopener noreferrer"' : '',
       ].filter(Boolean).join(' ')
       return `<a ${attrs}>${text}</a>`
     },
 
-    // 图片：添加 loading="lazy"
+    // 图片：添加 loading="lazy"，验证 src 协议
     image({ href, title, text }: Tokens.Image): string {
+      // 安全检查：仅允许安全协议
+      const safeSrc = href && /^(?:https?:\/\/|\/|data:image\/)/i.test(href) ? href : ''
       const attrs = [
-        `src="${escapeHtml(href || '')}"`,
+        `src="${escapeHtml(safeSrc)}"`,
         `alt="${escapeHtml(text || '')}"`,
         title ? `title="${escapeHtml(title)}"` : '',
         'loading="lazy"',

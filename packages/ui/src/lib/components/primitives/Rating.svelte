@@ -10,7 +10,7 @@
 -->
 <script lang="ts">
   import { cn } from '../../utils.js'
-  import { m } from '../../messages.js'
+  import { uiM } from '../../messages.js'
   
   interface Props {
     /** 当前评分值 (0 - max) */
@@ -118,7 +118,7 @@
           i >= Math.ceil(value) && 'opacity-30',
           i === Math.floor(value) && value % 1 !== 0 && 'opacity-60',
         )}
-        aria-label={m('rating_star', { count: i + 1 })}
+        aria-label={uiM('rating_star', { count: i + 1 })}
         aria-current={i + 1 <= value ? 'true' : undefined}
       ></div>
     {/each}
@@ -136,7 +136,7 @@
           half && item.isHalf && 'mask-half-1',
           half && !item.isHalf && item.value !== 0 && 'mask-half-2',
         )}
-        aria-label={item.value === 0 ? m('rating_clear') : m('rating_star', { count: item.value })}
+        aria-label={item.value === 0 ? uiM('rating_clear') : uiM('rating_star', { count: item.value })}
         checked={value === item.value}
         {disabled}
         onchange={() => handleChange(item.value)}

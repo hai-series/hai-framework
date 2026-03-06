@@ -11,7 +11,7 @@
   import type { AvatarUploadProps } from '../types.js'
   import { cn } from '../../../utils.js'
   import BareInput from '../../primitives/BareInput.svelte'
-  import { m } from '../../../messages.js'
+  import { uiM } from '../../../messages.js'
   
   let {
     value = $bindable(''),
@@ -64,11 +64,11 @@
   // 验证文件
   function validateFile(file: File): string | null {
     if (file.size > maxSize) {
-      return `${m('avatar_upload_size_exceeded')} ${formatSize(maxSize)}）`
+      return `${uiM('avatar_upload_size_exceeded')} ${formatSize(maxSize)}）`
     }
     
     if (!file.type.startsWith('image/')) {
-      return m('avatar_upload_invalid_type')
+      return uiM('avatar_upload_invalid_type')
     }
     
     return null
@@ -104,7 +104,7 @@
         })
         
         if (!presignResponse.ok) {
-          throw new Error(m('avatar_upload_get_url_failed'))
+          throw new Error(uiM('avatar_upload_get_url_failed'))
         }
         
         const data = await presignResponse.json()
@@ -122,7 +122,7 @@
       })
       
       if (!response.ok) {
-        throw new Error(m('avatar_upload_failed'))
+        throw new Error(uiM('avatar_upload_failed'))
       }
       
       // 获取最终 URL
@@ -140,7 +140,7 @@
       value = finalUrl
       onchange?.(finalUrl)
     } catch (error) {
-      const message = error instanceof Error ? error.message : m('avatar_upload_failed')
+      const message = error instanceof Error ? error.message : uiM('avatar_upload_failed')
       onerror?.(message)
     } finally {
       loading = false
@@ -188,7 +188,7 @@
     {#if value}
       <img
         src={value}
-        alt={m('avatar_upload_alt')}
+        alt={uiM('avatar_upload_alt')}
         class="w-full h-full object-cover"
       />
     {:else}

@@ -47,7 +47,7 @@
     }
   }
   
-  import { m } from '../../../messages.js'
+  import { uiM } from '../../../messages.js'
 
   interface Props {
     open?: boolean
@@ -57,7 +57,7 @@
 
   let { open = $bindable(false), labels = {}, onsubmit }: Props = $props()
   
-  // 文案优先使用传入的 labels，缺省回退到内置消息 m(...)
+  // 文案优先使用传入的 labels，缺省回退到内置消息 uiM(...)
 
   let feedbackType = $state<FeedbackType>('bug')
   let description = $state('')
@@ -66,15 +66,15 @@
   let error = $state('')
 
   const typeOptions = $derived([
-    { value: 'bug', label: labels.types?.bug ?? m('feedback_type_bug') },
-    { value: 'feature', label: labels.types?.feature ?? m('feedback_type_feature') },
-    { value: 'question', label: labels.types?.question ?? m('feedback_type_question') },
-    { value: 'other', label: labels.types?.other ?? m('feedback_type_other') },
+    { value: 'bug', label: labels.types?.bug ?? uiM('feedback_type_bug') },
+    { value: 'feature', label: labels.types?.feature ?? uiM('feedback_type_feature') },
+    { value: 'question', label: labels.types?.question ?? uiM('feedback_type_question') },
+    { value: 'other', label: labels.types?.other ?? uiM('feedback_type_other') },
   ])
 
   async function handleSubmit() {
     if (!description.trim()) {
-      error = labels.errorEmpty ?? m('feedback_error_empty')
+      error = labels.errorEmpty ?? uiM('feedback_error_empty')
       return
     }
 
@@ -90,7 +90,7 @@
       open = false
       resetForm()
     } catch (e) {
-      error = e instanceof Error ? e.message : (labels.errorSubmit ?? m('feedback_error_submit'))
+      error = e instanceof Error ? e.message : (labels.errorSubmit ?? uiM('feedback_error_submit'))
     } finally {
       loading = false
     }
@@ -104,8 +104,8 @@
   }
 </script>
 
-<Modal bind:open title={labels.title ?? m('feedback_title')}>
-  <p class='text-base-content/70 mb-4'>{labels.description ?? m('feedback_description')}</p>
+<Modal bind:open title={labels.title ?? uiM('feedback_title')}>
+  <p class='text-base-content/70 mb-4'>{labels.description ?? uiM('feedback_description')}</p>
 
   {#if error}
     <div class='alert alert-error mb-4'>
@@ -116,7 +116,7 @@
 
   <div class='space-y-4'>
     <div class='fieldset'>
-      <legend class='fieldset-legend'>{labels.typeLabel ?? m('feedback_type_label')}</legend>
+      <legend class='fieldset-legend'>{labels.typeLabel ?? uiM('feedback_type_label')}</legend>
       <Select
         id='feedback-type'
         options={typeOptions}
@@ -125,22 +125,22 @@
     </div>
 
     <div class='fieldset'>
-      <legend class='fieldset-legend'>{labels.contentLabel ?? m('feedback_content_label')} <span class='text-error'>*</span></legend>
+      <legend class='fieldset-legend'>{labels.contentLabel ?? uiM('feedback_content_label')} <span class='text-error'>*</span></legend>
       <Textarea
         id='feedback-desc'
         class='h-32'
-        placeholder={labels.contentPlaceholder ?? m('feedback_content_placeholder')}
+        placeholder={labels.contentPlaceholder ?? uiM('feedback_content_placeholder')}
         bind:value={description}
       />
     </div>
 
     <div class='fieldset'>
-      <legend class='fieldset-legend'>{labels.contactLabel ?? m('feedback_contact_label')}</legend>
+      <legend class='fieldset-legend'>{labels.contactLabel ?? uiM('feedback_contact_label')}</legend>
       <Input
         id='feedback-contact'
         type='text'
         class='w-full'
-        placeholder={labels.contactPlaceholder ?? m('feedback_contact_placeholder')}
+        placeholder={labels.contactPlaceholder ?? uiM('feedback_contact_placeholder')}
         bind:value={contact}
         autocomplete='email'
       />
@@ -149,10 +149,10 @@
 
   {#snippet footer()}
     <Button variant='ghost' onclick={() => open = false}>
-      {labels.cancel ?? m('feedback_cancel')}
+      {labels.cancel ?? uiM('feedback_cancel')}
     </Button>
     <Button variant='primary' {loading} onclick={handleSubmit}>
-      {labels.submit ?? m('feedback_submit')}
+      {labels.submit ?? uiM('feedback_submit')}
     </Button>
   {/snippet}
 </Modal>

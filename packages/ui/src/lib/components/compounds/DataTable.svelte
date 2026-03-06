@@ -28,7 +28,7 @@
 -->
 <script lang='ts' generics='T'>
   import type { Snippet } from 'svelte'
-  import { m } from '../../messages.js'
+  import { uiM } from '../../messages.js'
 
   let {
     data,
@@ -91,7 +91,7 @@
           </th>
         {/each}
         {#if actions}
-          <th class='w-24 text-center font-medium'>{m('data_table_actions')}</th>
+          <th class='w-24 text-center font-medium'>{uiM('data_table_actions')}</th>
         {/if}
       </tr>
     </thead>
@@ -108,7 +108,7 @@
             {#if empty}
               {@render empty()}
             {:else}
-              {m('data_table_empty')}
+              {uiM('data_table_empty')}
             {/if}
           </td>
         </tr>

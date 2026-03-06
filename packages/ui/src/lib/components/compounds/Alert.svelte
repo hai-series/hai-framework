@@ -5,7 +5,7 @@
 <script lang="ts">
   import type { AlertProps } from '../../types.js'
   import { cn, getAlertVariantClass } from '../../utils.js'
-  import { m } from '../../messages.js'
+  import { uiM } from '../../messages.js'
   import IconButton from '../primitives/IconButton.svelte'
   
   let {
@@ -57,7 +57,7 @@
     </div>
     
     {#if dismissible}
-      <IconButton size="sm" variant="ghost" label={m('common_close')} onclick={handleClose}>
+      <IconButton size="sm" variant="ghost" label={uiM('common_close')} onclick={handleClose}>
         {#snippet children()}
           <span class="icon-[tabler--x] size-4"></span>
         {/snippet}
