@@ -6,6 +6,7 @@
  */
 
 import type { Result } from '@h-ai/core'
+import type { WechatPayConfig } from '../../payment-config.js'
 import type {
   CreateOrderInput,
   OrderStatus,
@@ -16,12 +17,11 @@ import type {
   PaymentProvider,
   RefundInput,
   RefundResult,
-  WechatPayConfig,
 } from '../../payment-types.js'
 import type { WechatNotifyResource, WechatOrderRequest } from './wechat-pay-types.js'
 import { err, ok } from '@h-ai/core'
+import { PaymentErrorCode } from '../../payment-config.js'
 import { paymentM } from '../../payment-i18n.js'
-import { PaymentErrorCode } from '../../payment-types.js'
 import {
   decryptResource,
   generateNonce,
@@ -177,15 +177,19 @@ export function createWechatPayProvider(config: WechatPayConfig): PaymentProvide
         const nonce = request.headers['wechatpay-nonce'] ?? ''
         const signature = request.headers['wechatpay-signature'] ?? ''
 
-        // 验签
-        if (config.platformCert) {
-          const valid = verifyNotifySignature(timestamp, nonce, request.body, signature, config.platformCert)
-          if (!valid) {
-            return err({
-              code: PaymentErrorCode.NOTIFY_VERIFY_FAILED,
-              message: paymentM('payment_notifyVerifyFailed'),
-            })
-          }
+        // 验签（必须提供平台证书）
+        if (!config.platformCert) {
+          return err({
+            code: PaymentErrorCode.NOTIFY_VERIFY_FAILED,
+            message: paymentM('payment_notifyVerifyFailed'),
+          })
+        }
+        const valid = verifyNotifySignature(timestamp, nonce, request.body, signature, config.platformCert)
+        if (!valid) {
+          return err({
+            code: PaymentErrorCode.NOTIFY_VERIFY_FAILED,
+            message: paymentM('payment_notifyVerifyFailed'),
+          })
         }
 
         // 解密资源
@@ -220,7 +224,7 @@ export function createWechatPayProvider(config: WechatPayConfig): PaymentProvide
 
     async queryOrder(orderNo: string): Promise<Result<OrderStatus, PaymentError>> {
       try {
-        const path = `/v3/pay/transactions/out-trade-no/${orderNo}?mchid=${config.mchId}`
+        const path = `/v3/pay/transactions/out-trade-no/${encodeURIComponent(orderNo)}?mchid=${encodeURIComponent(config.mchId)}`
         const response = await wechatRequest<{
           out_trade_no: string
           transaction_id: string
@@ -264,7 +268,7 @@ export function createWechatPayProvider(config: WechatPayConfig): PaymentProvide
           out_refund_no: input.refundNo,
           amount: {
             refund: input.amount,
-            total: input.amount, // 需要外部传入订单总金额（简化处理）
+            total: input.totalAmount ?? input.amount,
             currency: 'CNY',
           },
           reason: input.reason,
@@ -293,7 +297,7 @@ export function createWechatPayProvider(config: WechatPayConfig): PaymentProvide
 
     async closeOrder(orderNo: string): Promise<Result<void, PaymentError>> {
       try {
-        await wechatRequest('POST', `/v3/pay/transactions/out-trade-no/${orderNo}/close`, {
+        await wechatRequest('POST', `/v3/pay/transactions/out-trade-no/${encodeURIComponent(orderNo)}/close`, {
           mchid: config.mchId,
         })
         return ok(undefined)

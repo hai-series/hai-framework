@@ -7,6 +7,7 @@
  */
 
 import type { Result } from '@h-ai/core'
+import type { StripeConfig } from '../../payment-config.js'
 import type {
   CreateOrderInput,
   OrderStatus,
@@ -17,12 +18,11 @@ import type {
   PaymentProvider,
   RefundInput,
   RefundResult,
-  StripeConfig,
 } from '../../payment-types.js'
 import { createHmac } from 'node:crypto'
 import { core, err, ok } from '@h-ai/core'
+import { PaymentErrorCode } from '../../payment-config.js'
 import { paymentM } from '../../payment-i18n.js'
-import { PaymentErrorCode } from '../../payment-types.js'
 
 /** Stripe API 基地址 */
 const STRIPE_API_BASE = 'https://api.stripe.com/v1'
@@ -55,11 +55,20 @@ export function createStripeProvider(config: StripeConfig): PaymentProvider {
     return response.json() as T
   }
 
+  /** Stripe Webhook 签名容忍时间窗口（秒） */
+  const TIMESTAMP_TOLERANCE = 300
+
   /** 验证 Stripe Webhook 签名 */
   function verifyWebhookSignature(payload: string, signature: string): boolean {
     const parts = signature.split(',')
     const timestamp = parts.find(p => p.startsWith('t='))?.slice(2) ?? ''
     const v1 = parts.find(p => p.startsWith('v1='))?.slice(3) ?? ''
+
+    // 时间戳重放保护
+    const ts = Number.parseInt(timestamp, 10)
+    if (Number.isNaN(ts) || Math.abs(Math.floor(Date.now() / 1000) - ts) > TIMESTAMP_TOLERANCE) {
+      return false
+    }
 
     const signedPayload = `${timestamp}.${payload}`
     const expected = createHmac('sha256', config.webhookSecret)
@@ -180,7 +189,7 @@ export function createStripeProvider(config: StripeConfig): PaymentProvider {
             payment_status: string
             amount_total: number
           }>
-        }>('GET', `/checkout/sessions?limit=1&metadata[orderNo]=${orderNo}`)
+        }>('GET', `/checkout/sessions?limit=1&metadata[orderNo]=${encodeURIComponent(orderNo)}`)
 
         const session = sessions.data[0]
         if (!session) {
@@ -218,7 +227,7 @@ export function createStripeProvider(config: StripeConfig): PaymentProvider {
         // Stripe 退款需要 payment_intent ID，这里简化为根据 orderNo 查询
         const sessions = await stripeRequest<{
           data: Array<{ payment_intent: string }>
-        }>('GET', `/checkout/sessions?limit=1&metadata[orderNo]=${input.orderNo}`)
+        }>('GET', `/checkout/sessions?limit=1&metadata[orderNo]=${encodeURIComponent(input.orderNo)}`)
 
         const paymentIntent = sessions.data[0]?.payment_intent
         if (!paymentIntent) {

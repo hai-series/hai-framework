@@ -7,6 +7,7 @@
 import type { PaymentProvider } from '../src/payment-types'
 import { err, ok } from '@h-ai/core'
 import { afterEach, describe, expect, it } from 'vitest'
+import { PaymentErrorCode } from '../src/payment-config'
 import {
   clearProviders,
   closeOrder,
@@ -17,7 +18,6 @@ import {
   refund,
   registerProvider,
 } from '../src/payment-functions'
-import { PaymentErrorCode } from '../src/payment-types'
 
 /** 创建 mock Provider */
 function createMockProvider(name: string): PaymentProvider {

@@ -6,7 +6,7 @@
 
 import { createSign, generateKeyPairSync } from 'node:crypto'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { PaymentErrorCode } from '../src/payment-types'
+import { PaymentErrorCode } from '../src/payment-config'
 import { createAlipayProvider } from '../src/providers/alipay/alipay-provider'
 
 // 生成测试用 RSA 密钥对
