@@ -46,9 +46,9 @@ function defineEndpoint<TInput, TOutput>(def: EndpointDef<TInput, TOutput>): End
  * const result = await api.call(aiEndpoints.chat, { messages: [...] })
  *
  * // 客户端（流式）— 使用专用 AIClient
- * import { createApiClient } from '@h-ai/api-client'
+ * import { api } from '@h-ai/api-client'
  * import { createAIClient } from '@h-ai/ai/client'
- * const api = createApiClient({ baseUrl: '/api' })
+ * await api.init({ baseUrl: '/api' })
  * const client = createAIClient({ api })
  * for await (const chunk of client.chatStream({ messages })) { ... }
  *
