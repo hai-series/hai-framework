@@ -123,7 +123,10 @@ function splitByPage(text: string): string[] {
 }
 
 /**
- * 按字数分割文本（中文按字符，英文按空格分词）
+ * 按空格分词分割文本
+ *
+ * 以空白字符为分隔符进行分词，每个分块包含不超过 maxSize 个词。
+ * 注意：中文等无空格语言的连续文本会被视为单个词。
  */
 function splitByWord(text: string, maxSize: number): string[] {
   const words = text.split(/\s+/)
@@ -161,6 +164,8 @@ function splitByCharacter(text: string, maxSize: number): string[] {
 
 /**
  * 按自定义分隔符分割文本
+ *
+ * @throws 当 separator 不是合法正则表达式时抛出异常，由外层 catch 转为 Result
  */
 function splitByCustom(text: string, separator: string): string[] {
   const regex = new RegExp(separator)
@@ -171,23 +176,19 @@ function splitByCustom(text: string, separator: string): string[] {
 // ─── 分割模式分发 ───
 
 /**
- * 按指定模式分割文本为片段
+ * 按指定模式分割文本为字符串片段（非 Markdown 模式）
  */
-function splitByMode(
+function splitTextByMode(
   text: string,
   mode: ChunkMode,
   maxSize: number,
   separator?: string,
-  markdownMinLevel?: number,
-  markdownKeepTitle?: boolean,
-): (string | { content: string, title: string, level: number })[] {
+): string[] {
   switch (mode) {
     case 'sentence':
       return splitBySentence(text)
     case 'paragraph':
       return splitByParagraph(text)
-    case 'markdown':
-      return splitByMarkdown(text, markdownMinLevel ?? 2, markdownKeepTitle ?? true)
     case 'page':
       return splitByPage(text)
     case 'word':
@@ -266,6 +267,46 @@ function buildChunks(
   return chunks
 }
 
+// ─── Markdown 分块构建 ───
+
+/**
+ * 将 Markdown 分割结果构建为带元数据的分块列表
+ *
+ * Markdown 模式下 overlap 仅用于单 section 超限时的子分块，section 间不做 overlap。
+ */
+function buildMarkdownChunks(
+  text: string,
+  maxSize: number,
+  overlap: number,
+  markdownMinLevel: number,
+  markdownKeepTitle: boolean,
+): DataChunk[] {
+  const mdSegments = splitByMarkdown(text, markdownMinLevel, markdownKeepTitle)
+  const chunks: DataChunk[] = []
+
+  for (const segment of mdSegments) {
+    if (segment.content.length > maxSize) {
+      const subChunks = buildChunks([segment.content], maxSize, overlap)
+      for (const sub of subChunks) {
+        chunks.push({
+          index: chunks.length,
+          content: sub.content,
+          metadata: { title: segment.title, level: segment.level, subChunk: true },
+        })
+      }
+    }
+    else {
+      chunks.push({
+        index: chunks.length,
+        content: segment.content,
+        metadata: { title: segment.title, level: segment.level },
+      })
+    }
+  }
+
+  return chunks
+}
+
 // ─── 公共 API ───
 
 /**
@@ -309,56 +350,15 @@ export function chunkText(text: string, options: ChunkOptionsInput): Result<Data
   }
 
   try {
-    const segments = splitByMode(
-      text,
-      opts.mode,
-      opts.maxSize,
-      opts.separator,
-      opts.markdownMinLevel,
-      opts.markdownKeepTitle,
-    )
-
-    // Markdown 模式：对象形式的分段，带有 title 和 level 元数据
+    // Markdown 模式：独立处理，带有 title 和 level 元数据
     if (opts.mode === 'markdown') {
-      const mdSegments = segments as { content: string, title: string, level: number }[]
-      const chunks: DataChunk[] = []
-
-      for (let i = 0; i < mdSegments.length; i++) {
-        const segment = mdSegments[i]
-
-        // 如果单个 section 超过 maxSize，进一步拆分
-        if (segment.content.length > opts.maxSize) {
-          const subChunks = buildChunks([segment.content], opts.maxSize, opts.overlap)
-          for (const sub of subChunks) {
-            chunks.push({
-              index: chunks.length,
-              content: sub.content,
-              metadata: {
-                title: segment.title,
-                level: segment.level,
-                subChunk: true,
-              },
-            })
-          }
-        }
-        else {
-          chunks.push({
-            index: chunks.length,
-            content: segment.content,
-            metadata: {
-              title: segment.title,
-              level: segment.level,
-            },
-          })
-        }
-      }
-
+      const chunks = buildMarkdownChunks(text, opts.maxSize, opts.overlap, opts.markdownMinLevel, opts.markdownKeepTitle)
       return ok(chunks)
     }
 
     // 其他模式：字符串形式的分段
-    const stringSegments = segments as string[]
-    const chunks = buildChunks(stringSegments, opts.maxSize, opts.overlap)
+    const segments = splitTextByMode(text, opts.mode, opts.maxSize, opts.separator)
+    const chunks = buildChunks(segments, opts.maxSize, opts.overlap)
 
     return ok(chunks)
   }
