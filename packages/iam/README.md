@@ -93,10 +93,10 @@ await iam.close()
 前端通过 `@h-ai/iam/api` 导出的契约定义（`iamEndpoints`）与 `@h-ai/api-client` 配合调用：
 
 ```ts
-import { createApiClient } from '@h-ai/api-client'
+import { api } from '@h-ai/api-client'
 import { iamEndpoints } from '@h-ai/iam/api'
 
-const api = createApiClient({ baseUrl: '/api/iam' })
+await api.init({ baseUrl: '/api/iam' })
 
 // 登录
 const result = await api.call(iamEndpoints.login, {
