@@ -15,5 +15,7 @@
   "vecdb_updateFailed": "更新向量失败: {error}",
   "vecdb_queryFailed": "查询向量失败: {error}",
   "vecdb_indexBuildFailed": "构建索引失败: {error}",
-  "vecdb_serializationFailed": "序列化/反序列化失败: {error}"
+  "vecdb_serializationFailed": "序列化/反序列化失败: {error}",
+  "vecdb_configPathRequired": "数据库存储路径不能为空",
+  "vecdb_configDatabaseRequired": "数据库名称不能为空"
 }

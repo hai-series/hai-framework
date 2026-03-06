@@ -8,6 +8,8 @@
 
 import { z } from 'zod'
 
+import { vecdbM } from './vecdb-i18n.js'
+
 // ─── 错误码常量 ───
 
 /**
@@ -44,15 +46,15 @@ export const VecdbErrorCode = {
   /** 索引构建失败 */
   INDEX_BUILD_FAILED: 3508,
   /** 数据库未初始化 */
-  NOT_INITIALIZED: 3509,
+  NOT_INITIALIZED: 3510,
   /** 配置错误 */
-  CONFIG_ERROR: 3510,
+  CONFIG_ERROR: 3511,
   /** 不支持的向量数据库类型 */
-  UNSUPPORTED_TYPE: 3511,
+  UNSUPPORTED_TYPE: 3512,
   /** 驱动加载失败（可选依赖缺失） */
-  DRIVER_NOT_FOUND: 3512,
+  DRIVER_NOT_FOUND: 3513,
   /** 序列化/反序列化失败 */
-  SERIALIZATION_FAILED: 3513,
+  SERIALIZATION_FAILED: 3514,
 } as const
 
 /** 向量数据库错误码类型 */
@@ -100,7 +102,7 @@ export type DistanceMetric = z.infer<typeof DistanceMetricSchema>
 export const LancedbConfigSchema = z.object({
   type: z.literal('lancedb'),
   /** 数据库存储路径（本地目录） */
-  path: z.string(),
+  path: z.string().min(1, vecdbM('vecdb_configPathRequired')),
   /** 距离度量（默认 cosine） */
   metric: DistanceMetricSchema.optional(),
 })
@@ -146,7 +148,7 @@ export const PgvectorConfigSchema = z.object({
   /** 端口号（默认 5432） */
   port: z.number().int().min(1).max(65535).default(5432),
   /** 数据库名称 */
-  database: z.string(),
+  database: z.string().min(1, vecdbM('vecdb_configDatabaseRequired')),
   /** 用户名 */
   user: z.string().optional(),
   /** 密码 */

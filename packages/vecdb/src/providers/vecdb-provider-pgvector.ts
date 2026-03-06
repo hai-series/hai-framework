@@ -27,7 +27,18 @@ import { vecdbM } from '../vecdb-i18n.js'
 
 const logger = core.logger.child({ module: 'vecdb', scope: 'pgvector' })
 
-type PgPool = any
+/** pg Client 的最小接口定义（事务操作用） */
+interface PgClient {
+  query: (text: string, params?: unknown[]) => Promise<{ rows: Record<string, unknown>[] }>
+  release: () => void
+}
+
+/** pg Pool 的最小接口定义（避免强依赖可选包） */
+interface PgPool {
+  query: (text: string, params?: unknown[]) => Promise<{ rows: Record<string, unknown>[] }>
+  connect: () => Promise<PgClient>
+  end: () => Promise<void>
+}
 
 /**
  * 创建 pgvector Provider
@@ -91,6 +102,8 @@ export function createPgvectorProvider(): VecdbProvider {
       const metric = options.metric ?? config?.metric ?? 'cosine'
       const indexType = config?.indexType ?? 'hnsw'
 
+      logger.debug('Creating collection', { name, dimension, metric, indexType })
+
       try {
         // 检查表是否已存在
         const checkResult = await pool.query(
@@ -130,10 +143,12 @@ export function createPgvectorProvider(): VecdbProvider {
           `)
         }
         else {
+          // IVFFlat lists 参数：建表时数据为空，使用 100 作为通用默认值
+          // 适用于 100 万行以内的数据集；超大数据集应在数据增长后重建索引
           await pool.query(`
             CREATE INDEX ON ${qi}
             USING ivfflat (vector ${opsClass})
-            WITH (lists = ${Math.max(1, Math.floor(Math.sqrt(100)))})
+            WITH (lists = 100)
           `)
         }
 
@@ -156,6 +171,8 @@ export function createPgvectorProvider(): VecdbProvider {
       }
 
       const table = tableName(name)
+
+      logger.debug('Dropping collection', { name })
 
       try {
         const checkResult = await pool.query(
@@ -189,6 +206,8 @@ export function createPgvectorProvider(): VecdbProvider {
         return err({ code: VecdbErrorCode.NOT_INITIALIZED, message: vecdbM('vecdb_notInitialized') })
       }
 
+      logger.debug('Checking collection exists', { name })
+
       try {
         const result = await pool.query(
           `SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = $1)`,
@@ -212,6 +231,8 @@ export function createPgvectorProvider(): VecdbProvider {
 
       const table = tableName(name)
 
+      logger.debug('Getting collection info', { name })
+
       try {
         // 检查表是否存在
         const existsResult = await pool.query(
@@ -227,14 +248,14 @@ export function createPgvectorProvider(): VecdbProvider {
 
         // 获取文档数量
         const countResult = await pool.query(`SELECT COUNT(*) as count FROM ${quoteIdent(table)}`)
-        const count = Number.parseInt(countResult.rows[0].count, 10)
+        const count = Number.parseInt(String(countResult.rows[0].count), 10)
 
         // 获取向量维度（从列定义中提取）
         const dimResult = await pool.query(`
           SELECT atttypmod FROM pg_attribute
           WHERE attrelid = $1::regclass AND attname = 'vector'
         `, [quoteIdent(table)])
-        const dimension = dimResult.rows.length > 0 ? dimResult.rows[0].atttypmod : 0
+        const dimension = dimResult.rows.length > 0 ? Number(dimResult.rows[0].atttypmod) : 0
 
         return ok({
           name,
@@ -259,13 +280,15 @@ export function createPgvectorProvider(): VecdbProvider {
 
       const prefix = config?.tablePrefix ?? 'vec_'
 
+      logger.debug('Listing collections')
+
       try {
         const result = await pool.query(
           `SELECT table_name FROM information_schema.tables WHERE table_name LIKE $1 AND table_schema = 'public'`,
           [`${prefix}%`],
         )
-        const names = result.rows.map((row: Record<string, string>) =>
-          row.table_name.slice(prefix.length),
+        const names = result.rows.map((row: Record<string, unknown>) =>
+          String(row.table_name).slice(prefix.length),
         )
         return ok(names)
       }
@@ -289,15 +312,29 @@ export function createPgvectorProvider(): VecdbProvider {
 
       const table = tableName(collection)
 
+      logger.debug('Inserting vectors', { collection, count: documents.length })
+
       try {
-        // 批量插入
+        // 使用客户端级事务保证批量插入原子性
         const qi = quoteIdent(table)
-        for (const doc of documents) {
-          const vectorStr = `[${doc.vector.join(',')}]`
-          await pool.query(
-            `INSERT INTO ${qi} (id, vector, content, metadata) VALUES ($1, $2::vector, $3, $4::jsonb)`,
-            [doc.id, vectorStr, doc.content ?? '', JSON.stringify(doc.metadata ?? {})],
-          )
+        const client = await pool.connect()
+        try {
+          await client.query('BEGIN')
+          for (const doc of documents) {
+            const vectorStr = `[${doc.vector.join(',')}]`
+            await client.query(
+              `INSERT INTO ${qi} (id, vector, content, metadata) VALUES ($1, $2::vector, $3, $4::jsonb)`,
+              [doc.id, vectorStr, doc.content ?? '', JSON.stringify(doc.metadata ?? {})],
+            )
+          }
+          await client.query('COMMIT')
+        }
+        catch (txError) {
+          await client.query('ROLLBACK')
+          throw txError
+        }
+        finally {
+          client.release()
         }
 
         logger.info('Vectors inserted', { collection, count: documents.length })
@@ -320,19 +357,34 @@ export function createPgvectorProvider(): VecdbProvider {
 
       const table = tableName(collection)
 
+      logger.debug('Upserting vectors', { collection, count: documents.length })
+
       try {
         const qi = quoteIdent(table)
-        for (const doc of documents) {
-          const vectorStr = `[${doc.vector.join(',')}]`
-          await pool.query(
-            `INSERT INTO ${qi} (id, vector, content, metadata)
+        // 使用客户端级事务保证批量 upsert 原子性
+        const client = await pool.connect()
+        try {
+          await client.query('BEGIN')
+          for (const doc of documents) {
+            const vectorStr = `[${doc.vector.join(',')}]`
+            await client.query(
+              `INSERT INTO ${qi} (id, vector, content, metadata)
              VALUES ($1, $2::vector, $3, $4::jsonb)
              ON CONFLICT (id) DO UPDATE SET
                vector = EXCLUDED.vector,
                content = EXCLUDED.content,
                metadata = EXCLUDED.metadata`,
-            [doc.id, vectorStr, doc.content ?? '', JSON.stringify(doc.metadata ?? {})],
-          )
+              [doc.id, vectorStr, doc.content ?? '', JSON.stringify(doc.metadata ?? {})],
+            )
+          }
+          await client.query('COMMIT')
+        }
+        catch (txError) {
+          await client.query('ROLLBACK')
+          throw txError
+        }
+        finally {
+          client.release()
         }
 
         logger.info('Vectors upserted', { collection, count: documents.length })
@@ -354,6 +406,8 @@ export function createPgvectorProvider(): VecdbProvider {
       }
 
       const table = tableName(collection)
+
+      logger.debug('Deleting vectors', { collection, count: ids.length })
 
       try {
         const placeholders = ids.map((_, i) => `$${i + 1}`).join(', ')
@@ -386,6 +440,8 @@ export function createPgvectorProvider(): VecdbProvider {
       const minScore = options?.minScore ?? 0
       const op = distanceOp()
 
+      logger.debug('Searching vectors', { collection, topK, hasFilter: !!options?.filter })
+
       try {
         const vectorStr = `[${vector.join(',')}]`
 
@@ -397,9 +453,9 @@ export function createPgvectorProvider(): VecdbProvider {
         if (options?.filter) {
           const filterParts: string[] = []
           for (const [key, value] of Object.entries(options.filter)) {
-            filterParts.push(`metadata->>'${key}' = $${paramIndex}`)
-            filterParams.push(String(value))
-            paramIndex++
+            filterParts.push(`metadata->>$${paramIndex} = $${paramIndex + 1}`)
+            filterParams.push(key, String(value))
+            paramIndex += 2
           }
           if (filterParts.length > 0) {
             filterSQL = `WHERE ${filterParts.join(' AND ')}`
@@ -446,9 +502,11 @@ export function createPgvectorProvider(): VecdbProvider {
 
       const table = tableName(collection)
 
+      logger.debug('Counting vectors', { collection })
+
       try {
         const result = await pool.query(`SELECT COUNT(*) as count FROM ${quoteIdent(table)}`)
-        return ok(Number.parseInt(result.rows[0].count, 10))
+        return ok(Number.parseInt(String(result.rows[0].count), 10))
       }
       catch (error) {
         return err({
@@ -463,6 +521,8 @@ export function createPgvectorProvider(): VecdbProvider {
   // ─── Provider 接口 ───
 
   return {
+    name: 'pgvector',
+
     async connect(cfg): Promise<Result<void, VecdbError>> {
       if (cfg.type !== 'pgvector') {
         return err({
