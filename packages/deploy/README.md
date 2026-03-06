@@ -2,51 +2,20 @@
 
 自动化部署模块，支持一键将 SvelteKit 应用部署到 Vercel，并自动开通所需的基础设施服务。
 
-## 功能
+## 支持的服务
 
-- **Vercel 部署** — 自动创建项目、上传构建产物、设置环境变量
-- **基础设施开通** — 自动开通 PostgreSQL (Neon)、Redis (Upstash)、S3 (Cloudflare R2)
-- **凭证验证** — 验证邮件 (Resend) 和短信 (阿里云) 服务凭证
-- **应用扫描** — 自动检测项目依赖和所需服务
-- **双层配置** — `config/_deploy.yml` (git 安全) + `~/.hai/credentials.yml` (密钥)
+| 服务类型 | Provisioner   | 说明                  |
+| -------- | ------------- | --------------------- |
+| 部署     | Vercel        | SvelteKit 应用部署    |
+| 数据库   | Neon          | PostgreSQL Serverless |
+| 缓存     | Upstash       | Redis REST API        |
+| 存储     | Cloudflare R2 | S3 兼容对象存储       |
+| 邮件     | Resend        | 邮件发送 API          |
+| 短信     | 阿里云        | 阿里云短信服务        |
 
 ## 快速开始
 
-### 1. 安装
-
-```bash
-pnpm add @h-ai/deploy
-```
-
-### 2. 配置
-
-通过 CLI 添加 deploy 模块：
-
-```bash
-hai add deploy
-```
-
-会在 `config/_deploy.yml` 生成配置模板。
-
-### 3. 设置凭证
-
-```bash
-# 手动编辑 ~/.hai/credentials.yml
-# 或通过环境变量设置
-export HAI_DEPLOY_VERCEL_TOKEN=vel_xxx
-```
-
-### 4. 部署
-
-```bash
-hai deploy
-```
-
-## 使用示例
-
-### 编程使用
-
-```ts
+```typescript
 import { deploy } from '@h-ai/deploy'
 
 // 初始化
@@ -58,7 +27,7 @@ await deploy.init({
   },
 })
 
-// 扫描应用
+// 扫描应用依赖
 const scan = await deploy.scan('./apps/my-app')
 
 // 开通基础设施
@@ -66,44 +35,16 @@ const provisions = await deploy.provisionAll('my-app')
 
 // 完整部署
 const result = await deploy.deployApp('./apps/my-app')
-if (result.success) {
-  console.log(`Deployed: ${result.data.url}`)
-}
 
 await deploy.close()
 ```
 
-### CLI 使用
+## 配置
 
-```bash
-# 部署当前目录
-hai deploy
-
-# 部署指定应用
-hai deploy ./apps/admin-console
-
-# 跳过基础设施开通
-hai deploy --skip-provision
-
-# 自定义项目名
-hai deploy --project-name my-custom-name
-```
-
-## 支持的服务
-
-| 服务类型 | Provisioner   | 说明                  |
-| -------- | ------------- | --------------------- |
-| 数据库   | Neon          | PostgreSQL Serverless |
-| 缓存     | Upstash       | Redis REST API        |
-| 存储     | Cloudflare R2 | S3 兼容对象存储       |
-| 邮件     | Resend        | 邮件发送 API          |
-| 短信     | 阿里云        | 阿里云短信服务        |
-
-## 配置文件
-
-### config/\_deploy.yml
+通过 `config/_deploy.yml` 管理 git 安全的配置，密钥存放在 `~/.hai/credentials.yml`：
 
 ```yaml
+# config/_deploy.yml
 provider:
   type: vercel
   token: ${HAI_DEPLOY_VERCEL_TOKEN}
@@ -118,11 +59,38 @@ services:
     apiKey: ${HAI_DEPLOY_UPSTASH_API_KEY}
 ```
 
-### ~/.hai/credentials.yml
+## 错误处理
 
-```yaml
-HAI_DEPLOY_VERCEL_TOKEN: vel_xxx
-HAI_DEPLOY_NEON_API_KEY: neon_xxx
-HAI_DEPLOY_UPSTASH_EMAIL: user@example.com
-HAI_DEPLOY_UPSTASH_API_KEY: up_xxx
+```typescript
+const result = await deploy.deployApp('./apps/my-app')
+if (!result.success) {
+  switch (result.error.code) {
+    case DeployErrorCode.PROVIDER_AUTH_FAILED:
+      // Vercel Token 无效
+      break
+    case DeployErrorCode.BUILD_FAILED:
+      // 构建失败
+      break
+  }
+}
 ```
+
+常用错误码：
+
+| 错误码 | 说明             |
+| ------ | ---------------- |
+| 9000   | 部署失败（通用） |
+| 9002   | 应用构建失败     |
+| 9005   | 认证失败         |
+| 9006   | 基础设施开通失败 |
+| 9010   | 模块未初始化     |
+
+## 测试
+
+```bash
+pnpm --filter @h-ai/deploy test
+```
+
+## License
+
+Apache-2.0

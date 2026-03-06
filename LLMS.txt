@@ -647,16 +647,15 @@ const client = createKitClient({ baseUrl: '/api/v1' })
 
 ### @h-ai/api-client — HTTP 客户端
 
-Bearer Token 自动管理、契约调用、文件上传、SSE 流式响应。
+Bearer Token 自动管理、契约调用、文件上传、SSE 流式响应。单例模式，通过 `api.init()` 初始化。
 
 ```typescript
-import { createApiClient, createLocalStorageTokenStorage } from '@h-ai/api-client'
+import { api } from '@h-ai/api-client'
 
-// 创建客户端
-const api = createApiClient({
+// 初始化客户端
+await api.init({
   baseUrl: 'https://api.example.com/api/v1',
   auth: {
-    storage: createLocalStorageTokenStorage(),  // 或 memory / 自定义
     refreshUrl: '/auth/refresh',                // 401 自动刷新
   },
 })
@@ -672,16 +671,13 @@ const created = await api.post<User>('/users', { name: 'Alice' })
 await api.put('/users/1', { name: 'Bob' })
 await api.delete('/users/1')
 
-// --- 文件上传（支持进度）---
-await api.post('/upload', formData, {
-  onProgress: (percent) => console.log(`${percent}%`),
-})
-
 // --- SSE 流式响应 ---
-const stream = api.stream('/ai/chat', { messages: [...] })
-for await (const event of stream) {
-  console.log(event.data)
+for await (const chunk of api.stream('/ai/chat', { messages: [...] })) {
+  console.log(chunk)
 }
+
+// --- 关闭 ---
+await api.close()
 ```
 
 ### @h-ai/capacitor — 移动端原生桥接
@@ -695,8 +691,8 @@ import { capacitor, createCapacitorTokenStorage } from '@h-ai/capacitor'
 await capacitor.init()
 
 // 安全 Token 存储（替代 localStorage，搭配 api-client）
-import { createApiClient } from '@h-ai/api-client'
-const api = createApiClient({
+import { api } from '@h-ai/api-client'
+await api.init({
   baseUrl: '/api/v1',
   auth: { storage: createCapacitorTokenStorage(), refreshUrl: '/auth/refresh' },
 })

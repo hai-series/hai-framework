@@ -569,18 +569,20 @@ const valid = crypto.password.verify('MyPassword123', hashed.data)
 ### HTTP 客户端
 
 ```typescript
-import { createApiClient, createLocalStorageTokenStorage } from '@h-ai/api-client'
+import { api } from '@h-ai/api-client'
 
-const api = createApiClient({
+await api.init({
   baseUrl: '/api/v1',
-  auth: { storage: createLocalStorageTokenStorage(), refreshUrl: '/auth/refresh' },
+  auth: { refreshUrl: '/auth/refresh' },
 })
 
 // 契约调用（类型安全）
 const result = await api.call(iamEndpoints.login, { identifier: 'alice', password: 'xxx' })
 
 // SSE 流式响应
-const stream = api.stream('/ai/chat', { messages: [] })
+for await (const chunk of api.stream('/ai/chat', { messages: [] })) {
+  console.log(chunk)
+}
 ```
 
 ### 用户触达
