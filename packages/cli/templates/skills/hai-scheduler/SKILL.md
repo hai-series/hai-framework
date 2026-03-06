@@ -202,6 +202,7 @@ interface TaskUpdateInput {
 | `DB_SAVE_FAILED`       | 11026 | 数据库操作失败             |
 | `ALREADY_RUNNING`      | 11027 | 重复调用 start             |
 | `NOT_RUNNING`          | 11028 | 未启动时调用 stop          |
+| `LOCK_ACQUIRE_FAILED`  | 11029 | 分布式锁获取失败           |
 
 ---
 
@@ -255,6 +256,29 @@ await scheduler.init({ enableDb: false })
 await scheduler.register({ /* ... */ })
 scheduler.start()
 ```
+
+### 多节点部署（分布式锁）
+
+> 多节点部署时，同一任务可能被多个节点同时调度。scheduler 内置基于数据库的分布式锁，通过 UNIQUE 约束保证同一时刻只有一个节点执行某任务。
+
+```typescript
+await reldb.init({ type: 'sqlite', database: './scheduler.db' })
+// enableDb: true 时自动启用分布式锁
+await scheduler.init({ enableDb: true })
+```
+
+锁配置（均有默认值，可选覆盖）：
+
+```typescript
+await scheduler.init({
+  enableDb: true,
+  lockTableName: 'scheduler_locks', // 锁表名，默认 'scheduler_locks'
+  lockExpireMs: 300000,              // 锁过期时间，默认 5 分钟
+  nodeId: 'node-1',                  // 节点标识，默认 crypto.randomUUID()
+})
+```
+
+**注意**：`runningTasks` 等内存状态仅表示当前节点的运行情况，不代表全局状态。跨节点互斥由数据库锁表保证。
 
 ---
 

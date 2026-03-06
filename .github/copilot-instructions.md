@@ -290,4 +290,5 @@ function register(tool: Tool): Result<void, XxError> {
 - 修改 `src/lib/paraglide` 生成文件
 - README 描述内部实现细节
 - 在公共模块 API 中使用 `throw`（必须返回 `Result<T, E>`）
+- 用模块级 `Map` / `Set` 缓存需跨节点一致的业务数据（模板、锁、配置等），必须使用数据库持久化
 - 做兼容性处理。目前处于开发期，不用考虑兼容旧版本
