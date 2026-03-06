@@ -375,7 +375,7 @@ describe('iam.user', () => {
         if (!loginResult.success)
           return
 
-        const result = await getIam().user.getCurrentUser(loginResult.data.accessToken)
+        const result = await getIam().user.getCurrentUser(loginResult.data.tokens.accessToken)
         expect(result.success).toBe(true)
         if (result.success) {
           expect(result.data.username).toBe('user_current')

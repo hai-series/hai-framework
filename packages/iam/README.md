@@ -61,11 +61,11 @@ const loginResult = await iam.auth.login({
   password: 'Password123',
 })
 if (loginResult.success) {
-  const { user, accessToken } = loginResult.data
+  const { user, tokens } = loginResult.data
 }
 
 // 4. 验证令牌
-const session = await iam.auth.verifyToken(loginResult.data.accessToken)
+const session = await iam.auth.verifyToken(loginResult.data.tokens.accessToken)
 
 // 5. OTP 验证码登录
 await iam.auth.sendOtp('user@example.com')

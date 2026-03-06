@@ -441,7 +441,9 @@ function buildUserFunctions(deps: UserBuilderDeps): IamUserFunctions {
       const params: unknown[] = []
 
       if (options?.search) {
-        const keyword = `%${options.search}%`
+        // 转义 LIKE 通配符，防止用户输入 % 或 _ 产生非预期匹配
+        const escaped = options.search.replace(/[%_\\]/g, '\\$&')
+        const keyword = `%${escaped}%`
         conditions.push('(username LIKE ? OR email LIKE ? OR phone LIKE ? OR display_name LIKE ?)')
         params.push(keyword, keyword, keyword, keyword)
       }
@@ -534,21 +536,47 @@ function buildUserFunctions(deps: UserBuilderDeps): IamUserFunctions {
         return err({ code: IamErrorCode.USER_NOT_FOUND, message: iamM('iam_userNotExist') })
       }
 
-      // 清理用户角色关联
-      const rolesResult = await authzFunctions.getUserRoles(userId)
-      if (rolesResult.success) {
-        for (const role of rolesResult.data) {
-          await authzFunctions.removeRole(userId, role.id)
+      // 事务：角色关联删除 + 用户删除原子执行
+      const txResult = await db.tx.begin()
+      if (!txResult.success) {
+        return mapRepositoryError('iam_deleteUserFailed', txResult.error.message) as Result<void, IamError>
+      }
+      const tx = txResult.data
+
+      try {
+        // 清理用户角色关联（事务内直接执行 SQL）
+        const delRolesResult = await tx.execute(
+          'DELETE FROM iam_user_roles WHERE user_id = ?',
+          [userId],
+        )
+        if (!delRolesResult.success) {
+          await tx.rollback()
+          return mapRepositoryError('iam_deleteUserFailed', delRolesResult.error.message) as Result<void, IamError>
+        }
+
+        // 删除用户记录
+        const deleteResult = await userRepository.deleteById(userId, tx)
+        if (!deleteResult.success) {
+          await tx.rollback()
+          return mapRepositoryError('iam_deleteUserFailed', deleteResult.error.message) as Result<void, IamError>
+        }
+
+        const commitResult = await tx.commit()
+        if (!commitResult.success) {
+          return mapRepositoryError('iam_deleteUserFailed', commitResult.error.message) as Result<void, IamError>
         }
       }
-
-      // 注销该用户所有活跃会话
-      await sessionFunctions.deleteByUserId(userId)
-
-      const deleteResult = await userRepository.deleteById(userId)
-      if (!deleteResult.success) {
-        return mapRepositoryError('iam_deleteUserFailed', deleteResult.error.message) as Result<void, IamError>
+      catch (error) {
+        await tx.rollback()
+        return err({
+          code: IamErrorCode.REPOSITORY_ERROR,
+          message: iamM('iam_deleteUserFailed', { params: { message: String(error) } }),
+          cause: error,
+        })
       }
+
+      // 事务提交后：最佳努力清理缓存和会话
+      await sessionFunctions.deleteByUserId(userId)
 
       logger.info('User deleted', { userId })
       return ok(undefined)

@@ -161,7 +161,10 @@ function buildSessionFunctions(config: SessionBuilderConfig): IamSessionFunction
         const sessionTtl = options.maxAge ?? maxAge
         const session = buildSession(options, now, sessionTtl, accessToken)
 
-        // 存储 accessToken → session
+        // 将 tokenPair 附加到 session 的 data 字段（持久化到缓存，logout 时可提取 refreshToken）
+        session.data = { ...session.data, _tokenPair: tokenPair }
+
+        // 存储 accessToken → session（含 _tokenPair）
         const storeResult = await config.sessionMappingRepository.set(accessToken, session, sessionTtl)
         if (!storeResult.success) {
           return storeResult as Result<Session, IamError>
@@ -174,9 +177,6 @@ function buildSessionFunctions(config: SessionBuilderConfig): IamSessionFunction
         }
 
         await config.sessionMappingRepository.addUserToken(options.userId, accessToken)
-
-        // 将 tokenPair 附加到 session 的 data 字段，供上层 authn 读取
-        session.data = { ...session.data, _tokenPair: tokenPair }
 
         logger.debug('Session created', { userId: options.userId })
         return ok(session)
@@ -329,7 +329,7 @@ function buildSessionFunctions(config: SessionBuilderConfig): IamSessionFunction
         }
 
         // 从新会话中提取 tokenPair
-        const tokenPair = newSessionResult.data.data?._tokenPair as TokenPair
+        const tokenPair = newSessionResult.data.data?._tokenPair
         if (!tokenPair) {
           return err({ code: IamErrorCode.TOKEN_REFRESH_FAILED, message: iamM('iam_refreshTokenFailed') })
         }

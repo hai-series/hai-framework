@@ -70,8 +70,18 @@ export interface Session {
   lastActiveAt: Date
   /** 过期时间 */
   expiresAt: Date
-  /** 扩展数据 */
-  data?: Record<string, unknown>
+  /** 扩展数据（内部保留 _tokenPair 供 logout 时吊销 refreshToken） */
+  data?: SessionData
+}
+
+/**
+ * 会话扩展数据
+ *
+ * 支持开放的 Record 扩展，同时约束内部保留字段 _tokenPair。
+ */
+export type SessionData = Record<string, unknown> & {
+  /** 令牌对（内部保留字段，由 session.create 写入，logout 时读取） */
+  _tokenPair?: TokenPair
 }
 
 /**
@@ -95,7 +105,7 @@ export interface CreateSessionOptions {
   /** 过期时间（秒） */
   maxAge?: number
   /** 扩展数据 */
-  data?: Record<string, unknown>
+  data?: SessionData
 }
 
 // ─── 会话管理接口 ───

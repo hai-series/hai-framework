@@ -246,7 +246,7 @@ import { iamEndpoints } from '@h-ai/iam/api'
 // 登录 → 保存 Token
 const login = await api.call(iamEndpoints.login, { username, password })
 if (login.success) {
-  await api.tokenManager.setTokens(login.data.tokens)
+  await api.auth.setTokens(login.data.tokens)
 }
 
 // 获取当前用户
@@ -257,7 +257,7 @@ const me = await api.call(iamEndpoints.currentUser, {})
 
 // 登出
 await api.call(iamEndpoints.logout, {})
-await api.tokenManager.clearTokens()
+await api.auth.clear()
 ```
 
 ### 自动会话失效
