@@ -1,12 +1,12 @@
 /**
- * android-app — API 客户端实例
+ * android-app — API 客户端初始化
  *
  * 使用 Capacitor Preferences 作为 Token 存储，
- * 通过 api-client 契约调用模式访问后端 API。
+ * 通过 api-client 单例调用模式访问后端 API。
  *
  * @example
  * ```ts
- * import { api } from '$lib/api'
+ * import { api } from '@h-ai/api-client'
  * import { iamEndpoints } from '@h-ai/iam/api'
  *
  * const result = await api.call(iamEndpoints.login, { identifier, password })
@@ -14,13 +14,22 @@
  */
 
 import { PUBLIC_API_BASE } from '$env/static/public'
-import { createApiClient } from '@h-ai/api-client'
+import { api } from '@h-ai/api-client'
 import { createCapacitorTokenStorage } from '@h-ai/capacitor'
 
-export const api = createApiClient({
-  baseUrl: `${PUBLIC_API_BASE}/api/v1`,
-  auth: {
-    storage: createCapacitorTokenStorage(),
-    refreshUrl: '/auth/refresh',
-  },
-})
+/**
+ * 初始化 API 客户端
+ *
+ * 应在应用启动时调用一次。
+ */
+export async function initApi() {
+  return api.init({
+    baseUrl: `${PUBLIC_API_BASE}/api/v1`,
+    auth: {
+      storage: createCapacitorTokenStorage(),
+      refreshUrl: '/auth/refresh',
+    },
+  })
+}
+
+export { api }
