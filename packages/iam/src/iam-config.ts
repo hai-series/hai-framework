@@ -115,7 +115,7 @@ export const IamErrorCode = {
   /** 配置错误 */
   CONFIG_ERROR: 5900,
   /** 未初始化 */
-  NOT_INITIALIZED: 5910,
+  NOT_INITIALIZED: 5010,
   /** 内部错误 */
   INTERNAL_ERROR: 5999,
 } as const
