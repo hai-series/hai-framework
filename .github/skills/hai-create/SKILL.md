@@ -35,9 +35,11 @@ packages/xx/
     xx-i18n.ts            # i18n 消息获取器
     xx-functions.ts       # 功能业务逻辑——工厂函数（可选）
     xx-utils.ts           # 工具函数（可选）
-    xx-repository-zz.ts   # 数据仓库——zz=实体名（可选）
+    xx-repository-zz.ts   # 数据仓库——zz=实体名（可选，见 §3.7.4）
     providers/             # Provider 实现目录（可选，仅需多后端时）
       xx-provider-aaa.ts   # Provider 实现——aaa=实现名
+    repositories/          # 多 Repository 集中目录（可选，≥3 个时用）
+      xx-zz-repository.ts  # 每个实体一个文件
   tests/
 ```
 
@@ -99,7 +101,20 @@ packages/xx/
 
 ## 2. 架构决策
 
-创建模块前，回答以下两个**独立**问题，确定模块架构。
+创建模块前，依次回答以下问题，确定模块架构。
+
+### 前置：模块类型
+
+确定模块属于以下哪种类型，后续所有决策基于此分类：
+
+| 类型             | 特征                                          | 代表模块                                                                                                       |
+| ---------------- | --------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| **生命周期单例** | `export const xx: XxFunctions`，有 init/close | reldb, storage, cache, ai, iam, payment, crypto, capacitor, vecdb, audit, scheduler, reach, deploy, api-client |
+| **纯函数模块**   | 无状态，无 init/close，直接调用               | datapipe                                                                                                       |
+| **基础设施模块** | 提供底层能力（日志、配置、i18n、Result 等）   | core                                                                                                           |
+
+- 生命周期单例模块必须遵循 §3.4 的 init/close/getter 全套规范
+- 纯函数模块不需要 init/close，`XxFunctions` 接口直接声明操作方法
 
 ### 问题 1：模块是否有子功能？
 
@@ -126,6 +141,43 @@ packages/xx/
 | 无     | 有（模块级）       | Provider 委托  | §3.4 示例 2 |
 | 有     | 无或有（子功能级） | 工厂创建子功能 | §3.4 示例 3 |
 
+### 问题 3：API 风格——扁平方法 vs 子操作对象？
+
+模块函数接口 `XxFunctions` 的方法可以**直接暴露**（扁平）或通过 **getter 返回子操作对象**（分组）。
+
+| 判断条件                                                | API 风格                 | 示例模块                                                                                                                                                                                                                                       |
+| ------------------------------------------------------- | ------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 操作可按领域分为 ≥2 组且每组 ≥2 个方法                  | **子操作对象**（getter） | reldb (sql/migration), cache (kv/hash/list/set/zset), ai (llm/mcp/embedding/...), iam (authn/authz/user/session), crypto (asymmetric/hash/symmetric/password), capacitor (device/camera/push/statusBar/preferences), vecdb (collection/vector) |
+| 模块操作少（≤6 个）或语义高度内聚，分组反而增加访问成本 | **扁平方法**             | payment (createOrder/refund/...), audit (log/list/stats), scheduler (register/start/stop), deploy (deployApp/provision/scanApp), reach (send)                                                                                                  |
+
+**扁平风格**（操作直接挂在服务对象上）：
+
+```ts
+export interface XxFunctions {
+  init: (config: XxConfigInput) => Promise<Result<void, XxError>>
+  close: () => Promise<void>
+  doSomething: (input: Input) => Promise<Result<Output, XxError>>
+  doAnother: (id: string) => Promise<Result<void, XxError>>
+  readonly config: XxConfig | null
+  readonly isInitialized: boolean
+}
+```
+
+**子操作风格**（通过 getter 暴露操作组）：
+
+```ts
+export interface XxFunctions {
+  init: (config: XxConfigInput) => Promise<Result<void, XxError>>
+  close: () => Promise<void>
+  readonly yy: YyOperations // 子操作组
+  readonly zz: ZzOperations // 子操作组
+  readonly config: XxConfig | null
+  readonly isInitialized: boolean
+}
+```
+
+> 选定后整个模块保持统一风格，禁止同一模块混用两种风格。
+
 ---
 
 ## 3. 文件职责与代码模板
@@ -136,9 +188,32 @@ packages/xx/
 
 **错误码规范**：
 
-- 每个模块分配一个千位段（如 db=3000、cache=4000、storage=5000）
+- 每个模块分配一个**独占千位段**，禁止与已分配段重叠
 - `NOT_INITIALIZED` 固定为 `X010`（模块段 + 010）
 - 按类别分段：通用 X000-X009、初始化 X010-X019、业务操作 X020+
+- 新模块必须在下表中选取未被占用的段位
+
+**已分配的错误码段位注册表**：
+
+| 段位        | 模块       | 说明                    |
+| ----------- | ---------- | ----------------------- |
+| 1000-1199   | core       | 通用错误 + 配置错误     |
+| 1200-1299   | api-client | HTTP 客户端             |
+| 2000-2099   | crypto     | 加密/签名/哈希          |
+| 3000-3499   | reldb      | 关系数据库              |
+| 3500-3999   | vecdb      | 向量数据库              |
+| 4000-4999   | cache      | 缓存                    |
+| 5000-5999   | iam        | 身份认证与授权          |
+| 6000-6999   | storage    | 对象存储                |
+| 7000-7999   | payment    | 支付                    |
+| 8000-8099   | capacitor  | 移动端原生能力          |
+| 8100-8199   | reach      | 消息触达（短信/邮件等） |
+| 8500-8599   | datapipe   | 数据管道（纯函数）      |
+| 9000-9099   | deploy     | 部署与资源配置          |
+| 10000-10999 | audit      | 审计日志                |
+| 11000-11999 | scheduler  | 定时任务调度            |
+| 12000-12999 | ai         | AI / LLM / RAG / MCP    |
+| 13000+      | —          | 预留给未来模块          |
 
 **配置 Schema 规范**：
 
@@ -308,6 +383,69 @@ export const xxM = core.i18n.createMessageGetter<XxMessageKey>({
 - `get` 访问器：`currentXxx ?? notInitializedXxx`
 - return 语句不含复杂逻辑（见 §4.1）
 - **❌ 禁止在 main.ts 中编写具体业务逻辑**（如调度循环、数据处理、任务执行等重操作）。所有具体逻辑必须委托给 `xx-functions.ts`、`xx-runner.ts` 或其他职责文件，main.ts 仅做 API 编排和委托调用。
+
+#### NotInitializedKit 安全访问模式
+
+> **核心问题**：模块在 `init()` 之前被调用时，`get` 访问器指向的操作实例尚未创建。直接返回 `null` 或 `undefined` 会导致运行时 crash，而手动在每个方法里判断初始化状态则过于冗余。
+>
+> **解决方案**：使用 `core.module.createNotInitializedKit<E>()` 创建一组工具，包含错误工厂、Result 工厂和 **Proxy 代理**。代理对象可作为任意操作接口的占位——当模块未初始化时，调用代理上的任何方法均会安全返回包含 `NOT_INITIALIZED` 错误的 `Result`，而非 crash。
+
+**API 签名**：
+
+```ts
+const notInitialized = core.module.createNotInitializedKit<XxError>(
+  XxErrorCode.NOT_INITIALIZED, // 固定使用模块的 NOT_INITIALIZED 错误码
+  () => xxM('xx_notInitialized'), // 延迟求值 i18n 消息（确保运行时 locale 正确）
+)
+```
+
+**返回的工具集**：
+
+| 方法                              | 说明                                                                  | 返回值               |
+| --------------------------------- | --------------------------------------------------------------------- | -------------------- |
+| `notInitialized.error()`          | 创建未初始化错误对象                                                  | `XxError`            |
+| `notInitialized.result<T>()`      | 创建包含未初始化错误的失败 Result                                     | `Result<T, XxError>` |
+| `notInitialized.proxy<T>()`       | 创建 Proxy 代理（默认 async），拦截所有方法调用返回 `Promise<Result>` | `T`                  |
+| `notInitialized.proxy<T>('sync')` | 创建同步 Proxy 代理，所有方法返回 `Result`                            | `T`                  |
+
+**Getter 模式**——三种状态管理变体：
+
+```ts
+// ─── 变体 A：Provider 引用（有 Provider 时） ───
+// 适用：storage、reldb、cache 等需多后端切换的模块
+const currentProvider: XxProvider | null = null
+const notInitializedZz = notInitialized.proxy<ZzOperations>()
+
+const storage = {
+  get zz(): ZzOperations { return currentProvider?.zz ?? notInitializedZz },
+}
+
+// ─── 变体 B：操作实例引用（有子功能工厂时） ───
+// 适用：iam 等有子功能的模块，init 时创建操作实例
+const currentYy: XxYyFunctions | null = null
+const notInitializedYy = notInitialized.proxy<XxYyFunctions>()
+
+const iam = {
+  get yy(): XxYyFunctions { return currentYy ?? notInitializedYy },
+}
+
+// ─── 变体 C：布尔标志（无 Provider / 工厂，操作是静态对象时） ───
+// 适用：capacitor 等运行时检测环境的模块，操作实现不需动态创建
+const initialized = false
+const deviceOps: DeviceOperations = { getInfo, getAppVersion }
+const notInitializedDevice = notInitialized.proxy<DeviceOperations>()
+
+const capacitor = {
+  get device(): DeviceOperations { return initialized ? deviceOps : notInitializedDevice },
+}
+```
+
+**使用要点**：
+
+- 所有 `get` 访问器必须使用此模式，**禁止裸返回 `null` / `undefined`**
+- Proxy 对象在模块顶层创建（模块加载时），而非每次 `get` 调用时创建
+- 默认 `proxy<T>()` 为 async 模式（方法返回 `Promise<Result>`），仅当接口全部是同步方法时使用 `proxy<T>('sync')`
+- `close()` 后状态回到未初始化，访问器自动切换回 Proxy 占位
 
 根据 §2 决策表选择对应模式：
 
@@ -820,6 +958,49 @@ export type { CreateYyInput, XxYyFunctions, YyItem } from './yy/xx-yy-types.js'
 export type { XxZzFunctions, ZzItem } from './zz/xx-zz-types.js'
 ```
 
+#### 3.7.4 Repository 数据仓库（可选）
+
+当模块需要持久化业务数据时，通过 Repository 封装数据访问逻辑。
+
+**文件位置**：
+
+| 场景                 | 位置                                         |
+| -------------------- | -------------------------------------------- |
+| 模块级（无子功能）   | `src/xx-repository-{entity}.ts`              |
+| 子功能目录内         | `src/yy/xx-yy-repository-{entity}.ts`        |
+| 多个 Repository 集中 | `src/repositories/xx-{entity}-repository.ts` |
+
+> 三种位置按模块复杂度选择：单一 Repository 放模块根；子功能内的放子功能目录；≥3 个同级 Repository 时用 `repositories/` 目录集中管理。
+
+**实现规范**：
+
+- **继承 `BaseReldbCrudRepository<T>`**（`@h-ai/reldb` 提供），获得标准 CRUD 能力
+- 导出 class（Repository 是有状态的数据访问层，适合用 class + 继承）
+- 类名为 `{Module}{Entity}Repository`（如 `AuditLogRepository`、`SchedulerTaskRepository`）
+- 子功能的 Repository 类名含域名：`{Module}{Domain}{Entity}Repository`
+- 如需抽象（多存储后端切换），先定义 `interface XxRepository`，再用 class 实现
+
+**示例**：
+
+```ts
+// ⚠️ 示例 — Repository 继承标准 CRUD 基类
+
+import { BaseReldbCrudRepository } from '@h-ai/reldb'
+
+export class XxItemRepository extends BaseReldbCrudRepository<XxItem> {
+  constructor(sql: SqlOperations) {
+    super(sql, 'xx_items')
+  }
+
+  /** 业务特有的查询方法 */
+  async findByStatus(status: string): Promise<Result<XxItem[], XxError>> {
+    // 利用 this.sql 执行自定义查询
+  }
+}
+```
+
+> **Provider 用工厂 + 闭包，Repository 用 class + 继承**——两者职责不同，实现模式不同。Provider 是可替换的后端适配器，Repository 是 CRUD 数据访问层。
+
 ### 3.8 `api/` — API 契约层（可选）
 
 > 当模块需要对外暴露 HTTP API 时，创建 `src/api/` 子目录。契约定义是客户端（`api.call`）和服务端（`kit.fromContract`）的**唯一真相源**，编译时保证两端 I/O 类型一致。
@@ -1207,13 +1388,19 @@ function createService(
 | ------------- | ---------------------------------------- | ----------------------------------------------------- |
 | 文件名        | `{模块}-{职责}.ts` kebab-case            | `db-main.ts`、`iam-authn-functions.ts`                |
 | 服务对象      | 小写模块名                               | `export const db`                                     |
-| 错误码        | `{Module}ErrorCode` UPPER_SNAKE          | `ReldbErrorCode.NOT_INITIALIZED`                      |
+| 函数接口      | `{Module}Functions`                      | `ReldbFunctions`、`PaymentFunctions`                  |
+| 子操作接口    | `{Domain}Operations`                     | `KvOperations`、`DeviceOperations`                    |
+| 错误码对象    | `{Module}ErrorCode` UPPER_SNAKE          | `ReldbErrorCode.NOT_INITIALIZED`                      |
+| 错误类型      | `{Module}Error`                          | `StorageError`、`IamError`                            |
 | 配置 Schema   | `{Module}ConfigSchema`                   | `StorageConfigSchema`                                 |
 | 配置类型      | `{Module}Config` / `{Module}ConfigInput` | `DbConfig` / `DbConfigInput`                          |
+| Provider 接口 | `{Module}Provider`                       | `ReldbProvider`、`CacheProvider`                      |
 | Provider 工厂 | `create{Impl}Provider`                   | `createSqliteProvider()`                              |
+| Repository 类 | `{Module}{Entity}Repository`             | `AuditLogRepository`、`SchedulerTaskRepository`       |
 | i18n 获取器   | `{缩写}M`                                | `reldbM()`、`storageM()`                              |
 | 日志          | `core.logger.child(...)`                 | `core.logger.child({ module: 'iam', scope: 'auth' })` |
 | 消息键        | `{module}_{camelCase}`                   | `storage_notInitialized`、`db_initFailed`             |
+| 端点对象      | `{module}Endpoints`                      | `storageEndpoints`、`iamEndpoints`                    |
 
 ### 4.7 import 顺序
 
@@ -1247,12 +1434,14 @@ import { XxConfigSchema } from './xx-config.js'
 - ❌ 硬编码密钥 — 用环境变量
 - ❌ `index.ts` 写逻辑 — 仅 `export *`
 - ❌ `main.ts` 写业务逻辑 — 仅做生命周期管理和 API 编排，具体逻辑委托给 `functions.ts` / `runner.ts` 等
-- ❌ class 实现 Provider — 用工厂函数 + 闭包
+- ❌ class 实现 Provider — 用工厂函数 + 闭包（Repository 用 class + 继承，见 §3.7.4）
 - ❌ return 嵌套复杂逻辑
 - ❌ 超过 2 层 if 嵌套
 - ❌ 重新包装上游 Result 错误
 - ❌ 公共 API 中 `throw` — 返回 `Result<T, XxError>`（合规场景见 §4.2）
 - ❌ 模块级 `Map` / `Set` 缓存需跨节点一致的业务数据 — 必须使用数据库持久化（详见 §4.11）
+- ❌ 错误码段位与已有模块冲突 — 新模块必须在 §3.1 注册表中选取未占用段位
+- ❌ 同一模块混用扁平方法与子操作对象两种 API 风格（见 §2 问题 3）
 
 ### 4.10 日志输出规范
 
@@ -1607,30 +1796,95 @@ export default defineConfig({ ...baseVitestConfig })
 
 ### 6.1 `README.md`（面向人类）
 
-只写"是什么 / 怎么用"，不写接口清单与内部实现。固定结构：
+> README 是开发者和使用者的**第一入口**，必须让人 **30 秒搞清楚模块能做什么、3 分钟跑通第一个示例**。
+> 只写"是什么 / 怎么用"，不写完整接口清单与内部实现细节。
+
+#### 固定结构
+
+以下为**必须包含**的章节及其要求，按顺序排列。标注「条件」的章节仅在满足条件时出现。
 
 ```text
-# @h-ai/xx
+# @h-ai/xx                          ← 包名
+一句话描述 + 核心价值。              ← 紧跟标题后，无需额外标题
 
-一句话描述。
-
-## 支持的后端 / 能力
-
-## 快速开始
-
-### Node.js 服务端
-
-### 浏览器客户端（如有）
-
-## 配置
-
-## 错误处理
-
-## 测试
-
-## License
-
+## 支持的 xxx                        ← §A 能力概览
+## 快速开始                          ← §B 核心示例
+  ### Node.js 服务端                 ← 条件：有 Node 入口
+  ### 浏览器客户端                   ← 条件：有 Browser 入口 / Client
+## API 契约                          ← 条件：有 src/api/
+## API 概览                          ← 条件：子操作较多
+## 配置                              ← §C 配置说明
+## 错误处理                          ← §D 错误码
+## 测试                              ← §E 测试命令
+## License                           ← §F 许可证
 ```
+
+#### 各章节编写要求
+
+##### §A 能力概览（`## 支持的 xxx`）
+
+- **标题**根据模块类型选择合适的名词：`支持的数据库`（reldb）、`支持的后端`（storage）、`支持的能力`（core、capacitor、crypto）等。
+- **呈现方式**：2 种选其一
+  - **表格**（有插件依赖或多 Provider 时优先）：列出「能力 | 依赖 | 说明」
+  - **列表**（能力同质时）：用 `- **名称** — 描述` 格式
+- 只列**用户需要知道的**外部依赖/后端；不列内部实现细节。
+
+##### §B 快速开始（`## 快速开始`）
+
+- **目标**：让读者从零到能跑的最小代码路径。
+- **必须包含**：`init`→ 核心操作 → `close` 的完整生命周期。
+- **多平台 / 多能力**时，用 `###` 子标题分节：
+  - **Node.js 服务端** / **浏览器客户端**（双端模块）
+  - 按能力分节（如 capacitor 按设备信息、推送、状态栏等分节）
+- **代码示例规范**：
+  - 使用 `typescript` 语言标注。
+  - 只展示**导入 → 初始化 → 调用 → 关闭**，不写辅助函数。
+  - 注释简短标注返回值含义。
+  - 多 Provider/后端时写**默认示例 + 一个备选**，不逐一列举。
+
+##### API 契约（`## API 契约`）— 条件：模块有 `src/api/`
+
+- 说明子路径导出（如 `@h-ai/storage/api`）的用途。
+- 给出**客户端调用**和**服务端路由**各一个 3-5 行的示例。
+- 列出导出的 **Schema 名称**和推导类型（仅名称列表，不展开字段）。
+
+##### API 概览（`## API 概览`）— 条件：子操作接口 ≥ 3 个
+
+- 用缩进列表展示操作分类层级，一行一个方法（仅方法名，不需要签名）。
+  ```text
+  - `xx.file` — `put / get / head / exists / delete / copy`
+  - `xx.dir` — `list / delete`
+  ```
+- **不需要**完整的参数/返回值表格（那是 SKILL.md 的职责）。
+
+##### §C 配置（`## 配置`）
+
+- **有 Zod Schema 的模块**：用文字简要描述必填/可选字段，给出 1-2 个典型配置代码。
+- **无配置的模块**：一句话说明即可（如 `capacitor.init()` 仅检测环境）。
+- **不需要**贴出完整 Schema 定义或每个字段的类型。
+
+##### §D 错误处理（`## 错误处理`）
+
+- 给出一个 3-5 行的 `Result` 判断示例（含错误码 switch/if）。
+- 列出**常用错误码**（仅名称 + 一句话含义），无需列所有错误码。
+
+##### §E 测试（`## 测试`）
+
+- 给出 `pnpm --filter @h-ai/xx test` 命令。
+- 有外部依赖时补一句提示（如 `> MySQL/PostgreSQL 测试需要 Docker。`）。
+
+##### §F License
+
+- 固定写 `Apache-2.0`。
+
+#### 禁止事项
+
+- ❌ 贴完整类型定义（`interface XxFunctions { ... }`）
+- ❌ 列完整 API 表格（含参数/返回值类型）— 那是 SKILL.md 的职责
+- ❌ 写内部实现原理（如 Provider 分发逻辑、Proxy 机制）
+- ❌ 写安装步骤（monorepo 内部模块不需要 `pnpm add`）
+- ❌ 写 `## 依赖` 章节单独列依赖包（`package.json` 已声明）
+- ❌ 代码示例中出现 `console.log`
 
 ### 6.2 Skill 模板（面向 AI）
 
@@ -1651,23 +1905,28 @@ export default defineConfig({ ...baseVitestConfig })
 
 ## 7. 创建检查清单
 
-- [ ] 确定模块名、错误码段、完成 §2 架构决策
+- [ ] 确定模块类型（§2 前置：生命周期单例 / 工厂 / 纯函数 / 基础设施）
+- [ ] 确定模块名、API 风格（§2 问题 3：扁平 vs 子操作）
+- [ ] 分配错误码段位（§3.1 注册表），确认与已有模块不冲突
+- [ ] 完成 §2 其他架构决策（子功能 / Provider）
 - [ ] 创建 `packages/xx/` 目录结构
 - [ ] `xx-config.ts`（错误码 + Zod Schema）
 - [ ] `messages/zh-CN.json` + `messages/en-US.json`
 - [ ] `xx-i18n.ts`
-- [ ] `xx-types.ts`
+- [ ] `xx-types.ts`（函数接口 + 错误类型 + 操作接口 / 子操作接口）
 - [ ] 子功能 `yy/xx-yy-types.ts` + `yy/xx-yy-functions.ts`（如有）
 - [ ] Provider 实现文件（如需，按 §2 决策放置）
+- [ ] Repository 实现文件（如需，按 §3.7.4 规范）
 - [ ] `xx-main.ts`
 - [ ] `index.ts`（+ `xx-index.browser.ts` 如有 Client）
 - [ ] `client/xx-client.ts`（如有）
 - [ ] `package.json` / `tsconfig.json` / `tsup.config.ts` / `vitest.config.ts`
-- [ ] `README.md`
-- [ ] `packages/cli/templates/skills/hai-xx/SKILL.md`（Skill 模板）
+- [ ] `README.md`（按 §6.1 结构）
+- [ ] `packages/cli/templates/skills/hai-xx/SKILL.md`（Skill 模板，按 §6.2）
 - [ ] `src/api/`（如需 HTTP API：`xx-api-schemas.ts` + `xx-api-contract.ts` + `index.ts`）
 - [ ] `package.json` 追加 `"./api"` 子路径导出（如有 `src/api/`）
 - [ ] `tsup.config.ts` 追加 `'api/index'` 入口（如有 `src/api/`）
+- [ ] 命名一致性：服务对象 / 函数接口 / 错误码 / 配置类型 / i18n 获取器（§4.6）
 - [ ] `pnpm typecheck` → `pnpm lint` → `pnpm test`
 
 ---
