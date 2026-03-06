@@ -354,3 +354,33 @@ describe('collectStreamContent', () => {
     expect(content).toBe('only')
   })
 })
+
+// =============================================================================
+// chatHistory
+// =============================================================================
+
+describe('client.chatHistory', () => {
+  it('获取对话历史', async () => {
+    const mockRecord = {
+      id: 'rec-1',
+      objectId: 'user-1',
+      sessionId: 'session-1',
+      request: { model: 'gpt-4o-mini', messages: [{ role: 'user', content: 'hi' }] },
+      response: { content: 'hello', finishReason: 'stop', usage: { prompt_tokens: 5, completion_tokens: 3, total_tokens: 8 } },
+      createdAt: Date.now(),
+      duration: 100,
+    }
+    const { api, postSpy } = createMockApi({ postResult: ok({ items: [mockRecord] }) })
+    const client = createAIClient({ api })
+    const history = await client.chatHistory('user-1', 'session-1')
+    expect(history).toHaveLength(1)
+    expect(history[0].objectId).toBe('user-1')
+    expect(postSpy).toHaveBeenCalledWith('/ai/chat/history', { objectId: 'user-1', sessionId: 'session-1' })
+  })
+
+  it('api 失败时抛出错误', async () => {
+    const { api } = createMockApi({ postResult: err({ message: 'Server error' }) })
+    const client = createAIClient({ api })
+    await expect(client.chatHistory('user-1', 'session-1')).rejects.toThrow('Chat history failed')
+  })
+})

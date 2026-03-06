@@ -8,9 +8,19 @@
 
 import type { Result } from '@h-ai/core'
 
-import type { CompressionStrategy } from '../ai-config.js'
 import type { AIError } from '../ai-types.js'
 import type { ChatMessage } from '../llm/ai-llm-types.js'
+import type { InteractionScope, SessionInfo } from '../store/ai-store-types.js'
+
+import { z } from 'zod'
+
+// ─── 压缩策略枚举 ───
+
+/** 压缩策略枚举 */
+export const CompressionStrategySchema = z.enum(['summary', 'sliding-window', 'hybrid'])
+
+/** 压缩策略类型 */
+export type CompressionStrategy = z.infer<typeof CompressionStrategySchema>
 
 // ─── 压缩选项与结果 ───
 
@@ -78,6 +88,8 @@ export interface ContextSummary {
  * 有状态上下文管理器配置
  */
 export interface ContextManagerOptions {
+  /** 交互作用域（objectId + sessionId） */
+  scope?: InteractionScope
   /** Token 预算（默认使用配置的 defaultMaxTokens） */
   maxTokens?: number
   /** 压缩策略 */
@@ -99,16 +111,22 @@ export interface ContextManagerOptions {
  *
  * @example
  * ```ts
- * const managerResult = ai.context.createManager({ maxTokens: 8000 })
+ * const managerResult = ai.context.createManager({
+ *   scope: { objectId: 'user-001', sessionId: 'sess-001' },
+ *   maxTokens: 8000,
+ * })
  * const manager = managerResult.value
  *
- * await manager.append({ role: 'user', content: userInput })
+ * await manager.addMessage({ role: 'user', content: userInput })
  * const messages = manager.getMessages().value
  * const response = await ai.llm.chat({ messages })
- * await manager.append(response.value.choices[0].message)
+ * await manager.addMessage(response.value.choices[0].message)
  * ```
  */
 export interface ContextManager {
+  /** 当前作用域（如已配置） */
+  readonly scope?: InteractionScope
+
   /**
    * 追加消息
    *
@@ -117,7 +135,7 @@ export interface ContextManager {
    * @param message - 要追加的消息
    * @returns 成功返回 ok(undefined)
    */
-  append: (message: ChatMessage) => Promise<Result<void, AIError>>
+  addMessage: (message: ChatMessage) => Promise<Result<void, AIError>>
 
   /**
    * 获取当前消息列表（压缩后）
@@ -141,6 +159,11 @@ export interface ContextManager {
   getSummaries: () => Result<ContextSummary[], AIError>
 
   /**
+   * 持久化当前状态（需要 scope + 存储可用）
+   */
+  save: () => Promise<Result<void, AIError>>
+
+  /**
    * 重置管理器（清空所有消息和摘要）
    */
   reset: () => void
@@ -157,7 +180,7 @@ export interface ContextManager {
  * @example
  * ```ts
  * // 压缩超长对话
- * const result = await ai.context.compress(messages, { maxTokens: 4000 })
+ * const result = await ai.context.tryCompress(messages, { maxTokens: 4000 })
  * const response = await ai.llm.chat({ messages: result.value.messages })
  *
  * // 对消息生成摘要
@@ -167,18 +190,29 @@ export interface ContextManager {
  * const tokens = ai.context.estimateTokens(messages)
  *
  * // 创建有状态管理器
- * const manager = ai.context.createManager({ maxTokens: 8000 })
+ * const manager = ai.context.createManager({
+ *   scope: { objectId: 'user-001', sessionId: 'sess-001' },
+ *   maxTokens: 8000,
+ * })
+ *
+ * // 从持久化恢复管理器
+ * const restored = await ai.context.restoreManager({
+ *   objectId: 'user-001',
+ *   sessionId: 'sess-001',
+ * })
  * ```
  */
 export interface ContextOperations {
   /**
    * 压缩消息列表，使其不超过指定 Token 预算
    *
+   * 如果当前 token 数未超限则直接返回（不压缩），因此命名为 tryCompress。
+   *
    * @param messages - 消息列表
    * @param options - 压缩选项
    * @returns 压缩结果
    */
-  compress: (messages: ChatMessage[], options?: ContextCompressOptions) => Promise<Result<ContextCompressResult, AIError>>
+  tryCompress: (messages: ChatMessage[], options?: ContextCompressOptions) => Promise<Result<ContextCompressResult, AIError>>
 
   /**
    * 对一组消息生成摘要
@@ -200,8 +234,25 @@ export interface ContextOperations {
   /**
    * 创建有状态上下文管理器
    *
-   * @param options - 管理器选项
-   * @returns ContextManager 实例
+   * @param options - 管理器配置
+   * @returns 管理器实例
    */
   createManager: (options?: ContextManagerOptions) => Result<ContextManager, AIError>
+
+  /**
+   * 从持久化恢复上下文管理器
+   *
+   * @param scope - 交互作用域
+   * @param options - 管理器配置覆盖
+   * @returns 恢复的管理器实例
+   */
+  restoreManager: (scope: InteractionScope, options?: Omit<ContextManagerOptions, 'scope'>) => Promise<Result<ContextManager, AIError>>
+
+  /**
+   * 列出指定主体的所有会话
+   *
+   * @param objectId - 主体 ID
+   * @returns 会话信息列表
+   */
+  listSessions: (objectId: string) => Promise<Result<SessionInfo[], AIError>>
 }

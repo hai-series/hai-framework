@@ -6,9 +6,22 @@
  */
 
 import type { Result } from '@h-ai/core'
-import type { EntityType } from '../ai-config.js'
 import type { AIError } from '../ai-types.js'
 import type { Citation } from '../retrieval/ai-retrieval-types.js'
+
+import { z } from 'zod'
+
+// ─── 实体类型枚举 ───
+
+/**
+ * 实体类型枚举
+ *
+ * 预定义的实体类型，用于实体提取和倒排索引分类。
+ */
+export const EntityTypeSchema = z.enum(['person', 'project', 'concept', 'organization', 'location', 'event', 'other'])
+
+/** 实体类型 */
+export type EntityType = z.infer<typeof EntityTypeSchema>
 
 // ─── 实体 ───
 

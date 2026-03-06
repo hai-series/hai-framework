@@ -139,6 +139,104 @@ export const SendMessageOutputSchema = z.object({
   usage: TokenUsageSchema.optional(),
 })
 
+// ─── Memory Schema ───
+
+/** 记忆条目 Schema */
+const MemoryEntrySchema = z.object({
+  id: z.string(),
+  content: z.string(),
+  type: z.enum(['fact', 'preference', 'event', 'summary', 'custom']),
+  importance: z.number(),
+  objectId: z.string().optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
+  createdAt: z.number(),
+  lastAccessedAt: z.number(),
+  accessCount: z.number(),
+})
+
+/** 记忆检索请求入参 */
+export const MemoryRecallInputSchema = z.object({
+  query: z.string().min(1),
+  topK: z.number().int().min(1).optional(),
+  types: z.array(z.enum(['fact', 'preference', 'event', 'summary', 'custom'])).optional(),
+  minImportance: z.number().min(0).max(1).optional(),
+  objectId: z.string().optional(),
+})
+
+/** 记忆检索响应出参 */
+export const MemoryRecallOutputSchema = z.object({
+  items: z.array(MemoryEntrySchema),
+})
+
+/** 记忆列表请求入参 */
+export const MemoryListInputSchema = z.object({
+  types: z.array(z.enum(['fact', 'preference', 'event', 'summary', 'custom'])).optional(),
+  objectId: z.string().optional(),
+  offset: z.number().int().min(0).optional(),
+  limit: z.number().int().min(1).max(100).optional(),
+})
+
+/** 记忆列表响应出参 */
+export const MemoryListOutputSchema = z.object({
+  items: z.array(MemoryEntrySchema),
+  total: z.number(),
+})
+
+// ─── Session Schema ───
+
+/** 会话信息 Schema */
+const SessionInfoSchema = z.object({
+  objectId: z.string(),
+  sessionId: z.string(),
+  createdAt: z.number(),
+  updatedAt: z.number(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
+})
+
+/** 会话列表请求入参 */
+export const SessionListInputSchema = z.object({
+  objectId: z.string().min(1),
+})
+
+/** 会话列表响应出参 */
+export const SessionListOutputSchema = z.object({
+  items: z.array(SessionInfoSchema),
+})
+
+// ─── ChatHistory Schema ───
+
+/** 对话记录响应条目 */
+const ChatRecordSchema = z.object({
+  id: z.string(),
+  objectId: z.string(),
+  sessionId: z.string(),
+  request: z.object({
+    model: z.string(),
+    messages: z.array(ChatMessageSchema),
+  }),
+  response: z.object({
+    content: z.string(),
+    toolCalls: z.array(ToolCallSchema).optional(),
+    finishReason: z.string(),
+    usage: TokenUsageSchema,
+  }),
+  createdAt: z.number(),
+  duration: z.number(),
+})
+
+/** 对话历史请求入参 */
+export const ChatHistoryInputSchema = z.object({
+  objectId: z.string().min(1),
+  sessionId: z.string().min(1),
+  limit: z.number().int().min(1).max(200).optional(),
+  order: z.enum(['asc', 'desc']).optional(),
+})
+
+/** 对话历史响应出参 */
+export const ChatHistoryOutputSchema = z.object({
+  items: z.array(ChatRecordSchema),
+})
+
 // ─── 推导类型 ───
 
 export type ChatCompletionInput = z.infer<typeof ChatCompletionInputSchema>

@@ -115,7 +115,7 @@ describe('estimateMessagesTokens', () => {
 
 // ─── compress 测试 ───
 
-describe('context compress', () => {
+describe('context tryCompress', () => {
   it('不需要压缩时原样返回', async () => {
     const llm = createMockLLM([])
     const ops = createContextOperations(defaultConfig, llm, 100000)
@@ -125,7 +125,7 @@ describe('context compress', () => {
       { role: 'assistant', content: 'Hi' },
     ]
 
-    const result = await ops.compress(messages, { maxTokens: 10000 })
+    const result = await ops.tryCompress(messages, { maxTokens: 10000 })
     expect(result.success).toBe(true)
     if (result.success) {
       expect(result.data.messages).toHaveLength(2)
@@ -141,7 +141,7 @@ describe('context compress', () => {
     // 生成 20 条长消息
     const messages = generateMessages(20, 500)
 
-    const result = await ops.compress(messages, {
+    const result = await ops.tryCompress(messages, {
       strategy: 'sliding-window',
       maxTokens: 500,
       preserveLastN: 4,
@@ -164,7 +164,7 @@ describe('context compress', () => {
       ...generateMessages(20, 500),
     ]
 
-    const result = await ops.compress(messages, {
+    const result = await ops.tryCompress(messages, {
       strategy: 'sliding-window',
       maxTokens: 500,
       preserveSystem: true,
@@ -187,7 +187,7 @@ describe('context compress', () => {
 
     const messages = generateMessages(20, 500)
 
-    const result = await ops.compress(messages, {
+    const result = await ops.tryCompress(messages, {
       strategy: 'summary',
       maxTokens: 500,
       preserveLastN: 4,
@@ -213,7 +213,7 @@ describe('context compress', () => {
 
     const messages = generateMessages(30, 500)
 
-    const result = await ops.compress(messages, {
+    const result = await ops.tryCompress(messages, {
       strategy: 'hybrid',
       maxTokens: 500,
       preserveLastN: 2,
@@ -330,8 +330,8 @@ describe('context createManager', () => {
       return
 
     const manager = managerResult.data
-    await manager.append({ role: 'user', content: 'Hello' })
-    await manager.append({ role: 'assistant', content: 'Hi there' })
+    await manager.addMessage({ role: 'user', content: 'Hello' })
+    await manager.addMessage({ role: 'assistant', content: 'Hi there' })
 
     const messages = manager.getMessages()
     expect(messages.success).toBe(true)
@@ -360,8 +360,8 @@ describe('context createManager', () => {
 
     // 追加多条消息触发压缩
     for (let i = 0; i < 10; i++) {
-      await manager.append({ role: 'user', content: `Message ${i}: ${'x'.repeat(100)}` })
-      await manager.append({ role: 'assistant', content: `Reply ${i}: ${'y'.repeat(100)}` })
+      await manager.addMessage({ role: 'user', content: `Message ${i}: ${'x'.repeat(100)}` })
+      await manager.addMessage({ role: 'assistant', content: `Reply ${i}: ${'y'.repeat(100)}` })
     }
 
     const messages = manager.getMessages()
@@ -382,7 +382,7 @@ describe('context createManager', () => {
       return
 
     const manager = managerResult.data
-    await manager.append({ role: 'user', content: 'Hello' })
+    await manager.addMessage({ role: 'user', content: 'Hello' })
 
     const usage = manager.getTokenUsage()
     expect(usage.success).toBe(true)
@@ -402,7 +402,7 @@ describe('context createManager', () => {
       return
 
     const manager = managerResult.data
-    await manager.append({ role: 'user', content: 'Hello' })
+    await manager.addMessage({ role: 'user', content: 'Hello' })
     manager.reset()
 
     const messages = manager.getMessages()
@@ -427,7 +427,7 @@ describe('context createManager', () => {
     const manager = managerResult.data
 
     for (let i = 0; i < 5; i++) {
-      await manager.append({ role: 'user', content: `Long message: ${'x'.repeat(200)}` })
+      await manager.addMessage({ role: 'user', content: `Long message: ${'x'.repeat(200)}` })
     }
 
     const messages = manager.getMessages()

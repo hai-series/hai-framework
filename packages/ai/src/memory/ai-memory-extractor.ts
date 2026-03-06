@@ -7,10 +7,9 @@
 
 import type { Result } from '@h-ai/core'
 
-import type { MemoryType } from '../ai-config.js'
 import type { AIError } from '../ai-types.js'
 import type { ChatMessage, LLMOperations } from '../llm/ai-llm-types.js'
-import type { MemoryEntryInput } from './ai-memory-types.js'
+import type { MemoryEntryInput, MemoryType } from './ai-memory-types.js'
 
 import { core, err, ok } from '@h-ai/core'
 
@@ -65,7 +64,8 @@ function formatMessages(messages: ChatMessage[]): string {
  * @param options.types - 只提取指定类型
  * @param options.model - 指定提取用的模型
  * @param options.minImportance - 过滤低重要性条目
- * @param options.source - 来源标识
+ * @param options.objectId - 所属主体 ID
+ * @param options.systemPrompt - 自定义提取用的系统提示词
  * @returns 提取到的记忆输入列表
  */
 export async function extractMemories(
@@ -75,7 +75,8 @@ export async function extractMemories(
     types?: MemoryType[]
     model?: string
     minImportance?: number
-    source?: string
+    objectId?: string
+    systemPrompt?: string
   },
 ): Promise<Result<MemoryEntryInput[], AIError>> {
   const conversationText = formatMessages(messages)
@@ -92,7 +93,7 @@ export async function extractMemories(
     const chatResult = await llm.chat({
       model: options?.model,
       messages: [
-        { role: 'system', content: MEMORY_EXTRACTION_SYSTEM_PROMPT },
+        { role: 'system', content: options?.systemPrompt ?? MEMORY_EXTRACTION_SYSTEM_PROMPT },
         { role: 'user', content: userPrompt },
       ],
       temperature: 0.1,
@@ -121,9 +122,9 @@ export async function extractMemories(
       entries = entries.filter(e => typeSet.has(e.type))
     }
 
-    // 附加来源
-    if (options?.source) {
-      entries = entries.map(e => ({ ...e, source: options.source }))
+    // 附加 objectId
+    if (options?.objectId) {
+      entries = entries.map(e => ({ ...e, objectId: options.objectId }))
     }
 
     logger.debug('Memory extraction completed', { messageCount: messages.length, extractedCount: entries.length })

@@ -19,6 +19,9 @@
   "ai_toolInvalidJson": "工具调用参数 JSON 格式无效",
   "ai_configError": "AI 配置校验失败：{error}",
 
+  "ai_llmRecordFailed": "对话记录保存失败：{error}",
+  "ai_llmHistoryFailed": "对话历史查询失败：{error}",
+
   "ai_embeddingApiFailed": "Embedding API 调用失败：{error}",
   "ai_embeddingModelNotFound": "Embedding 模型 '{model}' 未找到",
   "ai_embeddingInputTooLong": "Embedding 输入文本超过最大长度限制",
@@ -44,9 +47,14 @@
   "ai_memoryStoreFailed": "记忆存储失败：{error}",
   "ai_memoryRecallFailed": "记忆召回失败：{error}",
   "ai_memoryNotFound": "记忆条目 '{id}' 不存在",
-  "ai_memoryInjectFailed": "记忆注入失败：{error}",
+  "ai_memoryEnrichFailed": "记忆注入失败：{error}",
 
   "ai_contextCompressFailed": "上下文压缩失败：{error}",
   "ai_contextSummarizeFailed": "上下文总结失败：{error}",
-  "ai_contextTokenEstimateFailed": "Token 估算失败：{error}"
+  "ai_contextTokenEstimateFailed": "Token 估算失败：{error}",
+
+  "ai_storeFailed": "存储操作失败：{error}",
+  "ai_storeNotAvailable": "存储后端不可用，已降级为内存模式",
+  "ai_sessionNotFound": "会话 '{id}' 不存在",
+  "ai_sessionFailed": "会话操作失败：{error}"
 }

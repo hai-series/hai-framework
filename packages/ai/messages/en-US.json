@@ -19,6 +19,9 @@
   "ai_toolInvalidJson": "Invalid JSON in tool call arguments",
   "ai_configError": "AI config validation failed: {error}",
 
+  "ai_llmRecordFailed": "Chat record save failed: {error}",
+  "ai_llmHistoryFailed": "Chat history query failed: {error}",
+
   "ai_embeddingApiFailed": "Embedding API call failed: {error}",
   "ai_embeddingModelNotFound": "Embedding model '{model}' not found",
   "ai_embeddingInputTooLong": "Embedding input text exceeds maximum length",
@@ -44,9 +47,14 @@
   "ai_memoryStoreFailed": "Memory storage failed: {error}",
   "ai_memoryRecallFailed": "Memory recall failed: {error}",
   "ai_memoryNotFound": "Memory entry '{id}' not found",
-  "ai_memoryInjectFailed": "Memory injection failed: {error}",
+  "ai_memoryEnrichFailed": "Memory enrichment failed: {error}",
 
   "ai_contextCompressFailed": "Context compression failed: {error}",
   "ai_contextSummarizeFailed": "Context summarization failed: {error}",
-  "ai_contextTokenEstimateFailed": "Token estimation failed: {error}"
+  "ai_contextTokenEstimateFailed": "Token estimation failed: {error}",
+
+  "ai_storeFailed": "Store operation failed: {error}",
+  "ai_storeNotAvailable": "Store backend not available, degraded to memory mode",
+  "ai_sessionNotFound": "Session '{id}' not found",
+  "ai_sessionFailed": "Session operation failed: {error}"
 }

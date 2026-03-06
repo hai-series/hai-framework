@@ -43,7 +43,7 @@ export function createRetrievalOperations(embeddingOps: EmbeddingOperations): Re
         })
       }
       sources.set(source.id, source)
-      logger.info('Retrieval source added', { sourceId: source.id, collection: source.collection })
+      logger.debug('Retrieval source added', { sourceId: source.id, collection: source.collection })
       return ok(undefined)
     },
 
@@ -55,7 +55,7 @@ export function createRetrievalOperations(embeddingOps: EmbeddingOperations): Re
         })
       }
       sources.delete(sourceId)
-      logger.info('Retrieval source removed', { sourceId })
+      logger.debug('Retrieval source removed', { sourceId })
       return ok(undefined)
     },
 
@@ -146,7 +146,7 @@ export function createRetrievalOperations(embeddingOps: EmbeddingOperations): Re
         const limitedItems = allItems.slice(0, topK)
 
         const duration = Date.now() - startTime
-        logger.info('Retrieval completed', { query: request.query, resultCount: limitedItems.length, duration })
+        logger.debug('Retrieval completed', { query: request.query, resultCount: limitedItems.length, duration })
 
         return ok({
           items: limitedItems,

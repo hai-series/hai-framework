@@ -51,7 +51,7 @@ function defaultFormatContext(items: RagContextItem[]): string {
 export function createRagOperations(llm: LLMOperations, retrieval: RetrievalOperations): RagOperations {
   return {
     async query(query: string, options?: RagOptions): Promise<Result<RagResult, AIError>> {
-      logger.info('Starting RAG query', { query: query.slice(0, 100) })
+      logger.debug('Starting RAG query', { query: query.slice(0, 100) })
 
       try {
         // 阶段1：检索相关上下文
@@ -104,6 +104,8 @@ export function createRagOperations(llm: LLMOperations, retrieval: RetrievalOper
           model: options?.model,
           messages,
           temperature: options?.temperature,
+          objectId: options?.objectId,
+          sessionId: options?.sessionId,
         })
 
         if (!chatResult.success) {
@@ -117,7 +119,7 @@ export function createRagOperations(llm: LLMOperations, retrieval: RetrievalOper
         const choice = chatResult.data.choices[0]
         const answer = choice?.message?.content ?? ''
 
-        logger.info('RAG query completed', {
+        logger.debug('RAG query completed', {
           contextCount: contextItems.length,
           model: chatResult.data.model,
         })

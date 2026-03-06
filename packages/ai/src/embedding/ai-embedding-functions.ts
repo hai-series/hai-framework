@@ -17,7 +17,7 @@ import type {
 import process from 'node:process'
 import { core, err, ok } from '@h-ai/core'
 
-import { AIErrorCode } from '../ai-config.js'
+import { AIErrorCode, resolveModel } from '../ai-config.js'
 import { aiM } from '../ai-i18n.js'
 
 const logger = core.logger.child({ module: 'ai', scope: 'embedding' })
@@ -25,30 +25,53 @@ const logger = core.logger.child({ module: 'ai', scope: 'embedding' })
 /**
  * 创建 Embedding 操作接口
  *
- * @param config - 校验后的 AI 配置
- * @returns EmbeddingOperations 实例
+ * 提供文本向量嵌入能力，支持单条、批量和原始请求三种模式。
+ * 内部复用同一个 OpenAI 客户端实例，批量请求按 batchSize 自动拆分。
+ *
+ * @param config - 校验后的 AI 配置（apiKey / baseUrl 来自 llm 配置，dimensions / batchSize 来自 embedding 配置）
+ * @returns EmbeddingOperations 实例（`embed` / `embedText` / `embedBatch`）
  */
 export function createEmbeddingOperations(config: AIConfig): EmbeddingOperations {
-  const embeddingConfig: EmbeddingConfig = config.embedding ?? { model: 'text-embedding-3-small', batchSize: 100 }
+  const embeddingConfig: EmbeddingConfig = config.embedding ?? { batchSize: 100 }
 
-  /** 获取 API Key（优先 embedding 配置 → LLM 配置 → 环境变量） */
+  /** 获取 API Key（LLM 配置 → 环境变量） */
   function getApiKey(): string | undefined {
-    return embeddingConfig.apiKey
-      ?? config.llm?.apiKey
+    return config.llm?.apiKey
       ?? process.env.HAI_OPENAI_API_KEY
       ?? process.env.OPENAI_API_KEY
   }
 
   /** 获取 Base URL */
   function getBaseUrl(): string | undefined {
-    return embeddingConfig.baseUrl
-      ?? config.llm?.baseUrl
+    return config.llm?.baseUrl
       ?? process.env.HAI_OPENAI_BASE_URL
       ?? process.env.OPENAI_BASE_URL
   }
 
   /**
-   * 调用 OpenAI Embeddings API
+   * 缓存的 OpenAI 客户端实例（懒初始化，全生命周期复用）
+   */
+  let cachedClient: InstanceType<typeof import('openai').default> | null = null
+
+  /**
+   * 获取或创建 OpenAI 客户端（首次调用时初始化，后续复用同一实例）
+   */
+  async function getOrCreateClient() {
+    if (cachedClient)
+      return cachedClient
+
+    const OpenAI = (await import('openai')).default
+    cachedClient = new OpenAI({
+      apiKey: getApiKey(),
+      baseURL: getBaseUrl(),
+    })
+    return cachedClient
+  }
+
+  /**
+   * 调用 OpenAI Embeddings API（单次请求）
+   *
+   * 复用缓存的 OpenAI 客户端。批量调用由上层 embed / embedBatch 拆分后逐批调用本函数。
    */
   async function callEmbeddingAPI(request: EmbeddingRequest): Promise<Result<EmbeddingResponse, AIError>> {
     const apiKey = getApiKey()
@@ -59,17 +82,11 @@ export function createEmbeddingOperations(config: AIConfig): EmbeddingOperations
       })
     }
 
-    const model = request.model ?? embeddingConfig.model
+    const model = request.model ?? resolveModel(config.llm, 'embedding')
     const input = Array.isArray(request.input) ? request.input : [request.input]
 
     try {
-      // 动态加载 OpenAI SDK
-      const OpenAI = (await import('openai')).default
-
-      const client = new OpenAI({
-        apiKey,
-        baseURL: getBaseUrl(),
-      })
+      const client = await getOrCreateClient()
 
       const params: Record<string, unknown> = {
         model,

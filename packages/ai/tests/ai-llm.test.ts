@@ -749,3 +749,333 @@ describe('llm 完整对话流程', () => {
     expect(result.finishReason).toBe('stop')
   })
 })
+
+// =============================================================================
+// ai.llm.getHistory / ai.llm.listSessions — 对话记录
+// =============================================================================
+
+describe('ai.llm — chat recording', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    constructorCalls.length = 0
+    const initResult = ai.init({ llm: { apiKey: 'sk-test', model: 'gpt-4o-mini' } })
+    expect(initResult.success).toBe(true)
+  })
+
+  afterEach(() => {
+    ai.close()
+  })
+
+  it('传入 objectId 时自动记录对话', async () => {
+    mockCreate.mockResolvedValue(makeSDKChatCompletion('回复内容'))
+
+    await ai.llm.chat({
+      messages: [{ role: 'user', content: '你好' }],
+      objectId: 'user-1',
+      sessionId: 'session-1',
+    })
+
+    const historyResult = await ai.llm.getHistory({
+      objectId: 'user-1',
+      sessionId: 'session-1',
+    })
+    expect(historyResult.success).toBe(true)
+    if (historyResult.success) {
+      expect(historyResult.data.length).toBe(1)
+      const record = historyResult.data[0]
+      expect(record.objectId).toBe('user-1')
+      expect(record.sessionId).toBe('session-1')
+      expect(record.request.messages).toHaveLength(1)
+      expect(record.response.content).toBe('回复内容')
+      expect(record.response.usage.total_tokens).toBe(15)
+      expect(record.duration).toBeGreaterThanOrEqual(0)
+    }
+  })
+
+  it('未传 objectId 时不记录', async () => {
+    mockCreate.mockResolvedValue(makeSDKChatCompletion('ok'))
+
+    await ai.llm.chat({
+      messages: [{ role: 'user', content: 'test' }],
+    })
+
+    const historyResult = await ai.llm.getHistory({
+      objectId: 'user-1',
+      sessionId: 'default',
+    })
+    expect(historyResult.success).toBe(true)
+    if (historyResult.success) {
+      expect(historyResult.data).toHaveLength(0)
+    }
+  })
+
+  it('未传 sessionId 时默认使用 "default"', async () => {
+    mockCreate.mockResolvedValue(makeSDKChatCompletion('ok'))
+
+    await ai.llm.chat({
+      messages: [{ role: 'user', content: '你好' }],
+      objectId: 'user-1',
+    })
+
+    const historyResult = await ai.llm.getHistory({
+      objectId: 'user-1',
+      sessionId: 'default',
+    })
+    expect(historyResult.success).toBe(true)
+    if (historyResult.success) {
+      expect(historyResult.data).toHaveLength(1)
+      expect(historyResult.data[0].sessionId).toBe('default')
+    }
+  })
+
+  it('多条记录按时间倒序返回', async () => {
+    mockCreate.mockResolvedValue(makeSDKChatCompletion('first'))
+    await ai.llm.chat({
+      messages: [{ role: 'user', content: 'q1' }],
+      objectId: 'user-1',
+      sessionId: 's1',
+    })
+
+    mockCreate.mockResolvedValue(makeSDKChatCompletion('second'))
+    await ai.llm.chat({
+      messages: [{ role: 'user', content: 'q2' }],
+      objectId: 'user-1',
+      sessionId: 's1',
+    })
+
+    const historyResult = await ai.llm.getHistory(
+      { objectId: 'user-1', sessionId: 's1' },
+      { order: 'desc' },
+    )
+    expect(historyResult.success).toBe(true)
+    if (historyResult.success) {
+      expect(historyResult.data).toHaveLength(2)
+      expect(historyResult.data[0].createdAt).toBeGreaterThanOrEqual(historyResult.data[1].createdAt)
+    }
+  })
+
+  it('limit 限制返回数量', async () => {
+    for (let i = 0; i < 3; i++) {
+      mockCreate.mockResolvedValue(makeSDKChatCompletion(`reply-${i}`))
+      await ai.llm.chat({
+        messages: [{ role: 'user', content: `q-${i}` }],
+        objectId: 'user-1',
+        sessionId: 's1',
+      })
+    }
+
+    const historyResult = await ai.llm.getHistory(
+      { objectId: 'user-1', sessionId: 's1' },
+      { limit: 2 },
+    )
+    expect(historyResult.success).toBe(true)
+    if (historyResult.success) {
+      expect(historyResult.data).toHaveLength(2)
+    }
+  })
+})
+
+describe('ai.llm.listSessions', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    constructorCalls.length = 0
+    const initResult = ai.init({ llm: { apiKey: 'sk-test', model: 'gpt-4o-mini' } })
+    expect(initResult.success).toBe(true)
+  })
+
+  afterEach(() => {
+    ai.close()
+  })
+
+  it('记录对话后自动创建会话', async () => {
+    mockCreate.mockResolvedValue(makeSDKChatCompletion('ok'))
+    await ai.llm.chat({
+      messages: [{ role: 'user', content: '你好' }],
+      objectId: 'user-1',
+      sessionId: 'session-a',
+    })
+
+    const result = await ai.llm.listSessions('user-1')
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data).toHaveLength(1)
+      expect(result.data[0].sessionId).toBe('session-a')
+      expect(result.data[0].objectId).toBe('user-1')
+    }
+  })
+
+  it('多个会话分别记录', async () => {
+    mockCreate.mockResolvedValue(makeSDKChatCompletion('ok'))
+
+    await ai.llm.chat({
+      messages: [{ role: 'user', content: 'q1' }],
+      objectId: 'user-1',
+      sessionId: 'session-a',
+    })
+    await ai.llm.chat({
+      messages: [{ role: 'user', content: 'q2' }],
+      objectId: 'user-1',
+      sessionId: 'session-b',
+    })
+
+    const result = await ai.llm.listSessions('user-1')
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data).toHaveLength(2)
+      const sessionIds = result.data.map(s => s.sessionId)
+      expect(sessionIds).toContain('session-a')
+      expect(sessionIds).toContain('session-b')
+    }
+  })
+
+  it('不同 objectId 的会话互不影响', async () => {
+    mockCreate.mockResolvedValue(makeSDKChatCompletion('ok'))
+
+    await ai.llm.chat({
+      messages: [{ role: 'user', content: 'q1' }],
+      objectId: 'user-1',
+      sessionId: 'session-a',
+    })
+    await ai.llm.chat({
+      messages: [{ role: 'user', content: 'q2' }],
+      objectId: 'user-2',
+      sessionId: 'session-b',
+    })
+
+    const result1 = await ai.llm.listSessions('user-1')
+    const result2 = await ai.llm.listSessions('user-2')
+    expect(result1.success).toBe(true)
+    expect(result2.success).toBe(true)
+    if (result1.success && result2.success) {
+      expect(result1.data).toHaveLength(1)
+      expect(result2.data).toHaveLength(1)
+      expect(result1.data[0].sessionId).toBe('session-a')
+      expect(result2.data[0].sessionId).toBe('session-b')
+    }
+  })
+
+  it('新建会话时从用户消息提取 title', async () => {
+    mockCreate.mockResolvedValue(makeSDKChatCompletion('ok'))
+    await ai.llm.chat({
+      messages: [{ role: 'user', content: '请帮我写一篇关于人工智能的文章' }],
+      objectId: 'user-1',
+      sessionId: 'session-title',
+    })
+
+    const result = await ai.llm.listSessions('user-1')
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data).toHaveLength(1)
+      expect(result.data[0].title).toBe('请帮我写一篇关于人工智能的文章')
+    }
+  })
+
+  it('长消息标题截断到 50 字符', async () => {
+    mockCreate.mockResolvedValue(makeSDKChatCompletion('ok'))
+    const longMsg = '这是一条非常长的消息用来测试标题截断功能是否生效当消息超过五十个字符时应该被截断并追加省略号以确保用户体验保持良好的状态'
+    await ai.llm.chat({
+      messages: [{ role: 'user', content: longMsg }],
+      objectId: 'user-1',
+      sessionId: 'session-long',
+    })
+
+    const result = await ai.llm.listSessions('user-1')
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data[0].title).toBe(`${longMsg.slice(0, 50)}...`)
+    }
+  })
+})
+
+// =============================================================================
+// chatStream 记录保存
+// =============================================================================
+
+describe('ai.llm.chatStream 记录保存', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    constructorCalls.length = 0
+    const initResult = ai.init({ llm: { apiKey: 'sk-test', model: 'gpt-4o-mini' } })
+    expect(initResult.success).toBe(true)
+  })
+
+  afterEach(() => {
+    ai.close()
+  })
+
+  it('传入 objectId 时流式对话自动记录', async () => {
+    const streamChunks = [
+      makeSDKChunk('Hello', { role: 'assistant' }),
+      makeSDKChunk(' World'),
+      makeSDKChunk(undefined, { finishReason: 'stop' }),
+    ]
+
+    mockCreate.mockResolvedValue((async function* () {
+      for (const chunk of streamChunks) yield chunk
+    })())
+
+    for await (const _chunk of ai.llm.chatStream({
+      messages: [{ role: 'user', content: '你好' }],
+      objectId: 'user-1',
+      sessionId: 'stream-session',
+    })) {
+      // 消费所有 chunk
+    }
+
+    const historyResult = await ai.llm.getHistory({
+      objectId: 'user-1',
+      sessionId: 'stream-session',
+    })
+    expect(historyResult.success).toBe(true)
+    if (historyResult.success) {
+      expect(historyResult.data).toHaveLength(1)
+      const record = historyResult.data[0]
+      expect(record.objectId).toBe('user-1')
+      expect(record.sessionId).toBe('stream-session')
+      expect(record.response.content).toBe('Hello World')
+      expect(record.response.finishReason).toBe('stop')
+    }
+  })
+
+  it('流式对话自动创建会话并带 title', async () => {
+    mockCreate.mockResolvedValue((async function* () {
+      yield makeSDKChunk('回复', { role: 'assistant', finishReason: 'stop' })
+    })())
+
+    for await (const _chunk of ai.llm.chatStream({
+      messages: [{ role: 'user', content: '帮我翻译这段话' }],
+      objectId: 'user-1',
+      sessionId: 'stream-s',
+    })) {
+      // 消费所有 chunk
+    }
+
+    const sessions = await ai.llm.listSessions('user-1')
+    expect(sessions.success).toBe(true)
+    if (sessions.success) {
+      expect(sessions.data).toHaveLength(1)
+      expect(sessions.data[0].title).toBe('帮我翻译这段话')
+    }
+  })
+
+  it('未传 objectId 时流式对话不记录', async () => {
+    mockCreate.mockResolvedValue((async function* () {
+      yield makeSDKChunk('ok', { finishReason: 'stop' })
+    })())
+
+    for await (const _chunk of ai.llm.chatStream({
+      messages: [{ role: 'user', content: 'test' }],
+    })) {
+      // 消费所有 chunk
+    }
+
+    const historyResult = await ai.llm.getHistory({
+      objectId: 'user-1',
+      sessionId: 'default',
+    })
+    expect(historyResult.success).toBe(true)
+    if (historyResult.success) {
+      expect(historyResult.data).toHaveLength(0)
+    }
+  })
+})

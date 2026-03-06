@@ -18,7 +18,7 @@ import type {
 
 import { core, err, ok } from '@h-ai/core'
 
-import { AIErrorCode } from '../ai-config.js'
+import { AIErrorCode, resolveModel } from '../ai-config.js'
 import { aiM } from '../ai-i18n.js'
 
 const logger = core.logger.child({ module: 'ai', scope: 'reasoning' })
@@ -49,11 +49,11 @@ Format your plan as a numbered list.`
 /**
  * 创建 Reasoning 操作接口
  *
- * @param _config - 校验后的 AI 配置（预留扩展）
+ * @param config - 校验后的 AI 配置
  * @param llm - LLM 操作接口
  * @returns ReasoningOperations 实例
  */
-export function createReasoningOperations(_config: AIConfig, llm: LLMOperations): ReasoningOperations {
+export function createReasoningOperations(config: AIConfig, llm: LLMOperations): ReasoningOperations {
   /**
    * 执行 ReAct 策略推理
    */
@@ -74,11 +74,13 @@ export function createReasoningOperations(_config: AIConfig, llm: LLMOperations)
     for (let round = 0; round < maxRounds; round++) {
       // 调用 LLM
       const chatResult = await llm.chat({
-        model: options.model,
+        model: resolveModel(config.llm, 'reasoning', options.model),
         messages,
         temperature: options.temperature,
         tools: options.tools?.getDefinitions(),
         tool_choice: options.tools ? 'auto' : undefined,
+        objectId: options.objectId,
+        sessionId: options.sessionId,
       })
 
       if (!chatResult.success)
@@ -181,9 +183,11 @@ export function createReasoningOperations(_config: AIConfig, llm: LLMOperations)
     ]
 
     const chatResult = await llm.chat({
-      model: options.model,
+      model: resolveModel(config.llm, 'reasoning', options.model),
       messages,
       temperature: options.temperature,
+      objectId: options.objectId,
+      sessionId: options.sessionId,
     })
 
     if (!chatResult.success)
@@ -240,9 +244,11 @@ export function createReasoningOperations(_config: AIConfig, llm: LLMOperations)
     ]
 
     const planResult = await llm.chat({
-      model: options.model,
+      model: resolveModel(config.llm, 'plan', options.planModel ?? options.model),
       messages: planMessages,
       temperature: options.temperature,
+      objectId: options.objectId,
+      sessionId: options.sessionId,
     })
 
     if (!planResult.success)
@@ -261,11 +267,13 @@ export function createReasoningOperations(_config: AIConfig, llm: LLMOperations)
 
     for (let round = 0; round < maxRounds; round++) {
       const execResult = await llm.chat({
-        model: options.model,
+        model: resolveModel(config.llm, 'execute', options.executeModel ?? options.model),
         messages: executeMessages,
         temperature: options.temperature,
         tools: options.tools?.getDefinitions(),
         tool_choice: options.tools ? 'auto' : undefined,
+        objectId: options.objectId,
+        sessionId: options.sessionId,
       })
 
       if (!execResult.success)
@@ -330,7 +338,7 @@ export function createReasoningOperations(_config: AIConfig, llm: LLMOperations)
   return {
     async run(query: string, options?: ReasoningOptions): Promise<Result<ReasoningResult, AIError>> {
       const strategy = options?.strategy ?? 'react'
-      logger.info('Starting reasoning', { strategy, maxRounds: options?.maxRounds })
+      logger.debug('Starting reasoning', { strategy, maxRounds: options?.maxRounds })
 
       try {
         switch (strategy) {

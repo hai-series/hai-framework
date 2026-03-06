@@ -2,6 +2,7 @@
  * @h-ai/ai — Context 子功能实现
  *
  * 提供上下文压缩、摘要生成、Token 估算与有状态上下文管理。
+ * 支持通过 AIStore 持久化会话状态。
  * @module ai-context-functions
  */
 
@@ -10,6 +11,7 @@ import type { Result } from '@h-ai/core'
 import type { ContextConfig } from '../ai-config.js'
 import type { AIError } from '../ai-types.js'
 import type { ChatMessage, LLMOperations } from '../llm/ai-llm-types.js'
+import type { AIStore, InteractionScope, SessionInfo, WhereClause } from '../store/ai-store-types.js'
 import type {
   ContextCompressOptions,
   ContextCompressResult,
@@ -27,6 +29,17 @@ import { aiM } from '../ai-i18n.js'
 import { estimateMessagesTokens, estimateTextTokens } from './ai-context-token.js'
 
 const logger = core.logger.child({ module: 'ai', scope: 'context' })
+
+// ─── 持久化状态结构 ───
+
+/**
+ * 持久化的上下文管理器状态
+ */
+interface PersistedContextState {
+  messages: ChatMessage[]
+  summaries: ContextSummary[]
+  updatedAt: number
+}
 
 // ─── 摘要提示词 ───
 
@@ -56,12 +69,16 @@ Merge the previous summary with the new conversation messages to create an updat
  * @param config - Context 配置
  * @param llm - LLM 操作接口（用于生成摘要）
  * @param defaultMaxTokens - 默认 maxTokens（从 LLM 配置获取）
+ * @param contextStore - 上下文状态存储（可选，用于持久化）
+ * @param sessionStore - 会话信息存储（可选，用于目录管理）
  * @returns ContextOperations 实例
  */
 export function createContextOperations(
   config: ContextConfig,
   llm: LLMOperations,
   defaultMaxTokens: number,
+  contextStore?: AIStore<PersistedContextState>,
+  sessionStore?: AIStore<SessionInfo>,
 ): ContextOperations {
   const tokenRatio = config.tokenRatio
 
@@ -72,12 +89,11 @@ export function createContextOperations(
     const fromOption = optionMaxTokens ?? config.defaultMaxTokens
     if (fromOption > 0)
       return fromOption
-    // 取 LLM maxTokens 的 80%
     return Math.floor(defaultMaxTokens * 0.8)
   }
 
   /**
-   * 滑动窗口压缩：保留 system + 最近 N 条消息
+   * 滑动窗口压缩
    */
   function slidingWindow(
     messages: ChatMessage[],
@@ -97,7 +113,6 @@ export function createContextOperations(
       }
     }
 
-    // 保留最近 N 条
     const preserved = nonSystemMessages.slice(-preserveLastN)
     const result = [...systemMessages, ...preserved]
     const currentTokens = estimateMessagesTokens(result, tokenRatio)
@@ -109,22 +124,9 @@ export function createContextOperations(
       }
     }
 
-    // 如果仍然超限，从保留的消息中继续截断
+    // 从最新的消息开始逆向添加
     let finalMessages = [...systemMessages]
     let tokens = estimateMessagesTokens(finalMessages, tokenRatio)
-
-    // 从最新的消息开始逆向添加
-    for (let i = preserved.length - 1; i >= 0; i--) {
-      const msgTokens = estimateMessagesTokens([preserved[i]], tokenRatio)
-      if (tokens + msgTokens > maxTokens)
-        break
-      finalMessages = [...systemMessages, preserved[i], ...finalMessages.slice(systemMessages.length)]
-      tokens += msgTokens
-    }
-
-    // 重新构建：保留 system + 尽可能多的最新消息
-    finalMessages = [...systemMessages]
-    tokens = estimateMessagesTokens(finalMessages, tokenRatio)
     const addable: ChatMessage[] = []
 
     for (let i = nonSystemMessages.length - 1; i >= 0; i--) {
@@ -135,8 +137,10 @@ export function createContextOperations(
       tokens += msgTokens
     }
 
+    finalMessages = [...systemMessages, ...addable]
+
     return {
-      messages: [...systemMessages, ...addable],
+      messages: finalMessages,
       removedCount: nonSystemMessages.length - addable.length,
     }
   }
@@ -148,7 +152,6 @@ export function createContextOperations(
     messages: ChatMessage[],
     options?: { model?: string, temperature?: number, previousSummary?: string },
   ): Promise<Result<string, AIError>> {
-    // 格式化消息为文本
     const conversationText = messages
       .filter(m => m.role !== 'system')
       .map((m) => {
@@ -161,14 +164,14 @@ export function createContextOperations(
       })
       .join('\n')
 
-    let systemPrompt = SUMMARIZE_SYSTEM_PROMPT
+    let systemPrompt = config.systemPrompt ?? SUMMARIZE_SYSTEM_PROMPT
     if (options?.previousSummary) {
       systemPrompt = INCREMENTAL_SUMMARIZE_PROMPT
         .replace('{previousSummary}', options.previousSummary)
     }
 
     const chatResult = await llm.chat({
-      model: options?.model ?? config.summaryModel,
+      model: options?.model,
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: conversationText },
@@ -196,7 +199,7 @@ export function createContextOperations(
     const preserveSystem = options?.preserveSystem ?? true
     const preserveLastN = options?.preserveLastN ?? config.preserveLastN
 
-    logger.info('Compressing context', { strategy, maxTokens, messageCount: messages.length })
+    logger.debug('Compressing context', { strategy, maxTokens, messageCount: messages.length })
 
     try {
       const originalTokens = estimateMessagesTokens(messages, tokenRatio)
@@ -220,7 +223,7 @@ export function createContextOperations(
         )
         const compressedTokens = estimateMessagesTokens(compressed, tokenRatio)
 
-        logger.info('Sliding window compression completed', { originalTokens, compressedTokens, removedCount })
+        logger.debug('Sliding window compression completed', { originalTokens, compressedTokens, removedCount })
         return ok({
           messages: compressed,
           originalTokens,
@@ -257,7 +260,7 @@ export function createContextOperations(
         const compressed = [...systemMessages, summaryMessage, ...preserved]
         const compressedTokens = estimateMessagesTokens(compressed, tokenRatio)
 
-        logger.info('Summary compression completed', { originalTokens, compressedTokens, removedCount: toSummarize.length })
+        logger.debug('Summary compression completed', { originalTokens, compressedTokens, removedCount: toSummarize.length })
         return ok({
           messages: compressed,
           originalTokens,
@@ -305,7 +308,7 @@ export function createContextOperations(
         const compressed = [...systemMessages, summaryMessage, ...preservedMessages]
         const compressedTokens = estimateMessagesTokens(compressed, tokenRatio)
 
-        logger.info('Hybrid compression completed', { originalTokens, compressedTokens, removedCount: toSummarize.length })
+        logger.debug('Hybrid compression completed', { originalTokens, compressedTokens, removedCount: toSummarize.length })
         return ok({
           messages: compressed,
           originalTokens,
@@ -315,7 +318,6 @@ export function createContextOperations(
         })
       }
 
-      // 回退到滑动窗口结果
       return ok({
         messages: windowResult,
         originalTokens,
@@ -337,7 +339,7 @@ export function createContextOperations(
    * 摘要消息列表
    */
   async function summarizeMessages(messages: ChatMessage[], options?: ContextSummarizeOptions): Promise<Result<ContextSummary, AIError>> {
-    logger.info('Summarizing messages', { messageCount: messages.length })
+    logger.debug('Summarizing messages', { messageCount: messages.length })
 
     try {
       const summaryResult = await generateSummary(messages, {
@@ -366,8 +368,138 @@ export function createContextOperations(
     }
   }
 
+  /**
+   * 构造存储键
+   */
+  function storeKey(scope: InteractionScope): string {
+    return `${scope.objectId}:${scope.sessionId}`
+  }
+
+  /**
+   * 创建 ContextManager 实例（共享逻辑）
+   */
+  function buildManager(
+    scope: InteractionScope | undefined,
+    managerMaxTokens: number,
+    strategy: string,
+    preserveSystem: boolean,
+    preserveLastN: number,
+    autoCompress: boolean,
+    summaryModel: string | undefined,
+    initialMessages: ChatMessage[],
+    initialSummaries: ContextSummary[],
+  ): ContextManager {
+    const state = {
+      messages: initialMessages,
+      summaries: initialSummaries,
+    }
+
+    const manager: ContextManager = {
+      scope,
+
+      async addMessage(message: ChatMessage): Promise<Result<void, AIError>> {
+        state.messages.push(message)
+
+        if (!autoCompress)
+          return ok(undefined)
+
+        const currentTokens = estimateMessagesTokens(state.messages, tokenRatio)
+        if (currentTokens <= managerMaxTokens)
+          return ok(undefined)
+
+        logger.trace('Auto-compressing context', { currentTokens, budget: managerMaxTokens })
+
+        const compressResult = await compressMessages(state.messages, {
+          strategy: strategy as ContextCompressOptions['strategy'],
+          maxTokens: managerMaxTokens,
+          preserveSystem,
+          preserveLastN,
+          summaryModel,
+        })
+
+        if (!compressResult.success) {
+          logger.warn('Auto-compression failed, keeping original messages', { error: compressResult.error })
+          return ok(undefined)
+        }
+
+        if (compressResult.data.summary) {
+          state.summaries.push({
+            summary: compressResult.data.summary,
+            tokenCount: estimateTextTokens(compressResult.data.summary, tokenRatio),
+            coveredMessages: compressResult.data.removedCount,
+          })
+        }
+
+        state.messages = compressResult.data.messages
+        return ok(undefined)
+      },
+
+      getMessages(): Result<ChatMessage[], AIError> {
+        return ok([...state.messages])
+      },
+
+      getTokenUsage(): Result<{ current: number, budget: number }, AIError> {
+        return ok({
+          current: estimateMessagesTokens(state.messages, tokenRatio),
+          budget: managerMaxTokens,
+        })
+      },
+
+      getSummaries(): Result<ContextSummary[], AIError> {
+        return ok([...state.summaries])
+      },
+
+      async save(): Promise<Result<void, AIError>> {
+        if (!scope || !contextStore) {
+          return ok(undefined)
+        }
+        try {
+          const key = storeKey(scope)
+          await contextStore.save(key, {
+            messages: state.messages,
+            summaries: state.summaries,
+            updatedAt: Date.now(),
+          })
+
+          // 同步更新会话信息
+          if (sessionStore) {
+            const existing = await sessionStore.get(scope.sessionId)
+            if (existing) {
+              existing.updatedAt = Date.now()
+              await sessionStore.save(scope.sessionId, existing)
+            }
+            else {
+              await sessionStore.save(scope.sessionId, {
+                sessionId: scope.sessionId,
+                objectId: scope.objectId,
+                createdAt: Date.now(),
+                updatedAt: Date.now(),
+              })
+            }
+          }
+
+          return ok(undefined)
+        }
+        catch (error) {
+          return err({
+            code: AIErrorCode.SESSION_FAILED,
+            message: aiM('ai_sessionFailed', { params: { error: String(error) } }),
+            cause: error,
+          })
+        }
+      },
+
+      reset(): void {
+        state.messages = []
+        state.summaries = []
+      },
+    }
+
+    return manager
+  }
+
   return {
-    compress: compressMessages,
+    tryCompress: compressMessages,
 
     summarize: summarizeMessages,
 
@@ -390,75 +522,79 @@ export function createContextOperations(
       const preserveSystem = options?.preserveSystem ?? true
       const preserveLastN = options?.preserveLastN ?? config.preserveLastN
       const autoCompress = options?.autoCompress ?? true
-      const summaryModel = options?.summaryModel ?? config.summaryModel
+      const summaryModel = options?.summaryModel
 
-      const state = {
-        messages: [] as ChatMessage[],
-        summaries: [] as ContextSummary[],
-      }
-
-      const manager: ContextManager = {
-        async append(message: ChatMessage): Promise<Result<void, AIError>> {
-          state.messages.push(message)
-
-          if (!autoCompress)
-            return ok(undefined)
-
-          const currentTokens = estimateMessagesTokens(state.messages, tokenRatio)
-          if (currentTokens <= managerMaxTokens)
-            return ok(undefined)
-
-          // 自动压缩
-          logger.debug('Auto-compressing context', { currentTokens, budget: managerMaxTokens })
-
-          const compressResult = await compressMessages(state.messages, {
-            strategy,
-            maxTokens: managerMaxTokens,
-            preserveSystem,
-            preserveLastN,
-            summaryModel,
-          })
-
-          if (!compressResult.success) {
-            logger.warn('Auto-compression failed, keeping original messages', { error: compressResult.error })
-            return ok(undefined)
-          }
-
-          // 记录摘要
-          if (compressResult.data.summary) {
-            state.summaries.push({
-              summary: compressResult.data.summary,
-              tokenCount: estimateTextTokens(compressResult.data.summary, tokenRatio),
-              coveredMessages: compressResult.data.removedCount,
-            })
-          }
-
-          state.messages = compressResult.data.messages
-          return ok(undefined)
-        },
-
-        getMessages(): Result<ChatMessage[], AIError> {
-          return ok([...state.messages])
-        },
-
-        getTokenUsage(): Result<{ current: number, budget: number }, AIError> {
-          return ok({
-            current: estimateMessagesTokens(state.messages, tokenRatio),
-            budget: managerMaxTokens,
-          })
-        },
-
-        getSummaries(): Result<ContextSummary[], AIError> {
-          return ok([...state.summaries])
-        },
-
-        reset(): void {
-          state.messages = []
-          state.summaries = []
-        },
-      }
+      const manager = buildManager(
+        options?.scope,
+        managerMaxTokens,
+        strategy,
+        preserveSystem,
+        preserveLastN,
+        autoCompress,
+        summaryModel,
+        [],
+        [],
+      )
 
       return ok(manager)
+    },
+
+    async restoreManager(scope: InteractionScope, options?: Omit<ContextManagerOptions, 'scope'>): Promise<Result<ContextManager, AIError>> {
+      const managerMaxTokens = resolveMaxTokens(options?.maxTokens)
+      const strategy = options?.strategy ?? config.defaultStrategy
+      const preserveSystem = options?.preserveSystem ?? true
+      const preserveLastN = options?.preserveLastN ?? config.preserveLastN
+      const autoCompress = options?.autoCompress ?? true
+      const summaryModel = options?.summaryModel
+
+      let initialMessages: ChatMessage[] = []
+      let initialSummaries: ContextSummary[] = []
+
+      // 从存储恢复
+      if (contextStore) {
+        const key = storeKey(scope)
+        const persisted = await contextStore.get(key)
+        if (persisted) {
+          initialMessages = persisted.messages
+          initialSummaries = persisted.summaries
+          logger.trace('Context manager restored from store', { scope, messageCount: initialMessages.length })
+        }
+      }
+
+      const manager = buildManager(
+        scope,
+        managerMaxTokens,
+        strategy,
+        preserveSystem,
+        preserveLastN,
+        autoCompress,
+        summaryModel,
+        initialMessages,
+        initialSummaries,
+      )
+
+      return ok(manager)
+    },
+
+    async listSessions(objectId: string): Promise<Result<SessionInfo[], AIError>> {
+      if (!sessionStore) {
+        return ok([])
+      }
+
+      try {
+        const sessions = await sessionStore.query({
+          where: { objectId } as WhereClause<SessionInfo>,
+          orderBy: { field: 'updatedAt', direction: 'desc' },
+        })
+        return ok(sessions)
+      }
+      catch (error) {
+        return err({
+          code: AIErrorCode.SESSION_FAILED,
+          message: aiM('ai_sessionFailed', { params: { error: String(error) } }),
+          cause: error,
+        })
+      }
     },
   }
 }
