@@ -7,5 +7,7 @@
   "apiClient_notFound": "请求的资源不存在",
   "apiClient_validationFailed": "请求参数校验失败",
   "apiClient_tokenRefreshFailed": "Token刷新失败，请重新登录",
+  "apiClient_notInitialized": "API 客户端未初始化，请先调用 api.init()",
+  "apiClient_configError": "API 客户端配置错误：{error}",
   "apiClient_unknown": "未知错误"
 }

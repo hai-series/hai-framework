@@ -74,7 +74,7 @@ describe('createFetchClient', () => {
 
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.code).toBe(6005) // NOT_FOUND
+        expect(result.error.code).toBe(1205) // NOT_FOUND
         expect(result.error.status).toBe(404)
       }
     })
@@ -87,7 +87,7 @@ describe('createFetchClient', () => {
 
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.code).toBe(6002) // SERVER_ERROR
+        expect(result.error.code).toBe(1202) // SERVER_ERROR
       }
     })
 
@@ -99,7 +99,7 @@ describe('createFetchClient', () => {
 
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.code).toBe(6000) // NETWORK_ERROR
+        expect(result.error.code).toBe(1200) // NETWORK_ERROR
       }
     })
   })
@@ -165,7 +165,7 @@ describe('createFetchClient', () => {
 
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.code).toBe(6001) // TIMEOUT
+        expect(result.error.code).toBe(1201) // TIMEOUT
       }
     })
   })

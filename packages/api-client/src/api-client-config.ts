@@ -8,27 +8,31 @@
 // ─── 错误码 ───
 
 /**
- * Api Client 错误码（数值范围 6000-6099）
+ * Api Client 错误码（数值范围 1200-1299）
  */
 export const ApiClientErrorCode = {
   /** 网络请求失败 */
-  NETWORK_ERROR: 6000,
+  NETWORK_ERROR: 1200,
   /** 请求超时 */
-  TIMEOUT: 6001,
+  TIMEOUT: 1201,
   /** 服务器错误（5xx） */
-  SERVER_ERROR: 6002,
+  SERVER_ERROR: 1202,
   /** 未授权（401） */
-  UNAUTHORIZED: 6003,
+  UNAUTHORIZED: 1203,
   /** 无权限（403） */
-  FORBIDDEN: 6004,
+  FORBIDDEN: 1204,
   /** 资源不存在（404） */
-  NOT_FOUND: 6005,
+  NOT_FOUND: 1205,
   /** 请求参数校验失败（400） */
-  VALIDATION_FAILED: 6006,
+  VALIDATION_FAILED: 1206,
   /** Token 刷新失败 */
-  TOKEN_REFRESH_FAILED: 6007,
+  TOKEN_REFRESH_FAILED: 1207,
+  /** 未初始化 */
+  NOT_INITIALIZED: 1210,
+  /** 配置错误 */
+  CONFIG_ERROR: 1211,
   /** 未知错误 */
-  UNKNOWN: 6099,
+  UNKNOWN: 1299,
 } as const
 
 /** 错误码类型 */

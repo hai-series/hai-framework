@@ -1,45 +1,43 @@
 /**
  * @h-ai/api-client — 模块入口
  *
- * 提供 `createApiClient()` 工厂函数，创建通用 HTTP 客户端实例。
- * 支持通用 HTTP 方法、契约调用、文件上传、流式请求与自动 Token 管理。
+ * 提供统一的 `api` 对象，管理 HTTP 客户端运行时状态与生命周期。
  * @module api-client-main
  */
 
-import type { ApiClient, ApiClientConfig, TokenPair } from './api-client-types.js'
+import type { Result } from '@h-ai/core'
+import type { ApiClientError } from './api-client-config.js'
+import type { ApiClient, ApiClientConfig, ApiClientFunctions, TokenPair } from './api-client-types.js'
+
+import { core, err, ok } from '@h-ai/core'
 import { createLocalStorageTokenStorage } from './api-client-auth.js'
+import { ApiClientErrorCode } from './api-client-config.js'
 import { createContractCaller } from './api-client-contract.js'
 import { createFetchClient } from './api-client-fetch.js'
+import { apiClientM } from './api-client-i18n.js'
 import { createTokenManager } from './api-client-token-manager.js'
 
+const logger = core.logger.child({ module: 'api-client', scope: 'main' })
+
+// ─── 内部状态 ───
+
+/** 当前 ApiClient 实例（init 后非空，close 后置空） */
+let currentClient: ApiClient | null = null
+
+/** 当前客户端配置（init 后非空，close 后置空） */
+let currentConfig: ApiClientConfig | null = null
+
+// ─── 内部工厂 ───
+
 /**
- * 创建 Api Client 实例
+ * 根据配置创建 ApiClient 实例
  *
- * @param config - 客户端配置
- * @returns ApiClient 实例
- *
- * @example
- * ```ts
- * import { createApiClient } from '@h-ai/api-client'
- *
- * const api = createApiClient({
- *   baseUrl: 'https://api.example.com/api/v1',
- *   auth: {
- *     refreshUrl: '/auth/refresh',
- *   },
- * })
- *
- * // 契约调用
- * const result = await api.call(iamEndpoints.login, { identifier: 'alice', password: 'xxx' })
- *
- * // 通用 HTTP
- * const users = await api.get<User[]>('/users', { page: 1 })
- * ```
+ * 仅供 init() 内部使用，不对外暴露。
  */
-export function createApiClient(config: ApiClientConfig): ApiClient {
-  // 优先使用外部传入的 fetch（便于测试/跨平台注入）；未传入时回退到全局 fetch，并 bind(globalThis) 保证调用时 this 正确
+function createClient(config: ApiClientConfig): ApiClient {
+  // 优先使用外部传入的 fetch（便于测试/跨平台注入）；未传入时回退到全局 fetch
   const fetchFn = config.fetch ?? globalThis.fetch.bind(globalThis)
-  // auth 开启时，默认使用 localStorage 作为 Token 存储，减少调用方配置负担
+  // auth 开启时，默认使用 localStorage 作为 Token 存储
   const tokenStorage = config.auth?.storage ?? createLocalStorageTokenStorage()
 
   // Token 管理器（可选）
@@ -94,4 +92,158 @@ export function createApiClient(config: ApiClientConfig): ApiClient {
     call,
     auth,
   }
+}
+
+// ─── 未初始化占位 ───
+
+/**
+ * 未初始化状态的错误工具包
+ *
+ * 当 api 未调用 init() 就直接使用 HTTP 方法时，
+ * 所有方法调用都会返回 NOT_INITIALIZED 错误。
+ */
+const notInitialized = core.module.createNotInitializedKit<ApiClientError>(
+  ApiClientErrorCode.NOT_INITIALIZED,
+  () => apiClientM('apiClient_notInitialized'),
+)
+
+/** 未初始化时的 HTTP 操作占位代理（get/post/put/patch/delete/upload/call） */
+const notInitializedOps = notInitialized.proxy<Pick<ApiClient, 'get' | 'post' | 'put' | 'patch' | 'delete' | 'upload' | 'call'>>()
+
+/** 未初始化时的 Token 管理占位 */
+const notInitializedAuth: ApiClient['auth'] = {
+  async setTokens() {},
+  async clear() {},
+  onTokenRefreshed() { return () => {} },
+}
+
+/**
+ * 未初始化时的流式请求占位
+ *
+ * async generator 无法返回 Result，迭代时抛出异常。
+ */
+function notInitializedStreamFn(_path: string, _body?: unknown): AsyncIterable<string> {
+  return {
+    [Symbol.asyncIterator]() {
+      return {
+        async next(): Promise<IteratorResult<string>> {
+          throw new Error(apiClientM('apiClient_notInitialized'))
+        },
+      }
+    },
+  }
+}
+
+// ─── API 客户端单例 ───
+
+/**
+ * API 客户端单例
+ *
+ * 使用前必须先调用 `api.init()` 初始化，传入 baseUrl 等配置信息。
+ * 初始化后通过 `api.get`、`api.post`、`api.call` 等方法发起请求。
+ *
+ * @example
+ * ```ts
+ * import { api } from '@h-ai/api-client'
+ *
+ * // 初始化
+ * await api.init({
+ *   baseUrl: 'https://api.example.com/api/v1',
+ *   auth: { refreshUrl: '/auth/refresh' },
+ * })
+ *
+ * // 契约调用
+ * const result = await api.call(loginEndpoint, { identifier: 'alice', password: 'xxx' })
+ *
+ * // 通用 HTTP
+ * const users = await api.get<User[]>('/users', { page: 1 })
+ *
+ * // 关闭
+ * await api.close()
+ * ```
+ */
+export const api: ApiClientFunctions = {
+  /**
+   * 初始化 API 客户端
+   *
+   * 如果当前已有活跃实例，会先自动 close 再重新初始化。
+   * 创建异常时返回 CONFIG_ERROR 错误。
+   *
+   * @param config 客户端配置（baseUrl、auth 等）
+   * @returns 成功时返回 ok(undefined)；失败时返回包含错误码和消息的 err。
+   */
+  async init(config: ApiClientConfig): Promise<Result<void, ApiClientError>> {
+    if (currentClient) {
+      logger.warn('Api-client module is already initialized, reinitializing')
+      await api.close()
+    }
+
+    logger.info('Initializing api-client module')
+
+    try {
+      currentClient = createClient(config)
+      currentConfig = config
+      logger.info('Api-client module initialized')
+      return ok(undefined)
+    }
+    catch (error) {
+      logger.error('Api-client module initialization failed', { error })
+      return err({
+        code: ApiClientErrorCode.CONFIG_ERROR,
+        message: apiClientM('apiClient_configError', { params: { error: error instanceof Error ? error.message : String(error) } }),
+        cause: error,
+      })
+    }
+  },
+
+  /** GET 请求。未初始化时返回 NOT_INITIALIZED 错误 */
+  get get() { return currentClient?.get ?? notInitializedOps.get },
+  /** POST 请求。未初始化时返回 NOT_INITIALIZED 错误 */
+  get post() { return currentClient?.post ?? notInitializedOps.post },
+  /** PUT 请求。未初始化时返回 NOT_INITIALIZED 错误 */
+  get put() { return currentClient?.put ?? notInitializedOps.put },
+  /** PATCH 请求。未初始化时返回 NOT_INITIALIZED 错误 */
+  get patch() { return currentClient?.patch ?? notInitializedOps.patch },
+  /** DELETE 请求。未初始化时返回 NOT_INITIALIZED 错误 */
+  get delete() { return currentClient?.delete ?? notInitializedOps.delete },
+  /** 文件上传。未初始化时返回 NOT_INITIALIZED 错误 */
+  get upload() { return currentClient?.upload ?? notInitializedOps.upload },
+  /** 契约调用。未初始化时返回 NOT_INITIALIZED 错误 */
+  get call() { return currentClient?.call ?? notInitializedOps.call },
+
+  /**
+   * 流式请求。未初始化时迭代抛出异常。
+   *
+   * @throws 未初始化时抛出 Error
+   */
+  get stream() { return currentClient?.stream ?? notInitializedStreamFn },
+
+  /** Token 管理接口。未初始化时为空操作 */
+  get auth() { return currentClient?.auth ?? notInitializedAuth },
+
+  /** 当前客户端配置；未初始化或已关闭时为 null */
+  get config() { return currentConfig },
+
+  /** 是否已完成初始化 */
+  get isInitialized() { return currentClient !== null },
+
+  /**
+   * 关闭 API 客户端并释放资源
+   *
+   * 关闭后所有 HTTP 操作将返回 NOT_INITIALIZED 错误。
+   * 重复调用不会报错。
+   */
+  async close() {
+    if (!currentClient) {
+      currentConfig = null
+      return
+    }
+
+    logger.info('Closing api-client module')
+
+    currentClient = null
+    currentConfig = null
+
+    logger.info('Api-client module closed')
+  },
 }
