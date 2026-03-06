@@ -9,95 +9,117 @@ import { z } from 'zod'
 
 // ─── 错误码 ───
 
-/** AI 错误码（数值范围 7000-7999） */
+/** AI 错误码（数值范围 12000-12999） */
 export const AIErrorCode = {
-  // 通用 (7000-7009)
+  // 通用 (12000-12009)
   /** 内部错误 */
-  INTERNAL_ERROR: 7000,
+  INTERNAL_ERROR: 12000,
 
-  // 初始化 (7010-7019)
+  // 初始化 (12010-12019)
   /** 服务未初始化 */
-  NOT_INITIALIZED: 7010,
+  NOT_INITIALIZED: 12010,
   /** 配置错误 */
-  CONFIGURATION_ERROR: 7011,
+  CONFIGURATION_ERROR: 12011,
 
-  // LLM (7100-7199)
+  // LLM (12100-12199)
   /** API 调用错误 */
-  API_ERROR: 7100,
+  API_ERROR: 12100,
   /** 无效请求 */
-  INVALID_REQUEST: 7101,
+  INVALID_REQUEST: 12101,
   /** 速率限制 */
-  RATE_LIMITED: 7102,
+  RATE_LIMITED: 12102,
   /** 请求超时 */
-  TIMEOUT: 7103,
+  TIMEOUT: 12103,
   /** 模型未找到 */
-  MODEL_NOT_FOUND: 7104,
+  MODEL_NOT_FOUND: 12104,
   /** 上下文长度超限 */
-  CONTEXT_LENGTH_EXCEEDED: 7105,
+  CONTEXT_LENGTH_EXCEEDED: 12105,
 
-  // MCP (7200-7299)
+  // MCP (12200-12299)
   /** MCP 连接错误 */
-  MCP_CONNECTION_ERROR: 7200,
+  MCP_CONNECTION_ERROR: 12200,
   /** MCP 协议错误 */
-  MCP_PROTOCOL_ERROR: 7201,
+  MCP_PROTOCOL_ERROR: 12201,
   /** MCP 工具错误 */
-  MCP_TOOL_ERROR: 7202,
+  MCP_TOOL_ERROR: 12202,
   /** MCP 资源错误 */
-  MCP_RESOURCE_ERROR: 7203,
+  MCP_RESOURCE_ERROR: 12203,
   /** MCP 服务器错误 */
-  MCP_SERVER_ERROR: 7204,
+  MCP_SERVER_ERROR: 12204,
 
-  // Embedding (7300-7399)
+  // Embedding (12300-12399)
   /** Embedding API 调用错误 */
-  EMBEDDING_API_ERROR: 7300,
+  EMBEDDING_API_ERROR: 12300,
   /** Embedding 模型未找到 */
-  EMBEDDING_MODEL_NOT_FOUND: 7301,
+  EMBEDDING_MODEL_NOT_FOUND: 12301,
   /** Embedding 输入过长 */
-  EMBEDDING_INPUT_TOO_LONG: 7302,
+  EMBEDDING_INPUT_TOO_LONG: 12302,
 
-  // 工具 (7400-7499)
+  // 工具 (12400-12499)
   /** 工具未找到 */
-  TOOL_NOT_FOUND: 7400,
+  TOOL_NOT_FOUND: 12400,
   /** 工具验证失败 */
-  TOOL_VALIDATION_FAILED: 7401,
+  TOOL_VALIDATION_FAILED: 12401,
   /** 工具执行失败 */
-  TOOL_EXECUTION_FAILED: 7402,
+  TOOL_EXECUTION_FAILED: 12402,
   /** 工具超时 */
-  TOOL_TIMEOUT: 7403,
+  TOOL_TIMEOUT: 12403,
 
-  // Reasoning (7500-7599)
+  // Reasoning (12500-12599)
   /** 推理执行失败 */
-  REASONING_FAILED: 7500,
+  REASONING_FAILED: 12500,
   /** 推理轮次超限 */
-  REASONING_MAX_ROUNDS: 7501,
+  REASONING_MAX_ROUNDS: 12501,
   /** 推理策略未找到 */
-  REASONING_STRATEGY_NOT_FOUND: 7502,
+  REASONING_STRATEGY_NOT_FOUND: 12502,
 
-  // Retrieval (7600-7699)
+  // Retrieval (12600-12699)
   /** 检索执行失败 */
-  RETRIEVAL_FAILED: 7600,
+  RETRIEVAL_FAILED: 12600,
   /** 检索源未配置 */
-  RETRIEVAL_SOURCE_NOT_FOUND: 7601,
+  RETRIEVAL_SOURCE_NOT_FOUND: 12601,
 
-  // RAG (7700-7799)
+  // RAG (12700-12799)
   /** RAG 执行失败 */
-  RAG_FAILED: 7700,
+  RAG_FAILED: 12700,
   /** RAG 上下文构建失败 */
-  RAG_CONTEXT_BUILD_FAILED: 7701,
+  RAG_CONTEXT_BUILD_FAILED: 12701,
 
-  // Knowledge (7800-7899)
+  // Knowledge (12800-12899)
   /** 知识库初始化失败 */
-  KNOWLEDGE_SETUP_FAILED: 7800,
+  KNOWLEDGE_SETUP_FAILED: 12800,
   /** 知识入库失败 */
-  KNOWLEDGE_INGEST_FAILED: 7801,
+  KNOWLEDGE_INGEST_FAILED: 12801,
   /** 知识检索失败 */
-  KNOWLEDGE_RETRIEVE_FAILED: 7802,
+  KNOWLEDGE_RETRIEVE_FAILED: 12802,
   /** 实体提取失败 */
-  KNOWLEDGE_ENTITY_EXTRACT_FAILED: 7803,
+  KNOWLEDGE_ENTITY_EXTRACT_FAILED: 12803,
   /** 知识库未初始化 */
-  KNOWLEDGE_NOT_SETUP: 7804,
+  KNOWLEDGE_NOT_SETUP: 12804,
   /** 集合不存在 */
-  KNOWLEDGE_COLLECTION_NOT_FOUND: 7805,
+  KNOWLEDGE_COLLECTION_NOT_FOUND: 12805,
+
+  // Memory (12900-12949)
+  /** 记忆提取失败 */
+  MEMORY_EXTRACT_FAILED: 12900,
+  /** 记忆存储失败 */
+  MEMORY_STORE_FAILED: 12901,
+  /** 记忆检索失败 */
+  MEMORY_RECALL_FAILED: 12902,
+  /** 记忆不存在 */
+  MEMORY_NOT_FOUND: 12903,
+  /** 记忆注入失败 */
+  MEMORY_INJECT_FAILED: 12904,
+
+  // Context (12950-12999)
+  /** 上下文压缩失败 */
+  CONTEXT_COMPRESS_FAILED: 12950,
+  /** 摘要生成失败 */
+  CONTEXT_SUMMARIZE_FAILED: 12951,
+  /** Token 估算失败 */
+  CONTEXT_TOKEN_ESTIMATE_FAILED: 12952,
+  /** 超出 Token 预算 */
+  CONTEXT_BUDGET_EXCEEDED: 12953,
 } as const
 
 /** 错误码值类型 */
@@ -272,6 +294,56 @@ export const KnowledgeConfigSchema = z.object({
 /** Knowledge 配置类型 */
 export type KnowledgeConfig = z.infer<typeof KnowledgeConfigSchema>
 
+// ─── Memory 配置 Schema ───
+
+/** 记忆类型枚举 */
+export const MemoryTypeSchema = z.enum(['fact', 'preference', 'event', 'entity', 'instruction'])
+
+/** 记忆类型 */
+export type MemoryType = z.infer<typeof MemoryTypeSchema>
+
+/** Memory 配置 Schema */
+export const MemoryConfigSchema = z.object({
+  /** 最大记忆条数（默认 1000） */
+  maxEntries: z.number().int().positive().default(1000),
+  /** 提取用模型（可选，默认使用 LLM 配置中的默认模型） */
+  extractModel: z.string().optional(),
+  /** 时间衰减系数（默认 0.95，每次检索乘以此系数调整 recency 权重） */
+  recencyDecay: z.number().min(0).max(1).default(0.95),
+  /** 是否启用向量检索（默认 true，关闭则仅使用关键词匹配） */
+  embeddingEnabled: z.boolean().default(true),
+  /** 检索时默认返回数量（默认 10） */
+  defaultTopK: z.number().int().positive().default(10),
+})
+
+/** Memory 配置类型 */
+export type MemoryConfig = z.infer<typeof MemoryConfigSchema>
+
+// ─── Context 配置 Schema ───
+
+/** 压缩策略枚举 */
+export const CompressionStrategySchema = z.enum(['summary', 'sliding-window', 'hybrid'])
+
+/** 压缩策略类型 */
+export type CompressionStrategy = z.infer<typeof CompressionStrategySchema>
+
+/** Context 配置 Schema */
+export const ContextConfigSchema = z.object({
+  /** 默认压缩策略（默认 'hybrid'） */
+  defaultStrategy: CompressionStrategySchema.default('hybrid'),
+  /** 默认 Token 预算（默认 0 表示取模型上限的 80%） */
+  defaultMaxTokens: z.number().int().min(0).default(0),
+  /** 默认保留最近消息数（默认 4） */
+  preserveLastN: z.number().int().min(0).default(4),
+  /** 摘要用模型（可选，默认使用 LLM 配置中的默认模型） */
+  summaryModel: z.string().optional(),
+  /** Token 估算每字符系数（默认 0.25，即 4 字符 ≈ 1 token） */
+  tokenRatio: z.number().positive().default(0.25),
+})
+
+/** Context 配置类型 */
+export type ContextConfig = z.infer<typeof ContextConfigSchema>
+
 /** AI 配置 Schema */
 export const AIConfigSchema = z.object({
   /** LLM 配置 */
@@ -282,6 +354,10 @@ export const AIConfigSchema = z.object({
   embedding: EmbeddingConfigSchema.optional(),
   /** Knowledge 配置 */
   knowledge: KnowledgeConfigSchema.optional(),
+  /** Memory 配置 */
+  memory: MemoryConfigSchema.optional(),
+  /** Context 配置 */
+  context: ContextConfigSchema.optional(),
 })
 
 /** AI 配置类型（校验后的完整类型） */

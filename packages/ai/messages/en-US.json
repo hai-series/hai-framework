@@ -38,5 +38,15 @@
   "ai_knowledgeRetrieveFailed": "Knowledge retrieval failed: {error}",
   "ai_knowledgeEntityExtractFailed": "Entity extraction failed: {error}",
   "ai_knowledgeNotSetup": "Knowledge base not initialized. Call ai.knowledge.setup() first.",
-  "ai_knowledgeCollectionNotFound": "Knowledge collection '{collection}' not found"
+  "ai_knowledgeCollectionNotFound": "Knowledge collection '{collection}' not found",
+
+  "ai_memoryExtractFailed": "Memory extraction failed: {error}",
+  "ai_memoryStoreFailed": "Memory storage failed: {error}",
+  "ai_memoryRecallFailed": "Memory recall failed: {error}",
+  "ai_memoryNotFound": "Memory entry '{id}' not found",
+  "ai_memoryInjectFailed": "Memory injection failed: {error}",
+
+  "ai_contextCompressFailed": "Context compression failed: {error}",
+  "ai_contextSummarizeFailed": "Context summarization failed: {error}",
+  "ai_contextTokenEstimateFailed": "Token estimation failed: {error}"
 }

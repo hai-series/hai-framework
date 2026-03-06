@@ -20,8 +20,8 @@ import type {
 /**
  * AI 客户端所需的 API 调用能力
  *
- * 结构兼容 `@h-ai/api-client` 的 `ApiClient` 实例（鸭子类型）。
- * 传入 `createApiClient()` 返回值即可，无需额外适配。
+ * 结构兼容 `@h-ai/api-client` 的 `api` 单例（鸭子类型）。
+ * 传入 `api` 单例即可，无需额外适配。
  */
 export interface AIApiAdapter {
   /** POST 请求（返回 Result） */
@@ -37,10 +37,10 @@ export interface AIApiAdapter {
  *
  * @example
  * ```ts
- * import { createApiClient } from '@h-ai/api-client'
+ * import { api } from '@h-ai/api-client'
  * import { createAIClient } from '@h-ai/ai/client'
  *
- * const api = createApiClient({ baseUrl: '/api', auth: { ... } })
+ * await api.init({ baseUrl: '/api', auth: { ... } })
  * const aiClient = createAIClient({ api })
  * ```
  */
@@ -48,7 +48,7 @@ export interface AIClientConfig {
   /**
    * API 调用适配器
    *
-   * 传入 `createApiClient()` 返回的实例。
+   * 传入 `api` 单例（初始化后）。
    * baseUrl、Token 管理、超时等通过 api-client 配置。
    */
   api: AIApiAdapter
@@ -113,10 +113,10 @@ const AI_PATH = {
  *
  * @example
  * ```ts
- * import { createApiClient } from '@h-ai/api-client'
+ * import { api } from '@h-ai/api-client'
  * import { createAIClient } from '@h-ai/ai/client'
  *
- * const api = createApiClient({ baseUrl: '/api' })
+ * await api.init({ baseUrl: '/api' })
  * const client = createAIClient({ api })
  * const reply = await client.sendMessage('你好')
  * ```

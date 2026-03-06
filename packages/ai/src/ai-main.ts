@@ -9,24 +9,28 @@ import type { Result } from '@h-ai/core'
 
 import type { AIConfig, AIConfigInput } from './ai-config.js'
 import type { AIError, AIFunctions } from './ai-types.js'
+import type { ContextOperations } from './context/ai-context-types.js'
 import type { EmbeddingOperations } from './embedding/ai-embedding-types.js'
 import type { KnowledgeOperations } from './knowledge/ai-knowledge-types.js'
 import type { LLMOperations, StreamOperations, ToolsOperations } from './llm/ai-llm-types.js'
 import type { MCPOperations } from './mcp/ai-mcp-types.js'
+import type { MemoryOperations } from './memory/ai-memory-types.js'
 import type { RagOperations } from './rag/ai-rag-types.js'
 import type { ReasoningOperations } from './reasoning/ai-reasoning-types.js'
 import type { RetrievalOperations } from './retrieval/ai-retrieval-types.js'
 
 import { core, err, ok } from '@h-ai/core'
 
-import { AIConfigSchema, AIErrorCode, KnowledgeConfigSchema } from './ai-config.js'
+import { AIConfigSchema, AIErrorCode, ContextConfigSchema, KnowledgeConfigSchema, MemoryConfigSchema } from './ai-config.js'
 import { aiM } from './ai-i18n.js'
+import { createContextOperations } from './context/ai-context-functions.js'
 import { createEmbeddingOperations } from './embedding/ai-embedding-functions.js'
 import { createKnowledgeOperations } from './knowledge/ai-knowledge-functions.js'
 import { createAILLMFunctions } from './llm/ai-llm-functions.js'
 import { collectStream, createSSEDecoder, createStreamProcessor, encodeSSE } from './llm/ai-llm-stream.js'
 import { createToolRegistry, defineTool } from './llm/ai-llm-tool.js'
 import { createAIMCPFunctions } from './mcp/ai-mcp-functions.js'
+import { createMemoryOperations } from './memory/ai-memory-functions.js'
 import { createRagOperations } from './rag/ai-rag-functions.js'
 import { createReasoningOperations } from './reasoning/ai-reasoning-functions.js'
 import { createRetrievalOperations } from './retrieval/ai-retrieval-functions.js'
@@ -51,6 +55,10 @@ let currentRetrieval: RetrievalOperations | null = null
 let currentRag: RagOperations | null = null
 /** 当前 Knowledge 操作实例 */
 let currentKnowledge: KnowledgeOperations | null = null
+/** 当前 Memory 操作实例 */
+let currentMemory: MemoryOperations | null = null
+/** 当前 Context 操作实例 */
+let currentContext: ContextOperations | null = null
 
 // ─── 未初始化占位 ───
 
@@ -118,6 +126,25 @@ const notInitializedKnowledge: KnowledgeOperations = {
   ask: () => Promise.resolve(notInitialized.result()),
   findByEntity: () => Promise.resolve(notInitialized.result()),
   listEntities: () => Promise.resolve(notInitialized.result()),
+}
+
+/** Memory 未初始化占位 */
+const notInitializedMemory: MemoryOperations = {
+  extract: () => Promise.resolve(notInitialized.result()),
+  add: () => Promise.resolve(notInitialized.result()),
+  recall: () => Promise.resolve(notInitialized.result()),
+  inject: () => Promise.resolve(notInitialized.result()),
+  remove: () => Promise.resolve(notInitialized.result()),
+  list: () => Promise.resolve(notInitialized.result()),
+  clear: () => Promise.resolve(notInitialized.result()),
+}
+
+/** Context 未初始化占位 */
+const notInitializedContext: ContextOperations = {
+  compress: () => Promise.resolve(notInitialized.result()),
+  summarize: () => Promise.resolve(notInitialized.result()),
+  estimateTokens: () => notInitialized.result(),
+  createManager: () => notInitialized.result(),
 }
 
 // ─── 纯函数操作（不依赖初始化） ───
@@ -227,6 +254,16 @@ export const ai: AIFunctions = {
         },
       )
 
+      // 创建 Memory 子功能（依赖 LLM + Embedding）
+      const memoryConfig = parsed.memory ?? {}
+      const memoryParsed = MemoryConfigSchema.parse(memoryConfig)
+      currentMemory = createMemoryOperations(memoryParsed, currentLLM, currentEmbedding)
+
+      // 创建 Context 子功能（依赖 LLM）
+      const contextConfig = parsed.context ?? {}
+      const contextParsed = ContextConfigSchema.parse(contextConfig)
+      currentContext = createContextOperations(contextParsed, currentLLM, parsed.llm?.maxTokens ?? 4096)
+
       currentConfig = parsed
       logger.info('AI module initialized', { model: parsed.llm?.model })
       return ok(undefined)
@@ -252,6 +289,8 @@ export const ai: AIFunctions = {
   get retrieval(): RetrievalOperations { return currentRetrieval ?? notInitializedRetrieval },
   get rag(): RagOperations { return currentRag ?? notInitializedRag },
   get knowledge(): KnowledgeOperations { return currentKnowledge ?? notInitializedKnowledge },
+  get memory(): MemoryOperations { return currentMemory ?? notInitializedMemory },
+  get context(): ContextOperations { return currentContext ?? notInitializedContext },
   get config() { return currentConfig },
   get isInitialized() { return currentConfig !== null },
 
@@ -270,6 +309,8 @@ export const ai: AIFunctions = {
     currentRetrieval = null
     currentRag = null
     currentKnowledge = null
+    currentMemory = null
+    currentContext = null
     currentConfig = null
 
     logger.info('AI module closed')
