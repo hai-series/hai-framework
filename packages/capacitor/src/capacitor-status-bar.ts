@@ -9,8 +9,8 @@
 import type { Result } from '@h-ai/core'
 import type { CapacitorError, StatusBarConfig } from './capacitor-types.js'
 import { err, ok } from '@h-ai/core'
+import { CapacitorErrorCode } from './capacitor-config.js'
 import { capacitorM } from './capacitor-i18n.js'
-import { CapacitorErrorCode } from './capacitor-types.js'
 
 /**
  * 配置状态栏

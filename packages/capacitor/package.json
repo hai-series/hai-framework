@@ -33,6 +33,7 @@
     "@capacitor/preferences": "catalog:"
   },
   "peerDependenciesMeta": {
+    "@capacitor/app": { "optional": true },
     "@capacitor/camera": { "optional": true },
     "@capacitor/device": { "optional": true },
     "@capacitor/push-notifications": { "optional": true },

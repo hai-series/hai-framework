@@ -7,6 +7,7 @@ export default defineConfig({
   external: [
     '@h-ai/core',
     '@h-ai/api-client',
+    '@capacitor/app',
     '@capacitor/core',
     '@capacitor/preferences',
     '@capacitor/device',
