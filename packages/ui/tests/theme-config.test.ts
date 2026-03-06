@@ -11,10 +11,8 @@ import {
   DAISYUI_THEMES_CONFIG,
   DARK_THEMES,
   DEFAULT_THEME,
-  getAllFontUrls,
   getCurrentTheme,
   getSavedTheme,
-  getThemeFontUrl,
   getThemeInfo,
   getThemeInitScript,
   isDarkTheme,
@@ -28,8 +26,8 @@ import {
 // =============================================================================
 
 describe('tHEMES - 主题数据完整性', () => {
-  it('应该包含 32 个 DaisyUI 内置主题', () => {
-    expect(THEMES.length).toBe(32)
+  it('应该包含 15 个 DaisyUI 精选主题', () => {
+    expect(THEMES.length).toBe(15)
   })
 
   it('每个主题应该包含必要字段', () => {
@@ -127,9 +125,9 @@ describe('tHEME_GROUPS - 主题分组', () => {
     expect(totalInGroups).toBe(THEMES.length)
   })
 
-  it('分组应该有名称', () => {
-    expect(THEME_GROUPS[0].name).toBe('亮色主题')
-    expect(THEME_GROUPS[1].name).toBe('暗色主题')
+  it('分组应该有 i18n 名称 key', () => {
+    expect(THEME_GROUPS[0].nameKey).toBe('theme_group_light')
+    expect(THEME_GROUPS[1].nameKey).toBe('theme_group_dark')
   })
 })
 
@@ -185,30 +183,6 @@ describe('isDarkTheme - 暗色主题判断', () => {
   it('不存在的主题应返回 false', () => {
     expect(isDarkTheme('nonexistent')).toBe(false)
     expect(isDarkTheme('')).toBe(false)
-  })
-})
-
-// =============================================================================
-// getThemeFontUrl & getAllFontUrls
-// =============================================================================
-
-describe('getThemeFontUrl - 主题字体 URL', () => {
-  it('daisyUI 内置主题不需要额外字体', () => {
-    expect(getThemeFontUrl('light')).toBeUndefined()
-    expect(getThemeFontUrl('dark')).toBeUndefined()
-    expect(getThemeFontUrl('dracula')).toBeUndefined()
-  })
-
-  it('不存在的主题也返回 undefined', () => {
-    expect(getThemeFontUrl('nonexistent')).toBeUndefined()
-  })
-})
-
-describe('getAllFontUrls - 全部字体 URL', () => {
-  it('应该返回空数组', () => {
-    const urls = getAllFontUrls()
-    expect(Array.isArray(urls)).toBe(true)
-    expect(urls.length).toBe(0)
   })
 })
 

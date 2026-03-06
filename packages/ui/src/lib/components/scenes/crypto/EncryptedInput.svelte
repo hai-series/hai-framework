@@ -13,7 +13,7 @@
   import Input from '../../primitives/Input.svelte'
   import IconButton from '../../primitives/IconButton.svelte'
   import BareButton from '../../primitives/BareButton.svelte'
-  import { m } from '../../../messages.js'
+  import { uiM } from '../../../messages.js'
   
   interface Props {
     /** 原始值 */
@@ -97,7 +97,7 @@
   <div class="relative">
     <Input
       type={showValue ? 'text' : 'password'}
-      placeholder={placeholder || m('encrypted_input_placeholder')}
+      placeholder={placeholder || uiM('encrypted_input_placeholder')}
       {disabled}
       {size}
       bind:value
@@ -111,7 +111,7 @@
       class="absolute right-3 top-1/2 -translate-y-1/2 text-base-content/50 hover:text-base-content"
       onclick={toggleShow}
       tabindex={-1}
-      ariaLabel={showValue ? m('encrypted_input_hide') : m('encrypted_input_show')}
+      ariaLabel={showValue ? uiM('encrypted_input_hide') : uiM('encrypted_input_show')}
     >
       {#if showValue}
         <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -131,12 +131,12 @@
     <div class="bg-base-200 rounded-lg p-3">
       <div class="flex items-center justify-between mb-1">
         <span class="text-xs text-base-content/60">
-          {m('encrypted_input_result')} ({algorithm})
+          {uiM('encrypted_input_result')} ({algorithm})
         </span>
         <IconButton
           size="xs"
           variant="ghost"
-          label={m('encrypted_input_copy')}
+          label={uiM('encrypted_input_copy')}
           onclick={copyEncrypted}
         >
           {#snippet children()}

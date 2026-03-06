@@ -10,7 +10,7 @@
 <script lang="ts">
   import type { EmptyProps } from '../../types.js'
   import { cn } from '../../utils.js'
-  import { m } from '../../messages.js'
+  import { uiM } from '../../messages.js'
   
   let {
     title,
@@ -22,7 +22,7 @@
     children,
   }: EmptyProps = $props()
   
-  const displayTitle = $derived(title ?? m('empty_title'))
+  const displayTitle = $derived(title ?? uiM('empty_title'))
 
   const containerClass = $derived(
     cn(

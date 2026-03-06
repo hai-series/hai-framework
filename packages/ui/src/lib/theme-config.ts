@@ -93,20 +93,6 @@ export function isDarkTheme(themeId: string): boolean {
   return DARK_THEMES.includes(themeId)
 }
 
-/**
- * 获取主题需要的字体 URL（DaisyUI 内置主题无需额外字体）
- */
-export function getThemeFontUrl(_themeId: string): string | undefined {
-  return undefined
-}
-
-/**
- * 获取所有需要预加载的字体 URL
- */
-export function getAllFontUrls(): string[] {
-  return []
-}
-
 // ─── 主题初始化工具 ───
 
 /**

@@ -28,4 +28,4 @@ export * from './types.js'
 // ─── 基础类型与工具 ───
 
 export * from './utils.js'
-export { detectPlatform, isMobile, isNativeApp, type Platform, usePlatform } from './utils/platform.svelte.js'
+export * from './utils/platform.svelte.js'

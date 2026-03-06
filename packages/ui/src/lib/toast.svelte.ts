@@ -19,6 +19,8 @@ export interface ToastItem extends ToastProps {
  */
 class ToastState {
   items = $state<ToastItem[]>([])
+  /** 自动关闭定时器 */
+  private timers = new Map<string, ReturnType<typeof setTimeout>>()
 
   /**
    * 添加 Toast
@@ -37,9 +39,11 @@ class ToastState {
 
     // 自动关闭
     if ((item.duration ?? 0) > 0) {
-      setTimeout(() => {
+      const timer = setTimeout(() => {
+        this.timers.delete(id)
         this.remove(id)
       }, item.duration)
+      this.timers.set(id, timer)
     }
 
     return id
@@ -49,6 +53,11 @@ class ToastState {
    * 移除 Toast
    */
   remove(id: string): void {
+    const timer = this.timers.get(id)
+    if (timer) {
+      clearTimeout(timer)
+      this.timers.delete(id)
+    }
     this.items = this.items.filter(item => item.id !== id)
   }
 
@@ -56,6 +65,10 @@ class ToastState {
    * 清空所有 Toast
    */
   clear(): void {
+    for (const timer of this.timers.values()) {
+      clearTimeout(timer)
+    }
+    this.timers.clear()
     this.items = []
   }
 

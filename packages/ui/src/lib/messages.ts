@@ -29,10 +29,10 @@ const getMessage = core.i18n.createMessageGetter({
  *
  * @example
  * ```ts
- * m('password_show') // => '显示密码' (zh-CN) 或 'Show password' (en-US)
+ * uiM('password_show') // => '显示密码' (zh-CN) 或 'Show password' (en-US)
  * ```
  */
-export function m(key: UIMessageKey, params?: Record<string, string | number | boolean>): string {
+export function uiM(key: UIMessageKey, params?: Record<string, string | number | boolean>): string {
   return getMessage(key, params ? { params } : undefined)
 }
 

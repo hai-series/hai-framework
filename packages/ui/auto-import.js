@@ -31,7 +31,10 @@ const UI_COMPONENTS = new Set([
   'ToggleRadio',
   // compounds
   'Accordion',
+  'ActionSheet',
   'Alert',
+  'AppBar',
+  'BottomNav',
   'Breadcrumb',
   'Calendar',
   'Card',
@@ -44,13 +47,17 @@ const UI_COMPONENTS = new Set([
   'Empty',
   'Form',
   'FormField',
+  'InfiniteScroll',
   'Modal',
   'PageHeader',
   'Pagination',
   'Popover',
+  'PullRefresh',
   'Result',
+  'SafeArea',
   'Skeleton',
   'Steps',
+  'SwipeCell',
   'Tabs',
   'TagInput',
   'Timeline',
@@ -67,6 +74,7 @@ const UI_COMPONENTS = new Set([
   'ForgotPasswordForm',
   'LoginForm',
   'PasswordInput',
+  'PermGuard',
   'RegisterForm',
   'ResetPasswordForm',
   'UserProfile',
@@ -79,6 +87,8 @@ const UI_COMPONENTS = new Set([
   'EncryptedInput',
   'HashDisplay',
   'SignatureDisplay',
+  // scenes - ai
+  'MarkdownRenderer',
 ])
 
 const TAG_REGEX = /<([A-Z][A-Za-z0-9]*)\b/g

@@ -17,7 +17,7 @@
 -->
 <script lang='ts'>
   import { cn } from '../../../utils.js'
-  import { m } from '../../../messages.js'
+  import { uiM } from '../../../messages.js'
   import { THEMES, THEME_GROUPS, type ThemeInfo } from '../../../theme-config.js'
   import BareButton from '../../primitives/BareButton.svelte'
 
@@ -43,7 +43,7 @@
     class: className = '',
   }: Props = $props()
 
-  const displaySelectLabel = $derived(selectLabel ?? m('theme_selector_label'))
+  const displaySelectLabel = $derived(selectLabel ?? uiM('theme_selector_label'))
 
   let open = $state(false)
   let containerRef = $state<HTMLDivElement | null>(null)
@@ -110,7 +110,7 @@
         {#each THEME_GROUPS as group}
           <div class='mb-4 last:mb-0'>
             <div class='text-xs font-semibold text-base-content/50 uppercase tracking-wider px-2 mb-2'>
-              {m(group.nameKey)}
+              {uiM(group.nameKey)}
             </div>
             <div class='flex flex-wrap gap-2'>
               {#each group.themes as theme (theme.id)}

@@ -14,7 +14,7 @@
   import IconButton from '../../primitives/IconButton.svelte'
   import Badge from '../../primitives/Badge.svelte'
   
-  import { m } from '../../../messages.js'
+  import { uiM } from '../../../messages.js'
   
   let {
     signature = '',
@@ -41,10 +41,10 @@
   
   const verifyStatusText = $derived(
     verified === true
-      ? (labels.verified ?? m('signature_verified'))
+      ? (labels.verified ?? uiM('signature_verified'))
       : verified === false
-        ? (labels.verifyFailed ?? m('signature_verify_failed'))
-        : (labels.notVerified ?? m('signature_not_verified'))
+        ? (labels.verifyFailed ?? uiM('signature_verify_failed'))
+        : (labels.notVerified ?? uiM('signature_not_verified'))
   )
   
   async function copySignature() {
@@ -73,7 +73,7 @@
 <div class={containerClass}>
   <!-- 签名状态 -->
   <div class="flex items-center gap-2">
-    <span class="text-sm font-medium">{labels.signature ?? m('signature_label')} ({algorithm})</span>
+    <span class="text-sm font-medium">{labels.signature ?? uiM('signature_label')} ({algorithm})</span>
     {#if verified !== undefined}
       <Badge size="sm" variant={verified ? 'success' : 'error'}>
         {#if verified}
@@ -94,13 +94,13 @@
   <div class="bg-base-200 rounded-lg p-3">
     <div class="flex items-start justify-between gap-2">
         <code class="text-xs font-mono break-all text-base-content/80 flex-1">
-        {signature || (labels.noSignature ?? m('signature_no_signature'))}
+        {signature || (labels.noSignature ?? uiM('signature_no_signature'))}
       </code>
       {#if copyable && signature}
         <IconButton
           size="xs"
           variant="ghost"
-          label={labels.copySignature ?? m('signature_copy_signature')}
+          label={labels.copySignature ?? uiM('signature_copy_signature')}
           onclick={copySignature}
         >
           {#snippet children()}
@@ -122,7 +122,7 @@
   <!-- 公钥（可选） -->
   {#if showPublicKey && publicKey}
     <div>
-      <div class="text-xs text-base-content/60 mb-1">{labels.publicKey ?? m('signature_public_key')}</div>
+      <div class="text-xs text-base-content/60 mb-1">{labels.publicKey ?? uiM('signature_public_key')}</div>
       <div class="bg-base-200 rounded-lg p-3">
         <div class="flex items-start justify-between gap-2">
           <code class="text-xs font-mono break-all text-base-content/80 flex-1">
@@ -132,7 +132,7 @@
             <IconButton
               size="xs"
               variant="ghost"
-              label={labels.copyPublicKey ?? m('signature_copy_public_key')}
+              label={labels.copyPublicKey ?? uiM('signature_copy_public_key')}
               onclick={copyPublicKey}
             >
               {#snippet children()}

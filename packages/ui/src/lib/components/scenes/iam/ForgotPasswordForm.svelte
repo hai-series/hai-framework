@@ -14,7 +14,7 @@
   import Input from '../../primitives/Input.svelte'
   import Button from '../../primitives/Button.svelte'
   import Alert from '../../compounds/Alert.svelte'
-  import { m } from '../../../messages.js'
+  import { uiM } from '../../../messages.js'
   
   let {
     loading = false,
@@ -58,13 +58,13 @@
 <form class={formClass} onsubmit={handleSubmit}>
   <!-- 标题 -->
   {#if showTitle}
-    <h2 class="text-2xl font-semibold text-center mb-4">{m('forgot_password_title')}</h2>
+    <h2 class="text-2xl font-semibold text-center mb-4">{uiM('forgot_password_title')}</h2>
   {/if}
 
   <!-- 描述 -->
   {#if showDescription}
     <p class="text-center text-base-content/60 text-sm mb-6">
-      {m('forgot_password_desc')}
+      {uiM('forgot_password_desc')}
     </p>
   {/if}
 
@@ -78,12 +78,12 @@
   <!-- 邮箱输入 -->
   {#if mode === 'email'}
     <div class="fieldset">
-      <legend class="fieldset-legend">{m('forgot_password_email_label')}</legend>
+      <legend class="fieldset-legend">{uiM('forgot_password_email_label')}</legend>
       <Input
         id="forgot-email"
         name="email"
         type="email"
-        placeholder={m('forgot_password_email_placeholder')}
+        placeholder={uiM('forgot_password_email_placeholder')}
         bind:value={email}
         {disabled}
         required
@@ -92,12 +92,12 @@
     </div>
   {:else}
     <div class="fieldset">
-      <legend class="fieldset-legend">{m('forgot_password_phone_label')}</legend>
+      <legend class="fieldset-legend">{uiM('forgot_password_phone_label')}</legend>
       <Input
         id="forgot-phone"
         name="phone"
         type="tel"
-        placeholder={m('forgot_password_phone_placeholder')}
+        placeholder={uiM('forgot_password_phone_placeholder')}
         bind:value={phone}
         {disabled}
         required
@@ -109,9 +109,9 @@
   <!-- 提示信息 -->
   <p class="text-sm text-base-content/60">
     {#if mode === 'email'}
-      {m('forgot_password_email_hint')}
+      {uiM('forgot_password_email_hint')}
     {:else}
-      {m('forgot_password_phone_hint')}
+      {uiM('forgot_password_phone_hint')}
     {/if}
   </p>
   
@@ -130,7 +130,7 @@
     disabled={loading || disabled}
     class="w-full"
   >
-    {submitText || m('forgot_password_submit')}
+    {submitText || uiM('forgot_password_submit')}
   </Button>
   
   <!-- 自定义底部 -->
@@ -140,7 +140,7 @@
     </div>
   {:else if showBackLink}
     <div class="text-center mt-4 text-sm">
-      <a href={loginUrl} class="link link-primary">← {m('forgot_password_back')}</a>
+      <a href={loginUrl} class="link link-primary">← {uiM('forgot_password_back')}</a>
     </div>
   {/if}
 </form>

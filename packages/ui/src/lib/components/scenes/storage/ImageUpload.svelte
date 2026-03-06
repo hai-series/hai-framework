@@ -14,7 +14,7 @@
   import IconButton from '../../primitives/IconButton.svelte'
   import BareInput from '../../primitives/BareInput.svelte'
   import Spinner from '../../primitives/Spinner.svelte'
-  import { m } from '../../../messages.js'
+  import { uiM } from '../../../messages.js'
   
   let {
     value = $bindable(''),
@@ -73,11 +73,11 @@
   // 验证文件
   function validateFile(file: File): string | null {
     if (file.size > maxSize) {
-      return `${m('image_upload_size_exceeded')} ${formatSize(maxSize)}）`
+      return `${uiM('image_upload_size_exceeded')} ${formatSize(maxSize)}）`
     }
     
     if (!file.type.startsWith('image/')) {
-      return m('image_upload_invalid_type')
+      return uiM('image_upload_invalid_type')
     }
     
     return null
@@ -86,6 +86,11 @@
   // 上传文件
   async function uploadFile(file: File) {
     loading = true
+    
+    // 释放旧的 Blob URL
+    if (previewUrl && previewUrl.startsWith('blob:')) {
+      URL.revokeObjectURL(previewUrl)
+    }
     
     try {
       // 先创建本地预览
@@ -116,11 +121,16 @@
         })
         
         if (!presignResponse.ok) {
-          throw new Error(m('image_upload_get_url_failed'))
+          throw new Error(uiM('image_upload_get_url_failed'))
         }
         
         const data = await presignResponse.json()
         targetUrl = data.url
+      }
+      
+      // 安全检查：验证上传 URL 协议
+      if (targetUrl && !/^https?:\/\//i.test(targetUrl)) {
+        throw new Error(uiM('image_upload_failed'))
       }
       
       // 上传文件
@@ -134,7 +144,7 @@
       })
       
       if (!response.ok) {
-        throw new Error(m('image_upload_failed'))
+        throw new Error(uiM('image_upload_failed'))
       }
       
       // 获取最终 URL
@@ -150,10 +160,14 @@
       }
       
       value = finalUrl
+      // 释放 Blob URL（已有最终 URL）
+      if (previewUrl && previewUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(previewUrl)
+      }
       previewUrl = finalUrl
       onchange?.(finalUrl)
     } catch (error) {
-      const message = error instanceof Error ? error.message : m('image_upload_failed')
+      const message = error instanceof Error ? error.message : uiM('image_upload_failed')
       onerror?.(message)
       // 清除预览
       previewUrl = ''
@@ -211,7 +225,7 @@
     <!-- 预览图 -->
     <img
       src={previewUrl}
-      alt={m('image_upload_preview_alt')}
+      alt={uiM('image_upload_preview_alt')}
       class="w-full h-full object-cover"
     />
     
@@ -224,7 +238,7 @@
           <IconButton
             size="sm"
             variant="ghost"
-            label={m('image_upload_change')}
+            label={uiM('image_upload_change')}
             onclick={handleClick}
             class="text-white"
           >
@@ -237,7 +251,7 @@
           <IconButton
             size="sm"
             variant="ghost"
-            label={m('image_upload_delete')}
+            label={uiM('image_upload_delete')}
             onclick={handleRemove}
             class="text-white"
           >
@@ -259,8 +273,8 @@
         <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
         </svg>
-        <span class="text-sm text-center">{placeholder || m('image_upload_placeholder')}</span>
-        <span class="text-xs mt-1">{m('image_upload_max_size_hint')} {formatSize(maxSize)}</span>
+        <span class="text-sm text-center">{placeholder || uiM('image_upload_placeholder')}</span>
+        <span class="text-xs mt-1">{uiM('image_upload_max_size_hint')} {formatSize(maxSize)}</span>
       {/if}
     </div>
   {/if}

@@ -16,7 +16,7 @@
 <script lang='ts'>
   import { isDarkTheme } from '../../../theme-config.js'
   import IconButton from '../../primitives/IconButton.svelte'
-  import { m } from '../../../messages.js'
+  import { uiM } from '../../../messages.js'
 
   interface Props {
     currentTheme?: string
@@ -48,12 +48,12 @@
   }
 </script>
 
-<div class='tooltip tooltip-bottom {className}' data-tip={isDark ? (labels.switchToLight ?? m('theme_switch_to_light')) : (labels.switchToDark ?? m('theme_switch_to_dark'))}>
+<div class='tooltip tooltip-bottom {className}' data-tip={isDark ? (labels.switchToLight ?? uiM('theme_switch_to_light')) : (labels.switchToDark ?? uiM('theme_switch_to_dark'))}>
   <IconButton
     variant='ghost'
     size='sm'
     onclick={toggleTheme}
-    ariaLabel={isDark ? (labels.switchToLight ?? m('theme_switch_to_light')) : (labels.switchToDark ?? m('theme_switch_to_dark'))}
+    ariaLabel={isDark ? (labels.switchToLight ?? uiM('theme_switch_to_light')) : (labels.switchToDark ?? uiM('theme_switch_to_dark'))}
   >
     {#if isDark}
       <svg xmlns='http://www.w3.org/2000/svg' class='h-5 w-5' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2'>

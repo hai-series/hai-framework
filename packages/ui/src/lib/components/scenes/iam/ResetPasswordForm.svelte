@@ -10,7 +10,7 @@
   import Input from '../../primitives/Input.svelte'
   import Button from '../../primitives/Button.svelte'
   import Alert from '../../compounds/Alert.svelte'
-  import { m } from '../../../messages.js'
+  import { uiM } from '../../../messages.js'
   
   let {
     loading = false,
@@ -65,13 +65,13 @@
 <form class={formClass} onsubmit={handleSubmit}>
   <!-- 标题 -->
   {#if showTitle}
-    <h2 class="text-xl font-semibold text-center mb-4">{m('reset_password_title')}</h2>
+    <h2 class="text-xl font-semibold text-center mb-4">{uiM('reset_password_title')}</h2>
   {/if}
 
   <!-- 描述 -->
   {#if showDescription}
     <p class="text-center text-base-content/45 text-sm mb-5">
-      {m('reset_password_desc')}
+      {uiM('reset_password_desc')}
     </p>
   {/if}
 
@@ -79,13 +79,13 @@
   {#if showCode}
     <div class="space-y-1.5">
       <label class="text-sm font-medium text-base-content/70" for="reset-code">
-        {m('reset_password_code_label')}
+        {uiM('reset_password_code_label')}
       </label>
       <Input
         id="reset-code"
         name="code"
         type="text"
-        placeholder={m('reset_password_code_placeholder')}
+        placeholder={uiM('reset_password_code_placeholder')}
         bind:value={code}
         {disabled}
         required
@@ -97,11 +97,11 @@
   <!-- 新密码 -->
   <div class="space-y-1.5">
     <label class="text-sm font-medium text-base-content/70" for="reset-new-password">
-      {m('reset_password_new_label')}
+      {uiM('reset_password_new_label')}
     </label>
     <PasswordInput
       bind:value={newPassword}
-      placeholder={m('reset_password_new_placeholder')}
+      placeholder={uiM('reset_password_new_placeholder')}
       {disabled}
       error={errors.newPassword}
       showStrength={showPasswordStrength}
@@ -112,13 +112,13 @@
   <!-- 确认新密码 -->
   <div class="space-y-1.5">
     <label class="text-sm font-medium text-base-content/70" for="reset-confirm-password">
-      {m('reset_password_confirm_label')}
+      {uiM('reset_password_confirm_label')}
     </label>
     <PasswordInput
       bind:value={confirmPassword}
-      placeholder={m('reset_password_confirm_placeholder')}
+      placeholder={uiM('reset_password_confirm_placeholder')}
       {disabled}
-      error={errors.confirmPassword || (!passwordsMatch && confirmPassword ? m('reset_password_mismatch') : '')}
+      error={errors.confirmPassword || (!passwordsMatch && confirmPassword ? uiM('reset_password_mismatch') : '')}
       showStrength={false}
     />
   </div>
@@ -138,13 +138,13 @@
     disabled={loading || disabled || !canSubmit}
     class="w-full"
   >
-    {submitText || m('reset_password_submit')}
+    {submitText || uiM('reset_password_submit')}
   </Button>
 
   <!-- 返回链接 -->
   {#if showBackLink}
     <div class="text-center mt-4 text-sm">
-      <a href={loginUrl} class="link link-primary">← {m('reset_password_back')}</a>
+      <a href={loginUrl} class="link link-primary">← {uiM('reset_password_back')}</a>
     </div>
   {/if}
 </form>

@@ -12,7 +12,7 @@
 <script lang='ts'>
   import IconButton from '../../primitives/IconButton.svelte'
   import BareButton from '../../primitives/BareButton.svelte'
-  import { m } from '../../../messages.js'
+  import { uiM } from '../../../messages.js'
   
   interface Props {
     open?: boolean
@@ -79,11 +79,11 @@
     >
       <!-- 标题栏 -->
       <div class='flex items-center justify-between border-b border-base-content/10 px-6 py-4'>
-        <h3 class='text-lg font-semibold text-base-content'>{m('settings_title')}</h3>
+        <h3 class='text-lg font-semibold text-base-content'>{uiM('settings_title')}</h3>
         <IconButton
           size="sm"
           variant="ghost"
-          label={m('settings_close')}
+          label={uiM('settings_close')}
           onclick={handleClose}
           class="hover:bg-base-content/10"
         >
@@ -99,7 +99,7 @@
         <section class='mb-8'>
           <h4 class='mb-4 flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-base-content/60'>
             <span class='icon-[tabler--world] size-4'></span>
-            {m('settings_language')}
+            {uiM('settings_language')}
           </h4>
           <div class='flex gap-3'>
             {#each languages as lang (lang.value)}
@@ -130,7 +130,7 @@
         <section>
           <h4 class='mb-4 flex items-center gap-2 text-sm font-semibold uppercase tracking-wider text-base-content/60'>
             <span class='icon-[tabler--sun] size-4'></span>
-            {m('settings_theme')}
+            {uiM('settings_theme')}
           </h4>
           <div class='grid gap-2.5 grid-cols-2 sm:grid-cols-3'>
             {#each themes as theme (theme.value)}

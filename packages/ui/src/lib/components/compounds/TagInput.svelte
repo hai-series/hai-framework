@@ -10,7 +10,7 @@
 <script lang="ts">
   import type { TagInputProps } from '../../types.js'
   import { cn, getInputSizeClass } from '../../utils.js'
-  import { m } from '../../messages.js'
+  import { uiM } from '../../messages.js'
   import Tag from '../primitives/Tag.svelte'
   import BareInput from '../primitives/BareInput.svelte'
   
@@ -28,7 +28,7 @@
   let inputValue = $state('')
   let inputElement = $state<HTMLInputElement | undefined>(undefined)
   
-  const displayPlaceholder = $derived(placeholder ?? m('tag_input_placeholder'))
+  const displayPlaceholder = $derived(placeholder ?? uiM('tag_input_placeholder'))
 
   const containerClass = $derived(
     cn(

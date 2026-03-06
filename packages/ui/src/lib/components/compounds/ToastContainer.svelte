@@ -10,7 +10,7 @@
 <script lang="ts">
   import { toast } from '../../toast.svelte.js'
   import { cn, getAlertVariantClass } from '../../utils.js'
-  import { m } from '../../messages.js'
+  import { uiM } from '../../messages.js'
   import IconButton from '../primitives/IconButton.svelte'
   
   const positionMap = {
@@ -48,7 +48,7 @@
             variant="ghost"
             size="sm"
             onclick={() => toast.remove(item.id)}
-            ariaLabel={m('toast_dismiss')}
+            ariaLabel={uiM('toast_dismiss')}
           >
             ✕
           </IconButton>
