@@ -12,7 +12,7 @@ import { reachM } from './reach-i18n.js'
 // ─── 错误码常量 ───
 
 /**
- * 触达模块错误码（数值范围 8000-8099）
+ * 触达模块错误码（数值范围 8100-8199）
  *
  * @example
  * ```ts
@@ -25,25 +25,25 @@ import { reachM } from './reach-i18n.js'
  */
 export const ReachErrorCode = {
   /** 发送失败 */
-  SEND_FAILED: 8000,
+  SEND_FAILED: 8100,
   /** 模板未找到 */
-  TEMPLATE_NOT_FOUND: 8001,
+  TEMPLATE_NOT_FOUND: 8101,
   /** 模板渲染失败 */
-  TEMPLATE_RENDER_FAILED: 8002,
+  TEMPLATE_RENDER_FAILED: 8102,
   /** 无效接收方 */
-  INVALID_RECIPIENT: 8003,
+  INVALID_RECIPIENT: 8103,
   /** Provider 未找到 */
-  PROVIDER_NOT_FOUND: 8004,
+  PROVIDER_NOT_FOUND: 8104,
   /** 免打扰时段拦截（discard 策略） */
-  DND_BLOCKED: 8005,
+  DND_BLOCKED: 8105,
   /** 免打扰时段延时（delay 策略，消息已暂存） */
-  DND_DEFERRED: 8006,
+  DND_DEFERRED: 8106,
   /** 触达模块未初始化 */
-  NOT_INITIALIZED: 8010,
+  NOT_INITIALIZED: 8110,
   /** 不支持的 Provider 类型 */
-  UNSUPPORTED_TYPE: 8011,
+  UNSUPPORTED_TYPE: 8111,
   /** 配置错误 */
-  CONFIG_ERROR: 8012,
+  CONFIG_ERROR: 8112,
 } as const
 
 /** 触达模块错误码类型 */
