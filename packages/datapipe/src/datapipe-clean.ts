@@ -86,7 +86,17 @@ export function cleanText(text: string, options?: CleanOptionsInput): Result<str
     // 自定义替换
     if (opts.customReplacements) {
       for (const { pattern, replacement } of opts.customReplacements) {
-        const regex = new RegExp(pattern, 'g')
+        let regex: RegExp
+        try {
+          regex = new RegExp(pattern, 'g')
+        }
+        catch (regexError) {
+          return err({
+            code: DatapipeErrorCode.CONFIG_ERROR,
+            message: datapipeM('datapipe_configError', { params: { error: String(regexError) } }),
+            cause: regexError,
+          })
+        }
         result = result.replace(regex, replacement)
       }
     }
