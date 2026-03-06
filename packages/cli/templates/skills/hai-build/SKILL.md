@@ -152,12 +152,16 @@ export async function initModules() {
 #### SPA / 原生 App 模式（src/lib/api.ts）
 
 ```typescript
-import { createApiClient } from '@h-ai/api-client'
+import { api } from '@h-ai/api-client'
 
-export const api = createApiClient({
-  baseURL: import.meta.env.VITE_API_BASE_URL,
-  timeout: 15_000,
-})
+export async function initApi() {
+  return api.init({
+    baseUrl: import.meta.env.VITE_API_BASE_URL,
+    timeout: 15_000,
+  })
+}
+
+export { api }
 ```
 
 #### 原生 App 追加初始化（src/lib/capacitor.ts）

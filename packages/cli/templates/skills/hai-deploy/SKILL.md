@@ -200,3 +200,11 @@ await deploy.init({
 // 使用 deploy API 部署
 const result = await deploy.deployApp('./apps/my-app')
 ```
+
+---
+
+## 相关 Skills
+
+- **hai-core** — 配置加载、日志、Result 类型
+- **hai-reldb** — 数据库（Neon PostgreSQL）
+- **hai-cache** — 缓存（Upstash Redis）

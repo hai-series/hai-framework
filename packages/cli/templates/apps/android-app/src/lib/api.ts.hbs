@@ -1,23 +1,30 @@
 /**
- * {{projectName}} — API 客户端
+ * {{projectName}} — API 客户端初始化
  *
- * 使用 @h-ai/api-client 构建统一 HTTP 客户端，
+ * 使用 @h-ai/api-client 单例模式构建统一 HTTP 客户端，
  * 搭配 @h-ai/capacitor 的原生 Token 存储。
  */
-import { createApiClient } from '@h-ai/api-client'
+import { api } from '@h-ai/api-client'
 import { createCapacitorTokenStorage } from '@h-ai/capacitor'
 
 /** API 基础地址（开发时指向本地后端） */
 const API_BASE = import.meta.env.PUBLIC_API_BASE ?? 'http://localhost:3000'
 
 /**
- * 全局 API 客户端实例
+ * 初始化 API 客户端
  *
+ * 应在应用启动时调用一次。
  * - Token 存储使用 Capacitor Preferences（原生安全存储）
  * - 自动附加 Bearer Token、401 自动刷新重试
  */
-export const api = createApiClient({
-  baseUrl: API_BASE,
-  tokenStorage: createCapacitorTokenStorage(),
-  refreshUrl: '/api/v1/auth/refresh',
-})
+export async function initApi() {
+  return api.init({
+    baseUrl: API_BASE,
+    auth: {
+      storage: createCapacitorTokenStorage(),
+      refreshUrl: '/api/v1/auth/refresh',
+    },
+  })
+}
+
+export { api }
