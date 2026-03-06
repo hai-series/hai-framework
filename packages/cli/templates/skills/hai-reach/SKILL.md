@@ -183,16 +183,16 @@ interface ReachConfigInput {
 
 | 错误码                                  | 值   | 含义            |
 | --------------------------------------- | ---- | --------------- |
-| `ReachErrorCode.SEND_FAILED`            | 8000 | 发送失败        |
-| `ReachErrorCode.TEMPLATE_NOT_FOUND`     | 8001 | 模板未找到      |
-| `ReachErrorCode.TEMPLATE_RENDER_FAILED` | 8002 | 模板渲染失败    |
-| `ReachErrorCode.INVALID_RECIPIENT`      | 8003 | 无效接收方      |
-| `ReachErrorCode.PROVIDER_NOT_FOUND`     | 8004 | Provider 未找到 |
-| `ReachErrorCode.DND_BLOCKED`            | 8005 | 免打扰丢弃      |
-| `ReachErrorCode.DND_DEFERRED`           | 8006 | 免打扰延时暂存  |
-| `ReachErrorCode.NOT_INITIALIZED`        | 8010 | 模块未初始化    |
-| `ReachErrorCode.UNSUPPORTED_TYPE`       | 8011 | 不支持的类型    |
-| `ReachErrorCode.CONFIG_ERROR`           | 8012 | 配置错误        |
+| `ReachErrorCode.SEND_FAILED`            | 8100 | 发送失败        |
+| `ReachErrorCode.TEMPLATE_NOT_FOUND`     | 8101 | 模板未找到      |
+| `ReachErrorCode.TEMPLATE_RENDER_FAILED` | 8102 | 模板渲染失败    |
+| `ReachErrorCode.INVALID_RECIPIENT`      | 8103 | 无效接收方      |
+| `ReachErrorCode.PROVIDER_NOT_FOUND`     | 8104 | Provider 未找到 |
+| `ReachErrorCode.DND_BLOCKED`            | 8105 | 免打扰丢弃      |
+| `ReachErrorCode.DND_DEFERRED`           | 8106 | 免打扰延时暂存  |
+| `ReachErrorCode.NOT_INITIALIZED`        | 8110 | 模块未初始化    |
+| `ReachErrorCode.UNSUPPORTED_TYPE`       | 8111 | 不支持的类型    |
+| `ReachErrorCode.CONFIG_ERROR`           | 8112 | 配置错误        |
 
 ---
 

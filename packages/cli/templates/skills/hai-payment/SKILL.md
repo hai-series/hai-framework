@@ -164,18 +164,21 @@ const payResult = await invokePayment({
 
 ## 错误码 — `PaymentErrorCode`
 
-| 错误码 | 常量                    | 说明               |
-| ------ | ----------------------- | ------------------ |
-| 7000   | `PROVIDER_NOT_FOUND`    | Provider 未注册    |
-| 7001   | `CREATE_ORDER_FAILED`   | 创建订单失败       |
-| 7002   | `NOTIFY_VERIFY_FAILED`  | 回调验签失败       |
-| 7003   | `QUERY_ORDER_FAILED`    | 查询订单失败       |
-| 7004   | `REFUND_FAILED`         | 退款失败           |
-| 7005   | `CLOSE_ORDER_FAILED`    | 关闭订单失败       |
-| 7010   | `INVALID_CONFIG`        | 配置无效           |
-| 7011   | `SIGN_FAILED`           | 签名失败           |
-| 7012   | `DECRYPT_FAILED`        | 解密失败           |
-| 7020   | `INVOKE_PAYMENT_FAILED` | 客户端调起支付失败 |
+| 错误码 | 常量                    | 说明                   |
+| ------ | ----------------------- | ---------------------- |
+| 7000   | `CREATE_ORDER_FAILED`   | 创建订单失败           |
+| 7001   | `QUERY_ORDER_FAILED`    | 查询订单失败           |
+| 7002   | `REFUND_FAILED`         | 退款失败               |
+| 7003   | `CLOSE_ORDER_FAILED`    | 关闭订单失败           |
+| 7010   | `NOT_INITIALIZED`       | 模块未初始化           |
+| 7020   | `SIGN_FAILED`           | 签名失败               |
+| 7030   | `PROVIDER_NOT_FOUND`    | Provider 未注册        |
+| 7040   | `INVALID_AMOUNT`        | 金额无效               |
+| 7050   | `NOTIFY_VERIFY_FAILED`  | 回调验签失败           |
+| 7051   | `NOTIFY_PARSE_FAILED`   | 回调解析失败           |
+| 7060   | `INVOKE_WEB_FAILED`     | Web 端调起支付失败     |
+| 7061   | `INVOKE_APP_FAILED`     | App 端调起支付失败     |
+| 7070   | `CONFIG_ERROR`          | 配置无效               |
 
 ---
 
