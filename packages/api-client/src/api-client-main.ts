@@ -7,9 +7,10 @@
  */
 
 import type { ApiClient, ApiClientConfig, TokenPair } from './api-client-types.js'
-import { createTokenManager } from './api-client-auth.js'
+import { createLocalStorageTokenStorage } from './api-client-auth.js'
 import { createContractCaller } from './api-client-contract.js'
 import { createFetchClient } from './api-client-fetch.js'
+import { createTokenManager } from './api-client-token-manager.js'
 
 /**
  * 创建 Api Client 实例
@@ -19,12 +20,11 @@ import { createFetchClient } from './api-client-fetch.js'
  *
  * @example
  * ```ts
- * import { createApiClient, createLocalStorageTokenStorage } from '@h-ai/api-client'
+ * import { createApiClient } from '@h-ai/api-client'
  *
  * const api = createApiClient({
  *   baseUrl: 'https://api.example.com/api/v1',
  *   auth: {
- *     storage: createLocalStorageTokenStorage(),
  *     refreshUrl: '/auth/refresh',
  *   },
  * })
@@ -37,12 +37,15 @@ import { createFetchClient } from './api-client-fetch.js'
  * ```
  */
 export function createApiClient(config: ApiClientConfig): ApiClient {
+  // 优先使用外部传入的 fetch（便于测试/跨平台注入）；未传入时回退到全局 fetch，并 bind(globalThis) 保证调用时 this 正确
   const fetchFn = config.fetch ?? globalThis.fetch.bind(globalThis)
+  // auth 开启时，默认使用 localStorage 作为 Token 存储，减少调用方配置负担
+  const tokenStorage = config.auth?.storage ?? createLocalStorageTokenStorage()
 
   // Token 管理器（可选）
   const tokenManager = config.auth
     ? createTokenManager(
-        config.auth.storage,
+        tokenStorage,
         `${config.baseUrl.replace(/\/+$/, '')}${config.auth.refreshUrl}`,
         fetchFn,
         config.auth.onRefreshFailed,
@@ -72,8 +75,11 @@ export function createApiClient(config: ApiClientConfig): ApiClient {
         await tokenManager.clear()
       }
     },
-    onTokenRefreshed(callback: (tokens: TokenPair) => void) {
-      tokenManager?.onTokenRefreshed(callback)
+    onTokenRefreshed(callback: (tokens: TokenPair) => void): () => void {
+      if (tokenManager) {
+        return tokenManager.onTokenRefreshed(callback)
+      }
+      return () => {}
     },
   }
 

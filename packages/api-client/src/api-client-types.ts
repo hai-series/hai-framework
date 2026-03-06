@@ -8,6 +8,7 @@
 
 import type { Result } from '@h-ai/core'
 import type { z } from 'zod'
+import type { ApiClientError } from './api-client-config.js'
 
 // ─── API 契约 ───
 
@@ -117,8 +118,8 @@ export type ResponseInterceptor = (response: Response) => Response | Promise<Res
  * Token 刷新配置
  */
 export interface AuthConfig {
-  /** Token 存储适配器 */
-  storage: TokenStorage
+  /** Token 存储适配器（默认 createLocalStorageTokenStorage） */
+  storage?: TokenStorage
   /** Refresh Token 接口路径（相对于 baseUrl） */
   refreshUrl: string
   /** Token 刷新回调 */
@@ -146,59 +147,12 @@ export interface ApiClientConfig {
   fetch?: typeof globalThis.fetch
 }
 
-// ─── 错误 ───
-
-/**
- * Api Client 错误码
- */
-export const ApiClientErrorCode = {
-  /** 网络请求失败 */
-  NETWORK_ERROR: 6000,
-  /** 请求超时 */
-  TIMEOUT: 6001,
-  /** 服务器错误（5xx） */
-  SERVER_ERROR: 6002,
-  /** 未授权（401） */
-  UNAUTHORIZED: 6003,
-  /** 无权限（403） */
-  FORBIDDEN: 6004,
-  /** 资源不存在（404） */
-  NOT_FOUND: 6005,
-  /** 请求参数校验失败（400） */
-  VALIDATION_FAILED: 6006,
-  /** Token 刷新失败 */
-  TOKEN_REFRESH_FAILED: 6007,
-  /** 未知错误 */
-  UNKNOWN: 6099,
-} as const
-
-/** 错误码类型 */
-export type ApiClientErrorCodeType = (typeof ApiClientErrorCode)[keyof typeof ApiClientErrorCode]
-
-/**
- * Api Client 错误
- */
-export interface ApiClientError {
-  /** 错误码 */
-  code: ApiClientErrorCodeType
-  /** 错误消息 */
-  message: string
-  /** HTTP 状态码（如有） */
-  status?: number
-  /** 原始异常 */
-  cause?: unknown
-  /** 服务端返回的业务错误详情 */
-  details?: unknown
-}
-
 // ─── 上传选项 ───
 
 /**
  * 文件上传选项
  */
 export interface UploadOptions {
-  /** 上传进度回调 */
-  onProgress?: (percent: number) => void
   /** 文件字段名（默认 'file'） */
   fieldName?: string
   /** 附加表单字段 */
@@ -222,7 +176,7 @@ export interface ApiClient {
   /** PATCH 请求 */
   patch: <T>(path: string, body?: unknown) => Promise<Result<T, ApiClientError>>
   /** DELETE 请求 */
-  delete: <T>(path: string) => Promise<Result<T, ApiClientError>>
+  delete: <T>(path: string, params?: Record<string, unknown>) => Promise<Result<T, ApiClientError>>
 
   /** 文件上传 */
   upload: (path: string, file: File | Blob, options?: UploadOptions) => Promise<Result<unknown, ApiClientError>>
@@ -246,8 +200,8 @@ export interface ApiClient {
     setTokens: (tokens: TokenPair) => Promise<void>
     /** 清空 Token */
     clear: () => Promise<void>
-    /** Token 刷新回调 */
-    onTokenRefreshed: (callback: (tokens: TokenPair) => void) => void
+    /** Token 刷新回调，返回取消订阅函数 */
+    onTokenRefreshed: (callback: (tokens: TokenPair) => void) => () => void
   }
 }
 

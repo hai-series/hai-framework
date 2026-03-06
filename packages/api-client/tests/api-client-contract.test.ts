@@ -110,4 +110,72 @@ describe('api.call (contract)', () => {
     const headers = (fetch.mock.calls[0] as { headers: Record<string, string> }[])[1]?.headers
     expect(headers).toHaveProperty('Authorization', 'Bearer my-token-123')
   })
+
+  it('dELETE 契约调用传递 query 参数', async () => {
+    const deleteEndpoint = defineEndpoint({
+      method: 'DELETE',
+      path: '/users',
+      input: z.object({ id: z.string() }),
+      output: z.object({ success: z.boolean() }),
+    })
+
+    const fetch = mockFetch(200, { success: true })
+    const api = createApiClient({ baseUrl: 'https://api.test.com', fetch })
+
+    await api.call(deleteEndpoint, { id: 'u1' })
+
+    const url = (fetch.mock.calls[0] as string[])[0]
+    expect(url).toContain('id=u1')
+  })
+
+  it('auth 未传 storage 时默认使用 localStorage', async () => {
+    const storageData: Record<string, string> = {}
+    const localStorageMock = {
+      getItem: vi.fn((key: string) => storageData[key] ?? null),
+      setItem: vi.fn((key: string, value: string) => {
+        storageData[key] = value
+      }),
+      removeItem: vi.fn((key: string) => {
+        delete storageData[key]
+      }),
+    }
+
+    const originalLocalStorage = Object.getOwnPropertyDescriptor(globalThis, 'localStorage')
+    Object.defineProperty(globalThis, 'localStorage', {
+      configurable: true,
+      value: localStorageMock,
+    })
+
+    try {
+      const fetch = mockFetch(200, { ok: true })
+      const api = createApiClient({
+        baseUrl: 'https://api.test.com',
+        fetch,
+        auth: { refreshUrl: '/auth/refresh' },
+      })
+
+      await api.auth.setTokens({
+        accessToken: 'default-at',
+        refreshToken: 'default-rt',
+        expiresIn: 3600,
+        tokenType: 'Bearer',
+      })
+
+      await api.get('/protected')
+
+      expect(localStorageMock.setItem).toHaveBeenCalledWith('hai_access_token', 'default-at')
+      expect(localStorageMock.setItem).toHaveBeenCalledWith('hai_refresh_token', 'default-rt')
+
+      const headers = (fetch.mock.calls[0] as { headers: Record<string, string> }[])[1]?.headers
+      expect(headers).toHaveProperty('Authorization', 'Bearer default-at')
+    }
+    finally {
+      if (originalLocalStorage) {
+        Object.defineProperty(globalThis, 'localStorage', originalLocalStorage)
+      }
+      else {
+        Reflect.deleteProperty(globalThis, 'localStorage')
+      }
+    }
+  })
 })

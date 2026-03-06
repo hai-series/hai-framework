@@ -3,7 +3,8 @@
  */
 
 import { describe, expect, it, vi } from 'vitest'
-import { createMemoryTokenStorage, createTokenManager } from '../src/api-client-auth.js'
+import { createMemoryTokenStorage } from '../src/api-client-auth.js'
+import { createTokenManager } from '../src/api-client-token-manager.js'
 
 describe('createMemoryTokenStorage', () => {
   it('存取 Token', async () => {
@@ -121,5 +122,79 @@ describe('createTokenManager', () => {
     expect(r1).toEqual(newTokens)
     expect(r2).toEqual(newTokens)
     expect(r3).toEqual(newTokens)
+  })
+
+  it('onTokenRefreshed 返回取消订阅函数', async () => {
+    const storage = createMemoryTokenStorage()
+    await storage.setRefreshToken('rt')
+
+    const newTokens = {
+      accessToken: 'a',
+      refreshToken: 'r',
+      expiresIn: 3600,
+      tokenType: 'Bearer' as const,
+    }
+
+    const mockFetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ data: newTokens }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    )
+
+    const callback = vi.fn()
+    const manager = createTokenManager(storage, 'https://api.test.com/auth/refresh', mockFetch)
+    const unsubscribe = manager.onTokenRefreshed(callback)
+
+    await manager.refresh()
+    expect(callback).toHaveBeenCalledTimes(1)
+
+    // 取消订阅后不再收到通知
+    unsubscribe()
+    await storage.setRefreshToken('rt2')
+    await manager.refresh()
+    expect(callback).toHaveBeenCalledTimes(1)
+  })
+
+  it('refresh 响应缺少必要字段时返回 null', async () => {
+    const storage = createMemoryTokenStorage()
+    await storage.setRefreshToken('rt')
+
+    // 响应缺少 refreshToken
+    const mockFetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ data: { accessToken: 'a' } }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    )
+
+    const onFailed = vi.fn()
+    const manager = createTokenManager(storage, 'https://api.test.com/auth/refresh', mockFetch, onFailed)
+
+    const result = await manager.refresh()
+
+    expect(result).toBeNull()
+    expect(onFailed).toHaveBeenCalled()
+    expect(await storage.getRefreshToken()).toBeNull()
+  })
+
+  it('refresh 响应 accessToken 为空字符串时返回 null', async () => {
+    const storage = createMemoryTokenStorage()
+    await storage.setRefreshToken('rt')
+
+    const mockFetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ data: { accessToken: '', refreshToken: 'r' } }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    )
+
+    const onFailed = vi.fn()
+    const manager = createTokenManager(storage, 'https://api.test.com/auth/refresh', mockFetch, onFailed)
+
+    const result = await manager.refresh()
+
+    expect(result).toBeNull()
+    expect(onFailed).toHaveBeenCalled()
   })
 })

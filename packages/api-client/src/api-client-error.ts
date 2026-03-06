@@ -6,10 +6,10 @@
  */
 
 import type { Result } from '@h-ai/core'
-import type { ApiClientError } from './api-client-types.js'
+import type { ApiClientError } from './api-client-config.js'
 import { err } from '@h-ai/core'
+import { ApiClientErrorCode } from './api-client-config.js'
 import { apiClientM } from './api-client-i18n.js'
-import { ApiClientErrorCode } from './api-client-types.js'
 
 /**
  * 将 HTTP 响应转为 ApiClientError Result
