@@ -18,5 +18,14 @@
   "kit_transportInvalidPayload": "Invalid encrypted payload",
   "kit_transportKeyExchangeFailed": "Key exchange failed",
   "kit_transportClientIdRequired": "Missing X-Client-Id header, key exchange is required for transport encryption",
-  "kit_signFailed": "Request signing failed"
+  "kit_signFailed": "Request signing failed",
+  "kit_authRequired": "Authentication required",
+  "kit_accessDenied": "Access denied",
+  "kit_resourceNotFound": "Resource not found",
+  "kit_internalError": "Internal server error",
+  "kit_validationFailed": "Validation failed",
+  "kit_noGuardsPassed": "No guards passed",
+  "kit_requiredRoles": "Required roles: {roles}",
+  "kit_requiredPermissions": "Required permissions: {permissions}",
+  "kit_idRequired": "ID is required"
 }

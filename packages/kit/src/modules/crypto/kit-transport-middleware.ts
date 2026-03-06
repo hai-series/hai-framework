@@ -94,7 +94,7 @@ export function transportEncryptionMiddleware(config: TransportEncryptionConfig)
             // 重建请求，替换为解密后的明文
             const newRequest = new Request(event.request.url, {
               method: event.request.method,
-              headers: event.request.headers,
+              headers: new Headers(event.request.headers),
               body: plaintext,
             })
             // 将解密后的请求注入 locals，供后续中间件/端点使用
@@ -119,6 +119,16 @@ export function transportEncryptionMiddleware(config: TransportEncryptionConfig)
 
     // ── 加密响应 ──
     if (!encryptResponse) {
+      return response
+    }
+
+    // 跳过非 JSON 响应和大体积响应（>1MB），避免内存问题
+    const contentType = response.headers.get('Content-Type') ?? ''
+    if (!contentType.includes('application/json')) {
+      return response
+    }
+    const contentLength = response.headers.get('Content-Length')
+    if (contentLength && Number.parseInt(contentLength, 10) > 1_048_576) {
       return response
     }
 

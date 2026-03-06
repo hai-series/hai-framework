@@ -41,7 +41,7 @@ export interface LoggingMiddlewareConfig {
  * ```
  */
 export function loggingMiddleware(config: LoggingMiddlewareConfig = {}): Middleware {
-  const { logBody = false, logResponse = false, redactFields = ['password', 'token', 'secret'] } = config
+  const { logBody = false, logResponse = false, redactFields = ['password', 'token', 'secret', 'authorization', 'apikey', 'api_key', 'creditcard', 'credit_card'] } = config
 
   return async (context, next) => {
     const { event, requestId } = context
@@ -114,6 +114,11 @@ function redactObject(obj: unknown, fields: string[]): unknown {
 
   if (Array.isArray(obj)) {
     return obj.map(item => redactObject(item, fields))
+  }
+
+  // 保留 Date、RegExp 等原生对象类型
+  if (obj instanceof Date || obj instanceof RegExp) {
+    return obj
   }
 
   const result: Record<string, unknown> = {}

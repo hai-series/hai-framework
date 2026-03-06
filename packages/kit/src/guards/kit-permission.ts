@@ -46,7 +46,7 @@ export function permissionGuard(config: PermissionGuardConfig): RouteGuard {
     if (!session) {
       return {
         allowed: false,
-        message: 'Authentication required',
+        message: kitM('kit_authRequired'),
         status: 401,
       }
     }
@@ -62,7 +62,7 @@ export function permissionGuard(config: PermissionGuardConfig): RouteGuard {
       if (apiMode) {
         return {
           allowed: false,
-          message: `Required permissions: ${permissions.join(', ')}`,
+          message: kitM('kit_requiredPermissions', { params: { permissions: permissions.join(', ') } }),
           status: 403,
         }
       }

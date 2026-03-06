@@ -6,6 +6,7 @@
  */
 
 import type { GuardResult, RouteGuard } from '../kit-types.js'
+import { kitM } from '../kit-i18n.js'
 
 /**
  * 角色守卫配置
@@ -44,7 +45,7 @@ export function roleGuard(config: RoleGuardConfig): RouteGuard {
     if (!session) {
       return {
         allowed: false,
-        message: 'Authentication required',
+        message: kitM('kit_authRequired'),
         status: 401,
       }
     }
@@ -59,7 +60,7 @@ export function roleGuard(config: RoleGuardConfig): RouteGuard {
       if (apiMode) {
         return {
           allowed: false,
-          message: `Required roles: ${roles.join(', ')}`,
+          message: kitM('kit_requiredRoles', { params: { roles: roles.join(', ') } }),
           status: 403,
         }
       }

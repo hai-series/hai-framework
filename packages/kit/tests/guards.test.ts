@@ -65,7 +65,7 @@ describe('authGuard', () => {
 
     expect(result.allowed).toBe(false)
     expect(result.status).toBe(401)
-    expect(result.message).toBe('Authentication required')
+    expect(result.message).toBe('需要身份认证')
   })
 })
 

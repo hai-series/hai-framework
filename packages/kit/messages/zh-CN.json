@@ -18,5 +18,14 @@
   "kit_transportInvalidPayload": "无效的加密载荷",
   "kit_transportKeyExchangeFailed": "密钥交换失败",
   "kit_transportClientIdRequired": "缺少 X-Client-Id 请求头，传输加密必须先完成密钥交换",
-  "kit_signFailed": "请求签名失败"
+  "kit_signFailed": "请求签名失败",
+  "kit_authRequired": "需要身份认证",
+  "kit_accessDenied": "拒绝访问",
+  "kit_resourceNotFound": "资源未找到",
+  "kit_internalError": "内部服务器错误",
+  "kit_validationFailed": "数据验证失败",
+  "kit_noGuardsPassed": "没有守卫通过",
+  "kit_requiredRoles": "需要角色：{roles}",
+  "kit_requiredPermissions": "需要权限：{permissions}",
+  "kit_idRequired": "ID 不能为空"
 }
