@@ -4,6 +4,7 @@
 
 ## 支持的能力
 
+- 单例模式：`api.init()` → `api.get()` / `api.call()` → `api.close()`
 - 通用 HTTP 方法：`get` / `post` / `put` / `patch` / `delete`
 - 契约调用：`api.call(endpoint, input)`（入参/出参类型安全）
 - 自动附加 Bearer Token，401 自动刷新重试
@@ -16,14 +17,13 @@
 ## 快速开始
 
 ```ts
-import { createApiClient } from '@h-ai/api-client'
+import { api } from '@h-ai/api-client'
 import { iamEndpoints } from '@h-ai/iam/api'
 
-const api = createApiClient({
+// 初始化
+await api.init({
   baseUrl: 'https://api.example.com/api/v1',
-  auth: {
-    refreshUrl: '/auth/refresh',
-  },
+  auth: { refreshUrl: '/auth/refresh' },
 })
 
 // 契约调用（推荐）
@@ -34,6 +34,9 @@ const loginResult = await api.call(iamEndpoints.login, {
 
 // 通用 HTTP
 const users = await api.get<User[]>('/users', { page: 1 })
+
+// 关闭
+await api.close()
 ```
 
 > `auth.storage` 未传时默认使用 `createLocalStorageTokenStorage()`；在 SSR/测试环境可显式传入 `createMemoryTokenStorage()`。
@@ -43,13 +46,11 @@ const users = await api.get<User[]>('/users', { page: 1 })
 ### 浏览器端（默认 localStorage）
 
 ```ts
-import { createApiClient } from '@h-ai/api-client'
+import { api } from '@h-ai/api-client'
 
-export const api = createApiClient({
+await api.init({
   baseUrl: 'https://api.example.com/api/v1',
-  auth: {
-    refreshUrl: '/auth/refresh',
-  },
+  auth: { refreshUrl: '/auth/refresh' },
   timeout: 15000,
 })
 ```
@@ -57,9 +58,9 @@ export const api = createApiClient({
 ### SSR / 测试环境（推荐 memory storage）
 
 ```ts
-import { createApiClient, createMemoryTokenStorage } from '@h-ai/api-client'
+import { api, createMemoryTokenStorage } from '@h-ai/api-client'
 
-export const api = createApiClient({
+await api.init({
   baseUrl: 'https://api.example.com/api/v1',
   auth: {
     storage: createMemoryTokenStorage(),
@@ -77,7 +78,7 @@ const result = await api.get<{ id: string, name: string }>('/users/me')
 
 if (!result.success) {
   // 可根据 error.code 做分支处理
-  // 6003: UNAUTHORIZED, 6001: TIMEOUT ...
+  // 1203: UNAUTHORIZED, 1201: TIMEOUT, 1210: NOT_INITIALIZED ...
   console.error(result.error.code, result.error.message)
   return
 }
@@ -118,6 +119,12 @@ for await (const chunk of api.stream('/ai/chat/stream', { message: 'hello' })) {
 - `stream()` 内置超时控制
 - 401 会尝试自动刷新 Token 后重试一次
 - 解析器支持跨 chunk 的 SSE 行缓冲
+
+## 测试
+
+```bash
+pnpm --filter @h-ai/api-client test
+```
 
 ## License
 

@@ -224,3 +224,70 @@ export function defineEndpoint<TInput, TOutput>(
 ): EndpointDef<TInput, TOutput> {
   return def
 }
+
+// ─── ApiClientFunctions ───
+
+/**
+ * API 客户端函数接口（单例模式）
+ *
+ * 统一的 API 客户端访问入口：
+ * - `api.init(config)` — 初始化客户端
+ * - `api.close()` — 关闭客户端并释放资源
+ * - `api.get / post / put / patch / delete` — 通用 HTTP 方法
+ * - `api.call(endpoint, input)` — 契约调用
+ * - `api.upload(path, file)` — 文件上传
+ * - `api.stream(path, body)` — 流式请求
+ * - `api.auth` — Token 管理
+ * - `api.config` — 当前配置（未初始化时为 null）
+ * - `api.isInitialized` — 初始化状态
+ */
+export interface ApiClientFunctions {
+  /**
+   * 初始化 API 客户端
+   *
+   * 已有实例时会先 close 再重新初始化。
+   *
+   * @param config - 客户端配置
+   * @returns 成功 ok(undefined)；失败返回 err（含 ApiClientError）
+   */
+  init: (config: ApiClientConfig) => Promise<Result<void, ApiClientError>>
+
+  /**
+   * 关闭 API 客户端并释放资源
+   *
+   * 重复调用不会报错。
+   */
+  close: () => Promise<void>
+
+  /** 当前客户端配置；未初始化或已关闭时为 null */
+  readonly config: ApiClientConfig | null
+
+  /** 是否已完成初始化 */
+  readonly isInitialized: boolean
+
+  /** GET 请求 */
+  readonly get: ApiClient['get']
+  /** POST 请求 */
+  readonly post: ApiClient['post']
+  /** PUT 请求 */
+  readonly put: ApiClient['put']
+  /** PATCH 请求 */
+  readonly patch: ApiClient['patch']
+  /** DELETE 请求 */
+  readonly delete: ApiClient['delete']
+  /** 文件上传 */
+  readonly upload: ApiClient['upload']
+
+  /**
+   * 流式请求（返回 AsyncIterable）
+   *
+   * @throws 未初始化时抛出异常（async generator 无法返回 Result）
+   */
+  readonly stream: ApiClient['stream']
+
+  /** 契约调用（推荐） */
+  readonly call: ApiClient['call']
+
+  /** Token 管理 */
+  readonly auth: ApiClient['auth']
+}

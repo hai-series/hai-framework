@@ -7,5 +7,7 @@
   "apiClient_notFound": "Resource not found",
   "apiClient_validationFailed": "Request validation failed",
   "apiClient_tokenRefreshFailed": "Token refresh failed, please log in again",
+  "apiClient_notInitialized": "API client not initialized, please call api.init() first",
+  "apiClient_configError": "API client config error: {error}",
   "apiClient_unknown": "Unknown error"
 }

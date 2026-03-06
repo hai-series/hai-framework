@@ -2,10 +2,10 @@
  * @h-ai/api-client — 契约调用测试
  */
 
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { defineEndpoint } from '../src/api-client-types.js'
-import { createApiClient, createMemoryTokenStorage } from '../src/index.js'
+import { api, createMemoryTokenStorage } from '../src/index.js'
 
 /** 模拟登录端点契约 */
 const loginEndpoint = defineEndpoint({
@@ -48,13 +48,17 @@ function mockFetch(status: number, body: unknown) {
 }
 
 describe('api.call (contract)', () => {
+  afterEach(async () => {
+    await api.close()
+  })
+
   it('pOST 契约调用成功', async () => {
     const responseData = {
       user: { id: 'u1', name: 'Alice' },
       tokens: { accessToken: 'at', refreshToken: 'rt', expiresIn: 3600, tokenType: 'Bearer' },
     }
     const fetch = mockFetch(200, responseData)
-    const api = createApiClient({ baseUrl: 'https://api.test.com', fetch })
+    await api.init({ baseUrl: 'https://api.test.com', fetch })
 
     const result = await api.call(loginEndpoint, { identifier: 'alice', password: 'pass' })
 
@@ -70,7 +74,7 @@ describe('api.call (contract)', () => {
 
   it('gET 契约调用附加 query 参数', async () => {
     const fetch = mockFetch(200, [{ id: 'u1', name: 'Alice' }])
-    const api = createApiClient({ baseUrl: 'https://api.test.com', fetch })
+    await api.init({ baseUrl: 'https://api.test.com', fetch })
 
     await api.call(listUsersEndpoint, { page: 1, pageSize: 20 })
 
@@ -81,14 +85,14 @@ describe('api.call (contract)', () => {
 
   it('入参校验失败返回 VALIDATION_FAILED', async () => {
     const fetch = mockFetch(200, {})
-    const api = createApiClient({ baseUrl: 'https://api.test.com', fetch })
+    await api.init({ baseUrl: 'https://api.test.com', fetch })
 
     // identifier 为空字符串不满足 min(1)
     const result = await api.call(loginEndpoint, { identifier: '', password: 'pass' })
 
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(6006) // VALIDATION_FAILED
+      expect(result.error.code).toBe(1206) // VALIDATION_FAILED
     }
     // fetch 不应被调用
     expect(fetch).not.toHaveBeenCalled()
@@ -99,7 +103,7 @@ describe('api.call (contract)', () => {
     const storage = createMemoryTokenStorage()
     await storage.setAccessToken('my-token-123')
 
-    const api = createApiClient({
+    await api.init({
       baseUrl: 'https://api.test.com',
       fetch,
       auth: { storage, refreshUrl: '/auth/refresh' },
@@ -120,7 +124,7 @@ describe('api.call (contract)', () => {
     })
 
     const fetch = mockFetch(200, { success: true })
-    const api = createApiClient({ baseUrl: 'https://api.test.com', fetch })
+    await api.init({ baseUrl: 'https://api.test.com', fetch })
 
     await api.call(deleteEndpoint, { id: 'u1' })
 
@@ -148,7 +152,7 @@ describe('api.call (contract)', () => {
 
     try {
       const fetch = mockFetch(200, { ok: true })
-      const api = createApiClient({
+      await api.init({
         baseUrl: 'https://api.test.com',
         fetch,
         auth: { refreshUrl: '/auth/refresh' },
