@@ -149,16 +149,20 @@ function parseTextContent(content: Buffer | string): string {
  */
 function parseHtmlContent(content: Buffer | string): string {
   const html = parseTextContent(content)
-  const noScript = html.replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, ' ')
-  const noStyle = noScript.replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, ' ')
+  // 使用宽松结束标签匹配（允许 </script > 等格式）
+  const noScript = html.replace(/<script\b[^<]*(?:(?!<\/script\s*>)<[^<]*)*<\/script\s*>/gi, ' ')
+  const noStyle = noScript.replace(/<style\b[^<]*(?:(?!<\/style\s*>)<[^<]*)*<\/style\s*>/gi, ' ')
   const noTags = noStyle.replace(/<[^>]+>/g, ' ')
-  const decoded = noTags
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, '\'')
-    .replace(/&nbsp;/g, ' ')
+  // 单次替换常见 HTML 实体，避免链式替换造成的二次转义
+  const HTML_ENTITIES: Record<string, string> = {
+    '&amp;': '&',
+    '&lt;': '<',
+    '&gt;': '>',
+    '&quot;': '"',
+    '&#39;': '\'',
+    '&nbsp;': ' ',
+  }
+  const decoded = noTags.replace(/&(?:amp|lt|gt|quot|#39|nbsp);/g, match => HTML_ENTITIES[match] ?? match)
   return decoded.replace(/\s+/g, ' ').trim()
 }
 
