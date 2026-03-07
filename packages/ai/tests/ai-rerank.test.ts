@@ -208,7 +208,7 @@ describe('rerank operations', () => {
       }
     })
 
-    it('aPI 返回非 200 时返回 RERANK_API_ERROR', async () => {
+    it('请求失败时（HTTP 非 200）返回 RERANK_API_ERROR', async () => {
       mockFetch.mockResolvedValueOnce(makeErrorResponse(429, 'Rate limit exceeded'))
 
       const ops = createRerankOperations(mockConfig)
@@ -277,7 +277,7 @@ describe('rerank operations', () => {
       expect(callBody.top_n).toBe(1)
     })
 
-    it('aPI 错误时透传错误', async () => {
+    it('网络错误时透传 RERANK_API_ERROR', async () => {
       mockFetch.mockRejectedValueOnce(new Error('Timeout'))
 
       const ops = createRerankOperations(mockConfig)

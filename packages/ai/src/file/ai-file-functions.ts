@@ -153,16 +153,32 @@ function parseHtmlContent(content: Buffer | string): string {
   const noScript = html.replace(/<script[^>]*>[\s\S]*?<\/script[^>]*>/gi, ' ')
   const noStyle = noScript.replace(/<style[^>]*>[\s\S]*?<\/style[^>]*>/gi, ' ')
   const noTags = noStyle.replace(/<[^>]+>/g, ' ')
-  // 单次替换常见 HTML 实体，避免链式替换造成的二次转义
-  const HTML_ENTITIES: Record<string, string> = {
-    '&amp;': '&',
-    '&lt;': '<',
-    '&gt;': '>',
-    '&quot;': '"',
-    '&#39;': '\'',
-    '&nbsp;': ' ',
+  // 单次解码 HTML 实体（命名实体 + 十进制/十六进制数字实体）
+  const NAMED_ENTITIES: Record<string, string> = {
+    amp: '&',
+    lt: '<',
+    gt: '>',
+    quot: '"',
+    apos: '\'',
+    nbsp: ' ',
+    mdash: '—',
+    ndash: '–',
+    ldquo: '\u201C',
+    rdquo: '\u201D',
+    lsquo: '\u2018',
+    rsquo: '\u2019',
+    hellip: '…',
+    copy: '©',
+    reg: '®',
+    trade: '™',
   }
-  const decoded = noTags.replace(/&(?:amp|lt|gt|quot|#39|nbsp);/g, match => HTML_ENTITIES[match] ?? match)
+  const decoded = noTags.replace(/&(?:#(\d+)|#x([\dA-Fa-f]+)|([A-Za-z]+));/g, (match, dec, hex, named) => {
+    if (dec !== undefined)
+      return String.fromCharCode(Number.parseInt(dec, 10))
+    if (hex !== undefined)
+      return String.fromCharCode(Number.parseInt(hex, 16))
+    return NAMED_ENTITIES[named] ?? match
+  })
   return decoded.replace(/\s+/g, ' ').trim()
 }
 

@@ -169,7 +169,7 @@ describe('file operations — HTML', () => {
 // ─── PDF 解析测试 ───
 
 describe('file operations — PDF', () => {
-  it('pDF magic bytes 识别', async () => {
+  it('通过 PDF magic bytes 识别格式（pdfjs 不可用时回退 OCR）', async () => {
     // 模拟 pdfjs-dist 不可用，则 PDF 应回退 OCR
     vi.mock('pdfjs-dist/legacy/build/pdf.mjs', () => {
       throw new Error('Module not found')
@@ -201,7 +201,7 @@ describe('file operations — PDF', () => {
 // ─── 图片 OCR 测试 ───
 
 describe('file operations — image OCR', () => {
-  it('pNG 图片调用 OCR 返回识别文本（magic bytes 识别）', async () => {
+  it('通过 PNG magic bytes 检测触发图片 OCR 识别', async () => {
     const mockLLM = makeMockLLM('图片中的文字内容')
     const ops = createFileOperations(mockConfig, mockLLM)
 
@@ -217,7 +217,7 @@ describe('file operations — image OCR', () => {
     expect(mockLLM.chat).toHaveBeenCalledOnce()
   })
 
-  it('jPEG 图片调用 OCR', async () => {
+  it('通过文件名识别 JPEG 并触发 OCR', async () => {
     const mockLLM = makeMockLLM('JPEG text')
     const ops = createFileOperations(mockConfig, mockLLM)
 
@@ -231,7 +231,7 @@ describe('file operations — image OCR', () => {
     }
   })
 
-  it('oCR 使用配置中的 ocrModel', async () => {
+  it('图片解析使用全局 ocrModel 配置', async () => {
     const mockLLM = makeMockLLM('OCR with model')
     const ops = createFileOperations(mockConfigWithOcrModel, mockLLM)
 
@@ -244,7 +244,7 @@ describe('file operations — image OCR', () => {
     expect(chatArgs.model).toBe('gpt-4o')
   })
 
-  it('oCR 请求级 ocrModel 覆盖全局配置', async () => {
+  it('请求级 ocrModel 覆盖全局配置', async () => {
     const mockLLM = makeMockLLM('text')
     const ops = createFileOperations(mockConfigWithOcrModel, mockLLM)
 
@@ -258,7 +258,7 @@ describe('file operations — image OCR', () => {
     expect(chatArgs.model).toBe('gpt-4-turbo')
   })
 
-  it('oCR 失败时返回 FILE_OCR_FAILED', async () => {
+  it('视觉 LLM 调用失败时返回 FILE_OCR_FAILED', async () => {
     const mockLLM = makeMockLLMError()
     const ops = createFileOperations(mockConfig, mockLLM)
 
