@@ -5,7 +5,7 @@
  * @module ai-store-db
  */
 
-import type { AIStore, AIVectorStore, ReldbSql, StoreFilter, StorePage, VecdbClient, WhereClause, WhereOperator } from './ai-store-types.js'
+import type { AIStore, AIVectorStore, ReldbJsonOps, ReldbSql, StoreFilter, StorePage, VecdbClient, WhereClause, WhereOperator } from './ai-store-types.js'
 
 // ─── Reldb AIStore 实现 ───
 
@@ -18,11 +18,13 @@ import type { AIStore, AIVectorStore, ReldbSql, StoreFilter, StorePage, VecdbCli
 export class ReldbAIStore<T> implements AIStore<T> {
   private readonly sql: ReldbSql
   private readonly table: string
+  private readonly jsonOps: ReldbJsonOps
   private initialized = false
 
-  constructor(sql: ReldbSql, table: string) {
+  constructor(sql: ReldbSql, table: string, jsonOps: ReldbJsonOps) {
     this.sql = sql
     this.table = table
+    this.jsonOps = jsonOps
   }
 
   /**
@@ -187,42 +189,54 @@ export class ReldbAIStore<T> implements AIStore<T> {
   /**
    * 将 WhereClause 编译为 SQL 条件片段列表，同时收集参数化绑定值
    *
-   * 使用 SQLite json_extract(data, '$.field') 从 JSON 列中提取字段进行比较
+   * 使用 reldb.json.extract 从 JSON 列中提取字段进行比较，兼容所有数据库后端
    */
   private buildWhereConditions(where: WhereClause<T>, params: unknown[]): string[] {
     const conditions: string[] = []
 
     for (const key of Object.keys(where)) {
       const value = (where as Record<string, unknown>)[key]
-      const jsonPath = `json_extract(data, '$.${key}')`
+      const path = `$.${key}`
 
       if (this.isWhereOperator(value)) {
         const op = value as WhereOperator<unknown>
         if (op.$in !== undefined && Array.isArray(op.$in)) {
+          const { sql: jsonSql, params: jsonParams } = this.jsonOps.extract('data', path)
           const placeholders = op.$in.map(() => '?').join(', ')
-          conditions.push(`${jsonPath} IN (${placeholders})`)
+          params.push(...jsonParams)
+          conditions.push(`${jsonSql} IN (${placeholders})`)
           params.push(...op.$in)
         }
         if (op.$gte !== undefined) {
-          conditions.push(`${jsonPath} >= ?`)
+          const { sql: jsonSql, params: jsonParams } = this.jsonOps.extract('data', path)
+          params.push(...jsonParams)
+          conditions.push(`${jsonSql} >= ?`)
           params.push(op.$gte)
         }
         if (op.$gt !== undefined) {
-          conditions.push(`${jsonPath} > ?`)
+          const { sql: jsonSql, params: jsonParams } = this.jsonOps.extract('data', path)
+          params.push(...jsonParams)
+          conditions.push(`${jsonSql} > ?`)
           params.push(op.$gt)
         }
         if (op.$lte !== undefined) {
-          conditions.push(`${jsonPath} <= ?`)
+          const { sql: jsonSql, params: jsonParams } = this.jsonOps.extract('data', path)
+          params.push(...jsonParams)
+          conditions.push(`${jsonSql} <= ?`)
           params.push(op.$lte)
         }
         if (op.$lt !== undefined) {
-          conditions.push(`${jsonPath} < ?`)
+          const { sql: jsonSql, params: jsonParams } = this.jsonOps.extract('data', path)
+          params.push(...jsonParams)
+          conditions.push(`${jsonSql} < ?`)
           params.push(op.$lt)
         }
       }
       else {
         // 等值匹配
-        conditions.push(`${jsonPath} = ?`)
+        const { sql: jsonSql, params: jsonParams } = this.jsonOps.extract('data', path)
+        params.push(...jsonParams)
+        conditions.push(`${jsonSql} = ?`)
         params.push(value)
       }
     }

@@ -12,6 +12,7 @@ import type {
   ReldbDdlOperations,
   ReldbError,
   ReldbFunctions,
+  ReldbJsonOps,
   ReldbProvider,
   ReldbSqlOperations,
   ReldbTxManager,
@@ -26,6 +27,7 @@ import { ReldbConfigSchema, ReldbErrorCode } from './reldb-config.js'
 
 import { createCrud } from './reldb-crud-kernel.js'
 import { reldbM } from './reldb-i18n.js'
+import { createJsonOps } from './reldb-json.js'
 import { pagination } from './reldb-pagination.js'
 
 const logger = core.logger.child({ module: 'reldb', scope: 'main' })
@@ -76,6 +78,9 @@ const notInitializedCrud: ReldbCrudManager = {
   table: config => createCrud(notInitializedSql, config),
 }
 
+/** 未初始化时的 JSON 操作构建器（默认使用 SQLite 格式） */
+const notInitializedJson: ReldbJsonOps = createJsonOps('sqlite')
+
 /** 未初始化时的事务管理器占位对象 */
 const notInitializedTx: ReldbTxManager = {
   begin: async () => notInitialized.result(),
@@ -93,6 +98,7 @@ const notInitializedTx: ReldbTxManager = {
  * - `reldb.ddl` - DDL 操作（表结构管理）
  * - `reldb.sql` - SQL 操作（数据查询和修改）
  * - `reldb.tx` - 事务管理器（begin / wrap）
+ * - `reldb.json` - JSON 路径操作 SQL 构建器（提取、设置、插入、删除、合并）
  * - `reldb.config` - 当前配置
  * - `reldb.isInitialized` - 初始化状态
  *
@@ -226,6 +232,35 @@ export const reldb: ReldbFunctions = {
    */
   get pagination() {
     return pagination
+  },
+
+  /**
+   * 获取 JSON 路径操作 SQL 构建器
+   *
+   * 根据当前数据库类型返回对应的 JSON 操作实现。
+   * 未初始化时返回 SQLite 格式的构建器作为默认值。
+   *
+   * 构建器方法均为纯函数，返回 `{ sql, params }` 可直接嵌入 SQL 查询。
+   *
+   * @example
+   * ```ts
+   * // 提取 JSON 字段值
+   * const { sql, params } = reldb.json.extract('settings', '$.theme')
+   * const rows = await reldb.sql.query(
+   *   `SELECT * FROM users WHERE ${sql} = ?`,
+   *   [...params, '"dark"'],
+   * )
+   *
+   * // 设置 JSON 字段路径
+   * const { sql, params } = reldb.json.set('settings', '$.theme', 'dark')
+   * await reldb.sql.execute(
+   *   `UPDATE users SET settings = ${sql} WHERE id = ?`,
+   *   [...params, userId],
+   * )
+   * ```
+   */
+  get json(): ReldbJsonOps {
+    return currentConfig ? createJsonOps(currentConfig.type) : notInitializedJson
   },
 
   /**

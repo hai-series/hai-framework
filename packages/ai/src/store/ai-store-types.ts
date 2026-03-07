@@ -145,6 +145,26 @@ export interface AIVectorStore {
 // ─── 外部依赖鸭子类型（统一定义，避免各文件重复声明） ───
 
 /**
+ * reldb JSON 操作接口（鸭子类型，避免硬依赖 @h-ai/reldb）
+ *
+ * 与 `@h-ai/reldb` 中 `ReldbJsonOps` 对应，仅声明 `extract` 方法（当前使用到的子集）。
+ */
+export interface ReldbJsonExpr {
+  /** SQL 表达式片段（含 ? 占位符） */
+  sql: string
+  /** 参数列表（对应 ? 占位符） */
+  params: unknown[]
+}
+
+/**
+ * reldb JSON 路径操作接口（鸭子类型，避免硬依赖 @h-ai/reldb）
+ */
+export interface ReldbJsonOps {
+  /** 提取 JSON 路径值 */
+  extract: (column: string, path: string) => ReldbJsonExpr
+}
+
+/**
  * reldb SQL 操作接口（鸭子类型，避免硬依赖 @h-ai/reldb）
  */
 export interface ReldbSql {

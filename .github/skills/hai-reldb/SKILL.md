@@ -16,6 +16,7 @@ description: 使用 @h-ai/reldb 进行 SQLite/PostgreSQL/MySQL 的初始化、DD
 - 处理分页查询或分页结果规范化
 - 需要基于 `ReldbErrorCode` 做错误分支处理
 - 跨仓库事务（多个 Repository 共享同一 `tx` 句柄）
+- JSON 列的路径提取、设置、插入、删除、合并操作（跨数据库统一语法）
 
 ## 参考资料（优先读取）
 
@@ -23,6 +24,7 @@ description: 使用 @h-ai/reldb 进行 SQLite/PostgreSQL/MySQL 的初始化、DD
 - `packages/reldb/src/reldb-main.ts` — `reldb` 对象入口
 - `packages/reldb/src/reldb-types.ts` — 全部公共类型定义
 - `packages/reldb/src/reldb-config.ts` — 配置 Schema、错误码、DbType
+- `packages/reldb/src/reldb-json.ts` — JSON 路径操作 SQL 构建器
 - `packages/reldb/src/reldb-crud-kernel.ts` — `reldb.crud.table()` 实现
 - `packages/reldb/src/reldb-crud-repository.ts` — `BaseReldbCrudRepository` 抽象类
 - `packages/reldb/src/reldb-pagination.ts` — 分页工具函数
@@ -73,6 +75,7 @@ await reldb.close()
 | 业务仓库封装         | `BaseReldbCrudRepository`  | 字段映射、自动建表、类型转换、时间戳自动填充 |
 | 事务                 | `reldb.tx.*`               | `wrap`（自动）/ `begin`（手动）              |
 | 分页工具             | `reldb.pagination.*`       | `normalize` 参数校验 / `build` 构造结果      |
+| JSON 路径操作        | `reldb.json.*`             | 跨数据库统一 JSON 表达式构建                 |
 
 ### 3. DDL 操作
 
@@ -402,6 +405,52 @@ const result = reldb.pagination.build(items, total, { page: 1, pageSize: 20 })
 // => { items, total, page, pageSize, totalPages }
 ```
 
+### 10. JSON 路径操作 — `reldb.json`
+
+通过 `reldb.json` 构建跨数据库统一的 JSON 路径操作 SQL 表达式，返回 `{ sql, params }` 可直接嵌入 `reldb.sql.*`。
+
+**路径格式**：遵循 SQL/JSON Path 标准，以 `$` 开头，例如 `$.key`、`$.key.subkey`、`$[0]`。
+
+**跨数据库映射**：
+
+| 操作      | SQLite         | PostgreSQL     | MySQL          |
+| --------- | -------------- | -------------- | -------------- | -------- | ------------------ |
+| `extract` | `json_extract` | `#>` (text[])  | `JSON_EXTRACT` |
+| `set`     | `json_set`     | `jsonb_set`    | `JSON_SET`     |
+| `insert`  | `json_insert`  | `jsonb_insert` | `JSON_INSERT`  |
+| `remove`  | `json_remove`  | `#-` (text[])  | `JSON_REMOVE`  |
+| `merge`   | `json_patch`   | `              |                | ::jsonb` | `JSON_MERGE_PATCH` |
+
+```ts
+// 提取 JSON 字段值（用于 WHERE 条件或 SELECT 列）
+const { sql, params } = reldb.json.extract('settings', '$.theme')
+const rows = await reldb.sql.query(
+  `SELECT * FROM users WHERE ${sql} = ?`,
+  [...params, '"dark"'],
+)
+
+// 设置 JSON 字段路径（创建或替换）
+const { sql, params } = reldb.json.set('settings', '$.theme', 'dark')
+await reldb.sql.execute(
+  `UPDATE users SET settings = ${sql} WHERE id = ?`,
+  [...params, userId],
+)
+
+// 插入 JSON 字段路径（仅当路径不存在时）
+const { sql, params } = reldb.json.insert('data', '$.firstSeen', new Date().toISOString())
+await reldb.sql.execute(`UPDATE events SET data = ${sql} WHERE id = ?`, [...params, id])
+
+// 删除 JSON 字段路径
+const { sql, params } = reldb.json.remove('settings', '$.deprecated')
+await reldb.sql.execute(`UPDATE users SET settings = ${sql} WHERE id = ?`, [...params, id])
+
+// 合并 JSON 对象（RFC 7396：null 值表示删除对应键）
+const { sql, params } = reldb.json.merge('profile', { bio: '新简介', avatar: null })
+await reldb.sql.execute(`UPDATE users SET profile = ${sql} WHERE id = ?`, [...params, userId])
+```
+
+> **注意**：`column` 参数为列名或 SQL 表达式，**禁止传入用户输入**（开发者负责安全性）。
+
 ---
 
 ## 错误处理
@@ -547,6 +596,7 @@ interface ReldbTxHandle extends DataOperations {
 - SQLite / PostgreSQL / MySQL
 - `wrap` / `begin` / `commit` / `rollback` / `queryPage` / `batch`
 - 字段映射 / 自动建表 / 类型转换 / 时间戳填充
+- JSON 路径 / `reldb.json` / `json_extract` / `jsonb_set` / `JSON_EXTRACT` / `json_patch`
 
 ```
 

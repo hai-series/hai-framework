@@ -6,7 +6,7 @@
  * @module ai-store-factory
  */
 
-import type { AIStore, AIStoreMode, AIVectorStore, ReldbSql, VecdbClient } from './ai-store-types.js'
+import type { AIStore, AIStoreMode, AIVectorStore, ReldbJsonOps, ReldbSql, VecdbClient } from './ai-store-types.js'
 
 import { core } from '@h-ai/core'
 
@@ -17,10 +17,10 @@ const logger = core.logger.child({ module: 'ai', scope: 'store' })
 
 // ─── reldb / vecdb 动态加载 ───
 
-async function loadReldbSql(): Promise<ReldbSql | null> {
+async function loadReldbSql(): Promise<{ sql: ReldbSql, jsonOps: ReldbJsonOps } | null> {
   try {
     const { reldb } = await import('@h-ai/reldb')
-    return reldb.isInitialized ? reldb.sql as unknown as ReldbSql : null
+    return reldb.isInitialized ? { sql: reldb.sql as unknown as ReldbSql, jsonOps: reldb.json as unknown as ReldbJsonOps } : null
   }
   catch {
     return null
@@ -49,10 +49,10 @@ function createLazyReldbStore<T>(table: string): AIStore<T> {
 
   async function resolve(): Promise<AIStore<T>> {
     if (!delegate) {
-      const sql = await loadReldbSql()
-      if (sql) {
+      const reldb = await loadReldbSql()
+      if (reldb) {
         logger.debug('Lazy-resolved persistent AIStore', { table })
-        delegate = new ReldbAIStore<T>(sql, table)
+        delegate = new ReldbAIStore<T>(reldb.sql, table, reldb.jsonOps)
       }
       else {
         logger.warn('reldb not available, falling back to memory store', { table })
