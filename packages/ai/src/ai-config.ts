@@ -130,6 +130,22 @@ export const AIErrorCode = {
   /** 超出 Token 预算 */
   CONTEXT_BUDGET_EXCEEDED: 12953,
 
+  // Rerank (12020-12029)
+  /** Rerank API 调用错误 */
+  RERANK_API_ERROR: 12020,
+  /** Rerank 请求参数无效 */
+  RERANK_INVALID_REQUEST: 12021,
+
+  // File (12030-12049)
+  /** 文件解析失败 */
+  FILE_PARSE_FAILED: 12030,
+  /** 不支持的文件格式 */
+  FILE_UNSUPPORTED_FORMAT: 12031,
+  /** OCR 识别失败 */
+  FILE_OCR_FAILED: 12032,
+  /** 文件内容无效 */
+  FILE_INVALID_CONTENT: 12033,
+
   // Store (13000-13049)
   /** 存储操作失败 */
   STORE_FAILED: 13000,
@@ -505,6 +521,43 @@ export const StoreConfigSchema = z.object({
 /** Store 配置类型 */
 export type StoreConfig = z.infer<typeof StoreConfigSchema>
 
+// ─── Rerank 配置 Schema ───
+
+/**
+ * Rerank 配置 Schema
+ *
+ * 配置文档重排序 API 参数。
+ * apiKey / baseUrl 未配置时回退到 LLM 配置。
+ */
+export const RerankConfigSchema = z.object({
+  /** Rerank API Key（未配置时回退到 LLM apiKey） */
+  apiKey: z.string().optional(),
+  /** Rerank API Base URL（未配置时回退到 LLM baseUrl，默认 Cohere） */
+  baseUrl: z.url().optional(),
+  /** 默认 Rerank 模型名称（默认 'rerank-english-v3.0'） */
+  model: z.string().optional(),
+})
+
+/** Rerank 配置类型 */
+export type RerankConfig = z.infer<typeof RerankConfigSchema>
+
+// ─── File 配置 Schema ───
+
+/**
+ * File 配置 Schema
+ *
+ * 配置文件解析参数：OCR 模型和提示词。
+ */
+export const FileConfigSchema = z.object({
+  /** OCR 使用的视觉模型（默认使用 LLM 默认模型） */
+  ocrModel: z.string().optional(),
+  /** OCR 系统提示词（可选，覆盖内置默认提示词） */
+  ocrPrompt: z.string().optional(),
+})
+
+/** File 配置类型 */
+export type FileConfig = z.infer<typeof FileConfigSchema>
+
 /**
  * AI 配置 Schema
  *
@@ -543,6 +596,10 @@ export const AIConfigSchema = z.object({
   context: ContextConfigSchema.optional(),
   /** Store 配置 */
   store: StoreConfigSchema.optional(),
+  /** Rerank 配置 */
+  rerank: RerankConfigSchema.optional(),
+  /** File 解析配置 */
+  file: FileConfigSchema.optional(),
 })
 
 /** AI 配置类型（校验后的完整类型） */

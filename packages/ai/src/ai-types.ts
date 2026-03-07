@@ -10,12 +10,14 @@ import type { Result } from '@h-ai/core'
 import type { AIConfig, AIConfigInput, AIErrorCodeType } from './ai-config.js'
 import type { ContextOperations } from './context/ai-context-types.js'
 import type { EmbeddingOperations } from './embedding/ai-embedding-types.js'
+import type { FileOperations } from './file/ai-file-types.js'
 import type { KnowledgeOperations } from './knowledge/ai-knowledge-types.js'
 import type { LLMOperations, StreamOperations, ToolsOperations } from './llm/ai-llm-types.js'
 import type { MCPOperations } from './mcp/ai-mcp-types.js'
 import type { MemoryOperations } from './memory/ai-memory-types.js'
 import type { RagOperations } from './rag/ai-rag-types.js'
 import type { ReasoningOperations } from './reasoning/ai-reasoning-types.js'
+import type { RerankOperations } from './rerank/ai-rerank-types.js'
 import type { RetrievalOperations } from './retrieval/ai-retrieval-types.js'
 
 // ─── 错误类型 ───
@@ -91,6 +93,10 @@ export interface AIFunctions {
   readonly memory: MemoryOperations
   /** Context 操作（上下文压缩、摘要、Token 估算），需要先调用 `init()` */
   readonly context: ContextOperations
+  /** Rerank 操作（文档重排序），需要先调用 `init()` */
+  readonly rerank: RerankOperations
+  /** File 操作（文件内容解析），需要先调用 `init()` */
+  readonly file: FileOperations
 }
 
 // ─── 子功能类型 re-export ───
@@ -120,6 +126,16 @@ export type {
 // ─── Knowledge 类型 re-export ───
 
 export type {
+  FileOperations,
+  FileParseMethod,
+  FileParseOptions,
+  FileParseRequest,
+  FileParseResult,
+} from './file/ai-file-types.js'
+
+// ─── LLM 类型 re-export ───
+
+export type {
   EntityDocumentRelation,
   EntityDocumentResult,
   EntityListOptions,
@@ -136,7 +152,7 @@ export type {
   KnowledgeSetupOptions,
 } from './knowledge/ai-knowledge-types.js'
 
-// ─── LLM 类型 re-export ───
+// ─── MCP 类型 re-export ───
 
 export type {
   AssistantMessage,
@@ -173,7 +189,7 @@ export type {
   UserMessage,
 } from './llm/ai-llm-types.js'
 
-// ─── MCP 类型 re-export ───
+// ─── Memory 类型 re-export ───
 
 export type {
   MCPContext,
@@ -190,7 +206,7 @@ export type {
   MCPToolHandler,
 } from './mcp/ai-mcp-types.js'
 
-// ─── Memory 类型 re-export ───
+// ─── RAG 类型 re-export ───
 
 export type {
   MemoryClearOptions,
@@ -204,7 +220,7 @@ export type {
   MemoryRecallOptions,
 } from './memory/ai-memory-types.js'
 
-// ─── RAG 类型 re-export ───
+// ─── Reasoning 类型 re-export ───
 
 export type {
   RagContextItem,
@@ -213,7 +229,7 @@ export type {
   RagResult,
 } from './rag/ai-rag-types.js'
 
-// ─── Reasoning 类型 re-export ───
+// ─── Retrieval 类型 re-export ───
 
 export type {
   ReasoningOperations,
@@ -224,7 +240,17 @@ export type {
   ReasoningStrategy,
 } from './reasoning/ai-reasoning-types.js'
 
-// ─── Retrieval 类型 re-export ───
+// ─── Store 类型 re-export ───
+
+export type {
+  RerankDocument,
+  RerankItem,
+  RerankOperations,
+  RerankRequest,
+  RerankResponse,
+} from './rerank/ai-rerank-types.js'
+
+// ─── Rerank 类型 re-export ───
 
 export type {
   Citation,
@@ -235,7 +261,7 @@ export type {
   RetrievalSource,
 } from './retrieval/ai-retrieval-types.js'
 
-// ─── Store 类型 re-export ───
+// ─── File 类型 re-export ───
 
 export type {
   AIStore,
