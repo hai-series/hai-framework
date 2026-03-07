@@ -6,7 +6,7 @@
  */
 
 import type { Result } from '@h-ai/core'
-import type { AIConfig, FileConfig } from '../ai-config.js'
+import type { AIConfig } from '../ai-config.js'
 import type { AIError } from '../ai-types.js'
 import type { LLMOperations } from '../llm/ai-llm-types.js'
 import type {
@@ -20,7 +20,7 @@ import { Buffer } from 'node:buffer'
 
 import { core, err, ok } from '@h-ai/core'
 
-import { AIErrorCode } from '../ai-config.js'
+import { AIErrorCode, resolveModel } from '../ai-config.js'
 import { aiM } from '../ai-i18n.js'
 
 const logger = core.logger.child({ module: 'ai', scope: 'file' })
@@ -297,7 +297,12 @@ async function parseImageWithOcr(
  * @returns FileOperations 实例
  */
 export function createFileOperations(config: AIConfig, llmOps: LLMOperations): FileOperations {
-  const fileConfig: Partial<FileConfig> = config.file ?? {}
+  const fileConfig = config.file ?? {}
+
+  /** 解析 OCR 场景模型：优先使用请求级覆盖，然后通过场景映射获取 */
+  function resolveOcrModel(explicitModel?: string): string {
+    return resolveModel(config.llm, 'ocr', explicitModel)
+  }
 
   /**
    * 核心解析逻辑
@@ -316,7 +321,7 @@ export function createFileOperations(config: AIConfig, llmOps: LLMOperations): F
           message: aiM('ai_fileInvalidContent', { params: { reason: 'OCR requires Buffer content' } }),
         })
       }
-      const ocrModel = options.ocrModel ?? fileConfig.ocrModel
+      const ocrModel = resolveOcrModel(options.ocrModel)
       const ocrResult = await parseImageWithOcr(content, mimeType, llmOps, ocrModel, options.ocrPrompt ?? fileConfig.ocrPrompt)
       if (!ocrResult.success)
         return ocrResult
@@ -366,14 +371,13 @@ export function createFileOperations(config: AIConfig, llmOps: LLMOperations): F
       }
       // pdfjs-dist 不可用，回退 OCR
       logger.warn('PDF native parser failed, falling back to OCR', { filename })
-      const ocrModel = options.ocrModel ?? fileConfig.ocrModel
-      if (!ocrModel && !config.llm?.apiKey) {
+      if (!config.llm?.apiKey) {
         return err({
           code: AIErrorCode.CONFIGURATION_ERROR,
-          message: aiM('ai_configError', { params: { error: 'PDF OCR fallback requires LLM configuration (apiKey or ocrModel)' } }),
+          message: aiM('ai_configError', { params: { error: 'PDF OCR fallback requires LLM configuration (apiKey)' } }),
         })
       }
-      const ocrResult = await parseImageWithOcr(content, mimeType, llmOps, ocrModel, options.ocrPrompt ?? fileConfig.ocrPrompt)
+      const ocrResult = await parseImageWithOcr(content, mimeType, llmOps, resolveOcrModel(options.ocrModel), options.ocrPrompt ?? fileConfig.ocrPrompt)
       if (!ocrResult.success)
         return ocrResult
       return ok({
@@ -403,8 +407,7 @@ export function createFileOperations(config: AIConfig, llmOps: LLMOperations): F
       }
       // mammoth 不可用，回退 OCR
       logger.warn('DOCX native parser failed, falling back to OCR', { filename })
-      const ocrModel = options.ocrModel ?? fileConfig.ocrModel
-      const ocrResult = await parseImageWithOcr(content, mimeType, llmOps, ocrModel, options.ocrPrompt ?? fileConfig.ocrPrompt)
+      const ocrResult = await parseImageWithOcr(content, mimeType, llmOps, resolveOcrModel(options.ocrModel), options.ocrPrompt ?? fileConfig.ocrPrompt)
       if (!ocrResult.success)
         return ocrResult
       return ok({
@@ -422,8 +425,7 @@ export function createFileOperations(config: AIConfig, llmOps: LLMOperations): F
           message: aiM('ai_fileInvalidContent', { params: { reason: 'Image OCR requires Buffer content' } }),
         })
       }
-      const ocrModel = options.ocrModel ?? fileConfig.ocrModel
-      const ocrResult = await parseImageWithOcr(content, mimeType, llmOps, ocrModel, options.ocrPrompt ?? fileConfig.ocrPrompt)
+      const ocrResult = await parseImageWithOcr(content, mimeType, llmOps, resolveOcrModel(options.ocrModel), options.ocrPrompt ?? fileConfig.ocrPrompt)
       if (!ocrResult.success)
         return ocrResult
       return ok({

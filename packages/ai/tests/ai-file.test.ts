@@ -18,10 +18,9 @@ const mockConfig: AIConfig = {
   llm: { apiKey: 'sk-test', model: 'gpt-4o-mini' },
 } as unknown as AIConfig
 
-/** 构造有 OCR 模型配置的 AI 配置 */
+/** 构造有 OCR 模型配置的 AI 配置（通过 llm.scenarios.ocr） */
 const mockConfigWithOcrModel: AIConfig = {
-  llm: { apiKey: 'sk-test', model: 'gpt-4o-mini' },
-  file: { ocrModel: 'gpt-4o' },
+  llm: { apiKey: 'sk-test', model: 'gpt-4o-mini', scenarios: { ocr: 'gpt-4o' } },
 } as unknown as AIConfig
 
 /** 构造 mock LLM，OCR 调用返回指定文本 */

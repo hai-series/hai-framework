@@ -19,7 +19,7 @@ import type {
 import process from 'node:process'
 import { core, err, ok } from '@h-ai/core'
 
-import { AIErrorCode } from '../ai-config.js'
+import { AIErrorCode, resolveModel } from '../ai-config.js'
 import { aiM } from '../ai-i18n.js'
 
 const logger = core.logger.child({ module: 'ai', scope: 'rerank' })
@@ -111,7 +111,7 @@ export function createRerankOperations(config: AIConfig): RerankOperations {
       })
     }
 
-    const model = request.model ?? rerankConfig.model ?? 'rerank-english-v3.0'
+    const model = request.model ?? resolveModel(config.llm, 'rerank')
     const baseUrl = getBaseUrl()
 
     const body: Record<string, unknown> = {

@@ -41,11 +41,14 @@ const mockConfig: AIConfig = {
 } as unknown as AIConfig
 
 const mockConfigWithRerank: AIConfig = {
-  llm: { apiKey: 'sk-llm-key', model: 'gpt-4o-mini' },
+  llm: {
+    apiKey: 'sk-llm-key',
+    model: 'gpt-4o-mini',
+    scenarios: { rerank: 'rerank-english-v3.0' },
+  },
   rerank: {
     apiKey: 'co-rerank-key',
     baseUrl: 'https://api.cohere.com',
-    model: 'rerank-english-v3.0',
   },
 } as unknown as AIConfig
 
@@ -68,7 +71,7 @@ describe('rerank operations', () => {
         { index: 1, relevance_score: 0.12 },
       ]))
 
-      const ops = createRerankOperations(mockConfig)
+      const ops = createRerankOperations(mockConfigWithRerank)
       const result = await ops.rerank({
         query: '机器学习入门',
         documents: ['今天天气不错', '神经网络是深度学习的基础', '机器学习是 AI 的核心分支'],
@@ -80,6 +83,7 @@ describe('rerank operations', () => {
         expect(result.data.results[0].index).toBe(2)
         expect(result.data.results[0].relevanceScore).toBeCloseTo(0.95)
         expect(result.data.results[1].index).toBe(0)
+        // rerank scenario 映射到 'rerank-english-v3.0'
         expect(result.data.model).toBe('rerank-english-v3.0')
       }
     })

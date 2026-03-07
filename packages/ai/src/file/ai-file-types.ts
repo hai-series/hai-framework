@@ -33,7 +33,12 @@ export interface FileParseOptions {
   mimeType?: string
   /** 强制使用 OCR（即使有原生解析器支持） */
   useOcr?: boolean
-  /** OCR 使用的视觉模型（覆盖全局 `file.ocrModel` 配置） */
+  /**
+   * OCR 使用的视觉模型（请求级覆盖）
+   *
+   * 最高优先级，覆盖 `llm.scenarios.ocr` 场景映射。
+   * 未指定时通过 `llm.scenarios.ocr` 解析。
+   */
   ocrModel?: string
   /** OCR 系统提示词（覆盖全局 `file.ocrPrompt` 配置） */
   ocrPrompt?: string
@@ -94,7 +99,9 @@ export interface FileParseResult {
  * ```ts
  * import { readFile } from 'node:fs/promises'
  *
- * // 解析 PDF
+ * // 解析 PDF（OCR 模型通过 llm.scenarios.ocr 配置）
+ * ai.init({ llm: { apiKey: 'sk-...', scenarios: { ocr: 'gpt-4o' } } })
+ *
  * const pdf = await readFile('document.pdf')
  * const result = await ai.file.parse({ content: pdf, filename: 'document.pdf' })
  *

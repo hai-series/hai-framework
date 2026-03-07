@@ -179,9 +179,11 @@ export type AIErrorCodeType = (typeof AIErrorCode)[keyof typeof AIErrorCode]
  * - `extraction` — 信息提取场景（记忆提取、实体抽取）
  * - `summary` — 摘要/压缩场景（上下文摘要）
  * - `embedding` — 向量嵌入场景
+ * - `rerank` — 文档重排序场景
+ * - `ocr` — 图片 OCR 识别场景（视觉模型）
  * - `fast` — 快速响应场景（低延迟优先）
  */
-export const ModelScenarioSchema = z.enum(['default', 'chat', 'reasoning', 'plan', 'execute', 'extraction', 'summary', 'embedding', 'fast'])
+export const ModelScenarioSchema = z.enum(['default', 'chat', 'reasoning', 'plan', 'execute', 'extraction', 'summary', 'embedding', 'rerank', 'ocr', 'fast'])
 
 /** 模型场景类型 */
 export type ModelScenario = z.infer<typeof ModelScenarioSchema>
@@ -528,14 +530,13 @@ export type StoreConfig = z.infer<typeof StoreConfigSchema>
  *
  * 配置文档重排序 API 参数。
  * apiKey / baseUrl 未配置时回退到 LLM 配置。
+ * 模型通过 `llm.scenarios.rerank` 指定。
  */
 export const RerankConfigSchema = z.object({
   /** Rerank API Key（未配置时回退到 LLM apiKey） */
   apiKey: z.string().optional(),
   /** Rerank API Base URL（未配置时回退到 LLM baseUrl，默认 Cohere） */
   baseUrl: z.url().optional(),
-  /** 默认 Rerank 模型名称（默认 'rerank-english-v3.0'） */
-  model: z.string().optional(),
 })
 
 /** Rerank 配置类型 */
@@ -546,11 +547,10 @@ export type RerankConfig = z.infer<typeof RerankConfigSchema>
 /**
  * File 配置 Schema
  *
- * 配置文件解析参数：OCR 模型和提示词。
+ * 配置文件解析参数：OCR 提示词。
+ * OCR 使用的视觉模型通过 `llm.scenarios.ocr` 指定。
  */
 export const FileConfigSchema = z.object({
-  /** OCR 使用的视觉模型（默认使用 LLM 默认模型） */
-  ocrModel: z.string().optional(),
   /** OCR 系统提示词（可选，覆盖内置默认提示词） */
   ocrPrompt: z.string().optional(),
 })
@@ -571,9 +571,16 @@ export type FileConfig = z.infer<typeof FileConfigSchema>
  *     apiKey: 'sk-xxx',
  *     model: 'gpt-4o-mini',
  *     maxTokens: 4096,
- *     scenarios: { extraction: 'gpt-4o', summary: 'gpt-4o-mini', embedding: 'text-embedding-3-small' },
+ *     scenarios: {
+ *       extraction: 'gpt-4o',
+ *       summary: 'gpt-4o-mini',
+ *       embedding: 'text-embedding-3-small',
+ *       rerank: 'rerank-english-v3.0',
+ *       ocr: 'gpt-4o',
+ *     },
  *   },
  *   embedding: { dimensions: 1536 },
+ *   rerank: { baseUrl: 'https://api.cohere.com' },
  *   knowledge: { collection: 'docs', enableEntityExtraction: true },
  *   memory: { maxEntries: 500, embeddingEnabled: true },
  *   context: { defaultStrategy: 'hybrid', preserveLastN: 4 },
