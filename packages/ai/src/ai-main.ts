@@ -11,12 +11,14 @@ import type { AIConfig, AIConfigInput } from './ai-config.js'
 import type { AIError, AIFunctions } from './ai-types.js'
 import type { ContextOperations, ContextSummary } from './context/ai-context-types.js'
 import type { EmbeddingOperations } from './embedding/ai-embedding-types.js'
+import type { FileOperations } from './file/ai-file-types.js'
 import type { KnowledgeOperations } from './knowledge/ai-knowledge-types.js'
 import type { ChatMessage, ChatRecord, LLMOperations, StreamOperations, ToolsOperations } from './llm/ai-llm-types.js'
 import type { MCPOperations } from './mcp/ai-mcp-types.js'
 import type { MemoryEntry, MemoryOperations } from './memory/ai-memory-types.js'
 import type { RagOperations } from './rag/ai-rag-types.js'
 import type { ReasoningOperations } from './reasoning/ai-reasoning-types.js'
+import type { RerankOperations } from './rerank/ai-rerank-types.js'
 import type { RetrievalOperations } from './retrieval/ai-retrieval-types.js'
 import type { SessionInfo } from './store/ai-store-types.js'
 
@@ -26,6 +28,7 @@ import { AIConfigSchema, AIErrorCode, ContextConfigSchema, KnowledgeConfigSchema
 import { aiM } from './ai-i18n.js'
 import { createContextOperations } from './context/ai-context-functions.js'
 import { createEmbeddingOperations } from './embedding/ai-embedding-functions.js'
+import { createFileOperations } from './file/ai-file-functions.js'
 import { createKnowledgeOperations } from './knowledge/ai-knowledge-functions.js'
 import { createAILLMFunctions } from './llm/ai-llm-functions.js'
 import { collectStream, createSSEDecoder, createStreamProcessor, encodeSSE } from './llm/ai-llm-stream.js'
@@ -34,6 +37,7 @@ import { createAIMCPFunctions } from './mcp/ai-mcp-functions.js'
 import { createMemoryOperations } from './memory/ai-memory-functions.js'
 import { createRagOperations } from './rag/ai-rag-functions.js'
 import { createReasoningOperations } from './reasoning/ai-reasoning-functions.js'
+import { createRerankOperations } from './rerank/ai-rerank-functions.js'
 import { createRetrievalOperations } from './retrieval/ai-retrieval-functions.js'
 import { createAIStore, createAIVectorStore } from './store/ai-store-factory.js'
 
@@ -61,6 +65,10 @@ let currentKnowledge: KnowledgeOperations | null = null
 let currentMemory: MemoryOperations | null = null
 /** 当前 Context 操作实例 */
 let currentContext: ContextOperations | null = null
+/** 当前 Rerank 操作实例 */
+let currentRerank: RerankOperations | null = null
+/** 当前 File 操作实例 */
+let currentFile: FileOperations | null = null
 
 // ─── 未初始化占位 ───
 
@@ -153,6 +161,18 @@ const notInitializedContext: ContextOperations = {
   createManager: () => notInitialized.result(),
   restoreManager: () => Promise.resolve(notInitialized.result()),
   listSessions: () => Promise.resolve(notInitialized.result()),
+}
+
+/** Rerank 未初始化占位 */
+const notInitializedRerank: RerankOperations = {
+  rerank: () => Promise.resolve(notInitialized.result()),
+  rerankTexts: () => Promise.resolve(notInitialized.result()),
+}
+
+/** File 未初始化占位 */
+const notInitializedFile: FileOperations = {
+  parse: () => Promise.resolve(notInitialized.result()),
+  parseText: () => Promise.resolve(notInitialized.result()),
 }
 
 // ─── 纯函数操作（不依赖初始化） ───
@@ -280,6 +300,12 @@ export const ai: AIFunctions = {
       const contextStore = createAIStore<{ messages: ChatMessage[], summaries: ContextSummary[], updatedAt: number }>('ai_context', storeConfig.mode)
       currentContext = createContextOperations(contextParsed, currentLLM, parsed.llm?.maxTokens ?? 4096, contextStore, sessionStore)
 
+      // 创建 Rerank 子功能
+      currentRerank = createRerankOperations(parsed)
+
+      // 创建 File 子功能（依赖 LLM）
+      currentFile = createFileOperations(parsed, currentLLM)
+
       currentConfig = parsed
       logger.info('AI module initialized', { model: parsed.llm?.model })
       return ok(undefined)
@@ -307,6 +333,8 @@ export const ai: AIFunctions = {
   get knowledge(): KnowledgeOperations { return currentKnowledge ?? notInitializedKnowledge },
   get memory(): MemoryOperations { return currentMemory ?? notInitializedMemory },
   get context(): ContextOperations { return currentContext ?? notInitializedContext },
+  get rerank(): RerankOperations { return currentRerank ?? notInitializedRerank },
+  get file(): FileOperations { return currentFile ?? notInitializedFile },
   get config() { return currentConfig },
   get isInitialized() { return currentConfig !== null },
 
@@ -327,6 +355,8 @@ export const ai: AIFunctions = {
     currentKnowledge = null
     currentMemory = null
     currentContext = null
+    currentRerank = null
+    currentFile = null
     currentConfig = null
 
     logger.info('AI module closed')

@@ -56,5 +56,12 @@
   "ai_storeFailed": "存储操作失败：{error}",
   "ai_storeNotAvailable": "存储后端不可用，已降级为内存模式",
   "ai_sessionNotFound": "会话 '{id}' 不存在",
-  "ai_sessionFailed": "会话操作失败：{error}"
+  "ai_sessionFailed": "会话操作失败：{error}",
+
+  "ai_rerankApiFailed": "Rerank API 调用失败：{error}",
+  "ai_rerankInvalidRequest": "Rerank 请求参数无效：{reason}",
+  "ai_fileParseFailed": "文件解析失败：{error}",
+  "ai_fileUnsupportedFormat": "不支持的文件格式：{mimeType}",
+  "ai_fileOcrFailed": "OCR 识别失败：{error}",
+  "ai_fileInvalidContent": "文件内容无效：{reason}"
 }

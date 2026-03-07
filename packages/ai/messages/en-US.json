@@ -56,5 +56,12 @@
   "ai_storeFailed": "Store operation failed: {error}",
   "ai_storeNotAvailable": "Store backend not available, degraded to memory mode",
   "ai_sessionNotFound": "Session '{id}' not found",
-  "ai_sessionFailed": "Session operation failed: {error}"
+  "ai_sessionFailed": "Session operation failed: {error}",
+
+  "ai_rerankApiFailed": "Rerank API call failed: {error}",
+  "ai_rerankInvalidRequest": "Invalid rerank request: {reason}",
+  "ai_fileParseFailed": "File parsing failed: {error}",
+  "ai_fileUnsupportedFormat": "Unsupported file format: {mimeType}",
+  "ai_fileOcrFailed": "OCR recognition failed: {error}",
+  "ai_fileInvalidContent": "Invalid file content: {reason}"
 }
