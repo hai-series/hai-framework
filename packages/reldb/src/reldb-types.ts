@@ -7,6 +7,9 @@
 
 import type { PaginatedResult, PaginationOptions, PaginationOptionsInput, Result } from '@h-ai/core'
 import type { ReldbConfig, ReldbConfigInput, ReldbErrorCodeType } from './reldb-config.js'
+import type { JsonSqlExpr, ReldbJsonOps } from './reldb-json.js'
+
+export type { JsonSqlExpr, ReldbJsonOps }
 
 // ─── 错误类型 ───
 
@@ -650,6 +653,33 @@ export interface ReldbFunctions extends DbCompositeOperations {
 
   /** 分页工具 */
   readonly pagination: DbPagination
+
+  /**
+   * JSON 操作 SQL 构建器
+   *
+   * 提供跨数据库统一的 JSON 路径操作（提取、设置、插入、删除、合并）。
+   * 返回的 SQL 片段可嵌入 `reldb.sql.query` / `reldb.sql.execute` 等调用。
+   *
+   * 未初始化时默认返回 SQLite 格式的构建器；初始化后自动匹配当前数据库类型。
+   *
+   * @example
+   * ```ts
+   * // 提取 JSON 字段值（用于 WHERE 条件）
+   * const { sql, params } = reldb.json.extract('settings', '$.theme')
+   * const rows = await reldb.sql.query(
+   *   `SELECT * FROM users WHERE ${sql} = ?`,
+   *   [...params, '"dark"'],
+   * )
+   *
+   * // 设置 JSON 字段路径
+   * const { sql, params } = reldb.json.set('settings', '$.theme', 'dark')
+   * await reldb.sql.execute(
+   *   `UPDATE users SET settings = ${sql} WHERE id = ?`,
+   *   [...params, userId],
+   * )
+   * ```
+   */
+  readonly json: ReldbJsonOps
 
   /** 关闭数据库连接 */
   close: () => Promise<Result<void, ReldbError>>
