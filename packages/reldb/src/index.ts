@@ -1,5 +1,6 @@
 export * from './reldb-config.js'
 export * from './reldb-crud-repository.js'
+export * from './reldb-json.js'
 export * from './reldb-main.js'
 export * from './reldb-security.js'
 export * from './reldb-types.js'

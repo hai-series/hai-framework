@@ -271,6 +271,119 @@ if (txResult.success) {
 }
 ```
 
+## JSON 路径操作
+
+通过 `reldb.json` 构建跨数据库统一的 JSON 路径操作 SQL 表达式。
+
+路径格式遵循 SQL/JSON Path 标准（`$.key` / `$.key.subkey` / `$[0]`），各数据库后端自动映射到对应函数或操作符。
+
+| 操作      | SQLite         | PostgreSQL     | MySQL              |
+| --------- | -------------- | -------------- | ------------------ |
+| `extract` | `json_extract` | `#>` (text[])  | `JSON_EXTRACT`     |
+| `set`     | `json_set`     | `jsonb_set`    | `JSON_SET`         |
+| `insert`  | `json_insert`  | `jsonb_insert` | `JSON_INSERT`      |
+| `remove`  | `json_remove`  | `#-` (text[])  | `JSON_REMOVE`      |
+| `merge`   | `json_patch`   | `\|\| ::jsonb` | `JSON_MERGE_PATCH` |
+
+所有方法返回 `{ sql, params }` 片段，可直接嵌入 `reldb.sql.query` / `reldb.sql.execute`。
+
+### extract — 提取 JSON 字段值
+
+```ts
+// 用于 WHERE 条件
+const { sql, params } = reldb.json.extract('settings', '$.theme')
+const rows = await reldb.sql.query(
+  `SELECT * FROM users WHERE ${sql} = ?`,
+  [...params, '"dark"'],
+)
+
+// 用于 SELECT 列
+const { sql, params } = reldb.json.extract('profile', '$.name')
+const result = await reldb.sql.query(
+  `SELECT id, ${sql} as display_name FROM users`,
+  params,
+)
+```
+
+### set — 设置 JSON 字段路径（创建或替换）
+
+```ts
+const { sql, params } = reldb.json.set('settings', '$.theme', 'dark')
+await reldb.sql.execute(
+  `UPDATE users SET settings = ${sql} WHERE id = ?`,
+  [...params, userId],
+)
+```
+
+### insert — 插入 JSON 字段路径（仅当路径不存在时）
+
+```ts
+const { sql, params } = reldb.json.insert('data', '$.firstSeen', new Date().toISOString())
+await reldb.sql.execute(
+  `UPDATE events SET data = ${sql} WHERE id = ?`,
+  [...params, eventId],
+)
+```
+
+### remove — 删除 JSON 字段路径
+
+```ts
+const { sql, params } = reldb.json.remove('settings', '$.deprecated')
+await reldb.sql.execute(
+  `UPDATE users SET settings = ${sql} WHERE id = ?`,
+  [...params, userId],
+)
+```
+
+### merge — 合并 JSON 对象（RFC 7396 Merge Patch）
+
+```ts
+// 覆盖已有键、保留未提及键、将 null 键删除
+const { sql, params } = reldb.json.merge('profile', {
+  bio: '新简介',
+  avatar: null, // 传入 null 表示删除该键
+})
+await reldb.sql.execute(
+  `UPDATE users SET profile = ${sql} WHERE id = ?`,
+  [...params, userId],
+)
+```
+
+### 完整示例
+
+```ts
+// 建表（含 JSON 列）
+await reldb.ddl.createTable('products', {
+  id: { type: 'INTEGER', primaryKey: true, autoIncrement: true },
+  meta: { type: 'JSON' },
+})
+
+// 插入初始 JSON
+await reldb.sql.execute(
+  `INSERT INTO products (meta) VALUES (?)`,
+  [JSON.stringify({ status: 'draft', tags: ['new'], version: 1 })],
+)
+
+// 设置字段
+const { sql: setSql, params: setParams } = reldb.json.set('meta', '$.status', 'published')
+await reldb.sql.execute(`UPDATE products SET meta = ${setSql} WHERE id = ?`, [...setParams, 1])
+
+// 提取字段（用于过滤）
+const { sql: exSql, params: exParams } = reldb.json.extract('meta', '$.status')
+const published = await reldb.sql.query(
+  `SELECT * FROM products WHERE ${exSql} = ?`,
+  [...exParams, '"published"'],
+)
+
+// 合并更新
+const { sql: mSql, params: mParams } = reldb.json.merge('meta', { version: 2, reviewer: 'admin' })
+await reldb.sql.execute(`UPDATE products SET meta = ${mSql} WHERE id = ?`, [...mParams, 1])
+
+// 删除字段
+const { sql: rmSql, params: rmParams } = reldb.json.remove('meta', '$.reviewer')
+await reldb.sql.execute(`UPDATE products SET meta = ${rmSql} WHERE id = ?`, [...rmParams, 1])
+```
+
 ## 错误处理
 
 所有操作返回 `Result<T, ReldbError>`，通过 `result.success` 判断成功或失败。
