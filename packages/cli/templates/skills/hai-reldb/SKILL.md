@@ -15,6 +15,7 @@ description: 使用 @h-ai/reldb 进行 SQLite/PostgreSQL/MySQL 的初始化、SQ
 - 使用 `reldb.crud.table` 或 `BaseReldbCrudRepository` 构建数据仓库
 - 处理分页查询与分页结果规范化
 - 基于 `ReldbErrorCode` 做错误分支处理
+- JSON 列的路径提取、设置、插入、删除、合并操作（跨数据库统一语法）
 
 ---
 
@@ -54,6 +55,7 @@ await reldb.close()
 | 仓库 | 业务数据仓库封装   | `extends BaseReldbCrudRepository` |
 | 事务 | 事务管理           | `reldb.tx`                      |
 | 分页 | 分页参数与结果     | `reldb.pagination`              |
+| JSON | JSON 路径操作      | `reldb.json`                    |
 
 ---
 
@@ -332,6 +334,48 @@ interface PaginatedResult<T> {
 
 // 默认值：page=1, pageSize=20, maxPageSize=200
 ```
+
+---
+
+### JSON — `reldb.json`
+
+通过 `reldb.json` 构建跨数据库统一的 JSON 路径操作 SQL 表达式，返回 `{ sql, params }` 可直接嵌入 `reldb.sql.*`。
+
+路径格式遵循 SQL/JSON Path 标准，以 `$` 开头（如 `$.key`、`$.key.subkey`、`$[0]`）。
+
+| 操作      | SQLite             | PostgreSQL               | MySQL                  |
+| --------- | ------------------ | ------------------------ | ---------------------- |
+| `extract` | `json_extract`     | `#>` (text[])            | `JSON_EXTRACT`         |
+| `set`     | `json_set`         | `jsonb_set`              | `JSON_SET`             |
+| `insert`  | `json_insert`      | `jsonb_insert`           | `JSON_INSERT`          |
+| `remove`  | `json_remove`      | `#-` (text[])            | `JSON_REMOVE`          |
+| `merge`   | `json_patch`       | `|| ::jsonb`              | `JSON_MERGE_PATCH`     |
+
+```typescript
+// 提取 JSON 字段值（用于 WHERE 条件）
+const { sql, params } = reldb.json.extract('settings', '$.theme')
+const rows = await reldb.sql.query(
+  `SELECT * FROM users WHERE ${sql} = ?`,
+  [...params, '"dark"'],
+)
+
+// 设置 JSON 字段路径（创建或替换）
+const { sql, params } = reldb.json.set('settings', '$.theme', 'dark')
+await reldb.sql.execute(
+  `UPDATE users SET settings = ${sql} WHERE id = ?`,
+  [...params, userId],
+)
+
+// 删除 JSON 字段路径
+const { sql, params } = reldb.json.remove('settings', '$.deprecated')
+await reldb.sql.execute(`UPDATE users SET settings = ${sql} WHERE id = ?`, [...params, id])
+
+// 合并 JSON 对象（RFC 7396：null 值表示删除对应键）
+const { sql, params } = reldb.json.merge('profile', { bio: '新简介', avatar: null })
+await reldb.sql.execute(`UPDATE users SET profile = ${sql} WHERE id = ?`, [...params, userId])
+```
+
+> `column` 参数为列名，**禁止传入用户输入**（开发者负责安全性）。
 
 ---
 
