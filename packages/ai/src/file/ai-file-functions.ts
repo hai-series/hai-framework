@@ -349,8 +349,8 @@ export function createFileOperations(config: AIConfig, llmOps: LLMOperations): F
       const ocrModel = options.ocrModel ?? fileConfig.ocrModel
       if (!ocrModel && !config.llm?.apiKey) {
         return err({
-          code: AIErrorCode.FILE_UNSUPPORTED_FORMAT,
-          message: aiM('ai_fileUnsupportedFormat', { params: { mimeType } }),
+          code: AIErrorCode.CONFIGURATION_ERROR,
+          message: aiM('ai_configError', { params: { error: 'PDF OCR fallback requires LLM configuration (apiKey or ocrModel)' } }),
         })
       }
       const ocrResult = await parseImageWithOcr(content, mimeType, llmOps, ocrModel, options.ocrPrompt ?? fileConfig.ocrPrompt)
