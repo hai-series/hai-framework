@@ -149,9 +149,9 @@ function parseTextContent(content: Buffer | string): string {
  */
 function parseHtmlContent(content: Buffer | string): string {
   const html = parseTextContent(content)
-  // 使用宽松结束标签匹配（允许 </script > 等格式）
-  const noScript = html.replace(/<script\b[^<]*(?:(?!<\/script\s*>)<[^<]*)*<\/script\s*>/gi, ' ')
-  const noStyle = noScript.replace(/<style\b[^<]*(?:(?!<\/style\s*>)<[^<]*)*<\/style\s*>/gi, ' ')
+  // 使用非贪婪匹配移除 script 和 style 块（兼容结束标签中含空白/属性的情况）
+  const noScript = html.replace(/<script[^>]*>[\s\S]*?<\/script[^>]*>/gi, ' ')
+  const noStyle = noScript.replace(/<style[^>]*>[\s\S]*?<\/style[^>]*>/gi, ' ')
   const noTags = noStyle.replace(/<[^>]+>/g, ' ')
   // 单次替换常见 HTML 实体，避免链式替换造成的二次转义
   const HTML_ENTITIES: Record<string, string> = {
