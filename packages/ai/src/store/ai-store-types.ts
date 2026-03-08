@@ -5,11 +5,6 @@
  * @module ai-store-types
  */
 
-// ─── 存储模式 ───
-
-/** 存储模式 */
-export type AIStoreMode = 'memory' | 'persistent'
-
 // ─── 查询过滤 ───
 
 /**
@@ -175,14 +170,21 @@ export interface ReldbSql {
 
 /**
  * vecdb 客户端接口（鸭子类型，避免硬依赖 @h-ai/vecdb）
+ *
+ * 结构与 @h-ai/vecdb 的 VecdbFunctions 对齐，通过 `vector` 和 `collection` 子对象访问操作。
  */
 export interface VecdbClient {
   isInitialized: boolean
-  upsert: (collection: string, records: Array<{ id: string, vector: number[], metadata?: Record<string, unknown> }>) => Promise<{ success: boolean, error?: { message: string } }>
-  search: (collection: string, vector: number[], options?: { topK?: number, filter?: Record<string, unknown> }) => Promise<{ success: boolean, data: Array<{ id: string, score: number, metadata?: Record<string, unknown> }>, error?: { message: string } }>
-  remove: (collection: string, ids: string[]) => Promise<{ success: boolean, error?: { message: string } }>
-  removeByFilter: (collection: string, filter: Record<string, unknown>) => Promise<{ success: boolean, data: number, error?: { message: string } }>
-  clear: (collection: string) => Promise<{ success: boolean, error?: { message: string } }>
+  vector: {
+    upsert: (collection: string, documents: Array<{ id: string, vector: number[], content?: string, metadata?: Record<string, unknown> }>) => Promise<{ success: boolean, error?: { message: string } }>
+    search: (collection: string, vector: number[], options?: { topK?: number, filter?: Record<string, unknown>, minScore?: number }) => Promise<{ success: boolean, data: Array<{ id: string, score: number, content?: string, metadata?: Record<string, unknown> }>, error?: { message: string } }>
+    delete: (collection: string, ids: string[]) => Promise<{ success: boolean, error?: { message: string } }>
+  }
+  collection: {
+    create: (name: string, options: { dimension: number, metric?: string }) => Promise<{ success: boolean, error?: { message: string } }>
+    drop: (name: string) => Promise<{ success: boolean, error?: { message: string } }>
+    exists: (name: string) => Promise<{ success: boolean, data: boolean, error?: { message: string } }>
+  }
 }
 
 // ─── 交互作用域 ───

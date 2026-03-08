@@ -5,6 +5,10 @@
  * @module ai-config
  */
 
+import type { Result } from '@h-ai/core'
+import type { AIError } from './ai-types.js'
+import process from 'node:process'
+import { err, ok } from '@h-ai/core'
 import { z } from 'zod'
 
 // ─── Context 配置 Schema ───
@@ -229,39 +233,47 @@ export type ModelEntry = z.infer<typeof ModelEntrySchema>
  * 配置大模型调用参数：模型名称、API Key、Base URL、温度等。
  * 支持多模型注册和场景映射。
  *
+ * 顶层 `apiKey`、`baseUrl`、`maxTokens`、`temperature`、`timeout` 作为全局默认值，
+ * 当 `models` 条目中未指定对应字段时，自动回退到这些全局默认值。
+ * 通过 `resolveModelEntry()` 统一解析。
+ *
  * @example
  * ```ts
  * const llmConfig = {
+ *   // 全局默认值（各模型未指定时回退到此处）
  *   apiKey: 'sk-xxx',
  *   baseUrl: 'https://api.openai.com/v1',
  *   model: 'gpt-4o-mini',
  *   maxTokens: 4096,
  *   temperature: 0.7,
  *   timeout: 60000,
+ *   // 多模型注册（各字段可选，未指定时回退到全局默认值）
  *   models: [
  *     { id: 'fast', model: 'gpt-4o-mini', temperature: 0.3 },
  *     { id: 'strong', model: 'gpt-4o', maxTokens: 8192 },
+ *     { id: 'rerank', model: 'rerank-english-v3.0', baseUrl: 'https://api.cohere.com' },
  *   ],
- *   scenarios: { chat: 'fast', reasoning: 'strong' },
+ *   // 场景映射（场景名 → 模型 ID 或模型名称）
+ *   scenarios: { chat: 'fast', reasoning: 'strong', rerank: 'rerank' },
  * }
  * ```
  */
 export const LLMConfigSchema = z.object({
-  /** API Key，未提供时回退到 `process.env.HAI_OPENAI_API_KEY` 或 `process.env.OPENAI_API_KEY` */
+  /** 全局 API Key（各模型 fallback；未提供时回退到 `process.env.HAI_OPENAI_API_KEY` 或 `process.env.OPENAI_API_KEY`） */
   apiKey: z.string().optional(),
-  /** API 基础 URL，未提供时回退到 `process.env.HAI_OPENAI_BASE_URL` 或 `process.env.OPENAI_BASE_URL` 或 OpenAI 官方地址 */
-  baseUrl: z.url().optional(),
+  /** 全局 API 基础 URL（各模型 fallback；未提供时回退到环境变量） */
+  baseUrl: z.url(),
   /** 默认模型名称（默认 `'gpt-4o-mini'`） */
   model: z.string().optional().default('gpt-4o-mini'),
-  /** 单次请求最大 Token 数（默认 `4096`） */
+  /** 全局最大 Token 数（各模型 fallback，默认 `4096`） */
   maxTokens: z.number().positive().optional().default(4096),
-  /** 采样温度，范围 `[0, 2]`（默认 `0.7`） */
+  /** 全局采样温度（各模型 fallback，范围 `[0, 2]`，默认 `0.7`） */
   temperature: z.number().min(0).max(2).optional().default(0.7),
-  /** 请求超时时间（毫秒，默认 `60000`） */
+  /** 全局请求超时时间（各模型 fallback，毫秒，默认 `60000`） */
   timeout: z.number().positive().optional().default(60000),
-  /** 多模型配置列表（可选，配置多个模型及其参数） */
+  /** 多模型配置列表（各字段可选，未指定时回退到全局默认值） */
   models: z.array(ModelEntrySchema).optional(),
-  /** 场景模型映射（场景名 → 模型 ID，各场景均可选） */
+  /** 场景模型映射（场景名 → 模型 ID 或直接模型名称，各场景均可选） */
   scenarios: z.object(Object.fromEntries(ModelScenarioSchema.options.map(k => [k, z.string().optional()])) as Record<ModelScenario, z.ZodOptional<z.ZodString>>).optional(),
 })
 
@@ -269,37 +281,88 @@ export const LLMConfigSchema = z.object({
 export type LLMConfig = z.infer<typeof LLMConfigSchema>
 
 /**
- * 根据场景解析模型名称
+ * 已解析的模型配置
  *
- * 解析优先级：`显式参数 > 场景映射 (scenarios) > 全局默认 (llm.model) > 'gpt-4o-mini'`
+ * 由 `resolveModelEntry()` 返回，包含模型名称和完整的参数配置（已合并全局默认值和环境变量）。
+ */
+export interface ResolvedModelConfig {
+  /** 模型名称（传给 API 的实际模型名） */
+  model: string
+  /** API Key（模型条目 > 全局配置 > 环境变量） */
+  apiKey: string | undefined
+  /** API 基础 URL（模型条目 > 全局配置 > 环境变量） */
+  baseUrl: string
+  /** 最大 Token 数（模型条目 > 全局配置） */
+  maxTokens: number
+  /** 采样温度（模型条目 > 全局配置） */
+  temperature: number
+  /** 请求超时时间（毫秒）（模型条目 > 全局配置） */
+  timeout: number
+}
+
+/**
+ * 必需模型解析选项
+ */
+export interface ResolveRequiredModelEntryOptions {
+  /** 缺少 API Key 时的自定义错误消息 */
+  missingApiKeyMessage?: string
+}
+
+/**
+ * 根据场景解析完整模型配置，并要求必须存在 API Key
  *
- * 若 `scenarios` 映射的值在 `models` 列表中存在对应 `id`，返回该条目的 `model` 字段；
- * 否则直接将映射值作为模型名称返回。
+ * 用于需要访问远程模型 API 的场景，避免各子模块重复编写
+ * `if (!resolved.apiKey)` 之类的配置校验逻辑。
  *
- * @param llmConfig - LLM 配置（可选）
+ * @param llmConfig - LLM 配置
  * @param scenario - 使用场景
  * @param explicit - 调用方显式指定的模型名称（最高优先级）
- * @returns 解析后的模型名称
+ * @param options - 必需校验选项
+ * @returns 成功返回已解析模型配置，失败返回 `CONFIGURATION_ERROR`
  */
-export function resolveModel(
-  llmConfig: Partial<LLMConfig> | undefined,
+export function resolveModelEntry(
+  llmConfig: LLMConfig,
   scenario: ModelScenario,
   explicit?: string,
-): string {
-  // 显式指定的模型优先
-  if (explicit)
-    return explicit
+  options?: ResolveRequiredModelEntryOptions,
+): Result<ResolvedModelConfig, AIError> {
+  let entry: ModelEntry | undefined
+  let modelName: string
 
-  // 从场景映射查找
-  const modelId = llmConfig?.scenarios?.[scenario] ?? llmConfig?.scenarios?.default
-  if (modelId) {
-    // 尝试从 models 列表中匹配条目
-    const entry = llmConfig?.models?.find(m => m.id === modelId)
-    return entry?.model ?? modelId
+  if (explicit) {
+    // 显式指定的模型名，尝试匹配 models 条目
+    entry = llmConfig.models?.find(m => m.id === explicit || m.model === explicit)
+    modelName = entry?.model ?? explicit
+  }
+  else {
+    // 从场景映射查找
+    const modelId = llmConfig.scenarios?.[scenario] ?? llmConfig.scenarios?.default
+    if (modelId) {
+      entry = llmConfig.models?.find(m => m.id === modelId)
+      modelName = entry?.model ?? modelId
+    }
+    else {
+      modelName = llmConfig.model ?? 'gpt-4o-mini'
+    }
   }
 
-  // 全局默认模型
-  return llmConfig?.model ?? 'gpt-4o-mini'
+  const resolved: ResolvedModelConfig = {
+    model: modelName,
+    apiKey: entry?.apiKey ?? llmConfig.apiKey ?? process.env.HAI_OPENAI_API_KEY ?? process.env.OPENAI_API_KEY,
+    baseUrl: entry?.baseUrl ?? llmConfig.baseUrl ?? process.env.HAI_OPENAI_BASE_URL ?? process.env.OPENAI_BASE_URL,
+    maxTokens: entry?.maxTokens ?? llmConfig.maxTokens ?? 4096,
+    temperature: entry?.temperature ?? llmConfig.temperature ?? 0.7,
+    timeout: entry?.timeout ?? llmConfig.timeout ?? 60000,
+  }
+
+  if (!resolved.apiKey) {
+    return err({
+      code: AIErrorCode.CONFIGURATION_ERROR,
+      message: options?.missingApiKeyMessage ?? `API Key is required for ${scenario}`,
+    })
+  }
+
+  return ok(resolved)
 }
 
 // ─── MCP 配置 Schema ───
@@ -500,48 +563,6 @@ export const ContextConfigSchema = z.object({
 /** Context 配置类型 */
 export type ContextConfig = z.infer<typeof ContextConfigSchema>
 
-// ─── Store 配置 Schema ───
-
-/**
- * Store 配置 Schema
- *
- * 配置存储后端模式：`memory`（开发/测试用）或 `persistent`（生产用，需 reldb + vecdb）。
- * `persistent` 模式不可用时自动降级为 `memory` 并输出 warn 日志。
- *
- * @example
- * ```ts
- * const storeConfig = {
- *   mode: 'persistent', // 使用 reldb + vecdb
- * }
- * ```
- */
-export const StoreConfigSchema = z.object({
-  /** 存储模式（默认 `'memory'`） */
-  mode: z.enum(['memory', 'persistent']).default('memory'),
-})
-
-/** Store 配置类型 */
-export type StoreConfig = z.infer<typeof StoreConfigSchema>
-
-// ─── Rerank 配置 Schema ───
-
-/**
- * Rerank 配置 Schema
- *
- * 配置文档重排序 API 参数。
- * apiKey / baseUrl 未配置时回退到 LLM 配置。
- * 模型通过 `llm.scenarios.rerank` 指定。
- */
-export const RerankConfigSchema = z.object({
-  /** Rerank API Key（未配置时回退到 LLM apiKey） */
-  apiKey: z.string().optional(),
-  /** Rerank API Base URL（未配置时回退到 LLM baseUrl，默认 Cohere） */
-  baseUrl: z.url().optional(),
-})
-
-/** Rerank 配置类型 */
-export type RerankConfig = z.infer<typeof RerankConfigSchema>
-
 // ─── File 配置 Schema ───
 
 /**
@@ -571,26 +592,27 @@ export type FileConfig = z.infer<typeof FileConfigSchema>
  *     apiKey: 'sk-xxx',
  *     model: 'gpt-4o-mini',
  *     maxTokens: 4096,
+ *     models: [
+ *       { id: 'rerank', model: 'rerank-english-v3.0', baseUrl: 'https://api.cohere.com' },
+ *     ],
  *     scenarios: {
  *       extraction: 'gpt-4o',
  *       summary: 'gpt-4o-mini',
  *       embedding: 'text-embedding-3-small',
- *       rerank: 'rerank-english-v3.0',
+ *       rerank: 'rerank',
  *       ocr: 'gpt-4o',
  *     },
  *   },
  *   embedding: { dimensions: 1536 },
- *   rerank: { baseUrl: 'https://api.cohere.com' },
  *   knowledge: { collection: 'docs', enableEntityExtraction: true },
  *   memory: { maxEntries: 500, embeddingEnabled: true },
  *   context: { defaultStrategy: 'hybrid', preserveLastN: 4 },
- *   store: { mode: 'persistent' },
  * })
  * ```
  */
 export const AIConfigSchema = z.object({
   /** LLM 配置 */
-  llm: LLMConfigSchema.optional(),
+  llm: LLMConfigSchema,
   /** MCP 配置 */
   mcp: MCPConfigSchema.optional(),
   /** Embedding 配置 */
@@ -601,10 +623,6 @@ export const AIConfigSchema = z.object({
   memory: MemoryConfigSchema.optional(),
   /** Context 配置 */
   context: ContextConfigSchema.optional(),
-  /** Store 配置 */
-  store: StoreConfigSchema.optional(),
-  /** Rerank 配置 */
-  rerank: RerankConfigSchema.optional(),
   /** File 解析配置 */
   file: FileConfigSchema.optional(),
 })

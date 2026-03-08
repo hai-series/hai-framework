@@ -4,6 +4,4 @@
  */
 
 export * from './ai-store-db.js'
-export * from './ai-store-factory.js'
-export * from './ai-store-memory.js'
 export * from './ai-store-types.js'

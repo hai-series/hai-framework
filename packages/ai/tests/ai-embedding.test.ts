@@ -11,7 +11,7 @@ import { createEmbeddingOperations } from '../src/embedding/ai-embedding-functio
 
 // ─── Mock OpenAI ───
 
-// 由于 embedding 函数内部动态 import('openai')，需要 mock 整个模块
+// Embedding 函数静态依赖 openai，直接 mock 整个模块
 vi.mock('openai', () => {
   return {
     default: class MockOpenAI {

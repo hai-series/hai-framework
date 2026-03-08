@@ -6,7 +6,7 @@
  */
 
 import type { Result } from '@h-ai/core'
-import type { AIConfig, RerankConfig } from '../ai-config.js'
+import type { AIConfig } from '../ai-config.js'
 import type { AIError } from '../ai-types.js'
 import type {
   RerankDocument,
@@ -16,10 +16,9 @@ import type {
   RerankResponse,
 } from './ai-rerank-types.js'
 
-import process from 'node:process'
 import { core, err, ok } from '@h-ai/core'
 
-import { AIErrorCode, resolveModel } from '../ai-config.js'
+import { AIErrorCode, resolveModelEntry } from '../ai-config.js'
 import { aiM } from '../ai-i18n.js'
 
 const logger = core.logger.child({ module: 'ai', scope: 'rerank' })
@@ -46,32 +45,13 @@ interface CohereRerankResponse {
  * 创建 Rerank 操作接口
  *
  * 通过 Cohere 兼容的 Rerank API 对文档进行相关性重排序。
- * apiKey / baseUrl 优先使用 rerank 专属配置，未配置时回退到 LLM 配置和环境变量。
+ * apiKey / baseUrl / model 统一通过 `resolveModelEntry(llm, 'rerank')` 解析，
+ * 可在 `llm.models` 中为 rerank 场景配置独立的 apiKey / baseUrl。
  *
  * @param config - 校验后的 AI 配置
  * @returns RerankOperations 实例
  */
 export function createRerankOperations(config: AIConfig): RerankOperations {
-  const rerankConfig: Partial<RerankConfig> = config.rerank ?? {}
-
-  /** 获取 API Key */
-  function getApiKey(): string | undefined {
-    return rerankConfig.apiKey
-      ?? config.llm?.apiKey
-      ?? process.env.HAI_OPENAI_API_KEY
-      ?? process.env.OPENAI_API_KEY
-  }
-
-  /** 获取 Base URL，默认使用 LLM 配置或 Cohere 官方地址 */
-  function getBaseUrl(): string {
-    const base = rerankConfig.baseUrl
-      ?? config.llm?.baseUrl
-      ?? process.env.HAI_OPENAI_BASE_URL
-      ?? process.env.OPENAI_BASE_URL
-      ?? 'https://api.cohere.com'
-    return base.replace(/\/+$/, '')
-  }
-
   /** 将输入文档统一转换为文本数组和 id 映射 */
   function normalizeDocuments(documents: string[] | RerankDocument[]): {
     texts: string[]
@@ -95,13 +75,12 @@ export function createRerankOperations(config: AIConfig): RerankOperations {
    * 调用 Cohere 兼容的 Rerank API
    */
   async function callRerankAPI(request: RerankRequest): Promise<Result<RerankResponse, AIError>> {
-    const apiKey = getApiKey()
-    if (!apiKey) {
-      return err({
-        code: AIErrorCode.CONFIGURATION_ERROR,
-        message: aiM('ai_configError', { params: { error: 'API Key is required for rerank' } }),
-      })
-    }
+    const resolvedResult = resolveModelEntry(config.llm, 'rerank', request.model, {
+      missingApiKeyMessage: aiM('ai_configError', { params: { error: 'API Key is required for rerank' } }),
+    })
+    if (!resolvedResult.success)
+      return resolvedResult
+    const resolved = resolvedResult.data
 
     const { texts, ids } = normalizeDocuments(request.documents)
     if (texts.length === 0) {
@@ -111,11 +90,8 @@ export function createRerankOperations(config: AIConfig): RerankOperations {
       })
     }
 
-    const model = request.model ?? resolveModel(config.llm, 'rerank')
-    const baseUrl = getBaseUrl()
-
     const body: Record<string, unknown> = {
-      model,
+      model: resolved.model,
       query: request.query,
       documents: texts,
     }
@@ -126,14 +102,14 @@ export function createRerankOperations(config: AIConfig): RerankOperations {
       body.return_documents = true
     }
 
-    logger.debug('Calling rerank API', { model, documentCount: texts.length, topN: request.topN })
+    logger.debug('Calling rerank API', { model: resolved.model, documentCount: texts.length, topN: request.topN })
 
     try {
-      const response = await fetch(`${baseUrl}/v1/rerank`, {
+      const response = await fetch(`${resolved.baseUrl}/v1/rerank`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${apiKey}`,
+          'Authorization': `Bearer ${resolved.apiKey}`,
         },
         body: JSON.stringify(body),
       })
@@ -158,7 +134,7 @@ export function createRerankOperations(config: AIConfig): RerankOperations {
 
       logger.debug('Rerank completed', { resultCount: results.length })
 
-      return ok({ model, results })
+      return ok({ model: resolved.model, results })
     }
     catch (error) {
       logger.error('Rerank API call failed', { error })

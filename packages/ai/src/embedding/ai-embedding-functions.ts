@@ -6,7 +6,7 @@
  */
 
 import type { Result } from '@h-ai/core'
-import type { AIConfig, EmbeddingConfig } from '../ai-config.js'
+import type { AIConfig, EmbeddingConfig, ResolvedModelConfig } from '../ai-config.js'
 import type { AIError } from '../ai-types.js'
 import type {
   EmbeddingOperations,
@@ -14,10 +14,10 @@ import type {
   EmbeddingResponse,
 } from './ai-embedding-types.js'
 
-import process from 'node:process'
 import { core, err, ok } from '@h-ai/core'
+import OpenAI from 'openai'
 
-import { AIErrorCode, resolveModel } from '../ai-config.js'
+import { AIErrorCode, resolveModelEntry } from '../ai-config.js'
 import { aiM } from '../ai-i18n.js'
 
 const logger = core.logger.child({ module: 'ai', scope: 'embedding' })
@@ -34,62 +34,46 @@ const logger = core.logger.child({ module: 'ai', scope: 'embedding' })
 export function createEmbeddingOperations(config: AIConfig): EmbeddingOperations {
   const embeddingConfig: EmbeddingConfig = config.embedding ?? { batchSize: 100 }
 
-  /** 获取 API Key（LLM 配置 → 环境变量） */
-  function getApiKey(): string | undefined {
-    return config.llm?.apiKey
-      ?? process.env.HAI_OPENAI_API_KEY
-      ?? process.env.OPENAI_API_KEY
-  }
-
-  /** 获取 Base URL */
-  function getBaseUrl(): string | undefined {
-    return config.llm?.baseUrl
-      ?? process.env.HAI_OPENAI_BASE_URL
-      ?? process.env.OPENAI_BASE_URL
-  }
-
   /**
-   * 缓存的 OpenAI 客户端实例（懒初始化，全生命周期复用）
+   * 缓存的 OpenAI 客户端实例（按 model 缓存，避免不同模型共用同一个客户端）
    */
-  let cachedClient: InstanceType<typeof import('openai').default> | null = null
+  let cachedClient: OpenAI | null = null
+  let cachedResolvedKey: string | undefined
 
   /**
    * 获取或创建 OpenAI 客户端（首次调用时初始化，后续复用同一实例）
    */
-  async function getOrCreateClient() {
-    if (cachedClient)
+  function getOrCreateClient(resolved: ResolvedModelConfig) {
+    const apiKey = resolved.apiKey
+    const baseURL = resolved.baseUrl
+
+    // 如果 apiKey 变了（不同模型条目），需要重建客户端
+    if (cachedClient && cachedResolvedKey === apiKey)
       return cachedClient
 
-    const OpenAI = (await import('openai')).default
-    cachedClient = new OpenAI({
-      apiKey: getApiKey(),
-      baseURL: getBaseUrl(),
-    })
+    cachedClient = new OpenAI({ apiKey, baseURL })
+    cachedResolvedKey = apiKey
     return cachedClient
   }
 
   /**
    * 调用 OpenAI Embeddings API（单次请求）
-   *
-   * 复用缓存的 OpenAI 客户端。批量调用由上层 embed / embedBatch 拆分后逐批调用本函数。
    */
   async function callEmbeddingAPI(request: EmbeddingRequest): Promise<Result<EmbeddingResponse, AIError>> {
-    const apiKey = getApiKey()
-    if (!apiKey) {
-      return err({
-        code: AIErrorCode.CONFIGURATION_ERROR,
-        message: aiM('ai_configError', { params: { error: 'API Key is required for embedding' } }),
-      })
-    }
+    const resolvedResult = resolveModelEntry(config.llm, 'embedding', request.model, {
+      missingApiKeyMessage: aiM('ai_configError', { params: { error: 'API Key is required for embedding' } }),
+    })
+    if (!resolvedResult.success)
+      return resolvedResult
+    const resolved = resolvedResult.data
 
-    const model = request.model ?? resolveModel(config.llm, 'embedding')
     const input = Array.isArray(request.input) ? request.input : [request.input]
 
     try {
-      const client = await getOrCreateClient()
+      const client = getOrCreateClient(resolved)
 
       const params: Record<string, unknown> = {
-        model,
+        model: resolved.model,
         input,
       }
 
@@ -121,85 +105,75 @@ export function createEmbeddingOperations(config: AIConfig): EmbeddingOperations
     }
   }
 
+  /**
+   * 对外统一嵌入入口：单条 / 批量都复用同一套分批逻辑
+   */
+  async function embedRequest(request: EmbeddingRequest): Promise<Result<EmbeddingResponse, AIError>> {
+    const input = Array.isArray(request.input) ? request.input : [request.input]
+    const batchSize = embeddingConfig.batchSize
+
+    // 如果输入不超过 batchSize，直接调用
+    if (input.length <= batchSize) {
+      return callEmbeddingAPI(request)
+    }
+
+    // 批量处理：按 batchSize 分组
+    const allData: EmbeddingResponse['data'] = []
+    let totalPromptTokens = 0
+    let totalTokens = 0
+    let resultModel = ''
+
+    for (let i = 0; i < input.length; i += batchSize) {
+      const batch = input.slice(i, i + batchSize)
+      const result = await callEmbeddingAPI({ ...request, input: batch })
+      if (!result.success)
+        return result
+
+      resultModel = result.data.model
+      totalPromptTokens += result.data.usage.prompt_tokens
+      totalTokens += result.data.usage.total_tokens
+
+      // 调整 index 以反映全局位置
+      for (const item of result.data.data) {
+        allData.push({
+          index: i + item.index,
+          embedding: item.embedding,
+        })
+      }
+    }
+
+    return ok({
+      model: resultModel,
+      data: allData,
+      usage: { prompt_tokens: totalPromptTokens, total_tokens: totalTokens },
+    })
+  }
+
   return {
     async embed(request: EmbeddingRequest): Promise<Result<EmbeddingResponse, AIError>> {
-      const input = Array.isArray(request.input) ? request.input : [request.input]
-      const batchSize = embeddingConfig.batchSize
-
-      // 如果输入不超过 batchSize，直接调用
-      if (input.length <= batchSize) {
-        return callEmbeddingAPI(request)
-      }
-
-      // 批量处理：按 batchSize 分组
-      const allData: EmbeddingResponse['data'] = []
-      let totalPromptTokens = 0
-      let totalTokens = 0
-      let resultModel = ''
-
-      for (let i = 0; i < input.length; i += batchSize) {
-        const batch = input.slice(i, i + batchSize)
-        const result = await callEmbeddingAPI({ ...request, input: batch })
-        if (!result.success)
-          return result
-
-        resultModel = result.data.model
-        totalPromptTokens += result.data.usage.prompt_tokens
-        totalTokens += result.data.usage.total_tokens
-
-        // 调整 index 以反映全局位置
-        for (const item of result.data.data) {
-          allData.push({
-            index: i + item.index,
-            embedding: item.embedding,
-          })
-        }
-      }
-
-      return ok({
-        model: resultModel,
-        data: allData,
-        usage: { prompt_tokens: totalPromptTokens, total_tokens: totalTokens },
-      })
+      return embedRequest(request)
     },
 
     async embedText(text: string): Promise<Result<number[], AIError>> {
-      const result = await callEmbeddingAPI({ input: text })
+      const result = await embedRequest({ input: text })
       if (!result.success)
         return result
-      return ok(result.data.data[0].embedding)
+      const first = result.data.data.find(item => item.index === 0)
+      if (!first) {
+        return err({
+          code: AIErrorCode.EMBEDDING_API_ERROR,
+          message: aiM('ai_internalError', { params: { error: 'Embedding result is empty' } }),
+        })
+      }
+      return ok(first.embedding)
     },
 
     async embedBatch(texts: string[]): Promise<Result<number[][], AIError>> {
-      const request: EmbeddingRequest = { input: texts }
-      const input = texts
-      const batchSize = embeddingConfig.batchSize
-
-      if (input.length <= batchSize) {
-        const result = await callEmbeddingAPI(request)
-        if (!result.success)
-          return result
-        // 按 index 排序并提取向量
-        const sorted = result.data.data.sort((a, b) => a.index - b.index)
-        return ok(sorted.map(item => item.embedding))
-      }
-
-      // 批量处理
-      const allEmbeddings: { index: number, embedding: number[] }[] = []
-
-      for (let i = 0; i < input.length; i += batchSize) {
-        const batch = input.slice(i, i + batchSize)
-        const result = await callEmbeddingAPI({ ...request, input: batch })
-        if (!result.success)
-          return result
-
-        for (const item of result.data.data) {
-          allEmbeddings.push({ index: i + item.index, embedding: item.embedding })
-        }
-      }
-
-      allEmbeddings.sort((a, b) => a.index - b.index)
-      return ok(allEmbeddings.map(item => item.embedding))
+      const result = await embedRequest({ input: texts })
+      if (!result.success)
+        return result
+      const sorted = [...result.data.data].sort((a, b) => a.index - b.index)
+      return ok(sorted.map(item => item.embedding))
     },
   }
 }

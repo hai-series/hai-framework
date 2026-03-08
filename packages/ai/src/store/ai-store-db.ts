@@ -259,40 +259,58 @@ export class ReldbAIStore<T> implements AIStore<T> {
 
 /**
  * 基于 vecdb 的持久化向量存储实现
+ *
+ * 使用 vecdb.vector / vecdb.collection 子对象操作向量数据。
+ * 集合在首次 upsert 时按需创建（lazy），clear 时 drop 集合。
  */
 export class VecdbAIVectorStore implements AIVectorStore {
   private readonly vecdb: VecdbClient
   private readonly collection: string
+  /** 已创建集合的维度（null 表示未创建或已清除） */
+  private collectionDimension: number | null = null
 
   constructor(vecdb: VecdbClient, collection: string) {
     this.vecdb = vecdb
     this.collection = collection
   }
 
+  /**
+   * 确保集合存在（按需创建）
+   */
+  private async ensureCollection(dimension: number): Promise<void> {
+    if (this.collectionDimension === dimension)
+      return
+    const exists = await this.vecdb.collection.exists(this.collection)
+    if (exists.success && !exists.data) {
+      await this.vecdb.collection.create(this.collection, { dimension })
+    }
+    this.collectionDimension = dimension
+  }
+
   async upsert(id: string, vector: number[], metadata?: Record<string, unknown>): Promise<void> {
-    await this.vecdb.upsert(this.collection, [{ id, vector, metadata }])
+    await this.ensureCollection(vector.length)
+    await this.vecdb.vector.upsert(this.collection, [{ id, vector, metadata }])
   }
 
   async search(vector: number[], options?: { topK?: number, filter?: Record<string, unknown> }): Promise<Array<{ id: string, score: number, metadata?: Record<string, unknown> }>> {
-    const result = await this.vecdb.search(this.collection, vector, options)
+    const result = await this.vecdb.vector.search(this.collection, vector, options)
     return result.success ? result.data : []
   }
 
   async remove(id: string): Promise<void> {
-    await this.vecdb.remove(this.collection, [id])
+    await this.vecdb.vector.delete(this.collection, [id])
   }
 
-  async removeBy(filter: Record<string, unknown>): Promise<number> {
-    const result = await this.vecdb.removeByFilter(this.collection, filter)
-    return result.success ? result.data : 0
+  async removeBy(_filter: Record<string, unknown>): Promise<number> {
+    // vecdb 不支持按 metadata filter 批量删除，返回 0
+    return 0
   }
 
-  async clear(filter?: Record<string, unknown>): Promise<void> {
-    if (filter) {
-      await this.vecdb.removeByFilter(this.collection, filter)
-    }
-    else {
-      await this.vecdb.clear(this.collection)
+  async clear(_filter?: Record<string, unknown>): Promise<void> {
+    const exists = await this.vecdb.collection.exists(this.collection)
+    if (exists.success && exists.data) {
+      await this.vecdb.collection.drop(this.collection)
+      this.collectionDimension = null
     }
   }
 }

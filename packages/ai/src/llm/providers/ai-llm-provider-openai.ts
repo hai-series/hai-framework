@@ -16,11 +16,10 @@ import type {
   LLMProvider,
 } from '../ai-llm-types.js'
 
-import process from 'node:process'
 import { err, ok } from '@h-ai/core'
 import OpenAI from 'openai'
 
-import { AIErrorCode } from '../../ai-config.js'
+import { AIErrorCode, resolveModelEntry } from '../../ai-config.js'
 import { aiM } from '../../ai-i18n.js'
 
 // ─── 辅助函数 ───
@@ -168,7 +167,8 @@ function mapChunk(chunk: OpenAI.Chat.ChatCompletionChunk): ChatCompletionChunk {
  * 创建 OpenAI 兼容 LLM Provider
  *
  * 支持所有 OpenAI 兼容 API 端点（如 Azure OpenAI、本地 Ollama 等）。
- * 使用配置中的 `apiKey`、`baseUrl`、`timeout`、`model` 或环境变量回退。
+ * 通过 `resolveModelEntry()` 统一解析模型配置（apiKey / baseUrl / timeout 等），
+ * 支持多模型条目各自配置不同的 API 端点。
  *
  * @param deps - LLM 子功能依赖（含校验后配置）
  * @returns LLMProvider 实例
@@ -176,17 +176,35 @@ function mapChunk(chunk: OpenAI.Chat.ChatCompletionChunk): ChatCompletionChunk {
 export function createOpenAIProvider(deps: AILLMFunctionsDeps): LLMProvider {
   const { config } = deps
 
-  const client = new OpenAI({
-    apiKey: config.llm?.apiKey || process.env.HAI_OPENAI_API_KEY || process.env.OPENAI_API_KEY || '',
-    baseURL: config.llm?.baseUrl || process.env.HAI_OPENAI_BASE_URL || process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1',
-    timeout: config.llm?.timeout || 60000,
-  })
+  // 缓存客户端实例，按 apiKey+baseURL+timeout 复用，支持多端点并发调用
+  const clientCache = new Map<string, OpenAI>()
 
-  const defaultModel = config.llm?.model || 'gpt-4o-mini'
+  function getClient(apiKey: string, baseURL: string, timeout: number): OpenAI {
+    const key = `${apiKey}::${baseURL}::${timeout}`
+    let client = clientCache.get(key)
+    if (!client) {
+      client = new OpenAI({ apiKey, baseURL, timeout })
+      clientCache.set(key, client)
+    }
+    return client
+  }
+
+  function resolveClient(requestModel?: string): Result<{ client: OpenAI, model: string }, AIError> {
+    const resolvedResult = resolveModelEntry(config.llm, 'chat', requestModel, {
+      missingApiKeyMessage: aiM('ai_configError', { params: { error: 'API Key is required for chat' } }),
+    })
+    if (!resolvedResult.success)
+      return resolvedResult
+    const { apiKey, baseUrl, timeout, model } = resolvedResult.data
+    return ok({ client: getClient(apiKey ?? '', baseUrl ?? 'https://api.openai.com/v1', timeout), model })
+  }
 
   return {
     async chat(request: ChatCompletionRequest): Promise<Result<ChatCompletionResponse, AIError>> {
-      const model = request.model || defaultModel
+      const clientResult = resolveClient(request.model)
+      if (!clientResult.success)
+        return clientResult
+      const { client, model } = clientResult.data
       try {
         const response = await client.chat.completions.create({
           ...request,
@@ -201,7 +219,10 @@ export function createOpenAIProvider(deps: AILLMFunctionsDeps): LLMProvider {
     },
 
     async* chatStream(request: ChatCompletionRequest): AsyncIterable<ChatCompletionChunk> {
-      const model = request.model || defaultModel
+      const clientResult = resolveClient(request.model)
+      if (!clientResult.success)
+        throw new Error(clientResult.error.message)
+      const { client, model } = clientResult.data
       const stream = await client.chat.completions.create({
         ...request,
         model,
@@ -213,6 +234,10 @@ export function createOpenAIProvider(deps: AILLMFunctionsDeps): LLMProvider {
     },
 
     async listModels(): Promise<Result<string[], AIError>> {
+      const clientResult = resolveClient()
+      if (!clientResult.success)
+        return clientResult
+      const { client } = clientResult.data
       try {
         const response = await client.models.list()
         const models = response.data.map(m => m.id)

@@ -265,7 +265,6 @@ export type {
 
 export type {
   AIStore,
-  AIStoreMode,
   AIVectorStore,
   InteractionScope,
   ObjectRef,
