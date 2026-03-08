@@ -6,7 +6,7 @@
  */
 
 import type { Result } from '@h-ai/core'
-import type { AIConfig } from '../ai-config.js'
+import type { AIConfig, ModelScenario } from '../ai-config.js'
 import type { AIError } from '../ai-types.js'
 import type { ChatMessage, LLMOperations } from '../llm/ai-llm-types.js'
 import type {
@@ -18,7 +18,8 @@ import type {
 
 import { core, err, ok } from '@h-ai/core'
 
-import { AIErrorCode, resolveModel } from '../ai-config.js'
+import { AIErrorCode, resolveModelEntry } from '../ai-config.js'
+
 import { aiM } from '../ai-i18n.js'
 
 const logger = core.logger.child({ module: 'ai', scope: 'reasoning' })
@@ -55,6 +56,13 @@ Format your plan as a numbered list.`
  */
 export function createReasoningOperations(config: AIConfig, llm: LLMOperations): ReasoningOperations {
   /**
+   * 提取场景对应的模型名称（仅用于构造请求， API Key 校验由 provider 层负责）
+   */
+  function scenarioModel(scenario: ModelScenario, explicit?: string): string | undefined {
+    const result = resolveModelEntry(config.llm, scenario, explicit)
+    return result.success ? result.data.model : explicit
+  }
+  /**
    * 执行 ReAct 策略推理
    */
   async function runReact(
@@ -74,7 +82,7 @@ export function createReasoningOperations(config: AIConfig, llm: LLMOperations):
     for (let round = 0; round < maxRounds; round++) {
       // 调用 LLM
       const chatResult = await llm.chat({
-        model: resolveModel(config.llm, 'reasoning', options.model),
+        model: scenarioModel('reasoning', options.model),
         messages,
         temperature: options.temperature,
         tools: options.tools?.getDefinitions(),
@@ -183,7 +191,7 @@ export function createReasoningOperations(config: AIConfig, llm: LLMOperations):
     ]
 
     const chatResult = await llm.chat({
-      model: resolveModel(config.llm, 'reasoning', options.model),
+      model: scenarioModel('reasoning', options.model),
       messages,
       temperature: options.temperature,
       objectId: options.objectId,
@@ -244,7 +252,7 @@ export function createReasoningOperations(config: AIConfig, llm: LLMOperations):
     ]
 
     const planResult = await llm.chat({
-      model: resolveModel(config.llm, 'plan', options.planModel ?? options.model),
+      model: scenarioModel('plan', options.planModel ?? options.model),
       messages: planMessages,
       temperature: options.temperature,
       objectId: options.objectId,
@@ -267,7 +275,7 @@ export function createReasoningOperations(config: AIConfig, llm: LLMOperations):
 
     for (let round = 0; round < maxRounds; round++) {
       const execResult = await llm.chat({
-        model: resolveModel(config.llm, 'execute', options.executeModel ?? options.model),
+        model: scenarioModel('execute', options.executeModel ?? options.model),
         messages: executeMessages,
         temperature: options.temperature,
         tools: options.tools?.getDefinitions(),

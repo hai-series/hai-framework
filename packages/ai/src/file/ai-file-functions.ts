@@ -14,13 +14,14 @@ import type {
   FileParseMethod,
   FileParseRequest,
   FileParseResult,
+  OutputFormat,
 } from './ai-file-types.js'
 
 import { Buffer } from 'node:buffer'
 
 import { core, err, ok } from '@h-ai/core'
 
-import { AIErrorCode, resolveModel } from '../ai-config.js'
+import { AIErrorCode, resolveModelEntry } from '../ai-config.js'
 import { aiM } from '../ai-i18n.js'
 
 const logger = core.logger.child({ module: 'ai', scope: 'file' })
@@ -144,48 +145,135 @@ function parseTextContent(content: Buffer | string): string {
   return content.toString('utf-8')
 }
 
-/**
- * 解析 HTML，剥除标签并提取可读文本
- */
-function parseHtmlContent(content: Buffer | string): string {
-  const html = parseTextContent(content)
-  // 使用非贪婪匹配移除 script 和 style 块（兼容结束标签中含空白/属性的情况）
-  const noScript = html.replace(/<script[^>]*>[\s\S]*?<\/script[^>]*>/gi, ' ')
-  const noStyle = noScript.replace(/<style[^>]*>[\s\S]*?<\/style[^>]*>/gi, ' ')
-  const noTags = noStyle.replace(/<[^>]+>/g, ' ')
-  // 单次解码 HTML 实体（命名实体 + 十进制/十六进制数字实体）
-  const NAMED_ENTITIES: Record<string, string> = {
-    amp: '&',
-    lt: '<',
-    gt: '>',
-    quot: '"',
-    apos: '\'',
-    nbsp: ' ',
-    mdash: '—',
-    ndash: '–',
-    ldquo: '\u201C',
-    rdquo: '\u201D',
-    lsquo: '\u2018',
-    rsquo: '\u2019',
-    hellip: '…',
-    copy: '©',
-    reg: '®',
-    trade: '™',
-  }
-  const decoded = noTags.replace(/&(?:#(\d+)|#x([\dA-Fa-f]+)|([A-Za-z]+));/g, (match, dec, hex, named) => {
+/** HTML 实体名称映射表 */
+const HTML_ENTITIES: Record<string, string> = {
+  amp: '&',
+  lt: '<',
+  gt: '>',
+  quot: '"',
+  apos: '\'',
+  nbsp: ' ',
+  mdash: '—',
+  ndash: '–',
+  ldquo: '\u201C',
+  rdquo: '\u201D',
+  lsquo: '\u2018',
+  rsquo: '\u2019',
+  hellip: '…',
+  copy: '©',
+  reg: '®',
+  trade: '™',
+}
+
+/** 解码 HTML 实体（命名实体 + 十进制/十六进制数字实体） */
+function decodeHtmlEntities(text: string): string {
+  return text.replace(/&(?:#(\d+)|#x([\dA-Fa-f]+)|([A-Za-z]+));/g, (match, dec, hex, named) => {
     if (dec !== undefined)
       return String.fromCharCode(Number.parseInt(dec, 10))
     if (hex !== undefined)
       return String.fromCharCode(Number.parseInt(hex, 16))
-    return NAMED_ENTITIES[named] ?? match
+    return HTML_ENTITIES[named] ?? match
   })
-  return decoded.replace(/\s+/g, ' ').trim()
+}
+
+/** 剥除 HTML 标签，仅保留文本内容 */
+function stripTags(html: string): string {
+  return html.replace(/<[^>]+>/g, '')
+}
+
+/**
+ * 解析 HTML，剥除标签并提取纯文本
+ */
+function parseHtmlContent(content: Buffer | string): string {
+  const html = parseTextContent(content)
+  const noScript = html.replace(/<script[^>]*>[\s\S]*?<\/script[^>]*>/gi, ' ')
+  const noStyle = noScript.replace(/<style[^>]*>[\s\S]*?<\/style[^>]*>/gi, ' ')
+  const noTags = noStyle.replace(/<[^>]+>/g, ' ')
+  return decodeHtmlEntities(noTags).replace(/\s+/g, ' ').trim()
+}
+
+/**
+ * 将 HTML 转换为 Markdown
+ *
+ * 保留常见文档结构：标题、列表、粗体/斜体、超链接、代码块、水平线。
+ * 不支持的复杂结构（如嵌套表格、内联样式）将降级为纯文本。
+ */
+function htmlToMarkdown(content: Buffer | string): string {
+  let md = parseTextContent(content)
+
+  // 移除 script / style 块
+  md = md.replace(/<script[^>]*>[\s\S]*?<\/script[^>]*>/gi, '')
+  md = md.replace(/<style[^>]*>[\s\S]*?<\/style[^>]*>/gi, '')
+
+  // 代码块（pre > code，先处理避免内部标签被转换）
+  md = md.replace(/<pre[^>]*>\s*<code[^>]*>([\s\S]*?)<\/code>\s*<\/pre>/gi, (_, code) =>
+    `\n\`\`\`\n${decodeHtmlEntities(stripTags(code)).trim()}\n\`\`\`\n`)
+  md = md.replace(/<pre[^>]*>([\s\S]*?)<\/pre>/gi, (_, code) =>
+    `\n\`\`\`\n${decodeHtmlEntities(stripTags(code)).trim()}\n\`\`\`\n`)
+
+  // 标题 h1–h6
+  for (let level = 1; level <= 6; level++) {
+    md = md.replace(
+      new RegExp(`<h${level}[^>]*>([\\s\\S]*?)<\\/h${level}>`, 'gi'),
+      (_, c) => `\n${'#'.repeat(level)} ${stripTags(c).trim()}\n`,
+    )
+  }
+
+  // 水平线
+  md = md.replace(/<hr\s*\/?>/gi, '\n\n---\n\n')
+
+  // 引用块
+  md = md.replace(/<blockquote[^>]*>([\s\S]*?)<\/blockquote>/gi, (_, c) =>
+    stripTags(c).trim().split('\n').map(l => `> ${l.trim()}`).filter(l => l !== '> ').join('\n'))
+
+  // 列表项
+  md = md.replace(/<[ou]l[^>]*>/gi, '\n')
+  md = md.replace(/<\/[ou]l>/gi, '\n')
+  md = md.replace(/<li[^>]*>([\s\S]*?)<\/li>/gi, (_, c) => `\n- ${stripTags(c).trim()}`)
+
+  // 粗体 / 斜体
+  md = md.replace(/<(?:strong|b)[^>]*>([\s\S]*?)<\/(?:strong|b)>/gi, (_, c) => `**${stripTags(c).trim()}**`)
+  md = md.replace(/<(?:em|i)[^>]*>([\s\S]*?)<\/(?:em|i)>/gi, (_, c) => `*${stripTags(c).trim()}*`)
+
+  // 超链接
+  md = md.replace(/<a[^>]+href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/gi, (_, href, text) =>
+    `[${stripTags(text).trim()}](${href})`)
+
+  // 图片（src/alt 属性顺序不定，逐属性提取）
+  md = md.replace(/<img([^>]*)>/gi, (_, attrs: string) => {
+    const src = attrs.match(/src="([^"]*)"/)?.[1] ?? ''
+    const alt = attrs.match(/alt="([^"]*)"/)?.[1] ?? ''
+    return `![${alt}](${src})`
+  })
+
+  // 行内代码
+  md = md.replace(/<code[^>]*>([\s\S]*?)<\/code>/gi, (_, c) =>
+    `\`${decodeHtmlEntities(stripTags(c))}\``)
+
+  // 表格（简化：每行单元格用 | 分隔）
+  md = md.replace(/<tr[^>]*>([\s\S]*?)<\/tr>/gi, (_, row) => {
+    const cells = [...row.matchAll(/<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi)]
+    return `| ${cells.map(([, c]) => stripTags(c).trim()).join(' | ')} |\n`
+  })
+  md = md.replace(/<\/?t(?:able|head|body|foot)[^>]*>/gi, '')
+  md = md.replace(/<\/?t[rdh][^>]*>/gi, '')
+
+  // 换行与段落
+  md = md.replace(/<br\s*\/?>/gi, '\n')
+  md = md.replace(/<\/(?:p|div|section|article|header|footer|main|nav|aside)>/gi, '\n\n')
+  md = md.replace(/<(?:p|div|section|article|header|footer|main|nav|aside)[^>]*>/gi, '')
+
+  // 移除剩余标签并解码实体
+  md = md.replace(/<[^>]+>/g, '')
+  md = decodeHtmlEntities(md)
+
+  return md.replace(/\n{3,}/g, '\n\n').trim()
 }
 
 /**
  * 使用 pdfjs-dist 解析 PDF 内容
  */
-async function parsePdfContent(content: Buffer, maxPages?: number): Promise<Result<{ text: string, pageCount: number }, AIError>> {
+async function parsePdfContent(content: Buffer, outputFormat: OutputFormat = 'text', maxPages?: number): Promise<Result<{ text: string, pageCount: number }, AIError>> {
   try {
     const pdfjs = await import(
 
@@ -210,7 +298,9 @@ async function parsePdfContent(content: Buffer, maxPages?: number): Promise<Resu
       textParts.push(pageText)
     }
 
-    return ok({ text: textParts.join('\n\n'), pageCount: totalPages })
+    // markdown 模式用页分隔线区分每页
+    const separator = outputFormat === 'markdown' ? '\n\n---\n\n' : '\n\n'
+    return ok({ text: textParts.join(separator), pageCount: totalPages })
   }
   catch (error) {
     return err({
@@ -223,14 +313,24 @@ async function parsePdfContent(content: Buffer, maxPages?: number): Promise<Resu
 
 /**
  * 使用 mammoth 解析 DOCX 内容
+ *
+ * - `'text'`：使用 `extractRawText` 提取纯文本
+ * - `'markdown'`：使用 `convertToHtml` 后转换为 Markdown
  */
-async function parseDocxContent(content: Buffer): Promise<Result<string, AIError>> {
+async function parseDocxContent(content: Buffer, outputFormat: OutputFormat = 'text'): Promise<Result<string, AIError>> {
   try {
     const mammoth = await import(
 
       // @ts-expect-error — mammoth is an optional peer dependency
       'mammoth',
-    ) as { extractRawText: (options: unknown) => Promise<{ value: string }> }
+    ) as {
+      extractRawText: (options: unknown) => Promise<{ value: string }>
+      convertToHtml: (options: unknown) => Promise<{ value: string }>
+    }
+    if (outputFormat === 'markdown') {
+      const result = await mammoth.convertToHtml({ buffer: content })
+      return ok(htmlToMarkdown(result.value))
+    }
     const result = await mammoth.extractRawText({ buffer: content })
     return ok(result.value)
   }
@@ -251,11 +351,15 @@ async function parseImageWithOcr(
   mimeType: string,
   llmOps: LLMOperations,
   model?: string,
+  outputFormat: OutputFormat = 'text',
   customPrompt?: string,
 ): Promise<Result<string, AIError>> {
   const base64 = content.toString('base64')
   const dataUrl = `data:${mimeType};base64,${base64}`
-  const prompt = customPrompt ?? 'Please extract all text content from this image accurately. Return only the extracted text without any additional commentary.'
+  const defaultPrompt = outputFormat === 'markdown'
+    ? 'Please extract all text content from this image as Markdown, preserving document structure (headings, bullet lists, bold/italic). Return only the Markdown without additional commentary.'
+    : 'Please extract all text content from this image accurately. Return only the extracted text without any additional commentary.'
+  const prompt = customPrompt ?? defaultPrompt
 
   logger.debug('Running OCR via vision LLM', { mimeType, model })
 
@@ -297,11 +401,41 @@ async function parseImageWithOcr(
  * @returns FileOperations 实例
  */
 export function createFileOperations(config: AIConfig, llmOps: LLMOperations): FileOperations {
-  const fileConfig = config.file ?? {}
+  /**
+   * 统一 OCR 执行入口：解析模型配置 → 调用视觉 LLM → 包装结果
+   *
+   * 调用方负责确保 content 为 Buffer 类型。
+   */
+  async function runOcr(
+    content: Buffer,
+    mimeType: string,
+    filename: string | undefined,
+    model: string | undefined,
+    outputFormat: OutputFormat,
+    ocrPrompt: string | undefined,
+  ): Promise<Result<FileParseResult, AIError>> {
+    const resolvedResult = resolveModelEntry(config.llm, 'ocr', model, {
+      missingApiKeyMessage: aiM('ai_configError', { params: { error: 'API Key is required for OCR' } }),
+    })
+    if (!resolvedResult.success)
+      return resolvedResult
 
-  /** 解析 OCR 场景模型：优先使用请求级覆盖，然后通过场景映射获取 */
-  function resolveOcrModel(explicitModel?: string): string {
-    return resolveModel(config.llm, 'ocr', explicitModel)
+    const ocrResult = await parseImageWithOcr(
+      content,
+      mimeType,
+      llmOps,
+      resolvedResult.data.model,
+      outputFormat,
+      ocrPrompt,
+    )
+    if (!ocrResult.success)
+      return ocrResult
+
+    return ok({
+      text: ocrResult.data,
+      method: 'ocr' as FileParseMethod,
+      metadata: { filename, mimeType, charCount: ocrResult.data.length },
+    })
   }
 
   /**
@@ -310,8 +444,9 @@ export function createFileOperations(config: AIConfig, llmOps: LLMOperations): F
   async function doParse(request: FileParseRequest): Promise<Result<FileParseResult, AIError>> {
     const { content, filename, options = {} } = request
     const mimeType = detectMimeType(content, filename, options.mimeType)
+    const outputFormat: OutputFormat = options.outputFormat ?? 'text'
 
-    logger.debug('Parsing file', { filename, mimeType, useOcr: options.useOcr })
+    logger.debug('Parsing file', { filename, mimeType, outputFormat, useOcr: options.useOcr })
 
     // 强制 OCR 模式
     if (options.useOcr) {
@@ -321,18 +456,10 @@ export function createFileOperations(config: AIConfig, llmOps: LLMOperations): F
           message: aiM('ai_fileInvalidContent', { params: { reason: 'OCR requires Buffer content' } }),
         })
       }
-      const ocrModel = resolveOcrModel(options.ocrModel)
-      const ocrResult = await parseImageWithOcr(content, mimeType, llmOps, ocrModel, options.ocrPrompt ?? fileConfig.ocrPrompt)
-      if (!ocrResult.success)
-        return ocrResult
-      return ok({
-        text: ocrResult.data,
-        method: 'ocr' as FileParseMethod,
-        metadata: { filename, mimeType, charCount: ocrResult.data.length },
-      })
+      return runOcr(content, mimeType, filename, options.model, outputFormat, options.ocrPrompt)
     }
 
-    // 文本格式：直接解码
+    // 文本格式：直接解码（markdown 不改变纯文本语义）
     if (TEXT_MIME_TYPES.has(mimeType)) {
       const text = parseTextContent(content)
       return ok({
@@ -342,9 +469,9 @@ export function createFileOperations(config: AIConfig, llmOps: LLMOperations): F
       })
     }
 
-    // HTML：剥除标签
+    // HTML：按输出格式选择解析方式
     if (mimeType === 'text/html') {
-      const text = parseHtmlContent(content)
+      const text = outputFormat === 'markdown' ? htmlToMarkdown(content) : parseHtmlContent(content)
       return ok({
         text,
         method: 'html' as FileParseMethod,
@@ -352,7 +479,7 @@ export function createFileOperations(config: AIConfig, llmOps: LLMOperations): F
       })
     }
 
-    // PDF：尝试 pdfjs-dist
+    // PDF：尝试 pdfjs-dist，失败则回退 OCR
     if (mimeType === 'application/pdf') {
       if (!Buffer.isBuffer(content)) {
         return err({
@@ -360,7 +487,7 @@ export function createFileOperations(config: AIConfig, llmOps: LLMOperations): F
           message: aiM('ai_fileInvalidContent', { params: { reason: 'PDF parsing requires Buffer content' } }),
         })
       }
-      const pdfResult = await parsePdfContent(content, options.maxPages)
+      const pdfResult = await parsePdfContent(content, outputFormat, options.maxPages)
       if (pdfResult.success) {
         return ok({
           text: pdfResult.data.text,
@@ -369,35 +496,23 @@ export function createFileOperations(config: AIConfig, llmOps: LLMOperations): F
           metadata: { filename, mimeType, charCount: pdfResult.data.text.length },
         })
       }
-      // pdfjs-dist 不可用，回退 OCR
       logger.warn('PDF native parser failed, falling back to OCR', { filename })
-      if (!config.llm?.apiKey) {
-        return err({
-          code: AIErrorCode.CONFIGURATION_ERROR,
-          message: aiM('ai_configError', { params: { error: 'PDF OCR fallback requires LLM configuration (apiKey)' } }),
-        })
-      }
-      const ocrResult = await parseImageWithOcr(content, mimeType, llmOps, resolveOcrModel(options.ocrModel), options.ocrPrompt ?? fileConfig.ocrPrompt)
-      if (!ocrResult.success)
-        return ocrResult
-      return ok({
-        text: ocrResult.data,
-        method: 'ocr' as FileParseMethod,
-        metadata: { filename, mimeType, charCount: ocrResult.data.length },
-      })
+      return runOcr(content, mimeType, filename, options.model, outputFormat, options.ocrPrompt)
     }
 
-    // DOCX：尝试 mammoth
-    if (mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    // DOCX：尝试 mammoth，失败则回退 OCR
+    if (
+      mimeType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
       || mimeType === 'application/msword'
-      || mimeType === 'application/zip') {
+      || mimeType === 'application/zip'
+    ) {
       if (!Buffer.isBuffer(content)) {
         return err({
           code: AIErrorCode.FILE_INVALID_CONTENT,
           message: aiM('ai_fileInvalidContent', { params: { reason: 'DOCX parsing requires Buffer content' } }),
         })
       }
-      const docxResult = await parseDocxContent(content)
+      const docxResult = await parseDocxContent(content, outputFormat)
       if (docxResult.success) {
         return ok({
           text: docxResult.data,
@@ -405,16 +520,8 @@ export function createFileOperations(config: AIConfig, llmOps: LLMOperations): F
           metadata: { filename, mimeType, charCount: docxResult.data.length },
         })
       }
-      // mammoth 不可用，回退 OCR
       logger.warn('DOCX native parser failed, falling back to OCR', { filename })
-      const ocrResult = await parseImageWithOcr(content, mimeType, llmOps, resolveOcrModel(options.ocrModel), options.ocrPrompt ?? fileConfig.ocrPrompt)
-      if (!ocrResult.success)
-        return ocrResult
-      return ok({
-        text: ocrResult.data,
-        method: 'ocr' as FileParseMethod,
-        metadata: { filename, mimeType, charCount: ocrResult.data.length },
-      })
+      return runOcr(content, mimeType, filename, options.model, outputFormat, options.ocrPrompt)
     }
 
     // 图片格式：OCR
@@ -425,14 +532,7 @@ export function createFileOperations(config: AIConfig, llmOps: LLMOperations): F
           message: aiM('ai_fileInvalidContent', { params: { reason: 'Image OCR requires Buffer content' } }),
         })
       }
-      const ocrResult = await parseImageWithOcr(content, mimeType, llmOps, resolveOcrModel(options.ocrModel), options.ocrPrompt ?? fileConfig.ocrPrompt)
-      if (!ocrResult.success)
-        return ocrResult
-      return ok({
-        text: ocrResult.data,
-        method: 'ocr' as FileParseMethod,
-        metadata: { filename, mimeType, charCount: ocrResult.data.length },
-      })
+      return runOcr(content, mimeType, filename, options.model, outputFormat, options.ocrPrompt)
     }
 
     // 其他格式：不支持

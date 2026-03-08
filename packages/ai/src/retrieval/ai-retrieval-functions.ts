@@ -18,6 +18,7 @@ import type {
 } from './ai-retrieval-types.js'
 
 import { core, err, ok } from '@h-ai/core'
+import { vecdb } from '@h-ai/vecdb'
 
 import { AIErrorCode } from '../ai-config.js'
 import { aiM } from '../ai-i18n.js'
@@ -92,9 +93,6 @@ export function createRetrievalOperations(embeddingOps: EmbeddingOperations): Re
         }
 
         const queryVector = embedResult.data
-
-        // 动态加载 vecdb（延迟依赖，避免循环引用）
-        const { vecdb } = await import('@h-ai/vecdb') as { vecdb: { vector: { search: (collection: string, vector: number[], options?: { topK?: number, minScore?: number, filter?: Record<string, unknown> }) => Promise<Result<Array<{ id: string, score: number, content?: string, metadata?: Record<string, unknown> }>, unknown>> } } }
 
         // 并发查询所有源
         const allItems: RetrievalResultItem[] = []

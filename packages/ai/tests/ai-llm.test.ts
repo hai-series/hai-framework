@@ -523,9 +523,13 @@ describe('openAI 客户端配置', () => {
     constructorCalls.length = 0
   })
 
-  it('apiKey 传递给 OpenAI 构造函数', () => {
+  it('apiKey 传递给 OpenAI 构造函数', async () => {
     constructorCalls.length = 0
     ai.init({ llm: { apiKey: 'sk-my-key' } })
+
+    // 客户端延迟创建，需触发一次调用
+    mockCreate.mockResolvedValue(makeSDKChatCompletion('ok'))
+    await ai.llm.chat({ messages: [{ role: 'user', content: 'test' }] })
 
     expect(constructorCalls).toHaveLength(1)
     expect(constructorCalls[0][0]).toEqual(
@@ -533,7 +537,7 @@ describe('openAI 客户端配置', () => {
     )
   })
 
-  it('baseUrl 传递给 OpenAI 构造函数', () => {
+  it('baseUrl 传递给 OpenAI 构造函数', async () => {
     constructorCalls.length = 0
     ai.init({
       llm: {
@@ -542,12 +546,15 @@ describe('openAI 客户端配置', () => {
       },
     })
 
+    mockCreate.mockResolvedValue(makeSDKChatCompletion('ok'))
+    await ai.llm.chat({ messages: [{ role: 'user', content: 'test' }] })
+
     expect(constructorCalls[0][0]).toEqual(
       expect.objectContaining({ baseURL: 'https://custom.api.com/v1' }),
     )
   })
 
-  it('timeout 传递给 OpenAI 构造函数', () => {
+  it('timeout 传递给 OpenAI 构造函数', async () => {
     constructorCalls.length = 0
     ai.init({
       llm: {
@@ -555,6 +562,9 @@ describe('openAI 客户端配置', () => {
         timeout: 30000,
       },
     })
+
+    mockCreate.mockResolvedValue(makeSDKChatCompletion('ok'))
+    await ai.llm.chat({ messages: [{ role: 'user', content: 'test' }] })
 
     expect(constructorCalls[0][0]).toEqual(
       expect.objectContaining({ timeout: 30000 }),

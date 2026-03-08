@@ -23,6 +23,14 @@ import type { AIError } from '../ai-types.js'
  */
 export type FileParseMethod = 'text' | 'html' | 'pdf' | 'docx' | 'ocr'
 
+/**
+ * 文件解析输出格式
+ * - `text` — 纯文本（默认），适合程序处理
+ * - `markdown` — Markdown 格式，保留文档结构（标题、列表、粗斜体等），
+ *   适用于 HTML、PDF、DOCX；图片 OCR 会提示模型输出 Markdown
+ */
+export type OutputFormat = 'text' | 'markdown'
+
 // ─── 请求与结果 ───
 
 /**
@@ -39,11 +47,15 @@ export interface FileParseOptions {
    * 最高优先级，覆盖 `llm.scenarios.ocr` 场景映射。
    * 未指定时通过 `llm.scenarios.ocr` 解析。
    */
-  ocrModel?: string
+  model?: string
   /** OCR 系统提示词（覆盖全局 `file.ocrPrompt` 配置） */
   ocrPrompt?: string
   /** PDF 最大解析页数（默认解析全部页） */
   maxPages?: number
+  /**
+   * 输出格式（默认 `'text'`）
+   */
+  outputFormat?: OutputFormat
 }
 
 /**
@@ -67,7 +79,7 @@ export interface FileParseRequest {
  * 文件解析结果
  */
 export interface FileParseResult {
-  /** 提取的文本内容 */
+  /** 提取的文本内容（当 `outputFormat` 为 `'markdown'` 时为 Markdown 格式） */
   text: string
   /** 解析方法 */
   method: FileParseMethod

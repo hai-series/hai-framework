@@ -27,7 +27,7 @@ import type {
 
 import { core, err, ok } from '@h-ai/core'
 
-import { AIErrorCode, resolveModel } from '../ai-config.js'
+import { AIErrorCode } from '../ai-config.js'
 import { aiM } from '../ai-i18n.js'
 import { collectStream, createSSEDecoder, createStreamProcessor, encodeSSE } from './ai-llm-stream.js'
 import { createToolRegistry, defineTool } from './ai-llm-tool.js'
@@ -120,9 +120,8 @@ export function createAILLMFunctions(config: AIConfig, deps?: AILLMStores): AILL
    * 包装 chat，在有 objectId 时自动保存 ChatRecord
    */
   async function chatWithRecord(request: ChatCompletionRequest): Promise<Result<ChatCompletionResponse, AIError>> {
-    const resolvedModel = resolveModel(config.llm, 'chat', request.model)
     const start = Date.now()
-    const result = await provider.chat({ ...request, model: resolvedModel })
+    const result = await provider.chat(request)
 
     // 仅在调用成功且传入了 objectId + recordStore 时记录
     if (result.success && request.objectId && recordStore) {
@@ -134,7 +133,7 @@ export function createAILLMFunctions(config: AIConfig, deps?: AILLMStores): AILL
           objectId: request.objectId,
           sessionId: request.sessionId ?? 'default',
           request: {
-            model: resolvedModel,
+            model: response.model,
             messages: request.messages,
           },
           response: {
@@ -163,7 +162,6 @@ export function createAILLMFunctions(config: AIConfig, deps?: AILLMStores): AILL
    * 流式输出不受影响，记录在流消费完成后异步保存。
    */
   async function* chatStreamWithRecord(request: ChatCompletionRequest): AsyncIterable<ChatCompletionChunk> {
-    const resolvedModel = resolveModel(config.llm, 'chat', request.model)
     const start = Date.now()
     const shouldRecord = !!(request.objectId && recordStore)
 
@@ -172,8 +170,9 @@ export function createAILLMFunctions(config: AIConfig, deps?: AILLMStores): AILL
     let finishReason: string | null = null
     const toolCalls: ToolCall[] = []
     let streamId = ''
+    let resolvedModel = request.model ?? ''
 
-    for await (const chunk of provider.chatStream({ ...request, model: resolvedModel })) {
+    for await (const chunk of provider.chatStream(request)) {
       yield chunk
 
       if (!shouldRecord)
@@ -182,6 +181,8 @@ export function createAILLMFunctions(config: AIConfig, deps?: AILLMStores): AILL
       // 累积元数据
       if (!streamId && chunk.id)
         streamId = chunk.id
+      if (!resolvedModel && chunk.model)
+        resolvedModel = chunk.model
 
       for (const choice of chunk.choices) {
         if (choice.delta.content)

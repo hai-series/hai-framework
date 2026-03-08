@@ -20,11 +20,14 @@ import type { RagOperations } from './rag/ai-rag-types.js'
 import type { ReasoningOperations } from './reasoning/ai-reasoning-types.js'
 import type { RerankOperations } from './rerank/ai-rerank-types.js'
 import type { RetrievalOperations } from './retrieval/ai-retrieval-types.js'
-import type { SessionInfo } from './store/ai-store-types.js'
+import type { ReldbJsonOps, ReldbSql, SessionInfo, VecdbClient } from './store/ai-store-types.js'
 
 import { core, err, ok } from '@h-ai/core'
+import { datapipe } from '@h-ai/datapipe'
+import { reldb } from '@h-ai/reldb'
+import { vecdb } from '@h-ai/vecdb'
 
-import { AIConfigSchema, AIErrorCode, ContextConfigSchema, KnowledgeConfigSchema, MemoryConfigSchema, StoreConfigSchema } from './ai-config.js'
+import { AIConfigSchema, AIErrorCode, ContextConfigSchema, KnowledgeConfigSchema, MemoryConfigSchema } from './ai-config.js'
 import { aiM } from './ai-i18n.js'
 import { createContextOperations } from './context/ai-context-functions.js'
 import { createEmbeddingOperations } from './embedding/ai-embedding-functions.js'
@@ -39,7 +42,7 @@ import { createRagOperations } from './rag/ai-rag-functions.js'
 import { createReasoningOperations } from './reasoning/ai-reasoning-functions.js'
 import { createRerankOperations } from './rerank/ai-rerank-functions.js'
 import { createRetrievalOperations } from './retrieval/ai-retrieval-functions.js'
-import { createAIStore, createAIVectorStore } from './store/ai-store-factory.js'
+import { ReldbAIStore, VecdbAIVectorStore } from './store/ai-store-db.js'
 
 const logger = core.logger.child({ module: 'ai', scope: 'main' })
 
@@ -232,12 +235,21 @@ export const ai: AIFunctions = {
     const parsed = parseResult.data
 
     try {
-      // 解析存储配置（全局共享）
-      const storeConfig = parsed.store ?? StoreConfigSchema.parse({})
+      // 注入 reldb / vecdb 存储依赖（必选）
+      if (!reldb.isInitialized || !vecdb.isInitialized) {
+        const missing = [!reldb.isInitialized && 'reldb', !vecdb.isInitialized && 'vecdb'].filter(Boolean).join(', ')
+        return err({
+          code: AIErrorCode.CONFIGURATION_ERROR,
+          message: aiM('ai_configError', { params: { error: `${missing} not initialized. reldb and vecdb are required.` } }),
+        })
+      }
+      const _sql = reldb.sql as unknown as ReldbSql
+      const _jsonOps = reldb.json as unknown as ReldbJsonOps
+      const _vecdb = vecdb as unknown as VecdbClient
 
       // 创建 LLM 子功能（含对话记录存储）
-      const chatRecordStore = createAIStore<ChatRecord>('ai_chat_records', storeConfig.mode)
-      const sessionStore = createAIStore<SessionInfo>('ai_sessions', storeConfig.mode)
+      const chatRecordStore = new ReldbAIStore<ChatRecord>(_sql, 'ai_chat_records', _jsonOps)
+      const sessionStore = new ReldbAIStore<SessionInfo>(_sql, 'ai_sessions', _jsonOps)
       const llmFunctions = createAILLMFunctions(parsed, { recordStore: chatRecordStore, sessionStore })
       currentLLM = llmFunctions.llm
 
@@ -264,40 +276,22 @@ export const ai: AIFunctions = {
         knowledgeParsed,
         currentLLM,
         currentEmbedding,
-        async () => {
-          try {
-            const { vecdb } = await import('@h-ai/vecdb')
-            return vecdb.isInitialized ? vecdb : null
-          }
-          catch { return null }
-        },
-        async () => {
-          try {
-            const { reldb } = await import('@h-ai/reldb')
-            return reldb.isInitialized ? reldb.sql : null
-          }
-          catch { return null }
-        },
-        async () => {
-          try {
-            const { datapipe } = await import('@h-ai/datapipe')
-            return datapipe as unknown as { clean: (text: string, options?: Record<string, unknown>) => Result<string, unknown>, chunk: (text: string, options: Record<string, unknown>) => Result<Array<{ index: number, content: string, metadata?: Record<string, unknown> }>, unknown> }
-          }
-          catch { return null }
-        },
+        async () => vecdb.isInitialized ? vecdb : null,
+        async () => reldb.isInitialized ? reldb.sql : null,
+        async () => datapipe as unknown as { clean: (text: string, options?: Record<string, unknown>) => Result<string, unknown>, chunk: (text: string, options: Record<string, unknown>) => Result<Array<{ index: number, content: string, metadata?: Record<string, unknown> }>, unknown> },
       )
 
       // 创建 Memory 子功能（依赖 LLM + Embedding + Store）
       const memoryConfig = parsed.memory ?? {}
       const memoryParsed = MemoryConfigSchema.parse(memoryConfig)
-      const memoryStore = createAIStore<MemoryEntry>('ai_memory', storeConfig.mode)
-      const memoryVectorStore = createAIVectorStore('ai_memory_vectors', storeConfig.mode)
+      const memoryStore = new ReldbAIStore<MemoryEntry>(_sql, 'ai_memory', _jsonOps)
+      const memoryVectorStore = new VecdbAIVectorStore(_vecdb, 'ai_memory_vectors')
       currentMemory = createMemoryOperations(memoryParsed, currentLLM, currentEmbedding, memoryStore, memoryVectorStore)
 
       // 创建 Context 子功能（依赖 LLM + Store）
       const contextConfig = parsed.context ?? {}
       const contextParsed = ContextConfigSchema.parse(contextConfig)
-      const contextStore = createAIStore<{ messages: ChatMessage[], summaries: ContextSummary[], updatedAt: number }>('ai_context', storeConfig.mode)
+      const contextStore = new ReldbAIStore<{ messages: ChatMessage[], summaries: ContextSummary[], updatedAt: number }>(_sql, 'ai_context', _jsonOps)
       currentContext = createContextOperations(contextParsed, currentLLM, parsed.llm?.maxTokens ?? 4096, contextStore, sessionStore)
 
       // 创建 Rerank 子功能

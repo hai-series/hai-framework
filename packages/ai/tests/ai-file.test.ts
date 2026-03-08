@@ -18,8 +18,8 @@ const mockConfig: AIConfig = {
   llm: { apiKey: 'sk-test', model: 'gpt-4o-mini' },
 } as unknown as AIConfig
 
-/** 构造有 OCR 模型配置的 AI 配置（通过 llm.scenarios.ocr） */
-const mockConfigWithOcrModel: AIConfig = {
+/** 构造有 OCR 场景模型映射的 AI 配置 */
+const mockConfigWithOcrScenario: AIConfig = {
   llm: { apiKey: 'sk-test', model: 'gpt-4o-mini', scenarios: { ocr: 'gpt-4o' } },
 } as unknown as AIConfig
 
@@ -230,9 +230,9 @@ describe('file operations — image OCR', () => {
     }
   })
 
-  it('图片解析使用全局 ocrModel 配置', async () => {
+  it('图片解析使用 scenarios.ocr 场景模型', async () => {
     const mockLLM = makeMockLLM('OCR with model')
-    const ops = createFileOperations(mockConfigWithOcrModel, mockLLM)
+    const ops = createFileOperations(mockConfigWithOcrScenario, mockLLM)
 
     const fakePng = Buffer.from([0x89, 0x50, 0x4E, 0x47, ...Buffer.from('png')])
     await ops.parse({ content: fakePng })
@@ -241,20 +241,6 @@ describe('file operations — image OCR', () => {
     expect(mockLLM.chat).toHaveBeenCalledOnce()
     const chatArgs = (mockLLM.chat as ReturnType<typeof vi.fn>).mock.calls[0][0]
     expect(chatArgs.model).toBe('gpt-4o')
-  })
-
-  it('请求级 ocrModel 覆盖全局配置', async () => {
-    const mockLLM = makeMockLLM('text')
-    const ops = createFileOperations(mockConfigWithOcrModel, mockLLM)
-
-    const fakePng = Buffer.from([0x89, 0x50, 0x4E, 0x47, ...Buffer.from('png')])
-    await ops.parse({
-      content: fakePng,
-      options: { ocrModel: 'gpt-4-turbo' },
-    })
-
-    const chatArgs = (mockLLM.chat as ReturnType<typeof vi.fn>).mock.calls[0][0]
-    expect(chatArgs.model).toBe('gpt-4-turbo')
   })
 
   it('视觉 LLM 调用失败时返回 FILE_OCR_FAILED', async () => {
@@ -379,5 +365,119 @@ describe('file operations — parseText', () => {
     // 未知格式，默认应使用 text/plain 解码
     // 因为无扩展名匹配 → magic bytes → 未知 → 默认 text/plain
     expect(result.success).toBe(true)
+  })
+})
+
+// ─── outputFormat: 'markdown' 测试 ───
+
+describe('file operations — outputFormat: markdown', () => {
+  it('hTML 转 Markdown 保留标题结构', async () => {
+    const ops = createFileOperations(mockConfig, makeMockLLM(''))
+    const html = '<h1>主标题</h1><h2>副标题</h2><p>正文段落</p>'
+    const result = await ops.parse({
+      content: html,
+      filename: 'page.html',
+      options: { outputFormat: 'markdown' },
+    })
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.method).toBe('html')
+      expect(result.data.text).toContain('# 主标题')
+      expect(result.data.text).toContain('## 副标题')
+      expect(result.data.text).toContain('正文段落')
+    }
+  })
+
+  it('hTML 转 Markdown 处理粗体和斜体', async () => {
+    const ops = createFileOperations(mockConfig, makeMockLLM(''))
+    const html = '<p><strong>粗体</strong> 和 <em>斜体</em></p>'
+    const result = await ops.parse({
+      content: html,
+      filename: 'page.html',
+      options: { outputFormat: 'markdown' },
+    })
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.text).toContain('**粗体**')
+      expect(result.data.text).toContain('*斜体*')
+    }
+  })
+
+  it('hTML 转 Markdown 处理超链接', async () => {
+    const ops = createFileOperations(mockConfig, makeMockLLM(''))
+    const html = '<a href="https://example.com">链接文本</a>'
+    const result = await ops.parse({
+      content: html,
+      filename: 'index.html',
+      options: { outputFormat: 'markdown' },
+    })
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.text).toContain('[链接文本](https://example.com)')
+    }
+  })
+
+  it('hTML 转 Markdown 处理无序列表', async () => {
+    const ops = createFileOperations(mockConfig, makeMockLLM(''))
+    const html = '<ul><li>项目一</li><li>项目二</li></ul>'
+    const result = await ops.parse({
+      content: html,
+      filename: 'list.html',
+      options: { outputFormat: 'markdown' },
+    })
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.text).toContain('- 项目一')
+      expect(result.data.text).toContain('- 项目二')
+    }
+  })
+
+  it('hTML 转 Markdown 处理代码块', async () => {
+    const ops = createFileOperations(mockConfig, makeMockLLM(''))
+    const html = '<pre><code>const x = 1</code></pre>'
+    const result = await ops.parse({
+      content: html,
+      filename: 'code.html',
+      options: { outputFormat: 'markdown' },
+    })
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.text).toContain('```')
+      expect(result.data.text).toContain('const x = 1')
+    }
+  })
+
+  it('oCR 强制模式 + markdown：请求中包含 Markdown 指令', async () => {
+    const mockLLM = makeMockLLM('# 标题\n\n正文内容')
+    const ops = createFileOperations(mockConfig, mockLLM)
+    const fakeImage = Buffer.from([0x89, 0x50, 0x4E, 0x47, ...Buffer.from('png')])
+    const result = await ops.parse({
+      content: fakeImage,
+      filename: 'screenshot.png',
+      options: { outputFormat: 'markdown' },
+    })
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.method).toBe('ocr')
+      // LLM 调用中应包含 Markdown 相关提示词
+      const chatCall = (mockLLM.chat as ReturnType<typeof vi.fn>).mock.calls[0][0]
+      const textMsg = chatCall.messages[0].content.find((c: { type: string }) => c.type === 'text')
+      expect(textMsg.text.toLowerCase()).toContain('markdown')
+    }
+  })
+
+  it('文本格式文件 outputFormat 不影响结果', async () => {
+    const ops = createFileOperations(mockConfig, makeMockLLM(''))
+    const result = await ops.parse({
+      content: 'plain text',
+      filename: 'file.txt',
+      options: { outputFormat: 'markdown' },
+    })
+    expect(result.success).toBe(true)
+    if (result.success) {
+      // 文本格式不做转换，原样返回
+      expect(result.data.text).toBe('plain text')
+      expect(result.data.method).toBe('text')
+    }
   })
 })

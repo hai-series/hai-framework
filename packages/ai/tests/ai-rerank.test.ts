@@ -45,10 +45,9 @@ const mockConfigWithRerank: AIConfig = {
     apiKey: 'sk-llm-key',
     model: 'gpt-4o-mini',
     scenarios: { rerank: 'rerank-english-v3.0' },
-  },
-  rerank: {
-    apiKey: 'co-rerank-key',
-    baseUrl: 'https://api.cohere.com',
+    models: [
+      { id: 'rerank-english-v3.0', model: 'rerank-english-v3.0', apiKey: 'co-rerank-key', baseUrl: 'https://api.cohere.com' },
+    ],
   },
 } as unknown as AIConfig
 
