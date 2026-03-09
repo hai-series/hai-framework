@@ -122,8 +122,8 @@ export function createAILLMFunctions(config: AIConfig, deps?: AILLMStores): AILL
     const start = Date.now()
     const result = await provider.chat(request)
 
-    // 仅在调用成功且传入了 objectId + recordStore 时记录
-    if (result.success && request.objectId && recordStore) {
+    // 仅在调用成功且传入了 objectId + recordStore 且未禁用持久化时记录
+    if (result.success && request.objectId && recordStore && request.persist !== false) {
       try {
         const response = result.data
         const choice = response.choices[0]
@@ -162,7 +162,7 @@ export function createAILLMFunctions(config: AIConfig, deps?: AILLMStores): AILL
    */
   async function* chatStreamWithRecord(request: ChatCompletionRequest): AsyncIterable<ChatCompletionChunk> {
     const start = Date.now()
-    const shouldRecord = !!(request.objectId && recordStore)
+    const shouldRecord = !!(request.objectId && recordStore && request.persist !== false)
 
     // 累积流式响应的中间状态
     let content = ''

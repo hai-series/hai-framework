@@ -285,9 +285,9 @@ export const ai: AIFunctions = {
         knowledgeParsed,
         currentLLM,
         currentEmbedding,
-        async () => vecdb.isInitialized ? vecdb : null,
-        async () => reldb.isInitialized ? reldb.sql : null,
-        async () => datapipe as unknown as { clean: (text: string, options?: Record<string, unknown>) => Result<string, unknown>, chunk: (text: string, options: Record<string, unknown>) => Result<Array<{ index: number, content: string, metadata?: Record<string, unknown> }>, unknown> },
+        vecdb.isInitialized ? vecdb as unknown as { collection: { create: (name: string, options: { dimension: number }) => Promise<{ success: true, data: void } | { success: false, error: unknown }>, exists: (name: string) => Promise<{ success: true, data: boolean } | { success: false, error: unknown }> }, vector: { upsert: (collection: string, documents: Array<{ id: string, vector: number[], content?: string, metadata?: Record<string, unknown> }>) => Promise<{ success: true, data: void } | { success: false, error: unknown }>, search: (collection: string, vector: number[], options?: { topK?: number, minScore?: number, filter?: Record<string, unknown> }) => Promise<{ success: true, data: Array<{ id: string, score: number, content?: string, metadata?: Record<string, unknown> }> } | { success: false, error: unknown }> } } : null,
+        reldb.isInitialized ? reldb.sql as unknown as { execute: (sql: string, params?: unknown[]) => Promise<{ success: true, data: unknown } | { success: false, error: unknown }>, query: <T = Record<string, unknown>>(sql: string, params?: unknown[]) => Promise<{ success: true, data: T[] } | { success: false, error: unknown }> } : null,
+        datapipe as unknown as { clean: (text: string, options?: Record<string, unknown>) => { success: true, data: string } | { success: false, error: unknown }, chunk: (text: string, options: Record<string, unknown>) => { success: true, data: Array<{ index: number, content: string, metadata?: Record<string, unknown> }> } | { success: false, error: unknown } } | null,
       )
 
       // 创建 Memory 子功能（依赖 LLM + Embedding + Store）

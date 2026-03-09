@@ -94,18 +94,18 @@ Rules:
  * @param config - Knowledge 配置
  * @param llm - LLM 操作（用于实体提取和问答）
  * @param embedding - Embedding 操作（用于向量化）
- * @param getVecdb - 延迟获取 vecdb 实例
- * @param getReldb - 延迟获取 reldb 数据操作实例
- * @param getDatapipe - 延迟获取 datapipe 实例
+ * @param vecdbInstance - vecdb 实例（不可用时传 null）
+ * @param reldbInstance - reldb 数据操作实例（不可用时传 null）
+ * @param datapipeInstance - datapipe 实例（不可用时传 null）
  * @returns KnowledgeOperations 实例
  */
 export function createKnowledgeOperations(
   config: KnowledgeConfig,
   llm: LLMOperations,
   embedding: EmbeddingOperations,
-  getVecdb: () => Promise<VecdbOps | null>,
-  getReldb: () => Promise<DataOps | null>,
-  getDatapipe: () => Promise<DatapipeOps | null>,
+  vecdbInstance: VecdbOps | null,
+  reldbInstance: DataOps | null,
+  datapipeInstance: DatapipeOps | null,
 ): KnowledgeOperations {
   /** 是否已完成 setup */
   let isSetup = false
@@ -120,7 +120,6 @@ export function createKnowledgeOperations(
 
       try {
         // 创建 vecdb 集合
-        const vecdbInstance = await getVecdb()
         if (!vecdbInstance) {
           return err({
             code: AIErrorCode.KNOWLEDGE_SETUP_FAILED,
@@ -141,7 +140,6 @@ export function createKnowledgeOperations(
         }
 
         // 创建 reldb 实体表
-        const reldbInstance = await getReldb()
         if (reldbInstance) {
           const schemaResult = await createKnowledgeSchema(reldbInstance)
           if (!schemaResult.success)
@@ -185,9 +183,6 @@ export function createKnowledgeOperations(
 
       try {
         // 获取依赖
-        const datapipeInstance = await getDatapipe()
-        const vecdbInstance = await getVecdb()
-
         if (!vecdbInstance) {
           return err({
             code: AIErrorCode.KNOWLEDGE_INGEST_FAILED,
@@ -268,14 +263,12 @@ export function createKnowledgeOperations(
         const extractedEntities: KnowledgeEntity[] = []
 
         if (enableEntityExtraction) {
-          const reldbInstance = await getReldb()
-
           const chunkInputs = chunks.map(chunk => ({
             content: chunk.content,
             chunkId: `${input.documentId}:chunk-${chunk.index}`,
           }))
 
-          const entityResult = await extractEntitiesBatch(llm, chunkInputs)
+          const entityResult = await extractEntitiesBatch(llm, chunkInputs, undefined, config.entityTypes, config.entityExtractionPrompt)
           if (entityResult.success) {
             // ⑥ 写入 reldb
             for (const entity of entityResult.data) {
@@ -360,7 +353,6 @@ export function createKnowledgeOperations(
       logger.debug('Knowledge retrieval', { query: query.slice(0, 100), collection, topK })
 
       try {
-        const vecdbInstance = await getVecdb()
         if (!vecdbInstance) {
           return err({
             code: AIErrorCode.KNOWLEDGE_RETRIEVE_FAILED,
@@ -418,7 +410,6 @@ export function createKnowledgeOperations(
 
         // ③ 实体增强（可选）
         if (enableEntityBoost) {
-          const reldbInstance = await getReldb()
           if (reldbInstance) {
             // 从查询文本中提取可能的实体关键词
             const entityResult = await findEntitiesByName(reldbInstance, query)
@@ -520,9 +511,7 @@ export function createKnowledgeOperations(
 
       // 消息历史
       if (options?.messages) {
-        for (const msg of options.messages) {
-          messages.push({ role: msg.role, content: msg.content })
-        }
+        messages.push(...options.messages)
       }
 
       messages.push({ role: 'user', content: query })
@@ -568,7 +557,6 @@ export function createKnowledgeOperations(
 
     // ─── findByEntity ───
     async findByEntity(entityName: string, options?: EntityQueryOptions): Promise<Result<EntityDocumentResult[], AIError>> {
-      const reldbInstance = await getReldb()
       if (!reldbInstance) {
         return err({
           code: AIErrorCode.KNOWLEDGE_RETRIEVE_FAILED,
@@ -604,7 +592,6 @@ export function createKnowledgeOperations(
 
     // ─── listEntities ───
     async listEntities(options?: EntityListOptions): Promise<Result<KnowledgeEntity[], AIError>> {
-      const reldbInstance = await getReldb()
       if (!reldbInstance) {
         return err({
           code: AIErrorCode.KNOWLEDGE_RETRIEVE_FAILED,
