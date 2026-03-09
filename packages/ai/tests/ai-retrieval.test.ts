@@ -5,9 +5,10 @@
  * retrieve 需要 embedding + vecdb，此处仅测试源管理。
  */
 
+import type { VecdbFunctions } from '@h-ai/vecdb'
 import type { EmbeddingOperations } from '../src/embedding/ai-embedding-types.js'
 import type { RetrievalSource } from '../src/retrieval/ai-retrieval-types.js'
-import type { AIStore, VecdbClient } from '../src/store/ai-store-types.js'
+import type { AIStore } from '../src/store/ai-store-types.js'
 import { describe, expect, it } from 'vitest'
 import { AIErrorCode } from '../src/ai-config.js'
 import { createRetrievalOperations } from '../src/retrieval/ai-retrieval-functions.js'
@@ -20,19 +21,26 @@ const mockEmbedding: EmbeddingOperations = {
   embedBatch: async () => ({ success: true, data: [[0.1], [0.2]] }) as any,
 }
 
-// ─── Mock VecdbClient ───
+// ─── Mock VecdbFunctions ───
 
-const mockVecdb: VecdbClient = {
+const mockVecdb: VecdbFunctions = {
+  init: async () => ({ success: true as const, data: undefined }),
+  close: async () => ({ success: true as const, data: undefined }),
+  config: null,
   isInitialized: true,
   vector: {
-    upsert: async () => ({ success: true }),
-    search: async () => ({ success: true, data: [] }),
-    delete: async () => ({ success: true }),
+    insert: async () => ({ success: true as const, data: undefined }),
+    upsert: async () => ({ success: true as const, data: undefined }),
+    delete: async () => ({ success: true as const, data: undefined }),
+    search: async () => ({ success: true as const, data: [] }),
+    count: async () => ({ success: true as const, data: 0 }),
   },
   collection: {
-    create: async () => ({ success: true }),
-    drop: async () => ({ success: true }),
-    exists: async () => ({ success: true, data: true }),
+    create: async () => ({ success: true as const, data: undefined }),
+    drop: async () => ({ success: true as const, data: undefined }),
+    exists: async () => ({ success: true as const, data: true }),
+    info: async () => ({ success: true as const, data: { name: 'test', dimension: 1536, metric: 'cosine' as const, count: 0 } }),
+    list: async () => ({ success: true as const, data: [] }),
   },
 }
 

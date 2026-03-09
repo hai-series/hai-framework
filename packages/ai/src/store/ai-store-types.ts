@@ -135,56 +135,6 @@ export interface AIVectorStore {
   clear: (filter?: Record<string, unknown>) => Promise<void>
 }
 
-// ─── 外部依赖鸭子类型（统一定义，避免各文件重复声明） ───
-
-/**
- * reldb JSON 操作接口（鸭子类型，避免硬依赖 @h-ai/reldb）
- *
- * 与 `@h-ai/reldb` 中 `ReldbJsonOps` 对应，仅声明 `extract` 方法（当前使用到的子集）。
- */
-export interface ReldbJsonExpr {
-  /** SQL 表达式片段（含 ? 占位符） */
-  sql: string
-  /** 参数列表（对应 ? 占位符） */
-  params: unknown[]
-}
-
-/**
- * reldb JSON 路径操作接口（鸭子类型，避免硬依赖 @h-ai/reldb）
- */
-export interface ReldbJsonOps {
-  /** 提取 JSON 路径值 */
-  extract: (column: string, path: string) => ReldbJsonExpr
-}
-
-/**
- * reldb SQL 操作接口（鸭子类型，避免硬依赖 @h-ai/reldb）
- */
-export interface ReldbSql {
-  query: <T>(sql: string, params?: unknown[]) => Promise<{ success: boolean, data: T[], error?: { message: string } }>
-  get: <T>(sql: string, params?: unknown[]) => Promise<{ success: boolean, data: T, error?: { message: string } }>
-  execute: (sql: string, params?: unknown[]) => Promise<{ success: boolean, error?: { message: string } }>
-}
-
-/**
- * vecdb 客户端接口（鸭子类型，避免硬依赖 @h-ai/vecdb）
- *
- * 结构与 @h-ai/vecdb 的 VecdbFunctions 对齐，通过 `vector` 和 `collection` 子对象访问操作。
- */
-export interface VecdbClient {
-  isInitialized: boolean
-  vector: {
-    upsert: (collection: string, documents: Array<{ id: string, vector: number[], content?: string, metadata?: Record<string, unknown> }>) => Promise<{ success: boolean, error?: { message: string } }>
-    search: (collection: string, vector: number[], options?: { topK?: number, filter?: Record<string, unknown>, minScore?: number }) => Promise<{ success: boolean, data: Array<{ id: string, score: number, content?: string, metadata?: Record<string, unknown> }>, error?: { message: string } }>
-    delete: (collection: string, ids: string[]) => Promise<{ success: boolean, error?: { message: string } }>
-  }
-  collection: {
-    create: (name: string, options: { dimension: number, metric?: string }) => Promise<{ success: boolean, error?: { message: string } }>
-    drop: (name: string) => Promise<{ success: boolean, error?: { message: string } }>
-    exists: (name: string) => Promise<{ success: boolean, data: boolean, error?: { message: string } }>
-  }
-}
-
 // ─── 交互作用域 ───
 
 /**

@@ -171,7 +171,7 @@ describe('knowledge setup', () => {
       createMockEmbedding(),
       vecdb,
       reldb,
-      null,
+      createMockDatapipe(),
     )
 
     const result = await ops.setup()
@@ -183,21 +183,23 @@ describe('knowledge setup', () => {
     expect(reldb._executeCalls.length).toBeGreaterThan(0)
   })
 
-  it('vecdb 不可用返回错误', async () => {
+  it('vecdb.collection.create 失败时 setup 返回错误', async () => {
+    const vecdb = createMockVecdb()
+    vecdb.collection.create = vi.fn(async () => ({ success: false, error: { message: 'create failed' } } as any))
+
     const ops = createKnowledgeOperations(
       DEFAULT_CONFIG,
       createMockLLM(),
       createMockEmbedding(),
-      null,
-      null,
-      null,
+      vecdb,
+      createMockReldb(),
+      createMockDatapipe(),
     )
 
     const result = await ops.setup()
     expect(result.success).toBe(false)
-    if (!result.success) {
+    if (!result.success)
       expect(result.error.code).toBe(AIErrorCode.KNOWLEDGE_SETUP_FAILED)
-    }
   })
 
   it('自定义 collection 和 dimension', async () => {
@@ -210,28 +212,12 @@ describe('knowledge setup', () => {
       createMockEmbedding(),
       vecdb,
       reldb,
-      null,
+      createMockDatapipe(),
     )
 
     const result = await ops.setup({ collection: 'custom-kb', dimension: 768 })
     expect(result.success).toBe(true)
     expect(vecdb.collection.create).toHaveBeenCalledWith('custom-kb', { dimension: 768 })
-  })
-
-  it('reldb 不可用时仍可完成 setup（仅警告）', async () => {
-    const vecdb = createMockVecdb()
-
-    const ops = createKnowledgeOperations(
-      DEFAULT_CONFIG,
-      createMockLLM(),
-      createMockEmbedding(),
-      vecdb,
-      null,
-      null,
-    )
-
-    const result = await ops.setup()
-    expect(result.success).toBe(true)
   })
 
   it('集合已存在时不重复创建', async () => {
@@ -244,7 +230,7 @@ describe('knowledge setup', () => {
       createMockEmbedding(),
       vecdb,
       createMockReldb(),
-      null,
+      createMockDatapipe(),
     )
 
     const result = await ops.setup()
@@ -259,12 +245,12 @@ describe('knowledge ingest', () => {
   async function setupOps(options?: {
     enableEntityExtraction?: boolean
     entityJson?: string
-    datapipe?: ReturnType<typeof createMockDatapipe> | null
-    reldb?: ReturnType<typeof createMockReldb> | null
+    datapipe?: ReturnType<typeof createMockDatapipe>
+    reldb?: ReturnType<typeof createMockReldb>
   }) {
     const vecdb = createMockVecdb()
-    const reldb = options?.reldb !== undefined ? options.reldb : createMockReldb()
-    const datapipe = options?.datapipe !== undefined ? options.datapipe : createMockDatapipe()
+    const reldb = options?.reldb ?? createMockReldb()
+    const datapipe = options?.datapipe ?? createMockDatapipe()
     const embedding = createMockEmbedding()
     const llm = createMockLLM(options?.entityJson)
 
@@ -294,8 +280,8 @@ describe('knowledge ingest', () => {
       createMockLLM(),
       createMockEmbedding(),
       createMockVecdb(),
-      null,
-      null,
+      createMockReldb(),
+      createMockDatapipe(),
     )
 
     const result = await ops.ingest({ documentId: 'doc-1', content: 'Hello world' })
@@ -332,8 +318,12 @@ describe('knowledge ingest', () => {
     expect(vecdb.vector.upsert).toHaveBeenCalledWith('knowledge', expect.any(Array))
   })
 
-  it('无 datapipe 时整个文本作为单一 chunk', async () => {
-    const { ops, vecdb: _vecdb } = await setupOps({ datapipe: null })
+  it('分块失败时退回整文本单一 chunk', async () => {
+    const failDatapipe = {
+      clean: vi.fn((text: string) => ({ success: true, data: text })),
+      chunk: vi.fn(() => ({ success: false, error: { message: 'chunk failed' } })),
+    }
+    const { ops } = await setupOps({ datapipe: failDatapipe as any })
 
     const result = await ops.ingest({
       documentId: 'doc-2',
@@ -344,6 +334,23 @@ describe('knowledge ingest', () => {
     if (result.success) {
       expect(result.data.chunkCount).toBe(1)
     }
+  })
+
+  it('导入时传入 cleanOptions 与 chunkOptions', async () => {
+    const { ops, datapipe } = await setupOps()
+
+    const result = await ops.ingest({
+      documentId: 'doc-3b',
+      content: '<p>Hello world</p>',
+      cleanOptions: { removeHtml: true },
+      chunkOptions: { mode: 'paragraph', maxSize: 500, overlap: 50 },
+    })
+
+    expect(result.success).toBe(true)
+    // datapipe.clean 应收到 removeHtml: true
+    expect(datapipe!.clean).toHaveBeenCalledWith('<p>Hello world</p>', { removeHtml: true })
+    // datapipe.chunk 应收到 mode: 'paragraph'
+    expect(datapipe!.chunk).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ mode: 'paragraph' }))
   })
 
   it('开启实体提取时提取并存储实体', async () => {
@@ -370,25 +377,25 @@ describe('knowledge ingest', () => {
     }
   })
 
-  it('vecdb 不可用时 ingest 返回错误', async () => {
-    // 创建一个 setup 后 vecdb 不可用的场景：传入 null 则 setup 失败，导致 isSetup=false、ingest 返回 KNOWLEDGE_NOT_SETUP
+  it('vecdb.vector.upsert 失败时 ingest 返回错误', async () => {
+    const failVecdb = createMockVecdb()
+    failVecdb.vector.upsert = vi.fn(async () => ({ success: false, error: { message: 'upsert failed' } } as any))
+    failVecdb._collections.add('knowledge') // 跳过 create
+
     const ops = createKnowledgeOperations(
       DEFAULT_CONFIG,
       createMockLLM(),
       createMockEmbedding(),
-      null,
+      failVecdb,
       createMockReldb(),
-      null,
+      createMockDatapipe(),
     )
-
-    // setup 失败（vecdb 为 null）
     await ops.setup()
 
     const result = await ops.ingest({ documentId: 'doc-4', content: 'Test' })
     expect(result.success).toBe(false)
-    if (!result.success) {
-      expect([AIErrorCode.KNOWLEDGE_NOT_SETUP, AIErrorCode.KNOWLEDGE_INGEST_FAILED]).toContain(result.error.code)
-    }
+    if (!result.success)
+      expect(result.error.code).toBe(AIErrorCode.KNOWLEDGE_INGEST_FAILED)
   })
 })
 
@@ -430,8 +437,8 @@ describe('knowledge retrieve', () => {
       createMockLLM(),
       createMockEmbedding(),
       createMockVecdb(),
-      null,
-      null,
+      createMockReldb(),
+      createMockDatapipe(),
     )
 
     const result = await ops.retrieve('test query')
@@ -543,40 +550,6 @@ describe('knowledge ask', () => {
 // ─── findByEntity / listEntities ───
 
 describe('knowledge 实体查询', () => {
-  it('findByEntity — reldb 不可用返回错误', async () => {
-    const ops = createKnowledgeOperations(
-      DEFAULT_CONFIG,
-      createMockLLM(),
-      createMockEmbedding(),
-      createMockVecdb(),
-      null,
-      null,
-    )
-
-    const result = await ops.findByEntity('Alice')
-    expect(result.success).toBe(false)
-    if (!result.success) {
-      expect(result.error.code).toBe(AIErrorCode.KNOWLEDGE_RETRIEVE_FAILED)
-    }
-  })
-
-  it('listEntities — reldb 不可用返回错误', async () => {
-    const ops = createKnowledgeOperations(
-      DEFAULT_CONFIG,
-      createMockLLM(),
-      createMockEmbedding(),
-      createMockVecdb(),
-      null,
-      null,
-    )
-
-    const result = await ops.listEntities()
-    expect(result.success).toBe(false)
-    if (!result.success) {
-      expect(result.error.code).toBe(AIErrorCode.KNOWLEDGE_RETRIEVE_FAILED)
-    }
-  })
-
   it('findByEntity — 正常返回（空结果）', async () => {
     const reldb = createMockReldb()
     const ops = createKnowledgeOperations(
@@ -585,7 +558,7 @@ describe('knowledge 实体查询', () => {
       createMockEmbedding(),
       createMockVecdb(),
       reldb,
-      null,
+      createMockDatapipe(),
     )
 
     const result = await ops.findByEntity('Alice')
@@ -603,7 +576,7 @@ describe('knowledge 实体查询', () => {
       createMockEmbedding(),
       createMockVecdb(),
       reldb,
-      null,
+      createMockDatapipe(),
     )
 
     const result = await ops.listEntities()
@@ -621,7 +594,7 @@ describe('knowledge 实体查询', () => {
       createMockEmbedding(),
       createMockVecdb(),
       reldb,
-      null,
+      createMockDatapipe(),
     )
 
     const result = await ops.listEntities({ type: 'person', keyword: 'Alice', limit: 5 })

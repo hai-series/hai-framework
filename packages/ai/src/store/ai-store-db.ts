@@ -5,7 +5,9 @@
  * @module ai-store-db
  */
 
-import type { AIStore, AIVectorStore, ReldbJsonOps, ReldbSql, StoreFilter, StorePage, VecdbClient, WhereClause, WhereOperator } from './ai-store-types.js'
+import type { DataOperations, ReldbJsonOps } from '@h-ai/reldb'
+import type { VecdbFunctions } from '@h-ai/vecdb'
+import type { AIStore, AIVectorStore, StoreFilter, StorePage, WhereClause, WhereOperator } from './ai-store-types.js'
 
 // ─── Reldb AIStore 实现 ───
 
@@ -16,12 +18,12 @@ import type { AIStore, AIVectorStore, ReldbJsonOps, ReldbSql, StoreFilter, Store
  * 表结构：id TEXT PRIMARY KEY, data TEXT, created_at INTEGER
  */
 export class ReldbAIStore<T> implements AIStore<T> {
-  private readonly sql: ReldbSql
+  private readonly sql: DataOperations
   private readonly table: string
   private readonly jsonOps: ReldbJsonOps
   private initialized = false
 
-  constructor(sql: ReldbSql, table: string, jsonOps: ReldbJsonOps) {
+  constructor(sql: DataOperations, table: string, jsonOps: ReldbJsonOps) {
     this.sql = sql
     this.table = table
     this.jsonOps = jsonOps
@@ -88,7 +90,7 @@ export class ReldbAIStore<T> implements AIStore<T> {
       }
     }
     const countResult = await this.sql.get<{ cnt: number }>(countSql, countParams)
-    const total = countResult.success ? countResult.data.cnt : 0
+    const total = countResult.success && countResult.data != null ? countResult.data.cnt : 0
 
     // 分页数据（buildQuery 已含 WHERE + ORDER，追加 LIMIT/OFFSET）
     const { sql, params } = this.buildQuery({ ...filter, limit: undefined })
@@ -111,7 +113,7 @@ export class ReldbAIStore<T> implements AIStore<T> {
       const countResult = await this.sql.get<{ cnt: number }>(
         `SELECT COUNT(*) as cnt FROM ${this.table}`,
       )
-      const count = countResult.success ? countResult.data.cnt : 0
+      const count = countResult.success && countResult.data != null ? countResult.data.cnt : 0
       await this.sql.execute(`DELETE FROM ${this.table}`)
       return count
     }
@@ -132,7 +134,7 @@ export class ReldbAIStore<T> implements AIStore<T> {
       countSql += ` WHERE ${countConditions.join(' AND ')}`
     }
     const countResult = await this.sql.get<{ cnt: number }>(countSql, countParams)
-    const count = countResult.success ? countResult.data.cnt : 0
+    const count = countResult.success && countResult.data != null ? countResult.data.cnt : 0
 
     await this.sql.execute(deleteSql, params)
     return count
@@ -144,7 +146,7 @@ export class ReldbAIStore<T> implements AIStore<T> {
       const result = await this.sql.get<{ cnt: number }>(
         `SELECT COUNT(*) as cnt FROM ${this.table}`,
       )
-      return result.success ? result.data.cnt : 0
+      return result.success && result.data != null ? result.data.cnt : 0
     }
     const items = await this.query(filter)
     return items.length
@@ -264,12 +266,12 @@ export class ReldbAIStore<T> implements AIStore<T> {
  * 集合在首次 upsert 时按需创建（lazy），clear 时 drop 集合。
  */
 export class VecdbAIVectorStore implements AIVectorStore {
-  private readonly vecdb: VecdbClient
+  private readonly vecdb: VecdbFunctions
   private readonly collection: string
   /** 已创建集合的维度（null 表示未创建或已清除） */
   private collectionDimension: number | null = null
 
-  constructor(vecdb: VecdbClient, collection: string) {
+  constructor(vecdb: VecdbFunctions, collection: string) {
     this.vecdb = vecdb
     this.collection = collection
   }
