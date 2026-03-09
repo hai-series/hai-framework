@@ -43,6 +43,25 @@ export interface ReasoningOptions {
   executeModel?: string
   /** 系统提示词（可选，覆盖默认的策略提示词） */
   systemPrompt?: string
+  /**
+   * 前置对话上下文（可选）
+   *
+   * 插入到系统提示词之后、当前问题之前，用于注入：
+   * - 历史对话轮次（连续对话场景）
+   * - `ai.memory.injectMemories()` 处理后的记忆增强消息
+   * - RAG 检索到的内容片段（构造为 system 消息）
+   *
+   * @example
+   * ```ts
+   * // 将记忆注入推理上下文
+   * const withMemory = await ai.memory.injectMemories(
+   *   [{ role: 'user', content: query }],
+   *   { objectId: 'user-001' },
+   * )
+   * await ai.reasoning.run(query, { messages: withMemory.data })
+   * ```
+   */
+  messages?: ChatMessage[]
   /** 可用工具注册表（可选，ReAct 和 Plan-Execute 策略可用） */
   tools?: ToolRegistryOperations
   /** 温度覆盖 */

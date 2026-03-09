@@ -8,6 +8,7 @@
 import type { Result } from '@h-ai/core'
 import type { AIError } from '../ai-types.js'
 import type { EmbeddingOperations } from '../embedding/ai-embedding-types.js'
+import type { AIStore, VecdbClient } from '../store/ai-store-types.js'
 import type {
   Citation,
   RetrievalOperations,
@@ -18,7 +19,6 @@ import type {
 } from './ai-retrieval-types.js'
 
 import { core, err, ok } from '@h-ai/core'
-import { vecdb } from '@h-ai/vecdb'
 
 import { AIErrorCode } from '../ai-config.js'
 import { aiM } from '../ai-i18n.js'
@@ -29,50 +29,55 @@ const logger = core.logger.child({ module: 'ai', scope: 'retrieval' })
  * 创建 Retrieval 操作接口
  *
  * @param embeddingOps - Embedding 操作（用于将查询文本向量化）
+ * @param vecdbClient - vecdb 客户端（用于向量检索）
+ * @param sourceStore - 检索源持久化存储（支持分布式一致）
  * @returns RetrievalOperations 实例
  */
-export function createRetrievalOperations(embeddingOps: EmbeddingOperations): RetrievalOperations {
-  /** 已注册的检索源 */
-  const sources = new Map<string, RetrievalSource>()
-
+export function createRetrievalOperations(
+  embeddingOps: EmbeddingOperations,
+  vecdbClient: VecdbClient,
+  sourceStore: AIStore<RetrievalSource>,
+): RetrievalOperations {
   return {
-    addSource(source: RetrievalSource): Result<void, AIError> {
-      if (sources.has(source.id)) {
+    async addSource(source: RetrievalSource): Promise<Result<void, AIError>> {
+      const existing = await sourceStore.get(source.id)
+      if (existing) {
         return err({
           code: AIErrorCode.RETRIEVAL_FAILED,
           message: aiM('ai_internalError', { params: { error: `Source '${source.id}' already exists` } }),
         })
       }
-      sources.set(source.id, source)
+      await sourceStore.save(source.id, source)
       logger.debug('Retrieval source added', { sourceId: source.id, collection: source.collection })
       return ok(undefined)
     },
 
-    removeSource(sourceId: string): Result<void, AIError> {
-      if (!sources.has(sourceId)) {
+    async removeSource(sourceId: string): Promise<Result<void, AIError>> {
+      const existing = await sourceStore.get(sourceId)
+      if (!existing) {
         return err({
           code: AIErrorCode.RETRIEVAL_SOURCE_NOT_FOUND,
           message: aiM('ai_internalError', { params: { error: `Source '${sourceId}' not found` } }),
         })
       }
-      sources.delete(sourceId)
+      await sourceStore.remove(sourceId)
       logger.debug('Retrieval source removed', { sourceId })
       return ok(undefined)
     },
 
-    listSources(): RetrievalSource[] {
-      return Array.from(sources.values())
+    async listSources(): Promise<RetrievalSource[]> {
+      return sourceStore.query({})
     },
 
     async retrieve(request: RetrievalRequest): Promise<Result<RetrievalResult, AIError>> {
       const startTime = Date.now()
 
-      // 确定要查询的源
-      const targetSources: RetrievalSource[] = request.sources
-        ? request.sources
-            .map(id => sources.get(id))
-            .filter((s): s is RetrievalSource => s !== undefined)
-        : Array.from(sources.values())
+      // 确定要查询的源（从 DB 读取，分布式一致）
+      const targetSources = await sourceStore.query(
+        request.sources?.length
+          ? { where: { id: { $in: request.sources } } }
+          : {},
+      )
 
       if (targetSources.length === 0) {
         return err({
@@ -101,7 +106,7 @@ export function createRetrievalOperations(embeddingOps: EmbeddingOperations): Re
           const topK = request.topK ?? source.topK ?? 5
           const minScore = request.minScore ?? source.minScore
 
-          const searchResult = await vecdb.vector.search(source.collection, queryVector, {
+          const searchResult = await vecdbClient.vector.search(source.collection, queryVector, {
             topK,
             minScore,
             filter: source.filter,

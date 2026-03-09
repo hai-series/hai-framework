@@ -76,6 +76,7 @@ export function createReasoningOperations(config: AIConfig, llm: LLMOperations):
 
     const messages: ChatMessage[] = [
       { role: 'system', content: systemPrompt },
+      ...(options.messages ?? []),
       { role: 'user', content: query },
     ]
 
@@ -108,7 +109,7 @@ export function createReasoningOperations(config: AIConfig, llm: LLMOperations):
       if (assistantMessage.content) {
         steps.push({
           type: 'thought',
-          content: assistantMessage.content,
+          content: typeof assistantMessage.content === 'string' ? assistantMessage.content : '',
           index: stepIndex++,
         })
       }
@@ -119,6 +120,8 @@ export function createReasoningOperations(config: AIConfig, llm: LLMOperations):
       // 如果有工具调用
       if (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0 && options.tools) {
         for (const toolCall of assistantMessage.tool_calls) {
+          if (toolCall.type !== 'function')
+            continue
           // 记录 action 步骤
           steps.push({
             type: 'action',
@@ -132,9 +135,12 @@ export function createReasoningOperations(config: AIConfig, llm: LLMOperations):
 
           // 执行工具
           const toolResult = await options.tools.execute(toolCall)
-          const toolContent = toolResult.success
+          const rawToolContent = toolResult.success
             ? toolResult.data.content
             : `Tool error: ${toolResult.error.message}`
+          const toolContent = typeof rawToolContent === 'string'
+            ? rawToolContent
+            : (rawToolContent as Array<{ text?: string }>).map(p => p.text ?? '').join(' ')
 
           // 记录 observation 步骤
           steps.push({
@@ -155,7 +161,7 @@ export function createReasoningOperations(config: AIConfig, llm: LLMOperations):
 
       // 完成推理
       if (choice.finish_reason === 'stop') {
-        const answer = assistantMessage.content ?? ''
+        const answer = typeof assistantMessage.content === 'string' ? assistantMessage.content : ''
         steps.push({ type: 'answer', content: answer, index: stepIndex })
 
         return ok({
@@ -187,6 +193,7 @@ export function createReasoningOperations(config: AIConfig, llm: LLMOperations):
 
     const messages: ChatMessage[] = [
       { role: 'system', content: systemPrompt },
+      ...(options.messages ?? []),
       { role: 'user', content: `${query}\n\nPlease think step by step.` },
     ]
 
@@ -248,6 +255,7 @@ export function createReasoningOperations(config: AIConfig, llm: LLMOperations):
     // 阶段1：生成计划
     const planMessages: ChatMessage[] = [
       { role: 'system', content: systemPrompt },
+      ...(options.messages ?? []),
       { role: 'user', content: `Create a plan to solve this:\n${query}` },
     ]
 
@@ -294,7 +302,7 @@ export function createReasoningOperations(config: AIConfig, llm: LLMOperations):
       const msg = choice.message
 
       if (msg.content) {
-        steps.push({ type: 'thought', content: msg.content, index: stepIndex++ })
+        steps.push({ type: 'thought', content: typeof msg.content === 'string' ? msg.content : '', index: stepIndex++ })
       }
 
       executeMessages.push(msg)
@@ -302,6 +310,8 @@ export function createReasoningOperations(config: AIConfig, llm: LLMOperations):
       // 工具调用
       if (msg.tool_calls && msg.tool_calls.length > 0 && options.tools) {
         for (const toolCall of msg.tool_calls) {
+          if (toolCall.type !== 'function')
+            continue
           steps.push({
             type: 'action',
             content: `Executing: ${toolCall.function.name}`,
@@ -313,9 +323,12 @@ export function createReasoningOperations(config: AIConfig, llm: LLMOperations):
           })
 
           const toolResult = await options.tools.execute(toolCall)
-          const toolContent = toolResult.success
+          const rawToolContent = toolResult.success
             ? toolResult.data.content
             : `Tool error: ${toolResult.error.message}`
+          const toolContent = typeof rawToolContent === 'string'
+            ? rawToolContent
+            : (rawToolContent as Array<{ text?: string }>).map(p => p.text ?? '').join(' ')
 
           steps.push({ type: 'observation', content: toolContent, index: stepIndex++ })
           executeMessages.push({ role: 'tool', tool_call_id: toolCall.id, content: toolContent })
@@ -325,7 +338,7 @@ export function createReasoningOperations(config: AIConfig, llm: LLMOperations):
 
       // 完成
       if (choice.finish_reason === 'stop') {
-        const answer = msg.content ?? ''
+        const answer = typeof msg.content === 'string' ? msg.content : ''
         steps.push({ type: 'answer', content: answer, index: stepIndex })
         return ok({
           answer,

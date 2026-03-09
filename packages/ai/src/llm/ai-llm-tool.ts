@@ -152,6 +152,13 @@ export function createToolRegistry(): ToolRegistryOperations {
 
     /** 执行单个工具调用，解析 JSON 参数后调用工具的 execute 方法 */
     async execute(toolCall: ToolCall): Promise<Result<ToolMessage, ToolError>> {
+      // 仅支持 function 类型工具调用（OpenAI SDK union 含 custom 类型）
+      if (toolCall.type !== 'function') {
+        return err({
+          type: 'TOOL_NOT_FOUND',
+          message: aiM('ai_toolNotFound', { params: { name: 'unknown' } }),
+        })
+      }
       const tool = tools.get(toolCall.function.name)
       if (!tool) {
         return err({

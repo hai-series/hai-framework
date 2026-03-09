@@ -19,7 +19,7 @@ import type { MemoryEntry, MemoryOperations } from './memory/ai-memory-types.js'
 import type { RagOperations } from './rag/ai-rag-types.js'
 import type { ReasoningOperations } from './reasoning/ai-reasoning-types.js'
 import type { RerankOperations } from './rerank/ai-rerank-types.js'
-import type { RetrievalOperations } from './retrieval/ai-retrieval-types.js'
+import type { RetrievalOperations, RetrievalSource } from './retrieval/ai-retrieval-types.js'
 import type { ReldbJsonOps, ReldbSql, SessionInfo, VecdbClient } from './store/ai-store-types.js'
 
 import { core, err, ok } from '@h-ai/core'
@@ -27,7 +27,7 @@ import { datapipe } from '@h-ai/datapipe'
 import { reldb } from '@h-ai/reldb'
 import { vecdb } from '@h-ai/vecdb'
 
-import { AIConfigSchema, AIErrorCode, ContextConfigSchema, KnowledgeConfigSchema, MemoryConfigSchema } from './ai-config.js'
+import { AIConfigSchema, AIErrorCode, ContextConfigSchema, KnowledgeConfigSchema, MemoryConfigSchema, RetrievalConfigSchema } from './ai-config.js'
 import { aiM } from './ai-i18n.js'
 import { createContextOperations } from './context/ai-context-functions.js'
 import { createEmbeddingOperations } from './embedding/ai-embedding-functions.js'
@@ -122,9 +122,9 @@ const notInitializedReasoning: ReasoningOperations = {
 
 /** Retrieval 未初始化占位 */
 const notInitializedRetrieval: RetrievalOperations = {
-  addSource: () => notInitialized.result(),
-  removeSource: () => notInitialized.result(),
-  listSources: () => [],
+  addSource: () => Promise.resolve(notInitialized.result()),
+  removeSource: () => Promise.resolve(notInitialized.result()),
+  listSources: () => Promise.resolve([]),
   retrieve: () => Promise.resolve(notInitialized.result()),
 }
 
@@ -262,8 +262,17 @@ export const ai: AIFunctions = {
       // 创建 Reasoning 子功能（依赖 LLM）
       currentReasoning = createReasoningOperations(parsed, currentLLM)
 
-      // 创建 Retrieval 子功能（依赖 Embedding）
-      currentRetrieval = createRetrievalOperations(currentEmbedding)
+      // 创建 Retrieval 子功能（依赖 Embedding + vecdb）
+      const sourceStore = new ReldbAIStore<RetrievalSource>(_sql, 'ai_retrieval_sources', _jsonOps)
+      currentRetrieval = createRetrievalOperations(currentEmbedding, _vecdb, sourceStore)
+
+      // 预注册配置中的检索源（直接写入 store，就算其他实例已有相同数据也是幂等和撃）
+      if (parsed.retrieval?.sources?.length) {
+        const configSources = RetrievalConfigSchema.parse(parsed.retrieval).sources ?? []
+        sourceStore
+          .saveMany(configSources.map(s => ({ id: s.id, data: s })))
+          .catch(e => logger.error('Failed to pre-register retrieval sources', { error: e }))
+      }
 
       // 创建 RAG 子功能（依赖 LLM + Retrieval）
       currentRag = createRagOperations(currentLLM, currentRetrieval)

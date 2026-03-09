@@ -90,8 +90,7 @@ export interface StorePage<T> {
 /**
  * AI 通用存储适配器
  *
- * 提供统一的 KV 式 CRUD + 查询能力。
- * `memory` 模式用 Map 实现，`persistent` 模式用 reldb 实现。
+ * 提供统一的 KV 式 CRUD + 查询能力，基于 reldb 实现持久化。
  *
  * @typeParam T - 记录类型
  */
@@ -121,8 +120,7 @@ export interface AIStore<T> {
 /**
  * AI 向量存储适配器
  *
- * 专用于需要向量检索的场景（如 Memory）。
- * `memory` 模式在内存中计算余弦相似度，`persistent` 模式委托 vecdb。
+ * 专用于需要向量检索的场景（如 Memory），基于 vecdb 实现。
  */
 export interface AIVectorStore {
   /** 存储向量 */

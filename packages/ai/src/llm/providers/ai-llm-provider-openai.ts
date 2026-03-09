@@ -89,78 +89,6 @@ function toAIError(error: unknown): AIError {
   }
 }
 
-/**
- * 将 OpenAI SDK 响应映射为内部 ChatCompletionResponse
- *
- * 处理 `tool_calls` 字段可选性，确保 `usage` 字段默认值为 0。
- *
- * @param response - OpenAI SDK 原始响应
- * @returns 内部统一类型
- */
-function mapResponse(response: OpenAI.Chat.ChatCompletion): ChatCompletionResponse {
-  return {
-    id: response.id,
-    object: 'chat.completion',
-    created: response.created,
-    model: response.model,
-    choices: response.choices.map(choice => ({
-      index: choice.index,
-      message: {
-        role: 'assistant' as const,
-        content: choice.message.content || '',
-        tool_calls: choice.message.tool_calls?.map(tc => ({
-          id: tc.id,
-          type: 'function' as const,
-          function: {
-            name: 'function' in tc ? tc.function.name : '',
-            arguments: 'function' in tc ? tc.function.arguments : '',
-          },
-        })),
-      },
-      finish_reason: (choice.finish_reason || 'stop') as ChatCompletionResponse['choices'][0]['finish_reason'],
-    })),
-    usage: {
-      prompt_tokens: response.usage?.prompt_tokens || 0,
-      completion_tokens: response.usage?.completion_tokens || 0,
-      total_tokens: response.usage?.total_tokens || 0,
-    },
-  }
-}
-
-/**
- * 将 OpenAI SDK 流式块映射为内部 ChatCompletionChunk
- *
- * 处理 `delta.role` 和 `delta.tool_calls` 的可选性，
- * 确保 `role` 仅在 `'assistant'` 时保留。
- *
- * @param chunk - OpenAI SDK 流式块
- * @returns 内部统一类型
- */
-function mapChunk(chunk: OpenAI.Chat.ChatCompletionChunk): ChatCompletionChunk {
-  return {
-    id: chunk.id,
-    object: 'chat.completion.chunk',
-    created: chunk.created,
-    model: chunk.model,
-    choices: chunk.choices.map(choice => ({
-      index: choice.index,
-      delta: {
-        role: choice.delta?.role === 'assistant' ? 'assistant' as const : undefined,
-        content: choice.delta?.content || undefined,
-        tool_calls: choice.delta?.tool_calls?.map(tc => ({
-          index: tc.index,
-          id: tc.id,
-          type: tc.type as 'function' | undefined,
-          function: tc.function
-            ? { name: tc.function.name, arguments: tc.function.arguments }
-            : undefined,
-        })),
-      },
-      finish_reason: choice.finish_reason as ChatCompletionChunk['choices'][0]['finish_reason'],
-    })),
-  }
-}
-
 // ─── 工厂函数 ───
 
 /**
@@ -205,13 +133,14 @@ export function createOpenAIProvider(deps: AILLMFunctionsDeps): LLMProvider {
       if (!clientResult.success)
         return clientResult
       const { client, model } = clientResult.data
+      const { objectId: _objectId, sessionId: _sessionId, ...openaiRequest } = request
       try {
         const response = await client.chat.completions.create({
-          ...request,
+          ...openaiRequest,
           model,
           stream: false,
-        }) as OpenAI.Chat.ChatCompletion
-        return ok(mapResponse(response))
+        } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming)
+        return ok(response)
       }
       catch (error) {
         return err(toAIError(error))
@@ -223,13 +152,14 @@ export function createOpenAIProvider(deps: AILLMFunctionsDeps): LLMProvider {
       if (!clientResult.success)
         throw new Error(clientResult.error.message)
       const { client, model } = clientResult.data
+      const { objectId: _objectId, sessionId: _sessionId, ...openaiRequest } = request
       const stream = await client.chat.completions.create({
-        ...request,
+        ...openaiRequest,
         model,
         stream: true,
-      })
+      } as OpenAI.Chat.ChatCompletionCreateParamsStreaming)
       for await (const chunk of stream) {
-        yield mapChunk(chunk)
+        yield chunk
       }
     },
 
