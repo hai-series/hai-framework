@@ -86,6 +86,15 @@ export function createKnowledgeOperations(
 
   return {
     // ─── setup ───
+    /**
+     * 初始化知识库（幂等）
+     *
+     * 创建 vecdb 集合（已存在则跳过）和 reldb 实体索引表（DDL 幂等）。
+     * **调用 `ingest` / `retrieve` / `ask` 前必须先执行 `setup`。**
+     *
+     * @param options - 可选覆盖（collection 名称、向量维度）
+     * @returns `ok(undefined)` 成功；建表失败时返回 `KNOWLEDGE_SETUP_FAILED`
+     */
     async setup(options?: KnowledgeSetupOptions): Promise<Result<void, AIError>> {
       const collection = options?.collection ?? config.collection
       const dimension = options?.dimension ?? config.dimension
@@ -126,6 +135,24 @@ export function createKnowledgeOperations(
     },
 
     // ─── ingest ───
+    /**
+     * 导入文档到知识库
+     *
+     * 流程：清洗 → 分块 → Embedding 向量化 → 存入 vecdb；
+     * 可选地提取命名实体并建立倒排索引（实体增强相关度）。
+     *
+     * @param input - 导入输入（documentId、content、可选 cleanOptions / chunkOptions / metadata 等）
+     * @returns `ok(KnowledgeIngestResult)` 含导入信息；未初始化时返回 `KNOWLEDGE_NOT_SETUP`
+     *
+     * @example
+     * ```ts
+     * await knowledge.ingest({
+     *   documentId: 'doc-001',
+     *   content: '文章内容...',
+     *   chunkOptions: { maxSize: 512 },
+     * })
+     * ```
+     */
     async ingest(input: KnowledgeIngestInput): Promise<Result<KnowledgeIngestResult, AIError>> {
       if (!isSetup) {
         return err({
@@ -274,6 +301,16 @@ export function createKnowledgeOperations(
     },
 
     // ─── retrieve ───
+    /**
+     * 语义检索知识库
+     *
+     * 1. 将查询向量化 → 2. vecdb 向量搜索 → 3. 实体增强（可选）：
+     * LLM 提取查询中的命名实体，查实体倒排索引对匹配文档加权重排。
+     *
+     * @param query - 查询文本
+     * @param options - 可选（collection、topK、minScore、enableEntityBoost、filter 等）
+     * @returns `ok(KnowledgeRetrieveResult)` 含检索项和引用列表；未初始化时返回 `KNOWLEDGE_NOT_SETUP`
+     */
     async retrieve(query: string, options?: KnowledgeRetrieveOptions): Promise<Result<KnowledgeRetrieveResult, AIError>> {
       if (!isSetup) {
         return err({
@@ -287,7 +324,7 @@ export function createKnowledgeOperations(
       const topK = options?.topK ?? 10
       const enableEntityBoost = options?.enableEntityBoost ?? true
 
-      logger.debug('Knowledge retrieval', { query: query.slice(0, 100), collection, topK })
+      logger.trace('Knowledge retrieval', { query: query.slice(0, 100), collection, topK })
 
       try {
         // ① 向量化查询
@@ -404,7 +441,7 @@ export function createKnowledgeOperations(
         }
 
         const duration = Date.now() - startTime
-        logger.debug('Knowledge retrieval completed', { resultCount: items.length, duration })
+        logger.trace('Knowledge retrieval completed', { resultCount: items.length, duration })
 
         return ok({
           items,
@@ -424,6 +461,21 @@ export function createKnowledgeOperations(
     },
 
     // ─── ask ───
+    /**
+     * 基于知识库回答问题（RAG 模式）
+     *
+     * 内部调用 `retrieve` 获取相关文档，将检索结果格式化为上下文后和历史消息一起发送给 LLM 生成回答。
+     *
+     * @param query - 用户问题
+     * @param options - 可选（满足 `KnowledgeRetrieveOptions` 的所有选项 + systemPrompt、messages、temperature、model）
+     * @returns `ok(KnowledgeAskResult)` 含 answer、context 列表、citations、usage 等；检索或生成失败时返回错误
+     *
+     * @example
+     * ```ts
+     * const result = await knowledge.ask('座山方皮是什么？')
+     * if (result.success) console.log(result.data.answer)
+     * ```
+     */
     async ask(query: string, options?: KnowledgeAskOptions): Promise<Result<KnowledgeAskResult, AIError>> {
       // 先检索
       const retrieveResult = await this.retrieve(query, options)
@@ -478,7 +530,7 @@ export function createKnowledgeOperations(
       const choice = chatResult.data.choices[0]
       const answer = choice?.message?.content ?? ''
 
-      logger.debug('Knowledge ask completed', {
+      logger.trace('Knowledge ask completed', {
         contextCount: items.length,
         model: chatResult.data.model,
       })

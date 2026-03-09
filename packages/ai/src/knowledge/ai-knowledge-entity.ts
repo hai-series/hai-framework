@@ -109,7 +109,7 @@ export async function extractEntities(
     // 解析 JSON 响应
     const validTypes = new Set(resolvedTypes)
     const entities = parseEntityResponse(content, validTypes)
-    logger.debug('Entity extraction completed', { textLength: text.length, entityCount: entities.length })
+    logger.trace('Entity extraction completed', { textLength: text.length, entityCount: entities.length })
 
     return ok(entities)
   }

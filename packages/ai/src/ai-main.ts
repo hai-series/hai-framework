@@ -243,13 +243,12 @@ export const ai: AIFunctions = {
           message: aiM('ai_configError', { params: { error: `${missing} not initialized. reldb and vecdb are required.` } }),
         })
       }
-      const _sql = reldb.sql
-      const _jsonOps = reldb.json
-      const _vecdb = vecdb
+      const sql = reldb.sql
+      const jsonOps = reldb.json
 
       // 创建 LLM 子功能（含对话记录存储）
-      const chatRecordStore = new ReldbAIStore<ChatRecord>(_sql, 'ai_chat_records', _jsonOps)
-      const sessionStore = new ReldbAIStore<SessionInfo>(_sql, 'ai_sessions', _jsonOps)
+      const chatRecordStore = new ReldbAIStore<ChatRecord>(sql, 'ai_chat_records', jsonOps)
+      const sessionStore = new ReldbAIStore<SessionInfo>(sql, 'ai_sessions', jsonOps)
       const llmFunctions = createAILLMFunctions(parsed, { recordStore: chatRecordStore, sessionStore })
       currentLLM = llmFunctions.llm
 
@@ -263,8 +262,8 @@ export const ai: AIFunctions = {
       currentReasoning = createReasoningOperations(parsed, currentLLM)
 
       // 创建 Retrieval 子功能（依赖 Embedding + vecdb）
-      const sourceStore = new ReldbAIStore<RetrievalSource>(_sql, 'ai_retrieval_sources', _jsonOps)
-      currentRetrieval = createRetrievalOperations(currentEmbedding, _vecdb, sourceStore)
+      const sourceStore = new ReldbAIStore<RetrievalSource>(sql, 'ai_retrieval_sources', jsonOps)
+      currentRetrieval = createRetrievalOperations(currentEmbedding, vecdb, sourceStore)
 
       // 预注册配置中的检索源（直接写入 store，就算其他实例已有相同数据也是幂等和撃）
       if (parsed.retrieval?.sources?.length) {
@@ -293,14 +292,14 @@ export const ai: AIFunctions = {
       // 创建 Memory 子功能（依赖 LLM + Embedding + Store）
       const memoryConfig = parsed.memory ?? {}
       const memoryParsed = MemoryConfigSchema.parse(memoryConfig)
-      const memoryStore = new ReldbAIStore<MemoryEntry>(_sql, 'ai_memory', _jsonOps)
-      const memoryVectorStore = new VecdbAIVectorStore(_vecdb, 'ai_memory_vectors')
+      const memoryStore = new ReldbAIStore<MemoryEntry>(sql, 'ai_memory', jsonOps)
+      const memoryVectorStore = new VecdbAIVectorStore(vecdb, 'ai_memory_vectors')
       currentMemory = createMemoryOperations(memoryParsed, currentLLM, currentEmbedding, memoryStore, memoryVectorStore)
 
       // 创建 Context 子功能（依赖 LLM + Store）
       const contextConfig = parsed.context ?? {}
       const contextParsed = ContextConfigSchema.parse(contextConfig)
-      const contextStore = new ReldbAIStore<{ messages: ChatMessage[], summaries: ContextSummary[], updatedAt: number }>(_sql, 'ai_context', _jsonOps)
+      const contextStore = new ReldbAIStore<{ messages: ChatMessage[], summaries: ContextSummary[], updatedAt: number }>(sql, 'ai_context', jsonOps)
       currentContext = createContextOperations(contextParsed, currentLLM, parsed.llm?.maxTokens ?? 4096, contextStore, sessionStore)
 
       // 创建 Rerank 子功能

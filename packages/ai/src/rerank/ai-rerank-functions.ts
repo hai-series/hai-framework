@@ -102,7 +102,7 @@ export function createRerankOperations(config: AIConfig): RerankOperations {
       body.return_documents = true
     }
 
-    logger.debug('Calling rerank API', { model: resolved.model, documentCount: texts.length, topN: request.topN })
+    logger.trace('Calling rerank API', { model: resolved.model, documentCount: texts.length, topN: request.topN })
 
     try {
       const response = await fetch(`${resolved.baseUrl}/v1/rerank`, {
@@ -132,7 +132,7 @@ export function createRerankOperations(config: AIConfig): RerankOperations {
         document: item.document?.text,
       }))
 
-      logger.debug('Rerank completed', { resultCount: results.length })
+      logger.trace('Rerank completed', { resultCount: results.length })
 
       return ok({ model: resolved.model, results })
     }
@@ -147,10 +147,26 @@ export function createRerankOperations(config: AIConfig): RerankOperations {
   }
 
   return {
+    /**
+     * 对文档列表进行相关度重排
+     *
+     * 调用 Cohere 兼容 Rerank API，按与 query 的语义相关度对文档重新排序。
+     *
+     * @param request - 重排请求（query、documents、可选 topN/model）
+     * @returns `ok(RerankResponse)` 含重排后的结果列表；API 调用失败时返回 `RERANK_API_ERROR`
+     */
     async rerank(request: RerankRequest): Promise<Result<RerankResponse, AIError>> {
       return callRerankAPI(request)
     },
 
+    /**
+     * 对纯文本数组进行重排（`rerank` 的简化版本）
+     *
+     * @param query - 用于对比相关度的查询文本
+     * @param texts - 待重排的文本列表
+     * @param topN - 仅返回前 N 个结果（可选）
+     * @returns `ok(RerankItem[])` 按相关度降序排列的结果；API 调用失败时返回错误
+     */
     async rerankTexts(query: string, texts: string[], topN?: number): Promise<Result<RerankItem[], AIError>> {
       const result = await callRerankAPI({ query, documents: texts, topN })
       if (!result.success)

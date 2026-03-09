@@ -359,7 +359,7 @@ export function createReasoningOperations(config: AIConfig, llm: LLMOperations):
   return {
     async run(query: string, options?: ReasoningOptions): Promise<Result<ReasoningResult, AIError>> {
       const strategy = options?.strategy ?? 'react'
-      logger.debug('Starting reasoning', { strategy, maxRounds: options?.maxRounds })
+      logger.trace('Starting reasoning', { strategy, maxRounds: options?.maxRounds })
 
       try {
         switch (strategy) {

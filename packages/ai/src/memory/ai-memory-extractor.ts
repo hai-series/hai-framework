@@ -127,7 +127,7 @@ export async function extractMemories(
       entries = entries.map(e => ({ ...e, objectId: options.objectId }))
     }
 
-    logger.debug('Memory extraction completed', { messageCount: messages.length, extractedCount: entries.length })
+    logger.trace('Memory extraction completed', { messageCount: messages.length, extractedCount: entries.length })
     return ok(entries)
   }
   catch (error) {

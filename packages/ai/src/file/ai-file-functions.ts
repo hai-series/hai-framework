@@ -361,7 +361,7 @@ async function parseImageWithOcr(
     : 'Please extract all text content from this image accurately. Return only the extracted text without any additional commentary.'
   const prompt = customPrompt ?? defaultPrompt
 
-  logger.debug('Running OCR via vision LLM', { mimeType, model })
+  logger.trace('Running OCR via vision LLM', { mimeType, model })
 
   const result = await llmOps.chat({
     model,
@@ -412,7 +412,7 @@ export function createFileOperations(config: AIConfig, llmOps: LLMOperations): F
     filename: string | undefined,
     model: string | undefined,
     outputFormat: OutputFormat,
-    ocrPrompt: string | undefined,
+    systemPrompt: string | undefined,
   ): Promise<Result<FileParseResult, AIError>> {
     const resolvedResult = resolveModelEntry(config.llm, 'ocr', model, {
       missingApiKeyMessage: aiM('ai_configError', { params: { error: 'API Key is required for OCR' } }),
@@ -426,7 +426,7 @@ export function createFileOperations(config: AIConfig, llmOps: LLMOperations): F
       llmOps,
       resolvedResult.data.model,
       outputFormat,
-      ocrPrompt,
+      systemPrompt,
     )
     if (!ocrResult.success)
       return ocrResult
@@ -446,7 +446,7 @@ export function createFileOperations(config: AIConfig, llmOps: LLMOperations): F
     const mimeType = detectMimeType(content, filename, options.mimeType)
     const outputFormat: OutputFormat = options.outputFormat ?? 'text'
 
-    logger.debug('Parsing file', { filename, mimeType, outputFormat, useOcr: options.useOcr })
+    logger.trace('Parsing file', { filename, mimeType, outputFormat, useOcr: options.useOcr })
 
     // 强制 OCR 模式
     if (options.useOcr) {
@@ -456,7 +456,7 @@ export function createFileOperations(config: AIConfig, llmOps: LLMOperations): F
           message: aiM('ai_fileInvalidContent', { params: { reason: 'OCR requires Buffer content' } }),
         })
       }
-      return runOcr(content, mimeType, filename, options.model, outputFormat, options.ocrPrompt)
+      return runOcr(content, mimeType, filename, options.model, outputFormat, options.systemPrompt)
     }
 
     // 文本格式：直接解码（markdown 不改变纯文本语义）
@@ -497,7 +497,7 @@ export function createFileOperations(config: AIConfig, llmOps: LLMOperations): F
         })
       }
       logger.warn('PDF native parser failed, falling back to OCR', { filename })
-      return runOcr(content, mimeType, filename, options.model, outputFormat, options.ocrPrompt)
+      return runOcr(content, mimeType, filename, options.model, outputFormat, options.systemPrompt)
     }
 
     // DOCX：尝试 mammoth，失败则回退 OCR
@@ -521,7 +521,7 @@ export function createFileOperations(config: AIConfig, llmOps: LLMOperations): F
         })
       }
       logger.warn('DOCX native parser failed, falling back to OCR', { filename })
-      return runOcr(content, mimeType, filename, options.model, outputFormat, options.ocrPrompt)
+      return runOcr(content, mimeType, filename, options.model, outputFormat, options.systemPrompt)
     }
 
     // 图片格式：OCR
@@ -532,7 +532,7 @@ export function createFileOperations(config: AIConfig, llmOps: LLMOperations): F
           message: aiM('ai_fileInvalidContent', { params: { reason: 'Image OCR requires Buffer content' } }),
         })
       }
-      return runOcr(content, mimeType, filename, options.model, outputFormat, options.ocrPrompt)
+      return runOcr(content, mimeType, filename, options.model, outputFormat, options.systemPrompt)
     }
 
     // 其他格式：不支持
