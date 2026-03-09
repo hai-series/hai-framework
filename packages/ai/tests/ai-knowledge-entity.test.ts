@@ -264,7 +264,7 @@ describe('knowledge 批量实体提取（extractEntitiesBatch）', () => {
       { content: 'Chunk 2 text', chunkId: 'doc:chunk-1' },
     ]
 
-    const result = await extractEntitiesBatch(llm, chunks, undefined, 2)
+    const result = await extractEntitiesBatch(llm, chunks, undefined, undefined, undefined, 2)
     expect(result.success).toBe(true)
     if (result.success) {
       // 第一个失败，第二个成功

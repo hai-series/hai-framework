@@ -65,6 +65,8 @@ export type ChatCompletionRequest
     objectId?: string
     /** 会话 ID（传入后 LLM 会自动关联到该会话） */
     sessionId?: string
+    /** 是否持久化对话记录（默认 true；传入 false 时跳过记录，适用于内部调用如实体提取） */
+    persist?: boolean
   }
 
 /** Token 使用统计 */

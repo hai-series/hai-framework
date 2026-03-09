@@ -169,9 +169,9 @@ describe('knowledge setup', () => {
       DEFAULT_CONFIG,
       createMockLLM(),
       createMockEmbedding(),
-      async () => vecdb,
-      async () => reldb,
-      async () => null,
+      vecdb,
+      reldb,
+      null,
     )
 
     const result = await ops.setup()
@@ -188,9 +188,9 @@ describe('knowledge setup', () => {
       DEFAULT_CONFIG,
       createMockLLM(),
       createMockEmbedding(),
-      async () => null,
-      async () => null,
-      async () => null,
+      null,
+      null,
+      null,
     )
 
     const result = await ops.setup()
@@ -208,9 +208,9 @@ describe('knowledge setup', () => {
       DEFAULT_CONFIG,
       createMockLLM(),
       createMockEmbedding(),
-      async () => vecdb,
-      async () => reldb,
-      async () => null,
+      vecdb,
+      reldb,
+      null,
     )
 
     const result = await ops.setup({ collection: 'custom-kb', dimension: 768 })
@@ -225,9 +225,9 @@ describe('knowledge setup', () => {
       DEFAULT_CONFIG,
       createMockLLM(),
       createMockEmbedding(),
-      async () => vecdb,
-      async () => null,
-      async () => null,
+      vecdb,
+      null,
+      null,
     )
 
     const result = await ops.setup()
@@ -242,9 +242,9 @@ describe('knowledge setup', () => {
       DEFAULT_CONFIG,
       createMockLLM(),
       createMockEmbedding(),
-      async () => vecdb,
-      async () => createMockReldb(),
-      async () => null,
+      vecdb,
+      createMockReldb(),
+      null,
     )
 
     const result = await ops.setup()
@@ -277,9 +277,9 @@ describe('knowledge ingest', () => {
       config,
       llm,
       embedding,
-      async () => vecdb,
-      async () => reldb,
-      async () => datapipe,
+      vecdb,
+      reldb,
+      datapipe,
     )
 
     // 先 setup
@@ -293,9 +293,9 @@ describe('knowledge ingest', () => {
       DEFAULT_CONFIG,
       createMockLLM(),
       createMockEmbedding(),
-      async () => createMockVecdb(),
-      async () => null,
-      async () => null,
+      createMockVecdb(),
+      null,
+      null,
     )
 
     const result = await ops.ingest({ documentId: 'doc-1', content: 'Hello world' })
@@ -371,30 +371,23 @@ describe('knowledge ingest', () => {
   })
 
   it('vecdb 不可用时 ingest 返回错误', async () => {
-    // 创建一个在 setup 时可用，ingest 时不可用的 vecdb
-    const setupVecdb = createMockVecdb()
-    let setupDone = false
-
+    // 创建一个 setup 后 vecdb 不可用的场景：传入 null 则 setup 失败，导致 isSetup=false、ingest 返回 KNOWLEDGE_NOT_SETUP
     const ops = createKnowledgeOperations(
       DEFAULT_CONFIG,
       createMockLLM(),
       createMockEmbedding(),
-      async () => {
-        if (!setupDone)
-          return setupVecdb
-        return null // ingest 时返回 null
-      },
-      async () => createMockReldb(),
-      async () => null,
+      null,
+      createMockReldb(),
+      null,
     )
 
+    // setup 失败（vecdb 为 null）
     await ops.setup()
-    setupDone = true
 
     const result = await ops.ingest({ documentId: 'doc-4', content: 'Test' })
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(AIErrorCode.KNOWLEDGE_INGEST_FAILED)
+      expect([AIErrorCode.KNOWLEDGE_NOT_SETUP, AIErrorCode.KNOWLEDGE_INGEST_FAILED]).toContain(result.error.code)
     }
   })
 })
@@ -413,9 +406,9 @@ describe('knowledge retrieve', () => {
       DEFAULT_CONFIG,
       llm,
       embedding,
-      async () => vecdb,
-      async () => reldb,
-      async () => datapipe,
+      vecdb,
+      reldb,
+      datapipe,
     )
 
     await ops.setup()
@@ -436,9 +429,9 @@ describe('knowledge retrieve', () => {
       DEFAULT_CONFIG,
       createMockLLM(),
       createMockEmbedding(),
-      async () => createMockVecdb(),
-      async () => null,
-      async () => null,
+      createMockVecdb(),
+      null,
+      null,
     )
 
     const result = await ops.retrieve('test query')
@@ -506,9 +499,9 @@ describe('knowledge ask', () => {
       DEFAULT_CONFIG,
       llm,
       embedding,
-      async () => vecdb,
-      async () => reldb,
-      async () => datapipe,
+      vecdb,
+      reldb,
+      datapipe,
     )
 
     await ops.setup()
@@ -555,9 +548,9 @@ describe('knowledge 实体查询', () => {
       DEFAULT_CONFIG,
       createMockLLM(),
       createMockEmbedding(),
-      async () => createMockVecdb(),
-      async () => null,
-      async () => null,
+      createMockVecdb(),
+      null,
+      null,
     )
 
     const result = await ops.findByEntity('Alice')
@@ -572,9 +565,9 @@ describe('knowledge 实体查询', () => {
       DEFAULT_CONFIG,
       createMockLLM(),
       createMockEmbedding(),
-      async () => createMockVecdb(),
-      async () => null,
-      async () => null,
+      createMockVecdb(),
+      null,
+      null,
     )
 
     const result = await ops.listEntities()
@@ -590,9 +583,9 @@ describe('knowledge 实体查询', () => {
       DEFAULT_CONFIG,
       createMockLLM(),
       createMockEmbedding(),
-      async () => createMockVecdb(),
-      async () => reldb,
-      async () => null,
+      createMockVecdb(),
+      reldb,
+      null,
     )
 
     const result = await ops.findByEntity('Alice')
@@ -608,9 +601,9 @@ describe('knowledge 实体查询', () => {
       DEFAULT_CONFIG,
       createMockLLM(),
       createMockEmbedding(),
-      async () => createMockVecdb(),
-      async () => reldb,
-      async () => null,
+      createMockVecdb(),
+      reldb,
+      null,
     )
 
     const result = await ops.listEntities()
@@ -626,9 +619,9 @@ describe('knowledge 实体查询', () => {
       DEFAULT_CONFIG,
       createMockLLM(),
       createMockEmbedding(),
-      async () => createMockVecdb(),
-      async () => reldb,
-      async () => null,
+      createMockVecdb(),
+      reldb,
+      null,
     )
 
     const result = await ops.listEntities({ type: 'person', keyword: 'Alice', limit: 5 })

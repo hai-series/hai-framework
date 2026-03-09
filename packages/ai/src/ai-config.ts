@@ -483,6 +483,10 @@ export const KnowledgeConfigSchema = z.object({
   chunkOverlap: z.number().int().min(0).default(200),
   /** 实体查询命中的额外加权系数（默认 0.15，叠加到向量分数上） */
   entityBoostWeight: z.number().min(0).max(1).default(0.15),
+  /** 自定义实体类型列表（不指定时使用内置默认类型） */
+  entityTypes: z.array(z.string()).optional(),
+  /** 自定义实体提取系统提示词（不指定时使用内置默认提示词） */
+  entityExtractionPrompt: z.string().optional(),
 })
 
 /** Knowledge 配置类型 */

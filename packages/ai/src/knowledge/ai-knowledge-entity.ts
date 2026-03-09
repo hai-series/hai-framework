@@ -24,8 +24,8 @@ const logger = core.logger.child({ module: 'ai', scope: 'knowledge-entity' })
 export interface ExtractedEntity {
   /** 实体名称 */
   name: string
-  /** 实体类型 */
-  type: 'person' | 'project' | 'concept' | 'organization' | 'location' | 'event' | 'other'
+  /** 实体类型（内置类型或用户自定义类型） */
+  type: string
   /** 别名列表 */
   aliases?: string[]
   /** 简短描述 */
@@ -34,11 +34,19 @@ export interface ExtractedEntity {
 
 // ─── Prompt ───
 
-const ENTITY_EXTRACTION_SYSTEM_PROMPT = `You are a named entity extraction assistant. Extract named entities from the given text.
+/** 默认实体类型列表 */
+export const DEFAULT_ENTITY_TYPES = ['person', 'project', 'concept', 'organization', 'location', 'event', 'other']
+
+/**
+ * 根据实体类型列表生成实体提取系统提示词
+ */
+function buildEntityExtractionPrompt(entityTypes: string[]): string {
+  const typeList = entityTypes.map(t => `"${t}"`).join(', ')
+  return `You are a named entity extraction assistant. Extract named entities from the given text.
 
 Return a JSON array of entities. Each entity has:
 - "name": the primary name (string, required)
-- "type": one of "person", "project", "concept", "organization", "location", "event", "other" (required)
+- "type": one of ${typeList} (required)
 - "aliases": alternative names or abbreviations (string array, optional)
 - "description": a one-sentence description (string, optional)
 
@@ -48,6 +56,7 @@ Rules:
 - Be precise and concise.
 - Return an empty array [] if no entities are found.
 - Return ONLY the JSON array, no markdown fences, no explanation.`
+}
 
 /**
  * 从文本中提取实体
@@ -57,25 +66,33 @@ Rules:
  * @param llm - LLM 操作接口
  * @param text - 待提取的文本（通常是单个 chunk 的内容）
  * @param model - 模型名称覆盖（可选）
+ * @param entityTypes - 实体类型列表（可选，默认使用内置类型）
+ * @param systemPrompt - 系统提示词覆盖（可选，默认根据 entityTypes 自动生成）
  * @returns 提取到的实体列表
  */
 export async function extractEntities(
   llm: LLMOperations,
   text: string,
   model?: string,
+  entityTypes?: string[],
+  systemPrompt?: string,
 ): Promise<Result<ExtractedEntity[], AIError>> {
   if (!text.trim()) {
     return ok([])
   }
 
+  const resolvedTypes = entityTypes ?? DEFAULT_ENTITY_TYPES
+  const resolvedPrompt = systemPrompt ?? buildEntityExtractionPrompt(resolvedTypes)
+
   try {
     const chatResult = await llm.chat({
       model,
       messages: [
-        { role: 'system', content: ENTITY_EXTRACTION_SYSTEM_PROMPT },
+        { role: 'system', content: resolvedPrompt },
         { role: 'user', content: text },
       ],
       temperature: 0.1,
+      persist: false,
     })
 
     if (!chatResult.success) {
@@ -90,7 +107,8 @@ export async function extractEntities(
     const content = chatResult.data.choices[0]?.message?.content ?? ''
 
     // 解析 JSON 响应
-    const entities = parseEntityResponse(content)
+    const validTypes = new Set(resolvedTypes)
+    const entities = parseEntityResponse(content, validTypes)
     logger.debug('Entity extraction completed', { textLength: text.length, entityCount: entities.length })
 
     return ok(entities)
@@ -110,7 +128,7 @@ export async function extractEntities(
  *
  * 容错处理：去除 markdown 代码围栏、尝试 JSON.parse。
  */
-function parseEntityResponse(content: string): ExtractedEntity[] {
+function parseEntityResponse(content: string, validTypes: Set<string>): ExtractedEntity[] {
   let cleaned = content.trim()
 
   // 去除 markdown 代码围栏
@@ -125,14 +143,14 @@ function parseEntityResponse(content: string): ExtractedEntity[] {
     if (Array.isArray(parsed)) {
       return parsed
         .filter(isValidEntity)
-        .map(normalizeEntity)
+        .map(e => normalizeEntity(e, validTypes))
     }
 
     // 可能是 { entities: [...] } 包装
     if (typeof parsed === 'object' && parsed !== null && 'entities' in parsed) {
       const entities = (parsed as { entities: unknown }).entities
       if (Array.isArray(entities)) {
-        return entities.filter(isValidEntity).map(normalizeEntity)
+        return entities.filter(isValidEntity).map(e => normalizeEntity(e, validTypes))
       }
     }
 
@@ -156,13 +174,14 @@ function isValidEntity(item: unknown): item is Record<string, unknown> {
     && typeof obj.type === 'string'
 }
 
-const VALID_TYPES = new Set(['person', 'project', 'concept', 'organization', 'location', 'event', 'other'])
-
 /**
  * 标准化实体
+ *
+ * @param item - 原始实体对象
+ * @param validTypes - 合法类型集合（不在集合内的归为 'other'）
  */
-function normalizeEntity(item: Record<string, unknown>): ExtractedEntity {
-  const type = VALID_TYPES.has(item.type as string) ? item.type as ExtractedEntity['type'] : 'other'
+function normalizeEntity(item: Record<string, unknown>, validTypes: Set<string>): ExtractedEntity {
+  const type = validTypes.has(item.type as string) ? item.type as string : 'other'
 
   return {
     name: (item.name as string).trim(),
@@ -173,6 +192,7 @@ function normalizeEntity(item: Record<string, unknown>): ExtractedEntity {
 }
 
 /**
+/**
  * 批量提取实体并去重合并
  *
  * 对多个 chunk 并发提取，合并同名实体。
@@ -180,6 +200,8 @@ function normalizeEntity(item: Record<string, unknown>): ExtractedEntity {
  * @param llm - LLM 操作接口
  * @param chunks - 文本块列表
  * @param model - 模型名称覆盖（可选）
+ * @param entityTypes - 实体类型列表（可选，默认使用内置类型）
+ * @param systemPrompt - 系统提示词覆盖（可选）
  * @param concurrency - 并发数（默认 3）
  * @returns 去重合并后的实体列表
  */
@@ -187,6 +209,8 @@ export async function extractEntitiesBatch(
   llm: LLMOperations,
   chunks: Array<{ content: string, chunkId: string }>,
   model?: string,
+  entityTypes?: string[],
+  systemPrompt?: string,
   concurrency = 3,
 ): Promise<Result<Array<ExtractedEntity & { chunkIds: string[] }>, AIError>> {
   // 简单并发控制：按批次执行
@@ -196,7 +220,7 @@ export async function extractEntitiesBatch(
     const batch = chunks.slice(i, i + concurrency)
     const results = await Promise.all(
       batch.map(async (chunk) => {
-        const result = await extractEntities(llm, chunk.content, model)
+        const result = await extractEntities(llm, chunk.content, model, entityTypes, systemPrompt)
         if (result.success) {
           return result.data.map(e => ({ entity: e, chunkId: chunk.chunkId }))
         }

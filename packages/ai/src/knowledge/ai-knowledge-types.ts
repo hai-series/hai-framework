@@ -7,6 +7,7 @@
 
 import type { Result } from '@h-ai/core'
 import type { AIError } from '../ai-types.js'
+import type { ChatMessage } from '../llm/ai-llm-types.js'
 import type { Citation } from '../retrieval/ai-retrieval-types.js'
 
 import { z } from 'zod'
@@ -14,14 +15,12 @@ import { z } from 'zod'
 // ─── 实体类型枚举 ───
 
 /**
- * 实体类型枚举
- *
- * 预定义的实体类型，用于实体提取和倒排索引分类。
+ * 内置实体类型枚举（预设值，可通过配置 `entityTypes` 扩展）
  */
 export const EntityTypeSchema = z.enum(['person', 'project', 'concept', 'organization', 'location', 'event', 'other'])
 
-/** 实体类型 */
-export type EntityType = z.infer<typeof EntityTypeSchema>
+/** 实体类型（字符串，支持内置类型及用户自定义类型） */
+export type EntityType = string
 
 // ─── 实体 ───
 
@@ -202,7 +201,7 @@ export interface KnowledgeAskOptions extends KnowledgeRetrieveOptions {
   /** 温度覆盖 */
   temperature?: number
   /** 消息历史（多轮对话） */
-  messages?: Array<{ role: 'user' | 'assistant', content: string }>
+  messages?: ChatMessage[]
 }
 
 /**
