@@ -40,6 +40,15 @@ export function createRetrievalOperations(
   sourceStore: AIStore<RetrievalSource>,
 ): RetrievalOperations {
   return {
+    /**
+     * 注册检索源
+     *
+     * 将配置好的检索源持久化到 store，后续 `retrieve` 时根据 source.id 匹配。
+     * 同一 id 不可重复注册，重复调用返回错误。
+     *
+     * @param source - 检索源配置（id、collection、描述等）
+     * @returns `ok(undefined)` 注册成功；`err` 含错误码 `RETRIEVAL_FAILED`（重复注册）
+     */
     async addSource(source: RetrievalSource): Promise<Result<void, AIError>> {
       const existing = await sourceStore.get(source.id)
       if (existing) {
@@ -53,6 +62,14 @@ export function createRetrievalOperations(
       return ok(undefined)
     },
 
+    /**
+     * 取消注册检索源
+     *
+     * 从 store 删除指定 id 的检索源。源不存在时返回 `RETRIEVAL_SOURCE_NOT_FOUND` 错误。
+     *
+     * @param sourceId - 检索源的唯一标识
+     * @returns `ok(undefined)` 删除成功；`err` 含错误码 `RETRIEVAL_SOURCE_NOT_FOUND`
+     */
     async removeSource(sourceId: string): Promise<Result<void, AIError>> {
       const existing = await sourceStore.get(sourceId)
       if (!existing) {
@@ -66,10 +83,32 @@ export function createRetrievalOperations(
       return ok(undefined)
     },
 
+    /**
+     * 列出所有已注册的检索源
+     *
+     * @returns 全部检索源数组（无源时返回空数组）
+     */
     async listSources(): Promise<RetrievalSource[]> {
       return sourceStore.query({})
     },
 
+    /**
+     * 执行向量检索
+     *
+     * 流程：
+     * 1. 将 `request.query` 向量化（Embedding）
+     * 2. 对每个目标检索源并发执行向量近邻搜索
+     * 3. 合并结果 → 按 score 降序 → 截取 topK
+     *
+     * @param request - 检索请求（query、可选 sources / topK / minScore 等）
+     * @returns `ok(RetrievalResult)` 含检索项列表与引用信息；无源时返回 `RETRIEVAL_SOURCE_NOT_FOUND` 错误
+     *
+     * @example
+     * ```ts
+     * const result = await retrieval.retrieve({ query: '向量数据库', topK: 5 })
+     * if (result.success) console.log(result.data.items)
+     * ```
+     */
     async retrieve(request: RetrievalRequest): Promise<Result<RetrievalResult, AIError>> {
       const startTime = Date.now()
 
@@ -150,7 +189,7 @@ export function createRetrievalOperations(
         const limitedItems = allItems.slice(0, topK)
 
         const duration = Date.now() - startTime
-        logger.debug('Retrieval completed', { query: request.query, resultCount: limitedItems.length, duration })
+        logger.trace('Retrieval completed', { query: request.query, resultCount: limitedItems.length, duration })
 
         return ok({
           items: limitedItems,

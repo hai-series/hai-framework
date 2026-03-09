@@ -54,8 +54,26 @@ function defaultFormatContext(items: RagContextItem[]): string {
  */
 export function createRagOperations(llm: LLMOperations, retrieval: RetrievalOperations): RagOperations {
   return {
+    /**
+     * 执行 RAG 查询
+     *
+     * 流程：
+     * 1. 向量检索相关文档（`retrieval.retrieve`）
+     * 2. 格式化为编号列表上下文（可通过 `options.formatContext` 自定义）
+     * 3. 组装系统提示 + 上下文 → 调用 LLM 生成回答
+     *
+     * @param query - 用户查询文本
+     * @param options - 可选配置（sources / topK / minScore / systemPrompt / formatContext / history 等）
+     * @returns `ok(RagResult)` 含 answer、context 列表与引用信源；检索或生成失败时返回错误
+     *
+     * @example
+     * ```ts
+     * const result = await rag.query('什么是 vecdb？')
+     * if (result.success) console.log(result.data.answer)
+     * ```
+     */
     async query(query: string, options?: RagOptions): Promise<Result<RagResult, AIError>> {
-      logger.debug('Starting RAG query', { query: query.slice(0, 100) })
+      logger.trace('Starting RAG query', { query: query.slice(0, 100) })
 
       try {
         // 阶段1：检索相关上下文
@@ -123,7 +141,7 @@ export function createRagOperations(llm: LLMOperations, retrieval: RetrievalOper
         const choice = chatResult.data.choices[0]
         const answer = choice?.message?.content ?? ''
 
-        logger.debug('RAG query completed', {
+        logger.trace('RAG query completed', {
           contextCount: contextItems.length,
           model: chatResult.data.model,
         })

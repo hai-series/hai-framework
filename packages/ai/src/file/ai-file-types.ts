@@ -48,8 +48,8 @@ export interface FileParseOptions {
    * 未指定时通过 `llm.scenarios.ocr` 解析。
    */
   model?: string
-  /** OCR 系统提示词（覆盖全局 `file.ocrPrompt` 配置） */
-  ocrPrompt?: string
+  /** OCR 系统提示词（覆盖全局 `file.systemPrompt` 配置） */
+  systemPrompt?: string
   /** PDF 最大解析页数（默认解析全部页） */
   maxPages?: number
   /**

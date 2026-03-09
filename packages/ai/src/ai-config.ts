@@ -577,7 +577,7 @@ export type ContextConfig = z.infer<typeof ContextConfigSchema>
  */
 export const FileConfigSchema = z.object({
   /** OCR 系统提示词（可选，覆盖内置默认提示词） */
-  ocrPrompt: z.string().optional(),
+  systemPrompt: z.string().optional(),
 })
 
 /** File 配置类型 */

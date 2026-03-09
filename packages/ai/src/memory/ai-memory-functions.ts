@@ -81,6 +81,18 @@ function extractQueryFromMessages(messages: ChatMessage[]): string {
  * @param vectorStore - 向量存储（用于相似度检索）
  * @returns MemoryOperations 实例
  */
+/**
+ * 创建 Memory 操作接口
+ *
+ * 提供基于 LLM 的记忆提取并持久化、基于向量相似度的记忆检索，并支持将相关记忆注入消息得到于 LLM 上下文。
+ *
+ * @param config - 记忆配置（maxEntries、recencyDecay、systemPrompt 等）
+ * @param llm - LLM 操作接口（用于记忆提取）
+ * @param embedding - Embedding 接口（可为 null，为 null 时働用关键词回退）
+ * @param store - 记忆条目持久化存储
+ * @param vectorStore - 向量库存储（用于语义检索）
+ * @returns MemoryOperations 实例
+ */
 export function createMemoryOperations(
   config: MemoryConfig,
   llm: LLMOperations,
@@ -170,8 +182,18 @@ export function createMemoryOperations(
   }
 
   return {
+    /**
+     * 从对话消息中提取记忆并存储
+     *
+     * 调用 LLM 分析对话内容，提取具有持久化价值的记忆条目并写入存储。
+     * 每条记忆提取后会同步计算向量（如已启用 embedding）。
+     *
+     * @param messages - 待分析的对话消息列表
+     * @param options - 可选（记忆类型过滤、最小重要性阈值、自定义 model 等）
+     * @returns `ok(MemoryEntry[])` 新写入的记忆列表；LLM 调用失败时返回 `MEMORY_EXTRACT_FAILED`
+     */
     async extract(messages: ChatMessage[], options?: MemoryExtractOptions): Promise<Result<MemoryEntry[], AIError>> {
-      logger.debug('Extracting memories from conversation', { messageCount: messages.length })
+      logger.trace('Extracting memories from conversation', { messageCount: messages.length })
 
       try {
         const extractResult = await extractMemories(llm, messages, {
@@ -193,7 +215,7 @@ export function createMemoryOperations(
           entries.push(entry)
         }
 
-        logger.debug('Memories extracted and stored', { count: entries.length })
+        logger.trace('Memories extracted and stored', { count: entries.length })
         return ok(entries)
       }
       catch (error) {
@@ -206,6 +228,15 @@ export function createMemoryOperations(
       }
     },
 
+    /**
+     * 手动添加一条记忆
+     *
+     * 适用于外部直接写入记忆（非 LLM 提取）的场景。
+     * 超过 maxEntries 时会自动淡汰优先级最低的条目。
+     *
+     * @param entry - 记忆条目输入（content、type、importance 等）
+     * @returns `ok(MemoryEntry)` 含完整字段（id、时间戳等）；存储失败时返回 `MEMORY_STORE_FAILED`
+     */
     async add(entry: MemoryEntryInput): Promise<Result<MemoryEntry, AIError>> {
       try {
         const vector = await computeVector(entry.content)
@@ -223,6 +254,14 @@ export function createMemoryOperations(
       }
     },
 
+    /**
+     * 根据 ID 获取一条记忆并更新访问统计
+     *
+     * 访问成功后自动更新 `lastAccessedAt` 和 `accessCount`。
+     *
+     * @param memoryId - 记忆条目的唯一 ID
+     * @returns `ok(MemoryEntry)` 操作成功；ID 不存在时返回 `MEMORY_NOT_FOUND`
+     */
     async get(memoryId: string): Promise<Result<MemoryEntry, AIError>> {
       const entry = await store.get(memoryId)
       if (!entry) {
@@ -454,6 +493,14 @@ export function createMemoryOperations(
       }
     },
 
+    /**
+     * 根据 ID 删除一条记忆
+     *
+     * 同时从关系型存储和向量库中删除。
+     *
+     * @param memoryId - 记忆条目的唯一 ID
+     * @returns `ok(undefined)` 删除成功；ID 不存在时返回 `MEMORY_NOT_FOUND`
+     */
     async remove(memoryId: string): Promise<Result<void, AIError>> {
       const removed = await store.remove(memoryId)
       if (!removed) {
@@ -467,6 +514,12 @@ export function createMemoryOperations(
       return ok(undefined)
     },
 
+    /**
+     * 列出记忆条目（不分页）
+     *
+     * @param options - 可选（objectId、type 过滤、limit 限制数量）
+     * @returns `ok(MemoryEntry[])` 按创建时间降序排列的记忆列表
+     */
     async list(options?: MemoryListOptions): Promise<Result<MemoryEntry[], AIError>> {
       const where: WhereClause<MemoryEntry> = {}
       if (options?.objectId)
@@ -485,6 +538,12 @@ export function createMemoryOperations(
       return ok(results)
     },
 
+    /**
+     * 分页列出记忆条目
+     *
+     * @param options - 可选（objectId、type 过滤、offset / limit 分页参数）
+     * @returns `ok(StorePage<MemoryEntry>)` 含当前页数据与总数
+     */
     async listPage(options?: MemoryListPageOptions): Promise<Result<StorePage<MemoryEntry>, AIError>> {
       const where: WhereClause<MemoryEntry> = {}
       if (options?.objectId)
@@ -508,6 +567,15 @@ export function createMemoryOperations(
       return ok(page)
     },
 
+    /**
+     * 清除记忆条目
+     *
+     * - 不传任何 options 时清除全部记忆（包括向量库）。
+     * - 传入 objectId 或 types 时仅删除匹配的条目。
+     *
+     * @param options - 可选范围过滤（objectId 或 types 任意组合）
+     * @returns `ok(undefined)` 操作成功
+     */
     async clear(options?: MemoryClearOptions): Promise<Result<void, AIError>> {
       if (!options?.types && !options?.objectId) {
         await store.clear()

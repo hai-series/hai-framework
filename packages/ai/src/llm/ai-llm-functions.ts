@@ -94,7 +94,7 @@ export function createAILLMFunctions(config: AIConfig, deps?: AILLMStores): AILL
     messages: ChatMessage[],
   ): Promise<void> {
     await recordStore!.save(record.id, record)
-    logger.debug('Chat record saved', { id: record.id, objectId: record.objectId, sessionId: record.sessionId })
+    logger.trace('Chat record saved', { id: record.id, objectId: record.objectId, sessionId: record.sessionId })
 
     if (sessionStore) {
       const sid = record.sessionId

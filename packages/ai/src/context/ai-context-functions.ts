@@ -199,7 +199,7 @@ export function createContextOperations(
     const preserveSystem = options?.preserveSystem ?? true
     const preserveLastN = options?.preserveLastN ?? config.preserveLastN
 
-    logger.debug('Compressing context', { strategy, maxTokens, messageCount: messages.length })
+    logger.trace('Compressing context', { strategy, maxTokens, messageCount: messages.length })
 
     try {
       const originalTokens = estimateMessagesTokens(messages, tokenRatio)
@@ -223,7 +223,7 @@ export function createContextOperations(
         )
         const compressedTokens = estimateMessagesTokens(compressed, tokenRatio)
 
-        logger.debug('Sliding window compression completed', { originalTokens, compressedTokens, removedCount })
+        logger.trace('Sliding window compression completed', { originalTokens, compressedTokens, removedCount })
         return ok({
           messages: compressed,
           originalTokens,
@@ -260,7 +260,7 @@ export function createContextOperations(
         const compressed = [...systemMessages, summaryMessage, ...preserved]
         const compressedTokens = estimateMessagesTokens(compressed, tokenRatio)
 
-        logger.debug('Summary compression completed', { originalTokens, compressedTokens, removedCount: toSummarize.length })
+        logger.trace('Summary compression completed', { originalTokens, compressedTokens, removedCount: toSummarize.length })
         return ok({
           messages: compressed,
           originalTokens,
@@ -308,7 +308,7 @@ export function createContextOperations(
         const compressed = [...systemMessages, summaryMessage, ...preservedMessages]
         const compressedTokens = estimateMessagesTokens(compressed, tokenRatio)
 
-        logger.debug('Hybrid compression completed', { originalTokens, compressedTokens, removedCount: toSummarize.length })
+        logger.trace('Hybrid compression completed', { originalTokens, compressedTokens, removedCount: toSummarize.length })
         return ok({
           messages: compressed,
           originalTokens,
@@ -339,7 +339,7 @@ export function createContextOperations(
    * 摘要消息列表
    */
   async function summarizeMessages(messages: ChatMessage[], options?: ContextSummarizeOptions): Promise<Result<ContextSummary, AIError>> {
-    logger.debug('Summarizing messages', { messageCount: messages.length })
+    logger.trace('Summarizing messages', { messageCount: messages.length })
 
     try {
       const summaryResult = await generateSummary(messages, {
@@ -503,6 +503,14 @@ export function createContextOperations(
 
     summarize: summarizeMessages,
 
+    /**
+     * 估算消息列表的 Token 数
+     *
+     * 使用配置的 tokenRatio 进行字符数比例基于居估算。
+     *
+     * @param messages - 待估算的消息列表
+     * @returns `ok(number)` Token 数居估值；计算异常时返回 `CONTEXT_TOKEN_ESTIMATE_FAILED`
+     */
     estimateTokens(messages: ChatMessage[]): Result<number, AIError> {
       try {
         return ok(estimateMessagesTokens(messages, tokenRatio))
@@ -516,6 +524,15 @@ export function createContextOperations(
       }
     },
 
+    /**
+     * 创建无状态上下文管理器
+     *
+     * 每次创建时从空消息列表开始，不从存储读取。
+     * 如需恢复历史会话，请使用 `restoreManager`。
+     *
+     * @param options - 可选（maxTokens、strategy、preserveSystem、preserveLastN、autoCompress 等）
+     * @returns `ok(ContextManager)` 管理器实例
+     */
     createManager(options?: ContextManagerOptions): Result<ContextManager, AIError> {
       const managerMaxTokens = resolveMaxTokens(options?.maxTokens)
       const strategy = options?.strategy ?? config.defaultStrategy
@@ -539,6 +556,16 @@ export function createContextOperations(
       return ok(manager)
     },
 
+    /**
+     * 从存储恢复管理器实例（就地持久化的会话继续上次周期）
+     *
+     * 按 scope（objectId + sessionId）从 `contextStore` 读取历史消息并初始化管理器。
+     * 存储中无该 scope 时从空开始（装作 fetchOrCreate 语义）。
+     *
+     * @param scope - 会话范围（objectId + sessionId）
+     * @param options - 可选配置（与 `createManager` 相同选项，无 scope）
+     * @returns `ok(ContextManager)` 已恢复状态的管理器实例
+     */
     async restoreManager(scope: InteractionScope, options?: Omit<ContextManagerOptions, 'scope'>): Promise<Result<ContextManager, AIError>> {
       const managerMaxTokens = resolveMaxTokens(options?.maxTokens)
       const strategy = options?.strategy ?? config.defaultStrategy
@@ -576,6 +603,12 @@ export function createContextOperations(
       return ok(manager)
     },
 
+    /**
+     * 列出指定对象的所有会话
+     *
+     * @param objectId - 对象标识（如用户 ID）
+     * @returns `ok(SessionInfo[])` 按最近更新时间降序排列的会话列表；无 sessionStore 时返回空数组
+     */
     async listSessions(objectId: string): Promise<Result<SessionInfo[], AIError>> {
       if (!sessionStore) {
         return ok([])
