@@ -579,10 +579,65 @@ export const FileConfigSchema = z.object({
 /** File 配置类型 */
 export type FileConfig = z.infer<typeof FileConfigSchema>
 
+// ─── Retrieval 配置 Schema ───
+
+/**
+ * 检索源配置 Schema
+ *
+ * 与 `RetrievalSource` 接口字段对齐，支持在 `ai.init()` 中预注册检索源。
+ */
+export const RetrievalSourceSchema = z.object({
+  /** 来源唯一标识 */
+  id: z.string(),
+  /** vecdb collection 名称 */
+  collection: z.string(),
+  /** 信源显示名 */
+  name: z.string().optional(),
+  /** 信源类型 */
+  sourceType: z.enum(['document', 'webpage', 'database', 'manual']).optional(),
+  /** 信源 URL / 路径 */
+  url: z.string().optional(),
+  /** 最大返回条数（默认 5） */
+  topK: z.number().int().positive().optional(),
+  /** 最低相似度 0~1（低于此值的结果被过滤） */
+  minScore: z.number().min(0).max(1).optional(),
+  /** 元数据过滤条件 */
+  filter: z.record(z.string(), z.unknown()).optional(),
+})
+
+/** 检索源配置类型 */
+export type RetrievalSourceConfig = z.infer<typeof RetrievalSourceSchema>
+
+/**
+ * Retrieval 配置 Schema
+ *
+ * 在 `ai.init()` 时预注册检索源，等价于初始化后逐条调用 `ai.retrieval.addSource()`。
+ *
+ * @example
+ * ```ts
+ * ai.init({
+ *   llm: { apiKey: 'sk-xxx', model: 'gpt-4o-mini' },
+ *   retrieval: {
+ *     sources: [
+ *       { id: 'docs', collection: 'documentation', name: '产品文档', topK: 5, minScore: 0.7 },
+ *       { id: 'faq',  collection: 'faq', name: '常见问题', sourceType: 'manual' },
+ *     ],
+ *   },
+ * })
+ * ```
+ */
+export const RetrievalConfigSchema = z.object({
+  /** 预注册检索源列表 */
+  sources: z.array(RetrievalSourceSchema).optional(),
+})
+
+/** Retrieval 配置类型 */
+export type RetrievalConfig = z.infer<typeof RetrievalConfigSchema>
+
 /**
  * AI 配置 Schema
  *
- * 统一 AI 模块配置：LLM、MCP、Embedding、Knowledge、Memory、Context、Store。
+ * 统一 AI 模块配置：LLM、MCP、Embedding、Knowledge、Retrieval、Memory、Context、File。
  * 模型通过 LLM.scenarios 映射场景，子系统不再独立配置 apiKey / baseUrl / model。
  *
  * @example
@@ -605,6 +660,11 @@ export type FileConfig = z.infer<typeof FileConfigSchema>
  *   },
  *   embedding: { dimensions: 1536 },
  *   knowledge: { collection: 'docs', enableEntityExtraction: true },
+ *   retrieval: {
+ *     sources: [
+ *       { id: 'docs', collection: 'documentation', name: '产品文档', topK: 5, minScore: 0.7 },
+ *     ],
+ *   },
  *   memory: { maxEntries: 500, embeddingEnabled: true },
  *   context: { defaultStrategy: 'hybrid', preserveLastN: 4 },
  * })
@@ -623,6 +683,8 @@ export const AIConfigSchema = z.object({
   memory: MemoryConfigSchema.optional(),
   /** Context 配置 */
   context: ContextConfigSchema.optional(),
+  /** Retrieval 配置（预注册检索源） */
+  retrieval: RetrievalConfigSchema.optional(),
   /** File 解析配置 */
   file: FileConfigSchema.optional(),
 })

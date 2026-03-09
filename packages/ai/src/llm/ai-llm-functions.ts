@@ -21,7 +21,6 @@ import type {
   LLMOperations,
   StreamOperations,
   TokenUsage,
-  ToolCall,
   ToolsOperations,
 } from './ai-llm-types.js'
 
@@ -140,7 +139,7 @@ export function createAILLMFunctions(config: AIConfig, deps?: AILLMStores): AILL
             content: choice?.message?.content ?? '',
             toolCalls: choice?.message?.tool_calls,
             finishReason: choice?.finish_reason ?? 'stop',
-            usage: response.usage,
+            usage: response.usage ?? { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
           },
           createdAt: Date.now(),
           duration: Date.now() - start,
@@ -168,7 +167,8 @@ export function createAILLMFunctions(config: AIConfig, deps?: AILLMStores): AILL
     // 累积流式响应的中间状态
     let content = ''
     let finishReason: string | null = null
-    const toolCalls: ToolCall[] = []
+    // 使用更窄的本地类型：流式响应中工具调用均为 function 类型
+    const toolCalls: Array<{ id: string, type: 'function', function: { name: string, arguments: string } }> = []
     let streamId = ''
     let resolvedModel = request.model ?? ''
 

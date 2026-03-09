@@ -75,10 +75,20 @@ export function estimateMessagesTokens(messages: ChatMessage[], tokenRatio = 0.2
  */
 function getMessageContent(msg: ChatMessage): string {
   if (msg.role === 'assistant') {
-    return msg.content ?? ''
+    const c = msg.content
+    if (typeof c === 'string')
+      return c
+    if (Array.isArray(c))
+      return (c as Array<{ type: string, text?: string }>).filter(p => p.type === 'text').map(p => p.text ?? '').join(' ')
+    return ''
   }
   if (msg.role === 'tool') {
-    return msg.content
+    const c = msg.content
+    if (typeof c === 'string')
+      return c
+    if (Array.isArray(c))
+      return (c as Array<{ type: string, text?: string }>).filter(p => p.type === 'text').map(p => p.text ?? '').join(' ')
+    return ''
   }
   // system / user
   const content = (msg as { content: string | Array<{ type: string, text?: string }> }).content

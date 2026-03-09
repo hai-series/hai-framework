@@ -27,17 +27,21 @@ const logger = core.logger.child({ module: 'ai', scope: 'rag' })
 
 const DEFAULT_RAG_SYSTEM_PROMPT = `You are a helpful assistant. Answer the user's question based on the provided context.
 If the context doesn't contain relevant information, say so honestly.
-Always cite the source when using information from the context.`
+When using information from the context, cite the source by its number, e.g. [1] or [2].`
 
 /**
- * 默认上下文格式化：将检索结果格式化为编号列表
+ * 默认上下文格式化：将检索结果格式化为编号列表，含标题和 URL、便于 LLM 注明信源
  */
 function defaultFormatContext(items: RagContextItem[]): string {
   if (items.length === 0)
     return 'No relevant context found.'
 
   return items
-    .map((item, i) => `[${i + 1}] (score: ${item.score.toFixed(3)}, source: ${item.sourceId})\n${item.content}`)
+    .map((item, i) => {
+      const sourceLabel = item.citation?.title ?? item.citation?.url ?? item.sourceId
+      const urlPart = item.citation?.url ? ` (${item.citation.url})` : ''
+      return `[${i + 1}] Source: ${sourceLabel}${urlPart}\n${item.content}`
+    })
     .join('\n\n')
 }
 

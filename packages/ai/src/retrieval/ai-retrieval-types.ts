@@ -116,25 +116,25 @@ export interface RetrievalResult {
  */
 export interface RetrievalOperations {
   /**
-   * 注册一个检索源
+   * 注册一个检索源（持久化到 DB）
    *
    * @param source - 检索源配置
    * @returns 成功返回 ok，重复 id 返回错误
    */
-  addSource: (source: RetrievalSource) => Result<void, AIError>
+  addSource: (source: RetrievalSource) => Promise<Result<void, AIError>>
 
   /**
-   * 移除一个检索源
+   * 移除一个检索源（从 DB 删除）
    *
    * @param sourceId - 检索源 ID
    * @returns 成功返回 ok，未找到返回错误
    */
-  removeSource: (sourceId: string) => Result<void, AIError>
+  removeSource: (sourceId: string) => Promise<Result<void, AIError>>
 
   /**
-   * 列出所有已注册的检索源
+   * 列出所有已注册的检索源（从 DB 读取，分布式一致）
    */
-  listSources: () => RetrievalSource[]
+  listSources: () => Promise<RetrievalSource[]>
 
   /**
    * 执行检索
