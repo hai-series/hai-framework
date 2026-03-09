@@ -6,6 +6,7 @@
  */
 
 import type { Result } from '@h-ai/core'
+import type { DataOperations } from '@h-ai/reldb'
 import type { AIError } from '../ai-types.js'
 
 import { core, err, ok } from '@h-ai/core'
@@ -14,16 +15,6 @@ import { AIErrorCode } from '../ai-config.js'
 import { aiM } from '../ai-i18n.js'
 
 const logger = core.logger.child({ module: 'ai', scope: 'knowledge-schema' })
-
-/**
- * reldb DataOperations 接口（最小化依赖，仅用类型约束）
- *
- * 避免直接 import @h-ai/reldb（保持延迟加载），仅约束需要的方法签名。
- */
-interface DataOps {
-  execute: (sql: string, params?: unknown[]) => Promise<Result<unknown, unknown>>
-  query: <T = Record<string, unknown>>(sql: string, params?: unknown[]) => Promise<Result<T[], unknown>>
-}
 
 // ─── DDL 语句 ───
 
@@ -76,7 +67,7 @@ CREATE INDEX IF NOT EXISTS idx_knowledge_ed_collection ON knowledge_entity_docum
  * @param dataOps - reldb 数据操作接口
  * @returns 成功返回 ok(undefined)
  */
-export async function createKnowledgeSchema(dataOps: DataOps): Promise<Result<void, AIError>> {
+export async function createKnowledgeSchema(dataOps: DataOperations): Promise<Result<void, AIError>> {
   const statements = [
     CREATE_ENTITY_TABLE,
     CREATE_ENTITY_NAME_INDEX,
@@ -120,7 +111,7 @@ export async function createKnowledgeSchema(dataOps: DataOps): Promise<Result<vo
  * 使用 INSERT OR REPLACE 语义（按 id 匹配）。
  */
 export async function upsertEntity(
-  dataOps: DataOps,
+  dataOps: DataOperations,
   entity: { id: string, name: string, type: string, aliases?: string[], description?: string },
 ): Promise<Result<void, AIError>> {
   const sql = `
@@ -159,7 +150,7 @@ export async function upsertEntity(
  * 插入文档-实体关联
  */
 export async function insertEntityDocument(
-  dataOps: DataOps,
+  dataOps: DataOperations,
   relation: {
     entityId: string
     documentId: string
@@ -208,7 +199,7 @@ export async function insertEntityDocument(
  * @returns 匹配的实体 ID 列表
  */
 export async function findEntitiesByName(
-  dataOps: DataOps,
+  dataOps: DataOperations,
   keyword: string,
 ): Promise<Result<Array<{ id: string, name: string, type: string, aliases: string[] }>, AIError>> {
   const sql = `
@@ -249,7 +240,7 @@ export async function findEntitiesByName(
  * 按实体 ID 列表查询关联的文档 ID（倒排索引查询）
  */
 export async function findDocumentsByEntityIds(
-  dataOps: DataOps,
+  dataOps: DataOperations,
   entityIds: string[],
   collection?: string,
 ): Promise<Result<Array<{ entityId: string, documentId: string, chunkId: string, collection: string, relevance: number, context: string | null }>, AIError>> {
@@ -303,7 +294,7 @@ export async function findDocumentsByEntityIds(
  * 列出所有实体（支持类型过滤和关键词搜索）
  */
 export async function listEntities(
-  dataOps: DataOps,
+  dataOps: DataOperations,
   options?: { type?: string, keyword?: string, limit?: number },
 ): Promise<Result<Array<{ id: string, name: string, type: string, aliases: string[], description: string | null, createdAt: string | null, updatedAt: string | null }>, AIError>> {
   let sql = 'SELECT id, name, type, aliases, description, created_at, updated_at FROM knowledge_entity WHERE 1=1'
@@ -361,7 +352,7 @@ export async function listEntities(
  * 按实体名称查询实体及其关联文档
  */
 export async function findByEntityName(
-  dataOps: DataOps,
+  dataOps: DataOperations,
   entityName: string,
   options?: { collection?: string, type?: string },
 ): Promise<Result<Array<{

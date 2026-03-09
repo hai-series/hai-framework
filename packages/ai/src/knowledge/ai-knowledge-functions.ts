@@ -7,6 +7,9 @@
  */
 
 import type { Result } from '@h-ai/core'
+import type { ChunkOptionsInput, DatapipeFunctions } from '@h-ai/datapipe'
+import type { DataOperations } from '@h-ai/reldb'
+import type { VecdbFunctions } from '@h-ai/vecdb'
 import type { KnowledgeConfig } from '../ai-config.js'
 import type { AIError } from '../ai-types.js'
 import type { EmbeddingOperations } from '../embedding/ai-embedding-types.js'
@@ -33,7 +36,7 @@ import { nanoid } from 'nanoid'
 
 import { AIErrorCode } from '../ai-config.js'
 import { aiM } from '../ai-i18n.js'
-import { extractEntitiesBatch } from './ai-knowledge-entity.js'
+import { extractEntities, extractEntitiesBatch } from './ai-knowledge-entity.js'
 import {
   createKnowledgeSchema,
   findByEntityName,
@@ -45,38 +48,6 @@ import {
 } from './ai-knowledge-schema.js'
 
 const logger = core.logger.child({ module: 'ai', scope: 'knowledge' })
-
-// ─── 延迟依赖类型 ───
-
-/**
- * reldb 数据操作接口（最小化约束，延迟加载）
- */
-interface DataOps {
-  execute: (sql: string, params?: unknown[]) => Promise<Result<unknown, unknown>>
-  query: <T = Record<string, unknown>>(sql: string, params?: unknown[]) => Promise<Result<T[], unknown>>
-}
-
-/**
- * vecdb 操作接口（最小化约束，延迟加载）
- */
-interface VecdbOps {
-  collection: {
-    create: (name: string, options: { dimension: number }) => Promise<Result<void, unknown>>
-    exists: (name: string) => Promise<Result<boolean, unknown>>
-  }
-  vector: {
-    upsert: (collection: string, documents: Array<{ id: string, vector: number[], content?: string, metadata?: Record<string, unknown> }>) => Promise<Result<void, unknown>>
-    search: (collection: string, vector: number[], options?: { topK?: number, minScore?: number, filter?: Record<string, unknown> }) => Promise<Result<Array<{ id: string, score: number, content?: string, metadata?: Record<string, unknown> }>, unknown>>
-  }
-}
-
-/**
- * datapipe 操作接口（最小化约束，延迟加载）
- */
-interface DatapipeOps {
-  clean: (text: string, options?: Record<string, unknown>) => Result<string, unknown>
-  chunk: (text: string, options: Record<string, unknown>) => Result<Array<{ index: number, content: string, metadata?: Record<string, unknown> }>, unknown>
-}
 
 // ─── 默认提示词 ───
 
@@ -91,23 +62,26 @@ Rules:
 /**
  * 创建 Knowledge 操作接口
  *
- * @param config - Knowledge 配置
- * @param llm - LLM 操作（用于实体提取和问答）
- * @param embedding - Embedding 操作（用于向量化）
- * @param vecdbInstance - vecdb 实例（不可用时传 null）
- * @param reldbInstance - reldb 数据操作实例（不可用时传 null）
- * @param datapipeInstance - datapipe 实例（不可用时传 null）
+ * 编排 datapipe → embedding → vecdb（向量存储）和 reldb（实体倒排索引）三路管道，
+ * 实现文档导入、语义检索与实体增强。
+ *
+ * @param config - Knowledge 配置（分块策略、向量集合、实体提取开关等）
+ * @param llm - LLM 操作（用于实体提取和问答生成）
+ * @param embedding - Embedding 操作（用于文本向量化）
+ * @param vecdb - vecdb 实例（必选，用于向量存储与语义搜索）
+ * @param reldb - reldb 数据操作实例（必选，用于实体倒排索引 DDL 和 CRUD）
+ * @param datapipe - datapipe 实例（必选，用于文本清洗与分块）
  * @returns KnowledgeOperations 实例
  */
 export function createKnowledgeOperations(
   config: KnowledgeConfig,
   llm: LLMOperations,
   embedding: EmbeddingOperations,
-  vecdbInstance: VecdbOps | null,
-  reldbInstance: DataOps | null,
-  datapipeInstance: DatapipeOps | null,
+  vecdb: VecdbFunctions,
+  reldb: DataOperations,
+  datapipe: DatapipeFunctions,
 ): KnowledgeOperations {
-  /** 是否已完成 setup */
+  /** 是否已完成 setup（调用 setup() 后置为 true） */
   let isSetup = false
 
   return {
@@ -119,17 +93,10 @@ export function createKnowledgeOperations(
       logger.debug('Setting up knowledge base', { collection, dimension })
 
       try {
-        // 创建 vecdb 集合
-        if (!vecdbInstance) {
-          return err({
-            code: AIErrorCode.KNOWLEDGE_SETUP_FAILED,
-            message: aiM('ai_knowledgeSetupFailed', { params: { error: 'vecdb not available' } }),
-          })
-        }
-
-        const existsResult = await vecdbInstance.collection.exists(collection)
+        // 创建 vecdb 集合（已存在则跳过）
+        const existsResult = await vecdb.collection.exists(collection)
         if (existsResult.success && !existsResult.data) {
-          const createResult = await vecdbInstance.collection.create(collection, { dimension })
+          const createResult = await vecdb.collection.create(collection, { dimension })
           if (!createResult.success) {
             return err({
               code: AIErrorCode.KNOWLEDGE_SETUP_FAILED,
@@ -139,15 +106,10 @@ export function createKnowledgeOperations(
           }
         }
 
-        // 创建 reldb 实体表
-        if (reldbInstance) {
-          const schemaResult = await createKnowledgeSchema(reldbInstance)
-          if (!schemaResult.success)
-            return schemaResult
-        }
-        else {
-          logger.warn('reldb not available, entity indexing will be disabled')
-        }
+        // 创建 reldb 实体索引表（DDL 幂等）
+        const schemaResult = await createKnowledgeSchema(reldb)
+        if (!schemaResult.success)
+          return schemaResult
 
         isSetup = true
         logger.debug('Knowledge base setup completed', { collection })
@@ -175,50 +137,27 @@ export function createKnowledgeOperations(
       const startTime = Date.now()
       const collection = input.collection ?? config.collection
       const enableEntityExtraction = input.enableEntityExtraction ?? config.enableEntityExtraction
-      const chunkMode = input.chunkMode ?? config.chunkMode
-      const chunkMaxSize = input.chunkMaxSize ?? config.chunkMaxSize
-      const chunkOverlap = input.chunkOverlap ?? config.chunkOverlap
+      // 合并 config 默认值与 input 覆盖选项（input 优先级更高）
+      const cleanOptions = input.cleanOptions ?? {}
+      const chunkOptions: ChunkOptionsInput = {
+        mode: config.chunkMode,
+        maxSize: config.chunkMaxSize,
+        overlap: config.chunkOverlap,
+        ...input.chunkOptions,
+      }
 
       logger.debug('Ingesting document', { documentId: input.documentId, collection, contentLength: input.content.length })
 
       try {
-        // 获取依赖
-        if (!vecdbInstance) {
-          return err({
-            code: AIErrorCode.KNOWLEDGE_INGEST_FAILED,
-            message: aiM('ai_knowledgeIngestFailed', { params: { error: 'vecdb not available' } }),
-          })
-        }
+        // ① 清洗：标准化文本（去 HTML、空白规整等）
+        const cleanResult = datapipe.clean(input.content, cleanOptions)
+        const cleanedText = cleanResult.success ? cleanResult.data : input.content
 
-        // ① 清洗
-        let cleanedText = input.content
-        if (datapipeInstance) {
-          const cleanResult = datapipeInstance.clean(input.content)
-          if (cleanResult.success) {
-            cleanedText = cleanResult.data
-          }
-        }
-
-        // ② 分块
-        let chunks: Array<{ index: number, content: string, metadata?: Record<string, unknown> }> = []
-        if (datapipeInstance) {
-          const chunkResult = datapipeInstance.chunk(cleanedText, {
-            mode: chunkMode,
-            maxSize: chunkMaxSize,
-            overlap: chunkOverlap,
-          })
-          if (chunkResult.success) {
-            chunks = chunkResult.data
-          }
-          else {
-            // 分块失败时，将整个文本作为单一 chunk
-            chunks = [{ index: 0, content: cleanedText }]
-          }
-        }
-        else {
-          // 没有 datapipe 时，将整个文本作为单一 chunk
-          chunks = [{ index: 0, content: cleanedText }]
-        }
+        // ② 分块：按指定策略切割（分块失败退回整文本单一 chunk）
+        const chunkResult = datapipe.chunk(cleanedText, chunkOptions)
+        const chunks: Array<{ index: number, content: string, metadata?: Record<string, unknown> }> = chunkResult.success
+          ? chunkResult.data
+          : [{ index: 0, content: cleanedText }]
 
         // ③ 批量向量化
         const texts = chunks.map(c => c.content)
@@ -250,7 +189,7 @@ export function createKnowledgeOperations(
           }
         })
 
-        const upsertResult = await vecdbInstance.vector.upsert(collection, vectorDocuments)
+        const upsertResult = await vecdb.vector.upsert(collection, vectorDocuments)
         if (!upsertResult.success) {
           return err({
             code: AIErrorCode.KNOWLEDGE_INGEST_FAILED,
@@ -282,27 +221,25 @@ export function createKnowledgeOperations(
               }
               extractedEntities.push(knowledgeEntity)
 
-              if (reldbInstance) {
-                // 插入实体
-                await upsertEntity(reldbInstance, {
-                  id: entityId,
-                  name: entity.name,
-                  type: entity.type,
-                  aliases: entity.aliases,
-                  description: entity.description,
-                })
+              // 插入实体
+              await upsertEntity(reldb, {
+                id: entityId,
+                name: entity.name,
+                type: entity.type,
+                aliases: entity.aliases,
+                description: entity.description,
+              })
 
-                // 插入文档-实体关联
-                for (const chunkId of entity.chunkIds) {
-                  await insertEntityDocument(reldbInstance, {
-                    entityId,
-                    documentId: input.documentId,
-                    chunkId,
-                    collection,
-                    relevance: 1.0,
-                    context: chunks.find(c => `${input.documentId}:chunk-${c.index}` === chunkId)?.content?.slice(0, 200),
-                  })
-                }
+              // 插入文档-实体关联（每个命中的 chunkId 建一条倒排记录）
+              for (const chunkId of entity.chunkIds) {
+                await insertEntityDocument(reldb, {
+                  entityId,
+                  documentId: input.documentId,
+                  chunkId,
+                  collection,
+                  relevance: 1.0,
+                  context: chunks.find(c => `${input.documentId}:chunk-${c.index}` === chunkId)?.content?.slice(0, 200),
+                })
               }
             }
           }
@@ -353,13 +290,6 @@ export function createKnowledgeOperations(
       logger.debug('Knowledge retrieval', { query: query.slice(0, 100), collection, topK })
 
       try {
-        if (!vecdbInstance) {
-          return err({
-            code: AIErrorCode.KNOWLEDGE_RETRIEVE_FAILED,
-            message: aiM('ai_knowledgeRetrieveFailed', { params: { error: 'vecdb not available' } }),
-          })
-        }
-
         // ① 向量化查询
         const embedResult = await embedding.embedText(query)
         if (!embedResult.success) {
@@ -371,7 +301,7 @@ export function createKnowledgeOperations(
         }
 
         // ② 向量搜索
-        const searchResult = await vecdbInstance.vector.search(collection, embedResult.data, {
+        const searchResult = await vecdb.vector.search(collection, embedResult.data, {
           topK: topK * 2, // 多取一些，后续合并后再截断
           minScore: options?.minScore,
           filter: options?.filter,
@@ -408,17 +338,35 @@ export function createKnowledgeOperations(
           })
         }
 
-        // ③ 实体增强（可选）
+        // ③ 实体增强（可选）：先用 LLM 从查询中提取命名实体，再查倒排索引对向量结果加权
         if (enableEntityBoost) {
-          if (reldbInstance) {
-            // 从查询文本中提取可能的实体关键词
-            const entityResult = await findEntitiesByName(reldbInstance, query)
-            if (entityResult.success && entityResult.data.length > 0) {
-              const entityIds = entityResult.data.map(e => e.id)
-              const entityNameMap = new Map(entityResult.data.map(e => [e.id, e.name]))
+          const queryEntityResult = await extractEntities(
+            llm,
+            query,
+            undefined,
+            config.entityTypes,
+            config.entityExtractionPrompt,
+          )
+          const queryEntityNames = queryEntityResult.success
+            ? queryEntityResult.data.map(e => e.name)
+            : []
 
-              // 查询倒排索引
-              const docResult = await findDocumentsByEntityIds(reldbInstance, entityIds, collection)
+          if (queryEntityNames.length > 0) {
+            // 合并多个实体名的匹配结果（Map 保证去重）
+            const entityMap = new Map<string, { id: string, name: string, type: string, aliases: string[] }>()
+            for (const name of queryEntityNames) {
+              const entityResult = await findEntitiesByName(reldb, name)
+              if (entityResult.success) {
+                for (const e of entityResult.data)
+                  entityMap.set(e.id, e)
+              }
+            }
+
+            if (entityMap.size > 0) {
+              const entityIds = Array.from(entityMap.keys())
+              const entityNameMap = new Map(Array.from(entityMap.values()).map(e => [e.id, e.name]))
+
+              const docResult = await findDocumentsByEntityIds(reldb, entityIds, collection)
               if (docResult.success) {
                 const boostWeight = config.entityBoostWeight
 
@@ -426,7 +374,6 @@ export function createKnowledgeOperations(
                   const chunkKey = relation.chunkId || relation.documentId
                   const entityName = entityNameMap.get(relation.entityId) ?? ''
 
-                  // 查找已有结果项，加权
                   for (const [itemId, item] of itemMap) {
                     const itemDocId = item.metadata?.documentId as string | undefined
                     if (itemId === chunkKey || itemDocId === relation.documentId) {
@@ -436,9 +383,6 @@ export function createKnowledgeOperations(
                       }
                     }
                   }
-
-                  // 如果倒排索引中的文档不在向量搜索结果中，可以考虑补充
-                  // 但为简化实现，这里仅对已有结果加权
                 }
               }
             }
@@ -557,14 +501,7 @@ export function createKnowledgeOperations(
 
     // ─── findByEntity ───
     async findByEntity(entityName: string, options?: EntityQueryOptions): Promise<Result<EntityDocumentResult[], AIError>> {
-      if (!reldbInstance) {
-        return err({
-          code: AIErrorCode.KNOWLEDGE_RETRIEVE_FAILED,
-          message: aiM('ai_knowledgeRetrieveFailed', { params: { error: 'reldb not available' } }),
-        })
-      }
-
-      const result = await findByEntityName(reldbInstance, entityName, {
+      const result = await findByEntityName(reldb, entityName, {
         collection: options?.collection ?? config.collection,
         type: options?.type,
       })
@@ -592,14 +529,7 @@ export function createKnowledgeOperations(
 
     // ─── listEntities ───
     async listEntities(options?: EntityListOptions): Promise<Result<KnowledgeEntity[], AIError>> {
-      if (!reldbInstance) {
-        return err({
-          code: AIErrorCode.KNOWLEDGE_RETRIEVE_FAILED,
-          message: aiM('ai_knowledgeRetrieveFailed', { params: { error: 'reldb not available' } }),
-        })
-      }
-
-      const result = await listEntitiesFromDb(reldbInstance, {
+      const result = await listEntitiesFromDb(reldb, {
         type: options?.type,
         keyword: options?.keyword,
         limit: options?.limit,

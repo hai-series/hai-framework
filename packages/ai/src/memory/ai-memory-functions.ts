@@ -253,7 +253,6 @@ export function createMemoryOperations(
 
       try {
         // ── 第一阶段：筛选候选集 ──
-        // 使用 WhereClause 操作符将过滤条件下推到 store 层，减少内存中处理的数据量
         const where: WhereClause<MemoryEntry> = {}
         if (options?.objectId) {
           where.objectId = options.objectId

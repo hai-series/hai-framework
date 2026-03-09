@@ -6,6 +6,7 @@
  */
 
 import type { Result } from '@h-ai/core'
+import type { ChunkOptionsInput, CleanOptionsInput } from '@h-ai/datapipe'
 import type { AIError } from '../ai-types.js'
 import type { ChatMessage } from '../llm/ai-llm-types.js'
 import type { Citation } from '../retrieval/ai-retrieval-types.js'
@@ -120,12 +121,20 @@ export interface KnowledgeIngestInput {
   metadata?: Record<string, unknown>
   /** 是否启用实体提取（可选，覆盖全局配置） */
   enableEntityExtraction?: boolean
-  /** 分块模式覆盖（可选） */
-  chunkMode?: 'sentence' | 'paragraph' | 'markdown' | 'page'
-  /** 分块最大大小覆盖（可选） */
-  chunkMaxSize?: number
-  /** 分块重叠覆盖（可选） */
-  chunkOverlap?: number
+  /**
+   * 文本清洗选项（可选，覆盖全局配置默认值）
+   *
+   * 字段含义与 @h-ai/datapipe CleanOptionsInput 完全一致，
+   * 支持 removeHtml、removeUrls、normalizeWhitespace、customReplacements 等。
+   */
+  cleanOptions?: CleanOptionsInput
+  /**
+   * 分块选项（可选，覆盖全局配置默认值；mode 字段同时覆盖 config.chunkMode）
+   *
+   * 字段含义与 @h-ai/datapipe ChunkOptionsInput 完全一致，
+   * 支持 mode、maxSize、overlap、separator、markdownMinLevel 等完整选项。
+   */
+  chunkOptions?: ChunkOptionsInput
 }
 
 /**

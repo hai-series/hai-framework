@@ -310,3 +310,5 @@ function register(tool: Tool): Result<void, XxError> {
 - 错误码段位与已有模块冲突（段位注册表见 hai-create §3.1）
 - 同一模块混用扁平方法与子操作对象两种 API 风格
 - 做兼容性处理。目前处于开发期，不用考虑兼容旧版本
+- 在模块内为已有依赖包的类型定义本地鸭子类型接口：若 `dependencies` 中已有对应包，直接 import 使用真实类型（如 `DataOperations`、`VecdbFunctions`、`DatapipeFunctions`）；禁止以 `as unknown as` 强转规避类型不兼容
+- `as unknown as T` 类型强转：禁止用此模式绕过真实类型差异，应修改接口/函数签名使用正确的类型；合规例外：第三方库类型缺失时的 workaround（须加注释说明原因）

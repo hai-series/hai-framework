@@ -982,7 +982,7 @@ const response = await ai.llm.chat({ messages: msgs.data })
 // 追加 assistant 回复
 await manager.addMessage(response.data.choices[0].message)
 
-// 持久化当前会话状态（persistent 模式下）
+// 持久化当前会话状态
 await manager.save()
 
 // 查看 Token 使用量

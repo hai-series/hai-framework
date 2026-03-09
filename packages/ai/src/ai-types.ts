@@ -268,9 +268,7 @@ export type {
   AIVectorStore,
   InteractionScope,
   ObjectRef,
-  ReldbSql,
   SessionInfo,
   StoreFilter,
   StorePage,
-  VecdbClient,
 } from './store/ai-store-types.js'

@@ -6,9 +6,10 @@
  */
 
 import type { Result } from '@h-ai/core'
+import type { VecdbFunctions } from '@h-ai/vecdb'
 import type { AIError } from '../ai-types.js'
 import type { EmbeddingOperations } from '../embedding/ai-embedding-types.js'
-import type { AIStore, VecdbClient } from '../store/ai-store-types.js'
+import type { AIStore } from '../store/ai-store-types.js'
 import type {
   Citation,
   RetrievalOperations,
@@ -35,7 +36,7 @@ const logger = core.logger.child({ module: 'ai', scope: 'retrieval' })
  */
 export function createRetrievalOperations(
   embeddingOps: EmbeddingOperations,
-  vecdbClient: VecdbClient,
+  vecdbClient: VecdbFunctions,
   sourceStore: AIStore<RetrievalSource>,
 ): RetrievalOperations {
   return {
