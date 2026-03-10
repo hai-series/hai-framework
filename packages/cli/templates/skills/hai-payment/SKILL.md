@@ -29,7 +29,7 @@ description: 使用 @h-ai/payment 接入微信支付、支付宝、Stripe 统一
 wechat:
   appId: ${WECHAT_PAY_APP_ID}
   mchId: ${WECHAT_PAY_MCH_ID}
-  apiKeyV3: ${WECHAT_PAY_API_KEY_V3}
+  apiV3Key: ${WECHAT_PAY_API_KEY_V3}
   privateKey: ${WECHAT_PAY_PRIVATE_KEY}
   serialNo: ${WECHAT_PAY_SERIAL_NO}
   notifyUrl: ${WECHAT_PAY_NOTIFY_URL}
@@ -56,7 +56,7 @@ await payment.init({
   wechat: {
     appId: 'wx1234567890',
     mchId: '1600000000',
-    apiKeyV3: 'your-api-key-v3',
+    apiV3Key: 'your-api-key-v3',
     privateKey: '-----BEGIN RSA PRIVATE KEY-----...',
     serialNo: 'CERT_SERIAL_NO',
     notifyUrl: 'https://example.com/api/v1/payment/notify/wechat',

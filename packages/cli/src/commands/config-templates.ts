@@ -30,6 +30,16 @@ export function generateConfigFile(moduleKey: string, configs?: ModuleConfigs): 
       return generateAiConfig(configs?.ai)
     case 'deploy':
       return generateDeployConfig()
+    case 'vecdb':
+      return generateVecdbConfig()
+    case 'reach':
+      return generateReachConfig()
+    case 'scheduler':
+      return generateSchedulerConfig()
+    case 'audit':
+      return generateAuditConfig()
+    case 'payment':
+      return generatePaymentConfig()
     default:
       return `# ${moduleKey} 配置\n`
   }
@@ -541,5 +551,151 @@ services:
   #   provisioner: aliyun
   #   accessKeyId: \${HAI_DEPLOY_ALIYUN_ACCESS_KEY_ID}
   #   accessKeySecret: \${HAI_DEPLOY_ALIYUN_ACCESS_KEY_SECRET}
+`
+}
+
+function generateVecdbConfig(): string {
+  return `# =============================================================================
+# 向量数据库配置 (@h-ai/vecdb)
+# =============================================================================
+
+# 数据库类型: lancedb | pgvector | qdrant
+type: lancedb
+
+# LanceDB 数据目录
+path: \${HAI_VECDB_PATH:./data/vecdb}
+
+# 距离度量: cosine | euclidean | dot
+# metric: cosine
+
+# pgvector 配置（当 type 为 pgvector 时使用）
+# type: pgvector
+# host: \${HAI_DB_HOST:localhost}
+# port: \${HAI_DB_PORT:5432}
+# database: \${HAI_DB_DATABASE:hai}
+# user: \${HAI_DB_USER:postgres}
+# password: \${HAI_DB_PASSWORD:}
+# indexType: hnsw
+# tablePrefix: vec_
+
+# Qdrant 配置（当 type 为 qdrant 时使用）
+# type: qdrant
+# url: \${HAI_VECDB_QDRANT_URL:http://localhost:6333}
+# apiKey: \${HAI_VECDB_QDRANT_API_KEY:}
+`
+}
+
+function generateReachConfig(): string {
+  return `# =============================================================================
+# 消息推送配置 (@h-ai/reach)
+# =============================================================================
+
+providers:
+  # 控制台输出（开发/测试用）
+  - name: console_dev
+    type: console
+
+  # SMTP 邮件（按需开启）
+  # - name: email
+  #   type: smtp
+  #   host: \${HAI_REACH_SMTP_HOST:smtp.example.com}
+  #   port: \${HAI_REACH_SMTP_PORT:465}
+  #   secure: true
+  #   user: \${HAI_REACH_SMTP_USER:}
+  #   pass: \${HAI_REACH_SMTP_PASS:}
+  #   from: \${HAI_REACH_SMTP_FROM:noreply@example.com}
+
+  # 阿里云短信（按需开启）
+  # - name: sms
+  #   type: aliyun-sms
+  #   accessKeyId: \${HAI_REACH_SMS_ACCESS_KEY}
+  #   accessKeySecret: \${HAI_REACH_SMS_SECRET_KEY}
+  #   signName: MyApp
+
+# 模板（可选）
+# templates:
+#   - name: verification_code
+#     provider: email
+#     subject: "验证码: {code}"
+#     body: "您的验证码是 {code}，有效期 {minutes} 分钟。"
+
+# 免打扰（可选）
+# dnd:
+#   enabled: true
+#   strategy: delay
+#   start: "22:00"
+#   end: "08:00"
+`
+}
+
+function generateSchedulerConfig(): string {
+  return `# =============================================================================
+# 任务调度配置 (@h-ai/scheduler)
+# =============================================================================
+
+# 是否启用数据库日志（需要 @h-ai/reldb）
+enableDb: true
+
+# 执行日志表名
+tableName: scheduler_logs
+
+# 任务定义表名
+taskTableName: scheduler_tasks
+
+# 分布式锁表名
+lockTableName: scheduler_locks
+
+# 检查间隔（毫秒）
+tickInterval: 1000
+
+# 锁过期时间（毫秒）
+lockExpireMs: 300000
+`
+}
+
+function generateAuditConfig(): string {
+  return `# =============================================================================
+# 审计日志配置 (@h-ai/audit)
+# =============================================================================
+
+# 审计日志表名
+tableName: audit_logs
+
+# 用户表名（用于 JOIN 查询）
+userTable: users
+
+# 用户表主键列名
+userIdColumn: id
+
+# 用户名列名
+userNameColumn: username
+`
+}
+
+function generatePaymentConfig(): string {
+  return `# =============================================================================
+# 支付配置 (@h-ai/payment)
+# =============================================================================
+
+# 微信支付（按需开启）
+# wechat:
+#   mchId: \${HAI_PAY_WECHAT_MCH_ID}
+#   apiV3Key: \${HAI_PAY_WECHAT_API_V3_KEY}
+#   serialNo: \${HAI_PAY_WECHAT_SERIAL_NO}
+#   privateKey: \${HAI_PAY_WECHAT_PRIVATE_KEY}
+#   appId: \${HAI_PAY_WECHAT_APP_ID}
+
+# 支付宝（按需开启）
+# alipay:
+#   appId: \${HAI_PAY_ALIPAY_APP_ID}
+#   privateKey: \${HAI_PAY_ALIPAY_PRIVATE_KEY}
+#   alipayPublicKey: \${HAI_PAY_ALIPAY_PUBLIC_KEY}
+#   signType: RSA2
+#   sandbox: false
+
+# Stripe（按需开启）
+# stripe:
+#   secretKey: \${HAI_PAY_STRIPE_SECRET_KEY}
+#   webhookSecret: \${HAI_PAY_STRIPE_WEBHOOK_SECRET}
 `
 }

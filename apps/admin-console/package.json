@@ -28,12 +28,14 @@
     "@h-ai/cache": "workspace:*",
     "@h-ai/core": "workspace:*",
     "@h-ai/crypto": "workspace:*",
+    "@h-ai/datapipe": "workspace:*",
     "@h-ai/iam": "workspace:*",
     "@h-ai/kit": "workspace:*",
     "@h-ai/reach": "workspace:*",
     "@h-ai/reldb": "workspace:*",
     "@h-ai/storage": "workspace:*",
     "@h-ai/ui": "workspace:*",
+    "@h-ai/vecdb": "workspace:*",
     "zod": "catalog:"
   },
   "devDependencies": {

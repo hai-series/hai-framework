@@ -13,13 +13,24 @@ import fse from 'fs-extra'
  * 模块名到 Skill 目录名的映射
  */
 const MODULE_SKILL_MAP: Record<string, string> = {
-  db: 'hai-reldb',
-  cache: 'hai-cache',
-  iam: 'hai-iam',
-  storage: 'hai-storage',
-  ai: 'hai-ai',
-  crypto: 'hai-crypto',
-  payment: 'hai-payment',
+  'db': 'hai-reldb',
+  'reldb': 'hai-reldb',
+  'cache': 'hai-cache',
+  'iam': 'hai-iam',
+  'storage': 'hai-storage',
+  'ai': 'hai-ai',
+  'crypto': 'hai-crypto',
+  'payment': 'hai-payment',
+  'vecdb': 'hai-vecdb',
+  'datapipe': 'hai-datapipe',
+  'reach': 'hai-reach',
+  'scheduler': 'hai-scheduler',
+  'audit': 'hai-audit',
+  'deploy': 'hai-deploy',
+  'kit': 'hai-kit',
+  'ui': 'hai-ui',
+  'api-client': 'hai-api-client',
+  'capacitor': 'hai-capacitor',
 }
 
 /**

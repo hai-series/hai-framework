@@ -28,15 +28,23 @@ export interface AddModuleOptions extends GlobalOptions {
 
 // 可添加的模块与对应包
 const MODULE_MAP: Record<string, { packages: string[], deps?: string[], configKey?: string, description: string }> = {
-  iam: { packages: ['@h-ai/iam'], deps: ['crypto'], configKey: 'iam', description: '身份与访问管理' },
-  reldb: { packages: ['@h-ai/reldb'], configKey: 'reldb', description: '数据库' },
-  cache: { packages: ['@h-ai/cache'], configKey: 'cache', description: '缓存' },
-  ai: { packages: ['@h-ai/ai'], configKey: 'ai', description: 'AI 集成' },
-  storage: { packages: ['@h-ai/storage'], configKey: 'storage', description: '文件存储' },
-  crypto: { packages: ['@h-ai/crypto'], description: '加密模块' },
-  kit: { packages: ['@h-ai/kit'], description: 'SvelteKit 集成工具' },
-  ui: { packages: ['@h-ai/ui'], description: 'UI 组件库' },
-  deploy: { packages: ['@h-ai/deploy'], configKey: 'deploy', description: '自动化部署' },
+  'iam': { packages: ['@h-ai/iam'], deps: ['crypto'], configKey: 'iam', description: '身份与访问管理' },
+  'reldb': { packages: ['@h-ai/reldb'], configKey: 'db', description: '数据库' },
+  'cache': { packages: ['@h-ai/cache'], configKey: 'cache', description: '缓存' },
+  'ai': { packages: ['@h-ai/ai'], configKey: 'ai', description: 'AI 集成' },
+  'storage': { packages: ['@h-ai/storage'], configKey: 'storage', description: '文件存储' },
+  'crypto': { packages: ['@h-ai/crypto'], description: '加密模块' },
+  'kit': { packages: ['@h-ai/kit'], description: 'SvelteKit 集成工具' },
+  'ui': { packages: ['@h-ai/ui'], description: 'UI 组件库' },
+  'deploy': { packages: ['@h-ai/deploy'], configKey: 'deploy', description: '自动化部署' },
+  'vecdb': { packages: ['@h-ai/vecdb'], configKey: 'vecdb', description: '向量数据库' },
+  'datapipe': { packages: ['@h-ai/datapipe'], description: '数据处理管道' },
+  'reach': { packages: ['@h-ai/reach'], configKey: 'reach', description: '消息推送' },
+  'scheduler': { packages: ['@h-ai/scheduler'], deps: ['reldb'], configKey: 'scheduler', description: '任务调度' },
+  'audit': { packages: ['@h-ai/audit'], deps: ['reldb'], configKey: 'audit', description: '审计日志' },
+  'payment': { packages: ['@h-ai/payment'], configKey: 'payment', description: '支付' },
+  'capacitor': { packages: ['@h-ai/capacitor'], description: '移动端能力' },
+  'api-client': { packages: ['@h-ai/api-client'], description: 'HTTP 客户端' },
 }
 
 /**
