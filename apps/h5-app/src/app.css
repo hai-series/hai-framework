@@ -1,6 +1,6 @@
 @import 'tailwindcss';
-@import '@h-ai/ui/styles/design-tokens.css';
-@import '@h-ai/ui/styles/mobile.css';
+@import '../../../packages/ui/src/lib/styles/design-tokens.css';
+@import '../../../packages/ui/src/lib/styles/mobile.css';
 @source "../../../packages/ui/src/lib/**/*.svelte";
 
 /* ─── DaisyUI 主题配置 ─── */
