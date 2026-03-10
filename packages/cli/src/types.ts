@@ -19,6 +19,11 @@ export type FeatureId
     | 'ui' // UI 组件库
     | 'deploy' // 自动化部署
     | 'payment' // 统一支付（微信/支付宝/Stripe）
+    | 'vecdb' // 向量数据库
+    | 'datapipe' // 数据处理管道
+    | 'scheduler' // 任务调度
+    | 'capacitor' // 移动端能力
+    | 'api-client' // HTTP 客户端
 
 /**
  * 功能定义
