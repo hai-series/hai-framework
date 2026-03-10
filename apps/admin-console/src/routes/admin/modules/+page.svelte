@@ -12,6 +12,8 @@
     { key: 'cache', label: m.modules_tab_cache() },
     { key: 'storage', label: m.modules_tab_storage() },
     { key: 'ai', label: m.modules_tab_ai() },
+    { key: 'vecdb', label: m.modules_tab_vecdb() },
+    { key: 'datapipe', label: m.modules_tab_datapipe() },
     { key: 'crypto', label: m.modules_tab_crypto() },
   ])
 
@@ -53,6 +55,34 @@
     { name: '嵌入向量', desc: '文本向量化，用于语义搜索', api: 'ai.embed(text)' },
     { name: '多模型支持', desc: '支持 OpenAI / Azure / 本地模型', api: 'ai.init({ provider, model })' },
     { name: '流式输出', desc: '服务端流式返回生成结果', api: 'ai.stream({ messages: [...] })' },
+  ]
+
+  // VecDB 示例
+  const vecdbFeatures = [
+    { name: '创建集合', desc: '创建向量集合并指定维度', api: 'vecdb.createCollection(name, dimension)' },
+    { name: '插入向量', desc: '将文本嵌入向量存入集合', api: 'vecdb.insert(collection, vectors)' },
+    { name: '语义搜索', desc: '基于向量相似度进行检索', api: 'vecdb.search(collection, query, topK)' },
+    { name: '删除集合', desc: '删除集合及其所有数据', api: 'vecdb.dropCollection(name)' },
+  ]
+
+  const vecdbOps = [
+    { op: '创建集合', code: "await vecdb.createCollection('docs', 1536)", desc: '创建名为 docs 的向量集合（1536 维）' },
+    { op: '插入向量', code: "await vecdb.insert('docs', [{ id: '1', vector: embedding, metadata: { title: '文档标题' } }])", desc: '插入嵌入向量及元数据' },
+    { op: '搜索', code: "const results = await vecdb.search('docs', queryVector, { topK: 5 })", desc: '搜索最相似的 5 条记录' },
+    { op: '删除', code: "await vecdb.delete('docs', ['1', '2'])", desc: '按 ID 删除指定向量' },
+  ]
+
+  // DataPipe 示例
+  const datapipeFeatures = [
+    { name: '文本清洗', desc: '去除 HTML 标签、特殊字符、多余空白', api: 'datapipe.clean(text, options)' },
+    { name: '文本分块', desc: '将长文本按策略切分为小段', api: 'datapipe.chunk(text, options)' },
+    { name: '管道处理', desc: '组合多个处理步骤为流水线', api: 'datapipe.pipeline(steps).run(input)' },
+  ]
+
+  const datapipeOps = [
+    { op: 'Clean', code: "const cleaned = datapipe.clean(htmlContent, {\n  stripHtml: true,\n  trimWhitespace: true,\n  removeUrls: true,\n})", desc: '清洗 HTML 内容' },
+    { op: 'Chunk', code: "const chunks = datapipe.chunk(longText, {\n  strategy: 'recursive',\n  maxSize: 1000,\n  overlap: 200,\n})", desc: '按递归策略分块' },
+    { op: 'Pipeline', code: "const result = await datapipe.pipeline([\n  { type: 'clean', options: { stripHtml: true } },\n  { type: 'chunk', options: { maxSize: 500 } },\n]).run(rawContent)", desc: '组合清洗+分块管道' },
   ]
 
   // Crypto 示例状态
@@ -372,6 +402,170 @@ for await (const chunk of stream) {
 
 // 文本嵌入
 const embedding = await ai.embed('搜索查询文本')`}</code></pre>
+      </Card>
+    </div>
+  {/if}
+
+  <!-- ===== VecDB 向量数据库 ===== -->
+  {#if activeTab === 'vecdb'}
+    <div class="grid gap-6">
+      <Card>
+        <h3 class="text-lg font-semibold mb-2">@h-ai/vecdb — 向量数据库模块</h3>
+        <p class="text-base-content/60 text-sm mb-4">
+          统一的向量数据库接口，支持 LanceDB、pgvector、Qdrant，提供向量存储与语义搜索能力。适用于 RAG、推荐系统、语义检索等场景。
+        </p>
+        <div class="flex gap-2">
+          <Badge variant="success">LanceDB</Badge>
+          <Badge variant="info">pgvector</Badge>
+          <Badge variant="warning">Qdrant</Badge>
+        </div>
+      </Card>
+      <Card>
+        <h3 class="text-lg font-semibold mb-4">核心能力</h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {#each vecdbFeatures as feature}
+            <div class="p-4 rounded-lg bg-base-200/50">
+              <h4 class="font-medium text-base-content mb-1">{feature.name}</h4>
+              <p class="text-sm text-base-content/60 mb-2">{feature.desc}</p>
+              <code class="text-xs bg-base-200 px-2 py-1 rounded font-mono">{feature.api}</code>
+            </div>
+          {/each}
+        </div>
+      </Card>
+      <Card>
+        <h3 class="text-lg font-semibold mb-4">向量操作</h3>
+        <div class="space-y-3">
+          {#each vecdbOps as op}
+            <div class="flex items-start gap-4 p-4 bg-base-200 rounded-lg">
+              <Badge variant="primary" size="sm" class="shrink-0 mt-0.5">{op.op}</Badge>
+              <div class="flex-1 min-w-0">
+                <p class="text-sm text-base-content/70 mb-1">{op.desc}</p>
+                <code class="text-xs font-mono block overflow-x-auto">{op.code}</code>
+              </div>
+            </div>
+          {/each}
+        </div>
+      </Card>
+      <Card>
+        <h3 class="text-lg font-semibold mb-3">初始化与 RAG 示例</h3>
+        <pre class="bg-base-200 p-4 rounded-lg text-sm overflow-x-auto font-mono"><code>{`import { vecdb } from '@h-ai/vecdb'
+import { ai } from '@h-ai/ai'
+
+// 初始化（LanceDB 嵌入式）
+await vecdb.init({ type: 'lancedb', path: './data/vecdb' })
+
+// 创建集合
+await vecdb.createCollection('knowledge', 1536)
+
+// 文档入库: 嵌入 + 存储
+const embedding = await ai.embed('hai-framework 是一个 AI 优先的全栈框架')
+await vecdb.insert('knowledge', [{
+  id: 'doc-1',
+  vector: embedding,
+  metadata: { title: '框架介绍', source: 'docs' },
+}])
+
+// RAG 检索: 查询 → 嵌入 → 搜索
+const queryVector = await ai.embed('什么是 hai-framework？')
+const results = await vecdb.search('knowledge', queryVector, { topK: 3 })
+
+// 将检索结果作为 context 传给 LLM
+const context = results.map(r => r.metadata.title).join('\\n')
+const answer = await ai.chat({
+  messages: [
+    { role: 'system', content: \`基于以下知识回答:\\n\${context}\` },
+    { role: 'user', content: '什么是 hai-framework？' },
+  ],
+})
+
+// 关闭
+await vecdb.close()`}</code></pre>
+      </Card>
+    </div>
+  {/if}
+
+  <!-- ===== DataPipe 数据管道 ===== -->
+  {#if activeTab === 'datapipe'}
+    <div class="grid gap-6">
+      <Card>
+        <h3 class="text-lg font-semibold mb-2">@h-ai/datapipe — 数据处理管道</h3>
+        <p class="text-base-content/60 text-sm mb-4">
+          文本数据预处理工具集，提供清洗（HTML 去标签、URL 去除）、分块（递归/段落/句子）和管道编排能力。
+          适用于 RAG 数据入库前的预处理流程。
+        </p>
+        <div class="flex gap-2">
+          <Badge variant="success">Clean 清洗</Badge>
+          <Badge variant="info">Chunk 分块</Badge>
+          <Badge variant="warning">Pipeline 管道</Badge>
+        </div>
+        <Alert variant="info" class="mt-4">datapipe 为纯函数模块，无需 init/close 初始化，直接导入即可使用。</Alert>
+      </Card>
+      <Card>
+        <h3 class="text-lg font-semibold mb-4">核心能力</h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {#each datapipeFeatures as feature}
+            <div class="p-4 rounded-lg bg-base-200/50">
+              <h4 class="font-medium text-base-content mb-1">{feature.name}</h4>
+              <p class="text-sm text-base-content/60 mb-2">{feature.desc}</p>
+              <code class="text-xs bg-base-200 px-2 py-1 rounded font-mono">{feature.api}</code>
+            </div>
+          {/each}
+        </div>
+      </Card>
+      <Card>
+        <h3 class="text-lg font-semibold mb-4">操作示例</h3>
+        <div class="space-y-3">
+          {#each datapipeOps as op}
+            <div class="flex items-start gap-4 p-4 bg-base-200 rounded-lg">
+              <Badge variant="secondary" size="sm" class="shrink-0 mt-0.5">{op.op}</Badge>
+              <div class="flex-1 min-w-0">
+                <p class="text-sm text-base-content/70 mb-1">{op.desc}</p>
+                <pre class="text-xs font-mono overflow-x-auto">{op.code}</pre>
+              </div>
+            </div>
+          {/each}
+        </div>
+      </Card>
+      <Card>
+        <h3 class="text-lg font-semibold mb-3">RAG 预处理完整示例</h3>
+        <pre class="bg-base-200 p-4 rounded-lg text-sm overflow-x-auto font-mono"><code>{`import { datapipe } from '@h-ai/datapipe'
+import { ai } from '@h-ai/ai'
+import { vecdb } from '@h-ai/vecdb'
+
+// 1. 清洗原始 HTML 内容
+const cleaned = datapipe.clean(rawHtml, {
+  stripHtml: true,
+  trimWhitespace: true,
+  removeUrls: true,
+  normalizeUnicode: true,
+})
+
+// 2. 分块（递归策略，适合长文档）
+const chunks = datapipe.chunk(cleaned, {
+  strategy: 'recursive',
+  maxSize: 1000,
+  overlap: 200,
+})
+
+// 3. 嵌入并存入向量库
+for (const chunk of chunks) {
+  const vector = await ai.embed(chunk.text)
+  await vecdb.insert('knowledge', [{
+    id: chunk.id,
+    vector,
+    metadata: {
+      text: chunk.text,
+      index: chunk.index,
+    },
+  }])
+}
+
+// 也可以使用管道编排
+const pipeline = datapipe.pipeline([
+  { type: 'clean', options: { stripHtml: true } },
+  { type: 'chunk', options: { strategy: 'sentence', maxSize: 500 } },
+])
+const result = await pipeline.run(rawContent)`}</code></pre>
       </Card>
     </div>
   {/if}

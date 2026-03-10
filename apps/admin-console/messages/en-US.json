@@ -311,5 +311,7 @@
   "auth_forgot_email_sent_title": "Email Sent",
   "auth_forgot_email_sent_desc": "If this email is registered, you will receive a password reset email. Please check your inbox.",
   "auth_back_to_login": "Back to Login",
-  "meta_description": "hai Admin Console - Modern Admin Dashboard"
+  "meta_description": "hai Admin Console - Modern Admin Dashboard",
+  "modules_tab_vecdb": "VecDB",
+  "modules_tab_datapipe": "DataPipe"
 }

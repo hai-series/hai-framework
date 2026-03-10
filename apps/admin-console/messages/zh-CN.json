@@ -311,5 +311,7 @@
   "auth_forgot_email_sent_title": "邮件已发送",
   "auth_forgot_email_sent_desc": "如果该邮箱已注册，您将收到密码重置邮件，请检查收件箱。",
   "auth_back_to_login": "返回登录",
-  "meta_description": "hai 管理控制台 - 现代化管理后台"
+  "meta_description": "hai 管理控制台 - 现代化管理后台",
+  "modules_tab_vecdb": "VecDB 向量库",
+  "modules_tab_datapipe": "DataPipe 数据管道"
 }
