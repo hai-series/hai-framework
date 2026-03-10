@@ -273,6 +273,114 @@ export interface EntityListOptions {
   limit?: number
 }
 
+// ─── 文件导入类型 ───
+
+/**
+ * 文件导入输入（从文件路径读取内容后自动 ingest）
+ *
+ * 仅 Node.js 端可用。
+ *
+ * @example
+ * ```ts
+ * await knowledge.ingestFile({
+ *   filePath: '/data/docs/README.md',
+ *   documentId: 'readme',
+ * })
+ * ```
+ */
+export interface KnowledgeIngestFileInput {
+  /** 文件路径（绝对路径或相对路径） */
+  filePath: string
+  /** 文档唯一标识（可选，默认从文件名派生） */
+  documentId?: string
+  /** 文档标题（可选，默认为文件名） */
+  title?: string
+  /** 文件编码（默认 'utf-8'） */
+  encoding?: BufferEncoding
+  /** 集合名（可选，默认使用配置中的 collection） */
+  collection?: string
+  /** 附加元数据 */
+  metadata?: Record<string, unknown>
+  /** 是否启用实体提取 */
+  enableEntityExtraction?: boolean
+  /** 清洗选项 */
+  cleanOptions?: CleanOptionsInput
+  /** 分块选项 */
+  chunkOptions?: ChunkOptionsInput
+}
+
+// ─── 文档管理类型 ───
+
+/**
+ * 文档信息（列表展示用）
+ */
+export interface KnowledgeDocumentInfo {
+  /** 文档 ID */
+  documentId: string
+  /** 文档标题 */
+  title?: string
+  /** 文档来源 URL / 路径 */
+  url?: string
+  /** 分块数量 */
+  chunkCount: number
+  /** 关联实体数 */
+  entityCount: number
+  /** 创建时间（Unix 毫秒） */
+  createdAt: number
+}
+
+/**
+ * 文档列表查询选项
+ */
+export interface KnowledgeDocumentListOptions {
+  /** 集合名覆盖（不指定则使用配置中的 default） */
+  collection?: string
+  /** 偏移量 */
+  offset?: number
+  /** 每页数量（默认 20） */
+  limit?: number
+}
+
+/**
+ * 文档删除选项
+ */
+export interface KnowledgeDocumentRemoveOptions {
+  /** 集合名覆盖 */
+  collection?: string
+}
+
+// ─── 批量导入类型 ───
+
+/**
+ * 批量导入进度回调参数
+ */
+export interface KnowledgeIngestBatchProgress {
+  /** 已完成数量 */
+  completed: number
+  /** 总数量 */
+  total: number
+  /** 当前文档 ID */
+  currentDocumentId: string
+  /** 当前文档导入结果（失败时为 undefined） */
+  result?: KnowledgeIngestResult
+  /** 当前文档导入错误（成功时为 undefined） */
+  error?: AIError
+}
+
+/**
+ * 批量导入结果
+ */
+export interface KnowledgeIngestBatchResult {
+  /** 成功导入的文档数 */
+  successCount: number
+  /** 失败的文档数 */
+  failureCount: number
+  /** 各文档导入结果 */
+  results: Array<{ documentId: string, result?: KnowledgeIngestResult, error?: AIError }>
+  /** 总耗时（毫秒） */
+  duration: number
+}
+
 // ─── Knowledge 操作接口 ───
 
 /**
@@ -354,4 +462,45 @@ export interface KnowledgeOperations {
    * @returns 实体列表
    */
   listEntities: (options?: EntityListOptions) => Promise<Result<KnowledgeEntity[], AIError>>
+
+  /**
+   * 列出已导入的文档列表
+   *
+   * @param options - 列表选项
+   * @returns 文档信息列表
+   */
+  listDocuments: (options?: KnowledgeDocumentListOptions) => Promise<Result<KnowledgeDocumentInfo[], AIError>>
+
+  /**
+   * 删除已导入的文档（同时删除向量和实体关联）
+   *
+   * @param documentId - 文档 ID
+   * @param options - 删除选项
+   * @returns 成功返回 ok(undefined)
+   */
+  removeDocument: (documentId: string, options?: KnowledgeDocumentRemoveOptions) => Promise<Result<void, AIError>>
+
+  /**
+   * 从文件路径导入文档（仅 Node.js 端可用）
+   *
+   * 读取文件内容后自动调用 ingest() 完成导入。
+   *
+   * @param input - 文件导入输入
+   * @returns 导入结果
+   */
+  ingestFile: (input: KnowledgeIngestFileInput) => Promise<Result<KnowledgeIngestResult, AIError>>
+
+  /**
+   * 批量导入文档
+   *
+   * 依次执行 ingest()，通过 onProgress 回调报告进度，单个文档失败不中断整体流程。
+   *
+   * @param inputs - 文档导入输入列表
+   * @param onProgress - 每完成一个文档后的回调
+   * @returns 批量导入汇总结果
+   */
+  ingestBatch: (
+    inputs: KnowledgeIngestInput[],
+    onProgress?: (progress: KnowledgeIngestBatchProgress) => void,
+  ) => Promise<Result<KnowledgeIngestBatchResult, AIError>>
 }

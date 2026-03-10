@@ -66,7 +66,7 @@ export type ChatCompletionRequest
     /** 会话 ID（传入后 LLM 会自动关联到该会话） */
     sessionId?: string
     /** 是否持久化对话记录（默认 true；传入 false 时跳过记录，适用于内部调用如实体提取） */
-    persist?: boolean
+    enablePersist?: boolean
   }
 
 /** Token 使用统计 */
@@ -254,6 +254,24 @@ export interface ChatHistoryOptions {
 }
 
 /**
+ * ask/askStream 便捷方法选项
+ */
+export interface AskOptions {
+  /** 系统提示词 */
+  systemPrompt?: string
+  /** 使用的模型 */
+  model?: string
+  /** 交互主体 ID */
+  objectId?: string
+  /** 会话 ID */
+  sessionId?: string
+  /** 温度（0~2） */
+  temperature?: number
+  /** 是否持久化对话记录（默认 true；传入 false 时跳过记录） */
+  enablePersist?: boolean
+}
+
+/**
  * 对话记录
  *
  * 每次 `llm.chat()` 调用在传入 `objectId` 时自动保存的请求+响应快照。
@@ -317,6 +335,26 @@ export interface LLMOperations {
   getHistory: (scope: InteractionScope, options?: ChatHistoryOptions) => Promise<Result<ChatRecord[], AIError>>
   /** 列出指定 objectId 下的所有会话 */
   listSessions: (objectId: string) => Promise<Result<SessionInfo[], AIError>>
+
+  /**
+   * 便捷方法：发送纯文本问题，返回回复文本
+   *
+   * 内部构建 ChatCompletionRequest 并调用 `chat()`，只返回第一个 choice 的文本。
+   *
+   * @param question - 用户问题文本
+   * @param options - 可选的模型、systemPrompt、objectId、sessionId 等
+   * @returns 回复文本
+   */
+  ask: (question: string, options?: AskOptions) => Promise<Result<string, AIError>>
+
+  /**
+   * 便捷方法：流式发送纯文本问题，返回文本片段异步迭代器
+   *
+   * @param question - 用户问题文本
+   * @param options - 可选配置
+   * @returns 文本片段的异步迭代器
+   */
+  askStream: (question: string, options?: AskOptions) => AsyncIterable<string>
 }
 
 // ─── LLM 工厂依赖 ───

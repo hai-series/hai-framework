@@ -8,10 +8,141 @@ import type { MemoryConfig } from '../src/ai-config.js'
 import type { EmbeddingOperations } from '../src/embedding/ai-embedding-types.js'
 import type { LLMOperations } from '../src/llm/ai-llm-types.js'
 import type { MemoryEntry } from '../src/memory/ai-memory-types.js'
+import type { AIStore, AIVectorStore } from '../src/store/ai-store-types.js'
 import { describe, expect, it, vi } from 'vitest'
 import { extractMemories } from '../src/memory/ai-memory-extractor.js'
 import { createMemoryOperations } from '../src/memory/ai-memory-functions.js'
-import { InMemoryAIStore, InMemoryVectorStore } from '../src/store/ai-store-memory.js'
+
+// ─── Mock 工厂 ───
+
+/**
+ * 创建 Map 支撑的 AIStore mock（测试用）
+ */
+function createMockStore<T>(): AIStore<T> {
+  const data = new Map<string, T>()
+  return {
+    save: vi.fn(async (id: string, value: T) => {
+      data.set(id, { ...value as object } as T)
+    }),
+    saveMany: vi.fn(async (items: Array<{ id: string, data: T }>) => {
+      for (const item of items) {
+        data.set(item.id, { ...item.data as object } as T)
+      }
+    }),
+    get: vi.fn(async (id: string) => {
+      const v = data.get(id)
+      return v ? { ...v as object } as T : undefined
+    }),
+    query: vi.fn(async (filter) => {
+      let items = Array.from(data.values())
+      if (filter.where) {
+        items = items.filter(item => matchesWhere(item, filter.where))
+      }
+      if (filter.limit !== undefined)
+        items = items.slice(0, filter.limit)
+      return items
+    }),
+    queryPage: vi.fn(async (filter, page) => {
+      let items = Array.from(data.values())
+      if (filter.where) {
+        items = items.filter(item => matchesWhere(item, filter.where))
+      }
+      const total = items.length
+      return { items: items.slice(page.offset, page.offset + page.limit), total }
+    }),
+    remove: vi.fn(async (id: string) => data.delete(id)),
+    removeBy: vi.fn(async (filter) => {
+      let count = 0
+      for (const [id, item] of data.entries()) {
+        if (!filter.where || matchesWhere(item, filter.where)) {
+          data.delete(id)
+          count++
+        }
+      }
+      return count
+    }),
+    count: vi.fn(async (filter?) => {
+      if (!filter?.where)
+        return data.size
+      return Array.from(data.values()).filter(item => matchesWhere(item, filter.where)).length
+    }),
+    clear: vi.fn(async (filter?) => {
+      if (!filter?.where) {
+        data.clear()
+        return
+      }
+      for (const [id, item] of data.entries()) {
+        if (matchesWhere(item, filter.where))
+          data.delete(id)
+      }
+    }),
+  }
+}
+
+/**
+ * 创建 Map 支撑的 AIVectorStore mock（测试用）
+ */
+function createMockVectorStore(): AIVectorStore {
+  const vectors = new Map<string, { vector: number[], metadata?: Record<string, unknown> }>()
+  return {
+    upsert: vi.fn(async (id, vector, metadata) => {
+      vectors.set(id, { vector, metadata })
+    }),
+    search: vi.fn(async (queryVec, options) => {
+      const topK = options?.topK ?? 10
+      const results: Array<{ id: string, score: number, metadata?: Record<string, unknown> }> = []
+      for (const [id, entry] of vectors.entries()) {
+        const score = cosineSimilarity(queryVec, entry.vector)
+        results.push({ id, score, metadata: entry.metadata })
+      }
+      results.sort((a, b) => b.score - a.score)
+      return results.slice(0, topK)
+    }),
+    remove: vi.fn(async (id) => { vectors.delete(id) }),
+    removeBy: vi.fn(async () => 0),
+    clear: vi.fn(async () => { vectors.clear() }),
+  }
+}
+
+function matchesWhere(item: any, where: any): boolean {
+  if (!where)
+    return true
+  for (const [key, condition] of Object.entries(where)) {
+    const value = (item as any)[key]
+    if (condition === null || condition === undefined)
+      continue
+    if (typeof condition === 'object' && !Array.isArray(condition)) {
+      const ops = condition as Record<string, any>
+      if (ops.$in !== undefined && !ops.$in.includes(value))
+        return false
+      if (ops.$gte !== undefined && !(value >= ops.$gte))
+        return false
+      if (ops.$gt !== undefined && !(value > ops.$gt))
+        return false
+      if (ops.$lte !== undefined && !(value <= ops.$lte))
+        return false
+      if (ops.$lt !== undefined && !(value < ops.$lt))
+        return false
+    }
+    else {
+      if (value !== condition)
+        return false
+    }
+  }
+  return true
+}
+
+function cosineSimilarity(a: number[], b: number[]): number {
+  let dot = 0
+  let normA = 0
+  let normB = 0
+  for (let i = 0; i < a.length; i++) {
+    dot += a[i] * b[i]
+    normA += a[i] * a[i]
+    normB += b[i] * b[i]
+  }
+  return dot / (Math.sqrt(normA) * Math.sqrt(normB))
+}
 
 // ─── Mock 工厂 ───
 
@@ -73,195 +204,10 @@ function createTestMemoryOps(
   llm: LLMOperations,
   embedding: EmbeddingOperations | null,
 ) {
-  const store = new InMemoryAIStore<MemoryEntry>()
-  const vectorStore = new InMemoryVectorStore()
+  const store = createMockStore<MemoryEntry>()
+  const vectorStore = createMockVectorStore()
   return createMemoryOperations(config, llm, embedding, store, vectorStore)
 }
-
-// ─── InMemoryAIStore 测试 ───
-
-describe('inMemoryAIStore', () => {
-  it('save 和 get', async () => {
-    const store = new InMemoryAIStore<MemoryEntry>()
-    const entry: MemoryEntry = {
-      id: 'mem_1',
-      content: '用户喜欢中文',
-      type: 'preference',
-      importance: 0.8,
-      createdAt: Date.now(),
-      lastAccessedAt: Date.now(),
-      accessCount: 0,
-    }
-
-    await store.save('mem_1', entry)
-    const retrieved = await store.get('mem_1')
-
-    expect(retrieved).toBeDefined()
-    expect(retrieved!.content).toBe('用户喜欢中文')
-    expect(retrieved!.type).toBe('preference')
-  })
-
-  it('query 按 where 过滤', async () => {
-    const store = new InMemoryAIStore<MemoryEntry>()
-    const now = Date.now()
-    await store.save('1', { id: '1', content: '事实', type: 'fact', importance: 0.5, createdAt: now, lastAccessedAt: now, accessCount: 0 })
-    await store.save('2', { id: '2', content: '偏好', type: 'preference', importance: 0.5, createdAt: now, lastAccessedAt: now, accessCount: 0 })
-
-    const facts = await store.query({ where: { type: 'fact' } })
-    expect(facts).toHaveLength(1)
-    expect(facts[0].type).toBe('fact')
-  })
-
-  it('remove 删除记录', async () => {
-    const store = new InMemoryAIStore<MemoryEntry>()
-    const now = Date.now()
-    await store.save('1', { id: '1', content: '待删除', type: 'fact', importance: 0.5, createdAt: now, lastAccessedAt: now, accessCount: 0 })
-
-    const removed = await store.remove('1')
-    expect(removed).toBe(true)
-    expect(await store.get('1')).toBeUndefined()
-  })
-
-  it('clear 清空全部', async () => {
-    const store = new InMemoryAIStore<MemoryEntry>()
-    const now = Date.now()
-    await store.save('1', { id: '1', content: '条目1', type: 'fact', importance: 0.5, createdAt: now, lastAccessedAt: now, accessCount: 0 })
-    await store.save('2', { id: '2', content: '条目2', type: 'fact', importance: 0.5, createdAt: now, lastAccessedAt: now, accessCount: 0 })
-
-    await store.clear()
-    expect(await store.count()).toBe(0)
-  })
-
-  it('queryPage 分页查询', async () => {
-    const store = new InMemoryAIStore<MemoryEntry>()
-    const now = Date.now()
-    for (let i = 0; i < 5; i++) {
-      await store.save(`${i}`, { id: `${i}`, content: `条目${i}`, type: 'fact', importance: 0.5, createdAt: now + i, lastAccessedAt: now, accessCount: 0 })
-    }
-
-    const page = await store.queryPage({}, { offset: 1, limit: 2 })
-    expect(page.items).toHaveLength(2)
-    expect(page.total).toBe(5)
-  })
-
-  it('query 使用 $in 操作符过滤', async () => {
-    const store = new InMemoryAIStore<MemoryEntry>()
-    const now = Date.now()
-    await store.save('1', { id: '1', content: '事实', type: 'fact', importance: 0.5, createdAt: now, lastAccessedAt: now, accessCount: 0 })
-    await store.save('2', { id: '2', content: '偏好', type: 'preference', importance: 0.5, createdAt: now, lastAccessedAt: now, accessCount: 0 })
-    await store.save('3', { id: '3', content: '实体', type: 'entity', importance: 0.5, createdAt: now, lastAccessedAt: now, accessCount: 0 })
-
-    const results = await store.query({ where: { type: { $in: ['fact', 'preference'] } } })
-    expect(results).toHaveLength(2)
-    expect(results.map(r => r.type).sort()).toEqual(['fact', 'preference'])
-  })
-
-  it('query 使用 $gte 操作符过滤', async () => {
-    const store = new InMemoryAIStore<MemoryEntry>()
-    const now = Date.now()
-    await store.save('1', { id: '1', content: '低', type: 'fact', importance: 0.2, createdAt: now, lastAccessedAt: now, accessCount: 0 })
-    await store.save('2', { id: '2', content: '中', type: 'fact', importance: 0.5, createdAt: now, lastAccessedAt: now, accessCount: 0 })
-    await store.save('3', { id: '3', content: '高', type: 'fact', importance: 0.8, createdAt: now, lastAccessedAt: now, accessCount: 0 })
-
-    const results = await store.query({ where: { importance: { $gte: 0.5 } } })
-    expect(results).toHaveLength(2)
-    expect(results.every(r => r.importance >= 0.5)).toBe(true)
-  })
-
-  it('query 使用 $gt / $lt 操作符过滤', async () => {
-    const store = new InMemoryAIStore<MemoryEntry>()
-    const now = Date.now()
-    await store.save('1', { id: '1', content: '低', type: 'fact', importance: 0.2, createdAt: now, lastAccessedAt: now, accessCount: 0 })
-    await store.save('2', { id: '2', content: '中', type: 'fact', importance: 0.5, createdAt: now, lastAccessedAt: now, accessCount: 0 })
-    await store.save('3', { id: '3', content: '高', type: 'fact', importance: 0.8, createdAt: now, lastAccessedAt: now, accessCount: 0 })
-
-    const results = await store.query({ where: { importance: { $gt: 0.2, $lt: 0.8 } } })
-    expect(results).toHaveLength(1)
-    expect(results[0].importance).toBe(0.5)
-  })
-
-  it('query 使用 $lte 操作符过滤', async () => {
-    const store = new InMemoryAIStore<MemoryEntry>()
-    const now = Date.now()
-    await store.save('1', { id: '1', content: '低', type: 'fact', importance: 0.2, createdAt: now, lastAccessedAt: now, accessCount: 0 })
-    await store.save('2', { id: '2', content: '中', type: 'fact', importance: 0.5, createdAt: now, lastAccessedAt: now, accessCount: 0 })
-    await store.save('3', { id: '3', content: '高', type: 'fact', importance: 0.8, createdAt: now, lastAccessedAt: now, accessCount: 0 })
-
-    const results = await store.query({ where: { importance: { $lte: 0.5 } } })
-    expect(results).toHaveLength(2)
-    expect(results.every(r => r.importance <= 0.5)).toBe(true)
-  })
-
-  it('query 组合等值与操作符条件', async () => {
-    const store = new InMemoryAIStore<MemoryEntry>()
-    const now = Date.now()
-    await store.save('1', { id: '1', content: '高重要事实', type: 'fact', importance: 0.8, createdAt: now, lastAccessedAt: now, accessCount: 0 })
-    await store.save('2', { id: '2', content: '低重要事实', type: 'fact', importance: 0.2, createdAt: now, lastAccessedAt: now, accessCount: 0 })
-    await store.save('3', { id: '3', content: '高重要偏好', type: 'preference', importance: 0.8, createdAt: now, lastAccessedAt: now, accessCount: 0 })
-
-    // 等值 type + 范围 importance
-    const results = await store.query({ where: { type: 'fact', importance: { $gte: 0.5 } } })
-    expect(results).toHaveLength(1)
-    expect(results[0].content).toBe('高重要事实')
-  })
-
-  it('removeBy 使用操作符条件', async () => {
-    const store = new InMemoryAIStore<MemoryEntry>()
-    const now = Date.now()
-    await store.save('1', { id: '1', content: '低', type: 'fact', importance: 0.2, createdAt: now, lastAccessedAt: now, accessCount: 0 })
-    await store.save('2', { id: '2', content: '高', type: 'fact', importance: 0.8, createdAt: now, lastAccessedAt: now, accessCount: 0 })
-
-    const removed = await store.removeBy({ where: { importance: { $lt: 0.5 } } })
-    expect(removed).toBe(1)
-    expect(await store.count()).toBe(1)
-    expect((await store.get('2'))!.importance).toBe(0.8)
-  })
-
-  it('count 使用操作符条件', async () => {
-    const store = new InMemoryAIStore<MemoryEntry>()
-    const now = Date.now()
-    await store.save('1', { id: '1', content: '事实', type: 'fact', importance: 0.5, createdAt: now, lastAccessedAt: now, accessCount: 0 })
-    await store.save('2', { id: '2', content: '偏好', type: 'preference', importance: 0.5, createdAt: now, lastAccessedAt: now, accessCount: 0 })
-    await store.save('3', { id: '3', content: '实体', type: 'entity', importance: 0.5, createdAt: now, lastAccessedAt: now, accessCount: 0 })
-
-    const cnt = await store.count({ where: { type: { $in: ['fact', 'entity'] } } })
-    expect(cnt).toBe(2)
-  })
-})
-
-// ─── InMemoryVectorStore 测试 ───
-
-describe('inMemoryVectorStore', () => {
-  it('upsert 和 search', async () => {
-    const store = new InMemoryVectorStore()
-    await store.upsert('1', [0.9, 0.1, 0.0], { type: 'fact' })
-    await store.upsert('2', [0.1, 0.9, 0.0], { type: 'preference' })
-
-    const results = await store.search([0.85, 0.15, 0.0], { topK: 1 })
-    expect(results).toHaveLength(1)
-    expect(results[0].id).toBe('1')
-    expect(results[0].score).toBeGreaterThan(0.9)
-  })
-
-  it('remove 删除向量', async () => {
-    const store = new InMemoryVectorStore()
-    await store.upsert('1', [0.9, 0.1, 0.0])
-    await store.remove('1')
-
-    const results = await store.search([0.9, 0.1, 0.0])
-    expect(results).toHaveLength(0)
-  })
-
-  it('clear 清空全部', async () => {
-    const store = new InMemoryVectorStore()
-    await store.upsert('1', [0.9, 0.1, 0.0])
-    await store.upsert('2', [0.1, 0.9, 0.0])
-
-    await store.clear()
-    const results = await store.search([0.9, 0.1, 0.0])
-    expect(results).toHaveLength(0)
-  })
-})
 
 // ─── extractMemories 测试 ───
 
@@ -546,5 +492,54 @@ describe('createMemoryOperations', () => {
       expect(result.data.length).toBeGreaterThan(0)
       expect(result.data[0].content).toContain('中文')
     }
+  })
+
+  // ─── update 方法测试 ───
+
+  it('update 修改 content', async () => {
+    const llm = createMockLLM([])
+    const embedding = createMockEmbedding()
+    const ops = createTestMemoryOps(defaultConfig, llm, embedding)
+
+    const addResult = await ops.add({ content: '旧内容', type: 'fact', importance: 0.5 })
+    expect(addResult.success).toBe(true)
+    if (!addResult.success)
+      return
+
+    const memoryId = addResult.data.id
+    const updateResult = await ops.update(memoryId, { content: '新内容' })
+    expect(updateResult.success).toBe(true)
+    if (updateResult.success) {
+      expect(updateResult.data.content).toBe('新内容')
+      expect(updateResult.data.id).toBe(memoryId)
+    }
+  })
+
+  it('update 修改 importance', async () => {
+    const llm = createMockLLM([])
+    const embedding = createMockEmbedding()
+    const ops = createTestMemoryOps(defaultConfig, llm, embedding)
+
+    const addResult = await ops.add({ content: '记忆', type: 'fact', importance: 0.3 })
+    expect(addResult.success).toBe(true)
+    if (!addResult.success)
+      return
+
+    const memoryId = addResult.data.id
+    const updateResult = await ops.update(memoryId, { importance: 0.9 })
+    expect(updateResult.success).toBe(true)
+    if (updateResult.success) {
+      expect(updateResult.data.importance).toBe(0.9)
+      expect(updateResult.data.content).toBe('记忆') // content 不变
+    }
+  })
+
+  it('update 不存在的记忆返回错误', async () => {
+    const llm = createMockLLM([])
+    const embedding = createMockEmbedding()
+    const ops = createTestMemoryOps(defaultConfig, llm, embedding)
+
+    const result = await ops.update('non-existent-id', { content: '新内容' })
+    expect(result.success).toBe(false)
   })
 })

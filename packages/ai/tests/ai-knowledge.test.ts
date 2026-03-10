@@ -149,7 +149,7 @@ function createMockDatapipe() {
 }
 
 const DEFAULT_CONFIG = {
-  collection: 'knowledge',
+  collection: 'hai_ai_knowledge',
   dimension: 3,
   enableEntityExtraction: false,
   chunkMode: 'markdown' as const,
@@ -178,7 +178,7 @@ describe('knowledge setup', () => {
     expect(result.success).toBe(true)
 
     // 应创建集合
-    expect(vecdb.collection.create).toHaveBeenCalledWith('knowledge', { dimension: 3 })
+    expect(vecdb.collection.create).toHaveBeenCalledWith('hai_ai_knowledge', { dimension: 3 })
     // 应创建 schema（execute 调用 DDL）
     expect(reldb._executeCalls.length).toBeGreaterThan(0)
   })
@@ -222,7 +222,7 @@ describe('knowledge setup', () => {
 
   it('集合已存在时不重复创建', async () => {
     const vecdb = createMockVecdb()
-    vecdb._collections.add('knowledge')
+    vecdb._collections.add('hai_ai_knowledge')
 
     const ops = createKnowledgeOperations(
       DEFAULT_CONFIG,
@@ -315,7 +315,7 @@ describe('knowledge ingest', () => {
     // embedding.embedBatch 应被调用（2 个 chunk）
     expect(embedding.embedBatch).toHaveBeenCalled()
     // vecdb.upsert 应被调用
-    expect(vecdb.vector.upsert).toHaveBeenCalledWith('knowledge', expect.any(Array))
+    expect(vecdb.vector.upsert).toHaveBeenCalledWith('hai_ai_knowledge', expect.any(Array))
   })
 
   it('分块失败时退回整文本单一 chunk', async () => {
@@ -380,7 +380,7 @@ describe('knowledge ingest', () => {
   it('vecdb.vector.upsert 失败时 ingest 返回错误', async () => {
     const failVecdb = createMockVecdb()
     failVecdb.vector.upsert = vi.fn(async () => ({ success: false, error: { message: 'upsert failed' } } as any))
-    failVecdb._collections.add('knowledge') // 跳过 create
+    failVecdb._collections.add('hai_ai_knowledge') // 跳过 create
 
     const ops = createKnowledgeOperations(
       DEFAULT_CONFIG,
@@ -462,7 +462,7 @@ describe('knowledge retrieve', () => {
       // 每个 item 应有 citation
       for (const item of result.data.items) {
         expect(item.citation).toBeDefined()
-        expect(item.citation.collection).toBe('knowledge')
+        expect(item.citation.collection).toBe('hai_ai_knowledge')
         expect(item.score).toBeGreaterThan(0)
       }
     }
@@ -606,5 +606,212 @@ describe('knowledge 实体查询', () => {
     expect(lastCall.sql).toContain('type = ?')
     expect(lastCall.sql).toContain('LIKE')
     expect(lastCall.sql).toContain('LIMIT')
+  })
+})
+
+// ─── listDocuments ───
+
+describe('knowledge listDocuments', () => {
+  it('未 setup 时返回 KNOWLEDGE_NOT_SETUP', async () => {
+    const ops = createKnowledgeOperations(
+      DEFAULT_CONFIG,
+      createMockLLM(),
+      createMockEmbedding(),
+      createMockVecdb(),
+      createMockReldb(),
+      createMockDatapipe(),
+    )
+
+    const result = await ops.listDocuments()
+    expect(result.success).toBe(false)
+    if (!result.success)
+      expect(result.error.code).toBe(AIErrorCode.KNOWLEDGE_NOT_SETUP)
+  })
+
+  it('正常返回文档列表（空结果）', async () => {
+    const reldb = createMockReldb()
+    const ops = createKnowledgeOperations(
+      DEFAULT_CONFIG,
+      createMockLLM(),
+      createMockEmbedding(),
+      createMockVecdb(),
+      reldb,
+      createMockDatapipe(),
+    )
+    await ops.setup()
+
+    const result = await ops.listDocuments()
+    expect(result.success).toBe(true)
+    if (result.success)
+      expect(result.data).toEqual([])
+  })
+
+  it('传递分页参数', async () => {
+    const reldb = createMockReldb()
+    const ops = createKnowledgeOperations(
+      DEFAULT_CONFIG,
+      createMockLLM(),
+      createMockEmbedding(),
+      createMockVecdb(),
+      reldb,
+      createMockDatapipe(),
+    )
+    await ops.setup()
+
+    const result = await ops.listDocuments({ offset: 10, limit: 5 })
+    expect(result.success).toBe(true)
+
+    // 验证 reldb query 被调用且包含分页
+    expect(reldb._queryCalls.length).toBeGreaterThan(0)
+    const lastCall = reldb._queryCalls[reldb._queryCalls.length - 1]
+    expect(lastCall.sql).toContain('LIMIT')
+  })
+})
+
+// ─── removeDocument ───
+
+describe('knowledge removeDocument', () => {
+  it('未 setup 时返回 KNOWLEDGE_NOT_SETUP', async () => {
+    const ops = createKnowledgeOperations(
+      DEFAULT_CONFIG,
+      createMockLLM(),
+      createMockEmbedding(),
+      createMockVecdb(),
+      createMockReldb(),
+      createMockDatapipe(),
+    )
+
+    const result = await ops.removeDocument('doc-1')
+    expect(result.success).toBe(false)
+    if (!result.success)
+      expect(result.error.code).toBe(AIErrorCode.KNOWLEDGE_NOT_SETUP)
+  })
+
+  it('正常删除文档 — 清理向量 + 实体关联 + 元数据', async () => {
+    const vecdb = createMockVecdb()
+    // 添加 delete mock
+    ;(vecdb.vector as Record<string, unknown>).delete = vi.fn(async () => ({ success: true, data: undefined }))
+    const reldb = createMockReldb()
+
+    const ops = createKnowledgeOperations(
+      DEFAULT_CONFIG,
+      createMockLLM(),
+      createMockEmbedding(),
+      vecdb,
+      reldb,
+      createMockDatapipe(),
+    )
+    await ops.setup()
+
+    const result = await ops.removeDocument('doc-1')
+    expect(result.success).toBe(true)
+
+    // 验证 vecdb.vector.delete 被调用
+    expect((vecdb.vector as Record<string, unknown> & { delete: ReturnType<typeof vi.fn> }).delete).toHaveBeenCalled()
+
+    // 验证 reldb 执行了删除操作（实体关联 + 文档元数据）
+    const deleteCalls = reldb._executeCalls.filter(c => c.sql.includes('DELETE'))
+    expect(deleteCalls.length).toBeGreaterThanOrEqual(2)
+  })
+})
+
+// ─── ingestBatch ───
+
+describe('knowledge ingestBatch', () => {
+  it('批量导入多个文档 — 全部成功', async () => {
+    const vecdb = createMockVecdb()
+    const reldb = createMockReldb()
+
+    const ops = createKnowledgeOperations(
+      DEFAULT_CONFIG,
+      createMockLLM(),
+      createMockEmbedding(),
+      vecdb,
+      reldb,
+      createMockDatapipe(),
+    )
+    await ops.setup()
+
+    const inputs = [
+      { documentId: 'doc-1', content: 'First document content' },
+      { documentId: 'doc-2', content: 'Second document content' },
+    ]
+
+    const progressCalls: unknown[] = []
+    const result = await ops.ingestBatch(inputs, (progress) => {
+      progressCalls.push(progress)
+    })
+
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.successCount).toBe(2)
+      expect(result.data.failureCount).toBe(0)
+      expect(result.data.results).toHaveLength(2)
+      expect(result.data.duration).toBeGreaterThanOrEqual(0)
+    }
+
+    // 验证 onProgress 被调用两次
+    expect(progressCalls).toHaveLength(2)
+  })
+
+  it('部分导入失败 — 不中断后续', async () => {
+    const vecdb = createMockVecdb()
+    const reldb = createMockReldb()
+    const embedding = createMockEmbedding()
+
+    // 第一次 embedBatch 失败，第二次成功
+    let callCount = 0
+    embedding.embedBatch = vi.fn(async (texts: string[]) => {
+      callCount++
+      if (callCount === 1)
+        return { success: false, error: { message: 'embedding failed' } } as any
+      return { success: true, data: texts.map(() => [0.1, 0.2, 0.3]) } as any
+    }) as any
+
+    const ops = createKnowledgeOperations(
+      DEFAULT_CONFIG,
+      createMockLLM(),
+      embedding,
+      vecdb,
+      reldb,
+      createMockDatapipe(),
+    )
+    await ops.setup()
+
+    const inputs = [
+      { documentId: 'doc-fail', content: 'This will fail' },
+      { documentId: 'doc-ok', content: 'This will succeed' },
+    ]
+
+    const result = await ops.ingestBatch(inputs)
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.successCount).toBe(1)
+      expect(result.data.failureCount).toBe(1)
+      expect(result.data.results).toHaveLength(2)
+      // 第一个应有 error，第二个应有 result
+      expect(result.data.results[0].error).toBeDefined()
+      expect(result.data.results[1].result).toBeDefined()
+    }
+  })
+
+  it('空输入 — 返回零结果', async () => {
+    const ops = createKnowledgeOperations(
+      DEFAULT_CONFIG,
+      createMockLLM(),
+      createMockEmbedding(),
+      createMockVecdb(),
+      createMockReldb(),
+      createMockDatapipe(),
+    )
+    await ops.setup()
+
+    const result = await ops.ingestBatch([])
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.successCount).toBe(0)
+      expect(result.data.failureCount).toBe(0)
+      expect(result.data.results).toHaveLength(0)
+    }
   })
 })

@@ -1089,3 +1089,86 @@ describe('ai.llm.chatStream 记录保存', () => {
     }
   })
 })
+
+// =============================================================================
+// ai.llm.ask / askStream 便捷方法
+// =============================================================================
+
+describe('ai.llm.ask', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    constructorCalls.length = 0
+    const initResult = ai.init({ llm: { apiKey: 'sk-test', model: 'gpt-4o-mini' } })
+    expect(initResult.success).toBe(true)
+  })
+
+  afterEach(() => {
+    ai.close()
+  })
+
+  it('简单问答返回文本', async () => {
+    mockCreate.mockResolvedValue(makeSDKChatCompletion('这是回答'))
+
+    const result = await ai.llm.ask('你好')
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data).toBe('这是回答')
+    }
+  })
+
+  it('支持 systemPrompt 参数', async () => {
+    mockCreate.mockResolvedValue(makeSDKChatCompletion('定制回答'))
+
+    const result = await ai.llm.ask('你好', { systemPrompt: '你是一个翻译助手' })
+    expect(result.success).toBe(true)
+
+    // 验证传给 SDK 的 messages 包含 system 消息
+    const sdkCall = mockCreate.mock.calls[0][0]
+    expect(sdkCall.messages[0].role).toBe('system')
+    expect(sdkCall.messages[0].content).toBe('你是一个翻译助手')
+  })
+
+  it('支持 model 参数', async () => {
+    mockCreate.mockResolvedValue(makeSDKChatCompletion('model answer'))
+
+    await ai.llm.ask('test', { model: 'gpt-4o' })
+
+    const sdkCall = mockCreate.mock.calls[0][0]
+    expect(sdkCall.model).toBe('gpt-4o')
+  })
+
+  it('lLM 失败时返回错误', async () => {
+    mockCreate.mockRejectedValue(new MockAPIError(500, 'Server error'))
+
+    const result = await ai.llm.ask('test')
+    expect(result.success).toBe(false)
+  })
+})
+
+describe('ai.llm.askStream', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    constructorCalls.length = 0
+    const initResult = ai.init({ llm: { apiKey: 'sk-test', model: 'gpt-4o-mini' } })
+    expect(initResult.success).toBe(true)
+  })
+
+  afterEach(() => {
+    ai.close()
+  })
+
+  it('流式问答返回文本片段', async () => {
+    mockCreate.mockResolvedValue((async function* () {
+      yield makeSDKChunk('Hello')
+      yield makeSDKChunk(' World')
+      yield makeSDKChunk(undefined, { finishReason: 'stop' })
+    })())
+
+    const chunks: string[] = []
+    for await (const text of ai.llm.askStream('你好')) {
+      chunks.push(text)
+    }
+
+    expect(chunks).toEqual(['Hello', ' World'])
+  })
+})

@@ -1,15 +1,76 @@
 /**
  * AI Context 子模块单元测试
  *
- * 测试上下文压缩（滑动窗口、摘要、混合）、Token 估算、摘要生成、有状态管理器。
+ * 测试有状态上下文管理器（ContextManager）：创建、追加消息、自动压缩、Token 使用量、重置。
+ * Token / Summary / Compress 的测试已拆分到各自的测试文件。
  */
 
-import type { ContextConfig } from '../src/ai-config.js'
-import type { ChatMessage, LLMOperations } from '../src/llm/ai-llm-types.js'
+import type { CompressConfig, SummaryConfig, TokenConfig } from '../src/ai-config.js'
+import type { LLMOperations } from '../src/llm/ai-llm-types.js'
+import type { AIStore, SessionInfo } from '../src/store/ai-store-types.js'
 
 import { describe, expect, it, vi } from 'vitest'
+import { createCompressOperations } from '../src/compress/ai-compress-functions.js'
 import { createContextOperations } from '../src/context/ai-context-functions.js'
-import { estimateMessagesTokens, estimateTextTokens } from '../src/context/ai-context-token.js'
+import { createSummaryOperations } from '../src/summary/ai-summary-functions.js'
+import { createTokenOperations } from '../src/token/ai-token-functions.js'
+
+// ─── Mock 工厂 ───
+
+/**
+ * 创建 Map 支撑的 AIStore mock（测试用）
+ */
+function createMockStore<T>(): AIStore<T> {
+  const data = new Map<string, T>()
+  return {
+    save: vi.fn(async (id: string, value: T) => {
+      data.set(id, { ...value as object } as T)
+    }),
+    saveMany: vi.fn(async (items: Array<{ id: string, data: T }>) => {
+      for (const item of items) {
+        data.set(item.id, { ...item.data as object } as T)
+      }
+    }),
+    get: vi.fn(async (id: string) => {
+      const v = data.get(id)
+      return v ? { ...v as object } as T : undefined
+    }),
+    query: vi.fn(async (filter) => {
+      let items = Array.from(data.values())
+      if (filter.where) {
+        items = items.filter((item) => {
+          for (const [key, condition] of Object.entries(filter.where!)) {
+            if ((item as Record<string, unknown>)[key] !== condition)
+              return false
+          }
+          return true
+        })
+      }
+      if (filter.orderBy) {
+        const { field, direction } = filter.orderBy
+        items.sort((a, b) => {
+          const va = (a as Record<string, unknown>)[field as string]
+          const vb = (b as Record<string, unknown>)[field as string]
+          if (va === vb)
+            return 0
+          const cmp = va! < vb! ? -1 : 1
+          return direction === 'desc' ? -cmp : cmp
+        })
+      }
+      if (filter.limit !== undefined)
+        items = items.slice(0, filter.limit)
+      return items
+    }),
+    queryPage: vi.fn(async (_filter, page) => {
+      const items = Array.from(data.values())
+      return { items: items.slice(page.offset, page.offset + page.limit), total: items.length }
+    }),
+    remove: vi.fn(async (id: string) => data.delete(id)),
+    removeBy: vi.fn(async () => 0),
+    count: vi.fn(async () => data.size),
+    clear: vi.fn(async () => { data.clear() }),
+  }
+}
 
 // ─── Mock 工厂 ───
 
@@ -40,276 +101,50 @@ function createMockLLM(responses: Array<{ content: string | null }>): LLMOperati
   } as unknown as LLMOperations
 }
 
-const defaultConfig: ContextConfig = {
+const defaultLLMConfig = {
+  baseUrl: 'https://api.openai.com/v1',
+  model: 'gpt-4o-mini',
+  apiKey: 'test-key',
+  maxTokens: 4096,
+  temperature: 0.7,
+  timeout: 60000,
+}
+
+const defaultTokenConfig: TokenConfig = { tokenRatio: 0.25 }
+const defaultSummaryConfig: SummaryConfig = {}
+const defaultCompressConfig: CompressConfig = {
   defaultStrategy: 'hybrid',
   defaultMaxTokens: 0,
   preserveLastN: 4,
-  tokenRatio: 0.25,
 }
 
 /**
- * 生成 N 条用户/助手交替消息
+ * 便捷工厂：从独立配置 + llm + modelMaxTokens 创建完整的 ContextOperations
  */
-function generateMessages(count: number, msgLength = 200): ChatMessage[] {
-  const messages: ChatMessage[] = []
-  for (let i = 0; i < count; i++) {
-    const role = i % 2 === 0 ? 'user' : 'assistant'
-    const content = `Message ${i}: ${'x'.repeat(msgLength)}`
-    if (role === 'user') {
-      messages.push({ role: 'user', content })
-    }
-    else {
-      messages.push({ role: 'assistant', content })
-    }
-  }
-  return messages
+function createOps(
+  compressConfig: CompressConfig,
+  llm: LLMOperations,
+  modelMaxTokens: number,
+) {
+  const tokenOps = createTokenOperations(defaultTokenConfig)
+  const summaryOps = createSummaryOperations(defaultLLMConfig, llm, tokenOps, defaultSummaryConfig)
+  const compressOps = createCompressOperations(
+    compressConfig,
+    tokenOps,
+    summaryOps,
+    modelMaxTokens,
+  )
+  return createContextOperations(compressConfig, tokenOps, compressOps)
 }
-
-// ─── Token 估算测试 ───
-
-describe('estimateTextTokens', () => {
-  it('英文文本估算', () => {
-    const text = 'Hello world, this is a test string'
-    const tokens = estimateTextTokens(text, 0.25)
-    expect(tokens).toBeGreaterThan(0)
-    // 33 字符 * 0.25 ≈ 9 tokens
-    expect(tokens).toBeLessThan(20)
-  })
-
-  it('中文文本估算（每字约 1.5 token）', () => {
-    const text = '你好世界测试'
-    const tokens = estimateTextTokens(text, 0.25)
-    // 6 个中文字 * 1.5 = 9 tokens
-    expect(tokens).toBe(9)
-  })
-
-  it('空文本返回 0', () => {
-    expect(estimateTextTokens('', 0.25)).toBe(0)
-  })
-
-  it('混合中英文', () => {
-    const text = '你好 Hello 世界 World'
-    const tokens = estimateTextTokens(text, 0.25)
-    // 4 个中文字 * 1.5 = 6, 其余约 (12 chars * 0.25) = 3; total ≈ 9
-    expect(tokens).toBeGreaterThan(5)
-  })
-})
-
-describe('estimateMessagesTokens', () => {
-  it('计算消息 token 包含开销', () => {
-    const messages: ChatMessage[] = [
-      { role: 'system', content: 'System prompt' },
-      { role: 'user', content: 'Hello' },
-    ]
-    const tokens = estimateMessagesTokens(messages, 0.25)
-    // 每条消息 4 token 开销 + 内容 + 2 回复标记
-    expect(tokens).toBeGreaterThan(10)
-  })
-
-  it('空消息列表返回基础开销', () => {
-    const tokens = estimateMessagesTokens([], 0.25)
-    // 只有回复起始标记 2
-    expect(tokens).toBe(2)
-  })
-})
-
-// ─── compress 测试 ───
-
-describe('context tryCompress', () => {
-  it('不需要压缩时原样返回', async () => {
-    const llm = createMockLLM([])
-    const ops = createContextOperations(defaultConfig, llm, 100000)
-
-    const messages: ChatMessage[] = [
-      { role: 'user', content: 'Hello' },
-      { role: 'assistant', content: 'Hi' },
-    ]
-
-    const result = await ops.tryCompress(messages, { maxTokens: 10000 })
-    expect(result.success).toBe(true)
-    if (result.success) {
-      expect(result.data.messages).toHaveLength(2)
-      expect(result.data.removedCount).toBe(0)
-      expect(result.data.originalTokens).toBe(result.data.compressedTokens)
-    }
-  })
-
-  it('sliding-window 截断旧消息', async () => {
-    const llm = createMockLLM([])
-    const ops = createContextOperations(defaultConfig, llm, 8000)
-
-    // 生成 20 条长消息
-    const messages = generateMessages(20, 500)
-
-    const result = await ops.tryCompress(messages, {
-      strategy: 'sliding-window',
-      maxTokens: 500,
-      preserveLastN: 4,
-    })
-
-    expect(result.success).toBe(true)
-    if (result.success) {
-      expect(result.data.removedCount).toBeGreaterThan(0)
-      expect(result.data.compressedTokens).toBeLessThanOrEqual(500)
-      expect(result.data.messages.length).toBeLessThan(messages.length)
-    }
-  })
-
-  it('sliding-window 保留 system 消息', async () => {
-    const llm = createMockLLM([])
-    const ops = createContextOperations(defaultConfig, llm, 8000)
-
-    const messages: ChatMessage[] = [
-      { role: 'system', content: 'You are a helpful assistant' },
-      ...generateMessages(20, 500),
-    ]
-
-    const result = await ops.tryCompress(messages, {
-      strategy: 'sliding-window',
-      maxTokens: 500,
-      preserveSystem: true,
-      preserveLastN: 2,
-    })
-
-    expect(result.success).toBe(true)
-    if (result.success) {
-      const systemMsgs = result.data.messages.filter(m => m.role === 'system')
-      expect(systemMsgs.length).toBeGreaterThanOrEqual(1)
-      expect((systemMsgs[0] as { content: string }).content).toBe('You are a helpful assistant')
-    }
-  })
-
-  it('summary 策略生成摘要替换旧消息', async () => {
-    const llm = createMockLLM([{
-      content: 'Summary: The user asked about TypeScript and received explanations.',
-    }])
-    const ops = createContextOperations(defaultConfig, llm, 8000)
-
-    const messages = generateMessages(20, 500)
-
-    const result = await ops.tryCompress(messages, {
-      strategy: 'summary',
-      maxTokens: 500,
-      preserveLastN: 4,
-    })
-
-    expect(result.success).toBe(true)
-    if (result.success) {
-      expect(result.data.summary).toBeDefined()
-      expect(result.data.removedCount).toBeGreaterThan(0)
-      // 应包含摘要消息
-      const summaryMsg = result.data.messages.find(m =>
-        m.role === 'system' && (m as { content: string }).content.includes('[Conversation Summary]'),
-      )
-      expect(summaryMsg).toBeDefined()
-    }
-  })
-
-  it('hybrid 策略先窗口后摘要', async () => {
-    const llm = createMockLLM([{
-      content: 'Hybrid summary of older messages.',
-    }])
-    const ops = createContextOperations(defaultConfig, llm, 8000)
-
-    const messages = generateMessages(30, 500)
-
-    const result = await ops.tryCompress(messages, {
-      strategy: 'hybrid',
-      maxTokens: 500,
-      preserveLastN: 2,
-    })
-
-    expect(result.success).toBe(true)
-    if (result.success) {
-      expect(result.data.removedCount).toBeGreaterThan(0)
-    }
-  })
-})
-
-// ─── summarize 测试 ───
-
-describe('context summarize', () => {
-  it('生成消息摘要', async () => {
-    const llm = createMockLLM([{
-      content: 'The user discussed project architecture and testing strategies.',
-    }])
-    const ops = createContextOperations(defaultConfig, llm, 8000)
-
-    const messages: ChatMessage[] = [
-      { role: 'user', content: 'Let\'s talk about the project architecture.' },
-      { role: 'assistant', content: 'Sure, what aspects are you interested in?' },
-      { role: 'user', content: 'Testing strategies specifically.' },
-    ]
-
-    const result = await ops.summarize(messages)
-    expect(result.success).toBe(true)
-    if (result.success) {
-      expect(result.data.summary).toContain('architecture')
-      expect(result.data.coveredMessages).toBeGreaterThan(0)
-      expect(result.data.tokenCount).toBeGreaterThan(0)
-    }
-  })
-
-  it('增量摘要传入 previousSummary', async () => {
-    const llm = createMockLLM([{
-      content: 'Updated summary including previous context and new topics.',
-    }])
-    const ops = createContextOperations(defaultConfig, llm, 8000)
-
-    const result = await ops.summarize(
-      [{ role: 'user', content: 'New topic about deployment.' }],
-      { previousSummary: 'Previously discussed testing.' },
-    )
-    expect(result.success).toBe(true)
-    if (result.success) {
-      expect(result.data.summary).toBeTruthy()
-    }
-  })
-
-  it('lLM 失败返回错误', async () => {
-    const failingLLM: LLMOperations = {
-      chat: vi.fn(async () => ({
-        success: false as const,
-        error: { code: 7000, message: 'LLM error' },
-      })),
-      chatStream: vi.fn(),
-      listModels: vi.fn(),
-    } as unknown as LLMOperations
-
-    const ops = createContextOperations(defaultConfig, failingLLM, 8000)
-    const result = await ops.summarize([{ role: 'user', content: 'test' }])
-    expect(result.success).toBe(false)
-  })
-})
-
-// ─── estimateTokens 测试 ───
-
-describe('context estimateTokens', () => {
-  it('返回 token 估算结果', () => {
-    const llm = createMockLLM([])
-    const ops = createContextOperations(defaultConfig, llm, 8000)
-
-    const messages: ChatMessage[] = [
-      { role: 'user', content: 'Hello world' },
-      { role: 'assistant', content: 'Hi there' },
-    ]
-
-    const result = ops.estimateTokens(messages)
-    expect(result.success).toBe(true)
-    if (result.success) {
-      expect(result.data).toBeGreaterThan(0)
-    }
-  })
-})
 
 // ─── createManager 测试 ───
 
 describe('context createManager', () => {
   it('创建管理器成功', () => {
     const llm = createMockLLM([])
-    const ops = createContextOperations(defaultConfig, llm, 8000)
+    const ops = createOps(defaultCompressConfig, llm, 8000)
 
-    const result = ops.createManager({ maxTokens: 4000 })
+    const result = ops.createManager({ compress: { maxTokens: 4000 } })
     expect(result.success).toBe(true)
     if (result.success) {
       const messages = result.data.getMessages()
@@ -322,9 +157,9 @@ describe('context createManager', () => {
 
   it('追加消息并获取', async () => {
     const llm = createMockLLM([])
-    const ops = createContextOperations(defaultConfig, llm, 100000)
+    const ops = createOps(defaultCompressConfig, llm, 100000)
 
-    const managerResult = ops.createManager({ maxTokens: 100000 })
+    const managerResult = ops.createManager({ compress: { maxTokens: 100000 } })
     expect(managerResult.success).toBe(true)
     if (!managerResult.success)
       return
@@ -344,13 +179,15 @@ describe('context createManager', () => {
     const llm = createMockLLM([{
       content: 'Compressed summary of conversation.',
     }])
-    const ops = createContextOperations(defaultConfig, llm, 8000)
+    const ops = createOps(defaultCompressConfig, llm, 8000)
 
     const managerResult = ops.createManager({
-      maxTokens: 100,
-      strategy: 'summary',
-      preserveLastN: 2,
-      autoCompress: true,
+      compress: {
+        maxTokens: 100,
+        strategy: 'summary',
+        preserveLastN: 2,
+        auto: true,
+      },
     })
     expect(managerResult.success).toBe(true)
     if (!managerResult.success)
@@ -374,9 +211,9 @@ describe('context createManager', () => {
 
   it('getTokenUsage 返回当前 token 和预算', async () => {
     const llm = createMockLLM([])
-    const ops = createContextOperations(defaultConfig, llm, 8000)
+    const ops = createOps(defaultCompressConfig, llm, 8000)
 
-    const managerResult = ops.createManager({ maxTokens: 5000 })
+    const managerResult = ops.createManager({ compress: { maxTokens: 5000 } })
     expect(managerResult.success).toBe(true)
     if (!managerResult.success)
       return
@@ -394,9 +231,9 @@ describe('context createManager', () => {
 
   it('reset 清空消息和摘要', async () => {
     const llm = createMockLLM([])
-    const ops = createContextOperations(defaultConfig, llm, 100000)
+    const ops = createOps(defaultCompressConfig, llm, 100000)
 
-    const managerResult = ops.createManager({ maxTokens: 100000 })
+    const managerResult = ops.createManager({ compress: { maxTokens: 100000 } })
     expect(managerResult.success).toBe(true)
     if (!managerResult.success)
       return
@@ -414,11 +251,13 @@ describe('context createManager', () => {
 
   it('autoCompress 为 false 时不自动压缩', async () => {
     const llm = createMockLLM([])
-    const ops = createContextOperations(defaultConfig, llm, 8000)
+    const ops = createOps(defaultCompressConfig, llm, 8000)
 
     const managerResult = ops.createManager({
-      maxTokens: 50,
-      autoCompress: false,
+      compress: {
+        maxTokens: 50,
+        auto: false,
+      },
     })
     expect(managerResult.success).toBe(true)
     if (!managerResult.success)
@@ -436,5 +275,258 @@ describe('context createManager', () => {
       // 不压缩，5 条全保留
       expect(messages.data).toHaveLength(5)
     }
+  })
+})
+
+// =============================================================================
+// Session 管理（renameSession / removeSession）
+// =============================================================================
+
+describe('context session management', () => {
+  function createOpsWithStores(
+    compressConfig: CompressConfig,
+    llm: LLMOperations,
+    modelMaxTokens: number,
+  ) {
+    const tokenOps = createTokenOperations(defaultTokenConfig)
+    const summaryOps = createSummaryOperations(defaultLLMConfig, llm, tokenOps, defaultSummaryConfig)
+    const compressOps = createCompressOperations(
+      compressConfig,
+      tokenOps,
+      summaryOps,
+      modelMaxTokens,
+    )
+    const contextStore = createMockStore<Record<string, unknown>>()
+    const sessionStore = createMockStore<SessionInfo>()
+    const ops = createContextOperations(compressConfig, tokenOps, compressOps, contextStore as unknown as Parameters<typeof createContextOperations>[3], sessionStore)
+    return { ops, contextStore, sessionStore }
+  }
+
+  it('renameSession 修改会话标题', async () => {
+    const llm = createMockLLM([])
+    const { ops, sessionStore } = createOpsWithStores(defaultCompressConfig, llm, 8000)
+
+    // 先手工保存一个 session
+    const now = Date.now()
+    await sessionStore.save('session-1', {
+      sessionId: 'session-1',
+      objectId: 'user-1',
+      title: '旧标题',
+      createdAt: now,
+      updatedAt: now,
+    })
+
+    const result = await ops.renameSession('session-1', '新标题')
+    expect(result.success).toBe(true)
+
+    // 验证标题已更新
+    const session = await sessionStore.get('session-1')
+    expect(session?.title).toBe('新标题')
+  })
+
+  it('renameSession 不存在的会话返回错误', async () => {
+    const llm = createMockLLM([])
+    const { ops } = createOpsWithStores(defaultCompressConfig, llm, 8000)
+
+    const result = await ops.renameSession('non-existent', '标题')
+    expect(result.success).toBe(false)
+  })
+
+  it('removeSession 删除会话及上下文', async () => {
+    const llm = createMockLLM([])
+    const { ops, sessionStore, contextStore } = createOpsWithStores(defaultCompressConfig, llm, 8000)
+
+    const now = Date.now()
+    await sessionStore.save('session-1', {
+      sessionId: 'session-1',
+      objectId: 'user-1',
+      title: '会话',
+      createdAt: now,
+      updatedAt: now,
+    })
+    await contextStore.save('user-1:session-1', {
+      messages: [{ role: 'user', content: 'test' }],
+      summaries: [],
+      updatedAt: now,
+    })
+
+    const result = await ops.removeSession('session-1')
+    expect(result.success).toBe(true)
+
+    // 验证会话和上下文都被删除
+    const session = await sessionStore.get('session-1')
+    expect(session).toBeUndefined()
+    const context = await contextStore.get('user-1:session-1')
+    expect(context).toBeUndefined()
+  })
+
+  it('removeSession 不存在的会话也成功', async () => {
+    const llm = createMockLLM([])
+    const { ops } = createOpsWithStores(defaultCompressConfig, llm, 8000)
+
+    const result = await ops.removeSession('non-existent')
+    expect(result.success).toBe(true)
+  })
+
+  it('listSessions 列出会话', async () => {
+    const llm = createMockLLM([])
+    const { ops, sessionStore } = createOpsWithStores(defaultCompressConfig, llm, 8000)
+
+    const now = Date.now()
+    await sessionStore.save('s1', {
+      sessionId: 's1',
+      objectId: 'user-1',
+      title: '会话1',
+      createdAt: now,
+      updatedAt: now,
+    })
+    await sessionStore.save('s2', {
+      sessionId: 's2',
+      objectId: 'user-1',
+      title: '会话2',
+      createdAt: now,
+      updatedAt: now + 1000,
+    })
+
+    const result = await ops.listSessions('user-1')
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data).toHaveLength(2)
+      // 按 updatedAt 降序
+      expect(result.data[0].sessionId).toBe('s2')
+    }
+  })
+})
+
+// =============================================================================
+// chat / chatStream 编排测试
+// =============================================================================
+
+describe('context chat / chatStream', () => {
+  function createOpsWithDeps(llm: LLMOperations) {
+    const tokenOps = createTokenOperations(defaultTokenConfig)
+    const summaryOps = createSummaryOperations(defaultLLMConfig, llm, tokenOps, defaultSummaryConfig)
+    const compressOps = createCompressOperations(
+      defaultCompressConfig,
+      tokenOps,
+      summaryOps,
+      8000,
+    )
+    return createContextOperations(defaultCompressConfig, tokenOps, compressOps, undefined, undefined, { llm })
+  }
+
+  it('chat 发送消息并获取回复', async () => {
+    const llm = createMockLLM([{ content: '你好！很高兴认识你。' }])
+    const ops = createOpsWithDeps(llm)
+
+    const managerResult = ops.createManager({
+      compress: { maxTokens: 8000 },
+    })
+    expect(managerResult.success).toBe(true)
+    if (!managerResult.success)
+      return
+
+    const manager = managerResult.data
+    const result = await manager.chat('你好')
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.reply).toBe('你好！很高兴认识你。')
+      expect(result.data.model).toBe('test-model')
+    }
+
+    // 消息列表应包含 user + assistant
+    const msgs = manager.getMessages()
+    expect(msgs.success).toBe(true)
+    if (msgs.success) {
+      expect(msgs.data).toHaveLength(2)
+      expect(msgs.data[0].role).toBe('user')
+      expect(msgs.data[1].role).toBe('assistant')
+    }
+  })
+
+  it('chat 无 deps.llm 时返回 NOT_INITIALIZED', async () => {
+    const tokenOps = createTokenOperations(defaultTokenConfig)
+    const llm = createMockLLM([])
+    const summaryOps = createSummaryOperations(defaultLLMConfig, llm, tokenOps, defaultSummaryConfig)
+    const compressOps = createCompressOperations(defaultCompressConfig, tokenOps, summaryOps, 8000)
+    // 不传 deps
+    const ops = createContextOperations(defaultCompressConfig, tokenOps, compressOps)
+
+    const managerResult = ops.createManager({ compress: { maxTokens: 8000 } })
+    expect(managerResult.success).toBe(true)
+    if (!managerResult.success)
+      return
+
+    const result = await managerResult.data.chat('测试')
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error.code).toBe(12010) // NOT_INITIALIZED
+    }
+  })
+
+  it('chat 含 systemPrompt 时消息列表包含 system', async () => {
+    const llm = createMockLLM([{ content: '我是助手' }])
+    const ops = createOpsWithDeps(llm)
+
+    const managerResult = ops.createManager({
+      systemPrompt: '你是一个友好的助手。',
+      compress: { maxTokens: 8000 },
+    })
+    expect(managerResult.success).toBe(true)
+    if (!managerResult.success)
+      return
+
+    const manager = managerResult.data
+    await manager.chat('你是谁？')
+
+    const msgs = manager.getMessages()
+    expect(msgs.success).toBe(true)
+    if (msgs.success) {
+      expect(msgs.data[0].role).toBe('system')
+      expect(msgs.data[0].content).toBe('你是一个友好的助手。')
+    }
+  })
+
+  it('chat 使用 enablePersist:false 调用 LLM', async () => {
+    const llm = createMockLLM([{ content: 'reply' }])
+    const ops = createOpsWithDeps(llm)
+
+    const managerResult = ops.createManager({ compress: { maxTokens: 8000 } })
+    expect(managerResult.success).toBe(true)
+    if (!managerResult.success)
+      return
+
+    await managerResult.data.chat('test')
+
+    // 验证 LLM.chat 被调用时 enablePersist 为 false
+    expect(llm.chat).toHaveBeenCalledTimes(1)
+    const callArg = (llm.chat as ReturnType<typeof vi.fn>).mock.calls[0][0]
+    expect(callArg.enablePersist).toBe(false)
+  })
+
+  it('多轮对话保持上下文', async () => {
+    const llm = createMockLLM([
+      { content: '第一轮回复' },
+      { content: '第二轮回复' },
+    ])
+    const ops = createOpsWithDeps(llm)
+
+    const managerResult = ops.createManager({ compress: { maxTokens: 8000 } })
+    expect(managerResult.success).toBe(true)
+    if (!managerResult.success)
+      return
+
+    const manager = managerResult.data
+    await manager.chat('第一轮')
+    await manager.chat('第二轮')
+
+    const msgs = manager.getMessages()
+    expect(msgs.success).toBe(true)
+    if (msgs.success) {
+      expect(msgs.data).toHaveLength(4) // 2 user + 2 assistant
+    }
+
+    // 第二次调用 LLM 时应包含完整 4 条消息上下文（2 user + 1 assistant + 当前的 user，实际传入的是已 addMessage 后的消息列表）
+    expect(llm.chat).toHaveBeenCalledTimes(2)
   })
 })

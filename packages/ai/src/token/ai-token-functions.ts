@@ -1,11 +1,14 @@
 /**
- * @h-ai/ai — Context Token 估算
+ * @h-ai/ai — Token 子功能实现
  *
  * 提供轻量级 Token 估算能力，无需外部依赖。
- * @module ai-context-token
+ * 同时导出纯函数（可指定 tokenRatio）和工厂函数（绑定配置的 tokenRatio）。
+ * @module ai-token-functions
  */
 
+import type { TokenConfig } from '../ai-config.js'
 import type { ChatMessage } from '../llm/ai-llm-types.js'
+import type { TokenOperations } from './ai-token-types.js'
 
 /**
  * 估算单条文本的 Token 数
@@ -101,4 +104,18 @@ function getMessageContent(msg: ChatMessage): string {
       .join(' ')
   }
   return ''
+}
+
+/**
+ * 创建 Token 操作接口
+ *
+ * @param config - Token 配置
+ * @returns TokenOperations 实例
+ */
+export function createTokenOperations(config: TokenConfig): TokenOperations {
+  const { tokenRatio } = config
+  return {
+    estimateText: (text: string) => estimateTextTokens(text, tokenRatio),
+    estimateMessages: (messages: ChatMessage[]) => estimateMessagesTokens(messages, tokenRatio),
+  }
 }

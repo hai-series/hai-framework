@@ -68,9 +68,9 @@ describe('knowledge schema DDL', () => {
     expect(result.success).toBe(true)
 
     // 应执行 6 条 DDL：2 个表 + 4 个索引
-    expect(executeCalls.length).toBe(6)
-    expect(executeCalls[0].sql).toContain('knowledge_entity')
-    expect(executeCalls[3].sql).toContain('knowledge_entity_document')
+    expect(executeCalls.length).toBe(7)
+    expect(executeCalls[0].sql).toContain('hai_ai_knowledge_entity')
+    expect(executeCalls[3].sql).toContain('hai_ai_knowledge_entity_document')
   })
 
   it('dDL 执行失败返回错误', async () => {
@@ -101,7 +101,7 @@ describe('knowledge 实体 CRUD', () => {
 
     expect(result.success).toBe(true)
     expect(executeCalls.length).toBe(1)
-    expect(executeCalls[0].sql).toContain('INSERT OR REPLACE')
+    expect(executeCalls[0].sql).toContain('ON CONFLICT(id) DO UPDATE')
     expect(executeCalls[0].params).toContain('ent-abc')
     expect(executeCalls[0].params).toContain('Alice')
     expect(executeCalls[0].params).toContain('person')
@@ -139,7 +139,7 @@ describe('knowledge 实体 CRUD', () => {
 
     expect(result.success).toBe(true)
     expect(executeCalls.length).toBe(1)
-    expect(executeCalls[0].sql).toContain('knowledge_entity_document')
+    expect(executeCalls[0].sql).toContain('hai_ai_knowledge_entity_document')
     expect(executeCalls[0].params).toContain('ent-abc')
     expect(executeCalls[0].params).toContain('doc-1')
   })

@@ -10,8 +10,9 @@ import type { Result } from '@h-ai/core'
 
 import type { AIConfig } from '../ai-config.js'
 import type { AIError } from '../ai-types.js'
-import type { AIStore, InteractionScope, SessionInfo, WhereClause } from '../store/ai-store-types.js'
+import type { AIStore, InteractionScope, SessionInfo } from '../store/ai-store-types.js'
 import type {
+  AskOptions,
   ChatCompletionChunk,
   ChatCompletionRequest,
   ChatCompletionResponse,
@@ -93,7 +94,7 @@ export function createAILLMFunctions(config: AIConfig, deps?: AILLMStores): AILL
     record: ChatRecord,
     messages: ChatMessage[],
   ): Promise<void> {
-    await recordStore!.save(record.id, record)
+    await recordStore!.save(record.id, record, { objectId: record.objectId, sessionId: record.sessionId })
     logger.trace('Chat record saved', { id: record.id, objectId: record.objectId, sessionId: record.sessionId })
 
     if (sessionStore) {
@@ -101,7 +102,7 @@ export function createAILLMFunctions(config: AIConfig, deps?: AILLMStores): AILL
       const existing = await sessionStore.get(sid)
       const now = Date.now()
       if (existing) {
-        await sessionStore.save(sid, { ...existing, updatedAt: now })
+        await sessionStore.save(sid, { ...existing, updatedAt: now }, { objectId: existing.objectId })
       }
       else {
         await sessionStore.save(sid, {
@@ -110,7 +111,7 @@ export function createAILLMFunctions(config: AIConfig, deps?: AILLMStores): AILL
           title: extractTitle(messages),
           createdAt: now,
           updatedAt: now,
-        })
+        }, { objectId: record.objectId })
       }
     }
   }
@@ -123,7 +124,7 @@ export function createAILLMFunctions(config: AIConfig, deps?: AILLMStores): AILL
     const result = await provider.chat(request)
 
     // 仅在调用成功且传入了 objectId + recordStore 且未禁用持久化时记录
-    if (result.success && request.objectId && recordStore && request.persist !== false) {
+    if (result.success && request.objectId && recordStore && request.enablePersist !== false) {
       try {
         const response = result.data
         const choice = response.choices[0]
@@ -162,7 +163,7 @@ export function createAILLMFunctions(config: AIConfig, deps?: AILLMStores): AILL
    */
   async function* chatStreamWithRecord(request: ChatCompletionRequest): AsyncIterable<ChatCompletionChunk> {
     const start = Date.now()
-    const shouldRecord = !!(request.objectId && recordStore && request.persist !== false)
+    const shouldRecord = !!(request.objectId && recordStore && request.enablePersist !== false)
 
     // 累积流式响应的中间状态
     let content = ''
@@ -247,7 +248,8 @@ export function createAILLMFunctions(config: AIConfig, deps?: AILLMStores): AILL
     }
     try {
       const records = await recordStore.query({
-        where: { objectId: scope.objectId, sessionId: scope.sessionId } as WhereClause<ChatRecord>,
+        objectId: scope.objectId,
+        sessionId: scope.sessionId,
         orderBy: { field: 'createdAt', direction: options?.order ?? 'desc' },
         limit: options?.limit,
       })
@@ -273,7 +275,7 @@ export function createAILLMFunctions(config: AIConfig, deps?: AILLMStores): AILL
     }
     try {
       const sessions = await sessionStore.query({
-        where: { objectId } as WhereClause<SessionInfo>,
+        objectId,
         orderBy: { field: 'updatedAt', direction: 'desc' },
       })
       return ok(sessions)
@@ -293,6 +295,45 @@ export function createAILLMFunctions(config: AIConfig, deps?: AILLMStores): AILL
     listModels: () => provider.listModels(),
     getHistory,
     listSessions,
+
+    async ask(question: string, options?: AskOptions): Promise<Result<string, AIError>> {
+      const messages: ChatMessage[] = []
+      if (options?.systemPrompt) {
+        messages.push({ role: 'system', content: options.systemPrompt })
+      }
+      messages.push({ role: 'user', content: question })
+      const result = await chatWithRecord({
+        messages,
+        model: options?.model,
+        temperature: options?.temperature,
+        objectId: options?.objectId,
+        sessionId: options?.sessionId,
+        enablePersist: options?.enablePersist,
+      })
+      if (!result.success)
+        return result as Result<never, AIError>
+      return ok(result.data.choices[0]?.message?.content ?? '')
+    },
+
+    async* askStream(question: string, options?: AskOptions): AsyncIterable<string> {
+      const messages: ChatMessage[] = []
+      if (options?.systemPrompt) {
+        messages.push({ role: 'system', content: options.systemPrompt })
+      }
+      messages.push({ role: 'user', content: question })
+      for await (const chunk of chatStreamWithRecord({
+        messages,
+        model: options?.model,
+        temperature: options?.temperature,
+        objectId: options?.objectId,
+        sessionId: options?.sessionId,
+        enablePersist: options?.enablePersist,
+      })) {
+        const delta = chunk.choices[0]?.delta?.content
+        if (delta)
+          yield delta
+      }
+    },
   }
 
   const tools: ToolsOperations = {

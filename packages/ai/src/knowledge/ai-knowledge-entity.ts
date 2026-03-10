@@ -92,7 +92,7 @@ export async function extractEntities(
         { role: 'user', content: text },
       ],
       temperature: 0.1,
-      persist: false,
+      enablePersist: false,
     })
 
     if (!chatResult.success) {

@@ -43,6 +43,8 @@ export interface ReasoningOptions {
   executeModel?: string
   /** 系统提示词（可选，覆盖默认的策略提示词） */
   systemPrompt?: string
+  /** 是否启用内部 LLM 调用的持久化（默认 true；Context 层调用时传 false 避免重复记录） */
+  enablePersist?: boolean
   /**
    * 前置对话上下文（可选）
    *
@@ -111,6 +113,21 @@ export interface ReasoningResult {
   messages: ChatMessage[]
 }
 
+// ─── 推理流式事件 ───
+
+/**
+ * 推理流式事件
+ *
+ * runStream 产出的事件序列：
+ * - `step` — 推理步骤完成（思考/行动/观察/计划）
+ * - `delta` — LLM 增量文本（最终答案的流式输出）
+ * - `done` — 推理完成，携带完整结果
+ */
+export type ReasoningStreamEvent
+  = | { type: 'step', step: ReasoningStep }
+    | { type: 'delta', text: string }
+    | { type: 'done', result: ReasoningResult }
+
 // ─── 推理操作接口 ───
 
 /**
@@ -146,4 +163,15 @@ export interface ReasoningOperations {
    * @returns 推理结果
    */
   run: (query: string, options?: ReasoningOptions) => Promise<Result<ReasoningResult, AIError>>
+
+  /**
+   * 流式推理（逐步产出推理步骤 + 最终答案增量文本）
+   *
+   * 产出事件序列：step* → delta* → done
+   *
+   * @param query - 用户问题或任务描述
+   * @param options - 推理选项
+   * @returns 异步可迭代的 ReasoningStreamEvent
+   */
+  runStream: (query: string, options?: ReasoningOptions) => AsyncIterable<ReasoningStreamEvent>
 }

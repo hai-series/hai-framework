@@ -26,6 +26,10 @@ export interface RagOptions {
   topK?: number
   /** 最低相似度 */
   minScore?: number
+  /** 是否启用 Rerank 重排序 */
+  enableRerank?: boolean
+  /** Rerank 使用的模型名称覆盖 */
+  rerankModel?: string
   /** LLM 模型名称覆盖 */
   model?: string
   /** 系统提示词（可选，会自动注入检索上下文） */
@@ -36,6 +40,8 @@ export interface RagOptions {
   formatContext?: (items: RagContextItem[]) => string
   /** 是否保留消息历史（用于多轮对话） */
   messages?: ChatMessage[]
+  /** 是否启用内部 LLM 调用的持久化（默认 true；Context 层调用时传 false 避免重复记录） */
+  enablePersist?: boolean
 }
 
 /**
@@ -76,6 +82,21 @@ export interface RagResult {
   }
 }
 
+// ─── RAG 流式事件 ───
+
+/**
+ * RAG 流式事件
+ *
+ * queryStream 产出的事件序列：
+ * 1. `context` — 检索结果就绪，携带上下文列表
+ * 2. `delta` — LLM 增量文本
+ * 3. `done` — 生成完成，携带完整结果汇总
+ */
+export type RagStreamEvent
+  = | { type: 'context', items: RagContextItem[], citations: Citation[] }
+    | { type: 'delta', text: string }
+    | { type: 'done', answer: string, model: string, usage?: { prompt_tokens: number, completion_tokens: number, total_tokens: number } }
+
 // ─── RAG 操作 ───
 
 /**
@@ -95,4 +116,15 @@ export interface RagOperations {
    * @returns RAG 结果
    */
   query: (query: string, options?: RagOptions) => Promise<Result<RagResult, AIError>>
+
+  /**
+   * 流式 RAG 查询
+   *
+   * 产出事件序列：context → delta* → done
+   *
+   * @param query - 用户查询文本
+   * @param options - RAG 选项
+   * @returns 异步可迭代的 RagStreamEvent
+   */
+  queryStream: (query: string, options?: RagOptions) => AsyncIterable<RagStreamEvent>
 }

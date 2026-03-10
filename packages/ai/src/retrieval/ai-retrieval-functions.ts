@@ -9,6 +9,7 @@ import type { Result } from '@h-ai/core'
 import type { VecdbFunctions } from '@h-ai/vecdb'
 import type { AIError } from '../ai-types.js'
 import type { EmbeddingOperations } from '../embedding/ai-embedding-types.js'
+import type { RerankOperations } from '../rerank/ai-rerank-types.js'
 import type { AIStore } from '../store/ai-store-types.js'
 import type {
   Citation,
@@ -38,6 +39,7 @@ export function createRetrievalOperations(
   embeddingOps: EmbeddingOperations,
   vecdbClient: VecdbFunctions,
   sourceStore: AIStore<RetrievalSource>,
+  rerankOps?: RerankOperations | null,
 ): RetrievalOperations {
   return {
     /**
@@ -180,6 +182,26 @@ export function createRetrievalOperations(
         })
 
         await Promise.all(searchPromises)
+
+        // 可选：Rerank 重排序
+        if (request.enableRerank && rerankOps && allItems.length > 0) {
+          const rerankResult = await rerankOps.rerank({
+            query: request.query,
+            documents: allItems.map(item => item.content),
+            model: request.rerankModel,
+            topN: request.topK ?? 10,
+            returnDocuments: false,
+          })
+          if (rerankResult.success) {
+            const reranked = rerankResult.data.results
+              .map(r => ({ ...allItems[r.index], score: r.relevanceScore }))
+            allItems.length = 0
+            allItems.push(...reranked)
+          }
+          else {
+            logger.warn('Rerank failed, falling back to vector scores', { error: rerankResult.error })
+          }
+        }
 
         // 按分数降序排列
         allItems.sort((a, b) => b.score - a.score)

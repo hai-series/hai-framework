@@ -44,7 +44,7 @@ afterAll(async () => {
 })
 
 // 每个测试后清理 AI 模块创建的表数据，保证测试隔离
-const aiTables = ['ai_chat_records', 'ai_sessions', 'ai_memory', 'ai_context']
+const aiTables = ['hai_ai_chat_records', 'hai_ai_sessions', 'hai_ai_memory', 'hai_ai_context']
 afterEach(async () => {
   if (!reldb.isInitialized)
     return

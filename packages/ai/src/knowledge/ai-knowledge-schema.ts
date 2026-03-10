@@ -6,7 +6,7 @@
  */
 
 import type { Result } from '@h-ai/core'
-import type { DataOperations } from '@h-ai/reldb'
+import type { DataOperations, DbType } from '@h-ai/reldb'
 import type { AIError } from '../ai-types.js'
 
 import { core, err, ok } from '@h-ai/core'
@@ -16,48 +16,54 @@ import { aiM } from '../ai-i18n.js'
 
 const logger = core.logger.child({ module: 'ai', scope: 'knowledge-schema' })
 
-// ─── DDL 语句 ───
+// ─── DDL 生成（跨 DB 兼容） ───
 
-const CREATE_ENTITY_TABLE = `
-CREATE TABLE IF NOT EXISTS knowledge_entity (
-  id          TEXT PRIMARY KEY,
-  name        TEXT NOT NULL,
-  type        TEXT NOT NULL,
-  aliases     TEXT,
-  description TEXT,
-  created_at  TEXT DEFAULT (datetime('now')),
-  updated_at  TEXT DEFAULT (datetime('now'))
-)
-`
+/**
+ * 根据数据库类型生成 DDL 语句
+ */
+function buildSchemaStatements(dbType: DbType): string[] {
+  const pk = dbType === 'mysql' ? 'VARCHAR(512)' : 'TEXT'
+  const textCol = dbType === 'mysql' ? 'VARCHAR(255)' : 'TEXT'
+  const longText = 'TEXT'
 
-const CREATE_ENTITY_NAME_INDEX = `
-CREATE INDEX IF NOT EXISTS idx_knowledge_entity_name ON knowledge_entity(name)
-`
-
-const CREATE_ENTITY_TYPE_INDEX = `
-CREATE INDEX IF NOT EXISTS idx_knowledge_entity_type ON knowledge_entity(type)
-`
-
-const CREATE_ENTITY_DOCUMENT_TABLE = `
-CREATE TABLE IF NOT EXISTS knowledge_entity_document (
-  entity_id   TEXT NOT NULL,
-  document_id TEXT NOT NULL,
-  chunk_id    TEXT DEFAULT '',
-  collection  TEXT NOT NULL,
+  return [
+    // 实体表
+    `CREATE TABLE IF NOT EXISTS hai_ai_knowledge_entity (
+  id          ${pk} PRIMARY KEY,
+  name        ${textCol} NOT NULL,
+  type        ${textCol} NOT NULL,
+  aliases     ${longText},
+  description ${longText},
+  created_at  BIGINT DEFAULT 0,
+  updated_at  BIGINT DEFAULT 0
+)`,
+    `CREATE INDEX IF NOT EXISTS idx_hai_ai_knowledge_entity_name ON hai_ai_knowledge_entity(name)`,
+    `CREATE INDEX IF NOT EXISTS idx_hai_ai_knowledge_entity_type ON hai_ai_knowledge_entity(type)`,
+    // 实体-文档关联表
+    `CREATE TABLE IF NOT EXISTS hai_ai_knowledge_entity_document (
+  entity_id   ${pk} NOT NULL,
+  document_id ${pk} NOT NULL,
+  chunk_id    ${pk} DEFAULT '',
+  collection  ${textCol} NOT NULL,
   relevance   REAL DEFAULT 1.0,
-  context     TEXT,
-  created_at  TEXT DEFAULT (datetime('now')),
+  context     ${longText},
+  created_at  BIGINT DEFAULT 0,
   PRIMARY KEY (entity_id, document_id, chunk_id)
-)
-`
-
-const CREATE_ED_DOCUMENT_INDEX = `
-CREATE INDEX IF NOT EXISTS idx_knowledge_ed_document ON knowledge_entity_document(document_id)
-`
-
-const CREATE_ED_COLLECTION_INDEX = `
-CREATE INDEX IF NOT EXISTS idx_knowledge_ed_collection ON knowledge_entity_document(collection)
-`
+)`,
+    `CREATE INDEX IF NOT EXISTS idx_hai_ai_knowledge_ed_document ON hai_ai_knowledge_entity_document(document_id)`,
+    `CREATE INDEX IF NOT EXISTS idx_hai_ai_knowledge_ed_collection ON hai_ai_knowledge_entity_document(collection)`,
+    // 文档元数据表
+    `CREATE TABLE IF NOT EXISTS hai_ai_knowledge_document (
+  document_id ${pk} NOT NULL,
+  collection  ${textCol} NOT NULL,
+  title       ${longText},
+  url         ${longText},
+  chunk_count INTEGER DEFAULT 0,
+  created_at  BIGINT DEFAULT 0,
+  PRIMARY KEY (document_id, collection)
+)`,
+  ]
+}
 
 /**
  * 创建知识库实体索引表
@@ -67,15 +73,8 @@ CREATE INDEX IF NOT EXISTS idx_knowledge_ed_collection ON knowledge_entity_docum
  * @param dataOps - reldb 数据操作接口
  * @returns 成功返回 ok(undefined)
  */
-export async function createKnowledgeSchema(dataOps: DataOperations): Promise<Result<void, AIError>> {
-  const statements = [
-    CREATE_ENTITY_TABLE,
-    CREATE_ENTITY_NAME_INDEX,
-    CREATE_ENTITY_TYPE_INDEX,
-    CREATE_ENTITY_DOCUMENT_TABLE,
-    CREATE_ED_DOCUMENT_INDEX,
-    CREATE_ED_COLLECTION_INDEX,
-  ]
+export async function createKnowledgeSchema(dataOps: DataOperations, dbType: DbType = 'sqlite'): Promise<Result<void, AIError>> {
+  const statements = buildSchemaStatements(dbType)
 
   try {
     for (const sql of statements) {
@@ -113,18 +112,30 @@ export async function createKnowledgeSchema(dataOps: DataOperations): Promise<Re
 export async function upsertEntity(
   dataOps: DataOperations,
   entity: { id: string, name: string, type: string, aliases?: string[], description?: string },
+  dbType: DbType = 'sqlite',
 ): Promise<Result<void, AIError>> {
-  const sql = `
-    INSERT OR REPLACE INTO knowledge_entity (id, name, type, aliases, description, updated_at)
-    VALUES (?, ?, ?, ?, ?, datetime('now'))
-  `
+  const now = Date.now()
   const params = [
     entity.id,
     entity.name,
     entity.type,
     entity.aliases ? JSON.stringify(entity.aliases) : null,
     entity.description ?? null,
+    now,
+    now,
   ]
+
+  let sql: string
+  if (dbType === 'mysql') {
+    sql = `INSERT INTO hai_ai_knowledge_entity (id, name, type, aliases, description, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+      ON DUPLICATE KEY UPDATE name = VALUES(name), type = VALUES(type), aliases = VALUES(aliases), description = VALUES(description), updated_at = VALUES(updated_at)`
+  }
+  else {
+    sql = `INSERT INTO hai_ai_knowledge_entity (id, name, type, aliases, description, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(id) DO UPDATE SET name = excluded.name, type = excluded.type, aliases = excluded.aliases, description = excluded.description, updated_at = excluded.updated_at`
+  }
 
   try {
     const result = await dataOps.execute(sql, params)
@@ -159,11 +170,9 @@ export async function insertEntityDocument(
     relevance?: number
     context?: string
   },
+  dbType: DbType = 'sqlite',
 ): Promise<Result<void, AIError>> {
-  const sql = `
-    INSERT OR REPLACE INTO knowledge_entity_document (entity_id, document_id, chunk_id, collection, relevance, context)
-    VALUES (?, ?, ?, ?, ?, ?)
-  `
+  const now = Date.now()
   const params = [
     relation.entityId,
     relation.documentId,
@@ -171,7 +180,20 @@ export async function insertEntityDocument(
     relation.collection,
     relation.relevance ?? 1.0,
     relation.context ?? null,
+    now,
   ]
+
+  let sql: string
+  if (dbType === 'mysql') {
+    sql = `INSERT INTO hai_ai_knowledge_entity_document (entity_id, document_id, chunk_id, collection, relevance, context, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+      ON DUPLICATE KEY UPDATE relevance = VALUES(relevance), context = VALUES(context)`
+  }
+  else {
+    sql = `INSERT INTO hai_ai_knowledge_entity_document (entity_id, document_id, chunk_id, collection, relevance, context, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(entity_id, document_id, chunk_id) DO UPDATE SET relevance = excluded.relevance, context = excluded.context`
+  }
 
   try {
     const result = await dataOps.execute(sql, params)
@@ -203,7 +225,7 @@ export async function findEntitiesByName(
   keyword: string,
 ): Promise<Result<Array<{ id: string, name: string, type: string, aliases: string[] }>, AIError>> {
   const sql = `
-    SELECT id, name, type, aliases FROM knowledge_entity
+    SELECT id, name, type, aliases FROM hai_ai_knowledge_entity
     WHERE name LIKE ? OR aliases LIKE ?
   `
   const pattern = `%${keyword}%`
@@ -250,7 +272,7 @@ export async function findDocumentsByEntityIds(
   const placeholders = entityIds.map(() => '?').join(', ')
   let sql = `
     SELECT entity_id, document_id, chunk_id, collection, relevance, context
-    FROM knowledge_entity_document
+    FROM hai_ai_knowledge_entity_document
     WHERE entity_id IN (${placeholders})
   `
   const params: unknown[] = [...entityIds]
@@ -297,7 +319,7 @@ export async function listEntities(
   dataOps: DataOperations,
   options?: { type?: string, keyword?: string, limit?: number },
 ): Promise<Result<Array<{ id: string, name: string, type: string, aliases: string[], description: string | null, createdAt: string | null, updatedAt: string | null }>, AIError>> {
-  let sql = 'SELECT id, name, type, aliases, description, created_at, updated_at FROM knowledge_entity WHERE 1=1'
+  let sql = 'SELECT id, name, type, aliases, description, created_at, updated_at FROM hai_ai_knowledge_entity WHERE 1=1'
   const params: unknown[] = []
 
   if (options?.type) {
@@ -392,4 +414,182 @@ export async function findByEntityName(
   }))
 
   return ok(results)
+}
+
+// ─── 文档元数据 CRUD ───
+
+/**
+ * 保存文档元数据（跨 DB upsert）
+ */
+export async function upsertDocument(
+  dataOps: DataOperations,
+  doc: { documentId: string, collection: string, title?: string, url?: string, chunkCount: number, createdAt: number },
+  dbType: DbType = 'sqlite',
+): Promise<Result<void, AIError>> {
+  const params = [doc.documentId, doc.collection, doc.title ?? null, doc.url ?? null, doc.chunkCount, doc.createdAt]
+
+  let sql: string
+  if (dbType === 'mysql') {
+    sql = `INSERT INTO hai_ai_knowledge_document (document_id, collection, title, url, chunk_count, created_at)
+      VALUES (?, ?, ?, ?, ?, ?)
+      ON DUPLICATE KEY UPDATE title = VALUES(title), url = VALUES(url), chunk_count = VALUES(chunk_count)`
+  }
+  else {
+    sql = `INSERT INTO hai_ai_knowledge_document (document_id, collection, title, url, chunk_count, created_at)
+      VALUES (?, ?, ?, ?, ?, ?)
+      ON CONFLICT(document_id, collection) DO UPDATE SET title = excluded.title, url = excluded.url, chunk_count = excluded.chunk_count`
+  }
+  try {
+    const result = await dataOps.execute(sql, params)
+    if (!result.success) {
+      return err({ code: AIErrorCode.KNOWLEDGE_INGEST_FAILED, message: aiM('ai_knowledgeIngestFailed', { params: { error: String(result.error) } }), cause: result.error })
+    }
+    return ok(undefined)
+  }
+  catch (error) {
+    return err({ code: AIErrorCode.KNOWLEDGE_INGEST_FAILED, message: aiM('ai_knowledgeIngestFailed', { params: { error: String(error) } }), cause: error })
+  }
+}
+
+/**
+ * 按 documentId + collection 获取单个文档元数据
+ */
+export async function getDocumentFromDb(
+  dataOps: DataOperations,
+  documentId: string,
+  collection: string,
+): Promise<Result<{ documentId: string, collection: string, title: string | null, url: string | null, chunkCount: number, createdAt: number } | undefined, AIError>> {
+  const sql = 'SELECT document_id, collection, title, url, chunk_count, created_at FROM hai_ai_knowledge_document WHERE document_id = ? AND collection = ?'
+  try {
+    const result = await dataOps.query<Record<string, unknown>>(sql, [documentId, collection])
+    if (!result.success) {
+      return err({ code: AIErrorCode.KNOWLEDGE_RETRIEVE_FAILED, message: aiM('ai_knowledgeRetrieveFailed', { params: { error: String(result.error) } }), cause: result.error })
+    }
+    const row = result.data[0]
+    if (!row)
+      return ok(undefined)
+    return ok({
+      documentId: row.document_id as string,
+      collection: row.collection as string,
+      title: row.title as string | null,
+      url: row.url as string | null,
+      chunkCount: row.chunk_count as number,
+      createdAt: row.created_at as number,
+    })
+  }
+  catch (error) {
+    return err({ code: AIErrorCode.KNOWLEDGE_RETRIEVE_FAILED, message: aiM('ai_knowledgeRetrieveFailed', { params: { error: String(error) } }), cause: error })
+  }
+}
+
+/**
+ * 列出文档元数据
+ */
+export async function listDocumentsFromDb(
+  dataOps: DataOperations,
+  collection: string,
+  options?: { offset?: number, limit?: number },
+): Promise<Result<Array<{ documentId: string, collection: string, title: string | null, url: string | null, chunkCount: number, createdAt: number }>, AIError>> {
+  let sql = 'SELECT document_id, collection, title, url, chunk_count, created_at FROM hai_ai_knowledge_document WHERE collection = ?'
+  const params: unknown[] = [collection]
+
+  sql += ' ORDER BY created_at DESC'
+  if (options?.limit) {
+    sql += ' LIMIT ?'
+    params.push(options.limit)
+  }
+  if (options?.offset) {
+    sql += ' OFFSET ?'
+    params.push(options.offset)
+  }
+
+  try {
+    const result = await dataOps.query<Record<string, unknown>>(sql, params)
+    if (!result.success) {
+      return err({ code: AIErrorCode.KNOWLEDGE_RETRIEVE_FAILED, message: aiM('ai_knowledgeRetrieveFailed', { params: { error: String(result.error) } }), cause: result.error })
+    }
+    return ok(result.data.map(row => ({
+      documentId: row.document_id as string,
+      collection: row.collection as string,
+      title: row.title as string | null,
+      url: row.url as string | null,
+      chunkCount: row.chunk_count as number,
+      createdAt: row.created_at as number,
+    })))
+  }
+  catch (error) {
+    return err({ code: AIErrorCode.KNOWLEDGE_RETRIEVE_FAILED, message: aiM('ai_knowledgeRetrieveFailed', { params: { error: String(error) } }), cause: error })
+  }
+}
+
+/**
+ * 查询每个文档的实体关联数
+ */
+export async function listDocumentEntityCounts(
+  dataOps: DataOperations,
+  documentIds: string[],
+  collection: string,
+): Promise<Result<Map<string, number>, AIError>> {
+  if (documentIds.length === 0)
+    return ok(new Map())
+  const placeholders = documentIds.map(() => '?').join(', ')
+  const sql = `SELECT document_id, COUNT(DISTINCT entity_id) as cnt FROM hai_ai_knowledge_entity_document WHERE document_id IN (${placeholders}) AND collection = ? GROUP BY document_id`
+  const params = [...documentIds, collection]
+
+  try {
+    const result = await dataOps.query<Record<string, unknown>>(sql, params)
+    if (!result.success) {
+      return err({ code: AIErrorCode.KNOWLEDGE_RETRIEVE_FAILED, message: aiM('ai_knowledgeRetrieveFailed', { params: { error: String(result.error) } }), cause: result.error })
+    }
+    const map = new Map<string, number>()
+    for (const row of result.data) {
+      map.set(row.document_id as string, row.cnt as number)
+    }
+    return ok(map)
+  }
+  catch (error) {
+    return err({ code: AIErrorCode.KNOWLEDGE_RETRIEVE_FAILED, message: aiM('ai_knowledgeRetrieveFailed', { params: { error: String(error) } }), cause: error })
+  }
+}
+
+/**
+ * 删除文档相关的实体关联
+ */
+export async function removeDocumentEntityRelations(
+  dataOps: DataOperations,
+  documentId: string,
+  collection: string,
+): Promise<Result<void, AIError>> {
+  const sql = 'DELETE FROM hai_ai_knowledge_entity_document WHERE document_id = ? AND collection = ?'
+  try {
+    const result = await dataOps.execute(sql, [documentId, collection])
+    if (!result.success) {
+      return err({ code: AIErrorCode.KNOWLEDGE_INGEST_FAILED, message: aiM('ai_knowledgeIngestFailed', { params: { error: String(result.error) } }), cause: result.error })
+    }
+    return ok(undefined)
+  }
+  catch (error) {
+    return err({ code: AIErrorCode.KNOWLEDGE_INGEST_FAILED, message: aiM('ai_knowledgeIngestFailed', { params: { error: String(error) } }), cause: error })
+  }
+}
+
+/**
+ * 删除文档元数据
+ */
+export async function removeDocumentFromDb(
+  dataOps: DataOperations,
+  documentId: string,
+  collection: string,
+): Promise<Result<void, AIError>> {
+  const sql = 'DELETE FROM hai_ai_knowledge_document WHERE document_id = ? AND collection = ?'
+  try {
+    const result = await dataOps.execute(sql, [documentId, collection])
+    if (!result.success) {
+      return err({ code: AIErrorCode.KNOWLEDGE_INGEST_FAILED, message: aiM('ai_knowledgeIngestFailed', { params: { error: String(result.error) } }), cause: result.error })
+    }
+    return ok(undefined)
+  }
+  catch (error) {
+    return err({ code: AIErrorCode.KNOWLEDGE_INGEST_FAILED, message: aiM('ai_knowledgeIngestFailed', { params: { error: String(error) } }), cause: error })
+  }
 }

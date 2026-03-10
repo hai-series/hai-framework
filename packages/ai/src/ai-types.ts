@@ -8,6 +8,7 @@
 import type { Result } from '@h-ai/core'
 
 import type { AIConfig, AIConfigInput, AIErrorCodeType } from './ai-config.js'
+import type { CompressOperations } from './compress/ai-compress-types.js'
 import type { ContextOperations } from './context/ai-context-types.js'
 import type { EmbeddingOperations } from './embedding/ai-embedding-types.js'
 import type { FileOperations } from './file/ai-file-types.js'
@@ -19,6 +20,8 @@ import type { RagOperations } from './rag/ai-rag-types.js'
 import type { ReasoningOperations } from './reasoning/ai-reasoning-types.js'
 import type { RerankOperations } from './rerank/ai-rerank-types.js'
 import type { RetrievalOperations } from './retrieval/ai-retrieval-types.js'
+import type { SummaryOperations } from './summary/ai-summary-types.js'
+import type { TokenOperations } from './token/ai-token-types.js'
 
 // ─── 错误类型 ───
 
@@ -91,7 +94,13 @@ export interface AIFunctions {
   readonly knowledge: KnowledgeOperations
   /** Memory 操作（记忆提取、存储、检索、注入），需要先调用 `init()` */
   readonly memory: MemoryOperations
-  /** Context 操作（上下文压缩、摘要、Token 估算），需要先调用 `init()` */
+  /** Token 操作（Token 估算），需要先调用 `init()` */
+  readonly token: TokenOperations
+  /** Summary 操作（消息摘要生成），需要先调用 `init()` */
+  readonly summary: SummaryOperations
+  /** Compress 操作（上下文压缩），需要先调用 `init()` */
+  readonly compress: CompressOperations
+  /** Context 操作（有状态上下文管理器，编排 LLM + Memory + RAG + Reasoning），需要先调用 `init()` */
   readonly context: ContextOperations
   /** Rerank 操作（文档重排序），需要先调用 `init()` */
   readonly rerank: RerankOperations
@@ -101,16 +110,26 @@ export interface AIFunctions {
 
 // ─── 子功能类型 re-export ───
 
+// ─── Compress 类型 re-export ───
+
+export type {
+  CompressionStrategy,
+  CompressOperations,
+  CompressOptions,
+  CompressResult,
+} from './compress/ai-compress-types.js'
+export { CompressionStrategySchema } from './compress/ai-compress-types.js'
+
 // ─── Context 类型 re-export ───
 
 export type {
-  ContextCompressOptions,
-  ContextCompressResult,
+  ContextChatOptions,
+  ContextChatResult,
+  ContextDeps,
   ContextManager,
   ContextManagerOptions,
   ContextOperations,
-  ContextSummarizeOptions,
-  ContextSummary,
+  ContextStreamEvent,
 } from './context/ai-context-types.js'
 
 // ─── Embedding 类型 re-export ───
@@ -272,3 +291,17 @@ export type {
   StoreFilter,
   StorePage,
 } from './store/ai-store-types.js'
+
+// ─── Summary 类型 re-export ───
+
+export type {
+  SummaryOperations,
+  SummaryOptions,
+  SummaryResult,
+} from './summary/ai-summary-types.js'
+
+// ─── Token 类型 re-export ───
+
+export type {
+  TokenOperations,
+} from './token/ai-token-types.js'
