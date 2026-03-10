@@ -23,6 +23,7 @@ import type {
   MemoryListPageOptions,
   MemoryOperations,
   MemoryRecallOptions,
+  MemoryUpdateInput,
 } from './ai-memory-types.js'
 
 import { core, err, ok } from '@h-ai/core'
@@ -169,7 +170,7 @@ export function createMemoryOperations(
       accessCount: 0,
     }
 
-    await store.save(entry.id, entry)
+    await store.save(entry.id, entry, { objectId: entry.objectId })
 
     if (vector) {
       await vectorStore.upsert(entry.id, vector, {
@@ -255,6 +256,54 @@ export function createMemoryOperations(
     },
 
     /**
+     * 更新一条已有记忆
+     */
+    async update(memoryId: string, updates: MemoryUpdateInput): Promise<Result<MemoryEntry, AIError>> {
+      try {
+        const existing = await store.get(memoryId)
+        if (!existing) {
+          return err({
+            code: AIErrorCode.MEMORY_NOT_FOUND,
+            message: aiM('ai_memoryNotFound', { params: { id: memoryId } }),
+          })
+        }
+
+        if (updates.content !== undefined)
+          existing.content = updates.content
+        if (updates.type !== undefined)
+          existing.type = updates.type
+        if (updates.importance !== undefined)
+          existing.importance = updates.importance
+        if (updates.metadata !== undefined)
+          existing.metadata = updates.metadata
+
+        // 内容变更时重新计算向量
+        if (updates.content !== undefined) {
+          const vector = await computeVector(updates.content)
+          existing.vector = vector
+          if (vector) {
+            await vectorStore.upsert(memoryId, vector, {
+              objectId: existing.objectId,
+              type: existing.type,
+            })
+          }
+        }
+
+        await store.save(memoryId, existing, { objectId: existing.objectId })
+        logger.trace('Memory updated', { id: memoryId })
+        return ok(existing)
+      }
+      catch (error) {
+        logger.error('Memory update failed', { id: memoryId, error })
+        return err({
+          code: AIErrorCode.MEMORY_STORE_FAILED,
+          message: aiM('ai_memoryStoreFailed', { params: { error: String(error) } }),
+          cause: error,
+        })
+      }
+    },
+
+    /**
      * 根据 ID 获取一条记忆并更新访问统计
      *
      * 访问成功后自动更新 `lastAccessedAt` 和 `accessCount`。
@@ -272,7 +321,7 @@ export function createMemoryOperations(
       }
       entry.lastAccessedAt = Date.now()
       entry.accessCount++
-      await store.save(memoryId, entry)
+      await store.save(memoryId, entry, { objectId: entry.objectId })
       return ok(entry)
     },
 
@@ -293,9 +342,6 @@ export function createMemoryOperations(
       try {
         // ── 第一阶段：筛选候选集 ──
         const where: WhereClause<MemoryEntry> = {}
-        if (options?.objectId) {
-          where.objectId = options.objectId
-        }
 
         // type 过滤：单值用等值匹配，多值用 $in 操作符
         const types = options?.types
@@ -312,6 +358,7 @@ export function createMemoryOperations(
         }
 
         const candidates = await store.query({
+          objectId: options?.objectId,
           where: Object.keys(where).length > 0 ? where : undefined,
         })
 
@@ -380,7 +427,7 @@ export function createMemoryOperations(
         for (const { entry } of scored.slice(0, topK)) {
           entry.lastAccessedAt = now
           entry.accessCount++
-          await store.save(entry.id, entry)
+          await store.save(entry.id, entry, { objectId: entry.objectId })
           results.push(entry)
         }
 
@@ -522,14 +569,13 @@ export function createMemoryOperations(
      */
     async list(options?: MemoryListOptions): Promise<Result<MemoryEntry[], AIError>> {
       const where: WhereClause<MemoryEntry> = {}
-      if (options?.objectId)
-        where.objectId = options.objectId
       if (options?.types && options.types.length === 1)
         where.type = options.types[0]
       else if (options?.types && options.types.length > 1)
         where.type = { $in: options.types }
 
       const results = await store.query({
+        objectId: options?.objectId,
         where: Object.keys(where).length > 0 ? where : undefined,
         orderBy: { field: 'createdAt', direction: 'desc' },
         limit: options?.limit,
@@ -546,8 +592,6 @@ export function createMemoryOperations(
      */
     async listPage(options?: MemoryListPageOptions): Promise<Result<StorePage<MemoryEntry>, AIError>> {
       const where: WhereClause<MemoryEntry> = {}
-      if (options?.objectId)
-        where.objectId = options.objectId
       if (options?.types && options.types.length === 1)
         where.type = options.types[0]
       else if (options?.types && options.types.length > 1)
@@ -555,6 +599,7 @@ export function createMemoryOperations(
 
       const page = await store.queryPage(
         {
+          objectId: options?.objectId,
           where: Object.keys(where).length > 0 ? where : undefined,
           orderBy: { field: 'createdAt', direction: 'desc' },
         },
@@ -583,14 +628,13 @@ export function createMemoryOperations(
       }
       else {
         const where: WhereClause<MemoryEntry> = {}
-        if (options.objectId)
-          where.objectId = options.objectId
         if (options.types && options.types.length === 1)
           where.type = options.types[0]
         else if (options.types && options.types.length > 1)
           where.type = { $in: options.types }
 
         const toRemove = await store.query({
+          objectId: options.objectId,
           where: Object.keys(where).length > 0 ? where : undefined,
         })
 

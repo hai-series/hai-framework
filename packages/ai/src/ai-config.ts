@@ -10,11 +10,12 @@ import type { AIError } from './ai-types.js'
 import process from 'node:process'
 import { err, ok } from '@h-ai/core'
 import { z } from 'zod'
+import { aiM } from './ai-i18n.js'
 
 // ─── Context 配置 Schema ───
 
-// CompressionStrategySchema / CompressionStrategy 定义在 context/ai-context-types.ts 中
-import { CompressionStrategySchema } from './context/ai-context-types.js'
+// CompressionStrategySchema / CompressionStrategy 定义在 compress/ai-compress-types.ts 中
+import { CompressionStrategySchema } from './compress/ai-compress-types.js'
 
 // ─── 错误码 ───
 
@@ -150,17 +151,17 @@ export const AIErrorCode = {
   /** 文件内容无效 */
   FILE_INVALID_CONTENT: 12033,
 
-  // Store (13000-13049)
+  // Store (12960-12969)
   /** 存储操作失败 */
-  STORE_FAILED: 13000,
+  STORE_FAILED: 12960,
   /** 存储后端不可用 */
-  STORE_NOT_AVAILABLE: 13001,
+  STORE_NOT_AVAILABLE: 12961,
 
-  // Session (13050-13099)
+  // Session (12970-12979)
   /** 会话未找到 */
-  SESSION_NOT_FOUND: 13050,
+  SESSION_NOT_FOUND: 12970,
   /** 会话操作失败 */
-  SESSION_FAILED: 13051,
+  SESSION_FAILED: 12971,
 } as const
 
 /** 错误码值类型 */
@@ -261,8 +262,8 @@ export type ModelEntry = z.infer<typeof ModelEntrySchema>
 export const LLMConfigSchema = z.object({
   /** 全局 API Key（各模型 fallback；未提供时回退到 `process.env.HAI_OPENAI_API_KEY` 或 `process.env.OPENAI_API_KEY`） */
   apiKey: z.string().optional(),
-  /** 全局 API 基础 URL（各模型 fallback；未提供时回退到环境变量） */
-  baseUrl: z.url(),
+  /** 全局 API 基础 URL（各模型 fallback；未提供时回退到 `process.env.HAI_OPENAI_BASE_URL` 或 `process.env.OPENAI_BASE_URL`） */
+  baseUrl: z.url().optional(),
   /** 默认模型名称（默认 `'gpt-4o-mini'`） */
   model: z.string().optional().default('gpt-4o-mini'),
   /** 全局最大 Token 数（各模型 fallback，默认 `4096`） */
@@ -290,7 +291,7 @@ export interface ResolvedModelConfig {
   model: string
   /** API Key（模型条目 > 全局配置 > 环境变量） */
   apiKey: string | undefined
-  /** API 基础 URL（模型条目 > 全局配置 > 环境变量） */
+  /** API 基础 URL（模型条目 > 全局配置 > 环境变量 > 默认 OpenAI） */
   baseUrl: string
   /** 最大 Token 数（模型条目 > 全局配置） */
   maxTokens: number
@@ -349,7 +350,7 @@ export function resolveModelEntry(
   const resolved: ResolvedModelConfig = {
     model: modelName,
     apiKey: entry?.apiKey ?? llmConfig.apiKey ?? process.env.HAI_OPENAI_API_KEY ?? process.env.OPENAI_API_KEY,
-    baseUrl: entry?.baseUrl ?? llmConfig.baseUrl ?? process.env.HAI_OPENAI_BASE_URL ?? process.env.OPENAI_BASE_URL,
+    baseUrl: entry?.baseUrl ?? llmConfig.baseUrl ?? process.env.HAI_OPENAI_BASE_URL ?? process.env.OPENAI_BASE_URL ?? 'https://api.openai.com/v1',
     maxTokens: entry?.maxTokens ?? llmConfig.maxTokens ?? 4096,
     temperature: entry?.temperature ?? llmConfig.temperature ?? 0.7,
     timeout: entry?.timeout ?? llmConfig.timeout ?? 60000,
@@ -358,7 +359,7 @@ export function resolveModelEntry(
   if (!resolved.apiKey) {
     return err({
       code: AIErrorCode.CONFIGURATION_ERROR,
-      message: options?.missingApiKeyMessage ?? `API Key is required for ${scenario}`,
+      message: options?.missingApiKeyMessage ?? aiM('ai_configMissingApiKey', { params: { scenario } }),
     })
   }
 
@@ -446,8 +447,8 @@ export type EmbeddingConfig = z.infer<typeof EmbeddingConfigSchema>
 
 // ─── Knowledge 配置 Schema ───
 
-export { CompressionStrategySchema } from './context/ai-context-types.js'
-export type { CompressionStrategy } from './context/ai-context-types.js'
+export { CompressionStrategySchema } from './compress/ai-compress-types.js'
+export type { CompressionStrategy } from './compress/ai-compress-types.js'
 
 /**
  * Knowledge 配置 Schema
@@ -469,8 +470,8 @@ export type { CompressionStrategy } from './context/ai-context-types.js'
  * ```
  */
 export const KnowledgeConfigSchema = z.object({
-  /** 默认向量集合名（默认 'knowledge'） */
-  collection: z.string().default('knowledge'),
+  /** 默认向量集合名（默认 'hai_ai_knowledge'） */
+  collection: z.string().default('hai_ai_knowledge'),
   /** 向量维度（默认 1536，需与 embedding 模型匹配） */
   dimension: z.number().int().positive().default(1536),
   /** 是否启用实体提取（默认 true） */
@@ -486,7 +487,7 @@ export const KnowledgeConfigSchema = z.object({
   /** 自定义实体类型列表（不指定时使用内置默认类型） */
   entityTypes: z.array(z.string()).optional(),
   /** 自定义实体提取系统提示词（不指定时使用内置默认提示词） */
-  entityExtractionPrompt: z.string().optional(),
+  systemPrompt: z.string().optional(),
 })
 
 /** Knowledge 配置类型 */
@@ -535,37 +536,68 @@ export { MemoryTypeSchema } from './memory/ai-memory-types.js'
 export type { MemoryType } from './memory/ai-memory-types.js'
 
 /**
- * Context 配置 Schema
+ * Token 配置 Schema
  *
- * 配置对话上下文管理参数：压缩策略、Token 预算、摘要生成等。
+ * 配置 Token 估算参数。
+ *
+ * @example
+ * ```ts
+ * const tokenConfig = { tokenRatio: 0.25 }
+ * ```
+ */
+export const TokenConfigSchema = z.object({
+  /** Token 估算每字符系数（默认 0.25，即 4 字符 ≈ 1 token） */
+  tokenRatio: z.number().positive().default(0.25),
+})
+
+/** Token 配置类型 */
+export type TokenConfig = z.infer<typeof TokenConfigSchema>
+
+/**
+ * Summary 配置 Schema
+ *
+ * 配置摘要生成参数。
  * 模型通过 LLMConfigSchema.scenarios.summary 解析，
  * apiKey / baseUrl 统一使用 LLM 配置。
  *
  * @example
  * ```ts
- * const contextConfig = {
+ * const summaryConfig = { systemPrompt: 'You are a summarizer.' }
+ * ```
+ */
+export const SummaryConfigSchema = z.object({
+  /** 自定义摘要 systemPrompt（可选，覆盖内置默认提示词） */
+  systemPrompt: z.string().optional(),
+})
+
+/** Summary 配置类型 */
+export type SummaryConfig = z.infer<typeof SummaryConfigSchema>
+
+/**
+ * Compress 配置 Schema
+ *
+ * 配置上下文压缩参数：压缩策略、Token 预算、保留消息数。
+ *
+ * @example
+ * ```ts
+ * const compressConfig = {
  *   defaultStrategy: 'hybrid',
  *   defaultMaxTokens: 4000,
  *   preserveLastN: 4,
- *   tokenRatio: 0.25,
  * }
  * ```
  */
-export const ContextConfigSchema = z.object({
+export const CompressConfigSchema = z.object({
   /** 默认压缩策略（默认 'hybrid'） */
   defaultStrategy: CompressionStrategySchema.default('hybrid'),
   /** 默认 Token 预算（默认 0 表示取模型上限的 80%） */
   defaultMaxTokens: z.number().int().min(0).default(0),
   /** 默认保留最近消息数（默认 4） */
   preserveLastN: z.number().int().min(0).default(4),
-  /** 自定义摘要 systemPrompt（可选，覆盖内置默认提示词） */
-  systemPrompt: z.string().optional(),
-  /** Token 估算每字符系数（默认 0.25，即 4 字符 ≈ 1 token） */
-  tokenRatio: z.number().positive().default(0.25),
 })
 
-/** Context 配置类型 */
-export type ContextConfig = z.infer<typeof ContextConfigSchema>
+/** Compress 配置类型 */
+export type CompressConfig = z.infer<typeof CompressConfigSchema>
 
 // ─── File 配置 Schema ───
 
@@ -641,7 +673,7 @@ export type RetrievalConfig = z.infer<typeof RetrievalConfigSchema>
 /**
  * AI 配置 Schema
  *
- * 统一 AI 模块配置：LLM、MCP、Embedding、Knowledge、Retrieval、Memory、Context、File。
+ * 统一 AI 模块配置：LLM、MCP、Embedding、Knowledge、Retrieval、Memory、Token、Summary、Compress、File。
  * 模型通过 LLM.scenarios 映射场景，子系统不再独立配置 apiKey / baseUrl / model。
  *
  * @example
@@ -670,12 +702,14 @@ export type RetrievalConfig = z.infer<typeof RetrievalConfigSchema>
  *     ],
  *   },
  *   memory: { maxEntries: 500, embeddingEnabled: true },
- *   context: { defaultStrategy: 'hybrid', preserveLastN: 4 },
+ *   token: { tokenRatio: 0.25 },
+ *   summary: { systemPrompt: 'You are a summarizer.' },
+ *   compress: { defaultStrategy: 'hybrid', preserveLastN: 4 },
  * })
  * ```
  */
 export const AIConfigSchema = z.object({
-  /** LLM 配置 */
+  /** LLM 配置（必填，AI 模块的基础依赖） */
   llm: LLMConfigSchema,
   /** MCP 配置 */
   mcp: MCPConfigSchema.optional(),
@@ -685,8 +719,12 @@ export const AIConfigSchema = z.object({
   knowledge: KnowledgeConfigSchema.optional(),
   /** Memory 配置 */
   memory: MemoryConfigSchema.optional(),
-  /** Context 配置 */
-  context: ContextConfigSchema.optional(),
+  /** Token 配置 */
+  token: TokenConfigSchema.optional(),
+  /** Summary 配置 */
+  summary: SummaryConfigSchema.optional(),
+  /** Compress 配置 */
+  compress: CompressConfigSchema.optional(),
   /** Retrieval 配置（预注册检索源） */
   retrieval: RetrievalConfigSchema.optional(),
   /** File 解析配置 */

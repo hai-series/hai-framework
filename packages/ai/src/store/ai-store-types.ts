@@ -5,6 +5,21 @@
  * @module ai-store-types
  */
 
+// ─── 存储作用域 ───
+
+/**
+ * 存储作用域——用于索引列加速查询
+ *
+ * 在 save 时传入 scope，值将写入独立索引列（object_id / session_id），
+ * 后续 query / removeBy 可通过 StoreFilter.objectId / sessionId 使用索引过滤。
+ */
+export interface StoreScope {
+  /** 交互主体 ID（写入 object_id 索引列） */
+  objectId?: string
+  /** 会话 ID（写入 session_id 索引列） */
+  sessionId?: string
+}
+
 // ─── 查询过滤 ───
 
 /**
@@ -67,6 +82,10 @@ export type WhereClause<T> = {
 export interface StoreFilter<T> {
   /** 字段匹配条件（等值或操作符） */
   where?: WhereClause<T>
+  /** 按 object_id 索引列过滤（需要 AIStoreOptions.hasObjectId 启用） */
+  objectId?: string
+  /** 按 session_id 索引列过滤（需要 AIStoreOptions.hasSessionId 启用） */
+  sessionId?: string
   /** 排序 */
   orderBy?: { field: keyof T, direction: 'asc' | 'desc' }
   /** 数量限制 */
@@ -96,9 +115,9 @@ export interface StorePage<T> {
  */
 export interface AIStore<T> {
   /** 保存一条记录（upsert 语义） */
-  save: (id: string, data: T) => Promise<void>
+  save: (id: string, data: T, scope?: StoreScope) => Promise<void>
   /** 批量保存 */
-  saveMany: (items: Array<{ id: string, data: T }>) => Promise<void>
+  saveMany: (items: Array<{ id: string, data: T, scope?: StoreScope }>) => Promise<void>
   /** 按 ID 获取 */
   get: (id: string) => Promise<T | undefined>
   /** 按条件查询 */

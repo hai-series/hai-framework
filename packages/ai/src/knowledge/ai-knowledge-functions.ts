@@ -8,7 +8,7 @@
 
 import type { Result } from '@h-ai/core'
 import type { ChunkOptionsInput, DatapipeFunctions } from '@h-ai/datapipe'
-import type { DataOperations } from '@h-ai/reldb'
+import type { DataOperations, DbType } from '@h-ai/reldb'
 import type { VecdbFunctions } from '@h-ai/vecdb'
 import type { KnowledgeConfig } from '../ai-config.js'
 import type { AIError } from '../ai-types.js'
@@ -21,7 +21,13 @@ import type {
   EntityQueryOptions,
   KnowledgeAskOptions,
   KnowledgeAskResult,
+  KnowledgeDocumentInfo,
+  KnowledgeDocumentListOptions,
+  KnowledgeDocumentRemoveOptions,
   KnowledgeEntity,
+  KnowledgeIngestBatchProgress,
+  KnowledgeIngestBatchResult,
+  KnowledgeIngestFileInput,
   KnowledgeIngestInput,
   KnowledgeIngestResult,
   KnowledgeOperations,
@@ -42,8 +48,14 @@ import {
   findByEntityName,
   findDocumentsByEntityIds,
   findEntitiesByName,
+  getDocumentFromDb,
   insertEntityDocument,
+  listDocumentEntityCounts,
+  listDocumentsFromDb,
   listEntities as listEntitiesFromDb,
+  removeDocumentEntityRelations,
+  removeDocumentFromDb,
+  upsertDocument,
   upsertEntity,
 } from './ai-knowledge-schema.js'
 
@@ -80,6 +92,7 @@ export function createKnowledgeOperations(
   vecdb: VecdbFunctions,
   reldb: DataOperations,
   datapipe: DatapipeFunctions,
+  dbType: DbType = 'sqlite',
 ): KnowledgeOperations {
   /** 是否已完成 setup（调用 setup() 后置为 true） */
   let isSetup = false
@@ -116,7 +129,7 @@ export function createKnowledgeOperations(
         }
 
         // 创建 reldb 实体索引表（DDL 幂等）
-        const schemaResult = await createKnowledgeSchema(reldb)
+        const schemaResult = await createKnowledgeSchema(reldb, dbType)
         if (!schemaResult.success)
           return schemaResult
 
@@ -173,7 +186,7 @@ export function createKnowledgeOperations(
         ...input.chunkOptions,
       }
 
-      logger.debug('Ingesting document', { documentId: input.documentId, collection, contentLength: input.content.length })
+      logger.trace('Ingesting document', { documentId: input.documentId, collection, contentLength: input.content.length })
 
       try {
         // ① 清洗：标准化文本（去 HTML、空白规整等）
@@ -225,6 +238,16 @@ export function createKnowledgeOperations(
           })
         }
 
+        // ④.b 记录文档元数据到 reldb
+        await upsertDocument(reldb, {
+          documentId: input.documentId,
+          collection,
+          title: input.title,
+          url: input.url,
+          chunkCount: chunks.length,
+          createdAt: Date.now(),
+        }, dbType)
+
         // ⑤ 实体提取（可选）
         const extractedEntities: KnowledgeEntity[] = []
 
@@ -234,7 +257,7 @@ export function createKnowledgeOperations(
             chunkId: `${input.documentId}:chunk-${chunk.index}`,
           }))
 
-          const entityResult = await extractEntitiesBatch(llm, chunkInputs, undefined, config.entityTypes, config.entityExtractionPrompt)
+          const entityResult = await extractEntitiesBatch(llm, chunkInputs, undefined, config.entityTypes, config.systemPrompt)
           if (entityResult.success) {
             // ⑥ 写入 reldb
             for (const entity of entityResult.data) {
@@ -255,7 +278,7 @@ export function createKnowledgeOperations(
                 type: entity.type,
                 aliases: entity.aliases,
                 description: entity.description,
-              })
+              }, dbType)
 
               // 插入文档-实体关联（每个命中的 chunkId 建一条倒排记录）
               for (const chunkId of entity.chunkIds) {
@@ -266,7 +289,7 @@ export function createKnowledgeOperations(
                   collection,
                   relevance: 1.0,
                   context: chunks.find(c => `${input.documentId}:chunk-${c.index}` === chunkId)?.content?.slice(0, 200),
-                })
+                }, dbType)
               }
             }
           }
@@ -382,7 +405,7 @@ export function createKnowledgeOperations(
             query,
             undefined,
             config.entityTypes,
-            config.entityExtractionPrompt,
+            config.systemPrompt,
           )
           const queryEntityNames = queryEntityResult.success
             ? queryEntityResult.data.map(e => e.name)
@@ -599,6 +622,164 @@ export function createKnowledgeOperations(
         createdAt: row.createdAt ?? undefined,
         updatedAt: row.updatedAt ?? undefined,
       })))
+    },
+
+    // ─── listDocuments ───
+    async listDocuments(options?: KnowledgeDocumentListOptions): Promise<Result<KnowledgeDocumentInfo[], AIError>> {
+      if (!isSetup) {
+        return err({
+          code: AIErrorCode.KNOWLEDGE_NOT_SETUP,
+          message: aiM('ai_knowledgeNotSetup'),
+        })
+      }
+
+      const collection = options?.collection ?? config.collection
+
+      try {
+        // 从 reldb 文档元数据表中查询
+        const docsResult = await listDocumentsFromDb(reldb, collection, {
+          offset: options?.offset,
+          limit: options?.limit,
+        })
+        if (!docsResult.success)
+          return docsResult as Result<never, AIError>
+
+        // 查询每个文档的实体关联数
+        const docIds = docsResult.data.map(d => d.documentId)
+        const entityCountResult = await listDocumentEntityCounts(reldb, docIds, collection)
+        const entityCounts = entityCountResult.success ? entityCountResult.data : new Map<string, number>()
+
+        const docs: KnowledgeDocumentInfo[] = docsResult.data.map(d => ({
+          documentId: d.documentId,
+          title: d.title ?? undefined,
+          url: d.url ?? undefined,
+          chunkCount: d.chunkCount,
+          entityCount: entityCounts.get(d.documentId) ?? 0,
+          createdAt: d.createdAt,
+        }))
+
+        return ok(docs)
+      }
+      catch (error) {
+        return err({
+          code: AIErrorCode.KNOWLEDGE_RETRIEVE_FAILED,
+          message: aiM('ai_knowledgeRetrieveFailed', { params: { error: String(error) } }),
+          cause: error,
+        })
+      }
+    },
+
+    // ─── removeDocument ───
+    async removeDocument(documentId: string, options?: KnowledgeDocumentRemoveOptions): Promise<Result<void, AIError>> {
+      if (!isSetup) {
+        return err({
+          code: AIErrorCode.KNOWLEDGE_NOT_SETUP,
+          message: aiM('ai_knowledgeNotSetup'),
+        })
+      }
+
+      const collection = options?.collection ?? config.collection
+
+      try {
+        // ① 查询该文档的所有 chunk ID（从文档元数据获取 chunkCount，生成 ID 列表）
+        const docResult = await getDocumentFromDb(reldb, documentId, collection)
+        const docMeta = docResult.success ? docResult.data : undefined
+        const chunkCount = docMeta?.chunkCount ?? 100 // 回退到大数保证覆盖
+
+        // 生成要删除的向量 ID 列表
+        const vectorIds: string[] = []
+        for (let i = 0; i < chunkCount; i++) {
+          vectorIds.push(`${documentId}:chunk-${i}`)
+        }
+
+        // ② 从 vecdb 中删除该文档的所有向量
+        if (vectorIds.length > 0) {
+          const deleteResult = await vecdb.vector.delete(collection, vectorIds)
+          if (!deleteResult.success) {
+            logger.warn('Failed to delete some vectors', { documentId, error: deleteResult.error })
+          }
+        }
+
+        // ③ 从 reldb 中删除该文档的实体关联
+        await removeDocumentEntityRelations(reldb, documentId, collection)
+
+        // ④ 从 reldb 中删除文档元数据
+        await removeDocumentFromDb(reldb, documentId, collection)
+
+        logger.debug('Document removed', { documentId, collection })
+        return ok(undefined)
+      }
+      catch (error) {
+        return err({
+          code: AIErrorCode.KNOWLEDGE_INGEST_FAILED,
+          message: aiM('ai_knowledgeIngestFailed', { params: { error: String(error) } }),
+          cause: error,
+        })
+      }
+    },
+
+    /**
+     * 从文件路径读取并导入文档（仅 Node.js 端可用）
+     */
+    async ingestFile(input: KnowledgeIngestFileInput): Promise<Result<KnowledgeIngestResult, AIError>> {
+      try {
+        const { readFile } = await import('node:fs/promises')
+        const { basename } = await import('node:path')
+        const content = await readFile(input.filePath, { encoding: input.encoding ?? 'utf-8' })
+        const fileName = basename(input.filePath)
+        const documentId = input.documentId ?? fileName
+
+        return this.ingest({
+          documentId,
+          content,
+          title: input.title ?? fileName,
+          url: input.filePath,
+          collection: input.collection,
+          metadata: input.metadata,
+          enableEntityExtraction: input.enableEntityExtraction,
+          cleanOptions: input.cleanOptions,
+          chunkOptions: input.chunkOptions,
+        })
+      }
+      catch (error) {
+        return err({
+          code: AIErrorCode.KNOWLEDGE_INGEST_FAILED,
+          message: aiM('ai_knowledgeIngestFailed', { params: { error: String(error) } }),
+          cause: error,
+        })
+      }
+    },
+
+    /**
+     * 批量导入文档，逐个执行 ingest()，单个失败不中断
+     */
+    async ingestBatch(
+      inputs: KnowledgeIngestInput[],
+      onProgress?: (progress: KnowledgeIngestBatchProgress) => void,
+    ): Promise<Result<KnowledgeIngestBatchResult, AIError>> {
+      const startTime = Date.now()
+      let successCount = 0
+      let failureCount = 0
+      const results: KnowledgeIngestBatchResult['results'] = []
+
+      for (let i = 0; i < inputs.length; i++) {
+        const input = inputs[i]
+        const documentId = input.documentId ?? `batch-${i}`
+        const ingestResult = await this.ingest(input)
+
+        if (ingestResult.success) {
+          successCount++
+          results.push({ documentId, result: ingestResult.data })
+          onProgress?.({ completed: i + 1, total: inputs.length, currentDocumentId: documentId, result: ingestResult.data })
+        }
+        else {
+          failureCount++
+          results.push({ documentId, error: ingestResult.error })
+          onProgress?.({ completed: i + 1, total: inputs.length, currentDocumentId: documentId, error: ingestResult.error })
+        }
+      }
+
+      return ok({ successCount, failureCount, results, duration: Date.now() - startTime })
     },
   }
 }

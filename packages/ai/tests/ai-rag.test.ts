@@ -184,3 +184,63 @@ describe('rAG operations', () => {
     }
   })
 })
+
+// =============================================================================
+// queryStream 测试
+// =============================================================================
+
+describe('rAG queryStream', () => {
+  it('流式查询产出 context → delta → done 事件', async () => {
+    const mockRetrieval = createMockRetrieval([
+      { id: 'doc-1', content: 'AI knowledge', score: 0.9, sourceId: 'wiki' },
+    ])
+
+    const streamLLM: LLMOperations = {
+      chat: vi.fn(),
+      chatStream: vi.fn(() => (async function* () {
+        yield {
+          id: 'chunk-1',
+          object: 'chat.completion.chunk',
+          created: Date.now(),
+          model: 'gpt-4o-mini',
+          choices: [{ index: 0, delta: { content: 'Hello' }, finish_reason: null }],
+        }
+        yield {
+          id: 'chunk-2',
+          object: 'chat.completion.chunk',
+          created: Date.now(),
+          model: 'gpt-4o-mini',
+          choices: [{ index: 0, delta: { content: ' World' }, finish_reason: 'stop' }],
+          usage: { prompt_tokens: 30, completion_tokens: 10, total_tokens: 40 },
+        }
+      })()),
+    } as unknown as LLMOperations
+
+    const rag = createRagOperations(streamLLM, mockRetrieval)
+    const events: unknown[] = []
+
+    for await (const event of rag.queryStream('test query')) {
+      events.push(event)
+    }
+
+    // 第一个事件是 context
+    expect(events[0]).toMatchObject({ type: 'context' })
+    // 中间事件是 delta
+    expect(events[1]).toMatchObject({ type: 'delta', text: 'Hello' })
+    expect(events[2]).toMatchObject({ type: 'delta', text: ' World' })
+    // 最后事件是 done
+    expect(events[3]).toMatchObject({ type: 'done', answer: 'Hello World' })
+  })
+
+  it('retrieval 失败时 queryStream 抛出异常', async () => {
+    const failRetrieval = createFailRetrieval()
+    const mockLLM = createMockLLM('unused')
+    const rag = createRagOperations(mockLLM, failRetrieval)
+
+    await expect(async () => {
+      for await (const _event of rag.queryStream('test')) {
+        // 应该在第一次迭代时抛出
+      }
+    }).rejects.toThrow()
+  })
+})

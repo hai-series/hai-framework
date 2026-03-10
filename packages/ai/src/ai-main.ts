@@ -9,40 +9,31 @@ import type { Result } from '@h-ai/core'
 
 import type { AIConfig, AIConfigInput } from './ai-config.js'
 import type { AIError, AIFunctions } from './ai-types.js'
-import type { ContextOperations, ContextSummary } from './context/ai-context-types.js'
+import type { CompressOperations } from './compress/ai-compress-types.js'
+import type { ContextOperations } from './context/ai-context-types.js'
 import type { EmbeddingOperations } from './embedding/ai-embedding-types.js'
 import type { FileOperations } from './file/ai-file-types.js'
 import type { KnowledgeOperations } from './knowledge/ai-knowledge-types.js'
-import type { ChatMessage, ChatRecord, LLMOperations, StreamOperations, ToolsOperations } from './llm/ai-llm-types.js'
+import type { LLMOperations, StreamOperations, ToolsOperations } from './llm/ai-llm-types.js'
 import type { MCPOperations } from './mcp/ai-mcp-types.js'
-import type { MemoryEntry, MemoryOperations } from './memory/ai-memory-types.js'
+import type { MemoryOperations } from './memory/ai-memory-types.js'
 import type { RagOperations } from './rag/ai-rag-types.js'
 import type { ReasoningOperations } from './reasoning/ai-reasoning-types.js'
 import type { RerankOperations } from './rerank/ai-rerank-types.js'
-import type { RetrievalOperations, RetrievalSource } from './retrieval/ai-retrieval-types.js'
-import type { SessionInfo } from './store/ai-store-types.js'
+import type { RetrievalOperations } from './retrieval/ai-retrieval-types.js'
+import type { SummaryOperations } from './summary/ai-summary-types.js'
+import type { TokenOperations } from './token/ai-token-types.js'
 
 import { core, err, ok } from '@h-ai/core'
 import { datapipe } from '@h-ai/datapipe'
 import { reldb } from '@h-ai/reldb'
 import { vecdb } from '@h-ai/vecdb'
 
-import { AIConfigSchema, AIErrorCode, ContextConfigSchema, KnowledgeConfigSchema, MemoryConfigSchema, RetrievalConfigSchema } from './ai-config.js'
+import { AIConfigSchema, AIErrorCode } from './ai-config.js'
+import { createAISubsystems } from './ai-functions.js'
 import { aiM } from './ai-i18n.js'
-import { createContextOperations } from './context/ai-context-functions.js'
-import { createEmbeddingOperations } from './embedding/ai-embedding-functions.js'
-import { createFileOperations } from './file/ai-file-functions.js'
-import { createKnowledgeOperations } from './knowledge/ai-knowledge-functions.js'
-import { createAILLMFunctions } from './llm/ai-llm-functions.js'
 import { collectStream, createSSEDecoder, createStreamProcessor, encodeSSE } from './llm/ai-llm-stream.js'
 import { createToolRegistry, defineTool } from './llm/ai-llm-tool.js'
-import { createAIMCPFunctions } from './mcp/ai-mcp-functions.js'
-import { createMemoryOperations } from './memory/ai-memory-functions.js'
-import { createRagOperations } from './rag/ai-rag-functions.js'
-import { createReasoningOperations } from './reasoning/ai-reasoning-functions.js'
-import { createRerankOperations } from './rerank/ai-rerank-functions.js'
-import { createRetrievalOperations } from './retrieval/ai-retrieval-functions.js'
-import { ReldbAIStore, VecdbAIVectorStore } from './store/ai-store-db.js'
 
 const logger = core.logger.child({ module: 'ai', scope: 'main' })
 
@@ -68,6 +59,12 @@ let currentKnowledge: KnowledgeOperations | null = null
 let currentMemory: MemoryOperations | null = null
 /** 当前 Context 操作实例 */
 let currentContext: ContextOperations | null = null
+/** 当前 Token 操作实例 */
+let currentToken: TokenOperations | null = null
+/** 当前 Summary 操作实例 */
+let currentSummary: SummaryOperations | null = null
+/** 当前 Compress 操作实例 */
+let currentCompress: CompressOperations | null = null
 /** 当前 Rerank 操作实例 */
 let currentRerank: RerankOperations | null = null
 /** 当前 File 操作实例 */
@@ -96,6 +93,10 @@ const notInitializedLLM: LLMOperations = {
   listModels: () => Promise.resolve(notInitialized.result()),
   getHistory: () => Promise.resolve(notInitialized.result()),
   listSessions: () => Promise.resolve(notInitialized.result()),
+  ask: () => Promise.resolve(notInitialized.result()),
+  async* askStream() {
+    throw notInitialized.error()
+  },
 }
 
 /** MCP 未初始化占位：所有方法返回 NOT_INITIALIZED 错误 */
@@ -118,6 +119,7 @@ const notInitializedEmbedding: EmbeddingOperations = {
 /** Reasoning 未初始化占位 */
 const notInitializedReasoning: ReasoningOperations = {
   run: () => Promise.resolve(notInitialized.result()),
+  async* runStream() { throw notInitialized.error() },
 }
 
 /** Retrieval 未初始化占位 */
@@ -131,6 +133,7 @@ const notInitializedRetrieval: RetrievalOperations = {
 /** RAG 未初始化占位 */
 const notInitializedRag: RagOperations = {
   query: () => Promise.resolve(notInitialized.result()),
+  async* queryStream() { throw notInitialized.error() },
 }
 
 /** Knowledge 未初始化占位 */
@@ -141,12 +144,17 @@ const notInitializedKnowledge: KnowledgeOperations = {
   ask: () => Promise.resolve(notInitialized.result()),
   findByEntity: () => Promise.resolve(notInitialized.result()),
   listEntities: () => Promise.resolve(notInitialized.result()),
+  listDocuments: () => Promise.resolve(notInitialized.result()),
+  removeDocument: () => Promise.resolve(notInitialized.result()),
+  ingestFile: () => Promise.resolve(notInitialized.result()),
+  ingestBatch: () => Promise.resolve(notInitialized.result()),
 }
 
 /** Memory 未初始化占位 */
 const notInitializedMemory: MemoryOperations = {
   extract: () => Promise.resolve(notInitialized.result()),
   add: () => Promise.resolve(notInitialized.result()),
+  update: () => Promise.resolve(notInitialized.result()),
   get: () => Promise.resolve(notInitialized.result()),
   recall: () => Promise.resolve(notInitialized.result()),
   injectMemories: () => Promise.resolve(notInitialized.result()),
@@ -156,14 +164,30 @@ const notInitializedMemory: MemoryOperations = {
   clear: () => Promise.resolve(notInitialized.result()),
 }
 
+/** Token 未初始化占位 */
+const notInitializedToken: TokenOperations = {
+  estimateText: () => 0,
+  estimateMessages: () => 0,
+}
+
+/** Summary 未初始化占位 */
+const notInitializedSummary: SummaryOperations = {
+  generate: () => Promise.resolve(notInitialized.result()),
+  summarize: () => Promise.resolve(notInitialized.result()),
+}
+
+/** Compress 未初始化占位 */
+const notInitializedCompress: CompressOperations = {
+  tryCompress: () => Promise.resolve(notInitialized.result()),
+}
+
 /** Context 未初始化占位 */
 const notInitializedContext: ContextOperations = {
-  tryCompress: () => Promise.resolve(notInitialized.result()),
-  summarize: () => Promise.resolve(notInitialized.result()),
-  estimateTokens: () => notInitialized.result(),
   createManager: () => notInitialized.result(),
   restoreManager: () => Promise.resolve(notInitialized.result()),
   listSessions: () => Promise.resolve(notInitialized.result()),
+  renameSession: () => Promise.resolve(notInitialized.result()),
+  removeSession: () => Promise.resolve(notInitialized.result()),
 }
 
 /** Rerank 未初始化占位 */
@@ -176,6 +200,27 @@ const notInitializedRerank: RerankOperations = {
 const notInitializedFile: FileOperations = {
   parse: () => Promise.resolve(notInitialized.result()),
   parseText: () => Promise.resolve(notInitialized.result()),
+}
+
+// ─── 内部辅助 ───
+
+/** 重置所有子功能引用为 null（用于 close 和 init 失败清理） */
+function resetAllState(): void {
+  currentLLM = null
+  currentMCP = null
+  currentEmbedding = null
+  currentReasoning = null
+  currentRetrieval = null
+  currentRag = null
+  currentKnowledge = null
+  currentMemory = null
+  currentToken = null
+  currentSummary = null
+  currentCompress = null
+  currentContext = null
+  currentRerank = null
+  currentFile = null
+  currentConfig = null
 }
 
 // ─── 纯函数操作（不依赖初始化） ───
@@ -243,76 +288,38 @@ export const ai: AIFunctions = {
           message: aiM('ai_configError', { params: { error: `${missing} not initialized. reldb and vecdb are required.` } }),
         })
       }
-      const sql = reldb.sql
-      const jsonOps = reldb.json
 
-      // 创建 LLM 子功能（含对话记录存储）
-      const chatRecordStore = new ReldbAIStore<ChatRecord>(sql, 'ai_chat_records', jsonOps)
-      const sessionStore = new ReldbAIStore<SessionInfo>(sql, 'ai_sessions', jsonOps)
-      const llmFunctions = createAILLMFunctions(parsed, { recordStore: chatRecordStore, sessionStore })
-      currentLLM = llmFunctions.llm
-
-      // 创建 MCP 子功能
-      currentMCP = createAIMCPFunctions({ config: parsed })
-
-      // 创建 Embedding 子功能
-      currentEmbedding = createEmbeddingOperations(parsed)
-
-      // 创建 Reasoning 子功能（依赖 LLM）
-      currentReasoning = createReasoningOperations(parsed, currentLLM)
-
-      // 创建 Retrieval 子功能（依赖 Embedding + vecdb）
-      const sourceStore = new ReldbAIStore<RetrievalSource>(sql, 'ai_retrieval_sources', jsonOps)
-      currentRetrieval = createRetrievalOperations(currentEmbedding, vecdb, sourceStore)
-
-      // 预注册配置中的检索源（直接写入 store，就算其他实例已有相同数据也是幂等和撃）
-      if (parsed.retrieval?.sources?.length) {
-        const configSources = RetrievalConfigSchema.parse(parsed.retrieval).sources ?? []
-        sourceStore
-          .saveMany(configSources.map(s => ({ id: s.id, data: s })))
-          .catch(e => logger.error('Failed to pre-register retrieval sources', { error: e }))
-      }
-
-      // 创建 RAG 子功能（依赖 LLM + Retrieval）
-      currentRag = createRagOperations(currentLLM, currentRetrieval)
-
-      // 创建 Knowledge 子功能（依赖 LLM + Embedding + vecdb + reldb + datapipe）
-      const knowledgeConfig = parsed.knowledge ?? {}
-      const knowledgeParsed = KnowledgeConfigSchema.parse(knowledgeConfig)
-
-      currentKnowledge = createKnowledgeOperations(
-        knowledgeParsed,
-        currentLLM,
-        currentEmbedding,
+      // 委托 ai-functions 组装所有子功能
+      const subs = createAISubsystems(parsed, {
+        sql: reldb.sql,
+        jsonOps: reldb.json,
+        dbType: reldb.config?.type,
         vecdb,
-        reldb.sql,
         datapipe,
-      )
+      })
 
-      // 创建 Memory 子功能（依赖 LLM + Embedding + Store）
-      const memoryConfig = parsed.memory ?? {}
-      const memoryParsed = MemoryConfigSchema.parse(memoryConfig)
-      const memoryStore = new ReldbAIStore<MemoryEntry>(sql, 'ai_memory', jsonOps)
-      const memoryVectorStore = new VecdbAIVectorStore(vecdb, 'ai_memory_vectors')
-      currentMemory = createMemoryOperations(memoryParsed, currentLLM, currentEmbedding, memoryStore, memoryVectorStore)
-
-      // 创建 Context 子功能（依赖 LLM + Store）
-      const contextConfig = parsed.context ?? {}
-      const contextParsed = ContextConfigSchema.parse(contextConfig)
-      const contextStore = new ReldbAIStore<{ messages: ChatMessage[], summaries: ContextSummary[], updatedAt: number }>(sql, 'ai_context', jsonOps)
-      currentContext = createContextOperations(contextParsed, currentLLM, parsed.llm?.maxTokens ?? 4096, contextStore, sessionStore)
-
-      // 创建 Rerank 子功能
-      currentRerank = createRerankOperations(parsed)
-
-      // 创建 File 子功能（依赖 LLM）
-      currentFile = createFileOperations(parsed, currentLLM)
+      currentLLM = subs.llm
+      currentMCP = subs.mcp
+      currentEmbedding = subs.embedding
+      currentReasoning = subs.reasoning
+      currentRerank = subs.rerank
+      currentRetrieval = subs.retrieval
+      currentRag = subs.rag
+      currentKnowledge = subs.knowledge
+      currentMemory = subs.memory
+      currentToken = subs.token
+      currentSummary = subs.summary
+      currentCompress = subs.compress
+      currentContext = subs.context
+      currentFile = subs.file
 
       currentConfig = parsed
       logger.info('AI module initialized', { model: parsed.llm?.model })
       return ok(undefined)
     }
     catch (error) {
+      // 清理部分赋值的子功能引用，避免 isInitialized=false 但 getter 返回无效实例
+      resetAllState()
       logger.error('AI module initialization failed', { error })
       return err({
         code: AIErrorCode.CONFIGURATION_ERROR,
@@ -334,6 +341,9 @@ export const ai: AIFunctions = {
   get rag(): RagOperations { return currentRag ?? notInitializedRag },
   get knowledge(): KnowledgeOperations { return currentKnowledge ?? notInitializedKnowledge },
   get memory(): MemoryOperations { return currentMemory ?? notInitializedMemory },
+  get token(): TokenOperations { return currentToken ?? notInitializedToken },
+  get summary(): SummaryOperations { return currentSummary ?? notInitializedSummary },
+  get compress(): CompressOperations { return currentCompress ?? notInitializedCompress },
   get context(): ContextOperations { return currentContext ?? notInitializedContext },
   get rerank(): RerankOperations { return currentRerank ?? notInitializedRerank },
   get file(): FileOperations { return currentFile ?? notInitializedFile },
@@ -347,20 +357,7 @@ export const ai: AIFunctions = {
     }
 
     logger.info('Closing AI module')
-
-    currentLLM = null
-    currentMCP = null
-    currentEmbedding = null
-    currentReasoning = null
-    currentRetrieval = null
-    currentRag = null
-    currentKnowledge = null
-    currentMemory = null
-    currentContext = null
-    currentRerank = null
-    currentFile = null
-    currentConfig = null
-
+    resetAllState()
     logger.info('AI module closed')
   },
 }

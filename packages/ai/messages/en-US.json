@@ -63,5 +63,6 @@
   "ai_fileParseFailed": "File parsing failed: {error}",
   "ai_fileUnsupportedFormat": "Unsupported file format: {mimeType}",
   "ai_fileOcrFailed": "OCR recognition failed: {error}",
-  "ai_fileInvalidContent": "Invalid file content: {reason}"
+  "ai_fileInvalidContent": "Invalid file content: {reason}",
+  "ai_configMissingApiKey": "API Key is required for scenario '{scenario}'"
 }

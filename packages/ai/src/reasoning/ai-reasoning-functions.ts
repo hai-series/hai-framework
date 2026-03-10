@@ -14,6 +14,7 @@ import type {
   ReasoningOptions,
   ReasoningResult,
   ReasoningStep,
+  ReasoningStreamEvent,
 } from './ai-reasoning-types.js'
 
 import { core, err, ok } from '@h-ai/core'
@@ -90,6 +91,7 @@ export function createReasoningOperations(config: AIConfig, llm: LLMOperations):
         tool_choice: options.tools ? 'auto' : undefined,
         objectId: options.objectId,
         sessionId: options.sessionId,
+        enablePersist: options.enablePersist,
       })
 
       if (!chatResult.success)
@@ -203,6 +205,7 @@ export function createReasoningOperations(config: AIConfig, llm: LLMOperations):
       temperature: options.temperature,
       objectId: options.objectId,
       sessionId: options.sessionId,
+      enablePersist: options.enablePersist,
     })
 
     if (!chatResult.success)
@@ -265,6 +268,7 @@ export function createReasoningOperations(config: AIConfig, llm: LLMOperations):
       temperature: options.temperature,
       objectId: options.objectId,
       sessionId: options.sessionId,
+      enablePersist: options.enablePersist,
     })
 
     if (!planResult.success)
@@ -290,6 +294,7 @@ export function createReasoningOperations(config: AIConfig, llm: LLMOperations):
         tool_choice: options.tools ? 'auto' : undefined,
         objectId: options.objectId,
         sessionId: options.sessionId,
+        enablePersist: options.enablePersist,
       })
 
       if (!execResult.success)
@@ -384,6 +389,37 @@ export function createReasoningOperations(config: AIConfig, llm: LLMOperations):
           cause: error,
         })
       }
+    },
+
+    /**
+     * 流式推理：逐步产出推理步骤 + 最终答案增量
+     *
+     * 当前实现基于 run() 的结果分步产出事件，
+     * 后续可优化为真正逐轮流式输出。
+     */
+    async* runStream(query: string, options?: ReasoningOptions): AsyncIterable<ReasoningStreamEvent> {
+      const result = await this.run(query, options)
+
+      if (!result.success) {
+        throw result.error
+      }
+
+      const { steps, answer } = result.data
+
+      // 产出所有推理步骤（排除最终 answer 步骤）
+      for (const step of steps) {
+        if (step.type !== 'answer') {
+          yield { type: 'step', step }
+        }
+      }
+
+      // 产出最终答案作为 delta
+      if (answer) {
+        yield { type: 'delta', text: answer }
+      }
+
+      // 产出完成事件
+      yield { type: 'done', result: result.data }
     },
   }
 }

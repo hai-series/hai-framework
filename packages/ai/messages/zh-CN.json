@@ -63,5 +63,6 @@
   "ai_fileParseFailed": "文件解析失败：{error}",
   "ai_fileUnsupportedFormat": "不支持的文件格式：{mimeType}",
   "ai_fileOcrFailed": "OCR 识别失败：{error}",
-  "ai_fileInvalidContent": "文件内容无效：{reason}"
+  "ai_fileInvalidContent": "文件内容无效：{reason}",
+  "ai_configMissingApiKey": "场景 '{scenario}' 需要提供 API Key"
 }

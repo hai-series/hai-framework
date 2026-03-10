@@ -50,15 +50,19 @@ memory:
   embeddingEnabled: true    # 启用向量检索
   defaultTopK: 10           # 默认检索数量
 
+# Token 估算（可选）
+token:
+  tokenRatio: 0.25           # Token 估算系数（4 字符 ≈ 1 token）
+
+# 摘要生成（可选）
+summary:
+  systemPrompt:              # 自定义摘要系统提示词
+
 # 上下文压缩（可选）
-context:
+compress:
   defaultStrategy: hybrid    # 压缩策略：summary | sliding-window | hybrid
   defaultMaxTokens: 0        # 0 = 取模型 maxTokens 的 80%
   preserveLastN: 4           # 保留最近 N 条消息
-  summaryModel: gpt-4o-mini  # 摘要用模型
-  apiKey:                    # 可选，覆盖 LLM apiKey
-  baseUrl:                   # 可选，覆盖 LLM baseUrl
-  tokenRatio: 0.25           # Token 估算系数
 ```
 
 ### 2. 初始化与关闭
@@ -278,20 +282,40 @@ if (enriched.success) {
 }
 ```
 
-### 上下文管理 — `ai.context`
+### Token 估算 — `ai.token`
 
-| 方法             | 签名                                                              | 说明                                      |
-| ---------------- | ----------------------------------------------------------------- | ----------------------------------------- |
-| `tryCompress`    | `(messages, options?) => Promise<Result<ContextCompressResult>>`   | 压缩消息列表至指定 Token 预算             |
-| `summarize`      | `(messages, options?) => Promise<Result<ContextSummary>>`         | 对消息生成摘要                            |
-| `estimateTokens` | `(messages) => Result<number>`                                    | 估算消息列表的 Token 数                   |
-| `createManager`  | `(options?) => Result<ContextManager>`                            | 创建有状态上下文管理器（自动压缩）        |
-| `restoreManager` | `(scope, options?) => Promise<Result<ContextManager>>`            | 从持久化存储恢复上下文管理器              |
-| `listSessions`   | `(objectId) => Promise<Result<SessionInfo[]>>`                    | 列出指定对象的所有会话                    |
+| 方法               | 签名                                | 说明                     |
+| ------------------ | ----------------------------------- | ------------------------ |
+| `estimateMessages` | `(messages) => Result<number>`      | 估算消息列表的 Token 数  |
+| `estimateText`     | `(text) => number`                  | 估算纯文本的 Token 数    |
+
+```typescript
+// 估算消息列表 Token 数
+const tokens = ai.token.estimateMessages(messages)
+if (tokens.success) {
+  // tokens.data — 估算的 Token 数
+}
+
+// 估算纯文本 Token 数
+const count = ai.token.estimateText('Hello world')
+```
+
+### 消息摘要 — `ai.summary`
+
+| 方法        | 签名                                                              | 说明                          |
+| ----------- | ----------------------------------------------------------------- | ----------------------------- |
+| `summarize` | `(messages, options?) => Promise<Result<SummaryResult>>`          | 对消息生成摘要（支持增量）    |
+| `generate`  | `(text, options?) => Promise<Result<SummaryResult>>`              | 对纯文本生成摘要              |
+
+### 上下文压缩 — `ai.compress`
+
+| 方法          | 签名                                                              | 说明                                  |
+| ------------- | ----------------------------------------------------------------- | ------------------------------------- |
+| `tryCompress` | `(messages, options?) => Promise<Result<CompressResult>>`         | 压缩消息列表至指定 Token 预算         |
 
 ```typescript
 // 压缩超长对话
-const result = await ai.context.tryCompress(messages, {
+const result = await ai.compress.tryCompress(messages, {
   strategy: 'hybrid', // summary | sliding-window | hybrid
   maxTokens: 4000,
   preserveLastN: 4,
@@ -301,30 +325,59 @@ if (result.success) {
   // result.data.originalTokens / compressedTokens — 压缩前后 Token 数
   // result.data.summary — 生成的摘要文本
 }
+```
 
-// Token 估算
-const tokens = ai.context.estimateTokens(messages)
-if (tokens.success) {
-  // tokens.data — 估算的 Token 数
-}
+### 上下文管理 — `ai.context`
 
-// 有状态管理器（多轮对话场景）
+| 方法             | 签名                                                              | 说明                                                    |
+| ---------------- | ----------------------------------------------------------------- | ------------------------------------------------------- |
+| `createManager`  | `(options?) => Result<ContextManager>`                            | 创建有状态上下文管理器（压缩 + LLM/Memory/RAG 编排）   |
+| `restoreManager` | `(scope, options?) => Promise<Result<ContextManager>>`            | 从持久化存储恢复上下文管理器                            |
+| `listSessions`   | `(objectId) => Promise<Result<SessionInfo[]>>`                    | 列出指定对象的所有会话                                  |
+| `renameSession`  | `(sessionId, title) => Promise<Result<void>>`                     | 重命名会话                                              |
+| `removeSession`  | `(sessionId) => Promise<Result<void>>`                            | 删除会话                                                |
+
+**ContextManagerOptions**（嵌套子模块配置）：
+- `scope?: InteractionScope` — 交互作用域
+- `systemPrompt?: string` — 系统提示词
+- `model?: string` / `temperature?: number` — LLM 参数覆盖
+- `compress?: CompressOptions & { auto?: boolean }` — 压缩配置（maxTokens/strategy/preserveLastN/auto 等）
+- `memory?: { enable?, enableExtract?, topK?, maxTokens?, position? }` — 记忆配置
+- `rag?: { enable?, sources?, topK?, minScore?, enableRerank? }` — RAG 配置
+- `reasoning?: { enable?, strategy?, maxRounds? }` — 推理配置
+- `tools?: ToolRegistryOperations` — 工具注册表
+
+**ContextManager 方法**：
+- `addMessage(msg)` — 追加消息（自动压缩）
+- `getMessages()` / `getTokenUsage()` / `getSummaries()` — 查询状态
+- `chat(message, options?)` — 发送消息并获取回复（编排 LLM + Memory + RAG + Reasoning）
+- `chatStream(message, options?)` — 流式对话（产出 delta*/done 事件）
+- `save()` — 持久化 / `reset()` — 重置
+
+```typescript
+// 创建管理器并直接对话（推荐）
 const managerResult = ai.context.createManager({
-  scope: { objectId: 'user-001', sessionId: 'sess-001' }, // 可选
-  maxTokens: 8000,
+  scope: { objectId: 'user-001', sessionId: 'sess-001' },
+  systemPrompt: '你是一个友好的助手。',
+  compress: { maxTokens: 8000, strategy: 'hybrid', auto: true },
+  memory: { enable: true, enableExtract: true },
 })
 if (managerResult.success) {
   const manager = managerResult.data
-  await manager.addMessage({ role: 'user', content: userInput })
-  const msgs = manager.getMessages() // 超限时自动压缩
-  const response = await ai.llm.chat({ messages: msgs.data })
-  await manager.addMessage(response.data.choices[0].message)
-  await manager.save() // 持久化（persistent 模式下）
+  const result = await manager.chat('你好')
+  // result.data.reply / result.data.model / result.data.usage
+  await manager.save()
+}
+
+// 流式对话
+for await (const event of manager.chatStream('讲个故事')) {
+  if (event.type === 'delta') process.stdout.write(event.text)
 }
 
 // 恢复已有会话
 const restored = await ai.context.restoreManager(
   { objectId: 'user-001', sessionId: 'sess-001' },
+  { compress: { maxTokens: 8000 }, memory: { enable: true } },
 )
 
 // 列出对象的所有会话
@@ -490,7 +543,7 @@ async function chat(userInput: string) {
   if (!enriched.success) return
 
   // 2. 压缩上下文以适应 Token 限制
-  const compressed = await ai.context.tryCompress(enriched.data, {
+  const compressed = await ai.compress.tryCompress(enriched.data, {
     maxTokens: 4000,
     strategy: 'hybrid',
   })
@@ -515,37 +568,37 @@ async function chat(userInput: string) {
 ```typescript
 import { ai } from '@h-ai/ai'
 
-// 创建管理器（自动压缩）
+// 创建管理器（嵌套配置 + 对话编排）
 const managerResult = ai.context.createManager({
-  scope: { objectId: 'user-001', sessionId: 'sess-001' }, // 可选
-  maxTokens: 8000,
-  strategy: 'hybrid',
-  preserveLastN: 4,
-  autoCompress: true,
+  scope: { objectId: 'user-001', sessionId: 'sess-001' },
+  systemPrompt: '你是一个友好的助手。',
+  compress: { maxTokens: 8000, strategy: 'hybrid', preserveLastN: 4, auto: true },
+  memory: { enable: true, enableExtract: true },
 })
 if (!managerResult.success) throw new Error(managerResult.error.message)
 const manager = managerResult.data
 
-// 多轮对话
-async function chat(userInput: string) {
-  await manager.addMessage({ role: 'user', content: userInput })
+// 方式一：直接对话（推荐，自动编排 LLM + Memory + 压缩）
+const result = await manager.chat('你好')
+if (result.success) {
+  // result.data.reply / result.data.model / result.data.usage
+}
 
+// 流式对话
+for await (const event of manager.chatStream('讲个故事')) {
+  if (event.type === 'delta') process.stdout.write(event.text)
+}
+
+// 方式二：手动管理消息
+async function manualChat(userInput: string) {
+  await manager.addMessage({ role: 'user', content: userInput })
   const msgs = manager.getMessages()
   if (!msgs.success) return
-
-  const result = await ai.llm.chat({ messages: msgs.data })
-  if (!result.success) return
-
-  await manager.addMessage(result.data.choices[0].message)
-  await manager.save() // 持久化（persistent 模式下）
-
-  // 查看 Token 使用量
-  const usage = manager.getTokenUsage()
-  if (usage.success) {
-    console.log(`Token: ${usage.data.current}/${usage.data.budget}`)
-  }
-
-  return result.data.choices[0].message.content
+  const chatResult = await ai.llm.chat({ messages: msgs.data })
+  if (!chatResult.success) return
+  await manager.addMessage(chatResult.data.choices[0].message)
+  await manager.save()
+  return chatResult.data.choices[0].message.content
 }
 ```
 

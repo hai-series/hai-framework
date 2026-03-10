@@ -1,32 +1,34 @@
 /**
  * @h-ai/ai — Context 子功能实现
  *
- * 提供上下文压缩、摘要生成、Token 估算与有状态上下文管理。
- * 支持通过 AIStore 持久化会话状态。
+ * 聚合 Token、Summary、Compress 三个子模块，并在此基础上
+ * 提供有状态的 ContextManager（多轮对话自动压缩 + 对话编排 + 持久化）。
  * @module ai-context-functions
  */
 
 import type { Result } from '@h-ai/core'
 
-import type { ContextConfig } from '../ai-config.js'
+import type { CompressConfig } from '../ai-config.js'
 import type { AIError } from '../ai-types.js'
-import type { ChatMessage, LLMOperations } from '../llm/ai-llm-types.js'
-import type { AIStore, InteractionScope, SessionInfo, WhereClause } from '../store/ai-store-types.js'
+import type { CompressOperations } from '../compress/ai-compress-types.js'
+import type { ChatMessage } from '../llm/ai-llm-types.js'
+import type { AIStore, InteractionScope, SessionInfo } from '../store/ai-store-types.js'
+import type { SummaryResult } from '../summary/ai-summary-types.js'
+import type { TokenOperations } from '../token/ai-token-types.js'
 import type {
-  ContextCompressOptions,
-  ContextCompressResult,
+  ContextChatOptions,
+  ContextChatResult,
+  ContextDeps,
   ContextManager,
   ContextManagerOptions,
   ContextOperations,
-  ContextSummarizeOptions,
-  ContextSummary,
+  ContextStreamEvent,
 } from './ai-context-types.js'
 
 import { core, err, ok } from '@h-ai/core'
 
 import { AIErrorCode } from '../ai-config.js'
 import { aiM } from '../ai-i18n.js'
-import { estimateMessagesTokens, estimateTextTokens } from './ai-context-token.js'
 
 const logger = core.logger.child({ module: 'ai', scope: 'context' })
 
@@ -37,335 +39,41 @@ const logger = core.logger.child({ module: 'ai', scope: 'context' })
  */
 interface PersistedContextState {
   messages: ChatMessage[]
-  summaries: ContextSummary[]
+  summaries: SummaryResult[]
   updatedAt: number
 }
-
-// ─── 摘要提示词 ───
-
-const SUMMARIZE_SYSTEM_PROMPT = `You are a conversation summarizer. Create a concise summary of the conversation that preserves:
-1. Key facts and decisions made
-2. Important context and background information
-3. User preferences or instructions mentioned
-4. Any unresolved questions or pending topics
-
-Rules:
-- Be concise but comprehensive — capture all important information
-- Use third person ("The user asked...", "The assistant explained...")
-- Preserve specific details like names, numbers, dates, and technical terms
-- Structure the summary in logical paragraphs
-- Keep the summary under 500 words`
-
-const INCREMENTAL_SUMMARIZE_PROMPT = `You are a conversation summarizer. You have a previous summary and new messages to incorporate.
-
-Previous Summary:
-{previousSummary}
-
-Merge the previous summary with the new conversation messages to create an updated, comprehensive summary. Follow the same rules as before: be concise, preserve key details, use third person.`
 
 /**
  * 创建 Context 操作接口
  *
- * @param config - Context 配置
- * @param llm - LLM 操作接口（用于生成摘要）
- * @param defaultMaxTokens - 默认 maxTokens（从 LLM 配置获取）
+ * 聚合 Token、Summary、Compress 子模块，提供统一的上下文管理 API。
+ * 若传入 deps（LLM / Memory / RAG / Reasoning），ContextManager 可提供
+ * chat/chatStream 高层编排能力。
+ *
+ * @param compressConfig - Compress 配置（用于 ContextManager 的默认值）
+ * @param tokenOps - Token 操作接口（由 token 子模块创建）
+ * @param compressOps - Compress 操作接口（由 compress 子模块创建）
  * @param contextStore - 上下文状态存储（可选，用于持久化）
  * @param sessionStore - 会话信息存储（可选，用于目录管理）
+ * @param deps - 可选子模块依赖（LLM / Memory / RAG / Reasoning）
  * @returns ContextOperations 实例
  */
 export function createContextOperations(
-  config: ContextConfig,
-  llm: LLMOperations,
-  defaultMaxTokens: number,
+  compressConfig: CompressConfig,
+  tokenOps: TokenOperations,
+  compressOps: CompressOperations,
   contextStore?: AIStore<PersistedContextState>,
   sessionStore?: AIStore<SessionInfo>,
+  deps?: ContextDeps,
 ): ContextOperations {
-  const tokenRatio = config.tokenRatio
-
   /**
-   * 计算有效的 maxTokens
+   * 计算有效的 maxTokens（用于 ContextManager 初始化）
    */
   function resolveMaxTokens(optionMaxTokens?: number): number {
-    const fromOption = optionMaxTokens ?? config.defaultMaxTokens
+    const fromOption = optionMaxTokens ?? compressConfig.defaultMaxTokens
     if (fromOption > 0)
       return fromOption
-    return Math.floor(defaultMaxTokens * 0.8)
-  }
-
-  /**
-   * 滑动窗口压缩
-   */
-  function slidingWindow(
-    messages: ChatMessage[],
-    maxTokens: number,
-    preserveSystem: boolean,
-    preserveLastN: number,
-  ): { messages: ChatMessage[], removedCount: number } {
-    const systemMessages: ChatMessage[] = []
-    const nonSystemMessages: ChatMessage[] = []
-
-    for (const msg of messages) {
-      if (msg.role === 'system' && preserveSystem) {
-        systemMessages.push(msg)
-      }
-      else {
-        nonSystemMessages.push(msg)
-      }
-    }
-
-    const preserved = nonSystemMessages.slice(-preserveLastN)
-    const result = [...systemMessages, ...preserved]
-    const currentTokens = estimateMessagesTokens(result, tokenRatio)
-
-    if (currentTokens <= maxTokens) {
-      return {
-        messages: result,
-        removedCount: nonSystemMessages.length - preserved.length,
-      }
-    }
-
-    // 从最新的消息开始逆向添加
-    let finalMessages = [...systemMessages]
-    let tokens = estimateMessagesTokens(finalMessages, tokenRatio)
-    const addable: ChatMessage[] = []
-
-    for (let i = nonSystemMessages.length - 1; i >= 0; i--) {
-      const msgTokens = estimateMessagesTokens([nonSystemMessages[i]], tokenRatio)
-      if (tokens + msgTokens > maxTokens)
-        break
-      addable.unshift(nonSystemMessages[i])
-      tokens += msgTokens
-    }
-
-    finalMessages = [...systemMessages, ...addable]
-
-    return {
-      messages: finalMessages,
-      removedCount: nonSystemMessages.length - addable.length,
-    }
-  }
-
-  /**
-   * 生成摘要
-   */
-  async function generateSummary(
-    messages: ChatMessage[],
-    options?: { model?: string, temperature?: number, previousSummary?: string },
-  ): Promise<Result<string, AIError>> {
-    const conversationText = messages
-      .filter(m => m.role !== 'system')
-      .map((m) => {
-        const content = m.role === 'assistant'
-          ? (m.content ?? '[tool call]')
-          : m.role === 'tool'
-            ? `[tool result: ${m.content.slice(0, 200)}]`
-            : (typeof m.content === 'string' ? m.content : '[multimodal]')
-        return `${m.role}: ${content}`
-      })
-      .join('\n')
-
-    let systemPrompt = config.systemPrompt ?? SUMMARIZE_SYSTEM_PROMPT
-    if (options?.previousSummary) {
-      systemPrompt = INCREMENTAL_SUMMARIZE_PROMPT
-        .replace('{previousSummary}', options.previousSummary)
-    }
-
-    const chatResult = await llm.chat({
-      model: options?.model,
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user', content: conversationText },
-      ],
-      temperature: options?.temperature ?? 0.3,
-    })
-
-    if (!chatResult.success) {
-      return err({
-        code: AIErrorCode.CONTEXT_SUMMARIZE_FAILED,
-        message: aiM('ai_contextSummarizeFailed', { params: { error: String(chatResult.error.message) } }),
-        cause: chatResult.error,
-      })
-    }
-
-    return ok(chatResult.data.choices[0]?.message?.content ?? '')
-  }
-
-  /**
-   * 压缩消息列表
-   */
-  async function compressMessages(messages: ChatMessage[], options?: ContextCompressOptions): Promise<Result<ContextCompressResult, AIError>> {
-    const strategy = options?.strategy ?? config.defaultStrategy
-    const maxTokens = resolveMaxTokens(options?.maxTokens)
-    const preserveSystem = options?.preserveSystem ?? true
-    const preserveLastN = options?.preserveLastN ?? config.preserveLastN
-
-    logger.trace('Compressing context', { strategy, maxTokens, messageCount: messages.length })
-
-    try {
-      const originalTokens = estimateMessagesTokens(messages, tokenRatio)
-
-      // 不需要压缩
-      if (originalTokens <= maxTokens) {
-        return ok({
-          messages: [...messages],
-          originalTokens,
-          compressedTokens: originalTokens,
-          removedCount: 0,
-        })
-      }
-
-      if (strategy === 'sliding-window') {
-        const { messages: compressed, removedCount } = slidingWindow(
-          messages,
-          maxTokens,
-          preserveSystem,
-          preserveLastN,
-        )
-        const compressedTokens = estimateMessagesTokens(compressed, tokenRatio)
-
-        logger.trace('Sliding window compression completed', { originalTokens, compressedTokens, removedCount })
-        return ok({
-          messages: compressed,
-          originalTokens,
-          compressedTokens,
-          removedCount,
-        })
-      }
-
-      if (strategy === 'summary') {
-        const systemMessages = preserveSystem ? messages.filter(m => m.role === 'system') : []
-        const nonSystem = messages.filter(m => m.role !== 'system' || !preserveSystem)
-        const preserved = nonSystem.slice(-preserveLastN)
-        const toSummarize = nonSystem.slice(0, nonSystem.length - preserveLastN)
-
-        if (toSummarize.length === 0) {
-          return ok({
-            messages: [...messages],
-            originalTokens,
-            compressedTokens: originalTokens,
-            removedCount: 0,
-          })
-        }
-
-        const summaryResult = await generateSummary(toSummarize, { model: options?.summaryModel })
-        if (!summaryResult.success)
-          return summaryResult as Result<never, AIError>
-
-        const summaryText = summaryResult.data
-        const summaryMessage: ChatMessage = {
-          role: 'system',
-          content: `[Conversation Summary]\n${summaryText}`,
-        }
-
-        const compressed = [...systemMessages, summaryMessage, ...preserved]
-        const compressedTokens = estimateMessagesTokens(compressed, tokenRatio)
-
-        logger.trace('Summary compression completed', { originalTokens, compressedTokens, removedCount: toSummarize.length })
-        return ok({
-          messages: compressed,
-          originalTokens,
-          compressedTokens,
-          removedCount: toSummarize.length,
-          summary: summaryText,
-        })
-      }
-
-      // hybrid：先滑动窗口，如果仍超限则摘要
-      const { messages: windowResult, removedCount: windowRemoved } = slidingWindow(
-        messages,
-        maxTokens,
-        preserveSystem,
-        preserveLastN,
-      )
-      const windowTokens = estimateMessagesTokens(windowResult, tokenRatio)
-
-      if (windowTokens <= maxTokens) {
-        return ok({
-          messages: windowResult,
-          originalTokens,
-          compressedTokens: windowTokens,
-          removedCount: windowRemoved,
-        })
-      }
-
-      // 滑动窗口不够，对被移除的部分生成摘要
-      const systemMessages = preserveSystem ? messages.filter(m => m.role === 'system') : []
-      const nonSystem = messages.filter(m => m.role !== 'system' || !preserveSystem)
-      const preservedMessages = nonSystem.slice(-preserveLastN)
-      const toSummarize = nonSystem.slice(0, nonSystem.length - preserveLastN)
-
-      if (toSummarize.length > 0) {
-        const summaryResult = await generateSummary(toSummarize, { model: options?.summaryModel })
-        if (!summaryResult.success)
-          return summaryResult as Result<never, AIError>
-
-        const summaryText = summaryResult.data
-        const summaryMessage: ChatMessage = {
-          role: 'system',
-          content: `[Conversation Summary]\n${summaryText}`,
-        }
-
-        const compressed = [...systemMessages, summaryMessage, ...preservedMessages]
-        const compressedTokens = estimateMessagesTokens(compressed, tokenRatio)
-
-        logger.trace('Hybrid compression completed', { originalTokens, compressedTokens, removedCount: toSummarize.length })
-        return ok({
-          messages: compressed,
-          originalTokens,
-          compressedTokens,
-          removedCount: toSummarize.length,
-          summary: summaryText,
-        })
-      }
-
-      return ok({
-        messages: windowResult,
-        originalTokens,
-        compressedTokens: windowTokens,
-        removedCount: windowRemoved,
-      })
-    }
-    catch (error) {
-      logger.error('Context compression failed', { error })
-      return err({
-        code: AIErrorCode.CONTEXT_COMPRESS_FAILED,
-        message: aiM('ai_contextCompressFailed', { params: { error: String(error) } }),
-        cause: error,
-      })
-    }
-  }
-
-  /**
-   * 摘要消息列表
-   */
-  async function summarizeMessages(messages: ChatMessage[], options?: ContextSummarizeOptions): Promise<Result<ContextSummary, AIError>> {
-    logger.trace('Summarizing messages', { messageCount: messages.length })
-
-    try {
-      const summaryResult = await generateSummary(messages, {
-        model: options?.model,
-        temperature: options?.temperature,
-        previousSummary: options?.previousSummary,
-      })
-
-      if (!summaryResult.success)
-        return summaryResult as Result<never, AIError>
-
-      const summary = summaryResult.data
-      return ok({
-        summary,
-        tokenCount: estimateTextTokens(summary, tokenRatio),
-        coveredMessages: messages.filter(m => m.role !== 'system').length,
-      })
-    }
-    catch (error) {
-      logger.error('Context summarization failed', { error })
-      return err({
-        code: AIErrorCode.CONTEXT_SUMMARIZE_FAILED,
-        message: aiM('ai_contextSummarizeFailed', { params: { error: String(error) } }),
-        cause: error,
-      })
-    }
+    return compressConfig.defaultMaxTokens > 0 ? compressConfig.defaultMaxTokens : 4096
   }
 
   /**
@@ -379,16 +87,21 @@ export function createContextOperations(
    * 创建 ContextManager 实例（共享逻辑）
    */
   function buildManager(
-    scope: InteractionScope | undefined,
-    managerMaxTokens: number,
-    strategy: string,
-    preserveSystem: boolean,
-    preserveLastN: number,
-    autoCompress: boolean,
-    summaryModel: string | undefined,
+    options: ContextManagerOptions,
     initialMessages: ChatMessage[],
-    initialSummaries: ContextSummary[],
+    initialSummaries: SummaryResult[],
   ): ContextManager {
+    const scope = options.scope
+
+    // 解析压缩参数
+    const compress = options.compress
+    const managerMaxTokens = resolveMaxTokens(compress?.maxTokens)
+    const strategy = compress?.strategy ?? compressConfig.defaultStrategy
+    const preserveSystem = compress?.preserveSystem ?? true
+    const preserveLastN = compress?.preserveLastN ?? compressConfig.preserveLastN
+    const autoCompress = compress?.auto ?? true
+    const summaryModel = compress?.summaryModel
+
     const state = {
       messages: initialMessages,
       summaries: initialSummaries,
@@ -403,14 +116,14 @@ export function createContextOperations(
         if (!autoCompress)
           return ok(undefined)
 
-        const currentTokens = estimateMessagesTokens(state.messages, tokenRatio)
+        const currentTokens = tokenOps.estimateMessages(state.messages)
         if (currentTokens <= managerMaxTokens)
           return ok(undefined)
 
         logger.trace('Auto-compressing context', { currentTokens, budget: managerMaxTokens })
 
-        const compressResult = await compressMessages(state.messages, {
-          strategy: strategy as ContextCompressOptions['strategy'],
+        const compressResult = await compressOps.tryCompress(state.messages, {
+          strategy: strategy as 'summary' | 'sliding-window' | 'hybrid',
           maxTokens: managerMaxTokens,
           preserveSystem,
           preserveLastN,
@@ -425,7 +138,7 @@ export function createContextOperations(
         if (compressResult.data.summary) {
           state.summaries.push({
             summary: compressResult.data.summary,
-            tokenCount: estimateTextTokens(compressResult.data.summary, tokenRatio),
+            tokenCount: tokenOps.estimateText(compressResult.data.summary),
             coveredMessages: compressResult.data.removedCount,
           })
         }
@@ -440,12 +153,12 @@ export function createContextOperations(
 
       getTokenUsage(): Result<{ current: number, budget: number }, AIError> {
         return ok({
-          current: estimateMessagesTokens(state.messages, tokenRatio),
+          current: tokenOps.estimateMessages(state.messages),
           budget: managerMaxTokens,
         })
       },
 
-      getSummaries(): Result<ContextSummary[], AIError> {
+      getSummaries(): Result<SummaryResult[], AIError> {
         return ok([...state.summaries])
       },
 
@@ -459,14 +172,14 @@ export function createContextOperations(
             messages: state.messages,
             summaries: state.summaries,
             updatedAt: Date.now(),
-          })
+          }, { objectId: scope.objectId, sessionId: scope.sessionId })
 
           // 同步更新会话信息
           if (sessionStore) {
             const existing = await sessionStore.get(scope.sessionId)
             if (existing) {
               existing.updatedAt = Date.now()
-              await sessionStore.save(scope.sessionId, existing)
+              await sessionStore.save(scope.sessionId, existing, { objectId: existing.objectId })
             }
             else {
               await sessionStore.save(scope.sessionId, {
@@ -474,7 +187,7 @@ export function createContextOperations(
                 objectId: scope.objectId,
                 createdAt: Date.now(),
                 updatedAt: Date.now(),
-              })
+              }, { objectId: scope.objectId })
             }
           }
 
@@ -493,89 +206,331 @@ export function createContextOperations(
         state.messages = []
         state.summaries = []
       },
+
+      // ─── chat/chatStream 编排 ───
+
+      async chat(message: string, chatOpts?: ContextChatOptions): Promise<Result<ContextChatResult, AIError>> {
+        if (!deps?.llm) {
+          return err({
+            code: AIErrorCode.NOT_INITIALIZED,
+            message: aiM('ai_notInitialized'),
+          })
+        }
+
+        try {
+          // 追加用户消息（自动压缩）
+          const addResult = await manager.addMessage({ role: 'user', content: message })
+          if (!addResult.success)
+            return addResult
+
+          // 获取当前消息列表
+          const messagesResult = manager.getMessages()
+          if (!messagesResult.success)
+            return messagesResult
+          let messages = messagesResult.data
+
+          // 可选：注入记忆
+          if (options.memory?.enable && deps.memory) {
+            const injected = await deps.memory.injectMemories(messages, {
+              objectId: scope?.objectId,
+              topK: options.memory.topK,
+              maxTokens: options.memory.maxTokens,
+              position: options.memory.position,
+            })
+            if (injected.success) {
+              messages = injected.data
+            }
+          }
+
+          // 可选：RAG 检索增强 — 将检索结果作为 system 消息注入
+          if (options.rag?.enable && deps.rag) {
+            const ragResult = await deps.rag.query(message, {
+              sources: options.rag.sources,
+              topK: options.rag.topK,
+              minScore: options.rag.minScore,
+              enableRerank: options.rag.enableRerank,
+              rerankModel: options.rag.rerankModel,
+              model: chatOpts?.model ?? options.model,
+              messages,
+              enablePersist: false,
+            })
+            if (ragResult.success) {
+              // RAG query 已直接返回完整结果，将 answer 作为回复
+              const reply = ragResult.data.answer
+              await manager.addMessage({ role: 'assistant', content: reply })
+
+              if (options.memory?.enableExtract && deps.memory) {
+                const recentMessages: ChatMessage[] = [
+                  { role: 'user', content: message },
+                  { role: 'assistant', content: reply },
+                ]
+                deps.memory.extract(recentMessages, { objectId: scope?.objectId })
+                  .catch(e => logger.warn('Memory extract failed', { error: e }))
+              }
+
+              return ok({
+                reply,
+                model: ragResult.data.model,
+                usage: ragResult.data.usage,
+              })
+            }
+          }
+
+          // 可选：推理引擎
+          if (options.reasoning?.enable && deps.reasoning) {
+            const reasonResult = await deps.reasoning.run(message, {
+              strategy: options.reasoning.strategy,
+              maxRounds: options.reasoning.maxRounds,
+              model: chatOpts?.model ?? options.model,
+              temperature: chatOpts?.temperature ?? options.temperature,
+              messages,
+              tools: options.tools,
+              objectId: scope?.objectId,
+              sessionId: scope?.sessionId,
+              enablePersist: false,
+            })
+            if (reasonResult.success) {
+              const reply = reasonResult.data.answer
+              await manager.addMessage({ role: 'assistant', content: reply })
+
+              if (options.memory?.enableExtract && deps.memory) {
+                const recentMessages: ChatMessage[] = [
+                  { role: 'user', content: message },
+                  { role: 'assistant', content: reply },
+                ]
+                deps.memory.extract(recentMessages, { objectId: scope?.objectId })
+                  .catch(e => logger.warn('Memory extract failed', { error: e }))
+              }
+
+              return ok({ reply, model: chatOpts?.model ?? options.model ?? '', usage: undefined })
+            }
+          }
+
+          // 普通 LLM 调用
+          const chatResult = await deps.llm.chat({
+            model: chatOpts?.model ?? options.model,
+            messages,
+            temperature: chatOpts?.temperature ?? options.temperature,
+            objectId: scope?.objectId,
+            sessionId: scope?.sessionId,
+            tools: options.tools?.getDefinitions(),
+            enablePersist: chatOpts?.enablePersist ?? false,
+          })
+
+          if (!chatResult.success)
+            return chatResult
+
+          const choice = chatResult.data.choices[0]
+          const reply = choice?.message?.content ?? ''
+
+          // 追加助手回复
+          await manager.addMessage({ role: 'assistant', content: reply })
+
+          // 可选：自动提取记忆
+          if (options.memory?.enableExtract && deps.memory) {
+            const recentMessages: ChatMessage[] = [
+              { role: 'user', content: message },
+              { role: 'assistant', content: reply },
+            ]
+            deps.memory.extract(recentMessages, { objectId: scope?.objectId })
+              .catch(e => logger.warn('Memory extract failed', { error: e }))
+          }
+
+          return ok({
+            reply,
+            model: chatResult.data.model,
+            usage: chatResult.data.usage
+              ? {
+                  prompt_tokens: chatResult.data.usage.prompt_tokens,
+                  completion_tokens: chatResult.data.usage.completion_tokens,
+                  total_tokens: chatResult.data.usage.total_tokens,
+                }
+              : undefined,
+          })
+        }
+        catch (error) {
+          logger.error('Context chat failed', { error })
+          return err({
+            code: AIErrorCode.INTERNAL_ERROR,
+            message: aiM('ai_internalError', { params: { error: String(error) } }),
+            cause: error,
+          })
+        }
+      },
+
+      async* chatStream(message: string, chatOpts?: ContextChatOptions): AsyncIterable<ContextStreamEvent> {
+        if (!deps?.llm) {
+          throw new Error('LLM not initialized: deps.llm is required for chatStream')
+        }
+
+        // 追加用户消息
+        await manager.addMessage({ role: 'user', content: message })
+
+        // 获取消息列表
+        const messagesResult = manager.getMessages()
+        if (!messagesResult.success) {
+          throw new Error(`Failed to get messages: ${String(messagesResult.error)}`)
+        }
+        let messages = messagesResult.data
+
+        // 可选：注入记忆
+        if (options.memory?.enable && deps.memory) {
+          const injected = await deps.memory.injectMemories(messages, {
+            objectId: scope?.objectId,
+            topK: options.memory.topK,
+            maxTokens: options.memory.maxTokens,
+            position: options.memory.position,
+          })
+          if (injected.success) {
+            messages = injected.data
+          }
+        }
+
+        // 提取记忆的通用逻辑
+        const extractMemory = (reply: string) => {
+          if (options.memory?.enableExtract && deps?.memory) {
+            const recentMessages: ChatMessage[] = [
+              { role: 'user', content: message },
+              { role: 'assistant', content: reply },
+            ]
+            deps.memory.extract(recentMessages, { objectId: scope?.objectId })
+              .catch(e => logger.warn('Memory extract failed', { error: e }))
+          }
+        }
+
+        // 可选：RAG 流式检索增强
+        if (options.rag?.enable && deps.rag) {
+          let fullReply = ''
+          let model = ''
+          let usage: { prompt_tokens: number, completion_tokens: number, total_tokens: number } | undefined
+
+          for await (const event of deps.rag.queryStream(message, {
+            sources: options.rag.sources,
+            topK: options.rag.topK,
+            minScore: options.rag.minScore,
+            enableRerank: options.rag.enableRerank,
+            rerankModel: options.rag.rerankModel,
+            model: chatOpts?.model ?? options.model,
+            messages,
+            enablePersist: false,
+          })) {
+            if (event.type === 'delta') {
+              fullReply += event.text
+              yield { type: 'delta', text: event.text }
+            }
+            else if (event.type === 'done') {
+              fullReply = event.answer
+              model = event.model
+              usage = event.usage
+            }
+          }
+
+          await manager.addMessage({ role: 'assistant', content: fullReply })
+          extractMemory(fullReply)
+          yield { type: 'done', reply: fullReply, model, usage }
+          return
+        }
+
+        // 可选：Reasoning 流式推理
+        if (options.reasoning?.enable && deps.reasoning) {
+          let fullReply = ''
+
+          for await (const event of deps.reasoning.runStream(message, {
+            strategy: options.reasoning.strategy,
+            maxRounds: options.reasoning.maxRounds,
+            model: chatOpts?.model ?? options.model,
+            temperature: chatOpts?.temperature ?? options.temperature,
+            messages,
+            tools: options.tools,
+            objectId: scope?.objectId,
+            sessionId: scope?.sessionId,
+            enablePersist: false,
+          })) {
+            if (event.type === 'delta') {
+              fullReply += event.text
+              yield { type: 'delta', text: event.text }
+            }
+          }
+
+          await manager.addMessage({ role: 'assistant', content: fullReply })
+          extractMemory(fullReply)
+          yield { type: 'done', reply: fullReply, model: chatOpts?.model ?? options.model ?? '', usage: undefined }
+          return
+        }
+
+        // 普通流式 LLM 调用
+        const stream = deps.llm.chatStream({
+          model: chatOpts?.model ?? options.model,
+          messages,
+          temperature: chatOpts?.temperature ?? options.temperature,
+          objectId: scope?.objectId,
+          sessionId: scope?.sessionId,
+          tools: options.tools?.getDefinitions(),
+          enablePersist: chatOpts?.enablePersist ?? false,
+        })
+
+        let fullReply = ''
+        let model = ''
+        let usage: { prompt_tokens: number, completion_tokens: number, total_tokens: number } | undefined
+
+        for await (const chunk of stream) {
+          if (!model && chunk.model)
+            model = chunk.model
+          const delta = chunk.choices?.[0]?.delta?.content
+          if (delta) {
+            fullReply += delta
+            yield { type: 'delta', text: delta }
+          }
+          if (chunk.usage) {
+            usage = {
+              prompt_tokens: chunk.usage.prompt_tokens,
+              completion_tokens: chunk.usage.completion_tokens,
+              total_tokens: chunk.usage.total_tokens,
+            }
+          }
+        }
+
+        // 追加助手回复
+        await manager.addMessage({ role: 'assistant', content: fullReply })
+
+        extractMemory(fullReply)
+
+        yield { type: 'done', reply: fullReply, model, usage }
+      },
     }
 
     return manager
   }
 
   return {
-    tryCompress: compressMessages,
-
-    summarize: summarizeMessages,
-
     /**
-     * 估算消息列表的 Token 数
-     *
-     * 使用配置的 tokenRatio 进行字符数比例基于居估算。
-     *
-     * @param messages - 待估算的消息列表
-     * @returns `ok(number)` Token 数居估值；计算异常时返回 `CONTEXT_TOKEN_ESTIMATE_FAILED`
-     */
-    estimateTokens(messages: ChatMessage[]): Result<number, AIError> {
-      try {
-        return ok(estimateMessagesTokens(messages, tokenRatio))
-      }
-      catch (error) {
-        return err({
-          code: AIErrorCode.CONTEXT_TOKEN_ESTIMATE_FAILED,
-          message: aiM('ai_contextTokenEstimateFailed', { params: { error: String(error) } }),
-          cause: error,
-        })
-      }
-    },
-
-    /**
-     * 创建无状态上下文管理器
-     *
-     * 每次创建时从空消息列表开始，不从存储读取。
-     * 如需恢复历史会话，请使用 `restoreManager`。
-     *
-     * @param options - 可选（maxTokens、strategy、preserveSystem、preserveLastN、autoCompress 等）
-     * @returns `ok(ContextManager)` 管理器实例
+     * 创建有状态上下文管理器
      */
     createManager(options?: ContextManagerOptions): Result<ContextManager, AIError> {
-      const managerMaxTokens = resolveMaxTokens(options?.maxTokens)
-      const strategy = options?.strategy ?? config.defaultStrategy
-      const preserveSystem = options?.preserveSystem ?? true
-      const preserveLastN = options?.preserveLastN ?? config.preserveLastN
-      const autoCompress = options?.autoCompress ?? true
-      const summaryModel = options?.summaryModel
+      const opts = options ?? {}
 
       const manager = buildManager(
-        options?.scope,
-        managerMaxTokens,
-        strategy,
-        preserveSystem,
-        preserveLastN,
-        autoCompress,
-        summaryModel,
+        opts,
         [],
         [],
       )
+
+      // 如果有系统提示词，将其作为第一条 system 消息
+      if (opts.systemPrompt) {
+        void manager.addMessage({ role: 'system', content: opts.systemPrompt })
+      }
 
       return ok(manager)
     },
 
     /**
-     * 从存储恢复管理器实例（就地持久化的会话继续上次周期）
-     *
-     * 按 scope（objectId + sessionId）从 `contextStore` 读取历史消息并初始化管理器。
-     * 存储中无该 scope 时从空开始（装作 fetchOrCreate 语义）。
-     *
-     * @param scope - 会话范围（objectId + sessionId）
-     * @param options - 可选配置（与 `createManager` 相同选项，无 scope）
-     * @returns `ok(ContextManager)` 已恢复状态的管理器实例
+     * 从存储恢复管理器实例
      */
     async restoreManager(scope: InteractionScope, options?: Omit<ContextManagerOptions, 'scope'>): Promise<Result<ContextManager, AIError>> {
-      const managerMaxTokens = resolveMaxTokens(options?.maxTokens)
-      const strategy = options?.strategy ?? config.defaultStrategy
-      const preserveSystem = options?.preserveSystem ?? true
-      const preserveLastN = options?.preserveLastN ?? config.preserveLastN
-      const autoCompress = options?.autoCompress ?? true
-      const summaryModel = options?.summaryModel
+      const opts = { ...options, scope } as ContextManagerOptions
 
       let initialMessages: ChatMessage[] = []
-      let initialSummaries: ContextSummary[] = []
+      let initialSummaries: SummaryResult[] = []
 
       // 从存储恢复
       if (contextStore) {
@@ -589,13 +544,8 @@ export function createContextOperations(
       }
 
       const manager = buildManager(
-        scope,
-        managerMaxTokens,
-        strategy,
-        preserveSystem,
-        preserveLastN,
-        autoCompress,
-        summaryModel,
+        // 恢复时不再追加 systemPrompt（历史中已有）
+        { ...opts, systemPrompt: undefined },
         initialMessages,
         initialSummaries,
       )
@@ -605,9 +555,6 @@ export function createContextOperations(
 
     /**
      * 列出指定对象的所有会话
-     *
-     * @param objectId - 对象标识（如用户 ID）
-     * @returns `ok(SessionInfo[])` 按最近更新时间降序排列的会话列表；无 sessionStore 时返回空数组
      */
     async listSessions(objectId: string): Promise<Result<SessionInfo[], AIError>> {
       if (!sessionStore) {
@@ -616,10 +563,61 @@ export function createContextOperations(
 
       try {
         const sessions = await sessionStore.query({
-          where: { objectId } as WhereClause<SessionInfo>,
+          objectId,
           orderBy: { field: 'updatedAt', direction: 'desc' },
         })
         return ok(sessions)
+      }
+      catch (error) {
+        return err({
+          code: AIErrorCode.SESSION_FAILED,
+          message: aiM('ai_sessionFailed', { params: { error: String(error) } }),
+          cause: error,
+        })
+      }
+    },
+
+    async renameSession(sessionId: string, title: string): Promise<Result<void, AIError>> {
+      if (!sessionStore) {
+        return ok(undefined)
+      }
+
+      try {
+        const existing = await sessionStore.get(sessionId)
+        if (!existing) {
+          return err({
+            code: AIErrorCode.SESSION_FAILED,
+            message: aiM('ai_sessionFailed', { params: { error: `Session not found: ${sessionId}` } }),
+          })
+        }
+        existing.title = title
+        existing.updatedAt = Date.now()
+        await sessionStore.save(sessionId, existing, { objectId: existing.objectId })
+        return ok(undefined)
+      }
+      catch (error) {
+        return err({
+          code: AIErrorCode.SESSION_FAILED,
+          message: aiM('ai_sessionFailed', { params: { error: String(error) } }),
+          cause: error,
+        })
+      }
+    },
+
+    async removeSession(sessionId: string): Promise<Result<void, AIError>> {
+      if (!sessionStore) {
+        return ok(undefined)
+      }
+
+      try {
+        // 先获取会话信息，需要 objectId 来构建上下文存储 key
+        const existing = await sessionStore.get(sessionId)
+        if (existing && contextStore) {
+          const key = `${existing.objectId}:${existing.sessionId}`
+          await contextStore.remove(key)
+        }
+        await sessionStore.remove(sessionId)
+        return ok(undefined)
       }
       catch (error) {
         return err({

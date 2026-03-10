@@ -5,55 +5,148 @@
  * @module ai-store-db
  */
 
-import type { DataOperations, ReldbJsonOps } from '@h-ai/reldb'
+import type { DataOperations, DbType, ReldbJsonOps } from '@h-ai/reldb'
 import type { VecdbFunctions } from '@h-ai/vecdb'
-import type { AIStore, AIVectorStore, StoreFilter, StorePage, WhereClause, WhereOperator } from './ai-store-types.js'
+import type { AIStore, AIVectorStore, StoreFilter, StorePage, StoreScope, WhereClause, WhereOperator } from './ai-store-types.js'
 
 // ─── Reldb AIStore 实现 ───
 
 /**
+ * AIStore 配置选项
+ */
+export interface AIStoreOptions {
+  /** 数据库类型（用于生成跨 DB 兼容 SQL），默认 sqlite */
+  dbType?: DbType
+  /** 是否创建 object_id 索引列 */
+  hasObjectId?: boolean
+  /** 是否创建 session_id 索引列 */
+  hasSessionId?: boolean
+}
+
+/**
  * 基于 reldb 的持久化 AIStore 实现
  *
- * 将记录以 JSON 格式存储在 reldb 表中。
- * 表结构：id TEXT PRIMARY KEY, data TEXT, created_at INTEGER
+ * 将记录以 JSON 格式存储在 reldb 表中，支持 SQLite / PostgreSQL / MySQL。
+ * 表结构：id PK, object_id?, session_id?, data JSON, created_at, updated_at
+ *
+ * - object_id / session_id 为可选索引列，由 AIStoreOptions 控制是否创建
+ * - save 时通过 StoreScope 参数写入索引列
+ * - query / removeBy 时通过 StoreFilter.objectId / sessionId 使用索引加速
  */
 export class ReldbAIStore<T> implements AIStore<T> {
   private readonly sql: DataOperations
   private readonly table: string
   private readonly jsonOps: ReldbJsonOps
+  private readonly dbType: DbType
+  private readonly hasObjectId: boolean
+  private readonly hasSessionId: boolean
   private initialized = false
 
-  constructor(sql: DataOperations, table: string, jsonOps: ReldbJsonOps) {
+  constructor(sql: DataOperations, table: string, jsonOps: ReldbJsonOps, options?: AIStoreOptions) {
     this.sql = sql
     this.table = table
     this.jsonOps = jsonOps
+    this.dbType = options?.dbType ?? 'sqlite'
+    this.hasObjectId = options?.hasObjectId ?? false
+    this.hasSessionId = options?.hasSessionId ?? false
   }
 
   /**
-   * 确保表已创建
+   * 确保表已创建（跨 DB 兼容 DDL）
    */
   private async ensureTable(): Promise<void> {
     if (this.initialized)
       return
-    await this.sql.execute(
-      `CREATE TABLE IF NOT EXISTS ${this.table} (id TEXT PRIMARY KEY, data TEXT NOT NULL, created_at INTEGER NOT NULL DEFAULT (strftime('%s','now') * 1000))`,
-    )
+
+    const t = this.table
+    const db = this.dbType
+    const idType = db === 'mysql' ? 'VARCHAR(512)' : 'TEXT'
+    const scopeType = db === 'mysql' ? 'VARCHAR(255)' : 'TEXT'
+    const dataType = db === 'postgresql' ? 'JSONB' : db === 'mysql' ? 'JSON' : 'TEXT'
+
+    const cols: string[] = [
+      `id ${idType} PRIMARY KEY`,
+    ]
+    if (this.hasObjectId)
+      cols.push(`object_id ${scopeType}`)
+    if (this.hasSessionId)
+      cols.push(`session_id ${scopeType}`)
+    cols.push(`data ${dataType} NOT NULL`)
+    cols.push(`created_at BIGINT NOT NULL`)
+    cols.push(`updated_at BIGINT NOT NULL`)
+
+    await this.sql.execute(`CREATE TABLE IF NOT EXISTS ${t} (${cols.join(', ')})`)
+
+    // 索引
+    if (this.hasObjectId) {
+      await this.sql.execute(`CREATE INDEX IF NOT EXISTS idx_${t}_object_id ON ${t}(object_id)`)
+    }
+    if (this.hasSessionId) {
+      await this.sql.execute(`CREATE INDEX IF NOT EXISTS idx_${t}_session_id ON ${t}(session_id)`)
+    }
+    if (this.hasObjectId && this.hasSessionId) {
+      await this.sql.execute(`CREATE INDEX IF NOT EXISTS idx_${t}_object_session ON ${t}(object_id, session_id)`)
+    }
+
     this.initialized = true
   }
 
-  async save(id: string, data: T): Promise<void> {
+  async save(id: string, data: T, scope?: StoreScope): Promise<void> {
     await this.ensureTable()
+    const now = Date.now()
     const json = JSON.stringify(data)
-    await this.sql.execute(
-      `INSERT INTO ${this.table} (id, data, created_at) VALUES (?, ?, ?) ON CONFLICT(id) DO UPDATE SET data = excluded.data`,
-      [id, json, Date.now()],
-    )
+
+    const colNames = ['id']
+    const values: unknown[] = [id]
+    const placeholders: string[] = ['?']
+
+    if (this.hasObjectId) {
+      colNames.push('object_id')
+      values.push(scope?.objectId ?? null)
+      placeholders.push('?')
+    }
+    if (this.hasSessionId) {
+      colNames.push('session_id')
+      values.push(scope?.sessionId ?? null)
+      placeholders.push('?')
+    }
+
+    colNames.push('data', 'created_at', 'updated_at')
+    values.push(json, now, now)
+    placeholders.push('?', '?', '?')
+
+    if (this.dbType === 'mysql') {
+      // MySQL: ON DUPLICATE KEY UPDATE
+      const updateParts: string[] = ['data = VALUES(data)', 'updated_at = VALUES(updated_at)']
+      if (this.hasObjectId)
+        updateParts.push('object_id = VALUES(object_id)')
+      if (this.hasSessionId)
+        updateParts.push('session_id = VALUES(session_id)')
+
+      await this.sql.execute(
+        `INSERT INTO ${this.table} (${colNames.join(', ')}) VALUES (${placeholders.join(', ')}) ON DUPLICATE KEY UPDATE ${updateParts.join(', ')}`,
+        values,
+      )
+    }
+    else {
+      // SQLite / PostgreSQL: ON CONFLICT(id) DO UPDATE
+      const updateParts: string[] = ['data = excluded.data', 'updated_at = excluded.updated_at']
+      if (this.hasObjectId)
+        updateParts.push('object_id = excluded.object_id')
+      if (this.hasSessionId)
+        updateParts.push('session_id = excluded.session_id')
+
+      await this.sql.execute(
+        `INSERT INTO ${this.table} (${colNames.join(', ')}) VALUES (${placeholders.join(', ')}) ON CONFLICT(id) DO UPDATE SET ${updateParts.join(', ')}`,
+        values,
+      )
+    }
   }
 
-  async saveMany(items: Array<{ id: string, data: T }>): Promise<void> {
+  async saveMany(items: Array<{ id: string, data: T, scope?: StoreScope }>): Promise<void> {
     await this.ensureTable()
-    for (const { id, data } of items) {
-      await this.save(id, data)
+    for (const { id, data, scope } of items) {
+      await this.save(id, data, scope)
     }
   }
 
@@ -81,18 +174,16 @@ export class ReldbAIStore<T> implements AIStore<T> {
     await this.ensureTable()
 
     // 总数（带 WHERE 条件）
-    let countSql = `SELECT COUNT(*) as cnt FROM ${this.table}`
     const countParams: unknown[] = []
-    if (filter.where) {
-      const conditions = this.buildWhereConditions(filter.where, countParams)
-      if (conditions.length > 0) {
-        countSql += ` WHERE ${conditions.join(' AND ')}`
-      }
+    const countConditions = this.buildAllConditions(filter, countParams)
+    let countSql = `SELECT COUNT(*) as cnt FROM ${this.table}`
+    if (countConditions.length > 0) {
+      countSql += ` WHERE ${countConditions.join(' AND ')}`
     }
     const countResult = await this.sql.get<{ cnt: number }>(countSql, countParams)
     const total = countResult.success && countResult.data != null ? countResult.data.cnt : 0
 
-    // 分页数据（buildQuery 已含 WHERE + ORDER，追加 LIMIT/OFFSET）
+    // 分页数据
     const { sql, params } = this.buildQuery({ ...filter, limit: undefined })
     const pagedSql = `${sql} LIMIT ? OFFSET ?`
     const result = await this.sql.query<{ data: string }>(pagedSql, [...params, page.limit, page.offset])
@@ -109,72 +200,83 @@ export class ReldbAIStore<T> implements AIStore<T> {
 
   async removeBy(filter: StoreFilter<T>): Promise<number> {
     await this.ensureTable()
-    if (!filter.where) {
-      const countResult = await this.sql.get<{ cnt: number }>(
-        `SELECT COUNT(*) as cnt FROM ${this.table}`,
-      )
+    const params: unknown[] = []
+    const conditions = this.buildAllConditions(filter, params)
+
+    // 先计数
+    let countSql = `SELECT COUNT(*) as cnt FROM ${this.table}`
+    if (conditions.length > 0) {
+      const whereClause = ` WHERE ${conditions.join(' AND ')}`
+      countSql += whereClause
+      const countResult = await this.sql.get<{ cnt: number }>(countSql, [...params])
       const count = countResult.success && countResult.data != null ? countResult.data.cnt : 0
-      await this.sql.execute(`DELETE FROM ${this.table}`)
+
+      const deleteSql = `DELETE FROM ${this.table}${whereClause}`
+      await this.sql.execute(deleteSql, params)
       return count
     }
 
-    // 使用 json_extract WHERE 条件定位待删除行
-    let deleteSql = `DELETE FROM ${this.table}`
-    const params: unknown[] = []
-    const conditions = this.buildWhereConditions(filter.where, params)
-    if (conditions.length > 0) {
-      deleteSql += ` WHERE ${conditions.join(' AND ')}`
-    }
-
-    // 先计数再删除（SQLite DELETE 不返回 affected rows）
-    let countSql = `SELECT COUNT(*) as cnt FROM ${this.table}`
-    const countParams: unknown[] = []
-    const countConditions = this.buildWhereConditions(filter.where, countParams)
-    if (countConditions.length > 0) {
-      countSql += ` WHERE ${countConditions.join(' AND ')}`
-    }
-    const countResult = await this.sql.get<{ cnt: number }>(countSql, countParams)
+    // 无条件全删
+    const countResult = await this.sql.get<{ cnt: number }>(countSql)
     const count = countResult.success && countResult.data != null ? countResult.data.cnt : 0
-
-    await this.sql.execute(deleteSql, params)
+    await this.sql.execute(`DELETE FROM ${this.table}`)
     return count
   }
 
   async count(filter?: StoreFilter<T>): Promise<number> {
     await this.ensureTable()
-    if (!filter?.where) {
+    if (!filter?.where && !filter?.objectId && !filter?.sessionId) {
       const result = await this.sql.get<{ cnt: number }>(
         `SELECT COUNT(*) as cnt FROM ${this.table}`,
       )
       return result.success && result.data != null ? result.data.cnt : 0
     }
-    const items = await this.query(filter)
-    return items.length
+    const params: unknown[] = []
+    const conditions = this.buildAllConditions(filter!, params)
+    let sql = `SELECT COUNT(*) as cnt FROM ${this.table}`
+    if (conditions.length > 0) {
+      sql += ` WHERE ${conditions.join(' AND ')}`
+    }
+    const result = await this.sql.get<{ cnt: number }>(sql, params)
+    return result.success && result.data != null ? result.data.cnt : 0
   }
 
   async clear(filter?: StoreFilter<T>): Promise<void> {
     await this.ensureTable()
-    if (!filter?.where) {
+    if (!filter?.where && !filter?.objectId && !filter?.sessionId) {
       await this.sql.execute(`DELETE FROM ${this.table}`)
       return
     }
-    await this.removeBy(filter)
+    await this.removeBy(filter!)
   }
 
+  /**
+   * 构建 SELECT 查询（含 WHERE / ORDER BY / LIMIT）
+   */
   private buildQuery(filter: StoreFilter<T>): { sql: string, params: unknown[] } {
     let sql = `SELECT data FROM ${this.table}`
     const params: unknown[] = []
 
-    // 将 WhereClause 编译为 SQL WHERE 子句（基于 json_extract）
-    if (filter.where) {
-      const conditions = this.buildWhereConditions(filter.where, params)
-      if (conditions.length > 0) {
-        sql += ` WHERE ${conditions.join(' AND ')}`
-      }
+    const conditions = this.buildAllConditions(filter, params)
+    if (conditions.length > 0) {
+      sql += ` WHERE ${conditions.join(' AND ')}`
     }
 
     if (filter.orderBy) {
-      sql += ` ORDER BY created_at ${filter.orderBy.direction === 'asc' ? 'ASC' : 'DESC'}`
+      const dir = filter.orderBy.direction === 'asc' ? 'ASC' : 'DESC'
+      const field = String(filter.orderBy.field)
+      // created_at / updated_at 直接用表列，其他字段用 json_extract
+      if (field === 'createdAt') {
+        sql += ` ORDER BY created_at ${dir}`
+      }
+      else if (field === 'updatedAt') {
+        sql += ` ORDER BY updated_at ${dir}`
+      }
+      else {
+        const { sql: jsonSql, params: jsonParams } = this.jsonOps.extract('data', `$.${field}`)
+        params.push(...jsonParams)
+        sql += ` ORDER BY ${jsonSql} ${dir}`
+      }
     }
     else {
       sql += ` ORDER BY created_at DESC`
@@ -186,6 +288,30 @@ export class ReldbAIStore<T> implements AIStore<T> {
     }
 
     return { sql, params }
+  }
+
+  /**
+   * 构建所有 WHERE 条件：索引列 + JSON where 子句
+   */
+  private buildAllConditions(filter: StoreFilter<T>, params: unknown[]): string[] {
+    const conditions: string[] = []
+
+    // 索引列过滤（优先于 json_extract）
+    if (filter.objectId && this.hasObjectId) {
+      conditions.push('object_id = ?')
+      params.push(filter.objectId)
+    }
+    if (filter.sessionId && this.hasSessionId) {
+      conditions.push('session_id = ?')
+      params.push(filter.sessionId)
+    }
+
+    // JSON where 子句
+    if (filter.where) {
+      conditions.push(...this.buildWhereConditions(filter.where, params))
+    }
+
+    return conditions
   }
 
   /**

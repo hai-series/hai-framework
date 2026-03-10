@@ -8,6 +8,7 @@
  */
 
 import type { Result } from '@h-ai/core'
+import type { KnowledgeAskResult, KnowledgeDocumentInfo, KnowledgeIngestResult, KnowledgeRetrieveResult } from '../knowledge/ai-knowledge-types.js'
 import type {
   ChatCompletionChunk,
   ChatCompletionRequest,
@@ -15,7 +16,9 @@ import type {
   ChatMessage,
   ChatRecord,
 } from '../llm/ai-llm-types.js'
-import type { MemoryEntry } from '../memory/ai-memory-types.js'
+import type { MemoryEntry, MemoryEntryInput, MemoryUpdateInput } from '../memory/ai-memory-types.js'
+import type { RagResult } from '../rag/ai-rag-types.js'
+import type { ReasoningResult } from '../reasoning/ai-reasoning-types.js'
 import type { SessionInfo, StorePage } from '../store/ai-store-types.js'
 
 // ─── API 适配器接口 ───
@@ -81,6 +84,7 @@ export interface StreamOptions {
  * 提供浏览器端调用 AI API 的能力，HTTP 基础设施委托给 @h-ai/api-client。
  */
 export interface AIClient {
+  // ─── LLM ───
   /** 发送对话请求（非流式） */
   chat: (request: ChatCompletionRequest) => Promise<ChatCompletionResponse>
   /** 发送流式对话请求，返回异步迭代器 */
@@ -89,31 +93,95 @@ export interface AIClient {
   sendMessage: (message: string, systemPrompt?: string) => Promise<string>
   /** 便捷方法：流式发送纯文本消息并返回完整回复 */
   sendMessageStream: (message: string, options?: StreamOptions, systemPrompt?: string) => Promise<string>
+  /** 简单问答（单轮，自动构造 messages） */
+  ask: (question: string, options?: { systemPrompt?: string, model?: string }) => Promise<string>
+  /** 流式简单问答，返回异步文本流 */
+  askStream: (question: string, options?: { systemPrompt?: string, model?: string }) => AsyncIterable<string>
+
+  // ─── Knowledge ───
+  /** 知识检索（向量 + 实体增强） */
+  knowledgeRetrieve: (query: string, options?: { topK?: number, collection?: string }) => Promise<KnowledgeRetrieveResult>
+  /** 知识问答（RAG + 信源） */
+  knowledgeAsk: (query: string, options?: { model?: string, collection?: string }) => Promise<KnowledgeAskResult>
+  /** 导入文档 */
+  knowledgeIngest: (input: { documentId: string, content: string, title?: string, collection?: string, metadata?: Record<string, unknown> }) => Promise<KnowledgeIngestResult>
+  /** 列出已导入文档 */
+  knowledgeListDocuments: (options?: { collection?: string, offset?: number, limit?: number }) => Promise<KnowledgeDocumentInfo[]>
+  /** 删除已导入文档 */
+  knowledgeRemoveDocument: (documentId: string, options?: { collection?: string }) => Promise<void>
+
+  // ─── Memory ───
   /** 检索相关记忆 */
   recallMemories: (query: string, options?: { topK?: number, types?: string[], minImportance?: number, objectId?: string }) => Promise<MemoryEntry[]>
   /** 列出记忆（分页） */
   listMemories: (options?: { types?: string[], objectId?: string, offset?: number, limit?: number }) => Promise<StorePage<MemoryEntry>>
+  /** 添加记忆 */
+  addMemory: (entry: MemoryEntryInput) => Promise<MemoryEntry>
+  /** 更新记忆 */
+  updateMemory: (memoryId: string, updates: MemoryUpdateInput) => Promise<MemoryEntry>
+  /** 删除记忆 */
+  removeMemory: (memoryId: string) => Promise<void>
+
+  // ─── Session ───
   /** 列出会话 */
   listSessions: (objectId: string) => Promise<SessionInfo[]>
+  /** 重命名会话 */
+  renameSession: (sessionId: string, title: string) => Promise<void>
+  /** 删除会话 */
+  removeSession: (sessionId: string) => Promise<void>
   /** 获取对话历史 */
   chatHistory: (objectId: string, sessionId: string, options?: { limit?: number, order?: 'asc' | 'desc' }) => Promise<ChatRecord[]>
+
+  // ─── RAG ───
+  /** RAG 查询（检索 + 生成） */
+  ragQuery: (query: string, options?: { collection?: string, topK?: number, model?: string }) => Promise<RagResult>
+  /** RAG 流式查询，返回 SSE 数据行 */
+  ragQueryStream: (query: string, options?: { collection?: string, topK?: number, model?: string }) => AsyncIterable<string>
+
+  // ─── Reasoning ───
+  /** 推理（多步思考） */
+  reasoningRun: (query: string, options?: { model?: string, maxSteps?: number }) => Promise<ReasoningResult>
+  /** 推理流式，返回 SSE 数据行 */
+  reasoningRunStream: (query: string, options?: { model?: string, maxSteps?: number }) => AsyncIterable<string>
+
+  // ─── Token ───
+  /** 估算文本的 Token 数 */
+  estimateTokens: (text: string) => Promise<{ tokens: number }>
 }
 
 // ─── AI API 路径（与 ai-api-contract 保持一致） ───
 
 const AI_PATH = {
-  /** 非流式聊天 */
+  // LLM
   chat: '/ai/chat',
-  /** 流式聊天（SSE） */
   chatStream: '/ai/chat/stream',
-  /** 对话历史 */
   chatHistory: '/ai/chat/history',
-  /** 记忆检索 */
+  ask: '/ai/ask',
+  askStream: '/ai/ask/stream',
+  // Knowledge
+  knowledgeRetrieve: '/ai/knowledge/retrieve',
+  knowledgeAsk: '/ai/knowledge/ask',
+  knowledgeIngest: '/ai/knowledge/ingest',
+  knowledgeDocuments: '/ai/knowledge/documents',
+  knowledgeRemoveDocument: '/ai/knowledge/documents/remove',
+  // Memory
   memoryRecall: '/ai/memory/recall',
-  /** 记忆列表 */
   memoryList: '/ai/memory/list',
-  /** 会话列表 */
+  memoryAdd: '/ai/memory/add',
+  memoryUpdate: '/ai/memory/update',
+  memoryRemove: '/ai/memory/remove',
+  // Session
   sessions: '/ai/sessions',
+  sessionRename: '/ai/sessions/rename',
+  sessionRemove: '/ai/sessions/remove',
+  // RAG
+  ragQuery: '/ai/rag/query',
+  ragQueryStream: '/ai/rag/query/stream',
+  // Reasoning
+  reasoningRun: '/ai/reasoning/run',
+  reasoningRunStream: '/ai/reasoning/run/stream',
+  // Token
+  tokenEstimate: '/ai/token/estimate',
 } as const
 
 // ─── 工厂函数 ───
@@ -241,6 +309,146 @@ export function createAIClient(config: AIClientConfig): AIClient {
         throw new Error(`Chat history failed: ${result.error.message}`)
       }
       return result.data.items
+    },
+
+    // ─── LLM ask/askStream ───
+
+    async ask(question: string, options?: { systemPrompt?: string, model?: string }): Promise<string> {
+      const result = await api.post<{ text: string }>(AI_PATH.ask, { question, ...options })
+      if (!result.success) {
+        throw new Error(`AI ask failed: ${result.error.message}`)
+      }
+      return result.data.text
+    },
+
+    async* askStream(question: string, options?: { systemPrompt?: string, model?: string }): AsyncIterable<string> {
+      for await (const data of api.stream(AI_PATH.askStream, { question, ...options })) {
+        yield data
+      }
+    },
+
+    // ─── Knowledge ───
+
+    async knowledgeRetrieve(query: string, options?: { topK?: number, collection?: string }): Promise<KnowledgeRetrieveResult> {
+      const result = await api.post<KnowledgeRetrieveResult>(AI_PATH.knowledgeRetrieve, { query, ...options })
+      if (!result.success) {
+        throw new Error(`Knowledge retrieve failed: ${result.error.message}`)
+      }
+      return result.data
+    },
+
+    async knowledgeAsk(query: string, options?: { model?: string, collection?: string }): Promise<KnowledgeAskResult> {
+      const result = await api.post<KnowledgeAskResult>(AI_PATH.knowledgeAsk, { query, ...options })
+      if (!result.success) {
+        throw new Error(`Knowledge ask failed: ${result.error.message}`)
+      }
+      return result.data
+    },
+
+    async knowledgeIngest(input: { documentId: string, content: string, title?: string, collection?: string, metadata?: Record<string, unknown> }): Promise<KnowledgeIngestResult> {
+      const result = await api.post<KnowledgeIngestResult>(AI_PATH.knowledgeIngest, input)
+      if (!result.success) {
+        throw new Error(`Knowledge ingest failed: ${result.error.message}`)
+      }
+      return result.data
+    },
+
+    async knowledgeListDocuments(options?: { collection?: string, offset?: number, limit?: number }): Promise<KnowledgeDocumentInfo[]> {
+      const result = await api.post<{ items: KnowledgeDocumentInfo[] }>(AI_PATH.knowledgeDocuments, options ?? {})
+      if (!result.success) {
+        throw new Error(`Knowledge list documents failed: ${result.error.message}`)
+      }
+      return result.data.items
+    },
+
+    async knowledgeRemoveDocument(documentId: string, options?: { collection?: string }): Promise<void> {
+      const result = await api.post<void>(AI_PATH.knowledgeRemoveDocument, { documentId, ...options })
+      if (!result.success) {
+        throw new Error(`Knowledge remove document failed: ${result.error.message}`)
+      }
+    },
+
+    // ─── Memory (extended) ───
+
+    async addMemory(entry: MemoryEntryInput): Promise<MemoryEntry> {
+      const result = await api.post<MemoryEntry>(AI_PATH.memoryAdd, entry)
+      if (!result.success) {
+        throw new Error(`Memory add failed: ${result.error.message}`)
+      }
+      return result.data
+    },
+
+    async updateMemory(memoryId: string, updates: MemoryUpdateInput): Promise<MemoryEntry> {
+      const result = await api.post<MemoryEntry>(AI_PATH.memoryUpdate, { memoryId, ...updates })
+      if (!result.success) {
+        throw new Error(`Memory update failed: ${result.error.message}`)
+      }
+      return result.data
+    },
+
+    async removeMemory(memoryId: string): Promise<void> {
+      const result = await api.post<void>(AI_PATH.memoryRemove, { memoryId })
+      if (!result.success) {
+        throw new Error(`Memory remove failed: ${result.error.message}`)
+      }
+    },
+
+    // ─── Session (extended) ───
+
+    async renameSession(sessionId: string, title: string): Promise<void> {
+      const result = await api.post<void>(AI_PATH.sessionRename, { sessionId, title })
+      if (!result.success) {
+        throw new Error(`Session rename failed: ${result.error.message}`)
+      }
+    },
+
+    async removeSession(sessionId: string): Promise<void> {
+      const result = await api.post<void>(AI_PATH.sessionRemove, { sessionId })
+      if (!result.success) {
+        throw new Error(`Session remove failed: ${result.error.message}`)
+      }
+    },
+
+    // ─── RAG ───
+
+    async ragQuery(query: string, options?: { collection?: string, topK?: number, model?: string }): Promise<RagResult> {
+      const result = await api.post<RagResult>(AI_PATH.ragQuery, { query, ...options })
+      if (!result.success) {
+        throw new Error(`RAG query failed: ${result.error.message}`)
+      }
+      return result.data
+    },
+
+    async* ragQueryStream(query: string, options?: { collection?: string, topK?: number, model?: string }): AsyncIterable<string> {
+      for await (const data of api.stream(AI_PATH.ragQueryStream, { query, ...options })) {
+        yield data
+      }
+    },
+
+    // ─── Reasoning ───
+
+    async reasoningRun(query: string, options?: { model?: string, maxSteps?: number }): Promise<ReasoningResult> {
+      const result = await api.post<ReasoningResult>(AI_PATH.reasoningRun, { query, ...options })
+      if (!result.success) {
+        throw new Error(`Reasoning run failed: ${result.error.message}`)
+      }
+      return result.data
+    },
+
+    async* reasoningRunStream(query: string, options?: { model?: string, maxSteps?: number }): AsyncIterable<string> {
+      for await (const data of api.stream(AI_PATH.reasoningRunStream, { query, ...options })) {
+        yield data
+      }
+    },
+
+    // ─── Token ───
+
+    async estimateTokens(text: string): Promise<{ tokens: number }> {
+      const result = await api.post<{ tokens: number }>(AI_PATH.tokenEstimate, { text })
+      if (!result.success) {
+        throw new Error(`Token estimate failed: ${result.error.message}`)
+      }
+      return result.data
     },
   }
 }

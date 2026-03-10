@@ -77,6 +77,10 @@ export interface RetrievalRequest {
   topK?: number
   /** 全局 minScore 覆盖 */
   minScore?: number
+  /** 是否启用 Rerank 重排序（需要已初始化 ai.rerank） */
+  enableRerank?: boolean
+  /** Rerank 使用的模型名称覆盖 */
+  rerankModel?: string
 }
 
 /**

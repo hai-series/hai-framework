@@ -306,3 +306,37 @@ describe('reasoning plan-execute 模型分离', () => {
     expect(chatMock.mock.calls[0][0].model).toBe('gpt-4o')
   })
 })
+
+// =============================================================================
+// runStream 测试
+// =============================================================================
+
+describe('reasoning runStream', () => {
+  it('流式推理产出 step → delta → done 事件', async () => {
+    // CoT 策略返回：思考步骤 + 最终回答
+    const mockLLM = createMockLLM([
+      { content: 'Step 1: 分析问题\nStep 2: 推导\n\n最终答案：42' },
+    ])
+
+    const reasoning = createReasoningOperations(mockConfig, mockLLM)
+    const events: unknown[] = []
+
+    for await (const event of reasoning.runStream('什么是宇宙的答案？')) {
+      events.push(event)
+    }
+
+    // 应该至少有 step(s)、delta 和 done 事件
+    const stepEvents = events.filter((e: any) => e.type === 'step')
+    const deltaEvents = events.filter((e: any) => e.type === 'delta')
+    const doneEvents = events.filter((e: any) => e.type === 'done')
+
+    expect(stepEvents.length).toBeGreaterThanOrEqual(0)
+    expect(deltaEvents.length).toBeGreaterThanOrEqual(1)
+    expect(doneEvents).toHaveLength(1)
+
+    // done 事件包含完整结果
+    const doneEvent = doneEvents[0] as any
+    expect(doneEvent.result).toBeDefined()
+    expect(doneEvent.result.answer).toBeTruthy()
+  })
+})

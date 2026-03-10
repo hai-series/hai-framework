@@ -14,6 +14,7 @@ import type {
   RagOperations,
   RagOptions,
   RagResult,
+  RagStreamEvent,
 } from './ai-rag-types.js'
 
 import { core, err, ok } from '@h-ai/core'
@@ -82,6 +83,8 @@ export function createRagOperations(llm: LLMOperations, retrieval: RetrievalOper
           sources: options?.sources,
           topK: options?.topK ?? 5,
           minScore: options?.minScore,
+          enableRerank: options?.enableRerank,
+          rerankModel: options?.rerankModel,
         })
 
         if (!retrieveResult.success) {
@@ -128,6 +131,7 @@ export function createRagOperations(llm: LLMOperations, retrieval: RetrievalOper
           temperature: options?.temperature,
           objectId: options?.objectId,
           sessionId: options?.sessionId,
+          enablePersist: options?.enablePersist,
         })
 
         if (!chatResult.success) {
@@ -181,6 +185,96 @@ export function createRagOperations(llm: LLMOperations, retrieval: RetrievalOper
           cause: error,
         })
       }
+    },
+
+    /**
+     * 流式 RAG 查询：先产出 context，再逐 chunk 产出 delta，最后 done
+     */
+    async* queryStream(query: string, options?: RagOptions): AsyncIterable<RagStreamEvent> {
+      logger.trace('Starting RAG stream', { query: query.slice(0, 100) })
+
+      // 阶段1：检索
+      const retrieveResult = await retrieval.retrieve({
+        query,
+        sources: options?.sources,
+        topK: options?.topK ?? 5,
+        minScore: options?.minScore,
+        enableRerank: options?.enableRerank,
+        rerankModel: options?.rerankModel,
+      })
+
+      if (!retrieveResult.success) {
+        throw new Error(`RAG context build failed: ${String(retrieveResult.error)}`)
+      }
+
+      const contextItems: RagContextItem[] = retrieveResult.data.items.map(item => ({
+        content: item.content,
+        score: item.score,
+        sourceId: item.sourceId,
+        metadata: item.metadata,
+        citation: item.citation,
+      }))
+
+      // 去重信源
+      const citationMap = new Map<string, Citation>()
+      for (const ctx of contextItems) {
+        if (ctx.citation) {
+          const key = ctx.citation.documentId ?? ctx.citation.chunkId ?? ctx.citation.url ?? `${ctx.sourceId}:${ctx.content.slice(0, 50)}`
+          if (!citationMap.has(key)) {
+            citationMap.set(key, ctx.citation)
+          }
+        }
+      }
+      const citations = Array.from(citationMap.values())
+
+      // 产出上下文事件
+      yield { type: 'context', items: contextItems, citations }
+
+      // 阶段2：流式 LLM 生成
+      const formatFn = options?.formatContext ?? defaultFormatContext
+      const contextText = formatFn(contextItems)
+      const systemPrompt = options?.systemPrompt ?? DEFAULT_RAG_SYSTEM_PROMPT
+      const systemContent = `${systemPrompt}\n\n--- Context ---\n${contextText}\n--- End Context ---`
+
+      const messages: ChatMessage[] = [
+        { role: 'system', content: systemContent },
+      ]
+      if (options?.messages) {
+        messages.push(...options.messages)
+      }
+      messages.push({ role: 'user', content: query })
+
+      const stream = llm.chatStream({
+        model: options?.model,
+        messages,
+        temperature: options?.temperature,
+        objectId: options?.objectId,
+        sessionId: options?.sessionId,
+        enablePersist: options?.enablePersist,
+      })
+
+      let fullAnswer = ''
+      let model = ''
+      let usage: { prompt_tokens: number, completion_tokens: number, total_tokens: number } | undefined
+
+      for await (const chunk of stream) {
+        if (!model && chunk.model)
+          model = chunk.model
+        const delta = chunk.choices?.[0]?.delta?.content
+        if (delta) {
+          fullAnswer += delta
+          yield { type: 'delta', text: delta }
+        }
+        if (chunk.usage) {
+          usage = {
+            prompt_tokens: chunk.usage.prompt_tokens,
+            completion_tokens: chunk.usage.completion_tokens,
+            total_tokens: chunk.usage.total_tokens,
+          }
+        }
+      }
+
+      yield { type: 'done', answer: fullAnswer, model, usage }
     },
   }
 }
