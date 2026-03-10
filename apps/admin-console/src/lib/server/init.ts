@@ -146,7 +146,7 @@ export async function initApp(): Promise<void> {
 
   // 8. 初始化 IAM 模块（使用 reach 发送密码重置和 OTP 通知）
   const iamResult = await iam.init({
-    db,
+    db: reldb,
     cache,
     ...effectiveIamConfig,
     onPasswordResetRequest: reach.isInitialized
@@ -200,7 +200,7 @@ export async function initApp(): Promise<void> {
   }
 
   // 9. 初始化审计日志模块（IAM 用户表为 iam_users）
-  const auditResult = await audit.init({ reldb, userTable: 'iam_users' })
+  const auditResult = await audit.init({ db: reldb, userTable: 'iam_users' })
   if (!auditResult.success) {
     core.logger.warn('Audit module initialization failed', { error: auditResult.error.message })
   }

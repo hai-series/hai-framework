@@ -71,14 +71,10 @@ async function validateSession(token: string) {
 // =============================================================================
 
 const haiHandle = kit.createHandle({
-  sessionCookieName: 'h5_session',
   validateSession,
   middleware: [
     kit.middleware.logging({ logBody: false }),
     kit.middleware.rateLimit({ windowMs: 60000, maxRequests: 200 }),
-    kit.middleware.csrf({
-      exclude: ['/api/auth/*'],
-    }),
   ],
   guards: [
     {

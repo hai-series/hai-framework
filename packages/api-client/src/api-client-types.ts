@@ -159,6 +159,14 @@ export interface UploadOptions {
   extraFields?: Record<string, string>
 }
 
+/**
+ * 流式请求选项
+ */
+export interface StreamOptions {
+  /** 外部取消信号（例如 AbortController.signal） */
+  signal?: AbortSignal
+}
+
 // ─── ApiClient 接口 ───
 
 /**
@@ -182,7 +190,7 @@ export interface ApiClient {
   upload: (path: string, file: File | Blob, options?: UploadOptions) => Promise<Result<unknown, ApiClientError>>
 
   /** 流式请求（返回 AsyncIterable） */
-  stream: (path: string, body?: unknown) => AsyncIterable<string>
+  stream: (path: string, body?: unknown, options?: StreamOptions) => AsyncIterable<string>
 
   /**
    * 契约调用（推荐）

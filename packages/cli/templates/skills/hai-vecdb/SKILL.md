@@ -31,14 +31,14 @@ path: ./data/vecdb
 
 # pgvector
 # type: pgvector
-# url: ${VECDB_PG_URL:postgres://user:pass@localhost:5432/mydb}
+# url: ${HAI_VECDB_PG_URL:postgres://user:pass@localhost:5432/mydb}
 # indexType: hnsw
 # tablePrefix: vec_
 
 # Qdrant
 # type: qdrant
-# url: ${VECDB_QDRANT_URL:http://localhost:6333}
-# apiKey: ${VECDB_QDRANT_API_KEY:}
+# url: ${HAI_VECDB_QDRANT_URL:http://localhost:6333}
+# apiKey: ${HAI_VECDB_QDRANT_API_KEY:}
 ```
 
 ### 2. 初始化与关闭

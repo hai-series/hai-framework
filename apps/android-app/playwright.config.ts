@@ -5,7 +5,7 @@ export default defineConfig({
   fullyParallel: true,
   retries: 0,
   webServer: {
-    command: 'npm run preview',
+    command: 'pnpm build && pnpm exec vite preview --port 5175 --strictPort',
     port: 5175,
   },
   use: {

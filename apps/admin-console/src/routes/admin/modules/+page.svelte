@@ -51,38 +51,38 @@
 
   // AI 示例
   const aiFeatures = $derived([
-    { name: m.modules_ai_feat_chat_name(), desc: m.modules_ai_feat_chat_desc(), api: 'ai.chat({ messages: [...] })' },
-    { name: m.modules_ai_feat_embed_name(), desc: m.modules_ai_feat_embed_desc(), api: 'ai.embed(text)' },
-    { name: m.modules_ai_feat_multi_name(), desc: m.modules_ai_feat_multi_desc(), api: 'ai.init({ provider, model })' },
-    { name: m.modules_ai_feat_stream_name(), desc: m.modules_ai_feat_stream_desc(), api: 'ai.stream({ messages: [...] })' },
+    { name: m.modules_ai_feat_chat_name(), desc: m.modules_ai_feat_chat_desc(), api: 'ai.llm.chat({ messages: [...] })' },
+    { name: m.modules_ai_feat_embed_name(), desc: m.modules_ai_feat_embed_desc(), api: 'ai.embedding.embed({ input: text })' },
+    { name: m.modules_ai_feat_multi_name(), desc: m.modules_ai_feat_multi_desc(), api: 'ai.init({ llm: { provider, model } })' },
+    { name: m.modules_ai_feat_stream_name(), desc: m.modules_ai_feat_stream_desc(), api: 'ai.llm.chatStream({ messages: [...] })' },
   ])
 
   // VecDB 示例
   const vecdbFeatures = $derived([
-    { name: m.modules_vecdb_feat_create_name(), desc: m.modules_vecdb_feat_create_desc(), api: 'vecdb.createCollection(name, dimension)' },
-    { name: m.modules_vecdb_feat_insert_name(), desc: m.modules_vecdb_feat_insert_desc(), api: 'vecdb.insert(collection, vectors)' },
-    { name: m.modules_vecdb_feat_search_name(), desc: m.modules_vecdb_feat_search_desc(), api: 'vecdb.search(collection, query, topK)' },
-    { name: m.modules_vecdb_feat_drop_name(), desc: m.modules_vecdb_feat_drop_desc(), api: 'vecdb.dropCollection(name)' },
+    { name: m.modules_vecdb_feat_create_name(), desc: m.modules_vecdb_feat_create_desc(), api: 'vecdb.collection.create(name, { dimension })' },
+    { name: m.modules_vecdb_feat_insert_name(), desc: m.modules_vecdb_feat_insert_desc(), api: 'vecdb.vector.insert(collection, docs)' },
+    { name: m.modules_vecdb_feat_search_name(), desc: m.modules_vecdb_feat_search_desc(), api: 'vecdb.vector.search(collection, query, { topK })' },
+    { name: m.modules_vecdb_feat_drop_name(), desc: m.modules_vecdb_feat_drop_desc(), api: 'vecdb.collection.drop(name)' },
   ])
 
   const vecdbOps = $derived([
-    { op: m.modules_vecdb_op_create(), code: "await vecdb.createCollection('docs', 1536)", desc: m.modules_vecdb_op_create_desc() },
-    { op: m.modules_vecdb_op_insert(), code: "await vecdb.insert('docs', [{ id: '1', vector: embedding, metadata: { title: '文档标题' } }])", desc: m.modules_vecdb_op_insert_desc() },
-    { op: m.modules_vecdb_op_search(), code: "const results = await vecdb.search('docs', queryVector, { topK: 5 })", desc: m.modules_vecdb_op_search_desc() },
-    { op: m.modules_vecdb_op_delete(), code: "await vecdb.delete('docs', ['1', '2'])", desc: m.modules_vecdb_op_delete_desc() },
+    { op: m.modules_vecdb_op_create(), code: "await vecdb.collection.create('docs', { dimension: 1536 })", desc: m.modules_vecdb_op_create_desc() },
+    { op: m.modules_vecdb_op_insert(), code: "await vecdb.vector.insert('docs', [{ id: '1', vector: embedding, metadata: { title: '文档标题' } }])", desc: m.modules_vecdb_op_insert_desc() },
+    { op: m.modules_vecdb_op_search(), code: "const results = await vecdb.vector.search('docs', queryVector, { topK: 5 })", desc: m.modules_vecdb_op_search_desc() },
+    { op: m.modules_vecdb_op_delete(), code: "await vecdb.vector.delete('docs', ['1', '2'])", desc: m.modules_vecdb_op_delete_desc() },
   ])
 
   // DataPipe 示例
   const datapipeFeatures = $derived([
     { name: m.modules_datapipe_feat_clean_name(), desc: m.modules_datapipe_feat_clean_desc(), api: 'datapipe.clean(text, options)' },
     { name: m.modules_datapipe_feat_chunk_name(), desc: m.modules_datapipe_feat_chunk_desc(), api: 'datapipe.chunk(text, options)' },
-    { name: m.modules_datapipe_feat_pipe_name(), desc: m.modules_datapipe_feat_pipe_desc(), api: 'datapipe.pipeline(steps).run(input)' },
+    { name: m.modules_datapipe_feat_pipe_name(), desc: m.modules_datapipe_feat_pipe_desc(), api: 'datapipe.pipeline().clean(...).chunk(...).run(input)' },
   ])
 
   const datapipeOps = $derived([
-    { op: 'Clean', code: "const cleaned = datapipe.clean(htmlContent, {\n  stripHtml: true,\n  trimWhitespace: true,\n  removeUrls: true,\n})", desc: m.modules_datapipe_op_clean_desc() },
-    { op: 'Chunk', code: "const chunks = datapipe.chunk(longText, {\n  strategy: 'recursive',\n  maxSize: 1000,\n  overlap: 200,\n})", desc: m.modules_datapipe_op_chunk_desc() },
-    { op: 'Pipeline', code: "const result = await datapipe.pipeline([\n  { type: 'clean', options: { stripHtml: true } },\n  { type: 'chunk', options: { maxSize: 500 } },\n]).run(rawContent)", desc: m.modules_datapipe_op_pipe_desc() },
+    { op: 'Clean', code: "const cleaned = datapipe.clean(htmlContent, {\n  removeHtml: true,\n  normalizeWhitespace: true,\n  removeUrls: true,\n})", desc: m.modules_datapipe_op_clean_desc() },
+    { op: 'Chunk', code: "const chunks = datapipe.chunk(longText, {\n  mode: 'paragraph',\n  maxSize: 1000,\n  overlap: 200,\n})", desc: m.modules_datapipe_op_chunk_desc() },
+    { op: 'Pipeline', code: "const result = await datapipe.pipeline()\n  .clean({ removeHtml: true })\n  .chunk({ mode: 'paragraph', maxSize: 500 })\n  .run(rawContent)", desc: m.modules_datapipe_op_pipe_desc() },
   ])
 
   // Crypto 示例状态
@@ -378,14 +378,16 @@ const url = await storage.presign(key, { expires: 3600 })`}</code></pre>
         <pre class="bg-base-200 p-4 rounded-lg text-sm overflow-x-auto font-mono"><code>{`import { ai } from '@h-ai/ai'
 
 // 初始化
-await ai.init({
-  provider: 'openai',
-  apiKey: process.env.HAI_OPENAI_API_KEY,
-  model: 'gpt-4',
+ai.init({
+  llm: {
+    provider: 'openai',
+    apiKey: process.env.HAI_OPENAI_API_KEY,
+    model: 'gpt-4o-mini',
+  },
 })
 
 // 对话
-const response = await ai.chat({
+const response = await ai.llm.chat({
   messages: [
     { role: 'system', content: '你是一个有帮助的助手' },
     { role: 'user', content: '你好！' },
@@ -393,15 +395,14 @@ const response = await ai.chat({
 })
 
 // 流式输出
-const stream = await ai.stream({
+for await (const chunk of ai.llm.chatStream({
   messages: [{ role: 'user', content: '写一首诗' }],
-})
-for await (const chunk of stream) {
-  process.stdout.write(chunk)
+})) {
+  process.stdout.write(chunk.choices[0]?.delta?.content ?? '')
 }
 
 // 文本嵌入
-const embedding = await ai.embed('搜索查询文本')`}</code></pre>
+const embedding = await ai.embedding.embed({ input: '搜索查询文本' })`}</code></pre>
       </Card>
     </div>
   {/if}
@@ -455,23 +456,23 @@ import { ai } from '@h-ai/ai'
 await vecdb.init({ type: 'lancedb', path: './data/vecdb' })
 
 // 创建集合
-await vecdb.createCollection('knowledge', 1536)
+await vecdb.collection.create('knowledge', { dimension: 1536 })
 
 // 文档入库: 嵌入 + 存储
-const embedding = await ai.embed('hai-framework 是一个 AI 优先的全栈框架')
-await vecdb.insert('knowledge', [{
+const embedding = await ai.embedding.embed({ input: 'hai-framework 是一个 AI 优先的全栈框架' })
+await vecdb.vector.insert('knowledge', [{
   id: 'doc-1',
-  vector: embedding,
+  vector: embedding.data[0].embedding,
   metadata: { title: '框架介绍', source: 'docs' },
 }])
 
 // RAG 检索: 查询 → 嵌入 → 搜索
-const queryVector = await ai.embed('什么是 hai-framework？')
-const results = await vecdb.search('knowledge', queryVector, { topK: 3 })
+const queryEmbedding = await ai.embedding.embed({ input: '什么是 hai-framework？' })
+const results = await vecdb.vector.search('knowledge', queryEmbedding.data[0].embedding, { topK: 3 })
 
 // 将检索结果作为 context 传给 LLM
 const context = results.map(r => r.metadata.title).join('\\n')
-const answer = await ai.chat({
+const answer = await ai.llm.chat({
   messages: [
     { role: 'system', content: \`基于以下知识回答:\\n\${context}\` },
     { role: 'user', content: '什么是 hai-framework？' },
@@ -533,37 +534,36 @@ import { vecdb } from '@h-ai/vecdb'
 
 // 1. 清洗原始 HTML 内容
 const cleaned = datapipe.clean(rawHtml, {
-  stripHtml: true,
-  trimWhitespace: true,
+  removeHtml: true,
+  normalizeWhitespace: true,
   removeUrls: true,
-  normalizeUnicode: true,
 })
 
-// 2. 分块（递归策略，适合长文档）
+// 2. 分块（段落策略）
 const chunks = datapipe.chunk(cleaned, {
-  strategy: 'recursive',
+  mode: 'paragraph',
   maxSize: 1000,
   overlap: 200,
 })
 
 // 3. 嵌入并存入向量库
 for (const chunk of chunks) {
-  const vector = await ai.embed(chunk.text)
-  await vecdb.insert('knowledge', [{
+  const embedding = await ai.embedding.embed({ input: chunk.content })
+  await vecdb.vector.insert('knowledge', [{
     id: chunk.id,
-    vector,
+    vector: embedding.data[0].embedding,
     metadata: {
-      text: chunk.text,
-      index: chunk.index,
+      text: chunk.content,
+      start: chunk.start,
+      end: chunk.end,
     },
   }])
 }
 
 // 也可以使用管道编排
-const pipeline = datapipe.pipeline([
-  { type: 'clean', options: { stripHtml: true } },
-  { type: 'chunk', options: { strategy: 'sentence', maxSize: 500 } },
-])
+const pipeline = datapipe.pipeline()
+  .clean({ removeHtml: true })
+  .chunk({ mode: 'sentence', maxSize: 500 })
 const result = await pipeline.run(rawContent)`}</code></pre>
       </Card>
     </div>

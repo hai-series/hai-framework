@@ -56,6 +56,11 @@ const FEATURE_ROUTE_DIRS: Record<string, string[]> = {
   storage: ['routes'],
   ai: ['routes'],
   payment: ['routes'],
+  vecdb: ['routes'],
+  datapipe: ['routes'],
+  reach: ['routes'],
+  scheduler: ['routes'],
+  audit: ['routes'],
 }
 
 /**

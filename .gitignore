@@ -44,3 +44,6 @@ data/
 tmp/
 temp/
 .cache/
+
+data/
+test-results/

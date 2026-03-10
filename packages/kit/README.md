@@ -10,7 +10,7 @@
 
 - Handle Hook 组合（`createHandle` / `sequence`）
 - 认证/角色/权限守卫及组合守卫
-- CORS / CSRF / Logging / RateLimit 中间件
+- CORS / Logging / RateLimit 中间件
 - 统一 API 响应与请求验证（Zod）
 - 会话 Cookie 工具
 - 浏览器端统一客户端（自动 CSRF，支持传输加密）
@@ -32,7 +32,6 @@ export const handle = kit.createHandle({
   ],
   middleware: [
     kit.middleware.logging(),
-    kit.middleware.csrf({ exclude: ['/api/public/*'] }),
     kit.middleware.rateLimit({ windowMs: 60_000, maxRequests: 100 }),
   ],
 })
@@ -71,6 +70,8 @@ import { createKitClient } from '@h-ai/kit/client'
 
 const client = createKitClient({ transport: { crypto } })
 ```
+
+> CSRF Header 注入由 `createKitClient()` 在浏览器端自动处理；`@h-ai/kit` 不提供独立的 CSRF 中间件工厂。
 
 ## 配置
 

@@ -13,6 +13,7 @@ import type {
   RequestConfig,
   RequestInterceptor,
   ResponseInterceptor,
+  StreamOptions,
   UploadOptions,
 } from './api-client-types.js'
 import { core, ok } from '@h-ai/core'
@@ -217,7 +218,7 @@ export function createFetchClient(
 
   // ─── 流式请求 ───
 
-  async function* stream(path: string, body?: unknown): AsyncIterable<string> {
+  async function* stream(path: string, body?: unknown, options?: StreamOptions): AsyncIterable<string> {
     const requestConfig: RequestConfig = {
       url: buildUrl(path),
       method: 'POST',
@@ -239,11 +240,43 @@ export function createFetchClient(
       finalConfig = await interceptor(finalConfig)
     }
 
-    // 超时控制
+    // 超时控制 + 外部 abort
     const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), timeout)
+    let timeoutId: ReturnType<typeof setTimeout> | null = null
+    let timeoutTriggered = false
+
+    const clearStreamTimeout = () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId)
+        timeoutId = null
+      }
+    }
+
+    const armStreamTimeout = () => {
+      clearStreamTimeout()
+      timeoutTriggered = false
+      timeoutId = setTimeout(() => {
+        timeoutTriggered = true
+        controller.abort()
+      }, timeout)
+    }
+
+    const externalSignal = options?.signal
+    const onExternalAbort = () => {
+      controller.abort()
+    }
+
+    if (externalSignal) {
+      if (externalSignal.aborted) {
+        controller.abort()
+      }
+      else {
+        externalSignal.addEventListener('abort', onExternalAbort, { once: true })
+      }
+    }
 
     async function doStreamFetch(): Promise<Response> {
+      armStreamTimeout()
       try {
         return await fetchFn(finalConfig.url, {
           method: finalConfig.method,
@@ -253,8 +286,11 @@ export function createFetchClient(
         })
       }
       catch (cause) {
-        clearTimeout(timeoutId)
+        clearStreamTimeout()
         if (cause instanceof DOMException && cause.name === 'AbortError') {
+          if (externalSignal?.aborted && !timeoutTriggered) {
+            throw cause
+          }
           throw new Error(apiClientM('apiClient_timeout'), { cause })
         }
         throw cause
@@ -274,7 +310,7 @@ export function createFetchClient(
     }
 
     if (!response.ok) {
-      clearTimeout(timeoutId)
+      clearStreamTimeout()
       const errorResult = await responseToError(response)
       if (!errorResult.success) {
         throw new Error(errorResult.error.message, { cause: errorResult.error })
@@ -282,7 +318,7 @@ export function createFetchClient(
     }
 
     if (!response.body) {
-      clearTimeout(timeoutId)
+      clearStreamTimeout()
       throw new Error(apiClientM('apiClient_networkError'))
     }
 
@@ -292,12 +328,11 @@ export function createFetchClient(
 
     try {
       while (true) {
+        armStreamTimeout()
         const { done, value } = await reader.read()
+        clearStreamTimeout()
         if (done)
           break
-
-        // 每次 read 成功，重置超时
-        clearTimeout(timeoutId)
 
         lineBuffer += decoder.decode(value, { stream: true })
         // 按换行分割，保留最后一段（可能是不完整行）
@@ -322,8 +357,20 @@ export function createFetchClient(
         }
       }
     }
+    catch (cause) {
+      if (cause instanceof DOMException && cause.name === 'AbortError') {
+        if (externalSignal?.aborted && !timeoutTriggered) {
+          throw cause
+        }
+        throw new Error(apiClientM('apiClient_timeout'), { cause })
+      }
+      throw cause
+    }
     finally {
-      clearTimeout(timeoutId)
+      clearStreamTimeout()
+      if (externalSignal) {
+        externalSignal.removeEventListener('abort', onExternalAbort)
+      }
       reader.releaseLock()
     }
   }

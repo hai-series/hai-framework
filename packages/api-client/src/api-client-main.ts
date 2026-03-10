@@ -122,7 +122,7 @@ const notInitializedAuth: ApiClient['auth'] = {
  *
  * async generator 无法返回 Result，迭代时抛出异常。
  */
-function notInitializedStreamFn(_path: string, _body?: unknown): AsyncIterable<string> {
+function notInitializedStreamFn(_path: string, _body?: unknown, _options?: { signal?: AbortSignal }): AsyncIterable<string> {
   return {
     [Symbol.asyncIterator]() {
       return {

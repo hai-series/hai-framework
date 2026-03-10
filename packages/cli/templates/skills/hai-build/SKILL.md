@@ -181,10 +181,10 @@ export async function initCapacitor() {
 ```yaml
 # config/_core.yml
 app:
-  name: ${APP_NAME:my-app}
-  env: ${NODE_ENV:development}
+  name: ${HAI_APP_NAME:my-app}
+  env: ${HAI_ENV:development}
 log:
-  level: ${LOG_LEVEL:info}
+  level: ${HAI_LOG_LEVEL:info}
 ```
 
 ---

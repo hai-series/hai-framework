@@ -310,6 +310,57 @@ describe('createFetchClient', () => {
       }).rejects.toThrow()
     })
 
+    it('支持外部 AbortSignal 主动取消', async () => {
+      const fetch = vi.fn().mockImplementation((_url: string, init: { signal: AbortSignal }) => {
+        return new Promise((_resolve, reject) => {
+          if (init.signal.aborted) {
+            reject(new DOMException('The operation was aborted', 'AbortError'))
+            return
+          }
+          init.signal.addEventListener('abort', () => {
+            reject(new DOMException('The operation was aborted', 'AbortError'))
+          })
+        })
+      })
+      const client = createFetchClient({ baseUrl: 'https://api.test.com', fetch, timeout: 5_000 })
+      const controller = new AbortController()
+
+      controller.abort()
+
+      await expect(async () => {
+        for await (const _chunk of client.stream('/chat', undefined, { signal: controller.signal })) {
+          // 不应到达
+        }
+      }).rejects.toThrow('aborted')
+    })
+
+    it('在流式读取阶段超时会抛出超时错误', async () => {
+      const encoder = new TextEncoder()
+      const fetch = vi.fn().mockImplementation((_url: string, init: { signal: AbortSignal }) => {
+        const stream = new ReadableStream<Uint8Array>({
+          start(controller) {
+            controller.enqueue(encoder.encode('data: first\n'))
+            init.signal.addEventListener('abort', () => {
+              controller.error(new DOMException('The operation was aborted', 'AbortError'))
+            })
+          },
+        })
+
+        return Promise.resolve(new Response(stream, {
+          status: 200,
+          headers: { 'content-type': 'text/event-stream' },
+        }))
+      })
+
+      const client = createFetchClient({ baseUrl: 'https://api.test.com', fetch, timeout: 30 })
+
+      await expect(async () => {
+        for await (const _chunk of client.stream('/chat')) {
+          // 第一个 chunk 后会阻塞，随后触发超时
+        }
+      }).rejects.toThrow()
+    })
+
     it('401 时自动刷新 Token 并重试', async () => {
       const encoder = new TextEncoder()
       let callCount = 0
