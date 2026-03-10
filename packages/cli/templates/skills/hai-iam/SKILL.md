@@ -28,12 +28,12 @@ description: 使用 @h-ai/iam 进行身份认证（密码/OTP/LDAP）、统一 B
 ```yaml
 # config/_iam.yml
 password:
-  minLength: ${IAM_PASSWORD_MIN_LENGTH:8}
+  minLength: ${HAI_IAM_PASSWORD_MIN_LENGTH:8}
   requireUppercase: true
   requireNumber: true
 session:
-  maxAge: ${IAM_SESSION_MAX_AGE:86400}
-  refreshTokenMaxAge: ${IAM_REFRESH_TOKEN_MAX_AGE:604800} # 7 天
+  maxAge: ${HAI_IAM_SESSION_MAX_AGE:86400}
+  refreshTokenMaxAge: ${HAI_IAM_REFRESH_TOKEN_MAX_AGE:604800} # 7 天
   sliding: true
   singleDevice: false
 login:
@@ -42,7 +42,7 @@ login:
 register:
   enabled: true
 security:
-  maxLoginAttempts: ${IAM_MAX_LOGIN_ATTEMPTS:5}
+  maxLoginAttempts: ${HAI_IAM_MAX_LOGIN_ATTEMPTS:5}
   lockoutDuration: 900
 rbac:
   defaultRole: user

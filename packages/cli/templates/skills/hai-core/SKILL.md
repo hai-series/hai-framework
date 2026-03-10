@@ -79,11 +79,11 @@ const dbConfig = core.config.get('db')
 ```yaml
 # config/_core.yml
 app:
-  name: ${APP_NAME:my-app}
-  env: ${NODE_ENV:development}
+  name: ${HAI_APP_NAME:my-app}
+  env: ${HAI_ENV:development}
 log:
-  level: ${LOG_LEVEL:info}
-  format: ${LOG_FORMAT:pretty} # pretty | json
+  level: ${HAI_LOG_LEVEL:info}
+  format: ${HAI_LOG_FORMAT:pretty} # pretty | json
 i18n:
   defaultLocale: zh-CN
   supportedLocales:

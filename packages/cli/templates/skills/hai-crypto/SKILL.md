@@ -151,7 +151,7 @@ if (hashed.success) {
 ### 数据加密存储
 
 ```typescript
-const key = process.env.DATA_ENCRYPTION_KEY!
+const key = process.env.HAI_CRYPTO_DATA_KEY!
 const encrypted = crypto.symmetric.encrypt(sensitiveData, key)
 // 存入数据库
 

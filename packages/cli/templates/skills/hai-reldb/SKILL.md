@@ -25,13 +25,13 @@ description: 使用 @h-ai/reldb 进行 SQLite/PostgreSQL/MySQL 的初始化、SQ
 
 ```yaml
 # config/_db.yml
-type: ${DB_TYPE:sqlite}
-database: ${DB_DATABASE:./data/app.db}
+type: ${HAI_DB_TYPE:sqlite}
+database: ${HAI_DB_DATABASE:./data/app.db}
 # PostgreSQL/MySQL 额外字段：
-# host: ${DB_HOST:localhost}
-# port: ${DB_PORT:5432}
-# user: ${DB_USER:postgres}
-# password: ${DB_PASSWORD:}
+# host: ${HAI_DB_HOST:localhost}
+# port: ${HAI_DB_PORT:5432}
+# user: ${HAI_DB_USER:postgres}
+# password: ${HAI_DB_PASSWORD:}
 ```
 
 ### 2. 初始化与关闭

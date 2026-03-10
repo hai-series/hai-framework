@@ -108,17 +108,49 @@ unsubscribe()
 ## 流式响应（SSE）
 
 ```ts
-for await (const chunk of api.stream('/ai/chat/stream', { message: 'hello' })) {
+const controller = new AbortController()
+
+for await (const chunk of api.stream('/ai/chat/stream', { message: 'hello' }, { signal: controller.signal })) {
   // chunk 对应 SSE 的 data: 内容
   process.stdout.write(chunk)
 }
+
+// 主动停止流式响应
+controller.abort()
 ```
 
 说明：
 
-- `stream()` 内置超时控制
+- `stream()` 内置超时控制（连接阶段与流式读取阶段均生效）
 - 401 会尝试自动刷新 Token 后重试一次
 - 解析器支持跨 chunk 的 SSE 行缓冲
+- 支持外部传入 `AbortSignal` 主动取消
+
+## 拦截器（高级用法）
+
+```ts
+await api.init({
+  baseUrl: 'https://api.example.com/api/v1',
+  auth: { refreshUrl: '/auth/refresh' },
+  interceptors: {
+    request: [
+      async config => ({
+        ...config,
+        headers: {
+          ...config.headers,
+          'X-App-Version': '1.0.0',
+        },
+      }),
+    ],
+    response: [
+      async (response) => {
+        // 可统一记录埋点、限流处理等
+        return response
+      },
+    ],
+  },
+})
+```
 
 ## 测试
 

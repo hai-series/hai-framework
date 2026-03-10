@@ -53,7 +53,7 @@ const APP_TYPES: Record<AppType, { name: string, description: string, defaultFea
   'android-app': {
     name: 'Android 应用',
     description: 'Android 原生应用（Capacitor + SvelteKit SPA），可打包为 APK',
-    defaultFeatures: ['iam', 'db', 'cache', 'crypto'],
+    defaultFeatures: ['iam', 'db', 'cache', 'crypto', 'api-client', 'capacitor'],
   },
 }
 
@@ -65,69 +65,122 @@ const APP_TYPES: Record<AppType, { name: string, description: string, defaultFea
  * 功能定义
  */
 const FEATURES: Record<string, FeatureDefinition> = {
-  iam: {
+  'iam': {
     id: 'iam',
     name: '身份与访问管理',
     description: 'Session/JWT 会话管理、RBAC 权限控制',
     packages: ['@h-ai/iam'],
     dependencies: ['crypto', 'db', 'cache'],
   },
-  db: {
+  'db': {
     id: 'db',
     name: '数据库',
     description: '多数据库支持 (SQLite/PostgreSQL/MySQL)',
     packages: ['@h-ai/reldb'],
   },
-  cache: {
+  'cache': {
     id: 'cache',
     name: '缓存',
     description: 'Redis / 内存缓存',
     packages: ['@h-ai/cache'],
   },
-  ai: {
+  'ai': {
     id: 'ai',
     name: 'AI 集成',
     description: 'LLM 适配器、MCP 协议、技能系统、流式响应',
     packages: ['@h-ai/ai'],
   },
-  storage: {
+  'storage': {
     id: 'storage',
     name: '文件存储',
     description: '本地存储、S3/OSS/COS 云存储',
     packages: ['@h-ai/storage'],
   },
-  crypto: {
+  'crypto': {
     id: 'crypto',
     name: '加密模块',
     description: '国密 SM2/SM3/SM4、Argon2 密码哈希',
     packages: ['@h-ai/crypto'],
   },
-  audit: {
+  'audit': {
     id: 'audit',
     name: '审计日志',
     description: '操作审计、安全追踪',
     packages: ['@h-ai/audit'],
     dependencies: ['db'],
   },
-  reach: {
+  'reach': {
     id: 'reach',
     name: '触达服务',
     description: '邮件、短信、微信等消息触达',
     packages: ['@h-ai/reach'],
   },
-  payment: {
+  'payment': {
     id: 'payment',
     name: '统一支付',
     description: '微信支付、支付宝、Stripe 统一接入',
     packages: ['@h-ai/payment'],
     dependencies: ['db'],
   },
+  'vecdb': {
+    id: 'vecdb',
+    name: '向量数据库',
+    description: '向量检索与相似度搜索（LanceDB / pgvector / Qdrant）',
+    packages: ['@h-ai/vecdb'],
+  },
+  'datapipe': {
+    id: 'datapipe',
+    name: '数据处理管道',
+    description: '文本清洗、分块与可组合处理流水线',
+    packages: ['@h-ai/datapipe'],
+  },
+  'scheduler': {
+    id: 'scheduler',
+    name: '任务调度',
+    description: 'Cron 任务注册、执行与日志追踪',
+    packages: ['@h-ai/scheduler'],
+    dependencies: ['db'],
+  },
+  'deploy': {
+    id: 'deploy',
+    name: '自动化部署',
+    description: '统一部署编排与多平台发布支持',
+    packages: ['@h-ai/deploy'],
+  },
+  'api-client': {
+    id: 'api-client',
+    name: 'HTTP 客户端',
+    description: '统一 API 调用、错误处理与流式请求支持',
+    packages: ['@h-ai/api-client'],
+  },
+  'capacitor': {
+    id: 'capacitor',
+    name: '移动端能力',
+    description: 'Capacitor 原生桥接能力（偏移动应用）',
+    packages: ['@h-ai/capacitor'],
+  },
 }
 
 /**
  * 可选择的功能列表
  */
-const SELECTABLE_FEATURES: FeatureId[] = ['iam', 'db', 'cache', 'ai', 'storage', 'crypto', 'audit', 'reach', 'payment']
+const SELECTABLE_FEATURES: FeatureId[] = [
+  'iam',
+  'db',
+  'cache',
+  'ai',
+  'storage',
+  'crypto',
+  'audit',
+  'reach',
+  'payment',
+  'vecdb',
+  'datapipe',
+  'scheduler',
+  'deploy',
+  'api-client',
+  'capacitor',
+]
 
 // =============================================================================
 // 项目模板定义
@@ -147,7 +200,23 @@ const PROJECT_TEMPLATES = {
   full: {
     name: 'full',
     description: '完整模板 — 所有功能',
-    features: ['iam', 'db', 'cache', 'crypto', 'ai', 'storage', 'audit', 'reach'] as FeatureId[],
+    features: [
+      'iam',
+      'db',
+      'cache',
+      'crypto',
+      'ai',
+      'storage',
+      'audit',
+      'reach',
+      'payment',
+      'vecdb',
+      'datapipe',
+      'scheduler',
+      'deploy',
+      'api-client',
+      'capacitor',
+    ] as FeatureId[],
   },
   custom: {
     name: 'custom',
@@ -674,6 +743,12 @@ function getFeatureConfigKey(featureId: FeatureId): string | null {
     iam: 'iam',
     storage: 'storage',
     ai: 'ai',
+    deploy: 'deploy',
+    vecdb: 'vecdb',
+    reach: 'reach',
+    scheduler: 'scheduler',
+    audit: 'audit',
+    payment: 'payment',
   }
   return map[featureId] ?? null
 }

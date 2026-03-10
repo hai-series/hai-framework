@@ -24,7 +24,7 @@ export default defineConfig({
   },
 
   webServer: {
-    command: 'pnpm build && pnpm preview --port 4175 --strictPort',
+    command: 'pnpm build && pnpm exec vite preview --port 4175 --strictPort',
     env: {
       HAI_E2E: '1',
       HAI_PARTNER_ADMIN_USERNAME: 'partner-admin',

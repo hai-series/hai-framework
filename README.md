@@ -676,7 +676,9 @@ pnpm --filter @h-ai/reldb test
 
 ## 环境变量
 
-复制 `.env.example` 为 `.env` 填入实际值。命名规范：`HAI_<MODULE>_<SETTING>`。
+仓库根目录提供统一样例：`.env.example`。复制为 `.env` 后按需填写。
+
+命名规范：`HAI_<MODULE>_<SETTING>`；`OPENAI_*` 仅用于 `@h-ai/ai` 的兼容 fallback。
 
 | 变量                        | 说明                                      | 默认值           |
 | --------------------------- | ----------------------------------------- | ---------------- |
@@ -702,7 +704,7 @@ pnpm --filter @h-ai/reldb test
 | `HAI_ANTHROPIC_API_KEY`     | Anthropic API Key                         | —                |
 | `HAI_E2E`                   | E2E 测试模式                              | —                |
 
-完整列表见各应用的 `.env.example`。
+完整变量列表以仓库根目录 `.env.example` 为准；各 `apps/*/.env.example` 仅保留应用侧差异化示例。
 
 ## 许可证
 

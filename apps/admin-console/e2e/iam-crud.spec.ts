@@ -386,13 +386,14 @@ test.describe('IAM Batch API Behavior', () => {
       },
     })
     expect(roleRes.ok()).toBe(true)
-    const roleId = roleRes.json().then(b => b.data.id)
+    const roleBody = await roleRes.json()
+    const roleId = roleBody.data.id
 
     // 通过列表 API 验证权限在角色上（由 batch API getRolePermissionsForMany 填充）
     const listRes = await request.get('/api/iam/roles')
     expect(listRes.ok()).toBe(true)
     const listBody = await listRes.json()
-    const matchedRole = listBody.data.find((r: Record<string, unknown>) => r.id === await roleId)
+    const matchedRole = listBody.data.find((r: Record<string, unknown>) => r.id === roleId)
     expect(matchedRole).toBeTruthy()
     expect(matchedRole.permissions).toContain(permCode)
   })

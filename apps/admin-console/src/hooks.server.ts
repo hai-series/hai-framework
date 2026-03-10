@@ -134,18 +134,12 @@ async function validateSession(token: string) {
  * hai handle hook
  */
 const haiHandle = kit.createHandle({
-  sessionCookieName: 'hai_session',
   validateSession,
   middleware: [
     kit.middleware.logging({ logBody: false }),
     kit.middleware.rateLimit({
       windowMs: 60000, // 1分钟
       maxRequests: process.env.HAI_E2E === '1' ? 5000 : 100, // E2E 模式放宽限流
-    }),
-    kit.middleware.csrf({
-      exclude: process.env.HAI_E2E === '1'
-        ? ['/api/*']
-        : ['/api/auth/login', '/api/auth/register', '/api/auth/forgot-password', '/api/auth/reset-password', '/api/public/*'],
     }),
   ],
   guards: [

@@ -25,7 +25,7 @@ export default defineConfig({
   },
 
   webServer: {
-    command: 'pnpm build && pnpm preview --port 4176 --strictPort',
+    command: 'pnpm build && pnpm exec vite preview --port 4176 --strictPort',
     env: {
       HAI_E2E: '1',
     },

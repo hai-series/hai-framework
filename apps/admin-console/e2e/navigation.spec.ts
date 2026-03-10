@@ -25,6 +25,27 @@ test.describe('Page Navigation', () => {
     await expect(page.locator('body')).toBeVisible()
   })
 
+  test('模块展示页支持 AI / VecDB / DataPipe 示例切换', async ({ page, request }) => {
+    await registerAndLogin(page, request, 'nav')
+    await page.goto('/admin/modules')
+    await page.waitForLoadState('domcontentloaded')
+
+    const tabs = page.locator('[role="tab"]')
+    await expect(tabs).toHaveCount(8)
+
+    // AI
+    await tabs.nth(4).click()
+    await expect(page.locator('text=@h-ai/ai')).toBeVisible()
+
+    // VecDB
+    await tabs.nth(5).click()
+    await expect(page.locator('text=@h-ai/vecdb')).toBeVisible()
+
+    // DataPipe
+    await tabs.nth(6).click()
+    await expect(page.locator('text=@h-ai/datapipe')).toBeVisible()
+  })
+
   test('UI Gallery 页面可访问', async ({ page, request }) => {
     await registerAndLogin(page, request, 'nav')
     await page.goto('/admin/ui-gallery')

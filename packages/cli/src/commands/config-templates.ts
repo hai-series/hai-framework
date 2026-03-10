@@ -498,6 +498,59 @@ HAI_AI_API_KEY=
     }
   }
 
+  // VecDB
+  if (features.includes('vecdb')) {
+    sections.push(`
+# =============================================================================
+# Vector Database (@h-ai/vecdb)
+# =============================================================================
+# Backend type: lancedb | pgvector | qdrant
+HAI_VECDB_TYPE=lancedb
+# LanceDB data path
+HAI_VECDB_PATH=./data/vecdb
+# Qdrant (uncomment when type=qdrant)
+# HAI_VECDB_QDRANT_URL=http://localhost:6333
+# HAI_VECDB_QDRANT_API_KEY=
+`)
+  }
+
+  // Reach
+  if (features.includes('reach')) {
+    sections.push(`
+# =============================================================================
+# Reach (@h-ai/reach)
+# =============================================================================
+# SMTP (uncomment when enabling email provider)
+# HAI_REACH_SMTP_HOST=smtp.example.com
+# HAI_REACH_SMTP_PORT=465
+# HAI_REACH_SMTP_USER=
+# HAI_REACH_SMTP_PASS=
+# HAI_REACH_SMTP_FROM=noreply@example.com
+`)
+  }
+
+  // Payment
+  if (features.includes('payment')) {
+    sections.push(`
+# =============================================================================
+# Payment (@h-ai/payment)
+# =============================================================================
+# WeChat Pay
+# HAI_PAY_WECHAT_MCH_ID=
+# HAI_PAY_WECHAT_API_V3_KEY=
+# HAI_PAY_WECHAT_SERIAL_NO=
+# HAI_PAY_WECHAT_PRIVATE_KEY=
+# HAI_PAY_WECHAT_APP_ID=
+# Alipay
+# HAI_PAY_ALIPAY_APP_ID=
+# HAI_PAY_ALIPAY_PRIVATE_KEY=
+# HAI_PAY_ALIPAY_PUBLIC_KEY=
+# Stripe
+# HAI_PAY_STRIPE_SECRET_KEY=
+# HAI_PAY_STRIPE_WEBHOOK_SECRET=
+`)
+  }
+
   // 测试（始终生成）
   sections.push(`
 # =============================================================================

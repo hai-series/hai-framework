@@ -27,24 +27,24 @@ description: 使用 @h-ai/payment 接入微信支付、支付宝、Stripe 统一
 ```yaml
 # config/_payment.yml（自行创建）
 wechat:
-  appId: ${WECHAT_PAY_APP_ID}
-  mchId: ${WECHAT_PAY_MCH_ID}
-  apiV3Key: ${WECHAT_PAY_API_KEY_V3}
-  privateKey: ${WECHAT_PAY_PRIVATE_KEY}
-  serialNo: ${WECHAT_PAY_SERIAL_NO}
-  notifyUrl: ${WECHAT_PAY_NOTIFY_URL}
+  appId: ${HAI_PAY_WECHAT_APP_ID}
+  mchId: ${HAI_PAY_WECHAT_MCH_ID}
+  apiV3Key: ${HAI_PAY_WECHAT_API_V3_KEY}
+  privateKey: ${HAI_PAY_WECHAT_PRIVATE_KEY}
+  serialNo: ${HAI_PAY_WECHAT_SERIAL_NO}
+  notifyUrl: ${HAI_PAY_WECHAT_NOTIFY_URL}
 
 alipay:
-  appId: ${ALIPAY_APP_ID}
-  privateKey: ${ALIPAY_PRIVATE_KEY}
-  alipayPublicKey: ${ALIPAY_PUBLIC_KEY}
-  notifyUrl: ${ALIPAY_NOTIFY_URL}
+  appId: ${HAI_PAY_ALIPAY_APP_ID}
+  privateKey: ${HAI_PAY_ALIPAY_PRIVATE_KEY}
+  alipayPublicKey: ${HAI_PAY_ALIPAY_PUBLIC_KEY}
+  notifyUrl: ${HAI_PAY_ALIPAY_NOTIFY_URL}
 
 stripe:
-  secretKey: ${STRIPE_SECRET_KEY}
-  webhookSecret: ${STRIPE_WEBHOOK_SECRET}
-  successUrl: ${STRIPE_SUCCESS_URL}
-  cancelUrl: ${STRIPE_CANCEL_URL}
+  secretKey: ${HAI_PAY_STRIPE_SECRET_KEY}
+  webhookSecret: ${HAI_PAY_STRIPE_WEBHOOK_SECRET}
+  successUrl: ${HAI_PAY_STRIPE_SUCCESS_URL}
+  cancelUrl: ${HAI_PAY_STRIPE_CANCEL_URL}
 ```
 
 ### 2. 初始化（服务端）

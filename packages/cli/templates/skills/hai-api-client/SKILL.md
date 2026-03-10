@@ -94,10 +94,15 @@ api.auth.onTokenRefreshed((tokens) => {
 ### 5. 流式响应
 
 ```typescript
-// stream(path, body?) — 返回 AsyncIterable<string>，按 SSE data: 行 yield
-for await (const chunk of api.stream('/api/v1/ai/chat', { message: 'Hello' })) {
+const controller = new AbortController()
+
+// stream(path, body?, options?) — 返回 AsyncIterable<string>，按 SSE data: 行 yield
+for await (const chunk of api.stream('/api/v1/ai/chat', { message: 'Hello' }, { signal: controller.signal })) {
   // 每个 chunk 是 SSE data: 行的内容
 }
+
+// 主动停止
+controller.abort()
 ```
 
 ### 6. 关闭
