@@ -18,72 +18,72 @@
   ])
 
   // Core 示例数据
-  const coreFeatures = [
-    { name: '配置管理', desc: '基于 YAML 配置文件，支持多环境覆盖', api: 'core.config.get(key)' },
-    { name: '日志系统', desc: '结构化日志，支持 info/warn/error 级别', api: 'core.logger.info(msg, meta)' },
-    { name: 'i18n 国际化', desc: '多语言支持，运行时切换', api: 'core.i18n.setLocale(locale)' },
-    { name: '模块生命周期', desc: '统一 init/close 模式', api: 'core.init(config)' },
-  ]
+  const coreFeatures = $derived([
+    { name: m.modules_core_feat_config_name(), desc: m.modules_core_feat_config_desc(), api: 'core.config.get(key)' },
+    { name: m.modules_core_feat_log_name(), desc: m.modules_core_feat_log_desc(), api: 'core.logger.info(msg, meta)' },
+    { name: m.modules_core_feat_i18n_name(), desc: m.modules_core_feat_i18n_desc(), api: 'core.i18n.setLocale(locale)' },
+    { name: m.modules_core_feat_lifecycle_name(), desc: m.modules_core_feat_lifecycle_desc(), api: 'core.init(config)' },
+  ])
 
   // DB 示例数据
-  const dbExamples = [
-    { op: 'CREATE TABLE', sql: 'CREATE TABLE users (\n  id INTEGER PRIMARY KEY,\n  name TEXT NOT NULL,\n  email TEXT UNIQUE\n)', desc: '创建用户表' },
-    { op: 'INSERT', sql: "INSERT INTO users (name, email)\nVALUES ('张三', 'zhang@example.com')", desc: '插入数据' },
-    { op: 'SELECT', sql: "SELECT * FROM users WHERE name LIKE '%张%'", desc: '查询数据' },
-    { op: 'TRANSACTION', sql: 'await reldb.transaction(async (tx) => {\n  await tx.insert(users).values(...)\n  await tx.update(accounts)...\n})', desc: '事务处理' },
-  ]
+  const dbExamples = $derived([
+    { op: 'CREATE TABLE', sql: 'CREATE TABLE users (\n  id INTEGER PRIMARY KEY,\n  name TEXT NOT NULL,\n  email TEXT UNIQUE\n)', desc: m.modules_db_op_create_desc() },
+    { op: 'INSERT', sql: "INSERT INTO users (name, email)\nVALUES ('张三', 'zhang@example.com')", desc: m.modules_db_op_insert_desc() },
+    { op: 'SELECT', sql: "SELECT * FROM users WHERE name LIKE '%张%'", desc: m.modules_db_op_select_desc() },
+    { op: 'TRANSACTION', sql: 'await reldb.transaction(async (tx) => {\n  await tx.insert(users).values(...)\n  await tx.update(accounts)...\n})', desc: m.modules_db_op_tx_desc() },
+  ])
 
   // Cache 示例
-  const cacheOps = [
-    { op: 'SET', code: "await cache.set('user:1', userData, { ttl: 3600 })", desc: '设置缓存（1小时过期）' },
-    { op: 'GET', code: "const user = await cache.get('user:1')", desc: '获取缓存' },
-    { op: 'DELETE', code: "await cache.delete('user:1')", desc: '删除缓存' },
-    { op: 'CLEAR', code: "await cache.clear()", desc: '清除所有缓存' },
-  ]
+  const cacheOps = $derived([
+    { op: 'SET', code: "await cache.set('user:1', userData, { ttl: 3600 })", desc: m.modules_cache_op_set_desc() },
+    { op: 'GET', code: "const user = await cache.get('user:1')", desc: m.modules_cache_op_get_desc() },
+    { op: 'DELETE', code: "await cache.delete('user:1')", desc: m.modules_cache_op_delete_desc() },
+    { op: 'CLEAR', code: "await cache.clear()", desc: m.modules_cache_op_clear_desc() },
+  ])
 
   // Storage 示例
-  const storageOps = [
-    { op: '上传文件', code: "await storage.upload('docs/report.pdf', fileBuffer)", desc: '上传文件到存储' },
-    { op: '下载文件', code: "const file = await storage.download('docs/report.pdf')", desc: '下载文件' },
-    { op: '签名URL', code: "await storage.presign('docs/report.pdf', { expires: 3600 })", desc: '生成预签名访问 URL' },
-    { op: '列出文件', code: "const files = await storage.list('docs/')", desc: '列出目录下所有文件' },
-  ]
+  const storageOps = $derived([
+    { op: m.modules_storage_op_upload(), code: "await storage.upload('docs/report.pdf', fileBuffer)", desc: m.modules_storage_op_upload_desc() },
+    { op: m.modules_storage_op_download(), code: "const file = await storage.download('docs/report.pdf')", desc: m.modules_storage_op_download_desc() },
+    { op: m.modules_storage_op_presign(), code: "await storage.presign('docs/report.pdf', { expires: 3600 })", desc: m.modules_storage_op_presign_desc() },
+    { op: m.modules_storage_op_list(), code: "const files = await storage.list('docs/')", desc: m.modules_storage_op_list_desc() },
+  ])
 
   // AI 示例
-  const aiFeatures = [
-    { name: '文本生成', desc: '基于 LLM 的文本补全与对话', api: 'ai.chat({ messages: [...] })' },
-    { name: '嵌入向量', desc: '文本向量化，用于语义搜索', api: 'ai.embed(text)' },
-    { name: '多模型支持', desc: '支持 OpenAI / Azure / 本地模型', api: 'ai.init({ provider, model })' },
-    { name: '流式输出', desc: '服务端流式返回生成结果', api: 'ai.stream({ messages: [...] })' },
-  ]
+  const aiFeatures = $derived([
+    { name: m.modules_ai_feat_chat_name(), desc: m.modules_ai_feat_chat_desc(), api: 'ai.chat({ messages: [...] })' },
+    { name: m.modules_ai_feat_embed_name(), desc: m.modules_ai_feat_embed_desc(), api: 'ai.embed(text)' },
+    { name: m.modules_ai_feat_multi_name(), desc: m.modules_ai_feat_multi_desc(), api: 'ai.init({ provider, model })' },
+    { name: m.modules_ai_feat_stream_name(), desc: m.modules_ai_feat_stream_desc(), api: 'ai.stream({ messages: [...] })' },
+  ])
 
   // VecDB 示例
-  const vecdbFeatures = [
-    { name: '创建集合', desc: '创建向量集合并指定维度', api: 'vecdb.createCollection(name, dimension)' },
-    { name: '插入向量', desc: '将文本嵌入向量存入集合', api: 'vecdb.insert(collection, vectors)' },
-    { name: '语义搜索', desc: '基于向量相似度进行检索', api: 'vecdb.search(collection, query, topK)' },
-    { name: '删除集合', desc: '删除集合及其所有数据', api: 'vecdb.dropCollection(name)' },
-  ]
+  const vecdbFeatures = $derived([
+    { name: m.modules_vecdb_feat_create_name(), desc: m.modules_vecdb_feat_create_desc(), api: 'vecdb.createCollection(name, dimension)' },
+    { name: m.modules_vecdb_feat_insert_name(), desc: m.modules_vecdb_feat_insert_desc(), api: 'vecdb.insert(collection, vectors)' },
+    { name: m.modules_vecdb_feat_search_name(), desc: m.modules_vecdb_feat_search_desc(), api: 'vecdb.search(collection, query, topK)' },
+    { name: m.modules_vecdb_feat_drop_name(), desc: m.modules_vecdb_feat_drop_desc(), api: 'vecdb.dropCollection(name)' },
+  ])
 
-  const vecdbOps = [
-    { op: '创建集合', code: "await vecdb.createCollection('docs', 1536)", desc: '创建名为 docs 的向量集合（1536 维）' },
-    { op: '插入向量', code: "await vecdb.insert('docs', [{ id: '1', vector: embedding, metadata: { title: '文档标题' } }])", desc: '插入嵌入向量及元数据' },
-    { op: '搜索', code: "const results = await vecdb.search('docs', queryVector, { topK: 5 })", desc: '搜索最相似的 5 条记录' },
-    { op: '删除', code: "await vecdb.delete('docs', ['1', '2'])", desc: '按 ID 删除指定向量' },
-  ]
+  const vecdbOps = $derived([
+    { op: m.modules_vecdb_op_create(), code: "await vecdb.createCollection('docs', 1536)", desc: m.modules_vecdb_op_create_desc() },
+    { op: m.modules_vecdb_op_insert(), code: "await vecdb.insert('docs', [{ id: '1', vector: embedding, metadata: { title: '文档标题' } }])", desc: m.modules_vecdb_op_insert_desc() },
+    { op: m.modules_vecdb_op_search(), code: "const results = await vecdb.search('docs', queryVector, { topK: 5 })", desc: m.modules_vecdb_op_search_desc() },
+    { op: m.modules_vecdb_op_delete(), code: "await vecdb.delete('docs', ['1', '2'])", desc: m.modules_vecdb_op_delete_desc() },
+  ])
 
   // DataPipe 示例
-  const datapipeFeatures = [
-    { name: '文本清洗', desc: '去除 HTML 标签、特殊字符、多余空白', api: 'datapipe.clean(text, options)' },
-    { name: '文本分块', desc: '将长文本按策略切分为小段', api: 'datapipe.chunk(text, options)' },
-    { name: '管道处理', desc: '组合多个处理步骤为流水线', api: 'datapipe.pipeline(steps).run(input)' },
-  ]
+  const datapipeFeatures = $derived([
+    { name: m.modules_datapipe_feat_clean_name(), desc: m.modules_datapipe_feat_clean_desc(), api: 'datapipe.clean(text, options)' },
+    { name: m.modules_datapipe_feat_chunk_name(), desc: m.modules_datapipe_feat_chunk_desc(), api: 'datapipe.chunk(text, options)' },
+    { name: m.modules_datapipe_feat_pipe_name(), desc: m.modules_datapipe_feat_pipe_desc(), api: 'datapipe.pipeline(steps).run(input)' },
+  ])
 
-  const datapipeOps = [
-    { op: 'Clean', code: "const cleaned = datapipe.clean(htmlContent, {\n  stripHtml: true,\n  trimWhitespace: true,\n  removeUrls: true,\n})", desc: '清洗 HTML 内容' },
-    { op: 'Chunk', code: "const chunks = datapipe.chunk(longText, {\n  strategy: 'recursive',\n  maxSize: 1000,\n  overlap: 200,\n})", desc: '按递归策略分块' },
-    { op: 'Pipeline', code: "const result = await datapipe.pipeline([\n  { type: 'clean', options: { stripHtml: true } },\n  { type: 'chunk', options: { maxSize: 500 } },\n]).run(rawContent)", desc: '组合清洗+分块管道' },
-  ]
+  const datapipeOps = $derived([
+    { op: 'Clean', code: "const cleaned = datapipe.clean(htmlContent, {\n  stripHtml: true,\n  trimWhitespace: true,\n  removeUrls: true,\n})", desc: m.modules_datapipe_op_clean_desc() },
+    { op: 'Chunk', code: "const chunks = datapipe.chunk(longText, {\n  strategy: 'recursive',\n  maxSize: 1000,\n  overlap: 200,\n})", desc: m.modules_datapipe_op_chunk_desc() },
+    { op: 'Pipeline', code: "const result = await datapipe.pipeline([\n  { type: 'clean', options: { stripHtml: true } },\n  { type: 'chunk', options: { maxSize: 500 } },\n]).run(rawContent)", desc: m.modules_datapipe_op_pipe_desc() },
+  ])
 
   // Crypto 示例状态
   let plainText = $state('Hello, hai-framework!')
@@ -97,7 +97,7 @@
       () => '0123456789abcdef'[Math.floor(Math.random() * 16)]
     ).join('')
     hashResult = hash
-    toast.success('SM3 哈希计算完成')
+    toast.success(m.modules_crypto_hash_complete())
   }
 
   function mockEncrypt() {
@@ -107,7 +107,7 @@
       () => '0123456789abcdef'[Math.floor(Math.random() * 16)]
     ).join('')
     encryptResult = encrypted
-    toast.success('SM4 加密完成')
+    toast.success(m.modules_crypto_encrypt_complete())
   }
 </script>
 
@@ -137,14 +137,14 @@
   {#if activeTab === 'core'}
     <div class="grid gap-6">
       <Card>
-        <h3 class="text-lg font-semibold mb-2">@h-ai/core — 核心基础模块</h3>
+        <h3 class="text-lg font-semibold mb-2">@h-ai/core — {m.modules_core_subtitle()}</h3>
         <p class="text-base-content/60 text-sm mb-4">
-          提供配置管理、日志、i18n、模块生命周期等基础能力，是所有模块的公共依赖。
+          {m.modules_core_description()}
         </p>
-        <Alert variant="info">core 模块在应用启动时通过 <code class="font-mono">core.init(config)</code> 初始化，所有其他模块均依赖 core 提供的配置与日志。</Alert>
+        <Alert variant="info">{m.modules_core_info()}</Alert>
       </Card>
       <Card>
-        <h3 class="text-lg font-semibold mb-4">核心功能</h3>
+        <h3 class="text-lg font-semibold mb-4">{m.modules_core_features_title()}</h3>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           {#each coreFeatures as feature}
             <div class="p-4 rounded-lg bg-base-200">
@@ -158,7 +158,7 @@
         </div>
       </Card>
       <Card>
-        <h3 class="text-lg font-semibold mb-3">初始化示例</h3>
+        <h3 class="text-lg font-semibold mb-3">{m.modules_core_init_example()}</h3>
         <pre class="bg-base-200 p-4 rounded-lg text-sm overflow-x-auto font-mono"><code>{`import { core } from '@h-ai/core'
 
 // 加载 YAML 配置并初始化
@@ -186,9 +186,9 @@ await core.close()`}</code></pre>
   {#if activeTab === 'db'}
     <div class="grid gap-6">
       <Card>
-        <h3 class="text-lg font-semibold mb-2">@h-ai/reldb — 数据库模块</h3>
+        <h3 class="text-lg font-semibold mb-2">@h-ai/reldb — {m.modules_db_subtitle()}</h3>
         <p class="text-base-content/60 text-sm mb-4">
-          支持 SQLite、PostgreSQL、MySQL，提供统一且类型安全的数据库操作能力。
+          {m.modules_db_description()}
         </p>
         <div class="flex gap-2 mb-4">
           <Badge variant="success">SQLite</Badge>
@@ -197,7 +197,7 @@ await core.close()`}</code></pre>
         </div>
       </Card>
       <Card>
-        <h3 class="text-lg font-semibold mb-4">SQL 操作示例</h3>
+        <h3 class="text-lg font-semibold mb-4">{m.modules_db_sql_title()}</h3>
         <div class="space-y-4">
           {#each dbExamples as example}
             <div class="bg-base-200/50 rounded-lg overflow-hidden">
@@ -211,7 +211,7 @@ await core.close()`}</code></pre>
         </div>
       </Card>
       <Card>
-        <h3 class="text-lg font-semibold mb-3">数据库操作示例</h3>
+        <h3 class="text-lg font-semibold mb-3">{m.modules_db_crud_title()}</h3>
         <pre class="bg-base-200 p-4 rounded-lg text-sm overflow-x-auto font-mono"><code>{`import { reldb } from '@h-ai/reldb'
 
 // 定义 Schema
@@ -238,9 +238,9 @@ const page = await reldb.select().from(users).limit(10).offset(0)`}</code></pre>
   {#if activeTab === 'cache'}
     <div class="grid gap-6">
       <Card>
-        <h3 class="text-lg font-semibold mb-2">@h-ai/cache — 缓存模块</h3>
+        <h3 class="text-lg font-semibold mb-2">@h-ai/cache — {m.modules_cache_subtitle()}</h3>
         <p class="text-base-content/60 text-sm mb-4">
-          提供统一的缓存接口，支持内存缓存和 Redis 缓存，自动过期与命名空间隔离。
+          {m.modules_cache_description()}
         </p>
         <div class="flex gap-2">
           <Badge variant="success">Memory</Badge>
@@ -248,7 +248,7 @@ const page = await reldb.select().from(users).limit(10).offset(0)`}</code></pre>
         </div>
       </Card>
       <Card>
-        <h3 class="text-lg font-semibold mb-4">缓存操作</h3>
+        <h3 class="text-lg font-semibold mb-4">{m.modules_cache_ops_title()}</h3>
         <div class="space-y-3">
           {#each cacheOps as op}
             <div class="flex items-start gap-4 p-4 bg-base-200 rounded-lg">
@@ -262,7 +262,7 @@ const page = await reldb.select().from(users).limit(10).offset(0)`}</code></pre>
         </div>
       </Card>
       <Card>
-        <h3 class="text-lg font-semibold mb-3">初始化与使用</h3>
+        <h3 class="text-lg font-semibold mb-3">{m.modules_cache_init_title()}</h3>
         <pre class="bg-base-200 p-4 rounded-lg text-sm overflow-x-auto font-mono"><code>{`import { cache } from '@h-ai/cache'
 
 // 初始化 (内存缓存)
@@ -294,9 +294,9 @@ await cache.close()`}</code></pre>
   {#if activeTab === 'storage'}
     <div class="grid gap-6">
       <Card>
-        <h3 class="text-lg font-semibold mb-2">@h-ai/storage — 存储模块</h3>
+        <h3 class="text-lg font-semibold mb-2">@h-ai/storage — {m.modules_storage_subtitle()}</h3>
         <p class="text-base-content/60 text-sm mb-4">
-          统一文件存储接口，支持本地文件系统和 S3 兼容存储（AWS S3、MinIO、阿里云 OSS 等）。
+          {m.modules_storage_description()}
         </p>
         <div class="flex gap-2">
           <Badge variant="success">Local</Badge>
@@ -306,7 +306,7 @@ await cache.close()`}</code></pre>
         </div>
       </Card>
       <Card>
-        <h3 class="text-lg font-semibold mb-4">存储操作</h3>
+        <h3 class="text-lg font-semibold mb-4">{m.modules_storage_ops_title()}</h3>
         <div class="space-y-3">
           {#each storageOps as op}
             <div class="flex items-start gap-4 p-4 bg-base-200 rounded-lg">
@@ -320,7 +320,7 @@ await cache.close()`}</code></pre>
         </div>
       </Card>
       <Card>
-        <h3 class="text-lg font-semibold mb-3">初始化与配置</h3>
+        <h3 class="text-lg font-semibold mb-3">{m.modules_storage_init_title()}</h3>
         <pre class="bg-base-200 p-4 rounded-lg text-sm overflow-x-auto font-mono"><code>{`import { storage } from '@h-ai/storage'
 
 // 本地存储
@@ -351,18 +351,18 @@ const url = await storage.presign(key, { expires: 3600 })`}</code></pre>
   {#if activeTab === 'ai'}
     <div class="grid gap-6">
       <Card>
-        <h3 class="text-lg font-semibold mb-2">@h-ai/ai — AI 智能模块</h3>
+        <h3 class="text-lg font-semibold mb-2">@h-ai/ai — {m.modules_ai_subtitle()}</h3>
         <p class="text-base-content/60 text-sm mb-4">
-          统一的 AI 接口层，支持多种 LLM 提供商，提供对话、嵌入、流式输出等能力。
+          {m.modules_ai_description()}
         </p>
         <div class="flex gap-2">
           <Badge variant="info">OpenAI</Badge>
           <Badge variant="success">Azure</Badge>
-          <Badge variant="warning">本地模型</Badge>
+          <Badge variant="warning">{m.modules_ai_local_model()}</Badge>
         </div>
       </Card>
       <Card>
-        <h3 class="text-lg font-semibold mb-4">AI 能力矩阵</h3>
+        <h3 class="text-lg font-semibold mb-4">{m.modules_ai_capabilities_title()}</h3>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           {#each aiFeatures as feature}
             <div class="p-4 rounded-lg bg-base-200/50">
@@ -374,7 +374,7 @@ const url = await storage.presign(key, { expires: 3600 })`}</code></pre>
         </div>
       </Card>
       <Card>
-        <h3 class="text-lg font-semibold mb-3">使用示例</h3>
+        <h3 class="text-lg font-semibold mb-3">{m.modules_ai_example_title()}</h3>
         <pre class="bg-base-200 p-4 rounded-lg text-sm overflow-x-auto font-mono"><code>{`import { ai } from '@h-ai/ai'
 
 // 初始化
@@ -410,9 +410,9 @@ const embedding = await ai.embed('搜索查询文本')`}</code></pre>
   {#if activeTab === 'vecdb'}
     <div class="grid gap-6">
       <Card>
-        <h3 class="text-lg font-semibold mb-2">@h-ai/vecdb — 向量数据库模块</h3>
+        <h3 class="text-lg font-semibold mb-2">@h-ai/vecdb — {m.modules_vecdb_subtitle()}</h3>
         <p class="text-base-content/60 text-sm mb-4">
-          统一的向量数据库接口，支持 LanceDB、pgvector、Qdrant，提供向量存储与语义搜索能力。适用于 RAG、推荐系统、语义检索等场景。
+          {m.modules_vecdb_description()}
         </p>
         <div class="flex gap-2">
           <Badge variant="success">LanceDB</Badge>
@@ -421,7 +421,7 @@ const embedding = await ai.embed('搜索查询文本')`}</code></pre>
         </div>
       </Card>
       <Card>
-        <h3 class="text-lg font-semibold mb-4">核心能力</h3>
+        <h3 class="text-lg font-semibold mb-4">{m.modules_vecdb_capabilities_title()}</h3>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           {#each vecdbFeatures as feature}
             <div class="p-4 rounded-lg bg-base-200/50">
@@ -433,7 +433,7 @@ const embedding = await ai.embed('搜索查询文本')`}</code></pre>
         </div>
       </Card>
       <Card>
-        <h3 class="text-lg font-semibold mb-4">向量操作</h3>
+        <h3 class="text-lg font-semibold mb-4">{m.modules_vecdb_ops_title()}</h3>
         <div class="space-y-3">
           {#each vecdbOps as op}
             <div class="flex items-start gap-4 p-4 bg-base-200 rounded-lg">
@@ -447,7 +447,7 @@ const embedding = await ai.embed('搜索查询文本')`}</code></pre>
         </div>
       </Card>
       <Card>
-        <h3 class="text-lg font-semibold mb-3">初始化与 RAG 示例</h3>
+        <h3 class="text-lg font-semibold mb-3">{m.modules_vecdb_rag_title()}</h3>
         <pre class="bg-base-200 p-4 rounded-lg text-sm overflow-x-auto font-mono"><code>{`import { vecdb } from '@h-ai/vecdb'
 import { ai } from '@h-ai/ai'
 
@@ -488,20 +488,19 @@ await vecdb.close()`}</code></pre>
   {#if activeTab === 'datapipe'}
     <div class="grid gap-6">
       <Card>
-        <h3 class="text-lg font-semibold mb-2">@h-ai/datapipe — 数据处理管道</h3>
+        <h3 class="text-lg font-semibold mb-2">@h-ai/datapipe — {m.modules_datapipe_subtitle()}</h3>
         <p class="text-base-content/60 text-sm mb-4">
-          文本数据预处理工具集，提供清洗（HTML 去标签、URL 去除）、分块（递归/段落/句子）和管道编排能力。
-          适用于 RAG 数据入库前的预处理流程。
+          {m.modules_datapipe_description()}
         </p>
         <div class="flex gap-2">
-          <Badge variant="success">Clean 清洗</Badge>
-          <Badge variant="info">Chunk 分块</Badge>
-          <Badge variant="warning">Pipeline 管道</Badge>
+          <Badge variant="success">{m.modules_datapipe_clean_badge()}</Badge>
+          <Badge variant="info">{m.modules_datapipe_chunk_badge()}</Badge>
+          <Badge variant="warning">{m.modules_datapipe_pipeline_badge()}</Badge>
         </div>
-        <Alert variant="info" class="mt-4">datapipe 为纯函数模块，无需 init/close 初始化，直接导入即可使用。</Alert>
+        <Alert variant="info" class="mt-4">{m.modules_datapipe_note()}</Alert>
       </Card>
       <Card>
-        <h3 class="text-lg font-semibold mb-4">核心能力</h3>
+        <h3 class="text-lg font-semibold mb-4">{m.modules_datapipe_capabilities_title()}</h3>
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           {#each datapipeFeatures as feature}
             <div class="p-4 rounded-lg bg-base-200/50">
@@ -513,7 +512,7 @@ await vecdb.close()`}</code></pre>
         </div>
       </Card>
       <Card>
-        <h3 class="text-lg font-semibold mb-4">操作示例</h3>
+        <h3 class="text-lg font-semibold mb-4">{m.modules_datapipe_ops_title()}</h3>
         <div class="space-y-3">
           {#each datapipeOps as op}
             <div class="flex items-start gap-4 p-4 bg-base-200 rounded-lg">
@@ -527,7 +526,7 @@ await vecdb.close()`}</code></pre>
         </div>
       </Card>
       <Card>
-        <h3 class="text-lg font-semibold mb-3">RAG 预处理完整示例</h3>
+        <h3 class="text-lg font-semibold mb-3">{m.modules_datapipe_rag_title()}</h3>
         <pre class="bg-base-200 p-4 rounded-lg text-sm overflow-x-auto font-mono"><code>{`import { datapipe } from '@h-ai/datapipe'
 import { ai } from '@h-ai/ai'
 import { vecdb } from '@h-ai/vecdb'
@@ -574,43 +573,43 @@ const result = await pipeline.run(rawContent)`}</code></pre>
   {#if activeTab === 'crypto'}
     <div class="grid gap-6">
       <Card>
-        <h3 class="text-lg font-semibold mb-2">@h-ai/crypto — 加密模块</h3>
+        <h3 class="text-lg font-semibold mb-2">@h-ai/crypto — {m.modules_crypto_subtitle()}</h3>
         <p class="text-base-content/60 text-sm mb-4">
-          国密算法支持（SM2/SM3/SM4），提供哈希、对称加密、非对称加密与数字签名。
+          {m.modules_crypto_description()}
         </p>
         <div class="flex gap-2">
-          <Badge variant="error">SM2 非对称</Badge>
-          <Badge variant="warning">SM3 哈希</Badge>
-          <Badge variant="success">SM4 对称</Badge>
+          <Badge variant="error">{m.modules_crypto_sm2()}</Badge>
+          <Badge variant="warning">{m.modules_crypto_sm3()}</Badge>
+          <Badge variant="success">{m.modules_crypto_sm4()}</Badge>
         </div>
       </Card>
       <Card>
-        <h3 class="text-lg font-semibold mb-4">在线体验</h3>
+        <h3 class="text-lg font-semibold mb-4">{m.modules_crypto_demo_title()}</h3>
         <div class="space-y-4">
           <div>
-            <label class="text-sm font-medium mb-1 block" for="crypto-plain">明文输入</label>
-            <Input id="crypto-plain" bind:value={plainText} placeholder="输入要处理的文本" />
+            <label class="text-sm font-medium mb-1 block" for="crypto-plain">{m.modules_crypto_input_label()}</label>
+            <Input id="crypto-plain" bind:value={plainText} placeholder={m.modules_crypto_input_placeholder()} />
           </div>
           <div class="flex gap-3">
-            <Button variant="warning" onclick={mockHash}>SM3 哈希</Button>
-            <Button variant="success" onclick={mockEncrypt}>SM4 加密</Button>
+            <Button variant="warning" onclick={mockHash}>{m.modules_crypto_hash_btn()}</Button>
+            <Button variant="success" onclick={mockEncrypt}>{m.modules_crypto_encrypt_btn()}</Button>
           </div>
           {#if hashResult}
             <div class="p-3 bg-base-200 rounded-lg">
-              <p class="text-xs text-base-content/60 mb-1">SM3 哈希结果：</p>
+              <p class="text-xs text-base-content/60 mb-1">{m.modules_crypto_hash_result()}</p>
               <code class="text-xs font-mono break-all">{hashResult}</code>
             </div>
           {/if}
           {#if encryptResult}
             <div class="p-3 bg-base-200 rounded-lg">
-              <p class="text-xs text-base-content/60 mb-1">SM4 加密结果：</p>
+              <p class="text-xs text-base-content/60 mb-1">{m.modules_crypto_encrypt_result()}</p>
               <code class="text-xs font-mono break-all">{encryptResult}</code>
             </div>
           {/if}
         </div>
       </Card>
       <Card>
-        <h3 class="text-lg font-semibold mb-3">使用示例</h3>
+        <h3 class="text-lg font-semibold mb-3">{m.modules_crypto_example_title()}</h3>
         <pre class="bg-base-200 p-4 rounded-lg text-sm overflow-x-auto font-mono"><code>{`import { crypto } from '@h-ai/crypto'
 
 // 初始化
