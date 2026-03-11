@@ -12,17 +12,13 @@ import { toIamUserResponse } from '$lib/server/iam-helpers.js'
 import { iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
 
-export const GET = kit.handler(async ({ cookies }) => {
-  const token = cookies.get('hai_session')
-
-  if (!token) {
+export const GET = kit.handler(async ({ locals }) => {
+  if (!locals.accessToken) {
     return kit.response.unauthorized()
   }
 
-  // 验证令牌获取用户
-  const userResult = await iam.user.getCurrentUser(token)
+  const userResult = await iam.user.getCurrentUser(locals.accessToken)
   if (!userResult.success) {
-    kit.session.clearCookie(cookies)
     return kit.response.unauthorized()
   }
 

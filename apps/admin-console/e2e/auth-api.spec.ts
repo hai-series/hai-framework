@@ -99,6 +99,7 @@ test.describe('POST /api/auth/login', () => {
 
     const body = await res.json()
     expect(body.success).toBe(true)
+    expect(body.data?.accessToken).toBeTruthy()
     const loginUser = getUserPayload(body) as { id: string, username: string }
     expect(loginUser).toHaveProperty('id')
     expect(loginUser.username).toBe(user.username)
@@ -112,6 +113,7 @@ test.describe('POST /api/auth/login', () => {
 
     const body = await res.json()
     expect(body.success).toBe(true)
+    expect(body.data?.accessToken).toBeTruthy()
   })
 
   test('错误密码返回 401', async ({ request }) => {
@@ -162,12 +164,19 @@ test.describe('GET /api/auth/me', () => {
 
   test('登录后返回用户信息', async ({ request }) => {
     const u = uniqueUser()
-    // 注册（自动登录，设置 cookie）
-    await request.post('/api/auth/register', {
+    // 注册并使用返回 token 请求 me
+    const registerRes = await request.post('/api/auth/register', {
       data: { username: u.username, email: u.email, password: u.password, confirmPassword: u.password },
     })
+    const registerBody = await registerRes.json()
+    const accessToken = registerBody.data?.accessToken as string | undefined
+    expect(accessToken).toBeTruthy()
 
-    const res = await request.get('/api/auth/me')
+    const res = await request.get('/api/auth/me', {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    })
     const body = await res.json()
     expect(body.success).toBe(true)
     const meUser = getUserPayload(body) as { id: string, username: string }

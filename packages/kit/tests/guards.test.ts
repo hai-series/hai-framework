@@ -18,12 +18,13 @@ import {
   permissionGuard,
   requirePermission,
   roleGuard,
+  sessionGuard,
 } from '../src/guards/index.js'
 
 /**
  * 创建模拟 RequestEvent
  */
-function createMockEvent(path = '/') {
+function createMockEvent(path = '/', token?: string) {
   const url = new URL(`http://localhost${path}`)
 
   return {
@@ -31,6 +32,15 @@ function createMockEvent(path = '/') {
     url,
     params: {},
     route: { id: path },
+    locals: {},
+    cookies: {
+      get: (name: string) => {
+        if (name === 'hai_access_token') {
+          return token
+        }
+        return undefined
+      },
+    },
   } as any
 }
 
@@ -66,6 +76,64 @@ describe('authGuard', () => {
     expect(result.allowed).toBe(false)
     expect(result.status).toBe(401)
     expect(result.message).toBe('需要身份认证')
+  })
+})
+
+describe('sessionGuard', () => {
+  it('已存在 session 时直接放行', async () => {
+    const guard = sessionGuard({
+      validateSession: async () => null,
+    })
+    const session: SessionData = {
+      userId: 'u1',
+      roles: ['admin'],
+      permissions: ['*'],
+    }
+
+    const result = await guard(createMockEvent('/admin'), session)
+    expect(result.allowed).toBe(true)
+  })
+
+  it('页面模式：无 token 时重定向登录页', async () => {
+    const guard = sessionGuard({
+      validateSession: async () => null,
+      loginUrl: '/auth/login',
+    })
+
+    const result = await guard(createMockEvent('/admin/users'), undefined)
+    expect(result.allowed).toBe(false)
+    expect(result.redirect).toContain('/auth/login')
+    expect(result.redirect).toContain('returnUrl=')
+  })
+
+  it('应从 cookie token 恢复 session 并写入 locals（含 accessToken）', async () => {
+    const guard = sessionGuard({
+      validateSession: async () => ({
+        userId: 'u2',
+        username: 'alice',
+        roles: ['admin'],
+        permissions: ['dashboard:view'],
+      }),
+    })
+
+    const event = createMockEvent('/admin', 'token_abc')
+    const result = await guard(event, undefined)
+
+    expect(result.allowed).toBe(true)
+    expect(event.locals.session).toBeDefined()
+    expect(event.locals.session.userId).toBe('u2')
+    expect(event.locals.accessToken).toBe('token_abc')
+  })
+
+  it('api 模式：无 token 时返回 401', async () => {
+    const guard = sessionGuard({
+      validateSession: async () => null,
+      apiMode: true,
+    })
+
+    const result = await guard(createMockEvent('/api/admin'), undefined)
+    expect(result.allowed).toBe(false)
+    expect(result.status).toBe(401)
   })
 })
 

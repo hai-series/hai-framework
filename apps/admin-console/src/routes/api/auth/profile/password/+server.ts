@@ -6,14 +6,13 @@ import { kit } from '@h-ai/kit'
 /**
  * 修改当前登录用户密码，成功后要求重新登录。
  */
-export const PUT = kit.handler(async ({ cookies, request }) => {
-  const token = cookies.get('hai_session')
-  if (!token) {
+export const PUT = kit.handler(async ({ request, locals }) => {
+  if (!locals.accessToken) {
     return kit.response.unauthorized(m.common_error())
   }
 
   const data = await kit.validate.formOrFail(request, createChangeCurrentPasswordSchema())
-  const result = await iam.user.changeCurrentUserPassword(token, data.old_password, data.new_password)
+  const result = await iam.user.changeCurrentUserPassword(locals.accessToken, data.old_password, data.new_password)
 
   if (!result.success) {
     return kit.response.badRequest(
@@ -23,6 +22,5 @@ export const PUT = kit.handler(async ({ cookies, request }) => {
     )
   }
 
-  kit.session.clearCookie(cookies)
   return kit.response.ok({ reloginRequired: true })
 })

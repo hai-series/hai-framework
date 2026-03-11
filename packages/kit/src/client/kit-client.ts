@@ -6,7 +6,9 @@
  * @module kit-client
  */
 
+import type { BrowserTokenStore } from '../kit-auth.js'
 import type { EncryptedPayload, TransportCryptoServiceLike, TransportKeyPair } from '../modules/crypto/kit-crypto-types.js'
+import { createBrowserTokenStore } from '../kit-auth.js'
 import { isValidEncryptedPayload } from '../modules/crypto/kit-transport-encryption.js'
 
 // ─── 类型 ───
@@ -35,6 +37,13 @@ export interface KitClientConfig {
   csrfCookieName?: string
   /** CSRF Header 名称（默认 `'X-CSRF-Token'`） */
   csrfHeaderName?: string
+  /**
+   * 认证配置：自动从浏览器存储读取 Access Token 并注入请求头。
+   * - `true`：使用默认 localStorage 存储（key = `hai_access_token`）
+   * - `BrowserTokenStore`：使用自定义存储
+   * - 不提供 / `false`：不自动注入
+   */
+  auth?: boolean | BrowserTokenStore
 }
 
 /**
@@ -91,7 +100,13 @@ export function createKitClient(config: KitClientConfig = {}): KitClient {
     transport: transportConfig,
     csrfCookieName = 'hai_csrf',
     csrfHeaderName = 'X-CSRF-Token',
+    auth: authConfig,
   } = config
+
+  // ── Auth token store ──
+  const authStore: BrowserTokenStore | null = authConfig
+    ? (authConfig === true ? createBrowserTokenStore() : authConfig)
+    : null
 
   // ── 传输加密状态 ──
   let transportReady = false
@@ -225,6 +240,14 @@ export function createKitClient(config: KitClientConfig = {}): KitClient {
     const isWriteMethod = !['GET', 'HEAD', 'OPTIONS'].includes(method)
 
     const headers = new Headers(init.headers)
+
+    // ── Auth ──
+    if (authStore) {
+      const token = authStore.get()
+      if (token) {
+        headers.set('Authorization', `Bearer ${token}`)
+      }
+    }
 
     // ── CSRF ──
     if (isWriteMethod) {

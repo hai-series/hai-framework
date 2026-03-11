@@ -9,6 +9,7 @@
   import { goto } from '$app/navigation'
   import * as m from '$lib/paraglide/messages'
   import { apiFetch } from '$lib/utils/api'
+  import { kit } from '@h-ai/kit'
   import { setPermissionContext, usePermission } from '@h-ai/ui'
   
   interface Props {
@@ -109,6 +110,7 @@
   async function handleLogout() {
     userMenuOpen = false
     try { await apiFetch('/api/auth/logout', { method: 'POST' }) } catch { /* 忽略 */ }
+    kit.auth.clearBrowserAccessToken()
     goto('/auth/login')
   }
 

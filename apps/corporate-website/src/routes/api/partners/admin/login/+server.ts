@@ -1,3 +1,4 @@
+import process from 'node:process'
 import {
   createPartnerAdminSession,
   getPartnerAdminConfig,
@@ -16,13 +17,18 @@ export const POST = kit.handler(async ({ request, cookies }) => {
   const token = await createPartnerAdminSession(username)
   const config = getPartnerAdminConfig()
 
-  kit.session.setCookie(cookies, token, {
-    cookieName: 'corp_partner_session',
+  cookies.set('corp_partner_access_token', token, {
+    path: '/',
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
     maxAge: config.sessionTtlSeconds,
   })
 
   return kit.response.ok({
+    accessToken: token,
     username,
     loggedIn: true,
+    expiresIn: config.sessionTtlSeconds,
   })
 })

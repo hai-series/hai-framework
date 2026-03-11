@@ -34,8 +34,6 @@ async function ensureAppInitialized() {
   await appInitPromise
 }
 
-const cookieEncryptionKey = process.env.HAI_COOKIE_KEY?.trim() || undefined
-
 // =============================================================================
 // Paraglide i18n Middleware
 // =============================================================================
@@ -143,24 +141,26 @@ const haiHandle = kit.createHandle({
     }),
   ],
   guards: [
-    // 保护 /admin/* 路径
     {
-      guard: kit.guard.auth({ loginUrl: '/auth/login' }),
+      guard: kit.guard.session({
+        validateSession,
+        loginUrl: '/auth/login',
+      }),
       paths: ['/admin/*'],
       exclude: ['/admin/public/*'],
     },
-    // 保护 /api/* 路径（API模式）
     {
-      guard: kit.guard.auth({ apiMode: true }),
+      guard: kit.guard.session({
+        validateSession,
+        apiMode: true,
+      }),
       paths: ['/api/*'],
-      exclude: ['/api/auth/*', '/api/public/*', '/api/kit/*'],
+      exclude: ['/api/auth/login', '/api/auth/register', '/api/public/*', '/api/kit/*'],
     },
   ],
   crypto: {
     crypto,
     transport: { requireEncryption: false },
-    encryptedCookies: cookieEncryptionKey ? ['hai_session'] : [],
-    cookieEncryptionKey,
   },
   onError: (error: unknown, _event: unknown) => {
     core.logger.error('Request error:', { error })

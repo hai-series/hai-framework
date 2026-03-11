@@ -1,6 +1,7 @@
 <script lang="ts">
   import { goto } from '$app/navigation'
-  import { Badge, Button, Input, Select } from '@h-ai/ui'
+  import { corporateAuthTokenStore } from '$lib/utils/auth.js'
+  import { Alert, Badge, Button, Card, Empty, Input, PageHeader, Select } from '@h-ai/ui'
   import * as m from '$lib/paraglide/messages.js'
 
   interface Props {
@@ -39,6 +40,13 @@
     status = data.status
   })
 
+  $effect(() => {
+    if (data.loadError === 'Unauthorized') {
+      corporateAuthTokenStore.clear()
+      void goto('/partners/admin/login')
+    }
+  })
+
   async function handleFilter(event: Event) {
     event.preventDefault()
     const params = new URLSearchParams()
@@ -52,6 +60,7 @@
 
   async function handleLogout() {
     await fetch('/api/partners/admin/logout', { method: 'POST' })
+    corporateAuthTokenStore.clear()
     await goto('/partners/admin/login')
   }
 
@@ -71,12 +80,13 @@
 
 <section class="py-10 px-4 lg:px-8">
   <div class="mx-auto max-w-7xl space-y-5">
-    <PageHeader title={m.nav_partner_admin()} description="{m.admin_records_total({ total: String(data.total) })}，{m.admin_records_page_info({ page: String(data.page), totalPages: String(totalPages) })}">
+    <div class="flex items-center justify-between gap-3">
+      <PageHeader title={m.nav_partner_admin()} description="{m.admin_records_total({ total: String(data.total) })}，{m.admin_records_page_info({ page: String(data.page), totalPages: String(totalPages) })}" />
       <Button variant="default" size="sm" outline onclick={handleLogout}>
         <span class="icon-[tabler--logout] size-4"></span>
         {m.admin_logout()}
       </Button>
-    </PageHeader>
+    </div>
 
     <Card shadow="sm">
       <form class="grid gap-3 md:grid-cols-[1fr_220px_auto]" onsubmit={handleFilter}>

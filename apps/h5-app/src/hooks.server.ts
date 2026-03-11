@@ -78,7 +78,25 @@ const haiHandle = kit.createHandle({
   ],
   guards: [
     {
-      guard: kit.guard.auth({ apiMode: true }),
+      guard: async (event, session) => {
+        if (session) {
+          return { allowed: true }
+        }
+
+        const token = event.cookies.get('h5_access_token')
+        if (!token) {
+          return { allowed: false, status: 401, message: 'Unauthorized' }
+        }
+
+        const recoveredSession = await validateSession(token)
+        if (!recoveredSession) {
+          return { allowed: false, status: 401, message: 'Unauthorized' }
+        }
+
+        const sessionLocals = event.locals as unknown as Record<string, unknown>
+        sessionLocals.session = recoveredSession
+        return { allowed: true }
+      },
       paths: ['/api/user/*', '/api/vision/*', '/api/upload'],
       exclude: ['/api/auth/*'],
     },

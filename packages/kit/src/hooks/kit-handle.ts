@@ -10,6 +10,7 @@ import type { Handle, RequestEvent } from '@sveltejs/kit'
 import type { GuardConfig, GuardResult, HookConfig, Middleware, MiddlewareContext, SessionData } from '../kit-types.js'
 import type { CookieProxyConfig } from './kit-cookie-proxy.js'
 import { core } from '@h-ai/core'
+import { getBearerTokenFromRequest } from '../kit-auth.js'
 import { kitM } from '../kit-i18n.js'
 import { isSvelteKitControlFlow } from '../kit-utils.js'
 import { transportEncryptionMiddleware } from '../modules/crypto/kit-transport-middleware.js'
@@ -103,15 +104,14 @@ export function createHandle(config: HookConfig = {}): Handle {
 
       if (validateSession) {
         // 从 Authorization header 提取 Token（优先）
-        const authHeader = event.request.headers.get('Authorization')
-        const token = authHeader?.startsWith('Bearer ')
-          ? authHeader.slice(7)
-          : event.cookies.get('hai_token') // SSR 内部透传回退
-
+        const token = getBearerTokenFromRequest(event.request)
         if (token) {
           session = await validateSession(token) ?? undefined
           const sessionLocals = event.locals as unknown as Record<string, unknown>
           sessionLocals.session = session
+          if (session) {
+            sessionLocals.accessToken = token
+          }
         }
       }
 

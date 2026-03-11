@@ -4,7 +4,7 @@
 
 - `kit.createHandle()`：会话解析、路由守卫、中间件链、可选传输加密与 Cookie 加密
 - `kit.handler()`：API 端点异常边界
-- `kit.guard` / `kit.middleware` / `kit.response` / `kit.validate` / `kit.session` / `kit.client`
+- `kit.guard` / `kit.middleware` / `kit.response` / `kit.validate` / `kit.auth` / `kit.client`
 
 ## 支持的能力
 
@@ -12,7 +12,7 @@
 - 认证/角色/权限守卫及组合守卫
 - CORS / Logging / RateLimit 中间件
 - 统一 API 响应与请求验证（Zod）
-- 会话 Cookie 工具
+- Bearer Token 工具
 - 浏览器端统一客户端（自动 CSRF，支持传输加密）
 
 ## 快速开始
@@ -77,7 +77,6 @@ const client = createKitClient({ transport: { crypto } })
 
 `kit.createHandle()` 常用配置项：
 
-- `sessionCookieName`：会话 Cookie 名（默认 `hai_session`）
 - `validateSession(token)`：会话解析函数
 - `guards`：路由守卫列表
 - `middleware`：中间件列表
