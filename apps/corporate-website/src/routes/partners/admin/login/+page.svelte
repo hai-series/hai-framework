@@ -1,6 +1,7 @@
 <script lang="ts">
   import { goto } from '$app/navigation'
-  import { Alert, Button, Input, PasswordInput } from '@h-ai/ui'
+  import { corporateAuthTokenStore } from '$lib/utils/auth.js'
+  import { Alert, Button, Card, FormField, Input, PasswordInput } from '@h-ai/ui'
   import * as m from '$lib/paraglide/messages.js'
 
   let username = $state('')
@@ -27,6 +28,10 @@
       if (!data.success) {
         error = data.error?.message ?? m.admin_login_failed()
         return
+      }
+
+      if (data.accessToken) {
+        corporateAuthTokenStore.set(data.accessToken)
       }
 
       await goto('/partners/admin')

@@ -4,6 +4,7 @@
  * =============================================================================
  */
 
+import process from 'node:process'
 import { iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
 import { z } from 'zod'
@@ -31,6 +32,7 @@ export const POST = kit.handler(async ({ request, cookies }) => {
   const loginResult = await iam.auth.login({ identifier: username, password })
   if (!loginResult.success) {
     return kit.response.ok({
+      accessToken: '',
       user: {
         id: user.id,
         username: user.username,
@@ -39,12 +41,16 @@ export const POST = kit.handler(async ({ request, cookies }) => {
     })
   }
 
-  kit.session.setCookie(cookies, loginResult.data.accessToken, {
-    cookieName: 'h5_session',
+  cookies.set('h5_access_token', loginResult.data.tokens.accessToken, {
+    path: '/',
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
     maxAge: iam.config?.session?.maxAge,
   })
 
   return kit.response.ok({
+    accessToken: loginResult.data.tokens.accessToken,
     user: {
       id: user.id,
       username: user.username,

@@ -72,26 +72,26 @@ test.describe('Corporate pages and partner flow', () => {
       },
     })
     expect(loginRes.ok()).toBeTruthy()
+    const loginBody = await loginRes.json() as ApiResponse<{ accessToken?: string }>
+    expect(loginBody.success).toBe(true)
+    const accessToken = loginBody.data?.accessToken
+    expect(accessToken).toBeTruthy()
 
-    const setCookie = loginRes.headers()['set-cookie'] ?? ''
-    const tokenMatch = /corp_partner_session=([^;]+)/.exec(setCookie)
-    expect(tokenMatch?.[1]).toBeTruthy()
-
-    await page.context().addCookies([
-      {
-        name: 'corp_partner_session',
-        value: tokenMatch![1],
-        path: '/',
-        domain: 'localhost',
-      },
-    ])
+    await page.goto('/partners/admin/login')
+    await page.evaluate((token) => {
+      localStorage.setItem('corporate_access_token', token)
+    }, accessToken!)
 
     await page.goto('/partners/admin')
     await expect(page).toHaveURL(/\/partners\/admin/)
     await expect(page.locator('table')).toBeVisible()
     await expect(page.locator('table')).toContainText(companyName)
 
-    const recordsRes = await page.request.get('/api/partners/admin/records?page=1&pageSize=20')
+    const recordsRes = await page.request.get('/api/partners/admin/records?page=1&pageSize=20', {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    })
     expect(recordsRes.ok()).toBeTruthy()
     const body = await recordsRes.json() as ApiResponse<{ items: Array<{ company_name: string }> }>
     expect(body.success).toBe(true)

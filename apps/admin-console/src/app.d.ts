@@ -16,6 +16,8 @@ declare global {
     interface Locals {
       /** 请求 ID */
       requestId: string
+      /** 原始 Access Token（由 session guard 注入，受保护路由可直接使用） */
+      accessToken?: string
       /** 用户会话 */
       session?: {
         userId: string

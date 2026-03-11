@@ -11,6 +11,7 @@
   import type { RegisterFormData } from '@h-ai/ui'
   import * as m from '$lib/paraglide/messages'
   import { apiFetch } from '$lib/utils/api'
+  import { kit } from '@h-ai/kit'
   
   let loading = $state(false)
   let errors = $state<Record<string, string>>({})
@@ -46,6 +47,9 @@
       const result = await response.json()
 
       if (result.success) {
+        if (result.data?.accessToken) {
+          kit.auth.setBrowserAccessToken(result.data.accessToken)
+        }
         goto('/admin')
       } else {
         errors = { general: result.error?.message || m.common_error() }

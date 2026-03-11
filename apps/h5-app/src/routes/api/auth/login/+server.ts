@@ -4,6 +4,7 @@
  * =============================================================================
  */
 
+import process from 'node:process'
 import { iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
 import { z } from 'zod'
@@ -27,14 +28,18 @@ export const POST = kit.handler(async ({ request, cookies }) => {
     return kit.response.error('AUTH_FAILED', loginResult.error.message, status)
   }
 
-  const { user, accessToken } = loginResult.data
+  const { user, tokens } = loginResult.data
 
-  kit.session.setCookie(cookies, accessToken, {
-    cookieName: 'h5_session',
+  cookies.set('h5_access_token', tokens.accessToken, {
+    path: '/',
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: process.env.NODE_ENV === 'production',
     maxAge: iam.config?.session?.maxAge,
   })
 
   return kit.response.ok({
+    accessToken: tokens.accessToken,
     user: {
       id: user.id,
       username: user.username,

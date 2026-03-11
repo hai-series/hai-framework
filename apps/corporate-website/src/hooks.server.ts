@@ -77,12 +77,50 @@ const haiHandle = kit.createHandle({
   ],
   guards: [
     {
-      guard: kit.guard.auth({ loginUrl: '/partners/admin/login' }),
+      guard: async (event, session) => {
+        if (session) {
+          return { allowed: true }
+        }
+
+        const token = event.cookies.get('corp_partner_access_token')
+        if (!token) {
+          const returnUrl = encodeURIComponent(event.url.pathname + event.url.search)
+          return { allowed: false, redirect: `/partners/admin/login?returnUrl=${returnUrl}` }
+        }
+
+        const recoveredSession = await validateSession(token)
+        if (!recoveredSession) {
+          const returnUrl = encodeURIComponent(event.url.pathname + event.url.search)
+          return { allowed: false, redirect: `/partners/admin/login?returnUrl=${returnUrl}` }
+        }
+
+        const sessionLocals = event.locals as unknown as Record<string, unknown>
+        sessionLocals.session = recoveredSession
+        return { allowed: true }
+      },
       paths: ['/partners/admin', '/partners/admin/*'],
       exclude: ['/partners/admin/login'],
     },
     {
-      guard: kit.guard.auth({ apiMode: true }),
+      guard: async (event, session) => {
+        if (session) {
+          return { allowed: true }
+        }
+
+        const token = event.cookies.get('corp_partner_access_token')
+        if (!token) {
+          return { allowed: false, status: 401, message: 'Unauthorized' }
+        }
+
+        const recoveredSession = await validateSession(token)
+        if (!recoveredSession) {
+          return { allowed: false, status: 401, message: 'Unauthorized' }
+        }
+
+        const sessionLocals = event.locals as unknown as Record<string, unknown>
+        sessionLocals.session = recoveredSession
+        return { allowed: true }
+      },
       paths: ['/api/partners/admin/*'],
       exclude: ['/api/partners/admin/login'],
     },

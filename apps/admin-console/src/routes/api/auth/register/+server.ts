@@ -51,10 +51,9 @@ export const POST = kit.handler(async ({ request, cookies, getClientAddress }) =
     })
   }
 
-  const { accessToken } = loginResult.data
+  const accessToken = loginResult.data.tokens.accessToken
 
-  // 设置会话 Cookie
-  kit.session.setCookie(cookies, accessToken, {
+  kit.auth.setAccessTokenCookie(cookies, accessToken, {
     maxAge: iam.config?.session?.maxAge,
   })
 
@@ -68,6 +67,7 @@ export const POST = kit.handler(async ({ request, cookies, getClientAddress }) =
   const roles = rolesResult.success ? rolesResult.data.map(r => r.code) : ['user']
 
   return kit.response.ok({
+    accessToken,
     user: {
       id: user.id,
       username: user.username,

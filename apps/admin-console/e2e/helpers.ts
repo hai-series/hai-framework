@@ -6,6 +6,8 @@
 
 import type { APIRequestContext, Page } from '@playwright/test'
 
+const ADMIN_TOKEN_KEY = 'access_token'
+
 async function sleep(ms: number) {
   await new Promise(resolve => setTimeout(resolve, ms))
 }
@@ -75,7 +77,7 @@ export async function loginOnPage(page: Page, username: string, password: string
   await page.goto('/auth/login')
   await page.waitForLoadState('domcontentloaded')
 
-  // 通过 page.request 调用登录 API（与当前浏览器上下文共享 cookie 存储）
+  // 通过 page.request 调用登录 API
   let loginRes = await page.request.post('/api/auth/login', {
     data: { identifier: username, password },
   })
@@ -91,8 +93,21 @@ export async function loginOnPage(page: Page, username: string, password: string
     throw new Error(`Login failed: ${loginRes.status()} ${JSON.stringify(loginResult)}`)
   }
 
-  // 显式验证会话已建立，避免后续 /admin 导航被重定向
-  const meRes = await page.request.get('/api/auth/me')
+  const accessToken = loginResult.data?.accessToken
+  if (!accessToken) {
+    throw new Error(`Login token missing: ${JSON.stringify(loginResult)}`)
+  }
+
+  await page.evaluate((tokenKeyAndValue) => {
+    localStorage.setItem(tokenKeyAndValue.key, tokenKeyAndValue.value)
+  }, { key: ADMIN_TOKEN_KEY, value: accessToken })
+
+  // 显式验证令牌可用，避免后续 /admin 导航失败
+  const meRes = await page.request.get('/api/auth/me', {
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  })
   const meBody = await meRes.json()
   const meUser = extractMeUser(meBody)
   if (!meRes.ok() || !meUser) {
@@ -121,7 +136,7 @@ export async function registerAndLogin(page: Page, request: APIRequestContext, p
 
 /**
  * 通过 API 注册并登录（纯 API，不需要 page）
- * 适用于 API-only 的测试；同一 request 实例内 cookie 会自动保持
+ * 会为当前 request 实例自动补充 Authorization 头
  */
 export async function registerAndLoginViaApi(request: APIRequestContext, prefix = 'api') {
   const user = uniqueUser(prefix)
@@ -144,6 +159,43 @@ export async function registerAndLoginViaApi(request: APIRequestContext, prefix 
   const loginBody = await loginRes.json()
   if (!loginRes.ok() || !loginBody.success) {
     throw new Error(`Login failed: ${loginRes.status()} ${JSON.stringify(loginBody)}`)
+  }
+
+  const accessToken = loginBody.data?.accessToken
+  if (!accessToken) {
+    throw new Error(`Login token missing: ${JSON.stringify(loginBody)}`)
+  }
+
+  const requestWithAuth = request as APIRequestContext & {
+    __bearerPatched?: boolean
+    get: APIRequestContext['get']
+    post: APIRequestContext['post']
+    put: APIRequestContext['put']
+    patch: APIRequestContext['patch']
+    delete: APIRequestContext['delete']
+  }
+
+  if (!requestWithAuth.__bearerPatched) {
+    const withAuthHeaders = (options: Parameters<APIRequestContext['get']>[1] = {}) => ({
+      ...options,
+      headers: {
+        ...(options.headers ?? {}),
+        Authorization: options.headers?.Authorization ?? `Bearer ${accessToken}`,
+      },
+    })
+
+    const originalGet = request.get.bind(request)
+    const originalPost = request.post.bind(request)
+    const originalPut = request.put.bind(request)
+    const originalPatch = request.patch.bind(request)
+    const originalDelete = request.delete.bind(request)
+
+    requestWithAuth.get = ((url, options) => originalGet(url, withAuthHeaders(options))) as APIRequestContext['get']
+    requestWithAuth.post = ((url, options) => originalPost(url, withAuthHeaders(options as Parameters<APIRequestContext['get']>[1]))) as APIRequestContext['post']
+    requestWithAuth.put = ((url, options) => originalPut(url, withAuthHeaders(options as Parameters<APIRequestContext['get']>[1]))) as APIRequestContext['put']
+    requestWithAuth.patch = ((url, options) => originalPatch(url, withAuthHeaders(options as Parameters<APIRequestContext['get']>[1]))) as APIRequestContext['patch']
+    requestWithAuth.delete = ((url, options) => originalDelete(url, withAuthHeaders(options))) as APIRequestContext['delete']
+    requestWithAuth.__bearerPatched = true
   }
 
   const meRes = await request.get('/api/auth/me')

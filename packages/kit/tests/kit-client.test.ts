@@ -365,3 +365,74 @@ describe('createKitClient - 传输加密', () => {
     expect(keyExchangeCount).toBe(1)
   })
 })
+
+// =============================================================================
+// Auth 自动注入模式
+// =============================================================================
+
+describe('createKitClient - auth', () => {
+  afterEach(() => {
+    // 清理 localStorage mock
+    vi.restoreAllMocks()
+  })
+
+  it('auth: true 时自动注入 Authorization 头', async () => {
+    // mock localStorage
+    const store: Record<string, string> = { hai_access_token: 'my_token_123' }
+    vi.stubGlobal('window', {
+      localStorage: {
+        getItem: (key: string) => store[key] ?? null,
+        setItem: (key: string, val: string) => { store[key] = val },
+        removeItem: (key: string) => { delete store[key] },
+      },
+    })
+
+    const { apiFetch } = createKitClient({ auth: true })
+    await apiFetch('/api/users')
+
+    const [, init] = fetchSpy.mock.calls[0]!
+    const headers = new Headers(init.headers)
+    expect(headers.get('Authorization')).toBe('Bearer my_token_123')
+  })
+
+  it('auth: true 但无 token 时不注入', async () => {
+    vi.stubGlobal('window', {
+      localStorage: {
+        getItem: () => null,
+        setItem: () => {},
+        removeItem: () => {},
+      },
+    })
+
+    const { apiFetch } = createKitClient({ auth: true })
+    await apiFetch('/api/users')
+
+    const [, init] = fetchSpy.mock.calls[0]!
+    const headers = new Headers(init.headers)
+    expect(headers.has('Authorization')).toBe(false)
+  })
+
+  it('auth: false / 未配置时不注入', async () => {
+    const { apiFetch } = createKitClient()
+    await apiFetch('/api/users')
+
+    const [, init] = fetchSpy.mock.calls[0]!
+    const headers = new Headers(init.headers)
+    expect(headers.has('Authorization')).toBe(false)
+  })
+
+  it('自定义 BrowserTokenStore', async () => {
+    const customStore = {
+      get: () => 'custom_token',
+      set: () => {},
+      clear: () => {},
+    }
+
+    const { apiFetch } = createKitClient({ auth: customStore })
+    await apiFetch('/api/data')
+
+    const [, init] = fetchSpy.mock.calls[0]!
+    const headers = new Headers(init.headers)
+    expect(headers.get('Authorization')).toBe('Bearer custom_token')
+  })
+})

@@ -29,6 +29,7 @@ describe('kit 统一出口', () => {
   describe('kit.guard', () => {
     it('包含所有守卫工厂', () => {
       expect(typeof kit.guard.auth).toBe('function')
+      expect(typeof kit.guard.session).toBe('function')
       expect(typeof kit.guard.role).toBe('function')
       expect(typeof kit.guard.permission).toBe('function')
       expect(typeof kit.guard.hasPermission).toBe('function')
@@ -100,6 +101,27 @@ describe('kit 统一出口', () => {
   describe('kit.client', () => {
     it('包含 create 统一客户端工厂', () => {
       expect(typeof kit.client.create).toBe('function')
+    })
+  })
+
+  // ─── auth 子命名空间 ───
+
+  describe('kit.auth', () => {
+    it('包含认证工具（仅应用层所需）', () => {
+      expect(typeof kit.auth.setAccessTokenCookie).toBe('function')
+      expect(typeof kit.auth.clearAccessTokenCookie).toBe('function')
+      expect(typeof kit.auth.setBrowserAccessToken).toBe('function')
+      expect(typeof kit.auth.clearBrowserAccessToken).toBe('function')
+      expect(typeof kit.auth.createBrowserTokenStore).toBe('function')
+      expect(typeof kit.auth.createHandleFetch).toBe('function')
+    })
+
+    it('不暴露内部实现方法', () => {
+      const auth = kit.auth as Record<string, unknown>
+      expect(auth.ACCESS_TOKEN_KEY).toBeUndefined()
+      expect(auth.getBearerTokenFromRequest).toBeUndefined()
+      expect(auth.getAccessToken).toBeUndefined()
+      expect(auth.getBrowserAccessToken).toBeUndefined()
     })
   })
 

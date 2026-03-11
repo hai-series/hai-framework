@@ -35,12 +35,11 @@ const EXT_MAP: Record<string, string> = {
  *
  * @returns 上传处理结果，成功时返回头像 URL
  */
-export const POST = kit.handler(async ({ cookies, request }) => {
-  const token = cookies.get('hai_session')
-  if (!token) {
+export const POST = kit.handler(async ({ request, locals }) => {
+  if (!locals.accessToken) {
     return kit.response.unauthorized(m.common_error())
   }
-  const userResult = await iam.user.getCurrentUser(token)
+  const userResult = await iam.user.getCurrentUser(locals.accessToken)
   if (!userResult.success) {
     return kit.response.unauthorized(m.common_error())
   }

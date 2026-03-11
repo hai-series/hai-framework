@@ -6,11 +6,19 @@
  */
 
 import { createKitClient } from './client/kit-client.js'
-import { authGuard } from './guards/kit-auth.js'
+import { authGuard, sessionGuard } from './guards/kit-auth.js'
 import { allGuards, anyGuard, conditionalGuard, notGuard } from './guards/kit-compose.js'
 import { assertPermission, hasPermission, permissionGuard, requirePermission } from './guards/kit-permission.js'
 import { roleGuard } from './guards/kit-role.js'
 import { createHandle, sequence } from './hooks/kit-handle.js'
+import {
+  clearAccessTokenCookie,
+  clearBrowserAccessToken,
+  createBrowserTokenStore,
+  createHandleFetch,
+  setAccessTokenCookie,
+  setBrowserAccessToken,
+} from './kit-auth.js'
 import { fromContract } from './kit-contract.js'
 import { handler } from './kit-handler.js'
 import { setAllModulesLocale } from './kit-i18n.js'
@@ -43,6 +51,8 @@ export const kit = {
   guard: {
     /** 认证守卫（验证用户是否已登录） */
     auth: authGuard,
+    /** 会话守卫（自动从 Bearer/Cookie 恢复 session） */
+    session: sessionGuard,
     /** 角色守卫（验证指定角色） */
     role: roleGuard,
     /** 权限守卫（验证指定权限） */
@@ -129,6 +139,23 @@ export const kit = {
   client: {
     /** 创建统一客户端（CSRF + 传输加密透明合并） */
     create: createKitClient,
+  },
+
+  // ─── Bearer 认证工具 ───
+
+  auth: {
+    /** 写入固定名 Access Token Cookie（服务端 login/register 用） */
+    setAccessTokenCookie,
+    /** 清理固定名 Access Token Cookie（服务端 logout 用） */
+    clearAccessTokenCookie,
+    /** 写入浏览器端 Access Token（客户端 login/register 用） */
+    setBrowserAccessToken,
+    /** 清除浏览器端 Access Token（客户端 logout 用） */
+    clearBrowserAccessToken,
+    /** 创建浏览器端 Token 存储器（自定义 key 时使用，如 h5-app） */
+    createBrowserTokenStore,
+    /** 创建浏览器端同源请求自动附加 Authorization 的 HandleFetch */
+    createHandleFetch,
   },
 
   // ─── i18n ───

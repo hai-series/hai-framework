@@ -21,13 +21,12 @@ async function toUserResponse(user: { id: string, username: string, email?: stri
   }
 }
 
-export const GET = kit.handler(async ({ cookies }) => {
-  const token = cookies.get('hai_session')
-  if (!token) {
+export const GET = kit.handler(async ({ locals }) => {
+  if (!locals.accessToken) {
     return kit.response.unauthorized(m.common_error())
   }
 
-  const userResult = await iam.user.getCurrentUser(token)
+  const userResult = await iam.user.getCurrentUser(locals.accessToken)
   if (!userResult.success) {
     return kit.response.unauthorized(m.common_error())
   }
@@ -46,18 +45,13 @@ export const GET = kit.handler(async ({ cookies }) => {
  *
  * @returns 更新结果，成功返回最新用户信息
  */
-export const PUT = kit.handler(async ({ cookies, request }) => {
-  const token = cookies.get('hai_session')
-  if (!token) {
+export const PUT = kit.handler(async ({ request, locals }) => {
+  if (!locals.accessToken) {
     return kit.response.unauthorized(m.common_error())
   }
 
-  // 验证令牌并获取 userId（后续 updateUser 需要）
-  const verifyResult = await iam.auth.verifyToken(token)
-  if (!verifyResult.success) {
-    return kit.response.unauthorized(m.common_error())
-  }
-  const userId = verifyResult.data.userId
+  // session 已由 guard 注入，直接使用 userId
+  const userId = locals.session!.userId
 
   const data = await kit.validate.formOrFail(request, UpdateProfileSchema)
 
@@ -102,7 +96,7 @@ export const PUT = kit.handler(async ({ cookies, request }) => {
     sessionPatch.avatarUrl = avatar
 
   if (Object.keys(sessionPatch).length > 0) {
-    await iam.session.update(token, sessionPatch)
+    await iam.session.update(locals.accessToken, sessionPatch)
   }
 
   // ── 查询最新用户信息返回 ──

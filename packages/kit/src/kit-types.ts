@@ -264,7 +264,6 @@ export interface HookCryptoConfig {
    * 需要加密的 Cookie 名称列表
    *
    * 列出的 Cookie 在 set 时自动 SM4-CBC 加密，get 时自动解密。
-   * 应用层代码（包括 kit.session.setCookie）完全透明。
    */
   encryptedCookies?: string[]
   /**

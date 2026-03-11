@@ -82,7 +82,7 @@ describe('createHandle', () => {
     expect((event.locals as any).session).toEqual(mockSession)
   })
 
-  it('应该通过 hai_token cookie 回退验证会话', async () => {
+  it('缺少 Authorization 时不应触发会话验证', async () => {
     const mockSession: SessionData = {
       userId: 'user1',
       username: 'testuser',
@@ -97,15 +97,13 @@ describe('createHandle', () => {
       validateSession,
     })
 
-    const event = createMockEvent({
-      cookies: { hai_token: 'token456' },
-    })
+    const event = createMockEvent()
     const resolve = vi.fn().mockResolvedValue(new Response('OK'))
 
     await handle({ event, resolve })
 
-    expect(validateSession).toHaveBeenCalledWith('token456')
-    expect((event.locals as any).session).toEqual(mockSession)
+    expect(validateSession).not.toHaveBeenCalled()
+    expect((event.locals as any).session).toBeUndefined()
   })
 
   it('应该执行守卫', async () => {

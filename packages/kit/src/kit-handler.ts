@@ -47,8 +47,17 @@ export function handler(fn: (event: RequestEvent) => Promise<Response> | Respons
         throw error
       }
 
+      const normalizedError = error instanceof Error
+        ? {
+            name: error.name,
+            message: error.message,
+            stack: error.stack,
+            cause: error.cause,
+          }
+        : error
+
       core.logger.error('Request handler error', {
-        error,
+        error: normalizedError,
         path: event.url.pathname,
         method: event.request.method,
       })

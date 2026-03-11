@@ -27,10 +27,10 @@ export const POST = kit.handler(async ({ request, cookies, getClientAddress }) =
     return kit.response.error('AUTH_FAILED', loginResult.error.message, status)
   }
 
-  const { user, accessToken } = loginResult.data
+  const { user, tokens } = loginResult.data
+  const accessToken = tokens.accessToken
 
-  // 设置会话 Cookie
-  kit.session.setCookie(cookies, accessToken, {
+  kit.auth.setAccessTokenCookie(cookies, accessToken, {
     maxAge: iam.config?.session?.maxAge,
   })
 
@@ -46,6 +46,7 @@ export const POST = kit.handler(async ({ request, cookies, getClientAddress }) =
   const permissions = permissionsResult.success ? permissionsResult.data.map(p => p.code) : []
 
   return kit.response.ok({
+    accessToken,
     user: {
       id: user.id,
       username: user.username,
