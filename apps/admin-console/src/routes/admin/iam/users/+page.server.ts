@@ -38,7 +38,7 @@ function parsePositiveInt(value: string | null, fallback: number): number {
 
 export const load: PageServerLoad = async ({ url, locals }) => {
   // 权限检查：user:read
-  if (!kit.guard.hasPermission(locals.session, 'user:read')) {
+  if (!kit.guard.check(locals.session, 'user:read')) {
     error(403, { message: 'Forbidden' })
   }
 
@@ -55,34 +55,30 @@ export const load: PageServerLoad = async ({ url, locals }) => {
   else if (statusParam === 'suspended')
     enabled = false
 
-  // 角色列表 + 用户列表并行获取
+  // 角色列表 + 用户列表（含角色）并行获取
   const [roles, usersResult] = await Promise.all([
     roleService.list(),
-    iam.user.listUsers({ page, pageSize, search, enabled }),
+    iam.user.listUsers({ page, pageSize, search, enabled, include: ['roles'] }),
   ])
   const iamUsers = usersResult.success ? usersResult.data.items : []
   const total = usersResult.success ? usersResult.data.total : 0
 
-  // 获取每个用户的角色
-  const usersWithRoles: UserData[] = await Promise.all(
-    iamUsers.map(async (user) => {
-      const userRolesResult = await iam.authz.getUserRoles(user.id)
-      const userRoles = userRolesResult.success ? userRolesResult.data : []
-
-      return {
-        id: user.id,
-        username: user.username,
-        email: user.email ?? '',
-        display_name: user.displayName ?? null,
-        avatar: user.avatarUrl ?? null,
-        status: user.enabled ? 'active' : 'suspended' as const,
-        roles: userRoles.map(r => r.name),
-        roleIds: userRoles.map(r => r.id),
-        created_at: user.createdAt,
-        updated_at: user.updatedAt,
-      }
-    }),
-  )
+  // 将 IAM 用户转为前端所需格式（角色已随 listUsers 返回）
+  const usersWithRoles: UserData[] = iamUsers.map((user) => {
+    const userRoles = user.roles ?? []
+    return {
+      id: user.id,
+      username: user.username,
+      email: user.email ?? '',
+      display_name: user.displayName ?? null,
+      avatar: user.avatarUrl ?? null,
+      status: user.enabled ? 'active' : 'suspended' as const,
+      roles: userRoles.map(r => r.name),
+      roleIds: userRoles.map(r => r.id),
+      created_at: user.createdAt,
+      updated_at: user.updatedAt,
+    }
+  })
 
   // 如果指定了角色筛选则过滤
   const filteredUsers = roleFilter

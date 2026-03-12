@@ -17,9 +17,9 @@ import { kit } from '@h-ai/kit'
  * 需要权限：user:list
  */
 export const GET = kit.handler(async ({ params, locals }) => {
-  kit.guard.requirePermission(locals.session, 'user:list')
+  kit.guard.require(locals.session, 'user:list')
 
-  const { id } = kit.validate.paramsOrFail(params, IdParamSchema)
+  const { id } = kit.validate.params(params, IdParamSchema)
 
   const userResult = await iam.user.getUser(id)
   if (!userResult.success || !userResult.data) {
@@ -35,10 +35,10 @@ export const GET = kit.handler(async ({ params, locals }) => {
  * 需要权限：user:api:update
  */
 export const PUT = kit.handler(async ({ params, request, locals, getClientAddress }) => {
-  kit.guard.requirePermission(locals.session, 'user:api:update')
+  kit.guard.require(locals.session, 'user:api:update')
 
-  const { id: userId } = kit.validate.paramsOrFail(params, IdParamSchema)
-  const { username, email, password, display_name, roles, status } = await kit.validate.formOrFail(request, createUpdateUserSchema())
+  const { id: userId } = kit.validate.params(params, IdParamSchema)
+  const { username, email, password, display_name, roles, status } = await kit.validate.body(request, createUpdateUserSchema())
 
   // 检查用户是否存在
   const existingResult = await iam.user.getUser(userId)
@@ -74,22 +74,9 @@ export const PUT = kit.handler(async ({ params, request, locals, getClientAddres
 
   // 更新角色（如果提供）
   if (roles !== undefined) {
-    // 先获取当前角色
-    const currentRolesResult = await iam.authz.getUserRoles(userId)
-    const currentRoles = currentRolesResult.success ? currentRolesResult.data.map(r => r.id) : []
-
-    // 移除不在新列表中的角色
-    for (const roleId of currentRoles) {
-      if (!roles.includes(roleId)) {
-        await iam.authz.removeRole(userId, roleId)
-      }
-    }
-
-    // 添加新角色
-    for (const roleId of roles) {
-      if (!currentRoles.includes(roleId)) {
-        await iam.authz.assignRole(userId, roleId)
-      }
+    const syncResult = await iam.authz.syncRoles(userId, roles)
+    if (!syncResult.success) {
+      return kit.response.badRequest(syncResult.error.message)
     }
   }
 
@@ -121,9 +108,9 @@ export const PUT = kit.handler(async ({ params, request, locals, getClientAddres
  * 需要权限：user:api:delete
  */
 export const DELETE = kit.handler(async ({ params, locals, request, getClientAddress }) => {
-  kit.guard.requirePermission(locals.session, 'user:api:delete')
+  kit.guard.require(locals.session, 'user:api:delete')
 
-  const { id: userId } = kit.validate.paramsOrFail(params, IdParamSchema)
+  const { id: userId } = kit.validate.params(params, IdParamSchema)
 
   // 检查用户是否存在
   const existingResult = await iam.user.getUser(userId)

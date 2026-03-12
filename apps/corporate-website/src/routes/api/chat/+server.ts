@@ -19,7 +19,7 @@ Keep responses concise, professional, and in the same language as the user's que
 If you don't know something specific about the company, provide a helpful general response.`
 
 export const POST = kit.handler(async ({ request }) => {
-  const { message } = await kit.validate.formOrFail(request, ChatSchema)
+  const { message } = await kit.validate.body(request, ChatSchema)
 
   if (!ai.isInitialized) {
     return kit.response.ok({

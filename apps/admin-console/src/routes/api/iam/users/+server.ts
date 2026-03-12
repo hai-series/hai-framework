@@ -5,7 +5,7 @@
  */
 
 import * as m from '$lib/paraglide/messages.js'
-import { toIamUserResponse, toIamUserResponses } from '$lib/server/iam-helpers.js'
+import { toIamUserResponse } from '$lib/server/iam-helpers.js'
 import { createCreateUserSchema, ListUsersQuerySchema } from '$lib/server/schemas/index.js'
 import { audit } from '@h-ai/audit'
 import { iam, IamErrorCode } from '@h-ai/iam'
@@ -25,19 +25,29 @@ import { kit } from '@h-ai/kit'
  * - enabled: 启用状态过滤（true/false，不传则返回全部）
  */
 export const GET = kit.handler(async ({ url, locals }) => {
-  kit.guard.requirePermission(locals.session, 'user:list')
+  kit.guard.require(locals.session, 'user:list')
 
-  const { page, pageSize, search, enabled } = kit.validate.queryOrFail(url, ListUsersQuerySchema)
+  const { page, pageSize, search, enabled } = kit.validate.query(url, ListUsersQuerySchema)
 
-  const usersResult = await iam.user.listUsers({ page, pageSize, search, enabled })
+  const usersResult = await iam.user.listUsers({ page, pageSize, search, enabled, include: ['roles'] })
   if (!usersResult.success) {
     return kit.response.internalError(usersResult.error.message)
   }
 
   const { items, total } = usersResult.data
 
-  // 批量获取所有用户的角色（避免 N+1）
-  const users = await toIamUserResponses(items)
+  // 角色已随 listUsers 返回，直接映射为前端格式
+  const users = items.map(user => ({
+    id: user.id,
+    username: user.username,
+    email: user.email,
+    display_name: user.displayName,
+    avatar: user.avatarUrl,
+    status: user.enabled !== false ? 'active' as const : 'inactive' as const,
+    roles: (user.roles ?? []).map(r => r.code),
+    created_at: user.createdAt,
+    updated_at: user.updatedAt,
+  }))
 
   return kit.response.ok({ users, total, page, pageSize })
 })
@@ -48,9 +58,9 @@ export const GET = kit.handler(async ({ url, locals }) => {
  * 需要权限：user:api:create
  */
 export const POST = kit.handler(async ({ request, locals, getClientAddress }) => {
-  kit.guard.requirePermission(locals.session, 'user:api:create')
+  kit.guard.require(locals.session, 'user:api:create')
 
-  const { username, email, password, roles, status } = await kit.validate.formOrFail(request, createCreateUserSchema())
+  const { username, email, password, roles, status } = await kit.validate.body(request, createCreateUserSchema())
 
   // 使用 IAM 模块注册用户
   const registerResult = await iam.user.register({

@@ -4,16 +4,12 @@
  * =============================================================================
  */
 
-import { iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
 
-export const POST = kit.handler(async ({ cookies }) => {
-  const token = cookies.get('h5_access_token')
-  if (token) {
-    await iam.auth.logout(token)
-  }
+export const POST = kit.handler(async ({ locals, cookies }) => {
+  const token = locals.accessToken
 
-  cookies.delete('h5_access_token', { path: '/' })
+  await kit.auth.logout(cookies, token)
 
   return kit.response.ok({ loggedOut: true })
 })

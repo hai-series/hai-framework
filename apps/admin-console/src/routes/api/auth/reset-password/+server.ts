@@ -11,7 +11,7 @@ import { iam, IamErrorCode } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
 
 export const POST = kit.handler(async ({ request, getClientAddress }) => {
-  const { token, password } = await kit.validate.formOrFail(request, createResetPasswordSchema())
+  const { token, password } = await kit.validate.body(request, createResetPasswordSchema())
 
   // 使用 IAM 模块确认密码重置
   const resetResult = await iam.user.confirmPasswordReset(token, password)

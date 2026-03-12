@@ -11,7 +11,7 @@ import { error } from '@sveltejs/kit'
 
 export const load: PageServerLoad = async ({ url, locals }) => {
   // 权限检查：role:read
-  if (!kit.guard.hasPermission(locals.session, 'role:read')) {
+  if (!kit.guard.check(locals.session, 'role:read')) {
     error(403, { message: 'Forbidden' })
   }
 

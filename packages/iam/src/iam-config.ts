@@ -123,6 +123,57 @@ export const IamErrorCode = {
 /** IAM 错误码类型 */
 export type IamErrorCodeType = typeof IamErrorCode[keyof typeof IamErrorCode]
 
+/** IAM 错误码 → HTTP 状态码映射 */
+export const IamErrorHttpStatus: Record<number, number> = {
+  // 认证错误 (5000-5099)
+  [IamErrorCode.AUTH_FAILED]: 401,
+  [IamErrorCode.INVALID_CREDENTIALS]: 401,
+  [IamErrorCode.USER_NOT_FOUND]: 404,
+  [IamErrorCode.USER_DISABLED]: 403,
+  [IamErrorCode.USER_LOCKED]: 403,
+  [IamErrorCode.USER_ALREADY_EXISTS]: 409,
+  [IamErrorCode.PASSWORD_EXPIRED]: 401,
+  [IamErrorCode.PASSWORD_POLICY_VIOLATION]: 400,
+  [IamErrorCode.OTP_INVALID]: 400,
+  [IamErrorCode.OTP_EXPIRED]: 400,
+  [IamErrorCode.OTP_RESEND_TOO_FAST]: 429,
+  [IamErrorCode.LOGIN_DISABLED]: 400,
+  [IamErrorCode.REGISTER_DISABLED]: 403,
+  [IamErrorCode.STRATEGY_NOT_SUPPORTED]: 400,
+  [IamErrorCode.RESET_TOKEN_INVALID]: 400,
+  [IamErrorCode.RESET_TOKEN_EXPIRED]: 400,
+  [IamErrorCode.RESET_TOKEN_MAX_ATTEMPTS]: 429,
+  // 会话错误 (5100-5199)
+  [IamErrorCode.SESSION_NOT_FOUND]: 401,
+  [IamErrorCode.SESSION_EXPIRED]: 401,
+  [IamErrorCode.SESSION_INVALID]: 401,
+  [IamErrorCode.SESSION_CREATE_FAILED]: 500,
+  [IamErrorCode.TOKEN_EXPIRED]: 401,
+  [IamErrorCode.TOKEN_INVALID]: 401,
+  [IamErrorCode.TOKEN_REFRESH_FAILED]: 401,
+  // 授权错误 (5200-5299)
+  [IamErrorCode.PERMISSION_DENIED]: 403,
+  [IamErrorCode.ROLE_NOT_FOUND]: 404,
+  [IamErrorCode.PERMISSION_NOT_FOUND]: 404,
+  [IamErrorCode.ROLE_ALREADY_EXISTS]: 409,
+  [IamErrorCode.PERMISSION_ALREADY_EXISTS]: 409,
+  // LDAP 错误 (5400-5499)
+  [IamErrorCode.LDAP_CONNECTION_FAILED]: 500,
+  [IamErrorCode.LDAP_BIND_FAILED]: 401,
+  [IamErrorCode.LDAP_SEARCH_FAILED]: 500,
+  // 存储层错误 (5500-5599)
+  [IamErrorCode.REPOSITORY_ERROR]: 500,
+  [IamErrorCode.NOT_FOUND]: 404,
+  [IamErrorCode.CONFLICT]: 409,
+  // 通用错误 (5800-5899)
+  [IamErrorCode.FORBIDDEN]: 403,
+  [IamErrorCode.INVALID_ARGUMENT]: 400,
+  // 系统错误 (5900-5999)
+  [IamErrorCode.CONFIG_ERROR]: 500,
+  // NOT_INITIALIZED (5010) 与 OTP_INVALID 共享码值，已在上方映射
+  [IamErrorCode.INTERNAL_ERROR]: 500,
+}
+
 // ─── 认证策略配置 ───
 
 /**

@@ -16,9 +16,9 @@ import { kit } from '@h-ai/kit'
  * 需要权限：permission:api:delete
  */
 export const DELETE = kit.handler(async ({ params, locals, request, getClientAddress }) => {
-  kit.guard.requirePermission(locals.session, 'permission:api:delete')
+  kit.guard.require(locals.session, 'permission:api:delete')
 
-  const { id: permId } = kit.validate.paramsOrFail(params, IdParamSchema)
+  const { id: permId } = kit.validate.params(params, IdParamSchema)
 
   // 检查权限是否存在
   const existing = await permissionService.getById(permId)

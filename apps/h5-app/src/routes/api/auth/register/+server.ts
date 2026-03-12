@@ -4,8 +4,7 @@
  * =============================================================================
  */
 
-import process from 'node:process'
-import { iam } from '@h-ai/iam'
+import { IamErrorCode, IamErrorHttpStatus } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
 import { z } from 'zod'
 
@@ -16,41 +15,20 @@ const RegisterSchema = z.object({
 })
 
 export const POST = kit.handler(async ({ request, cookies }) => {
-  const { username, email, password } = await kit.validate.formOrFail(request, RegisterSchema)
+  const { username, email, password } = await kit.validate.body(request, RegisterSchema)
 
-  const registerResult = await iam.user.register({ username, email, password })
-  if (!registerResult.success) {
-    if (registerResult.error.code === 5002 || registerResult.error.code === 5502) {
+  const result = await kit.auth.registerAndLogin(cookies, { username, email, password })
+  if (!result.success) {
+    if (result.error.code === IamErrorCode.USER_ALREADY_EXISTS) {
       return kit.response.conflict('Username or email already taken')
     }
-    return kit.response.badRequest(registerResult.error.message)
+    return kit.response.fromError(result.error, IamErrorHttpStatus)
   }
 
-  const { user } = registerResult.data
-
-  // 注册成功后自动登录获取 token
-  const loginResult = await iam.auth.login({ identifier: username, password })
-  if (!loginResult.success) {
-    return kit.response.ok({
-      accessToken: '',
-      user: {
-        id: user.id,
-        username: user.username,
-        displayName: user.displayName,
-      },
-    })
-  }
-
-  cookies.set('h5_access_token', loginResult.data.tokens.accessToken, {
-    path: '/',
-    httpOnly: true,
-    sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production',
-    maxAge: iam.config?.session?.maxAge,
-  })
+  const { user, tokens } = result.data
 
   return kit.response.ok({
-    accessToken: loginResult.data.tokens.accessToken,
+    accessToken: tokens.accessToken,
     user: {
       id: user.id,
       username: user.username,

@@ -11,7 +11,7 @@ import { iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
 
 export const POST = kit.handler(async ({ request, getClientAddress }) => {
-  const { email } = await kit.validate.formOrFail(request, ForgotPasswordSchema)
+  const { email } = await kit.validate.body(request, ForgotPasswordSchema)
 
   const ip = getClientAddress()
   const ua = request.headers.get('user-agent') ?? undefined

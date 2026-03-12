@@ -2,7 +2,7 @@ import { listPartnerLeads, PartnerLeadQuerySchema } from '$lib/server/partner-se
 import { kit } from '@h-ai/kit'
 
 export const GET = kit.handler(async ({ url }) => {
-  const query = kit.validate.queryOrFail(url, PartnerLeadQuerySchema)
+  const query = kit.validate.query(url, PartnerLeadQuerySchema)
 
   const result = await listPartnerLeads(query)
   if (!result.success) {

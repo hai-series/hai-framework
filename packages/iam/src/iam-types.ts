@@ -131,6 +131,8 @@ export interface IamFunctions {
   readonly config: IamConfig | null
   /** 是否已初始化 */
   readonly isInitialized: boolean
+  /** 注册功能是否启用（未初始化或未配置时默认启用） */
+  readonly isRegisterEnabled: boolean
   /** 认证操作（登录、登出、令牌验证等） */
   readonly auth: IamAuthnFunctions
   /** 用户管理（注册、查询、更新、密码管理等） */

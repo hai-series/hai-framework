@@ -15,7 +15,7 @@ import { kit } from '@h-ai/kit'
  * 需要权限：role:list
  */
 export const GET = kit.handler(async ({ locals }) => {
-  kit.guard.requirePermission(locals.session, 'role:list')
+  kit.guard.require(locals.session, 'role:list')
 
   const roles = await roleService.list()
   return kit.response.ok(roles)
@@ -27,9 +27,9 @@ export const GET = kit.handler(async ({ locals }) => {
  * 需要权限：role:api:create
  */
 export const POST = kit.handler(async ({ request, locals, getClientAddress }) => {
-  kit.guard.requirePermission(locals.session, 'role:api:create')
+  kit.guard.require(locals.session, 'role:api:create')
 
-  const { name, description, permissions } = await kit.validate.formOrFail(request, CreateRoleSchema)
+  const { name, description, permissions } = await kit.validate.body(request, CreateRoleSchema)
 
   // 生成角色 code：仅保留字母、数字、下划线，防止特殊字符注入
   const code = `role_${name.toLowerCase().replace(/[^a-z0-9_]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '')}`

@@ -43,6 +43,19 @@ export const CacheErrorCode = {
 /** 缓存错误码类型 */
 export type CacheErrorCodeType = (typeof CacheErrorCode)[keyof typeof CacheErrorCode]
 
+/** 缓存错误码 → HTTP 状态码映射 */
+export const CacheErrorHttpStatus: Record<number, number> = {
+  [CacheErrorCode.CONNECTION_FAILED]: 500,
+  [CacheErrorCode.OPERATION_FAILED]: 500,
+  [CacheErrorCode.SERIALIZATION_FAILED]: 500,
+  [CacheErrorCode.DESERIALIZATION_FAILED]: 500,
+  [CacheErrorCode.KEY_NOT_FOUND]: 404,
+  [CacheErrorCode.TIMEOUT]: 504,
+  [CacheErrorCode.NOT_INITIALIZED]: 500,
+  [CacheErrorCode.UNSUPPORTED_TYPE]: 400,
+  [CacheErrorCode.CONFIG_ERROR]: 500,
+}
+
 // ─── 配置 Schema ───
 
 /** Redis 集群节点配置 */

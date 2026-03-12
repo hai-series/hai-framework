@@ -56,8 +56,8 @@ export interface IamAuthnFunctionsDeps {
  * 将公共 API 与内部依赖分离，避免将密码策略暴露在公共接口上。
  */
 export interface IamAuthnFunctionsResult {
-  /** 对外暴露的认证操作 */
-  authn: IamAuthnFunctions
+  /** 对外暴露的认证操作（不含 registerAndLogin，由 iam-main 组合注入） */
+  authn: Omit<IamAuthnFunctions, 'registerAndLogin'>
   /** 密码策略引用（仅供内部 user 子功能复用，对外不可见） */
   passwordStrategy: PasswordStrategy
 }
@@ -164,8 +164,10 @@ interface AuthnOperationsDeps {
 
 /**
  * 组装认证操作（纯同步，不涉及 I/O）
+ *
+ * 不含 registerAndLogin，该方法需要 userFunctions 依赖，由 iam-main 在初始化后组合注入。
  */
-function buildAuthnOperations(deps: AuthnOperationsDeps): IamAuthnFunctions {
+function buildAuthnOperations(deps: AuthnOperationsDeps): Omit<IamAuthnFunctions, 'registerAndLogin'> {
   const {
     passwordStrategy,
     otpStrategy,
@@ -304,8 +306,8 @@ function buildAuthnOperations(deps: AuthnOperationsDeps): IamAuthnFunctions {
       username: user.username,
       displayName: user.displayName,
       avatarUrl: user.avatarUrl,
-      roleCodes: roleCodesResult.data,
-      permissionCodes: permCodesResult.data,
+      roles: roleCodesResult.data,
+      permissions: permCodesResult.data,
     })
 
     if (!sessionResult.success) {
@@ -323,6 +325,8 @@ function buildAuthnOperations(deps: AuthnOperationsDeps): IamAuthnFunctions {
     return ok({
       user,
       tokens: tokenPair,
+      roles: roleCodesResult.data,
+      permissions: permCodesResult.data,
       agreements: buildAgreementDisplay(),
     })
   }

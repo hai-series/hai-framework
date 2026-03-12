@@ -8,7 +8,7 @@
 
 import type { BrowserTokenStore } from '../kit-auth.js'
 import type { EncryptedPayload, TransportCryptoServiceLike, TransportKeyPair } from '../modules/crypto/kit-crypto-types.js'
-import { createBrowserTokenStore } from '../kit-auth.js'
+import { createTokenStore } from '../kit-auth.js'
 import { isValidEncryptedPayload } from '../modules/crypto/kit-transport-encryption.js'
 
 // ─── 类型 ───
@@ -105,7 +105,7 @@ export function createKitClient(config: KitClientConfig = {}): KitClient {
 
   // ── Auth token store ──
   const authStore: BrowserTokenStore | null = authConfig
-    ? (authConfig === true ? createBrowserTokenStore() : authConfig)
+    ? (authConfig === true ? createTokenStore() : authConfig)
     : null
 
   // ── 传输加密状态 ──

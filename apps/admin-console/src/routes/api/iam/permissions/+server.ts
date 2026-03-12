@@ -16,9 +16,9 @@ import { kit } from '@h-ai/kit'
  * 需要权限：permission:list
  */
 export const GET = kit.handler(async ({ url, locals }) => {
-  kit.guard.requirePermission(locals.session, 'permission:list')
+  kit.guard.require(locals.session, 'permission:list')
 
-  const { page, pageSize, search, type } = kit.validate.queryOrFail(url, ListPermissionsQuerySchema)
+  const { page, pageSize, search, type } = kit.validate.query(url, ListPermissionsQuerySchema)
 
   const result = await permissionService.listPaginated({ page, pageSize, search, type })
   return kit.response.ok(result)
@@ -30,9 +30,9 @@ export const GET = kit.handler(async ({ url, locals }) => {
  * 需要权限：permission:api:create
  */
 export const POST = kit.handler(async ({ request, locals, getClientAddress }) => {
-  kit.guard.requirePermission(locals.session, 'permission:api:create')
+  kit.guard.require(locals.session, 'permission:api:create')
 
-  const { name, description, resource, action, type } = await kit.validate.formOrFail(request, CreatePermissionSchema)
+  const { name, description, resource, action, type } = await kit.validate.body(request, CreatePermissionSchema)
 
   // 生成权限 code
   const code = `${resource}:${action}`

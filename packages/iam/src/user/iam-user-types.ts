@@ -6,6 +6,7 @@
  */
 
 import type { PaginatedResult, PaginationOptionsInput, Result } from '@h-ai/core'
+import type { Role } from '../authz/iam-authz-types.js'
 import type { IamError } from '../iam-types.js'
 
 // ─── 用户查询选项 ───
@@ -18,6 +19,8 @@ export interface ListUsersOptions extends PaginationOptionsInput {
   search?: string
   /** 按启用状态过滤，不传则返回全部 */
   enabled?: boolean
+  /** 包含关联数据（如 'roles' 表示同时返回用户角色列表） */
+  include?: ('roles')[]
 }
 
 // ─── 用户类型 ───
@@ -50,6 +53,8 @@ export interface User {
   updatedAt: Date
   /** 扩展属性 */
   metadata?: Record<string, unknown>
+  /** 用户角色列表（仅在 include: ['roles'] 时返回） */
+  roles?: Role[]
 }
 
 // ─── 协议展示类型 ───
@@ -175,9 +180,10 @@ export interface IamUserFunctions {
    * 获取用户信息
    *
    * @param userId - 用户 ID
+   * @param options - 查询选项（可选 include: ['roles'] 同时返回角色列表）
    * @returns 成功返回用户信息或 null（用户不存在时）
    */
-  getUser: (userId: string) => Promise<Result<User | null, IamError>>
+  getUser: (userId: string, options?: { include?: ('roles')[] }) => Promise<Result<User | null, IamError>>
 
   /**
    * 获取用户列表（分页 + 搜索 + 过滤）

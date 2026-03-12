@@ -5,7 +5,6 @@
  */
 
 import { audit } from '@h-ai/audit'
-import { iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
 
 export const POST = kit.handler(async ({ getClientAddress, request, cookies, locals }) => {
@@ -18,12 +17,9 @@ export const POST = kit.handler(async ({ getClientAddress, request, cookies, loc
       const ua = request.headers.get('user-agent') ?? undefined
       await audit.helper.logout(locals.session.userId, ip, ua)
     }
-
-    // 登出（使会话失效）—— iam.auth.logout 返回 Result，永不 throw
-    await iam.auth.logout(token)
   }
 
-  kit.auth.clearAccessTokenCookie(cookies)
+  await kit.auth.logout(cookies, token)
 
   return kit.response.ok(null)
 })

@@ -61,3 +61,20 @@ export const CryptoErrorCode = {
 
 /** 错误码类型（CryptoErrorCode 值的联合类型） */
 export type CryptoErrorCodeType = (typeof CryptoErrorCode)[keyof typeof CryptoErrorCode]
+
+/** 加密错误码 → HTTP 状态码映射 */
+export const CryptoErrorHttpStatus: Record<number, number> = {
+  [CryptoErrorCode.OPERATION_FAILED]: 500,
+  [CryptoErrorCode.INVALID_INPUT]: 400,
+  [CryptoErrorCode.INVALID_KEY]: 400,
+  [CryptoErrorCode.NOT_INITIALIZED]: 500,
+  [CryptoErrorCode.INIT_FAILED]: 500,
+  [CryptoErrorCode.KEY_GENERATION_FAILED]: 500,
+  [CryptoErrorCode.ENCRYPTION_FAILED]: 500,
+  [CryptoErrorCode.DECRYPTION_FAILED]: 500,
+  [CryptoErrorCode.SIGN_FAILED]: 500,
+  [CryptoErrorCode.VERIFY_FAILED]: 500,
+  [CryptoErrorCode.HASH_FAILED]: 500,
+  [CryptoErrorCode.HMAC_FAILED]: 500,
+  [CryptoErrorCode.INVALID_IV]: 400,
+}

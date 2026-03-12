@@ -155,6 +155,18 @@ export interface IamAuthzFunctions {
    */
   removeRole: (userId: string, roleId: string) => Promise<Result<void, IamError>>
 
+  /**
+   * 同步用户角色（替换为目标角色列表）
+   *
+   * 自动计算当前角色与目标角色的差集，批量移除多余角色、添加缺失角色，
+   * 最终同步一次会话权限。若目标与当前一致则跳过操作。
+   *
+   * @param userId - 用户 ID
+   * @param roleIds - 目标角色 ID 列表
+   * @returns 成功返回 ok
+   */
+  syncRoles: (userId: string, roleIds: string[]) => Promise<Result<void, IamError>>
+
   // ─── 角色管理 ───
 
   /**

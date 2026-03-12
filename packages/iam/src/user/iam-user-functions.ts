@@ -427,13 +427,26 @@ function buildUserFunctions(deps: UserBuilderDeps): IamUserFunctions {
       return ok(toUser(updatedResult.data))
     },
 
-    async getUser(userId: string): Promise<Result<User | null, IamError>> {
+    async getUser(userId: string, options?: { include?: ('roles')[] }): Promise<Result<User | null, IamError>> {
       const userResult = await userRepository.findById(userId)
       if (!userResult.success) {
         return mapRepositoryError('iam_queryUserFailed', userResult.error.message) as Result<User | null, IamError>
       }
 
-      return ok(userResult.data ? toUser(userResult.data) : null)
+      if (!userResult.data) {
+        return ok(null)
+      }
+
+      const user = toUser(userResult.data)
+
+      if (options?.include?.includes('roles')) {
+        const rolesResult = await authzFunctions.getUserRoles(userId)
+        if (rolesResult.success) {
+          user.roles = rolesResult.data
+        }
+      }
+
+      return ok(user)
     },
 
     async listUsers(options?: ListUsersOptions): Promise<Result<PaginatedResult<User>, IamError>> {
@@ -466,6 +479,17 @@ function buildUserFunctions(deps: UserBuilderDeps): IamUserFunctions {
       }
 
       const items = usersResult.data.items.map(toUser)
+
+      if (options?.include?.includes('roles') && items.length > 0) {
+        const userIds = items.map(u => u.id)
+        const rolesMapResult = await authzFunctions.getUserRolesForMany(userIds)
+        if (rolesMapResult.success) {
+          for (const user of items) {
+            user.roles = rolesMapResult.data.get(user.id) ?? []
+          }
+        }
+      }
+
       return ok({
         items,
         total: usersResult.data.total,

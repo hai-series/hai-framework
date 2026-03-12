@@ -49,6 +49,20 @@ export const ReachErrorCode = {
 /** 触达模块错误码类型 */
 export type ReachErrorCodeType = (typeof ReachErrorCode)[keyof typeof ReachErrorCode]
 
+/** 触达错误码 → HTTP 状态码映射 */
+export const ReachErrorHttpStatus: Record<number, number> = {
+  [ReachErrorCode.SEND_FAILED]: 500,
+  [ReachErrorCode.TEMPLATE_NOT_FOUND]: 404,
+  [ReachErrorCode.TEMPLATE_RENDER_FAILED]: 500,
+  [ReachErrorCode.INVALID_RECIPIENT]: 400,
+  [ReachErrorCode.PROVIDER_NOT_FOUND]: 500,
+  [ReachErrorCode.DND_BLOCKED]: 403,
+  [ReachErrorCode.DND_DEFERRED]: 202,
+  [ReachErrorCode.NOT_INITIALIZED]: 500,
+  [ReachErrorCode.UNSUPPORTED_TYPE]: 400,
+  [ReachErrorCode.CONFIG_ERROR]: 500,
+}
+
 // ─── 单个 Provider 配置 Schema ───
 
 /**

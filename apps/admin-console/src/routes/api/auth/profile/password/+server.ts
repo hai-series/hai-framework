@@ -11,7 +11,7 @@ export const PUT = kit.handler(async ({ request, locals }) => {
     return kit.response.unauthorized(m.common_error())
   }
 
-  const data = await kit.validate.formOrFail(request, createChangeCurrentPasswordSchema())
+  const data = await kit.validate.body(request, createChangeCurrentPasswordSchema())
   const result = await iam.user.changeCurrentUserPassword(locals.accessToken, data.old_password, data.new_password)
 
   if (!result.success) {

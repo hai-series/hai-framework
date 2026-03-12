@@ -7,12 +7,14 @@
  */
 
 import type { Handle, RequestEvent } from '@sveltejs/kit'
-import type { GuardConfig, GuardResult, HookConfig, Middleware, MiddlewareContext, SessionData } from '../kit-types.js'
+import type { GuardConfig, GuardResult, HandleConfig, Middleware, MiddlewareContext, SessionData } from '../kit-types.js'
 import type { CookieProxyConfig } from './kit-cookie-proxy.js'
 import { core } from '@h-ai/core'
-import { getBearerTokenFromRequest } from '../kit-auth.js'
+import { configureAuth, getAccessToken } from '../kit-auth.js'
 import { kitM } from '../kit-i18n.js'
 import { isSvelteKitControlFlow } from '../kit-utils.js'
+import { loggingMiddleware as loggingMiddlewareFn } from '../middleware/kit-logging.js'
+import { rateLimitMiddleware as rateLimitMiddlewareFn } from '../middleware/kit-ratelimit.js'
 import { transportEncryptionMiddleware } from '../modules/crypto/kit-transport-middleware.js'
 import { createEncryptedCookieProxy } from './kit-cookie-proxy.js'
 
@@ -20,9 +22,6 @@ import { createEncryptedCookieProxy } from './kit-cookie-proxy.js'
  * 生成唯一请求级 ID
  *
  * 由时间戳（base36）+ 6 位随机串拼接，用于日志追踪与响应头 `X-Request-Id`。
- *
- * @param prefix - ID 前缀，如 `'req'`
- * @returns 格式为 `{prefix}_{timestamp}{random}` 的唯一 ID
  */
 function generateId(prefix: string): string {
   const timestamp = Date.now().toString(36)
@@ -37,46 +36,80 @@ function generateId(prefix: string): string {
  *
  * 执行顺序：
  * 1. 生成 `requestId` 并写入 `event.locals`
- * 2. 根据 Cookie 调用 `validateSession` 解析会话
- * 3. 按顺序执行 `guards`（路径过滤 → 权限判断）
- * 4. 构建 `MiddlewareContext` 并执行中间件链
+ * 2. 根据 `auth` 配置从 Bearer / Cookie 解析会话
+ * 3. 根据 `auth.protectedPaths` 自动执行路由守卫 + 额外自定义守卫
+ * 4. 构建中间件链（内置 logging / rateLimit + 自定义）并执行
  * 5. 调用 `resolve(event)` 获取业务响应
  * 6. 附加 `X-Request-Id` 响应头
  *
- * @param config - Hook 配置（均有合理默认值，可零配置使用）
+ * @param config - Handle 配置（均有合理默认值，可零配置使用）
  * @returns SvelteKit Handle 函数
  *
  * @example
  * ```ts
- * // src/hooks.server.ts
  * export const handle = kit.createHandle({
- *   validateSession: token => iam.session.validate(token),
- *   guards: [{ guard: kit.guard.auth(), paths: ['/api/*'] }],
- *   middleware: [kit.middleware.logging()],
+ *   auth: {
+ *     verifyToken: validateSession,
+ *     loginUrl: '/auth/login',
+ *     protectedPaths: ['/admin/*', '/api/*'],
+ *     publicPaths: ['/api/auth/*', '/api/public/*'],
+ *   },
+ *   rateLimit: { maxRequests: 100 },
+ *   crypto: { crypto, transport: true },
  * })
  * ```
  */
-export function createHandle(config: HookConfig = {}): Handle {
+export function createHandle(config: HandleConfig = {}): Handle {
   const {
-    validateSession,
-    middleware = [],
-    guards = [],
-    onError,
-    logging = false,
+    auth: authConfig,
+    rateLimit: rateLimitConfig,
+    logging: loggingConfig = true,
     crypto: cryptoConfig,
+    onError,
+    guards: customGuards = [],
+    middleware: customMiddleware = [],
   } = config
 
-  // ── 构建最终中间件链（传输加密中间件自动注入到最外层） ──
-  const finalMiddleware = buildMiddlewareChain(middleware, cryptoConfig)
+  // ── 配置 Cookie 名 + 认证操作 ──
+  if (authConfig?.cookieName || authConfig?.operations) {
+    configureAuth({ cookieName: authConfig.cookieName, operations: authConfig.operations })
+  }
+
+  // ── 构建守卫列表（auth 自动守卫 + 自定义守卫） ──
+  const guards: GuardConfig[] = []
+  if (authConfig?.protectedPaths?.length) {
+    guards.push({
+      guard: buildAuthGuard(authConfig.verifyToken, authConfig.loginUrl),
+      paths: authConfig.protectedPaths,
+      exclude: authConfig.publicPaths,
+    })
+  }
+  guards.push(...customGuards)
+
+  // ── 构建中间件链 ──
+  const builtinMiddleware: Middleware[] = []
+  if (loggingConfig) {
+    const logOpts = typeof loggingConfig === 'object' ? loggingConfig : { logBody: false }
+    builtinMiddleware.push(loggingMiddlewareFn(logOpts))
+  }
+  if (rateLimitConfig) {
+    builtinMiddleware.push(rateLimitMiddlewareFn({
+      windowMs: rateLimitConfig.windowMs ?? 60000,
+      maxRequests: rateLimitConfig.maxRequests ?? 100,
+    }))
+  }
+  const allMiddleware = [...builtinMiddleware, ...customMiddleware]
+
+  // ── 传输加密中间件自动注入到最外层 ──
+  const finalMiddleware = buildTransportMiddleware(allMiddleware, cryptoConfig)
 
   // ── Cookie 加密配置预处理 ──
   const cookieProxyConfig = buildCookieProxyConfig(cryptoConfig)
 
   return async ({ event, resolve }) => {
-    const startTime = Date.now()
     const requestId = generateId('req')
 
-    // 添加请求 ID 到 event.locals
+    // 注入 requestId 到 event.locals
     const locals = event.locals as unknown as Record<string, unknown>
     locals.requestId = requestId
 
@@ -90,32 +123,22 @@ export function createHandle(config: HookConfig = {}): Handle {
       })
     }
 
-    if (logging) {
-      core.logger.trace('Request started', {
-        requestId,
-        method: event.request.method,
-        path: event.url.pathname,
-      })
-    }
-
     try {
-      // 统一 Bearer Token 会话解析
+      // ── 会话解析 ──
       let session: SessionData | undefined
 
-      if (validateSession) {
-        // 从 Authorization header 提取 Token（优先）
-        const token = getBearerTokenFromRequest(event.request)
+      if (authConfig) {
+        const token = getAccessToken(event.request, event.cookies)
         if (token) {
-          session = await validateSession(token) ?? undefined
-          const sessionLocals = event.locals as unknown as Record<string, unknown>
-          sessionLocals.session = session
+          session = await authConfig.verifyToken(token) ?? undefined
+          locals.session = session
           if (session) {
-            sessionLocals.accessToken = token
+            locals.accessToken = token
           }
         }
       }
 
-      // 执行守卫
+      // ── 执行守卫 ──
       for (const guardConfig of guards) {
         const guardResult = await executeGuard(guardConfig, event, session)
 
@@ -144,36 +167,25 @@ export function createHandle(config: HookConfig = {}): Handle {
         }
       }
 
-      // 构建中间件上下文
+      // ── 中间件链 ──
       const context: MiddlewareContext = {
         event,
         session,
         requestId,
       }
 
-      // 执行中间件链
       const response = await executeMiddlewareChain(
         finalMiddleware,
         context,
         () => resolve(event),
       )
 
-      // 添加请求 ID 到响应头
       response.headers.set('X-Request-Id', requestId)
-
-      if (logging) {
-        const duration = Date.now() - startTime
-        core.logger.info('Request completed', {
-          requestId,
-          status: response.status,
-          duration,
-        })
-      }
 
       return response
     }
     catch (error) {
-      // 重新抛出 SvelteKit 控制流异常（redirect / error）
+      // SvelteKit 控制流异常（redirect / error）必须继续抛出
       if (isSvelteKitControlFlow(error)) {
         throw error
       }
@@ -184,7 +196,7 @@ export function createHandle(config: HookConfig = {}): Handle {
         return onError(error, event)
       }
 
-      // 默认错误响应（生产环境不暴露内部错误详情）
+      // 默认错误响应
       return new Response(
         JSON.stringify({
           success: false,
@@ -203,16 +215,56 @@ export function createHandle(config: HookConfig = {}): Handle {
   }
 }
 
+// ─── 内部：构建 auth 守卫 ───
+
+/**
+ * 根据 auth 配置构建路由守卫
+ *
+ * - API 路径（以 `/api/` 开头）：未认证返回 401 JSON
+ * - 非 API 路径：未认证时重定向到 loginUrl（若配置），否则返回 401
+ */
+function buildAuthGuard(
+  verifyToken: (token: string) => Promise<SessionData | null>,
+  loginUrl?: string,
+): (event: RequestEvent, session?: SessionData) => GuardResult {
+  // verifyToken 参数仅用于类型签名对齐，实际会话已在上层解析
+  void verifyToken
+
+  return (event, session) => {
+    if (session) {
+      return { allowed: true }
+    }
+
+    const isApiRoute = event.url.pathname.startsWith('/api/')
+
+    if (isApiRoute) {
+      return {
+        allowed: false,
+        message: kitM('kit_authRequired'),
+        status: 401,
+      }
+    }
+
+    if (loginUrl) {
+      const returnUrl = encodeURIComponent(event.url.pathname + event.url.search)
+      return {
+        allowed: false,
+        redirect: `${loginUrl}?returnUrl=${returnUrl}`,
+      }
+    }
+
+    return {
+      allowed: false,
+      message: kitM('kit_authRequired'),
+      status: 401,
+    }
+  }
+}
+
+// ─── 内部：守卫执行 ───
+
 /**
  * 执行单个守卫（含路径过滤逻辑）
- *
- * 先检查 `exclude` 排除列表，再检查 `paths` 白名单。
- * 若路径不在守卫保护范围内，直接返回 `{ allowed: true }`。
- *
- * @param config - 守卫配置（含路径过滤）
- * @param event - SvelteKit 请求事件
- * @param session - 已解析的会话信息（可能为空）
- * @returns 守卫判定结果
  */
 async function executeGuard(
   config: GuardConfig,
@@ -222,12 +274,10 @@ async function executeGuard(
   const { guard, paths, exclude } = config
   const pathname = event.url.pathname
 
-  // 检查是否排除
   if (exclude?.some(pattern => matchPath(pathname, pattern))) {
     return { allowed: true }
   }
 
-  // 检查是否匹配路径
   if (paths && !paths.some(pattern => matchPath(pathname, pattern))) {
     return { allowed: true }
   }
@@ -235,16 +285,10 @@ async function executeGuard(
   return guard(event, session)
 }
 
+// ─── 内部：中间件执行 ───
+
 /**
- * 递归执行中间件链
- *
- * 采用"洋葱模型"：每个中间件调用 `next()` 交给下一层，
- * 链末端调用 `final` 取得业务 Response。
- *
- * @param middleware - 待执行的中间件数组
- * @param context - 中间件共享上下文
- * @param final - 链末端的 resolve 回调
- * @returns 最终 Response
+ * 递归执行中间件链（洋葱模型）
  */
 async function executeMiddlewareChain(
   middleware: Middleware[],
@@ -260,19 +304,10 @@ async function executeMiddlewareChain(
   return current(context, () => executeMiddlewareChain(rest, context, final))
 }
 
+// ─── 内部：路径匹配 ───
+
 /**
- * 简单路径通配符匹配
- *
- * 支持三种模式：
- * - 精确匹配：`/api/users` 仅匹配 `/api/users`
- * - 单层通配：`/api/*` 匹配 `/api` 本身及 `/api/` 开头的所有路径
- * - 递归通配：`/api/**` 同上（语义等价）
- *
- * 注意：`/api/*` 不会匹配 `/api-docs`，仅匹配 `/api` 或 `/api/...` 路径。
- *
- * @param pathname - 当前请求路径
- * @param pattern - 匹配模式
- * @returns 是否匹配
+ * 路径通配符匹配（`/*` `/**` 精确匹配）
  */
 function matchPath(pathname: string, pattern: string): boolean {
   if (pattern.endsWith('/*')) {
@@ -288,20 +323,14 @@ function matchPath(pathname: string, pattern: string): boolean {
   return pathname === pattern
 }
 
-// ─── Crypto 配置构建 ───
+// ─── 内部：Crypto 配置构建 ───
 
 /**
  * 构建最终中间件链：将传输加密中间件自动插入到最外层
- *
- * 传输加密中间件位于链头，确保：请求进来时第一个解密，响应出去时最后一个加密。
- *
- * @param userMiddleware - 用户配置的中间件
- * @param cryptoConfig - 加密配置
- * @returns 最终中间件链
  */
-function buildMiddlewareChain(
+function buildTransportMiddleware(
   userMiddleware: Middleware[],
-  cryptoConfig: HookConfig['crypto'],
+  cryptoConfig: HandleConfig['crypto'],
 ): Middleware[] {
   if (!cryptoConfig?.transport)
     return userMiddleware
@@ -317,21 +346,14 @@ function buildMiddlewareChain(
     requireEncryption: transportOpts.requireEncryption,
   })
 
-  // 传输加密在最外层
   return [transportMw, ...userMiddleware]
 }
 
 /**
  * 构建 Cookie 加密代理配置
- *
- * 从 HookCryptoConfig 中提取 Cookie 加密所需信息。
- * 密钥优先使用显式配置，回退到环境变量 HAI_COOKIE_KEY。
- *
- * @param cryptoConfig - 加密配置
- * @returns CookieProxyConfig 或 null（不需要 Cookie 加密时）
  */
 function buildCookieProxyConfig(
-  cryptoConfig: HookConfig['crypto'],
+  cryptoConfig: HandleConfig['crypto'],
 ): CookieProxyConfig | null {
   if (!cryptoConfig?.encryptedCookies?.length)
     return null
@@ -355,18 +377,13 @@ function buildCookieProxyConfig(
  *
  * 洋葱模型：`sequence(a, b, c)` 执行顺序为 a → b → c → resolve → c → b → a。
  *
- * > 注意：未直接委托 `@sveltejs/kit/hooks` 的 `sequence`，因为其依赖内部 request store，
- * > 在单元测试环境中不可用。本实现行为与 SvelteKit 原生版本一致。
- *
  * @param handles - 待组合的 handle 函数列表
  * @returns 组合后的单一 Handle 函数
  *
  * @example
  * ```ts
- * // src/hooks.server.ts
  * const haiHandle = kit.createHandle({ ... })
- * const iamHandle = kit.createHandle({ ... })
- * export const handle = kit.sequence(haiHandle, iamHandle)
+ * export const handle = kit.sequence(i18nHandle, haiHandle)
  * ```
  */
 export function sequence(...handles: Handle[]): Handle {

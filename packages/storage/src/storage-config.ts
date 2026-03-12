@@ -47,6 +47,25 @@ export const StorageErrorCode = {
 /** 存储错误码类型 */
 export type StorageErrorCodeType = (typeof StorageErrorCode)[keyof typeof StorageErrorCode]
 
+/** 存储错误码 → HTTP 状态码映射 */
+export const StorageErrorHttpStatus: Record<number, number> = {
+  [StorageErrorCode.CONNECTION_FAILED]: 500,
+  [StorageErrorCode.OPERATION_FAILED]: 500,
+  [StorageErrorCode.NOT_FOUND]: 404,
+  [StorageErrorCode.ALREADY_EXISTS]: 409,
+  [StorageErrorCode.PERMISSION_DENIED]: 403,
+  [StorageErrorCode.QUOTA_EXCEEDED]: 413,
+  [StorageErrorCode.INVALID_PATH]: 400,
+  [StorageErrorCode.IO_ERROR]: 500,
+  [StorageErrorCode.NETWORK_ERROR]: 502,
+  [StorageErrorCode.NOT_INITIALIZED]: 500,
+  [StorageErrorCode.UNSUPPORTED_TYPE]: 400,
+  [StorageErrorCode.CONFIG_ERROR]: 500,
+  [StorageErrorCode.PRESIGN_FAILED]: 500,
+  [StorageErrorCode.UPLOAD_FAILED]: 500,
+  [StorageErrorCode.DOWNLOAD_FAILED]: 500,
+}
+
 // ─── 配置 Schema ───
 
 /**

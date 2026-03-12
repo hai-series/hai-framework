@@ -32,14 +32,14 @@ describe('iam.session', () => {
         const result = await getIam().session.create({
           userId: 'session-user-1',
           username: 'testuser',
-          roleCodes: ['role_a'],
+          roles: ['role_a'],
           source: 'pc',
         })
         expect(result.success).toBe(true)
         if (result.success) {
           expect(result.data.userId).toBe('session-user-1')
           expect(result.data.username).toBe('testuser')
-          expect(result.data.roleCodes).toContain('role_a')
+          expect(result.data.roles).toContain('role_a')
           expect(result.data.accessToken).toBeTruthy()
           expect(result.data.createdAt).toBeInstanceOf(Date)
           expect(result.data.expiresAt).toBeInstanceOf(Date)
@@ -78,7 +78,7 @@ describe('iam.session', () => {
       it('有效令牌应返回 Session', async () => {
         const createResult = await getIam().session.create({
           userId: 'session-verify-user',
-          roleCodes: ['admin'],
+          roles: ['admin'],
         })
         if (!createResult.success)
           return
@@ -216,7 +216,7 @@ describe('iam.session', () => {
       it('创建会话时可传入 source 和 data', async () => {
         const result = await getIam().session.create({
           userId: 'session-opts-user',
-          roleCodes: ['r1'],
+          roles: ['r1'],
           source: 'android',
           data: { deviceId: 'abc123' },
         })
@@ -240,13 +240,13 @@ describe('iam.session', () => {
         }
       })
 
-      it('创建会话时 roleCodes 为空数组应成功', async () => {
+      it('创建会话时 roles 为空数组应成功', async () => {
         const result = await getIam().session.create({
           userId: 'session-empty-roles',
         })
         expect(result.success).toBe(true)
         if (result.success) {
-          expect(result.data.roleCodes).toEqual([])
+          expect(result.data.roles).toEqual([])
         }
       })
     })
@@ -405,7 +405,7 @@ describe('iam.session', () => {
         const session = await getIam().auth.verifyToken(loginResult.data.tokens.accessToken)
         expect(session.success).toBe(true)
         if (session.success) {
-          expect(session.data.roleCodes).toContain(role.data.code)
+          expect(session.data.roles).toContain(role.data.code)
         }
       })
 
@@ -432,7 +432,7 @@ describe('iam.session', () => {
         const session = await getIam().auth.verifyToken(loginResult.data.tokens.accessToken)
         expect(session.success).toBe(true)
         if (session.success) {
-          expect(session.data.roleCodes).toContain(role.data.code)
+          expect(session.data.roles).toContain(role.data.code)
         }
       })
     })

@@ -61,6 +61,23 @@ export const SchedulerErrorCode = {
 /** 定时任务错误码类型 */
 export type SchedulerErrorCodeType = typeof SchedulerErrorCode[keyof typeof SchedulerErrorCode]
 
+/** 定时任务错误码 → HTTP 状态码映射 */
+export const SchedulerErrorHttpStatus: Record<number, number> = {
+  [SchedulerErrorCode.NOT_INITIALIZED]: 500,
+  [SchedulerErrorCode.INIT_FAILED]: 500,
+  [SchedulerErrorCode.CONFIG_ERROR]: 500,
+  [SchedulerErrorCode.TASK_NOT_FOUND]: 404,
+  [SchedulerErrorCode.TASK_ALREADY_EXISTS]: 409,
+  [SchedulerErrorCode.INVALID_CRON]: 400,
+  [SchedulerErrorCode.EXECUTION_FAILED]: 500,
+  [SchedulerErrorCode.JS_EXECUTION_FAILED]: 500,
+  [SchedulerErrorCode.API_EXECUTION_FAILED]: 502,
+  [SchedulerErrorCode.DB_SAVE_FAILED]: 500,
+  [SchedulerErrorCode.ALREADY_RUNNING]: 409,
+  [SchedulerErrorCode.NOT_RUNNING]: 400,
+  [SchedulerErrorCode.LOCK_ACQUIRE_FAILED]: 409,
+}
+
 // ─── 配置 Schema ───
 
 /**

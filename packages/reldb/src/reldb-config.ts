@@ -57,6 +57,24 @@ export const ReldbErrorCode = {
 /** 数据库错误码类型 */
 export type ReldbErrorCodeType = typeof ReldbErrorCode[keyof typeof ReldbErrorCode]
 
+/** 关系数据库错误码 → HTTP 状态码映射 */
+export const ReldbErrorHttpStatus: Record<number, number> = {
+  [ReldbErrorCode.CONNECTION_FAILED]: 500,
+  [ReldbErrorCode.QUERY_FAILED]: 500,
+  [ReldbErrorCode.CONSTRAINT_VIOLATION]: 409,
+  [ReldbErrorCode.TRANSACTION_FAILED]: 500,
+  [ReldbErrorCode.MIGRATION_FAILED]: 500,
+  [ReldbErrorCode.RECORD_NOT_FOUND]: 404,
+  [ReldbErrorCode.DUPLICATE_ENTRY]: 409,
+  [ReldbErrorCode.DEADLOCK]: 500,
+  [ReldbErrorCode.TIMEOUT]: 504,
+  [ReldbErrorCode.POOL_EXHAUSTED]: 503,
+  [ReldbErrorCode.NOT_INITIALIZED]: 500,
+  [ReldbErrorCode.DDL_FAILED]: 500,
+  [ReldbErrorCode.UNSUPPORTED_TYPE]: 400,
+  [ReldbErrorCode.CONFIG_ERROR]: 500,
+}
+
 // ─── 数据库配置 Schema ───
 
 /**

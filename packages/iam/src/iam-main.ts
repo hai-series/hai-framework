@@ -9,6 +9,7 @@ import type { Result } from '@h-ai/core'
 
 import type { IamConfig } from './iam-config.js'
 import type {
+  AuthResult,
   IamAuthnFunctions,
   IamAuthzFunctions,
   IamConfigInput,
@@ -158,9 +159,21 @@ export const iam: IamFunctions = {
       // 所有子功能创建成功，原子性赋值到模块状态
       currentSession = sessionResult.data
       currentAuthz = authzResult.data
-      currentAuth = authnResult.data.authn
       currentUser = userResult.data
       currentConfig = parsed
+
+      // 组合 auth：注入 registerAndLogin（依赖 user + auth 两个子功能）
+      const authn = authnResult.data.authn
+      currentAuth = {
+        ...authn,
+        async registerAndLogin(options) {
+          const regResult = await currentUser!.register(options)
+          if (!regResult.success) {
+            return regResult as Result<AuthResult, IamError>
+          }
+          return authn.login({ identifier: options.username, password: options.password })
+        },
+      }
       logger.info('IAM module initialized')
       return ok(undefined)
     }
@@ -180,6 +193,7 @@ export const iam: IamFunctions = {
   get session(): IamSessionFunctions { return currentSession ?? notInitializedSession },
   get config() { return currentConfig },
   get isInitialized() { return currentConfig !== null },
+  get isRegisterEnabled() { return currentConfig?.register?.enabled !== false },
 
   async close() {
     if (currentConfig === null && currentAuth === null && currentUser === null && currentAuthz === null && currentSession === null) {

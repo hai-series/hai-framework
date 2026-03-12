@@ -110,7 +110,7 @@
   async function handleLogout() {
     userMenuOpen = false
     try { await apiFetch('/api/auth/logout', { method: 'POST' }) } catch { /* 忽略 */ }
-    kit.auth.clearBrowserAccessToken()
+    kit.auth.clearBrowserToken()
     goto('/auth/login')
   }
 

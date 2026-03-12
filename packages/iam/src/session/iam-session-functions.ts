@@ -318,8 +318,8 @@ function buildSessionFunctions(config: SessionBuilderConfig): IamSessionFunction
           username: oldSession.username,
           displayName: oldSession.displayName,
           avatarUrl: oldSession.avatarUrl,
-          roleCodes: oldSession.roleCodes,
-          permissionCodes: oldSession.permissionCodes,
+          roles: oldSession.roles,
+          permissions: oldSession.permissions,
           source: oldSession.source,
           data: oldSession.data ? { ...oldSession.data, _tokenPair: undefined } : undefined,
         })

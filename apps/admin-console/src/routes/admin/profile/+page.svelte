@@ -278,7 +278,7 @@
 
       passwordSuccess = m.common_success()
       if (body.data?.reloginRequired && typeof window !== 'undefined') {
-        kit.auth.clearBrowserAccessToken()
+        kit.auth.clearBrowserToken()
         window.setTimeout(() => {
           window.location.assign('/auth/login')
         }, 300)

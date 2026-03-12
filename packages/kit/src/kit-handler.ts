@@ -15,7 +15,7 @@ import { isResponseLike, isSvelteKitControlFlow } from './kit-utils.js'
  *
  * 将业务逻辑包裹在统一的异常边界中：
  * 1. 正常执行 `fn(event)` 返回 Response
- * 2. 若 `fn` throw 了 `Response`（如 `requirePermission` / `formOrFail`），直接返回该 Response
+ * 2. 若 `fn` throw 了 `Response`（如 `kit.guard.require` / `kit.validate.body`），直接返回该 Response
  * 3. 若 `fn` throw 了 SvelteKit 控制流（`redirect()` / `error()`），继续抛出
  * 4. 其他异常：记录日志 → 返回 `kit.response.internalError()`
  *
@@ -25,7 +25,7 @@ import { isResponseLike, isSvelteKitControlFlow } from './kit-utils.js'
  * @example
  * ```ts
  * export const GET = kit.handler(async ({ locals }) => {
- *   kit.guard.requirePermission(locals.session, 'user:read')
+ *   kit.guard.require(locals.session, 'user:read')
  *   return kit.response.ok(await getUsers())
  * })
  * ```
@@ -36,7 +36,7 @@ export function handler(fn: (event: RequestEvent) => Promise<Response> | Respons
       return await fn(event)
     }
     catch (error) {
-      // validate.*OrFail / requirePermission 等场景会 throw Response，直接返回即可
+      // validate.body / guard.require 等场景会 throw Response，直接返回即可
       // 使用 isResponseLike 兼容 Vite 开发环境下跨模块 instanceof 失效
       if (isResponseLike(error)) {
         return error

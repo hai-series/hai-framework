@@ -38,6 +38,21 @@ export const ApiClientErrorCode = {
 /** 错误码类型 */
 export type ApiClientErrorCodeType = (typeof ApiClientErrorCode)[keyof typeof ApiClientErrorCode]
 
+/** API Client 错误码 → HTTP 状态码映射 */
+export const ApiClientErrorHttpStatus: Record<number, number> = {
+  [ApiClientErrorCode.NETWORK_ERROR]: 502,
+  [ApiClientErrorCode.TIMEOUT]: 504,
+  [ApiClientErrorCode.SERVER_ERROR]: 502,
+  [ApiClientErrorCode.UNAUTHORIZED]: 401,
+  [ApiClientErrorCode.FORBIDDEN]: 403,
+  [ApiClientErrorCode.NOT_FOUND]: 404,
+  [ApiClientErrorCode.VALIDATION_FAILED]: 400,
+  [ApiClientErrorCode.TOKEN_REFRESH_FAILED]: 401,
+  [ApiClientErrorCode.NOT_INITIALIZED]: 500,
+  [ApiClientErrorCode.CONFIG_ERROR]: 500,
+  [ApiClientErrorCode.UNKNOWN]: 500,
+}
+
 /**
  * Api Client 错误
  */

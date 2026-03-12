@@ -31,3 +31,17 @@ export const CapacitorErrorCode = {
 } as const
 
 export type CapacitorErrorCodeType = (typeof CapacitorErrorCode)[keyof typeof CapacitorErrorCode]
+
+/** Capacitor 错误码 → HTTP 状态码映射 */
+export const CapacitorErrorHttpStatus: Record<number, number> = {
+  [CapacitorErrorCode.INIT_FAILED]: 500,
+  [CapacitorErrorCode.NOT_AVAILABLE]: 400,
+  [CapacitorErrorCode.NOT_INITIALIZED]: 500,
+  [CapacitorErrorCode.PREFERENCES_GET_FAILED]: 500,
+  [CapacitorErrorCode.PREFERENCES_SET_FAILED]: 500,
+  [CapacitorErrorCode.PREFERENCES_REMOVE_FAILED]: 500,
+  [CapacitorErrorCode.DEVICE_INFO_FAILED]: 500,
+  [CapacitorErrorCode.PUSH_REGISTER_FAILED]: 500,
+  [CapacitorErrorCode.CAMERA_FAILED]: 500,
+  [CapacitorErrorCode.STATUS_BAR_FAILED]: 500,
+}
