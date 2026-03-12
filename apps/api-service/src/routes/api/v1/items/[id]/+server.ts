@@ -34,7 +34,7 @@ async function clearListCache(): Promise<void> {
  * GET /api/v1/items/:id — 获取单个 item
  */
 export const GET = kit.handler(async ({ params }) => {
-  const { id } = kit.validate.paramsOrFail(params, IdParamSchema)
+  const { id } = kit.validate.params(params, IdParamSchema)
 
   // 尝试缓存
   const cacheKey = `${CACHE_PREFIX}:${id}`
@@ -59,8 +59,8 @@ export const GET = kit.handler(async ({ params }) => {
  * PUT /api/v1/items/:id — 更新 item
  */
 export const PUT = kit.handler(async ({ params, request }) => {
-  const { id } = kit.validate.paramsOrFail(params, IdParamSchema)
-  const updates = await kit.validate.formOrFail(request, UpdateItemSchema)
+  const { id } = kit.validate.params(params, IdParamSchema)
+  const updates = await kit.validate.body(request, UpdateItemSchema)
 
   const existing = await reldb.sql.get<Record<string, unknown>>('SELECT * FROM items WHERE id = ?', [id])
   if (!existing.success) {
@@ -109,7 +109,7 @@ export const PUT = kit.handler(async ({ params, request }) => {
  * DELETE /api/v1/items/:id — 删除 item
  */
 export const DELETE = kit.handler(async ({ params }) => {
-  const { id } = kit.validate.paramsOrFail(params, IdParamSchema)
+  const { id } = kit.validate.params(params, IdParamSchema)
 
   const existing = await reldb.sql.get<Record<string, unknown>>('SELECT * FROM items WHERE id = ?', [id])
   if (!existing.success) {

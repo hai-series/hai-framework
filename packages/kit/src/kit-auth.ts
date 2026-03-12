@@ -1,15 +1,43 @@
 /**
  * @h-ai/kit — Bearer 认证工具
  *
- * 提供服务端 Cookie / Bearer Token 管理与浏览器端 Token 存储工具。
+ * 提供服务端认证 Cookie 管理（login / logout）与浏览器端 Token 存储工具。
  * @module kit-auth
  */
 
+import type { Result } from '@h-ai/core'
+import type { AuthResult, IamError, LdapCredentials, OtpCredentials, PasswordCredentials, RegisterOptions } from '@h-ai/iam'
 import type { HandleFetch } from '@sveltejs/kit'
+import type { AuthOperations } from './kit-types.js'
 import process from 'node:process'
 
-/** 固定 Access Token 名（Cookie 与浏览器存储统一） */
-export const ACCESS_TOKEN_KEY = 'hai_access_token'
+/** 默认 Token Cookie 名 */
+const DEFAULT_TOKEN_COOKIE_NAME = 'hai_access_token'
+
+/** 模块级 Token Cookie 名（可通过 configureAuth 或 createHandle auth.cookieName 配置） */
+let tokenCookieName = DEFAULT_TOKEN_COOKIE_NAME
+
+/** 模块级认证操作（由 createHandle auth.operations 注入） */
+let authOperations: AuthOperations | null = null
+
+/**
+ * 配置认证参数
+ *
+ * 通常由 `createHandle` 在初始化时自动调用，无需手动调用。
+ */
+export function configureAuth(config: { cookieName?: string, operations?: AuthOperations }): void {
+  if (config.cookieName)
+    tokenCookieName = config.cookieName
+  if (config.operations)
+    authOperations = config.operations
+}
+
+/**
+ * 获取当前配置的 Token Cookie 名
+ */
+export function getTokenCookieName(): string {
+  return tokenCookieName
+}
 
 interface CookieReader {
   get: (name: string) => string | undefined
@@ -33,7 +61,7 @@ export interface BrowserTokenStore {
   clear: () => void
 }
 
-const defaultBrowserTokenStore = createBrowserTokenStore()
+const defaultBrowserTokenStore = createTokenStore()
 
 // ─── 内部工具（仅 kit 包内使用） ───
 
@@ -57,40 +85,168 @@ export function getBearerTokenFromRequest(request: Request): string | null {
 }
 
 /**
- * 从请求中统一提取 Access Token（Bearer 优先，其次固定 Cookie）。
+ * 从请求中统一提取 Access Token（Bearer 优先，其次配置的 Cookie 名）。
  */
 export function getAccessToken(request: Request, cookies?: CookieReader): string | null {
-  return getBearerTokenFromRequest(request) ?? cookies?.get(ACCESS_TOKEN_KEY) ?? null
+  return getBearerTokenFromRequest(request) ?? cookies?.get(tokenCookieName) ?? null
 }
 
-// ─── 服务端 Cookie 管理（通过 kit.auth 暴露） ───
+// ─── 服务端认证 Cookie 管理 ───
 
 /**
- * 写入固定名 Access Token Cookie。
+ * 写入 Access Token Cookie（内部使用，由 login 自动调用）。
  */
-export function setAccessTokenCookie(cookies: CookieWriter, token: string, options?: { maxAge?: number }): void {
-  cookies.set(ACCESS_TOKEN_KEY, token, {
+function setToken(cookies: CookieWriter, token: string, maxAge?: number): void {
+  cookies.set(tokenCookieName, token, {
     path: '/',
     httpOnly: true,
     sameSite: 'lax',
     secure: process.env.NODE_ENV === 'production',
-    maxAge: options?.maxAge,
+    maxAge,
   })
 }
 
 /**
- * 清理固定名 Access Token Cookie。
+ * 清除 Access Token Cookie（内部使用，由 logout 自动调用）。
  */
-export function clearAccessTokenCookie(cookies: CookieWriter): void {
-  cookies.delete(ACCESS_TOKEN_KEY, { path: '/' })
+function clearToken(cookies: CookieWriter): void {
+  cookies.delete(tokenCookieName, { path: '/' })
+}
+
+// ─── 服务端高级认证 API（通过 kit.auth 暴露） ───
+
+/**
+ * 获取已注入的认证操作（未配置时抛出编程错误）
+ */
+function getAuthOperations(): AuthOperations {
+  if (!authOperations) {
+    throw new Error('kit.auth 未配置：请在 kit.createHandle() 中传入 auth.operations')
+  }
+  return authOperations
+}
+
+/**
+ * 内部工具：执行认证操作并在成功时写入 Token Cookie。
+ */
+async function executeLogin(
+  cookies: CookieWriter,
+  authPromise: Promise<Result<AuthResult, IamError>>,
+): Promise<Result<AuthResult, IamError>> {
+  const result = await authPromise
+  if (result.success) {
+    setToken(cookies, result.data.tokens.accessToken, result.data.tokens.expiresIn)
+  }
+  return result
+}
+
+/**
+ * 服务端登录（密码）：内部调用 iam.auth.login，成功时自动写入 Token Cookie。
+ *
+ * @param cookies - SvelteKit cookies 对象
+ * @param credentials - 密码凭证（identifier + password）
+ * @returns 认证结果（成功时 Cookie 已自动写入）
+ *
+ * @example
+ * ```ts
+ * const result = await kit.auth.login(cookies, { identifier, password })
+ * if (!result.success) return kit.response.fromError(result.error, IamErrorHttpStatus)
+ * const { user, roles, permissions } = result.data
+ * ```
+ */
+export async function login(
+  cookies: CookieWriter,
+  credentials: PasswordCredentials,
+): Promise<Result<AuthResult, IamError>> {
+  return executeLogin(cookies, getAuthOperations().login(credentials))
+}
+
+/**
+ * 服务端登录（OTP 验证码）：内部调用 iam.auth.loginWithOtp，成功时自动写入 Token Cookie。
+ *
+ * @param cookies - SvelteKit cookies 对象
+ * @param credentials - OTP 凭证（identifier + code）
+ * @returns 认证结果（成功时 Cookie 已自动写入）
+ *
+ * @example
+ * ```ts
+ * const result = await kit.auth.loginWithOtp(cookies, { identifier, code })
+ * ```
+ */
+export async function loginWithOtp(
+  cookies: CookieWriter,
+  credentials: OtpCredentials,
+): Promise<Result<AuthResult, IamError>> {
+  return executeLogin(cookies, getAuthOperations().loginWithOtp(credentials))
+}
+
+/**
+ * 服务端登录（LDAP）：内部调用 iam.auth.loginWithLdap，成功时自动写入 Token Cookie。
+ *
+ * @param cookies - SvelteKit cookies 对象
+ * @param credentials - LDAP 凭证（username + password）
+ * @returns 认证结果（成功时 Cookie 已自动写入）
+ *
+ * @example
+ * ```ts
+ * const result = await kit.auth.loginWithLdap(cookies, { username, password })
+ * ```
+ */
+export async function loginWithLdap(
+  cookies: CookieWriter,
+  credentials: LdapCredentials,
+): Promise<Result<AuthResult, IamError>> {
+  return executeLogin(cookies, getAuthOperations().loginWithLdap(credentials))
+}
+
+/**
+ * 服务端注册并登录：内部调用 iam.auth.registerAndLogin，成功时自动写入 Token Cookie。
+ *
+ * @param cookies - SvelteKit cookies 对象
+ * @param options - 注册选项（username、password、email 等）
+ * @returns 认证结果（成功时 Cookie 已自动写入）
+ *
+ * @example
+ * ```ts
+ * const result = await kit.auth.registerAndLogin(cookies, { username, email, password })
+ * ```
+ */
+export async function registerAndLogin(
+  cookies: CookieWriter,
+  options: RegisterOptions,
+): Promise<Result<AuthResult, IamError>> {
+  return executeLogin(cookies, getAuthOperations().registerAndLogin(options))
+}
+
+/**
+ * 服务端登出：内部调用 iam.auth.logout 使会话失效，并清除 Token Cookie。
+ *
+ * @param cookies - SvelteKit cookies 对象
+ * @param accessToken - 访问令牌（为 null/undefined 时仅清除 Cookie）
+ *
+ * @example
+ * ```ts
+ * await kit.auth.logout(cookies, locals.accessToken)
+ * return kit.response.ok(null)
+ * ```
+ */
+export async function logout(
+  cookies: CookieWriter,
+  accessToken?: string | null,
+): Promise<void> {
+  if (accessToken) {
+    await getAuthOperations().logout(accessToken)
+  }
+  clearToken(cookies)
 }
 
 // ─── 浏览器端 Token 存储（通过 kit.auth 暴露） ───
 
 /**
  * 创建浏览器端 Token 存储器（localStorage）。
+ *
+ * @param key - localStorage 键名，默认 `'hai_access_token'`
  */
-export function createBrowserTokenStore(key = ACCESS_TOKEN_KEY): BrowserTokenStore {
+export function createTokenStore(key = DEFAULT_TOKEN_COOKIE_NAME): BrowserTokenStore {
   return {
     get(): string | null {
       if (typeof window === 'undefined') {
@@ -114,16 +270,16 @@ export function createBrowserTokenStore(key = ACCESS_TOKEN_KEY): BrowserTokenSto
 }
 
 /**
- * 写入浏览器端 Access Token（固定 key）。
+ * 写入浏览器端 Access Token。
  */
-export function setBrowserAccessToken(token: string): void {
+export function setBrowserToken(token: string): void {
   defaultBrowserTokenStore.set(token)
 }
 
 /**
- * 清除浏览器端 Access Token（固定 key）。
+ * 清除浏览器端 Access Token。
  */
-export function clearBrowserAccessToken(): void {
+export function clearBrowserToken(): void {
   defaultBrowserTokenStore.clear()
 }
 
@@ -132,7 +288,7 @@ export function clearBrowserAccessToken(): void {
 /**
  * 创建浏览器端同源请求自动附加 Access Token 的 HandleFetch。
  */
-export function createHandleFetch(tokenStore: BrowserTokenStore = createBrowserTokenStore()): HandleFetch {
+export function createHandleFetch(tokenStore: BrowserTokenStore = createTokenStore()): HandleFetch {
   return async ({ event, request, fetch }) => {
     const requestUrl = new URL(request.url)
     if (requestUrl.origin !== event.url.origin)

@@ -8,7 +8,7 @@
  * - loginWithOtp / loginWithLdap：无策略时应返回 STRATEGY_NOT_SUPPORTED
  * - sendOtp：无策略时应返回 STRATEGY_NOT_SUPPORTED
  * - login 禁用配置：关闭密码登录后应返回 LOGIN_DISABLED
- * - verifyToken：有效/无效/空令牌、登出后令牌验证、Session 含 roleCodes/permissionCodes/displayName
+ * - verifyToken：有效/无效/空令牌、登出后令牌验证、Session 含 roles/permissions/displayName
  * - logout：正常登出、令牌失效、重复登出、不存在令牌幂等
  * - logout 吊销 refreshToken：登出后 refreshToken 不可用
  * - 禁用用户登录：register(defaultEnabled:false) → login 应返回 USER_DISABLED
@@ -176,11 +176,11 @@ describe('iam.auth', () => {
     })
 
     // =========================================================================
-    // verifyToken 会话字段（roleCodes / permissionCodes / displayName）
+    // verifyToken 会话字段（roles / permissions / displayName）
     // =========================================================================
 
     describe('verifyToken session fields', () => {
-      it('有效令牌应返回 Session 含 roleCodes / permissionCodes', async () => {
+      it('有效令牌应返回 Session 含 roles / permissions', async () => {
         await registerUser('auth_resolve_user')
         const loginResult = await getIam().auth.login({
           identifier: 'auth_resolve_user',
@@ -195,8 +195,8 @@ describe('iam.auth', () => {
         if (result.success) {
           expect(result.data.userId).toBeTruthy()
           expect(result.data.username).toBe('auth_resolve_user')
-          expect(Array.isArray(result.data.roleCodes)).toBe(true)
-          expect(Array.isArray(result.data.permissionCodes)).toBe(true)
+          expect(Array.isArray(result.data.roles)).toBe(true)
+          expect(Array.isArray(result.data.permissions)).toBe(true)
         }
       })
 

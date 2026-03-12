@@ -36,7 +36,7 @@ async function clearListCache(): Promise<void> {
  * GET /api/v1/items — 分页查询 items
  */
 export const GET = kit.handler(async ({ url }) => {
-  const { page, pageSize, search } = kit.validate.queryOrFail(url, ListQuerySchema)
+  const { page, pageSize, search } = kit.validate.query(url, ListQuerySchema)
 
   // 无搜索条件时尝试缓存
   if (!search) {
@@ -82,7 +82,7 @@ export const GET = kit.handler(async ({ url }) => {
  * POST /api/v1/items — 创建 item
  */
 export const POST = kit.handler(async ({ request }) => {
-  const { name, description } = await kit.validate.formOrFail(request, CreateItemSchema)
+  const { name, description } = await kit.validate.body(request, CreateItemSchema)
 
   const id = core.id.generate()
   const now = new Date().toISOString()

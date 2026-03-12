@@ -8,7 +8,6 @@ import type { Handle } from '@sveltejs/kit'
 import { paraglideMiddleware } from '$lib/paraglide/server.js'
 import { initApp } from '$lib/server/init.js'
 import { getPartnerAdminSessionByToken } from '$lib/server/partner-service.js'
-import { core } from '@h-ai/core'
 import { kit } from '@h-ai/kit'
 
 let appInitPromise: Promise<void> | null = null
@@ -70,68 +69,14 @@ async function validateSession(token: string) {
 // =============================================================================
 
 const haiHandle = kit.createHandle({
-  validateSession,
-  middleware: [
-    kit.middleware.logging({ logBody: false }),
-    kit.middleware.rateLimit({ windowMs: 60000, maxRequests: 120 }),
-  ],
-  guards: [
-    {
-      guard: async (event, session) => {
-        if (session) {
-          return { allowed: true }
-        }
-
-        const token = event.cookies.get('corp_partner_access_token')
-        if (!token) {
-          const returnUrl = encodeURIComponent(event.url.pathname + event.url.search)
-          return { allowed: false, redirect: `/partners/admin/login?returnUrl=${returnUrl}` }
-        }
-
-        const recoveredSession = await validateSession(token)
-        if (!recoveredSession) {
-          const returnUrl = encodeURIComponent(event.url.pathname + event.url.search)
-          return { allowed: false, redirect: `/partners/admin/login?returnUrl=${returnUrl}` }
-        }
-
-        const sessionLocals = event.locals as unknown as Record<string, unknown>
-        sessionLocals.session = recoveredSession
-        return { allowed: true }
-      },
-      paths: ['/partners/admin', '/partners/admin/*'],
-      exclude: ['/partners/admin/login'],
-    },
-    {
-      guard: async (event, session) => {
-        if (session) {
-          return { allowed: true }
-        }
-
-        const token = event.cookies.get('corp_partner_access_token')
-        if (!token) {
-          return { allowed: false, status: 401, message: 'Unauthorized' }
-        }
-
-        const recoveredSession = await validateSession(token)
-        if (!recoveredSession) {
-          return { allowed: false, status: 401, message: 'Unauthorized' }
-        }
-
-        const sessionLocals = event.locals as unknown as Record<string, unknown>
-        sessionLocals.session = recoveredSession
-        return { allowed: true }
-      },
-      paths: ['/api/partners/admin/*'],
-      exclude: ['/api/partners/admin/login'],
-    },
-  ],
-  onError: (error: unknown) => {
-    core.logger.error('Request error:', { error })
-    return new Response(
-      JSON.stringify({ success: false, error: { code: 'INTERNAL_ERROR', message: 'An error occurred' } }),
-      { status: 500, headers: { 'Content-Type': 'application/json' } },
-    )
+  auth: {
+    verifyToken: validateSession,
+    cookieName: 'corp_partner_access_token',
+    loginUrl: '/partners/admin/login',
+    protectedPaths: ['/partners/admin', '/partners/admin/*', '/api/partners/admin/*'],
+    publicPaths: ['/partners/admin/login', '/api/partners/admin/login'],
   },
+  rateLimit: { windowMs: 60000, maxRequests: 120 },
 })
 
 export const handle: Handle = kit.sequence(i18nHandle, haiHandle)

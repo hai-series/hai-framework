@@ -18,6 +18,8 @@ declare global {
       requestId: string
       /** 当前语言 */
       locale?: string
+      /** 原始 Access Token（由 createHandle 注入） */
+      accessToken?: string
       /** 用户会话 */
       session?: {
         userId: string

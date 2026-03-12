@@ -123,7 +123,7 @@ export function matchPermission(required: string, userPermissions: string[]): bo
  *
  * @example
  * ```ts
- * if (kit.guard.hasPermission(locals.session, 'user:read')) {
+ * if (kit.guard.check(locals.session, 'user:read')) {
  *   // 有权限
  * }
  * ```
@@ -190,7 +190,7 @@ export function assertPermission(
  * @example
  * ```ts
  * export const GET = kit.handler(async ({ locals }) => {
- *   kit.guard.requirePermission(locals.session, 'user:read')
+ *   kit.guard.require(locals.session, 'user:read')
  *   // 执行到这里说明权限已通过
  *   return kit.response.ok(data)
  * })
@@ -203,5 +203,42 @@ export function requirePermission(
   const denied = assertPermission(session, permission)
   if (denied) {
     throw denied
+  }
+}
+
+/**
+ * 权限守卫高阶函数包装器
+ *
+ * 将权限检查从业务逻辑中提取到装饰层，handler 内部无需关心权限。
+ * 未认证返回 401、无权限返回 403（均通过 SvelteKit throw 控制流抛出）。
+ *
+ * 适用于 page load、API handler 等所有 SvelteKit server 函数。
+ *
+ * @param permission - 需要的权限码，如 `'user:read'`
+ * @param handler - 原始处理函数
+ * @returns 包装后的处理函数（签名不变）
+ *
+ * @example
+ * ```ts
+ * // +page.server.ts
+ * export const load = kit.guard.withPermission('user:read', async ({ locals }) => {
+ *   const result = await iam.user.listUsers()
+ *   return { users: result.success ? result.data.items : [] }
+ * })
+ *
+ * // +server.ts (API handler)
+ * export const GET = kit.handler(kit.guard.withPermission('user:list', async ({ locals }) => {
+ *   const result = await iam.user.listUsers()
+ *   return kit.response.ok(result.data)
+ * }))
+ * ```
+ */
+export function withPermission<TEvent extends { locals: Record<string, unknown> }, TReturn>(
+  permission: string,
+  handler: (event: TEvent) => Promise<TReturn>,
+): (event: TEvent) => Promise<TReturn> {
+  return async (event: TEvent) => {
+    requirePermission(event.locals.session as SessionLike | undefined, permission)
+    return handler(event)
   }
 }

@@ -5,9 +5,18 @@
  * @module kit-types
  */
 
+import type { IamAuthnFunctions } from '@h-ai/iam'
 import type { RequestEvent } from '@sveltejs/kit'
 import type { RateLimitStore } from './middleware/kit-ratelimit.js'
 import type { TransportCryptoServiceLike } from './modules/crypto/kit-crypto-types.js'
+
+/**
+ * kit.auth 认证操作（由 createHandle auth.operations 注入）
+ *
+ * 注入后，kit.auth.login / kit.auth.logout 等函数自动委托到 iam.auth 对应方法。
+ * 传入 `iam.auth` 即可，kit 会自动提取所需方法。
+ */
+export type AuthOperations = Pick<IamAuthnFunctions, 'login' | 'loginWithOtp' | 'loginWithLdap' | 'registerAndLogin' | 'logout'>
 
 /**
  * 会话数据最小接口
@@ -172,48 +181,112 @@ export interface GuardConfig {
 }
 
 /**
- * Hook 配置
+ * 认证配置
  *
- * 传给 `kit.createHandle()` 的完整配置。
- * 执行顺序：会话解析 → guards → middleware → resolve。
+ * 在 `HandleConfig.auth` 中使用，自动完成：
+ * 1. 从 Bearer header / Cookie 提取 Token
+ * 2. 调用 verifyToken 恢复会话
+ * 3. 根据 protectedPaths / publicPaths 自动生成路由守卫
+ *
+ * API 路径（以 `/api/` 开头）未认证时返回 401 JSON；
+ * 非 API 路径未认证时重定向到 `loginUrl`（若配置）或返回 401。
  *
  * @example
  * ```ts
  * kit.createHandle({
- *   logging: true,
- *   middleware: [kit.middleware.cors()],
- *   guards: [{ guard: kit.guard.auth(), paths: ['/api/*'] }],
+ *   auth: {
+ *     verifyToken: validateSession,
+ *     loginUrl: '/auth/login',
+ *     protectedPaths: ['/admin/*', '/api/*'],
+ *     publicPaths: ['/api/auth/*', '/api/public/*'],
+ *   },
  * })
  * ```
  */
-export interface HookConfig {
-  /** 会话验证函数（从 Bearer Token 验证会话） */
-  validateSession?: (token: string) => Promise<SessionData | null>
-  /** 中间件列表 */
-  middleware?: Middleware[]
-  /** 守卫列表 */
-  guards?: GuardConfig[]
-  /** 错误处理 */
-  onError?: (error: unknown, event: RequestEvent) => Response | Promise<Response>
+export interface HandleAuthConfig {
+  /** 令牌验证函数，返回 SessionData 或 null */
+  verifyToken: (token: string) => Promise<SessionData | null>
+  /** 认证操作（传入 iam.auth 即可，启用 kit.auth.login / logout 等高级 API） */
+  operations?: AuthOperations
+  /** 未认证时 UI 路由重定向地址（如 `'/auth/login'`） */
+  loginUrl?: string
+  /** Token Cookie 名（默认 `'hai_access_token'`） */
+  cookieName?: string
+  /** 需要认证的路径（支持 `/*` `/**` 通配符） */
+  protectedPaths?: string[]
+  /** 免认证的路径（优先于 protectedPaths） */
+  publicPaths?: string[]
+}
+
+/**
+ * Handle Hook 配置
+ *
+ * 传给 `kit.createHandle()` 的配置。
+ *
+ * 自动完成：
+ * 1. 生成 requestId 并注入 `event.locals`
+ * 2. 根据 `auth` 配置解析会话
+ * 3. 执行路由守卫
+ * 4. 执行中间件链（logging / rateLimit / 自定义）
+ * 5. 调用 resolve + 附加 `X-Request-Id` 响应头
+ *
+ * @example
+ * ```ts
+ * kit.createHandle({
+ *   auth: {
+ *     verifyToken: validateSession,
+ *     loginUrl: '/auth/login',
+ *     protectedPaths: ['/admin/*', '/api/*'],
+ *     publicPaths: ['/api/auth/*'],
+ *   },
+ *   rateLimit: { maxRequests: 100 },
+ *   crypto: { crypto, transport: true },
+ * })
+ * ```
+ */
+export interface HandleConfig {
   /**
-   * 请求生命周期日志
+   * 认证配置
    *
-   * 为 `true` 时在 handle 层面记录请求开始/结束日志。
-   * 注意：若同时使用 `kit.middleware.logging()`，建议将此项设为 `false` 以避免重复日志。
-   * 默认 `false`。
+   * 提供后自动完成 Token 解析、会话恢复、路由守卫等。
+   * 不提供则不做认证处理。
    */
-  logging?: boolean
+  auth?: HandleAuthConfig
+  /**
+   * 速率限制配置
+   *
+   * 提供对象启用速率限制；设为 `false` 显式禁用。
+   * 不提供则不开启速率限制。
+   */
+  rateLimit?: { windowMs?: number, maxRequests?: number } | false
+  /**
+   * 请求日志配置
+   *
+   * - `true`（默认）：启用日志中间件
+   * - `{ logBody: true }`：启用并记录请求体
+   * - `false`：禁用日志
+   */
+  logging?: boolean | { logBody?: boolean }
   /**
    * 加密配置（传输加密 + Cookie 加密）
    *
    * 启用后 kit 自动在 Handle 中完成：
    * - 传输加密：请求体解密 / 响应体加密 / 密钥交换端点
    * - Cookie 加密：对指定 Cookie 的 get/set 自动 AES 加解密
-   *
-   * 应用层业务代码无需感知加密细节。
    */
   crypto?: HookCryptoConfig
+  /** 自定义错误处理（不提供则使用内置的 500 JSON 响应） */
+  onError?: (error: unknown, event: RequestEvent) => Response | Promise<Response>
+  /** 自定义守卫（在 auth 自动守卫之后执行） */
+  guards?: GuardConfig[]
+  /** 自定义中间件（在内置 logging / rateLimit 之后执行） */
+  middleware?: Middleware[]
 }
+
+/**
+ * @deprecated 使用 HandleConfig
+ */
+export type HookConfig = HandleConfig
 
 /**
  * 传输加密详细配置

@@ -10,7 +10,6 @@ import type { Handle } from '@sveltejs/kit'
 import process from 'node:process'
 import { paraglideMiddleware } from '$lib/paraglide/server.js'
 import { initApp } from '$lib/server/init.js'
-import { core } from '@h-ai/core'
 import { crypto } from '@h-ai/crypto'
 import { iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
@@ -123,8 +122,8 @@ async function validateSession(token: string) {
     username: s.username,
     displayName: s.displayName,
     avatarUrl: s.avatarUrl,
-    roles: s.roleCodes,
-    permissions: s.permissionCodes,
+    roles: s.roles,
+    permissions: s.permissions,
   }
 }
 
@@ -132,52 +131,20 @@ async function validateSession(token: string) {
  * hai handle hook
  */
 const haiHandle = kit.createHandle({
-  validateSession,
-  middleware: [
-    kit.middleware.logging({ logBody: false }),
-    kit.middleware.rateLimit({
-      windowMs: 60000, // 1分钟
-      maxRequests: process.env.HAI_E2E === '1' ? 5000 : 100, // E2E 模式放宽限流
-    }),
-  ],
-  guards: [
-    {
-      guard: kit.guard.session({
-        validateSession,
-        loginUrl: '/auth/login',
-      }),
-      paths: ['/admin/*'],
-      exclude: ['/admin/public/*'],
-    },
-    {
-      guard: kit.guard.session({
-        validateSession,
-        apiMode: true,
-      }),
-      paths: ['/api/*'],
-      exclude: ['/api/auth/login', '/api/auth/register', '/api/public/*', '/api/kit/*'],
-    },
-  ],
+  auth: {
+    verifyToken: validateSession,
+    loginUrl: '/auth/login',
+    protectedPaths: ['/admin/*', '/api/*'],
+    publicPaths: ['/admin/public/*', '/api/auth/login', '/api/auth/register', '/api/public/*', '/api/kit/*'],
+    operations: iam.auth,
+  },
+  rateLimit: {
+    windowMs: 60000,
+    maxRequests: process.env.HAI_E2E === '1' ? 5000 : 100,
+  },
   crypto: {
     crypto,
     transport: { requireEncryption: false },
-  },
-  onError: (error: unknown, _event: unknown) => {
-    core.logger.error('Request error:', { error })
-
-    return new Response(
-      JSON.stringify({
-        success: false,
-        error: {
-          code: 'INTERNAL_ERROR',
-          message: 'An unexpected error occurred',
-        },
-      }),
-      {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' },
-      },
-    )
   },
 })
 

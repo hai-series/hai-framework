@@ -15,7 +15,7 @@ const ContactSchema = z.object({
 })
 
 export const POST = kit.handler(async ({ request }) => {
-  const { name, email, message } = await kit.validate.formOrFail(request, ContactSchema)
+  const { name, email, message } = await kit.validate.body(request, ContactSchema)
 
   const reachModule = await import('@h-ai/reach')
     .then(mod => mod.reach)

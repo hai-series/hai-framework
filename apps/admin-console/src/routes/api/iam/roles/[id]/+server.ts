@@ -16,9 +16,9 @@ import { kit } from '@h-ai/kit'
  * 需要权限：role:list
  */
 export const GET = kit.handler(async ({ params, locals }) => {
-  kit.guard.requirePermission(locals.session, 'role:list')
+  kit.guard.require(locals.session, 'role:list')
 
-  const { id } = kit.validate.paramsOrFail(params, IdParamSchema)
+  const { id } = kit.validate.params(params, IdParamSchema)
 
   const role = await roleService.getById(id)
   if (!role) {
@@ -33,10 +33,10 @@ export const GET = kit.handler(async ({ params, locals }) => {
  * 需要权限：role:api:update
  */
 export const PUT = kit.handler(async ({ params, request, locals, getClientAddress }) => {
-  kit.guard.requirePermission(locals.session, 'role:api:update')
+  kit.guard.require(locals.session, 'role:api:update')
 
-  const { id: roleId } = kit.validate.paramsOrFail(params, IdParamSchema)
-  const input = await kit.validate.formOrFail(request, UpdateRoleSchema)
+  const { id: roleId } = kit.validate.params(params, IdParamSchema)
+  const input = await kit.validate.body(request, UpdateRoleSchema)
 
   // 检查角色是否存在
   const existing = await roleService.getById(roleId)
@@ -91,9 +91,9 @@ export const PUT = kit.handler(async ({ params, request, locals, getClientAddres
  * 需要权限：role:api:delete
  */
 export const DELETE = kit.handler(async ({ params, locals, request, getClientAddress }) => {
-  kit.guard.requirePermission(locals.session, 'role:api:delete')
+  kit.guard.require(locals.session, 'role:api:delete')
 
-  const { id: roleId } = kit.validate.paramsOrFail(params, IdParamSchema)
+  const { id: roleId } = kit.validate.params(params, IdParamSchema)
 
   // 检查角色是否存在
   const existing = await roleService.getById(roleId)

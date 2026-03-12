@@ -854,7 +854,7 @@ export async function createDbUserRoleRepository(
 
       const updated = {
         ...sessionResult.data,
-        roleCodes,
+        roles: roleCodes,
       }
 
       const setResult = await cache.kv.set(sessionKey, updated, { ex: ttlResult.data })
@@ -895,7 +895,7 @@ export async function createDbUserRoleRepository(
   /**
    * 将预计算的权限 code 列表同步到用户所有活跃会话
    *
-   * 遍历用户缓存中的所有 session token，更新 permissionCodes 字段，
+   * 遍历用户缓存中的所有 session token，更新 permissions 字段，
    * 同时清理已失效的会话令牌。
    *
    * @param userId - 用户 ID
@@ -930,7 +930,7 @@ export async function createDbUserRoleRepository(
 
       const updated = {
         ...sessionResult.data,
-        permissionCodes,
+        permissions: permissionCodes,
       }
 
       const setResult = await cache.kv.set(sessionKey, updated, { ex: ttlResult.data })

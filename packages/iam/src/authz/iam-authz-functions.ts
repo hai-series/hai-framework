@@ -262,7 +262,7 @@ function createRbacManager(config: RbacManagerConfig): IamAuthzFunctions {
   }
 
   /**
-   * 角色权限变更后，同步所有持有该角色用户的 session permissionCodes
+   * 角色权限变更后，同步所有持有该角色用户的 session permissions
    *
    * 最大努力：单用户同步失败仅记录日志，不阻塞其他用户。
    *
@@ -373,6 +373,67 @@ function createRbacManager(config: RbacManagerConfig): IamAuthzFunctions {
       return result
     },
 
+    async syncRoles(userId: string, roleIds: string[]): Promise<Result<void, IamError>> {
+      const currentResult = await userRoleRepository.getRoles(userId)
+      if (!currentResult.success) {
+        return currentResult as Result<void, IamError>
+      }
+
+      const currentIds = new Set(currentResult.data.map(r => r.id))
+      const targetIds = new Set(roleIds)
+
+      const toRemove = [...currentIds].filter(id => !targetIds.has(id))
+      const toAdd = [...targetIds].filter(id => !currentIds.has(id))
+
+      // 无变化时直接返回
+      if (toRemove.length === 0 && toAdd.length === 0) {
+        return ok(undefined)
+      }
+
+      // 验证新增角色存在性
+      for (const roleId of toAdd) {
+        const existsResult = await roleRepository.existsById(roleId)
+        if (!existsResult.success) {
+          return mapRepositoryError('iam_queryRoleFailed', existsResult.error.message) as Result<void, IamError>
+        }
+        if (!existsResult.data) {
+          return err({ code: IamErrorCode.ROLE_NOT_FOUND, message: iamM('iam_roleNotExist') })
+        }
+      }
+
+      // 批量移除
+      for (const roleId of toRemove) {
+        const result = await userRoleRepository.remove(userId, roleId)
+        if (!result.success) {
+          return result
+        }
+      }
+
+      // 批量添加
+      for (const roleId of toAdd) {
+        const result = await userRoleRepository.assign(userId, roleId)
+        if (!result.success) {
+          return result
+        }
+      }
+
+      logger.info('Roles synced for user', { userId, added: toAdd.length, removed: toRemove.length })
+
+      // 统一同步一次会话权限
+      const permResult = await resolveUserPermissionCodes(userId)
+      if (permResult.success) {
+        const syncResult = await userRoleRepository.syncUserSessionPermissions(userId, permResult.data)
+        if (!syncResult.success) {
+          logger.error('Failed to sync session permissions after syncRoles', { userId, error: syncResult.error.message })
+        }
+      }
+      else {
+        logger.error('Failed to resolve permissions after syncRoles', { userId, error: permResult.error.message })
+      }
+
+      return ok(undefined)
+    },
+
     // ─── 角色管理 ───
 
     async createRole(role): Promise<Result<Role, IamError>> {
@@ -456,7 +517,7 @@ function createRbacManager(config: RbacManagerConfig): IamAuthzFunctions {
       // 角色代码可能变更，强制下次 checkPermission 重新解析超管角色
       superAdminRoleId = undefined
 
-      // 角色代码变更后同步受影响用户的会话 roleCodes（最大努力）
+      // 角色代码变更后同步受影响用户的会话 roles（最大努力）
       const affectedUsersResult = await userRoleRepository.getUserIdsByRoleId(roleId)
       if (affectedUsersResult.success) {
         for (const userId of affectedUsersResult.data) {

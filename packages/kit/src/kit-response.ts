@@ -216,3 +216,70 @@ export function redirect(url: string, status: 301 | 302 | 303 | 307 | 308 = 302)
     headers: { Location: url },
   })
 }
+
+// ─── Result → Response 转换 ───
+
+/**
+ * 将 Result<T, E> 转换为标准 API Response
+ *
+ * 成功时返回 200 ok(data)，失败时从 error 对象中提取 code、message，
+ * 并根据 httpStatusMap 映射 HTTP 状态码（未命中时默认 400）。
+ *
+ * @param result - core Result 对象（{ success, data } 或 { success: false, error }）
+ * @param httpStatusMap - 模块导出的错误码 → HTTP 状态码映射表（如 IamErrorHttpStatus）
+ * @param requestId - 可选请求 ID，用于链路追踪
+ * @returns 标准化 JSON Response
+ *
+ * @example
+ * ```ts
+ * // 无映射（默认 400）
+ * return kit.response.fromResult(result)
+ *
+ * // 带模块错误码映射
+ * return kit.response.fromResult(result, IamErrorHttpStatus)
+ * ```
+ */
+export function fromResult<T>(
+  result: { success: true, data: T } | { success: false, error: { code: number | string, message: string, [key: string]: unknown } },
+  httpStatusMap?: Record<number | string, number>,
+  requestId?: string,
+): Response {
+  if (result.success) {
+    return ok(result.data, requestId)
+  }
+
+  const { code, message } = result.error
+  const status = httpStatusMap?.[code] ?? 400
+  return error(String(code), message, status, requestId)
+}
+
+/**
+ * 将模块错误码映射为标准 HTTP Response（通用）
+ *
+ * 根据各模块导出的 XxErrorHttpStatus 映射表，将模块错误码转换为对应的 HTTP 状态码。
+ * 未命中映射时默认返回 400。
+ *
+ * @param moduleError - 模块错误对象（{ code, message }）
+ * @param httpStatusMap - 模块导出的错误码 → HTTP 状态码映射表（如 IamErrorHttpStatus）
+ * @param requestId - 可选请求 ID，用于链路追踪
+ * @returns 标准化 JSON 错误 Response
+ *
+ * @example
+ * ```ts
+ * import { IamErrorHttpStatus } from '@h-ai/iam'
+ *
+ * const result = await iam.auth.login(credentials)
+ * if (!result.success) {
+ *   return kit.response.fromError(result.error, IamErrorHttpStatus)
+ * }
+ * ```
+ */
+export function fromError(
+  moduleError: { code: number | string, message: string },
+  httpStatusMap: Record<number | string, number>,
+  requestId?: string,
+): Response {
+  const status = httpStatusMap[Number(moduleError.code)] ?? 400
+
+  return error(String(moduleError.code), moduleError.message, status, requestId)
+}

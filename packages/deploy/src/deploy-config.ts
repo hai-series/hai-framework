@@ -58,6 +58,24 @@ export const DeployErrorCode = {
 /** 部署错误码类型 */
 export type DeployErrorCodeType = (typeof DeployErrorCode)[keyof typeof DeployErrorCode]
 
+/** 部署错误码 → HTTP 状态码映射 */
+export const DeployErrorHttpStatus: Record<number, number> = {
+  [DeployErrorCode.DEPLOY_FAILED]: 500,
+  [DeployErrorCode.PROJECT_CREATE_FAILED]: 500,
+  [DeployErrorCode.BUILD_FAILED]: 500,
+  [DeployErrorCode.UPLOAD_FAILED]: 500,
+  [DeployErrorCode.AUTH_REQUIRED]: 401,
+  [DeployErrorCode.AUTH_FAILED]: 401,
+  [DeployErrorCode.PROVISION_FAILED]: 500,
+  [DeployErrorCode.ADAPTER_MISSING]: 500,
+  [DeployErrorCode.SCAN_FAILED]: 500,
+  [DeployErrorCode.ENV_VAR_FAILED]: 500,
+  [DeployErrorCode.NOT_INITIALIZED]: 500,
+  [DeployErrorCode.UNSUPPORTED_TYPE]: 400,
+  [DeployErrorCode.CONFIG_ERROR]: 500,
+  [DeployErrorCode.CREDENTIAL_ERROR]: 500,
+}
+
 // ─── Provider 配置 Schema ───
 
 /** Vercel 部署平台配置 */

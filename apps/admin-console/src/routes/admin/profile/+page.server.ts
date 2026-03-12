@@ -29,10 +29,7 @@ export const load: PageServerLoad = async ({ locals }) => {
   }
 
   try {
-    const [userResult, rolesResult] = await Promise.all([
-      iam.user.getUser(userId),
-      iam.authz.getUserRoles(userId),
-    ])
+    const userResult = await iam.user.getUser(userId, { include: ['roles'] })
 
     if (!userResult.success || !userResult.data) {
       return { profile: fallbackProfile }
@@ -46,7 +43,7 @@ export const load: PageServerLoad = async ({ locals }) => {
         display_name: userResult.data.displayName ?? '',
         phone: userResult.data.phone ?? '',
         avatar: userResult.data.avatarUrl ?? '',
-        roles: rolesResult.success ? rolesResult.data.map(role => role.code) : fallbackProfile.roles,
+        roles: userResult.data.roles?.map(role => role.code) ?? fallbackProfile.roles,
       } satisfies ProfileData,
     }
   }

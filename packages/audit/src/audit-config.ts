@@ -48,6 +48,16 @@ export const AuditErrorCode = {
  */
 export type AuditErrorCodeType = (typeof AuditErrorCode)[keyof typeof AuditErrorCode]
 
+/** 审计错误码 → HTTP 状态码映射 */
+export const AuditErrorHttpStatus: Record<number, number> = {
+  [AuditErrorCode.LOG_FAILED]: 500,
+  [AuditErrorCode.QUERY_FAILED]: 500,
+  [AuditErrorCode.CLEANUP_FAILED]: 500,
+  [AuditErrorCode.STATS_FAILED]: 500,
+  [AuditErrorCode.NOT_INITIALIZED]: 500,
+  [AuditErrorCode.CONFIG_ERROR]: 500,
+}
+
 // ─── 初始化配置 ───
 
 /**

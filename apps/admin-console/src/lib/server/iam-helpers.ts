@@ -40,8 +40,10 @@ interface IamUserInput {
  * IAM 用户对象转前端管理列表所需的标准响应格式（含角色）。
  */
 export async function toIamUserResponse(user: IamUserInput) {
-  const rolesResult = await iam.authz.getUserRoles(user.id)
-  const roles = rolesResult.success ? rolesResult.data.map(r => r.code) : []
+  const userResult = await iam.user.getUser(user.id, { include: ['roles'] })
+  const roles = userResult.success && userResult.data?.roles
+    ? userResult.data.roles.map(r => r.code)
+    : []
   return {
     id: user.id,
     username: user.username,

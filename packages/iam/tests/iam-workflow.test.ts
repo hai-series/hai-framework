@@ -165,7 +165,7 @@ describe('iam.workflow', () => {
         const session = await iam.auth.verifyToken(loginResult.data.tokens.accessToken)
         expect(session.success).toBe(true)
         if (session.success) {
-          expect(session.data.roleCodes).toContain('wf_editor')
+          expect(session.data.roles).toContain('wf_editor')
         }
 
         // ⑧ 检查权限：应有 read 和 write，不应有 delete
@@ -267,7 +267,7 @@ describe('iam.workflow', () => {
           expect(hasViewAfterRemoval.data).toBe(false)
       })
 
-      it('权限变更后会话 permissionCodes 实时同步', async () => {
+      it('权限变更后会话 permissions 实时同步', async () => {
         const iam = getIam()
 
         // ① 创建角色和权限
@@ -301,8 +301,8 @@ describe('iam.workflow', () => {
         expect(session1.success).toBe(true)
         if (!session1.success)
           return
-        expect(session1.data.permissionCodes).toContain('wf_sync:a')
-        expect(session1.data.permissionCodes).not.toContain('wf_sync:b')
+        expect(session1.data.permissions).toContain('wf_sync:a')
+        expect(session1.data.permissions).not.toContain('wf_sync:b')
 
         // ⑤ 管理员给角色新增权限 B → 会话实时同步
         await iam.authz.assignPermissionToRole(role.data.id, permB.data.id)
@@ -311,8 +311,8 @@ describe('iam.workflow', () => {
         expect(session2.success).toBe(true)
         if (!session2.success)
           return
-        expect(session2.data.permissionCodes).toContain('wf_sync:a')
-        expect(session2.data.permissionCodes).toContain('wf_sync:b')
+        expect(session2.data.permissions).toContain('wf_sync:a')
+        expect(session2.data.permissions).toContain('wf_sync:b')
 
         // ⑥ 管理员移除权限 A → 会话实时同步
         await iam.authz.removePermissionFromRole(role.data.id, permA.data.id)
@@ -321,11 +321,11 @@ describe('iam.workflow', () => {
         expect(session3.success).toBe(true)
         if (!session3.success)
           return
-        expect(session3.data.permissionCodes).not.toContain('wf_sync:a')
-        expect(session3.data.permissionCodes).toContain('wf_sync:b')
+        expect(session3.data.permissions).not.toContain('wf_sync:a')
+        expect(session3.data.permissions).toContain('wf_sync:b')
       })
 
-      it('删除权限后会话 permissionCodes 实时同步', async () => {
+      it('删除权限后会话 permissions 实时同步', async () => {
         const iam = getIam()
 
         // ① 创建角色和权限
@@ -359,8 +359,8 @@ describe('iam.workflow', () => {
         expect(session1.success).toBe(true)
         if (!session1.success)
           return
-        expect(session1.data.permissionCodes).toContain('wf_delperm:target')
-        expect(session1.data.permissionCodes).toContain('wf_delperm:keep')
+        expect(session1.data.permissions).toContain('wf_delperm:target')
+        expect(session1.data.permissions).toContain('wf_delperm:keep')
 
         // ⑤ 管理员删除权限 → 会话实时同步
         await iam.authz.deletePermission(perm.data.id)
@@ -369,11 +369,11 @@ describe('iam.workflow', () => {
         expect(session2.success).toBe(true)
         if (!session2.success)
           return
-        expect(session2.data.permissionCodes).not.toContain('wf_delperm:target')
-        expect(session2.data.permissionCodes).toContain('wf_delperm:keep')
+        expect(session2.data.permissions).not.toContain('wf_delperm:target')
+        expect(session2.data.permissions).toContain('wf_delperm:keep')
       })
 
-      it('删除角色后会话 permissionCodes 实时同步', async () => {
+      it('删除角色后会话 permissions 实时同步', async () => {
         const iam = getIam()
 
         // ① 创建角色和权限
@@ -404,8 +404,8 @@ describe('iam.workflow', () => {
         expect(session1.success).toBe(true)
         if (!session1.success)
           return
-        expect(session1.data.permissionCodes).toContain('wf_delrole:perm')
-        expect(session1.data.roleCodes).toContain('wf_delrole_role')
+        expect(session1.data.permissions).toContain('wf_delrole:perm')
+        expect(session1.data.roles).toContain('wf_delrole_role')
 
         // ④ 管理员删除角色 → 会话角色和权限都同步
         await iam.authz.deleteRole(role.data.id)
@@ -414,11 +414,11 @@ describe('iam.workflow', () => {
         expect(session2.success).toBe(true)
         if (!session2.success)
           return
-        expect(session2.data.roleCodes).not.toContain('wf_delrole_role')
-        expect(session2.data.permissionCodes).not.toContain('wf_delrole:perm')
+        expect(session2.data.roles).not.toContain('wf_delrole_role')
+        expect(session2.data.permissions).not.toContain('wf_delrole:perm')
       })
 
-      it('分配角色后会话 permissionCodes 实时同步', async () => {
+      it('分配角色后会话 permissions 实时同步', async () => {
         const iam = getIam()
 
         // ① 创建角色和权限并关联
@@ -448,8 +448,8 @@ describe('iam.workflow', () => {
         expect(session1.success).toBe(true)
         if (!session1.success)
           return
-        expect(session1.data.roleCodes).not.toContain('wf_assign_role')
-        expect(session1.data.permissionCodes).not.toContain('wf_assign:perm')
+        expect(session1.data.roles).not.toContain('wf_assign_role')
+        expect(session1.data.permissions).not.toContain('wf_assign:perm')
 
         // ④ 管理员分配角色 → 会话角色和权限都实时同步
         await iam.authz.assignRole(reg.data.user.id, role.data.id)
@@ -458,11 +458,11 @@ describe('iam.workflow', () => {
         expect(session2.success).toBe(true)
         if (!session2.success)
           return
-        expect(session2.data.roleCodes).toContain('wf_assign_role')
-        expect(session2.data.permissionCodes).toContain('wf_assign:perm')
+        expect(session2.data.roles).toContain('wf_assign_role')
+        expect(session2.data.permissions).toContain('wf_assign:perm')
       })
 
-      it('移除角色后会话 permissionCodes 实时失效', async () => {
+      it('移除角色后会话 permissions 实时失效', async () => {
         const iam = getIam()
 
         // ① 创建角色和权限
@@ -493,8 +493,8 @@ describe('iam.workflow', () => {
         expect(session1.success).toBe(true)
         if (!session1.success)
           return
-        expect(session1.data.roleCodes).toContain('wf_rmrole_role')
-        expect(session1.data.permissionCodes).toContain('wf_rmrole:perm')
+        expect(session1.data.roles).toContain('wf_rmrole_role')
+        expect(session1.data.permissions).toContain('wf_rmrole:perm')
 
         // ④ 管理员移除角色 → 会话角色和权限都立即失效
         await iam.authz.removeRole(reg.data.user.id, role.data.id)
@@ -503,11 +503,11 @@ describe('iam.workflow', () => {
         expect(session2.success).toBe(true)
         if (!session2.success)
           return
-        expect(session2.data.roleCodes).not.toContain('wf_rmrole_role')
-        expect(session2.data.permissionCodes).not.toContain('wf_rmrole:perm')
+        expect(session2.data.roles).not.toContain('wf_rmrole_role')
+        expect(session2.data.permissions).not.toContain('wf_rmrole:perm')
       })
 
-      it('修改角色 code 后会话 roleCodes 实时同步', async () => {
+      it('修改角色 code 后会话 roles 实时同步', async () => {
         const iam = getIam()
 
         // ① 创建角色
@@ -531,7 +531,7 @@ describe('iam.workflow', () => {
         expect(session1.success).toBe(true)
         if (!session1.success)
           return
-        expect(session1.data.roleCodes).toContain('wf_updrole_old')
+        expect(session1.data.roles).toContain('wf_updrole_old')
 
         // ④ 管理员修改角色 code → 会话实时同步新 code
         await iam.authz.updateRole(role.data.id, { code: 'wf_updrole_new', name: '已改名角色' })
@@ -540,8 +540,8 @@ describe('iam.workflow', () => {
         expect(session2.success).toBe(true)
         if (!session2.success)
           return
-        expect(session2.data.roleCodes).not.toContain('wf_updrole_old')
-        expect(session2.data.roleCodes).toContain('wf_updrole_new')
+        expect(session2.data.roles).not.toContain('wf_updrole_old')
+        expect(session2.data.roles).toContain('wf_updrole_new')
       })
     })
 

@@ -28,6 +28,23 @@ export const PaymentErrorCode = {
 
 export type PaymentErrorCodeType = (typeof PaymentErrorCode)[keyof typeof PaymentErrorCode]
 
+/** 支付错误码 → HTTP 状态码映射 */
+export const PaymentErrorHttpStatus: Record<number, number> = {
+  [PaymentErrorCode.CREATE_ORDER_FAILED]: 500,
+  [PaymentErrorCode.QUERY_ORDER_FAILED]: 500,
+  [PaymentErrorCode.REFUND_FAILED]: 500,
+  [PaymentErrorCode.CLOSE_ORDER_FAILED]: 500,
+  [PaymentErrorCode.NOT_INITIALIZED]: 500,
+  [PaymentErrorCode.SIGN_FAILED]: 500,
+  [PaymentErrorCode.PROVIDER_NOT_FOUND]: 404,
+  [PaymentErrorCode.INVALID_AMOUNT]: 400,
+  [PaymentErrorCode.NOTIFY_VERIFY_FAILED]: 400,
+  [PaymentErrorCode.NOTIFY_PARSE_FAILED]: 400,
+  [PaymentErrorCode.INVOKE_WEB_FAILED]: 500,
+  [PaymentErrorCode.INVOKE_APP_FAILED]: 500,
+  [PaymentErrorCode.CONFIG_ERROR]: 500,
+}
+
 // ─── 配置 Schema ───
 
 /** 微信支付配置 Schema */

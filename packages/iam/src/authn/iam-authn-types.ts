@@ -9,7 +9,7 @@ import type { Result } from '@h-ai/core'
 import type { AuthStrategyType } from '../iam-config.js'
 import type { IamError } from '../iam-types.js'
 import type { AuthResult, Session } from '../session/iam-session-types.js'
-import type { User } from '../user/iam-user-types.js'
+import type { RegisterOptions, User } from '../user/iam-user-types.js'
 
 // ─── 凭证类型 ───
 
@@ -142,4 +142,15 @@ export interface IamAuthnFunctions {
    * @returns 成功返回验证码过期时间；频率限制返回 OTP_RESEND_TOO_FAST
    */
   sendOtp: (identifier: string) => Promise<Result<{ expiresAt: Date }, IamError>>
+
+  /**
+   * 注册并登录（一站式）
+   *
+   * 先注册用户（含默认角色分配），成功后立即登录并返回令牌。
+   * 注册失败则直接返回注册错误；注册成功但登录失败则返回登录错误。
+   *
+   * @param options - 注册选项（用户名、密码、邮箱等）
+   * @returns 成功返回 AuthResult（用户信息、令牌、协议展示）；失败返回对应错误码
+   */
+  registerAndLogin: (options: RegisterOptions) => Promise<Result<AuthResult, IamError>>
 }

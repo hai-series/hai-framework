@@ -60,6 +60,24 @@ export const VecdbErrorCode = {
 /** 向量数据库错误码类型 */
 export type VecdbErrorCodeType = typeof VecdbErrorCode[keyof typeof VecdbErrorCode]
 
+/** 向量数据库错误码 → HTTP 状态码映射 */
+export const VecdbErrorHttpStatus: Record<number, number> = {
+  [VecdbErrorCode.CONNECTION_FAILED]: 500,
+  [VecdbErrorCode.QUERY_FAILED]: 500,
+  [VecdbErrorCode.COLLECTION_NOT_FOUND]: 404,
+  [VecdbErrorCode.COLLECTION_ALREADY_EXISTS]: 409,
+  [VecdbErrorCode.DIMENSION_MISMATCH]: 400,
+  [VecdbErrorCode.INSERT_FAILED]: 500,
+  [VecdbErrorCode.DELETE_FAILED]: 500,
+  [VecdbErrorCode.UPDATE_FAILED]: 500,
+  [VecdbErrorCode.INDEX_BUILD_FAILED]: 500,
+  [VecdbErrorCode.NOT_INITIALIZED]: 500,
+  [VecdbErrorCode.CONFIG_ERROR]: 500,
+  [VecdbErrorCode.UNSUPPORTED_TYPE]: 400,
+  [VecdbErrorCode.DRIVER_NOT_FOUND]: 500,
+  [VecdbErrorCode.SERIALIZATION_FAILED]: 500,
+}
+
 // ─── 向量数据库类型枚举 ───
 
 /**

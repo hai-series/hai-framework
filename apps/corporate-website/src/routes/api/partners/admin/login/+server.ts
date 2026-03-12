@@ -8,7 +8,7 @@ import {
 import { kit } from '@h-ai/kit'
 
 export const POST = kit.handler(async ({ request, cookies }) => {
-  const { username, password } = await kit.validate.formOrFail(request, PartnerAdminLoginSchema)
+  const { username, password } = await kit.validate.body(request, PartnerAdminLoginSchema)
 
   if (!verifyPartnerAdminCredential(username, password)) {
     return kit.response.error('AUTH_FAILED', 'Invalid username or password', 401)

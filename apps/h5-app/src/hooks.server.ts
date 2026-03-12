@@ -7,7 +7,6 @@
 import type { Handle } from '@sveltejs/kit'
 import { paraglideMiddleware } from '$lib/paraglide/server.js'
 import { initApp } from '$lib/server/init.js'
-import { core } from '@h-ai/core'
 import { iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
 
@@ -61,8 +60,8 @@ async function validateSession(token: string) {
     username: s.username,
     displayName: s.displayName,
     avatarUrl: s.avatarUrl,
-    roles: s.roleCodes,
-    permissions: s.permissionCodes,
+    roles: s.roles,
+    permissions: s.permissions,
   }
 }
 
@@ -71,43 +70,14 @@ async function validateSession(token: string) {
 // =============================================================================
 
 const haiHandle = kit.createHandle({
-  validateSession,
-  middleware: [
-    kit.middleware.logging({ logBody: false }),
-    kit.middleware.rateLimit({ windowMs: 60000, maxRequests: 200 }),
-  ],
-  guards: [
-    {
-      guard: async (event, session) => {
-        if (session) {
-          return { allowed: true }
-        }
-
-        const token = event.cookies.get('h5_access_token')
-        if (!token) {
-          return { allowed: false, status: 401, message: 'Unauthorized' }
-        }
-
-        const recoveredSession = await validateSession(token)
-        if (!recoveredSession) {
-          return { allowed: false, status: 401, message: 'Unauthorized' }
-        }
-
-        const sessionLocals = event.locals as unknown as Record<string, unknown>
-        sessionLocals.session = recoveredSession
-        return { allowed: true }
-      },
-      paths: ['/api/user/*', '/api/vision/*', '/api/upload'],
-      exclude: ['/api/auth/*'],
-    },
-  ],
-  onError: (error: unknown) => {
-    core.logger.error('Request error:', { error })
-    return new Response(
-      JSON.stringify({ success: false, error: { code: 'INTERNAL_ERROR', message: 'An error occurred' } }),
-      { status: 500, headers: { 'Content-Type': 'application/json' } },
-    )
+  auth: {
+    verifyToken: validateSession,
+    cookieName: 'h5_access_token',
+    protectedPaths: ['/api/user/*', '/api/vision/*', '/api/upload'],
+    publicPaths: ['/api/auth/*'],
+    operations: iam.auth,
   },
+  rateLimit: { windowMs: 60000, maxRequests: 200 },
 })
 
 export const handle: Handle = kit.sequence(i18nHandle, haiHandle)

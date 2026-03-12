@@ -4,8 +4,7 @@
  * =============================================================================
  */
 
-import process from 'node:process'
-import { iam } from '@h-ai/iam'
+import { IamErrorHttpStatus } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
 import { z } from 'zod'
 
@@ -15,28 +14,14 @@ const LoginSchema = z.object({
 })
 
 export const POST = kit.handler(async ({ request, cookies }) => {
-  const { identifier, password } = await kit.validate.formOrFail(request, LoginSchema)
+  const { identifier, password } = await kit.validate.body(request, LoginSchema)
 
-  const loginResult = await iam.auth.login({ identifier, password })
+  const loginResult = await kit.auth.login(cookies, { identifier, password })
   if (!loginResult.success) {
-    const code = loginResult.error.code
-    const status = (code === 5001 || code === 5002)
-      ? 401
-      : (code === 5003 || code === 5004)
-          ? 403
-          : 400
-    return kit.response.error('AUTH_FAILED', loginResult.error.message, status)
+    return kit.response.fromError(loginResult.error, IamErrorHttpStatus)
   }
 
   const { user, tokens } = loginResult.data
-
-  cookies.set('h5_access_token', tokens.accessToken, {
-    path: '/',
-    httpOnly: true,
-    sameSite: 'lax',
-    secure: process.env.NODE_ENV === 'production',
-    maxAge: iam.config?.session?.maxAge,
-  })
 
   return kit.response.ok({
     accessToken: tokens.accessToken,

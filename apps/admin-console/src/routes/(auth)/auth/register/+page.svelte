@@ -48,7 +48,7 @@
 
       if (result.success) {
         if (result.data?.accessToken) {
-          kit.auth.setBrowserAccessToken(result.data.accessToken)
+          kit.auth.setBrowserToken(result.data.accessToken)
         }
         goto('/admin')
       } else {

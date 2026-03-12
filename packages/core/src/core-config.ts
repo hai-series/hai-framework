@@ -43,6 +43,19 @@ export const CommonErrorCode = {
 } as const
 export type CommonErrorCodeType = typeof CommonErrorCode[keyof typeof CommonErrorCode]
 
+/** 通用错误码 → HTTP 状态码映射 */
+export const CommonErrorHttpStatus: Record<number, number> = {
+  [CommonErrorCode.UNKNOWN]: 500,
+  [CommonErrorCode.VALIDATION]: 400,
+  [CommonErrorCode.NOT_FOUND]: 404,
+  [CommonErrorCode.UNAUTHORIZED]: 401,
+  [CommonErrorCode.FORBIDDEN]: 403,
+  [CommonErrorCode.CONFLICT]: 409,
+  [CommonErrorCode.INTERNAL]: 500,
+  [CommonErrorCode.TIMEOUT]: 504,
+  [CommonErrorCode.NETWORK]: 502,
+}
+
 /**
  * 配置错误码 (1100-1199)。
  *
@@ -70,6 +83,15 @@ export const ConfigErrorCode = {
   NOT_LOADED: 1104,
 } as const
 export type ConfigErrorCodeType = typeof ConfigErrorCode[keyof typeof ConfigErrorCode]
+
+/** 配置错误码 → HTTP 状态码映射 */
+export const ConfigErrorHttpStatus: Record<number, number> = {
+  [ConfigErrorCode.FILE_NOT_FOUND]: 500,
+  [ConfigErrorCode.PARSE_ERROR]: 500,
+  [ConfigErrorCode.VALIDATION_ERROR]: 500,
+  [ConfigErrorCode.ENV_VAR_MISSING]: 500,
+  [ConfigErrorCode.NOT_LOADED]: 500,
+}
 
 // ─── 环境与基础配置 Schema ───
 

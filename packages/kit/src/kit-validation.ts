@@ -197,7 +197,7 @@ export function validateParams<T extends z.ZodType>(
  * @example
  * ```ts
  * export const POST = kit.handler(async ({ request }) => {
- *   const data = await kit.validate.formOrFail(request, CreateUserSchema)
+ *   const data = await kit.validate.body(request, CreateUserSchema)
  *   // data 类型安全，校验已通过
  * })
  * ```
@@ -227,7 +227,7 @@ export async function validateFormOrFail<T extends z.ZodType>(
  *
  * @example
  * ```ts
- * const query = kit.validate.queryOrFail(event.url, PaginationSchema)
+ * const query = kit.validate.query(event.url, PaginationSchema)
  * ```
  */
 export function validateQueryOrFail<T extends z.ZodType>(
@@ -255,7 +255,7 @@ export function validateQueryOrFail<T extends z.ZodType>(
  *
  * @example
  * ```ts
- * const { id } = kit.validate.paramsOrFail(event.params, IdParamSchema)
+ * const { id } = kit.validate.params(event.params, IdParamSchema)
  * ```
  */
 export function validateParamsOrFail<T extends z.ZodType>(
@@ -282,7 +282,7 @@ export function validateParamsOrFail<T extends z.ZodType>(
  *
  * @example
  * ```ts
- * const { id } = kit.validate.paramsOrFail(event.params, IdParamSchema)
+ * const { id } = kit.validate.params(event.params, IdParamSchema)
  * ```
  */
 export const IdParamSchema = zod.object({
@@ -301,7 +301,7 @@ const MAX_PAGE_SIZE = 100
  * @example
  * ```ts
  * // 直接使用
- * const { page, pageSize, search } = kit.validate.queryOrFail(url, PaginationQuerySchema)
+ * const { page, pageSize, search } = kit.validate.query(url, PaginationQuerySchema)
  *
  * // 扩展业务字段
  * const ListUsersSchema = PaginationQuerySchema.extend({

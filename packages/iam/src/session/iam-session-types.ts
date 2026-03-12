@@ -32,12 +32,20 @@ export interface TokenPair {
 
 /**
  * 认证结果
+ *
+ * 登录/注册成功后返回，包含用户信息、令牌、角色权限等。
+ * `roles` / `permissions` 来源于会话创建时写入的 RBAC 数据，
+ * 调用方无需再通过 `verifyToken` 获取。
  */
 export interface AuthResult {
   /** 用户信息 */
   user: User
   /** 令牌对（替代原来的单个 accessToken） */
   tokens: TokenPair
+  /** 角色 code 列表（登录时从 RBAC 写入） */
+  roles: string[]
+  /** 权限 code 列表（登录时从 RBAC 写入） */
+  permissions: string[]
   /** 协议展示信息（可选） */
   agreements?: AgreementDisplay
 }
@@ -57,9 +65,9 @@ export interface Session {
   /** 头像 URL */
   avatarUrl?: string
   /** 角色 code 列表（登录时写入，用于会话解析） */
-  roleCodes: string[]
+  roles: string[]
   /** 权限 code 列表（登录时写入，用于会话解析） */
-  permissionCodes: string[]
+  permissions: string[]
   /** 来源（如 pc/android/ios） */
   source?: string
   /** 访问令牌 */
@@ -97,9 +105,9 @@ export interface CreateSessionOptions {
   /** 头像 URL */
   avatarUrl?: string
   /** 角色 code 列表 */
-  roleCodes?: string[]
+  roles?: string[]
   /** 权限 code 列表 */
-  permissionCodes?: string[]
+  permissions?: string[]
   /** 来源（如 pc/android/ios） */
   source?: string
   /** 过期时间（秒） */

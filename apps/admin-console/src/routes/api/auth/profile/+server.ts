@@ -8,8 +8,10 @@ import { kit } from '@h-ai/kit'
  * 构造含角色列表的用户响应对象（GET / PUT 共用）。
  */
 async function toUserResponse(user: { id: string, username: string, email?: string | null, displayName?: string | null, phone?: string | null, avatarUrl?: string | null }) {
-  const rolesResult = await iam.authz.getUserRoles(user.id)
-  const roles = rolesResult.success ? rolesResult.data.map(r => r.code) : []
+  const userResult = await iam.user.getUser(user.id, { include: ['roles'] })
+  const roles = userResult.success && userResult.data?.roles
+    ? userResult.data.roles.map(r => r.code)
+    : []
   return {
     id: user.id,
     username: user.username,
@@ -53,7 +55,7 @@ export const PUT = kit.handler(async ({ request, locals }) => {
   // session 已由 guard 注入，直接使用 userId
   const userId = locals.session!.userId
 
-  const data = await kit.validate.formOrFail(request, UpdateProfileSchema)
+  const data = await kit.validate.body(request, UpdateProfileSchema)
 
   const username = data?.username?.trim()
   const displayName = data?.display_name?.trim()

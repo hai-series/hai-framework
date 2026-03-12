@@ -6,27 +6,24 @@
  */
 
 import { createKitClient } from './client/kit-client.js'
-import { authGuard, sessionGuard } from './guards/kit-auth.js'
-import { allGuards, anyGuard, conditionalGuard, notGuard } from './guards/kit-compose.js'
-import { assertPermission, hasPermission, permissionGuard, requirePermission } from './guards/kit-permission.js'
-import { roleGuard } from './guards/kit-role.js'
+import { hasPermission, requirePermission } from './guards/kit-permission.js'
 import { createHandle, sequence } from './hooks/kit-handle.js'
 import {
-  clearAccessTokenCookie,
-  clearBrowserAccessToken,
-  createBrowserTokenStore,
+  clearBrowserToken,
   createHandleFetch,
-  setAccessTokenCookie,
-  setBrowserAccessToken,
+  createTokenStore,
+  login,
+  loginWithLdap,
+  loginWithOtp,
+  logout,
+  registerAndLogin,
+  setBrowserToken,
 } from './kit-auth.js'
 import { fromContract } from './kit-contract.js'
 import { handler } from './kit-handler.js'
 import { setAllModulesLocale } from './kit-i18n.js'
-import { badRequest, conflict, created, error, forbidden, internalError, noContent, notFound, ok, redirect, unauthorized, validationError } from './kit-response.js'
-import { IdParamSchema, PaginationQuerySchema, validateForm, validateFormOrFail, validateParams, validateParamsOrFail, validateQuery, validateQueryOrFail } from './kit-validation.js'
-import { corsMiddleware } from './middleware/kit-cors.js'
-import { loggingMiddleware } from './middleware/kit-logging.js'
-import { rateLimitMiddleware } from './middleware/kit-ratelimit.js'
+import { badRequest, conflict, created, error, forbidden, fromError, fromResult, internalError, noContent, notFound, ok, redirect, unauthorized, validationError } from './kit-response.js'
+import { IdParamSchema, PaginationQuerySchema, validateFormOrFail, validateParamsOrFail, validateQueryOrFail } from './kit-validation.js'
 
 /**
  * Kit 模块统一出口。
@@ -37,7 +34,7 @@ import { rateLimitMiddleware } from './middleware/kit-ratelimit.js'
 export const kit = {
   // ─── Handle Hook ───
 
-  /** 创建 SvelteKit Handle Hook */
+  /** 创建 SvelteKit Handle Hook（含 auth / logging / rateLimit 内置配置） */
   createHandle,
   /** 组合多个 Handle */
   sequence,
@@ -49,39 +46,10 @@ export const kit = {
   // ─── 路由守卫 ───
 
   guard: {
-    /** 认证守卫（验证用户是否已登录） */
-    auth: authGuard,
-    /** 会话守卫（自动从 Bearer/Cookie 恢复 session） */
-    session: sessionGuard,
-    /** 角色守卫（验证指定角色） */
-    role: roleGuard,
-    /** 权限守卫（验证指定权限） */
-    permission: permissionGuard,
-    /** 检查会话是否具有指定权限（布尔） */
-    hasPermission,
-    /** 断言权限，不满足时返回 403 Response（用于 API Handler） */
-    assertPermission,
     /** 要求权限，不满足时 throw Response（SvelteKit 控制流） */
-    requirePermission,
-    /** 所有守卫通过（AND 逻辑） */
-    all: allGuards,
-    /** 任一守卫通过（OR 逻辑） */
-    any: anyGuard,
-    /** 取反守卫 */
-    not: notGuard,
-    /** 条件守卫 */
-    conditional: conditionalGuard,
-  },
-
-  // ─── 中间件 ───
-
-  middleware: {
-    /** CORS 中间件 */
-    cors: corsMiddleware,
-    /** 请求日志中间件 */
-    logging: loggingMiddleware,
-    /** 速率限制中间件 */
-    rateLimit: rateLimitMiddleware,
+    require: requirePermission,
+    /** 检查会话是否具有指定权限（布尔） */
+    check: hasPermission,
   },
 
   // ─── API 响应 ───
@@ -111,23 +79,21 @@ export const kit = {
     internalError,
     /** 重定向 */
     redirect,
+    /** 将 Result<T, E> 转为标准 API Response（支持 httpStatusMap） */
+    fromResult,
+    /** 将模块错误码映射为标准 HTTP Response */
+    fromError,
   },
 
   // ─── 验证 ───
 
   validate: {
-    /** 从 Request 解析并验证表单/JSON 数据 */
-    form: validateForm,
-    /** 从 URL 验证查询参数 */
-    query: validateQuery,
-    /** 验证路径参数 */
-    params: validateParams,
-    /** 验证表单/JSON，失败 throw Response（SvelteKit 控制流） */
-    formOrFail: validateFormOrFail,
-    /** 验证查询参数，失败 throw Response（SvelteKit 控制流） */
-    queryOrFail: validateQueryOrFail,
-    /** 验证路径参数，失败 throw Response（SvelteKit 控制流） */
-    paramsOrFail: validateParamsOrFail,
+    /** 验证请求体（JSON/表单），失败 throw Response */
+    body: validateFormOrFail,
+    /** 验证查询参数，失败 throw Response */
+    query: validateQueryOrFail,
+    /** 验证路径参数，失败 throw Response */
+    params: validateParamsOrFail,
     /** 路径参数 id Schema（{id: string}） */
     IdParamSchema,
     /** 通用分页查询 Schema（page / pageSize / search） */
@@ -141,19 +107,25 @@ export const kit = {
     create: createKitClient,
   },
 
-  // ─── Bearer 认证工具 ───
+  // ─── 认证工具 ───
 
   auth: {
-    /** 写入固定名 Access Token Cookie（服务端 login/register 用） */
-    setAccessTokenCookie,
-    /** 清理固定名 Access Token Cookie（服务端 logout 用） */
-    clearAccessTokenCookie,
+    /** 服务端登录（密码）：内部调用 iam.auth.login + 自动写入 Token Cookie */
+    login,
+    /** 服务端登录（OTP 验证码）：内部调用 iam.auth.loginWithOtp + 自动写入 Token Cookie */
+    loginWithOtp,
+    /** 服务端登录（LDAP）：内部调用 iam.auth.loginWithLdap + 自动写入 Token Cookie */
+    loginWithLdap,
+    /** 服务端注册并登录：内部调用 iam.auth.registerAndLogin + 自动写入 Token Cookie */
+    registerAndLogin,
+    /** 服务端登出：内部调用 iam.auth.logout + 清除 Token Cookie */
+    logout,
     /** 写入浏览器端 Access Token（客户端 login/register 用） */
-    setBrowserAccessToken,
+    setBrowserToken,
     /** 清除浏览器端 Access Token（客户端 logout 用） */
-    clearBrowserAccessToken,
-    /** 创建浏览器端 Token 存储器（自定义 key 时使用，如 h5-app） */
-    createBrowserTokenStore,
+    clearBrowserToken,
+    /** 创建浏览器端 Token 存储器（自定义 key 时使用） */
+    createTokenStore,
     /** 创建浏览器端同源请求自动附加 Authorization 的 HandleFetch */
     createHandleFetch,
   },

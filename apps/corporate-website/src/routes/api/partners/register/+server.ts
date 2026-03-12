@@ -2,7 +2,7 @@ import { createPartnerLead, PartnerLeadSchema } from '$lib/server/partner-servic
 import { kit } from '@h-ai/kit'
 
 export const POST = kit.handler(async ({ request }) => {
-  const payload = await kit.validate.formOrFail(request, PartnerLeadSchema)
+  const payload = await kit.validate.body(request, PartnerLeadSchema)
 
   const result = await createPartnerLead(payload)
   if (!result.success) {

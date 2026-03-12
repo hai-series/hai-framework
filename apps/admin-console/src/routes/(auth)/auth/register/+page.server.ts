@@ -11,7 +11,7 @@ import { iam } from '@h-ai/iam'
 import { redirect } from '@sveltejs/kit'
 
 export const load: PageServerLoad = async () => {
-  if (iam.config?.register?.enabled === false) {
+  if (!iam.isRegisterEnabled) {
     redirect(302, '/auth/login')
   }
 }

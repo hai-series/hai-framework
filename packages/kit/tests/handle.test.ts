@@ -68,7 +68,7 @@ describe('createHandle', () => {
 
     const handle = createHandle({
       logging: false,
-      validateSession,
+      auth: { verifyToken: validateSession },
     })
 
     const event = createMockEvent({
@@ -94,7 +94,7 @@ describe('createHandle', () => {
 
     const handle = createHandle({
       logging: false,
-      validateSession,
+      auth: { verifyToken: validateSession },
     })
 
     const event = createMockEvent()

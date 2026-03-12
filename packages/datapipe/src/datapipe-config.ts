@@ -44,6 +44,18 @@ export const DatapipeErrorCode = {
 /** 数据处理错误码类型 */
 export type DatapipeErrorCodeType = typeof DatapipeErrorCode[keyof typeof DatapipeErrorCode]
 
+/** 数据管线错误码 → HTTP 状态码映射 */
+export const DatapipeErrorHttpStatus: Record<number, number> = {
+  [DatapipeErrorCode.CLEAN_FAILED]: 500,
+  [DatapipeErrorCode.CHUNK_FAILED]: 500,
+  [DatapipeErrorCode.TRANSFORM_FAILED]: 500,
+  [DatapipeErrorCode.PIPELINE_FAILED]: 500,
+  [DatapipeErrorCode.CONFIG_ERROR]: 500,
+  [DatapipeErrorCode.EMPTY_INPUT]: 400,
+  [DatapipeErrorCode.UNSUPPORTED_CHUNK_MODE]: 400,
+  [DatapipeErrorCode.MISSING_SEPARATOR]: 400,
+}
+
 // ─── 清洗配置 ───
 
 /**
