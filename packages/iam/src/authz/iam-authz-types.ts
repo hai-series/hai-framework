@@ -100,7 +100,7 @@ export interface UserRole {
 /**
  * 授权子功能接口
  */
-export interface IamAuthzFunctions {
+export interface AuthzOperations {
   /**
    * 检查权限
    *

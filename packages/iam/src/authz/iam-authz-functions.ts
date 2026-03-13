@@ -15,7 +15,7 @@ import type { PermissionRepository } from './iam-authz-repository-permission.js'
 import type { RolePermissionRepository, UserRoleRepository } from './iam-authz-repository-relation.js'
 import type { RoleRepository } from './iam-authz-repository-role.js'
 import type {
-  IamAuthzFunctions,
+  AuthzOperations,
   Permission,
   PermissionQueryOptions,
   Role,
@@ -36,7 +36,7 @@ const logger = core.logger.child({ module: 'iam', scope: 'authz' })
 /**
  * 授权子功能依赖
  */
-export interface IamAuthzFunctionsDeps {
+export interface AuthzOperationsDeps {
   config: IamConfig
   db: ReldbFunctions
   cache: CacheFunctions
@@ -47,7 +47,7 @@ export interface IamAuthzFunctionsDeps {
  *
  * 内部创建 RBAC 所需的存储层，返回授权管理接口。
  */
-export async function createIamAuthzFunctions(deps: IamAuthzFunctionsDeps): Promise<Result<IamAuthzFunctions, IamError>> {
+export async function createAuthzOperations(deps: AuthzOperationsDeps): Promise<Result<AuthzOperations, IamError>> {
   try {
     const { config, db, cache } = deps
 
@@ -109,7 +109,7 @@ interface RbacManagerConfig {
  * @param config - RBAC 配置和存储层依赖
  * @returns 授权管理器接口实现
  */
-function createRbacManager(config: RbacManagerConfig): IamAuthzFunctions {
+function createRbacManager(config: RbacManagerConfig): AuthzOperations {
   const rbacConfig = config.rbacConfig
     ? RbacConfigSchema.parse(config.rbacConfig)
     : RbacConfigSchema.parse({})

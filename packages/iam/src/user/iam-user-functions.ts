@@ -9,20 +9,20 @@ import type { CacheFunctions } from '@h-ai/cache'
 import type { PaginatedResult, Result } from '@h-ai/core'
 import type { ReldbFunctions } from '@h-ai/reldb'
 import type { PasswordStrategy } from '../authn/password/iam-authn-password-strategy.js'
-import type { IamAuthzFunctions } from '../authz/iam-authz-types.js'
+import type { AuthzOperations } from '../authz/iam-authz-types.js'
 import type { IamConfig, IamErrorCodeType } from '../iam-config.js'
 import type { IamError } from '../iam-types.js'
-import type { IamSessionFunctions } from '../session/iam-session-types.js'
+import type { SessionOperations } from '../session/iam-session-types.js'
 import type { ResetTokenRepository } from './iam-user-repository-reset-token.js'
 import type { UserRepository } from './iam-user-repository-user.js'
 import type {
   AgreementDisplay,
-  IamUserFunctions,
   ListUsersOptions,
   RegisterOptions,
   RegisterResult,
   UpdateCurrentUserInput,
   User,
+  UserOperations,
 } from './iam-user-types.js'
 import { core, err, ok } from '@h-ai/core'
 import { crypto } from '@h-ai/crypto'
@@ -40,13 +40,13 @@ const logger = core.logger.child({ module: 'iam', scope: 'user' })
 /**
  * 用户子功能依赖
  */
-export interface IamUserFunctionsDeps {
+export interface UserOperationsDeps {
   config: IamConfig
   db: ReldbFunctions
   cache: CacheFunctions
   passwordStrategy: PasswordStrategy
-  sessionFunctions: IamSessionFunctions
-  authzFunctions: IamAuthzFunctions
+  sessionFunctions: SessionOperations
+  authzFunctions: AuthzOperations
   /** 密码重置令牌回调（由业务层注入） */
   onPasswordResetRequest?: (user: User, token: string, expiresAt: Date) => Promise<void>
 }
@@ -56,7 +56,7 @@ export interface IamUserFunctionsDeps {
  *
  * 内部创建用户存储，组装用户管理操作接口。
  */
-export async function createIamUserFunctions(deps: IamUserFunctionsDeps): Promise<Result<IamUserFunctions, IamError>> {
+export async function createUserOperations(deps: UserOperationsDeps): Promise<Result<UserOperations, IamError>> {
   try {
     const { config, db, cache, passwordStrategy, sessionFunctions, authzFunctions, onPasswordResetRequest } = deps
 
@@ -94,8 +94,8 @@ interface UserBuilderDeps {
   userRepository: UserRepository
   resetTokenRepository: ResetTokenRepository
   passwordStrategy: PasswordStrategy
-  sessionFunctions: IamSessionFunctions
-  authzFunctions: IamAuthzFunctions
+  sessionFunctions: SessionOperations
+  authzFunctions: AuthzOperations
   config: IamConfig
   onPasswordResetRequest?: (user: User, token: string, expiresAt: Date) => Promise<void>
 }
@@ -103,7 +103,7 @@ interface UserBuilderDeps {
 /**
  * 组装用户操作
  */
-function buildUserFunctions(deps: UserBuilderDeps): IamUserFunctions {
+function buildUserFunctions(deps: UserBuilderDeps): UserOperations {
   const {
     db,
     userRepository,

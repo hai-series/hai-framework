@@ -10,7 +10,7 @@ import type { Result } from '@h-ai/core'
 import type { IamConfig } from '../iam-config.js'
 import type { IamError } from '../iam-types.js'
 import type { SessionMappingRepository } from './iam-session-repository-cache.js'
-import type { CreateSessionOptions, IamSessionFunctions, Session, TokenPair } from './iam-session-types.js'
+import type { CreateSessionOptions, Session, SessionOperations, TokenPair } from './iam-session-types.js'
 import { core, err, ok } from '@h-ai/core'
 import { IamErrorCode, SessionConfigSchema } from '../iam-config.js'
 import { iamM } from '../iam-i18n.js'
@@ -27,7 +27,7 @@ const REFRESH_TOKEN_PREFIX = 'iam:refresh:'
 /**
  * 会话子功能依赖
  */
-export interface IamSessionFunctionsDeps {
+export interface SessionOperationsDeps {
   config: IamConfig
   cache: CacheFunctions
 }
@@ -37,7 +37,7 @@ export interface IamSessionFunctionsDeps {
  *
  * 内部创建缓存会话存储，返回会话管理接口。
  */
-export async function createIamSessionFunctions(deps: IamSessionFunctionsDeps): Promise<Result<IamSessionFunctions, IamError>> {
+export async function createSessionOperations(deps: SessionOperationsDeps): Promise<Result<SessionOperations, IamError>> {
   try {
     const { config, cache } = deps
     const sessionConfig = SessionConfigSchema.parse(config.session ?? {})
@@ -88,7 +88,7 @@ interface SessionBuilderConfig {
 /**
  * 组装会话操作（纯同步，不涉及 I/O，除缓存操作）
  */
-function buildSessionFunctions(config: SessionBuilderConfig): IamSessionFunctions {
+function buildSessionFunctions(config: SessionBuilderConfig): SessionOperations {
   const maxAge = config.maxAge ?? 86400
   const sliding = config.sliding ?? true
   const singleDevice = config.singleDevice ?? false

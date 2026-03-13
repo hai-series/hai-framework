@@ -1,7 +1,7 @@
 /**
  * @h-ai/iam — 会话相关类型定义
  *
- * 包含： - 认证结果（AuthResult） - 会话类型（Session） - 会话子功能接口（IamSessionFunctions）
+ * 包含： - 认证结果（AuthResult） - 会话类型（Session） - 会话子功能接口（SessionOperations）
  * @module iam-session-types
  */
 
@@ -121,7 +121,7 @@ export interface CreateSessionOptions {
 /**
  * 会话子功能接口
  */
-export interface IamSessionFunctions {
+export interface SessionOperations {
   /**
    * 创建会话
    *

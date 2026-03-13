@@ -53,6 +53,14 @@ export const IamErrorCode = {
   REGISTER_DISABLED: 5014,
   /** 认证策略不支持 */
   STRATEGY_NOT_SUPPORTED: 5015,
+  /** API Key 无效 */
+  APIKEY_INVALID: 5016,
+  /** API Key 已过期 */
+  APIKEY_EXPIRED: 5017,
+  /** API Key 已禁用 */
+  APIKEY_DISABLED: 5018,
+  /** API Key 不存在 */
+  APIKEY_NOT_FOUND: 5019,
 
   /** 密码重置令牌无效 */
   RESET_TOKEN_INVALID: 5020,
@@ -115,7 +123,7 @@ export const IamErrorCode = {
   /** 配置错误 */
   CONFIG_ERROR: 5900,
   /** 未初始化 */
-  NOT_INITIALIZED: 5010,
+  NOT_INITIALIZED: 5910,
   /** 内部错误 */
   INTERNAL_ERROR: 5999,
 } as const
@@ -140,6 +148,10 @@ export const IamErrorHttpStatus: Record<number, number> = {
   [IamErrorCode.LOGIN_DISABLED]: 400,
   [IamErrorCode.REGISTER_DISABLED]: 403,
   [IamErrorCode.STRATEGY_NOT_SUPPORTED]: 400,
+  [IamErrorCode.APIKEY_INVALID]: 401,
+  [IamErrorCode.APIKEY_EXPIRED]: 401,
+  [IamErrorCode.APIKEY_DISABLED]: 403,
+  [IamErrorCode.APIKEY_NOT_FOUND]: 404,
   [IamErrorCode.RESET_TOKEN_INVALID]: 400,
   [IamErrorCode.RESET_TOKEN_EXPIRED]: 400,
   [IamErrorCode.RESET_TOKEN_MAX_ATTEMPTS]: 429,
@@ -170,7 +182,7 @@ export const IamErrorHttpStatus: Record<number, number> = {
   [IamErrorCode.INVALID_ARGUMENT]: 400,
   // 系统错误 (5900-5999)
   [IamErrorCode.CONFIG_ERROR]: 500,
-  // NOT_INITIALIZED (5010) 与 OTP_INVALID 共享码值，已在上方映射
+  [IamErrorCode.NOT_INITIALIZED]: 500,
   [IamErrorCode.INTERNAL_ERROR]: 500,
 }
 
@@ -184,7 +196,7 @@ export const IamErrorHttpStatus: Record<number, number> = {
  * - `otp` - 邮箱/短信 + 验证码
  * - `ldap` - LDAP 目录认证
  */
-export const AuthStrategyTypeSchema = z.enum(['password', 'otp', 'ldap'])
+export const AuthStrategyTypeSchema = z.enum(['password', 'otp', 'ldap', 'apikey'])
 
 /** 认证策略类型 */
 export type AuthStrategyType = z.infer<typeof AuthStrategyTypeSchema>
@@ -271,6 +283,21 @@ export const LdapConfigSchema = z.object({
 /** LDAP 配置类型 */
 export type LdapConfig = z.infer<typeof LdapConfigSchema>
 
+/**
+ * API Key 配置 Schema
+ */
+export const ApiKeyConfigSchema = z.object({
+  /** 单用户最大 API Key 数量（默认 10） */
+  maxKeysPerUser: z.number().int().min(1).default(10),
+  /** API Key 默认有效期（天，0 表示永不过期，默认 0） */
+  defaultExpirationDays: z.number().int().min(0).default(0),
+  /** API Key 前缀（默认 'hai_'） */
+  prefix: z.string().default('hai_'),
+})
+
+/** API Key 配置类型 */
+export type ApiKeyConfig = z.infer<typeof ApiKeyConfigSchema>
+
 // ─── 登录/注册与安全策略配置 ───
 
 /** 登录类型启用配置 */
@@ -281,6 +308,8 @@ export const LoginConfigSchema = z.object({
   otp: z.boolean().default(true),
   /** 是否启用 LDAP 登录 */
   ldap: z.boolean().default(true),
+  /** 是否启用 API Key 登录 */
+  apikey: z.boolean().default(false),
 })
 
 export type LoginConfig = z.infer<typeof LoginConfigSchema>
@@ -386,6 +415,9 @@ export const IamConfigSchema = z.object({
   /** LDAP 配置 */
   ldap: LdapConfigSchema.optional(),
 
+  /** API Key 配置 */
+  apikey: ApiKeyConfigSchema.optional(),
+
   /** 密码重置配置 */
   passwordReset: PasswordResetConfigSchema.optional(),
 
@@ -394,6 +426,7 @@ export const IamConfigSchema = z.object({
     password: true,
     otp: true,
     ldap: true,
+    apikey: false,
   }),
 
   /** 注册配置 */

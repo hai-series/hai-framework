@@ -13,12 +13,13 @@ import type { CacheFunctions } from '@h-ai/cache'
 import type { Result } from '@h-ai/core'
 import type { ReldbFunctions } from '@h-ai/reldb'
 
-import type { IamAuthnFunctions } from './authn/iam-authn-types.js'
+import type { ApiKeyOperations } from './authn/apikey/iam-authn-apikey-types.js'
+import type { AuthnOperations } from './authn/iam-authn-types.js'
 import type { LdapClientFactory } from './authn/ldap/iam-authn-ldap-strategy.js'
-import type { IamAuthzFunctions } from './authz/iam-authz-types.js'
+import type { AuthzOperations } from './authz/iam-authz-types.js'
 import type { IamConfig, IamConfigSettingsInput, IamErrorCodeType } from './iam-config.js'
-import type { IamSessionFunctions } from './session/iam-session-types.js'
-import type { IamUserFunctions, User } from './user/iam-user-types.js'
+import type { SessionOperations } from './session/iam-session-types.js'
+import type { User, UserOperations } from './user/iam-user-types.js'
 
 // ─── 错误类型 ───
 
@@ -134,19 +135,22 @@ export interface IamFunctions {
   /** 注册功能是否启用（未初始化或未配置时默认启用） */
   readonly isRegisterEnabled: boolean
   /** 认证操作（登录、登出、令牌验证等） */
-  readonly auth: IamAuthnFunctions
+  readonly auth: AuthnOperations
   /** 用户管理（注册、查询、更新、密码管理等） */
-  readonly user: IamUserFunctions
+  readonly user: UserOperations
   /** 授权管理（角色/权限 CRUD、用户角色分配、权限检查） */
-  readonly authz: IamAuthzFunctions
+  readonly authz: AuthzOperations
   /** 会话管理（创建、查询、验证、删除会话） */
-  readonly session: IamSessionFunctions
+  readonly session: SessionOperations
+  /** API Key 管理（创建、列表、吐销、验证），未启用 apikey 登录时返回未初始化代理 */
+  readonly apiKey: ApiKeyOperations
 }
 
 // ─── 子功能类型 re-export ───
 
-export type { AuthStrategy, Credentials, IamAuthnFunctions, LdapCredentials, OtpCredentials, PasswordCredentials } from './authn/iam-authn-types.js'
+export type { ApiKey, ApiKeyOperations, CreateApiKeyOptions, CreateApiKeyResult } from './authn/apikey/iam-authn-apikey-types.js'
+export type { ApiKeyCredentials, AuthnOperations, AuthStrategy, Credentials, LdapCredentials, OtpCredentials, PasswordCredentials } from './authn/iam-authn-types.js'
 export type { LdapClientFactory } from './authn/ldap/iam-authn-ldap-strategy.js'
-export type { IamAuthzFunctions, Permission, PermissionQueryOptions, PermissionType, Role, RolePermission, UserRole } from './authz/iam-authz-types.js'
-export type { AuthResult, CreateSessionOptions, IamSessionFunctions, Session, SessionData, TokenPair } from './session/iam-session-types.js'
-export type { AgreementDisplay, IamUserFunctions, ListUsersOptions, RegisterOptions, RegisterResult, StoredUser, UpdateCurrentUserInput, User } from './user/iam-user-types.js'
+export type { AuthzOperations, Permission, PermissionQueryOptions, PermissionType, Role, RolePermission, UserRole } from './authz/iam-authz-types.js'
+export type { AuthResult, CreateSessionOptions, Session, SessionData, SessionOperations, TokenPair } from './session/iam-session-types.js'
+export type { AgreementDisplay, ListUsersOptions, RegisterOptions, RegisterResult, StoredUser, UpdateCurrentUserInput, User, UserOperations } from './user/iam-user-types.js'

@@ -9,21 +9,24 @@ import type { CacheFunctions } from '@h-ai/cache'
 import type { Result } from '@h-ai/core'
 import type { ReldbFunctions } from '@h-ai/reldb'
 
-import type { IamAuthzFunctions } from '../authz/iam-authz-types.js'
+import type { AuthzOperations } from '../authz/iam-authz-types.js'
 import type { IamConfig } from '../iam-config.js'
 import type { IamError } from '../iam-types.js'
-import type { AuthResult, IamSessionFunctions, Session } from '../session/iam-session-types.js'
+import type { AuthResult, Session, SessionOperations } from '../session/iam-session-types.js'
 import type { AgreementDisplay, User } from '../user/iam-user-types.js'
-import type { AuthStrategy, Credentials, IamAuthnFunctions, LdapCredentials, OtpCredentials, PasswordCredentials } from './iam-authn-types.js'
+import type { ApiKeyOperations } from './apikey/iam-authn-apikey-types.js'
+import type { ApiKeyCredentials, AuthnOperations, AuthStrategy, Credentials, LdapCredentials, OtpCredentials, PasswordCredentials } from './iam-authn-types.js'
 import type { LdapClientFactory } from './ldap/iam-authn-ldap-strategy.js'
 import type { OtpStrategy } from './otp/iam-authn-otp-strategy.js'
 import type { PasswordStrategy } from './password/iam-authn-password-strategy.js'
 
 import { core, err, ok } from '@h-ai/core'
 
-import { AgreementConfigSchema, IamErrorCode, LoginConfigSchema, OtpConfigSchema, SecurityConfigSchema } from '../iam-config.js'
+import { AgreementConfigSchema, ApiKeyConfigSchema, IamErrorCode, LoginConfigSchema, OtpConfigSchema, SecurityConfigSchema } from '../iam-config.js'
 import { iamM } from '../iam-i18n.js'
 import { createDbUserRepository } from '../user/iam-user-repository-user.js'
+import { createDbApiKeyRepository } from './apikey/iam-authn-apikey-repository.js'
+import { createApiKeyStrategy } from './apikey/iam-authn-apikey-strategy.js'
 import { createLdapStrategy } from './ldap/iam-authn-ldap-strategy.js'
 import { createCacheOtpRepository } from './otp/iam-authn-otp-repository-otp.js'
 import { createOtpStrategy } from './otp/iam-authn-otp-strategy.js'
@@ -36,12 +39,12 @@ const logger = core.logger.child({ module: 'iam', scope: 'authn' })
 /**
  * 认证子功能依赖
  */
-export interface IamAuthnFunctionsDeps {
+export interface AuthnOperationsDeps {
   config: IamConfig
   db: ReldbFunctions
   cache: CacheFunctions
-  sessionFunctions: IamSessionFunctions
-  authzFunctions: IamAuthzFunctions
+  sessionFunctions: SessionOperations
+  authzFunctions: AuthzOperations
   ldapClientFactory?: LdapClientFactory
   ldapSyncUser?: boolean
   /** OTP 邮件发送回调（由业务层注入） */
@@ -55,11 +58,13 @@ export interface IamAuthnFunctionsDeps {
  *
  * 将公共 API 与内部依赖分离，避免将密码策略暴露在公共接口上。
  */
-export interface IamAuthnFunctionsResult {
+export interface AuthnOperationsResult {
   /** 对外暴露的认证操作（不含 registerAndLogin，由 iam-main 组合注入） */
-  authn: Omit<IamAuthnFunctions, 'registerAndLogin'>
+  authn: Omit<AuthnOperations, 'registerAndLogin'>
   /** 密码策略引用（仅供内部 user 子功能复用，对外不可见） */
   passwordStrategy: PasswordStrategy
+  /** API Key 管理操作（仅在启用 apikey 登录时可用） */
+  apiKeyFunctions: ApiKeyOperations | null
 }
 
 /**
@@ -67,7 +72,7 @@ export interface IamAuthnFunctionsResult {
  *
  * 内部创建密码/OTP/LDAP 策略，组装成统一的认证操作接口。
  */
-export async function createIamAuthnFunctions(deps: IamAuthnFunctionsDeps): Promise<Result<IamAuthnFunctionsResult, IamError>> {
+export async function createAuthnOperations(deps: AuthnOperationsDeps): Promise<Result<AuthnOperationsResult, IamError>> {
   try {
     const { config, db, cache, sessionFunctions, authzFunctions, ldapClientFactory, ldapSyncUser, onOtpSendEmail, onOtpSendSms } = deps
 
@@ -128,18 +133,34 @@ export async function createIamAuthnFunctions(deps: IamAuthnFunctionsDeps): Prom
       })
     }
 
+    // API Key 策略
+    let apiKeyStrategy: AuthStrategy | undefined
+    let apiKeyFunctions: ApiKeyOperations | null = null
+    if (loginConfig.apikey) {
+      const apiKeyConfig = config.apikey ? ApiKeyConfigSchema.parse(config.apikey) : undefined
+      const apiKeyRepository = await createDbApiKeyRepository(db)
+      const apiKeyResult = createApiKeyStrategy({
+        apikeyConfig: apiKeyConfig,
+        userRepository,
+        apiKeyRepository,
+      })
+      apiKeyStrategy = apiKeyResult.strategy
+      apiKeyFunctions = apiKeyResult.apiKeyFunctions
+    }
+
     // 组装认证操作
     const operations = buildAuthnOperations({
       passwordStrategy,
       otpStrategy,
       ldapStrategy,
+      apiKeyStrategy,
       sessionFunctions,
       authzFunctions,
       config,
     })
 
     logger.info('Authn sub-feature initialized')
-    return ok({ authn: operations, passwordStrategy })
+    return ok({ authn: operations, passwordStrategy, apiKeyFunctions })
   }
   catch (error) {
     logger.error('Authn sub-feature initialization failed', { error })
@@ -153,12 +174,13 @@ export async function createIamAuthnFunctions(deps: IamAuthnFunctionsDeps): Prom
 
 // ─── 内部实现 ───
 
-interface AuthnOperationsDeps {
+interface BuildAuthnDeps {
   passwordStrategy: PasswordStrategy
   otpStrategy?: OtpStrategy
   ldapStrategy?: AuthStrategy
-  sessionFunctions: IamSessionFunctions
-  authzFunctions: IamAuthzFunctions
+  apiKeyStrategy?: AuthStrategy
+  sessionFunctions: SessionOperations
+  authzFunctions: AuthzOperations
   config: IamConfig
 }
 
@@ -167,11 +189,12 @@ interface AuthnOperationsDeps {
  *
  * 不含 registerAndLogin，该方法需要 userFunctions 依赖，由 iam-main 在初始化后组合注入。
  */
-function buildAuthnOperations(deps: AuthnOperationsDeps): Omit<IamAuthnFunctions, 'registerAndLogin'> {
+function buildAuthnOperations(deps: BuildAuthnDeps): Omit<AuthnOperations, 'registerAndLogin'> {
   const {
     passwordStrategy,
     otpStrategy,
     ldapStrategy,
+    apiKeyStrategy,
     sessionFunctions,
     authzFunctions,
     config,
@@ -208,7 +231,7 @@ function buildAuthnOperations(deps: AuthnOperationsDeps): Omit<IamAuthnFunctions
    * @param type - 登录方式类型
    * @returns 禁用时返回错误 Result，否则返回 null
    */
-  function loginDisabled(type: 'password' | 'otp' | 'ldap'): Result<void, IamError> | null {
+  function loginDisabled(type: 'password' | 'otp' | 'ldap' | 'apikey'): Result<void, IamError> | null {
     if (!loginConfig[type]) {
       return err({
         code: IamErrorCode.LOGIN_DISABLED,
@@ -255,7 +278,7 @@ function buildAuthnOperations(deps: AuthnOperationsDeps): Omit<IamAuthnFunctions
    * @param strategy - 已注册的策略实例（可选）
    * @returns 策略实例，或策略不支持错误
    */
-  function resolveStrategy(type: 'password' | 'otp' | 'ldap', strategy?: AuthStrategy): Result<AuthStrategy, IamError> {
+  function resolveStrategy(type: 'password' | 'otp' | 'ldap' | 'apikey', strategy?: AuthStrategy): Result<AuthStrategy, IamError> {
     if (strategy) {
       return ok(strategy)
     }
@@ -342,8 +365,8 @@ function buildAuthnOperations(deps: AuthnOperationsDeps): Omit<IamAuthnFunctions
    * @returns 认证结果（包含用户、令牌、协议）
    */
   async function loginWithStrategy(
-    type: 'password' | 'otp' | 'ldap',
-    credentials: PasswordCredentials | OtpCredentials | LdapCredentials,
+    type: 'password' | 'otp' | 'ldap' | 'apikey',
+    credentials: PasswordCredentials | OtpCredentials | LdapCredentials | ApiKeyCredentials,
     strategy?: AuthStrategy,
   ): Promise<Result<AuthResult, IamError>> {
     const disabled = loginDisabled(type)
@@ -382,6 +405,10 @@ function buildAuthnOperations(deps: AuthnOperationsDeps): Omit<IamAuthnFunctions
 
     async loginWithLdap(credentials: LdapCredentials): Promise<Result<AuthResult, IamError>> {
       return loginWithStrategy('ldap', credentials, ldapStrategy)
+    },
+
+    async loginWithApiKey(credentials: ApiKeyCredentials): Promise<Result<AuthResult, IamError>> {
+      return loginWithStrategy('apikey', credentials, apiKeyStrategy)
     },
 
     async logout(accessToken: string): Promise<Result<void, IamError>> {
