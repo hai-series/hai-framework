@@ -1,7 +1,7 @@
 /**
  * @h-ai/iam — 认证类型定义
  *
- * 包含： - 凭证类型（Credentials） - 认证策略接口（AuthStrategy） - 认证操作接口（IamAuthnFunctions）
+ * 包含： - 凭证类型（Credentials） - 认证策略接口（AuthStrategy） - 认证操作接口（AuthnOperations）
  * @module iam-authn-types
  */
 
@@ -46,12 +46,21 @@ export interface LdapCredentials {
 }
 
 /**
+ * API Key 凭证（用于 API Key 认证）
+ */
+export interface ApiKeyCredentials {
+  /** 明文 API Key */
+  key: string
+}
+
+/**
  * 统一凭证类型
  */
 export type Credentials
   = | { type: 'password' } & PasswordCredentials
     | { type: 'otp' } & OtpCredentials
     | { type: 'ldap' } & LdapCredentials
+    | { type: 'apikey' } & ApiKeyCredentials
 
 // ─── 认证策略接口 ───
 
@@ -88,7 +97,7 @@ export interface AuthStrategy {
 /**
  * 认证子功能接口
  */
-export interface IamAuthnFunctions {
+export interface AuthnOperations {
   /**
    * 登录（使用密码）
    *
@@ -114,6 +123,16 @@ export interface IamAuthnFunctions {
    * @returns 成功返回 AuthResult（自动同步本地用户）；失败返回错误
    */
   loginWithLdap: (credentials: LdapCredentials) => Promise<Result<AuthResult, IamError>>
+
+  /**
+   * 使用 API Key 登录
+   *
+   * 验证 API Key 有效性 → 查找关联用户 → 创建会话 → 返回令牌。
+   *
+   * @param credentials - API Key 凭证
+   * @returns 成功返回 AuthResult；API Key 无效/过期/禁用返回对应错误
+   */
+  loginWithApiKey: (credentials: ApiKeyCredentials) => Promise<Result<AuthResult, IamError>>
 
   /**
    * 登出

@@ -10,7 +10,7 @@ import type { Result } from '@h-ai/core'
 
 import type { PermissionType } from './authz/iam-authz-types.js'
 
-import type { IamAuthzFunctions, IamError } from './iam-types.js'
+import type { AuthzOperations, IamError } from './iam-types.js'
 
 import { core, err, ok } from '@h-ai/core'
 
@@ -87,7 +87,7 @@ const USER_ROLE_PERMISSIONS = ['dashboard:view', 'profile:read']
  * @returns 成功返回 ok(undefined)；失败返回 REPOSITORY_ERROR
  */
 export async function seedIamData(
-  authz: IamAuthzFunctions,
+  authz: AuthzOperations,
 ): Promise<Result<void, IamError>> {
   try {
     // 查询现有角色，避免重复创建

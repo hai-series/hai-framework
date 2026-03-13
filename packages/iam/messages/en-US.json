@@ -165,5 +165,14 @@
   "iam_seedPermDashboardView": "Dashboard",
   "iam_seedPermProfileRead": "Profile",
   "iam_seedPermAuditRead": "Audit Logs",
-  "iam_configError": "IAM config validation failed: {error}"
+  "iam_configError": "IAM config validation failed: {error}",
+  "iam_apikeyInvalid": "Invalid API Key",
+  "iam_apikeyExpired": "API Key has expired",
+  "iam_apikeyDisabled": "API Key is disabled",
+  "iam_apikeyMaxKeysReached": "Maximum number of API Keys ({max}) reached",
+  "iam_apikeyCreateFailed": "Failed to create API Key: {message}",
+  "iam_apikeyUpdateFailed": "Failed to update API Key: {message}",
+  "iam_apikeyDeleteFailed": "Failed to delete API Key: {message}",
+  "iam_apikeyQueryFailed": "Failed to query API Key: {message}",
+  "iam_apikeyStrategyRequired": "API Key authentication requires API Key strategy configuration"
 }

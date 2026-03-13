@@ -9,29 +9,31 @@ import type { Result } from '@h-ai/core'
 
 import type { IamConfig } from './iam-config.js'
 import type {
+  ApiKeyOperations,
+  AuthnOperations,
   AuthResult,
-  IamAuthnFunctions,
-  IamAuthzFunctions,
+  AuthzOperations,
   IamConfigInput,
   IamError,
   IamFunctions,
-  IamSessionFunctions,
-  IamUserFunctions,
+  SessionOperations,
+  UserOperations,
 } from './iam-types.js'
 
 import { core, err, ok } from '@h-ai/core'
 import { crypto } from '@h-ai/crypto'
 
-import { createIamAuthnFunctions } from './authn/iam-authn-functions.js'
+import { resetApiKeyRepoSingleton } from './authn/apikey/iam-authn-apikey-repository.js'
+import { createAuthnOperations } from './authn/iam-authn-functions.js'
 import { resetOtpRepoSingleton } from './authn/otp/iam-authn-otp-repository-otp.js'
-import { createIamAuthzFunctions } from './authz/iam-authz-functions.js'
+import { createAuthzOperations } from './authz/iam-authz-functions.js'
 import { resetPermissionRepoSingleton } from './authz/iam-authz-repository-permission.js'
 import { resetRoleRepoSingleton } from './authz/iam-authz-repository-role.js'
 import { IamConfigSchema, IamErrorCode } from './iam-config.js'
 import { iamM } from './iam-i18n.js'
 import { seedIamData } from './iam-seed.js'
-import { createIamSessionFunctions } from './session/iam-session-functions.js'
-import { createIamUserFunctions } from './user/iam-user-functions.js'
+import { createSessionOperations } from './session/iam-session-functions.js'
+import { createUserOperations } from './user/iam-user-functions.js'
 import { resetResetTokenRepoSingleton } from './user/iam-user-repository-reset-token.js'
 import { resetUserRepoSingleton } from './user/iam-user-repository-user.js'
 
@@ -40,10 +42,11 @@ const logger = core.logger.child({ module: 'iam', scope: 'main' })
 // ─── 内部状态 ───
 
 let currentConfig: IamConfig | null = null
-let currentAuth: IamAuthnFunctions | null = null
-let currentUser: IamUserFunctions | null = null
-let currentAuthz: IamAuthzFunctions | null = null
-let currentSession: IamSessionFunctions | null = null
+let currentAuth: AuthnOperations | null = null
+let currentUser: UserOperations | null = null
+let currentAuthz: AuthzOperations | null = null
+let currentSession: SessionOperations | null = null
+let currentApiKey: ApiKeyOperations | null = null
 
 // ─── 未初始化占位 ───
 
@@ -52,9 +55,10 @@ const notInitialized = core.module.createNotInitializedKit<IamError>(
   () => iamM('iam_notInitialized'),
 )
 
-const notInitializedAuth = notInitialized.proxy<IamAuthnFunctions>()
-const notInitializedAuthz = notInitialized.proxy<IamAuthzFunctions>()
-const notInitializedSession = notInitialized.proxy<IamSessionFunctions>()
+const notInitializedAuth = notInitialized.proxy<AuthnOperations>()
+const notInitializedAuthz = notInitialized.proxy<AuthzOperations>()
+const notInitializedSession = notInitialized.proxy<SessionOperations>()
+const notInitializedApiKey = notInitialized.proxy<ApiKeyOperations>()
 
 /**
  * 用户子功能的未初始化代理
@@ -62,9 +66,9 @@ const notInitializedSession = notInitialized.proxy<IamSessionFunctions>()
  * 需要特殊处理 validatePassword：该方法是同步的，
  * 其余方法为异步，因此不能统一使用 proxy('async') 或 proxy('sync')。
  */
-const syncUserProxy = notInitialized.proxy<IamUserFunctions>('sync')
-const asyncUserProxy = notInitialized.proxy<IamUserFunctions>()
-const notInitializedUser: IamUserFunctions = new Proxy({} as IamUserFunctions, {
+const syncUserProxy = notInitialized.proxy<UserOperations>('sync')
+const asyncUserProxy = notInitialized.proxy<UserOperations>()
+const notInitializedUser: UserOperations = new Proxy({} as UserOperations, {
   get(_, prop, receiver) {
     return prop === 'validatePassword'
       ? Reflect.get(syncUserProxy as object, prop, receiver)
@@ -110,17 +114,17 @@ export const iam: IamFunctions = {
       const parsed = parseResult.data
 
       // 创建子功能（按依赖顺序），使用局部变量暂存，全部成功后再原子性赋值
-      const sessionResult = await createIamSessionFunctions({ config: parsed, cache })
+      const sessionResult = await createSessionOperations({ config: parsed, cache })
       if (!sessionResult.success) {
         return sessionResult
       }
 
-      const authzResult = await createIamAuthzFunctions({ config: parsed, db, cache })
+      const authzResult = await createAuthzOperations({ config: parsed, db, cache })
       if (!authzResult.success) {
         return authzResult
       }
 
-      const authnResult = await createIamAuthnFunctions({
+      const authnResult = await createAuthnOperations({
         config: parsed,
         db,
         cache,
@@ -135,7 +139,7 @@ export const iam: IamFunctions = {
         return authnResult
       }
 
-      const userResult = await createIamUserFunctions({
+      const userResult = await createUserOperations({
         config: parsed,
         db,
         cache,
@@ -161,6 +165,7 @@ export const iam: IamFunctions = {
       currentAuthz = authzResult.data
       currentUser = userResult.data
       currentConfig = parsed
+      currentApiKey = authnResult.data.apiKeyFunctions
 
       // 组合 auth：注入 registerAndLogin（依赖 user + auth 两个子功能）
       const authn = authnResult.data.authn
@@ -187,10 +192,11 @@ export const iam: IamFunctions = {
     }
   },
 
-  get auth(): IamAuthnFunctions { return currentAuth ?? notInitializedAuth },
-  get user(): IamUserFunctions { return currentUser ?? notInitializedUser },
-  get authz(): IamAuthzFunctions { return currentAuthz ?? notInitializedAuthz },
-  get session(): IamSessionFunctions { return currentSession ?? notInitializedSession },
+  get auth(): AuthnOperations { return currentAuth ?? notInitializedAuth },
+  get user(): UserOperations { return currentUser ?? notInitializedUser },
+  get authz(): AuthzOperations { return currentAuthz ?? notInitializedAuthz },
+  get session(): SessionOperations { return currentSession ?? notInitializedSession },
+  get apiKey(): ApiKeyOperations { return currentApiKey ?? notInitializedApiKey },
   get config() { return currentConfig },
   get isInitialized() { return currentConfig !== null },
   get isRegisterEnabled() { return currentConfig?.register?.enabled !== false },
@@ -207,9 +213,11 @@ export const iam: IamFunctions = {
     currentUser = null
     currentAuthz = null
     currentSession = null
+    currentApiKey = null
     currentConfig = null
 
     // 重置所有仓库单例，释放对旧 db 实例的引用
+    resetApiKeyRepoSingleton()
     resetOtpRepoSingleton()
     resetUserRepoSingleton()
     resetResetTokenRepoSingleton()

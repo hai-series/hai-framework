@@ -1,7 +1,7 @@
 /**
  * @h-ai/iam — 用户相关类型定义
  *
- * 包含： - 用户基础类型（User、StoredUser） - 注册选项（RegisterOptions） - 协议展示类型（AgreementDisplay） - 用户操作接口（IamUserFunctions）
+ * 包含： - 用户基础类型（User、StoredUser） - 注册选项（RegisterOptions） - 协议展示类型（AgreementDisplay） - 用户操作接口（UserOperations）
  * @module iam-user-types
  */
 
@@ -142,7 +142,7 @@ export interface UpdateCurrentUserInput {
 /**
  * 用户子功能接口
  */
-export interface IamUserFunctions {
+export interface UserOperations {
   /**
    * 注册用户
    *

@@ -165,5 +165,14 @@
   "iam_seedPermDashboardView": "仪表盘",
   "iam_seedPermProfileRead": "个人中心",
   "iam_seedPermAuditRead": "审计日志",
-  "iam_configError": "IAM 配置校验失败：{error}"
+  "iam_configError": "IAM 配置校验失败：{error}",
+  "iam_apikeyInvalid": "API Key 无效",
+  "iam_apikeyExpired": "API Key 已过期",
+  "iam_apikeyDisabled": "API Key 已禁用",
+  "iam_apikeyMaxKeysReached": "API Key 数量已达上限（{max}）",
+  "iam_apikeyCreateFailed": "创建 API Key 失败：{message}",
+  "iam_apikeyUpdateFailed": "更新 API Key 失败：{message}",
+  "iam_apikeyDeleteFailed": "删除 API Key 失败：{message}",
+  "iam_apikeyQueryFailed": "查询 API Key 失败：{message}",
+  "iam_apikeyStrategyRequired": "API Key 认证需要 API Key 策略配置"
 }
