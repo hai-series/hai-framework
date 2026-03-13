@@ -56,7 +56,7 @@ export type {
  * ```
  */
 export function buildAgentCard(config: A2AAgentCardConfig): AgentCard {
-  return {
+  const card: AgentCard = {
     name: config.name,
     description: config.description ?? '',
     url: config.url,
@@ -72,4 +72,15 @@ export function buildAgentCard(config: A2AAgentCardConfig): AgentCard {
       tags: s.tags ?? [],
     })),
   }
+
+  // 声明安全认证方案到 Agent Card
+  if (config.security?.apiKey) {
+    const { in: location, name } = config.security.apiKey
+    card.securitySchemes = {
+      apiKey: { type: 'apiKey', in: location, name },
+    }
+    card.security = [{ apiKey: [] }]
+  }
+
+  return card
 }

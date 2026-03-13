@@ -54,6 +54,43 @@ describe('buildAgentCard', () => {
     expect(card.skills[1].description).toBe('')
     expect(card.skills[1].tags).toEqual([])
   })
+
+  it('配置 security.apiKey 时输出 securitySchemes 和 security', () => {
+    const card = buildAgentCard({
+      name: 'secure-agent',
+      url: 'https://example.com',
+      security: {
+        apiKey: { in: 'header', name: 'x-api-key' },
+      },
+    })
+
+    expect(card.securitySchemes).toEqual({
+      apiKey: { type: 'apiKey', in: 'header', name: 'x-api-key' },
+    })
+    expect(card.security).toEqual([{ apiKey: [] }])
+  })
+
+  it('security.apiKey 使用 query 传递', () => {
+    const card = buildAgentCard({
+      name: 'query-agent',
+      url: 'https://example.com',
+      security: {
+        apiKey: { in: 'query', name: 'api_key' },
+      },
+    })
+
+    expect(card.securitySchemes).toEqual({
+      apiKey: { type: 'apiKey', in: 'query', name: 'api_key' },
+    })
+    expect(card.security).toEqual([{ apiKey: [] }])
+  })
+
+  it('未配置 security 时无 securitySchemes 和 security 字段', () => {
+    const card = buildAgentCard({ name: 'open-agent', url: 'https://example.com' })
+
+    expect(card.securitySchemes).toBeUndefined()
+    expect(card.security).toBeUndefined()
+  })
 })
 
 // ─── ReldbA2ATaskStore ───

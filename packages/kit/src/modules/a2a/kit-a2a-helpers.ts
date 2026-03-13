@@ -8,6 +8,7 @@
 import type { RequestEvent, RequestHandler } from '@sveltejs/kit'
 
 import type { KitA2AHandlerConfig } from './kit-a2a-types.js'
+import { createA2AApiKeyAuthenticator } from './kit-a2a-auth.js'
 
 /**
  * 创建 Agent Card GET 处理器
@@ -74,7 +75,10 @@ export function createA2AHandler(
     // 可选认证
     let context: Record<string, unknown> | undefined
     if (config?.authenticate) {
-      const authResult = await config.authenticate(event)
+      const authFn = typeof config.authenticate === 'function'
+        ? config.authenticate
+        : createA2AApiKeyAuthenticator({ in: 'header', name: 'x-api-key' })
+      const authResult = await authFn(event)
       if (authResult) {
         context = authResult
       }
