@@ -5,6 +5,7 @@
  * @module index
  */
 
+export * from './kit-a2a-auth.js'
 export * from './kit-a2a-handle.js'
 export * from './kit-a2a-helpers.js'
 export * from './kit-a2a-types.js'

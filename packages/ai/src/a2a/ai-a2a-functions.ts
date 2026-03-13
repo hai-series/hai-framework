@@ -337,8 +337,9 @@ export function createA2ALazyProxy(deps: A2ALazyProxyDeps): A2AOperations {
         logger.warn('A2A executor already registered, re-registering')
       }
       const reldbDeps = deps.getReldbDeps()
+      const agentCardWithSecurity = { ...a2aConfig.agentCard, security: a2aConfig.security }
       const impl = createA2AOperations(
-        { agentCard: a2aConfig.agentCard, executor },
+        { agentCard: agentCardWithSecurity, executor },
         reldbDeps,
       )
       deps.setA2AImpl(impl)
@@ -352,7 +353,7 @@ export function createA2ALazyProxy(deps: A2ALazyProxyDeps): A2AOperations {
         return impl.getAgentCard()
       const a2aConfig = deps.getA2AConfig()
       if (a2aConfig)
-        return ok(a2aConfig.agentCard as A2AAgentCardConfig)
+        return ok({ ...a2aConfig.agentCard, security: a2aConfig.security } as A2AAgentCardConfig)
       if (!deps.isInitialized())
         return deps.notInitializedResult()
       return err({ code: AIErrorCode.A2A_NOT_CONFIGURED, message: aiM('ai_a2aNotConfigured') })

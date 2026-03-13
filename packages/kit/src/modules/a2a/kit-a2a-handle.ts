@@ -8,6 +8,7 @@
 
 import type { RequestEvent } from '@sveltejs/kit'
 import type { HandleA2AConfig, HandleA2AOperations, HandleConfig } from '../../kit-types.js'
+import { createA2AApiKeyAuthenticator } from './kit-a2a-auth.js'
 
 // ─── 解析后的 A2A 内部配置 ───
 
@@ -51,8 +52,38 @@ export function resolveA2AConfig(
     operations: cfg.operations,
     cardPath: cfg.cardPath ?? '/.well-known/agent.json',
     rpcPath: cfg.rpcPath ?? '/a2a',
-    authenticate: cfg.authenticate,
+    authenticate: resolveAuthenticate(cfg.authenticate, cfg.operations),
   }
+}
+
+/**
+ * 解析 authenticate 配置
+ *
+ * - `undefined` → 无认证
+ * - `'apiKey'` → 从 Agent Card security 配置创建 API Key 认证器
+ * - 函数 → 直接使用
+ */
+function resolveAuthenticate(
+  authenticate: HandleA2AConfig['authenticate'],
+  operations: HandleA2AOperations,
+): ResolvedA2AConfig['authenticate'] {
+  if (!authenticate)
+    return undefined
+
+  if (typeof authenticate === 'function')
+    return authenticate
+
+  // 'apiKey' 快捷方式：从 Agent Card 获取 security 配置
+  const cardResult = operations.getAgentCard()
+  const security = cardResult.success && cardResult.data
+    ? (cardResult.data as Record<string, unknown>).security as { apiKey?: { in: 'header' | 'query', name: string } } | undefined
+    : undefined
+  const apiKeyCfg = security?.apiKey
+
+  return createA2AApiKeyAuthenticator({
+    in: apiKeyCfg?.in ?? 'header',
+    name: apiKeyCfg?.name ?? 'x-api-key',
+  })
 }
 
 // ─── A2A 请求处理 ───

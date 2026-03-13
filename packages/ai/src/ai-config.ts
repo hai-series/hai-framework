@@ -794,6 +794,16 @@ export const A2AConfigSchema = z.object({
     /** Agent 技能列表 */
     skills: z.array(A2ASkillConfigSchema).optional(),
   }),
+  /** A2A 安全认证配置 */
+  security: z.object({
+    /** API Key 认证（通过 IAM apiKey.verifyApiKey 验证） */
+    apiKey: z.object({
+      /** API Key 的传递位置（默认 header） */
+      in: z.enum(['header', 'query']).default('header'),
+      /** 参数名（默认 x-api-key） */
+      name: z.string().default('x-api-key'),
+    }).optional(),
+  }).optional(),
 })
 
 /** A2A 配置类型 */

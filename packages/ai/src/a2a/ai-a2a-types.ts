@@ -205,6 +205,20 @@ export interface A2AOperations {
 
 // ─── 辅助类型 ───
 
+/** A2A API Key 安全配置 */
+export interface A2AApiKeySecurity {
+  /** API Key 的传递位置 */
+  in: 'header' | 'query'
+  /** 参数名 */
+  name: string
+}
+
+/** A2A 安全认证配置 */
+export interface A2ASecurityConfig {
+  /** API Key 认证配置 */
+  apiKey?: A2AApiKeySecurity
+}
+
 /** Agent Card 配置（应用层提供） */
 export interface A2AAgentCardConfig {
   /** Agent 名称 */
@@ -222,6 +236,8 @@ export interface A2AAgentCardConfig {
     description?: string
     tags?: string[]
   }>
+  /** 安全认证配置（体现在 Agent Card 的 securitySchemes / security 字段） */
+  security?: A2ASecurityConfig
 }
 
 /** 处理结果（单条或流式） */

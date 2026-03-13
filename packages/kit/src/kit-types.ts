@@ -319,7 +319,7 @@ export interface HandleA2AOperations {
  *   a2a: {
  *     operations: ai.a2a,
  *     rpcPath: '/api/a2a',
- *     authenticate: async (event) => ({ userId: 'xxx' }),
+ *     authenticate: 'apiKey', // 自动使用 IAM API Key 验证
  *   },
  * })
  * ```
@@ -331,8 +331,13 @@ export interface HandleA2AConfig {
   cardPath?: string
   /** JSON-RPC 端点路径（默认 `/a2a`） */
   rpcPath?: string
-  /** A2A 认证回调 */
-  authenticate?: (event: RequestEvent) => Promise<Record<string, unknown> | null | undefined>
+  /**
+   * A2A 认证
+   *
+   * - `'apiKey'`：自动使用 IAM API Key 认证（根据 Agent Card 的 security 配置提取 key）
+   * - 函数：自定义认证回调
+   */
+  authenticate?: 'apiKey' | ((event: RequestEvent) => Promise<Record<string, unknown> | null | undefined>)
 }
 
 /**
