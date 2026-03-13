@@ -5,7 +5,7 @@
  * @module kit-types
  */
 
-import type { IamAuthnFunctions } from '@h-ai/iam'
+import type { AuthnOperations } from '@h-ai/iam'
 import type { RequestEvent } from '@sveltejs/kit'
 import type { RateLimitStore } from './middleware/kit-ratelimit.js'
 import type { TransportCryptoServiceLike } from './modules/crypto/kit-crypto-types.js'
@@ -16,7 +16,7 @@ import type { TransportCryptoServiceLike } from './modules/crypto/kit-crypto-typ
  * 注入后，kit.auth.login / kit.auth.logout 等函数自动委托到 iam.auth 对应方法。
  * 传入 `iam.auth` 即可，kit 会自动提取所需方法。
  */
-export type AuthOperations = Pick<IamAuthnFunctions, 'login' | 'loginWithOtp' | 'loginWithLdap' | 'registerAndLogin' | 'logout'>
+export type AuthOperations = Pick<AuthnOperations, 'login' | 'loginWithOtp' | 'loginWithLdap' | 'loginWithApiKey' | 'registerAndLogin' | 'logout'>
 
 /**
  * 会话数据最小接口
@@ -281,6 +281,58 @@ export interface HandleConfig {
   guards?: GuardConfig[]
   /** 自定义中间件（在内置 logging / rateLimit 之后执行） */
   middleware?: Middleware[]
+  /**
+   * A2A 协议集成
+   *
+   * 传入 `ai.a2a` 操作对象后，自动挂载 Agent Card 发现端点和 JSON-RPC 处理端点。
+   *
+   * - 简单模式：`a2a: ai.a2a`（使用默认路径）
+   * - 配置模式：`a2a: { operations: ai.a2a, rpcPath: '/api/a2a' }`
+   */
+  a2a?: HandleA2AOperations | HandleA2AConfig
+}
+
+// ─── A2A Handle 集成类型 ───
+
+/**
+ * A2A 操作接口（用于 Handle 集成）
+ *
+ * 与 `ai.a2a` 结构兼容，可直接传入 `ai.a2a` 对象。
+ */
+export interface HandleA2AOperations {
+  /** 获取 Agent Card（返回 Result 对象） */
+  getAgentCard: () => { success: boolean, data?: unknown, error?: unknown }
+  /** 处理 JSON-RPC 请求 */
+  handleRequest: (body: unknown, context?: Record<string, unknown>) => Promise<{
+    streaming: boolean
+    body?: unknown
+    stream?: AsyncGenerator<unknown, void, undefined>
+  }>
+}
+
+/**
+ * A2A Handle 配置（高级模式）
+ *
+ * @example
+ * ```ts
+ * kit.createHandle({
+ *   a2a: {
+ *     operations: ai.a2a,
+ *     rpcPath: '/api/a2a',
+ *     authenticate: async (event) => ({ userId: 'xxx' }),
+ *   },
+ * })
+ * ```
+ */
+export interface HandleA2AConfig {
+  /** A2A 操作接口（通常传入 `ai.a2a`） */
+  operations: HandleA2AOperations
+  /** Agent Card 端点路径（默认 `/.well-known/agent.json`） */
+  cardPath?: string
+  /** JSON-RPC 端点路径（默认 `/a2a`） */
+  rpcPath?: string
+  /** A2A 认证回调 */
+  authenticate?: (event: RequestEvent) => Promise<Record<string, unknown> | null | undefined>
 }
 
 /**

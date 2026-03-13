@@ -7,6 +7,7 @@
 
 import type { Result } from '@h-ai/core'
 
+import type { A2AOperations } from './a2a/ai-a2a-types.js'
 import type { AIConfig, AIConfigInput } from './ai-config.js'
 import type { AIError, AIFunctions } from './ai-types.js'
 import type { CompressOperations } from './compress/ai-compress-types.js'
@@ -29,6 +30,7 @@ import { datapipe } from '@h-ai/datapipe'
 import { reldb } from '@h-ai/reldb'
 import { vecdb } from '@h-ai/vecdb'
 
+import { createA2ALazyProxy } from './a2a/ai-a2a-functions.js'
 import { AIConfigSchema, AIErrorCode } from './ai-config.js'
 import { createAISubsystems } from './ai-functions.js'
 import { aiM } from './ai-i18n.js'
@@ -69,6 +71,10 @@ let currentCompress: CompressOperations | null = null
 let currentRerank: RerankOperations | null = null
 /** 当前 File 操作实例 */
 let currentFile: FileOperations | null = null
+/** A2A 配置（从 config.a2a 存储，供延迟初始化使用） */
+let currentA2AConfig: AIConfig['a2a']
+/** A2A 内部实现（registerExecutor 成功后才有值） */
+let currentA2AImpl: A2AOperations | null = null
 
 // ─── 未初始化占位 ───
 
@@ -110,11 +116,7 @@ const notInitializedMCP: MCPOperations = {
 }
 
 /** Embedding 未初始化占位 */
-const notInitializedEmbedding: EmbeddingOperations = {
-  embed: () => Promise.resolve(notInitialized.result()),
-  embedText: () => Promise.resolve(notInitialized.result()),
-  embedBatch: () => Promise.resolve(notInitialized.result()),
-}
+const notInitializedEmbedding = notInitialized.proxy<EmbeddingOperations>()
 
 /** Reasoning 未初始化占位 */
 const notInitializedReasoning: ReasoningOperations = {
@@ -137,49 +139,27 @@ const notInitializedRag: RagOperations = {
 }
 
 /** Knowledge 未初始化占位 */
-const notInitializedKnowledge: KnowledgeOperations = {
-  setup: () => Promise.resolve(notInitialized.result()),
-  ingest: () => Promise.resolve(notInitialized.result()),
-  retrieve: () => Promise.resolve(notInitialized.result()),
-  ask: () => Promise.resolve(notInitialized.result()),
-  findByEntity: () => Promise.resolve(notInitialized.result()),
-  listEntities: () => Promise.resolve(notInitialized.result()),
-  listDocuments: () => Promise.resolve(notInitialized.result()),
-  removeDocument: () => Promise.resolve(notInitialized.result()),
-  ingestFile: () => Promise.resolve(notInitialized.result()),
-  ingestBatch: () => Promise.resolve(notInitialized.result()),
-}
+const notInitializedKnowledge = notInitialized.proxy<KnowledgeOperations>()
 
 /** Memory 未初始化占位 */
-const notInitializedMemory: MemoryOperations = {
-  extract: () => Promise.resolve(notInitialized.result()),
-  add: () => Promise.resolve(notInitialized.result()),
-  update: () => Promise.resolve(notInitialized.result()),
-  get: () => Promise.resolve(notInitialized.result()),
-  recall: () => Promise.resolve(notInitialized.result()),
-  injectMemories: () => Promise.resolve(notInitialized.result()),
-  remove: () => Promise.resolve(notInitialized.result()),
-  list: () => Promise.resolve(notInitialized.result()),
-  listPage: () => Promise.resolve(notInitialized.result()),
-  clear: () => Promise.resolve(notInitialized.result()),
-}
+const notInitializedMemory = notInitialized.proxy<MemoryOperations>()
 
-/** Token 未初始化占位 */
+/**
+ * Token 未初始化占位
+ *
+ * Token 方法返回原始 number 而非 Result，无法通过 proxy 安全拦截。
+ * 未初始化时直接抛出异常，避免静默返回 0 导致下游 Token 计算错误。
+ */
 const notInitializedToken: TokenOperations = {
-  estimateText: () => 0,
-  estimateMessages: () => 0,
+  estimateText: () => { throw notInitialized.error() },
+  estimateMessages: () => { throw notInitialized.error() },
 }
 
 /** Summary 未初始化占位 */
-const notInitializedSummary: SummaryOperations = {
-  generate: () => Promise.resolve(notInitialized.result()),
-  summarize: () => Promise.resolve(notInitialized.result()),
-}
+const notInitializedSummary = notInitialized.proxy<SummaryOperations>()
 
 /** Compress 未初始化占位 */
-const notInitializedCompress: CompressOperations = {
-  tryCompress: () => Promise.resolve(notInitialized.result()),
-}
+const notInitializedCompress = notInitialized.proxy<CompressOperations>()
 
 /** Context 未初始化占位 */
 const notInitializedContext: ContextOperations = {
@@ -191,16 +171,20 @@ const notInitializedContext: ContextOperations = {
 }
 
 /** Rerank 未初始化占位 */
-const notInitializedRerank: RerankOperations = {
-  rerank: () => Promise.resolve(notInitialized.result()),
-  rerankTexts: () => Promise.resolve(notInitialized.result()),
-}
+const notInitializedRerank = notInitialized.proxy<RerankOperations>()
 
 /** File 未初始化占位 */
-const notInitializedFile: FileOperations = {
-  parse: () => Promise.resolve(notInitialized.result()),
-  parseText: () => Promise.resolve(notInitialized.result()),
-}
+const notInitializedFile = notInitialized.proxy<FileOperations>()
+
+/** A2A 延迟初始化代理（委托给 a2a 模块的 createA2ALazyProxy） */
+const a2aLazyOperations: A2AOperations = createA2ALazyProxy({
+  isInitialized: () => currentConfig !== null,
+  getA2AConfig: () => currentA2AConfig ?? null,
+  getA2AImpl: () => currentA2AImpl,
+  setA2AImpl: (impl) => { currentA2AImpl = impl },
+  getReldbDeps: () => ({ sql: reldb.sql, jsonOps: reldb.json, dbType: reldb.config?.type }),
+  notInitializedResult: () => notInitialized.result(),
+})
 
 // ─── 内部辅助 ───
 
@@ -220,6 +204,8 @@ function resetAllState(): void {
   currentContext = null
   currentRerank = null
   currentFile = null
+  currentA2AConfig = undefined
+  currentA2AImpl = null
   currentConfig = null
 }
 
@@ -313,6 +299,8 @@ export const ai: AIFunctions = {
       currentContext = subs.context
       currentFile = subs.file
 
+      currentA2AConfig = parsed.a2a
+
       currentConfig = parsed
       logger.info('AI module initialized', { model: parsed.llm?.model })
       return ok(undefined)
@@ -347,6 +335,7 @@ export const ai: AIFunctions = {
   get context(): ContextOperations { return currentContext ?? notInitializedContext },
   get rerank(): RerankOperations { return currentRerank ?? notInitializedRerank },
   get file(): FileOperations { return currentFile ?? notInitializedFile },
+  get a2a(): A2AOperations { return a2aLazyOperations },
   get config() { return currentConfig },
   get isInitialized() { return currentConfig !== null },
 

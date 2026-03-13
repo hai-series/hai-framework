@@ -15,6 +15,7 @@ import { kitM } from '../kit-i18n.js'
 import { isSvelteKitControlFlow } from '../kit-utils.js'
 import { loggingMiddleware as loggingMiddlewareFn } from '../middleware/kit-logging.js'
 import { rateLimitMiddleware as rateLimitMiddlewareFn } from '../middleware/kit-ratelimit.js'
+import { handleA2ARequest, resolveA2AConfig } from '../modules/a2a/kit-a2a-handle.js'
 import { transportEncryptionMiddleware } from '../modules/crypto/kit-transport-middleware.js'
 import { createEncryptedCookieProxy } from './kit-cookie-proxy.js'
 
@@ -68,7 +69,11 @@ export function createHandle(config: HandleConfig = {}): Handle {
     onError,
     guards: customGuards = [],
     middleware: customMiddleware = [],
+    a2a: a2aInput,
   } = config
+
+  // ── A2A 配置解析 ──
+  const a2aResolved = resolveA2AConfig(a2aInput)
 
   // ── 配置 Cookie 名 + 认证操作 ──
   if (authConfig?.cookieName || authConfig?.operations) {
@@ -124,6 +129,13 @@ export function createHandle(config: HandleConfig = {}): Handle {
     }
 
     try {
+      // ── A2A 端点拦截（在认证/守卫之前，A2A 有专用认证） ──
+      if (a2aResolved) {
+        const a2aResponse = await handleA2ARequest(event, requestId, a2aResolved)
+        if (a2aResponse)
+          return a2aResponse
+      }
+
       // ── 会话解析 ──
       let session: SessionData | undefined
 

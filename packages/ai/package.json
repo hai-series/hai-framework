@@ -41,6 +41,7 @@
     "clean": "rimraf dist .turbo"
   },
   "dependencies": {
+    "@a2a-js/sdk": "catalog:",
     "@h-ai/core": "workspace:*",
     "@modelcontextprotocol/sdk": "catalog:",
     "nanoid": "catalog:",

@@ -13,6 +13,7 @@ import {
   createHandleFetch,
   createTokenStore,
   login,
+  loginWithApiKey,
   loginWithLdap,
   loginWithOtp,
   logout,
@@ -116,6 +117,8 @@ export const kit = {
     loginWithOtp,
     /** 服务端登录（LDAP）：内部调用 iam.auth.loginWithLdap + 自动写入 Token Cookie */
     loginWithLdap,
+    /** 服务端登录（API Key）：内部调用 iam.auth.loginWithApiKey + 自动写入 Token Cookie */
+    loginWithApiKey,
     /** 服务端注册并登录：内部调用 iam.auth.registerAndLogin + 自动写入 Token Cookie */
     registerAndLogin,
     /** 服务端登出：内部调用 iam.auth.logout + 清除 Token Cookie */

@@ -6,6 +6,7 @@
 
 import type { Handle } from '@sveltejs/kit'
 import { initApp } from '$lib/server/init.js'
+import { ai } from '@h-ai/ai'
 import { kit } from '@h-ai/kit'
 
 let appInitPromise: Promise<void> | null = null
@@ -30,11 +31,12 @@ const initHandle: Handle = async ({ event, resolve }) => {
 }
 
 // =============================================================================
-// hai Handle
+// hai Handle（含 A2A 自动端点）
 // =============================================================================
 
 const haiHandle = kit.createHandle({
   rateLimit: { windowMs: 60000, maxRequests: 200 },
+  a2a: ai.a2a,
 })
 
 export const handle: Handle = kit.sequence(initHandle, haiHandle)

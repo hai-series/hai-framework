@@ -21,6 +21,10 @@ export interface AIStoreOptions {
   hasObjectId?: boolean
   /** 是否创建 session_id 索引列 */
   hasSessionId?: boolean
+  /** 是否创建 status 索引列 */
+  hasStatus?: boolean
+  /** 是否创建 ref_id 索引列 */
+  hasRefId?: boolean
 }
 
 /**
@@ -40,6 +44,8 @@ export class ReldbAIStore<T> implements AIStore<T> {
   private readonly dbType: DbType
   private readonly hasObjectId: boolean
   private readonly hasSessionId: boolean
+  private readonly hasStatus: boolean
+  private readonly hasRefId: boolean
   private initialized = false
 
   constructor(sql: DataOperations, table: string, jsonOps: ReldbJsonOps, options?: AIStoreOptions) {
@@ -49,6 +55,8 @@ export class ReldbAIStore<T> implements AIStore<T> {
     this.dbType = options?.dbType ?? 'sqlite'
     this.hasObjectId = options?.hasObjectId ?? false
     this.hasSessionId = options?.hasSessionId ?? false
+    this.hasStatus = options?.hasStatus ?? false
+    this.hasRefId = options?.hasRefId ?? false
   }
 
   /**
@@ -71,6 +79,10 @@ export class ReldbAIStore<T> implements AIStore<T> {
       cols.push(`object_id ${scopeType}`)
     if (this.hasSessionId)
       cols.push(`session_id ${scopeType}`)
+    if (this.hasStatus)
+      cols.push(`status ${scopeType}`)
+    if (this.hasRefId)
+      cols.push(`ref_id ${scopeType}`)
     cols.push(`data ${dataType} NOT NULL`)
     cols.push(`created_at BIGINT NOT NULL`)
     cols.push(`updated_at BIGINT NOT NULL`)
@@ -86,6 +98,12 @@ export class ReldbAIStore<T> implements AIStore<T> {
     }
     if (this.hasObjectId && this.hasSessionId) {
       await this.sql.execute(`CREATE INDEX IF NOT EXISTS idx_${t}_object_session ON ${t}(object_id, session_id)`)
+    }
+    if (this.hasStatus) {
+      await this.sql.execute(`CREATE INDEX IF NOT EXISTS idx_${t}_status ON ${t}(status)`)
+    }
+    if (this.hasRefId) {
+      await this.sql.execute(`CREATE INDEX IF NOT EXISTS idx_${t}_ref_id ON ${t}(ref_id)`)
     }
 
     this.initialized = true
@@ -110,6 +128,16 @@ export class ReldbAIStore<T> implements AIStore<T> {
       values.push(scope?.sessionId ?? null)
       placeholders.push('?')
     }
+    if (this.hasStatus) {
+      colNames.push('status')
+      values.push(scope?.status ?? null)
+      placeholders.push('?')
+    }
+    if (this.hasRefId) {
+      colNames.push('ref_id')
+      values.push(scope?.refId ?? null)
+      placeholders.push('?')
+    }
 
     colNames.push('data', 'created_at', 'updated_at')
     values.push(json, now, now)
@@ -122,6 +150,10 @@ export class ReldbAIStore<T> implements AIStore<T> {
         updateParts.push('object_id = VALUES(object_id)')
       if (this.hasSessionId)
         updateParts.push('session_id = VALUES(session_id)')
+      if (this.hasStatus)
+        updateParts.push('status = VALUES(status)')
+      if (this.hasRefId)
+        updateParts.push('ref_id = VALUES(ref_id)')
 
       await this.sql.execute(
         `INSERT INTO ${this.table} (${colNames.join(', ')}) VALUES (${placeholders.join(', ')}) ON DUPLICATE KEY UPDATE ${updateParts.join(', ')}`,
@@ -135,6 +167,10 @@ export class ReldbAIStore<T> implements AIStore<T> {
         updateParts.push('object_id = excluded.object_id')
       if (this.hasSessionId)
         updateParts.push('session_id = excluded.session_id')
+      if (this.hasStatus)
+        updateParts.push('status = excluded.status')
+      if (this.hasRefId)
+        updateParts.push('ref_id = excluded.ref_id')
 
       await this.sql.execute(
         `INSERT INTO ${this.table} (${colNames.join(', ')}) VALUES (${placeholders.join(', ')}) ON CONFLICT(id) DO UPDATE SET ${updateParts.join(', ')}`,
@@ -225,7 +261,7 @@ export class ReldbAIStore<T> implements AIStore<T> {
 
   async count(filter?: StoreFilter<T>): Promise<number> {
     await this.ensureTable()
-    if (!filter?.where && !filter?.objectId && !filter?.sessionId) {
+    if (!filter?.where && !filter?.objectId && !filter?.sessionId && !filter?.status && !filter?.refId) {
       const result = await this.sql.get<{ cnt: number }>(
         `SELECT COUNT(*) as cnt FROM ${this.table}`,
       )
@@ -243,7 +279,7 @@ export class ReldbAIStore<T> implements AIStore<T> {
 
   async clear(filter?: StoreFilter<T>): Promise<void> {
     await this.ensureTable()
-    if (!filter?.where && !filter?.objectId && !filter?.sessionId) {
+    if (!filter?.where && !filter?.objectId && !filter?.sessionId && !filter?.status && !filter?.refId) {
       await this.sql.execute(`DELETE FROM ${this.table}`)
       return
     }
@@ -304,6 +340,21 @@ export class ReldbAIStore<T> implements AIStore<T> {
     if (filter.sessionId && this.hasSessionId) {
       conditions.push('session_id = ?')
       params.push(filter.sessionId)
+    }
+    if (filter.status && this.hasStatus) {
+      if (Array.isArray(filter.status)) {
+        const placeholders = filter.status.map(() => '?').join(', ')
+        conditions.push(`status IN (${placeholders})`)
+        params.push(...filter.status)
+      }
+      else {
+        conditions.push('status = ?')
+        params.push(filter.status)
+      }
+    }
+    if (filter.refId && this.hasRefId) {
+      conditions.push('ref_id = ?')
+      params.push(filter.refId)
     }
 
     // JSON where 子句

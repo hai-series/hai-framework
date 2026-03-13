@@ -162,6 +162,18 @@ export const AIErrorCode = {
   SESSION_NOT_FOUND: 12970,
   /** 会话操作失败 */
   SESSION_FAILED: 12971,
+
+  // A2A (12980-12999)
+  /** A2A 服务未配置 */
+  A2A_NOT_CONFIGURED: 12980,
+  /** A2A 请求处理失败 */
+  A2A_HANDLE_FAILED: 12981,
+  /** A2A 远端调用失败 */
+  A2A_REMOTE_CALL_FAILED: 12982,
+  /** A2A 认证失败 */
+  A2A_AUTH_FAILED: 12983,
+  /** A2A 消息查询失败 */
+  A2A_LIST_MESSAGES_FAILED: 12984,
 } as const
 
 /** 错误码值类型 */
@@ -224,6 +236,11 @@ export const AIErrorHttpStatus: Record<number, number> = {
   [AIErrorCode.STORE_NOT_AVAILABLE]: 503,
   [AIErrorCode.SESSION_NOT_FOUND]: 404,
   [AIErrorCode.SESSION_FAILED]: 500,
+  [AIErrorCode.A2A_NOT_CONFIGURED]: 500,
+  [AIErrorCode.A2A_HANDLE_FAILED]: 500,
+  [AIErrorCode.A2A_REMOTE_CALL_FAILED]: 502,
+  [AIErrorCode.A2A_AUTH_FAILED]: 401,
+  [AIErrorCode.A2A_LIST_MESSAGES_FAILED]: 500,
 }
 
 // ─── LLM 配置 Schema ───
@@ -729,6 +746,59 @@ export const RetrievalConfigSchema = z.object({
 /** Retrieval 配置类型 */
 export type RetrievalConfig = z.infer<typeof RetrievalConfigSchema>
 
+// ─── A2A 配置 Schema ───
+
+/** A2A Agent Skill 配置 Schema */
+export const A2ASkillConfigSchema = z.object({
+  /** 技能 ID */
+  id: z.string(),
+  /** 技能名称 */
+  name: z.string(),
+  /** 技能描述 */
+  description: z.string().optional(),
+  /** 标签列表 */
+  tags: z.array(z.string()).optional(),
+})
+
+/**
+ * A2A 配置 Schema
+ *
+ * 配置 Agent-to-Agent 协议参数：Agent Card、认证等。
+ *
+ * @example
+ * ```ts
+ * ai.init({
+ *   llm: { apiKey: 'sk-xxx', model: 'gpt-4o-mini' },
+ *   a2a: {
+ *     agentCard: {
+ *       name: 'my-agent',
+ *       description: 'An example agent',
+ *       url: 'https://example.com',
+ *       skills: [{ id: 'chat', name: 'General Chat' }],
+ *     },
+ *   },
+ * })
+ * ```
+ */
+export const A2AConfigSchema = z.object({
+  /** Agent Card 配置 */
+  agentCard: z.object({
+    /** Agent 名称 */
+    name: z.string(),
+    /** Agent 描述 */
+    description: z.string().optional(),
+    /** Agent 对外 URL */
+    url: z.string(),
+    /** Agent 版本 */
+    version: z.string().optional(),
+    /** Agent 技能列表 */
+    skills: z.array(A2ASkillConfigSchema).optional(),
+  }),
+})
+
+/** A2A 配置类型 */
+export type A2AConfig = z.infer<typeof A2AConfigSchema>
+
 /**
  * AI 配置 Schema
  *
@@ -788,6 +858,8 @@ export const AIConfigSchema = z.object({
   retrieval: RetrievalConfigSchema.optional(),
   /** File 解析配置 */
   file: FileConfigSchema.optional(),
+  /** A2A 配置（Agent-to-Agent 协议） */
+  a2a: A2AConfigSchema.optional(),
 })
 
 /** AI 配置类型（校验后的完整类型） */

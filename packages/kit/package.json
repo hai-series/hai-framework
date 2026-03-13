@@ -24,6 +24,10 @@
     "./adapter": {
       "types": "./dist/adapter/index.d.ts",
       "import": "./dist/adapter/index.js"
+    },
+    "./a2a": {
+      "types": "./dist/modules/a2a/index.d.ts",
+      "import": "./dist/modules/a2a/index.js"
     }
   },
   "main": "./dist/index.js",
