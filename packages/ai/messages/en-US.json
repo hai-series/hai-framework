@@ -64,5 +64,11 @@
   "ai_fileUnsupportedFormat": "Unsupported file format: {mimeType}",
   "ai_fileOcrFailed": "OCR recognition failed: {error}",
   "ai_fileInvalidContent": "Invalid file content: {reason}",
-  "ai_configMissingApiKey": "API Key is required for scenario '{scenario}'"
+  "ai_configMissingApiKey": "API Key is required for scenario '{scenario}'",
+
+  "ai_a2aNotConfigured": "A2A service not configured. Provide 'a2a' config in ai.init().",
+  "ai_a2aHandleFailed": "A2A request handling failed: {error}",
+  "ai_a2aRemoteCallFailed": "A2A remote call to '{url}' failed: {error}",
+  "ai_a2aAuthFailed": "A2A authentication failed: {error}",
+  "ai_a2aListMessagesFailed": "A2A message listing failed: {error}"
 }

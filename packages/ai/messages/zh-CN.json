@@ -64,5 +64,11 @@
   "ai_fileUnsupportedFormat": "不支持的文件格式：{mimeType}",
   "ai_fileOcrFailed": "OCR 识别失败：{error}",
   "ai_fileInvalidContent": "文件内容无效：{reason}",
-  "ai_configMissingApiKey": "场景 '{scenario}' 需要提供 API Key"
+  "ai_configMissingApiKey": "场景 '{scenario}' 需要提供 API Key",
+
+  "ai_a2aNotConfigured": "A2A 服务未配置，请在 ai.init() 中提供 'a2a' 配置。",
+  "ai_a2aHandleFailed": "A2A 请求处理失败：{error}",
+  "ai_a2aRemoteCallFailed": "A2A 远端调用 '{url}' 失败：{error}",
+  "ai_a2aAuthFailed": "A2A 认证失败：{error}",
+  "ai_a2aListMessagesFailed": "A2A 消息查询失败：{error}"
 }

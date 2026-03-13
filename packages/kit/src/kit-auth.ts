@@ -6,7 +6,7 @@
  */
 
 import type { Result } from '@h-ai/core'
-import type { AuthResult, IamError, LdapCredentials, OtpCredentials, PasswordCredentials, RegisterOptions } from '@h-ai/iam'
+import type { ApiKeyCredentials, AuthResult, IamError, LdapCredentials, OtpCredentials, PasswordCredentials, RegisterOptions } from '@h-ai/iam'
 import type { HandleFetch } from '@sveltejs/kit'
 import type { AuthOperations } from './kit-types.js'
 import process from 'node:process'
@@ -14,11 +14,15 @@ import process from 'node:process'
 /** 默认 Token Cookie 名 */
 const DEFAULT_TOKEN_COOKIE_NAME = 'hai_access_token'
 
-/** 模块级 Token Cookie 名（可通过 configureAuth 或 createHandle auth.cookieName 配置） */
-let tokenCookieName = DEFAULT_TOKEN_COOKIE_NAME
-
-/** 模块级认证操作（由 createHandle auth.operations 注入） */
-let authOperations: AuthOperations | null = null
+/**
+ * 应用级认证配置（由 createHandle 一次性初始化，生命周期同进程）
+ *
+ * 此状态非请求级：仅在 createHandle() 时写入一次，后续所有请求只读访问。
+ */
+const authState = {
+  cookieName: DEFAULT_TOKEN_COOKIE_NAME,
+  operations: null as AuthOperations | null,
+}
 
 /**
  * 配置认证参数
@@ -27,16 +31,16 @@ let authOperations: AuthOperations | null = null
  */
 export function configureAuth(config: { cookieName?: string, operations?: AuthOperations }): void {
   if (config.cookieName)
-    tokenCookieName = config.cookieName
+    authState.cookieName = config.cookieName
   if (config.operations)
-    authOperations = config.operations
+    authState.operations = config.operations
 }
 
 /**
  * 获取当前配置的 Token Cookie 名
  */
 export function getTokenCookieName(): string {
-  return tokenCookieName
+  return authState.cookieName
 }
 
 interface CookieReader {
@@ -88,7 +92,7 @@ export function getBearerTokenFromRequest(request: Request): string | null {
  * 从请求中统一提取 Access Token（Bearer 优先，其次配置的 Cookie 名）。
  */
 export function getAccessToken(request: Request, cookies?: CookieReader): string | null {
-  return getBearerTokenFromRequest(request) ?? cookies?.get(tokenCookieName) ?? null
+  return getBearerTokenFromRequest(request) ?? cookies?.get(authState.cookieName) ?? null
 }
 
 // ─── 服务端认证 Cookie 管理 ───
@@ -97,7 +101,7 @@ export function getAccessToken(request: Request, cookies?: CookieReader): string
  * 写入 Access Token Cookie（内部使用，由 login 自动调用）。
  */
 function setToken(cookies: CookieWriter, token: string, maxAge?: number): void {
-  cookies.set(tokenCookieName, token, {
+  cookies.set(authState.cookieName, token, {
     path: '/',
     httpOnly: true,
     sameSite: 'lax',
@@ -110,7 +114,7 @@ function setToken(cookies: CookieWriter, token: string, maxAge?: number): void {
  * 清除 Access Token Cookie（内部使用，由 logout 自动调用）。
  */
 function clearToken(cookies: CookieWriter): void {
-  cookies.delete(tokenCookieName, { path: '/' })
+  cookies.delete(authState.cookieName, { path: '/' })
 }
 
 // ─── 服务端高级认证 API（通过 kit.auth 暴露） ───
@@ -119,10 +123,10 @@ function clearToken(cookies: CookieWriter): void {
  * 获取已注入的认证操作（未配置时抛出编程错误）
  */
 function getAuthOperations(): AuthOperations {
-  if (!authOperations) {
+  if (!authState.operations) {
     throw new Error('kit.auth 未配置：请在 kit.createHandle() 中传入 auth.operations')
   }
-  return authOperations
+  return authState.operations
 }
 
 /**
@@ -196,6 +200,26 @@ export async function loginWithLdap(
   credentials: LdapCredentials,
 ): Promise<Result<AuthResult, IamError>> {
   return executeLogin(cookies, getAuthOperations().loginWithLdap(credentials))
+}
+
+/**
+ * 服务端登录（API Key）：内部调用 iam.auth.loginWithApiKey，成功时自动写入 Token Cookie。
+ *
+ * @param cookies - SvelteKit cookies 对象
+ * @param credentials - API Key 凭证（key）
+ * @returns 认证结果（成功时 Cookie 已自动写入）
+ *
+ * @example
+ * ```ts
+ * const result = await kit.auth.loginWithApiKey(cookies, { key: apiKey })
+ * if (!result.success) return kit.response.fromError(result.error, IamErrorHttpStatus)
+ * ```
+ */
+export async function loginWithApiKey(
+  cookies: CookieWriter,
+  credentials: ApiKeyCredentials,
+): Promise<Result<AuthResult, IamError>> {
+  return executeLogin(cookies, getAuthOperations().loginWithApiKey(credentials))
 }
 
 /**

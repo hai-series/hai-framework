@@ -120,14 +120,6 @@ export function createAISubsystems(config: AIConfig, deps: AISubsystemDeps): AIS
   const knowledgeParsed = KnowledgeConfigSchema.parse(config.knowledge ?? {})
   const knowledge = createKnowledgeOperations(knowledgeParsed, llm, embedding, vecdbDep, sql, datapipeDep, dbType)
 
-  // 自动初始化知识库（幂等），失败仅警告不阻塞
-  knowledge.setup()
-    .then((r) => {
-      if (!r.success)
-        logger.warn('Knowledge auto-setup failed', { error: r.error })
-    })
-    .catch(e => logger.warn('Knowledge auto-setup error', { error: e }))
-
   // Memory（依赖 LLM + Embedding + Store）
   const memoryParsed = MemoryConfigSchema.parse(config.memory ?? {})
   const memoryStore = new ReldbAIStore<MemoryEntry>(sql, 'hai_ai_memory', jsonOps, { dbType, hasObjectId: true })

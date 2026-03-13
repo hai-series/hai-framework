@@ -21,10 +21,12 @@
     "clean": "rimraf .svelte-kit build .turbo"
   },
   "dependencies": {
+    "@h-ai/ai": "workspace:*",
     "@h-ai/cache": "workspace:*",
     "@h-ai/core": "workspace:*",
     "@h-ai/kit": "workspace:*",
     "@h-ai/reldb": "workspace:*",
+    "@h-ai/vecdb": "workspace:*",
     "zod": "catalog:"
   },
   "devDependencies": {

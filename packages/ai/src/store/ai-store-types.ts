@@ -18,6 +18,10 @@ export interface StoreScope {
   objectId?: string
   /** 会话 ID（写入 session_id 索引列） */
   sessionId?: string
+  /** 状态（写入 status 索引列） */
+  status?: string
+  /** 引用 ID（写入 ref_id 索引列，关联外部实体） */
+  refId?: string
 }
 
 // ─── 查询过滤 ───
@@ -86,6 +90,10 @@ export interface StoreFilter<T> {
   objectId?: string
   /** 按 session_id 索引列过滤（需要 AIStoreOptions.hasSessionId 启用） */
   sessionId?: string
+  /** 按 status 索引列过滤（需要 AIStoreOptions.hasStatus 启用，支持单值或多值 IN 匹配） */
+  status?: string | string[]
+  /** 按 ref_id 索引列过滤（需要 AIStoreOptions.hasRefId 启用） */
+  refId?: string
   /** 排序 */
   orderBy?: { field: keyof T, direction: 'asc' | 'desc' }
   /** 数量限制 */

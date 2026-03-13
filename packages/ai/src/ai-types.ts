@@ -7,6 +7,7 @@
 
 import type { Result } from '@h-ai/core'
 
+import type { A2AOperations } from './a2a/ai-a2a-types.js'
 import type { AIConfig, AIConfigInput, AIErrorCodeType } from './ai-config.js'
 import type { CompressOperations } from './compress/ai-compress-types.js'
 import type { ContextOperations } from './context/ai-context-types.js'
@@ -106,6 +107,8 @@ export interface AIFunctions {
   readonly rerank: RerankOperations
   /** File 操作（文件内容解析），需要先调用 `init()` */
   readonly file: FileOperations
+  /** A2A 操作（Agent-to-Agent 协议），需要先调用 `init()` 并配置 `a2a` */
+  readonly a2a: A2AOperations
 }
 
 // ─── 子功能类型 re-export ───

@@ -1,0 +1,22 @@
+# =============================================================================
+# API Service - AI 配置
+# =============================================================================
+
+llm:
+  type: openai
+  apiKey: ${HAI_OPENAI_API_KEY:sk-placeholder}
+  model: gpt-4o-mini
+
+a2a:
+  agentCard:
+    name: echo-agent
+    description: A simple echo agent that repeats your message (A2A demo)
+    url: ${HAI_A2A_URL:http://localhost:5173}
+    version: 0.1.0
+    skills:
+      - id: echo
+        name: Echo
+        description: Echoes back the user message
+        tags:
+          - demo
+          - echo

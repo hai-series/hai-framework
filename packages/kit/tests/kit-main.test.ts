@@ -89,6 +89,7 @@ describe('kit 统一出口', () => {
       expect(typeof kit.auth.login).toBe('function')
       expect(typeof kit.auth.loginWithOtp).toBe('function')
       expect(typeof kit.auth.loginWithLdap).toBe('function')
+      expect(typeof kit.auth.loginWithApiKey).toBe('function')
       expect(typeof kit.auth.registerAndLogin).toBe('function')
       expect(typeof kit.auth.logout).toBe('function')
       expect(typeof kit.auth.setBrowserToken).toBe('function')

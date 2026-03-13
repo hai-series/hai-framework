@@ -5,4 +5,5 @@
  * @module index
  */
 
+export * from './ai-a2a-client.js'
 export * from './ai-client.js'
