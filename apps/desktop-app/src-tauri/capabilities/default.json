@@ -1,0 +1,9 @@
+{
+  "identifier": "default",
+  "description": "hai Desktop App 默认权限",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "shell:allow-open"
+  ]
+}

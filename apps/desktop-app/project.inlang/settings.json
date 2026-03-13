@@ -1,0 +1,11 @@
+{
+  "$schema": "https://raw.githubusercontent.com/nicoverbruggen/inlang-schema/main/project-settings/project-settings.json",
+  "modules": [
+    "https://cdn.jsdelivr.net/npm/@inlang/plugin-message-format@4/dist/index.js"
+  ],
+  "plugin.inlang.messageFormat": {
+    "pathPattern": "../messages/{languageTag}.json"
+  },
+  "baseLocale": "zh-CN",
+  "locales": ["zh-CN", "en-US"]
+}
