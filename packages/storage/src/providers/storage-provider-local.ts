@@ -406,12 +406,13 @@ export function createLocalProvider(): StorageProvider {
     },
 
     async deleteMany(keys): Promise<Result<void, StorageError>> {
-      const errors: StorageError[] = []
+      // 并行删除，避免 await-in-loop（N+1）
+      const results = await Promise.allSettled(keys.map(key => file.delete(key)))
 
-      for (const key of keys) {
-        const result = await file.delete(key)
-        if (!result.success) {
-          errors.push(result.error)
+      const errors: StorageError[] = []
+      for (const result of results) {
+        if (result.status === 'fulfilled' && !result.value.success) {
+          errors.push(result.value.error)
         }
       }
 
