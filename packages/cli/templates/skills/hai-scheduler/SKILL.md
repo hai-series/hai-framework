@@ -259,11 +259,16 @@ scheduler.start()
 
 ### 多节点部署（分布式锁）
 
-> 多节点部署时，同一任务可能被多个节点同时调度。scheduler 内置基于数据库的分布式锁，通过 UNIQUE 约束保证同一时刻只有一个节点执行某任务。
+> 多节点部署时，同一任务可能被多个节点同时调度。scheduler 内置基于 `@h-ai/cache` 的分布式锁，通过 `cache.lock.acquire()` 保证同一时刻只有一个节点执行某任务。
 
 ```typescript
+import { cache } from '@h-ai/cache'
+import { reldb } from '@h-ai/reldb'
+
+// 先初始化 cache（用于分布式锁）
+await cache.init({ type: 'redis', host: 'localhost', port: 6379 })
 await reldb.init({ type: 'sqlite', database: './scheduler.db' })
-// enableDb: true 时自动启用分布式锁
+// enableDb: true 且 cache 已初始化时自动启用分布式锁
 await scheduler.init({ enableDb: true })
 ```
 
@@ -277,11 +282,16 @@ await scheduler.init({
 })
 ```
 
-**注意**：`runningTasks` 等内存状态仅表示当前节点的运行情况，不代表全局状态。跨节点互斥由数据库锁表保证。
+**注意**：
+- 分布式锁基于 `@h-ai/cache` 模块，运行时动态检测 `cache.isInitialized`
+- 若 cache 未初始化，分布式锁自动禁用，不影响调度器运行
+- 锁通过 TTL 自动过期，无需手动清理
+- `runningTasks` 等内存状态仅表示当前节点的运行情况，不代表全局状态
 
 ---
 
 ## 相关 Skills
 
 - `hai-reldb`：数据库初始化与操作
+- `hai-cache`：缓存操作、分布式锁
 - `hai-core`：配置管理、Result 模型、日志

@@ -95,12 +95,13 @@ await scheduler.init({
 
 ## 分布式锁
 
-启用 DB 时，scheduler 内置基于数据库 UNIQUE 约束的分布式锁，多节点部署时确保同一任务同一分钟只有一个节点执行。
+启用 DB 时，scheduler 内置基于 `@h-ai/cache` 的分布式锁，多节点部署时确保同一任务同一分钟只有一个节点执行。
 
-- `enableDb: true` 时自动启用，无需额外配置
-- 锁键格式为 `${taskId}:${minuteTimestamp}`
-- 崩溃节点的过期锁会被自动清理
+- `enableDb: true` 且 `@h-ai/cache` 已初始化时自动启用，无需额外配置
+- 锁键格式为 `scheduler:${taskId}:${minuteTimestamp}`
+- 锁通过 TTL 自动过期，无需手动清理
 - 手动触发（`trigger`）不经过分布式锁
+- 若 `@h-ai/cache` 未初始化，分布式锁自动禁用，不影响调度器运行
 
 ## 错误处理
 

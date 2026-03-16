@@ -8,5 +8,7 @@
   "cache_valueNotNumber": "值不是数字",
   "cache_keyNotFound": "键不存在",
   "cache_indexOutOfRange": "索引越界",
-  "cache_configError": "缓存配置校验失败：{error}"
+  "cache_configError": "缓存配置校验失败：{error}",
+  "cache_lockAcquireFailed": "获取分布式锁失败：{key}",
+  "cache_lockReleaseFailed": "释放分布式锁失败：{key}"
 }

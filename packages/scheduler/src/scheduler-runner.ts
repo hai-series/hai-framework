@@ -8,10 +8,11 @@
 import type { Result } from '@h-ai/core'
 import type { Cron } from 'croner'
 
-import type { SchedulerLockRepository, SchedulerLogRepository } from './repositories/index.js'
+import type { SchedulerLogRepository } from './repositories/index.js'
 import type { SchedulerConfig } from './scheduler-config.js'
 import type { SchedulerError, TaskDefinition, TaskExecutionLog } from './scheduler-types.js'
 
+import { cache } from '@h-ai/cache'
 import { core, ok } from '@h-ai/core'
 
 import { parseCronExpression } from './scheduler-cron.js'
@@ -39,20 +40,11 @@ let lastTickMinute = -1
 /** 日志仓库实例（由 main.ts 在 init 时注入） */
 let currentLogRepo: SchedulerLogRepository | null = null
 
-/** 分布式锁仓库实例（由 main.ts 在 init 时注入） */
-let currentLockRepo: SchedulerLockRepository | null = null
-
-/** 当前节点 ID */
+/** 当前节点 ID（用于分布式锁 owner） */
 let currentNodeId: string = ''
 
-/** 锁过期时间（毫秒） */
-let currentLockExpireMs: number = 300000
-
-/** 上次锁清理的分钟时间戳 */
-let lastCleanupMinute: number = -1
-
-/** 锁清理间隔（每 10 分钟清理一次） */
-const LOCK_CLEANUP_INTERVAL_MINUTES = 10
+/** 锁过期时间（秒） */
+let currentLockTtlSec: number = 300
 
 /**
  * 设置日志仓库实例
@@ -68,16 +60,15 @@ export function setLogRepository(repo: SchedulerLogRepository | null): void {
 /**
  * 配置分布式锁
  *
- * 由 scheduler-main.ts 在 init 时调用，注入锁仓库与节点配置。
+ * 由 scheduler-main.ts 在 init 时调用，配置锁参数。
+ * 分布式锁基于 @h-ai/cache 模块实现，运行时通过 cache.isInitialized 动态检测可用性。
  *
- * @param repo - 锁仓库实例或 null
- * @param nodeId - 当前节点标识
- * @param expireMs - 锁过期时间（毫秒）
+ * @param nodeId - 当前节点标识（用于 lock owner）
+ * @param lockTtlSec - 锁过期时间（秒）
  */
-export function setLockRepository(repo: SchedulerLockRepository | null, nodeId: string, expireMs: number): void {
-  currentLockRepo = repo
+export function configureLock(nodeId: string, lockTtlSec: number): void {
   currentNodeId = nodeId
-  currentLockExpireMs = expireMs
+  currentLockTtlSec = lockTtlSec
 }
 
 // ─── 调度逻辑 ───
@@ -98,14 +89,6 @@ function tick(): void {
     return
   lastTickMinute = currentMinute
 
-  // 定期清理过期锁记录
-  if (currentLockRepo && currentMinute - lastCleanupMinute >= LOCK_CLEANUP_INTERVAL_MINUTES) {
-    lastCleanupMinute = currentMinute
-    void currentLockRepo.cleanupExpiredLocks().catch((error) => {
-      logger.warn('Lock cleanup error', { error })
-    })
-  }
-
   for (const [taskId, task] of taskRegistry) {
     if (task.enabled === false)
       continue
@@ -120,7 +103,7 @@ function tick(): void {
         logger.debug('Skipping task already running', { taskId, taskName: task.name })
         continue
       }
-      logger.info('Triggering scheduled task', { taskId, taskName: task.name })
+      logger.debug('Triggering scheduled task', { taskId, taskName: task.name })
       // 异步执行，不阻塞 tick；捕获未处理拒绝
       void runTask(task, currentMinute).catch((error) => {
         logger.error('Unhandled task execution error', { taskId, error })
@@ -142,10 +125,11 @@ function tick(): void {
  */
 export async function runTask(task: TaskDefinition, minuteTimestamp?: number): Promise<TaskExecutionLog> {
   // 分布式锁：多节点场景下确保同一任务同一分钟只执行一次
-  if (currentLockRepo && minuteTimestamp !== undefined) {
-    const acquired = await currentLockRepo.tryAcquire(task.id, minuteTimestamp, currentNodeId, currentLockExpireMs)
-    if (!acquired) {
-      logger.info('Skipping task, another node holds the lock', { taskId: task.id, minuteTimestamp })
+  const lockKey = minuteTimestamp !== undefined ? `hai:scheduler:${task.id}:${minuteTimestamp}` : undefined
+  if (cache.isInitialized && lockKey) {
+    const lockResult = await cache.lock.acquire(lockKey, { ttl: currentLockTtlSec, owner: currentNodeId })
+    if (lockResult.success && !lockResult.data) {
+      logger.debug('Skipping task, another node holds the lock', { taskId: task.id, minuteTimestamp })
       // 返回一条跳过日志（不持久化）
       return {
         id: 0,
@@ -181,11 +165,6 @@ export async function runTask(task: TaskDefinition, minuteTimestamp?: number): P
     }
     else {
       logger.info('Task execution succeeded', { taskId: task.id, duration: log.duration })
-    }
-
-    // 释放分布式锁（更新状态）
-    if (currentLockRepo && minuteTimestamp !== undefined) {
-      await currentLockRepo.releaseLock(task.id, minuteTimestamp, log.status === 'success' ? 'completed' : 'failed')
     }
 
     return log
@@ -328,8 +307,6 @@ export function resetRunner(): void {
   runningTasks.clear()
   lastTickMinute = -1
   currentLogRepo = null
-  currentLockRepo = null
   currentNodeId = ''
-  currentLockExpireMs = 300000
-  lastCleanupMinute = -1
+  currentLockTtlSec = 300
 }

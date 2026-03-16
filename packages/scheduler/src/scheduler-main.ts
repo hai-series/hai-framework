@@ -19,16 +19,17 @@ import type {
   TaskExecutionLog,
   TaskUpdateInput,
 } from './scheduler-types.js'
+import { cache } from '@h-ai/cache'
 import { core, err, ok } from '@h-ai/core'
 
 import { reldb } from '@h-ai/reldb'
 
-import { SchedulerLockRepository, SchedulerLogRepository, SchedulerTaskRepository } from './repositories/index.js'
+import { SchedulerLogRepository, SchedulerTaskRepository } from './repositories/index.js'
 import { SchedulerConfigSchema, SchedulerErrorCode } from './scheduler-config.js'
-import { SCHEDULER_LOCK_TABLE, SCHEDULER_LOG_TABLE, SCHEDULER_TASK_TABLE } from './scheduler-constants.js'
+import { SCHEDULER_LOG_TABLE, SCHEDULER_TASK_TABLE } from './scheduler-constants.js'
 import { parseCronExpression } from './scheduler-cron.js'
 import { schedulerM } from './scheduler-i18n.js'
-import { getTask, getTaskRegistry, hasTask, isTaskRunning, isTimerRunning, registerInMemory, resetRunner, runTask, setCronCache, setLockRepository, setLogRepository, setTask, startTimer, stopTimer, unregisterFromMemory } from './scheduler-runner.js'
+import { configureLock, getTask, getTaskRegistry, hasTask, isTaskRunning, isTimerRunning, registerInMemory, resetRunner, runTask, setCronCache, setLogRepository, setTask, startTimer, stopTimer, unregisterFromMemory } from './scheduler-runner.js'
 
 const logger = core.logger.child({ module: 'scheduler', scope: 'main' })
 
@@ -45,9 +46,6 @@ let taskRepo: SchedulerTaskRepository | null = null
 
 /** 执行日志仓库 */
 let logRepo: SchedulerLogRepository | null = null
-
-/** 分布式锁仓库 */
-let lockRepo: SchedulerLockRepository | null = null
 
 // ─── 未初始化工具集 ───
 
@@ -70,15 +68,20 @@ async function initDatabase(parsed: SchedulerConfig): Promise<SchedulerConfig> {
 
   taskRepo = new SchedulerTaskRepository(reldb, SCHEDULER_TASK_TABLE)
   logRepo = new SchedulerLogRepository(reldb, SCHEDULER_LOG_TABLE)
-  lockRepo = new SchedulerLockRepository(reldb, SCHEDULER_LOCK_TABLE)
 
   // 通知 runner 使用日志仓库
   setLogRepository(logRepo)
 
-  // 配置分布式锁：使用配置的 nodeId 或自动生成
+  // 配置分布式锁：基于 cache 模块，运行时动态检测 cache.isInitialized
   const nodeId = parsed.nodeId ?? crypto.randomUUID()
-  setLockRepository(lockRepo, nodeId, parsed.lockExpireMs)
-  logger.info('Distributed lock configured', { nodeId, lockExpireMs: parsed.lockExpireMs })
+  const lockTtlSec = Math.ceil(parsed.lockExpireMs / 1000)
+  configureLock(nodeId, lockTtlSec)
+  if (cache.isInitialized) {
+    logger.info('Distributed lock configured (cache-based)', { nodeId, lockTtlSec })
+  }
+  else {
+    logger.warn('Cache module not initialized, distributed lock will be enabled when cache becomes available')
+  }
 
   return parsed
 }
@@ -209,9 +212,8 @@ export const scheduler: SchedulerFunctions = {
         currentConfig = null
         taskRepo = null
         logRepo = null
-        lockRepo = null
         setLogRepository(null)
-        setLockRepository(null, '', 300000)
+        configureLock('', 300)
         logger.error('Scheduler initialization failed', { error })
         return err({
           code: SchedulerErrorCode.INIT_FAILED,
@@ -447,7 +449,7 @@ export const scheduler: SchedulerFunctions = {
       })
     }
 
-    logger.info('Manually triggering task', { taskId })
+    logger.debug('Manually triggering task', { taskId })
     const log = await runTask(task)
     return ok(log)
   },
@@ -511,7 +513,6 @@ export const scheduler: SchedulerFunctions = {
     currentConfig = null
     taskRepo = null
     logRepo = null
-    lockRepo = null
     logger.info('Scheduler module closed')
   },
 }
