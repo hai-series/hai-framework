@@ -15,6 +15,23 @@ import { schedulerM } from './scheduler-i18n.js'
 
 const logger = core.logger.child({ module: 'scheduler', scope: 'executor' })
 
+/**
+ * 剥离 URL 中的认证信息，避免密码泄露到日志
+ */
+function sanitizeUrl(url: string): string {
+  try {
+    const u = new URL(url)
+    if (u.password)
+      u.password = '***'
+    if (u.username)
+      u.username = '***'
+    return u.toString()
+  }
+  catch {
+    return '(invalid url)'
+  }
+}
+
 // ─── JS 任务执行 ───
 
 /**
@@ -69,10 +86,10 @@ export async function executeApiTask(
 ): Promise<Result<string | null, SchedulerError>> {
   const { url, method = 'GET', headers, body, timeout = DEFAULT_API_TIMEOUT } = config
 
-  try {
-    const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), timeout)
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), timeout)
 
+  try {
     const fetchOptions: RequestInit = {
       method,
       headers: {
@@ -89,7 +106,7 @@ export async function executeApiTask(
     const responseText = await response.text()
 
     if (!response.ok) {
-      logger.error('API task returned non-OK status', { taskId, status: response.status, url })
+      logger.error('API task returned non-OK status', { taskId, status: response.status, url: sanitizeUrl(url) })
       return err({
         code: SchedulerErrorCode.API_EXECUTION_FAILED,
         message: schedulerM('scheduler_apiExecutionFailed', {
@@ -101,8 +118,9 @@ export async function executeApiTask(
     return ok(responseText || null)
   }
   catch (error) {
+    clearTimeout(timer)
     const message = error instanceof Error ? error.message : String(error)
-    logger.error('API task execution failed', { taskId, error: message, url })
+    logger.error('API task execution failed', { taskId, error: message, url: sanitizeUrl(url) })
     return err({
       code: SchedulerErrorCode.API_EXECUTION_FAILED,
       message: schedulerM('scheduler_apiExecutionFailed', { params: { error: message } }),

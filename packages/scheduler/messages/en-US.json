@@ -13,10 +13,8 @@
   "scheduler_dbSaveFailed": "Failed to save execution log: {error}",
   "scheduler_dbNotInitialized": "Database not initialized, cannot save execution logs",
   "scheduler_configError": "Scheduler config validation failed: {error}",
-  "scheduler_config_tableNameInvalid": "Table name must only contain letters, digits, and underscores",
   "scheduler_taskIdEmpty": "Task ID cannot be empty",
   "scheduler_taskRunning": "Task is currently running: {taskId}",
   "scheduler_invalidApiConfig": "Invalid api_config for task: {taskId}",
-  "scheduler_lockAcquireFailed": "Failed to acquire distributed lock, another node already holds it: {taskId}",
-  "scheduler_lockCleanupFailed": "Failed to cleanup expired lock records: {error}"
+  "scheduler_lockAcquireFailed": "Failed to acquire distributed lock, another node already holds it: {taskId}"
 }

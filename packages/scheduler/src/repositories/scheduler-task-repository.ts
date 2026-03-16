@@ -12,11 +12,23 @@ import type { SchedulerError, TaskDefinitionApi, TaskUpdateInput } from '../sche
 
 import { core, err, ok } from '@h-ai/core'
 import { BaseReldbCrudRepository } from '@h-ai/reldb'
+import { z } from 'zod'
 
-import { ApiTaskConfigSchema, SchedulerErrorCode } from '../scheduler-config.js'
+import { SchedulerErrorCode } from '../scheduler-config.js'
 import { schedulerM } from '../scheduler-i18n.js'
 
 const logger = core.logger.child({ module: 'scheduler', scope: 'task-repository' })
+
+// ─── API 任务配置 Schema（用于 DB 加载时校验） ───
+
+/** API 任务配置 Zod Schema，校验从数据库加载的 api_config JSON */
+const ApiTaskConfigSchema = z.object({
+  url: z.string().min(1),
+  method: z.enum(['GET', 'POST', 'PUT', 'DELETE', 'PATCH']).optional(),
+  headers: z.record(z.string(), z.string()).optional(),
+  body: z.unknown().optional(),
+  timeout: z.number().int().positive().optional(),
+})
 
 // ─── 任务行类型（数据库行映射） ───
 
@@ -139,7 +151,10 @@ export class SchedulerTaskRepository extends BaseReldbCrudRepository<TaskRow> {
       if (updates.api !== undefined)
         data.apiConfig = updates.api
 
-      if (Object.keys(data).length === 0) {
+      // 更新时间戳
+      data.updatedAt = new Date()
+
+      if (Object.keys(data).length <= 1) {
         return ok(undefined)
       }
 

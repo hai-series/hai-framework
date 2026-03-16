@@ -31,13 +31,6 @@ describe('distributed lock integration', () => {
     it('启用 DB 时应自动创建锁表', async () => {
       const result = await scheduler.init({ enableDb: true })
       expect(result.success).toBe(true)
-      expect(scheduler.config?.lockTableName).toBe('scheduler_locks')
-    })
-
-    it('应支持自定义锁表名', async () => {
-      const result = await scheduler.init({ enableDb: true, lockTableName: 'custom_locks' })
-      expect(result.success).toBe(true)
-      expect(scheduler.config?.lockTableName).toBe('custom_locks')
     })
 
     it('应支持自定义锁过期时间', async () => {
@@ -56,14 +49,6 @@ describe('distributed lock integration', () => {
       const result = await scheduler.init({ enableDb: false })
       expect(result.success).toBe(true)
       // 禁用 DB 时分布式锁不可用，但不影响运行
-    })
-
-    it('含特殊字符的 lockTableName 应被拒绝', async () => {
-      const result = await scheduler.init({ enableDb: true, lockTableName: 'locks; DROP TABLE' })
-      expect(result.success).toBe(false)
-      if (!result.success) {
-        expect(result.error.code).toBe(SchedulerErrorCode.CONFIG_ERROR)
-      }
     })
 
     it('lockExpireMs 低于最小值应被拒绝', async () => {
