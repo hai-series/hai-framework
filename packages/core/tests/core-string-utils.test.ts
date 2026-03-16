@@ -46,4 +46,12 @@ describe('core.string', () => {
     expect(core.string.padStart('1', 3, '0')).toBe('001')
     expect(core.string.padEnd('1', 3, '0')).toBe('100')
   })
+
+  it('constantTimeEqual 应该进行常量时间比较', () => {
+    expect(core.string.constantTimeEqual('abc', 'abc')).toBe(true)
+    expect(core.string.constantTimeEqual('abc', 'abd')).toBe(false)
+    expect(core.string.constantTimeEqual('abc', 'ab')).toBe(false)
+    expect(core.string.constantTimeEqual('', '')).toBe(true)
+    expect(core.string.constantTimeEqual('a', '')).toBe(false)
+  })
 })

@@ -7,27 +7,12 @@
 
 import type { LogFormat, LoggingConfig, LogLevel } from '../core-config.js'
 import type { LogContext, Logger, LoggerFunctions, LoggerOptions } from '../core-types.js'
+import { execSync } from 'node:child_process'
 import process from 'node:process'
 import pino from 'pino'
 
-/** Windows UTF-8 编码修复是否已执行 */
-let windowsUtf8Fixed = false
-
-/**
- * Windows 控制台 UTF-8 编码修复（懒执行）。
- *
- * 解决 Pino 日志中文乱码问题（pino/sonic-boom 在 Windows 上需要显式设置 UTF-8）。
- * 仅在首次调用时执行，后续调用直接跳过。
- */
-function ensureWindowsUtf8(): void {
-  if (windowsUtf8Fixed || process.platform !== 'win32' || !process.stdout.isTTY)
-    return
-  windowsUtf8Fixed = true
-
+if (process.platform === 'win32' && process.stdout.isTTY) {
   try {
-    // 动态导入 execSync，避免模块加载时阻塞
-    // eslint-disable-next-line ts/no-require-imports
-    const { execSync } = require('node:child_process')
     // 强制切换控制台代码页为 UTF-8（避免 GBK/GB2312 导致的乱码）
     execSync('chcp 65001 > nul', { stdio: 'ignore' })
 
@@ -44,7 +29,8 @@ function ensureWindowsUtf8(): void {
     process.env.LC_ALL = 'zh_CN.UTF-8'
     process.env.PYTHONIOENCODING = 'utf-8'
   }
-  catch {
+  // eslint-disable-next-line unused-imports/no-unused-vars
+  catch (_e) {
     // 忽略错误，某些环境可能不支持
   }
 }
@@ -165,9 +151,6 @@ function wrapPino(pinoLogger: pino.Logger, context: Record<string, unknown>): Lo
  * ```
  */
 function createLogger(options: LoggerOptions = {}): Logger {
-  // 首次创建 pino 实例前确保 Windows 控制台 UTF-8 编码
-  ensureWindowsUtf8()
-
   const level = options.level ?? globalLevel
   const format = options.format ?? globalFormat
   const context = { ...globalContext, ...options.context }

@@ -150,7 +150,7 @@ const configCache = new Map<string, CacheEntry>()
  * @example
  * ```ts
  * const callback: WatchCallback<AppConfig> = (cfg, error) => {
- *   if (error) { console.error(error); return }
+ *   if (error) { core.logger.error('Config reload failed', { error }); return }
  *   // 使用更新后的 cfg
  * }
  * ```
