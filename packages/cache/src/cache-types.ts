@@ -262,12 +262,83 @@ export interface ZSetOperations {
   zremRangeByScore: (key: string, min: number | string, max: number | string) => Promise<Result<number, CacheError>>
 }
 
+// ─── 分布式锁操作接口 ───
+
+/**
+ * 分布式锁操作接口
+ *
+ * 基于 SET NX EX 模式实现分布式互斥锁，适用于多节点部署场景。
+ *
+ * @example
+ * ```ts
+ * const acquired = await cache.lock.acquire('my-lock', { ttl: 30 })
+ * if (acquired.success && acquired.data) {
+ *   try {
+ *     // 执行受保护操作
+ *   } finally {
+ *     await cache.lock.release('my-lock')
+ *   }
+ * }
+ * ```
+ */
+export interface LockOperations {
+  /**
+   * 尝试获取分布式锁
+   *
+   * 通过 SET NX EX 原子操作实现。获锁成功返回 true，锁已被持有返回 false。
+   *
+   * @param key - 锁键名
+   * @param options - 锁选项
+   * @returns true 表示获锁成功，false 表示锁已被其他持有者持有
+   */
+  acquire: (key: string, options?: LockOptions) => Promise<Result<boolean, CacheError>>
+
+  /**
+   * 释放分布式锁
+   *
+   * 仅当锁由当前持有者持有时才释放（通过 owner 比对），防止误释放他人的锁。
+   *
+   * @param key - 锁键名
+   * @param owner - 锁持有者标识（须与 acquire 时一致）；未传则强制释放
+   * @returns true 表示释放成功，false 表示锁不存在或非当前持有者
+   */
+  release: (key: string, owner?: string) => Promise<Result<boolean, CacheError>>
+
+  /**
+   * 检查锁是否被持有
+   *
+   * @param key - 锁键名
+   * @returns true 表示锁存在且未过期
+   */
+  isLocked: (key: string) => Promise<Result<boolean, CacheError>>
+
+  /**
+   * 续期锁的过期时间
+   *
+   * 仅当锁由当前持有者持有时才续期。
+   *
+   * @param key - 锁键名
+   * @param ttl - 新的过期时间（秒）
+   * @param owner - 锁持有者标识；未传则直接续期
+   * @returns true 表示续期成功，false 表示锁不存在或非当前持有者
+   */
+  extend: (key: string, ttl: number, owner?: string) => Promise<Result<boolean, CacheError>>
+}
+
+/** 分布式锁选项 */
+export interface LockOptions {
+  /** 锁过期时间（秒）；默认 30 */
+  ttl?: number
+  /** 锁持有者标识；默认自动生成（推荐设置固定值以便审计） */
+  owner?: string
+}
+
 // ─── 复合操作接口 ───
 
 /**
  * 复合缓存操作接口，聚合所有数据结构的操作子接口
  *
- * 通过 `cache.kv` / `cache.hash` / `cache.list` / `cache.set_` / `cache.zset` 分别访问
+ * 通过 `cache.kv` / `cache.hash` / `cache.list` / `cache.set_` / `cache.zset` / `cache.lock` 分别访问
  */
 export interface CacheCompositeOperations {
   /** KV 操作 */
@@ -280,6 +351,8 @@ export interface CacheCompositeOperations {
   readonly set_: SetOperations
   /** SortedSet 操作 */
   readonly zset: ZSetOperations
+  /** 分布式锁操作 */
+  readonly lock: LockOperations
   /** 测试连接 */
   ping: () => Promise<Result<string, CacheError>>
 }

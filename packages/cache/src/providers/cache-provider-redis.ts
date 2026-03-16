@@ -15,6 +15,8 @@ import type {
   HashOperations,
   KvOperations,
   ListOperations,
+  LockOperations,
+  LockOptions,
   ScanOptions,
   SetOperations,
   SetOptions,
@@ -585,6 +587,72 @@ export function createRedisProvider(): CacheProvider {
     },
   }
 
+  // ─── Lock 操作 ───
+
+  /** 锁前缀，用于区分锁键与普通 KV 键 */
+  const LOCK_PREFIX = '__lock:'
+
+  const lock: LockOperations = {
+    async acquire(key: string, options?: LockOptions): Promise<Result<boolean, CacheError>> {
+      return wrapOperation(async () => {
+        const lockKey = `${LOCK_PREFIX}${key}`
+        const ttl = options?.ttl ?? 30
+        const owner = options?.owner ?? 'default'
+        // SET key value NX EX ttl — 原子获锁
+        const result = await client!.set(lockKey, owner, 'EX', ttl, 'NX')
+        return result === 'OK'
+      })
+    },
+
+    async release(key: string, owner?: string): Promise<Result<boolean, CacheError>> {
+      return wrapOperation(async () => {
+        const lockKey = `${LOCK_PREFIX}${key}`
+        if (owner !== undefined) {
+          // Lua 脚本：仅当 owner 匹配时才删除（原子操作，防止误释放）
+          const script = `
+            if redis.call("get", KEYS[1]) == ARGV[1] then
+              return redis.call("del", KEYS[1])
+            else
+              return 0
+            end
+          `
+          const result = await client!.eval(script, 1, lockKey, owner) as number
+          return result === 1
+        }
+        const deleted = await client!.del(lockKey)
+        return deleted === 1
+      })
+    },
+
+    async isLocked(key: string): Promise<Result<boolean, CacheError>> {
+      return wrapOperation(async () => {
+        const lockKey = `${LOCK_PREFIX}${key}`
+        const exists = await client!.exists(lockKey)
+        return exists === 1
+      })
+    },
+
+    async extend(key: string, ttl: number, owner?: string): Promise<Result<boolean, CacheError>> {
+      return wrapOperation(async () => {
+        const lockKey = `${LOCK_PREFIX}${key}`
+        if (owner !== undefined) {
+          // Lua 脚本：仅当 owner 匹配时才续期（原子操作）
+          const script = `
+            if redis.call("get", KEYS[1]) == ARGV[1] then
+              return redis.call("expire", KEYS[1], ARGV[2])
+            else
+              return 0
+            end
+          `
+          const result = await client!.eval(script, 1, lockKey, owner, ttl) as number
+          return result === 1
+        }
+        const result = await client!.expire(lockKey, ttl)
+        return result === 1
+      })
+    },
+  }
+
   // ─── Provider 返回 ───
 
   return {
@@ -695,6 +763,7 @@ export function createRedisProvider(): CacheProvider {
     list,
     set_,
     zset,
+    lock,
 
     async ping(): Promise<Result<string, CacheError>> {
       return wrapOperation(() => client!.ping())
