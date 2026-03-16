@@ -45,6 +45,8 @@ function generateUUID(): string {
     crypto.getRandomValues(bytes)
   }
   else {
+    // 注意：Math.random() 不是密码学安全的随机源，仅作为极端环境的兜底方案
+    // 现代 Node.js 和浏览器均支持 crypto API，此分支几乎不会执行
     for (let i = 0; i < 16; i++) {
       bytes[i] = Math.floor(Math.random() * 256)
     }

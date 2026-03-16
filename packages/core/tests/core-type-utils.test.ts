@@ -14,9 +14,11 @@ describe('core.typeUtils', () => {
     expect(core.typeUtils.isDefined(0)).toBe(true)
   })
 
-  it('isObject 应该排除数组', () => {
+  it('isObject 应该排除数组和 null', () => {
     expect(core.typeUtils.isObject({})).toBe(true)
     expect(core.typeUtils.isObject([])).toBe(false)
+    expect(core.typeUtils.isObject(null)).toBe(false)
+    expect(core.typeUtils.isObject(undefined)).toBe(false)
   })
 
   it('isFunction 应该识别函数', () => {
