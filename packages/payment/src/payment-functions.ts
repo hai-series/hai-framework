@@ -17,7 +17,7 @@ import type {
   RefundInput,
   RefundResult,
 } from './payment-types.js'
-import { err } from '@h-ai/core'
+import { err, ok } from '@h-ai/core'
 import { PaymentErrorCode } from './payment-config.js'
 import { paymentM } from './payment-i18n.js'
 
@@ -54,7 +54,7 @@ function requireProvider(name: string): Result<PaymentProvider, PaymentError> {
       message: paymentM('payment_providerNotFound'),
     })
   }
-  return { success: true, data: provider } as Result<PaymentProvider, PaymentError>
+  return ok(provider)
 }
 
 /**

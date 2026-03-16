@@ -49,6 +49,27 @@ describe('payment.init', () => {
     expect(result.success).toBe(true)
   })
 
+  it('并发 init 时第二次返回 CONFIG_ERROR', async () => {
+    // 先初始化一次，使后续 init 进入 reinit 路径（会 await close()，产生微任务让步）
+    await payment.init({})
+
+    const [r1, r2] = await Promise.all([
+      payment.init({}),
+      payment.init({}),
+    ])
+
+    // 其中一个成功，另一个因并发被拒绝
+    const results = [r1, r2]
+    const successes = results.filter(r => r.success)
+    const failures = results.filter(r => !r.success)
+
+    expect(successes).toHaveLength(1)
+    expect(failures).toHaveLength(1)
+    if (!failures[0].success) {
+      expect(failures[0].error.code).toBe(PaymentErrorCode.CONFIG_ERROR)
+    }
+  })
+
   it('配置 wechat 时注册 wechat Provider', async () => {
     await payment.init({
       wechat: {
