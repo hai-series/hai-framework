@@ -2,16 +2,16 @@
  * =============================================================================
  * @h-ai/scheduler - 分布式锁集成测试
  *
- * 测试 scheduler + reldb 集成场景下的分布式锁行为：
- * - 启用 DB 时自动配置分布式锁
- * - runTask 获锁后执行，释放锁后状态更新
+ * 测试 scheduler + cache 集成场景下的分布式锁行为：
+ * - 启用 cache 时自动配置分布式锁
+ * - runTask 获锁后执行，同一分钟内不重复执行
  * - 模拟多节点竞争，验证仅一个节点执行
  * =============================================================================
  */
 
+import { cache } from '@h-ai/cache'
 import { reldb } from '@h-ai/reldb'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { SchedulerLockRepository } from '../src/repositories/scheduler-lock-repository.js'
 import { SchedulerErrorCode } from '../src/scheduler-config.js'
 import { scheduler } from '../src/scheduler-main.js'
 import { runTask } from '../src/scheduler-runner.js'
@@ -19,16 +19,18 @@ import { runTask } from '../src/scheduler-runner.js'
 describe('distributed lock integration', () => {
   beforeEach(async () => {
     await reldb.init({ type: 'sqlite', database: ':memory:' })
+    await cache.init({ type: 'memory' })
   })
 
   afterEach(async () => {
     vi.unstubAllGlobals()
     await scheduler.close()
+    await cache.close()
     await reldb.close()
   })
 
   describe('scheduler init with lock', () => {
-    it('启用 DB 时应自动创建锁表', async () => {
+    it('启用 DB 且 cache 已初始化时应自动配置分布式锁', async () => {
       const result = await scheduler.init({ enableDb: true })
       expect(result.success).toBe(true)
     })
@@ -155,38 +157,29 @@ describe('distributed lock integration', () => {
   })
 
   describe('simulate multi-node competition', () => {
-    it('两个 lockRepo 实例竞争同一锁键，只有一个成功', async () => {
-      const lockRepoA = new SchedulerLockRepository(reldb, 'scheduler_locks')
-      const lockRepoB = new SchedulerLockRepository(reldb, 'scheduler_locks')
+    it('同一锁键竞争，只有一个成功', async () => {
+      await scheduler.init({ enableDb: true })
 
-      // 等待建表完成（两个实例共享同一张表）
-      await new Promise(resolve => setTimeout(resolve, 50))
+      const handler = vi.fn().mockResolvedValue('done')
+      await scheduler.register({
+        id: 'compete-task',
+        name: '竞争测试',
+        cron: '* * * * *',
+        type: 'js',
+        handler,
+      })
 
+      const task = scheduler.tasks.get('compete-task')!
       const minuteTs = Math.floor(Date.now() / 60000)
 
-      const resultA = await lockRepoA.tryAcquire('task-1', minuteTs, 'node-a', 300000)
-      const resultB = await lockRepoB.tryAcquire('task-1', minuteTs, 'node-b', 300000)
+      // 第一次获锁执行
+      const log1 = await runTask(task, minuteTs)
+      expect(log1.status).toBe('success')
 
-      // 恰好一个成功、一个失败
-      expect([resultA, resultB].filter(Boolean).length).toBe(1)
-      expect([resultA, resultB].filter(r => !r).length).toBe(1)
-    })
-
-    it('并发获锁只有一个节点成功', async () => {
-      const lockRepo = new SchedulerLockRepository(reldb, 'scheduler_locks_concurrent')
-      await new Promise(resolve => setTimeout(resolve, 50))
-
-      const minuteTs = Math.floor(Date.now() / 60000)
-
-      // 并发获锁
-      const results = await Promise.all([
-        lockRepo.tryAcquire('task-1', minuteTs, 'node-1', 300000),
-        lockRepo.tryAcquire('task-1', minuteTs, 'node-2', 300000),
-        lockRepo.tryAcquire('task-1', minuteTs, 'node-3', 300000),
-      ])
-
-      // 仅一个成功
-      expect(results.filter(Boolean).length).toBe(1)
+      // 第二次（模拟另一节点）应失败
+      const log2 = await runTask(task, minuteTs)
+      expect(log2.status).toBe('failed')
+      expect(log2.error).toContain('another node holds the distributed lock')
     })
   })
 })

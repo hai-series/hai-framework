@@ -14,6 +14,8 @@ import type {
   HashOperations,
   KvOperations,
   ListOperations,
+  LockOperations,
+  LockOptions,
   ScanOptions,
   SetOperations,
   SetOptions,
@@ -842,6 +844,61 @@ export function createMemoryProvider(): CacheProvider {
     },
   }
 
+  // ─── Lock 操作 ───
+
+  /** 锁前缀，用于区分锁键与普通 KV 键 */
+  const LOCK_PREFIX = '__lock:'
+
+  const lock: LockOperations = {
+    async acquire(key: string, options?: LockOptions): Promise<Result<boolean, CacheError>> {
+      const lockKey = `${LOCK_PREFIX}${key}`
+      const ttl = options?.ttl ?? 30
+      const owner = options?.owner ?? 'default'
+      const existing = getValidEntry(lockKey)
+      if (existing) {
+        // 锁已被持有
+        return ok(false)
+      }
+      store.set(lockKey, {
+        value: owner,
+        expiresAt: Date.now() + ttl * 1000,
+      })
+      return ok(true)
+    },
+
+    async release(key: string, owner?: string): Promise<Result<boolean, CacheError>> {
+      const lockKey = `${LOCK_PREFIX}${key}`
+      const entry = getValidEntry(lockKey)
+      if (!entry) {
+        return ok(false)
+      }
+      if (owner !== undefined && entry.value !== owner) {
+        return ok(false)
+      }
+      store.delete(lockKey)
+      return ok(true)
+    },
+
+    async isLocked(key: string): Promise<Result<boolean, CacheError>> {
+      const lockKey = `${LOCK_PREFIX}${key}`
+      const entry = getValidEntry(lockKey)
+      return ok(entry !== null)
+    },
+
+    async extend(key: string, ttl: number, owner?: string): Promise<Result<boolean, CacheError>> {
+      const lockKey = `${LOCK_PREFIX}${key}`
+      const entry = getValidEntry(lockKey)
+      if (!entry) {
+        return ok(false)
+      }
+      if (owner !== undefined && entry.value !== owner) {
+        return ok(false)
+      }
+      entry.expiresAt = Date.now() + ttl * 1000
+      return ok(true)
+    },
+  }
+
   // ─── Provider 返回 ───
 
   return {
@@ -875,6 +932,7 @@ export function createMemoryProvider(): CacheProvider {
     list,
     set_,
     zset,
+    lock,
 
     async ping(): Promise<Result<string, CacheError>> {
       return ok('PONG')

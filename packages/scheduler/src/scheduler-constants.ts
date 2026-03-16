@@ -12,6 +12,3 @@ export const SCHEDULER_LOG_TABLE = 'hai_scheduler_logs'
 
 /** 任务定义表名 */
 export const SCHEDULER_TASK_TABLE = 'hai_scheduler_tasks'
-
-/** 分布式锁表名 */
-export const SCHEDULER_LOCK_TABLE = 'hai_scheduler_locks'

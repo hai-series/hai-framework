@@ -16,12 +16,16 @@ import type {
 } from './reach-types.js'
 import type { SendLogRepository } from './repositories/reach-repository-send-log.js'
 
+import { cache } from '@h-ai/cache'
 import { core, err, ok } from '@h-ai/core'
 
 import { ReachErrorCode } from './reach-config.js'
 import { reachM } from './reach-i18n.js'
 
 const logger = core.logger.child({ module: 'reach', scope: 'send' })
+
+/** 稳定的节点标识，用于分布式锁 owner（进程级别唯一） */
+const reachNodeId = `reach:${crypto.randomUUID()}`
 
 // ─── DND（免打扰）检查 ───
 
@@ -254,6 +258,9 @@ export function resetSendState(): void {
 
 /**
  * 从数据库获取所有 pending 记录并逐条发送
+ *
+ * 多节点部署时通过分布式锁确保同一时刻只有一个节点执行 flush。
+ * 分布式锁基于 @h-ai/cache 模块实现，运行时通过 cache.isInitialized 动态检测可用性。
  */
 async function flushPendingMessages(
   providers: Map<string, ReachProvider>,
@@ -263,48 +270,71 @@ async function flushPendingMessages(
     return
   }
 
-  const result = await repo.findPending()
-  if (!result.success || !result.data.length) {
-    return
+  // 分布式锁：防止多节点同时 flush
+  const FLUSH_LOCK_KEY = 'hai:reach:flush-pending'
+  const FLUSH_LOCK_TTL = 60
+  let lockAcquired = false
+  if (cache.isInitialized) {
+    const lockResult = await cache.lock.acquire(FLUSH_LOCK_KEY, { ttl: FLUSH_LOCK_TTL, owner: reachNodeId })
+    if (lockResult.success && !lockResult.data) {
+      logger.info('Skipping flush, another node holds the lock')
+      return
+    }
+    lockAcquired = lockResult.success && lockResult.data
   }
 
-  logger.info('Flushing pending messages', { count: result.data.length })
-
-  for (const row of result.data) {
-    const provider = providers.get(row.provider)
-    if (!provider) {
-      logger.warn('Provider not found for pending message, skipping', { provider: row.provider, id: row.id })
-      continue
+  try {
+    const result = await repo.findPending()
+    if (!result.success || !result.data.length) {
+      return
     }
 
-    let vars: Record<string, string> | undefined
-    let extra: Record<string, unknown> | undefined
-    try {
-      vars = row.varsJson ? JSON.parse(row.varsJson) as Record<string, string> : undefined
-      extra = row.extraJson ? JSON.parse(row.extraJson) as Record<string, unknown> : undefined
-    }
-    catch {
-      logger.warn('Failed to parse pending message JSON, skipping', { id: row.id })
-      continue
-    }
+    logger.info('Flushing pending messages', { count: result.data.length })
 
-    const message: ReachMessage = {
-      provider: row.provider,
-      to: row.toAddr,
-      subject: row.subject ?? undefined,
-      body: row.body ?? undefined,
-      template: row.template ?? undefined,
-      vars,
-      extra,
-    }
+    for (const row of result.data) {
+      const provider = providers.get(row.provider)
+      if (!provider) {
+        logger.warn('Provider not found for pending message, skipping', { provider: row.provider, id: row.id })
+        continue
+      }
 
-    const sendResult = await provider.send(message)
-    if (sendResult.success) {
-      await repo.markSent(row.id, sendResult.data.messageId)
-      logger.info('Pending message sent', { id: row.id, to: row.toAddr, provider: row.provider })
+      let vars: Record<string, string> | undefined
+      let extra: Record<string, unknown> | undefined
+      try {
+        vars = row.varsJson ? JSON.parse(row.varsJson) as Record<string, string> : undefined
+        extra = row.extraJson ? JSON.parse(row.extraJson) as Record<string, unknown> : undefined
+      }
+      catch {
+        logger.warn('Failed to parse pending message JSON, skipping', { id: row.id })
+        continue
+      }
+
+      const message: ReachMessage = {
+        provider: row.provider,
+        to: row.toAddr,
+        subject: row.subject ?? undefined,
+        body: row.body ?? undefined,
+        template: row.template ?? undefined,
+        vars,
+        extra,
+      }
+
+      const sendResult = await provider.send(message)
+      if (sendResult.success) {
+        await repo.markSent(row.id, sendResult.data.messageId)
+        logger.info('Pending message sent', { id: row.id, to: row.toAddr, provider: row.provider })
+      }
+      else {
+        logger.warn('Pending message send failed', { id: row.id, to: row.toAddr, error: sendResult.error.code })
+      }
     }
-    else {
-      logger.warn('Pending message send failed', { id: row.id, to: row.toAddr, error: sendResult.error.code })
+  }
+  finally {
+    // 释放锁
+    if (lockAcquired) {
+      await cache.lock.release(FLUSH_LOCK_KEY, reachNodeId).catch((error: unknown) => {
+        logger.warn('Failed to release flush lock', { error })
+      })
     }
   }
 }

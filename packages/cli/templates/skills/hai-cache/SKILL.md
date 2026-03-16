@@ -1,11 +1,11 @@
 ---
 name: hai-cache
-description: 使用 @h-ai/cache 进行内存或 Redis 缓存操作（kv/hash/list/set/zset）；当需求涉及缓存读写、TTL 管理、集合运算、排行榜或缓存一致性策略时使用。
+description: 使用 @h-ai/cache 进行内存或 Redis 缓存操作（kv/hash/list/set/zset/分布式锁）；当需求涉及缓存读写、TTL 管理、集合运算、排行榜、缓存一致性策略或分布式互斥锁时使用。
 ---
 
 # hai-cache
 
-> `@h-ai/cache` 提供统一缓存接口，支持 Memory 与 Redis 后端，包含 KV / Hash / List / Set / ZSet 五类操作。
+> `@h-ai/cache` 提供统一缓存接口，支持 Memory 与 Redis 后端，包含 KV / Hash / List / Set / ZSet / 分布式锁 六类操作。
 
 ---
 
@@ -16,6 +16,7 @@ description: 使用 @h-ai/cache 进行内存或 Redis 缓存操作（kv/hash/lis
 - 分布式缓存（Redis）与本地测试缓存（Memory）
 - 集合操作（权限缓存、标签集合）
 - 排行榜（ZSet）与队列（List）
+- 分布式锁（多节点部署互斥控制）
 
 ---
 
@@ -82,6 +83,40 @@ await cache.set_.sadd('role:admin:perms', 'user.read', 'user.write')
 await cache.zset.zadd('rank:daily', { member: 'u1', score: 100 })
 ```
 
+### 分布式锁（`cache.lock`）
+
+| 方法       | 说明                                       |
+| ---------- | ------------------------------------------ |
+| `acquire`  | 尝试获锁（SET NX EX），返回 true/false     |
+| `release`  | 释放锁（支持 owner 验证，防止误释放）      |
+| `isLocked` | 检查锁是否被持有                           |
+| `extend`   | 续期锁 TTL（支持 owner 验证）              |
+
+```typescript
+// 获锁（TTL 30 秒，owner 用于标识持有者）
+const acquired = await cache.lock.acquire('my-lock', { ttl: 30, owner: 'node-1' })
+if (acquired.success && acquired.data) {
+  try {
+    // 受保护的操作
+  }
+  finally {
+    await cache.lock.release('my-lock', 'node-1')
+  }
+}
+
+// 续期
+await cache.lock.extend('my-lock', 60, 'node-1')
+
+// 检查
+const locked = await cache.lock.isLocked('my-lock')
+```
+
+**最佳实践：**
+
+- `owner` 使用稳定的节点标识（如 `nodeId`），不要每次随机生成
+- 释放锁时传入 `owner` 防止误释放他人锁
+- Memory 后端适合开发/测试；Redis 后端用 Lua 脚本保证 release/extend 原子性
+
 ---
 
 ## 错误码 — `CacheErrorCode`
@@ -119,6 +154,24 @@ async function getUserCached(userId: string) {
 }
 ```
 
+### 分布式锁保护共享资源
+
+```typescript
+const lockKey = 'batch:import'
+const acquired = await cache.lock.acquire(lockKey, { ttl: 60, owner: nodeId })
+if (acquired.success && acquired.data) {
+  try {
+    await runBatchImport()
+  }
+  finally {
+    await cache.lock.release(lockKey, nodeId)
+  }
+}
+else {
+  logger.info('Another node is running the import')
+}
+```
+
 ---
 
 ## 相关 Skills
@@ -126,4 +179,6 @@ async function getUserCached(userId: string) {
 - `hai-build`：模块初始化顺序（cache 在 db 之后、iam 之前）
 - `hai-core`：配置与 Result 模型
 - `hai-iam`：会话存储与权限缓存（底层使用 cache）
+- `hai-scheduler`：定时任务分布式锁（底层使用 cache.lock）
+- `hai-reach`：消息发送互斥锁（底层使用 cache.lock）
 - `hai-kit`：SvelteKit 集成层

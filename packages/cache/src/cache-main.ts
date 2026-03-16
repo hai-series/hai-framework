@@ -14,6 +14,7 @@ import type {
   HashOperations,
   KvOperations,
   ListOperations,
+  LockOperations,
   SetOperations,
   ZSetOperations,
 } from './cache-types.js'
@@ -74,6 +75,7 @@ const notInitializedHash = notInitialized.proxy<HashOperations>()
 const notInitializedList = notInitialized.proxy<ListOperations>()
 const notInitializedSet = notInitialized.proxy<SetOperations>()
 const notInitializedZSet = notInitialized.proxy<ZSetOperations>()
+const notInitializedLock = notInitialized.proxy<LockOperations>()
 
 // ─── 缓存服务对象 ───
 
@@ -179,6 +181,8 @@ export const cache: CacheFunctions = {
   get set_(): SetOperations { return currentProvider?.set_ ?? notInitializedSet },
   /** ZSet（有序集合）操作子接口 */
   get zset(): ZSetOperations { return currentProvider?.zset ?? notInitializedZSet },
+  /** 分布式锁操作子接口 */
+  get lock(): LockOperations { return currentProvider?.lock ?? notInitializedLock },
   /** 当前配置（parse 后）；未初始化时返回 null */
   get config(): CacheConfig | null { return currentConfig },
   /** 是否已初始化并连接；Provider 不存在或未连接时返回 false */
