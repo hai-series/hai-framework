@@ -66,11 +66,10 @@ export function createRedisProvider(): CacheProvider {
   /**
    * 序列化值
    *
-   * string 类型直接存储，其它类型经 JSON.stringify 转为字符串
+   * 所有类型（包括 string）统一经 JSON.stringify，确保 deserialize 时能还原原始类型。
+   * 例：string '123' → '"123"'（反序列化回 string），number 123 → '123'（反序列化回 number）。
    */
   function serialize(value: CacheValue): string {
-    if (typeof value === 'string')
-      return value
     return JSON.stringify(value)
   }
 
@@ -150,6 +149,7 @@ export function createRedisProvider(): CacheProvider {
           args.push('XX')
         if (options?.keepTtl)
           args.push('KEEPTTL')
+        // ioredis SET 的 TypeScript 重载签名不支持动态参数拼装（EX/PX/NX/XX/KEEPTTL），需绕过类型检查
         await (client as unknown as { set: (...args: Array<string | number>) => Promise<unknown> }).set(...args)
       })
     },
@@ -548,6 +548,7 @@ export function createRedisProvider(): CacheProvider {
         if (options?.offset !== undefined && options?.count !== undefined) {
           args.push('LIMIT', options.offset, options.count)
         }
+        // ioredis zrangebyscore 的 TypeScript 重载签名不支持动态参数拼装（WITHSCORES/LIMIT），需绕过类型检查
         const result = await (client!.zrangebyscore as unknown as (...a: (string | number)[]) => Promise<string[]>).call(client, ...args)
         if (options?.withScores) {
           const members: ZMember[] = []

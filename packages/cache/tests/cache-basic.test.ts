@@ -94,5 +94,5 @@ describe('cache basic operations', () => {
   }
 
   defineCacheSuite('memory', memoryEnv, () => defineCommon(['1', '2', null]))
-  defineCacheSuite('redis', redisEnv, () => defineCommon([1, 2, null]))
+  defineCacheSuite('redis', redisEnv, () => defineCommon(['1', '2', null]))
 })
