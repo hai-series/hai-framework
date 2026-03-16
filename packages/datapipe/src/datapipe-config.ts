@@ -33,10 +33,6 @@ export const DatapipeErrorCode = {
   PIPELINE_FAILED: 8503,
   /** 配置错误 */
   CONFIG_ERROR: 8504,
-  /** 输入为空 */
-  EMPTY_INPUT: 8505,
-  /** 不支持的分块模式 */
-  UNSUPPORTED_CHUNK_MODE: 8506,
   /** 自定义分隔符缺失 */
   MISSING_SEPARATOR: 8507,
 } as const
@@ -50,9 +46,7 @@ export const DatapipeErrorHttpStatus: Record<number, number> = {
   [DatapipeErrorCode.CHUNK_FAILED]: 500,
   [DatapipeErrorCode.TRANSFORM_FAILED]: 500,
   [DatapipeErrorCode.PIPELINE_FAILED]: 500,
-  [DatapipeErrorCode.CONFIG_ERROR]: 500,
-  [DatapipeErrorCode.EMPTY_INPUT]: 400,
-  [DatapipeErrorCode.UNSUPPORTED_CHUNK_MODE]: 400,
+  [DatapipeErrorCode.CONFIG_ERROR]: 400,
   [DatapipeErrorCode.MISSING_SEPARATOR]: 400,
 }
 
@@ -83,7 +77,11 @@ export const CleanOptionsSchema = z.object({
   normalizeWhitespace: z.boolean().default(true),
   /** 去除首尾空白（默认 true） */
   trim: z.boolean().default(true),
-  /** 自定义替换规则（正则→替换字符串） */
+  /**
+   * 自定义替换规则（正则→替换字符串）
+   *
+   * ❗ 安全提示：pattern 会通过 `new RegExp()` 构造，如果其值来源于用户输入，请在调用方先行校验以防止 ReDoS 攻击。
+   */
   customReplacements: z.array(z.object({
     /** 正则表达式字符串 */
     pattern: z.string(),
@@ -151,7 +149,11 @@ export const ChunkOptionsSchema = z.object({
   maxSize: z.number().int().positive().default(1000),
   /** 重叠大小（字符数 / 字数，用于上下文衔接，默认 0） */
   overlap: z.number().int().min(0).default(0),
-  /** 自定义分隔符正则（仅 mode='custom' 时使用） */
+  /**
+   * 自定义分隔符正则（仅 mode='custom' 时使用）
+   *
+   * ❗ 安全提示：separator 会通过 `new RegExp()` 构造，如果其值来源于用户输入，请在调用方先行校验以防止 ReDoS 攻击。
+   */
   separator: z.string().optional(),
   /** Markdown 最低标题级别（1-6，默认 2，即 ## 及以下都作为分块边界） */
   markdownMinLevel: z.number().int().min(1).max(6).default(2),
