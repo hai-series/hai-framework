@@ -34,6 +34,9 @@ let currentProvider: StorageProvider | null = null
 /** 当前解析后的存储配置（init 后非空，close 后置空） */
 let currentConfig: StorageConfig | null = null
 
+/** 并发初始化防护标志；防止多次 init() 同时执行导致资源泄漏 */
+let initInProgress = false
+
 // ─── Provider 工厂 ───
 
 /**
@@ -117,25 +120,35 @@ export const storage: StorageFunctions = {
    * @returns 成功时返回 ok(undefined)；失败时返回包含错误码和消息的 err。
    */
   async init(config: StorageConfigInput): Promise<Result<void, StorageError>> {
-    if (currentProvider) {
-      logger.warn('Storage module is already initialized, reinitializing')
-      await storage.close()
-    }
-
-    logger.info('Initializing storage module')
-
-    const parseResult = StorageConfigSchema.safeParse(config)
-    if (!parseResult.success) {
-      logger.error('Storage config validation failed', { error: parseResult.error.message })
+    // 并发初始化防护：避免多次 init 同时执行导致 Provider 泄漏
+    if (initInProgress) {
+      logger.warn('Storage init already in progress, skipping concurrent call')
       return err({
-        code: StorageErrorCode.CONFIG_ERROR,
-        message: storageM('storage_configError', { params: { error: parseResult.error.message } }),
-        cause: parseResult.error,
+        code: StorageErrorCode.OPERATION_FAILED,
+        message: storageM('storage_operationFailed', { params: { error: 'Concurrent initialization detected' } }),
       })
     }
-    const parsed = parseResult.data
+    initInProgress = true
 
     try {
+      if (currentProvider) {
+        logger.warn('Storage module is already initialized, reinitializing')
+        await storage.close()
+      }
+
+      logger.info('Initializing storage module')
+
+      const parseResult = StorageConfigSchema.safeParse(config)
+      if (!parseResult.success) {
+        logger.error('Storage config validation failed', { error: parseResult.error.message })
+        return err({
+          code: StorageErrorCode.CONFIG_ERROR,
+          message: storageM('storage_configError', { params: { error: parseResult.error.message } }),
+          cause: parseResult.error,
+        })
+      }
+      const parsed = parseResult.data
+
       const provider = createProvider(parsed)
       const connectResult = await provider.connect(parsed)
       if (!connectResult.success) {
@@ -159,6 +172,9 @@ export const storage: StorageFunctions = {
         }),
         cause: error,
       })
+    }
+    finally {
+      initInProgress = false
     }
   },
 
