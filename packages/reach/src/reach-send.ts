@@ -271,7 +271,7 @@ async function flushPendingMessages(
   }
 
   // 分布式锁：防止多节点同时 flush
-  const FLUSH_LOCK_KEY = 'reach:flush-pending'
+  const FLUSH_LOCK_KEY = 'hai:reach:flush-pending'
   const FLUSH_LOCK_TTL = 60
   let lockAcquired = false
   if (cache.isInitialized) {

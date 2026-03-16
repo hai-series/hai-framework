@@ -103,7 +103,7 @@ function tick(): void {
         logger.debug('Skipping task already running', { taskId, taskName: task.name })
         continue
       }
-      logger.info('Triggering scheduled task', { taskId, taskName: task.name })
+      logger.debug('Triggering scheduled task', { taskId, taskName: task.name })
       // 异步执行，不阻塞 tick；捕获未处理拒绝
       void runTask(task, currentMinute).catch((error) => {
         logger.error('Unhandled task execution error', { taskId, error })
@@ -125,11 +125,11 @@ function tick(): void {
  */
 export async function runTask(task: TaskDefinition, minuteTimestamp?: number): Promise<TaskExecutionLog> {
   // 分布式锁：多节点场景下确保同一任务同一分钟只执行一次
-  const lockKey = minuteTimestamp !== undefined ? `scheduler:${task.id}:${minuteTimestamp}` : undefined
+  const lockKey = minuteTimestamp !== undefined ? `hai:scheduler:${task.id}:${minuteTimestamp}` : undefined
   if (cache.isInitialized && lockKey) {
     const lockResult = await cache.lock.acquire(lockKey, { ttl: currentLockTtlSec, owner: currentNodeId })
     if (lockResult.success && !lockResult.data) {
-      logger.info('Skipping task, another node holds the lock', { taskId: task.id, minuteTimestamp })
+      logger.debug('Skipping task, another node holds the lock', { taskId: task.id, minuteTimestamp })
       // 返回一条跳过日志（不持久化）
       return {
         id: 0,

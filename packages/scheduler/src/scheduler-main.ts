@@ -449,7 +449,7 @@ export const scheduler: SchedulerFunctions = {
       })
     }
 
-    logger.info('Manually triggering task', { taskId })
+    logger.debug('Manually triggering task', { taskId })
     const log = await runTask(task)
     return ok(log)
   },
