@@ -5,32 +5,35 @@
  * @module reldb-provider-postgres
  */
 
-import type { PaginatedResult, Result } from '@h-ai/core'
+import type { Result } from '@h-ai/core'
 import type { ReldbConfig } from '../reldb-config.js'
 import type {
-  DataOperations,
-  ExecuteResult,
-  PaginationQueryOptions,
+  DmlWithTxOperations,
   ReldbColumnDef,
-  ReldbCrudManager,
-  ReldbDdlOperations,
   ReldbError,
-  ReldbIndexDef,
   ReldbProvider,
-  ReldbSqlOperations,
-  ReldbTableDef,
-  ReldbTxHandle,
-  ReldbTxManager,
-  TxWrapCallback,
+  TxManager,
 } from '../reldb-types.js'
 
-import { core, err, ok } from '@h-ai/core'
+import type { DdlDialect, RawExecutor } from './reldb-provider-base.js'
 
+import { core, err, ok } from '@h-ai/core'
 import { ReldbErrorCode } from '../reldb-config.js'
-import { createCrud } from '../reldb-crud-kernel.js'
 import { reldbM } from '../reldb-i18n.js'
-import { buildPaginatedResult, normalizePagination, parseCount } from '../reldb-pagination.js'
-import { escapeSqlString, quoteIdentifier, validateIdentifier, validateIdentifiers } from '../reldb-security.js'
+import { quoteIdentifier } from '../reldb-security.js'
+import {
+  buildColumnSqlBase,
+  buildDefaultCreateIndexSql,
+  buildDefaultCreateTableSql,
+  buildDefaultDropIndexSql,
+  buildDefaultRenameTableSql,
+  createCrudManager,
+  createDdlOps,
+  createSqlOps,
+  createTxOps,
+  createTxWrap,
+  queryPageAsync,
+} from './reldb-provider-base.js'
 
 const logger = core.logger.child({ module: 'reldb', scope: 'postgres' })
 
@@ -63,100 +66,7 @@ export function createPostgresProvider(): ReldbProvider {
   // ─── 辅助函数 ───
 
   /**
-   * 构建列定义 SQL
-   *
-   * 将 ReldbColumnDef 转换为 PostgreSQL 列定义语句
-   *
-   * @param name - 列名
-   * @param def - 列定义
-   * @returns 列定义 SQL 片段
-   */
-  function buildColumnSql(name: string, def: ReldbColumnDef): string {
-    const parts: string[] = [quoteIdentifier(name)]
-
-    switch (def.type) {
-      case 'TEXT':
-        parts.push('TEXT')
-        break
-      case 'INTEGER':
-        if (def.autoIncrement) {
-          parts.push('BIGSERIAL')
-        }
-        else {
-          parts.push('INTEGER')
-        }
-        break
-      case 'REAL':
-        parts.push('DOUBLE PRECISION')
-        break
-      case 'BLOB':
-        parts.push('BYTEA')
-        break
-      case 'BOOLEAN':
-        parts.push('BOOLEAN')
-        break
-      case 'TIMESTAMP':
-        parts.push('TIMESTAMP')
-        break
-      case 'JSON':
-        parts.push('JSONB')
-        break
-      default:
-        parts.push('TEXT')
-    }
-
-    if (def.primaryKey) {
-      parts.push('PRIMARY KEY')
-    }
-
-    if (def.notNull && !def.primaryKey) {
-      parts.push('NOT NULL')
-    }
-
-    if (def.unique && !def.primaryKey) {
-      parts.push('UNIQUE')
-    }
-
-    if (def.defaultValue !== undefined) {
-      if (def.defaultValue === null) {
-        parts.push('DEFAULT NULL')
-      }
-      else if (typeof def.defaultValue === 'string') {
-        if (def.defaultValue.startsWith('(') && def.defaultValue.endsWith(')')) {
-          parts.push(`DEFAULT ${def.defaultValue}`)
-        }
-        else if (def.defaultValue === 'NOW()' || def.defaultValue === 'CURRENT_TIMESTAMP') {
-          parts.push(`DEFAULT ${def.defaultValue}`)
-        }
-        else {
-          parts.push(`DEFAULT '${escapeSqlString(def.defaultValue)}'`)
-        }
-      }
-      else if (typeof def.defaultValue === 'boolean') {
-        parts.push(`DEFAULT ${def.defaultValue}`)
-      }
-      else {
-        parts.push(`DEFAULT ${def.defaultValue}`)
-      }
-    }
-
-    if (def.references) {
-      parts.push(`REFERENCES ${quoteIdentifier(def.references.table)}(${quoteIdentifier(def.references.column)})`)
-      if (def.references.onDelete) {
-        parts.push(`ON DELETE ${def.references.onDelete}`)
-      }
-      if (def.references.onUpdate) {
-        parts.push(`ON UPDATE ${def.references.onUpdate}`)
-      }
-    }
-
-    return parts.join(' ')
-  }
-
-  /**
    * 确保数据库已连接
-   *
-   * @returns 连接池或错误
    */
   function ensureConnected(): Result<PgPool, ReldbError> {
     if (!pool) {
@@ -180,435 +90,128 @@ export function createPostgresProvider(): ReldbProvider {
   }
 
   /**
-   * 执行分页查询
+   * 将 pg 查询接口适配为 RawExecutor
    *
-   * 使用独立的 COUNT(*) 查询获取总数，再执行 LIMIT/OFFSET 获取当前页数据。
-   * 与 SQLite/MySQL 的分页行为一致，OFFSET 超出数据范围时 total 仍返回精确值。
-   *
-   * @param executor - SQL 执行器
-   * @param options - 分页查询参数
-   * @returns 分页结果
+   * @param queryFn - pg 的 query 函数
+   * @returns RawExecutor 实例
    */
-  async function queryPageWithExecutor<T>(
-    executor: (sql: string, params?: unknown[]) => Promise<{ rows: unknown[] }>,
-    options: PaginationQueryOptions,
-  ): Promise<PaginatedResult<T>> {
-    const pagination = normalizePagination(options.pagination, options.overrides)
+  function createExecutor(
+    queryFn: (text: string, values?: unknown[]) => Promise<{ rows: unknown[], rowCount: number }>,
+  ): RawExecutor {
+    return {
+      queryRows: async (sql, params) => {
+        const result = await queryFn(convertPlaceholders(sql), params)
+        return result.rows
+      },
+      getRow: async (sql, params) => {
+        const result = await queryFn(convertPlaceholders(sql), params)
+        return result.rows[0]
+      },
+      executeStmt: async (sql, params) => {
+        const result = await queryFn(convertPlaceholders(sql), params)
+        return { changes: result.rowCount ?? 0 }
+      },
+      batchStmts: async (statements) => {
+        for (const { sql: statement, params } of statements) {
+          await queryFn(convertPlaceholders(statement), params)
+        }
+      },
+      queryPage: options => queryPageAsync(
+        async (sql, params) => {
+          const result = await queryFn(convertPlaceholders(sql), params)
+          return result.rows
+        },
+        options,
+      ),
+    }
+  }
 
-    // 独立 COUNT 查询（与 OFFSET 无关，始终返回精确值）
-    const countSql = convertPlaceholders(`SELECT COUNT(*) as cnt FROM (${options.sql}) AS t`)
-    const countResult = await executor(countSql, options.params)
-    const countRows = countResult.rows as Record<string, unknown>[]
-    const total = countRows.length > 0 ? parseCount(countRows[0]) : 0
+  /** 错误消息生成 */
+  function pgErrorMessage(detail: string): string {
+    return reldbM('reldb_queryFailed', { params: { error: detail } })
+  }
 
-    // 数据查询
-    const dataSql = convertPlaceholders(`${options.sql} LIMIT ? OFFSET ?`)
-    const dataParams = [...(options.params ?? []), pagination.limit, pagination.offset]
-    const dataResult = await executor(dataSql, dataParams)
-    const items = dataResult.rows as T[]
-
-    return buildPaginatedResult(items, total, pagination)
+  /** 事务错误消息生成 */
+  function pgTxErrorMessage(detail: string): string {
+    return reldbM('reldb_postgresTxFailed', { params: { error: detail } })
   }
 
   /**
-   * 批量执行多条 SQL 语句（序列化执行，负责占位符转换）
-   *
-   * @param executor - SQL 执行器
-   * @param statements - SQL 语句列表
+   * 获取 RawExecutor（含连接检查）
    */
-  async function runStatementBatch(
-    executor: (sql: string, params?: unknown[]) => Promise<{ rows: unknown[], rowCount: number }>,
-    statements: Array<{ sql: string, params?: unknown[] }>,
-  ): Promise<void> {
-    for (const { sql: statement, params } of statements) {
-      const pgSql = convertPlaceholders(statement)
-      await executor(pgSql, params)
+  function getExecutor(): Result<RawExecutor, ReldbError> {
+    const connResult = ensureConnected()
+    if (!connResult.success)
+      return connResult
+    return ok(createExecutor((text, values) => connResult.data.query(text, values)))
+  }
+
+  // ─── PostgreSQL 方言 ───
+
+  /** PostgreSQL 列类型映射 */
+  function mapPgType(def: ReldbColumnDef): string {
+    switch (def.type) {
+      case 'TEXT':
+        return 'TEXT'
+      case 'INTEGER':
+        return def.autoIncrement ? 'BIGSERIAL' : 'INTEGER'
+      case 'REAL':
+        return 'DOUBLE PRECISION'
+      case 'BLOB':
+        return 'BYTEA'
+      case 'BOOLEAN':
+        return 'BOOLEAN'
+      case 'TIMESTAMP':
+        return 'TIMESTAMP'
+      case 'JSON':
+        return 'JSONB'
+      default:
+        return 'TEXT'
     }
   }
 
-  /**
-   * 执行查询并返回多行结果
-   *
-   * 自动将 ? 占位符转换为 PostgreSQL 的 $n 格式。
-   *
-   * @param executor - SQL 执行器
-   * @param sqlStr - SQL 查询语句
-   * @param params - 查询参数
-   * @returns 查询结果数组或错误
-   */
-  async function runQuery<T>(
-    executor: (sql: string, params?: unknown[]) => Promise<{ rows: unknown[], rowCount: number }>,
-    sqlStr: string,
-    params?: unknown[],
-  ): Promise<Result<T[], ReldbError>> {
-    try {
-      const pgSql = convertPlaceholders(sqlStr)
-      const result = await executor(pgSql, params)
-      return ok(result.rows as T[])
-    }
-    catch (error) {
-      return err({
-        code: ReldbErrorCode.QUERY_FAILED,
-        message: reldbM('reldb_queryFailed', { params: { error: String(error) } }),
-        cause: error,
-      })
-    }
+  const pgDialect: DdlDialect = {
+    quoteId: quoteIdentifier,
+    buildColumnSql: (name, def) => buildColumnSqlBase(name, def, {
+      quoteId: quoteIdentifier,
+      mapType: mapPgType,
+      inlinePrimaryKey: true,
+      formatDefault: (d) => {
+        if (d.defaultValue === undefined)
+          return undefined
+        if (typeof d.defaultValue === 'string'
+          && (d.defaultValue === 'NOW()' || d.defaultValue === 'CURRENT_TIMESTAMP')) {
+          return `DEFAULT ${d.defaultValue}`
+        }
+        return undefined // 走通用逻辑
+      },
+    }),
+    buildCreateTableSql: (quotedTable, columns, ifNotExists) =>
+      buildDefaultCreateTableSql(pgDialect, quotedTable, columns, ifNotExists),
+    buildRenameTableSql: buildDefaultRenameTableSql,
+    buildCreateIndexSql: (quotedTable, quotedIndex, indexDef) =>
+      buildDefaultCreateIndexSql(pgDialect, quotedTable, quotedIndex, indexDef),
+    buildDropIndexSql: async (indexName, ifExists) =>
+      buildDefaultDropIndexSql(pgDialect, indexName, ifExists),
   }
 
-  /**
-   * 执行查询并返回单行结果
-   *
-   * @param executor - SQL 执行器
-   * @param sqlStr - SQL 查询语句
-   * @param params - 查询参数
-   * @returns 单行结果或 null
-   */
-  async function runGet<T>(
-    executor: (sql: string, params?: unknown[]) => Promise<{ rows: unknown[], rowCount: number }>,
-    sqlStr: string,
-    params?: unknown[],
-  ): Promise<Result<T | null, ReldbError>> {
-    try {
-      const pgSql = convertPlaceholders(sqlStr)
-      const result = await executor(pgSql, params)
-      return ok((result.rows[0] as T) ?? null)
-    }
-    catch (error) {
-      return err({
-        code: ReldbErrorCode.QUERY_FAILED,
-        message: reldbM('reldb_queryFailed', { params: { error: String(error) } }),
-        cause: error,
-      })
-    }
-  }
+  // ─── DDL / SQL / CRUD ───
 
-  /**
-   * 执行修改语句（INSERT/UPDATE/DELETE）
-   *
-   * @param executor - SQL 执行器
-   * @param sqlStr - SQL 修改语句
-   * @param params - 语句参数
-   * @returns 执行结果（含 changes）
-   */
-  async function runExecute(
-    executor: (sql: string, params?: unknown[]) => Promise<{ rows: unknown[], rowCount: number }>,
-    sqlStr: string,
-    params?: unknown[],
-  ): Promise<Result<ExecuteResult, ReldbError>> {
-    try {
-      const pgSql = convertPlaceholders(sqlStr)
-      const result = await executor(pgSql, params)
-      return ok({
-        changes: result.rowCount ?? 0,
-      })
-    }
-    catch (error) {
-      return err({
-        code: ReldbErrorCode.QUERY_FAILED,
-        message: reldbM('reldb_executeFailed', { params: { error: String(error) } }),
-        cause: error,
-      })
-    }
-  }
-
-  /**
-   * 批量执行多条 SQL 语句（带错误包装）
-   *
-   * @param executor - SQL 执行器
-   * @param statements - SQL 语句列表
-   * @returns 批量执行结果
-   */
-  async function runBatch(
-    executor: (sql: string, params?: unknown[]) => Promise<{ rows: unknown[], rowCount: number }>,
-    statements: Array<{ sql: string, params?: unknown[] }>,
-  ): Promise<Result<void, ReldbError>> {
-    try {
-      await runStatementBatch(executor, statements)
-      return ok(undefined)
-    }
-    catch (error) {
-      return err({
-        code: ReldbErrorCode.QUERY_FAILED,
-        message: reldbM('reldb_batchFailed', { params: { error: String(error) } }),
-        cause: error,
-      })
-    }
-  }
-
-  /**
-   * 执行分页查询（带错误包装）
-   *
-   * @param executor - SQL 执行器
-   * @param options - 分页查询参数
-   * @returns 分页结果或错误
-   */
-  async function runQueryPage<T>(
-    executor: (sql: string, params?: unknown[]) => Promise<{ rows: unknown[], rowCount: number }>,
-    options: PaginationQueryOptions,
-  ): Promise<Result<PaginatedResult<T>, ReldbError>> {
-    try {
-      const pageResult = await queryPageWithExecutor<T>(executor, options)
-      return ok(pageResult)
-    }
-    catch (error) {
-      return err({
-        code: ReldbErrorCode.QUERY_FAILED,
-        message: reldbM('reldb_queryFailed', { params: { error: String(error) } }),
-        cause: error,
-      })
-    }
-  }
-
-  /** 创建 CRUD 管理器（基于给定的 DataOperations 创建单表 CRUD 工厂） */
-  const createCrudManager = (ops: DataOperations): ReldbCrudManager => ({
-    table: config => createCrud(ops, config),
+  const ddl = createDdlOps({
+    ensureReady: () => {
+      const r = ensureConnected()
+      return r.success ? ok(undefined) : r
+    },
+    executeDdl: async (sqlStr) => {
+      await pool!.query(sqlStr)
+    },
+    dialect: pgDialect,
   })
 
-  // ─── DDL 操作实现 ───
-
-  /**
-   * DDL 操作
-   *
-   * PostgreSQL 的 DDL 语句通过连接池异步执行。
-   */
-  const ddl: ReldbDdlOperations = {
-    async createTable(tableName: string, columns: ReldbTableDef, ifNotExists = true): Promise<Result<void, ReldbError>> {
-      const connResult = ensureConnected()
-      if (!connResult.success)
-        return connResult
-
-      // 校验表名与列名
-      const tableValid = validateIdentifier(tableName)
-      if (!tableValid.success)
-        return tableValid
-      const colNames = Object.keys(columns)
-      const colsValid = validateIdentifiers(colNames)
-      if (!colsValid.success)
-        return colsValid
-
-      const columnDefs = Object.entries(columns)
-        .map(([name, def]) => buildColumnSql(name, def))
-        .join(', ')
-
-      const ifNotExistsClause = ifNotExists ? 'IF NOT EXISTS ' : ''
-      const sql = `CREATE TABLE ${ifNotExistsClause}${quoteIdentifier(tableName)} (${columnDefs})`
-
-      try {
-        await connResult.data.query(sql)
-        return ok(undefined)
-      }
-      catch (error) {
-        return err({
-          code: ReldbErrorCode.DDL_FAILED,
-          message: reldbM('reldb_ddlFailed', { params: { error: String(error) } }),
-          cause: error,
-        })
-      }
-    },
-
-    async dropTable(tableName: string, ifExists = true): Promise<Result<void, ReldbError>> {
-      const connResult = ensureConnected()
-      if (!connResult.success)
-        return connResult
-
-      const tableValid = validateIdentifier(tableName)
-      if (!tableValid.success)
-        return tableValid
-
-      const ifExistsClause = ifExists ? 'IF EXISTS ' : ''
-      try {
-        await connResult.data.query(`DROP TABLE ${ifExistsClause}${quoteIdentifier(tableName)}`)
-        return ok(undefined)
-      }
-      catch (error) {
-        return err({
-          code: ReldbErrorCode.DDL_FAILED,
-          message: reldbM('reldb_ddlFailed', { params: { error: String(error) } }),
-          cause: error,
-        })
-      }
-    },
-
-    async addColumn(tableName: string, columnName: string, columnDef: ReldbColumnDef): Promise<Result<void, ReldbError>> {
-      const connResult = ensureConnected()
-      if (!connResult.success)
-        return connResult
-
-      const tableValid = validateIdentifier(tableName)
-      if (!tableValid.success)
-        return tableValid
-      const colValid = validateIdentifier(columnName)
-      if (!colValid.success)
-        return colValid
-
-      const colSql = buildColumnSql(columnName, columnDef)
-      try {
-        await connResult.data.query(`ALTER TABLE ${quoteIdentifier(tableName)} ADD COLUMN ${colSql}`)
-        return ok(undefined)
-      }
-      catch (error) {
-        return err({
-          code: ReldbErrorCode.DDL_FAILED,
-          message: reldbM('reldb_ddlFailed', { params: { error: String(error) } }),
-          cause: error,
-        })
-      }
-    },
-
-    async dropColumn(tableName: string, columnName: string): Promise<Result<void, ReldbError>> {
-      const connResult = ensureConnected()
-      if (!connResult.success)
-        return connResult
-
-      const tableValid = validateIdentifier(tableName)
-      if (!tableValid.success)
-        return tableValid
-      const colValid = validateIdentifier(columnName)
-      if (!colValid.success)
-        return colValid
-
-      try {
-        await connResult.data.query(`ALTER TABLE ${quoteIdentifier(tableName)} DROP COLUMN ${quoteIdentifier(columnName)}`)
-        return ok(undefined)
-      }
-      catch (error) {
-        return err({
-          code: ReldbErrorCode.DDL_FAILED,
-          message: reldbM('reldb_ddlFailed', { params: { error: String(error) } }),
-          cause: error,
-        })
-      }
-    },
-
-    async renameTable(oldName: string, newName: string): Promise<Result<void, ReldbError>> {
-      const connResult = ensureConnected()
-      if (!connResult.success)
-        return connResult
-
-      const oldValid = validateIdentifier(oldName)
-      if (!oldValid.success)
-        return oldValid
-      const newValid = validateIdentifier(newName)
-      if (!newValid.success)
-        return newValid
-
-      try {
-        await connResult.data.query(`ALTER TABLE ${quoteIdentifier(oldName)} RENAME TO ${quoteIdentifier(newName)}`)
-        return ok(undefined)
-      }
-      catch (error) {
-        return err({
-          code: ReldbErrorCode.DDL_FAILED,
-          message: reldbM('reldb_ddlFailed', { params: { error: String(error) } }),
-          cause: error,
-        })
-      }
-    },
-
-    async createIndex(tableName: string, indexName: string, indexDef: ReldbIndexDef): Promise<Result<void, ReldbError>> {
-      const connResult = ensureConnected()
-      if (!connResult.success)
-        return connResult
-
-      const tableValid = validateIdentifier(tableName)
-      if (!tableValid.success)
-        return tableValid
-      const idxValid = validateIdentifier(indexName)
-      if (!idxValid.success)
-        return idxValid
-      const colsValid = validateIdentifiers(indexDef.columns)
-      if (!colsValid.success)
-        return colsValid
-
-      const uniqueClause = indexDef.unique ? 'UNIQUE ' : ''
-      const columns = indexDef.columns.map(c => quoteIdentifier(c)).join(', ')
-      const whereClause = indexDef.where ? ` WHERE ${indexDef.where}` : ''
-
-      try {
-        await connResult.data.query(
-          `CREATE ${uniqueClause}INDEX IF NOT EXISTS ${quoteIdentifier(indexName)} ON ${quoteIdentifier(tableName)} (${columns})${whereClause}`,
-        )
-        return ok(undefined)
-      }
-      catch (error) {
-        return err({
-          code: ReldbErrorCode.DDL_FAILED,
-          message: reldbM('reldb_ddlFailed', { params: { error: String(error) } }),
-          cause: error,
-        })
-      }
-    },
-
-    async dropIndex(indexName: string, ifExists = true): Promise<Result<void, ReldbError>> {
-      const connResult = ensureConnected()
-      if (!connResult.success)
-        return connResult
-
-      const idxValid = validateIdentifier(indexName)
-      if (!idxValid.success)
-        return idxValid
-
-      const ifExistsClause = ifExists ? 'IF EXISTS ' : ''
-      try {
-        await connResult.data.query(`DROP INDEX ${ifExistsClause}${quoteIdentifier(indexName)}`)
-        return ok(undefined)
-      }
-      catch (error) {
-        return err({
-          code: ReldbErrorCode.DDL_FAILED,
-          message: reldbM('reldb_ddlFailed', { params: { error: String(error) } }),
-          cause: error,
-        })
-      }
-    },
-
-    async raw(sql: string): Promise<Result<void, ReldbError>> {
-      const connResult = ensureConnected()
-      if (!connResult.success)
-        return connResult
-
-      try {
-        await connResult.data.query(sql)
-        return ok(undefined)
-      }
-      catch (error) {
-        return err({
-          code: ReldbErrorCode.DDL_FAILED,
-          message: reldbM('reldb_ddlFailed', { params: { error: String(error) } }),
-          cause: error,
-        })
-      }
-    },
-  }
-
-  // ─── SQL 操作 ───
-
-  /**
-   * SQL 操作
-   */
-  const sql: ReldbSqlOperations = {
-    async query<T>(sqlStr: string, params?: unknown[]): Promise<Result<T[], ReldbError>> {
-      const connResult = ensureConnected()
-      if (!connResult.success)
-        return connResult
-      return runQuery<T>((sqlStrInner, paramsInner) => connResult.data.query(sqlStrInner, paramsInner), sqlStr, params)
-    },
-
-    async get<T>(sqlStr: string, params?: unknown[]): Promise<Result<T | null, ReldbError>> {
-      const connResult = ensureConnected()
-      if (!connResult.success)
-        return connResult
-      return runGet<T>((sqlStrInner, paramsInner) => connResult.data.query(sqlStrInner, paramsInner), sqlStr, params)
-    },
-
-    async execute(sqlStr: string, params?: unknown[]): Promise<Result<ExecuteResult, ReldbError>> {
-      const connResult = ensureConnected()
-      if (!connResult.success)
-        return connResult
-      return runExecute((sqlStrInner, paramsInner) => connResult.data.query(sqlStrInner, paramsInner), sqlStr, params)
-    },
-
-    async batch(statements: Array<{ sql: string, params?: unknown[] }>): Promise<Result<void, ReldbError>> {
+  const sql = createSqlOps({
+    getExecutor,
+    errorMessage: pgErrorMessage,
+    batch: async (statements) => {
       const connResult = ensureConnected()
       if (!connResult.success)
         return connResult
@@ -617,7 +220,8 @@ export function createPostgresProvider(): ReldbProvider {
       try {
         client = await connResult.data.connect()
         await client.query('BEGIN')
-        await runStatementBatch((sqlStr, params) => client!.query(sqlStr, params), statements)
+        const clientExec = createExecutor((text, values) => client!.query(text, values))
+        await clientExec.batchStmts(statements)
         await client.query('COMMIT')
         return ok(undefined)
       }
@@ -637,14 +241,7 @@ export function createPostgresProvider(): ReldbProvider {
         }
       }
     },
-
-    async queryPage<T>(options: PaginationQueryOptions): Promise<Result<PaginatedResult<T>, ReldbError>> {
-      const connResult = ensureConnected()
-      if (!connResult.success)
-        return connResult
-      return runQueryPage<T>((sqlStr, params) => connResult.data.query(sqlStr, params), options)
-    },
-  }
+  })
 
   const crud = createCrudManager(sql)
 
@@ -658,7 +255,7 @@ export function createPostgresProvider(): ReldbProvider {
    *
    * @returns 事务句柄或错误
    */
-  async function beginTransaction(): Promise<Result<ReldbTxHandle, ReldbError>> {
+  async function beginTransaction(): Promise<Result<DmlWithTxOperations, ReldbError>> {
     const connResult = ensureConnected()
     if (!connResult.success)
       return connResult
@@ -675,134 +272,23 @@ export function createPostgresProvider(): ReldbProvider {
       }
       return err({
         code: ReldbErrorCode.TRANSACTION_FAILED,
-        message: reldbM('reldb_postgresTxFailed', { params: { error: String(error) } }),
+        message: pgTxErrorMessage(String(error)),
         cause: error,
       })
     }
 
-    let active = true
-
-    const ensureActive = (): Result<void, ReldbError> => {
-      if (!active) {
-        return err({
-          code: ReldbErrorCode.TRANSACTION_FAILED,
-          message: reldbM('reldb_postgresTxFailed', { params: { error: 'transaction finished' } }),
-        })
-      }
-      return ok(undefined)
-    }
-
-    const txDataOps: DataOperations = {
-      async query<R>(sqlStr: string, params?: unknown[]): Promise<Result<R[], ReldbError>> {
-        const activeResult = ensureActive()
-        if (!activeResult.success)
-          return activeResult
-        return runQuery<R>((sqlStrInner, paramsInner) => client!.query(sqlStrInner, paramsInner), sqlStr, params)
-      },
-
-      async get<R>(sqlStr: string, params?: unknown[]): Promise<Result<R | null, ReldbError>> {
-        const activeResult = ensureActive()
-        if (!activeResult.success)
-          return activeResult
-        return runGet<R>((sqlStrInner, paramsInner) => client!.query(sqlStrInner, paramsInner), sqlStr, params)
-      },
-
-      async execute(sqlStr: string, params?: unknown[]): Promise<Result<ExecuteResult, ReldbError>> {
-        const activeResult = ensureActive()
-        if (!activeResult.success)
-          return activeResult
-        return runExecute((sqlStrInner, paramsInner) => client!.query(sqlStrInner, paramsInner), sqlStr, params)
-      },
-
-      async batch(statements: Array<{ sql: string, params?: unknown[] }>): Promise<Result<void, ReldbError>> {
-        const activeResult = ensureActive()
-        if (!activeResult.success)
-          return activeResult
-        return runBatch((sqlStrInner, paramsInner) => client!.query(sqlStrInner, paramsInner), statements)
-      },
-
-      async queryPage<R>(options: PaginationQueryOptions): Promise<Result<PaginatedResult<R>, ReldbError>> {
-        const activeResult = ensureActive()
-        if (!activeResult.success)
-          return activeResult
-        return runQueryPage<R>((sqlStrInner, paramsInner) => client!.query(sqlStrInner, paramsInner), options)
-      },
-    }
-
-    const txOps: ReldbTxHandle = {
-      ...txDataOps,
-      crud: createCrudManager(txDataOps),
-
-      async commit(): Promise<Result<void, ReldbError>> {
-        const activeResult = ensureActive()
-        if (!activeResult.success)
-          return activeResult
-        try {
-          await client!.query('COMMIT')
-          active = false
-          return ok(undefined)
-        }
-        catch (error) {
-          return err({
-            code: ReldbErrorCode.TRANSACTION_FAILED,
-            message: reldbM('reldb_postgresTxFailed', { params: { error: String(error) } }),
-            cause: error,
-          })
-        }
-        finally {
-          client!.release()
-        }
-      },
-      async rollback(): Promise<Result<void, ReldbError>> {
-        const activeResult = ensureActive()
-        if (!activeResult.success)
-          return activeResult
-        try {
-          await client!.query('ROLLBACK')
-          active = false
-          return ok(undefined)
-        }
-        catch (error) {
-          return err({
-            code: ReldbErrorCode.TRANSACTION_FAILED,
-            message: reldbM('reldb_postgresTxFailed', { params: { error: String(error) } }),
-            cause: error,
-          })
-        }
-        finally {
-          client!.release()
-        }
-      },
-    }
-
-    return ok(txOps)
+    const clientExec = createExecutor((text, values) => client!.query(text, values))
+    return ok(createTxOps(clientExec, {
+      commit: async () => { await client!.query('COMMIT') },
+      rollback: async () => { await client!.query('ROLLBACK') },
+      release: () => client!.release(),
+      errorMessage: pgTxErrorMessage,
+    }))
   }
 
-  const tx: ReldbTxManager = {
+  const tx: TxManager = {
     begin: beginTransaction,
-
-    async wrap<T>(fn: TxWrapCallback<T>): Promise<Result<T, ReldbError>> {
-      const txResult = await beginTransaction()
-      if (!txResult.success)
-        return txResult
-
-      try {
-        const result = await fn(txResult.data)
-        const commitResult = await txResult.data.commit()
-        if (!commitResult.success) {
-          return commitResult as Result<T, ReldbError>
-        }
-        return ok(result)
-      }
-      catch (error) {
-        await txResult.data.rollback()
-        return err({
-          code: ReldbErrorCode.TRANSACTION_FAILED,
-          message: reldbM('reldb_postgresTxFailed', { params: { error: String(error) } }),
-          cause: error,
-        })
-      }
-    },
+    wrap: createTxWrap(beginTransaction, pgTxErrorMessage),
   }
 
   // ─── Provider 接口实现 ───

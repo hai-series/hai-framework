@@ -217,7 +217,7 @@ await reldb.tx.wrap(async (tx) => {
 业务仓库继承 `BaseReldbCrudRepository`，通过 `fields` 定义字段映射，自动建表、类型转换：
 
 ```ts
-import type { ReldbCrudFieldDefinition, ReldbTxHandle } from '@h-ai/reldb'
+import type { DmlWithTxOperations, ReldbCrudFieldDefinition } from '@h-ai/reldb'
 import { BaseReldbCrudRepository, reldb } from '@h-ai/reldb'
 
 interface UserRow {
@@ -247,7 +247,7 @@ class UserRepository extends BaseReldbCrudRepository<UserRow> {
   }
 
   /** 自定义方法中使用 this.sql(tx) 自动路由到事务 */
-  async insertRaw(data: { name: string, email: string }, tx?: ReldbTxHandle) {
+  async insertRaw(data: { name: string, email: string }, tx?: DmlWithTxOperations) {
     const now = Date.now()
     return this.sql(tx).execute(
       'INSERT INTO users (name, email, created_at, updated_at) VALUES (?, ?, ?, ?)',

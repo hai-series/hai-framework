@@ -11,7 +11,8 @@ import type {
   BaseReldbCrudRepositoryConfig,
   CrudPageOptions,
   CrudQueryOptions,
-  DataOperations,
+  DmlOperations,
+  DmlWithTxOperations,
   ExecuteResult,
   QueryRow,
   ReldbCrudCountOptions,
@@ -20,7 +21,6 @@ import type {
   ReldbError,
   ReldbFunctions,
   ReldbTableDef,
-  ReldbTxHandle,
 } from './reldb-types.js'
 
 import { err, ok } from '@h-ai/core'
@@ -134,7 +134,7 @@ export abstract class BaseReldbCrudRepository<TItem> implements ReldbCrudReposit
    * @param tx - 可选事务句柄
    * @returns DataOperations 实例
    */
-  protected sql(tx?: ReldbTxHandle): DataOperations {
+  protected sql(tx?: DmlWithTxOperations): DmlOperations {
     return tx ?? this.db.sql
   }
 
@@ -333,6 +333,7 @@ export abstract class BaseReldbCrudRepository<TItem> implements ReldbCrudReposit
       const value = this.fromDbValue(row[field.columnName], field.def)
       result[field.fieldName] = value
     }
+    // 行映射结果为动态构建的对象，无法通过 TS 静态推导，需强转为 TItem
     return result as unknown as TItem
   }
 
@@ -344,7 +345,6 @@ export abstract class BaseReldbCrudRepository<TItem> implements ReldbCrudReposit
   private buildCreatePayload(data: Record<string, unknown>): Record<string, unknown> {
     const payload: Record<string, unknown> = {}
     const now = this.nowProvider()
-    const context = { id: '', now }
 
     let generatedId: string | number | undefined
     const idFieldDef = this.fields.find(field => field.fieldName === this.idField)
@@ -352,12 +352,10 @@ export abstract class BaseReldbCrudRepository<TItem> implements ReldbCrudReposit
       const currentId = data[this.idField]
       if (currentId !== undefined) {
         // 已提供主键，直接使用
-        context.id = String(currentId)
       }
       else if (this.generateId) {
         // 未提供主键，使用生成器
         generatedId = this.generateId()
-        context.id = String(generatedId)
       }
     }
 
@@ -460,7 +458,7 @@ export abstract class BaseReldbCrudRepository<TItem> implements ReldbCrudReposit
    * @param tx - 可选事务句柄
    * @returns 插入结果（含 changes、lastInsertRowid）
    */
-  async create(data: Record<string, unknown>, tx?: ReldbTxHandle): Promise<Result<ExecuteResult, ReldbError>> {
+  async create(data: Record<string, unknown>, tx?: DmlWithTxOperations): Promise<Result<ExecuteResult, ReldbError>> {
     const ready = await this.ensureReady()
     if (!ready.success) {
       return ready as Result<ExecuteResult, ReldbError>
@@ -485,7 +483,7 @@ export abstract class BaseReldbCrudRepository<TItem> implements ReldbCrudReposit
    * @param tx - 可选事务句柄
    * @returns 批量插入结果
    */
-  async createMany(items: Array<Record<string, unknown>>, tx?: ReldbTxHandle): Promise<Result<void, ReldbError>> {
+  async createMany(items: Array<Record<string, unknown>>, tx?: DmlWithTxOperations): Promise<Result<void, ReldbError>> {
     const ready = await this.ensureReady()
     if (!ready.success) {
       return ready as Result<void, ReldbError>
@@ -501,7 +499,7 @@ export abstract class BaseReldbCrudRepository<TItem> implements ReldbCrudReposit
    * @param tx - 可选事务句柄
    * @returns 业务模型对象或 null（未找到）
    */
-  async findById(id: unknown, tx?: ReldbTxHandle): Promise<Result<TItem | null, ReldbError>> {
+  async findById(id: unknown, tx?: DmlWithTxOperations): Promise<Result<TItem | null, ReldbError>> {
     const ready = await this.ensureReady()
     if (!ready.success) {
       return ready as Result<TItem | null, ReldbError>
@@ -516,7 +514,7 @@ export abstract class BaseReldbCrudRepository<TItem> implements ReldbCrudReposit
    * @param tx - 可选事务句柄
    * @returns 业务模型数组
    */
-  async findAll(options?: CrudQueryOptions, tx?: ReldbTxHandle): Promise<Result<TItem[], ReldbError>> {
+  async findAll(options?: CrudQueryOptions, tx?: DmlWithTxOperations): Promise<Result<TItem[], ReldbError>> {
     const ready = await this.ensureReady()
     if (!ready.success) {
       return ready as Result<TItem[], ReldbError>
@@ -531,7 +529,7 @@ export abstract class BaseReldbCrudRepository<TItem> implements ReldbCrudReposit
    * @param tx - 可选事务句柄
    * @returns 分页结果（含 items、total、page、pageSize）
    */
-  async findPage(options: CrudPageOptions, tx?: ReldbTxHandle): Promise<Result<PaginatedResult<TItem>, ReldbError>> {
+  async findPage(options: CrudPageOptions, tx?: DmlWithTxOperations): Promise<Result<PaginatedResult<TItem>, ReldbError>> {
     const ready = await this.ensureReady()
     if (!ready.success) {
       return ready as Result<PaginatedResult<TItem>, ReldbError>
@@ -549,7 +547,7 @@ export abstract class BaseReldbCrudRepository<TItem> implements ReldbCrudReposit
    * @param tx - 可选事务句柄
    * @returns 更新结果（含 changes）
    */
-  async updateById(id: unknown, data: Record<string, unknown>, tx?: ReldbTxHandle): Promise<Result<ExecuteResult, ReldbError>> {
+  async updateById(id: unknown, data: Record<string, unknown>, tx?: DmlWithTxOperations): Promise<Result<ExecuteResult, ReldbError>> {
     const ready = await this.ensureReady()
     if (!ready.success) {
       return ready as Result<ExecuteResult, ReldbError>
@@ -572,7 +570,7 @@ export abstract class BaseReldbCrudRepository<TItem> implements ReldbCrudReposit
    * @param tx - 可选事务句柄
    * @returns 删除结果（含 changes）
    */
-  async deleteById(id: unknown, tx?: ReldbTxHandle): Promise<Result<ExecuteResult, ReldbError>> {
+  async deleteById(id: unknown, tx?: DmlWithTxOperations): Promise<Result<ExecuteResult, ReldbError>> {
     const ready = await this.ensureReady()
     if (!ready.success) {
       return ready as Result<ExecuteResult, ReldbError>
@@ -587,7 +585,7 @@ export abstract class BaseReldbCrudRepository<TItem> implements ReldbCrudReposit
    * @param tx - 可选事务句柄
    * @returns 记录数
    */
-  async count(options?: ReldbCrudCountOptions, tx?: ReldbTxHandle): Promise<Result<number, ReldbError>> {
+  async count(options?: ReldbCrudCountOptions, tx?: DmlWithTxOperations): Promise<Result<number, ReldbError>> {
     const ready = await this.ensureReady()
     if (!ready.success) {
       return ready as Result<number, ReldbError>
@@ -602,7 +600,7 @@ export abstract class BaseReldbCrudRepository<TItem> implements ReldbCrudReposit
    * @param tx - 可选事务句柄
    * @returns 是否存在
    */
-  async exists(options?: ReldbCrudCountOptions, tx?: ReldbTxHandle): Promise<Result<boolean, ReldbError>> {
+  async exists(options?: ReldbCrudCountOptions, tx?: DmlWithTxOperations): Promise<Result<boolean, ReldbError>> {
     const ready = await this.ensureReady()
     if (!ready.success) {
       return ready as Result<boolean, ReldbError>
@@ -617,7 +615,7 @@ export abstract class BaseReldbCrudRepository<TItem> implements ReldbCrudReposit
    * @param tx - 可选事务句柄
    * @returns 是否存在
    */
-  async existsById(id: unknown, tx?: ReldbTxHandle): Promise<Result<boolean, ReldbError>> {
+  async existsById(id: unknown, tx?: DmlWithTxOperations): Promise<Result<boolean, ReldbError>> {
     const ready = await this.ensureReady()
     if (!ready.success) {
       return ready as Result<boolean, ReldbError>

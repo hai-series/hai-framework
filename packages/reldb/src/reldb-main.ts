@@ -8,24 +8,24 @@
 import type { Result } from '@h-ai/core'
 import type { ReldbConfig, ReldbConfigInput } from './reldb-config.js'
 import type {
-  ReldbCrudManager,
-  ReldbDdlOperations,
+  CrudManager,
+  DdlOperations,
+  DmlOperations,
   ReldbError,
   ReldbFunctions,
   ReldbJsonOps,
   ReldbProvider,
-  ReldbSqlOperations,
-  ReldbTxManager,
+  TxManager,
 } from './reldb-types.js'
 
 import { core, err, ok } from '@h-ai/core'
 
+import { createCrudManager } from './providers/reldb-provider-base.js'
 import { createMysqlProvider } from './providers/reldb-provider-mysql.js'
 import { createPostgresProvider } from './providers/reldb-provider-postgres.js'
 import { createSqliteProvider } from './providers/reldb-provider-sqlite.js'
-import { ReldbConfigSchema, ReldbErrorCode } from './reldb-config.js'
 
-import { createCrud } from './reldb-crud-kernel.js'
+import { ReldbConfigSchema, ReldbErrorCode } from './reldb-config.js'
 import { reldbM } from './reldb-i18n.js'
 import { createJsonOps } from './reldb-json.js'
 import { pagination } from './reldb-pagination.js'
@@ -39,6 +39,12 @@ let currentProvider: ReldbProvider | null = null
 
 /** 当前数据库配置（未初始化时为 null） */
 let currentConfig: ReldbConfig | null = null
+
+/** 缓存的 JSON 操作实例（dbType 在 init/close 间不变，无需每次 getter 重建） */
+let currentJsonOps: ReldbJsonOps | null = null
+
+/** 初始化进行中标记，防止并发调用导致 Provider 泄漏 */
+let initInProgress = false
 
 // ─── Provider 工厂 ───
 
@@ -68,21 +74,19 @@ const notInitialized = core.module.createNotInitializedKit<ReldbError>(
 )
 
 /** 未初始化时的 DDL 操作占位对象 */
-const notInitializedDdl = notInitialized.proxy<ReldbDdlOperations>()
+const notInitializedDdl = notInitialized.proxy<DdlOperations>()
 
 /** 未初始化时的 SQL 操作占位对象 */
-const notInitializedSql = notInitialized.proxy<ReldbSqlOperations>()
+const notInitializedSql = notInitialized.proxy<DmlOperations>()
 
 /** 未初始化时的 CRUD 管理器 */
-const notInitializedCrud: ReldbCrudManager = {
-  table: config => createCrud(notInitializedSql, config),
-}
+const notInitializedCrud: CrudManager = createCrudManager(notInitializedSql)
 
 /** 未初始化时的 JSON 操作构建器（默认使用 SQLite 格式） */
 const notInitializedJson: ReldbJsonOps = createJsonOps('sqlite')
 
 /** 未初始化时的事务管理器占位对象 */
-const notInitializedTx: ReldbTxManager = {
+const notInitializedTx: TxManager = {
   begin: async () => notInitialized.result(),
   wrap: async () => notInitialized.result(),
 }
@@ -138,46 +142,61 @@ export const reldb: ReldbFunctions = {
    * @returns 初始化结果，失败时包含错误信息
    */
   async init(config: ReldbConfigInput): Promise<Result<void, ReldbError>> {
-    if (currentProvider) {
-      logger.warn('DB module is already initialized, reinitializing')
-      await reldb.close()
-    }
-
-    logger.info('Initializing DB module')
-
-    const parseResult = ReldbConfigSchema.safeParse(config)
-    if (!parseResult.success) {
-      logger.error('DB config validation failed', { error: parseResult.error.message })
+    if (initInProgress) {
+      logger.warn('DB module init is already in progress, skipping concurrent call')
       return err({
         code: ReldbErrorCode.CONFIG_ERROR,
-        message: reldbM('reldb_configError', { params: { error: parseResult.error.message } }),
-        cause: parseResult.error,
+        message: reldbM('reldb_configError', { params: { error: 'init already in progress' } }),
       })
     }
-    const parsed = parseResult.data
 
+    initInProgress = true
     try {
-      const provider = createProvider(parsed)
-      const connectResult = await provider.connect(parsed)
-      if (!connectResult.success) {
-        logger.error('DB module initialization failed', {
-          code: connectResult.error.code,
-          message: connectResult.error.message,
-        })
-        return connectResult
+      if (currentProvider) {
+        logger.warn('DB module is already initialized, reinitializing')
+        await reldb.close()
       }
-      currentProvider = provider
-      currentConfig = parsed
-      logger.info('DB module initialized', { type: parsed.type })
-      return ok(undefined)
+
+      logger.info('Initializing DB module')
+
+      const parseResult = ReldbConfigSchema.safeParse(config)
+      if (!parseResult.success) {
+        logger.error('DB config validation failed', { error: parseResult.error.message })
+        return err({
+          code: ReldbErrorCode.CONFIG_ERROR,
+          message: reldbM('reldb_configError', { params: { error: parseResult.error.message } }),
+          cause: parseResult.error,
+        })
+      }
+      const parsed = parseResult.data
+
+      try {
+        const provider = createProvider(parsed)
+        const connectResult = await provider.connect(parsed)
+        if (!connectResult.success) {
+          logger.error('DB module initialization failed', {
+            code: connectResult.error.code,
+            message: connectResult.error.message,
+          })
+          return connectResult
+        }
+        currentProvider = provider
+        currentConfig = parsed
+        currentJsonOps = createJsonOps(parsed.type)
+        logger.info('DB module initialized', { type: parsed.type })
+        return ok(undefined)
+      }
+      catch (error) {
+        logger.error('DB module initialization failed', { error })
+        return err({
+          code: ReldbErrorCode.CONNECTION_FAILED,
+          message: reldbM('reldb_initFailed', { params: { error: error instanceof Error ? error.message : String(error) } }),
+          cause: error,
+        })
+      }
     }
-    catch (error) {
-      logger.error('DB module initialization failed', { error })
-      return err({
-        code: ReldbErrorCode.CONNECTION_FAILED,
-        message: reldbM('reldb_initFailed', { params: { error: error instanceof Error ? error.message : String(error) } }),
-        cause: error,
-      })
+    finally {
+      initInProgress = false
     }
   },
 
@@ -186,7 +205,7 @@ export const reldb: ReldbFunctions = {
    *
    * 未初始化时返回占位对象（所有调用返回 NOT_INITIALIZED）。
    */
-  get ddl(): ReldbDdlOperations {
+  get ddl(): DdlOperations {
     return currentProvider?.ddl ?? notInitializedDdl
   },
 
@@ -195,7 +214,7 @@ export const reldb: ReldbFunctions = {
    *
    * 未初始化时返回占位对象（所有调用返回 NOT_INITIALIZED）。
    */
-  get sql(): ReldbSqlOperations {
+  get sql(): DmlOperations {
     return currentProvider?.sql ?? notInitializedSql
   },
 
@@ -210,7 +229,7 @@ export const reldb: ReldbFunctions = {
   },
 
   /** 事务管理器 */
-  get tx(): ReldbTxManager {
+  get tx(): TxManager {
     return currentProvider?.tx ?? notInitializedTx
   },
 
@@ -260,7 +279,7 @@ export const reldb: ReldbFunctions = {
    * ```
    */
   get json(): ReldbJsonOps {
-    return currentConfig ? createJsonOps(currentConfig.type) : notInitializedJson
+    return currentJsonOps ?? notInitializedJson
   },
 
   /**
@@ -271,6 +290,7 @@ export const reldb: ReldbFunctions = {
   async close(): Promise<Result<void, ReldbError>> {
     if (!currentProvider) {
       currentConfig = null
+      currentJsonOps = null
       logger.info('DB module already closed, skipping')
       return ok(undefined)
     }
@@ -297,6 +317,7 @@ export const reldb: ReldbFunctions = {
     finally {
       currentProvider = null
       currentConfig = null
+      currentJsonOps = null
     }
   },
 }

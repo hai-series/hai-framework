@@ -143,7 +143,7 @@ class UserRepository extends BaseReldbCrudRepository<UserRow> {
     return this.findAll({ where: 'email = ?', params: [email], limit: 1 })
   }
 
-  async insertRaw(data: { name: string, email: string, enabled?: boolean }, tx?: import('../src/index.js').ReldbTxHandle) {
+  async insertRaw(data: { name: string, email: string, enabled?: boolean }, tx?: import('../src/index.js').DmlWithTxOperations) {
     const isSqlite = reldb.config?.type === 'sqlite'
     const now = isSqlite ? Date.now() : new Date()
     const enabledValue = data.enabled ?? true
