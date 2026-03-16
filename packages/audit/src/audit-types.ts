@@ -131,6 +131,28 @@ export interface AuditStatItem {
   count: number
 }
 
+/**
+ * CRUD 审计操作输入
+ *
+ * 调用 {@link AuditHelper.crud} 时传入的参数。
+ */
+export interface CrudAuditInput {
+  /** 操作用户 ID（系统操作传 null） */
+  userId?: string | null
+  /** 操作类型 */
+  action: 'create' | 'read' | 'update' | 'delete'
+  /** 资源类型（如 users / roles） */
+  resource: string
+  /** 资源 ID（可选） */
+  resourceId?: string
+  /** 操作详情对象（可选） */
+  details?: Record<string, unknown>
+  /** 客户端 IP（可选） */
+  ip?: string
+  /** 客户端 User-Agent（可选） */
+  ua?: string
+}
+
 // ─── 便捷操作接口 ───
 
 /**
@@ -142,7 +164,7 @@ export interface AuditStatItem {
  * @example
  * ```ts
  * await audit.helper.login('user_1', '127.0.0.1', 'Mozilla/5.0')
- * await audit.helper.crud('user_1', 'create', 'users', 'user_2')
+ * await audit.helper.crud({ userId: 'user_1', action: 'create', resource: 'users', resourceId: 'user_2' })
  * ```
  */
 export interface AuditHelper {
@@ -189,23 +211,14 @@ export interface AuditHelper {
   /**
    * 记录 CRUD 操作
    *
-   * @param userId - 操作用户 ID（系统操作传 null）
-   * @param action - 操作类型：create / read / update / delete
-   * @param resource - 资源类型（如 users / roles）
-   * @param resourceId - 资源 ID（可选）
-   * @param details - 操作详情对象（可选）
-   * @param ip - 客户端 IP（可选）
-   * @param ua - 客户端 User-Agent（可选）
+   * @param input - CRUD 审计输入（action 和 resource 为必填）
+   *
+   * @example
+   * ```ts
+   * await audit.helper.crud({ userId: 'user_1', action: 'create', resource: 'users', resourceId: 'user_2' })
+   * ```
    */
-  crud: (
-    userId: string | null,
-    action: 'create' | 'read' | 'update' | 'delete',
-    resource: string,
-    resourceId?: string,
-    details?: Record<string, unknown>,
-    ip?: string,
-    ua?: string,
-  ) => Promise<Result<void, AuditError>>
+  crud: (input: CrudAuditInput) => Promise<Result<void, AuditError>>
 }
 
 // ─── 函数接口 ───

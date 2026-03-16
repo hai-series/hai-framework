@@ -128,7 +128,7 @@ describe('audit.helper', () => {
   // ─── crud ───
 
   it('crud create 应记录创建操作', async () => {
-    const result = await audit.helper.crud('user_1', 'create', 'users', 'user_2', { name: 'Bob' })
+    const result = await audit.helper.crud({ userId: 'user_1', action: 'create', resource: 'users', resourceId: 'user_2', details: { name: 'Bob' } })
     expect(result.success).toBe(true)
 
     const logs = await audit.list({ action: 'create' })
@@ -141,7 +141,7 @@ describe('audit.helper', () => {
   })
 
   it('crud update 应记录更新操作', async () => {
-    const result = await audit.helper.crud('user_1', 'update', 'roles', 'role_1', { name: 'admin' })
+    const result = await audit.helper.crud({ userId: 'user_1', action: 'update', resource: 'roles', resourceId: 'role_1', details: { name: 'admin' } })
     expect(result.success).toBe(true)
 
     const logs = await audit.list({ action: 'update' })
@@ -153,7 +153,7 @@ describe('audit.helper', () => {
   })
 
   it('crud delete 应记录删除操作', async () => {
-    const result = await audit.helper.crud('user_1', 'delete', 'permissions', 'perm_1')
+    const result = await audit.helper.crud({ userId: 'user_1', action: 'delete', resource: 'permissions', resourceId: 'perm_1' })
     expect(result.success).toBe(true)
 
     const logs = await audit.list({ action: 'delete' })
@@ -164,7 +164,7 @@ describe('audit.helper', () => {
   })
 
   it('crud 不传 resourceId 和 details 也应成功', async () => {
-    const result = await audit.helper.crud('user_1', 'read', 'reports')
+    const result = await audit.helper.crud({ userId: 'user_1', action: 'read', resource: 'reports' })
     expect(result.success).toBe(true)
 
     const logs = await audit.list({ action: 'read' })
@@ -175,7 +175,7 @@ describe('audit.helper', () => {
   })
 
   it('crud 系统操作（userId 为 null）应成功', async () => {
-    const result = await audit.helper.crud(null, 'create', 'system', 'job_1')
+    const result = await audit.helper.crud({ userId: null, action: 'create', resource: 'system', resourceId: 'job_1' })
     expect(result.success).toBe(true)
 
     const logs = await audit.list({ action: 'create' })
