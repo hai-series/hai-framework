@@ -48,6 +48,26 @@ function sanitizeRedisUrl(url: string): string {
   }
 }
 
+// ─── Lua 脚本常量（分布式锁） ───
+
+/** Lua 脚本：仅当 owner 匹配时才删除锁（原子操作，防止误释放） */
+const RELEASE_LOCK_SCRIPT = `
+  if redis.call("get", KEYS[1]) == ARGV[1] then
+    return redis.call("del", KEYS[1])
+  else
+    return 0
+  end
+`
+
+/** Lua 脚本：仅当 owner 匹配时才续期锁（原子操作） */
+const EXTEND_LOCK_SCRIPT = `
+  if redis.call("get", KEYS[1]) == ARGV[1] then
+    return redis.call("expire", KEYS[1], ARGV[2])
+  else
+    return 0
+  end
+`
+
 // ─── Redis Provider ───
 
 /**
@@ -608,15 +628,7 @@ export function createRedisProvider(): CacheProvider {
       return wrapOperation(async () => {
         const lockKey = `${LOCK_PREFIX}${key}`
         if (owner !== undefined) {
-          // Lua 脚本：仅当 owner 匹配时才删除（原子操作，防止误释放）
-          const script = `
-            if redis.call("get", KEYS[1]) == ARGV[1] then
-              return redis.call("del", KEYS[1])
-            else
-              return 0
-            end
-          `
-          const result = await client!.eval(script, 1, lockKey, owner) as number
+          const result = await client!.eval(RELEASE_LOCK_SCRIPT, 1, lockKey, owner) as number
           return result === 1
         }
         const deleted = await client!.del(lockKey)
@@ -636,15 +648,7 @@ export function createRedisProvider(): CacheProvider {
       return wrapOperation(async () => {
         const lockKey = `${LOCK_PREFIX}${key}`
         if (owner !== undefined) {
-          // Lua 脚本：仅当 owner 匹配时才续期（原子操作）
-          const script = `
-            if redis.call("get", KEYS[1]) == ARGV[1] then
-              return redis.call("expire", KEYS[1], ARGV[2])
-            else
-              return 0
-            end
-          `
-          const result = await client!.eval(script, 1, lockKey, owner, ttl) as number
+          const result = await client!.eval(EXTEND_LOCK_SCRIPT, 1, lockKey, owner, ttl) as number
           return result === 1
         }
         const result = await client!.expire(lockKey, ttl)

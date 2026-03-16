@@ -329,7 +329,7 @@ export interface LockOperations {
 export interface LockOptions {
   /** 锁过期时间（秒）；默认 30 */
   ttl?: number
-  /** 锁持有者标识；默认自动生成（推荐设置固定值以便审计） */
+  /** 锁持有者标识；默认 'default'（多节点部署时建议设置固定值以便审计） */
   owner?: string
 }
 

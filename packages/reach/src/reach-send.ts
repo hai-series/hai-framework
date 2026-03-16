@@ -269,9 +269,10 @@ async function flushPendingMessages(
   // 分布式锁：防止多节点同时 flush
   const FLUSH_LOCK_KEY = 'reach:flush-pending'
   const FLUSH_LOCK_TTL = 60
+  const FLUSH_LOCK_OWNER = `reach:${crypto.randomUUID()}`
   let lockAcquired = false
   if (cache.isInitialized) {
-    const lockResult = await cache.lock.acquire(FLUSH_LOCK_KEY, { ttl: FLUSH_LOCK_TTL })
+    const lockResult = await cache.lock.acquire(FLUSH_LOCK_KEY, { ttl: FLUSH_LOCK_TTL, owner: FLUSH_LOCK_OWNER })
     if (lockResult.success && !lockResult.data) {
       logger.info('Skipping flush, another node holds the lock')
       return
@@ -328,7 +329,7 @@ async function flushPendingMessages(
   finally {
     // 释放锁
     if (lockAcquired) {
-      await cache.lock.release(FLUSH_LOCK_KEY).catch((error: unknown) => {
+      await cache.lock.release(FLUSH_LOCK_KEY, FLUSH_LOCK_OWNER).catch((error: unknown) => {
         logger.warn('Failed to release flush lock', { error })
       })
     }
