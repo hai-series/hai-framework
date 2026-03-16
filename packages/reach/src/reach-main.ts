@@ -54,6 +54,9 @@ let sendLogRepo: SendLogRepository | null = null
 /** 模板存储（db 可用时初始化） */
 let templateRepo: TemplateRepository | null = null
 
+/** 初始化进行中标志（防止并发调用） */
+let initInProgress = false
+
 // ─── Provider 工厂 ───
 
 /**
@@ -142,6 +145,134 @@ const notInitialized = core.module.createNotInitializedKit<ReachError>(
   () => reachM('reach_notInitialized'),
 )
 
+// ─── 关闭逻辑 ───
+
+/**
+ * 关闭所有 Provider 并释放资源（内部实现）
+ */
+async function doClose(): Promise<void> {
+  if (providers.size === 0 && currentConfig === null) {
+    logger.info('Reach module already closed, skipping')
+    return
+  }
+
+  logger.info('Closing reach module')
+
+  for (const [name, provider] of providers.entries()) {
+    try {
+      await provider.close()
+    }
+    catch (error) {
+      logger.error('Provider close failed', { name, error })
+    }
+  }
+
+  providers = new Map()
+  currentConfig = null
+  dndConfig = undefined
+  templateRegistry = createTemplateRegistry()
+  sendLogRepo = null
+  templateRepo = null
+  resetSendLogRepoSingleton()
+  resetTemplateRepoSingleton()
+  resetSendState()
+
+  logger.info('Reach module closed')
+}
+
+// ─── 初始化逻辑 ───
+
+/**
+ * 实际的初始化逻辑（由 init 包裹并发防护后调用）
+ */
+async function doInit(config: ReachConfigInput): Promise<Result<void, ReachError>> {
+  if (providers.size > 0) {
+    logger.warn('Reach module is already initialized, reinitializing')
+    await doClose()
+  }
+
+  logger.info('Initializing reach module')
+
+  const parseResult = ReachConfigSchema.safeParse(config)
+  if (!parseResult.success) {
+    logger.error('Reach config validation failed', { error: parseResult.error.message })
+    return err({
+      code: ReachErrorCode.CONFIG_ERROR,
+      message: reachM('reach_configError', { params: { error: parseResult.error.message } }),
+      cause: parseResult.error,
+    })
+  }
+  const parsed = parseResult.data
+
+  try {
+    const newProviders = new Map<string, ReachProvider>()
+
+    for (const providerConfig of parsed.providers) {
+      const provider = createProvider(providerConfig)
+      const connectResult = await provider.connect(providerConfig)
+      if (!connectResult.success) {
+        logger.error('Provider initialization failed', {
+          name: providerConfig.name,
+          type: providerConfig.type,
+          code: connectResult.error.code,
+          message: connectResult.error.message,
+        })
+        logger.info('Rolling back connected providers', { count: newProviders.size })
+        for (const [name, p] of newProviders.entries()) {
+          try {
+            await p.close()
+          }
+          catch (rollbackError) {
+            logger.error('Provider rollback close failed', { name, error: rollbackError })
+          }
+        }
+        return connectResult
+      }
+      newProviders.set(providerConfig.name, provider)
+    }
+
+    providers = newProviders
+    currentConfig = parsed
+    dndConfig = parsed.dnd
+
+    // 尝试初始化模板存储
+    templateRepo = await tryInitTemplateRepo()
+
+    // 创建模板注册表
+    templateRegistry = createTemplateRegistry(templateRepo)
+
+    // 配置文件中定义的模板写入数据库
+    if (parsed.templates && templateRepo) {
+      const saveResult = await templateRegistry.saveBatch(parsed.templates)
+      if (!saveResult.success) {
+        logger.warn('Failed to save config templates to database', { error: saveResult.error.message })
+      }
+    }
+
+    // 尝试初始化发送日志存储
+    sendLogRepo = await tryInitSendLogRepo()
+
+    // 启动 DND 恢复定时器
+    if (dndConfig) {
+      startDndScheduler(dndConfig, providers, sendLogRepo)
+    }
+
+    const providerNames = parsed.providers.map(p => p.name)
+    logger.info('Reach module initialized', { providers: providerNames })
+    return ok(undefined)
+  }
+  catch (error) {
+    logger.error('Reach module initialization failed', { error })
+    return err({
+      code: ReachErrorCode.CONFIG_ERROR,
+      message: reachM('reach_initFailed', {
+        params: { error: error instanceof Error ? error.message : String(error) },
+      }),
+      cause: error,
+    })
+  }
+}
+
 // ─── 触达服务对象 ───
 
 /**
@@ -151,90 +282,20 @@ const notInitialized = core.module.createNotInitializedKit<ReachError>(
  */
 export const reach: ReachFunctions = {
   async init(config: ReachConfigInput): Promise<Result<void, ReachError>> {
-    if (providers.size > 0) {
-      logger.warn('Reach module is already initialized, reinitializing')
-      await reach.close()
-    }
-
-    logger.info('Initializing reach module')
-
-    const parseResult = ReachConfigSchema.safeParse(config)
-    if (!parseResult.success) {
-      logger.error('Reach config validation failed', { error: parseResult.error.message })
+    if (initInProgress) {
+      logger.warn('Reach module init already in progress, skipping')
       return err({
         code: ReachErrorCode.CONFIG_ERROR,
-        message: reachM('reach_configError', { params: { error: parseResult.error.message } }),
-        cause: parseResult.error,
+        message: reachM('reach_configError', { params: { error: 'init already in progress' } }),
       })
     }
-    const parsed = parseResult.data
 
+    initInProgress = true
     try {
-      const newProviders = new Map<string, ReachProvider>()
-
-      for (const providerConfig of parsed.providers) {
-        const provider = createProvider(providerConfig)
-        const connectResult = await provider.connect(providerConfig)
-        if (!connectResult.success) {
-          logger.error('Provider initialization failed', {
-            name: providerConfig.name,
-            type: providerConfig.type,
-            code: connectResult.error.code,
-            message: connectResult.error.message,
-          })
-          logger.info('Rolling back connected providers', { count: newProviders.size })
-          for (const [name, p] of newProviders.entries()) {
-            try {
-              await p.close()
-            }
-            catch (rollbackError) {
-              logger.error('Provider rollback close failed', { name, error: rollbackError })
-            }
-          }
-          return connectResult
-        }
-        newProviders.set(providerConfig.name, provider)
-      }
-
-      providers = newProviders
-      currentConfig = parsed
-      dndConfig = parsed.dnd
-
-      // 尝试初始化模板存储
-      templateRepo = await tryInitTemplateRepo()
-
-      // 创建模板注册表
-      templateRegistry = createTemplateRegistry(templateRepo)
-
-      // 配置文件中定义的模板写入数据库
-      if (parsed.templates && templateRepo) {
-        const saveResult = await templateRegistry.saveBatch(parsed.templates)
-        if (!saveResult.success) {
-          logger.warn('Failed to save config templates to database', { error: saveResult.error.message })
-        }
-      }
-
-      // 尝试初始化发送日志存储
-      sendLogRepo = await tryInitSendLogRepo()
-
-      // 启动 DND 恢复定时器
-      if (dndConfig) {
-        startDndScheduler(dndConfig, providers, sendLogRepo)
-      }
-
-      const providerNames = parsed.providers.map(p => p.name)
-      logger.info('Reach module initialized', { providers: providerNames })
-      return ok(undefined)
+      return await doInit(config)
     }
-    catch (error) {
-      logger.error('Reach module initialization failed', { error })
-      return err({
-        code: ReachErrorCode.CONFIG_ERROR,
-        message: reachM('reach_initFailed', {
-          params: { error: error instanceof Error ? error.message : String(error) },
-        }),
-        cause: error,
-      })
+    finally {
+      initInProgress = false
     }
   },
 
@@ -259,32 +320,6 @@ export const reach: ReachFunctions = {
   },
 
   async close(): Promise<void> {
-    if (providers.size === 0 && currentConfig === null) {
-      logger.info('Reach module already closed, skipping')
-      return
-    }
-
-    logger.info('Closing reach module')
-
-    for (const [name, provider] of providers.entries()) {
-      try {
-        await provider.close()
-      }
-      catch (error) {
-        logger.error('Provider close failed', { name, error })
-      }
-    }
-
-    providers = new Map()
-    currentConfig = null
-    dndConfig = undefined
-    templateRegistry = createTemplateRegistry()
-    sendLogRepo = null
-    templateRepo = null
-    resetSendLogRepoSingleton()
-    resetTemplateRepoSingleton()
-    resetSendState()
-
-    logger.info('Reach module closed')
+    await doClose()
   },
 }

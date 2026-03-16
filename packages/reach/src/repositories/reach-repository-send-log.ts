@@ -6,7 +6,7 @@
  */
 
 import type { Result } from '@h-ai/core'
-import type { ReldbCrudFieldDefinition, ReldbCrudRepository, ReldbError, ReldbFunctions, ReldbTxHandle } from '@h-ai/reldb'
+import type { DmlWithTxOperations, ReldbCrudFieldDefinition, ReldbCrudRepository, ReldbError, ReldbFunctions } from '@h-ai/reldb'
 import type { ReachError } from '../reach-types.js'
 
 import { err, ok } from '@h-ai/core'
@@ -57,12 +57,12 @@ export interface SendLogRepository extends ReldbCrudRepository<StoredSendLog> {
   /**
    * 获取所有待发送记录（按创建时间升序）
    */
-  findPending: (tx?: ReldbTxHandle) => Promise<Result<StoredSendLog[], ReachError>>
+  findPending: (tx?: DmlWithTxOperations) => Promise<Result<StoredSendLog[], ReachError>>
 
   /**
    * 将记录标记为已发送
    */
-  markSent: (id: number, messageId?: string, tx?: ReldbTxHandle) => Promise<Result<void, ReachError>>
+  markSent: (id: number, messageId?: string, tx?: DmlWithTxOperations) => Promise<Result<void, ReachError>>
 }
 
 // ─── 发送日志存储实现 ───
@@ -219,7 +219,7 @@ class DbSendLogRepository extends BaseReldbCrudRepository<StoredSendLog> impleme
   }
 
   /** 获取所有待发送记录 */
-  async findPending(tx?: ReldbTxHandle): Promise<Result<StoredSendLog[], ReachError>> {
+  async findPending(tx?: DmlWithTxOperations): Promise<Result<StoredSendLog[], ReachError>> {
     const result = await this.findAll({ where: 'status = ?', params: ['pending'], orderBy: 'created_at ASC' }, tx)
     if (!result.success) {
       return this.buildQueryError(result.error)
@@ -228,7 +228,7 @@ class DbSendLogRepository extends BaseReldbCrudRepository<StoredSendLog> impleme
   }
 
   /** 将记录标记为已发送 */
-  async markSent(id: number, messageId?: string, tx?: ReldbTxHandle): Promise<Result<void, ReachError>> {
+  async markSent(id: number, messageId?: string, tx?: DmlWithTxOperations): Promise<Result<void, ReachError>> {
     const result = await this.updateById(id, { status: 'sent', messageId: messageId ?? null }, tx)
     if (!result.success) {
       return this.buildQueryError(result.error)

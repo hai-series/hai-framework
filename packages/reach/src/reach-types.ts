@@ -189,8 +189,8 @@ export interface ReachTemplateRegistry {
  *   ],
  * })
  *
- * // 注册模板（绑定到 Provider）
- * reach.template.register({
+ * // 保存模板（绑定到 Provider）
+ * await reach.template.save({
  *   name: 'welcome',
  *   provider: 'email',
  *   subject: '欢迎 {userName}',

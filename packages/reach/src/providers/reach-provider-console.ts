@@ -40,7 +40,7 @@ export function createConsoleProvider(): ReachProvider {
     },
 
     async send(message: ReachMessage): Promise<Result<SendResult, ReachError>> {
-      logger.info('Sending message via console', {
+      logger.debug('Sending message via console', {
         provider: message.provider,
         to: message.to,
         subject: message.subject,

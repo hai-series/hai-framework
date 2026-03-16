@@ -7,7 +7,7 @@
  */
 
 import type { Result } from '@h-ai/core'
-import type { ReldbCrudFieldDefinition, ReldbCrudRepository, ReldbError, ReldbFunctions, ReldbTxHandle } from '@h-ai/reldb'
+import type { DmlWithTxOperations, ReldbCrudFieldDefinition, ReldbCrudRepository, ReldbError, ReldbFunctions } from '@h-ai/reldb'
 import type { ReachError, ReachTemplate } from '../reach-types.js'
 
 import { err, ok } from '@h-ai/core'
@@ -47,22 +47,22 @@ export interface TemplateRepository extends ReldbCrudRepository<StoredTemplate> 
   /**
    * 按名称查找模板
    */
-  findByName: (name: string, tx?: ReldbTxHandle) => Promise<Result<StoredTemplate | undefined, ReachError>>
+  findByName: (name: string, tx?: DmlWithTxOperations) => Promise<Result<StoredTemplate | undefined, ReachError>>
 
   /**
    * 保存模板（存在则更新，不存在则插入）
    */
-  upsert: (template: ReachTemplate, tx?: ReldbTxHandle) => Promise<Result<void, ReachError>>
+  upsert: (template: ReachTemplate, tx?: DmlWithTxOperations) => Promise<Result<void, ReachError>>
 
   /**
    * 按名称删除模板
    */
-  deleteByName: (name: string, tx?: ReldbTxHandle) => Promise<Result<void, ReachError>>
+  deleteByName: (name: string, tx?: DmlWithTxOperations) => Promise<Result<void, ReachError>>
 
   /**
    * 获取所有模板（转换为 ReachTemplate 格式）
    */
-  listTemplates: (tx?: ReldbTxHandle) => Promise<Result<ReachTemplate[], ReachError>>
+  listTemplates: (tx?: DmlWithTxOperations) => Promise<Result<ReachTemplate[], ReachError>>
 }
 
 // ─── 模板存储实现 ───
@@ -199,7 +199,7 @@ class DbTemplateRepository extends BaseReldbCrudRepository<StoredTemplate> imple
   }
 
   /** 按名称查找模板 */
-  async findByName(name: string, tx?: ReldbTxHandle): Promise<Result<StoredTemplate | undefined, ReachError>> {
+  async findByName(name: string, tx?: DmlWithTxOperations): Promise<Result<StoredTemplate | undefined, ReachError>> {
     const result = await this.findAll({ where: 'name = ?', params: [name], limit: 1 }, tx)
     if (!result.success) {
       return this.buildQueryError(result.error)
@@ -208,7 +208,7 @@ class DbTemplateRepository extends BaseReldbCrudRepository<StoredTemplate> imple
   }
 
   /** 保存模板（存在则更新，不存在则插入） */
-  async upsert(template: ReachTemplate, tx?: ReldbTxHandle): Promise<Result<void, ReachError>> {
+  async upsert(template: ReachTemplate, tx?: DmlWithTxOperations): Promise<Result<void, ReachError>> {
     const existing = await this.findByName(template.name, tx)
     if (!existing.success) {
       return existing
@@ -253,7 +253,7 @@ class DbTemplateRepository extends BaseReldbCrudRepository<StoredTemplate> imple
   }
 
   /** 按名称删除模板 */
-  async deleteByName(name: string, tx?: ReldbTxHandle): Promise<Result<void, ReachError>> {
+  async deleteByName(name: string, tx?: DmlWithTxOperations): Promise<Result<void, ReachError>> {
     const existing = await this.findByName(name, tx)
     if (!existing.success) {
       return existing
@@ -269,7 +269,7 @@ class DbTemplateRepository extends BaseReldbCrudRepository<StoredTemplate> imple
   }
 
   /** 获取所有模板（转换为 ReachTemplate 格式） */
-  async listTemplates(tx?: ReldbTxHandle): Promise<Result<ReachTemplate[], ReachError>> {
+  async listTemplates(tx?: DmlWithTxOperations): Promise<Result<ReachTemplate[], ReachError>> {
     const result = await this.findAll({ orderBy: 'name ASC' }, tx)
     if (!result.success) {
       return this.buildQueryError(result.error)
