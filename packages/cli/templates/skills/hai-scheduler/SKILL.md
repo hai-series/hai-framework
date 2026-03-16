@@ -272,7 +272,6 @@ await scheduler.init({ enableDb: true })
 ```typescript
 await scheduler.init({
   enableDb: true,
-  lockTableName: 'scheduler_locks', // 锁表名，默认 'scheduler_locks'
   lockExpireMs: 300000,              // 锁过期时间，默认 5 分钟
   nodeId: 'node-1',                  // 节点标识，默认 crypto.randomUUID()
 })

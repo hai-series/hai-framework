@@ -7,7 +7,7 @@
 
 import type { CacheFunctions } from '@h-ai/cache'
 import type { Result } from '@h-ai/core'
-import type { ReldbFunctions, ReldbTxHandle } from '@h-ai/reldb'
+import type { DmlWithTxOperations, ReldbFunctions } from '@h-ai/reldb'
 import type { IamError } from '../iam-types.js'
 import type { PermissionRepository } from './iam-authz-repository-permission.js'
 import type { RoleRepository } from './iam-authz-repository-role.js'
@@ -26,22 +26,22 @@ export interface RolePermissionRepository {
   /**
    * 分配权限给角色
    */
-  assign: (roleId: string, permissionId: string, permissionCode: string, tx?: ReldbTxHandle) => Promise<Result<void, IamError>>
+  assign: (roleId: string, permissionId: string, permissionCode: string, tx?: DmlWithTxOperations) => Promise<Result<void, IamError>>
 
   /**
    * 移除角色权限
    */
-  remove: (roleId: string, permissionId: string, permissionCode: string, tx?: ReldbTxHandle) => Promise<Result<void, IamError>>
+  remove: (roleId: string, permissionId: string, permissionCode: string, tx?: DmlWithTxOperations) => Promise<Result<void, IamError>>
 
   /**
    * 获取角色的所有权限 ID
    */
-  getPermissionIds: (roleId: string, tx?: ReldbTxHandle) => Promise<Result<string[], IamError>>
+  getPermissionIds: (roleId: string, tx?: DmlWithTxOperations) => Promise<Result<string[], IamError>>
 
   /**
    * 获取角色的所有权限
    */
-  getPermissions: (roleId: string, tx?: ReldbTxHandle) => Promise<Result<Permission[], IamError>>
+  getPermissions: (roleId: string, tx?: DmlWithTxOperations) => Promise<Result<Permission[], IamError>>
 
   /**
    * 获取角色的权限代码（缓存优先）
@@ -49,7 +49,7 @@ export interface RolePermissionRepository {
    * 优先从缓存读取，未命中时回源数据库并回写缓存。
    * 可能返回非最新数据；写操作已自动同步缓存。
    */
-  getPermissionCodesCached: (roleId: string, tx?: ReldbTxHandle) => Promise<Result<string[], IamError>>
+  getPermissionCodesCached: (roleId: string, tx?: DmlWithTxOperations) => Promise<Result<string[], IamError>>
 
   /**
    * 清理角色权限缓存
@@ -66,21 +66,21 @@ export interface RolePermissionRepository {
    *
    * 优先从缓存判断，未命中时加载全量权限代码到缓存后再判断。
    */
-  hasPermissionCached: (roleId: string, permissionCode: string, tx?: ReldbTxHandle) => Promise<Result<boolean, IamError>>
+  hasPermissionCached: (roleId: string, permissionCode: string, tx?: DmlWithTxOperations) => Promise<Result<boolean, IamError>>
 
   /**
    * 删除角色的所有权限关联（仅 DB 操作）
    *
    * 不清理缓存；调用方应在事务提交后调用 `clearRolePermissionsCache` 清理缓存。
    */
-  removeByRoleId: (roleId: string, tx?: ReldbTxHandle) => Promise<Result<void, IamError>>
+  removeByRoleId: (roleId: string, tx?: DmlWithTxOperations) => Promise<Result<void, IamError>>
 
   /**
    * 删除权限的所有角色关联（仅 DB 操作）
    *
    * 不清理缓存；调用方应在事务提交后调用 `removePermissionCodeFromCache` 清理缓存。
    */
-  removeByPermissionId: (permissionId: string, tx?: ReldbTxHandle) => Promise<Result<void, IamError>>
+  removeByPermissionId: (permissionId: string, tx?: DmlWithTxOperations) => Promise<Result<void, IamError>>
 
   /**
    * 查询拥有指定权限的所有角色 ID
@@ -111,22 +111,22 @@ export interface UserRoleRepository {
   /**
    * 分配角色给用户
    */
-  assign: (userId: string, roleId: string, tx?: ReldbTxHandle) => Promise<Result<void, IamError>>
+  assign: (userId: string, roleId: string, tx?: DmlWithTxOperations) => Promise<Result<void, IamError>>
 
   /**
    * 移除用户角色
    */
-  remove: (userId: string, roleId: string, tx?: ReldbTxHandle) => Promise<Result<void, IamError>>
+  remove: (userId: string, roleId: string, tx?: DmlWithTxOperations) => Promise<Result<void, IamError>>
 
   /**
    * 获取用户的所有角色 ID
    */
-  getRoleIds: (userId: string, tx?: ReldbTxHandle) => Promise<Result<string[], IamError>>
+  getRoleIds: (userId: string, tx?: DmlWithTxOperations) => Promise<Result<string[], IamError>>
 
   /**
    * 获取用户的所有角色
    */
-  getRoles: (userId: string, tx?: ReldbTxHandle) => Promise<Result<Role[], IamError>>
+  getRoles: (userId: string, tx?: DmlWithTxOperations) => Promise<Result<Role[], IamError>>
 
   /**
    * 删除角色的所有用户关联（仅 DB 操作）
@@ -134,7 +134,7 @@ export interface UserRoleRepository {
    * 返回受影响的用户 ID 列表。
    * 不同步会话；调用方应在事务提交后调用 `syncUserSessionRoles` 逐一同步。
    */
-  removeByRoleId: (roleId: string, tx?: ReldbTxHandle) => Promise<Result<string[], IamError>>
+  removeByRoleId: (roleId: string, tx?: DmlWithTxOperations) => Promise<Result<string[], IamError>>
 
   /**
    * 查询拥有指定角色的所有用户 ID
@@ -243,7 +243,7 @@ export async function createDbRolePermissionRepository(
    * @param tx - 可选事务句柄
    * @returns 权限 ID 数组
    */
-  async function getPermissionIdsInternal(roleId: string, tx?: ReldbTxHandle): Promise<Result<string[], IamError>> {
+  async function getPermissionIdsInternal(roleId: string, tx?: DmlWithTxOperations): Promise<Result<string[], IamError>> {
     const runner = tx ?? db.sql
     const result = await runner.query<{ permission_id: string }>(
       `SELECT permission_id FROM ${ROLE_PERMISSION_TABLE} WHERE role_id = ?`,
@@ -270,7 +270,7 @@ export async function createDbRolePermissionRepository(
    * @param tx - 可选事务句柄
    * @returns Permission 数组
    */
-  async function getPermissionsInternal(roleId: string, tx?: ReldbTxHandle): Promise<Result<Permission[], IamError>> {
+  async function getPermissionsInternal(roleId: string, tx?: DmlWithTxOperations): Promise<Result<Permission[], IamError>> {
     const idsResult = await getPermissionIdsInternal(roleId, tx)
     if (!idsResult.success)
       return idsResult
@@ -377,7 +377,7 @@ export async function createDbRolePermissionRepository(
    * @param tx - 可选事务句柄
    * @returns 权限代码数组
    */
-  async function getPermissionCodesCached(roleId: string, tx?: ReldbTxHandle): Promise<Result<string[], IamError>> {
+  async function getPermissionCodesCached(roleId: string, tx?: DmlWithTxOperations): Promise<Result<string[], IamError>> {
     const key = buildRolePermsKey(roleId)
 
     const existsResult = await cache.kv.exists(key)
@@ -427,7 +427,7 @@ export async function createDbRolePermissionRepository(
   }
 
   return ok({
-    async assign(roleId: string, permissionId: string, permissionCode: string, tx?: ReldbTxHandle): Promise<Result<void, IamError>> {
+    async assign(roleId: string, permissionId: string, permissionCode: string, tx?: DmlWithTxOperations): Promise<Result<void, IamError>> {
       const runner = tx ?? db.sql
       const result = await runner.execute(
         `INSERT INTO ${ROLE_PERMISSION_TABLE} (role_id, permission_id) VALUES (?, ?) ON CONFLICT DO NOTHING`,
@@ -459,7 +459,7 @@ export async function createDbRolePermissionRepository(
       return ok(undefined)
     },
 
-    async remove(roleId: string, permissionId: string, permissionCode: string, tx?: ReldbTxHandle): Promise<Result<void, IamError>> {
+    async remove(roleId: string, permissionId: string, permissionCode: string, tx?: DmlWithTxOperations): Promise<Result<void, IamError>> {
       const runner = tx ?? db.sql
       const result = await runner.execute(
         `DELETE FROM ${ROLE_PERMISSION_TABLE} WHERE role_id = ? AND permission_id = ?`,
@@ -491,15 +491,15 @@ export async function createDbRolePermissionRepository(
       return ok(undefined)
     },
 
-    async getPermissionIds(roleId: string, tx?: ReldbTxHandle): Promise<Result<string[], IamError>> {
+    async getPermissionIds(roleId: string, tx?: DmlWithTxOperations): Promise<Result<string[], IamError>> {
       return getPermissionIdsInternal(roleId, tx)
     },
 
-    async getPermissions(roleId: string, tx?: ReldbTxHandle): Promise<Result<Permission[], IamError>> {
+    async getPermissions(roleId: string, tx?: DmlWithTxOperations): Promise<Result<Permission[], IamError>> {
       return getPermissionsInternal(roleId, tx)
     },
 
-    async getPermissionCodesCached(roleId: string, tx?: ReldbTxHandle): Promise<Result<string[], IamError>> {
+    async getPermissionCodesCached(roleId: string, tx?: DmlWithTxOperations): Promise<Result<string[], IamError>> {
       return getPermissionCodesCached(roleId, tx)
     },
 
@@ -564,7 +564,7 @@ export async function createDbRolePermissionRepository(
       return ok(undefined)
     },
 
-    async hasPermissionCached(roleId: string, permissionCode: string, tx?: ReldbTxHandle): Promise<Result<boolean, IamError>> {
+    async hasPermissionCached(roleId: string, permissionCode: string, tx?: DmlWithTxOperations): Promise<Result<boolean, IamError>> {
       const cacheKey = buildRolePermsKey(roleId)
       const existsResult = await cache.kv.exists(cacheKey)
       if (!existsResult.success) {
@@ -595,7 +595,7 @@ export async function createDbRolePermissionRepository(
       return ok(codesResult.data.includes(permissionCode))
     },
 
-    async removeByRoleId(roleId: string, tx?: ReldbTxHandle): Promise<Result<void, IamError>> {
+    async removeByRoleId(roleId: string, tx?: DmlWithTxOperations): Promise<Result<void, IamError>> {
       const runner = tx ?? db.sql
       const result = await runner.execute(
         `DELETE FROM ${ROLE_PERMISSION_TABLE} WHERE role_id = ?`,
@@ -611,7 +611,7 @@ export async function createDbRolePermissionRepository(
       return ok(undefined)
     },
 
-    async removeByPermissionId(permissionId: string, tx?: ReldbTxHandle): Promise<Result<void, IamError>> {
+    async removeByPermissionId(permissionId: string, tx?: DmlWithTxOperations): Promise<Result<void, IamError>> {
       const runner = tx ?? db.sql
       const result = await runner.execute(
         `DELETE FROM ${ROLE_PERMISSION_TABLE} WHERE permission_id = ?`,
@@ -777,7 +777,7 @@ export async function createDbUserRoleRepository(
    * @param tx - 可选事务句柄
    * @returns 角色 ID 数组
    */
-  async function getRoleIdsInternal(userId: string, tx?: ReldbTxHandle): Promise<Result<string[], IamError>> {
+  async function getRoleIdsInternal(userId: string, tx?: DmlWithTxOperations): Promise<Result<string[], IamError>> {
     const runner = tx ?? db.sql
     const result = await runner.query<{ role_id: string }>(
       `SELECT role_id FROM ${USER_ROLE_TABLE} WHERE user_id = ?`,
@@ -969,7 +969,7 @@ export async function createDbUserRoleRepository(
   }
 
   return ok({
-    async assign(userId: string, roleId: string, tx?: ReldbTxHandle): Promise<Result<void, IamError>> {
+    async assign(userId: string, roleId: string, tx?: DmlWithTxOperations): Promise<Result<void, IamError>> {
       const runner = tx ?? db.sql
       const result = await runner.execute(
         `INSERT INTO ${USER_ROLE_TABLE} (user_id, role_id) VALUES (?, ?) ON CONFLICT DO NOTHING`,
@@ -992,7 +992,7 @@ export async function createDbUserRoleRepository(
       return ok(undefined)
     },
 
-    async remove(userId: string, roleId: string, tx?: ReldbTxHandle): Promise<Result<void, IamError>> {
+    async remove(userId: string, roleId: string, tx?: DmlWithTxOperations): Promise<Result<void, IamError>> {
       const runner = tx ?? db.sql
       const result = await runner.execute(
         `DELETE FROM ${USER_ROLE_TABLE} WHERE user_id = ? AND role_id = ?`,
@@ -1015,11 +1015,11 @@ export async function createDbUserRoleRepository(
       return ok(undefined)
     },
 
-    async getRoleIds(userId: string, tx?: ReldbTxHandle): Promise<Result<string[], IamError>> {
+    async getRoleIds(userId: string, tx?: DmlWithTxOperations): Promise<Result<string[], IamError>> {
       return getRoleIdsInternal(userId, tx)
     },
 
-    async getRoles(userId: string, tx?: ReldbTxHandle): Promise<Result<Role[], IamError>> {
+    async getRoles(userId: string, tx?: DmlWithTxOperations): Promise<Result<Role[], IamError>> {
       const idsResult = await getRoleIdsInternal(userId, tx)
       if (!idsResult.success)
         return idsResult
@@ -1043,7 +1043,7 @@ export async function createDbUserRoleRepository(
       return ok(roleResult.data)
     },
 
-    async removeByRoleId(roleId: string, tx?: ReldbTxHandle): Promise<Result<string[], IamError>> {
+    async removeByRoleId(roleId: string, tx?: DmlWithTxOperations): Promise<Result<string[], IamError>> {
       const runner = tx ?? db.sql
 
       // 查出受影响的用户 ID

@@ -62,15 +62,15 @@ export const POST = kit.handler(async ({ request, locals, getClientAddress }) =>
   // 记录审计日志
   const ip = getClientAddress()
   const ua = request.headers.get('user-agent') ?? undefined
-  await audit.helper.crud(
-    locals.session!.userId,
-    'create',
-    'role',
-    role.id,
-    { name, permissions },
+  await audit.helper.crud({
+    userId: locals.session!.userId,
+    action: 'create',
+    resource: 'role',
+    resourceId: role.id,
+    details: { name, permissions },
     ip,
     ua,
-  )
+  })
 
   return kit.response.ok(role)
 })

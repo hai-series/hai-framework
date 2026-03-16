@@ -9,7 +9,7 @@
 import type { Message, Task } from '@a2a-js/sdk'
 import type { AgentExecutor, ExecutionEventBus, ServerCallContext, TaskStore } from '@a2a-js/sdk/server'
 import type { Result } from '@h-ai/core'
-import type { DataOperations, DbType, ReldbJsonOps } from '@h-ai/reldb'
+import type { DbType, DmlOperations, ReldbJsonOps } from '@h-ai/reldb'
 
 import type { A2AConfig } from '../ai-config.js'
 import type { AIError } from '../ai-types.js'
@@ -115,7 +115,7 @@ function wrapExecutorWithLogging(
 
 /** A2A 子功能组装依赖 */
 export interface A2ADeps {
-  sql: DataOperations
+  sql: DmlOperations
   jsonOps: ReldbJsonOps
   dbType: DbType | undefined
 }

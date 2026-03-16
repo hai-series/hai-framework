@@ -6,7 +6,7 @@
  */
 
 import type { Result } from '@h-ai/core'
-import type { DataOperations, DbType } from '@h-ai/reldb'
+import type { DbType, DmlOperations } from '@h-ai/reldb'
 import type { AIError } from '../ai-types.js'
 
 import { core, err, ok } from '@h-ai/core'
@@ -73,7 +73,7 @@ function buildSchemaStatements(dbType: DbType): string[] {
  * @param dataOps - reldb 数据操作接口
  * @returns 成功返回 ok(undefined)
  */
-export async function createKnowledgeSchema(dataOps: DataOperations, dbType: DbType = 'sqlite'): Promise<Result<void, AIError>> {
+export async function createKnowledgeSchema(dataOps: DmlOperations, dbType: DbType = 'sqlite'): Promise<Result<void, AIError>> {
   const statements = buildSchemaStatements(dbType)
 
   try {
@@ -110,7 +110,7 @@ export async function createKnowledgeSchema(dataOps: DataOperations, dbType: DbT
  * 使用 INSERT OR REPLACE 语义（按 id 匹配）。
  */
 export async function upsertEntity(
-  dataOps: DataOperations,
+  dataOps: DmlOperations,
   entity: { id: string, name: string, type: string, aliases?: string[], description?: string },
   dbType: DbType = 'sqlite',
 ): Promise<Result<void, AIError>> {
@@ -161,7 +161,7 @@ export async function upsertEntity(
  * 插入文档-实体关联
  */
 export async function insertEntityDocument(
-  dataOps: DataOperations,
+  dataOps: DmlOperations,
   relation: {
     entityId: string
     documentId: string
@@ -221,7 +221,7 @@ export async function insertEntityDocument(
  * @returns 匹配的实体 ID 列表
  */
 export async function findEntitiesByName(
-  dataOps: DataOperations,
+  dataOps: DmlOperations,
   keyword: string,
 ): Promise<Result<Array<{ id: string, name: string, type: string, aliases: string[] }>, AIError>> {
   const sql = `
@@ -262,7 +262,7 @@ export async function findEntitiesByName(
  * 按实体 ID 列表查询关联的文档 ID（倒排索引查询）
  */
 export async function findDocumentsByEntityIds(
-  dataOps: DataOperations,
+  dataOps: DmlOperations,
   entityIds: string[],
   collection?: string,
 ): Promise<Result<Array<{ entityId: string, documentId: string, chunkId: string, collection: string, relevance: number, context: string | null }>, AIError>> {
@@ -316,7 +316,7 @@ export async function findDocumentsByEntityIds(
  * 列出所有实体（支持类型过滤和关键词搜索）
  */
 export async function listEntities(
-  dataOps: DataOperations,
+  dataOps: DmlOperations,
   options?: { type?: string, keyword?: string, limit?: number },
 ): Promise<Result<Array<{ id: string, name: string, type: string, aliases: string[], description: string | null, createdAt: string | null, updatedAt: string | null }>, AIError>> {
   let sql = 'SELECT id, name, type, aliases, description, created_at, updated_at FROM hai_ai_knowledge_entity WHERE 1=1'
@@ -374,7 +374,7 @@ export async function listEntities(
  * 按实体名称查询实体及其关联文档
  */
 export async function findByEntityName(
-  dataOps: DataOperations,
+  dataOps: DmlOperations,
   entityName: string,
   options?: { collection?: string, type?: string },
 ): Promise<Result<Array<{
@@ -422,7 +422,7 @@ export async function findByEntityName(
  * 保存文档元数据（跨 DB upsert）
  */
 export async function upsertDocument(
-  dataOps: DataOperations,
+  dataOps: DmlOperations,
   doc: { documentId: string, collection: string, title?: string, url?: string, chunkCount: number, createdAt: number },
   dbType: DbType = 'sqlite',
 ): Promise<Result<void, AIError>> {
@@ -455,7 +455,7 @@ export async function upsertDocument(
  * 按 documentId + collection 获取单个文档元数据
  */
 export async function getDocumentFromDb(
-  dataOps: DataOperations,
+  dataOps: DmlOperations,
   documentId: string,
   collection: string,
 ): Promise<Result<{ documentId: string, collection: string, title: string | null, url: string | null, chunkCount: number, createdAt: number } | undefined, AIError>> {
@@ -486,7 +486,7 @@ export async function getDocumentFromDb(
  * 列出文档元数据
  */
 export async function listDocumentsFromDb(
-  dataOps: DataOperations,
+  dataOps: DmlOperations,
   collection: string,
   options?: { offset?: number, limit?: number },
 ): Promise<Result<Array<{ documentId: string, collection: string, title: string | null, url: string | null, chunkCount: number, createdAt: number }>, AIError>> {
@@ -526,7 +526,7 @@ export async function listDocumentsFromDb(
  * 查询每个文档的实体关联数
  */
 export async function listDocumentEntityCounts(
-  dataOps: DataOperations,
+  dataOps: DmlOperations,
   documentIds: string[],
   collection: string,
 ): Promise<Result<Map<string, number>, AIError>> {
@@ -556,7 +556,7 @@ export async function listDocumentEntityCounts(
  * 删除文档相关的实体关联
  */
 export async function removeDocumentEntityRelations(
-  dataOps: DataOperations,
+  dataOps: DmlOperations,
   documentId: string,
   collection: string,
 ): Promise<Result<void, AIError>> {
@@ -577,7 +577,7 @@ export async function removeDocumentEntityRelations(
  * 删除文档元数据
  */
 export async function removeDocumentFromDb(
-  dataOps: DataOperations,
+  dataOps: DmlOperations,
   documentId: string,
   collection: string,
 ): Promise<Result<void, AIError>> {

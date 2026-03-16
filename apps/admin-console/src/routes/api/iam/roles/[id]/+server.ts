@@ -72,15 +72,15 @@ export const PUT = kit.handler(async ({ params, request, locals, getClientAddres
   // 记录审计日志
   const ip = getClientAddress()
   const ua = request.headers.get('user-agent') ?? undefined
-  await audit.helper.crud(
-    locals.session!.userId,
-    'update',
-    'role',
-    roleId,
-    { name: input.name, permissions: input.permissions },
+  await audit.helper.crud({
+    userId: locals.session!.userId,
+    action: 'update',
+    resource: 'role',
+    resourceId: roleId,
+    details: { name: input.name, permissions: input.permissions },
     ip,
     ua,
-  )
+  })
 
   return kit.response.ok(role)
 })
@@ -110,15 +110,15 @@ export const DELETE = kit.handler(async ({ params, locals, request, getClientAdd
   // 记录审计日志
   const ip = getClientAddress()
   const ua = request.headers.get('user-agent') ?? undefined
-  await audit.helper.crud(
-    locals.session!.userId,
-    'delete',
-    'role',
-    roleId,
-    { name: existing.name },
+  await audit.helper.crud({
+    userId: locals.session!.userId,
+    action: 'delete',
+    resource: 'role',
+    resourceId: roleId,
+    details: { name: existing.name },
     ip,
     ua,
-  )
+  })
 
   return kit.response.ok(null)
 })

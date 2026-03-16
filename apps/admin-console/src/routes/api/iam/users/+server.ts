@@ -95,15 +95,15 @@ export const POST = kit.handler(async ({ request, locals, getClientAddress }) =>
   const ip = getClientAddress()
   const ua = request.headers.get('user-agent') ?? undefined
   const [, userResponse] = await Promise.all([
-    audit.helper.crud(
-      locals.session!.userId,
-      'create',
-      'user',
-      user.id,
-      { username, email },
+    audit.helper.crud({
+      userId: locals.session!.userId,
+      action: 'create',
+      resource: 'user',
+      resourceId: user.id,
+      details: { username, email },
       ip,
       ua,
-    ),
+    }),
     toIamUserResponse(user),
   ])
 

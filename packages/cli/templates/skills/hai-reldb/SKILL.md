@@ -113,7 +113,7 @@ interface ColumnDef {
 | REAL      | REAL    | DOUBLE PRECISION | DOUBLE       |
 | BLOB      | BLOB    | BYTEA            | BLOB         |
 | BOOLEAN   | INTEGER | BOOLEAN          | TINYINT(1)   |
-| TIMESTAMP | INTEGER | TIMESTAMPTZ      | DATETIME     |
+| TIMESTAMP | INTEGER | TIMESTAMP        | DATETIME     |
 | JSON      | TEXT    | JSONB            | JSON         |
 
 > MySQL 将 TEXT 映射为 VARCHAR(255) 以支持索引和 UNIQUE 约束。INTEGER + autoIncrement 在 MySQL 映射为 BIGINT。
@@ -268,13 +268,13 @@ class UserRepository extends BaseReldbCrudRepository<User> {
   }
 
   /** 自定义查询示例 */
-  async findByEmail(email: string, tx?: ReldbTxHandle) {
+  async findByEmail(email: string, tx?: DmlWithTxOperations) {
     return this.sql(tx).get<User>('SELECT * FROM users WHERE email = ?', [email])
   }
 }
 ```
 
-**`this.sql(tx?)`**：返回 `DataOperations`（`reldb.sql` 或传入的事务句柄），自动适配事务场景。
+**`this.sql(tx?)`**：返回 `DmlOperations`（`reldb.sql` 或传入的事务句柄），自动适配事务场景。
 
 **自动能力**：
 
@@ -310,7 +310,7 @@ if (txResult.success) {
 }
 ```
 
-**事务内可用操作**（`ReldbTxHandle` 继承 `DataOperations`）：
+**事务内可用操作**（`DmlWithTxOperations` 继承 `DmlOperations`）：
 
 - `tx.query / tx.get / tx.execute / tx.batch / tx.queryPage`
 - `tx.crud.table(config)` — 事务内的 CRUD 仓库

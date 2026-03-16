@@ -138,8 +138,6 @@ interface PipelineResult {
 | `TRANSFORM_FAILED`       | 8502 | 转换失败           |
 | `PIPELINE_FAILED`        | 8503 | 管线执行失败       |
 | `CONFIG_ERROR`           | 8504 | 配置错误           |
-| `EMPTY_INPUT`            | 8505 | 输入为空           |
-| `UNSUPPORTED_CHUNK_MODE` | 8506 | 不支持的分块模式   |
 | `MISSING_SEPARATOR`      | 8507 | 自定义分隔符缺失   |
 
 ---
