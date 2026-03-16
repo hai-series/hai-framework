@@ -1,0 +1,11 @@
+{
+  "hooks": {
+    "Stop": [
+      {
+        "type": "command",
+        "command": "echo '[Quality Gate Reminder] Before submitting: pnpm typecheck && pnpm lint && pnpm test'",
+        "timeout": 5
+      }
+    ]
+  }
+}

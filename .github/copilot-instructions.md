@@ -2,7 +2,9 @@
 
 > 本文件用于约束 AI 助手在本仓库中的工作方式，目标是：**可维护、可审计、可测试、可扩展**。
 >
-> 适用范围：本仓库所有 packages、apps、docs。
+> 适用范围：本仓库所有 packages、apps。
+>
+> 模块专属规范见 `.github/instructions/` 下按路径自动激活的指令文件。
 
 ---
 
@@ -12,7 +14,7 @@
   - **必须/禁止**：强制要求，不可违反。
   - **优先**：默认选择，除非有明确理由。
   - **可选**：在需要时执行。
-- 若与用户请求冲突，以用户请求优先，但需说明影响并给出最小可行替代。
+- 若与用户请求冲突，以用户请求优先，但需说明影响并给出可行替代。
 
 ---
 
@@ -22,7 +24,7 @@
 - **必须成套更新**：代码 / 测试 / 文档 同步；禁止“只改一处”。
 - **必须可验证**：改动后跑完质量门禁（typecheck → lint → test）。
 - **必须可追溯**：所有“引用关系”用 `grep_search` 搜索确认，不靠猜。
-- **必须对齐 core 规范**：core 作为全局基础能力，所有模块需与其 API/行为保持一致（见“核心审查重点”）。
+- **必须对齐 core 规范**：core 作为全局基础能力，所有模块需与其 API/行为保持一致（见 `module-conventions.instructions.md`）。
 
 ---
 
@@ -72,65 +74,13 @@
 6. 引用点已更新（用 `grep_search` 复核）
 7. 文档已同步（README / Skill 模板 / 本文件）
 
-#### 最小可执行命令清单（仓库根目录）
-
-本仓库使用 Turbo + pnpm workspace 聚合执行：
-
-- 类型检查：`pnpm typecheck`
-- ESLint：`pnpm lint`
-- 单元测试：`pnpm test`
-
-可选：
-
-- 自动修复 lint：`pnpm lint:fix`
-- 覆盖率：`pnpm test:coverage`
-- E2E 测试：`pnpm --filter admin-console test:e2e`
-- 全量构建：`pnpm build`
-
-只运行某个 package/app：优先使用 pnpm filter（示例：`pnpm --filter @h-ai/storage test`）。
-
 ---
 
-## 编码约定（命名、导出、类型、分层、日志、i18n、安全）
+## 通用编码约定
 
-### 文件命名与职责
-
-- `xx-main.ts`：模块主入口（运行时对象 / 初始化 / 关闭等）。**必须保持精简**：仅包含生命周期管理（`init` / `close`）和 API 编排，**禁止在 main 中编写具体业务逻辑、调度循环、数据处理等重操作**。所有具体逻辑应委托给 `xx-functions.ts`、`xx-runner.ts` 或其他职责文件。
-- `xx-types.ts`：对外接口类型定义（public types）
-- `xx-config.ts`：对外配置定义与默认值
-
-### 导出规则（强制）
-
-- 导出统一使用 `export *`。
-- 在源文件中控制导出边界；`index.ts` 仅做聚合：
-  - ✅ `export * from './storage-main'`
-  - ✅ `export * from './storage-types'`
-  - ❌ 禁止在 `index.ts` 里选择性导出/重命名导出（除非强制兼容，并写清楚原因）
-
-### 类型规则
-
-- ❌ 禁止 `any`；不确定用 `unknown`，并在边界处做类型缩窄。
-- 对外类型应集中在 `xx-types.ts`，避免把内部实现类型泄漏为 public API。
-
-### 命名一致性
-
-- 类名、文件名、变量名三者一致。
-- 接口名与实现类名对应（例如 `StorageProvider` ↔ `S3StorageProvider`）。
-- 重命名必须同步更新：引用点、测试、注释、文档。
-- 禁止含糊命名（如 data / info / handle / process）。
-- 统一命名模式（详见 hai-create §4.6）：
-  - 服务对象：小写模块名（`export const storage`）
-  - 函数接口：`{Module}Functions`；错误码：`{Module}ErrorCode`；错误类型：`{Module}Error`
-  - 子操作接口：`{Domain}Operations`
-  - Provider 接口：`{Module}Provider`；Provider 工厂：`create{Impl}Provider`
-  - Repository 类：`{Module}{Entity}Repository`
-  - i18n 获取器：`{缩写}M()`；消息键：`{module}_{camelCase}`
-
-### 错误码段位
-
-- 每个模块拥有独占的千位段错误码，禁止与已有模块冲突。
-- `NOT_INITIALIZED` 固定为 `X010`。
-- 完整段位注册表见 hai-create §3.1。新模块必须在注册表中选取未占用段位。
+> 模块专属规范（文件命名、导出、错误处理、Provider 模式、Result 用法等）见 `module-conventions.instructions.md`（编辑 `packages/` 时自动注入）。
+> 应用层规范（i18n、UI 组件、路由安全等）见 `app-conventions.instructions.md`（编辑 `apps/` 时自动注入）。
+> 测试规范见 `test-conventions.instructions.md`（编辑 `tests/` 时自动注入）。
 
 ### 分层与依赖约束（架构红线）
 
@@ -138,123 +88,56 @@
 - 依赖方向必须向内收敛：上层可以依赖 Core 等基础能力，Core 不反向依赖上层。
 - 引入新依赖前先确认是否已有同类能力，避免重复建设。
 - 如各模块已有同类功能，必须优先复用，不得重复造轮子。
-- 如 @h-ai/ui 已有组件，应用/业务层必须直接使用，不得重复实现。
+
+### 最小知识原则（API 设计红线）
+
+- 模块只暴露使用方需要的最小 API 集，内部实现细节不可泄漏。
+- 函数参数尽量少（≤ 3 个），复杂参数用配置对象 + 合理默认值。
+- 使用方不应感知模块的内部架构（Provider 选型、子功能划分、存储方式等）。
+- 返回值只含使用方关心的业务字段，不暴露 DB 行结构或内部中间态。
 
 ### 文本、日志与 i18n
 
-- 日志与 `package.json` 字段统一使用英文。
-- 代码注释统一使用中文。
-- ❌ 禁止 `console.log`：使用模块 logger（如 `core.logger` 或模块自身 logger），并尽量结构化输出。
-- 所有用户可见字符串必须使用 i18n key（UI 文案、Toast、Alert、标题、按钮、校验提示、错误信息等）。
-- ❌ 禁止直接修改 `src/lib/paraglide` 生成文件。
-
-### @h-ai/ui 组件 i18n 规则
-
-- **组件内置翻译**：`@h-ai/ui` 场景组件（`scenes/`）内置中英文翻译，自动响应全局 locale。
-- **应用层只管页面级文本**：标题、错误提示、导航链接等由应用层 i18n 处理。
-- **不要为 UI 组件传入翻译 props**：组件内部文本由 `@h-ai/ui` 统一管理。
-- **可选覆盖**：通过 `submitText` 等 props 覆盖特定文本（如需要自定义按钮文字）。
-- 翻译文件位于 `packages/ui/src/lib/messages/{zh-CN,en-US}.json`。
-
-### 错误处理与异常规范
-
-> 核心原则：**公共模块 API 不抛异常，统一返回 `Result<T, E>`**。
-
-#### 禁止在公共 API 中 throw
-
-- 所有 `packages/*/src/` 下对外暴露的函数/方法，返回值必须是 `Result<T, XxError>` 或 `Promise<Result<T, XxError>>`。
-- ❌ 禁止在公共 API 中 `throw`；调用方不应使用 `try/catch` 来处理模块返回的错误。
-
-#### 允许 throw 的场景（合规模式）
-
-以下场景中的 `throw` 是合规的，不违反此规范：
-
-| 场景                                     | 说明                                                                                                            |
-| ---------------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| **内部 throw + 外层 try-catch → Result** | 模块内部函数 throw，由外层 `try { } catch { return err(...) }` 转为 Result 返回。这是标准 catch-and-wrap 模式。 |
-| **SvelteKit 控制流**                     | `throw redirect()`、`throw error()` 等 SvelteKit 框架约定的控制流用法。                                         |
-| **浏览器端 Client 代码**                 | `client/xx-client.ts` 等浏览器端封装，不属于模块公共 API。                                                      |
-| **CLI 命令**                             | `packages/cli/` 中的命令行工具，非模块 API。                                                                    |
-| **`getOrThrow()` 等显式命名的函数**      | 函数名已明确表达会 throw 的语义。                                                                               |
-| **async generator（如 `chatStream()`）** | 异步生成器无法返回 Result，只能 throw。需在 JSDoc 中注明。                                                      |
-
-#### 使用模式
-
-```ts
-// ✅ 返回 Result
-async function create(input: Input): Promise<Result<Item, XxError>> {
-  try {
-    const item = await doCreate(input)
-    return ok(item)
-  }
-  catch (error) {
-    return err({ code: XxErrorCode.CREATE_FAILED, message: xxM('xx_createFailed'), cause: error })
-  }
-}
-
-// ❌ 公共 API 中直接 throw
-function register(tool: Tool): void {
-  if (!isInitialized)
-    throw new Error('Not initialized')
-  // ...
-}
-
-// ✅ 公共 API 中返回 Result
-function register(tool: Tool): Result<void, XxError> {
-  if (!isInitialized)
-    return notInitialized.result()
-  // ...
-  return ok(undefined)
-}
-```
+- 日志与 `package.json` 字段统一使用英文；代码注释统一使用中文。
+- ❌ 禁止 `console.log`：使用模块 logger（如 `core.logger`），尽量结构化输出。
+- 所有用户可见字符串必须使用 i18n key。
 
 ### 环境变量与密钥
 
-- ❌ 禁止硬编码 API Key / 密钥。
-- 使用环境变量读取；新增变量时：
-  - 若仓库根目录缺少 `.env`，必须创建并写入占位符（不写真实值）。
-  - 在对应模块文档说明变量用途与示例。
-
-### 测试要求
-
-- 每个新功能/修复必须有对应测试（Vitest）。
-- 避免真实外部依赖：使用注入 + mock（网络/数据库/云服务不直连）。
-- 变更边界行为时，补齐边界用例（空值、异常分支、权限、超时等）。
-- 涉及跨端能力（Node/Browser）时，测试需拆分环境或显式隔离，避免互相污染。
+- ❌ 禁止硬编码 API Key / 密钥。使用环境变量读取。
+- 新增变量时：若缺少 `.env`，创建占位符文件；在模块文档说明变量用途。
 
 ---
 
-## 核心审查重点（对齐 core 模块基线）
+## 性能约束（新代码必须遵循）
 
-> 以下规范来自 core 模块审查结论，**所有模块必须对齐执行**。
+- **禁止 await-in-loop**（N+1 问题）：批量操作使用 `Promise.all` / `Promise.allSettled` 或批量 API。
+- **禁止阻塞同步 I/O**：`readFileSync` / `writeFileSync` 仅限 CLI 和启动 init，运行时必须异步。
+- **大数据集必须分页/流式**：超过 1000 条记录的查询必须使用 `queryPage` 或 streaming。
+- **连接/资源必须在 close() 中释放**：DB 连接、HTTP client、定时器、event listener。
+- **热路径禁止重复创建对象**：Provider/Client 实例应缓存复用。
+- **函数体 ≤ 120 行**：超过则拆分为子函数。
+- **禁止 >2 层 if 嵌套**：使用提前返回（early return）。
 
-### 初始化与入口一致性
+## 分布式约束（新代码必须遵循）
 
-- Node 与 Browser 的 API 形态必须一致，统一通过 `<模块名>.init(...)` 调用初始化。
-- 浏览器端不暴露独立 init 函数；如需内部实现必须保持私有。
+- **禁止模块级 Map/Set 缓存业务数据**：需跨节点一致的数据（任务注册、锁、配置、模板）必须持久化到 DB。
+- **允许模块级缓存的场景**：纯进程内 SDK client 实例、不可变配置、连接池 — 不需要跨节点同步。
+- **定时器必须有清理机制**：`setTimeout`/`setInterval` 必须在 `close()` 中 `clearTimeout`/`clearInterval`。
+- **并发初始化防护**：`init()` 必须处理并发调用（重入检测或锁）。
+- **写操作幂等**：写操作接口应设计为幂等，支持安全重试。
+- **状态一致性**：多节点部署时，DB 是唯一数据源，进程内状态仅作只读缓存。
 
-### 配置加载与校验
+## 安全约束（新代码必须遵循）
 
-- `core.init` 会统一加载配置文件，但不会自动校验其他模块配置。
-- **模块在使用配置前必须显式调用** `core.config.validate(name, schema)` 做合法性校验。
-- 不允许在模块入口做隐式注册/自动校验（避免副作用和隐藏依赖）。
-
-### 错误处理与异常
-
-- 公共模块 API **禁止 throw**，必须返回 `Result<T, XxError>`。
-- 允许在内部函数中 throw，但外层必须 catch 并转为 Result。
-- 合规的 throw 场景：内部 throw + 外层 catch、SvelteKit 控制流、浏览器 Client、CLI、`getOrThrow()` 显式命名、async generator。
-- 详细规范见"编码约定 > 错误处理与异常规范"。
-
-### 导出与文档同步
-
-- 公共入口只做 `export *` 聚合，避免新增隐式导出。
-- 任何 API 变更必须同步 README / Skill 模板 / 测试。
-
-### 日志与 i18n
-
-- 统一使用 `core.logger`（或模块 logger），禁止 `console.log`。
-- 用户可见文本必须走 i18n，不得在核心/模块中硬编码。
+- **SQL 必须参数化**：禁止字符串拼接/模板字面量构造 SQL（使用 `?` 占位符）。
+- **用户输入必须校验**：API 边界 / 表单输入必须 Zod schema 校验后才进入业务层。
+- **禁止 eval / Function / innerHTML**（受控 SVG 渲染除外）。
+- **敏感信息禁入日志**：密码、token、apiKey、用户隐私字段禁止出现在日志中。
+- **日志脱敏**：日志上下文包含 URL、连接字符串、配置对象等可能携带敏感字段时，必须先通过 `sanitize*` 辅助函数脱敏后再传入 logger（参考 `sanitizeRedisUrl` 模式）。
+- **HTTP 响应安全头**：API 端点应设置 CORS、CSP、X-Content-Type-Options。
+- **认证令牌安全**：token 存储使用 httpOnly cookie 或安全存储，禁止 localStorage 存敏感 token。
+- **路径遍历防护**：文件操作 API 必须校验路径合法性，禁止 `../` 逃逸。
 
 ---
 
@@ -269,7 +152,7 @@ function register(tool: Tool): Result<void, XxError> {
 - 固定章节顺序：一句话描述 → 能力概览 → 快速开始 → API 契约（条件）→ API 概览（条件）→ 配置 → 错误处理 → 测试 → License。
 - 快速开始必须包含 init → 核心操作 → close 完整生命周期。
 - 不要包含完整接口清单、完整类型定义、内部实现细节。
-- 详细规范见 `hai-create` Skill §6.1。
+- 详细规范见 `hai-create-module` Skill §12。
 
 ### Skill 模板（给 AI 看的）
 
@@ -293,22 +176,34 @@ function register(tool: Tool): Result<void, XxError> {
 
 ## 禁止事项（任一触发需立即修正）
 
+> 模块专属禁止事项见 `module-conventions.instructions.md`（throw/Result、错误码、xx-main、鸭子类型等）。
+
+### 通用
+
 - 只改一处，不改关联处
 - 重命名后不更新引用点/测试/文档
 - 添加用户可见文本但不走 i18n
 - 修改架构但不更新 README / Skill 模板
 - 提交 typecheck/lint/test 不通过的代码
 - UI 层写业务逻辑，或 services 层写 UI 代码
-- 在 `xx-main.ts` 中编写具体业务逻辑（调度循环、数据处理等），main 仅做生命周期管理和 API 编排
 - 使用 `console.log`
 - 硬编码密钥
 - 使用 `any`
-- 修改 `src/lib/paraglide` 生成文件
 - README 描述内部实现细节
-- 在公共模块 API 中使用 `throw`（必须返回 `Result<T, E>`）
-- 用模块级 `Map` / `Set` 缓存需跨节点一致的业务数据（模板、锁、配置等），必须使用数据库持久化
-- 错误码段位与已有模块冲突（段位注册表见 hai-create §3.1）
-- 同一模块混用扁平方法与子操作对象两种 API 风格
-- 做兼容性处理。目前处于开发期，不用考虑兼容旧版本
-- 在模块内为已有依赖包的类型定义本地鸭子类型接口：若 `dependencies` 中已有对应包，直接 import 使用真实类型（如 `DataOperations`、`VecdbFunctions`、`DatapipeFunctions`）；禁止以 `as unknown as` 强转规避类型不兼容
-- `as unknown as T` 类型强转：禁止用此模式绕过真实类型差异，应修改接口/函数签名使用正确的类型；合规例外：第三方库类型缺失时的 workaround（须加注释说明原因）
+
+### 性能与分布式
+
+- 用模块级 `Map` / `Set` 缓存需跨节点一致的业务数据
+- await-in-loop 造成 N+1 查询
+- `readFileSync` / `writeFileSync` 在运行时路径使用
+- 定时器不清理（无对应 `clearTimeout`/`clearInterval`）
+- `init()` 未处理并发调用
+- 非幂等的写操作接口
+
+### 安全
+
+- SQL 字符串拼接/模板字面量构造 SQL
+- 敏感信息（密码、token、apiKey）写入日志
+- `eval()` / `Function()` / `innerHTML`
+- localStorage 存储敏感 token
+- 文件操作 API 未校验路径合法性
