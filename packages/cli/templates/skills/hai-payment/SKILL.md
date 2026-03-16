@@ -32,19 +32,18 @@ wechat:
   apiV3Key: ${HAI_PAY_WECHAT_API_V3_KEY}
   privateKey: ${HAI_PAY_WECHAT_PRIVATE_KEY}
   serialNo: ${HAI_PAY_WECHAT_SERIAL_NO}
-  notifyUrl: ${HAI_PAY_WECHAT_NOTIFY_URL}
+  platformCert: ${HAI_PAY_WECHAT_PLATFORM_CERT}  # 可选，回调验签需要
 
 alipay:
   appId: ${HAI_PAY_ALIPAY_APP_ID}
   privateKey: ${HAI_PAY_ALIPAY_PRIVATE_KEY}
   alipayPublicKey: ${HAI_PAY_ALIPAY_PUBLIC_KEY}
-  notifyUrl: ${HAI_PAY_ALIPAY_NOTIFY_URL}
+  signType: RSA2  # 可选，默认 RSA2
+  sandbox: false   # 可选，默认 false
 
 stripe:
   secretKey: ${HAI_PAY_STRIPE_SECRET_KEY}
   webhookSecret: ${HAI_PAY_STRIPE_WEBHOOK_SECRET}
-  successUrl: ${HAI_PAY_STRIPE_SUCCESS_URL}
-  cancelUrl: ${HAI_PAY_STRIPE_CANCEL_URL}
 ```
 
 ### 2. 初始化（服务端）
@@ -52,55 +51,55 @@ stripe:
 ```typescript
 import { payment } from '@h-ai/payment'
 
-await payment.init({
+const initResult = await payment.init({
   wechat: {
     appId: 'wx1234567890',
     mchId: '1600000000',
     apiV3Key: 'your-api-key-v3',
     privateKey: '-----BEGIN RSA PRIVATE KEY-----...',
     serialNo: 'CERT_SERIAL_NO',
-    notifyUrl: 'https://example.com/api/v1/payment/notify/wechat',
   },
   alipay: {
     appId: '2021000000000000',
     privateKey: '-----BEGIN RSA PRIVATE KEY-----...',
     alipayPublicKey: '-----BEGIN PUBLIC KEY-----...',
-    notifyUrl: 'https://example.com/api/v1/payment/notify/alipay',
   },
 })
+if (!initResult.success) {
+  // 处理初始化错误
+}
 ```
 
 ### 3. 创建订单
 
 ```typescript
-const result = await payment.createOrder({
-  provider: 'wechat',
-  tradeType: 'JSAPI',
-  outTradeNo: 'ORDER_20250101_001',
-  totalAmount: 9900, // 单位：分
-  subject: '商品名称',
-  notifyUrl: 'https://example.com/api/v1/payment/notify/wechat',
-  extra: { openid: 'user_openid' },
+const result = await payment.createOrder('wechat', {
+  orderNo: 'ORDER_20250101_001',
+  amount: 9900, // 单位：分
+  description: '商品名称',
+  tradeType: 'jsapi',
+  userId: 'user_openid',
+  notifyUrl: 'https://example.com/payment/notify/wechat',
+  metadata: { source: 'web' },
 })
 
 if (result.success) {
-  // result.data: PaymentOrder { outTradeNo, providerData, status }
-  // providerData 包含调起支付所需参数
+  // result.data: PaymentOrder { provider, tradeType, clientParams, prepayId? }
+  // clientParams 包含调起支付所需参数
 }
 ```
 
 ### 4. 处理支付回调
 
 ```typescript
-// API 路由：POST /api/v1/payment/notify/:provider
-const result = await payment.handleNotify({
-  provider: 'wechat',
-  headers: Object.fromEntries(request.headers),
+// API 路由：POST /payment/notify/:provider
+const result = await payment.handleNotify('wechat', {
   body: await request.text(),
+  headers: Object.fromEntries(request.headers),
 })
 
 if (result.success) {
-  // result.data: { outTradeNo, status, amount }
+  // result.data: { orderNo, transactionId, amount, status, paidAt? }
   // 更新订单状态...
 }
 ```
@@ -111,19 +110,18 @@ if (result.success) {
 const result = await payment.queryOrder('wechat', 'ORDER_20250101_001')
 
 if (result.success) {
-  console.log(result.data.status) // 'PAID' | 'PENDING' | 'CLOSED' | 'REFUNDED'
+  // result.data.status: 'pending' | 'paid' | 'closed' | 'refunded' | 'failed'
 }
 ```
 
 ### 6. 退款
 
 ```typescript
-const result = await payment.refund({
-  provider: 'wechat',
-  outTradeNo: 'ORDER_20250101_001',
-  outRefundNo: 'REFUND_20250101_001',
-  totalAmount: 9900,
-  refundAmount: 9900,
+const result = await payment.refund('wechat', {
+  orderNo: 'ORDER_20250101_001',
+  refundNo: 'REFUND_20250101_001',
+  amount: 9900,
+  totalAmount: 9900, // 微信退款必填
   reason: '用户退款',
 })
 ```
@@ -133,26 +131,25 @@ const result = await payment.refund({
 ```typescript
 import { invokePayment } from '@h-ai/payment/client'
 
-// 前端拿到 providerData 后调起支付
-const payResult = await invokePayment({
-  provider: 'wechat',
-  tradeType: 'JSAPI',
-  providerData: orderResult.data.providerData,
-})
+// 前端拿到服务端返回的 PaymentOrder 后调起支付
+const payResult = await invokePayment(orderResult.data)
 ```
 
 ---
 
 ## 核心 API（服务端）
 
-| API                                        | 用途     | 返回值                        |
-| ------------------------------------------ | -------- | ----------------------------- |
-| `payment.init(config)`                     | 初始化   | `void`                        |
-| `payment.createOrder(input)`               | 创建订单 | `Result<PaymentOrder>`        |
-| `payment.handleNotify(request)`            | 处理回调 | `Result<PaymentNotifyResult>` |
-| `payment.queryOrder(provider, outTradeNo)` | 查询订单 | `Result<OrderStatus>`         |
-| `payment.refund(input)`                    | 退款     | `Result<RefundResult>`        |
-| `payment.closeOrder(provider, outTradeNo)` | 关闭订单 | `Result<void>`                |
+| API                                              | 用途     | 返回值                        |
+| ------------------------------------------------ | -------- | ----------------------------- |
+| `payment.init(config)`                           | 初始化   | `Result<void>`                |
+| `payment.close()`                                | 关闭     | `void`                        |
+| `payment.createOrder(providerName, input)`       | 创建订单 | `Result<PaymentOrder>`        |
+| `payment.handleNotify(providerName, request)`    | 处理回调 | `Result<PaymentNotifyResult>` |
+| `payment.queryOrder(providerName, orderNo)`      | 查询订单 | `Result<OrderStatus>`         |
+| `payment.refund(providerName, input)`            | 退款     | `Result<RefundResult>`        |
+| `payment.closeOrder(providerName, orderNo)`      | 关闭订单 | `Result<void>`                |
+| `payment.getProvider(name)`                      | 获取 Provider | `PaymentProvider \| undefined` |
+| `payment.registerProvider(provider)`             | 注册自定义 Provider | `void`              |
 
 ## 客户端 API
 
@@ -208,12 +205,12 @@ interface PaymentProvider {
 ```typescript
 import { paymentEndpoints } from '@h-ai/payment/api'
 
-// paymentEndpoints.createOrder    — POST /api/v1/payment/create
-// paymentEndpoints.queryOrder     — GET  /api/v1/payment/query/:orderNo
-// paymentEndpoints.notifyWechat   — POST /api/v1/payment/notify/wechat
-// paymentEndpoints.notifyAlipay   — POST /api/v1/payment/notify/alipay
-// paymentEndpoints.notifyStripe   — POST /api/v1/payment/notify/stripe
-// paymentEndpoints.refund         — POST /api/v1/payment/refund
+// paymentEndpoints.createOrder    — POST /payment/create
+// paymentEndpoints.queryOrder     — GET  /payment/query
+// paymentEndpoints.notifyWechat   — POST /payment/notify/wechat
+// paymentEndpoints.notifyAlipay   — POST /payment/notify/alipay
+// paymentEndpoints.notifyStripe   — POST /payment/notify/stripe
+// paymentEndpoints.refund         — POST /payment/refund
 ```
 
 ---
@@ -229,7 +226,14 @@ import { payment } from '@h-ai/payment'
 
 export const POST = kit.handler(async ({ request, locals }) => {
   const body = await request.json()
-  const result = await payment.createOrder(body)
+  const result = await payment.createOrder(body.provider, {
+    orderNo: body.orderNo,
+    amount: body.amount,
+    description: body.description,
+    tradeType: body.tradeType,
+    userId: body.userId,
+    notifyUrl: body.notifyUrl,
+  })
 
   if (!result.success) {
     return kit.response.internalError(result.error.message)

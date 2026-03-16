@@ -5,7 +5,7 @@
  * @module ai-store-db
  */
 
-import type { DataOperations, DbType, ReldbJsonOps } from '@h-ai/reldb'
+import type { DbType, DmlOperations, ReldbJsonOps } from '@h-ai/reldb'
 import type { VecdbFunctions } from '@h-ai/vecdb'
 import type { AIStore, AIVectorStore, StoreFilter, StorePage, StoreScope, WhereClause, WhereOperator } from './ai-store-types.js'
 
@@ -38,7 +38,7 @@ export interface AIStoreOptions {
  * - query / removeBy 时通过 StoreFilter.objectId / sessionId 使用索引加速
  */
 export class ReldbAIStore<T> implements AIStore<T> {
-  private readonly sql: DataOperations
+  private readonly sql: DmlOperations
   private readonly table: string
   private readonly jsonOps: ReldbJsonOps
   private readonly dbType: DbType
@@ -48,7 +48,7 @@ export class ReldbAIStore<T> implements AIStore<T> {
   private readonly hasRefId: boolean
   private initialized = false
 
-  constructor(sql: DataOperations, table: string, jsonOps: ReldbJsonOps, options?: AIStoreOptions) {
+  constructor(sql: DmlOperations, table: string, jsonOps: ReldbJsonOps, options?: AIStoreOptions) {
     this.sql = sql
     this.table = table
     this.jsonOps = jsonOps

@@ -8,7 +8,7 @@
 
 import type { Result } from '@h-ai/core'
 import type { ChunkOptionsInput, DatapipeFunctions } from '@h-ai/datapipe'
-import type { DataOperations, DbType } from '@h-ai/reldb'
+import type { DbType, DmlOperations } from '@h-ai/reldb'
 import type { VecdbFunctions } from '@h-ai/vecdb'
 import type { KnowledgeConfig } from '../ai-config.js'
 import type { AIError } from '../ai-types.js'
@@ -90,7 +90,7 @@ export function createKnowledgeOperations(
   llm: LLMOperations,
   embedding: EmbeddingOperations,
   vecdb: VecdbFunctions,
-  reldb: DataOperations,
+  reldb: DmlOperations,
   datapipe: DatapipeFunctions,
   dbType: DbType = 'sqlite',
 ): KnowledgeOperations {

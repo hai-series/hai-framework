@@ -6,7 +6,7 @@
  */
 
 import type { Result } from '@h-ai/core'
-import type { ReldbCrudCountOptions, ReldbCrudFieldDefinition, ReldbCrudRepository, ReldbError, ReldbFunctions, ReldbTxHandle } from '@h-ai/reldb'
+import type { DmlWithTxOperations, ReldbCrudCountOptions, ReldbCrudFieldDefinition, ReldbCrudRepository, ReldbError, ReldbFunctions } from '@h-ai/reldb'
 import type { IamError } from '../iam-types.js'
 import type { Role } from './iam-authz-types.js'
 import { err, ok } from '@h-ai/core'
@@ -144,7 +144,7 @@ class DbRoleRepository extends BaseReldbCrudRepository<Role> implements RoleRepo
     return this.findOneBy('code = ?', [code])
   }
 
-  async exists(options?: ReldbCrudCountOptions, tx?: ReldbTxHandle): Promise<Result<boolean, ReldbError>> {
+  async exists(options?: ReldbCrudCountOptions, tx?: DmlWithTxOperations): Promise<Result<boolean, ReldbError>> {
     const result = await this.count(options, tx)
     if (!result.success) {
       return result as Result<boolean, ReldbError>

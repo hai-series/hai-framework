@@ -83,15 +83,15 @@ export const PUT = kit.handler(async ({ params, request, locals, getClientAddres
   // 记录审计日志（包含密码重置标记）
   const ip = getClientAddress()
   const ua = request.headers.get('user-agent') ?? undefined
-  await audit.helper.crud(
-    locals.session!.userId,
-    'update',
-    'user',
-    userId,
-    { username, email, passwordReset: !!password },
+  await audit.helper.crud({
+    userId: locals.session!.userId,
+    action: 'update',
+    resource: 'user',
+    resourceId: userId,
+    details: { username, email, passwordReset: !!password },
     ip,
     ua,
-  )
+  })
 
   // 获取更新后的用户信息
   const updatedResult = await iam.user.getUser(userId)
@@ -136,15 +136,15 @@ export const DELETE = kit.handler(async ({ params, locals, request, getClientAdd
   // 记录审计日志
   const ip = getClientAddress()
   const ua = request.headers.get('user-agent') ?? undefined
-  await audit.helper.crud(
-    locals.session!.userId,
-    'delete',
-    'user',
-    userId,
-    { username: existing.username },
+  await audit.helper.crud({
+    userId: locals.session!.userId,
+    action: 'delete',
+    resource: 'user',
+    resourceId: userId,
+    details: { username: existing.username },
     ip,
     ua,
-  )
+  })
 
   return kit.response.ok(null)
 })

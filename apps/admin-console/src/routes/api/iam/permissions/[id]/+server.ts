@@ -37,15 +37,15 @@ export const DELETE = kit.handler(async ({ params, locals, request, getClientAdd
   // 记录审计日志
   const ip = getClientAddress()
   const ua = request.headers.get('user-agent') ?? undefined
-  await audit.helper.crud(
-    locals.session!.userId,
-    'delete',
-    'permission',
-    permId,
-    { name: existing.name },
+  await audit.helper.crud({
+    userId: locals.session!.userId,
+    action: 'delete',
+    resource: 'permission',
+    resourceId: permId,
+    details: { name: existing.name },
     ip,
     ua,
-  )
+  })
 
   return kit.response.ok(null)
 })

@@ -74,18 +74,18 @@ await reach.init(core.config.get('reach'))
 await reach.close()
 ```
 
-### 3. 注册模板（模板绑定 Provider）
+### 3. 保存模板（模板绑定 Provider）
 
 ```typescript
-// 通过代码注册（配置文件中的模板在 init 时自动注册）
-reach.template.register({
+// 通过代码保存（配置文件中的模板在 init 时自动注册）
+await reach.template.save({
   name: 'verification_code',
   provider: 'email',
   subject: '验证码: {code}',
   body: '您的验证码是 {code}，有效期 {minutes} 分钟。',
 })
 
-reach.template.registerMany([
+await reach.template.saveBatch([
   { name: 'welcome', provider: 'email', subject: '欢迎 {userName}', body: '亲爱的 {userName}，欢迎使用 {appName}！' },
   { name: 'sms_code', provider: 'sms', body: '验证码: {code}，{minutes} 分钟内有效。' },
 ])
@@ -201,14 +201,14 @@ interface ReachConfigInput {
 ### 多渠道验证码发送
 
 ```typescript
-reach.template.register({
+reach.template.save({
   name: 'email_code',
   provider: 'email',
   subject: '验证码: {code}',
   body: '您的验证码是 {code}，有效期 {minutes} 分钟。',
 })
 
-reach.template.register({
+reach.template.save({
   name: 'sms_code',
   provider: 'sms',
   body: '验证码: {code}，{minutes} 分钟内有效。',

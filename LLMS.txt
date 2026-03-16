@@ -503,7 +503,7 @@ await audit.log({
 await audit.helper.login('user_1', '127.0.0.1')
 await audit.helper.logout('user_1', '127.0.0.1')
 await audit.helper.register('user_1', '127.0.0.1')
-await audit.helper.crud('user_1', 'create', 'users', 'user_2', { name: '张三' })
+await audit.helper.crud({ userId: 'user_1', action: 'create', resource: 'users', resourceId: 'user_2', details: { name: '张三' } })
 
 // --- 查询 ---
 const logs = await audit.list({ pageSize: 20, action: 'login' })         // 分页查询

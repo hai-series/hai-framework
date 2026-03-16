@@ -61,7 +61,7 @@ await audit.close()
 | `audit.helper.register(userId, ip?, ua?)`                                      | 注册         |
 | `audit.helper.passwordResetRequest(email, ip?, ua?)`                           | 密码重置请求 |
 | `audit.helper.passwordResetComplete(userId, ip?, ua?)`                         | 密码重置完成 |
-| `audit.helper.crud(userId, action, resource, resourceId?, details?, ip?, ua?)` | CRUD 操作    |
+| `audit.helper.crud(input)` | CRUD 操作    |
 
 ## 错误码
 
@@ -71,6 +71,7 @@ await audit.close()
 | `AuditErrorCode.QUERY_FAILED`    | 10001 | 查询失败     |
 | `AuditErrorCode.CLEANUP_FAILED`  | 10002 | 清理失败     |
 | `AuditErrorCode.STATS_FAILED`    | 10003 | 统计失败     |
+| `AuditErrorCode.INIT_IN_PROGRESS`| 10004 | 初始化进行中 |
 | `AuditErrorCode.NOT_INITIALIZED` | 10010 | 模块未初始化 |
 | `AuditErrorCode.CONFIG_ERROR`    | 10012 | 配置错误     |
 
@@ -89,9 +90,9 @@ await audit.helper.logout(userId, request.ip, request.headers['user-agent'])
 ### CRUD 操作审计
 
 ```ts
-await audit.helper.crud(userId, 'create', 'users', newUser.id, { name: newUser.name })
-await audit.helper.crud(userId, 'update', 'roles', roleId, { changes })
-await audit.helper.crud(userId, 'delete', 'permissions', permId)
+await audit.helper.crud({ userId, action: 'create', resource: 'users', resourceId: newUser.id, details: { name: newUser.name } })
+await audit.helper.crud({ userId, action: 'update', resource: 'roles', resourceId: roleId, details: { changes } })
+await audit.helper.crud({ userId, action: 'delete', resource: 'permissions', resourceId: permId })
 ```
 
 ### 仪表盘数据

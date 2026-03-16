@@ -6,7 +6,7 @@
  */
 
 import type { DatapipeFunctions } from '@h-ai/datapipe'
-import type { DataOperations, DbType, ReldbJsonOps } from '@h-ai/reldb'
+import type { DbType, DmlOperations, ReldbJsonOps } from '@h-ai/reldb'
 import type { VecdbFunctions } from '@h-ai/vecdb'
 
 import type { AIConfig } from './ai-config.js'
@@ -49,7 +49,7 @@ const logger = core.logger.child({ module: 'ai', scope: 'functions' })
 
 /** 子功能组装依赖 */
 export interface AISubsystemDeps {
-  sql: DataOperations
+  sql: DmlOperations
   jsonOps: ReldbJsonOps
   dbType: DbType | undefined
   vecdb: VecdbFunctions
