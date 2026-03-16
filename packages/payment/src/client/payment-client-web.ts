@@ -59,13 +59,16 @@ function invokeAlipayH5(clientParams: Record<string, unknown>): InvokePaymentRes
   const payUrl = clientParams.pay_url as string | undefined
 
   if (formHtml) {
-    // 支付宝返回的 HTML form，直接写入页面
-    const container = document.createElement('div')
-    container.innerHTML = formHtml
-    document.body.appendChild(container)
-    const form = container.querySelector('form')
-    form?.submit()
-    return { invoked: true }
+    // 支付宝返回的 HTML form，使用 DOMParser 安全解析后提交
+    const parser = new DOMParser()
+    const doc = parser.parseFromString(formHtml, 'text/html')
+    const form = doc.querySelector('form')
+    if (form) {
+      document.body.appendChild(document.adoptNode(form))
+      form.submit()
+      return { invoked: true }
+    }
+    return { invoked: false, message: 'No form element found in response' }
   }
 
   if (payUrl) {

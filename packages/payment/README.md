@@ -34,7 +34,7 @@ const result = await payment.createOrder('wechat', {
 })
 
 // 查询订单
-const query = await payment.queryOrder('wechat', { orderNo: 'ORD001' })
+const query = await payment.queryOrder('wechat', 'ORD001')
 
 await payment.close()
 ```

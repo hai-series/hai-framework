@@ -39,6 +39,7 @@ const logger = core.logger.child({ module: 'payment', scope: 'main' })
 // ─── 内部状态 ───
 
 let currentConfig: PaymentConfig | null = null
+let initInProgress = false
 
 // ─── 未初始化占位 ───
 
@@ -80,25 +81,34 @@ export const payment: PaymentFunctions = {
    * @param config - 支付配置
    */
   async init(config: PaymentConfigInput): Promise<Result<void, PaymentError>> {
-    if (currentConfig !== null) {
-      logger.warn('Payment module is already initialized, reinitializing')
-      await payment.close()
-    }
-
-    logger.info('Initializing payment module')
-
-    const parseResult = PaymentConfigSchema.safeParse(config)
-    if (!parseResult.success) {
-      logger.error('Payment config validation failed', { error: parseResult.error.message })
+    if (initInProgress) {
+      logger.warn('Payment module init already in progress, skipping')
       return err({
         code: PaymentErrorCode.CONFIG_ERROR,
-        message: paymentM('payment_configError', { params: { error: parseResult.error.message } }),
-        cause: parseResult.error,
+        message: paymentM('payment_configError', { params: { error: 'init already in progress' } }),
       })
     }
-    const parsed = parseResult.data
+
+    initInProgress = true
 
     try {
+      if (currentConfig !== null) {
+        logger.warn('Payment module is already initialized, reinitializing')
+        await payment.close()
+      }
+
+      logger.info('Initializing payment module')
+      const parseResult = PaymentConfigSchema.safeParse(config)
+      if (!parseResult.success) {
+        logger.error('Payment config validation failed', { error: parseResult.error.message })
+        return err({
+          code: PaymentErrorCode.CONFIG_ERROR,
+          message: paymentM('payment_configError', { params: { error: parseResult.error.message } }),
+          cause: parseResult.error,
+        })
+      }
+      const parsed = parseResult.data
+
       // 清除旧注册
       clearProviders()
 
@@ -132,6 +142,9 @@ export const payment: PaymentFunctions = {
         }),
         cause: error,
       })
+    }
+    finally {
+      initInProgress = false
     }
   },
 
