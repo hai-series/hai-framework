@@ -1205,6 +1205,9 @@ importers:
 
   packages/reach:
     dependencies:
+      '@h-ai/cache':
+        specifier: workspace:^
+        version: link:../cache
       '@h-ai/core':
         specifier: workspace:*
         version: link:../core
