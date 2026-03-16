@@ -123,6 +123,14 @@ if (!result.success) {
 }
 ```
 
+## 分布式锁
+
+多节点部署时，DND（delay 策略）的 pending 消息 flush 操作通过 `@h-ai/cache` 分布式锁保护，确保同一时刻只有一个节点执行 flush。
+
+- 锁基于 `cache.lock.acquire('reach:flush-pending')`，TTL 60 秒
+- 若 `@h-ai/cache` 未初始化，分布式锁自动禁用，不影响单节点运行
+- 使用稳定的进程级 owner 标识，防止误释放他人锁
+
 ## 测试
 
 ```bash

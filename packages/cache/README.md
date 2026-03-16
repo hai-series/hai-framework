@@ -1,12 +1,13 @@
 # @h-ai/cache
 
-统一缓存模块，通过 `cache` 对象提供 KV / Hash / List / Set / ZSet 操作，支持内存与 Redis 两种后端。
+统一缓存模块，通过 `cache` 对象提供 KV / Hash / List / Set / ZSet / 分布式锁 操作，支持内存与 Redis 两种后端。
 
 ## 适用场景
 
 - 开发/测试场景下的内存缓存
 - 生产环境 Redis 缓存（单机、URL、集群、哨兵）
 - IAM 会话与权限相关的集合缓存
+- 分布式锁（多节点部署互斥控制）
 
 ## 快速开始
 
@@ -25,6 +26,17 @@ await cache.hash.hset('profile:1', { age: 18, city: 'Hangzhou' })
 await cache.list.lpush('queue:jobs', 'job-1', 'job-2')
 await cache.set_.sadd('role:admin:perms', 'user.read', 'user.write')
 await cache.zset.zadd('rank', { member: 'u1', score: 100 })
+
+// 分布式锁
+const acquired = await cache.lock.acquire('my-lock', { ttl: 30, owner: 'node-1' })
+if (acquired.success && acquired.data) {
+  try {
+    // 执行受保护的操作
+  }
+  finally {
+    await cache.lock.release('my-lock', 'node-1')
+  }
+}
 
 if (!user.success && user.error.code === CacheErrorCode.NOT_INITIALIZED) {
   // 请先调用 cache.init()
@@ -80,6 +92,34 @@ await cache.init({
 - `cache.list`: 列表结构（`lpush/rpush/lpop/rpop/...`）
 - `cache.set_`: 集合结构（`sadd/smembers/sismember/...`）
 - `cache.zset`: 有序集合（`zadd/zrange/zrevrange/...`）
+- `cache.lock`: 分布式锁（`acquire/release/isLocked/extend`）
+
+## 分布式锁
+
+基于 SET NX EX 模式实现的分布式互斥锁，适用于多节点部署场景。
+
+```ts
+// 获取锁（TTL 30 秒，owner 用于标识持有者）
+const acquired = await cache.lock.acquire('my-lock', { ttl: 30, owner: 'node-1' })
+if (acquired.success && acquired.data) {
+  try {
+    // 执行受保护操作
+  }
+  finally {
+    await cache.lock.release('my-lock', 'node-1')
+  }
+}
+
+// 检查锁状态
+const locked = await cache.lock.isLocked('my-lock')
+
+// 续期锁
+await cache.lock.extend('my-lock', 60, 'node-1')
+```
+
+- **Memory 后端**：基于 Map + TTL 过期机制
+- **Redis 后端**：使用 `SET NX EX` 原子获锁，Lua 脚本实现 owner 验证的安全释放/续期
+- `owner` 参数用于防止误释放他人锁，多节点部署时建议设置稳定的节点标识
 
 ## 错误码
 

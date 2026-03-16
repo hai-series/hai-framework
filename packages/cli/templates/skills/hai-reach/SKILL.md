@@ -284,10 +284,26 @@ if (!result.success) {
 }
 ```
 
+### 分布式锁（DND flush 保护）
+
+> 多节点部署时，DND（delay 策略）的 pending 消息 flush 通过 `@h-ai/cache` 分布式锁保护，确保同一时刻只有一个节点执行 flush。
+
+```typescript
+import { cache } from '@h-ai/cache'
+
+// 初始化 cache 后，reach 自动使用分布式锁保护 flush 操作
+await cache.init({ type: 'redis', host: 'localhost', port: 6379 })
+await reach.init({ /* ... */ })
+```
+
+- 锁键：`reach:flush-pending`，TTL 60 秒
+- 若 cache 未初始化，分布式锁自动禁用，不影响单节点运行
+- 使用稳定的进程级 owner 标识，防止误释放他人锁
+
 ---
 
 ## 相关 Skills
 
 - `hai-core` — 配置加载、日志、Result 模式
 - `hai-reldb` — 数据库操作（存储发送记录等）
-- `hai-cache` — 缓存操作（验证码缓存等）
+- `hai-cache` — 缓存操作、分布式锁（DND flush 互斥）
