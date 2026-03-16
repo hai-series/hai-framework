@@ -287,7 +287,7 @@ function divide(a: number, b: number): Result<number, string> {
 
 const result = divide(10, 2)
 if (result.success) {
-  console.log(result.data) // 5
+  const quotient = result.data // 5
 }
 else {
   console.error(result.error)
@@ -312,7 +312,7 @@ await reldb.ddl.createTable('users', {
 // 查询
 const users = await reldb.sql.query<User>('SELECT * FROM users WHERE name = ?', ['Alice'])
 if (users.success)
-  console.log(users.data)
+  void users.data
 
 // 分页查询
 const page = await reldb.sql.queryPage<User>({
@@ -390,7 +390,7 @@ const result = await ai.llm.chat({
   messages: [{ role: 'user', content: '用一句话解释量子计算' }],
 })
 if (result.success)
-  console.log(result.data.choices[0].message.content)
+  void result.data.choices[0].message.content
 
 // 流式调用
 const stream = ai.llm.chatStream({
@@ -501,7 +501,7 @@ await audit.init({ reldb })
 
 // 记录操作
 await audit.helper.login('user_1', '127.0.0.1')
-await audit.helper.crud('user_1', 'create', 'users', 'user_2', { name: '张三' })
+await audit.helper.crud({ userId: 'user_1', action: 'create', resource: 'users', resourceId: 'user_2', details: { name: '张三' } })
 
 // 查询与统计
 const logs = await audit.list({ pageSize: 20, action: 'login' })
@@ -581,7 +581,7 @@ const result = await api.call(iamEndpoints.login, { identifier: 'alice', passwor
 
 // SSE 流式响应
 for await (const chunk of api.stream('/ai/chat', { messages: [] })) {
-  console.log(chunk)
+  void chunk
 }
 ```
 
@@ -606,7 +606,7 @@ await reach.send({ provider: 'email', to: 'user@example.com', template: 'welcome
 
 ### Svelte 5 UI 组件
 
-```svelte
+```text
 <script lang="ts">
   import { Button, Input, Modal, DataTable, Card } from '@h-ai/ui'
 
