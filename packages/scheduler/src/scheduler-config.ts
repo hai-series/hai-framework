@@ -6,7 +6,6 @@
  */
 
 import { z } from 'zod'
-import { schedulerM } from './scheduler-i18n.js'
 
 // ─── 错误码常量 ───
 
@@ -84,13 +83,11 @@ export const SchedulerErrorHttpStatus: Record<number, number> = {
  * 调度器配置 Zod Schema
  *
  * 所有字段均可选，提供合理默认值。
- * `tableName` 仅允许字母、数字和下划线，防止 SQL 注入。
  *
  * @example
  * ```ts
  * const config = SchedulerConfigSchema.parse({
  *   enableDb: true,
- *   tableName: 'scheduler_logs',
  *   tickInterval: 1000,
  * })
  * ```
@@ -98,14 +95,8 @@ export const SchedulerErrorHttpStatus: Record<number, number> = {
 export const SchedulerConfigSchema = z.object({
   /** 是否启用数据库记录（默认 true，需要 @h-ai/reldb 已初始化） */
   enableDb: z.boolean().default(true),
-  /** 执行日志表名（默认 'scheduler_logs'，仅允许字母、数字和下划线） */
-  tableName: z.string().regex(/^\w+$/, schedulerM('scheduler_config_tableNameInvalid')).default('scheduler_logs'),
-  /** 任务定义持久化表名（默认 'scheduler_tasks'，仅允许字母、数字和下划线） */
-  taskTableName: z.string().regex(/^\w+$/, schedulerM('scheduler_config_tableNameInvalid')).default('scheduler_tasks'),
   /** 调度检查间隔，单位毫秒（默认 1000，即每秒检查一次） */
   tickInterval: z.number().int().min(100).default(1000),
-  /** 分布式锁表名（默认 'scheduler_locks'，仅允许字母、数字和下划线） */
-  lockTableName: z.string().regex(/^\w+$/, schedulerM('scheduler_config_tableNameInvalid')).default('scheduler_locks'),
   /** 分布式锁过期时间，单位毫秒（默认 300000，即 5 分钟） */
   lockExpireMs: z.number().int().min(10000).default(300000),
   /** 节点标识（默认自动生成 UUID，多节点部署时建议设置固定标识以便审计） */
@@ -117,14 +108,3 @@ export type SchedulerConfig = z.infer<typeof SchedulerConfigSchema>
 
 /** 调度器配置输入类型 */
 export type SchedulerConfigInput = z.input<typeof SchedulerConfigSchema>
-
-// ─── API 任务配置 Schema（用于 DB 加载时校验） ───
-
-/** API 任务配置 Zod Schema，校验从数据库加载的 api_config JSON */
-export const ApiTaskConfigSchema = z.object({
-  url: z.string().min(1),
-  method: z.enum(['GET', 'POST', 'PUT', 'DELETE', 'PATCH']).optional(),
-  headers: z.record(z.string(), z.string()).optional(),
-  body: z.unknown().optional(),
-  timeout: z.number().int().positive().optional(),
-})

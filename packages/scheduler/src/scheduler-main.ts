@@ -25,6 +25,7 @@ import { reldb } from '@h-ai/reldb'
 
 import { SchedulerLockRepository, SchedulerLogRepository, SchedulerTaskRepository } from './repositories/index.js'
 import { SchedulerConfigSchema, SchedulerErrorCode } from './scheduler-config.js'
+import { SCHEDULER_LOCK_TABLE, SCHEDULER_LOG_TABLE, SCHEDULER_TASK_TABLE } from './scheduler-constants.js'
 import { parseCronExpression } from './scheduler-cron.js'
 import { schedulerM } from './scheduler-i18n.js'
 import { getTask, getTaskRegistry, hasTask, isTaskRunning, isTimerRunning, registerInMemory, resetRunner, runTask, setCronCache, setLockRepository, setLogRepository, setTask, startTimer, stopTimer, unregisterFromMemory } from './scheduler-runner.js'
@@ -35,6 +36,9 @@ const logger = core.logger.child({ module: 'scheduler', scope: 'main' })
 
 /** 当前配置 */
 let currentConfig: SchedulerConfig | null = null
+
+/** 并发初始化防护标志 */
+let initInProgress = false
 
 /** 任务定义仓库 */
 let taskRepo: SchedulerTaskRepository | null = null
@@ -64,9 +68,9 @@ async function initDatabase(parsed: SchedulerConfig): Promise<SchedulerConfig> {
     return { ...parsed, enableDb: false }
   }
 
-  taskRepo = new SchedulerTaskRepository(reldb, parsed.taskTableName)
-  logRepo = new SchedulerLogRepository(reldb, parsed.tableName)
-  lockRepo = new SchedulerLockRepository(reldb, parsed.lockTableName)
+  taskRepo = new SchedulerTaskRepository(reldb, SCHEDULER_TASK_TABLE)
+  logRepo = new SchedulerLogRepository(reldb, SCHEDULER_LOG_TABLE)
+  lockRepo = new SchedulerLockRepository(reldb, SCHEDULER_LOCK_TABLE)
 
   // 通知 runner 使用日志仓库
   setLogRepository(logRepo)
@@ -157,54 +161,69 @@ export const scheduler: SchedulerFunctions = {
    * @returns 成功返回 `ok(undefined)`；配置异常返回 `INIT_FAILED` 错误
    */
   async init(config?: SchedulerInitInput): Promise<Result<void, SchedulerError>> {
-    if (currentConfig) {
-      logger.warn('Scheduler module is already initialized, reinitializing')
-      await scheduler.close()
-    }
-
-    logger.info('Initializing scheduler module')
-
-    const { tasks: configTasks, ...configOptions } = config ?? {}
-
-    const parseResult = SchedulerConfigSchema.safeParse(configOptions)
-    if (!parseResult.success) {
-      logger.error('Scheduler config validation failed', { error: parseResult.error.message })
-      return err({
-        code: SchedulerErrorCode.CONFIG_ERROR,
-        message: schedulerM('scheduler_configError', { params: { error: parseResult.error.message } }),
-        cause: parseResult.error,
-      })
-    }
-
-    try {
-      currentConfig = await initDatabase(parseResult.data)
-
-      // 先加载 DB 中持久化的任务（优先级高）
-      await loadPersistedTasks()
-
-      // 再加载配置中的预定义任务（不覆盖 DB 中已有的同 ID 任务）
-      if (configTasks && configTasks.length > 0) {
-        loadConfigTasks(configTasks)
-      }
-
-      logger.info('Scheduler module initialized', { enableDb: currentConfig.enableDb })
-      return ok(undefined)
-    }
-    catch (error) {
-      currentConfig = null
-      taskRepo = null
-      logRepo = null
-      lockRepo = null
-      setLogRepository(null)
-      setLockRepository(null, '', 300000)
-      logger.error('Scheduler initialization failed', { error })
+    // 并发初始化防护：避免多次 init 同时执行导致资源泄漏
+    if (initInProgress) {
+      logger.warn('Scheduler init already in progress, skipping concurrent call')
       return err({
         code: SchedulerErrorCode.INIT_FAILED,
-        message: schedulerM('scheduler_initFailed', {
-          params: { error: error instanceof Error ? error.message : String(error) },
-        }),
-        cause: error,
+        message: schedulerM('scheduler_initFailed', { params: { error: 'Concurrent initialization detected' } }),
       })
+    }
+    initInProgress = true
+
+    try {
+      if (currentConfig) {
+        logger.warn('Scheduler module is already initialized, reinitializing')
+        await scheduler.close()
+      }
+
+      logger.info('Initializing scheduler module')
+
+      const { tasks: configTasks, ...configOptions } = config ?? {}
+
+      const parseResult = SchedulerConfigSchema.safeParse(configOptions)
+      if (!parseResult.success) {
+        logger.error('Scheduler config validation failed', { error: parseResult.error.message })
+        return err({
+          code: SchedulerErrorCode.CONFIG_ERROR,
+          message: schedulerM('scheduler_configError', { params: { error: parseResult.error.message } }),
+          cause: parseResult.error,
+        })
+      }
+
+      try {
+        currentConfig = await initDatabase(parseResult.data)
+
+        // 先加载 DB 中持久化的任务（优先级高）
+        await loadPersistedTasks()
+
+        // 再加载配置中的预定义任务（不覆盖 DB 中已有的同 ID 任务）
+        if (configTasks && configTasks.length > 0) {
+          loadConfigTasks(configTasks)
+        }
+
+        logger.info('Scheduler module initialized', { enableDb: currentConfig.enableDb })
+        return ok(undefined)
+      }
+      catch (error) {
+        currentConfig = null
+        taskRepo = null
+        logRepo = null
+        lockRepo = null
+        setLogRepository(null)
+        setLockRepository(null, '', 300000)
+        logger.error('Scheduler initialization failed', { error })
+        return err({
+          code: SchedulerErrorCode.INIT_FAILED,
+          message: schedulerM('scheduler_initFailed', {
+            params: { error: error instanceof Error ? error.message : String(error) },
+          }),
+          cause: error,
+        })
+      }
+    }
+    finally {
+      initInProgress = false
     }
   },
 

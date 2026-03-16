@@ -11,8 +11,6 @@ import type { ReldbFunctions } from '@h-ai/reldb'
 import { core } from '@h-ai/core'
 import { BaseReldbCrudRepository } from '@h-ai/reldb'
 
-import { schedulerM } from '../scheduler-i18n.js'
-
 const logger = core.logger.child({ module: 'scheduler', scope: 'lock-repository' })
 
 // ─── 锁行类型（数据库行映射） ───
@@ -172,7 +170,7 @@ export class SchedulerLockRepository extends BaseReldbCrudRepository<LockRow> {
       }
     }
     catch (error) {
-      logger.warn(schedulerM('scheduler_lockCleanupFailed', { params: { error: error instanceof Error ? error.message : String(error) } }))
+      logger.warn('Failed to cleanup expired lock records', { error: error instanceof Error ? error.message : String(error) })
     }
   }
 }

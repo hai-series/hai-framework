@@ -73,9 +73,9 @@ await scheduler.close()
 ```ts
 await scheduler.init({
   enableDb: true, // 是否启用数据库（默认 true，需 @h-ai/reldb 已初始化）
-  tableName: 'scheduler_logs', // 执行日志表名（默认 'scheduler_logs'）
-  taskTableName: 'scheduler_tasks', // 任务定义表名（默认 'scheduler_tasks'）
   tickInterval: 1000, // 调度检查间隔，毫秒（默认 1000）
+  lockExpireMs: 300000, // 分布式锁过期时间，毫秒（默认 300000，即 5 分钟）
+  nodeId: 'node-1', // 节点标识（默认自动生成 UUID）
   tasks: [ // 预定义任务列表（可选，DB 中已有同 ID 的不会被覆盖）
     { id: 'health', name: '健康检查', cron: '*/5 * * * *', type: 'api', api: { url: 'https://...' } },
   ],
@@ -92,6 +92,15 @@ await scheduler.init({
 - **JS 任务**因 handler 函数不可序列化，不参与持久化，需每次启动时重新注册
 - `updateTask()` 同步更新内存和数据库中的任务定义
 - **配置任务**通过 `init({ tasks: [...] })` 传入，初始化时自动注册；DB 中已有同 ID 的任务优先，不会被配置覆盖
+
+## 分布式锁
+
+启用 DB 时，scheduler 内置基于数据库 UNIQUE 约束的分布式锁，多节点部署时确保同一任务同一分钟只有一个节点执行。
+
+- `enableDb: true` 时自动启用，无需额外配置
+- 锁键格式为 `${taskId}:${minuteTimestamp}`
+- 崩溃节点的过期锁会被自动清理
+- 手动触发（`trigger`）不经过分布式锁
 
 ## 错误处理
 

@@ -49,24 +49,30 @@ describe('scheduler', () => {
     it('使用默认配置初始化', async () => {
       const result = await scheduler.init({ enableDb: false })
       expect(result.success).toBe(true)
-      expect(scheduler.config?.tableName).toBe('scheduler_logs')
-      expect(scheduler.config?.taskTableName).toBe('scheduler_tasks')
       expect(scheduler.config?.tickInterval).toBe(1000)
     })
 
-    it('含特殊字符的 tableName 应被 Zod 校验拒绝', async () => {
-      const result = await scheduler.init({ enableDb: false, tableName: 'logs; DROP TABLE users' })
-      expect(result.success).toBe(false)
-      if (!result.success) {
-        expect(result.error.code).toBe(SchedulerErrorCode.CONFIG_ERROR)
-      }
+    it('自定义 tickInterval 应生效', async () => {
+      const result = await scheduler.init({ enableDb: false, tickInterval: 500 })
+      expect(result.success).toBe(true)
+      expect(scheduler.config?.tickInterval).toBe(500)
     })
 
-    it('自定义 tableName 和 tickInterval 应生效', async () => {
-      const result = await scheduler.init({ enableDb: false, tableName: 'custom_logs', tickInterval: 500 })
-      expect(result.success).toBe(true)
-      expect(scheduler.config?.tableName).toBe('custom_logs')
-      expect(scheduler.config?.tickInterval).toBe(500)
+    it('并发调用 init 应拒绝后续调用', async () => {
+      const [r1, r2] = await Promise.all([
+        scheduler.init({ enableDb: false }),
+        scheduler.init({ enableDb: false }),
+      ])
+
+      // 恰好一个成功，一个失败（INIT_FAILED）
+      const results = [r1, r2]
+      expect(results.filter(r => r.success).length).toBe(1)
+      expect(results.filter(r => !r.success).length).toBe(1)
+
+      const failed = results.find(r => !r.success)!
+      if (!failed.success) {
+        expect(failed.error.code).toBe(SchedulerErrorCode.INIT_FAILED)
+      }
     })
   })
 
