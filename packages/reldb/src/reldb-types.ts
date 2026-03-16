@@ -50,7 +50,7 @@ export interface ReldbError {
  * | REAL       | REAL    | DOUBLE PRECISION | DOUBLE       |
  * | BLOB       | BLOB    | BYTEA            | BLOB         |
  * | BOOLEAN    | INTEGER | BOOLEAN          | TINYINT(1)   |
- * | TIMESTAMP  | INTEGER | TIMESTAMPTZ      | DATETIME     |
+ * | TIMESTAMP  | INTEGER | TIMESTAMP        | DATETIME     |
  * | JSON       | TEXT    | JSONB            | JSON         |
  *
  * 注：MySQL 将 TEXT 映射为 VARCHAR(255) 以支持索引和 UNIQUE 约束。
@@ -190,7 +190,7 @@ export interface ReldbIndexDef {
  * }
  * ```
  */
-export interface ReldbDdlOperations {
+export interface DdlOperations {
   /**
    * 创建表
    * @param tableName - 表名
@@ -364,7 +364,7 @@ export interface PaginationQueryOptions {
 /**
  * 数据读写操作接口（SQL / 事务共享）
  */
-export interface DataOperations {
+export interface DmlOperations {
   /** 查询多行 */
   query: <T = QueryRow>(sql: string, params?: unknown[]) => Promise<Result<T[], ReldbError>>
   /** 查询单行 */
@@ -491,45 +491,22 @@ export interface BaseReldbCrudRepositoryConfig<TItem> {
 
 /** CRUD 仓库接口 */
 export interface ReldbCrudRepository<TItem> {
-  create: (data: Record<string, unknown>, tx?: ReldbTxHandle) => Promise<Result<ExecuteResult, ReldbError>>
-  createMany: (items: Array<Record<string, unknown>>, tx?: ReldbTxHandle) => Promise<Result<void, ReldbError>>
-  findById: (id: unknown, tx?: ReldbTxHandle) => Promise<Result<TItem | null, ReldbError>>
-  findAll: (options?: CrudQueryOptions, tx?: ReldbTxHandle) => Promise<Result<TItem[], ReldbError>>
-  findPage: (options: CrudPageOptions, tx?: ReldbTxHandle) => Promise<Result<PaginatedResult<TItem>, ReldbError>>
-  updateById: (id: unknown, data: Record<string, unknown>, tx?: ReldbTxHandle) => Promise<Result<ExecuteResult, ReldbError>>
-  deleteById: (id: unknown, tx?: ReldbTxHandle) => Promise<Result<ExecuteResult, ReldbError>>
-  count: (options?: ReldbCrudCountOptions, tx?: ReldbTxHandle) => Promise<Result<number, ReldbError>>
-  exists: (options?: ReldbCrudCountOptions, tx?: ReldbTxHandle) => Promise<Result<boolean, ReldbError>>
-  existsById: (id: unknown, tx?: ReldbTxHandle) => Promise<Result<boolean, ReldbError>>
+  create: (data: Record<string, unknown>, tx?: DmlWithTxOperations) => Promise<Result<ExecuteResult, ReldbError>>
+  createMany: (items: Array<Record<string, unknown>>, tx?: DmlWithTxOperations) => Promise<Result<void, ReldbError>>
+  findById: (id: unknown, tx?: DmlWithTxOperations) => Promise<Result<TItem | null, ReldbError>>
+  findAll: (options?: CrudQueryOptions, tx?: DmlWithTxOperations) => Promise<Result<TItem[], ReldbError>>
+  findPage: (options: CrudPageOptions, tx?: DmlWithTxOperations) => Promise<Result<PaginatedResult<TItem>, ReldbError>>
+  updateById: (id: unknown, data: Record<string, unknown>, tx?: DmlWithTxOperations) => Promise<Result<ExecuteResult, ReldbError>>
+  deleteById: (id: unknown, tx?: DmlWithTxOperations) => Promise<Result<ExecuteResult, ReldbError>>
+  count: (options?: ReldbCrudCountOptions, tx?: DmlWithTxOperations) => Promise<Result<number, ReldbError>>
+  exists: (options?: ReldbCrudCountOptions, tx?: DmlWithTxOperations) => Promise<Result<boolean, ReldbError>>
+  existsById: (id: unknown, tx?: DmlWithTxOperations) => Promise<Result<boolean, ReldbError>>
 }
 
 /** CRUD 管理器（统一入口） */
-export interface ReldbCrudManager {
+export interface CrudManager {
   /** 获取单表 CRUD 仓库 */
   table: <TItem>(config: CrudConfig<TItem>) => ReldbCrudRepository<TItem>
-}
-
-/**
- * SQL（数据操作语言）操作接口
- *
- * 提供数据查询和修改功能。
- *
- * 注意：所有数据库操作均为异步，需使用 await。
- *
- * @example
- * ```ts
- * // 查询多行
- * const users = await reldb.sql.query<{ id: number; name: string }>('SELECT * FROM users')
- *
- * // 查询单行
- * const user = await reldb.sql.get('SELECT * FROM users WHERE id = ?', [1])
- *
- * // 执行修改
- * const result = await reldb.sql.execute('INSERT INTO users (name) VALUES (?)', ['张三'])
- * // 可从 result.data?.lastInsertRowid 获取插入 ID
- * ```
- */
-export interface ReldbSqlOperations extends DataOperations {
 }
 
 // ─── 事务接口 ───
@@ -537,9 +514,9 @@ export interface ReldbSqlOperations extends DataOperations {
 /**
  * 事务句柄接口（分步事务）
  */
-export interface ReldbTxHandle extends DataOperations {
+export interface DmlWithTxOperations extends DmlOperations {
   /** CRUD 管理器 */
-  crud: ReldbCrudManager
+  crud: CrudManager
   /** 提交事务 */
   commit: () => Promise<Result<void, ReldbError>>
   /** 回滚事务 */
@@ -559,49 +536,16 @@ export interface ReldbTxHandle extends DataOperations {
  * })
  * ```
  */
-export type TxWrapCallback<T> = (tx: ReldbTxHandle) => Promise<T>
+export type TxWrapCallback<T> = (tx: DmlWithTxOperations) => Promise<T>
 
 /**
  * 事务管理器
  */
-export interface ReldbTxManager {
+export interface TxManager {
   /** 开启事务（分步事务） */
-  begin: () => Promise<Result<ReldbTxHandle, ReldbError>>
+  begin: () => Promise<Result<DmlWithTxOperations, ReldbError>>
   /** 包裹事务（自动提交/回滚） */
   wrap: <T>(fn: TxWrapCallback<T>) => Promise<Result<T, ReldbError>>
-}
-
-// ─── 复合数据库操作接口 ───
-
-/**
- * 复合数据库操作接口
- *
- * 在基础操作之上，统一聚合 DDL / SQL / 事务能力。
- */
-export interface DbCompositeOperations {
-  /** DDL 操作（表结构管理） */
-  readonly ddl: ReldbDdlOperations
-
-  /** SQL 操作（数据查询和修改） */
-  readonly sql: ReldbSqlOperations
-
-  /** CRUD 管理器 */
-  readonly crud: ReldbCrudManager
-
-  /** 事务管理器 */
-  tx: ReldbTxManager
-}
-
-// ─── 分页工具接口 ───
-
-/**
- * 分页工具接口
- */
-export interface DbPagination {
-  /** 规范化分页参数 */
-  normalize: (options?: PaginationOptionsInput, overrides?: PaginationOverrides) => NormalizedPagination
-  /** 构建分页结果 */
-  build: <T>(items: T[], total: number, pagination: PaginationOptions) => PaginatedResult<T>
 }
 
 // ─── 数据库函数接口 ───
@@ -636,7 +580,7 @@ export interface DbPagination {
  * await reldb.close()
  * ```
  */
-export interface ReldbFunctions extends DbCompositeOperations {
+export interface ReldbFunctions {
   /**
    * 初始化数据库连接
    *
@@ -645,6 +589,18 @@ export interface ReldbFunctions extends DbCompositeOperations {
    */
   init: (config: ReldbConfigInput) => Promise<Result<void, ReldbError>>
 
+  /** DDL 操作（表结构管理） */
+  readonly ddl: DdlOperations
+
+  /** SQL 操作（数据查询和修改） */
+  readonly sql: DmlOperations
+
+  /** CRUD 管理器 */
+  readonly crud: CrudManager
+
+  /** 事务管理器 */
+  readonly tx: TxManager
+
   /** 当前数据库配置（未初始化时为 null） */
   readonly config: ReldbConfig | null
 
@@ -652,7 +608,12 @@ export interface ReldbFunctions extends DbCompositeOperations {
   readonly isInitialized: boolean
 
   /** 分页工具 */
-  readonly pagination: DbPagination
+  readonly pagination: {
+    /** 规范化分页参数 */
+    normalize: (options?: PaginationOptionsInput, overrides?: PaginationOverrides) => NormalizedPagination
+    /** 构建分页结果 */
+    build: <T>(items: T[], total: number, pagination: PaginationOptions) => PaginatedResult<T>
+  }
 
   /**
    * JSON 操作 SQL 构建器
@@ -693,7 +654,15 @@ export interface ReldbFunctions extends DbCompositeOperations {
  * 内部使用，定义各数据库驱动需要实现的接口。
  * 每个数据库类型（SQLite、PostgreSQL、MySQL）都有对应的 Provider 实现。
  */
-export interface ReldbProvider extends DbCompositeOperations {
+export interface ReldbProvider {
+  /** DDL 操作（表结构管理） */
+  readonly ddl: DdlOperations
+  /** SQL 操作（数据查询和修改） */
+  readonly sql: DmlOperations
+  /** CRUD 管理器 */
+  readonly crud: CrudManager
+  /** 事务管理器 */
+  readonly tx: TxManager
   /** 连接数据库 */
   connect: (config: ReldbConfig) => Promise<Result<void, ReldbError>>
   /** 关闭连接 */

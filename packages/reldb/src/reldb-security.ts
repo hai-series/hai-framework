@@ -61,7 +61,7 @@ export function validateIdentifiers(names: string[]): Result<void, ReldbError> {
   for (const name of names) {
     const result = validateIdentifier(name)
     if (!result.success) {
-      return result as unknown as Result<void, ReldbError>
+      return err(result.error)
     }
   }
   return ok(undefined)
