@@ -30,6 +30,7 @@
     "clean": "rimraf dist .turbo"
   },
   "dependencies": {
+    "@h-ai/cache": "workspace:^",
     "@h-ai/core": "workspace:*",
     "@h-ai/reldb": "workspace:*",
     "croner": "catalog:",
