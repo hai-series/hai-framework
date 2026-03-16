@@ -34,7 +34,7 @@ await audit.log({
 
 // 4. 使用便捷方法
 await audit.helper.login('user_1', '127.0.0.1')
-await audit.helper.crud('user_1', 'create', 'users', 'user_2', { name: '张三' })
+await audit.helper.crud({ userId: 'user_1', action: 'create', resource: 'users', resourceId: 'user_2', details: { name: '张三' } })
 
 // 5. 查询日志
 const logs = await audit.list({ pageSize: 20, action: 'login' })
@@ -81,6 +81,7 @@ await audit.init({
 - `AuditErrorCode.CLEANUP_FAILED` (10002) - 清理失败
 - `AuditErrorCode.STATS_FAILED` (10003) - 统计失败
 - `AuditErrorCode.NOT_INITIALIZED` (10010) - 模块未初始化
+- `AuditErrorCode.INIT_IN_PROGRESS` (10004) - 初始化进行中
 - `AuditErrorCode.CONFIG_ERROR` (10012) - 配置错误
 
 ## 测试

@@ -15,6 +15,7 @@ import type {
   AuditLogWithUser,
   AuditStatItem,
   CreateAuditLogInput,
+  CrudAuditInput,
   ListAuditLogsOptions,
 } from './audit-types.js'
 
@@ -24,7 +25,7 @@ import { validateIdentifiers } from '@h-ai/reldb'
 
 import { AuditErrorCode, AuditInitConfigSchema } from './audit-config.js'
 import { auditM } from './audit-i18n.js'
-import { AuditLogRepository } from './audit-repository.js'
+import { AuditLogRepository } from './audit-repository-log.js'
 
 const logger = core.logger.child({ module: 'audit', scope: 'main' })
 
@@ -35,6 +36,9 @@ let currentRepo: AuditLogRepository | null = null
 
 /** 缓存的便捷记录器实例；init 时创建，close 时置 null */
 let currentHelper: AuditHelper | null = null
+
+/** 并发初始化防护标志 */
+let initInProgress = false
 
 // ─── 未初始化占位 ───
 
@@ -101,15 +105,17 @@ function createHelper(logFn: (input: CreateAuditLogInput) => Promise<Result<Audi
     },
 
     async crud(
-      userId: string | null,
-      action: 'create' | 'read' | 'update' | 'delete',
-      resource: string,
-      resourceId?: string,
-      details?: Record<string, unknown>,
-      ip?: string,
-      ua?: string,
+      input: CrudAuditInput,
     ): Promise<Result<void, AuditError>> {
-      const result = await logFn({ userId, action, resource, resourceId, details, ipAddress: ip, userAgent: ua })
+      const result = await logFn({
+        userId: input.userId,
+        action: input.action,
+        resource: input.resource,
+        resourceId: input.resourceId,
+        details: input.details,
+        ipAddress: input.ip,
+        userAgent: input.ua,
+      })
       return toVoid(result)
     },
   }
@@ -169,35 +175,45 @@ export const audit: AuditFunctions = {
    * ```
    */
   async init(config: AuditInitConfigInput): Promise<Result<void, AuditError>> {
-    if (currentRepo) {
-      logger.warn('Audit module is already initialized, reinitializing')
-      await audit.close()
-    }
-
-    logger.info('Initializing audit module')
-
-    const parseResult = AuditInitConfigSchema.safeParse(config)
-    if (!parseResult.success) {
-      logger.error('Audit config validation failed', { error: parseResult.error.message })
+    // 并发初始化防护：避免多次 init 同时执行导致资源泄漏
+    if (initInProgress) {
+      logger.warn('Audit init already in progress, skipping concurrent call')
       return err({
-        code: AuditErrorCode.CONFIG_ERROR,
-        message: auditM('audit_configError', { params: { error: parseResult.error.message } }),
-        cause: parseResult.error,
+        code: AuditErrorCode.INIT_IN_PROGRESS,
+        message: auditM('audit_initInProgress'),
       })
     }
-    const parsed = parseResult.data
-
-    const identifierResult = validateIdentifiers([parsed.tableName, parsed.userTable, parsed.userIdColumn, parsed.userNameColumn])
-    if (!identifierResult.success) {
-      logger.error('Audit config contains invalid identifiers', { error: identifierResult.error.message })
-      return err({
-        code: AuditErrorCode.CONFIG_ERROR,
-        message: auditM('audit_configError', { params: { error: identifierResult.error.message } }),
-        cause: identifierResult.error,
-      })
-    }
+    initInProgress = true
 
     try {
+      if (currentRepo) {
+        logger.warn('Audit module is already initialized, reinitializing')
+        await audit.close()
+      }
+
+      logger.info('Initializing audit module')
+
+      const parseResult = AuditInitConfigSchema.safeParse(config)
+      if (!parseResult.success) {
+        logger.error('Audit config validation failed', { error: parseResult.error.message })
+        return err({
+          code: AuditErrorCode.CONFIG_ERROR,
+          message: auditM('audit_configError', { params: { error: parseResult.error.message } }),
+          cause: parseResult.error,
+        })
+      }
+      const parsed = parseResult.data
+
+      const identifierResult = validateIdentifiers([parsed.tableName, parsed.userTable, parsed.userIdColumn, parsed.userNameColumn])
+      if (!identifierResult.success) {
+        logger.error('Audit config contains invalid identifiers', { error: identifierResult.error.message })
+        return err({
+          code: AuditErrorCode.CONFIG_ERROR,
+          message: auditM('audit_configError', { params: { error: identifierResult.error.message } }),
+          cause: identifierResult.error,
+        })
+      }
+
       currentRepo = new AuditLogRepository(parsed.db, {
         tableName: parsed.tableName,
         userTable: parsed.userTable,
@@ -216,6 +232,9 @@ export const audit: AuditFunctions = {
         message: auditM('audit_initFailed', { params: { error: error instanceof Error ? error.message : String(error) } }),
         cause: error,
       })
+    }
+    finally {
+      initInProgress = false
     }
   },
 

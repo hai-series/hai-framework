@@ -35,6 +35,8 @@ export const AuditErrorCode = {
   CLEANUP_FAILED: 10002,
   /** 审计统计查询失败（聚合查询出错） */
   STATS_FAILED: 10003,
+  /** 初始化正在进行中，不可并发调用 */
+  INIT_IN_PROGRESS: 10004,
   /** 模块未初始化，需先调用 audit.init() */
   NOT_INITIALIZED: 10010,
   /** 初始化配置错误（如 db 实例无效） */
@@ -54,6 +56,7 @@ export const AuditErrorHttpStatus: Record<number, number> = {
   [AuditErrorCode.QUERY_FAILED]: 500,
   [AuditErrorCode.CLEANUP_FAILED]: 500,
   [AuditErrorCode.STATS_FAILED]: 500,
+  [AuditErrorCode.INIT_IN_PROGRESS]: 409,
   [AuditErrorCode.NOT_INITIALIZED]: 500,
   [AuditErrorCode.CONFIG_ERROR]: 500,
 }

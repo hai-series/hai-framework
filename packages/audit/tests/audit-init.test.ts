@@ -6,7 +6,7 @@
 
 import { reldb } from '@h-ai/reldb'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { audit } from '../src/index.js'
+import { audit, AuditErrorCode } from '../src/index.js'
 
 // ─── 测试辅助 ───
 
@@ -91,5 +91,45 @@ describe('audit.init / audit.close', () => {
     const result = await audit.init({ db: reldb })
     expect(result.success).toBe(true)
     expect(audit.isInitialized).toBe(true)
+  })
+
+  // ─── 配置校验 ───
+
+  it('传入 null 作为 db 应返回 CONFIG_ERROR', async () => {
+    const result = await audit.init({ db: null as never })
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error.code).toBe(AuditErrorCode.CONFIG_ERROR)
+    }
+  })
+
+  it('传入非法标识符应返回 CONFIG_ERROR', async () => {
+    const result = await audit.init({ db: reldb, tableName: 'DROP TABLE; --' })
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error.code).toBe(AuditErrorCode.CONFIG_ERROR)
+    }
+  })
+
+  // ─── 并发初始化防护 ───
+
+  it('并发 init 应返回 INIT_IN_PROGRESS', async () => {
+    // 先初始化一次，使重新初始化时触发 await audit.close()，产生真正的并发窗口
+    await audit.init({ db: reldb })
+
+    const [r1, r2] = await Promise.all([
+      audit.init({ db: reldb }),
+      audit.init({ db: reldb }),
+    ])
+
+    // 其中一个成功，另一个返回 INIT_IN_PROGRESS
+    const results = [r1, r2]
+    const successes = results.filter(r => r.success)
+    const failures = results.filter(r => !r.success)
+    expect(successes.length).toBe(1)
+    expect(failures.length).toBe(1)
+    if (!failures[0].success) {
+      expect(failures[0].error.code).toBe(AuditErrorCode.INIT_IN_PROGRESS)
+    }
   })
 })

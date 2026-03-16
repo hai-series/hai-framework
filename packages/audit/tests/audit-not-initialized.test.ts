@@ -101,7 +101,7 @@ describe('audit (not initialized)', () => {
   })
 
   it('helper.crud 应返回 NOT_INITIALIZED', async () => {
-    const result = await audit.helper.crud('user_1', 'create', 'users')
+    const result = await audit.helper.crud({ userId: 'user_1', action: 'create', resource: 'users' })
     expect(result.success).toBe(false)
     if (!result.success) {
       expect(result.error.code).toBe(AuditErrorCode.NOT_INITIALIZED)
