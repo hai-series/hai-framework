@@ -123,11 +123,10 @@ export function createTemplateRegistry(repo?: TemplateRepository | null): ReachT
       if (!repo) {
         return noDbError('reach_templateSaveFailed')
       }
-      for (const template of templates) {
-        const result = await repo.upsert(template)
-        if (!result.success) {
-          return result
-        }
+      const results = await Promise.all(templates.map(t => repo!.upsert(t)))
+      const failed = results.find(r => !r.success)
+      if (failed) {
+        return failed
       }
       return ok(undefined)
     },
