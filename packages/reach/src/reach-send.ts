@@ -24,6 +24,9 @@ import { reachM } from './reach-i18n.js'
 
 const logger = core.logger.child({ module: 'reach', scope: 'send' })
 
+/** 稳定的节点标识，用于分布式锁 owner（进程级别唯一） */
+const reachNodeId = `reach:${crypto.randomUUID()}`
+
 // ─── DND（免打扰）检查 ───
 
 /**
@@ -257,6 +260,7 @@ export function resetSendState(): void {
  * 从数据库获取所有 pending 记录并逐条发送
  *
  * 多节点部署时通过分布式锁确保同一时刻只有一个节点执行 flush。
+ * 分布式锁基于 @h-ai/cache 模块实现，运行时通过 cache.isInitialized 动态检测可用性。
  */
 async function flushPendingMessages(
   providers: Map<string, ReachProvider>,
@@ -269,10 +273,9 @@ async function flushPendingMessages(
   // 分布式锁：防止多节点同时 flush
   const FLUSH_LOCK_KEY = 'reach:flush-pending'
   const FLUSH_LOCK_TTL = 60
-  const FLUSH_LOCK_OWNER = `reach:${crypto.randomUUID()}`
   let lockAcquired = false
   if (cache.isInitialized) {
-    const lockResult = await cache.lock.acquire(FLUSH_LOCK_KEY, { ttl: FLUSH_LOCK_TTL, owner: FLUSH_LOCK_OWNER })
+    const lockResult = await cache.lock.acquire(FLUSH_LOCK_KEY, { ttl: FLUSH_LOCK_TTL, owner: reachNodeId })
     if (lockResult.success && !lockResult.data) {
       logger.info('Skipping flush, another node holds the lock')
       return
@@ -329,7 +332,7 @@ async function flushPendingMessages(
   finally {
     // 释放锁
     if (lockAcquired) {
-      await cache.lock.release(FLUSH_LOCK_KEY, FLUSH_LOCK_OWNER).catch((error: unknown) => {
+      await cache.lock.release(FLUSH_LOCK_KEY, reachNodeId).catch((error: unknown) => {
         logger.warn('Failed to release flush lock', { error })
       })
     }

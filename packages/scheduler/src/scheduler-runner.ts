@@ -40,10 +40,7 @@ let lastTickMinute = -1
 /** 日志仓库实例（由 main.ts 在 init 时注入） */
 let currentLogRepo: SchedulerLogRepository | null = null
 
-/** 是否启用分布式锁 */
-let lockEnabled: boolean = false
-
-/** 当前节点 ID */
+/** 当前节点 ID（用于分布式锁 owner） */
 let currentNodeId: string = ''
 
 /** 锁过期时间（秒） */
@@ -64,14 +61,12 @@ export function setLogRepository(repo: SchedulerLogRepository | null): void {
  * 配置分布式锁
  *
  * 由 scheduler-main.ts 在 init 时调用，配置锁参数。
- * 分布式锁基于 @h-ai/cache 模块实现。
+ * 分布式锁基于 @h-ai/cache 模块实现，运行时通过 cache.isInitialized 动态检测可用性。
  *
- * @param enabled - 是否启用分布式锁
- * @param nodeId - 当前节点标识
+ * @param nodeId - 当前节点标识（用于 lock owner）
  * @param lockTtlSec - 锁过期时间（秒）
  */
-export function configureLock(enabled: boolean, nodeId: string, lockTtlSec: number): void {
-  lockEnabled = enabled
+export function configureLock(nodeId: string, lockTtlSec: number): void {
   currentNodeId = nodeId
   currentLockTtlSec = lockTtlSec
 }
@@ -131,9 +126,9 @@ function tick(): void {
 export async function runTask(task: TaskDefinition, minuteTimestamp?: number): Promise<TaskExecutionLog> {
   // 分布式锁：多节点场景下确保同一任务同一分钟只执行一次
   const lockKey = minuteTimestamp !== undefined ? `scheduler:${task.id}:${minuteTimestamp}` : undefined
-  if (lockEnabled && cache.isInitialized && lockKey) {
-    const acquired = await cache.lock.acquire(lockKey, { ttl: currentLockTtlSec, owner: currentNodeId })
-    if (!acquired.success || !acquired.data) {
+  if (cache.isInitialized && lockKey) {
+    const lockResult = await cache.lock.acquire(lockKey, { ttl: currentLockTtlSec, owner: currentNodeId })
+    if (lockResult.success && !lockResult.data) {
       logger.info('Skipping task, another node holds the lock', { taskId: task.id, minuteTimestamp })
       // 返回一条跳过日志（不持久化）
       return {
@@ -312,7 +307,6 @@ export function resetRunner(): void {
   runningTasks.clear()
   lastTickMinute = -1
   currentLogRepo = null
-  lockEnabled = false
   currentNodeId = ''
   currentLockTtlSec = 300
 }

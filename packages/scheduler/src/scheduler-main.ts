@@ -72,16 +72,15 @@ async function initDatabase(parsed: SchedulerConfig): Promise<SchedulerConfig> {
   // 通知 runner 使用日志仓库
   setLogRepository(logRepo)
 
-  // 配置分布式锁：基于 cache 模块，需要 cache 已初始化
+  // 配置分布式锁：基于 cache 模块，运行时动态检测 cache.isInitialized
   const nodeId = parsed.nodeId ?? crypto.randomUUID()
   const lockTtlSec = Math.ceil(parsed.lockExpireMs / 1000)
-  const cacheAvailable = cache.isInitialized
-  configureLock(cacheAvailable, nodeId, lockTtlSec)
-  if (cacheAvailable) {
+  configureLock(nodeId, lockTtlSec)
+  if (cache.isInitialized) {
     logger.info('Distributed lock configured (cache-based)', { nodeId, lockTtlSec })
   }
   else {
-    logger.warn('Cache module not initialized, distributed lock disabled')
+    logger.warn('Cache module not initialized, distributed lock will be enabled when cache becomes available')
   }
 
   return parsed
@@ -214,7 +213,7 @@ export const scheduler: SchedulerFunctions = {
         taskRepo = null
         logRepo = null
         setLogRepository(null)
-        configureLock(false, '', 300)
+        configureLock('', 300)
         logger.error('Scheduler initialization failed', { error })
         return err({
           code: SchedulerErrorCode.INIT_FAILED,
