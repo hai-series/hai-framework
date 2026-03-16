@@ -1,7 +1,7 @@
 /**
  * @h-ai/crypto — 密码操作
  *
- * 提供 argon2id 密码哈希与校验功能。
+ * 提供迭代加盐（SM3）密码哈希与校验功能。
  * @module crypto-password
  */
 
