@@ -33,6 +33,8 @@ const logger = core.logger.child({ module: 'cache', scope: 'main' })
 let currentProvider: CacheProvider | null = null
 /** 当前缓存配置（Zod parse 后）；init 后赋值，close 后置 null */
 let currentConfig: CacheConfig | null = null
+/** 并发初始化防护标志；防止多次 init() 同时执行导致资源泄漏 */
+let initInProgress = false
 
 // ─── Provider 工厂 ───
 
@@ -107,48 +109,63 @@ export const cache: CacheFunctions = {
    * ```
    */
   async init(config: CacheConfigInput): Promise<Result<void, CacheError>> {
-    if (currentProvider) {
-      logger.warn('Cache module is already initialized, reinitializing')
-      await cache.close()
-    }
-
-    logger.info('Initializing cache module')
-
-    const parseResult = CacheConfigSchema.safeParse(config)
-    if (!parseResult.success) {
-      logger.error('Cache config validation failed', { error: parseResult.error.message })
+    // 并发初始化防护：避免多次 init 同时执行导致 Provider 泄漏
+    if (initInProgress) {
+      logger.warn('Cache init already in progress, skipping concurrent call')
       return err({
-        code: CacheErrorCode.CONFIG_ERROR,
-        message: cacheM('cache_configError', { params: { error: parseResult.error.message } }),
-        cause: parseResult.error,
+        code: CacheErrorCode.OPERATION_FAILED,
+        message: cacheM('cache_operationFailed', { params: { error: 'Concurrent initialization detected' } }),
       })
     }
-    const parsed = parseResult.data
+    initInProgress = true
 
     try {
-      const provider = createProvider(parsed)
-      const connectResult = await provider.connect(parsed)
-      if (!connectResult.success) {
-        logger.error('Cache module initialization failed', {
-          code: connectResult.error.code,
-          message: connectResult.error.message,
-        })
-        return connectResult
+      if (currentProvider) {
+        logger.warn('Cache module is already initialized, reinitializing')
+        await cache.close()
       }
-      currentProvider = provider
-      currentConfig = parsed
-      logger.info('Cache module initialized', { type: parsed.type })
-      return ok(undefined)
+
+      logger.info('Initializing cache module')
+
+      const parseResult = CacheConfigSchema.safeParse(config)
+      if (!parseResult.success) {
+        logger.error('Cache config validation failed', { error: parseResult.error.message })
+        return err({
+          code: CacheErrorCode.CONFIG_ERROR,
+          message: cacheM('cache_configError', { params: { error: parseResult.error.message } }),
+          cause: parseResult.error,
+        })
+      }
+      const parsed = parseResult.data
+
+      try {
+        const provider = createProvider(parsed)
+        const connectResult = await provider.connect(parsed)
+        if (!connectResult.success) {
+          logger.error('Cache module initialization failed', {
+            code: connectResult.error.code,
+            message: connectResult.error.message,
+          })
+          return connectResult
+        }
+        currentProvider = provider
+        currentConfig = parsed
+        logger.info('Cache module initialized', { type: parsed.type })
+        return ok(undefined)
+      }
+      catch (error) {
+        logger.error('Cache module initialization failed', { error })
+        return err({
+          code: CacheErrorCode.CONNECTION_FAILED,
+          message: cacheM('cache_initFailed', {
+            params: { error: error instanceof Error ? error.message : String(error) },
+          }),
+          cause: error,
+        })
+      }
     }
-    catch (error) {
-      logger.error('Cache module initialization failed', { error })
-      return err({
-        code: CacheErrorCode.CONNECTION_FAILED,
-        message: cacheM('cache_initFailed', {
-          params: { error: error instanceof Error ? error.message : String(error) },
-        }),
-        cause: error,
-      })
+    finally {
+      initInProgress = false
     }
   },
 
