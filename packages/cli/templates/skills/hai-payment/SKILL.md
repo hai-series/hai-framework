@@ -257,9 +257,25 @@ export const POST = kit.handler(async ({ request, locals }) => {
 
 ---
 
+## 审计日志
+
+关键支付操作成功后自动写入审计日志（依赖 `@h-ai/audit`），无需额外配置。失败仅 warn，不影响支付流程。
+
+| 操作 | `action` | `resource` | `resourceId` | `details` |
+| --- | --- | --- | --- | --- |
+| 创建订单 | `create_order` | `payment` | `orderNo` | `{ provider, amount, tradeType }` |
+| 支付回调 | `payment_notify` | `payment` | `orderNo` | `{ provider, transactionId, status, amount }` |
+| 退款 | `refund` | `payment` | `orderNo` | `{ provider, refundNo, amount }` |
+| 关闭订单 | `close_order` | `payment` | `orderNo` | `{ provider }` |
+
+> `queryOrder` 为只读操作，不写审计日志。
+
+---
+
 ## 相关 Skills
 
 - `hai-kit`：服务端 API 路由与契约处理
 - `hai-api-client`：客户端契约调用
 - `hai-reldb`：订单持久化存储
+- `hai-audit`：审计日志（payment 内部自动调用）
 - `hai-core`：Result 类型、日志、配置
