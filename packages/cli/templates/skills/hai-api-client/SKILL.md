@@ -31,6 +31,10 @@ await api.init({
   baseUrl: 'http://localhost:3000',
   auth: {
     refreshUrl: '/auth/refresh',
+    // Token 刷新失败回调（可选，常用于跳转登录页）
+    onRefreshFailed: () => {
+      window.location.href = '/login'
+    },
   },
   timeout: 15000,
 })
@@ -59,15 +63,15 @@ const page = await api.get<PageResult>('/api/v1/users', { page: 1, pageSize: 20 
 ```typescript
 import { iamEndpoints } from '@h-ai/iam/api'
 
-// 类型安全：入参和返回值由 EndpointDef 的 Zod schema 推导
+// 类型安全：入参和返回值由 EndpointDef 的 Zod schema 推导，入参/出参双向校验
 const loginResult = await api.call(iamEndpoints.login, {
-  username: 'admin',
+  identifier: 'admin',
   password: 'StrongPassword123',
 })
 
 if (loginResult.success) {
   // loginResult.data 类型自动推导为 { user, tokens, agreements? }
-  console.log(loginResult.data.tokens.accessToken)
+  await api.auth.setTokens(loginResult.data.tokens)
 }
 ```
 
@@ -126,7 +130,7 @@ await api.close()
 | `api.put<T>(path, body?)`          | PUT 请求       | —                                     |
 | `api.patch<T>(path, body?)`        | PATCH 请求     | —                                     |
 | `api.delete<T>(path, params?)`     | DELETE 请求    | params 附加到 URL query string        |
-| `api.call(endpoint, input)`        | 契约调用       | 入参 Zod 校验，路径/方法由契约决定    |
+| `api.call(endpoint, input)`        | 契约调用       | 入参/出参 Zod 双向校验，路径/方法由契约决定 |
 | `api.upload(path, file, options?)`  | 文件上传       | FormData，支持附加字段                |
 | `api.stream(path, body?)`          | 流式请求       | 返回 AsyncIterable<string>（SSE）     |
 | `api.auth.setTokens(tokens)`       | 设置 Token     | 存入 TokenStorage                     |
@@ -142,7 +146,7 @@ interface EndpointDef<TInput, TOutput> {
   input: ZodSchema<TInput>
   output: ZodSchema<TOutput>
   requireAuth?: boolean
-  meta?: Record<string, unknown>
+  meta?: { summary?: string; tags?: string[] }
 }
 ```
 
@@ -206,8 +210,9 @@ App 端使用 `@h-ai/capacitor` 的 `createCapacitorTokenStorage()`。
 ### 客户端流程（本模块责任）
 
 1. 从 `@h-ai/xx/api` 导入 `xxEndpoints`
-2. `api.call(xxEndpoints.xxx, input)` → 自动 Zod 校验入参 → 按 method/path 发起 HTTP → 自动 Zod 校验出参
-3. 返回 `Result<TOutput, ApiClientError>`
+2. `api.call(xxEndpoints.xxx, input)` → Zod 校验入参 → 按 method/path 发起 HTTP → Zod 校验出参
+3. 入参或出参校验失败均返回 `VALIDATION_FAILED`（1206）
+4. 返回 `Result<TOutput, ApiClientError>`
 
 ```typescript
 import { storageEndpoints } from '@h-ai/storage/api'
@@ -255,19 +260,65 @@ const chat = await api.call(aiEndpoints.sendMessage, {
 ```typescript
 import { iamEndpoints } from '@h-ai/iam/api'
 
-// 登录
-const login = await api.call(iamEndpoints.login, { username, password })
+// 登录（入参字段为 identifier + password）
+const login = await api.call(iamEndpoints.login, { identifier, password })
 if (login.success) {
+  // login.data 类型：{ user, tokens, agreements? }
   await api.auth.setTokens(login.data.tokens)
 }
 
-// 获取当前用户
+// 获取当前用户（自动携带 Bearer Token）
 const me = await api.call(iamEndpoints.currentUser, {})
+// me.data 类型：{ user, roles, permissions }
+
+// 修改密码
+await api.call(iamEndpoints.changePassword, { oldPassword, newPassword })
 
 // 登出
-await api.call(iamEndpoints.logout, {})
+const accessToken = '...' // 从 Token 存储获取
+await api.call(iamEndpoints.logout, { accessToken })
 await api.auth.clear()
 ```
+
+#### 401 自动刷新机制
+
+当请求收到 401 响应时，客户端自动执行：
+
+1. 使用存储的 `refreshToken` 调用 `auth.refreshUrl`（POST）
+2. 刷新成功 → 更新存储 → 用新 Token 重试原请求（仅重试一次）
+3. 刷新失败 → 清空 Token → 触发 `onRefreshFailed` 回调
+4. 多个并发 401 → **自动去重**，只发一次刷新请求
+
+> 流式请求（`api.stream()`）同样支持 401 自动刷新 + 重试。
+
+#### 可用的 IAM 端点
+
+| 分类 | 端点 | 方法 | 路径 | 认证 |
+|------|------|------|------|------|
+| 认证 | `iamEndpoints.login` | POST | /auth/login | 否 |
+| | `iamEndpoints.loginWithOtp` | POST | /auth/login/otp | 否 |
+| | `iamEndpoints.logout` | POST | /auth/logout | 是 |
+| | `iamEndpoints.currentUser` | GET | /auth/me | 是 |
+| | `iamEndpoints.refreshToken` | POST | /auth/refresh | 否 |
+| | `iamEndpoints.sendOtp` | POST | /auth/otp/send | 否 |
+| | `iamEndpoints.register` | POST | /auth/register | 否 |
+| | `iamEndpoints.changePassword` | POST | /auth/change-password | 是 |
+| | `iamEndpoints.updateCurrentUser` | PUT | /auth/me | 是 |
+| 用户管理 | `iamEndpoints.listUsers` | GET | /iam/users | 是 |
+| | `iamEndpoints.getUser` | GET | /iam/users/:id | 是 |
+| | `iamEndpoints.createUser` | POST | /iam/users | 是 |
+| | `iamEndpoints.updateUser` | PUT | /iam/users/:id | 是 |
+| | `iamEndpoints.deleteUser` | DELETE | /iam/users/:id | 是 |
+| | `iamEndpoints.adminResetPassword` | POST | /iam/users/:id/reset-password | 是 |
+| 角色管理 | `iamEndpoints.listRoles` | GET | /iam/roles | 是 |
+| | `iamEndpoints.getRole` | GET | /iam/roles/:id | 是 |
+| | `iamEndpoints.createRole` | POST | /iam/roles | 是 |
+| | `iamEndpoints.updateRole` | PUT | /iam/roles/:id | 是 |
+| | `iamEndpoints.deleteRole` | DELETE | /iam/roles/:id | 是 |
+| 权限管理 | `iamEndpoints.listPermissions` | GET | /iam/permissions | 是 |
+| | `iamEndpoints.getPermission` | GET | /iam/permissions/:id | 是 |
+| | `iamEndpoints.createPermission` | POST | /iam/permissions | 是 |
+| | `iamEndpoints.deletePermission` | DELETE | /iam/permissions/:id | 是 |
 
 ### Android App 中使用
 

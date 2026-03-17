@@ -75,7 +75,7 @@ export function createTokenManager(
       return null
     }
 
-    logger.info('Refreshing token', { url: refreshUrl })
+    logger.debug('Refreshing token', { url: refreshUrl })
 
     try {
       const response = await fetchFn(refreshUrl, {
@@ -99,7 +99,13 @@ export function createTokenManager(
         return null
       }
 
-      const tokens = parsed.data as TokenPair
+      // 提供默认值，避免 as TokenPair 不安全强转
+      const tokens: TokenPair = {
+        accessToken: parsed.data.accessToken,
+        refreshToken: parsed.data.refreshToken,
+        expiresIn: parsed.data.expiresIn ?? 3600,
+        tokenType: 'Bearer',
+      }
       await storage.setAccessToken(tokens.accessToken)
       await storage.setRefreshToken(tokens.refreshToken)
       logger.info('Token refreshed successfully')
