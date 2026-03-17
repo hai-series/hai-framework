@@ -6,7 +6,7 @@
 
 import type { PaymentProvider } from '../src/payment-types'
 import { err, ok } from '@h-ai/core'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { PaymentErrorCode } from '../src/payment-config'
 import {
   clearProviders,
@@ -18,6 +18,22 @@ import {
   refund,
   registerProvider,
 } from '../src/payment-functions'
+
+// mock @h-ai/audit 模块，使 payment-functions 内部的 audit.log 可被断言
+const mockAuditLog = vi.fn(async () => ok(undefined as never))
+vi.mock('@h-ai/audit', () => ({
+  audit: {
+    init: vi.fn(),
+    close: vi.fn(),
+    isInitialized: true,
+    log: mockAuditLog,
+    list: vi.fn(),
+    getUserRecent: vi.fn(),
+    cleanup: vi.fn(),
+    getStats: vi.fn(),
+    helper: {},
+  },
+}))
 
 /** 创建 mock Provider */
 function createMockProvider(name: string): PaymentProvider {
@@ -130,6 +146,7 @@ describe('payment-functions', () => {
 
 afterEach(() => {
   clearProviders()
+  mockAuditLog.mockClear()
 })
 
 describe('payment-functions — handleNotify', () => {
@@ -287,5 +304,122 @@ describe('payment-functions — Provider 返回错误的透传', () => {
     if (!result.success) {
       expect(result.error.code).toBe(PaymentErrorCode.INVALID_AMOUNT)
     }
+  })
+})
+
+// ─── 审计日志集成测试（通过 vi.mock 拦截 @h-ai/audit） ───
+
+describe('payment-functions — 审计日志', () => {
+  afterEach(() => {
+    mockAuditLog.mockClear()
+  })
+
+  it('createOrder 成功后写审计日志', async () => {
+    registerProvider(createMockProvider('mock'))
+
+    const result = await createOrder('mock', {
+      orderNo: 'ORD001',
+      amount: 100,
+      description: '测试',
+      tradeType: 'jsapi',
+      notifyUrl: 'https://example.com/notify',
+    })
+
+    expect(result.success).toBe(true)
+    expect(mockAuditLog).toHaveBeenCalledOnce()
+    expect(mockAuditLog).toHaveBeenCalledWith({
+      action: 'create_order',
+      resource: 'payment',
+      resourceId: 'ORD001',
+      details: { provider: 'mock', amount: 100, tradeType: 'jsapi' },
+    })
+  })
+
+  it('handleNotify 成功后写审计日志', async () => {
+    registerProvider(createMockProvider('mock'))
+
+    const result = await handleNotify('mock', { body: '{}', headers: {} })
+
+    expect(result.success).toBe(true)
+    expect(mockAuditLog).toHaveBeenCalledOnce()
+    expect(mockAuditLog).toHaveBeenCalledWith({
+      action: 'payment_notify',
+      resource: 'payment',
+      resourceId: 'ORD001',
+      details: { provider: 'mock', transactionId: 'TXN001', status: 'paid', amount: 100 },
+    })
+  })
+
+  it('refund 成功后写审计日志', async () => {
+    registerProvider(createMockProvider('mock'))
+
+    const result = await refund('mock', {
+      orderNo: 'ORD001',
+      refundNo: 'RF001',
+      amount: 50,
+    })
+
+    expect(result.success).toBe(true)
+    expect(mockAuditLog).toHaveBeenCalledOnce()
+    expect(mockAuditLog).toHaveBeenCalledWith({
+      action: 'refund',
+      resource: 'payment',
+      resourceId: 'ORD001',
+      details: { provider: 'mock', refundNo: 'RF001', amount: 50 },
+    })
+  })
+
+  it('closeOrder 成功后写审计日志', async () => {
+    registerProvider(createMockProvider('mock'))
+
+    const result = await closeOrder('mock', 'ORD001')
+
+    expect(result.success).toBe(true)
+    expect(mockAuditLog).toHaveBeenCalledOnce()
+    expect(mockAuditLog).toHaveBeenCalledWith({
+      action: 'close_order',
+      resource: 'payment',
+      resourceId: 'ORD001',
+      details: { provider: 'mock' },
+    })
+  })
+
+  it('操作失败时不写审计日志', async () => {
+    // Provider 未注册，操作失败
+    const result = await createOrder('nonexistent', {
+      orderNo: 'ORD',
+      amount: 100,
+      description: '测试',
+      tradeType: 'jsapi',
+      notifyUrl: 'https://example.com/n',
+    })
+
+    expect(result.success).toBe(false)
+    expect(mockAuditLog).not.toHaveBeenCalled()
+  })
+
+  it('审计日志写入失败不影响支付操作结果', async () => {
+    registerProvider(createMockProvider('mock'))
+    mockAuditLog.mockResolvedValueOnce(err({ code: 10000, message: 'audit write failed' }) as never)
+
+    const result = await createOrder('mock', {
+      orderNo: 'ORD001',
+      amount: 100,
+      description: '测试',
+      tradeType: 'jsapi',
+      notifyUrl: 'https://example.com/n',
+    })
+
+    expect(result.success).toBe(true)
+    expect(mockAuditLog).toHaveBeenCalledOnce()
+  })
+
+  it('queryOrder 不写审计日志（读操作）', async () => {
+    registerProvider(createMockProvider('mock'))
+
+    const result = await queryOrder('mock', 'ORD001')
+
+    expect(result.success).toBe(true)
+    expect(mockAuditLog).not.toHaveBeenCalled()
   })
 })

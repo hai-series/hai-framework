@@ -5,6 +5,7 @@
  * @module payment-functions
  */
 
+import type { CreateAuditLogInput } from '@h-ai/audit'
 import type { Result } from '@h-ai/core'
 import type {
   CreateOrderInput,
@@ -17,12 +18,25 @@ import type {
   RefundInput,
   RefundResult,
 } from './payment-types.js'
-import { err, ok } from '@h-ai/core'
+import { audit } from '@h-ai/audit'
+import { core, err, ok } from '@h-ai/core'
 import { PaymentErrorCode } from './payment-config.js'
 import { paymentM } from './payment-i18n.js'
 
+const logger = core.logger.child({ module: 'payment', scope: 'functions' })
+
 /** Provider 注册表 */
 const providers = new Map<string, PaymentProvider>()
+
+/**
+ * 写审计日志（失败仅 warn，不影响支付操作）
+ */
+async function auditLog(input: CreateAuditLogInput): Promise<void> {
+  const result = await audit.log(input)
+  if (!result.success) {
+    logger.warn('Failed to write payment audit log', { action: input.action, error: result.error.message })
+  }
+}
 
 /**
  * 注册支付 Provider
@@ -70,7 +84,16 @@ export async function createOrder(
   const result = requireProvider(providerName)
   if (!result.success)
     return result
-  return result.data.createOrder(input)
+  const orderResult = await result.data.createOrder(input)
+  if (orderResult.success) {
+    await auditLog({
+      action: 'create_order',
+      resource: 'payment',
+      resourceId: input.orderNo,
+      details: { provider: providerName, amount: input.amount, tradeType: input.tradeType },
+    })
+  }
+  return orderResult
 }
 
 /**
@@ -86,7 +109,16 @@ export async function handleNotify(
   const result = requireProvider(providerName)
   if (!result.success)
     return result
-  return result.data.handleNotify(request)
+  const notifyResult = await result.data.handleNotify(request)
+  if (notifyResult.success) {
+    await auditLog({
+      action: 'payment_notify',
+      resource: 'payment',
+      resourceId: notifyResult.data.orderNo,
+      details: { provider: providerName, transactionId: notifyResult.data.transactionId, status: notifyResult.data.status, amount: notifyResult.data.amount },
+    })
+  }
+  return notifyResult
 }
 
 /**
@@ -118,7 +150,16 @@ export async function refund(
   const result = requireProvider(providerName)
   if (!result.success)
     return result
-  return result.data.refund(input)
+  const refundResult = await result.data.refund(input)
+  if (refundResult.success) {
+    await auditLog({
+      action: 'refund',
+      resource: 'payment',
+      resourceId: input.orderNo,
+      details: { provider: providerName, refundNo: input.refundNo, amount: input.amount },
+    })
+  }
+  return refundResult
 }
 
 /**
@@ -134,7 +175,16 @@ export async function closeOrder(
   const result = requireProvider(providerName)
   if (!result.success)
     return result
-  return result.data.closeOrder(orderNo)
+  const closeResult = await result.data.closeOrder(orderNo)
+  if (closeResult.success) {
+    await auditLog({
+      action: 'close_order',
+      resource: 'payment',
+      resourceId: orderNo,
+      details: { provider: providerName },
+    })
+  }
+  return closeResult
 }
 
 /**
