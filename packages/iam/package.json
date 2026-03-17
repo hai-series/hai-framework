@@ -36,6 +36,7 @@
     "clean": "rimraf dist .turbo"
   },
   "dependencies": {
+    "@h-ai/audit": "workspace:*",
     "@h-ai/cache": "workspace:*",
     "@h-ai/core": "workspace:*",
     "@h-ai/crypto": "workspace:*",

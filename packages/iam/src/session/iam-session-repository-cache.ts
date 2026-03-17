@@ -1,27 +1,35 @@
 /**
- * @h-ai/iam — 会话映射缓存实现
+ * @h-ai/iam — 会话缓存存储实现
  *
- * 基于 @h-ai/cache 的会话映射实现： - token -> session: iam:token:{token} - user -> tokens: iam:user:{userId}:tokens
+ * 基于 @h-ai/cache 的会话存储，统一管理三组缓存键：
+ * - `hai:iam:token:{accessToken}` → Session（含 _tokenPair）
+ * - `hai:iam:user:{userId}:tokens` → Set\<accessToken\>
+ * - `hai:iam:refresh:{refreshToken}` → { userId, accessToken }
+ *
  * @module iam-session-repository-cache
  */
 
 import type { CacheFunctions } from '@h-ai/cache'
 import type { Result } from '@h-ai/core'
 import type { IamError } from '../iam-types.js'
-import type { Session } from './iam-session-types.js'
+import type { Session, TokenPair } from './iam-session-types.js'
 import { err, ok } from '@h-ai/core'
 
 import { IamErrorCode } from '../iam-config.js'
 import { iamM } from '../iam-i18n.js'
+import { applySessionPatch, getSessionTtl } from './iam-session-utils.js'
 
-const TOKEN_KEY_PREFIX = 'iam:token:'
-const USER_TOKENS_KEY_PREFIX = 'iam:user:'
+// ─── 缓存键前缀 ───
+
+const TOKEN_KEY_PREFIX = 'hai:iam:token:'
+const USER_TOKENS_KEY_PREFIX = 'hai:iam:user:'
+const REFRESH_TOKEN_PREFIX = 'hai:iam:refresh:'
 
 /**
  * 构建令牌对应的缓存 key
  *
  * @param token - 访问令牌
- * @returns 格式：`iam:token:{token}`
+ * @returns 格式：`hai:iam:token:{token}`
  */
 export function buildTokenKey(token: string): string {
   return `${TOKEN_KEY_PREFIX}${token}`
@@ -31,19 +39,18 @@ export function buildTokenKey(token: string): string {
  * 构建用户令牌集合的缓存 key
  *
  * @param userId - 用户 ID
- * @returns 格式：`iam:user:{userId}:tokens`
+ * @returns 格式：`hai:iam:user:{userId}:tokens`
  */
 export function buildUserTokensKey(userId: string): string {
   return `${USER_TOKENS_KEY_PREFIX}${userId}:tokens`
 }
 
+function buildRefreshKey(refreshToken: string): string {
+  return `${REFRESH_TOKEN_PREFIX}${refreshToken}`
+}
+
 /**
  * 修复从缓存反序列化后的日期字段
- *
- * 缓存存储后日期可能为字符串，需要重新转为 Date 对象。
- *
- * @param session - 缓存中读取的会话数据
- * @returns 日期字段已修复的 Session 对象
  */
 function restoreSessionDates(session: Session): Session {
   return {
@@ -54,69 +61,142 @@ function restoreSessionDates(session: Session): Session {
   }
 }
 
-// ─── 会话映射存储接口 ───
+// ─── 会话存储接口 ───
 
 /**
- * 会话映射存储接口
+ * 会话存储接口
+ *
+ * 统一管理 accessToken、userTokens、refreshToken 三组缓存键，
+ * 对上层提供面向会话的操作语义。
  */
-export interface SessionMappingRepository {
+export interface SessionRepository {
   /**
-   * 存储会话（key: iam:token:{token}）
+   * 保存会话
+   *
+   * 同时创建三个缓存条目：
+   * - accessToken → session（含 _tokenPair）
+   * - userId → Set\<accessToken\>
+   * - refreshToken → { userId, accessToken }
+   *
+   * @param session - 会话数据（data 中应已包含 _tokenPair）
+   * @param tokenPair - 令牌对（用于存储 refreshToken 映射）
    */
-  set: (token: string, session: Session, ttl: number) => Promise<Result<void, IamError>>
+  save: (session: Session, tokenPair: TokenPair) => Promise<Result<void, IamError>>
 
   /**
-   * 获取会话
+   * 根据 accessToken 获取会话
    */
-  get: (token: string) => Promise<Result<Session | null, IamError>>
+  getByAccessToken: (accessToken: string) => Promise<Result<Session | null, IamError>>
 
   /**
-   * 删除会话
+   * 根据 accessToken 更新会话
+   *
+   * 合并 patch 到现有会话后写回缓存，同时保留剩余 TTL。
+   *
+   * @param accessToken - 访问令牌
+   * @param data - 要更新的字段
    */
-  delete: (token: string) => Promise<Result<void, IamError>>
+  updateByAccessToken: (accessToken: string, data: Partial<Session>) => Promise<Result<void, IamError>>
 
   /**
-   * 获取用户的所有令牌
+   * 根据 accessToken 删除会话
+   *
+   * 同时清理三个缓存条目（accessToken 映射、用户令牌集合成员、refreshToken 映射）。
    */
-  getUserTokens: (userId: string) => Promise<Result<string[], IamError>>
+  removeByAccessToken: (accessToken: string) => Promise<Result<void, IamError>>
 
   /**
-   * 添加用户令牌映射
+   * 删除用户的所有会话
+   *
+   * 遍历用户令牌集合，逐一删除关联的三个缓存条目，最后删除集合本身。
    */
-  addUserToken: (userId: string, token: string) => Promise<Result<void, IamError>>
+  removeByUserId: (userId: string) => Promise<Result<void, IamError>>
 
   /**
-   * 移除用户令牌映射
+   * 根据 refreshToken 获取关联的会话
+   *
+   * 先查 refreshToken 映射获取 accessToken，再查 accessToken 获取会话。
+   * 若 refreshToken 有效但 session 已过期（TTL 到期），返回 null。
    */
-  removeUserToken: (userId: string, token: string) => Promise<Result<void, IamError>>
+  getByRefreshToken: (refreshToken: string) => Promise<Result<Session | null, IamError>>
+
+  /**
+   * 仅删除 refreshToken 映射（不影响 accessToken 会话）
+   */
+  removeRefreshToken: (refreshToken: string) => Promise<Result<void, IamError>>
+
+  /**
+   * 批量更新用户所有活跃会话的指定字段
+   *
+   * 遍历用户令牌集合，合并 updates 到每个会话后写回缓存，
+   * 同时清理已失效的令牌。
+   *
+   * @param userId - 用户 ID
+   * @param updates - 要合并到会话的字段（如 { roles, permissions }）
+   */
+  patchUserSessions: (userId: string, updates: Record<string, unknown>) => Promise<Result<void, IamError>>
 }
 
 /**
- * 创建基于缓存的会话映射存储
- *
- * 使用 @h-ai/cache 实现 token→session 和 user→tokens 的映射存储。
- * 用户令牌集合（Set）会在每次添加令牌时刷新 TTL，防止僵尸键无限膨胀。
+ * 创建基于缓存的会话存储
  *
  * @param cache - 缓存服务实例
  * @param sessionMaxAge - 会话最大有效期（秒），用于设置用户令牌集合的 TTL
- * @returns 会话映射存储接口实现
+ * @param refreshTokenMaxAge - refreshToken 最大有效期（秒）
+ * @returns 会话存储接口实现
  */
-export function createCacheSessionMappingRepository(cache: CacheFunctions, sessionMaxAge = 86400): SessionMappingRepository {
-  return {
-    async set(token, session, ttl): Promise<Result<void, IamError>> {
-      const result = await cache.kv.set(buildTokenKey(token), session, { ex: ttl })
-      if (!result.success) {
+export function createCacheSessionRepository(
+  cache: CacheFunctions,
+  sessionMaxAge: number,
+  refreshTokenMaxAge: number,
+): SessionRepository {
+  const repo: SessionRepository = {
+    async save(session, tokenPair): Promise<Result<void, IamError>> {
+      const accessToken = session.accessToken
+      const userId = session.userId
+      const ttl = getSessionTtl(session)
+
+      // 1. accessToken → session（带 TTL）
+      const setResult = await cache.kv.set(buildTokenKey(accessToken), session, { ex: ttl })
+      if (!setResult.success) {
         return err({
           code: IamErrorCode.REPOSITORY_ERROR,
-          message: iamM('iam_saveSessionMappingCacheFailed', { params: { message: result.error.message } }),
-          cause: result.error,
+          message: iamM('iam_saveSessionMappingCacheFailed', { params: { message: setResult.error.message } }),
+          cause: setResult.error,
         })
       }
+
+      // 2. userId → Set<accessToken>
+      const saddResult = await cache.set_.sadd(buildUserTokensKey(userId), accessToken)
+      if (!saddResult.success) {
+        return err({
+          code: IamErrorCode.REPOSITORY_ERROR,
+          message: iamM('iam_saveUserSessionCacheFailed', { params: { message: saddResult.error.message } }),
+          cause: saddResult.error,
+        })
+      }
+      // 刷新集合 TTL（2 倍会话最大有效期，防止僵尸键）
+      await cache.kv.expire(buildUserTokensKey(userId), sessionMaxAge * 2)
+
+      // 3. refreshToken → { userId, accessToken }
+      const refreshResult = await cache.kv.set(
+        buildRefreshKey(tokenPair.refreshToken),
+        { userId, accessToken },
+        { ex: refreshTokenMaxAge },
+      )
+      if (!refreshResult.success) {
+        return err({
+          code: IamErrorCode.REPOSITORY_ERROR,
+          message: iamM('iam_saveSessionMappingCacheFailed', { params: { message: refreshResult.error.message } }),
+          cause: refreshResult.error,
+        })
+      }
+
       return ok(undefined)
     },
 
-    async get(token): Promise<Result<Session | null, IamError>> {
-      const result = await cache.kv.get<Session>(buildTokenKey(token))
+    async getByAccessToken(accessToken): Promise<Result<Session | null, IamError>> {
+      const result = await cache.kv.get<Session>(buildTokenKey(accessToken))
       if (!result.success) {
         return err({
           code: IamErrorCode.REPOSITORY_ERROR,
@@ -130,8 +210,83 @@ export function createCacheSessionMappingRepository(cache: CacheFunctions, sessi
       return ok(restoreSessionDates(result.data))
     },
 
-    async delete(token): Promise<Result<void, IamError>> {
-      const result = await cache.kv.del(buildTokenKey(token))
+    async updateByAccessToken(accessToken, data): Promise<Result<void, IamError>> {
+      const sessionResult = await repo.getByAccessToken(accessToken)
+      if (!sessionResult.success) {
+        return sessionResult as Result<void, IamError>
+      }
+      if (!sessionResult.data) {
+        return err({
+          code: IamErrorCode.SESSION_NOT_FOUND,
+          message: iamM('iam_sessionNotExist'),
+        })
+      }
+
+      const nextSession = applySessionPatch(sessionResult.data, data)
+      const ttl = getSessionTtl(nextSession)
+
+      const setResult = await cache.kv.set(buildTokenKey(accessToken), nextSession, { ex: ttl })
+      if (!setResult.success) {
+        return err({
+          code: IamErrorCode.REPOSITORY_ERROR,
+          message: iamM('iam_saveSessionMappingCacheFailed', { params: { message: setResult.error.message } }),
+          cause: setResult.error,
+        })
+      }
+      return ok(undefined)
+    },
+
+    async removeByAccessToken(accessToken): Promise<Result<void, IamError>> {
+      // 读取 session 以获取 userId 和 _tokenPair.refreshToken
+      const sessionResult = await cache.kv.get<Session>(buildTokenKey(accessToken))
+      if (sessionResult.success && sessionResult.data) {
+        const session = sessionResult.data as Session & { data?: { _tokenPair?: TokenPair } }
+
+        // 从用户令牌集合中移除
+        await cache.set_.srem(buildUserTokensKey(session.userId), accessToken)
+
+        // 删除 refreshToken 映射
+        const tokenPair = session.data?._tokenPair
+        if (tokenPair?.refreshToken) {
+          await cache.kv.del(buildRefreshKey(tokenPair.refreshToken))
+        }
+      }
+
+      // 删除 session 本身
+      await cache.kv.del(buildTokenKey(accessToken))
+      return ok(undefined)
+    },
+
+    async removeByUserId(userId): Promise<Result<void, IamError>> {
+      const tokensResult = await cache.set_.smembers<string>(buildUserTokensKey(userId))
+      if (tokensResult.success) {
+        for (const token of tokensResult.data) {
+          await repo.removeByAccessToken(token)
+        }
+      }
+      // 清理用户令牌集合本身
+      await cache.kv.del(buildUserTokensKey(userId))
+      return ok(undefined)
+    },
+
+    async getByRefreshToken(refreshToken): Promise<Result<Session | null, IamError>> {
+      const mappingResult = await cache.kv.get<{ userId: string, accessToken: string }>(buildRefreshKey(refreshToken))
+      if (!mappingResult.success) {
+        return err({
+          code: IamErrorCode.REPOSITORY_ERROR,
+          message: iamM('iam_querySessionMappingCacheFailed', { params: { message: mappingResult.error.message } }),
+          cause: mappingResult.error,
+        })
+      }
+      if (!mappingResult.data) {
+        return ok(null)
+      }
+
+      return repo.getByAccessToken(mappingResult.data.accessToken)
+    },
+
+    async removeRefreshToken(refreshToken): Promise<Result<void, IamError>> {
+      const result = await cache.kv.del(buildRefreshKey(refreshToken))
       if (!result.success) {
         return err({
           code: IamErrorCode.REPOSITORY_ERROR,
@@ -142,43 +297,51 @@ export function createCacheSessionMappingRepository(cache: CacheFunctions, sessi
       return ok(undefined)
     },
 
-    async getUserTokens(userId): Promise<Result<string[], IamError>> {
-      const result = await cache.set_.smembers<string>(buildUserTokensKey(userId))
-      if (!result.success) {
+    async patchUserSessions(userId, updates): Promise<Result<void, IamError>> {
+      const tokensResult = await cache.set_.smembers<string>(buildUserTokensKey(userId))
+      if (!tokensResult.success) {
         return err({
           code: IamErrorCode.REPOSITORY_ERROR,
-          message: iamM('iam_queryUserSessionCacheFailed', { params: { message: result.error.message } }),
-          cause: result.error,
+          message: iamM('iam_queryUserSessionCacheFailed', { params: { message: tokensResult.error.message } }),
+          cause: tokensResult.error,
         })
       }
-      return ok(result.data)
-    },
 
-    async addUserToken(userId, token): Promise<Result<void, IamError>> {
-      const result = await cache.set_.sadd(buildUserTokensKey(userId), token)
-      if (!result.success) {
-        return err({
-          code: IamErrorCode.REPOSITORY_ERROR,
-          message: iamM('iam_saveUserSessionCacheFailed', { params: { message: result.error.message } }),
-          cause: result.error,
-        })
-      }
-      // 刷新用户令牌集合 TTL，防止僵尸键无限膨胀
-      // TTL 为会话最大有效期的 2 倍，确保活跃会话不会被误清理
-      await cache.kv.expire(buildUserTokensKey(userId), sessionMaxAge * 2)
-      return ok(undefined)
-    },
+      const staleTokens: string[] = []
 
-    async removeUserToken(userId, token): Promise<Result<void, IamError>> {
-      const result = await cache.set_.srem(buildUserTokensKey(userId), token)
-      if (!result.success) {
-        return err({
-          code: IamErrorCode.REPOSITORY_ERROR,
-          message: iamM('iam_deleteUserSessionCacheFailed', { params: { message: result.error.message } }),
-          cause: result.error,
-        })
+      for (const token of tokensResult.data) {
+        const sessionKey = buildTokenKey(token)
+        const sessionResult = await cache.kv.get<Record<string, unknown>>(sessionKey)
+        if (!sessionResult.success || !sessionResult.data) {
+          staleTokens.push(token)
+          continue
+        }
+
+        const ttlResult = await cache.kv.ttl(sessionKey)
+        if (!ttlResult.success || ttlResult.data <= 0) {
+          staleTokens.push(token)
+          continue
+        }
+
+        const updated = { ...sessionResult.data, ...updates }
+        const setResult = await cache.kv.set(sessionKey, updated, { ex: ttlResult.data })
+        if (!setResult.success) {
+          return err({
+            code: IamErrorCode.REPOSITORY_ERROR,
+            message: iamM('iam_saveUserSessionCacheFailed', { params: { message: setResult.error.message } }),
+            cause: setResult.error,
+          })
+        }
       }
+
+      // 清理已失效的令牌
+      if (staleTokens.length > 0) {
+        await cache.set_.srem(buildUserTokensKey(userId), ...staleTokens)
+      }
+
       return ok(undefined)
     },
   }
+
+  return repo
 }

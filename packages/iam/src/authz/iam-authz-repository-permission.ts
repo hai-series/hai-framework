@@ -6,7 +6,7 @@
  */
 
 import type { Result } from '@h-ai/core'
-import type { DmlWithTxOperations, ReldbCrudCountOptions, ReldbCrudFieldDefinition, ReldbCrudRepository, ReldbError, ReldbFunctions } from '@h-ai/reldb'
+import type { DmlWithTxOperations, ReldbCrudFieldDefinition, ReldbCrudRepository, ReldbFunctions } from '@h-ai/reldb'
 import type { IamError } from '../iam-types.js'
 import type { Permission } from './iam-authz-types.js'
 import { err, ok } from '@h-ai/core'
@@ -23,7 +23,7 @@ export interface PermissionRepository extends ReldbCrudRepository<Permission> {
   /**
    * 根据代码获取权限
    */
-  findByCode: (code: string) => Promise<Result<Permission | null, IamError>>
+  findByCode: (code: string, tx?: DmlWithTxOperations) => Promise<Result<Permission | null, IamError>>
 }
 
 // ─── 权限存储实现 ───
@@ -31,7 +31,7 @@ export interface PermissionRepository extends ReldbCrudRepository<Permission> {
 /**
  * 权限表名
  */
-const TABLE_NAME = 'iam_permissions'
+const TABLE_NAME = 'hai_iam_permissions'
 
 const PERMISSION_FIELDS: ReldbCrudFieldDefinition[] = [
   {
@@ -156,16 +156,8 @@ class DbPermissionRepository extends BaseReldbCrudRepository<Permission> impleme
   }
 
   /** 根据权限代码查找权限 */
-  async findByCode(code: string): Promise<Result<Permission | null, IamError>> {
-    return this.findOneBy('code = ?', [code])
-  }
-
-  async exists(options?: ReldbCrudCountOptions, tx?: DmlWithTxOperations): Promise<Result<boolean, ReldbError>> {
-    const result = await this.count(options, tx)
-    if (!result.success) {
-      return result as Result<boolean, ReldbError>
-    }
-    return ok(result.data > 0)
+  async findByCode(code: string, tx?: DmlWithTxOperations): Promise<Result<Permission | null, IamError>> {
+    return this.findOneBy('code = ?', [code], tx)
   }
 
   private buildQueryError(error: { message: string }, cause: unknown): Result<never, IamError> {
@@ -176,8 +168,8 @@ class DbPermissionRepository extends BaseReldbCrudRepository<Permission> impleme
     })
   }
 
-  private async findOneBy(where: string, params: unknown[]): Promise<Result<Permission | null, IamError>> {
-    const result = await this.findAll({ where, params, limit: 1 })
+  private async findOneBy(where: string, params: unknown[], tx?: DmlWithTxOperations): Promise<Result<Permission | null, IamError>> {
+    const result = await this.findAll({ where, params, limit: 1 }, tx)
     if (!result.success) {
       return this.buildQueryError(result.error, result.error)
     }

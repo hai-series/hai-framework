@@ -127,6 +127,10 @@ export interface RegisterResult {
  * 仅允许修改个人资料相关字段，禁止修改安全字段（enabled、emailVerified、roles 等）。
  */
 export interface UpdateCurrentUserInput {
+  /** 用户名 */
+  username?: string
+  /** 邮箱 */
+  email?: string
   /** 显示名称 */
   displayName?: string
   /** 头像 URL */
@@ -167,8 +171,8 @@ export interface UserOperations {
   /**
    * 更新当前登录用户信息（通过 accessToken 识别用户）
    *
-   * 仅允许修改白名单字段（displayName、avatarUrl、phone、metadata），
-   * 禁止修改安全字段（enabled、emailVerified 等）。
+   * 仅允许修改白名单字段（username、email、displayName、avatarUrl、phone、metadata），
+   * 禁止修改安全字段（enabled、emailVerified 等）。修改 username/email 时自动校验唯一性。
    *
    * @param accessToken - 访问令牌
    * @param data - 要更新的字段（仅白名单字段）
@@ -267,11 +271,11 @@ export interface UserOperations {
   /**
    * 确认密码重置
    *
-   * 查询令牌 → 校验有效期与尝试次数 → 验证新密码强度 → 哈希并更新密码 → 标记令牌已使用 → 清除该用户所有会话。
+   * 验证新密码强度 → 验证令牌有效性与尝试次数 → 哈希并更新密码 → 删除令牌 → 清除该用户所有会话。
    *
    * @param token - 重置令牌（明文，由 requestPasswordReset 生成并由业务层发送给用户）
    * @param newPassword - 新密码
-   * @returns 成功返回 ok；令牌无效返回 RESET_TOKEN_INVALID，已过期返回 RESET_TOKEN_EXPIRED，尝试超限返回 RESET_TOKEN_MAX_ATTEMPTS
+   * @returns 成功返回 ok；令牌无效/过期返回 RESET_TOKEN_INVALID，尝试超限返回 RESET_TOKEN_MAX_ATTEMPTS
    */
   confirmPasswordReset: (token: string, newPassword: string) => Promise<Result<void, IamError>>
 

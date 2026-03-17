@@ -37,6 +37,16 @@ export interface ApiKeyStrategyConfig {
 }
 
 /**
+ * API Key 策略工厂返回值
+ */
+export interface ApiKeyStrategyResult {
+  /** 认证策略（用于通用登录流程） */
+  strategy: AuthStrategy
+  /** API Key 管理操作（用于 CRUD） */
+  apiKeyFunctions: ApiKeyOperations
+}
+
+/**
  * API Key 的前缀长度（用于存储和快速匹配）
  *
  * 例如密钥为 'hai_abc123def456...' 时，前缀为 'hai_abc123de'
@@ -258,14 +268,4 @@ export function createApiKeyStrategy(config: ApiKeyStrategyConfig): ApiKeyStrate
   }
 
   return { strategy, apiKeyFunctions }
-}
-
-/**
- * API Key 策略工厂返回值
- */
-export interface ApiKeyStrategyResult {
-  /** 认证策略（用于通用登录流程） */
-  strategy: AuthStrategy
-  /** API Key 管理操作（用于 CRUD） */
-  apiKeyFunctions: ApiKeyOperations
 }

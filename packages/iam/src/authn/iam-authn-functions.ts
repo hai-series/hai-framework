@@ -17,8 +17,8 @@ import type { AgreementDisplay, User } from '../user/iam-user-types.js'
 import type { ApiKeyOperations } from './apikey/iam-authn-apikey-types.js'
 import type { ApiKeyCredentials, AuthnOperations, AuthStrategy, Credentials, LdapCredentials, OtpCredentials, PasswordCredentials } from './iam-authn-types.js'
 import type { LdapClientFactory } from './ldap/iam-authn-ldap-strategy.js'
-import type { OtpStrategy } from './otp/iam-authn-otp-strategy.js'
-import type { PasswordStrategy } from './password/iam-authn-password-strategy.js'
+import type { OtpStrategyResult } from './otp/iam-authn-otp-strategy.js'
+import type { PasswordStrategyResult } from './password/iam-authn-password-strategy.js'
 
 import { core, err, ok } from '@h-ai/core'
 
@@ -61,8 +61,8 @@ export interface AuthnOperationsDeps {
 export interface AuthnOperationsResult {
   /** 对外暴露的认证操作（不含 registerAndLogin，由 iam-main 组合注入） */
   authn: Omit<AuthnOperations, 'registerAndLogin'>
-  /** 密码策略引用（仅供内部 user 子功能复用，对外不可见） */
-  passwordStrategy: PasswordStrategy
+  /** 密码策略结果（仅供内部 user 子功能复用，对外不可见） */
+  passwordStrategyResult: PasswordStrategyResult
   /** API Key 管理操作（仅在启用 apikey 登录时可用） */
   apiKeyFunctions: ApiKeyOperations | null
 }
@@ -95,7 +95,7 @@ export async function createAuthnOperations(deps: AuthnOperationsDeps): Promise<
     }
 
     // 密码策略
-    const passwordStrategy = createPasswordStrategy({
+    const passwordResult = createPasswordStrategy({
       passwordConfig: config.password,
       userRepository,
       maxLoginAttempts: securityConfig.maxLoginAttempts,
@@ -103,11 +103,11 @@ export async function createAuthnOperations(deps: AuthnOperationsDeps): Promise<
     })
 
     // OTP 策略
-    let otpStrategy: OtpStrategy | undefined
+    let otpResult: OtpStrategyResult | undefined
     const otpConfig = config.otp ? OtpConfigSchema.parse(config.otp) : undefined
     if (loginConfig.otp && otpConfig) {
-      const otpRepository = createCacheOtpRepository(cache, { onOtpSendEmail, onOtpSendSms })
-      otpStrategy = createOtpStrategy({
+      const otpRepository = createCacheOtpRepository(cache)
+      otpResult = createOtpStrategy({
         otpConfig,
         userRepository,
         otpRepository,
@@ -116,6 +116,8 @@ export async function createAuthnOperations(deps: AuthnOperationsDeps): Promise<
         maxLoginAttempts: securityConfig.maxLoginAttempts,
         lockoutDuration: securityConfig.lockoutDuration,
         onUserAutoRegistered,
+        onOtpSendEmail,
+        onOtpSendSms,
       })
     }
 
@@ -150,8 +152,9 @@ export async function createAuthnOperations(deps: AuthnOperationsDeps): Promise<
 
     // 组装认证操作
     const operations = buildAuthnOperations({
-      passwordStrategy,
-      otpStrategy,
+      passwordStrategy: passwordResult.strategy,
+      otpStrategy: otpResult?.strategy,
+      otpChallenge: otpResult?.challenge,
       ldapStrategy,
       apiKeyStrategy,
       sessionFunctions,
@@ -160,7 +163,7 @@ export async function createAuthnOperations(deps: AuthnOperationsDeps): Promise<
     })
 
     logger.info('Authn sub-feature initialized')
-    return ok({ authn: operations, passwordStrategy, apiKeyFunctions })
+    return ok({ authn: operations, passwordStrategyResult: passwordResult, apiKeyFunctions })
   }
   catch (error) {
     logger.error('Authn sub-feature initialization failed', { error })
@@ -175,8 +178,9 @@ export async function createAuthnOperations(deps: AuthnOperationsDeps): Promise<
 // ─── 内部实现 ───
 
 interface BuildAuthnDeps {
-  passwordStrategy: PasswordStrategy
-  otpStrategy?: OtpStrategy
+  passwordStrategy: AuthStrategy
+  otpStrategy?: AuthStrategy
+  otpChallenge?: (identifier: string) => Promise<Result<{ expiresAt: Date }, IamError>>
   ldapStrategy?: AuthStrategy
   apiKeyStrategy?: AuthStrategy
   sessionFunctions: SessionOperations
@@ -193,6 +197,7 @@ function buildAuthnOperations(deps: BuildAuthnDeps): Omit<AuthnOperations, 'regi
   const {
     passwordStrategy,
     otpStrategy,
+    otpChallenge,
     ldapStrategy,
     apiKeyStrategy,
     sessionFunctions,
@@ -436,14 +441,14 @@ function buildAuthnOperations(deps: BuildAuthnDeps): Omit<AuthnOperations, 'regi
         return disabled as Result<{ expiresAt: Date }, IamError>
       }
 
-      if (!otpStrategy) {
+      if (!otpChallenge) {
         return err({
           code: IamErrorCode.STRATEGY_NOT_SUPPORTED,
           message: iamM('iam_otpStrategyRequiredForSend'),
         })
       }
 
-      return otpStrategy.challenge(identifier)
+      return otpChallenge(identifier)
     },
   }
 }

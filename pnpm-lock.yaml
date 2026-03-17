@@ -1103,6 +1103,9 @@ importers:
 
   packages/iam:
     dependencies:
+      '@h-ai/audit':
+        specifier: workspace:*
+        version: link:../audit
       '@h-ai/cache':
         specifier: workspace:*
         version: link:../cache

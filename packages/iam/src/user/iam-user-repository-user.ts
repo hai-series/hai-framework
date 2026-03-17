@@ -6,7 +6,7 @@
  */
 
 import type { Result } from '@h-ai/core'
-import type { DmlWithTxOperations, ReldbCrudCountOptions, ReldbCrudFieldDefinition, ReldbCrudRepository, ReldbError, ReldbFunctions } from '@h-ai/reldb'
+import type { DmlWithTxOperations, ReldbCrudFieldDefinition, ReldbCrudRepository, ReldbFunctions } from '@h-ai/reldb'
 import type { IamError } from '../iam-types.js'
 import type { StoredUser } from './iam-user-types.js'
 import { err, ok } from '@h-ai/core'
@@ -57,7 +57,7 @@ export interface UserRepository extends ReldbCrudRepository<StoredUser> {
 /**
  * 用户表名
  */
-const TABLE_NAME = 'iam_users'
+const TABLE_NAME = 'hai_iam_users'
 
 /**
  * 用户字段定义
@@ -323,20 +323,5 @@ class DbUserRepository extends BaseReldbCrudRepository<StoredUser> implements Us
       return this.buildQueryError(result.error, result.error)
     }
     return ok(result.data[0] ?? null)
-  }
-
-  /**
-   * 检查符合条件的记录是否存在
-   *
-   * @param options - 查询条件
-   * @param tx - 可选事务句柄
-   * @returns 存在返回 true
-   */
-  async exists(options?: ReldbCrudCountOptions, tx?: DmlWithTxOperations): Promise<Result<boolean, ReldbError>> {
-    const result = await this.count(options, tx)
-    if (!result.success) {
-      return result as Result<boolean, ReldbError>
-    }
-    return ok(result.data > 0)
   }
 }

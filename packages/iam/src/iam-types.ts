@@ -151,6 +151,6 @@ export interface IamFunctions {
 export type { ApiKey, ApiKeyOperations, CreateApiKeyOptions, CreateApiKeyResult } from './authn/apikey/iam-authn-apikey-types.js'
 export type { ApiKeyCredentials, AuthnOperations, AuthStrategy, Credentials, LdapCredentials, OtpCredentials, PasswordCredentials } from './authn/iam-authn-types.js'
 export type { LdapClientFactory } from './authn/ldap/iam-authn-ldap-strategy.js'
-export type { AuthzOperations, Permission, PermissionQueryOptions, PermissionType, Role, RolePermission, UserRole } from './authz/iam-authz-types.js'
-export type { AuthResult, CreateSessionOptions, Session, SessionData, SessionOperations, TokenPair } from './session/iam-session-types.js'
+export type { AuthzOperations, Permission, PermissionQueryOptions, PermissionType, Role } from './authz/iam-authz-types.js'
+export type { AuthResult, CreateSessionOptions, Session, SessionData, SessionFieldUpdates, SessionOperations, TokenPair } from './session/iam-session-types.js'
 export type { AgreementDisplay, ListUsersOptions, RegisterOptions, RegisterResult, StoredUser, UpdateCurrentUserInput, User, UserOperations } from './user/iam-user-types.js'

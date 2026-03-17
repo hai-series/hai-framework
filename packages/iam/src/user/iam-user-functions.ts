@@ -8,9 +8,9 @@
 import type { CacheFunctions } from '@h-ai/cache'
 import type { PaginatedResult, Result } from '@h-ai/core'
 import type { ReldbFunctions } from '@h-ai/reldb'
-import type { PasswordStrategy } from '../authn/password/iam-authn-password-strategy.js'
+import type { PasswordStrategyResult } from '../authn/password/iam-authn-password-strategy.js'
 import type { AuthzOperations } from '../authz/iam-authz-types.js'
-import type { IamConfig, IamErrorCodeType } from '../iam-config.js'
+import type { IamConfig } from '../iam-config.js'
 import type { IamError } from '../iam-types.js'
 import type { SessionOperations } from '../session/iam-session-types.js'
 import type { ResetTokenRepository } from './iam-user-repository-reset-token.js'
@@ -44,7 +44,7 @@ export interface UserOperationsDeps {
   config: IamConfig
   db: ReldbFunctions
   cache: CacheFunctions
-  passwordStrategy: PasswordStrategy
+  passwordStrategyResult: PasswordStrategyResult
   sessionFunctions: SessionOperations
   authzFunctions: AuthzOperations
   /** 密码重置令牌回调（由业务层注入） */
@@ -58,7 +58,7 @@ export interface UserOperationsDeps {
  */
 export async function createUserOperations(deps: UserOperationsDeps): Promise<Result<UserOperations, IamError>> {
   try {
-    const { config, db, cache, passwordStrategy, sessionFunctions, authzFunctions, onPasswordResetRequest } = deps
+    const { config, db, cache, passwordStrategyResult, sessionFunctions, authzFunctions, onPasswordResetRequest } = deps
 
     const userRepository = await createDbUserRepository(db)
     const resetTokenRepository = createCacheResetTokenRepository(cache)
@@ -67,7 +67,7 @@ export async function createUserOperations(deps: UserOperationsDeps): Promise<Re
       db,
       userRepository,
       resetTokenRepository,
-      passwordStrategy,
+      passwordStrategyResult,
       sessionFunctions,
       authzFunctions,
       config,
@@ -87,115 +87,140 @@ export async function createUserOperations(deps: UserOperationsDeps): Promise<Re
   }
 }
 
-// ─── 内部实现 ───
+// ─── 纯工具函数 ───
 
-interface UserBuilderDeps {
-  db: ReldbFunctions
-  userRepository: UserRepository
-  resetTokenRepository: ResetTokenRepository
-  passwordStrategy: PasswordStrategy
-  sessionFunctions: SessionOperations
-  authzFunctions: AuthzOperations
-  config: IamConfig
-  onPasswordResetRequest?: (user: User, token: string, expiresAt: Date) => Promise<void>
+/**
+ * 判断更新数据中是否包含有效字段
+ *
+ * @param data - 用户更新数据
+ * @returns 包含至少一个非 undefined 字段返回 true
+ */
+function hasUpdateFields(data: Partial<User>): boolean {
+  return Object.values(data).some(value => value !== undefined)
 }
 
 /**
- * 组装用户操作
+ * 构建存储层错误响应
+ *
+ * @param messageKey - i18n 消息键
+ * @param message - 原始错误消息
+ * @returns 包含 REPOSITORY_ERROR 码的错误 Result
  */
-function buildUserFunctions(deps: UserBuilderDeps): UserOperations {
-  const {
-    db,
-    userRepository,
-    resetTokenRepository,
-    passwordStrategy,
-    sessionFunctions,
-    authzFunctions,
-    config,
-    onPasswordResetRequest,
-  } = deps
+function mapRepositoryError(messageKey: Parameters<typeof iamM>[0], message: string) {
+  return err({
+    code: IamErrorCode.REPOSITORY_ERROR,
+    message: iamM(messageKey, { params: { message } }),
+  })
+}
 
-  const registerConfig = RegisterConfigSchema.parse(config.register ?? {})
-  const agreementConfig = AgreementConfigSchema.parse(config.agreements ?? {})
-
-  /**
-   * 判断更新数据中是否包含有效字段
-   *
-   * @param data - 用户更新数据
-   * @returns 包含至少一个非 undefined 字段返回 true
-   */
-  function hasUpdateFields(data: Partial<User>): boolean {
-    return Object.values(data).some(value => value !== undefined)
-  }
-
-  /**
-   * 构建存储层错误响应
-   *
-   * @param messageKey - i18n 消息键
-   * @param message - 原始错误消息
-   * @returns 包含 REPOSITORY_ERROR 码的错误 Result
-   */
-  function mapRepositoryError(messageKey: Parameters<typeof iamM>[0], message: string) {
+/**
+ * 将底层更新错误转换为领域层 IAM 错误。
+ *
+ * @param message 底层错误消息
+ * @returns 领域层错误结果
+ */
+function mapUpdateErrorAsDomainError(message: string): Result<never, IamError> {
+  const loweredMessage = message.toLowerCase()
+  if (loweredMessage.includes('unique') || loweredMessage.includes('duplicate')) {
     return err({
-      code: IamErrorCode.REPOSITORY_ERROR,
-      message: iamM(messageKey, { params: { message } }),
+      code: IamErrorCode.USER_ALREADY_EXISTS,
+      message: iamM('iam_userAlreadyExist'),
     })
   }
 
-  /**
-   * 将底层更新错误转换为领域层 IAM 错误。
-   *
-   * @param message 底层错误消息
-   * @returns 领域层错误结果
-   */
-  function mapUpdateErrorAsDomainError(message: string): Result<never, IamError> {
-    const loweredMessage = message.toLowerCase()
-    if (loweredMessage.includes('unique') || loweredMessage.includes('duplicate')) {
+  return mapRepositoryError('iam_updateUserFailed', message)
+}
+
+/**
+ * 更新用户前校验用户名和邮箱唯一性。
+ *
+ * @param userRepository - 用户仓库
+ * @param userId - 用户 ID
+ * @param data - 待更新用户字段
+ * @returns 唯一性校验结果
+ */
+async function validateUniqueFieldsForUpdate(
+  userRepository: UserRepository,
+  userId: string,
+  data: Partial<User>,
+): Promise<Result<void, IamError>> {
+  const currentResult = await userRepository.findById(userId)
+  if (!currentResult.success) {
+    return mapRepositoryError('iam_queryUserFailed', currentResult.error.message) as Result<void, IamError>
+  }
+  if (!currentResult.data) {
+    return err({
+      code: IamErrorCode.USER_NOT_FOUND,
+      message: iamM('iam_userNotExist'),
+    })
+  }
+
+  if (data.username && data.username !== currentResult.data.username) {
+    const usernameExistsResult = await userRepository.existsByUsername(data.username)
+    if (!usernameExistsResult.success) {
+      return mapRepositoryError('iam_queryUserFailed', usernameExistsResult.error.message) as Result<void, IamError>
+    }
+    if (usernameExistsResult.data) {
       return err({
         code: IamErrorCode.USER_ALREADY_EXISTS,
-        message: iamM('iam_userAlreadyExist'),
+        message: iamM('iam_usernameAlreadyExist'),
       })
     }
-
-    return mapRepositoryError('iam_updateUserFailed', message)
   }
 
-  /**
-   * 构建注册页协议展示信息
-   *
-   * 根据配置决定是否在注册时展示用户协议/隐私协议链接。
-   *
-   * @returns 协议展示信息，或 undefined（未启用时）
-   */
-  function buildAgreementDisplay(): AgreementDisplay | undefined {
-    if (!agreementConfig.showOnRegister) {
-      return undefined
+  if (data.email && data.email !== currentResult.data.email) {
+    const emailExistsResult = await userRepository.existsByEmail(data.email)
+    if (!emailExistsResult.success) {
+      return mapRepositoryError('iam_queryUserFailed', emailExistsResult.error.message) as Result<void, IamError>
     }
-    if (!agreementConfig.userAgreementUrl && !agreementConfig.privacyPolicyUrl) {
-      return undefined
-    }
-    return {
-      userAgreementUrl: agreementConfig.userAgreementUrl,
-      privacyPolicyUrl: agreementConfig.privacyPolicyUrl,
-      showOnRegister: agreementConfig.showOnRegister,
-      showOnLogin: agreementConfig.showOnLogin,
+    if (emailExistsResult.data) {
+      return err({
+        code: IamErrorCode.USER_ALREADY_EXISTS,
+        message: iamM('iam_emailAlreadyUsed'),
+      })
     }
   }
+
+  return ok(undefined)
+}
+
+// ─── 内部实现 ───
+
+/**
+ * 子功能构建器共享上下文
+ */
+interface UserFnContext {
+  db: ReldbFunctions
+  userRepository: UserRepository
+  resetTokenRepository: ResetTokenRepository
+  validatePassword: (password: string) => Result<void, IamError>
+  hashPassword: (password: string) => Result<string, IamError>
+  sessionFunctions: SessionOperations
+  authzFunctions: AuthzOperations
+  config: IamConfig
+  registerConfig: { enabled: boolean, defaultEnabled: boolean }
+  agreementConfig: { showOnRegister: boolean, showOnLogin: boolean, userAgreementUrl?: string, privacyPolicyUrl?: string }
+  onPasswordResetRequest?: (user: User, token: string, expiresAt: Date) => Promise<void>
+}
+
+// ─── 注册操作 ───
+
+/**
+ * 构建用户注册相关操作
+ */
+function buildRegistrationOps(ctx: UserFnContext): Pick<UserOperations, 'register' | 'validatePassword'> {
+  const { db, userRepository, authzFunctions, config, registerConfig, agreementConfig } = ctx
+  const { validatePassword, hashPassword } = ctx
 
   /**
    * 校验注册前置条件
-   *
-   * 检查注册开关、密码强度、用户名/邮箱唯一性。
-   *
-   * @param options - 注册选项
-   * @returns 校验通过返回 ok(undefined)，失败返回对应错误
    */
   async function validateRegisterPreconditions(options: RegisterOptions): Promise<Result<void, IamError>> {
     if (!registerConfig.enabled) {
       return err({ code: IamErrorCode.REGISTER_DISABLED, message: iamM('iam_registerDisabled') })
     }
 
-    const validateResult = passwordStrategy.validatePassword(options.password)
+    const validateResult = validatePassword(options.password)
     if (!validateResult.success)
       return validateResult
 
@@ -215,60 +240,23 @@ function buildUserFunctions(deps: UserBuilderDeps): UserOperations {
   }
 
   /**
-   * 更新用户前校验用户名和邮箱唯一性。
-   *
-   * @param userId 用户 ID
-   * @param data 待更新用户字段
-   * @returns 唯一性校验结果
+   * 构建注册页协议展示信息
    */
-  async function validateUniqueFieldsForUpdate(userId: string, data: Partial<User>): Promise<Result<void, IamError>> {
-    const currentResult = await userRepository.findById(userId)
-    if (!currentResult.success) {
-      return mapRepositoryError('iam_queryUserFailed', currentResult.error.message) as Result<void, IamError>
+  function buildAgreementDisplay(): AgreementDisplay | undefined {
+    if (!agreementConfig.showOnRegister)
+      return undefined
+    if (!agreementConfig.userAgreementUrl && !agreementConfig.privacyPolicyUrl)
+      return undefined
+    return {
+      userAgreementUrl: agreementConfig.userAgreementUrl,
+      privacyPolicyUrl: agreementConfig.privacyPolicyUrl,
+      showOnRegister: agreementConfig.showOnRegister,
+      showOnLogin: agreementConfig.showOnLogin,
     }
-    if (!currentResult.data) {
-      return err({
-        code: IamErrorCode.USER_NOT_FOUND,
-        message: iamM('iam_userNotExist'),
-      })
-    }
-
-    if (data.username && data.username !== currentResult.data.username) {
-      const usernameExistsResult = await userRepository.existsByUsername(data.username)
-      if (!usernameExistsResult.success) {
-        return mapRepositoryError('iam_queryUserFailed', usernameExistsResult.error.message) as Result<void, IamError>
-      }
-      if (usernameExistsResult.data) {
-        return err({
-          code: IamErrorCode.USER_ALREADY_EXISTS,
-          message: iamM('iam_usernameAlreadyExist'),
-        })
-      }
-    }
-
-    if (data.email && data.email !== currentResult.data.email) {
-      const emailExistsResult = await userRepository.existsByEmail(data.email)
-      if (!emailExistsResult.success) {
-        return mapRepositoryError('iam_queryUserFailed', emailExistsResult.error.message) as Result<void, IamError>
-      }
-      if (emailExistsResult.data) {
-        return err({
-          code: IamErrorCode.USER_ALREADY_EXISTS,
-          message: iamM('iam_emailAlreadyUsed'),
-        })
-      }
-    }
-
-    return ok(undefined)
   }
 
   /**
    * 为新用户分配默认角色
-   *
-   * 通过 getRoleByCode 查找配置中指定的默认角色，再分配给用户。
-   * 在事务外执行，失败不影响注册结果。
-   *
-   * @param userId - 新用户 ID
    */
   async function assignDefaultRole(userId: string): Promise<void> {
     if (!config.rbac?.defaultRole)
@@ -287,48 +275,50 @@ function buildUserFunctions(deps: UserBuilderDeps): UserOperations {
         return preResult as Result<RegisterResult, IamError>
 
       // 哈希密码
-      const hashResult = passwordStrategy.hashPassword(options.password)
+      const hashResult = hashPassword(options.password)
       if (!hashResult.success)
         return hashResult as Result<RegisterResult, IamError>
 
-      // 事务：创建用户 + 分配默认角色
-      const txResult = await db.tx.wrap(async (tx) => {
-        const createResult = await userRepository.create({
-          username: options.username,
-          email: options.email,
-          phone: options.phone,
-          displayName: options.displayName,
-          enabled: registerConfig.defaultEnabled,
-          emailVerified: false,
-          phoneVerified: false,
-          passwordHash: hashResult.data,
-          passwordUpdatedAt: new Date(),
-          metadata: options.metadata,
-        }, tx)
-
-        if (!createResult.success) {
-          const errorMsg = createResult.error.message.toLowerCase()
-          if (errorMsg.includes('unique') || errorMsg.includes('duplicate')) {
-            throw Object.assign(new Error(iamM('iam_userAlreadyExist')), { code: IamErrorCode.USER_ALREADY_EXISTS })
-          }
-          throw Object.assign(new Error(createResult.error.message), { code: IamErrorCode.REPOSITORY_ERROR })
-        }
-
-        const createdUserResult = await userRepository.findByUsername(options.username, tx)
-        if (!createdUserResult.success || !createdUserResult.data) {
-          throw Object.assign(new Error(iamM('iam_userNotExist')), { code: IamErrorCode.USER_NOT_FOUND })
-        }
-
-        return createdUserResult.data
-      })
-
+      // 事务：创建用户
+      const txResult = await db.tx.begin()
       if (!txResult.success) {
-        const cause = txResult.error.cause as { code?: IamErrorCodeType } | undefined
-        const code = cause?.code ?? IamErrorCode.REPOSITORY_ERROR
-        return err({ code, message: txResult.error.message, cause: txResult.error })
+        return mapRepositoryError('iam_createUserFailed', txResult.error.message) as Result<RegisterResult, IamError>
+      }
+      const tx = txResult.data
+
+      const createResult = await userRepository.create({
+        username: options.username,
+        email: options.email,
+        phone: options.phone,
+        displayName: options.displayName,
+        enabled: registerConfig.defaultEnabled,
+        emailVerified: false,
+        phoneVerified: false,
+        passwordHash: hashResult.data,
+        passwordUpdatedAt: new Date(),
+        metadata: options.metadata,
+      }, tx)
+
+      if (!createResult.success) {
+        await tx.rollback()
+        return mapUpdateErrorAsDomainError(createResult.error.message) as Result<RegisterResult, IamError>
       }
 
-      const createdUser = txResult.data
+      const createdUserResult = await userRepository.findByUsername(options.username, tx)
+      if (!createdUserResult.success || !createdUserResult.data) {
+        await tx.rollback()
+        return err({
+          code: IamErrorCode.USER_NOT_FOUND,
+          message: iamM('iam_userNotExist'),
+        })
+      }
+
+      const commitResult = await tx.commit()
+      if (!commitResult.success) {
+        return mapRepositoryError('iam_createUserFailed', commitResult.error.message) as Result<RegisterResult, IamError>
+      }
+
+      const createdUser = createdUserResult.data
 
       // 分配默认角色（事务外，失败不影响注册结果）
       await assignDefaultRole(createdUser.id)
@@ -340,6 +330,21 @@ function buildUserFunctions(deps: UserBuilderDeps): UserOperations {
       })
     },
 
+    validatePassword(password: string): Result<void, IamError> {
+      return validatePassword(password)
+    },
+  }
+}
+
+// ─── 查询操作 ───
+
+/**
+ * 构建用户查询操作
+ */
+function buildUserQueryOps(ctx: UserFnContext): Pick<UserOperations, 'getCurrentUser' | 'getUser' | 'listUsers'> {
+  const { userRepository, sessionFunctions, authzFunctions } = ctx
+
+  return {
     async getCurrentUser(accessToken: string): Promise<Result<User, IamError>> {
       const verifyResult = await sessionFunctions.verifyToken(accessToken)
       if (!verifyResult.success) {
@@ -359,72 +364,6 @@ function buildUserFunctions(deps: UserBuilderDeps): UserOperations {
       }
 
       return ok(toUser(userResult.data))
-    },
-
-    async updateCurrentUser(accessToken: string, data: UpdateCurrentUserInput): Promise<Result<User, IamError>> {
-      const verifyResult = await sessionFunctions.verifyToken(accessToken)
-      if (!verifyResult.success) {
-        return verifyResult as Result<User, IamError>
-      }
-
-      const userId = verifyResult.data.userId
-
-      // 提取白名单字段，防止修改安全字段
-      const safeData: Partial<User> = {}
-      if (data.displayName !== undefined)
-        safeData.displayName = data.displayName
-      if (data.avatarUrl !== undefined)
-        safeData.avatarUrl = data.avatarUrl
-      if (data.phone !== undefined)
-        safeData.phone = data.phone
-      if (data.metadata !== undefined)
-        safeData.metadata = data.metadata
-
-      if (!hasUpdateFields(safeData)) {
-        const currentResult = await userRepository.findById(userId)
-        if (!currentResult.success) {
-          return mapRepositoryError('iam_queryUserFailed', currentResult.error.message) as Result<User, IamError>
-        }
-        if (!currentResult.data) {
-          return err({
-            code: IamErrorCode.USER_NOT_FOUND,
-            message: iamM('iam_userNotExist'),
-          })
-        }
-        return ok(toUser(currentResult.data))
-      }
-
-      const uniqueResult = await validateUniqueFieldsForUpdate(userId, safeData)
-      if (!uniqueResult.success) {
-        return uniqueResult as Result<User, IamError>
-      }
-
-      const updateResult = await userRepository.updateById(userId, safeData)
-      if (!updateResult.success) {
-        return mapUpdateErrorAsDomainError(updateResult.error.message) as Result<User, IamError>
-      }
-
-      if (updateResult.data.changes === 0) {
-        return err({
-          code: IamErrorCode.USER_NOT_FOUND,
-          message: iamM('iam_userNotExist'),
-        })
-      }
-
-      // 注意：updateCurrentUser 不允许修改 enabled 字段，无需注销会话
-
-      const updatedResult = await userRepository.findById(userId)
-      if (!updatedResult.success) {
-        return mapRepositoryError('iam_queryUserFailed', updatedResult.error.message) as Result<User, IamError>
-      }
-      if (!updatedResult.data) {
-        return err({
-          code: IamErrorCode.USER_NOT_FOUND,
-          message: iamM('iam_userNotExist'),
-        })
-      }
-
-      return ok(toUser(updatedResult.data))
     },
 
     async getUser(userId: string, options?: { include?: ('roles')[] }): Promise<Result<User | null, IamError>> {
@@ -497,6 +436,84 @@ function buildUserFunctions(deps: UserBuilderDeps): UserOperations {
         pageSize: usersResult.data.pageSize,
       })
     },
+  }
+}
+
+// ─── 变更操作 ───
+
+/**
+ * 构建用户变更操作（更新、删除）
+ */
+function buildUserMutationOps(ctx: UserFnContext): Pick<UserOperations, 'updateCurrentUser' | 'updateUser' | 'deleteUser'> {
+  const { db, userRepository, sessionFunctions, authzFunctions } = ctx
+
+  return {
+    async updateCurrentUser(accessToken: string, data: UpdateCurrentUserInput): Promise<Result<User, IamError>> {
+      const verifyResult = await sessionFunctions.verifyToken(accessToken)
+      if (!verifyResult.success) {
+        return verifyResult as Result<User, IamError>
+      }
+
+      const userId = verifyResult.data.userId
+
+      // 提取白名单字段，防止修改安全字段
+      const safeData: Partial<User> = {}
+      if (data.username !== undefined)
+        safeData.username = data.username
+      if (data.email !== undefined)
+        safeData.email = data.email
+      if (data.displayName !== undefined)
+        safeData.displayName = data.displayName
+      if (data.avatarUrl !== undefined)
+        safeData.avatarUrl = data.avatarUrl
+      if (data.phone !== undefined)
+        safeData.phone = data.phone
+      if (data.metadata !== undefined)
+        safeData.metadata = data.metadata
+
+      if (!hasUpdateFields(safeData)) {
+        const currentResult = await userRepository.findById(userId)
+        if (!currentResult.success) {
+          return mapRepositoryError('iam_queryUserFailed', currentResult.error.message) as Result<User, IamError>
+        }
+        if (!currentResult.data) {
+          return err({
+            code: IamErrorCode.USER_NOT_FOUND,
+            message: iamM('iam_userNotExist'),
+          })
+        }
+        return ok(toUser(currentResult.data))
+      }
+
+      const uniqueResult = await validateUniqueFieldsForUpdate(userRepository, userId, safeData)
+      if (!uniqueResult.success) {
+        return uniqueResult as Result<User, IamError>
+      }
+
+      const updateResult = await userRepository.updateById(userId, safeData)
+      if (!updateResult.success) {
+        return mapUpdateErrorAsDomainError(updateResult.error.message) as Result<User, IamError>
+      }
+
+      if (updateResult.data.changes === 0) {
+        return err({
+          code: IamErrorCode.USER_NOT_FOUND,
+          message: iamM('iam_userNotExist'),
+        })
+      }
+      const updatedResult = await userRepository.findById(userId)
+      if (!updatedResult.success) {
+        return mapRepositoryError('iam_queryUserFailed', updatedResult.error.message) as Result<User, IamError>
+      }
+      if (!updatedResult.data) {
+        return err({
+          code: IamErrorCode.USER_NOT_FOUND,
+          message: iamM('iam_userNotExist'),
+        })
+      }
+
+      return ok(toUser(updatedResult.data))
+    },
 
     async updateUser(userId: string, data: Partial<User>): Promise<Result<User, IamError>> {
       if (!hasUpdateFields(data)) {
@@ -513,7 +530,7 @@ function buildUserFunctions(deps: UserBuilderDeps): UserOperations {
         return ok(toUser(currentResult.data))
       }
 
-      const uniqueResult = await validateUniqueFieldsForUpdate(userId, data)
+      const uniqueResult = await validateUniqueFieldsForUpdate(userRepository, userId, data)
       if (!uniqueResult.success) {
         return uniqueResult as Result<User, IamError>
       }
@@ -560,7 +577,6 @@ function buildUserFunctions(deps: UserBuilderDeps): UserOperations {
         return err({ code: IamErrorCode.USER_NOT_FOUND, message: iamM('iam_userNotExist') })
       }
 
-      // 事务：角色关联删除 + 用户删除原子执行
       const txResult = await db.tx.begin()
       if (!txResult.success) {
         return mapRepositoryError('iam_deleteUserFailed', txResult.error.message) as Result<void, IamError>
@@ -568,14 +584,11 @@ function buildUserFunctions(deps: UserBuilderDeps): UserOperations {
       const tx = txResult.data
 
       try {
-        // 清理用户角色关联（事务内直接执行 SQL）
-        const delRolesResult = await tx.execute(
-          'DELETE FROM iam_user_roles WHERE user_id = ?',
-          [userId],
-        )
-        if (!delRolesResult.success) {
+        // 通过 authz 子模块清理用户角色关联
+        const syncResult = await authzFunctions.syncRoles(userId, [], tx)
+        if (!syncResult.success) {
           await tx.rollback()
-          return mapRepositoryError('iam_deleteUserFailed', delRolesResult.error.message) as Result<void, IamError>
+          return mapRepositoryError('iam_deleteUserFailed', syncResult.error.message) as Result<void, IamError>
         }
 
         // 删除用户记录
@@ -599,13 +612,25 @@ function buildUserFunctions(deps: UserBuilderDeps): UserOperations {
         })
       }
 
-      // 事务提交后：最佳努力清理缓存和会话
+      // 事务提交后：最佳努力清理会话
       await sessionFunctions.deleteByUserId(userId)
 
       logger.info('User deleted', { userId })
       return ok(undefined)
     },
+  }
+}
 
+// ─── 密码变更操作 ───
+
+/**
+ * 构建密码变更操作（管理员重置、用户改密）
+ */
+function buildPasswordChangeOps(ctx: UserFnContext): Pick<UserOperations, 'adminResetPassword' | 'changePassword' | 'changeCurrentUserPassword'> {
+  const { userRepository, sessionFunctions } = ctx
+  const { validatePassword, hashPassword } = ctx
+
+  return {
     async adminResetPassword(userId: string, newPassword: string): Promise<Result<void, IamError>> {
       logger.debug('Admin resetting user password', { userId })
 
@@ -617,11 +642,11 @@ function buildUserFunctions(deps: UserBuilderDeps): UserOperations {
         return err({ code: IamErrorCode.USER_NOT_FOUND, message: iamM('iam_userNotExist') })
       }
 
-      const validateResult = passwordStrategy.validatePassword(newPassword)
+      const validateResult = validatePassword(newPassword)
       if (!validateResult.success)
         return validateResult
 
-      const hashResult = passwordStrategy.hashPassword(newPassword)
+      const hashResult = hashPassword(newPassword)
       if (!hashResult.success)
         return hashResult as Result<void, IamError>
 
@@ -663,12 +688,12 @@ function buildUserFunctions(deps: UserBuilderDeps): UserOperations {
       }
 
       // 验证新密码强度
-      const validateResult = passwordStrategy.validatePassword(newPassword)
+      const validateResult = validatePassword(newPassword)
       if (!validateResult.success)
         return validateResult
 
       // 哈希新密码
-      const hashResult = passwordStrategy.hashPassword(newPassword)
+      const hashResult = hashPassword(newPassword)
       if (!hashResult.success)
         return hashResult as Result<void, IamError>
 
@@ -704,7 +729,19 @@ function buildUserFunctions(deps: UserBuilderDeps): UserOperations {
 
       return this.changePassword(verifyResult.data.userId, oldPassword, newPassword)
     },
+  }
+}
 
+// ─── 密码重置操作 ───
+
+/**
+ * 构建密码重置操作（请求重置、确认重置）
+ */
+function buildPasswordResetOps(ctx: UserFnContext): Pick<UserOperations, 'requestPasswordReset' | 'confirmPasswordReset'> {
+  const { userRepository, resetTokenRepository, sessionFunctions, config, onPasswordResetRequest } = ctx
+  const { validatePassword, hashPassword } = ctx
+
+  return {
     async requestPasswordReset(identifier: string): Promise<Result<void, IamError>> {
       logger.debug('Password reset requested', { identifier })
 
@@ -729,16 +766,8 @@ function buildUserFunctions(deps: UserBuilderDeps): UserOperations {
       const token = globalThis.crypto.randomUUID()
       const expiresAt = new Date(Date.now() + resetConfig.tokenExpiresIn * 1000)
 
-      // 清理该用户的旧令牌
-      await resetTokenRepository.removeByUserId(user.id)
-
-      // 保存新令牌
-      const saveResult = await resetTokenRepository.saveToken({
-        id: globalThis.crypto.randomUUID(),
-        userId: user.id,
-        token,
-        expiresAt,
-      })
+      // 保存新令牌（saveToken 内部重置尝试次数）
+      const saveResult = await resetTokenRepository.saveToken(token, user.id, expiresAt)
       if (!saveResult.success) {
         return saveResult
       }
@@ -766,46 +795,21 @@ function buildUserFunctions(deps: UserBuilderDeps): UserOperations {
 
       const resetConfig = PasswordResetConfigSchema.parse(config.passwordReset ?? {})
 
-      // 查找令牌
-      const tokenResult = await resetTokenRepository.findByToken(token)
-      if (!tokenResult.success) {
-        return tokenResult as Result<void, IamError>
-      }
-      if (!tokenResult.data) {
-        return err({
-          code: IamErrorCode.RESET_TOKEN_INVALID,
-          message: iamM('iam_resetTokenInvalid'),
-        })
-      }
-
-      const tokenRecord = tokenResult.data
-
-      // 检查是否过期（findByToken 已自动清理过期记录，此处做显式判断以返回精确错误码）
-      if (new Date() > tokenRecord.expiresAt) {
-        return err({
-          code: IamErrorCode.RESET_TOKEN_EXPIRED,
-          message: iamM('iam_resetTokenExpired'),
-        })
-      }
-
-      // 检查尝试次数
-      if (tokenRecord.attempts >= resetConfig.maxAttempts) {
-        return err({
-          code: IamErrorCode.RESET_TOKEN_MAX_ATTEMPTS,
-          message: iamM('iam_resetTokenMaxAttempts'),
-        })
-      }
-
       // 先验证新密码强度（不消耗尝试次数）
-      const validateResult = passwordStrategy.validatePassword(newPassword)
+      const validateResult = validatePassword(newPassword)
       if (!validateResult.success)
         return validateResult
 
-      // 密码合规后再增加尝试次数
-      await resetTokenRepository.incrementAttempts(tokenRecord.id)
+      // 验证令牌并获取 userId（自动递增尝试次数、超限自动删除令牌）
+      const tokenResult = await resetTokenRepository.tryGetUserByToken(token, resetConfig.maxAttempts)
+      if (!tokenResult.success) {
+        return tokenResult as Result<void, IamError>
+      }
+
+      const userId = tokenResult.data
 
       // 查找用户
-      const userResult = await userRepository.findById(tokenRecord.userId)
+      const userResult = await userRepository.findById(userId)
       if (!userResult.success) {
         return mapRepositoryError('iam_queryUserFailed', userResult.error.message) as Result<void, IamError>
       }
@@ -817,12 +821,12 @@ function buildUserFunctions(deps: UserBuilderDeps): UserOperations {
       }
 
       // 哈希新密码
-      const hashResult = passwordStrategy.hashPassword(newPassword)
+      const hashResult = hashPassword(newPassword)
       if (!hashResult.success)
         return hashResult as Result<void, IamError>
 
       // 更新密码
-      const updateResult = await userRepository.updateById(tokenRecord.userId, {
+      const updateResult = await userRepository.updateById(userId, {
         passwordHash: hashResult.data,
         passwordUpdatedAt: new Date(),
       })
@@ -830,18 +834,52 @@ function buildUserFunctions(deps: UserBuilderDeps): UserOperations {
         return mapRepositoryError('iam_updateUserFailed', updateResult.error.message)
       }
 
-      // 标记令牌为已使用
-      await resetTokenRepository.markUsed(tokenRecord.id)
+      // 删除已使用的令牌
+      await resetTokenRepository.removeToken(token)
 
       // 注销该用户所有活跃会话
-      await sessionFunctions.deleteByUserId(tokenRecord.userId)
+      await sessionFunctions.deleteByUserId(userId)
 
-      logger.info('Password reset confirmed', { userId: tokenRecord.userId })
+      logger.info('Password reset confirmed', { userId })
       return ok(undefined)
     },
-
-    validatePassword(password: string): Result<void, IamError> {
-      return passwordStrategy.validatePassword(password)
-    },
   }
+}
+
+// ─── 组装 ───
+
+/**
+ * 组装用户操作
+ *
+ * 将注册、查询、变更、密码管理四类子操作组合为统一的 UserOperations。
+ */
+function buildUserFunctions(deps: UserBuilderDeps): UserOperations {
+  const { validatePassword, hashPassword } = deps.passwordStrategyResult
+
+  const ctx: UserFnContext = {
+    ...deps,
+    validatePassword,
+    hashPassword,
+    registerConfig: RegisterConfigSchema.parse(deps.config.register ?? {}),
+    agreementConfig: AgreementConfigSchema.parse(deps.config.agreements ?? {}),
+  }
+
+  return {
+    ...buildRegistrationOps(ctx),
+    ...buildUserQueryOps(ctx),
+    ...buildUserMutationOps(ctx),
+    ...buildPasswordChangeOps(ctx),
+    ...buildPasswordResetOps(ctx),
+  }
+}
+
+interface UserBuilderDeps {
+  db: ReldbFunctions
+  userRepository: UserRepository
+  resetTokenRepository: ResetTokenRepository
+  passwordStrategyResult: PasswordStrategyResult
+  sessionFunctions: SessionOperations
+  authzFunctions: AuthzOperations
+  config: IamConfig
+  onPasswordResetRequest?: (user: User, token: string, expiresAt: Date) => Promise<void>
 }

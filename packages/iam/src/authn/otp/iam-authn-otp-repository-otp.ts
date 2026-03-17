@@ -54,22 +54,12 @@ export interface OtpRepository {
    * 删除验证码
    */
   removeOtp: (identifier: string) => Promise<Result<void, IamError>>
-
-  /**
-   * 发送邮件验证码
-   */
-  sendEmail?: (email: string, code: string) => Promise<Result<void, IamError>>
-
-  /**
-   * 发送短信验证码
-   */
-  sendSms?: (phone: string, code: string) => Promise<Result<void, IamError>>
 }
 
 // ─── 缓存键构建 ───
 
 /** OTP 缓存键前缀 */
-const OTP_KEY_PREFIX = 'iam:otp:'
+const OTP_KEY_PREFIX = 'hai:iam:otp:'
 
 /**
  * 构建 OTP 缓存 key
@@ -94,21 +84,6 @@ function restoreOtpDates(record: OtpRecord): OtpRecord {
   }
 }
 
-// ─── OTP 发送回调 ───
-
-/**
- * OTP 发送回调（由业务层注入）
- *
- * 用于将 OTP 验证码通过邮件/短信发送给用户。
- * 若回调未提供，OTP challenge 将返回"发送方式未配置"错误。
- */
-export interface OtpSendCallbacks {
-  /** 邮件发送回调 */
-  onOtpSendEmail?: (email: string, code: string) => Promise<void>
-  /** 短信发送回调 */
-  onOtpSendSms?: (phone: string, code: string) => Promise<void>
-}
-
 // ─── 缓存实现 ───
 
 /** OTP 存储单例缓存 */
@@ -129,10 +104,9 @@ export function resetOtpRepoSingleton(): void {
  * 单例模式：重复调用返回缓存实例。
  *
  * @param cache - 缓存服务实例
- * @param callbacks - OTP 发送回调（邮件/短信，由业务层注入）
  * @returns OTP 存储接口实现
  */
-export function createCacheOtpRepository(cache: CacheFunctions, callbacks?: OtpSendCallbacks): OtpRepository {
+export function createCacheOtpRepository(cache: CacheFunctions): OtpRepository {
   if (otpRepoInstance)
     return otpRepoInstance
 
@@ -222,50 +196,6 @@ export function createCacheOtpRepository(cache: CacheFunctions, callbacks?: OtpS
       }
       return ok(undefined)
     },
-
-    /**
-     * 发送邮件验证码（通过业务层回调）
-     *
-     * 若未注入 onOtpSendEmail 回调，此方法为 undefined，
-     * OTP 策略将返回"发送方式未配置"错误。
-     */
-    sendEmail: callbacks?.onOtpSendEmail
-      ? async (email: string, code: string): Promise<Result<void, IamError>> => {
-        try {
-          await callbacks.onOtpSendEmail!(email, code)
-          return ok(undefined)
-        }
-        catch (error) {
-          return err({
-            code: IamErrorCode.INTERNAL_ERROR,
-            message: iamM('iam_otpSendFailed', { params: { message: String(error) } }),
-            cause: error,
-          })
-        }
-      }
-      : undefined,
-
-    /**
-     * 发送短信验证码（通过业务层回调）
-     *
-     * 若未注入 onOtpSendSms 回调，此方法为 undefined，
-     * OTP 策略将返回"发送方式未配置"错误。
-     */
-    sendSms: callbacks?.onOtpSendSms
-      ? async (phone: string, code: string): Promise<Result<void, IamError>> => {
-        try {
-          await callbacks.onOtpSendSms!(phone, code)
-          return ok(undefined)
-        }
-        catch (error) {
-          return err({
-            code: IamErrorCode.INTERNAL_ERROR,
-            message: iamM('iam_otpSendFailed', { params: { message: String(error) } }),
-            cause: error,
-          })
-        }
-      }
-      : undefined,
   }
 
   otpRepoInstance = repo

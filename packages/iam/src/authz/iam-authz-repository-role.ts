@@ -6,7 +6,7 @@
  */
 
 import type { Result } from '@h-ai/core'
-import type { DmlWithTxOperations, ReldbCrudCountOptions, ReldbCrudFieldDefinition, ReldbCrudRepository, ReldbError, ReldbFunctions } from '@h-ai/reldb'
+import type { DmlWithTxOperations, ReldbCrudFieldDefinition, ReldbCrudRepository, ReldbFunctions } from '@h-ai/reldb'
 import type { IamError } from '../iam-types.js'
 import type { Role } from './iam-authz-types.js'
 import { err, ok } from '@h-ai/core'
@@ -23,7 +23,7 @@ export interface RoleRepository extends ReldbCrudRepository<Role> {
   /**
    * 根据代码获取角色
    */
-  findByCode: (code: string) => Promise<Result<Role | null, IamError>>
+  findByCode: (code: string, tx?: DmlWithTxOperations) => Promise<Result<Role | null, IamError>>
 }
 
 // ─── 角色存储实现 ───
@@ -31,7 +31,7 @@ export interface RoleRepository extends ReldbCrudRepository<Role> {
 /**
  * 角色表名
  */
-const TABLE_NAME = 'iam_roles'
+const TABLE_NAME = 'hai_iam_roles'
 
 const ROLE_FIELDS: ReldbCrudFieldDefinition[] = [
   {
@@ -140,16 +140,8 @@ class DbRoleRepository extends BaseReldbCrudRepository<Role> implements RoleRepo
   }
 
   /** 根据角色代码查找角色 */
-  async findByCode(code: string): Promise<Result<Role | null, IamError>> {
-    return this.findOneBy('code = ?', [code])
-  }
-
-  async exists(options?: ReldbCrudCountOptions, tx?: DmlWithTxOperations): Promise<Result<boolean, ReldbError>> {
-    const result = await this.count(options, tx)
-    if (!result.success) {
-      return result as Result<boolean, ReldbError>
-    }
-    return ok(result.data > 0)
+  async findByCode(code: string, tx?: DmlWithTxOperations): Promise<Result<Role | null, IamError>> {
+    return this.findOneBy('code = ?', [code], tx)
   }
 
   private buildQueryError(error: { message: string }, cause: unknown): Result<never, IamError> {
@@ -160,8 +152,8 @@ class DbRoleRepository extends BaseReldbCrudRepository<Role> implements RoleRepo
     })
   }
 
-  private async findOneBy(where: string, params: unknown[]): Promise<Result<Role | null, IamError>> {
-    const result = await this.findAll({ where, params, limit: 1 })
+  private async findOneBy(where: string, params: unknown[], tx?: DmlWithTxOperations): Promise<Result<Role | null, IamError>> {
+    const result = await this.findAll({ where, params, limit: 1 }, tx)
     if (!result.success) {
       return this.buildQueryError(result.error, result.error)
     }

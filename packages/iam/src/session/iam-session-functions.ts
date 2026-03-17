@@ -9,18 +9,15 @@ import type { CacheFunctions } from '@h-ai/cache'
 import type { Result } from '@h-ai/core'
 import type { IamConfig } from '../iam-config.js'
 import type { IamError } from '../iam-types.js'
-import type { SessionMappingRepository } from './iam-session-repository-cache.js'
+import type { SessionRepository } from './iam-session-repository-cache.js'
 import type { CreateSessionOptions, Session, SessionOperations, TokenPair } from './iam-session-types.js'
 import { core, err, ok } from '@h-ai/core'
 import { IamErrorCode, SessionConfigSchema } from '../iam-config.js'
 import { iamM } from '../iam-i18n.js'
-import { createCacheSessionMappingRepository } from './iam-session-repository-cache.js'
-import { applySessionPatch, buildSession, generateToken, getSessionTtl } from './iam-session-utils.js'
+import { createCacheSessionRepository } from './iam-session-repository-cache.js'
+import { buildSession, generateToken } from './iam-session-utils.js'
 
 const logger = core.logger.child({ module: 'iam', scope: 'session' })
-
-/** refreshToken → userId 映射的缓存 key 前缀 */
-const REFRESH_TOKEN_PREFIX = 'iam:refresh:'
 
 // ─── 子功能依赖 ───
 
@@ -41,15 +38,17 @@ export async function createSessionOperations(deps: SessionOperationsDeps): Prom
   try {
     const { config, cache } = deps
     const sessionConfig = SessionConfigSchema.parse(config.session ?? {})
-    const sessionMappingRepository = createCacheSessionMappingRepository(cache, sessionConfig.maxAge)
+    const sessionRepository = createCacheSessionRepository(
+      cache,
+      sessionConfig.maxAge ?? 86400,
+      sessionConfig.refreshTokenMaxAge ?? 604800,
+    )
 
     const functions = buildSessionFunctions({
       maxAge: sessionConfig.maxAge,
       sliding: sessionConfig.sliding,
       singleDevice: sessionConfig.singleDevice,
-      refreshTokenMaxAge: sessionConfig.refreshTokenMaxAge,
-      cache,
-      sessionMappingRepository,
+      sessionRepository,
     })
 
     logger.info('Session sub-feature initialized')
@@ -77,86 +76,37 @@ interface SessionBuilderConfig {
   sliding?: boolean
   /** 单设备登录（踢掉其他设备） */
   singleDevice?: boolean
-  /** refreshToken 过期时间（秒，默认 604800 = 7天） */
-  refreshTokenMaxAge?: number
-  /** 缓存服务（用于存储 refreshToken 映射） */
-  cache: CacheFunctions
-  /** 会话映射存储 */
-  sessionMappingRepository: SessionMappingRepository
+  /** 会话存储 */
+  sessionRepository: SessionRepository
 }
 
 /**
- * 组装会话操作（纯同步，不涉及 I/O，除缓存操作）
+ * 组装会话操作
  */
 function buildSessionFunctions(config: SessionBuilderConfig): SessionOperations {
   const maxAge = config.maxAge ?? 86400
   const sliding = config.sliding ?? true
   const singleDevice = config.singleDevice ?? false
-  const refreshTokenMaxAge = config.refreshTokenMaxAge ?? 604800
-
-  /**
-   * 构建 refreshToken 的缓存 key
-   */
-  function buildRefreshKey(refreshToken: string): string {
-    return `${REFRESH_TOKEN_PREFIX}${refreshToken}`
-  }
-
-  /**
-   * 存储 refreshToken → { userId, accessToken } 映射
-   */
-  async function storeRefreshToken(refreshToken: string, userId: string, accessToken: string): Promise<Result<void, IamError>> {
-    const result = await config.cache.kv.set(buildRefreshKey(refreshToken), { userId, accessToken }, { ex: refreshTokenMaxAge })
-    if (!result.success) {
-      return err({ code: IamErrorCode.SESSION_CREATE_FAILED, message: iamM('iam_createSessionFailed'), cause: result.error })
-    }
-    return ok(undefined)
-  }
-
-  /**
-   * 创建 TokenPair（accessToken + refreshToken）
-   */
-  function createTokenPair(accessToken: string): TokenPair {
-    return {
-      accessToken,
-      refreshToken: generateToken(),
-      expiresIn: maxAge,
-      tokenType: 'Bearer',
-    }
-  }
-
-  /**
-   * 清除用户的所有会话令牌
-   *
-   * 用于单设备登录场景，新登录前踢掉其他设备的会话。
-   *
-   * @param userId - 用户 ID
-   */
-  async function clearUserTokens(userId: string): Promise<Result<void, IamError>> {
-    const tokensResult = await config.sessionMappingRepository.getUserTokens(userId)
-    if (!tokensResult.success) {
-      return tokensResult as Result<void, IamError>
-    }
-
-    for (const token of tokensResult.data) {
-      await config.sessionMappingRepository.delete(token)
-      await config.sessionMappingRepository.removeUserToken(userId, token)
-    }
-
-    return ok(undefined)
-  }
+  const repo = config.sessionRepository
 
   return {
     async create(options: CreateSessionOptions): Promise<Result<Session, IamError>> {
       try {
         if (singleDevice) {
-          const clearResult = await clearUserTokens(options.userId)
+          const clearResult = await repo.removeByUserId(options.userId)
           if (!clearResult.success) {
             return clearResult as Result<Session, IamError>
           }
         }
 
         const accessToken = generateToken()
-        const tokenPair = createTokenPair(accessToken)
+        const tokenPair: TokenPair = {
+          accessToken,
+          refreshToken: generateToken(),
+          expiresIn: maxAge,
+          tokenType: 'Bearer',
+        }
+
         const now = new Date()
         const sessionTtl = options.maxAge ?? maxAge
         const session = buildSession(options, now, sessionTtl, accessToken)
@@ -164,19 +114,10 @@ function buildSessionFunctions(config: SessionBuilderConfig): SessionOperations 
         // 将 tokenPair 附加到 session 的 data 字段（持久化到缓存，logout 时可提取 refreshToken）
         session.data = { ...session.data, _tokenPair: tokenPair }
 
-        // 存储 accessToken → session（含 _tokenPair）
-        const storeResult = await config.sessionMappingRepository.set(accessToken, session, sessionTtl)
-        if (!storeResult.success) {
-          return storeResult as Result<Session, IamError>
+        const saveResult = await repo.save(session, tokenPair)
+        if (!saveResult.success) {
+          return saveResult as Result<Session, IamError>
         }
-
-        // 存储 refreshToken → { userId, accessToken }
-        const refreshResult = await storeRefreshToken(tokenPair.refreshToken, options.userId, accessToken)
-        if (!refreshResult.success) {
-          return refreshResult as Result<Session, IamError>
-        }
-
-        await config.sessionMappingRepository.addUserToken(options.userId, accessToken)
 
         logger.debug('Session created', { userId: options.userId })
         return ok(session)
@@ -191,7 +132,7 @@ function buildSessionFunctions(config: SessionBuilderConfig): SessionOperations 
     },
 
     async get(accessToken: string): Promise<Result<Session | null, IamError>> {
-      const sessionResult = await config.sessionMappingRepository.get(accessToken)
+      const sessionResult = await repo.getByAccessToken(accessToken)
       if (!sessionResult.success) {
         return sessionResult
       }
@@ -202,15 +143,16 @@ function buildSessionFunctions(config: SessionBuilderConfig): SessionOperations 
       }
 
       if (new Date() > session.expiresAt) {
-        await this.delete(accessToken)
+        await repo.removeByAccessToken(accessToken)
         return ok(null)
       }
 
       if (sliding) {
         const now = new Date()
-        session.lastActiveAt = now
-        session.expiresAt = new Date(now.getTime() + maxAge * 1000)
-        await config.sessionMappingRepository.set(accessToken, session, maxAge)
+        await repo.updateByAccessToken(accessToken, {
+          lastActiveAt: now,
+          expiresAt: new Date(now.getTime() + maxAge * 1000),
+        })
       }
 
       return ok(session)
@@ -233,84 +175,39 @@ function buildSessionFunctions(config: SessionBuilderConfig): SessionOperations 
     },
 
     async update(accessToken: string, data: Partial<Session>): Promise<Result<void, IamError>> {
-      const sessionResult = await config.sessionMappingRepository.get(accessToken)
-      if (!sessionResult.success) {
-        return sessionResult as Result<void, IamError>
-      }
-
-      const session = sessionResult.data
-      if (!session) {
-        return err({
-          code: IamErrorCode.SESSION_NOT_FOUND,
-          message: iamM('iam_sessionNotExist'),
-        })
-      }
-
-      const nextSession = applySessionPatch(session, data)
-      const ttl = getSessionTtl(nextSession)
-      return config.sessionMappingRepository.set(accessToken, nextSession, ttl)
+      return repo.updateByAccessToken(accessToken, data)
     },
 
     async delete(accessToken: string): Promise<Result<void, IamError>> {
-      const sessionResult = await config.sessionMappingRepository.get(accessToken)
-      if (sessionResult.success && sessionResult.data) {
-        const session = sessionResult.data
-        await config.sessionMappingRepository.removeUserToken(session.userId, session.accessToken)
-        logger.debug('Session deleted', { userId: session.userId })
-      }
-
-      return config.sessionMappingRepository.delete(accessToken)
+      logger.debug('Session deleted', { accessToken })
+      return repo.removeByAccessToken(accessToken)
     },
 
     async deleteByUserId(userId: string): Promise<Result<number, IamError>> {
-      const tokensResult = await config.sessionMappingRepository.getUserTokens(userId)
-      if (!tokensResult.success) {
-        return tokensResult as Result<number, IamError>
+      // removeByUserId 内部遍历删除，无法直接获取删除数量
+      // 暂返回 0 表示成功；上层仅关注 success/failure
+      const result = await repo.removeByUserId(userId)
+      if (!result.success) {
+        return result as Result<number, IamError>
       }
-
-      let count = 0
-      for (const token of tokensResult.data) {
-        const deleteResult = await this.delete(token)
-        if (deleteResult.success) {
-          count++
-        }
-      }
-
-      return ok(count)
+      return ok(0)
     },
 
     async refresh(refreshToken: string): Promise<Result<TokenPair, IamError>> {
       try {
-        // 读取 refreshToken 映射
-        const mappingResult = await config.cache.kv.get<{ userId: string, accessToken: string }>(buildRefreshKey(refreshToken))
-        if (!mappingResult.success) {
-          return err({ code: IamErrorCode.TOKEN_REFRESH_FAILED, message: iamM('iam_refreshTokenFailed'), cause: mappingResult.error })
-        }
-
-        const mapping = mappingResult.data
-        if (!mapping) {
-          return err({ code: IamErrorCode.TOKEN_EXPIRED, message: iamM('iam_refreshTokenExpired') })
-        }
-
-        // 获取旧会话
-        const oldSessionResult = await this.get(mapping.accessToken)
+        // 根据 refreshToken 获取旧会话
+        const oldSessionResult = await repo.getByRefreshToken(refreshToken)
         if (!oldSessionResult.success) {
           return oldSessionResult as Result<TokenPair, IamError>
         }
 
         const oldSession = oldSessionResult.data
         if (!oldSession) {
-          // 旧 accessToken 已过期，但 refreshToken 还活着 → 重建会话
-          // 此场景下无法重建（缺少用户上下文），返回过期错误
-          await config.cache.kv.del(buildRefreshKey(refreshToken))
-          return err({ code: IamErrorCode.SESSION_EXPIRED, message: iamM('iam_sessionExpired') })
+          return err({ code: IamErrorCode.TOKEN_EXPIRED, message: iamM('iam_refreshTokenExpired') })
         }
 
-        // 删除旧 refreshToken（Rotation 策略）
-        await config.cache.kv.del(buildRefreshKey(refreshToken))
-
-        // 删除旧的 accessToken 会话
-        await this.delete(mapping.accessToken)
+        // Rotation 策略：删除旧会话（removeByAccessToken 内部同时清理 refreshToken 映射）
+        await repo.removeByAccessToken(oldSession.accessToken)
 
         // 创建新会话（复用旧会话的用户数据）
         const newSessionResult = await this.create({
@@ -343,11 +240,11 @@ function buildSessionFunctions(config: SessionBuilderConfig): SessionOperations 
     },
 
     async revokeRefresh(refreshToken: string): Promise<Result<void, IamError>> {
-      const result = await config.cache.kv.del(buildRefreshKey(refreshToken))
-      if (!result.success) {
-        return err({ code: IamErrorCode.REPOSITORY_ERROR, message: iamM('iam_deleteSessionMappingCacheFailed', { params: { message: result.error.message } }), cause: result.error })
-      }
-      return ok(undefined)
+      return repo.removeRefreshToken(refreshToken)
+    },
+
+    async patchUserSessions(userId, updates): Promise<Result<void, IamError>> {
+      return repo.patchUserSessions(userId, { ...updates })
     },
   }
 }

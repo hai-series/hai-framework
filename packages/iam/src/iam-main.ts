@@ -41,6 +41,8 @@ const logger = core.logger.child({ module: 'iam', scope: 'main' })
 
 // ─── 内部状态 ───
 
+/** init() 是否正在执行（并发防护） */
+let initInProgress = false
 let currentConfig: IamConfig | null = null
 let currentAuth: AuthnOperations | null = null
 let currentUser: UserOperations | null = null
@@ -80,12 +82,21 @@ const notInitializedUser: UserOperations = new Proxy({} as UserOperations, {
 
 export const iam: IamFunctions = {
   async init(config: IamConfigInput): Promise<Result<void, IamError>> {
-    if (currentConfig !== null) {
-      logger.warn('IAM module is already initialized, reinitializing')
-      await iam.close()
+    // 并发防护：防止多次同时调用导致子功能/连接泄漏
+    if (initInProgress) {
+      logger.warn('IAM init already in progress, skipping concurrent call')
+      return err({
+        code: IamErrorCode.CONFIG_ERROR,
+        message: iamM('iam_initInProgress'),
+      })
     }
+    initInProgress = true
 
     try {
+      if (currentConfig !== null) {
+        logger.warn('IAM module is already initialized, reinitializing')
+        await iam.close()
+      }
       const { db, cache, ldapClientFactory, ldapSyncUser, onPasswordResetRequest, onOtpSendEmail, onOtpSendSms, ...settingsInput } = config
 
       logger.info('Initializing IAM module')
@@ -119,7 +130,7 @@ export const iam: IamFunctions = {
         return sessionResult
       }
 
-      const authzResult = await createAuthzOperations({ config: parsed, db, cache })
+      const authzResult = await createAuthzOperations({ config: parsed, db, session: sessionResult.data })
       if (!authzResult.success) {
         return authzResult
       }
@@ -143,7 +154,7 @@ export const iam: IamFunctions = {
         config: parsed,
         db,
         cache,
-        passwordStrategy: authnResult.data.passwordStrategy,
+        passwordStrategyResult: authnResult.data.passwordStrategyResult,
         sessionFunctions: sessionResult.data,
         authzFunctions: authzResult.data,
         onPasswordResetRequest,
@@ -189,6 +200,9 @@ export const iam: IamFunctions = {
         message: iamM('iam_initFailed'),
         cause: error,
       })
+    }
+    finally {
+      initInProgress = false
     }
   },
 
