@@ -56,6 +56,10 @@ Part 2 — 交叉评审与模拟
 - [ ] **命名三问**通过：看名字知职责？不会混淆？6 个月后仍理解？
 - [ ] 类名、文件名、变量名三者一致
 - [ ] 无含糊命名（data / info / handle / process）
+- [ ] 关系表名符合 `hai_<module>_<feature>`（全小写 snake_case）
+- [ ] 缓存 key 符合 `hai:<module>:<feature>`（全小写 + `:` 分隔）
+- [ ] 表名/缓存 key 常量贴近使用处定义（Repository/functions），未散落到 main/constants
+- [ ] 表名/缓存 key 未做成配置项（无 `config.tableName` / `config.keyPrefix`）
 - [ ] 函数体 ≤ 120 行，无 >2 层 if 嵌套
 - [ ] return 语句无内嵌复杂逻辑
 - [ ] import 顺序正确（type-only 在前，外部在前）

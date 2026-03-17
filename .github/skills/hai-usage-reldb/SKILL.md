@@ -35,6 +35,12 @@ await reldb.init(core.config.get('db'))
 await reldb.close()
 ```
 
+### 命名约定（与模块规范保持一致）
+
+- 表名必须使用 `hai_<module>_<feature>`（如 `hai_iam_users`）
+- 缓存 key（如该仓库逻辑涉及 cache）必须使用 `hai:<module>:<feature>`（如 `hai:iam:user:123`）
+- 表名/缓存 key 常量应在使用处就近定义，不做配置项暴露
+
 ---
 
 ## §2 操作接口总览
@@ -108,7 +114,7 @@ const columns: TableDef = {
 
 ```typescript
 const result = await reldb.sql.query<User>(
-  'SELECT * FROM users WHERE status = ? AND age > ?',
+  'SELECT * FROM hai_demo_users WHERE status = ? AND age > ?',
   ['active', 18],
 )
 ```
@@ -117,7 +123,7 @@ const result = await reldb.sql.query<User>(
 
 ```typescript
 const page = await reldb.sql.queryPage<User>({
-  sql: 'SELECT * FROM users WHERE status = ? ORDER BY id',
+  sql: 'SELECT * FROM hai_demo_users WHERE status = ? ORDER BY id',
   params: ['active'],
   pagination: { page: 1, pageSize: 20 },
   overrides: { maxPageSize: 100 },
@@ -133,7 +139,7 @@ const page = await reldb.sql.queryPage<User>({
 
 ```typescript
 const userCrud = reldb.crud.table<{ id: number, name: string, email: string }>({
-  table: 'users',
+  table: 'hai_demo_users',
   idColumn: 'id',
   select: ['id', 'name', 'email'],
   createColumns: ['name', 'email'],
@@ -200,7 +206,7 @@ interface User { id: number, name: string, email: string, createdAt: Date }
 class UserRepository extends BaseReldbCrudRepository<User> {
   constructor() {
     super(db, {
-      table: 'users',
+      table: 'hai_demo_users',
       idColumn: 'id',
       fields: [
         { fieldName: 'id', columnName: 'id', def: { type: 'INTEGER', primaryKey: true, autoIncrement: true }, select: true, create: false, update: false },
@@ -212,7 +218,7 @@ class UserRepository extends BaseReldbCrudRepository<User> {
   }
 
   async findByEmail(email: string, tx?: DmlWithTxOperations) {
-    return this.sql(tx).get<User>('SELECT * FROM users WHERE email = ?', [email])
+    return this.sql(tx).get<User>('SELECT * FROM hai_demo_users WHERE email = ?', [email])
   }
 }
 ```
@@ -228,7 +234,7 @@ class UserRepository extends BaseReldbCrudRepository<User> {
 ```typescript
 // 方式1：wrap（自动 commit/rollback）
 const result = await reldb.tx.wrap(async (tx) => {
-  await tx.execute('INSERT INTO users (name) VALUES (?)', ['张三'])
+  await tx.execute('INSERT INTO hai_demo_users (name) VALUES (?)', ['张三'])
   await tx.execute('INSERT INTO logs (action) VALUES (?)', ['user_created'])
   return 'done'
 })
@@ -238,7 +244,7 @@ const txResult = await reldb.tx.begin()
 if (txResult.success) {
   const tx = txResult.data
   try {
-    await tx.execute('INSERT INTO users (name) VALUES (?)', ['李四'])
+    await tx.execute('INSERT INTO hai_demo_users (name) VALUES (?)', ['李四'])
     await tx.commit()
   } catch {
     await tx.rollback()
@@ -257,19 +263,19 @@ if (txResult.success) {
 ```typescript
 // 提取
 const { sql, params } = reldb.json.extract('settings', '$.theme')
-const rows = await reldb.sql.query(`SELECT * FROM users WHERE ${sql} = ?`, [...params, '"dark"'])
+const rows = await reldb.sql.query(`SELECT * FROM hai_demo_users WHERE ${sql} = ?`, [...params, '"dark"'])
 
 // 设置
 const { sql, params } = reldb.json.set('settings', '$.theme', 'dark')
-await reldb.sql.execute(`UPDATE users SET settings = ${sql} WHERE id = ?`, [...params, userId])
+await reldb.sql.execute(`UPDATE hai_demo_users SET settings = ${sql} WHERE id = ?`, [...params, userId])
 
 // 删除
 const { sql, params } = reldb.json.remove('settings', '$.deprecated')
-await reldb.sql.execute(`UPDATE users SET settings = ${sql} WHERE id = ?`, [...params, id])
+await reldb.sql.execute(`UPDATE hai_demo_users SET settings = ${sql} WHERE id = ?`, [...params, id])
 
 // 合并
 const { sql, params } = reldb.json.merge('profile', { bio: '新简介', avatar: null })
-await reldb.sql.execute(`UPDATE users SET profile = ${sql} WHERE id = ?`, [...params, userId])
+await reldb.sql.execute(`UPDATE hai_demo_users SET profile = ${sql} WHERE id = ?`, [...params, userId])
 ```
 
 > `column` 参数为列名，**禁止传入用户输入**。

@@ -29,6 +29,15 @@ applyTo: "packages/reldb/**"
 - 类名：`{Module}{Entity}Repository`
 - 实现 `fieldMapping`、`toEntity`、`fromEntity`
 - 跨仓库事务：多个 Repository 共享同一 `tx` 句柄
+- 表名命名必须使用 `hai_<module>_<feature>`（全小写 snake_case）
+- 表名常量必须与 Repository 实现同文件就近定义，禁止放在 main/constants 并跨层传递
+- 表名禁止做成可配置项（禁止 `config.tableName`）
+
+## 缓存 key 约定（涉及 cache 时）
+
+- 缓存 key 命名必须使用 `hai:<module>:<feature>`（全小写 + 冒号分隔）
+- key 前缀常量必须在实际使用该 key 的 Functions/Repository 文件内定义
+- 缓存 key 禁止做成可配置项（禁止 `config.keyPrefix`）
 
 ## 详细 API 文档
 
