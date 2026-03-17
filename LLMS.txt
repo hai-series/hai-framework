@@ -485,11 +485,7 @@ await payment.close()
 import { audit } from '@h-ai/audit'
 
 // 初始化（需先 init reldb）
-await audit.init({
-  reldb,                          // 已初始化的 @h-ai/reldb 实例
-  tableName: 'audit_logs',        // 可选，默认 'audit_logs'
-  userTable: 'users',             // 可选，用于 JOIN 查询用户名
-})
+await audit.init()
 
 // --- 记录审计日志 ---
 await audit.log({

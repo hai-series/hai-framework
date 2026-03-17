@@ -68,7 +68,7 @@ await iam.init({
 })
 ```
 
-初始化时自动创建数据库表（5 张）：`iam_users`、`iam_roles`、`iam_permissions`、`iam_role_permissions`、`iam_user_roles`。
+初始化时自动创建数据库表（5 张）：`hai_iam_users`、`hai_iam_roles`、`hai_iam_permissions`、`hai_iam_role_permissions`、`hai_iam_user_roles`。
 
 Token 和 OTP 存储在 cache 中（不落库）。refreshToken 使用独立的 cache key 存储。
 

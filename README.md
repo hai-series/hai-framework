@@ -497,7 +497,7 @@ if (result.success)
 ```typescript
 import { audit } from '@h-ai/audit'
 
-await audit.init({ reldb })
+await audit.init()
 
 // 记录操作
 await audit.helper.login('user_1', '127.0.0.1')
