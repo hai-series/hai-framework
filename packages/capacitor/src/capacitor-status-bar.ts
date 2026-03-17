@@ -22,10 +22,7 @@ import { capacitorM } from './capacitor-i18n.js'
  *
  * @example
  * ```ts
- * import { configureStatusBar } from '@h-ai/capacitor'
- *
- * // 沉浸式深色文字状态栏
- * await configureStatusBar({
+ * await capacitor.statusBar.configure({
  *   style: 'dark',
  *   overlay: true,
  *   backgroundColor: '#ffffff',
@@ -69,6 +66,13 @@ export async function configureStatusBar(config: StatusBarConfig): Promise<Resul
 
 /**
  * 显示状态栏
+ *
+ * @returns Result
+ *
+ * @example
+ * ```ts
+ * await capacitor.statusBar.show()
+ * ```
  */
 export async function showStatusBar(): Promise<Result<void, CapacitorError>> {
   try {
@@ -87,6 +91,13 @@ export async function showStatusBar(): Promise<Result<void, CapacitorError>> {
 
 /**
  * 隐藏状态栏
+ *
+ * @returns Result
+ *
+ * @example
+ * ```ts
+ * await capacitor.statusBar.hide()
+ * ```
  */
 export async function hideStatusBar(): Promise<Result<void, CapacitorError>> {
   try {

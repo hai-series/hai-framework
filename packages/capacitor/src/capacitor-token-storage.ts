@@ -105,6 +105,14 @@ export function createCapacitorTokenStorage(): TokenStorage {
  *
  * @param key - Preference Key
  * @returns Result 包裹的值
+ *
+ * @example
+ * ```ts
+ * const result = await capacitor.preferences.get('my_key')
+ * if (result.success) {
+ *   result.data // 值或 null
+ * }
+ * ```
  */
 export async function safeGetPreference(key: string): Promise<Result<string | null, CapacitorError>> {
   try {
@@ -126,6 +134,11 @@ export async function safeGetPreference(key: string): Promise<Result<string | nu
  * @param key - Preference Key
  * @param value - 要写入的值
  * @returns Result
+ *
+ * @example
+ * ```ts
+ * await capacitor.preferences.set('my_key', 'value')
+ * ```
  */
 export async function safeSetPreference(key: string, value: string): Promise<Result<void, CapacitorError>> {
   try {
@@ -146,6 +159,11 @@ export async function safeSetPreference(key: string, value: string): Promise<Res
  *
  * @param key - Preference Key
  * @returns Result
+ *
+ * @example
+ * ```ts
+ * await capacitor.preferences.remove('my_key')
+ * ```
  */
 export async function safeRemovePreference(key: string): Promise<Result<void, CapacitorError>> {
   try {
