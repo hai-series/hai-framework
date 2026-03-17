@@ -81,7 +81,20 @@ await payment.init({
 })
 ```
 
-关键支付操作（创建订单、回调、退款、关闭订单）会自动写入审计日志（依赖 `@h-ai/audit`）。只配置需要的 Provider 即可，未配置的 Provider 不会注册。
+只配置需要的 Provider 即可，未配置的 Provider 不会注册。
+
+## 审计日志
+
+关键支付操作执行成功后会自动写入审计日志（依赖 `@h-ai/audit`），无需额外配置。审计写入失败仅输出 warn 日志，不影响支付操作。
+
+| 操作     | `action`         | 记录内容                                |
+| -------- | ---------------- | --------------------------------------- |
+| 创建订单 | `create_order`   | provider、amount、tradeType             |
+| 支付回调 | `payment_notify` | provider、transactionId、status、amount |
+| 退款     | `refund`         | provider、refundNo、amount              |
+| 关闭订单 | `close_order`    | provider                                |
+
+> 订单查询（`queryOrder`）为只读操作，不写审计日志。
 
 ## 错误处理
 
