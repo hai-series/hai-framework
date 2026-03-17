@@ -20,7 +20,9 @@ import {
 } from '../src/payment-functions'
 
 // mock @h-ai/audit 模块，使 payment-functions 内部的 audit.log 可被断言
-const mockAuditLog = vi.fn(async () => ok(undefined as never))
+const { mockAuditLog } = vi.hoisted(() => ({
+  mockAuditLog: vi.fn(async () => ({ success: true as const, value: undefined })),
+}))
 vi.mock('@h-ai/audit', () => ({
   audit: {
     init: vi.fn(),
