@@ -46,8 +46,6 @@ export class ReldbAIStore<T> implements AIStore<T> {
   private readonly hasSessionId: boolean
   private readonly hasStatus: boolean
   private readonly hasRefId: boolean
-  private initialized = false
-
   constructor(sql: DmlOperations, table: string, jsonOps: ReldbJsonOps, options?: AIStoreOptions) {
     this.sql = sql
     this.table = table
@@ -60,12 +58,9 @@ export class ReldbAIStore<T> implements AIStore<T> {
   }
 
   /**
-   * 确保表已创建（跨 DB 兼容 DDL）
+   * 创建表及索引（由 ai.init() 统一调用，幂等）
    */
-  private async ensureTable(): Promise<void> {
-    if (this.initialized)
-      return
-
+  async createTable(): Promise<void> {
     const t = this.table
     const db = this.dbType
     const idType = db === 'mysql' ? 'VARCHAR(512)' : 'TEXT'
@@ -105,12 +100,9 @@ export class ReldbAIStore<T> implements AIStore<T> {
     if (this.hasRefId) {
       await this.sql.execute(`CREATE INDEX IF NOT EXISTS idx_${t}_ref_id ON ${t}(ref_id)`)
     }
-
-    this.initialized = true
   }
 
   async save(id: string, data: T, scope?: StoreScope): Promise<void> {
-    await this.ensureTable()
     const now = Date.now()
     const json = JSON.stringify(data)
 
@@ -180,14 +172,13 @@ export class ReldbAIStore<T> implements AIStore<T> {
   }
 
   async saveMany(items: Array<{ id: string, data: T, scope?: StoreScope }>): Promise<void> {
-    await this.ensureTable()
-    for (const { id, data, scope } of items) {
-      await this.save(id, data, scope)
-    }
+    if (items.length === 0)
+      return
+    // 批量写入：使用 Promise.all 并行执行，避免 N+1 顺序写入
+    await Promise.all(items.map(({ id, data, scope }) => this.save(id, data, scope)))
   }
 
   async get(id: string): Promise<T | undefined> {
-    await this.ensureTable()
     const result = await this.sql.get<{ data: string }>(
       `SELECT data FROM ${this.table} WHERE id = ?`,
       [id],
@@ -198,7 +189,6 @@ export class ReldbAIStore<T> implements AIStore<T> {
   }
 
   async query(filter: StoreFilter<T>): Promise<T[]> {
-    await this.ensureTable()
     const { sql, params } = this.buildQuery(filter)
     const result = await this.sql.query<{ data: string }>(sql, params)
     if (!result.success)
@@ -207,8 +197,6 @@ export class ReldbAIStore<T> implements AIStore<T> {
   }
 
   async queryPage(filter: StoreFilter<T>, page: { offset: number, limit: number }): Promise<StorePage<T>> {
-    await this.ensureTable()
-
     // 总数（带 WHERE 条件）
     const countParams: unknown[] = []
     const countConditions = this.buildAllConditions(filter, countParams)
@@ -229,13 +217,11 @@ export class ReldbAIStore<T> implements AIStore<T> {
   }
 
   async remove(id: string): Promise<boolean> {
-    await this.ensureTable()
     await this.sql.execute(`DELETE FROM ${this.table} WHERE id = ?`, [id])
     return true
   }
 
   async removeBy(filter: StoreFilter<T>): Promise<number> {
-    await this.ensureTable()
     const params: unknown[] = []
     const conditions = this.buildAllConditions(filter, params)
 
@@ -260,7 +246,6 @@ export class ReldbAIStore<T> implements AIStore<T> {
   }
 
   async count(filter?: StoreFilter<T>): Promise<number> {
-    await this.ensureTable()
     if (!filter?.where && !filter?.objectId && !filter?.sessionId && !filter?.status && !filter?.refId) {
       const result = await this.sql.get<{ cnt: number }>(
         `SELECT COUNT(*) as cnt FROM ${this.table}`,
@@ -278,7 +263,6 @@ export class ReldbAIStore<T> implements AIStore<T> {
   }
 
   async clear(filter?: StoreFilter<T>): Promise<void> {
-    await this.ensureTable()
     if (!filter?.where && !filter?.objectId && !filter?.sessionId && !filter?.status && !filter?.refId) {
       await this.sql.execute(`DELETE FROM ${this.table}`)
       return
@@ -478,11 +462,6 @@ export class VecdbAIVectorStore implements AIVectorStore {
 
   async remove(id: string): Promise<void> {
     await this.vecdb.vector.delete(this.collection, [id])
-  }
-
-  async removeBy(_filter: Record<string, unknown>): Promise<number> {
-    // vecdb 不支持按 metadata filter 批量删除，返回 0
-    return 0
   }
 
   async clear(_filter?: Record<string, unknown>): Promise<void> {

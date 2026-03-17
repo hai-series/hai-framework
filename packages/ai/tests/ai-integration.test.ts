@@ -74,9 +74,9 @@ function embeddingResponse(dim: number, count = 1) {
 // =============================================================================
 
 describe('ai 全流程集成', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks()
-    ai.init({
+    await ai.init({
       llm: { model: 'gpt-4o-mini', apiKey: 'sk-test' },
       embedding: { model: 'text-embedding-3-small', apiKey: 'sk-test' },
     })
@@ -264,7 +264,7 @@ describe('ai 全流程集成', () => {
     ai.retrieval.addSource({ id: 'src-1', collection: 'coll-1' })
 
     // 重新初始化
-    const result = ai.init({
+    const result = await ai.init({
       llm: { model: 'gpt-4o', apiKey: 'sk-new' },
       embedding: { model: 'text-embedding-3-small', apiKey: 'sk-new' },
     })

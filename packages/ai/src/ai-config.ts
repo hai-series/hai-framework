@@ -30,6 +30,8 @@ export const AIErrorCode = {
   NOT_INITIALIZED: 12010,
   /** 配置错误 */
   CONFIGURATION_ERROR: 12011,
+  /** 初始化正在进行中（并发调用防护） */
+  INIT_IN_PROGRESS: 12012,
 
   // LLM (12100-12199)
   /** API 调用错误 */

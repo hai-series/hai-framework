@@ -8,6 +8,7 @@
  * - Tool registry + execute → 工具链
  */
 
+import type { AIConfig } from '../src/ai-config.js'
 import type { EmbeddingOperations } from '../src/embedding/ai-embedding-types.js'
 import type { LLMOperations } from '../src/llm/ai-llm-types.js'
 import type { RetrievalOperations, RetrievalSource } from '../src/retrieval/ai-retrieval-types.js'
@@ -231,7 +232,7 @@ describe('rAG + citation 跨模块流程', () => {
 // =============================================================================
 
 describe('retrieval 源管理进阶', () => {
-  it('多源管理：添加、列出、删除', () => {
+  it('多源管理：添加、列出、删除', async () => {
     const ops = createRetrievalOperations(createMockEmbedding(8))
 
     ops.addSource({ id: 'wiki', collection: 'wiki-docs', topK: 5, name: 'Wiki' })
@@ -252,7 +253,7 @@ describe('retrieval 源管理进阶', () => {
     }
   })
 
-  it('添加带完整信源信息的源', () => {
+  it('添加带完整信源信息的源', async () => {
     const ops = createRetrievalOperations(createMockEmbedding(8))
 
     const source: RetrievalSource = {
@@ -286,7 +287,7 @@ describe('retrieval 源管理进阶', () => {
 describe('reasoning 跨模块进阶', () => {
   const defaultConfig = {
     llm: { model: 'gpt-4o', apiKey: 'test' },
-  } as any
+  } as AIConfig
 
   it('coT 策略正确流转', async () => {
     const mockLLM = createMockLLM([
@@ -378,7 +379,7 @@ describe('tools 注册表组合场景', () => {
     }
   })
 
-  it('获取 OpenAI 兼容工具定义列表', () => {
+  it('获取 OpenAI 兼容工具定义列表', async () => {
     const registry = ai.tools.createRegistry()
 
     registry.register(ai.tools.define({
@@ -394,7 +395,7 @@ describe('tools 注册表组合场景', () => {
     expect(defs[0].function.name).toBe('greet')
   })
 
-  it('注册表 unregister + re-register', () => {
+  it('注册表 unregister + re-register', async () => {
     const registry = ai.tools.createRegistry()
 
     const tool = ai.tools.define({
@@ -454,25 +455,25 @@ describe('embedding 跨模块边界', () => {
 // =============================================================================
 
 describe('配置变体初始化', () => {
-  it('仅 LLM 配置，无 embedding 配置', () => {
+  it('仅 LLM 配置，无 embedding 配置', async () => {
     ai.close()
-    const result = ai.init({ llm: { model: 'gpt-4o', apiKey: 'sk-test' } })
+    const result = await ai.init({ llm: { model: 'gpt-4o', apiKey: 'sk-test' } })
     expect(result.success).toBe(true)
     expect(ai.config?.llm?.model).toBe('gpt-4o')
     ai.close()
   })
 
-  it('仅 embedding 配置', () => {
+  it('仅 embedding 配置', async () => {
     ai.close()
-    const result = ai.init({ llm: { apiKey: 'sk-test', scenarios: { embedding: 'text-embedding-3-small' } } })
+    const result = await ai.init({ llm: { apiKey: 'sk-test', scenarios: { embedding: 'text-embedding-3-small' } } })
     expect(result.success).toBe(true)
     expect(ai.config?.llm?.scenarios?.embedding).toBe('text-embedding-3-small')
     ai.close()
   })
 
-  it('完整配置（LLM + Embedding）', () => {
+  it('完整配置（LLM + Embedding）', async () => {
     ai.close()
-    const result = ai.init({
+    const result = await ai.init({
       llm: { model: 'gpt-4o', apiKey: 'sk-test', temperature: 0.7, maxTokens: 4096, scenarios: { embedding: 'text-embedding-3-large' } },
     })
     expect(result.success).toBe(true)
@@ -481,17 +482,17 @@ describe('配置变体初始化', () => {
     ai.close()
   })
 
-  it('空配置初始化（使用所有默认值）', () => {
+  it('空配置初始化（使用所有默认值）', async () => {
     ai.close()
-    const result = ai.init()
+    const result = await ai.init()
     expect(result.success).toBe(true)
     expect(ai.config).not.toBeNull()
     ai.close()
   })
 
-  it('knowledge 配置项', () => {
+  it('knowledge 配置项', async () => {
     ai.close()
-    const result = ai.init({
+    const result = await ai.init({
       llm: { model: 'gpt-4o', apiKey: 'sk-test' },
       knowledge: {
         chunkSize: 500,

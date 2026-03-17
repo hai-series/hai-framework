@@ -88,7 +88,9 @@ function wrapExecutorWithLogging(
       const originalPublish = eventBus.publish.bind(eventBus)
       const wrappedBus: ExecutionEventBus = Object.create(eventBus)
       wrappedBus.publish = (event) => {
-        // 记录 agent 消息（Message 类型有 role 属性）
+        // @a2a-js/sdk ExecutionEventBus.publish 的 event 参数是联合类型，
+        // 此处需要通过运行时检查判断是否为 Message 类型（含 role 属性），
+        // SDK 未导出 Message 类型守卫，故使用 Record 断言访问属性
         if (event && typeof event === 'object' && 'role' in event && (event as unknown as Record<string, unknown>).role === 'agent') {
           const outboundRecord: A2AMessageRecord = {
             id: `msg_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`,
@@ -240,10 +242,12 @@ export function createA2AOperations(
         }
 
         // 提取 result（Task | Message）
+        // @a2a-js/sdk SendMessageResponse.result 为 Task | Message 联合类型，
+        // SDK 未提供类型守卫，通过 'status'/'parts' 属性运行时判别后断言
         const responseData = response.result
         let result: A2ACallResult
         if (responseData && 'status' in responseData) {
-          // 返回的是 Task
+          // 通过 'status' 判别为 Task 类型
           const task = responseData as unknown as Task
           const textParts = task.artifacts?.flatMap(a => a.parts?.filter(p => 'text' in p).map(p => (p as { text: string }).text) ?? []) ?? []
           result = {
@@ -254,7 +258,7 @@ export function createA2AOperations(
           }
         }
         else if (responseData && 'parts' in responseData) {
-          // 返回的是 Message
+          // 通过 'parts' 判别为 Message 类型
           const msg = responseData as unknown as { role: string, parts: Array<{ text?: string }> }
           const textParts = msg.parts?.filter(p => p.text).map(p => p.text!) ?? []
           result = {

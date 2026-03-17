@@ -3,6 +3,7 @@
 
   "ai_notInitialized": "AI service not initialized. Call ai.init() first.",
   "ai_initFailed": "Failed to initialize AI service: {error}",
+  "ai_initInProgress": "AI service initialization is already in progress.",
 
   "ai_requestTimeout": "Request timeout",
   "ai_internalError": "Internal error: {error}",

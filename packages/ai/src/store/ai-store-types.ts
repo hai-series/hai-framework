@@ -156,8 +156,6 @@ export interface AIVectorStore {
   search: (vector: number[], options?: { topK?: number, filter?: Record<string, unknown> }) => Promise<Array<{ id: string, score: number, metadata?: Record<string, unknown> }>>
   /** 删除向量 */
   remove: (id: string) => Promise<void>
-  /** 批量删除 */
-  removeBy: (filter: Record<string, unknown>) => Promise<number>
   /** 清空 */
   clear: (filter?: Record<string, unknown>) => Promise<void>
 }

@@ -381,7 +381,7 @@ import { ai, createMcpServer } from '@h-ai/ai'
 import { z } from 'zod'
 
 // 初始化（OpenAI 兼容 API）
-ai.init({
+await ai.init({
   llm: { apiKey: process.env.HAI_OPENAI_API_KEY, model: 'gpt-4o-mini' },
 })
 

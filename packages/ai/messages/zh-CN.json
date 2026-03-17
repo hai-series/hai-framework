@@ -3,6 +3,7 @@
 
   "ai_notInitialized": "AI 服务未初始化，请先调用 ai.init()",
   "ai_initFailed": "AI 服务初始化失败：{error}",
+  "ai_initInProgress": "AI 服务正在初始化中，请勿重复调用。",
 
   "ai_requestTimeout": "请求超时",
   "ai_internalError": "内部错误：{error}",

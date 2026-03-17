@@ -80,12 +80,31 @@ export interface AISubsystems {
  * 根据 parsed config 和外部依赖创建所有子功能操作接口。
  * 与 main.ts 解耦——main 仅负责生命周期，本函数负责创建逻辑。
  */
-export function createAISubsystems(config: AIConfig, deps: AISubsystemDeps): AISubsystems {
+export async function createAISubsystems(config: AIConfig, deps: AISubsystemDeps): Promise<AISubsystems> {
   const { sql, jsonOps, dbType, vecdb: vecdbDep, datapipe: datapipeDep } = deps
 
   // LLM（含对话记录存储）
   const chatRecordStore = new ReldbAIStore<ChatRecord>(sql, 'hai_ai_chat_records', jsonOps, { dbType, hasObjectId: true, hasSessionId: true })
   const sessionStore = new ReldbAIStore<SessionInfo>(sql, 'hai_ai_sessions', jsonOps, { dbType, hasObjectId: true })
+
+  // Retrieval（依赖 Embedding + vecdb，可选依赖 Rerank）
+  const sourceStore = new ReldbAIStore<RetrievalSource>(sql, 'hai_ai_retrieval_sources', jsonOps, { dbType })
+
+  // Memory（依赖 LLM + Embedding + Store）
+  const memoryStore = new ReldbAIStore<MemoryEntry>(sql, 'hai_ai_memory', jsonOps, { dbType, hasObjectId: true })
+
+  // Context（依赖 Compress + Token + SessionStore + LLM + Memory + RAG + Reasoning）
+  const contextStore = new ReldbAIStore<{ messages: ChatMessage[], summaries: SummaryResult[], updatedAt: number }>(sql, 'hai_ai_context', jsonOps, { dbType, hasObjectId: true, hasSessionId: true })
+
+  // 统一建表（幂等 DDL）
+  await Promise.all([
+    chatRecordStore.createTable(),
+    sessionStore.createTable(),
+    sourceStore.createTable(),
+    memoryStore.createTable(),
+    contextStore.createTable(),
+  ])
+
   const llmFunctions = createAILLMFunctions(config, { recordStore: chatRecordStore, sessionStore })
   const llm = llmFunctions.llm
 
@@ -101,8 +120,6 @@ export function createAISubsystems(config: AIConfig, deps: AISubsystemDeps): AIS
   // Rerank
   const rerank = createRerankOperations(config)
 
-  // Retrieval（依赖 Embedding + vecdb，可选依赖 Rerank）
-  const sourceStore = new ReldbAIStore<RetrievalSource>(sql, 'hai_ai_retrieval_sources', jsonOps, { dbType })
   const retrieval = createRetrievalOperations(embedding, vecdbDep, sourceStore, rerank)
 
   // 预注册配置中的检索源（幂等写入，就算其他实例已有相同数据也安全）
@@ -120,9 +137,7 @@ export function createAISubsystems(config: AIConfig, deps: AISubsystemDeps): AIS
   const knowledgeParsed = KnowledgeConfigSchema.parse(config.knowledge ?? {})
   const knowledge = createKnowledgeOperations(knowledgeParsed, llm, embedding, vecdbDep, sql, datapipeDep, dbType)
 
-  // Memory（依赖 LLM + Embedding + Store）
   const memoryParsed = MemoryConfigSchema.parse(config.memory ?? {})
-  const memoryStore = new ReldbAIStore<MemoryEntry>(sql, 'hai_ai_memory', jsonOps, { dbType, hasObjectId: true })
   const memoryVectorStore = new VecdbAIVectorStore(vecdbDep, 'hai_ai_memory_vectors')
   const memory = createMemoryOperations(memoryParsed, llm, embedding, memoryStore, memoryVectorStore)
 
@@ -135,8 +150,6 @@ export function createAISubsystems(config: AIConfig, deps: AISubsystemDeps): AIS
   const summary = createSummaryOperations(config.llm, llm, token, summaryParsed)
   const compress = createCompressOperations(compressParsed, token, summary, config.llm.maxTokens ?? 4096)
 
-  // Context（依赖 Compress + Token + SessionStore + LLM + Memory + RAG + Reasoning）
-  const contextStore = new ReldbAIStore<{ messages: ChatMessage[], summaries: SummaryResult[], updatedAt: number }>(sql, 'hai_ai_context', jsonOps, { dbType, hasObjectId: true, hasSessionId: true })
   const context = createContextOperations(compressParsed, token, compress, contextStore, sessionStore, {
     llm,
     memory: memory ?? undefined,

@@ -123,7 +123,7 @@ export async function initApp(): Promise<void> {
   }
 
   // 7. 初始化 AI（可选）
-  const aiResult = ai.init(aiConfig ?? {})
+  const aiResult = await ai.init(aiConfig ?? {})
   if (!aiResult.success) {
     core.logger.warn('AI initialization failed, image recognition unavailable', {
       error: aiResult.error.message,
