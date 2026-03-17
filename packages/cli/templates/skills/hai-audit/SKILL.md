@@ -11,7 +11,7 @@ description: 使用 @h-ai/audit 进行审计日志的记录、查询、清理与
 
 ### 1. 配置
 
-审计模块依赖已初始化的 `@h-ai/reldb` 实例，无需独立配置文件。
+审计模块依赖已初始化的 `@h-ai/reldb` 实例，无需独立配置文件。审计日志固定存储在 `hai_audit_logs` 表中。
 
 ### 2. 初始化
 
@@ -20,10 +20,20 @@ import { audit } from '@h-ai/audit'
 import { reldb } from '@h-ai/reldb'
 
 await reldb.init({ type: 'sqlite', database: './data.db' })
-const result = await audit.init({ db: reldb })
+const result = await audit.init()
 if (!result.success) {
   // 处理错误
 }
+```
+
+自定义用户表映射：
+
+```ts
+await audit.init({
+  userTable: 'hai_iam_users',
+  userIdColumn: 'id',
+  userNameColumn: 'username',
+})
 ```
 
 ### 3. 关闭

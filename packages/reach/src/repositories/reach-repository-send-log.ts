@@ -68,7 +68,7 @@ export interface SendLogRepository extends ReldbCrudRepository<StoredSendLog> {
 // ─── 发送日志存储实现 ───
 
 /** 表名 */
-const TABLE_NAME = 'reach_send_log'
+const TABLE_NAME = 'hai_reach_send_log'
 
 /** 字段定义 */
 const SEND_LOG_FIELDS: ReldbCrudFieldDefinition[] = [

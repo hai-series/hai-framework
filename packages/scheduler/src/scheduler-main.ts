@@ -26,7 +26,6 @@ import { reldb } from '@h-ai/reldb'
 
 import { SchedulerLogRepository, SchedulerTaskRepository } from './repositories/index.js'
 import { SchedulerConfigSchema, SchedulerErrorCode } from './scheduler-config.js'
-import { SCHEDULER_LOG_TABLE, SCHEDULER_TASK_TABLE } from './scheduler-constants.js'
 import { parseCronExpression } from './scheduler-cron.js'
 import { schedulerM } from './scheduler-i18n.js'
 import { configureLock, getTask, getTaskRegistry, hasTask, isTaskRunning, isTimerRunning, registerInMemory, resetRunner, runTask, setCronCache, setLogRepository, setTask, startTimer, stopTimer, unregisterFromMemory } from './scheduler-runner.js'
@@ -66,8 +65,8 @@ async function initDatabase(parsed: SchedulerConfig): Promise<SchedulerConfig> {
     return { ...parsed, enableDb: false }
   }
 
-  taskRepo = new SchedulerTaskRepository(reldb, SCHEDULER_TASK_TABLE)
-  logRepo = new SchedulerLogRepository(reldb, SCHEDULER_LOG_TABLE)
+  taskRepo = new SchedulerTaskRepository(reldb)
+  logRepo = new SchedulerLogRepository(reldb)
 
   // 通知 runner 使用日志仓库
   setLogRepository(logRepo)

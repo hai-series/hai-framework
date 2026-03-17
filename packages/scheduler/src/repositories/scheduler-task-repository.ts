@@ -19,6 +19,9 @@ import { schedulerM } from '../scheduler-i18n.js'
 
 const logger = core.logger.child({ module: 'scheduler', scope: 'task-repository' })
 
+/** 任务定义表名（固定值） */
+const SCHEDULER_TASK_TABLE = 'hai_scheduler_tasks'
+
 // ─── API 任务配置 Schema（用于 DB 加载时校验） ───
 
 /** API 任务配置 Zod Schema，校验从数据库加载的 api_config JSON */
@@ -54,9 +57,9 @@ interface TaskRow {
  * 此类仅供 scheduler-main.ts 内部使用，不通过 index.ts 对外导出。
  */
 export class SchedulerTaskRepository extends BaseReldbCrudRepository<TaskRow> {
-  constructor(db: ReldbFunctions, tableName: string) {
+  constructor(db: ReldbFunctions) {
     super(db, {
-      table: tableName,
+      table: SCHEDULER_TASK_TABLE,
       idColumn: 'id',
       fields: [
         { fieldName: 'id', columnName: 'id', def: { type: 'INTEGER', primaryKey: true, autoIncrement: true }, select: true, create: false, update: false },

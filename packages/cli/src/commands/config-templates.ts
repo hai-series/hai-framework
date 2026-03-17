@@ -690,13 +690,13 @@ function generateSchedulerConfig(): string {
 enableDb: true
 
 # 执行日志表名
-tableName: scheduler_logs
+tableName: hai_scheduler_logs
 
 # 任务定义表名
-taskTableName: scheduler_tasks
+taskTableName: hai_scheduler_tasks
 
 # 分布式锁表名
-lockTableName: scheduler_locks
+lockTableName: hai_scheduler_locks
 
 # 检查间隔（毫秒）
 tickInterval: 1000
@@ -712,10 +712,10 @@ function generateAuditConfig(): string {
 # =============================================================================
 
 # 审计日志表名
-tableName: audit_logs
+tableName: hai_audit_logs
 
 # 用户表名（用于 JOIN 查询）
-userTable: users
+userTable: hai_iam_users
 
 # 用户表主键列名
 userIdColumn: id

@@ -68,7 +68,7 @@ export interface TemplateRepository extends ReldbCrudRepository<StoredTemplate> 
 // ─── 模板存储实现 ───
 
 /** 表名 */
-const TABLE_NAME = 'reach_template'
+const TABLE_NAME = 'hai_reach_template'
 
 /** 字段定义 */
 const TEMPLATE_FIELDS: ReldbCrudFieldDefinition[] = [
