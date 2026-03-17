@@ -94,6 +94,10 @@ function register(tool: Tool): Result<void, XxError> {
 - Repository：`{Module}{Entity}Repository`，继承 `BaseReldbCrudRepository`
 - i18n 获取器：`{缩写}M()`；消息键：`{module}_{camelCase}`
 - 请求-响应结构体：请求体 `{Domain}Req`，响应体 `{Domain}Resp`（如 `LoginReq` / `LoginResp`）
+- 关系表名统一：`hai_<module>_<feature>`（全小写 snake_case），例如 `hai_iam_users`
+- 缓存 key 统一：`hai:<module>:<feature>`（全小写 + 冒号分隔），例如 `hai:iam:user:123`
+- 表名与缓存 key 必须就近定义在使用处（Repository/Functions 文件内），禁止散落在 main/constants
+- 表名与缓存 key 禁止通过配置项覆盖（无需支持可配置）
 
 ## 最小知识原则（API 设计）
 
@@ -168,3 +172,5 @@ function register(tool: Tool): Result<void, XxError> {
 - 做兼容性处理（开发期，不考虑兼容旧版本）
 - 在模块内为已有依赖包的类型定义本地鸭子类型接口：若 `dependencies` 中已有对应包，直接 import 使用真实类型；禁止以 `as unknown as` 强转规避类型不兼容
 - `as unknown as T` 类型强转：禁止用此模式绕过真实类型差异，应修改接口/函数签名使用正确的类型；合规例外：第三方库类型缺失时的 workaround（须加注释说明原因）
+- 将表名/缓存 key 定义在模块 main、全局 constants 或配置文件中，导致与实现分离
+- 将表名/缓存 key 设计为可配置项（如 `config.tableName` / `config.keyPrefix`）
