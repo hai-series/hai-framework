@@ -21,11 +21,9 @@ import { capacitorM } from './capacitor-i18n.js'
  *
  * @example
  * ```ts
- * import { getDeviceInfo } from '@h-ai/capacitor'
- *
- * const result = await getDeviceInfo()
+ * const result = await capacitor.device.getInfo()
  * if (result.success) {
- *   console.log(result.data.platform) // 'android' | 'ios' | 'web'
+ *   result.data.platform // 'android' | 'ios' | 'web'
  * }
  * ```
  */
@@ -55,6 +53,15 @@ export async function getDeviceInfo(): Promise<Result<DeviceInfo, CapacitorError
  * 获取应用版本信息
  *
  * @returns appVersion 与 appBuild
+ *
+ * @example
+ * ```ts
+ * const result = await capacitor.device.getAppVersion()
+ * if (result.success) {
+ *   result.data.version // '1.0.0'
+ *   result.data.build   // '42'
+ * }
+ * ```
  */
 export async function getAppVersion(): Promise<Result<{ version: string, build: string }, CapacitorError>> {
   try {

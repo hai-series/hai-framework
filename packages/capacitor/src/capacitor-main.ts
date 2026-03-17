@@ -23,6 +23,9 @@ const logger = core.logger.child({ module: 'capacitor', scope: 'main' })
 /** 是否已初始化 */
 let initialized = false
 
+/** 是否正在初始化中（并发防护） */
+let initInProgress = false
+
 /** 缓存平台信息 */
 let cachedPlatform: string | null = null
 
@@ -97,22 +100,32 @@ function isCapacitorAvailable(): boolean {
  */
 export const capacitor: CapacitorFunctions = {
   async init(): Promise<Result<void, CapacitorError>> {
-    if (initialized) {
-      logger.warn('Capacitor module is already initialized, reinitializing')
-      await capacitor.close()
-    }
-
-    logger.info('Initializing capacitor module')
-
-    if (!isCapacitorAvailable()) {
-      logger.error('Capacitor is not available in current environment')
+    // 并发初始化防护：避免多次 init 同时执行导致资源泄漏
+    if (initInProgress) {
+      logger.warn('Capacitor init already in progress, skipping concurrent call')
       return err({
-        code: CapacitorErrorCode.NOT_AVAILABLE,
-        message: capacitorM('capacitor_notAvailable'),
+        code: CapacitorErrorCode.INIT_IN_PROGRESS,
+        message: capacitorM('capacitor_initInProgress'),
       })
     }
+    initInProgress = true
 
     try {
+      if (initialized) {
+        logger.warn('Capacitor module is already initialized, reinitializing')
+        await capacitor.close()
+      }
+
+      logger.info('Initializing capacitor module')
+
+      if (!isCapacitorAvailable()) {
+        logger.error('Capacitor is not available in current environment')
+        return err({
+          code: CapacitorErrorCode.NOT_AVAILABLE,
+          message: capacitorM('capacitor_notAvailable'),
+        })
+      }
+
       const { Capacitor } = await import('@capacitor/core')
       const platform = Capacitor.getPlatform()
 
@@ -136,6 +149,9 @@ export const capacitor: CapacitorFunctions = {
         message: capacitorM('capacitor_initFailed'),
         cause,
       })
+    }
+    finally {
+      initInProgress = false
     }
   },
 

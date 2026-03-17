@@ -41,7 +41,7 @@ export interface PushOperations {
   /** 注册推送通知，返回设备 Token */
   register: () => Promise<Result<PushRegistration, CapacitorError>>
   /** 监听推送通知事件，返回清理函数 */
-  listen: (callbacks: PushNotificationCallbacks) => Promise<() => Promise<void>>
+  listen: (callbacks: PushNotificationCallbacks) => Promise<Result<() => Promise<void>, CapacitorError>>
 }
 
 /** 状态栏操作 */

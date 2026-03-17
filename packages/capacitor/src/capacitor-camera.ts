@@ -36,9 +36,7 @@ const RESULT_TYPE_MAP = {
  *
  * @example
  * ```ts
- * import { takePhoto } from '@h-ai/capacitor'
- *
- * const result = await takePhoto({ source: 'camera', quality: 80 })
+ * const result = await capacitor.camera.takePhoto({ source: 'camera', quality: 80 })
  * if (result.success) {
  *   imageUrl = result.data.data
  * }

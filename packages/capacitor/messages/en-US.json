@@ -1,11 +1,13 @@
 {
   "capacitor_initFailed": "Capacitor initialization failed",
+  "capacitor_initInProgress": "Capacitor initialization is already in progress",
   "capacitor_notAvailable": "Capacitor is not available in this environment",
   "capacitor_preferencesGetFailed": "Failed to read from Capacitor Preferences",
   "capacitor_preferencesSetFailed": "Failed to write to Capacitor Preferences",
   "capacitor_preferencesRemoveFailed": "Failed to remove from Capacitor Preferences",
   "capacitor_deviceInfoFailed": "Failed to get device info",
   "capacitor_pushRegisterFailed": "Failed to register push notifications",
+  "capacitor_pushListenFailed": "Failed to listen for push notifications",
   "capacitor_cameraFailed": "Failed to access camera",
   "capacitor_statusBarFailed": "Failed to configure status bar",
   "capacitor_notInitialized": "Capacitor module is not initialized"
