@@ -70,7 +70,8 @@ describe('vecdb 未初始化', () => {
 
 describe('vecdb 配置校验', () => {
   it('无效的 type 返回 CONFIG_ERROR', async () => {
-    const result = await vecdb.init({ type: 'invalid' as any })
+    // @ts-expect-error 故意传入非法 type 测试配置校验
+    const result = await vecdb.init({ type: 'invalid' })
     expect(result.success).toBe(false)
     if (!result.success) {
       expect(result.error.code).toBe(VecdbErrorCode.CONFIG_ERROR)
@@ -79,7 +80,8 @@ describe('vecdb 配置校验', () => {
 
   it('lancedb 缺少 path 返回 CONFIG_ERROR', async () => {
     // lancedb path 为必填字段，缺少时应校验失败
-    const result = await vecdb.init({ type: 'lancedb' } as any)
+    // @ts-expect-error 故意缺少 path 测试配置校验
+    const result = await vecdb.init({ type: 'lancedb' })
     expect(result.success).toBe(false)
     if (!result.success) {
       expect(result.error.code).toBe(VecdbErrorCode.CONFIG_ERROR)
@@ -88,7 +90,8 @@ describe('vecdb 配置校验', () => {
   })
 
   it('pgvector 缺少 database 返回 CONFIG_ERROR', async () => {
-    const result = await vecdb.init({ type: 'pgvector' } as any)
+    // @ts-expect-error 故意缺少 database 测试配置校验
+    const result = await vecdb.init({ type: 'pgvector' })
     expect(result.success).toBe(false)
     if (!result.success) {
       expect(result.error.code).toBe(VecdbErrorCode.CONFIG_ERROR)

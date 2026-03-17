@@ -9,21 +9,17 @@
 import type { Result } from '@h-ai/core'
 import type { LancedbConfig } from '../vecdb-config.js'
 import type {
-  CollectionCreateOptions,
   CollectionInfo,
-  CollectionOperations,
   VecdbError,
-  VecdbProvider,
-  VectorDocument,
-  VectorOperations,
-  VectorSearchOptions,
   VectorSearchResult,
 } from '../vecdb-types.js'
+import type { CollectionDriver, VecdbProvider, VectorDriver } from './vecdb-provider-base.js'
 
 import { core, err, ok } from '@h-ai/core'
 
 import { VecdbErrorCode } from '../vecdb-config.js'
 import { vecdbM } from '../vecdb-i18n.js'
+import { createBaseCollectionOps, createBaseVectorOps } from './vecdb-provider-base.js'
 
 const logger = core.logger.child({ module: 'vecdb', scope: 'lancedb' })
 
@@ -52,9 +48,13 @@ interface LanceSearchQuery {
   toArray: () => Promise<Record<string, unknown>[]>
 }
 
-/** 转义 LanceDB filter 表达式中的字符串值（防注入） */
+/** 转义 LanceDB filter 表达式中的字符串值（防注入 + LIKE 通配符） */
 function escapeLanceFilterValue(value: string): string {
-  return value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
+  return value
+    .replace(/\\/g, '\\\\')
+    .replace(/"/g, '\\"')
+    .replace(/%/g, '\\%')
+    .replace(/_/g, '\\_')
 }
 
 /**
@@ -117,371 +117,235 @@ export function createLancedbProvider(): VecdbProvider {
     }
   }
 
-  // ─── 集合操作 ───
+  // ─── 操作上下文 ───
 
-  const collectionOps: CollectionOperations = {
-    async create(name: string, options: CollectionCreateOptions): Promise<Result<void, VecdbError>> {
-      if (!connection) {
-        return err({ code: VecdbErrorCode.NOT_INITIALIZED, message: vecdbM('vecdb_notInitialized') })
-      }
+  const ctx = { isConnected: () => connection !== null, logger }
 
+  // ─── 集合操作适配器 ───
+
+  const collectionDriver: CollectionDriver = {
+    async create(name, options) {
       logger.debug('Creating collection', { name, dimension: options.dimension, metric: options.metric })
 
-      try {
-        const tableNames = await connection.tableNames()
-        if (tableNames.includes(name)) {
-          return err({
-            code: VecdbErrorCode.COLLECTION_ALREADY_EXISTS,
-            message: vecdbM('vecdb_collectionAlreadyExists', { params: { name } }),
-          })
-        }
-
-        // 创建包含初始记录的表以确定 schema
-        const dimension = options.dimension
-        const metric = options.metric ?? config?.metric ?? 'cosine'
-        const initRecord = {
-          id: '__init__',
-          vector: Array.from({ length: dimension }, () => 0),
-          content: '',
-          metadata: '{}',
-        }
-
-        const table = await connection.createTable(name, [initRecord])
-        // 删除初始记录
-        await table.delete('id = "__init__"')
-
-        collectionMetas.set(name, { dimension, metric })
-
-        logger.info('Collection created', { name, dimension, metric })
-        return ok(undefined)
-      }
-      catch (error) {
-        logger.error('Failed to create collection', { name, error })
+      const tableNames = await connection!.tableNames()
+      if (tableNames.includes(name)) {
         return err({
-          code: VecdbErrorCode.QUERY_FAILED,
-          message: vecdbM('vecdb_queryFailed', { params: { error: String(error) } }),
-          cause: error,
+          code: VecdbErrorCode.COLLECTION_ALREADY_EXISTS,
+          message: vecdbM('vecdb_collectionAlreadyExists', { params: { name } }),
         })
       }
-    },
 
-    async drop(name: string): Promise<Result<void, VecdbError>> {
-      if (!connection) {
-        return err({ code: VecdbErrorCode.NOT_INITIALIZED, message: vecdbM('vecdb_notInitialized') })
+      // 创建包含初始记录的表以确定 schema
+      const dimension = options.dimension
+      const metric = options.metric ?? config?.metric ?? 'cosine'
+      const initRecord = {
+        id: '__init__',
+        vector: Array.from({ length: dimension }, () => 0),
+        content: '',
+        metadata: '{}',
       }
 
+      const table = await connection!.createTable(name, [initRecord])
+      // 删除初始记录
+      await table.delete('id = "__init__"')
+
+      collectionMetas.set(name, { dimension, metric })
+
+      logger.info('Collection created', { name, dimension, metric })
+      return ok(undefined)
+    },
+
+    async drop(name) {
       logger.debug('Dropping collection', { name })
 
-      try {
-        const tableNames = await connection.tableNames()
-        if (!tableNames.includes(name)) {
-          return err({
-            code: VecdbErrorCode.COLLECTION_NOT_FOUND,
-            message: vecdbM('vecdb_collectionNotFound', { params: { name } }),
-          })
-        }
-
-        await connection.dropTable(name)
-        collectionMetas.delete(name)
-
-        logger.info('Collection dropped', { name })
-        return ok(undefined)
-      }
-      catch (error) {
-        logger.error('Failed to drop collection', { name, error })
+      const tableNames = await connection!.tableNames()
+      if (!tableNames.includes(name)) {
         return err({
-          code: VecdbErrorCode.DELETE_FAILED,
-          message: vecdbM('vecdb_deleteFailed', { params: { error: String(error) } }),
-          cause: error,
+          code: VecdbErrorCode.COLLECTION_NOT_FOUND,
+          message: vecdbM('vecdb_collectionNotFound', { params: { name } }),
         })
       }
+
+      await connection!.dropTable(name)
+      collectionMetas.delete(name)
+
+      logger.info('Collection dropped', { name })
+      return ok(undefined)
     },
 
-    async exists(name: string): Promise<Result<boolean, VecdbError>> {
-      if (!connection) {
-        return err({ code: VecdbErrorCode.NOT_INITIALIZED, message: vecdbM('vecdb_notInitialized') })
-      }
-
+    async exists(name) {
       logger.debug('Checking collection exists', { name })
 
-      try {
-        const tableNames = await connection.tableNames()
-        return ok(tableNames.includes(name))
-      }
-      catch (error) {
-        return err({
-          code: VecdbErrorCode.QUERY_FAILED,
-          message: vecdbM('vecdb_queryFailed', { params: { error: String(error) } }),
-          cause: error,
-        })
-      }
+      const tableNames = await connection!.tableNames()
+      return ok(tableNames.includes(name))
     },
 
-    async info(name: string): Promise<Result<CollectionInfo, VecdbError>> {
-      if (!connection) {
-        return err({ code: VecdbErrorCode.NOT_INITIALIZED, message: vecdbM('vecdb_notInitialized') })
-      }
-
+    async info(name) {
       logger.debug('Getting collection info', { name })
 
-      try {
-        const table = await openTable(name)
-        if (!table) {
-          return err({
-            code: VecdbErrorCode.COLLECTION_NOT_FOUND,
-            message: vecdbM('vecdb_collectionNotFound', { params: { name } }),
-          })
-        }
-
-        const count = await table.countRows()
-        const meta = collectionMetas.get(name)
-
-        return ok({
-          name,
-          dimension: meta?.dimension ?? 0,
-          metric: (meta?.metric ?? config?.metric ?? 'cosine') as CollectionInfo['metric'],
-          count,
-        })
-      }
-      catch (error) {
+      const table = await openTable(name)
+      if (!table) {
         return err({
-          code: VecdbErrorCode.QUERY_FAILED,
-          message: vecdbM('vecdb_queryFailed', { params: { error: String(error) } }),
-          cause: error,
+          code: VecdbErrorCode.COLLECTION_NOT_FOUND,
+          message: vecdbM('vecdb_collectionNotFound', { params: { name } }),
         })
       }
+
+      const count = await table.countRows()
+      const meta = collectionMetas.get(name)
+
+      return ok({
+        name,
+        dimension: meta?.dimension ?? 0,
+        metric: (meta?.metric ?? config?.metric ?? 'cosine') as CollectionInfo['metric'],
+        count,
+      })
     },
 
-    async list(): Promise<Result<string[], VecdbError>> {
-      if (!connection) {
-        return err({ code: VecdbErrorCode.NOT_INITIALIZED, message: vecdbM('vecdb_notInitialized') })
-      }
-
+    async list() {
       logger.debug('Listing collections')
 
-      try {
-        const tableNames = await connection.tableNames()
-        return ok(tableNames)
-      }
-      catch (error) {
-        return err({
-          code: VecdbErrorCode.QUERY_FAILED,
-          message: vecdbM('vecdb_queryFailed', { params: { error: String(error) } }),
-          cause: error,
-        })
-      }
+      const tableNames = await connection!.tableNames()
+      return ok(tableNames)
     },
   }
 
-  // ─── 向量操作 ───
+  // ─── 向量操作适配器 ───
 
-  const vectorOps: VectorOperations = {
-    async insert(collection: string, documents: VectorDocument[]): Promise<Result<void, VecdbError>> {
-      if (!connection) {
-        return err({ code: VecdbErrorCode.NOT_INITIALIZED, message: vecdbM('vecdb_notInitialized') })
-      }
-
+  const vectorDriver: VectorDriver = {
+    async insert(collection, documents) {
       logger.debug('Inserting vectors', { collection, count: documents.length })
 
-      try {
-        const table = await openTable(collection)
-        if (!table) {
-          return err({
-            code: VecdbErrorCode.COLLECTION_NOT_FOUND,
-            message: vecdbM('vecdb_collectionNotFound', { params: { name: collection } }),
-          })
-        }
-
-        const records = documents.map(doc => ({
-          id: doc.id,
-          vector: doc.vector,
-          content: doc.content ?? '',
-          metadata: JSON.stringify(doc.metadata ?? {}),
-        }))
-
-        await table.add(records)
-
-        logger.info('Vectors inserted', { collection, count: documents.length })
-        return ok(undefined)
-      }
-      catch (error) {
-        logger.error('Failed to insert vectors', { collection, error })
+      const table = await openTable(collection)
+      if (!table) {
         return err({
-          code: VecdbErrorCode.INSERT_FAILED,
-          message: vecdbM('vecdb_insertFailed', { params: { error: String(error) } }),
-          cause: error,
+          code: VecdbErrorCode.COLLECTION_NOT_FOUND,
+          message: vecdbM('vecdb_collectionNotFound', { params: { name: collection } }),
         })
       }
+
+      const records = documents.map(doc => ({
+        id: doc.id,
+        vector: doc.vector,
+        content: doc.content ?? '',
+        metadata: JSON.stringify(doc.metadata ?? {}),
+      }))
+
+      await table.add(records)
+
+      logger.info('Vectors inserted', { collection, count: documents.length })
+      return ok(undefined)
     },
 
-    async upsert(collection: string, documents: VectorDocument[]): Promise<Result<void, VecdbError>> {
-      if (!connection) {
-        return err({ code: VecdbErrorCode.NOT_INITIALIZED, message: vecdbM('vecdb_notInitialized') })
-      }
-
+    async upsert(collection, documents) {
       logger.debug('Upserting vectors', { collection, count: documents.length })
 
-      try {
-        const table = await openTable(collection)
-        if (!table) {
-          return err({
-            code: VecdbErrorCode.COLLECTION_NOT_FOUND,
-            message: vecdbM('vecdb_collectionNotFound', { params: { name: collection } }),
-          })
-        }
-
-        // LanceDB 不支持原子 upsert，当前实现为 delete + add 两步操作。
-        // 若在 delete 之后、add 之前发生错误，已删除的记录将丢失。
-        // TODO: LanceDB 未来支持 mergeInsert 后可替换为原子操作
-        const records = documents.map(doc => ({
-          id: doc.id,
-          vector: doc.vector,
-          content: doc.content ?? '',
-          metadata: JSON.stringify(doc.metadata ?? {}),
-        }))
-
-        // 先删除已存在的记录，再插入
-        const ids = documents.map(d => `"${escapeLanceFilterValue(d.id)}"`).join(', ')
-        await table.delete(`id IN (${ids})`)
-        await table.add(records)
-
-        logger.info('Vectors upserted', { collection, count: documents.length })
-        return ok(undefined)
-      }
-      catch (error) {
-        logger.error('Failed to upsert vectors', { collection, error })
+      const table = await openTable(collection)
+      if (!table) {
         return err({
-          code: VecdbErrorCode.UPDATE_FAILED,
-          message: vecdbM('vecdb_updateFailed', { params: { error: String(error) } }),
-          cause: error,
+          code: VecdbErrorCode.COLLECTION_NOT_FOUND,
+          message: vecdbM('vecdb_collectionNotFound', { params: { name: collection } }),
         })
       }
+
+      // LanceDB 不支持原子 upsert，当前实现为 delete + add 两步操作。
+      // 若在 delete 之后、add 之前发生错误，已删除的记录将丢失。
+      // TODO: LanceDB 未来支持 mergeInsert 后可替换为原子操作
+      const records = documents.map(doc => ({
+        id: doc.id,
+        vector: doc.vector,
+        content: doc.content ?? '',
+        metadata: JSON.stringify(doc.metadata ?? {}),
+      }))
+
+      // 先删除已存在的记录，再插入
+      const ids = documents.map(d => `"${escapeLanceFilterValue(d.id)}"`).join(', ')
+      await table.delete(`id IN (${ids})`)
+      await table.add(records)
+
+      logger.info('Vectors upserted', { collection, count: documents.length })
+      return ok(undefined)
     },
 
-    async delete(collection: string, ids: string[]): Promise<Result<void, VecdbError>> {
-      if (!connection) {
-        return err({ code: VecdbErrorCode.NOT_INITIALIZED, message: vecdbM('vecdb_notInitialized') })
-      }
-
+    async delete(collection, ids) {
       logger.debug('Deleting vectors', { collection, count: ids.length })
 
-      try {
-        const table = await openTable(collection)
-        if (!table) {
-          return err({
-            code: VecdbErrorCode.COLLECTION_NOT_FOUND,
-            message: vecdbM('vecdb_collectionNotFound', { params: { name: collection } }),
-          })
-        }
-
-        const idList = ids.map(id => `"${escapeLanceFilterValue(id)}"`).join(', ')
-        await table.delete(`id IN (${idList})`)
-
-        logger.info('Vectors deleted', { collection, count: ids.length })
-        return ok(undefined)
-      }
-      catch (error) {
-        logger.error('Failed to delete vectors', { collection, error })
+      const table = await openTable(collection)
+      if (!table) {
         return err({
-          code: VecdbErrorCode.DELETE_FAILED,
-          message: vecdbM('vecdb_deleteFailed', { params: { error: String(error) } }),
-          cause: error,
+          code: VecdbErrorCode.COLLECTION_NOT_FOUND,
+          message: vecdbM('vecdb_collectionNotFound', { params: { name: collection } }),
         })
       }
+
+      const idList = ids.map(id => `"${escapeLanceFilterValue(id)}"`).join(', ')
+      await table.delete(`id IN (${idList})`)
+
+      logger.info('Vectors deleted', { collection, count: ids.length })
+      return ok(undefined)
     },
 
-    async search(
-      collection: string,
-      vector: number[],
-      options?: VectorSearchOptions,
-    ): Promise<Result<VectorSearchResult[], VecdbError>> {
-      if (!connection) {
-        return err({ code: VecdbErrorCode.NOT_INITIALIZED, message: vecdbM('vecdb_notInitialized') })
-      }
-
+    async search(collection, vector, options) {
       logger.debug('Searching vectors', { collection, topK: options?.topK, hasFilter: !!options?.filter })
 
-      try {
-        const table = await openTable(collection)
-        if (!table) {
-          return err({
-            code: VecdbErrorCode.COLLECTION_NOT_FOUND,
-            message: vecdbM('vecdb_collectionNotFound', { params: { name: collection } }),
-          })
-        }
-
-        const topK = options?.topK ?? 10
-        const minScore = options?.minScore ?? 0
-
-        let query = table.search(vector).limit(topK)
-
-        // 应用元数据过滤
-        if (options?.filter) {
-          const filterParts: string[] = []
-          for (const [key, value] of Object.entries(options.filter)) {
-            // LanceDB 过滤基于 SQL WHERE 子句（metadata 为 JSON 字符串）
-            filterParts.push(`metadata LIKE '%"${escapeLanceFilterValue(key)}":"${escapeLanceFilterValue(String(value))}"%'`)
-          }
-          if (filterParts.length > 0) {
-            query = query.where(filterParts.join(' AND '))
-          }
-        }
-
-        const results = await query.toArray()
-
-        const searchResults: VectorSearchResult[] = results
-          .map((row: Record<string, unknown>) => {
-            // LanceDB 返回 _distance（L2 距离），转换为相似度
-            const distance = (row._distance as number) ?? 0
-            const score = 1 / (1 + distance)
-
-            return {
-              id: row.id as string,
-              score,
-              content: (row.content as string) || undefined,
-              metadata: row.metadata ? JSON.parse(row.metadata as string) as Record<string, unknown> : undefined,
-            }
-          })
-          .filter((r: VectorSearchResult) => r.score >= minScore)
-
-        return ok(searchResults)
-      }
-      catch (error) {
-        logger.error('Failed to search vectors', { collection, error })
+      const table = await openTable(collection)
+      if (!table) {
         return err({
-          code: VecdbErrorCode.QUERY_FAILED,
-          message: vecdbM('vecdb_queryFailed', { params: { error: String(error) } }),
-          cause: error,
+          code: VecdbErrorCode.COLLECTION_NOT_FOUND,
+          message: vecdbM('vecdb_collectionNotFound', { params: { name: collection } }),
         })
       }
+
+      const topK = options?.topK ?? 10
+      const minScore = options?.minScore ?? 0
+
+      let query = table.search(vector).limit(topK)
+
+      // 应用元数据过滤
+      if (options?.filter) {
+        const filterParts: string[] = []
+        for (const [key, value] of Object.entries(options.filter)) {
+          // LanceDB 过滤基于 SQL WHERE 子句（metadata 为 JSON 字符串）
+          filterParts.push(`metadata LIKE '%"${escapeLanceFilterValue(key)}":"${escapeLanceFilterValue(String(value))}"%'`)
+        }
+        if (filterParts.length > 0) {
+          query = query.where(filterParts.join(' AND '))
+        }
+      }
+
+      const results = await query.toArray()
+
+      const searchResults: VectorSearchResult[] = results
+        .map((row: Record<string, unknown>) => {
+          // LanceDB 返回 _distance（L2 距离），转换为相似度
+          const distance = (row._distance as number) ?? 0
+          const score = 1 / (1 + distance)
+
+          return {
+            id: row.id as string,
+            score,
+            content: (row.content as string) || undefined,
+            metadata: row.metadata ? JSON.parse(row.metadata as string) as Record<string, unknown> : undefined,
+          }
+        })
+        .filter((r: VectorSearchResult) => r.score >= minScore)
+
+      return ok(searchResults)
     },
 
-    async count(collection: string): Promise<Result<number, VecdbError>> {
-      if (!connection) {
-        return err({ code: VecdbErrorCode.NOT_INITIALIZED, message: vecdbM('vecdb_notInitialized') })
-      }
-
+    async count(collection) {
       logger.debug('Counting vectors', { collection })
 
-      try {
-        const table = await openTable(collection)
-        if (!table) {
-          return err({
-            code: VecdbErrorCode.COLLECTION_NOT_FOUND,
-            message: vecdbM('vecdb_collectionNotFound', { params: { name: collection } }),
-          })
-        }
-
-        const count = await table.countRows()
-        return ok(count)
-      }
-      catch (error) {
+      const table = await openTable(collection)
+      if (!table) {
         return err({
-          code: VecdbErrorCode.QUERY_FAILED,
-          message: vecdbM('vecdb_queryFailed', { params: { error: String(error) } }),
-          cause: error,
+          code: VecdbErrorCode.COLLECTION_NOT_FOUND,
+          message: vecdbM('vecdb_collectionNotFound', { params: { name: collection } }),
         })
       }
+
+      const count = await table.countRows()
+      return ok(count)
     },
   }
 
@@ -506,6 +370,7 @@ export function createLancedbProvider(): VecdbProvider {
       const lancedb = loadResult.data
 
       try {
+        // @lancedb/lancedb 为 optionalDependencies，动态 import 后类型与本地最小接口不兼容，需强转
         connection = await lancedb.connect(lanceConfig.path) as unknown as LanceConnection
         config = lanceConfig
 
@@ -513,12 +378,12 @@ export function createLancedbProvider(): VecdbProvider {
         // 限制：LanceDB 不持久化维度/度量元信息，此处通过读取首条记录推断。
         // 若表为空或向量维度与探测维度不匹配，dimension 将为 0。
         const tableNames = await connection!.tableNames()
-        for (const name of tableNames) {
+        await Promise.allSettled(tableNames.map(async (name) => {
           try {
-            const table = await connection.openTable(name)
+            const table = await connection!.openTable(name)
             const count = await table.countRows()
             if (count === 0)
-              continue
+              return
             // 使用 1 维零向量探测，若真实维度不同 LanceDB 可能报错
             const rows = await table.search(Array.from({ length: 1 }).fill(0)).limit(1).toArray()
             if (rows.length > 0 && rows[0].vector) {
@@ -531,7 +396,7 @@ export function createLancedbProvider(): VecdbProvider {
           catch {
             // 无法推断维度（例如维度不匹配），跳过；info() 将返回 dimension=0
           }
-        }
+        }))
 
         logger.info('LanceDB connected', { path: lanceConfig.path })
         return ok(undefined)
@@ -558,7 +423,7 @@ export function createLancedbProvider(): VecdbProvider {
       return connection !== null
     },
 
-    collection: collectionOps,
-    vector: vectorOps,
+    collection: createBaseCollectionOps(ctx, collectionDriver),
+    vector: createBaseVectorOps(ctx, vectorDriver),
   }
 }

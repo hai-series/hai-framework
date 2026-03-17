@@ -4,6 +4,7 @@
   "vecdb_initFailed": "初始化向量数据库失败: {error}",
   "vecdb_closeFailed": "关闭向量数据库失败: {error}",
   "vecdb_configError": "向量数据库配置校验失败：{error}",
+  "vecdb_initInProgress": "向量数据库初始化正在进行中",
   "vecdb_unsupportedType": "不支持的向量数据库类型: {type}",
   "vecdb_driverNotFound": "向量数据库驱动未安装: {driver}，请执行 pnpm add {driver}",
   "vecdb_connectionFailed": "连接向量数据库失败: {error}",

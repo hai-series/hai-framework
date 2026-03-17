@@ -9,34 +9,22 @@
 import type { Result } from '@h-ai/core'
 import type { PgvectorConfig } from '../vecdb-config.js'
 import type {
-  CollectionCreateOptions,
-  CollectionInfo,
-  CollectionOperations,
   VecdbError,
-  VecdbProvider,
-  VectorDocument,
-  VectorOperations,
-  VectorSearchOptions,
   VectorSearchResult,
 } from '../vecdb-types.js'
+import type { CollectionDriver, VecdbProvider, VectorDriver } from './vecdb-provider-base.js'
 
 import { core, err, ok } from '@h-ai/core'
 
 import { VecdbErrorCode } from '../vecdb-config.js'
 import { vecdbM } from '../vecdb-i18n.js'
+import { createBaseCollectionOps, createBaseVectorOps } from './vecdb-provider-base.js'
 
 const logger = core.logger.child({ module: 'vecdb', scope: 'pgvector' })
-
-/** pg Client 的最小接口定义（事务操作用） */
-interface PgClient {
-  query: (text: string, params?: unknown[]) => Promise<{ rows: Record<string, unknown>[] }>
-  release: () => void
-}
 
 /** pg Pool 的最小接口定义（避免强依赖可选包） */
 interface PgPool {
   query: (text: string, params?: unknown[]) => Promise<{ rows: Record<string, unknown>[] }>
-  connect: () => Promise<PgClient>
   end: () => Promise<void>
 }
 
@@ -89,14 +77,14 @@ export function createPgvectorProvider(): VecdbProvider {
     }
   }
 
-  // ─── 集合操作 ───
+  // ─── 操作上下文 ───
 
-  const collectionOps: CollectionOperations = {
-    async create(name: string, options: CollectionCreateOptions): Promise<Result<void, VecdbError>> {
-      if (!pool) {
-        return err({ code: VecdbErrorCode.NOT_INITIALIZED, message: vecdbM('vecdb_notInitialized') })
-      }
+  const ctx = { isConnected: () => pool !== null, logger }
 
+  // ─── 集合操作适配器 ───
+
+  const collectionDriver: CollectionDriver = {
+    async create(name, options) {
       const table = tableName(name)
       const dimension = options.dimension
       const metric = options.metric ?? config?.metric ?? 'cosine'
@@ -104,337 +92,212 @@ export function createPgvectorProvider(): VecdbProvider {
 
       logger.debug('Creating collection', { name, dimension, metric, indexType })
 
-      try {
-        // 检查表是否已存在
-        const checkResult = await pool.query(
-          `SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = $1)`,
-          [table],
-        )
-        if (checkResult.rows[0].exists) {
-          return err({
-            code: VecdbErrorCode.COLLECTION_ALREADY_EXISTS,
-            message: vecdbM('vecdb_collectionAlreadyExists', { params: { name } }),
-          })
-        }
-
-        // 创建表
-        const qi = quoteIdent(table)
-        await pool.query(`
-          CREATE TABLE ${qi} (
-            id TEXT PRIMARY KEY,
-            vector vector(${dimension}),
-            content TEXT,
-            metadata JSONB DEFAULT '{}'::jsonb
-          )
-        `)
-
-        // 创建向量索引
-        const distOp = distanceOp()
-        const opsClass = distOp === '<=>'
-          ? 'vector_cosine_ops'
-          : distOp === '<->'
-            ? 'vector_l2_ops'
-            : 'vector_ip_ops'
-
-        if (indexType === 'hnsw') {
-          await pool.query(`
-            CREATE INDEX ON ${qi}
-            USING hnsw (vector ${opsClass})
-          `)
-        }
-        else {
-          // IVFFlat lists 参数：建表时数据为空，使用 100 作为通用默认值
-          // 适用于 100 万行以内的数据集；超大数据集应在数据增长后重建索引
-          await pool.query(`
-            CREATE INDEX ON ${qi}
-            USING ivfflat (vector ${opsClass})
-            WITH (lists = 100)
-          `)
-        }
-
-        logger.info('Collection created', { name, dimension, metric, indexType })
-        return ok(undefined)
-      }
-      catch (error) {
-        logger.error('Failed to create collection', { name, error })
+      // 检查表是否已存在
+      const checkResult = await pool!.query(
+        `SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = $1)`,
+        [table],
+      )
+      if (checkResult.rows[0].exists) {
         return err({
-          code: VecdbErrorCode.QUERY_FAILED,
-          message: vecdbM('vecdb_queryFailed', { params: { error: String(error) } }),
-          cause: error,
+          code: VecdbErrorCode.COLLECTION_ALREADY_EXISTS,
+          message: vecdbM('vecdb_collectionAlreadyExists', { params: { name } }),
         })
       }
-    },
 
-    async drop(name: string): Promise<Result<void, VecdbError>> {
-      if (!pool) {
-        return err({ code: VecdbErrorCode.NOT_INITIALIZED, message: vecdbM('vecdb_notInitialized') })
+      // 创建表
+      const qi = quoteIdent(table)
+      await pool!.query(`
+        CREATE TABLE ${qi} (
+          id TEXT PRIMARY KEY,
+          vector vector(${dimension}),
+          content TEXT,
+          metadata JSONB DEFAULT '{}'::jsonb
+        )
+      `)
+
+      // 创建向量索引
+      const distOp = distanceOp()
+      const opsClass = distOp === '<=>'
+        ? 'vector_cosine_ops'
+        : distOp === '<->'
+          ? 'vector_l2_ops'
+          : 'vector_ip_ops'
+
+      if (indexType === 'hnsw') {
+        await pool!.query(`
+          CREATE INDEX ON ${qi}
+          USING hnsw (vector ${opsClass})
+        `)
+      }
+      else {
+        // IVFFlat lists 参数：建表时数据为空，使用 100 作为通用默认值
+        // 适用于 100 万行以内的数据集；超大数据集应在数据增长后重建索引
+        await pool!.query(`
+          CREATE INDEX ON ${qi}
+          USING ivfflat (vector ${opsClass})
+          WITH (lists = 100)
+        `)
       }
 
+      logger.info('Collection created', { name, dimension, metric, indexType })
+      return ok(undefined)
+    },
+
+    async drop(name) {
       const table = tableName(name)
 
       logger.debug('Dropping collection', { name })
 
-      try {
-        const checkResult = await pool.query(
-          `SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = $1)`,
-          [table],
-        )
-        if (!checkResult.rows[0].exists) {
-          return err({
-            code: VecdbErrorCode.COLLECTION_NOT_FOUND,
-            message: vecdbM('vecdb_collectionNotFound', { params: { name } }),
-          })
-        }
-
-        await pool.query(`DROP TABLE ${quoteIdent(table)}`)
-
-        logger.info('Collection dropped', { name })
-        return ok(undefined)
-      }
-      catch (error) {
-        logger.error('Failed to drop collection', { name, error })
+      const checkResult = await pool!.query(
+        `SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = $1)`,
+        [table],
+      )
+      if (!checkResult.rows[0].exists) {
         return err({
-          code: VecdbErrorCode.DELETE_FAILED,
-          message: vecdbM('vecdb_deleteFailed', { params: { error: String(error) } }),
-          cause: error,
+          code: VecdbErrorCode.COLLECTION_NOT_FOUND,
+          message: vecdbM('vecdb_collectionNotFound', { params: { name } }),
         })
       }
+
+      await pool!.query(`DROP TABLE ${quoteIdent(table)}`)
+
+      logger.info('Collection dropped', { name })
+      return ok(undefined)
     },
 
-    async exists(name: string): Promise<Result<boolean, VecdbError>> {
-      if (!pool) {
-        return err({ code: VecdbErrorCode.NOT_INITIALIZED, message: vecdbM('vecdb_notInitialized') })
-      }
-
+    async exists(name) {
       logger.debug('Checking collection exists', { name })
 
-      try {
-        const result = await pool.query(
-          `SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = $1)`,
-          [tableName(name)],
-        )
-        return ok(result.rows[0].exists as boolean)
-      }
-      catch (error) {
-        return err({
-          code: VecdbErrorCode.QUERY_FAILED,
-          message: vecdbM('vecdb_queryFailed', { params: { error: String(error) } }),
-          cause: error,
-        })
-      }
+      const result = await pool!.query(
+        `SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = $1)`,
+        [tableName(name)],
+      )
+      return ok(result.rows[0].exists as boolean)
     },
 
-    async info(name: string): Promise<Result<CollectionInfo, VecdbError>> {
-      if (!pool) {
-        return err({ code: VecdbErrorCode.NOT_INITIALIZED, message: vecdbM('vecdb_notInitialized') })
-      }
-
+    async info(name) {
       const table = tableName(name)
 
       logger.debug('Getting collection info', { name })
 
-      try {
-        // 检查表是否存在
-        const existsResult = await pool.query(
-          `SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = $1)`,
-          [table],
-        )
-        if (!existsResult.rows[0].exists) {
-          return err({
-            code: VecdbErrorCode.COLLECTION_NOT_FOUND,
-            message: vecdbM('vecdb_collectionNotFound', { params: { name } }),
-          })
-        }
-
-        // 获取文档数量
-        const countResult = await pool.query(`SELECT COUNT(*) as count FROM ${quoteIdent(table)}`)
-        const count = Number.parseInt(String(countResult.rows[0].count), 10)
-
-        // 获取向量维度（从列定义中提取）
-        const dimResult = await pool.query(`
-          SELECT atttypmod FROM pg_attribute
-          WHERE attrelid = $1::regclass AND attname = 'vector'
-        `, [quoteIdent(table)])
-        const dimension = dimResult.rows.length > 0 ? Number(dimResult.rows[0].atttypmod) : 0
-
-        return ok({
-          name,
-          dimension,
-          metric: config?.metric ?? 'cosine',
-          count,
-        })
-      }
-      catch (error) {
+      // 检查表是否存在
+      const existsResult = await pool!.query(
+        `SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = $1)`,
+        [table],
+      )
+      if (!existsResult.rows[0].exists) {
         return err({
-          code: VecdbErrorCode.QUERY_FAILED,
-          message: vecdbM('vecdb_queryFailed', { params: { error: String(error) } }),
-          cause: error,
+          code: VecdbErrorCode.COLLECTION_NOT_FOUND,
+          message: vecdbM('vecdb_collectionNotFound', { params: { name } }),
         })
       }
+
+      // 获取文档数量
+      const countResult = await pool!.query(`SELECT COUNT(*) as count FROM ${quoteIdent(table)}`)
+      const count = Number.parseInt(String(countResult.rows[0].count), 10)
+
+      // 获取向量维度（从列定义中提取）
+      const dimResult = await pool!.query(`
+        SELECT atttypmod FROM pg_attribute
+        WHERE attrelid = $1::regclass AND attname = 'vector'
+      `, [quoteIdent(table)])
+      const dimension = dimResult.rows.length > 0 ? Number(dimResult.rows[0].atttypmod) : 0
+
+      return ok({
+        name,
+        dimension,
+        metric: config?.metric ?? 'cosine',
+        count,
+      })
     },
 
-    async list(): Promise<Result<string[], VecdbError>> {
-      if (!pool) {
-        return err({ code: VecdbErrorCode.NOT_INITIALIZED, message: vecdbM('vecdb_notInitialized') })
-      }
-
+    async list() {
       const prefix = config?.tablePrefix ?? 'vec_'
 
       logger.debug('Listing collections')
 
-      try {
-        const result = await pool.query(
-          `SELECT table_name FROM information_schema.tables WHERE table_name LIKE $1 AND table_schema = 'public'`,
-          [`${prefix}%`],
-        )
-        const names = result.rows.map((row: Record<string, unknown>) =>
-          String(row.table_name).slice(prefix.length),
-        )
-        return ok(names)
-      }
-      catch (error) {
-        return err({
-          code: VecdbErrorCode.QUERY_FAILED,
-          message: vecdbM('vecdb_queryFailed', { params: { error: String(error) } }),
-          cause: error,
-        })
-      }
+      const result = await pool!.query(
+        `SELECT table_name FROM information_schema.tables WHERE table_name LIKE $1 AND table_schema = 'public'`,
+        [`${prefix}%`],
+      )
+      const names = result.rows.map((row: Record<string, unknown>) =>
+        String(row.table_name).slice(prefix.length),
+      )
+      return ok(names)
     },
   }
 
-  // ─── 向量操作 ───
+  // ─── 向量操作适配器 ───
 
-  const vectorOps: VectorOperations = {
-    async insert(collection: string, documents: VectorDocument[]): Promise<Result<void, VecdbError>> {
-      if (!pool) {
-        return err({ code: VecdbErrorCode.NOT_INITIALIZED, message: vecdbM('vecdb_notInitialized') })
-      }
-
+  const vectorDriver: VectorDriver = {
+    async insert(collection, documents) {
       const table = tableName(collection)
 
       logger.debug('Inserting vectors', { collection, count: documents.length })
 
-      try {
-        // 使用客户端级事务保证批量插入原子性
-        const qi = quoteIdent(table)
-        const client = await pool.connect()
-        try {
-          await client.query('BEGIN')
-          for (const doc of documents) {
-            const vectorStr = `[${doc.vector.join(',')}]`
-            await client.query(
-              `INSERT INTO ${qi} (id, vector, content, metadata) VALUES ($1, $2::vector, $3, $4::jsonb)`,
-              [doc.id, vectorStr, doc.content ?? '', JSON.stringify(doc.metadata ?? {})],
-            )
-          }
-          await client.query('COMMIT')
-        }
-        catch (txError) {
-          await client.query('ROLLBACK')
-          throw txError
-        }
-        finally {
-          client.release()
-        }
+      // 构建多值 INSERT（单条 SQL，避免 await-in-loop N+1 问题）
+      // 注意：PostgreSQL 参数上限为 65535，每条文档占 4 个参数，单批最多 ~16383 条
+      const qi = quoteIdent(table)
+      const values: string[] = []
+      const params: unknown[] = []
+      for (let i = 0; i < documents.length; i++) {
+        const base = i * 4
+        values.push(`($${base + 1}, $${base + 2}::vector, $${base + 3}, $${base + 4}::jsonb)`)
+        const doc = documents[i]
+        params.push(doc.id, `[${doc.vector.join(',')}]`, doc.content ?? '', JSON.stringify(doc.metadata ?? {}))
+      }
 
-        logger.info('Vectors inserted', { collection, count: documents.length })
-        return ok(undefined)
-      }
-      catch (error) {
-        logger.error('Failed to insert vectors', { collection, error })
-        return err({
-          code: VecdbErrorCode.INSERT_FAILED,
-          message: vecdbM('vecdb_insertFailed', { params: { error: String(error) } }),
-          cause: error,
-        })
-      }
+      await pool!.query(
+        `INSERT INTO ${qi} (id, vector, content, metadata) VALUES ${values.join(', ')}`,
+        params,
+      )
+
+      logger.info('Vectors inserted', { collection, count: documents.length })
+      return ok(undefined)
     },
 
-    async upsert(collection: string, documents: VectorDocument[]): Promise<Result<void, VecdbError>> {
-      if (!pool) {
-        return err({ code: VecdbErrorCode.NOT_INITIALIZED, message: vecdbM('vecdb_notInitialized') })
-      }
-
+    async upsert(collection, documents) {
       const table = tableName(collection)
 
       logger.debug('Upserting vectors', { collection, count: documents.length })
 
-      try {
-        const qi = quoteIdent(table)
-        // 使用客户端级事务保证批量 upsert 原子性
-        const client = await pool.connect()
-        try {
-          await client.query('BEGIN')
-          for (const doc of documents) {
-            const vectorStr = `[${doc.vector.join(',')}]`
-            await client.query(
-              `INSERT INTO ${qi} (id, vector, content, metadata)
-             VALUES ($1, $2::vector, $3, $4::jsonb)
-             ON CONFLICT (id) DO UPDATE SET
-               vector = EXCLUDED.vector,
-               content = EXCLUDED.content,
-               metadata = EXCLUDED.metadata`,
-              [doc.id, vectorStr, doc.content ?? '', JSON.stringify(doc.metadata ?? {})],
-            )
-          }
-          await client.query('COMMIT')
-        }
-        catch (txError) {
-          await client.query('ROLLBACK')
-          throw txError
-        }
-        finally {
-          client.release()
-        }
+      const qi = quoteIdent(table)
+      // 构建多值 INSERT ON CONFLICT（单条 SQL，避免 await-in-loop N+1 问题）
+      const values: string[] = []
+      const params: unknown[] = []
+      for (let i = 0; i < documents.length; i++) {
+        const base = i * 4
+        values.push(`($${base + 1}, $${base + 2}::vector, $${base + 3}, $${base + 4}::jsonb)`)
+        const doc = documents[i]
+        params.push(doc.id, `[${doc.vector.join(',')}]`, doc.content ?? '', JSON.stringify(doc.metadata ?? {}))
+      }
 
-        logger.info('Vectors upserted', { collection, count: documents.length })
-        return ok(undefined)
-      }
-      catch (error) {
-        logger.error('Failed to upsert vectors', { collection, error })
-        return err({
-          code: VecdbErrorCode.UPDATE_FAILED,
-          message: vecdbM('vecdb_updateFailed', { params: { error: String(error) } }),
-          cause: error,
-        })
-      }
+      await pool!.query(
+        `INSERT INTO ${qi} (id, vector, content, metadata) VALUES ${values.join(', ')}
+         ON CONFLICT (id) DO UPDATE SET
+           vector = EXCLUDED.vector,
+           content = EXCLUDED.content,
+           metadata = EXCLUDED.metadata`,
+        params,
+      )
+
+      logger.info('Vectors upserted', { collection, count: documents.length })
+      return ok(undefined)
     },
 
-    async delete(collection: string, ids: string[]): Promise<Result<void, VecdbError>> {
-      if (!pool) {
-        return err({ code: VecdbErrorCode.NOT_INITIALIZED, message: vecdbM('vecdb_notInitialized') })
-      }
-
+    async delete(collection, ids) {
       const table = tableName(collection)
 
       logger.debug('Deleting vectors', { collection, count: ids.length })
 
-      try {
-        const placeholders = ids.map((_, i) => `$${i + 1}`).join(', ')
-        await pool.query(`DELETE FROM ${quoteIdent(table)} WHERE id IN (${placeholders})`, ids)
+      const placeholders = ids.map((_, i) => `$${i + 1}`).join(', ')
+      await pool!.query(`DELETE FROM ${quoteIdent(table)} WHERE id IN (${placeholders})`, ids)
 
-        logger.info('Vectors deleted', { collection, count: ids.length })
-        return ok(undefined)
-      }
-      catch (error) {
-        logger.error('Failed to delete vectors', { collection, error })
-        return err({
-          code: VecdbErrorCode.DELETE_FAILED,
-          message: vecdbM('vecdb_deleteFailed', { params: { error: String(error) } }),
-          cause: error,
-        })
-      }
+      logger.info('Vectors deleted', { collection, count: ids.length })
+      return ok(undefined)
     },
 
-    async search(
-      collection: string,
-      vector: number[],
-      options?: VectorSearchOptions,
-    ): Promise<Result<VectorSearchResult[], VecdbError>> {
-      if (!pool) {
-        return err({ code: VecdbErrorCode.NOT_INITIALIZED, message: vecdbM('vecdb_notInitialized') })
-      }
-
+    async search(collection, vector, options) {
       const table = tableName(collection)
       const topK = options?.topK ?? 10
       const minScore = options?.minScore ?? 0
@@ -442,79 +305,56 @@ export function createPgvectorProvider(): VecdbProvider {
 
       logger.debug('Searching vectors', { collection, topK, hasFilter: !!options?.filter })
 
-      try {
-        const vectorStr = `[${vector.join(',')}]`
+      const vectorStr = `[${vector.join(',')}]`
 
-        // 构建过滤条件
-        let filterSQL = ''
-        const filterParams: unknown[] = [vectorStr, topK]
-        let paramIndex = 3
+      // 构建过滤条件
+      let filterSQL = ''
+      const filterParams: unknown[] = [vectorStr, topK]
+      let paramIndex = 3
 
-        if (options?.filter) {
-          const filterParts: string[] = []
-          for (const [key, value] of Object.entries(options.filter)) {
-            filterParts.push(`metadata->>$${paramIndex} = $${paramIndex + 1}`)
-            filterParams.push(key, String(value))
-            paramIndex += 2
-          }
-          if (filterParts.length > 0) {
-            filterSQL = `WHERE ${filterParts.join(' AND ')}`
-          }
+      if (options?.filter) {
+        const filterParts: string[] = []
+        for (const [key, value] of Object.entries(options.filter)) {
+          filterParts.push(`metadata->>$${paramIndex} = $${paramIndex + 1}`)
+          filterParams.push(key, String(value))
+          paramIndex += 2
         }
-
-        const result = await pool.query(
-          `SELECT id, content, metadata, vector ${op} $1::vector AS distance
-           FROM ${quoteIdent(table)}
-           ${filterSQL}
-           ORDER BY vector ${op} $1::vector
-           LIMIT $2`,
-          filterParams,
-        )
-
-        const searchResults: VectorSearchResult[] = result.rows
-          .map((row: Record<string, unknown>) => {
-            const score = distanceToScore(row.distance as number)
-            return {
-              id: row.id as string,
-              score,
-              content: (row.content as string) || undefined,
-              metadata: row.metadata as Record<string, unknown> | undefined,
-            }
-          })
-          .filter((r: VectorSearchResult) => r.score >= minScore)
-
-        return ok(searchResults)
+        if (filterParts.length > 0) {
+          filterSQL = `WHERE ${filterParts.join(' AND ')}`
+        }
       }
-      catch (error) {
-        logger.error('Failed to search vectors', { collection, error })
-        return err({
-          code: VecdbErrorCode.QUERY_FAILED,
-          message: vecdbM('vecdb_queryFailed', { params: { error: String(error) } }),
-          cause: error,
+
+      const result = await pool!.query(
+        `SELECT id, content, metadata, vector ${op} $1::vector AS distance
+         FROM ${quoteIdent(table)}
+         ${filterSQL}
+         ORDER BY vector ${op} $1::vector
+         LIMIT $2`,
+        filterParams,
+      )
+
+      const searchResults: VectorSearchResult[] = result.rows
+        .map((row: Record<string, unknown>) => {
+          const score = distanceToScore(row.distance as number)
+          return {
+            id: row.id as string,
+            score,
+            content: (row.content as string) || undefined,
+            metadata: row.metadata as Record<string, unknown> | undefined,
+          }
         })
-      }
+        .filter((r: VectorSearchResult) => r.score >= minScore)
+
+      return ok(searchResults)
     },
 
-    async count(collection: string): Promise<Result<number, VecdbError>> {
-      if (!pool) {
-        return err({ code: VecdbErrorCode.NOT_INITIALIZED, message: vecdbM('vecdb_notInitialized') })
-      }
-
+    async count(collection) {
       const table = tableName(collection)
 
       logger.debug('Counting vectors', { collection })
 
-      try {
-        const result = await pool.query(`SELECT COUNT(*) as count FROM ${quoteIdent(table)}`)
-        return ok(Number.parseInt(String(result.rows[0].count), 10))
-      }
-      catch (error) {
-        return err({
-          code: VecdbErrorCode.QUERY_FAILED,
-          message: vecdbM('vecdb_queryFailed', { params: { error: String(error) } }),
-          cause: error,
-        })
-      }
+      const result = await pool!.query(`SELECT COUNT(*) as count FROM ${quoteIdent(table)}`)
+      return ok(Number.parseInt(String(result.rows[0].count), 10))
     },
   }
 
@@ -558,10 +398,11 @@ export function createPgvectorProvider(): VecdbProvider {
         return ok(undefined)
       }
       catch (error) {
-        logger.error('Failed to connect to pgvector', { error })
+        // 仅提取错误消息，避免 error 对象中的连接字符串泄漏密码
+        logger.error('Failed to connect to pgvector', { error: error instanceof Error ? error.message : String(error) })
         return err({
           code: VecdbErrorCode.CONNECTION_FAILED,
-          message: vecdbM('vecdb_connectionFailed', { params: { error: String(error) } }),
+          message: vecdbM('vecdb_connectionFailed', { params: { error: error instanceof Error ? error.message : String(error) } }),
           cause: error,
         })
       }
@@ -578,7 +419,7 @@ export function createPgvectorProvider(): VecdbProvider {
         return ok(undefined)
       }
       catch (error) {
-        logger.error('Failed to close pgvector connection', { error })
+        logger.error('Failed to close pgvector connection', { error: error instanceof Error ? error.message : String(error) })
         return err({
           code: VecdbErrorCode.CONNECTION_FAILED,
           message: vecdbM('vecdb_closeFailed', { params: { error: String(error) } }),
@@ -591,7 +432,7 @@ export function createPgvectorProvider(): VecdbProvider {
       return pool !== null
     },
 
-    collection: collectionOps,
-    vector: vectorOps,
+    collection: createBaseCollectionOps(ctx, collectionDriver),
+    vector: createBaseVectorOps(ctx, vectorDriver),
   }
 }

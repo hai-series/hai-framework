@@ -246,28 +246,6 @@ export interface VectorOperations {
   count: (collection: string) => Promise<Result<number, VecdbError>>
 }
 
-// ─── Provider 接口 ───
-
-/**
- * 向量数据库 Provider 接口
- *
- * 各后端实现需遵循此接口，提供统一的集合管理和向量操作能力。
- */
-export interface VecdbProvider {
-  /** Provider 名称标识 */
-  readonly name: string
-  /** 连接到向量数据库 */
-  connect: (config: VecdbConfig) => Promise<Result<void, VecdbError>>
-  /** 关闭连接 */
-  close: () => Promise<Result<void, VecdbError>>
-  /** 是否已连接 */
-  isConnected: () => boolean
-  /** 集合管理操作 */
-  collection: CollectionOperations
-  /** 向量操作 */
-  vector: VectorOperations
-}
-
 // ─── VecdbFunctions 接口 ───
 
 /**

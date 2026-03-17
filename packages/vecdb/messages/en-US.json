@@ -4,6 +4,7 @@
   "vecdb_initFailed": "Failed to initialize vector database: {error}",
   "vecdb_closeFailed": "Failed to close vector database: {error}",
   "vecdb_configError": "Vector database config validation failed: {error}",
+  "vecdb_initInProgress": "Vector database initialization is already in progress",
   "vecdb_unsupportedType": "Unsupported vector database type: {type}",
   "vecdb_driverNotFound": "Vector database driver not installed: {driver}, please run pnpm add {driver}",
   "vecdb_connectionFailed": "Failed to connect to vector database: {error}",
