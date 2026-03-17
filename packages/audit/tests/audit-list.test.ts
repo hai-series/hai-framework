@@ -15,16 +15,16 @@ async function setupDb(): Promise<void> {
   if (!result.success) {
     throw new Error(`DB init failed: ${result.error.message}`)
   }
-  await reldb.ddl.createTable('users', {
+  await reldb.ddl.createTable('hai_iam_users', {
     id: { type: 'TEXT', primaryKey: true },
     username: { type: 'TEXT', notNull: true },
   }, true)
   await reldb.sql.execute(
-    'INSERT INTO users (id, username) VALUES (?, ?)',
+    'INSERT INTO hai_iam_users (id, username) VALUES (?, ?)',
     ['user_1', 'testuser'],
   )
   await reldb.sql.execute(
-    'INSERT INTO users (id, username) VALUES (?, ?)',
+    'INSERT INTO hai_iam_users (id, username) VALUES (?, ?)',
     ['user_2', 'anotheruser'],
   )
 }
@@ -34,7 +34,7 @@ async function setupDb(): Promise<void> {
 describe('audit.list', () => {
   beforeEach(async () => {
     await setupDb()
-    await audit.init({ db: reldb })
+    await audit.init()
     // 插入测试数据
     await audit.log({ userId: 'user_1', action: 'login', resource: 'auth' })
     await audit.log({ userId: 'user_1', action: 'update', resource: 'users', resourceId: 'user_2' })
@@ -163,7 +163,7 @@ describe('audit.list', () => {
 describe('audit.getUserRecent', () => {
   beforeEach(async () => {
     await setupDb()
-    await audit.init({ db: reldb })
+    await audit.init()
     await audit.log({ userId: 'user_1', action: 'login', resource: 'auth' })
     await audit.log({ userId: 'user_1', action: 'update', resource: 'users' })
     await audit.log({ userId: 'user_1', action: 'logout', resource: 'auth' })

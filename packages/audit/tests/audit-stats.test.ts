@@ -26,7 +26,7 @@ async function setupDb(): Promise<void> {
 describe('audit.getStats', () => {
   beforeEach(async () => {
     await setupDb()
-    await audit.init({ db: reldb })
+    await audit.init()
     await audit.log({ userId: 'user_1', action: 'login', resource: 'auth' })
     await audit.log({ userId: 'user_1', action: 'login', resource: 'auth' })
     await audit.log({ userId: 'user_1', action: 'login', resource: 'auth' })
@@ -77,11 +77,11 @@ describe('audit.getStats', () => {
     const initResult = await reldb.init({ type: 'sqlite', database: ':memory:' })
     if (!initResult.success)
       throw new Error('DB re-init failed')
-    await reldb.ddl.createTable('users', {
+    await reldb.ddl.createTable('hai_iam_users', {
       id: { type: 'TEXT', primaryKey: true },
       username: { type: 'TEXT', notNull: true },
     }, true)
-    await audit.init({ db: reldb })
+    await audit.init()
 
     const result = await audit.getStats(7)
     expect(result.success).toBe(true)
@@ -94,7 +94,7 @@ describe('audit.getStats', () => {
 describe('audit.cleanup', () => {
   beforeEach(async () => {
     await setupDb()
-    await audit.init({ db: reldb })
+    await audit.init()
   })
 
   afterEach(async () => {
@@ -103,10 +103,10 @@ describe('audit.cleanup', () => {
   })
 
   it('应清理旧日志', async () => {
-    // 直接插入一条"旧"记录（时间戳为 2 天前）
+    // 直接插入一条“旧”记录（时间戳为 2 天前）
     const oldTime = Date.now() - 2 * 86400000
     await reldb.sql.execute(
-      'INSERT INTO audit_logs (id, action, resource, created_at) VALUES (?, ?, ?, ?)',
+      'INSERT INTO hai_audit_logs (id, action, resource, created_at) VALUES (?, ?, ?, ?)',
       ['audit_old_1', 'test', 'test', oldTime],
     )
 
@@ -139,11 +139,11 @@ describe('audit.cleanup', () => {
   it('应正确返回删除的记录数', async () => {
     const oldTime = Date.now() - 2 * 86400000
     await reldb.sql.execute(
-      'INSERT INTO audit_logs (id, action, resource, created_at) VALUES (?, ?, ?, ?)',
+      'INSERT INTO hai_audit_logs (id, action, resource, created_at) VALUES (?, ?, ?, ?)',
       ['audit_old_1', 'test1', 'test', oldTime],
     )
     await reldb.sql.execute(
-      'INSERT INTO audit_logs (id, action, resource, created_at) VALUES (?, ?, ?, ?)',
+      'INSERT INTO hai_audit_logs (id, action, resource, created_at) VALUES (?, ?, ?, ?)',
       ['audit_old_2', 'test2', 'test', oldTime],
     )
     // 新记录

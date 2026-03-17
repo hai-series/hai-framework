@@ -19,7 +19,7 @@ import { reldb } from '@h-ai/reldb'
 await reldb.init({ type: 'sqlite', database: './data.db' })
 
 // 2. 初始化审计模块
-const result = await audit.init({ db: reldb })
+const result = await audit.init()
 if (!result.success) {
   throw new Error(result.error.message)
 }
@@ -52,14 +52,18 @@ await audit.close()
 ## 初始化配置
 
 ```ts
+// 默认配置（无需传参）
+await audit.init()
+
+// 自定义用户表映射
 await audit.init({
-  db: reldb, // 已初始化的 @h-ai/reldb 实例（必须）
-  tableName: 'audit_logs', // 审计日志表名（默认 'audit_logs'）
-  userTable: 'users', // 用户表名（默认 'users'）
+  userTable: 'hai_iam_users', // 用户表名（默认 'hai_iam_users'）
   userIdColumn: 'id', // 用户表主键列名（默认 'id'）
   userNameColumn: 'username', // 用户表用户名列名（默认 'username'）
 })
 ```
+
+审计日志固定存储在 `hai_audit_logs` 表中，依赖 `@h-ai/reldb` 已初始化。
 
 ## API 概览
 

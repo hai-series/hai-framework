@@ -6,11 +6,10 @@
  */
 
 import type { Result } from '@h-ai/core'
-import type { ReldbFunctions } from '@h-ai/reldb'
 import type { AuditError, AuditLog, AuditLogWithUser, AuditStatItem, ListAuditLogsOptions } from './audit-types.js'
 
 import { core, err, ok } from '@h-ai/core'
-import { BaseReldbCrudRepository } from '@h-ai/reldb'
+import { BaseReldbCrudRepository, reldb } from '@h-ai/reldb'
 
 import { AuditErrorCode } from './audit-config.js'
 import { auditM } from './audit-i18n.js'
@@ -24,9 +23,10 @@ const logger = core.logger.child({ module: 'audit', scope: 'repository' })
  *
  * 由 audit-main.ts 在 init() 时构造并传入。
  */
+/** 审计日志表名（固定值） */
+const AUDIT_TABLE = 'hai_audit_logs'
+
 export interface AuditRepositoryConfig {
-  /** 审计日志表名 */
-  tableName: string
   /** 用户表名 */
   userTable: string
   /** 用户表主键列名 */
@@ -50,12 +50,11 @@ export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
   private readonly isSqlite: boolean
 
   /**
-   * @param db - 已初始化的数据库服务实例
-   * @param config - 仓库配置（表名与用户表映射）
+   * @param config - 仓库配置（用户表映射）
    */
-  constructor(db: ReldbFunctions, config: AuditRepositoryConfig) {
-    super(db, {
-      table: config.tableName,
+  constructor(config: AuditRepositoryConfig) {
+    super(reldb, {
+      table: AUDIT_TABLE,
       idColumn: 'id',
       generateId: () => core.id.withPrefix('audit_'),
       fields: [
@@ -171,7 +170,7 @@ export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
 
     const conditions: string[] = []
     const params: unknown[] = []
-    const { userTable, userIdColumn, userNameColumn, tableName } = this.repoConfig
+    const { userTable, userIdColumn, userNameColumn } = this.repoConfig
 
     if (options.userId) {
       conditions.push('a.user_id = ?')
@@ -201,7 +200,7 @@ export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
         sql: `SELECT a.id, a.user_id AS userId, a.action, a.resource, a.resource_id AS resourceId,
                 a.details, a.ip_address AS ipAddress, a.user_agent AS userAgent,
                 a.created_at AS createdAt, u.${userNameColumn} AS username
-         FROM ${tableName} a
+         FROM ${AUDIT_TABLE} a
          LEFT JOIN ${userTable} u ON a.user_id = u.${userIdColumn}
          ${whereClause}
          ORDER BY a.created_at DESC`,
@@ -282,7 +281,7 @@ export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
 
     try {
       const result = await this.sql().execute(
-        `DELETE FROM ${this.repoConfig.tableName} WHERE created_at < ?`,
+        `DELETE FROM ${AUDIT_TABLE} WHERE created_at < ?`,
         [this.toDateParam(cutoff)],
       )
 
@@ -324,7 +323,7 @@ export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
     try {
       const result = await this.sql().query<AuditStatItem>(
         `SELECT action, COUNT(*) as count
-         FROM ${this.repoConfig.tableName}
+         FROM ${AUDIT_TABLE}
          WHERE created_at >= ?
          GROUP BY action
          ORDER BY count DESC`,
