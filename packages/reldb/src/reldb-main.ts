@@ -20,7 +20,7 @@ import type {
 
 import { core, err, ok } from '@h-ai/core'
 
-import { createCrudManager } from './providers/reldb-provider-base.js'
+import { createBaseCrudManager } from './providers/reldb-provider-base.js'
 import { createMysqlProvider } from './providers/reldb-provider-mysql.js'
 import { createPostgresProvider } from './providers/reldb-provider-postgres.js'
 import { createSqliteProvider } from './providers/reldb-provider-sqlite.js'
@@ -80,7 +80,7 @@ const notInitializedDdl = notInitialized.proxy<DdlOperations>()
 const notInitializedSql = notInitialized.proxy<DmlOperations>()
 
 /** 未初始化时的 CRUD 管理器 */
-const notInitializedCrud: CrudManager = createCrudManager(notInitializedSql)
+const notInitializedCrud: CrudManager = createBaseCrudManager(notInitializedSql)
 
 /** 未初始化时的 JSON 操作构建器（默认使用 SQLite 格式） */
 const notInitializedJson: ReldbJsonOps = createJsonOps('sqlite')
