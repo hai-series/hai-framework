@@ -1,633 +1,217 @@
 /**
  * @h-ai/reldb — Provider 共享基础层
  *
- * 将三个 Provider（SQLite / PostgreSQL / MySQL）中的共性逻辑抽取为统一实现，
- * 包括 DDL 操作、SQL 操作、CRUD 管理器、事务句柄、tx.wrap 等。
+ * Provider 共享基础层：Context + wrapOp → Factory 模式。
  *
- * 各 Provider 只需提供 DdlDialect（SQL 方言差异）、RawExecutor（驱动适配）、
- * TxLifecycle（事务回调）即可获得完整的 ReldbProvider 能力。
+ * 各 Provider 只需提供 raw DdlOperations / DmlOperations / beginTx，
+ * base 层统一处理连接守卫、运行时异常捕获与 Result 包装。
  * @module reldb-provider-base
  */
 
 import type { PaginatedResult, Result } from '@h-ai/core'
+import type { ReldbErrorCodeType } from '../reldb-config.js'
+
 import type {
   CrudManager,
   DdlOperations,
   DmlOperations,
-  DmlWithTxOperations,
-  ExecuteResult,
   PaginationQueryOptions,
-  ReldbColumnDef,
   ReldbError,
-  ReldbIndexDef,
-  ReldbTableDef,
   TxManager,
-  TxWrapCallback,
 } from '../reldb-types.js'
 
-import { err, ok } from '@h-ai/core'
-
+import { err } from '@h-ai/core'
 import { ReldbErrorCode } from '../reldb-config.js'
 import { createCrud } from '../reldb-crud-kernel.js'
 import { reldbM } from '../reldb-i18n.js'
 import { buildPaginatedResult, normalizePagination, parseCount } from '../reldb-pagination.js'
-import { escapeSqlString, quoteIdentifier, validateIdentifier, validateIdentifiers } from '../reldb-security.js'
+import { validateIdentifier, validateIdentifiers } from '../reldb-security.js'
+import { createTxWrap } from './reldb-tx-assembler.js'
 
-// ─── RawExecutor 适配器 ───
+// ─── 操作上下文 ───
 
 /**
- * 原始 SQL 执行适配器
+ * 操作上下文：由 Provider 在创建 ops 时传入
  *
- * 各 Provider 将原生驱动适配为此接口，由 base 层统一做 Result 包装与分页计算。
- * 实现方只需关注"如何执行 SQL"，不需关注 Result 包装、错误码、分页算法等。
+ * 对标 VecdbOpsContext：统一的连接状态检查 + 日志记录。
  */
-export interface RawExecutor {
-  /** 执行查询，返回多行 */
-  queryRows: (sql: string, params?: unknown[]) => Promise<unknown[]>
-  /** 执行查询，返回首行或 undefined */
-  getRow: (sql: string, params?: unknown[]) => Promise<unknown | undefined>
-  /** 执行写操作（INSERT/UPDATE/DELETE），返回影响行数 */
-  executeStmt: (sql: string, params?: unknown[]) => Promise<ExecuteResult>
-  /** 批量执行多条语句（序列化执行） */
-  batchStmts: (statements: Array<{ sql: string, params?: unknown[] }>) => Promise<void>
-  /** 执行分页查询（COUNT + LIMIT/OFFSET） */
-  queryPage: <T>(options: PaginationQueryOptions) => Promise<PaginatedResult<T>>
-}
-
-// ─── 事务生命周期回调 ───
-
-/**
- * 事务生命周期回调
- *
- * 各 Provider 提供具体的 commit/rollback/release 操作及错误信息。
- */
-export interface TxLifecycle {
-  /** 提交事务的原始操作 */
-  commit: () => Promise<void>
-  /** 回滚事务的原始操作 */
-  rollback: () => Promise<void>
-  /** 释放资源（连接归还池等），commit/rollback 后调用 */
-  release: () => void
-  /** 创建事务错误消息 */
-  errorMessage: (detail: string) => string
-}
-
-// ─── DDL 方言接口 ───
-
-/**
- * DDL 方言配置
- *
- * 各 Provider 提供 SQL 方言差异部分，base 层统一处理校验、Result 包装与错误处理。
- */
-export interface DdlDialect {
-  /** 标识符引用（SQLite/PG 使用 quoteIdentifier，MySQL 使用反引号） */
-  quoteId: (name: string) => string
-  /** 列定义 → SQL 片段 */
-  buildColumnSql: (name: string, def: ReldbColumnDef) => string
-  /** 生成完整 CREATE TABLE SQL */
-  buildCreateTableSql: (quotedTable: string, columns: ReldbTableDef, ifNotExists: boolean) => string
-  /** 生成 RENAME TABLE SQL */
-  buildRenameTableSql: (quotedOld: string, quotedNew: string) => string
-  /** 生成 CREATE INDEX SQL */
-  buildCreateIndexSql: (quotedTable: string, quotedIndex: string, indexDef: ReldbIndexDef) => string
-  /** 生成 DROP INDEX SQL；返回 null 表示索引不存在且 ifExists=true */
-  buildDropIndexSql: (indexName: string, ifExists: boolean) => Promise<Result<string | null, ReldbError>>
-}
-
-// ─── SQL 操作配置 ───
-
-/**
- * SQL（DML）操作配置
- *
- * 各 Provider 提供执行器获取函数和批量执行实现，base 层统一处理连接检查与 Result 包装。
- */
-export interface SqlOpsConfig {
-  /** 获取 RawExecutor（含连接检查） */
-  getExecutor: () => Result<RawExecutor, ReldbError>
-  /** 错误消息生成 */
-  errorMessage: (detail: string) => string
-  /** 批量执行（各 DB 的批量事务机制不同） */
-  batch: (statements: Array<{ sql: string, params?: unknown[] }>) => Promise<Result<void, ReldbError>>
-}
-
-// ─── 1. DDL 操作工厂 ───
-
-/**
- * 默认 CREATE TABLE SQL 生成（SQLite / PostgreSQL 通用）
- *
- * 列定义内联主键和外键，无额外子句。
- */
-export function buildDefaultCreateTableSql(
-  dialect: DdlDialect,
-  quotedTable: string,
-  columns: ReldbTableDef,
-  ifNotExists: boolean,
-): string {
-  const columnDefs = Object.entries(columns)
-    .map(([name, def]) => dialect.buildColumnSql(name, def))
-    .join(', ')
-  const ifNotExistsClause = ifNotExists ? 'IF NOT EXISTS ' : ''
-  return `CREATE TABLE ${ifNotExistsClause}${quotedTable} (${columnDefs})`
-}
-
-/**
- * 默认 CREATE INDEX SQL 生成（SQLite / PostgreSQL 通用）
- *
- * 支持 IF NOT EXISTS 与 WHERE 子句。
- */
-export function buildDefaultCreateIndexSql(
-  dialect: DdlDialect,
-  quotedTable: string,
-  quotedIndex: string,
-  indexDef: ReldbIndexDef,
-): string {
-  const uniqueClause = indexDef.unique ? 'UNIQUE ' : ''
-  const columns = indexDef.columns.map(c => dialect.quoteId(c)).join(', ')
-  const whereClause = indexDef.where ? ` WHERE ${indexDef.where}` : ''
-  return `CREATE ${uniqueClause}INDEX IF NOT EXISTS ${quotedIndex} ON ${quotedTable} (${columns})${whereClause}`
-}
-
-/**
- * 默认 RENAME TABLE SQL 生成（SQLite / PostgreSQL 通用）
- */
-export function buildDefaultRenameTableSql(quotedOld: string, quotedNew: string): string {
-  return `ALTER TABLE ${quotedOld} RENAME TO ${quotedNew}`
-}
-
-/**
- * 默认 DROP INDEX SQL 生成（SQLite / PostgreSQL 通用）
- */
-export function buildDefaultDropIndexSql(
-  dialect: DdlDialect,
-  indexName: string,
-  ifExists: boolean,
-): Result<string | null, ReldbError> {
-  const ifExistsClause = ifExists ? 'IF EXISTS ' : ''
-  return ok(`DROP INDEX ${ifExistsClause}${dialect.quoteId(indexName)}`)
-}
-
-/**
- * 通用 buildColumnSql 骨架
- *
- * 各 Provider 仅提供 typeMap 和 overrides 即可。
- */
-export function buildColumnSqlBase(
-  name: string,
-  def: ReldbColumnDef,
-  options: {
-    /** 标识符引用函数 */
-    quoteId: (n: string) => string
-    /** ColumnType → SQL 类型字符串 */
-    mapType: (def: ReldbColumnDef) => string
-    /** 是否在列定义中内联 PRIMARY KEY（SQLite/PG true，MySQL false） */
-    inlinePrimaryKey: boolean
-    /** 自定义约束附加（返回额外 SQL 片段数组） */
-    extraConstraints?: (def: ReldbColumnDef) => string[]
-    /** 默认值格式化覆盖（返回 undefined 走通用逻辑，返回 null 跳过默认值） */
-    formatDefault?: (def: ReldbColumnDef) => string | null | undefined
-  },
-): string {
-  const parts: string[] = [options.quoteId(name)]
-
-  parts.push(options.mapType(def))
-
-  if (options.inlinePrimaryKey && def.primaryKey) {
-    parts.push('PRIMARY KEY')
+export interface ReldbOpsContext {
+  /** 连接状态检查 */
+  isConnected: () => boolean
+  /** Logger 实例（用于运行时异常的错误日志） */
+  logger: {
+    error: (msg: string, meta?: Record<string, unknown>) => void
   }
-
-  // 额外约束（如 AUTOINCREMENT、AUTO_INCREMENT、NOT NULL for PK 等）
-  if (options.extraConstraints) {
-    parts.push(...options.extraConstraints(def))
-  }
-
-  if (def.notNull && !def.primaryKey) {
-    parts.push('NOT NULL')
-  }
-
-  if (def.unique && !def.primaryKey) {
-    parts.push('UNIQUE')
-  }
-
-  // 默认值
-  if (def.defaultValue !== undefined) {
-    const custom = options.formatDefault?.(def)
-    if (custom === null) {
-      // null 表示跳过默认值（如 MySQL autoIncrement）
-    }
-    else if (custom !== undefined) {
-      parts.push(custom)
-    }
-    else if (def.defaultValue === null) {
-      parts.push('DEFAULT NULL')
-    }
-    else if (typeof def.defaultValue === 'string') {
-      if (def.defaultValue.startsWith('(') && def.defaultValue.endsWith(')')) {
-        parts.push(`DEFAULT ${def.defaultValue}`)
-      }
-      else {
-        parts.push(`DEFAULT '${escapeSqlString(def.defaultValue)}'`)
-      }
-    }
-    else {
-      parts.push(`DEFAULT ${def.defaultValue}`)
-    }
-  }
-
-  // 外键引用（内联模式）
-  if (options.inlinePrimaryKey && def.references) {
-    parts.push(`REFERENCES ${quoteIdentifier(def.references.table)}(${quoteIdentifier(def.references.column)})`)
-    if (def.references.onDelete) {
-      parts.push(`ON DELETE ${def.references.onDelete}`)
-    }
-    if (def.references.onUpdate) {
-      parts.push(`ON UPDATE ${def.references.onUpdate}`)
-    }
-  }
-
-  return parts.join(' ')
 }
 
+// ─── 统一操作包装器 ───
+
 /**
- * 创建 DDL 操作
+ * 统一操作包装器：guard → delegate → catch-all
  *
- * 统一校验、SQL 生成（委托 dialect）、Result 包装。
- *
- * @param config - DDL 配置
- * @param config.ensureReady - 连接检查
- * @param config.executeDdl - 执行 DDL SQL
- * @param config.dialect - SQL 方言
- * @returns ReldbDdlOperations
+ * 对标 vecdb wrapOp：
+ * 1. 连接守卫：未初始化时直接返回 NOT_INITIALIZED
+ * 2. 委托给 raw ops 执行（raw ops 内部用 Result 表达业务错误）
+ * 3. catch-all 安全网：捕获 raw ops 未预期的运行时异常
  */
-export function createDdlOps(config: {
-  /** 连接检查，返回 err 说明未连接 */
-  ensureReady: () => Result<void, ReldbError>
-  /** 执行 DDL SQL */
-  executeDdl: (sql: string) => Promise<void>
-  /** SQL 方言 */
-  dialect: DdlDialect
-}): DdlOperations {
-  const { ensureReady, executeDdl, dialect } = config
-
-  /** 统一执行 DDL：校验连接 → 执行 → Result 包装 */
-  async function runDdl(sql: string): Promise<Result<void, ReldbError>> {
-    const ready = ensureReady()
-    if (!ready.success)
-      return ready
-    try {
-      await executeDdl(sql)
-      return ok(undefined)
-    }
-    catch (error) {
-      return err({
-        code: ReldbErrorCode.DDL_FAILED,
-        message: reldbM('reldb_ddlFailed', { params: { error: String(error) } }),
-        cause: error,
-      })
-    }
+async function wrapOp<T>(
+  ctx: ReldbOpsContext,
+  fn: () => Promise<Result<T, ReldbError>>,
+  errorCode: ReldbErrorCodeType,
+  errorLabel: string,
+  errorMeta?: Record<string, unknown>,
+): Promise<Result<T, ReldbError>> {
+  if (!ctx.isConnected()) {
+    return err({ code: ReldbErrorCode.NOT_INITIALIZED, message: reldbM('reldb_notInitialized') })
   }
+  try {
+    return await fn()
+  }
+  catch (error) {
+    ctx.logger.error(errorLabel, { ...errorMeta, error })
+    return err({
+      code: errorCode,
+      message: reldbM('reldb_queryFailed', { params: { error: String(error) } }),
+      cause: error,
+    })
+  }
+}
 
+// ─── DDL 操作工厂 ───
+
+/**
+ * 创建标准 DDL 操作
+ *
+ * 各 Provider 只需提供 raw DdlOperations，base 层统一处理标识符校验、连接守卫与运行时异常。
+ */
+export function createBaseDdlOps(ctx: ReldbOpsContext, raw: DdlOperations): DdlOperations {
   return {
-    async createTable(tableName, columns, ifNotExists = true) {
-      const tableValid = validateIdentifier(tableName)
-      if (!tableValid.success)
-        return tableValid
-      const colsValid = validateIdentifiers(Object.keys(columns))
-      if (!colsValid.success)
-        return colsValid
-
-      const quotedTable = dialect.quoteId(tableName)
-      const sql = dialect.buildCreateTableSql(quotedTable, columns, ifNotExists)
-      return runDdl(sql)
+    createTable(tableName, columns, ifNotExists = true) {
+      const v1 = validateIdentifier(tableName)
+      if (!v1.success)
+        return Promise.resolve(v1)
+      const v2 = validateIdentifiers(Object.keys(columns))
+      if (!v2.success)
+        return Promise.resolve(v2)
+      return wrapOp(ctx, () => raw.createTable(tableName, columns, ifNotExists), ReldbErrorCode.DDL_FAILED, 'DDL: createTable failed', { tableName })
     },
 
-    async dropTable(tableName, ifExists = true) {
-      const tableValid = validateIdentifier(tableName)
-      if (!tableValid.success)
-        return tableValid
-
-      const ifExistsClause = ifExists ? 'IF EXISTS ' : ''
-      return runDdl(`DROP TABLE ${ifExistsClause}${dialect.quoteId(tableName)}`)
+    dropTable(tableName, ifExists = true) {
+      const v = validateIdentifier(tableName)
+      if (!v.success)
+        return Promise.resolve(v)
+      return wrapOp(ctx, () => raw.dropTable(tableName, ifExists), ReldbErrorCode.DDL_FAILED, 'DDL: dropTable failed', { tableName })
     },
 
-    async addColumn(tableName, columnName, columnDef) {
-      const tableValid = validateIdentifier(tableName)
-      if (!tableValid.success)
-        return tableValid
-      const colValid = validateIdentifier(columnName)
-      if (!colValid.success)
-        return colValid
-
-      const colSql = dialect.buildColumnSql(columnName, columnDef)
-      return runDdl(`ALTER TABLE ${dialect.quoteId(tableName)} ADD COLUMN ${colSql}`)
+    addColumn(tableName, columnName, columnDef) {
+      const v1 = validateIdentifier(tableName)
+      if (!v1.success)
+        return Promise.resolve(v1)
+      const v2 = validateIdentifier(columnName)
+      if (!v2.success)
+        return Promise.resolve(v2)
+      return wrapOp(ctx, () => raw.addColumn(tableName, columnName, columnDef), ReldbErrorCode.DDL_FAILED, 'DDL: addColumn failed', { tableName, columnName })
     },
 
-    async dropColumn(tableName, columnName) {
-      const tableValid = validateIdentifier(tableName)
-      if (!tableValid.success)
-        return tableValid
-      const colValid = validateIdentifier(columnName)
-      if (!colValid.success)
-        return colValid
-
-      return runDdl(`ALTER TABLE ${dialect.quoteId(tableName)} DROP COLUMN ${dialect.quoteId(columnName)}`)
+    dropColumn(tableName, columnName) {
+      const v1 = validateIdentifier(tableName)
+      if (!v1.success)
+        return Promise.resolve(v1)
+      const v2 = validateIdentifier(columnName)
+      if (!v2.success)
+        return Promise.resolve(v2)
+      return wrapOp(ctx, () => raw.dropColumn(tableName, columnName), ReldbErrorCode.DDL_FAILED, 'DDL: dropColumn failed', { tableName, columnName })
     },
 
-    async renameTable(oldName, newName) {
-      const oldValid = validateIdentifier(oldName)
-      if (!oldValid.success)
-        return oldValid
-      const newValid = validateIdentifier(newName)
-      if (!newValid.success)
-        return newValid
-
-      return runDdl(dialect.buildRenameTableSql(dialect.quoteId(oldName), dialect.quoteId(newName)))
+    renameTable(oldName, newName) {
+      const v1 = validateIdentifier(oldName)
+      if (!v1.success)
+        return Promise.resolve(v1)
+      const v2 = validateIdentifier(newName)
+      if (!v2.success)
+        return Promise.resolve(v2)
+      return wrapOp(ctx, () => raw.renameTable(oldName, newName), ReldbErrorCode.DDL_FAILED, 'DDL: renameTable failed', { oldName, newName })
     },
 
-    async createIndex(tableName, indexName, indexDef) {
-      const tableValid = validateIdentifier(tableName)
-      if (!tableValid.success)
-        return tableValid
-      const idxValid = validateIdentifier(indexName)
-      if (!idxValid.success)
-        return idxValid
-      const colsValid = validateIdentifiers(indexDef.columns)
-      if (!colsValid.success)
-        return colsValid
-
-      return runDdl(dialect.buildCreateIndexSql(dialect.quoteId(tableName), dialect.quoteId(indexName), indexDef))
+    createIndex(tableName, indexName, indexDef) {
+      const v1 = validateIdentifier(tableName)
+      if (!v1.success)
+        return Promise.resolve(v1)
+      const v2 = validateIdentifier(indexName)
+      if (!v2.success)
+        return Promise.resolve(v2)
+      const v3 = validateIdentifiers(indexDef.columns)
+      if (!v3.success)
+        return Promise.resolve(v3)
+      return wrapOp(ctx, () => raw.createIndex(tableName, indexName, indexDef), ReldbErrorCode.DDL_FAILED, 'DDL: createIndex failed', { tableName, indexName })
     },
 
-    async dropIndex(indexName, ifExists = true) {
-      const idxValid = validateIdentifier(indexName)
-      if (!idxValid.success)
-        return idxValid
-
-      const sqlResult = await dialect.buildDropIndexSql(indexName, ifExists)
-      if (!sqlResult.success)
-        return sqlResult
-      // null 表示索引不存在且 ifExists=true，静默成功
-      if (sqlResult.data === null)
-        return ok(undefined)
-      return runDdl(sqlResult.data)
+    dropIndex(indexName, ifExists = true) {
+      const v = validateIdentifier(indexName)
+      if (!v.success)
+        return Promise.resolve(v)
+      return wrapOp(ctx, () => raw.dropIndex(indexName, ifExists), ReldbErrorCode.DDL_FAILED, 'DDL: dropIndex failed', { indexName })
     },
 
-    async raw(sql) {
-      return runDdl(sql)
+    raw(sql) {
+      return wrapOp(ctx, () => raw.raw(sql), ReldbErrorCode.DDL_FAILED, 'DDL: raw failed')
     },
   }
 }
 
-// ─── 2. SQL（DML）操作工厂 ───
+// ─── DML 操作工厂 ───
 
 /**
- * 创建 SQL（DML）操作
+ * 创建标准 DML 操作
  *
- * 统一连接检查 + Result 包装。各 Provider 只需提供 getExecutor 和 batch。
- *
- * @param config - SQL 操作配置
- * @returns DataOperations
+ * 各 Provider 只需提供 raw DmlOperations，base 层统一处理连接守卫与运行时异常。
  */
-export function createSqlOps(config: SqlOpsConfig): DmlOperations {
-  const { getExecutor, errorMessage, batch } = config
-
+export function createBaseDmlOps(ctx: ReldbOpsContext, raw: DmlOperations): DmlOperations {
   return {
-    async query<T>(sql: string, params?: unknown[]) {
-      const execResult = getExecutor()
-      if (!execResult.success)
-        return execResult
-      try {
-        const rows = await execResult.data.queryRows(sql, params)
-        return ok(rows as T[])
-      }
-      catch (error) {
-        return err({ code: ReldbErrorCode.QUERY_FAILED, message: errorMessage(String(error)), cause: error })
-      }
-    },
-
-    async get<T>(sql: string, params?: unknown[]) {
-      const execResult = getExecutor()
-      if (!execResult.success)
-        return execResult
-      try {
-        const row = await execResult.data.getRow(sql, params)
-        return ok((row as T) ?? null)
-      }
-      catch (error) {
-        return err({ code: ReldbErrorCode.QUERY_FAILED, message: errorMessage(String(error)), cause: error })
-      }
-    },
-
-    async execute(sql: string, params?: unknown[]) {
-      const execResult = getExecutor()
-      if (!execResult.success)
-        return execResult
-      try {
-        return ok(await execResult.data.executeStmt(sql, params))
-      }
-      catch (error) {
-        return err({ code: ReldbErrorCode.QUERY_FAILED, message: errorMessage(String(error)), cause: error })
-      }
-    },
-
-    batch,
-
-    async queryPage<T>(options: PaginationQueryOptions) {
-      const execResult = getExecutor()
-      if (!execResult.success)
-        return execResult
-      try {
-        return ok(await execResult.data.queryPage<T>(options))
-      }
-      catch (error) {
-        return err({ code: ReldbErrorCode.QUERY_FAILED, message: errorMessage(String(error)), cause: error })
-      }
-    },
+    query: (sql, params) => wrapOp(ctx, () => raw.query(sql, params), ReldbErrorCode.QUERY_FAILED, 'DML: query failed'),
+    get: (sql, params) => wrapOp(ctx, () => raw.get(sql, params), ReldbErrorCode.QUERY_FAILED, 'DML: get failed'),
+    execute: (sql, params) => wrapOp(ctx, () => raw.execute(sql, params), ReldbErrorCode.QUERY_FAILED, 'DML: execute failed'),
+    batch: stmts => wrapOp(ctx, () => raw.batch(stmts), ReldbErrorCode.QUERY_FAILED, 'DML: batch failed'),
+    queryPage: options => wrapOp(ctx, () => raw.queryPage(options), ReldbErrorCode.QUERY_FAILED, 'DML: queryPage failed'),
   }
 }
 
-// ─── 3. CRUD 管理器工厂 ───
+// ─── 事务管理器工厂 ───
+
+/**
+ * 创建标准事务管理器
+ *
+ * 各 Provider 只需提供 beginTx 函数，base 层统一处理连接守卫 + tx.wrap 语法糖。
+ */
+export function createBaseTxManager(ctx: ReldbOpsContext, beginTx: TxManager['begin']): TxManager {
+  const begin: TxManager['begin'] = () => wrapOp(ctx, beginTx, ReldbErrorCode.TRANSACTION_FAILED, 'TX: begin failed')
+  return {
+    begin,
+    wrap: createTxWrap(begin),
+  }
+}
+
+// ─── CRUD 管理器工厂 ───
 
 /**
  * 创建 CRUD 管理器
  *
- * @param ops - 数据操作接口
+ * @param ops - DML 操作接口
  * @returns CRUD 管理器
  */
-export function createCrudManager(ops: DmlOperations): CrudManager {
+export function createBaseCrudManager(ops: DmlOperations): CrudManager {
   return {
     table: config => createCrud(ops, config),
   }
 }
 
-// ─── 4. 事务句柄组装 ───
-
-/**
- * 组装完整的 ReldbTxHandle
- *
- * 内部自动管理：
- * - ensureActive 守卫（commit/rollback 后拒绝操作）
- * - DataOperations（委托给 RawExecutor，带守卫）
- * - crud（基于 DataOperations 创建）
- * - commit/rollback（调用回调 + 标记非活跃 + 释放资源）
- *
- * @param raw - 事务连接的 RawExecutor
- * @param lifecycle - 事务生命周期回调
- * @returns 完整的事务句柄
- */
-export function createTxOps(raw: RawExecutor, lifecycle: TxLifecycle): DmlWithTxOperations {
-  let active = true
-
-  const ensureActive = (): Result<void, ReldbError> => {
-    if (!active) {
-      return err({
-        code: ReldbErrorCode.TRANSACTION_FAILED,
-        message: lifecycle.errorMessage('transaction finished'),
-      })
-    }
-    return ok(undefined)
-  }
-
-  // 带守卫的 DmlOperations（复用 createSqlOps，getExecutor 始终返回当前事务的 executor）
-  const baseOps = createSqlOps({
-    getExecutor: () => ok(raw),
-    errorMessage: detail => lifecycle.errorMessage(detail),
-    batch: async (statements) => {
-      try {
-        await raw.batchStmts(statements)
-        return ok(undefined)
-      }
-      catch (error) {
-        return err({ code: ReldbErrorCode.QUERY_FAILED, message: lifecycle.errorMessage(String(error)), cause: error })
-      }
-    },
-  })
-
-  const guardedOps: DmlOperations = {
-    async query<T>(sql: string, params?: unknown[]): Promise<Result<T[], ReldbError>> {
-      const check = ensureActive()
-      if (!check.success)
-        return check
-      return baseOps.query<T>(sql, params)
-    },
-    async get<T>(sql: string, params?: unknown[]): Promise<Result<T | null, ReldbError>> {
-      const check = ensureActive()
-      if (!check.success)
-        return check
-      return baseOps.get<T>(sql, params)
-    },
-    async execute(sql: string, params?: unknown[]): Promise<Result<ExecuteResult, ReldbError>> {
-      const check = ensureActive()
-      if (!check.success)
-        return check
-      return baseOps.execute(sql, params)
-    },
-    async batch(statements: Array<{ sql: string, params?: unknown[] }>): Promise<Result<void, ReldbError>> {
-      const check = ensureActive()
-      if (!check.success)
-        return check
-      return baseOps.batch(statements)
-    },
-    async queryPage<T>(options: PaginationQueryOptions): Promise<Result<PaginatedResult<T>, ReldbError>> {
-      const check = ensureActive()
-      if (!check.success)
-        return check
-      return baseOps.queryPage<T>(options)
-    },
-  }
-
-  return {
-    ...guardedOps,
-    crud: createCrudManager(guardedOps),
-
-    async commit(): Promise<Result<void, ReldbError>> {
-      const check = ensureActive()
-      if (!check.success)
-        return check
-      try {
-        await lifecycle.commit()
-        active = false
-        return ok(undefined)
-      }
-      catch (error) {
-        active = false
-        return err({
-          code: ReldbErrorCode.TRANSACTION_FAILED,
-          message: lifecycle.errorMessage(String(error)),
-          cause: error,
-        })
-      }
-      finally {
-        lifecycle.release()
-      }
-    },
-
-    async rollback(): Promise<Result<void, ReldbError>> {
-      const check = ensureActive()
-      if (!check.success)
-        return check
-      try {
-        await lifecycle.rollback()
-        active = false
-        return ok(undefined)
-      }
-      catch (error) {
-        active = false
-        return err({
-          code: ReldbErrorCode.TRANSACTION_FAILED,
-          message: lifecycle.errorMessage(String(error)),
-          cause: error,
-        })
-      }
-      finally {
-        lifecycle.release()
-      }
-    },
-  }
-}
-
-// ─── 5. tx.wrap 统一实现 ───
-
-/**
- * 创建统一的 tx.wrap 函数
- *
- * @param beginTx - 开启事务函数
- * @param errorMessage - 错误消息生成函数
- * @returns tx.wrap 函数
- */
-export function createTxWrap(
-  beginTx: () => Promise<Result<DmlWithTxOperations, ReldbError>>,
-  errorMessage: (detail: string) => string,
-): TxManager['wrap'] {
-  return async <T>(fn: TxWrapCallback<T>): Promise<Result<T, ReldbError>> => {
-    const txResult = await beginTx()
-    if (!txResult.success)
-      return txResult
-
-    try {
-      const result = await fn(txResult.data)
-      const commitResult = await txResult.data.commit()
-      if (!commitResult.success) {
-        return commitResult as Result<T, ReldbError>
-      }
-      return ok(result)
-    }
-    catch (error) {
-      await txResult.data.rollback()
-      return err({
-        code: ReldbErrorCode.TRANSACTION_FAILED,
-        message: errorMessage(String(error)),
-        cause: error,
-      })
-    }
-  }
-}
-
-// ─── 6. 通用分页查询执行器 ───
+// ─── 通用分页查询执行器 ───
 
 /**
  * 通用异步分页查询
  *
  * 使用独立的 COUNT(*) 查询获取总数，再执行 LIMIT/OFFSET 获取当前页数据。
+ * 各 Provider 在实现 DmlOperations.queryPage 时使用此函数。
  *
  * @param queryRows - 查询多行的原始函数
  * @param options - 分页查询参数

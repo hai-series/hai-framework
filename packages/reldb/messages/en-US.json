@@ -34,5 +34,6 @@
   "reldb_crudEmptyPayload": "CRUD payload is empty, please provide data",
   "reldb_crudNoValidColumns": "CRUD payload has no valid columns",
   "reldb_invalidIdentifier": "Invalid SQL identifier: {name} (only letters, digits and underscores allowed)",
-  "reldb_configError": "Database config validation failed: {error}"
+  "reldb_configError": "Database config validation failed: {error}",
+  "reldb_txFailed": "Transaction failed: {error}"
 }

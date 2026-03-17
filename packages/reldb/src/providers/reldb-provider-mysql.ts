@@ -2,19 +2,23 @@
  * @h-ai/reldb — MySQL Provider
  *
  * 基于 mysql2 的 MySQL 数据库实现。
+ * 按 Context + wrapOp → Factory 模式实现。
  * @module reldb-provider-mysql
  */
 
-import type { Result } from '@h-ai/core'
+import type { PaginatedResult, Result } from '@h-ai/core'
 import type { ReldbConfig } from '../reldb-config.js'
 import type {
+  DdlOperations,
+  DmlOperations,
   DmlWithTxOperations,
+  ExecuteResult,
+  PaginationQueryOptions,
   ReldbColumnDef,
   ReldbError,
   ReldbProvider,
-  TxManager,
 } from '../reldb-types.js'
-import type { DdlDialect, RawExecutor } from './reldb-provider-base.js'
+import type { ReldbOpsContext } from './reldb-provider-base.js'
 
 import { core, err, ok } from '@h-ai/core'
 
@@ -22,13 +26,9 @@ import { ReldbErrorCode } from '../reldb-config.js'
 import { reldbM } from '../reldb-i18n.js'
 import {
   buildColumnSqlBase,
-  createCrudManager,
-  createDdlOps,
-  createSqlOps,
-  createTxOps,
-  createTxWrap,
-  queryPageAsync,
-} from './reldb-provider-base.js'
+} from './reldb-ddl-builder.js'
+import { createBaseCrudManager, createBaseDdlOps, createBaseDmlOps, createBaseTxManager, queryPageAsync } from './reldb-provider-base.js'
+import { createTxHandle } from './reldb-tx-assembler.js'
 
 const logger = core.logger.child({ module: 'reldb', scope: 'mysql' })
 
@@ -69,81 +69,18 @@ export function createMysqlProvider(): ReldbProvider {
   /** 连接池实例 */
   let pool: MysqlPool | null = null
 
+  // ─── 操作上下文 ───
+
+  const ctx: ReldbOpsContext = {
+    isConnected: () => pool !== null,
+    logger,
+  }
+
   // ─── 辅助函数 ───
 
   /** MySQL 标识符引用（反引号） */
   function mysqlQuoteId(name: string): string {
     return `\`${name}\``
-  }
-
-  /**
-   * 确保数据库已连接
-   */
-  function ensureConnected(): Result<MysqlPool, ReldbError> {
-    if (!pool) {
-      return err({
-        code: ReldbErrorCode.NOT_INITIALIZED,
-        message: reldbM('reldb_notInitialized'),
-      })
-    }
-    return ok(pool)
-  }
-
-  /**
-   * 获取 RawExecutor（含连接检查）
-   */
-  function getExecutor(): Result<RawExecutor, ReldbError> {
-    const connResult = ensureConnected()
-    if (!connResult.success)
-      return connResult
-    return ok(createExecutor(
-      (s, v) => connResult.data.query(s, v),
-      (s, v) => connResult.data.execute(s, v),
-    ))
-  }
-
-  /**
-   * 将 mysql2 的 query/execute 接口适配为 RawExecutor
-   *
-   * @param queryFn - mysql2 query 函数（用于读操作）
-   * @param executeFn - mysql2 execute 函数（用于写操作，预编译语句）
-   * @returns RawExecutor 实例
-   */
-  function createExecutor(
-    queryFn: (sql: string, values?: unknown[]) => Promise<[unknown[], unknown]>,
-    executeFn: (sql: string, values?: unknown[]) => Promise<[MysqlResult, unknown]>,
-  ): RawExecutor {
-    return {
-      queryRows: async (sql, params) => {
-        const [rows] = await queryFn(sql, params)
-        return rows as unknown[]
-      },
-      getRow: async (sql, params) => {
-        const [rows] = await queryFn(sql, params)
-        return (rows as unknown[])[0]
-      },
-      executeStmt: async (sql, params) => {
-        const [result] = await executeFn(sql, params)
-        return { changes: result.affectedRows, lastInsertRowid: result.insertId }
-      },
-      batchStmts: async (statements) => {
-        for (const { sql: s, params } of statements) {
-          await executeFn(s, params)
-        }
-      },
-      queryPage: options => queryPageAsync(
-        async (sql, params) => {
-          const [rows] = await queryFn(sql, params)
-          return rows as unknown[]
-        },
-        options,
-      ),
-    }
-  }
-
-  /** 错误消息生成 */
-  function mysqlErrorMessage(detail: string): string {
-    return reldbM('reldb_queryFailed', { params: { error: detail } })
   }
 
   /** 事务错误消息生成 */
@@ -172,13 +109,13 @@ export function createMysqlProvider(): ReldbProvider {
     catch (error) {
       return err({
         code: ReldbErrorCode.QUERY_FAILED,
-        message: mysqlErrorMessage(String(error)),
+        message: reldbM('reldb_queryFailed', { params: { error: String(error) } }),
         cause: error,
       })
     }
   }
 
-  // ─── MySQL 方言 ───
+  // ─── MySQL 方言辅助 ───
 
   /** MySQL 列类型映射 */
   function mapMysqlType(def: ReldbColumnDef): string {
@@ -202,9 +139,9 @@ export function createMysqlProvider(): ReldbProvider {
     }
   }
 
-  const mysqlDialect: DdlDialect = {
-    quoteId: mysqlQuoteId,
-    buildColumnSql: (name, def) => buildColumnSqlBase(name, def, {
+  /** MySQL buildColumnSql */
+  function mysqlBuildColumnSql(name: string, def: ReldbColumnDef): string {
+    return buildColumnSqlBase(name, def, {
       quoteId: mysqlQuoteId,
       mapType: mapMysqlType,
       inlinePrimaryKey: false,
@@ -231,97 +168,122 @@ export function createMysqlProvider(): ReldbProvider {
         }
         return undefined // 走通用逻辑
       },
-    }),
-    buildCreateTableSql: (quotedTable, columns, ifNotExists) => {
-      const columnDefs: string[] = []
-      let primaryKeyCol: string | null = null
+    })
+  }
 
-      for (const [name, def] of Object.entries(columns)) {
-        columnDefs.push(mysqlDialect.buildColumnSql(name, def))
-        if (def.primaryKey) {
-          primaryKeyCol = name
+  /** MySQL CREATE TABLE（含 PRIMARY KEY、FOREIGN KEY、ENGINE） */
+  function mysqlBuildCreateTableSql(quotedTable: string, columns: Record<string, ReldbColumnDef>, ifNotExists: boolean): string {
+    const columnDefs: string[] = []
+    let primaryKeyCol: string | null = null
+
+    for (const [name, def] of Object.entries(columns)) {
+      columnDefs.push(mysqlBuildColumnSql(name, def))
+      if (def.primaryKey) {
+        primaryKeyCol = name
+      }
+    }
+
+    if (primaryKeyCol) {
+      columnDefs.push(`PRIMARY KEY (${mysqlQuoteId(primaryKeyCol)})`)
+    }
+
+    // 外键约束
+    for (const [name, def] of Object.entries(columns)) {
+      if (def.references) {
+        let fkSql = `FOREIGN KEY (${mysqlQuoteId(name)}) REFERENCES ${mysqlQuoteId(def.references.table)}(${mysqlQuoteId(def.references.column)})`
+        if (def.references.onDelete) {
+          fkSql += ` ON DELETE ${def.references.onDelete}`
         }
-      }
-
-      if (primaryKeyCol) {
-        columnDefs.push(`PRIMARY KEY (${mysqlQuoteId(primaryKeyCol)})`)
-      }
-
-      // 外键约束
-      for (const [name, def] of Object.entries(columns)) {
-        if (def.references) {
-          let fkSql = `FOREIGN KEY (${mysqlQuoteId(name)}) REFERENCES ${mysqlQuoteId(def.references.table)}(${mysqlQuoteId(def.references.column)})`
-          if (def.references.onDelete) {
-            fkSql += ` ON DELETE ${def.references.onDelete}`
-          }
-          if (def.references.onUpdate) {
-            fkSql += ` ON UPDATE ${def.references.onUpdate}`
-          }
-          columnDefs.push(fkSql)
+        if (def.references.onUpdate) {
+          fkSql += ` ON UPDATE ${def.references.onUpdate}`
         }
+        columnDefs.push(fkSql)
       }
+    }
 
-      const ifNotExistsClause = ifNotExists ? 'IF NOT EXISTS ' : ''
-      return `CREATE TABLE ${ifNotExistsClause}${quotedTable} (${columnDefs.join(', ')}) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`
-    },
-    buildRenameTableSql: (quotedOld, quotedNew) => `RENAME TABLE ${quotedOld} TO ${quotedNew}`,
-    buildCreateIndexSql: (quotedTable, quotedIndex, indexDef) => {
-      const uniqueClause = indexDef.unique ? 'UNIQUE ' : ''
-      const columns = indexDef.columns.map(c => mysqlQuoteId(c)).join(', ')
-      return `CREATE ${uniqueClause}INDEX ${quotedIndex} ON ${quotedTable} (${columns})`
-    },
-    buildDropIndexSql: async (indexName, ifExists) => {
-      const connResult = ensureConnected()
-      if (!connResult.success)
-        return connResult
+    const ifNotExistsClause = ifNotExists ? 'IF NOT EXISTS ' : ''
+    return `CREATE TABLE ${ifNotExistsClause}${quotedTable} (${columnDefs.join(', ')}) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4`
+  }
 
-      const tableResult = await findIndexTableName((s, v) => connResult.data.query(s, v), indexName)
+  // ─── DDL 操作 ───
+
+  const rawDdl: DdlOperations = {
+    async createTable(name, columns, ifNotExists = true) {
+      const quotedTable = mysqlQuoteId(name)
+      const sql = mysqlBuildCreateTableSql(quotedTable, columns, ifNotExists)
+      await pool!.query(sql)
+      return ok(undefined)
+    },
+    async dropTable(name, ifExists) {
+      const ifExistsClause = ifExists ? 'IF EXISTS ' : ''
+      await pool!.query(`DROP TABLE ${ifExistsClause}${mysqlQuoteId(name)}`)
+      return ok(undefined)
+    },
+    async addColumn(table, column, def) {
+      const colSql = mysqlBuildColumnSql(column, def)
+      await pool!.query(`ALTER TABLE ${mysqlQuoteId(table)} ADD COLUMN ${colSql}`)
+      return ok(undefined)
+    },
+    async dropColumn(table, column) {
+      await pool!.query(`ALTER TABLE ${mysqlQuoteId(table)} DROP COLUMN ${mysqlQuoteId(column)}`)
+      return ok(undefined)
+    },
+    async renameTable(oldName, newName) {
+      await pool!.query(`RENAME TABLE ${mysqlQuoteId(oldName)} TO ${mysqlQuoteId(newName)}`)
+      return ok(undefined)
+    },
+    async createIndex(table, index, def) {
+      const uniqueClause = def.unique ? 'UNIQUE ' : ''
+      const columns = def.columns.map(c => mysqlQuoteId(c)).join(', ')
+      await pool!.query(`CREATE ${uniqueClause}INDEX ${mysqlQuoteId(index)} ON ${mysqlQuoteId(table)} (${columns})`)
+      return ok(undefined)
+    },
+    async dropIndex(index, ifExists) {
+      const tableResult = await findIndexTableName((s, v) => pool!.query(s, v), index)
       if (!tableResult.success)
         return tableResult
 
       if (!tableResult.data) {
         if (ifExists)
-          return ok(null)
+          return ok(undefined)
         return err({
           code: ReldbErrorCode.DDL_FAILED,
-          message: reldbM('reldb_ddlFailed', { params: { error: `index not found: ${indexName}` } }),
+          message: reldbM('reldb_ddlFailed', { params: { error: `index not found: ${index}` } }),
         })
       }
 
-      return ok(`DROP INDEX ${mysqlQuoteId(indexName)} ON ${mysqlQuoteId(tableResult.data)}`)
+      await pool!.query(`DROP INDEX ${mysqlQuoteId(index)} ON ${mysqlQuoteId(tableResult.data)}`)
+      return ok(undefined)
+    },
+    async raw(sql) {
+      await pool!.query(sql)
+      return ok(undefined)
     },
   }
 
-  // ─── DDL / SQL / CRUD ───
+  // ─── DML 操作 ───
 
-  const ddl = createDdlOps({
-    ensureReady: () => {
-      const r = ensureConnected()
-      return r.success ? ok(undefined) : r
+  const rawDml: DmlOperations = {
+    async query<T>(sql: string, params?: unknown[]): Promise<Result<T[], ReldbError>> {
+      const [rows] = await pool!.query(sql, params)
+      return ok(rows as T[])
     },
-    executeDdl: async (sqlStr) => {
-      await pool!.query(sqlStr)
+    async get<T>(sql: string, params?: unknown[]): Promise<Result<T | null, ReldbError>> {
+      const [rows] = await pool!.query(sql, params)
+      return ok(((rows as unknown[])[0] as T) ?? null)
     },
-    dialect: mysqlDialect,
-  })
-
-  const sql = createSqlOps({
-    getExecutor,
-    errorMessage: mysqlErrorMessage,
-    batch: async (statements) => {
-      const connResult = ensureConnected()
-      if (!connResult.success)
-        return connResult
-
+    async execute(sql: string, params?: unknown[]): Promise<Result<ExecuteResult, ReldbError>> {
+      const [result] = await pool!.execute(sql, params)
+      return ok({ changes: result.affectedRows, lastInsertRowid: result.insertId })
+    },
+    async batch(statements) {
       let connection: MysqlConnection | null = null
       try {
-        connection = await connResult.data.getConnection()
+        connection = await pool!.getConnection()
         await connection.beginTransaction()
-        const connExec = createExecutor(
-          (s, v) => connection!.query(s, v),
-          (s, v) => connection!.execute(s, v),
-        )
-        await connExec.batchStmts(statements)
+        for (const { sql: s, params } of statements) {
+          await connection.execute(s, params)
+        }
         await connection.commit()
         return ok(undefined)
       }
@@ -341,25 +303,55 @@ export function createMysqlProvider(): ReldbProvider {
         }
       }
     },
-  })
+    async queryPage<T>(options: PaginationQueryOptions): Promise<Result<PaginatedResult<T>, ReldbError>> {
+      const result = await queryPageAsync<T>(
+        async (sql, params) => {
+          const [rows] = await pool!.query(sql, params)
+          return rows as unknown[]
+        },
+        options,
+      )
+      return ok(result)
+    },
+  }
 
-  const crud = createCrudManager(sql)
+  // ─── 事务 ───
 
-  // ─── 事务操作实现 ───
+  /** 创建事务连接上的 DML 操作 */
+  function createMysqlTxDmlOps(conn: MysqlConnection): DmlOperations {
+    return {
+      async query<T>(sql: string, params?: unknown[]): Promise<Result<T[], ReldbError>> {
+        const [rows] = await conn.query(sql, params)
+        return ok(rows as T[])
+      },
+      async get<T>(sql: string, params?: unknown[]): Promise<Result<T | null, ReldbError>> {
+        const [rows] = await conn.query(sql, params)
+        return ok(((rows as unknown[])[0] as T) ?? null)
+      },
+      async execute(sql: string, params?: unknown[]): Promise<Result<ExecuteResult, ReldbError>> {
+        const [result] = await conn.execute(sql, params)
+        return ok({ changes: result.affectedRows, lastInsertRowid: result.insertId })
+      },
+      async batch(statements) {
+        for (const { sql: s, params } of statements) {
+          await conn.execute(s, params)
+        }
+        return ok(undefined)
+      },
+      async queryPage<T>(options: PaginationQueryOptions): Promise<Result<PaginatedResult<T>, ReldbError>> {
+        const result = await queryPageAsync<T>(
+          async (sql, params) => {
+            const [rows] = await conn.query(sql, params)
+            return rows as unknown[]
+          },
+          options,
+        )
+        return ok(result)
+      },
+    }
+  }
 
-  /**
-   * 开启事务
-   *
-   * 从连接池获取独立连接，执行 beginTransaction，并返回事务句柄。
-   * 事务完成后（commit/rollback）自动释放连接。
-   *
-   * @returns 事务句柄或错误
-   */
-  async function beginTransaction(): Promise<Result<DmlWithTxOperations, ReldbError>> {
-    const connResult = ensureConnected()
-    if (!connResult.success)
-      return connResult
-
+  async function beginTx(): Promise<Result<DmlWithTxOperations, ReldbError>> {
     let connection: MysqlConnection | null = null
 
     try {
@@ -377,11 +369,8 @@ export function createMysqlProvider(): ReldbProvider {
       })
     }
 
-    const connExec = createExecutor(
-      (s, v) => connection!.query(s, v),
-      (s, v) => connection!.execute(s, v),
-    )
-    return ok(createTxOps(connExec, {
+    const txDmlOps = createMysqlTxDmlOps(connection)
+    return ok(createTxHandle(txDmlOps, {
       commit: async () => { await connection!.commit() },
       rollback: async () => { await connection!.rollback() },
       release: () => connection!.release(),
@@ -389,66 +378,42 @@ export function createMysqlProvider(): ReldbProvider {
     }))
   }
 
-  const tx: TxManager = {
-    begin: beginTransaction,
-    wrap: createTxWrap(beginTransaction, mysqlTxErrorMessage),
-  }
+  // ─── 组装 Provider ───
 
-  // ─── Provider 接口实现 ───
+  const dmlOps = createBaseDmlOps(ctx, rawDml)
 
-  /**
-   * 连接 MySQL 数据库
-   */
-  const connect: ReldbProvider['connect'] = async (config: ReldbConfig): Promise<Result<void, ReldbError>> => {
-    if (config.type !== 'mysql') {
-      return err({
-        code: ReldbErrorCode.UNSUPPORTED_TYPE,
-        message: reldbM('reldb_mysqlOnlyMysql'),
-      })
-    }
+  return {
+    async connect(config: ReldbConfig): Promise<Result<void, ReldbError>> {
+      if (config.type !== 'mysql') {
+        return err({
+          code: ReldbErrorCode.UNSUPPORTED_TYPE,
+          message: reldbM('reldb_mysqlOnlyMysql'),
+        })
+      }
 
-    try {
-      // 动态导入 mysql2
-      // eslint-disable-next-line ts/no-require-imports -- 需要保持 connect 同步，使用 require 进行按需加载
-      const mysql = require('mysql2/promise')
-
-      pool = mysql.createPool({
-        uri: config.url,
-        host: config.host,
-        port: config.port,
-        database: config.database,
-        user: config.user,
-        password: config.password,
-        ssl: config.ssl,
-        connectionLimit: config.pool?.max ?? 10,
-        waitForConnections: true,
-        queueLimit: 0,
-        charset: config.mysql?.charset ?? 'utf8mb4',
-      }) as MysqlPool
-
-      // 验证连接可用性
-      await pool.query('SELECT 1')
-
-      logger.info('Connected to MySQL', { host: config.host, port: config.port, database: config.database })
-      return ok(undefined)
-    }
-    catch (error) {
-      pool = null
-      return err({
-        code: ReldbErrorCode.CONNECTION_FAILED,
-        message: reldbM('reldb_mysqlConnectionFailed', { params: { error: String(error) } }),
-        cause: error,
-      })
-    }
-  }
-
-  /**
-   * 关闭连接池
-   */
-  const close: ReldbProvider['close'] = async (): Promise<Result<void, ReldbError>> => {
-    if (pool) {
       try {
-        await pool.end()
+        // eslint-disable-next-line ts/no-require-imports -- 按需加载
+        const mysql = require('mysql2/promise')
+
+        pool = mysql.createPool({
+          uri: config.url,
+          host: config.host,
+          port: config.port,
+          database: config.database,
+          user: config.user,
+          password: config.password,
+          ssl: config.ssl,
+          connectionLimit: config.pool?.max ?? 10,
+          waitForConnections: true,
+          queueLimit: 0,
+          charset: config.mysql?.charset ?? 'utf8mb4',
+        }) as MysqlPool
+
+        // 验证连接可用性
+        await pool.query('SELECT 1')
+
+        logger.info('Connected to MySQL', { host: config.host, port: config.port, database: config.database })
+        return ok(undefined)
       }
       catch (error) {
         pool = null
@@ -458,26 +423,31 @@ export function createMysqlProvider(): ReldbProvider {
           cause: error,
         })
       }
-      pool = null
-      logger.info('Disconnected from MySQL')
-    }
-    return ok(undefined)
-  }
+    },
 
-  /**
-   * 检查是否已连接
-   */
-  const isConnected: ReldbProvider['isConnected'] = (): boolean => {
-    return pool !== null
-  }
+    async close(): Promise<Result<void, ReldbError>> {
+      if (pool) {
+        try {
+          await pool.end()
+        }
+        catch (error) {
+          pool = null
+          return err({
+            code: ReldbErrorCode.CONNECTION_FAILED,
+            message: reldbM('reldb_mysqlConnectionFailed', { params: { error: String(error) } }),
+            cause: error,
+          })
+        }
+        pool = null
+        logger.info('Disconnected from MySQL')
+      }
+      return ok(undefined)
+    },
 
-  return {
-    connect,
-    close,
-    isConnected,
-    ddl,
-    sql,
-    crud,
-    tx,
+    isConnected: () => ctx.isConnected(),
+    ddl: createBaseDdlOps(ctx, rawDdl),
+    sql: dmlOps,
+    crud: createBaseCrudManager(dmlOps),
+    tx: createBaseTxManager(ctx, beginTx),
   }
 }

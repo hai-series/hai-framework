@@ -2,20 +2,24 @@
  * @h-ai/reldb — SQLite Provider
  *
  * 基于 better-sqlite3 的 SQLite 数据库实现。
+ * 按 Context + wrapOp → Factory 模式实现。
  * @module reldb-provider-sqlite
  */
 
-import type { Result } from '@h-ai/core'
+import type { PaginatedResult, Result } from '@h-ai/core'
 import type Database from 'better-sqlite3'
 import type { ReldbConfig } from '../reldb-config.js'
 import type {
+  DdlOperations,
+  DmlOperations,
   DmlWithTxOperations,
+  ExecuteResult,
+  PaginationQueryOptions,
   ReldbColumnDef,
   ReldbError,
   ReldbProvider,
-  TxManager,
 } from '../reldb-types.js'
-import type { DdlDialect, RawExecutor } from './reldb-provider-base.js'
+import type { ReldbOpsContext } from './reldb-provider-base.js'
 
 import { createRequire } from 'node:module'
 
@@ -29,13 +33,9 @@ import {
   buildDefaultCreateTableSql,
   buildDefaultDropIndexSql,
   buildDefaultRenameTableSql,
-  createCrudManager,
-  createDdlOps,
-  createSqlOps,
-  createTxOps,
-  createTxWrap,
-  queryPageAsync,
-} from './reldb-provider-base.js'
+} from './reldb-ddl-builder.js'
+import { createBaseCrudManager, createBaseDdlOps, createBaseDmlOps, createBaseTxManager, queryPageAsync } from './reldb-provider-base.js'
+import { createTxHandle } from './reldb-tx-assembler.js'
 
 const require = createRequire(import.meta.url)
 
@@ -92,81 +92,14 @@ export function createSqliteProvider(): ReldbProvider {
     return release
   }
 
-  // ─── 辅助函数 ───
+  // ─── 操作上下文 ───
 
-  /**
-   * 确保数据库已连接
-   */
-  function ensureConnected(): Result<Database.Database, ReldbError> {
-    if (!database) {
-      return err({
-        code: ReldbErrorCode.NOT_INITIALIZED,
-        message: reldbM('reldb_notInitialized'),
-      })
-    }
-    return ok(database)
+  const ctx: ReldbOpsContext = {
+    isConnected: () => database !== null && database.open,
+    logger,
   }
 
-  /**
-   * 获取 RawExecutor（含连接检查）
-   */
-  function getExecutor(): Result<RawExecutor, ReldbError> {
-    const connResult = ensureConnected()
-    if (!connResult.success)
-      return connResult
-    return ok(createDbExecutor(connResult.data))
-  }
-
-  /**
-   * 将 better-sqlite3 同步 API 适配为 RawExecutor
-   *
-   * @param db - better-sqlite3 数据库实例
-   * @returns RawExecutor 实例
-   */
-  function createDbExecutor(db: Database.Database): RawExecutor {
-    return {
-      queryRows: async (sqlStr, params) => {
-        const stmt = db.prepare(sqlStr)
-        return params ? stmt.all(...params) : stmt.all()
-      },
-      getRow: async (sqlStr, params) => {
-        const stmt = db.prepare(sqlStr)
-        return params ? stmt.get(...params) : stmt.get()
-      },
-      executeStmt: async (sqlStr, params) => {
-        const stmt = db.prepare(sqlStr)
-        const result = params ? stmt.run(...params) : stmt.run()
-        return { changes: result.changes, lastInsertRowid: result.lastInsertRowid }
-      },
-      batchStmts: async (statements) => {
-        for (const { sql: s, params } of statements) {
-          const stmt = db.prepare(s)
-          if (params)
-            stmt.run(...params)
-          else stmt.run()
-        }
-      },
-      queryPage: options => queryPageAsync(
-        async (sqlStr, params) => {
-          const stmt = db.prepare(sqlStr)
-          return params ? stmt.all(...params) : stmt.all()
-        },
-        options,
-      ),
-    }
-  }
-
-  /** 错误消息生成 */
-  function sqliteErrorMessage(detail: string): string {
-    return reldbM('reldb_sqliteQueryFailed', { params: { error: detail } })
-  }
-
-  /** 事务错误消息生成 */
-  function sqliteTxErrorMessage(detail: string): string {
-    return reldbM('reldb_sqliteTxFailed', { params: { error: detail } })
-  }
-
-  // ─── SQLite 方言 ───
+  // ─── SQLite 方言辅助 ───
 
   /** SQLite 列类型映射 */
   function mapSqliteType(def: ReldbColumnDef): string {
@@ -188,9 +121,9 @@ export function createSqliteProvider(): ReldbProvider {
     }
   }
 
-  const sqliteDialect: DdlDialect = {
-    quoteId: quoteIdentifier,
-    buildColumnSql: (name, def) => buildColumnSqlBase(name, def, {
+  /** SQLite buildColumnSql */
+  function sqliteBuildColumnSql(name: string, def: ReldbColumnDef): string {
+    return buildColumnSqlBase(name, def, {
       quoteId: quoteIdentifier,
       mapType: mapSqliteType,
       inlinePrimaryKey: true,
@@ -200,40 +133,79 @@ export function createSqliteProvider(): ReldbProvider {
           extras.push('AUTOINCREMENT')
         return extras
       },
-    }),
-    buildCreateTableSql: (quotedTable, columns, ifNotExists) =>
-      buildDefaultCreateTableSql(sqliteDialect, quotedTable, columns, ifNotExists),
-    buildRenameTableSql: buildDefaultRenameTableSql,
-    buildCreateIndexSql: (quotedTable, quotedIndex, indexDef) =>
-      buildDefaultCreateIndexSql(sqliteDialect, quotedTable, quotedIndex, indexDef),
-    buildDropIndexSql: async (indexName, ifExists) =>
-      buildDefaultDropIndexSql(sqliteDialect, indexName, ifExists),
+    })
   }
 
-  // ─── DDL / SQL / CRUD ───
+  /** 事务错误消息生成 */
+  function sqliteTxErrorMessage(detail: string): string {
+    return reldbM('reldb_sqliteTxFailed', { params: { error: detail } })
+  }
 
-  const ddl = createDdlOps({
-    ensureReady: () => {
-      const r = ensureConnected()
-      return r.success ? ok(undefined) : r
+  // ─── DDL 操作 ───
+
+  const rawDdl: DdlOperations = {
+    async createTable(name, columns, ifNotExists = true) {
+      const quotedTable = quoteIdentifier(name)
+      const sql = buildDefaultCreateTableSql(sqliteBuildColumnSql, quotedTable, columns, ifNotExists)
+      database!.exec(sql)
+      return ok(undefined)
     },
-    executeDdl: async (sqlStr) => {
-      database!.exec(sqlStr)
+    async dropTable(name, ifExists) {
+      const ifExistsClause = ifExists ? 'IF EXISTS ' : ''
+      database!.exec(`DROP TABLE ${ifExistsClause}${quoteIdentifier(name)}`)
+      return ok(undefined)
     },
-    dialect: sqliteDialect,
-  })
+    async addColumn(table, column, def) {
+      const colSql = sqliteBuildColumnSql(column, def)
+      database!.exec(`ALTER TABLE ${quoteIdentifier(table)} ADD COLUMN ${colSql}`)
+      return ok(undefined)
+    },
+    async dropColumn(table, column) {
+      database!.exec(`ALTER TABLE ${quoteIdentifier(table)} DROP COLUMN ${quoteIdentifier(column)}`)
+      return ok(undefined)
+    },
+    async renameTable(oldName, newName) {
+      database!.exec(buildDefaultRenameTableSql(quoteIdentifier(oldName), quoteIdentifier(newName)))
+      return ok(undefined)
+    },
+    async createIndex(table, index, def) {
+      const sql = buildDefaultCreateIndexSql(quoteIdentifier, quoteIdentifier(table), quoteIdentifier(index), def)
+      database!.exec(sql)
+      return ok(undefined)
+    },
+    async dropIndex(index, ifExists = true) {
+      const sql = buildDefaultDropIndexSql(quoteIdentifier, index, ifExists)
+      database!.exec(sql)
+      return ok(undefined)
+    },
+    async raw(sql) {
+      database!.exec(sql)
+      return ok(undefined)
+    },
+  }
 
-  const sql = createSqlOps({
-    getExecutor,
-    errorMessage: sqliteErrorMessage,
-    batch: async (statements) => {
-      const connResult = ensureConnected()
-      if (!connResult.success)
-        return connResult
+  // ─── DML 操作 ───
 
+  const rawDml: DmlOperations = {
+    async query<T>(sql: string, params?: unknown[]): Promise<Result<T[], ReldbError>> {
+      const stmt = database!.prepare(sql)
+      const rows = params ? stmt.all(...params) : stmt.all()
+      return ok(rows as T[])
+    },
+    async get<T>(sql: string, params?: unknown[]): Promise<Result<T | null, ReldbError>> {
+      const stmt = database!.prepare(sql)
+      const row = params ? stmt.get(...params) : stmt.get()
+      return ok((row as T) ?? null)
+    },
+    async execute(sql: string, params?: unknown[]): Promise<Result<ExecuteResult, ReldbError>> {
+      const stmt = database!.prepare(sql)
+      const result = params ? stmt.run(...params) : stmt.run()
+      return ok({ changes: result.changes, lastInsertRowid: result.lastInsertRowid })
+    },
+    async batch(statements) {
       const releaseTxLock = await acquireTxLock()
       try {
-        const db = connResult.data
+        const db = database!
         const transaction = db.transaction(() => {
           for (const { sql: s, params } of statements) {
             const stmt = db.prepare(s)
@@ -256,26 +228,60 @@ export function createSqliteProvider(): ReldbProvider {
         releaseTxLock()
       }
     },
-  })
+    async queryPage<T>(options: PaginationQueryOptions): Promise<Result<PaginatedResult<T>, ReldbError>> {
+      const result = await queryPageAsync<T>(
+        async (sqlStr, params) => {
+          const stmt = database!.prepare(sqlStr)
+          return params ? stmt.all(...params) : stmt.all()
+        },
+        options,
+      )
+      return ok(result)
+    },
+  }
 
-  const crud = createCrudManager(sql)
+  // ─── 事务 ───
 
-  // ─── 事务操作实现 ───
+  /** 创建事务连接上的 DML 操作（无守卫，由 createTxHandle 统一守卫） */
+  function createSqliteTxDmlOps(db: Database.Database): DmlOperations {
+    return {
+      async query<T>(sql: string, params?: unknown[]): Promise<Result<T[], ReldbError>> {
+        const stmt = db.prepare(sql)
+        return ok((params ? stmt.all(...params) : stmt.all()) as T[])
+      },
+      async get<T>(sql: string, params?: unknown[]): Promise<Result<T | null, ReldbError>> {
+        const stmt = db.prepare(sql)
+        return ok(((params ? stmt.get(...params) : stmt.get()) as T) ?? null)
+      },
+      async execute(sql: string, params?: unknown[]): Promise<Result<ExecuteResult, ReldbError>> {
+        const stmt = db.prepare(sql)
+        const result = params ? stmt.run(...params) : stmt.run()
+        return ok({ changes: result.changes, lastInsertRowid: result.lastInsertRowid })
+      },
+      async batch(statements) {
+        for (const { sql: s, params } of statements) {
+          const stmt = db.prepare(s)
+          if (params)
+            stmt.run(...params)
+          else stmt.run()
+        }
+        return ok(undefined)
+      },
+      async queryPage<T>(options: PaginationQueryOptions): Promise<Result<PaginatedResult<T>, ReldbError>> {
+        const result = await queryPageAsync<T>(
+          async (sqlStr, params) => {
+            const stmt = db.prepare(sqlStr)
+            return params ? stmt.all(...params) : stmt.all()
+          },
+          options,
+        )
+        return ok(result)
+      },
+    }
+  }
 
-  /**
-   * 开启事务
-   *
-   * SQLite 使用同步 API，此处显式执行 BEGIN/COMMIT/ROLLBACK，
-   * 并将同步调用包装为异步接口。事务锁保证串行化。
-   *
-   * @returns 事务句柄或错误
-   */
-  async function beginTransaction(): Promise<Result<DmlWithTxOperations, ReldbError>> {
-    const connResult = ensureConnected()
-    if (!connResult.success)
-      return connResult
-
-    const db = connResult.data
+  async function beginTx(): Promise<Result<DmlWithTxOperations, ReldbError>> {
+    const db = database!
     let released = false
     const releaseTxLock = await acquireTxLock()
 
@@ -298,8 +304,8 @@ export function createSqliteProvider(): ReldbProvider {
       })
     }
 
-    const dbExec = createDbExecutor(db)
-    return ok(createTxOps(dbExec, {
+    const txDmlOps = createSqliteTxDmlOps(db)
+    return ok(createTxHandle(txDmlOps, {
       commit: async () => { db.exec('COMMIT') },
       rollback: async () => { db.exec('ROLLBACK') },
       release: () => finishTransaction(),
@@ -307,98 +313,78 @@ export function createSqliteProvider(): ReldbProvider {
     }))
   }
 
-  const tx: TxManager = {
-    begin: beginTransaction,
-    wrap: createTxWrap(beginTransaction, sqliteTxErrorMessage),
-  }
+  // ─── 组装 Provider ───
 
-  // ─── Provider 接口实现 ───
+  const dmlOps = createBaseDmlOps(ctx, rawDml)
 
-  /**
-   * 连接 SQLite 数据库
-   */
-  const connect: ReldbProvider['connect'] = async (config: ReldbConfig): Promise<Result<void, ReldbError>> => {
-    if (config.type !== 'sqlite') {
-      return err({
-        code: ReldbErrorCode.UNSUPPORTED_TYPE,
-        message: reldbM('reldb_sqliteOnlySqlite'),
-      })
-    }
-
-    if (!config.database) {
-      return err({
-        code: ReldbErrorCode.CONFIG_ERROR,
-        message: reldbM('reldb_sqliteNeedPath'),
-      })
-    }
-
-    try {
-      // 动态导入 better-sqlite3
-
-      const Database = require('better-sqlite3')
-
-      const sqliteOptions: { walMode: boolean, readonly: boolean } = {
-        walMode: true,
-        readonly: false,
-        ...(config.sqlite ?? {}),
-      }
-      database = new Database(config.database, {
-        readonly: sqliteOptions.readonly ?? false,
-      }) as Database.Database
-
-      // 启用 WAL 模式（提高并发性能）
-      if (sqliteOptions.walMode !== false) {
-        database.pragma('journal_mode = WAL')
+  return {
+    async connect(config: ReldbConfig): Promise<Result<void, ReldbError>> {
+      if (config.type !== 'sqlite') {
+        return err({
+          code: ReldbErrorCode.UNSUPPORTED_TYPE,
+          message: reldbM('reldb_sqliteOnlySqlite'),
+        })
       }
 
-      logger.info('Connected to SQLite', { database: config.database })
-      return ok(undefined)
-    }
-    catch (error) {
-      return err({
-        code: ReldbErrorCode.CONNECTION_FAILED,
-        message: reldbM('reldb_sqliteConnectionFailed', { params: { error: String(error) } }),
-        cause: error,
-      })
-    }
-  }
+      if (!config.database) {
+        return err({
+          code: ReldbErrorCode.CONFIG_ERROR,
+          message: reldbM('reldb_sqliteNeedPath'),
+        })
+      }
 
-  /**
-   * 关闭数据库连接
-   */
-  const close: ReldbProvider['close'] = async (): Promise<Result<void, ReldbError>> => {
-    if (database) {
       try {
-        database.close()
+        const Database = require('better-sqlite3')
+
+        const sqliteOptions: { walMode: boolean, readonly: boolean } = {
+          walMode: true,
+          readonly: false,
+          ...(config.sqlite ?? {}),
+        }
+        database = new Database(config.database, {
+          readonly: sqliteOptions.readonly ?? false,
+        }) as Database.Database
+
+        // 启用 WAL 模式（提高并发性能）
+        if (sqliteOptions.walMode !== false) {
+          database.pragma('journal_mode = WAL')
+        }
+
+        logger.info('Connected to SQLite', { database: config.database })
+        return ok(undefined)
       }
       catch (error) {
-        database = null
         return err({
           code: ReldbErrorCode.CONNECTION_FAILED,
           message: reldbM('reldb_sqliteConnectionFailed', { params: { error: String(error) } }),
           cause: error,
         })
       }
-      database = null
-      logger.info('Disconnected from SQLite')
-    }
-    return ok(undefined)
-  }
+    },
 
-  /**
-   * 检查是否已连接
-   */
-  const isConnected: ReldbProvider['isConnected'] = (): boolean => {
-    return database !== null && database.open
-  }
+    async close(): Promise<Result<void, ReldbError>> {
+      if (database) {
+        try {
+          database.close()
+        }
+        catch (error) {
+          database = null
+          return err({
+            code: ReldbErrorCode.CONNECTION_FAILED,
+            message: reldbM('reldb_sqliteConnectionFailed', { params: { error: String(error) } }),
+            cause: error,
+          })
+        }
+        database = null
+        logger.info('Disconnected from SQLite')
+      }
+      return ok(undefined)
+    },
 
-  return {
-    connect,
-    close,
-    isConnected,
-    ddl,
-    sql,
-    crud,
-    tx,
+    isConnected: () => ctx.isConnected(),
+    ddl: createBaseDdlOps(ctx, rawDdl),
+    sql: dmlOps,
+    crud: createBaseCrudManager(dmlOps),
+    tx: createBaseTxManager(ctx, beginTx),
   }
 }

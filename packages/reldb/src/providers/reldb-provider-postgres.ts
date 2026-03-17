@@ -2,20 +2,23 @@
  * @h-ai/reldb — PostgreSQL Provider
  *
  * 基于 pg 的 PostgreSQL 数据库实现。
+ * 按 Context + wrapOp → Factory 模式实现。
  * @module reldb-provider-postgres
  */
 
-import type { Result } from '@h-ai/core'
+import type { PaginatedResult, Result } from '@h-ai/core'
 import type { ReldbConfig } from '../reldb-config.js'
 import type {
+  DdlOperations,
+  DmlOperations,
   DmlWithTxOperations,
+  ExecuteResult,
+  PaginationQueryOptions,
   ReldbColumnDef,
   ReldbError,
   ReldbProvider,
-  TxManager,
 } from '../reldb-types.js'
-
-import type { DdlDialect, RawExecutor } from './reldb-provider-base.js'
+import type { ReldbOpsContext } from './reldb-provider-base.js'
 
 import { core, err, ok } from '@h-ai/core'
 import { ReldbErrorCode } from '../reldb-config.js'
@@ -27,13 +30,9 @@ import {
   buildDefaultCreateTableSql,
   buildDefaultDropIndexSql,
   buildDefaultRenameTableSql,
-  createCrudManager,
-  createDdlOps,
-  createSqlOps,
-  createTxOps,
-  createTxWrap,
-  queryPageAsync,
-} from './reldb-provider-base.js'
+} from './reldb-ddl-builder.js'
+import { createBaseCrudManager, createBaseDdlOps, createBaseDmlOps, createBaseTxManager, queryPageAsync } from './reldb-provider-base.js'
+import { createTxHandle } from './reldb-tx-assembler.js'
 
 const logger = core.logger.child({ module: 'reldb', scope: 'postgres' })
 
@@ -63,72 +62,21 @@ export function createPostgresProvider(): ReldbProvider {
   /** 连接池实例 */
   let pool: PgPool | null = null
 
+  // ─── 操作上下文 ───
+
+  const ctx: ReldbOpsContext = {
+    isConnected: () => pool !== null,
+    logger,
+  }
+
   // ─── 辅助函数 ───
 
   /**
-   * 确保数据库已连接
-   */
-  function ensureConnected(): Result<PgPool, ReldbError> {
-    if (!pool) {
-      return err({
-        code: ReldbErrorCode.NOT_INITIALIZED,
-        message: reldbM('reldb_notInitialized'),
-      })
-    }
-    return ok(pool)
-  }
-
-  /**
    * 将 ? 占位符转换为 PostgreSQL 的 $1, $2, ... 格式
-   *
-   * @param sql - 含 ? 占位符的 SQL
-   * @returns 替换为 $n 的 SQL
    */
   function convertPlaceholders(sql: string): string {
     let index = 0
     return sql.replace(/\?/g, () => `$${++index}`)
-  }
-
-  /**
-   * 将 pg 查询接口适配为 RawExecutor
-   *
-   * @param queryFn - pg 的 query 函数
-   * @returns RawExecutor 实例
-   */
-  function createExecutor(
-    queryFn: (text: string, values?: unknown[]) => Promise<{ rows: unknown[], rowCount: number }>,
-  ): RawExecutor {
-    return {
-      queryRows: async (sql, params) => {
-        const result = await queryFn(convertPlaceholders(sql), params)
-        return result.rows
-      },
-      getRow: async (sql, params) => {
-        const result = await queryFn(convertPlaceholders(sql), params)
-        return result.rows[0]
-      },
-      executeStmt: async (sql, params) => {
-        const result = await queryFn(convertPlaceholders(sql), params)
-        return { changes: result.rowCount ?? 0 }
-      },
-      batchStmts: async (statements) => {
-        for (const { sql: statement, params } of statements) {
-          await queryFn(convertPlaceholders(statement), params)
-        }
-      },
-      queryPage: options => queryPageAsync(
-        async (sql, params) => {
-          const result = await queryFn(convertPlaceholders(sql), params)
-          return result.rows
-        },
-        options,
-      ),
-    }
-  }
-
-  /** 错误消息生成 */
-  function pgErrorMessage(detail: string): string {
-    return reldbM('reldb_queryFailed', { params: { error: detail } })
   }
 
   /** 事务错误消息生成 */
@@ -136,17 +84,7 @@ export function createPostgresProvider(): ReldbProvider {
     return reldbM('reldb_postgresTxFailed', { params: { error: detail } })
   }
 
-  /**
-   * 获取 RawExecutor（含连接检查）
-   */
-  function getExecutor(): Result<RawExecutor, ReldbError> {
-    const connResult = ensureConnected()
-    if (!connResult.success)
-      return connResult
-    return ok(createExecutor((text, values) => connResult.data.query(text, values)))
-  }
-
-  // ─── PostgreSQL 方言 ───
+  // ─── PostgreSQL 方言辅助 ───
 
   /** PostgreSQL 列类型映射 */
   function mapPgType(def: ReldbColumnDef): string {
@@ -170,9 +108,9 @@ export function createPostgresProvider(): ReldbProvider {
     }
   }
 
-  const pgDialect: DdlDialect = {
-    quoteId: quoteIdentifier,
-    buildColumnSql: (name, def) => buildColumnSqlBase(name, def, {
+  /** PostgreSQL buildColumnSql */
+  function pgBuildColumnSql(name: string, def: ReldbColumnDef): string {
+    return buildColumnSqlBase(name, def, {
       quoteId: quoteIdentifier,
       mapType: mapPgType,
       inlinePrimaryKey: true,
@@ -185,43 +123,85 @@ export function createPostgresProvider(): ReldbProvider {
         }
         return undefined // 走通用逻辑
       },
-    }),
-    buildCreateTableSql: (quotedTable, columns, ifNotExists) =>
-      buildDefaultCreateTableSql(pgDialect, quotedTable, columns, ifNotExists),
-    buildRenameTableSql: buildDefaultRenameTableSql,
-    buildCreateIndexSql: (quotedTable, quotedIndex, indexDef) =>
-      buildDefaultCreateIndexSql(pgDialect, quotedTable, quotedIndex, indexDef),
-    buildDropIndexSql: async (indexName, ifExists) =>
-      buildDefaultDropIndexSql(pgDialect, indexName, ifExists),
+    })
   }
 
-  // ─── DDL / SQL / CRUD ───
+  /** 通用 pg queryFn → rows 适配 */
+  async function pgQueryRows(
+    queryFn: (text: string, values?: unknown[]) => Promise<{ rows: unknown[], rowCount: number }>,
+    sql: string,
+    params?: unknown[],
+  ): Promise<unknown[]> {
+    const result = await queryFn(convertPlaceholders(sql), params)
+    return result.rows
+  }
 
-  const ddl = createDdlOps({
-    ensureReady: () => {
-      const r = ensureConnected()
-      return r.success ? ok(undefined) : r
+  // ─── DDL 操作 ───
+
+  const rawDdl: DdlOperations = {
+    async createTable(name, columns, ifNotExists = true) {
+      const quotedTable = quoteIdentifier(name)
+      const sql = buildDefaultCreateTableSql(pgBuildColumnSql, quotedTable, columns, ifNotExists)
+      await pool!.query(sql)
+      return ok(undefined)
     },
-    executeDdl: async (sqlStr) => {
-      await pool!.query(sqlStr)
+    async dropTable(name, ifExists) {
+      const ifExistsClause = ifExists ? 'IF EXISTS ' : ''
+      await pool!.query(`DROP TABLE ${ifExistsClause}${quoteIdentifier(name)}`)
+      return ok(undefined)
     },
-    dialect: pgDialect,
-  })
+    async addColumn(table, column, def) {
+      const colSql = pgBuildColumnSql(column, def)
+      await pool!.query(`ALTER TABLE ${quoteIdentifier(table)} ADD COLUMN ${colSql}`)
+      return ok(undefined)
+    },
+    async dropColumn(table, column) {
+      await pool!.query(`ALTER TABLE ${quoteIdentifier(table)} DROP COLUMN ${quoteIdentifier(column)}`)
+      return ok(undefined)
+    },
+    async renameTable(oldName, newName) {
+      await pool!.query(buildDefaultRenameTableSql(quoteIdentifier(oldName), quoteIdentifier(newName)))
+      return ok(undefined)
+    },
+    async createIndex(table, index, def) {
+      const sql = buildDefaultCreateIndexSql(quoteIdentifier, quoteIdentifier(table), quoteIdentifier(index), def)
+      await pool!.query(sql)
+      return ok(undefined)
+    },
+    async dropIndex(index, ifExists = true) {
+      const sql = buildDefaultDropIndexSql(quoteIdentifier, index, ifExists)
+      await pool!.query(sql)
+      return ok(undefined)
+    },
+    async raw(sql) {
+      await pool!.query(sql)
+      return ok(undefined)
+    },
+  }
 
-  const sql = createSqlOps({
-    getExecutor,
-    errorMessage: pgErrorMessage,
-    batch: async (statements) => {
-      const connResult = ensureConnected()
-      if (!connResult.success)
-        return connResult
+  // ─── DML 操作 ───
 
+  const rawDml: DmlOperations = {
+    async query<T>(sql: string, params?: unknown[]): Promise<Result<T[], ReldbError>> {
+      const rows = await pgQueryRows((t, v) => pool!.query(t, v), sql, params)
+      return ok(rows as T[])
+    },
+    async get<T>(sql: string, params?: unknown[]): Promise<Result<T | null, ReldbError>> {
+      const rows = await pgQueryRows((t, v) => pool!.query(t, v), sql, params)
+      return ok((rows[0] as T) ?? null)
+    },
+    async execute(sql: string, params?: unknown[]): Promise<Result<ExecuteResult, ReldbError>> {
+      const result = await pool!.query(convertPlaceholders(sql), params)
+      return ok({ changes: result.rowCount ?? 0 })
+    },
+    async batch(statements) {
       let client: PgClient | null = null
       try {
-        client = await connResult.data.connect()
+        client = await pool!.connect()
         await client.query('BEGIN')
-        const clientExec = createExecutor((text, values) => client!.query(text, values))
-        await clientExec.batchStmts(statements)
+        for (const { sql: s, params } of statements) {
+          await client.query(convertPlaceholders(s), params)
+        }
         await client.query('COMMIT')
         return ok(undefined)
       }
@@ -241,25 +221,56 @@ export function createPostgresProvider(): ReldbProvider {
         }
       }
     },
-  })
+    async queryPage<T>(options: PaginationQueryOptions): Promise<Result<PaginatedResult<T>, ReldbError>> {
+      const result = await queryPageAsync<T>(
+        async (sql, params) => {
+          const r = await pool!.query(convertPlaceholders(sql), params)
+          return r.rows
+        },
+        options,
+      )
+      return ok(result)
+    },
+  }
 
-  const crud = createCrudManager(sql)
+  // ─── 事务 ───
 
-  // ─── 事务操作实现 ───
+  /** 创建事务连接上的 DML 操作 */
+  function createPgTxDmlOps(client: PgClient): DmlOperations {
+    const queryFn = (text: string, values?: unknown[]) => client.query(text, values)
+    return {
+      async query<T>(sql: string, params?: unknown[]): Promise<Result<T[], ReldbError>> {
+        const rows = await pgQueryRows(queryFn, sql, params)
+        return ok(rows as T[])
+      },
+      async get<T>(sql: string, params?: unknown[]): Promise<Result<T | null, ReldbError>> {
+        const rows = await pgQueryRows(queryFn, sql, params)
+        return ok((rows[0] as T) ?? null)
+      },
+      async execute(sql: string, params?: unknown[]): Promise<Result<ExecuteResult, ReldbError>> {
+        const result = await queryFn(convertPlaceholders(sql), params)
+        return ok({ changes: result.rowCount ?? 0 })
+      },
+      async batch(statements) {
+        for (const { sql: s, params } of statements) {
+          await queryFn(convertPlaceholders(s), params)
+        }
+        return ok(undefined)
+      },
+      async queryPage<T>(options: PaginationQueryOptions): Promise<Result<PaginatedResult<T>, ReldbError>> {
+        const result = await queryPageAsync<T>(
+          async (sql, params) => {
+            const r = await queryFn(convertPlaceholders(sql), params)
+            return r.rows
+          },
+          options,
+        )
+        return ok(result)
+      },
+    }
+  }
 
-  /**
-   * 开启事务
-   *
-   * 从连接池获取独立连接，执行 BEGIN，并返回事务句柄。
-   * 事务完成后（commit/rollback）自动释放连接。
-   *
-   * @returns 事务句柄或错误
-   */
-  async function beginTransaction(): Promise<Result<DmlWithTxOperations, ReldbError>> {
-    const connResult = ensureConnected()
-    if (!connResult.success)
-      return connResult
-
+  async function beginTx(): Promise<Result<DmlWithTxOperations, ReldbError>> {
     let client: PgClient | null = null
 
     try {
@@ -277,8 +288,8 @@ export function createPostgresProvider(): ReldbProvider {
       })
     }
 
-    const clientExec = createExecutor((text, values) => client!.query(text, values))
-    return ok(createTxOps(clientExec, {
+    const txDmlOps = createPgTxDmlOps(client)
+    return ok(createTxHandle(txDmlOps, {
       commit: async () => { await client!.query('COMMIT') },
       rollback: async () => { await client!.query('ROLLBACK') },
       release: () => client!.release(),
@@ -286,66 +297,42 @@ export function createPostgresProvider(): ReldbProvider {
     }))
   }
 
-  const tx: TxManager = {
-    begin: beginTransaction,
-    wrap: createTxWrap(beginTransaction, pgTxErrorMessage),
-  }
+  // ─── 组装 Provider ───
 
-  // ─── Provider 接口实现 ───
+  const dmlOps = createBaseDmlOps(ctx, rawDml)
 
-  /**
-   * 连接 PostgreSQL 数据库
-   */
-  const connect: ReldbProvider['connect'] = async (config: ReldbConfig): Promise<Result<void, ReldbError>> => {
-    if (config.type !== 'postgresql') {
-      return err({
-        code: ReldbErrorCode.UNSUPPORTED_TYPE,
-        message: reldbM('reldb_postgresOnlyPostgresql'),
-      })
-    }
+  return {
+    async connect(config: ReldbConfig): Promise<Result<void, ReldbError>> {
+      if (config.type !== 'postgresql') {
+        return err({
+          code: ReldbErrorCode.UNSUPPORTED_TYPE,
+          message: reldbM('reldb_postgresOnlyPostgresql'),
+        })
+      }
 
-    try {
-      // 动态导入 pg
-      // eslint-disable-next-line ts/no-require-imports -- 需要保持 connect 同步，使用 require 进行按需加载
-      const { Pool } = require('pg')
-
-      pool = new Pool({
-        connectionString: config.url,
-        host: config.host,
-        port: config.port,
-        database: config.database,
-        user: config.user,
-        password: config.password,
-        ssl: config.ssl,
-        min: config.pool?.min,
-        max: config.pool?.max ?? 10,
-        idleTimeoutMillis: config.pool?.idleTimeout,
-        connectionTimeoutMillis: config.pool?.acquireTimeout,
-      }) as PgPool
-
-      // 验证连接可用性
-      await pool.query('SELECT 1')
-
-      logger.info('Connected to PostgreSQL', { host: config.host, port: config.port, database: config.database })
-      return ok(undefined)
-    }
-    catch (error) {
-      pool = null
-      return err({
-        code: ReldbErrorCode.CONNECTION_FAILED,
-        message: reldbM('reldb_postgresConnectionFailed', { params: { error: String(error) } }),
-        cause: error,
-      })
-    }
-  }
-
-  /**
-   * 关闭连接池
-   */
-  const close: ReldbProvider['close'] = async (): Promise<Result<void, ReldbError>> => {
-    if (pool) {
       try {
-        await pool.end()
+        // eslint-disable-next-line ts/no-require-imports -- 按需加载
+        const { Pool } = require('pg')
+
+        pool = new Pool({
+          connectionString: config.url,
+          host: config.host,
+          port: config.port,
+          database: config.database,
+          user: config.user,
+          password: config.password,
+          ssl: config.ssl,
+          min: config.pool?.min,
+          max: config.pool?.max ?? 10,
+          idleTimeoutMillis: config.pool?.idleTimeout,
+          connectionTimeoutMillis: config.pool?.acquireTimeout,
+        }) as PgPool
+
+        // 验证连接可用性
+        await pool.query('SELECT 1')
+
+        logger.info('Connected to PostgreSQL', { host: config.host, port: config.port, database: config.database })
+        return ok(undefined)
       }
       catch (error) {
         pool = null
@@ -355,26 +342,31 @@ export function createPostgresProvider(): ReldbProvider {
           cause: error,
         })
       }
-      pool = null
-      logger.info('Disconnected from PostgreSQL')
-    }
-    return ok(undefined)
-  }
+    },
 
-  /**
-   * 检查是否已连接
-   */
-  const isConnected: ReldbProvider['isConnected'] = (): boolean => {
-    return pool !== null
-  }
+    async close(): Promise<Result<void, ReldbError>> {
+      if (pool) {
+        try {
+          await pool.end()
+        }
+        catch (error) {
+          pool = null
+          return err({
+            code: ReldbErrorCode.CONNECTION_FAILED,
+            message: reldbM('reldb_postgresConnectionFailed', { params: { error: String(error) } }),
+            cause: error,
+          })
+        }
+        pool = null
+        logger.info('Disconnected from PostgreSQL')
+      }
+      return ok(undefined)
+    },
 
-  return {
-    connect,
-    close,
-    isConnected,
-    ddl,
-    sql,
-    crud,
-    tx,
+    isConnected: () => ctx.isConnected(),
+    ddl: createBaseDdlOps(ctx, rawDdl),
+    sql: dmlOps,
+    crud: createBaseCrudManager(dmlOps),
+    tx: createBaseTxManager(ctx, beginTx),
   }
 }
