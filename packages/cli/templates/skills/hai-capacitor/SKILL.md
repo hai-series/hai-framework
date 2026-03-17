@@ -132,8 +132,8 @@ if (reg.success) {
   await api.post('/push/register', { token: reg.data.token })
 }
 
-// 监听推送事件（返回 async 清理函数）
-const cleanup = await capacitor.push.listen({
+// 监听推送事件（返回 Result 包裹的 async 清理函数）
+const listenResult = await capacitor.push.listen({
   onReceived: (notification) => {
     // 前台收到推送
     // notification: { id, title?, body?, data? }
@@ -144,7 +144,9 @@ const cleanup = await capacitor.push.listen({
 })
 
 // 停止监听
-await cleanup()
+if (listenResult.success) {
+  await listenResult.data()
+}
 ```
 
 ### 5. 相机
@@ -198,7 +200,7 @@ await capacitor.statusBar.show()
 | `capacitor.device.getInfo()` | 设备信息 | `Result<DeviceInfo, CapacitorError>` |
 | `capacitor.device.getAppVersion()` | 应用版本 | `Result<{ version, build }, CapacitorError>` |
 | `capacitor.push.register()` | 注册推送 | `Result<PushRegistration, CapacitorError>` |
-| `capacitor.push.listen(callbacks)` | 监听推送事件 | `Promise<() => Promise<void>>`（async 清理函数） |
+| `capacitor.push.listen(callbacks)` | 监听推送事件 | `Result<() => Promise<void>, CapacitorError>`（async 清理函数） |
 | `capacitor.camera.takePhoto(options?)` | 拍照 / 选取图片 | `Result<PhotoResult, CapacitorError>` |
 | `capacitor.statusBar.configure(config)` | 配置状态栏 | `Result<void, CapacitorError>` |
 | `capacitor.statusBar.show()` | 显示状态栏 | `Result<void, CapacitorError>` |
@@ -212,12 +214,14 @@ await capacitor.statusBar.show()
 | ------ | --------------------------- | -------------------- |
 | 8000   | `INIT_FAILED`               | 初始化失败           |
 | 8001   | `NOT_AVAILABLE`             | Capacitor 不可用     |
+| 8002   | `INIT_IN_PROGRESS`          | 正在初始化中       |
 | 8010   | `NOT_INITIALIZED`           | 模块未初始化         |
 | 8011   | `PREFERENCES_GET_FAILED`    | Preferences 读取失败 |
 | 8012   | `PREFERENCES_SET_FAILED`    | Preferences 写入失败 |
 | 8013   | `PREFERENCES_REMOVE_FAILED` | Preferences 删除失败 |
 | 8020   | `DEVICE_INFO_FAILED`        | 获取设备信息失败     |
 | 8030   | `PUSH_REGISTER_FAILED`      | 推送注册失败         |
+| 8031   | `PUSH_LISTEN_FAILED`        | 推送监听失败         |
 | 8040   | `CAMERA_FAILED`             | 拍照/相册失败        |
 | 8050   | `STATUS_BAR_FAILED`         | 状态栏配置失败       |
 
@@ -324,7 +328,7 @@ export async function setupPush() {
   })
 
   // 监听推送
-  await capacitor.push.listen({
+  const listenResult = await capacitor.push.listen({
     onReceived: (n) => {
       // 前台通知处理
     },
