@@ -5,7 +5,6 @@
  * @module audit-config
  */
 
-import type { ReldbFunctions } from '@h-ai/reldb'
 import { z } from 'zod'
 
 // ─── 错误码 ───
@@ -39,7 +38,7 @@ export const AuditErrorCode = {
   INIT_IN_PROGRESS: 10004,
   /** 模块未初始化，需先调用 audit.init() */
   NOT_INITIALIZED: 10010,
-  /** 初始化配置错误（如 db 实例无效） */
+  /** 初始化配置错误（如标识符非法） */
   CONFIG_ERROR: 10012,
 } as const
 
@@ -66,19 +65,17 @@ export const AuditErrorHttpStatus: Record<number, number> = {
 /**
  * 审计模块初始化配置 Schema（Zod）
  *
- * 仅 `db` 为必填项，其余字段均有默认值。
+ * 所有字段均有默认值，可直接调用 `audit.init()` 无需传参。
  *
  * @example
  * ```ts
  * import { audit } from '@h-ai/audit'
  * import { reldb } from '@h-ai/reldb'
  *
- * await audit.init({ db: reldb })
+ * await audit.init()
  *
- * // 自定义表名与用户表映射
+ * // 自定义用户表映射
  * await audit.init({
- *   db: reldb,
- *   tableName: 'sys_audit_logs',
  *   userTable: 'sys_users',
  *   userIdColumn: 'user_id',
  *   userNameColumn: 'name',
@@ -86,14 +83,8 @@ export const AuditErrorHttpStatus: Record<number, number> = {
  * ```
  */
 export const AuditInitConfigSchema = z.object({
-  /** 数据库服务实例，必须是已初始化的 @h-ai/reldb 实例 */
-  db: z.custom<ReldbFunctions>(val => val != null && typeof val === 'object' && 'isInitialized' in val, {
-    message: 'db must be a valid @h-ai/reldb instance',
-  }),
-  /** 审计日志表名 */
-  tableName: z.string().default('audit_logs'),
   /** 用户表名，用于 list 查询时 LEFT JOIN 获取用户名 */
-  userTable: z.string().default('users'),
+  userTable: z.string().default('hai_iam_users'),
   /** 用户表主键列名，用于 JOIN 条件 */
   userIdColumn: z.string().default('id'),
   /** 用户表用户名列名，用于 SELECT 输出 */

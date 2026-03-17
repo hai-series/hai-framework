@@ -15,7 +15,6 @@ import type {
   AuditLogWithUser,
   AuditStatItem,
   CreateAuditLogInput,
-  CrudAuditInput,
   ListAuditLogsOptions,
 } from './audit-types.js'
 
@@ -24,6 +23,7 @@ import { core, err, ok } from '@h-ai/core'
 import { validateIdentifiers } from '@h-ai/reldb'
 
 import { AuditErrorCode, AuditInitConfigSchema } from './audit-config.js'
+import { createHelper } from './audit-helper.js'
 import { auditM } from './audit-i18n.js'
 import { AuditLogRepository } from './audit-repository-log.js'
 
@@ -53,73 +53,7 @@ const notInitialized = core.module.createNotInitializedKit<AuditError>(
   () => auditM('audit_notInitialized'),
 )
 
-// ─── 便捷记录器 ───
-
-/**
- * 创建便捷记录器
- *
- * 封装常见审计操作（登录、登出、注册、密码重置、CRUD），
- * 简化调用方代码。每个方法内部调用 logFn 并将 AuditLog 结果映射为 void。
- *
- * @param logFn - 底层日志记录函数（通常为 currentRepo.log）
- * @returns 便捷记录器接口
- */
-function createHelper(logFn: (input: CreateAuditLogInput) => Promise<Result<AuditLog, AuditError>>): AuditHelper {
-  /**
-   * 将 log 结果映射为 void 返回
-   *
-   * @param result - log 操作结果
-   * @returns 成功返回 ok(undefined)；失败透传原始错误
-   */
-  function toVoid(result: Result<AuditLog, AuditError>): Result<void, AuditError> {
-    if (!result.success) {
-      return result
-    }
-    return ok(undefined)
-  }
-
-  return {
-    async login(userId: string, ip?: string, ua?: string): Promise<Result<void, AuditError>> {
-      const result = await logFn({ userId, action: 'login', resource: 'auth', ipAddress: ip, userAgent: ua })
-      return toVoid(result)
-    },
-
-    async logout(userId: string, ip?: string, ua?: string): Promise<Result<void, AuditError>> {
-      const result = await logFn({ userId, action: 'logout', resource: 'auth', ipAddress: ip, userAgent: ua })
-      return toVoid(result)
-    },
-
-    async register(userId: string, ip?: string, ua?: string): Promise<Result<void, AuditError>> {
-      const result = await logFn({ userId, action: 'register', resource: 'auth', resourceId: userId, ipAddress: ip, userAgent: ua })
-      return toVoid(result)
-    },
-
-    async passwordResetRequest(email: string, ip?: string, ua?: string): Promise<Result<void, AuditError>> {
-      const result = await logFn({ action: 'password_reset_request', resource: 'auth', details: { email }, ipAddress: ip, userAgent: ua })
-      return toVoid(result)
-    },
-
-    async passwordResetComplete(userId: string | null, ip?: string, ua?: string): Promise<Result<void, AuditError>> {
-      const result = await logFn({ userId, action: 'password_reset', resource: 'auth', ipAddress: ip, userAgent: ua })
-      return toVoid(result)
-    },
-
-    async crud(
-      input: CrudAuditInput,
-    ): Promise<Result<void, AuditError>> {
-      const result = await logFn({
-        userId: input.userId,
-        action: input.action,
-        resource: input.resource,
-        resourceId: input.resourceId,
-        details: input.details,
-        ipAddress: input.ip,
-        userAgent: input.ua,
-      })
-      return toVoid(result)
-    },
-  }
-}
+// ─── 便捷记录器占位 ───
 
 /** 未初始化时的便捷记录器占位 */
 const notInitializedHelper = notInitialized.proxy<AuditHelper>()
@@ -146,7 +80,7 @@ const notInitializedHelper = notInitialized.proxy<AuditHelper>()
  * import { reldb } from '@h-ai/reldb'
  *
  * await reldb.init({ type: 'sqlite', database: ':memory:' })
- * const result = await audit.init({ db: reldb })
+ * const result = await audit.init()
  * if (!result.success) {
  *   // 处理初始化错误
  * }
@@ -162,19 +96,20 @@ export const audit: AuditFunctions = {
    *
    * 会先关闭已有实例（如已初始化），再用新配置重新初始化。
    * 内部创建 AuditLogRepository 实例（BaseReldbCrudRepository 自动建表）。
+   * 依赖 @h-ai/reldb 已初始化。
    *
-   * @param config - 初始化配置（需包含已初始化的 db 实例）
+   * @param config - 初始化配置（可选，所有字段均有默认值）
    * @returns 成功时返回 ok(undefined)；失败时返回 CONFIG_ERROR
    *
    * @example
    * ```ts
-   * const result = await audit.init({ db: reldb })
+   * const result = await audit.init()
    * if (!result.success) {
    *   logger.error('Audit init failed', { error: result.error.message })
    * }
    * ```
    */
-  async init(config: AuditInitConfigInput): Promise<Result<void, AuditError>> {
+  async init(config?: AuditInitConfigInput): Promise<Result<void, AuditError>> {
     // 并发初始化防护：避免多次 init 同时执行导致资源泄漏
     if (initInProgress) {
       logger.warn('Audit init already in progress, skipping concurrent call')
@@ -193,7 +128,7 @@ export const audit: AuditFunctions = {
 
       logger.info('Initializing audit module')
 
-      const parseResult = AuditInitConfigSchema.safeParse(config)
+      const parseResult = AuditInitConfigSchema.safeParse(config ?? {})
       if (!parseResult.success) {
         logger.error('Audit config validation failed', { error: parseResult.error.message })
         return err({
@@ -204,7 +139,7 @@ export const audit: AuditFunctions = {
       }
       const parsed = parseResult.data
 
-      const identifierResult = validateIdentifiers([parsed.tableName, parsed.userTable, parsed.userIdColumn, parsed.userNameColumn])
+      const identifierResult = validateIdentifiers([parsed.userTable, parsed.userIdColumn, parsed.userNameColumn])
       if (!identifierResult.success) {
         logger.error('Audit config contains invalid identifiers', { error: identifierResult.error.message })
         return err({
@@ -214,15 +149,14 @@ export const audit: AuditFunctions = {
         })
       }
 
-      currentRepo = new AuditLogRepository(parsed.db, {
-        tableName: parsed.tableName,
+      currentRepo = new AuditLogRepository({
         userTable: parsed.userTable,
         userIdColumn: parsed.userIdColumn,
         userNameColumn: parsed.userNameColumn,
       })
       currentHelper = createHelper(input => currentRepo!.log(input))
 
-      logger.info('Audit module initialized', { tableName: parsed.tableName })
+      logger.info('Audit module initialized')
       return ok(undefined)
     }
     catch (error) {

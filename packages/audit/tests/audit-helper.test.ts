@@ -15,12 +15,12 @@ async function setupDb(): Promise<void> {
   if (!result.success) {
     throw new Error(`DB init failed: ${result.error.message}`)
   }
-  await reldb.ddl.createTable('users', {
+  await reldb.ddl.createTable('hai_iam_users', {
     id: { type: 'TEXT', primaryKey: true },
     username: { type: 'TEXT', notNull: true },
   }, true)
   await reldb.sql.execute(
-    'INSERT INTO users (id, username) VALUES (?, ?)',
+    'INSERT INTO hai_iam_users (id, username) VALUES (?, ?)',
     ['user_1', 'testuser'],
   )
 }
@@ -30,7 +30,7 @@ async function setupDb(): Promise<void> {
 describe('audit.helper', () => {
   beforeEach(async () => {
     await setupDb()
-    await audit.init({ db: reldb })
+    await audit.init()
   })
 
   afterEach(async () => {

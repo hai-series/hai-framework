@@ -234,7 +234,7 @@ export interface AuditHelper {
  * import { reldb } from '@h-ai/reldb'
  *
  * await reldb.init({ type: 'sqlite', database: './data.db' })
- * await audit.init({ db: reldb })
+ * await audit.init()
  *
  * await audit.log({ userId: 'user_1', action: 'login', resource: 'auth' })
  * const logs = await audit.list({ pageSize: 10 })
@@ -245,10 +245,10 @@ export interface AuditFunctions {
   /**
    * 初始化审计模块
    *
-   * @param config - 初始化配置，需包含已初始化的 db 实例
+   * @param config - 初始化配置（可选，所有字段均有默认值）
    * @returns 成功时返回 ok(undefined)；失败时返回 CONFIG_ERROR
    */
-  init: (config: AuditInitConfigInput) => Promise<Result<void, AuditError>>
+  init: (config?: AuditInitConfigInput) => Promise<Result<void, AuditError>>
   /**
    * 关闭审计模块，释放内部状态
    */

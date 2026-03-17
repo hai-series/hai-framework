@@ -15,7 +15,7 @@ async function setupDb(): Promise<void> {
   if (!result.success) {
     throw new Error(`DB init failed: ${result.error.message}`)
   }
-  await reldb.ddl.createTable('users', {
+  await reldb.ddl.createTable('hai_iam_users', {
     id: { type: 'TEXT', primaryKey: true },
     username: { type: 'TEXT', notNull: true },
   }, true)
@@ -47,16 +47,18 @@ describe('audit.init / audit.close', () => {
   // ─── 初始化 ───
 
   it('init 应初始化成功并更新状态', async () => {
-    const result = await audit.init({ db: reldb })
+    const result = await audit.init()
     expect(result.success).toBe(true)
     expect(audit.isInitialized).toBe(true)
   })
 
-  it('init 使用自定义表名应初始化成功', async () => {
+  it('init 使用自定义用户表应初始化成功', async () => {
+    await reldb.ddl.createTable('custom_users', {
+      id: { type: 'TEXT', primaryKey: true },
+      username: { type: 'TEXT', notNull: true },
+    }, true)
     const result = await audit.init({
-      db: reldb,
-      tableName: 'custom_audit',
-      userTable: 'users',
+      userTable: 'custom_users',
       userIdColumn: 'id',
       userNameColumn: 'username',
     })
@@ -67,7 +69,7 @@ describe('audit.init / audit.close', () => {
   // ─── 关闭 ───
 
   it('close 应将 isInitialized 设为 false', async () => {
-    await audit.init({ db: reldb })
+    await audit.init()
     expect(audit.isInitialized).toBe(true)
     await audit.close()
     expect(audit.isInitialized).toBe(false)
@@ -76,35 +78,27 @@ describe('audit.init / audit.close', () => {
   // ─── 重新初始化 ───
 
   it('重复 init 应先关闭再重新初始化', async () => {
-    await audit.init({ db: reldb })
+    await audit.init()
     await audit.log({ action: 'test', resource: 'test' })
 
     // 重新初始化
-    const result = await audit.init({ db: reldb })
+    const result = await audit.init()
     expect(result.success).toBe(true)
     expect(audit.isInitialized).toBe(true)
   })
 
   it('close 后再 init 应成功', async () => {
-    await audit.init({ db: reldb })
+    await audit.init()
     await audit.close()
-    const result = await audit.init({ db: reldb })
+    const result = await audit.init()
     expect(result.success).toBe(true)
     expect(audit.isInitialized).toBe(true)
   })
 
   // ─── 配置校验 ───
 
-  it('传入 null 作为 db 应返回 CONFIG_ERROR', async () => {
-    const result = await audit.init({ db: null as never })
-    expect(result.success).toBe(false)
-    if (!result.success) {
-      expect(result.error.code).toBe(AuditErrorCode.CONFIG_ERROR)
-    }
-  })
-
   it('传入非法标识符应返回 CONFIG_ERROR', async () => {
-    const result = await audit.init({ db: reldb, tableName: 'DROP TABLE; --' })
+    const result = await audit.init({ userTable: 'DROP TABLE; --' })
     expect(result.success).toBe(false)
     if (!result.success) {
       expect(result.error.code).toBe(AuditErrorCode.CONFIG_ERROR)
@@ -115,11 +109,11 @@ describe('audit.init / audit.close', () => {
 
   it('并发 init 应返回 INIT_IN_PROGRESS', async () => {
     // 先初始化一次，使重新初始化时触发 await audit.close()，产生真正的并发窗口
-    await audit.init({ db: reldb })
+    await audit.init()
 
     const [r1, r2] = await Promise.all([
-      audit.init({ db: reldb }),
-      audit.init({ db: reldb }),
+      audit.init(),
+      audit.init(),
     ])
 
     // 其中一个成功，另一个返回 INIT_IN_PROGRESS
