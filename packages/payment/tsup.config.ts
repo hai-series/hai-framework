@@ -8,5 +8,5 @@ export default defineConfig({
     'client/index': 'src/client/index.ts',
     'api/index': 'src/api/index.ts',
   },
-  external: ['@h-ai/core', 'zod'],
+  external: ['@h-ai/audit', '@h-ai/core', 'zod'],
 })

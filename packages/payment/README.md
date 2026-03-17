@@ -81,7 +81,7 @@ await payment.init({
 })
 ```
 
-只配置需要的 Provider 即可，未配置的 Provider 不会注册。
+关键支付操作（创建订单、回调、退款、关闭订单）会自动写入审计日志（依赖 `@h-ai/audit`）。只配置需要的 Provider 即可，未配置的 Provider 不会注册。
 
 ## 错误处理
 

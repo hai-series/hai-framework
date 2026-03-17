@@ -37,6 +37,7 @@
     "clean": "rimraf dist .turbo"
   },
   "dependencies": {
+    "@h-ai/audit": "workspace:*",
     "@h-ai/core": "workspace:*",
     "zod": "catalog:"
   },
