@@ -9,5 +9,6 @@
   "apiClient_tokenRefreshFailed": "Token刷新失败，请重新登录",
   "apiClient_notInitialized": "API 客户端未初始化，请先调用 api.init()",
   "apiClient_configError": "API 客户端配置错误：{error}",
+  "apiClient_responseValidationFailed": "响应数据校验失败",
   "apiClient_unknown": "未知错误"
 }

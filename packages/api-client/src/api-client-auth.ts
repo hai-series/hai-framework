@@ -19,6 +19,19 @@ const LS_REFRESH_KEY = 'hai_refresh_token'
  * `@h-ai/capacitor` 提供的 `CapacitorTokenStorage`。
  *
  * @returns TokenStorage 实例
+ *
+ * @example
+ * ```ts
+ * import { api, createLocalStorageTokenStorage } from '@h-ai/api-client'
+ *
+ * await api.init({
+ *   baseUrl: 'https://api.example.com',
+ *   auth: {
+ *     storage: createLocalStorageTokenStorage(),
+ *     refreshUrl: '/auth/refresh',
+ *   },
+ * })
+ * ```
  */
 export function createLocalStorageTokenStorage(): TokenStorage {
   return {
@@ -50,6 +63,19 @@ export function createLocalStorageTokenStorage(): TokenStorage {
  * 页面刷新后 Token 丢失。
  *
  * @returns TokenStorage 实例
+ *
+ * @example
+ * ```ts
+ * import { api, createMemoryTokenStorage } from '@h-ai/api-client'
+ *
+ * await api.init({
+ *   baseUrl: 'https://api.example.com',
+ *   auth: {
+ *     storage: createMemoryTokenStorage(),
+ *     refreshUrl: '/auth/refresh',
+ *   },
+ * })
+ * ```
  */
 export function createMemoryTokenStorage(): TokenStorage {
   let accessToken: string | null = null

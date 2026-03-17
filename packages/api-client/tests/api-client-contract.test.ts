@@ -98,6 +98,20 @@ describe('api.call (contract)', () => {
     expect(fetch).not.toHaveBeenCalled()
   })
 
+  it('响应数据不符合 output schema 时返回 VALIDATION_FAILED', async () => {
+    // 服务端返回的数据缺少 tokens 字段，不满足 loginEndpoint.output
+    const fetch = mockFetch(200, { user: { id: 'u1', name: 'Alice' } })
+    await api.init({ baseUrl: 'https://api.test.com', fetch })
+
+    const result = await api.call(loginEndpoint, { identifier: 'alice', password: 'pass' })
+
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error.code).toBe(1206) // VALIDATION_FAILED
+      expect(result.error.details).toBeDefined()
+    }
+  })
+
   it('token 自动附加到请求头', async () => {
     const fetch = mockFetch(200, { data: [] })
     const storage = createMemoryTokenStorage()

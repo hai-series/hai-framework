@@ -27,6 +27,9 @@ let currentClient: ApiClient | null = null
 /** 当前客户端配置（init 后非空，close 后置空） */
 let currentConfig: ApiClientConfig | null = null
 
+/** 并发初始化防护标志 */
+let initInProgress = false
+
 // ─── 内部工厂 ───
 
 /**
@@ -112,9 +115,16 @@ const notInitializedOps = notInitialized.proxy<Pick<ApiClient, 'get' | 'post' | 
 
 /** 未初始化时的 Token 管理占位 */
 const notInitializedAuth: ApiClient['auth'] = {
-  async setTokens() {},
-  async clear() {},
-  onTokenRefreshed() { return () => {} },
+  async setTokens() {
+    logger.warn('api.auth.setTokens called before initialization, ignored')
+  },
+  async clear() {
+    logger.warn('api.auth.clear called before initialization, ignored')
+  },
+  onTokenRefreshed() {
+    logger.warn('api.auth.onTokenRefreshed called before initialization, ignored')
+    return () => {}
+  },
 }
 
 /**
@@ -173,14 +183,22 @@ export const api: ApiClientFunctions = {
    * @returns 成功时返回 ok(undefined)；失败时返回包含错误码和消息的 err。
    */
   async init(config: ApiClientConfig): Promise<Result<void, ApiClientError>> {
-    if (currentClient) {
-      logger.warn('Api-client module is already initialized, reinitializing')
-      await api.close()
+    if (initInProgress) {
+      return err({
+        code: ApiClientErrorCode.CONFIG_ERROR,
+        message: apiClientM('apiClient_configError', { params: { error: 'initialization already in progress' } }),
+      })
     }
 
-    logger.info('Initializing api-client module')
-
+    initInProgress = true
     try {
+      if (currentClient) {
+        logger.warn('Api-client module is already initialized, reinitializing')
+        await api.close()
+      }
+
+      logger.info('Initializing api-client module')
+
       currentClient = createClient(config)
       currentConfig = config
       logger.info('Api-client module initialized')
@@ -193,6 +211,9 @@ export const api: ApiClientFunctions = {
         message: apiClientM('apiClient_configError', { params: { error: error instanceof Error ? error.message : String(error) } }),
         cause: error,
       })
+    }
+    finally {
+      initInProgress = false
     }
   },
 

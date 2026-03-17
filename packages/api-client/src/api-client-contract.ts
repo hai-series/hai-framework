@@ -9,7 +9,7 @@ import type { Result } from '@h-ai/core'
 import type { ApiClientError } from './api-client-config.js'
 import type { FetchClient } from './api-client-fetch.js'
 import type { EndpointDef } from './api-client-types.js'
-import { err } from '@h-ai/core'
+import { err, ok } from '@h-ai/core'
 import { ApiClientErrorCode } from './api-client-config.js'
 import { apiClientM } from './api-client-i18n.js'
 
@@ -40,7 +40,7 @@ export function createContractCaller(fetchClient: FetchClient) {
     endpoint: EndpointDef<TInput, TOutput>,
     input: TInput,
   ): Promise<Result<TOutput, ApiClientError>> {
-    // 客户端输入校验（可选，避免无效请求发送到服务端）
+    // 客户端入参校验（避免无效请求发送到服务端）
     const parsed = endpoint.input.safeParse(input)
     if (!parsed.success) {
       return err({
@@ -52,21 +52,28 @@ export function createContractCaller(fetchClient: FetchClient) {
 
     const validInput = parsed.data
 
+    let result: Result<unknown, ApiClientError>
+
     switch (endpoint.method) {
       case 'GET':
-        return fetchClient.get<TOutput>(endpoint.path, validInput as Record<string, unknown>)
+        result = await fetchClient.get(endpoint.path, validInput as Record<string, unknown>)
+        break
 
       case 'POST':
-        return fetchClient.post<TOutput>(endpoint.path, validInput)
+        result = await fetchClient.post(endpoint.path, validInput)
+        break
 
       case 'PUT':
-        return fetchClient.put<TOutput>(endpoint.path, validInput)
+        result = await fetchClient.put(endpoint.path, validInput)
+        break
 
       case 'PATCH':
-        return fetchClient.patch<TOutput>(endpoint.path, validInput)
+        result = await fetchClient.patch(endpoint.path, validInput)
+        break
 
       case 'DELETE':
-        return fetchClient.delete<TOutput>(endpoint.path, validInput as Record<string, unknown>)
+        result = await fetchClient.delete(endpoint.path, validInput as Record<string, unknown>)
+        break
 
       default:
         return err({
@@ -74,6 +81,22 @@ export function createContractCaller(fetchClient: FetchClient) {
           message: apiClientM('apiClient_unknown'),
         })
     }
+
+    if (!result.success) {
+      return result
+    }
+
+    // 响应数据校验（确保服务端返回的数据符合契约）
+    const outputParsed = endpoint.output.safeParse(result.data)
+    if (!outputParsed.success) {
+      return err({
+        code: ApiClientErrorCode.VALIDATION_FAILED,
+        message: apiClientM('apiClient_responseValidationFailed'),
+        details: outputParsed.error.issues,
+      })
+    }
+
+    return ok(outputParsed.data)
   }
 
   return call

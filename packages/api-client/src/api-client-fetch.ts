@@ -287,46 +287,42 @@ export function createFetchClient(
       }
       catch (cause) {
         clearStreamTimeout()
-        if (cause instanceof DOMException && cause.name === 'AbortError') {
-          if (externalSignal?.aborted && !timeoutTriggered) {
-            throw cause
-          }
-          throw new Error(apiClientM('apiClient_timeout'), { cause })
-        }
         throw cause
       }
     }
 
-    let response = await doStreamFetch()
-
-    // 401 自动刷新 + 重试（一次）
-    if (response.status === 401 && tokenManager) {
-      logger.info('Stream received 401, attempting token refresh', { url: requestConfig.url })
-      const tokens = await tokenManager.refresh()
-      if (tokens) {
-        finalConfig.headers.Authorization = `Bearer ${tokens.accessToken}`
-        response = await doStreamFetch()
-      }
-    }
-
-    if (!response.ok) {
-      clearStreamTimeout()
-      const errorResult = await responseToError(response)
-      if (!errorResult.success) {
-        throw new Error(errorResult.error.message, { cause: errorResult.error })
-      }
-    }
-
-    if (!response.body) {
-      clearStreamTimeout()
-      throw new Error(apiClientM('apiClient_networkError'))
-    }
-
-    const reader = response.body.getReader()
-    const decoder = new TextDecoder()
-    let lineBuffer = ''
+    // 统一资源清理：无论 doStreamFetch / 401 重试 / 读取阶段在哪抛出异常，
+    // 都确保清理超时定时器、外部信号监听器和 reader 锁。
+    let reader: ReadableStreamDefaultReader<Uint8Array> | null = null
 
     try {
+      let response = await doStreamFetch()
+
+      // 401 自动刷新 + 重试（一次）
+      if (response.status === 401 && tokenManager) {
+        logger.info('Stream received 401, attempting token refresh', { url: requestConfig.url })
+        const tokens = await tokenManager.refresh()
+        if (tokens) {
+          finalConfig.headers.Authorization = `Bearer ${tokens.accessToken}`
+          response = await doStreamFetch()
+        }
+      }
+
+      if (!response.ok) {
+        const errorResult = await responseToError(response)
+        if (!errorResult.success) {
+          throw new Error(errorResult.error.message, { cause: errorResult.error })
+        }
+      }
+
+      if (!response.body) {
+        throw new Error(apiClientM('apiClient_networkError'))
+      }
+
+      reader = response.body.getReader()
+      const decoder = new TextDecoder()
+      let lineBuffer = ''
+
       while (true) {
         armStreamTimeout()
         const { done, value } = await reader.read()
@@ -371,7 +367,9 @@ export function createFetchClient(
       if (externalSignal) {
         externalSignal.removeEventListener('abort', onExternalAbort)
       }
-      reader.releaseLock()
+      if (reader) {
+        reader.releaseLock()
+      }
     }
   }
 
