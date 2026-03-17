@@ -6,6 +6,7 @@
  */
 
 import type { PaginatedResult, PaginationOptionsInput, Result } from '@h-ai/core'
+import type { DmlWithTxOperations } from '@h-ai/reldb'
 import type { IamError } from '../iam-types.js'
 
 // ─── 授权类型（RBAC） ───
@@ -107,7 +108,7 @@ export interface AuthzOperations {
    * 超级管理员角色自动拥有所有权限。
    * 支持通配符匹配（如 `user:*` 匹配 `user:read`）。
    *
-   * **数据来源**：角色列表从数据库实时查询；权限代码走缓存优先策略（可能非最新）。
+   * **数据来源**：角色列表和权限代码均从数据库实时查询。
    *
    * @param userId - 用户 ID
    * @param permission - 权限代码（如 `user:read`）
@@ -144,7 +145,7 @@ export interface AuthzOperations {
    * @param roleId - 角色 ID
    * @returns 成功返回 ok；角色不存在返回 ROLE_NOT_FOUND
    */
-  assignRole: (userId: string, roleId: string) => Promise<Result<void, IamError>>
+  assignRole: (userId: string, roleId: string, tx?: DmlWithTxOperations) => Promise<Result<void, IamError>>
 
   /**
    * 移除用户角色
@@ -153,7 +154,7 @@ export interface AuthzOperations {
    * @param roleId - 角色 ID
    * @returns 成功返回 ok
    */
-  removeRole: (userId: string, roleId: string) => Promise<Result<void, IamError>>
+  removeRole: (userId: string, roleId: string, tx?: DmlWithTxOperations) => Promise<Result<void, IamError>>
 
   /**
    * 同步用户角色（替换为目标角色列表）
@@ -165,7 +166,7 @@ export interface AuthzOperations {
    * @param roleIds - 目标角色 ID 列表
    * @returns 成功返回 ok
    */
-  syncRoles: (userId: string, roleIds: string[]) => Promise<Result<void, IamError>>
+  syncRoles: (userId: string, roleIds: string[], tx?: DmlWithTxOperations) => Promise<Result<void, IamError>>
 
   // ─── 角色管理 ───
 
@@ -175,7 +176,7 @@ export interface AuthzOperations {
    * @param role - 角色数据（code、name、description、isSystem）
    * @returns 成功返回创建的角色（含 id 和时间戳）
    */
-  createRole: (role: Omit<Role, 'id' | 'createdAt' | 'updatedAt'>) => Promise<Result<Role, IamError>>
+  createRole: (role: Omit<Role, 'id' | 'createdAt' | 'updatedAt'>, tx?: DmlWithTxOperations) => Promise<Result<Role, IamError>>
 
   /**
    * 获取角色
@@ -208,17 +209,17 @@ export interface AuthzOperations {
    * @param data - 要更新的字段（name、description 等）
    * @returns 成功返回更新后的角色；角色不存在返回 ROLE_NOT_FOUND
    */
-  updateRole: (roleId: string, data: Partial<Omit<Role, 'id' | 'createdAt' | 'updatedAt'>>) => Promise<Result<Role, IamError>>
+  updateRole: (roleId: string, data: Partial<Omit<Role, 'id' | 'createdAt' | 'updatedAt'>>, tx?: DmlWithTxOperations) => Promise<Result<Role, IamError>>
 
   /**
    * 删除角色
    *
-   * 同时清除角色相关的权限缓存。
+   * 级联删除用户-角色、角色-权限关联，并同步受影响用户的会话。
    *
    * @param roleId - 角色 ID
    * @returns 成功返回 ok；角色不存在返回 ROLE_NOT_FOUND
    */
-  deleteRole: (roleId: string) => Promise<Result<void, IamError>>
+  deleteRole: (roleId: string, tx?: DmlWithTxOperations) => Promise<Result<void, IamError>>
 
   // ─── 权限管理 ───
 
@@ -228,7 +229,7 @@ export interface AuthzOperations {
    * @param permission - 权限数据（code、name、resource、action）
    * @returns 成功返回创建的权限（含 id 和时间戳）
    */
-  createPermission: (permission: Omit<Permission, 'id' | 'createdAt' | 'updatedAt'>) => Promise<Result<Permission, IamError>>
+  createPermission: (permission: Omit<Permission, 'id' | 'createdAt' | 'updatedAt'>, tx?: DmlWithTxOperations) => Promise<Result<Permission, IamError>>
 
   /**
    * 获取权限
@@ -259,12 +260,12 @@ export interface AuthzOperations {
   /**
    * 删除权限
    *
-   * 同时从相关角色的缓存中移除权限代码。
+   * 级联删除角色-权限关联，并同步受影响用户的会话。
    *
    * @param permissionId - 权限 ID
    * @returns 成功返回 ok；权限不存在返回 PERMISSION_NOT_FOUND
    */
-  deletePermission: (permissionId: string) => Promise<Result<void, IamError>>
+  deletePermission: (permissionId: string, tx?: DmlWithTxOperations) => Promise<Result<void, IamError>>
 
   /**
    * 为角色分配权限
@@ -273,7 +274,7 @@ export interface AuthzOperations {
    * @param permissionId - 权限 ID
    * @returns 成功返回 ok；角色/权限不存在返回对应错误码
    */
-  assignPermissionToRole: (roleId: string, permissionId: string) => Promise<Result<void, IamError>>
+  assignPermissionToRole: (roleId: string, permissionId: string, tx?: DmlWithTxOperations) => Promise<Result<void, IamError>>
 
   /**
    * 移除角色权限
@@ -282,7 +283,7 @@ export interface AuthzOperations {
    * @param permissionId - 权限 ID
    * @returns 成功返回 ok；权限不存在返回 PERMISSION_NOT_FOUND
    */
-  removePermissionFromRole: (roleId: string, permissionId: string) => Promise<Result<void, IamError>>
+  removePermissionFromRole: (roleId: string, permissionId: string, tx?: DmlWithTxOperations) => Promise<Result<void, IamError>>
 
   /**
    * 获取角色的权限列表

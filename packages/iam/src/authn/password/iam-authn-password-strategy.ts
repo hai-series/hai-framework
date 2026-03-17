@@ -33,12 +33,26 @@ export interface PasswordStrategyConfig {
   lockoutDuration?: number
 }
 
+/**
+ * 密码策略工厂返回值
+ */
+export interface PasswordStrategyResult {
+  /** 认证策略（用于通用登录流程） */
+  strategy: AuthStrategy
+  /** 验证密码强度 */
+  validatePassword: (password: string) => Result<void, IamError>
+  /** 密码哈希 */
+  hashPassword: (password: string) => Result<string, IamError>
+  /** 密码策略配置 */
+  passwordConfig: PasswordConfig
+}
+
 const logger = core.logger.child({ module: 'iam', scope: 'password-strategy' })
 
 /**
  * 创建密码认证策略
  */
-export function createPasswordStrategy(config: PasswordStrategyConfig): PasswordStrategy {
+export function createPasswordStrategy(config: PasswordStrategyConfig): PasswordStrategyResult {
   const passwordConfig = config.passwordConfig
     ? PasswordConfigSchema.parse(config.passwordConfig)
     : PasswordConfigSchema.parse({})
@@ -150,7 +164,7 @@ export function createPasswordStrategy(config: PasswordStrategyConfig): Password
     return ok(undefined)
   }
 
-  return {
+  const strategy: AuthStrategy = {
     type: 'password',
     name: 'password-strategy',
 
@@ -170,7 +184,7 @@ export function createPasswordStrategy(config: PasswordStrategyConfig): Password
       const storedUser = userResult.data
       if (!storedUser) {
         // 防止用户枚举：执行伪哈希验证以消除时序差异，统一返回 INVALID_CREDENTIALS
-        passwordOps.hash('dummy-password-to-prevent-timing-leak')
+        await passwordOps.hash('dummy-password-to-prevent-timing-leak')
         return err({ code: IamErrorCode.INVALID_CREDENTIALS, message: iamM('iam_passwordWrong') })
       }
 
@@ -195,29 +209,20 @@ export function createPasswordStrategy(config: PasswordStrategyConfig): Password
 
       return ok(toUser(storedUser))
     },
+  }
 
+  function hashPassword(password: string): Result<string, IamError> {
+    const hashResult = passwordOps.hash(password)
+    if (!hashResult.success) {
+      return mapPasswordError(hashResult.error.message)
+    }
+    return ok(hashResult.data)
+  }
+
+  return {
+    strategy,
     validatePassword: validatePasswordStrength,
-
-    hashPassword(password: string): Result<string, IamError> {
-      const hashResult = passwordOps.hash(password)
-      if (!hashResult.success) {
-        return mapPasswordError(hashResult.error.message)
-      }
-      return ok(hashResult.data)
-    },
-
+    hashPassword,
     passwordConfig,
   }
-}
-
-/**
- * 扩展的密码策略接口（包含额外方法）
- */
-export interface PasswordStrategy extends AuthStrategy {
-  /** 验证密码强度 */
-  validatePassword: (password: string) => Result<void, IamError>
-  /** 密码哈希 */
-  hashPassword: (password: string) => Result<string, IamError>
-  /** 密码策略 */
-  passwordConfig: PasswordConfig
 }

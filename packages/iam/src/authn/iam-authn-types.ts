@@ -82,14 +82,6 @@ export interface AuthStrategy {
    * @returns 认证成功返回用户信息；失败返回对应错误码（INVALID_CREDENTIALS / USER_LOCKED 等）
    */
   authenticate: (credentials: Credentials) => Promise<Result<User, IamError>>
-
-  /**
-   * 发起认证挑战（如发送验证码）
-   *
-   * @param identifier - 用户标识（邮箱/手机号）
-   * @returns 成功返回验证码过期时间；频率限制返回 OTP_RESEND_TOO_FAST
-   */
-  challenge?: (identifier: string) => Promise<Result<{ expiresAt: Date }, IamError>>
 }
 
 // ─── 认证操作接口 ───

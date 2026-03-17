@@ -202,4 +202,28 @@ export interface SessionOperations {
    * @returns 成功返回 ok；令牌不存在时静默成功
    */
   revokeRefresh: (refreshToken: string) => Promise<Result<void, IamError>>
+
+  /**
+   * 批量更新用户所有活跃会话的 roles / permissions 字段
+   *
+   * 遍历用户缓存中的所有 session token，合并更新指定字段，
+   * 同时清理已失效的会话令牌。用于角色/权限变更后的会话同步。
+   *
+   * @param userId - 用户 ID
+   * @param updates - 要更新的字段（roles / permissions）
+   * @returns 成功返回 ok
+   */
+  patchUserSessions: (userId: string, updates: SessionFieldUpdates) => Promise<Result<void, IamError>>
+}
+
+/**
+ * 会话字段更新（仅限 roles / permissions）
+ *
+ * 用于角色/权限变更后的会话同步。
+ */
+export interface SessionFieldUpdates {
+  /** 角色 code 列表 */
+  roles?: string[]
+  /** 权限 code 列表 */
+  permissions?: string[]
 }

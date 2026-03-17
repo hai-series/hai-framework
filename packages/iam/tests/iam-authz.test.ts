@@ -374,6 +374,18 @@ describe('iam.authz', () => {
         const result = await getIam().authz.removePermissionFromRole(role.data.id, perm.data.id)
         expect(result.success).toBe(true)
       })
+
+      it('removePermissionFromRole 角色不存在应返回 ROLE_NOT_FOUND', async () => {
+        const perm = await getIam().authz.createPermission({ code: 'rp:remove_bad_role', name: '测试权限' })
+        if (!perm.success)
+          return
+
+        const result = await getIam().authz.removePermissionFromRole('nonexistent-role-id', perm.data.id)
+        expect(result.success).toBe(false)
+        if (!result.success) {
+          expect(result.error.code).toBe(IamErrorCode.ROLE_NOT_FOUND)
+        }
+      })
     })
 
     // =========================================================================

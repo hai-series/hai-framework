@@ -52,6 +52,10 @@ export interface OtpStrategyConfig {
    * @param userId - 新创建的用户 ID
    */
   onUserAutoRegistered?: (userId: string) => Promise<void>
+  /** OTP 邮件发送回调（由业务层注入） */
+  onOtpSendEmail?: (email: string, code: string) => Promise<void>
+  /** OTP 短信发送回调（由业务层注入） */
+  onOtpSendSms?: (phone: string, code: string) => Promise<void>
 }
 
 /**
@@ -99,9 +103,12 @@ function identifierType(identifier: string): 'email' | 'phone' | 'unknown' {
 }
 
 /**
- * 创建 OTP 认证策略
+ * OTP 策略工厂返回值
  */
-export type OtpStrategy = AuthStrategy & {
+export interface OtpStrategyResult {
+  /** 认证策略（用于通用登录流程） */
+  strategy: AuthStrategy
+  /** 发起认证挑战（发送验证码） */
   challenge: (identifier: string) => Promise<Result<{ expiresAt: Date }, IamError>>
 }
 
@@ -111,9 +118,9 @@ export type OtpStrategy = AuthStrategy & {
  * 支持验证码登录、自动注册新用户、发送频率限制、登录失败锁定等能力。
  *
  * @param config - OTP 策略配置（包含用户存储、OTP 存储、自动注册开关等）
- * @returns OTP 认证策略实例，包含 authenticate 和 challenge 方法
+ * @returns OTP 策略结果，包含认证策略和 challenge 方法
  */
-export function createOtpStrategy(config: OtpStrategyConfig): OtpStrategy {
+export function createOtpStrategy(config: OtpStrategyConfig): OtpStrategyResult {
   const otpConfig = config.otpConfig
     ? OtpConfigSchema.parse(config.otpConfig)
     : OtpConfigSchema.parse({})
@@ -133,7 +140,7 @@ export function createOtpStrategy(config: OtpStrategyConfig): OtpStrategy {
     return { expiresAt }
   }
 
-  return {
+  const strategy: AuthStrategy = {
     type: 'otp',
     name: 'otp-strategy',
 
@@ -260,54 +267,70 @@ export function createOtpStrategy(config: OtpStrategyConfig): OtpStrategy {
 
       return ok(toUser(storedUser))
     },
+  }
 
-    async challenge(identifier: string): Promise<Result<{ expiresAt: Date }, IamError>> {
-      // 发送频率限制
-      const existingResult = await config.otpRepository.fetchOtp(identifier)
-      if (existingResult.success && existingResult.data) {
-        const elapsedSeconds = Math.floor((Date.now() - existingResult.data.createdAt.getTime()) / 1000)
-        if (elapsedSeconds < otpConfig.resendInterval) {
-          return err({
-            code: IamErrorCode.OTP_RESEND_TOO_FAST,
-            message: iamM('iam_otpResendTooFast', { params: { seconds: otpConfig.resendInterval - elapsedSeconds } }),
-          })
-        }
-      }
+  // ─── challenge ───
 
-      // 生成验证码
-      const code = generateOtpCode(otpConfig.length)
-      const expiresAt = new Date(Date.now() + otpConfig.expiresIn * 1000)
-
-      // 存储验证码
-      const storeResult = await config.otpRepository.saveOtp(identifier, code, otpConfig.expiresIn)
-      if (!storeResult.success) {
-        return storeResult as Result<{ expiresAt: Date }, IamError>
-      }
-
-      // 发送验证码
-      const type = identifierType(identifier)
-      if (type === 'email' && config.otpRepository.sendEmail) {
-        const sendResult = await config.otpRepository.sendEmail(identifier, code)
-        if (!sendResult.success) {
-          return sendResult as Result<{ expiresAt: Date }, IamError>
-        }
-      }
-      else if (type === 'phone' && config.otpRepository.sendSms) {
-        const sendResult = await config.otpRepository.sendSms(identifier, code)
-        if (!sendResult.success) {
-          return sendResult as Result<{ expiresAt: Date }, IamError>
-        }
-      }
-      else {
+  async function challenge(identifier: string): Promise<Result<{ expiresAt: Date }, IamError>> {
+    // 发送频率限制
+    const existingResult = await config.otpRepository.fetchOtp(identifier)
+    if (existingResult.success && existingResult.data) {
+      const elapsedSeconds = Math.floor((Date.now() - existingResult.data.createdAt.getTime()) / 1000)
+      if (elapsedSeconds < otpConfig.resendInterval) {
         return err({
-          code: IamErrorCode.INTERNAL_ERROR,
-          message: iamM('iam_identifierTypeNotSupported'),
+          code: IamErrorCode.OTP_RESEND_TOO_FAST,
+          message: iamM('iam_otpResendTooFast', { params: { seconds: otpConfig.resendInterval - elapsedSeconds } }),
         })
       }
+    }
 
-      const result = buildChallengeResult(expiresAt)
-      logger.debug('OTP challenge sent', { identifier, expiresAt })
-      return ok(result)
-    },
+    // 生成验证码
+    const code = generateOtpCode(otpConfig.length)
+    const expiresAt = new Date(Date.now() + otpConfig.expiresIn * 1000)
+
+    // 存储验证码
+    const storeResult = await config.otpRepository.saveOtp(identifier, code, otpConfig.expiresIn)
+    if (!storeResult.success) {
+      return storeResult as Result<{ expiresAt: Date }, IamError>
+    }
+
+    // 通过业务层回调发送验证码
+    const type = identifierType(identifier)
+    if (type === 'email' && config.onOtpSendEmail) {
+      try {
+        await config.onOtpSendEmail(identifier, code)
+      }
+      catch (error) {
+        return err({
+          code: IamErrorCode.INTERNAL_ERROR,
+          message: iamM('iam_otpSendFailed', { params: { message: String(error) } }),
+          cause: error,
+        })
+      }
+    }
+    else if (type === 'phone' && config.onOtpSendSms) {
+      try {
+        await config.onOtpSendSms(identifier, code)
+      }
+      catch (error) {
+        return err({
+          code: IamErrorCode.INTERNAL_ERROR,
+          message: iamM('iam_otpSendFailed', { params: { message: String(error) } }),
+          cause: error,
+        })
+      }
+    }
+    else {
+      return err({
+        code: IamErrorCode.INTERNAL_ERROR,
+        message: iamM('iam_identifierTypeNotSupported'),
+      })
+    }
+
+    const result = buildChallengeResult(expiresAt)
+    logger.debug('OTP challenge sent', { identifier, expiresAt })
+    return ok(result)
   }
+
+  return { strategy, challenge }
 }

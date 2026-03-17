@@ -5,17 +5,14 @@
  * @module iam-authz-repository-relation
  */
 
-import type { CacheFunctions } from '@h-ai/cache'
 import type { Result } from '@h-ai/core'
 import type { DmlWithTxOperations, ReldbFunctions } from '@h-ai/reldb'
 import type { IamError } from '../iam-types.js'
-import type { PermissionRepository } from './iam-authz-repository-permission.js'
 import type { RoleRepository } from './iam-authz-repository-role.js'
 import type { Permission, Role } from './iam-authz-types.js'
-import { core, err, ok } from '@h-ai/core'
+import { err, ok } from '@h-ai/core'
 import { IamErrorCode } from '../iam-config.js'
 import { iamM } from '../iam-i18n.js'
-import { buildTokenKey, buildUserTokensKey } from '../session/iam-session-repository-cache.js'
 
 // ─── 角色-权限关联存储接口 ───
 
@@ -26,17 +23,12 @@ export interface RolePermissionRepository {
   /**
    * 分配权限给角色
    */
-  assign: (roleId: string, permissionId: string, permissionCode: string, tx?: DmlWithTxOperations) => Promise<Result<void, IamError>>
+  assign: (roleId: string, permissionId: string, tx?: DmlWithTxOperations) => Promise<Result<void, IamError>>
 
   /**
    * 移除角色权限
    */
-  remove: (roleId: string, permissionId: string, permissionCode: string, tx?: DmlWithTxOperations) => Promise<Result<void, IamError>>
-
-  /**
-   * 获取角色的所有权限 ID
-   */
-  getPermissionIds: (roleId: string, tx?: DmlWithTxOperations) => Promise<Result<string[], IamError>>
+  remove: (roleId: string, permissionId: string, tx?: DmlWithTxOperations) => Promise<Result<void, IamError>>
 
   /**
    * 获取角色的所有权限
@@ -44,41 +36,22 @@ export interface RolePermissionRepository {
   getPermissions: (roleId: string, tx?: DmlWithTxOperations) => Promise<Result<Permission[], IamError>>
 
   /**
-   * 获取角色的权限代码（缓存优先）
+   * 批量获取多个角色的权限代码（去重）
    *
-   * 优先从缓存读取，未命中时回源数据库并回写缓存。
-   * 可能返回非最新数据；写操作已自动同步缓存。
-   */
-  getPermissionCodesCached: (roleId: string, tx?: DmlWithTxOperations) => Promise<Result<string[], IamError>>
-
-  /**
-   * 清理角色权限缓存
-   */
-  clearRolePermissionsCache: (roleId: string) => Promise<Result<void, IamError>>
-
-  /**
-   * 从全部角色权限缓存移除权限代码
-   */
-  removePermissionCodeFromCache: (permissionCode: string) => Promise<Result<void, IamError>>
-
-  /**
-   * 检查角色是否有某权限（缓存优先）
+   * 单次 JOIN 查询替代 N 次逐角色查询。
    *
-   * 优先从缓存判断，未命中时加载全量权限代码到缓存后再判断。
+   * @param roleIds - 角色 ID 列表
+   * @returns 去重后的权限代码数组
    */
-  hasPermissionCached: (roleId: string, permissionCode: string, tx?: DmlWithTxOperations) => Promise<Result<boolean, IamError>>
+  getPermissionCodesForRoles: (roleIds: string[]) => Promise<Result<string[], IamError>>
 
   /**
-   * 删除角色的所有权限关联（仅 DB 操作）
-   *
-   * 不清理缓存；调用方应在事务提交后调用 `clearRolePermissionsCache` 清理缓存。
+   * 删除角色的所有权限关联
    */
   removeByRoleId: (roleId: string, tx?: DmlWithTxOperations) => Promise<Result<void, IamError>>
 
   /**
-   * 删除权限的所有角色关联（仅 DB 操作）
-   *
-   * 不清理缓存；调用方应在事务提交后调用 `removePermissionCodeFromCache` 清理缓存。
+   * 删除权限的所有角色关联
    */
   removeByPermissionId: (permissionId: string, tx?: DmlWithTxOperations) => Promise<Result<void, IamError>>
 
@@ -132,7 +105,7 @@ export interface UserRoleRepository {
    * 删除角色的所有用户关联（仅 DB 操作）
    *
    * 返回受影响的用户 ID 列表。
-   * 不同步会话；调用方应在事务提交后调用 `syncUserSessionRoles` 逐一同步。
+   * 不同步会话；调用方应在事务提交后通过 SessionOperations 同步。
    */
   removeByRoleId: (roleId: string, tx?: DmlWithTxOperations) => Promise<Result<string[], IamError>>
 
@@ -143,23 +116,6 @@ export interface UserRoleRepository {
    * @returns 用户 ID 数组
    */
   getUserIdsByRoleId: (roleId: string) => Promise<Result<string[], IamError>>
-
-  /**
-   * 同步用户会话中的角色列表
-   *
-   * 角色变更后将用户最新角色列表回写到缓存中的所有活跃会话。
-   */
-  syncUserSessionRoles: (userId: string) => Promise<Result<void, IamError>>
-
-  /**
-   * 同步用户会话中的权限列表
-   *
-   * 将预计算好的权限 code 列表写入用户所有活跃会话。
-   *
-   * @param userId - 用户 ID
-   * @param permissionCodes - 预计算的权限 code 列表
-   */
-  syncUserSessionPermissions: (userId: string, permissionCodes: string[]) => Promise<Result<void, IamError>>
 
   /**
    * 批量获取多个用户的角色列表
@@ -175,10 +131,8 @@ export interface UserRoleRepository {
 
 // ─── 角色-权限关联存储实现 ───
 
-const ROLE_PERMISSION_TABLE = 'iam_role_permissions'
-const ROLE_PERMS_PREFIX = 'iam:role:'
-const PERMISSION_ROLES_PREFIX = 'iam:permission:'
-const logger = core.logger.child({ module: 'iam', scope: 'rbac-relation' })
+const ROLE_PERMISSION_TABLE = 'hai_iam_role_permissions'
+const PERMISSION_TABLE = 'hai_iam_permissions'
 const ROLE_PERMISSION_SCHEMA = {
   role_id: { type: 'TEXT' as const, notNull: true },
   permission_id: { type: 'TEXT' as const, notNull: true },
@@ -187,17 +141,13 @@ const ROLE_PERMISSION_SCHEMA = {
 /**
  * 创建基于数据库的角色-权限关联存储
  *
- * 自动创建关联表和索引，提供分配/移除/查询权限以及缓存管理能力。
+ * 自动创建关联表和索引，提供分配/移除/查询权限能力。
  *
  * @param db - 数据库服务实例
- * @param permissionRepository - 权限存储（用于查询权限详情）
- * @param cache - 缓存服务（用于权限代码缓存）
  * @returns 角色-权限关联存储接口实现（失败返回 IamError）
  */
 export async function createDbRolePermissionRepository(
   db: ReldbFunctions,
-  permissionRepository: PermissionRepository,
-  cache: CacheFunctions,
 ): Promise<Result<RolePermissionRepository, IamError>> {
   // 确保表存在
   async function ensureTable(): Promise<Result<void, IamError>> {
@@ -261,173 +211,8 @@ export async function createDbRolePermissionRepository(
     return ok(result.data.map(r => r.permission_id))
   }
 
-  /**
-   * 查询角色的所有权限对象
-   *
-   * 先获取权限 ID 列表，再批量查询权限详情。
-   *
-   * @param roleId - 角色 ID
-   * @param tx - 可选事务句柄
-   * @returns Permission 数组
-   */
-  async function getPermissionsInternal(roleId: string, tx?: DmlWithTxOperations): Promise<Result<Permission[], IamError>> {
-    const idsResult = await getPermissionIdsInternal(roleId, tx)
-    if (!idsResult.success)
-      return idsResult
-
-    if (idsResult.data.length === 0) {
-      return ok([])
-    }
-    const placeholders = idsResult.data.map(() => '?').join(', ')
-    const permResult = await permissionRepository.findAll({
-      where: `id IN (${placeholders})`,
-      params: idsResult.data,
-    }, tx)
-    if (!permResult.success) {
-      return err({
-        code: IamErrorCode.REPOSITORY_ERROR,
-        message: iamM('iam_queryPermissionFailed', { params: { message: permResult.error.message } }),
-        cause: permResult.error,
-      })
-    }
-
-    return ok(permResult.data)
-  }
-
-  /**
-   * 构建角色权限缓存 key
-   *
-   * @param roleId - 角色 ID
-   * @returns 格式：`iam:role:{roleId}:perms`
-   */
-  function buildRolePermsKey(roleId: string): string {
-    return `${ROLE_PERMS_PREFIX}${roleId}:perms`
-  }
-
-  /**
-   * 构建权限对应角色集合的缓存 key
-   *
-   * @param permissionCode - 权限代码
-   * @returns 格式：`iam:permission:{code}:roles`
-   */
-  function buildPermissionRolesKey(permissionCode: string): string {
-    return `${PERMISSION_ROLES_PREFIX}${permissionCode}:roles`
-  }
-
-  /**
-   * 将角色 ID 添加到权限缓存的角色集合中
-   *
-   * @param roleId - 角色 ID
-   * @param permissionCodes - 权限代码列表
-   */
-  async function addRoleToPermissionCache(roleId: string, permissionCodes: string[]): Promise<Result<void, IamError>> {
-    if (permissionCodes.length === 0) {
-      return ok(undefined)
-    }
-
-    const addResults = await Promise.all(
-      permissionCodes.map(code => cache.set_.sadd(buildPermissionRolesKey(code), roleId)),
-    )
-    for (const addResult of addResults) {
-      if (!addResult.success) {
-        return err({
-          code: IamErrorCode.REPOSITORY_ERROR,
-          message: iamM('iam_setPermissionCacheFailed', { params: { message: addResult.error.message } }),
-          cause: addResult.error,
-        })
-      }
-    }
-
-    return ok(undefined)
-  }
-
-  /**
-   * 从权限缓存的角色集合中移除角色 ID
-   *
-   * @param roleId - 角色 ID
-   * @param permissionCodes - 权限代码列表
-   */
-  async function removeRoleFromPermissionCache(roleId: string, permissionCodes: string[]): Promise<Result<void, IamError>> {
-    if (permissionCodes.length === 0) {
-      return ok(undefined)
-    }
-
-    const removeResults = await Promise.all(
-      permissionCodes.map(code => cache.set_.srem(buildPermissionRolesKey(code), roleId)),
-    )
-    for (const removeResult of removeResults) {
-      if (!removeResult.success) {
-        return err({
-          code: IamErrorCode.REPOSITORY_ERROR,
-          message: iamM('iam_setPermissionCacheFailed', { params: { message: removeResult.error.message } }),
-          cause: removeResult.error,
-        })
-      }
-    }
-
-    return ok(undefined)
-  }
-
-  /**
-   * 获取角色的权限代码列表（带缓存）
-   *
-   * 优先从缓存读取，缓存未命中时从数据库加载并回写缓存。
-   *
-   * @param roleId - 角色 ID
-   * @param tx - 可选事务句柄
-   * @returns 权限代码数组
-   */
-  async function getPermissionCodesCached(roleId: string, tx?: DmlWithTxOperations): Promise<Result<string[], IamError>> {
-    const key = buildRolePermsKey(roleId)
-
-    const existsResult = await cache.kv.exists(key)
-    if (!existsResult.success) {
-      return err({
-        code: IamErrorCode.REPOSITORY_ERROR,
-        message: iamM('iam_queryPermissionCacheFailed', { params: { message: existsResult.error.message } }),
-        cause: existsResult.error,
-      })
-    }
-
-    if (existsResult.data > 0) {
-      const cached = await cache.set_.smembers<string>(key)
-      if (!cached.success) {
-        return err({
-          code: IamErrorCode.REPOSITORY_ERROR,
-          message: iamM('iam_queryPermissionCacheFailed', { params: { message: cached.error.message } }),
-          cause: cached.error,
-        })
-      }
-      return ok(cached.data)
-    }
-
-    const permsResult = await getPermissionsInternal(roleId, tx)
-    if (!permsResult.success) {
-      return permsResult as Result<string[], IamError>
-    }
-
-    const codes = permsResult.data.map(perm => perm.code)
-    if (codes.length > 0) {
-      const setResult = await cache.set_.sadd(key, ...codes)
-      if (!setResult.success) {
-        return err({
-          code: IamErrorCode.REPOSITORY_ERROR,
-          message: iamM('iam_setPermissionCacheFailed', { params: { message: setResult.error.message } }),
-          cause: setResult.error,
-        })
-      }
-
-      const addRoleResult = await addRoleToPermissionCache(roleId, codes)
-      if (!addRoleResult.success) {
-        return addRoleResult
-      }
-    }
-
-    return ok(codes)
-  }
-
   return ok({
-    async assign(roleId: string, permissionId: string, permissionCode: string, tx?: DmlWithTxOperations): Promise<Result<void, IamError>> {
+    async assign(roleId: string, permissionId: string, tx?: DmlWithTxOperations): Promise<Result<void, IamError>> {
       const runner = tx ?? db.sql
       const result = await runner.execute(
         `INSERT INTO ${ROLE_PERMISSION_TABLE} (role_id, permission_id) VALUES (?, ?) ON CONFLICT DO NOTHING`,
@@ -442,24 +227,10 @@ export async function createDbRolePermissionRepository(
         })
       }
 
-      const cacheResult = await cache.set_.sadd(buildRolePermsKey(roleId), permissionCode)
-      if (!cacheResult.success) {
-        return err({
-          code: IamErrorCode.REPOSITORY_ERROR,
-          message: iamM('iam_setPermissionCacheFailed', { params: { message: cacheResult.error.message } }),
-          cause: cacheResult.error,
-        })
-      }
-
-      const addRoleResult = await addRoleToPermissionCache(roleId, [permissionCode])
-      if (!addRoleResult.success) {
-        return addRoleResult
-      }
-
       return ok(undefined)
     },
 
-    async remove(roleId: string, permissionId: string, permissionCode: string, tx?: DmlWithTxOperations): Promise<Result<void, IamError>> {
+    async remove(roleId: string, permissionId: string, tx?: DmlWithTxOperations): Promise<Result<void, IamError>> {
       const runner = tx ?? db.sql
       const result = await runner.execute(
         `DELETE FROM ${ROLE_PERMISSION_TABLE} WHERE role_id = ? AND permission_id = ?`,
@@ -474,125 +245,53 @@ export async function createDbRolePermissionRepository(
         })
       }
 
-      const cacheResult = await cache.set_.srem(buildRolePermsKey(roleId), permissionCode)
-      if (!cacheResult.success) {
-        return err({
-          code: IamErrorCode.REPOSITORY_ERROR,
-          message: iamM('iam_setPermissionCacheFailed', { params: { message: cacheResult.error.message } }),
-          cause: cacheResult.error,
-        })
-      }
-
-      const removeRoleResult = await removeRoleFromPermissionCache(roleId, [permissionCode])
-      if (!removeRoleResult.success) {
-        return removeRoleResult
-      }
-
       return ok(undefined)
-    },
-
-    async getPermissionIds(roleId: string, tx?: DmlWithTxOperations): Promise<Result<string[], IamError>> {
-      return getPermissionIdsInternal(roleId, tx)
     },
 
     async getPermissions(roleId: string, tx?: DmlWithTxOperations): Promise<Result<Permission[], IamError>> {
-      return getPermissionsInternal(roleId, tx)
-    },
+      const idsResult = await getPermissionIdsInternal(roleId, tx)
+      if (!idsResult.success)
+        return idsResult
 
-    async getPermissionCodesCached(roleId: string, tx?: DmlWithTxOperations): Promise<Result<string[], IamError>> {
-      return getPermissionCodesCached(roleId, tx)
-    },
-
-    async clearRolePermissionsCache(roleId: string): Promise<Result<void, IamError>> {
-      const cachedCodes = await cache.set_.smembers<string>(buildRolePermsKey(roleId))
-      if (!cachedCodes.success) {
-        return err({
-          code: IamErrorCode.REPOSITORY_ERROR,
-          message: iamM('iam_queryPermissionCacheFailed', { params: { message: cachedCodes.error.message } }),
-          cause: cachedCodes.error,
-        })
+      if (idsResult.data.length === 0) {
+        return ok([])
       }
 
-      const removeRoleResult = await removeRoleFromPermissionCache(roleId, cachedCodes.data)
-      if (!removeRoleResult.success) {
-        return removeRoleResult
-      }
-
-      const result = await cache.kv.del(buildRolePermsKey(roleId))
+      const placeholders = idsResult.data.map(() => '?').join(', ')
+      const result = await db.sql.query<Record<string, unknown>>(
+        `SELECT * FROM ${PERMISSION_TABLE} WHERE id IN (${placeholders})`,
+        idsResult.data,
+      )
       if (!result.success) {
         return err({
           code: IamErrorCode.REPOSITORY_ERROR,
-          message: iamM('iam_clearPermissionCacheFailed', { params: { message: result.error.message } }),
+          message: iamM('iam_queryPermissionFailed', { params: { message: result.error.message } }),
           cause: result.error,
         })
       }
-      return ok(undefined)
+
+      return ok(result.data as unknown as Permission[])
     },
 
-    async removePermissionCodeFromCache(permissionCode: string): Promise<Result<void, IamError>> {
-      const roleIdsResult = await cache.set_.smembers<string>(buildPermissionRolesKey(permissionCode))
-      if (!roleIdsResult.success) {
-        return err({
-          code: IamErrorCode.REPOSITORY_ERROR,
-          message: iamM('iam_queryPermissionCacheFailed', { params: { message: roleIdsResult.error.message } }),
-          cause: roleIdsResult.error,
-        })
+    async getPermissionCodesForRoles(roleIds: string[]): Promise<Result<string[], IamError>> {
+      if (roleIds.length === 0) {
+        return ok([])
       }
 
-      const removeResults = await Promise.all(
-        roleIdsResult.data.map(roleId => cache.set_.srem(buildRolePermsKey(roleId), permissionCode)),
+      const placeholders = roleIds.map(() => '?').join(', ')
+      const result = await db.sql.query<{ code: string }>(
+        `SELECT DISTINCT p.code FROM ${ROLE_PERMISSION_TABLE} rp JOIN ${PERMISSION_TABLE} p ON rp.permission_id = p.id WHERE rp.role_id IN (${placeholders})`,
+        roleIds,
       )
-      for (const removeResult of removeResults) {
-        if (!removeResult.success) {
-          return err({
-            code: IamErrorCode.REPOSITORY_ERROR,
-            message: iamM('iam_setPermissionCacheFailed', { params: { message: removeResult.error.message } }),
-            cause: removeResult.error,
-          })
-        }
-      }
-
-      const deleteResult = await cache.kv.del(buildPermissionRolesKey(permissionCode))
-      if (!deleteResult.success) {
+      if (!result.success) {
         return err({
           code: IamErrorCode.REPOSITORY_ERROR,
-          message: iamM('iam_clearPermissionCacheFailed', { params: { message: deleteResult.error.message } }),
-          cause: deleteResult.error,
+          message: iamM('iam_queryPermissionFailed', { params: { message: result.error.message } }),
+          cause: result.error,
         })
       }
 
-      return ok(undefined)
-    },
-
-    async hasPermissionCached(roleId: string, permissionCode: string, tx?: DmlWithTxOperations): Promise<Result<boolean, IamError>> {
-      const cacheKey = buildRolePermsKey(roleId)
-      const existsResult = await cache.kv.exists(cacheKey)
-      if (!existsResult.success) {
-        return err({
-          code: IamErrorCode.REPOSITORY_ERROR,
-          message: iamM('iam_queryPermissionCacheFailed', { params: { message: existsResult.error.message } }),
-          cause: existsResult.error,
-        })
-      }
-
-      if (existsResult.data > 0) {
-        const memberResult = await cache.set_.sismember(cacheKey, permissionCode)
-        if (!memberResult.success) {
-          return err({
-            code: IamErrorCode.REPOSITORY_ERROR,
-            message: iamM('iam_queryPermissionCacheFailed', { params: { message: memberResult.error.message } }),
-            cause: memberResult.error,
-          })
-        }
-        return ok(memberResult.data)
-      }
-
-      const codesResult = await getPermissionCodesCached(roleId, tx)
-      if (!codesResult.success) {
-        return codesResult as Result<boolean, IamError>
-      }
-
-      return ok(codesResult.data.includes(permissionCode))
+      return ok(result.data.map(r => r.code))
     },
 
     async removeByRoleId(roleId: string, tx?: DmlWithTxOperations): Promise<Result<void, IamError>> {
@@ -644,12 +343,10 @@ export async function createDbRolePermissionRepository(
 
     async getPermissionsForRoles(roleIds: string[]): Promise<Result<Map<string, Permission[]>, IamError>> {
       const result = new Map<string, Permission[]>()
-      // 空列表直接返回空 Map
       if (roleIds.length === 0) {
         return ok(result)
       }
 
-      // 批量查询所有角色的权限关联
       const placeholders = roleIds.map(() => '?').join(', ')
       const relationsResult = await db.sql.query<{ role_id: string, permission_id: string }>(
         `SELECT role_id, permission_id FROM ${ROLE_PERMISSION_TABLE} WHERE role_id IN (${placeholders})`,
@@ -663,7 +360,6 @@ export async function createDbRolePermissionRepository(
         })
       }
 
-      // 初始化所有 roleId → 空数组
       for (const rid of roleIds) {
         result.set(rid, [])
       }
@@ -672,13 +368,12 @@ export async function createDbRolePermissionRepository(
         return ok(result)
       }
 
-      // 收集去重的 permissionId，批量查询权限详情
       const uniquePermIds = [...new Set(relationsResult.data.map(r => r.permission_id))]
       const permPlaceholders = uniquePermIds.map(() => '?').join(', ')
-      const permsResult = await permissionRepository.findAll({
-        where: `id IN (${permPlaceholders})`,
-        params: uniquePermIds,
-      })
+      const permsResult = await db.sql.query<Record<string, unknown>>(
+        `SELECT * FROM ${PERMISSION_TABLE} WHERE id IN (${permPlaceholders})`,
+        uniquePermIds,
+      )
       if (!permsResult.success) {
         return err({
           code: IamErrorCode.REPOSITORY_ERROR,
@@ -687,13 +382,11 @@ export async function createDbRolePermissionRepository(
         })
       }
 
-      // permissionId → Permission 索引
       const permMap = new Map<string, Permission>()
-      for (const perm of permsResult.data) {
+      for (const perm of permsResult.data as unknown as Permission[]) {
         permMap.set(perm.id, perm)
       }
 
-      // 按 roleId 分组填充
       for (const rel of relationsResult.data) {
         const perm = permMap.get(rel.permission_id)
         if (perm) {
@@ -708,7 +401,7 @@ export async function createDbRolePermissionRepository(
 
 // ─── 用户-角色关联存储实现 ───
 
-const USER_ROLE_TABLE = 'iam_user_roles'
+const USER_ROLE_TABLE = 'hai_iam_user_roles'
 const USER_ROLE_SCHEMA = {
   user_id: { type: 'TEXT' as const, notNull: true },
   role_id: { type: 'TEXT' as const, notNull: true },
@@ -717,22 +410,21 @@ const USER_ROLE_SCHEMA = {
 /**
  * 创建基于数据库的用户-角色关联存储
  *
- * 自动创建关联表和索引。分配/移除角色时会自动同步用户会话中的角色列表。
+ * 自动创建关联表和索引，提供分配/移除/查询角色能力。
+ * 会话同步由上层（authz functions）通过 SessionOperations 完成。
  *
  * @param db - 数据库服务实例
  * @param roleRepository - 角色存储（用于查询角色详情）
- * @param cache - 缓存服务（用于同步会话角色）
  * @returns 用户-角色关联存储接口实现（失败返回 IamError）
  */
 export async function createDbUserRoleRepository(
   db: ReldbFunctions,
   roleRepository: RoleRepository,
-  cache: CacheFunctions,
 ): Promise<Result<UserRoleRepository, IamError>> {
   /**
    * 确保关联表和索引已创建
    *
-   * 创建 `iam_user_roles` 表及唯一约束索引。
+   * 创建 `hai_iam_user_roles` 表及唯一约束索引。
    */
   async function ensureTable(): Promise<Result<void, IamError>> {
     const result = await db.ddl.createTable(USER_ROLE_TABLE, USER_ROLE_SCHEMA, true)
@@ -795,179 +487,6 @@ export async function createDbUserRoleRepository(
     return ok(result.data.map(r => r.role_id))
   }
 
-  /**
-   * 同步用户会话中的角色列表
-   *
-   * 角色变更后将用户最新角色列表回写到缓存中的所有活跃会话，
-   * 同时清理已失效的会话令牌。
-   *
-   * @param userId - 用户 ID
-   */
-  async function syncUserSessionRoles(userId: string): Promise<Result<void, IamError>> {
-    const idsResult = await getRoleIdsInternal(userId)
-    if (!idsResult.success) {
-      return idsResult as Result<void, IamError>
-    }
-
-    let roleCodes: string[] = []
-    if (idsResult.data.length > 0) {
-      const placeholders = idsResult.data.map(() => '?').join(', ')
-      const roleResult = await roleRepository.findAll({
-        where: `id IN (${placeholders})`,
-        params: idsResult.data,
-      })
-      if (!roleResult.success) {
-        return err({
-          code: IamErrorCode.REPOSITORY_ERROR,
-          message: iamM('iam_queryRoleFailed', { params: { message: roleResult.error.message } }),
-          cause: roleResult.error,
-        })
-      }
-      roleCodes = roleResult.data.map(r => r.code)
-    }
-
-    const tokensResult = await cache.set_.smembers<string>(buildUserTokensKey(userId))
-    if (!tokensResult.success) {
-      return err({
-        code: IamErrorCode.REPOSITORY_ERROR,
-        message: iamM('iam_queryUserSessionCacheFailed', { params: { message: tokensResult.error.message } }),
-        cause: tokensResult.error,
-      })
-    }
-
-    const staleTokens: string[] = []
-    let updatedTokens = 0
-
-    for (const token of tokensResult.data) {
-      const sessionKey = buildTokenKey(token)
-      const sessionResult = await cache.kv.get<Record<string, unknown>>(sessionKey)
-      if (!sessionResult.success || !sessionResult.data) {
-        staleTokens.push(token)
-        continue
-      }
-
-      const ttlResult = await cache.kv.ttl(sessionKey)
-      if (!ttlResult.success || ttlResult.data <= 0) {
-        staleTokens.push(token)
-        continue
-      }
-
-      const updated = {
-        ...sessionResult.data,
-        roles: roleCodes,
-      }
-
-      const setResult = await cache.kv.set(sessionKey, updated, { ex: ttlResult.data })
-      if (!setResult.success) {
-        logger.error('Failed to update user session roles cache', { userId, error: setResult.error.message })
-        return err({
-          code: IamErrorCode.REPOSITORY_ERROR,
-          message: iamM('iam_saveUserSessionCacheFailed', { params: { message: setResult.error.message } }),
-          cause: setResult.error,
-        })
-      }
-      updatedTokens += 1
-    }
-
-    if (staleTokens.length > 0) {
-      const removeResult = await cache.set_.srem(buildUserTokensKey(userId), ...staleTokens)
-      if (!removeResult.success) {
-        logger.error('Failed to remove stale user session tokens', { userId, error: removeResult.error.message })
-        return err({
-          code: IamErrorCode.REPOSITORY_ERROR,
-          message: iamM('iam_deleteUserSessionCacheFailed', { params: { message: removeResult.error.message } }),
-          cause: removeResult.error,
-        })
-      }
-    }
-
-    if (updatedTokens > 0 || staleTokens.length > 0) {
-      logger.info('User session roles synced', {
-        userId,
-        updatedTokens,
-        staleTokens: staleTokens.length,
-      })
-    }
-
-    return ok(undefined)
-  }
-
-  /**
-   * 将预计算的权限 code 列表同步到用户所有活跃会话
-   *
-   * 遍历用户缓存中的所有 session token，更新 permissions 字段，
-   * 同时清理已失效的会话令牌。
-   *
-   * @param userId - 用户 ID
-   * @param permissionCodes - 预计算的权限 code 列表
-   */
-  async function syncUserSessionPermissions(userId: string, permissionCodes: string[]): Promise<Result<void, IamError>> {
-    const tokensResult = await cache.set_.smembers<string>(buildUserTokensKey(userId))
-    if (!tokensResult.success) {
-      return err({
-        code: IamErrorCode.REPOSITORY_ERROR,
-        message: iamM('iam_queryUserSessionCacheFailed', { params: { message: tokensResult.error.message } }),
-        cause: tokensResult.error,
-      })
-    }
-
-    const staleTokens: string[] = []
-    let updatedTokens = 0
-
-    for (const token of tokensResult.data) {
-      const sessionKey = buildTokenKey(token)
-      const sessionResult = await cache.kv.get<Record<string, unknown>>(sessionKey)
-      if (!sessionResult.success || !sessionResult.data) {
-        staleTokens.push(token)
-        continue
-      }
-
-      const ttlResult = await cache.kv.ttl(sessionKey)
-      if (!ttlResult.success || ttlResult.data <= 0) {
-        staleTokens.push(token)
-        continue
-      }
-
-      const updated = {
-        ...sessionResult.data,
-        permissions: permissionCodes,
-      }
-
-      const setResult = await cache.kv.set(sessionKey, updated, { ex: ttlResult.data })
-      if (!setResult.success) {
-        logger.error('Failed to update user session permissions cache', { userId, error: setResult.error.message })
-        return err({
-          code: IamErrorCode.REPOSITORY_ERROR,
-          message: iamM('iam_saveUserSessionCacheFailed', { params: { message: setResult.error.message } }),
-          cause: setResult.error,
-        })
-      }
-      updatedTokens += 1
-    }
-
-    if (staleTokens.length > 0) {
-      const removeResult = await cache.set_.srem(buildUserTokensKey(userId), ...staleTokens)
-      if (!removeResult.success) {
-        logger.error('Failed to remove stale user session tokens', { userId, error: removeResult.error.message })
-        return err({
-          code: IamErrorCode.REPOSITORY_ERROR,
-          message: iamM('iam_deleteUserSessionCacheFailed', { params: { message: removeResult.error.message } }),
-          cause: removeResult.error,
-        })
-      }
-    }
-
-    if (updatedTokens > 0 || staleTokens.length > 0) {
-      logger.info('User session permissions synced', {
-        userId,
-        updatedTokens,
-        staleTokens: staleTokens.length,
-      })
-    }
-
-    return ok(undefined)
-  }
-
   return ok({
     async assign(userId: string, roleId: string, tx?: DmlWithTxOperations): Promise<Result<void, IamError>> {
       const runner = tx ?? db.sql
@@ -982,11 +501,6 @@ export async function createDbUserRoleRepository(
           message: iamM('iam_assignRoleFailed', { params: { message: result.error.message } }),
           cause: result.error,
         })
-      }
-
-      const syncResult = await syncUserSessionRoles(userId)
-      if (!syncResult.success) {
-        return syncResult
       }
 
       return ok(undefined)
@@ -1005,11 +519,6 @@ export async function createDbUserRoleRepository(
           message: iamM('iam_removeRoleFailed', { params: { message: result.error.message } }),
           cause: result.error,
         })
-      }
-
-      const syncResult = await syncUserSessionRoles(userId)
-      if (!syncResult.success) {
-        return syncResult
       }
 
       return ok(undefined)
@@ -1089,9 +598,6 @@ export async function createDbUserRoleRepository(
       }
       return ok(result.data.map(r => r.user_id))
     },
-
-    syncUserSessionRoles,
-    syncUserSessionPermissions,
 
     async getRolesForUsers(userIds: string[]): Promise<Result<Map<string, Role[]>, IamError>> {
       const result = new Map<string, Role[]>()
