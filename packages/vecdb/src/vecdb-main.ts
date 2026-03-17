@@ -6,12 +6,12 @@
  */
 
 import type { Result } from '@h-ai/core'
+import type { VecdbProvider } from './providers/vecdb-provider-base.js'
 import type { VecdbConfig, VecdbConfigInput } from './vecdb-config.js'
 import type {
   CollectionOperations,
   VecdbError,
   VecdbFunctions,
-  VecdbProvider,
   VectorOperations,
 } from './vecdb-types.js'
 
@@ -32,6 +32,9 @@ let currentProvider: VecdbProvider | null = null
 
 /** 当前向量数据库配置（未初始化时为 null） */
 let currentConfig: VecdbConfig | null = null
+
+/** init() 是否正在执行（并发防护） */
+let initInProgress = false
 
 // ─── Provider 工厂 ───
 
@@ -109,46 +112,61 @@ export const vecdb: VecdbFunctions = {
    * @returns 初始化结果，失败时包含错误信息
    */
   async init(config: VecdbConfigInput): Promise<Result<void, VecdbError>> {
-    if (currentProvider) {
-      logger.warn('Vecdb module is already initialized, reinitializing')
-      await vecdb.close()
-    }
-
-    logger.info('Initializing vecdb module')
-
-    const parseResult = VecdbConfigSchema.safeParse(config)
-    if (!parseResult.success) {
-      logger.error('Vecdb config validation failed', { error: parseResult.error.message })
+    // 并发防护：防止多次同时调用导致 Provider/连接泄漏
+    if (initInProgress) {
+      logger.warn('Vecdb init already in progress, skipping concurrent call')
       return err({
         code: VecdbErrorCode.CONFIG_ERROR,
-        message: vecdbM('vecdb_configError', { params: { error: parseResult.error.message } }),
-        cause: parseResult.error,
+        message: vecdbM('vecdb_initInProgress'),
       })
     }
-    const parsed = parseResult.data
+    initInProgress = true
 
     try {
-      const provider = createProvider(parsed)
-      const connectResult = await provider.connect(parsed)
-      if (!connectResult.success) {
-        logger.error('Vecdb module initialization failed', {
-          code: connectResult.error.code,
-          message: connectResult.error.message,
-        })
-        return connectResult
+      if (currentProvider) {
+        logger.warn('Vecdb module is already initialized, reinitializing')
+        await vecdb.close()
       }
-      currentProvider = provider
-      currentConfig = parsed
-      logger.info('Vecdb module initialized', { type: parsed.type })
-      return ok(undefined)
+
+      logger.info('Initializing vecdb module')
+
+      const parseResult = VecdbConfigSchema.safeParse(config)
+      if (!parseResult.success) {
+        logger.error('Vecdb config validation failed', { error: parseResult.error.message })
+        return err({
+          code: VecdbErrorCode.CONFIG_ERROR,
+          message: vecdbM('vecdb_configError', { params: { error: parseResult.error.message } }),
+          cause: parseResult.error,
+        })
+      }
+      const parsed = parseResult.data
+
+      try {
+        const provider = createProvider(parsed)
+        const connectResult = await provider.connect(parsed)
+        if (!connectResult.success) {
+          logger.error('Vecdb module initialization failed', {
+            code: connectResult.error.code,
+            message: connectResult.error.message,
+          })
+          return connectResult
+        }
+        currentProvider = provider
+        currentConfig = parsed
+        logger.info('Vecdb module initialized', { type: parsed.type })
+        return ok(undefined)
+      }
+      catch (error) {
+        logger.error('Vecdb module initialization failed', { error })
+        return err({
+          code: VecdbErrorCode.CONNECTION_FAILED,
+          message: vecdbM('vecdb_initFailed', { params: { error: error instanceof Error ? error.message : String(error) } }),
+          cause: error,
+        })
+      }
     }
-    catch (error) {
-      logger.error('Vecdb module initialization failed', { error })
-      return err({
-        code: VecdbErrorCode.CONNECTION_FAILED,
-        message: vecdbM('vecdb_initFailed', { params: { error: error instanceof Error ? error.message : String(error) } }),
-        cause: error,
-      })
+    finally {
+      initInProgress = false
     }
   },
 

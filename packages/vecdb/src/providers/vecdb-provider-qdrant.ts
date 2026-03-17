@@ -9,22 +9,17 @@
 import type { Result } from '@h-ai/core'
 import type { DistanceMetric, QdrantConfig } from '../vecdb-config.js'
 import type {
-  CollectionCreateOptions,
-  CollectionInfo,
-  CollectionOperations,
   VecdbError,
-  VecdbProvider,
-  VectorDocument,
-  VectorOperations,
-  VectorSearchOptions,
   VectorSearchResult,
 } from '../vecdb-types.js'
+import type { CollectionDriver, VecdbProvider, VectorDriver } from './vecdb-provider-base.js'
 
 import { createHash } from 'node:crypto'
 import { core, err, ok } from '@h-ai/core'
 
 import { VecdbErrorCode } from '../vecdb-config.js'
 import { vecdbM } from '../vecdb-i18n.js'
+import { createBaseCollectionOps, createBaseVectorOps } from './vecdb-provider-base.js'
 
 const logger = core.logger.child({ module: 'vecdb', scope: 'qdrant' })
 
@@ -71,305 +66,210 @@ export function createQdrantProvider(): VecdbProvider {
   let client: QdrantClient | null = null
   let config: QdrantConfig | null = null
 
-  // ─── 集合操作 ───
+  // ─── 操作上下文 ───
 
-  const collectionOps: CollectionOperations = {
-    async create(name: string, options: CollectionCreateOptions): Promise<Result<void, VecdbError>> {
-      if (!client) {
-        return err({ code: VecdbErrorCode.NOT_INITIALIZED, message: vecdbM('vecdb_notInitialized') })
-      }
+  const ctx = { isConnected: () => client !== null, logger }
 
+  // ─── 集合操作适配器 ───
+
+  const collectionDriver: CollectionDriver = {
+    async create(name, options) {
       logger.debug('Creating collection', { name, dimension: options.dimension, metric: options.metric })
 
-      try {
-        // 检查集合是否已存在
-        const collections = await client.getCollections()
-        const exists = collections.collections.some((c: { name: string }) => c.name === name)
-        if (exists) {
-          return err({
-            code: VecdbErrorCode.COLLECTION_ALREADY_EXISTS,
-            message: vecdbM('vecdb_collectionAlreadyExists', { params: { name } }),
-          })
-        }
-
-        const metric = options.metric ?? config?.metric ?? 'cosine'
-
-        await client.createCollection(name, {
-          vectors: {
-            size: options.dimension,
-            distance: toQdrantDistance(metric),
-          },
-        })
-
-        logger.info('Collection created', { name, dimension: options.dimension, metric })
-        return ok(undefined)
-      }
-      catch (error) {
-        logger.error('Failed to create collection', { name, error })
+      // 检查集合是否已存在
+      const collections = await client!.getCollections()
+      const exists = collections.collections.some((c: { name: string }) => c.name === name)
+      if (exists) {
         return err({
-          code: VecdbErrorCode.QUERY_FAILED,
-          message: vecdbM('vecdb_queryFailed', { params: { error: String(error) } }),
-          cause: error,
+          code: VecdbErrorCode.COLLECTION_ALREADY_EXISTS,
+          message: vecdbM('vecdb_collectionAlreadyExists', { params: { name } }),
         })
       }
+
+      const metric = options.metric ?? config?.metric ?? 'cosine'
+
+      await client!.createCollection(name, {
+        vectors: {
+          size: options.dimension,
+          distance: toQdrantDistance(metric),
+        },
+      })
+
+      logger.info('Collection created', { name, dimension: options.dimension, metric })
+      return ok(undefined)
     },
 
-    async drop(name: string): Promise<Result<void, VecdbError>> {
-      if (!client) {
-        return err({ code: VecdbErrorCode.NOT_INITIALIZED, message: vecdbM('vecdb_notInitialized') })
-      }
-
+    async drop(name) {
       logger.debug('Dropping collection', { name })
 
+      // 先用 getCollection 确认存在，不存在时会抛出异常
       try {
-        // 先用 getCollection 确认存在，不存在时会抛出异常
-        try {
-          await client.getCollection(name)
-        }
-        catch {
-          return err({
-            code: VecdbErrorCode.COLLECTION_NOT_FOUND,
-            message: vecdbM('vecdb_collectionNotFound', { params: { name } }),
-          })
-        }
-
-        await client.deleteCollection(name)
-
-        logger.info('Collection dropped', { name })
-        return ok(undefined)
+        await client!.getCollection(name)
       }
-      catch (error) {
-        logger.error('Failed to drop collection', { name, error })
+      catch {
         return err({
-          code: VecdbErrorCode.DELETE_FAILED,
-          message: vecdbM('vecdb_deleteFailed', { params: { error: String(error) } }),
-          cause: error,
+          code: VecdbErrorCode.COLLECTION_NOT_FOUND,
+          message: vecdbM('vecdb_collectionNotFound', { params: { name } }),
         })
       }
+
+      await client!.deleteCollection(name)
+
+      logger.info('Collection dropped', { name })
+      return ok(undefined)
     },
 
-    async exists(name: string): Promise<Result<boolean, VecdbError>> {
-      if (!client) {
-        return err({ code: VecdbErrorCode.NOT_INITIALIZED, message: vecdbM('vecdb_notInitialized') })
-      }
-
+    async exists(name) {
       logger.debug('Checking collection exists', { name })
 
       try {
-        await client.getCollection(name)
+        await client!.getCollection(name)
         return ok(true)
       }
       catch {
-        // getCollection 在集合不存在时抛出异常
+        // 限制：Qdrant SDK getCollection 在集合不存在时抛出 404 异常，
+        // 但网络错误也会抛异常，当前无法区分两者。
+        // 网络不可用时可能误判为“不存在”。
         return ok(false)
       }
     },
 
-    async info(name: string): Promise<Result<CollectionInfo, VecdbError>> {
-      if (!client) {
-        return err({ code: VecdbErrorCode.NOT_INITIALIZED, message: vecdbM('vecdb_notInitialized') })
-      }
-
+    async info(name) {
       logger.debug('Getting collection info', { name })
 
+      let collectionInfo: Awaited<ReturnType<QdrantClient['getCollection']>>
       try {
-        let collectionInfo: Awaited<ReturnType<QdrantClient['getCollection']>>
-        try {
-          collectionInfo = await client.getCollection(name)
-        }
-        catch {
-          return err({
-            code: VecdbErrorCode.COLLECTION_NOT_FOUND,
-            message: vecdbM('vecdb_collectionNotFound', { params: { name } }),
-          })
-        }
-
-        const vectorsConfig = collectionInfo.config?.params?.vectors
-        const dimension = vectorsConfig?.size ?? 0
-
-        // 从 Qdrant distance 字符串映射回 DistanceMetric
-        const qdrantDistance = vectorsConfig?.distance ?? 'Cosine'
-        const metric: DistanceMetric = qdrantDistance === 'Euclid'
-          ? 'euclidean'
-          : qdrantDistance === 'Dot' ? 'dot' : 'cosine'
-
-        return ok({
-          name,
-          dimension,
-          metric,
-          count: collectionInfo.points_count ?? 0,
-        })
+        collectionInfo = await client!.getCollection(name)
       }
-      catch (error) {
+      catch {
         return err({
-          code: VecdbErrorCode.QUERY_FAILED,
-          message: vecdbM('vecdb_queryFailed', { params: { error: String(error) } }),
-          cause: error,
+          code: VecdbErrorCode.COLLECTION_NOT_FOUND,
+          message: vecdbM('vecdb_collectionNotFound', { params: { name } }),
         })
       }
+
+      const vectorsConfig = collectionInfo.config?.params?.vectors
+      const dimension = vectorsConfig?.size ?? 0
+
+      // 从 Qdrant distance 字符串映射回 DistanceMetric
+      const qdrantDistance = vectorsConfig?.distance ?? 'Cosine'
+      const metric: DistanceMetric = qdrantDistance === 'Euclid'
+        ? 'euclidean'
+        : qdrantDistance === 'Dot' ? 'dot' : 'cosine'
+
+      return ok({
+        name,
+        dimension,
+        metric,
+        count: collectionInfo.points_count ?? 0,
+      })
     },
 
-    async list(): Promise<Result<string[], VecdbError>> {
-      if (!client) {
-        return err({ code: VecdbErrorCode.NOT_INITIALIZED, message: vecdbM('vecdb_notInitialized') })
-      }
-
+    async list() {
       logger.debug('Listing collections')
 
-      try {
-        const collections = await client.getCollections()
-        const names = collections.collections.map((c: { name: string }) => c.name)
-        return ok(names)
-      }
-      catch (error) {
-        return err({
-          code: VecdbErrorCode.QUERY_FAILED,
-          message: vecdbM('vecdb_queryFailed', { params: { error: String(error) } }),
-          cause: error,
-        })
-      }
+      const collections = await client!.getCollections()
+      const names = collections.collections.map((c: { name: string }) => c.name)
+      return ok(names)
     },
   }
 
-  // ─── 向量操作 ───
+  // ─── 向量操作适配器 ───
 
-  const vectorOps: VectorOperations = {
-    async insert(collection: string, documents: VectorDocument[]): Promise<Result<void, VecdbError>> {
-      if (!client) {
-        return err({ code: VecdbErrorCode.NOT_INITIALIZED, message: vecdbM('vecdb_notInitialized') })
-      }
-
+  const vectorDriver: VectorDriver = {
+    async insert(collection, documents) {
       logger.debug('Inserting vectors', { collection, count: documents.length })
 
-      try {
-        const points = documents.map(doc => ({
-          id: hashToUuid(doc.id),
-          vector: doc.vector,
-          payload: {
-            _id: doc.id,
-            content: doc.content ?? '',
-            ...doc.metadata,
-          },
-        }))
+      const points = documents.map(doc => ({
+        id: hashToUuid(doc.id),
+        vector: doc.vector,
+        payload: {
+          _id: doc.id,
+          content: doc.content ?? '',
+          ...doc.metadata,
+        },
+      }))
 
-        await client.upsert(collection, { points })
+      // 限制：Qdrant API 仅提供 upsert，无原生 strict insert；
+      // ID 已存在时会静默覆盖而非报错，行为等同于 upsert。
+      await client!.upsert(collection, { points })
 
-        logger.info('Vectors inserted', { collection, count: documents.length })
-        return ok(undefined)
-      }
-      catch (error) {
-        logger.error('Failed to insert vectors', { collection, error })
-        return err({
-          code: VecdbErrorCode.INSERT_FAILED,
-          message: vecdbM('vecdb_insertFailed', { params: { error: String(error) } }),
-          cause: error,
-        })
-      }
+      logger.info('Vectors inserted', { collection, count: documents.length })
+      return ok(undefined)
     },
 
-    async upsert(collection: string, documents: VectorDocument[]): Promise<Result<void, VecdbError>> {
-      // Qdrant 的 upsert 与 insert 操作相同（原生支持 upsert）
-      return vectorOps.insert(collection, documents)
+    async upsert(collection, documents) {
+      logger.debug('Upserting vectors', { collection, count: documents.length })
+
+      const points = documents.map(doc => ({
+        id: hashToUuid(doc.id),
+        vector: doc.vector,
+        payload: {
+          _id: doc.id,
+          content: doc.content ?? '',
+          ...doc.metadata,
+        },
+      }))
+
+      await client!.upsert(collection, { points })
+
+      logger.info('Vectors upserted', { collection, count: documents.length })
+      return ok(undefined)
     },
 
-    async delete(collection: string, ids: string[]): Promise<Result<void, VecdbError>> {
-      if (!client) {
-        return err({ code: VecdbErrorCode.NOT_INITIALIZED, message: vecdbM('vecdb_notInitialized') })
-      }
-
+    async delete(collection, ids) {
       logger.debug('Deleting vectors', { collection, count: ids.length })
 
-      try {
-        const uuids = ids.map(hashToUuid)
-        await client.delete(collection, { points: uuids })
+      const uuids = ids.map(hashToUuid)
+      await client!.delete(collection, { points: uuids })
 
-        logger.info('Vectors deleted', { collection, count: ids.length })
-        return ok(undefined)
-      }
-      catch (error) {
-        logger.error('Failed to delete vectors', { collection, error })
-        return err({
-          code: VecdbErrorCode.DELETE_FAILED,
-          message: vecdbM('vecdb_deleteFailed', { params: { error: String(error) } }),
-          cause: error,
-        })
-      }
+      logger.info('Vectors deleted', { collection, count: ids.length })
+      return ok(undefined)
     },
 
-    async search(
-      collection: string,
-      vector: number[],
-      options?: VectorSearchOptions,
-    ): Promise<Result<VectorSearchResult[], VecdbError>> {
-      if (!client) {
-        return err({ code: VecdbErrorCode.NOT_INITIALIZED, message: vecdbM('vecdb_notInitialized') })
-      }
-
+    async search(collection, vector, options) {
       const topK = options?.topK ?? 10
       const minScore = options?.minScore ?? 0
 
       logger.debug('Searching vectors', { collection, topK, hasFilter: !!options?.filter })
 
-      try {
-        // 构建过滤条件
-        let filter: Record<string, unknown> | undefined
-        if (options?.filter && Object.keys(options.filter).length > 0) {
-          const mustConditions = Object.entries(options.filter).map(([key, value]) => ({
-            key,
-            match: { value },
-          }))
-          filter = { must: mustConditions }
+      // 构建过滤条件
+      let filter: Record<string, unknown> | undefined
+      if (options?.filter && Object.keys(options.filter).length > 0) {
+        const mustConditions = Object.entries(options.filter).map(([key, value]) => ({
+          key,
+          match: { value },
+        }))
+        filter = { must: mustConditions }
+      }
+
+      const searchResult = await client!.search(collection, {
+        vector,
+        limit: topK,
+        score_threshold: minScore > 0 ? minScore : undefined,
+        filter,
+        with_payload: true,
+      })
+
+      const results: VectorSearchResult[] = searchResult.map((point: Record<string, unknown>) => {
+        const payload = point.payload as Record<string, unknown> ?? {}
+        const { _id, content, ...metadata } = payload
+        return {
+          id: (_id as string) ?? '',
+          score: point.score as number,
+          content: (content as string) || undefined,
+          metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
         }
+      })
 
-        const searchResult = await client.search(collection, {
-          vector,
-          limit: topK,
-          score_threshold: minScore > 0 ? minScore : undefined,
-          filter,
-          with_payload: true,
-        })
-
-        const results: VectorSearchResult[] = searchResult.map((point: Record<string, unknown>) => {
-          const payload = point.payload as Record<string, unknown> ?? {}
-          const { _id, content, ...metadata } = payload
-          return {
-            id: (_id as string) ?? '',
-            score: point.score as number,
-            content: (content as string) || undefined,
-            metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
-          }
-        })
-
-        return ok(results)
-      }
-      catch (error) {
-        logger.error('Failed to search vectors', { collection, error })
-        return err({
-          code: VecdbErrorCode.QUERY_FAILED,
-          message: vecdbM('vecdb_queryFailed', { params: { error: String(error) } }),
-          cause: error,
-        })
-      }
+      return ok(results)
     },
 
-    async count(collection: string): Promise<Result<number, VecdbError>> {
-      if (!client) {
-        return err({ code: VecdbErrorCode.NOT_INITIALIZED, message: vecdbM('vecdb_notInitialized') })
-      }
-
+    async count(collection) {
       logger.debug('Counting vectors', { collection })
 
-      try {
-        const info = await client.getCollection(collection)
-        return ok(info.points_count ?? 0)
-      }
-      catch (error) {
-        return err({
-          code: VecdbErrorCode.QUERY_FAILED,
-          message: vecdbM('vecdb_queryFailed', { params: { error: String(error) } }),
-          cause: error,
-        })
-      }
+      const info = await client!.getCollection(collection)
+      return ok(info.points_count ?? 0)
     },
   }
 
@@ -391,6 +291,7 @@ export function createQdrantProvider(): VecdbProvider {
       try {
         const { QdrantClient: QdrantClientClass } = await import('@qdrant/js-client-rest')
 
+        // @qdrant/js-client-rest 为 optionalDependencies，动态 import 后类型与本地最小接口不兼容，需强转
         const qdrantClient = new QdrantClientClass({
           url: qdrantConfig.url,
           apiKey: qdrantConfig.apiKey,
@@ -406,7 +307,8 @@ export function createQdrantProvider(): VecdbProvider {
         return ok(undefined)
       }
       catch (error) {
-        logger.error('Failed to connect to Qdrant', { error })
+        // 仅提取错误消息，避免 error 对象中的 URL 或连接信息泄漏
+        logger.error('Failed to connect to Qdrant', { error: error instanceof Error ? error.message : String(error) })
         return err({
           code: VecdbErrorCode.CONNECTION_FAILED,
           message: vecdbM('vecdb_connectionFailed', { params: { error: String(error) } }),
@@ -426,7 +328,7 @@ export function createQdrantProvider(): VecdbProvider {
       return client !== null
     },
 
-    collection: collectionOps,
-    vector: vectorOps,
+    collection: createBaseCollectionOps(ctx, collectionDriver),
+    vector: createBaseVectorOps(ctx, vectorDriver),
   }
 }
