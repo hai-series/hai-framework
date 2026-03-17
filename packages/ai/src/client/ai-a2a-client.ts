@@ -74,6 +74,7 @@ export function createA2AClient(api: AIApiAdapter): A2AClientOperations {
       if (!result.success) {
         throw new Error(`A2A remote call failed: ${result.error.message}`)
       }
+      // API 返回 Result<A2ACallResult, ...> 嵌套结构，解包后断言为业务类型
       return result.data as unknown as A2ACallResult
     },
   }

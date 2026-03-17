@@ -81,6 +81,8 @@ export function createEmbeddingOperations(config: AIConfig): EmbeddingOperations
         params.dimensions = request.dimensions ?? embeddingConfig.dimensions
       }
 
+      // OpenAI SDK embeddings.create 参数类型与动态构造的 params 不兼容，
+      // 此处按需组装 model/input/dimensions 字段后断言为 SDK 参数类型
       const response = await client.embeddings.create(params as unknown as Parameters<typeof client.embeddings.create>[0])
 
       return ok({

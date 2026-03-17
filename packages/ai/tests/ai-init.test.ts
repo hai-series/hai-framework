@@ -7,15 +7,15 @@ import { z } from 'zod'
 import { ai, AIErrorCode } from '../src/index.js'
 
 describe('ai.init', () => {
-  it('默认配置初始化成功', () => {
-    const result = ai.init()
+  it('默认配置初始化成功', async () => {
+    const result = await ai.init()
     expect(result.success).toBe(true)
     expect(ai.isInitialized).toBe(true)
     ai.close()
   })
 
-  it('自定义 LLM 配置初始化成功', () => {
-    const result = ai.init({
+  it('自定义 LLM 配置初始化成功', async () => {
+    const result = await ai.init({
       llm: {
         model: 'gpt-4o',
         apiKey: 'sk-test-key',
@@ -32,15 +32,15 @@ describe('ai.init', () => {
     ai.close()
   })
 
-  it('配置默认值自动填充', () => {
-    ai.init({})
+  it('配置默认值自动填充', async () => {
+    await ai.init({})
     expect(ai.config).not.toBeNull()
     // LLM schema 有默认值，但 llm 字段本身是 optional
     ai.close()
   })
 
-  it('无效配置返回错误', () => {
-    const result = ai.init({
+  it('无效配置返回错误', async () => {
+    const result = await ai.init({
       llm: {
         temperature: 999 as unknown as number, // 超出 0-2 范围
       },
@@ -51,8 +51,8 @@ describe('ai.init', () => {
     }
   })
 
-  it('负数 timeout 返回错误', () => {
-    const result = ai.init({
+  it('负数 timeout 返回错误', async () => {
+    const result = await ai.init({
       llm: { timeout: -1 },
     })
     expect(result.success).toBe(false)
@@ -61,8 +61,8 @@ describe('ai.init', () => {
     }
   })
 
-  it('非法 baseUrl 格式返回错误', () => {
-    const result = ai.init({
+  it('非法 baseUrl 格式返回错误', async () => {
+    const result = await ai.init({
       llm: { baseUrl: 'not-a-url' },
     })
     expect(result.success).toBe(false)
@@ -71,8 +71,8 @@ describe('ai.init', () => {
     }
   })
 
-  it('同时配置 llm 和 mcp', () => {
-    const result = ai.init({
+  it('同时配置 llm 和 mcp', async () => {
+    const result = await ai.init({
       llm: { model: 'gpt-4o', apiKey: 'sk-test' },
       mcp: { server: { name: 'my-server' } },
     })
@@ -82,27 +82,27 @@ describe('ai.init', () => {
     ai.close()
   })
 
-  it('mcp 配置默认值', () => {
-    ai.init({
+  it('mcp 配置默认值', async () => {
+    await ai.init({
       mcp: { server: { name: 'test-server' } },
     })
     expect(ai.config?.mcp?.server?.version).toBe('1.0.0')
     ai.close()
   })
 
-  it('重复初始化应重置状态', () => {
-    ai.init({ llm: { model: 'model-a' } })
+  it('重复初始化应重置状态', async () => {
+    await ai.init({ llm: { model: 'model-a' } })
     expect(ai.config!.llm?.model).toBe('model-a')
 
-    ai.init({ llm: { model: 'model-b' } })
+    await ai.init({ llm: { model: 'model-b' } })
     expect(ai.config!.llm?.model).toBe('model-b')
     ai.close()
   })
 })
 
 describe('ai.close', () => {
-  it('关闭后状态重置', () => {
-    ai.init()
+  it('关闭后状态重置', async () => {
+    await ai.init()
     expect(ai.isInitialized).toBe(true)
 
     ai.close()
@@ -110,8 +110,8 @@ describe('ai.close', () => {
     expect(ai.config).toBeNull()
   })
 
-  it('重复关闭不会报错', () => {
-    ai.init()
+  it('重复关闭不会报错', async () => {
+    await ai.init()
     ai.close()
     ai.close()
     expect(ai.isInitialized).toBe(false)
@@ -119,7 +119,7 @@ describe('ai.close', () => {
 })
 
 describe('ai.isInitialized', () => {
-  it('未初始化时为 false', () => {
+  it('未初始化时为 false', async () => {
     ai.close()
     expect(ai.isInitialized).toBe(false)
   })
@@ -183,7 +183,7 @@ describe('未初始化时的 MCP 操作', () => {
     }
   })
 
-  it('ai.mcp.registerTool 返回 NOT_INITIALIZED', () => {
+  it('ai.mcp.registerTool 返回 NOT_INITIALIZED', async () => {
     ai.close()
     const result = ai.mcp.registerTool(
       { name: 'test', description: 'test', inputSchema: {} },
@@ -195,7 +195,7 @@ describe('未初始化时的 MCP 操作', () => {
     }
   })
 
-  it('ai.mcp.registerResource 返回 NOT_INITIALIZED', () => {
+  it('ai.mcp.registerResource 返回 NOT_INITIALIZED', async () => {
     ai.close()
     const result = ai.mcp.registerResource(
       { uri: 'test://r', name: 'test' },
@@ -207,7 +207,7 @@ describe('未初始化时的 MCP 操作', () => {
     }
   })
 
-  it('ai.mcp.registerPrompt 返回 NOT_INITIALIZED', () => {
+  it('ai.mcp.registerPrompt 返回 NOT_INITIALIZED', async () => {
     ai.close()
     const result = ai.mcp.registerPrompt(
       { name: 'test' },
@@ -221,7 +221,7 @@ describe('未初始化时的 MCP 操作', () => {
 })
 
 describe('ai.tools / ai.stream 无需初始化即可使用', () => {
-  it('ai.tools.define 无需 init', () => {
+  it('ai.tools.define 无需 init', async () => {
     ai.close()
     const tool = ai.tools.define({
       name: 't',
@@ -232,25 +232,25 @@ describe('ai.tools / ai.stream 无需初始化即可使用', () => {
     expect(tool.name).toBe('t')
   })
 
-  it('ai.tools.createRegistry 无需 init', () => {
+  it('ai.tools.createRegistry 无需 init', async () => {
     ai.close()
     const registry = ai.tools.createRegistry()
     expect(registry.size).toBe(0)
   })
 
-  it('ai.stream.createProcessor 无需 init', () => {
+  it('ai.stream.createProcessor 无需 init', async () => {
     ai.close()
     const processor = ai.stream.createProcessor()
     expect(processor.getResult().content).toBe('')
   })
 
-  it('ai.stream.encodeSSE 无需 init', () => {
+  it('ai.stream.encodeSSE 无需 init', async () => {
     ai.close()
     const encoded = ai.stream.encodeSSE({ data: 'test' })
     expect(encoded).toContain('data: test')
   })
 
-  it('ai.stream.createSSEDecoder 无需 init', () => {
+  it('ai.stream.createSSEDecoder 无需 init', async () => {
     ai.close()
     const decoder = ai.stream.createSSEDecoder()
     const events = [...decoder.decode('data: hello\n\n')]

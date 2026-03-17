@@ -99,29 +99,36 @@ function createMockVectorStore(): AIVectorStore {
       return results.slice(0, topK)
     }),
     remove: vi.fn(async (id) => { vectors.delete(id) }),
-    removeBy: vi.fn(async () => 0),
     clear: vi.fn(async () => { vectors.clear() }),
   }
 }
 
-function matchesWhere(item: any, where: any): boolean {
+interface WhereOps {
+  $in?: unknown[]
+  $gte?: number
+  $gt?: number
+  $lte?: number
+  $lt?: number
+}
+
+function matchesWhere(item: unknown, where: unknown): boolean {
   if (!where)
     return true
-  for (const [key, condition] of Object.entries(where)) {
-    const value = (item as any)[key]
+  for (const [key, condition] of Object.entries(where as Record<string, unknown>)) {
+    const value = (item as Record<string, unknown>)[key]
     if (condition === null || condition === undefined)
       continue
     if (typeof condition === 'object' && !Array.isArray(condition)) {
-      const ops = condition as Record<string, any>
+      const ops = condition as WhereOps
       if (ops.$in !== undefined && !ops.$in.includes(value))
         return false
-      if (ops.$gte !== undefined && !(value >= ops.$gte))
+      if (ops.$gte !== undefined && !((value as number) >= ops.$gte))
         return false
-      if (ops.$gt !== undefined && !(value > ops.$gt))
+      if (ops.$gt !== undefined && !((value as number) > ops.$gt))
         return false
-      if (ops.$lte !== undefined && !(value <= ops.$lte))
+      if (ops.$lte !== undefined && !((value as number) <= ops.$lte))
         return false
-      if (ops.$lt !== undefined && !(value < ops.$lt))
+      if (ops.$lt !== undefined && !((value as number) < ops.$lt))
         return false
     }
     else {

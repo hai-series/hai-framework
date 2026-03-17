@@ -382,8 +382,8 @@ LLM 调用（同步/流式）+ MCP Server + 工具系统 + SSE 流处理。
 import { ai, createMcpServer } from '@h-ai/ai'
 import { z } from 'zod'
 
-// 初始化（同步，不是 async）— 只有 OpenAI 兼容的 Provider
-ai.init({
+// 初始化（async）— 只有 OpenAI 兼容的 Provider
+await ai.init({
   llm: {
     apiKey: process.env.HAI_OPENAI_API_KEY,   // 也兼容 OPENAI_API_KEY
     baseUrl: process.env.HAI_OPENAI_BASE_URL,  // 可指向任何 OpenAI 兼容端点

@@ -91,7 +91,7 @@ export async function initApp(): Promise<void> {
   }
 
   // 6. 初始化 AI 模块（读取 _ai.yml 中的 a2a.agentCard 配置）
-  const aiResult = ai.init(aiConfig)
+  const aiResult = await ai.init(aiConfig)
   if (!aiResult.success) {
     throw new Error(`AI initialization failed: ${aiResult.error.message}`)
   }

@@ -88,7 +88,7 @@ export const aiEndpoints = {
     method: 'POST',
     path: '/ai/chat/stream',
     input: ChatCompletionInputSchema,
-    output: z.any(),
+    output: z.unknown(),
     requireAuth: true,
     meta: { summary: 'Chat completion (SSE streaming)', tags: ['ai'], streaming: true },
   }),

@@ -47,8 +47,8 @@ compress:
 ```typescript
 import { ai } from '@h-ai/ai'
 
-// ai.init() 和 ai.close() 是同步方法
-ai.init(core.config.get('ai'))
+// ai.init() 是异步方法，ai.close() 是同步方法
+await ai.init(core.config.get('ai'))
 ai.close()
 ```
 

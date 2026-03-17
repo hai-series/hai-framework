@@ -36,7 +36,7 @@ pnpm add @h-ai/ai
 import { ai } from '@h-ai/ai'
 
 // 1. 初始化
-ai.init({
+await ai.init({
   llm: {
     model: 'gpt-4o-mini',
     apiKey: process.env.HAI_OPENAI_API_KEY,
@@ -65,7 +65,7 @@ ai.close()
 ### 完整配置
 
 ```ts
-ai.init({
+await ai.init({
   // LLM 配置
   llm: {
     apiKey: 'sk-xxx',
@@ -152,7 +152,7 @@ import { ai } from '@h-ai/ai'
 import { core } from '@h-ai/core'
 
 await core.init({ configDir: './config' })
-ai.init(core.config.get('ai'))
+await ai.init(core.config.get('ai'))
 // ...
 ai.close()
 await core.close()
@@ -529,7 +529,7 @@ const result = await ai.reasoning.run('北京到上海的距离是多少公里�
 **方式一：初始化时预配置**
 
 ```ts
-ai.init({
+await ai.init({
   llm: { apiKey: 'sk-xxx', model: 'gpt-4o-mini' },
   retrieval: {
     sources: [
@@ -1013,7 +1013,7 @@ for await (const event of manager.chatStream('讲个故事')) {
   if (event.type === 'delta')
     process.stdout.write(event.text)
   if (event.type === 'done')
-    console.log('\n完成', event.model)
+    console.warn('\n完成', event.model)
 }
 
 // 持久化
@@ -1353,7 +1353,7 @@ if (result.success) {
 import type { ChatMessage } from '@h-ai/ai'
 import { ai } from '@h-ai/ai'
 
-ai.init({
+await ai.init({
   llm: { model: 'gpt-4o-mini', apiKey: process.env.API_KEY },
   memory: { maxEntries: 500, embeddingEnabled: true },
   compress: { defaultStrategy: 'hybrid', preserveLastN: 6 },
@@ -1402,7 +1402,7 @@ async function chat(userInput: string): Promise<string | undefined> {
 import { ai } from '@h-ai/ai'
 
 // 初始化（需要 vecdb + reldb 配合）
-ai.init({
+await ai.init({
   llm: { model: 'gpt-4o-mini', apiKey: process.env.API_KEY },
   embedding: { model: 'text-embedding-3-small' },
   knowledge: {
@@ -1447,7 +1447,7 @@ if (answer.success) {
 ```ts
 import { ai } from '@h-ai/ai'
 
-ai.init({
+await ai.init({
   llm: { model: 'gpt-4o-mini', apiKey: process.env.API_KEY },
   compress: { defaultStrategy: 'hybrid', preserveLastN: 6 },
 })
@@ -1466,7 +1466,7 @@ for await (const event of manager.chatStream('你好')) {
   if (event.type === 'delta')
     process.stdout.write(event.text)
   if (event.type === 'done')
-    console.log('\n完成，模型:', event.model)
+    console.warn('\n完成，模型:', event.model)
 }
 
 // 方式二：手动编排

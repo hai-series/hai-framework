@@ -41,6 +41,8 @@ const logger = core.logger.child({ module: 'ai', scope: 'main' })
 
 // ─── 内部状态 ───
 
+/** 并发初始化防护 */
+let initInProgress = false
 /** 当前配置（`null` 表示未初始化） */
 let currentConfig: AIConfig | null = null
 /** 当前 LLM 操作实例 */
@@ -233,7 +235,7 @@ const streamOperations: StreamOperations = {
  * import { ai } from '@h-ai/ai'
  *
  * // 初始化
- * ai.init({ llm: { model: 'gpt-4o-mini', apiKey: process.env.HAI_OPENAI_API_KEY } })
+ * await ai.init({ llm: { model: 'gpt-4o-mini', apiKey: process.env.HAI_OPENAI_API_KEY } })
  *
  * // LLM 调用
  * const result = await ai.llm.chat({
@@ -245,27 +247,37 @@ const streamOperations: StreamOperations = {
  * ```
  */
 export const ai: AIFunctions = {
-  init(config?: AIConfigInput): Result<void, AIError> {
-    // 关闭旧实例
-    if (currentConfig) {
-      logger.warn('AI module is already initialized, reinitializing')
-      ai.close()
-    }
-
-    logger.info('Initializing AI module')
-
-    const parseResult = AIConfigSchema.safeParse(config ?? {})
-    if (!parseResult.success) {
-      logger.error('AI config validation failed', { error: parseResult.error.message })
+  async init(config?: AIConfigInput): Promise<Result<void, AIError>> {
+    // 并发初始化防护：避免多次 init 同时执行导致资源泄漏
+    if (initInProgress) {
+      logger.warn('AI init already in progress, skipping concurrent call')
       return err({
-        code: AIErrorCode.CONFIGURATION_ERROR,
-        message: aiM('ai_configError', { params: { error: parseResult.error.message } }),
-        cause: parseResult.error,
+        code: AIErrorCode.INIT_IN_PROGRESS,
+        message: aiM('ai_initInProgress'),
       })
     }
-    const parsed = parseResult.data
+    initInProgress = true
 
     try {
+      // 关闭旧实例
+      if (currentConfig) {
+        logger.warn('AI module is already initialized, reinitializing')
+        ai.close()
+      }
+
+      logger.info('Initializing AI module')
+
+      const parseResult = AIConfigSchema.safeParse(config ?? {})
+      if (!parseResult.success) {
+        logger.error('AI config validation failed', { error: parseResult.error.message })
+        return err({
+          code: AIErrorCode.CONFIGURATION_ERROR,
+          message: aiM('ai_configError', { params: { error: parseResult.error.message } }),
+          cause: parseResult.error,
+        })
+      }
+      const parsed = parseResult.data
+
       // 注入 reldb / vecdb 存储依赖（必选）
       if (!reldb.isInitialized || !vecdb.isInitialized) {
         const missing = [!reldb.isInitialized && 'reldb', !vecdb.isInitialized && 'vecdb'].filter(Boolean).join(', ')
@@ -275,8 +287,8 @@ export const ai: AIFunctions = {
         })
       }
 
-      // 委托 ai-functions 组装所有子功能
-      const subs = createAISubsystems(parsed, {
+      // 委托 ai-functions 组装所有子功能（含建表）
+      const subs = await createAISubsystems(parsed, {
         sql: reldb.sql,
         jsonOps: reldb.json,
         dbType: reldb.config?.type,
@@ -316,6 +328,9 @@ export const ai: AIFunctions = {
         }),
         cause: error,
       })
+    }
+    finally {
+      initInProgress = false
     }
   },
 

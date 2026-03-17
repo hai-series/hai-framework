@@ -48,7 +48,7 @@ export interface AIError {
  * ```ts
  * import { ai } from '@h-ai/ai'
  *
- * ai.init({ llm: { model: 'gpt-4o-mini' } })
+ * await ai.init({ llm: { model: 'gpt-4o-mini' } })
  * const result = await ai.llm.chat({ messages: [{ role: 'user', content: '你好' }] })
  * ai.close()
  * ```
@@ -63,7 +63,7 @@ export interface AIFunctions {
    * @param config - AI 配置（可选，默认使用空对象并应用 Schema 默认值）
    * @returns 成功返回 `ok(undefined)`；配置校验失败返回 `err(AIError)`
    */
-  init: (config?: AIConfigInput) => Result<void, AIError>
+  init: (config?: AIConfigInput) => Promise<Result<void, AIError>>
   /**
    * 关闭 AI 服务，释放内部状态
    *
@@ -128,7 +128,6 @@ export { CompressionStrategySchema } from './compress/ai-compress-types.js'
 export type {
   ContextChatOptions,
   ContextChatResult,
-  ContextDeps,
   ContextManager,
   ContextManagerOptions,
   ContextOperations,
@@ -140,7 +139,6 @@ export type {
 export type {
   EmbeddingItem,
   EmbeddingOperations,
-  EmbeddingProvider,
   EmbeddingRequest,
   EmbeddingResponse,
 } from './embedding/ai-embedding-types.js'
@@ -189,7 +187,6 @@ export type {
   DefineToolOptions,
   ImageContent,
   LLMOperations,
-  LLMProvider,
   MessageContent,
   MessageRole,
   SSEDecoder,
@@ -220,7 +217,6 @@ export type {
   MCPPromptArgument,
   MCPPromptContent,
   MCPPromptMessage,
-  MCPProvider,
   MCPResource,
   MCPResourceContent,
   McpServerOptions,

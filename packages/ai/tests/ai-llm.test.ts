@@ -109,10 +109,10 @@ function makeSDKChunk(content: string | undefined, options?: {
 // =============================================================================
 
 describe('ai.llm.chat', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks()
     constructorCalls.length = 0
-    const initResult = ai.init({ llm: { apiKey: 'sk-test', model: 'gpt-4o-mini' } })
+    const initResult = await ai.init({ llm: { apiKey: 'sk-test', model: 'gpt-4o-mini' } })
     expect(initResult.success).toBe(true)
   })
 
@@ -367,10 +367,10 @@ describe('ai.llm.chat', () => {
 // =============================================================================
 
 describe('ai.llm.chatStream', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks()
     constructorCalls.length = 0
-    const initResult = ai.init({ llm: { apiKey: 'sk-test' } })
+    const initResult = await ai.init({ llm: { apiKey: 'sk-test' } })
     expect(initResult.success).toBe(true)
   })
 
@@ -464,10 +464,10 @@ describe('ai.llm.chatStream', () => {
 // =============================================================================
 
 describe('ai.llm.listModels', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks()
     constructorCalls.length = 0
-    const initResult = ai.init({ llm: { apiKey: 'sk-test' } })
+    const initResult = await ai.init({ llm: { apiKey: 'sk-test' } })
     expect(initResult.success).toBe(true)
   })
 
@@ -525,7 +525,7 @@ describe('openAI 客户端配置', () => {
 
   it('apiKey 传递给 OpenAI 构造函数', async () => {
     constructorCalls.length = 0
-    ai.init({ llm: { apiKey: 'sk-my-key' } })
+    await ai.init({ llm: { apiKey: 'sk-my-key' } })
 
     // 客户端延迟创建，需触发一次调用
     mockCreate.mockResolvedValue(makeSDKChatCompletion('ok'))
@@ -539,7 +539,7 @@ describe('openAI 客户端配置', () => {
 
   it('baseUrl 传递给 OpenAI 构造函数', async () => {
     constructorCalls.length = 0
-    ai.init({
+    await ai.init({
       llm: {
         apiKey: 'sk-key',
         baseUrl: 'https://custom.api.com/v1',
@@ -556,7 +556,7 @@ describe('openAI 客户端配置', () => {
 
   it('timeout 传递给 OpenAI 构造函数', async () => {
     constructorCalls.length = 0
-    ai.init({
+    await ai.init({
       llm: {
         apiKey: 'sk-key',
         timeout: 30000,
@@ -572,11 +572,11 @@ describe('openAI 客户端配置', () => {
   })
 
   it('重新初始化使用新配置', async () => {
-    ai.init({ llm: { apiKey: 'sk-old' } })
+    await ai.init({ llm: { apiKey: 'sk-old' } })
     constructorCalls.length = 0
     vi.clearAllMocks()
 
-    ai.init({ llm: { apiKey: 'sk-new', model: 'gpt-4o' } })
+    await ai.init({ llm: { apiKey: 'sk-new', model: 'gpt-4o' } })
     mockCreate.mockResolvedValue(makeSDKChatCompletion('ok'))
 
     await ai.llm.chat({ messages: [{ role: 'user', content: 'test' }] })
@@ -596,10 +596,10 @@ describe('openAI 客户端配置', () => {
 // =============================================================================
 
 describe('llm 完整对话流程', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks()
     constructorCalls.length = 0
-    const initResult = ai.init({ llm: { apiKey: 'sk-test' } })
+    const initResult = await ai.init({ llm: { apiKey: 'sk-test' } })
     expect(initResult.success).toBe(true)
   })
 
@@ -765,10 +765,10 @@ describe('llm 完整对话流程', () => {
 // =============================================================================
 
 describe('ai.llm — chat recording', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks()
     constructorCalls.length = 0
-    const initResult = ai.init({ llm: { apiKey: 'sk-test', model: 'gpt-4o-mini' } })
+    const initResult = await ai.init({ llm: { apiKey: 'sk-test', model: 'gpt-4o-mini' } })
     expect(initResult.success).toBe(true)
   })
 
@@ -886,10 +886,10 @@ describe('ai.llm — chat recording', () => {
 })
 
 describe('ai.llm.listSessions', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks()
     constructorCalls.length = 0
-    const initResult = ai.init({ llm: { apiKey: 'sk-test', model: 'gpt-4o-mini' } })
+    const initResult = await ai.init({ llm: { apiKey: 'sk-test', model: 'gpt-4o-mini' } })
     expect(initResult.success).toBe(true)
   })
 
@@ -1002,10 +1002,10 @@ describe('ai.llm.listSessions', () => {
 // =============================================================================
 
 describe('ai.llm.chatStream 记录保存', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks()
     constructorCalls.length = 0
-    const initResult = ai.init({ llm: { apiKey: 'sk-test', model: 'gpt-4o-mini' } })
+    const initResult = await ai.init({ llm: { apiKey: 'sk-test', model: 'gpt-4o-mini' } })
     expect(initResult.success).toBe(true)
   })
 
@@ -1095,10 +1095,10 @@ describe('ai.llm.chatStream 记录保存', () => {
 // =============================================================================
 
 describe('ai.llm.ask', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks()
     constructorCalls.length = 0
-    const initResult = ai.init({ llm: { apiKey: 'sk-test', model: 'gpt-4o-mini' } })
+    const initResult = await ai.init({ llm: { apiKey: 'sk-test', model: 'gpt-4o-mini' } })
     expect(initResult.success).toBe(true)
   })
 
@@ -1146,10 +1146,10 @@ describe('ai.llm.ask', () => {
 })
 
 describe('ai.llm.askStream', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks()
     constructorCalls.length = 0
-    const initResult = ai.init({ llm: { apiKey: 'sk-test', model: 'gpt-4o-mini' } })
+    const initResult = await ai.init({ llm: { apiKey: 'sk-test', model: 'gpt-4o-mini' } })
     expect(initResult.success).toBe(true)
   })
 

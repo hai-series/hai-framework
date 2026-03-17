@@ -333,7 +333,7 @@ describe('ai.mcp — 同步与边界场景', () => {
   })
 
   it('同步 tool handler 正常工作', async () => {
-    ai.init()
+    await ai.init()
 
     ai.mcp.registerTool(
       { name: 'sync_add', description: '同步加法', inputSchema: { type: 'object' } },
@@ -351,7 +351,7 @@ describe('ai.mcp — 同步与边界场景', () => {
   })
 
   it('tool handler 返回 undefined 时正常返回', async () => {
-    ai.init()
+    await ai.init()
 
     ai.mcp.registerTool(
       { name: 'void_tool', description: '无返回值工具', inputSchema: {} },
@@ -366,7 +366,7 @@ describe('ai.mcp — 同步与边界场景', () => {
   })
 
   it('prompt 无 arguments 定义时传入任意参数正常', async () => {
-    ai.init()
+    await ai.init()
 
     ai.mcp.registerPrompt(
       { name: 'no_args_prompt' },
@@ -382,7 +382,7 @@ describe('ai.mcp — 同步与边界场景', () => {
   })
 
   it('resource handler 返回 text 和 blob 均可', async () => {
-    ai.init()
+    await ai.init()
 
     // text 资源
     ai.mcp.registerResource(
@@ -421,7 +421,7 @@ describe('ai — 未初始化时的行为一致性', () => {
   })
 
   it('close 后再访问 llm 功能返回 NOT_INITIALIZED', async () => {
-    ai.init({ llm: { apiKey: 'sk-test' } })
+    await ai.init({ llm: { apiKey: 'sk-test' } })
     ai.close()
 
     const result = await ai.llm.chat({
@@ -435,7 +435,7 @@ describe('ai — 未初始化时的行为一致性', () => {
   })
 
   it('close 后再访问 mcp 功能返回 NOT_INITIALIZED', async () => {
-    ai.init()
+    await ai.init()
     ai.close()
 
     const result = await ai.mcp.callTool('any', {})
@@ -447,7 +447,7 @@ describe('ai — 未初始化时的行为一致性', () => {
 
   it('反复 init/close 不会泄漏状态', async () => {
     // 第一轮
-    ai.init()
+    await ai.init()
     ai.mcp.registerTool(
       { name: 'first', description: 'test', inputSchema: {} },
       async () => 'first',
@@ -455,7 +455,7 @@ describe('ai — 未初始化时的行为一致性', () => {
     ai.close()
 
     // 第二轮：之前注册的工具不应存在
-    ai.init()
+    await ai.init()
     const result = await ai.mcp.callTool('first', {})
     expect(result.success).toBe(false)
     if (!result.success) {
