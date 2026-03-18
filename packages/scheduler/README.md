@@ -2,6 +2,11 @@
 
 定时任务调度模块，支持 cron 表达式、JS 函数 / HTTP API 执行，以及通过 `@h-ai/reldb` 持久化执行日志和任务定义。
 
+## 依赖
+
+- `@h-ai/reldb` — 数据库（任务定义与执行日志持久化），**需在 scheduler.init() 前初始化**（enableDb: true 时必需）
+- `@h-ai/cache` — 缓存（分布式锁），可选；已初始化时自动启用分布式锁
+
 ## 支持的任务类型
 
 - **JS 函数任务**：执行用户提供的 JS/TS 处理函数（仅存在于内存，不可持久化）
@@ -10,13 +15,15 @@
 ## 快速开始
 
 ```ts
+import { cache } from '@h-ai/cache'
 import { reldb } from '@h-ai/reldb'
 import { scheduler } from '@h-ai/scheduler'
 
-// 初始化 DB（用于持久化任务定义和执行日志）
+// 1. 初始化依赖
 await reldb.init({ type: 'sqlite', database: './scheduler.db' })
+await cache.init({ type: 'memory' }) // 可选，启用分布式锁
 
-// 初始化调度器（自动加载之前持久化的 API 任务）
+// 2. 初始化调度器（自动使用已初始化的 reldb 单例，自动加载之前持久化的 API 任务）
 await scheduler.init({ enableDb: true })
 
 // 也可以在初始化时传入预定义任务（DB 中已有同 ID 的不会被覆盖）

@@ -2,6 +2,11 @@
 
 用户触达模块，支持同时注册多个 Provider（邮件、短信、API 回调等），通过模板绑定 Provider 实现按场景路由发送。内置免打扰（DND）机制，支持通过配置文件定义模板。
 
+## 依赖
+
+- `@h-ai/reldb` — 数据库（发送日志与模板持久化），可选；已初始化时自动启用持久化
+- `@h-ai/cache` — 缓存（DND delay 策略分布式锁），可选；已初始化时自动启用分布式锁
+
 ## 支持的 Provider
 
 | Provider     | 渠道 | 说明                                        |
@@ -24,9 +29,15 @@ pnpm add @h-ai/reach
 ### 多 Provider 初始化
 
 ```ts
+import { cache } from '@h-ai/cache'
 import { reach } from '@h-ai/reach'
+import { reldb } from '@h-ai/reldb'
 
-// 同时注册邮件和短信 Provider，并通过配置定义模板和 DND
+// 1. 初始化可选依赖（按需）
+await reldb.init({ type: 'sqlite', database: './data.db' }) // 可选，启用发送日志与模板持久化
+await cache.init({ type: 'memory' }) // 可选，启用 DND delay 策略分布式锁
+
+// 2. 初始化触达模块（自动检测已初始化的 reldb/cache 单例）
 await reach.init({
   providers: [
     { name: 'email', type: 'smtp', host: 'smtp.example.com', from: 'noreply@example.com' },

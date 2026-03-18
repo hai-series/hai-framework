@@ -2,6 +2,10 @@
 
 统一审计日志模块，通过 `audit` 对象提供审计日志的记录、查询、清理与统计功能，基于 `@h-ai/reldb` 实现持久化。
 
+## 依赖
+
+- `@h-ai/reldb` — 数据库（审计日志持久化），**需在 audit.init() 前初始化**
+
 ## 适用场景
 
 - 用户操作审计（登录、登出、注册、密码重置等）
@@ -15,10 +19,10 @@
 import { audit } from '@h-ai/audit'
 import { reldb } from '@h-ai/reldb'
 
-// 1. 初始化数据库
+// 1. 初始化依赖
 await reldb.init({ type: 'sqlite', database: './data.db' })
 
-// 2. 初始化审计模块
+// 2. 初始化审计模块（自动使用已初始化的 reldb 单例）
 const result = await audit.init()
 if (!result.success) {
   throw new Error(result.error.message)
