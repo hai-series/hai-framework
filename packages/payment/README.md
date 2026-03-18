@@ -10,6 +10,10 @@
 | 支付宝   | JSAPI / H5 / App / Native        |
 | Stripe   | Checkout Session（国际支付）     |
 
+## 依赖
+
+- `@h-ai/audit` — 审计日志（支付操作自动审计），可选；已初始化时自动写入审计日志
+
 ## 快速开始
 
 ### Node.js 服务端
