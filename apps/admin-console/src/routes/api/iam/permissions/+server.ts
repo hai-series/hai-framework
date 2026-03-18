@@ -7,7 +7,6 @@
 import * as m from '$lib/paraglide/messages.js'
 import { CreatePermissionSchema, ListPermissionsQuerySchema } from '$lib/server/schemas/index.js'
 import { permissionService } from '$lib/server/services/index.js'
-import { audit } from '@h-ai/audit'
 import { kit } from '@h-ai/kit'
 
 /**
@@ -29,7 +28,7 @@ export const GET = kit.handler(async ({ url, locals }) => {
  *
  * 需要权限：permission:api:create
  */
-export const POST = kit.handler(async ({ request, locals, getClientAddress }) => {
+export const POST = kit.handler(async ({ request, locals }) => {
   kit.guard.require(locals.session, 'permission:api:create')
 
   const { name, description, resource, action, type } = await kit.validate.body(request, CreatePermissionSchema)
@@ -43,7 +42,7 @@ export const POST = kit.handler(async ({ request, locals, getClientAddress }) =>
     return kit.response.conflict(m.api_iam_permissions_name_exists())
   }
 
-  // 创建权限
+  // 创建权限（IAM authz 内部已记录审计日志）
   const createResult = await permissionService.create({
     code,
     name,
@@ -57,20 +56,5 @@ export const POST = kit.handler(async ({ request, locals, getClientAddress }) =>
     return kit.response.badRequest(createResult.error.message)
   }
 
-  const permission = createResult.data
-
-  // 记录审计日志
-  const ip = getClientAddress()
-  const ua = request.headers.get('user-agent') ?? undefined
-  await audit.helper.crud({
-    userId: locals.session!.userId,
-    action: 'create',
-    resource: 'permission',
-    resourceId: permission.id,
-    details: { name, resource, action, type },
-    ip,
-    ua,
-  })
-
-  return kit.response.ok(permission)
+  return kit.response.ok(createResult.data)
 })

@@ -7,7 +7,6 @@
 import * as m from '$lib/paraglide/messages.js'
 import { IdParamSchema } from '$lib/server/schemas/index.js'
 import { permissionService } from '$lib/server/services/index.js'
-import { audit } from '@h-ai/audit'
 import { kit } from '@h-ai/kit'
 
 /**
@@ -15,7 +14,7 @@ import { kit } from '@h-ai/kit'
  *
  * 需要权限：permission:api:delete
  */
-export const DELETE = kit.handler(async ({ params, locals, request, getClientAddress }) => {
+export const DELETE = kit.handler(async ({ params, locals }) => {
   kit.guard.require(locals.session, 'permission:api:delete')
 
   const { id: permId } = kit.validate.params(params, IdParamSchema)
@@ -31,21 +30,8 @@ export const DELETE = kit.handler(async ({ params, locals, request, getClientAdd
     return kit.response.badRequest(m.api_iam_permissions_system_cannot_delete())
   }
 
-  // 删除权限
+  // 删除权限（IAM authz 内部已记录审计日志）
   await permissionService.delete(permId)
-
-  // 记录审计日志
-  const ip = getClientAddress()
-  const ua = request.headers.get('user-agent') ?? undefined
-  await audit.helper.crud({
-    userId: locals.session!.userId,
-    action: 'delete',
-    resource: 'permission',
-    resourceId: permId,
-    details: { name: existing.name },
-    ip,
-    ua,
-  })
 
   return kit.response.ok(null)
 })

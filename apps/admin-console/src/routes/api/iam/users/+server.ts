@@ -86,9 +86,7 @@ export const POST = kit.handler(async ({ request, locals, getClientAddress }) =>
   // 分配角色（iam.user.register 已分配 config.rbac.defaultRole）
   // 管理员创建时额外分配指定角色
   if (roles?.length) {
-    for (const roleId of roles) {
-      await iam.authz.assignRole(user.id, roleId)
-    }
+    await iam.authz.syncRoles(user.id, roles)
   }
 
   // 审计日志 + 用户信息并行获取
