@@ -1,6 +1,6 @@
 ---
 name: hai-usage-ai
-description: "Use when: using @h-ai/ai, LLM calls, chat completion, tool calling, function calling, MCP server, streaming, memory management, context compression, summarization, token estimation, RAG, knowledge base, AI client, embeddings. 使用 @h-ai/ai 进行 LLM 调用、工具定义、MCP 服务器、流式处理、记忆管理、上下文压缩与会话持久化。"
+description: "Use when: using @h-ai/ai, LLM calls, chat completion, tool calling, function calling, MCP server, streaming, memory management, context compression, summarization, token estimation, RAG, knowledge base, AI client, embeddings, reasoning, rerank, file parsing, A2A agent-to-agent. 使用 @h-ai/ai 进行 LLM 调用、工具定义、MCP 服务器、流式处理、记忆管理、上下文压缩、知识库、推理引擎、Rerank、文件解析、A2A 与会话持久化。"
 ---
 
 # hai-usage-ai — AI 能力指南
@@ -22,16 +22,34 @@ llm:
   maxTokens: ${HAI_AI_MAX_TOKENS:4096}
   temperature: 0.7
   timeout: 60000
-
-store:
-  mode: memory  # memory | persistent（需 reldb + vecdb）
+  # 多模型场景映射
+  scenarios:
+    default: fast
+    chat: fast
+    reasoning: strong
+    embedding: embed
+    summary: fast
+    extraction: fast
+    rerank: fast
+    ocr: strong
 
 memory:
   maxEntries: 1000
-  extractModel: gpt-4o-mini
   recencyDecay: 0.95
   embeddingEnabled: true
   defaultTopK: 10
+
+embedding:
+  dimensions: 1536
+  batchSize: 100
+
+knowledge:
+  collection: hai_ai_knowledge
+  dimension: 1536
+  enableEntityExtraction: true
+  chunkMode: markdown  # sentence | paragraph | markdown | page
+  chunkMaxSize: 1500
+  chunkOverlap: 200
 
 token:
   tokenRatio: 0.25  # 4 字符 ≈ 1 token
@@ -40,6 +58,9 @@ compress:
   defaultStrategy: hybrid  # summary | sliding-window | hybrid
   defaultMaxTokens: 0      # 0 = 模型 maxTokens 的 80%
   preserveLastN: 4
+
+file:
+  systemPrompt: ''  # 可选，覆盖内置解析提示词
 ```
 
 ### 初始化
@@ -62,7 +83,11 @@ ai.close()
 |------|------|------|
 | `chat` | `(options) => Promise<Result<ChatCompletionResponse>>` | 非流式对话 |
 | `chatStream` | `(options) => AsyncIterable<ChatCompletionChunk>` | 流式对话 |
+| `ask` | `(query, options?) => Promise<Result<string>>` | 简易问答（返回纯文本） |
+| `askStream` | `(query, options?) => AsyncIterable<string>` | 流式简易问答 |
 | `listModels` | `() => Promise<Result<string[]>>` | 可用模型列表 |
+| `getHistory` | `(scope: InteractionScope, options?) => Promise<Result<ChatRecord[]>>` | 获取对话历史 |
+| `listSessions` | `(objectId) => Promise<Result<SessionInfo[]>>` | 列出对象的所有会话 |
 
 ```typescript
 // 非流式
@@ -187,8 +212,9 @@ await mcp.connect(transport)
 | 方法 | 签名 | 说明 |
 |------|------|------|
 | `extract` | `(messages, options?) => Promise<Result<MemoryEntry[]>>` | 自动提取记忆 |
-| `add` | `(entry) => Promise<Result<MemoryEntry>>` | 手动添加 |
-| `get` | `(memoryId) => Promise<Result<MemoryEntry>>` | 获取 |
+| `add` | `(entry: MemoryEntryInput) => Promise<Result<MemoryEntry>>` | 手动添加记忆 |
+| `get` | `(memoryId: string) => Promise<Result<MemoryEntry>>` | 按 ID 获取记忆 |
+| `update` | `(memoryId, updates) => Promise<Result<MemoryEntry>>` | 更新记忆条目 |
 | `recall` | `(query, options?) => Promise<Result<MemoryEntry[]>>` | 检索相关记忆 |
 | `injectMemories` | `(messages, options?) => Promise<Result<ChatMessage[]>>` | 注入记忆到消息 |
 | `remove` | `(memoryId) => Promise<Result<void>>` | 删除 |
@@ -220,12 +246,31 @@ if (enriched.success) {
 
 ---
 
-## §7 Token 与摘要
+## §7 向量嵌入 — `ai.embedding`
+
+| 方法 | 签名 | 说明 |
+|------|------|------|
+| `embed` | `(request: EmbeddingRequest) => Promise<Result<EmbeddingResponse>>` | 通用嵌入（支持单条/批量） |
+| `embedText` | `(text: string) => Promise<Result<number[]>>` | 单文本嵌入（返回向量） |
+| `embedBatch` | `(texts: string[]) => Promise<Result<number[][]>>` | 批量文本嵌入 |
+
+```typescript
+const vector = await ai.embedding.embedText('你好世界')
+if (vector.success) {
+  // vector.data — number[] (1536 维)
+}
+
+const vectors = await ai.embedding.embedBatch(['文本1', '文本2'])
+```
+
+---
+
+## §8 Token 与摘要
 
 ### Token 估算 — `ai.token`
 
 ```typescript
-const tokens = ai.token.estimateMessages(messages)  // Result<number>
+const tokens = ai.token.estimateMessages(messages)  // number
 const count = ai.token.estimateText('Hello world')   // number
 ```
 
@@ -233,12 +278,12 @@ const count = ai.token.estimateText('Hello world')   // number
 
 ```typescript
 const result = await ai.summary.summarize(messages, { /* options */ })
-const textResult = await ai.summary.generate(text, { /* options */ })
+const textResult = await ai.summary.generate(messages, { /* options */ })
 ```
 
 ---
 
-## §8 上下文压缩 — `ai.compress`
+## §9 上下文压缩 — `ai.compress`
 
 ```typescript
 const result = await ai.compress.tryCompress(messages, {
@@ -255,7 +300,181 @@ if (result.success) {
 
 ---
 
-## §9 上下文管理器 — `ai.context`
+## §10 检索与 RAG
+
+### Retrieval — `ai.retrieval`
+
+| 方法 | 签名 | 说明 |
+|------|------|------|
+| `addSource` | `(source: RetrievalSource) => Result<void>` | 注册检索源（vecdb collection） |
+| `removeSource` | `(sourceId: string) => Result<void>` | 移除检索源 |
+| `listSources` | `() => RetrievalSource[]` | 列出已注册检索源 |
+| `retrieve` | `(request: RetrievalRequest) => Promise<Result<RetrievalResult>>` | 多源检索 |
+
+### RAG — `ai.rag`
+
+| 方法 | 签名 | 说明 |
+|------|------|------|
+| `query` | `(query, options?) => Promise<Result<RagResult>>` | RAG 问答（检索 + LLM 生成） |
+
+```typescript
+// 注册检索源
+ai.retrieval.addSource({
+  id: 'docs',
+  collection: 'doc_vectors',
+  name: '产品文档',
+  topK: 5,
+  minScore: 0.7,
+})
+
+// RAG 问答
+const result = await ai.rag.query('核心架构是什么？', {
+  sources: ['docs'],
+  topK: 5,
+})
+if (result.success) {
+  // result.data.answer — LLM 生成的回答
+  // result.data.citations — 信源引用列表
+}
+```
+
+---
+
+## §11 知识库 — `ai.knowledge`
+
+| 方法 | 签名 | 说明 |
+|------|------|------|
+| `setup` | `(options?) => Promise<Result<void>>` | 初始化知识库（创建 vecdb 集合 + reldb 表） |
+| `ingest` | `(input: KnowledgeIngestInput) => Promise<Result<KnowledgeIngestResult>>` | 文档入库 |
+| `ingestFile` | `(input: KnowledgeIngestFileInput) => Promise<Result<KnowledgeIngestResult>>` | 从文件路径导入（Node.js） |
+| `ingestBatch` | `(inputs, onProgress?) => Promise<Result<KnowledgeIngestBatchResult>>` | 批量导入 |
+| `retrieve` | `(query, options?) => Promise<Result<KnowledgeRetrieveResult>>` | 知识检索（实体增强） |
+| `ask` | `(query, options?) => Promise<Result<KnowledgeAskResult>>` | 知识问答（RAG + 信源引用） |
+| `findByEntity` | `(entityName, options?) => Promise<Result<EntityDocumentResult[]>>` | 按实体查询关联文档 |
+| `listEntities` | `(options?) => Promise<Result<KnowledgeEntity[]>>` | 列出实体 |
+| `listDocuments` | `(options?) => Promise<Result<KnowledgeDocumentInfo[]>>` | 列出已导入文档 |
+| `removeDocument` | `(documentId, options?) => Promise<Result<void>>` | 删除文档 |
+
+```typescript
+await ai.knowledge.setup()
+
+await ai.knowledge.ingest({
+  documentId: 'doc-001',
+  content: markdownText,
+  title: '产品手册',
+  enableEntityExtraction: true,
+})
+
+const answer = await ai.knowledge.ask('核心架构是什么？')
+if (answer.success) {
+  // answer.data.answer + answer.data.citations
+}
+```
+
+---
+
+## §12 推理 — `ai.reasoning`
+
+| 方法 | 签名 | 说明 |
+|------|------|------|
+| `run` | `(query, options?) => Promise<Result<ReasoningResult>>` | 执行推理 |
+| `runStream` | `(query, options?) => AsyncIterable<ReasoningStreamEvent>` | 流式推理 |
+
+**策略**：`react`（默认，ReAct 循环）、`cot`（Chain-of-Thought）、`plan-execute`（规划执行）
+
+```typescript
+const result = await ai.reasoning.run('分析竞争对手定价策略', {
+  strategy: 'react',
+  tools: registry,
+  maxRounds: 10,
+})
+if (result.success) {
+  // result.data.answer — 最终答案
+  // result.data.steps — 推理步骤（thought/action/observation/answer）
+  // result.data.rounds — 实际轮次
+}
+
+// 流式
+for await (const event of ai.reasoning.runStream('任务', { strategy: 'cot' })) {
+  if (event.type === 'step') console.log(event.step)
+  if (event.type === 'delta') process.stdout.write(event.text)
+}
+```
+
+---
+
+## §13 Rerank 与 File
+
+### Rerank — `ai.rerank`
+
+| 方法 | 签名 | 说明 |
+|------|------|------|
+| `rerank` | `(request: RerankRequest) => Promise<Result<RerankResponse>>` | 通用重排序 |
+| `rerankTexts` | `(query, texts, topN?) => Promise<Result<RerankItem[]>>` | 快捷文本重排序 |
+
+```typescript
+const result = await ai.rerank.rerankTexts('机器学习', [
+  '深度学习是机器学习的子领域',
+  '今天天气很好',
+  'GPU 加速训练模型',
+], 2)
+// result.data — [{ index, relevanceScore, document? }]
+```
+
+### File — `ai.file`
+
+| 方法 | 签名 | 说明 |
+|------|------|------|
+| `parse` | `(request: FileParseRequest) => Promise<Result<FileParseResult>>` | 解析文件（支持 text/html/pdf/docx/ocr） |
+| `parseText` | `(content, filename?) => Promise<Result<string>>` | 快捷解析（直接返回文本） |
+
+```typescript
+const result = await ai.file.parse({
+  content: pdfBuffer,
+  filename: 'report.pdf',
+  options: { useOcr: false, outputFormat: 'markdown' },
+})
+if (result.success) {
+  // result.data.text — 解析后文本
+  // result.data.method — 使用的解析方式（text/html/pdf/docx/ocr）
+}
+```
+
+---
+
+## §14 A2A（Agent-to-Agent）— `ai.a2a`
+
+| 方法 | 签名 | 说明 |
+|------|------|------|
+| `registerExecutor` | `(executor: AgentExecutor) => Result<void>` | 注册代理执行器 |
+| `getAgentCard` | `() => Result<A2AAgentCardConfig>` | 获取 Agent Card |
+| `handleRequest` | `(body, context?) => Promise<A2AHandleResult>` | 处理 A2A 协议请求 |
+| `listMessages` | `(filter) => Promise<Result<StorePage<A2AMessageRecord>>>` | 查询消息记录 |
+| `callRemoteAgent` | `(remoteUrl, message, options?) => Promise<Result<A2ACallResult>>` | 调用远端代理 |
+
+```typescript
+// 注册执行器
+ai.a2a.registerExecutor(myAgentExecutor)
+
+// 在 SvelteKit API 端点处理请求
+const result = await ai.a2a.handleRequest(requestBody)
+if (result.streaming) {
+  // result.stream — AsyncGenerator
+} else {
+  // result.body — JSON 响应
+}
+
+// 调用远端代理
+const callResult = await ai.a2a.callRemoteAgent(
+  'https://remote-agent.example.com',
+  '帮我分析这份报告',
+  { timeout: 30000 },
+)
+```
+
+---
+
+## §15 上下文管理器 — `ai.context`
 
 | 方法 | 签名 | 说明 |
 |------|------|------|
@@ -303,7 +522,7 @@ const restored = await ai.context.restoreManager(
 
 ---
 
-## §10 前端客户端
+## §16 前端客户端
 
 ```typescript
 import { api } from '@h-ai/api-client'
@@ -325,46 +544,92 @@ const sessions = await client.listSessions('user-001')
 
 ---
 
-## §11 错误码 — `AIErrorCode`
+## §17 错误码 — `AIErrorCode`
 
 | 错误码 | 说明 |
 |--------|------|
+| **通用** | |
 | `INTERNAL_ERROR` (12000) | 内部错误 |
+| **初始化** | |
 | `NOT_INITIALIZED` (12010) | 未初始化 |
 | `CONFIGURATION_ERROR` (12011) | 配置错误 |
+| `INIT_IN_PROGRESS` (12012) | 初始化正在进行中 |
+| **Rerank** | |
+| `RERANK_API_ERROR` (12020) | Rerank API 调用错误 |
+| `RERANK_INVALID_REQUEST` (12021) | Rerank 请求参数无效 |
+| **File** | |
+| `FILE_PARSE_FAILED` (12030) | 文件解析失败 |
+| `FILE_UNSUPPORTED_FORMAT` (12031) | 不支持的文件格式 |
+| `FILE_OCR_FAILED` (12032) | OCR 识别失败 |
+| `FILE_INVALID_CONTENT` (12033) | 文件内容无效 |
+| **LLM** | |
 | `API_ERROR` (12100) | API 调用错误 |
 | `INVALID_REQUEST` (12101) | 无效请求 |
 | `RATE_LIMITED` (12102) | 速率限制 |
 | `TIMEOUT` (12103) | 超时 |
 | `MODEL_NOT_FOUND` (12104) | 模型未找到 |
 | `CONTEXT_LENGTH_EXCEEDED` (12105) | 上下文超限 |
+| `LLM_RECORD_FAILED` (12106) | 对话记录保存失败 |
+| `LLM_HISTORY_FAILED` (12107) | 对话历史查询失败 |
+| **MCP** | |
 | `MCP_CONNECTION_ERROR` (12200) | MCP 连接错误 |
 | `MCP_PROTOCOL_ERROR` (12201) | MCP 协议错误 |
 | `MCP_TOOL_ERROR` (12202) | MCP 工具错误 |
 | `MCP_RESOURCE_ERROR` (12203) | MCP 资源错误 |
 | `MCP_SERVER_ERROR` (12204) | MCP 服务器错误 |
-| `EMBEDDING_API_ERROR` (12300) | Embedding 错误 |
+| **Embedding** | |
+| `EMBEDDING_API_ERROR` (12300) | Embedding 调用错误 |
+| `EMBEDDING_MODEL_NOT_FOUND` (12301) | Embedding 模型未找到 |
+| `EMBEDDING_INPUT_TOO_LONG` (12302) | Embedding 输入过长 |
+| **工具** | |
 | `TOOL_NOT_FOUND` (12400) | 工具未找到 |
 | `TOOL_VALIDATION_FAILED` (12401) | 工具验证失败 |
 | `TOOL_EXECUTION_FAILED` (12402) | 工具执行失败 |
+| `TOOL_TIMEOUT` (12403) | 工具超时 |
+| **Reasoning** | |
 | `REASONING_FAILED` (12500) | 推理失败 |
+| `REASONING_MAX_ROUNDS` (12501) | 推理轮次超限 |
+| `REASONING_STRATEGY_NOT_FOUND` (12502) | 推理策略未找到 |
+| **Retrieval** | |
 | `RETRIEVAL_FAILED` (12600) | 检索失败 |
+| `RETRIEVAL_SOURCE_NOT_FOUND` (12601) | 检索源未配置 |
+| **RAG** | |
 | `RAG_FAILED` (12700) | RAG 失败 |
+| `RAG_CONTEXT_BUILD_FAILED` (12701) | RAG 上下文构建失败 |
+| **Knowledge** | |
 | `KNOWLEDGE_SETUP_FAILED` (12800) | 知识库初始化失败 |
 | `KNOWLEDGE_INGEST_FAILED` (12801) | 知识入库失败 |
 | `KNOWLEDGE_RETRIEVE_FAILED` (12802) | 知识检索失败 |
+| `KNOWLEDGE_ENTITY_EXTRACT_FAILED` (12803) | 实体提取失败 |
+| `KNOWLEDGE_NOT_SETUP` (12804) | 知识库未初始化 |
+| `KNOWLEDGE_COLLECTION_NOT_FOUND` (12805) | 集合不存在 |
+| **Memory** | |
 | `MEMORY_EXTRACT_FAILED` (12900) | 记忆提取失败 |
 | `MEMORY_STORE_FAILED` (12901) | 记忆存储失败 |
 | `MEMORY_RECALL_FAILED` (12902) | 记忆召回失败 |
-| `MEMORY_INJECT_FAILED` (12904) | 记忆注入失败 |
+| `MEMORY_NOT_FOUND` (12903) | 记忆不存在 |
+| `MEMORY_ENRICH_FAILED` (12904) | 记忆注入失败 |
+| **Context** | |
 | `CONTEXT_COMPRESS_FAILED` (12950) | 压缩失败 |
 | `CONTEXT_SUMMARIZE_FAILED` (12951) | 摘要失败 |
-| `STORE_FAILED` (13000) | 存储失败 |
-| `SESSION_NOT_FOUND` (13050) | 会话不存在 |
+| `CONTEXT_TOKEN_ESTIMATE_FAILED` (12952) | Token 估算失败 |
+| `CONTEXT_BUDGET_EXCEEDED` (12953) | 超出 Token 预算 |
+| **Store** | |
+| `STORE_FAILED` (12960) | 存储操作失败 |
+| `STORE_NOT_AVAILABLE` (12961) | 存储后端不可用 |
+| **Session** | |
+| `SESSION_NOT_FOUND` (12970) | 会话未找到 |
+| `SESSION_FAILED` (12971) | 会话操作失败 |
+| **A2A** | |
+| `A2A_NOT_CONFIGURED` (12980) | A2A 服务未配置 |
+| `A2A_HANDLE_FAILED` (12981) | A2A 请求处理失败 |
+| `A2A_REMOTE_CALL_FAILED` (12982) | A2A 远端调用失败 |
+| `A2A_AUTH_FAILED` (12983) | A2A 认证失败 |
+| `A2A_LIST_MESSAGES_FAILED` (12984) | A2A 消息查询失败 |
 
 ---
 
-## §12 常见模式
+## §18 常见模式
 
 ### 带工具的对话循环
 
@@ -455,3 +720,9 @@ export const POST = kit.handler(async ({ request }) => {
 - "实现记忆增强对话"
 - "使用上下文管理器"
 - "流式输出"
+- "知识库入库与问答"
+- "实现 RAG 检索"
+- "使用推理引擎"
+- "Rerank 重排序"
+- "解析文件"
+- "接入 A2A 协议"
