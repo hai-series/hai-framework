@@ -8,7 +8,7 @@ describe('debug init', () => {
     await reldb.init({ type: 'sqlite', database: ':memory:' })
     await cache.init({ type: 'memory' })
 
-    const result = await iam.init({ db: reldb, cache })
+    const result = await iam.init({})
     if (!result.success) {
       console.error('INIT FAILED:', JSON.stringify(result.error, null, 2))
     }

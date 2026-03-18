@@ -175,8 +175,8 @@ export async function fullIntegrationEnv(): Promise<IamTestEnv & { ldapLease: Ld
 // 测试套件定义
 // =============================================================================
 
-/** 测试用的 IAM 设置类型（包含 settings + 运行时依赖，不含 db/cache） */
-type IamTestSettings = Omit<IamConfigInput, 'db' | 'cache'>
+/** 测试用的 IAM 设置类型 */
+type IamTestSettings = IamConfigInput
 
 /**
  * 定义 IAM 测试套件
@@ -202,7 +202,7 @@ export function defineIamSuite(
 
       const resolvedSettings = typeof iamSettings === 'function' ? iamSettings() : (iamSettings ?? {})
 
-      const result = await iam.init({ db: reldb, cache, ...resolvedSettings } as IamConfigInput)
+      const result = await iam.init(resolvedSettings)
       if (!result.success) {
         throw new Error(`IAM init failed in "${label}": ${JSON.stringify(result.error)}`)
       }
@@ -257,9 +257,9 @@ export function defineIamEnvSuite(
  * db / cache 需已初始化。用于需要不同配置的子场景。
  * 注意：会重置当前 IAM 状态。
  */
-export async function initIam(settings?: Omit<IamConfigInput, 'db' | 'cache'>): Promise<IamFunctions> {
+export async function initIam(settings?: IamConfigInput): Promise<IamFunctions> {
   await iam.close()
-  const result = await iam.init({ db: reldb, cache, ...(settings ?? {}) } as IamConfigInput)
+  const result = await iam.init(settings ?? {})
   if (!result.success) {
     throw new Error(`IAM init failed: ${JSON.stringify(result.error)}`)
   }

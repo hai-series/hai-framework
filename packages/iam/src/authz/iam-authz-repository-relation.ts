@@ -6,11 +6,12 @@
  */
 
 import type { Result } from '@h-ai/core'
-import type { DmlWithTxOperations, ReldbFunctions } from '@h-ai/reldb'
+import type { DmlWithTxOperations } from '@h-ai/reldb'
 import type { IamError } from '../iam-types.js'
 import type { RoleRepository } from './iam-authz-repository-role.js'
 import type { Permission, Role } from './iam-authz-types.js'
 import { err, ok } from '@h-ai/core'
+import { reldb } from '@h-ai/reldb'
 import { IamErrorCode } from '../iam-config.js'
 import { iamM } from '../iam-i18n.js'
 
@@ -143,15 +144,12 @@ const ROLE_PERMISSION_SCHEMA = {
  *
  * 自动创建关联表和索引，提供分配/移除/查询权限能力。
  *
- * @param db - 数据库服务实例
  * @returns 角色-权限关联存储接口实现（失败返回 IamError）
  */
-export async function createDbRolePermissionRepository(
-  db: ReldbFunctions,
-): Promise<Result<RolePermissionRepository, IamError>> {
+export async function createDbRolePermissionRepository(): Promise<Result<RolePermissionRepository, IamError>> {
   // 确保表存在
   async function ensureTable(): Promise<Result<void, IamError>> {
-    const result = await db.ddl.createTable(ROLE_PERMISSION_TABLE, ROLE_PERMISSION_SCHEMA, true)
+    const result = await reldb.ddl.createTable(ROLE_PERMISSION_TABLE, ROLE_PERMISSION_SCHEMA, true)
     if (!result.success) {
       return err({
         code: IamErrorCode.REPOSITORY_ERROR,
@@ -161,8 +159,8 @@ export async function createDbRolePermissionRepository(
     }
 
     const indexResults = await Promise.all([
-      db.ddl.createIndex(ROLE_PERMISSION_TABLE, 'idx_role_perm_role_perm', { columns: ['role_id', 'permission_id'], unique: true }),
-      db.ddl.createIndex(ROLE_PERMISSION_TABLE, 'idx_role_perm_role', { columns: ['role_id'] }),
+      reldb.ddl.createIndex(ROLE_PERMISSION_TABLE, 'idx_role_perm_role_perm', { columns: ['role_id', 'permission_id'], unique: true }),
+      reldb.ddl.createIndex(ROLE_PERMISSION_TABLE, 'idx_role_perm_role', { columns: ['role_id'] }),
     ])
     for (const indexResult of indexResults) {
       if (!indexResult.success) {
@@ -194,7 +192,7 @@ export async function createDbRolePermissionRepository(
    * @returns 权限 ID 数组
    */
   async function getPermissionIdsInternal(roleId: string, tx?: DmlWithTxOperations): Promise<Result<string[], IamError>> {
-    const runner = tx ?? db.sql
+    const runner = tx ?? reldb.sql
     const result = await runner.query<{ permission_id: string }>(
       `SELECT permission_id FROM ${ROLE_PERMISSION_TABLE} WHERE role_id = ?`,
       [roleId],
@@ -213,7 +211,7 @@ export async function createDbRolePermissionRepository(
 
   return ok({
     async assign(roleId: string, permissionId: string, tx?: DmlWithTxOperations): Promise<Result<void, IamError>> {
-      const runner = tx ?? db.sql
+      const runner = tx ?? reldb.sql
       const result = await runner.execute(
         `INSERT INTO ${ROLE_PERMISSION_TABLE} (role_id, permission_id) VALUES (?, ?) ON CONFLICT DO NOTHING`,
         [roleId, permissionId],
@@ -231,7 +229,7 @@ export async function createDbRolePermissionRepository(
     },
 
     async remove(roleId: string, permissionId: string, tx?: DmlWithTxOperations): Promise<Result<void, IamError>> {
-      const runner = tx ?? db.sql
+      const runner = tx ?? reldb.sql
       const result = await runner.execute(
         `DELETE FROM ${ROLE_PERMISSION_TABLE} WHERE role_id = ? AND permission_id = ?`,
         [roleId, permissionId],
@@ -258,7 +256,7 @@ export async function createDbRolePermissionRepository(
       }
 
       const placeholders = idsResult.data.map(() => '?').join(', ')
-      const result = await db.sql.query<Record<string, unknown>>(
+      const result = await reldb.sql.query<Record<string, unknown>>(
         `SELECT * FROM ${PERMISSION_TABLE} WHERE id IN (${placeholders})`,
         idsResult.data,
       )
@@ -279,7 +277,7 @@ export async function createDbRolePermissionRepository(
       }
 
       const placeholders = roleIds.map(() => '?').join(', ')
-      const result = await db.sql.query<{ code: string }>(
+      const result = await reldb.sql.query<{ code: string }>(
         `SELECT DISTINCT p.code FROM ${ROLE_PERMISSION_TABLE} rp JOIN ${PERMISSION_TABLE} p ON rp.permission_id = p.id WHERE rp.role_id IN (${placeholders})`,
         roleIds,
       )
@@ -295,7 +293,7 @@ export async function createDbRolePermissionRepository(
     },
 
     async removeByRoleId(roleId: string, tx?: DmlWithTxOperations): Promise<Result<void, IamError>> {
-      const runner = tx ?? db.sql
+      const runner = tx ?? reldb.sql
       const result = await runner.execute(
         `DELETE FROM ${ROLE_PERMISSION_TABLE} WHERE role_id = ?`,
         [roleId],
@@ -311,7 +309,7 @@ export async function createDbRolePermissionRepository(
     },
 
     async removeByPermissionId(permissionId: string, tx?: DmlWithTxOperations): Promise<Result<void, IamError>> {
-      const runner = tx ?? db.sql
+      const runner = tx ?? reldb.sql
       const result = await runner.execute(
         `DELETE FROM ${ROLE_PERMISSION_TABLE} WHERE permission_id = ?`,
         [permissionId],
@@ -327,7 +325,7 @@ export async function createDbRolePermissionRepository(
     },
 
     async getRoleIdsByPermissionId(permissionId: string): Promise<Result<string[], IamError>> {
-      const result = await db.sql.query<{ role_id: string }>(
+      const result = await reldb.sql.query<{ role_id: string }>(
         `SELECT role_id FROM ${ROLE_PERMISSION_TABLE} WHERE permission_id = ?`,
         [permissionId],
       )
@@ -348,7 +346,7 @@ export async function createDbRolePermissionRepository(
       }
 
       const placeholders = roleIds.map(() => '?').join(', ')
-      const relationsResult = await db.sql.query<{ role_id: string, permission_id: string }>(
+      const relationsResult = await reldb.sql.query<{ role_id: string, permission_id: string }>(
         `SELECT role_id, permission_id FROM ${ROLE_PERMISSION_TABLE} WHERE role_id IN (${placeholders})`,
         roleIds,
       )
@@ -370,7 +368,7 @@ export async function createDbRolePermissionRepository(
 
       const uniquePermIds = [...new Set(relationsResult.data.map(r => r.permission_id))]
       const permPlaceholders = uniquePermIds.map(() => '?').join(', ')
-      const permsResult = await db.sql.query<Record<string, unknown>>(
+      const permsResult = await reldb.sql.query<Record<string, unknown>>(
         `SELECT * FROM ${PERMISSION_TABLE} WHERE id IN (${permPlaceholders})`,
         uniquePermIds,
       )
@@ -413,12 +411,10 @@ const USER_ROLE_SCHEMA = {
  * 自动创建关联表和索引，提供分配/移除/查询角色能力。
  * 会话同步由上层（authz functions）通过 SessionOperations 完成。
  *
- * @param db - 数据库服务实例
  * @param roleRepository - 角色存储（用于查询角色详情）
  * @returns 用户-角色关联存储接口实现（失败返回 IamError）
  */
 export async function createDbUserRoleRepository(
-  db: ReldbFunctions,
   roleRepository: RoleRepository,
 ): Promise<Result<UserRoleRepository, IamError>> {
   /**
@@ -427,7 +423,7 @@ export async function createDbUserRoleRepository(
    * 创建 `hai_iam_user_roles` 表及唯一约束索引。
    */
   async function ensureTable(): Promise<Result<void, IamError>> {
-    const result = await db.ddl.createTable(USER_ROLE_TABLE, USER_ROLE_SCHEMA, true)
+    const result = await reldb.ddl.createTable(USER_ROLE_TABLE, USER_ROLE_SCHEMA, true)
     if (!result.success) {
       return err({
         code: IamErrorCode.REPOSITORY_ERROR,
@@ -437,8 +433,8 @@ export async function createDbUserRoleRepository(
     }
 
     const indexResults = await Promise.all([
-      db.ddl.createIndex(USER_ROLE_TABLE, 'idx_user_role_user_role', { columns: ['user_id', 'role_id'], unique: true }),
-      db.ddl.createIndex(USER_ROLE_TABLE, 'idx_user_role_user', { columns: ['user_id'] }),
+      reldb.ddl.createIndex(USER_ROLE_TABLE, 'idx_user_role_user_role', { columns: ['user_id', 'role_id'], unique: true }),
+      reldb.ddl.createIndex(USER_ROLE_TABLE, 'idx_user_role_user', { columns: ['user_id'] }),
     ])
     for (const indexResult of indexResults) {
       if (!indexResult.success) {
@@ -470,7 +466,7 @@ export async function createDbUserRoleRepository(
    * @returns 角色 ID 数组
    */
   async function getRoleIdsInternal(userId: string, tx?: DmlWithTxOperations): Promise<Result<string[], IamError>> {
-    const runner = tx ?? db.sql
+    const runner = tx ?? reldb.sql
     const result = await runner.query<{ role_id: string }>(
       `SELECT role_id FROM ${USER_ROLE_TABLE} WHERE user_id = ?`,
       [userId],
@@ -489,7 +485,7 @@ export async function createDbUserRoleRepository(
 
   return ok({
     async assign(userId: string, roleId: string, tx?: DmlWithTxOperations): Promise<Result<void, IamError>> {
-      const runner = tx ?? db.sql
+      const runner = tx ?? reldb.sql
       const result = await runner.execute(
         `INSERT INTO ${USER_ROLE_TABLE} (user_id, role_id) VALUES (?, ?) ON CONFLICT DO NOTHING`,
         [userId, roleId],
@@ -507,7 +503,7 @@ export async function createDbUserRoleRepository(
     },
 
     async remove(userId: string, roleId: string, tx?: DmlWithTxOperations): Promise<Result<void, IamError>> {
-      const runner = tx ?? db.sql
+      const runner = tx ?? reldb.sql
       const result = await runner.execute(
         `DELETE FROM ${USER_ROLE_TABLE} WHERE user_id = ? AND role_id = ?`,
         [userId, roleId],
@@ -553,7 +549,7 @@ export async function createDbUserRoleRepository(
     },
 
     async removeByRoleId(roleId: string, tx?: DmlWithTxOperations): Promise<Result<string[], IamError>> {
-      const runner = tx ?? db.sql
+      const runner = tx ?? reldb.sql
 
       // 查出受影响的用户 ID
       const usersResult = await runner.query<{ user_id: string }>(
@@ -585,7 +581,7 @@ export async function createDbUserRoleRepository(
     },
 
     async getUserIdsByRoleId(roleId: string): Promise<Result<string[], IamError>> {
-      const result = await db.sql.query<{ user_id: string }>(
+      const result = await reldb.sql.query<{ user_id: string }>(
         `SELECT user_id FROM ${USER_ROLE_TABLE} WHERE role_id = ?`,
         [roleId],
       )
@@ -608,7 +604,7 @@ export async function createDbUserRoleRepository(
 
       // 批量查询所有用户的角色关联
       const placeholders = userIds.map(() => '?').join(', ')
-      const relationsResult = await db.sql.query<{ user_id: string, role_id: string }>(
+      const relationsResult = await reldb.sql.query<{ user_id: string, role_id: string }>(
         `SELECT user_id, role_id FROM ${USER_ROLE_TABLE} WHERE user_id IN (${placeholders})`,
         userIds,
       )

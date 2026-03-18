@@ -6,11 +6,11 @@
  */
 
 import type { Result } from '@h-ai/core'
-import type { DmlWithTxOperations, ReldbCrudFieldDefinition, ReldbCrudRepository, ReldbFunctions } from '@h-ai/reldb'
+import type { DmlWithTxOperations, ReldbCrudFieldDefinition, ReldbCrudRepository } from '@h-ai/reldb'
 import type { IamError } from '../iam-types.js'
 import type { Role } from './iam-authz-types.js'
 import { err, ok } from '@h-ai/core'
-import { BaseReldbCrudRepository } from '@h-ai/reldb'
+import { BaseReldbCrudRepository, reldb } from '@h-ai/reldb'
 import { IamErrorCode } from '../iam-config.js'
 import { iamM } from '../iam-i18n.js'
 
@@ -112,17 +112,16 @@ export function resetRoleRepoSingleton(): void {
  * 单例模式：同一 db 生命周期内重复调用返回缓存实例，
  * db 重新初始化后自动创建新实例。
  *
- * @param db - 数据库服务实例
  * @returns 角色存储接口实现
  */
-export async function createDbRoleRepository(db: ReldbFunctions): Promise<RoleRepository> {
-  if (roleRepoInstance && roleRepoDbConfig === db.config)
+export async function createDbRoleRepository(): Promise<RoleRepository> {
+  if (roleRepoInstance && roleRepoDbConfig === reldb.config)
     return roleRepoInstance
 
-  const repo = new DbRoleRepository(db)
+  const repo = new DbRoleRepository()
   await repo.count()
   roleRepoInstance = repo
-  roleRepoDbConfig = db.config
+  roleRepoDbConfig = reldb.config
   return repo
 }
 
@@ -132,8 +131,8 @@ export async function createDbRoleRepository(db: ReldbFunctions): Promise<RoleRe
  * 继承 BaseReldbCrudRepository，提供按 code 查找角色的能力。
  */
 class DbRoleRepository extends BaseReldbCrudRepository<Role> implements RoleRepository {
-  constructor(db: ReldbFunctions) {
-    super(db, {
+  constructor() {
+    super(reldb, {
       table: TABLE_NAME,
       fields: ROLE_FIELDS,
     })

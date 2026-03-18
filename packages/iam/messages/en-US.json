@@ -49,6 +49,7 @@
   "iam_permissionNotExist": "Permission does not exist",
   "iam_notInitialized": "Not initialized, please call iam.init() first",
   "iam_initFailed": "Initialization failed",
+  "iam_depsNotInitialized": "Dependency {dep} is not initialized, please call {dep}.init() before iam.init()",
   "iam_initInProgress": "IAM initialization is already in progress",
   "iam_cacheRequired": "Cache service is required for session management",
   "iam_initComponentFailed": "Failed to initialize component",

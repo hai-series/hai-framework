@@ -49,6 +49,7 @@
   "iam_permissionNotExist": "权限不存在",
   "iam_notInitialized": "未初始化，请先调用 iam.init()",
   "iam_initFailed": "初始化失败",
+  "iam_depsNotInitialized": "依赖 {dep} 未初始化，请在 iam.init() 之前调用 {dep}.init()",
   "iam_initInProgress": "IAM 初始化正在进行中",
   "iam_cacheRequired": "会话管理需要提供缓存服务",
   "iam_initComponentFailed": "初始化组件失败",

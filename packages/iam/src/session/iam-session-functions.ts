@@ -5,7 +5,6 @@
  * @module iam-session-functions
  */
 
-import type { CacheFunctions } from '@h-ai/cache'
 import type { Result } from '@h-ai/core'
 import type { IamConfig } from '../iam-config.js'
 import type { IamError } from '../iam-types.js'
@@ -26,7 +25,6 @@ const logger = core.logger.child({ module: 'iam', scope: 'session' })
  */
 export interface SessionOperationsDeps {
   config: IamConfig
-  cache: CacheFunctions
 }
 
 /**
@@ -36,10 +34,9 @@ export interface SessionOperationsDeps {
  */
 export async function createSessionOperations(deps: SessionOperationsDeps): Promise<Result<SessionOperations, IamError>> {
   try {
-    const { config, cache } = deps
+    const { config } = deps
     const sessionConfig = SessionConfigSchema.parse(config.session ?? {})
     const sessionRepository = createCacheSessionRepository(
-      cache,
       sessionConfig.maxAge ?? 86400,
       sessionConfig.refreshTokenMaxAge ?? 604800,
     )

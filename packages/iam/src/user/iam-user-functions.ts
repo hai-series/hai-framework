@@ -5,9 +5,7 @@
  * @module iam-user-functions
  */
 
-import type { CacheFunctions } from '@h-ai/cache'
 import type { PaginatedResult, Result } from '@h-ai/core'
-import type { ReldbFunctions } from '@h-ai/reldb'
 import type { PasswordStrategyResult } from '../authn/password/iam-authn-password-strategy.js'
 import type { AuthzOperations } from '../authz/iam-authz-types.js'
 import type { IamConfig } from '../iam-config.js'
@@ -26,6 +24,7 @@ import type {
 } from './iam-user-types.js'
 import { core, err, ok } from '@h-ai/core'
 import { crypto } from '@h-ai/crypto'
+import { reldb } from '@h-ai/reldb'
 
 import { AgreementConfigSchema, IamErrorCode, PasswordResetConfigSchema, RegisterConfigSchema } from '../iam-config.js'
 import { iamM } from '../iam-i18n.js'
@@ -42,8 +41,6 @@ const logger = core.logger.child({ module: 'iam', scope: 'user' })
  */
 export interface UserOperationsDeps {
   config: IamConfig
-  db: ReldbFunctions
-  cache: CacheFunctions
   passwordStrategyResult: PasswordStrategyResult
   sessionFunctions: SessionOperations
   authzFunctions: AuthzOperations
@@ -58,13 +55,12 @@ export interface UserOperationsDeps {
  */
 export async function createUserOperations(deps: UserOperationsDeps): Promise<Result<UserOperations, IamError>> {
   try {
-    const { config, db, cache, passwordStrategyResult, sessionFunctions, authzFunctions, onPasswordResetRequest } = deps
+    const { config, passwordStrategyResult, sessionFunctions, authzFunctions, onPasswordResetRequest } = deps
 
-    const userRepository = await createDbUserRepository(db)
-    const resetTokenRepository = createCacheResetTokenRepository(cache)
+    const userRepository = await createDbUserRepository()
+    const resetTokenRepository = createCacheResetTokenRepository()
 
     const functions = buildUserFunctions({
-      db,
       userRepository,
       resetTokenRepository,
       passwordStrategyResult,
@@ -190,7 +186,6 @@ async function validateUniqueFieldsForUpdate(
  * 子功能构建器共享上下文
  */
 interface UserFnContext {
-  db: ReldbFunctions
   userRepository: UserRepository
   resetTokenRepository: ResetTokenRepository
   validatePassword: (password: string) => Result<void, IamError>
@@ -209,7 +204,7 @@ interface UserFnContext {
  * 构建用户注册相关操作
  */
 function buildRegistrationOps(ctx: UserFnContext): Pick<UserOperations, 'register' | 'validatePassword'> {
-  const { db, userRepository, authzFunctions, config, registerConfig, agreementConfig } = ctx
+  const { userRepository, authzFunctions, config, registerConfig, agreementConfig } = ctx
   const { validatePassword, hashPassword } = ctx
 
   /**
@@ -280,7 +275,7 @@ function buildRegistrationOps(ctx: UserFnContext): Pick<UserOperations, 'registe
         return hashResult as Result<RegisterResult, IamError>
 
       // 事务：创建用户
-      const txResult = await db.tx.begin()
+      const txResult = await reldb.tx.begin()
       if (!txResult.success) {
         return mapRepositoryError('iam_createUserFailed', txResult.error.message) as Result<RegisterResult, IamError>
       }
@@ -445,7 +440,7 @@ function buildUserQueryOps(ctx: UserFnContext): Pick<UserOperations, 'getCurrent
  * 构建用户变更操作（更新、删除）
  */
 function buildUserMutationOps(ctx: UserFnContext): Pick<UserOperations, 'updateCurrentUser' | 'updateUser' | 'deleteUser'> {
-  const { db, userRepository, sessionFunctions, authzFunctions } = ctx
+  const { userRepository, sessionFunctions, authzFunctions } = ctx
 
   return {
     async updateCurrentUser(accessToken: string, data: UpdateCurrentUserInput): Promise<Result<User, IamError>> {
@@ -577,7 +572,7 @@ function buildUserMutationOps(ctx: UserFnContext): Pick<UserOperations, 'updateC
         return err({ code: IamErrorCode.USER_NOT_FOUND, message: iamM('iam_userNotExist') })
       }
 
-      const txResult = await db.tx.begin()
+      const txResult = await reldb.tx.begin()
       if (!txResult.success) {
         return mapRepositoryError('iam_deleteUserFailed', txResult.error.message) as Result<void, IamError>
       }
@@ -874,7 +869,6 @@ function buildUserFunctions(deps: UserBuilderDeps): UserOperations {
 }
 
 interface UserBuilderDeps {
-  db: ReldbFunctions
   userRepository: UserRepository
   resetTokenRepository: ResetTokenRepository
   passwordStrategyResult: PasswordStrategyResult

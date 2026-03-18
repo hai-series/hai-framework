@@ -72,18 +72,24 @@ describe('iam.init', () => {
       }
     })
 
-    it('缺少 db/cache 应返回 CONFIG_ERROR', async () => {
+    it('依赖未初始化时应返回 CONFIG_ERROR', async () => {
       await iam.close()
-      const result = await iam.init({} as any)
+      // 暂时关闭 reldb/cache 以模拟依赖未初始化
+      await cache.close()
+      await reldb.close()
+      const result = await iam.init({})
       expect(result.success).toBe(false)
       if (!result.success) {
         expect(result.error.code).toBe(IamErrorCode.CONFIG_ERROR)
       }
+      // 恢复依赖以免影响后续测试
+      await reldb.init({ type: 'sqlite', database: ':memory:' })
+      await cache.init({ type: 'memory' })
     })
 
     it('正常初始化应成功', async () => {
       await iam.close()
-      const result = await iam.init({ db: reldb, cache })
+      const result = await iam.init({})
       expect(result.success).toBe(true)
       expect(iam.isInitialized).toBe(true)
       expect(iam.config).not.toBeNull()
@@ -92,14 +98,14 @@ describe('iam.init', () => {
 
     it('重复初始化应幂等（直接返回 ok）', async () => {
       await iam.close()
-      await iam.init({ db: reldb, cache })
-      const result = await iam.init({ db: reldb, cache })
+      await iam.init({})
+      const result = await iam.init({})
       expect(result.success).toBe(true)
       await iam.close()
     })
 
     it('close 后应恢复未初始化状态', async () => {
-      await iam.init({ db: reldb, cache })
+      await iam.init({})
       expect(iam.isInitialized).toBe(true)
 
       await iam.close()
@@ -115,7 +121,7 @@ describe('iam.init', () => {
 
     it('seedDefaultData: false 时初始化应成功且不触发种子流程', async () => {
       await iam.close()
-      const result = await iam.init({ db: reldb, cache, seedDefaultData: false })
+      const result = await iam.init({ seedDefaultData: false })
       expect(result.success).toBe(true)
       expect(iam.isInitialized).toBe(true)
       expect(iam.config?.seedDefaultData).toBe(false)
@@ -131,8 +137,6 @@ describe('iam.init', () => {
     it('自定义密码配置后 config 应反映正确值', async () => {
       await iam.close()
       const result = await iam.init({
-        db: reldb,
-        cache,
         password: { minLength: 12, requireUppercase: true, requireNumber: true },
       })
       expect(result.success).toBe(true)
@@ -145,8 +149,6 @@ describe('iam.init', () => {
     it('自定义 session 配置后 config 应反映正确值', async () => {
       await iam.close()
       const result = await iam.init({
-        db: reldb,
-        cache,
         session: { maxAge: 7200, sliding: true },
       })
       expect(result.success).toBe(true)

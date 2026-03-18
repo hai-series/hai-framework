@@ -9,10 +9,10 @@
  * @module iam-session-repository-cache
  */
 
-import type { CacheFunctions } from '@h-ai/cache'
 import type { Result } from '@h-ai/core'
 import type { IamError } from '../iam-types.js'
 import type { Session, TokenPair } from './iam-session-types.js'
+import { cache } from '@h-ai/cache'
 import { err, ok } from '@h-ai/core'
 
 import { IamErrorCode } from '../iam-config.js'
@@ -140,13 +140,11 @@ export interface SessionRepository {
 /**
  * 创建基于缓存的会话存储
  *
- * @param cache - 缓存服务实例
  * @param sessionMaxAge - 会话最大有效期（秒），用于设置用户令牌集合的 TTL
  * @param refreshTokenMaxAge - refreshToken 最大有效期（秒）
  * @returns 会话存储接口实现
  */
 export function createCacheSessionRepository(
-  cache: CacheFunctions,
   sessionMaxAge: number,
   refreshTokenMaxAge: number,
 ): SessionRepository {
