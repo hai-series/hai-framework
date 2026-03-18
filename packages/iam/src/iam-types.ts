@@ -9,9 +9,7 @@
  * @module iam-types
  */
 
-import type { CacheFunctions } from '@h-ai/cache'
 import type { Result } from '@h-ai/core'
-import type { ReldbFunctions } from '@h-ai/reldb'
 
 import type { ApiKeyOperations } from './authn/apikey/iam-authn-apikey-types.js'
 import type { AuthnOperations } from './authn/iam-authn-types.js'
@@ -46,10 +44,6 @@ export interface IamError {
  * 传入 `iam.init()` 的唯一参数。
  */
 export interface IamConfigInput extends IamConfigSettingsInput {
-  /** 数据库服务（必需） */
-  db: ReldbFunctions
-  /** 缓存服务（必需） */
-  cache: CacheFunctions
   /** LDAP 客户端工厂（启用 LDAP 登录时必填） */
   ldapClientFactory?: LdapClientFactory
   /** LDAP 用户同步开关（默认 true） */
@@ -107,12 +101,12 @@ export interface IamFunctions {
    * 内部按依赖顺序创建 session → authz → authn → user 子功能，
    * 并可选执行种子数据初始化。
    *
-   * @param config - IAM 初始化配置（包含数据库、缓存、可选 LDAP 工厂等）
+   * @param config - IAM 初始化配置（可选 session/password/LDAP 等策略配置）
    * @returns 成功返回 `ok(undefined)`；失败返回含错误码的 `err`
    *
    * @example
    * ```ts
-   * const result = await iam.init({ db, cache })
+   * const result = await iam.init({ session: { maxAge: 86400 } })
    * if (!result.success) {
    *   console.error(result.error.message)
    * }

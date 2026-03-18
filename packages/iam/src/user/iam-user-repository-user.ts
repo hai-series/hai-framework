@@ -6,11 +6,11 @@
  */
 
 import type { Result } from '@h-ai/core'
-import type { DmlWithTxOperations, ReldbCrudFieldDefinition, ReldbCrudRepository, ReldbFunctions } from '@h-ai/reldb'
+import type { DmlWithTxOperations, ReldbCrudFieldDefinition, ReldbCrudRepository } from '@h-ai/reldb'
 import type { IamError } from '../iam-types.js'
 import type { StoredUser } from './iam-user-types.js'
 import { err, ok } from '@h-ai/core'
-import { BaseReldbCrudRepository } from '@h-ai/reldb'
+import { BaseReldbCrudRepository, reldb } from '@h-ai/reldb'
 import { IamErrorCode } from '../iam-config.js'
 import { iamM } from '../iam-i18n.js'
 
@@ -221,18 +221,17 @@ export function resetUserRepoSingleton(): void {
  * 单例模式：同一 db 生命周期内重复调用返回缓存实例，
  * db 重新初始化后自动创建新实例。
  *
- * @param db - 数据库服务实例
  * @returns 用户存储接口实现
  */
-export async function createDbUserRepository(db: ReldbFunctions): Promise<UserRepository> {
-  if (userRepoInstance && userRepoDbConfig === db.config)
+export async function createDbUserRepository(): Promise<UserRepository> {
+  if (userRepoInstance && userRepoDbConfig === reldb.config)
     return userRepoInstance
 
-  const repo = new DbUserRepository(db)
+  const repo = new DbUserRepository()
   // 确保底层表创建完成（BaseReldbCrudRepository 的表创建是异步的）
   await repo.count()
   userRepoInstance = repo
-  userRepoDbConfig = db.config
+  userRepoDbConfig = reldb.config
   return repo
 }
 
@@ -242,8 +241,8 @@ export async function createDbUserRepository(db: ReldbFunctions): Promise<UserRe
  * 继承 BaseReldbCrudRepository，提供按用户名/邮箱/手机号/标识符的查询能力。
  */
 class DbUserRepository extends BaseReldbCrudRepository<StoredUser> implements UserRepository {
-  constructor(db: ReldbFunctions) {
-    super(db, {
+  constructor() {
+    super(reldb, {
       table: TABLE_NAME,
       fields: USER_FIELDS,
     })

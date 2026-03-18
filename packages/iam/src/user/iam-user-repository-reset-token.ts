@@ -8,9 +8,9 @@
  * @module iam-user-repository-reset-token
  */
 
-import type { CacheFunctions } from '@h-ai/cache'
 import type { Result } from '@h-ai/core'
 import type { IamError } from '../iam-types.js'
+import { cache } from '@h-ai/cache'
 import { err, ok } from '@h-ai/core'
 import { crypto as haiCrypto } from '@h-ai/crypto'
 
@@ -108,10 +108,9 @@ export function resetResetTokenRepoSingleton(): void {
  *
  * 单例模式：重复调用返回缓存实例。
  *
- * @param cache - 缓存服务实例
  * @returns 密码重置令牌存储接口实现
  */
-export function createCacheResetTokenRepository(cache: CacheFunctions): ResetTokenRepository {
+export function createCacheResetTokenRepository(): ResetTokenRepository {
   if (resetTokenRepoInstance)
     return resetTokenRepoInstance
 

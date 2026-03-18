@@ -20,8 +20,10 @@ import type {
   UserOperations,
 } from './iam-types.js'
 
+import { cache } from '@h-ai/cache'
 import { core, err, ok } from '@h-ai/core'
 import { crypto } from '@h-ai/crypto'
+import { reldb } from '@h-ai/reldb'
 
 import { resetApiKeyRepoSingleton } from './authn/apikey/iam-authn-apikey-repository.js'
 import { createAuthnOperations } from './authn/iam-authn-functions.js'
@@ -97,9 +99,23 @@ export const iam: IamFunctions = {
         logger.warn('IAM module is already initialized, reinitializing')
         await iam.close()
       }
-      const { db, cache, ldapClientFactory, ldapSyncUser, onPasswordResetRequest, onOtpSendEmail, onOtpSendSms, ...settingsInput } = config
+      const { ldapClientFactory, ldapSyncUser, onPasswordResetRequest, onOtpSendEmail, onOtpSendSms, ...settingsInput } = config
 
       logger.info('Initializing IAM module')
+
+      // 前置依赖检查：reldb 和 cache 必须已初始化
+      if (!reldb.isInitialized) {
+        return err({
+          code: IamErrorCode.CONFIG_ERROR,
+          message: iamM('iam_depsNotInitialized', { params: { dep: 'reldb' } }),
+        })
+      }
+      if (!cache.isInitialized) {
+        return err({
+          code: IamErrorCode.CONFIG_ERROR,
+          message: iamM('iam_depsNotInitialized', { params: { dep: 'cache' } }),
+        })
+      }
 
       // 确保 crypto 已初始化（密码哈希依赖）
       if (!crypto.isInitialized) {
@@ -125,20 +141,18 @@ export const iam: IamFunctions = {
       const parsed = parseResult.data
 
       // 创建子功能（按依赖顺序），使用局部变量暂存，全部成功后再原子性赋值
-      const sessionResult = await createSessionOperations({ config: parsed, cache })
+      const sessionResult = await createSessionOperations({ config: parsed })
       if (!sessionResult.success) {
         return sessionResult
       }
 
-      const authzResult = await createAuthzOperations({ config: parsed, db, session: sessionResult.data })
+      const authzResult = await createAuthzOperations({ config: parsed, session: sessionResult.data })
       if (!authzResult.success) {
         return authzResult
       }
 
       const authnResult = await createAuthnOperations({
         config: parsed,
-        db,
-        cache,
         sessionFunctions: sessionResult.data,
         authzFunctions: authzResult.data,
         ldapClientFactory,
@@ -152,8 +166,6 @@ export const iam: IamFunctions = {
 
       const userResult = await createUserOperations({
         config: parsed,
-        db,
-        cache,
         passwordStrategyResult: authnResult.data.passwordStrategyResult,
         sessionFunctions: sessionResult.data,
         authzFunctions: authzResult.data,

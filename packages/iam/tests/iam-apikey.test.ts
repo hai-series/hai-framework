@@ -12,8 +12,6 @@
  */
 
 import type { IamFunctions } from '../src/iam-types.js'
-import { cache } from '@h-ai/cache'
-import { reldb } from '@h-ai/reldb'
 import { describe, expect, it } from 'vitest'
 import { IamErrorCode } from '../src/iam-config.js'
 import { iam } from '../src/index.js'
@@ -28,7 +26,7 @@ describe('iam.apiKey（未启用）', () => {
     it('默认配置下 apikey 未启用，iam.apiKey 调用应返回 NOT_INITIALIZED', async () => {
       await iam.close()
       // 默认 login.apikey = false
-      const initResult = await iam.init({ db: reldb, cache })
+      const initResult = await iam.init({})
       expect(initResult.success).toBe(true)
 
       const result = await iam.apiKey.createApiKey('any-user', { name: 'test' })
@@ -41,7 +39,7 @@ describe('iam.apiKey（未启用）', () => {
 
     it('未启用 apikey 时 loginWithApiKey 应返回 LOGIN_DISABLED', async () => {
       await iam.close()
-      await iam.init({ db: reldb, cache })
+      await iam.init({})
 
       const result = await iam.auth.loginWithApiKey({ key: 'hai_fakekey123' })
       expect(result.success).toBe(false)

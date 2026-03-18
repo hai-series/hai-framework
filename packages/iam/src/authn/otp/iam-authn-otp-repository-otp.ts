@@ -5,9 +5,9 @@
  * @module iam-authn-otp-repository-otp
  */
 
-import type { CacheFunctions } from '@h-ai/cache'
 import type { Result } from '@h-ai/core'
 import type { IamError } from '../../iam-types.js'
+import { cache } from '@h-ai/cache'
 import { err, ok } from '@h-ai/core'
 
 import { IamErrorCode } from '../../iam-config.js'
@@ -103,10 +103,9 @@ export function resetOtpRepoSingleton(): void {
  *
  * 单例模式：重复调用返回缓存实例。
  *
- * @param cache - 缓存服务实例
  * @returns OTP 存储接口实现
  */
-export function createCacheOtpRepository(cache: CacheFunctions): OtpRepository {
+export function createCacheOtpRepository(): OtpRepository {
   if (otpRepoInstance)
     return otpRepoInstance
 

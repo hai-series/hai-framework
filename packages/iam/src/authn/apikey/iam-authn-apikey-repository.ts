@@ -6,11 +6,11 @@
  */
 
 import type { Result } from '@h-ai/core'
-import type { DmlWithTxOperations, ReldbCrudFieldDefinition, ReldbFunctions } from '@h-ai/reldb'
+import type { DmlWithTxOperations, ReldbCrudFieldDefinition } from '@h-ai/reldb'
 import type { IamError } from '../../iam-types.js'
 import type { StoredApiKey } from './iam-authn-apikey-types.js'
 import { err, ok } from '@h-ai/core'
-import { BaseReldbCrudRepository } from '@h-ai/reldb'
+import { BaseReldbCrudRepository, reldb } from '@h-ai/reldb'
 import { IamErrorCode } from '../../iam-config.js'
 import { iamM } from '../../iam-i18n.js'
 
@@ -139,25 +139,24 @@ export function resetApiKeyRepoSingleton(): void {
 /**
  * 创建基于数据库的 API Key 存储实例
  *
- * @param db - 数据库服务实例
  * @returns API Key 存储接口实现
  */
-export async function createDbApiKeyRepository(db: ReldbFunctions): Promise<ApiKeyRepository> {
-  if (apiKeyRepoInstance && apiKeyRepoDbConfig === db.config)
+export async function createDbApiKeyRepository(): Promise<ApiKeyRepository> {
+  if (apiKeyRepoInstance && apiKeyRepoDbConfig === reldb.config)
     return apiKeyRepoInstance
 
-  const repo = new DbApiKeyRepository(db)
+  const repo = new DbApiKeyRepository()
   await repo.count()
   apiKeyRepoInstance = repo
-  apiKeyRepoDbConfig = db.config
+  apiKeyRepoDbConfig = reldb.config
   return repo
 }
 
 // ─── 存储实现 ───
 
 class DbApiKeyRepository extends BaseReldbCrudRepository<StoredApiKey> implements ApiKeyRepository {
-  constructor(db: ReldbFunctions) {
-    super(db, {
+  constructor() {
+    super(reldb, {
       table: TABLE_NAME,
       fields: API_KEY_FIELDS,
     })

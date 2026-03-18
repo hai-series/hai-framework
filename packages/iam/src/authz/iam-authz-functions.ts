@@ -6,7 +6,7 @@
  */
 
 import type { PaginatedResult, PaginationOptionsInput, Result } from '@h-ai/core'
-import type { DmlWithTxOperations, ReldbFunctions } from '@h-ai/reldb'
+import type { DmlWithTxOperations } from '@h-ai/reldb'
 
 import type { IamConfig, RbacConfig } from '../iam-config.js'
 import type { IamError } from '../iam-types.js'
@@ -23,6 +23,7 @@ import type {
 
 import { audit } from '@h-ai/audit'
 import { core, err, ok } from '@h-ai/core'
+import { reldb } from '@h-ai/reldb'
 
 import { IamErrorCode, RbacConfigSchema } from '../iam-config.js'
 import { iamM } from '../iam-i18n.js'
@@ -39,7 +40,6 @@ const logger = core.logger.child({ module: 'iam', scope: 'authz' })
  */
 export interface AuthzOperationsDeps {
   config: IamConfig
-  db: ReldbFunctions
   session: SessionOperations
 }
 
@@ -50,24 +50,23 @@ export interface AuthzOperationsDeps {
  */
 export async function createAuthzOperations(deps: AuthzOperationsDeps): Promise<Result<AuthzOperations, IamError>> {
   try {
-    const { config, db, session } = deps
+    const { config, session } = deps
 
-    const roleRepository = await createDbRoleRepository(db)
-    const permissionRepository = await createDbPermissionRepository(db)
+    const roleRepository = await createDbRoleRepository()
+    const permissionRepository = await createDbPermissionRepository()
 
-    const rolePermResult = await createDbRolePermissionRepository(db)
+    const rolePermResult = await createDbRolePermissionRepository()
     if (!rolePermResult.success) {
       return rolePermResult
     }
 
-    const userRoleResult = await createDbUserRoleRepository(db, roleRepository)
+    const userRoleResult = await createDbUserRoleRepository(roleRepository)
     if (!userRoleResult.success) {
       return userRoleResult
     }
 
     const manager = createRbacManager({
       rbacConfig: config.rbac,
-      db,
       roleRepository,
       permissionRepository,
       rolePermissionRepository: rolePermResult.data,
@@ -95,7 +94,6 @@ export async function createAuthzOperations(deps: AuthzOperationsDeps): Promise<
  */
 interface RbacManagerConfig {
   rbacConfig?: RbacConfig
-  db: ReldbFunctions
   roleRepository: RoleRepository
   permissionRepository: PermissionRepository
   rolePermissionRepository: RolePermissionRepository
@@ -118,7 +116,6 @@ function createRbacManager(config: RbacManagerConfig): AuthzOperations {
     : RbacConfigSchema.parse({})
 
   const {
-    db,
     roleRepository,
     permissionRepository,
     rolePermissionRepository,
@@ -428,7 +425,7 @@ function createRbacManager(config: RbacManagerConfig): AuthzOperations {
       // 使用调用方事务或创建新事务，保证批量操作原子性
       const ownTx = !tx
       if (!tx) {
-        const txResult = await db.tx.begin()
+        const txResult = await reldb.tx.begin()
         if (!txResult.success) {
           return mapRepositoryError('iam_syncRolesFailed', txResult.error.message) as Result<void, IamError>
         }
@@ -490,7 +487,7 @@ function createRbacManager(config: RbacManagerConfig): AuthzOperations {
       // 使用调用方事务或创建新事务，保证 create+findByCode 原子性
       const ownTx = !tx
       if (!tx) {
-        const txResult = await db.tx.begin()
+        const txResult = await reldb.tx.begin()
         if (!txResult.success) {
           return mapRepositoryError('iam_createRoleFailed', txResult.error.message) as Result<Role, IamError>
         }
@@ -584,7 +581,7 @@ function createRbacManager(config: RbacManagerConfig): AuthzOperations {
       // 使用调用方事务或创建新事务，保证 update+findById 原子性
       const ownTx = !tx
       if (!tx) {
-        const txResult = await db.tx.begin()
+        const txResult = await reldb.tx.begin()
         if (!txResult.success) {
           return mapRepositoryError('iam_updateRoleFailed', txResult.error.message) as Result<Role, IamError>
         }
@@ -676,7 +673,7 @@ function createRbacManager(config: RbacManagerConfig): AuthzOperations {
       // 使用调用方事务或创建新事务，保证级联删除原子执行
       const ownTx = !tx
       if (!tx) {
-        const txResult = await db.tx.begin()
+        const txResult = await reldb.tx.begin()
         if (!txResult.success) {
           return mapRepositoryError('iam_deleteRoleFailed', txResult.error.message) as Result<void, IamError>
         }
@@ -748,7 +745,7 @@ function createRbacManager(config: RbacManagerConfig): AuthzOperations {
       // 使用调用方事务或创建新事务，保证 create+findByCode 原子性
       const ownTx = !tx
       if (!tx) {
-        const txResult = await db.tx.begin()
+        const txResult = await reldb.tx.begin()
         if (!txResult.success) {
           return mapRepositoryError('iam_createPermissionFailed', txResult.error.message) as Result<Permission, IamError>
         }
@@ -868,7 +865,7 @@ function createRbacManager(config: RbacManagerConfig): AuthzOperations {
       // 使用调用方事务或创建新事务，保证级联删除原子执行
       const ownTx = !tx
       if (!tx) {
-        const txResult = await db.tx.begin()
+        const txResult = await reldb.tx.begin()
         if (!txResult.success) {
           return mapRepositoryError('iam_deletePermissionFailed', txResult.error.message) as Result<void, IamError>
         }

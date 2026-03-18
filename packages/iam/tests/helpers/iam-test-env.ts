@@ -5,7 +5,6 @@
  * 使用 SQLite 内存数据库 + 内存缓存，无需外部依赖。
  */
 
-import type { IamConfigSettingsInput } from '../../src/iam-config.js'
 import type { IamConfigInput, IamFunctions } from '../../src/iam-types.js'
 import { cache } from '@h-ai/cache'
 import { reldb } from '@h-ai/reldb'
@@ -19,9 +18,9 @@ export const TEST_PASSWORD = 'TestPass123'
 export const WEAK_PASSWORD = 'abc'
 
 /**
- * 初始化配置（不含 db / cache，由测试环境自动注入）
+ * 初始化配置
  */
-type IamTestInitConfig = IamConfigSettingsInput & Omit<IamConfigInput, keyof IamConfigSettingsInput | 'db' | 'cache'>
+type IamTestInitConfig = IamConfigInput
 
 /**
  * 初始化 IAM 单例
@@ -29,7 +28,7 @@ type IamTestInitConfig = IamConfigSettingsInput & Omit<IamConfigInput, keyof Iam
  * db / cache 需已初始化。用于需要不同配置的子场景。
  */
 export async function initIam(settings?: IamTestInitConfig): Promise<IamFunctions> {
-  const result = await iam.init({ db: reldb, cache, ...(settings ?? {}) })
+  const result = await iam.init(settings ?? {})
   if (!result.success) {
     throw new Error(`IAM init failed: ${result.error.message}`)
   }
@@ -54,7 +53,7 @@ export function defineIamTestEnv(
       await cache.init({ type: 'memory' })
     }
 
-    const result = await iam.init({ db: reldb, cache, ...(settings ?? {}) })
+    const result = await iam.init(settings ?? {})
     if (!result.success) {
       throw new Error(`IAM init failed in "${_label}": ${result.error.message}`)
     }

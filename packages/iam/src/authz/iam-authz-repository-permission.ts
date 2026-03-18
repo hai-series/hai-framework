@@ -6,11 +6,11 @@
  */
 
 import type { Result } from '@h-ai/core'
-import type { DmlWithTxOperations, ReldbCrudFieldDefinition, ReldbCrudRepository, ReldbFunctions } from '@h-ai/reldb'
+import type { DmlWithTxOperations, ReldbCrudFieldDefinition, ReldbCrudRepository } from '@h-ai/reldb'
 import type { IamError } from '../iam-types.js'
 import type { Permission } from './iam-authz-types.js'
 import { err, ok } from '@h-ai/core'
-import { BaseReldbCrudRepository } from '@h-ai/reldb'
+import { BaseReldbCrudRepository, reldb } from '@h-ai/reldb'
 import { IamErrorCode } from '../iam-config.js'
 import { iamM } from '../iam-i18n.js'
 
@@ -128,17 +128,16 @@ export function resetPermissionRepoSingleton(): void {
  * 单例模式：同一 db 生命周期内重复调用返回缓存实例，
  * db 重新初始化后自动创建新实例。
  *
- * @param db - 数据库服务实例
  * @returns 权限存储接口实现
  */
-export async function createDbPermissionRepository(db: ReldbFunctions): Promise<PermissionRepository> {
-  if (permRepoInstance && permRepoDbConfig === db.config)
+export async function createDbPermissionRepository(): Promise<PermissionRepository> {
+  if (permRepoInstance && permRepoDbConfig === reldb.config)
     return permRepoInstance
 
-  const repo = new DbPermissionRepository(db)
+  const repo = new DbPermissionRepository()
   await repo.count()
   permRepoInstance = repo
-  permRepoDbConfig = db.config
+  permRepoDbConfig = reldb.config
   return repo
 }
 
@@ -148,8 +147,8 @@ export async function createDbPermissionRepository(db: ReldbFunctions): Promise<
  * 继承 BaseReldbCrudRepository，提供按 code 查找权限的能力。
  */
 class DbPermissionRepository extends BaseReldbCrudRepository<Permission> implements PermissionRepository {
-  constructor(db: ReldbFunctions) {
-    super(db, {
+  constructor() {
+    super(reldb, {
       table: TABLE_NAME,
       fields: PERMISSION_FIELDS,
     })

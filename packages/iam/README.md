@@ -4,13 +4,14 @@
 
 ## 功能特性
 
-| 功能           | 说明                                             |
-| -------------- | ------------------------------------------------ |
-| **认证**       | 密码、OTP（邮箱/短信验证码）、LDAP 多策略认证    |
-| **会话**       | 有状态会话（随机访问令牌 + 缓存，滑动续期可选）  |
-| **授权**       | RBAC 角色与权限管理（DB + 缓存，通配符权限匹配） |
-| **用户管理**   | 注册、查询、更新、密码重置、管理员重置密码       |
-| **前端客户端** | HTTP API 客户端，支持独立前端使用                |
+| 功能           | 说明                                                   |
+| -------------- | ------------------------------------------------------ |
+| **认证**       | 密码、OTP（邮箱/短信验证码）、LDAP、API Key 多策略认证 |
+| **会话**       | 有状态会话（随机访问令牌 + 缓存，滑动续期可选）        |
+| **授权**       | RBAC 角色与权限管理（DB + 缓存，通配符权限匹配）       |
+| **用户管理**   | 注册、查询、更新、密码重置、管理员重置密码             |
+| **API Key**    | API Key 创建、吊销、验证，支持 scope 与过期时间        |
+| **前端客户端** | HTTP API 契约定义，支持独立前端使用                    |
 
 ## 安装
 
@@ -20,8 +21,8 @@ pnpm add @h-ai/iam
 
 ## 依赖
 
-- `@h-ai/reldb` — 数据库（用户/角色/权限持久化）
-- `@h-ai/cache` — 缓存（会话/OTP/重置令牌/权限缓存）
+- `@h-ai/reldb` — 数据库（用户/角色/权限持久化），**需在 iam.init() 前初始化**
+- `@h-ai/cache` — 缓存（会话/OTP/重置令牌/权限缓存），**需在 iam.init() 前初始化**
 - `@h-ai/crypto` — 密码哈希（内部使用，自动初始化）
 - `@h-ai/audit` — 审计日志（RBAC 关键操作记录）
 
@@ -32,12 +33,12 @@ import { cache } from '@h-ai/cache'
 import { iam } from '@h-ai/iam'
 import { reldb } from '@h-ai/reldb'
 
-// 1. 初始化
+// 1. 初始化依赖
 await reldb.init({ type: 'sqlite', database: './data.db' })
 await cache.init({ type: 'memory' })
+
+// 2. 初始化 IAM（自动使用已初始化的 reldb 和 cache 单例）
 await iam.init({
-  db,
-  cache,
   session: { maxAge: 86400, sliding: true },
   // OTP 回调（启用 OTP 登录时注入发送逻辑）
   onOtpSendEmail: async (email, code) => {
@@ -77,7 +78,7 @@ const otpResult = await iam.auth.loginWithOtp({
 
 // 6. 检查权限
 const hasPermission = await iam.authz.checkPermission(
-  user.id,
+  loginResult.data.user.id,
   'user:read',
 )
 
@@ -106,14 +107,14 @@ iam.init()
 
 ### 数据存储分布
 
-| 数据类型                                          | 存储位置     | 说明                                                                                                      |
-| ------------------------------------------------- | ------------ | --------------------------------------------------------------------------------------------------------- |
-| 用户、角色、权限、关联关系                        | DB（5 张表） | `hai_iam_users`、`hai_iam_roles`、`hai_iam_permissions`、`hai_iam_role_permissions`、`hai_iam_user_roles` |
-| 会话（accessToken → Session）                     | 缓存         | 有 TTL，滑动续期可选                                                                                      |
-| Token 映射（refreshToken → userId + accessToken） | 缓存         | 独立 key，refresh 后旧 token 立即失效                                                                     |
-| OTP 验证码                                        | 缓存         | 有 TTL + 尝试次数限制                                                                                     |
-| 密码重置令牌                                      | 缓存         | 有 TTL + 最大验证次数限制                                                                                 |
-| API Key                                           | DB           | 明文不落库，仅存 hash；前缀用于候选检索                                                                   |
+| 数据类型                                          | 存储位置     | 说明                                                                                                                          |
+| ------------------------------------------------- | ------------ | ----------------------------------------------------------------------------------------------------------------------------- |
+| 用户、角色、权限、关联关系、API Key               | DB（6 张表） | `hai_iam_users`、`hai_iam_roles`、`hai_iam_permissions`、`hai_iam_role_permissions`、`hai_iam_user_roles`、`hai_iam_api_keys` |
+| 会话（accessToken → Session）                     | 缓存         | 有 TTL，滑动续期可选                                                                                                          |
+| Token 映射（refreshToken → userId + accessToken） | 缓存         | 独立 key，refresh 后旧 token 立即失效                                                                                         |
+| OTP 验证码                                        | 缓存         | 有 TTL + 尝试次数限制                                                                                                         |
+| 密码重置令牌                                      | 缓存         | 有 TTL + 最大验证次数限制                                                                                                     |
+| API Key                                           | DB           | `hai_iam_api_keys`，明文不落库，仅存 hash；前缀用于候选检索                                                                   |
 
 ---
 
@@ -190,7 +191,7 @@ const result = await iam.auth.registerAndLogin({ username: 'new', password: 'Pas
 
 #### 关键对象
 
-- **`SessionOperations`** — 会话操作接口：`create` / `get` / `verifyToken` / `update` / `delete` / `deleteByUserId` / `refresh` / `revokeRefresh`
+- **`SessionOperations`** — 会话操作接口：`create` / `get` / `verifyToken` / `update` / `delete` / `deleteByUserId` / `refresh` / `revokeRefresh` / `patchUserSessions`
 - **`Session`** — 会话实体，含 userId、roles、permissions、accessToken、过期时间等
 - **`TokenPair`** — 令牌对：`{ accessToken, refreshToken, expiresIn, tokenType: 'Bearer' }`
 

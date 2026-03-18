@@ -5,9 +5,7 @@
  * @module iam-authn-functions
  */
 
-import type { CacheFunctions } from '@h-ai/cache'
 import type { Result } from '@h-ai/core'
-import type { ReldbFunctions } from '@h-ai/reldb'
 
 import type { AuthzOperations } from '../authz/iam-authz-types.js'
 import type { IamConfig } from '../iam-config.js'
@@ -41,8 +39,6 @@ const logger = core.logger.child({ module: 'iam', scope: 'authn' })
  */
 export interface AuthnOperationsDeps {
   config: IamConfig
-  db: ReldbFunctions
-  cache: CacheFunctions
   sessionFunctions: SessionOperations
   authzFunctions: AuthzOperations
   ldapClientFactory?: LdapClientFactory
@@ -74,9 +70,9 @@ export interface AuthnOperationsResult {
  */
 export async function createAuthnOperations(deps: AuthnOperationsDeps): Promise<Result<AuthnOperationsResult, IamError>> {
   try {
-    const { config, db, cache, sessionFunctions, authzFunctions, ldapClientFactory, ldapSyncUser, onOtpSendEmail, onOtpSendSms } = deps
+    const { config, sessionFunctions, authzFunctions, ldapClientFactory, ldapSyncUser, onOtpSendEmail, onOtpSendSms } = deps
 
-    const userRepository = await createDbUserRepository(db)
+    const userRepository = await createDbUserRepository()
     const securityConfig = SecurityConfigSchema.parse(config.security ?? {})
     const loginConfig = LoginConfigSchema.parse(config.login ?? {})
 
@@ -106,7 +102,7 @@ export async function createAuthnOperations(deps: AuthnOperationsDeps): Promise<
     let otpResult: OtpStrategyResult | undefined
     const otpConfig = config.otp ? OtpConfigSchema.parse(config.otp) : undefined
     if (loginConfig.otp && otpConfig) {
-      const otpRepository = createCacheOtpRepository(cache)
+      const otpRepository = createCacheOtpRepository()
       otpResult = createOtpStrategy({
         otpConfig,
         userRepository,
@@ -140,7 +136,7 @@ export async function createAuthnOperations(deps: AuthnOperationsDeps): Promise<
     let apiKeyFunctions: ApiKeyOperations | null = null
     if (loginConfig.apikey) {
       const apiKeyConfig = config.apikey ? ApiKeyConfigSchema.parse(config.apikey) : undefined
-      const apiKeyRepository = await createDbApiKeyRepository(db)
+      const apiKeyRepository = await createDbApiKeyRepository()
       const apiKeyResult = createApiKeyStrategy({
         apikeyConfig: apiKeyConfig,
         userRepository,
