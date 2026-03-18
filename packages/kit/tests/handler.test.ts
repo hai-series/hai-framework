@@ -4,6 +4,7 @@
  * =============================================================================
  */
 
+import type { RequestEvent } from '@sveltejs/kit'
 import { describe, expect, it, vi } from 'vitest'
 
 import { handler } from '../src/kit-handler.js'
@@ -39,7 +40,7 @@ function createMockEvent(path = '/api/test', method = 'GET') {
       delete: vi.fn(),
     },
     getClientAddress: () => '127.0.0.1',
-  } as any
+  } as unknown as RequestEvent
 }
 
 describe('handler', () => {
@@ -103,7 +104,7 @@ describe('handler', () => {
   })
 
   it('传递完整的 RequestEvent 给处理函数', async () => {
-    const receivedEvent: any[] = []
+    const receivedEvent: RequestEvent[] = []
 
     const h = handler(async (event) => {
       receivedEvent.push(event)

@@ -8,7 +8,7 @@ import { svelte } from '@sveltejs/vite-plugin-svelte'
 import { defineConfig } from 'vitest/config'
 
 export default defineConfig({
-  plugins: [svelte({ hot: false })],
+  plugins: [svelte()],
   test: {
     globals: true,
     environment: 'node', // 纯逻辑测试用 node 环境

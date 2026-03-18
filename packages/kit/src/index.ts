@@ -11,6 +11,8 @@
 
 // 子模块仅导出类型（运行时函数统一通过 kit 命名空间访问）
 export type * from './client/index.js'
+// CRUD 声明式资源定义
+export * from './crud/index.js'
 export type * from './guards/index.js'
 // 运行时导出 — 权限匹配纯函数（客户端/服务端通用）
 export { matchPermission } from './guards/kit-permission.js'

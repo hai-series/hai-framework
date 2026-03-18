@@ -27,9 +27,11 @@
     "@antfu/eslint-config": "catalog:",
     "@types/node": "catalog:",
     "eslint": "catalog:",
+    "eslint-plugin-svelte": "catalog:",
     "husky": "catalog:",
     "lint-staged": "catalog:",
     "rimraf": "catalog:",
+    "svelte-eslint-parser": "catalog:",
     "turbo": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"

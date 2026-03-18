@@ -4,6 +4,7 @@
  * =============================================================================
  */
 
+import type { Handle, RequestEvent } from '@sveltejs/kit'
 import type { SessionData } from '../src/kit-types.js'
 import { describe, expect, it, vi } from 'vitest'
 import { createHandle, sequence } from '../src/hooks/index.js'
@@ -40,7 +41,7 @@ function createMockEvent(options: {
     isSubRequest: false,
     fetch: vi.fn(),
     setHeaders: vi.fn(),
-  } as any
+  } as unknown as RequestEvent
 }
 
 describe('createHandle', () => {
@@ -79,7 +80,7 @@ describe('createHandle', () => {
     await handle({ event, resolve })
 
     expect(validateSession).toHaveBeenCalledWith('token123')
-    expect((event.locals as any).session).toEqual(mockSession)
+    expect((event.locals as Record<string, unknown>).session).toEqual(mockSession)
   })
 
   it('缺少 Authorization 时不应触发会话验证', async () => {
@@ -103,7 +104,7 @@ describe('createHandle', () => {
     await handle({ event, resolve })
 
     expect(validateSession).not.toHaveBeenCalled()
-    expect((event.locals as any).session).toBeUndefined()
+    expect((event.locals as Record<string, unknown>).session).toBeUndefined()
   })
 
   it('应该执行守卫', async () => {
@@ -208,14 +209,14 @@ describe('sequence', () => {
   it('应该组合多个 handle', async () => {
     const order: number[] = []
 
-    const handle1 = vi.fn(async ({ event, resolve }: any) => {
+    const handle1 = vi.fn(async ({ event, resolve }: Parameters<Handle>[0]) => {
       order.push(1)
       const response = await resolve(event)
       order.push(4)
       return response
     })
 
-    const handle2 = vi.fn(async ({ event, resolve }: any) => {
+    const handle2 = vi.fn(async ({ event, resolve }: Parameters<Handle>[0]) => {
       order.push(2)
       const response = await resolve(event)
       order.push(3)

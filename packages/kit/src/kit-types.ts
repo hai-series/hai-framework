@@ -341,11 +341,6 @@ export interface HandleA2AConfig {
 }
 
 /**
- * @deprecated 使用 HandleConfig
- */
-export type HookConfig = HandleConfig
-
-/**
  * 传输加密详细配置
  */
 export interface TransportEncryptionOptions {

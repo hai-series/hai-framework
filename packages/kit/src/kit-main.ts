@@ -6,6 +6,7 @@
  */
 
 import { createKitClient } from './client/kit-client.js'
+import { defineCrud } from './crud/kit-crud.js'
 import { hasPermission, requirePermission } from './guards/kit-permission.js'
 import { createHandle, sequence } from './hooks/kit-handle.js'
 import {
@@ -131,6 +132,13 @@ export const kit = {
     createTokenStore,
     /** 创建浏览器端同源请求自动附加 Authorization 的 HandleFetch */
     createHandleFetch,
+  },
+
+  // ─── CRUD ───
+
+  crud: {
+    /** 定义 CRUD 资源（声明式配置 → 操作对象） */
+    define: defineCrud,
   },
 
   // ─── i18n ───
