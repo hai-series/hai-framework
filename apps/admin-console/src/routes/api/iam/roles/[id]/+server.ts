@@ -7,7 +7,6 @@
 import * as m from '$lib/paraglide/messages.js'
 import { IdParamSchema, UpdateRoleSchema } from '$lib/server/schemas/index.js'
 import { permissionService, roleService } from '$lib/server/services/index.js'
-import { audit } from '@h-ai/audit'
 import { kit } from '@h-ai/kit'
 
 /**
@@ -32,7 +31,7 @@ export const GET = kit.handler(async ({ params, locals }) => {
  *
  * 需要权限：role:api:update
  */
-export const PUT = kit.handler(async ({ params, request, locals, getClientAddress }) => {
+export const PUT = kit.handler(async ({ params, request, locals }) => {
   kit.guard.require(locals.session, 'role:api:update')
 
   const { id: roleId } = kit.validate.params(params, IdParamSchema)
@@ -44,19 +43,15 @@ export const PUT = kit.handler(async ({ params, request, locals, getClientAddres
     return kit.response.notFound(m.api_iam_roles_not_found())
   }
 
-  // 转换权限代码为 ID
+  // 批量转换权限代码为 ID
   let permissionIds: string[] | undefined
   if (input.permissions !== undefined) {
-    permissionIds = []
-    for (const permCode of input.permissions) {
-      const perm = await permissionService.getByCode(permCode)
-      if (perm) {
-        permissionIds.push(perm.id)
-      }
-    }
+    permissionIds = (await Promise.all(input.permissions.map(code => permissionService.getByCode(code))))
+      .filter((p): p is NonNullable<typeof p> => p !== null)
+      .map(p => p.id)
   }
 
-  // 更新角色
+  // 更新角色（IAM authz 内部已记录审计日志）
   const updateResult = await roleService.update(roleId, {
     name: input.name,
     description: input.description,
@@ -67,22 +62,7 @@ export const PUT = kit.handler(async ({ params, request, locals, getClientAddres
     return kit.response.badRequest(updateResult.error.message)
   }
 
-  const role = updateResult.data
-
-  // 记录审计日志
-  const ip = getClientAddress()
-  const ua = request.headers.get('user-agent') ?? undefined
-  await audit.helper.crud({
-    userId: locals.session!.userId,
-    action: 'update',
-    resource: 'role',
-    resourceId: roleId,
-    details: { name: input.name, permissions: input.permissions },
-    ip,
-    ua,
-  })
-
-  return kit.response.ok(role)
+  return kit.response.ok(updateResult.data)
 })
 
 /**
@@ -90,7 +70,7 @@ export const PUT = kit.handler(async ({ params, request, locals, getClientAddres
  *
  * 需要权限：role:api:delete
  */
-export const DELETE = kit.handler(async ({ params, locals, request, getClientAddress }) => {
+export const DELETE = kit.handler(async ({ params, locals }) => {
   kit.guard.require(locals.session, 'role:api:delete')
 
   const { id: roleId } = kit.validate.params(params, IdParamSchema)
@@ -101,24 +81,11 @@ export const DELETE = kit.handler(async ({ params, locals, request, getClientAdd
     return kit.response.notFound(m.api_iam_roles_not_found())
   }
 
-  // 删除角色
+  // 删除角色（IAM authz 内部已记录审计日志）
   const deleteResult = await roleService.delete(roleId)
   if (!deleteResult.success) {
     return kit.response.badRequest(deleteResult.error.message)
   }
-
-  // 记录审计日志
-  const ip = getClientAddress()
-  const ua = request.headers.get('user-agent') ?? undefined
-  await audit.helper.crud({
-    userId: locals.session!.userId,
-    action: 'delete',
-    resource: 'role',
-    resourceId: roleId,
-    details: { name: existing.name },
-    ip,
-    ua,
-  })
 
   return kit.response.ok(null)
 })

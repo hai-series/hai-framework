@@ -146,8 +146,6 @@ export async function initApp(): Promise<void> {
 
   // 8. 初始化 IAM 模块（使用 reach 发送密码重置和 OTP 通知）
   const iamResult = await iam.init({
-    db: reldb,
-    cache,
     ...effectiveIamConfig,
     onPasswordResetRequest: reach.isInitialized
       ? async (user, token, expiresAt) => {

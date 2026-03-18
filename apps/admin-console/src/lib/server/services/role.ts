@@ -107,15 +107,15 @@ export const roleService = {
 
     const role = result.data
 
-    // 分配权限（逐条检查结果，任一失败则回滚角色）
+    // 批量分配权限（任一失败则回滚角色）
     if (input.permissions?.length) {
-      for (const permId of input.permissions) {
-        const assignResult = await iam.authz.assignPermissionToRole(role.id, permId)
-        if (!assignResult.success) {
-          // 回滚：删除刚创建的角色
-          await iam.authz.deleteRole(role.id)
-          return err({ message: `${m.api_iam_roles_create_failed()}: ${assignResult.error.message}` })
-        }
+      const assignResults = await Promise.all(
+        input.permissions.map(permId => iam.authz.assignPermissionToRole(role.id, permId)),
+      )
+      const failed = assignResults.find(r => !r.success)
+      if (failed && !failed.success) {
+        await iam.authz.deleteRole(role.id)
+        return err({ message: `${m.api_iam_roles_create_failed()}: ${failed.error.message}` })
       }
     }
 
@@ -195,19 +195,14 @@ export const roleService = {
       const currentResult = await iam.authz.getRolePermissions(id)
       const currentIds = currentResult.success ? currentResult.data.map(p => p.id) : []
 
-      // 移除不在新列表中的权限
-      for (const permId of currentIds) {
-        if (!input.permissions.includes(permId)) {
-          await iam.authz.removePermissionFromRole(id, permId)
-        }
-      }
+      // 计算差异后批量执行
+      const toRemove = currentIds.filter(permId => !input.permissions!.includes(permId))
+      const toAdd = input.permissions.filter(permId => !currentIds.includes(permId))
 
-      // 添加新权限
-      for (const permId of input.permissions) {
-        if (!currentIds.includes(permId)) {
-          await iam.authz.assignPermissionToRole(id, permId)
-        }
-      }
+      await Promise.all([
+        ...toRemove.map(permId => iam.authz.removePermissionFromRole(id, permId)),
+        ...toAdd.map(permId => iam.authz.assignPermissionToRole(id, permId)),
+      ])
     }
 
     return ok(await this.getById(id))

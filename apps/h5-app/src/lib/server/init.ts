@@ -107,7 +107,7 @@ export async function initApp(): Promise<void> {
   }
 
   // 5. 初始化 IAM
-  const iamResult = await iam.init({ reldb, cache, ...iamConfig })
+  const iamResult = await iam.init(iamConfig)
   if (!iamResult.success) {
     throw new Error(`IAM initialization failed: ${iamResult.error.message}`)
   }
