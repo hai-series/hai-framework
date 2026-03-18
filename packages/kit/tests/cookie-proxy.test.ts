@@ -10,6 +10,7 @@
  * =============================================================================
  */
 
+import type { Cookies } from '@sveltejs/kit'
 import type { CookieProxyConfig } from '../src/hooks/kit-cookie-proxy.js'
 import { Buffer } from 'node:buffer'
 import { describe, expect, it, vi } from 'vitest'
@@ -24,7 +25,7 @@ function createMockCookies(store: Record<string, string> = {}) {
     delete: vi.fn((name: string) => { delete store[name] }),
     getAll: vi.fn(() => Object.entries(store).map(([name, value]) => ({ name, value }))),
     serialize: vi.fn(() => ''),
-  } as any
+  } as unknown as Cookies
 }
 
 // ─── Mock 对称加密服务 ───

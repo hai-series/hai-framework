@@ -11,6 +11,9 @@ export * from './ai'
 // App 应用级场景组件
 export * from './app'
 
+// CRUD 场景组件
+export * from './crud'
+
 // Crypto 场景组件
 export * from './crypto'
 

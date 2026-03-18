@@ -26,6 +26,9 @@ export default antfu({
     '**/packages/cli/templates/skills/**/*.md', // Skill 模板文档（示例代码片段）不参与 lint
     '**/packages/ui/README.md', // markdown 规则冲突，临时忽略
   ],
+
+  // 启用 Svelte 支持
+  svelte: true,
 }, {
   // 代码质量强制规则 — 这些由 ESLint 自动检测，不依赖 AI 记忆
   files: ['**/*.ts', '**/*.svelte'],

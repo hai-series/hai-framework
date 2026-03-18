@@ -21,11 +21,11 @@ export * from './theme-config.js'
 
 export * from './toast.svelte.js'
 
-// ─── 平台检测与移动端工具 ───
-
-export * from './types.js'
-
 // ─── 基础类型与工具 ───
 
+export * from './types.js'
 export * from './utils.js'
+
+// ─── 平台检测与移动端工具 ───
+
 export * from './utils/platform.svelte.js'

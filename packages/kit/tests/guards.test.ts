@@ -4,6 +4,7 @@
  * =============================================================================
  */
 
+import type { RequestEvent } from '@sveltejs/kit'
 import type { SessionData } from '../src/kit-types.js'
 import { describe, expect, it, vi } from 'vitest'
 import {
@@ -41,7 +42,7 @@ function createMockEvent(path = '/', token?: string) {
         return undefined
       },
     },
-  } as any
+  } as unknown as RequestEvent
 }
 
 describe('authGuard', () => {

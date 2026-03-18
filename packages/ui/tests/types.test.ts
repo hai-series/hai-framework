@@ -57,7 +57,7 @@ import { describe, expectTypeOf, it } from 'vitest'
 
 describe('基础类型', () => {
   it('size 类型应该正确', () => {
-    expectTypeOf<Size>().toEqualTypeOf<'xs' | 'sm' | 'md' | 'lg' | 'xl'>()
+    expectTypeOf<Size>().toEqualTypeOf<'xs' | 'sm' | 'md' | 'lg' | 'xl' | '2xl' | '3xl' | '4xl'>()
   })
 
   it('variant 类型应包含全部 10 个变体', () => {
