@@ -226,6 +226,98 @@ describe('resolveA2AConfig — apiKey authenticate', () => {
       scopes: ['a2a:call'],
     })
   })
+
+  it('"apiKey" 在请求时读取最新 Agent Card security 配置', async () => {
+    const verifyMock = await getIamMock()
+    verifyMock.mockResolvedValueOnce({
+      success: true,
+      data: { id: 'key-4', userId: 'user-4', scopes: ['a2a:call'] },
+    })
+
+    let initialized = false
+    const operations = {
+      getAgentCard: () => initialized
+        ? ({
+            success: true,
+            data: {
+              name: 'secure-agent',
+              url: 'http://localhost',
+              security: { apiKey: { in: 'query' as const, name: 'api_key' } },
+            },
+          })
+        : ({ success: false, error: { message: 'not initialized' } }),
+      handleRequest: vi.fn(async (_body: unknown, context?: Record<string, unknown>) => ({ streaming: false, body: { context } })),
+    }
+
+    const resolved = resolveA2AConfig({
+      operations,
+      authenticate: 'apiKey',
+    })
+
+    initialized = true
+
+    const response = await handleA2ARequest(
+      createMockEvent({ path: '/a2a', method: 'POST', searchParams: { api_key: 'hai_query_key' }, jsonBody: { jsonrpc: '2.0', id: '1' } }),
+      'req_test',
+      resolved!,
+    )
+
+    expect(response).not.toBeNull()
+    expect(response!.status).toBe(200)
+    expect(verifyMock).toHaveBeenCalledWith('hai_query_key')
+    expect(operations.handleRequest).toHaveBeenCalledWith(
+      { jsonrpc: '2.0', id: '1' },
+      {
+        agentId: 'user-4',
+        apiKeyId: 'key-4',
+        scopes: ['a2a:call'],
+      },
+    )
+  })
+
+  it('简单模式在请求时按最新 Agent Card security 启用鉴权', async () => {
+    const verifyMock = await getIamMock()
+    verifyMock.mockResolvedValueOnce({
+      success: true,
+      data: { id: 'key-5', userId: 'user-5', scopes: ['a2a:call'] },
+    })
+
+    let initialized = false
+    const operations = {
+      getAgentCard: () => initialized
+        ? ({
+            success: true,
+            data: {
+              name: 'secure-agent',
+              url: 'http://localhost',
+              security: { apiKey: { in: 'query' as const, name: 'api_key' } },
+            },
+          })
+        : ({ success: false, error: { message: 'not initialized' } }),
+      handleRequest: vi.fn(async (_body: unknown, context?: Record<string, unknown>) => ({ streaming: false, body: { context } })),
+    }
+
+    const resolved = resolveA2AConfig(operations)
+    initialized = true
+
+    const response = await handleA2ARequest(
+      createMockEvent({ path: '/a2a', method: 'POST', searchParams: { api_key: 'hai_auto_key' }, jsonBody: { jsonrpc: '2.0', id: '1' } }),
+      'req_test',
+      resolved!,
+    )
+
+    expect(response).not.toBeNull()
+    expect(response!.status).toBe(200)
+    expect(verifyMock).toHaveBeenCalledWith('hai_auto_key')
+    expect(operations.handleRequest).toHaveBeenCalledWith(
+      { jsonrpc: '2.0', id: '1' },
+      {
+        agentId: 'user-5',
+        apiKeyId: 'key-5',
+        scopes: ['a2a:call'],
+      },
+    )
+  })
 })
 
 describe('handleA2ARequest — A2A auth enforcement', () => {

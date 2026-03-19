@@ -37,7 +37,6 @@ export interface A2AClientOperations {
 
 const A2A_PATH = {
   agentCard: '/.well-known/agent.json',
-  legacyAgentCard: '/a2a/agent-card',
   rpc: '/a2a',
   messages: '/a2a/messages',
   callRemote: '/a2a/call',
@@ -54,19 +53,11 @@ const A2A_PATH = {
 export function createA2AClient(api: AIApiAdapter): A2AClientOperations {
   return {
     async getAgentCard(): Promise<A2AAgentCardConfig> {
-      const result = typeof api.get === 'function'
-        ? await api.get<A2AAgentCardConfig>(A2A_PATH.agentCard)
-        : await api.post<A2AAgentCardConfig>(A2A_PATH.agentCard)
-      if (result.success) {
-        return result.data
-      }
-
-      // 兼容旧路由：若服务仍使用 /a2a/agent-card，回退一次。
-      const legacyResult = await api.post<A2AAgentCardConfig>(A2A_PATH.legacyAgentCard)
-      if (!legacyResult.success) {
+      const result = await api.get<A2AAgentCardConfig>(A2A_PATH.agentCard)
+      if (!result.success) {
         throw new Error(`A2A get agent card failed: ${result.error.message}`)
       }
-      return legacyResult.data
+      return result.data
     },
 
     async sendRequest(requestBody: unknown): Promise<unknown> {

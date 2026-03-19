@@ -49,7 +49,7 @@ export function resolveA2AConfig(
       operations,
       cardPath: '/.well-known/agent.json',
       rpcPath: '/a2a',
-      authenticate: resolveAuthenticate(undefined, operations),
+      authenticate: createAgentCardSecurityAuthenticator(operations),
     }
   }
 
@@ -67,7 +67,7 @@ export function resolveA2AConfig(
  * 解析 authenticate 配置
  *
  * - `undefined` → 无认证
- * - `'apiKey'` → 从 Agent Card security 配置创建 API Key 认证器
+ * - `'apiKey'` → 在请求时根据 Agent Card security 配置创建 API Key 认证器
  * - 函数 → 直接使用
  */
 function resolveAuthenticate(
@@ -77,22 +77,30 @@ function resolveAuthenticate(
   if (typeof authenticate === 'function')
     return authenticate
 
-  const apiKeyCfg = getApiKeySecurityFromAgentCard(operations)
+  if (authenticate !== 'apiKey')
+    return undefined
 
-  if (authenticate === 'apiKey') {
-    return createA2AApiKeyAuthenticator({
+  return async (event: RequestEvent) => {
+    const apiKeyCfg = getApiKeySecurityFromAgentCard(operations)
+    const auth = createA2AApiKeyAuthenticator({
       in: apiKeyCfg?.in ?? 'header',
       name: apiKeyCfg?.name ?? 'x-api-key',
     })
+    return auth(event)
   }
+}
 
-  if (!apiKeyCfg)
-    return undefined
+function createAgentCardSecurityAuthenticator(
+  operations: HandleA2AOperations,
+): ResolvedA2AConfig['authenticate'] {
+  return async (event: RequestEvent) => {
+    const apiKeyCfg = getApiKeySecurityFromAgentCard(operations)
+    if (!apiKeyCfg)
+      return undefined
 
-  return createA2AApiKeyAuthenticator({
-    in: apiKeyCfg.in,
-    name: apiKeyCfg.name,
-  })
+    const auth = createA2AApiKeyAuthenticator(apiKeyCfg)
+    return auth(event)
+  }
 }
 
 function getApiKeySecurityFromAgentCard(
@@ -147,13 +155,15 @@ export async function handleA2ARequest(
     if (config.authenticate) {
       try {
         const authResult = await config.authenticate(event)
-        if (!authResult) {
+        if (authResult === null) {
           return new Response(
             JSON.stringify({ error: { code: 'A2A_UNAUTHORIZED', message: 'A2A authentication required' } }),
             { status: 401, headers: { 'Content-Type': 'application/json', 'X-Request-Id': requestId } },
           )
         }
-        context = authResult
+        if (authResult !== undefined) {
+          context = authResult
+        }
       }
       catch {
         return new Response(

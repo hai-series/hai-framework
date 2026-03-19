@@ -13,14 +13,14 @@ import { createA2AApiKeyAuthenticator } from './kit-a2a-auth.js'
 /**
  * 创建 Agent Card GET 处理器
  *
- * 返回当前 Agent 的 Agent Card（JSON），通常挂载在 `/.well-known/agent-card.json`。
+ * 返回当前 Agent 的 Agent Card（JSON），通常挂载在 `/.well-known/agent.json`。
  *
  * @param getAgentCard - 获取 Agent Card 的回调（通常调用 `ai.a2a.getAgentCard()`）
  * @returns SvelteKit GET 处理器
  *
  * @example
  * ```ts
- * // src/routes/.well-known/agent-card.json/+server.ts
+ * // src/routes/.well-known/agent.json/+server.ts
  * import { ai } from '@h-ai/ai'
  * import { createAgentCardHandler } from '@h-ai/kit/a2a'
  *
@@ -75,12 +75,26 @@ export function createA2AHandler(
     // 可选认证
     let context: Record<string, unknown> | undefined
     if (config?.authenticate) {
-      const authFn = typeof config.authenticate === 'function'
-        ? config.authenticate
-        : createA2AApiKeyAuthenticator({ in: 'header', name: 'x-api-key' })
-      const authResult = await authFn(event)
-      if (authResult) {
-        context = authResult
+      try {
+        const authFn = typeof config.authenticate === 'function'
+          ? config.authenticate
+          : createA2AApiKeyAuthenticator({ in: 'header', name: 'x-api-key' })
+        const authResult = await authFn(event)
+        if (authResult === null) {
+          return new Response(
+            JSON.stringify({ error: { code: 'A2A_UNAUTHORIZED', message: 'A2A authentication required' } }),
+            { status: 401, headers: { 'Content-Type': 'application/json' } },
+          )
+        }
+        if (authResult !== undefined) {
+          context = authResult
+        }
+      }
+      catch {
+        return new Response(
+          JSON.stringify({ error: { code: 'A2A_FORBIDDEN', message: 'A2A authentication failed' } }),
+          { status: 403, headers: { 'Content-Type': 'application/json' } },
+        )
       }
     }
 

@@ -20,25 +20,20 @@ describe('createA2AClient', () => {
     expect(api.get).toHaveBeenCalledWith('/.well-known/agent.json')
   })
 
-  it('发现端点失败时回退到旧路由 /a2a/agent-card', async () => {
+  it('发现端点失败时抛出错误', async () => {
     const api = {
       get: vi.fn(async () => ({
         success: false,
         error: { message: 'not found' },
       })),
-      post: vi.fn(async (path: string) => ({
-        success: path === '/a2a/agent-card',
-        data: path === '/a2a/agent-card' ? { name: 'legacy-agent', url: 'https://legacy.example.com' } : undefined,
-        error: { message: 'not found' },
-      })),
+      post: vi.fn(),
       stream: vi.fn(),
     }
 
     const client = createA2AClient(api)
-    const card = await client.getAgentCard()
 
-    expect(card).toEqual({ name: 'legacy-agent', url: 'https://legacy.example.com' })
-    expect(api.post).toHaveBeenCalledWith('/a2a/agent-card')
+    await expect(client.getAgentCard()).rejects.toThrow('A2A get agent card failed: not found')
+    expect(api.post).not.toHaveBeenCalled()
   })
 
   it('sendRequest 使用默认 /a2a JSON-RPC 端点', async () => {
