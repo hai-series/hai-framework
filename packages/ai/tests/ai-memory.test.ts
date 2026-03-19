@@ -8,7 +8,7 @@ import type { MemoryConfig } from '../src/ai-config.js'
 import type { EmbeddingOperations } from '../src/embedding/ai-embedding-types.js'
 import type { LLMOperations } from '../src/llm/ai-llm-types.js'
 import type { MemoryEntry } from '../src/memory/ai-memory-types.js'
-import type { AIStore, AIVectorStore } from '../src/store/ai-store-types.js'
+import type { AIRelStore, AIVectorStore } from '../src/store/ai-store-types.js'
 import { describe, expect, it, vi } from 'vitest'
 import { extractMemories } from '../src/memory/ai-memory-extractor.js'
 import { createMemoryOperations } from '../src/memory/ai-memory-functions.js'
@@ -18,7 +18,7 @@ import { createMemoryOperations } from '../src/memory/ai-memory-functions.js'
 /**
  * 创建 Map 支撑的 AIStore mock（测试用）
  */
-function createMockStore<T>(): AIStore<T> {
+function createMockStore<T>(): AIRelStore<T> {
   const data = new Map<string, T>()
   return {
     save: vi.fn(async (id: string, value: T) => {

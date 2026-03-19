@@ -231,7 +231,7 @@ export interface MemoryOperations {
    * 从对话消息中自动提取记忆条目
    *
    * 使用 LLM 分析对话内容，提取值得记住的事实、偏好、事件等。
-   * 提取的记忆会自动持久化到 reldb + vecdb（含向量计算）。
+   * 提取的记忆会自动持久化到 Store（含向量计算）。
    *
    * @param messages - 对话消息列表
    * @param options - 提取选项
@@ -242,7 +242,7 @@ export interface MemoryOperations {
   /**
    * 手动添加一条记忆
    *
-   * 记忆会自动持久化到 reldb + vecdb（含向量计算）。
+   * 记忆会自动持久化到 Store（含向量计算）。
    *
    * @param entry - 记忆条目输入
    * @returns 存储后的完整记忆条目
@@ -254,7 +254,7 @@ export interface MemoryOperations {
    *
    * 仅更新传入的字段，其余字段保持不变。
    * 若 content 被更新，会重新计算向量。
-   * 更新结果自动持久化到 reldb + vecdb。
+   * 更新结果自动持久化到 Store。
    *
    * @param memoryId - 记忆 ID
    * @param updates - 需要更新的字段
@@ -298,7 +298,7 @@ export interface MemoryOperations {
   /**
    * 删除单条记忆
    *
-   * 同时从 reldb 和 vecdb 中移除持久化数据。
+   * 同时从 Store 中移除持久化数据。
    *
    * @param memoryId - 记忆 ID
    * @returns 成功返回 ok(undefined)
@@ -324,7 +324,7 @@ export interface MemoryOperations {
   /**
    * 清空记忆
    *
-   * 同时从 reldb 和 vecdb 中移除持久化数据。
+   * 同时从 Store 中移除持久化数据。
    *
    * @param options - 清空选项（可按类型/主体过滤）
    */

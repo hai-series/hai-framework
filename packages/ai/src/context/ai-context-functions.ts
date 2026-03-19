@@ -12,7 +12,7 @@ import type { CompressConfig } from '../ai-config.js'
 import type { AIError } from '../ai-types.js'
 import type { CompressOperations } from '../compress/ai-compress-types.js'
 import type { ChatMessage } from '../llm/ai-llm-types.js'
-import type { AIStore, InteractionScope, SessionInfo } from '../store/ai-store-types.js'
+import type { AIRelStore, InteractionScope, SessionInfo } from '../store/ai-store-types.js'
 import type { SummaryResult } from '../summary/ai-summary-types.js'
 import type { TokenOperations } from '../token/ai-token-types.js'
 import type {
@@ -62,8 +62,8 @@ export function createContextOperations(
   compressConfig: CompressConfig,
   tokenOps: TokenOperations,
   compressOps: CompressOperations,
-  contextStore?: AIStore<PersistedContextState>,
-  sessionStore?: AIStore<SessionInfo>,
+  contextStore?: AIRelStore<PersistedContextState>,
+  sessionStore?: AIRelStore<SessionInfo>,
   deps?: ContextDeps,
 ): ContextOperations {
   /**

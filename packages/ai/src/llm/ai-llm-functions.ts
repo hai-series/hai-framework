@@ -10,7 +10,7 @@ import type { Result } from '@h-ai/core'
 
 import type { AIConfig } from '../ai-config.js'
 import type { AIError } from '../ai-types.js'
-import type { AIStore, InteractionScope, SessionInfo } from '../store/ai-store-types.js'
+import type { AIRelStore, InteractionScope, SessionInfo } from '../store/ai-store-types.js'
 import type {
   AskOptions,
   ChatCompletionChunk,
@@ -40,9 +40,9 @@ const logger = core.logger.child({ module: 'ai', scope: 'llm' })
 /** LLM 子功能存储依赖 */
 export interface AILLMStores {
   /** 对话记录存储（可选；未传入时不记录） */
-  recordStore?: AIStore<ChatRecord>
+  recordStore?: AIRelStore<ChatRecord>
   /** 会话信息存储（可选；未传入时 listSessions 返回空） */
-  sessionStore?: AIStore<SessionInfo>
+  sessionStore?: AIRelStore<SessionInfo>
 }
 
 /** LLM 子功能创建结果 */
