@@ -19,15 +19,14 @@ password:
 
 # 会话配置
 session:
-  type: jwt
-  jwt:
-    # 密钥（必须通过环境变量设置）
-    secret: ${HAI_SESSION_SECRET}
-    algorithm: HS256
-    # access token 有效期（秒）
-    accessTokenExpiresIn: 900
-    # refresh token 有效期（秒）
-    refreshTokenExpiresIn: 604800
+  # 会话超时时间（秒，默认 86400 = 24小时）
+  maxAge: 900
+  # refreshToken 过期时间（秒，默认 604800 = 7天）
+  refreshTokenMaxAge: 604800
+  # 是否滑动窗口（每次访问刷新过期时间）
+  sliding: true
+  # 单设备登录（踢掉其他设备）
+  singleDevice: false
 
 # RBAC 配置
 rbac:
