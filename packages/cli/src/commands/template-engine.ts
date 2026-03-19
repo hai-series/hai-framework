@@ -224,6 +224,11 @@ export async function generateFromTemplates(
       continue
     }
 
+    // 安全校验：featureId 只允许字母、数字和连字符，防止路径遍历
+    if (!/^[a-z0-9-]+$/.test(featureId)) {
+      continue
+    }
+
     const featureDir = path.join(root, 'features', featureId)
     if (!(await fse.pathExists(featureDir))) {
       continue
