@@ -20,6 +20,11 @@ export interface ResolvedA2AConfig {
   authenticate?: (event: RequestEvent) => Promise<Record<string, unknown> | null | undefined>
 }
 
+interface A2AApiKeySecurityConfig {
+  in: 'header' | 'query'
+  name: string
+}
+
 // ─── A2A 配置解析 ───
 
 /**
@@ -39,10 +44,12 @@ export function resolveA2AConfig(
 
   // 简单模式：直接传入操作对象
   if ('getAgentCard' in input && 'handleRequest' in input) {
+    const operations = input as HandleA2AOperations
     return {
-      operations: input as HandleA2AOperations,
+      operations,
       cardPath: '/.well-known/agent.json',
       rpcPath: '/a2a',
+      authenticate: resolveAuthenticate(undefined, operations),
     }
   }
 
@@ -67,23 +74,36 @@ function resolveAuthenticate(
   authenticate: HandleA2AConfig['authenticate'],
   operations: HandleA2AOperations,
 ): ResolvedA2AConfig['authenticate'] {
-  if (!authenticate)
-    return undefined
-
   if (typeof authenticate === 'function')
     return authenticate
 
-  // 'apiKey' 快捷方式：从 Agent Card 获取 security 配置
-  const cardResult = operations.getAgentCard()
-  const security = cardResult.success && cardResult.data
-    ? (cardResult.data as Record<string, unknown>).security as { apiKey?: { in: 'header' | 'query', name: string } } | undefined
-    : undefined
-  const apiKeyCfg = security?.apiKey
+  const apiKeyCfg = getApiKeySecurityFromAgentCard(operations)
+
+  if (authenticate === 'apiKey') {
+    return createA2AApiKeyAuthenticator({
+      in: apiKeyCfg?.in ?? 'header',
+      name: apiKeyCfg?.name ?? 'x-api-key',
+    })
+  }
+
+  if (!apiKeyCfg)
+    return undefined
 
   return createA2AApiKeyAuthenticator({
-    in: apiKeyCfg?.in ?? 'header',
-    name: apiKeyCfg?.name ?? 'x-api-key',
+    in: apiKeyCfg.in,
+    name: apiKeyCfg.name,
   })
+}
+
+function getApiKeySecurityFromAgentCard(
+  operations: HandleA2AOperations,
+): A2AApiKeySecurityConfig | undefined {
+  const cardResult = operations.getAgentCard()
+  if (!cardResult.success || !cardResult.data)
+    return undefined
+
+  const security = (cardResult.data as Record<string, unknown>).security as { apiKey?: A2AApiKeySecurityConfig } | undefined
+  return security?.apiKey
 }
 
 // ─── A2A 请求处理 ───
@@ -125,9 +145,21 @@ export async function handleA2ARequest(
     // 可选认证
     let context: Record<string, unknown> | undefined
     if (config.authenticate) {
-      const authResult = await config.authenticate(event)
-      if (authResult) {
+      try {
+        const authResult = await config.authenticate(event)
+        if (!authResult) {
+          return new Response(
+            JSON.stringify({ error: { code: 'A2A_UNAUTHORIZED', message: 'A2A authentication required' } }),
+            { status: 401, headers: { 'Content-Type': 'application/json', 'X-Request-Id': requestId } },
+          )
+        }
         context = authResult
+      }
+      catch {
+        return new Response(
+          JSON.stringify({ error: { code: 'A2A_FORBIDDEN', message: 'A2A authentication failed' } }),
+          { status: 403, headers: { 'Content-Type': 'application/json', 'X-Request-Id': requestId } },
+        )
       }
     }
 

@@ -25,6 +25,8 @@ import type { AIApiAdapter } from './ai-client.js'
 export interface A2AClientOperations {
   /** 获取当前 Agent Card 配置 */
   getAgentCard: () => Promise<A2AAgentCardConfig>
+  /** 直接请求默认 A2A JSON-RPC 端点 */
+  sendRequest: (requestBody: unknown) => Promise<unknown>
   /** 查询 A2A 消息记录 */
   listMessages: (filter?: { contextId?: string, status?: string, limit?: number, offset?: number }) => Promise<StorePage<A2AMessageRecord>>
   /** 作为客户端调用远端 Agent */
@@ -34,7 +36,9 @@ export interface A2AClientOperations {
 // ─── A2A API 路径 ───
 
 const A2A_PATH = {
-  agentCard: '/a2a/agent-card',
+  agentCard: '/.well-known/agent.json',
+  legacyAgentCard: '/a2a/agent-card',
+  rpc: '/a2a',
   messages: '/a2a/messages',
   callRemote: '/a2a/call',
 } as const
@@ -50,9 +54,25 @@ const A2A_PATH = {
 export function createA2AClient(api: AIApiAdapter): A2AClientOperations {
   return {
     async getAgentCard(): Promise<A2AAgentCardConfig> {
-      const result = await api.post<A2AAgentCardConfig>(A2A_PATH.agentCard)
-      if (!result.success) {
+      const result = typeof api.get === 'function'
+        ? await api.get<A2AAgentCardConfig>(A2A_PATH.agentCard)
+        : await api.post<A2AAgentCardConfig>(A2A_PATH.agentCard)
+      if (result.success) {
+        return result.data
+      }
+
+      // 兼容旧路由：若服务仍使用 /a2a/agent-card，回退一次。
+      const legacyResult = await api.post<A2AAgentCardConfig>(A2A_PATH.legacyAgentCard)
+      if (!legacyResult.success) {
         throw new Error(`A2A get agent card failed: ${result.error.message}`)
+      }
+      return legacyResult.data
+    },
+
+    async sendRequest(requestBody: unknown): Promise<unknown> {
+      const result = await api.post<unknown>(A2A_PATH.rpc, requestBody)
+      if (!result.success) {
+        throw new Error(`A2A request failed: ${result.error.message}`)
       }
       return result.data
     },

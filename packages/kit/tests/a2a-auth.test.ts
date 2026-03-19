@@ -8,22 +8,25 @@ import type { RequestEvent } from '@sveltejs/kit'
 import { describe, expect, it, vi } from 'vitest'
 
 import { createA2AApiKeyAuthenticator } from '../src/modules/a2a/kit-a2a-auth.js'
-import { resolveA2AConfig } from '../src/modules/a2a/kit-a2a-handle.js'
+import { handleA2ARequest, resolveA2AConfig } from '../src/modules/a2a/kit-a2a-handle.js'
 
 // ─── mock IAM ───
+
+const { verifyApiKeyMock } = vi.hoisted(() => ({
+  verifyApiKeyMock: vi.fn(),
+}))
 
 vi.mock('@h-ai/iam', () => ({
   iam: {
     apiKey: {
-      verifyApiKey: vi.fn(),
+      verifyApiKey: verifyApiKeyMock,
     },
   },
-}))
+}), { virtual: true })
 
 // 获取 mock 引用
 async function getIamMock() {
-  const { iam } = await import('@h-ai/iam')
-  return iam.apiKey.verifyApiKey as ReturnType<typeof vi.fn>
+  return verifyApiKeyMock
 }
 
 // ─── 测试辅助 ───
@@ -31,16 +34,23 @@ async function getIamMock() {
 function createMockEvent(overrides: {
   headers?: Record<string, string>
   searchParams?: Record<string, string>
+  path?: string
+  method?: string
+  jsonBody?: unknown
 } = {}): RequestEvent {
   const headers = new Headers(overrides.headers ?? {})
-  const url = new URL('http://localhost/a2a')
+  const url = new URL(`http://localhost${overrides.path ?? '/a2a'}`)
   if (overrides.searchParams) {
     for (const [k, v] of Object.entries(overrides.searchParams)) {
       url.searchParams.set(k, v)
     }
   }
   return {
-    request: { headers } as Request,
+    request: {
+      headers,
+      method: overrides.method ?? 'POST',
+      json: async () => overrides.jsonBody ?? {},
+    } as unknown as Request,
     url,
   } as unknown as RequestEvent
 }
@@ -184,5 +194,63 @@ describe('resolveA2AConfig — apiKey authenticate', () => {
       apiKeyId: 'key-1',
       scopes: [],
     })
+  })
+
+  it('简单模式下 security.apiKey 会自动启用鉴权', async () => {
+    const verifyMock = await getIamMock()
+    verifyMock.mockResolvedValueOnce({
+      success: true,
+      data: { id: 'key-3', userId: 'user-3', scopes: ['a2a:call'] },
+    })
+
+    const operations = {
+      getAgentCard: () => ({
+        success: true,
+        data: {
+          name: 'secure-agent',
+          url: 'http://localhost',
+          security: { apiKey: { in: 'header' as const, name: 'x-api-key' } },
+        },
+      }),
+      handleRequest: vi.fn(),
+    }
+
+    const resolved = resolveA2AConfig(operations)
+    const result = await resolved!.authenticate!(
+      createMockEvent({ headers: { 'x-api-key': 'hai_secure' } }),
+    )
+
+    expect(result).toEqual({
+      agentId: 'user-3',
+      apiKeyId: 'key-3',
+      scopes: ['a2a:call'],
+    })
+  })
+})
+
+describe('handleA2ARequest — A2A auth enforcement', () => {
+  it('POST /a2a 缺少有效 API Key 时返回 401 且不执行 handleRequest', async () => {
+    const operations = {
+      getAgentCard: () => ({
+        success: true,
+        data: {
+          name: 'secure-agent',
+          url: 'http://localhost',
+          security: { apiKey: { in: 'header' as const, name: 'x-api-key' } },
+        },
+      }),
+      handleRequest: vi.fn(async () => ({ streaming: false, body: { ok: true } })),
+    }
+
+    const resolved = resolveA2AConfig(operations)
+    const response = await handleA2ARequest(
+      createMockEvent({ path: '/a2a', method: 'POST', jsonBody: { jsonrpc: '2.0', id: '1' } }),
+      'req_test',
+      resolved!,
+    )
+
+    expect(response).not.toBeNull()
+    expect(response!.status).toBe(401)
+    expect(operations.handleRequest).not.toHaveBeenCalled()
   })
 })
