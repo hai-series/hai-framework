@@ -97,7 +97,8 @@
     "Reranking",
     "srem",
     "vecdb",
-    "wechat"
+    "wechat",
+    "zset"
   ],
   // 禁用 Inlang 扩展的自动设置同步，防止 locale 被自动修改
   "inlang.disableConfigFileWatcher": true,

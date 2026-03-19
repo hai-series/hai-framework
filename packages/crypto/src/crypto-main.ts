@@ -31,6 +31,8 @@ const logger = core.logger.child({ module: 'crypto', scope: 'main' })
 
 /** 是否已初始化 */
 let initialized = false
+/** 并发初始化防护标志 */
+let initInProgress = false
 /** 当前非对称加密操作实例 */
 let currentAsymmetric: AsymmetricOperations | null = null
 /** 当前哈希操作实例 */
@@ -80,14 +82,24 @@ export const crypto: CryptoFunctions = {
    * @returns 成功时返回 ok(undefined)；失败时返回 INIT_FAILED
    */
   async init(): Promise<Result<void, CryptoError>> {
-    if (initialized) {
-      logger.warn('Crypto module is already initialized, reinitializing')
-      await crypto.close()
+    // 并发初始化防护：避免多次 init 同时执行导致资源泄漏
+    if (initInProgress) {
+      logger.warn('Crypto init already in progress, skipping concurrent call')
+      return err({
+        code: CryptoErrorCode.INIT_FAILED,
+        message: cryptoM('crypto_initFailed', { params: { error: 'Concurrent initialization detected' } }),
+      })
     }
-
-    logger.info('Initializing crypto module')
+    initInProgress = true
 
     try {
+      if (initialized) {
+        logger.warn('Crypto module is already initialized, reinitializing')
+        await crypto.close()
+      }
+
+      logger.info('Initializing crypto module')
+
       currentAsymmetric = createSM2()
       currentHash = createSM3()
       currentSymmetric = createSM4()
@@ -97,6 +109,12 @@ export const crypto: CryptoFunctions = {
       return ok(undefined)
     }
     catch (error) {
+      // 清理部分赋值的状态
+      currentAsymmetric = null
+      currentHash = null
+      currentSymmetric = null
+      currentPassword = null
+      initialized = false
       logger.error('Crypto module initialization failed', { error })
       return err({
         code: CryptoErrorCode.INIT_FAILED,
@@ -105,6 +123,9 @@ export const crypto: CryptoFunctions = {
         }),
         cause: error,
       })
+    }
+    finally {
+      initInProgress = false
     }
   },
 
