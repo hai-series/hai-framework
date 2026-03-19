@@ -46,6 +46,7 @@ export class ReldbAIStore<T> implements AIStore<T> {
   private readonly hasSessionId: boolean
   private readonly hasStatus: boolean
   private readonly hasRefId: boolean
+
   constructor(sql: DmlOperations, table: string, jsonOps: ReldbJsonOps, options?: AIStoreOptions) {
     this.sql = sql
     this.table = table
@@ -55,6 +56,19 @@ export class ReldbAIStore<T> implements AIStore<T> {
     this.hasSessionId = options?.hasSessionId ?? false
     this.hasStatus = options?.hasStatus ?? false
     this.hasRefId = options?.hasRefId ?? false
+  }
+
+  private assertDbSuccess(
+    operation: string,
+    result: { success: boolean, error?: { message?: string } },
+  ): asserts result is { success: true } {
+    if (result.success)
+      return
+    const errorMessage = result.error?.message ?? 'unknown database error'
+    throw new Error(
+      `[ReldbAIStore:${this.table}] ${operation} failed: ${errorMessage}`,
+      { cause: result.error },
+    )
   }
 
   /**
@@ -82,23 +96,41 @@ export class ReldbAIStore<T> implements AIStore<T> {
     cols.push(`created_at BIGINT NOT NULL`)
     cols.push(`updated_at BIGINT NOT NULL`)
 
-    await this.sql.execute(`CREATE TABLE IF NOT EXISTS ${t} (${cols.join(', ')})`)
+    this.assertDbSuccess(
+      'create table',
+      await this.sql.execute(`CREATE TABLE IF NOT EXISTS ${t} (${cols.join(', ')})`),
+    )
 
     // 索引
     if (this.hasObjectId) {
-      await this.sql.execute(`CREATE INDEX IF NOT EXISTS idx_${t}_object_id ON ${t}(object_id)`)
+      this.assertDbSuccess(
+        'create object_id index',
+        await this.sql.execute(`CREATE INDEX IF NOT EXISTS idx_${t}_object_id ON ${t}(object_id)`),
+      )
     }
     if (this.hasSessionId) {
-      await this.sql.execute(`CREATE INDEX IF NOT EXISTS idx_${t}_session_id ON ${t}(session_id)`)
+      this.assertDbSuccess(
+        'create session_id index',
+        await this.sql.execute(`CREATE INDEX IF NOT EXISTS idx_${t}_session_id ON ${t}(session_id)`),
+      )
     }
     if (this.hasObjectId && this.hasSessionId) {
-      await this.sql.execute(`CREATE INDEX IF NOT EXISTS idx_${t}_object_session ON ${t}(object_id, session_id)`)
+      this.assertDbSuccess(
+        'create object_id + session_id index',
+        await this.sql.execute(`CREATE INDEX IF NOT EXISTS idx_${t}_object_session ON ${t}(object_id, session_id)`),
+      )
     }
     if (this.hasStatus) {
-      await this.sql.execute(`CREATE INDEX IF NOT EXISTS idx_${t}_status ON ${t}(status)`)
+      this.assertDbSuccess(
+        'create status index',
+        await this.sql.execute(`CREATE INDEX IF NOT EXISTS idx_${t}_status ON ${t}(status)`),
+      )
     }
     if (this.hasRefId) {
-      await this.sql.execute(`CREATE INDEX IF NOT EXISTS idx_${t}_ref_id ON ${t}(ref_id)`)
+      this.assertDbSuccess(
+        'create ref_id index',
+        await this.sql.execute(`CREATE INDEX IF NOT EXISTS idx_${t}_ref_id ON ${t}(ref_id)`),
+      )
     }
   }
 
@@ -147,9 +179,12 @@ export class ReldbAIStore<T> implements AIStore<T> {
       if (this.hasRefId)
         updateParts.push('ref_id = VALUES(ref_id)')
 
-      await this.sql.execute(
-        `INSERT INTO ${this.table} (${colNames.join(', ')}) VALUES (${placeholders.join(', ')}) ON DUPLICATE KEY UPDATE ${updateParts.join(', ')}`,
-        values,
+      this.assertDbSuccess(
+        'save upsert',
+        await this.sql.execute(
+          `INSERT INTO ${this.table} (${colNames.join(', ')}) VALUES (${placeholders.join(', ')}) ON DUPLICATE KEY UPDATE ${updateParts.join(', ')}`,
+          values,
+        ),
       )
     }
     else {
@@ -164,9 +199,12 @@ export class ReldbAIStore<T> implements AIStore<T> {
       if (this.hasRefId)
         updateParts.push('ref_id = excluded.ref_id')
 
-      await this.sql.execute(
-        `INSERT INTO ${this.table} (${colNames.join(', ')}) VALUES (${placeholders.join(', ')}) ON CONFLICT(id) DO UPDATE SET ${updateParts.join(', ')}`,
-        values,
+      this.assertDbSuccess(
+        'save upsert',
+        await this.sql.execute(
+          `INSERT INTO ${this.table} (${colNames.join(', ')}) VALUES (${placeholders.join(', ')}) ON CONFLICT(id) DO UPDATE SET ${updateParts.join(', ')}`,
+          values,
+        ),
       )
     }
   }
@@ -183,7 +221,8 @@ export class ReldbAIStore<T> implements AIStore<T> {
       `SELECT data FROM ${this.table} WHERE id = ?`,
       [id],
     )
-    if (!result.success || !result.data)
+    this.assertDbSuccess('get by id', result)
+    if (!result.data)
       return undefined
     return JSON.parse(result.data.data) as T
   }
@@ -191,8 +230,7 @@ export class ReldbAIStore<T> implements AIStore<T> {
   async query(filter: StoreFilter<T>): Promise<T[]> {
     const { sql, params } = this.buildQuery(filter)
     const result = await this.sql.query<{ data: string }>(sql, params)
-    if (!result.success)
-      return []
+    this.assertDbSuccess('query by filter', result)
     return result.data.map(row => JSON.parse(row.data) as T)
   }
 
@@ -205,19 +243,24 @@ export class ReldbAIStore<T> implements AIStore<T> {
       countSql += ` WHERE ${countConditions.join(' AND ')}`
     }
     const countResult = await this.sql.get<{ cnt: number }>(countSql, countParams)
-    const total = countResult.success && countResult.data != null ? countResult.data.cnt : 0
+    this.assertDbSuccess('query page count', countResult)
+    const total = countResult.data != null ? countResult.data.cnt : 0
 
     // 分页数据
     const { sql, params } = this.buildQuery({ ...filter, limit: undefined })
     const pagedSql = `${sql} LIMIT ? OFFSET ?`
     const result = await this.sql.query<{ data: string }>(pagedSql, [...params, page.limit, page.offset])
-    const items = result.success ? result.data.map(row => JSON.parse(row.data) as T) : []
+    this.assertDbSuccess('query page items', result)
+    const items = result.data.map(row => JSON.parse(row.data) as T)
 
     return { items, total }
   }
 
   async remove(id: string): Promise<boolean> {
-    await this.sql.execute(`DELETE FROM ${this.table} WHERE id = ?`, [id])
+    this.assertDbSuccess(
+      'remove by id',
+      await this.sql.execute(`DELETE FROM ${this.table} WHERE id = ?`, [id]),
+    )
     return true
   }
 
@@ -231,17 +274,19 @@ export class ReldbAIStore<T> implements AIStore<T> {
       const whereClause = ` WHERE ${conditions.join(' AND ')}`
       countSql += whereClause
       const countResult = await this.sql.get<{ cnt: number }>(countSql, [...params])
-      const count = countResult.success && countResult.data != null ? countResult.data.cnt : 0
+      this.assertDbSuccess('removeBy count', countResult)
+      const count = countResult.data != null ? countResult.data.cnt : 0
 
       const deleteSql = `DELETE FROM ${this.table}${whereClause}`
-      await this.sql.execute(deleteSql, params)
+      this.assertDbSuccess('removeBy delete', await this.sql.execute(deleteSql, params))
       return count
     }
 
     // 无条件全删
     const countResult = await this.sql.get<{ cnt: number }>(countSql)
-    const count = countResult.success && countResult.data != null ? countResult.data.cnt : 0
-    await this.sql.execute(`DELETE FROM ${this.table}`)
+    this.assertDbSuccess('removeBy count all', countResult)
+    const count = countResult.data != null ? countResult.data.cnt : 0
+    this.assertDbSuccess('removeBy delete all', await this.sql.execute(`DELETE FROM ${this.table}`))
     return count
   }
 
@@ -250,7 +295,8 @@ export class ReldbAIStore<T> implements AIStore<T> {
       const result = await this.sql.get<{ cnt: number }>(
         `SELECT COUNT(*) as cnt FROM ${this.table}`,
       )
-      return result.success && result.data != null ? result.data.cnt : 0
+      this.assertDbSuccess('count all', result)
+      return result.data != null ? result.data.cnt : 0
     }
     const params: unknown[] = []
     const conditions = this.buildAllConditions(filter!, params)
@@ -259,12 +305,13 @@ export class ReldbAIStore<T> implements AIStore<T> {
       sql += ` WHERE ${conditions.join(' AND ')}`
     }
     const result = await this.sql.get<{ cnt: number }>(sql, params)
-    return result.success && result.data != null ? result.data.cnt : 0
+    this.assertDbSuccess('count by filter', result)
+    return result.data != null ? result.data.cnt : 0
   }
 
   async clear(filter?: StoreFilter<T>): Promise<void> {
     if (!filter?.where && !filter?.objectId && !filter?.sessionId && !filter?.status && !filter?.refId) {
-      await this.sql.execute(`DELETE FROM ${this.table}`)
+      this.assertDbSuccess('clear all', await this.sql.execute(`DELETE FROM ${this.table}`))
       return
     }
     await this.removeBy(filter!)
