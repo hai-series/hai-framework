@@ -795,7 +795,7 @@ ${pm} preview
 
 ## 文档
 
-- [hai Agent Framework](https://github.com/200hub/hai-framework)
+- [hai Agent Framework](https://github.com/hai-series/hai-framework)
 - [SvelteKit](https://kit.svelte.dev/)
 - [Svelte 5](https://svelte.dev/)
 `
