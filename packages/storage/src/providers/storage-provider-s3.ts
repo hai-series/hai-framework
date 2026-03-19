@@ -323,12 +323,21 @@ export function createS3Provider(): StorageProvider {
           return ok(undefined)
         }
 
-        await s3Client.send(new DeleteObjectsCommand({
+        const response = await s3Client.send(new DeleteObjectsCommand({
           Bucket: s3Config.bucket,
           Delete: {
             Objects: keys.map(key => ({ Key: fullKey(key) })),
           },
         }))
+
+        const failed = response.Errors ?? []
+        if (failed.length > 0) {
+          return err({
+            code: StorageErrorCode.OPERATION_FAILED,
+            message: storageM('storage_deleteManyFailed', { params: { count: failed.length } }),
+            cause: failed,
+          })
+        }
 
         return ok(undefined)
       }

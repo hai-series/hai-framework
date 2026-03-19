@@ -36,6 +36,202 @@ import { createTxHandle } from './reldb-tx-assembler.js'
 
 const logger = core.logger.child({ module: 'reldb', scope: 'postgres' })
 
+function findPrevNonWhitespaceChar(sql: string, start: number): string | null {
+  for (let i = start; i >= 0; i--) {
+    const ch = sql[i]
+    if (!/\s/.test(ch)) {
+      return ch
+    }
+  }
+  return null
+}
+
+function findNextNonWhitespaceChar(sql: string, start: number): string | null {
+  for (let i = start; i < sql.length; i++) {
+    const ch = sql[i]
+    if (!/\s/.test(ch)) {
+      return ch
+    }
+  }
+  return null
+}
+
+function matchDollarTag(sql: string, start: number): string | null {
+  if (sql[start] !== '$')
+    return null
+
+  const end = sql.indexOf('$', start + 1)
+  if (end === -1)
+    return null
+
+  const tag = sql.slice(start, end + 1)
+  if (tag === '$$')
+    return tag
+
+  const body = tag.slice(1, -1)
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(body))
+    return null
+
+  return tag
+}
+
+function isPgQuestionOperator(sql: string, index: number): boolean {
+  const prev = findPrevNonWhitespaceChar(sql, index - 1)
+  const next = findNextNonWhitespaceChar(sql, index + 1)
+
+  // PG JSON/JSONB 操作符：?、?|、?&、??（以及紧邻这些符号的变体）
+  if (next === '|' || next === '&' || next === '?')
+    return true
+  if (prev === '|' || prev === '&' || prev === '?')
+    return true
+
+  // 常见形式：metadata ? 'key'
+  if (next === '\'' || next === '"')
+    return true
+
+  return false
+}
+
+/**
+ * 将 ? 占位符转换为 PostgreSQL 的 $1, $2, ... 格式
+ *
+ * 仅转换参数占位符：
+ * - 跳过字符串字面量、标识符引用、注释、Dollar-Quoted 字符串
+ * - 跳过 PostgreSQL 的 ? 系列操作符（如 ?| / ?&）
+ * - 最多替换 placeholderCount 个，避免误替换无关的 ?
+ */
+export function convertPostgresPlaceholders(sql: string, placeholderCount = Number.POSITIVE_INFINITY): string {
+  if (!Number.isFinite(placeholderCount) || placeholderCount <= 0)
+    return sql
+
+  let index = 0
+  let converted = 0
+  let result = ''
+  let dollarTag: string | null = null
+  let inSingleQuote = false
+  let inDoubleQuote = false
+  let inLineComment = false
+  let inBlockComment = false
+
+  while (index < sql.length) {
+    const ch = sql[index]
+    const next = sql[index + 1]
+
+    if (inSingleQuote) {
+      result += ch
+      if (ch === '\'' && next === '\'') {
+        result += next
+        index += 2
+        continue
+      }
+      if (ch === '\'')
+        inSingleQuote = false
+      index++
+      continue
+    }
+
+    if (inDoubleQuote) {
+      result += ch
+      if (ch === '"' && next === '"') {
+        result += next
+        index += 2
+        continue
+      }
+      if (ch === '"')
+        inDoubleQuote = false
+      index++
+      continue
+    }
+
+    if (inLineComment) {
+      result += ch
+      if (ch === '\n')
+        inLineComment = false
+      index++
+      continue
+    }
+
+    if (inBlockComment) {
+      result += ch
+      if (ch === '*' && next === '/') {
+        result += next
+        index += 2
+        inBlockComment = false
+        continue
+      }
+      index++
+      continue
+    }
+
+    if (dollarTag) {
+      if (sql.startsWith(dollarTag, index)) {
+        result += dollarTag
+        index += dollarTag.length
+        dollarTag = null
+        continue
+      }
+      result += ch
+      index++
+      continue
+    }
+
+    if (ch === '\'' ) {
+      inSingleQuote = true
+      result += ch
+      index++
+      continue
+    }
+
+    if (ch === '"') {
+      inDoubleQuote = true
+      result += ch
+      index++
+      continue
+    }
+
+    if (ch === '-' && next === '-') {
+      inLineComment = true
+      result += ch + next
+      index += 2
+      continue
+    }
+
+    if (ch === '/' && next === '*') {
+      inBlockComment = true
+      result += ch + next
+      index += 2
+      continue
+    }
+
+    if (ch === '$') {
+      const tag = matchDollarTag(sql, index)
+      if (tag) {
+        dollarTag = tag
+        result += tag
+        index += tag.length
+        continue
+      }
+    }
+
+    if (ch === '?') {
+      if (converted < placeholderCount && !isPgQuestionOperator(sql, index)) {
+        converted++
+        result += `$${converted}`
+      }
+      else {
+        result += ch
+      }
+      index++
+      continue
+    }
+
+    result += ch
+    index++
+  }
+
+  return result
+}
+
 // ─── pg 类型定义（避免强依赖） ───
 
 /** PostgreSQL 连接池接口 */
@@ -70,14 +266,6 @@ export function createPostgresProvider(): ReldbProvider {
   }
 
   // ─── 辅助函数 ───
-
-  /**
-   * 将 ? 占位符转换为 PostgreSQL 的 $1, $2, ... 格式
-   */
-  function convertPlaceholders(sql: string): string {
-    let index = 0
-    return sql.replace(/\?/g, () => `$${++index}`)
-  }
 
   /** 事务错误消息生成 */
   function pgTxErrorMessage(detail: string): string {
@@ -132,7 +320,7 @@ export function createPostgresProvider(): ReldbProvider {
     sql: string,
     params?: unknown[],
   ): Promise<unknown[]> {
-    const result = await queryFn(convertPlaceholders(sql), params)
+    const result = await queryFn(convertPostgresPlaceholders(sql, params?.length ?? 0), params)
     return result.rows
   }
 
@@ -191,7 +379,7 @@ export function createPostgresProvider(): ReldbProvider {
       return ok((rows[0] as T) ?? null)
     },
     async execute(sql: string, params?: unknown[]): Promise<Result<ExecuteResult, ReldbError>> {
-      const result = await pool!.query(convertPlaceholders(sql), params)
+      const result = await pool!.query(convertPostgresPlaceholders(sql, params?.length ?? 0), params)
       return ok({ changes: result.rowCount ?? 0 })
     },
     async batch(statements) {
@@ -200,7 +388,7 @@ export function createPostgresProvider(): ReldbProvider {
         client = await pool!.connect()
         await client.query('BEGIN')
         for (const { sql: s, params } of statements) {
-          await client.query(convertPlaceholders(s), params)
+          await client.query(convertPostgresPlaceholders(s, params?.length ?? 0), params)
         }
         await client.query('COMMIT')
         return ok(undefined)
@@ -224,7 +412,7 @@ export function createPostgresProvider(): ReldbProvider {
     async queryPage<T>(options: PaginationQueryOptions): Promise<Result<PaginatedResult<T>, ReldbError>> {
       const result = await queryPageAsync<T>(
         async (sql, params) => {
-          const r = await pool!.query(convertPlaceholders(sql), params)
+          const r = await pool!.query(convertPostgresPlaceholders(sql, params?.length ?? 0), params)
           return r.rows
         },
         options,
@@ -248,19 +436,19 @@ export function createPostgresProvider(): ReldbProvider {
         return ok((rows[0] as T) ?? null)
       },
       async execute(sql: string, params?: unknown[]): Promise<Result<ExecuteResult, ReldbError>> {
-        const result = await queryFn(convertPlaceholders(sql), params)
+        const result = await queryFn(convertPostgresPlaceholders(sql, params?.length ?? 0), params)
         return ok({ changes: result.rowCount ?? 0 })
       },
       async batch(statements) {
         for (const { sql: s, params } of statements) {
-          await queryFn(convertPlaceholders(s), params)
+          await queryFn(convertPostgresPlaceholders(s, params?.length ?? 0), params)
         }
         return ok(undefined)
       },
       async queryPage<T>(options: PaginationQueryOptions): Promise<Result<PaginatedResult<T>, ReldbError>> {
         const result = await queryPageAsync<T>(
           async (sql, params) => {
-            const r = await queryFn(convertPlaceholders(sql), params)
+            const r = await queryFn(convertPostgresPlaceholders(sql, params?.length ?? 0), params)
             return r.rows
           },
           options,

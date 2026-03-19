@@ -86,6 +86,18 @@ export function createRedisProvider(): CacheProvider {
   // ─── 辅助函数 ───
 
   /**
+   * 连接阶段失败时主动断开，避免遗留后台重连中的 client
+   */
+  function disposeFailedClient(failedClient: Redis | Cluster): void {
+    try {
+      (failedClient as { disconnect: (reconnect?: boolean) => void }).disconnect(false)
+    }
+    catch {
+      // ignore cleanup errors
+    }
+  }
+
+  /**
    * 序列化值
    *
    * 所有类型（包括 string）统一经 JSON.stringify，确保 deserialize 时能还原原始类型。
@@ -743,6 +755,12 @@ export function createRedisProvider(): CacheProvider {
         return ok(undefined)
       }
       catch (error) {
+        const failedClient = client
+        client = null
+        if (failedClient) {
+          disposeFailedClient(failedClient)
+        }
+
         return err({
           code: CacheErrorCode.CONNECTION_FAILED,
           message: cacheM('cache_redisConnectionFailed', { params: { error: error instanceof Error ? error.message : String(error) } }),
