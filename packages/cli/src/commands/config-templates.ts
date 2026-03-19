@@ -175,12 +175,10 @@ password:
 
 # 会话配置
 session:
-  type: jwt
-  jwt:
-    secret: \${HAI_SESSION_SECRET}
-    algorithm: HS256
-    accessTokenExpiresIn: 900
-    refreshTokenExpiresIn: 604800
+  maxAge: 86400       # 会话超时（秒），默认 24 小时
+  sliding: true       # 滑动窗口（每次请求刷新过期时间）
+  singleDevice: false # 单设备登录
+  refreshTokenMaxAge: 604800  # refreshToken 过期（秒），默认 7 天
 
 # RBAC 配置
 rbac:
@@ -249,70 +247,40 @@ providers:
 }
 
 function generateAiConfig(cfg?: AiModuleConfig): string {
-  const provider = cfg?.defaultProvider ?? 'openai'
   const model = cfg?.model ?? 'gpt-4o-mini'
 
-  if (provider === 'openai') {
-    return `# =============================================================================
-# AI 配置
-# =============================================================================
-
-# 默认 Provider
-defaultProvider: openai
-
-# Provider 配置
-providers:
-  openai:
-    type: openai
-    apiKey: \${HAI_OPENAI_API_KEY}
-    model: ${model}
-
-  # 其他 Provider（可选）
-  # anthropic:
-  #   type: anthropic
-  #   apiKey: \${HAI_ANTHROPIC_API_KEY}
-  #   model: claude-3-sonnet
-`
-  }
-
-  if (provider === 'anthropic') {
-    return `# =============================================================================
-# AI 配置
-# =============================================================================
-
-# 默认 Provider
-defaultProvider: anthropic
-
-# Provider 配置
-providers:
-  anthropic:
-    type: anthropic
-    apiKey: \${HAI_ANTHROPIC_API_KEY}
-    model: ${model || 'claude-3-sonnet'}
-
-  # 其他 Provider（可选）
-  # openai:
-  #   type: openai
-  #   apiKey: \${HAI_OPENAI_API_KEY}
-  #   model: gpt-4o-mini
-`
-  }
-
-  // 通用 OpenAI 兼容 Provider
+  // AIConfigSchema 结构：llm（必填）+ 可选子模块
+  // LLMConfigSchema 支持顶层 apiKey/model，以及多模型 models 数组
   return `# =============================================================================
 # AI 配置
 # =============================================================================
 
-# 默认 Provider
-defaultProvider: ${provider}
+# LLM 配置（必填）
+llm:
+  # API Key（留空时自动读取 HAI_OPENAI_API_KEY / OPENAI_API_KEY 环境变量）
+  apiKey: \${HAI_AI_API_KEY:}
+  # 默认模型
+  model: ${model}
+  # 全局最大 Token 数（默认 4096）
+  # maxTokens: 4096
+  # 采样温度（0-2，默认 0.7）
+  # temperature: 0.7
+  # 请求超时（毫秒，默认 60000）
+  # timeout: 60000
 
-# Provider 配置
-providers:
-  ${provider}:
-    type: openai
-    apiKey: \${HAI_AI_API_KEY}
-    model: ${model}
-    # baseUrl: \${HAI_AI_BASE_URL}
+  # 多模型配置（可选，用于场景路由）
+  # models:
+  #   - id: fast
+  #     model: gpt-4o-mini
+  #     apiKey: \${HAI_AI_API_KEY:}
+  #   - id: smart
+  #     model: gpt-4o
+  #     apiKey: \${HAI_AI_API_KEY:}
+
+  # 场景模型映射（可选）
+  # scenarios:
+  #   default: fast
+  #   analysis: smart
 `
 }
 
@@ -378,10 +346,9 @@ HAI_DB_PASSWORD=`}`)
   if (features.includes('iam')) {
     sections.push(`
 # =============================================================================
-# Session / IAM (@h-ai/iam)
+# IAM (@h-ai/iam)
 # =============================================================================
-# JWT signing secret (REQUIRED, min 32 chars)
-HAI_SESSION_SECRET=change-me-to-a-strong-random-string-min-32-chars`)
+`)
   }
 
   // 缓存

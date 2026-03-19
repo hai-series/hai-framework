@@ -1,5 +1,7 @@
 # hai Framework
 
+> 研发中，敬请期待！🚀
+
 <p align="center">
   <strong>AI-First · 模块化 · 类型安全 · 全栈</strong>
 </p>
@@ -134,24 +136,24 @@ Skill 模板统一管理在 `packages/cli/templates/skills/` 中，通过 `@h-ai
 
 ### 数据层
 
-| 包名             | 职责                                                              |         Provider 支持          |
-| ---------------- | ----------------------------------------------------------------- | :----------------------------: |
-| `@h-ai/reldb`    | 关系数据库：DDL、原生 SQL、事务、分页、CRUD 仓库                  |     ✅ SQLite / PG / MySQL     |
-| `@h-ai/vecdb`    | 向量数据库：集合管理、向量插入、相似度搜索                        | ✅ LanceDB / pgvector / Qdrant |
+| 包名             | 职责                                                                 |         Provider 支持          |
+| ---------------- | -------------------------------------------------------------------- | :----------------------------: |
+| `@h-ai/reldb`    | 关系数据库：DDL、原生 SQL、事务、分页、CRUD 仓库                     |     ✅ SQLite / PG / MySQL     |
+| `@h-ai/vecdb`    | 向量数据库：集合管理、向量插入、相似度搜索                           | ✅ LanceDB / pgvector / Qdrant |
 | `@h-ai/cache`    | 缓存与分布式锁：KV、Hash、List、Set、SortedSet、Lock，Redis 风格 API |       ✅ Memory / Redis        |
-| `@h-ai/storage`  | 文件存储：上传/下载/删除/复制/预签名 URL                          |         ✅ Local / S3          |
-| `@h-ai/datapipe` | 数据管线：文本清洗、7 种分块模式、可组合管线（纯函数，无需 init） |               —                |
+| `@h-ai/storage`  | 文件存储：上传/下载/删除/复制/预签名 URL                             |         ✅ Local / S3          |
+| `@h-ai/datapipe` | 数据管线：文本清洗、7 种分块模式、可组合管线（纯函数，无需 init）    |               —                |
 
 ### 业务能力
 
-| 包名              | 职责                                                                   |       Provider 支持        |
-| ----------------- | ---------------------------------------------------------------------- | :------------------------: |
-| `@h-ai/iam`       | 身份与访问管理：认证（密码/OTP/LDAP）、RBAC 授权、会话管理、用户管理   |             —              |
-| `@h-ai/reach`     | 用户触达：邮件、短信、API 回调，模板引擎、免打扰（DND）                | ✅ SMTP / 阿里云短信 / API |
-| `@h-ai/ai`        | AI 集成：LLM 调用（同步/流式）、MCP、工具调用、RAG、知识库、推理、上下文压缩、A2A |    ✅ OpenAI 兼容 / 可扩展    |
-| `@h-ai/payment`   | 统一支付：订单创建、多端调起、回调通知                                 | ✅ 微信 / 支付宝 / Stripe  |
-| `@h-ai/audit`     | 审计日志：操作记录、分页查询、统计聚合、定时清理                       |             —              |
-| `@h-ai/scheduler` | 定时任务：Cron 调度、JS 函数 / HTTP API 执行、DB 持久化、分布式锁、执行日志 |             —              |
+| 包名              | 职责                                                                              |       Provider 支持        |
+| ----------------- | --------------------------------------------------------------------------------- | :------------------------: |
+| `@h-ai/iam`       | 身份与访问管理：认证（密码/OTP/LDAP）、RBAC 授权、会话管理、用户管理              |             —              |
+| `@h-ai/reach`     | 用户触达：邮件、短信、API 回调，模板引擎、免打扰（DND）                           | ✅ SMTP / 阿里云短信 / API |
+| `@h-ai/ai`        | AI 集成：LLM 调用（同步/流式）、MCP、工具调用、RAG、知识库、推理、上下文压缩、A2A |  ✅ OpenAI 兼容 / 可扩展   |
+| `@h-ai/payment`   | 统一支付：订单创建、多端调起、回调通知                                            | ✅ 微信 / 支付宝 / Stripe  |
+| `@h-ai/audit`     | 审计日志：操作记录、分页查询、统计聚合、定时清理                                  |             —              |
+| `@h-ai/scheduler` | 定时任务：Cron 调度、JS 函数 / HTTP API 执行、DB 持久化、分布式锁、执行日志       |             —              |
 
 ### 集成层
 
@@ -163,35 +165,35 @@ Skill 模板统一管理在 `packages/cli/templates/skills/` 中，通过 `@h-ai
 
 ### 界面与工具
 
-| 包名           | 职责                                                                   | Provider 支持 |
-| -------------- | ---------------------------------------------------------------------- | :-----------: |
-| `@h-ai/ui`     | UI 组件库：69+ Svelte 5 Runes 组件（原子 + 复合 + 业务场景），32+ 主题 |       —       |
-| `@h-ai/cli`    | CLI 脚手架：项目创建、模块添加、代码生成、一键部署                     |       —       |
+| 包名           | 职责                                                                             |                     Provider 支持                     |
+| -------------- | -------------------------------------------------------------------------------- | :---------------------------------------------------: |
+| `@h-ai/ui`     | UI 组件库：69+ Svelte 5 Runes 组件（原子 + 复合 + 业务场景），32+ 主题           |                           —                           |
+| `@h-ai/cli`    | CLI 脚手架：项目创建、模块添加、代码生成、一键部署                               |                           —                           |
 | `@h-ai/deploy` | 自动化部署：Vercel 部署 + 基础设施自动开通（数据库 / 缓存 / 存储 / 邮件 / 短信） | ✅ Vercel / Neon / Upstash / R2 / Resend / 阿里云短信 |
 
 ### 模块文档索引
 
-| 分类 | 模块 | README |
-| ---- | ---- | ------ |
-| 基础能力 | `@h-ai/core` | [`packages/core/README.md`](./packages/core/README.md) |
-| 基础能力 | `@h-ai/crypto` | [`packages/crypto/README.md`](./packages/crypto/README.md) |
-| 数据层 | `@h-ai/reldb` | [`packages/reldb/README.md`](./packages/reldb/README.md) |
-| 数据层 | `@h-ai/vecdb` | [`packages/vecdb/README.md`](./packages/vecdb/README.md) |
-| 数据层 | `@h-ai/cache` | [`packages/cache/README.md`](./packages/cache/README.md) |
-| 数据层 | `@h-ai/storage` | [`packages/storage/README.md`](./packages/storage/README.md) |
-| 数据层 | `@h-ai/datapipe` | [`packages/datapipe/README.md`](./packages/datapipe/README.md) |
-| 业务能力 | `@h-ai/iam` | [`packages/iam/README.md`](./packages/iam/README.md) |
-| 业务能力 | `@h-ai/reach` | [`packages/reach/README.md`](./packages/reach/README.md) |
-| 业务能力 | `@h-ai/ai` | [`packages/ai/README.md`](./packages/ai/README.md) |
-| 业务能力 | `@h-ai/payment` | [`packages/payment/README.md`](./packages/payment/README.md) |
-| 业务能力 | `@h-ai/audit` | [`packages/audit/README.md`](./packages/audit/README.md) |
-| 业务能力 | `@h-ai/scheduler` | [`packages/scheduler/README.md`](./packages/scheduler/README.md) |
-| 集成层 | `@h-ai/kit` | [`packages/kit/README.md`](./packages/kit/README.md) |
-| 集成层 | `@h-ai/api-client` | [`packages/api-client/README.md`](./packages/api-client/README.md) |
-| 集成层 | `@h-ai/capacitor` | [`packages/capacitor/README.md`](./packages/capacitor/README.md) |
-| 界面与工具 | `@h-ai/ui` | [`packages/ui/README.md`](./packages/ui/README.md) |
-| 界面与工具 | `@h-ai/cli` | [`packages/cli/README.md`](./packages/cli/README.md) |
-| 界面与工具 | `@h-ai/deploy` | [`packages/deploy/README.md`](./packages/deploy/README.md) |
+| 分类       | 模块               | README                                                             |
+| ---------- | ------------------ | ------------------------------------------------------------------ |
+| 基础能力   | `@h-ai/core`       | [`packages/core/README.md`](./packages/core/README.md)             |
+| 基础能力   | `@h-ai/crypto`     | [`packages/crypto/README.md`](./packages/crypto/README.md)         |
+| 数据层     | `@h-ai/reldb`      | [`packages/reldb/README.md`](./packages/reldb/README.md)           |
+| 数据层     | `@h-ai/vecdb`      | [`packages/vecdb/README.md`](./packages/vecdb/README.md)           |
+| 数据层     | `@h-ai/cache`      | [`packages/cache/README.md`](./packages/cache/README.md)           |
+| 数据层     | `@h-ai/storage`    | [`packages/storage/README.md`](./packages/storage/README.md)       |
+| 数据层     | `@h-ai/datapipe`   | [`packages/datapipe/README.md`](./packages/datapipe/README.md)     |
+| 业务能力   | `@h-ai/iam`        | [`packages/iam/README.md`](./packages/iam/README.md)               |
+| 业务能力   | `@h-ai/reach`      | [`packages/reach/README.md`](./packages/reach/README.md)           |
+| 业务能力   | `@h-ai/ai`         | [`packages/ai/README.md`](./packages/ai/README.md)                 |
+| 业务能力   | `@h-ai/payment`    | [`packages/payment/README.md`](./packages/payment/README.md)       |
+| 业务能力   | `@h-ai/audit`      | [`packages/audit/README.md`](./packages/audit/README.md)           |
+| 业务能力   | `@h-ai/scheduler`  | [`packages/scheduler/README.md`](./packages/scheduler/README.md)   |
+| 集成层     | `@h-ai/kit`        | [`packages/kit/README.md`](./packages/kit/README.md)               |
+| 集成层     | `@h-ai/api-client` | [`packages/api-client/README.md`](./packages/api-client/README.md) |
+| 集成层     | `@h-ai/capacitor`  | [`packages/capacitor/README.md`](./packages/capacitor/README.md)   |
+| 界面与工具 | `@h-ai/ui`         | [`packages/ui/README.md`](./packages/ui/README.md)                 |
+| 界面与工具 | `@h-ai/cli`        | [`packages/cli/README.md`](./packages/cli/README.md)               |
+| 界面与工具 | `@h-ai/deploy`     | [`packages/deploy/README.md`](./packages/deploy/README.md)         |
 
 ### 常见初始化顺序
 
@@ -682,25 +684,25 @@ await reach.send({ provider: 'email', to: 'user@example.com', template: 'welcome
 
 仓库 `apps/` 目录包含 6 个可直接运行的示例应用，既能作为脚手架参考，也能作为模块联调样板：
 
-| 应用                | 说明                     | 使用的模块               |
-| ------------------- | ------------------------ | ------------------------ |
-| `admin-console`     | 管理后台（全模块集成参考） | core, reldb, iam, cache, storage, crypto, ai, kit, ui |
-| `api-service`       | 无头 REST API 服务        | core, reldb, cache, kit |
-| `corporate-website` | 企业官网 + 合作登记 + AI 客服 | core, reldb, cache, storage, ai, reach, kit, ui |
-| `h5-app`            | 移动端 H5（拍照识别 / 购物车 / 登录） | core, reldb, iam, cache, storage, ai, kit, ui |
-| `desktop-app`       | Tauri 桌面应用           | core, kit, ui |
-| `android-app`       | Capacitor Android 应用   | core, kit, ui, capacitor |
+| 应用                | 说明                                  | 使用的模块                                            |
+| ------------------- | ------------------------------------- | ----------------------------------------------------- |
+| `admin-console`     | 管理后台（全模块集成参考）            | core, reldb, iam, cache, storage, crypto, ai, kit, ui |
+| `api-service`       | 无头 REST API 服务                    | core, reldb, cache, kit                               |
+| `corporate-website` | 企业官网 + 合作登记 + AI 客服         | core, reldb, cache, storage, ai, reach, kit, ui       |
+| `h5-app`            | 移动端 H5（拍照识别 / 购物车 / 登录） | core, reldb, iam, cache, storage, ai, kit, ui         |
+| `desktop-app`       | Tauri 桌面应用                        | core, kit, ui                                         |
+| `android-app`       | Capacitor Android 应用                | core, kit, ui, capacitor                              |
 
 ### 按应用快速启动
 
-| 应用 | 启动方式 |
-| ---- | -------- |
-| `admin-console` | `pnpm --filter admin-console dev` |
-| `api-service` | `pnpm --filter api-service dev` |
-| `corporate-website` | `pnpm --filter corporate-website dev` |
-| `h5-app` | `pnpm --filter h5-app dev` |
-| `desktop-app` | `cd apps/desktop-app && pnpm tauri:dev` |
-| `android-app` | `cd apps/android-app && pnpm cap:android` |
+| 应用                | 启动方式                                  |
+| ------------------- | ----------------------------------------- |
+| `admin-console`     | `pnpm --filter admin-console dev`         |
+| `api-service`       | `pnpm --filter api-service dev`           |
+| `corporate-website` | `pnpm --filter corporate-website dev`     |
+| `h5-app`            | `pnpm --filter h5-app dev`                |
+| `desktop-app`       | `cd apps/desktop-app && pnpm tauri:dev`   |
+| `android-app`       | `cd apps/android-app && pnpm cap:android` |
 
 ## 开发
 
@@ -739,32 +741,32 @@ pnpm --filter @h-ai/reldb test
 
 ### 根目录 `.env.example` 的关键分组
 
-| 分组 | 代表变量 | 说明 |
-| ---- | -------- | ---- |
-| Runtime | `HAI_ENV`、`HAI_DEBUG` | 运行环境、调试与日志开关 |
-| Database | `HAI_DB_*` | `@h-ai/reldb` 的 SQLite / PostgreSQL / MySQL 配置 |
-| Cache | `HAI_CACHE_*` | `@h-ai/cache` 的 memory / Redis / Upstash 配置 |
-| Session / Auth | `HAI_SESSION_SECRET`、`HAI_IAM_*` | `@h-ai/iam` 与 `@h-ai/kit` 的会话、Cookie、安全配置 |
-| Storage | `HAI_STORAGE_*` | `@h-ai/storage` 的 local / S3 配置 |
-| AI | `HAI_OPENAI_*`、`HAI_AI_*`、`HAI_ANTHROPIC_API_KEY` | `@h-ai/ai` 的模型、Base URL 与兼容 Provider 配置 |
-| VecDB | `HAI_VECDB_*` | `@h-ai/vecdb` 的 LanceDB / pgvector / Qdrant 配置 |
-| Reach | `HAI_REACH_*` | `@h-ai/reach` 的 SMTP、短信、Webhook 配置 |
-| Payment | `HAI_PAY_*` | `@h-ai/payment` 的微信、支付宝、Stripe 商户配置 |
-| Deploy | `HAI_DEPLOY_*` | `@h-ai/deploy` / `@h-ai/cli` 的 Vercel、Neon、Upstash、R2、Resend、阿里云短信凭据 |
-| App-specific | `HAI_PARTNER_*`、`HAI_CRYPTO_DATA_KEY` | 示例应用专用变量（如企业官网后台、业务数据加密） |
-| Dev / Test | `HAI_E2E`、`BASE_URL`、`PUBLIC_API_BASE`、`CI` | 本地联调、E2E 与构建辅助 |
+| 分组           | 代表变量                                            | 说明                                                                              |
+| -------------- | --------------------------------------------------- | --------------------------------------------------------------------------------- |
+| Runtime        | `HAI_ENV`、`HAI_DEBUG`                              | 运行环境、调试与日志开关                                                          |
+| Database       | `HAI_DB_*`                                          | `@h-ai/reldb` 的 SQLite / PostgreSQL / MySQL 配置                                 |
+| Cache          | `HAI_CACHE_*`                                       | `@h-ai/cache` 的 memory / Redis / Upstash 配置                                    |
+| Session / Auth | `HAI_SESSION_SECRET`、`HAI_IAM_*`                   | `@h-ai/iam` 与 `@h-ai/kit` 的会话、Cookie、安全配置                               |
+| Storage        | `HAI_STORAGE_*`                                     | `@h-ai/storage` 的 local / S3 配置                                                |
+| AI             | `HAI_OPENAI_*`、`HAI_AI_*`、`HAI_ANTHROPIC_API_KEY` | `@h-ai/ai` 的模型、Base URL 与兼容 Provider 配置                                  |
+| VecDB          | `HAI_VECDB_*`                                       | `@h-ai/vecdb` 的 LanceDB / pgvector / Qdrant 配置                                 |
+| Reach          | `HAI_REACH_*`                                       | `@h-ai/reach` 的 SMTP、短信、Webhook 配置                                         |
+| Payment        | `HAI_PAY_*`                                         | `@h-ai/payment` 的微信、支付宝、Stripe 商户配置                                   |
+| Deploy         | `HAI_DEPLOY_*`                                      | `@h-ai/deploy` / `@h-ai/cli` 的 Vercel、Neon、Upstash、R2、Resend、阿里云短信凭据 |
+| App-specific   | `HAI_PARTNER_*`、`HAI_CRYPTO_DATA_KEY`              | 示例应用专用变量（如企业官网后台、业务数据加密）                                  |
+| Dev / Test     | `HAI_E2E`、`BASE_URL`、`PUBLIC_API_BASE`、`CI`      | 本地联调、E2E 与构建辅助                                                          |
 
 ### 常见模块变量速查
 
-| 模块 | 常见变量前缀 | 用途 |
-| ---- | ------------ | ---- |
-| `@h-ai/reldb` | `HAI_DB_*` | 数据库连接、DSN、用户名密码 |
-| `@h-ai/cache` | `HAI_CACHE_*` | Redis / Upstash 连接、超时、前缀 |
-| `@h-ai/storage` | `HAI_STORAGE_*` | 本地路径、S3 Bucket / Endpoint / AK/SK |
-| `@h-ai/ai` | `HAI_OPENAI_*`、`HAI_AI_*` | LLM API Key、Base URL、默认模型 |
-| `@h-ai/reach` | `HAI_REACH_SMTP_*`、`HAI_REACH_SMS_*`、`HAI_REACH_WEBHOOK_URL` | 邮件、短信、Webhook 触达配置 |
-| `@h-ai/payment` | `HAI_PAY_WECHAT_*`、`HAI_PAY_ALIPAY_*`、`HAI_PAY_STRIPE_*` | 支付商户与回调配置 |
-| `@h-ai/deploy` | `HAI_DEPLOY_*` | Vercel / Neon / Upstash / Cloudflare / Resend / 阿里云短信凭据 |
+| 模块            | 常见变量前缀                                                   | 用途                                                           |
+| --------------- | -------------------------------------------------------------- | -------------------------------------------------------------- |
+| `@h-ai/reldb`   | `HAI_DB_*`                                                     | 数据库连接、DSN、用户名密码                                    |
+| `@h-ai/cache`   | `HAI_CACHE_*`                                                  | Redis / Upstash 连接、超时、前缀                               |
+| `@h-ai/storage` | `HAI_STORAGE_*`                                                | 本地路径、S3 Bucket / Endpoint / AK/SK                         |
+| `@h-ai/ai`      | `HAI_OPENAI_*`、`HAI_AI_*`                                     | LLM API Key、Base URL、默认模型                                |
+| `@h-ai/reach`   | `HAI_REACH_SMTP_*`、`HAI_REACH_SMS_*`、`HAI_REACH_WEBHOOK_URL` | 邮件、短信、Webhook 触达配置                                   |
+| `@h-ai/payment` | `HAI_PAY_WECHAT_*`、`HAI_PAY_ALIPAY_*`、`HAI_PAY_STRIPE_*`     | 支付商户与回调配置                                             |
+| `@h-ai/deploy`  | `HAI_DEPLOY_*`                                                 | Vercel / Neon / Upstash / Cloudflare / Resend / 阿里云短信凭据 |
 
 完整字段与默认值以仓库根目录 `.env.example` 为准；当你在某个示例应用中工作时，再对照该应用自己的 `README.md` 与 `.env.example` 查看增量配置。
 
