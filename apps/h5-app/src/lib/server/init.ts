@@ -26,12 +26,65 @@ type StorageConfigInput = Parameters<typeof storage.init>[0]
 
 let initialized = false
 
+interface SqliteTableInfoRow {
+  name: string
+}
+
+interface ExistsRow {
+  exists_value: boolean | number | string | null
+}
+
+async function hasVisionUserIdColumn(): Promise<boolean> {
+  const dbType = reldb.config?.type ?? 'sqlite'
+
+  if (dbType === 'sqlite') {
+    const columnsResult = await reldb.sql.query<SqliteTableInfoRow>(`PRAGMA table_info('vision_records')`)
+    if (!columnsResult.success) {
+      throw new Error(`Vision table schema inspection failed: ${columnsResult.error.message}`)
+    }
+    return columnsResult.data.some(column => column.name === 'user_id')
+  }
+
+  if (dbType === 'postgresql') {
+    const columnsResult = await reldb.sql.get<ExistsRow>(
+      `SELECT EXISTS (
+         SELECT 1
+         FROM information_schema.columns
+         WHERE table_schema = current_schema()
+           AND table_name = ?
+           AND column_name = ?
+       ) AS exists_value`,
+      ['vision_records', 'user_id'],
+    )
+    if (!columnsResult.success) {
+      throw new Error(`Vision table schema inspection failed: ${columnsResult.error.message}`)
+    }
+    return Boolean(columnsResult.data?.exists_value)
+  }
+
+  const columnsResult = await reldb.sql.get<ExistsRow>(
+    `SELECT EXISTS (
+       SELECT 1
+       FROM information_schema.columns
+       WHERE table_schema = DATABASE()
+         AND table_name = ?
+         AND column_name = ?
+     ) AS exists_value`,
+    ['vision_records', 'user_id'],
+  )
+  if (!columnsResult.success) {
+    throw new Error(`Vision table schema inspection failed: ${columnsResult.error.message}`)
+  }
+  return Boolean(columnsResult.data?.exists_value)
+}
+
 /**
  * 初始化拍照识别记录表
  */
 async function ensureVisionTable(): Promise<void> {
   const createResult = await reldb.ddl.createTable('vision_records', {
     id: { type: 'TEXT', primaryKey: true, notNull: true },
+    user_id: { type: 'TEXT', notNull: true },
     storage_key: { type: 'TEXT', notNull: true },
     file_name: { type: 'TEXT', notNull: true },
     mime_type: { type: 'TEXT', notNull: true },
@@ -52,6 +105,31 @@ async function ensureVisionTable(): Promise<void> {
   if (!indexResult.success) {
     core.logger.warn('Vision table index initialization failed', {
       error: indexResult.error.message,
+    })
+  }
+
+  const hasUserId = await hasVisionUserIdColumn()
+  if (!hasUserId) {
+    const addColumnResult = await reldb.ddl.addColumn('vision_records', 'user_id', { type: 'TEXT' })
+    if (!addColumnResult.success) {
+      throw new Error(`Vision table owner column initialization failed: ${addColumnResult.error.message}`)
+    }
+  }
+
+  const ownerIndexResult = await reldb.ddl.createIndex('vision_records', 'idx_vision_records_user_id_created_at', {
+    columns: ['user_id', 'created_at'],
+  })
+  if (!ownerIndexResult.success) {
+    core.logger.warn('Vision table owner index initialization failed', {
+      error: ownerIndexResult.error.message,
+    })
+  }
+
+  // 数据清理策略：历史记录未绑定 owner 时直接清理，避免无法归属的数据被错误访问。
+  const cleanupResult = await reldb.sql.execute('DELETE FROM vision_records WHERE user_id IS NULL OR user_id = ?', [''])
+  if (!cleanupResult.success) {
+    core.logger.warn('Vision table orphan data cleanup failed', {
+      error: cleanupResult.error.message,
     })
   }
 }
