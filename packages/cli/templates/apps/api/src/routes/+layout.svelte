@@ -1,4 +1,4 @@
-<script lang="ts">
+<script lang='ts'>
   /**
    * API 服务根布局
    */
@@ -8,7 +8,7 @@
     children: Snippet
   }
 
-  let { children }: Props = $props()
+  const { children }: Props = $props()
 </script>
 
 {@render children()}

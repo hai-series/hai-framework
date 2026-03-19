@@ -178,9 +178,11 @@ describe('createProject — admin 类型 + iam', () => {
     expect(pkg.devDependencies?.['@inlang/paraglide-js']).toBeDefined()
   })
 
-  it('hooks.server.ts 包含 authHandle', async () => {
+  it('hooks.server.ts 包含 auth.verifyToken 配置', async () => {
     const content = await readText(projectPath, 'src/hooks.server.ts')
-    expect(content).toContain('authHandle')
+    expect(content).toContain('auth:')
+    expect(content).toContain('verifyToken:')
+    expect(content).toContain('iam.auth.verifyToken')
   })
 
   it('hooks.server.ts 包含 i18nHandle', async () => {

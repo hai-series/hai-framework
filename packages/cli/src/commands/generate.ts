@@ -71,6 +71,14 @@ export async function generate(options: GenerateOptions): Promise<void> {
     }
 
     const outputDir = path.resolve(cwd, resolvedOptions.output || generator.defaultPath)
+
+    // 安全校验：输出路径必须在当前工作目录内，防止路径遍历
+    const resolvedCwd = path.resolve(cwd)
+    if (!outputDir.startsWith(resolvedCwd + path.sep) && outputDir !== resolvedCwd) {
+      core.logger.error(chalk.red(`输出路径 "${resolvedOptions.output}" 超出工作目录范围`))
+      return
+    }
+
     const context = createTemplateContext(resolvedOptions.name, {
       projectName: project?.name,
     })

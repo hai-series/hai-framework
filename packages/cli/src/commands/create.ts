@@ -238,6 +238,13 @@ export async function createProject(options: CreateProjectOptions): Promise<void
   try {
     // 交互式获取选项
     const resolvedOptions = await resolveOptions(options)
+
+    // 安全校验：项目名必须仅含小写字母、数字和连字符，防止路径遍历
+    if (!/^[a-z0-9-]+$/.test(resolvedOptions.name)) {
+      core.logger.error(chalk.red(`项目名称不合法: "${resolvedOptions.name}"，只能包含小写字母、数字和连字符`))
+      return
+    }
+
     const projectPath = path.resolve(resolvedOptions.cwd ?? '.', resolvedOptions.name)
 
     // 检查目录是否存在
