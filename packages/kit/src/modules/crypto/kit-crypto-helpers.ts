@@ -12,7 +12,152 @@ import type {
   EncryptedCookieConfig,
   WebhookVerifyConfig,
 } from './kit-crypto-types.js'
+import { core } from '@h-ai/core'
+import { createHmac } from 'node:crypto'
 import { kitM } from '../../kit-i18n.js'
+
+const SYMMETRIC_COOKIE_PREFIX = 'encv1:'
+
+interface ResultLike<T> {
+  success: boolean
+  data?: T
+  error?: { code: number, message: string }
+}
+
+async function createSignature(
+  crypto: CryptoServiceLike,
+  body: string,
+  secretKey: string,
+  algorithm: string,
+): Promise<ResultLike<string>> {
+  if (crypto.hmac?.sign) {
+    return await crypto.hmac.sign(body, secretKey, algorithm)
+  }
+
+  if (algorithm === 'sha256' || algorithm === 'sha512') {
+    try {
+      return { success: true, data: createHmac(algorithm, secretKey).update(body).digest('hex') }
+    }
+    catch (error) {
+      return {
+        success: false,
+        error: { code: 500, message: error instanceof Error ? error.message : String(error) },
+      }
+    }
+  }
+
+  if (crypto.hash.hmac) {
+    return await crypto.hash.hmac(body, secretKey, algorithm)
+  }
+
+  return { success: false, error: { code: 500, message: kitM('kit_signFailed') } }
+}
+
+async function verifySignature(
+  crypto: CryptoServiceLike,
+  body: string,
+  secretKey: string,
+  signature: string,
+  algorithm: string,
+): Promise<ResultLike<boolean>> {
+  if (crypto.hmac?.verify) {
+    return await crypto.hmac.verify(body, secretKey, signature, algorithm)
+  }
+
+  const signResult = await createSignature(crypto, body, secretKey, algorithm)
+  if (!signResult.success || !signResult.data) {
+    return {
+      success: false,
+      error: signResult.error ?? { code: 500, message: kitM('kit_signFailed') },
+    }
+  }
+
+  return { success: true, data: await constantTimeEqualsAsync(crypto, signResult.data, signature) }
+}
+
+async function constantTimeEqualsAsync(crypto: CryptoServiceLike, a: string, b: string): Promise<boolean> {
+  if (crypto.hash.timingSafeEqual) {
+    const result = await crypto.hash.timingSafeEqual(a, b)
+    if (result.success && typeof result.data === 'boolean') {
+      return result.data
+    }
+  }
+  return core.string.constantTimeEqual(a, b)
+}
+
+async function getRandomBytes(crypto: CryptoServiceLike, length: number): Promise<ResultLike<Uint8Array>> {
+  if (crypto.random?.bytes) {
+    return await crypto.random.bytes(length)
+  }
+
+  try {
+    const data = new Uint8Array(length)
+    globalThis.crypto.getRandomValues(data)
+    return { success: true, data }
+  }
+  catch (error) {
+    return {
+      success: false,
+      error: { code: 500, message: error instanceof Error ? error.message : String(error) },
+    }
+  }
+}
+
+async function encryptCookieString(
+  crypto: CryptoServiceLike,
+  value: string,
+  key: string,
+): Promise<ResultLike<string>> {
+  if (crypto.aes?.encrypt) {
+    return await crypto.aes.encrypt(value, key)
+  }
+
+  if (crypto.symmetric?.encryptWithIV) {
+    const result = await crypto.symmetric.encryptWithIV(value, key)
+    if (!result.success || !result.data) {
+      return { success: false, error: result.error }
+    }
+
+    return {
+      success: true,
+      data: `${SYMMETRIC_COOKIE_PREFIX}${result.data.iv}:${result.data.ciphertext}`,
+    }
+  }
+
+  return { success: false, error: { code: 500, message: kitM('kit_encryptFailed') } }
+}
+
+async function decryptCookieString(
+  crypto: CryptoServiceLike,
+  encrypted: string,
+  key: string,
+): Promise<ResultLike<string>> {
+  if (encrypted.startsWith(SYMMETRIC_COOKIE_PREFIX)) {
+    if (!crypto.symmetric?.decryptWithIV) {
+      return { success: false, error: { code: 500, message: kitM('kit_transportDecryptFailed') } }
+    }
+
+    const payload = encrypted.slice(SYMMETRIC_COOKIE_PREFIX.length)
+    const separator = payload.indexOf(':')
+    if (separator === -1) {
+      return { success: false, error: { code: 400, message: kitM('kit_transportDecryptFailed') } }
+    }
+
+    const iv = payload.slice(0, separator)
+    const ciphertext = payload.slice(separator + 1)
+    return await crypto.symmetric.decryptWithIV(ciphertext, key, iv)
+  }
+
+  if (crypto.aes?.decrypt) {
+    return await crypto.aes.decrypt(encrypted, key)
+  }
+
+  if (crypto.symmetric?.decryptWithIV) {
+    return { success: false, error: { code: 400, message: kitM('kit_transportDecryptFailed') } }
+  }
+
+  return { success: false, error: { code: 500, message: kitM('kit_transportDecryptFailed') } }
+}
 
 /**
  * 验证 Webhook 签名
@@ -44,10 +189,10 @@ export async function verifyWebhookSignature(config: WebhookVerifyConfig): Promi
     return false
   }
 
-  const body = await event.request.text()
+  const body = await event.request.clone().text()
 
   try {
-    const result = await crypto.hmac.verify(body, secretKey, signature, algorithm)
+    const result = await verifySignature(crypto, body, secretKey, signature, algorithm)
     return result.success && result.data === true
   }
   catch {
@@ -71,7 +216,7 @@ export async function signRequest(
   secretKey: string,
   algorithm = 'sha256',
 ): Promise<string> {
-  const result = await crypto.hmac.sign(body, secretKey, algorithm)
+  const result = await createSignature(crypto, body, secretKey, algorithm)
   if (!result.success) {
     throw new Error(result.error?.message || kitM('kit_signFailed'))
   }
@@ -111,7 +256,7 @@ export function createCsrfManager(config: CryptoCsrfConfig) {
      * 生成新的 CSRF Token 并设置 Cookie
      */
     async generate(cookies: Cookies): Promise<string> {
-      const result = await crypto.random.bytes(tokenLength)
+      const result = await getRandomBytes(crypto, tokenLength)
       if (!result.success) {
         throw new Error(kitM('kit_csrfTokenFailed'))
       }
@@ -159,8 +304,7 @@ export function createCsrfManager(config: CryptoCsrfConfig) {
       }
 
       // 时间安全的比较
-      const result = await crypto.hash.timingSafeEqual(cookieToken, requestToken)
-      return result.success && result.data === true
+      return await constantTimeEqualsAsync(crypto, cookieToken, requestToken)
     },
 
     /**
@@ -209,7 +353,7 @@ export function createEncryptedCookie(config: EncryptedCookieConfig) {
      */
     async set(cookies: Cookies, name: string, value: unknown): Promise<void> {
       const json = JSON.stringify(value)
-      const result = await crypto.aes.encrypt(json, encryptionKey)
+      const result = await encryptCookieString(crypto, json, encryptionKey)
 
       if (!result.success) {
         throw new Error(kitM('kit_encryptFailed'))
@@ -234,7 +378,7 @@ export function createEncryptedCookie(config: EncryptedCookieConfig) {
       }
 
       try {
-        const result = await crypto.aes.decrypt(encrypted, encryptionKey)
+        const result = await decryptCookieString(crypto, encrypted, encryptionKey)
         if (!result.success) {
           return null
         }

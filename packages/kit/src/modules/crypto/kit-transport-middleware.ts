@@ -41,8 +41,17 @@ export function transportEncryptionMiddleware(config: TransportEncryptionConfig)
   // 初始化传输加密管理器
   const result = createTransportEncryption(config.crypto)
   if (!result.success) {
-    // 密钥生成失败时降级为透传
-    return async (_context, next) => next()
+    if (!requireEncryption) {
+      // 渐进迁移模式允许降级
+      return async (_context, next) => next()
+    }
+
+    return async (context, next) => {
+      if (shouldExclude(context.event.url.pathname, excludePaths, keyExchangePath)) {
+        return next()
+      }
+      return jsonError(503, kitM('kit_transportKeyGenerationFailed'))
+    }
   }
   const manager = result.data
 
@@ -86,32 +95,45 @@ export function transportEncryptionMiddleware(config: TransportEncryptionConfig)
     // ── 解密请求 ──
     try {
       if (hasBody(event.request.method)) {
-        const bodyText = await event.request.text()
+        const bodyText = await event.request.clone().text()
         if (bodyText) {
-          const payload = JSON.parse(bodyText) as unknown
-          if (isValidEncryptedPayload(payload)) {
-            const plaintext = manager.decryptRequest(payload)
-            // 重建请求，替换为解密后的明文
-            const newRequest = new Request(event.request.url, {
-              method: event.request.method,
-              headers: new Headers(event.request.headers),
-              body: plaintext,
-            })
-            // 将解密后的请求注入 locals，供后续中间件/端点使用
-            Object.defineProperty(event, 'request', {
-              value: newRequest,
-              writable: true,
-              configurable: true,
-            })
+          let payload: unknown
+          try {
+            payload = JSON.parse(bodyText) as unknown
+          }
+          catch {
+            if (requireEncryption) {
+              return jsonError(400, kitM('kit_transportInvalidPayload'))
+            }
+          }
+
+          if (payload !== undefined) {
+            if (!isValidEncryptedPayload(payload)) {
+              if (requireEncryption) {
+                return jsonError(400, kitM('kit_transportInvalidPayload'))
+              }
+            }
+            else {
+              const plaintext = manager.decryptRequest(payload)
+              // 重建请求，替换为解密后的明文
+              const newRequest = new Request(event.request.url, {
+                method: event.request.method,
+                headers: new Headers(event.request.headers),
+                body: plaintext,
+              })
+              // 将解密后的请求注入 locals，供后续中间件/端点使用
+              Object.defineProperty(event, 'request', {
+                value: newRequest,
+                writable: true,
+                configurable: true,
+              })
+            }
           }
         }
       }
     }
     catch {
-      return new Response(
-        JSON.stringify({ error: kitM('kit_transportDecryptFailed') }),
-        { status: 400, headers: { 'Content-Type': 'application/json' } },
-      )
+      return jsonError(400, kitM('kit_transportDecryptFailed'))
     }
 
     // ── 执行后续中间件/端点 ──
@@ -124,11 +146,18 @@ export function transportEncryptionMiddleware(config: TransportEncryptionConfig)
 
     // 跳过非 JSON 响应和大体积响应（>1MB），避免内存问题
     const contentType = response.headers.get('Content-Type') ?? ''
+    const contentLength = response.headers.get('Content-Length')
+    const noBodyResponse = response.status === 204 || response.status === 205 || response.status === 304
     if (!contentType.includes('application/json')) {
+      if (requireEncryption && !noBodyResponse && contentLength !== '0') {
+        return jsonError(500, kitM('kit_transportEncryptFailed'))
+      }
       return response
     }
-    const contentLength = response.headers.get('Content-Length')
     if (contentLength && Number.parseInt(contentLength, 10) > 1_048_576) {
+      if (requireEncryption) {
+        return jsonError(500, kitM('kit_transportEncryptFailed'))
+      }
       return response
     }
 
@@ -139,24 +168,32 @@ export function transportEncryptionMiddleware(config: TransportEncryptionConfig)
       }
 
       const encryptedPayload = manager.encryptResponse(clientId, responseBody)
+      const headers = new Headers(response.headers)
+      headers.set('Content-Type', 'application/json')
+      headers.set('X-Encrypted', 'true')
       return new Response(
         JSON.stringify(encryptedPayload),
         {
           status: response.status,
           statusText: response.statusText,
-          headers: {
-            ...Object.fromEntries(response.headers.entries()),
-            'Content-Type': 'application/json',
-            'X-Encrypted': 'true',
-          },
+          headers,
         },
       )
     }
     catch {
-      // 加密失败时返回原始响应
+      if (requireEncryption) {
+        return jsonError(500, kitM('kit_transportEncryptFailed'))
+      }
       return response
     }
   }
+}
+
+function jsonError(status: number, message: string): Response {
+  return new Response(
+    JSON.stringify({ error: message }),
+    { status, headers: { 'Content-Type': 'application/json' } },
+  )
 }
 
 /**

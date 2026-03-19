@@ -58,32 +58,28 @@ export function createEncryptedCookieProxy(
           if (!raw || !names.has(name))
             return raw
 
-          // 仅解密带有加密前缀的值
-          if (!raw.startsWith(ENCRYPTED_PREFIX))
-            return raw
-
-          try {
-            const ciphertext = raw.slice(ENCRYPTED_PREFIX.length)
-            // 格式: iv:ciphertext
-            const separatorIndex = ciphertext.indexOf(':')
-            if (separatorIndex === -1)
-              return raw
-
-            const iv = ciphertext.slice(0, separatorIndex)
-            const encrypted = ciphertext.slice(separatorIndex + 1)
-
-            const result = symmetric.decryptWithIV(encrypted, encryptionKey, iv)
-            if (!result.success || typeof result.data !== 'string') {
-              logger.warn('Cookie decryption failed, returning raw value', { name })
-              return raw
-            }
-
-            return result.data
+          if (!raw.startsWith(ENCRYPTED_PREFIX)) {
+            logger.error('Encrypted cookie missing encryption marker', { name })
+            throw new Error(`Encrypted cookie "${name}" is not in encrypted format`)
           }
-          catch {
-            logger.warn('Cookie decryption error, returning raw value', { name })
-            return raw
+
+          const ciphertext = raw.slice(ENCRYPTED_PREFIX.length)
+          const separatorIndex = ciphertext.indexOf(':')
+          if (separatorIndex === -1) {
+            logger.error('Encrypted cookie payload is malformed', { name })
+            throw new Error(`Encrypted cookie "${name}" payload is malformed`)
           }
+
+          const iv = ciphertext.slice(0, separatorIndex)
+          const encrypted = ciphertext.slice(separatorIndex + 1)
+
+          const result = symmetric.decryptWithIV(encrypted, encryptionKey, iv)
+          if (!result.success || typeof result.data !== 'string') {
+            logger.error('Encrypted cookie decryption failed', { name, error: result.error })
+            throw new Error(`Failed to decrypt encrypted cookie "${name}"`)
+          }
+
+          return result.data
         }
       }
 
@@ -91,19 +87,13 @@ export function createEncryptedCookieProxy(
       if (prop === 'set') {
         return (name: string, value: string, opts: Parameters<Cookies['set']>[2]) => {
           if (names.has(name)) {
-            try {
-              const result = symmetric.encryptWithIV(value, encryptionKey)
-              if (result.success && result.data) {
-                // 格式: enc:iv:ciphertext
-                value = `${ENCRYPTED_PREFIX}${result.data.iv}:${result.data.ciphertext}`
-              }
-              else {
-                logger.warn('Cookie encryption failed, storing plaintext', { name })
-              }
+            const result = symmetric.encryptWithIV(value, encryptionKey)
+            if (!result.success || !result.data) {
+              logger.error('Encrypted cookie encryption failed', { name, error: result.error })
+              throw new Error(`Failed to encrypt cookie "${name}"`)
             }
-            catch {
-              logger.warn('Cookie encryption error, storing plaintext', { name })
-            }
+
+            value = `${ENCRYPTED_PREFIX}${result.data.iv}:${result.data.ciphertext}`
           }
 
           return target.set(name, value, opts)

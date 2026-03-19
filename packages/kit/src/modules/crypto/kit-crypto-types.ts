@@ -7,76 +7,103 @@
 
 import type { RequestEvent } from '@sveltejs/kit'
 
+type MaybePromise<T> = T | Promise<T>
+
+interface CryptoResultLike<T> {
+  success: boolean
+  data?: T
+  error?: { code: number, message: string }
+}
+
 /**
  * Crypto 服务接口（简化版，与 @h-ai/crypto 兼容）
  */
 export interface CryptoServiceLike {
-  hmac: {
+  /**
+   * 旧版 helper 接口：crypto.hmac.sign/verify
+   *
+   * 在 @h-ai/crypto 新接口中可不存在，此时 helper 会回退到 crypto.hash.hmac。
+   */
+  hmac?: {
     sign: (
       data: string,
       key: string,
       algorithm?: string,
-    ) => Promise<{
-      success: boolean
-      data?: string
-      error?: { code: number, message: string }
-    }>
+    ) => MaybePromise<CryptoResultLike<string>>
     verify: (
       data: string,
       key: string,
       signature: string,
       algorithm?: string,
-    ) => Promise<{
-      success: boolean
-      data?: boolean
-      error?: { code: number, message: string }
-    }>
+    ) => MaybePromise<CryptoResultLike<boolean>>
   }
 
   hash: {
-    digest: (
+    /**
+     * @h-ai/crypto 原生接口：SM3 hash
+     */
+    hash?: (
+      data: string | Uint8Array,
+      algorithm?: string,
+    ) => MaybePromise<CryptoResultLike<string>>
+    /**
+     * 旧版 helper 接口：digest
+     */
+    digest?: (
       data: string,
       algorithm?: string,
-    ) => Promise<{
-      success: boolean
-      data?: string
-      error?: { code: number, message: string }
-    }>
-    timingSafeEqual: (
+    ) => MaybePromise<CryptoResultLike<string>>
+    /**
+     * @h-ai/crypto 原生接口：SM3 HMAC
+     */
+    hmac?: (
+      data: string,
+      key: string,
+      algorithm?: string,
+    ) => MaybePromise<CryptoResultLike<string>>
+    /**
+     * 旧版 helper 期望：安全比较
+     */
+    timingSafeEqual?: (
       a: string,
       b: string,
-    ) => Promise<{
-      success: boolean
-      data?: boolean
-      error?: { code: number, message: string }
-    }>
+    ) => MaybePromise<CryptoResultLike<boolean>>
   }
 
-  aes: {
+  /**
+   * 旧版 helper 接口：AES 字符串加解密
+   */
+  aes?: {
     encrypt: (
       data: string,
       key: string,
-    ) => Promise<{
-      success: boolean
-      data?: string
-      error?: { code: number, message: string }
-    }>
+    ) => MaybePromise<CryptoResultLike<string>>
     decrypt: (
       data: string,
       key: string,
-    ) => Promise<{
-      success: boolean
-      data?: string
-      error?: { code: number, message: string }
-    }>
+    ) => MaybePromise<CryptoResultLike<string>>
   }
 
-  random: {
-    bytes: (length: number) => Promise<{
-      success: boolean
-      data?: Uint8Array
-      error?: { code: number, message: string }
-    }>
+  /**
+   * @h-ai/crypto 原生接口：SM4 对称加解密
+   */
+  symmetric?: {
+    encryptWithIV?: (
+      data: string,
+      key: string,
+    ) => MaybePromise<CryptoResultLike<{ ciphertext: string, iv: string }>>
+    decryptWithIV?: (
+      ciphertext: string,
+      key: string,
+      iv: string,
+    ) => MaybePromise<CryptoResultLike<string>>
+  }
+
+  /**
+   * 旧版 helper 接口：随机字节
+   */
+  random?: {
+    bytes: (length: number) => MaybePromise<CryptoResultLike<Uint8Array>>
   }
 }
 
@@ -93,7 +120,7 @@ export interface WebhookVerifyConfig {
   /** 签名头名称 */
   signatureHeader?: string
   /** 算法 */
-  algorithm?: 'sha256' | 'sha512'
+  algorithm?: 'sha256' | 'sha512' | 'sm3'
   /** 编码 */
   encoding?: 'hex' | 'base64'
 }
