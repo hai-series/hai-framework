@@ -68,12 +68,17 @@ file:
 ```typescript
 import { ai } from '@h-ai/ai'
 
-// ai.init() 是异步方法，ai.close() 是同步方法
+// 方式一：默认 DB Provider（需要 reldb + vecdb 已初始化）
 await ai.init(core.config.get('ai'))
+
+// 方式二：自定义 StoreProvider（无需 reldb / vecdb）
+await ai.init(core.config.get('ai'), { storeProvider: myProvider })
+
 ai.close()
 ```
 
 > `ai.tools` 和 `ai.stream` 无需 init 即可使用。
+> 存储层通过 `AIStoreProvider` 接口抽象，默认使用 reldb+vecdb，也可注入自定义实现。
 
 ---
 

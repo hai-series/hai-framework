@@ -9,7 +9,7 @@ import type { Result } from '@h-ai/core'
 
 import type { A2AOperations } from './a2a/ai-a2a-types.js'
 import type { AIConfig, AIConfigInput } from './ai-config.js'
-import type { AIError, AIFunctions } from './ai-types.js'
+import type { AIError, AIFunctions, AIInitOptions } from './ai-types.js'
 import type { CompressOperations } from './compress/ai-compress-types.js'
 import type { ContextOperations } from './context/ai-context-types.js'
 import type { EmbeddingOperations } from './embedding/ai-embedding-types.js'
@@ -22,13 +22,12 @@ import type { RagOperations } from './rag/ai-rag-types.js'
 import type { ReasoningOperations } from './reasoning/ai-reasoning-types.js'
 import type { RerankOperations } from './rerank/ai-rerank-types.js'
 import type { RetrievalOperations } from './retrieval/ai-retrieval-types.js'
+import type { AIStoreProvider } from './store/ai-store-types.js'
 import type { SummaryOperations } from './summary/ai-summary-types.js'
 import type { TokenOperations } from './token/ai-token-types.js'
 
 import { core, err, ok } from '@h-ai/core'
 import { datapipe } from '@h-ai/datapipe'
-import { reldb } from '@h-ai/reldb'
-import { vecdb } from '@h-ai/vecdb'
 
 import { createA2ALazyProxy } from './a2a/ai-a2a-functions.js'
 import { AIConfigSchema, AIErrorCode } from './ai-config.js'
@@ -36,6 +35,7 @@ import { createAISubsystems } from './ai-functions.js'
 import { aiM } from './ai-i18n.js'
 import { collectStream, createSSEDecoder, createStreamProcessor, encodeSSE } from './llm/ai-llm-stream.js'
 import { createToolRegistry, defineTool } from './llm/ai-llm-tool.js'
+import { createDbStoreProviderFromModules, isDbStoreAvailable, getUnavailableDbDeps } from './store/providers/ai-store-provider-db.js'
 
 const logger = core.logger.child({ module: 'ai', scope: 'main' })
 
@@ -77,6 +77,8 @@ let currentFile: FileOperations | null = null
 let currentA2AConfig: AIConfig['a2a']
 /** A2A 内部实现（registerExecutor 成功后才有值） */
 let currentA2AImpl: A2AOperations | null = null
+/** 当前存储 Provider（用于 A2A 延迟初始化） */
+let currentStoreProvider: AIStoreProvider | null = null
 
 // ─── 未初始化占位 ───
 
@@ -184,7 +186,7 @@ const a2aLazyOperations: A2AOperations = createA2ALazyProxy({
   getA2AConfig: () => currentA2AConfig ?? null,
   getA2AImpl: () => currentA2AImpl,
   setA2AImpl: (impl) => { currentA2AImpl = impl },
-  getReldbDeps: () => ({ sql: reldb.sql, jsonOps: reldb.json, dbType: reldb.config?.type }),
+  getStoreProvider: () => currentStoreProvider,
   notInitializedResult: () => notInitialized.result(),
 })
 
@@ -208,6 +210,7 @@ function resetAllState(): void {
   currentFile = null
   currentA2AConfig = undefined
   currentA2AImpl = null
+  currentStoreProvider = null
   currentConfig = null
 }
 
@@ -247,7 +250,7 @@ const streamOperations: StreamOperations = {
  * ```
  */
 export const ai: AIFunctions = {
-  async init(config?: AIConfigInput): Promise<Result<void, AIError>> {
+  async init(config?: AIConfigInput, options?: AIInitOptions): Promise<Result<void, AIError>> {
     // 并发初始化防护：避免多次 init 同时执行导致资源泄漏
     if (initInProgress) {
       logger.warn('AI init already in progress, skipping concurrent call')
@@ -278,21 +281,27 @@ export const ai: AIFunctions = {
       }
       const parsed = parseResult.data
 
-      // 注入 reldb / vecdb 存储依赖（必选）
-      if (!reldb.isInitialized || !vecdb.isInitialized) {
-        const missing = [!reldb.isInitialized && 'reldb', !vecdb.isInitialized && 'vecdb'].filter(Boolean).join(', ')
-        return err({
-          code: AIErrorCode.CONFIGURATION_ERROR,
-          message: aiM('ai_configError', { params: { error: `${missing} not initialized. reldb and vecdb are required.` } }),
-        })
+      // 注入存储 Provider（外部传入或使用默认 DB Provider）
+      let storeProvider: AIStoreProvider
+      if (options?.storeProvider) {
+        storeProvider = options.storeProvider
       }
+      else {
+        // 默认使用 reldb + vecdb（需要已初始化）
+        if (!isDbStoreAvailable()) {
+          const missing = getUnavailableDbDeps().join(', ')
+          return err({
+            code: AIErrorCode.CONFIGURATION_ERROR,
+            message: aiM('ai_configError', { params: { error: `${missing} not initialized. reldb and vecdb are required for default db store.` } }),
+          })
+        }
+        storeProvider = createDbStoreProviderFromModules()
+      }
+      currentStoreProvider = storeProvider
 
       // 委托 ai-functions 组装所有子功能（含建表）
       const subs = await createAISubsystems(parsed, {
-        sql: reldb.sql,
-        jsonOps: reldb.json,
-        dbType: reldb.config?.type,
-        vecdb,
+        storeProvider,
         datapipe,
       })
 

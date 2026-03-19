@@ -21,6 +21,7 @@ import type { RagOperations } from './rag/ai-rag-types.js'
 import type { ReasoningOperations } from './reasoning/ai-reasoning-types.js'
 import type { RerankOperations } from './rerank/ai-rerank-types.js'
 import type { RetrievalOperations } from './retrieval/ai-retrieval-types.js'
+import type { AIStoreProvider } from './store/ai-store-types.js'
 import type { SummaryOperations } from './summary/ai-summary-types.js'
 import type { TokenOperations } from './token/ai-token-types.js'
 
@@ -34,6 +35,24 @@ export interface AIError {
   message: string
   /** 原始错误（可选） */
   cause?: unknown
+}
+
+// ─── 初始化选项 ───
+
+/**
+ * AI 初始化运行时选项
+ *
+ * 用于传入运行时对象（如自定义 StoreProvider），
+ * 这些对象无法通过 Zod 配置 Schema 传递。
+ */
+export interface AIInitOptions {
+  /**
+   * 自定义存储 Provider
+   *
+   * 提供后 AI 模块将使用此 Provider 而非默认的 reldb+vecdb 实现，
+   * 此时不需要提前初始化 reldb/vecdb。
+   */
+  storeProvider?: AIStoreProvider
 }
 
 // ─── AIFunctions 接口 ───
@@ -61,9 +80,10 @@ export interface AIFunctions {
    * 重复调用会先关闭旧实例再重新初始化。
    *
    * @param config - AI 配置（可选，默认使用空对象并应用 Schema 默认值）
+   * @param options - 运行时选项（可选，用于传入自定义 StoreProvider 等运行时对象）
    * @returns 成功返回 `ok(undefined)`；配置校验失败返回 `err(AIError)`
    */
-  init: (config?: AIConfigInput) => Promise<Result<void, AIError>>
+  init: (config?: AIConfigInput, options?: AIInitOptions) => Promise<Result<void, AIError>>
   /**
    * 关闭 AI 服务，释放内部状态
    *
@@ -282,9 +302,12 @@ export type {
 // ─── Store 类型 re-export ───
 
 export type {
-  AIStore,
+  AIRelStore,
+  AIRelStoreOptions,
+  AIStoreProvider,
   AIVectorStore,
   InteractionScope,
+  KnowledgeStore,
   ObjectRef,
   SessionInfo,
   StoreFilter,

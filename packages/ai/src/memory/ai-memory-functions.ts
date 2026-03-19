@@ -1,7 +1,7 @@
 /**
  * @h-ai/ai — Memory 子功能实现
  *
- * 编排记忆的提取、存储、检索与注入。基于 AIStore + AIVectorStore 抽象，
+ * 编排记忆的提取、存储、检索与注入。基于 AIRelStore + AIVectorStore 抽象，
  * 根据配置自动选择内存或持久化存储后端。
  * @module ai-memory-functions
  */
@@ -12,7 +12,7 @@ import type { MemoryConfig } from '../ai-config.js'
 import type { AIError } from '../ai-types.js'
 import type { EmbeddingOperations } from '../embedding/ai-embedding-types.js'
 import type { ChatMessage, LLMOperations } from '../llm/ai-llm-types.js'
-import type { AIStore, AIVectorStore, StorePage, WhereClause } from '../store/ai-store-types.js'
+import type { AIRelStore, AIVectorStore, StorePage, WhereClause } from '../store/ai-store-types.js'
 import type {
   MemoryClearOptions,
   MemoryEntry,
@@ -98,7 +98,7 @@ export function createMemoryOperations(
   config: MemoryConfig,
   llm: LLMOperations,
   embedding: EmbeddingOperations | null,
-  store: AIStore<MemoryEntry>,
+  store: AIRelStore<MemoryEntry>,
   vectorStore: AIVectorStore,
 ): MemoryOperations {
   /**
