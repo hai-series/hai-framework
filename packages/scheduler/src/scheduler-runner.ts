@@ -17,6 +17,7 @@ import { core, ok } from '@h-ai/core'
 
 import { parseCronExpression } from './scheduler-cron.js'
 import { executeTask } from './scheduler-executor.js'
+import { schedulerM } from './scheduler-i18n.js'
 
 const logger = core.logger.child({ module: 'scheduler', scope: 'runner' })
 
@@ -127,7 +128,32 @@ export async function runTask(task: TaskDefinition, minuteTimestamp?: number): P
   // 分布式锁：多节点场景下确保同一任务同一分钟只执行一次
   const lockKey = minuteTimestamp !== undefined ? `hai:scheduler:${task.id}:${minuteTimestamp}` : undefined
   if (cache.isInitialized && lockKey) {
-    const lockResult = await cache.lock.acquire(lockKey, { ttl: currentLockTtlSec, owner: currentNodeId })
+    const now = Date.now()
+    const buildLockFailureLog = (error: string): TaskExecutionLog => ({
+      id: 0,
+      taskId: task.id,
+      taskName: task.name,
+      taskType: task.type,
+      status: 'failed',
+      result: null,
+      error,
+      startedAt: now,
+      finishedAt: now,
+      duration: 0,
+    })
+
+    let lockResult: Awaited<ReturnType<typeof cache.lock.acquire>>
+    try {
+      lockResult = await cache.lock.acquire(lockKey, { ttl: currentLockTtlSec, owner: currentNodeId })
+    }
+    catch (error) {
+      const errorMessage = schedulerM('scheduler_lockAcquireFailed', {
+        params: { taskId: task.id },
+      })
+      logger.error('Failed to acquire distributed lock', { taskId: task.id, minuteTimestamp, error })
+      return buildLockFailureLog(errorMessage)
+    }
+
     if (lockResult.success && !lockResult.data) {
       logger.debug('Skipping task, another node holds the lock', { taskId: task.id, minuteTimestamp })
       // 返回一条跳过日志（不持久化）
@@ -143,6 +169,14 @@ export async function runTask(task: TaskDefinition, minuteTimestamp?: number): P
         finishedAt: Date.now(),
         duration: 0,
       }
+    }
+
+    if (!lockResult.success) {
+      const errorMessage = schedulerM('scheduler_lockAcquireFailed', {
+        params: { taskId: task.id },
+      })
+      logger.error('Failed to acquire distributed lock', { taskId: task.id, minuteTimestamp, error: lockResult.error.message })
+      return buildLockFailureLog(errorMessage)
     }
   }
 

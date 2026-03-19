@@ -6,11 +6,13 @@
 
 import { reldb } from '@h-ai/reldb'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { SchedulerTaskRepository } from '../src/repositories/index.js'
 import { SchedulerErrorCode } from '../src/scheduler-config.js'
 import { scheduler } from '../src/scheduler-main.js'
 
 describe('scheduler', () => {
   afterEach(async () => {
+    vi.restoreAllMocks()
     vi.unstubAllGlobals()
     await scheduler.close()
     await reldb.close()
@@ -478,6 +480,106 @@ describe('scheduler', () => {
   })
 
   describe('任务持久化', () => {
+    it('API 任务持久化失败时应返回错误且不写入内存', async () => {
+      vi.spyOn(reldb, 'isInitialized', 'get').mockReturnValue(true)
+      await scheduler.init({ enableDb: true })
+
+      vi.spyOn(SchedulerTaskRepository.prototype, 'saveTask').mockResolvedValue({
+        success: false,
+        error: {
+          code: SchedulerErrorCode.DB_SAVE_FAILED,
+          message: 'mock save failure',
+        },
+      })
+
+      const result = await scheduler.register({
+        id: 'persist-fail-register',
+        name: '持久化失败注册',
+        cron: '0 * * * *',
+        type: 'api',
+        api: { url: 'https://example.com/register' },
+      })
+
+      expect(result.success).toBe(false)
+      if (!result.success) {
+        expect(result.error.code).toBe(SchedulerErrorCode.DB_SAVE_FAILED)
+      }
+      expect(scheduler.tasks.has('persist-fail-register')).toBe(false)
+    })
+
+    it('API 任务删除持久化失败时应返回错误且保留内存任务', async () => {
+      vi.spyOn(reldb, 'isInitialized', 'get').mockReturnValue(true)
+      await scheduler.init({ enableDb: true })
+
+      vi.spyOn(SchedulerTaskRepository.prototype, 'saveTask').mockResolvedValue({
+        success: true,
+        data: undefined,
+      })
+      const registerResult = await scheduler.register({
+        id: 'persist-fail-unregister',
+        name: '持久化失败删除',
+        cron: '0 * * * *',
+        type: 'api',
+        api: { url: 'https://example.com/unregister' },
+      })
+      expect(registerResult.success).toBe(true)
+      expect(scheduler.tasks.has('persist-fail-unregister')).toBe(true)
+
+      vi.spyOn(SchedulerTaskRepository.prototype, 'deleteTask').mockResolvedValue({
+        success: false,
+        error: {
+          code: SchedulerErrorCode.DB_SAVE_FAILED,
+          message: 'mock delete failure',
+        },
+      })
+
+      const unregisterResult = await scheduler.unregister('persist-fail-unregister')
+      expect(unregisterResult.success).toBe(false)
+      if (!unregisterResult.success) {
+        expect(unregisterResult.error.code).toBe(SchedulerErrorCode.DB_SAVE_FAILED)
+      }
+      expect(scheduler.tasks.has('persist-fail-unregister')).toBe(true)
+    })
+
+    it('API 任务更新持久化失败时应返回错误且不修改内存任务', async () => {
+      vi.spyOn(reldb, 'isInitialized', 'get').mockReturnValue(true)
+      await scheduler.init({ enableDb: true })
+
+      vi.spyOn(SchedulerTaskRepository.prototype, 'saveTask').mockResolvedValue({
+        success: true,
+        data: undefined,
+      })
+      const registerResult = await scheduler.register({
+        id: 'persist-fail-update',
+        name: '原始任务',
+        cron: '0 * * * *',
+        type: 'api',
+        api: { url: 'https://example.com/original' },
+      })
+      expect(registerResult.success).toBe(true)
+
+      vi.spyOn(SchedulerTaskRepository.prototype, 'updateTask').mockResolvedValue({
+        success: false,
+        error: {
+          code: SchedulerErrorCode.DB_SAVE_FAILED,
+          message: 'mock update failure',
+        },
+      })
+
+      const updateResult = await scheduler.updateTask('persist-fail-update', {
+        name: '更新后的任务',
+        cron: '*/15 * * * *',
+      })
+      expect(updateResult.success).toBe(false)
+      if (!updateResult.success) {
+        expect(updateResult.error.code).toBe(SchedulerErrorCode.DB_SAVE_FAILED)
+      }
+
+      const task = scheduler.tasks.get('persist-fail-update')
+      expect(task?.name).toBe('原始任务')
+      expect(task?.cron).toBe('0 * * * *')
+    })
+
     it('api 任务应持久化到数据库，重新初始化后自动加载', async () => {
       await reldb.init({ type: 'sqlite', database: ':memory:' })
       await scheduler.init({ enableDb: true })

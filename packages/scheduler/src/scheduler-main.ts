@@ -256,17 +256,19 @@ export const scheduler: SchedulerFunctions = {
       })
     }
 
-    const regResult = registerInMemory(task)
-    if (!regResult.success)
-      return regResult
+    const cronResult = parseCronExpression(task.cron)
+    if (!cronResult.success)
+      return cronResult
 
-    // 持久化 API 任务到数据库
+    // 持久化 API 任务到数据库。持久化失败时不写入内存，保证一致性。
     if (taskRepo && task.type === 'api') {
       const saveResult = await taskRepo.saveTask(task)
-      if (!saveResult.success) {
-        logger.warn('Failed to persist task definition', { taskId: task.id, error: saveResult.error.message })
-      }
+      if (!saveResult.success)
+        return saveResult
     }
+
+    setTask(task.id, task)
+    setCronCache(task.id, cronResult.data)
 
     logger.info('Task registered', { taskId: task.id, taskName: task.name, cron: task.cron, persisted: task.type === 'api' && !!taskRepo })
     return ok(undefined)
@@ -292,15 +294,14 @@ export const scheduler: SchedulerFunctions = {
       })
     }
 
-    unregisterFromMemory(taskId)
-
-    // 从数据库中删除持久化的任务定义
+    // 从数据库中删除持久化的任务定义。删除失败时不移除内存任务，保证一致性。
     if (taskRepo) {
       const deleteResult = await taskRepo.deleteTask(taskId)
-      if (!deleteResult.success) {
-        logger.warn('Failed to delete persisted task definition', { taskId, error: deleteResult.error.message })
-      }
+      if (!deleteResult.success)
+        return deleteResult
     }
+
+    unregisterFromMemory(taskId)
 
     logger.info('Task unregistered', { taskId })
     return ok(undefined)
@@ -329,12 +330,14 @@ export const scheduler: SchedulerFunctions = {
       })
     }
 
+    let parsedCron: ReturnType<typeof parseCronExpression> | null = null
+
     // 若更新了 cron，需要重新解析
     if (updates.cron !== undefined) {
       const cronResult = parseCronExpression(updates.cron)
       if (!cronResult.success)
         return cronResult
-      setCronCache(taskId, cronResult.data)
+      parsedCron = cronResult
     }
 
     // 构建更新后的任务（按 type 分支构建，避免类型断言）
@@ -357,14 +360,16 @@ export const scheduler: SchedulerFunctions = {
       }
     }
 
-    setTask(taskId, updatedTask)
-
-    // 同步到数据库
+    // 同步到数据库。持久化失败时不更新内存，保证一致性。
     if (taskRepo && existingTask.type === 'api') {
       const updateResult = await taskRepo.updateTask(taskId, updates)
-      if (!updateResult.success) {
-        logger.warn('Failed to update persisted task definition', { taskId, error: updateResult.error.message })
-      }
+      if (!updateResult.success)
+        return updateResult
+    }
+
+    setTask(taskId, updatedTask)
+    if (parsedCron && parsedCron.success) {
+      setCronCache(taskId, parsedCron.data)
     }
 
     logger.info('Task updated', { taskId, updates: Object.keys(updates) })

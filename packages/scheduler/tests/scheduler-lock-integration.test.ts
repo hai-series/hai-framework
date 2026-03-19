@@ -13,6 +13,7 @@ import { cache } from '@h-ai/cache'
 import { reldb } from '@h-ai/reldb'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { SchedulerErrorCode } from '../src/scheduler-config.js'
+import { schedulerM } from '../src/scheduler-i18n.js'
 import { scheduler } from '../src/scheduler-main.js'
 import { runTask } from '../src/scheduler-runner.js'
 
@@ -153,6 +154,39 @@ describe('distributed lock integration', () => {
         expect(result.data.status).toBe('success')
       }
       expect(handler).toHaveBeenCalled()
+    })
+
+    it('锁获取返回失败时应 fail-closed 且不执行任务', async () => {
+      await scheduler.init({ enableDb: true })
+
+      const handler = vi.fn().mockResolvedValue('done')
+      await scheduler.register({
+        id: 'lock-task-fail-closed',
+        name: '锁失败关闭测试',
+        cron: '* * * * *',
+        type: 'js',
+        handler,
+      })
+
+      vi.spyOn(cache.lock, 'acquire').mockResolvedValue({
+        success: false,
+        error: {
+          code: 9999,
+          message: 'mock lock failure',
+        },
+      })
+
+      const task = scheduler.tasks.get('lock-task-fail-closed')!
+      const minuteTimestamp = Math.floor(Date.now() / 60000)
+      const log = await runTask(task, minuteTimestamp)
+
+      expect(log.status).toBe('failed')
+      expect(log.error).toBe(
+        schedulerM('scheduler_lockAcquireFailed', {
+          params: { taskId: 'lock-task-fail-closed' },
+        }),
+      )
+      expect(handler).not.toHaveBeenCalled()
     })
   })
 
