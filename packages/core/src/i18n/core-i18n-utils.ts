@@ -140,6 +140,9 @@ function detectBrowserLocale(supportedLocales: LocaleInfo[] = DEFAULT_LOCALES): 
 /** 当前全局 locale */
 let currentLocale: Locale = DEFAULT_LOCALE
 
+/** 请求级 locale 解析器（可选） */
+let requestLocaleResolver: (() => Locale | undefined) | null = null
+
 /**
  * 规范化简写语言代码。
  *
@@ -166,6 +169,18 @@ function getGlobalLocale(): Locale {
 }
 
 /**
+ * 注册请求级 locale 解析器。
+ *
+ * 服务端可在请求上下文中注入 locale（例如基于 AsyncLocalStorage），
+ * createMessageGetter 会优先读取该 locale，再回退到全局 locale。
+ *
+ * @param resolver - 返回当前请求 locale 的函数；传 null 可清除
+ */
+function setRequestLocaleResolver(resolver: (() => Locale | undefined) | null): void {
+  requestLocaleResolver = resolver
+}
+
+/**
  * 设置全局 locale。
  *
  * 会自动规范化简写（如 'en' → 'en-US'），然后通知所有订阅者。
@@ -181,6 +196,19 @@ function setGlobalLocale(locale: Locale): void {
   }
 
   currentLocale = normalized
+}
+
+/**
+ * 获取当前消息解析应使用的 locale。
+ *
+ * 优先级：请求级 resolver > 全局 locale。
+ */
+function getEffectiveLocale(): Locale {
+  const requestLocale = requestLocaleResolver?.()
+  if (requestLocale) {
+    return normalizeLocale(requestLocale)
+  }
+  return currentLocale
 }
 
 // ─── 消息解析 ───
@@ -201,7 +229,7 @@ function resolveMessage<K extends string>(
   options: MessageOptions | undefined,
 ): string {
   const locale = resolveLocale(
-    options?.locale ?? currentLocale,
+    options?.locale ?? getEffectiveLocale(),
     DEFAULT_LOCALES,
     DEFAULT_LOCALE,
   )
@@ -301,6 +329,8 @@ export const i18n = {
   resolveLocale,
   /** 设置全局 locale（所有 createMessageGetter 创建的函数自动响应） */
   setGlobalLocale,
+  /** 设置请求级 locale 解析器（优先于全局 locale） */
+  setRequestLocaleResolver,
   /** 获取当前全局 locale */
   getGlobalLocale,
   /** 创建消息获取函数（读取全局 locale） */
