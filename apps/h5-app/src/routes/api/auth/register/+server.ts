@@ -25,10 +25,9 @@ export const POST = kit.handler(async ({ request, cookies }) => {
     return kit.response.fromError(result.error, IamErrorHttpStatus)
   }
 
-  const { user, tokens } = result.data
+  const { user } = result.data
 
   return kit.response.ok({
-    accessToken: tokens.accessToken,
     user: {
       id: user.id,
       username: user.username,

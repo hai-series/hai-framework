@@ -4,7 +4,6 @@
    */
   import { goto } from '$app/navigation'
   import * as m from '$lib/paraglide/messages.js'
-  import { h5AuthTokenStore } from '$lib/utils/auth.js'
   import type { LoginFormData } from '@h-ai/ui'
 
   let loading = $state(false)
@@ -26,9 +25,6 @@
       const result = await res.json()
 
       if (result.success) {
-        if (result.accessToken) {
-          h5AuthTokenStore.set(result.accessToken)
-        }
         goto('/profile')
       }
       else {

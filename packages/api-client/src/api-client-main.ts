@@ -10,7 +10,7 @@ import type { ApiClientError } from './api-client-config.js'
 import type { ApiClient, ApiClientConfig, ApiClientFunctions, TokenPair } from './api-client-types.js'
 
 import { core, err, ok } from '@h-ai/core'
-import { createLocalStorageTokenStorage } from './api-client-auth.js'
+import { createMemoryTokenStorage } from './api-client-auth.js'
 import { ApiClientErrorCode } from './api-client-config.js'
 import { createContractCaller } from './api-client-contract.js'
 import { createFetchClient } from './api-client-fetch.js'
@@ -40,8 +40,8 @@ let initInProgress = false
 function createClient(config: ApiClientConfig): ApiClient {
   // 优先使用外部传入的 fetch（便于测试/跨平台注入）；未传入时回退到全局 fetch
   const fetchFn = config.fetch ?? globalThis.fetch.bind(globalThis)
-  // auth 开启时，默认使用 localStorage 作为 Token 存储
-  const tokenStorage = config.auth?.storage ?? createLocalStorageTokenStorage()
+  // auth 开启时，默认使用内存存储；持久化存储需显式 opt-in。
+  const tokenStorage = config.auth?.storage ?? createMemoryTokenStorage()
 
   // Token 管理器（可选）
   const tokenManager = config.auth

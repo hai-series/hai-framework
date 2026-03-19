@@ -65,33 +65,19 @@ test.describe('Corporate pages and partner flow', () => {
     const unauthorized = await request.get('/api/partners/admin/records')
     expect([401, 403]).toContain(unauthorized.status())
 
-    const loginRes = await request.post('/api/partners/admin/login', {
-      form: {
-        username: 'partner-admin',
-        password: 'CHANGE_ME_STRONG_PASSWORD',
-      },
-    })
-    expect(loginRes.ok()).toBeTruthy()
-    const loginBody = await loginRes.json() as ApiResponse<{ accessToken?: string }>
-    expect(loginBody.success).toBe(true)
-    const accessToken = loginBody.data?.accessToken
-    expect(accessToken).toBeTruthy()
-
     await page.goto('/partners/admin/login')
-    await page.evaluate((token) => {
-      localStorage.setItem('corporate_access_token', token)
-    }, accessToken!)
+    await page.fill('#admin-username', 'partner-admin')
+    await page.fill('#admin-password', 'CHANGE_ME_STRONG_PASSWORD')
+    await Promise.all([
+      page.waitForURL(/\/partners\/admin/),
+      page.click('button[type="submit"]'),
+    ])
 
-    await page.goto('/partners/admin')
     await expect(page).toHaveURL(/\/partners\/admin/)
     await expect(page.locator('table')).toBeVisible()
     await expect(page.locator('table')).toContainText(companyName)
 
-    const recordsRes = await page.request.get('/api/partners/admin/records?page=1&pageSize=20', {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-      },
-    })
+    const recordsRes = await page.request.get('/api/partners/admin/records?page=1&pageSize=20')
     expect(recordsRes.ok()).toBeTruthy()
     const body = await recordsRes.json() as ApiResponse<{ items: Array<{ company_name: string }> }>
     expect(body.success).toBe(true)

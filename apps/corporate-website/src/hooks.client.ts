@@ -1,4 +1,3 @@
-import { corporateAuthTokenStore } from '$lib/utils/auth.js'
-import { kit } from '@h-ai/kit'
+import type { HandleFetch } from '@sveltejs/kit'
 
-export const handleFetch = kit.auth.createHandleFetch(corporateAuthTokenStore)
+export const handleFetch: HandleFetch = async ({ fetch, request }) => fetch(request)
