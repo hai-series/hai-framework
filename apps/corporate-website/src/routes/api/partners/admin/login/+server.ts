@@ -26,6 +26,7 @@ export const POST = kit.handler(async ({ request, cookies }) => {
   })
 
   return kit.response.ok({
+    accessToken: token,
     username,
     loggedIn: true,
     expiresIn: config.sessionTtlSeconds,

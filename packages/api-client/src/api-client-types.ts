@@ -118,7 +118,7 @@ export type ResponseInterceptor = (response: Response) => Response | Promise<Res
  * Token 刷新配置
  */
 export interface AuthConfig {
-  /** Token 存储适配器（默认 createMemoryTokenStorage，持久化需显式传入） */
+  /** Token 存储适配器（默认 createLocalStorageTokenStorage） */
   storage?: TokenStorage
   /** Refresh Token 接口路径（相对于 baseUrl） */
   refreshUrl: string

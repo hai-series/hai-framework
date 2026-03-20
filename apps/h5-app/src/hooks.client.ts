@@ -1,3 +1,4 @@
-import type { HandleFetch } from '@sveltejs/kit'
+import { h5AuthTokenStore } from '$lib/utils/auth.js'
+import { kit } from '@h-ai/kit'
 
-export const handleFetch: HandleFetch = async ({ fetch, request }) => fetch(request)
+export const handleFetch = kit.auth.createHandleFetch(h5AuthTokenStore)

@@ -5,7 +5,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { defineEndpoint } from '../src/api-client-types.js'
-import { api, createLocalStorageTokenStorage, createMemoryTokenStorage } from '../src/index.js'
+import { api, createMemoryTokenStorage } from '../src/index.js'
 
 /** 模拟登录端点契约 */
 const loginEndpoint = defineEndpoint({
@@ -146,7 +146,7 @@ describe('api.call (contract)', () => {
     expect(url).toContain('id=u1')
   })
 
-  it('auth 未传 storage 时默认使用 memory，不写入 localStorage', async () => {
+  it('auth 未传 storage 时默认使用 localStorage', async () => {
     const storageData: Record<string, string> = {}
     const localStorageMock = {
       getItem: vi.fn((key: string) => storageData[key] ?? null),
@@ -181,56 +181,11 @@ describe('api.call (contract)', () => {
 
       await api.get('/protected')
 
-      expect(localStorageMock.setItem).not.toHaveBeenCalled()
+      expect(localStorageMock.setItem).toHaveBeenCalledWith('hai_access_token', 'default-at')
+      expect(localStorageMock.setItem).toHaveBeenCalledWith('hai_refresh_token', 'default-rt')
 
       const headers = (fetch.mock.calls[0] as { headers: Record<string, string> }[])[1]?.headers
       expect(headers).toHaveProperty('Authorization', 'Bearer default-at')
-    }
-    finally {
-      if (originalLocalStorage) {
-        Object.defineProperty(globalThis, 'localStorage', originalLocalStorage)
-      }
-      else {
-        Reflect.deleteProperty(globalThis, 'localStorage')
-      }
-    }
-  })
-
-  it('auth 显式传入 localStorage storage 时才持久化 refresh token', async () => {
-    const storageData: Record<string, string> = {}
-    const localStorageMock = {
-      getItem: vi.fn((key: string) => storageData[key] ?? null),
-      setItem: vi.fn((key: string, value: string) => {
-        storageData[key] = value
-      }),
-      removeItem: vi.fn((key: string) => {
-        delete storageData[key]
-      }),
-    }
-
-    const originalLocalStorage = Object.getOwnPropertyDescriptor(globalThis, 'localStorage')
-    Object.defineProperty(globalThis, 'localStorage', {
-      configurable: true,
-      value: localStorageMock,
-    })
-
-    try {
-      const fetch = mockFetch(200, { ok: true })
-      await api.init({
-        baseUrl: 'https://api.test.com',
-        fetch,
-        auth: { refreshUrl: '/auth/refresh', storage: createLocalStorageTokenStorage() },
-      })
-
-      await api.auth.setTokens({
-        accessToken: 'persist-at',
-        refreshToken: 'persist-rt',
-        expiresIn: 3600,
-        tokenType: 'Bearer',
-      })
-
-      expect(localStorageMock.setItem).toHaveBeenCalledWith('hai_access_token', 'persist-at')
-      expect(localStorageMock.setItem).toHaveBeenCalledWith('hai_refresh_token', 'persist-rt')
     }
     finally {
       if (originalLocalStorage) {

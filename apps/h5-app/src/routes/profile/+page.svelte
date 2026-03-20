@@ -3,6 +3,7 @@
    * 个人中心页 — 集成 @h-ai/iam 用户认证、@h-ai/storage 头像上传、ActionSheet 操作菜单
    */
   import * as m from '$lib/paraglide/messages.js'
+  import { h5AuthTokenStore } from '$lib/utils/auth.js'
   import { Avatar, Badge, Button, Card, Skeleton, Spinner, ActionSheet } from '@h-ai/ui'
 
   let user = $state<{ id: string, username: string, displayName?: string, avatarUrl?: string, email?: string } | null>(null)
@@ -41,6 +42,7 @@
 
   async function handleLogout() {
     await fetch('/api/auth/logout', { method: 'POST' })
+    h5AuthTokenStore.clear()
     user = null
   }
 

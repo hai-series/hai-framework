@@ -1,5 +1,6 @@
 <script lang="ts">
   import { goto } from '$app/navigation'
+  import { corporateAuthTokenStore } from '$lib/utils/auth.js'
   import { Alert, Badge, Button, Card, Empty, Input, PageHeader, Select } from '@h-ai/ui'
   import * as m from '$lib/paraglide/messages.js'
 
@@ -41,6 +42,7 @@
 
   $effect(() => {
     if (data.loadError === 'Unauthorized') {
+      corporateAuthTokenStore.clear()
       void goto('/partners/admin/login')
     }
   })
@@ -58,6 +60,7 @@
 
   async function handleLogout() {
     await fetch('/api/partners/admin/logout', { method: 'POST' })
+    corporateAuthTokenStore.clear()
     await goto('/partners/admin/login')
   }
 
