@@ -38,21 +38,19 @@ describe('crypto.password', () => {
 
   // ─── 哈希格式 ───
 
-  it('should produce hash with default v2 format', () => {
+  it('should produce hash with default format: $hai$10000$<16-char-salt>$<hash>', () => {
     const hashResult = crypto.password.hash('password')
     expect(hashResult.success).toBe(true)
     if (!hashResult.success)
       return
 
     const parts = hashResult.data.split('$')
-    expect(parts.length).toBe(7)
+    expect(parts.length).toBe(5)
     expect(parts[0]).toBe('') // 首个 $ 前为空
     expect(parts[1]).toBe('hai')
-    expect(parts[2]).toBe('v2')
-    expect(parts[3]).toBe('pbkdf2-sha256')
-    expect(parts[4]).toBe('210000') // 默认迭代次数
-    expect(parts[5].length).toBe(32) // 默认盐值长度：16 bytes => 32 hex
-    expect(parts[6].length).toBe(64) // 32 bytes => 64 hex
+    expect(parts[2]).toBe('10000') // 默认迭代次数
+    expect(parts[3].length).toBe(16) // 默认盐值长度
+    expect(parts[4].length).toBeGreaterThan(0)
   })
 
   it('should produce hash with custom iterations and salt length', () => {
@@ -62,13 +60,11 @@ describe('crypto.password', () => {
       return
 
     const parts = hashResult.data.split('$')
-    expect(parts.length).toBe(7)
+    expect(parts.length).toBe(5)
     expect(parts[1]).toBe('hai')
-    expect(parts[2]).toBe('v2')
-    expect(parts[3]).toBe('pbkdf2-sha256')
-    expect(parts[4]).toBe('12000')
-    expect(parts[5].length).toBe(16) // 8 bytes => 16 hex
-    expect(parts[6].length).toBe(64)
+    expect(parts[2]).toBe('12000')
+    expect(parts[3].length).toBe(8)
+    expect(parts[4].length).toBeGreaterThan(0)
   })
 
   it('should produce different hashes for same password due to random salt', () => {
@@ -149,7 +145,7 @@ describe('crypto.password', () => {
   })
 
   it('should return INVALID_INPUT when verify password is empty', () => {
-    const result = crypto.password.verify('', '$hai$v2$pbkdf2-sha256$10000$salt$hash')
+    const result = crypto.password.verify('', '$hai$10000$salt$hash')
     expect(result.success).toBe(false)
     if (result.success)
       return
@@ -191,27 +187,5 @@ describe('crypto.password', () => {
       return
 
     expect(result.error.code).toBe(CryptoErrorCode.INVALID_INPUT)
-  })
-
-  it('should verify legacy hash format for migration compatibility', () => {
-    const password = 'legacyPass'
-    const iterations = 5
-    const salt = 'legacySalt'
-    let current = `${salt}${password}`
-
-    for (let i = 0; i < iterations; i++) {
-      const result = crypto.hash.hash(current)
-      expect(result.success).toBe(true)
-      if (!result.success)
-        return
-      current = result.data
-    }
-
-    const legacyHash = `$hai$${iterations}$${salt}$${current}`
-    const verifyResult = crypto.password.verify(password, legacyHash)
-    expect(verifyResult.success).toBe(true)
-    if (!verifyResult.success)
-      return
-    expect(verifyResult.data).toBe(true)
   })
 })

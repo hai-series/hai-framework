@@ -13,7 +13,6 @@ import type {
   WebhookVerifyConfig,
 } from './kit-crypto-types.js'
 import { core } from '@h-ai/core'
-import { createHmac } from 'node:crypto'
 import { kitM } from '../../kit-i18n.js'
 
 const SYMMETRIC_COOKIE_PREFIX = 'encv1:'
@@ -22,6 +21,48 @@ interface ResultLike<T> {
   success: boolean
   data?: T
   error?: { code: number, message: string }
+}
+
+function bytesToHex(data: Uint8Array): string {
+  return Array.from(data)
+    .map(byte => byte.toString(16).padStart(2, '0'))
+    .join('')
+}
+
+async function createWebCryptoHmacSignature(
+  body: string,
+  secretKey: string,
+  algorithm: string,
+): Promise<ResultLike<string>> {
+  const subtle = globalThis.crypto?.subtle
+  const hashAlgorithm = algorithm === 'sha256'
+    ? 'SHA-256'
+    : algorithm === 'sha512'
+      ? 'SHA-512'
+      : null
+
+  if (!subtle || !hashAlgorithm) {
+    return { success: false, error: { code: 500, message: kitM('kit_signFailed') } }
+  }
+
+  try {
+    const encoder = new TextEncoder()
+    const key = await subtle.importKey(
+      'raw',
+      encoder.encode(secretKey),
+      { name: 'HMAC', hash: hashAlgorithm },
+      false,
+      ['sign'],
+    )
+    const signature = await subtle.sign('HMAC', key, encoder.encode(body))
+    return { success: true, data: bytesToHex(new Uint8Array(signature)) }
+  }
+  catch (error) {
+    return {
+      success: false,
+      error: { code: 500, message: error instanceof Error ? error.message : String(error) },
+    }
+  }
 }
 
 async function createSignature(
@@ -35,15 +76,7 @@ async function createSignature(
   }
 
   if (algorithm === 'sha256' || algorithm === 'sha512') {
-    try {
-      return { success: true, data: createHmac(algorithm, secretKey).update(body).digest('hex') }
-    }
-    catch (error) {
-      return {
-        success: false,
-        error: { code: 500, message: error instanceof Error ? error.message : String(error) },
-      }
-    }
+    return await createWebCryptoHmacSignature(body, secretKey, algorithm)
   }
 
   if (crypto.hash.hmac) {

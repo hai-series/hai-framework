@@ -90,9 +90,9 @@ export interface EncryptWithIVResult {
 
 /** 密码哈希配置 */
 export interface PasswordConfig {
-  /** 盐值长度（字节，默认 16） */
+  /** 盐值长度（默认 16） */
   saltLength?: number
-  /** PBKDF2 迭代次数（默认 210000） */
+  /** 迭代次数（默认 10000） */
   iterations?: number
 }
 
@@ -269,13 +269,13 @@ export interface SymmetricOperations {
  * 密码哈希操作接口
  *
  * 通过 `crypto.password` 访问，需先调用 `crypto.init()`。
- * 使用标准 KDF（PBKDF2-SHA256）生成密码哈希，并兼容旧格式验证。
+ * 使用迭代加盐的方式生成密码哈希。
  */
 export interface PasswordOperations {
   /**
    * 对密码进行哈希
    *
-   * 输出格式: `$hai$v2$pbkdf2-sha256$<iterations>$<saltHex>$<derivedHex>`
+   * 输出格式: `$hai$<iterations>$<salt>$<hash>`
    *
    * @param password - 明文密码（不能为空）
    * @param config - 可选配置（盐值长度、迭代次数）
@@ -285,12 +285,10 @@ export interface PasswordOperations {
   /**
    * 验证密码是否匹配
    *
-   * 自动解析并兼容两种格式：
-   * - v2: `$hai$v2$pbkdf2-sha256$<iterations>$<saltHex>$<derivedHex>`
-   * - legacy: `$hai$<iterations>$<salt>$<hash>`
+   * 自动从哈希字符串中解析迭代次数和盐值进行重新计算。
    *
    * @param password - 待验证的明文密码
-   * @param hash - 存储的哈希值（v2 或 legacy）
+   * @param hash - 存储的哈希值（格式: `$hai$<iterations>$<salt>$<hash>`）
    * @returns 成功时返回 boolean；失败时返回 INVALID_INPUT 或 VERIFY_FAILED
    */
   verify: (password: string, hash: string) => Result<boolean, CryptoError>
