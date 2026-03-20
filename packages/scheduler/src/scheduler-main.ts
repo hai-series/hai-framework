@@ -267,8 +267,9 @@ export const scheduler: SchedulerFunctions = {
         return saveResult
     }
 
-    setTask(task.id, task)
-    setCronCache(task.id, cronResult.data)
+    const regResult = registerInMemory(task)
+    if (!regResult.success)
+      return regResult
 
     logger.info('Task registered', { taskId: task.id, taskName: task.name, cron: task.cron, persisted: task.type === 'api' && !!taskRepo })
     return ok(undefined)
