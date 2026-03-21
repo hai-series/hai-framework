@@ -35,7 +35,7 @@ import { createAISubsystems } from './ai-functions.js'
 import { aiM } from './ai-i18n.js'
 import { collectStream, createSSEDecoder, createStreamProcessor, encodeSSE } from './llm/ai-llm-stream.js'
 import { createToolRegistry, defineTool } from './llm/ai-llm-tool.js'
-import { createDbStoreProviderFromModules, isDbStoreAvailable, getUnavailableDbDeps } from './store/providers/ai-store-provider-db.js'
+import { createDbStoreProviderFromModules, getUnavailableDbDeps, isDbStoreAvailable } from './store/providers/ai-store-provider-db.js'
 
 const logger = core.logger.child({ module: 'ai', scope: 'main' })
 

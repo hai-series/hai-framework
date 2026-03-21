@@ -231,51 +231,51 @@ export interface SessionInfo {
  */
 export interface KnowledgeStore {
   /** 初始化存储（建表 / 建集合 / 建索引，幂等） */
-  initialize(collection: string, dimension: number): Promise<void>
+  initialize: (collection: string, dimension: number) => Promise<void>
 
   // ─── 实体 CRUD ───
 
   /** 插入或更新实体 */
-  upsertEntity(entity: { id: string, name: string, type: string, aliases?: string[], description?: string }): Promise<void>
+  upsertEntity: (entity: { id: string, name: string, type: string, aliases?: string[], description?: string }) => Promise<void>
   /** 按名称模糊搜索实体（匹配 name 和 aliases） */
-  findEntitiesByName(keyword: string): Promise<Array<{ id: string, name: string, type: string, aliases: string[] }>>
+  findEntitiesByName: (keyword: string) => Promise<Array<{ id: string, name: string, type: string, aliases: string[] }>>
   /** 列出实体（支持类型过滤和关键词搜索） */
-  listEntities(options?: { type?: string, keyword?: string, limit?: number }): Promise<Array<{ id: string, name: string, type: string, aliases: string[], description: string | null, createdAt: string | null, updatedAt: string | null }>>
+  listEntities: (options?: { type?: string, keyword?: string, limit?: number }) => Promise<Array<{ id: string, name: string, type: string, aliases: string[], description: string | null, createdAt: string | null, updatedAt: string | null }>>
 
   // ─── 文档-实体关联 ───
 
   /** 插入文档-实体关联 */
-  insertEntityDocument(relation: { entityId: string, documentId: string, chunkId?: string, collection: string, relevance?: number, context?: string }): Promise<void>
+  insertEntityDocument: (relation: { entityId: string, documentId: string, chunkId?: string, collection: string, relevance?: number, context?: string }) => Promise<void>
   /** 按实体 ID 列表查询关联文档 */
-  findDocumentsByEntityIds(entityIds: string[], collection?: string): Promise<Array<{ entityId: string, documentId: string, chunkId: string, collection: string, relevance: number, context: string | null }>>
+  findDocumentsByEntityIds: (entityIds: string[], collection?: string) => Promise<Array<{ entityId: string, documentId: string, chunkId: string, collection: string, relevance: number, context: string | null }>>
   /** 按实体名称查询实体及其关联文档 */
-  findByEntityName(entityName: string, options?: { collection?: string, type?: string }): Promise<Array<{ entity: { id: string, name: string, type: string, aliases: string[], description: string | null }, documents: Array<{ documentId: string, chunkId: string, collection: string, relevance: number, context: string | null }> }>>
+  findByEntityName: (entityName: string, options?: { collection?: string, type?: string }) => Promise<Array<{ entity: { id: string, name: string, type: string, aliases: string[], description: string | null }, documents: Array<{ documentId: string, chunkId: string, collection: string, relevance: number, context: string | null }> }>>
   /** 删除文档相关的实体关联 */
-  removeDocumentEntityRelations(documentId: string, collection: string): Promise<void>
+  removeDocumentEntityRelations: (documentId: string, collection: string) => Promise<void>
 
   // ─── 文档元数据 ───
 
   /** 保存文档元数据 */
-  upsertDocument(doc: { documentId: string, collection: string, title?: string, url?: string, chunkCount: number, createdAt: number }): Promise<void>
+  upsertDocument: (doc: { documentId: string, collection: string, title?: string, url?: string, chunkCount: number, createdAt: number }) => Promise<void>
   /** 按 documentId + collection 获取单个文档元数据 */
-  getDocument(documentId: string, collection: string): Promise<{ documentId: string, collection: string, title: string | null, url: string | null, chunkCount: number, createdAt: number } | undefined>
+  getDocument: (documentId: string, collection: string) => Promise<{ documentId: string, collection: string, title: string | null, url: string | null, chunkCount: number, createdAt: number } | undefined>
   /** 列出文档元数据 */
-  listDocuments(collection: string, options?: { offset?: number, limit?: number }): Promise<Array<{ documentId: string, collection: string, title: string | null, url: string | null, chunkCount: number, createdAt: number }>>
+  listDocuments: (collection: string, options?: { offset?: number, limit?: number }) => Promise<Array<{ documentId: string, collection: string, title: string | null, url: string | null, chunkCount: number, createdAt: number }>>
   /** 查询每个文档的实体关联数 */
-  listDocumentEntityCounts(documentIds: string[], collection: string): Promise<Map<string, number>>
+  listDocumentEntityCounts: (documentIds: string[], collection: string) => Promise<Map<string, number>>
   /** 删除文档元数据 */
-  removeDocument(documentId: string, collection: string): Promise<void>
+  removeDocument: (documentId: string, collection: string) => Promise<void>
 
   // ─── 向量操作 ───
 
   /** 批量写入向量 */
-  upsertVectors(collection: string, vectors: Array<{ id: string, vector: number[], content?: string, metadata?: Record<string, unknown> }>): Promise<void>
+  upsertVectors: (collection: string, vectors: Array<{ id: string, vector: number[], content?: string, metadata?: Record<string, unknown> }>) => Promise<void>
   /** 向量相似度检索 */
-  searchVectors(collection: string, vector: number[], options?: { topK?: number, minScore?: number, filter?: Record<string, unknown> }): Promise<Array<{ id: string, score: number, content?: string, metadata?: Record<string, unknown> }>>
+  searchVectors: (collection: string, vector: number[], options?: { topK?: number, minScore?: number, filter?: Record<string, unknown> }) => Promise<Array<{ id: string, score: number, content?: string, metadata?: Record<string, unknown> }>>
   /** 批量删除向量 */
-  removeVectors(collection: string, ids: string[]): Promise<void>
+  removeVectors: (collection: string, ids: string[]) => Promise<void>
   /** 确保向量集合存在 */
-  ensureCollection(collection: string, dimension: number): Promise<void>
+  ensureCollection: (collection: string, dimension: number) => Promise<void>
 }
 
 // ─── 存储 Provider ───
@@ -300,10 +300,10 @@ export interface AIStoreProvider {
   readonly name: string
 
   /** 创建关系数据存储实例 */
-  createRelStore<T>(name: string, options?: AIRelStoreOptions): AIRelStore<T>
+  createRelStore: <T>(name: string, options?: AIRelStoreOptions) => AIRelStore<T>
 
   /** 创建向量数据存储实例 */
-  createVectorStore(name: string): AIVectorStore
+  createVectorStore: (name: string) => AIVectorStore
 
   /**
    * 创建 knowledge 专用存储（可选）
@@ -311,15 +311,15 @@ export interface AIStoreProvider {
    * 如果 Provider 不提供此方法，knowledge 子系统将不可用。
    * 默认 db Provider 提供基于 reldb 归一化表 + vecdb 的高效实现。
    */
-  createKnowledgeStore?(): KnowledgeStore
+  createKnowledgeStore?: () => KnowledgeStore
 
   /**
    * 初始化所有已创建的存储（建表、建连接等）
    *
    * 由 ai.init() 在创建完所有 store 实例后统一调用。
    */
-  initialize(): Promise<void>
+  initialize: () => Promise<void>
 
   /** 关闭所有存储（释放连接等），由 ai.close() 调用 */
-  close?(): Promise<void>
+  close?: () => Promise<void>
 }
