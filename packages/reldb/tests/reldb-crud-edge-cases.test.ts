@@ -45,6 +45,7 @@ describe('reldb.crud edge cases', () => {
         table: 'users',
         idColumn: 'id',
         createColumns: ['name', 'email'],
+        dbType: label,
       })
 
       const result = await crud.create({})
@@ -60,6 +61,7 @@ describe('reldb.crud edge cases', () => {
         table: 'users',
         idColumn: 'id',
         updateColumns: ['name', 'email'],
+        dbType: label,
       })
 
       const result = await crud.updateById(1, {})
@@ -77,6 +79,7 @@ describe('reldb.crud edge cases', () => {
         table: 'users',
         idColumn: 'id',
         createColumns: ['name', 'email'],
+        dbType: label,
       })
 
       // 传入 status 字段，但 createColumns 不包含 status
@@ -93,6 +96,7 @@ describe('reldb.crud edge cases', () => {
         table: 'users',
         idColumn: 'id',
         updateColumns: ['name'],
+        dbType: label,
       })
 
       // 只传入 email，但 updateColumns 仅含 name
@@ -109,6 +113,7 @@ describe('reldb.crud edge cases', () => {
         table: 'users',
         idColumn: 'id',
         updateColumns: ['id', 'name'],
+        dbType: label,
       })
 
       // 先插入一条记录
@@ -131,6 +136,7 @@ describe('reldb.crud edge cases', () => {
         table: 'users',
         idColumn: 'id',
         createColumns: ['name', 'email'],
+        dbType: label,
       })
 
       const result = await crud.createMany([
@@ -149,6 +155,7 @@ describe('reldb.crud edge cases', () => {
         table: 'users',
         idColumn: 'id',
         createColumns: ['name', 'email'],
+        dbType: label,
       })
 
       const result = await crud.createMany([])
@@ -164,6 +171,7 @@ describe('reldb.crud edge cases', () => {
         idColumn: 'id',
         select: ['id', 'name', 'email'],
         createColumns: ['name', 'email'],
+        dbType: label,
       })
 
       // 插入 5 条数据
@@ -192,6 +200,7 @@ describe('reldb.crud edge cases', () => {
         idColumn: 'id',
         select: ['id', 'name', 'email'],
         createColumns: ['name', 'email'],
+        dbType: label,
       })
 
       await crud.create({ name: '用户1', email: 'u1@test.com' })
@@ -212,6 +221,7 @@ describe('reldb.crud edge cases', () => {
         idColumn: 'id',
         select: ['id', 'name', 'email'],
         createColumns: ['name', 'email'],
+        dbType: label,
       })
 
       await crud.create({ name: '用户1', email: 'u1@test.com' })
@@ -230,6 +240,7 @@ describe('reldb.crud edge cases', () => {
         idColumn: 'id',
         select: ['id', 'name', 'email'],
         createColumns: ['name', 'email'],
+        dbType: label,
       })
 
       await crud.create({ name: '用户1', email: 'u1@test.com' })
@@ -256,6 +267,7 @@ describe('reldb.crud edge cases', () => {
         idColumn: 'id',
         select: ['id', 'name'],
         createColumns: ['name', 'email'],
+        dbType: label,
         mapRow: row => ({
           userId: Number(row.id),
           displayName: `【${row.name as string}】`,
@@ -289,6 +301,7 @@ describe('reldb.crud edge cases', () => {
         idColumn: 'id',
         select: ['id', 'name', 'email'],
         createColumns: ['name', 'email'],
+        dbType: label,
       })
 
       for (let i = 1; i <= 10; i++) {
@@ -315,6 +328,7 @@ describe('reldb.crud edge cases', () => {
         idColumn: 'id',
         select: ['id', 'name', 'email'],
         createColumns: ['name', 'email'],
+        dbType: label,
       })
 
       for (let i = 1; i <= 5; i++) {
@@ -342,6 +356,7 @@ describe('reldb.crud edge cases', () => {
         idColumn: 'id',
         select: ['id', 'name', 'email'],
         createColumns: ['name', 'email', 'status'],
+        dbType: label,
       })
 
       await crud.create({ name: '用户A', email: 'a@test.com', status: 'active' })
@@ -370,6 +385,7 @@ describe('reldb.crud edge cases', () => {
         table: 'users',
         idColumn: 'id',
         select: ['id', 'name', 'email'],
+        dbType: label,
         // 不指定 createColumns
       })
 

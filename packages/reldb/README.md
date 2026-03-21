@@ -40,6 +40,7 @@ const userCrud = reldb.crud.table({
   select: ['id', 'name', 'email'],
   createColumns: ['name', 'email'],
   updateColumns: ['name', 'email'],
+  dbType: 'sqlite',
 })
 await userCrud.create({ name: '李四', email: 'li@test.com' })
 const user = await userCrud.findById(1)
@@ -137,6 +138,7 @@ const userCrud = reldb.crud.table<{ id: number, name: string, email: string }>({
   select: ['id', 'name', 'email'], // 查询列，默认 '*'
   createColumns: ['name', 'email'], // 允许插入的列
   updateColumns: ['name', 'email'], // 允许更新的列
+  dbType: 'sqlite', // 数据库类型
 })
 ```
 
@@ -154,12 +156,35 @@ await userCrud.createMany([
 ])
 ```
 
-### findById / findAll / findPage
+### createOrUpdate
+
+主键存在时更新，否则创建（upsert）：
 
 ```ts
-// 主键查找
+const userCrud = reldb.crud.table<{ id: number, name: string, email: string }>({
+  table: 'users',
+  idColumn: 'id',
+  createColumns: ['id', 'name', 'email'],
+  updateColumns: ['name', 'email'],
+  dbType: 'sqlite',
+})
+
+await userCrud.createOrUpdate({ id: 1, name: '张三', email: 'test@example.com' })
+// 不存在 → 插入；已存在 → 更新 name、email
+```
+
+`BaseReldbCrudRepository` 自动获取 `dbType`，无需手动传入。
+
+### findById / getById / findAll / findPage
+
+```ts
+// 主键查找（不存在时返回 null）
 const user = await userCrud.findById(1)
 // user.data → { id: 1, name: '张三', email: 'test@example.com' } | null
+
+// 主键获取（不存在时返回 RECORD_NOT_FOUND 错误）
+const user2 = await userCrud.getById(1)
+// user2.data → { id: 1, name: '张三', email: 'test@example.com' }
 
 // 条件查询（where + params 占位符）
 const actives = await userCrud.findAll({
@@ -260,6 +285,10 @@ class UserRepository extends BaseReldbCrudRepository<UserRow> {
 const repo = new UserRepository()
 await repo.create({ name: '张三', email: 'test@example.com' })
 const user = await repo.findById(1)
+
+// 创建或更新（upsert）
+await repo.createOrUpdate({ id: 1, name: '李四', email: 'test@example.com' })
+// id=1 已存在 → 更新 name；不存在 → 插入新记录
 
 // 跨仓库事务
 const txResult = await reldb.tx.begin()

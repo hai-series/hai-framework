@@ -78,9 +78,11 @@ export abstract class BaseReldbCrudRepository<TItem> implements ReldbCrudReposit
   private readonly createColumns: string[]
   /** 可更新列 */
   private readonly updateColumns: string[]
+  /** 表名 */
+  private readonly table: string
   /** 当前数据库类型（延迟读取，确保获取初始化后的值） */
-  private get dbType(): ReldbConfig['type'] | undefined {
-    return this.db.config?.type
+  private get dbType(): ReldbConfig['type'] {
+    return this.db.config!.type
   }
 
   /**
@@ -93,6 +95,7 @@ export abstract class BaseReldbCrudRepository<TItem> implements ReldbCrudReposit
    */
   protected constructor(db: ReldbFunctions, config: BaseReldbCrudRepositoryConfig<TItem>) {
     this.db = db
+    this.table = config.table
     this.fields = config.fields
     this.idColumn = config.idColumn ?? 'id'
     this.idField = config.idField ?? this.resolveIdField(config.fields, this.idColumn)
@@ -123,6 +126,7 @@ export abstract class BaseReldbCrudRepository<TItem> implements ReldbCrudReposit
       createColumns: this.createColumns,
       updateColumns: this.updateColumns,
       mapRow: (row: Record<string, unknown>) => this.mapRow(row),
+      get dbType() { return db.config!.type },
     })
   }
 
@@ -493,6 +497,92 @@ export abstract class BaseReldbCrudRepository<TItem> implements ReldbCrudReposit
   }
 
   /**
+   * 创建或更新单条记录（upsert）
+   *
+   * 主键存在时更新可更新字段，否则插入新记录。
+   * 自动处理主键生成、createdAt/updatedAt 填充、字段类型转换。
+   * 更新时仅写入用户显式提供的可更新字段，不会用默认值覆盖已有数据。
+   *
+   * ### 为什么不复用 this.crud.createOrUpdate（kernel）
+   *
+   * Kernel 的 createOrUpdate 使用 `excluded.col` / `VALUES(col)` 引用 INSERT 值作为
+   * UPDATE 值，即 INSERT 和 UPDATE 共享同一组数据。但 Repository 层的 INSERT 负载和
+   * UPDATE 负载语义不同：
+   *
+   * - **INSERT 负载**（buildCreatePayload）：包含自动生成的主键、createdAt、updatedAt、
+   *   字段默认值（如 `status: 'active'`）等应用层填充值。
+   * - **UPDATE 负载**（buildUpdatePayload）：仅包含用户显式传入的可更新字段 + updatedAt，
+   *   不包含 createdAt（避免覆盖原始创建时间）、不包含应用默认值（避免覆盖已有数据）。
+   *
+   * 若复用 kernel，冲突更新时会将 INSERT 的 createdAt、默认值等一并写入，破坏已有记录。
+   * 因此 Repository 自行构建两份独立负载，使用 `col = ?` 参数化占位分别传入 INSERT 值
+   * 和 UPDATE 值，通过 this.sql(tx).execute() 直接执行。
+   *
+   * @param data - 业务字段与值的映射
+   * @param tx - 可选事务句柄
+   * @returns 执行结果（含 changes）
+   */
+  async createOrUpdate(data: Record<string, unknown>, tx?: DmlWithTxOperations): Promise<Result<ExecuteResult, ReldbError>> {
+    const ready = await this.ensureReady()
+    if (!ready.success) {
+      return ready as Result<ExecuteResult, ReldbError>
+    }
+
+    const dbType = this.dbType
+
+    // INSERT 负载：含 createdAt、默认值、生成的主键等应用层填充值
+    const createPayload = this.buildCreatePayload(data)
+
+    // 确保主键包含在插入负载中（upsert 需要主键来触发冲突检测）
+    // 当主键为 autoIncrement 且 create: false 时，buildCreatePayload 不会包含它
+    if (this.idField && data[this.idField] !== undefined) {
+      const idFieldDef = this.fields.find(f => f.fieldName === this.idField)
+      if (idFieldDef && !(idFieldDef.columnName in createPayload)) {
+        createPayload[idFieldDef.columnName] = this.toDbValue(data[this.idField], idFieldDef.def)
+      }
+    }
+
+    if (Object.keys(createPayload).length === 0) {
+      return err({
+        code: ReldbErrorCode.CONFIG_ERROR,
+        message: reldbM('reldb_crudEmptyPayload'),
+      })
+    }
+
+    const insertColumns = Object.keys(createPayload)
+    const insertValues = Object.values(createPayload)
+    const placeholders = insertColumns.map(() => '?').join(', ')
+
+    // UPDATE 负载：仅用户显式传入的可更新字段 + updatedAt
+    // 与 INSERT 负载独立，不含 createdAt / 应用默认值，避免冲突更新时覆盖已有数据
+    const updatePayload = this.buildUpdatePayload(data)
+
+    if (!updatePayload || Object.keys(updatePayload).length === 0) {
+      // 无可更新列，退化为普通 INSERT
+      const sql = `INSERT INTO ${this.table} (${insertColumns.join(', ')}) VALUES (${placeholders})`
+      return this.sql(tx).execute(sql, insertValues)
+    }
+
+    const updateColumns = Object.keys(updatePayload)
+    const updateValues = Object.values(updatePayload)
+    // 使用 col = ? 参数化占位（而非 kernel 的 excluded.col / VALUES(col)），
+    // 使 UPDATE 值独立于 INSERT 值
+    const updateSet = updateColumns.map(col => `${col} = ?`).join(', ')
+
+    let sql: string
+    if (dbType === 'mysql') {
+      sql = `INSERT INTO ${this.table} (${insertColumns.join(', ')}) VALUES (${placeholders}) ON DUPLICATE KEY UPDATE ${updateSet}`
+    }
+    else {
+      // SQLite / PostgreSQL
+      sql = `INSERT INTO ${this.table} (${insertColumns.join(', ')}) VALUES (${placeholders}) ON CONFLICT(${this.idColumn}) DO UPDATE SET ${updateSet}`
+    }
+
+    // 参数顺序：先 INSERT 值，再 UPDATE 值（两组独立）
+    return this.sql(tx).execute(sql, [...insertValues, ...updateValues])
+  }
+
+  /**
    * 根据主键查找单条记录
    *
    * @param id - 主键值
@@ -505,6 +595,23 @@ export abstract class BaseReldbCrudRepository<TItem> implements ReldbCrudReposit
       return ready as Result<TItem | null, ReldbError>
     }
     return this.crud.findById(id, tx)
+  }
+
+  /**
+   * 根据主键获取单条记录（必须存在）
+   *
+   * 与 findById 不同，当记录不存在时返回 RECORD_NOT_FOUND 错误。
+   *
+   * @param id - 主键值
+   * @param tx - 可选事务句柄
+   * @returns 业务模型对象（不存在时返回错误）
+   */
+  async getById(id: unknown, tx?: DmlWithTxOperations): Promise<Result<TItem, ReldbError>> {
+    const ready = await this.ensureReady()
+    if (!ready.success) {
+      return ready as Result<TItem, ReldbError>
+    }
+    return this.crud.getById(id, tx)
   }
 
   /**

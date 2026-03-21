@@ -85,6 +85,7 @@ describe.sequential('db (not initialized)', () => {
     const crud = reldb.crud.table({
       table: 'users',
       idColumn: 'id',
+      dbType: 'sqlite',
     })
 
     const findAll = await crud.findAll()
@@ -97,6 +98,12 @@ describe.sequential('db (not initialized)', () => {
     expect(findById.success).toBe(false)
     if (!findById.success) {
       expect(findById.error.code).toBe(ReldbErrorCode.NOT_INITIALIZED)
+    }
+
+    const getById = await crud.getById(1)
+    expect(getById.success).toBe(false)
+    if (!getById.success) {
+      expect(getById.error.code).toBe(ReldbErrorCode.NOT_INITIALIZED)
     }
 
     const create = await crud.create({ name: '用户A' })

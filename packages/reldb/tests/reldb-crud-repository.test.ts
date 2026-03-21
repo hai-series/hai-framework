@@ -472,6 +472,208 @@ describe('db.BaseReldbCrudRepository', () => {
         expect(result.data).toHaveLength(2)
       }
     })
+
+    it(`${label}: createOrUpdate should insert when record does not exist`, async () => {
+      await reldb.ddl.dropTable('api_keys', true)
+      const repo = new ApiKeyRepository()
+
+      const result = await repo.createOrUpdate({ id: 'key-upsert-1', name: 'new-key' })
+      expect(result.success).toBe(true)
+
+      const found = await repo.findById('key-upsert-1')
+      expect(found.success).toBe(true)
+      if (found.success) {
+        expect(found.data).not.toBeNull()
+        expect(found.data!.name).toBe('new-key')
+      }
+    })
+
+    it(`${label}: createOrUpdate should update when record exists`, async () => {
+      await reldb.ddl.dropTable('api_keys', true)
+      const repo = new ApiKeyRepository()
+
+      const createResult = await repo.create({ id: 'key-upsert-2', name: 'original' })
+      expect(createResult.success).toBe(true)
+
+      const before = await repo.findById('key-upsert-2')
+      expect(before.success).toBe(true)
+
+      await new Promise(resolve => setTimeout(resolve, 5))
+
+      const upsertResult = await repo.createOrUpdate({ id: 'key-upsert-2', name: 'updated' })
+      expect(upsertResult.success).toBe(true)
+
+      const after = await repo.findById('key-upsert-2')
+      expect(after.success).toBe(true)
+      if (after.success && after.data) {
+        expect(after.data.name).toBe('updated')
+      }
+
+      // 仅有一条记录
+      const count = await repo.count()
+      expect(count.success).toBe(true)
+      if (count.success) {
+        expect(count.data).toBe(1)
+      }
+    })
+
+    it(`${label}: createOrUpdate should preserve createdAt on update`, async () => {
+      await ensureTable()
+      const repo = new UserRepository()
+
+      const createResult = await repo.create({ name: '用户UP', email: 'up@test.com' })
+      expect(createResult.success).toBe(true)
+
+      const before = await repo.findById(1)
+      expect(before.success).toBe(true)
+
+      await new Promise(resolve => setTimeout(resolve, 5))
+
+      const upsertResult = await repo.createOrUpdate({ id: 1, name: '用户UP-更新', email: 'up@test.com' })
+      expect(upsertResult.success).toBe(true)
+
+      const after = await repo.findById(1)
+      expect(after.success).toBe(true)
+      if (before.success && after.success && before.data && after.data) {
+        // createdAt 不变
+        expect(after.data.createdAt.getTime()).toBe(before.data.createdAt.getTime())
+        // updatedAt 被更新
+        expect(after.data.updatedAt.getTime()).toBeGreaterThanOrEqual(before.data.updatedAt.getTime())
+        expect(after.data.name).toBe('用户UP-更新')
+      }
+    })
+
+    it(`${label}: createOrUpdate should work within transaction`, async () => {
+      await reldb.ddl.dropTable('api_keys', true)
+      const repo = new ApiKeyRepository()
+
+      const txResult = await reldb.tx.begin()
+      expect(txResult.success).toBe(true)
+      if (!txResult.success) {
+        return
+      }
+
+      const tx = txResult.data
+      await repo.createOrUpdate({ id: 'key-tx-1', name: 'tx-key' }, tx)
+
+      const rollbackResult = await tx.rollback()
+      expect(rollbackResult.success).toBe(true)
+
+      const afterCount = await repo.count()
+      expect(afterCount.success).toBe(true)
+      if (afterCount.success) {
+        expect(afterCount.data).toBe(0)
+      }
+    })
+
+    it(`${label}: createOrUpdate should not overwrite fields outside updateColumns`, async () => {
+      await ensureTable()
+      const repo = new UserRepository()
+
+      // 首次插入：enabled = false
+      const createResult = await repo.create({ name: '用户WL', email: 'wl@test.com', enabled: false })
+      expect(createResult.success).toBe(true)
+
+      // upsert 只更新 name/email（enabled 是 update: true 但不传值则不会更新）
+      const upsertResult = await repo.createOrUpdate({ id: 1, name: '用户WL-更新', email: 'wl@test.com' })
+      expect(upsertResult.success).toBe(true)
+
+      const after = await repo.findById(1)
+      expect(after.success).toBe(true)
+      if (after.success && after.data) {
+        expect(after.data.name).toBe('用户WL-更新')
+        // enabled 未传入，不应被覆盖（保持 false）
+        expect(after.data.enabled).toBe(false)
+      }
+    })
+
+    it(`${label}: createOrUpdate should not overwrite default values on conflict`, async () => {
+      await ensureTable()
+      const repo = new UserRepository()
+
+      // 首次插入：enabled 使用 buildCreatePayload 的默认值 true
+      const createResult = await repo.create({ name: '用户DV', email: 'dv@test.com' })
+      expect(createResult.success).toBe(true)
+
+      const before = await repo.findById(1)
+      expect(before.success).toBe(true)
+      if (before.success && before.data) {
+        expect(before.data.enabled).toBe(true)
+      }
+
+      // 手动设置 enabled = false
+      const updateResult = await repo.updateById(1, { enabled: false })
+      expect(updateResult.success).toBe(true)
+
+      // upsert 不传 enabled：不应用 INSERT 的默认值 true 覆盖现有的 false
+      const upsertResult = await repo.createOrUpdate({ id: 1, name: '用户DV-更新', email: 'dv@test.com' })
+      expect(upsertResult.success).toBe(true)
+
+      const after = await repo.findById(1)
+      expect(after.success).toBe(true)
+      if (after.success && after.data) {
+        expect(after.data.name).toBe('用户DV-更新')
+        // enabled 应保持 false，不被 INSERT 默认值覆盖
+        expect(after.data.enabled).toBe(false)
+      }
+    })
+
+    it(`${label}: createOrUpdate with empty data should fail`, async () => {
+      await ensureTable()
+      const repo = new UserRepository()
+
+      // 不传任何业务字段：buildCreatePayload 仍会填充默认值和时间戳，
+      // 但 notNull 的 name/email 未提供会触发数据库约束错误
+      const result = await repo.createOrUpdate({})
+      expect(result.success).toBe(false)
+    })
+
+    it(`${label}: createOrUpdate multiple times should keep only one record`, async () => {
+      await reldb.ddl.dropTable('api_keys', true)
+      const repo = new ApiKeyRepository()
+
+      await repo.createOrUpdate({ id: 'key-multi', name: 'v1' })
+      await repo.createOrUpdate({ id: 'key-multi', name: 'v2' })
+      await repo.createOrUpdate({ id: 'key-multi', name: 'v3' })
+
+      const count = await repo.count()
+      expect(count.success).toBe(true)
+      if (count.success) {
+        expect(count.data).toBe(1)
+      }
+
+      const found = await repo.findById('key-multi')
+      expect(found.success).toBe(true)
+      if (found.success && found.data) {
+        expect(found.data.name).toBe('v3')
+      }
+    })
+
+    // ─── getById（Repository 层） ───
+
+    it(`${label}: getById should return record when exists`, async () => {
+      await ensureTable()
+      const repo = new UserRepository()
+
+      await repo.create({ name: '用户G', email: 'g@test.com', enabled: true })
+
+      const result = await repo.getById(1)
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data.name).toBe('用户G')
+      }
+    })
+
+    it(`${label}: getById non-existent should return RECORD_NOT_FOUND`, async () => {
+      await ensureTable()
+      const repo = new UserRepository()
+
+      const result = await repo.getById(999)
+      expect(result.success).toBe(false)
+      if (!result.success) {
+        expect(result.error.code).toBe(ReldbErrorCode.RECORD_NOT_FOUND)
+      }
+    })
   }
 
   defineDbSuite('sqlite', sqliteMemoryEnv, () => defineCommon('sqlite'))
