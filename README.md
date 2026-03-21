@@ -421,7 +421,7 @@ import { z } from 'zod'
 
 // 初始化（OpenAI 兼容 API）
 await ai.init({
-  llm: { apiKey: process.env.HAI_OPENAI_API_KEY, model: 'gpt-4o-mini' },
+  llm: { apiKey: process.env.HAI_AI_LLM_API_KEY, model: 'gpt-4o-mini' },
 })
 
 // 同步调用
@@ -494,7 +494,7 @@ await reldb.init({ type: 'sqlite', database: './data/app.db' })
 await cache.init({ type: 'memory' })
 
 await iam.init({
-  session: { secret: process.env.HAI_SESSION_SECRET! },
+  session: { secret: process.env.HAI_IAM_SESSION_SECRET! },
 })
 
 // 用户注册
@@ -741,32 +741,32 @@ pnpm --filter @h-ai/reldb test
 
 ### 根目录 `.env.example` 的关键分组
 
-| 分组           | 代表变量                                            | 说明                                                                              |
-| -------------- | --------------------------------------------------- | --------------------------------------------------------------------------------- |
-| Runtime        | `HAI_ENV`、`HAI_DEBUG`                              | 运行环境、调试与日志开关                                                          |
-| Database       | `HAI_DB_*`                                          | `@h-ai/reldb` 的 SQLite / PostgreSQL / MySQL 配置                                 |
-| Cache          | `HAI_CACHE_*`                                       | `@h-ai/cache` 的 memory / Redis / Upstash 配置                                    |
-| Session / Auth | `HAI_SESSION_SECRET`、`HAI_IAM_*`                   | `@h-ai/iam` 与 `@h-ai/kit` 的会话、Cookie、安全配置                               |
-| Storage        | `HAI_STORAGE_*`                                     | `@h-ai/storage` 的 local / S3 配置                                                |
-| AI             | `HAI_OPENAI_*`、`HAI_AI_*`、`HAI_ANTHROPIC_API_KEY` | `@h-ai/ai` 的模型、Base URL 与兼容 Provider 配置                                  |
-| VecDB          | `HAI_VECDB_*`                                       | `@h-ai/vecdb` 的 LanceDB / pgvector / Qdrant 配置                                 |
-| Reach          | `HAI_REACH_*`                                       | `@h-ai/reach` 的 SMTP、短信、Webhook 配置                                         |
-| Payment        | `HAI_PAY_*`                                         | `@h-ai/payment` 的微信、支付宝、Stripe 商户配置                                   |
-| Deploy         | `HAI_DEPLOY_*`                                      | `@h-ai/deploy` / `@h-ai/cli` 的 Vercel、Neon、Upstash、R2、Resend、阿里云短信凭据 |
-| App-specific   | `HAI_PARTNER_*`、`HAI_CRYPTO_DATA_KEY`              | 示例应用专用变量（如企业官网后台、业务数据加密）                                  |
-| Dev / Test     | `HAI_E2E`、`BASE_URL`、`PUBLIC_API_BASE`、`CI`      | 本地联调、E2E 与构建辅助                                                          |
+| 分组           | 代表变量                                                    | 说明                                                                              |
+| -------------- | ----------------------------------------------------------- | --------------------------------------------------------------------------------- |
+| Runtime        | `HAI_ENV`、`HAI_DEBUG`                                      | 运行环境、调试与日志开关                                                          |
+| Database       | `HAI_RELDB_*`                                               | `@h-ai/reldb` 的 SQLite / PostgreSQL / MySQL 配置                                 |
+| Cache          | `HAI_CACHE_*`                                               | `@h-ai/cache` 的 memory / Redis / Upstash 配置                                    |
+| Session / Auth | `HAI_IAM_SESSION_SECRET`、`HAI_IAM_*`、`HAI_KIT_COOKIE_KEY` | `@h-ai/iam` 与 `@h-ai/kit` 的会话、Cookie、安全配置                               |
+| Storage        | `HAI_STORAGE_*`                                             | `@h-ai/storage` 的 local / S3 配置                                                |
+| AI             | `HAI_AI_LLM_*`                                              | `@h-ai/ai` 的 LLM API Key、Base URL、模型配置（兼容 `OPENAI_*` 回退）             |
+| VecDB          | `HAI_VECDB_*`                                               | `@h-ai/vecdb` 的 LanceDB / pgvector / Qdrant 配置                                 |
+| Reach          | `HAI_REACH_*`                                               | `@h-ai/reach` 的 SMTP、短信、Webhook 配置                                         |
+| Payment        | `HAI_PAYMENT_*`                                             | `@h-ai/payment` 的微信、支付宝、Stripe 商户配置                                   |
+| Deploy         | `HAI_DEPLOY_*`                                              | `@h-ai/deploy` / `@h-ai/cli` 的 Vercel、Neon、Upstash、R2、Resend、阿里云短信凭据 |
+| App-specific   | `HAI_PARTNER_*`、`HAI_CRYPTO_DATA_KEY`                      | 示例应用专用变量（如企业官网后台、业务数据加密）                                  |
+| Dev / Test     | `HAI_E2E`、`BASE_URL`、`PUBLIC_API_BASE`、`CI`              | 本地联调、E2E 与构建辅助                                                          |
 
 ### 常见模块变量速查
 
-| 模块            | 常见变量前缀                                                   | 用途                                                           |
-| --------------- | -------------------------------------------------------------- | -------------------------------------------------------------- |
-| `@h-ai/reldb`   | `HAI_DB_*`                                                     | 数据库连接、DSN、用户名密码                                    |
-| `@h-ai/cache`   | `HAI_CACHE_*`                                                  | Redis / Upstash 连接、超时、前缀                               |
-| `@h-ai/storage` | `HAI_STORAGE_*`                                                | 本地路径、S3 Bucket / Endpoint / AK/SK                         |
-| `@h-ai/ai`      | `HAI_OPENAI_*`、`HAI_AI_*`                                     | LLM API Key、Base URL、默认模型                                |
-| `@h-ai/reach`   | `HAI_REACH_SMTP_*`、`HAI_REACH_SMS_*`、`HAI_REACH_WEBHOOK_URL` | 邮件、短信、Webhook 触达配置                                   |
-| `@h-ai/payment` | `HAI_PAY_WECHAT_*`、`HAI_PAY_ALIPAY_*`、`HAI_PAY_STRIPE_*`     | 支付商户与回调配置                                             |
-| `@h-ai/deploy`  | `HAI_DEPLOY_*`                                                 | Vercel / Neon / Upstash / Cloudflare / Resend / 阿里云短信凭据 |
+| 模块            | 常见变量前缀                                                           | 用途                                                           |
+| --------------- | ---------------------------------------------------------------------- | -------------------------------------------------------------- |
+| `@h-ai/reldb`   | `HAI_RELDB_*`                                                          | 数据库连接、DSN、用户名密码                                    |
+| `@h-ai/cache`   | `HAI_CACHE_*`                                                          | Redis / Upstash 连接、超时、前缀                               |
+| `@h-ai/storage` | `HAI_STORAGE_*`                                                        | 本地路径、S3 Bucket / Endpoint / AK/SK                         |
+| `@h-ai/ai`      | `HAI_AI_LLM_*`                                                         | LLM API Key、Base URL、默认模型                                |
+| `@h-ai/reach`   | `HAI_REACH_SMTP_*`、`HAI_REACH_SMS_*`、`HAI_REACH_WEBHOOK_URL`         | 邮件、短信、Webhook 触达配置                                   |
+| `@h-ai/payment` | `HAI_PAYMENT_WECHAT_*`、`HAI_PAYMENT_ALIPAY_*`、`HAI_PAYMENT_STRIPE_*` | 支付商户与回调配置                                             |
+| `@h-ai/deploy`  | `HAI_DEPLOY_*`                                                         | Vercel / Neon / Upstash / Cloudflare / Resend / 阿里云短信凭据 |
 
 完整字段与默认值以仓库根目录 `.env.example` 为准；当你在某个示例应用中工作时，再对照该应用自己的 `README.md` 与 `.env.example` 查看增量配置。
 

@@ -2,5 +2,5 @@
 # API Service - 数据库配置
 # =============================================================================
 
-type: ${HAI_DB_TYPE:sqlite}
-database: ${HAI_DB_DATABASE:./data/api-service.db}
+type: ${HAI_RELDB_TYPE:sqlite}
+database: ${HAI_RELDB_DATABASE:./data/api-service.db}

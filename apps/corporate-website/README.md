@@ -69,8 +69,8 @@ pnpm --filter corporate-website preview
 
 | 变量名                       | 说明               | 默认值                |
 | ---------------------------- | ------------------ | --------------------- |
-| `HAI_DB_TYPE`                | 数据库类型         | `sqlite`              |
-| `HAI_DB_DATABASE`            | 数据库路径/地址    | `./data/corporate.db` |
+| `HAI_RELDB_TYPE`             | 数据库类型         | `sqlite`              |
+| `HAI_RELDB_DATABASE`         | 数据库路径/地址    | `./data/corporate.db` |
 | `HAI_CACHE_TYPE`             | 缓存类型           | `memory`              |
 | `HAI_STORAGE_TYPE`           | 存储类型           | `local`               |
 | `HAI_PARTNER_ADMIN_USERNAME` | 合作管理后台用户名 | —                     |

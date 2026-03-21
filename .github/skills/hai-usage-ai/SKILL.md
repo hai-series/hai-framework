@@ -16,10 +16,10 @@ description: "Use when: using @h-ai/ai, LLM calls, chat completion, tool calling
 ```yaml
 # config/_ai.yml
 llm:
-  apiKey: ${HAI_OPENAI_API_KEY:}
-  baseUrl: ${HAI_OPENAI_BASE_URL:https://api.openai.com/v1}
-  model: ${HAI_AI_MODEL:gpt-4o-mini}
-  maxTokens: ${HAI_AI_MAX_TOKENS:4096}
+  apiKey: ${HAI_AI_LLM_API_KEY:}
+  baseUrl: ${HAI_AI_LLM_BASE_URL:https://api.openai.com/v1}
+  model: ${HAI_AI_LLM_MODEL:gpt-4o-mini}
+  maxTokens: ${HAI_AI_LLM_MAX_TOKENS:4096}
   temperature: 0.7
   timeout: 60000
   # 多模型场景映射

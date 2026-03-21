@@ -61,7 +61,7 @@ await vecdb.init({ type: 'lancedb', path: './ai-vec.db' })
 await ai.init({
   llm: {
     model: 'gpt-4o-mini',
-    apiKey: process.env.HAI_OPENAI_API_KEY,
+    apiKey: process.env.HAI_AI_LLM_API_KEY,
   },
 })
 
@@ -90,7 +90,7 @@ import { ai } from '@h-ai/ai'
 const myProvider: AIStoreProvider = { /* ... */ }
 
 await ai.init(
-  { llm: { model: 'gpt-4o-mini', apiKey: process.env.HAI_OPENAI_API_KEY } },
+  { llm: { model: 'gpt-4o-mini', apiKey: process.env.HAI_AI_LLM_API_KEY } },
   { storeProvider: myProvider }, // 无需 reldb / vecdb
 )
 
@@ -1589,8 +1589,8 @@ await ai.init({
 
 当前内置 **OpenAI 兼容** Provider（`ai-llm-provider-openai.ts`），支持所有 OpenAI API 兼容服务（OpenAI、Azure OpenAI、Ollama、vLLM 等）：
 
-- API Key 解析顺序：模型条目 > 全局配置 > 环境变量（`HAI_OPENAI_API_KEY` / `OPENAI_API_KEY`）
-- Base URL 解析顺序：模型条目 > 全局配置 > 环境变量（`HAI_OPENAI_BASE_URL` / `OPENAI_BASE_URL`）> OpenAI 默认
+- API Key 解析顺序：模型条目 > 全局配置 > 环境变量（`HAI_AI_LLM_API_KEY` / `OPENAI_API_KEY`）
+- Base URL 解析顺序：模型条目 > 全局配置 > 环境变量（`HAI_AI_LLM_BASE_URL` / `OPENAI_BASE_URL`）> OpenAI 默认
 
 #### Store Provider
 

@@ -85,7 +85,7 @@ describe('neon provisioner', () => {
     if (result.success) {
       expect(result.data.serviceType).toBe('db')
       expect(result.data.provisionerName).toBe('neon')
-      expect(result.data.envVars.HAI_DB_URL).toBe('postgres://user:pass@host/db')
+      expect(result.data.envVars.HAI_RELDB_URL).toBe('postgres://user:pass@host/db')
     }
   })
 
