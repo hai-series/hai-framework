@@ -371,9 +371,9 @@ function buildCookieProxyConfig(
     return null
 
   // eslint-disable-next-line node/prefer-global/process
-  const key = cryptoConfig.cookieEncryptionKey ?? (typeof process !== 'undefined' ? process.env?.HAI_COOKIE_KEY : undefined)
+  const key = cryptoConfig.cookieEncryptionKey ?? (typeof process !== 'undefined' ? process.env?.HAI_KIT_COOKIE_KEY : undefined)
   if (!key) {
-    core.logger.warn('Cookie encryption configured but no key provided (set crypto.cookieEncryptionKey or HAI_COOKIE_KEY env)')
+    core.logger.warn('Cookie encryption configured but no key provided (set crypto.cookieEncryptionKey or HAI_KIT_COOKIE_KEY env)')
     return null
   }
 

@@ -371,7 +371,7 @@ export interface TransportEncryptionOptions {
  *     crypto: cryptoInstance,
  *     transport: true,
  *     encryptedCookies: ['hai_session'],
- *     cookieEncryptionKey: process.env.HAI_COOKIE_KEY,
+ *     cookieEncryptionKey: process.env.HAI_KIT_COOKIE_KEY,
  *   },
  * })
  * ```
@@ -394,7 +394,7 @@ export interface HookCryptoConfig {
   /**
    * Cookie 加密密钥（32 字符十六进制 = 16 字节 SM4 密钥）
    *
-   * 如不提供，则从环境变量 `HAI_COOKIE_KEY` 读取。
+   * 如不提供，则从环境变量 `HAI_KIT_COOKIE_KEY` 读取。
    * 两者都未设置时 Cookie 加密不生效并输出警告。
    */
   cookieEncryptionKey?: string

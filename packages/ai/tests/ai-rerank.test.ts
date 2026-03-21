@@ -180,10 +180,10 @@ describe('rerank operations', () => {
     it('无 API Key 时返回 CONFIGURATION_ERROR', async () => {
       const noKeyConfig = { llm: { model: 'gpt-4o-mini' } } as unknown as AIConfig
       const origKeys = {
-        HAI_OPENAI_API_KEY: process.env.HAI_OPENAI_API_KEY,
+        HAI_AI_LLM_API_KEY: process.env.HAI_AI_LLM_API_KEY,
         OPENAI_API_KEY: process.env.OPENAI_API_KEY,
       }
-      delete process.env.HAI_OPENAI_API_KEY
+      delete process.env.HAI_AI_LLM_API_KEY
       delete process.env.OPENAI_API_KEY
 
       try {
@@ -195,8 +195,8 @@ describe('rerank operations', () => {
         }
       }
       finally {
-        if (origKeys.HAI_OPENAI_API_KEY)
-          process.env.HAI_OPENAI_API_KEY = origKeys.HAI_OPENAI_API_KEY
+        if (origKeys.HAI_AI_LLM_API_KEY)
+          process.env.HAI_AI_LLM_API_KEY = origKeys.HAI_AI_LLM_API_KEY
         if (origKeys.OPENAI_API_KEY)
           process.env.OPENAI_API_KEY = origKeys.OPENAI_API_KEY
       }

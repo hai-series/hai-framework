@@ -385,8 +385,8 @@ import { z } from 'zod'
 // 初始化（async）— 只有 OpenAI 兼容的 Provider
 await ai.init({
   llm: {
-    apiKey: process.env.HAI_OPENAI_API_KEY,   // 也兼容 OPENAI_API_KEY
-    baseUrl: process.env.HAI_OPENAI_BASE_URL,  // 可指向任何 OpenAI 兼容端点
+    apiKey: process.env.HAI_AI_LLM_API_KEY,   // 也兼容 OPENAI_API_KEY
+    baseUrl: process.env.HAI_AI_LLM_BASE_URL,  // 可指向任何 OpenAI 兼容端点
     model: 'gpt-4o-mini',                     // 默认模型
     maxTokens: 4096,
     temperature: 0.7,
@@ -853,19 +853,19 @@ HAI_ENV=development         # development|production|test
 HAI_DEBUG=false
 
 # Database (@h-ai/reldb)
-HAI_DB_TYPE=sqlite          # sqlite|postgresql|mysql
-HAI_DB_DATABASE=./data/app.db
-# HAI_DB_HOST=localhost
-# HAI_DB_PORT=5432
-# HAI_DB_USER=postgres
-# HAI_DB_PASSWORD=
+HAI_RELDB_TYPE=sqlite          # sqlite|postgresql|mysql
+HAI_RELDB_DATABASE=./data/app.db
+# HAI_RELDB_HOST=localhost
+# HAI_RELDB_PORT=5432
+# HAI_RELDB_USER=postgres
+# HAI_RELDB_PASSWORD=
 
 # Vector DB (@h-ai/vecdb)
 # HAI_VECDB_TYPE=lancedb    # lancedb|pgvector|qdrant
 # HAI_VECDB_PATH=./data/vecdb
 
 # Session / IAM (@h-ai/iam)
-HAI_SESSION_SECRET=...      # REQUIRED, ≥32 chars
+HAI_IAM_SESSION_SECRET=...      # REQUIRED, ≥32 chars
 
 # Cache (@h-ai/cache)
 HAI_CACHE_TYPE=memory       # memory|redis
@@ -880,14 +880,14 @@ HAI_STORAGE_PATH=./data/uploads
 # HAI_STORAGE_S3_SECRET_KEY=
 
 # AI (@h-ai/ai)
-# HAI_OPENAI_API_KEY=
-# HAI_OPENAI_BASE_URL=
-# HAI_ANTHROPIC_API_KEY=
+# HAI_AI_LLM_API_KEY=
+# HAI_AI_LLM_BASE_URL=
+# HAI_AI_LLM_MODEL=gpt-4o-mini
 
 # Payment (@h-ai/payment)
-# HAI_WECHAT_MCH_ID=
-# HAI_ALIPAY_APP_ID=
-# HAI_STRIPE_SECRET_KEY=
+# HAI_PAYMENT_WECHAT_MCH_ID=
+# HAI_PAYMENT_ALIPAY_APP_ID=
+# HAI_PAYMENT_STRIPE_SECRET_KEY=
 
 # Deploy (@h-ai/deploy)
 # HAI_DEPLOY_VERCEL_TOKEN=

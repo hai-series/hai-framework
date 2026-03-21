@@ -69,16 +69,15 @@ pnpm --filter h5-app preview
 
 ### 环境变量
 
-| 变量名                | 说明                          | 默认值             |
-| --------------------- | ----------------------------- | ------------------ |
-| `HAI_DB_TYPE`         | 数据库类型                    | `sqlite`           |
-| `HAI_DB_DATABASE`     | 数据库路径/地址               | `./data/h5-app.db` |
-| `HAI_CACHE_TYPE`      | 缓存类型                      | `memory`           |
-| `HAI_STORAGE_TYPE`    | 存储类型                      | `local`            |
-| `HAI_OPENAI_API_KEY`  | OpenAI API Key（AI 识别必填） | —                  |
-| `HAI_OPENAI_BASE_URL` | OpenAI API 基础 URL           | —                  |
-| `HAI_AI_MODEL`        | AI 模型名称                   | —                  |
-| `HAI_SESSION_SECRET`  | Session 密钥（≥32 字符）      | —                  |
+| 变量名                   | 说明                          | 默认值             |
+| ------------------------ | ----------------------------- | ------------------ |
+| `HAI_RELDB_TYPE`         | 数据库类型                    | `sqlite`           |
+| `HAI_RELDB_DATABASE`     | 数据库路径/地址               | `./data/h5-app.db` |
+| `HAI_CACHE_TYPE`         | 缓存类型                      | `memory`           |
+| `HAI_STORAGE_TYPE`       | 存储类型                      | `local`            |
+| `HAI_AI_LLM_API_KEY`     | OpenAI API Key（AI 识别必填） | —                  |
+| `HAI_AI_LLM_BASE_URL`    | OpenAI API 基础 URL           | —                  |
+| `HAI_IAM_SESSION_SECRET` | Session 密钥（≥32 字符）      | —                  |
 
 ## 🌍 国际化 (i18n)
 

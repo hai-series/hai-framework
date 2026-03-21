@@ -4,7 +4,7 @@
 
 llm:
   type: openai
-  apiKey: ${HAI_OPENAI_API_KEY:sk-placeholder}
+  apiKey: ${HAI_AI_LLM_API_KEY:sk-placeholder}
   model: gpt-4o-mini
 
 a2a:

@@ -35,23 +35,23 @@ description: 使用 @h-ai/payment 接入微信支付、支付宝、Stripe 统一
 ```yaml
 # config/_payment.yml（自行创建）
 wechat:
-  appId: ${HAI_PAY_WECHAT_APP_ID}
-  mchId: ${HAI_PAY_WECHAT_MCH_ID}
-  apiV3Key: ${HAI_PAY_WECHAT_API_V3_KEY}
-  privateKey: ${HAI_PAY_WECHAT_PRIVATE_KEY}
-  serialNo: ${HAI_PAY_WECHAT_SERIAL_NO}
-  platformCert: ${HAI_PAY_WECHAT_PLATFORM_CERT}  # 可选，回调验签需要
+  appId: ${HAI_PAYMENT_WECHAT_APP_ID}
+  mchId: ${HAI_PAYMENT_WECHAT_MCH_ID}
+  apiV3Key: ${HAI_PAYMENT_WECHAT_API_V3_KEY}
+  privateKey: ${HAI_PAYMENT_WECHAT_PRIVATE_KEY}
+  serialNo: ${HAI_PAYMENT_WECHAT_SERIAL_NO}
+  platformCert: ${HAI_PAYMENT_WECHAT_PLATFORM_CERT}  # 可选，回调验签需要
 
 alipay:
-  appId: ${HAI_PAY_ALIPAY_APP_ID}
-  privateKey: ${HAI_PAY_ALIPAY_PRIVATE_KEY}
-  alipayPublicKey: ${HAI_PAY_ALIPAY_PUBLIC_KEY}
+  appId: ${HAI_PAYMENT_ALIPAY_APP_ID}
+  privateKey: ${HAI_PAYMENT_ALIPAY_PRIVATE_KEY}
+  alipayPublicKey: ${HAI_PAYMENT_ALIPAY_PUBLIC_KEY}
   signType: RSA2  # 可选，默认 RSA2
   sandbox: false   # 可选，默认 false
 
 stripe:
-  secretKey: ${HAI_PAY_STRIPE_SECRET_KEY}
-  webhookSecret: ${HAI_PAY_STRIPE_WEBHOOK_SECRET}
+  secretKey: ${HAI_PAYMENT_STRIPE_SECRET_KEY}
+  webhookSecret: ${HAI_PAYMENT_STRIPE_WEBHOOK_SECRET}
 ```
 
 ### 2. 初始化（服务端）

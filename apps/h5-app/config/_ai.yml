@@ -3,9 +3,9 @@
 # =============================================================================
 
 llm:
-  apiKey: ${HAI_OPENAI_API_KEY:}
-  baseUrl: ${HAI_OPENAI_BASE_URL:https://api.openai.com/v1}
-  model: ${HAI_AI_MODEL:gpt-4o-mini}
+  apiKey: ${HAI_AI_LLM_API_KEY:}
+  baseUrl: ${HAI_AI_LLM_BASE_URL:https://api.openai.com/v1}
+  model: ${HAI_AI_LLM_MODEL:gpt-4o-mini}
   timeout: 60000
   temperature: 0.2
   maxTokens: 1024

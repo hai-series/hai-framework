@@ -47,11 +47,11 @@ pnpm --filter api-service preview
 
 ### 环境变量
 
-| 变量名            | 说明            | 默认值                  |
-| ----------------- | --------------- | ----------------------- |
-| `HAI_DB_TYPE`     | 数据库类型      | `sqlite`                |
-| `HAI_DB_DATABASE` | 数据库路径/地址 | `./data/api-service.db` |
-| `HAI_CACHE_TYPE`  | 缓存类型        | `memory`                |
+| 变量名               | 说明            | 默认值                  |
+| -------------------- | --------------- | ----------------------- |
+| `HAI_RELDB_TYPE`     | 数据库类型      | `sqlite`                |
+| `HAI_RELDB_DATABASE` | 数据库路径/地址 | `./data/api-service.db` |
+| `HAI_CACHE_TYPE`     | 缓存类型        | `memory`                |
 
 ## 📋 API 端点
 

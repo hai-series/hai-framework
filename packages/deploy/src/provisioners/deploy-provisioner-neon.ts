@@ -109,7 +109,7 @@ export function createNeonProvisioner(): ServiceProvisioner {
           serviceType: 'db',
           provisionerName: 'neon',
           envVars: {
-            HAI_DB_URL: connectionUri,
+            HAI_RELDB_URL: connectionUri,
           },
           resourceInfo: `neon-project:${data.project.id}`,
         })

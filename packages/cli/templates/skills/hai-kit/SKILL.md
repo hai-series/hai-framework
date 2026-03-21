@@ -122,7 +122,7 @@ export const handle = kit.createHandle({
   crypto: {
     crypto,
     transport: true,
-    cookieEncryptionKey: process.env.HAI_COOKIE_KEY,
+    cookieEncryptionKey: process.env.HAI_KIT_COOKIE_KEY,
   },
 })
 ```

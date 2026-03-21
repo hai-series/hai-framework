@@ -4,9 +4,8 @@
  * 使用 mock OpenAI SDK 测试 embedding 操作。
  */
 
-import type { AIConfig } from '../src/ai-config.js'
 import { describe, expect, it, vi } from 'vitest'
-import { AIErrorCode } from '../src/ai-config.js'
+import { AIConfigSchema, AIErrorCode } from '../src/ai-config.js'
 import { createEmbeddingOperations } from '../src/embedding/ai-embedding-functions.js'
 
 // ─── Mock OpenAI ───
@@ -16,11 +15,11 @@ vi.mock('openai', () => {
   return {
     default: class MockOpenAI {
       embeddings = {
-        create: vi.fn(async (params: any) => {
+        create: vi.fn(async (params: { input: string | string[], model?: string }) => {
           const input = Array.isArray(params.input) ? params.input : [params.input]
           return {
             model: params.model ?? 'text-embedding-3-small',
-            data: input.map((text: string, i: number) => ({
+            data: input.map((_text: string, i: number) => ({
               index: i,
               embedding: Array.from({ length: 8 }).fill(0).map((_, j) => (i + j) * 0.1),
             })),
@@ -32,17 +31,17 @@ vi.mock('openai', () => {
         }),
       }
 
-      constructor(_options: any) {
+      constructor(_options: Record<string, unknown>) {
         // 接受 apiKey 等参数
       }
     },
   }
 })
 
-const mockConfig: AIConfig = {
-  llm: { type: 'openai' as any, apiKey: 'test-key', model: 'gpt-4' },
+const mockConfig = AIConfigSchema.parse({
+  llm: { apiKey: 'test-key', model: 'gpt-4' },
   embedding: { model: 'text-embedding-3-small', batchSize: 2 },
-} as AIConfig
+})
 
 // ─── 测试 ───
 
@@ -110,17 +109,17 @@ describe('embedding operations', () => {
   })
 
   it('无 API Key 时返回错误', async () => {
-    const noKeyConfig: AIConfig = {
-      llm: { type: 'openai' as any, model: 'gpt-4' },
+    const noKeyConfig = AIConfigSchema.parse({
+      llm: { model: 'gpt-4' },
       embedding: { model: 'text-embedding-3-small', batchSize: 100 },
-    } as AIConfig
+    })
 
     // 清除环境变量
     const origKeys = {
-      HAI_OPENAI_API_KEY: process.env.HAI_OPENAI_API_KEY,
+      HAI_AI_LLM_API_KEY: process.env.HAI_AI_LLM_API_KEY,
       OPENAI_API_KEY: process.env.OPENAI_API_KEY,
     }
-    delete process.env.HAI_OPENAI_API_KEY
+    delete process.env.HAI_AI_LLM_API_KEY
     delete process.env.OPENAI_API_KEY
 
     try {
@@ -133,8 +132,8 @@ describe('embedding operations', () => {
     }
     finally {
       // 恢复环境变量
-      if (origKeys.HAI_OPENAI_API_KEY)
-        process.env.HAI_OPENAI_API_KEY = origKeys.HAI_OPENAI_API_KEY
+      if (origKeys.HAI_AI_LLM_API_KEY)
+        process.env.HAI_AI_LLM_API_KEY = origKeys.HAI_AI_LLM_API_KEY
       if (origKeys.OPENAI_API_KEY)
         process.env.OPENAI_API_KEY = origKeys.OPENAI_API_KEY
     }
