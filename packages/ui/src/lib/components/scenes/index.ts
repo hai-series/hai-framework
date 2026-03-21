@@ -6,22 +6,22 @@
  */
 
 // AI 场景组件
-export * from './ai'
+export * from './ai/index.js'
 
 // App 应用级场景组件
-export * from './app'
+export * from './app/index.js'
 
 // CRUD 场景组件
-export * from './crud'
+export * from './crud/index.js'
 
 // Crypto 场景组件
-export * from './crypto'
+export * from './crypto/index.js'
 
 // IAM 场景组件
-export * from './iam'
+export * from './iam/index.js'
 
 // Storage 场景组件
-export * from './storage'
+export * from './storage/index.js'
 
 // 场景组件类型
-export * from './types'
+export * from './types.js'

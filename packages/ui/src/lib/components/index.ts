@@ -6,10 +6,10 @@
  */
 
 // 组合组件
-export * from './compounds'
+export * from './compounds/index.js'
 
 // 原子组件
-export * from './primitives'
+export * from './primitives/index.js'
 
 // 场景组件
-export * from './scenes'
+export * from './scenes/index.js'
