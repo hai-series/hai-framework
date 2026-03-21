@@ -248,7 +248,7 @@ export function createApiKeyStrategy(config: ApiKeyStrategyConfig): ApiKeyStrate
     },
 
     async getApiKey(keyId: string): Promise<Result<ApiKey | null, IamError>> {
-      const result = await apiKeyRepository.getById(keyId)
+      const result = await apiKeyRepository.findOneById(keyId)
       if (!result.success)
         return result as Result<ApiKey | null, IamError>
       return ok(result.data ? toApiKey(result.data) : null)
