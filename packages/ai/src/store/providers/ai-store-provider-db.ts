@@ -54,10 +54,14 @@ class ReldbAIRelStore<T> implements AIRelStore<T> {
     const dataType = db === 'postgresql' ? 'JSONB' : db === 'mysql' ? 'JSON' : 'TEXT'
 
     const cols: string[] = [`id ${idType} PRIMARY KEY`]
-    if (this.hasObjectId) cols.push(`object_id ${scopeType}`)
-    if (this.hasSessionId) cols.push(`session_id ${scopeType}`)
-    if (this.hasStatus) cols.push(`status ${scopeType}`)
-    if (this.hasRefId) cols.push(`ref_id ${scopeType}`)
+    if (this.hasObjectId)
+      cols.push(`object_id ${scopeType}`)
+    if (this.hasSessionId)
+      cols.push(`session_id ${scopeType}`)
+    if (this.hasStatus)
+      cols.push(`status ${scopeType}`)
+    if (this.hasRefId)
+      cols.push(`ref_id ${scopeType}`)
     cols.push(`data ${dataType} NOT NULL`, `created_at BIGINT NOT NULL`, `updated_at BIGINT NOT NULL`)
 
     await this.sql.execute(`CREATE TABLE IF NOT EXISTS ${t} (${cols.join(', ')})`)
@@ -82,10 +86,26 @@ class ReldbAIRelStore<T> implements AIRelStore<T> {
     const values: unknown[] = [id]
     const placeholders: string[] = ['?']
 
-    if (this.hasObjectId) { colNames.push('object_id'); values.push(scope?.objectId ?? null); placeholders.push('?') }
-    if (this.hasSessionId) { colNames.push('session_id'); values.push(scope?.sessionId ?? null); placeholders.push('?') }
-    if (this.hasStatus) { colNames.push('status'); values.push(scope?.status ?? null); placeholders.push('?') }
-    if (this.hasRefId) { colNames.push('ref_id'); values.push(scope?.refId ?? null); placeholders.push('?') }
+    if (this.hasObjectId) {
+      colNames.push('object_id')
+      values.push(scope?.objectId ?? null)
+      placeholders.push('?')
+    }
+    if (this.hasSessionId) {
+      colNames.push('session_id')
+      values.push(scope?.sessionId ?? null)
+      placeholders.push('?')
+    }
+    if (this.hasStatus) {
+      colNames.push('status')
+      values.push(scope?.status ?? null)
+      placeholders.push('?')
+    }
+    if (this.hasRefId) {
+      colNames.push('ref_id')
+      values.push(scope?.refId ?? null)
+      placeholders.push('?')
+    }
 
     colNames.push('data', 'created_at', 'updated_at')
     values.push(json, now, now)
@@ -93,10 +113,14 @@ class ReldbAIRelStore<T> implements AIRelStore<T> {
 
     if (this.dbType === 'mysql') {
       const updateParts: string[] = ['data = VALUES(data)', 'updated_at = VALUES(updated_at)']
-      if (this.hasObjectId) updateParts.push('object_id = VALUES(object_id)')
-      if (this.hasSessionId) updateParts.push('session_id = VALUES(session_id)')
-      if (this.hasStatus) updateParts.push('status = VALUES(status)')
-      if (this.hasRefId) updateParts.push('ref_id = VALUES(ref_id)')
+      if (this.hasObjectId)
+        updateParts.push('object_id = VALUES(object_id)')
+      if (this.hasSessionId)
+        updateParts.push('session_id = VALUES(session_id)')
+      if (this.hasStatus)
+        updateParts.push('status = VALUES(status)')
+      if (this.hasRefId)
+        updateParts.push('ref_id = VALUES(ref_id)')
       await this.sql.execute(
         `INSERT INTO ${this.table} (${colNames.join(', ')}) VALUES (${placeholders.join(', ')}) ON DUPLICATE KEY UPDATE ${updateParts.join(', ')}`,
         values,
@@ -104,10 +128,14 @@ class ReldbAIRelStore<T> implements AIRelStore<T> {
     }
     else {
       const updateParts: string[] = ['data = excluded.data', 'updated_at = excluded.updated_at']
-      if (this.hasObjectId) updateParts.push('object_id = excluded.object_id')
-      if (this.hasSessionId) updateParts.push('session_id = excluded.session_id')
-      if (this.hasStatus) updateParts.push('status = excluded.status')
-      if (this.hasRefId) updateParts.push('ref_id = excluded.ref_id')
+      if (this.hasObjectId)
+        updateParts.push('object_id = excluded.object_id')
+      if (this.hasSessionId)
+        updateParts.push('session_id = excluded.session_id')
+      if (this.hasStatus)
+        updateParts.push('status = excluded.status')
+      if (this.hasRefId)
+        updateParts.push('ref_id = excluded.ref_id')
       await this.sql.execute(
         `INSERT INTO ${this.table} (${colNames.join(', ')}) VALUES (${placeholders.join(', ')}) ON CONFLICT(id) DO UPDATE SET ${updateParts.join(', ')}`,
         values,
@@ -116,20 +144,23 @@ class ReldbAIRelStore<T> implements AIRelStore<T> {
   }
 
   async saveMany(items: Array<{ id: string, data: T, scope?: StoreScope }>): Promise<void> {
-    if (items.length === 0) return
+    if (items.length === 0)
+      return
     await Promise.all(items.map(({ id, data, scope }) => this.save(id, data, scope)))
   }
 
   async get(id: string): Promise<T | undefined> {
     const result = await this.sql.get<{ data: string }>(`SELECT data FROM ${this.table} WHERE id = ?`, [id])
-    if (!result.success || !result.data) return undefined
+    if (!result.success || !result.data)
+      return undefined
     return JSON.parse(result.data.data) as T
   }
 
   async query(filter: StoreFilter<T>): Promise<T[]> {
     const { sql, params } = this.buildQuery(filter)
     const result = await this.sql.query<{ data: string }>(sql, params)
-    if (!result.success) return []
+    if (!result.success)
+      return []
     return result.data.map(row => JSON.parse(row.data) as T)
   }
 
@@ -137,7 +168,8 @@ class ReldbAIRelStore<T> implements AIRelStore<T> {
     const countParams: unknown[] = []
     const countConditions = this.buildAllConditions(filter, countParams)
     let countSql = `SELECT COUNT(*) as cnt FROM ${this.table}`
-    if (countConditions.length > 0) countSql += ` WHERE ${countConditions.join(' AND ')}`
+    if (countConditions.length > 0)
+      countSql += ` WHERE ${countConditions.join(' AND ')}`
     const countResult = await this.sql.get<{ cnt: number }>(countSql, countParams)
     const total = countResult.success && countResult.data != null ? countResult.data.cnt : 0
 
@@ -182,7 +214,8 @@ class ReldbAIRelStore<T> implements AIRelStore<T> {
     const params: unknown[] = []
     const conditions = this.buildAllConditions(filter!, params)
     let sql = `SELECT COUNT(*) as cnt FROM ${this.table}`
-    if (conditions.length > 0) sql += ` WHERE ${conditions.join(' AND ')}`
+    if (conditions.length > 0)
+      sql += ` WHERE ${conditions.join(' AND ')}`
     const result = await this.sql.get<{ cnt: number }>(sql, params)
     return result.success && result.data != null ? result.data.cnt : 0
   }
@@ -199,7 +232,8 @@ class ReldbAIRelStore<T> implements AIRelStore<T> {
     let sql = `SELECT data FROM ${this.table}`
     const params: unknown[] = []
     const conditions = this.buildAllConditions(filter, params)
-    if (conditions.length > 0) sql += ` WHERE ${conditions.join(' AND ')}`
+    if (conditions.length > 0)
+      sql += ` WHERE ${conditions.join(' AND ')}`
 
     if (filter.orderBy) {
       const dir = filter.orderBy.direction === 'asc' ? 'ASC' : 'DESC'
@@ -220,23 +254,39 @@ class ReldbAIRelStore<T> implements AIRelStore<T> {
       sql += ` ORDER BY created_at DESC`
     }
 
-    if (filter.limit) { sql += ` LIMIT ?`; params.push(filter.limit) }
+    if (filter.limit) {
+      sql += ` LIMIT ?`
+      params.push(filter.limit)
+    }
     return { sql, params }
   }
 
   private buildAllConditions(filter: StoreFilter<T>, params: unknown[]): string[] {
     const conditions: string[] = []
-    if (filter.objectId && this.hasObjectId) { conditions.push('object_id = ?'); params.push(filter.objectId) }
-    if (filter.sessionId && this.hasSessionId) { conditions.push('session_id = ?'); params.push(filter.sessionId) }
+    if (filter.objectId && this.hasObjectId) {
+      conditions.push('object_id = ?')
+      params.push(filter.objectId)
+    }
+    if (filter.sessionId && this.hasSessionId) {
+      conditions.push('session_id = ?')
+      params.push(filter.sessionId)
+    }
     if (filter.status && this.hasStatus) {
       if (Array.isArray(filter.status)) {
         conditions.push(`status IN (${filter.status.map(() => '?').join(', ')})`)
         params.push(...filter.status)
       }
-      else { conditions.push('status = ?'); params.push(filter.status) }
+      else {
+        conditions.push('status = ?')
+        params.push(filter.status)
+      }
     }
-    if (filter.refId && this.hasRefId) { conditions.push('ref_id = ?'); params.push(filter.refId) }
-    if (filter.where) conditions.push(...this.buildWhereConditions(filter.where, params))
+    if (filter.refId && this.hasRefId) {
+      conditions.push('ref_id = ?')
+      params.push(filter.refId)
+    }
+    if (filter.where)
+      conditions.push(...this.buildWhereConditions(filter.where, params))
     return conditions
   }
 
@@ -253,10 +303,30 @@ class ReldbAIRelStore<T> implements AIRelStore<T> {
           conditions.push(`${jsonSql} IN (${op.$in.map(() => '?').join(', ')})`)
           params.push(...op.$in)
         }
-        if (op.$gte !== undefined) { const { sql: j, params: p } = this.jsonOps.extract('data', path); params.push(...p); conditions.push(`${j} >= ?`); params.push(op.$gte) }
-        if (op.$gt !== undefined) { const { sql: j, params: p } = this.jsonOps.extract('data', path); params.push(...p); conditions.push(`${j} > ?`); params.push(op.$gt) }
-        if (op.$lte !== undefined) { const { sql: j, params: p } = this.jsonOps.extract('data', path); params.push(...p); conditions.push(`${j} <= ?`); params.push(op.$lte) }
-        if (op.$lt !== undefined) { const { sql: j, params: p } = this.jsonOps.extract('data', path); params.push(...p); conditions.push(`${j} < ?`); params.push(op.$lt) }
+        if (op.$gte !== undefined) {
+          const { sql: j, params: p } = this.jsonOps.extract('data', path)
+          params.push(...p)
+          conditions.push(`${j} >= ?`)
+          params.push(op.$gte)
+        }
+        if (op.$gt !== undefined) {
+          const { sql: j, params: p } = this.jsonOps.extract('data', path)
+          params.push(...p)
+          conditions.push(`${j} > ?`)
+          params.push(op.$gt)
+        }
+        if (op.$lte !== undefined) {
+          const { sql: j, params: p } = this.jsonOps.extract('data', path)
+          params.push(...p)
+          conditions.push(`${j} <= ?`)
+          params.push(op.$lte)
+        }
+        if (op.$lt !== undefined) {
+          const { sql: j, params: p } = this.jsonOps.extract('data', path)
+          params.push(...p)
+          conditions.push(`${j} < ?`)
+          params.push(op.$lt)
+        }
       }
       else {
         const { sql: jsonSql, params: jsonParams } = this.jsonOps.extract('data', path)
@@ -269,7 +339,8 @@ class ReldbAIRelStore<T> implements AIRelStore<T> {
   }
 
   private isWhereOperator<V>(value: unknown): value is WhereOperator<V> {
-    if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
+    if (typeof value !== 'object' || value === null || Array.isArray(value))
+      return false
     const keys = Object.keys(value)
     return keys.length > 0 && keys.every(k => ['$in', '$gte', '$gt', '$lte', '$lt'].includes(k))
   }
@@ -294,7 +365,8 @@ class VecdbAIVectorStore implements AIVectorStore {
   }
 
   private async ensureCollection(dimension: number): Promise<void> {
-    if (this.collectionDimension === dimension) return
+    if (this.collectionDimension === dimension)
+      return
     const exists = await this.vecdb.collection.exists(this.collection)
     if (exists.success && !exists.data)
       await this.vecdb.collection.create(this.collection, { dimension })
@@ -409,7 +481,8 @@ class DbKnowledgeStore implements KnowledgeStore {
       ? `INSERT INTO hai_ai_knowledge_entity (id, name, type, aliases, description, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE name = VALUES(name), type = VALUES(type), aliases = VALUES(aliases), description = VALUES(description), updated_at = VALUES(updated_at)`
       : `INSERT INTO hai_ai_knowledge_entity (id, name, type, aliases, description, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET name = excluded.name, type = excluded.type, aliases = excluded.aliases, description = excluded.description, updated_at = excluded.updated_at`
     const result = await this.sql.execute(stmt, params)
-    if (!result.success) throw new Error(`upsertEntity failed: ${String(result.error)}`)
+    if (!result.success)
+      throw new Error(`upsertEntity failed: ${String(result.error)}`)
   }
 
   async findEntitiesByName(keyword: string): Promise<Array<{ id: string, name: string, type: string, aliases: string[] }>> {
@@ -418,7 +491,8 @@ class DbKnowledgeStore implements KnowledgeStore {
       `SELECT id, name, type, aliases FROM hai_ai_knowledge_entity WHERE name LIKE ? OR aliases LIKE ?`,
       [pattern, pattern],
     )
-    if (!result.success) return []
+    if (!result.success)
+      return []
     return result.data.map(row => ({
       id: row.id as string,
       name: row.name as string,
@@ -430,12 +504,23 @@ class DbKnowledgeStore implements KnowledgeStore {
   async listEntities(options?: { type?: string, keyword?: string, limit?: number }): Promise<Array<{ id: string, name: string, type: string, aliases: string[], description: string | null, createdAt: string | null, updatedAt: string | null }>> {
     let stmt = 'SELECT id, name, type, aliases, description, created_at, updated_at FROM hai_ai_knowledge_entity WHERE 1=1'
     const params: unknown[] = []
-    if (options?.type) { stmt += ' AND type = ?'; params.push(options.type) }
-    if (options?.keyword) { stmt += ' AND (name LIKE ? OR aliases LIKE ?)'; const p = `%${options.keyword}%`; params.push(p, p) }
+    if (options?.type) {
+      stmt += ' AND type = ?'
+      params.push(options.type)
+    }
+    if (options?.keyword) {
+      stmt += ' AND (name LIKE ? OR aliases LIKE ?)'
+      const p = `%${options.keyword}%`
+      params.push(p, p)
+    }
     stmt += ' ORDER BY name'
-    if (options?.limit) { stmt += ' LIMIT ?'; params.push(options.limit) }
+    if (options?.limit) {
+      stmt += ' LIMIT ?'
+      params.push(options.limit)
+    }
     const result = await this.sql.query<Record<string, unknown>>(stmt, params)
-    if (!result.success) return []
+    if (!result.success)
+      return []
     return result.data.map(row => ({
       id: row.id as string,
       name: row.name as string,
@@ -454,17 +539,23 @@ class DbKnowledgeStore implements KnowledgeStore {
       ? `INSERT INTO hai_ai_knowledge_entity_document (entity_id, document_id, chunk_id, collection, relevance, context, created_at) VALUES (?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE relevance = VALUES(relevance), context = VALUES(context)`
       : `INSERT INTO hai_ai_knowledge_entity_document (entity_id, document_id, chunk_id, collection, relevance, context, created_at) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(entity_id, document_id, chunk_id) DO UPDATE SET relevance = excluded.relevance, context = excluded.context`
     const result = await this.sql.execute(stmt, params)
-    if (!result.success) throw new Error(`insertEntityDocument failed: ${String(result.error)}`)
+    if (!result.success)
+      throw new Error(`insertEntityDocument failed: ${String(result.error)}`)
   }
 
   async findDocumentsByEntityIds(entityIds: string[], collection?: string): Promise<Array<{ entityId: string, documentId: string, chunkId: string, collection: string, relevance: number, context: string | null }>> {
-    if (entityIds.length === 0) return []
+    if (entityIds.length === 0)
+      return []
     const placeholders = entityIds.map(() => '?').join(', ')
     let stmt = `SELECT entity_id, document_id, chunk_id, collection, relevance, context FROM hai_ai_knowledge_entity_document WHERE entity_id IN (${placeholders})`
     const params: unknown[] = [...entityIds]
-    if (collection) { stmt += ' AND collection = ?'; params.push(collection) }
+    if (collection) {
+      stmt += ' AND collection = ?'
+      params.push(collection)
+    }
     const result = await this.sql.query<Record<string, unknown>>(stmt, params)
-    if (!result.success) return []
+    if (!result.success)
+      return []
     return result.data.map(row => ({
       entityId: row.entity_id as string,
       documentId: row.document_id as string,
@@ -478,8 +569,10 @@ class DbKnowledgeStore implements KnowledgeStore {
   async findByEntityName(entityName: string, options?: { collection?: string, type?: string }): Promise<Array<{ entity: { id: string, name: string, type: string, aliases: string[], description: string | null }, documents: Array<{ documentId: string, chunkId: string, collection: string, relevance: number, context: string | null }> }>> {
     const entities = await this.findEntitiesByName(entityName)
     let filtered = entities
-    if (options?.type) filtered = filtered.filter(e => e.type === options.type)
-    if (filtered.length === 0) return []
+    if (options?.type)
+      filtered = filtered.filter(e => e.type === options.type)
+    if (filtered.length === 0)
+      return []
 
     const entityIds = filtered.map(e => e.id)
     const docs = await this.findDocumentsByEntityIds(entityIds, options?.collection)
@@ -515,7 +608,8 @@ class DbKnowledgeStore implements KnowledgeStore {
       'SELECT document_id, collection, title, url, chunk_count, created_at FROM hai_ai_knowledge_document WHERE document_id = ? AND collection = ?',
       [documentId, collection],
     )
-    if (!result.success || result.data.length === 0) return undefined
+    if (!result.success || result.data.length === 0)
+      return undefined
     const row = result.data[0]
     return {
       documentId: row.document_id as string,
@@ -531,10 +625,17 @@ class DbKnowledgeStore implements KnowledgeStore {
     let stmt = 'SELECT document_id, collection, title, url, chunk_count, created_at FROM hai_ai_knowledge_document WHERE collection = ?'
     const params: unknown[] = [collection]
     stmt += ' ORDER BY created_at DESC'
-    if (options?.limit) { stmt += ' LIMIT ?'; params.push(options.limit) }
-    if (options?.offset) { stmt += ' OFFSET ?'; params.push(options.offset) }
+    if (options?.limit) {
+      stmt += ' LIMIT ?'
+      params.push(options.limit)
+    }
+    if (options?.offset) {
+      stmt += ' OFFSET ?'
+      params.push(options.offset)
+    }
     const result = await this.sql.query<Record<string, unknown>>(stmt, params)
-    if (!result.success) return []
+    if (!result.success)
+      return []
     return result.data.map(row => ({
       documentId: row.document_id as string,
       collection: row.collection as string,
@@ -546,7 +647,8 @@ class DbKnowledgeStore implements KnowledgeStore {
   }
 
   async listDocumentEntityCounts(documentIds: string[], collection: string): Promise<Map<string, number>> {
-    if (documentIds.length === 0) return new Map()
+    if (documentIds.length === 0)
+      return new Map()
     const placeholders = documentIds.map(() => '?').join(', ')
     const result = await this.sql.query<Record<string, unknown>>(
       `SELECT document_id, COUNT(DISTINCT entity_id) as cnt FROM hai_ai_knowledge_entity_document WHERE document_id IN (${placeholders}) AND collection = ? GROUP BY document_id`,
@@ -658,8 +760,10 @@ export function isDbStoreAvailable(): boolean {
  */
 export function getUnavailableDbDeps(): string[] {
   const missing: string[] = []
-  if (!reldb.isInitialized) missing.push('reldb')
-  if (!vecdb.isInitialized) missing.push('vecdb')
+  if (!reldb.isInitialized)
+    missing.push('reldb')
+  if (!vecdb.isInitialized)
+    missing.push('vecdb')
   return missing
 }
 

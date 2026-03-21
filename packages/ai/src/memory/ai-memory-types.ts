@@ -227,7 +227,6 @@ export interface MemoryUpdateInput {
  * ```
  */
 export interface MemoryOperations {
-  extractMemories: (messages: ChatMessage[], options: MemoryExtractOptions | undefined) => Promise<Result<MemoryEntry[], AIError>>
   /**
    * 从对话消息中自动提取记忆条目
    *
