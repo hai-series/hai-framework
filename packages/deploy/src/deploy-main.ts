@@ -38,6 +38,9 @@ let currentConfig: DeployConfig | null = null
 let currentProvider: DeployProvider | null = null
 const currentProvisioners: Map<ServiceType, ServiceProvisioner> = new Map()
 
+/** 并发初始化防护标志 */
+let initInProgress = false
+
 // ─── 未初始化占位 ───
 
 const notInitialized = core.module.createNotInitializedKit<DeployError>(
@@ -119,78 +122,97 @@ function extractCredentials(serviceConfig: Record<string, unknown>): Record<stri
  */
 export const deploy: DeployFunctions = {
   async init(config: DeployConfigInput): Promise<Result<void, DeployError>> {
-    if (currentProvider) {
-      logger.warn('Deploy module is already initialized, reinitializing')
-      await deploy.close()
-    }
-
-    logger.info('Initializing deploy module')
-
-    const parseResult = DeployConfigSchema.safeParse(config)
-    if (!parseResult.success) {
-      logger.error('Deploy config validation failed', { error: parseResult.error.message })
+    // 并发初始化防护：避免多次 init 同时执行导致资源泄漏
+    if (initInProgress) {
+      logger.warn('Deploy init already in progress, skipping concurrent call')
       return err({
         code: DeployErrorCode.CONFIG_ERROR,
-        message: deployM('deploy_configError', { params: { error: parseResult.error.message } }),
-        cause: parseResult.error,
+        message: deployM('deploy_configError', { params: { error: 'init already in progress' } }),
       })
     }
-    const parsed = parseResult.data
+    initInProgress = true
 
     try {
-      // 创建 Provider
-      const provider = createProviderByType(parsed.provider.type)
-      const authResult = await provider.authenticate(parsed.provider.token)
-      if (!authResult.success) {
-        return err(authResult.error)
+      if (currentProvider) {
+        logger.warn('Deploy module is already initialized, reinitializing')
+        await deploy.close()
       }
-      logger.info('Provider authenticated', { provider: parsed.provider.type, user: authResult.data })
 
-      // 创建 Provisioners
-      currentProvisioners.clear()
-      if (parsed.services) {
-        const serviceEntries = Object.entries(parsed.services) as Array<[ServiceType, Record<string, unknown> | undefined]>
-        for (const [serviceType, serviceConfig] of serviceEntries) {
-          if (!serviceConfig)
-            continue
+      logger.info('Initializing deploy module')
 
-          const provisioner = createProvisionerByName(serviceConfig.provisioner as string)
-          const credentials = extractCredentials(serviceConfig as Record<string, unknown>)
-          const provAuthResult = await provisioner.authenticate(credentials)
-          if (!provAuthResult.success) {
-            logger.warn('Provisioner authentication failed', {
-              service: serviceType,
-              provisioner: (serviceConfig as Record<string, unknown>).provisioner,
-            })
-            // 非致命：记录警告但继续
-          }
-          else {
-            logger.info('Provisioner authenticated', {
-              service: serviceType,
-              user: provAuthResult.data,
-            })
-          }
-          currentProvisioners.set(serviceType, provisioner)
+      const parseResult = DeployConfigSchema.safeParse(config)
+      if (!parseResult.success) {
+        logger.error('Deploy config validation failed', { error: parseResult.error.message })
+        return err({
+          code: DeployErrorCode.CONFIG_ERROR,
+          message: deployM('deploy_configError', { params: { error: parseResult.error.message } }),
+          cause: parseResult.error,
+        })
+      }
+      const parsed = parseResult.data
+
+      try {
+        // 创建 Provider
+        const provider = createProviderByType(parsed.provider.type)
+        const authResult = await provider.authenticate(parsed.provider.token)
+        if (!authResult.success) {
+          return err(authResult.error)
         }
-      }
+        logger.info('Provider authenticated', { provider: parsed.provider.type, user: authResult.data })
 
-      currentProvider = provider
-      currentConfig = parsed
-      logger.info('Deploy module initialized', {
-        provider: parsed.provider.type,
-        provisioners: [...currentProvisioners.keys()],
-      })
-      return ok(undefined)
+        // 创建 Provisioners
+        currentProvisioners.clear()
+        if (parsed.services) {
+          const serviceEntries = Object.entries(parsed.services) as Array<[ServiceType, Record<string, unknown> | undefined]>
+          for (const [serviceType, serviceConfig] of serviceEntries) {
+            if (!serviceConfig)
+              continue
+
+            const provisioner = createProvisionerByName(serviceConfig.provisioner as string)
+            const credentials = extractCredentials(serviceConfig as Record<string, unknown>)
+            const provAuthResult = await provisioner.authenticate(credentials)
+            if (!provAuthResult.success) {
+              logger.warn('Provisioner authentication failed', {
+                service: serviceType,
+                provisioner: (serviceConfig as Record<string, unknown>).provisioner,
+              })
+              // 非致命：记录警告但继续
+            }
+            else {
+              logger.info('Provisioner authenticated', {
+                service: serviceType,
+                user: provAuthResult.data,
+              })
+            }
+            currentProvisioners.set(serviceType, provisioner)
+          }
+        }
+
+        currentProvider = provider
+        currentConfig = parsed
+        logger.info('Deploy module initialized', {
+          provider: parsed.provider.type,
+          provisioners: [...currentProvisioners.keys()],
+        })
+        return ok(undefined)
+      }
+      catch (error) {
+        // 清理部分赋值的状态
+        currentProvider = null
+        currentConfig = null
+        currentProvisioners.clear()
+        logger.error('Deploy module initialization failed', { error })
+        return err({
+          code: DeployErrorCode.CONFIG_ERROR,
+          message: deployM('deploy_configError', {
+            params: { error: error instanceof Error ? error.message : String(error) },
+          }),
+          cause: error,
+        })
+      }
     }
-    catch (error) {
-      logger.error('Deploy module initialization failed', { error })
-      return err({
-        code: DeployErrorCode.CONFIG_ERROR,
-        message: deployM('deploy_configError', {
-          params: { error: error instanceof Error ? error.message : String(error) },
-        }),
-        cause: error,
-      })
+    finally {
+      initInProgress = false
     }
   },
 

@@ -74,7 +74,9 @@ function createFailReldbCrudRepository<TItem>(configError: ReldbError): ReldbCru
   return {
     create: () => failResult(),
     createMany: () => failResult(),
+    createOrUpdate: () => failResult(),
     findById: () => failResult(),
+    getById: () => failResult(),
     findAll: () => failResult(),
     findPage: () => failResult(),
     updateById: () => failResult(),
@@ -100,6 +102,7 @@ export function createCrud<TItem>(
   const idColumn = config.idColumn ?? 'id'
   const selectColumns = buildSelectColumns(config.select)
   const mapRow = config.mapRow ?? ((row: QueryRow) => row as TItem)
+  const dbType = config.dbType
 
   // 校验表名与主键列名，防止标识符注入
   const tableValid = validateIdentifier(table)
@@ -278,6 +281,56 @@ export function createCrud<TItem>(
     },
 
     /**
+     * 创建或更新单条记录（upsert）
+     *
+     * 主键冲突时更新 updateColumns 中存在的列，否则插入新记录。
+     *
+     * @param data - 列名与值的映射
+     * @param tx - 可选事务句柄
+     * @returns 执行结果（含 changes）
+     */
+    async createOrUpdate(data: Record<string, unknown>, tx?: DmlWithTxOperations): Promise<Result<ExecuteResult, ReldbError>> {
+      if (!data || Object.keys(data).length === 0) {
+        return createPayloadError()
+      }
+
+      const { columns, values } = pickColumns(data, config.createColumns)
+      if (columns.length === 0) {
+        return createColumnsError()
+      }
+
+      const colValid = validateIdentifiers(columns)
+      if (!colValid.success) {
+        return err(colValid.error)
+      }
+
+      const placeholders = columns.map(() => '?').join(', ')
+
+      // 从 updateColumns 中筛选：排除主键，且仅保留当前 INSERT 数据中存在的列
+      const updateCols = (config.updateColumns ?? columns)
+        .filter(col => col !== idColumn && columns.includes(col))
+
+      if (updateCols.length === 0) {
+        // 无可更新列，退化为普通 INSERT
+        const sql = `INSERT INTO ${table} (${columns.join(', ')}) VALUES (${placeholders})`
+        return resolveOps(tx).execute(sql, values)
+      }
+
+      let sql: string
+      if (dbType === 'mysql') {
+        const updateSet = updateCols.map(col => `${col} = VALUES(${col})`).join(', ')
+        sql = `INSERT INTO ${table} (${columns.join(', ')}) VALUES (${placeholders}) ON DUPLICATE KEY UPDATE ${updateSet}`
+      }
+      else {
+        // SQLite / PostgreSQL
+        const updateSet = updateCols.map(col => `${col} = excluded.${col}`).join(', ')
+        sql = `INSERT INTO ${table} (${columns.join(', ')}) VALUES (${placeholders}) ON CONFLICT(${idColumn}) DO UPDATE SET ${updateSet}`
+      }
+
+      return resolveOps(tx).execute(sql, values)
+    },
+
+    /**
      * 根据主键查找单条记录
      *
      * @param id - 主键值
@@ -293,6 +346,29 @@ export function createCrud<TItem>(
       }
       // 未命中时返回 null
       return ok(result.data ? mapRow(result.data) : null)
+    },
+
+    /**
+     * 根据主键获取单条记录（必须存在）
+     *
+     * 与 findById 不同，当记录不存在时返回 RECORD_NOT_FOUND 错误。
+     *
+     * @param id - 主键值
+     * @param tx - 可选事务句柄
+     * @returns 记录对象（不存在时返回错误）
+     */
+    async getById(id: unknown, tx?: DmlWithTxOperations): Promise<Result<TItem, ReldbError>> {
+      const findResult = await this.findById(id, tx)
+      if (!findResult.success) {
+        return findResult
+      }
+      if (findResult.data === null) {
+        return err({
+          code: ReldbErrorCode.RECORD_NOT_FOUND,
+          message: reldbM('reldb_crudRecordNotFound', { params: { id: String(id) } }),
+        })
+      }
+      return ok(findResult.data)
     },
 
     /**

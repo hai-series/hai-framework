@@ -5,14 +5,14 @@
   使用 @h-ai/ui 的 RegisterForm 场景组件
   =============================================================================
 -->
-<script lang="ts">
+<script lang='ts'>
+  import type { RegisterFormData } from '@h-ai/ui'
   import { goto } from '$app/navigation'
   import { page } from '$app/state'
-  import type { RegisterFormData } from '@h-ai/ui'
   import * as m from '$lib/paraglide/messages'
   import { apiFetch } from '$lib/utils/api'
   import { kit } from '@h-ai/kit'
-  
+
   let loading = $state(false)
   let errors = $state<Record<string, string>>({})
 
@@ -22,10 +22,10 @@
   const registerAgreements = $derived(
     iamPublicConfig?.agreements?.showOnRegister !== false
       ? {
-          userAgreementUrl: iamPublicConfig?.agreements?.userAgreementUrl,
-          privacyPolicyUrl: iamPublicConfig?.agreements?.privacyPolicyUrl,
-        }
-      : undefined
+        userAgreementUrl: iamPublicConfig?.agreements?.userAgreementUrl,
+        privacyPolicyUrl: iamPublicConfig?.agreements?.privacyPolicyUrl,
+      }
+      : undefined,
   )
 
   async function handleRegister(data: RegisterFormData) {
@@ -51,12 +51,15 @@
           kit.auth.setBrowserToken(result.data.accessToken)
         }
         goto('/admin')
-      } else {
+      }
+      else {
         errors = { general: result.error?.message || m.common_error() }
       }
-    } catch {
+    }
+    catch {
       errors = { general: m.common_network_error() }
-    } finally {
+    }
+    finally {
       loading = false
     }
   }
@@ -75,7 +78,7 @@
   requireConfirmPassword={true}
   showPasswordStrength={true}
   minPasswordLength={passwordMinLength}
-  loginUrl="/auth/login"
+  loginUrl='/auth/login'
   agreements={registerAgreements}
   onsubmit={handleRegister}
 />

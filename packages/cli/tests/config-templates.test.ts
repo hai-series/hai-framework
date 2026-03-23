@@ -44,8 +44,8 @@ describe('generateConfigFile', () => {
 
   it('应该生成 ai 配置', () => {
     const content = generateConfigFile('ai')
-    expect(content).toContain('defaultProvider: openai')
-    expect(content).toContain('providers:')
+    expect(content).toContain('llm:')
+    expect(content).toContain('model: gpt-4o-mini')
   })
 
   it('应该为未知模块返回默认配置', () => {
@@ -60,7 +60,7 @@ describe('generateConfigFile', () => {
 
     const dbContent = generateConfigFile('db')
     // eslint-disable-next-line no-template-curly-in-string
-    expect(dbContent).toContain('${HAI_DB_DATABASE:./data/app.db}')
+    expect(dbContent).toContain('${HAI_RELDB_DATABASE:./data/app.db}')
   })
 
   // 自定义配置值测试
@@ -112,15 +112,12 @@ describe('generateConfigFile', () => {
 
     it('ai: 应该生成 Anthropic 配置', () => {
       const content = generateConfigFile('ai', { ai: { defaultProvider: 'anthropic', model: 'claude-3-opus' } })
-      expect(content).toContain('defaultProvider: anthropic')
-      expect(content).toContain('claude-3-opus')
+      expect(content).toContain('model: claude-3-opus')
     })
 
     it('ai: 应该生成自定义 Provider 配置', () => {
       const content = generateConfigFile('ai', { ai: { defaultProvider: 'deepseek', model: 'deepseek-chat' } })
-      expect(content).toContain('defaultProvider: deepseek')
-      expect(content).toContain('deepseek-chat')
-      expect(content).toContain('deepseek:')
+      expect(content).toContain('model: deepseek-chat')
     })
   })
 })

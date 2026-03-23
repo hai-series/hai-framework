@@ -6,7 +6,7 @@
 
 import type { Task } from '@a2a-js/sdk'
 import type { ServerCallContext } from '@a2a-js/sdk/server'
-import type { AIStore, StorePage } from '../src/store/ai-store-types.js'
+import type { AIRelStore, StorePage } from '../src/store/ai-store-types.js'
 
 import { describe, expect, it, vi } from 'vitest'
 
@@ -96,7 +96,7 @@ describe('buildAgentCard', () => {
 // ─── ReldbA2ATaskStore ───
 
 describe('reldbA2ATaskStore', () => {
-  function createMockStore(): AIStore<Task> {
+  function createMockStore(): AIRelStore<Task> {
     return {
       save: vi.fn(async () => {}),
       saveMany: vi.fn(async () => {}),
