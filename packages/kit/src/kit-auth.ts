@@ -8,7 +8,7 @@
 import type { Result } from '@h-ai/core'
 import type { ApiKeyCredentials, AuthResult, IamError, LdapCredentials, OtpCredentials, PasswordCredentials, RegisterOptions } from '@h-ai/iam'
 import type { HandleFetch } from '@sveltejs/kit'
-import type { AuthOperations } from './kit-types.js'
+import type { AuthOperations, AuthOperationsProvider } from './kit-types.js'
 import process from 'node:process'
 
 /** 默认 Token Cookie 名 */
@@ -21,7 +21,7 @@ const DEFAULT_TOKEN_COOKIE_NAME = 'hai_access_token'
  */
 const authState = {
   cookieName: DEFAULT_TOKEN_COOKIE_NAME,
-  operations: null as AuthOperations | null,
+  operations: null as AuthOperationsProvider | null,
 }
 
 /**
@@ -29,7 +29,7 @@ const authState = {
  *
  * 通常由 `createHandle` 在初始化时自动调用，无需手动调用。
  */
-export function configureAuth(config: { cookieName?: string, operations?: AuthOperations }): void {
+export function configureAuth(config: { cookieName?: string, operations?: AuthOperationsProvider }): void {
   if (config.cookieName)
     authState.cookieName = config.cookieName
   if (config.operations)
@@ -126,7 +126,9 @@ function getAuthOperations(): AuthOperations {
   if (!authState.operations) {
     throw new Error('kit.auth 未配置：请在 kit.createHandle() 中传入 auth.operations')
   }
-  return authState.operations
+  return typeof authState.operations === 'function'
+    ? authState.operations()
+    : authState.operations
 }
 
 /**

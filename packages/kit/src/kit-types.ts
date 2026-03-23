@@ -18,6 +18,9 @@ import type { TransportCryptoServiceLike } from './modules/crypto/kit-crypto-typ
  */
 export type AuthOperations = Pick<AuthnOperations, 'login' | 'loginWithOtp' | 'loginWithLdap' | 'loginWithApiKey' | 'registerAndLogin' | 'logout'>
 
+/** 认证操作提供器：支持直接传对象或按需返回最新对象的工厂函数 */
+export type AuthOperationsProvider = AuthOperations | (() => AuthOperations)
+
 /**
  * 会话数据最小接口
  *
@@ -206,8 +209,13 @@ export interface GuardConfig {
 export interface HandleAuthConfig {
   /** 令牌验证函数，返回 SessionData 或 null */
   verifyToken: (token: string) => Promise<SessionData | null>
-  /** 认证操作（传入 iam.auth 即可，启用 kit.auth.login / logout 等高级 API） */
-  operations?: AuthOperations
+  /**
+   * 认证操作。
+   *
+   * - 直接对象：`operations: iam.auth`
+   * - 工厂函数：`operations: () => iam.auth`（推荐，避免模块加载阶段捕获旧引用）
+   */
+  operations?: AuthOperationsProvider
   /** 未认证时 UI 路由重定向地址（如 `'/auth/login'`） */
   loginUrl?: string
   /** Token Cookie 名（默认 `'hai_access_token'`） */

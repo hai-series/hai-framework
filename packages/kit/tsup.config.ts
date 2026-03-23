@@ -5,6 +5,7 @@ export default defineConfig({
   ...baseConfig,
   entry: [
     'src/index.ts',
+    'src/browser.ts',
     'src/client/index.ts',
     'src/modules/crypto/index.ts',
     'src/modules/a2a/index.ts',

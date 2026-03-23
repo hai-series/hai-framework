@@ -143,7 +143,7 @@ export const reldb: ReldbFunctions = {
    */
   async init(config: ReldbConfigInput): Promise<Result<void, ReldbError>> {
     if (initInProgress) {
-      logger.warn('DB module init is already in progress, skipping concurrent call')
+      logger.warn('RelDB module init is already in progress, skipping concurrent call')
       return err({
         code: ReldbErrorCode.CONFIG_ERROR,
         message: reldbM('reldb_configError', { params: { error: 'init already in progress' } }),
@@ -153,15 +153,15 @@ export const reldb: ReldbFunctions = {
     initInProgress = true
     try {
       if (currentProvider) {
-        logger.warn('DB module is already initialized, reinitializing')
+        logger.warn('RelDB module is already initialized, reinitializing')
         await reldb.close()
       }
 
-      logger.info('Initializing DB module')
+      logger.info('Initializing RelDB module')
 
       const parseResult = ReldbConfigSchema.safeParse(config)
       if (!parseResult.success) {
-        logger.error('DB config validation failed', { error: parseResult.error.message })
+        logger.error('RelDB config validation failed', { error: parseResult.error.message })
         return err({
           code: ReldbErrorCode.CONFIG_ERROR,
           message: reldbM('reldb_configError', { params: { error: parseResult.error.message } }),
@@ -174,7 +174,7 @@ export const reldb: ReldbFunctions = {
         const provider = createProvider(parsed)
         const connectResult = await provider.connect(parsed)
         if (!connectResult.success) {
-          logger.error('DB module initialization failed', {
+          logger.error('RelDB module initialization failed', {
             code: connectResult.error.code,
             message: connectResult.error.message,
           })
@@ -183,11 +183,11 @@ export const reldb: ReldbFunctions = {
         currentProvider = provider
         currentConfig = parsed
         currentJsonOps = createJsonOps(parsed.type)
-        logger.info('DB module initialized', { type: parsed.type })
+        logger.info('RelDB module initialized', { type: parsed.type })
         return ok(undefined)
       }
       catch (error) {
-        logger.error('DB module initialization failed', { error })
+        logger.error('RelDB module initialization failed', { error })
         return err({
           code: ReldbErrorCode.CONNECTION_FAILED,
           message: reldbM('reldb_initFailed', { params: { error: error instanceof Error ? error.message : String(error) } }),
@@ -291,23 +291,23 @@ export const reldb: ReldbFunctions = {
     if (!currentProvider) {
       currentConfig = null
       currentJsonOps = null
-      logger.info('DB module already closed, skipping')
+      logger.info('RelDB module already closed, skipping')
       return ok(undefined)
     }
 
-    logger.info('Closing DB module')
+    logger.info('Closing RelDB module')
 
     try {
       const closeResult = await currentProvider.close()
       if (!closeResult.success) {
-        logger.error('DB module close failed', { code: closeResult.error.code, message: closeResult.error.message })
+        logger.error('RelDB module close failed', { code: closeResult.error.code, message: closeResult.error.message })
         return closeResult
       }
-      logger.info('DB module closed')
+      logger.info('RelDB module closed')
       return ok(undefined)
     }
     catch (error) {
-      logger.error('DB module close failed', { error })
+      logger.error('RelDB module close failed', { error })
       return err({
         code: ReldbErrorCode.CONNECTION_FAILED,
         message: reldbM('reldb_closeFailed', { params: { error: error instanceof Error ? error.message : String(error) } }),

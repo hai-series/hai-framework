@@ -10,7 +10,6 @@ import { paraglideVitePlugin } from '@inlang/paraglide-js'
 import { sveltekit } from '@sveltejs/kit/vite'
 import tailwindcss from '@tailwindcss/vite'
 import { defineConfig, loadEnv } from 'vite'
-import { haiResolvePlugin } from '../../packages/kit/src/vite/kit-vite-resolve.js'
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
@@ -18,7 +17,6 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [
-      haiResolvePlugin(),
       sveltekit(),
       tailwindcss(),
       paraglideVitePlugin({

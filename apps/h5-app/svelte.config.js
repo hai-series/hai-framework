@@ -22,14 +22,6 @@ const config = {
         ? ['http://localhost:4175', 'http://127.0.0.1:4175']
         : [],
     },
-    alias: {
-      // 双入口包（core/ai/iam/storage）由 vite.config.ts 中的 haiResolvePlugin 条件解析
-      '@h-ai/cache': '../../packages/cache/src/index.ts',
-      '@h-ai/reldb': '../../packages/reldb/src/index.ts',
-      '@h-ai/kit': '../../packages/kit/src/index.ts',
-      '@h-ai/ui': '../../packages/ui/src/lib/index.ts',
-      '@h-ai/ui/*': '../../packages/ui/*',
-    },
   },
 }
 
