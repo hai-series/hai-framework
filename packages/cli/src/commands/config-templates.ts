@@ -82,13 +82,13 @@ function generateDbConfig(cfg?: DbModuleConfig): string {
 type: sqlite
 
 # SQLite 数据库路径
-database: \${HAI_DB_DATABASE:${database}}
+database: \${HAI_RELDB_DATABASE:${database}}
 
 # PostgreSQL/MySQL 配置（可选）
-# host: \${HAI_DB_HOST:localhost}
-# port: \${HAI_DB_PORT:5432}
-# user: \${HAI_DB_USER:postgres}
-# password: \${HAI_DB_PASSWORD:}
+# host: \${HAI_RELDB_HOST:localhost}
+# port: \${HAI_RELDB_PORT:5432}
+# user: \${HAI_RELDB_USER:postgres}
+# password: \${HAI_RELDB_PASSWORD:}
 `
   }
 
@@ -102,13 +102,13 @@ database: \${HAI_DB_DATABASE:${database}}
 type: ${dbType}
 
 # 数据库名称
-database: \${HAI_DB_DATABASE:${database}}
+database: \${HAI_RELDB_DATABASE:${database}}
 
 # 连接配置
-host: \${HAI_DB_HOST:${host}}
-port: \${HAI_DB_PORT:${port}}
-user: \${HAI_DB_USER:${user}}
-password: \${HAI_DB_PASSWORD:}
+host: \${HAI_RELDB_HOST:${host}}
+port: \${HAI_RELDB_PORT:${port}}
+user: \${HAI_RELDB_USER:${user}}
+password: \${HAI_RELDB_PASSWORD:}
 `
 }
 
@@ -175,12 +175,10 @@ password:
 
 # 会话配置
 session:
-  type: jwt
-  jwt:
-    secret: \${HAI_SESSION_SECRET}
-    algorithm: HS256
-    accessTokenExpiresIn: 900
-    refreshTokenExpiresIn: 604800
+  maxAge: 86400       # 会话超时（秒），默认 24 小时
+  sliding: true       # 滑动窗口（每次请求刷新过期时间）
+  singleDevice: false # 单设备登录
+  refreshTokenMaxAge: 604800  # refreshToken 过期（秒），默认 7 天
 
 # RBAC 配置
 rbac:
@@ -249,70 +247,41 @@ providers:
 }
 
 function generateAiConfig(cfg?: AiModuleConfig): string {
-  const provider = cfg?.defaultProvider ?? 'openai'
   const model = cfg?.model ?? 'gpt-4o-mini'
 
-  if (provider === 'openai') {
-    return `# =============================================================================
-# AI 配置
-# =============================================================================
-
-# 默认 Provider
-defaultProvider: openai
-
-# Provider 配置
-providers:
-  openai:
-    type: openai
-    apiKey: \${HAI_OPENAI_API_KEY}
-    model: ${model}
-
-  # 其他 Provider（可选）
-  # anthropic:
-  #   type: anthropic
-  #   apiKey: \${HAI_ANTHROPIC_API_KEY}
-  #   model: claude-3-sonnet
-`
-  }
-
-  if (provider === 'anthropic') {
-    return `# =============================================================================
-# AI 配置
-# =============================================================================
-
-# 默认 Provider
-defaultProvider: anthropic
-
-# Provider 配置
-providers:
-  anthropic:
-    type: anthropic
-    apiKey: \${HAI_ANTHROPIC_API_KEY}
-    model: ${model || 'claude-3-sonnet'}
-
-  # 其他 Provider（可选）
-  # openai:
-  #   type: openai
-  #   apiKey: \${HAI_OPENAI_API_KEY}
-  #   model: gpt-4o-mini
-`
-  }
-
-  // 通用 OpenAI 兼容 Provider
+  // AIConfigSchema 结构：llm（必填）+ 可选子模块
+  // LLMConfigSchema 支持顶层 apiKey/model，以及多模型 models 数组
   return `# =============================================================================
 # AI 配置
 # =============================================================================
 
-# 默认 Provider
-defaultProvider: ${provider}
+# LLM 配置（必填）
+llm:
+  # API Key（留空时自动读取 HAI_AI_LLM_API_KEY / OPENAI_API_KEY 环境变量）
+  apiKey: \${HAI_AI_LLM_API_KEY:}
+  # Base URL（留空时自动读取 HAI_AI_LLM_BASE_URL / OPENAI_BASE_URL，默认 https://api.openai.com/v1）
+  # baseUrl: \${HAI_AI_LLM_BASE_URL:}
+  # 默认模型
+  model: ${model}
+  # 全局最大 Token 数（默认 4096）
+  # maxTokens: 4096
+  # 采样温度（0-2，默认 0.7）
+  # temperature: 0.7
+  # 请求超时（毫秒，默认 60000）
+  # timeout: 60000
 
-# Provider 配置
-providers:
-  ${provider}:
-    type: openai
-    apiKey: \${HAI_AI_API_KEY}
-    model: ${model}
-    # baseUrl: \${HAI_AI_BASE_URL}
+  # 多模型配置（可选，用于场景路由）
+  # models:
+  #   - id: fast
+  #     model: gpt-4o-mini
+  #   - id: smart
+  #     model: gpt-4o
+  #     apiKey: \${HAI_AI_LLM_API_KEY:}
+
+  # 场景模型映射（可选）
+  # scenarios:
+  #   default: fast
+  #   analysis: smart
 `
 }
 
@@ -357,31 +326,36 @@ HAI_DEBUG=false`)
 # Database (@h-ai/reldb)
 # =============================================================================
 # Database type: sqlite | postgresql | mysql
-HAI_DB_TYPE=${dbType}
+HAI_RELDB_TYPE=${dbType}
 # SQLite: file path; PostgreSQL/MySQL: database name
-HAI_DB_DATABASE=${dbDatabase}${isSqlite
+HAI_RELDB_DATABASE=${dbDatabase}${isSqlite
   ? `
 # PostgreSQL/MySQL connection (uncomment when not using sqlite)
-# HAI_DB_HOST=localhost
-# HAI_DB_PORT=5432
-# HAI_DB_USER=postgres
-# HAI_DB_PASSWORD=`
+# HAI_RELDB_HOST=localhost
+# HAI_RELDB_PORT=5432
+# HAI_RELDB_USER=postgres
+# HAI_RELDB_PASSWORD=`
   : `
 # Connection
-HAI_DB_HOST=${configs?.db?.host ?? 'localhost'}
-HAI_DB_PORT=${configs?.db?.port ?? (dbType === 'postgresql' ? 5432 : 3306)}
-HAI_DB_USER=${dbType === 'postgresql' ? 'postgres' : 'root'}
-HAI_DB_PASSWORD=`}`)
+HAI_RELDB_HOST=${configs?.db?.host ?? 'localhost'}
+HAI_RELDB_PORT=${configs?.db?.port ?? (dbType === 'postgresql' ? 5432 : 3306)}
+HAI_RELDB_USER=${dbType === 'postgresql' ? 'postgres' : 'root'}
+HAI_RELDB_PASSWORD=`}`)
   }
 
   // IAM / Session
   if (features.includes('iam')) {
     sections.push(`
 # =============================================================================
-# Session / IAM (@h-ai/iam)
+# IAM (@h-ai/iam)
 # =============================================================================
-# JWT signing secret (REQUIRED, min 32 chars)
-HAI_SESSION_SECRET=change-me-to-a-strong-random-string-min-32-chars`)
+HAI_IAM_SESSION_SECRET=change-me-to-a-strong-random-string-min-32-chars
+# HAI_IAM_PASSWORD_MIN_LENGTH=8
+# HAI_IAM_SESSION_MAX_AGE=86400
+# HAI_IAM_REFRESH_TOKEN_MAX_AGE=604800
+# HAI_IAM_MAX_LOGIN_ATTEMPTS=5
+# HAI_KIT_COOKIE_KEY=                 # 32-char hex for SM4-CBC cookie encryption
+`)
   }
 
   // 缓存
@@ -470,11 +444,11 @@ HAI_STORAGE_PATH=${configs?.storage?.localPath ?? './data/uploads'}
 # =============================================================================
 # AI (@h-ai/ai)
 # =============================================================================
-# Anthropic
-HAI_ANTHROPIC_API_KEY=
-# OpenAI / OpenAI-compatible (uncomment if needed)
-# HAI_OPENAI_API_KEY=
-# HAI_OPENAI_BASE_URL=`)
+# OpenAI-compatible API Key (Anthropic models via OpenAI-compatible proxy)
+HAI_AI_LLM_API_KEY=
+# HAI_AI_LLM_BASE_URL=               # Custom base URL
+# Optional compatibility fallback
+# OPENAI_API_KEY=`)
     }
     else if (provider === 'openai') {
       sections.push(`
@@ -482,19 +456,21 @@ HAI_ANTHROPIC_API_KEY=
 # AI (@h-ai/ai)
 # =============================================================================
 # OpenAI / OpenAI-compatible
-HAI_OPENAI_API_KEY=
-# HAI_OPENAI_BASE_URL=               # Custom base URL (e.g. local proxy, Azure)
-# Anthropic (uncomment if needed)
-# HAI_ANTHROPIC_API_KEY=`)
+HAI_AI_LLM_API_KEY=
+# HAI_AI_LLM_BASE_URL=               # Custom base URL (e.g. local proxy, Azure)
+# Optional compatibility fallback
+# OPENAI_API_KEY=`)
     }
     else {
       sections.push(`
 # =============================================================================
 # AI (@h-ai/ai)
 # =============================================================================
-# Generic OpenAI-compatible provider
-HAI_AI_API_KEY=
-# HAI_AI_BASE_URL=`)
+# OpenAI-compatible provider
+HAI_AI_LLM_API_KEY=
+# HAI_AI_LLM_BASE_URL=               # Custom base URL
+# Optional compatibility fallback
+# OPENAI_API_KEY=`)
     }
   }
 
@@ -536,18 +512,18 @@ HAI_VECDB_PATH=./data/vecdb
 # Payment (@h-ai/payment)
 # =============================================================================
 # WeChat Pay
-# HAI_PAY_WECHAT_MCH_ID=
-# HAI_PAY_WECHAT_API_V3_KEY=
-# HAI_PAY_WECHAT_SERIAL_NO=
-# HAI_PAY_WECHAT_PRIVATE_KEY=
-# HAI_PAY_WECHAT_APP_ID=
+# HAI_PAYMENT_WECHAT_MCH_ID=
+# HAI_PAYMENT_WECHAT_API_V3_KEY=
+# HAI_PAYMENT_WECHAT_SERIAL_NO=
+# HAI_PAYMENT_WECHAT_PRIVATE_KEY=
+# HAI_PAYMENT_WECHAT_APP_ID=
 # Alipay
-# HAI_PAY_ALIPAY_APP_ID=
-# HAI_PAY_ALIPAY_PRIVATE_KEY=
-# HAI_PAY_ALIPAY_PUBLIC_KEY=
+# HAI_PAYMENT_ALIPAY_APP_ID=
+# HAI_PAYMENT_ALIPAY_PRIVATE_KEY=
+# HAI_PAYMENT_ALIPAY_PUBLIC_KEY=
 # Stripe
-# HAI_PAY_STRIPE_SECRET_KEY=
-# HAI_PAY_STRIPE_WEBHOOK_SECRET=
+# HAI_PAYMENT_STRIPE_SECRET_KEY=
+# HAI_PAYMENT_STRIPE_WEBHOOK_SECRET=
 `)
   }
 
@@ -623,11 +599,11 @@ path: \${HAI_VECDB_PATH:./data/vecdb}
 
 # pgvector 配置（当 type 为 pgvector 时使用）
 # type: pgvector
-# host: \${HAI_DB_HOST:localhost}
-# port: \${HAI_DB_PORT:5432}
-# database: \${HAI_DB_DATABASE:hai}
-# user: \${HAI_DB_USER:postgres}
-# password: \${HAI_DB_PASSWORD:}
+# host: \${HAI_RELDB_HOST:localhost}
+# port: \${HAI_RELDB_PORT:5432}
+# database: \${HAI_RELDB_DATABASE:hai}
+# user: \${HAI_RELDB_USER:postgres}
+# password: \${HAI_RELDB_PASSWORD:}
 # indexType: hnsw
 # tablePrefix: vec_
 
@@ -732,23 +708,23 @@ function generatePaymentConfig(): string {
 
 # 微信支付（按需开启）
 # wechat:
-#   mchId: \${HAI_PAY_WECHAT_MCH_ID}
-#   apiV3Key: \${HAI_PAY_WECHAT_API_V3_KEY}
-#   serialNo: \${HAI_PAY_WECHAT_SERIAL_NO}
-#   privateKey: \${HAI_PAY_WECHAT_PRIVATE_KEY}
-#   appId: \${HAI_PAY_WECHAT_APP_ID}
+#   mchId: \${HAI_PAYMENT_WECHAT_MCH_ID}
+#   apiV3Key: \${HAI_PAYMENT_WECHAT_API_V3_KEY}
+#   serialNo: \${HAI_PAYMENT_WECHAT_SERIAL_NO}
+#   privateKey: \${HAI_PAYMENT_WECHAT_PRIVATE_KEY}
+#   appId: \${HAI_PAYMENT_WECHAT_APP_ID}
 
 # 支付宝（按需开启）
 # alipay:
-#   appId: \${HAI_PAY_ALIPAY_APP_ID}
-#   privateKey: \${HAI_PAY_ALIPAY_PRIVATE_KEY}
-#   alipayPublicKey: \${HAI_PAY_ALIPAY_PUBLIC_KEY}
+#   appId: \${HAI_PAYMENT_ALIPAY_APP_ID}
+#   privateKey: \${HAI_PAYMENT_ALIPAY_PRIVATE_KEY}
+#   alipayPublicKey: \${HAI_PAYMENT_ALIPAY_PUBLIC_KEY}
 #   signType: RSA2
 #   sandbox: false
 
 # Stripe（按需开启）
 # stripe:
-#   secretKey: \${HAI_PAY_STRIPE_SECRET_KEY}
-#   webhookSecret: \${HAI_PAY_STRIPE_WEBHOOK_SECRET}
+#   secretKey: \${HAI_PAYMENT_STRIPE_SECRET_KEY}
+#   webhookSecret: \${HAI_PAYMENT_STRIPE_WEBHOOK_SECRET}
 `
 }

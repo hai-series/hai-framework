@@ -6,8 +6,6 @@
  */
 
 import type { DatapipeFunctions } from '@h-ai/datapipe'
-import type { DbType, DmlOperations, ReldbJsonOps } from '@h-ai/reldb'
-import type { VecdbFunctions } from '@h-ai/vecdb'
 
 import type { AIConfig } from './ai-config.js'
 import type { CompressOperations } from './compress/ai-compress-types.js'
@@ -22,7 +20,7 @@ import type { RagOperations } from './rag/ai-rag-types.js'
 import type { ReasoningOperations } from './reasoning/ai-reasoning-types.js'
 import type { RerankOperations } from './rerank/ai-rerank-types.js'
 import type { RetrievalOperations, RetrievalSource } from './retrieval/ai-retrieval-types.js'
-import type { SessionInfo } from './store/ai-store-types.js'
+import type { AIStoreProvider, SessionInfo } from './store/ai-store-types.js'
 import type { SummaryOperations, SummaryResult } from './summary/ai-summary-types.js'
 import type { TokenOperations } from './token/ai-token-types.js'
 
@@ -41,7 +39,6 @@ import { createRagOperations } from './rag/ai-rag-functions.js'
 import { createReasoningOperations } from './reasoning/ai-reasoning-functions.js'
 import { createRerankOperations } from './rerank/ai-rerank-functions.js'
 import { createRetrievalOperations } from './retrieval/ai-retrieval-functions.js'
-import { ReldbAIStore, VecdbAIVectorStore } from './store/ai-store-db.js'
 import { createSummaryOperations } from './summary/ai-summary-functions.js'
 import { createTokenOperations } from './token/ai-token-functions.js'
 
@@ -49,10 +46,7 @@ const logger = core.logger.child({ module: 'ai', scope: 'functions' })
 
 /** 子功能组装依赖 */
 export interface AISubsystemDeps {
-  sql: DmlOperations
-  jsonOps: ReldbJsonOps
-  dbType: DbType | undefined
-  vecdb: VecdbFunctions
+  storeProvider: AIStoreProvider
   datapipe: DatapipeFunctions
 }
 
@@ -81,29 +75,20 @@ export interface AISubsystems {
  * 与 main.ts 解耦——main 仅负责生命周期，本函数负责创建逻辑。
  */
 export async function createAISubsystems(config: AIConfig, deps: AISubsystemDeps): Promise<AISubsystems> {
-  const { sql, jsonOps, dbType, vecdb: vecdbDep, datapipe: datapipeDep } = deps
+  const { storeProvider, datapipe: datapipeDep } = deps
 
-  // LLM（含对话记录存储）
-  const chatRecordStore = new ReldbAIStore<ChatRecord>(sql, 'hai_ai_chat_records', jsonOps, { dbType, hasObjectId: true, hasSessionId: true })
-  const sessionStore = new ReldbAIStore<SessionInfo>(sql, 'hai_ai_sessions', jsonOps, { dbType, hasObjectId: true })
+  // 通过 Provider 创建存储实例
+  const chatRecordStore = storeProvider.createRelStore<ChatRecord>('hai_ai_chat_records', { hasObjectId: true, hasSessionId: true })
+  const sessionStore = storeProvider.createRelStore<SessionInfo>('hai_ai_sessions', { hasObjectId: true })
+  const sourceStore = storeProvider.createRelStore<RetrievalSource>('hai_ai_retrieval_sources')
+  const memoryStore = storeProvider.createRelStore<MemoryEntry>('hai_ai_memory', { hasObjectId: true })
+  const contextStore = storeProvider.createRelStore<{ messages: ChatMessage[], summaries: SummaryResult[], updatedAt: number }>('hai_ai_context', { hasObjectId: true, hasSessionId: true })
 
-  // Retrieval（依赖 Embedding + vecdb，可选依赖 Rerank）
-  const sourceStore = new ReldbAIStore<RetrievalSource>(sql, 'hai_ai_retrieval_sources', jsonOps, { dbType })
+  // 向量存储
+  const memoryVectorStore = storeProvider.createVectorStore('hai_ai_memory_vectors')
 
-  // Memory（依赖 LLM + Embedding + Store）
-  const memoryStore = new ReldbAIStore<MemoryEntry>(sql, 'hai_ai_memory', jsonOps, { dbType, hasObjectId: true })
-
-  // Context（依赖 Compress + Token + SessionStore + LLM + Memory + RAG + Reasoning）
-  const contextStore = new ReldbAIStore<{ messages: ChatMessage[], summaries: SummaryResult[], updatedAt: number }>(sql, 'hai_ai_context', jsonOps, { dbType, hasObjectId: true, hasSessionId: true })
-
-  // 统一建表（幂等 DDL）
-  await Promise.all([
-    chatRecordStore.createTable(),
-    sessionStore.createTable(),
-    sourceStore.createTable(),
-    memoryStore.createTable(),
-    contextStore.createTable(),
-  ])
+  // 统一初始化（建表等）
+  await storeProvider.initialize()
 
   const llmFunctions = createAILLMFunctions(config, { recordStore: chatRecordStore, sessionStore })
   const llm = llmFunctions.llm
@@ -120,25 +105,25 @@ export async function createAISubsystems(config: AIConfig, deps: AISubsystemDeps
   // Rerank
   const rerank = createRerankOperations(config)
 
-  const retrieval = createRetrievalOperations(embedding, vecdbDep, sourceStore, rerank)
+  const retrieval = createRetrievalOperations(embedding, storeProvider, sourceStore, rerank)
 
   // 预注册配置中的检索源（幂等写入，就算其他实例已有相同数据也安全）
   if (config.retrieval?.sources?.length) {
     const configSources = RetrievalConfigSchema.parse(config.retrieval).sources ?? []
     sourceStore
       .saveMany(configSources.map(s => ({ id: s.id, data: s })))
-      .catch(e => logger.warn('Failed to pre-register retrieval sources', { error: e }))
+      .catch((e: unknown) => logger.warn('Failed to pre-register retrieval sources', { error: e }))
   }
 
   // RAG（依赖 LLM + Retrieval）
   const rag = createRagOperations(llm, retrieval)
 
-  // Knowledge（依赖 LLM + Embedding + vecdb + reldb + datapipe）
+  // Knowledge（依赖 KnowledgeStore + LLM + Embedding + datapipe）
   const knowledgeParsed = KnowledgeConfigSchema.parse(config.knowledge ?? {})
-  const knowledge = createKnowledgeOperations(knowledgeParsed, llm, embedding, vecdbDep, sql, datapipeDep, dbType)
+  const knowledgeStore = storeProvider.createKnowledgeStore?.()
+  const knowledge = createKnowledgeOperations(knowledgeParsed, llm, embedding, datapipeDep, knowledgeStore)
 
   const memoryParsed = MemoryConfigSchema.parse(config.memory ?? {})
-  const memoryVectorStore = new VecdbAIVectorStore(vecdbDep, 'hai_ai_memory_vectors')
   const memory = createMemoryOperations(memoryParsed, llm, embedding, memoryStore, memoryVectorStore)
 
   // Token / Summary / Compress

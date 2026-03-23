@@ -338,9 +338,9 @@ export type ModelEntry = z.infer<typeof ModelEntrySchema>
  * ```
  */
 export const LLMConfigSchema = z.object({
-  /** 全局 API Key（各模型 fallback；未提供时回退到 `process.env.HAI_OPENAI_API_KEY` 或 `process.env.OPENAI_API_KEY`） */
+  /** 全局 API Key（各模型 fallback；未提供时回退到 `process.env.HAI_AI_LLM_API_KEY` 或 `process.env.OPENAI_API_KEY`） */
   apiKey: z.string().optional(),
-  /** 全局 API 基础 URL（各模型 fallback；未提供时回退到 `process.env.HAI_OPENAI_BASE_URL` 或 `process.env.OPENAI_BASE_URL`） */
+  /** 全局 API 基础 URL（各模型 fallback；未提供时回退到 `process.env.HAI_AI_LLM_BASE_URL` 或 `process.env.OPENAI_BASE_URL`） */
   baseUrl: z.url().optional(),
   /** 默认模型名称（默认 `'gpt-4o-mini'`） */
   model: z.string().optional().default('gpt-4o-mini'),
@@ -427,8 +427,8 @@ export function resolveModelEntry(
 
   const resolved: ResolvedModelConfig = {
     model: modelName,
-    apiKey: entry?.apiKey ?? llmConfig.apiKey ?? process.env.HAI_OPENAI_API_KEY ?? process.env.OPENAI_API_KEY,
-    baseUrl: entry?.baseUrl ?? llmConfig.baseUrl ?? process.env.HAI_OPENAI_BASE_URL ?? process.env.OPENAI_BASE_URL ?? 'https://api.openai.com/v1',
+    apiKey: entry?.apiKey ?? llmConfig.apiKey ?? process.env.HAI_AI_LLM_API_KEY ?? process.env.OPENAI_API_KEY,
+    baseUrl: entry?.baseUrl ?? llmConfig.baseUrl ?? process.env.HAI_AI_LLM_BASE_URL ?? process.env.OPENAI_BASE_URL ?? 'https://api.openai.com/v1',
     maxTokens: entry?.maxTokens ?? llmConfig.maxTokens ?? 4096,
     temperature: entry?.temperature ?? llmConfig.temperature ?? 0.7,
     timeout: entry?.timeout ?? llmConfig.timeout ?? 60000,
