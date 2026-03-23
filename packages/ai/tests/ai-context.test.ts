@@ -6,12 +6,14 @@
  */
 
 import type { CompressConfig, SummaryConfig, TokenConfig } from '../src/ai-config.js'
-import type { LLMOperations } from '../src/llm/ai-llm-types.js'
+import type { ChatCompletionChunk, LLMOperations, ToolCall } from '../src/llm/ai-llm-types.js'
 import type { AIRelStore, SessionInfo } from '../src/store/ai-store-types.js'
 
 import { describe, expect, it, vi } from 'vitest'
+import { z } from 'zod'
 import { createCompressOperations } from '../src/compress/ai-compress-functions.js'
 import { createContextOperations } from '../src/context/ai-context-functions.js'
+import { ai } from '../src/index.js'
 import { createSummaryOperations } from '../src/summary/ai-summary-functions.js'
 import { createTokenOperations } from '../src/token/ai-token-functions.js'
 
@@ -528,5 +530,300 @@ describe('context chat / chatStream', () => {
 
     // 第二次调用 LLM 时应包含完整 4 条消息上下文（2 user + 1 assistant + 当前的 user，实际传入的是已 addMessage 后的消息列表）
     expect(llm.chat).toHaveBeenCalledTimes(2)
+  })
+})
+
+// =============================================================================
+// chat / chatStream 工具调用循环测试
+// =============================================================================
+
+describe('context chat tool call loop', () => {
+  /**
+   * 创建带 LLM 依赖的 ContextOperations
+   */
+  function createOpsWithDeps(llm: LLMOperations) {
+    const tokenOps = createTokenOperations(defaultTokenConfig)
+    const summaryOps = createSummaryOperations(defaultLLMConfig, llm, tokenOps, defaultSummaryConfig)
+    const compressOps = createCompressOperations(
+      defaultCompressConfig,
+      tokenOps,
+      summaryOps,
+      8000,
+    )
+    return createContextOperations(defaultCompressConfig, tokenOps, compressOps, undefined, undefined, { llm })
+  }
+
+  /**
+   * 创建返回 tool_calls 后再返回文本的 LLM mock
+   *
+   * 第一次调用返回 tool_calls，第二次调用返回文本回复
+   */
+  function createToolCallLLM(toolCalls: ToolCall[], finalReply: string): LLMOperations {
+    let callIndex = 0
+    return {
+      chat: vi.fn(async () => {
+        callIndex++
+        if (callIndex === 1) {
+          // 第一轮：返回 tool_calls
+          return {
+            success: true as const,
+            data: {
+              id: 'test-id-1',
+              object: 'chat.completion' as const,
+              created: Date.now(),
+              model: 'test-model',
+              choices: [{
+                index: 0,
+                message: {
+                  role: 'assistant' as const,
+                  content: null,
+                  tool_calls: toolCalls,
+                },
+                finish_reason: 'tool_calls' as const,
+              }],
+              usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
+            },
+          }
+        }
+        // 第二轮：返回文本回复
+        return {
+          success: true as const,
+          data: {
+            id: 'test-id-2',
+            object: 'chat.completion' as const,
+            created: Date.now(),
+            model: 'test-model',
+            choices: [{
+              index: 0,
+              message: { role: 'assistant' as const, content: finalReply },
+              finish_reason: 'stop' as const,
+            }],
+            usage: { prompt_tokens: 20, completion_tokens: 10, total_tokens: 30 },
+          },
+        }
+      }),
+      chatStream: vi.fn(),
+      listModels: vi.fn(),
+    } as unknown as LLMOperations
+  }
+
+  it('chat 自动执行工具并返回最终回复', async () => {
+    const toolCalls: ToolCall[] = [{
+      id: 'call-1',
+      type: 'function',
+      function: { name: 'getWeather', arguments: '{"city":"北京"}' },
+    }]
+
+    const llm = createToolCallLLM(toolCalls, '北京今天25度，晴天。')
+    const ops = createOpsWithDeps(llm)
+
+    // 定义并注册工具
+    const weatherTool = ai.tools.define({
+      name: 'getWeather',
+      description: '获取天气',
+      parameters: z.object({ city: z.string() }),
+      handler: async ({ city }) => ({ temp: 25, city, condition: '晴' }),
+    })
+    const registry = ai.tools.createRegistry()
+    registry.register(weatherTool)
+
+    const managerResult = ops.createManager({
+      compress: { maxTokens: 8000 },
+      tools: registry,
+    })
+    expect(managerResult.success).toBe(true)
+    if (!managerResult.success)
+      return
+
+    const result = await managerResult.data.chat('北京天气怎么样？')
+    expect(result.success).toBe(true)
+    if (!result.success)
+      return
+
+    // 最终回复是第二轮 LLM 生成的文本
+    expect(result.data.reply).toBe('北京今天25度，晴天。')
+    // LLM 被调用了两次
+    expect(llm.chat).toHaveBeenCalledTimes(2)
+  })
+
+  it('chat 无 tool_calls 时直接返回文本', async () => {
+    const llm = createMockLLM([{ content: '直接回复' }])
+    const ops = createOpsWithDeps(llm)
+
+    const registry = ai.tools.createRegistry()
+
+    const managerResult = ops.createManager({
+      compress: { maxTokens: 8000 },
+      tools: registry,
+    })
+    expect(managerResult.success).toBe(true)
+    if (!managerResult.success)
+      return
+
+    const result = await managerResult.data.chat('你好')
+    expect(result.success).toBe(true)
+    if (result.success) {
+      expect(result.data.reply).toBe('直接回复')
+    }
+    expect(llm.chat).toHaveBeenCalledTimes(1)
+  })
+
+  it('chat 工具执行失败时错误信息回传 LLM', async () => {
+    const toolCalls: ToolCall[] = [{
+      id: 'call-err',
+      type: 'function',
+      function: { name: 'failTool', arguments: '{}' },
+    }]
+    const llm = createToolCallLLM(toolCalls, '工具调用失败了，请稍后再试。')
+    const ops = createOpsWithDeps(llm)
+
+    const failTool = ai.tools.define({
+      name: 'failTool',
+      description: '总是失败的工具',
+      parameters: z.object({}),
+      handler: () => { throw new Error('Boom') },
+    })
+    const registry = ai.tools.createRegistry()
+    registry.register(failTool)
+
+    const managerResult = ops.createManager({
+      compress: { maxTokens: 8000 },
+      tools: registry,
+    })
+    expect(managerResult.success).toBe(true)
+    if (!managerResult.success)
+      return
+
+    const result = await managerResult.data.chat('运行工具')
+    expect(result.success).toBe(true)
+    if (!result.success)
+      return
+
+    // 即使工具失败，LLM 仍被第二次调用并给出回复
+    expect(result.data.reply).toBe('工具调用失败了，请稍后再试。')
+    expect(llm.chat).toHaveBeenCalledTimes(2)
+
+    // 第二次调用应包含 tool message（带错误信息）
+    const secondCallMessages = (llm.chat as ReturnType<typeof vi.fn>).mock.calls[1][0].messages
+    const toolMessage = secondCallMessages.find((m: { role: string }) => m.role === 'tool')
+    expect(toolMessage).toBeDefined()
+    expect(toolMessage.content).toContain('Tool error')
+  })
+
+  it('chatStream 自动执行工具并流式返回最终回复', async () => {
+    // 创建流式 LLM mock，第一次返回 tool_calls chunk，第二次返回文本 chunk
+    let streamCallIndex = 0
+    const llm: LLMOperations = {
+      chat: vi.fn(),
+      chatStream: vi.fn(() => {
+        streamCallIndex++
+        if (streamCallIndex === 1) {
+          // 第一轮：流式返回 tool_calls
+          return (async function* () {
+            yield {
+              id: 'chunk-1',
+              object: 'chat.completion.chunk',
+              created: Date.now(),
+              model: 'test-model',
+              choices: [{
+                index: 0,
+                delta: {
+                  role: 'assistant',
+                  tool_calls: [{
+                    index: 0,
+                    id: 'call-stream-1',
+                    type: 'function',
+                    function: { name: 'add', arguments: '{"a":' },
+                  }],
+                },
+                finish_reason: null,
+              }],
+            } as ChatCompletionChunk
+            yield {
+              id: 'chunk-2',
+              object: 'chat.completion.chunk',
+              created: Date.now(),
+              model: 'test-model',
+              choices: [{
+                index: 0,
+                delta: {
+                  tool_calls: [{
+                    index: 0,
+                    function: { arguments: '3,"b":5}' },
+                  }],
+                },
+                finish_reason: 'tool_calls',
+              }],
+            } as ChatCompletionChunk
+          })()
+        }
+        // 第二轮：流式返回文本
+        return (async function* () {
+          yield {
+            id: 'chunk-3',
+            object: 'chat.completion.chunk',
+            created: Date.now(),
+            model: 'test-model',
+            choices: [{
+              index: 0,
+              delta: { role: 'assistant', content: '3+5=' },
+              finish_reason: null,
+            }],
+          } as ChatCompletionChunk
+          yield {
+            id: 'chunk-4',
+            object: 'chat.completion.chunk',
+            created: Date.now(),
+            model: 'test-model',
+            choices: [{
+              index: 0,
+              delta: { content: '8' },
+              finish_reason: 'stop',
+            }],
+          } as ChatCompletionChunk
+        })()
+      }),
+      listModels: vi.fn(),
+    } as unknown as LLMOperations
+
+    const ops = createOpsWithDeps(llm)
+
+    const addTool = ai.tools.define({
+      name: 'add',
+      description: '加法',
+      parameters: z.object({ a: z.number(), b: z.number() }),
+      handler: async ({ a, b }) => a + b,
+    })
+    const registry = ai.tools.createRegistry()
+    registry.register(addTool)
+
+    const managerResult = ops.createManager({
+      compress: { maxTokens: 8000 },
+      tools: registry,
+    })
+    expect(managerResult.success).toBe(true)
+    if (!managerResult.success)
+      return
+
+    const events: Array<{ type: string, [key: string]: unknown }> = []
+    for await (const event of managerResult.data.chatStream('3加5等于多少？')) {
+      events.push(event)
+    }
+
+    // 应有 tool_call → tool_result → delta → delta → done
+    const toolCallEvent = events.find(e => e.type === 'tool_call')
+    expect(toolCallEvent).toBeDefined()
+    expect(toolCallEvent?.name).toBe('add')
+
+    const toolResultEvent = events.find(e => e.type === 'tool_result')
+    expect(toolResultEvent).toBeDefined()
+    expect(toolResultEvent?.success).toBe(true)
+
+    const doneEvent = events.find(e => e.type === 'done')
+    expect(doneEvent).toBeDefined()
+    expect(doneEvent?.reply).toBe('3+5=8')
+
+    // chatStream 被调用了两次（tool_calls 轮 + 最终文本轮）
+    expect(llm.chatStream).toHaveBeenCalledTimes(2)
   })
 })
