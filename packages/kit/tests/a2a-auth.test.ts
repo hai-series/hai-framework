@@ -8,6 +8,7 @@ import type { RequestEvent } from '@sveltejs/kit'
 import { describe, expect, it, vi } from 'vitest'
 
 import { createA2AApiKeyAuthenticator } from '../src/modules/a2a/kit-a2a-auth.js'
+import { createA2AHandler, createAgentCardHandler } from '../src/modules/a2a/kit-a2a-helpers.js'
 import { handleA2ARequest, resolveA2AConfig } from '../src/modules/a2a/kit-a2a-handle.js'
 
 // ─── mock IAM ───
@@ -344,5 +345,130 @@ describe('handleA2ARequest — A2A auth enforcement', () => {
     expect(response).not.toBeNull()
     expect(response!.status).toBe(401)
     expect(operations.handleRequest).not.toHaveBeenCalled()
+  })
+})
+
+describe('handleA2ARequest — Agent Card discovery payload', () => {
+  it('GET /.well-known/agent.json 返回协议兼容 Agent Card', async () => {
+    const operations = {
+      getAgentCard: () => ({
+        success: true,
+        data: {
+          name: 'secure-agent',
+          description: 'a2a test agent',
+          url: 'http://localhost',
+          version: '1.2.3',
+          skills: [{ id: 'chat', name: 'Chat' }],
+          security: { apiKey: { in: 'query' as const, name: 'api_key' } },
+        },
+      }),
+      handleRequest: vi.fn(),
+    }
+
+    const resolved = resolveA2AConfig(operations)
+    const response = await handleA2ARequest(
+      createMockEvent({ path: '/.well-known/agent.json', method: 'GET' }),
+      'req_test',
+      resolved!,
+    )
+
+    expect(response).not.toBeNull()
+    expect(response!.status).toBe(200)
+    const body = await response!.json() as Record<string, unknown>
+    expect(body.protocolVersion).toBe('0.3.0')
+    expect(body.defaultInputModes).toEqual(['text'])
+    expect(body.defaultOutputModes).toEqual(['text'])
+    expect(body.securitySchemes).toEqual({
+      apiKey: { type: 'apiKey', in: 'query', name: 'api_key' },
+    })
+    expect(body.security).toEqual([{ apiKey: [] }])
+  })
+})
+
+describe('createAgentCardHandler', () => {
+  it('会将简化配置归一化为协议兼容 Agent Card', async () => {
+    const handler = createAgentCardHandler(() => ({
+      name: 'secure-agent',
+      url: 'http://localhost',
+      security: { apiKey: { in: 'header' as const, name: 'x-custom-key' } },
+    }))
+
+    const response = await handler(createMockEvent({ path: '/.well-known/agent.json', method: 'GET' }))
+    const body = await response.json() as Record<string, unknown>
+    expect(body.protocolVersion).toBe('0.3.0')
+    expect(body.securitySchemes).toEqual({
+      apiKey: { type: 'apiKey', in: 'header', name: 'x-custom-key' },
+    })
+    expect(body.security).toEqual([{ apiKey: [] }])
+  })
+})
+
+describe('createA2AHandler — apiKey config', () => {
+  it('authenticate: \"apiKey\" 支持 query 参数配置', async () => {
+    const verifyMock = await getIamMock()
+    verifyMock.mockResolvedValueOnce({
+      success: true,
+      data: { id: 'key-query', userId: 'user-query', scopes: ['a2a:call'] },
+    })
+
+    const handleRequest = vi.fn(async (_body: unknown, context?: Record<string, unknown>) => ({
+      streaming: false,
+      body: { context },
+    }))
+    const handler = createA2AHandler(handleRequest, {
+      authenticate: 'apiKey',
+      apiKey: { in: 'query', name: 'api_key' },
+    })
+
+    const response = await handler(createMockEvent({
+      path: '/a2a',
+      method: 'POST',
+      searchParams: { api_key: 'hai_query_key' },
+      jsonBody: { jsonrpc: '2.0', id: '1' },
+    }))
+
+    expect(response.status).toBe(200)
+    const body = await response.json() as { context: Record<string, unknown> }
+    expect(body.context).toEqual({
+      agentId: 'user-query',
+      apiKeyId: 'key-query',
+      scopes: ['a2a:call'],
+    })
+    expect(verifyMock).toHaveBeenCalledWith('hai_query_key')
+    expect(handleRequest).toHaveBeenCalledTimes(1)
+  })
+
+  it('authenticate: \"apiKey\" 支持自定义 header 名', async () => {
+    const verifyMock = await getIamMock()
+    verifyMock.mockResolvedValueOnce({
+      success: true,
+      data: { id: 'key-header', userId: 'user-header', scopes: [] },
+    })
+
+    const handleRequest = vi.fn(async (_body: unknown, context?: Record<string, unknown>) => ({
+      streaming: false,
+      body: { context },
+    }))
+    const handler = createA2AHandler(handleRequest, {
+      authenticate: 'apiKey',
+      apiKey: { in: 'header', name: 'x-custom-key' },
+    })
+
+    const response = await handler(createMockEvent({
+      path: '/a2a',
+      method: 'POST',
+      headers: { 'x-custom-key': 'hai_custom_key' },
+      jsonBody: { jsonrpc: '2.0', id: '2' },
+    }))
+
+    expect(response.status).toBe(200)
+    const body = await response.json() as { context: Record<string, unknown> }
+    expect(body.context).toEqual({
+      agentId: 'user-header',
+      apiKeyId: 'key-header',
+      scopes: [],
+    })
+    expect(verifyMock).toHaveBeenCalledWith('hai_custom_key')
+    expect(handleRequest).toHaveBeenCalledTimes(1)
   })
 })

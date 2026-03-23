@@ -4,10 +4,29 @@ import { createA2AClient } from '../src/client/ai-a2a-client.js'
 
 describe('createA2AClient', () => {
   it('默认通过 /.well-known/agent.json 发现 Agent Card', async () => {
+    const agentCardPayload = {
+      name: 'agent',
+      description: 'test agent',
+      url: 'https://example.com',
+      version: '1.0.0',
+      protocolVersion: '0.3.0',
+      defaultInputModes: ['text'],
+      defaultOutputModes: ['text'],
+      capabilities: {},
+      skills: [],
+      securitySchemes: {
+        apiKey: {
+          type: 'apiKey',
+          in: 'header',
+          name: 'x-api-key',
+        },
+      },
+      security: [{ apiKey: [] }],
+    }
     const api = {
       get: vi.fn(async () => ({
         success: true,
-        data: { name: 'agent', url: 'https://example.com' },
+        data: agentCardPayload,
       })),
       post: vi.fn(),
       stream: vi.fn(),
@@ -16,7 +35,16 @@ describe('createA2AClient', () => {
     const client = createA2AClient(api)
     const card = await client.getAgentCard()
 
-    expect(card).toEqual({ name: 'agent', url: 'https://example.com' })
+    expect(card).toEqual(agentCardPayload)
+    expect((card as Record<string, unknown>).protocolVersion).toBe('0.3.0')
+    expect((card as Record<string, unknown>).securitySchemes).toEqual({
+      apiKey: {
+        type: 'apiKey',
+        in: 'header',
+        name: 'x-api-key',
+      },
+    })
+    expect((card as Record<string, unknown>).security).toEqual([{ apiKey: [] }])
     expect(api.get).toHaveBeenCalledWith('/.well-known/agent.json')
   })
 

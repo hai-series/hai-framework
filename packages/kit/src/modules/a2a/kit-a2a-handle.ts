@@ -8,6 +8,7 @@
 
 import type { RequestEvent } from '@sveltejs/kit'
 import type { HandleA2AConfig, HandleA2AOperations, HandleConfig } from '../../kit-types.js'
+import { getA2AApiKeySecurity, toProtocolAgentCard } from './kit-a2a-agent-card.js'
 import { createA2AApiKeyAuthenticator } from './kit-a2a-auth.js'
 
 // ─── 解析后的 A2A 内部配置 ───
@@ -18,11 +19,6 @@ export interface ResolvedA2AConfig {
   cardPath: string
   rpcPath: string
   authenticate?: (event: RequestEvent) => Promise<Record<string, unknown> | null | undefined>
-}
-
-interface A2AApiKeySecurityConfig {
-  in: 'header' | 'query'
-  name: string
 }
 
 // ─── A2A 配置解析 ───
@@ -105,13 +101,12 @@ function createAgentCardSecurityAuthenticator(
 
 function getApiKeySecurityFromAgentCard(
   operations: HandleA2AOperations,
-): A2AApiKeySecurityConfig | undefined {
+): ReturnType<typeof getA2AApiKeySecurity> {
   const cardResult = operations.getAgentCard()
   if (!cardResult.success || !cardResult.data)
     return undefined
 
-  const security = (cardResult.data as Record<string, unknown>).security as { apiKey?: A2AApiKeySecurityConfig } | undefined
-  return security?.apiKey
+  return getA2AApiKeySecurity(cardResult.data)
 }
 
 // ─── A2A 请求处理 ───
@@ -138,7 +133,7 @@ export async function handleA2ARequest(
   if (pathname === config.cardPath && event.request.method === 'GET') {
     const result = config.operations.getAgentCard()
     if (result.success) {
-      return new Response(JSON.stringify(result.data), {
+      return new Response(JSON.stringify(toProtocolAgentCard(result.data)), {
         headers: { 'Content-Type': 'application/json', 'X-Request-Id': requestId },
       })
     }

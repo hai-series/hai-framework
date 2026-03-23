@@ -8,6 +8,7 @@
 import type { RequestEvent, RequestHandler } from '@sveltejs/kit'
 
 import type { KitA2AHandlerConfig } from './kit-a2a-types.js'
+import { toProtocolAgentCard } from './kit-a2a-agent-card.js'
 import { createA2AApiKeyAuthenticator } from './kit-a2a-auth.js'
 
 /**
@@ -35,7 +36,7 @@ export function createAgentCardHandler(
   getAgentCard: () => Record<string, unknown>,
 ): RequestHandler {
   return async () => {
-    const card = getAgentCard()
+    const card = toProtocolAgentCard(getAgentCard())
     return new Response(JSON.stringify(card), {
       headers: { 'Content-Type': 'application/json' },
     })
@@ -78,7 +79,7 @@ export function createA2AHandler(
       try {
         const authFn = typeof config.authenticate === 'function'
           ? config.authenticate
-          : createA2AApiKeyAuthenticator({ in: 'header', name: 'x-api-key' })
+          : createA2AApiKeyAuthenticator(config.apiKey ?? { in: 'header', name: 'x-api-key' })
         const authResult = await authFn(event)
         if (authResult === null) {
           return new Response(

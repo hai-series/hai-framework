@@ -7,6 +7,14 @@
 
 import type { RequestEvent } from '@sveltejs/kit'
 
+/** A2A API Key 配置 */
+export interface KitA2AApiKeyConfig {
+  /** API Key 的传递位置 */
+  in: 'header' | 'query'
+  /** 请求头或 query 参数名 */
+  name: string
+}
+
 /** A2A 路由处理器配置 */
 export interface KitA2AHandlerConfig {
   /**
@@ -20,7 +28,15 @@ export interface KitA2AHandlerConfig {
    * - 抛出异常：鉴权异常，返回 403
    *
    * - `'apiKey'`：自动使用 IAM API Key 认证
+   *   可通过 `apiKey` 字段自定义读取位置与参数名。
    * - 函数：自定义认证回调
    */
   authenticate?: 'apiKey' | ((event: RequestEvent) => Promise<Record<string, unknown> | null | undefined>)
+
+  /**
+   * 当 `authenticate: 'apiKey'` 时使用的 API Key 读取配置
+   *
+   * 未配置时默认 `{ in: 'header', name: 'x-api-key' }`
+   */
+  apiKey?: KitA2AApiKeyConfig
 }
