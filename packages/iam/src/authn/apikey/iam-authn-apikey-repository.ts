@@ -22,8 +22,8 @@ import { iamM } from '../../iam-i18n.js'
 export interface ApiKeyRepository {
   /** 插入 API Key */
   insert: (data: StoredApiKey, tx?: DmlWithTxOperations) => Promise<Result<void, IamError>>
-  /** 根据 ID 获取 */
-  getById: (id: string, tx?: DmlWithTxOperations) => Promise<Result<StoredApiKey | null, IamError>>
+  /** 根据 ID 获取（不存在时返回 null） */
+  findOneById: (id: string, tx?: DmlWithTxOperations) => Promise<Result<StoredApiKey | null, IamError>>
   /** 根据密钥前缀查找（用于快速匹配候选项） */
   findByKeyPrefix: (prefix: string, tx?: DmlWithTxOperations) => Promise<Result<StoredApiKey[], IamError>>
   /** 列出用户所有 API Key */
@@ -174,7 +174,7 @@ class DbApiKeyRepository extends BaseReldbCrudRepository<StoredApiKey> implement
     return ok(undefined)
   }
 
-  async getById(id: string, tx?: DmlWithTxOperations): Promise<Result<StoredApiKey | null, IamError>> {
+  async findOneById(id: string, tx?: DmlWithTxOperations): Promise<Result<StoredApiKey | null, IamError>> {
     const result = await this.findById(id, tx)
     if (!result.success) {
       return this.buildQueryError(result.error)

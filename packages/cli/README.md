@@ -80,12 +80,12 @@ npx hai g:model order
 
 ## 项目模板
 
-| 模板      | 说明     | 包含功能                         |
-| --------- | -------- | -------------------------------- |
-| `minimal` | 最小模板 | 仅 SvelteKit + @h-ai/core        |
-| `default` | 标准模板 | IAM + DB + Crypto                |
-| `full`    | 完整模板 | IAM + DB + Crypto + AI + Storage |
-| `custom`  | 自定义   | 按需选择                         |
+| 模板      | 说明     | 包含功能                                                                                    |
+| --------- | -------- | ------------------------------------------------------------------------------------------- |
+| `minimal` | 最小模板 | 仅 SvelteKit + @h-ai/core                                                                   |
+| `default` | 标准模板 | IAM + DB + Cache + Crypto                                                                   |
+| `full`    | 完整模板 | IAM + DB + Cache + Crypto + AI + Storage + Audit + Reach + Payment + VecDB + Datapipe + ... |
+| `custom`  | 自定义   | 按需选择                                                                                    |
 
 ## 全局选项
 
