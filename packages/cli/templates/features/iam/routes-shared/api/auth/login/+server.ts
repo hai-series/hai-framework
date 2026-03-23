@@ -7,25 +7,25 @@ import { kit } from '@h-ai/kit'
 
 export const POST: RequestHandler = async ({ request, cookies, locals }) => {
   const body = await request.json()
-  const { username, password } = body
+  const { identifier, password } = body
 
-  if (!username || !password) {
-    return kit.response.badRequest('Username and password are required')
+  if (!identifier || !password) {
+    return kit.response.badRequest('identifier and password are required')
   }
 
-  const result = await iam.auth.login({ username, password })
+  const result = await iam.auth.login({ identifier, password })
   if (!result.success) {
     return kit.response.unauthorized(result.error.message)
   }
 
-  const { token, expiresIn } = result.data
+  const { tokens } = result.data
 
-  cookies.set('session_token', token, {
+  cookies.set('session_token', tokens.accessToken, {
     path: '/',
     httpOnly: true,
     sameSite: 'lax',
     secure: false,
-    maxAge: expiresIn,
+    maxAge: tokens.expiresIn,
   })
 
   return kit.response.ok({ message: 'Login successful' }, locals.requestId)

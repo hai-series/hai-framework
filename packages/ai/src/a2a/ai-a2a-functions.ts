@@ -9,11 +9,10 @@
 import type { Message, Task } from '@a2a-js/sdk'
 import type { AgentExecutor, ExecutionEventBus, ServerCallContext, TaskStore } from '@a2a-js/sdk/server'
 import type { Result } from '@h-ai/core'
-import type { DbType, DmlOperations, ReldbJsonOps } from '@h-ai/reldb'
 
 import type { A2AConfig } from '../ai-config.js'
 import type { AIError } from '../ai-types.js'
-import type { AIStore } from '../store/ai-store-types.js'
+import type { AIRelStore, AIStoreProvider } from '../store/ai-store-types.js'
 import type {
   A2AAgentCardConfig,
   A2ACallOptions,
@@ -31,7 +30,6 @@ import { core, err, ok } from '@h-ai/core'
 
 import { AIErrorCode } from '../ai-config.js'
 import { aiM } from '../ai-i18n.js'
-import { ReldbAIStore } from '../store/ai-store-db.js'
 import { buildAgentCard } from './ai-a2a-server.js'
 
 const logger = core.logger.child({ module: 'ai', scope: 'a2a' })
@@ -45,7 +43,7 @@ const logger = core.logger.child({ module: 'ai', scope: 'a2a' })
  * 实现按状态和上下文查询。
  */
 export class ReldbA2ATaskStore implements TaskStore {
-  constructor(private readonly store: AIStore<Task>) {}
+  constructor(private readonly store: AIRelStore<Task>) {}
 
   async save(task: Task, _context?: ServerCallContext): Promise<void> {
     await this.store.save(task.id, task, {
@@ -69,7 +67,7 @@ export class ReldbA2ATaskStore implements TaskStore {
  */
 function wrapExecutorWithLogging(
   executor: AgentExecutor,
-  messageStore: AIStore<A2AMessageRecord>,
+  messageStore: AIRelStore<A2AMessageRecord>,
 ): AgentExecutor {
   return {
     async execute(requestContext, eventBus) {
@@ -158,9 +156,7 @@ function withReadyStore<T>(store: AIStore<T>, ready: Promise<void>): AIStore<T> 
 
 /** A2A 子功能组装依赖 */
 export interface A2ADeps {
-  sql: DmlOperations
-  jsonOps: ReldbJsonOps
-  dbType: DbType | undefined
+  storeProvider: AIStoreProvider
 }
 
 /** A2A 子功能配置 */
@@ -180,23 +176,20 @@ export function createA2AOperations(
   options: A2ACreateOptions,
   deps: A2ADeps,
 ): A2AOperations {
-  const { sql, jsonOps, dbType } = deps
+  const { storeProvider } = deps
   const agentCardConfig = options.agentCard
 
   // 创建持久化存储
-  const taskStore = new ReldbAIStore<Task>(sql, 'hai_ai_a2a_tasks', jsonOps, {
-    dbType,
+  const taskStore = storeProvider.createRelStore<Task>('hai_ai_a2a_tasks', {
     hasObjectId: true,
     hasStatus: true,
     hasRefId: true,
   })
-  const messageStore = new ReldbAIStore<A2AMessageRecord>(sql, 'hai_ai_a2a_messages', jsonOps, {
-    dbType,
+  const messageStore = storeProvider.createRelStore<A2AMessageRecord>('hai_ai_a2a_messages', {
     hasObjectId: true,
     hasStatus: true,
   })
-  const callRecordStore = new ReldbAIStore<A2AClientCallRecord>(sql, 'hai_ai_a2a_calls', jsonOps, {
-    dbType,
+  const callRecordStore = storeProvider.createRelStore<A2AClientCallRecord>('hai_ai_a2a_calls', {
     hasObjectId: true,
     hasStatus: true,
   })
@@ -362,8 +355,8 @@ export interface A2ALazyProxyDeps {
   getA2AImpl: () => A2AOperations | null
   /** 保存 A2A 实现引用 */
   setA2AImpl: (impl: A2AOperations) => void
-  /** 获取 RelDB 依赖（用于 createA2AOperations） */
-  getReldbDeps: () => A2ADeps
+  /** 获取 StoreProvider（用于 createA2AOperations） */
+  getStoreProvider: () => AIStoreProvider | null
   /** 未初始化错误工厂 */
   notInitializedResult: <T>() => Result<T, AIError>
 }
@@ -393,11 +386,17 @@ export function createA2ALazyProxy(deps: A2ALazyProxyDeps): A2AOperations {
       if (deps.getA2AImpl()) {
         logger.warn('A2A executor already registered, re-registering')
       }
-      const reldbDeps = deps.getReldbDeps()
+      const storeProvider = deps.getStoreProvider()
+      if (!storeProvider) {
+        return err({
+          code: AIErrorCode.STORE_FAILED,
+          message: aiM('ai_internalError', { params: { error: 'StoreProvider not available' } }),
+        })
+      }
       const agentCardWithSecurity = { ...a2aConfig.agentCard, security: a2aConfig.security }
       const impl = createA2AOperations(
         { agentCard: agentCardWithSecurity, executor },
-        reldbDeps,
+        { storeProvider },
       )
       deps.setA2AImpl(impl)
       logger.info('A2A executor registered', { agentName: a2aConfig.agentCard.name })

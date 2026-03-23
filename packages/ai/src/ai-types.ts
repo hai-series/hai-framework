@@ -21,6 +21,7 @@ import type { RagOperations } from './rag/ai-rag-types.js'
 import type { ReasoningOperations } from './reasoning/ai-reasoning-types.js'
 import type { RerankOperations } from './rerank/ai-rerank-types.js'
 import type { RetrievalOperations } from './retrieval/ai-retrieval-types.js'
+import type { AIStoreProvider } from './store/ai-store-types.js'
 import type { SummaryOperations } from './summary/ai-summary-types.js'
 import type { TokenOperations } from './token/ai-token-types.js'
 
@@ -34,6 +35,24 @@ export interface AIError {
   message: string
   /** 原始错误（可选） */
   cause?: unknown
+}
+
+// ─── 初始化选项 ───
+
+/**
+ * AI 初始化运行时选项
+ *
+ * 用于传入运行时对象（如自定义 StoreProvider），
+ * 这些对象无法通过 Zod 配置 Schema 传递。
+ */
+export interface AIInitOptions {
+  /**
+   * 自定义存储 Provider
+   *
+   * 提供后 AI 模块将使用此 Provider 而非默认的 reldb+vecdb 实现，
+   * 此时不需要提前初始化 reldb/vecdb。
+   */
+  storeProvider?: AIStoreProvider
 }
 
 // ─── AIFunctions 接口 ───
@@ -61,9 +80,10 @@ export interface AIFunctions {
    * 重复调用会先关闭旧实例再重新初始化。
    *
    * @param config - AI 配置（可选，默认使用空对象并应用 Schema 默认值）
+   * @param options - 运行时选项（可选，用于传入自定义 StoreProvider 等运行时对象）
    * @returns 成功返回 `ok(undefined)`；配置校验失败返回 `err(AIError)`
    */
-  init: (config?: AIConfigInput) => Promise<Result<void, AIError>>
+  init: (config?: AIConfigInput, options?: AIInitOptions) => Promise<Result<void, AIError>>
   /**
    * 关闭 AI 服务，释放内部状态
    *
@@ -110,197 +130,3 @@ export interface AIFunctions {
   /** A2A 操作（Agent-to-Agent 协议），需要先调用 `init()` 并配置 `a2a` */
   readonly a2a: A2AOperations
 }
-
-// ─── 子功能类型 re-export ───
-
-// ─── Compress 类型 re-export ───
-
-export type {
-  CompressionStrategy,
-  CompressOperations,
-  CompressOptions,
-  CompressResult,
-} from './compress/ai-compress-types.js'
-export { CompressionStrategySchema } from './compress/ai-compress-types.js'
-
-// ─── Context 类型 re-export ───
-
-export type {
-  ContextChatOptions,
-  ContextChatResult,
-  ContextManager,
-  ContextManagerOptions,
-  ContextOperations,
-  ContextStreamEvent,
-} from './context/ai-context-types.js'
-
-// ─── Embedding 类型 re-export ───
-
-export type {
-  EmbeddingItem,
-  EmbeddingOperations,
-  EmbeddingRequest,
-  EmbeddingResponse,
-} from './embedding/ai-embedding-types.js'
-
-// ─── File 类型 re-export ───
-
-export type {
-  FileOperations,
-  FileParseMethod,
-  FileParseOptions,
-  FileParseRequest,
-  FileParseResult,
-} from './file/ai-file-types.js'
-
-// ─── Knowledge 类型 re-export ───
-
-export type {
-  EntityDocumentRelation,
-  EntityDocumentResult,
-  EntityListOptions,
-  EntityQueryOptions,
-  KnowledgeAskOptions,
-  KnowledgeAskResult,
-  KnowledgeEntity,
-  KnowledgeIngestInput,
-  KnowledgeIngestResult,
-  KnowledgeOperations,
-  KnowledgeRetrieveItem,
-  KnowledgeRetrieveOptions,
-  KnowledgeRetrieveResult,
-  KnowledgeSetupOptions,
-} from './knowledge/ai-knowledge-types.js'
-
-// ─── LLM 类型 re-export ───
-
-export type {
-  AssistantMessage,
-  ChatCompletionChoice,
-  ChatCompletionChunk,
-  ChatCompletionDelta,
-  ChatCompletionRequest,
-  ChatCompletionResponse,
-  ChatHistoryOptions,
-  ChatMessage,
-  ChatRecord,
-  DefineToolOptions,
-  ImageContent,
-  LLMOperations,
-  MessageContent,
-  MessageRole,
-  SSEDecoder,
-  SSEEvent,
-  StreamOperations,
-  StreamProcessor,
-  StreamResult,
-  SystemMessage,
-  TextContent,
-  TokenUsage,
-  Tool,
-  ToolCall,
-  ToolDefinition,
-  ToolError,
-  ToolErrorType,
-  ToolMessage,
-  ToolRegistryOperations,
-  ToolsOperations,
-  UserMessage,
-} from './llm/ai-llm-types.js'
-
-// ─── MCP 类型 re-export ───
-
-export type {
-  MCPContext,
-  MCPOperations,
-  MCPPrompt,
-  MCPPromptArgument,
-  MCPPromptContent,
-  MCPPromptMessage,
-  MCPResource,
-  MCPResourceContent,
-  McpServerOptions,
-  MCPToolDefinition,
-  MCPToolHandler,
-} from './mcp/ai-mcp-types.js'
-
-// ─── Memory 类型 re-export ───
-
-export type {
-  MemoryClearOptions,
-  MemoryEntry,
-  MemoryEntryInput,
-  MemoryExtractOptions,
-  MemoryInjectionOptions,
-  MemoryListOptions,
-  MemoryListPageOptions,
-  MemoryOperations,
-  MemoryRecallOptions,
-} from './memory/ai-memory-types.js'
-
-// ─── RAG 类型 re-export ───
-
-export type {
-  RagContextItem,
-  RagOperations,
-  RagOptions,
-  RagResult,
-} from './rag/ai-rag-types.js'
-
-// ─── Reasoning 类型 re-export ───
-
-export type {
-  ReasoningOperations,
-  ReasoningOptions,
-  ReasoningResult,
-  ReasoningStep,
-  ReasoningStepType,
-  ReasoningStrategy,
-} from './reasoning/ai-reasoning-types.js'
-
-// ─── Rerank 类型 re-export ───
-
-export type {
-  RerankDocument,
-  RerankItem,
-  RerankOperations,
-  RerankRequest,
-  RerankResponse,
-} from './rerank/ai-rerank-types.js'
-
-// ─── Retrieval 类型 re-export ───
-
-export type {
-  Citation,
-  RetrievalOperations,
-  RetrievalRequest,
-  RetrievalResult,
-  RetrievalResultItem,
-  RetrievalSource,
-} from './retrieval/ai-retrieval-types.js'
-
-// ─── Store 类型 re-export ───
-
-export type {
-  AIStore,
-  AIVectorStore,
-  InteractionScope,
-  ObjectRef,
-  SessionInfo,
-  StoreFilter,
-  StorePage,
-} from './store/ai-store-types.js'
-
-// ─── Summary 类型 re-export ───
-
-export type {
-  SummaryOperations,
-  SummaryOptions,
-  SummaryResult,
-} from './summary/ai-summary-types.js'
-
-// ─── Token 类型 re-export ───
-
-export type {
-  TokenOperations,
-} from './token/ai-token-types.js'
