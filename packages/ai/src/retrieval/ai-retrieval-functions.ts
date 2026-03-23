@@ -6,11 +6,10 @@
  */
 
 import type { Result } from '@h-ai/core'
-import type { VecdbFunctions } from '@h-ai/vecdb'
 import type { AIError } from '../ai-types.js'
 import type { EmbeddingOperations } from '../embedding/ai-embedding-types.js'
 import type { RerankOperations } from '../rerank/ai-rerank-types.js'
-import type { AIStore } from '../store/ai-store-types.js'
+import type { AIRelStore, AIStoreProvider } from '../store/ai-store-types.js'
 import type {
   Citation,
   RetrievalOperations,
@@ -31,14 +30,14 @@ const logger = core.logger.child({ module: 'ai', scope: 'retrieval' })
  * 创建 Retrieval 操作接口
  *
  * @param embeddingOps - Embedding 操作（用于将查询文本向量化）
- * @param vecdbClient - vecdb 客户端（用于向量检索）
+ * @param storeProvider - 存储 Provider（用于按 collection 创建向量存储实例）
  * @param sourceStore - 检索源持久化存储（支持分布式一致）
  * @returns RetrievalOperations 实例
  */
 export function createRetrievalOperations(
   embeddingOps: EmbeddingOperations,
-  vecdbClient: VecdbFunctions,
-  sourceStore: AIStore<RetrievalSource>,
+  storeProvider: AIStoreProvider,
+  sourceStore: AIRelStore<RetrievalSource>,
   rerankOps?: RerankOperations | null,
 ): RetrievalOperations {
   return {
@@ -148,18 +147,14 @@ export function createRetrievalOperations(
           const topK = request.topK ?? source.topK ?? 5
           const minScore = request.minScore ?? source.minScore
 
-          const searchResult = await vecdbClient.vector.search(source.collection, queryVector, {
+          const vectorStore = storeProvider.createVectorStore(source.collection)
+          const searchResults = await vectorStore.search(queryVector, {
             topK,
             minScore,
             filter: source.filter,
           })
 
-          if (!searchResult.success) {
-            logger.warn('Retrieval search failed for source', { sourceId: source.id, error: searchResult.error })
-            return
-          }
-
-          for (const item of searchResult.data) {
+          for (const item of searchResults) {
             // 从向量记录 metadata 构建结构化信源引用
             const citation: Citation = {
               documentId: item.metadata?.documentId as string | undefined,

@@ -17,7 +17,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
     return kit.response.badRequest('Passwords do not match')
   }
 
-  const result = await iam.auth.register({ username, email, password })
+  const result = await iam.user.register({ username, email, password })
   if (!result.success) {
     return kit.response.badRequest(result.error.message)
   }

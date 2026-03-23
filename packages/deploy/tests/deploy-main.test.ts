@@ -136,7 +136,7 @@ describe('deploy singleton', () => {
       if (result.success) {
         expect(result.data).toHaveLength(1)
         expect(result.data[0].serviceType).toBe('db')
-        expect(result.data[0].envVars.HAI_DB_URL).toBe('postgres://u:p@h/d')
+        expect(result.data[0].envVars.HAI_RELDB_URL).toBe('postgres://u:p@h/d')
       }
     })
   })

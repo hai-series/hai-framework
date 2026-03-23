@@ -5,10 +5,9 @@
  * retrieve 需要 embedding + vecdb，此处仅测试源管理。
  */
 
-import type { VecdbFunctions } from '@h-ai/vecdb'
 import type { EmbeddingOperations } from '../src/embedding/ai-embedding-types.js'
 import type { RetrievalSource } from '../src/retrieval/ai-retrieval-types.js'
-import type { AIStore } from '../src/store/ai-store-types.js'
+import type { AIRelStore, AIStoreProvider } from '../src/store/ai-store-types.js'
 import { describe, expect, it } from 'vitest'
 import { AIErrorCode } from '../src/ai-config.js'
 import { createRetrievalOperations } from '../src/retrieval/ai-retrieval-functions.js'
@@ -16,37 +15,23 @@ import { createRetrievalOperations } from '../src/retrieval/ai-retrieval-functio
 // ─── Mock Embedding ───
 
 const mockEmbedding: EmbeddingOperations = {
-  embed: async () => ({ success: true, data: { model: 'test', data: [{ index: 0, embedding: [0.1, 0.2] }], usage: { prompt_tokens: 1, total_tokens: 1 } } }) as any,
-  embedText: async () => ({ success: true, data: [0.1, 0.2, 0.3] }) as any,
-  embedBatch: async () => ({ success: true, data: [[0.1], [0.2]] }) as any,
+  embed: async () => ({ success: true as const, data: { model: 'test', data: [{ index: 0, embedding: [0.1, 0.2] }], usage: { prompt_tokens: 1, total_tokens: 1 } } }),
+  embedText: async () => ({ success: true as const, data: [0.1, 0.2, 0.3] }),
+  embedBatch: async () => ({ success: true as const, data: [[0.1], [0.2]] }),
 }
 
-// ─── Mock VecdbFunctions ───
+// ─── Mock AIStoreProvider ───
 
-const mockVecdb: VecdbFunctions = {
-  init: async () => ({ success: true as const, data: undefined }),
-  close: async () => ({ success: true as const, data: undefined }),
-  config: null,
-  isInitialized: true,
-  vector: {
-    insert: async () => ({ success: true as const, data: undefined }),
-    upsert: async () => ({ success: true as const, data: undefined }),
-    delete: async () => ({ success: true as const, data: undefined }),
-    search: async () => ({ success: true as const, data: [] }),
-    count: async () => ({ success: true as const, data: 0 }),
-  },
-  collection: {
-    create: async () => ({ success: true as const, data: undefined }),
-    drop: async () => ({ success: true as const, data: undefined }),
-    exists: async () => ({ success: true as const, data: true }),
-    info: async () => ({ success: true as const, data: { name: 'test', dimension: 1536, metric: 'cosine' as const, count: 0 } }),
-    list: async () => ({ success: true as const, data: [] }),
-  },
+const mockStoreProvider: AIStoreProvider = {
+  name: 'mock',
+  createRelStore: () => ({ save: async () => {}, saveMany: async () => {}, get: async () => undefined, query: async () => [], queryPage: async () => ({ items: [], total: 0 }), remove: async () => false, removeBy: async () => 0, count: async () => 0, clear: async () => {} }) as AIRelStore<never>,
+  createVectorStore: () => ({ upsert: async () => {}, search: async () => [], remove: async () => {}, clear: async () => {} }),
+  initialize: async () => {},
 }
 
-// ─── Mock AIStore<RetrievalSource>（内存实现，测试隔离用）───
+// ─── Mock AIRelStore<RetrievalSource>（内存实现，测试隔离用）───
 
-function createMockSourceStore(): AIStore<RetrievalSource> {
+function createMockSourceStore(): AIRelStore<RetrievalSource> {
   const store = new Map<string, RetrievalSource>()
   return {
     async save(id, data) { store.set(id, data) },
@@ -68,13 +53,13 @@ function createMockSourceStore(): AIStore<RetrievalSource> {
 
 describe('retrieval 源管理', () => {
   it('添加源', async () => {
-    const ops = createRetrievalOperations(mockEmbedding, mockVecdb, createMockSourceStore())
+    const ops = createRetrievalOperations(mockEmbedding, mockStoreProvider, createMockSourceStore())
     const result = await ops.addSource({ id: 'wiki', collection: 'wiki-docs', topK: 5 })
     expect(result.success).toBe(true)
   })
 
   it('添加重复源返回错误', async () => {
-    const ops = createRetrievalOperations(mockEmbedding, mockVecdb, createMockSourceStore())
+    const ops = createRetrievalOperations(mockEmbedding, mockStoreProvider, createMockSourceStore())
     await ops.addSource({ id: 'wiki', collection: 'wiki-docs' })
     const result = await ops.addSource({ id: 'wiki', collection: 'other' })
     expect(result.success).toBe(false)
@@ -84,7 +69,7 @@ describe('retrieval 源管理', () => {
   })
 
   it('列出源', async () => {
-    const ops = createRetrievalOperations(mockEmbedding, mockVecdb, createMockSourceStore())
+    const ops = createRetrievalOperations(mockEmbedding, mockStoreProvider, createMockSourceStore())
     await ops.addSource({ id: 'wiki', collection: 'wiki-docs' })
     await ops.addSource({ id: 'kb', collection: 'knowledge-base' })
     const list = await ops.listSources()
@@ -94,7 +79,7 @@ describe('retrieval 源管理', () => {
   })
 
   it('删除源', async () => {
-    const ops = createRetrievalOperations(mockEmbedding, mockVecdb, createMockSourceStore())
+    const ops = createRetrievalOperations(mockEmbedding, mockStoreProvider, createMockSourceStore())
     await ops.addSource({ id: 'wiki', collection: 'wiki-docs' })
     const result = await ops.removeSource('wiki')
     expect(result.success).toBe(true)
@@ -102,7 +87,7 @@ describe('retrieval 源管理', () => {
   })
 
   it('删除不存在的源返回错误', async () => {
-    const ops = createRetrievalOperations(mockEmbedding, mockVecdb, createMockSourceStore())
+    const ops = createRetrievalOperations(mockEmbedding, mockStoreProvider, createMockSourceStore())
     const result = await ops.removeSource('nonexistent')
     expect(result.success).toBe(false)
     if (!result.success) {
@@ -111,7 +96,7 @@ describe('retrieval 源管理', () => {
   })
 
   it('无源时 retrieve 返回错误', async () => {
-    const ops = createRetrievalOperations(mockEmbedding, mockVecdb, createMockSourceStore())
+    const ops = createRetrievalOperations(mockEmbedding, mockStoreProvider, createMockSourceStore())
     const result = await ops.retrieve({ query: 'test' })
     expect(result.success).toBe(false)
     if (!result.success) {
@@ -122,8 +107,8 @@ describe('retrieval 源管理', () => {
   it('多实例：store 共享保证一致性', async () => {
     // 模拟两个实例共用同一个 store（分布式场景）
     const sharedStore = createMockSourceStore()
-    const instance1 = createRetrievalOperations(mockEmbedding, mockVecdb, sharedStore)
-    const instance2 = createRetrievalOperations(mockEmbedding, mockVecdb, sharedStore)
+    const instance1 = createRetrievalOperations(mockEmbedding, mockStoreProvider, sharedStore)
+    const instance2 = createRetrievalOperations(mockEmbedding, mockStoreProvider, sharedStore)
 
     await instance1.addSource({ id: 'wiki', collection: 'wiki-docs' })
     const list = await instance2.listSources()

@@ -12,7 +12,7 @@ import chalk from 'chalk'
 import fse from 'fs-extra'
 import ora from 'ora'
 import prompts from 'prompts'
-import { fileExists, writeFile } from '../utils.js'
+import { detectPackageManager, fileExists, writeFile } from '../utils.js'
 import { generateConfigFile } from './config-templates.js'
 import { detectProject } from './create.js'
 
@@ -28,7 +28,9 @@ export interface AddModuleOptions extends GlobalOptions {
 
 // 可添加的模块与对应包
 const MODULE_MAP: Record<string, { packages: string[], deps?: string[], configKey?: string, description: string }> = {
-  'iam': { packages: ['@h-ai/iam'], deps: ['crypto'], configKey: 'iam', description: '身份与访问管理' },
+  // iam 依赖 crypto（password hash）/ db（user 存储）/ cache（session 缓存）
+  'iam': { packages: ['@h-ai/iam'], deps: ['crypto', 'db', 'cache'], configKey: 'iam', description: '身份与访问管理' },
+  // 'db' 和 'reldb' 都映射到 @h-ai/reldb，兼容用户习惯（hai add db 和 hai add reldb 均可）
   'db': { packages: ['@h-ai/reldb'], configKey: 'db', description: '数据库' },
   'reldb': { packages: ['@h-ai/reldb'], configKey: 'db', description: '数据库' },
   'cache': { packages: ['@h-ai/cache'], configKey: 'cache', description: '缓存' },
@@ -174,7 +176,7 @@ export async function addModule(options: AddModuleOptions): Promise<void> {
     if (doInstall) {
       spinner.start('安装依赖...')
       const { execSync } = await import('node:child_process')
-      const pm = project.haiPackages.length > 0 ? 'pnpm' : 'pnpm'
+      const pm = await detectPackageManager(cwd)
       execSync(`${pm} install`, { cwd, stdio: 'ignore' })
       spinner.succeed()
     }

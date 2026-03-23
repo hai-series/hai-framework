@@ -188,10 +188,12 @@ describe('admin 应用类型生成', () => {
     it('hooks.server.ts 的 handle 序列应包含 i18nHandle', async () => {
       const content = await readGenerated(projectPath, 'src/hooks.server.ts')
       expect(content).toContain('i18nHandle,')
-      // i18nHandle 应在 authHandle 之前
+      // i18nHandle 应在 haiHandle 之前
       const i18nPos = content.indexOf('i18nHandle,')
-      const authPos = content.indexOf('authHandle,')
-      expect(i18nPos).toBeLessThan(authPos)
+      const haiPos = content.indexOf('haiHandle,')
+      expect(i18nPos).not.toBe(-1)
+      expect(haiPos).not.toBe(-1)
+      expect(i18nPos).toBeLessThan(haiPos)
     })
   })
 
@@ -265,9 +267,11 @@ describe('admin 应用类型生成', () => {
       expect(content).toContain('from \'@h-ai/cache\'')
     })
 
-    it('hooks.server.ts 应包含 authHandle', async () => {
+    it('hooks.server.ts 应包含 auth.verifyToken 配置', async () => {
       const content = await readGenerated(projectPath, 'src/hooks.server.ts')
-      expect(content).toContain('authHandle')
+      expect(content).toContain('auth:')
+      expect(content).toContain('verifyToken:')
+      expect(content).toContain('iam.auth.verifyToken')
       expect(content).toContain('import { iam } from \'@h-ai/iam\'')
     })
   })
@@ -565,7 +569,6 @@ describe('feature 叠加', () => {
     const content = await readGenerated(projectPath, 'src/hooks.server.ts')
     expect(content).toContain('initHandle,')
     expect(content).toContain('i18nHandle,')
-    expect(content).toContain('authHandle,')
     expect(content).toContain('haiHandle,')
   })
 

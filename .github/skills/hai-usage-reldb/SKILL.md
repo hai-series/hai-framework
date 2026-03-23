@@ -15,13 +15,13 @@ description: "Use when: using @h-ai/reldb, database operations, SQL queries, DDL
 
 ```yaml
 # config/_db.yml
-type: ${HAI_DB_TYPE:sqlite}
-database: ${HAI_DB_DATABASE:./data/app.db}
+type: ${HAI_RELDB_TYPE:sqlite}
+database: ${HAI_RELDB_DATABASE:./data/app.db}
 # PostgreSQL/MySQL 额外字段：
-# host: ${HAI_DB_HOST:localhost}
-# port: ${HAI_DB_PORT:5432}
-# user: ${HAI_DB_USER:postgres}
-# password: ${HAI_DB_PASSWORD:}
+# host: ${HAI_RELDB_HOST:localhost}
+# port: ${HAI_RELDB_PORT:5432}
+# user: ${HAI_RELDB_USER:postgres}
+# password: ${HAI_RELDB_PASSWORD:}
 ```
 
 ### 初始化与关闭
@@ -144,6 +144,7 @@ const userCrud = reldb.crud.table<{ id: number, name: string, email: string }>({
   select: ['id', 'name', 'email'],
   createColumns: ['name', 'email'],
   updateColumns: ['name', 'email'],
+  dbType: 'sqlite',
 })
 ```
 
@@ -153,7 +154,9 @@ const userCrud = reldb.crud.table<{ id: number, name: string, email: string }>({
 |------|------|------|
 | `create` | `(data, tx?) => Result<ExecuteResult>` | 创建 |
 | `createMany` | `(items, tx?) => Result<void>` | 批量创建 |
-| `findById` | `(id, tx?) => Result<T \| null>` | 按 ID 查 |
+| `createOrUpdate` | `(data, tx?) => Result<ExecuteResult>` | 创建或更新（upsert） |
+| `findById` | `(id, tx?) => Result<T \| null>` | 按 ID 查（不存在返回 null） |
+| `getById` | `(id, tx?) => Result<T>` | 按 ID 获取（不存在返回 RECORD_NOT_FOUND 错误） |
 | `findAll` | `(options?, tx?) => Result<T[]>` | 条件查询 |
 | `findPage` | `(options, tx?) => Result<PaginatedResult<T>>` | 分页查询 |
 | `updateById` | `(id, data, tx?) => Result<ExecuteResult>` | 按 ID 更新 |
@@ -169,6 +172,10 @@ const userCrud = reldb.crud.table<{ id: number, name: string, email: string }>({
 ```typescript
 // 创建
 await userCrud.create({ name: '张三', email: 'test@example.com' })
+
+// 创建或更新
+await userCrud.createOrUpdate({ id: 1, name: '张三', email: 'new@example.com' })
+// 不存在 → 插入；主键冲突 → 更新 updateColumns 中的字段
 
 // 条件查询
 const actives = await userCrud.findAll({
@@ -226,6 +233,8 @@ class UserRepository extends BaseReldbCrudRepository<User> {
 **`this.sql(tx?)`**：返回当前数据操作对象（自动适配事务）。
 
 **自动能力**：createdAt/updatedAt 自动时间戳、BOOLEAN → 1/0、TIMESTAMP → 毫秒、JSON → 序列化。
+
+**createOrUpdate**：`repo.createOrUpdate({ id: 1, name: '新名字' })` — 主键存在时更新（保留 createdAt），否则插入。dbType 自动获取，无需手动传入。
 
 ---
 
