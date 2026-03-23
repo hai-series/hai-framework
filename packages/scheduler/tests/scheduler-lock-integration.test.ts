@@ -187,6 +187,49 @@ describe('distributed lock integration', () => {
         }),
       )
       expect(handler).not.toHaveBeenCalled()
+
+      const logsResult = await scheduler.getLogs({ taskId: 'lock-task-fail-closed' })
+      expect(logsResult.success).toBe(true)
+      if (logsResult.success) {
+        expect(logsResult.data).toHaveLength(1)
+        expect(logsResult.data[0].status).toBe('failed')
+        expect(logsResult.data[0].error).toBe(log.error)
+      }
+    })
+
+    it('锁获取抛异常时应 fail-closed、记录日志且不执行任务', async () => {
+      await scheduler.init({ enableDb: true })
+
+      const handler = vi.fn().mockResolvedValue('done')
+      await scheduler.register({
+        id: 'lock-task-throw-fail-closed',
+        name: '锁异常关闭测试',
+        cron: '* * * * *',
+        type: 'js',
+        handler,
+      })
+
+      vi.spyOn(cache.lock, 'acquire').mockRejectedValue(new Error('mock thrown lock failure'))
+
+      const task = scheduler.tasks.get('lock-task-throw-fail-closed')!
+      const minuteTimestamp = Math.floor(Date.now() / 60000)
+      const log = await runTask(task, minuteTimestamp)
+
+      expect(log.status).toBe('failed')
+      expect(log.error).toBe(
+        schedulerM('scheduler_lockAcquireFailed', {
+          params: { taskId: 'lock-task-throw-fail-closed' },
+        }),
+      )
+      expect(handler).not.toHaveBeenCalled()
+
+      const logsResult = await scheduler.getLogs({ taskId: 'lock-task-throw-fail-closed' })
+      expect(logsResult.success).toBe(true)
+      if (logsResult.success) {
+        expect(logsResult.data).toHaveLength(1)
+        expect(logsResult.data[0].status).toBe('failed')
+        expect(logsResult.data[0].error).toBe(log.error)
+      }
     })
   })
 

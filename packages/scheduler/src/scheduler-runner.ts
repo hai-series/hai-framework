@@ -72,6 +72,12 @@ export function configureLock(nodeId: string, lockTtlSec: number): void {
   currentLockTtlSec = lockTtlSec
 }
 
+async function persistExecutionLog(log: TaskExecutionLog): Promise<void> {
+  if (currentLogRepo) {
+    await currentLogRepo.saveLog(log)
+  }
+}
+
 // ─── 调度逻辑 ───
 
 /**
@@ -150,8 +156,10 @@ export async function runTask(task: TaskDefinition, minuteTimestamp?: number): P
       const errorMessage = schedulerM('scheduler_lockAcquireFailed', {
         params: { taskId: task.id },
       })
+      const log = buildLockFailureLog(errorMessage)
       logger.error('Failed to acquire distributed lock', { taskId: task.id, minuteTimestamp, error })
-      return buildLockFailureLog(errorMessage)
+      await persistExecutionLog(log)
+      return log
     }
 
     if (lockResult.success && !lockResult.data) {
@@ -175,8 +183,10 @@ export async function runTask(task: TaskDefinition, minuteTimestamp?: number): P
       const errorMessage = schedulerM('scheduler_lockAcquireFailed', {
         params: { taskId: task.id },
       })
+      const log = buildLockFailureLog(errorMessage)
       logger.error('Failed to acquire distributed lock', { taskId: task.id, minuteTimestamp, error: lockResult.error.message })
-      return buildLockFailureLog(errorMessage)
+      await persistExecutionLog(log)
+      return log
     }
   }
 
@@ -190,9 +200,7 @@ export async function runTask(task: TaskDefinition, minuteTimestamp?: number): P
       api: task.type === 'api' ? task.api : undefined,
     })
 
-    if (currentLogRepo) {
-      await currentLogRepo.saveLog(log)
-    }
+    await persistExecutionLog(log)
 
     if (log.status === 'failed') {
       logger.warn('Task execution failed', { taskId: task.id, error: log.error })

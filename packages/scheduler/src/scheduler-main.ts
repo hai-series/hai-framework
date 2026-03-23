@@ -288,15 +288,16 @@ export const scheduler: SchedulerFunctions = {
     if (!currentConfig)
       return notInitialized.result()
 
-    if (!hasTask(taskId)) {
+    const existingTask = getTask(taskId)
+    if (!existingTask) {
       return err({
         code: SchedulerErrorCode.TASK_NOT_FOUND,
         message: schedulerM('scheduler_taskNotFound', { params: { taskId } }),
       })
     }
 
-    // 从数据库中删除持久化的任务定义。删除失败时不移除内存任务，保证一致性。
-    if (taskRepo) {
+    // 仅 API 任务存在持久化定义。删除失败时不移除内存任务，保证一致性。
+    if (taskRepo && existingTask.type === 'api') {
       const deleteResult = await taskRepo.deleteTask(taskId)
       if (!deleteResult.success)
         return deleteResult

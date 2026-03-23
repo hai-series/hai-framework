@@ -481,7 +481,7 @@ describe('scheduler', () => {
 
   describe('任务持久化', () => {
     it('API 任务持久化失败时应返回错误且不写入内存', async () => {
-      vi.spyOn(reldb, 'isInitialized', 'get').mockReturnValue(true)
+      await reldb.init({ type: 'sqlite', database: ':memory:' })
       await scheduler.init({ enableDb: true })
 
       vi.spyOn(SchedulerTaskRepository.prototype, 'saveTask').mockResolvedValue({
@@ -508,13 +508,9 @@ describe('scheduler', () => {
     })
 
     it('API 任务删除持久化失败时应返回错误且保留内存任务', async () => {
-      vi.spyOn(reldb, 'isInitialized', 'get').mockReturnValue(true)
+      await reldb.init({ type: 'sqlite', database: ':memory:' })
       await scheduler.init({ enableDb: true })
 
-      vi.spyOn(SchedulerTaskRepository.prototype, 'saveTask').mockResolvedValue({
-        success: true,
-        data: undefined,
-      })
       const registerResult = await scheduler.register({
         id: 'persist-fail-unregister',
         name: '持久化失败删除',
@@ -542,13 +538,9 @@ describe('scheduler', () => {
     })
 
     it('API 任务更新持久化失败时应返回错误且不修改内存任务', async () => {
-      vi.spyOn(reldb, 'isInitialized', 'get').mockReturnValue(true)
+      await reldb.init({ type: 'sqlite', database: ':memory:' })
       await scheduler.init({ enableDb: true })
 
-      vi.spyOn(SchedulerTaskRepository.prototype, 'saveTask').mockResolvedValue({
-        success: true,
-        data: undefined,
-      })
       const registerResult = await scheduler.register({
         id: 'persist-fail-update',
         name: '原始任务',
@@ -578,6 +570,26 @@ describe('scheduler', () => {
       const task = scheduler.tasks.get('persist-fail-update')
       expect(task?.name).toBe('原始任务')
       expect(task?.cron).toBe('0 * * * *')
+    })
+
+    it('启用 DB 时注销 JS 任务不应依赖持久化仓库', async () => {
+      await reldb.init({ type: 'sqlite', database: ':memory:' })
+      await scheduler.init({ enableDb: true })
+
+      await scheduler.register({
+        id: 'js-unregister-no-db-delete',
+        name: 'JS 注销任务',
+        cron: '* * * * *',
+        type: 'js',
+        handler: () => 'done',
+      })
+
+      const deleteTaskSpy = vi.spyOn(SchedulerTaskRepository.prototype, 'deleteTask')
+      const unregisterResult = await scheduler.unregister('js-unregister-no-db-delete')
+
+      expect(unregisterResult.success).toBe(true)
+      expect(deleteTaskSpy).not.toHaveBeenCalled()
+      expect(scheduler.tasks.has('js-unregister-no-db-delete')).toBe(false)
     })
 
     it('api 任务应持久化到数据库，重新初始化后自动加载', async () => {
