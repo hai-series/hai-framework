@@ -18,10 +18,10 @@ describe('core.init (browser)', () => {
 
   it('init 带 logging 应该配置日志级别', () => {
     core.init({ logging: { level: 'debug' } })
-    expect(core.getLogLevel()).toBe('debug')
+    expect(core.logger.getLevel()).toBe('debug')
 
     // 恢复
-    core.setLogLevel('info')
+    core.logger.setLevel('info')
   })
 
   it('init 带 watchConfig 应该输出警告但不崩溃', () => {

@@ -65,7 +65,7 @@ function initCore(options: CoreOptions = {}): void {
 
   // 配置日志
   if (options.logging) {
-    core.configureLogger(options.logging)
+    core.logger.configure(options.logging)
   }
 
   if (options.watchConfig) {

@@ -53,7 +53,7 @@ core.init({ configDir: './config', logging: { level: 'info' } })
 
 // 日志
 core.logger.info('message', { key: 'value' })
-const logger = core.createLogger({ name: 'my-module' })
+const logger = core.logger.create({ name: 'my-module' })
 
 // ID 生成
 const id = core.id.generate()     // nanoid

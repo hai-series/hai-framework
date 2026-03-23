@@ -25,62 +25,15 @@ describe('core.i18n (node)', () => {
     expect(core.i18n.getGlobalLocale()).toBe('zh-CN')
   })
 
-  it('resolveLocale/isLocaleSupported 应该处理回退', () => {
-    expect(core.i18n.isLocaleSupported('zh-CN')).toBe(true)
-    expect(core.i18n.isLocaleSupported('en-US')).toBe(true)
-    expect(core.i18n.isLocaleSupported('fr-FR')).toBe(false)
-    expect(core.i18n.resolveLocale('fr-FR')).toBe('zh-CN')
-    expect(core.i18n.resolveLocale('en-US')).toBe('en-US')
-  })
-
-  it('resolveLocale 对 undefined 应返回默认语言', () => {
-    expect(core.i18n.resolveLocale(undefined)).toBe('zh-CN')
-  })
-
-  it('detectBrowserLocale 在无 navigator 时应返回 undefined', () => {
-    const originalNavigator = (globalThis as Record<string, unknown>).navigator
-
-    Object.defineProperty(globalThis, 'navigator', {
-      value: undefined,
-      configurable: true,
+  it('createMessageGetter 应该处理 locale 回退与占位符保留', () => {
+    const getMessage = core.i18n.createMessageGetter({
+      'zh-CN': { greet: '你好 {name}，欢迎 {place}' },
+      'en-US': { greet: 'Hello {name}, welcome to {place}' },
     })
-    expect(core.i18n.detectBrowserLocale()).toBeUndefined()
 
-    Object.defineProperty(globalThis, 'navigator', {
-      value: originalNavigator,
-      configurable: true,
-    })
-  })
-
-  it('detectBrowserLocale 应该支持语言代码部分匹配', () => {
-    const originalNavigator = (globalThis as Record<string, unknown>).navigator
-
-    // 'zh' 应匹配 'zh-CN'
-    Object.defineProperty(globalThis, 'navigator', {
-      value: { languages: ['zh'] },
-      configurable: true,
-    })
-    expect(core.i18n.detectBrowserLocale()).toBe('zh-CN')
-
-    // 不支持的语言应返回 undefined
-    Object.defineProperty(globalThis, 'navigator', {
-      value: { languages: ['fr-FR'] },
-      configurable: true,
-    })
-    expect(core.i18n.detectBrowserLocale()).toBeUndefined()
-
-    Object.defineProperty(globalThis, 'navigator', {
-      value: originalNavigator,
-      configurable: true,
-    })
-  })
-
-  it('interpolate 应该替换模板变量', () => {
-    expect(core.i18n.interpolate('Hello, {name}!', { name: 'World' })).toBe('Hello, World!')
-  })
-
-  it('interpolate 缺少参数时应保留占位符', () => {
-    expect(core.i18n.interpolate('{a} and {b}', { a: '1' })).toBe('1 and {b}')
+    // 全局 locale 不存在时应回退到默认语言
+    core.i18n.setGlobalLocale('fr-FR')
+    expect(getMessage('greet', { params: { name: 'World' } })).toBe('你好 World，欢迎 {place}')
   })
 
   it('createMessageGetter 应该读取全局 locale 并支持插值', () => {

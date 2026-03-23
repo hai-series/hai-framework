@@ -141,7 +141,7 @@ function initCore(options: CoreOptions = {}): void {
 
   // 1. Configure logging
   if (options.logging) {
-    core.configureLogger(options.logging)
+    core.logger.configure(options.logging)
   }
 
   logger.info('[core] Initializing...')
@@ -159,7 +159,7 @@ function initCore(options: CoreOptions = {}): void {
       const result = config.load(item.name, item.filePath, CoreConfigSchema)
       if (result.success) {
         if (!options.logging) {
-          core.configureLogger(result.data.logging || {})
+          core.logger.configure(result.data.logging || {})
         }
         logger.info(`[core] Config loaded: ${item.name} <- ${item.filePath}`)
       }

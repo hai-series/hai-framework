@@ -45,10 +45,10 @@ describe('core.init', () => {
 
   it('init 应该支持 logging 选项', () => {
     core.init({ logging: { level: 'debug' } })
-    expect(core.getLogLevel()).toBe('debug')
+    expect(core.logger.getLevel()).toBe('debug')
 
     // 恢复
-    core.setLogLevel('info')
+    core.logger.setLevel('info')
   })
 
   it('init 配置目录不存在应不崩溃', () => {
@@ -72,19 +72,19 @@ describe('core.init', () => {
     writeFileSync(join(tempDir, '_core.yml'), 'name: app\nlogging:\n  level: warn\n', 'utf-8')
     core.init({ configDir: tempDir })
     // core config 中的 logging.level 应被应用
-    expect(core.getLogLevel()).toBe('warn')
+    expect(core.logger.getLevel()).toBe('warn')
 
     // 恢复
-    core.setLogLevel('info')
+    core.logger.setLevel('info')
   })
 
   it('init 带 logging 选项时应覆盖 core 配置的 logging', () => {
     writeFileSync(join(tempDir, '_core.yml'), 'name: app\nlogging:\n  level: warn\n', 'utf-8')
     core.init({ configDir: tempDir, logging: { level: 'error' } })
     // 显式传入的 logging 应优先
-    expect(core.getLogLevel()).toBe('error')
+    expect(core.logger.getLevel()).toBe('error')
 
     // 恢复
-    core.setLogLevel('info')
+    core.logger.setLevel('info')
   })
 })

@@ -74,31 +74,61 @@ const dbConfig = core.config.get('db')
 | `unwatch`    | `(name?: string) => void`                                      | 停止配置文件监听               |
 | `isWatching` | `(name: string) => boolean`                                    | 检查是否正在监听某个配置       |
 
-配置文件格式（YAML，支持环境变量）：
+配置文件格式（YAML，支持环境变量插值）：
+
+- `${VAR}` — 读取 `process.env.VAR`；缺失则返回 `ConfigErrorCode.ENV_VAR_MISSING` 错误
+- `${VAR:default}` — 读取 `process.env.VAR`；缺失则使用默认值
+- **类型还原**：整个值恰好是单个变量表达式时，结果还原为原生类型（number / boolean 等）；混合文本始终为字符串
 
 ```yaml
 # config/_core.yml
 app:
-  name: ${HAI_APP_NAME:my-app}
-  env: ${HAI_ENV:development}
+  name: ${HAI_APP_NAME:my-app} # → string
+  env: ${HAI_ENV:development} # → string
 log:
-  level: ${HAI_LOG_LEVEL:info}
-  format: ${HAI_LOG_FORMAT:pretty} # pretty | json
-i18n:
-  defaultLocale: zh-CN
-  supportedLocales:
-    - zh-CN
-    - en-US
+  level: ${HAI_LOG_LEVEL:info} # → string
+  format: ${HAI_LOG_FORMAT:pretty} # → string，pretty | json
+feature:
+  debug: ${DEBUG:false} # → boolean false（类型还原）
+  maxRetries: ${MAX_RETRIES:3} # → number 3（类型还原）
+  url: http://${HOST}:${PORT} # → string（混合文本，不还原）
 ```
 
 ### 日志 — `core.logger`
 
-方法：`trace` / `debug` / `info` / `warn` / `error` / `fatal`
+`core.logger` 既是默认 Logger 实例，也是日志管理的统一入口。
+
+**日志记录**（实例方法）：`trace` / `debug` / `info` / `warn` / `error` / `fatal`
 
 ```typescript
 core.logger.info('User created', { userId: '123' })
 core.logger.error('Failed to connect', { error })
 core.logger.debug('Processing item', { id, step: 'validation' })
+```
+
+**管理方法**：
+
+| 方法        | 签名                                   | 说明                     |
+| ----------- | -------------------------------------- | ------------------------ |
+| `create`    | `(options?: LoggerOptions) => Logger`  | 创建新 Logger 实例       |
+| `child`     | `(context: Record<string, unknown>) => Logger` | 创建携带固定上下文的子 Logger |
+| `configure` | `(config: Partial<LoggingConfig>) => void` | 配置全局日志选项（级别、格式等） |
+| `setLevel`  | `(level: LogLevel) => void`            | 设置全局日志级别         |
+| `getLevel`  | `() => LogLevel`                       | 获取当前全局日志级别     |
+
+```typescript
+// 创建模块级 logger
+const logger = core.logger.create({ name: 'my-module' })
+logger.info('Module initialized')
+
+// 创建携带固定上下文的子 logger（自动合并到每条日志）
+const reqLogger = core.logger.child({ requestId: 'req-001' })
+reqLogger.info('Request started') // 日志中自动包含 requestId
+
+// 配置输出格式和级别
+core.logger.configure({ level: 'warn', format: 'json' }) // Node.js 支持
+core.logger.setLevel('debug')
+const level = core.logger.getLevel() // 'debug'
 ```
 
 **日志级别规范**：
@@ -111,13 +141,6 @@ core.logger.debug('Processing item', { id, step: 'validation' })
 | `warn`  | 异常但可恢复（校验失败、重试）     |
 | `error` | 操作失败（需人工排查）             |
 | `fatal` | 致命错误（服务无法继续）           |
-
-创建模块级 logger：
-
-```typescript
-const logger = core.createLogger({ name: 'my-module' })
-logger.info('Module initialized')
-```
 
 ### 国际化 — `core.i18n`
 

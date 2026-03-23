@@ -21,7 +21,7 @@
   const coreFeatures = $derived([
     { name: m.modules_core_feat_config_name(), desc: m.modules_core_feat_config_desc(), api: 'core.config.get(key)' },
     { name: m.modules_core_feat_log_name(), desc: m.modules_core_feat_log_desc(), api: 'core.logger.info(msg, meta)' },
-    { name: m.modules_core_feat_i18n_name(), desc: m.modules_core_feat_i18n_desc(), api: 'core.i18n.setLocale(locale)' },
+    { name: m.modules_core_feat_i18n_name(), desc: m.modules_core_feat_i18n_desc(), api: 'core.i18n.setGlobalLocale(locale)' },
     { name: m.modules_core_feat_lifecycle_name(), desc: m.modules_core_feat_lifecycle_desc(), api: 'core.init(config)' },
   ])
 
@@ -174,7 +174,7 @@ const dbConfig = core.config.get('db')
 core.logger.info('Application started', { port: 3000 })
 
 // 切换语言
-core.i18n.setLocale('en-US')
+core.i18n.setGlobalLocale('en-US')
 
 // 关闭时清理资源
 await core.close()`}</code></pre>

@@ -190,6 +190,29 @@ export interface Logger {
 }
 
 /**
+ * Core 公共 Logger — Logger 实例 + 管理方法。
+ *
+ * @example
+ * ```ts
+ * core.logger.info('ready')
+ * core.logger.configure({ level: 'debug' })
+ * core.logger.setLevel('warn')
+ * const level = core.logger.getLevel()
+ * const db = core.logger.create({ name: 'db' })
+ * ```
+ */
+export interface CoreLogger extends Logger {
+  /** 创建新的 Logger 实例 */
+  create: (options?: LoggerOptions) => Logger
+  /** 配置全局 Logger 选项（级别、格式、上下文等） */
+  configure: (config: Partial<LoggingConfig>) => void
+  /** 设置全局日志级别 */
+  setLevel: (level: LogLevel) => void
+  /** 获取当前全局日志级别 */
+  getLevel: () => LogLevel
+}
+
+/**
  * Logger 函数组合（平台实现依赖）。
  *
  * 由各平台（Node.js / Browser）提供具体实现，通过 `createCore()` 注入。
