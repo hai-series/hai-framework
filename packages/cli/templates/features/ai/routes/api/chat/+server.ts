@@ -12,11 +12,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
     return kit.response.badRequest('message is required')
   }
 
-  const result = await ai.chat({
-    messages: [
-      { role: 'system', content: 'You are a helpful assistant.' },
-      { role: 'user', content: message },
-    ],
+  const result = await ai.llm.ask(message, {
+    systemPrompt: 'You are a helpful assistant.',
   })
 
   if (!result.success) {
@@ -24,6 +21,6 @@ export const POST: RequestHandler = async ({ request, locals }) => {
   }
 
   return kit.response.ok({
-    reply: result.data.content,
+    reply: result.data,
   }, locals.requestId)
 }

@@ -6,7 +6,7 @@
  */
 
 import type { PaginatedResult, PaginationOptions, PaginationOptionsInput, Result } from '@h-ai/core'
-import type { ReldbConfig, ReldbConfigInput, ReldbErrorCodeType } from './reldb-config.js'
+import type { DbType, ReldbConfig, ReldbConfigInput, ReldbErrorCodeType } from './reldb-config.js'
 import type { JsonSqlExpr, ReldbJsonOps } from './reldb-json.js'
 
 export type { JsonSqlExpr, ReldbJsonOps }
@@ -453,6 +453,8 @@ export interface CrudConfig<TItem> {
   updateColumns?: string[]
   /** 行映射函数（可选） */
   mapRow?: (row: QueryRow) => TItem
+  /** 数据库类型 */
+  dbType: DbType
 }
 
 /** CRUD 字段定义 */
@@ -493,7 +495,9 @@ export interface BaseReldbCrudRepositoryConfig<TItem> {
 export interface ReldbCrudRepository<TItem> {
   create: (data: Record<string, unknown>, tx?: DmlWithTxOperations) => Promise<Result<ExecuteResult, ReldbError>>
   createMany: (items: Array<Record<string, unknown>>, tx?: DmlWithTxOperations) => Promise<Result<void, ReldbError>>
+  createOrUpdate: (data: Record<string, unknown>, tx?: DmlWithTxOperations) => Promise<Result<ExecuteResult, ReldbError>>
   findById: (id: unknown, tx?: DmlWithTxOperations) => Promise<Result<TItem | null, ReldbError>>
+  getById: (id: unknown, tx?: DmlWithTxOperations) => Promise<Result<TItem, ReldbError>>
   findAll: (options?: CrudQueryOptions, tx?: DmlWithTxOperations) => Promise<Result<TItem[], ReldbError>>
   findPage: (options: CrudPageOptions, tx?: DmlWithTxOperations) => Promise<Result<PaginatedResult<TItem>, ReldbError>>
   updateById: (id: unknown, data: Record<string, unknown>, tx?: DmlWithTxOperations) => Promise<Result<ExecuteResult, ReldbError>>

@@ -86,13 +86,13 @@ export type WhereClause<T> = {
 export interface StoreFilter<T> {
   /** 字段匹配条件（等值或操作符） */
   where?: WhereClause<T>
-  /** 按 object_id 索引列过滤（需要 AIStoreOptions.hasObjectId 启用） */
+  /** 按 object_id 索引列过滤（需要 AIRelStoreOptions.hasObjectId 启用） */
   objectId?: string
-  /** 按 session_id 索引列过滤（需要 AIStoreOptions.hasSessionId 启用） */
+  /** 按 session_id 索引列过滤（需要 AIRelStoreOptions.hasSessionId 启用） */
   sessionId?: string
-  /** 按 status 索引列过滤（需要 AIStoreOptions.hasStatus 启用，支持单值或多值 IN 匹配） */
+  /** 按 status 索引列过滤（需要 AIRelStoreOptions.hasStatus 启用，支持单值或多值 IN 匹配） */
   status?: string | string[]
-  /** 按 ref_id 索引列过滤（需要 AIStoreOptions.hasRefId 启用） */
+  /** 按 ref_id 索引列过滤（需要 AIRelStoreOptions.hasRefId 启用） */
   refId?: string
   /** 排序 */
   orderBy?: { field: keyof T, direction: 'asc' | 'desc' }
@@ -112,16 +112,34 @@ export interface StorePage<T> {
   total: number
 }
 
+// ─── 关系存储配置 ───
+
+/**
+ * AIRelStore 配置选项
+ *
+ * 控制存储实例需要创建哪些索引列（object_id / session_id / status / ref_id）。
+ */
+export interface AIRelStoreOptions {
+  /** 是否创建 object_id 索引列 */
+  hasObjectId?: boolean
+  /** 是否创建 session_id 索引列 */
+  hasSessionId?: boolean
+  /** 是否创建 status 索引列 */
+  hasStatus?: boolean
+  /** 是否创建 ref_id 索引列 */
+  hasRefId?: boolean
+}
+
 // ─── 存储适配器抽象 ───
 
 /**
- * AI 通用存储适配器
+ * AI 关系存储适配器
  *
- * 提供统一的 KV 式 CRUD + 查询能力，基于 reldb 实现持久化。
+ * 提供统一的 KV 式 CRUD + 查询能力，由 AIStoreProvider 创建具体实现。
  *
  * @typeParam T - 记录类型
  */
-export interface AIStore<T> {
+export interface AIRelStore<T> {
   /** 保存一条记录（upsert 语义） */
   save: (id: string, data: T, scope?: StoreScope) => Promise<void>
   /** 批量保存 */
@@ -147,13 +165,13 @@ export interface AIStore<T> {
 /**
  * AI 向量存储适配器
  *
- * 专用于需要向量检索的场景（如 Memory），基于 vecdb 实现。
+ * 专用于需要向量检索的场景（如 Memory），由 AIStoreProvider 创建具体实现。
  */
 export interface AIVectorStore {
   /** 存储向量 */
   upsert: (id: string, vector: number[], metadata?: Record<string, unknown>) => Promise<void>
   /** 向量相似度检索 */
-  search: (vector: number[], options?: { topK?: number, filter?: Record<string, unknown> }) => Promise<Array<{ id: string, score: number, metadata?: Record<string, unknown> }>>
+  search: (vector: number[], options?: { topK?: number, minScore?: number, filter?: Record<string, unknown> }) => Promise<Array<{ id: string, score: number, content?: string, metadata?: Record<string, unknown> }>>
   /** 删除向量 */
   remove: (id: string) => Promise<void>
   /** 清空 */
@@ -200,4 +218,108 @@ export interface SessionInfo {
   updatedAt: number
   /** 附加元数据 */
   metadata?: Record<string, unknown>
+}
+
+// ─── Knowledge 存储抽象 ───
+
+/**
+ * Knowledge 专用存储接口
+ *
+ * 封装知识库的实体索引、文档元数据和向量操作。
+ * 默认实现使用 reldb 归一化表 + vecdb 向量检索；
+ * SaaS 实现可对接远端知识库 API。
+ */
+export interface KnowledgeStore {
+  /** 初始化存储（建表 / 建集合 / 建索引，幂等） */
+  initialize: (collection: string, dimension: number) => Promise<void>
+
+  // ─── 实体 CRUD ───
+
+  /** 插入或更新实体 */
+  upsertEntity: (entity: { id: string, name: string, type: string, aliases?: string[], description?: string }) => Promise<void>
+  /** 按名称模糊搜索实体（匹配 name 和 aliases） */
+  findEntitiesByName: (keyword: string) => Promise<Array<{ id: string, name: string, type: string, aliases: string[] }>>
+  /** 列出实体（支持类型过滤和关键词搜索） */
+  listEntities: (options?: { type?: string, keyword?: string, limit?: number }) => Promise<Array<{ id: string, name: string, type: string, aliases: string[], description: string | null, createdAt: string | null, updatedAt: string | null }>>
+
+  // ─── 文档-实体关联 ───
+
+  /** 插入文档-实体关联 */
+  insertEntityDocument: (relation: { entityId: string, documentId: string, chunkId?: string, collection: string, relevance?: number, context?: string }) => Promise<void>
+  /** 按实体 ID 列表查询关联文档 */
+  findDocumentsByEntityIds: (entityIds: string[], collection?: string) => Promise<Array<{ entityId: string, documentId: string, chunkId: string, collection: string, relevance: number, context: string | null }>>
+  /** 按实体名称查询实体及其关联文档 */
+  findByEntityName: (entityName: string, options?: { collection?: string, type?: string }) => Promise<Array<{ entity: { id: string, name: string, type: string, aliases: string[], description: string | null }, documents: Array<{ documentId: string, chunkId: string, collection: string, relevance: number, context: string | null }> }>>
+  /** 删除文档相关的实体关联 */
+  removeDocumentEntityRelations: (documentId: string, collection: string) => Promise<void>
+
+  // ─── 文档元数据 ───
+
+  /** 保存文档元数据 */
+  upsertDocument: (doc: { documentId: string, collection: string, title?: string, url?: string, chunkCount: number, createdAt: number }) => Promise<void>
+  /** 按 documentId + collection 获取单个文档元数据 */
+  getDocument: (documentId: string, collection: string) => Promise<{ documentId: string, collection: string, title: string | null, url: string | null, chunkCount: number, createdAt: number } | undefined>
+  /** 列出文档元数据 */
+  listDocuments: (collection: string, options?: { offset?: number, limit?: number }) => Promise<Array<{ documentId: string, collection: string, title: string | null, url: string | null, chunkCount: number, createdAt: number }>>
+  /** 查询每个文档的实体关联数 */
+  listDocumentEntityCounts: (documentIds: string[], collection: string) => Promise<Map<string, number>>
+  /** 删除文档元数据 */
+  removeDocument: (documentId: string, collection: string) => Promise<void>
+
+  // ─── 向量操作 ───
+
+  /** 批量写入向量 */
+  upsertVectors: (collection: string, vectors: Array<{ id: string, vector: number[], content?: string, metadata?: Record<string, unknown> }>) => Promise<void>
+  /** 向量相似度检索 */
+  searchVectors: (collection: string, vector: number[], options?: { topK?: number, minScore?: number, filter?: Record<string, unknown> }) => Promise<Array<{ id: string, score: number, content?: string, metadata?: Record<string, unknown> }>>
+  /** 批量删除向量 */
+  removeVectors: (collection: string, ids: string[]) => Promise<void>
+  /** 确保向量集合存在 */
+  ensureCollection: (collection: string, dimension: number) => Promise<void>
+}
+
+// ─── 存储 Provider ───
+
+/**
+ * AI 存储 Provider 接口
+ *
+ * 负责创建 AIRelStore / AIVectorStore 实例，并管理存储层生命周期。
+ * 默认实现基于 reldb + vecdb；也可对接 SaaS API 或其他后端。
+ *
+ * @example
+ * ```ts
+ * // 使用默认 reldb+vecdb provider
+ * ai.init({ store: { type: 'db' } })
+ *
+ * // 使用自定义 provider
+ * ai.init({ store: { type: 'custom', provider: myProvider } })
+ * ```
+ */
+export interface AIStoreProvider {
+  /** Provider 名称（如 'db'、'api'） */
+  readonly name: string
+
+  /** 创建关系数据存储实例 */
+  createRelStore: <T>(name: string, options?: AIRelStoreOptions) => AIRelStore<T>
+
+  /** 创建向量数据存储实例 */
+  createVectorStore: (name: string) => AIVectorStore
+
+  /**
+   * 创建 knowledge 专用存储（可选）
+   *
+   * 如果 Provider 不提供此方法，knowledge 子系统将不可用。
+   * 默认 db Provider 提供基于 reldb 归一化表 + vecdb 的高效实现。
+   */
+  createKnowledgeStore?: () => KnowledgeStore
+
+  /**
+   * 初始化所有已创建的存储（建表、建连接等）
+   *
+   * 由 ai.init() 在创建完所有 store 实例后统一调用。
+   */
+  initialize: () => Promise<void>
+
+  /** 关闭所有存储（释放连接等），由 ai.close() 调用 */
+  close?: () => Promise<void>
 }

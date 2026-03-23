@@ -63,6 +63,8 @@ let initialized = false
 // 初始化函数
 // =============================================================================
 
+export interface MemoryApi extends MemoryOperations {}
+
 /**
  * 初始化应用
  *

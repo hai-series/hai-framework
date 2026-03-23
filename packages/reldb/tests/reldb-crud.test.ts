@@ -6,6 +6,7 @@
 
 import { describe, expect, it } from 'vitest'
 import { reldb } from '../src/index.js'
+import { ReldbErrorCode } from '../src/reldb-config.js'
 import { defineDbSuite, mysqlDockerOpts, mysqlEnv, postgresDockerOpts, postgresEnv, sqliteMemoryEnv } from './helpers/reldb-test-suite.js'
 
 interface UserRow {
@@ -22,6 +23,16 @@ describe('reldb.crud', () => {
       select: ['id', 'name', 'email'],
       createColumns: ['name', 'email'],
       updateColumns: ['name', 'email'],
+      dbType: label,
+    })
+
+    const userCrudWithDbType = () => reldb.crud.table<UserRow>({
+      table: 'users',
+      idColumn: 'id',
+      select: ['id', 'name', 'email'],
+      createColumns: ['id', 'name', 'email'],
+      updateColumns: ['name', 'email'],
+      dbType: label,
     })
 
     const ensureTable = async () => {
@@ -110,6 +121,7 @@ describe('reldb.crud', () => {
           select: ['id', 'name', 'email'],
           createColumns: ['name', 'email'],
           updateColumns: ['name', 'email'],
+          dbType: label,
         })
 
         const insert = await txCrud.create({ name: '用户A', email: 'a@test.com' })
@@ -147,6 +159,7 @@ describe('reldb.crud', () => {
         select: ['id', 'name', 'email'],
         createColumns: ['name', 'email'],
         updateColumns: ['name', 'email'],
+        dbType: label,
       })
 
       const insert = await txCrud.create({ name: '用户B', email: 'b@test.com' })
@@ -287,6 +300,143 @@ describe('reldb.crud', () => {
       expect(result.success).toBe(true)
       if (result.success) {
         expect(result.data).toBe(1)
+      }
+    })
+
+    // ─── createOrUpdate（kernel 层） ───
+
+    it(`${label}: createOrUpdate should insert when no conflict`, async () => {
+      await ensureTable()
+      const crud = userCrudWithDbType()
+
+      const result = await crud.createOrUpdate({ id: 100, name: '用户UP', email: 'up@test.com' })
+      expect(result.success).toBe(true)
+
+      const found = await crud.findById(100)
+      expect(found.success).toBe(true)
+      if (found.success) {
+        expect(found.data?.name).toBe('用户UP')
+        expect(found.data?.email).toBe('up@test.com')
+      }
+    })
+
+    it(`${label}: createOrUpdate should update on primary key conflict`, async () => {
+      await ensureTable()
+      const crud = userCrudWithDbType()
+
+      await crud.createOrUpdate({ id: 200, name: '原始', email: 'orig@test.com' })
+
+      const upsertResult = await crud.createOrUpdate({ id: 200, name: '更新', email: 'updated@test.com' })
+      expect(upsertResult.success).toBe(true)
+
+      const found = await crud.findById(200)
+      expect(found.success).toBe(true)
+      if (found.success) {
+        expect(found.data?.name).toBe('更新')
+        expect(found.data?.email).toBe('updated@test.com')
+      }
+
+      // 只有一条记录
+      const count = await crud.count()
+      expect(count.success).toBe(true)
+      if (count.success) {
+        expect(count.data).toBe(1)
+      }
+    })
+
+    it(`${label}: createOrUpdate should respect updateColumns whitelist`, async () => {
+      await ensureTable()
+      // updateColumns 仅含 name，不含 email
+      const crud = reldb.crud.table<UserRow>({
+        table: 'users',
+        idColumn: 'id',
+        select: ['id', 'name', 'email'],
+        createColumns: ['id', 'name', 'email'],
+        updateColumns: ['name'],
+        dbType: label,
+      })
+
+      await crud.createOrUpdate({ id: 300, name: '原名', email: 'orig@test.com' })
+
+      // 第二次 upsert：email 应保持不变（不在 updateColumns 中）
+      await crud.createOrUpdate({ id: 300, name: '新名', email: 'new@test.com' })
+
+      const found = await crud.findById(300)
+      expect(found.success).toBe(true)
+      if (found.success) {
+        expect(found.data?.name).toBe('新名')
+        expect(found.data?.email).toBe('orig@test.com')
+      }
+    })
+
+    it(`${label}: createOrUpdate with empty data should return error`, async () => {
+      await ensureTable()
+      const crud = userCrudWithDbType()
+
+      const result = await crud.createOrUpdate({})
+      expect(result.success).toBe(false)
+      if (!result.success) {
+        expect(result.error.code).toBe(ReldbErrorCode.CONFIG_ERROR)
+      }
+    })
+
+    it(`${label}: createOrUpdate should work inside transaction`, async () => {
+      await ensureTable()
+
+      const txResult = await reldb.tx.begin()
+      expect(txResult.success).toBe(true)
+      if (!txResult.success) {
+        return
+      }
+
+      const tx = txResult.data
+      const txCrud = tx.crud.table<UserRow>({
+        table: 'users',
+        idColumn: 'id',
+        select: ['id', 'name', 'email'],
+        createColumns: ['id', 'name', 'email'],
+        updateColumns: ['name', 'email'],
+        dbType: label,
+      })
+
+      const upsert = await txCrud.createOrUpdate({ id: 400, name: '事务UP', email: 'txup@test.com' })
+      expect(upsert.success).toBe(true)
+
+      const rollback = await tx.rollback()
+      expect(rollback.success).toBe(true)
+
+      // 回滚后应无记录
+      const count = await reldb.sql.get<{ cnt: number }>('SELECT COUNT(*) as cnt FROM users')
+      expect(count.success).toBe(true)
+      if (count.success) {
+        expect(Number(count.data?.cnt)).toBe(0)
+      }
+    })
+
+    // ─── getById（kernel 层） ───
+
+    it(`${label}: getById should return record when exists`, async () => {
+      await ensureTable()
+      const crud = userCrud()
+
+      await crud.create({ name: '用户G', email: 'g@test.com' })
+
+      const result = await crud.getById(1)
+      expect(result.success).toBe(true)
+      if (result.success) {
+        expect(result.data.name).toBe('用户G')
+        expect(result.data.email).toBe('g@test.com')
+      }
+    })
+
+    it(`${label}: getById non-existent should return RECORD_NOT_FOUND`, async () => {
+      await ensureTable()
+      const crud = userCrud()
+
+      const result = await crud.getById(999)
+      expect(result.success).toBe(false)
+      if (!result.success) {
+        expect(result.error.code).toBe(ReldbErrorCode.RECORD_NOT_FOUND)
       }
     })
   }
