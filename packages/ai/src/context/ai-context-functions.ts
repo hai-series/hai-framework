@@ -29,6 +29,7 @@ import { core, err, ok } from '@h-ai/core'
 
 import { AIErrorCode } from '../ai-config.js'
 import { aiM } from '../ai-i18n.js'
+import { createStreamProcessor } from '../llm/ai-llm-stream.js'
 
 const logger = core.logger.child({ module: 'ai', scope: 'context' })
 
@@ -306,47 +307,91 @@ export function createContextOperations(
             }
           }
 
-          // 普通 LLM 调用
-          const chatResult = await deps.llm.chat({
-            model: chatOpts?.model ?? options.model,
-            messages,
-            temperature: chatOpts?.temperature ?? options.temperature,
-            objectId: scope?.objectId,
-            sessionId: scope?.sessionId,
-            tools: options.tools?.getDefinitions(),
-            enablePersist: chatOpts?.enablePersist ?? false,
-          })
+          // 普通 LLM 调用（含工具调用循环）
+          const toolDefs = options.tools?.getDefinitions()
+          const maxToolRounds = options.maxToolRounds ?? 10
+          let lastModel = ''
+          let lastUsage: { prompt_tokens: number, completion_tokens: number, total_tokens: number } | undefined
 
-          if (!chatResult.success)
-            return chatResult
+          for (let round = 0; round <= maxToolRounds; round++) {
+            const chatResult = await deps.llm.chat({
+              model: chatOpts?.model ?? options.model,
+              messages,
+              temperature: chatOpts?.temperature ?? options.temperature,
+              objectId: scope?.objectId,
+              sessionId: scope?.sessionId,
+              tools: toolDefs,
+              tool_choice: toolDefs ? 'auto' : undefined,
+              enablePersist: chatOpts?.enablePersist ?? false,
+            })
 
-          const choice = chatResult.data.choices[0]
-          const reply = choice?.message?.content ?? ''
+            if (!chatResult.success)
+              return chatResult
 
-          // 追加助手回复
-          await manager.addMessage({ role: 'assistant', content: reply })
+            const choice = chatResult.data.choices[0]
+            lastModel = chatResult.data.model
+            if (chatResult.data.usage) {
+              lastUsage = {
+                prompt_tokens: chatResult.data.usage.prompt_tokens,
+                completion_tokens: chatResult.data.usage.completion_tokens,
+                total_tokens: chatResult.data.usage.total_tokens,
+              }
+            }
 
-          // 可选：自动提取记忆
-          if (options.memory?.enableExtract && deps.memory) {
-            const recentMessages: ChatMessage[] = [
-              { role: 'user', content: message },
-              { role: 'assistant', content: reply },
-            ]
-            deps.memory.extract(recentMessages, { objectId: scope?.objectId })
-              .catch(e => logger.warn('Memory extract failed', { error: e }))
+            if (!choice)
+              break
+
+            const assistantMessage = choice.message
+
+            // 有工具调用且注册表可用：执行工具并将结果回传 LLM
+            if (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0 && options.tools) {
+              messages.push(assistantMessage)
+
+              for (const toolCall of assistantMessage.tool_calls) {
+                if (toolCall.type !== 'function')
+                  continue
+                const toolResult = await options.tools.execute(toolCall)
+                const rawContent = toolResult.success
+                  ? toolResult.data.content
+                  : `Tool error: ${toolResult.error.message}`
+                const toolContent = typeof rawContent === 'string'
+                  ? rawContent
+                  : (rawContent as Array<{ text?: string }>).map(p => p.text ?? '').join(' ')
+
+                messages.push({
+                  role: 'tool',
+                  tool_call_id: toolCall.id,
+                  content: toolContent,
+                })
+              }
+              continue
+            }
+
+            // 无工具调用：提取文本回复
+            const reply = typeof assistantMessage.content === 'string' ? assistantMessage.content : ''
+
+            // 追加助手回复
+            await manager.addMessage({ role: 'assistant', content: reply })
+
+            // 可选：自动提取记忆
+            if (options.memory?.enableExtract && deps.memory) {
+              const recentMessages: ChatMessage[] = [
+                { role: 'user', content: message },
+                { role: 'assistant', content: reply },
+              ]
+              deps.memory.extract(recentMessages, { objectId: scope?.objectId })
+                .catch(e => logger.warn('Memory extract failed', { error: e }))
+            }
+
+            return ok({ reply, model: lastModel, usage: lastUsage })
           }
 
-          return ok({
-            reply,
-            model: chatResult.data.model,
-            usage: chatResult.data.usage
-              ? {
-                  prompt_tokens: chatResult.data.usage.prompt_tokens,
-                  completion_tokens: chatResult.data.usage.completion_tokens,
-                  total_tokens: chatResult.data.usage.total_tokens,
-                }
-              : undefined,
-          })
+          // 达到最大工具调用轮次，返回最后可用的回复
+          const lastAssistantMsg = messages.filter(m => m.role === 'assistant').pop()
+          const fallbackReply = lastAssistantMsg && 'content' in lastAssistantMsg && typeof lastAssistantMsg.content === 'string'
+            ? lastAssistantMsg.content
+            : ''
+          return ok({ reply: fallbackReply, model: lastModel, usage: lastUsage })
         }
         catch (error) {
           logger.error('Context chat failed', { error })
@@ -458,36 +503,82 @@ export function createContextOperations(
           return
         }
 
-        // 普通流式 LLM 调用
-        const stream = deps.llm.chatStream({
-          model: chatOpts?.model ?? options.model,
-          messages,
-          temperature: chatOpts?.temperature ?? options.temperature,
-          objectId: scope?.objectId,
-          sessionId: scope?.sessionId,
-          tools: options.tools?.getDefinitions(),
-          enablePersist: chatOpts?.enablePersist ?? false,
-        })
+        // 普通流式 LLM 调用（含工具调用循环）
+        const toolDefs = options.tools?.getDefinitions()
+        const maxToolRounds = options.maxToolRounds ?? 10
 
         let fullReply = ''
         let model = ''
         let usage: { prompt_tokens: number, completion_tokens: number, total_tokens: number } | undefined
 
-        for await (const chunk of stream) {
-          if (!model && chunk.model)
-            model = chunk.model
-          const delta = chunk.choices?.[0]?.delta?.content
-          if (delta) {
-            fullReply += delta
-            yield { type: 'delta', text: delta }
-          }
-          if (chunk.usage) {
-            usage = {
-              prompt_tokens: chunk.usage.prompt_tokens,
-              completion_tokens: chunk.usage.completion_tokens,
-              total_tokens: chunk.usage.total_tokens,
+        for (let round = 0; round <= maxToolRounds; round++) {
+          const processor = createStreamProcessor()
+
+          const stream = deps.llm.chatStream({
+            model: chatOpts?.model ?? options.model,
+            messages,
+            temperature: chatOpts?.temperature ?? options.temperature,
+            objectId: scope?.objectId,
+            sessionId: scope?.sessionId,
+            tools: toolDefs,
+            tool_choice: toolDefs ? 'auto' : undefined,
+            enablePersist: chatOpts?.enablePersist ?? false,
+          })
+
+          for await (const chunk of stream) {
+            processor.process(chunk)
+
+            if (!model && chunk.model)
+              model = chunk.model
+            const delta = chunk.choices?.[0]?.delta?.content
+            if (delta) {
+              fullReply += delta
+              yield { type: 'delta', text: delta }
+            }
+            if (chunk.usage) {
+              usage = {
+                prompt_tokens: chunk.usage.prompt_tokens,
+                completion_tokens: chunk.usage.completion_tokens,
+                total_tokens: chunk.usage.total_tokens,
+              }
             }
           }
+
+          const streamResult = processor.getResult()
+
+          // 有工具调用：执行工具并继续下一轮
+          if (streamResult.toolCalls.length > 0 && options.tools) {
+            messages.push(processor.toAssistantMessage())
+
+            for (const toolCall of streamResult.toolCalls) {
+              if (toolCall.type !== 'function')
+                continue
+              yield { type: 'tool_call', name: toolCall.function.name, arguments: toolCall.function.arguments }
+
+              const toolResult = await options.tools.execute(toolCall)
+              const rawContent = toolResult.success
+                ? toolResult.data.content
+                : `Tool error: ${toolResult.error.message}`
+              const toolContent = typeof rawContent === 'string'
+                ? rawContent
+                : (rawContent as Array<{ text?: string }>).map(p => p.text ?? '').join(' ')
+
+              yield { type: 'tool_result', name: toolCall.function.name, content: toolContent, success: toolResult.success }
+
+              messages.push({
+                role: 'tool',
+                tool_call_id: toolCall.id,
+                content: toolContent,
+              })
+            }
+
+            // 重置 fullReply，下一轮 LLM 会产出最终文本
+            fullReply = ''
+            continue
+          }
+
+          // 无工具调用：结束循环
+          break
         }
 
         // 追加助手回复
