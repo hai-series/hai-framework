@@ -40,6 +40,17 @@ export function createRetrievalOperations(
   sourceStore: AIRelStore<RetrievalSource>,
   rerankOps?: RerankOperations | null,
 ): RetrievalOperations {
+  // vectorStore 实例缓存（按 collection 复用，避免每次检索都创建新实例）
+  const vectorStoreCache = new Map<string, ReturnType<AIStoreProvider['createVectorStore']>>()
+  function getVectorStore(collection: string) {
+    let store = vectorStoreCache.get(collection)
+    if (!store) {
+      store = storeProvider.createVectorStore(collection)
+      vectorStoreCache.set(collection, store)
+    }
+    return store
+  }
+
   return {
     /**
      * 注册检索源
@@ -147,7 +158,7 @@ export function createRetrievalOperations(
           const topK = request.topK ?? source.topK ?? 5
           const minScore = request.minScore ?? source.minScore
 
-          const vectorStore = storeProvider.createVectorStore(source.collection)
+          const vectorStore = getVectorStore(source.collection)
           const searchResults = await vectorStore.search(queryVector, {
             topK,
             minScore,
