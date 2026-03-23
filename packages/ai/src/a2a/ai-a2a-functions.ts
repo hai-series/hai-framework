@@ -138,6 +138,9 @@ export function createA2AOperations(
   const { storeProvider } = deps
   const agentCardConfig = options.agentCard
 
+  // A2AClient 实例缓存（按 URL 复用，避免每次调用都创建新实例）
+  const clientCache = new Map<string, A2AClient>()
+
   // 创建持久化存储
   const taskStore = storeProvider.createRelStore<Task>('hai_ai_a2a_tasks', {
     hasObjectId: true,
@@ -214,7 +217,11 @@ export function createA2AOperations(
     async callRemoteAgent(remoteUrl: string, message: string, _options?: A2ACallOptions) {
       const startTime = Date.now()
       try {
-        const client = new A2AClient(remoteUrl)
+        let client = clientCache.get(remoteUrl)
+        if (!client) {
+          client = new A2AClient(remoteUrl)
+          clientCache.set(remoteUrl, client)
+        }
         const params: { message: Message } = {
           message: {
             kind: 'message',

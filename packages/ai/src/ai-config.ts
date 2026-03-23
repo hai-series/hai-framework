@@ -707,8 +707,6 @@ export const RetrievalSourceSchema = z.object({
   collection: z.string(),
   /** 信源显示名 */
   name: z.string().optional(),
-  /** 信源类型 */
-  sourceType: z.enum(['document', 'webpage', 'database', 'manual']).optional(),
   /** 信源 URL / 路径 */
   url: z.string().optional(),
   /** 最大返回条数（默认 5） */
@@ -734,7 +732,7 @@ export type RetrievalSourceConfig = z.infer<typeof RetrievalSourceSchema>
  *   retrieval: {
  *     sources: [
  *       { id: 'docs', collection: 'documentation', name: '产品文档', topK: 5, minScore: 0.7 },
- *       { id: 'faq',  collection: 'faq', name: '常见问题', sourceType: 'manual' },
+ *       { id: 'faq',  collection: 'faq', name: '常见问题' },
  *     ],
  *   },
  * })
