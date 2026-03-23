@@ -105,6 +105,14 @@ export interface ContextManagerOptions {
 
   /** 工具注册表（传入后 chat/chatStream 支持 function calling） */
   tools?: ToolRegistryOperations
+
+  /**
+   * 工具调用最大轮次（默认 10）
+   *
+   * 当 LLM 返回 tool_calls 时，自动执行工具并将结果回传 LLM，
+   * 重复此过程直到 LLM 给出文本回复或达到最大轮次。
+   */
+  maxToolRounds?: number
 }
 
 // ─── 单次 Chat 选项与结果 ───
@@ -142,6 +150,8 @@ export interface ContextChatResult {
  */
 export type ContextStreamEvent
   = | { type: 'delta', text: string }
+    | { type: 'tool_call', name: string, arguments: string }
+    | { type: 'tool_result', name: string, content: string, success: boolean }
     | { type: 'done', reply: string, model: string, usage?: { prompt_tokens: number, completion_tokens: number, total_tokens: number } }
 
 /**

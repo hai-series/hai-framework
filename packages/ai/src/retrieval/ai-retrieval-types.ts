@@ -53,8 +53,6 @@ export interface RetrievalSource {
   collection: string
   /** 信源显示名（用于 UI 展示） */
   name?: string
-  /** 信源类型 */
-  sourceType?: 'document' | 'webpage' | 'database' | 'manual'
   /** 信源 URL / 路径 */
   url?: string
   /** 最大返回条数（默认 5） */

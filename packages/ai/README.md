@@ -600,7 +600,7 @@ await ai.init({
   retrieval: {
     sources: [
       { id: 'docs', collection: 'documentation', name: '产品文档', topK: 5, minScore: 0.7 },
-      { id: 'faq', collection: 'faq', name: '常见问题', sourceType: 'manual' },
+      { id: 'faq', collection: 'faq', name: '常见问题' },
     ],
   },
 })
@@ -614,7 +614,6 @@ await ai.retrieval.addSource({
   id: 'docs',
   collection: 'documentation',
   name: '产品文档',
-  sourceType: 'document',
   topK: 5,
   minScore: 0.7,
 })
@@ -623,7 +622,6 @@ await ai.retrieval.addSource({
   id: 'faq',
   collection: 'faq',
   name: '常见问题',
-  sourceType: 'manual',
 })
 
 // 查看已注册的源（从 DB 读取）
