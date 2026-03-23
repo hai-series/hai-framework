@@ -170,6 +170,18 @@ export function buildTemplateContext(options: {
     featureMap[f] = true
   }
 
+  // 强制补全模块硬依赖，防止调用方未经过 resolveFeatureDependencies 时遗漏依赖
+  // iam 依赖 reldb（用户/角色/权限持久化）和 cache（会话/OTP 缓存），以及 crypto（密码哈希）
+  if (featureMap.iam) {
+    featureMap.db = true
+    featureMap.cache = true
+    featureMap.crypto = true
+  }
+  // audit / scheduler / payment 依赖 reldb
+  if (featureMap.audit || featureMap.scheduler || featureMap.payment) {
+    featureMap.db = true
+  }
+
   const isApi = options.appType === 'api'
   const isCapacitorApp = options.appType === 'android-app'
 
@@ -221,6 +233,11 @@ export async function generateFromTemplates(
   // ─── ③ 叠加 feature 路由 ───
   for (const featureId of Object.keys(context.features)) {
     if (!context.features[featureId]) {
+      continue
+    }
+
+    // 安全校验：featureId 只允许字母、数字和连字符，防止路径遍历
+    if (!/^[a-z0-9-]+$/.test(featureId)) {
       continue
     }
 

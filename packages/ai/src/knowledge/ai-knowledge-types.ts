@@ -29,7 +29,7 @@ export type EntityType = string
  * 知识实体
  *
  * 表示从文档中提取的命名实体（人名、项目名、概念等），
- * 存储在 reldb 中用于倒排索引查询。
+ * 存储在 KnowledgeStore 中用于倒排索引查询。
  *
  * @example
  * ```ts
@@ -66,9 +66,9 @@ export interface KnowledgeEntity {
 export interface EntityDocumentRelation {
   /** 实体 ID */
   entityId: string
-  /** 文档 ID（对应 vecdb 中的 documentId） */
+  /** 文档 ID（对应向量存储中的 documentId） */
   documentId: string
-  /** 分块 ID（对应 vecdb 中的向量记录 ID） */
+  /** 分块 ID（对应向量存储中的向量记录 ID） */
   chunkId?: string
   /** 集合名 */
   collection: string
@@ -386,7 +386,7 @@ export interface KnowledgeIngestBatchResult {
 /**
  * Knowledge 操作接口（通过 `ai.knowledge` 访问）
  *
- * 知识库管理与检索的统一入口，编排 datapipe + vecdb + reldb + embedding + LLM。
+ * 知识库管理与检索的统一入口，编排 datapipe + KnowledgeStore + embedding + LLM。
  *
  * @example
  * ```ts
@@ -411,7 +411,7 @@ export interface KnowledgeOperations {
   /**
    * 初始化知识库
    *
-   * 创建 vecdb 集合和 reldb 实体表。
+   * 创建向量集合和实体表。
    *
    * @param options - 初始化选项
    * @returns 成功返回 ok(undefined)
@@ -421,7 +421,7 @@ export interface KnowledgeOperations {
   /**
    * 导入文档
    *
-   * 执行流程：clean → chunk → embed → vecdb → 实体提取 → reldb
+   * 执行流程：clean → chunk → embed → 向量存储 → 实体提取 → 实体存储
    *
    * @param input - 文档导入输入
    * @returns 导入结果（分块数、实体列表等）

@@ -68,11 +68,11 @@ HAI_ENV=development
 HAI_DEBUG=false
 
 # Database (sqlite | postgresql | mysql)
-HAI_DB_TYPE=sqlite
-HAI_DB_DATABASE=./data/admin.db
+HAI_RELDB_TYPE=sqlite
+HAI_RELDB_DATABASE=./data/admin.db
 
 # Session (REQUIRED, min 32 chars)
-HAI_SESSION_SECRET=change-me-to-a-strong-random-string-min-32-chars
+HAI_IAM_SESSION_SECRET=change-me-to-a-strong-random-string-min-32-chars
 
 # Cache (memory | redis)
 HAI_CACHE_TYPE=memory
@@ -82,7 +82,7 @@ HAI_STORAGE_TYPE=local
 HAI_STORAGE_PATH=./data/uploads
 
 # AI (uncomment to enable)
-# HAI_OPENAI_API_KEY=
+# HAI_AI_LLM_API_KEY=
 ```
 
 完整列表见 `.env.example`。

@@ -255,15 +255,17 @@
     try {
       if (drawerMode === 'create' && crud.api.create) {
         const result = await crud.api.create(submitData)
+        const submitted = (result ?? {}) as Record<string, unknown>
         closeDrawer()
-        onaftersubmit?.(result, 'create')
+        onaftersubmit?.(submitted, 'create')
         await invalidateAll()
       }
       else if (drawerMode === 'edit' && crud.api.update && selectedItem) {
         const id = String(selectedItem[keyField])
         const result = await crud.api.update(id, submitData)
+        const submitted = (result ?? {}) as Record<string, unknown>
         closeDrawer()
-        onaftersubmit?.(result, 'edit')
+        onaftersubmit?.(submitted, 'edit')
         await invalidateAll()
       }
     }
