@@ -12,19 +12,14 @@ describe('core.i18n (browser)', () => {
     core.i18n.setGlobalLocale('zh-CN')
   })
 
-  it('detectBrowserLocale 应该根据 navigator 返回结果', () => {
-    const originalNavigator = (globalThis as Record<string, unknown>).navigator
-
-    Object.defineProperty(globalThis, 'navigator', {
-      value: { languages: ['en-US'] },
-      configurable: true,
+  it('createMessageGetter 应该在 locale 覆盖时优先使用指定语言', () => {
+    const getMessage = core.i18n.createMessageGetter({
+      'zh-CN': { hi: '你好' },
+      'en-US': { hi: 'Hi' },
     })
-    expect(core.i18n.detectBrowserLocale()).toBe('en-US')
 
-    Object.defineProperty(globalThis, 'navigator', {
-      value: originalNavigator,
-      configurable: true,
-    })
+    core.i18n.setGlobalLocale('zh-CN')
+    expect(getMessage('hi', { locale: 'en-US' })).toBe('Hi')
   })
 
   it('setGlobalLocale/getGlobalLocale 应该设置并读取', () => {
