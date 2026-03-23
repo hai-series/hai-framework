@@ -28,6 +28,9 @@ export default defineConfig(({ mode }) => {
     optimizeDeps: {
       exclude: ['bits-ui'],
     },
+    ssr: {
+      noExternal: [/@h-ai\//],
+    },
     build: {
       rollupOptions: {
         external: ['pdfjs-dist/legacy/build/pdf.mjs', 'mammoth'],

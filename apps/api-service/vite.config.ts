@@ -11,6 +11,9 @@ import { defineConfig } from 'vite'
 
 export default defineConfig({
   plugins: [sveltekit()],
+  ssr: {
+    noExternal: [/@h-ai\//],
+  },
   server: {
     fs: {
       allow: [

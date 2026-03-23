@@ -30,6 +30,9 @@ export default defineConfig(({ mode }) => {
     optimizeDeps: {
       exclude: ['bits-ui'],
     },
+    ssr: {
+      noExternal: [/@h-ai\//],
+    },
     server: {
       port: 5173,
       fs: {
