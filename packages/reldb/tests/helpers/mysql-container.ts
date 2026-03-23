@@ -33,7 +33,11 @@ export async function acquireMysqlContainer(): Promise<MysqlContainerLease> {
         MYSQL_DATABASE,
         MYSQL_ROOT_PASSWORD: MYSQL_PASSWORD,
       })
-      .withWaitStrategy(Wait.forLogMessage('ready for connections'))
+      .withWaitStrategy(Wait.forAll([
+        Wait.forLogMessage('ready for connections', 2),
+        Wait.forListeningPorts(),
+      ]))
+      .withStartupTimeout(120_000)
       .start()
   }
 

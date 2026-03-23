@@ -48,49 +48,6 @@ const initHandle: Handle = async ({ event, resolve }) => {
   return resolve(event)
 }
 
-{{#if features.iam}}
-// =============================================================================
-// 会话验证
-// =============================================================================
-
-/** 无需认证的公共路径 */
-const PUBLIC_PATHS = [
-  '/api/health',
-  '/api/public/',
-  '/api/auth/login',
-  '/api/auth/register',
-  '/api/auth/forgot-password',
-  '/api/auth/reset-password',
-  '/auth/',
-]
-
-function isPublicPath(pathname: string): boolean {
-  return PUBLIC_PATHS.some(p => pathname.startsWith(p)) || !pathname.startsWith('/api/')
-}
-
-const authHandle: Handle = async ({ event, resolve }) => {
-  // 从 cookie 获取 token
-  const token = event.cookies.get('session_token')
-
-  if (token) {
-    const sessionResult = await iam.session.verify(token)
-    if (sessionResult.success) {
-      event.locals.session = sessionResult.data
-    }
-  }
-
-  // 受保护的 API 路径需要认证
-  if (!isPublicPath(event.url.pathname) && !event.locals.session) {
-    return new Response(JSON.stringify({ success: false, error: { code: 'UNAUTHORIZED', message: 'Authentication required' } }), {
-      status: 401,
-      headers: { 'Content-Type': 'application/json' },
-    })
-  }
-
-  return resolve(event)
-}
-
-{{/if}}
 {{#if hasI18n}}
 // =============================================================================
 // Paraglide i18n Middleware
@@ -120,15 +77,25 @@ const i18nHandle: Handle = async ({ event, resolve }) => {
 
 {{/if}}
 // =============================================================================
-// hai Handle
+// hai Handle（会话验证 + 限流 + 日志）
 // =============================================================================
 
 const haiHandle = kit.createHandle({
-  middleware: [
-    kit.middleware.logging({ logBody: false }),
-    kit.middleware.rateLimit({ windowMs: 60000, maxRequests: 200 }),
-  ],
-  onError: (error: unknown) => {
+{{#if features.iam}}
+  auth: {
+    verifyToken: async (token) => {
+      const result = await iam.auth.verifyToken(token)
+      return result.success ? result.data : null
+    },
+    operations: iam.auth,
+    loginUrl: '/auth/login',
+    protectedPaths: ['/admin/*', '/api/*'],
+    publicPaths: ['/api/auth/*', '/api/public/*', '/api/health'],
+  },
+{{/if}}
+  rateLimit: { windowMs: 60000, maxRequests: 200 },
+  logging: { logBody: false },
+  onError: (error: unknown, _event) => {
     core.logger.error('Request error:', { error })
     return new Response(
       JSON.stringify({
@@ -147,13 +114,10 @@ const haiHandle = kit.createHandle({
 // 组合 Handle
 // =============================================================================
 
-export const handle = kit.sequenceHandles(
+export const handle = kit.sequence(
   initHandle,
 {{#if hasI18n}}
   i18nHandle,
-{{/if}}
-{{#if features.iam}}
-  authHandle,
 {{/if}}
   haiHandle,
 )

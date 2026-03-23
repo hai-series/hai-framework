@@ -32,7 +32,7 @@
     placeholder="搜索技能..."
   />
 -->
-<script lang="ts">
+<script lang='ts'>
   import { Combobox } from 'bits-ui'
   import { uiM } from '../../messages.js'
   import BareButton from '../primitives/BareButton.svelte'
@@ -82,10 +82,11 @@
     onchange,
   }: Props = $props()
 
-  // 为未提供 value 时设置合适的默认值（仅在初始化时执行一次）
-  const isMultiple = multiple
+  // 为未提供 value 时设置初始默认值（仅在初始化时执行一次）
+  // 统一以空字符串初始化，避免在初始化阶段捕获 multiple 的初始值。
+  // 多选模式会通过 multiVal 派生为 [] 传给 Combobox.Root。
   if (value === undefined) {
-    value = isMultiple ? [] : ''
+    value = ''
   }
 
   let searchValue = $state('')
@@ -95,15 +96,18 @@
   const filteredOptions = $derived(
     searchValue === ''
       ? options
-      : options.filter(opt =>
-          opt.label.toLowerCase().includes(searchValue.toLowerCase())
-          || opt.description?.toLowerCase().includes(searchValue.toLowerCase()),
-        ),
+      : options.filter((opt) => {
+        const keyword = searchValue.toLowerCase()
+        const inLabel = opt.label.toLowerCase().includes(keyword)
+        const inDescription = opt.description?.toLowerCase().includes(keyword) ?? false
+        return inLabel || inDescription
+      }),
   )
 
   /** 单选模式：输入框显示值（打开时显示搜索词，关闭时显示选中项标签） */
   const singleInputValue = $derived.by(() => {
-    if (open) return searchValue
+    if (open)
+      return searchValue
     return options.find(o => o.value === value)?.label ?? ''
   })
 
@@ -125,73 +129,89 @@
 
   function handleInput(e: Event & { currentTarget: HTMLInputElement }) {
     searchValue = e.currentTarget.value
-    if (!open) open = true
+    if (!open)
+      open = true
   }
 
   function handleOpenChange(newOpen: boolean) {
-    if (!newOpen) searchValue = ''
+    if (!newOpen)
+      searchValue = ''
+  }
+
+  function handleMultiValueChange(v: string[]) {
+    value = v
+    onchange?.(v)
+  }
+
+  function handleSingleValueChange(v: string) {
+    value = v
+    onchange?.(v)
   }
 
   /** 多选模式下移除某个已选项 */
   function removeItem(val: string, event: MouseEvent) {
     event.stopPropagation()
-    if (!Array.isArray(value)) return
+    if (!Array.isArray(value))
+      return
     const newValue = (value as string[]).filter(v => v !== val)
     value = newValue
     onchange?.(newValue)
   }
 </script>
 
-<div class="fieldset w-full {className}">
+<div class='fieldset w-full {className}'>
   {#if fieldLabel}
-    <legend class="fieldset-legend font-medium">{fieldLabel}</legend>
+    <legend class='fieldset-legend font-medium'>{fieldLabel}</legend>
   {/if}
 
   {#if multiple}
     <!-- 多选模式 -->
     <Combobox.Root
-      type="multiple"
+      type='multiple'
       items={filteredOptions}
       inputValue={multiInputValue}
       value={multiVal}
       bind:open
       {disabled}
       onOpenChange={handleOpenChange}
-      onValueChange={(v) => { value = v; onchange?.(v) }}
+      onValueChange={handleMultiValueChange}
     >
-      <div class="relative">
+      <div class='relative'>
         <div
           class="min-h-10 px-2 py-1.5 pr-8 border rounded-lg bg-base-100 flex flex-wrap gap-1.5 items-center transition-colors
             {disabled ? 'opacity-50 cursor-not-allowed bg-base-200' : 'cursor-text'}
             {error ? 'border-error focus-within:border-error' : 'border-base-content/20 focus-within:border-primary focus-within:ring-1 focus-within:ring-primary/20'}"
         >
           {#each selectedOptions as opt (opt.value)}
-            <span class="inline-flex items-center gap-1 px-2 py-0.5 bg-primary/10 text-primary text-sm rounded-md">
-              <span class="truncate max-w-32">{opt.label}</span>
+            <span class='inline-flex items-center gap-1 px-2 py-0.5 bg-primary/10 text-primary text-sm rounded-md'>
+              <span class='truncate max-w-32'>{opt.label}</span>
               {#if !disabled}
                 <BareButton
-                  type="button"
-                  class="hover:bg-primary/20 rounded p-0.5 transition-colors"
-                  onclick={(e) => removeItem(opt.value, e)}
+                  type='button'
+                  class='hover:bg-primary/20 rounded p-0.5 transition-colors'
+                  onclick={e => removeItem(opt.value, e)}
                   ariaLabel="{uiM('combobox_remove')} {opt.label}"
                 >
-                  <span class="icon-[tabler--x] size-3"></span>
+                  <span class='icon-[tabler--x] size-3'></span>
                 </BareButton>
               {/if}
             </span>
           {/each}
 
           <Combobox.Input
-            class="flex-1 min-w-20 bg-transparent outline-none text-sm py-0.5"
+            class='flex-1 min-w-20 bg-transparent outline-none text-sm py-0.5'
             placeholder={selectedOptions.length === 0 ? placeholder : ''}
             {disabled}
             oninput={handleInput}
-            onfocus={() => { if (!disabled) open = true }}
+            onfocus={() => {
+              if (!disabled)
+                open = true
+            }}
           />
         </div>
 
         <Combobox.Trigger
-          class="absolute right-2 top-1/2 -translate-y-1/2 btn btn-ghost btn-xs btn-circle"
+          class='absolute right-2 top-1/2 -translate-y-1/2 btn btn-ghost btn-xs btn-circle'
         >
           <span class="icon-[tabler--chevron-down] size-4 transition-transform {open ? 'rotate-180' : ''}"></span>
         </Combobox.Trigger>
@@ -199,11 +219,11 @@
 
       <Combobox.Portal>
         <Combobox.Content
-          class="z-50 mt-1 max-h-60 w-[var(--bits-combobox-anchor-width)] overflow-y-auto rounded-lg border border-base-content/10 bg-base-100 p-1 shadow-lg"
+          class='z-50 mt-1 max-h-60 w-[var(--bits-combobox-anchor-width)] overflow-y-auto rounded-lg border border-base-content/10 bg-base-100 p-1 shadow-lg'
           sideOffset={4}
         >
           {#if filteredOptions.length === 0}
-            <div class="px-3 py-2 text-sm text-base-content/50">
+            <div class='px-3 py-2 text-sm text-base-content/50'>
               {uiM('combobox_no_match')}
             </div>
           {:else}
@@ -212,18 +232,18 @@
                 value={opt.value}
                 label={opt.label}
                 disabled={opt.disabled}
-                class="flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors hover:bg-base-200 data-[highlighted]:bg-base-200 data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50"
+                class='flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors hover:bg-base-200 data-[highlighted]:bg-base-200 data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50'
               >
                 {#snippet children({ selected })}
                   <span class="size-4 shrink-0 rounded border border-base-content/30 flex items-center justify-center {selected ? 'bg-primary border-primary' : ''}">
                     {#if selected}
-                      <span class="icon-[tabler--check] size-3 text-primary-content"></span>
+                      <span class='icon-[tabler--check] size-3 text-primary-content'></span>
                     {/if}
                   </span>
-                  <div class="flex-1 min-w-0">
+                  <div class='flex-1 min-w-0'>
                     <span>{opt.label}</span>
                     {#if opt.description}
-                      <div class="text-xs text-base-content/50 truncate">{opt.description}</div>
+                      <div class='text-xs text-base-content/50 truncate'>{opt.description}</div>
                     {/if}
                   </div>
                 {/snippet}
@@ -236,25 +256,28 @@
   {:else}
     <!-- 单选模式 -->
     <Combobox.Root
-      type="single"
+      type='single'
       items={filteredOptions}
       inputValue={singleInputValue}
       value={singleVal}
       bind:open
       {disabled}
       onOpenChange={handleOpenChange}
-      onValueChange={(v) => { value = v; onchange?.(v) }}
+      onValueChange={handleSingleValueChange}
     >
-      <div class="relative">
+      <div class='relative'>
         <Combobox.Input
           class="input w-full pr-8 {error ? 'input-error' : ''}"
           {placeholder}
           {disabled}
           oninput={handleInput}
-          onfocus={() => { if (!disabled) open = true }}
+          onfocus={() => {
+            if (!disabled)
+              open = true
+          }}
         />
         <Combobox.Trigger
-          class="absolute right-2 top-1/2 -translate-y-1/2 btn btn-ghost btn-xs btn-circle"
+          class='absolute right-2 top-1/2 -translate-y-1/2 btn btn-ghost btn-xs btn-circle'
         >
           <span class="icon-[tabler--chevron-down] size-4 transition-transform {open ? 'rotate-180' : ''}"></span>
         </Combobox.Trigger>
@@ -262,11 +285,11 @@
 
       <Combobox.Portal>
         <Combobox.Content
-          class="z-50 mt-1 max-h-60 w-[var(--bits-combobox-anchor-width)] overflow-y-auto rounded-lg border border-base-content/10 bg-base-100 p-1 shadow-lg"
+          class='z-50 mt-1 max-h-60 w-[var(--bits-combobox-anchor-width)] overflow-y-auto rounded-lg border border-base-content/10 bg-base-100 p-1 shadow-lg'
           sideOffset={4}
         >
           {#if filteredOptions.length === 0}
-            <div class="px-3 py-2 text-sm text-base-content/50">
+            <div class='px-3 py-2 text-sm text-base-content/50'>
               {uiM('combobox_no_match')}
             </div>
           {:else}
@@ -275,18 +298,18 @@
                 value={opt.value}
                 label={opt.label}
                 disabled={opt.disabled}
-                class="flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors hover:bg-base-200 data-[highlighted]:bg-base-200 data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50"
+                class='flex cursor-pointer items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors hover:bg-base-200 data-[highlighted]:bg-base-200 data-[disabled]:cursor-not-allowed data-[disabled]:opacity-50'
               >
                 {#snippet children({ selected })}
-                  <span class="size-4 shrink-0">
+                  <span class='size-4 shrink-0'>
                     {#if selected}
-                      <span class="icon-[tabler--check] size-4 text-primary"></span>
+                      <span class='icon-[tabler--check] size-4 text-primary'></span>
                     {/if}
                   </span>
-                  <div class="flex-1 min-w-0">
+                  <div class='flex-1 min-w-0'>
                     <span>{opt.label}</span>
                     {#if opt.description}
-                      <div class="text-xs text-base-content/50 truncate">{opt.description}</div>
+                      <div class='text-xs text-base-content/50 truncate'>{opt.description}</div>
                     {/if}
                   </div>
                 {/snippet}
@@ -299,6 +322,6 @@
   {/if}
 
   {#if error}
-    <span class="fieldset-label text-error">{error}</span>
+    <span class='fieldset-label text-error'>{error}</span>
   {/if}
 </div>
