@@ -5,8 +5,7 @@
  * @module ai-embedding-types
  */
 
-import type { Result } from '@h-ai/core'
-import type { AIError } from '../ai-types.js'
+import type { HaiResult } from '@h-ai/core'
 
 // ─── Embedding 请求与响应 ───
 
@@ -56,7 +55,7 @@ export interface EmbeddingResponse {
  */
 export interface EmbeddingProvider {
   /** 生成向量嵌入 */
-  embed: (request: EmbeddingRequest) => Promise<Result<EmbeddingResponse, AIError>>
+  embed: (request: EmbeddingRequest) => Promise<HaiResult<EmbeddingResponse>>
 }
 
 // ─── Embedding 操作接口 ───
@@ -84,7 +83,7 @@ export interface EmbeddingOperations {
    * @param request - Embedding 请求
    * @returns Embedding 响应
    */
-  embed: (request: EmbeddingRequest) => Promise<Result<EmbeddingResponse, AIError>>
+  embed: (request: EmbeddingRequest) => Promise<HaiResult<EmbeddingResponse>>
 
   /**
    * 便捷方法：嵌入单条文本，直接返回向量
@@ -92,7 +91,7 @@ export interface EmbeddingOperations {
    * @param text - 输入文本
    * @returns 向量数组
    */
-  embedText: (text: string) => Promise<Result<number[], AIError>>
+  embedText: (text: string) => Promise<HaiResult<number[]>>
 
   /**
    * 便捷方法：批量嵌入文本，返回向量列表
@@ -100,5 +99,5 @@ export interface EmbeddingOperations {
    * @param texts - 输入文本列表
    * @returns 向量数组列表（与输入顺序一致）
    */
-  embedBatch: (texts: string[]) => Promise<Result<number[][], AIError>>
+  embedBatch: (texts: string[]) => Promise<HaiResult<number[][]>>
 }

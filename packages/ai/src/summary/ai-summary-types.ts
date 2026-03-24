@@ -5,9 +5,8 @@
  * @module ai-summary-types
  */
 
-import type { Result } from '@h-ai/core'
+import type { HaiResult } from '@h-ai/core'
 
-import type { AIError } from '../ai-types.js'
 import type { ChatMessage } from '../llm/ai-llm-types.js'
 
 // ─── 摘要选项与结果 ───
@@ -66,7 +65,7 @@ export interface SummaryOperations {
    * @param options - 摘要选项
    * @returns 摘要文本
    */
-  generate: (messages: ChatMessage[], options?: SummaryOptions) => Promise<Result<string, AIError>>
+  generate: (messages: ChatMessage[], options?: SummaryOptions) => Promise<HaiResult<string>>
 
   /**
    * 生成摘要（含元数据）
@@ -75,5 +74,5 @@ export interface SummaryOperations {
    * @param options - 摘要选项
    * @returns 摘要结果（含 Token 数、覆盖消息数）
    */
-  summarize: (messages: ChatMessage[], options?: SummaryOptions) => Promise<Result<SummaryResult, AIError>>
+  summarize: (messages: ChatMessage[], options?: SummaryOptions) => Promise<HaiResult<SummaryResult>>
 }

@@ -5,11 +5,11 @@
  * @module ai-main
  */
 
-import type { Result } from '@h-ai/core'
+import type { HaiResult } from '@h-ai/core'
 
 import type { A2AOperations } from './a2a/ai-a2a-types.js'
 import type { AIConfig, AIConfigInput } from './ai-config.js'
-import type { AIError, AIFunctions, AIInitOptions } from './ai-types.js'
+import type { AIFunctions, AIInitOptions } from './ai-types.js'
 import type { CompressOperations } from './compress/ai-compress-types.js'
 import type { ContextOperations } from './context/ai-context-types.js'
 import type { EmbeddingOperations } from './embedding/ai-embedding-types.js'
@@ -30,9 +30,10 @@ import { core, err, ok } from '@h-ai/core'
 import { datapipe } from '@h-ai/datapipe'
 
 import { createA2ALazyProxy } from './a2a/ai-a2a-functions.js'
-import { AIConfigSchema, AIErrorCode } from './ai-config.js'
+import { AIConfigSchema } from './ai-config.js'
 import { createAISubsystems } from './ai-functions.js'
 import { aiM } from './ai-i18n.js'
+import { HaiAIError } from './ai-types.js'
 import { collectStream, createSSEDecoder, createStreamProcessor, encodeSSE } from './llm/ai-llm-stream.js'
 import { createToolRegistry, defineTool } from './llm/ai-llm-tool.js'
 import { createDbStoreProviderFromModules, getUnavailableDbDeps, isDbStoreAvailable } from './store/providers/ai-store-provider-db.js'
@@ -83,8 +84,8 @@ let currentStoreProvider: AIStoreProvider | null = null
 // ─── 未初始化占位 ───
 
 /** 创建未初始化错误工具（统一的 NOT_INITIALIZED 响应） */
-const notInitialized = core.module.createNotInitializedKit<AIError>(
-  AIErrorCode.NOT_INITIALIZED,
+const notInitialized = core.module.createNotInitializedKit(
+  HaiAIError.NOT_INITIALIZED,
   () => aiM('ai_notInitialized'),
 )
 
@@ -250,14 +251,11 @@ const streamOperations: StreamOperations = {
  * ```
  */
 export const ai: AIFunctions = {
-  async init(config?: AIConfigInput, options?: AIInitOptions): Promise<Result<void, AIError>> {
+  async init(config?: AIConfigInput, options?: AIInitOptions): Promise<HaiResult<void>> {
     // 并发初始化防护：避免多次 init 同时执行导致资源泄漏
     if (initInProgress) {
       logger.warn('AI init already in progress, skipping concurrent call')
-      return err({
-        code: AIErrorCode.INIT_IN_PROGRESS,
-        message: aiM('ai_initInProgress'),
-      })
+      return err(HaiAIError.INIT_IN_PROGRESS, aiM('ai_initInProgress'))
     }
     initInProgress = true
 
@@ -273,11 +271,11 @@ export const ai: AIFunctions = {
       const parseResult = AIConfigSchema.safeParse(config ?? {})
       if (!parseResult.success) {
         logger.error('AI config validation failed', { error: parseResult.error.message })
-        return err({
-          code: AIErrorCode.CONFIGURATION_ERROR,
-          message: aiM('ai_configError', { params: { error: parseResult.error.message } }),
-          cause: parseResult.error,
-        })
+        return err(
+          HaiAIError.CONFIGURATION_ERROR,
+          aiM('ai_configError', { params: { error: parseResult.error.message } }),
+          parseResult.error,
+        )
       }
       const parsed = parseResult.data
 
@@ -290,10 +288,10 @@ export const ai: AIFunctions = {
         // 默认使用 reldb + vecdb（需要已初始化）
         if (!isDbStoreAvailable()) {
           const missing = getUnavailableDbDeps().join(', ')
-          return err({
-            code: AIErrorCode.CONFIGURATION_ERROR,
-            message: aiM('ai_configError', { params: { error: `${missing} not initialized. reldb and vecdb are required for default db store.` } }),
-          })
+          return err(
+            HaiAIError.CONFIGURATION_ERROR,
+            aiM('ai_configError', { params: { error: `${missing} not initialized. reldb and vecdb are required for default db store.` } }),
+          )
         }
         storeProvider = createDbStoreProviderFromModules()
       }
@@ -330,13 +328,13 @@ export const ai: AIFunctions = {
       // 清理部分赋值的子功能引用，避免 isInitialized=false 但 getter 返回无效实例
       resetAllState()
       logger.error('AI module initialization failed', { error })
-      return err({
-        code: AIErrorCode.CONFIGURATION_ERROR,
-        message: aiM('ai_initFailed', {
+      return err(
+        HaiAIError.CONFIGURATION_ERROR,
+        aiM('ai_initFailed', {
           params: { error: String(error) },
         }),
-        cause: error,
-      })
+        error,
+      )
     }
     finally {
       initInProgress = false

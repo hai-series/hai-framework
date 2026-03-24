@@ -5,18 +5,19 @@
  * @module ai-summary-functions
  */
 
-import type { Result } from '@h-ai/core'
+import type { HaiResult } from '@h-ai/core'
 
 import type { LLMConfig, SummaryConfig } from '../ai-config.js'
-import type { AIError } from '../ai-types.js'
+
 import type { ChatMessage, LLMOperations } from '../llm/ai-llm-types.js'
 import type { TokenOperations } from '../token/ai-token-types.js'
 import type { SummaryOperations, SummaryOptions, SummaryResult } from './ai-summary-types.js'
 
 import { core, err, ok } from '@h-ai/core'
 
-import { AIErrorCode, resolveModelEntry } from '../ai-config.js'
+import { resolveModelEntry } from '../ai-config.js'
 import { aiM } from '../ai-i18n.js'
+import { HaiAIError } from '../ai-types.js'
 
 const logger = core.logger.child({ module: 'ai', scope: 'summary' })
 
@@ -73,7 +74,7 @@ export function createSummaryOperations(
   async function generate(
     messages: ChatMessage[],
     options?: SummaryOptions,
-  ): Promise<Result<string, AIError>> {
+  ): Promise<HaiResult<string>> {
     const conversationText = messages
       .filter(m => m.role !== 'system')
       .map((m) => {
@@ -103,11 +104,7 @@ export function createSummaryOperations(
     })
 
     if (!chatResult.success) {
-      return err({
-        code: AIErrorCode.CONTEXT_SUMMARIZE_FAILED,
-        message: aiM('ai_contextSummarizeFailed', { params: { error: String(chatResult.error.message) } }),
-        cause: chatResult.error,
-      })
+      return err(HaiAIError.CONTEXT_SUMMARIZE_FAILED, aiM('ai_contextSummarizeFailed', { params: { error: String(chatResult.error.message) } }), chatResult.error)
     }
 
     return ok(chatResult.data.choices[0]?.message?.content ?? '')
@@ -119,13 +116,13 @@ export function createSummaryOperations(
   async function summarize(
     messages: ChatMessage[],
     options?: SummaryOptions,
-  ): Promise<Result<SummaryResult, AIError>> {
+  ): Promise<HaiResult<SummaryResult>> {
     logger.trace('Summarizing messages', { messageCount: messages.length })
 
     try {
       const result = await generate(messages, options)
       if (!result.success)
-        return result as Result<never, AIError>
+        return result as HaiResult<never>
 
       const summary = result.data
       return ok({
@@ -136,11 +133,7 @@ export function createSummaryOperations(
     }
     catch (error) {
       logger.error('Context summarization failed', { error })
-      return err({
-        code: AIErrorCode.CONTEXT_SUMMARIZE_FAILED,
-        message: aiM('ai_contextSummarizeFailed', { params: { error: String(error) } }),
-        cause: error,
-      })
+      return err(HaiAIError.CONTEXT_SUMMARIZE_FAILED, aiM('ai_contextSummarizeFailed', { params: { error: String(error) } }), error)
     }
   }
 

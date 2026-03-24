@@ -5,245 +5,14 @@
  * @module ai-config
  */
 
-import type { Result } from '@h-ai/core'
-import type { AIError } from './ai-types.js'
+import type { HaiResult } from '@h-ai/core'
 import process from 'node:process'
 import { err, ok } from '@h-ai/core'
 import { z } from 'zod'
 import { aiM } from './ai-i18n.js'
 
-// ─── Context 配置 Schema ───
-
-// CompressionStrategySchema / CompressionStrategy 定义在 compress/ai-compress-types.ts 中
+import { HaiAIError } from './ai-types.js'
 import { CompressionStrategySchema } from './compress/ai-compress-types.js'
-
-// ─── 错误码 ───
-
-/** AI 错误码（数值范围 12000-12999） */
-export const AIErrorCode = {
-  // 通用 (12000-12009)
-  /** 内部错误 */
-  INTERNAL_ERROR: 12000,
-
-  // 初始化 (12010-12019)
-  /** 服务未初始化 */
-  NOT_INITIALIZED: 12010,
-  /** 配置错误 */
-  CONFIGURATION_ERROR: 12011,
-  /** 初始化正在进行中（并发调用防护） */
-  INIT_IN_PROGRESS: 12012,
-
-  // LLM (12100-12199)
-  /** API 调用错误 */
-  API_ERROR: 12100,
-  /** 无效请求 */
-  INVALID_REQUEST: 12101,
-  /** 速率限制 */
-  RATE_LIMITED: 12102,
-  /** 请求超时 */
-  TIMEOUT: 12103,
-  /** 模型未找到 */
-  MODEL_NOT_FOUND: 12104,
-  /** 上下文长度超限 */
-  CONTEXT_LENGTH_EXCEEDED: 12105,
-  /** 对话记录保存失败 */
-  LLM_RECORD_FAILED: 12106,
-  /** 对话历史查询失败 */
-  LLM_HISTORY_FAILED: 12107,
-
-  // MCP (12200-12299)
-  /** MCP 连接错误 */
-  MCP_CONNECTION_ERROR: 12200,
-  /** MCP 协议错误 */
-  MCP_PROTOCOL_ERROR: 12201,
-  /** MCP 工具错误 */
-  MCP_TOOL_ERROR: 12202,
-  /** MCP 资源错误 */
-  MCP_RESOURCE_ERROR: 12203,
-  /** MCP 服务器错误 */
-  MCP_SERVER_ERROR: 12204,
-
-  // Embedding (12300-12399)
-  /** Embedding API 调用错误 */
-  EMBEDDING_API_ERROR: 12300,
-  /** Embedding 模型未找到 */
-  EMBEDDING_MODEL_NOT_FOUND: 12301,
-  /** Embedding 输入过长 */
-  EMBEDDING_INPUT_TOO_LONG: 12302,
-
-  // 工具 (12400-12499)
-  /** 工具未找到 */
-  TOOL_NOT_FOUND: 12400,
-  /** 工具验证失败 */
-  TOOL_VALIDATION_FAILED: 12401,
-  /** 工具执行失败 */
-  TOOL_EXECUTION_FAILED: 12402,
-  /** 工具超时 */
-  TOOL_TIMEOUT: 12403,
-
-  // Reasoning (12500-12599)
-  /** 推理执行失败 */
-  REASONING_FAILED: 12500,
-  /** 推理轮次超限 */
-  REASONING_MAX_ROUNDS: 12501,
-  /** 推理策略未找到 */
-  REASONING_STRATEGY_NOT_FOUND: 12502,
-
-  // Retrieval (12600-12699)
-  /** 检索执行失败 */
-  RETRIEVAL_FAILED: 12600,
-  /** 检索源未配置 */
-  RETRIEVAL_SOURCE_NOT_FOUND: 12601,
-
-  // RAG (12700-12799)
-  /** RAG 执行失败 */
-  RAG_FAILED: 12700,
-  /** RAG 上下文构建失败 */
-  RAG_CONTEXT_BUILD_FAILED: 12701,
-
-  // Knowledge (12800-12899)
-  /** 知识库初始化失败 */
-  KNOWLEDGE_SETUP_FAILED: 12800,
-  /** 知识入库失败 */
-  KNOWLEDGE_INGEST_FAILED: 12801,
-  /** 知识检索失败 */
-  KNOWLEDGE_RETRIEVE_FAILED: 12802,
-  /** 实体提取失败 */
-  KNOWLEDGE_ENTITY_EXTRACT_FAILED: 12803,
-  /** 知识库未初始化 */
-  KNOWLEDGE_NOT_SETUP: 12804,
-  /** 集合不存在 */
-  KNOWLEDGE_COLLECTION_NOT_FOUND: 12805,
-
-  // Memory (12900-12949)
-  /** 记忆提取失败 */
-  MEMORY_EXTRACT_FAILED: 12900,
-  /** 记忆存储失败 */
-  MEMORY_STORE_FAILED: 12901,
-  /** 记忆检索失败 */
-  MEMORY_RECALL_FAILED: 12902,
-  /** 记忆不存在 */
-  MEMORY_NOT_FOUND: 12903,
-  /** 记忆注入失败 */
-  MEMORY_ENRICH_FAILED: 12904,
-
-  // Context (12950-12999)
-  /** 上下文压缩失败 */
-  CONTEXT_COMPRESS_FAILED: 12950,
-  /** 摘要生成失败 */
-  CONTEXT_SUMMARIZE_FAILED: 12951,
-  /** Token 估算失败 */
-  CONTEXT_TOKEN_ESTIMATE_FAILED: 12952,
-  /** 超出 Token 预算 */
-  CONTEXT_BUDGET_EXCEEDED: 12953,
-
-  // Rerank (12020-12029)
-  /** Rerank API 调用错误 */
-  RERANK_API_ERROR: 12020,
-  /** Rerank 请求参数无效 */
-  RERANK_INVALID_REQUEST: 12021,
-
-  // File (12030-12049)
-  /** 文件解析失败 */
-  FILE_PARSE_FAILED: 12030,
-  /** 不支持的文件格式 */
-  FILE_UNSUPPORTED_FORMAT: 12031,
-  /** OCR 识别失败 */
-  FILE_OCR_FAILED: 12032,
-  /** 文件内容无效 */
-  FILE_INVALID_CONTENT: 12033,
-
-  // Store (12960-12969)
-  /** 存储操作失败 */
-  STORE_FAILED: 12960,
-  /** 存储后端不可用 */
-  STORE_NOT_AVAILABLE: 12961,
-
-  // Session (12970-12979)
-  /** 会话未找到 */
-  SESSION_NOT_FOUND: 12970,
-  /** 会话操作失败 */
-  SESSION_FAILED: 12971,
-
-  // A2A (12980-12999)
-  /** A2A 服务未配置 */
-  A2A_NOT_CONFIGURED: 12980,
-  /** A2A 请求处理失败 */
-  A2A_HANDLE_FAILED: 12981,
-  /** A2A 远端调用失败 */
-  A2A_REMOTE_CALL_FAILED: 12982,
-  /** A2A 认证失败 */
-  A2A_AUTH_FAILED: 12983,
-  /** A2A 消息查询失败 */
-  A2A_LIST_MESSAGES_FAILED: 12984,
-} as const
-
-/** 错误码值类型 */
-export type AIErrorCodeType = (typeof AIErrorCode)[keyof typeof AIErrorCode]
-
-/** AI 错误码 → HTTP 状态码映射 */
-export const AIErrorHttpStatus: Record<number, number> = {
-  [AIErrorCode.INTERNAL_ERROR]: 500,
-  [AIErrorCode.NOT_INITIALIZED]: 500,
-  [AIErrorCode.CONFIGURATION_ERROR]: 500,
-  [AIErrorCode.API_ERROR]: 502,
-  [AIErrorCode.INVALID_REQUEST]: 400,
-  [AIErrorCode.RATE_LIMITED]: 429,
-  [AIErrorCode.TIMEOUT]: 504,
-  [AIErrorCode.MODEL_NOT_FOUND]: 404,
-  [AIErrorCode.CONTEXT_LENGTH_EXCEEDED]: 400,
-  [AIErrorCode.LLM_RECORD_FAILED]: 500,
-  [AIErrorCode.LLM_HISTORY_FAILED]: 500,
-  [AIErrorCode.MCP_CONNECTION_ERROR]: 502,
-  [AIErrorCode.MCP_PROTOCOL_ERROR]: 502,
-  [AIErrorCode.MCP_TOOL_ERROR]: 500,
-  [AIErrorCode.MCP_RESOURCE_ERROR]: 500,
-  [AIErrorCode.MCP_SERVER_ERROR]: 502,
-  [AIErrorCode.EMBEDDING_API_ERROR]: 502,
-  [AIErrorCode.EMBEDDING_MODEL_NOT_FOUND]: 404,
-  [AIErrorCode.EMBEDDING_INPUT_TOO_LONG]: 400,
-  [AIErrorCode.TOOL_NOT_FOUND]: 404,
-  [AIErrorCode.TOOL_VALIDATION_FAILED]: 400,
-  [AIErrorCode.TOOL_EXECUTION_FAILED]: 500,
-  [AIErrorCode.TOOL_TIMEOUT]: 504,
-  [AIErrorCode.REASONING_FAILED]: 500,
-  [AIErrorCode.REASONING_MAX_ROUNDS]: 400,
-  [AIErrorCode.REASONING_STRATEGY_NOT_FOUND]: 404,
-  [AIErrorCode.RETRIEVAL_FAILED]: 500,
-  [AIErrorCode.RETRIEVAL_SOURCE_NOT_FOUND]: 404,
-  [AIErrorCode.RAG_FAILED]: 500,
-  [AIErrorCode.RAG_CONTEXT_BUILD_FAILED]: 500,
-  [AIErrorCode.KNOWLEDGE_SETUP_FAILED]: 500,
-  [AIErrorCode.KNOWLEDGE_INGEST_FAILED]: 500,
-  [AIErrorCode.KNOWLEDGE_RETRIEVE_FAILED]: 500,
-  [AIErrorCode.KNOWLEDGE_ENTITY_EXTRACT_FAILED]: 500,
-  [AIErrorCode.KNOWLEDGE_NOT_SETUP]: 500,
-  [AIErrorCode.KNOWLEDGE_COLLECTION_NOT_FOUND]: 404,
-  [AIErrorCode.MEMORY_EXTRACT_FAILED]: 500,
-  [AIErrorCode.MEMORY_STORE_FAILED]: 500,
-  [AIErrorCode.MEMORY_RECALL_FAILED]: 500,
-  [AIErrorCode.MEMORY_NOT_FOUND]: 404,
-  [AIErrorCode.MEMORY_ENRICH_FAILED]: 500,
-  [AIErrorCode.CONTEXT_COMPRESS_FAILED]: 500,
-  [AIErrorCode.CONTEXT_SUMMARIZE_FAILED]: 500,
-  [AIErrorCode.CONTEXT_TOKEN_ESTIMATE_FAILED]: 500,
-  [AIErrorCode.CONTEXT_BUDGET_EXCEEDED]: 400,
-  [AIErrorCode.RERANK_API_ERROR]: 502,
-  [AIErrorCode.RERANK_INVALID_REQUEST]: 400,
-  [AIErrorCode.FILE_PARSE_FAILED]: 500,
-  [AIErrorCode.FILE_UNSUPPORTED_FORMAT]: 400,
-  [AIErrorCode.FILE_OCR_FAILED]: 500,
-  [AIErrorCode.FILE_INVALID_CONTENT]: 400,
-  [AIErrorCode.STORE_FAILED]: 500,
-  [AIErrorCode.STORE_NOT_AVAILABLE]: 503,
-  [AIErrorCode.SESSION_NOT_FOUND]: 404,
-  [AIErrorCode.SESSION_FAILED]: 500,
-  [AIErrorCode.A2A_NOT_CONFIGURED]: 500,
-  [AIErrorCode.A2A_HANDLE_FAILED]: 500,
-  [AIErrorCode.A2A_REMOTE_CALL_FAILED]: 502,
-  [AIErrorCode.A2A_AUTH_FAILED]: 401,
-  [AIErrorCode.A2A_LIST_MESSAGES_FAILED]: 500,
-}
 
 // ─── LLM 配置 Schema ───
 
@@ -404,7 +173,7 @@ export function resolveModelEntry(
   scenario: ModelScenario,
   explicit?: string,
   options?: ResolveRequiredModelEntryOptions,
-): Result<ResolvedModelConfig, AIError> {
+): HaiResult<ResolvedModelConfig> {
   let entry: ModelEntry | undefined
   let modelName: string
 
@@ -435,10 +204,7 @@ export function resolveModelEntry(
   }
 
   if (!resolved.apiKey) {
-    return err({
-      code: AIErrorCode.CONFIGURATION_ERROR,
-      message: options?.missingApiKeyMessage ?? aiM('ai_configMissingApiKey', { params: { scenario } }),
-    })
+    return err(HaiAIError.CONFIGURATION_ERROR, options?.missingApiKeyMessage ?? aiM('ai_configMissingApiKey', { params: { scenario } }))
   }
 
   return ok(resolved)

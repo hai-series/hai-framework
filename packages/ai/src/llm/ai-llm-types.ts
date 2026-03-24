@@ -5,12 +5,12 @@
  * @module ai-llm-types
  */
 
-import type { Result } from '@h-ai/core'
+import type { HaiResult } from '@h-ai/core'
 import type OpenAI from 'openai'
 import type { ZodType } from 'zod'
 
 import type { AIConfig } from '../ai-config.js'
-import type { AIError } from '../ai-types.js'
+
 import type { InteractionScope, SessionInfo } from '../store/ai-store-types.js'
 
 // ─── 消息类型 ───
@@ -198,7 +198,7 @@ export interface Tool<TInput = unknown, TOutput = unknown> {
   /** Zod 参数 schema */
   parameters: ZodType<TInput>
   /** 执行工具（自动校验参数），失败返回 ToolError */
-  execute: (input: TInput) => Promise<Result<TOutput, ToolError>>
+  execute: (input: TInput) => Promise<HaiResult<TOutput>>
   /** 转换为 OpenAI function calling 定义格式（$schema 字段已移除） */
   toDefinition: () => ToolDefinition
 }
@@ -224,9 +224,9 @@ export interface ToolRegistryOperations {
   /** 获取所有工具的 OpenAI function calling 定义（用于传入 ChatCompletionRequest.tools） */
   getDefinitions: () => ToolDefinition[]
   /** 执行单个工具调用，自动解析 JSON 参数并校验；失败返回 ToolError */
-  execute: (toolCall: ToolCall) => Promise<Result<ToolMessage, ToolError>>
+  execute: (toolCall: ToolCall) => Promise<HaiResult<ToolMessage>>
   /** 批量执行工具调用（默认并行），任一失败立即返回错误 */
-  executeAll: (toolCalls: ToolCall[], options?: { parallel?: boolean }) => Promise<Result<ToolMessage[], ToolError>>
+  executeAll: (toolCalls: ToolCall[], options?: { parallel?: boolean }) => Promise<HaiResult<ToolMessage[]>>
   /** 清空所有已注册的工具 */
   clear: () => void
   /** 当前已注册的工具数量 */
@@ -310,11 +310,11 @@ export interface ChatRecord {
  */
 export interface LLMProvider {
   /** 发送聊天请求并获取完整响应 */
-  chat: (request: ChatCompletionRequest) => Promise<Result<ChatCompletionResponse, AIError>>
+  chat: (request: ChatCompletionRequest) => Promise<HaiResult<ChatCompletionResponse>>
   /** 发送聊天请求并获取流式响应（逐 chunk 产出） */
   chatStream: (request: ChatCompletionRequest) => AsyncIterable<ChatCompletionChunk>
   /** 获取可用模型列表 */
-  listModels: () => Promise<Result<string[], AIError>>
+  listModels: () => Promise<HaiResult<string[]>>
 }
 
 // ─── LLM 操作接口 ───
@@ -325,16 +325,16 @@ export interface LLMProvider {
  * 需要先调用 `ai.init()` 初始化，否则返回 `NOT_INITIALIZED` 错误。
  */
 export interface LLMOperations {
-  /** 发送聊天请求，返回 `Result<ChatCompletionResponse, AIError>` */
-  chat: (request: ChatCompletionRequest) => Promise<Result<ChatCompletionResponse, AIError>>
+  /** 发送聊天请求，返回 `HaiResult<ChatCompletionResponse>` */
+  chat: (request: ChatCompletionRequest) => Promise<HaiResult<ChatCompletionResponse>>
   /** 发送流式聊天请求，逐 chunk 产出 `ChatCompletionChunk` */
   chatStream: (request: ChatCompletionRequest) => AsyncIterable<ChatCompletionChunk>
   /** 获取可用模型名称列表 */
-  listModels: () => Promise<Result<string[], AIError>>
+  listModels: () => Promise<HaiResult<string[]>>
   /** 查询对话历史记录（需传入 objectId；可选 sessionId 以按会话过滤） */
-  getHistory: (scope: InteractionScope, options?: ChatHistoryOptions) => Promise<Result<ChatRecord[], AIError>>
+  getHistory: (scope: InteractionScope, options?: ChatHistoryOptions) => Promise<HaiResult<ChatRecord[]>>
   /** 列出指定 objectId 下的所有会话 */
-  listSessions: (objectId: string) => Promise<Result<SessionInfo[], AIError>>
+  listSessions: (objectId: string) => Promise<HaiResult<SessionInfo[]>>
 
   /**
    * 便捷方法：发送纯文本问题，返回回复文本
@@ -345,7 +345,7 @@ export interface LLMOperations {
    * @param options - 可选的模型、systemPrompt、objectId、sessionId 等
    * @returns 回复文本
    */
-  ask: (question: string, options?: AskOptions) => Promise<Result<string, AIError>>
+  ask: (question: string, options?: AskOptions) => Promise<HaiResult<string>>
 
   /**
    * 便捷方法：流式发送纯文本问题，返回文本片段异步迭代器

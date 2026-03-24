@@ -5,12 +5,11 @@
  * @module vecdb-main
  */
 
-import type { Result } from '@h-ai/core'
+import type { HaiResult } from '@h-ai/core'
 import type { VecdbProvider } from './providers/vecdb-provider-base.js'
 import type { VecdbConfig, VecdbConfigInput } from './vecdb-config.js'
 import type {
   CollectionOperations,
-  VecdbError,
   VecdbFunctions,
   VectorOperations,
 } from './vecdb-types.js'
@@ -20,8 +19,9 @@ import { core, err, ok } from '@h-ai/core'
 import { createLancedbProvider } from './providers/vecdb-provider-lancedb.js'
 import { createPgvectorProvider } from './providers/vecdb-provider-pgvector.js'
 import { createQdrantProvider } from './providers/vecdb-provider-qdrant.js'
-import { VecdbConfigSchema, VecdbErrorCode } from './vecdb-config.js'
+import { VecdbConfigSchema } from './vecdb-config.js'
 import { vecdbM } from './vecdb-i18n.js'
+import { HaiVecdbError } from './vecdb-types.js'
 
 const logger = core.logger.child({ module: 'vecdb', scope: 'main' })
 
@@ -58,8 +58,8 @@ function createProvider(config: VecdbConfig): VecdbProvider {
 // ─── 未初始化时的占位操作 ───
 
 /** 未初始化工具集 */
-const notInitialized = core.module.createNotInitializedKit<VecdbError>(
-  VecdbErrorCode.NOT_INITIALIZED,
+const notInitialized = core.module.createNotInitializedKit(
+  HaiVecdbError.NOT_INITIALIZED,
   () => vecdbM('vecdb_notInitialized'),
 )
 
@@ -111,14 +111,11 @@ export const vecdb: VecdbFunctions = {
    * @param config - 向量数据库配置（允许部分字段，内部会补齐默认值）
    * @returns 初始化结果，失败时包含错误信息
    */
-  async init(config: VecdbConfigInput): Promise<Result<void, VecdbError>> {
+  async init(config: VecdbConfigInput): Promise<HaiResult<void>> {
     // 并发防护：防止多次同时调用导致 Provider/连接泄漏
     if (initInProgress) {
       logger.warn('Vecdb init already in progress, skipping concurrent call')
-      return err({
-        code: VecdbErrorCode.CONFIG_ERROR,
-        message: vecdbM('vecdb_initInProgress'),
-      })
+      return err(HaiVecdbError.CONFIG_ERROR, vecdbM('vecdb_initInProgress'))
     }
     initInProgress = true
 
@@ -133,11 +130,7 @@ export const vecdb: VecdbFunctions = {
       const parseResult = VecdbConfigSchema.safeParse(config)
       if (!parseResult.success) {
         logger.error('Vecdb config validation failed', { error: parseResult.error.message })
-        return err({
-          code: VecdbErrorCode.CONFIG_ERROR,
-          message: vecdbM('vecdb_configError', { params: { error: parseResult.error.message } }),
-          cause: parseResult.error,
-        })
+        return err(HaiVecdbError.CONFIG_ERROR, vecdbM('vecdb_configError', { params: { error: parseResult.error.message } }), parseResult.error)
       }
       const parsed = parseResult.data
 
@@ -158,11 +151,7 @@ export const vecdb: VecdbFunctions = {
       }
       catch (error) {
         logger.error('Vecdb module initialization failed', { error })
-        return err({
-          code: VecdbErrorCode.CONNECTION_FAILED,
-          message: vecdbM('vecdb_initFailed', { params: { error: error instanceof Error ? error.message : String(error) } }),
-          cause: error,
-        })
+        return err(HaiVecdbError.CONNECTION_FAILED, vecdbM('vecdb_initFailed', { params: { error: error instanceof Error ? error.message : String(error) } }), error)
       }
     }
     finally {
@@ -203,7 +192,7 @@ export const vecdb: VecdbFunctions = {
    *
    * 多次调用安全，未初始化时直接返回。
    */
-  async close(): Promise<Result<void, VecdbError>> {
+  async close(): Promise<HaiResult<void>> {
     if (!currentProvider) {
       currentConfig = null
       logger.info('Vecdb module already closed, skipping')
@@ -223,11 +212,7 @@ export const vecdb: VecdbFunctions = {
     }
     catch (error) {
       logger.error('Vecdb module close failed', { error })
-      return err({
-        code: VecdbErrorCode.CONNECTION_FAILED,
-        message: vecdbM('vecdb_closeFailed', { params: { error: error instanceof Error ? error.message : String(error) } }),
-        cause: error,
-      })
+      return err(HaiVecdbError.CONNECTION_FAILED, vecdbM('vecdb_closeFailed', { params: { error: error instanceof Error ? error.message : String(error) } }), error)
     }
     finally {
       currentProvider = null
