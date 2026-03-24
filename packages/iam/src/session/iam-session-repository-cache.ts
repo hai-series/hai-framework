@@ -15,7 +15,7 @@ import { cache } from '@h-ai/cache'
 import { err, ok } from '@h-ai/core'
 
 import { iamM } from '../iam-i18n.js'
-import { IamErrorCode } from '../iam-types.js'
+import { HaiIamError } from '../iam-types.js'
 import { applySessionPatch, getSessionTtl } from './iam-session-utils.js'
 
 // ─── 缓存键前缀 ───
@@ -156,21 +156,21 @@ export function createCacheSessionRepository(
       // 1. accessToken → session（带 TTL）
       const setResult = await cache.kv.set(buildTokenKey(accessToken), session, { ex: ttl })
       if (!setResult.success) {
-        return err({
-          code: IamErrorCode.REPOSITORY_ERROR,
-          message: iamM('iam_saveSessionMappingCacheFailed', { params: { message: setResult.error.message } }),
-          cause: setResult.error,
-        })
+        return err(
+          HaiIamError.REPOSITORY_ERROR,
+          iamM('iam_saveSessionMappingCacheFailed', { params: { message: setResult.error.message } }),
+          setResult.error,
+        )
       }
 
       // 2. userId → Set<accessToken>
       const saddResult = await cache.set_.sadd(buildUserTokensKey(userId), accessToken)
       if (!saddResult.success) {
-        return err({
-          code: IamErrorCode.REPOSITORY_ERROR,
-          message: iamM('iam_saveUserSessionCacheFailed', { params: { message: saddResult.error.message } }),
-          cause: saddResult.error,
-        })
+        return err(
+          HaiIamError.REPOSITORY_ERROR,
+          iamM('iam_saveUserSessionCacheFailed', { params: { message: saddResult.error.message } }),
+          saddResult.error,
+        )
       }
       // 刷新集合 TTL（2 倍会话最大有效期，防止僵尸键）
       await cache.kv.expire(buildUserTokensKey(userId), sessionMaxAge * 2)
@@ -182,11 +182,11 @@ export function createCacheSessionRepository(
         { ex: refreshTokenMaxAge },
       )
       if (!refreshResult.success) {
-        return err({
-          code: IamErrorCode.REPOSITORY_ERROR,
-          message: iamM('iam_saveSessionMappingCacheFailed', { params: { message: refreshResult.error.message } }),
-          cause: refreshResult.error,
-        })
+        return err(
+          HaiIamError.REPOSITORY_ERROR,
+          iamM('iam_saveSessionMappingCacheFailed', { params: { message: refreshResult.error.message } }),
+          refreshResult.error,
+        )
       }
 
       return ok(undefined)
@@ -195,11 +195,11 @@ export function createCacheSessionRepository(
     async getByAccessToken(accessToken): Promise<HaiResult<Session | null>> {
       const result = await cache.kv.get<Session>(buildTokenKey(accessToken))
       if (!result.success) {
-        return err({
-          code: IamErrorCode.REPOSITORY_ERROR,
-          message: iamM('iam_querySessionMappingCacheFailed', { params: { message: result.error.message } }),
-          cause: result.error,
-        })
+        return err(
+          HaiIamError.REPOSITORY_ERROR,
+          iamM('iam_querySessionMappingCacheFailed', { params: { message: result.error.message } }),
+          result.error,
+        )
       }
       if (!result.data) {
         return ok(null)
@@ -213,10 +213,10 @@ export function createCacheSessionRepository(
         return sessionResult as HaiResult<void>
       }
       if (!sessionResult.data) {
-        return err({
-          code: IamErrorCode.SESSION_NOT_FOUND,
-          message: iamM('iam_sessionNotExist'),
-        })
+        return err(
+          HaiIamError.SESSION_NOT_FOUND,
+          iamM('iam_sessionNotExist'),
+        )
       }
 
       const nextSession = applySessionPatch(sessionResult.data, data)
@@ -224,11 +224,11 @@ export function createCacheSessionRepository(
 
       const setResult = await cache.kv.set(buildTokenKey(accessToken), nextSession, { ex: ttl })
       if (!setResult.success) {
-        return err({
-          code: IamErrorCode.REPOSITORY_ERROR,
-          message: iamM('iam_saveSessionMappingCacheFailed', { params: { message: setResult.error.message } }),
-          cause: setResult.error,
-        })
+        return err(
+          HaiIamError.REPOSITORY_ERROR,
+          iamM('iam_saveSessionMappingCacheFailed', { params: { message: setResult.error.message } }),
+          setResult.error,
+        )
       }
       return ok(undefined)
     },
@@ -269,11 +269,11 @@ export function createCacheSessionRepository(
     async getByRefreshToken(refreshToken): Promise<HaiResult<Session | null>> {
       const mappingResult = await cache.kv.get<{ userId: string, accessToken: string }>(buildRefreshKey(refreshToken))
       if (!mappingResult.success) {
-        return err({
-          code: IamErrorCode.REPOSITORY_ERROR,
-          message: iamM('iam_querySessionMappingCacheFailed', { params: { message: mappingResult.error.message } }),
-          cause: mappingResult.error,
-        })
+        return err(
+          HaiIamError.REPOSITORY_ERROR,
+          iamM('iam_querySessionMappingCacheFailed', { params: { message: mappingResult.error.message } }),
+          mappingResult.error,
+        )
       }
       if (!mappingResult.data) {
         return ok(null)
@@ -285,11 +285,11 @@ export function createCacheSessionRepository(
     async removeRefreshToken(refreshToken): Promise<HaiResult<void>> {
       const result = await cache.kv.del(buildRefreshKey(refreshToken))
       if (!result.success) {
-        return err({
-          code: IamErrorCode.REPOSITORY_ERROR,
-          message: iamM('iam_deleteSessionMappingCacheFailed', { params: { message: result.error.message } }),
-          cause: result.error,
-        })
+        return err(
+          HaiIamError.REPOSITORY_ERROR,
+          iamM('iam_deleteSessionMappingCacheFailed', { params: { message: result.error.message } }),
+          result.error,
+        )
       }
       return ok(undefined)
     },
@@ -297,11 +297,11 @@ export function createCacheSessionRepository(
     async patchUserSessions(userId, updates): Promise<HaiResult<void>> {
       const tokensResult = await cache.set_.smembers<string>(buildUserTokensKey(userId))
       if (!tokensResult.success) {
-        return err({
-          code: IamErrorCode.REPOSITORY_ERROR,
-          message: iamM('iam_queryUserSessionCacheFailed', { params: { message: tokensResult.error.message } }),
-          cause: tokensResult.error,
-        })
+        return err(
+          HaiIamError.REPOSITORY_ERROR,
+          iamM('iam_queryUserSessionCacheFailed', { params: { message: tokensResult.error.message } }),
+          tokensResult.error,
+        )
       }
 
       const staleTokens: string[] = []
@@ -323,11 +323,11 @@ export function createCacheSessionRepository(
         const updated = { ...sessionResult.data, ...updates }
         const setResult = await cache.kv.set(sessionKey, updated, { ex: ttlResult.data })
         if (!setResult.success) {
-          return err({
-            code: IamErrorCode.REPOSITORY_ERROR,
-            message: iamM('iam_saveUserSessionCacheFailed', { params: { message: setResult.error.message } }),
-            cause: setResult.error,
-          })
+          return err(
+            HaiIamError.REPOSITORY_ERROR,
+            iamM('iam_saveUserSessionCacheFailed', { params: { message: setResult.error.message } }),
+            setResult.error,
+          )
         }
       }
 

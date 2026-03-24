@@ -16,7 +16,7 @@
 
 import type { IamFunctions } from '../src/iam-types.js'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { IamErrorCode } from '../src/iam-config.js'
+import { HaiIamError } from '../src/iam-config.js'
 import { defineIamSuite, initIam, postgresRedisEnv, sqliteMemoryEnv, TEST_PASSWORD } from './helpers/iam-test-suite.js'
 
 describe('iam.workflow', () => {
@@ -697,7 +697,7 @@ describe('iam.workflow', () => {
         const confirmResult = await getIam().user.confirmPasswordReset('fake-token', 'NewPass789')
         expect(confirmResult.success).toBe(false)
         if (!confirmResult.success) {
-          expect(confirmResult.error.code).toBe(IamErrorCode.RESET_TOKEN_INVALID)
+          expect(confirmResult.error.code).toBe(HaiIamError.RESET_TOKEN_INVALID.code)
         }
       })
     })
@@ -721,7 +721,7 @@ describe('iam.workflow', () => {
         })
         expect(regResult.success).toBe(false)
         if (!regResult.success) {
-          expect(regResult.error.code).toBe(IamErrorCode.REGISTER_DISABLED)
+          expect(regResult.error.code).toBe(HaiIamError.REGISTER_DISABLED.code)
         }
 
         await initIam()
@@ -752,7 +752,7 @@ describe('iam.workflow', () => {
         })
         expect(lockedResult.success).toBe(false)
         if (!lockedResult.success) {
-          expect(lockedResult.error.code).toBe(IamErrorCode.USER_LOCKED)
+          expect(lockedResult.error.code).toBe(HaiIamError.USER_LOCKED.code)
         }
 
         // ⑥ 锁定后即使密码正确也应失败（不等待解锁，lockoutDuration=60s 远超测试时间）
@@ -948,7 +948,7 @@ describe('iam.workflow', () => {
         const sendResult = await otpIam.auth.sendOtp('nohandler@test.com')
         expect(sendResult.success).toBe(false)
         if (!sendResult.success) {
-          expect(sendResult.error.code).toBe(IamErrorCode.INTERNAL_ERROR)
+          expect(sendResult.error.code).toBe(HaiIamError.INTERNAL_ERROR.code)
         }
 
         await initIam()
@@ -966,7 +966,7 @@ describe('iam.workflow', () => {
         const sendResult = await otpIam.auth.sendOtp('fail@test.com')
         expect(sendResult.success).toBe(false)
         if (!sendResult.success) {
-          expect(sendResult.error.code).toBe(IamErrorCode.INTERNAL_ERROR)
+          expect(sendResult.error.code).toBe(HaiIamError.INTERNAL_ERROR.code)
         }
 
         await initIam()
@@ -998,7 +998,7 @@ describe('iam.workflow', () => {
         })
         expect(loginResult.success).toBe(false)
         if (!loginResult.success) {
-          expect(loginResult.error.code).toBe(IamErrorCode.OTP_INVALID)
+          expect(loginResult.error.code).toBe(HaiIamError.OTP_INVALID.code)
         }
 
         await initIam()

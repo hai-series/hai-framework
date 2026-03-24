@@ -230,7 +230,7 @@ const result = await api.call(iamEndpoints.login, { username, password })
 
 ---
 
-## 错误码 — `IamErrorCode`
+## 错误码 — `HaiIamError`
 
 | 错误码 | 常量                       | HTTP | 说明                 |
 | ------ | -------------------------- | ---- | -------------------- |

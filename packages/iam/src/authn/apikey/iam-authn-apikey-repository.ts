@@ -11,7 +11,7 @@ import type { StoredApiKey } from './iam-authn-apikey-types.js'
 import { err, ok } from '@h-ai/core'
 import { BaseReldbCrudRepository, reldb } from '@h-ai/reldb'
 import { iamM } from '../../iam-i18n.js'
-import { IamErrorCode } from '../../iam-types.js'
+import { HaiIamError } from '../../iam-types.js'
 
 // ─── API Key 存储接口 ───
 
@@ -164,11 +164,11 @@ class DbApiKeyRepository extends BaseReldbCrudRepository<StoredApiKey> implement
   async insert(data: StoredApiKey, tx?: DmlWithTxOperations): Promise<HaiResult<void>> {
     const result = await this.create(data as unknown as Record<string, unknown>, tx)
     if (!result.success) {
-      return err({
-        code: IamErrorCode.REPOSITORY_ERROR,
-        message: iamM('iam_apikeyCreateFailed', { params: { message: result.error.message } }),
-        cause: result.error,
-      })
+      return err(
+        HaiIamError.REPOSITORY_ERROR,
+        iamM('iam_apikeyCreateFailed', { params: { message: result.error.message } }),
+        result.error,
+      )
     }
     return ok(undefined)
   }
@@ -208,11 +208,11 @@ class DbApiKeyRepository extends BaseReldbCrudRepository<StoredApiKey> implement
   async updateFields(id: string, data: Partial<StoredApiKey>, tx?: DmlWithTxOperations): Promise<HaiResult<void>> {
     const result = await this.updateById(id, data as unknown as Record<string, unknown>, tx)
     if (!result.success) {
-      return err({
-        code: IamErrorCode.REPOSITORY_ERROR,
-        message: iamM('iam_apikeyUpdateFailed', { params: { message: result.error.message } }),
-        cause: result.error,
-      })
+      return err(
+        HaiIamError.REPOSITORY_ERROR,
+        iamM('iam_apikeyUpdateFailed', { params: { message: result.error.message } }),
+        result.error,
+      )
     }
     return ok(undefined)
   }
@@ -220,20 +220,20 @@ class DbApiKeyRepository extends BaseReldbCrudRepository<StoredApiKey> implement
   async removeById(id: string, tx?: DmlWithTxOperations): Promise<HaiResult<void>> {
     const result = await this.deleteById(id, tx)
     if (!result.success) {
-      return err({
-        code: IamErrorCode.REPOSITORY_ERROR,
-        message: iamM('iam_apikeyDeleteFailed', { params: { message: result.error.message } }),
-        cause: result.error,
-      })
+      return err(
+        HaiIamError.REPOSITORY_ERROR,
+        iamM('iam_apikeyDeleteFailed', { params: { message: result.error.message } }),
+        result.error,
+      )
     }
     return ok(undefined)
   }
 
   private buildQueryError(error: { message: string }): HaiResult<never> {
-    return err({
-      code: IamErrorCode.REPOSITORY_ERROR,
-      message: iamM('iam_apikeyQueryFailed', { params: { message: error.message } }),
-      cause: error,
-    })
+    return err(
+      HaiIamError.REPOSITORY_ERROR,
+      iamM('iam_apikeyQueryFailed', { params: { message: error.message } }),
+      error,
+    )
   }
 }

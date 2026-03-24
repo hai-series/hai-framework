@@ -8,7 +8,7 @@ import * as m from '$lib/paraglide/messages.js'
 import { toIamUserResponse } from '$lib/server/iam-helpers.js'
 import { createCreateUserSchema, ListUsersQuerySchema } from '$lib/server/schemas/index.js'
 import { audit } from '@h-ai/audit'
-import { iam, IamErrorCode } from '@h-ai/iam'
+import { HaiIamError, iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
 
 /**
@@ -70,7 +70,7 @@ export const POST = kit.handler(async ({ request, locals, getClientAddress }) =>
   })
 
   if (!registerResult.success) {
-    if (registerResult.error.code === IamErrorCode.USER_NOT_FOUND || registerResult.error.code === IamErrorCode.USER_ALREADY_EXISTS) {
+    if (registerResult.error.code === HaiIamError.USER_NOT_FOUND.code || registerResult.error.code === HaiIamError.USER_ALREADY_EXISTS.code) {
       return kit.response.conflict(m.api_auth_username_or_email_taken())
     }
     return kit.response.badRequest(registerResult.error.message)

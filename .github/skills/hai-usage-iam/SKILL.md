@@ -322,7 +322,7 @@ const loginResult = await iam.auth.loginWithApiKey({ key: rawKey })
 
 ---
 
-## §10 错误码 — `IamErrorCode`
+## §10 错误码 — `HaiIamError`
 
 | 错误码 | 常量 | 说明 |
 |--------|------|------|

@@ -6,7 +6,7 @@
 
 import { createSign, generateKeyPairSync } from 'node:crypto'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { PaymentErrorCode } from '../src/payment-config'
+import { HaiPaymentError } from '../src/payment-types'
 import { createAlipayProvider } from '../src/providers/alipay/alipay-provider'
 
 // 生成测试用 RSA 密钥对
@@ -211,7 +211,7 @@ describe('alipay-provider', () => {
 
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.code).toBe(PaymentErrorCode.CREATE_ORDER_FAILED)
+        expect(result.error.code).toBe(HaiPaymentError.CREATE_ORDER_FAILED.code)
       }
     })
 
@@ -229,7 +229,7 @@ describe('alipay-provider', () => {
 
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.code).toBe(PaymentErrorCode.CREATE_ORDER_FAILED)
+        expect(result.error.code).toBe(HaiPaymentError.CREATE_ORDER_FAILED.code)
       }
     })
   })
@@ -341,7 +341,7 @@ describe('alipay-provider', () => {
 
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.code).toBe(PaymentErrorCode.NOTIFY_VERIFY_FAILED)
+        expect(result.error.code).toBe(HaiPaymentError.NOTIFY_VERIFY_FAILED.code)
       }
     })
   })
@@ -407,7 +407,7 @@ describe('alipay-provider', () => {
 
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.code).toBe(PaymentErrorCode.QUERY_ORDER_FAILED)
+        expect(result.error.code).toBe(HaiPaymentError.QUERY_ORDER_FAILED.code)
       }
     })
   })
@@ -472,7 +472,7 @@ describe('alipay-provider', () => {
 
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.code).toBe(PaymentErrorCode.REFUND_FAILED)
+        expect(result.error.code).toBe(HaiPaymentError.REFUND_FAILED.code)
       }
     })
   })
@@ -501,7 +501,7 @@ describe('alipay-provider', () => {
 
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.code).toBe(PaymentErrorCode.CLOSE_ORDER_FAILED)
+        expect(result.error.code).toBe(HaiPaymentError.CLOSE_ORDER_FAILED.code)
       }
     })
   })
