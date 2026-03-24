@@ -6,7 +6,7 @@
 
 import { createHmac } from 'node:crypto'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { PaymentErrorCode } from '../src/payment-config'
+import { HaiPaymentError } from '../src/payment-types'
 import { createStripeProvider } from '../src/providers/stripe/stripe-provider'
 
 const testConfig = {
@@ -149,7 +149,7 @@ describe('stripe-provider', () => {
 
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.code).toBe(PaymentErrorCode.CREATE_ORDER_FAILED)
+        expect(result.error.code).toBe(HaiPaymentError.CREATE_ORDER_FAILED.code)
       }
     })
 
@@ -167,7 +167,7 @@ describe('stripe-provider', () => {
 
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.code).toBe(PaymentErrorCode.CREATE_ORDER_FAILED)
+        expect(result.error.code).toBe(HaiPaymentError.CREATE_ORDER_FAILED.code)
       }
     })
   })
@@ -293,7 +293,7 @@ describe('stripe-provider', () => {
 
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.code).toBe(PaymentErrorCode.NOTIFY_VERIFY_FAILED)
+        expect(result.error.code).toBe(HaiPaymentError.NOTIFY_VERIFY_FAILED.code)
       }
     })
 
@@ -306,7 +306,7 @@ describe('stripe-provider', () => {
 
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.code).toBe(PaymentErrorCode.NOTIFY_VERIFY_FAILED)
+        expect(result.error.code).toBe(HaiPaymentError.NOTIFY_VERIFY_FAILED.code)
       }
     })
 
@@ -323,7 +323,7 @@ describe('stripe-provider', () => {
 
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.code).toBe(PaymentErrorCode.NOTIFY_PARSE_FAILED)
+        expect(result.error.code).toBe(HaiPaymentError.NOTIFY_PARSE_FAILED.code)
       }
     })
   })
@@ -403,7 +403,7 @@ describe('stripe-provider', () => {
 
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.code).toBe(PaymentErrorCode.QUERY_ORDER_FAILED)
+        expect(result.error.code).toBe(HaiPaymentError.QUERY_ORDER_FAILED.code)
       }
     })
   })
@@ -492,7 +492,7 @@ describe('stripe-provider', () => {
 
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.code).toBe(PaymentErrorCode.REFUND_FAILED)
+        expect(result.error.code).toBe(HaiPaymentError.REFUND_FAILED.code)
       }
     })
 
@@ -531,7 +531,7 @@ describe('stripe-provider', () => {
 
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.code).toBe(PaymentErrorCode.REFUND_FAILED)
+        expect(result.error.code).toBe(HaiPaymentError.REFUND_FAILED.code)
       }
     })
   })

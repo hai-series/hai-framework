@@ -18,7 +18,7 @@
 
 import type { IamFunctions } from '../src/iam-types.js'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { IamErrorCode } from '../src/iam-config.js'
+import { HaiIamError } from '../src/iam-types.js'
 import { defineIamSuite, initIam, postgresRedisEnv, sqliteMemoryEnv, TEST_PASSWORD } from './helpers/iam-test-suite.js'
 
 describe('iam.auth', () => {
@@ -79,7 +79,7 @@ describe('iam.auth', () => {
         })
         expect(result.success).toBe(false)
         if (!result.success) {
-          expect(result.error.code).toBe(IamErrorCode.INVALID_CREDENTIALS)
+          expect(result.error.code).toBe(HaiIamError.INVALID_CREDENTIALS.code)
         }
       })
 
@@ -90,7 +90,7 @@ describe('iam.auth', () => {
         })
         expect(result.success).toBe(false)
         if (!result.success) {
-          expect(result.error.code).toBe(IamErrorCode.INVALID_CREDENTIALS)
+          expect(result.error.code).toBe(HaiIamError.INVALID_CREDENTIALS.code)
         }
       })
 
@@ -101,7 +101,7 @@ describe('iam.auth', () => {
         })
         expect(result.success).toBe(false)
         if (!result.success) {
-          expect(result.error.code).toBe(IamErrorCode.INVALID_CREDENTIALS)
+          expect(result.error.code).toBe(HaiIamError.INVALID_CREDENTIALS.code)
         }
       })
 
@@ -113,7 +113,7 @@ describe('iam.auth', () => {
         })
         expect(result.success).toBe(false)
         if (!result.success) {
-          expect(result.error.code).toBe(IamErrorCode.INTERNAL_ERROR)
+          expect(result.error.code).toBe(HaiIamError.INTERNAL_ERROR.code)
         }
       })
     })
@@ -145,7 +145,7 @@ describe('iam.auth', () => {
         const result = await getIam().auth.verifyToken('invalid-token-xxx')
         expect(result.success).toBe(false)
         if (!result.success) {
-          expect(result.error.code).toBe(IamErrorCode.SESSION_INVALID)
+          expect(result.error.code).toBe(HaiIamError.SESSION_INVALID.code)
         }
       })
 
@@ -153,7 +153,7 @@ describe('iam.auth', () => {
         const result = await getIam().auth.verifyToken('')
         expect(result.success).toBe(false)
         if (!result.success) {
-          expect(result.error.code).toBe(IamErrorCode.SESSION_INVALID)
+          expect(result.error.code).toBe(HaiIamError.SESSION_INVALID.code)
         }
       })
 
@@ -170,7 +170,7 @@ describe('iam.auth', () => {
         const result = await getIam().auth.verifyToken(loginResult.data.tokens.accessToken)
         expect(result.success).toBe(false)
         if (!result.success) {
-          expect(result.error.code).toBe(IamErrorCode.SESSION_INVALID)
+          expect(result.error.code).toBe(HaiIamError.SESSION_INVALID.code)
         }
       })
     })
@@ -213,7 +213,7 @@ describe('iam.auth', () => {
         const result = await getIam().auth.verifyToken(loginResult.data.tokens.accessToken)
         expect(result.success).toBe(false)
         if (!result.success) {
-          expect(result.error.code).toBe(IamErrorCode.SESSION_INVALID)
+          expect(result.error.code).toBe(HaiIamError.SESSION_INVALID.code)
         }
       })
 
@@ -297,7 +297,7 @@ describe('iam.auth', () => {
         })
         expect(result.success).toBe(false)
         if (!result.success) {
-          expect(result.error.code).toBe(IamErrorCode.STRATEGY_NOT_SUPPORTED)
+          expect(result.error.code).toBe(HaiIamError.STRATEGY_NOT_SUPPORTED.code)
         }
       })
     })
@@ -310,7 +310,7 @@ describe('iam.auth', () => {
         })
         expect(result.success).toBe(false)
         if (!result.success) {
-          expect(result.error.code).toBe(IamErrorCode.STRATEGY_NOT_SUPPORTED)
+          expect(result.error.code).toBe(HaiIamError.STRATEGY_NOT_SUPPORTED.code)
         }
       })
     })
@@ -320,7 +320,7 @@ describe('iam.auth', () => {
         const result = await getIam().auth.sendOtp('any@test.com')
         expect(result.success).toBe(false)
         if (!result.success) {
-          expect(result.error.code).toBe(IamErrorCode.STRATEGY_NOT_SUPPORTED)
+          expect(result.error.code).toBe(HaiIamError.STRATEGY_NOT_SUPPORTED.code)
         }
       })
     })
@@ -349,7 +349,7 @@ describe('iam.auth', () => {
         })
         expect(result.success).toBe(false)
         if (!result.success) {
-          expect(result.error.code).toBe(IamErrorCode.LOGIN_DISABLED)
+          expect(result.error.code).toBe(HaiIamError.LOGIN_DISABLED.code)
         }
       })
 
@@ -357,7 +357,7 @@ describe('iam.auth', () => {
         const result = await loginDisabledIam.auth.sendOtp('any@test.com')
         expect(result.success).toBe(false)
         if (!result.success) {
-          expect(result.error.code).toBe(IamErrorCode.LOGIN_DISABLED)
+          expect(result.error.code).toBe(HaiIamError.LOGIN_DISABLED.code)
         }
       })
     })
@@ -390,7 +390,7 @@ describe('iam.auth', () => {
         })
         expect(result.success).toBe(false)
         if (!result.success) {
-          expect(result.error.code).toBe(IamErrorCode.USER_DISABLED)
+          expect(result.error.code).toBe(HaiIamError.USER_DISABLED.code)
         }
       })
     })
@@ -431,7 +431,7 @@ describe('iam.auth', () => {
         })
         expect(result.success).toBe(false)
         if (!result.success) {
-          expect(result.error.code).toBe(IamErrorCode.USER_LOCKED)
+          expect(result.error.code).toBe(HaiIamError.USER_LOCKED.code)
         }
       })
 
@@ -528,7 +528,7 @@ describe('iam.auth', () => {
         const refreshAfter = await getIam().session.refresh(refreshBefore.data.refreshToken)
         expect(refreshAfter.success).toBe(false)
         if (!refreshAfter.success) {
-          expect(refreshAfter.error.code).toBe(IamErrorCode.TOKEN_EXPIRED)
+          expect(refreshAfter.error.code).toBe(HaiIamError.TOKEN_EXPIRED.code)
         }
       })
 
@@ -552,7 +552,7 @@ describe('iam.auth', () => {
         const refreshAfter = await getIam().session.refresh(refreshToken)
         expect(refreshAfter.success).toBe(false)
         if (!refreshAfter.success) {
-          expect(refreshAfter.error.code).toBe(IamErrorCode.TOKEN_EXPIRED)
+          expect(refreshAfter.error.code).toBe(HaiIamError.TOKEN_EXPIRED.code)
         }
       })
     })

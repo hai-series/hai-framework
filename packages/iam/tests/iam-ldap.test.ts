@@ -16,7 +16,7 @@
 import type { IamFunctions } from '../src/iam-types.js'
 import type { LdapContainerLease } from './helpers/ldap-container.js'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { IamErrorCode } from '../src/iam-config.js'
+import { HaiIamError } from '../src/iam-types.js'
 import { defineIamSuite, initIam, postgresRedisEnv, sqliteMemoryEnv, TEST_PASSWORD } from './helpers/iam-test-suite.js'
 import { acquireLdapContainer } from './helpers/ldap-container.js'
 
@@ -74,7 +74,7 @@ describe('iam.ldap', () => {
         })
         expect(result.success).toBe(false)
         if (!result.success) {
-          expect(result.error.code).toBe(IamErrorCode.INVALID_CREDENTIALS)
+          expect(result.error.code).toBe(HaiIamError.INVALID_CREDENTIALS.code)
         }
       })
 
@@ -175,7 +175,7 @@ describe('iam.ldap', () => {
         })
         expect(retryResult.success).toBe(false)
         if (!retryResult.success) {
-          expect(retryResult.error.code).toBe(IamErrorCode.USER_DISABLED)
+          expect(retryResult.error.code).toBe(HaiIamError.USER_DISABLED.code)
         }
 
         // 恢复用户状态，避免影响后续测试
@@ -260,7 +260,7 @@ describe('iam.ldap', () => {
         })
         expect(result.success).toBe(false)
         if (!result.success) {
-          expect(result.error.code).toBe(IamErrorCode.USER_LOCKED)
+          expect(result.error.code).toBe(HaiIamError.USER_LOCKED.code)
         }
       })
     })

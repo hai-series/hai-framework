@@ -18,7 +18,7 @@ import { crypto as haiCrypto } from '@h-ai/crypto'
 
 import { ApiKeyConfigSchema } from '../../iam-config.js'
 import { iamM } from '../../iam-i18n.js'
-import { IamErrorCode } from '../../iam-types.js'
+import { HaiIamError } from '../../iam-types.js'
 import { toUser } from '../../user/iam-user-utils.js'
 import { ensureCredentialType } from '../iam-authn-utils.js'
 
@@ -120,12 +120,12 @@ export function createApiKeyStrategy(config: ApiKeyStrategyConfig): ApiKeyStrate
 
       // 检查是否启用
       if (!candidate.enabled) {
-        return err({ code: IamErrorCode.APIKEY_DISABLED, message: iamM('iam_apikeyDisabled') })
+        return err(HaiIamError.APIKEY_DISABLED, iamM('iam_apikeyDisabled'))
       }
 
       // 检查是否过期
       if (candidate.expiresAt && new Date() > candidate.expiresAt) {
-        return err({ code: IamErrorCode.APIKEY_EXPIRED, message: iamM('iam_apikeyExpired') })
+        return err(HaiIamError.APIKEY_EXPIRED, iamM('iam_apikeyExpired'))
       }
 
       // 更新最后使用时间（异步，不阻塞认证）
@@ -136,7 +136,7 @@ export function createApiKeyStrategy(config: ApiKeyStrategyConfig): ApiKeyStrate
       return ok(toApiKey(candidate))
     }
 
-    return err({ code: IamErrorCode.APIKEY_INVALID, message: iamM('iam_apikeyInvalid') })
+    return err(HaiIamError.APIKEY_INVALID, iamM('iam_apikeyInvalid'))
   }
 
   // ─── AuthStrategy 实现 ───
@@ -164,13 +164,13 @@ export function createApiKeyStrategy(config: ApiKeyStrategyConfig): ApiKeyStrate
       // 通过用户 ID 查找关联用户
       const userResult = await userRepository.findById(apiKey.userId)
       if (!userResult.success) {
-        return err({ code: IamErrorCode.REPOSITORY_ERROR, message: userResult.error.message, cause: userResult.error })
+        return err(HaiIamError.REPOSITORY_ERROR, userResult.error.message, userResult.error)
       }
       if (!userResult.data) {
-        return err({ code: IamErrorCode.USER_NOT_FOUND, message: iamM('iam_userNotExist') })
+        return err(HaiIamError.USER_NOT_FOUND, iamM('iam_userNotExist'))
       }
       if (!userResult.data.enabled) {
-        return err({ code: IamErrorCode.USER_DISABLED, message: iamM('iam_accountDisabled') })
+        return err(HaiIamError.USER_DISABLED, iamM('iam_accountDisabled'))
       }
 
       logger.info('API Key authentication succeeded', { userId: userResult.data.id, keyId: apiKey.id })
@@ -189,17 +189,14 @@ export function createApiKeyStrategy(config: ApiKeyStrategyConfig): ApiKeyStrate
           return countResult as HaiResult<CreateApiKeyResult>
 
         if (countResult.data >= apikeyConfig.maxKeysPerUser) {
-          return err({
-            code: IamErrorCode.INVALID_ARGUMENT,
-            message: iamM('iam_apikeyMaxKeysReached', { params: { max: apikeyConfig.maxKeysPerUser } }),
-          })
+          return err(HaiIamError.INVALID_ARGUMENT, iamM('iam_apikeyMaxKeysReached', { params: { max: apikeyConfig.maxKeysPerUser } }))
         }
 
         // 生成明文密钥和哈希
         const rawKey = generateRawKey(apikeyConfig.prefix)
         const hashResult = passwordOps.hash(rawKey)
         if (!hashResult.success) {
-          return err({ code: IamErrorCode.INTERNAL_ERROR, message: hashResult.error.message })
+          return err(HaiIamError.INTERNAL_ERROR, hashResult.error.message)
         }
 
         // 计算过期时间
@@ -232,11 +229,7 @@ export function createApiKeyStrategy(config: ApiKeyStrategyConfig): ApiKeyStrate
         return ok({ apiKey: toApiKey(storedApiKey), rawKey })
       }
       catch (error) {
-        return err({
-          code: IamErrorCode.INTERNAL_ERROR,
-          message: iamM('iam_apikeyCreateFailed', { params: { message: String(error) } }),
-          cause: error,
-        })
+        return err(HaiIamError.INTERNAL_ERROR, iamM('iam_apikeyCreateFailed', { params: { message: String(error) } }), error)
       }
     },
 

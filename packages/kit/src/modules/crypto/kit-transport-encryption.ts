@@ -5,7 +5,7 @@
  * @module kit-transport-encryption
  */
 
-import type { Result } from '@h-ai/core'
+import type { HaiResult } from '@h-ai/core'
 import type {
   EncryptedPayload,
   TransportCryptoServiceLike,
@@ -32,11 +32,11 @@ import { kitM } from '../../kit-i18n.js'
 export function createTransportEncryption(
   cryptoService: TransportCryptoServiceLike,
   maxClients = 10000,
-): Result<TransportEncryptionManager, Error> {
+): HaiResult<TransportEncryptionManager> {
   // 生成服务端密钥对
   const keyPairResult = cryptoService.asymmetric.generateKeyPair()
   if (!keyPairResult.success || !keyPairResult.data) {
-    return err(new Error(kitM('kit_transportKeyGenerationFailed')))
+    return err({ code: 'KIT_TRANSPORT_KEY_GENERATION_FAILED', message: kitM('kit_transportKeyGenerationFailed') })
   }
   const serverKeyPair: TransportKeyPair = keyPairResult.data
 

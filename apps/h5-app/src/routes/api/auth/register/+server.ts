@@ -4,7 +4,7 @@
  * =============================================================================
  */
 
-import { IamErrorCode, IamErrorHttpStatus } from '@h-ai/iam'
+import { HaiIamError } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
 import { z } from 'zod'
 
@@ -19,10 +19,10 @@ export const POST = kit.handler(async ({ request, cookies }) => {
 
   const result = await kit.auth.registerAndLogin(cookies, { username, email, password })
   if (!result.success) {
-    if (result.error.code === IamErrorCode.USER_ALREADY_EXISTS) {
+    if (result.error.code === HaiIamError.USER_ALREADY_EXISTS.code) {
       return kit.response.conflict('Username or email already taken')
     }
-    return kit.response.fromError(result.error, IamErrorHttpStatus)
+    return kit.response.fromError(result.error)
   }
 
   const { user, tokens } = result.data

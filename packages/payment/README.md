@@ -106,10 +106,10 @@ await payment.init({
 const result = await payment.createOrder('wechat', orderInput)
 if (!result.success) {
   switch (result.error.code) {
-    case PaymentErrorCode.PROVIDER_NOT_FOUND:
+    case HaiPaymentError.PROVIDER_NOT_FOUND:
       // Provider 未注册
       break
-    case PaymentErrorCode.CREATE_ORDER_FAILED:
+    case HaiPaymentError.CREATE_ORDER_FAILED:
       // 创建订单失败
       break
   }

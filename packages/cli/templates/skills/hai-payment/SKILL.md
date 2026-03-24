@@ -167,7 +167,7 @@ const payResult = await invokePayment(orderResult.data)
 
 ---
 
-## 错误码 — `PaymentErrorCode`
+## 错误码 — `HaiPaymentError`
 
 | 错误码 | 常量                    | 说明                   |
 | ------ | ----------------------- | ---------------------- |

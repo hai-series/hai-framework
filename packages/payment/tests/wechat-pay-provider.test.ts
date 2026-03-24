@@ -7,7 +7,7 @@
 import { Buffer } from 'node:buffer'
 import { createCipheriv, createSign, generateKeyPairSync } from 'node:crypto'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { PaymentErrorCode } from '../src/payment-config'
+import { HaiPaymentError } from '../src/payment-types'
 import { createWechatPayProvider } from '../src/providers/wechat/wechat-pay-provider'
 
 // 生成测试用 RSA 密钥对
@@ -229,7 +229,7 @@ describe('wechat-pay-provider', () => {
 
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.code).toBe(PaymentErrorCode.CREATE_ORDER_FAILED)
+        expect(result.error.code).toBe(HaiPaymentError.CREATE_ORDER_FAILED.code)
         expect(result.error.cause).toBeDefined()
       }
     })
@@ -248,7 +248,7 @@ describe('wechat-pay-provider', () => {
 
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.code).toBe(PaymentErrorCode.CREATE_ORDER_FAILED)
+        expect(result.error.code).toBe(HaiPaymentError.CREATE_ORDER_FAILED.code)
       }
     })
   })
@@ -341,7 +341,7 @@ describe('wechat-pay-provider', () => {
 
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.code).toBe(PaymentErrorCode.NOTIFY_VERIFY_FAILED)
+        expect(result.error.code).toBe(HaiPaymentError.NOTIFY_VERIFY_FAILED.code)
       }
     })
 
@@ -363,7 +363,7 @@ describe('wechat-pay-provider', () => {
 
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.code).toBe(PaymentErrorCode.NOTIFY_PARSE_FAILED)
+        expect(result.error.code).toBe(HaiPaymentError.NOTIFY_PARSE_FAILED.code)
       }
     })
 
@@ -381,7 +381,7 @@ describe('wechat-pay-provider', () => {
 
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.code).toBe(PaymentErrorCode.NOTIFY_VERIFY_FAILED)
+        expect(result.error.code).toBe(HaiPaymentError.NOTIFY_VERIFY_FAILED.code)
       }
     })
   })
@@ -450,7 +450,7 @@ describe('wechat-pay-provider', () => {
 
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.code).toBe(PaymentErrorCode.QUERY_ORDER_FAILED)
+        expect(result.error.code).toBe(HaiPaymentError.QUERY_ORDER_FAILED.code)
       }
     })
   })
@@ -514,7 +514,7 @@ describe('wechat-pay-provider', () => {
 
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.code).toBe(PaymentErrorCode.REFUND_FAILED)
+        expect(result.error.code).toBe(HaiPaymentError.REFUND_FAILED.code)
       }
     })
   })
@@ -546,7 +546,7 @@ describe('wechat-pay-provider', () => {
 
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.code).toBe(PaymentErrorCode.CLOSE_ORDER_FAILED)
+        expect(result.error.code).toBe(HaiPaymentError.CLOSE_ORDER_FAILED.code)
       }
     })
   })

@@ -8,6 +8,7 @@
  * @module kit-response
  */
 
+import type { HaiError } from '@h-ai/core'
 import type { ApiResponse } from './kit-types.js'
 import { kitM } from './kit-i18n.js'
 
@@ -253,33 +254,9 @@ export function fromResult<T>(
   return error(String(code), message, status, requestId)
 }
 
-/**
- * 将模块错误码映射为标准 HTTP Response（通用）
- *
- * 根据各模块导出的 XxErrorHttpStatus 映射表，将模块错误码转换为对应的 HTTP 状态码。
- * 未命中映射时默认返回 400。
- *
- * @param moduleError - 模块错误对象（{ code, message }）
- * @param httpStatusMap - 模块导出的错误码 → HTTP 状态码映射表（如 IamErrorHttpStatus）
- * @param requestId - 可选请求 ID，用于链路追踪
- * @returns 标准化 JSON 错误 Response
- *
- * @example
- * ```ts
- * import { IamErrorHttpStatus } from '@h-ai/iam'
- *
- * const result = await iam.auth.login(credentials)
- * if (!result.success) {
- *   return kit.response.fromError(result.error, IamErrorHttpStatus)
- * }
- * ```
- */
 export function fromError(
-  moduleError: { code: number | string, message: string },
-  httpStatusMap: Record<number | string, number>,
+  haiError: HaiError,
   requestId?: string,
 ): Response {
-  const status = httpStatusMap[Number(moduleError.code)] ?? 400
-
-  return error(String(moduleError.code), moduleError.message, status, requestId)
+  return error(String(haiError.code), haiError.message, haiError.httpStatus ?? 400, requestId)
 }

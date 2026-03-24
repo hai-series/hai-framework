@@ -7,8 +7,8 @@
 import type { PaymentProvider } from '../src/payment-types'
 import { ok } from '@h-ai/core'
 import { afterEach, describe, expect, it } from 'vitest'
-import { PaymentErrorCode } from '../src/payment-config'
 import { payment } from '../src/payment-main'
+import { HaiPaymentError } from '../src/payment-types'
 
 /** 创建 mock Provider */
 function createMockProvider(name: string): PaymentProvider {
@@ -66,7 +66,7 @@ describe('payment.init', () => {
     expect(successes).toHaveLength(1)
     expect(failures).toHaveLength(1)
     if (!failures[0].success) {
-      expect(failures[0].error.code).toBe(PaymentErrorCode.CONFIG_ERROR)
+      expect(failures[0].error.code).toBe(HaiPaymentError.CONFIG_ERROR.code)
     }
   })
 
@@ -233,7 +233,7 @@ describe('payment.createOrder（通过入口调用）', () => {
 
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(PaymentErrorCode.PROVIDER_NOT_FOUND)
+      expect(result.error.code).toBe(HaiPaymentError.PROVIDER_NOT_FOUND.code)
     }
   })
 })
@@ -264,7 +264,7 @@ describe('payment.handleNotify（通过入口调用）', () => {
 
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(PaymentErrorCode.PROVIDER_NOT_FOUND)
+      expect(result.error.code).toBe(HaiPaymentError.PROVIDER_NOT_FOUND.code)
     }
   })
 })
@@ -288,7 +288,7 @@ describe('payment.queryOrder（通过入口调用）', () => {
     const result = await payment.queryOrder('nonexistent', 'ORD001')
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(PaymentErrorCode.PROVIDER_NOT_FOUND)
+      expect(result.error.code).toBe(HaiPaymentError.PROVIDER_NOT_FOUND.code)
     }
   })
 })
@@ -321,7 +321,7 @@ describe('payment.refund（通过入口调用）', () => {
 
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(PaymentErrorCode.PROVIDER_NOT_FOUND)
+      expect(result.error.code).toBe(HaiPaymentError.PROVIDER_NOT_FOUND.code)
     }
   })
 })
@@ -340,7 +340,7 @@ describe('payment.closeOrder（通过入口调用）', () => {
     const result = await payment.closeOrder('nonexistent', 'ORD001')
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(PaymentErrorCode.PROVIDER_NOT_FOUND)
+      expect(result.error.code).toBe(HaiPaymentError.PROVIDER_NOT_FOUND.code)
     }
   })
 })

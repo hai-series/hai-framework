@@ -13,7 +13,7 @@ import type { AuthStrategy, Credentials } from '../iam-authn-types.js'
 import { core, err, ok } from '@h-ai/core'
 
 import { iamM } from '../../iam-i18n.js'
-import { IamErrorCode } from '../../iam-types.js'
+import { HaiIamError } from '../../iam-types.js'
 import { toUser } from '../../user/iam-user-utils.js'
 import { ensureCredentialType, isAccountLocked, recordLoginFailure, resetLoginFailures } from '../iam-authn-utils.js'
 
@@ -176,11 +176,11 @@ export function createLdapStrategy(config: LdapStrategyConfig): AuthStrategy {
       // 创建 LDAP 客户端
       const clientResult = await ldapClientFactory(ldapConfig)
       if (!clientResult.success) {
-        return err({
-          code: IamErrorCode.LDAP_CONNECTION_FAILED,
-          message: iamM('iam_ldapConnectionFailed'),
-          cause: clientResult.error,
-        })
+        return err(
+          HaiIamError.LDAP_CONNECTION_FAILED,
+          iamM('iam_ldapConnectionFailed'),
+          clientResult.error,
+        )
       }
 
       const client = clientResult.data
@@ -189,11 +189,11 @@ export function createLdapStrategy(config: LdapStrategyConfig): AuthStrategy {
         // 先用管理员账号绑定
         const adminBindResult = await client.bind(ldapConfig.bindDn, ldapConfig.bindPassword)
         if (!adminBindResult.success) {
-          return err({
-            code: IamErrorCode.LDAP_BIND_FAILED,
-            message: iamM('iam_ldapAdminBindFailed'),
-            cause: adminBindResult.error,
-          })
+          return err(
+            HaiIamError.LDAP_BIND_FAILED,
+            iamM('iam_ldapAdminBindFailed'),
+            adminBindResult.error,
+          )
         }
 
         // 搜索用户（转义用户输入，防止 LDAP 注入）
@@ -205,19 +205,19 @@ export function createLdapStrategy(config: LdapStrategyConfig): AuthStrategy {
         )
 
         if (!searchResult.success) {
-          return err({
-            code: IamErrorCode.LDAP_SEARCH_FAILED,
-            message: iamM('iam_ldapSearchFailed'),
-            cause: searchResult.error,
-          })
+          return err(
+            HaiIamError.LDAP_SEARCH_FAILED,
+            iamM('iam_ldapSearchFailed'),
+            searchResult.error,
+          )
         }
 
         const entries = searchResult.data
         if (entries.length === 0) {
-          return err({
-            code: IamErrorCode.USER_NOT_FOUND,
-            message: iamM('iam_userNotExist'),
-          })
+          return err(
+            HaiIamError.USER_NOT_FOUND,
+            iamM('iam_userNotExist'),
+          )
         }
 
         const entry = entries[0]
@@ -237,17 +237,17 @@ export function createLdapStrategy(config: LdapStrategyConfig): AuthStrategy {
 
         if (storedUser) {
           if (!storedUser.enabled) {
-            return err({
-              code: IamErrorCode.USER_DISABLED,
-              message: iamM('iam_accountDisabled'),
-            })
+            return err(
+              HaiIamError.USER_DISABLED,
+              iamM('iam_accountDisabled'),
+            )
           }
 
           if (isAccountLocked(storedUser)) {
-            return err({
-              code: IamErrorCode.USER_LOCKED,
-              message: iamM('iam_accountLocked'),
-            })
+            return err(
+              HaiIamError.USER_LOCKED,
+              iamM('iam_accountLocked'),
+            )
           }
         }
 
@@ -258,10 +258,10 @@ export function createLdapStrategy(config: LdapStrategyConfig): AuthStrategy {
             await recordLoginFailure(userRepository, storedUser, { maxLoginAttempts, lockoutDuration })
           }
           logger.warn('LDAP authentication failed', { username })
-          return err({
-            code: IamErrorCode.INVALID_CREDENTIALS,
-            message: iamM('iam_passwordWrong'),
-          })
+          return err(
+            HaiIamError.INVALID_CREDENTIALS,
+            iamM('iam_passwordWrong'),
+          )
         }
 
         if (!storedUser && syncUser) {
@@ -278,11 +278,11 @@ export function createLdapStrategy(config: LdapStrategyConfig): AuthStrategy {
             },
           })
           if (!createResult.success) {
-            return err({
-              code: IamErrorCode.REPOSITORY_ERROR,
-              message: iamM('iam_createUserFailed', { params: { message: createResult.error.message } }),
-              cause: createResult.error,
-            })
+            return err(
+              HaiIamError.REPOSITORY_ERROR,
+              iamM('iam_createUserFailed', { params: { message: createResult.error.message } }),
+              createResult.error,
+            )
           }
 
           const createdResult = await userRepository.findByUsername(ldapUsername)

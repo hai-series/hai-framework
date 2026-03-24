@@ -11,7 +11,7 @@ import type { StoredUser } from './iam-user-types.js'
 import { err, ok } from '@h-ai/core'
 import { BaseReldbCrudRepository, reldb } from '@h-ai/reldb'
 import { iamM } from '../iam-i18n.js'
-import { IamErrorCode } from '../iam-types.js'
+import { HaiIamError } from '../iam-types.js'
 
 // ─── 用户存储接口 ───
 
@@ -285,11 +285,11 @@ class DbUserRepository extends BaseReldbCrudRepository<StoredUser> implements Us
    * @param cause - 错误原因
    */
   private buildQueryError(error: { message: string }, cause: unknown): HaiResult<never> {
-    return err({
-      code: IamErrorCode.REPOSITORY_ERROR,
-      message: iamM('iam_queryUserFailed', { params: { message: error.message } }),
+    return err(
+      HaiIamError.REPOSITORY_ERROR,
+      iamM('iam_queryUserFailed', { params: { message: error.message } }),
       cause,
-    })
+    )
   }
 
   /**
