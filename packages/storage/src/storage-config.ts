@@ -6,66 +6,6 @@
 import { z } from 'zod'
 import { storageM } from './storage-i18n.js'
 
-// ─── 错误码 ───
-
-/**
- * 存储错误码（数值范围 6000-6999）
- */
-export const StorageErrorCode = {
-  /** 连接失败 */
-  CONNECTION_FAILED: 6000,
-  /** 操作失败 */
-  OPERATION_FAILED: 6001,
-  /** 文件不存在 */
-  NOT_FOUND: 6002,
-  /** 文件已存在 */
-  ALREADY_EXISTS: 6003,
-  /** 权限拒绝 */
-  PERMISSION_DENIED: 6004,
-  /** 配额超限 */
-  QUOTA_EXCEEDED: 6005,
-  /** 无效路径 */
-  INVALID_PATH: 6006,
-  /** IO 错误 */
-  IO_ERROR: 6007,
-  /** 网络错误 */
-  NETWORK_ERROR: 6008,
-  /** 存储未初始化 */
-  NOT_INITIALIZED: 6010,
-  /** 不支持的存储类型 */
-  UNSUPPORTED_TYPE: 6011,
-  /** 配置错误 */
-  CONFIG_ERROR: 6012,
-  /** 签名 URL 生成失败 */
-  PRESIGN_FAILED: 6013,
-  /** 上传失败 */
-  UPLOAD_FAILED: 6014,
-  /** 下载失败 */
-  DOWNLOAD_FAILED: 6015,
-} as const
-
-/** 存储错误码类型 */
-export type StorageErrorCodeType = (typeof StorageErrorCode)[keyof typeof StorageErrorCode]
-
-/** 存储错误码 → HTTP 状态码映射 */
-export const StorageErrorHttpStatus: Record<number, number> = {
-  [StorageErrorCode.CONNECTION_FAILED]: 500,
-  [StorageErrorCode.OPERATION_FAILED]: 500,
-  [StorageErrorCode.NOT_FOUND]: 404,
-  [StorageErrorCode.ALREADY_EXISTS]: 409,
-  [StorageErrorCode.PERMISSION_DENIED]: 403,
-  [StorageErrorCode.QUOTA_EXCEEDED]: 413,
-  [StorageErrorCode.INVALID_PATH]: 400,
-  [StorageErrorCode.IO_ERROR]: 500,
-  [StorageErrorCode.NETWORK_ERROR]: 502,
-  [StorageErrorCode.NOT_INITIALIZED]: 500,
-  [StorageErrorCode.UNSUPPORTED_TYPE]: 400,
-  [StorageErrorCode.CONFIG_ERROR]: 500,
-  [StorageErrorCode.PRESIGN_FAILED]: 500,
-  [StorageErrorCode.UPLOAD_FAILED]: 500,
-  [StorageErrorCode.DOWNLOAD_FAILED]: 500,
-}
-
 // ─── 配置 Schema ───
 
 /**

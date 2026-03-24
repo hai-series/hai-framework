@@ -5,10 +5,30 @@
  * @module deploy-types
  */
 
-import type { Result } from '@h-ai/core'
-import type { DeployConfig, DeployConfigInput, DeployErrorCodeType } from './deploy-config.js'
+import type { ErrorInfo, HaiResult } from '@h-ai/core'
+import type { DeployConfig, DeployConfigInput } from './deploy-config.js'
+import { core } from '@h-ai/core'
 
-// ─── 错误类型 ───
+// ─── 错误定义（照 @h-ai/core 范式） ───
+
+const DeployErrorInfo = {
+  DEPLOY_FAILED: '001:500',
+  PROJECT_CREATE_FAILED: '002:500',
+  BUILD_FAILED: '003:500',
+  UPLOAD_FAILED: '004:500',
+  AUTH_REQUIRED: '005:401',
+  AUTH_FAILED: '006:401',
+  PROVISION_FAILED: '007:500',
+  ADAPTER_MISSING: '008:500',
+  SCAN_FAILED: '009:500',
+  ENV_VAR_FAILED: '010:500',
+  NOT_INITIALIZED: '011:500',
+  UNSUPPORTED_TYPE: '012:400',
+  CONFIG_ERROR: '013:500',
+  CREDENTIAL_ERROR: '014:500',
+} as const satisfies ErrorInfo
+
+export const HaiDeployError = core.error.buildHaiErrorsDef('deploy', DeployErrorInfo)
 
 /**
  * 部署错误接口
@@ -25,8 +45,8 @@ import type { DeployConfig, DeployConfigInput, DeployErrorCodeType } from './dep
  * ```
  */
 export interface DeployError {
-  /** 错误码（数值，参见 DeployErrorCode） */
-  code: DeployErrorCodeType
+  /** 错误定义 */
+  def: (typeof HaiDeployError)[keyof typeof HaiDeployError]
   /** 错误消息 */
   message: string
   /** 原始错误（可选） */
@@ -111,7 +131,7 @@ export interface DeployProvider {
    * @param token - 平台 API Token
    * @returns 用户信息摘要（如邮箱/用户名）
    */
-  authenticate: (token: string) => Promise<Result<string, DeployError>>
+  authenticate: (token: string) => Promise<HaiResult<string>>
 
   /**
    * 创建平台项目（幂等：已存在则返回现有项目 ID）
@@ -119,7 +139,7 @@ export interface DeployProvider {
    * @param projectName - 项目名称
    * @returns 项目 ID
    */
-  createProject: (projectName: string) => Promise<Result<string, DeployError>>
+  createProject: (projectName: string) => Promise<HaiResult<string>>
 
   /**
    * 批量设置项目环境变量
@@ -127,7 +147,7 @@ export interface DeployProvider {
    * @param projectId - 平台项目 ID
    * @param envVars - 环境变量键值对
    */
-  setEnvVars: (projectId: string, envVars: Record<string, string>) => Promise<Result<void, DeployError>>
+  setEnvVars: (projectId: string, envVars: Record<string, string>) => Promise<HaiResult<void>>
 
   /**
    * 上传构建产物并触发部署
@@ -136,7 +156,7 @@ export interface DeployProvider {
    * @param outputDir - 构建产物目录（如 .vercel/output/）
    * @returns 部署结果
    */
-  deploy: (projectId: string, outputDir: string) => Promise<Result<DeployResult, DeployError>>
+  deploy: (projectId: string, outputDir: string) => Promise<HaiResult<DeployResult>>
 }
 
 // ─── Provisioner 接口 ───
@@ -158,7 +178,7 @@ export interface ServiceProvisioner {
    * @param credentials - 凭证键值对
    * @returns 账户标识信息
    */
-  authenticate: (credentials: Record<string, string>) => Promise<Result<string, DeployError>>
+  authenticate: (credentials: Record<string, string>) => Promise<HaiResult<string>>
 
   /**
    * 开通/查找服务资源（幂等：按项目名查找已有资源）
@@ -166,7 +186,7 @@ export interface ServiceProvisioner {
    * @param projectName - 项目名称，用作资源命名
    * @returns 开通结果（含环境变量映射）
    */
-  provision: (projectName: string) => Promise<Result<ProvisionResult, DeployError>>
+  provision: (projectName: string) => Promise<HaiResult<ProvisionResult>>
 }
 
 // ─── 部署选项 ───
@@ -207,7 +227,7 @@ export interface DeployAppOptions {
  */
 export interface DeployFunctions {
   /** 初始化模块（加载配置、创建 Provider 和 Provisioner 实例） */
-  init: (config: DeployConfigInput) => Promise<Result<void, DeployError>>
+  init: (config: DeployConfigInput) => Promise<HaiResult<void>>
   /** 关闭模块 */
   close: () => Promise<void>
   /** 当前配置 */
@@ -220,7 +240,7 @@ export interface DeployFunctions {
    *
    * @param appDir - 应用根目录路径
    */
-  scan: (appDir: string) => Promise<Result<ScanResult, DeployError>>
+  scan: (appDir: string) => Promise<HaiResult<ScanResult>>
 
   /**
    * 对所有已配置的 Provisioner 执行基础设施开通
@@ -228,7 +248,7 @@ export interface DeployFunctions {
    * @param projectName - 用于资源命名的项目名
    * @returns 所有 Provisioner 的结果列表
    */
-  provisionAll: (projectName: string) => Promise<Result<ProvisionResult[], DeployError>>
+  provisionAll: (projectName: string) => Promise<HaiResult<ProvisionResult[]>>
 
   /**
    * 执行完整部署流程（provision → build → deploy）
@@ -236,5 +256,5 @@ export interface DeployFunctions {
    * @param appDir - 应用根目录路径
    * @param options - 部署选项
    */
-  deployApp: (appDir: string, options?: DeployAppOptions) => Promise<Result<DeployResult, DeployError>>
+  deployApp: (appDir: string, options?: DeployAppOptions) => Promise<HaiResult<DeployResult>>
 }

@@ -5,28 +5,19 @@
  * @module scheduler-executor
  */
 
-import type { Result } from '@h-ai/core'
+import type { HaiResult } from '@h-ai/core'
 import type { SchedulerLogRepository } from './repositories/index.js'
-import type {
-  ExecutionStatus,
-  SchedulerError,
-  SchedulerTaskContext,
-  SchedulerTaskExecuteEvent,
-  SchedulerTaskFinishEvent,
-  SchedulerTaskHooks,
-  SchedulerTaskInterruptedEvent,
-  SchedulerTaskStartEvent,
-  TaskDefinition,
-  TaskExecutionLog,
-  TaskExecutionTargetType,
-  TaskTriggerInfo,
-} from './scheduler-types.js'
+import type { ExecutionStatus, SchedulerTaskContext, SchedulerTaskExecuteEvent, SchedulerTaskFinishEvent, SchedulerTaskHooks, SchedulerTaskInterruptedEvent, SchedulerTaskStartEvent, TaskDefinition, TaskExecutionLog, TaskExecutionTargetType, TaskTriggerInfo } from './scheduler-types.js'
 
 import { core, err, ok } from '@h-ai/core'
 
-import { SchedulerErrorCode } from './scheduler-config.js'
 import { schedulerM } from './scheduler-i18n.js'
 import { compileJsTaskHandler } from './scheduler-js-compiler.js'
+import {
+
+  HaiSchedulerError,
+
+} from './scheduler-types.js'
 
 const logger = core.logger.child({ module: 'scheduler', scope: 'executor' })
 
@@ -176,13 +167,13 @@ export async function interruptTask(
 export async function executeJsTask(
   task: TaskDefinition,
   context: SchedulerTaskContext,
-): Promise<Result<string | null, SchedulerError>> {
+): Promise<HaiResult<string | null>> {
   const handler = task.handler
   if (!handler || handler.kind !== 'js') {
-    return err({
-      code: SchedulerErrorCode.EXECUTION_FAILED,
-      message: schedulerM('scheduler_invalidHandlerConfig', { params: { taskId: task.id } }),
-    })
+    return err(
+      HaiSchedulerError.EXECUTION_FAILED,
+      schedulerM('scheduler_invalidHandlerConfig', { params: { taskId: task.id } }),
+    )
   }
 
   const compileResult = compileJsTaskHandler(handler)
@@ -196,24 +187,24 @@ export async function executeJsTask(
   catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     logger.error('JS task execution failed', { taskId: task.id, error: message })
-    return err({
-      code: SchedulerErrorCode.JS_EXECUTION_FAILED,
-      message: schedulerM('scheduler_jsExecutionFailed', { params: { error: message } }),
-      cause: error,
-    })
+    return err(
+      HaiSchedulerError.JS_EXECUTION_FAILED,
+      schedulerM('scheduler_jsExecutionFailed', { params: { error: message } }),
+      error,
+    )
   }
 }
 
 export async function executeApiTask(
   task: TaskDefinition,
   context: SchedulerTaskContext,
-): Promise<Result<string | null, SchedulerError>> {
+): Promise<HaiResult<string | null>> {
   const handler = task.handler
   if (!handler || handler.kind !== 'api') {
-    return err({
-      code: SchedulerErrorCode.EXECUTION_FAILED,
-      message: schedulerM('scheduler_invalidHandlerConfig', { params: { taskId: task.id } }),
-    })
+    return err(
+      HaiSchedulerError.EXECUTION_FAILED,
+      schedulerM('scheduler_invalidHandlerConfig', { params: { taskId: task.id } }),
+    )
   }
 
   const { url, method = 'GET', headers, body, timeout = 30000 } = handler
@@ -240,12 +231,12 @@ export async function executeApiTask(
         status: response.status,
         url: sanitizeUrl(url),
       })
-      return err({
-        code: SchedulerErrorCode.API_EXECUTION_FAILED,
-        message: schedulerM('scheduler_apiExecutionFailed', {
+      return err(
+        HaiSchedulerError.API_EXECUTION_FAILED,
+        schedulerM('scheduler_apiExecutionFailed', {
           params: { error: `HTTP ${response.status}: ${responseText.slice(0, 200)}` },
         }),
-      })
+      )
     }
 
     return ok(responseText || null)
@@ -254,11 +245,11 @@ export async function executeApiTask(
     clearTimeout(timer)
     const message = error instanceof Error ? error.message : String(error)
     logger.error('API task execution failed', { taskId: context.taskId, error: message, url: sanitizeUrl(url) })
-    return err({
-      code: SchedulerErrorCode.API_EXECUTION_FAILED,
-      message: schedulerM('scheduler_apiExecutionFailed', { params: { error: message } }),
-      cause: error,
-    })
+    return err(
+      HaiSchedulerError.API_EXECUTION_FAILED,
+      schedulerM('scheduler_apiExecutionFailed', { params: { error: message } }),
+      error,
+    )
   }
 }
 
@@ -267,12 +258,12 @@ async function executeHookTask(
   context: SchedulerTaskContext,
   hooks: Readonly<SchedulerTaskHooks>,
   startedAt: number,
-): Promise<Result<string | null, SchedulerError>> {
+): Promise<HaiResult<string | null>> {
   if (!hooks.onTaskExecute) {
-    return err({
-      code: SchedulerErrorCode.EXECUTION_FAILED,
-      message: schedulerM('scheduler_taskHandlerMissing', { params: { taskId: task.id } }),
-    })
+    return err(
+      HaiSchedulerError.EXECUTION_FAILED,
+      schedulerM('scheduler_taskHandlerMissing', { params: { taskId: task.id } }),
+    )
   }
 
   const executeEvent: SchedulerTaskExecuteEvent = {
@@ -289,11 +280,11 @@ async function executeHookTask(
   catch (error) {
     const message = error instanceof Error ? error.message : String(error)
     logger.error('Task execute hook failed', { taskId: task.id, error: message })
-    return err({
-      code: SchedulerErrorCode.HOOK_EXECUTION_FAILED,
-      message: schedulerM('scheduler_hookExecutionFailed', { params: { error: message } }),
-      cause: error,
-    })
+    return err(
+      HaiSchedulerError.HOOK_EXECUTION_FAILED,
+      schedulerM('scheduler_hookExecutionFailed', { params: { error: message } }),
+      error,
+    )
   }
 }
 
@@ -308,7 +299,7 @@ export async function executeTask(
 
   await notifyTaskStart(hooks, { task, trigger, startedAt })
 
-  let executionResult: Result<string | null, SchedulerError>
+  let executionResult: HaiResult<string | null>
   let shouldNotifyInterrupted = false
   if (!task.handler) {
     executionResult = await executeHookTask(task, context, hooks, startedAt)

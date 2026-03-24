@@ -6,31 +6,25 @@
  * @module scheduler-main
  */
 
-import type { PaginatedResult, Result } from '@h-ai/core'
+import type { HaiResult, PaginatedResult } from '@h-ai/core'
 
 import type { SchedulerConfig } from './scheduler-config.js'
-import type {
-  LogQueryOptions,
-  SchedulerError,
-  SchedulerFunctions,
-  SchedulerInitInput,
-  SchedulerTaskHooks,
-  TaskDefinition,
-  TaskExecutionLog,
-  TaskUpdateInput,
-  TriggerTaskInput,
-} from './scheduler-types.js'
+import type { LogQueryOptions, SchedulerFunctions, SchedulerInitInput, SchedulerTaskHooks, TaskDefinition, TaskExecutionLog, TaskUpdateInput, TriggerTaskInput } from './scheduler-types.js'
 import { cache } from '@h-ai/cache'
 import { core, err, ok } from '@h-ai/core'
 import { reldb } from '@h-ai/reldb'
 
 import { SchedulerLogRepository, SchedulerTaskRepository } from './repositories/index.js'
-import { SchedulerConfigSchema, SchedulerErrorCode } from './scheduler-config.js'
+import { SchedulerConfigSchema } from './scheduler-config.js'
 import { setLogRepository } from './scheduler-executor.js'
 import { clearHooks, getHooks, getTask, getTaskRegistry, loadConfigTasks, loadPersistedTasks, queryTaskLogs, registerTask, resetTaskState, setHooks, unregisterTask, updateRegisteredTask } from './scheduler-functions.js'
 import { schedulerM } from './scheduler-i18n.js'
 import { clearJsTaskHandlerCache } from './scheduler-js-compiler.js'
 import { configureLock, isTaskRunning, isTimerRunning, resetRunner, runTask, startTimer, stopTimer } from './scheduler-runner.js'
+import {
+  HaiSchedulerError,
+
+} from './scheduler-types.js'
 
 const logger = core.logger.child({ module: 'scheduler', scope: 'main' })
 
@@ -39,8 +33,8 @@ let initInProgress = false
 let taskRepo: SchedulerTaskRepository | null = null
 let logRepo: SchedulerLogRepository | null = null
 
-const notInitialized = core.module.createNotInitializedKit<SchedulerError>(
-  SchedulerErrorCode.NOT_INITIALIZED,
+const notInitialized = core.module.createNotInitializedKit(
+  HaiSchedulerError.NOT_INITIALIZED,
   () => schedulerM('scheduler_notInitialized'),
 )
 
@@ -77,13 +71,13 @@ function normalizeTriggerInput(options?: TriggerTaskInput): { type: 'manual', so
 }
 
 export const scheduler: SchedulerFunctions = {
-  async init(config?: SchedulerInitInput): Promise<Result<void, SchedulerError>> {
+  async init(config?: SchedulerInitInput): Promise<HaiResult<void>> {
     if (initInProgress) {
       logger.warn('Scheduler init already in progress, skipping concurrent call')
-      return err({
-        code: SchedulerErrorCode.INIT_FAILED,
-        message: schedulerM('scheduler_initFailed', { params: { error: 'Concurrent initialization detected' } }),
-      })
+      return err(
+        HaiSchedulerError.INIT_FAILED,
+        schedulerM('scheduler_initFailed', { params: { error: 'Concurrent initialization detected' } }),
+      )
     }
 
     initInProgress = true
@@ -99,11 +93,11 @@ export const scheduler: SchedulerFunctions = {
       const parseResult = SchedulerConfigSchema.safeParse(configOptions)
       if (!parseResult.success) {
         logger.error('Scheduler config validation failed', { error: parseResult.error.message })
-        return err({
-          code: SchedulerErrorCode.CONFIG_ERROR,
-          message: schedulerM('scheduler_configError', { params: { error: parseResult.error.message } }),
-          cause: parseResult.error,
-        })
+        return err(
+          HaiSchedulerError.CONFIG_ERROR,
+          schedulerM('scheduler_configError', { params: { error: parseResult.error.message } }),
+          parseResult.error,
+        )
       }
 
       try {
@@ -120,13 +114,13 @@ export const scheduler: SchedulerFunctions = {
       catch (error) {
         logger.error('Scheduler initialization failed', { error })
         await scheduler.close()
-        return err({
-          code: SchedulerErrorCode.INIT_FAILED,
-          message: schedulerM('scheduler_initFailed', {
+        return err(
+          HaiSchedulerError.INIT_FAILED,
+          schedulerM('scheduler_initFailed', {
             params: { error: error instanceof Error ? error.message : String(error) },
           }),
-          cause: error,
-        })
+          error,
+        )
       }
     }
     finally {
@@ -134,7 +128,7 @@ export const scheduler: SchedulerFunctions = {
     }
   },
 
-  async register(task: TaskDefinition): Promise<Result<void, SchedulerError>> {
+  async register(task: TaskDefinition): Promise<HaiResult<void>> {
     if (!currentConfig)
       return notInitialized.result()
 
@@ -145,7 +139,7 @@ export const scheduler: SchedulerFunctions = {
     return registerResult
   },
 
-  async unregister(taskId: string): Promise<Result<void, SchedulerError>> {
+  async unregister(taskId: string): Promise<HaiResult<void>> {
     if (!currentConfig)
       return notInitialized.result()
 
@@ -156,7 +150,7 @@ export const scheduler: SchedulerFunctions = {
     return unregisterResult
   },
 
-  async updateTask(taskId: string, updates: TaskUpdateInput): Promise<Result<void, SchedulerError>> {
+  async updateTask(taskId: string, updates: TaskUpdateInput): Promise<HaiResult<void>> {
     if (!currentConfig)
       return notInitialized.result()
 
@@ -167,15 +161,15 @@ export const scheduler: SchedulerFunctions = {
     return updateResult
   },
 
-  start(): Result<void, SchedulerError> {
+  start(): HaiResult<void> {
     if (!currentConfig)
       return notInitialized.result()
 
     if (isTimerRunning()) {
-      return err({
-        code: SchedulerErrorCode.ALREADY_RUNNING,
-        message: schedulerM('scheduler_alreadyRunning'),
-      })
+      return err(
+        HaiSchedulerError.ALREADY_RUNNING,
+        schedulerM('scheduler_alreadyRunning'),
+      )
     }
 
     startTimer(currentConfig.tickInterval)
@@ -183,15 +177,15 @@ export const scheduler: SchedulerFunctions = {
     return ok(undefined)
   },
 
-  stop(): Result<void, SchedulerError> {
+  stop(): HaiResult<void> {
     if (!currentConfig)
       return notInitialized.result()
 
     if (!isTimerRunning()) {
-      return err({
-        code: SchedulerErrorCode.NOT_RUNNING,
-        message: schedulerM('scheduler_notRunning'),
-      })
+      return err(
+        HaiSchedulerError.NOT_RUNNING,
+        schedulerM('scheduler_notRunning'),
+      )
     }
 
     stopTimer()
@@ -199,37 +193,37 @@ export const scheduler: SchedulerFunctions = {
     return ok(undefined)
   },
 
-  async trigger(taskId: string, options?: TriggerTaskInput): Promise<Result<TaskExecutionLog, SchedulerError>> {
+  async trigger(taskId: string, options?: TriggerTaskInput): Promise<HaiResult<TaskExecutionLog>> {
     if (!currentConfig)
       return notInitialized.result()
 
     const task = getTask(taskId)
     if (!task) {
-      return err({
-        code: SchedulerErrorCode.TASK_NOT_FOUND,
-        message: schedulerM('scheduler_taskNotFound', { params: { taskId } }),
-      })
+      return err(
+        HaiSchedulerError.TASK_NOT_FOUND,
+        schedulerM('scheduler_taskNotFound', { params: { taskId } }),
+      )
     }
 
     if (isTaskRunning(taskId)) {
-      return err({
-        code: SchedulerErrorCode.EXECUTION_FAILED,
-        message: schedulerM('scheduler_taskRunning', { params: { taskId } }),
-      })
+      return err(
+        HaiSchedulerError.EXECUTION_FAILED,
+        schedulerM('scheduler_taskRunning', { params: { taskId } }),
+      )
     }
 
     const log = await runTask(task, undefined, normalizeTriggerInput(options))
     return ok(log)
   },
 
-  async getLogs(options?: LogQueryOptions): Promise<Result<PaginatedResult<TaskExecutionLog>, SchedulerError>> {
+  async getLogs(options?: LogQueryOptions): Promise<HaiResult<PaginatedResult<TaskExecutionLog>>> {
     if (!currentConfig)
       return notInitialized.result()
 
     return queryTaskLogs(logRepo, options)
   },
 
-  setHooks(hooks: SchedulerTaskHooks): Result<void, SchedulerError> {
+  setHooks(hooks: SchedulerTaskHooks): HaiResult<void> {
     if (!currentConfig)
       return notInitialized.result()
 
@@ -237,7 +231,7 @@ export const scheduler: SchedulerFunctions = {
     return ok(undefined)
   },
 
-  clearHooks(): Result<void, SchedulerError> {
+  clearHooks(): HaiResult<void> {
     if (!currentConfig)
       return notInitialized.result()
 

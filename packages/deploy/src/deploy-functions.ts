@@ -5,15 +5,14 @@
  * @module deploy-functions
  */
 
-import type { Result } from '@h-ai/core'
-import type { DeployError } from './deploy-types.js'
+import type { HaiResult } from '@h-ai/core'
 import { execSync } from 'node:child_process'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import process from 'node:process'
 import { core, err, ok } from '@h-ai/core'
-import { DeployErrorCode } from './deploy-config.js'
 import { deployM } from './deploy-i18n.js'
+import { HaiDeployError } from './deploy-types.js'
 
 const logger = core.logger.child({ module: 'deploy', scope: 'functions' })
 
@@ -24,7 +23,7 @@ const logger = core.logger.child({ module: 'deploy', scope: 'functions' })
  * @param buildCommand - 构建命令
  * @returns 构建结果
  */
-export function buildApp(appDir: string, buildCommand: string): Result<void, DeployError> {
+export function buildApp(appDir: string, buildCommand: string): HaiResult<void> {
   logger.info('Building application', { appDir, buildCommand })
   try {
     execSync(buildCommand, {
@@ -35,13 +34,13 @@ export function buildApp(appDir: string, buildCommand: string): Result<void, Dep
     return ok(undefined)
   }
   catch (error) {
-    return err({
-      code: DeployErrorCode.BUILD_FAILED,
-      message: deployM('deploy_buildFailed', {
+    return err(
+      HaiDeployError.BUILD_FAILED,
+      deployM('deploy_buildFailed', {
         params: { error: error instanceof Error ? error.message : String(error) },
       }),
-      cause: error,
-    })
+      error,
+    )
   }
 }
 

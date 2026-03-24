@@ -5,16 +5,15 @@
  * @module deploy-credentials
  */
 
-import type { Result } from '@h-ai/core'
-import type { DeployError } from './deploy-types.js'
+import type { HaiResult } from '@h-ai/core'
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { dirname, join } from 'node:path'
 import process from 'node:process'
 import { core, err, ok } from '@h-ai/core'
 import { parse, stringify } from 'yaml'
-import { DeployErrorCode } from './deploy-config.js'
 import { deployM } from './deploy-i18n.js'
+import { HaiDeployError } from './deploy-types.js'
 
 const logger = core.logger.child({ module: 'deploy', scope: 'credentials' })
 
@@ -91,7 +90,7 @@ function writeCredentialsFile(data: Record<string, string>): void {
  * }
  * ```
  */
-export function loadCredentials(): Result<string[], DeployError> {
+export function loadCredentials(): HaiResult<string[]> {
   try {
     const data = readCredentialsFile()
     const keys = Object.keys(data)
@@ -103,13 +102,13 @@ export function loadCredentials(): Result<string[], DeployError> {
   }
   catch (error) {
     logger.error('Failed to load credentials', { error })
-    return err({
-      code: DeployErrorCode.CREDENTIAL_ERROR,
-      message: deployM('deploy_credentialError', {
+    return err(
+      HaiDeployError.CREDENTIAL_ERROR,
+      deployM('deploy_credentialError', {
         params: { error: error instanceof Error ? error.message : String(error) },
       }),
-      cause: error,
-    })
+      error,
+    )
   }
 }
 
@@ -126,7 +125,7 @@ export function loadCredentials(): Result<string[], DeployError> {
  * saveCredential('HAI_DEPLOY_VERCEL_TOKEN', 'vel_xxx')
  * ```
  */
-export function saveCredential(key: string, value: string): Result<void, DeployError> {
+export function saveCredential(key: string, value: string): HaiResult<void> {
   try {
     const data = readCredentialsFile()
     data[key] = value
@@ -137,13 +136,13 @@ export function saveCredential(key: string, value: string): Result<void, DeployE
   }
   catch (error) {
     logger.error('Failed to save credential', { key, error })
-    return err({
-      code: DeployErrorCode.CREDENTIAL_ERROR,
-      message: deployM('deploy_credentialError', {
+    return err(
+      HaiDeployError.CREDENTIAL_ERROR,
+      deployM('deploy_credentialError', {
         params: { error: error instanceof Error ? error.message : String(error) },
       }),
-      cause: error,
-    })
+      error,
+    )
   }
 }
 
@@ -160,7 +159,7 @@ export function saveCredential(key: string, value: string): Result<void, DeployE
  * })
  * ```
  */
-export function saveCredentials(entries: Record<string, string>): Result<void, DeployError> {
+export function saveCredentials(entries: Record<string, string>): HaiResult<void> {
   try {
     const data = readCredentialsFile()
     for (const [key, value] of Object.entries(entries)) {
@@ -173,12 +172,12 @@ export function saveCredentials(entries: Record<string, string>): Result<void, D
   }
   catch (error) {
     logger.error('Failed to save credentials', { error })
-    return err({
-      code: DeployErrorCode.CREDENTIAL_ERROR,
-      message: deployM('deploy_credentialError', {
+    return err(
+      HaiDeployError.CREDENTIAL_ERROR,
+      deployM('deploy_credentialError', {
         params: { error: error instanceof Error ? error.message : String(error) },
       }),
-      cause: error,
-    })
+      error,
+    )
   }
 }

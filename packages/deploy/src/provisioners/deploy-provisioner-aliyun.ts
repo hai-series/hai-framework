@@ -5,11 +5,11 @@
  * @module deploy-provisioner-aliyun
  */
 
-import type { Result } from '@h-ai/core'
-import type { DeployError, ProvisionResult, ServiceProvisioner } from '../deploy-types.js'
+import type { HaiResult } from '@h-ai/core'
+import type { ProvisionResult, ServiceProvisioner } from '../deploy-types.js'
 import { core, err, ok } from '@h-ai/core'
-import { DeployErrorCode } from '../deploy-config.js'
 import { deployM } from '../deploy-i18n.js'
+import { HaiDeployError } from '../deploy-types.js'
 
 const logger = core.logger.child({ module: 'deploy', scope: 'provisioner-aliyun' })
 
@@ -26,7 +26,7 @@ export function createAliyunProvisioner(): ServiceProvisioner {
     name: 'aliyun',
     serviceType: 'sms',
 
-    async authenticate(credentials: Record<string, string>): Promise<Result<string, DeployError>> {
+    async authenticate(credentials: Record<string, string>): Promise<HaiResult<string>> {
       logger.debug('Authenticating with Aliyun')
       try {
         const akId = credentials.accessKeyId ?? credentials.access_key_id ?? credentials.access_key ?? ''
@@ -43,22 +43,22 @@ export function createAliyunProvisioner(): ServiceProvisioner {
       }
       catch (error) {
         logger.error('Aliyun authentication failed', { error })
-        return err({
-          code: DeployErrorCode.AUTH_FAILED,
-          message: deployM('deploy_authFailed', {
+        return err(
+          HaiDeployError.AUTH_FAILED,
+          deployM('deploy_authFailed', {
             params: { error: error instanceof Error ? error.message : String(error) },
           }),
-          cause: error,
-        })
+          error,
+        )
       }
     },
 
-    async provision(_appName: string): Promise<Result<ProvisionResult, DeployError>> {
+    async provision(_appName: string): Promise<HaiResult<ProvisionResult>> {
       if (!accessKey || !secretKey) {
-        return err({
-          code: DeployErrorCode.AUTH_REQUIRED,
-          message: deployM('deploy_authRequired'),
-        })
+        return err(
+          HaiDeployError.AUTH_REQUIRED,
+          deployM('deploy_authRequired'),
+        )
       }
 
       logger.debug('Provisioning Aliyun SMS service')

@@ -10,16 +10,16 @@
  * @module scheduler-functions
  */
 
-import type { PaginatedResult, Result } from '@h-ai/core'
+import type { HaiResult, PaginatedResult } from '@h-ai/core'
 import type { Cron } from 'croner'
 import type { SchedulerLogRepository, SchedulerTaskRepository } from './repositories/index.js'
-import type { LogQueryOptions, SchedulerError, SchedulerTaskHooks, TaskDefinition, TaskExecutionLog, TaskUpdateInput } from './scheduler-types.js'
+import type { LogQueryOptions, SchedulerTaskHooks, TaskDefinition, TaskExecutionLog, TaskUpdateInput } from './scheduler-types.js'
 
 import { core, err, ok } from '@h-ai/core'
 
-import { SchedulerErrorCode } from './scheduler-config.js'
 import { parseCronExpression } from './scheduler-cron.js'
 import { schedulerM } from './scheduler-i18n.js'
+import { HaiSchedulerError } from './scheduler-types.js'
 
 const logger = core.logger.child({ module: 'scheduler', scope: 'functions' })
 
@@ -150,19 +150,19 @@ export async function loadConfigTasks(tasks: TaskDefinition[]): Promise<void> {
 export async function registerTask(
   task: TaskDefinition,
   taskRepo?: SchedulerTaskRepository | null,
-): Promise<Result<void, SchedulerError>> {
+): Promise<HaiResult<void>> {
   if (!task.id) {
-    return err({
-      code: SchedulerErrorCode.EXECUTION_FAILED,
-      message: schedulerM('scheduler_taskIdEmpty'),
-    })
+    return err(
+      HaiSchedulerError.EXECUTION_FAILED,
+      schedulerM('scheduler_taskIdEmpty'),
+    )
   }
 
   if (hasTask(task.id)) {
-    return err({
-      code: SchedulerErrorCode.TASK_ALREADY_EXISTS,
-      message: schedulerM('scheduler_taskAlreadyExists', { params: { taskId: task.id } }),
-    })
+    return err(
+      HaiSchedulerError.TASK_ALREADY_EXISTS,
+      schedulerM('scheduler_taskAlreadyExists', { params: { taskId: task.id } }),
+    )
   }
 
   const cronResult = parseCronExpression(task.cron)
@@ -191,12 +191,12 @@ export async function registerTask(
 export async function unregisterTask(
   taskId: string,
   taskRepo?: SchedulerTaskRepository | null,
-): Promise<Result<void, SchedulerError>> {
+): Promise<HaiResult<void>> {
   if (!hasTask(taskId)) {
-    return err({
-      code: SchedulerErrorCode.TASK_NOT_FOUND,
-      message: schedulerM('scheduler_taskNotFound', { params: { taskId } }),
-    })
+    return err(
+      HaiSchedulerError.TASK_NOT_FOUND,
+      schedulerM('scheduler_taskNotFound', { params: { taskId } }),
+    )
   }
 
   deleteTask(taskId)
@@ -216,13 +216,13 @@ export async function updateRegisteredTask(
   taskId: string,
   updates: TaskUpdateInput,
   taskRepo?: SchedulerTaskRepository | null,
-): Promise<Result<void, SchedulerError>> {
+): Promise<HaiResult<void>> {
   const existingTask = getTask(taskId)
   if (!existingTask) {
-    return err({
-      code: SchedulerErrorCode.TASK_NOT_FOUND,
-      message: schedulerM('scheduler_taskNotFound', { params: { taskId } }),
-    })
+    return err(
+      HaiSchedulerError.TASK_NOT_FOUND,
+      schedulerM('scheduler_taskNotFound', { params: { taskId } }),
+    )
   }
 
   if (updates.cron !== undefined) {
@@ -257,12 +257,12 @@ export async function updateRegisteredTask(
 export async function queryTaskLogs(
   logRepo: SchedulerLogRepository | null,
   options?: LogQueryOptions,
-): Promise<Result<PaginatedResult<TaskExecutionLog>, SchedulerError>> {
+): Promise<HaiResult<PaginatedResult<TaskExecutionLog>>> {
   if (!logRepo) {
-    return err({
-      code: SchedulerErrorCode.DB_SAVE_FAILED,
-      message: schedulerM('scheduler_dbNotInitialized'),
-    })
+    return err(
+      HaiSchedulerError.DB_SAVE_FAILED,
+      schedulerM('scheduler_dbNotInitialized'),
+    )
   }
 
   return logRepo.queryLogs(options)

@@ -5,15 +5,14 @@
  * @module deploy-provider-vercel
  */
 
-import type { Result } from '@h-ai/core'
-import type { DeployErrorCodeType } from '../deploy-config.js'
-import type { DeployError, DeployProvider, DeployResult } from '../deploy-types.js'
+import type { HaiError, HaiErrorDef, HaiResult } from '@h-ai/core'
+import type { DeployProvider, DeployResult } from '../deploy-types.js'
 import { createHash } from 'node:crypto'
 import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join, relative } from 'node:path'
 import { core, err, ok } from '@h-ai/core'
-import { DeployErrorCode } from '../deploy-config.js'
 import { deployM } from '../deploy-i18n.js'
+import { HaiDeployError } from '../deploy-types.js'
 
 const logger = core.logger.child({ module: 'deploy', scope: 'provider-vercel' })
 
@@ -29,9 +28,9 @@ const MAX_POLL_ATTEMPTS = 60
 // ─── 内部工具 ───
 
 /** 构造标准错误对象 */
-function toDeployError(code: DeployErrorCodeType, messageKey: string, error: unknown): DeployError {
+function toDeployError(codeDef: HaiErrorDef, messageKey: string, error: unknown): HaiError {
   return {
-    code,
+    ...codeDef,
     message: deployM(messageKey as Parameters<typeof deployM>[0], {
       params: { error: error instanceof Error ? error.message : String(error) },
     }),
@@ -110,7 +109,7 @@ export function createVercelProvider(): DeployProvider {
   return {
     name: 'vercel',
 
-    async authenticate(apiToken: string): Promise<Result<string, DeployError>> {
+    async authenticate(apiToken: string): Promise<HaiResult<string>> {
       logger.debug('Authenticating with Vercel')
       try {
         const user = await vercelFetch<{ user: { username: string, email: string } }>(
@@ -124,16 +123,16 @@ export function createVercelProvider(): DeployProvider {
       }
       catch (error) {
         logger.error('Vercel authentication failed', { error })
-        return err(toDeployError(DeployErrorCode.AUTH_FAILED, 'deploy_authFailed', error))
+        return err(toDeployError(HaiDeployError.AUTH_FAILED, 'deploy_authFailed', error))
       }
     },
 
-    async createProject(projectName: string): Promise<Result<string, DeployError>> {
+    async createProject(projectName: string): Promise<HaiResult<string>> {
       if (!token) {
-        return err({
-          code: DeployErrorCode.AUTH_REQUIRED,
-          message: deployM('deploy_authRequired'),
-        })
+        return err(
+          HaiDeployError.AUTH_REQUIRED,
+          deployM('deploy_authRequired'),
+        )
       }
 
       logger.debug('Creating Vercel project', { projectName })
@@ -162,16 +161,16 @@ export function createVercelProvider(): DeployProvider {
       }
       catch (error) {
         logger.error('Vercel project creation failed', { projectName, error })
-        return err(toDeployError(DeployErrorCode.PROJECT_CREATE_FAILED, 'deploy_projectCreateFailed', error))
+        return err(toDeployError(HaiDeployError.PROJECT_CREATE_FAILED, 'deploy_projectCreateFailed', error))
       }
     },
 
-    async setEnvVars(projectId: string, envVars: Record<string, string>): Promise<Result<void, DeployError>> {
+    async setEnvVars(projectId: string, envVars: Record<string, string>): Promise<HaiResult<void>> {
       if (!token) {
-        return err({
-          code: DeployErrorCode.AUTH_REQUIRED,
-          message: deployM('deploy_authRequired'),
-        })
+        return err(
+          HaiDeployError.AUTH_REQUIRED,
+          deployM('deploy_authRequired'),
+        )
       }
 
       logger.debug('Setting Vercel env vars', { projectId, count: Object.keys(envVars).length })
@@ -196,16 +195,16 @@ export function createVercelProvider(): DeployProvider {
       }
       catch (error) {
         logger.error('Vercel env vars setup failed', { projectId, error })
-        return err(toDeployError(DeployErrorCode.ENV_VAR_FAILED, 'deploy_envVarFailed', error))
+        return err(toDeployError(HaiDeployError.ENV_VAR_FAILED, 'deploy_envVarFailed', error))
       }
     },
 
-    async deploy(projectId: string, outputDir: string): Promise<Result<DeployResult, DeployError>> {
+    async deploy(projectId: string, outputDir: string): Promise<HaiResult<DeployResult>> {
       if (!token) {
-        return err({
-          code: DeployErrorCode.AUTH_REQUIRED,
-          message: deployM('deploy_authRequired'),
-        })
+        return err(
+          HaiDeployError.AUTH_REQUIRED,
+          deployM('deploy_authRequired'),
+        )
       }
 
       logger.debug('Deploying to Vercel', { projectId, outputDir })
@@ -261,7 +260,7 @@ export function createVercelProvider(): DeployProvider {
       }
       catch (error) {
         logger.error('Vercel deployment failed', { projectId, error })
-        return err(toDeployError(DeployErrorCode.UPLOAD_FAILED, 'deploy_uploadFailed', error))
+        return err(toDeployError(HaiDeployError.UPLOAD_FAILED, 'deploy_uploadFailed', error))
       }
     },
   }
