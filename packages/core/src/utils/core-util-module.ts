@@ -5,7 +5,9 @@
  * @module core-util-module
  */
 
-import type { HaiResult } from '../core-types.js'
+import type { HaiError, HaiErrorDef, HaiResult } from '../core-types.js'
+
+import { error as errorUtils } from '../functions/core-function-error.js'
 
 // ─── 基础类型 ───
 
@@ -24,8 +26,8 @@ import type { HaiResult } from '../core-types.js'
  * ```
  */
 export interface BaseModuleError {
-  /** 错误码（各模块自定义数值范围） */
-  code: number
+  /** 错误码 */
+  code: string | number
   /** 错误描述（i18n 消息） */
   message: string
 }
@@ -61,7 +63,7 @@ export interface NotInitializedKit<E extends BaseModuleError> {
  * - `result<T>()` — 创建包含未初始化错误的失败 Result
  * - `proxy<T>(mode?)` — 创建 Proxy 对象（mode='async' 异步，mode='sync' 同步）
  *
- * @param code - 模块的 NOT_INITIALIZED 错误码
+ * @param codeOrDef - 模块的 NOT_INITIALIZED 错误码，或标准 HaiErrorDef 错误定义
  * @param messageFn - 返回 i18n 错误消息的函数（延迟求值，确保运行时 locale 正确）
  * @returns 未初始化工具集
  *
@@ -85,23 +87,43 @@ export interface NotInitializedKit<E extends BaseModuleError> {
  *   get ddl() { return currentProvider?.ddl ?? ddlProxy },
  *   get sql() { return currentProvider?.sql ?? notInitialized.proxy<SqlOperations>() },
  * }
+ *
+ * // 新错误模型（HaiErrorDef）
+ * const notInitialized2 = core.module.createNotInitializedKit(
+ *   HaiCommonError.NOT_INITIALIZED,
+ *   () => 'module not initialized',
+ * )
  * ```
  */
+export function createNotInitializedKit(codeOrDef: HaiErrorDef, messageFn: () => string): NotInitializedKit<HaiError>
 export function createNotInitializedKit<E extends BaseModuleError>(
-  code: E['code'],
+  codeOrDef: E['code'],
   messageFn: () => string,
 ): NotInitializedKit<E> {
+  const isHaiErrorDef = (value: BaseModuleError['code'] | HaiErrorDef): value is HaiErrorDef => {
+    return typeof value === 'object'
+      && value !== null
+      && 'httpStatus' in value
+      && 'system' in value
+      && 'module' in value
+  }
+
   /** 创建未初始化错误 */
-  const error = (): E => ({ code, message: messageFn() }) as E
+  const error = (): E => {
+    if (isHaiErrorDef(codeOrDef)) {
+      return errorUtils.buildHaiErrorInst(codeOrDef, messageFn()) as E
+    }
+    return { code: codeOrDef, message: messageFn() } as E
+  }
 
   /** 创建未初始化错误的 HaiResult */
-  const result = <T>(): HaiResult<T> => ({ success: false, error: error() })
+  const result = <T>(): HaiResult<T> => ({ success: false, error: error() as HaiError })
 
   /** 异步占位操作 */
-  const asyncOp = async (): Promise<HaiResult<unknown>> => ({ success: false, error: error() })
+  const asyncOp = async (): Promise<HaiResult<unknown>> => ({ success: false, error: error() as HaiError })
 
   /** 同步占位操作 */
-  const syncOp = (): HaiResult<unknown> => ({ success: false, error: error() })
+  const syncOp = (): HaiResult<unknown> => ({ success: false, error: error() as HaiError })
 
   /** 创建 Proxy 代理 */
   const proxy = <T>(mode: 'async' | 'sync' = 'async'): T =>
