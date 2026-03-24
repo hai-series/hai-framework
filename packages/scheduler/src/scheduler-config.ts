@@ -55,6 +55,10 @@ export const SchedulerErrorCode = {
   NOT_RUNNING: 11028,
   /** 获取分布式锁失败（其他节点已获锁） */
   LOCK_ACQUIRE_FAILED: 11029,
+  /** JS 任务编译失败（无效函数字符串） */
+  JS_COMPILE_FAILED: 11030,
+  /** 生命周期回调执行失败 */
+  HOOK_EXECUTION_FAILED: 11031,
 } as const
 
 /** 定时任务错误码类型 */
@@ -75,6 +79,8 @@ export const SchedulerErrorHttpStatus: Record<number, number> = {
   [SchedulerErrorCode.ALREADY_RUNNING]: 409,
   [SchedulerErrorCode.NOT_RUNNING]: 400,
   [SchedulerErrorCode.LOCK_ACQUIRE_FAILED]: 409,
+  [SchedulerErrorCode.JS_COMPILE_FAILED]: 500,
+  [SchedulerErrorCode.HOOK_EXECUTION_FAILED]: 500,
 }
 
 // ─── 配置 Schema ───
