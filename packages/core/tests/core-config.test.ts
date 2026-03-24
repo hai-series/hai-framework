@@ -9,7 +9,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { z } from 'zod'
-import { ConfigErrorCode, core } from '../src/index.js'
+import { core } from '../src/index.js'
 
 describe('core.config', () => {
   let tempDir: string
@@ -55,7 +55,7 @@ describe('core.config', () => {
     const result = core.config.load('app', configPath, schema)
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(ConfigErrorCode.ENV_VAR_MISSING)
+      expect(result.error.code).toBe('hai:core:013')
     }
   })
 
@@ -63,7 +63,7 @@ describe('core.config', () => {
     const result = core.config.load('app', join(tempDir, 'nonexistent.yml'), schema)
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(ConfigErrorCode.FILE_NOT_FOUND)
+      expect(result.error.code).toBe('hai:core:010')
     }
   })
 
@@ -73,7 +73,7 @@ describe('core.config', () => {
     const result = core.config.load('app', configPath, schema)
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(ConfigErrorCode.PARSE_ERROR)
+      expect(result.error.code).toBe('hai:core:011')
     }
   })
 
@@ -83,7 +83,7 @@ describe('core.config', () => {
     const result = core.config.load('app', configPath, strictSchema)
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(ConfigErrorCode.VALIDATION_ERROR)
+      expect(result.error.code).toBe('hai:core:012')
     }
   })
 
@@ -210,7 +210,7 @@ describe('core.config', () => {
     const result = core.config.validate('app', strictSchema)
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(ConfigErrorCode.VALIDATION_ERROR)
+      expect(result.error.code).toBe('hai:core:012')
     }
   })
 
@@ -218,7 +218,7 @@ describe('core.config', () => {
     const result = core.config.validate('missing', schema)
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(ConfigErrorCode.NOT_LOADED)
+      expect(result.error.code).toBe('hai:core:014')
     }
   })
 
@@ -243,7 +243,7 @@ describe('core.config', () => {
     const result = core.config.reload('missing')
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(ConfigErrorCode.NOT_LOADED)
+      expect(result.error.code).toBe('hai:core:014')
     }
   })
 
@@ -276,12 +276,12 @@ describe('core.config', () => {
   })
 
   it('watch 未加载配置应立即回调错误', () => {
-    let receivedError: { code: number } | undefined
+    let receivedError: { code: string | number } | undefined
     core.config.watch('nonexistent', (_cfg, error) => {
       receivedError = error
     })
     expect(receivedError).toBeDefined()
-    expect(receivedError?.code).toBe(ConfigErrorCode.NOT_LOADED)
+    expect(receivedError?.code).toBe('hai:core:014')
   })
 
   it('isWatching 应该正确反映监听状态', () => {
@@ -289,7 +289,7 @@ describe('core.config', () => {
     core.config.load('app', configPath, schema)
 
     expect(core.config.isWatching('app')).toBe(false)
-    const unwatch = core.config.watch('app', () => {})
+    const unwatch = core.config.watch('app', () => { })
     expect(core.config.isWatching('app')).toBe(true)
     unwatch()
     expect(core.config.isWatching('app')).toBe(false)
@@ -298,7 +298,7 @@ describe('core.config', () => {
   it('unwatch 按名称应该停止特定监听', () => {
     writeFileSync(configPath, 'foo: a\nbar: b\n', 'utf-8')
     core.config.load('app', configPath, schema)
-    core.config.watch('app', () => {})
+    core.config.watch('app', () => { })
     expect(core.config.isWatching('app')).toBe(true)
 
     core.config.unwatch('app')
@@ -313,8 +313,8 @@ describe('core.config', () => {
     core.config.load('app1', configPath, schema)
     core.config.load('app2', configPath2, schema)
 
-    core.config.watch('app1', () => {})
-    core.config.watch('app2', () => {})
+    core.config.watch('app1', () => { })
+    core.config.watch('app2', () => { })
     expect(core.config.isWatching('app1')).toBe(true)
     expect(core.config.isWatching('app2')).toBe(true)
 

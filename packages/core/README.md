@@ -4,7 +4,7 @@
 
 ## 支持的能力
 
-- **Result 类型** — 函数式错误处理（`ok` / `err`）
+- **HaiResult 类型** — 函数式错误处理（`ok` / `err`）
 - **统一日志** — Node.js 基于 pino，浏览器基于 loglevel，API 一致
 - **国际化（i18n）** — 集中式 locale 管理 + 类型安全的消息获取器
 - **配置管理** — YAML 加载、环境变量插值、Zod 校验、文件监听（Node.js 专用）
@@ -135,7 +135,7 @@ core.i18n.DEFAULT_LOCALE // 'zh-CN'
 ### 配置管理（Node.js 专用）
 
 ```typescript
-import { ConfigErrorCode, core } from '@h-ai/core'
+import { core, CoreErrorCode } from '@h-ai/core'
 import { z } from 'zod'
 
 // 方式 1：init 时自动加载整个配置目录
@@ -154,7 +154,7 @@ if (result.success) {
   console.warn(result.data.name)
 }
 else {
-  console.error(result.error.code) // ConfigErrorCode.FILE_NOT_FOUND 等
+  console.error(result.error.code) // CoreErrorCode.CONFIG_FILE_NOT_FOUND 等
 }
 
 // 校验已加载的配置（模块若使用 init 自动加载，调用方需主动校验）
@@ -196,7 +196,7 @@ core.config.clear() // 清除全部
 
 **语法：**
 
-- `${VAR}` — 读取 `process.env.VAR`；若不存在则返回 `ConfigErrorCode.ENV_VAR_MISSING` 错误
+- `${VAR}` — 读取 `process.env.VAR`；若不存在则返回 `CoreErrorCode.CONFIG_ENV_VAR_MISSING` 错误
 - `${VAR:default}` — 读取 `process.env.VAR`；若不存在则使用冒号后的默认值
 
 **类型还原：** 当整个值恰好是单个变量表达式（如 `${PORT:3000}`）时，插值结果会按 YAML 规则还原为原生类型（number / boolean 等）。若值中包含其他文本（如 `http://${HOST}:${PORT}`），则结果始终为字符串。
@@ -290,15 +290,15 @@ const dbOperations = notInitialized.proxy<DbOperations>()
 
 ### Result 类型
 
-所有可能失败的操作都返回 `Result<T, E>`（可以是 `ok(data)` 或 `err(error)`）：
+所有可能失败的操作都返回 `HaiResult<T>`（可以是 `ok(data)` 或 `err(error)`）：
 
 ```typescript
-import type { Result } from '@h-ai/core'
+import type { HaiResult } from '@h-ai/core'
 import { err, ok } from '@h-ai/core'
 
-function divide(a: number, b: number): Result<number, string> {
+function divide(a: number, b: number): HaiResult<number> {
   if (b === 0)
-    return err('Division by zero')
+    return err(HaiCommonError.VALIDATION_ERROR, 'Division by zero')
   return ok(a / b)
 }
 
@@ -307,7 +307,7 @@ if (result.success) {
   console.warn(result.data) // 5
 }
 else {
-  console.error(result.error) // error message
+  console.error(result.error) // error object
 }
 ```
 
@@ -316,14 +316,14 @@ else {
 仅 `core.config` 操作会产生这些错误：
 
 ```typescript
-import { ConfigErrorCode } from '@h-ai/core'
+import { CoreErrorCode } from '@h-ai/core'
 
 // 常见错误码
-ConfigErrorCode.FILE_NOT_FOUND // 1100 - 配置文件不存在
-ConfigErrorCode.PARSE_ERROR // 1101 - YAML 解析失败
-ConfigErrorCode.VALIDATION_ERROR // 1102 - Schema 校验失败
-ConfigErrorCode.ENV_VAR_MISSING // 1103 - 环境变量缺失
-ConfigErrorCode.NOT_LOADED // 1104 - 配置未加载
+CoreErrorCode.CONFIG_FILE_NOT_FOUND // hai:core:010 - 配置文件不存在
+CoreErrorCode.CONFIG_PARSE_ERROR // hai:core:011 - YAML 解析失败
+CoreErrorCode.CONFIG_VALIDATION_ERROR // hai:core:012 - Schema 校验失败
+CoreErrorCode.CONFIG_ENV_VAR_MISSING // hai:core:013 - 环境变量缺失
+CoreErrorCode.CONFIG_NOT_LOADED // hai:core:014 - 配置未加载
 ```
 
 ## 测试

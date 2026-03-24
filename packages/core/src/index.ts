@@ -5,10 +5,10 @@
  * @module index
  */
 
-// 配置类型与错误码（CommonErrorCode, ConfigErrorCode, CoreConfigSchema 等）
+// 配置 Schema 与错误码（CoreErrorCode, CoreConfigSchema 等）
 export * from './core-config.js'
 
-// Core 聚合服务（包含 logger, config, id, i18n, module, typeUtils, object, string, array, async, time）
+// Core 聚合服务（包含 logger, config, error, id, i18n, module, typeUtils, object, string, array, async, time）
 export * from './core-main.node.js'
 
 // 类型定义（Result, Logger 等）

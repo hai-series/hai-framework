@@ -74,6 +74,48 @@ const dbConfig = core.config.get('db')
 | `unwatch`    | `(name?: string) => void`                                      | 停止配置文件监听               |
 | `isWatching` | `(name: string) => boolean`                                    | 检查是否正在监听某个配置       |
 
+**`watch()` 回调处理**：
+
+```typescript
+// watch 回调签名：(config: T | null, error?: HaiError) => void
+// - 成功重载时：传入新配置，error 为 undefined
+// - 重载失败时：config 为 null，error 为错误详情（包含 code 和 message）
+
+const unwatch = core.config.watch('db', (cfg, error) => {
+  if (error) {
+    // 处理重载失败（如文件解析错误），不应更新本地使用的配置
+    core.logger.error('Config reload failed', {
+      name: 'db',
+      code: error.code,
+      message: error.message,
+    })
+    return
+  }
+  // 使用新配置
+  // 注意：此时 core.config.get('db') 已经指向新数据
+  core.logger.info('Config updated', { db: cfg })
+})
+
+// 调用 unwatch() 停止监听
+unwatch()
+
+// 配置未加载时立即返回 NOT_LOADED 错误
+core.config.watch('nonexistent', (_cfg, error) => {
+  // error.code === CoreErrorCode.CONFIG_NOT_LOADED
+})
+
+// 多个监听回调可在同一配置文件变更时同时触发
+core.config.watch('app', cb1)
+core.config.watch('app', cb2) // cb1 和 cb2 都会被调用
+```
+
+**文件监听特性**：
+
+- 使用 `fs.watch()` 实现，自动防抖（100ms 防抖避免快速重复保存触发多次回调）
+- 同一配置名只会创建一个 watcher（多次 `watch()` 共享同一 watcher 实例）
+- 当最后一个回调被移除时，watcher 自动关闭
+- `unwatch()` 会关闭watcher，但缓存的配置数据保留
+
 配置文件格式（YAML，支持环境变量插值）：
 
 - `${VAR}` — 读取 `process.env.VAR`；缺失则返回 `ConfigErrorCode.ENV_VAR_MISSING` 错误
@@ -166,32 +208,66 @@ m('user_created') // "用户已创建"
 m('welcome', { params: { name: '张三' } }) // "欢迎，张三"
 ```
 
-### Result 模型
+### Result 模型与错误处理
 
-所有 hai 模块操作返回 `Result<T, E>` 类型，强制处理成功/失败分支：
+所有 hai 模块操作返回 `HaiResult<T>` 类型，强制处理成功/失败分支：
 
 ```typescript
-import type { Result } from '@h-ai/core'
+import type { HaiResult, HaiErrorDef, HaiError } from '@h-ai/core'
 import { err, ok } from '@h-ai/core'
 
 // 成功
 return ok(data)
 
-// 失败
-return err({ code: 'NOT_FOUND', message: m('item_not_found') })
+// 失败：使用预定义错误定义创建错误实例
+return err(HaiCommonError.NOT_FOUND, 'Resource not found')
+
+// 带原始错误和建议的完整失败
+return err(
+  HaiCommonError.INTERNAL_ERROR,
+  'Failed to process request',
+  originalError,
+  'Check database connection'
+)
 ```
 
-**Result 类型定义**：
+**错误定义 vs 错误实例**：
 
 ```typescript
-type Result<T, E = HaiError>
-  = | { success: true, data: T }
-    | { success: false, error: E }
+// HaiErrorDef 是错误定义（包含错误码、HTTP 状态码、模块信息）
+const errorDef: HaiErrorDef = {
+  code: 'hai:common:001',        // system:module:code
+  httpStatus: 500,               // HTTP 响应状态码
+  system: 'hai',                 // 系统标识
+  module: 'common',              // 所属模块
+}
 
-interface HaiError {
+// HaiError 是具体错误实例（包含定义数据 + 运行时信息）
+const errorInst: HaiError = {
+  ...errorDef,
+  message: '具体错误消息',        // i18n 翻译后的消息
+  cause?: originalError,         // 原始错误
+  suggestion?: '用户可采取的行动', // 建议
+}
+
+// err() 函数接受 HaiErrorDef，自动创建 HaiError 实例
+err(errorDef, '消息文本', cause, '建议')
+```
+
+**HaiResult 类型定义**：
+
+```typescript
+type HaiResult<T>
+  = | { success: true, data: T }
+  | { success: false, error: HaiError }
   code: string
   message: string
-  details?: unknown
+  httpStatus?: number
+  system?: string
+  module?: string
+  cause?: unknown
+  suggestion?: string
+  ext?: Record<string, unknown>
 }
 ```
 
@@ -242,35 +318,91 @@ export const myModule = {
 }
 ```
 
----
-
 ## 错误码
 
-### `CommonErrorCode`（通用，1000-1099）
+Core 模块定义了两组标准错误码：
 
-| 错误码         | 值   | 说明       |
-| -------------- | ---- | ---------- |
-| `UNKNOWN`      | 1000 | 未知错误   |
-| `VALIDATION`   | 1001 | 校验失败   |
-| `NOT_FOUND`    | 1002 | 资源不存在 |
-| `UNAUTHORIZED` | 1003 | 未认证     |
-| `FORBIDDEN`    | 1004 | 无权限     |
-| `CONFLICT`     | 1005 | 冲突       |
-| `INTERNAL`     | 1006 | 内部错误   |
-| `TIMEOUT`      | 1007 | 超时       |
-| `NETWORK`      | 1008 | 网络错误   |
+### `HaiCommonError`（通用错误）
 
-### `ConfigErrorCode`（配置，1100-1199）
+| 错误码              | 编码       | HTTP 状态 | 说明                |
+| ------------------- | ---------- | --------- | ------------------- |
+| `NOT_INITIALIZED`   | hai:common:001 | 500       | 模块未初始化        |
+| `INIT_FAILED`       | hai:common:002 | 500       | 初始化失败          |
+| `INIT_IN_PROGRESS`  | hai:common:004 | 500       | 正在初始化中        |
+| `UNAUTHORIZED`      | hai:common:100 | 401       | 未认证              |
+| `FORBIDDEN`         | hai:common:101 | 403       | 无权限              |
+| `TOKEN_EXPIRED`     | hai:common:102 | 401       | Token 已过期        |
+| `TOKEN_INVALID`     | hai:common:103 | 401       | Token 无效          |
+| `VALIDATION_ERROR`  | hai:common:200 | 400       | 校验失败            |
+| `INVALID_REQUEST`   | hai:common:201 | 400       | 请求无效            |
+| `PARAMETER_MISSING` | hai:common:202 | 400       | 参数缺失            |
+| `NOT_FOUND`         | hai:common:300 | 404       | 资源不存在          |
+| `ALREADY_EXISTS`    | hai:common:301 | 409       | 资源已存在          |
+| `CONFLICT`          | hai:common:302 | 409       | 冲突                |
+| `API_ERROR`         | hai:common:400 | 502       | API 错误            |
+| `NETWORK_ERROR`     | hai:common:401 | 502       | 网络错误            |
+| `TIMEOUT`           | hai:common:402 | 504       | 超时                |
+| `SERVICE_UNAVAILABLE` | hai:common:403 | 503       | 服务不可用          |
+| `INTERNAL_ERROR`    | hai:common:500 | 500       | 内部错误            |
+| `DATABASE_ERROR`    | hai:common:501 | 500       | 数据库错误          |
+| `UNKNOWN_ERROR`     | hai:common:599 | 500       | 未知错误            |
 
-| 错误码             | 值   | 说明            |
-| ------------------ | ---- | --------------- |
-| `FILE_NOT_FOUND`   | 1100 | 配置文件不存在  |
-| `PARSE_ERROR`      | 1101 | YAML 解析失败   |
-| `VALIDATION_ERROR` | 1102 | Schema 校验失败 |
-| `ENV_VAR_MISSING`  | 1103 | 环境变量缺失    |
-| `NOT_LOADED`       | 1104 | 配置未加载      |
+**使用示例**：
 
----
+```typescript
+import { HaiCommonError, err } from '@h-ai/core'
+
+// 创建错误实例
+err(HaiCommonError.NOT_FOUND, 'User not found')
+err(HaiCommonError.VALIDATION_ERROR, 'Invalid email', validationErrors)
+```
+
+### `HaiConfigError`（配置错误）
+
+| 错误码                  | 编码         | HTTP 状态 | 说明               |
+| ----------------------- | ------------ | --------- | ------------------ |
+| `CONFIG_FILE_NOT_FOUND` | hai:core:010 | 500       | 配置文件不存在     |
+| `CONFIG_PARSE_ERROR`    | hai:core:011 | 500       | YAML 解析失败      |
+| `CONFIG_VALIDATION_ERROR` | hai:core:012 | 500       | Schema 校验失败    |
+| `CONFIG_ENV_VAR_MISSING` | hai:core:013 | 500       | 必需环境变量缺失   |
+| `CONFIG_NOT_LOADED`     | hai:core:014 | 500       | 配置未加载         |
+
+**使用场景**：
+
+```typescript
+import { core, CoreErrorCode } from '@h-ai/core'
+
+const result = core.config.load('db', './config/db.yml', schema)
+if (!result.success) {
+  if (result.error.code === CoreErrorCode.CONFIG_FILE_NOT_FOUND) {
+    core.logger.error('Config file missing')
+  }
+  else if (result.error.code === CoreErrorCode.CONFIG_VALIDATION_ERROR) {
+    core.logger.error('Config validation failed', { issues: result.error.cause })
+  }
+}
+```
+
+### 自定义错误码（模块级）
+
+各模块应定义自己的错误码常量，遵循格式 `hai:<module>:<code>`：
+
+```typescript
+// 示例：db 模块定义错误码
+const DbErrorInfo = {
+  NOT_INITIALIZED: '001:500',
+  CONNECTION_FAILED: '010:500',
+  QUERY_FAILED: '011:500',
+  INVALID_SCHEMA: '012:400',
+} as const satisfies ErrorInfo
+
+export const DbError = error.buildHaiErrorsDef('db', DbErrorInfo)
+
+// 使用
+import { DbError, err } from '@h-ai/db'
+
+err(DbError.CONNECTION_FAILED, 'Failed to connect to PostgreSQL')
+```
 
 ## 常见模式
 

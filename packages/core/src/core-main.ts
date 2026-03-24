@@ -6,6 +6,7 @@
  */
 
 import type { CoreLogger, LoggerFunctions } from './core-types.js'
+import { error } from './functions/core-function-error.js'
 import { id } from './functions/core-function-id.js'
 import { i18n } from './i18n/core-i18n-utils.js'
 import { array as arrayUtils } from './utils/core-util-array.js'
@@ -181,6 +182,30 @@ export function createCore(loggerFns: LoggerFunctions) {
     time: timeUtils,
 
     // ─── 模块基础能力 ───
+
+    /**
+     * 错误工具（统一入口）。
+     *
+     * 提供错误定义生成与错误实例创建方法，支持跨模块统一的错误码和 HTTP 状态映射。
+     *
+     * @example
+     * ```ts
+     * // 为模块生成标准错误定义
+     * const DbError = core.error.buildHaiErrorsDef('db', {
+     *   CONNECTION_FAILED: '101:500',
+     *   QUERY_TIMEOUT: '102:504',
+     * })
+     *
+     * // 创建错误实例（带上下文信息）
+     * const err = core.error.buildHaiErrorInst(
+     *   DbError.CONNECTION_FAILED,
+     *   'Unable to connect to PostgreSQL',
+     *   originalError,
+     *   'Please check database connection string'
+     * )
+     * ```
+     */
+    error,
 
     /**
      * 模块基础工具集。

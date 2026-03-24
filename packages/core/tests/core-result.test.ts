@@ -1,11 +1,11 @@
 /**
  * =============================================================================
- * @h-ai/core - Result 类型测试
+ * @h-ai/core - HaiResult 类型测试
  * =============================================================================
  */
 
 import { describe, expect, it } from 'vitest'
-import { err, ok } from '../src/index.js'
+import { err, HaiCommonError, ok } from '../src/index.js'
 
 describe('core.result', () => {
   it('ok 应该返回 success true', () => {
@@ -34,33 +34,36 @@ describe('core.result', () => {
   })
 
   it('err 应该返回 success false', () => {
-    const result = err('oops')
+    const result = err(HaiCommonError.UNKNOWN_ERROR, 'oops')
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error).toBe('oops')
+      expect(result.error.message).toBe('oops')
     }
   })
 
-  it('err 应该支持对象错误', () => {
-    const error = { code: 1000, message: 'Unknown error' }
-    const result = err(error)
+  it('err 应该支持 HaiError 对象', () => {
+    const errorInst = {
+      ...HaiCommonError.INTERNAL_ERROR,
+      message: 'Unknown error',
+    }
+    const result = err(errorInst)
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(1000)
+      expect(result.error.code).toBe('hai:common:500')
       expect(result.error.message).toBe('Unknown error')
     }
   })
 
   it('ok 和 err 应该通过 success 字段区分', () => {
     const success = ok('data')
-    const failure = err('error')
+    const failure = err(HaiCommonError.UNKNOWN_ERROR, 'error')
 
     // 类型窄化验证
     if (success.success) {
       expect(success.data).toBe('data')
     }
     if (!failure.success) {
-      expect(failure.error).toBe('error')
+      expect(failure.error.message).toBe('error')
     }
   })
 })
