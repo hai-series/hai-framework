@@ -5,22 +5,19 @@
  * @module reach-send
  */
 
-import type { Result } from '@h-ai/core'
+import type { HaiResult } from '@h-ai/core'
 import type { DndConfig } from './reach-config.js'
-import type {
-  ReachError,
-  ReachMessage,
-  ReachProvider,
-  ReachTemplateRegistry,
-  SendResult,
-} from './reach-types.js'
-import type { SendLogRepository } from './repositories/reach-repository-send-log.js'
+import type { ReachMessage, ReachProvider, ReachTemplateRegistry, SendResult } from './reach-types.js'
 
+import type { SendLogRepository } from './repositories/reach-repository-send-log.js'
 import { cache } from '@h-ai/cache'
 import { core, err, ok } from '@h-ai/core'
 
-import { ReachErrorCode } from './reach-config.js'
 import { reachM } from './reach-i18n.js'
+import {
+  HaiReachError,
+
+} from './reach-types.js'
 
 const logger = core.logger.child({ module: 'reach', scope: 'send' })
 
@@ -97,7 +94,7 @@ export function msUntilDndEnd(dnd: DndConfig, now: Date = new Date()): number {
 export async function preprocessMessage(
   message: ReachMessage,
   templateRegistry: ReachTemplateRegistry,
-): Promise<Result<ReachMessage, ReachError>> {
+): Promise<HaiResult<ReachMessage>> {
   if (!message.template) {
     return ok(message)
   }
@@ -360,12 +357,12 @@ export async function executeSend(
   templateRegistry: ReachTemplateRegistry,
   dndConfig?: DndConfig,
   repo?: SendLogRepository | null,
-): Promise<Result<SendResult, ReachError>> {
+): Promise<HaiResult<SendResult>> {
   if (!message.to) {
-    return err({
-      code: ReachErrorCode.INVALID_RECIPIENT,
-      message: reachM('reach_invalidRecipient', { params: { recipient: '' } }),
-    })
+    return err(
+      HaiReachError.INVALID_RECIPIENT,
+      reachM('reach_invalidRecipient', { params: { recipient: '' } }),
+    )
   }
 
   const preprocessed = await preprocessMessage(message, templateRegistry)
@@ -376,17 +373,17 @@ export async function executeSend(
   // 校验 Provider 存在性（在 DND 检查前，确保 delay 也能正确路由）
   const providerName = preprocessed.data.provider
   if (!providerName) {
-    return err({
-      code: ReachErrorCode.PROVIDER_NOT_FOUND,
-      message: reachM('reach_providerRequired'),
-    })
+    return err(
+      HaiReachError.PROVIDER_NOT_FOUND,
+      reachM('reach_providerRequired'),
+    )
   }
 
   if (!providers.has(providerName)) {
-    return err({
-      code: ReachErrorCode.PROVIDER_NOT_FOUND,
-      message: reachM('reach_providerNotFound', { params: { provider: providerName } }),
-    })
+    return err(
+      HaiReachError.PROVIDER_NOT_FOUND,
+      reachM('reach_providerNotFound', { params: { provider: providerName } }),
+    )
   }
 
   // DND 检查
@@ -401,21 +398,21 @@ export async function executeSend(
       }
       catch (error) {
         logger.warn('Failed to save deferred message to DB', { provider: providerName, to: message.to, error })
-        return err({
-          code: ReachErrorCode.SEND_FAILED,
-          message: reachM('reach_dndDeferred'),
-          cause: error,
-        })
+        return err(
+          HaiReachError.SEND_FAILED,
+          reachM('reach_dndDeferred'),
+          error,
+        )
       }
       return ok({ success: true, deferred: true })
     }
 
     // discard 策略：直接拒绝
     logger.info('Message blocked by DND (discard strategy)', { provider: providerName, to: message.to })
-    return err({
-      code: ReachErrorCode.DND_BLOCKED,
-      message: reachM('reach_dndBlocked'),
-    })
+    return err(
+      HaiReachError.DND_BLOCKED,
+      reachM('reach_dndBlocked'),
+    )
   }
 
   const provider = providers.get(providerName)!

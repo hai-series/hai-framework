@@ -9,14 +9,13 @@
  * @module iam-session-repository-cache
  */
 
-import type { Result } from '@h-ai/core'
-import type { IamError } from '../iam-types.js'
+import type { HaiResult } from '@h-ai/core'
 import type { Session, TokenPair } from './iam-session-types.js'
 import { cache } from '@h-ai/cache'
 import { err, ok } from '@h-ai/core'
 
-import { IamErrorCode } from '../iam-config.js'
 import { iamM } from '../iam-i18n.js'
+import { IamErrorCode } from '../iam-types.js'
 import { applySessionPatch, getSessionTtl } from './iam-session-utils.js'
 
 // ─── 缓存键前缀 ───
@@ -81,12 +80,12 @@ export interface SessionRepository {
    * @param session - 会话数据（data 中应已包含 _tokenPair）
    * @param tokenPair - 令牌对（用于存储 refreshToken 映射）
    */
-  save: (session: Session, tokenPair: TokenPair) => Promise<Result<void, IamError>>
+  save: (session: Session, tokenPair: TokenPair) => Promise<HaiResult<void>>
 
   /**
    * 根据 accessToken 获取会话
    */
-  getByAccessToken: (accessToken: string) => Promise<Result<Session | null, IamError>>
+  getByAccessToken: (accessToken: string) => Promise<HaiResult<Session | null>>
 
   /**
    * 根据 accessToken 更新会话
@@ -96,21 +95,21 @@ export interface SessionRepository {
    * @param accessToken - 访问令牌
    * @param data - 要更新的字段
    */
-  updateByAccessToken: (accessToken: string, data: Partial<Session>) => Promise<Result<void, IamError>>
+  updateByAccessToken: (accessToken: string, data: Partial<Session>) => Promise<HaiResult<void>>
 
   /**
    * 根据 accessToken 删除会话
    *
    * 同时清理三个缓存条目（accessToken 映射、用户令牌集合成员、refreshToken 映射）。
    */
-  removeByAccessToken: (accessToken: string) => Promise<Result<void, IamError>>
+  removeByAccessToken: (accessToken: string) => Promise<HaiResult<void>>
 
   /**
    * 删除用户的所有会话
    *
    * 遍历用户令牌集合，逐一删除关联的三个缓存条目，最后删除集合本身。
    */
-  removeByUserId: (userId: string) => Promise<Result<void, IamError>>
+  removeByUserId: (userId: string) => Promise<HaiResult<void>>
 
   /**
    * 根据 refreshToken 获取关联的会话
@@ -118,12 +117,12 @@ export interface SessionRepository {
    * 先查 refreshToken 映射获取 accessToken，再查 accessToken 获取会话。
    * 若 refreshToken 有效但 session 已过期（TTL 到期），返回 null。
    */
-  getByRefreshToken: (refreshToken: string) => Promise<Result<Session | null, IamError>>
+  getByRefreshToken: (refreshToken: string) => Promise<HaiResult<Session | null>>
 
   /**
    * 仅删除 refreshToken 映射（不影响 accessToken 会话）
    */
-  removeRefreshToken: (refreshToken: string) => Promise<Result<void, IamError>>
+  removeRefreshToken: (refreshToken: string) => Promise<HaiResult<void>>
 
   /**
    * 批量更新用户所有活跃会话的指定字段
@@ -134,7 +133,7 @@ export interface SessionRepository {
    * @param userId - 用户 ID
    * @param updates - 要合并到会话的字段（如 { roles, permissions }）
    */
-  patchUserSessions: (userId: string, updates: Record<string, unknown>) => Promise<Result<void, IamError>>
+  patchUserSessions: (userId: string, updates: Record<string, unknown>) => Promise<HaiResult<void>>
 }
 
 /**
@@ -149,7 +148,7 @@ export function createCacheSessionRepository(
   refreshTokenMaxAge: number,
 ): SessionRepository {
   const repo: SessionRepository = {
-    async save(session, tokenPair): Promise<Result<void, IamError>> {
+    async save(session, tokenPair): Promise<HaiResult<void>> {
       const accessToken = session.accessToken
       const userId = session.userId
       const ttl = getSessionTtl(session)
@@ -193,7 +192,7 @@ export function createCacheSessionRepository(
       return ok(undefined)
     },
 
-    async getByAccessToken(accessToken): Promise<Result<Session | null, IamError>> {
+    async getByAccessToken(accessToken): Promise<HaiResult<Session | null>> {
       const result = await cache.kv.get<Session>(buildTokenKey(accessToken))
       if (!result.success) {
         return err({
@@ -208,10 +207,10 @@ export function createCacheSessionRepository(
       return ok(restoreSessionDates(result.data))
     },
 
-    async updateByAccessToken(accessToken, data): Promise<Result<void, IamError>> {
+    async updateByAccessToken(accessToken, data): Promise<HaiResult<void>> {
       const sessionResult = await repo.getByAccessToken(accessToken)
       if (!sessionResult.success) {
-        return sessionResult as Result<void, IamError>
+        return sessionResult as HaiResult<void>
       }
       if (!sessionResult.data) {
         return err({
@@ -234,7 +233,7 @@ export function createCacheSessionRepository(
       return ok(undefined)
     },
 
-    async removeByAccessToken(accessToken): Promise<Result<void, IamError>> {
+    async removeByAccessToken(accessToken): Promise<HaiResult<void>> {
       // 读取 session 以获取 userId 和 _tokenPair.refreshToken
       const sessionResult = await cache.kv.get<Session>(buildTokenKey(accessToken))
       if (sessionResult.success && sessionResult.data) {
@@ -255,7 +254,7 @@ export function createCacheSessionRepository(
       return ok(undefined)
     },
 
-    async removeByUserId(userId): Promise<Result<void, IamError>> {
+    async removeByUserId(userId): Promise<HaiResult<void>> {
       const tokensResult = await cache.set_.smembers<string>(buildUserTokensKey(userId))
       if (tokensResult.success) {
         for (const token of tokensResult.data) {
@@ -267,7 +266,7 @@ export function createCacheSessionRepository(
       return ok(undefined)
     },
 
-    async getByRefreshToken(refreshToken): Promise<Result<Session | null, IamError>> {
+    async getByRefreshToken(refreshToken): Promise<HaiResult<Session | null>> {
       const mappingResult = await cache.kv.get<{ userId: string, accessToken: string }>(buildRefreshKey(refreshToken))
       if (!mappingResult.success) {
         return err({
@@ -283,7 +282,7 @@ export function createCacheSessionRepository(
       return repo.getByAccessToken(mappingResult.data.accessToken)
     },
 
-    async removeRefreshToken(refreshToken): Promise<Result<void, IamError>> {
+    async removeRefreshToken(refreshToken): Promise<HaiResult<void>> {
       const result = await cache.kv.del(buildRefreshKey(refreshToken))
       if (!result.success) {
         return err({
@@ -295,7 +294,7 @@ export function createCacheSessionRepository(
       return ok(undefined)
     },
 
-    async patchUserSessions(userId, updates): Promise<Result<void, IamError>> {
+    async patchUserSessions(userId, updates): Promise<HaiResult<void>> {
       const tokensResult = await cache.set_.smembers<string>(buildUserTokensKey(userId))
       if (!tokensResult.success) {
         return err({

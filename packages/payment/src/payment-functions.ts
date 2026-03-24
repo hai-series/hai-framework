@@ -6,22 +6,16 @@
  */
 
 import type { CreateAuditLogInput } from '@h-ai/audit'
-import type { Result } from '@h-ai/core'
-import type {
-  CreateOrderInput,
-  OrderStatus,
-  PaymentError,
-  PaymentNotifyRequest,
-  PaymentNotifyResult,
-  PaymentOrder,
-  PaymentProvider,
-  RefundInput,
-  RefundResult,
-} from './payment-types.js'
+import type { HaiResult } from '@h-ai/core'
+import type { CreateOrderInput, OrderStatus, PaymentNotifyRequest, PaymentNotifyResult, PaymentOrder, PaymentProvider, RefundInput, RefundResult } from './payment-types.js'
 import { audit } from '@h-ai/audit'
 import { core, err, ok } from '@h-ai/core'
-import { PaymentErrorCode } from './payment-config.js'
 import { paymentM } from './payment-i18n.js'
+import {
+
+  HaiPaymentError,
+
+} from './payment-types.js'
 
 const logger = core.logger.child({ module: 'payment', scope: 'functions' })
 
@@ -60,13 +54,13 @@ export function getProvider(name: string): PaymentProvider | undefined {
 /**
  * 获取 Provider（不存在则返回 err）
  */
-function requireProvider(name: string): Result<PaymentProvider, PaymentError> {
+function requireProvider(name: string): HaiResult<PaymentProvider> {
   const provider = providers.get(name)
   if (!provider) {
-    return err({
-      code: PaymentErrorCode.PROVIDER_NOT_FOUND,
-      message: paymentM('payment_providerNotFound'),
-    })
+    return err(
+      HaiPaymentError.PROVIDER_NOT_FOUND,
+      paymentM('payment_providerNotFound'),
+    )
   }
   return ok(provider)
 }
@@ -80,7 +74,7 @@ function requireProvider(name: string): Result<PaymentProvider, PaymentError> {
 export async function createOrder(
   providerName: string,
   input: CreateOrderInput,
-): Promise<Result<PaymentOrder, PaymentError>> {
+): Promise<HaiResult<PaymentOrder>> {
   const result = requireProvider(providerName)
   if (!result.success)
     return result
@@ -105,7 +99,7 @@ export async function createOrder(
 export async function handleNotify(
   providerName: string,
   request: PaymentNotifyRequest,
-): Promise<Result<PaymentNotifyResult, PaymentError>> {
+): Promise<HaiResult<PaymentNotifyResult>> {
   const result = requireProvider(providerName)
   if (!result.success)
     return result
@@ -130,7 +124,7 @@ export async function handleNotify(
 export async function queryOrder(
   providerName: string,
   orderNo: string,
-): Promise<Result<OrderStatus, PaymentError>> {
+): Promise<HaiResult<OrderStatus>> {
   const result = requireProvider(providerName)
   if (!result.success)
     return result
@@ -146,7 +140,7 @@ export async function queryOrder(
 export async function refund(
   providerName: string,
   input: RefundInput,
-): Promise<Result<RefundResult, PaymentError>> {
+): Promise<HaiResult<RefundResult>> {
   const result = requireProvider(providerName)
   if (!result.success)
     return result
@@ -171,7 +165,7 @@ export async function refund(
 export async function closeOrder(
   providerName: string,
   orderNo: string,
-): Promise<Result<void, PaymentError>> {
+): Promise<HaiResult<void>> {
   const result = requireProvider(providerName)
   if (!result.success)
     return result

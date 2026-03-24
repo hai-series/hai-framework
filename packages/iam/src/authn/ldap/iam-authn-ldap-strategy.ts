@@ -5,16 +5,15 @@
  * @module iam-authn-ldap-strategy
  */
 
-import type { Result } from '@h-ai/core'
+import type { HaiResult } from '@h-ai/core'
 import type { LdapConfig } from '../../iam-config.js'
-import type { IamError } from '../../iam-types.js'
 import type { UserRepository } from '../../user/iam-user-repository-user.js'
 import type { StoredUser, User } from '../../user/iam-user-types.js'
 import type { AuthStrategy, Credentials } from '../iam-authn-types.js'
 import { core, err, ok } from '@h-ai/core'
 
-import { IamErrorCode } from '../../iam-config.js'
 import { iamM } from '../../iam-i18n.js'
+import { IamErrorCode } from '../../iam-types.js'
 import { toUser } from '../../user/iam-user-utils.js'
 import { ensureCredentialType, isAccountLocked, recordLoginFailure, resetLoginFailures } from '../iam-authn-utils.js'
 
@@ -43,17 +42,17 @@ export interface LdapClient {
   /**
    * 绑定（认证）
    */
-  bind: (dn: string, password: string) => Promise<Result<void, IamError>>
+  bind: (dn: string, password: string) => Promise<HaiResult<void>>
 
   /**
    * 搜索用户
    */
-  search: (base: string, filter: string, attributes: string[]) => Promise<Result<LdapSearchEntry[], IamError>>
+  search: (base: string, filter: string, attributes: string[]) => Promise<HaiResult<LdapSearchEntry[]>>
 
   /**
    * 解除绑定
    */
-  unbind: () => Promise<Result<void, IamError>>
+  unbind: () => Promise<HaiResult<void>>
 }
 
 /**
@@ -69,7 +68,7 @@ export interface LdapSearchEntry {
 /**
  * LDAP 客户端工厂
  */
-export type LdapClientFactory = (config: LdapConfig) => Promise<Result<LdapClient, IamError>>
+export type LdapClientFactory = (config: LdapConfig) => Promise<HaiResult<LdapClient>>
 
 /**
  * LDAP 认证策略配置
@@ -165,11 +164,11 @@ export function createLdapStrategy(config: LdapStrategyConfig): AuthStrategy {
     type: 'ldap',
     name: 'ldap-strategy',
 
-    async authenticate(credentials: Credentials): Promise<Result<User, IamError>> {
+    async authenticate(credentials: Credentials): Promise<HaiResult<User>> {
       // 类型检查
       const credentialResult = ensureCredentialType(credentials, 'ldap')
       if (!credentialResult.success) {
-        return credentialResult as Result<User, IamError>
+        return credentialResult as HaiResult<User>
       }
 
       const { username, password } = credentialResult.data
@@ -231,7 +230,7 @@ export function createLdapStrategy(config: LdapStrategyConfig): AuthStrategy {
         // 查找本地用户（用于状态判断与失败计数）
         const localUserResult = await userRepository.findByUsername(ldapUsername)
         if (!localUserResult.success) {
-          return localUserResult as Result<User, IamError>
+          return localUserResult as HaiResult<User>
         }
 
         let storedUser = localUserResult.data as StoredUser | null
@@ -288,7 +287,7 @@ export function createLdapStrategy(config: LdapStrategyConfig): AuthStrategy {
 
           const createdResult = await userRepository.findByUsername(ldapUsername)
           if (!createdResult.success) {
-            return createdResult as Result<User, IamError>
+            return createdResult as HaiResult<User>
           }
           storedUser = createdResult.data
 

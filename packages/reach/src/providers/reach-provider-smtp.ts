@@ -5,24 +5,24 @@
  * @module reach-provider-smtp
  */
 
-import type { Result } from '@h-ai/core'
+import type { HaiError, HaiResult } from '@h-ai/core'
 import type { ProviderConfig, SmtpProviderConfig } from '../reach-config.js'
-import type { ReachError, ReachMessage, ReachProvider, SendResult } from '../reach-types.js'
 
+import type { ReachMessage, ReachProvider, SendResult } from '../reach-types.js'
 import { createRequire } from 'node:module'
 import { core, err, ok } from '@h-ai/core'
 
-import { ReachErrorCode } from '../reach-config.js'
 import { reachM } from '../reach-i18n.js'
+import { HaiReachError } from '../reach-types.js'
 
 const logger = core.logger.child({ module: 'reach', scope: 'provider-smtp' })
 
 /**
  * 将异常包装为 ReachError
  */
-function toReachError(error: unknown): ReachError {
+function toReachError(error: unknown): HaiError {
   return {
-    code: ReachErrorCode.SEND_FAILED,
+    code: HaiReachError.SEND_FAILED.code,
     message: reachM('reach_emailSendFailed', {
       params: { error: error instanceof Error ? error.message : String(error) },
     }),
@@ -42,12 +42,12 @@ export function createSmtpProvider(): ReachProvider {
   return {
     name: 'smtp',
 
-    async connect(config: ProviderConfig): Promise<Result<void, ReachError>> {
+    async connect(config: ProviderConfig): Promise<HaiResult<void>> {
       if (config.type !== 'smtp') {
-        return err({
-          code: ReachErrorCode.CONFIG_ERROR,
-          message: reachM('reach_unsupportedType', { params: { type: config.type } }),
-        })
+        return err(
+          HaiReachError.CONFIG_ERROR,
+          reachM('reach_unsupportedType', { params: { type: config.type } }),
+        )
       }
 
       try {
@@ -86,12 +86,12 @@ export function createSmtpProvider(): ReachProvider {
       return transporter !== null
     },
 
-    async send(message: ReachMessage): Promise<Result<SendResult, ReachError>> {
+    async send(message: ReachMessage): Promise<HaiResult<SendResult>> {
       if (!transporter || !smtpConfig) {
-        return err({
-          code: ReachErrorCode.NOT_INITIALIZED,
-          message: reachM('reach_notInitialized'),
-        })
+        return err(
+          HaiReachError.NOT_INITIALIZED,
+          reachM('reach_notInitialized'),
+        )
       }
 
       logger.debug('Sending email', { to: message.to, subject: message.subject })

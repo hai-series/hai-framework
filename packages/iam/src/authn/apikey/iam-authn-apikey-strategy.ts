@@ -5,9 +5,8 @@
  * @module iam-authn-apikey-strategy
  */
 
-import type { Result } from '@h-ai/core'
+import type { HaiResult } from '@h-ai/core'
 import type { ApiKeyConfig } from '../../iam-config.js'
-import type { IamError } from '../../iam-types.js'
 import type { UserRepository } from '../../user/iam-user-repository-user.js'
 import type { User } from '../../user/iam-user-types.js'
 import type { AuthStrategy, Credentials } from '../iam-authn-types.js'
@@ -17,8 +16,9 @@ import { randomBytes } from 'node:crypto'
 import { core, err, ok } from '@h-ai/core'
 import { crypto as haiCrypto } from '@h-ai/crypto'
 
-import { ApiKeyConfigSchema, IamErrorCode } from '../../iam-config.js'
+import { ApiKeyConfigSchema } from '../../iam-config.js'
 import { iamM } from '../../iam-i18n.js'
+import { IamErrorCode } from '../../iam-types.js'
 import { toUser } from '../../user/iam-user-utils.js'
 import { ensureCredentialType } from '../iam-authn-utils.js'
 
@@ -101,13 +101,13 @@ export function createApiKeyStrategy(config: ApiKeyStrategyConfig): ApiKeyStrate
   /**
    * 内部：验证明文 API Key 并返回 ApiKey 实体
    */
-  async function verifyRawKey(rawKey: string): Promise<Result<ApiKey, IamError>> {
+  async function verifyRawKey(rawKey: string): Promise<HaiResult<ApiKey>> {
     const prefix = extractKeyPrefix(rawKey)
 
     // 根据前缀缩小候选范围
     const candidatesResult = await apiKeyRepository.findByKeyPrefix(prefix)
     if (!candidatesResult.success) {
-      return candidatesResult as Result<ApiKey, IamError>
+      return candidatesResult as HaiResult<ApiKey>
     }
 
     // 遍历候选项验证哈希
@@ -145,10 +145,10 @@ export function createApiKeyStrategy(config: ApiKeyStrategyConfig): ApiKeyStrate
     type: 'apikey',
     name: 'apikey-strategy',
 
-    async authenticate(credentials: Credentials): Promise<Result<User, IamError>> {
+    async authenticate(credentials: Credentials): Promise<HaiResult<User>> {
       const credentialResult = ensureCredentialType(credentials, 'apikey')
       if (!credentialResult.success) {
-        return credentialResult as Result<User, IamError>
+        return credentialResult as HaiResult<User>
       }
 
       const { key } = credentialResult.data
@@ -156,7 +156,7 @@ export function createApiKeyStrategy(config: ApiKeyStrategyConfig): ApiKeyStrate
       // 验证 API Key
       const verifyResult = await verifyRawKey(key)
       if (!verifyResult.success) {
-        return verifyResult as Result<User, IamError>
+        return verifyResult as HaiResult<User>
       }
 
       const apiKey = verifyResult.data
@@ -181,12 +181,12 @@ export function createApiKeyStrategy(config: ApiKeyStrategyConfig): ApiKeyStrate
   // ─── API Key 管理操作 ───
 
   const apiKeyFunctions: ApiKeyOperations = {
-    async createApiKey(userId: string, options: CreateApiKeyOptions): Promise<Result<CreateApiKeyResult, IamError>> {
+    async createApiKey(userId: string, options: CreateApiKeyOptions): Promise<HaiResult<CreateApiKeyResult>> {
       try {
         // 检查用户 API Key 数量限制
         const countResult = await apiKeyRepository.countByUserId(userId)
         if (!countResult.success)
-          return countResult as Result<CreateApiKeyResult, IamError>
+          return countResult as HaiResult<CreateApiKeyResult>
 
         if (countResult.data >= apikeyConfig.maxKeysPerUser) {
           return err({
@@ -226,7 +226,7 @@ export function createApiKeyStrategy(config: ApiKeyStrategyConfig): ApiKeyStrate
 
         const insertResult = await apiKeyRepository.insert(storedApiKey)
         if (!insertResult.success)
-          return insertResult as Result<CreateApiKeyResult, IamError>
+          return insertResult as HaiResult<CreateApiKeyResult>
 
         logger.info('API Key created', { userId, keyId: id, name: options.name })
         return ok({ apiKey: toApiKey(storedApiKey), rawKey })
@@ -240,21 +240,21 @@ export function createApiKeyStrategy(config: ApiKeyStrategyConfig): ApiKeyStrate
       }
     },
 
-    async listApiKeys(userId: string): Promise<Result<ApiKey[], IamError>> {
+    async listApiKeys(userId: string): Promise<HaiResult<ApiKey[]>> {
       const result = await apiKeyRepository.findByUserId(userId)
       if (!result.success)
-        return result as Result<ApiKey[], IamError>
+        return result as HaiResult<ApiKey[]>
       return ok(result.data.map(toApiKey))
     },
 
-    async getApiKey(keyId: string): Promise<Result<ApiKey | null, IamError>> {
+    async getApiKey(keyId: string): Promise<HaiResult<ApiKey | null>> {
       const result = await apiKeyRepository.findOneById(keyId)
       if (!result.success)
-        return result as Result<ApiKey | null, IamError>
+        return result as HaiResult<ApiKey | null>
       return ok(result.data ? toApiKey(result.data) : null)
     },
 
-    async revokeApiKey(keyId: string): Promise<Result<void, IamError>> {
+    async revokeApiKey(keyId: string): Promise<HaiResult<void>> {
       const result = await apiKeyRepository.removeById(keyId)
       if (!result.success)
         return result
@@ -262,7 +262,7 @@ export function createApiKeyStrategy(config: ApiKeyStrategyConfig): ApiKeyStrate
       return ok(undefined)
     },
 
-    async verifyApiKey(rawKey: string): Promise<Result<ApiKey, IamError>> {
+    async verifyApiKey(rawKey: string): Promise<HaiResult<ApiKey>> {
       return verifyRawKey(rawKey)
     },
   }
