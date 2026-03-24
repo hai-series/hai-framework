@@ -6,79 +6,131 @@
  */
 
 import type { LogFormat, LoggingConfig, LogLevel } from './core-config.js'
+import { error } from './functions/core-function-error.js'
 
 // ─── 1. 基础类型 - Result / Option ───
 
-/**
- * Result 类型 - 函数返回值的标准封装
- * 用于显式处理成功/失败两种情况，避免异常驱动的控制流
- *
- * @example
- * ```ts
- * function divide(a: number, b: number): Result<number, string> {
- *     if (b === 0) return err('Division by zero')
- *     return ok(a / b)
- * }
- * ```
- */
-export type Result<T, E = Error>
+export type HaiResult<T>
   = | { success: true, data: T }
-    | { success: false, error: E }
+    | { success: false, error: HaiError }
 
-/**
- * 创建成功结果。
- *
- * @example
- * ```ts
- * const result = ok({ id: 1 })
- * if (result.success) {
- *   // 使用 result.data.id
- * }
- * ```
- */
-export function ok<T>(data: T): Result<T, never> {
+export function ok<T>(data: T): HaiResult<T> {
   return { success: true, data }
 }
 
-/**
- * 创建失败结果。
- *
- * @example
- * ```ts
- * const result = err('bad request')
- * if (!result.success) {
- *   // 处理错误：result.error
- * }
- * ```
- */
-export function err<E>(error: E): Result<never, E> {
-  return { success: false, error }
+export function err(
+  errorOrDef: HaiErrorDef | HaiError,
+  message?: string,
+  cause?: unknown,
+  suggestion?: string,
+): HaiResult<never> {
+  if (typeof errorOrDef === 'object' && 'message' in errorOrDef) {
+    return {
+      success: false,
+      error: errorOrDef,
+    }
+  }
+  return {
+    success: false,
+    error: error.buildHaiErrorInst(errorOrDef as HaiErrorDef, message || '', cause, suggestion),
+  }
 }
 
 /**
- * Result Match 处理器。
+ * HaiResult 模式匹配处理器。
  *
- * 提供对 Result 的模式匹配能力，分别处理成功和失败两种情况。
+ * 提供对 HaiResult 的模式匹配能力，分别处理成功和失败两种情况。
  *
  * @template T - 成功数据类型
- * @template E - 错误类型
  * @template R1 - ok 分支返回类型
  * @template R2 - err 分支返回类型
  *
  * @example
  * ```ts
- * const handlers: MatchHandlers<number, string, number, number> = {
+ * const handlers: MatchHandlers<number, number, number> = {
  *   ok: n => n + 1,
  *   err: () => 0,
  * }
  * ```
  */
-export interface MatchHandlers<T, E, R1, R2> {
+export interface MatchHandlers<T, R1, R2> {
   /** 成功分支处理器 */
   ok: (data: T) => R1
   /** 失败分支处理器 */
-  err: (error: E) => R2
+  err: (error: HaiError) => R2
 }
+
+// ─── 1.5 标准错误类型 ───
+
+/** 错误信息值格式：`错误码数字段:HTTP状态码`，例如 `001:500`。 */
+export type ErrorInfoValue = `${string}:${string}`
+
+/** 模块错误信息映射。 */
+export type ErrorInfo = Record<string, ErrorInfoValue>
+
+export interface HaiErrorDef {
+  code: string
+  httpStatus: number
+  system: string
+  module: string
+}
+
+export interface HaiError {
+  code: string | number
+  message: string
+  httpStatus?: number
+  system?: string
+  module?: string
+  cause?: unknown
+  suggestion?: string
+  ext?: Record<string, unknown>
+}
+
+// ─── 标准错误码常量 ───
+const CommonErrorInfo = {
+  // 001-099: 初始化和配置
+  NOT_INITIALIZED: '001:500',
+  INIT_FAILED: '002:500',
+  INIT_IN_PROGRESS: '004:500',
+
+  // 100-199: 认证 & 授权
+  UNAUTHORIZED: '100:401',
+  FORBIDDEN: '101:403',
+  TOKEN_EXPIRED: '102:401',
+  TOKEN_INVALID: '103:401',
+
+  // 200-299: 校验 & 参数
+  VALIDATION_ERROR: '200:400',
+  INVALID_REQUEST: '201:400',
+  PARAMETER_MISSING: '202:400',
+
+  // 300-399: 资源操作
+  NOT_FOUND: '300:404',
+  ALREADY_EXISTS: '301:409',
+  CONFLICT: '302:409',
+
+  // 400-499: 外部依赖
+  API_ERROR: '400:502',
+  NETWORK_ERROR: '401:502',
+  TIMEOUT: '402:504',
+  SERVICE_UNAVAILABLE: '403:503',
+
+  // 500-599: 内部错误
+  INTERNAL_ERROR: '500:500',
+  DATABASE_ERROR: '501:500',
+  UNKNOWN_ERROR: '599:500',
+} as const satisfies ErrorInfo
+export const HaiCommonError = error.buildHaiErrorsDef('common', CommonErrorInfo)
+
+const ConfigErrorInfo = {
+  CONFIG_FILE_NOT_FOUND: '010:500',
+  CONFIG_PARSE_ERROR: '011:500',
+  CONFIG_VALIDATION_ERROR: '012:500',
+  CONFIG_ENV_VAR_MISSING: '013:500',
+  CONFIG_NOT_LOADED: '014:500',
+} as const satisfies ErrorInfo
+
+export const HaiConfigError = error.buildHaiErrorsDef('core', ConfigErrorInfo)
 
 // ─── 2 分页类型 ───
 

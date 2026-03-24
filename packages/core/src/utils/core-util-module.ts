@@ -5,8 +5,7 @@
  * @module core-util-module
  */
 
-import type { Result } from '../core-types.js'
-import { err } from '../core-types.js'
+import type { HaiResult } from '../core-types.js'
 
 // ─── 基础类型 ───
 
@@ -44,12 +43,12 @@ export interface BaseModuleError {
 export interface NotInitializedKit<E extends BaseModuleError> {
   /** 创建未初始化错误对象 */
   error: () => E
-  /** 创建包含未初始化错误的失败 Result */
-  result: <T>() => Result<T, E>
+  /** 创建包含未初始化错误的失败 HaiResult */
+  result: <T>() => HaiResult<T>
   /**
    * 创建 Proxy 代理，拦截所有方法调用并返回未初始化错误。
    *
-   * @param mode - 'async'（默认）所有方法返回 `Promise<Result>`；'sync' 所有方法返回 `Result`
+   * @param mode - 'async'（默认）所有方法返回 `Promise<HaiResult>`；'sync' 所有方法返回 `HaiResult`
    */
   proxy: <T>(mode?: 'async' | 'sync') => T
 }
@@ -95,14 +94,14 @@ export function createNotInitializedKit<E extends BaseModuleError>(
   /** 创建未初始化错误 */
   const error = (): E => ({ code, message: messageFn() }) as E
 
-  /** 创建未初始化错误的 Result */
-  const result = <T>(): Result<T, E> => err(error())
+  /** 创建未初始化错误的 HaiResult */
+  const result = <T>(): HaiResult<T> => ({ success: false, error: error() })
 
   /** 异步占位操作 */
-  const asyncOp = async (): Promise<Result<unknown, E>> => err(error())
+  const asyncOp = async (): Promise<HaiResult<unknown>> => ({ success: false, error: error() })
 
   /** 同步占位操作 */
-  const syncOp = (): Result<unknown, E> => err(error())
+  const syncOp = (): HaiResult<unknown> => ({ success: false, error: error() })
 
   /** 创建 Proxy 代理 */
   const proxy = <T>(mode: 'async' | 'sync' = 'async'): T =>
