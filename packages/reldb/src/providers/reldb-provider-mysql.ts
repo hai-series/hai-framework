@@ -6,7 +6,7 @@
  * @module reldb-provider-mysql
  */
 
-import type { PaginatedResult, Result } from '@h-ai/core'
+import type { HaiResult, PaginatedResult } from '@h-ai/core'
 import type { ReldbConfig } from '../reldb-config.js'
 import type {
   DdlOperations,
@@ -15,15 +15,14 @@ import type {
   ExecuteResult,
   PaginationQueryOptions,
   ReldbColumnDef,
-  ReldbError,
   ReldbProvider,
 } from '../reldb-types.js'
 import type { ReldbOpsContext } from './reldb-provider-base.js'
 
 import { core, err, ok } from '@h-ai/core'
-
-import { ReldbErrorCode } from '../reldb-config.js'
 import { reldbM } from '../reldb-i18n.js'
+import { HaiReldbError } from '../reldb-types.js'
+
 import {
   buildColumnSqlBase,
 } from './reldb-ddl-builder.js'
@@ -97,7 +96,7 @@ export function createMysqlProvider(): ReldbProvider {
   async function findIndexTableName(
     queryFn: (sql: string, values?: unknown[]) => Promise<[unknown[], unknown]>,
     indexName: string,
-  ): Promise<Result<string | null, ReldbError>> {
+  ): Promise<HaiResult<string | null>> {
     try {
       const [rows] = await queryFn(
         'SELECT TABLE_NAME as name FROM INFORMATION_SCHEMA.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND INDEX_NAME = ? LIMIT 1',
@@ -107,11 +106,7 @@ export function createMysqlProvider(): ReldbProvider {
       return ok(data[0]?.name ?? null)
     }
     catch (error) {
-      return err({
-        code: ReldbErrorCode.QUERY_FAILED,
-        message: reldbM('reldb_queryFailed', { params: { error: String(error) } }),
-        cause: error,
-      })
+      return err(HaiReldbError.QUERY_FAILED, reldbM('reldb_queryFailed', { params: { error: String(error) } }), error)
     }
   }
 
@@ -246,10 +241,7 @@ export function createMysqlProvider(): ReldbProvider {
       if (!tableResult.data) {
         if (ifExists)
           return ok(undefined)
-        return err({
-          code: ReldbErrorCode.DDL_FAILED,
-          message: reldbM('reldb_ddlFailed', { params: { error: `index not found: ${index}` } }),
-        })
+        return err(HaiReldbError.DDL_FAILED, reldbM('reldb_ddlFailed', { params: { error: `index not found: ${index}` } }))
       }
 
       await pool!.query(`DROP INDEX ${mysqlQuoteId(index)} ON ${mysqlQuoteId(tableResult.data)}`)
@@ -264,15 +256,15 @@ export function createMysqlProvider(): ReldbProvider {
   // ─── DML 操作 ───
 
   const rawDml: DmlOperations = {
-    async query<T>(sql: string, params?: unknown[]): Promise<Result<T[], ReldbError>> {
+    async query<T>(sql: string, params?: unknown[]): Promise<HaiResult<T[]>> {
       const [rows] = await pool!.query(sql, params)
       return ok(rows as T[])
     },
-    async get<T>(sql: string, params?: unknown[]): Promise<Result<T | null, ReldbError>> {
+    async get<T>(sql: string, params?: unknown[]): Promise<HaiResult<T | null>> {
       const [rows] = await pool!.query(sql, params)
       return ok(((rows as unknown[])[0] as T) ?? null)
     },
-    async execute(sql: string, params?: unknown[]): Promise<Result<ExecuteResult, ReldbError>> {
+    async execute(sql: string, params?: unknown[]): Promise<HaiResult<ExecuteResult>> {
       const [result] = await pool!.execute(sql, params)
       return ok({ changes: result.affectedRows, lastInsertRowid: result.insertId })
     },
@@ -291,11 +283,7 @@ export function createMysqlProvider(): ReldbProvider {
         if (connection) {
           await connection.rollback().catch(() => { })
         }
-        return err({
-          code: ReldbErrorCode.QUERY_FAILED,
-          message: reldbM('reldb_batchFailed', { params: { error: String(error) } }),
-          cause: error,
-        })
+        return err(HaiReldbError.QUERY_FAILED, reldbM('reldb_batchFailed', { params: { error: String(error) } }), error)
       }
       finally {
         if (connection) {
@@ -303,7 +291,7 @@ export function createMysqlProvider(): ReldbProvider {
         }
       }
     },
-    async queryPage<T>(options: PaginationQueryOptions): Promise<Result<PaginatedResult<T>, ReldbError>> {
+    async queryPage<T>(options: PaginationQueryOptions): Promise<HaiResult<PaginatedResult<T>>> {
       const result = await queryPageAsync<T>(
         async (sql, params) => {
           const [rows] = await pool!.query(sql, params)
@@ -320,15 +308,15 @@ export function createMysqlProvider(): ReldbProvider {
   /** 创建事务连接上的 DML 操作 */
   function createMysqlTxDmlOps(conn: MysqlConnection): DmlOperations {
     return {
-      async query<T>(sql: string, params?: unknown[]): Promise<Result<T[], ReldbError>> {
+      async query<T>(sql: string, params?: unknown[]): Promise<HaiResult<T[]>> {
         const [rows] = await conn.query(sql, params)
         return ok(rows as T[])
       },
-      async get<T>(sql: string, params?: unknown[]): Promise<Result<T | null, ReldbError>> {
+      async get<T>(sql: string, params?: unknown[]): Promise<HaiResult<T | null>> {
         const [rows] = await conn.query(sql, params)
         return ok(((rows as unknown[])[0] as T) ?? null)
       },
-      async execute(sql: string, params?: unknown[]): Promise<Result<ExecuteResult, ReldbError>> {
+      async execute(sql: string, params?: unknown[]): Promise<HaiResult<ExecuteResult>> {
         const [result] = await conn.execute(sql, params)
         return ok({ changes: result.affectedRows, lastInsertRowid: result.insertId })
       },
@@ -338,7 +326,7 @@ export function createMysqlProvider(): ReldbProvider {
         }
         return ok(undefined)
       },
-      async queryPage<T>(options: PaginationQueryOptions): Promise<Result<PaginatedResult<T>, ReldbError>> {
+      async queryPage<T>(options: PaginationQueryOptions): Promise<HaiResult<PaginatedResult<T>>> {
         const result = await queryPageAsync<T>(
           async (sql, params) => {
             const [rows] = await conn.query(sql, params)
@@ -351,7 +339,7 @@ export function createMysqlProvider(): ReldbProvider {
     }
   }
 
-  async function beginTx(): Promise<Result<DmlWithTxOperations, ReldbError>> {
+  async function beginTx(): Promise<HaiResult<DmlWithTxOperations>> {
     let connection: MysqlConnection | null = null
 
     try {
@@ -362,11 +350,7 @@ export function createMysqlProvider(): ReldbProvider {
       if (connection) {
         connection.release()
       }
-      return err({
-        code: ReldbErrorCode.TRANSACTION_FAILED,
-        message: mysqlTxErrorMessage(String(error)),
-        cause: error,
-      })
+      return err(HaiReldbError.TRANSACTION_FAILED, mysqlTxErrorMessage(String(error)), error)
     }
 
     const txDmlOps = createMysqlTxDmlOps(connection)
@@ -383,12 +367,9 @@ export function createMysqlProvider(): ReldbProvider {
   const dmlOps = createBaseDmlOps(ctx, rawDml)
 
   return {
-    async connect(config: ReldbConfig): Promise<Result<void, ReldbError>> {
+    async connect(config: ReldbConfig): Promise<HaiResult<void>> {
       if (config.type !== 'mysql') {
-        return err({
-          code: ReldbErrorCode.UNSUPPORTED_TYPE,
-          message: reldbM('reldb_mysqlOnlyMysql'),
-        })
+        return err(HaiReldbError.UNSUPPORTED_TYPE, reldbM('reldb_mysqlOnlyMysql'))
       }
 
       try {
@@ -417,26 +398,18 @@ export function createMysqlProvider(): ReldbProvider {
       }
       catch (error) {
         pool = null
-        return err({
-          code: ReldbErrorCode.CONNECTION_FAILED,
-          message: reldbM('reldb_mysqlConnectionFailed', { params: { error: String(error) } }),
-          cause: error,
-        })
+        return err(HaiReldbError.CONNECTION_FAILED, reldbM('reldb_mysqlConnectionFailed', { params: { error: String(error) } }), error)
       }
     },
 
-    async close(): Promise<Result<void, ReldbError>> {
+    async close(): Promise<HaiResult<void>> {
       if (pool) {
         try {
           await pool.end()
         }
         catch (error) {
           pool = null
-          return err({
-            code: ReldbErrorCode.CONNECTION_FAILED,
-            message: reldbM('reldb_mysqlConnectionFailed', { params: { error: String(error) } }),
-            cause: error,
-          })
+          return err(HaiReldbError.CONNECTION_FAILED, reldbM('reldb_mysqlConnectionFailed', { params: { error: String(error) } }), error)
         }
         pool = null
         logger.info('Disconnected from MySQL')

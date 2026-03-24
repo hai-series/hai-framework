@@ -6,14 +6,15 @@
  * @module datapipe-chunk
  */
 
-import type { Result } from '@h-ai/core'
+import type { HaiResult } from '@h-ai/core'
 import type { ChunkMode, ChunkOptionsInput } from './datapipe-config.js'
-import type { DataChunk, DatapipeError } from './datapipe-types.js'
+import type { DataChunk } from './datapipe-types.js'
 
 import { err, ok } from '@h-ai/core'
 
-import { ChunkOptionsSchema, DatapipeErrorCode } from './datapipe-config.js'
+import { ChunkOptionsSchema } from './datapipe-config.js'
 import { datapipeM } from './datapipe-i18n.js'
+import { HaiDatapipeError } from './datapipe-types.js'
 
 // ─── 分割函数 ───
 
@@ -325,24 +326,17 @@ function buildMarkdownChunks(
  * const result = chunkText(text, { mode: 'sentence', maxSize: 500, overlap: 50 })
  * ```
  */
-export function chunkText(text: string, options: ChunkOptionsInput): Result<DataChunk[], DatapipeError> {
+export function chunkText(text: string, options: ChunkOptionsInput): HaiResult<DataChunk[]> {
   const parseResult = ChunkOptionsSchema.safeParse(options)
   if (!parseResult.success) {
-    return err({
-      code: DatapipeErrorCode.CONFIG_ERROR,
-      message: datapipeM('datapipe_configError', { params: { error: parseResult.error.message } }),
-      cause: parseResult.error,
-    })
+    return err(HaiDatapipeError.CONFIG_ERROR, datapipeM('datapipe_configError', { params: { error: parseResult.error.message } }), parseResult.error)
   }
 
   const opts = parseResult.data
 
   // 校验 custom 模式需要 separator
   if (opts.mode === 'custom' && !opts.separator) {
-    return err({
-      code: DatapipeErrorCode.MISSING_SEPARATOR,
-      message: datapipeM('datapipe_missingSeparator'),
-    })
+    return err(HaiDatapipeError.MISSING_SEPARATOR, datapipeM('datapipe_missingSeparator'))
   }
 
   if (!text || text.trim().length === 0) {
@@ -363,10 +357,6 @@ export function chunkText(text: string, options: ChunkOptionsInput): Result<Data
     return ok(chunks)
   }
   catch (error) {
-    return err({
-      code: DatapipeErrorCode.CHUNK_FAILED,
-      message: datapipeM('datapipe_chunkFailed', { params: { error: String(error) } }),
-      cause: error,
-    })
+    return err(HaiDatapipeError.CHUNK_FAILED, datapipeM('datapipe_chunkFailed', { params: { error: String(error) } }), error)
   }
 }

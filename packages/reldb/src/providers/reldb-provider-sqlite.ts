@@ -6,7 +6,7 @@
  * @module reldb-provider-sqlite
  */
 
-import type { PaginatedResult, Result } from '@h-ai/core'
+import type { HaiResult, PaginatedResult } from '@h-ai/core'
 import type Database from 'better-sqlite3'
 import type { ReldbConfig } from '../reldb-config.js'
 import type {
@@ -16,7 +16,6 @@ import type {
   ExecuteResult,
   PaginationQueryOptions,
   ReldbColumnDef,
-  ReldbError,
   ReldbProvider,
 } from '../reldb-types.js'
 import type { ReldbOpsContext } from './reldb-provider-base.js'
@@ -24,9 +23,9 @@ import type { ReldbOpsContext } from './reldb-provider-base.js'
 import { createRequire } from 'node:module'
 
 import { core, err, ok } from '@h-ai/core'
-import { ReldbErrorCode } from '../reldb-config.js'
 import { reldbM } from '../reldb-i18n.js'
 import { quoteIdentifier } from '../reldb-security.js'
+import { HaiReldbError } from '../reldb-types.js'
 import {
   buildColumnSqlBase,
   buildDefaultCreateIndexSql,
@@ -187,17 +186,17 @@ export function createSqliteProvider(): ReldbProvider {
   // ─── DML 操作 ───
 
   const rawDml: DmlOperations = {
-    async query<T>(sql: string, params?: unknown[]): Promise<Result<T[], ReldbError>> {
+    async query<T>(sql: string, params?: unknown[]): Promise<HaiResult<T[]>> {
       const stmt = database!.prepare(sql)
       const rows = params ? stmt.all(...params) : stmt.all()
       return ok(rows as T[])
     },
-    async get<T>(sql: string, params?: unknown[]): Promise<Result<T | null, ReldbError>> {
+    async get<T>(sql: string, params?: unknown[]): Promise<HaiResult<T | null>> {
       const stmt = database!.prepare(sql)
       const row = params ? stmt.get(...params) : stmt.get()
       return ok((row as T) ?? null)
     },
-    async execute(sql: string, params?: unknown[]): Promise<Result<ExecuteResult, ReldbError>> {
+    async execute(sql: string, params?: unknown[]): Promise<HaiResult<ExecuteResult>> {
       const stmt = database!.prepare(sql)
       const result = params ? stmt.run(...params) : stmt.run()
       return ok({ changes: result.changes, lastInsertRowid: result.lastInsertRowid })
@@ -218,17 +217,13 @@ export function createSqliteProvider(): ReldbProvider {
         return ok(undefined)
       }
       catch (error) {
-        return err({
-          code: ReldbErrorCode.QUERY_FAILED,
-          message: reldbM('reldb_sqliteBatchFailed', { params: { error: String(error) } }),
-          cause: error,
-        })
+        return err(HaiReldbError.QUERY_FAILED, reldbM('reldb_sqliteBatchFailed', { params: { error: String(error) } }), error)
       }
       finally {
         releaseTxLock()
       }
     },
-    async queryPage<T>(options: PaginationQueryOptions): Promise<Result<PaginatedResult<T>, ReldbError>> {
+    async queryPage<T>(options: PaginationQueryOptions): Promise<HaiResult<PaginatedResult<T>>> {
       const result = await queryPageAsync<T>(
         async (sqlStr, params) => {
           const stmt = database!.prepare(sqlStr)
@@ -245,15 +240,15 @@ export function createSqliteProvider(): ReldbProvider {
   /** 创建事务连接上的 DML 操作（无守卫，由 createTxHandle 统一守卫） */
   function createSqliteTxDmlOps(db: Database.Database): DmlOperations {
     return {
-      async query<T>(sql: string, params?: unknown[]): Promise<Result<T[], ReldbError>> {
+      async query<T>(sql: string, params?: unknown[]): Promise<HaiResult<T[]>> {
         const stmt = db.prepare(sql)
         return ok((params ? stmt.all(...params) : stmt.all()) as T[])
       },
-      async get<T>(sql: string, params?: unknown[]): Promise<Result<T | null, ReldbError>> {
+      async get<T>(sql: string, params?: unknown[]): Promise<HaiResult<T | null>> {
         const stmt = db.prepare(sql)
         return ok(((params ? stmt.get(...params) : stmt.get()) as T) ?? null)
       },
-      async execute(sql: string, params?: unknown[]): Promise<Result<ExecuteResult, ReldbError>> {
+      async execute(sql: string, params?: unknown[]): Promise<HaiResult<ExecuteResult>> {
         const stmt = db.prepare(sql)
         const result = params ? stmt.run(...params) : stmt.run()
         return ok({ changes: result.changes, lastInsertRowid: result.lastInsertRowid })
@@ -267,7 +262,7 @@ export function createSqliteProvider(): ReldbProvider {
         }
         return ok(undefined)
       },
-      async queryPage<T>(options: PaginationQueryOptions): Promise<Result<PaginatedResult<T>, ReldbError>> {
+      async queryPage<T>(options: PaginationQueryOptions): Promise<HaiResult<PaginatedResult<T>>> {
         const result = await queryPageAsync<T>(
           async (sqlStr, params) => {
             const stmt = db.prepare(sqlStr)
@@ -280,7 +275,7 @@ export function createSqliteProvider(): ReldbProvider {
     }
   }
 
-  async function beginTx(): Promise<Result<DmlWithTxOperations, ReldbError>> {
+  async function beginTx(): Promise<HaiResult<DmlWithTxOperations>> {
     const db = database!
     let released = false
     const releaseTxLock = await acquireTxLock()
@@ -297,11 +292,7 @@ export function createSqliteProvider(): ReldbProvider {
     }
     catch (error) {
       finishTransaction()
-      return err({
-        code: ReldbErrorCode.TRANSACTION_FAILED,
-        message: sqliteTxErrorMessage(String(error)),
-        cause: error,
-      })
+      return err(HaiReldbError.TRANSACTION_FAILED, sqliteTxErrorMessage(String(error)), error)
     }
 
     const txDmlOps = createSqliteTxDmlOps(db)
@@ -318,19 +309,13 @@ export function createSqliteProvider(): ReldbProvider {
   const dmlOps = createBaseDmlOps(ctx, rawDml)
 
   return {
-    async connect(config: ReldbConfig): Promise<Result<void, ReldbError>> {
+    async connect(config: ReldbConfig): Promise<HaiResult<void>> {
       if (config.type !== 'sqlite') {
-        return err({
-          code: ReldbErrorCode.UNSUPPORTED_TYPE,
-          message: reldbM('reldb_sqliteOnlySqlite'),
-        })
+        return err(HaiReldbError.UNSUPPORTED_TYPE, reldbM('reldb_sqliteOnlySqlite'))
       }
 
       if (!config.database) {
-        return err({
-          code: ReldbErrorCode.CONFIG_ERROR,
-          message: reldbM('reldb_sqliteNeedPath'),
-        })
+        return err(HaiReldbError.CONFIG_ERROR, reldbM('reldb_sqliteNeedPath'))
       }
 
       try {
@@ -354,26 +339,18 @@ export function createSqliteProvider(): ReldbProvider {
         return ok(undefined)
       }
       catch (error) {
-        return err({
-          code: ReldbErrorCode.CONNECTION_FAILED,
-          message: reldbM('reldb_sqliteConnectionFailed', { params: { error: String(error) } }),
-          cause: error,
-        })
+        return err(HaiReldbError.CONNECTION_FAILED, reldbM('reldb_sqliteConnectionFailed', { params: { error: String(error) } }), error)
       }
     },
 
-    async close(): Promise<Result<void, ReldbError>> {
+    async close(): Promise<HaiResult<void>> {
       if (database) {
         try {
           database.close()
         }
         catch (error) {
           database = null
-          return err({
-            code: ReldbErrorCode.CONNECTION_FAILED,
-            message: reldbM('reldb_sqliteConnectionFailed', { params: { error: String(error) } }),
-            cause: error,
-          })
+          return err(HaiReldbError.CONNECTION_FAILED, reldbM('reldb_sqliteConnectionFailed', { params: { error: String(error) } }), error)
         }
         database = null
         logger.info('Disconnected from SQLite')

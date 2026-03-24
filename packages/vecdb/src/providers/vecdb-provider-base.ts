@@ -8,13 +8,12 @@
  * @module vecdb-provider-base
  */
 
-import type { Result } from '@h-ai/core'
-import type { VecdbConfig, VecdbErrorCodeType } from '../vecdb-config.js'
+import type { HaiErrorDef, HaiResult } from '@h-ai/core'
+import type { VecdbConfig } from '../vecdb-config.js'
 import type {
   CollectionCreateOptions,
   CollectionInfo,
   CollectionOperations,
-  VecdbError,
   VectorDocument,
   VectorOperations,
   VectorSearchOptions,
@@ -23,8 +22,8 @@ import type {
 
 import { err } from '@h-ai/core'
 
-import { VecdbErrorCode } from '../vecdb-config.js'
 import { vecdbM } from '../vecdb-i18n.js'
+import { HaiVecdbError } from '../vecdb-types.js'
 
 // ─── Provider 接口（内部，不暴露给模块消费者） ───
 
@@ -37,9 +36,9 @@ export interface VecdbProvider {
   /** Provider 名称标识 */
   readonly name: string
   /** 连接到向量数据库 */
-  connect: (config: VecdbConfig) => Promise<Result<void, VecdbError>>
+  connect: (config: VecdbConfig) => Promise<HaiResult<void>>
   /** 关闭连接 */
-  close: () => Promise<Result<void, VecdbError>>
+  close: () => Promise<HaiResult<void>>
   /** 是否已连接 */
   isConnected: () => boolean
   /** 集合管理操作 */
@@ -68,11 +67,11 @@ export interface VecdbOpsContext {
  * 未预期的运行时异常直接 throw，由 wrapOp 统一捕获。
  */
 export interface CollectionDriver {
-  create: (name: string, options: CollectionCreateOptions) => Promise<Result<void, VecdbError>>
-  drop: (name: string) => Promise<Result<void, VecdbError>>
-  exists: (name: string) => Promise<Result<boolean, VecdbError>>
-  info: (name: string) => Promise<Result<CollectionInfo, VecdbError>>
-  list: () => Promise<Result<string[], VecdbError>>
+  create: (name: string, options: CollectionCreateOptions) => Promise<HaiResult<void>>
+  drop: (name: string) => Promise<HaiResult<void>>
+  exists: (name: string) => Promise<HaiResult<boolean>>
+  info: (name: string) => Promise<HaiResult<CollectionInfo>>
+  list: () => Promise<HaiResult<string[]>>
 }
 
 /**
@@ -83,27 +82,27 @@ export interface CollectionDriver {
  * 未预期的运行时异常直接 throw，由 wrapOp 统一捕获。
  */
 export interface VectorDriver {
-  insert: (collection: string, documents: VectorDocument[]) => Promise<Result<void, VecdbError>>
-  upsert: (collection: string, documents: VectorDocument[]) => Promise<Result<void, VecdbError>>
-  delete: (collection: string, ids: string[]) => Promise<Result<void, VecdbError>>
+  insert: (collection: string, documents: VectorDocument[]) => Promise<HaiResult<void>>
+  upsert: (collection: string, documents: VectorDocument[]) => Promise<HaiResult<void>>
+  delete: (collection: string, ids: string[]) => Promise<HaiResult<void>>
   search: (
     collection: string,
     vector: number[],
     options?: VectorSearchOptions,
-  ) => Promise<Result<VectorSearchResult[], VecdbError>>
-  count: (collection: string) => Promise<Result<number, VecdbError>>
+  ) => Promise<HaiResult<VectorSearchResult[]>>
+  count: (collection: string) => Promise<HaiResult<number>>
 }
 
 // ─── 内部帮助 ───
 
-/** 根据错误码获取对应的 i18n 错误消息 */
-function errorMsgFromCode(code: VecdbErrorCodeType, errorStr: string): string {
-  switch (code) {
-    case VecdbErrorCode.DELETE_FAILED:
+/** 根据错误定义获取对应的 i18n 错误消息 */
+function errorMsgFromCode(def: HaiErrorDef, errorStr: string): string {
+  switch (def) {
+    case HaiVecdbError.DELETE_FAILED:
       return vecdbM('vecdb_deleteFailed', { params: { error: errorStr } })
-    case VecdbErrorCode.INSERT_FAILED:
+    case HaiVecdbError.INSERT_FAILED:
       return vecdbM('vecdb_insertFailed', { params: { error: errorStr } })
-    case VecdbErrorCode.UPDATE_FAILED:
+    case HaiVecdbError.UPDATE_FAILED:
       return vecdbM('vecdb_updateFailed', { params: { error: errorStr } })
     default:
       return vecdbM('vecdb_queryFailed', { params: { error: errorStr } })
@@ -119,24 +118,20 @@ function errorMsgFromCode(code: VecdbErrorCodeType, errorStr: string): string {
  */
 async function wrapOp<T>(
   ctx: VecdbOpsContext,
-  fn: () => Promise<Result<T, VecdbError>>,
-  errorCode: VecdbErrorCodeType,
+  fn: () => Promise<HaiResult<T>>,
+  errorDef: HaiErrorDef,
   errorLabel: string,
   errorMeta?: Record<string, unknown>,
-): Promise<Result<T, VecdbError>> {
+): Promise<HaiResult<T>> {
   if (!ctx.isConnected()) {
-    return err({ code: VecdbErrorCode.NOT_INITIALIZED, message: vecdbM('vecdb_notInitialized') })
+    return err(HaiVecdbError.NOT_INITIALIZED, vecdbM('vecdb_notInitialized'))
   }
   try {
     return await fn()
   }
   catch (error) {
     ctx.logger.error(errorLabel, { ...errorMeta, error })
-    return err({
-      code: errorCode,
-      message: errorMsgFromCode(errorCode, String(error)),
-      cause: error,
-    })
+    return err(errorDef, errorMsgFromCode(errorDef, String(error)), error)
   }
 }
 
@@ -152,35 +147,35 @@ export function createBaseCollectionOps(ctx: VecdbOpsContext, driver: Collection
     create: (name, options) => wrapOp(
       ctx,
       () => driver.create(name, options),
-      VecdbErrorCode.QUERY_FAILED,
+      HaiVecdbError.QUERY_FAILED,
       'Failed to create collection',
       { name },
     ),
     drop: name => wrapOp(
       ctx,
       () => driver.drop(name),
-      VecdbErrorCode.DELETE_FAILED,
+      HaiVecdbError.DELETE_FAILED,
       'Failed to drop collection',
       { name },
     ),
     exists: name => wrapOp(
       ctx,
       () => driver.exists(name),
-      VecdbErrorCode.QUERY_FAILED,
+      HaiVecdbError.QUERY_FAILED,
       'Failed to check collection',
       { name },
     ),
     info: name => wrapOp(
       ctx,
       () => driver.info(name),
-      VecdbErrorCode.QUERY_FAILED,
+      HaiVecdbError.QUERY_FAILED,
       'Failed to get collection info',
       { name },
     ),
     list: () => wrapOp(
       ctx,
       () => driver.list(),
-      VecdbErrorCode.QUERY_FAILED,
+      HaiVecdbError.QUERY_FAILED,
       'Failed to list collections',
     ),
   }
@@ -198,35 +193,35 @@ export function createBaseVectorOps(ctx: VecdbOpsContext, driver: VectorDriver):
     insert: (collection, documents) => wrapOp(
       ctx,
       () => driver.insert(collection, documents),
-      VecdbErrorCode.INSERT_FAILED,
+      HaiVecdbError.INSERT_FAILED,
       'Failed to insert vectors',
       { collection },
     ),
     upsert: (collection, documents) => wrapOp(
       ctx,
       () => driver.upsert(collection, documents),
-      VecdbErrorCode.UPDATE_FAILED,
+      HaiVecdbError.UPDATE_FAILED,
       'Failed to upsert vectors',
       { collection },
     ),
     delete: (collection, ids) => wrapOp(
       ctx,
       () => driver.delete(collection, ids),
-      VecdbErrorCode.DELETE_FAILED,
+      HaiVecdbError.DELETE_FAILED,
       'Failed to delete vectors',
       { collection },
     ),
     search: (collection, vector, options) => wrapOp(
       ctx,
       () => driver.search(collection, vector, options),
-      VecdbErrorCode.QUERY_FAILED,
+      HaiVecdbError.QUERY_FAILED,
       'Failed to search vectors',
       { collection },
     ),
     count: collection => wrapOp(
       ctx,
       () => driver.count(collection),
-      VecdbErrorCode.QUERY_FAILED,
+      HaiVecdbError.QUERY_FAILED,
       'Failed to count vectors',
       { collection },
     ),

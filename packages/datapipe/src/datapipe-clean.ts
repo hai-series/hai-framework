@@ -5,14 +5,14 @@
  * @module datapipe-clean
  */
 
-import type { Result } from '@h-ai/core'
+import type { HaiResult } from '@h-ai/core'
 import type { CleanOptionsInput } from './datapipe-config.js'
-import type { DatapipeError } from './datapipe-types.js'
 
 import { err, ok } from '@h-ai/core'
 
-import { CleanOptionsSchema, DatapipeErrorCode } from './datapipe-config.js'
+import { CleanOptionsSchema } from './datapipe-config.js'
 import { datapipeM } from './datapipe-i18n.js'
+import { HaiDatapipeError } from './datapipe-types.js'
 
 /**
  * HTML 标签正则
@@ -54,14 +54,10 @@ const MULTI_SPACE_REGEX = /[ \t]{2,}/g
  * // result.data === 'Hello World'
  * ```
  */
-export function cleanText(text: string, options?: CleanOptionsInput): Result<string, DatapipeError> {
+export function cleanText(text: string, options?: CleanOptionsInput): HaiResult<string> {
   const parseResult = CleanOptionsSchema.safeParse(options ?? {})
   if (!parseResult.success) {
-    return err({
-      code: DatapipeErrorCode.CONFIG_ERROR,
-      message: datapipeM('datapipe_configError', { params: { error: parseResult.error.message } }),
-      cause: parseResult.error,
-    })
+    return err(HaiDatapipeError.CONFIG_ERROR, datapipeM('datapipe_configError', { params: { error: parseResult.error.message } }), parseResult.error)
   }
 
   const opts = parseResult.data
@@ -91,11 +87,7 @@ export function cleanText(text: string, options?: CleanOptionsInput): Result<str
           regex = new RegExp(pattern, 'g')
         }
         catch (regexError) {
-          return err({
-            code: DatapipeErrorCode.CONFIG_ERROR,
-            message: datapipeM('datapipe_configError', { params: { error: String(regexError) } }),
-            cause: regexError,
-          })
+          return err(HaiDatapipeError.CONFIG_ERROR, datapipeM('datapipe_configError', { params: { error: String(regexError) } }), regexError)
         }
         result = result.replace(regex, replacement)
       }
@@ -115,10 +107,6 @@ export function cleanText(text: string, options?: CleanOptionsInput): Result<str
     return ok(result)
   }
   catch (error) {
-    return err({
-      code: DatapipeErrorCode.CLEAN_FAILED,
-      message: datapipeM('datapipe_cleanFailed', { params: { error: String(error) } }),
-      cause: error,
-    })
+    return err(HaiDatapipeError.CLEAN_FAILED, datapipeM('datapipe_cleanFailed', { params: { error: String(error) } }), error)
   }
 }

@@ -5,11 +5,11 @@
  * @module reldb-security
  */
 
-import type { Result } from '@h-ai/core'
-import type { ReldbError } from './reldb-types.js'
+import type { HaiResult } from '@h-ai/core'
+import type { } from './reldb-types.js'
 import { err, ok } from '@h-ai/core'
-import { ReldbErrorCode } from './reldb-config.js'
 import { reldbM } from './reldb-i18n.js'
+import { HaiReldbError } from './reldb-types.js'
 
 // ─── 标识符校验 ───
 
@@ -39,14 +39,11 @@ const VALID_IDENTIFIER_RE = /^[a-z_]\w{0,127}$/i
  * // bad.success === false
  * ```
  */
-export function validateIdentifier(name: string): Result<string, ReldbError> {
+export function validateIdentifier(name: string): HaiResult<string> {
   if (VALID_IDENTIFIER_RE.test(name)) {
     return ok(name)
   }
-  return err({
-    code: ReldbErrorCode.CONFIG_ERROR,
-    message: reldbM('reldb_invalidIdentifier', { params: { name } }),
-  })
+  return err(HaiReldbError.CONFIG_ERROR, reldbM('reldb_invalidIdentifier', { params: { name } }))
 }
 
 /**
@@ -57,7 +54,7 @@ export function validateIdentifier(name: string): Result<string, ReldbError> {
  * @param names - 待校验的标识符数组
  * @returns 全部合法时返回 ok(undefined)；否则返回第一个不合法项的错误
  */
-export function validateIdentifiers(names: string[]): Result<void, ReldbError> {
+export function validateIdentifiers(names: string[]): HaiResult<void> {
   for (const name of names) {
     const result = validateIdentifier(name)
     if (!result.success) {

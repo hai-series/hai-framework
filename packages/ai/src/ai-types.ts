@@ -5,10 +5,10 @@
  * @module ai-types
  */
 
-import type { Result } from '@h-ai/core'
-
+import type { ErrorInfo, HaiResult } from '@h-ai/core'
 import type { A2AOperations } from './a2a/ai-a2a-types.js'
-import type { AIConfig, AIConfigInput, AIErrorCodeType } from './ai-config.js'
+
+import type { AIConfig, AIConfigInput } from './ai-config.js'
 import type { CompressOperations } from './compress/ai-compress-types.js'
 import type { ContextOperations } from './context/ai-context-types.js'
 import type { EmbeddingOperations } from './embedding/ai-embedding-types.js'
@@ -24,18 +24,121 @@ import type { RetrievalOperations } from './retrieval/ai-retrieval-types.js'
 import type { AIStoreProvider } from './store/ai-store-types.js'
 import type { SummaryOperations } from './summary/ai-summary-types.js'
 import type { TokenOperations } from './token/ai-token-types.js'
+import { core } from '@h-ai/core'
 
-// ─── 错误类型 ───
+// ─── 错误定义（照 @h-ai/core 范式） ───
 
-/** AI 错误接口，所有 AI 操作的错误统一遵循此结构 */
-export interface AIError {
-  /** 错误码（数值，参见 AIErrorCode） */
-  code: AIErrorCodeType
-  /** 错误消息 */
-  message: string
-  /** 原始错误（可选） */
-  cause?: unknown
-}
+/**
+ * AI 错误信息映射（错误码:HTTP状态码）。
+ *
+ * 错误码采用 3 位数字格式（000-999），HTTP 状态码遵循标准 HTTP 规范。
+ * 完整错误码将自动生成为：`hai:ai:NNN`
+ */
+const AIErrorInfo = {
+  // 通用 (000-009)
+  INTERNAL_ERROR: '000:500',
+
+  // 初始化 (010-019)
+  NOT_INITIALIZED: '010:500',
+  CONFIGURATION_ERROR: '011:500',
+  INIT_IN_PROGRESS: '012:500',
+  RERANK_API_ERROR: '020:502',
+  RERANK_INVALID_REQUEST: '021:400',
+
+  // LLM (100-199)
+  API_ERROR: '100:502',
+  INVALID_REQUEST: '101:400',
+  RATE_LIMITED: '102:429',
+  TIMEOUT: '103:504',
+  MODEL_NOT_FOUND: '104:404',
+  CONTEXT_LENGTH_EXCEEDED: '105:400',
+  LLM_RECORD_FAILED: '106:500',
+  LLM_HISTORY_FAILED: '107:500',
+
+  // MCP (200-299)
+  MCP_CONNECTION_ERROR: '200:502',
+  MCP_PROTOCOL_ERROR: '201:502',
+  MCP_TOOL_ERROR: '202:500',
+  MCP_RESOURCE_ERROR: '203:500',
+  MCP_SERVER_ERROR: '204:502',
+
+  // Embedding (300-399)
+  EMBEDDING_API_ERROR: '300:502',
+  EMBEDDING_MODEL_NOT_FOUND: '301:404',
+  EMBEDDING_INPUT_TOO_LONG: '302:400',
+
+  // 工具 (400-499)
+  TOOL_NOT_FOUND: '400:404',
+  TOOL_VALIDATION_FAILED: '401:400',
+  TOOL_EXECUTION_FAILED: '402:500',
+  TOOL_TIMEOUT: '403:504',
+
+  // Reasoning (500-599)
+  REASONING_FAILED: '500:500',
+  REASONING_MAX_ROUNDS: '501:400',
+  REASONING_STRATEGY_NOT_FOUND: '502:404',
+
+  // Retrieval (600-699)
+  RETRIEVAL_FAILED: '600:500',
+  RETRIEVAL_SOURCE_NOT_FOUND: '601:404',
+
+  // RAG (700-799)
+  RAG_FAILED: '700:500',
+  RAG_CONTEXT_BUILD_FAILED: '701:500',
+
+  // Knowledge (800-899)
+  KNOWLEDGE_SETUP_FAILED: '800:500',
+  KNOWLEDGE_INGEST_FAILED: '801:500',
+  KNOWLEDGE_RETRIEVE_FAILED: '802:500',
+  KNOWLEDGE_ENTITY_EXTRACT_FAILED: '803:500',
+  KNOWLEDGE_NOT_SETUP: '804:500',
+  KNOWLEDGE_COLLECTION_NOT_FOUND: '805:404',
+
+  // Memory (900-949)
+  MEMORY_EXTRACT_FAILED: '900:500',
+  MEMORY_STORE_FAILED: '901:500',
+  MEMORY_RECALL_FAILED: '902:500',
+  MEMORY_NOT_FOUND: '903:404',
+  MEMORY_ENRICH_FAILED: '904:500',
+
+  // File (030-049)
+  FILE_PARSE_FAILED: '030:500',
+  FILE_UNSUPPORTED_FORMAT: '031:400',
+  FILE_OCR_FAILED: '032:500',
+  FILE_INVALID_CONTENT: '033:400',
+
+  // Context (950-999)
+  CONTEXT_COMPRESS_FAILED: '950:500',
+  CONTEXT_SUMMARIZE_FAILED: '951:500',
+  CONTEXT_TOKEN_ESTIMATE_FAILED: '952:500',
+  CONTEXT_BUDGET_EXCEEDED: '953:400',
+
+  // Store (960-969)
+  STORE_FAILED: '960:500',
+  STORE_NOT_AVAILABLE: '961:503',
+
+  // Session (970-979)
+  SESSION_NOT_FOUND: '970:404',
+  SESSION_FAILED: '971:500',
+
+  // A2A (980-999)
+  A2A_NOT_CONFIGURED: '980:500',
+  A2A_HANDLE_FAILED: '981:500',
+  A2A_REMOTE_CALL_FAILED: '982:502',
+  A2A_AUTH_FAILED: '983:401',
+  A2A_LIST_MESSAGES_FAILED: '984:500',
+} as const satisfies ErrorInfo
+
+/**
+ * AI 模块标准错误定义对象。
+ *
+ * 通过 `HaiAIError.ERROR_CODE_NAME` 访问具体错误定义，如：
+ * ```ts
+ * const def = HaiAIError.NOT_INITIALIZED
+ * // => { code: 'hai:ai:010', httpStatus: 500, system: 'hai', module: 'ai' }
+ * ```
+ */
+export const HaiAIError = core.error.buildHaiErrorsDef('ai', AIErrorInfo)
 
 // ─── 初始化选项 ───
 
@@ -81,9 +184,9 @@ export interface AIFunctions {
    *
    * @param config - AI 配置（可选，默认使用空对象并应用 Schema 默认值）
    * @param options - 运行时选项（可选，用于传入自定义 StoreProvider 等运行时对象）
-   * @returns 成功返回 `ok(undefined)`；配置校验失败返回 `err(AIError)`
+   * @returns 成功返回 `ok(undefined)`；配置校验失败返回 `err(HaiAIError.CONFIGURATION_ERROR)`
    */
-  init: (config?: AIConfigInput, options?: AIInitOptions) => Promise<Result<void, AIError>>
+  init: (config?: AIConfigInput, options?: AIInitOptions) => Promise<HaiResult<void>>
   /**
    * 关闭 AI 服务，释放内部状态
    *

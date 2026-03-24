@@ -7,77 +7,7 @@
  */
 
 import { z } from 'zod'
-
 import { vecdbM } from './vecdb-i18n.js'
-
-// ─── 错误码常量 ───
-
-/**
- * 向量数据库错误码（数值范围 3500-3999）
- *
- * 用于标识向量数据库操作中的各类错误，便于错误处理和日志记录。
- *
- * @example
- * ```ts
- * import { VecdbErrorCode } from '@h-ai/vecdb'
- *
- * if (result.error?.code === VecdbErrorCode.CONNECTION_FAILED) {
- *     // 处理错误：向量数据库连接失败
- * }
- * ```
- */
-export const VecdbErrorCode = {
-  /** 连接失败 */
-  CONNECTION_FAILED: 3500,
-  /** 查询失败 */
-  QUERY_FAILED: 3501,
-  /** 集合不存在 */
-  COLLECTION_NOT_FOUND: 3502,
-  /** 集合已存在 */
-  COLLECTION_ALREADY_EXISTS: 3503,
-  /** 向量维度不匹配 */
-  DIMENSION_MISMATCH: 3504,
-  /** 插入失败 */
-  INSERT_FAILED: 3505,
-  /** 删除失败 */
-  DELETE_FAILED: 3506,
-  /** 更新失败 */
-  UPDATE_FAILED: 3507,
-  /** 索引构建失败 */
-  INDEX_BUILD_FAILED: 3508,
-  /** 数据库未初始化 */
-  NOT_INITIALIZED: 3510,
-  /** 配置错误 */
-  CONFIG_ERROR: 3511,
-  /** 不支持的向量数据库类型 */
-  UNSUPPORTED_TYPE: 3512,
-  /** 驱动加载失败（可选依赖缺失） */
-  DRIVER_NOT_FOUND: 3513,
-  /** 序列化/反序列化失败 */
-  SERIALIZATION_FAILED: 3514,
-} as const
-
-/** 向量数据库错误码类型 */
-export type VecdbErrorCodeType = typeof VecdbErrorCode[keyof typeof VecdbErrorCode]
-
-/** 向量数据库错误码 → HTTP 状态码映射 */
-export const VecdbErrorHttpStatus: Record<number, number> = {
-  [VecdbErrorCode.CONNECTION_FAILED]: 500,
-  [VecdbErrorCode.QUERY_FAILED]: 500,
-  [VecdbErrorCode.COLLECTION_NOT_FOUND]: 404,
-  [VecdbErrorCode.COLLECTION_ALREADY_EXISTS]: 409,
-  [VecdbErrorCode.DIMENSION_MISMATCH]: 400,
-  [VecdbErrorCode.INSERT_FAILED]: 500,
-  [VecdbErrorCode.DELETE_FAILED]: 500,
-  [VecdbErrorCode.UPDATE_FAILED]: 500,
-  [VecdbErrorCode.INDEX_BUILD_FAILED]: 500,
-  [VecdbErrorCode.NOT_INITIALIZED]: 500,
-  [VecdbErrorCode.CONFIG_ERROR]: 500,
-  [VecdbErrorCode.UNSUPPORTED_TYPE]: 400,
-  [VecdbErrorCode.DRIVER_NOT_FOUND]: 500,
-  [VecdbErrorCode.SERIALIZATION_FAILED]: 500,
-}
-
 // ─── 向量数据库类型枚举 ───
 
 /**

@@ -5,22 +5,30 @@
  * @module datapipe-types
  */
 
-import type { Result } from '@h-ai/core'
-import type { ChunkOptionsInput, CleanOptionsInput, DatapipeErrorCodeType } from './datapipe-config.js'
+import type { ErrorInfo, HaiResult } from '@h-ai/core'
+import type { ChunkOptionsInput, CleanOptionsInput } from './datapipe-config'
+import { core } from '@h-ai/core'
 
-// ─── 错误类型 ───
+// ─── 错误定义（照 @h-ai/core 范式） ───
 
 /**
- * 数据处理错误接口
+ * 数据处理错误信息映射（错误码:HTTP状态码）。
+ *
+ * 完整错误码将自动生成为：`hai:datapipe:NNN`
  */
-export interface DatapipeError {
-  /** 错误码（数值，参见 DatapipeErrorCode） */
-  code: DatapipeErrorCodeType
-  /** 错误消息 */
-  message: string
-  /** 原始错误（可选） */
-  cause?: unknown
-}
+const DatapipeErrorInfo = {
+  CLEAN_FAILED: '001:500',
+  CHUNK_FAILED: '002:500',
+  TRANSFORM_FAILED: '003:500',
+  PIPELINE_FAILED: '004:500',
+  CONFIG_ERROR: '005:400',
+  MISSING_SEPARATOR: '006:400',
+} as const satisfies ErrorInfo
+
+/**
+ * Datapipe 模块标准错误定义对象。
+ */
+export const HaiDatapipeError = core.error.buildHaiErrorsDef('datapipe', DatapipeErrorInfo)
 
 // ─── 数据块 ───
 
@@ -103,7 +111,7 @@ export interface CleanOperations {
    * @param options - 清洗选项（可选，使用默认值）
    * @returns 清洗后的文本
    */
-  (text: string, options?: CleanOptionsInput): Result<string, DatapipeError>
+  (text: string, options?: CleanOptionsInput): HaiResult<string>
 }
 
 /**
@@ -119,7 +127,7 @@ export interface ChunkOperations {
    * @param options - 分块选项
    * @returns 分块列表
    */
-  (text: string, options: ChunkOptionsInput): Result<DataChunk[], DatapipeError>
+  (text: string, options: ChunkOptionsInput): HaiResult<DataChunk[]>
 }
 
 /**
@@ -146,7 +154,7 @@ export interface PipelineBuilder {
   /** 添加分块后处理步骤 */
   chunkTransform: (fn: ChunkTransformFn) => PipelineBuilder
   /** 执行管线 */
-  run: (text: string) => Promise<Result<PipelineResult, DatapipeError>>
+  run: (text: string) => Promise<HaiResult<PipelineResult>>
 }
 
 /**

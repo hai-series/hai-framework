@@ -5,9 +5,9 @@
  * @module ai-rerank-functions
  */
 
-import type { Result } from '@h-ai/core'
+import type { HaiResult } from '@h-ai/core'
 import type { AIConfig } from '../ai-config.js'
-import type { AIError } from '../ai-types.js'
+
 import type {
   RerankDocument,
   RerankItem,
@@ -18,8 +18,9 @@ import type {
 
 import { core, err, ok } from '@h-ai/core'
 
-import { AIErrorCode, resolveModelEntry } from '../ai-config.js'
+import { resolveModelEntry } from '../ai-config.js'
 import { aiM } from '../ai-i18n.js'
+import { HaiAIError } from '../ai-types.js'
 
 const logger = core.logger.child({ module: 'ai', scope: 'rerank' })
 
@@ -74,7 +75,7 @@ export function createRerankOperations(config: AIConfig): RerankOperations {
   /**
    * 调用 Cohere 兼容的 Rerank API
    */
-  async function callRerankAPI(request: RerankRequest): Promise<Result<RerankResponse, AIError>> {
+  async function callRerankAPI(request: RerankRequest): Promise<HaiResult<RerankResponse>> {
     const resolvedResult = resolveModelEntry(config.llm, 'rerank', request.model, {
       missingApiKeyMessage: aiM('ai_configError', { params: { error: 'API Key is required for rerank' } }),
     })
@@ -84,10 +85,7 @@ export function createRerankOperations(config: AIConfig): RerankOperations {
 
     const { texts, ids } = normalizeDocuments(request.documents)
     if (texts.length === 0) {
-      return err({
-        code: AIErrorCode.RERANK_INVALID_REQUEST,
-        message: aiM('ai_rerankInvalidRequest', { params: { reason: 'documents cannot be empty' } }),
-      })
+      return err(HaiAIError.RERANK_INVALID_REQUEST, aiM('ai_rerankInvalidRequest', { params: { reason: 'documents cannot be empty' } }))
     }
 
     const body: Record<string, unknown> = {
@@ -117,10 +115,7 @@ export function createRerankOperations(config: AIConfig): RerankOperations {
       if (!response.ok) {
         const errorText = await response.text().catch(() => response.statusText)
         logger.error('Rerank API request failed', { status: response.status, error: errorText })
-        return err({
-          code: AIErrorCode.RERANK_API_ERROR,
-          message: aiM('ai_rerankApiFailed', { params: { error: `HTTP ${response.status}: ${errorText}` } }),
-        })
+        return err(HaiAIError.RERANK_API_ERROR, aiM('ai_rerankApiFailed', { params: { error: `HTTP ${response.status}: ${errorText}` } }))
       }
 
       const data = await response.json() as CohereRerankResponse
@@ -138,11 +133,7 @@ export function createRerankOperations(config: AIConfig): RerankOperations {
     }
     catch (error) {
       logger.error('Rerank API call failed', { error })
-      return err({
-        code: AIErrorCode.RERANK_API_ERROR,
-        message: aiM('ai_rerankApiFailed', { params: { error: String(error) } }),
-        cause: error,
-      })
+      return err(HaiAIError.RERANK_API_ERROR, aiM('ai_rerankApiFailed', { params: { error: String(error) } }), error)
     }
   }
 
@@ -155,7 +146,7 @@ export function createRerankOperations(config: AIConfig): RerankOperations {
      * @param request - 重排请求（query、documents、可选 topN/model）
      * @returns `ok(RerankResponse)` 含重排后的结果列表；API 调用失败时返回 `RERANK_API_ERROR`
      */
-    async rerank(request: RerankRequest): Promise<Result<RerankResponse, AIError>> {
+    async rerank(request: RerankRequest): Promise<HaiResult<RerankResponse>> {
       return callRerankAPI(request)
     },
 
@@ -167,7 +158,7 @@ export function createRerankOperations(config: AIConfig): RerankOperations {
      * @param topN - 仅返回前 N 个结果（可选）
      * @returns `ok(RerankItem[])` 按相关度降序排列的结果；API 调用失败时返回错误
      */
-    async rerankTexts(query: string, texts: string[], topN?: number): Promise<Result<RerankItem[], AIError>> {
+    async rerankTexts(query: string, texts: string[], topN?: number): Promise<HaiResult<RerankItem[]>> {
       const result = await callRerankAPI({ query, documents: texts, topN })
       if (!result.success)
         return result

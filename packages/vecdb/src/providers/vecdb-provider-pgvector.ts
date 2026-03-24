@@ -6,18 +6,17 @@
  * @module vecdb-provider-pgvector
  */
 
-import type { Result } from '@h-ai/core'
+import type { HaiResult } from '@h-ai/core'
 import type { PgvectorConfig } from '../vecdb-config.js'
 import type {
-  VecdbError,
   VectorSearchResult,
 } from '../vecdb-types.js'
 import type { CollectionDriver, VecdbProvider, VectorDriver } from './vecdb-provider-base.js'
 
 import { core, err, ok } from '@h-ai/core'
-
-import { VecdbErrorCode } from '../vecdb-config.js'
 import { vecdbM } from '../vecdb-i18n.js'
+import { HaiVecdbError } from '../vecdb-types.js'
+
 import { createBaseCollectionOps, createBaseVectorOps } from './vecdb-provider-base.js'
 
 const logger = core.logger.child({ module: 'vecdb', scope: 'pgvector' })
@@ -98,10 +97,7 @@ export function createPgvectorProvider(): VecdbProvider {
         [table],
       )
       if (checkResult.rows[0].exists) {
-        return err({
-          code: VecdbErrorCode.COLLECTION_ALREADY_EXISTS,
-          message: vecdbM('vecdb_collectionAlreadyExists', { params: { name } }),
-        })
+        return err(HaiVecdbError.COLLECTION_ALREADY_EXISTS, vecdbM('vecdb_collectionAlreadyExists', { params: { name } }))
       }
 
       // 创建表
@@ -153,10 +149,7 @@ export function createPgvectorProvider(): VecdbProvider {
         [table],
       )
       if (!checkResult.rows[0].exists) {
-        return err({
-          code: VecdbErrorCode.COLLECTION_NOT_FOUND,
-          message: vecdbM('vecdb_collectionNotFound', { params: { name } }),
-        })
+        return err(HaiVecdbError.COLLECTION_NOT_FOUND, vecdbM('vecdb_collectionNotFound', { params: { name } }))
       }
 
       await pool!.query(`DROP TABLE ${quoteIdent(table)}`)
@@ -186,10 +179,7 @@ export function createPgvectorProvider(): VecdbProvider {
         [table],
       )
       if (!existsResult.rows[0].exists) {
-        return err({
-          code: VecdbErrorCode.COLLECTION_NOT_FOUND,
-          message: vecdbM('vecdb_collectionNotFound', { params: { name } }),
-        })
+        return err(HaiVecdbError.COLLECTION_NOT_FOUND, vecdbM('vecdb_collectionNotFound', { params: { name } }))
       }
 
       // 获取文档数量
@@ -363,12 +353,9 @@ export function createPgvectorProvider(): VecdbProvider {
   return {
     name: 'pgvector',
 
-    async connect(cfg): Promise<Result<void, VecdbError>> {
+    async connect(cfg): Promise<HaiResult<void>> {
       if (cfg.type !== 'pgvector') {
-        return err({
-          code: VecdbErrorCode.UNSUPPORTED_TYPE,
-          message: vecdbM('vecdb_unsupportedType', { params: { type: cfg.type } }),
-        })
+        return err(HaiVecdbError.UNSUPPORTED_TYPE, vecdbM('vecdb_unsupportedType', { params: { type: cfg.type } }))
       }
 
       const pgConfig = cfg as PgvectorConfig
@@ -400,15 +387,11 @@ export function createPgvectorProvider(): VecdbProvider {
       catch (error) {
         // 仅提取错误消息，避免 error 对象中的连接字符串泄漏密码
         logger.error('Failed to connect to pgvector', { error: error instanceof Error ? error.message : String(error) })
-        return err({
-          code: VecdbErrorCode.CONNECTION_FAILED,
-          message: vecdbM('vecdb_connectionFailed', { params: { error: error instanceof Error ? error.message : String(error) } }),
-          cause: error,
-        })
+        return err(HaiVecdbError.CONNECTION_FAILED, vecdbM('vecdb_connectionFailed', { params: { error: error instanceof Error ? error.message : String(error) } }), error)
       }
     },
 
-    async close(): Promise<Result<void, VecdbError>> {
+    async close(): Promise<HaiResult<void>> {
       try {
         if (pool) {
           await pool.end()
@@ -420,11 +403,7 @@ export function createPgvectorProvider(): VecdbProvider {
       }
       catch (error) {
         logger.error('Failed to close pgvector connection', { error: error instanceof Error ? error.message : String(error) })
-        return err({
-          code: VecdbErrorCode.CONNECTION_FAILED,
-          message: vecdbM('vecdb_closeFailed', { params: { error: String(error) } }),
-          cause: error,
-        })
+        return err(HaiVecdbError.CONNECTION_FAILED, vecdbM('vecdb_closeFailed', { params: { error: String(error) } }), error)
       }
     },
 

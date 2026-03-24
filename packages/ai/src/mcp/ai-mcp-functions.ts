@@ -5,9 +5,8 @@
  * @module ai-mcp-functions
  */
 
-import type { Result } from '@h-ai/core'
+import type { HaiResult } from '@h-ai/core'
 
-import type { AIError } from '../ai-types.js'
 import type {
   AIMCPFunctionsDeps,
   MCPContext,
@@ -22,8 +21,8 @@ import type {
 
 import { err, ok } from '@h-ai/core'
 
-import { AIErrorCode } from '../ai-config.js'
 import { aiM } from '../ai-i18n.js'
+import { HaiAIError } from '../ai-types.js'
 
 // ─── 内部类型 ───
 
@@ -57,7 +56,7 @@ interface PromptRegistration {
  * 创建 MCP 子功能
  *
  * 提供工具、资源、提示词的注册与调用功能。
- * 注册是同步，调用是异步。所有调用方法返回 `Result<T, AIError>`。
+ * 注册是同步，调用是异步。所有调用方法返回 `HaiResult<T>`。
  *
  * @param _deps - MCP 子功能依赖（config 保留供将来使用）
  * @returns MCPOperations 接口
@@ -87,7 +86,7 @@ export function createAIMCPFunctions(_deps: AIMCPFunctionsDeps): MCPOperations {
     registerTool<TInput, TOutput>(
       definition: MCPToolDefinition,
       handler: MCPToolHandler<TInput, TOutput>,
-    ): Result<void, AIError> {
+    ): HaiResult<void> {
       tools.set(definition.name, {
         definition,
         handler: handler as MCPToolHandler,
@@ -99,7 +98,7 @@ export function createAIMCPFunctions(_deps: AIMCPFunctionsDeps): MCPOperations {
     registerResource(
       resource: MCPResource,
       handler: () => Promise<MCPResourceContent>,
-    ): Result<void, AIError> {
+    ): HaiResult<void> {
       resources.set(resource.uri, { resource, handler })
       return ok(undefined)
     },
@@ -108,7 +107,7 @@ export function createAIMCPFunctions(_deps: AIMCPFunctionsDeps): MCPOperations {
     registerPrompt(
       prompt: MCPPrompt,
       handler: (args: Record<string, string>) => Promise<MCPPromptMessage[]>,
-    ): Result<void, AIError> {
+    ): HaiResult<void> {
       prompts.set(prompt.name, { prompt, handler })
       return ok(undefined)
     },
@@ -125,27 +124,24 @@ export function createAIMCPFunctions(_deps: AIMCPFunctionsDeps): MCPOperations {
       name: string,
       args: unknown,
       context?: MCPContext,
-    ): Promise<Result<unknown, AIError>> {
+    ): Promise<HaiResult<unknown>> {
       try {
         const registration = tools.get(name)
         if (!registration) {
-          return err({
-            code: AIErrorCode.MCP_TOOL_ERROR,
-            message: aiM('ai_mcpToolNotFound', { params: { name } }),
-          })
+          return err(HaiAIError.MCP_TOOL_ERROR, aiM('ai_mcpToolNotFound', { params: { name } }))
         }
         const ctx: MCPContext = context || { requestId: crypto.randomUUID() }
         const result = await registration.handler(args, ctx)
         return ok(result)
       }
       catch (error) {
-        return err({
-          code: AIErrorCode.MCP_TOOL_ERROR,
-          message: aiM('ai_mcpToolFailed', {
+        return err(
+          HaiAIError.MCP_TOOL_ERROR,
+          aiM('ai_mcpToolFailed', {
             params: { name, error: error instanceof Error ? error.message : 'Unknown error' },
           }),
-          cause: error,
-        })
+          error,
+        )
       }
     },
 
@@ -155,26 +151,23 @@ export function createAIMCPFunctions(_deps: AIMCPFunctionsDeps): MCPOperations {
      * @param uri - 资源 URI
      * @returns 资源内容或 `MCP_RESOURCE_ERROR`
      */
-    async readResource(uri: string): Promise<Result<MCPResourceContent, AIError>> {
+    async readResource(uri: string): Promise<HaiResult<MCPResourceContent>> {
       try {
         const registration = resources.get(uri)
         if (!registration) {
-          return err({
-            code: AIErrorCode.MCP_RESOURCE_ERROR,
-            message: aiM('ai_mcpResourceNotFound', { params: { uri } }),
-          })
+          return err(HaiAIError.MCP_RESOURCE_ERROR, aiM('ai_mcpResourceNotFound', { params: { uri } }))
         }
         const content = await registration.handler()
         return ok(content)
       }
       catch (error) {
-        return err({
-          code: AIErrorCode.MCP_RESOURCE_ERROR,
-          message: aiM('ai_mcpResourceFailed', {
+        return err(
+          HaiAIError.MCP_RESOURCE_ERROR,
+          aiM('ai_mcpResourceFailed', {
             params: { uri, error: error instanceof Error ? error.message : 'Unknown error' },
           }),
-          cause: error,
-        })
+          error,
+        )
       }
     },
 
@@ -190,23 +183,17 @@ export function createAIMCPFunctions(_deps: AIMCPFunctionsDeps): MCPOperations {
     async getPrompt(
       name: string,
       args: Record<string, string>,
-    ): Promise<Result<MCPPromptMessage[], AIError>> {
+    ): Promise<HaiResult<MCPPromptMessage[]>> {
       try {
         const registration = prompts.get(name)
         if (!registration) {
-          return err({
-            code: AIErrorCode.MCP_PROTOCOL_ERROR,
-            message: aiM('ai_mcpPromptNotFound', { params: { name } }),
-          })
+          return err(HaiAIError.MCP_PROTOCOL_ERROR, aiM('ai_mcpPromptNotFound', { params: { name } }))
         }
 
         // 验证必需参数
         for (const arg of registration.prompt.arguments || []) {
           if (arg.required && !(arg.name in args)) {
-            return err({
-              code: AIErrorCode.MCP_PROTOCOL_ERROR,
-              message: aiM('ai_mcpPromptMissingArg', { params: { name, arg: arg.name } }),
-            })
+            return err(HaiAIError.MCP_PROTOCOL_ERROR, aiM('ai_mcpPromptMissingArg', { params: { name, arg: arg.name } }))
           }
         }
 
@@ -214,13 +201,13 @@ export function createAIMCPFunctions(_deps: AIMCPFunctionsDeps): MCPOperations {
         return ok(messages)
       }
       catch (error) {
-        return err({
-          code: AIErrorCode.MCP_PROTOCOL_ERROR,
-          message: aiM('ai_mcpPromptFailed', {
+        return err(
+          HaiAIError.MCP_PROTOCOL_ERROR,
+          aiM('ai_mcpPromptFailed', {
             params: { name, error: error instanceof Error ? error.message : 'Unknown error' },
           }),
-          cause: error,
-        })
+          error,
+        )
       }
     },
   }

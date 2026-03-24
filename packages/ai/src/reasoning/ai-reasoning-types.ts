@@ -6,8 +6,8 @@
  * @module ai-reasoning-types
  */
 
-import type { Result } from '@h-ai/core'
-import type { AIError } from '../ai-types.js'
+import type { HaiResult } from '@h-ai/core'
+
 import type { ChatMessage, ToolRegistryOperations } from '../llm/ai-llm-types.js'
 
 // ─── 推理策略 ───
@@ -162,7 +162,7 @@ export interface ReasoningOperations {
    * @param options - 推理选项
    * @returns 推理结果
    */
-  run: (query: string, options?: ReasoningOptions) => Promise<Result<ReasoningResult, AIError>>
+  run: (query: string, options?: ReasoningOptions) => Promise<HaiResult<ReasoningResult>>
 
   /**
    * 流式推理（逐步产出推理步骤 + 最终答案增量文本）

@@ -5,10 +5,9 @@
  * @module ai-mcp-types
  */
 
-import type { Result } from '@h-ai/core'
+import type { HaiResult } from '@h-ai/core'
 
 import type { AIConfig } from '../ai-config.js'
-import type { AIError } from '../ai-types.js'
 
 // ─── MCP 业务类型 ───
 
@@ -129,18 +128,18 @@ export interface MCPProvider {
   registerTool: <TInput, TOutput>(
     definition: MCPToolDefinition,
     handler: MCPToolHandler<TInput, TOutput>,
-  ) => Result<void, AIError>
+  ) => HaiResult<void>
   registerResource: (
     resource: MCPResource,
     handler: () => Promise<MCPResourceContent>,
-  ) => Result<void, AIError>
+  ) => HaiResult<void>
   registerPrompt: (
     prompt: MCPPrompt,
     handler: (args: Record<string, string>) => Promise<MCPPromptMessage[]>,
-  ) => Result<void, AIError>
-  callTool: (name: string, args: unknown, context?: MCPContext) => Promise<Result<unknown, AIError>>
-  readResource: (uri: string) => Promise<Result<MCPResourceContent, AIError>>
-  getPrompt: (name: string, args: Record<string, string>) => Promise<Result<MCPPromptMessage[], AIError>>
+  ) => HaiResult<void>
+  callTool: (name: string, args: unknown, context?: MCPContext) => Promise<HaiResult<unknown>>
+  readResource: (uri: string) => Promise<HaiResult<MCPResourceContent>>
+  getPrompt: (name: string, args: Record<string, string>) => Promise<HaiResult<MCPPromptMessage[]>>
 }
 
 // ─── MCP 操作接口 ───
@@ -154,18 +153,18 @@ export interface MCPOperations {
   registerTool: <TInput, TOutput>(
     definition: MCPToolDefinition,
     handler: MCPToolHandler<TInput, TOutput>,
-  ) => Result<void, AIError>
+  ) => HaiResult<void>
   registerResource: (
     resource: MCPResource,
     handler: () => Promise<MCPResourceContent>,
-  ) => Result<void, AIError>
+  ) => HaiResult<void>
   registerPrompt: (
     prompt: MCPPrompt,
     handler: (args: Record<string, string>) => Promise<MCPPromptMessage[]>,
-  ) => Result<void, AIError>
-  callTool: (name: string, args: unknown, context?: MCPContext) => Promise<Result<unknown, AIError>>
-  readResource: (uri: string) => Promise<Result<MCPResourceContent, AIError>>
-  getPrompt: (name: string, args: Record<string, string>) => Promise<Result<MCPPromptMessage[], AIError>>
+  ) => HaiResult<void>
+  callTool: (name: string, args: unknown, context?: MCPContext) => Promise<HaiResult<unknown>>
+  readResource: (uri: string) => Promise<HaiResult<MCPResourceContent>>
+  getPrompt: (name: string, args: Record<string, string>) => Promise<HaiResult<MCPPromptMessage[]>>
 }
 
 // ─── MCP 工厂依赖 ───

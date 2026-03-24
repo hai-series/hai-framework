@@ -5,14 +5,14 @@
  * @module ai-knowledge-entity
  */
 
-import type { Result } from '@h-ai/core'
-import type { AIError } from '../ai-types.js'
+import type { HaiResult } from '@h-ai/core'
+
 import type { LLMOperations } from '../llm/ai-llm-types.js'
 
 import { core, err, ok } from '@h-ai/core'
 
-import { AIErrorCode } from '../ai-config.js'
 import { aiM } from '../ai-i18n.js'
+import { HaiAIError } from '../ai-types.js'
 
 const logger = core.logger.child({ module: 'ai', scope: 'knowledge-entity' })
 
@@ -76,7 +76,7 @@ export async function extractEntities(
   model?: string,
   entityTypes?: string[],
   systemPrompt?: string,
-): Promise<Result<ExtractedEntity[], AIError>> {
+): Promise<HaiResult<ExtractedEntity[]>> {
   if (!text.trim()) {
     return ok([])
   }
@@ -97,11 +97,7 @@ export async function extractEntities(
 
     if (!chatResult.success) {
       logger.warn('Entity extraction LLM call failed', { error: chatResult.error })
-      return err({
-        code: AIErrorCode.KNOWLEDGE_ENTITY_EXTRACT_FAILED,
-        message: aiM('ai_knowledgeEntityExtractFailed', { params: { error: String(chatResult.error.message) } }),
-        cause: chatResult.error,
-      })
+      return err(HaiAIError.KNOWLEDGE_ENTITY_EXTRACT_FAILED, aiM('ai_knowledgeEntityExtractFailed', { params: { error: String(chatResult.error.message) } }), chatResult.error)
     }
 
     const content = chatResult.data.choices[0]?.message?.content ?? ''
@@ -115,11 +111,7 @@ export async function extractEntities(
   }
   catch (error) {
     logger.error('Entity extraction failed', { error })
-    return err({
-      code: AIErrorCode.KNOWLEDGE_ENTITY_EXTRACT_FAILED,
-      message: aiM('ai_knowledgeEntityExtractFailed', { params: { error: String(error) } }),
-      cause: error,
-    })
+    return err(HaiAIError.KNOWLEDGE_ENTITY_EXTRACT_FAILED, aiM('ai_knowledgeEntityExtractFailed', { params: { error: String(error) } }), error)
   }
 }
 
@@ -212,7 +204,7 @@ export async function extractEntitiesBatch(
   entityTypes?: string[],
   systemPrompt?: string,
   concurrency = 3,
-): Promise<Result<Array<ExtractedEntity & { chunkIds: string[] }>, AIError>> {
+): Promise<HaiResult<Array<ExtractedEntity & { chunkIds: string[] }>>> {
   // 简单并发控制：按批次执行
   const allEntities: Array<{ entity: ExtractedEntity, chunkId: string }> = []
 

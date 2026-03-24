@@ -5,8 +5,8 @@
  * @module ai-rag-functions
  */
 
-import type { Result } from '@h-ai/core'
-import type { AIError } from '../ai-types.js'
+import type { HaiResult } from '@h-ai/core'
+
 import type { ChatMessage, LLMOperations } from '../llm/ai-llm-types.js'
 import type { Citation, RetrievalOperations } from '../retrieval/ai-retrieval-types.js'
 import type {
@@ -19,8 +19,8 @@ import type {
 
 import { core, err, ok } from '@h-ai/core'
 
-import { AIErrorCode } from '../ai-config.js'
 import { aiM } from '../ai-i18n.js'
+import { HaiAIError } from '../ai-types.js'
 
 const logger = core.logger.child({ module: 'ai', scope: 'rag' })
 
@@ -73,7 +73,7 @@ export function createRagOperations(llm: LLMOperations, retrieval: RetrievalOper
      * if (result.success) console.log(result.data.answer)
      * ```
      */
-    async query(query: string, options?: RagOptions): Promise<Result<RagResult, AIError>> {
+    async query(query: string, options?: RagOptions): Promise<HaiResult<RagResult>> {
       logger.trace('Starting RAG query', { query: query.slice(0, 100) })
 
       try {
@@ -88,11 +88,7 @@ export function createRagOperations(llm: LLMOperations, retrieval: RetrievalOper
         })
 
         if (!retrieveResult.success) {
-          return err({
-            code: AIErrorCode.RAG_CONTEXT_BUILD_FAILED,
-            message: aiM('ai_internalError', { params: { error: 'Failed to retrieve context' } }),
-            cause: retrieveResult.error,
-          })
+          return err(HaiAIError.RAG_CONTEXT_BUILD_FAILED, aiM('ai_internalError', { params: { error: 'Failed to retrieve context' } }), retrieveResult.error)
         }
 
         // 构建上下文
@@ -135,11 +131,7 @@ export function createRagOperations(llm: LLMOperations, retrieval: RetrievalOper
         })
 
         if (!chatResult.success) {
-          return err({
-            code: AIErrorCode.RAG_FAILED,
-            message: aiM('ai_internalError', { params: { error: 'LLM generation failed' } }),
-            cause: chatResult.error,
-          })
+          return err(HaiAIError.RAG_FAILED, aiM('ai_internalError', { params: { error: 'LLM generation failed' } }), chatResult.error)
         }
 
         const choice = chatResult.data.choices[0]
@@ -179,11 +171,7 @@ export function createRagOperations(llm: LLMOperations, retrieval: RetrievalOper
       }
       catch (error) {
         logger.error('RAG query failed', { error })
-        return err({
-          code: AIErrorCode.RAG_FAILED,
-          message: aiM('ai_internalError', { params: { error: String(error) } }),
-          cause: error,
-        })
+        return err(HaiAIError.RAG_FAILED, aiM('ai_internalError', { params: { error: String(error) } }), error)
       }
     },
 

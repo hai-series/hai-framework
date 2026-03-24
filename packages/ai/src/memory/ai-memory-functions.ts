@@ -6,10 +6,10 @@
  * @module ai-memory-functions
  */
 
-import type { Result } from '@h-ai/core'
+import type { HaiResult } from '@h-ai/core'
 
 import type { MemoryConfig } from '../ai-config.js'
-import type { AIError } from '../ai-types.js'
+
 import type { EmbeddingOperations } from '../embedding/ai-embedding-types.js'
 import type { ChatMessage, LLMOperations } from '../llm/ai-llm-types.js'
 import type { AIRelStore, AIVectorStore, StorePage, WhereClause } from '../store/ai-store-types.js'
@@ -28,8 +28,8 @@ import type {
 
 import { core, err, ok } from '@h-ai/core'
 
-import { AIErrorCode } from '../ai-config.js'
 import { aiM } from '../ai-i18n.js'
+import { HaiAIError } from '../ai-types.js'
 import { extractMemories } from './ai-memory-extractor.js'
 
 const logger = core.logger.child({ module: 'ai', scope: 'memory' })
@@ -193,7 +193,7 @@ export function createMemoryOperations(
      * @param options - 可选（记忆类型过滤、最小重要性阈值、自定义 model 等）
      * @returns `ok(MemoryEntry[])` 新写入的记忆列表；LLM 调用失败时返回 `MEMORY_EXTRACT_FAILED`
      */
-    async extract(messages: ChatMessage[], options?: MemoryExtractOptions): Promise<Result<MemoryEntry[], AIError>> {
+    async extract(messages: ChatMessage[], options?: MemoryExtractOptions): Promise<HaiResult<MemoryEntry[]>> {
       logger.trace('Extracting memories from conversation', { messageCount: messages.length })
 
       try {
@@ -221,11 +221,7 @@ export function createMemoryOperations(
       }
       catch (error) {
         logger.error('Memory extraction failed', { error })
-        return err({
-          code: AIErrorCode.MEMORY_EXTRACT_FAILED,
-          message: aiM('ai_memoryExtractFailed', { params: { error: String(error) } }),
-          cause: error,
-        })
+        return err(HaiAIError.MEMORY_EXTRACT_FAILED, aiM('ai_memoryExtractFailed', { params: { error: String(error) } }), error)
       }
     },
 
@@ -238,7 +234,7 @@ export function createMemoryOperations(
      * @param entry - 记忆条目输入（content、type、importance 等）
      * @returns `ok(MemoryEntry)` 含完整字段（id、时间戳等）；存储失败时返回 `MEMORY_STORE_FAILED`
      */
-    async add(entry: MemoryEntryInput): Promise<Result<MemoryEntry, AIError>> {
+    async add(entry: MemoryEntryInput): Promise<HaiResult<MemoryEntry>> {
       try {
         const vector = await computeVector(entry.content)
         const stored = await saveEntry(entry, vector)
@@ -247,25 +243,18 @@ export function createMemoryOperations(
       }
       catch (error) {
         logger.error('Memory add failed', { error })
-        return err({
-          code: AIErrorCode.MEMORY_STORE_FAILED,
-          message: aiM('ai_memoryStoreFailed', { params: { error: String(error) } }),
-          cause: error,
-        })
+        return err(HaiAIError.MEMORY_STORE_FAILED, aiM('ai_memoryStoreFailed', { params: { error: String(error) } }), error)
       }
     },
 
     /**
      * 更新一条已有记忆
      */
-    async update(memoryId: string, updates: MemoryUpdateInput): Promise<Result<MemoryEntry, AIError>> {
+    async update(memoryId: string, updates: MemoryUpdateInput): Promise<HaiResult<MemoryEntry>> {
       try {
         const existing = await store.get(memoryId)
         if (!existing) {
-          return err({
-            code: AIErrorCode.MEMORY_NOT_FOUND,
-            message: aiM('ai_memoryNotFound', { params: { id: memoryId } }),
-          })
+          return err(HaiAIError.MEMORY_NOT_FOUND, aiM('ai_memoryNotFound', { params: { id: memoryId } }))
         }
 
         if (updates.content !== undefined)
@@ -295,11 +284,7 @@ export function createMemoryOperations(
       }
       catch (error) {
         logger.error('Memory update failed', { id: memoryId, error })
-        return err({
-          code: AIErrorCode.MEMORY_STORE_FAILED,
-          message: aiM('ai_memoryStoreFailed', { params: { error: String(error) } }),
-          cause: error,
-        })
+        return err(HaiAIError.MEMORY_STORE_FAILED, aiM('ai_memoryStoreFailed', { params: { error: String(error) } }), error)
       }
     },
 
@@ -311,13 +296,10 @@ export function createMemoryOperations(
      * @param memoryId - 记忆条目的唯一 ID
      * @returns `ok(MemoryEntry)` 操作成功；ID 不存在时返回 `MEMORY_NOT_FOUND`
      */
-    async get(memoryId: string): Promise<Result<MemoryEntry, AIError>> {
+    async get(memoryId: string): Promise<HaiResult<MemoryEntry>> {
       const entry = await store.get(memoryId)
       if (!entry) {
-        return err({
-          code: AIErrorCode.MEMORY_NOT_FOUND,
-          message: aiM('ai_memoryNotFound', { params: { id: memoryId } }),
-        })
+        return err(HaiAIError.MEMORY_NOT_FOUND, aiM('ai_memoryNotFound', { params: { id: memoryId } }))
       }
       entry.lastAccessedAt = Date.now()
       entry.accessCount++
@@ -333,7 +315,7 @@ export function createMemoryOperations(
      * 2. 计算综合得分 — 融合向量相似度、重要性、时间新鲜度三个维度
      * 3. 排序截取 — 按得分降序，返回前 topK 条并更新访问统计
      */
-    async recall(query: string, options?: MemoryRecallOptions): Promise<Result<MemoryEntry[], AIError>> {
+    async recall(query: string, options?: MemoryRecallOptions): Promise<HaiResult<MemoryEntry[]>> {
       const topK = options?.topK ?? config.defaultTopK
       const recencyWeight = options?.recencyWeight ?? (1 - config.recencyDecay)
 
@@ -436,11 +418,7 @@ export function createMemoryOperations(
       }
       catch (error) {
         logger.error('Memory recall failed', { error })
-        return err({
-          code: AIErrorCode.MEMORY_RECALL_FAILED,
-          message: aiM('ai_memoryRecallFailed', { params: { error: String(error) } }),
-          cause: error,
-        })
+        return err(HaiAIError.MEMORY_RECALL_FAILED, aiM('ai_memoryRecallFailed', { params: { error: String(error) } }), error)
       }
     },
 
@@ -455,7 +433,7 @@ export function createMemoryOperations(
      *    - 'system'：追加到现有 system 消息末尾（无则插入新 system 消息）
      *    - 'before-last'：在最后一条用户消息之前插入 system 消息
      */
-    async injectMemories(messages: ChatMessage[], options?: MemoryInjectionOptions): Promise<Result<ChatMessage[], AIError>> {
+    async injectMemories(messages: ChatMessage[], options?: MemoryInjectionOptions): Promise<HaiResult<ChatMessage[]>> {
       const topK = options?.topK ?? 5
       const position = options?.position ?? 'system'
 
@@ -467,11 +445,7 @@ export function createMemoryOperations(
 
         const recallResult = await this.recall(query, { topK, objectId: options?.objectId })
         if (!recallResult.success) {
-          return err({
-            code: AIErrorCode.MEMORY_ENRICH_FAILED,
-            message: aiM('ai_memoryEnrichFailed', { params: { error: recallResult.error.message } }),
-            cause: recallResult.error,
-          })
+          return err(HaiAIError.MEMORY_ENRICH_FAILED, aiM('ai_memoryEnrichFailed', { params: { error: recallResult.error.message } }), recallResult.error)
         }
 
         const memories = recallResult.data
@@ -532,11 +506,7 @@ export function createMemoryOperations(
       }
       catch (error) {
         logger.error('Memory enrichment failed', { error })
-        return err({
-          code: AIErrorCode.MEMORY_ENRICH_FAILED,
-          message: aiM('ai_memoryEnrichFailed', { params: { error: String(error) } }),
-          cause: error,
-        })
+        return err(HaiAIError.MEMORY_ENRICH_FAILED, aiM('ai_memoryEnrichFailed', { params: { error: String(error) } }), error)
       }
     },
 
@@ -548,13 +518,10 @@ export function createMemoryOperations(
      * @param memoryId - 记忆条目的唯一 ID
      * @returns `ok(undefined)` 删除成功；ID 不存在时返回 `MEMORY_NOT_FOUND`
      */
-    async remove(memoryId: string): Promise<Result<void, AIError>> {
+    async remove(memoryId: string): Promise<HaiResult<void>> {
       const removed = await store.remove(memoryId)
       if (!removed) {
-        return err({
-          code: AIErrorCode.MEMORY_NOT_FOUND,
-          message: aiM('ai_memoryNotFound', { params: { id: memoryId } }),
-        })
+        return err(HaiAIError.MEMORY_NOT_FOUND, aiM('ai_memoryNotFound', { params: { id: memoryId } }))
       }
       await vectorStore.remove(memoryId)
       logger.trace('Memory removed', { id: memoryId })
@@ -567,7 +534,7 @@ export function createMemoryOperations(
      * @param options - 可选（objectId、type 过滤、limit 限制数量）
      * @returns `ok(MemoryEntry[])` 按创建时间降序排列的记忆列表
      */
-    async list(options?: MemoryListOptions): Promise<Result<MemoryEntry[], AIError>> {
+    async list(options?: MemoryListOptions): Promise<HaiResult<MemoryEntry[]>> {
       const where: WhereClause<MemoryEntry> = {}
       if (options?.types && options.types.length === 1)
         where.type = options.types[0]
@@ -590,7 +557,7 @@ export function createMemoryOperations(
      * @param options - 可选（objectId、type 过滤、offset / limit 分页参数）
      * @returns `ok(StorePage<MemoryEntry>)` 含当前页数据与总数
      */
-    async listPage(options?: MemoryListPageOptions): Promise<Result<StorePage<MemoryEntry>, AIError>> {
+    async listPage(options?: MemoryListPageOptions): Promise<HaiResult<StorePage<MemoryEntry>>> {
       const where: WhereClause<MemoryEntry> = {}
       if (options?.types && options.types.length === 1)
         where.type = options.types[0]
@@ -621,7 +588,7 @@ export function createMemoryOperations(
      * @param options - 可选范围过滤（objectId 或 types 任意组合）
      * @returns `ok(undefined)` 操作成功
      */
-    async clear(options?: MemoryClearOptions): Promise<Result<void, AIError>> {
+    async clear(options?: MemoryClearOptions): Promise<HaiResult<void>> {
       if (!options?.types && !options?.objectId) {
         await store.clear()
         await vectorStore.clear()

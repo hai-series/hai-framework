@@ -5,7 +5,7 @@
  * @module reldb-crud-kernel
  */
 
-import type { PaginatedResult, Result } from '@h-ai/core'
+import type { HaiResult, PaginatedResult } from '@h-ai/core'
 import type {
   CrudConfig,
   CrudPageOptions,
@@ -16,14 +16,12 @@ import type {
   QueryRow,
   ReldbCrudCountOptions,
   ReldbCrudRepository,
-  ReldbError,
 } from './reldb-types.js'
 import { core, err, ok } from '@h-ai/core'
-
-import { ReldbErrorCode } from './reldb-config.js'
 import { reldbM } from './reldb-i18n.js'
 import { parseCount } from './reldb-pagination.js'
 import { validateIdentifier, validateIdentifiers } from './reldb-security.js'
+import { HaiReldbError } from './reldb-types.js'
 
 const logger = core.logger.child({ module: 'reldb', scope: 'crud-kernel' })
 
@@ -66,11 +64,11 @@ function pickColumns(
 /**
  * 创建一个所有方法均返回同一错误的 ReldbCrudRepository，用于配置校验失败时短路返回
  *
- * @param configError - 校验失败产生的 ReldbError
+ * @param configError - 校验失败产生的
  * @returns 所有操作均返回 configError 的 ReldbCrudRepository
  */
-function createFailReldbCrudRepository<TItem>(configError: ReldbError): ReldbCrudRepository<TItem> {
-  const failResult = <T>(): Promise<Result<T, ReldbError>> => Promise.resolve(err(configError))
+function createFailReldbCrudRepository<TItem>(failedResult: HaiResult<never>): ReldbCrudRepository<TItem> {
+  const failResult = <T>(): Promise<HaiResult<T>> => Promise.resolve(failedResult as HaiResult<T>)
   return {
     create: () => failResult(),
     createMany: () => failResult(),
@@ -107,29 +105,29 @@ export function createCrud<TItem>(
   // 校验表名与主键列名，防止标识符注入
   const tableValid = validateIdentifier(table)
   if (!tableValid.success) {
-    return createFailReldbCrudRepository(tableValid.error)
+    return createFailReldbCrudRepository(tableValid)
   }
   const idColumnValid = validateIdentifier(idColumn)
   if (!idColumnValid.success) {
-    return createFailReldbCrudRepository(idColumnValid.error)
+    return createFailReldbCrudRepository(idColumnValid)
   }
   // 校验 select / createColumns / updateColumns 列名
   if (config.select) {
     const selectValid = validateIdentifiers(config.select)
     if (!selectValid.success) {
-      return createFailReldbCrudRepository(selectValid.error)
+      return createFailReldbCrudRepository(selectValid)
     }
   }
   if (config.createColumns) {
     const createColsValid = validateIdentifiers(config.createColumns)
     if (!createColsValid.success) {
-      return createFailReldbCrudRepository(createColsValid.error)
+      return createFailReldbCrudRepository(createColsValid)
     }
   }
   if (config.updateColumns) {
     const updateColsValid = validateIdentifiers(config.updateColumns)
     if (!updateColsValid.success) {
-      return createFailReldbCrudRepository(updateColsValid.error)
+      return createFailReldbCrudRepository(updateColsValid)
     }
   }
 
@@ -186,16 +184,10 @@ export function createCrud<TItem>(
   }
 
   /** 构建空负载错误结果（数据为空时报错） */
-  const createPayloadError = (): Result<ExecuteResult, ReldbError> => err({
-    code: ReldbErrorCode.CONFIG_ERROR,
-    message: reldbM('reldb_crudEmptyPayload'),
-  })
+  const createPayloadError = (): HaiResult<ExecuteResult> => err(HaiReldbError.CONFIG_ERROR, reldbM('reldb_crudEmptyPayload'))
 
   /** 构建无有效列错误结果（白名单过滤后无可写列时报错） */
-  const createColumnsError = (): Result<ExecuteResult, ReldbError> => err({
-    code: ReldbErrorCode.CONFIG_ERROR,
-    message: reldbM('reldb_crudNoValidColumns'),
-  })
+  const createColumnsError = (): HaiResult<ExecuteResult> => err(HaiReldbError.CONFIG_ERROR, reldbM('reldb_crudNoValidColumns'))
 
   /** 解析实际数据操作接口：传入事务时使用事务接口，否则使用 reldb.sql */
   const resolveOps = (tx?: DmlWithTxOperations): DmlOperations => tx ?? ops
@@ -208,7 +200,7 @@ export function createCrud<TItem>(
      * @param tx - 可选事务句柄
      * @returns 插入结果（含 changes、lastInsertRowid）
      */
-    async create(data: Record<string, unknown>, tx?: DmlWithTxOperations): Promise<Result<ExecuteResult, ReldbError>> {
+    async create(data: Record<string, unknown>, tx?: DmlWithTxOperations): Promise<HaiResult<ExecuteResult>> {
       if (!data || Object.keys(data).length === 0) {
         // 空数据直接报错
         return createPayloadError()
@@ -240,7 +232,7 @@ export function createCrud<TItem>(
      * @param tx - 可选事务句柄
      * @returns 批量插入结果
      */
-    async createMany(items: Array<Record<string, unknown>>, tx?: DmlWithTxOperations): Promise<Result<void, ReldbError>> {
+    async createMany(items: Array<Record<string, unknown>>, tx?: DmlWithTxOperations): Promise<HaiResult<void>> {
       if (!items || items.length === 0) {
         // 空数组视为成功
         return ok(undefined)
@@ -251,19 +243,13 @@ export function createCrud<TItem>(
       for (const item of items) {
         if (!item || Object.keys(item).length === 0) {
           // 任意项为空则整体失败
-          return err({
-            code: ReldbErrorCode.CONFIG_ERROR,
-            message: reldbM('reldb_crudEmptyPayload'),
-          })
+          return err(HaiReldbError.CONFIG_ERROR, reldbM('reldb_crudEmptyPayload'))
         }
 
         const { columns, values } = pickColumns(item, config.createColumns)
         if (columns.length === 0) {
           // 过滤后无可写列
-          return err({
-            code: ReldbErrorCode.CONFIG_ERROR,
-            message: reldbM('reldb_crudNoValidColumns'),
-          })
+          return err(HaiReldbError.CONFIG_ERROR, reldbM('reldb_crudNoValidColumns'))
         }
 
         // 校验列名合法性
@@ -289,7 +275,7 @@ export function createCrud<TItem>(
      * @param tx - 可选事务句柄
      * @returns 执行结果（含 changes）
      */
-    async createOrUpdate(data: Record<string, unknown>, tx?: DmlWithTxOperations): Promise<Result<ExecuteResult, ReldbError>> {
+    async createOrUpdate(data: Record<string, unknown>, tx?: DmlWithTxOperations): Promise<HaiResult<ExecuteResult>> {
       if (!data || Object.keys(data).length === 0) {
         return createPayloadError()
       }
@@ -337,7 +323,7 @@ export function createCrud<TItem>(
      * @param tx - 可选事务句柄
      * @returns 记录对象或 null（未找到）
      */
-    async findById(id: unknown, tx?: DmlWithTxOperations): Promise<Result<TItem | null, ReldbError>> {
+    async findById(id: unknown, tx?: DmlWithTxOperations): Promise<HaiResult<TItem | null>> {
       const sql = `SELECT ${selectColumns} FROM ${table} WHERE ${idColumn} = ?`
       const result = await resolveOps(tx).get<QueryRow>(sql, [id])
       if (!result.success) {
@@ -357,16 +343,13 @@ export function createCrud<TItem>(
      * @param tx - 可选事务句柄
      * @returns 记录对象（不存在时返回错误）
      */
-    async getById(id: unknown, tx?: DmlWithTxOperations): Promise<Result<TItem, ReldbError>> {
+    async getById(id: unknown, tx?: DmlWithTxOperations): Promise<HaiResult<TItem>> {
       const findResult = await this.findById(id, tx)
       if (!findResult.success) {
         return findResult
       }
       if (findResult.data === null) {
-        return err({
-          code: ReldbErrorCode.RECORD_NOT_FOUND,
-          message: reldbM('reldb_crudRecordNotFound', { params: { id: String(id) } }),
-        })
+        return err(HaiReldbError.RECORD_NOT_FOUND, reldbM('reldb_crudRecordNotFound', { params: { id: String(id) } }))
       }
       return ok(findResult.data)
     },
@@ -378,7 +361,7 @@ export function createCrud<TItem>(
      * @param tx - 可选事务句柄
      * @returns 记录数组
      */
-    async findAll(options: CrudQueryOptions = {}, tx?: DmlWithTxOperations): Promise<Result<TItem[], ReldbError>> {
+    async findAll(options: CrudQueryOptions = {}, tx?: DmlWithTxOperations): Promise<HaiResult<TItem[]>> {
       const whereClause = buildWhereClause(options.where)
       const orderClause = buildOrderClause(options.orderBy)
       const limitClause = buildLimitOffset(options.limit, options.offset)
@@ -398,7 +381,7 @@ export function createCrud<TItem>(
      * @param tx - 可选事务句柄
      * @returns 分页结果（含 items、total、page、pageSize）
      */
-    async findPage(options: CrudPageOptions, tx?: DmlWithTxOperations): Promise<Result<PaginatedResult<TItem>, ReldbError>> {
+    async findPage(options: CrudPageOptions, tx?: DmlWithTxOperations): Promise<HaiResult<PaginatedResult<TItem>>> {
       const whereClause = buildWhereClause(options.where)
       const orderClause = buildOrderClause(options.orderBy)
       const sql = `SELECT ${selectColumns} FROM ${table}${whereClause}${orderClause}`
@@ -428,7 +411,7 @@ export function createCrud<TItem>(
      * @param tx - 可选事务句柄
      * @returns 更新结果（含 changes）
      */
-    async updateById(id: unknown, data: Record<string, unknown>, tx?: DmlWithTxOperations): Promise<Result<ExecuteResult, ReldbError>> {
+    async updateById(id: unknown, data: Record<string, unknown>, tx?: DmlWithTxOperations): Promise<HaiResult<ExecuteResult>> {
       if (!data || Object.keys(data).length === 0) {
         // 空数据不允许更新
         return createPayloadError()
@@ -462,7 +445,7 @@ export function createCrud<TItem>(
      * @param tx - 可选事务句柄
      * @returns 删除结果（含 changes）
      */
-    async deleteById(id: unknown, tx?: DmlWithTxOperations): Promise<Result<ExecuteResult, ReldbError>> {
+    async deleteById(id: unknown, tx?: DmlWithTxOperations): Promise<HaiResult<ExecuteResult>> {
       const sql = `DELETE FROM ${table} WHERE ${idColumn} = ?`
       return resolveOps(tx).execute(sql, [id])
     },
@@ -474,7 +457,7 @@ export function createCrud<TItem>(
      * @param tx - 可选事务句柄
      * @returns 记录数
      */
-    async count(options: ReldbCrudCountOptions = {}, tx?: DmlWithTxOperations): Promise<Result<number, ReldbError>> {
+    async count(options: ReldbCrudCountOptions = {}, tx?: DmlWithTxOperations): Promise<HaiResult<number>> {
       const whereClause = buildWhereClause(options.where)
       const sql = `SELECT COUNT(*) as cnt FROM ${table}${whereClause}`
       const result = await resolveOps(tx).get<QueryRow>(sql, options.params)
@@ -492,7 +475,7 @@ export function createCrud<TItem>(
      * @param tx - 可选事务句柄
      * @returns 是否存在
      */
-    async exists(options: ReldbCrudCountOptions = {}, tx?: DmlWithTxOperations): Promise<Result<boolean, ReldbError>> {
+    async exists(options: ReldbCrudCountOptions = {}, tx?: DmlWithTxOperations): Promise<HaiResult<boolean>> {
       const whereClause = buildWhereClause(options.where)
       const sql = `SELECT 1 as exist_flag FROM ${table}${whereClause} LIMIT 1`
       const result = await resolveOps(tx).get<QueryRow>(sql, options.params)
@@ -511,7 +494,7 @@ export function createCrud<TItem>(
      * @param tx - 可选事务句柄
      * @returns 是否存在
      */
-    async existsById(id: unknown, tx?: DmlWithTxOperations): Promise<Result<boolean, ReldbError>> {
+    async existsById(id: unknown, tx?: DmlWithTxOperations): Promise<HaiResult<boolean>> {
       const sql = `SELECT 1 as exist_flag FROM ${table} WHERE ${idColumn} = ? LIMIT 1`
       const result = await resolveOps(tx).get<QueryRow>(sql, [id])
       if (!result.success) {

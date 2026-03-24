@@ -5,8 +5,7 @@
  * @module ai-rerank-types
  */
 
-import type { Result } from '@h-ai/core'
-import type { AIError } from '../ai-types.js'
+import type { HaiResult } from '@h-ai/core'
 
 // ─── Rerank 请求与响应 ───
 
@@ -92,7 +91,7 @@ export interface RerankOperations {
    * @param request - Rerank 请求
    * @returns 重排序响应，结果按相关性分数降序排列
    */
-  rerank: (request: RerankRequest) => Promise<Result<RerankResponse, AIError>>
+  rerank: (request: RerankRequest) => Promise<HaiResult<RerankResponse>>
 
   /**
    * 便捷方法：对文本数组重排序，直接返回结果列表
@@ -102,5 +101,5 @@ export interface RerankOperations {
    * @param topN - 返回条数（可选）
    * @returns RerankItem 列表，按相关性分数降序排列
    */
-  rerankTexts: (query: string, texts: string[], topN?: number) => Promise<Result<RerankItem[], AIError>>
+  rerankTexts: (query: string, texts: string[], topN?: number) => Promise<HaiResult<RerankItem[]>>
 }

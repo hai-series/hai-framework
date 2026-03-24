@@ -5,9 +5,9 @@
  * @module ai-file-functions
  */
 
-import type { Result } from '@h-ai/core'
+import type { HaiResult } from '@h-ai/core'
 import type { AIConfig } from '../ai-config.js'
-import type { AIError } from '../ai-types.js'
+
 import type { LLMOperations } from '../llm/ai-llm-types.js'
 import type {
   FileOperations,
@@ -21,8 +21,9 @@ import { Buffer } from 'node:buffer'
 
 import { core, err, ok } from '@h-ai/core'
 
-import { AIErrorCode, resolveModelEntry } from '../ai-config.js'
+import { resolveModelEntry } from '../ai-config.js'
 import { aiM } from '../ai-i18n.js'
+import { HaiAIError } from '../ai-types.js'
 
 const logger = core.logger.child({ module: 'ai', scope: 'file' })
 
@@ -273,7 +274,7 @@ function htmlToMarkdown(content: Buffer | string): string {
 /**
  * 使用 pdfjs-dist 解析 PDF 内容
  */
-async function parsePdfContent(content: Buffer, outputFormat: OutputFormat = 'text', maxPages?: number): Promise<Result<{ text: string, pageCount: number }, AIError>> {
+async function parsePdfContent(content: Buffer, outputFormat: OutputFormat = 'text', maxPages?: number): Promise<HaiResult<{ text: string, pageCount: number }>> {
   try {
     const pdfjs = await import(
 
@@ -303,11 +304,7 @@ async function parsePdfContent(content: Buffer, outputFormat: OutputFormat = 'te
     return ok({ text: textParts.join(separator), pageCount: totalPages })
   }
   catch (error) {
-    return err({
-      code: AIErrorCode.FILE_PARSE_FAILED,
-      message: aiM('ai_fileParseFailed', { params: { error: String(error) } }),
-      cause: error,
-    })
+    return err(HaiAIError.FILE_PARSE_FAILED, aiM('ai_fileParseFailed', { params: { error: String(error) } }), error)
   }
 }
 
@@ -317,7 +314,7 @@ async function parsePdfContent(content: Buffer, outputFormat: OutputFormat = 'te
  * - `'text'`：使用 `extractRawText` 提取纯文本
  * - `'markdown'`：使用 `convertToHtml` 后转换为 Markdown
  */
-async function parseDocxContent(content: Buffer, outputFormat: OutputFormat = 'text'): Promise<Result<string, AIError>> {
+async function parseDocxContent(content: Buffer, outputFormat: OutputFormat = 'text'): Promise<HaiResult<string>> {
   try {
     const mammoth = await import(
 
@@ -335,11 +332,7 @@ async function parseDocxContent(content: Buffer, outputFormat: OutputFormat = 't
     return ok(result.value)
   }
   catch (error) {
-    return err({
-      code: AIErrorCode.FILE_PARSE_FAILED,
-      message: aiM('ai_fileParseFailed', { params: { error: String(error) } }),
-      cause: error,
-    })
+    return err(HaiAIError.FILE_PARSE_FAILED, aiM('ai_fileParseFailed', { params: { error: String(error) } }), error)
   }
 }
 
@@ -353,7 +346,7 @@ async function parseImageWithOcr(
   model?: string,
   outputFormat: OutputFormat = 'text',
   customPrompt?: string,
-): Promise<Result<string, AIError>> {
+): Promise<HaiResult<string>> {
   const base64 = content.toString('base64')
   const dataUrl = `data:${mimeType};base64,${base64}`
   const defaultPrompt = outputFormat === 'markdown'
@@ -383,11 +376,7 @@ async function parseImageWithOcr(
   })
 
   if (!result.success) {
-    return err({
-      code: AIErrorCode.FILE_OCR_FAILED,
-      message: aiM('ai_fileOcrFailed', { params: { error: result.error.message } }),
-      cause: result.error,
-    })
+    return err(HaiAIError.FILE_OCR_FAILED, aiM('ai_fileOcrFailed', { params: { error: result.error.message } }), result.error)
   }
 
   return ok(result.data.choices[0]?.message?.content ?? '')
@@ -413,7 +402,7 @@ export function createFileOperations(config: AIConfig, llmOps: LLMOperations): F
     model: string | undefined,
     outputFormat: OutputFormat,
     systemPrompt: string | undefined,
-  ): Promise<Result<FileParseResult, AIError>> {
+  ): Promise<HaiResult<FileParseResult>> {
     const resolvedResult = resolveModelEntry(config.llm, 'ocr', model, {
       missingApiKeyMessage: aiM('ai_configError', { params: { error: 'API Key is required for OCR' } }),
     })
@@ -441,7 +430,7 @@ export function createFileOperations(config: AIConfig, llmOps: LLMOperations): F
   /**
    * 核心解析逻辑
    */
-  async function doParse(request: FileParseRequest): Promise<Result<FileParseResult, AIError>> {
+  async function doParse(request: FileParseRequest): Promise<HaiResult<FileParseResult>> {
     const { content, filename, options = {} } = request
     const mimeType = detectMimeType(content, filename, options.mimeType)
     const outputFormat: OutputFormat = options.outputFormat ?? 'text'
@@ -451,10 +440,7 @@ export function createFileOperations(config: AIConfig, llmOps: LLMOperations): F
     // 强制 OCR 模式
     if (options.useOcr) {
       if (!Buffer.isBuffer(content)) {
-        return err({
-          code: AIErrorCode.FILE_INVALID_CONTENT,
-          message: aiM('ai_fileInvalidContent', { params: { reason: 'OCR requires Buffer content' } }),
-        })
+        return err(HaiAIError.FILE_INVALID_CONTENT, aiM('ai_fileInvalidContent', { params: { reason: 'OCR requires Buffer content' } }))
       }
       return runOcr(content, mimeType, filename, options.model, outputFormat, options.systemPrompt)
     }
@@ -482,10 +468,7 @@ export function createFileOperations(config: AIConfig, llmOps: LLMOperations): F
     // PDF：尝试 pdfjs-dist，失败则回退 OCR
     if (mimeType === 'application/pdf') {
       if (!Buffer.isBuffer(content)) {
-        return err({
-          code: AIErrorCode.FILE_INVALID_CONTENT,
-          message: aiM('ai_fileInvalidContent', { params: { reason: 'PDF parsing requires Buffer content' } }),
-        })
+        return err(HaiAIError.FILE_INVALID_CONTENT, aiM('ai_fileInvalidContent', { params: { reason: 'PDF parsing requires Buffer content' } }))
       }
       const pdfResult = await parsePdfContent(content, outputFormat, options.maxPages)
       if (pdfResult.success) {
@@ -507,10 +490,7 @@ export function createFileOperations(config: AIConfig, llmOps: LLMOperations): F
       || mimeType === 'application/zip'
     ) {
       if (!Buffer.isBuffer(content)) {
-        return err({
-          code: AIErrorCode.FILE_INVALID_CONTENT,
-          message: aiM('ai_fileInvalidContent', { params: { reason: 'DOCX parsing requires Buffer content' } }),
-        })
+        return err(HaiAIError.FILE_INVALID_CONTENT, aiM('ai_fileInvalidContent', { params: { reason: 'DOCX parsing requires Buffer content' } }))
       }
       const docxResult = await parseDocxContent(content, outputFormat)
       if (docxResult.success) {
@@ -527,37 +507,27 @@ export function createFileOperations(config: AIConfig, llmOps: LLMOperations): F
     // 图片格式：OCR
     if (IMAGE_MIME_TYPES.has(mimeType)) {
       if (!Buffer.isBuffer(content)) {
-        return err({
-          code: AIErrorCode.FILE_INVALID_CONTENT,
-          message: aiM('ai_fileInvalidContent', { params: { reason: 'Image OCR requires Buffer content' } }),
-        })
+        return err(HaiAIError.FILE_INVALID_CONTENT, aiM('ai_fileInvalidContent', { params: { reason: 'Image OCR requires Buffer content' } }))
       }
       return runOcr(content, mimeType, filename, options.model, outputFormat, options.systemPrompt)
     }
 
     // 其他格式：不支持
-    return err({
-      code: AIErrorCode.FILE_UNSUPPORTED_FORMAT,
-      message: aiM('ai_fileUnsupportedFormat', { params: { mimeType } }),
-    })
+    return err(HaiAIError.FILE_UNSUPPORTED_FORMAT, aiM('ai_fileUnsupportedFormat', { params: { mimeType } }))
   }
 
   return {
-    async parse(request: FileParseRequest): Promise<Result<FileParseResult, AIError>> {
+    async parse(request: FileParseRequest): Promise<HaiResult<FileParseResult>> {
       try {
         return await doParse(request)
       }
       catch (error) {
         logger.error('File parse failed unexpectedly', { filename: request.filename, error })
-        return err({
-          code: AIErrorCode.FILE_PARSE_FAILED,
-          message: aiM('ai_fileParseFailed', { params: { error: String(error) } }),
-          cause: error,
-        })
+        return err(HaiAIError.FILE_PARSE_FAILED, aiM('ai_fileParseFailed', { params: { error: String(error) } }), error)
       }
     },
 
-    async parseText(content: Buffer | string, filename?: string): Promise<Result<string, AIError>> {
+    async parseText(content: Buffer | string, filename?: string): Promise<HaiResult<string>> {
       const result = await this.parse({ content, filename })
       if (!result.success)
         return result

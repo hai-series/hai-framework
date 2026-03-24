@@ -5,8 +5,6 @@
  * @module ai-a2a-client
  */
 
-import type { Result } from '@h-ai/core'
-
 import type {
   A2AAgentCardConfig,
   A2ACallResult,
@@ -66,7 +64,7 @@ export function createA2AClient(api: AIApiAdapter): A2AClientOperations {
     },
 
     async callRemoteAgent(remoteUrl: string, message: string, options?: { timeout?: number }): Promise<A2ACallResult> {
-      const result = await api.post<Result<A2ACallResult, { message: string }>>(A2A_PATH.callRemote, {
+      const result = await api.post<A2ACallResult>(A2A_PATH.callRemote, {
         remoteUrl,
         message,
         ...options,
@@ -74,8 +72,7 @@ export function createA2AClient(api: AIApiAdapter): A2AClientOperations {
       if (!result.success) {
         throw new Error(`A2A remote call failed: ${result.error.message}`)
       }
-      // API 返回 Result<A2ACallResult, ...> 嵌套结构，解包后断言为业务类型
-      return result.data as unknown as A2ACallResult
+      return result.data
     },
   }
 }

@@ -6,23 +6,21 @@
  * @module reldb-tx-assembler
  */
 
-import type { PaginatedResult, Result } from '@h-ai/core'
+import type { HaiResult, PaginatedResult } from '@h-ai/core'
 import type {
   CrudManager,
   DmlOperations,
   DmlWithTxOperations,
   ExecuteResult,
   PaginationQueryOptions,
-  ReldbError,
   TxManager,
   TxWrapCallback,
 } from '../reldb-types.js'
 
 import { err, ok } from '@h-ai/core'
-
-import { ReldbErrorCode } from '../reldb-config.js'
 import { createCrud } from '../reldb-crud-kernel.js'
 import { reldbM } from '../reldb-i18n.js'
+import { HaiReldbError } from '../reldb-types.js'
 
 // ─── 事务回调接口 ───
 
@@ -60,42 +58,39 @@ export interface TxCallbacks {
 export function createTxHandle(baseDmlOps: DmlOperations, callbacks: TxCallbacks): DmlWithTxOperations {
   let active = true
 
-  const ensureActive = (): Result<void, ReldbError> => {
+  const ensureActive = (): HaiResult<void> => {
     if (!active) {
-      return err({
-        code: ReldbErrorCode.TRANSACTION_FAILED,
-        message: callbacks.errorMessage('transaction finished'),
-      })
+      return err(HaiReldbError.TRANSACTION_FAILED, callbacks.errorMessage('transaction finished'))
     }
     return ok(undefined)
   }
 
   const guardedOps: DmlOperations = {
-    async query<T>(sql: string, params?: unknown[]): Promise<Result<T[], ReldbError>> {
+    async query<T>(sql: string, params?: unknown[]): Promise<HaiResult<T[]>> {
       const check = ensureActive()
       if (!check.success)
         return check
       return baseDmlOps.query<T>(sql, params)
     },
-    async get<T>(sql: string, params?: unknown[]): Promise<Result<T | null, ReldbError>> {
+    async get<T>(sql: string, params?: unknown[]): Promise<HaiResult<T | null>> {
       const check = ensureActive()
       if (!check.success)
         return check
       return baseDmlOps.get<T>(sql, params)
     },
-    async execute(sql: string, params?: unknown[]): Promise<Result<ExecuteResult, ReldbError>> {
+    async execute(sql: string, params?: unknown[]): Promise<HaiResult<ExecuteResult>> {
       const check = ensureActive()
       if (!check.success)
         return check
       return baseDmlOps.execute(sql, params)
     },
-    async batch(statements: Array<{ sql: string, params?: unknown[] }>): Promise<Result<void, ReldbError>> {
+    async batch(statements: Array<{ sql: string, params?: unknown[] }>): Promise<HaiResult<void>> {
       const check = ensureActive()
       if (!check.success)
         return check
       return baseDmlOps.batch(statements)
     },
-    async queryPage<T>(options: PaginationQueryOptions): Promise<Result<PaginatedResult<T>, ReldbError>> {
+    async queryPage<T>(options: PaginationQueryOptions): Promise<HaiResult<PaginatedResult<T>>> {
       const check = ensureActive()
       if (!check.success)
         return check
@@ -111,7 +106,7 @@ export function createTxHandle(baseDmlOps: DmlOperations, callbacks: TxCallbacks
     ...guardedOps,
     crud: crudManager,
 
-    async commit(): Promise<Result<void, ReldbError>> {
+    async commit(): Promise<HaiResult<void>> {
       const check = ensureActive()
       if (!check.success)
         return check
@@ -122,18 +117,14 @@ export function createTxHandle(baseDmlOps: DmlOperations, callbacks: TxCallbacks
       }
       catch (error) {
         active = false
-        return err({
-          code: ReldbErrorCode.TRANSACTION_FAILED,
-          message: callbacks.errorMessage(String(error)),
-          cause: error,
-        })
+        return err(HaiReldbError.TRANSACTION_FAILED, callbacks.errorMessage(String(error)), error)
       }
       finally {
         callbacks.release()
       }
     },
 
-    async rollback(): Promise<Result<void, ReldbError>> {
+    async rollback(): Promise<HaiResult<void>> {
       const check = ensureActive()
       if (!check.success)
         return check
@@ -144,11 +135,7 @@ export function createTxHandle(baseDmlOps: DmlOperations, callbacks: TxCallbacks
       }
       catch (error) {
         active = false
-        return err({
-          code: ReldbErrorCode.TRANSACTION_FAILED,
-          message: callbacks.errorMessage(String(error)),
-          cause: error,
-        })
+        return err(HaiReldbError.TRANSACTION_FAILED, callbacks.errorMessage(String(error)), error)
       }
       finally {
         callbacks.release()
@@ -168,9 +155,9 @@ export function createTxHandle(baseDmlOps: DmlOperations, callbacks: TxCallbacks
  * @returns tx.wrap 函数
  */
 export function createTxWrap(
-  beginTx: () => Promise<Result<DmlWithTxOperations, ReldbError>>,
+  beginTx: () => Promise<HaiResult<DmlWithTxOperations>>,
 ): TxManager['wrap'] {
-  return async <T>(fn: TxWrapCallback<T>): Promise<Result<T, ReldbError>> => {
+  return async <T>(fn: TxWrapCallback<T>): Promise<HaiResult<T>> => {
     const txResult = await beginTx()
     if (!txResult.success)
       return txResult
@@ -179,17 +166,13 @@ export function createTxWrap(
       const result = await fn(txResult.data)
       const commitResult = await txResult.data.commit()
       if (!commitResult.success) {
-        return commitResult as Result<T, ReldbError>
+        return commitResult as HaiResult<T>
       }
       return ok(result)
     }
     catch (error) {
       await txResult.data.rollback()
-      return err({
-        code: ReldbErrorCode.TRANSACTION_FAILED,
-        message: reldbM('reldb_txFailed', { params: { error: String(error) } }),
-        cause: error,
-      })
+      return err(HaiReldbError.TRANSACTION_FAILED, reldbM('reldb_txFailed', { params: { error: String(error) } }), error)
     }
   }
 }

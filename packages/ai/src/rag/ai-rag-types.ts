@@ -5,8 +5,8 @@
  * @module ai-rag-types
  */
 
-import type { Result } from '@h-ai/core'
-import type { AIError } from '../ai-types.js'
+import type { HaiResult } from '@h-ai/core'
+
 import type { ChatMessage } from '../llm/ai-llm-types.js'
 import type { Citation } from '../retrieval/ai-retrieval-types.js'
 
@@ -115,7 +115,7 @@ export interface RagOperations {
    * @param options - RAG 选项
    * @returns RAG 结果
    */
-  query: (query: string, options?: RagOptions) => Promise<Result<RagResult, AIError>>
+  query: (query: string, options?: RagOptions) => Promise<HaiResult<RagResult>>
 
   /**
    * 流式 RAG 查询

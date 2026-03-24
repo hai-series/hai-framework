@@ -5,9 +5,8 @@
  * @module ai-llm-provider-openai
  */
 
-import type { Result } from '@h-ai/core'
+import type { HaiErrorDef, HaiResult } from '@h-ai/core'
 
-import type { AIError } from '../../ai-types.js'
 import type {
   AILLMFunctionsDeps,
   ChatCompletionChunk,
@@ -19,8 +18,9 @@ import type {
 import { err, ok } from '@h-ai/core'
 import OpenAI from 'openai'
 
-import { AIErrorCode, resolveModelEntry } from '../../ai-config.js'
+import { resolveModelEntry } from '../../ai-config.js'
 import { aiM } from '../../ai-i18n.js'
+import { HaiAIError } from '../../ai-types.js'
 
 // ─── 辅助函数 ───
 
@@ -44,7 +44,7 @@ function sanitizeErrorCause(error: unknown): { message: string, status?: number,
 }
 
 /**
- * 将 OpenAI SDK 异常映射为 AIError
+ * 将 OpenAI SDK 异常映射为标准错误定义 + 消息
  *
  * 映射规则：
  * - HTTP 429 → `RATE_LIMITED`
@@ -55,33 +55,33 @@ function sanitizeErrorCause(error: unknown): { message: string, status?: number,
  * - 其他 → `INTERNAL_ERROR`
  *
  * @param error - 捕获的异常
- * @returns 统一的 AIError（cause 已脱敏，不含 API Key）
+ * @returns 统一错误映射（cause 已脱敏，不含 API Key）
  */
-function toAIError(error: unknown): AIError {
+function toAIError(error: unknown): { def: HaiErrorDef, message: string, cause: unknown } {
   if (error instanceof OpenAI.APIError) {
-    let code: AIError['code'] = AIErrorCode.API_ERROR
+    let def = HaiAIError.API_ERROR
     if (error.status === 429) {
-      code = AIErrorCode.RATE_LIMITED
+      def = HaiAIError.RATE_LIMITED
     }
     else if (error.status === 404) {
-      code = AIErrorCode.MODEL_NOT_FOUND
+      def = HaiAIError.MODEL_NOT_FOUND
     }
     else if (error.status === 400) {
-      code = AIErrorCode.INVALID_REQUEST
+      def = HaiAIError.INVALID_REQUEST
     }
-    return { code, message: error.message, cause: sanitizeErrorCause(error) }
+    return { def, message: error.message, cause: sanitizeErrorCause(error) }
   }
 
   if (error instanceof Error && error.name === 'AbortError') {
     return {
-      code: AIErrorCode.TIMEOUT,
+      def: HaiAIError.TIMEOUT,
       message: aiM('ai_requestTimeout'),
       cause: sanitizeErrorCause(error),
     }
   }
 
   return {
-    code: AIErrorCode.INTERNAL_ERROR,
+    def: HaiAIError.INTERNAL_ERROR,
     message: aiM('ai_internalError', {
       params: { error: error instanceof Error ? error.message : 'Unknown error' },
     }),
@@ -117,7 +117,7 @@ export function createOpenAIProvider(deps: AILLMFunctionsDeps): LLMProvider {
     return client
   }
 
-  function resolveClient(requestModel?: string): Result<{ client: OpenAI, model: string }, AIError> {
+  function resolveClient(requestModel?: string): HaiResult<{ client: OpenAI, model: string }> {
     const resolvedResult = resolveModelEntry(config.llm, 'chat', requestModel, {
       missingApiKeyMessage: aiM('ai_configError', { params: { error: 'API Key is required for chat' } }),
     })
@@ -128,7 +128,7 @@ export function createOpenAIProvider(deps: AILLMFunctionsDeps): LLMProvider {
   }
 
   return {
-    async chat(request: ChatCompletionRequest): Promise<Result<ChatCompletionResponse, AIError>> {
+    async chat(request: ChatCompletionRequest): Promise<HaiResult<ChatCompletionResponse>> {
       const clientResult = resolveClient(request.model)
       if (!clientResult.success)
         return clientResult
@@ -143,7 +143,8 @@ export function createOpenAIProvider(deps: AILLMFunctionsDeps): LLMProvider {
         return ok(response)
       }
       catch (error) {
-        return err(toAIError(error))
+        const mapped = toAIError(error)
+        return err(mapped.def, mapped.message, mapped.cause)
       }
     },
 
@@ -163,18 +164,19 @@ export function createOpenAIProvider(deps: AILLMFunctionsDeps): LLMProvider {
       }
     },
 
-    async listModels(): Promise<Result<string[], AIError>> {
+    async listModels(): Promise<HaiResult<string[]>> {
       const clientResult = resolveClient()
       if (!clientResult.success)
         return clientResult
       const { client } = clientResult.data
       try {
         const response = await client.models.list()
-        const models = response.data.map(m => m.id)
+        const models = response.data.map((m: { id: string }) => m.id)
         return ok(models)
       }
       catch (error) {
-        return err(toAIError(error))
+        const mapped = toAIError(error)
+        return err(mapped.def, mapped.message, mapped.cause)
       }
     },
   }

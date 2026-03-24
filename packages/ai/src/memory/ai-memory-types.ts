@@ -6,9 +6,8 @@
  * @module ai-memory-types
  */
 
-import type { Result } from '@h-ai/core'
+import type { HaiResult } from '@h-ai/core'
 
-import type { AIError } from '../ai-types.js'
 import type { ChatMessage } from '../llm/ai-llm-types.js'
 import type { StorePage } from '../store/ai-store-types.js'
 
@@ -237,7 +236,7 @@ export interface MemoryOperations {
    * @param options - 提取选项
    * @returns 提取到的记忆条目列表
    */
-  extract: (messages: ChatMessage[], options?: MemoryExtractOptions) => Promise<Result<MemoryEntry[], AIError>>
+  extract: (messages: ChatMessage[], options?: MemoryExtractOptions) => Promise<HaiResult<MemoryEntry[]>>
 
   /**
    * 手动添加一条记忆
@@ -247,7 +246,7 @@ export interface MemoryOperations {
    * @param entry - 记忆条目输入
    * @returns 存储后的完整记忆条目
    */
-  add: (entry: MemoryEntryInput) => Promise<Result<MemoryEntry, AIError>>
+  add: (entry: MemoryEntryInput) => Promise<HaiResult<MemoryEntry>>
 
   /**
    * 更新一条已有记忆
@@ -260,7 +259,7 @@ export interface MemoryOperations {
    * @param updates - 需要更新的字段
    * @returns 更新后的完整记忆条目
    */
-  update: (memoryId: string, updates: MemoryUpdateInput) => Promise<Result<MemoryEntry, AIError>>
+  update: (memoryId: string, updates: MemoryUpdateInput) => Promise<HaiResult<MemoryEntry>>
 
   /**
    * 按 ID 获取单条记忆
@@ -268,7 +267,7 @@ export interface MemoryOperations {
    * @param memoryId - 记忆 ID
    * @returns 记忆条目，不存在时返回 MEMORY_NOT_FOUND
    */
-  get: (memoryId: string) => Promise<Result<MemoryEntry, AIError>>
+  get: (memoryId: string) => Promise<HaiResult<MemoryEntry>>
 
   /**
    * 根据查询检索最相关的记忆
@@ -279,7 +278,7 @@ export interface MemoryOperations {
    * @param options - 检索选项
    * @returns 相关记忆列表
    */
-  recall: (query: string, options?: MemoryRecallOptions) => Promise<Result<MemoryEntry[], AIError>>
+  recall: (query: string, options?: MemoryRecallOptions) => Promise<HaiResult<MemoryEntry[]>>
 
   /**
    * 将相关记忆注入到消息列表中
@@ -293,7 +292,7 @@ export interface MemoryOperations {
    * @param options - 注入选项（数量、位置、Token 预算等）
    * @returns 注入记忆后的新消息列表（不修改原数组）
    */
-  injectMemories: (messages: ChatMessage[], options?: MemoryInjectionOptions) => Promise<Result<ChatMessage[], AIError>>
+  injectMemories: (messages: ChatMessage[], options?: MemoryInjectionOptions) => Promise<HaiResult<ChatMessage[]>>
 
   /**
    * 删除单条记忆
@@ -303,7 +302,7 @@ export interface MemoryOperations {
    * @param memoryId - 记忆 ID
    * @returns 成功返回 ok(undefined)
    */
-  remove: (memoryId: string) => Promise<Result<void, AIError>>
+  remove: (memoryId: string) => Promise<HaiResult<void>>
 
   /**
    * 获取记忆列表
@@ -311,7 +310,7 @@ export interface MemoryOperations {
    * @param options - 列表选项
    * @returns 记忆条目列表
    */
-  list: (options?: MemoryListOptions) => Promise<Result<MemoryEntry[], AIError>>
+  list: (options?: MemoryListOptions) => Promise<HaiResult<MemoryEntry[]>>
 
   /**
    * 分页获取记忆列表
@@ -319,7 +318,7 @@ export interface MemoryOperations {
    * @param options - 分页选项
    * @returns 分页结果
    */
-  listPage: (options?: MemoryListPageOptions) => Promise<Result<StorePage<MemoryEntry>, AIError>>
+  listPage: (options?: MemoryListPageOptions) => Promise<HaiResult<StorePage<MemoryEntry>>>
 
   /**
    * 清空记忆
@@ -328,5 +327,5 @@ export interface MemoryOperations {
    *
    * @param options - 清空选项（可按类型/主体过滤）
    */
-  clear: (options?: MemoryClearOptions) => Promise<Result<void, AIError>>
+  clear: (options?: MemoryClearOptions) => Promise<HaiResult<void>>
 }

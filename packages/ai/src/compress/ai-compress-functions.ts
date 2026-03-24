@@ -6,10 +6,10 @@
  * @module ai-compress-functions
  */
 
-import type { Result } from '@h-ai/core'
+import type { HaiResult } from '@h-ai/core'
 
 import type { CompressConfig } from '../ai-config.js'
-import type { AIError } from '../ai-types.js'
+
 import type { ChatMessage } from '../llm/ai-llm-types.js'
 import type { SummaryOperations } from '../summary/ai-summary-types.js'
 import type { TokenOperations } from '../token/ai-token-types.js'
@@ -17,8 +17,8 @@ import type { CompressOperations, CompressOptions, CompressResult } from './ai-c
 
 import { core, err, ok } from '@h-ai/core'
 
-import { AIErrorCode } from '../ai-config.js'
 import { aiM } from '../ai-i18n.js'
+import { HaiAIError } from '../ai-types.js'
 
 const logger = core.logger.child({ module: 'ai', scope: 'compress' })
 
@@ -103,7 +103,7 @@ export function createCompressOperations(
   /**
    * 压缩消息列表
    */
-  async function tryCompress(messages: ChatMessage[], options?: CompressOptions): Promise<Result<CompressResult, AIError>> {
+  async function tryCompress(messages: ChatMessage[], options?: CompressOptions): Promise<HaiResult<CompressResult>> {
     const strategy = options?.strategy ?? config.defaultStrategy
     const maxTokens = resolveMaxTokens(options?.maxTokens)
     const preserveSystem = options?.preserveSystem ?? true
@@ -159,7 +159,7 @@ export function createCompressOperations(
 
         const summaryResult = await summary.generate(toSummarize, { model: options?.summaryModel })
         if (!summaryResult.success)
-          return summaryResult as Result<never, AIError>
+          return summaryResult as HaiResult<never>
 
         const summaryText = summaryResult.data
         const summaryMessage: ChatMessage = {
@@ -207,7 +207,7 @@ export function createCompressOperations(
       if (toSummarize.length > 0) {
         const summaryResult = await summary.generate(toSummarize, { model: options?.summaryModel })
         if (!summaryResult.success)
-          return summaryResult as Result<never, AIError>
+          return summaryResult as HaiResult<never>
 
         const summaryText = summaryResult.data
         const summaryMessage: ChatMessage = {
@@ -237,11 +237,7 @@ export function createCompressOperations(
     }
     catch (error) {
       logger.error('Context compression failed', { error })
-      return err({
-        code: AIErrorCode.CONTEXT_COMPRESS_FAILED,
-        message: aiM('ai_contextCompressFailed', { params: { error: String(error) } }),
-        cause: error,
-      })
+      return err(HaiAIError.CONTEXT_COMPRESS_FAILED, aiM('ai_contextCompressFailed', { params: { error: String(error) } }), error)
     }
   }
 

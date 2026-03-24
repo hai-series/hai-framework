@@ -8,24 +8,22 @@
  * @module reldb-provider-base
  */
 
-import type { PaginatedResult, Result } from '@h-ai/core'
-import type { ReldbErrorCodeType } from '../reldb-config.js'
+import type { HaiErrorDef, HaiResult, PaginatedResult } from '@h-ai/core'
 
 import type {
   CrudManager,
   DdlOperations,
   DmlOperations,
   PaginationQueryOptions,
-  ReldbError,
   TxManager,
 } from '../reldb-types.js'
 
 import { err } from '@h-ai/core'
-import { ReldbErrorCode } from '../reldb-config.js'
 import { createCrud } from '../reldb-crud-kernel.js'
 import { reldbM } from '../reldb-i18n.js'
 import { buildPaginatedResult, normalizePagination, parseCount } from '../reldb-pagination.js'
 import { validateIdentifier, validateIdentifiers } from '../reldb-security.js'
+import { HaiReldbError } from '../reldb-types.js'
 import { createTxWrap } from './reldb-tx-assembler.js'
 
 // ─── 操作上下文 ───
@@ -56,24 +54,20 @@ export interface ReldbOpsContext {
  */
 async function wrapOp<T>(
   ctx: ReldbOpsContext,
-  fn: () => Promise<Result<T, ReldbError>>,
-  errorCode: ReldbErrorCodeType,
+  fn: () => Promise<HaiResult<T>>,
+  errorDef: HaiErrorDef,
   errorLabel: string,
   errorMeta?: Record<string, unknown>,
-): Promise<Result<T, ReldbError>> {
+): Promise<HaiResult<T>> {
   if (!ctx.isConnected()) {
-    return err({ code: ReldbErrorCode.NOT_INITIALIZED, message: reldbM('reldb_notInitialized') })
+    return err(HaiReldbError.NOT_INITIALIZED, reldbM('reldb_notInitialized'))
   }
   try {
     return await fn()
   }
   catch (error) {
     ctx.logger.error(errorLabel, { ...errorMeta, error })
-    return err({
-      code: errorCode,
-      message: reldbM('reldb_queryFailed', { params: { error: String(error) } }),
-      cause: error,
-    })
+    return err(errorDef, reldbM('reldb_queryFailed', { params: { error: String(error) } }), error)
   }
 }
 
@@ -93,14 +87,14 @@ export function createBaseDdlOps(ctx: ReldbOpsContext, raw: DdlOperations): DdlO
       const v2 = validateIdentifiers(Object.keys(columns))
       if (!v2.success)
         return Promise.resolve(v2)
-      return wrapOp(ctx, () => raw.createTable(tableName, columns, ifNotExists), ReldbErrorCode.DDL_FAILED, 'DDL: createTable failed', { tableName })
+      return wrapOp(ctx, () => raw.createTable(tableName, columns, ifNotExists), HaiReldbError.DDL_FAILED, 'DDL: createTable failed', { tableName })
     },
 
     dropTable(tableName, ifExists = true) {
       const v = validateIdentifier(tableName)
       if (!v.success)
         return Promise.resolve(v)
-      return wrapOp(ctx, () => raw.dropTable(tableName, ifExists), ReldbErrorCode.DDL_FAILED, 'DDL: dropTable failed', { tableName })
+      return wrapOp(ctx, () => raw.dropTable(tableName, ifExists), HaiReldbError.DDL_FAILED, 'DDL: dropTable failed', { tableName })
     },
 
     addColumn(tableName, columnName, columnDef) {
@@ -110,7 +104,7 @@ export function createBaseDdlOps(ctx: ReldbOpsContext, raw: DdlOperations): DdlO
       const v2 = validateIdentifier(columnName)
       if (!v2.success)
         return Promise.resolve(v2)
-      return wrapOp(ctx, () => raw.addColumn(tableName, columnName, columnDef), ReldbErrorCode.DDL_FAILED, 'DDL: addColumn failed', { tableName, columnName })
+      return wrapOp(ctx, () => raw.addColumn(tableName, columnName, columnDef), HaiReldbError.DDL_FAILED, 'DDL: addColumn failed', { tableName, columnName })
     },
 
     dropColumn(tableName, columnName) {
@@ -120,7 +114,7 @@ export function createBaseDdlOps(ctx: ReldbOpsContext, raw: DdlOperations): DdlO
       const v2 = validateIdentifier(columnName)
       if (!v2.success)
         return Promise.resolve(v2)
-      return wrapOp(ctx, () => raw.dropColumn(tableName, columnName), ReldbErrorCode.DDL_FAILED, 'DDL: dropColumn failed', { tableName, columnName })
+      return wrapOp(ctx, () => raw.dropColumn(tableName, columnName), HaiReldbError.DDL_FAILED, 'DDL: dropColumn failed', { tableName, columnName })
     },
 
     renameTable(oldName, newName) {
@@ -130,7 +124,7 @@ export function createBaseDdlOps(ctx: ReldbOpsContext, raw: DdlOperations): DdlO
       const v2 = validateIdentifier(newName)
       if (!v2.success)
         return Promise.resolve(v2)
-      return wrapOp(ctx, () => raw.renameTable(oldName, newName), ReldbErrorCode.DDL_FAILED, 'DDL: renameTable failed', { oldName, newName })
+      return wrapOp(ctx, () => raw.renameTable(oldName, newName), HaiReldbError.DDL_FAILED, 'DDL: renameTable failed', { oldName, newName })
     },
 
     createIndex(tableName, indexName, indexDef) {
@@ -143,18 +137,18 @@ export function createBaseDdlOps(ctx: ReldbOpsContext, raw: DdlOperations): DdlO
       const v3 = validateIdentifiers(indexDef.columns)
       if (!v3.success)
         return Promise.resolve(v3)
-      return wrapOp(ctx, () => raw.createIndex(tableName, indexName, indexDef), ReldbErrorCode.DDL_FAILED, 'DDL: createIndex failed', { tableName, indexName })
+      return wrapOp(ctx, () => raw.createIndex(tableName, indexName, indexDef), HaiReldbError.DDL_FAILED, 'DDL: createIndex failed', { tableName, indexName })
     },
 
     dropIndex(indexName, ifExists = true) {
       const v = validateIdentifier(indexName)
       if (!v.success)
         return Promise.resolve(v)
-      return wrapOp(ctx, () => raw.dropIndex(indexName, ifExists), ReldbErrorCode.DDL_FAILED, 'DDL: dropIndex failed', { indexName })
+      return wrapOp(ctx, () => raw.dropIndex(indexName, ifExists), HaiReldbError.DDL_FAILED, 'DDL: dropIndex failed', { indexName })
     },
 
     raw(sql) {
-      return wrapOp(ctx, () => raw.raw(sql), ReldbErrorCode.DDL_FAILED, 'DDL: raw failed')
+      return wrapOp(ctx, () => raw.raw(sql), HaiReldbError.DDL_FAILED, 'DDL: raw failed')
     },
   }
 }
@@ -168,11 +162,11 @@ export function createBaseDdlOps(ctx: ReldbOpsContext, raw: DdlOperations): DdlO
  */
 export function createBaseDmlOps(ctx: ReldbOpsContext, raw: DmlOperations): DmlOperations {
   return {
-    query: (sql, params) => wrapOp(ctx, () => raw.query(sql, params), ReldbErrorCode.QUERY_FAILED, 'DML: query failed'),
-    get: (sql, params) => wrapOp(ctx, () => raw.get(sql, params), ReldbErrorCode.QUERY_FAILED, 'DML: get failed'),
-    execute: (sql, params) => wrapOp(ctx, () => raw.execute(sql, params), ReldbErrorCode.QUERY_FAILED, 'DML: execute failed'),
-    batch: stmts => wrapOp(ctx, () => raw.batch(stmts), ReldbErrorCode.QUERY_FAILED, 'DML: batch failed'),
-    queryPage: options => wrapOp(ctx, () => raw.queryPage(options), ReldbErrorCode.QUERY_FAILED, 'DML: queryPage failed'),
+    query: (sql, params) => wrapOp(ctx, () => raw.query(sql, params), HaiReldbError.QUERY_FAILED, 'DML: query failed'),
+    get: (sql, params) => wrapOp(ctx, () => raw.get(sql, params), HaiReldbError.QUERY_FAILED, 'DML: get failed'),
+    execute: (sql, params) => wrapOp(ctx, () => raw.execute(sql, params), HaiReldbError.QUERY_FAILED, 'DML: execute failed'),
+    batch: stmts => wrapOp(ctx, () => raw.batch(stmts), HaiReldbError.QUERY_FAILED, 'DML: batch failed'),
+    queryPage: options => wrapOp(ctx, () => raw.queryPage(options), HaiReldbError.QUERY_FAILED, 'DML: queryPage failed'),
   }
 }
 
@@ -184,7 +178,7 @@ export function createBaseDmlOps(ctx: ReldbOpsContext, raw: DmlOperations): DmlO
  * 各 Provider 只需提供 beginTx 函数，base 层统一处理连接守卫 + tx.wrap 语法糖。
  */
 export function createBaseTxManager(ctx: ReldbOpsContext, beginTx: TxManager['begin']): TxManager {
-  const begin: TxManager['begin'] = () => wrapOp(ctx, beginTx, ReldbErrorCode.TRANSACTION_FAILED, 'TX: begin failed')
+  const begin: TxManager['begin'] = () => wrapOp(ctx, beginTx, HaiReldbError.TRANSACTION_FAILED, 'TX: begin failed')
   return {
     begin,
     wrap: createTxWrap(begin),

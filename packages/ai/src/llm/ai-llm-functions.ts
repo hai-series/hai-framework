@@ -6,10 +6,10 @@
  * @module ai-llm-functions
  */
 
-import type { Result } from '@h-ai/core'
+import type { HaiResult } from '@h-ai/core'
 
 import type { AIConfig } from '../ai-config.js'
-import type { AIError } from '../ai-types.js'
+
 import type { AIRelStore, InteractionScope, SessionInfo } from '../store/ai-store-types.js'
 import type {
   AskOptions,
@@ -27,8 +27,8 @@ import type {
 
 import { core, err, ok } from '@h-ai/core'
 
-import { AIErrorCode } from '../ai-config.js'
 import { aiM } from '../ai-i18n.js'
+import { HaiAIError } from '../ai-types.js'
 import { collectStream, createSSEDecoder, createStreamProcessor, encodeSSE } from './ai-llm-stream.js'
 import { createToolRegistry, defineTool } from './ai-llm-tool.js'
 import { createOpenAIProvider } from './providers/ai-llm-provider-openai.js'
@@ -119,7 +119,7 @@ export function createAILLMFunctions(config: AIConfig, deps?: AILLMStores): AILL
   /**
    * 包装 chat，在有 objectId 时自动保存 ChatRecord
    */
-  async function chatWithRecord(request: ChatCompletionRequest): Promise<Result<ChatCompletionResponse, AIError>> {
+  async function chatWithRecord(request: ChatCompletionRequest): Promise<HaiResult<ChatCompletionResponse>> {
     const start = Date.now()
     const result = await provider.chat(request)
 
@@ -242,7 +242,7 @@ export function createAILLMFunctions(config: AIConfig, deps?: AILLMStores): AILL
   async function getHistory(
     scope: InteractionScope,
     options?: ChatHistoryOptions,
-  ): Promise<Result<ChatRecord[], AIError>> {
+  ): Promise<HaiResult<ChatRecord[]>> {
     if (!recordStore) {
       return ok([])
     }
@@ -256,11 +256,7 @@ export function createAILLMFunctions(config: AIConfig, deps?: AILLMStores): AILL
       return ok(records)
     }
     catch (error) {
-      return err({
-        code: AIErrorCode.LLM_HISTORY_FAILED,
-        message: aiM('ai_llmHistoryFailed', { params: { error: error instanceof Error ? error.message : String(error) } }),
-        cause: error,
-      })
+      return err(HaiAIError.LLM_HISTORY_FAILED, aiM('ai_llmHistoryFailed', { params: { error: error instanceof Error ? error.message : String(error) } }), error)
     }
   }
 
@@ -269,7 +265,7 @@ export function createAILLMFunctions(config: AIConfig, deps?: AILLMStores): AILL
    */
   async function listSessions(
     objectId: string,
-  ): Promise<Result<SessionInfo[], AIError>> {
+  ): Promise<HaiResult<SessionInfo[]>> {
     if (!sessionStore) {
       return ok([])
     }
@@ -281,11 +277,7 @@ export function createAILLMFunctions(config: AIConfig, deps?: AILLMStores): AILL
       return ok(sessions)
     }
     catch (error) {
-      return err({
-        code: AIErrorCode.LLM_HISTORY_FAILED,
-        message: aiM('ai_llmHistoryFailed', { params: { error: error instanceof Error ? error.message : String(error) } }),
-        cause: error,
-      })
+      return err(HaiAIError.LLM_HISTORY_FAILED, aiM('ai_llmHistoryFailed', { params: { error: error instanceof Error ? error.message : String(error) } }), error)
     }
   }
 
@@ -296,7 +288,7 @@ export function createAILLMFunctions(config: AIConfig, deps?: AILLMStores): AILL
     getHistory,
     listSessions,
 
-    async ask(question: string, options?: AskOptions): Promise<Result<string, AIError>> {
+    async ask(question: string, options?: AskOptions): Promise<HaiResult<string>> {
       const messages: ChatMessage[] = []
       if (options?.systemPrompt) {
         messages.push({ role: 'system', content: options.systemPrompt })
@@ -311,7 +303,7 @@ export function createAILLMFunctions(config: AIConfig, deps?: AILLMStores): AILL
         enablePersist: options?.enablePersist,
       })
       if (!result.success)
-        return result as Result<never, AIError>
+        return result as HaiResult<never>
       return ok(result.data.choices[0]?.message?.content ?? '')
     },
 

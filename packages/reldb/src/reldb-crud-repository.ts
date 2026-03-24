@@ -5,7 +5,7 @@
  * @module reldb-crud-repository
  */
 
-import type { PaginatedResult, Result } from '@h-ai/core'
+import type { HaiResult, PaginatedResult } from '@h-ai/core'
 import type { ReldbConfig } from './reldb-config.js'
 import type {
   BaseReldbCrudRepositoryConfig,
@@ -18,14 +18,13 @@ import type {
   ReldbCrudCountOptions,
   ReldbCrudFieldDefinition,
   ReldbCrudRepository,
-  ReldbError,
   ReldbFunctions,
   ReldbTableDef,
 } from './reldb-types.js'
 
 import { err, ok } from '@h-ai/core'
-import { ReldbErrorCode } from './reldb-config.js'
 import { reldbM } from './reldb-i18n.js'
+import { HaiReldbError } from './reldb-types.js'
 
 /**
  * CRUD 仓库基类
@@ -71,7 +70,7 @@ export abstract class BaseReldbCrudRepository<TItem> implements ReldbCrudReposit
   /** 当前时间提供者（默认 Date.now） */
   private readonly nowProvider: () => number
   /** 初始化 Promise（自动建表等） */
-  private readonly initPromise: Promise<Result<void, ReldbError>>
+  private readonly initPromise: Promise<HaiResult<void>>
   /** 可查询列 */
   private readonly selectColumns: string[]
   /** 可插入列 */
@@ -444,7 +443,7 @@ export abstract class BaseReldbCrudRepository<TItem> implements ReldbCrudReposit
    *
    * @returns 初始化结果
    */
-  private async ensureReady(): Promise<Result<void, ReldbError>> {
+  private async ensureReady(): Promise<HaiResult<void>> {
     const result = await this.initPromise
     if (!result.success) {
       // 透传初始化失败结果
@@ -462,18 +461,15 @@ export abstract class BaseReldbCrudRepository<TItem> implements ReldbCrudReposit
    * @param tx - 可选事务句柄
    * @returns 插入结果（含 changes、lastInsertRowid）
    */
-  async create(data: Record<string, unknown>, tx?: DmlWithTxOperations): Promise<Result<ExecuteResult, ReldbError>> {
+  async create(data: Record<string, unknown>, tx?: DmlWithTxOperations): Promise<HaiResult<ExecuteResult>> {
     const ready = await this.ensureReady()
     if (!ready.success) {
-      return ready as Result<ExecuteResult, ReldbError>
+      return ready as HaiResult<ExecuteResult>
     }
     const payload = this.buildCreatePayload(data)
     if (Object.keys(payload).length === 0) {
       // 无可写入字段时返回配置错误
-      return err({
-        code: ReldbErrorCode.CONFIG_ERROR,
-        message: reldbM('reldb_crudEmptyPayload'),
-      })
+      return err(HaiReldbError.CONFIG_ERROR, reldbM('reldb_crudEmptyPayload'))
     }
     return this.crud.create(payload, tx)
   }
@@ -487,10 +483,10 @@ export abstract class BaseReldbCrudRepository<TItem> implements ReldbCrudReposit
    * @param tx - 可选事务句柄
    * @returns 批量插入结果
    */
-  async createMany(items: Array<Record<string, unknown>>, tx?: DmlWithTxOperations): Promise<Result<void, ReldbError>> {
+  async createMany(items: Array<Record<string, unknown>>, tx?: DmlWithTxOperations): Promise<HaiResult<void>> {
     const ready = await this.ensureReady()
     if (!ready.success) {
-      return ready as Result<void, ReldbError>
+      return ready as HaiResult<void>
     }
     const payloads = items.map(item => this.buildCreatePayload(item))
     return this.crud.createMany(payloads, tx)
@@ -522,10 +518,10 @@ export abstract class BaseReldbCrudRepository<TItem> implements ReldbCrudReposit
    * @param tx - 可选事务句柄
    * @returns 执行结果（含 changes）
    */
-  async createOrUpdate(data: Record<string, unknown>, tx?: DmlWithTxOperations): Promise<Result<ExecuteResult, ReldbError>> {
+  async createOrUpdate(data: Record<string, unknown>, tx?: DmlWithTxOperations): Promise<HaiResult<ExecuteResult>> {
     const ready = await this.ensureReady()
     if (!ready.success) {
-      return ready as Result<ExecuteResult, ReldbError>
+      return ready as HaiResult<ExecuteResult>
     }
 
     const dbType = this.dbType
@@ -543,10 +539,7 @@ export abstract class BaseReldbCrudRepository<TItem> implements ReldbCrudReposit
     }
 
     if (Object.keys(createPayload).length === 0) {
-      return err({
-        code: ReldbErrorCode.CONFIG_ERROR,
-        message: reldbM('reldb_crudEmptyPayload'),
-      })
+      return err(HaiReldbError.CONFIG_ERROR, reldbM('reldb_crudEmptyPayload'))
     }
 
     const insertColumns = Object.keys(createPayload)
@@ -589,10 +582,10 @@ export abstract class BaseReldbCrudRepository<TItem> implements ReldbCrudReposit
    * @param tx - 可选事务句柄
    * @returns 业务模型对象或 null（未找到）
    */
-  async findById(id: unknown, tx?: DmlWithTxOperations): Promise<Result<TItem | null, ReldbError>> {
+  async findById(id: unknown, tx?: DmlWithTxOperations): Promise<HaiResult<TItem | null>> {
     const ready = await this.ensureReady()
     if (!ready.success) {
-      return ready as Result<TItem | null, ReldbError>
+      return ready as HaiResult<TItem | null>
     }
     return this.crud.findById(id, tx)
   }
@@ -606,10 +599,10 @@ export abstract class BaseReldbCrudRepository<TItem> implements ReldbCrudReposit
    * @param tx - 可选事务句柄
    * @returns 业务模型对象（不存在时返回错误）
    */
-  async getById(id: unknown, tx?: DmlWithTxOperations): Promise<Result<TItem, ReldbError>> {
+  async getById(id: unknown, tx?: DmlWithTxOperations): Promise<HaiResult<TItem>> {
     const ready = await this.ensureReady()
     if (!ready.success) {
-      return ready as Result<TItem, ReldbError>
+      return ready as HaiResult<TItem>
     }
     return this.crud.getById(id, tx)
   }
@@ -621,10 +614,10 @@ export abstract class BaseReldbCrudRepository<TItem> implements ReldbCrudReposit
    * @param tx - 可选事务句柄
    * @returns 业务模型数组
    */
-  async findAll(options?: CrudQueryOptions, tx?: DmlWithTxOperations): Promise<Result<TItem[], ReldbError>> {
+  async findAll(options?: CrudQueryOptions, tx?: DmlWithTxOperations): Promise<HaiResult<TItem[]>> {
     const ready = await this.ensureReady()
     if (!ready.success) {
-      return ready as Result<TItem[], ReldbError>
+      return ready as HaiResult<TItem[]>
     }
     return this.crud.findAll(options, tx)
   }
@@ -636,10 +629,10 @@ export abstract class BaseReldbCrudRepository<TItem> implements ReldbCrudReposit
    * @param tx - 可选事务句柄
    * @returns 分页结果（含 items、total、page、pageSize）
    */
-  async findPage(options: CrudPageOptions, tx?: DmlWithTxOperations): Promise<Result<PaginatedResult<TItem>, ReldbError>> {
+  async findPage(options: CrudPageOptions, tx?: DmlWithTxOperations): Promise<HaiResult<PaginatedResult<TItem>>> {
     const ready = await this.ensureReady()
     if (!ready.success) {
-      return ready as Result<PaginatedResult<TItem>, ReldbError>
+      return ready as HaiResult<PaginatedResult<TItem>>
     }
     return this.crud.findPage(options, tx)
   }
@@ -654,18 +647,15 @@ export abstract class BaseReldbCrudRepository<TItem> implements ReldbCrudReposit
    * @param tx - 可选事务句柄
    * @returns 更新结果（含 changes）
    */
-  async updateById(id: unknown, data: Record<string, unknown>, tx?: DmlWithTxOperations): Promise<Result<ExecuteResult, ReldbError>> {
+  async updateById(id: unknown, data: Record<string, unknown>, tx?: DmlWithTxOperations): Promise<HaiResult<ExecuteResult>> {
     const ready = await this.ensureReady()
     if (!ready.success) {
-      return ready as Result<ExecuteResult, ReldbError>
+      return ready as HaiResult<ExecuteResult>
     }
     const payload = this.buildUpdatePayload(data)
     if (!payload) {
       // 无可更新字段时返回配置错误
-      return err({
-        code: ReldbErrorCode.CONFIG_ERROR,
-        message: reldbM('reldb_crudEmptyPayload'),
-      })
+      return err(HaiReldbError.CONFIG_ERROR, reldbM('reldb_crudEmptyPayload'))
     }
     return this.crud.updateById(id, payload, tx)
   }
@@ -677,10 +667,10 @@ export abstract class BaseReldbCrudRepository<TItem> implements ReldbCrudReposit
    * @param tx - 可选事务句柄
    * @returns 删除结果（含 changes）
    */
-  async deleteById(id: unknown, tx?: DmlWithTxOperations): Promise<Result<ExecuteResult, ReldbError>> {
+  async deleteById(id: unknown, tx?: DmlWithTxOperations): Promise<HaiResult<ExecuteResult>> {
     const ready = await this.ensureReady()
     if (!ready.success) {
-      return ready as Result<ExecuteResult, ReldbError>
+      return ready as HaiResult<ExecuteResult>
     }
     return this.crud.deleteById(id, tx)
   }
@@ -692,10 +682,10 @@ export abstract class BaseReldbCrudRepository<TItem> implements ReldbCrudReposit
    * @param tx - 可选事务句柄
    * @returns 记录数
    */
-  async count(options?: ReldbCrudCountOptions, tx?: DmlWithTxOperations): Promise<Result<number, ReldbError>> {
+  async count(options?: ReldbCrudCountOptions, tx?: DmlWithTxOperations): Promise<HaiResult<number>> {
     const ready = await this.ensureReady()
     if (!ready.success) {
-      return ready as Result<number, ReldbError>
+      return ready as HaiResult<number>
     }
     return this.crud.count(options, tx)
   }
@@ -707,10 +697,10 @@ export abstract class BaseReldbCrudRepository<TItem> implements ReldbCrudReposit
    * @param tx - 可选事务句柄
    * @returns 是否存在
    */
-  async exists(options?: ReldbCrudCountOptions, tx?: DmlWithTxOperations): Promise<Result<boolean, ReldbError>> {
+  async exists(options?: ReldbCrudCountOptions, tx?: DmlWithTxOperations): Promise<HaiResult<boolean>> {
     const ready = await this.ensureReady()
     if (!ready.success) {
-      return ready as Result<boolean, ReldbError>
+      return ready as HaiResult<boolean>
     }
     return this.crud.exists(options, tx)
   }
@@ -722,10 +712,10 @@ export abstract class BaseReldbCrudRepository<TItem> implements ReldbCrudReposit
    * @param tx - 可选事务句柄
    * @returns 是否存在
    */
-  async existsById(id: unknown, tx?: DmlWithTxOperations): Promise<Result<boolean, ReldbError>> {
+  async existsById(id: unknown, tx?: DmlWithTxOperations): Promise<HaiResult<boolean>> {
     const ready = await this.ensureReady()
     if (!ready.success) {
-      return ready as Result<boolean, ReldbError>
+      return ready as HaiResult<boolean>
     }
     return this.crud.existsById(id, tx)
   }

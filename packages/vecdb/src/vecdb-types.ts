@@ -6,24 +6,38 @@
  * @module vecdb-types
  */
 
-import type { Result } from '@h-ai/core'
-import type { DistanceMetric, VecdbConfig, VecdbConfigInput, VecdbErrorCodeType } from './vecdb-config.js'
+import type { ErrorInfo, HaiResult } from '@h-ai/core'
+import type { DistanceMetric, VecdbConfig, VecdbConfigInput } from './vecdb-config.js'
+import { core } from '@h-ai/core'
 
-// ─── 错误类型 ───
+// ─── 错误定义（照 @h-ai/core 范式） ───
 
 /**
- * 向量数据库错误接口
+ * 向量数据库错误信息映射（错误码:HTTP状态码）。
  *
- * 所有向量数据库操作返回的错误都遵循此接口。
+ * 完整错误码将自动生成为：`hai:vecdb:NNN`
  */
-export interface VecdbError {
-  /** 错误码（数值，参见 VecdbErrorCode） */
-  code: VecdbErrorCodeType
-  /** 错误消息 */
-  message: string
-  /** 原始错误（可选） */
-  cause?: unknown
-}
+const VecdbErrorInfo = {
+  CONNECTION_FAILED: '001:500',
+  QUERY_FAILED: '002:500',
+  COLLECTION_NOT_FOUND: '003:404',
+  COLLECTION_ALREADY_EXISTS: '004:409',
+  DIMENSION_MISMATCH: '005:400',
+  INSERT_FAILED: '006:500',
+  DELETE_FAILED: '007:500',
+  UPDATE_FAILED: '008:500',
+  INDEX_BUILD_FAILED: '009:500',
+  NOT_INITIALIZED: '010:500',
+  CONFIG_ERROR: '011:500',
+  UNSUPPORTED_TYPE: '012:400',
+  DRIVER_NOT_FOUND: '013:500',
+  SERIALIZATION_FAILED: '014:500',
+} as const satisfies ErrorInfo
+
+/**
+ * Vecdb 模块标准错误定义对象。
+ */
+export const HaiVecdbError = core.error.buildHaiErrorsDef('vecdb', VecdbErrorInfo)
 
 // ─── 向量文档 ───
 
@@ -134,7 +148,7 @@ export interface CollectionOperations {
    * @param options - 创建选项
    * @returns 成功返回 ok(undefined)；集合已存在返回 COLLECTION_ALREADY_EXISTS
    */
-  create: (name: string, options: CollectionCreateOptions) => Promise<Result<void, VecdbError>>
+  create: (name: string, options: CollectionCreateOptions) => Promise<HaiResult<void>>
 
   /**
    * 删除集合
@@ -142,7 +156,7 @@ export interface CollectionOperations {
    * @param name - 集合名称
    * @returns 成功返回 ok(undefined)；集合不存在返回 COLLECTION_NOT_FOUND
    */
-  drop: (name: string) => Promise<Result<void, VecdbError>>
+  drop: (name: string) => Promise<HaiResult<void>>
 
   /**
    * 判断集合是否存在
@@ -150,7 +164,7 @@ export interface CollectionOperations {
    * @param name - 集合名称
    * @returns 存在返回 true，不存在返回 false
    */
-  exists: (name: string) => Promise<Result<boolean, VecdbError>>
+  exists: (name: string) => Promise<HaiResult<boolean>>
 
   /**
    * 获取集合信息
@@ -158,14 +172,14 @@ export interface CollectionOperations {
    * @param name - 集合名称
    * @returns 集合信息
    */
-  info: (name: string) => Promise<Result<CollectionInfo, VecdbError>>
+  info: (name: string) => Promise<HaiResult<CollectionInfo>>
 
   /**
    * 列出所有集合
    *
    * @returns 集合名称列表
    */
-  list: () => Promise<Result<string[], VecdbError>>
+  list: () => Promise<HaiResult<string[]>>
 }
 
 /**
@@ -203,7 +217,7 @@ export interface VectorOperations {
    * @param documents - 文档列表
    * @returns 成功返回 ok(undefined)
    */
-  insert: (collection: string, documents: VectorDocument[]) => Promise<Result<void, VecdbError>>
+  insert: (collection: string, documents: VectorDocument[]) => Promise<HaiResult<void>>
 
   /**
    * 更新向量文档（按 id 匹配，整体替换）
@@ -212,7 +226,7 @@ export interface VectorOperations {
    * @param documents - 待更新的文档（id 必须已存在）
    * @returns 成功返回 ok(undefined)
    */
-  upsert: (collection: string, documents: VectorDocument[]) => Promise<Result<void, VecdbError>>
+  upsert: (collection: string, documents: VectorDocument[]) => Promise<HaiResult<void>>
 
   /**
    * 删除向量文档
@@ -221,7 +235,7 @@ export interface VectorOperations {
    * @param ids - 文档 ID 列表
    * @returns 成功返回 ok(undefined)
    */
-  delete: (collection: string, ids: string[]) => Promise<Result<void, VecdbError>>
+  delete: (collection: string, ids: string[]) => Promise<HaiResult<void>>
 
   /**
    * 向量搜索
@@ -235,7 +249,7 @@ export interface VectorOperations {
     collection: string,
     vector: number[],
     options?: VectorSearchOptions,
-  ) => Promise<Result<VectorSearchResult[], VecdbError>>
+  ) => Promise<HaiResult<VectorSearchResult[]>>
 
   /**
    * 获取集合中的文档数量
@@ -243,7 +257,7 @@ export interface VectorOperations {
    * @param collection - 集合名称
    * @returns 文档数量
    */
-  count: (collection: string) => Promise<Result<number, VecdbError>>
+  count: (collection: string) => Promise<HaiResult<number>>
 }
 
 // ─── VecdbFunctions 接口 ───
@@ -273,9 +287,9 @@ export interface VectorOperations {
  */
 export interface VecdbFunctions {
   /** 初始化向量数据库连接 */
-  init: (config: VecdbConfigInput) => Promise<Result<void, VecdbError>>
+  init: (config: VecdbConfigInput) => Promise<HaiResult<void>>
   /** 关闭连接 */
-  close: () => Promise<Result<void, VecdbError>>
+  close: () => Promise<HaiResult<void>>
   /** 当前配置（未初始化时为 null） */
   readonly config: VecdbConfig | null
   /** 是否已初始化 */

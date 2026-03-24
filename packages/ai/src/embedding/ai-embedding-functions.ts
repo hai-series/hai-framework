@@ -5,9 +5,9 @@
  * @module ai-embedding-functions
  */
 
-import type { Result } from '@h-ai/core'
+import type { HaiResult } from '@h-ai/core'
 import type { AIConfig, EmbeddingConfig, ResolvedModelConfig } from '../ai-config.js'
-import type { AIError } from '../ai-types.js'
+
 import type {
   EmbeddingOperations,
   EmbeddingRequest,
@@ -17,8 +17,9 @@ import type {
 import { core, err, ok } from '@h-ai/core'
 import OpenAI from 'openai'
 
-import { AIErrorCode, resolveModelEntry } from '../ai-config.js'
+import { resolveModelEntry } from '../ai-config.js'
 import { aiM } from '../ai-i18n.js'
+import { HaiAIError } from '../ai-types.js'
 
 const logger = core.logger.child({ module: 'ai', scope: 'embedding' })
 
@@ -59,7 +60,7 @@ export function createEmbeddingOperations(config: AIConfig): EmbeddingOperations
   /**
    * 调用 OpenAI Embeddings API（单次请求）
    */
-  async function callEmbeddingAPI(request: EmbeddingRequest): Promise<Result<EmbeddingResponse, AIError>> {
+  async function callEmbeddingAPI(request: EmbeddingRequest): Promise<HaiResult<EmbeddingResponse>> {
     const resolvedResult = resolveModelEntry(config.llm, 'embedding', request.model, {
       missingApiKeyMessage: aiM('ai_configError', { params: { error: 'API Key is required for embedding' } }),
     })
@@ -99,18 +100,14 @@ export function createEmbeddingOperations(config: AIConfig): EmbeddingOperations
     }
     catch (error) {
       logger.error('Embedding API call failed', { error })
-      return err({
-        code: AIErrorCode.EMBEDDING_API_ERROR,
-        message: aiM('ai_internalError', { params: { error: String(error) } }),
-        cause: error,
-      })
+      return err(HaiAIError.EMBEDDING_API_ERROR, aiM('ai_internalError', { params: { error: String(error) } }), error)
     }
   }
 
   /**
    * 对外统一嵌入入口：单条 / 批量都复用同一套分批逻辑
    */
-  async function embedRequest(request: EmbeddingRequest): Promise<Result<EmbeddingResponse, AIError>> {
+  async function embedRequest(request: EmbeddingRequest): Promise<HaiResult<EmbeddingResponse>> {
     const input = Array.isArray(request.input) ? request.input : [request.input]
     const batchSize = embeddingConfig.batchSize
 
@@ -152,25 +149,22 @@ export function createEmbeddingOperations(config: AIConfig): EmbeddingOperations
   }
 
   return {
-    async embed(request: EmbeddingRequest): Promise<Result<EmbeddingResponse, AIError>> {
+    async embed(request: EmbeddingRequest): Promise<HaiResult<EmbeddingResponse>> {
       return embedRequest(request)
     },
 
-    async embedText(text: string): Promise<Result<number[], AIError>> {
+    async embedText(text: string): Promise<HaiResult<number[]>> {
       const result = await embedRequest({ input: text })
       if (!result.success)
         return result
       const first = result.data.data.find(item => item.index === 0)
       if (!first) {
-        return err({
-          code: AIErrorCode.EMBEDDING_API_ERROR,
-          message: aiM('ai_internalError', { params: { error: 'Embedding result is empty' } }),
-        })
+        return err(HaiAIError.EMBEDDING_API_ERROR, aiM('ai_internalError', { params: { error: 'Embedding result is empty' } }))
       }
       return ok(first.embedding)
     },
 
-    async embedBatch(texts: string[]): Promise<Result<number[][], AIError>> {
+    async embedBatch(texts: string[]): Promise<HaiResult<number[][]>> {
       const result = await embedRequest({ input: texts })
       if (!result.success)
         return result
