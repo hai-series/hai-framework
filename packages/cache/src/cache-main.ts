@@ -5,24 +5,19 @@
  * @module cache-main
  */
 
-import type { Result } from '@h-ai/core'
+import type { HaiResult } from '@h-ai/core'
 import type { CacheConfig, CacheConfigInput } from './cache-config.js'
-import type {
-  CacheError,
-  CacheFunctions,
-  CacheProvider,
-  HashOperations,
-  KvOperations,
-  ListOperations,
-  LockOperations,
-  SetOperations,
-  ZSetOperations,
-} from './cache-types.js'
-
+import type { CacheFunctions, CacheProvider, HashOperations, KvOperations, ListOperations, LockOperations, SetOperations, ZSetOperations } from './cache-types.js'
 import { core, err, ok } from '@h-ai/core'
 
-import { CacheConfigSchema, CacheErrorCode } from './cache-config.js'
+import { CacheConfigSchema } from './cache-config.js'
+
 import { cacheM } from './cache-i18n.js'
+import {
+
+  HaiCacheError,
+
+} from './cache-types.js'
 import { createMemoryProvider } from './providers/cache-provider-memory.js'
 import { createRedisProvider } from './providers/cache-provider-redis.js'
 
@@ -65,8 +60,8 @@ function createProvider(config: CacheConfig): CacheProvider {
  * 所有子接口（kv/hash/list/set_/zset）在未 init 前使用 proxy 占位，
  * 调用任意方法均返回 { success: false, error: { code: NOT_INITIALIZED } }
  */
-const notInitialized = core.module.createNotInitializedKit<CacheError>(
-  CacheErrorCode.NOT_INITIALIZED,
+const notInitialized = core.module.createNotInitializedKit(
+  HaiCacheError.NOT_INITIALIZED,
   () => cacheM('cache_notInitialized'),
 )
 
@@ -110,14 +105,14 @@ export const cache: CacheFunctions = {
    * }
    * ```
    */
-  async init(config: CacheConfigInput): Promise<Result<void, CacheError>> {
+  async init(config: CacheConfigInput): Promise<HaiResult<void>> {
     // 并发初始化防护：避免多次 init 同时执行导致 Provider 泄漏
     if (initInProgress) {
       logger.warn('Cache init already in progress, skipping concurrent call')
-      return err({
-        code: CacheErrorCode.OPERATION_FAILED,
-        message: cacheM('cache_operationFailed', { params: { error: 'Concurrent initialization detected' } }),
-      })
+      return err(
+        HaiCacheError.OPERATION_FAILED,
+        cacheM('cache_operationFailed', { params: { error: 'Concurrent initialization detected' } }),
+      )
     }
     initInProgress = true
 
@@ -132,11 +127,11 @@ export const cache: CacheFunctions = {
       const parseResult = CacheConfigSchema.safeParse(config)
       if (!parseResult.success) {
         logger.error('Cache config validation failed', { error: parseResult.error.message })
-        return err({
-          code: CacheErrorCode.CONFIG_ERROR,
-          message: cacheM('cache_configError', { params: { error: parseResult.error.message } }),
-          cause: parseResult.error,
-        })
+        return err(
+          HaiCacheError.CONFIG_ERROR,
+          cacheM('cache_configError', { params: { error: parseResult.error.message } }),
+          parseResult.error,
+        )
       }
       const parsed = parseResult.data
 
@@ -157,13 +152,13 @@ export const cache: CacheFunctions = {
       }
       catch (error) {
         logger.error('Cache module initialization failed', { error })
-        return err({
-          code: CacheErrorCode.CONNECTION_FAILED,
-          message: cacheM('cache_initFailed', {
+        return err(
+          HaiCacheError.CONNECTION_FAILED,
+          cacheM('cache_initFailed', {
             params: { error: error instanceof Error ? error.message : String(error) },
           }),
-          cause: error,
-        })
+          error,
+        )
       }
     }
     finally {
@@ -193,7 +188,7 @@ export const cache: CacheFunctions = {
    *
    * @returns 成功时返回 'PONG'；未初始化时返回 NOT_INITIALIZED 错误
    */
-  ping(): Promise<Result<string, CacheError>> {
+  ping(): Promise<HaiResult<string>> {
     return currentProvider?.ping() ?? Promise.resolve(notInitialized.result())
   },
 

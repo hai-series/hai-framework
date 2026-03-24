@@ -6,11 +6,11 @@
  * @module capacitor-push
  */
 
-import type { Result } from '@h-ai/core'
-import type { CapacitorError, PushNotificationCallbacks, PushRegistration } from './capacitor-types.js'
+import type { HaiResult } from '@h-ai/core'
+import type { PushNotificationCallbacks, PushRegistration } from './capacitor-types.js'
 import { err, ok } from '@h-ai/core'
-import { CapacitorErrorCode } from './capacitor-config.js'
 import { capacitorM } from './capacitor-i18n.js'
+import { HaiCapacitorError } from './capacitor-types.js'
 
 /**
  * 注册推送通知
@@ -28,17 +28,17 @@ import { capacitorM } from './capacitor-i18n.js'
  * }
  * ```
  */
-export async function registerPush(): Promise<Result<PushRegistration, CapacitorError>> {
+export async function registerPush(): Promise<HaiResult<PushRegistration>> {
   try {
     const { PushNotifications } = await import('@capacitor/push-notifications')
 
     // 请求权限
     const permResult = await PushNotifications.requestPermissions()
     if (permResult.receive !== 'granted') {
-      return err({
-        code: CapacitorErrorCode.PUSH_REGISTER_FAILED,
-        message: capacitorM('capacitor_pushRegisterFailed'),
-      })
+      return err(
+        HaiCapacitorError.PUSH_REGISTER_FAILED,
+        capacitorM('capacitor_pushRegisterFailed'),
+      )
     }
 
     // 注册并等待 Token（带超时防护）
@@ -74,11 +74,11 @@ export async function registerPush(): Promise<Result<PushRegistration, Capacitor
     return ok({ token })
   }
   catch (cause) {
-    return err({
-      code: CapacitorErrorCode.PUSH_REGISTER_FAILED,
-      message: capacitorM('capacitor_pushRegisterFailed'),
+    return err(
+      HaiCapacitorError.PUSH_REGISTER_FAILED,
+      capacitorM('capacitor_pushRegisterFailed'),
       cause,
-    })
+    )
   }
 }
 
@@ -100,7 +100,7 @@ export async function registerPush(): Promise<Result<PushRegistration, Capacitor
  * }
  * ```
  */
-export async function listenPush(callbacks: PushNotificationCallbacks): Promise<Result<() => Promise<void>, CapacitorError>> {
+export async function listenPush(callbacks: PushNotificationCallbacks): Promise<HaiResult<() => Promise<void>>> {
   try {
     const { PushNotifications } = await import('@capacitor/push-notifications')
     const listeners: Array<{ remove: () => Promise<void> }> = []
@@ -141,10 +141,10 @@ export async function listenPush(callbacks: PushNotificationCallbacks): Promise<
     return ok(cleanup)
   }
   catch (cause) {
-    return err({
-      code: CapacitorErrorCode.PUSH_LISTEN_FAILED,
-      message: capacitorM('capacitor_pushListenFailed'),
+    return err(
+      HaiCapacitorError.PUSH_LISTEN_FAILED,
+      capacitorM('capacitor_pushListenFailed'),
       cause,
-    })
+    )
   }
 }

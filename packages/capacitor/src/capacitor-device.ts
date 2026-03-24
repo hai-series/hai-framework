@@ -6,11 +6,11 @@
  * @module capacitor-device
  */
 
-import type { Result } from '@h-ai/core'
-import type { CapacitorError, DeviceInfo } from './capacitor-types.js'
+import type { HaiResult } from '@h-ai/core'
+import type { DeviceInfo } from './capacitor-types.js'
 import { err, ok } from '@h-ai/core'
-import { CapacitorErrorCode } from './capacitor-config.js'
 import { capacitorM } from './capacitor-i18n.js'
+import { HaiCapacitorError } from './capacitor-types.js'
 
 /**
  * 获取设备信息
@@ -27,7 +27,7 @@ import { capacitorM } from './capacitor-i18n.js'
  * }
  * ```
  */
-export async function getDeviceInfo(): Promise<Result<DeviceInfo, CapacitorError>> {
+export async function getDeviceInfo(): Promise<HaiResult<DeviceInfo>> {
   try {
     const { Device } = await import('@capacitor/device')
     const info = await Device.getInfo()
@@ -41,11 +41,11 @@ export async function getDeviceInfo(): Promise<Result<DeviceInfo, CapacitorError
     })
   }
   catch (cause) {
-    return err({
-      code: CapacitorErrorCode.DEVICE_INFO_FAILED,
-      message: capacitorM('capacitor_deviceInfoFailed'),
+    return err(
+      HaiCapacitorError.DEVICE_INFO_FAILED,
+      capacitorM('capacitor_deviceInfoFailed'),
       cause,
-    })
+    )
   }
 }
 
@@ -63,7 +63,7 @@ export async function getDeviceInfo(): Promise<Result<DeviceInfo, CapacitorError
  * }
  * ```
  */
-export async function getAppVersion(): Promise<Result<{ version: string, build: string }, CapacitorError>> {
+export async function getAppVersion(): Promise<HaiResult<{ version: string, build: string }>> {
   try {
     const { App } = await import('@capacitor/app')
     const info = await App.getInfo()
@@ -74,10 +74,10 @@ export async function getAppVersion(): Promise<Result<{ version: string, build: 
     })
   }
   catch (cause) {
-    return err({
-      code: CapacitorErrorCode.DEVICE_INFO_FAILED,
-      message: capacitorM('capacitor_deviceInfoFailed'),
+    return err(
+      HaiCapacitorError.DEVICE_INFO_FAILED,
+      capacitorM('capacitor_deviceInfoFailed'),
       cause,
-    })
+    )
   }
 }

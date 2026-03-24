@@ -8,12 +8,11 @@
  */
 
 import type { TokenStorage } from '@h-ai/api-client'
-import type { Result } from '@h-ai/core'
-import type { CapacitorError } from './capacitor-types.js'
+import type { HaiResult } from '@h-ai/core'
 import { Preferences } from '@capacitor/preferences'
 import { core, err, ok } from '@h-ai/core'
-import { CapacitorErrorCode } from './capacitor-config.js'
 import { capacitorM } from './capacitor-i18n.js'
+import { HaiCapacitorError } from './capacitor-types.js'
 
 const logger = core.logger.child({ module: 'capacitor', scope: 'token-storage' })
 
@@ -114,17 +113,17 @@ export function createCapacitorTokenStorage(): TokenStorage {
  * }
  * ```
  */
-export async function safeGetPreference(key: string): Promise<Result<string | null, CapacitorError>> {
+export async function safeGetPreference(key: string): Promise<HaiResult<string | null>> {
   try {
     const { value } = await Preferences.get({ key })
     return ok(value)
   }
   catch (cause) {
-    return err({
-      code: CapacitorErrorCode.PREFERENCES_GET_FAILED,
-      message: capacitorM('capacitor_preferencesGetFailed'),
+    return err(
+      HaiCapacitorError.PREFERENCES_GET_FAILED,
+      capacitorM('capacitor_preferencesGetFailed'),
       cause,
-    })
+    )
   }
 }
 
@@ -140,17 +139,17 @@ export async function safeGetPreference(key: string): Promise<Result<string | nu
  * await capacitor.preferences.set('my_key', 'value')
  * ```
  */
-export async function safeSetPreference(key: string, value: string): Promise<Result<void, CapacitorError>> {
+export async function safeSetPreference(key: string, value: string): Promise<HaiResult<void>> {
   try {
     await Preferences.set({ key, value })
     return ok(undefined)
   }
   catch (cause) {
-    return err({
-      code: CapacitorErrorCode.PREFERENCES_SET_FAILED,
-      message: capacitorM('capacitor_preferencesSetFailed'),
+    return err(
+      HaiCapacitorError.PREFERENCES_SET_FAILED,
+      capacitorM('capacitor_preferencesSetFailed'),
       cause,
-    })
+    )
   }
 }
 
@@ -165,16 +164,16 @@ export async function safeSetPreference(key: string, value: string): Promise<Res
  * await capacitor.preferences.remove('my_key')
  * ```
  */
-export async function safeRemovePreference(key: string): Promise<Result<void, CapacitorError>> {
+export async function safeRemovePreference(key: string): Promise<HaiResult<void>> {
   try {
     await Preferences.remove({ key })
     return ok(undefined)
   }
   catch (cause) {
-    return err({
-      code: CapacitorErrorCode.PREFERENCES_REMOVE_FAILED,
-      message: capacitorM('capacitor_preferencesRemoveFailed'),
+    return err(
+      HaiCapacitorError.PREFERENCES_REMOVE_FAILED,
+      capacitorM('capacitor_preferencesRemoveFailed'),
       cause,
-    })
+    )
   }
 }

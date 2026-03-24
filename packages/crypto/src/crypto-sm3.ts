@@ -5,19 +5,18 @@
  * @module crypto-sm3
  */
 
-import type { Result } from '@h-ai/core'
-import type {
-  CryptoError,
-  HashOperations,
-  HashOptions,
-} from './crypto-types.js'
+import type { HaiResult } from '@h-ai/core'
 
+import type { HashOperations, HashOptions } from './crypto-types.js'
 import { core, err, ok } from '@h-ai/core'
 // @ts-expect-error sm-crypto 无类型定义
 import smCrypto from 'sm-crypto'
 
-import { CryptoErrorCode } from './crypto-config.js'
 import { cryptoM } from './crypto-i18n.js'
+import {
+  HaiCryptoError,
+
+} from './crypto-types.js'
 
 const { sm3 } = smCrypto
 
@@ -46,7 +45,7 @@ export function createSM3(): HashOperations {
     hash(
       data: string | Uint8Array,
       options: HashOptions = {},
-    ): Result<string, CryptoError> {
+    ): HaiResult<string> {
       const { inputEncoding = 'utf8' } = options
 
       try {
@@ -68,20 +67,20 @@ export function createSM3(): HashOperations {
         const result = sm3(input)
 
         if (!result) {
-          return err({
-            code: CryptoErrorCode.HASH_FAILED,
-            message: cryptoM('crypto_sm3HashEmpty'),
-          })
+          return err(
+            HaiCryptoError.HASH_FAILED,
+            cryptoM('crypto_sm3HashEmpty'),
+          )
         }
 
         return ok(result)
       }
       catch (error) {
-        return err({
-          code: CryptoErrorCode.HASH_FAILED,
-          message: cryptoM('crypto_sm3HashFailed', { params: { error: error instanceof Error ? error.message : String(error) } }),
-          cause: error,
-        })
+        return err(
+          HaiCryptoError.HASH_FAILED,
+          cryptoM('crypto_sm3HashFailed', { params: { error: error instanceof Error ? error.message : String(error) } }),
+          error,
+        )
       }
     },
 
@@ -94,7 +93,7 @@ export function createSM3(): HashOperations {
      * @param key - HMAC 密钥
      * @returns 成功时返回 64 字符十六进制 HMAC 值；失败时返回 HMAC_FAILED
      */
-    hmac(data: string, key: string): Result<string, CryptoError> {
+    hmac(data: string, key: string): HaiResult<string> {
       try {
         const blockSize = 64
         const opad = 0x5C
@@ -130,11 +129,11 @@ export function createSM3(): HashOperations {
         return ok(result)
       }
       catch (error) {
-        return err({
-          code: CryptoErrorCode.HMAC_FAILED,
-          message: cryptoM('crypto_sm3HmacFailed', { params: { error: error instanceof Error ? error.message : String(error) } }),
-          cause: error,
-        })
+        return err(
+          HaiCryptoError.HMAC_FAILED,
+          cryptoM('crypto_sm3HmacFailed', { params: { error: error instanceof Error ? error.message : String(error) } }),
+          error,
+        )
       }
     },
 
@@ -147,17 +146,17 @@ export function createSM3(): HashOperations {
      * @param expectedHash - 期望的哈希值
      * @returns 成功时返回 boolean；失败时返回 HASH_FAILED
      */
-    verify(data: string, expectedHash: string): Result<boolean, CryptoError> {
+    verify(data: string, expectedHash: string): HaiResult<boolean> {
       try {
         const hashResult = sm3(data)
         return ok(core.string.constantTimeEqual(hashResult.toLowerCase(), expectedHash.toLowerCase()))
       }
       catch (error) {
-        return err({
-          code: CryptoErrorCode.HASH_FAILED,
-          message: cryptoM('crypto_sm3VerifyFailed', { params: { error: error instanceof Error ? error.message : String(error) } }),
-          cause: error,
-        })
+        return err(
+          HaiCryptoError.HASH_FAILED,
+          cryptoM('crypto_sm3VerifyFailed', { params: { error: error instanceof Error ? error.message : String(error) } }),
+          error,
+        )
       }
     },
   }

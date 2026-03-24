@@ -5,17 +5,16 @@
  * @module api-client-main
  */
 
-import type { Result } from '@h-ai/core'
-import type { ApiClientError } from './api-client-config.js'
+import type { HaiResult } from '@h-ai/core'
 import type { ApiClient, ApiClientConfig, ApiClientFunctions, TokenPair } from './api-client-types.js'
 
 import { core, err, ok } from '@h-ai/core'
 import { createLocalStorageTokenStorage } from './api-client-auth.js'
-import { ApiClientErrorCode } from './api-client-config.js'
 import { createContractCaller } from './api-client-contract.js'
 import { createFetchClient } from './api-client-fetch.js'
 import { apiClientM } from './api-client-i18n.js'
 import { createTokenManager } from './api-client-token-manager.js'
+import { HaiApiClientError } from './api-client-types.js'
 
 const logger = core.logger.child({ module: 'api-client', scope: 'main' })
 
@@ -80,7 +79,7 @@ function createClient(config: ApiClientConfig): ApiClient {
       if (tokenManager) {
         return tokenManager.onTokenRefreshed(callback)
       }
-      return () => {}
+      return () => { }
     },
   }
 
@@ -105,8 +104,8 @@ function createClient(config: ApiClientConfig): ApiClient {
  * 当 api 未调用 init() 就直接使用 HTTP 方法时，
  * 所有方法调用都会返回 NOT_INITIALIZED 错误。
  */
-const notInitialized = core.module.createNotInitializedKit<ApiClientError>(
-  ApiClientErrorCode.NOT_INITIALIZED,
+const notInitialized = core.module.createNotInitializedKit(
+  HaiApiClientError.NOT_INITIALIZED,
   () => apiClientM('apiClient_notInitialized'),
 )
 
@@ -123,7 +122,7 @@ const notInitializedAuth: ApiClient['auth'] = {
   },
   onTokenRefreshed() {
     logger.warn('api.auth.onTokenRefreshed called before initialization, ignored')
-    return () => {}
+    return () => { }
   },
 }
 
@@ -182,12 +181,12 @@ export const api: ApiClientFunctions = {
    * @param config 客户端配置（baseUrl、auth 等）
    * @returns 成功时返回 ok(undefined)；失败时返回包含错误码和消息的 err。
    */
-  async init(config: ApiClientConfig): Promise<Result<void, ApiClientError>> {
+  async init(config: ApiClientConfig): Promise<HaiResult<void>> {
     if (initInProgress) {
-      return err({
-        code: ApiClientErrorCode.CONFIG_ERROR,
-        message: apiClientM('apiClient_configError', { params: { error: 'initialization already in progress' } }),
-      })
+      return err(
+        HaiApiClientError.CONFIG_ERROR,
+        apiClientM('apiClient_configError', { params: { error: 'initialization already in progress' } }),
+      )
     }
 
     initInProgress = true
@@ -206,11 +205,11 @@ export const api: ApiClientFunctions = {
     }
     catch (error) {
       logger.error('Api-client module initialization failed', { error })
-      return err({
-        code: ApiClientErrorCode.CONFIG_ERROR,
-        message: apiClientM('apiClient_configError', { params: { error: error instanceof Error ? error.message : String(error) } }),
-        cause: error,
-      })
+      return err(
+        HaiApiClientError.CONFIG_ERROR,
+        apiClientM('apiClient_configError', { params: { error: error instanceof Error ? error.message : String(error) } }),
+        error,
+      )
     }
     finally {
       initInProgress = false

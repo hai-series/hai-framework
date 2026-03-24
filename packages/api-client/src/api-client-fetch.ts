@@ -5,8 +5,7 @@
  * @module api-client-fetch
  */
 
-import type { Result } from '@h-ai/core'
-import type { ApiClientError } from './api-client-config.js'
+import type { HaiResult } from '@h-ai/core'
 import type { TokenManager } from './api-client-token-manager.js'
 import type {
   ApiClientConfig,
@@ -72,7 +71,7 @@ export function createFetchClient(
   async function execute<T>(
     requestConfig: RequestConfig,
     retryOnUnauthorized = true,
-  ): Promise<Result<T, ApiClientError>> {
+  ): Promise<HaiResult<T>> {
     logger.trace('Executing request', { method: requestConfig.method, url: requestConfig.url })
 
     // 1. Token 注入
@@ -149,7 +148,7 @@ export function createFetchClient(
 
   // ─── 通用 HTTP 方法 ───
 
-  async function get<T>(path: string, params?: Record<string, unknown>): Promise<Result<T, ApiClientError>> {
+  async function get<T>(path: string, params?: Record<string, unknown>): Promise<HaiResult<T>> {
     return execute<T>({
       url: buildUrl(path, params),
       method: 'GET',
@@ -157,7 +156,7 @@ export function createFetchClient(
     })
   }
 
-  async function post<T>(path: string, body?: unknown): Promise<Result<T, ApiClientError>> {
+  async function post<T>(path: string, body?: unknown): Promise<HaiResult<T>> {
     return execute<T>({
       url: buildUrl(path),
       method: 'POST',
@@ -166,7 +165,7 @@ export function createFetchClient(
     })
   }
 
-  async function put<T>(path: string, body?: unknown): Promise<Result<T, ApiClientError>> {
+  async function put<T>(path: string, body?: unknown): Promise<HaiResult<T>> {
     return execute<T>({
       url: buildUrl(path),
       method: 'PUT',
@@ -175,7 +174,7 @@ export function createFetchClient(
     })
   }
 
-  async function patch<T>(path: string, body?: unknown): Promise<Result<T, ApiClientError>> {
+  async function patch<T>(path: string, body?: unknown): Promise<HaiResult<T>> {
     return execute<T>({
       url: buildUrl(path),
       method: 'PATCH',
@@ -184,7 +183,7 @@ export function createFetchClient(
     })
   }
 
-  async function del<T>(path: string, params?: Record<string, unknown>): Promise<Result<T, ApiClientError>> {
+  async function del<T>(path: string, params?: Record<string, unknown>): Promise<HaiResult<T>> {
     return execute<T>({
       url: buildUrl(path, params),
       method: 'DELETE',
@@ -198,7 +197,7 @@ export function createFetchClient(
     path: string,
     file: File | Blob,
     options?: UploadOptions,
-  ): Promise<Result<unknown, ApiClientError>> {
+  ): Promise<HaiResult<unknown>> {
     const formData = new FormData()
     formData.append(options?.fieldName ?? 'file', file)
 

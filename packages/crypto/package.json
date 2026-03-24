@@ -26,6 +26,7 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
     "clean": "rimraf dist .turbo"
   },
   "dependencies": {

@@ -6,9 +6,27 @@
  * @module api-client-types
  */
 
-import type { Result } from '@h-ai/core'
+import type { ErrorInfo, HaiResult } from '@h-ai/core'
 import type { z } from 'zod'
-import type { ApiClientError } from './api-client-config.js'
+import { core } from '@h-ai/core'
+
+// ─── 错误定义（照 @h-ai/core 范式） ───
+
+const ApiClientErrorInfo = {
+  NETWORK_ERROR: '001:502',
+  TIMEOUT: '002:504',
+  SERVER_ERROR: '003:502',
+  UNAUTHORIZED: '004:401',
+  FORBIDDEN: '005:403',
+  NOT_FOUND: '006:404',
+  VALIDATION_FAILED: '007:400',
+  TOKEN_REFRESH_FAILED: '008:401',
+  NOT_INITIALIZED: '010:500',
+  CONFIG_ERROR: '011:500',
+  UNKNOWN: '099:500',
+} as const satisfies ErrorInfo
+
+export const HaiApiClientError = core.error.buildHaiErrorsDef('api-client', ApiClientErrorInfo)
 
 // ─── API 契约 ───
 
@@ -176,18 +194,18 @@ export interface StreamOptions {
  */
 export interface ApiClient {
   /** GET 请求 */
-  get: <T>(path: string, params?: Record<string, unknown>) => Promise<Result<T, ApiClientError>>
+  get: <T>(path: string, params?: Record<string, unknown>) => Promise<HaiResult<T>>
   /** POST 请求 */
-  post: <T>(path: string, body?: unknown) => Promise<Result<T, ApiClientError>>
+  post: <T>(path: string, body?: unknown) => Promise<HaiResult<T>>
   /** PUT 请求 */
-  put: <T>(path: string, body?: unknown) => Promise<Result<T, ApiClientError>>
+  put: <T>(path: string, body?: unknown) => Promise<HaiResult<T>>
   /** PATCH 请求 */
-  patch: <T>(path: string, body?: unknown) => Promise<Result<T, ApiClientError>>
+  patch: <T>(path: string, body?: unknown) => Promise<HaiResult<T>>
   /** DELETE 请求 */
-  delete: <T>(path: string, params?: Record<string, unknown>) => Promise<Result<T, ApiClientError>>
+  delete: <T>(path: string, params?: Record<string, unknown>) => Promise<HaiResult<T>>
 
   /** 文件上传 */
-  upload: (path: string, file: File | Blob, options?: UploadOptions) => Promise<Result<unknown, ApiClientError>>
+  upload: (path: string, file: File | Blob, options?: UploadOptions) => Promise<HaiResult<unknown>>
 
   /** 流式请求（返回 AsyncIterable） */
   stream: (path: string, body?: unknown, options?: StreamOptions) => AsyncIterable<string>
@@ -200,7 +218,7 @@ export interface ApiClient {
   call: <TInput, TOutput>(
     endpoint: EndpointDef<TInput, TOutput>,
     input: TInput,
-  ) => Promise<Result<TOutput, ApiClientError>>
+  ) => Promise<HaiResult<TOutput>>
 
   /** Token 管理 */
   auth: {
@@ -258,7 +276,7 @@ export interface ApiClientFunctions {
    * @param config - 客户端配置
    * @returns 成功 ok(undefined)；失败返回 err（含 ApiClientError）
    */
-  init: (config: ApiClientConfig) => Promise<Result<void, ApiClientError>>
+  init: (config: ApiClientConfig) => Promise<HaiResult<void>>
 
   /**
    * 关闭 API 客户端并释放资源

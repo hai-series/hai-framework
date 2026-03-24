@@ -7,55 +7,6 @@
 
 import { z } from 'zod'
 
-// ─── 错误码 ───
-
-/**
- * 缓存错误码（数值范围 4000-4999）
- *
- * @example
- * ```ts
- * if (result.error?.code === CacheErrorCode.CONNECTION_FAILED) {
- *     // 处理连接失败
- * }
- * ```
- */
-export const CacheErrorCode = {
-  /** 连接失败 */
-  CONNECTION_FAILED: 4000,
-  /** 操作失败 */
-  OPERATION_FAILED: 4001,
-  /** 序列化失败 */
-  SERIALIZATION_FAILED: 4002,
-  /** 反序列化失败 */
-  DESERIALIZATION_FAILED: 4003,
-  /** 键不存在 */
-  KEY_NOT_FOUND: 4004,
-  /** 超时 */
-  TIMEOUT: 4005,
-  /** 缓存未初始化 */
-  NOT_INITIALIZED: 4010,
-  /** 不支持的缓存类型 */
-  UNSUPPORTED_TYPE: 4011,
-  /** 配置错误 */
-  CONFIG_ERROR: 4012,
-} as const
-
-/** 缓存错误码类型 */
-export type CacheErrorCodeType = (typeof CacheErrorCode)[keyof typeof CacheErrorCode]
-
-/** 缓存错误码 → HTTP 状态码映射 */
-export const CacheErrorHttpStatus: Record<number, number> = {
-  [CacheErrorCode.CONNECTION_FAILED]: 500,
-  [CacheErrorCode.OPERATION_FAILED]: 500,
-  [CacheErrorCode.SERIALIZATION_FAILED]: 500,
-  [CacheErrorCode.DESERIALIZATION_FAILED]: 500,
-  [CacheErrorCode.KEY_NOT_FOUND]: 404,
-  [CacheErrorCode.TIMEOUT]: 504,
-  [CacheErrorCode.NOT_INITIALIZED]: 500,
-  [CacheErrorCode.UNSUPPORTED_TYPE]: 400,
-  [CacheErrorCode.CONFIG_ERROR]: 500,
-}
-
 // ─── 配置 Schema ───
 
 /** Redis 集群节点配置 */

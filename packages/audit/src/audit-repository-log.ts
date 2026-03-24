@@ -5,14 +5,12 @@
  * @module audit-repository
  */
 
-import type { Result } from '@h-ai/core'
-import type { AuditError, AuditLog, AuditLogWithUser, AuditStatItem, ListAuditLogsOptions } from './audit-types.js'
-
+import type { HaiResult } from '@h-ai/core'
+import type { AuditLog, AuditLogWithUser, AuditStatItem, ListAuditLogsOptions } from './audit-types.js'
 import { core, err, ok } from '@h-ai/core'
 import { BaseReldbCrudRepository, reldb } from '@h-ai/reldb'
-
-import { AuditErrorCode } from './audit-config.js'
 import { auditM } from './audit-i18n.js'
+import { HaiAuditError } from './audit-types.js'
 
 const logger = core.logger.child({ module: 'audit', scope: 'repository' })
 
@@ -106,7 +104,7 @@ export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
     details?: Record<string, unknown> | null
     ipAddress?: string | null
     userAgent?: string | null
-  }): Promise<Result<AuditLog, AuditError>> {
+  }): Promise<HaiResult<AuditLog>> {
     logger.debug('Recording audit log', { action: input.action, resource: input.resource })
 
     const id = core.id.withPrefix('audit_')
@@ -127,11 +125,11 @@ export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
       const createResult = await this.create(data)
       if (!createResult.success) {
         logger.error('Failed to record audit log', { action: input.action, error: createResult.error.message })
-        return err({
-          code: AuditErrorCode.LOG_FAILED,
-          message: auditM('audit_logFailed', { params: { error: createResult.error.message } }),
-          cause: createResult.error,
-        })
+        return err(
+          HaiAuditError.LOG_FAILED,
+          auditM('audit_logFailed', { params: { error: createResult.error.message } }),
+          createResult.error,
+        )
       }
 
       const auditLog: AuditLog = {
@@ -151,11 +149,11 @@ export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
     }
     catch (error) {
       logger.error('Failed to record audit log', { action: input.action, error })
-      return err({
-        code: AuditErrorCode.LOG_FAILED,
-        message: auditM('audit_logFailed', { params: { error: error instanceof Error ? error.message : String(error) } }),
-        cause: error,
-      })
+      return err(
+        HaiAuditError.LOG_FAILED,
+        auditM('audit_logFailed', { params: { error: error instanceof Error ? error.message : String(error) } }),
+        error,
+      )
     }
   }
 
@@ -165,7 +163,7 @@ export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
    * @param options - 过滤条件与分页参数
    * @returns 成功时返回 { items, total }；失败时返回 QUERY_FAILED
    */
-  async listWithUser(options: ListAuditLogsOptions = {}): Promise<Result<{ items: AuditLogWithUser[], total: number }, AuditError>> {
+  async listWithUser(options: ListAuditLogsOptions = {}): Promise<HaiResult<{ items: AuditLogWithUser[], total: number }>> {
     logger.debug('Querying audit logs', { userId: options.userId, action: options.action, resource: options.resource })
 
     const conditions: string[] = []
@@ -211,22 +209,22 @@ export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
 
       if (!result.success) {
         logger.error('Failed to query audit logs', { error: result.error.message })
-        return err({
-          code: AuditErrorCode.QUERY_FAILED,
-          message: auditM('audit_queryFailed', { params: { error: result.error.message } }),
-          cause: result.error,
-        })
+        return err(
+          HaiAuditError.QUERY_FAILED,
+          auditM('audit_queryFailed', { params: { error: result.error.message } }),
+          result.error,
+        )
       }
 
       return ok({ items: result.data.items, total: result.data.total })
     }
     catch (error) {
       logger.error('Failed to query audit logs', { error })
-      return err({
-        code: AuditErrorCode.QUERY_FAILED,
-        message: auditM('audit_queryFailed', { params: { error: error instanceof Error ? error.message : String(error) } }),
-        cause: error,
-      })
+      return err(
+        HaiAuditError.QUERY_FAILED,
+        auditM('audit_queryFailed', { params: { error: error instanceof Error ? error.message : String(error) } }),
+        error,
+      )
     }
   }
 
@@ -237,7 +235,7 @@ export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
    * @param limit - 最大返回条数，默认 10
    * @returns 成功时返回 AuditLog 数组（按时间倒序）；失败时返回 QUERY_FAILED
    */
-  async getUserRecent(userId: string, limit = 10): Promise<Result<AuditLog[], AuditError>> {
+  async getUserRecent(userId: string, limit = 10): Promise<HaiResult<AuditLog[]>> {
     logger.debug('Getting user recent activity', { userId, limit })
 
     try {
@@ -249,21 +247,21 @@ export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
       })
 
       if (!result.success) {
-        return err({
-          code: AuditErrorCode.QUERY_FAILED,
-          message: auditM('audit_queryFailed', { params: { error: result.error.message } }),
-          cause: result.error,
-        })
+        return err(
+          HaiAuditError.QUERY_FAILED,
+          auditM('audit_queryFailed', { params: { error: result.error.message } }),
+          result.error,
+        )
       }
 
       return ok(result.data)
     }
     catch (error) {
-      return err({
-        code: AuditErrorCode.QUERY_FAILED,
-        message: auditM('audit_queryFailed', { params: { error: error instanceof Error ? error.message : String(error) } }),
-        cause: error,
-      })
+      return err(
+        HaiAuditError.QUERY_FAILED,
+        auditM('audit_queryFailed', { params: { error: error instanceof Error ? error.message : String(error) } }),
+        error,
+      )
     }
   }
 
@@ -273,7 +271,7 @@ export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
    * @param olderThanDays - 保留天数，默认 90；清理此天数之前的日志
    * @returns 成功时返回删除的记录数；失败时返回 CLEANUP_FAILED
    */
-  async cleanupOld(olderThanDays = 90): Promise<Result<number, AuditError>> {
+  async cleanupOld(olderThanDays = 90): Promise<HaiResult<number>> {
     logger.debug('Cleaning up old audit logs', { olderThanDays })
 
     const cutoff = new Date()
@@ -287,11 +285,11 @@ export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
 
       if (!result.success) {
         logger.error('Failed to cleanup audit logs', { error: result.error.message })
-        return err({
-          code: AuditErrorCode.CLEANUP_FAILED,
-          message: auditM('audit_cleanupFailed', { params: { error: result.error.message } }),
-          cause: result.error,
-        })
+        return err(
+          HaiAuditError.CLEANUP_FAILED,
+          auditM('audit_cleanupFailed', { params: { error: result.error.message } }),
+          result.error,
+        )
       }
 
       const deleted = result.data.changes
@@ -300,11 +298,11 @@ export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
     }
     catch (error) {
       logger.error('Failed to cleanup audit logs', { error })
-      return err({
-        code: AuditErrorCode.CLEANUP_FAILED,
-        message: auditM('audit_cleanupFailed', { params: { error: error instanceof Error ? error.message : String(error) } }),
-        cause: error,
-      })
+      return err(
+        HaiAuditError.CLEANUP_FAILED,
+        auditM('audit_cleanupFailed', { params: { error: error instanceof Error ? error.message : String(error) } }),
+        error,
+      )
     }
   }
 
@@ -314,7 +312,7 @@ export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
    * @param days - 统计天数，默认 7
    * @returns 成功时返回 AuditStatItem 数组（按 count 倒序）；失败时返回 STATS_FAILED
    */
-  async getStats(days = 7): Promise<Result<AuditStatItem[], AuditError>> {
+  async getStats(days = 7): Promise<HaiResult<AuditStatItem[]>> {
     logger.debug('Getting audit statistics', { days })
 
     const cutoff = new Date()
@@ -332,22 +330,22 @@ export class AuditLogRepository extends BaseReldbCrudRepository<AuditLog> {
 
       if (!result.success) {
         logger.error('Failed to query audit statistics', { error: result.error.message })
-        return err({
-          code: AuditErrorCode.STATS_FAILED,
-          message: auditM('audit_statsFailed', { params: { error: result.error.message } }),
-          cause: result.error,
-        })
+        return err(
+          HaiAuditError.STATS_FAILED,
+          auditM('audit_statsFailed', { params: { error: result.error.message } }),
+          result.error,
+        )
       }
 
       return ok(result.data.map(item => ({ action: item.action, count: Number(item.count) })))
     }
     catch (error) {
       logger.error('Failed to query audit statistics', { error })
-      return err({
-        code: AuditErrorCode.STATS_FAILED,
-        message: auditM('audit_statsFailed', { params: { error: error instanceof Error ? error.message : String(error) } }),
-        cause: error,
-      })
+      return err(
+        HaiAuditError.STATS_FAILED,
+        auditM('audit_statsFailed', { params: { error: error instanceof Error ? error.message : String(error) } }),
+        error,
+      )
     }
   }
 }

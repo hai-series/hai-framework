@@ -7,16 +7,16 @@
  * @module capacitor-main
  */
 
-import type { Result } from '@h-ai/core'
-import type { CameraOperations, CapacitorError, CapacitorFunctions, DeviceOperations, PreferencesOperations, PushOperations, StatusBarOperations } from './capacitor-types.js'
+import type { HaiResult } from '@h-ai/core'
+import type { CameraOperations, CapacitorFunctions, DeviceOperations, PreferencesOperations, PushOperations, StatusBarOperations } from './capacitor-types.js'
 import { core, err, ok } from '@h-ai/core'
 import { takePhoto } from './capacitor-camera.js'
-import { CapacitorErrorCode } from './capacitor-config.js'
 import { getAppVersion, getDeviceInfo } from './capacitor-device.js'
 import { capacitorM } from './capacitor-i18n.js'
 import { listenPush, registerPush } from './capacitor-push.js'
 import { configureStatusBar, hideStatusBar, showStatusBar } from './capacitor-status-bar.js'
 import { safeGetPreference, safeRemovePreference, safeSetPreference } from './capacitor-token-storage.js'
+import { HaiCapacitorError } from './capacitor-types.js'
 
 const logger = core.logger.child({ module: 'capacitor', scope: 'main' })
 
@@ -31,8 +31,8 @@ let cachedPlatform: string | null = null
 
 // ─── 未初始化代理 ───
 
-const notInitialized = core.module.createNotInitializedKit<CapacitorError>(
-  CapacitorErrorCode.NOT_INITIALIZED,
+const notInitialized = core.module.createNotInitializedKit(
+  HaiCapacitorError.NOT_INITIALIZED,
   () => capacitorM('capacitor_notInitialized'),
 )
 
@@ -99,14 +99,14 @@ function isCapacitorAvailable(): boolean {
  * ```
  */
 export const capacitor: CapacitorFunctions = {
-  async init(): Promise<Result<void, CapacitorError>> {
+  async init(): Promise<HaiResult<void>> {
     // 并发初始化防护：避免多次 init 同时执行导致资源泄漏
     if (initInProgress) {
       logger.warn('Capacitor init already in progress, skipping concurrent call')
-      return err({
-        code: CapacitorErrorCode.INIT_IN_PROGRESS,
-        message: capacitorM('capacitor_initInProgress'),
-      })
+      return err(
+        HaiCapacitorError.INIT_IN_PROGRESS,
+        capacitorM('capacitor_initInProgress'),
+      )
     }
     initInProgress = true
 
@@ -120,10 +120,10 @@ export const capacitor: CapacitorFunctions = {
 
       if (!isCapacitorAvailable()) {
         logger.error('Capacitor is not available in current environment')
-        return err({
-          code: CapacitorErrorCode.NOT_AVAILABLE,
-          message: capacitorM('capacitor_notAvailable'),
-        })
+        return err(
+          HaiCapacitorError.NOT_AVAILABLE,
+          capacitorM('capacitor_notAvailable'),
+        )
       }
 
       const { Capacitor } = await import('@capacitor/core')
@@ -131,10 +131,10 @@ export const capacitor: CapacitorFunctions = {
 
       if (!platform) {
         logger.error('Capacitor initialization failed, platform not detected')
-        return err({
-          code: CapacitorErrorCode.INIT_FAILED,
-          message: capacitorM('capacitor_initFailed'),
-        })
+        return err(
+          HaiCapacitorError.INIT_FAILED,
+          capacitorM('capacitor_initFailed'),
+        )
       }
 
       cachedPlatform = platform
@@ -144,11 +144,11 @@ export const capacitor: CapacitorFunctions = {
     }
     catch (cause) {
       logger.error('Capacitor module initialization failed', { error: cause })
-      return err({
-        code: CapacitorErrorCode.INIT_FAILED,
-        message: capacitorM('capacitor_initFailed'),
+      return err(
+        HaiCapacitorError.INIT_FAILED,
+        capacitorM('capacitor_initFailed'),
         cause,
-      })
+      )
     }
     finally {
       initInProgress = false

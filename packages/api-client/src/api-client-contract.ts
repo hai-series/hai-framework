@@ -5,13 +5,12 @@
  * @module api-client-contract
  */
 
-import type { Result } from '@h-ai/core'
-import type { ApiClientError } from './api-client-config.js'
+import type { HaiResult } from '@h-ai/core'
 import type { FetchClient } from './api-client-fetch.js'
 import type { EndpointDef } from './api-client-types.js'
 import { err, ok } from '@h-ai/core'
-import { ApiClientErrorCode } from './api-client-config.js'
 import { apiClientM } from './api-client-i18n.js'
+import { HaiApiClientError } from './api-client-types.js'
 
 /**
  * 创建契约调用函数
@@ -39,20 +38,20 @@ export function createContractCaller(fetchClient: FetchClient) {
   async function call<TInput, TOutput>(
     endpoint: EndpointDef<TInput, TOutput>,
     input: TInput,
-  ): Promise<Result<TOutput, ApiClientError>> {
+  ): Promise<HaiResult<TOutput>> {
     // 客户端入参校验（避免无效请求发送到服务端）
     const parsed = endpoint.input.safeParse(input)
     if (!parsed.success) {
-      return err({
-        code: ApiClientErrorCode.VALIDATION_FAILED,
-        message: apiClientM('apiClient_validationFailed'),
-        details: parsed.error.issues,
-      })
+      return err(
+        HaiApiClientError.VALIDATION_FAILED,
+        apiClientM('apiClient_validationFailed'),
+        parsed.error.issues,
+      )
     }
 
     const validInput = parsed.data
 
-    let result: Result<unknown, ApiClientError>
+    let result: HaiResult<unknown>
 
     switch (endpoint.method) {
       case 'GET':
@@ -76,10 +75,10 @@ export function createContractCaller(fetchClient: FetchClient) {
         break
 
       default:
-        return err({
-          code: ApiClientErrorCode.UNKNOWN,
-          message: apiClientM('apiClient_unknown'),
-        })
+        return err(
+          HaiApiClientError.UNKNOWN,
+          apiClientM('apiClient_unknown'),
+        )
     }
 
     if (!result.success) {
@@ -89,11 +88,11 @@ export function createContractCaller(fetchClient: FetchClient) {
     // 响应数据校验（确保服务端返回的数据符合契约）
     const outputParsed = endpoint.output.safeParse(result.data)
     if (!outputParsed.success) {
-      return err({
-        code: ApiClientErrorCode.VALIDATION_FAILED,
-        message: apiClientM('apiClient_responseValidationFailed'),
-        details: outputParsed.error.issues,
-      })
+      return err(
+        HaiApiClientError.VALIDATION_FAILED,
+        apiClientM('apiClient_responseValidationFailed'),
+        outputParsed.error.issues,
+      )
     }
 
     return ok(outputParsed.data)
