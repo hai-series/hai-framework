@@ -5,16 +5,16 @@
  * @module scheduler-task-repository
  */
 
-import type { Result } from '@h-ai/core'
+import type { HaiResult } from '@h-ai/core'
 import type { ReldbFunctions } from '@h-ai/reldb'
-import type { SchedulerError, TaskDefinition, TaskUpdateInput } from '../scheduler-types.js'
 
+import type { TaskDefinition, TaskUpdateInput } from '../scheduler-types.js'
 import { core, err, ok } from '@h-ai/core'
 import { BaseReldbCrudRepository } from '@h-ai/reldb'
 import { z } from 'zod'
 
-import { SchedulerErrorCode } from '../scheduler-config.js'
 import { schedulerM } from '../scheduler-i18n.js'
+import { HaiSchedulerError } from '../scheduler-types.js'
 
 const logger = core.logger.child({ module: 'scheduler', scope: 'task-repository' })
 
@@ -67,7 +67,7 @@ export class SchedulerTaskRepository extends BaseReldbCrudRepository<TaskRow> {
     })
   }
 
-  async saveTask(task: TaskDefinition): Promise<Result<void, SchedulerError>> {
+  async saveTask(task: TaskDefinition): Promise<HaiResult<void>> {
     try {
       const createResult = await this.create({
         taskId: task.id,
@@ -81,36 +81,36 @@ export class SchedulerTaskRepository extends BaseReldbCrudRepository<TaskRow> {
 
       if (!createResult.success) {
         logger.error('Failed to save task definition', { taskId: task.id, error: createResult.error.message })
-        return err({
-          code: SchedulerErrorCode.DB_SAVE_FAILED,
-          message: schedulerM('scheduler_dbSaveFailed', { params: { error: createResult.error.message } }),
-          cause: createResult.error,
-        })
+        return err(
+          HaiSchedulerError.DB_SAVE_FAILED,
+          schedulerM('scheduler_dbSaveFailed', { params: { error: createResult.error.message } }),
+          createResult.error,
+        )
       }
 
       return ok(undefined)
     }
     catch (error) {
       logger.error('Failed to save task definition', { taskId: task.id, error })
-      return err({
-        code: SchedulerErrorCode.DB_SAVE_FAILED,
-        message: schedulerM('scheduler_dbSaveFailed', {
+      return err(
+        HaiSchedulerError.DB_SAVE_FAILED,
+        schedulerM('scheduler_dbSaveFailed', {
           params: { error: error instanceof Error ? error.message : String(error) },
         }),
-        cause: error,
-      })
+        error,
+      )
     }
   }
 
-  async updateTask(taskId: string, updates: TaskUpdateInput): Promise<Result<void, SchedulerError>> {
+  async updateTask(taskId: string, updates: TaskUpdateInput): Promise<HaiResult<void>> {
     try {
       const rows = await this.findAll({ where: 'task_id = ?', params: [taskId], limit: 1 })
       if (!rows.success) {
-        return err({
-          code: SchedulerErrorCode.DB_SAVE_FAILED,
-          message: schedulerM('scheduler_dbSaveFailed', { params: { error: rows.error.message } }),
-          cause: rows.error,
-        })
+        return err(
+          HaiSchedulerError.DB_SAVE_FAILED,
+          schedulerM('scheduler_dbSaveFailed', { params: { error: rows.error.message } }),
+          rows.error,
+        )
       }
 
       if (rows.data.length === 0)
@@ -136,36 +136,36 @@ export class SchedulerTaskRepository extends BaseReldbCrudRepository<TaskRow> {
       const updateResult = await this.updateById(rows.data[0].id, data)
       if (!updateResult.success) {
         logger.error('Failed to update task definition', { taskId, error: updateResult.error.message })
-        return err({
-          code: SchedulerErrorCode.DB_SAVE_FAILED,
-          message: schedulerM('scheduler_dbSaveFailed', { params: { error: updateResult.error.message } }),
-          cause: updateResult.error,
-        })
+        return err(
+          HaiSchedulerError.DB_SAVE_FAILED,
+          schedulerM('scheduler_dbSaveFailed', { params: { error: updateResult.error.message } }),
+          updateResult.error,
+        )
       }
 
       return ok(undefined)
     }
     catch (error) {
       logger.error('Failed to update task definition', { taskId, error })
-      return err({
-        code: SchedulerErrorCode.DB_SAVE_FAILED,
-        message: schedulerM('scheduler_dbSaveFailed', {
+      return err(
+        HaiSchedulerError.DB_SAVE_FAILED,
+        schedulerM('scheduler_dbSaveFailed', {
           params: { error: error instanceof Error ? error.message : String(error) },
         }),
-        cause: error,
-      })
+        error,
+      )
     }
   }
 
-  async deleteTask(taskId: string): Promise<Result<void, SchedulerError>> {
+  async deleteTask(taskId: string): Promise<HaiResult<void>> {
     try {
       const rows = await this.findAll({ where: 'task_id = ?', params: [taskId], limit: 1 })
       if (!rows.success) {
-        return err({
-          code: SchedulerErrorCode.DB_SAVE_FAILED,
-          message: schedulerM('scheduler_dbSaveFailed', { params: { error: rows.error.message } }),
-          cause: rows.error,
-        })
+        return err(
+          HaiSchedulerError.DB_SAVE_FAILED,
+          schedulerM('scheduler_dbSaveFailed', { params: { error: rows.error.message } }),
+          rows.error,
+        )
       }
 
       if (rows.data.length === 0)
@@ -174,36 +174,36 @@ export class SchedulerTaskRepository extends BaseReldbCrudRepository<TaskRow> {
       const deleteResult = await this.deleteById(rows.data[0].id)
       if (!deleteResult.success) {
         logger.error('Failed to delete task definition', { taskId, error: deleteResult.error.message })
-        return err({
-          code: SchedulerErrorCode.DB_SAVE_FAILED,
-          message: schedulerM('scheduler_dbSaveFailed', { params: { error: deleteResult.error.message } }),
-          cause: deleteResult.error,
-        })
+        return err(
+          HaiSchedulerError.DB_SAVE_FAILED,
+          schedulerM('scheduler_dbSaveFailed', { params: { error: deleteResult.error.message } }),
+          deleteResult.error,
+        )
       }
 
       return ok(undefined)
     }
     catch (error) {
       logger.error('Failed to delete task definition', { taskId, error })
-      return err({
-        code: SchedulerErrorCode.DB_SAVE_FAILED,
-        message: schedulerM('scheduler_dbSaveFailed', {
+      return err(
+        HaiSchedulerError.DB_SAVE_FAILED,
+        schedulerM('scheduler_dbSaveFailed', {
           params: { error: error instanceof Error ? error.message : String(error) },
         }),
-        cause: error,
-      })
+        error,
+      )
     }
   }
 
-  async loadTasks(): Promise<Result<TaskDefinition[], SchedulerError>> {
+  async loadTasks(): Promise<HaiResult<TaskDefinition[]>> {
     try {
       const rows = await this.findAll({ orderBy: 'id ASC' })
       if (!rows.success) {
-        return err({
-          code: SchedulerErrorCode.DB_SAVE_FAILED,
-          message: schedulerM('scheduler_dbSaveFailed', { params: { error: rows.error.message } }),
-          cause: rows.error,
-        })
+        return err(
+          HaiSchedulerError.DB_SAVE_FAILED,
+          schedulerM('scheduler_dbSaveFailed', { params: { error: rows.error.message } }),
+          rows.error,
+        )
       }
 
       const tasks: TaskDefinition[] = []
@@ -237,13 +237,13 @@ export class SchedulerTaskRepository extends BaseReldbCrudRepository<TaskRow> {
     }
     catch (error) {
       logger.error('Failed to load task definitions', { error })
-      return err({
-        code: SchedulerErrorCode.DB_SAVE_FAILED,
-        message: schedulerM('scheduler_dbSaveFailed', {
+      return err(
+        HaiSchedulerError.DB_SAVE_FAILED,
+        schedulerM('scheduler_dbSaveFailed', {
           params: { error: error instanceof Error ? error.message : String(error) },
         }),
-        cause: error,
-      })
+        error,
+      )
     }
   }
 }

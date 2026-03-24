@@ -5,15 +5,15 @@
  * @module scheduler-js-compiler
  */
 
-import type { Result } from '@h-ai/core'
-import type { JsTaskConfig, JsTaskHandler, SchedulerError } from './scheduler-types.js'
+import type { HaiResult } from '@h-ai/core'
 
+import type { JsTaskConfig, JsTaskHandler } from './scheduler-types.js'
 import { createHash } from 'node:crypto'
 import { Script } from 'node:vm'
 import { err, ok } from '@h-ai/core'
 
-import { SchedulerErrorCode } from './scheduler-config.js'
 import { schedulerM } from './scheduler-i18n.js'
+import { HaiSchedulerError } from './scheduler-types.js'
 
 /** 已编译 JS 处理器缓存 */
 const compiledHandlerCache = new Map<string, JsTaskHandler>()
@@ -26,7 +26,7 @@ export function clearJsTaskHandlerCache(): void {
   compiledHandlerCache.clear()
 }
 
-export function compileJsTaskHandler(config: JsTaskConfig): Result<JsTaskHandler, SchedulerError> {
+export function compileJsTaskHandler(config: JsTaskConfig): HaiResult<JsTaskHandler> {
   const cacheKey = createCacheKey(config)
   const cachedHandler = compiledHandlerCache.get(cacheKey)
   if (cachedHandler)
@@ -36,10 +36,10 @@ export function compileJsTaskHandler(config: JsTaskConfig): Result<JsTaskHandler
     const script = new Script(`(${config.code})`)
     const candidate = script.runInNewContext({})
     if (typeof candidate !== 'function') {
-      return err({
-        code: SchedulerErrorCode.JS_COMPILE_FAILED,
-        message: schedulerM('scheduler_jsCompileFailed', { params: { error: 'Compiled result is not a function' } }),
-      })
+      return err(
+        HaiSchedulerError.JS_COMPILE_FAILED,
+        schedulerM('scheduler_jsCompileFailed', { params: { error: 'Compiled result is not a function' } }),
+      )
     }
 
     const handler: JsTaskHandler = async (context) => {
@@ -62,12 +62,12 @@ export function compileJsTaskHandler(config: JsTaskConfig): Result<JsTaskHandler
     return ok(handler)
   }
   catch (error) {
-    return err({
-      code: SchedulerErrorCode.JS_COMPILE_FAILED,
-      message: schedulerM('scheduler_jsCompileFailed', {
+    return err(
+      HaiSchedulerError.JS_COMPILE_FAILED,
+      schedulerM('scheduler_jsCompileFailed', {
         params: { error: error instanceof Error ? error.message : String(error) },
       }),
-      cause: error,
-    })
+      error,
+    )
   }
 }

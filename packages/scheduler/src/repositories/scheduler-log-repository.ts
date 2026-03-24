@@ -5,15 +5,15 @@
  * @module scheduler-log-repository
  */
 
-import type { PaginatedResult, Result } from '@h-ai/core'
+import type { HaiResult, PaginatedResult } from '@h-ai/core'
 import type { ReldbFunctions } from '@h-ai/reldb'
-import type { LogQueryOptions, SchedulerError, TaskExecutionLog } from '../scheduler-types.js'
+import type { LogQueryOptions, TaskExecutionLog } from '../scheduler-types.js'
 
 import { core, err, ok } from '@h-ai/core'
 import { BaseReldbCrudRepository } from '@h-ai/reldb'
 
-import { SchedulerErrorCode } from '../scheduler-config.js'
 import { schedulerM } from '../scheduler-i18n.js'
+import { HaiSchedulerError } from '../scheduler-types.js'
 
 const logger = core.logger.child({ module: 'scheduler', scope: 'log-repository' })
 
@@ -80,7 +80,7 @@ export class SchedulerLogRepository extends BaseReldbCrudRepository<LogRow> {
     }
   }
 
-  async queryLogs(options?: LogQueryOptions): Promise<Result<PaginatedResult<TaskExecutionLog>, SchedulerError>> {
+  async queryLogs(options?: LogQueryOptions): Promise<HaiResult<PaginatedResult<TaskExecutionLog>>> {
     const { taskId, status, triggerType, triggerSource, pagination } = options ?? {}
 
     const conditions: string[] = []
@@ -113,11 +113,11 @@ export class SchedulerLogRepository extends BaseReldbCrudRepository<LogRow> {
       })
 
       if (!pageResult.success) {
-        return err({
-          code: SchedulerErrorCode.DB_SAVE_FAILED,
-          message: schedulerM('scheduler_dbSaveFailed', { params: { error: pageResult.error.message } }),
-          cause: pageResult.error,
-        })
+        return err(
+          HaiSchedulerError.DB_SAVE_FAILED,
+          schedulerM('scheduler_dbSaveFailed', { params: { error: pageResult.error.message } }),
+          pageResult.error,
+        )
       }
 
       return ok({
@@ -140,13 +140,13 @@ export class SchedulerLogRepository extends BaseReldbCrudRepository<LogRow> {
     }
     catch (error) {
       logger.error('Failed to query execution logs', { error })
-      return err({
-        code: SchedulerErrorCode.DB_SAVE_FAILED,
-        message: schedulerM('scheduler_dbSaveFailed', {
+      return err(
+        HaiSchedulerError.DB_SAVE_FAILED,
+        schedulerM('scheduler_dbSaveFailed', {
           params: { error: error instanceof Error ? error.message : String(error) },
         }),
-        cause: error,
-      })
+        error,
+      )
     }
   }
 }

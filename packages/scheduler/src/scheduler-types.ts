@@ -5,22 +5,31 @@
  * @module scheduler-types
  */
 
-import type { PaginatedResult, PaginationOptionsInput, Result } from '@h-ai/core'
-import type { SchedulerConfig, SchedulerConfigInput, SchedulerErrorCodeType } from './scheduler-config.js'
+import type { ErrorInfo, HaiResult, PaginatedResult, PaginationOptionsInput } from '@h-ai/core'
+import type { SchedulerConfig, SchedulerConfigInput } from './scheduler-config.js'
+import { core } from '@h-ai/core'
 
-// ─── 错误类型 ───
+// ─── 错误定义（照 @h-ai/core 范式） ───
 
-/**
- * 定时任务错误接口
- */
-export interface SchedulerError {
-  /** 错误码 */
-  code: SchedulerErrorCodeType
-  /** 错误消息 */
-  message: string
-  /** 原始错误 */
-  cause?: unknown
-}
+const SchedulerErrorInfo = {
+  NOT_INITIALIZED: '010:500',
+  INIT_FAILED: '011:500',
+  CONFIG_ERROR: '012:500',
+  TASK_NOT_FOUND: '020:404',
+  TASK_ALREADY_EXISTS: '021:409',
+  INVALID_CRON: '022:400',
+  EXECUTION_FAILED: '023:500',
+  JS_EXECUTION_FAILED: '024:500',
+  API_EXECUTION_FAILED: '025:502',
+  DB_SAVE_FAILED: '026:500',
+  ALREADY_RUNNING: '027:409',
+  NOT_RUNNING: '028:400',
+  LOCK_ACQUIRE_FAILED: '029:409',
+  JS_COMPILE_FAILED: '030:500',
+  HOOK_EXECUTION_FAILED: '031:500',
+} as const satisfies ErrorInfo
+
+export const HaiSchedulerError = core.error.buildHaiErrorsDef('scheduler', SchedulerErrorInfo)
 
 // ─── 任务定义 ───
 
@@ -296,34 +305,34 @@ export interface SchedulerInitInput extends SchedulerConfigInput {
  */
 export interface SchedulerFunctions {
   /** 初始化调度器 */
-  init: (config?: SchedulerInitInput) => Promise<Result<void, SchedulerError>>
+  init: (config?: SchedulerInitInput) => Promise<HaiResult<void>>
 
   /** 注册任务 */
-  register: (task: TaskDefinition) => Promise<Result<void, SchedulerError>>
+  register: (task: TaskDefinition) => Promise<HaiResult<void>>
 
   /** 注销任务 */
-  unregister: (taskId: string) => Promise<Result<void, SchedulerError>>
+  unregister: (taskId: string) => Promise<HaiResult<void>>
 
   /** 更新任务 */
-  updateTask: (taskId: string, updates: TaskUpdateInput) => Promise<Result<void, SchedulerError>>
+  updateTask: (taskId: string, updates: TaskUpdateInput) => Promise<HaiResult<void>>
 
   /** 启动调度 */
-  start: () => Result<void, SchedulerError>
+  start: () => HaiResult<void>
 
   /** 停止调度 */
-  stop: () => Result<void, SchedulerError>
+  stop: () => HaiResult<void>
 
   /** 手动触发任务 */
-  trigger: (taskId: string, options?: TriggerTaskInput) => Promise<Result<TaskExecutionLog, SchedulerError>>
+  trigger: (taskId: string, options?: TriggerTaskInput) => Promise<HaiResult<TaskExecutionLog>>
 
   /** 查询执行日志 */
-  getLogs: (options?: LogQueryOptions) => Promise<Result<PaginatedResult<TaskExecutionLog>, SchedulerError>>
+  getLogs: (options?: LogQueryOptions) => Promise<HaiResult<PaginatedResult<TaskExecutionLog>>>
 
   /** 设置全局任务生命周期回调 */
-  setHooks: (hooks: SchedulerTaskHooks) => Result<void, SchedulerError>
+  setHooks: (hooks: SchedulerTaskHooks) => HaiResult<void>
 
   /** 清空全局任务生命周期回调 */
-  clearHooks: () => Result<void, SchedulerError>
+  clearHooks: () => HaiResult<void>
 
   /** 获取已注册任务列表 */
   readonly tasks: ReadonlyMap<string, TaskDefinition>
