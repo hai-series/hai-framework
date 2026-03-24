@@ -5,15 +5,13 @@
  * @module reach-repository-send-log
  */
 
-import type { Result } from '@h-ai/core'
-import type { DmlWithTxOperations, ReldbCrudFieldDefinition, ReldbCrudRepository, ReldbError, ReldbFunctions } from '@h-ai/reldb'
-import type { ReachError } from '../reach-types.js'
-
+import type { HaiResult } from '@h-ai/core'
+import type { DmlWithTxOperations, ReldbCrudFieldDefinition, ReldbCrudRepository, ReldbFunctions } from '@h-ai/reldb'
 import { err, ok } from '@h-ai/core'
 import { BaseReldbCrudRepository } from '@h-ai/reldb'
 
-import { ReachErrorCode } from '../reach-config.js'
 import { reachM } from '../reach-i18n.js'
+import { HaiReachError } from '../reach-types.js'
 
 // ─── 发送日志实体类型 ───
 
@@ -57,12 +55,12 @@ export interface SendLogRepository extends ReldbCrudRepository<StoredSendLog> {
   /**
    * 获取所有待发送记录（按创建时间升序）
    */
-  findPending: (tx?: DmlWithTxOperations) => Promise<Result<StoredSendLog[], ReachError>>
+  findPending: (tx?: DmlWithTxOperations) => Promise<HaiResult<StoredSendLog[]>>
 
   /**
    * 将记录标记为已发送
    */
-  markSent: (id: number, messageId?: string, tx?: DmlWithTxOperations) => Promise<Result<void, ReachError>>
+  markSent: (id: number, messageId?: string, tx?: DmlWithTxOperations) => Promise<HaiResult<void>>
 }
 
 // ─── 发送日志存储实现 ───
@@ -185,7 +183,7 @@ export function resetSendLogRepoSingleton(): void {
  * @param db - 数据库服务实例
  * @returns 成功返回发送日志存储接口实现；失败返回含错误信息的 Result
  */
-export async function createSendLogRepository(db: ReldbFunctions): Promise<Result<SendLogRepository, ReachError>> {
+export async function createSendLogRepository(db: ReldbFunctions): Promise<HaiResult<SendLogRepository>> {
   if (sendLogRepoInstance && sendLogRepoDbConfig === db.config)
     return ok(sendLogRepoInstance)
 
@@ -193,11 +191,11 @@ export async function createSendLogRepository(db: ReldbFunctions): Promise<Resul
   // 触发表创建（BaseReldbCrudRepository 的表创建是异步的）
   const initResult = await repo.count()
   if (!initResult.success) {
-    return err({
-      code: ReachErrorCode.SEND_FAILED,
-      message: reachM('reach_sendFailed', { params: { error: initResult.error.message } }),
-      cause: initResult.error,
-    })
+    return err(
+      HaiReachError.SEND_FAILED,
+      reachM('reach_sendFailed', { params: { error: initResult.error.message } }),
+      initResult.error,
+    )
   }
   sendLogRepoInstance = repo
   sendLogRepoDbConfig = db.config
@@ -219,31 +217,20 @@ class DbSendLogRepository extends BaseReldbCrudRepository<StoredSendLog> impleme
   }
 
   /** 获取所有待发送记录 */
-  async findPending(tx?: DmlWithTxOperations): Promise<Result<StoredSendLog[], ReachError>> {
+  async findPending(tx?: DmlWithTxOperations): Promise<HaiResult<StoredSendLog[]>> {
     const result = await this.findAll({ where: 'status = ?', params: ['pending'], orderBy: 'created_at ASC' }, tx)
     if (!result.success) {
-      return this.buildQueryError(result.error)
+      return result
     }
     return ok(result.data)
   }
 
   /** 将记录标记为已发送 */
-  async markSent(id: number, messageId?: string, tx?: DmlWithTxOperations): Promise<Result<void, ReachError>> {
+  async markSent(id: number, messageId?: string, tx?: DmlWithTxOperations): Promise<HaiResult<void>> {
     const result = await this.updateById(id, { status: 'sent', messageId: messageId ?? null }, tx)
     if (!result.success) {
-      return this.buildQueryError(result.error)
+      return result
     }
     return ok(undefined)
-  }
-
-  /**
-   * 构建查询错误响应
-   */
-  private buildQueryError(error: ReldbError): Result<never, ReachError> {
-    return err({
-      code: ReachErrorCode.SEND_FAILED,
-      message: reachM('reach_sendFailed', { params: { error: error.message } }),
-      cause: error,
-    })
   }
 }

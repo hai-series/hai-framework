@@ -5,12 +5,12 @@
  * @module payment-client-web
  */
 
-import type { Result } from '@h-ai/core'
-import type { PaymentError, PaymentOrder } from '../payment-types.js'
+import type { HaiResult } from '@h-ai/core'
+import type { PaymentOrder } from '../payment-types.js'
 import type { InvokePaymentResult } from './payment-client-types.js'
 import { err, ok } from '@h-ai/core'
-import { PaymentErrorCode } from '../payment-config.js'
 import { paymentM } from '../payment-i18n.js'
+import { HaiPaymentError } from '../payment-types.js'
 
 /**
  * Web/H5 环境调起微信支付（JSAPI）
@@ -109,7 +109,7 @@ function invokeStripeCheckout(clientParams: Record<string, unknown>): InvokePaym
  * }
  * ```
  */
-export async function invokePayment(order: PaymentOrder): Promise<Result<InvokePaymentResult, PaymentError>> {
+export async function invokePayment(order: PaymentOrder): Promise<HaiResult<InvokePaymentResult>> {
   try {
     let result: InvokePaymentResult
 
@@ -129,19 +129,19 @@ export async function invokePayment(order: PaymentOrder): Promise<Result<InvokeP
         result = invokeStripeCheckout(order.clientParams)
         break
       default:
-        return err({
-          code: PaymentErrorCode.INVOKE_WEB_FAILED,
-          message: paymentM('payment_invokeWebFailed'),
-        })
+        return err(
+          HaiPaymentError.INVOKE_WEB_FAILED,
+          paymentM('payment_invokeWebFailed'),
+        )
     }
 
     return ok(result)
   }
   catch (cause) {
-    return err({
-      code: PaymentErrorCode.INVOKE_WEB_FAILED,
-      message: paymentM('payment_invokeWebFailed'),
+    return err(
+      HaiPaymentError.INVOKE_WEB_FAILED,
+      paymentM('payment_invokeWebFailed'),
       cause,
-    })
+    )
   }
 }

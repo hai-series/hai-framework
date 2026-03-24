@@ -5,20 +5,29 @@
  * @module payment-types
  */
 
-import type { Result } from '@h-ai/core'
-import type { PaymentConfig, PaymentConfigInput, PaymentErrorCodeType } from './payment-config.js'
+import type { ErrorInfo, HaiResult } from '@h-ai/core'
+import type { PaymentConfig, PaymentConfigInput } from './payment-config.js'
+import { core } from '@h-ai/core'
 
-// ─── 错误类型 ───
+// ─── 错误定义（照 @h-ai/core 范式） ───
 
-/** 支付模块错误 */
-export interface PaymentError {
-  /** 错误码 */
-  code: PaymentErrorCodeType
-  /** 错误描述 */
-  message: string
-  /** 原始错误 */
-  cause?: unknown
-}
+const PaymentErrorInfo = {
+  CREATE_ORDER_FAILED: '001:500',
+  QUERY_ORDER_FAILED: '002:500',
+  REFUND_FAILED: '003:500',
+  CLOSE_ORDER_FAILED: '004:500',
+  NOT_INITIALIZED: '010:500',
+  SIGN_FAILED: '020:500',
+  PROVIDER_NOT_FOUND: '030:404',
+  INVALID_AMOUNT: '040:400',
+  NOTIFY_VERIFY_FAILED: '050:400',
+  NOTIFY_PARSE_FAILED: '051:400',
+  INVOKE_WEB_FAILED: '060:500',
+  INVOKE_APP_FAILED: '061:500',
+  CONFIG_ERROR: '070:500',
+} as const satisfies ErrorInfo
+
+export const HaiPaymentError = core.error.buildHaiErrorsDef('payment', PaymentErrorInfo)
 
 // ─── 支付场景 ───
 
@@ -143,34 +152,34 @@ export interface PaymentProvider {
   readonly name: string
 
   /** 创建支付订单 */
-  createOrder: (input: CreateOrderInput) => Promise<Result<PaymentOrder, PaymentError>>
+  createOrder: (input: CreateOrderInput) => Promise<HaiResult<PaymentOrder>>
 
   /** 处理异步通知回调（验签 + 解析） */
-  handleNotify: (request: PaymentNotifyRequest) => Promise<Result<PaymentNotifyResult, PaymentError>>
+  handleNotify: (request: PaymentNotifyRequest) => Promise<HaiResult<PaymentNotifyResult>>
 
   /** 查询订单状态 */
-  queryOrder: (orderNo: string) => Promise<Result<OrderStatus, PaymentError>>
+  queryOrder: (orderNo: string) => Promise<HaiResult<OrderStatus>>
 
   /** 申请退款 */
-  refund: (input: RefundInput) => Promise<Result<RefundResult, PaymentError>>
+  refund: (input: RefundInput) => Promise<HaiResult<RefundResult>>
 
   /** 关闭订单 */
-  closeOrder: (orderNo: string) => Promise<Result<void, PaymentError>>
+  closeOrder: (orderNo: string) => Promise<HaiResult<void>>
 }
 
 // ─── 函数接口 ───
 
 /** 支付模块函数接口 */
 export interface PaymentFunctions {
-  init: (config: PaymentConfigInput) => Promise<Result<void, PaymentError>>
+  init: (config: PaymentConfigInput) => Promise<HaiResult<void>>
   close: () => Promise<void>
   readonly config: PaymentConfig | null
   readonly isInitialized: boolean
-  createOrder: (providerName: string, input: CreateOrderInput) => Promise<Result<PaymentOrder, PaymentError>>
-  handleNotify: (providerName: string, request: PaymentNotifyRequest) => Promise<Result<PaymentNotifyResult, PaymentError>>
-  queryOrder: (providerName: string, orderNo: string) => Promise<Result<OrderStatus, PaymentError>>
-  refund: (providerName: string, input: RefundInput) => Promise<Result<RefundResult, PaymentError>>
-  closeOrder: (providerName: string, orderNo: string) => Promise<Result<void, PaymentError>>
+  createOrder: (providerName: string, input: CreateOrderInput) => Promise<HaiResult<PaymentOrder>>
+  handleNotify: (providerName: string, request: PaymentNotifyRequest) => Promise<HaiResult<PaymentNotifyResult>>
+  queryOrder: (providerName: string, orderNo: string) => Promise<HaiResult<OrderStatus>>
+  refund: (providerName: string, input: RefundInput) => Promise<HaiResult<RefundResult>>
+  closeOrder: (providerName: string, orderNo: string) => Promise<HaiResult<void>>
   getProvider: (name: string) => PaymentProvider | undefined
   registerProvider: (provider: PaymentProvider) => void
 }

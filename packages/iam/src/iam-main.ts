@@ -5,20 +5,10 @@
  * @module iam-main
  */
 
-import type { Result } from '@h-ai/core'
+import type { HaiResult } from '@h-ai/core'
 
 import type { IamConfig } from './iam-config.js'
-import type {
-  ApiKeyOperations,
-  AuthnOperations,
-  AuthResult,
-  AuthzOperations,
-  IamConfigInput,
-  IamError,
-  IamFunctions,
-  SessionOperations,
-  UserOperations,
-} from './iam-types.js'
+import type { ApiKeyOperations, AuthnOperations, AuthResult, AuthzOperations, IamConfigInput, IamFunctions, SessionOperations, UserOperations } from './iam-types.js'
 
 import { cache } from '@h-ai/cache'
 import { core, err, ok } from '@h-ai/core'
@@ -31,9 +21,14 @@ import { resetOtpRepoSingleton } from './authn/otp/iam-authn-otp-repository-otp.
 import { createAuthzOperations } from './authz/iam-authz-functions.js'
 import { resetPermissionRepoSingleton } from './authz/iam-authz-repository-permission.js'
 import { resetRoleRepoSingleton } from './authz/iam-authz-repository-role.js'
-import { IamConfigSchema, IamErrorCode } from './iam-config.js'
+import { IamConfigSchema } from './iam-config.js'
 import { iamM } from './iam-i18n.js'
 import { seedIamData } from './iam-seed.js'
+import {
+
+  HaiIamError,
+
+} from './iam-types.js'
 import { createSessionOperations } from './session/iam-session-functions.js'
 import { createUserOperations } from './user/iam-user-functions.js'
 import { resetResetTokenRepoSingleton } from './user/iam-user-repository-reset-token.js'
@@ -54,8 +49,8 @@ let currentApiKey: ApiKeyOperations | null = null
 
 // ─── 未初始化占位 ───
 
-const notInitialized = core.module.createNotInitializedKit<IamError>(
-  IamErrorCode.NOT_INITIALIZED,
+const notInitialized = core.module.createNotInitializedKit(
+  HaiIamError.NOT_INITIALIZED,
   () => iamM('iam_notInitialized'),
 )
 
@@ -83,14 +78,14 @@ const notInitializedUser: UserOperations = new Proxy({} as UserOperations, {
 // ─── 服务对象 ───
 
 export const iam: IamFunctions = {
-  async init(config: IamConfigInput): Promise<Result<void, IamError>> {
+  async init(config: IamConfigInput): Promise<HaiResult<void>> {
     // 并发防护：防止多次同时调用导致子功能/连接泄漏
     if (initInProgress) {
       logger.warn('IAM init already in progress, skipping concurrent call')
-      return err({
-        code: IamErrorCode.CONFIG_ERROR,
-        message: iamM('iam_initInProgress'),
-      })
+      return err(
+        HaiIamError.CONFIG_ERROR,
+        iamM('iam_initInProgress'),
+      )
     }
     initInProgress = true
 
@@ -105,38 +100,38 @@ export const iam: IamFunctions = {
 
       // 前置依赖检查：reldb 和 cache 必须已初始化
       if (!reldb.isInitialized) {
-        return err({
-          code: IamErrorCode.CONFIG_ERROR,
-          message: iamM('iam_depsNotInitialized', { params: { dep: 'reldb' } }),
-        })
+        return err(
+          HaiIamError.CONFIG_ERROR,
+          iamM('iam_depsNotInitialized', { params: { dep: 'reldb' } }),
+        )
       }
       if (!cache.isInitialized) {
-        return err({
-          code: IamErrorCode.CONFIG_ERROR,
-          message: iamM('iam_depsNotInitialized', { params: { dep: 'cache' } }),
-        })
+        return err(
+          HaiIamError.CONFIG_ERROR,
+          iamM('iam_depsNotInitialized', { params: { dep: 'cache' } }),
+        )
       }
 
       // 确保 crypto 已初始化（密码哈希依赖）
       if (!crypto.isInitialized) {
         const cryptoResult = await crypto.init()
         if (!cryptoResult.success) {
-          return err({
-            code: IamErrorCode.CONFIG_ERROR,
-            message: iamM('iam_initFailed'),
-            cause: cryptoResult.error,
-          })
+          return err(
+            HaiIamError.CONFIG_ERROR,
+            iamM('iam_initFailed'),
+            cryptoResult.error,
+          )
         }
       }
 
       const parseResult = IamConfigSchema.safeParse(settingsInput)
       if (!parseResult.success) {
         logger.error('IAM config validation failed', { error: parseResult.error.message })
-        return err({
-          code: IamErrorCode.CONFIG_ERROR,
-          message: iamM('iam_configError', { params: { error: parseResult.error.message } }),
-          cause: parseResult.error,
-        })
+        return err(
+          HaiIamError.CONFIG_ERROR,
+          iamM('iam_configError', { params: { error: parseResult.error.message } }),
+          parseResult.error,
+        )
       }
       const parsed = parseResult.data
 
@@ -197,7 +192,7 @@ export const iam: IamFunctions = {
         async registerAndLogin(options) {
           const regResult = await currentUser!.register(options)
           if (!regResult.success) {
-            return regResult as Result<AuthResult, IamError>
+            return regResult as HaiResult<AuthResult>
           }
           return authn.login({ identifier: options.username, password: options.password })
         },
@@ -207,11 +202,11 @@ export const iam: IamFunctions = {
     }
     catch (error) {
       logger.error('IAM module initialization failed', { error })
-      return err({
-        code: IamErrorCode.CONFIG_ERROR,
-        message: iamM('iam_initFailed'),
-        cause: error,
-      })
+      return err(
+        HaiIamError.CONFIG_ERROR,
+        iamM('iam_initFailed'),
+        error,
+      )
     }
     finally {
       initInProgress = false

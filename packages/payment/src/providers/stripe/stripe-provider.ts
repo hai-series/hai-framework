@@ -6,23 +6,17 @@
  * @module stripe-provider
  */
 
-import type { Result } from '@h-ai/core'
+import type { HaiResult } from '@h-ai/core'
 import type { StripeConfig } from '../../payment-config.js'
-import type {
-  CreateOrderInput,
-  OrderStatus,
-  PaymentError,
-  PaymentNotifyRequest,
-  PaymentNotifyResult,
-  PaymentOrder,
-  PaymentProvider,
-  RefundInput,
-  RefundResult,
-} from '../../payment-types.js'
+import type { CreateOrderInput, OrderStatus, PaymentNotifyRequest, PaymentNotifyResult, PaymentOrder, PaymentProvider, RefundInput, RefundResult } from '../../payment-types.js'
 import { createHmac } from 'node:crypto'
 import { core, err, ok } from '@h-ai/core'
-import { PaymentErrorCode } from '../../payment-config.js'
 import { paymentM } from '../../payment-i18n.js'
+import {
+
+  HaiPaymentError,
+
+} from '../../payment-types.js'
 
 /** Stripe API 基地址 */
 const STRIPE_API_BASE = 'https://api.stripe.com/v1'
@@ -86,7 +80,7 @@ export function createStripeProvider(config: StripeConfig): PaymentProvider {
   return {
     name: 'stripe',
 
-    async createOrder(input: CreateOrderInput): Promise<Result<PaymentOrder, PaymentError>> {
+    async createOrder(input: CreateOrderInput): Promise<HaiResult<PaymentOrder>> {
       try {
         // 使用 Stripe Checkout Session
         const params: Record<string, string> = {
@@ -121,25 +115,25 @@ export function createStripeProvider(config: StripeConfig): PaymentProvider {
         })
       }
       catch (cause) {
-        return err({
-          code: PaymentErrorCode.CREATE_ORDER_FAILED,
-          message: paymentM('payment_createOrderFailed'),
+        return err(
+          HaiPaymentError.CREATE_ORDER_FAILED,
+          paymentM('payment_createOrderFailed'),
           cause,
-        })
+        )
       }
     },
 
-    async handleNotify(request: PaymentNotifyRequest): Promise<Result<PaymentNotifyResult, PaymentError>> {
+    async handleNotify(request: PaymentNotifyRequest): Promise<HaiResult<PaymentNotifyResult>> {
       try {
         const signature = request.headers['stripe-signature'] ?? ''
 
         // 验签
         const valid = verifyWebhookSignature(request.body, signature)
         if (!valid) {
-          return err({
-            code: PaymentErrorCode.NOTIFY_VERIFY_FAILED,
-            message: paymentM('payment_notifyVerifyFailed'),
-          })
+          return err(
+            HaiPaymentError.NOTIFY_VERIFY_FAILED,
+            paymentM('payment_notifyVerifyFailed'),
+          )
         }
 
         const event = JSON.parse(request.body) as {
@@ -172,15 +166,15 @@ export function createStripeProvider(config: StripeConfig): PaymentProvider {
         })
       }
       catch (cause) {
-        return err({
-          code: PaymentErrorCode.NOTIFY_PARSE_FAILED,
-          message: paymentM('payment_notifyParseFailed'),
+        return err(
+          HaiPaymentError.NOTIFY_PARSE_FAILED,
+          paymentM('payment_notifyParseFailed'),
           cause,
-        })
+        )
       }
     },
 
-    async queryOrder(orderNo: string): Promise<Result<OrderStatus, PaymentError>> {
+    async queryOrder(orderNo: string): Promise<HaiResult<OrderStatus>> {
       try {
         // 搜索 checkout sessions by metadata
         const sessions = await stripeRequest<{
@@ -214,15 +208,15 @@ export function createStripeProvider(config: StripeConfig): PaymentProvider {
         })
       }
       catch (cause) {
-        return err({
-          code: PaymentErrorCode.QUERY_ORDER_FAILED,
-          message: paymentM('payment_queryOrderFailed'),
+        return err(
+          HaiPaymentError.QUERY_ORDER_FAILED,
+          paymentM('payment_queryOrderFailed'),
           cause,
-        })
+        )
       }
     },
 
-    async refund(input: RefundInput): Promise<Result<RefundResult, PaymentError>> {
+    async refund(input: RefundInput): Promise<HaiResult<RefundResult>> {
       try {
         // Stripe 退款需要 payment_intent ID，这里简化为根据 orderNo 查询
         const sessions = await stripeRequest<{
@@ -231,10 +225,10 @@ export function createStripeProvider(config: StripeConfig): PaymentProvider {
 
         const paymentIntent = sessions.data[0]?.payment_intent
         if (!paymentIntent) {
-          return err({
-            code: PaymentErrorCode.REFUND_FAILED,
-            message: paymentM('payment_refundFailed'),
-          })
+          return err(
+            HaiPaymentError.REFUND_FAILED,
+            paymentM('payment_refundFailed'),
+          )
         }
 
         const refund = await stripeRequest<{
@@ -253,15 +247,15 @@ export function createStripeProvider(config: StripeConfig): PaymentProvider {
         })
       }
       catch (cause) {
-        return err({
-          code: PaymentErrorCode.REFUND_FAILED,
-          message: paymentM('payment_refundFailed'),
+        return err(
+          HaiPaymentError.REFUND_FAILED,
+          paymentM('payment_refundFailed'),
           cause,
-        })
+        )
       }
     },
 
-    async closeOrder(_orderNo: string): Promise<Result<void, PaymentError>> {
+    async closeOrder(_orderNo: string): Promise<HaiResult<void>> {
       // Stripe Checkout Sessions 会自动过期，无需主动关闭
       return ok(undefined)
     },

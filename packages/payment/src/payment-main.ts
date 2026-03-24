@@ -7,18 +7,17 @@
  * @module payment-main
  */
 
-import type { Result } from '@h-ai/core'
+import type { HaiResult } from '@h-ai/core'
 import type { PaymentConfig, PaymentConfigInput } from './payment-config.js'
 import type {
   OrderStatus,
-  PaymentError,
   PaymentFunctions,
   PaymentNotifyResult,
   PaymentOrder,
   RefundResult,
 } from './payment-types.js'
 import { core, err, ok } from '@h-ai/core'
-import { PaymentConfigSchema, PaymentErrorCode } from './payment-config.js'
+import { PaymentConfigSchema } from './payment-config.js'
 import {
   clearProviders,
   closeOrder,
@@ -30,6 +29,7 @@ import {
   registerProvider,
 } from './payment-functions.js'
 import { paymentM } from './payment-i18n.js'
+import { HaiPaymentError } from './payment-types.js'
 import { createAlipayProvider } from './providers/alipay/alipay-provider.js'
 import { createStripeProvider } from './providers/stripe/stripe-provider.js'
 import { createWechatPayProvider } from './providers/wechat/wechat-pay-provider.js'
@@ -43,8 +43,8 @@ let initInProgress = false
 
 // ─── 未初始化占位 ───
 
-const notInitialized = core.module.createNotInitializedKit<PaymentError>(
-  PaymentErrorCode.NOT_INITIALIZED,
+const notInitialized = core.module.createNotInitializedKit(
+  HaiPaymentError.NOT_INITIALIZED,
   () => paymentM('payment_notInitialized'),
 )
 
@@ -80,13 +80,13 @@ export const payment: PaymentFunctions = {
    *
    * @param config - 支付配置
    */
-  async init(config: PaymentConfigInput): Promise<Result<void, PaymentError>> {
+  async init(config: PaymentConfigInput): Promise<HaiResult<void>> {
     if (initInProgress) {
       logger.warn('Payment module init already in progress, skipping')
-      return err({
-        code: PaymentErrorCode.CONFIG_ERROR,
-        message: paymentM('payment_configError', { params: { error: 'init already in progress' } }),
-      })
+      return err(
+        HaiPaymentError.CONFIG_ERROR,
+        paymentM('payment_configError', { params: { error: 'init already in progress' } }),
+      )
     }
 
     initInProgress = true
@@ -101,11 +101,11 @@ export const payment: PaymentFunctions = {
       const parseResult = PaymentConfigSchema.safeParse(config)
       if (!parseResult.success) {
         logger.error('Payment config validation failed', { error: parseResult.error.message })
-        return err({
-          code: PaymentErrorCode.CONFIG_ERROR,
-          message: paymentM('payment_configError', { params: { error: parseResult.error.message } }),
-          cause: parseResult.error,
-        })
+        return err(
+          HaiPaymentError.CONFIG_ERROR,
+          paymentM('payment_configError', { params: { error: parseResult.error.message } }),
+          parseResult.error,
+        )
       }
       const parsed = parseResult.data
 
@@ -135,13 +135,13 @@ export const payment: PaymentFunctions = {
     }
     catch (error) {
       logger.error('Payment module initialization failed', { error })
-      return err({
-        code: PaymentErrorCode.CONFIG_ERROR,
-        message: paymentM('payment_initFailed', {
+      return err(
+        HaiPaymentError.CONFIG_ERROR,
+        paymentM('payment_initFailed', {
           params: { error: error instanceof Error ? error.message : String(error) },
         }),
-        cause: error,
-      })
+        error,
+      )
     }
     finally {
       initInProgress = false

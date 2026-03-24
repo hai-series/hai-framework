@@ -5,17 +5,17 @@
  * @module iam-authn-password-strategy
  */
 
-import type { Result } from '@h-ai/core'
+import type { HaiResult } from '@h-ai/core'
 import type { PasswordConfig } from '../../iam-config.js'
-import type { IamError } from '../../iam-types.js'
 import type { UserRepository } from '../../user/iam-user-repository-user.js'
 import type { StoredUser, User } from '../../user/iam-user-types.js'
 import type { AuthStrategy, Credentials } from '../iam-authn-types.js'
 import { core, err, ok } from '@h-ai/core'
 import { crypto as haiCrypto } from '@h-ai/crypto'
 
-import { IamErrorCode, PasswordConfigSchema } from '../../iam-config.js'
+import { PasswordConfigSchema } from '../../iam-config.js'
 import { iamM } from '../../iam-i18n.js'
+import { HaiIamError } from '../../iam-types.js'
 import { toUser } from '../../user/iam-user-utils.js'
 import { ensureCredentialType, isAccountLocked, recordLoginFailure, resetLoginFailures } from '../iam-authn-utils.js'
 
@@ -40,9 +40,9 @@ export interface PasswordStrategyResult {
   /** 认证策略（用于通用登录流程） */
   strategy: AuthStrategy
   /** 验证密码强度 */
-  validatePassword: (password: string) => Result<void, IamError>
+  validatePassword: (password: string) => HaiResult<void>
   /** 密码哈希 */
-  hashPassword: (password: string) => Result<string, IamError>
+  hashPassword: (password: string) => HaiResult<string>
   /** 密码策略配置 */
   passwordConfig: PasswordConfig
 }
@@ -61,57 +61,57 @@ export function createPasswordStrategy(config: PasswordStrategyConfig): Password
   const lockoutDuration = config.lockoutDuration ?? 900
   const passwordOps = haiCrypto.password
 
-  function mapPasswordError(message: string): Result<never, IamError> {
-    return err({
-      code: IamErrorCode.INTERNAL_ERROR,
+  function mapPasswordError(message: string): HaiResult<never> {
+    return err(
+      HaiIamError.INTERNAL_ERROR,
       message,
-    })
+    )
   }
 
   /**
    * 验证密码强度
    */
-  function validatePasswordStrength(password: string): Result<void, IamError> {
+  function validatePasswordStrength(password: string): HaiResult<void> {
     if (password.length < passwordConfig.minLength) {
-      return err({
-        code: IamErrorCode.PASSWORD_POLICY_VIOLATION,
-        message: iamM('iam_passwordMinLength', { params: { minLength: passwordConfig.minLength } }),
-      })
+      return err(
+        HaiIamError.PASSWORD_POLICY_VIOLATION,
+        iamM('iam_passwordMinLength', { params: { minLength: passwordConfig.minLength } }),
+      )
     }
 
     if (password.length > passwordConfig.maxLength) {
-      return err({
-        code: IamErrorCode.PASSWORD_POLICY_VIOLATION,
-        message: iamM('iam_passwordMaxLength', { params: { maxLength: passwordConfig.maxLength } }),
-      })
+      return err(
+        HaiIamError.PASSWORD_POLICY_VIOLATION,
+        iamM('iam_passwordMaxLength', { params: { maxLength: passwordConfig.maxLength } }),
+      )
     }
 
     if (passwordConfig.requireUppercase && !/[A-Z]/.test(password)) {
-      return err({
-        code: IamErrorCode.PASSWORD_POLICY_VIOLATION,
-        message: iamM('iam_passwordNeedUppercase'),
-      })
+      return err(
+        HaiIamError.PASSWORD_POLICY_VIOLATION,
+        iamM('iam_passwordNeedUppercase'),
+      )
     }
 
     if (passwordConfig.requireLowercase && !/[a-z]/.test(password)) {
-      return err({
-        code: IamErrorCode.PASSWORD_POLICY_VIOLATION,
-        message: iamM('iam_passwordNeedLowercase'),
-      })
+      return err(
+        HaiIamError.PASSWORD_POLICY_VIOLATION,
+        iamM('iam_passwordNeedLowercase'),
+      )
     }
 
     if (passwordConfig.requireNumber && !/\d/.test(password)) {
-      return err({
-        code: IamErrorCode.PASSWORD_POLICY_VIOLATION,
-        message: iamM('iam_passwordNeedNumber'),
-      })
+      return err(
+        HaiIamError.PASSWORD_POLICY_VIOLATION,
+        iamM('iam_passwordNeedNumber'),
+      )
     }
 
     if (passwordConfig.requireSpecialChar && !/[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(password)) {
-      return err({
-        code: IamErrorCode.PASSWORD_POLICY_VIOLATION,
-        message: iamM('iam_passwordNeedSpecialChar'),
-      })
+      return err(
+        HaiIamError.PASSWORD_POLICY_VIOLATION,
+        iamM('iam_passwordNeedSpecialChar'),
+      )
     }
 
     return ok(undefined)
@@ -132,12 +132,12 @@ export function createPasswordStrategy(config: PasswordStrategyConfig): Password
   /**
    * 校验账户状态（启用、锁定）
    */
-  function checkAccountStatus(user: StoredUser): Result<void, IamError> {
+  function checkAccountStatus(user: StoredUser): HaiResult<void> {
     if (!user.enabled) {
-      return err({ code: IamErrorCode.USER_DISABLED, message: iamM('iam_accountDisabled') })
+      return err(HaiIamError.USER_DISABLED, iamM('iam_accountDisabled'))
     }
     if (isAccountLocked(user)) {
-      return err({ code: IamErrorCode.USER_LOCKED, message: iamM('iam_accountLocked') })
+      return err(HaiIamError.USER_LOCKED, iamM('iam_accountLocked'))
     }
     return ok(undefined)
   }
@@ -145,11 +145,10 @@ export function createPasswordStrategy(config: PasswordStrategyConfig): Password
   /**
    * 验证用户密码
    */
-  async function verifyUserPassword(user: StoredUser, password: string): Promise<Result<void, IamError>> {
+  async function verifyUserPassword(user: StoredUser, password: string): Promise<HaiResult<void>> {
     if (!user.passwordHash) {
-      return err({ code: IamErrorCode.INVALID_CREDENTIALS, message: iamM('iam_accountNoPassword') })
+      return err(HaiIamError.INVALID_CREDENTIALS, iamM('iam_accountNoPassword'))
     }
-
     const verifyResult = passwordOps.verify(password, user.passwordHash)
     if (!verifyResult.success) {
       return mapPasswordError(verifyResult.error.message)
@@ -158,7 +157,7 @@ export function createPasswordStrategy(config: PasswordStrategyConfig): Password
     if (!verifyResult.data) {
       await recordLoginFailure(config.userRepository, user, { maxLoginAttempts, lockoutDuration })
       logger.warn('Password verification failed', { userId: user.id })
-      return err({ code: IamErrorCode.INVALID_CREDENTIALS, message: iamM('iam_passwordWrong') })
+      return err(HaiIamError.INVALID_CREDENTIALS, iamM('iam_passwordWrong'))
     }
 
     return ok(undefined)
@@ -168,10 +167,10 @@ export function createPasswordStrategy(config: PasswordStrategyConfig): Password
     type: 'password',
     name: 'password-strategy',
 
-    async authenticate(credentials: Credentials): Promise<Result<User, IamError>> {
+    async authenticate(credentials: Credentials): Promise<HaiResult<User>> {
       const credentialResult = ensureCredentialType(credentials, 'password')
       if (!credentialResult.success) {
-        return credentialResult as Result<User, IamError>
+        return credentialResult as HaiResult<User>
       }
 
       const { identifier, password } = credentialResult.data
@@ -185,22 +184,22 @@ export function createPasswordStrategy(config: PasswordStrategyConfig): Password
       if (!storedUser) {
         // 防止用户枚举：执行伪哈希验证以消除时序差异，统一返回 INVALID_CREDENTIALS
         await passwordOps.hash('dummy-password-to-prevent-timing-leak')
-        return err({ code: IamErrorCode.INVALID_CREDENTIALS, message: iamM('iam_passwordWrong') })
+        return err(HaiIamError.INVALID_CREDENTIALS, iamM('iam_passwordWrong'))
       }
 
       // 校验账户状态
       const statusResult = checkAccountStatus(storedUser)
       if (!statusResult.success)
-        return statusResult as Result<User, IamError>
+        return statusResult as HaiResult<User>
 
       // 验证密码
       const pwResult = await verifyUserPassword(storedUser, password)
       if (!pwResult.success)
-        return pwResult as Result<User, IamError>
+        return pwResult as HaiResult<User>
 
       // 检查密码是否过期
       if (isPasswordExpired(storedUser)) {
-        return err({ code: IamErrorCode.PASSWORD_EXPIRED, message: iamM('iam_passwordExpired') })
+        return err(HaiIamError.PASSWORD_EXPIRED, iamM('iam_passwordExpired'))
       }
 
       // 登录成功，重置失败计数
@@ -211,7 +210,7 @@ export function createPasswordStrategy(config: PasswordStrategyConfig): Password
     },
   }
 
-  function hashPassword(password: string): Result<string, IamError> {
+  function hashPassword(password: string): HaiResult<string> {
     const hashResult = passwordOps.hash(password)
     if (!hashResult.success) {
       return mapPasswordError(hashResult.error.message)

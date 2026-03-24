@@ -15,7 +15,7 @@
 
 import type { IamFunctions } from '../src/iam-types.js'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { IamErrorCode } from '../src/iam-config.js'
+import { HaiIamError } from '../src/iam-types.js'
 import { defineIamSuite, initIam, postgresRedisEnv, sqliteMemoryEnv, TEST_PASSWORD, WEAK_PASSWORD } from './helpers/iam-test-suite.js'
 
 describe('iam.user', () => {
@@ -62,7 +62,7 @@ describe('iam.user', () => {
         const result = await getIam().user.register({ username: 'user_dup', password: TEST_PASSWORD })
         expect(result.success).toBe(false)
         if (!result.success) {
-          expect(result.error.code).toBe(IamErrorCode.USER_ALREADY_EXISTS)
+          expect(result.error.code).toBe(HaiIamError.USER_ALREADY_EXISTS.code)
         }
       })
 
@@ -79,7 +79,7 @@ describe('iam.user', () => {
         })
         expect(result.success).toBe(false)
         if (!result.success) {
-          expect(result.error.code).toBe(IamErrorCode.USER_ALREADY_EXISTS)
+          expect(result.error.code).toBe(HaiIamError.USER_ALREADY_EXISTS.code)
         }
       })
 
@@ -90,7 +90,7 @@ describe('iam.user', () => {
         })
         expect(result.success).toBe(false)
         if (!result.success) {
-          expect(result.error.code).toBe(IamErrorCode.PASSWORD_POLICY_VIOLATION)
+          expect(result.error.code).toBe(HaiIamError.PASSWORD_POLICY_VIOLATION.code)
         }
       })
 
@@ -101,7 +101,7 @@ describe('iam.user', () => {
         })
         expect(result.success).toBe(false)
         if (!result.success) {
-          expect(result.error.code).toBe(IamErrorCode.PASSWORD_POLICY_VIOLATION)
+          expect(result.error.code).toBe(HaiIamError.PASSWORD_POLICY_VIOLATION.code)
         }
       })
 
@@ -112,7 +112,7 @@ describe('iam.user', () => {
         })
         expect(result.success).toBe(false)
         if (!result.success) {
-          expect(result.error.code).toBe(IamErrorCode.PASSWORD_POLICY_VIOLATION)
+          expect(result.error.code).toBe(HaiIamError.PASSWORD_POLICY_VIOLATION.code)
         }
       })
 
@@ -134,7 +134,7 @@ describe('iam.user', () => {
         })
         expect(result.success).toBe(false)
         if (!result.success) {
-          expect(result.error.code).toBe(IamErrorCode.PASSWORD_POLICY_VIOLATION)
+          expect(result.error.code).toBe(HaiIamError.PASSWORD_POLICY_VIOLATION.code)
         }
       })
     })
@@ -163,7 +163,7 @@ describe('iam.user', () => {
         })
         expect(result.success).toBe(false)
         if (!result.success) {
-          expect(result.error.code).toBe(IamErrorCode.REGISTER_DISABLED)
+          expect(result.error.code).toBe(HaiIamError.REGISTER_DISABLED.code)
         }
       })
     })
@@ -211,7 +211,7 @@ describe('iam.user', () => {
         const result = getIam().user.validatePassword(WEAK_PASSWORD)
         expect(result.success).toBe(false)
         if (!result.success) {
-          expect(result.error.code).toBe(IamErrorCode.PASSWORD_POLICY_VIOLATION)
+          expect(result.error.code).toBe(HaiIamError.PASSWORD_POLICY_VIOLATION.code)
         }
       })
 
@@ -219,7 +219,7 @@ describe('iam.user', () => {
         const result = getIam().user.validatePassword('')
         expect(result.success).toBe(false)
         if (!result.success) {
-          expect(result.error.code).toBe(IamErrorCode.PASSWORD_POLICY_VIOLATION)
+          expect(result.error.code).toBe(HaiIamError.PASSWORD_POLICY_VIOLATION.code)
         }
       })
 
@@ -227,7 +227,7 @@ describe('iam.user', () => {
         const result = getIam().user.validatePassword('lowercase123')
         expect(result.success).toBe(false)
         if (!result.success) {
-          expect(result.error.code).toBe(IamErrorCode.PASSWORD_POLICY_VIOLATION)
+          expect(result.error.code).toBe(HaiIamError.PASSWORD_POLICY_VIOLATION.code)
         }
       })
 
@@ -235,7 +235,7 @@ describe('iam.user', () => {
         const result = getIam().user.validatePassword('UPPERCASE123')
         expect(result.success).toBe(false)
         if (!result.success) {
-          expect(result.error.code).toBe(IamErrorCode.PASSWORD_POLICY_VIOLATION)
+          expect(result.error.code).toBe(HaiIamError.PASSWORD_POLICY_VIOLATION.code)
         }
       })
 
@@ -243,7 +243,7 @@ describe('iam.user', () => {
         const result = getIam().user.validatePassword('NoDigitsHere')
         expect(result.success).toBe(false)
         if (!result.success) {
-          expect(result.error.code).toBe(IamErrorCode.PASSWORD_POLICY_VIOLATION)
+          expect(result.error.code).toBe(HaiIamError.PASSWORD_POLICY_VIOLATION.code)
         }
       })
 
@@ -256,7 +256,7 @@ describe('iam.user', () => {
         const result = getIam().user.validatePassword('Ab1defg')
         expect(result.success).toBe(false)
         if (!result.success) {
-          expect(result.error.code).toBe(IamErrorCode.PASSWORD_POLICY_VIOLATION)
+          expect(result.error.code).toBe(HaiIamError.PASSWORD_POLICY_VIOLATION.code)
         }
       })
 
@@ -265,7 +265,7 @@ describe('iam.user', () => {
         const result = getIam().user.validatePassword(longPwd)
         expect(result.success).toBe(false)
         if (!result.success) {
-          expect(result.error.code).toBe(IamErrorCode.PASSWORD_POLICY_VIOLATION)
+          expect(result.error.code).toBe(HaiIamError.PASSWORD_POLICY_VIOLATION.code)
         }
       })
     })
@@ -294,7 +294,7 @@ describe('iam.user', () => {
         const result = specialCharIam.user.validatePassword('TestPass123')
         expect(result.success).toBe(false)
         if (!result.success) {
-          expect(result.error.code).toBe(IamErrorCode.PASSWORD_POLICY_VIOLATION)
+          expect(result.error.code).toBe(HaiIamError.PASSWORD_POLICY_VIOLATION.code)
         }
       })
 
@@ -307,7 +307,7 @@ describe('iam.user', () => {
         const result = specialCharIam.user.validatePassword('Test!2abc')
         expect(result.success).toBe(false)
         if (!result.success) {
-          expect(result.error.code).toBe(IamErrorCode.PASSWORD_POLICY_VIOLATION)
+          expect(result.error.code).toBe(HaiIamError.PASSWORD_POLICY_VIOLATION.code)
         }
       })
     })
@@ -352,6 +352,7 @@ describe('iam.user', () => {
         const result = await getIam().user.getUser(regResult.data.user.id)
         expect(result.success).toBe(true)
         if (result.success && result.data) {
+          // eslint-disable-next-line ts/no-explicit-any
           expect((result.data as any).passwordHash).toBeUndefined()
         }
       })
@@ -387,7 +388,7 @@ describe('iam.user', () => {
         const result = await getIam().user.getCurrentUser('bad-token')
         expect(result.success).toBe(false)
         if (!result.success) {
-          expect(result.error.code).toBe(IamErrorCode.SESSION_INVALID)
+          expect(result.error.code).toBe(HaiIamError.SESSION_INVALID.code)
         }
       })
 
@@ -395,7 +396,7 @@ describe('iam.user', () => {
         const result = await getIam().user.getCurrentUser('')
         expect(result.success).toBe(false)
         if (!result.success) {
-          expect(result.error.code).toBe(IamErrorCode.SESSION_INVALID)
+          expect(result.error.code).toBe(HaiIamError.SESSION_INVALID.code)
         }
       })
     })
@@ -430,6 +431,7 @@ describe('iam.user', () => {
         expect(result.success).toBe(true)
         if (result.success) {
           for (const user of result.data.items) {
+            // eslint-disable-next-line ts/no-explicit-any
             expect((user as any).passwordHash).toBeUndefined()
           }
         }
@@ -483,7 +485,7 @@ describe('iam.user', () => {
         })
         expect(result.success).toBe(false)
         if (!result.success) {
-          expect(result.error.code).toBe(IamErrorCode.USER_NOT_FOUND)
+          expect(result.error.code).toBe(HaiIamError.USER_NOT_FOUND.code)
         }
       })
 
@@ -587,7 +589,7 @@ describe('iam.user', () => {
         )
         expect(result.success).toBe(false)
         if (!result.success) {
-          expect(result.error.code).toBe(IamErrorCode.INVALID_CREDENTIALS)
+          expect(result.error.code).toBe(HaiIamError.INVALID_CREDENTIALS.code)
         }
       })
 
@@ -607,7 +609,7 @@ describe('iam.user', () => {
         )
         expect(result.success).toBe(false)
         if (!result.success) {
-          expect(result.error.code).toBe(IamErrorCode.PASSWORD_POLICY_VIOLATION)
+          expect(result.error.code).toBe(HaiIamError.PASSWORD_POLICY_VIOLATION.code)
         }
       })
 
@@ -619,7 +621,7 @@ describe('iam.user', () => {
         )
         expect(result.success).toBe(false)
         if (!result.success) {
-          expect(result.error.code).toBe(IamErrorCode.USER_NOT_FOUND)
+          expect(result.error.code).toBe(HaiIamError.USER_NOT_FOUND.code)
         }
       })
     })
@@ -638,7 +640,7 @@ describe('iam.user', () => {
         const result = await getIam().user.confirmPasswordReset('fake-token', 'NewPass123')
         expect(result.success).toBe(false)
         if (!result.success) {
-          expect(result.error.code).toBe(IamErrorCode.RESET_TOKEN_INVALID)
+          expect(result.error.code).toBe(HaiIamError.RESET_TOKEN_INVALID.code)
         }
       })
 
@@ -725,7 +727,7 @@ describe('iam.user', () => {
         const secondConfirm = await resetIam.user.confirmPasswordReset(capturedToken, 'AnotherPass789!')
         expect(secondConfirm.success).toBe(false)
         if (!secondConfirm.success) {
-          expect(secondConfirm.error.code).toBe(IamErrorCode.RESET_TOKEN_INVALID)
+          expect(secondConfirm.error.code).toBe(HaiIamError.RESET_TOKEN_INVALID.code)
         }
 
         // 还原默认配置

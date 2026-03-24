@@ -5,8 +5,7 @@
  * @module iam-session-types
  */
 
-import type { Result } from '@h-ai/core'
-import type { IamError } from '../iam-types.js'
+import type { HaiResult } from '@h-ai/core'
 import type { AgreementDisplay, User } from '../user/iam-user-types.js'
 
 // ─── 令牌类型 ───
@@ -130,7 +129,7 @@ export interface SessionOperations {
    * @param options - 会话创建选项（用户 ID、角色、来源等）
    * @returns 成功返回完整的 Session 对象（含生成的访问令牌和过期时间）
    */
-  create: (options: CreateSessionOptions) => Promise<Result<Session, IamError>>
+  create: (options: CreateSessionOptions) => Promise<HaiResult<Session>>
 
   /**
    * 获取会话
@@ -141,7 +140,7 @@ export interface SessionOperations {
    * @param accessToken - 访问令牌
    * @returns 成功返回会话对象或 null（会话不存在/已过期）
    */
-  get: (accessToken: string) => Promise<Result<Session | null, IamError>>
+  get: (accessToken: string) => Promise<HaiResult<Session | null>>
 
   /**
    * 验证访问令牌
@@ -151,7 +150,7 @@ export interface SessionOperations {
    * @param accessToken - 访问令牌
    * @returns 成功返回会话；会话无效返回 SESSION_INVALID
    */
-  verifyToken: (accessToken: string) => Promise<Result<Session, IamError>>
+  verifyToken: (accessToken: string) => Promise<HaiResult<Session>>
 
   /**
    * 更新会话
@@ -162,7 +161,7 @@ export interface SessionOperations {
    * @param data - 要更新的字段（roles、username、source、data 等）
    * @returns 成功返回 ok；会话不存在返回 SESSION_NOT_FOUND
    */
-  update: (accessToken: string, data: Partial<Session>) => Promise<Result<void, IamError>>
+  update: (accessToken: string, data: Partial<Session>) => Promise<HaiResult<void>>
 
   /**
    * 删除会话
@@ -172,7 +171,7 @@ export interface SessionOperations {
    * @param accessToken - 访问令牌
    * @returns 始终返回 ok（令牌不存在时静默成功）
    */
-  delete: (accessToken: string) => Promise<Result<void, IamError>>
+  delete: (accessToken: string) => Promise<HaiResult<void>>
 
   /**
    * 删除用户所有会话
@@ -182,7 +181,7 @@ export interface SessionOperations {
    * @param userId - 用户 ID
    * @returns 成功返回实际删除的会话数量
    */
-  deleteByUserId: (userId: string) => Promise<Result<number, IamError>>
+  deleteByUserId: (userId: string) => Promise<HaiResult<number>>
 
   /**
    * 通过 refreshToken 换取新的 TokenPair
@@ -193,7 +192,7 @@ export interface SessionOperations {
    * @param refreshToken - 刷新令牌
    * @returns 成功返回新的 TokenPair；失败返回 TOKEN_REFRESH_FAILED / TOKEN_EXPIRED
    */
-  refresh: (refreshToken: string) => Promise<Result<TokenPair, IamError>>
+  refresh: (refreshToken: string) => Promise<HaiResult<TokenPair>>
 
   /**
    * 吊销 refreshToken（登出时调用）
@@ -201,7 +200,7 @@ export interface SessionOperations {
    * @param refreshToken - 刷新令牌
    * @returns 成功返回 ok；令牌不存在时静默成功
    */
-  revokeRefresh: (refreshToken: string) => Promise<Result<void, IamError>>
+  revokeRefresh: (refreshToken: string) => Promise<HaiResult<void>>
 
   /**
    * 批量更新用户所有活跃会话的 roles / permissions 字段
@@ -213,7 +212,7 @@ export interface SessionOperations {
    * @param updates - 要更新的字段（roles / permissions）
    * @returns 成功返回 ok
    */
-  patchUserSessions: (userId: string, updates: SessionFieldUpdates) => Promise<Result<void, IamError>>
+  patchUserSessions: (userId: string, updates: SessionFieldUpdates) => Promise<HaiResult<void>>
 }
 
 /**

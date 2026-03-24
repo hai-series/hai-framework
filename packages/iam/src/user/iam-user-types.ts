@@ -5,9 +5,8 @@
  * @module iam-user-types
  */
 
-import type { PaginatedResult, PaginationOptionsInput, Result } from '@h-ai/core'
+import type { HaiResult, PaginatedResult, PaginationOptionsInput } from '@h-ai/core'
 import type { Role } from '../authz/iam-authz-types.js'
-import type { IamError } from '../iam-types.js'
 
 // ─── 用户查询选项 ───
 
@@ -156,7 +155,7 @@ export interface UserOperations {
    * @param options - 注册选项（用户名、密码、邮箱等）
    * @returns 成功返回用户信息及可选的协议展示；失败返回对应错误码
    */
-  register: (options: RegisterOptions) => Promise<Result<RegisterResult, IamError>>
+  register: (options: RegisterOptions) => Promise<HaiResult<RegisterResult>>
 
   /**
    * 获取当前用户
@@ -166,7 +165,7 @@ export interface UserOperations {
    * @param accessToken - 访问令牌
    * @returns 成功返回用户信息；令牌无效/过期返回错误
    */
-  getCurrentUser: (accessToken: string) => Promise<Result<User, IamError>>
+  getCurrentUser: (accessToken: string) => Promise<HaiResult<User>>
 
   /**
    * 更新当前登录用户信息（通过 accessToken 识别用户）
@@ -178,7 +177,7 @@ export interface UserOperations {
    * @param data - 要更新的字段（仅白名单字段）
    * @returns 成功返回更新后的用户信息
    */
-  updateCurrentUser: (accessToken: string, data: UpdateCurrentUserInput) => Promise<Result<User, IamError>>
+  updateCurrentUser: (accessToken: string, data: UpdateCurrentUserInput) => Promise<HaiResult<User>>
 
   /**
    * 获取用户信息
@@ -187,7 +186,7 @@ export interface UserOperations {
    * @param options - 查询选项（可选 include: ['roles'] 同时返回角色列表）
    * @returns 成功返回用户信息或 null（用户不存在时）
    */
-  getUser: (userId: string, options?: { include?: ('roles')[] }) => Promise<Result<User | null, IamError>>
+  getUser: (userId: string, options?: { include?: ('roles')[] }) => Promise<HaiResult<User | null>>
 
   /**
    * 获取用户列表（分页 + 搜索 + 过滤）
@@ -195,7 +194,7 @@ export interface UserOperations {
    * @param options - 查询选项（页码、每页数量、搜索关键字、启用状态过滤）
    * @returns 成功返回分页用户列表
    */
-  listUsers: (options?: ListUsersOptions) => Promise<Result<PaginatedResult<User>, IamError>>
+  listUsers: (options?: ListUsersOptions) => Promise<HaiResult<PaginatedResult<User>>>
 
   /**
    * 更新用户信息
@@ -206,7 +205,7 @@ export interface UserOperations {
    * @param data - 要更新的字段（displayName、email 等）
    * @returns 成功返回更新后的用户信息；用户不存在返回 USER_NOT_FOUND
    */
-  updateUser: (userId: string, data: Partial<User>) => Promise<Result<User, IamError>>
+  updateUser: (userId: string, data: Partial<User>) => Promise<HaiResult<User>>
 
   /**
    * 删除用户
@@ -216,7 +215,7 @@ export interface UserOperations {
    * @param userId - 用户 ID
    * @returns 成功返回 ok；用户不存在返回 USER_NOT_FOUND
    */
-  deleteUser: (userId: string) => Promise<Result<void, IamError>>
+  deleteUser: (userId: string) => Promise<HaiResult<void>>
 
   /**
    * 管理员重置用户密码
@@ -227,7 +226,7 @@ export interface UserOperations {
    * @param newPassword - 新密码
    * @returns 成功返回 ok；用户不存在返回 USER_NOT_FOUND，密码不合规返回 PASSWORD_POLICY_VIOLATION
    */
-  adminResetPassword: (userId: string, newPassword: string) => Promise<Result<void, IamError>>
+  adminResetPassword: (userId: string, newPassword: string) => Promise<HaiResult<void>>
 
   /**
    * 修改密码
@@ -239,7 +238,7 @@ export interface UserOperations {
    * @param newPassword - 新密码
    * @returns 成功返回 ok；旧密码错误返回 INVALID_CREDENTIALS，新密码不合规返回 PASSWORD_POLICY_VIOLATION
    */
-  changePassword: (userId: string, oldPassword: string, newPassword: string) => Promise<Result<void, IamError>>
+  changePassword: (userId: string, oldPassword: string, newPassword: string) => Promise<HaiResult<void>>
 
   /**
    * 当前登录用户修改密码
@@ -255,7 +254,7 @@ export interface UserOperations {
     accessToken: string,
     oldPassword: string,
     newPassword: string,
-  ) => Promise<Result<void, IamError>>
+  ) => Promise<HaiResult<void>>
 
   /**
    * 请求密码重置
@@ -266,7 +265,7 @@ export interface UserOperations {
    * @param identifier - 用户标识（邮箱）
    * @returns 始终返回 ok（防枚举）；内部异常返回 INTERNAL_ERROR
    */
-  requestPasswordReset: (identifier: string) => Promise<Result<void, IamError>>
+  requestPasswordReset: (identifier: string) => Promise<HaiResult<void>>
 
   /**
    * 确认密码重置
@@ -277,7 +276,7 @@ export interface UserOperations {
    * @param newPassword - 新密码
    * @returns 成功返回 ok；令牌无效/过期返回 RESET_TOKEN_INVALID，尝试超限返回 RESET_TOKEN_MAX_ATTEMPTS
    */
-  confirmPasswordReset: (token: string, newPassword: string) => Promise<Result<void, IamError>>
+  confirmPasswordReset: (token: string, newPassword: string) => Promise<HaiResult<void>>
 
   /**
    * 验证密码强度（同步方法）
@@ -287,5 +286,5 @@ export interface UserOperations {
    * @param password - 待校验的密码
    * @returns 通过返回 ok；不合规返回 PASSWORD_POLICY_VIOLATION
    */
-  validatePassword: (password: string) => Result<void, IamError>
+  validatePassword: (password: string) => HaiResult<void>
 }

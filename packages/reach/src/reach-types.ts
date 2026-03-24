@@ -5,22 +5,26 @@
  * @module reach-types
  */
 
-import type { Result } from '@h-ai/core'
-import type { ProviderConfig, ReachConfig, ReachConfigInput, ReachErrorCodeType } from './reach-config.js'
+import type { ErrorInfo, HaiResult } from '@h-ai/core'
+import type { ProviderConfig, ReachConfig, ReachConfigInput } from './reach-config.js'
+import { core } from '@h-ai/core'
 
-// ─── 错误类型 ───
+// ─── 错误定义（照 @h-ai/core 范式） ───
 
-/**
- * 触达模块错误接口
- */
-export interface ReachError {
-  /** 错误码（参见 ReachErrorCode） */
-  code: ReachErrorCodeType
-  /** 错误消息 */
-  message: string
-  /** 原始错误（可选） */
-  cause?: unknown
-}
+const ReachErrorInfo = {
+  SEND_FAILED: '001:500',
+  TEMPLATE_NOT_FOUND: '002:404',
+  TEMPLATE_RENDER_FAILED: '003:500',
+  INVALID_RECIPIENT: '004:400',
+  PROVIDER_NOT_FOUND: '005:500',
+  DND_BLOCKED: '006:403',
+  DND_DEFERRED: '007:202',
+  NOT_INITIALIZED: '010:500',
+  UNSUPPORTED_TYPE: '011:400',
+  CONFIG_ERROR: '012:500',
+} as const satisfies ErrorInfo
+
+export const HaiReachError = core.error.buildHaiErrorsDef('reach', ReachErrorInfo)
 
 // ─── 渠道类型 ───
 
@@ -146,7 +150,7 @@ export interface SendOperations {
    * })
    * ```
    */
-  send: (message: ReachMessage) => Promise<Result<SendResult, ReachError>>
+  send: (message: ReachMessage) => Promise<HaiResult<SendResult>>
 }
 
 // ─── 模板注册表接口 ───
@@ -159,17 +163,17 @@ export interface SendOperations {
  */
 export interface ReachTemplateRegistry {
   /** 按名称解析模板 */
-  resolve: (name: string) => Promise<Result<ReachTemplate, ReachError>>
+  resolve: (name: string) => Promise<HaiResult<ReachTemplate>>
   /** 保存模板到数据库（upsert） */
-  save: (template: ReachTemplate) => Promise<Result<void, ReachError>>
+  save: (template: ReachTemplate) => Promise<HaiResult<void>>
   /** 批量保存模板到数据库 */
-  saveBatch: (templates: ReachTemplate[]) => Promise<Result<void, ReachError>>
+  saveBatch: (templates: ReachTemplate[]) => Promise<HaiResult<void>>
   /** 从数据库删除模板 */
-  remove: (name: string) => Promise<Result<void, ReachError>>
+  remove: (name: string) => Promise<HaiResult<void>>
   /** 列出所有模板 */
-  list: () => Promise<Result<ReachTemplate[], ReachError>>
+  list: () => Promise<HaiResult<ReachTemplate[]>>
   /** 渲染模板（从数据库解析后渲染） */
-  render: (name: string, vars: Record<string, string>) => Promise<Result<RenderedTemplate, ReachError>>
+  render: (name: string, vars: Record<string, string>) => Promise<HaiResult<RenderedTemplate>>
 }
 
 // ─── 函数接口 ───
@@ -206,7 +210,7 @@ export interface ReachTemplateRegistry {
  */
 export interface ReachFunctions extends SendOperations {
   /** 初始化触达模块（注册多个 Provider） */
-  init: (config: ReachConfigInput) => Promise<Result<void, ReachError>>
+  init: (config: ReachConfigInput) => Promise<HaiResult<void>>
   /** 当前配置（未初始化时为 null） */
   readonly config: ReachConfig | null
   /** 是否已初始化 */
@@ -228,9 +232,9 @@ export interface ReachProvider {
   /** Provider 名称 */
   readonly name: string
   /** 连接/初始化 Provider */
-  connect: (config: ProviderConfig) => Promise<Result<void, ReachError>>
+  connect: (config: ProviderConfig) => Promise<HaiResult<void>>
   /** 发送消息 */
-  send: (message: ReachMessage) => Promise<Result<SendResult, ReachError>>
+  send: (message: ReachMessage) => Promise<HaiResult<SendResult>>
   /** 关闭连接 */
   close: () => Promise<void>
   /** 是否已连接 */

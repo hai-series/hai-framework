@@ -9,60 +9,6 @@ import { z } from 'zod'
 
 import { reachM } from './reach-i18n.js'
 
-// ─── 错误码常量 ───
-
-/**
- * 触达模块错误码（数值范围 8100-8199）
- *
- * @example
- * ```ts
- * import { ReachErrorCode } from '@h-ai/reach'
- *
- * if (result.error?.code === ReachErrorCode.SEND_FAILED) {
- *     // 处理发送失败
- * }
- * ```
- */
-export const ReachErrorCode = {
-  /** 发送失败 */
-  SEND_FAILED: 8100,
-  /** 模板未找到 */
-  TEMPLATE_NOT_FOUND: 8101,
-  /** 模板渲染失败 */
-  TEMPLATE_RENDER_FAILED: 8102,
-  /** 无效接收方 */
-  INVALID_RECIPIENT: 8103,
-  /** Provider 未找到 */
-  PROVIDER_NOT_FOUND: 8104,
-  /** 免打扰时段拦截（discard 策略） */
-  DND_BLOCKED: 8105,
-  /** 免打扰时段延时（delay 策略，消息已暂存） */
-  DND_DEFERRED: 8106,
-  /** 触达模块未初始化 */
-  NOT_INITIALIZED: 8110,
-  /** 不支持的 Provider 类型 */
-  UNSUPPORTED_TYPE: 8111,
-  /** 配置错误 */
-  CONFIG_ERROR: 8112,
-} as const
-
-/** 触达模块错误码类型 */
-export type ReachErrorCodeType = (typeof ReachErrorCode)[keyof typeof ReachErrorCode]
-
-/** 触达错误码 → HTTP 状态码映射 */
-export const ReachErrorHttpStatus: Record<number, number> = {
-  [ReachErrorCode.SEND_FAILED]: 500,
-  [ReachErrorCode.TEMPLATE_NOT_FOUND]: 404,
-  [ReachErrorCode.TEMPLATE_RENDER_FAILED]: 500,
-  [ReachErrorCode.INVALID_RECIPIENT]: 400,
-  [ReachErrorCode.PROVIDER_NOT_FOUND]: 500,
-  [ReachErrorCode.DND_BLOCKED]: 403,
-  [ReachErrorCode.DND_DEFERRED]: 202,
-  [ReachErrorCode.NOT_INITIALIZED]: 500,
-  [ReachErrorCode.UNSUPPORTED_TYPE]: 400,
-  [ReachErrorCode.CONFIG_ERROR]: 500,
-}
-
 // ─── 单个 Provider 配置 Schema ───
 
 /**

@@ -5,11 +5,10 @@
  * @module iam-user-functions
  */
 
-import type { PaginatedResult, Result } from '@h-ai/core'
+import type { HaiResult, PaginatedResult } from '@h-ai/core'
 import type { PasswordStrategyResult } from '../authn/password/iam-authn-password-strategy.js'
 import type { AuthzOperations } from '../authz/iam-authz-types.js'
 import type { IamConfig } from '../iam-config.js'
-import type { IamError } from '../iam-types.js'
 import type { SessionOperations } from '../session/iam-session-types.js'
 import type { ResetTokenRepository } from './iam-user-repository-reset-token.js'
 import type { UserRepository } from './iam-user-repository-user.js'
@@ -26,8 +25,9 @@ import { core, err, ok } from '@h-ai/core'
 import { crypto } from '@h-ai/crypto'
 import { reldb } from '@h-ai/reldb'
 
-import { AgreementConfigSchema, IamErrorCode, PasswordResetConfigSchema, RegisterConfigSchema } from '../iam-config.js'
+import { AgreementConfigSchema, PasswordResetConfigSchema, RegisterConfigSchema } from '../iam-config.js'
 import { iamM } from '../iam-i18n.js'
+import { IamErrorCode } from '../iam-types.js'
 import { createCacheResetTokenRepository } from './iam-user-repository-reset-token.js'
 import { createDbUserRepository } from './iam-user-repository-user.js'
 import { toUser } from './iam-user-utils.js'
@@ -53,7 +53,7 @@ export interface UserOperationsDeps {
  *
  * 内部创建用户存储，组装用户管理操作接口。
  */
-export async function createUserOperations(deps: UserOperationsDeps): Promise<Result<UserOperations, IamError>> {
+export async function createUserOperations(deps: UserOperationsDeps): Promise<HaiResult<UserOperations>> {
   try {
     const { config, passwordStrategyResult, sessionFunctions, authzFunctions, onPasswordResetRequest } = deps
 
@@ -115,7 +115,7 @@ function mapRepositoryError(messageKey: Parameters<typeof iamM>[0], message: str
  * @param message 底层错误消息
  * @returns 领域层错误结果
  */
-function mapUpdateErrorAsDomainError(message: string): Result<never, IamError> {
+function mapUpdateErrorAsDomainError(message: string): HaiResult<never> {
   const loweredMessage = message.toLowerCase()
   if (loweredMessage.includes('unique') || loweredMessage.includes('duplicate')) {
     return err({
@@ -139,10 +139,10 @@ async function validateUniqueFieldsForUpdate(
   userRepository: UserRepository,
   userId: string,
   data: Partial<User>,
-): Promise<Result<void, IamError>> {
+): Promise<HaiResult<void>> {
   const currentResult = await userRepository.findById(userId)
   if (!currentResult.success) {
-    return mapRepositoryError('iam_queryUserFailed', currentResult.error.message) as Result<void, IamError>
+    return mapRepositoryError('iam_queryUserFailed', currentResult.error.message) as HaiResult<void>
   }
   if (!currentResult.data) {
     return err({
@@ -154,7 +154,7 @@ async function validateUniqueFieldsForUpdate(
   if (data.username && data.username !== currentResult.data.username) {
     const usernameExistsResult = await userRepository.existsByUsername(data.username)
     if (!usernameExistsResult.success) {
-      return mapRepositoryError('iam_queryUserFailed', usernameExistsResult.error.message) as Result<void, IamError>
+      return mapRepositoryError('iam_queryUserFailed', usernameExistsResult.error.message) as HaiResult<void>
     }
     if (usernameExistsResult.data) {
       return err({
@@ -167,7 +167,7 @@ async function validateUniqueFieldsForUpdate(
   if (data.email && data.email !== currentResult.data.email) {
     const emailExistsResult = await userRepository.existsByEmail(data.email)
     if (!emailExistsResult.success) {
-      return mapRepositoryError('iam_queryUserFailed', emailExistsResult.error.message) as Result<void, IamError>
+      return mapRepositoryError('iam_queryUserFailed', emailExistsResult.error.message) as HaiResult<void>
     }
     if (emailExistsResult.data) {
       return err({
@@ -188,8 +188,8 @@ async function validateUniqueFieldsForUpdate(
 interface UserFnContext {
   userRepository: UserRepository
   resetTokenRepository: ResetTokenRepository
-  validatePassword: (password: string) => Result<void, IamError>
-  hashPassword: (password: string) => Result<string, IamError>
+  validatePassword: (password: string) => HaiResult<void>
+  hashPassword: (password: string) => HaiResult<string>
   sessionFunctions: SessionOperations
   authzFunctions: AuthzOperations
   config: IamConfig
@@ -210,7 +210,7 @@ function buildRegistrationOps(ctx: UserFnContext): Pick<UserOperations, 'registe
   /**
    * 校验注册前置条件
    */
-  async function validateRegisterPreconditions(options: RegisterOptions): Promise<Result<void, IamError>> {
+  async function validateRegisterPreconditions(options: RegisterOptions): Promise<HaiResult<void>> {
     if (!registerConfig.enabled) {
       return err({ code: IamErrorCode.REGISTER_DISABLED, message: iamM('iam_registerDisabled') })
     }
@@ -263,21 +263,21 @@ function buildRegistrationOps(ctx: UserFnContext): Pick<UserOperations, 'registe
   }
 
   return {
-    async register(options: RegisterOptions): Promise<Result<RegisterResult, IamError>> {
+    async register(options: RegisterOptions): Promise<HaiResult<RegisterResult>> {
       // 校验前置条件
       const preResult = await validateRegisterPreconditions(options)
       if (!preResult.success)
-        return preResult as Result<RegisterResult, IamError>
+        return preResult as HaiResult<RegisterResult>
 
       // 哈希密码
       const hashResult = hashPassword(options.password)
       if (!hashResult.success)
-        return hashResult as Result<RegisterResult, IamError>
+        return hashResult as HaiResult<RegisterResult>
 
       // 事务：创建用户
       const txResult = await reldb.tx.begin()
       if (!txResult.success) {
-        return mapRepositoryError('iam_createUserFailed', txResult.error.message) as Result<RegisterResult, IamError>
+        return mapRepositoryError('iam_createUserFailed', txResult.error.message) as HaiResult<RegisterResult>
       }
       const tx = txResult.data
 
@@ -296,7 +296,7 @@ function buildRegistrationOps(ctx: UserFnContext): Pick<UserOperations, 'registe
 
       if (!createResult.success) {
         await tx.rollback()
-        return mapUpdateErrorAsDomainError(createResult.error.message) as Result<RegisterResult, IamError>
+        return mapUpdateErrorAsDomainError(createResult.error.message) as HaiResult<RegisterResult>
       }
 
       const createdUserResult = await userRepository.findByUsername(options.username, tx)
@@ -310,7 +310,7 @@ function buildRegistrationOps(ctx: UserFnContext): Pick<UserOperations, 'registe
 
       const commitResult = await tx.commit()
       if (!commitResult.success) {
-        return mapRepositoryError('iam_createUserFailed', commitResult.error.message) as Result<RegisterResult, IamError>
+        return mapRepositoryError('iam_createUserFailed', commitResult.error.message) as HaiResult<RegisterResult>
       }
 
       const createdUser = createdUserResult.data
@@ -325,7 +325,7 @@ function buildRegistrationOps(ctx: UserFnContext): Pick<UserOperations, 'registe
       })
     },
 
-    validatePassword(password: string): Result<void, IamError> {
+    validatePassword(password: string): HaiResult<void> {
       return validatePassword(password)
     },
   }
@@ -340,15 +340,15 @@ function buildUserQueryOps(ctx: UserFnContext): Pick<UserOperations, 'getCurrent
   const { userRepository, sessionFunctions, authzFunctions } = ctx
 
   return {
-    async getCurrentUser(accessToken: string): Promise<Result<User, IamError>> {
+    async getCurrentUser(accessToken: string): Promise<HaiResult<User>> {
       const verifyResult = await sessionFunctions.verifyToken(accessToken)
       if (!verifyResult.success) {
-        return verifyResult as Result<User, IamError>
+        return verifyResult as HaiResult<User>
       }
 
       const userResult = await userRepository.findById(verifyResult.data.userId)
       if (!userResult.success) {
-        return mapRepositoryError('iam_queryUserFailed', userResult.error.message) as Result<User, IamError>
+        return mapRepositoryError('iam_queryUserFailed', userResult.error.message) as HaiResult<User>
       }
 
       if (!userResult.data) {
@@ -361,10 +361,10 @@ function buildUserQueryOps(ctx: UserFnContext): Pick<UserOperations, 'getCurrent
       return ok(toUser(userResult.data))
     },
 
-    async getUser(userId: string, options?: { include?: ('roles')[] }): Promise<Result<User | null, IamError>> {
+    async getUser(userId: string, options?: { include?: ('roles')[] }): Promise<HaiResult<User | null>> {
       const userResult = await userRepository.findById(userId)
       if (!userResult.success) {
-        return mapRepositoryError('iam_queryUserFailed', userResult.error.message) as Result<User | null, IamError>
+        return mapRepositoryError('iam_queryUserFailed', userResult.error.message) as HaiResult<User | null>
       }
 
       if (!userResult.data) {
@@ -383,7 +383,7 @@ function buildUserQueryOps(ctx: UserFnContext): Pick<UserOperations, 'getCurrent
       return ok(user)
     },
 
-    async listUsers(options?: ListUsersOptions): Promise<Result<PaginatedResult<User>, IamError>> {
+    async listUsers(options?: ListUsersOptions): Promise<HaiResult<PaginatedResult<User>>> {
       const conditions: string[] = []
       const params: unknown[] = []
 
@@ -409,7 +409,7 @@ function buildUserQueryOps(ctx: UserFnContext): Pick<UserOperations, 'getCurrent
         pagination: options ? { page: options.page, pageSize: options.pageSize } : undefined,
       })
       if (!usersResult.success) {
-        return mapRepositoryError('iam_queryUserListFailed', usersResult.error.message) as Result<PaginatedResult<User>, IamError>
+        return mapRepositoryError('iam_queryUserListFailed', usersResult.error.message) as HaiResult<PaginatedResult<User>>
       }
 
       const items = usersResult.data.items.map(toUser)
@@ -443,10 +443,10 @@ function buildUserMutationOps(ctx: UserFnContext): Pick<UserOperations, 'updateC
   const { userRepository, sessionFunctions, authzFunctions } = ctx
 
   return {
-    async updateCurrentUser(accessToken: string, data: UpdateCurrentUserInput): Promise<Result<User, IamError>> {
+    async updateCurrentUser(accessToken: string, data: UpdateCurrentUserInput): Promise<HaiResult<User>> {
       const verifyResult = await sessionFunctions.verifyToken(accessToken)
       if (!verifyResult.success) {
-        return verifyResult as Result<User, IamError>
+        return verifyResult as HaiResult<User>
       }
 
       const userId = verifyResult.data.userId
@@ -469,7 +469,7 @@ function buildUserMutationOps(ctx: UserFnContext): Pick<UserOperations, 'updateC
       if (!hasUpdateFields(safeData)) {
         const currentResult = await userRepository.findById(userId)
         if (!currentResult.success) {
-          return mapRepositoryError('iam_queryUserFailed', currentResult.error.message) as Result<User, IamError>
+          return mapRepositoryError('iam_queryUserFailed', currentResult.error.message) as HaiResult<User>
         }
         if (!currentResult.data) {
           return err({
@@ -482,12 +482,12 @@ function buildUserMutationOps(ctx: UserFnContext): Pick<UserOperations, 'updateC
 
       const uniqueResult = await validateUniqueFieldsForUpdate(userRepository, userId, safeData)
       if (!uniqueResult.success) {
-        return uniqueResult as Result<User, IamError>
+        return uniqueResult as HaiResult<User>
       }
 
       const updateResult = await userRepository.updateById(userId, safeData)
       if (!updateResult.success) {
-        return mapUpdateErrorAsDomainError(updateResult.error.message) as Result<User, IamError>
+        return mapUpdateErrorAsDomainError(updateResult.error.message) as HaiResult<User>
       }
 
       if (updateResult.data.changes === 0) {
@@ -498,7 +498,7 @@ function buildUserMutationOps(ctx: UserFnContext): Pick<UserOperations, 'updateC
       }
       const updatedResult = await userRepository.findById(userId)
       if (!updatedResult.success) {
-        return mapRepositoryError('iam_queryUserFailed', updatedResult.error.message) as Result<User, IamError>
+        return mapRepositoryError('iam_queryUserFailed', updatedResult.error.message) as HaiResult<User>
       }
       if (!updatedResult.data) {
         return err({
@@ -510,11 +510,11 @@ function buildUserMutationOps(ctx: UserFnContext): Pick<UserOperations, 'updateC
       return ok(toUser(updatedResult.data))
     },
 
-    async updateUser(userId: string, data: Partial<User>): Promise<Result<User, IamError>> {
+    async updateUser(userId: string, data: Partial<User>): Promise<HaiResult<User>> {
       if (!hasUpdateFields(data)) {
         const currentResult = await userRepository.findById(userId)
         if (!currentResult.success) {
-          return mapRepositoryError('iam_queryUserFailed', currentResult.error.message) as Result<User, IamError>
+          return mapRepositoryError('iam_queryUserFailed', currentResult.error.message) as HaiResult<User>
         }
         if (!currentResult.data) {
           return err({
@@ -527,12 +527,12 @@ function buildUserMutationOps(ctx: UserFnContext): Pick<UserOperations, 'updateC
 
       const uniqueResult = await validateUniqueFieldsForUpdate(userRepository, userId, data)
       if (!uniqueResult.success) {
-        return uniqueResult as Result<User, IamError>
+        return uniqueResult as HaiResult<User>
       }
 
       const updateResult = await userRepository.updateById(userId, data)
       if (!updateResult.success) {
-        return mapUpdateErrorAsDomainError(updateResult.error.message) as Result<User, IamError>
+        return mapUpdateErrorAsDomainError(updateResult.error.message) as HaiResult<User>
       }
 
       if (updateResult.data.changes === 0) {
@@ -549,7 +549,7 @@ function buildUserMutationOps(ctx: UserFnContext): Pick<UserOperations, 'updateC
 
       const updatedResult = await userRepository.findById(userId)
       if (!updatedResult.success) {
-        return mapRepositoryError('iam_queryUserFailed', updatedResult.error.message) as Result<User, IamError>
+        return mapRepositoryError('iam_queryUserFailed', updatedResult.error.message) as HaiResult<User>
       }
       if (!updatedResult.data) {
         return err({
@@ -561,12 +561,12 @@ function buildUserMutationOps(ctx: UserFnContext): Pick<UserOperations, 'updateC
       return ok(toUser(updatedResult.data))
     },
 
-    async deleteUser(userId: string): Promise<Result<void, IamError>> {
+    async deleteUser(userId: string): Promise<HaiResult<void>> {
       logger.debug('Deleting user', { userId })
 
       const userResult = await userRepository.findById(userId)
       if (!userResult.success) {
-        return mapRepositoryError('iam_queryUserFailed', userResult.error.message) as Result<void, IamError>
+        return mapRepositoryError('iam_queryUserFailed', userResult.error.message) as HaiResult<void>
       }
       if (!userResult.data) {
         return err({ code: IamErrorCode.USER_NOT_FOUND, message: iamM('iam_userNotExist') })
@@ -574,7 +574,7 @@ function buildUserMutationOps(ctx: UserFnContext): Pick<UserOperations, 'updateC
 
       const txResult = await reldb.tx.begin()
       if (!txResult.success) {
-        return mapRepositoryError('iam_deleteUserFailed', txResult.error.message) as Result<void, IamError>
+        return mapRepositoryError('iam_deleteUserFailed', txResult.error.message) as HaiResult<void>
       }
       const tx = txResult.data
 
@@ -583,19 +583,19 @@ function buildUserMutationOps(ctx: UserFnContext): Pick<UserOperations, 'updateC
         const syncResult = await authzFunctions.syncRoles(userId, [], tx)
         if (!syncResult.success) {
           await tx.rollback()
-          return mapRepositoryError('iam_deleteUserFailed', syncResult.error.message) as Result<void, IamError>
+          return mapRepositoryError('iam_deleteUserFailed', syncResult.error.message) as HaiResult<void>
         }
 
         // 删除用户记录
         const deleteResult = await userRepository.deleteById(userId, tx)
         if (!deleteResult.success) {
           await tx.rollback()
-          return mapRepositoryError('iam_deleteUserFailed', deleteResult.error.message) as Result<void, IamError>
+          return mapRepositoryError('iam_deleteUserFailed', deleteResult.error.message) as HaiResult<void>
         }
 
         const commitResult = await tx.commit()
         if (!commitResult.success) {
-          return mapRepositoryError('iam_deleteUserFailed', commitResult.error.message) as Result<void, IamError>
+          return mapRepositoryError('iam_deleteUserFailed', commitResult.error.message) as HaiResult<void>
         }
       }
       catch (error) {
@@ -626,12 +626,12 @@ function buildPasswordChangeOps(ctx: UserFnContext): Pick<UserOperations, 'admin
   const { validatePassword, hashPassword } = ctx
 
   return {
-    async adminResetPassword(userId: string, newPassword: string): Promise<Result<void, IamError>> {
+    async adminResetPassword(userId: string, newPassword: string): Promise<HaiResult<void>> {
       logger.debug('Admin resetting user password', { userId })
 
       const userResult = await userRepository.findById(userId)
       if (!userResult.success) {
-        return mapRepositoryError('iam_queryUserFailed', userResult.error.message) as Result<void, IamError>
+        return mapRepositoryError('iam_queryUserFailed', userResult.error.message) as HaiResult<void>
       }
       if (!userResult.data) {
         return err({ code: IamErrorCode.USER_NOT_FOUND, message: iamM('iam_userNotExist') })
@@ -643,7 +643,7 @@ function buildPasswordChangeOps(ctx: UserFnContext): Pick<UserOperations, 'admin
 
       const hashResult = hashPassword(newPassword)
       if (!hashResult.success)
-        return hashResult as Result<void, IamError>
+        return hashResult as HaiResult<void>
 
       const updateResult = await userRepository.updateById(userId, {
         passwordHash: hashResult.data,
@@ -660,11 +660,11 @@ function buildPasswordChangeOps(ctx: UserFnContext): Pick<UserOperations, 'admin
       return ok(undefined)
     },
 
-    async changePassword(userId: string, oldPassword: string, newPassword: string): Promise<Result<void, IamError>> {
+    async changePassword(userId: string, oldPassword: string, newPassword: string): Promise<HaiResult<void>> {
       // 获取用户
       const userResult = await userRepository.findById(userId)
       if (!userResult.success) {
-        return mapRepositoryError('iam_queryUserFailed', userResult.error.message) as Result<void, IamError>
+        return mapRepositoryError('iam_queryUserFailed', userResult.error.message) as HaiResult<void>
       }
       if (!userResult.data) {
         return err({ code: IamErrorCode.USER_NOT_FOUND, message: iamM('iam_userNotExist') })
@@ -690,7 +690,7 @@ function buildPasswordChangeOps(ctx: UserFnContext): Pick<UserOperations, 'admin
       // 哈希新密码
       const hashResult = hashPassword(newPassword)
       if (!hashResult.success)
-        return hashResult as Result<void, IamError>
+        return hashResult as HaiResult<void>
 
       // 更新密码
       const updateResult = await userRepository.updateById(userId, {
@@ -716,10 +716,10 @@ function buildPasswordChangeOps(ctx: UserFnContext): Pick<UserOperations, 'admin
      * @param newPassword 新密码
      * @returns 改密执行结果
      */
-    async changeCurrentUserPassword(accessToken: string, oldPassword: string, newPassword: string): Promise<Result<void, IamError>> {
+    async changeCurrentUserPassword(accessToken: string, oldPassword: string, newPassword: string): Promise<HaiResult<void>> {
       const verifyResult = await sessionFunctions.verifyToken(accessToken)
       if (!verifyResult.success) {
-        return verifyResult as Result<void, IamError>
+        return verifyResult as HaiResult<void>
       }
 
       return this.changePassword(verifyResult.data.userId, oldPassword, newPassword)
@@ -737,7 +737,7 @@ function buildPasswordResetOps(ctx: UserFnContext): Pick<UserOperations, 'reques
   const { validatePassword, hashPassword } = ctx
 
   return {
-    async requestPasswordReset(identifier: string): Promise<Result<void, IamError>> {
+    async requestPasswordReset(identifier: string): Promise<HaiResult<void>> {
       logger.debug('Password reset requested', { identifier })
 
       const resetConfig = PasswordResetConfigSchema.parse(config.passwordReset ?? {})
@@ -785,7 +785,7 @@ function buildPasswordResetOps(ctx: UserFnContext): Pick<UserOperations, 'reques
       return ok(undefined)
     },
 
-    async confirmPasswordReset(token: string, newPassword: string): Promise<Result<void, IamError>> {
+    async confirmPasswordReset(token: string, newPassword: string): Promise<HaiResult<void>> {
       logger.debug('Confirming password reset')
 
       const resetConfig = PasswordResetConfigSchema.parse(config.passwordReset ?? {})
@@ -798,7 +798,7 @@ function buildPasswordResetOps(ctx: UserFnContext): Pick<UserOperations, 'reques
       // 验证令牌并获取 userId（自动递增尝试次数、超限自动删除令牌）
       const tokenResult = await resetTokenRepository.tryGetUserByToken(token, resetConfig.maxAttempts)
       if (!tokenResult.success) {
-        return tokenResult as Result<void, IamError>
+        return tokenResult as HaiResult<void>
       }
 
       const userId = tokenResult.data
@@ -806,7 +806,7 @@ function buildPasswordResetOps(ctx: UserFnContext): Pick<UserOperations, 'reques
       // 查找用户
       const userResult = await userRepository.findById(userId)
       if (!userResult.success) {
-        return mapRepositoryError('iam_queryUserFailed', userResult.error.message) as Result<void, IamError>
+        return mapRepositoryError('iam_queryUserFailed', userResult.error.message) as HaiResult<void>
       }
       if (!userResult.data) {
         return err({
@@ -818,7 +818,7 @@ function buildPasswordResetOps(ctx: UserFnContext): Pick<UserOperations, 'reques
       // 哈希新密码
       const hashResult = hashPassword(newPassword)
       if (!hashResult.success)
-        return hashResult as Result<void, IamError>
+        return hashResult as HaiResult<void>
 
       // 更新密码
       const updateResult = await userRepository.updateById(userId, {

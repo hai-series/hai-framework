@@ -8,43 +8,6 @@
 import { z } from 'zod'
 import { paymentM } from './payment-i18n.js'
 
-// ─── 错误码 ───
-
-export const PaymentErrorCode = {
-  CREATE_ORDER_FAILED: 7000,
-  QUERY_ORDER_FAILED: 7001,
-  REFUND_FAILED: 7002,
-  CLOSE_ORDER_FAILED: 7003,
-  NOT_INITIALIZED: 7010,
-  SIGN_FAILED: 7020,
-  PROVIDER_NOT_FOUND: 7030,
-  INVALID_AMOUNT: 7040,
-  NOTIFY_VERIFY_FAILED: 7050,
-  NOTIFY_PARSE_FAILED: 7051,
-  INVOKE_WEB_FAILED: 7060,
-  INVOKE_APP_FAILED: 7061,
-  CONFIG_ERROR: 7070,
-} as const
-
-export type PaymentErrorCodeType = (typeof PaymentErrorCode)[keyof typeof PaymentErrorCode]
-
-/** 支付错误码 → HTTP 状态码映射 */
-export const PaymentErrorHttpStatus: Record<number, number> = {
-  [PaymentErrorCode.CREATE_ORDER_FAILED]: 500,
-  [PaymentErrorCode.QUERY_ORDER_FAILED]: 500,
-  [PaymentErrorCode.REFUND_FAILED]: 500,
-  [PaymentErrorCode.CLOSE_ORDER_FAILED]: 500,
-  [PaymentErrorCode.NOT_INITIALIZED]: 500,
-  [PaymentErrorCode.SIGN_FAILED]: 500,
-  [PaymentErrorCode.PROVIDER_NOT_FOUND]: 404,
-  [PaymentErrorCode.INVALID_AMOUNT]: 400,
-  [PaymentErrorCode.NOTIFY_VERIFY_FAILED]: 400,
-  [PaymentErrorCode.NOTIFY_PARSE_FAILED]: 400,
-  [PaymentErrorCode.INVOKE_WEB_FAILED]: 500,
-  [PaymentErrorCode.INVOKE_APP_FAILED]: 500,
-  [PaymentErrorCode.CONFIG_ERROR]: 500,
-}
-
 // ─── 配置 Schema ───
 
 /** 微信支付配置 Schema */

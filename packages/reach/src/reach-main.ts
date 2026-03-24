@@ -5,17 +5,10 @@
  * @module reach-main
  */
 
-import type { Result } from '@h-ai/core'
+import type { HaiResult } from '@h-ai/core'
 import type { ReldbFunctions } from '@h-ai/reldb'
 import type { DndConfig, ProviderConfig, ReachConfig, ReachConfigInput } from './reach-config.js'
-import type {
-  ReachError,
-  ReachFunctions,
-  ReachMessage,
-  ReachProvider,
-  ReachTemplateRegistry,
-  SendResult,
-} from './reach-types.js'
+import type { ReachFunctions, ReachMessage, ReachProvider, ReachTemplateRegistry, SendResult } from './reach-types.js'
 import type { SendLogRepository } from './repositories/reach-repository-send-log.js'
 import type { TemplateRepository } from './repositories/reach-repository-template.js'
 
@@ -25,10 +18,14 @@ import { createAliyunSmsProvider } from './providers/reach-provider-aliyun-sms.j
 import { createApiProvider } from './providers/reach-provider-api.js'
 import { createConsoleProvider } from './providers/reach-provider-console.js'
 import { createSmtpProvider } from './providers/reach-provider-smtp.js'
-import { ReachConfigSchema, ReachErrorCode } from './reach-config.js'
+import { ReachConfigSchema } from './reach-config.js'
 import { reachM } from './reach-i18n.js'
 import { executeSend, resetSendState, startDndScheduler } from './reach-send.js'
 import { createTemplateRegistry } from './reach-template.js'
+import {
+  HaiReachError,
+
+} from './reach-types.js'
 import { createSendLogRepository, resetSendLogRepoSingleton } from './repositories/reach-repository-send-log.js'
 import { createTemplateRepository, resetTemplateRepoSingleton } from './repositories/reach-repository-template.js'
 
@@ -140,8 +137,8 @@ async function tryInitTemplateRepo(): Promise<TemplateRepository | null> {
 
 // ─── 未初始化工具集 ───
 
-const notInitialized = core.module.createNotInitializedKit<ReachError>(
-  ReachErrorCode.NOT_INITIALIZED,
+const notInitialized = core.module.createNotInitializedKit(
+  HaiReachError.NOT_INITIALIZED,
   () => reachM('reach_notInitialized'),
 )
 
@@ -185,7 +182,7 @@ async function doClose(): Promise<void> {
 /**
  * 实际的初始化逻辑（由 init 包裹并发防护后调用）
  */
-async function doInit(config: ReachConfigInput): Promise<Result<void, ReachError>> {
+async function doInit(config: ReachConfigInput): Promise<HaiResult<void>> {
   if (providers.size > 0) {
     logger.warn('Reach module is already initialized, reinitializing')
     await doClose()
@@ -196,11 +193,11 @@ async function doInit(config: ReachConfigInput): Promise<Result<void, ReachError
   const parseResult = ReachConfigSchema.safeParse(config)
   if (!parseResult.success) {
     logger.error('Reach config validation failed', { error: parseResult.error.message })
-    return err({
-      code: ReachErrorCode.CONFIG_ERROR,
-      message: reachM('reach_configError', { params: { error: parseResult.error.message } }),
-      cause: parseResult.error,
-    })
+    return err(
+      HaiReachError.CONFIG_ERROR,
+      reachM('reach_configError', { params: { error: parseResult.error.message } }),
+      parseResult.error,
+    )
   }
   const parsed = parseResult.data
 
@@ -263,13 +260,13 @@ async function doInit(config: ReachConfigInput): Promise<Result<void, ReachError
   }
   catch (error) {
     logger.error('Reach module initialization failed', { error })
-    return err({
-      code: ReachErrorCode.CONFIG_ERROR,
-      message: reachM('reach_initFailed', {
+    return err(
+      HaiReachError.CONFIG_ERROR,
+      reachM('reach_initFailed', {
         params: { error: error instanceof Error ? error.message : String(error) },
       }),
-      cause: error,
-    })
+      error,
+    )
   }
 }
 
@@ -281,13 +278,13 @@ async function doInit(config: ReachConfigInput): Promise<Result<void, ReachError
  * 统一的用户触达入口，支持同时使用邮件、短信、API 回调等多种 Provider。
  */
 export const reach: ReachFunctions = {
-  async init(config: ReachConfigInput): Promise<Result<void, ReachError>> {
+  async init(config: ReachConfigInput): Promise<HaiResult<void>> {
     if (initInProgress) {
       logger.warn('Reach module init already in progress, skipping')
-      return err({
-        code: ReachErrorCode.CONFIG_ERROR,
-        message: reachM('reach_configError', { params: { error: 'init already in progress' } }),
-      })
+      return err(
+        HaiReachError.CONFIG_ERROR,
+        reachM('reach_configError', { params: { error: 'init already in progress' } }),
+      )
     }
 
     initInProgress = true
@@ -299,7 +296,7 @@ export const reach: ReachFunctions = {
     }
   },
 
-  async send(message: ReachMessage): Promise<Result<SendResult, ReachError>> {
+  async send(message: ReachMessage): Promise<HaiResult<SendResult>> {
     if (providers.size === 0) {
       return notInitialized.result()
     }

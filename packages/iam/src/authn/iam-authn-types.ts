@@ -5,9 +5,8 @@
  * @module iam-authn-types
  */
 
-import type { Result } from '@h-ai/core'
+import type { HaiResult } from '@h-ai/core'
 import type { AuthStrategyType } from '../iam-config.js'
-import type { IamError } from '../iam-types.js'
 import type { AuthResult, Session } from '../session/iam-session-types.js'
 import type { RegisterOptions, User } from '../user/iam-user-types.js'
 
@@ -81,7 +80,7 @@ export interface AuthStrategy {
    * @param credentials - 统一凭证（包含 type 字段标识认证方式）
    * @returns 认证成功返回用户信息；失败返回对应错误码（INVALID_CREDENTIALS / USER_LOCKED 等）
    */
-  authenticate: (credentials: Credentials) => Promise<Result<User, IamError>>
+  authenticate: (credentials: Credentials) => Promise<HaiResult<User>>
 }
 
 // ─── 认证操作接口 ───
@@ -98,7 +97,7 @@ export interface AuthnOperations {
    * @param credentials - 密码凭证（identifier + password）
    * @returns 成功返回 AuthResult（用户信息、令牌、协议展示）；失败返回错误
    */
-  login: (credentials: PasswordCredentials) => Promise<Result<AuthResult, IamError>>
+  login: (credentials: PasswordCredentials) => Promise<HaiResult<AuthResult>>
 
   /**
    * 使用验证码登录
@@ -106,7 +105,7 @@ export interface AuthnOperations {
    * @param credentials - OTP 凭证（identifier + code）
    * @returns 成功返回 AuthResult；验证码无效/过期返回 OTP_INVALID
    */
-  loginWithOtp: (credentials: OtpCredentials) => Promise<Result<AuthResult, IamError>>
+  loginWithOtp: (credentials: OtpCredentials) => Promise<HaiResult<AuthResult>>
 
   /**
    * 使用 LDAP 登录
@@ -114,7 +113,7 @@ export interface AuthnOperations {
    * @param credentials - LDAP 凭证（username + password）
    * @returns 成功返回 AuthResult（自动同步本地用户）；失败返回错误
    */
-  loginWithLdap: (credentials: LdapCredentials) => Promise<Result<AuthResult, IamError>>
+  loginWithLdap: (credentials: LdapCredentials) => Promise<HaiResult<AuthResult>>
 
   /**
    * 使用 API Key 登录
@@ -124,7 +123,7 @@ export interface AuthnOperations {
    * @param credentials - API Key 凭证
    * @returns 成功返回 AuthResult；API Key 无效/过期/禁用返回对应错误
    */
-  loginWithApiKey: (credentials: ApiKeyCredentials) => Promise<Result<AuthResult, IamError>>
+  loginWithApiKey: (credentials: ApiKeyCredentials) => Promise<HaiResult<AuthResult>>
 
   /**
    * 登出
@@ -134,7 +133,7 @@ export interface AuthnOperations {
    * @param accessToken - 访问令牌
    * @returns 始终返回 ok
    */
-  logout: (accessToken: string) => Promise<Result<void, IamError>>
+  logout: (accessToken: string) => Promise<HaiResult<void>>
 
   /**
    * 验证令牌
@@ -144,7 +143,7 @@ export interface AuthnOperations {
    * @param accessToken - 访问令牌
    * @returns 成功返回会话信息；令牌无效/过期返回 SESSION_INVALID
    */
-  verifyToken: (accessToken: string) => Promise<Result<Session, IamError>>
+  verifyToken: (accessToken: string) => Promise<HaiResult<Session>>
 
   /**
    * 发送验证码
@@ -152,7 +151,7 @@ export interface AuthnOperations {
    * @param identifier - 用户标识（邮箱/手机号）
    * @returns 成功返回验证码过期时间；频率限制返回 OTP_RESEND_TOO_FAST
    */
-  sendOtp: (identifier: string) => Promise<Result<{ expiresAt: Date }, IamError>>
+  sendOtp: (identifier: string) => Promise<HaiResult<{ expiresAt: Date }>>
 
   /**
    * 注册并登录（一站式）
@@ -163,5 +162,5 @@ export interface AuthnOperations {
    * @param options - 注册选项（用户名、密码、邮箱等）
    * @returns 成功返回 AuthResult（用户信息、令牌、协议展示）；失败返回对应错误码
    */
-  registerAndLogin: (options: RegisterOptions) => Promise<Result<AuthResult, IamError>>
+  registerAndLogin: (options: RegisterOptions) => Promise<HaiResult<AuthResult>>
 }

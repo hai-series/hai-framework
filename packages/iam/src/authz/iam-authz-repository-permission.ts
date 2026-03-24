@@ -5,14 +5,13 @@
  * @module iam-authz-repository-permission
  */
 
-import type { Result } from '@h-ai/core'
+import type { HaiResult } from '@h-ai/core'
 import type { DmlWithTxOperations, ReldbCrudFieldDefinition, ReldbCrudRepository } from '@h-ai/reldb'
-import type { IamError } from '../iam-types.js'
 import type { Permission } from './iam-authz-types.js'
 import { err, ok } from '@h-ai/core'
 import { BaseReldbCrudRepository, reldb } from '@h-ai/reldb'
-import { IamErrorCode } from '../iam-config.js'
 import { iamM } from '../iam-i18n.js'
+import { HaiIamError } from '../iam-types.js'
 
 // ─── 权限存储接口 ───
 
@@ -23,7 +22,7 @@ export interface PermissionRepository extends ReldbCrudRepository<Permission> {
   /**
    * 根据代码获取权限
    */
-  findByCode: (code: string, tx?: DmlWithTxOperations) => Promise<Result<Permission | null, IamError>>
+  findByCode: (code: string, tx?: DmlWithTxOperations) => Promise<HaiResult<Permission | null>>
 }
 
 // ─── 权限存储实现 ───
@@ -155,19 +154,19 @@ class DbPermissionRepository extends BaseReldbCrudRepository<Permission> impleme
   }
 
   /** 根据权限代码查找权限 */
-  async findByCode(code: string, tx?: DmlWithTxOperations): Promise<Result<Permission | null, IamError>> {
+  async findByCode(code: string, tx?: DmlWithTxOperations): Promise<HaiResult<Permission | null>> {
     return this.findOneBy('code = ?', [code], tx)
   }
 
-  private buildQueryError(error: { message: string }, cause: unknown): Result<never, IamError> {
-    return err({
-      code: IamErrorCode.REPOSITORY_ERROR,
-      message: iamM('iam_queryPermissionFailed', { params: { message: error.message } }),
+  private buildQueryError(error: { message: string }, cause: unknown): HaiResult<never> {
+    return err(
+      HaiIamError.REPOSITORY_ERROR,
+      iamM('iam_queryPermissionFailed', { params: { message: error.message } }),
       cause,
-    })
+    )
   }
 
-  private async findOneBy(where: string, params: unknown[], tx?: DmlWithTxOperations): Promise<Result<Permission | null, IamError>> {
+  private async findOneBy(where: string, params: unknown[], tx?: DmlWithTxOperations): Promise<HaiResult<Permission | null>> {
     const result = await this.findAll({ where, params, limit: 1 }, tx)
     if (!result.success) {
       return this.buildQueryError(result.error, result.error)

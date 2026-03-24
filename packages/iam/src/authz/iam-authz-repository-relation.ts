@@ -5,15 +5,14 @@
  * @module iam-authz-repository-relation
  */
 
-import type { Result } from '@h-ai/core'
+import type { HaiResult } from '@h-ai/core'
 import type { DmlWithTxOperations } from '@h-ai/reldb'
-import type { IamError } from '../iam-types.js'
 import type { RoleRepository } from './iam-authz-repository-role.js'
 import type { Permission, Role } from './iam-authz-types.js'
 import { err, ok } from '@h-ai/core'
 import { reldb } from '@h-ai/reldb'
-import { IamErrorCode } from '../iam-config.js'
 import { iamM } from '../iam-i18n.js'
+import { HaiIamError } from '../iam-types.js'
 
 // ─── 角色-权限关联存储接口 ───
 
@@ -24,17 +23,17 @@ export interface RolePermissionRepository {
   /**
    * 分配权限给角色
    */
-  assign: (roleId: string, permissionId: string, tx?: DmlWithTxOperations) => Promise<Result<void, IamError>>
+  assign: (roleId: string, permissionId: string, tx?: DmlWithTxOperations) => Promise<HaiResult<void>>
 
   /**
    * 移除角色权限
    */
-  remove: (roleId: string, permissionId: string, tx?: DmlWithTxOperations) => Promise<Result<void, IamError>>
+  remove: (roleId: string, permissionId: string, tx?: DmlWithTxOperations) => Promise<HaiResult<void>>
 
   /**
    * 获取角色的所有权限
    */
-  getPermissions: (roleId: string, tx?: DmlWithTxOperations) => Promise<Result<Permission[], IamError>>
+  getPermissions: (roleId: string, tx?: DmlWithTxOperations) => Promise<HaiResult<Permission[]>>
 
   /**
    * 批量获取多个角色的权限代码（去重）
@@ -44,17 +43,17 @@ export interface RolePermissionRepository {
    * @param roleIds - 角色 ID 列表
    * @returns 去重后的权限代码数组
    */
-  getPermissionCodesForRoles: (roleIds: string[]) => Promise<Result<string[], IamError>>
+  getPermissionCodesForRoles: (roleIds: string[]) => Promise<HaiResult<string[]>>
 
   /**
    * 删除角色的所有权限关联
    */
-  removeByRoleId: (roleId: string, tx?: DmlWithTxOperations) => Promise<Result<void, IamError>>
+  removeByRoleId: (roleId: string, tx?: DmlWithTxOperations) => Promise<HaiResult<void>>
 
   /**
    * 删除权限的所有角色关联
    */
-  removeByPermissionId: (permissionId: string, tx?: DmlWithTxOperations) => Promise<Result<void, IamError>>
+  removeByPermissionId: (permissionId: string, tx?: DmlWithTxOperations) => Promise<HaiResult<void>>
 
   /**
    * 查询拥有指定权限的所有角色 ID
@@ -62,7 +61,7 @@ export interface RolePermissionRepository {
    * @param permissionId - 权限 ID
    * @returns 角色 ID 数组
    */
-  getRoleIdsByPermissionId: (permissionId: string) => Promise<Result<string[], IamError>>
+  getRoleIdsByPermissionId: (permissionId: string) => Promise<HaiResult<string[]>>
 
   /**
    * 批量获取多个角色的权限列表
@@ -73,7 +72,7 @@ export interface RolePermissionRepository {
    * @param roleIds - 角色 ID 列表
    * @returns Map<roleId, Permission[]>
    */
-  getPermissionsForRoles: (roleIds: string[]) => Promise<Result<Map<string, Permission[]>, IamError>>
+  getPermissionsForRoles: (roleIds: string[]) => Promise<HaiResult<Map<string, Permission[]>>>
 }
 
 // ─── 用户-角色关联存储接口 ───
@@ -85,22 +84,22 @@ export interface UserRoleRepository {
   /**
    * 分配角色给用户
    */
-  assign: (userId: string, roleId: string, tx?: DmlWithTxOperations) => Promise<Result<void, IamError>>
+  assign: (userId: string, roleId: string, tx?: DmlWithTxOperations) => Promise<HaiResult<void>>
 
   /**
    * 移除用户角色
    */
-  remove: (userId: string, roleId: string, tx?: DmlWithTxOperations) => Promise<Result<void, IamError>>
+  remove: (userId: string, roleId: string, tx?: DmlWithTxOperations) => Promise<HaiResult<void>>
 
   /**
    * 获取用户的所有角色 ID
    */
-  getRoleIds: (userId: string, tx?: DmlWithTxOperations) => Promise<Result<string[], IamError>>
+  getRoleIds: (userId: string, tx?: DmlWithTxOperations) => Promise<HaiResult<string[]>>
 
   /**
    * 获取用户的所有角色
    */
-  getRoles: (userId: string, tx?: DmlWithTxOperations) => Promise<Result<Role[], IamError>>
+  getRoles: (userId: string, tx?: DmlWithTxOperations) => Promise<HaiResult<Role[]>>
 
   /**
    * 删除角色的所有用户关联（仅 DB 操作）
@@ -108,7 +107,7 @@ export interface UserRoleRepository {
    * 返回受影响的用户 ID 列表。
    * 不同步会话；调用方应在事务提交后通过 SessionOperations 同步。
    */
-  removeByRoleId: (roleId: string, tx?: DmlWithTxOperations) => Promise<Result<string[], IamError>>
+  removeByRoleId: (roleId: string, tx?: DmlWithTxOperations) => Promise<HaiResult<string[]>>
 
   /**
    * 查询拥有指定角色的所有用户 ID
@@ -116,7 +115,7 @@ export interface UserRoleRepository {
    * @param roleId - 角色 ID
    * @returns 用户 ID 数组
    */
-  getUserIdsByRoleId: (roleId: string) => Promise<Result<string[], IamError>>
+  getUserIdsByRoleId: (roleId: string) => Promise<HaiResult<string[]>>
 
   /**
    * 批量获取多个用户的角色列表
@@ -127,7 +126,7 @@ export interface UserRoleRepository {
    * @param userIds - 用户 ID 列表
    * @returns Map<userId, Role[]>
    */
-  getRolesForUsers: (userIds: string[]) => Promise<Result<Map<string, Role[]>, IamError>>
+  getRolesForUsers: (userIds: string[]) => Promise<HaiResult<Map<string, Role[]>>>
 }
 
 // ─── 角色-权限关联存储实现 ───
@@ -146,16 +145,16 @@ const ROLE_PERMISSION_SCHEMA = {
  *
  * @returns 角色-权限关联存储接口实现（失败返回 IamError）
  */
-export async function createDbRolePermissionRepository(): Promise<Result<RolePermissionRepository, IamError>> {
+export async function createDbRolePermissionRepository(): Promise<HaiResult<RolePermissionRepository>> {
   // 确保表存在
-  async function ensureTable(): Promise<Result<void, IamError>> {
+  async function ensureTable(): Promise<HaiResult<void>> {
     const result = await reldb.ddl.createTable(ROLE_PERMISSION_TABLE, ROLE_PERMISSION_SCHEMA, true)
     if (!result.success) {
-      return err({
-        code: IamErrorCode.REPOSITORY_ERROR,
-        message: iamM('iam_createRolePermissionTableFailed', { params: { message: result.error.message } }),
-        cause: result.error,
-      })
+      return err(
+        HaiIamError.REPOSITORY_ERROR,
+        iamM('iam_createRolePermissionTableFailed', { params: { message: result.error.message } }),
+        result.error,
+      )
     }
 
     const indexResults = await Promise.all([
@@ -164,11 +163,11 @@ export async function createDbRolePermissionRepository(): Promise<Result<RolePer
     ])
     for (const indexResult of indexResults) {
       if (!indexResult.success) {
-        return err({
-          code: IamErrorCode.REPOSITORY_ERROR,
-          message: iamM('iam_createRolePermissionIndexFailed', { params: { message: indexResult.error.message } }),
-          cause: indexResult.error,
-        })
+        return err(
+          HaiIamError.REPOSITORY_ERROR,
+          iamM('iam_createRolePermissionIndexFailed', { params: { message: indexResult.error.message } }),
+          indexResult.error,
+        )
       }
     }
 
@@ -177,11 +176,11 @@ export async function createDbRolePermissionRepository(): Promise<Result<RolePer
 
   const initResult = await ensureTable()
   if (!initResult.success) {
-    return err({
-      code: IamErrorCode.REPOSITORY_ERROR,
-      message: initResult.error.message,
-      cause: initResult.error,
-    })
+    return err(
+      HaiIamError.REPOSITORY_ERROR,
+      initResult.error.message,
+      initResult.error,
+    )
   }
 
   /**
@@ -191,7 +190,7 @@ export async function createDbRolePermissionRepository(): Promise<Result<RolePer
    * @param tx - 可选事务句柄
    * @returns 权限 ID 数组
    */
-  async function getPermissionIdsInternal(roleId: string, tx?: DmlWithTxOperations): Promise<Result<string[], IamError>> {
+  async function getPermissionIdsInternal(roleId: string, tx?: DmlWithTxOperations): Promise<HaiResult<string[]>> {
     const runner = tx ?? reldb.sql
     const result = await runner.query<{ permission_id: string }>(
       `SELECT permission_id FROM ${ROLE_PERMISSION_TABLE} WHERE role_id = ?`,
@@ -199,18 +198,18 @@ export async function createDbRolePermissionRepository(): Promise<Result<RolePer
     )
 
     if (!result.success) {
-      return err({
-        code: IamErrorCode.REPOSITORY_ERROR,
-        message: iamM('iam_queryPermissionFailed', { params: { message: result.error.message } }),
-        cause: result.error,
-      })
+      return err(
+        HaiIamError.REPOSITORY_ERROR,
+        iamM('iam_queryPermissionFailed', { params: { message: result.error.message } }),
+        result.error,
+      )
     }
 
     return ok(result.data.map(r => r.permission_id))
   }
 
   return ok({
-    async assign(roleId: string, permissionId: string, tx?: DmlWithTxOperations): Promise<Result<void, IamError>> {
+    async assign(roleId: string, permissionId: string, tx?: DmlWithTxOperations): Promise<HaiResult<void>> {
       const runner = tx ?? reldb.sql
       const result = await runner.execute(
         `INSERT INTO ${ROLE_PERMISSION_TABLE} (role_id, permission_id) VALUES (?, ?) ON CONFLICT DO NOTHING`,
@@ -218,17 +217,17 @@ export async function createDbRolePermissionRepository(): Promise<Result<RolePer
       )
 
       if (!result.success) {
-        return err({
-          code: IamErrorCode.REPOSITORY_ERROR,
-          message: iamM('iam_assignPermissionFailed', { params: { message: result.error.message } }),
-          cause: result.error,
-        })
+        return err(
+          HaiIamError.REPOSITORY_ERROR,
+          iamM('iam_assignPermissionFailed', { params: { message: result.error.message } }),
+          result.error,
+        )
       }
 
       return ok(undefined)
     },
 
-    async remove(roleId: string, permissionId: string, tx?: DmlWithTxOperations): Promise<Result<void, IamError>> {
+    async remove(roleId: string, permissionId: string, tx?: DmlWithTxOperations): Promise<HaiResult<void>> {
       const runner = tx ?? reldb.sql
       const result = await runner.execute(
         `DELETE FROM ${ROLE_PERMISSION_TABLE} WHERE role_id = ? AND permission_id = ?`,
@@ -236,17 +235,17 @@ export async function createDbRolePermissionRepository(): Promise<Result<RolePer
       )
 
       if (!result.success) {
-        return err({
-          code: IamErrorCode.REPOSITORY_ERROR,
-          message: iamM('iam_removePermissionFailed', { params: { message: result.error.message } }),
-          cause: result.error,
-        })
+        return err(
+          HaiIamError.REPOSITORY_ERROR,
+          iamM('iam_removePermissionFailed', { params: { message: result.error.message } }),
+          result.error,
+        )
       }
 
       return ok(undefined)
     },
 
-    async getPermissions(roleId: string, tx?: DmlWithTxOperations): Promise<Result<Permission[], IamError>> {
+    async getPermissions(roleId: string, tx?: DmlWithTxOperations): Promise<HaiResult<Permission[]>> {
       const idsResult = await getPermissionIdsInternal(roleId, tx)
       if (!idsResult.success)
         return idsResult
@@ -261,17 +260,17 @@ export async function createDbRolePermissionRepository(): Promise<Result<RolePer
         idsResult.data,
       )
       if (!result.success) {
-        return err({
-          code: IamErrorCode.REPOSITORY_ERROR,
-          message: iamM('iam_queryPermissionFailed', { params: { message: result.error.message } }),
-          cause: result.error,
-        })
+        return err(
+          HaiIamError.REPOSITORY_ERROR,
+          iamM('iam_queryPermissionFailed', { params: { message: result.error.message } }),
+          result.error,
+        )
       }
 
       return ok(result.data as unknown as Permission[])
     },
 
-    async getPermissionCodesForRoles(roleIds: string[]): Promise<Result<string[], IamError>> {
+    async getPermissionCodesForRoles(roleIds: string[]): Promise<HaiResult<string[]>> {
       if (roleIds.length === 0) {
         return ok([])
       }
@@ -282,64 +281,64 @@ export async function createDbRolePermissionRepository(): Promise<Result<RolePer
         roleIds,
       )
       if (!result.success) {
-        return err({
-          code: IamErrorCode.REPOSITORY_ERROR,
-          message: iamM('iam_queryPermissionFailed', { params: { message: result.error.message } }),
-          cause: result.error,
-        })
+        return err(
+          HaiIamError.REPOSITORY_ERROR,
+          iamM('iam_queryPermissionFailed', { params: { message: result.error.message } }),
+          result.error,
+        )
       }
 
       return ok(result.data.map(r => r.code))
     },
 
-    async removeByRoleId(roleId: string, tx?: DmlWithTxOperations): Promise<Result<void, IamError>> {
+    async removeByRoleId(roleId: string, tx?: DmlWithTxOperations): Promise<HaiResult<void>> {
       const runner = tx ?? reldb.sql
       const result = await runner.execute(
         `DELETE FROM ${ROLE_PERMISSION_TABLE} WHERE role_id = ?`,
         [roleId],
       )
       if (!result.success) {
-        return err({
-          code: IamErrorCode.REPOSITORY_ERROR,
-          message: iamM('iam_removePermissionFailed', { params: { message: result.error.message } }),
-          cause: result.error,
-        })
+        return err(
+          HaiIamError.REPOSITORY_ERROR,
+          iamM('iam_removePermissionFailed', { params: { message: result.error.message } }),
+          result.error,
+        )
       }
       return ok(undefined)
     },
 
-    async removeByPermissionId(permissionId: string, tx?: DmlWithTxOperations): Promise<Result<void, IamError>> {
+    async removeByPermissionId(permissionId: string, tx?: DmlWithTxOperations): Promise<HaiResult<void>> {
       const runner = tx ?? reldb.sql
       const result = await runner.execute(
         `DELETE FROM ${ROLE_PERMISSION_TABLE} WHERE permission_id = ?`,
         [permissionId],
       )
       if (!result.success) {
-        return err({
-          code: IamErrorCode.REPOSITORY_ERROR,
-          message: iamM('iam_removePermissionFailed', { params: { message: result.error.message } }),
-          cause: result.error,
-        })
+        return err(
+          HaiIamError.REPOSITORY_ERROR,
+          iamM('iam_removePermissionFailed', { params: { message: result.error.message } }),
+          result.error,
+        )
       }
       return ok(undefined)
     },
 
-    async getRoleIdsByPermissionId(permissionId: string): Promise<Result<string[], IamError>> {
+    async getRoleIdsByPermissionId(permissionId: string): Promise<HaiResult<string[]>> {
       const result = await reldb.sql.query<{ role_id: string }>(
         `SELECT role_id FROM ${ROLE_PERMISSION_TABLE} WHERE permission_id = ?`,
         [permissionId],
       )
       if (!result.success) {
-        return err({
-          code: IamErrorCode.REPOSITORY_ERROR,
-          message: iamM('iam_queryPermissionFailed', { params: { message: result.error.message } }),
-          cause: result.error,
-        })
+        return err(
+          HaiIamError.REPOSITORY_ERROR,
+          iamM('iam_queryPermissionFailed', { params: { message: result.error.message } }),
+          result.error,
+        )
       }
       return ok(result.data.map(r => r.role_id))
     },
 
-    async getPermissionsForRoles(roleIds: string[]): Promise<Result<Map<string, Permission[]>, IamError>> {
+    async getPermissionsForRoles(roleIds: string[]): Promise<HaiResult<Map<string, Permission[]>>> {
       const result = new Map<string, Permission[]>()
       if (roleIds.length === 0) {
         return ok(result)
@@ -351,11 +350,11 @@ export async function createDbRolePermissionRepository(): Promise<Result<RolePer
         roleIds,
       )
       if (!relationsResult.success) {
-        return err({
-          code: IamErrorCode.REPOSITORY_ERROR,
-          message: iamM('iam_queryPermissionFailed', { params: { message: relationsResult.error.message } }),
-          cause: relationsResult.error,
-        })
+        return err(
+          HaiIamError.REPOSITORY_ERROR,
+          iamM('iam_queryPermissionFailed', { params: { message: relationsResult.error.message } }),
+          relationsResult.error,
+        )
       }
 
       for (const rid of roleIds) {
@@ -373,11 +372,11 @@ export async function createDbRolePermissionRepository(): Promise<Result<RolePer
         uniquePermIds,
       )
       if (!permsResult.success) {
-        return err({
-          code: IamErrorCode.REPOSITORY_ERROR,
-          message: iamM('iam_queryPermissionFailed', { params: { message: permsResult.error.message } }),
-          cause: permsResult.error,
-        })
+        return err(
+          HaiIamError.REPOSITORY_ERROR,
+          iamM('iam_queryPermissionFailed', { params: { message: permsResult.error.message } }),
+          permsResult.error,
+        )
       }
 
       const permMap = new Map<string, Permission>()
@@ -416,20 +415,20 @@ const USER_ROLE_SCHEMA = {
  */
 export async function createDbUserRoleRepository(
   roleRepository: RoleRepository,
-): Promise<Result<UserRoleRepository, IamError>> {
+): Promise<HaiResult<UserRoleRepository>> {
   /**
    * 确保关联表和索引已创建
    *
    * 创建 `hai_iam_user_roles` 表及唯一约束索引。
    */
-  async function ensureTable(): Promise<Result<void, IamError>> {
+  async function ensureTable(): Promise<HaiResult<void>> {
     const result = await reldb.ddl.createTable(USER_ROLE_TABLE, USER_ROLE_SCHEMA, true)
     if (!result.success) {
-      return err({
-        code: IamErrorCode.REPOSITORY_ERROR,
-        message: iamM('iam_createUserRoleTableFailed', { params: { message: result.error.message } }),
-        cause: result.error,
-      })
+      return err(
+        HaiIamError.REPOSITORY_ERROR,
+        iamM('iam_createUserRoleTableFailed', { params: { message: result.error.message } }),
+        result.error,
+      )
     }
 
     const indexResults = await Promise.all([
@@ -438,11 +437,11 @@ export async function createDbUserRoleRepository(
     ])
     for (const indexResult of indexResults) {
       if (!indexResult.success) {
-        return err({
-          code: IamErrorCode.REPOSITORY_ERROR,
-          message: iamM('iam_createUserRoleIndexFailed', { params: { message: indexResult.error.message } }),
-          cause: indexResult.error,
-        })
+        return err(
+          HaiIamError.REPOSITORY_ERROR,
+          iamM('iam_createUserRoleIndexFailed', { params: { message: indexResult.error.message } }),
+          indexResult.error,
+        )
       }
     }
 
@@ -451,11 +450,11 @@ export async function createDbUserRoleRepository(
 
   const initResult = await ensureTable()
   if (!initResult.success) {
-    return err({
-      code: IamErrorCode.REPOSITORY_ERROR,
-      message: initResult.error.message,
-      cause: initResult.error,
-    })
+    return err(
+      HaiIamError.REPOSITORY_ERROR,
+      initResult.error.message,
+      initResult.error,
+    )
   }
 
   /**
@@ -465,7 +464,7 @@ export async function createDbUserRoleRepository(
    * @param tx - 可选事务句柄
    * @returns 角色 ID 数组
    */
-  async function getRoleIdsInternal(userId: string, tx?: DmlWithTxOperations): Promise<Result<string[], IamError>> {
+  async function getRoleIdsInternal(userId: string, tx?: DmlWithTxOperations): Promise<HaiResult<string[]>> {
     const runner = tx ?? reldb.sql
     const result = await runner.query<{ role_id: string }>(
       `SELECT role_id FROM ${USER_ROLE_TABLE} WHERE user_id = ?`,
@@ -473,18 +472,18 @@ export async function createDbUserRoleRepository(
     )
 
     if (!result.success) {
-      return err({
-        code: IamErrorCode.REPOSITORY_ERROR,
-        message: iamM('iam_queryRoleFailed', { params: { message: result.error.message } }),
-        cause: result.error,
-      })
+      return err(
+        HaiIamError.REPOSITORY_ERROR,
+        iamM('iam_queryRoleFailed', { params: { message: result.error.message } }),
+        result.error,
+      )
     }
 
     return ok(result.data.map(r => r.role_id))
   }
 
   return ok({
-    async assign(userId: string, roleId: string, tx?: DmlWithTxOperations): Promise<Result<void, IamError>> {
+    async assign(userId: string, roleId: string, tx?: DmlWithTxOperations): Promise<HaiResult<void>> {
       const runner = tx ?? reldb.sql
       const result = await runner.execute(
         `INSERT INTO ${USER_ROLE_TABLE} (user_id, role_id) VALUES (?, ?) ON CONFLICT DO NOTHING`,
@@ -492,17 +491,17 @@ export async function createDbUserRoleRepository(
       )
 
       if (!result.success) {
-        return err({
-          code: IamErrorCode.REPOSITORY_ERROR,
-          message: iamM('iam_assignRoleFailed', { params: { message: result.error.message } }),
-          cause: result.error,
-        })
+        return err(
+          HaiIamError.REPOSITORY_ERROR,
+          iamM('iam_assignRoleFailed', { params: { message: result.error.message } }),
+          result.error,
+        )
       }
 
       return ok(undefined)
     },
 
-    async remove(userId: string, roleId: string, tx?: DmlWithTxOperations): Promise<Result<void, IamError>> {
+    async remove(userId: string, roleId: string, tx?: DmlWithTxOperations): Promise<HaiResult<void>> {
       const runner = tx ?? reldb.sql
       const result = await runner.execute(
         `DELETE FROM ${USER_ROLE_TABLE} WHERE user_id = ? AND role_id = ?`,
@@ -510,21 +509,21 @@ export async function createDbUserRoleRepository(
       )
 
       if (!result.success) {
-        return err({
-          code: IamErrorCode.REPOSITORY_ERROR,
-          message: iamM('iam_removeRoleFailed', { params: { message: result.error.message } }),
-          cause: result.error,
-        })
+        return err(
+          HaiIamError.REPOSITORY_ERROR,
+          iamM('iam_removeRoleFailed', { params: { message: result.error.message } }),
+          result.error,
+        )
       }
 
       return ok(undefined)
     },
 
-    async getRoleIds(userId: string, tx?: DmlWithTxOperations): Promise<Result<string[], IamError>> {
+    async getRoleIds(userId: string, tx?: DmlWithTxOperations): Promise<HaiResult<string[]>> {
       return getRoleIdsInternal(userId, tx)
     },
 
-    async getRoles(userId: string, tx?: DmlWithTxOperations): Promise<Result<Role[], IamError>> {
+    async getRoles(userId: string, tx?: DmlWithTxOperations): Promise<HaiResult<Role[]>> {
       const idsResult = await getRoleIdsInternal(userId, tx)
       if (!idsResult.success)
         return idsResult
@@ -538,17 +537,17 @@ export async function createDbUserRoleRepository(
         params: idsResult.data,
       }, tx)
       if (!roleResult.success) {
-        return err({
-          code: IamErrorCode.REPOSITORY_ERROR,
-          message: iamM('iam_queryRoleFailed', { params: { message: roleResult.error.message } }),
-          cause: roleResult.error,
-        })
+        return err(
+          HaiIamError.REPOSITORY_ERROR,
+          iamM('iam_queryRoleFailed', { params: { message: roleResult.error.message } }),
+          roleResult.error,
+        )
       }
 
       return ok(roleResult.data)
     },
 
-    async removeByRoleId(roleId: string, tx?: DmlWithTxOperations): Promise<Result<string[], IamError>> {
+    async removeByRoleId(roleId: string, tx?: DmlWithTxOperations): Promise<HaiResult<string[]>> {
       const runner = tx ?? reldb.sql
 
       // 查出受影响的用户 ID
@@ -557,11 +556,11 @@ export async function createDbUserRoleRepository(
         [roleId],
       )
       if (!usersResult.success) {
-        return err({
-          code: IamErrorCode.REPOSITORY_ERROR,
-          message: iamM('iam_queryRoleFailed', { params: { message: usersResult.error.message } }),
-          cause: usersResult.error,
-        })
+        return err(
+          HaiIamError.REPOSITORY_ERROR,
+          iamM('iam_queryRoleFailed', { params: { message: usersResult.error.message } }),
+          usersResult.error,
+        )
       }
 
       // 删除关联行
@@ -570,32 +569,32 @@ export async function createDbUserRoleRepository(
         [roleId],
       )
       if (!deleteResult.success) {
-        return err({
-          code: IamErrorCode.REPOSITORY_ERROR,
-          message: iamM('iam_removeRoleFailed', { params: { message: deleteResult.error.message } }),
-          cause: deleteResult.error,
-        })
+        return err(
+          HaiIamError.REPOSITORY_ERROR,
+          iamM('iam_removeRoleFailed', { params: { message: deleteResult.error.message } }),
+          deleteResult.error,
+        )
       }
 
       return ok(usersResult.data.map(r => r.user_id))
     },
 
-    async getUserIdsByRoleId(roleId: string): Promise<Result<string[], IamError>> {
+    async getUserIdsByRoleId(roleId: string): Promise<HaiResult<string[]>> {
       const result = await reldb.sql.query<{ user_id: string }>(
         `SELECT user_id FROM ${USER_ROLE_TABLE} WHERE role_id = ?`,
         [roleId],
       )
       if (!result.success) {
-        return err({
-          code: IamErrorCode.REPOSITORY_ERROR,
-          message: iamM('iam_queryRoleFailed', { params: { message: result.error.message } }),
-          cause: result.error,
-        })
+        return err(
+          HaiIamError.REPOSITORY_ERROR,
+          iamM('iam_queryRoleFailed', { params: { message: result.error.message } }),
+          result.error,
+        )
       }
       return ok(result.data.map(r => r.user_id))
     },
 
-    async getRolesForUsers(userIds: string[]): Promise<Result<Map<string, Role[]>, IamError>> {
+    async getRolesForUsers(userIds: string[]): Promise<HaiResult<Map<string, Role[]>>> {
       const result = new Map<string, Role[]>()
       // 空列表直接返回空 Map
       if (userIds.length === 0) {
@@ -609,11 +608,11 @@ export async function createDbUserRoleRepository(
         userIds,
       )
       if (!relationsResult.success) {
-        return err({
-          code: IamErrorCode.REPOSITORY_ERROR,
-          message: iamM('iam_queryRoleFailed', { params: { message: relationsResult.error.message } }),
-          cause: relationsResult.error,
-        })
+        return err(
+          HaiIamError.REPOSITORY_ERROR,
+          iamM('iam_queryRoleFailed', { params: { message: relationsResult.error.message } }),
+          relationsResult.error,
+        )
       }
 
       // 初始化所有 userId → 空数组
@@ -633,11 +632,11 @@ export async function createDbUserRoleRepository(
         params: uniqueRoleIds,
       })
       if (!rolesResult.success) {
-        return err({
-          code: IamErrorCode.REPOSITORY_ERROR,
-          message: iamM('iam_queryRoleFailed', { params: { message: rolesResult.error.message } }),
-          cause: rolesResult.error,
-        })
+        return err(
+          HaiIamError.REPOSITORY_ERROR,
+          iamM('iam_queryRoleFailed', { params: { message: rolesResult.error.message } }),
+          rolesResult.error,
+        )
       }
 
       // roleId → Role 索引

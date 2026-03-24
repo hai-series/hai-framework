@@ -6,16 +6,16 @@
  * @module iam-seed
  */
 
-import type { Result } from '@h-ai/core'
+import type { HaiResult } from '@h-ai/core'
 
 import type { PermissionType } from './authz/iam-authz-types.js'
 
-import type { AuthzOperations, IamError } from './iam-types.js'
+import type { AuthzOperations } from './iam-types.js'
 
 import { core, err, ok } from '@h-ai/core'
 
-import { IamErrorCode } from './iam-config.js'
 import { iamM } from './iam-i18n.js'
+import { HaiIamError } from './iam-types.js'
 
 const logger = core.logger.child({ module: 'iam', scope: 'seed' })
 
@@ -88,7 +88,7 @@ const USER_ROLE_PERMISSIONS = ['dashboard:view', 'profile:read']
  */
 export async function seedIamData(
   authz: AuthzOperations,
-): Promise<Result<void, IamError>> {
+): Promise<HaiResult<void>> {
   try {
     // 查询现有角色，避免重复创建
     const existingRoles = await authz.getAllRoles({ page: 1, pageSize: 1000 })
@@ -111,7 +111,7 @@ export async function seedIamData(
         roleMap.set(role.code, result.data.id)
       }
       else {
-        return result as Result<void, IamError>
+        return result as HaiResult<void>
       }
     }
 
@@ -136,7 +136,7 @@ export async function seedIamData(
         permMap.set(perm.code, result.data.id)
       }
       else {
-        return result as Result<void, IamError>
+        return result as HaiResult<void>
       }
     }
 
@@ -166,10 +166,10 @@ export async function seedIamData(
   }
   catch (error) {
     logger.error('Failed to seed IAM data', { error })
-    return err({
-      code: IamErrorCode.REPOSITORY_ERROR,
-      message: iamM('iam_initSeedDataFailed'),
-      cause: error,
-    })
+    return err(
+      HaiIamError.REPOSITORY_ERROR,
+      iamM('iam_initSeedDataFailed'),
+      error,
+    )
   }
 }

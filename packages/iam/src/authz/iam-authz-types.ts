@@ -5,9 +5,8 @@
  * @module iam-authz-types
  */
 
-import type { PaginatedResult, PaginationOptionsInput, Result } from '@h-ai/core'
+import type { HaiResult, PaginatedResult, PaginationOptionsInput } from '@h-ai/core'
 import type { DmlWithTxOperations } from '@h-ai/reldb'
-import type { IamError } from '../iam-types.js'
 
 // ─── 授权类型（RBAC） ───
 
@@ -114,7 +113,7 @@ export interface AuthzOperations {
    * @param permission - 权限代码（如 `user:read`）
    * @returns 成功返回 true/false
    */
-  checkPermission: (userId: string, permission: string) => Promise<Result<boolean, IamError>>
+  checkPermission: (userId: string, permission: string) => Promise<HaiResult<boolean>>
 
   /**
    * 获取用户权限列表
@@ -126,7 +125,7 @@ export interface AuthzOperations {
    * @param userId - 用户 ID
    * @returns 成功返回去重后的权限列表
    */
-  getUserPermissions: (userId: string) => Promise<Result<Permission[], IamError>>
+  getUserPermissions: (userId: string) => Promise<HaiResult<Permission[]>>
 
   /**
    * 获取用户角色列表
@@ -136,7 +135,7 @@ export interface AuthzOperations {
    * @param userId - 用户 ID
    * @returns 成功返回角色列表
    */
-  getUserRoles: (userId: string) => Promise<Result<Role[], IamError>>
+  getUserRoles: (userId: string) => Promise<HaiResult<Role[]>>
 
   /**
    * 分配角色给用户
@@ -145,7 +144,7 @@ export interface AuthzOperations {
    * @param roleId - 角色 ID
    * @returns 成功返回 ok；角色不存在返回 ROLE_NOT_FOUND
    */
-  assignRole: (userId: string, roleId: string, tx?: DmlWithTxOperations) => Promise<Result<void, IamError>>
+  assignRole: (userId: string, roleId: string, tx?: DmlWithTxOperations) => Promise<HaiResult<void>>
 
   /**
    * 移除用户角色
@@ -154,7 +153,7 @@ export interface AuthzOperations {
    * @param roleId - 角色 ID
    * @returns 成功返回 ok
    */
-  removeRole: (userId: string, roleId: string, tx?: DmlWithTxOperations) => Promise<Result<void, IamError>>
+  removeRole: (userId: string, roleId: string, tx?: DmlWithTxOperations) => Promise<HaiResult<void>>
 
   /**
    * 同步用户角色（替换为目标角色列表）
@@ -166,7 +165,7 @@ export interface AuthzOperations {
    * @param roleIds - 目标角色 ID 列表
    * @returns 成功返回 ok
    */
-  syncRoles: (userId: string, roleIds: string[], tx?: DmlWithTxOperations) => Promise<Result<void, IamError>>
+  syncRoles: (userId: string, roleIds: string[], tx?: DmlWithTxOperations) => Promise<HaiResult<void>>
 
   // ─── 角色管理 ───
 
@@ -176,7 +175,7 @@ export interface AuthzOperations {
    * @param role - 角色数据（code、name、description、isSystem）
    * @returns 成功返回创建的角色（含 id 和时间戳）
    */
-  createRole: (role: Omit<Role, 'id' | 'createdAt' | 'updatedAt'>, tx?: DmlWithTxOperations) => Promise<Result<Role, IamError>>
+  createRole: (role: Omit<Role, 'id' | 'createdAt' | 'updatedAt'>, tx?: DmlWithTxOperations) => Promise<HaiResult<Role>>
 
   /**
    * 获取角色
@@ -184,7 +183,7 @@ export interface AuthzOperations {
    * @param roleId - 角色 ID
    * @returns 成功返回角色或 null（不存在时）
    */
-  getRole: (roleId: string) => Promise<Result<Role | null, IamError>>
+  getRole: (roleId: string) => Promise<HaiResult<Role | null>>
 
   /**
    * 根据角色代码获取角色
@@ -192,7 +191,7 @@ export interface AuthzOperations {
    * @param code - 角色代码（如 'admin'、'user'）
    * @returns 成功返回角色或 null（不存在时）
    */
-  getRoleByCode: (code: string) => Promise<Result<Role | null, IamError>>
+  getRoleByCode: (code: string) => Promise<HaiResult<Role | null>>
 
   /**
    * 获取所有角色（分页）
@@ -200,7 +199,7 @@ export interface AuthzOperations {
    * @param options - 分页参数，可选
    * @returns 成功返回分页角色列表
    */
-  getAllRoles: (options?: PaginationOptionsInput) => Promise<Result<PaginatedResult<Role>, IamError>>
+  getAllRoles: (options?: PaginationOptionsInput) => Promise<HaiResult<PaginatedResult<Role>>>
 
   /**
    * 更新角色
@@ -209,7 +208,7 @@ export interface AuthzOperations {
    * @param data - 要更新的字段（name、description 等）
    * @returns 成功返回更新后的角色；角色不存在返回 ROLE_NOT_FOUND
    */
-  updateRole: (roleId: string, data: Partial<Omit<Role, 'id' | 'createdAt' | 'updatedAt'>>, tx?: DmlWithTxOperations) => Promise<Result<Role, IamError>>
+  updateRole: (roleId: string, data: Partial<Omit<Role, 'id' | 'createdAt' | 'updatedAt'>>, tx?: DmlWithTxOperations) => Promise<HaiResult<Role>>
 
   /**
    * 删除角色
@@ -219,7 +218,7 @@ export interface AuthzOperations {
    * @param roleId - 角色 ID
    * @returns 成功返回 ok；角色不存在返回 ROLE_NOT_FOUND
    */
-  deleteRole: (roleId: string, tx?: DmlWithTxOperations) => Promise<Result<void, IamError>>
+  deleteRole: (roleId: string, tx?: DmlWithTxOperations) => Promise<HaiResult<void>>
 
   // ─── 权限管理 ───
 
@@ -229,7 +228,7 @@ export interface AuthzOperations {
    * @param permission - 权限数据（code、name、resource、action）
    * @returns 成功返回创建的权限（含 id 和时间戳）
    */
-  createPermission: (permission: Omit<Permission, 'id' | 'createdAt' | 'updatedAt'>, tx?: DmlWithTxOperations) => Promise<Result<Permission, IamError>>
+  createPermission: (permission: Omit<Permission, 'id' | 'createdAt' | 'updatedAt'>, tx?: DmlWithTxOperations) => Promise<HaiResult<Permission>>
 
   /**
    * 获取权限
@@ -237,7 +236,7 @@ export interface AuthzOperations {
    * @param permissionId - 权限 ID
    * @returns 成功返回权限或 null（不存在时）
    */
-  getPermission: (permissionId: string) => Promise<Result<Permission | null, IamError>>
+  getPermission: (permissionId: string) => Promise<HaiResult<Permission | null>>
 
   /**
    * 根据权限代码获取权限
@@ -245,7 +244,7 @@ export interface AuthzOperations {
    * @param code - 权限代码（如 `user:read`）
    * @returns 成功返回权限或 null（不存在时）
    */
-  getPermissionByCode: (code: string) => Promise<Result<Permission | null, IamError>>
+  getPermissionByCode: (code: string) => Promise<HaiResult<Permission | null>>
 
   /**
    * 获取所有权限（分页）
@@ -255,7 +254,7 @@ export interface AuthzOperations {
    * @param options - 分页及筛选参数，可选
    * @returns 成功返回分页权限列表
    */
-  getAllPermissions: (options?: PermissionQueryOptions) => Promise<Result<PaginatedResult<Permission>, IamError>>
+  getAllPermissions: (options?: PermissionQueryOptions) => Promise<HaiResult<PaginatedResult<Permission>>>
 
   /**
    * 删除权限
@@ -265,7 +264,7 @@ export interface AuthzOperations {
    * @param permissionId - 权限 ID
    * @returns 成功返回 ok；权限不存在返回 PERMISSION_NOT_FOUND
    */
-  deletePermission: (permissionId: string, tx?: DmlWithTxOperations) => Promise<Result<void, IamError>>
+  deletePermission: (permissionId: string, tx?: DmlWithTxOperations) => Promise<HaiResult<void>>
 
   /**
    * 为角色分配权限
@@ -274,7 +273,7 @@ export interface AuthzOperations {
    * @param permissionId - 权限 ID
    * @returns 成功返回 ok；角色/权限不存在返回对应错误码
    */
-  assignPermissionToRole: (roleId: string, permissionId: string, tx?: DmlWithTxOperations) => Promise<Result<void, IamError>>
+  assignPermissionToRole: (roleId: string, permissionId: string, tx?: DmlWithTxOperations) => Promise<HaiResult<void>>
 
   /**
    * 移除角色权限
@@ -283,7 +282,7 @@ export interface AuthzOperations {
    * @param permissionId - 权限 ID
    * @returns 成功返回 ok；权限不存在返回 PERMISSION_NOT_FOUND
    */
-  removePermissionFromRole: (roleId: string, permissionId: string, tx?: DmlWithTxOperations) => Promise<Result<void, IamError>>
+  removePermissionFromRole: (roleId: string, permissionId: string, tx?: DmlWithTxOperations) => Promise<HaiResult<void>>
 
   /**
    * 获取角色的权限列表
@@ -293,7 +292,7 @@ export interface AuthzOperations {
    * @param roleId - 角色 ID
    * @returns 成功返回角色关联的权限列表
    */
-  getRolePermissions: (roleId: string) => Promise<Result<Permission[], IamError>>
+  getRolePermissions: (roleId: string) => Promise<HaiResult<Permission[]>>
 
   /**
    * 批量获取多个用户的角色列表
@@ -306,7 +305,7 @@ export interface AuthzOperations {
    * @param userIds - 用户 ID 列表
    * @returns Map<userId, Role[]>
    */
-  getUserRolesForMany: (userIds: string[]) => Promise<Result<Map<string, Role[]>, IamError>>
+  getUserRolesForMany: (userIds: string[]) => Promise<HaiResult<Map<string, Role[]>>>
 
   /**
    * 批量获取多个角色的权限列表
@@ -319,5 +318,5 @@ export interface AuthzOperations {
    * @param roleIds - 角色 ID 列表
    * @returns Map<roleId, Permission[]>
    */
-  getRolePermissionsForMany: (roleIds: string[]) => Promise<Result<Map<string, Permission[]>, IamError>>
+  getRolePermissionsForMany: (roleIds: string[]) => Promise<HaiResult<Map<string, Permission[]>>>
 }
