@@ -5,7 +5,7 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { core } from '../src/index.js'
+import { core, HaiCommonError } from '../src/index.js'
 
 describe('core.module', () => {
   const ERROR_CODE = 9001
@@ -86,5 +86,37 @@ describe('core.module', () => {
     expect(e1.message).toBe('call 1')
     expect(e2.message).toBe('call 2')
     expect(callCount).toBe(2)
+  })
+
+  it('应该支持 HaiErrorDef 作为未初始化错误定义', async () => {
+    const kit = core.module.createNotInitializedKit(
+      HaiCommonError.NOT_INITIALIZED,
+      () => 'hai module not initialized',
+    )
+
+    const error = kit.error()
+    expect(error.code).toBe(HaiCommonError.NOT_INITIALIZED.code)
+    expect(error.httpStatus).toBe(HaiCommonError.NOT_INITIALIZED.httpStatus)
+    expect(error.system).toBe(HaiCommonError.NOT_INITIALIZED.system)
+    expect(error.module).toBe(HaiCommonError.NOT_INITIALIZED.module)
+    expect(error.message).toBe('hai module not initialized')
+
+    const result = kit.result<string>()
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error.code).toBe(HaiCommonError.NOT_INITIALIZED.code)
+      expect(result.error.message).toBe('hai module not initialized')
+    }
+
+    interface FakeOps {
+      doSomething: () => Promise<{ success: boolean, error?: { code: string | number } }>
+    }
+
+    const ops = kit.proxy<FakeOps>()
+    const proxyResult = await ops.doSomething()
+    expect(proxyResult.success).toBe(false)
+    if (!proxyResult.success) {
+      expect(proxyResult.error?.code).toBe(HaiCommonError.NOT_INITIALIZED.code)
+    }
   })
 })
