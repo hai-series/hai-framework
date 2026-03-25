@@ -157,16 +157,6 @@ export type ToolErrorType
     | 'EXECUTION_FAILED'
     | 'TIMEOUT'
 
-/** 工具执行错误 */
-export interface ToolError {
-  /** 错误分类 */
-  type: ToolErrorType
-  /** 错误描述 */
-  message: string
-  /** 关联的工具名称（可选） */
-  toolName?: string
-}
-
 /**
  * 工具定义选项（传给 `ai.tools.define()`）
  *

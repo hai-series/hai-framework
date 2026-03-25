@@ -19,6 +19,8 @@ export interface SummaryOptions {
   model?: string
   /** 温度覆盖 */
   temperature?: number
+  /** 自定义摘要 systemPrompt（覆盖模块配置与内置默认提示词） */
+  systemPrompt?: string
   /** 前序摘要文本（用于增量摘要） */
   previousSummary?: string
 }
@@ -53,6 +55,7 @@ export interface SummaryResult {
  *
  * // 增量摘要
  * const updated = await summaryOps.summarize(newMessages, {
+ *   systemPrompt: 'Focus on product decisions and pending action items.',
  *   previousSummary: oldSummary,
  * })
  * ```

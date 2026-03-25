@@ -190,7 +190,7 @@ export function createMemoryOperations(
      * 每条记忆提取后会同步计算向量（如已启用 embedding）。
      *
      * @param messages - 待分析的对话消息列表
-     * @param options - 可选（记忆类型过滤、最小重要性阈值、自定义 model 等）
+     * @param options - 可选（记忆类型过滤、最小重要性阈值、自定义 model / systemPrompt 等）
      * @returns `ok(MemoryEntry[])` 新写入的记忆列表；LLM 调用失败时返回 `MEMORY_EXTRACT_FAILED`
      */
     async extract(messages: ChatMessage[], options?: MemoryExtractOptions): Promise<HaiResult<MemoryEntry[]>> {
@@ -202,7 +202,7 @@ export function createMemoryOperations(
           model: options?.model,
           minImportance: options?.minImportance,
           objectId: options?.objectId,
-          systemPrompt: config.systemPrompt,
+          systemPrompt: options?.systemPrompt ?? config.systemPrompt,
         })
 
         if (!extractResult.success)
@@ -223,88 +223,6 @@ export function createMemoryOperations(
         logger.error('Memory extraction failed', { error })
         return err(HaiAIError.MEMORY_EXTRACT_FAILED, aiM('ai_memoryExtractFailed', { params: { error: String(error) } }), error)
       }
-    },
-
-    /**
-     * 手动添加一条记忆
-     *
-     * 适用于外部直接写入记忆（非 LLM 提取）的场景。
-     * 超过 maxEntries 时会自动淡汰优先级最低的条目。
-     *
-     * @param entry - 记忆条目输入（content、type、importance 等）
-     * @returns `ok(MemoryEntry)` 含完整字段（id、时间戳等）；存储失败时返回 `MEMORY_STORE_FAILED`
-     */
-    async add(entry: MemoryEntryInput): Promise<HaiResult<MemoryEntry>> {
-      try {
-        const vector = await computeVector(entry.content)
-        const stored = await saveEntry(entry, vector)
-        logger.trace('Memory added', { id: stored.id, type: stored.type })
-        return ok(stored)
-      }
-      catch (error) {
-        logger.error('Memory add failed', { error })
-        return err(HaiAIError.MEMORY_STORE_FAILED, aiM('ai_memoryStoreFailed', { params: { error: String(error) } }), error)
-      }
-    },
-
-    /**
-     * 更新一条已有记忆
-     */
-    async update(memoryId: string, updates: MemoryUpdateInput): Promise<HaiResult<MemoryEntry>> {
-      try {
-        const existing = await store.get(memoryId)
-        if (!existing) {
-          return err(HaiAIError.MEMORY_NOT_FOUND, aiM('ai_memoryNotFound', { params: { id: memoryId } }))
-        }
-
-        if (updates.content !== undefined)
-          existing.content = updates.content
-        if (updates.type !== undefined)
-          existing.type = updates.type
-        if (updates.importance !== undefined)
-          existing.importance = updates.importance
-        if (updates.metadata !== undefined)
-          existing.metadata = updates.metadata
-
-        // 内容变更时重新计算向量
-        if (updates.content !== undefined) {
-          const vector = await computeVector(updates.content)
-          existing.vector = vector
-          if (vector) {
-            await vectorStore.upsert(memoryId, vector, {
-              objectId: existing.objectId,
-              type: existing.type,
-            })
-          }
-        }
-
-        await store.save(memoryId, existing, { objectId: existing.objectId })
-        logger.trace('Memory updated', { id: memoryId })
-        return ok(existing)
-      }
-      catch (error) {
-        logger.error('Memory update failed', { id: memoryId, error })
-        return err(HaiAIError.MEMORY_STORE_FAILED, aiM('ai_memoryStoreFailed', { params: { error: String(error) } }), error)
-      }
-    },
-
-    /**
-     * 根据 ID 获取一条记忆并更新访问统计
-     *
-     * 访问成功后自动更新 `lastAccessedAt` 和 `accessCount`。
-     *
-     * @param memoryId - 记忆条目的唯一 ID
-     * @returns `ok(MemoryEntry)` 操作成功；ID 不存在时返回 `MEMORY_NOT_FOUND`
-     */
-    async get(memoryId: string): Promise<HaiResult<MemoryEntry>> {
-      const entry = await store.get(memoryId)
-      if (!entry) {
-        return err(HaiAIError.MEMORY_NOT_FOUND, aiM('ai_memoryNotFound', { params: { id: memoryId } }))
-      }
-      entry.lastAccessedAt = Date.now()
-      entry.accessCount++
-      await store.save(memoryId, entry, { objectId: entry.objectId })
-      return ok(entry)
     },
 
     /**
@@ -508,6 +426,88 @@ export function createMemoryOperations(
         logger.error('Memory enrichment failed', { error })
         return err(HaiAIError.MEMORY_ENRICH_FAILED, aiM('ai_memoryEnrichFailed', { params: { error: String(error) } }), error)
       }
+    },
+
+    /**
+     * 手动添加一条记忆
+     *
+     * 适用于外部直接写入记忆（非 LLM 提取）的场景。
+     * 超过 maxEntries 时会自动淡汰优先级最低的条目。
+     *
+     * @param entry - 记忆条目输入（content、type、importance 等）
+     * @returns `ok(MemoryEntry)` 含完整字段（id、时间戳等）；存储失败时返回 `MEMORY_STORE_FAILED`
+     */
+    async add(entry: MemoryEntryInput): Promise<HaiResult<MemoryEntry>> {
+      try {
+        const vector = await computeVector(entry.content)
+        const stored = await saveEntry(entry, vector)
+        logger.trace('Memory added', { id: stored.id, type: stored.type })
+        return ok(stored)
+      }
+      catch (error) {
+        logger.error('Memory add failed', { error })
+        return err(HaiAIError.MEMORY_STORE_FAILED, aiM('ai_memoryStoreFailed', { params: { error: String(error) } }), error)
+      }
+    },
+
+    /**
+     * 更新一条已有记忆
+     */
+    async update(memoryId: string, updates: MemoryUpdateInput): Promise<HaiResult<MemoryEntry>> {
+      try {
+        const existing = await store.get(memoryId)
+        if (!existing) {
+          return err(HaiAIError.MEMORY_NOT_FOUND, aiM('ai_memoryNotFound', { params: { id: memoryId } }))
+        }
+
+        if (updates.content !== undefined)
+          existing.content = updates.content
+        if (updates.type !== undefined)
+          existing.type = updates.type
+        if (updates.importance !== undefined)
+          existing.importance = updates.importance
+        if (updates.metadata !== undefined)
+          existing.metadata = updates.metadata
+
+        // 内容变更时重新计算向量
+        if (updates.content !== undefined) {
+          const vector = await computeVector(updates.content)
+          existing.vector = vector
+          if (vector) {
+            await vectorStore.upsert(memoryId, vector, {
+              objectId: existing.objectId,
+              type: existing.type,
+            })
+          }
+        }
+
+        await store.save(memoryId, existing, { objectId: existing.objectId })
+        logger.trace('Memory updated', { id: memoryId })
+        return ok(existing)
+      }
+      catch (error) {
+        logger.error('Memory update failed', { id: memoryId, error })
+        return err(HaiAIError.MEMORY_STORE_FAILED, aiM('ai_memoryStoreFailed', { params: { error: String(error) } }), error)
+      }
+    },
+
+    /**
+     * 根据 ID 获取一条记忆并更新访问统计
+     *
+     * 访问成功后自动更新 `lastAccessedAt` 和 `accessCount`。
+     *
+     * @param memoryId - 记忆条目的唯一 ID
+     * @returns `ok(MemoryEntry)` 操作成功；ID 不存在时返回 `MEMORY_NOT_FOUND`
+     */
+    async get(memoryId: string): Promise<HaiResult<MemoryEntry>> {
+      const entry = await store.get(memoryId)
+      if (!entry) {
+        return err(HaiAIError.MEMORY_NOT_FOUND, aiM('ai_memoryNotFound', { params: { id: memoryId } }))
+      }
+      entry.lastAccessedAt = Date.now()
+      entry.accessCount++
+      await store.save(memoryId, entry, { objectId: entry.objectId })
+      return ok(entry)
     },
 
     /**
