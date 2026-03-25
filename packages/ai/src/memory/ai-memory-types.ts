@@ -105,6 +105,8 @@ export interface MemoryExtractOptions {
   types?: MemoryType[]
   /** 指定提取用的模型 */
   model?: string
+  /** 自定义提取 systemPrompt（覆盖模块配置与内置默认提示词） */
+  systemPrompt?: string
   /** 过滤低重要性条目（默认 0） */
   minImportance?: number
   /** 所属主体 ID（关联到提取结果） */
@@ -212,7 +214,10 @@ export interface MemoryUpdateInput {
  * @example
  * ```ts
  * // 从对话中自动提取记忆
- * const extracted = await ai.memory.extract(messages, { objectId: 'user-001' })
+ * const extracted = await ai.memory.extract(messages, {
+ *   objectId: 'user-001',
+ *   systemPrompt: 'Only extract durable user preferences and explicit long-term instructions.',
+ * })
  *
  * // 手动添加记忆
  * await ai.memory.add({ content: '用户偏好中文', type: 'preference', objectId: 'user-001' })
@@ -237,6 +242,31 @@ export interface MemoryOperations {
    * @returns 提取到的记忆条目列表
    */
   extract: (messages: ChatMessage[], options?: MemoryExtractOptions) => Promise<HaiResult<MemoryEntry[]>>
+
+  /**
+   * 根据查询检索最相关的记忆
+   *
+   * 综合向量相似度、重要性、时间衰减进行排序。
+   *
+   * @param query - 查询文本
+   * @param options - 检索选项
+   * @returns 相关记忆列表
+   */
+  recall: (query: string, options?: MemoryRecallOptions) => Promise<HaiResult<MemoryEntry[]>>
+
+  /**
+   * 将相关记忆注入到消息列表中
+   *
+   * 工作流程：
+   * 1. 从消息列表中提取最后一条用户消息作为检索查询
+   * 2. 调用 `recall` 检索最相关的记忆条目
+   * 3. 将记忆格式化为文本块，按指定位置注入消息列表
+   *
+   * @param messages - 原始消息列表
+   * @param options - 注入选项（数量、位置、Token 预算等）
+   * @returns 注入记忆后的新消息列表（不修改原数组）
+   */
+  injectMemories: (messages: ChatMessage[], options?: MemoryInjectionOptions) => Promise<HaiResult<ChatMessage[]>>
 
   /**
    * 手动添加一条记忆
@@ -268,31 +298,6 @@ export interface MemoryOperations {
    * @returns 记忆条目，不存在时返回 MEMORY_NOT_FOUND
    */
   get: (memoryId: string) => Promise<HaiResult<MemoryEntry>>
-
-  /**
-   * 根据查询检索最相关的记忆
-   *
-   * 综合向量相似度、重要性、时间衰减进行排序。
-   *
-   * @param query - 查询文本
-   * @param options - 检索选项
-   * @returns 相关记忆列表
-   */
-  recall: (query: string, options?: MemoryRecallOptions) => Promise<HaiResult<MemoryEntry[]>>
-
-  /**
-   * 将相关记忆注入到消息列表中
-   *
-   * 工作流程：
-   * 1. 从消息列表中提取最后一条用户消息作为检索查询
-   * 2. 调用 `recall` 检索最相关的记忆条目
-   * 3. 将记忆格式化为文本块，按指定位置注入消息列表
-   *
-   * @param messages - 原始消息列表
-   * @param options - 注入选项（数量、位置、Token 预算等）
-   * @returns 注入记忆后的新消息列表（不修改原数组）
-   */
-  injectMemories: (messages: ChatMessage[], options?: MemoryInjectionOptions) => Promise<HaiResult<ChatMessage[]>>
 
   /**
    * 删除单条记忆

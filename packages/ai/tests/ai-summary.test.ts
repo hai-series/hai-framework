@@ -100,6 +100,31 @@ describe('summary summarize', () => {
     }
   })
 
+  it('支持通过 options.systemPrompt 自定义摘要提示词', async () => {
+    const llm = createMockLLM([{
+      content: 'Custom prompt summary.',
+    }])
+    const ops = createOps(llm, { systemPrompt: 'Use configured summary prompt.' })
+
+    const result = await ops.summarize(
+      [{ role: 'user', content: 'Please summarize only key decisions.' }],
+      {
+        systemPrompt: 'Focus on product decisions and pending action items.',
+        previousSummary: 'Earlier discussion covered the release scope.',
+      },
+    )
+
+    expect(result.success).toBe(true)
+    expect(llm.chat).toHaveBeenCalledOnce()
+
+    const [request] = vi.mocked(llm.chat).mock.calls[0] ?? []
+    expect(request?.messages[0]).toEqual({
+      role: 'system',
+      content: expect.stringContaining('Focus on product decisions and pending action items.'),
+    })
+    expect(request?.messages[0]?.content).toContain('Earlier discussion covered the release scope.')
+  })
+
   it('lLM 失败返回错误', async () => {
     const failingLLM: LLMOperations = {
       chat: vi.fn(async () => ({
@@ -130,5 +155,26 @@ describe('summary generate', () => {
     if (result.success) {
       expect(result.data).toBe('Summary text only.')
     }
+  })
+
+  it('generate 支持覆盖默认 systemPrompt', async () => {
+    const llm = createMockLLM([{
+      content: 'Summary text only.',
+    }])
+    const ops = createOps(llm, { systemPrompt: 'Use configured summary prompt.' })
+
+    const result = await ops.generate(
+      [{ role: 'user', content: 'Hello' }],
+      { systemPrompt: 'Summarize in one short paragraph.' },
+    )
+
+    expect(result.success).toBe(true)
+    expect(llm.chat).toHaveBeenCalledOnce()
+
+    const [request] = vi.mocked(llm.chat).mock.calls[0] ?? []
+    expect(request?.messages[0]).toEqual({
+      role: 'system',
+      content: 'Summarize in one short paragraph.',
+    })
   })
 })

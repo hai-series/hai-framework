@@ -36,12 +36,12 @@ Rules:
 - Structure the summary in logical paragraphs
 - Keep the summary under 500 words`
 
-const INCREMENTAL_SUMMARIZE_PROMPT = `You are a conversation summarizer. You have a previous summary and new messages to incorporate.
+const INCREMENTAL_SUMMARIZE_SUFFIX = `You have a previous summary and new messages to incorporate.
 
 Previous Summary:
 {previousSummary}
 
-Merge the previous summary with the new conversation messages to create an updated, comprehensive summary. Follow the same rules as before: be concise, preserve key details, use third person.`
+Merge the previous summary with the new conversation messages to create an updated, comprehensive summary. Follow the same rules as above: be concise, preserve key details, use third person.`
 
 /**
  * 创建 Summary 操作接口
@@ -59,6 +59,17 @@ export function createSummaryOperations(
   config: SummaryConfig,
 ): SummaryOperations {
   const { systemPrompt } = config
+
+  /**
+   * 构建摘要用 systemPrompt
+   */
+  function buildSummaryPrompt(options?: SummaryOptions): string {
+    const basePrompt = options?.systemPrompt ?? systemPrompt ?? SUMMARIZE_SYSTEM_PROMPT
+    if (!options?.previousSummary)
+      return basePrompt
+
+    return `${basePrompt}\n\n${INCREMENTAL_SUMMARIZE_SUFFIX.replace('{previousSummary}', options.previousSummary)}`
+  }
 
   /**
    * 提取场景对应的模型名称（API Key 校验由 provider 层负责）
@@ -87,11 +98,7 @@ export function createSummaryOperations(
       })
       .join('\n')
 
-    let prompt = systemPrompt ?? SUMMARIZE_SYSTEM_PROMPT
-    if (options?.previousSummary) {
-      prompt = INCREMENTAL_SUMMARIZE_PROMPT
-        .replace('{previousSummary}', options.previousSummary)
-    }
+    const prompt = buildSummaryPrompt(options)
 
     const chatResult = await llm.chat({
       model: scenarioModel(options?.model),
