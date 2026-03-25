@@ -20,7 +20,7 @@ import { setLogRepository } from './scheduler-executor.js'
 import { clearHooks, getHooks, getTask, getTaskRegistry, loadConfigTasks, loadPersistedTasks, queryTaskLogs, registerTask, resetTaskState, setHooks, unregisterTask, updateRegisteredTask } from './scheduler-functions.js'
 import { schedulerM } from './scheduler-i18n.js'
 import { clearJsTaskHandlerCache } from './scheduler-js-compiler.js'
-import { configureLock, isTaskRunning, isTimerRunning, resetRunner, runTask, startTimer, stopTimer } from './scheduler-runner.js'
+import { configureLock, isTaskRunning, isTimerRunning, resetRunner, runTask, setTaskRepository, startTimer, stopTimer } from './scheduler-runner.js'
 import {
   HaiSchedulerError,
 
@@ -49,7 +49,11 @@ async function initDatabase(parsed: SchedulerConfig): Promise<SchedulerConfig> {
 
   taskRepo = new SchedulerTaskRepository(reldb)
   logRepo = new SchedulerLogRepository(reldb)
-  setLogRepository(logRepo)
+  setTaskRepository(taskRepo)
+  setLogRepository(logRepo, {
+    maxLogs: parsed.maxLogs,
+    retentionDays: parsed.retentionDays,
+  })
 
   const nodeId = parsed.nodeId ?? crypto.randomUUID()
   const lockTtlSec = Math.ceil(parsed.lockExpireMs / 1000)
@@ -271,6 +275,7 @@ export const scheduler: SchedulerFunctions = {
     resetTaskState()
     resetRunner()
     setLogRepository(null)
+    setTaskRepository(null)
     currentConfig = null
     taskRepo = null
     logRepo = null

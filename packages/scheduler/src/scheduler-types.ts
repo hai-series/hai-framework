@@ -42,6 +42,14 @@ export type TaskTriggerType = 'scheduled' | 'manual'
 /** 任务处理器类型 */
 export type TaskHandlerKind = 'api' | 'js'
 
+/** 失败重试策略 */
+export interface TaskRetryPolicy {
+  /** 最大尝试次数（包含首次执行，最小 1） */
+  maxAttempts: number
+  /** 每次重试前的退避时间（毫秒）；按顺序对应第 2、3... 次尝试 */
+  backoffMs?: number[]
+}
+
 /** 任务执行目标类型 */
 export type TaskExecutionTargetType = TaskHandlerKind | 'hook'
 
@@ -114,10 +122,16 @@ export interface TaskDefinition {
   id: string
   /** 任务名称 */
   name: string
+  /** 任务描述 */
+  description?: string
   /** cron 表达式（标准 5 字段：分 时 日 月 周） */
   cron: string
   /** 是否启用（默认 true） */
   enabled?: boolean
+  /** 是否在执行后自动删除（默认 false） */
+  deleteAfterRun?: boolean
+  /** 失败重试策略 */
+  retry?: TaskRetryPolicy
   /** 通用参数 */
   params?: TaskParams
   /** 任务处理器；为空时可由全局事件回调统一处理 */
@@ -253,8 +267,20 @@ export interface LogQueryOptions {
   triggerType?: TaskTriggerType
   /** 按触发来源过滤 */
   triggerSource?: string
+  /** 仅查询开始时间 >= startedAfter 的日志（Unix 时间戳毫秒） */
+  startedAfter?: number
+  /** 仅查询开始时间 <= startedBefore 的日志（Unix 时间戳毫秒） */
+  startedBefore?: number
   /** 分页参数（page 从 1 开始，pageSize 默认 20） */
   pagination?: PaginationOptionsInput
+}
+
+/** 日志清理策略 */
+export interface SchedulerLogCleanupPolicy {
+  /** 最多保留日志条数 */
+  maxLogs?: number
+  /** 最多保留天数 */
+  retentionDays?: number
 }
 
 // ─── 任务更新 ───
@@ -268,10 +294,16 @@ export interface LogQueryOptions {
 export interface TaskUpdateInput {
   /** 任务名称 */
   name?: string
+  /** 任务描述 */
+  description?: string
   /** cron 表达式 */
   cron?: string
   /** 是否启用 */
   enabled?: boolean
+  /** 是否在执行后自动删除 */
+  deleteAfterRun?: boolean
+  /** 失败重试策略；传 null 表示清空重试策略 */
+  retry?: TaskRetryPolicy | null
   /** 通用参数 */
   params?: TaskParams
   /** 任务处理器；传 null 表示清空内置处理器 */

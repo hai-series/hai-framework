@@ -13,7 +13,7 @@
 import type { HaiResult, PaginatedResult } from '@h-ai/core'
 import type { Cron } from 'croner'
 import type { SchedulerLogRepository, SchedulerTaskRepository } from './repositories/index.js'
-import type { LogQueryOptions, SchedulerTaskHooks, TaskDefinition, TaskExecutionLog, TaskUpdateInput } from './scheduler-types.js'
+import type { LogQueryOptions, SchedulerTaskHooks, TaskDefinition, TaskExecutionLog, TaskRetryPolicy, TaskUpdateInput } from './scheduler-types.js'
 
 import { core, err, ok } from '@h-ai/core'
 
@@ -90,6 +90,38 @@ export function resetTaskState(): void {
   taskRegistry.clear()
   cronCache.clear()
   currentHooks = {}
+}
+
+function normalizeTaskDescription(description: string | undefined): string | undefined {
+  if (description === undefined)
+    return undefined
+
+  const trimmed = description.trim()
+  return trimmed.length > 0 ? trimmed : undefined
+}
+
+function validateRetryPolicy(taskId: string, retry: TaskRetryPolicy): HaiResult<TaskRetryPolicy> {
+  if (!Number.isInteger(retry.maxAttempts) || retry.maxAttempts < 1) {
+    return err(
+      HaiSchedulerError.EXECUTION_FAILED,
+      schedulerM('scheduler_invalidRetryConfig', { params: { taskId } }),
+    )
+  }
+
+  if (retry.backoffMs !== undefined) {
+    const hasInvalidBackoff = retry.backoffMs.some(ms => !Number.isInteger(ms) || ms < 0)
+    if (hasInvalidBackoff) {
+      return err(
+        HaiSchedulerError.EXECUTION_FAILED,
+        schedulerM('scheduler_invalidRetryConfig', { params: { taskId } }),
+      )
+    }
+  }
+
+  return ok({
+    maxAttempts: retry.maxAttempts,
+    ...(retry.backoffMs ? { backoffMs: [...retry.backoffMs] } : {}),
+  })
 }
 
 // ─── 业务函数 ───
@@ -169,9 +201,16 @@ export async function registerTask(
   if (!cronResult.success)
     return cronResult
 
+  const retryResult = task.retry ? validateRetryPolicy(task.id, task.retry) : ok(undefined)
+  if (!retryResult.success)
+    return retryResult
+
   const normalizedTask: TaskDefinition = {
     ...task,
+    description: normalizeTaskDescription(task.description),
     enabled: task.enabled !== false,
+    deleteAfterRun: task.deleteAfterRun === true,
+    retry: retryResult.data,
     params: task.params ?? {},
   }
 
@@ -233,19 +272,46 @@ export async function updateRegisteredTask(
     setCron(taskId, cronResult.data)
   }
 
+  let normalizedRetry: TaskRetryPolicy | null | undefined
+  if (updates.retry !== undefined) {
+    if (updates.retry === null) {
+      normalizedRetry = null
+    }
+    else {
+      const retryResult = validateRetryPolicy(taskId, updates.retry)
+      if (!retryResult.success)
+        return retryResult
+
+      normalizedRetry = retryResult.data
+    }
+  }
+
+  const normalizedDescription = updates.description !== undefined
+    ? normalizeTaskDescription(updates.description)
+    : undefined
+
+  const normalizedUpdates: TaskUpdateInput = {
+    ...updates,
+    ...(updates.description !== undefined ? { description: normalizedDescription } : {}),
+    ...(updates.retry !== undefined ? { retry: normalizedRetry } : {}),
+  }
+
   const updatedTask: TaskDefinition = {
     ...existingTask,
-    ...(updates.name !== undefined ? { name: updates.name } : {}),
-    ...(updates.cron !== undefined ? { cron: updates.cron } : {}),
-    ...(updates.enabled !== undefined ? { enabled: updates.enabled } : {}),
-    ...(updates.params !== undefined ? { params: updates.params } : {}),
-    ...(updates.handler !== undefined ? { handler: updates.handler ?? undefined } : {}),
+    ...(normalizedUpdates.name !== undefined ? { name: normalizedUpdates.name } : {}),
+    ...(normalizedUpdates.description !== undefined ? { description: normalizedUpdates.description } : {}),
+    ...(normalizedUpdates.cron !== undefined ? { cron: normalizedUpdates.cron } : {}),
+    ...(normalizedUpdates.enabled !== undefined ? { enabled: normalizedUpdates.enabled } : {}),
+    ...(normalizedUpdates.deleteAfterRun !== undefined ? { deleteAfterRun: normalizedUpdates.deleteAfterRun } : {}),
+    ...(normalizedUpdates.retry !== undefined ? { retry: normalizedUpdates.retry ?? undefined } : {}),
+    ...(normalizedUpdates.params !== undefined ? { params: normalizedUpdates.params } : {}),
+    ...(normalizedUpdates.handler !== undefined ? { handler: normalizedUpdates.handler ?? undefined } : {}),
   }
 
   setTask(taskId, updatedTask)
 
   if (taskRepo) {
-    const updateResult = await taskRepo.updateTask(taskId, updates)
+    const updateResult = await taskRepo.updateTask(taskId, normalizedUpdates)
     if (!updateResult.success) {
       logger.warn('Failed to update persisted task definition', { taskId, error: updateResult.error.message })
     }

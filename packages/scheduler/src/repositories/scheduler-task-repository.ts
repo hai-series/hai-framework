@@ -20,7 +20,11 @@ const logger = core.logger.child({ module: 'scheduler', scope: 'task-repository'
 
 const SCHEDULER_TASK_TABLE = 'hai_scheduler_tasks'
 
-const TaskParamsSchema = z.record(z.string(), z.string())
+const TaskParamsSchema = z.record(z.string(), z.unknown())
+const TaskRetryPolicySchema = z.object({
+  maxAttempts: z.number().int().min(1),
+  backoffMs: z.array(z.number().int().min(0)).optional(),
+})
 const ApiTaskConfigSchema = z.object({
   kind: z.literal('api'),
   url: z.string().min(1),
@@ -40,8 +44,11 @@ interface TaskRow {
   id: number
   taskId: string
   taskName: string
+  description: string | null
   cron: string
   enabled: boolean
+  deleteAfterRun: boolean
+  retry: unknown
   params: unknown
   handler: unknown
   createdAt: Date
@@ -57,8 +64,11 @@ export class SchedulerTaskRepository extends BaseReldbCrudRepository<TaskRow> {
         { fieldName: 'id', columnName: 'id', def: { type: 'INTEGER', primaryKey: true, autoIncrement: true }, select: true, create: false, update: false },
         { fieldName: 'taskId', columnName: 'task_id', def: { type: 'TEXT', notNull: true, unique: true }, select: true, create: true, update: false },
         { fieldName: 'taskName', columnName: 'task_name', def: { type: 'TEXT', notNull: true }, select: true, create: true, update: true },
+        { fieldName: 'description', columnName: 'description', def: { type: 'TEXT' }, select: true, create: true, update: true },
         { fieldName: 'cron', columnName: 'cron', def: { type: 'TEXT', notNull: true }, select: true, create: true, update: true },
         { fieldName: 'enabled', columnName: 'enabled', def: { type: 'BOOLEAN', notNull: true, defaultValue: true }, select: true, create: true, update: true },
+        { fieldName: 'deleteAfterRun', columnName: 'delete_after_run', def: { type: 'BOOLEAN', notNull: true, defaultValue: false }, select: true, create: true, update: true },
+        { fieldName: 'retry', columnName: 'retry', def: { type: 'JSON' }, select: true, create: true, update: true },
         { fieldName: 'params', columnName: 'params', def: { type: 'JSON' }, select: true, create: true, update: true },
         { fieldName: 'handler', columnName: 'handler', def: { type: 'JSON' }, select: true, create: true, update: true },
         { fieldName: 'createdAt', columnName: 'created_at', def: { type: 'TIMESTAMP' }, select: true, create: true, update: false },
@@ -72,8 +82,11 @@ export class SchedulerTaskRepository extends BaseReldbCrudRepository<TaskRow> {
       const createResult = await this.create({
         taskId: task.id,
         taskName: task.name,
+        description: task.description ?? null,
         cron: task.cron,
         enabled: task.enabled !== false,
+        deleteAfterRun: task.deleteAfterRun === true,
+        retry: task.retry ?? null,
         params: task.params ?? {},
         handler: task.handler ?? null,
         createdAt: new Date(),
@@ -119,10 +132,16 @@ export class SchedulerTaskRepository extends BaseReldbCrudRepository<TaskRow> {
       const data: Partial<TaskRow> = {}
       if (updates.name !== undefined)
         data.taskName = updates.name
+      if (updates.description !== undefined)
+        data.description = updates.description ?? null
       if (updates.cron !== undefined)
         data.cron = updates.cron
       if (updates.enabled !== undefined)
         data.enabled = updates.enabled
+      if (updates.deleteAfterRun !== undefined)
+        data.deleteAfterRun = updates.deleteAfterRun
+      if (updates.retry !== undefined)
+        data.retry = updates.retry ?? null
       if (updates.params !== undefined)
         data.params = updates.params
       if (updates.handler !== undefined)
@@ -223,11 +242,23 @@ export class SchedulerTaskRepository extends BaseReldbCrudRepository<TaskRow> {
           continue
         }
 
+        const retryResult = row.retry == null
+          ? { success: true as const, data: undefined }
+          : TaskRetryPolicySchema.safeParse(row.retry)
+
+        if (!retryResult.success) {
+          logger.warn('Skipping task with invalid retry policy', { taskId: row.taskId, error: retryResult.error.message })
+          continue
+        }
+
         tasks.push({
           id: row.taskId,
           name: row.taskName,
+          ...(row.description ? { description: row.description } : {}),
           cron: row.cron,
           enabled: row.enabled,
+          deleteAfterRun: row.deleteAfterRun,
+          ...(retryResult.data ? { retry: retryResult.data } : {}),
           params: paramsResult.data,
           ...(handlerResult.data ? { handler: handlerResult.data } : {}),
         })

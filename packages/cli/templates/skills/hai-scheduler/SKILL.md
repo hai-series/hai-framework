@@ -28,6 +28,8 @@ await cache.init({ type: 'memory' })
 
 await scheduler.init({
   enableDb: true,
+  maxLogs: 1000,
+  retentionDays: 30,
   hooks: {
     onTaskStart(event) {
       console.info('start', event.task.id, event.trigger)
@@ -48,8 +50,10 @@ await scheduler.init({
 await scheduler.register({
   id: 'health-check',
   name: '健康检查',
+  description: '每 5 分钟巡检一次接口健康状态',
   cron: '*/5 * * * *',
   params: { channel: 'ops' },
+  retry: { maxAttempts: 3, backoffMs: [1000, 5000] },
   handler: {
     kind: 'api',
     url: 'https://api.example.com/health',
@@ -60,7 +64,9 @@ await scheduler.register({
 await scheduler.register({
   id: 'cleanup',
   name: '清理过期数据',
+  description: '夜间单次清理任务',
   cron: '0 2 * * *',
+  deleteAfterRun: true,
   params: { source: 'nightly' },
   handler: {
     kind: 'js',
@@ -94,6 +100,8 @@ const logs = await scheduler.getLogs({
   taskId: 'cleanup',
   triggerType: 'manual',
   triggerSource: 'admin-console',
+  startedAfter: Date.now() - 24 * 60 * 60 * 1000,
+  startedBefore: Date.now(),
   pagination: { page: 1, pageSize: 20 },
 })
 ```
@@ -106,9 +114,15 @@ const logs = await scheduler.getLogs({
 interface TaskDefinition {
   id: string
   name: string
+  description?: string
   cron: string
   enabled?: boolean
-  params?: Record<string, string>
+  deleteAfterRun?: boolean
+  retry?: {
+    maxAttempts: number
+    backoffMs?: number[]
+  }
+  params?: Record<string, unknown>
   handler?: ApiTaskConfig | JsTaskConfig
 }
 ```
@@ -158,8 +172,9 @@ interface TaskExecutionLog {
 | `init` | `(config?) => Promise<Result<void, SchedulerError>>` | 初始化调度器 |
 | `register` | `(task) => Promise<Result<void>>` | 注册统一任务模型 |
 | `updateTask` | `(taskId, updates) => Promise<Result<void>>` | 更新 cron / params / handler |
+| `register` 扩展字段 | `description / deleteAfterRun / retry` | 支持任务描述、一次性任务、失败重试策略 |
 | `trigger` | `(taskId, { source? }) => Promise<Result<TaskExecutionLog>>` | 手工触发并记录来源 |
-| `getLogs` | `(options?) => Promise<Result<PaginatedResult<TaskExecutionLog>>>` | 支持按 trigger 过滤日志 |
+| `getLogs` | `(options?) => Promise<Result<PaginatedResult<TaskExecutionLog>>>` | 支持按 trigger + startedAfter/startedBefore 过滤日志 |
 | `setHooks` | `(hooks) => Result<void>` | 设置全局生命周期回调 |
 | `clearHooks` | `() => Result<void>` | 清空全局生命周期回调 |
 | `start / stop` | `() => Result<void>` | 启动 / 停止调度 |
@@ -199,6 +214,8 @@ await cache.init({ type: 'redis', host: 'localhost', port: 6379 })
 await reldb.init({ type: 'sqlite', database: './scheduler.db' })
 await scheduler.init({
   enableDb: true,
+  maxLogs: 500,
+  retentionDays: 14,
   lockExpireMs: 300000,
   nodeId: 'node-1',
 })

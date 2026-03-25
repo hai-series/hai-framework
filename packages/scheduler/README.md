@@ -19,6 +19,8 @@ await cache.init({ type: 'memory' }) // 可选
 
 await scheduler.init({
   enableDb: true,
+  maxLogs: 1000,
+  retentionDays: 30,
   hooks: {
     onTaskStart(event) {
       void event
@@ -29,8 +31,10 @@ await scheduler.init({
 await scheduler.register({
   id: 'health-check',
   name: '健康检查',
+  description: '每 5 分钟执行一次系统健康检查',
   cron: '*/5 * * * *',
   params: { channel: 'ops' },
+  retry: { maxAttempts: 3, backoffMs: [1000, 5000] },
   handler: {
     kind: 'api',
     url: 'https://api.example.com/health',
@@ -42,7 +46,9 @@ await scheduler.register({
 await scheduler.register({
   id: 'cleanup',
   name: '清理过期数据',
+  description: '每日凌晨执行过期数据清理',
   cron: '0 2 * * *',
+  deleteAfterRun: true,
   params: { source: 'nightly' },
   handler: {
     kind: 'js',
@@ -53,7 +59,11 @@ await scheduler.register({
 scheduler.start()
 
 const manualResult = await scheduler.trigger('cleanup', { source: 'admin-console' })
-const logs = await scheduler.getLogs({ triggerType: 'manual', triggerSource: 'admin-console' })
+const logs = await scheduler.getLogs({
+  triggerType: 'manual',
+  triggerSource: 'admin-console',
+  startedAfter: Date.now() - 24 * 60 * 60 * 1000,
+})
 
 scheduler.stop()
 await scheduler.close()
@@ -65,9 +75,15 @@ await scheduler.close()
 interface TaskDefinition {
   id: string
   name: string
+  description?: string
   cron: string
   enabled?: boolean
-  params?: Record<string, string>
+  deleteAfterRun?: boolean
+  retry?: {
+    maxAttempts: number
+    backoffMs?: number[]
+  }
+  params?: Record<string, unknown>
   handler?: ApiTaskConfig | JsTaskConfig
 }
 
@@ -126,9 +142,16 @@ const logs = await scheduler.getLogs({
   taskId: 'cleanup',
   triggerType: 'manual',
   triggerSource: 'admin-console',
+  startedAfter: Date.now() - 24 * 60 * 60 * 1000,
+  startedBefore: Date.now(),
   pagination: { page: 1, pageSize: 20 },
 })
 ```
+
+执行日志支持自动清理策略（初始化时配置）：
+
+- `maxLogs`：最多保留 N 条日志
+- `retentionDays`：最多保留最近 N 天日志
 
 ## API 概览
 

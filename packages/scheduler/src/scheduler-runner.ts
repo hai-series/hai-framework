@@ -12,13 +12,14 @@
  * @module scheduler-runner
  */
 
+import type { SchedulerTaskRepository } from './repositories/index.js'
 import type { TaskDefinition, TaskExecutionLog, TaskTriggerInfo } from './scheduler-types.js'
 
 import { cache } from '@h-ai/cache'
 import { core } from '@h-ai/core'
 
 import { executeTask, interruptTask } from './scheduler-executor.js'
-import { getCron, getHooks, getTaskRegistry } from './scheduler-functions.js'
+import { getCron, getHooks, getTaskRegistry, unregisterTask } from './scheduler-functions.js'
 import { schedulerM } from './scheduler-i18n.js'
 
 const logger = core.logger.child({ module: 'scheduler', scope: 'runner' })
@@ -40,11 +41,18 @@ let currentNodeId = ''
 /** 当前锁过期时间（秒，分布式锁用） */
 let currentLockTtlSec = 300
 
+/** 当前任务仓库（用于 deleteAfterRun 持久化删除） */
+let currentTaskRepo: SchedulerTaskRepository | null = null
+
 // ─── 运行状态访问器（供 main.ts 编排） ───
 
 export function configureLock(nodeId: string, lockTtlSec: number): void {
   currentNodeId = nodeId
   currentLockTtlSec = lockTtlSec
+}
+
+export function setTaskRepository(repo: SchedulerTaskRepository | null): void {
+  currentTaskRepo = repo
 }
 
 export function isTaskRunning(taskId: string): boolean {
@@ -66,6 +74,23 @@ export function resetRunner(): void {
   lastTickMinute = -1
   currentNodeId = ''
   currentLockTtlSec = 300
+  currentTaskRepo = null
+}
+
+async function sleep(ms: number): Promise<void> {
+  if (ms <= 0)
+    return
+
+  await new Promise(resolve => setTimeout(resolve, ms))
+}
+
+function resolveRetryBackoffMs(task: TaskDefinition, attempt: number): number {
+  const backoff = task.retry?.backoffMs
+  if (!backoff || backoff.length === 0)
+    return 0
+
+  const index = Math.min(Math.max(attempt - 2, 0), backoff.length - 1)
+  return backoff[index] ?? 0
 }
 
 // ─── 调度循环与任务执行 ───
@@ -129,13 +154,55 @@ export async function runTask(
   runningTasks.add(task.id)
 
   try {
-    const log = await executeTask(task, trigger, getHooks())
+    const maxAttempts = Math.max(1, task.retry?.maxAttempts ?? 1)
+    let log: TaskExecutionLog | null = null
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      log = await executeTask(task, trigger, getHooks())
+      if (log.status !== 'failed')
+        break
+
+      if (attempt >= maxAttempts)
+        break
+
+      const backoffMs = resolveRetryBackoffMs(task, attempt + 1)
+      logger.warn('Retrying failed task execution', {
+        taskId: task.id,
+        attempt,
+        maxAttempts,
+        backoffMs,
+      })
+      await sleep(backoffMs)
+    }
+
+    if (!log) {
+      return interruptTask(
+        task,
+        trigger,
+        schedulerM('scheduler_executionFailed', { params: { error: 'Task execution produced no log' } }),
+        getHooks(),
+      )
+    }
+
     if (log.status === 'failed')
       logger.warn('Task execution failed', { taskId: task.id, error: log.error })
     else if (log.status === 'interrupted')
       logger.debug('Task execution interrupted', { taskId: task.id, error: log.error })
     else
       logger.debug('Task execution succeeded', { taskId: task.id, duration: log.duration })
+
+    if (task.deleteAfterRun === true) {
+      const unregisterResult = await unregisterTask(task.id, currentTaskRepo)
+      if (!unregisterResult.success) {
+        logger.warn('Failed to auto-delete one-time task after run', {
+          taskId: task.id,
+          error: unregisterResult.error.message,
+        })
+      }
+      else {
+        logger.info('Auto-deleted one-time task after run', { taskId: task.id })
+      }
+    }
 
     return log
   }
