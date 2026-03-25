@@ -5,8 +5,8 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { SchedulerErrorCode } from '../src/scheduler-config.js'
 import { matchesCron, parseCronExpression } from '../src/scheduler-cron.js'
+import { HaiSchedulerError } from '../src/scheduler-types.js'
 
 describe('parseCronExpression', () => {
   it('应解析通配符 "* * * * *"', () => {
@@ -53,7 +53,7 @@ describe('parseCronExpression', () => {
     const result = parseCronExpression('invalid cron')
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(SchedulerErrorCode.INVALID_CRON)
+      expect(result.error.code).toBe(HaiSchedulerError.INVALID_CRON.code)
     }
   })
 
@@ -61,7 +61,7 @@ describe('parseCronExpression', () => {
     const result = parseCronExpression('abc * * * *')
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(SchedulerErrorCode.INVALID_CRON)
+      expect(result.error.code).toBe(HaiSchedulerError.INVALID_CRON.code)
     }
   })
 

@@ -7,7 +7,7 @@
 
 import type { HaiResult } from '@h-ai/core'
 import type { SchedulerLogRepository } from './repositories/index.js'
-import type { ExecutionStatus, SchedulerTaskContext, SchedulerTaskExecuteEvent, SchedulerTaskFinishEvent, SchedulerTaskHooks, SchedulerTaskInterruptedEvent, SchedulerTaskStartEvent, TaskDefinition, TaskExecutionLog, TaskExecutionTargetType, TaskTriggerInfo } from './scheduler-types.js'
+import type { ExecutionStatus, SchedulerLogCleanupPolicy, SchedulerTaskContext, SchedulerTaskExecuteEvent, SchedulerTaskFinishEvent, SchedulerTaskHooks, SchedulerTaskInterruptedEvent, SchedulerTaskStartEvent, TaskDefinition, TaskExecutionLog, TaskExecutionTargetType, TaskTriggerInfo } from './scheduler-types.js'
 
 import { core, err, ok } from '@h-ai/core'
 
@@ -22,9 +22,11 @@ import {
 const logger = core.logger.child({ module: 'scheduler', scope: 'executor' })
 
 let currentLogRepo: SchedulerLogRepository | null = null
+let currentCleanupPolicy: SchedulerLogCleanupPolicy = {}
 
-export function setLogRepository(repo: SchedulerLogRepository | null): void {
+export function setLogRepository(repo: SchedulerLogRepository | null, cleanupPolicy: SchedulerLogCleanupPolicy = {}): void {
   currentLogRepo = repo
+  currentCleanupPolicy = { ...cleanupPolicy }
 }
 
 function sanitizeUrl(url: string): string {
@@ -125,6 +127,17 @@ async function saveExecutionLog(
     return log
 
   await currentLogRepo.saveLog(log)
+
+  const cleanupResult = await currentLogRepo.cleanupLogs(currentCleanupPolicy)
+  if (!cleanupResult.success) {
+    logger.warn('Failed to cleanup execution logs', {
+      taskId: task.id,
+      error: cleanupResult.error.message,
+      maxLogs: currentCleanupPolicy.maxLogs,
+      retentionDays: currentCleanupPolicy.retentionDays,
+    })
+  }
+
   return log
 }
 

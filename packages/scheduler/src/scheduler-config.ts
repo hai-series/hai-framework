@@ -31,6 +31,10 @@ export const SchedulerConfigSchema = z.object({
   lockExpireMs: z.number().int().min(10000).default(300000),
   /** 节点标识（默认自动生成 UUID，多节点部署时建议设置固定标识以便审计） */
   nodeId: z.string().min(1).optional(),
+  /** 执行日志最大保留条数（启用 DB 时生效） */
+  maxLogs: z.number().int().min(1).optional(),
+  /** 执行日志保留天数（启用 DB 时生效） */
+  retentionDays: z.number().int().min(1).optional(),
 })
 
 /** 调度器配置类型 */

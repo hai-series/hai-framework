@@ -7,7 +7,7 @@
 
 import type { HaiResult, PaginatedResult } from '@h-ai/core'
 import type { ReldbFunctions } from '@h-ai/reldb'
-import type { LogQueryOptions, TaskExecutionLog } from '../scheduler-types.js'
+import type { LogQueryOptions, SchedulerLogCleanupPolicy, TaskExecutionLog } from '../scheduler-types.js'
 
 import { core, err, ok } from '@h-ai/core'
 import { BaseReldbCrudRepository } from '@h-ai/reldb'
@@ -81,7 +81,7 @@ export class SchedulerLogRepository extends BaseReldbCrudRepository<LogRow> {
   }
 
   async queryLogs(options?: LogQueryOptions): Promise<HaiResult<PaginatedResult<TaskExecutionLog>>> {
-    const { taskId, status, triggerType, triggerSource, pagination } = options ?? {}
+    const { taskId, status, triggerType, triggerSource, startedAfter, startedBefore, pagination } = options ?? {}
 
     const conditions: string[] = []
     const params: unknown[] = []
@@ -101,6 +101,14 @@ export class SchedulerLogRepository extends BaseReldbCrudRepository<LogRow> {
     if (triggerSource) {
       conditions.push('trigger_source = ?')
       params.push(triggerSource)
+    }
+    if (startedAfter !== undefined) {
+      conditions.push('started_at >= ?')
+      params.push(startedAfter)
+    }
+    if (startedBefore !== undefined) {
+      conditions.push('started_at <= ?')
+      params.push(startedBefore)
     }
 
     try {
@@ -140,6 +148,65 @@ export class SchedulerLogRepository extends BaseReldbCrudRepository<LogRow> {
     }
     catch (error) {
       logger.error('Failed to query execution logs', { error })
+      return err(
+        HaiSchedulerError.DB_SAVE_FAILED,
+        schedulerM('scheduler_dbSaveFailed', {
+          params: { error: error instanceof Error ? error.message : String(error) },
+        }),
+        error,
+      )
+    }
+  }
+
+  async cleanupLogs(policy: SchedulerLogCleanupPolicy): Promise<HaiResult<void>> {
+    const { maxLogs, retentionDays } = policy
+    if (!maxLogs && !retentionDays)
+      return ok(undefined)
+
+    try {
+      if (retentionDays) {
+        const cutoff = Date.now() - retentionDays * 24 * 60 * 60 * 1000
+        const retentionResult = await this.sql().execute(
+          `DELETE FROM ${SCHEDULER_LOG_TABLE} WHERE started_at < ?`,
+          [cutoff],
+        )
+
+        if (!retentionResult.success) {
+          return err(
+            HaiSchedulerError.DB_SAVE_FAILED,
+            schedulerM('scheduler_dbSaveFailed', { params: { error: retentionResult.error.message } }),
+            retentionResult.error,
+          )
+        }
+      }
+
+      if (maxLogs) {
+        const maxLogsResult = await this.sql().execute(
+          `DELETE FROM ${SCHEDULER_LOG_TABLE}
+           WHERE id NOT IN (
+             SELECT id FROM (
+               SELECT id
+               FROM ${SCHEDULER_LOG_TABLE}
+               ORDER BY started_at DESC, id DESC
+               LIMIT ?
+             ) AS keep_logs
+           )`,
+          [maxLogs],
+        )
+
+        if (!maxLogsResult.success) {
+          return err(
+            HaiSchedulerError.DB_SAVE_FAILED,
+            schedulerM('scheduler_dbSaveFailed', { params: { error: maxLogsResult.error.message } }),
+            maxLogsResult.error,
+          )
+        }
+      }
+
+      return ok(undefined)
+    }
+    catch (error) {
+      logger.error('Failed to cleanup execution logs', { error, maxLogs, retentionDays })
       return err(
         HaiSchedulerError.DB_SAVE_FAILED,
         schedulerM('scheduler_dbSaveFailed', {
