@@ -111,8 +111,8 @@ export const LLMConfigSchema = z.object({
   apiKey: z.string().optional(),
   /** 全局 API 基础 URL（各模型 fallback；未提供时回退到 `process.env.HAI_AI_LLM_BASE_URL` 或 `process.env.OPENAI_BASE_URL`） */
   baseUrl: z.url().optional(),
-  /** 默认模型名称（默认 `'gpt-4o-mini'`） */
-  model: z.string().optional().default('gpt-4o-mini'),
+  /** 默认模型名称（未提供时回退到 `process.env.HAI_AI_LLM_MODEL` / `process.env.OPENAI_MODEL` / `'gpt-4o-mini'`） */
+  model: z.string().optional(),
   /** 全局最大 Token 数（各模型 fallback，默认 `4096`） */
   maxTokens: z.number().positive().optional().default(4096),
   /** 全局采样温度（各模型 fallback，范围 `[0, 2]`，默认 `0.7`） */
@@ -190,7 +190,7 @@ export function resolveModelEntry(
       modelName = entry?.model ?? modelId
     }
     else {
-      modelName = llmConfig.model ?? 'gpt-4o-mini'
+      modelName = llmConfig.model ?? process.env.HAI_AI_LLM_MODEL ?? process.env.OPENAI_MODEL ?? 'gpt-4o-mini'
     }
   }
 

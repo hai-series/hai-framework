@@ -521,6 +521,8 @@ describe('openAI 客户端配置', () => {
     ai.close()
     vi.clearAllMocks()
     constructorCalls.length = 0
+    delete process.env.HAI_AI_LLM_MODEL
+    delete process.env.OPENAI_MODEL
   })
 
   it('apiKey 传递给 OpenAI 构造函数', async () => {
@@ -568,6 +570,25 @@ describe('openAI 客户端配置', () => {
 
     expect(constructorCalls[0][0]).toEqual(
       expect.objectContaining({ timeout: 30000 }),
+    )
+  })
+
+  it('未配置模型时回退到环境变量 HAI_AI_LLM_MODEL', async () => {
+    process.env.HAI_AI_LLM_MODEL = 'gpt-5.1-codex-mini'
+    constructorCalls.length = 0
+
+    await ai.init({
+      llm: {
+        apiKey: 'sk-key',
+        baseUrl: 'https://custom.api.com/v1',
+      },
+    })
+
+    mockCreate.mockResolvedValue(makeSDKChatCompletion('ok'))
+    await ai.llm.chat({ messages: [{ role: 'user', content: 'test' }] })
+
+    expect(mockCreate).toHaveBeenCalledWith(
+      expect.objectContaining({ model: 'gpt-5.1-codex-mini' }),
     )
   })
 
