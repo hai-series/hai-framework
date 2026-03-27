@@ -5,14 +5,13 @@
  * @module iam-authn-apikey-repository
  */
 
-import type { Result } from '@h-ai/core'
+import type { HaiResult } from '@h-ai/core'
 import type { DmlWithTxOperations, ReldbCrudFieldDefinition } from '@h-ai/reldb'
-import type { IamError } from '../../iam-types.js'
 import type { StoredApiKey } from './iam-authn-apikey-types.js'
 import { err, ok } from '@h-ai/core'
 import { BaseReldbCrudRepository, reldb } from '@h-ai/reldb'
-import { IamErrorCode } from '../../iam-config.js'
 import { iamM } from '../../iam-i18n.js'
+import { HaiIamError } from '../../iam-types.js'
 
 // ─── API Key 存储接口 ───
 
@@ -21,19 +20,19 @@ import { iamM } from '../../iam-i18n.js'
  */
 export interface ApiKeyRepository {
   /** 插入 API Key */
-  insert: (data: StoredApiKey, tx?: DmlWithTxOperations) => Promise<Result<void, IamError>>
+  insert: (data: StoredApiKey, tx?: DmlWithTxOperations) => Promise<HaiResult<void>>
   /** 根据 ID 获取（不存在时返回 null） */
-  findOneById: (id: string, tx?: DmlWithTxOperations) => Promise<Result<StoredApiKey | null, IamError>>
+  findOneById: (id: string, tx?: DmlWithTxOperations) => Promise<HaiResult<StoredApiKey | null>>
   /** 根据密钥前缀查找（用于快速匹配候选项） */
-  findByKeyPrefix: (prefix: string, tx?: DmlWithTxOperations) => Promise<Result<StoredApiKey[], IamError>>
+  findByKeyPrefix: (prefix: string, tx?: DmlWithTxOperations) => Promise<HaiResult<StoredApiKey[]>>
   /** 列出用户所有 API Key */
-  findByUserId: (userId: string, tx?: DmlWithTxOperations) => Promise<Result<StoredApiKey[], IamError>>
+  findByUserId: (userId: string, tx?: DmlWithTxOperations) => Promise<HaiResult<StoredApiKey[]>>
   /** 统计用户 API Key 数量 */
-  countByUserId: (userId: string, tx?: DmlWithTxOperations) => Promise<Result<number, IamError>>
+  countByUserId: (userId: string, tx?: DmlWithTxOperations) => Promise<HaiResult<number>>
   /** 根据 ID 更新（部分字段） */
-  updateFields: (id: string, data: Partial<StoredApiKey>, tx?: DmlWithTxOperations) => Promise<Result<void, IamError>>
+  updateFields: (id: string, data: Partial<StoredApiKey>, tx?: DmlWithTxOperations) => Promise<HaiResult<void>>
   /** 根据 ID 删除 */
-  removeById: (id: string, tx?: DmlWithTxOperations) => Promise<Result<void, IamError>>
+  removeById: (id: string, tx?: DmlWithTxOperations) => Promise<HaiResult<void>>
 }
 
 // ─── 字段定义 ───
@@ -162,19 +161,19 @@ class DbApiKeyRepository extends BaseReldbCrudRepository<StoredApiKey> implement
     })
   }
 
-  async insert(data: StoredApiKey, tx?: DmlWithTxOperations): Promise<Result<void, IamError>> {
+  async insert(data: StoredApiKey, tx?: DmlWithTxOperations): Promise<HaiResult<void>> {
     const result = await this.create(data as unknown as Record<string, unknown>, tx)
     if (!result.success) {
-      return err({
-        code: IamErrorCode.REPOSITORY_ERROR,
-        message: iamM('iam_apikeyCreateFailed', { params: { message: result.error.message } }),
-        cause: result.error,
-      })
+      return err(
+        HaiIamError.REPOSITORY_ERROR,
+        iamM('iam_apikeyCreateFailed', { params: { message: result.error.message } }),
+        result.error,
+      )
     }
     return ok(undefined)
   }
 
-  async findOneById(id: string, tx?: DmlWithTxOperations): Promise<Result<StoredApiKey | null, IamError>> {
+  async findOneById(id: string, tx?: DmlWithTxOperations): Promise<HaiResult<StoredApiKey | null>> {
     const result = await this.findById(id, tx)
     if (!result.success) {
       return this.buildQueryError(result.error)
@@ -182,7 +181,7 @@ class DbApiKeyRepository extends BaseReldbCrudRepository<StoredApiKey> implement
     return ok(result.data)
   }
 
-  async findByKeyPrefix(prefix: string, tx?: DmlWithTxOperations): Promise<Result<StoredApiKey[], IamError>> {
+  async findByKeyPrefix(prefix: string, tx?: DmlWithTxOperations): Promise<HaiResult<StoredApiKey[]>> {
     const result = await this.findAll({ where: 'key_prefix = ?', params: [prefix] }, tx)
     if (!result.success) {
       return this.buildQueryError(result.error)
@@ -190,7 +189,7 @@ class DbApiKeyRepository extends BaseReldbCrudRepository<StoredApiKey> implement
     return ok(result.data)
   }
 
-  async findByUserId(userId: string, tx?: DmlWithTxOperations): Promise<Result<StoredApiKey[], IamError>> {
+  async findByUserId(userId: string, tx?: DmlWithTxOperations): Promise<HaiResult<StoredApiKey[]>> {
     const result = await this.findAll({ where: 'user_id = ?', params: [userId] }, tx)
     if (!result.success) {
       return this.buildQueryError(result.error)
@@ -198,7 +197,7 @@ class DbApiKeyRepository extends BaseReldbCrudRepository<StoredApiKey> implement
     return ok(result.data)
   }
 
-  async countByUserId(userId: string, tx?: DmlWithTxOperations): Promise<Result<number, IamError>> {
+  async countByUserId(userId: string, tx?: DmlWithTxOperations): Promise<HaiResult<number>> {
     const result = await this.count({ where: 'user_id = ?', params: [userId] }, tx)
     if (!result.success) {
       return this.buildQueryError(result.error)
@@ -206,35 +205,35 @@ class DbApiKeyRepository extends BaseReldbCrudRepository<StoredApiKey> implement
     return ok(result.data)
   }
 
-  async updateFields(id: string, data: Partial<StoredApiKey>, tx?: DmlWithTxOperations): Promise<Result<void, IamError>> {
+  async updateFields(id: string, data: Partial<StoredApiKey>, tx?: DmlWithTxOperations): Promise<HaiResult<void>> {
     const result = await this.updateById(id, data as unknown as Record<string, unknown>, tx)
     if (!result.success) {
-      return err({
-        code: IamErrorCode.REPOSITORY_ERROR,
-        message: iamM('iam_apikeyUpdateFailed', { params: { message: result.error.message } }),
-        cause: result.error,
-      })
+      return err(
+        HaiIamError.REPOSITORY_ERROR,
+        iamM('iam_apikeyUpdateFailed', { params: { message: result.error.message } }),
+        result.error,
+      )
     }
     return ok(undefined)
   }
 
-  async removeById(id: string, tx?: DmlWithTxOperations): Promise<Result<void, IamError>> {
+  async removeById(id: string, tx?: DmlWithTxOperations): Promise<HaiResult<void>> {
     const result = await this.deleteById(id, tx)
     if (!result.success) {
-      return err({
-        code: IamErrorCode.REPOSITORY_ERROR,
-        message: iamM('iam_apikeyDeleteFailed', { params: { message: result.error.message } }),
-        cause: result.error,
-      })
+      return err(
+        HaiIamError.REPOSITORY_ERROR,
+        iamM('iam_apikeyDeleteFailed', { params: { message: result.error.message } }),
+        result.error,
+      )
     }
     return ok(undefined)
   }
 
-  private buildQueryError(error: { message: string }): Result<never, IamError> {
-    return err({
-      code: IamErrorCode.REPOSITORY_ERROR,
-      message: iamM('iam_apikeyQueryFailed', { params: { message: error.message } }),
-      cause: error,
-    })
+  private buildQueryError(error: { message: string }): HaiResult<never> {
+    return err(
+      HaiIamError.REPOSITORY_ERROR,
+      iamM('iam_apikeyQueryFailed', { params: { message: error.message } }),
+      error,
+    )
   }
 }

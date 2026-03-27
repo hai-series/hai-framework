@@ -283,6 +283,29 @@ describe('extractMemories', () => {
     }
   })
 
+  it('支持自定义 systemPrompt', async () => {
+    const mockLLM = createMockLLM([{
+      content: JSON.stringify([
+        { content: '用户偏好中文', type: 'preference', importance: 0.8 },
+      ]),
+    }])
+
+    const result = await extractMemories(mockLLM, [
+      { role: 'user' as const, content: '请记住我喜欢中文回复。' },
+    ], {
+      systemPrompt: 'Only extract durable user preferences.',
+    })
+
+    expect(result.success).toBe(true)
+    expect(mockLLM.chat).toHaveBeenCalledOnce()
+
+    const [request] = vi.mocked(mockLLM.chat).mock.calls[0] ?? []
+    expect(request?.messages[0]).toEqual({
+      role: 'system',
+      content: 'Only extract durable user preferences.',
+    })
+  })
+
   it('lLM 调用失败返回错误', async () => {
     const failingLLM: LLMOperations = {
       chat: vi.fn(async () => ({
@@ -343,6 +366,34 @@ describe('createMemoryOperations', () => {
     if (listResult.success) {
       expect(listResult.data).toHaveLength(1)
     }
+  })
+
+  it('extract 支持通过 options.systemPrompt 覆盖模块默认提示词', async () => {
+    const llm = createMockLLM([{
+      content: JSON.stringify([
+        { content: '提取到的偏好', type: 'preference', importance: 0.9 },
+      ]),
+    }])
+    const embedding = createMockEmbedding()
+    const ops = createTestMemoryOps({
+      ...defaultConfig,
+      systemPrompt: 'Use configured memory extraction prompt.',
+    }, llm, embedding)
+
+    const result = await ops.extract([
+      { role: 'user' as const, content: '请记住我喜欢中文回复。' },
+    ], {
+      systemPrompt: 'Only extract durable user preferences.',
+    })
+
+    expect(result.success).toBe(true)
+    expect(llm.chat).toHaveBeenCalledOnce()
+
+    const [request] = vi.mocked(llm.chat).mock.calls[0] ?? []
+    expect(request?.messages[0]).toEqual({
+      role: 'system',
+      content: 'Only extract durable user preferences.',
+    })
   })
 
   it('recall 检索相关记忆', async () => {

@@ -6,7 +6,7 @@
  * @module reldb-provider-postgres
  */
 
-import type { PaginatedResult, Result } from '@h-ai/core'
+import type { HaiResult, PaginatedResult } from '@h-ai/core'
 import type { ReldbConfig } from '../reldb-config.js'
 import type {
   DdlOperations,
@@ -15,15 +15,14 @@ import type {
   ExecuteResult,
   PaginationQueryOptions,
   ReldbColumnDef,
-  ReldbError,
   ReldbProvider,
 } from '../reldb-types.js'
 import type { ReldbOpsContext } from './reldb-provider-base.js'
 
 import { core, err, ok } from '@h-ai/core'
-import { ReldbErrorCode } from '../reldb-config.js'
 import { reldbM } from '../reldb-i18n.js'
 import { quoteIdentifier } from '../reldb-security.js'
+import { HaiReldbError } from '../reldb-types.js'
 import {
   buildColumnSqlBase,
   buildDefaultCreateIndexSql,
@@ -182,15 +181,15 @@ export function createPostgresProvider(): ReldbProvider {
   // ─── DML 操作 ───
 
   const rawDml: DmlOperations = {
-    async query<T>(sql: string, params?: unknown[]): Promise<Result<T[], ReldbError>> {
+    async query<T>(sql: string, params?: unknown[]): Promise<HaiResult<T[]>> {
       const rows = await pgQueryRows((t, v) => pool!.query(t, v), sql, params)
       return ok(rows as T[])
     },
-    async get<T>(sql: string, params?: unknown[]): Promise<Result<T | null, ReldbError>> {
+    async get<T>(sql: string, params?: unknown[]): Promise<HaiResult<T | null>> {
       const rows = await pgQueryRows((t, v) => pool!.query(t, v), sql, params)
       return ok((rows[0] as T) ?? null)
     },
-    async execute(sql: string, params?: unknown[]): Promise<Result<ExecuteResult, ReldbError>> {
+    async execute(sql: string, params?: unknown[]): Promise<HaiResult<ExecuteResult>> {
       const result = await pool!.query(convertPlaceholders(sql), params)
       return ok({ changes: result.rowCount ?? 0 })
     },
@@ -209,11 +208,7 @@ export function createPostgresProvider(): ReldbProvider {
         if (client) {
           await client.query('ROLLBACK').catch(() => { })
         }
-        return err({
-          code: ReldbErrorCode.QUERY_FAILED,
-          message: reldbM('reldb_batchFailed', { params: { error: String(error) } }),
-          cause: error,
-        })
+        return err(HaiReldbError.QUERY_FAILED, reldbM('reldb_batchFailed', { params: { error: String(error) } }), error)
       }
       finally {
         if (client) {
@@ -221,7 +216,7 @@ export function createPostgresProvider(): ReldbProvider {
         }
       }
     },
-    async queryPage<T>(options: PaginationQueryOptions): Promise<Result<PaginatedResult<T>, ReldbError>> {
+    async queryPage<T>(options: PaginationQueryOptions): Promise<HaiResult<PaginatedResult<T>>> {
       const result = await queryPageAsync<T>(
         async (sql, params) => {
           const r = await pool!.query(convertPlaceholders(sql), params)
@@ -239,15 +234,15 @@ export function createPostgresProvider(): ReldbProvider {
   function createPgTxDmlOps(client: PgClient): DmlOperations {
     const queryFn = (text: string, values?: unknown[]) => client.query(text, values)
     return {
-      async query<T>(sql: string, params?: unknown[]): Promise<Result<T[], ReldbError>> {
+      async query<T>(sql: string, params?: unknown[]): Promise<HaiResult<T[]>> {
         const rows = await pgQueryRows(queryFn, sql, params)
         return ok(rows as T[])
       },
-      async get<T>(sql: string, params?: unknown[]): Promise<Result<T | null, ReldbError>> {
+      async get<T>(sql: string, params?: unknown[]): Promise<HaiResult<T | null>> {
         const rows = await pgQueryRows(queryFn, sql, params)
         return ok((rows[0] as T) ?? null)
       },
-      async execute(sql: string, params?: unknown[]): Promise<Result<ExecuteResult, ReldbError>> {
+      async execute(sql: string, params?: unknown[]): Promise<HaiResult<ExecuteResult>> {
         const result = await queryFn(convertPlaceholders(sql), params)
         return ok({ changes: result.rowCount ?? 0 })
       },
@@ -257,7 +252,7 @@ export function createPostgresProvider(): ReldbProvider {
         }
         return ok(undefined)
       },
-      async queryPage<T>(options: PaginationQueryOptions): Promise<Result<PaginatedResult<T>, ReldbError>> {
+      async queryPage<T>(options: PaginationQueryOptions): Promise<HaiResult<PaginatedResult<T>>> {
         const result = await queryPageAsync<T>(
           async (sql, params) => {
             const r = await queryFn(convertPlaceholders(sql), params)
@@ -270,7 +265,7 @@ export function createPostgresProvider(): ReldbProvider {
     }
   }
 
-  async function beginTx(): Promise<Result<DmlWithTxOperations, ReldbError>> {
+  async function beginTx(): Promise<HaiResult<DmlWithTxOperations>> {
     let client: PgClient | null = null
 
     try {
@@ -281,11 +276,7 @@ export function createPostgresProvider(): ReldbProvider {
       if (client) {
         client.release()
       }
-      return err({
-        code: ReldbErrorCode.TRANSACTION_FAILED,
-        message: pgTxErrorMessage(String(error)),
-        cause: error,
-      })
+      return err(HaiReldbError.TRANSACTION_FAILED, pgTxErrorMessage(String(error)), error)
     }
 
     const txDmlOps = createPgTxDmlOps(client)
@@ -302,12 +293,9 @@ export function createPostgresProvider(): ReldbProvider {
   const dmlOps = createBaseDmlOps(ctx, rawDml)
 
   return {
-    async connect(config: ReldbConfig): Promise<Result<void, ReldbError>> {
+    async connect(config: ReldbConfig): Promise<HaiResult<void>> {
       if (config.type !== 'postgresql') {
-        return err({
-          code: ReldbErrorCode.UNSUPPORTED_TYPE,
-          message: reldbM('reldb_postgresOnlyPostgresql'),
-        })
+        return err(HaiReldbError.UNSUPPORTED_TYPE, reldbM('reldb_postgresOnlyPostgresql'))
       }
 
       try {
@@ -336,26 +324,18 @@ export function createPostgresProvider(): ReldbProvider {
       }
       catch (error) {
         pool = null
-        return err({
-          code: ReldbErrorCode.CONNECTION_FAILED,
-          message: reldbM('reldb_postgresConnectionFailed', { params: { error: String(error) } }),
-          cause: error,
-        })
+        return err(HaiReldbError.CONNECTION_FAILED, reldbM('reldb_postgresConnectionFailed', { params: { error: String(error) } }), error)
       }
     },
 
-    async close(): Promise<Result<void, ReldbError>> {
+    async close(): Promise<HaiResult<void>> {
       if (pool) {
         try {
           await pool.end()
         }
         catch (error) {
           pool = null
-          return err({
-            code: ReldbErrorCode.CONNECTION_FAILED,
-            message: reldbM('reldb_postgresConnectionFailed', { params: { error: String(error) } }),
-            cause: error,
-          })
+          return err(HaiReldbError.CONNECTION_FAILED, reldbM('reldb_postgresConnectionFailed', { params: { error: String(error) } }), error)
         }
         pool = null
         logger.info('Disconnected from PostgreSQL')

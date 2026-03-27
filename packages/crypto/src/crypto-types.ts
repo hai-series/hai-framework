@@ -5,22 +5,26 @@
  * @module crypto-types
  */
 
-import type { Result } from '@h-ai/core'
-import type { CryptoErrorCodeType } from './crypto-config.js'
+import type { ErrorInfo, HaiResult } from '@h-ai/core'
+import { core } from '@h-ai/core'
 
-/**
- * 加密模块统一错误类型
- *
- * 所有操作失败时返回此结构，code 对应 {@link CryptoErrorCode} 中的常量。
- */
-export interface CryptoError {
-  /** 错误码，对应 CryptoErrorCode 枚举值 */
-  code: CryptoErrorCodeType
-  /** 人类可读的错误描述（i18n） */
-  message: string
-  /** 原始错误对象（如有） */
-  cause?: unknown
-}
+const CryptoErrorInfo = {
+  OPERATION_FAILED: '001:500',
+  INVALID_INPUT: '002:400',
+  INVALID_KEY: '003:400',
+  NOT_INITIALIZED: '010:500',
+  INIT_FAILED: '011:500',
+  KEY_GENERATION_FAILED: '020:500',
+  ENCRYPTION_FAILED: '021:500',
+  DECRYPTION_FAILED: '022:500',
+  SIGN_FAILED: '023:500',
+  VERIFY_FAILED: '024:500',
+  HASH_FAILED: '040:500',
+  HMAC_FAILED: '041:500',
+  INVALID_IV: '060:400',
+} as const satisfies ErrorInfo
+
+export const HaiCryptoError = core.error.buildHaiErrorsDef('crypto', CryptoErrorInfo)
 
 // ─── 非对称加密类型 ───
 
@@ -109,7 +113,7 @@ export interface AsymmetricOperations {
    *
    * @returns 成功时包含公私钥对；失败时返回 KEY_GENERATION_FAILED
    */
-  generateKeyPair: () => Result<KeyPair, CryptoError>
+  generateKeyPair: () => HaiResult<KeyPair>
   /**
    * 非对称加密
    *
@@ -118,7 +122,7 @@ export interface AsymmetricOperations {
    * @param options - 加密选项（密文模式、输出格式）
    * @returns 成功时返回密文字符串；失败时返回 INVALID_KEY 或 ENCRYPTION_FAILED
    */
-  encrypt: (data: string, publicKey: string, options?: AsymmetricEncryptOptions) => Result<string, CryptoError>
+  encrypt: (data: string, publicKey: string, options?: AsymmetricEncryptOptions) => HaiResult<string>
   /**
    * 非对称解密
    *
@@ -129,7 +133,7 @@ export interface AsymmetricOperations {
    * @param options - 解密选项（密文模式需与加密时一致）
    * @returns 成功时返回明文；失败时返回 INVALID_KEY 或 DECRYPTION_FAILED
    */
-  decrypt: (ciphertext: string, privateKey: string, options?: AsymmetricEncryptOptions) => Result<string, CryptoError>
+  decrypt: (ciphertext: string, privateKey: string, options?: AsymmetricEncryptOptions) => HaiResult<string>
   /**
    * 签名
    *
@@ -138,7 +142,7 @@ export interface AsymmetricOperations {
    * @param options - 签名选项（hash 开关、userId）
    * @returns 成功时返回签名字符串；失败时返回 INVALID_KEY 或 SIGN_FAILED
    */
-  sign: (data: string, privateKey: string, options?: SignOptions) => Result<string, CryptoError>
+  sign: (data: string, privateKey: string, options?: SignOptions) => HaiResult<string>
   /**
    * 验签
    *
@@ -148,7 +152,7 @@ export interface AsymmetricOperations {
    * @param options - 验签选项
    * @returns 成功时返回 boolean；失败时返回 INVALID_KEY 或 VERIFY_FAILED
    */
-  verify: (data: string, signature: string, publicKey: string, options?: SignOptions) => Result<boolean, CryptoError>
+  verify: (data: string, signature: string, publicKey: string, options?: SignOptions) => HaiResult<boolean>
   /**
    * 校验公钥格式是否合法
    *
@@ -176,7 +180,7 @@ export interface HashOperations {
    * @param options - 输入编码选项
    * @returns 成功时返回 64 字符十六进制哈希值；失败时返回 HASH_FAILED
    */
-  hash: (data: string | Uint8Array, options?: HashOptions) => Result<string, CryptoError>
+  hash: (data: string | Uint8Array, options?: HashOptions) => HaiResult<string>
   /**
    * 计算 HMAC
    *
@@ -187,7 +191,7 @@ export interface HashOperations {
    * @param key - HMAC 密钥
    * @returns 成功时返回 64 字符十六进制 HMAC 值；失败时返回 HMAC_FAILED
    */
-  hmac: (data: string, key: string) => Result<string, CryptoError>
+  hmac: (data: string, key: string) => HaiResult<string>
   /**
    * 验证数据的哈希是否匹配
    *
@@ -197,7 +201,7 @@ export interface HashOperations {
    * @param expectedHash - 期望的哈希值
    * @returns 成功时返回 boolean；失败时返回 HASH_FAILED
    */
-  verify: (data: string, expectedHash: string) => Result<boolean, CryptoError>
+  verify: (data: string, expectedHash: string) => HaiResult<boolean>
 }
 
 /**
@@ -219,7 +223,7 @@ export interface SymmetricOperations {
    * @param options - 加密模式/IV/输出格式
    * @returns 成功时返回密文；失败时返回 INVALID_KEY/INVALID_IV/ENCRYPTION_FAILED
    */
-  encrypt: (data: string, key: string, options?: SymmetricOptions) => Result<string, CryptoError>
+  encrypt: (data: string, key: string, options?: SymmetricOptions) => HaiResult<string>
   /**
    * 对称解密
    *
@@ -230,7 +234,7 @@ export interface SymmetricOperations {
    * @param options - 解密模式/IV（需与加密时一致）
    * @returns 成功时返回明文；失败时返回 INVALID_KEY/INVALID_IV/DECRYPTION_FAILED
    */
-  decrypt: (ciphertext: string, key: string, options?: SymmetricOptions) => Result<string, CryptoError>
+  decrypt: (ciphertext: string, key: string, options?: SymmetricOptions) => HaiResult<string>
   /**
    * 带 IV 加密（CBC 模式，自动生成随机 IV）
    *
@@ -238,7 +242,7 @@ export interface SymmetricOperations {
    * @param key - 密钥（32 字符十六进制）
    * @returns 成功时返回 { ciphertext, iv }；失败时同 encrypt
    */
-  encryptWithIV: (data: string, key: string) => Result<EncryptWithIVResult, CryptoError>
+  encryptWithIV: (data: string, key: string) => HaiResult<EncryptWithIVResult>
   /**
    * 带 IV 解密（CBC 模式）
    *
@@ -247,7 +251,7 @@ export interface SymmetricOperations {
    * @param iv - 加密时使用的 IV
    * @returns 成功时返回明文；失败时同 decrypt
    */
-  decryptWithIV: (ciphertext: string, key: string, iv: string) => Result<string, CryptoError>
+  decryptWithIV: (ciphertext: string, key: string, iv: string) => HaiResult<string>
   /**
    * 从密码和盐值派生密钥
    *
@@ -281,7 +285,7 @@ export interface PasswordOperations {
    * @param config - 可选配置（盐值长度、迭代次数）
    * @returns 成功时返回格式化的哈希字符串；失败时返回 INVALID_INPUT 或 HASH_FAILED
    */
-  hash: (password: string, config?: PasswordConfig) => Result<string, CryptoError>
+  hash: (password: string, config?: PasswordConfig) => HaiResult<string>
   /**
    * 验证密码是否匹配
    *
@@ -291,7 +295,7 @@ export interface PasswordOperations {
    * @param hash - 存储的哈希值（格式: `$hai$<iterations>$<salt>$<hash>`）
    * @returns 成功时返回 boolean；失败时返回 INVALID_INPUT 或 VERIFY_FAILED
    */
-  verify: (password: string, hash: string) => Result<boolean, CryptoError>
+  verify: (password: string, hash: string) => HaiResult<boolean>
 }
 
 // ─── 函数接口 ───
@@ -319,7 +323,7 @@ export interface CryptoFunctions {
    *
    * @returns 成功时返回 ok(undefined)；失败时返回 INIT_FAILED
    */
-  init: () => Promise<Result<void, CryptoError>>
+  init: () => Promise<HaiResult<void>>
   /**
    * 关闭加密模块，释放内部状态
    *

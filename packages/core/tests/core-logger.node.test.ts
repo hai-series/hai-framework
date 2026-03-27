@@ -13,7 +13,7 @@ describe('core.logger (node)', () => {
   })
 
   it('createLogger 应该返回带完整方法集的实例', () => {
-    const logger = core.createLogger({ name: 'test-complete' })
+    const logger = core.logger.create({ name: 'test-complete' })
     expect(typeof logger.trace).toBe('function')
     expect(typeof logger.debug).toBe('function')
     expect(typeof logger.info).toBe('function')
@@ -24,7 +24,7 @@ describe('core.logger (node)', () => {
   })
 
   it('createLogger 应该支持各级别日志调用', () => {
-    const logger = core.createLogger({ name: 'level-test', level: 'trace' })
+    const logger = core.logger.create({ name: 'level-test', level: 'trace' })
     // 验证各级别调用不抛错
     expect(() => logger.trace('trace msg')).not.toThrow()
     expect(() => logger.debug('debug msg')).not.toThrow()
@@ -35,12 +35,12 @@ describe('core.logger (node)', () => {
   })
 
   it('createLogger 应该支持带上下文的日志', () => {
-    const logger = core.createLogger({ name: 'ctx-test', context: { service: 'api' } })
+    const logger = core.logger.create({ name: 'ctx-test', context: { service: 'api' } })
     expect(() => logger.info('with context', { requestId: 'req-123' })).not.toThrow()
   })
 
   it('child 应该继承父级并携带额外上下文', () => {
-    const parent = core.createLogger({ name: 'parent' })
+    const parent = core.logger.create({ name: 'parent' })
     const child = parent.child({ module: 'auth' })
     expect(typeof child.info).toBe('function')
 
@@ -50,48 +50,48 @@ describe('core.logger (node)', () => {
   })
 
   it('createLogger 应该支持 json 格式', () => {
-    const logger = core.createLogger({ name: 'json-test', format: 'json' })
+    const logger = core.logger.create({ name: 'json-test', format: 'json' })
     expect(() => logger.info('json format')).not.toThrow()
   })
 
   it('configureLogger/setLogLevel/getLogLevel 应该生效', () => {
-    core.configureLogger({ level: 'warn' })
-    expect(core.getLogLevel()).toBe('warn')
+    core.logger.configure({ level: 'warn' })
+    expect(core.logger.getLevel()).toBe('warn')
 
-    core.setLogLevel('error')
-    expect(core.getLogLevel()).toBe('error')
+    core.logger.setLevel('error')
+    expect(core.logger.getLevel()).toBe('error')
 
     // 恢复
-    core.setLogLevel('info')
+    core.logger.setLevel('info')
   })
 
   it('configureLogger 应该支持设置 format 和 context', () => {
-    core.configureLogger({ format: 'json', context: { env: 'test' } })
-    expect(core.getLogLevel()).toBe('info') // level 未变
+    core.logger.configure({ format: 'json', context: { env: 'test' } })
+    expect(core.logger.getLevel()).toBe('info') // level 未变
 
     // 恢复
-    core.configureLogger({ format: 'pretty' })
+    core.logger.configure({ format: 'pretty' })
   })
 
   it('configureLogger 应该支持 redact 配置', () => {
-    core.configureLogger({ redact: ['password', 'secret'] })
-    const logger = core.createLogger({ name: 'redact-test' })
+    core.logger.configure({ redact: ['password', 'secret'] })
+    const logger = core.logger.create({ name: 'redact-test' })
     expect(() => logger.info('test', { password: '123', data: 'ok' })).not.toThrow()
 
     // 恢复
-    core.configureLogger({ redact: [] })
+    core.logger.configure({ redact: [] })
   })
 
   it('configureLogger 后 createLogger 应该使用新配置', () => {
-    core.configureLogger({ level: 'debug' })
-    expect(core.getLogLevel()).toBe('debug')
+    core.logger.configure({ level: 'debug' })
+    expect(core.logger.getLevel()).toBe('debug')
 
     // createLogger 以新全局配置为准
-    const logger = core.createLogger({ name: 'new-config-test' })
+    const logger = core.logger.create({ name: 'new-config-test' })
     expect(typeof logger.debug).toBe('function')
     expect(() => logger.debug('should work at debug level')).not.toThrow()
 
     // 恢复
-    core.configureLogger({ level: 'info' })
+    core.logger.configure({ level: 'info' })
   })
 })

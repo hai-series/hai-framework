@@ -5,10 +5,9 @@
  * @module audit-main
  */
 
-import type { Result } from '@h-ai/core'
+import type { HaiResult } from '@h-ai/core'
 import type { AuditInitConfigInput } from './audit-config.js'
 import type {
-  AuditError,
   AuditFunctions,
   AuditHelper,
   AuditLog,
@@ -17,15 +16,16 @@ import type {
   CreateAuditLogInput,
   ListAuditLogsOptions,
 } from './audit-types.js'
-
 import { core, err, ok } from '@h-ai/core'
-
 import { validateIdentifiers } from '@h-ai/reldb'
-
-import { AuditErrorCode, AuditInitConfigSchema } from './audit-config.js'
+import { AuditInitConfigSchema } from './audit-config.js'
 import { createHelper } from './audit-helper.js'
+
 import { auditM } from './audit-i18n.js'
 import { AuditLogRepository } from './audit-repository-log.js'
+import {
+  HaiAuditError,
+} from './audit-types.js'
 
 const logger = core.logger.child({ module: 'audit', scope: 'main' })
 
@@ -48,8 +48,8 @@ let initInProgress = false
  * 调用 audit.log / audit.list 等方法时，
  * 若模块未初始化则返回 { success: false, error: { code: NOT_INITIALIZED } }
  */
-const notInitialized = core.module.createNotInitializedKit<AuditError>(
-  AuditErrorCode.NOT_INITIALIZED,
+const notInitialized = core.module.createNotInitializedKit(
+  HaiAuditError.NOT_INITIALIZED,
   () => auditM('audit_notInitialized'),
 )
 
@@ -109,14 +109,14 @@ export const audit: AuditFunctions = {
    * }
    * ```
    */
-  async init(config?: AuditInitConfigInput): Promise<Result<void, AuditError>> {
+  async init(config?: AuditInitConfigInput): Promise<HaiResult<void>> {
     // 并发初始化防护：避免多次 init 同时执行导致资源泄漏
     if (initInProgress) {
       logger.warn('Audit init already in progress, skipping concurrent call')
-      return err({
-        code: AuditErrorCode.INIT_IN_PROGRESS,
-        message: auditM('audit_initInProgress'),
-      })
+      return err(
+        HaiAuditError.INIT_IN_PROGRESS,
+        auditM('audit_initInProgress'),
+      )
     }
     initInProgress = true
 
@@ -131,22 +131,22 @@ export const audit: AuditFunctions = {
       const parseResult = AuditInitConfigSchema.safeParse(config ?? {})
       if (!parseResult.success) {
         logger.error('Audit config validation failed', { error: parseResult.error.message })
-        return err({
-          code: AuditErrorCode.CONFIG_ERROR,
-          message: auditM('audit_configError', { params: { error: parseResult.error.message } }),
-          cause: parseResult.error,
-        })
+        return err(
+          HaiAuditError.CONFIG_ERROR,
+          auditM('audit_configError', { params: { error: parseResult.error.message } }),
+          parseResult.error,
+        )
       }
       const parsed = parseResult.data
 
       const identifierResult = validateIdentifiers([parsed.userTable, parsed.userIdColumn, parsed.userNameColumn])
       if (!identifierResult.success) {
         logger.error('Audit config contains invalid identifiers', { error: identifierResult.error.message })
-        return err({
-          code: AuditErrorCode.CONFIG_ERROR,
-          message: auditM('audit_configError', { params: { error: identifierResult.error.message } }),
-          cause: identifierResult.error,
-        })
+        return err(
+          HaiAuditError.CONFIG_ERROR,
+          auditM('audit_configError', { params: { error: identifierResult.error.message } }),
+          identifierResult.error,
+        )
       }
 
       currentRepo = new AuditLogRepository({
@@ -161,11 +161,11 @@ export const audit: AuditFunctions = {
     }
     catch (error) {
       logger.error('Audit module initialization failed', { error })
-      return err({
-        code: AuditErrorCode.CONFIG_ERROR,
-        message: auditM('audit_initFailed', { params: { error: error instanceof Error ? error.message : String(error) } }),
-        cause: error,
-      })
+      return err(
+        HaiAuditError.CONFIG_ERROR,
+        auditM('audit_initFailed', { params: { error: error instanceof Error ? error.message : String(error) } }),
+        error,
+      )
     }
     finally {
       initInProgress = false
@@ -183,7 +183,7 @@ export const audit: AuditFunctions = {
    * @param input - 日志内容（action 和 resource 为必填）
    * @returns 成功时返回创建的 AuditLog；未初始化时返回 NOT_INITIALIZED
    */
-  log(input: CreateAuditLogInput): Promise<Result<AuditLog, AuditError>> {
+  log(input: CreateAuditLogInput): Promise<HaiResult<AuditLog>> {
     if (!currentRepo) {
       return Promise.resolve(notInitialized.result())
     }
@@ -196,7 +196,7 @@ export const audit: AuditFunctions = {
    * @param options - 过滤条件与分页参数
    * @returns 成功时返回 { items, total }；未初始化时返回 NOT_INITIALIZED
    */
-  list(options?: ListAuditLogsOptions): Promise<Result<{ items: AuditLogWithUser[], total: number }, AuditError>> {
+  list(options?: ListAuditLogsOptions): Promise<HaiResult<{ items: AuditLogWithUser[], total: number }>> {
     if (!currentRepo) {
       return Promise.resolve(notInitialized.result())
     }
@@ -210,7 +210,7 @@ export const audit: AuditFunctions = {
    * @param limit - 最大返回条数，默认 10
    * @returns 成功时返回 AuditLog 数组；未初始化时返回 NOT_INITIALIZED
    */
-  getUserRecent(userId: string, limit?: number): Promise<Result<AuditLog[], AuditError>> {
+  getUserRecent(userId: string, limit?: number): Promise<HaiResult<AuditLog[]>> {
     if (!currentRepo) {
       return Promise.resolve(notInitialized.result())
     }
@@ -223,7 +223,7 @@ export const audit: AuditFunctions = {
    * @param olderThanDays - 保留天数，默认 90
    * @returns 成功时返回删除的记录数；未初始化时返回 NOT_INITIALIZED
    */
-  cleanup(olderThanDays?: number): Promise<Result<number, AuditError>> {
+  cleanup(olderThanDays?: number): Promise<HaiResult<number>> {
     if (!currentRepo) {
       return Promise.resolve(notInitialized.result())
     }
@@ -236,7 +236,7 @@ export const audit: AuditFunctions = {
    * @param days - 统计天数，默认 7
    * @returns 成功时返回 AuditStatItem 数组；未初始化时返回 NOT_INITIALIZED
    */
-  getStats(days?: number): Promise<Result<AuditStatItem[], AuditError>> {
+  getStats(days?: number): Promise<HaiResult<AuditStatItem[]>> {
     if (!currentRepo) {
       return Promise.resolve(notInitialized.result())
     }

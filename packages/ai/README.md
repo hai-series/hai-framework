@@ -600,7 +600,7 @@ await ai.init({
   retrieval: {
     sources: [
       { id: 'docs', collection: 'documentation', name: '产品文档', topK: 5, minScore: 0.7 },
-      { id: 'faq', collection: 'faq', name: '常见问题', sourceType: 'manual' },
+      { id: 'faq', collection: 'faq', name: '常见问题' },
     ],
   },
 })
@@ -614,7 +614,6 @@ await ai.retrieval.addSource({
   id: 'docs',
   collection: 'documentation',
   name: '产品文档',
-  sourceType: 'document',
   topK: 5,
   minScore: 0.7,
 })
@@ -623,7 +622,6 @@ await ai.retrieval.addSource({
   id: 'faq',
   collection: 'faq',
   name: '常见问题',
-  sourceType: 'manual',
 })
 
 // 查看已注册的源（从 DB 读取）
@@ -839,6 +837,7 @@ const result = await ai.memory.extract(messages, {
   minImportance: 0.5, // 过滤低重要性条目（可选）
   objectId: 'user-001', // 关联到对象标识（可选，不传为全局）
   model: 'gpt-4o-mini', // 指定提取模型（可选）
+  systemPrompt: 'Only extract durable user preferences and explicit long-term instructions.', // 自定义提取提示词（可选）
 })
 
 if (result.success) {
@@ -985,6 +984,7 @@ const count = ai.token.estimateText('Hello world')
 const result = await ai.summary.summarize(messages, {
   model: 'gpt-4o-mini',
   temperature: 0.3,
+  systemPrompt: 'Focus on key decisions, constraints, and unresolved action items.',
 })
 
 if (result.success) {
@@ -995,13 +995,16 @@ if (result.success) {
 }
 
 // 生成纯文本摘要
-const textResult = await ai.summary.generate(messages)
+const textResult = await ai.summary.generate(messages, {
+  systemPrompt: 'Summarize in one concise paragraph for handoff notes.',
+})
 if (textResult.success) {
   // textResult.data: string（摘要文本）
 }
 
 // 增量摘要（在已有摘要基础上追加）
 const updated = await ai.summary.summarize(newMessages, {
+  systemPrompt: 'Keep the summary focused on product decisions and next steps.',
   previousSummary: existingSummary,
 })
 ```

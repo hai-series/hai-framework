@@ -5,36 +5,33 @@
  * @module reldb-types
  */
 
-import type { PaginatedResult, PaginationOptions, PaginationOptionsInput, Result } from '@h-ai/core'
-import type { DbType, ReldbConfig, ReldbConfigInput, ReldbErrorCodeType } from './reldb-config.js'
+import type { ErrorInfo, HaiResult, PaginatedResult, PaginationOptions, PaginationOptionsInput } from '@h-ai/core'
+import type { DbType, ReldbConfig, ReldbConfigInput } from './reldb-config.js'
 import type { JsonSqlExpr, ReldbJsonOps } from './reldb-json.js'
+import { core } from '@h-ai/core'
 
 export type { JsonSqlExpr, ReldbJsonOps }
 
 // ─── 错误类型 ───
 
-/**
- * 数据库错误接口
- *
- * 所有数据库操作返回的错误都遵循此接口。
- *
- * @example
- * ```ts
- * const result = await reldb.sql.query('SELECT * FROM users')
- * if (!result.success) {
- *     const error: ReldbError = result.error
- *     // 处理错误：根据 error.code / error.message 做兜底
- * }
- * ```
- */
-export interface ReldbError {
-  /** 错误码（数值，参见 ReldbErrorCode） */
-  code: ReldbErrorCodeType
-  /** 错误消息 */
-  message: string
-  /** 原始错误（可选） */
-  cause?: unknown
-}
+const ReldbErrorInfo = {
+  CONNECTION_FAILED: '001:500',
+  QUERY_FAILED: '002:500',
+  CONSTRAINT_VIOLATION: '003:409',
+  TRANSACTION_FAILED: '004:500',
+  MIGRATION_FAILED: '005:500',
+  RECORD_NOT_FOUND: '006:404',
+  DUPLICATE_ENTRY: '007:409',
+  DEADLOCK: '008:500',
+  TIMEOUT: '009:504',
+  POOL_EXHAUSTED: '010:503',
+  NOT_INITIALIZED: '011:500',
+  DDL_FAILED: '012:500',
+  UNSUPPORTED_TYPE: '013:400',
+  CONFIG_ERROR: '014:500',
+} satisfies ErrorInfo
+
+export const HaiReldbError = core.error.buildHaiErrorsDef('reldb', ReldbErrorInfo)
 
 // ─── 列定义 ───
 
@@ -175,7 +172,7 @@ export interface ReldbIndexDef {
  * DDL（数据定义语言）操作接口
  *
  * 提供表结构管理功能，包括创建/删除表、添加/删除列、创建索引等。
- * 所有操作返回 `Result<void, ReldbError>` 类型。
+ * 所有操作返回 `HaiResult<void>` 类型。
  *
  * @example
  * ```ts
@@ -207,7 +204,7 @@ export interface DdlOperations {
    * }
    * ```
    */
-  createTable: (tableName: string, columns: ReldbTableDef, ifNotExists?: boolean) => Promise<Result<void, ReldbError>>
+  createTable: (tableName: string, columns: ReldbTableDef, ifNotExists?: boolean) => Promise<HaiResult<void>>
 
   /**
    * 删除表
@@ -219,7 +216,7 @@ export interface DdlOperations {
    * await reldb.ddl.dropTable('users_backup', false)
    * ```
    */
-  dropTable: (tableName: string, ifExists?: boolean) => Promise<Result<void, ReldbError>>
+  dropTable: (tableName: string, ifExists?: boolean) => Promise<HaiResult<void>>
 
   /**
    * 添加列
@@ -232,7 +229,7 @@ export interface DdlOperations {
    * await reldb.ddl.addColumn('users', 'email', { type: 'TEXT', unique: true })
    * ```
    */
-  addColumn: (tableName: string, columnName: string, columnDef: ReldbColumnDef) => Promise<Result<void, ReldbError>>
+  addColumn: (tableName: string, columnName: string, columnDef: ReldbColumnDef) => Promise<HaiResult<void>>
 
   /**
    * 删除列
@@ -243,7 +240,7 @@ export interface DdlOperations {
    * await reldb.ddl.dropColumn('users', 'legacy_field')
    * ```
    */
-  dropColumn: (tableName: string, columnName: string) => Promise<Result<void, ReldbError>>
+  dropColumn: (tableName: string, columnName: string) => Promise<HaiResult<void>>
 
   /**
    * 重命名表
@@ -254,7 +251,7 @@ export interface DdlOperations {
    * await reldb.ddl.renameTable('users_temp', 'users')
    * ```
    */
-  renameTable: (oldName: string, newName: string) => Promise<Result<void, ReldbError>>
+  renameTable: (oldName: string, newName: string) => Promise<HaiResult<void>>
 
   /**
    * 创建索引
@@ -269,7 +266,7 @@ export interface DdlOperations {
    * })
    * ```
    */
-  createIndex: (tableName: string, indexName: string, indexDef: ReldbIndexDef) => Promise<Result<void, ReldbError>>
+  createIndex: (tableName: string, indexName: string, indexDef: ReldbIndexDef) => Promise<HaiResult<void>>
 
   /**
    * 删除索引
@@ -280,7 +277,7 @@ export interface DdlOperations {
    * await reldb.ddl.dropIndex('idx_users_email')
    * ```
    */
-  dropIndex: (indexName: string, ifExists?: boolean) => Promise<Result<void, ReldbError>>
+  dropIndex: (indexName: string, ifExists?: boolean) => Promise<HaiResult<void>>
 
   /**
    * 执行原始 DDL SQL
@@ -299,7 +296,7 @@ export interface DdlOperations {
    * await reldb.ddl.raw(`ALTER TABLE ${userInput} ADD COLUMN status TEXT`)
    * ```
    */
-  raw: (sql: string) => Promise<Result<void, ReldbError>>
+  raw: (sql: string) => Promise<HaiResult<void>>
 }
 
 // ─── SQL 操作接口 ───
@@ -366,15 +363,15 @@ export interface PaginationQueryOptions {
  */
 export interface DmlOperations {
   /** 查询多行 */
-  query: <T = QueryRow>(sql: string, params?: unknown[]) => Promise<Result<T[], ReldbError>>
+  query: <T = QueryRow>(sql: string, params?: unknown[]) => Promise<HaiResult<T[]>>
   /** 查询单行 */
-  get: <T = QueryRow>(sql: string, params?: unknown[]) => Promise<Result<T | null, ReldbError>>
+  get: <T = QueryRow>(sql: string, params?: unknown[]) => Promise<HaiResult<T | null>>
   /** 执行修改语句（INSERT/UPDATE/DELETE） */
-  execute: (sql: string, params?: unknown[]) => Promise<Result<ExecuteResult, ReldbError>>
+  execute: (sql: string, params?: unknown[]) => Promise<HaiResult<ExecuteResult>>
   /** 批量执行多条语句（在同一事务上下文中） */
-  batch: (statements: Array<{ sql: string, params?: unknown[] }>) => Promise<Result<void, ReldbError>>
+  batch: (statements: Array<{ sql: string, params?: unknown[] }>) => Promise<HaiResult<void>>
   /** 分页查询 */
-  queryPage: <T = QueryRow>(options: PaginationQueryOptions) => Promise<Result<PaginatedResult<T>, ReldbError>>
+  queryPage: <T = QueryRow>(options: PaginationQueryOptions) => Promise<HaiResult<PaginatedResult<T>>>
 }
 
 // ─── CRUD 抽象类型 ───
@@ -493,18 +490,18 @@ export interface BaseReldbCrudRepositoryConfig<TItem> {
 
 /** CRUD 仓库接口 */
 export interface ReldbCrudRepository<TItem> {
-  create: (data: Record<string, unknown>, tx?: DmlWithTxOperations) => Promise<Result<ExecuteResult, ReldbError>>
-  createMany: (items: Array<Record<string, unknown>>, tx?: DmlWithTxOperations) => Promise<Result<void, ReldbError>>
-  createOrUpdate: (data: Record<string, unknown>, tx?: DmlWithTxOperations) => Promise<Result<ExecuteResult, ReldbError>>
-  findById: (id: unknown, tx?: DmlWithTxOperations) => Promise<Result<TItem | null, ReldbError>>
-  getById: (id: unknown, tx?: DmlWithTxOperations) => Promise<Result<TItem, ReldbError>>
-  findAll: (options?: CrudQueryOptions, tx?: DmlWithTxOperations) => Promise<Result<TItem[], ReldbError>>
-  findPage: (options: CrudPageOptions, tx?: DmlWithTxOperations) => Promise<Result<PaginatedResult<TItem>, ReldbError>>
-  updateById: (id: unknown, data: Record<string, unknown>, tx?: DmlWithTxOperations) => Promise<Result<ExecuteResult, ReldbError>>
-  deleteById: (id: unknown, tx?: DmlWithTxOperations) => Promise<Result<ExecuteResult, ReldbError>>
-  count: (options?: ReldbCrudCountOptions, tx?: DmlWithTxOperations) => Promise<Result<number, ReldbError>>
-  exists: (options?: ReldbCrudCountOptions, tx?: DmlWithTxOperations) => Promise<Result<boolean, ReldbError>>
-  existsById: (id: unknown, tx?: DmlWithTxOperations) => Promise<Result<boolean, ReldbError>>
+  create: (data: Record<string, unknown>, tx?: DmlWithTxOperations) => Promise<HaiResult<ExecuteResult>>
+  createMany: (items: Array<Record<string, unknown>>, tx?: DmlWithTxOperations) => Promise<HaiResult<void>>
+  createOrUpdate: (data: Record<string, unknown>, tx?: DmlWithTxOperations) => Promise<HaiResult<ExecuteResult>>
+  findById: (id: unknown, tx?: DmlWithTxOperations) => Promise<HaiResult<TItem | null>>
+  getById: (id: unknown, tx?: DmlWithTxOperations) => Promise<HaiResult<TItem>>
+  findAll: (options?: CrudQueryOptions, tx?: DmlWithTxOperations) => Promise<HaiResult<TItem[]>>
+  findPage: (options: CrudPageOptions, tx?: DmlWithTxOperations) => Promise<HaiResult<PaginatedResult<TItem>>>
+  updateById: (id: unknown, data: Record<string, unknown>, tx?: DmlWithTxOperations) => Promise<HaiResult<ExecuteResult>>
+  deleteById: (id: unknown, tx?: DmlWithTxOperations) => Promise<HaiResult<ExecuteResult>>
+  count: (options?: ReldbCrudCountOptions, tx?: DmlWithTxOperations) => Promise<HaiResult<number>>
+  exists: (options?: ReldbCrudCountOptions, tx?: DmlWithTxOperations) => Promise<HaiResult<boolean>>
+  existsById: (id: unknown, tx?: DmlWithTxOperations) => Promise<HaiResult<boolean>>
 }
 
 /** CRUD 管理器（统一入口） */
@@ -522,9 +519,9 @@ export interface DmlWithTxOperations extends DmlOperations {
   /** CRUD 管理器 */
   crud: CrudManager
   /** 提交事务 */
-  commit: () => Promise<Result<void, ReldbError>>
+  commit: () => Promise<HaiResult<void>>
   /** 回滚事务 */
-  rollback: () => Promise<Result<void, ReldbError>>
+  rollback: () => Promise<HaiResult<void>>
 }
 
 /**
@@ -547,9 +544,9 @@ export type TxWrapCallback<T> = (tx: DmlWithTxOperations) => Promise<T>
  */
 export interface TxManager {
   /** 开启事务（分步事务） */
-  begin: () => Promise<Result<DmlWithTxOperations, ReldbError>>
+  begin: () => Promise<HaiResult<DmlWithTxOperations>>
   /** 包裹事务（自动提交/回滚） */
-  wrap: <T>(fn: TxWrapCallback<T>) => Promise<Result<T, ReldbError>>
+  wrap: <T>(fn: TxWrapCallback<T>) => Promise<HaiResult<T>>
 }
 
 // ─── 数据库函数接口 ───
@@ -591,7 +588,7 @@ export interface ReldbFunctions {
    * @param config - 数据库配置
    * @returns 初始化结果
    */
-  init: (config: ReldbConfigInput) => Promise<Result<void, ReldbError>>
+  init: (config: ReldbConfigInput) => Promise<HaiResult<void>>
 
   /** DDL 操作（表结构管理） */
   readonly ddl: DdlOperations
@@ -647,7 +644,7 @@ export interface ReldbFunctions {
   readonly json: ReldbJsonOps
 
   /** 关闭数据库连接 */
-  close: () => Promise<Result<void, ReldbError>>
+  close: () => Promise<HaiResult<void>>
 }
 
 // ─── Provider 接口 ───
@@ -668,9 +665,9 @@ export interface ReldbProvider {
   /** 事务管理器 */
   readonly tx: TxManager
   /** 连接数据库 */
-  connect: (config: ReldbConfig) => Promise<Result<void, ReldbError>>
+  connect: (config: ReldbConfig) => Promise<HaiResult<void>>
   /** 关闭连接 */
-  close: () => Promise<Result<void, ReldbError>>
+  close: () => Promise<HaiResult<void>>
   /** 是否已连接 */
   isConnected: () => boolean
 }

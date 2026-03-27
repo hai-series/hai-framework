@@ -5,11 +5,12 @@
  * @module deploy-provisioner-resend
  */
 
-import type { Result } from '@h-ai/core'
-import type { DeployError, ProvisionResult, ServiceProvisioner } from '../deploy-types.js'
+import type { HaiResult } from '@h-ai/core'
+import type { ProvisionResult, ServiceProvisioner } from '../deploy-types.js'
 import { core, err, ok } from '@h-ai/core'
-import { DeployErrorCode } from '../deploy-config.js'
+
 import { deployM } from '../deploy-i18n.js'
+import { HaiDeployError } from '../deploy-types.js'
 
 const logger = core.logger.child({ module: 'deploy', scope: 'provisioner-resend' })
 
@@ -28,7 +29,7 @@ export function createResendProvisioner(): ServiceProvisioner {
     name: 'resend',
     serviceType: 'email',
 
-    async authenticate(credentials: Record<string, string>): Promise<Result<string, DeployError>> {
+    async authenticate(credentials: Record<string, string>): Promise<HaiResult<string>> {
       logger.debug('Authenticating with Resend')
       try {
         const apiToken = credentials.apiKey ?? credentials.api_key ?? credentials.token ?? ''
@@ -48,22 +49,22 @@ export function createResendProvisioner(): ServiceProvisioner {
       }
       catch (error) {
         logger.error('Resend authentication failed', { error })
-        return err({
-          code: DeployErrorCode.AUTH_FAILED,
-          message: deployM('deploy_authFailed', {
+        return err(
+          HaiDeployError.AUTH_FAILED,
+          deployM('deploy_authFailed', {
             params: { error: error instanceof Error ? error.message : String(error) },
           }),
-          cause: error,
-        })
+          error,
+        )
       }
     },
 
-    async provision(_appName: string): Promise<Result<ProvisionResult, DeployError>> {
+    async provision(_appName: string): Promise<HaiResult<ProvisionResult>> {
       if (!token) {
-        return err({
-          code: DeployErrorCode.AUTH_REQUIRED,
-          message: deployM('deploy_authRequired'),
-        })
+        return err(
+          HaiDeployError.AUTH_REQUIRED,
+          deployM('deploy_authRequired'),
+        )
       }
 
       logger.debug('Provisioning Resend email service')

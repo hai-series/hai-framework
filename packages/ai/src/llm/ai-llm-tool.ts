@@ -5,7 +5,7 @@
  * @module ai-llm-tool
  */
 
-import type { Result } from '@h-ai/core'
+import type { HaiResult } from '@h-ai/core'
 import type { z } from 'zod'
 
 import type {
@@ -13,7 +13,6 @@ import type {
   Tool,
   ToolCall,
   ToolDefinition,
-  ToolError,
   ToolMessage,
   ToolRegistryOperations,
 } from './ai-llm-types.js'
@@ -22,6 +21,7 @@ import { err, ok } from '@h-ai/core'
 import { z as zod } from 'zod'
 
 import { aiM } from '../ai-i18n.js'
+import { HaiAIError } from '../ai-types.js'
 
 // ─── 工具定义 ───
 
@@ -54,25 +54,17 @@ export function defineTool<TInput, TOutput>(
     description,
     parameters,
 
-    async execute(input: TInput): Promise<Result<TOutput, ToolError>> {
+    async execute(input: TInput): Promise<HaiResult<TOutput>> {
       try {
         const parseResult = parameters.safeParse(input)
         if (!parseResult.success) {
-          return err({
-            type: 'VALIDATION_FAILED',
-            message: parseResult.error.message,
-            toolName: name,
-          })
+          return err(HaiAIError.TOOL_VALIDATION_FAILED, parseResult.error.message)
         }
         const output = await handler(parseResult.data)
         return ok(output)
       }
       catch (error) {
-        return err({
-          type: 'EXECUTION_FAILED',
-          message: error instanceof Error ? error.message : String(error),
-          toolName: name,
-        })
+        return err(HaiAIError.TOOL_EXECUTION_FAILED, error instanceof Error ? error.message : String(error), error)
       }
     },
 
@@ -151,21 +143,14 @@ export function createToolRegistry(): ToolRegistryOperations {
     },
 
     /** 执行单个工具调用，解析 JSON 参数后调用工具的 execute 方法 */
-    async execute(toolCall: ToolCall): Promise<Result<ToolMessage, ToolError>> {
+    async execute(toolCall: ToolCall): Promise<HaiResult<ToolMessage>> {
       // 仅支持 function 类型工具调用（OpenAI SDK union 含 custom 类型）
       if (toolCall.type !== 'function') {
-        return err({
-          type: 'TOOL_NOT_FOUND',
-          message: aiM('ai_toolNotFound', { params: { name: 'unknown' } }),
-        })
+        return err(HaiAIError.TOOL_NOT_FOUND, aiM('ai_toolNotFound', { params: { name: 'unknown' } }))
       }
       const tool = tools.get(toolCall.function.name)
       if (!tool) {
-        return err({
-          type: 'TOOL_NOT_FOUND',
-          message: aiM('ai_toolNotFound', { params: { name: toolCall.function.name } }),
-          toolName: toolCall.function.name,
-        })
+        return err(HaiAIError.TOOL_NOT_FOUND, aiM('ai_toolNotFound', { params: { name: toolCall.function.name } }))
       }
 
       let args: unknown
@@ -173,16 +158,12 @@ export function createToolRegistry(): ToolRegistryOperations {
         args = JSON.parse(toolCall.function.arguments)
       }
       catch {
-        return err({
-          type: 'VALIDATION_FAILED',
-          message: aiM('ai_toolInvalidJson'),
-          toolName: toolCall.function.name,
-        })
+        return err(HaiAIError.TOOL_VALIDATION_FAILED, aiM('ai_toolInvalidJson'))
       }
 
       const result = await tool.execute(args)
       if (!result.success) {
-        return result as Result<ToolMessage, ToolError>
+        return result
       }
 
       const content = typeof result.data === 'string'
@@ -200,7 +181,7 @@ export function createToolRegistry(): ToolRegistryOperations {
     async executeAll(
       toolCalls: ToolCall[],
       options: { parallel?: boolean } = {},
-    ): Promise<Result<ToolMessage[], ToolError>> {
+    ): Promise<HaiResult<ToolMessage[]>> {
       const { parallel = true } = options
       const messages: ToolMessage[] = []
 
@@ -210,7 +191,7 @@ export function createToolRegistry(): ToolRegistryOperations {
         )
         for (const result of results) {
           if (!result.success) {
-            return result as Result<ToolMessage[], ToolError>
+            return result
           }
           messages.push(result.data)
         }
@@ -219,7 +200,7 @@ export function createToolRegistry(): ToolRegistryOperations {
         for (const toolCall of toolCalls) {
           const result = await registry.execute(toolCall)
           if (!result.success) {
-            return result as Result<ToolMessage[], ToolError>
+            return result
           }
           messages.push(result.data)
         }

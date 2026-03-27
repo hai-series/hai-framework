@@ -489,14 +489,14 @@ await iam.user.adminResetPassword(userId, 'TempPassword123')
 
 ## 错误处理
 
-所有操作返回 `Result<T, IamError>`，通过 `IamErrorCode` 做分支判断：
+所有操作返回 `HaiResult<T>`，通过 `HaiIamError` 做分支判断：
 
 ```ts
-import { iam, IamErrorCode } from '@h-ai/iam'
+import { HaiIamError, iam } from '@h-ai/iam'
 
 const result = await iam.auth.login({ identifier: 'admin', password: 'wrong' })
 if (!result.success) {
-  if (result.error.code === IamErrorCode.INVALID_CREDENTIALS) {
+  if (result.error.code === HaiIamError.INVALID_CREDENTIALS.code) {
     // 用户名或密码错误
   }
 }

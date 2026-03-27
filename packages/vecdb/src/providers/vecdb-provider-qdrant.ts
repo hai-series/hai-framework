@@ -6,19 +6,18 @@
  * @module vecdb-provider-qdrant
  */
 
-import type { Result } from '@h-ai/core'
+import type { HaiResult } from '@h-ai/core'
 import type { DistanceMetric, QdrantConfig } from '../vecdb-config.js'
 import type {
-  VecdbError,
   VectorSearchResult,
 } from '../vecdb-types.js'
 import type { CollectionDriver, VecdbProvider, VectorDriver } from './vecdb-provider-base.js'
 
 import { createHash } from 'node:crypto'
 import { core, err, ok } from '@h-ai/core'
-
-import { VecdbErrorCode } from '../vecdb-config.js'
 import { vecdbM } from '../vecdb-i18n.js'
+import { HaiVecdbError } from '../vecdb-types.js'
+
 import { createBaseCollectionOps, createBaseVectorOps } from './vecdb-provider-base.js'
 
 const logger = core.logger.child({ module: 'vecdb', scope: 'qdrant' })
@@ -80,10 +79,7 @@ export function createQdrantProvider(): VecdbProvider {
       const collections = await client!.getCollections()
       const exists = collections.collections.some((c: { name: string }) => c.name === name)
       if (exists) {
-        return err({
-          code: VecdbErrorCode.COLLECTION_ALREADY_EXISTS,
-          message: vecdbM('vecdb_collectionAlreadyExists', { params: { name } }),
-        })
+        return err(HaiVecdbError.COLLECTION_ALREADY_EXISTS, vecdbM('vecdb_collectionAlreadyExists', { params: { name } }))
       }
 
       const metric = options.metric ?? config?.metric ?? 'cosine'
@@ -107,10 +103,7 @@ export function createQdrantProvider(): VecdbProvider {
         await client!.getCollection(name)
       }
       catch {
-        return err({
-          code: VecdbErrorCode.COLLECTION_NOT_FOUND,
-          message: vecdbM('vecdb_collectionNotFound', { params: { name } }),
-        })
+        return err(HaiVecdbError.COLLECTION_NOT_FOUND, vecdbM('vecdb_collectionNotFound', { params: { name } }))
       }
 
       await client!.deleteCollection(name)
@@ -142,10 +135,7 @@ export function createQdrantProvider(): VecdbProvider {
         collectionInfo = await client!.getCollection(name)
       }
       catch {
-        return err({
-          code: VecdbErrorCode.COLLECTION_NOT_FOUND,
-          message: vecdbM('vecdb_collectionNotFound', { params: { name } }),
-        })
+        return err(HaiVecdbError.COLLECTION_NOT_FOUND, vecdbM('vecdb_collectionNotFound', { params: { name } }))
       }
 
       const vectorsConfig = collectionInfo.config?.params?.vectors
@@ -278,12 +268,9 @@ export function createQdrantProvider(): VecdbProvider {
   return {
     name: 'qdrant',
 
-    async connect(cfg): Promise<Result<void, VecdbError>> {
+    async connect(cfg): Promise<HaiResult<void>> {
       if (cfg.type !== 'qdrant') {
-        return err({
-          code: VecdbErrorCode.UNSUPPORTED_TYPE,
-          message: vecdbM('vecdb_unsupportedType', { params: { type: cfg.type } }),
-        })
+        return err(HaiVecdbError.UNSUPPORTED_TYPE, vecdbM('vecdb_unsupportedType', { params: { type: cfg.type } }))
       }
 
       const qdrantConfig = cfg as QdrantConfig
@@ -309,15 +296,11 @@ export function createQdrantProvider(): VecdbProvider {
       catch (error) {
         // 仅提取错误消息，避免 error 对象中的 URL 或连接信息泄漏
         logger.error('Failed to connect to Qdrant', { error: error instanceof Error ? error.message : String(error) })
-        return err({
-          code: VecdbErrorCode.CONNECTION_FAILED,
-          message: vecdbM('vecdb_connectionFailed', { params: { error: String(error) } }),
-          cause: error,
-        })
+        return err(HaiVecdbError.CONNECTION_FAILED, vecdbM('vecdb_connectionFailed', { params: { error: String(error) } }), error)
       }
     },
 
-    async close(): Promise<Result<void, VecdbError>> {
+    async close(): Promise<HaiResult<void>> {
       client = null
       config = null
       logger.info('Qdrant connection closed')

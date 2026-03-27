@@ -5,14 +5,14 @@
  * @module deploy-scanner
  */
 
-import type { Result } from '@h-ai/core'
-import type { DeployError, ScanResult, ServiceType } from './deploy-types.js'
+import type { HaiResult } from '@h-ai/core'
+import type { ScanResult, ServiceType } from './deploy-types.js'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { core, err, ok } from '@h-ai/core'
 import { parse } from 'yaml'
-import { DeployErrorCode } from './deploy-config.js'
 import { deployM } from './deploy-i18n.js'
+import { HaiDeployError } from './deploy-types.js'
 
 const logger = core.logger.child({ module: 'deploy', scope: 'scanner' })
 
@@ -199,17 +199,17 @@ function detectReachServices(config: Record<string, unknown>, services: ServiceT
  * }
  * ```
  */
-export async function scanApp(appDir: string): Promise<Result<ScanResult, DeployError>> {
+export async function scanApp(appDir: string): Promise<HaiResult<ScanResult>> {
   logger.debug('Scanning application', { appDir })
 
   try {
     // 读取 package.json
     const pkg = readJson(join(appDir, 'package.json'))
     if (pkg === null) {
-      return err({
-        code: DeployErrorCode.SCAN_FAILED,
-        message: deployM('deploy_scanFailed', { params: { error: 'package.json not found' } }),
-      })
+      return err(
+        HaiDeployError.SCAN_FAILED,
+        deployM('deploy_scanFailed', { params: { error: 'package.json not found' } }),
+      )
     }
 
     const appName = extractAppName(pkg)
@@ -243,13 +243,13 @@ export async function scanApp(appDir: string): Promise<Result<ScanResult, Deploy
   }
   catch (error) {
     logger.error('Application scan failed', { appDir, error })
-    return err({
-      code: DeployErrorCode.SCAN_FAILED,
-      message: deployM('deploy_scanFailed', {
+    return err(
+      HaiDeployError.SCAN_FAILED,
+      deployM('deploy_scanFailed', {
         params: { error: error instanceof Error ? error.message : String(error) },
       }),
-      cause: error,
-    })
+      error,
+    )
   }
 }
 

@@ -18,7 +18,7 @@
 
 import type { IamFunctions } from '../src/iam-types.js'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { IamErrorCode } from '../src/iam-config.js'
+import { HaiIamError } from '../src/iam-types.js'
 import { defineIamSuite, initIam, postgresRedisEnv, sqliteMemoryEnv, TEST_PASSWORD } from './helpers/iam-test-suite.js'
 
 describe('iam.session', () => {
@@ -94,7 +94,7 @@ describe('iam.session', () => {
         const result = await getIam().session.verifyToken('invalid-token')
         expect(result.success).toBe(false)
         if (!result.success) {
-          expect(result.error.code).toBe(IamErrorCode.SESSION_INVALID)
+          expect(result.error.code).toBe(HaiIamError.SESSION_INVALID.code)
         }
       })
 
@@ -102,7 +102,7 @@ describe('iam.session', () => {
         const result = await getIam().session.verifyToken('')
         expect(result.success).toBe(false)
         if (!result.success) {
-          expect(result.error.code).toBe(IamErrorCode.SESSION_INVALID)
+          expect(result.error.code).toBe(HaiIamError.SESSION_INVALID.code)
         }
       })
     })
@@ -139,7 +139,7 @@ describe('iam.session', () => {
         )
         expect(result.success).toBe(false)
         if (!result.success) {
-          expect(result.error.code).toBe(IamErrorCode.SESSION_NOT_FOUND)
+          expect(result.error.code).toBe(HaiIamError.SESSION_NOT_FOUND.code)
         }
       })
     })
@@ -323,7 +323,7 @@ describe('iam.session', () => {
         const result = await getIam().session.verifyToken(createResult.data.accessToken)
         expect(result.success).toBe(false)
         if (!result.success) {
-          expect(result.error.code).toBe(IamErrorCode.SESSION_INVALID)
+          expect(result.error.code).toBe(HaiIamError.SESSION_INVALID.code)
         }
       })
     })

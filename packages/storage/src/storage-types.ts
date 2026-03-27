@@ -13,36 +13,32 @@
  * @module storage-types
  */
 
-import type { Result } from '@h-ai/core'
+import type { ErrorInfo, HaiResult } from '@h-ai/core'
 import type { Buffer } from 'node:buffer'
-import type { PresignOptions, PresignUploadOptions, StorageConfig, StorageConfigInput, StorageErrorCodeType } from './storage-config.js'
+import type { PresignOptions, PresignUploadOptions, StorageConfig, StorageConfigInput } from './storage-config.js'
+import { core } from '@h-ai/core'
 
-// ─── 错误类型 ───
+// ─── 错误定义（照 @h-ai/core 范式） ───
 
-/**
- * 存储错误接口
- *
- * 所有存储操作返回的错误都遵循此接口。
- *
- * @example
- * ```ts
- * const result = await storage.file.get('image.png')
- * if (!result.success) {
- *     const error: StorageError = result.error
- *     // 处理错误：根据 error.code / error.message 做兜底
- * }
- * ```
- */
-export interface StorageError {
-  /** 错误码（数值，参见 StorageErrorCode） */
-  code: StorageErrorCodeType
-  /** 错误消息 */
-  message: string
-  /** 相关的文件路径/键 */
-  key?: string
-  /** 原始错误（可选） */
-  cause?: unknown
-}
+const StorageErrorInfo = {
+  CONNECTION_FAILED: '001:500',
+  OPERATION_FAILED: '002:500',
+  NOT_FOUND: '003:404',
+  ALREADY_EXISTS: '004:409',
+  PERMISSION_DENIED: '005:403',
+  QUOTA_EXCEEDED: '006:413',
+  INVALID_PATH: '007:400',
+  IO_ERROR: '008:500',
+  NETWORK_ERROR: '009:502',
+  NOT_INITIALIZED: '010:500',
+  UNSUPPORTED_TYPE: '011:400',
+  CONFIG_ERROR: '012:500',
+  PRESIGN_FAILED: '013:500',
+  UPLOAD_FAILED: '014:500',
+  DOWNLOAD_FAILED: '015:500',
+} as const satisfies ErrorInfo
+
+export const HaiStorageError = core.error.buildHaiErrorsDef('storage', StorageErrorInfo)
 
 // ─── 文件元数据 ───
 
@@ -169,7 +165,7 @@ export interface FileOperations {
    * }
    * ```
    */
-  put: (key: string, data: Buffer | Uint8Array | string, options?: UploadOptions) => Promise<Result<FileMetadata, StorageError>>
+  put: (key: string, data: Buffer | Uint8Array | string, options?: UploadOptions) => Promise<HaiResult<FileMetadata>>
 
   /**
    * 下载文件
@@ -185,7 +181,7 @@ export interface FileOperations {
    * }
    * ```
    */
-  get: (key: string, options?: DownloadOptions) => Promise<Result<Buffer, StorageError>>
+  get: (key: string, options?: DownloadOptions) => Promise<HaiResult<Buffer>>
 
   /**
    * 获取文件元数据
@@ -200,7 +196,7 @@ export interface FileOperations {
    * }
    * ```
    */
-  head: (key: string) => Promise<Result<FileMetadata, StorageError>>
+  head: (key: string) => Promise<HaiResult<FileMetadata>>
 
   /**
    * 检查文件是否存在
@@ -215,7 +211,7 @@ export interface FileOperations {
    * }
    * ```
    */
-  exists: (key: string) => Promise<Result<boolean, StorageError>>
+  exists: (key: string) => Promise<HaiResult<boolean>>
 
   /**
    * 删除文件
@@ -227,7 +223,7 @@ export interface FileOperations {
    * await storage.file.delete('uploads/a.txt')
    * ```
    */
-  delete: (key: string) => Promise<Result<void, StorageError>>
+  delete: (key: string) => Promise<HaiResult<void>>
 
   /**
    * 批量删除文件
@@ -239,7 +235,7 @@ export interface FileOperations {
    * await storage.file.deleteMany(['a.txt', 'b.txt'])
    * ```
    */
-  deleteMany: (keys: string[]) => Promise<Result<void, StorageError>>
+  deleteMany: (keys: string[]) => Promise<HaiResult<void>>
 
   /**
    * 复制文件
@@ -253,7 +249,7 @@ export interface FileOperations {
    * await storage.file.copy('a.txt', 'b.txt')
    * ```
    */
-  copy: (sourceKey: string, destKey: string, options?: CopyOptions) => Promise<Result<FileMetadata, StorageError>>
+  copy: (sourceKey: string, destKey: string, options?: CopyOptions) => Promise<HaiResult<FileMetadata>>
 }
 
 /**
@@ -275,7 +271,7 @@ export interface DirOperations {
    * }
    * ```
    */
-  list: (options?: ListOptions) => Promise<Result<ListResult, StorageError>>
+  list: (options?: ListOptions) => Promise<HaiResult<ListResult>>
 
   /**
    * 删除目录（删除指定前缀下的所有文件）
@@ -287,7 +283,7 @@ export interface DirOperations {
    * await storage.dir.delete('uploads/tmp/')
    * ```
    */
-  delete: (prefix: string) => Promise<Result<void, StorageError>>
+  delete: (prefix: string) => Promise<HaiResult<void>>
 }
 
 /**
@@ -307,7 +303,7 @@ export interface PresignOperations {
    * const result = await storage.presign.getUrl('a.txt', { expiresIn: 60 })
    * ```
    */
-  getUrl: (key: string, options?: PresignOptions) => Promise<Result<string, StorageError>>
+  getUrl: (key: string, options?: PresignOptions) => Promise<HaiResult<string>>
 
   /**
    * 生成上传签名 URL
@@ -320,7 +316,7 @@ export interface PresignOperations {
    * const result = await storage.presign.putUrl('a.txt', { contentType: 'text/plain' })
    * ```
    */
-  putUrl: (key: string, options?: PresignUploadOptions) => Promise<Result<string, StorageError>>
+  putUrl: (key: string, options?: PresignUploadOptions) => Promise<HaiResult<string>>
 
   /**
    * 获取公开访问 URL（如果配置了 publicUrl）
@@ -358,7 +354,7 @@ export interface StorageFunctions {
    * @param config - 存储配置（支持省略带默认值的字段）
    * @returns 成功 ok(undefined)；失败返回 err（含 StorageError）
    */
-  init: (config: StorageConfigInput) => Promise<Result<void, StorageError>>
+  init: (config: StorageConfigInput) => Promise<HaiResult<void>>
 
   /**
    * 关闭存储连接并释放资源
@@ -401,7 +397,7 @@ export interface StorageProvider {
    * @param config - 经 Schema 校验后的完整配置
    * @returns 连接结果
    */
-  connect: (config: StorageConfig) => Promise<Result<void, StorageError>>
+  connect: (config: StorageConfig) => Promise<HaiResult<void>>
 
   /** 关闭连接并释放资源 */
   close: () => Promise<void>

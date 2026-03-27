@@ -27,6 +27,7 @@
     "@h-ai/kit": "workspace:*",
     "@h-ai/reldb": "workspace:*",
     "@h-ai/vecdb": "workspace:*",
+    "@lancedb/lancedb": "catalog:",
     "zod": "catalog:"
   },
   "devDependencies": {

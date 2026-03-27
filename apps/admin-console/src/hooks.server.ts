@@ -136,7 +136,7 @@ const haiHandle = kit.createHandle({
     loginUrl: '/auth/login',
     protectedPaths: ['/admin/*', '/api/*'],
     publicPaths: ['/admin/public/*', '/api/auth/login', '/api/auth/register', '/api/public/*', '/api/kit/*'],
-    operations: iam.auth,
+    operations: () => iam.auth,
   },
   rateLimit: {
     windowMs: 60000,
