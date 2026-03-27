@@ -42,7 +42,7 @@ async function hasVisionUserIdColumn(): Promise<boolean> {
     if (!columnsResult.success) {
       throw new Error(`Vision table schema inspection failed: ${columnsResult.error.message}`)
     }
-    return columnsResult.data.some(column => column.name === 'user_id')
+    return columnsResult.data.some((column: SqliteTableInfoRow) => column.name === 'user_id')
   }
 
   if (dbType === 'postgresql') {
@@ -122,14 +122,6 @@ async function ensureVisionTable(): Promise<void> {
   if (!ownerIndexResult.success) {
     core.logger.warn('Vision table owner index initialization failed', {
       error: ownerIndexResult.error.message,
-    })
-  }
-
-  // 数据清理策略：历史记录未绑定 owner 时直接清理，避免无法归属的数据被错误访问。
-  const cleanupResult = await reldb.sql.execute('DELETE FROM vision_records WHERE user_id IS NULL OR user_id = ?', [''])
-  if (!cleanupResult.success) {
-    core.logger.warn('Vision table orphan data cleanup failed', {
-      error: cleanupResult.error.message,
     })
   }
 }
