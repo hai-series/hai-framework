@@ -6,10 +6,10 @@
  * @module ai-knowledge-functions
  */
 
-import type { Result } from '@h-ai/core'
+import type { HaiResult } from '@h-ai/core'
 import type { ChunkOptionsInput, DatapipeFunctions } from '@h-ai/datapipe'
 import type { KnowledgeConfig } from '../ai-config.js'
-import type { AIError } from '../ai-types.js'
+
 import type { EmbeddingOperations } from '../embedding/ai-embedding-types.js'
 import type { ChatMessage, LLMOperations } from '../llm/ai-llm-types.js'
 import type { Citation } from '../retrieval/ai-retrieval-types.js'
@@ -39,8 +39,8 @@ import type {
 import { core, err, ok } from '@h-ai/core'
 import { nanoid } from 'nanoid'
 
-import { AIErrorCode } from '../ai-config.js'
 import { aiM } from '../ai-i18n.js'
+import { HaiAIError } from '../ai-types.js'
 import { extractEntities, extractEntitiesBatch } from './ai-knowledge-entity.js'
 
 const logger = core.logger.child({ module: 'ai', scope: 'knowledge' })
@@ -89,12 +89,9 @@ export function createKnowledgeOperations(
      * @param options - 可选覆盖（collection 名称、向量维度）
      * @returns `ok(undefined)` 成功；建表失败时返回 `KNOWLEDGE_SETUP_FAILED`
      */
-    async setup(options?: KnowledgeSetupOptions): Promise<Result<void, AIError>> {
+    async setup(options?: KnowledgeSetupOptions): Promise<HaiResult<void>> {
       if (!store) {
-        return err({
-          code: AIErrorCode.KNOWLEDGE_SETUP_FAILED,
-          message: aiM('ai_knowledgeSetupFailed', { params: { error: 'KnowledgeStore not available. Provider may not support knowledge operations.' } }),
-        })
+        return err(HaiAIError.KNOWLEDGE_SETUP_FAILED, aiM('ai_knowledgeSetupFailed', { params: { error: 'KnowledgeStore not available. Provider may not support knowledge operations.' } }))
       }
 
       const collection = options?.collection ?? config.collection
@@ -111,11 +108,7 @@ export function createKnowledgeOperations(
       }
       catch (error) {
         logger.error('Knowledge base setup failed', { error })
-        return err({
-          code: AIErrorCode.KNOWLEDGE_SETUP_FAILED,
-          message: aiM('ai_knowledgeSetupFailed', { params: { error: String(error) } }),
-          cause: error,
-        })
+        return err(HaiAIError.KNOWLEDGE_SETUP_FAILED, aiM('ai_knowledgeSetupFailed', { params: { error: String(error) } }), error)
       }
     },
 
@@ -138,12 +131,9 @@ export function createKnowledgeOperations(
      * })
      * ```
      */
-    async ingest(input: KnowledgeIngestInput): Promise<Result<KnowledgeIngestResult, AIError>> {
+    async ingest(input: KnowledgeIngestInput): Promise<HaiResult<KnowledgeIngestResult>> {
       if (!isSetup) {
-        return err({
-          code: AIErrorCode.KNOWLEDGE_NOT_SETUP,
-          message: aiM('ai_knowledgeNotSetup'),
-        })
+        return err(HaiAIError.KNOWLEDGE_NOT_SETUP, aiM('ai_knowledgeNotSetup'))
       }
 
       const startTime = Date.now()
@@ -175,11 +165,7 @@ export function createKnowledgeOperations(
         const texts = chunks.map(c => c.content)
         const embedResult = await embedding.embedBatch(texts)
         if (!embedResult.success) {
-          return err({
-            code: AIErrorCode.KNOWLEDGE_INGEST_FAILED,
-            message: aiM('ai_knowledgeIngestFailed', { params: { error: 'Embedding failed' } }),
-            cause: embedResult.error,
-          })
+          return err(HaiAIError.KNOWLEDGE_INGEST_FAILED, aiM('ai_knowledgeIngestFailed', { params: { error: 'Embedding failed' } }), embedResult.error)
         }
 
         // ④ 存入 vecdb
@@ -280,11 +266,7 @@ export function createKnowledgeOperations(
       }
       catch (error) {
         logger.error('Document ingestion failed', { documentId: input.documentId, error })
-        return err({
-          code: AIErrorCode.KNOWLEDGE_INGEST_FAILED,
-          message: aiM('ai_knowledgeIngestFailed', { params: { error: String(error) } }),
-          cause: error,
-        })
+        return err(HaiAIError.KNOWLEDGE_INGEST_FAILED, aiM('ai_knowledgeIngestFailed', { params: { error: String(error) } }), error)
       }
     },
 
@@ -299,12 +281,9 @@ export function createKnowledgeOperations(
      * @param options - 可选（collection、topK、minScore、enableEntityBoost、filter 等）
      * @returns `ok(KnowledgeRetrieveResult)` 含检索项和引用列表；未初始化时返回 `KNOWLEDGE_NOT_SETUP`
      */
-    async retrieve(query: string, options?: KnowledgeRetrieveOptions): Promise<Result<KnowledgeRetrieveResult, AIError>> {
+    async retrieve(query: string, options?: KnowledgeRetrieveOptions): Promise<HaiResult<KnowledgeRetrieveResult>> {
       if (!isSetup) {
-        return err({
-          code: AIErrorCode.KNOWLEDGE_NOT_SETUP,
-          message: aiM('ai_knowledgeNotSetup'),
-        })
+        return err(HaiAIError.KNOWLEDGE_NOT_SETUP, aiM('ai_knowledgeNotSetup'))
       }
 
       const startTime = Date.now()
@@ -318,11 +297,7 @@ export function createKnowledgeOperations(
         // ① 向量化查询
         const embedResult = await embedding.embedText(query)
         if (!embedResult.success) {
-          return err({
-            code: AIErrorCode.KNOWLEDGE_RETRIEVE_FAILED,
-            message: aiM('ai_knowledgeRetrieveFailed', { params: { error: 'Query embedding failed' } }),
-            cause: embedResult.error,
-          })
+          return err(HaiAIError.KNOWLEDGE_RETRIEVE_FAILED, aiM('ai_knowledgeRetrieveFailed', { params: { error: 'Query embedding failed' } }), embedResult.error)
         }
 
         // ② 向量搜索
@@ -428,11 +403,7 @@ export function createKnowledgeOperations(
       }
       catch (error) {
         logger.error('Knowledge retrieval failed', { error })
-        return err({
-          code: AIErrorCode.KNOWLEDGE_RETRIEVE_FAILED,
-          message: aiM('ai_knowledgeRetrieveFailed', { params: { error: String(error) } }),
-          cause: error,
-        })
+        return err(HaiAIError.KNOWLEDGE_RETRIEVE_FAILED, aiM('ai_knowledgeRetrieveFailed', { params: { error: String(error) } }), error)
       }
     },
 
@@ -452,15 +423,11 @@ export function createKnowledgeOperations(
      * if (result.success) console.log(result.data.answer)
      * ```
      */
-    async ask(query: string, options?: KnowledgeAskOptions): Promise<Result<KnowledgeAskResult, AIError>> {
+    async ask(query: string, options?: KnowledgeAskOptions): Promise<HaiResult<KnowledgeAskResult>> {
       // 先检索
       const retrieveResult = await this.retrieve(query, options)
       if (!retrieveResult.success) {
-        return err({
-          code: AIErrorCode.RAG_FAILED,
-          message: aiM('ai_ragFailed', { params: { error: retrieveResult.error.message } }),
-          cause: retrieveResult.error,
-        })
+        return err(HaiAIError.RAG_FAILED, aiM('ai_ragFailed', { params: { error: retrieveResult.error.message } }), retrieveResult.error)
       }
 
       const { items, citations } = retrieveResult.data
@@ -496,11 +463,7 @@ export function createKnowledgeOperations(
       })
 
       if (!chatResult.success) {
-        return err({
-          code: AIErrorCode.RAG_FAILED,
-          message: aiM('ai_ragFailed', { params: { error: chatResult.error.message } }),
-          cause: chatResult.error,
-        })
+        return err(HaiAIError.RAG_FAILED, aiM('ai_ragFailed', { params: { error: chatResult.error.message } }), chatResult.error)
       }
 
       const choice = chatResult.data.choices[0]
@@ -528,12 +491,9 @@ export function createKnowledgeOperations(
     },
 
     // ─── findByEntity ───
-    async findByEntity(entityName: string, options?: EntityQueryOptions): Promise<Result<EntityDocumentResult[], AIError>> {
+    async findByEntity(entityName: string, options?: EntityQueryOptions): Promise<HaiResult<EntityDocumentResult[]>> {
       if (!store) {
-        return err({
-          code: AIErrorCode.KNOWLEDGE_NOT_SETUP,
-          message: aiM('ai_knowledgeNotSetup'),
-        })
+        return err(HaiAIError.KNOWLEDGE_NOT_SETUP, aiM('ai_knowledgeNotSetup'))
       }
 
       try {
@@ -560,21 +520,14 @@ export function createKnowledgeOperations(
         })))
       }
       catch (error) {
-        return err({
-          code: AIErrorCode.KNOWLEDGE_RETRIEVE_FAILED,
-          message: aiM('ai_knowledgeRetrieveFailed', { params: { error: String(error) } }),
-          cause: error,
-        })
+        return err(HaiAIError.KNOWLEDGE_RETRIEVE_FAILED, aiM('ai_knowledgeRetrieveFailed', { params: { error: String(error) } }), error)
       }
     },
 
     // ─── listEntities ───
-    async listEntities(options?: EntityListOptions): Promise<Result<KnowledgeEntity[], AIError>> {
+    async listEntities(options?: EntityListOptions): Promise<HaiResult<KnowledgeEntity[]>> {
       if (!store) {
-        return err({
-          code: AIErrorCode.KNOWLEDGE_NOT_SETUP,
-          message: aiM('ai_knowledgeNotSetup'),
-        })
+        return err(HaiAIError.KNOWLEDGE_NOT_SETUP, aiM('ai_knowledgeNotSetup'))
       }
 
       try {
@@ -595,21 +548,14 @@ export function createKnowledgeOperations(
         })))
       }
       catch (error) {
-        return err({
-          code: AIErrorCode.KNOWLEDGE_RETRIEVE_FAILED,
-          message: aiM('ai_knowledgeRetrieveFailed', { params: { error: String(error) } }),
-          cause: error,
-        })
+        return err(HaiAIError.KNOWLEDGE_RETRIEVE_FAILED, aiM('ai_knowledgeRetrieveFailed', { params: { error: String(error) } }), error)
       }
     },
 
     // ─── listDocuments ───
-    async listDocuments(options?: KnowledgeDocumentListOptions): Promise<Result<KnowledgeDocumentInfo[], AIError>> {
+    async listDocuments(options?: KnowledgeDocumentListOptions): Promise<HaiResult<KnowledgeDocumentInfo[]>> {
       if (!isSetup || !store) {
-        return err({
-          code: AIErrorCode.KNOWLEDGE_NOT_SETUP,
-          message: aiM('ai_knowledgeNotSetup'),
-        })
+        return err(HaiAIError.KNOWLEDGE_NOT_SETUP, aiM('ai_knowledgeNotSetup'))
       }
 
       const collection = options?.collection ?? config.collection
@@ -636,21 +582,14 @@ export function createKnowledgeOperations(
         return ok(result)
       }
       catch (error) {
-        return err({
-          code: AIErrorCode.KNOWLEDGE_RETRIEVE_FAILED,
-          message: aiM('ai_knowledgeRetrieveFailed', { params: { error: String(error) } }),
-          cause: error,
-        })
+        return err(HaiAIError.KNOWLEDGE_RETRIEVE_FAILED, aiM('ai_knowledgeRetrieveFailed', { params: { error: String(error) } }), error)
       }
     },
 
     // ─── removeDocument ───
-    async removeDocument(documentId: string, options?: KnowledgeDocumentRemoveOptions): Promise<Result<void, AIError>> {
+    async removeDocument(documentId: string, options?: KnowledgeDocumentRemoveOptions): Promise<HaiResult<void>> {
       if (!isSetup || !store) {
-        return err({
-          code: AIErrorCode.KNOWLEDGE_NOT_SETUP,
-          message: aiM('ai_knowledgeNotSetup'),
-        })
+        return err(HaiAIError.KNOWLEDGE_NOT_SETUP, aiM('ai_knowledgeNotSetup'))
       }
 
       const collection = options?.collection ?? config.collection
@@ -686,18 +625,14 @@ export function createKnowledgeOperations(
         return ok(undefined)
       }
       catch (error) {
-        return err({
-          code: AIErrorCode.KNOWLEDGE_INGEST_FAILED,
-          message: aiM('ai_knowledgeIngestFailed', { params: { error: String(error) } }),
-          cause: error,
-        })
+        return err(HaiAIError.KNOWLEDGE_INGEST_FAILED, aiM('ai_knowledgeIngestFailed', { params: { error: String(error) } }), error)
       }
     },
 
     /**
      * 从文件路径读取并导入文档（仅 Node.js 端可用）
      */
-    async ingestFile(input: KnowledgeIngestFileInput): Promise<Result<KnowledgeIngestResult, AIError>> {
+    async ingestFile(input: KnowledgeIngestFileInput): Promise<HaiResult<KnowledgeIngestResult>> {
       try {
         const { readFile } = await import('node:fs/promises')
         const { basename } = await import('node:path')
@@ -718,11 +653,7 @@ export function createKnowledgeOperations(
         })
       }
       catch (error) {
-        return err({
-          code: AIErrorCode.KNOWLEDGE_INGEST_FAILED,
-          message: aiM('ai_knowledgeIngestFailed', { params: { error: String(error) } }),
-          cause: error,
-        })
+        return err(HaiAIError.KNOWLEDGE_INGEST_FAILED, aiM('ai_knowledgeIngestFailed', { params: { error: String(error) } }), error)
       }
     },
 
@@ -732,7 +663,7 @@ export function createKnowledgeOperations(
     async ingestBatch(
       inputs: KnowledgeIngestInput[],
       onProgress?: (progress: KnowledgeIngestBatchProgress) => void,
-    ): Promise<Result<KnowledgeIngestBatchResult, AIError>> {
+    ): Promise<HaiResult<KnowledgeIngestBatchResult>> {
       const startTime = Date.now()
       let successCount = 0
       let failureCount = 0

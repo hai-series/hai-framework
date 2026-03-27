@@ -5,8 +5,7 @@
  * @module ai-retrieval-types
  */
 
-import type { Result } from '@h-ai/core'
-import type { AIError } from '../ai-types.js'
+import type { HaiResult } from '@h-ai/core'
 
 // ─── 信源引用 ───
 
@@ -53,8 +52,6 @@ export interface RetrievalSource {
   collection: string
   /** 信源显示名（用于 UI 展示） */
   name?: string
-  /** 信源类型 */
-  sourceType?: 'document' | 'webpage' | 'database' | 'manual'
   /** 信源 URL / 路径 */
   url?: string
   /** 最大返回条数（默认 5） */
@@ -125,7 +122,7 @@ export interface RetrievalOperations {
    * @param source - 检索源配置
    * @returns 成功返回 ok，重复 id 返回错误
    */
-  addSource: (source: RetrievalSource) => Promise<Result<void, AIError>>
+  addSource: (source: RetrievalSource) => Promise<HaiResult<void>>
 
   /**
    * 移除一个检索源（从 DB 删除）
@@ -133,7 +130,7 @@ export interface RetrievalOperations {
    * @param sourceId - 检索源 ID
    * @returns 成功返回 ok，未找到返回错误
    */
-  removeSource: (sourceId: string) => Promise<Result<void, AIError>>
+  removeSource: (sourceId: string) => Promise<HaiResult<void>>
 
   /**
    * 列出所有已注册的检索源（从 DB 读取，分布式一致）
@@ -146,5 +143,5 @@ export interface RetrievalOperations {
    * @param request - 检索请求
    * @returns 检索结果
    */
-  retrieve: (request: RetrievalRequest) => Promise<Result<RetrievalResult, AIError>>
+  retrieve: (request: RetrievalRequest) => Promise<HaiResult<RetrievalResult>>
 }

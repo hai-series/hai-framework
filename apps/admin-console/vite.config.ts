@@ -10,7 +10,6 @@ import { paraglideVitePlugin } from '@inlang/paraglide-js'
 import { sveltekit } from '@sveltejs/kit/vite'
 import tailwindcss from '@tailwindcss/vite'
 import { defineConfig, loadEnv } from 'vite'
-import { haiResolvePlugin } from '../../packages/kit/src/vite/kit-vite-resolve.js'
 
 export default defineConfig(({ mode }) => {
   // 加载环境变量到 process.env
@@ -19,7 +18,6 @@ export default defineConfig(({ mode }) => {
 
   return {
     plugins: [
-      haiResolvePlugin(),
       sveltekit(),
       tailwindcss(),
       paraglideVitePlugin({
@@ -31,6 +29,9 @@ export default defineConfig(({ mode }) => {
     ],
     optimizeDeps: {
       exclude: ['bits-ui'],
+    },
+    ssr: {
+      noExternal: [/@h-ai\//],
     },
     server: {
       port: 5173,

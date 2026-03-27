@@ -5,12 +5,11 @@
  * @module datapipe-pipeline
  */
 
-import type { Result } from '@h-ai/core'
+import type { HaiResult } from '@h-ai/core'
 import type { ChunkOptionsInput, CleanOptionsInput } from './datapipe-config.js'
 import type {
   ChunkTransformFn,
   DataChunk,
-  DatapipeError,
   PipelineBuilder,
   PipelineResult,
   PipelineStep,
@@ -21,8 +20,8 @@ import { err, ok } from '@h-ai/core'
 
 import { chunkText } from './datapipe-chunk.js'
 import { cleanText } from './datapipe-clean.js'
-import { DatapipeErrorCode } from './datapipe-config.js'
 import { datapipeM } from './datapipe-i18n.js'
+import { HaiDatapipeError } from './datapipe-types.js'
 
 /**
  * 创建管线构建器
@@ -80,7 +79,7 @@ export function createPipelineBuilder(): PipelineBuilder {
 async function runPipeline(
   steps: PipelineStep[],
   text: string,
-): Promise<Result<PipelineResult, DatapipeError>> {
+): Promise<HaiResult<PipelineResult>> {
   let currentText = text
   let chunks: DataChunk[] = []
 
@@ -89,7 +88,7 @@ async function runPipeline(
       case 'clean': {
         const result = cleanText(currentText, step.options)
         if (!result.success)
-          return result as Result<never, DatapipeError>
+          return result
         currentText = result.data
         break
       }
@@ -97,7 +96,7 @@ async function runPipeline(
       case 'chunk': {
         const result = chunkText(currentText, step.options)
         if (!result.success)
-          return result as Result<never, DatapipeError>
+          return result
         chunks = result.data
         break
       }
@@ -107,11 +106,7 @@ async function runPipeline(
           currentText = await step.fn(currentText)
         }
         catch (error) {
-          return err({
-            code: DatapipeErrorCode.TRANSFORM_FAILED,
-            message: datapipeM('datapipe_transformFailed', { params: { error: String(error) } }),
-            cause: error,
-          })
+          return err(HaiDatapipeError.TRANSFORM_FAILED, datapipeM('datapipe_transformFailed', { params: { error: String(error) } }), error)
         }
         break
       }
@@ -122,11 +117,7 @@ async function runPipeline(
             chunks = await step.fn(chunks)
           }
           catch (error) {
-            return err({
-              code: DatapipeErrorCode.PIPELINE_FAILED,
-              message: datapipeM('datapipe_pipelineFailed', { params: { error: String(error) } }),
-              cause: error,
-            })
+            return err(HaiDatapipeError.PIPELINE_FAILED, datapipeM('datapipe_pipelineFailed', { params: { error: String(error) } }), error)
           }
         }
         break

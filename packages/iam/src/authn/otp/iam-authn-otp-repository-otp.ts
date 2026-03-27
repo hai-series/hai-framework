@@ -5,13 +5,12 @@
  * @module iam-authn-otp-repository-otp
  */
 
-import type { Result } from '@h-ai/core'
-import type { IamError } from '../../iam-types.js'
+import type { HaiResult } from '@h-ai/core'
 import { cache } from '@h-ai/cache'
 import { err, ok } from '@h-ai/core'
 
-import { IamErrorCode } from '../../iam-config.js'
 import { iamM } from '../../iam-i18n.js'
+import { HaiIamError } from '../../iam-types.js'
 
 // ─── OTP 存储接口与类型 ───
 
@@ -38,22 +37,22 @@ export interface OtpRepository {
   /**
    * 存储验证码
    */
-  saveOtp: (identifier: string, code: string, expiresIn: number) => Promise<Result<void, IamError>>
+  saveOtp: (identifier: string, code: string, expiresIn: number) => Promise<HaiResult<void>>
 
   /**
    * 获取验证码
    */
-  fetchOtp: (identifier: string) => Promise<Result<OtpRecord | null, IamError>>
+  fetchOtp: (identifier: string) => Promise<HaiResult<OtpRecord | null>>
 
   /**
    * 增加尝试次数
    */
-  incrementOtpAttempts: (identifier: string) => Promise<Result<number, IamError>>
+  incrementOtpAttempts: (identifier: string) => Promise<HaiResult<number>>
 
   /**
    * 删除验证码
    */
-  removeOtp: (identifier: string) => Promise<Result<void, IamError>>
+  removeOtp: (identifier: string) => Promise<HaiResult<void>>
 }
 
 // ─── 缓存键构建 ───
@@ -110,7 +109,7 @@ export function createCacheOtpRepository(): OtpRepository {
     return otpRepoInstance
 
   const repo: OtpRepository = {
-    async saveOtp(identifier, code, expiresIn): Promise<Result<void, IamError>> {
+    async saveOtp(identifier, code, expiresIn): Promise<HaiResult<void>> {
       const now = Date.now()
       const record: OtpRecord = {
         identifier,
@@ -123,24 +122,24 @@ export function createCacheOtpRepository(): OtpRepository {
       // 直接 set 覆盖（cache 天然支持 upsert 语义）
       const result = await cache.kv.set(buildOtpKey(identifier), record, { ex: expiresIn })
       if (!result.success) {
-        return err({
-          code: IamErrorCode.REPOSITORY_ERROR,
-          message: iamM('iam_saveOtpFailed', { params: { message: result.error.message } }),
-          cause: result.error,
-        })
+        return err(
+          HaiIamError.REPOSITORY_ERROR,
+          iamM('iam_saveOtpFailed', { params: { message: result.error.message } }),
+          result.error,
+        )
       }
 
       return ok(undefined)
     },
 
-    async fetchOtp(identifier): Promise<Result<OtpRecord | null, IamError>> {
+    async fetchOtp(identifier): Promise<HaiResult<OtpRecord | null>> {
       const result = await cache.kv.get<OtpRecord>(buildOtpKey(identifier))
       if (!result.success) {
-        return err({
-          code: IamErrorCode.REPOSITORY_ERROR,
-          message: iamM('iam_queryOtpFailed', { params: { message: result.error.message } }),
-          cause: result.error,
-        })
+        return err(
+          HaiIamError.REPOSITORY_ERROR,
+          iamM('iam_queryOtpFailed', { params: { message: result.error.message } }),
+          result.error,
+        )
       }
 
       if (!result.data) {
@@ -150,15 +149,15 @@ export function createCacheOtpRepository(): OtpRepository {
       return ok(restoreOtpDates(result.data))
     },
 
-    async incrementOtpAttempts(identifier): Promise<Result<number, IamError>> {
+    async incrementOtpAttempts(identifier): Promise<HaiResult<number>> {
       const otpKey = buildOtpKey(identifier)
       const current = await cache.kv.get<OtpRecord>(otpKey)
       if (!current.success) {
-        return err({
-          code: IamErrorCode.REPOSITORY_ERROR,
-          message: iamM('iam_queryOtpFailed', { params: { message: current.error.message } }),
-          cause: current.error,
-        })
+        return err(
+          HaiIamError.REPOSITORY_ERROR,
+          iamM('iam_queryOtpFailed', { params: { message: current.error.message } }),
+          current.error,
+        )
       }
 
       if (!current.data) {
@@ -174,24 +173,24 @@ export function createCacheOtpRepository(): OtpRepository {
 
       const updateResult = await cache.kv.set(otpKey, { ...record, attempts: nextAttempts }, { ex: ttl })
       if (!updateResult.success) {
-        return err({
-          code: IamErrorCode.REPOSITORY_ERROR,
-          message: iamM('iam_updateOtpAttemptsFailed', { params: { message: updateResult.error.message } }),
-          cause: updateResult.error,
-        })
+        return err(
+          HaiIamError.REPOSITORY_ERROR,
+          iamM('iam_updateOtpAttemptsFailed', { params: { message: updateResult.error.message } }),
+          updateResult.error,
+        )
       }
 
       return ok(nextAttempts)
     },
 
-    async removeOtp(identifier): Promise<Result<void, IamError>> {
+    async removeOtp(identifier): Promise<HaiResult<void>> {
       const result = await cache.kv.del(buildOtpKey(identifier))
       if (!result.success) {
-        return err({
-          code: IamErrorCode.REPOSITORY_ERROR,
-          message: iamM('iam_deleteOtpFailed', { params: { message: result.error.message } }),
-          cause: result.error,
-        })
+        return err(
+          HaiIamError.REPOSITORY_ERROR,
+          iamM('iam_deleteOtpFailed', { params: { message: result.error.message } }),
+          result.error,
+        )
       }
       return ok(undefined)
     },

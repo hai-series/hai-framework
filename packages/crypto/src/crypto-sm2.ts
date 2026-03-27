@@ -5,21 +5,19 @@
  * @module crypto-sm2
  */
 
-import type { Result } from '@h-ai/core'
-import type {
-  AsymmetricEncryptOptions,
-  AsymmetricOperations,
-  CryptoError,
-  KeyPair,
-  SignOptions,
-} from './crypto-types.js'
+import type { HaiResult } from '@h-ai/core'
+import type { AsymmetricEncryptOptions, AsymmetricOperations, KeyPair, SignOptions } from './crypto-types.js'
 
 import { err, ok } from '@h-ai/core'
 // @ts-expect-error sm-crypto 无类型定义
 import smCrypto from 'sm-crypto'
 
-import { CryptoErrorCode } from './crypto-config.js'
 import { cryptoM } from './crypto-i18n.js'
+import {
+
+  HaiCryptoError,
+
+} from './crypto-types.js'
 import { base64ToHex, hexToBase64, isBase64 } from './crypto-utils.js'
 
 const { sm2 } = smCrypto
@@ -42,7 +40,7 @@ export function createSM2(): AsymmetricOperations {
      *
      * @returns 成功时返回包含公钥（130 字符含 04 前缀）和私钥（64 字符）的密钥对
      */
-    generateKeyPair(): Result<KeyPair, CryptoError> {
+    generateKeyPair(): HaiResult<KeyPair> {
       try {
         const keyPair = sm2.generateKeyPairHex()
         return ok({
@@ -51,11 +49,11 @@ export function createSM2(): AsymmetricOperations {
         })
       }
       catch (error) {
-        return err({
-          code: CryptoErrorCode.KEY_GENERATION_FAILED,
-          message: cryptoM('crypto_sm2KeyPairGenerateFailed', { params: { error: error instanceof Error ? error.message : String(error) } }),
-          cause: error,
-        })
+        return err(
+          HaiCryptoError.KEY_GENERATION_FAILED,
+          cryptoM('crypto_sm2KeyPairGenerateFailed', { params: { error: error instanceof Error ? error.message : String(error) } }),
+          error,
+        )
       }
     },
 
@@ -73,14 +71,14 @@ export function createSM2(): AsymmetricOperations {
       data: string,
       publicKey: string,
       options: AsymmetricEncryptOptions = {},
-    ): Result<string, CryptoError> {
+    ): HaiResult<string> {
       const { cipherMode = 1, outputFormat = 'hex' } = options
 
       if (!this.isValidPublicKey(publicKey)) {
-        return err({
-          code: CryptoErrorCode.INVALID_KEY,
-          message: cryptoM('crypto_sm2PublicKeyInvalid'),
-        })
+        return err(
+          HaiCryptoError.INVALID_KEY,
+          cryptoM('crypto_sm2PublicKeyInvalid'),
+        )
       }
 
       try {
@@ -89,10 +87,10 @@ export function createSM2(): AsymmetricOperations {
         const encrypted = sm2.doEncrypt(data, key, cipherMode)
 
         if (!encrypted) {
-          return err({
-            code: CryptoErrorCode.ENCRYPTION_FAILED,
-            message: cryptoM('crypto_sm2EncryptEmpty'),
-          })
+          return err(
+            HaiCryptoError.ENCRYPTION_FAILED,
+            cryptoM('crypto_sm2EncryptEmpty'),
+          )
         }
 
         if (outputFormat === 'base64') {
@@ -102,11 +100,11 @@ export function createSM2(): AsymmetricOperations {
         return ok(encrypted)
       }
       catch (error) {
-        return err({
-          code: CryptoErrorCode.ENCRYPTION_FAILED,
-          message: cryptoM('crypto_sm2EncryptFailed', { params: { error: error instanceof Error ? error.message : String(error) } }),
-          cause: error,
-        })
+        return err(
+          HaiCryptoError.ENCRYPTION_FAILED,
+          cryptoM('crypto_sm2EncryptFailed', { params: { error: error instanceof Error ? error.message : String(error) } }),
+          error,
+        )
       }
     },
 
@@ -124,14 +122,14 @@ export function createSM2(): AsymmetricOperations {
       ciphertext: string,
       privateKey: string,
       options: AsymmetricEncryptOptions = {},
-    ): Result<string, CryptoError> {
+    ): HaiResult<string> {
       const { cipherMode = 1 } = options
 
       if (!this.isValidPrivateKey(privateKey)) {
-        return err({
-          code: CryptoErrorCode.INVALID_KEY,
-          message: cryptoM('crypto_sm2PrivateKeyInvalid'),
-        })
+        return err(
+          HaiCryptoError.INVALID_KEY,
+          cryptoM('crypto_sm2PrivateKeyInvalid'),
+        )
       }
 
       try {
@@ -144,20 +142,20 @@ export function createSM2(): AsymmetricOperations {
         const decrypted = sm2.doDecrypt(input, privateKey, cipherMode)
 
         if (decrypted === false || decrypted === null || decrypted === undefined) {
-          return err({
-            code: CryptoErrorCode.DECRYPTION_FAILED,
-            message: cryptoM('crypto_sm2DecryptFailed'),
-          })
+          return err(
+            HaiCryptoError.DECRYPTION_FAILED,
+            cryptoM('crypto_sm2DecryptFailed'),
+          )
         }
 
         return ok(decrypted)
       }
       catch (error) {
-        return err({
-          code: CryptoErrorCode.DECRYPTION_FAILED,
-          message: cryptoM('crypto_sm2DecryptFailedWithError', { params: { error: error instanceof Error ? error.message : String(error) } }),
-          cause: error,
-        })
+        return err(
+          HaiCryptoError.DECRYPTION_FAILED,
+          cryptoM('crypto_sm2DecryptFailedWithError', { params: { error: error instanceof Error ? error.message : String(error) } }),
+          error,
+        )
       }
     },
 
@@ -175,34 +173,34 @@ export function createSM2(): AsymmetricOperations {
       data: string,
       privateKey: string,
       options: SignOptions = {},
-    ): Result<string, CryptoError> {
+    ): HaiResult<string> {
       const { hash = true, userId = '1234567812345678' } = options
 
       if (!this.isValidPrivateKey(privateKey)) {
-        return err({
-          code: CryptoErrorCode.INVALID_KEY,
-          message: cryptoM('crypto_sm2PrivateKeyInvalid'),
-        })
+        return err(
+          HaiCryptoError.INVALID_KEY,
+          cryptoM('crypto_sm2PrivateKeyInvalid'),
+        )
       }
 
       try {
         const signature = sm2.doSignature(data, privateKey, { hash, userId })
 
         if (!signature) {
-          return err({
-            code: CryptoErrorCode.SIGN_FAILED,
-            message: cryptoM('crypto_sm2SignEmpty'),
-          })
+          return err(
+            HaiCryptoError.SIGN_FAILED,
+            cryptoM('crypto_sm2SignEmpty'),
+          )
         }
 
         return ok(signature)
       }
       catch (error) {
-        return err({
-          code: CryptoErrorCode.SIGN_FAILED,
-          message: cryptoM('crypto_sm2SignFailed', { params: { error: error instanceof Error ? error.message : String(error) } }),
-          cause: error,
-        })
+        return err(
+          HaiCryptoError.SIGN_FAILED,
+          cryptoM('crypto_sm2SignFailed', { params: { error: error instanceof Error ? error.message : String(error) } }),
+          error,
+        )
       }
     },
 
@@ -222,14 +220,14 @@ export function createSM2(): AsymmetricOperations {
       signature: string,
       publicKey: string,
       options: SignOptions = {},
-    ): Result<boolean, CryptoError> {
+    ): HaiResult<boolean> {
       const { hash = true, userId = '1234567812345678' } = options
 
       if (!this.isValidPublicKey(publicKey)) {
-        return err({
-          code: CryptoErrorCode.INVALID_KEY,
-          message: cryptoM('crypto_sm2PublicKeyInvalid'),
-        })
+        return err(
+          HaiCryptoError.INVALID_KEY,
+          cryptoM('crypto_sm2PublicKeyInvalid'),
+        )
       }
 
       try {
@@ -239,11 +237,11 @@ export function createSM2(): AsymmetricOperations {
         return ok(!!isValid)
       }
       catch (error) {
-        return err({
-          code: CryptoErrorCode.VERIFY_FAILED,
-          message: cryptoM('crypto_sm2VerifyFailed', { params: { error: error instanceof Error ? error.message : String(error) } }),
-          cause: error,
-        })
+        return err(
+          HaiCryptoError.VERIFY_FAILED,
+          cryptoM('crypto_sm2VerifyFailed', { params: { error: error instanceof Error ? error.message : String(error) } }),
+          error,
+        )
       }
     },
 

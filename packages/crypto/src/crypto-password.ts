@@ -5,13 +5,13 @@
  * @module crypto-password
  */
 
-import type { Result } from '@h-ai/core'
-import type { CryptoError, HashOperations, PasswordConfig, PasswordOperations } from './crypto-types.js'
+import type { HaiResult } from '@h-ai/core'
 
+import type { HashOperations, PasswordConfig, PasswordOperations } from './crypto-types.js'
 import { core, err, ok } from '@h-ai/core'
 
-import { CryptoErrorCode } from './crypto-config.js'
 import { cryptoM } from './crypto-i18n.js'
+import { HaiCryptoError } from './crypto-types.js'
 
 // ─── 依赖接口 ───
 
@@ -59,7 +59,7 @@ function iterateHash(
   data: string,
   salt: string,
   iterations: number,
-): Result<string, CryptoError> {
+): HaiResult<string> {
   let current = salt + data
   for (let i = 0; i < iterations; i++) {
     const result = hash.hash(current)
@@ -94,15 +94,15 @@ export function createPasswordFunctions(deps: PasswordDeps): PasswordOperations 
      * @param config - 可选配置（盐值长度、迭代次数）
      * @returns 成功时返回格式化的哈希字符串；失败时返回 INVALID_INPUT 或 HASH_FAILED
      */
-    hash(password: string, config: PasswordConfig = {}): Result<string, CryptoError> {
+    hash(password: string, config: PasswordConfig = {}): HaiResult<string> {
       const { saltLength = 16, iterations = 10000 } = config
 
       try {
         if (!password) {
-          return err({
-            code: CryptoErrorCode.INVALID_INPUT,
-            message: cryptoM('crypto_passwordEmpty'),
-          })
+          return err(
+            HaiCryptoError.INVALID_INPUT,
+            cryptoM('crypto_passwordEmpty'),
+          )
         }
 
         const salt = generateSalt(saltLength)
@@ -115,11 +115,11 @@ export function createPasswordFunctions(deps: PasswordDeps): PasswordOperations 
         return ok(formatted)
       }
       catch (error) {
-        return err({
-          code: CryptoErrorCode.HASH_FAILED,
-          message: cryptoM('crypto_passwordHashFailed'),
-          cause: error,
-        })
+        return err(
+          HaiCryptoError.HASH_FAILED,
+          cryptoM('crypto_passwordHashFailed'),
+          error,
+        )
       }
     },
 
@@ -133,21 +133,21 @@ export function createPasswordFunctions(deps: PasswordDeps): PasswordOperations 
      * @param hash - 存储的哈希值
      * @returns 成功时返回 boolean；失败时返回 INVALID_INPUT 或 VERIFY_FAILED
      */
-    verify(password: string, hash: string): Result<boolean, CryptoError> {
+    verify(password: string, hash: string): HaiResult<boolean> {
       try {
         if (!password || !hash) {
-          return err({
-            code: CryptoErrorCode.INVALID_INPUT,
-            message: cryptoM('crypto_passwordHashEmpty'),
-          })
+          return err(
+            HaiCryptoError.INVALID_INPUT,
+            cryptoM('crypto_passwordHashEmpty'),
+          )
         }
 
         const parts = hash.split('$')
         if (parts.length !== 5 || parts[1] !== 'hai') {
-          return err({
-            code: CryptoErrorCode.INVALID_INPUT,
-            message: cryptoM('crypto_hashFormatInvalid'),
-          })
+          return err(
+            HaiCryptoError.INVALID_INPUT,
+            cryptoM('crypto_hashFormatInvalid'),
+          )
         }
 
         const storedIterations = Number.parseInt(parts[2], 10)
@@ -155,10 +155,10 @@ export function createPasswordFunctions(deps: PasswordDeps): PasswordOperations 
         const storedHash = parts[4]
 
         if (Number.isNaN(storedIterations) || !salt || !storedHash) {
-          return err({
-            code: CryptoErrorCode.INVALID_INPUT,
-            message: cryptoM('crypto_hashFormatInvalid'),
-          })
+          return err(
+            HaiCryptoError.INVALID_INPUT,
+            cryptoM('crypto_hashFormatInvalid'),
+          )
         }
 
         const hashResult = iterateHash(hashOps, password, salt, storedIterations)
@@ -169,11 +169,11 @@ export function createPasswordFunctions(deps: PasswordDeps): PasswordOperations 
         return ok(core.string.constantTimeEqual(hashResult.data, storedHash))
       }
       catch (error) {
-        return err({
-          code: CryptoErrorCode.VERIFY_FAILED,
-          message: cryptoM('crypto_passwordVerifyFailed'),
-          cause: error,
-        })
+        return err(
+          HaiCryptoError.VERIFY_FAILED,
+          cryptoM('crypto_passwordVerifyFailed'),
+          error,
+        )
       }
     },
   }

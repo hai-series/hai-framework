@@ -6,10 +6,10 @@
  * @module ai-context-functions
  */
 
-import type { Result } from '@h-ai/core'
+import type { HaiResult } from '@h-ai/core'
 
 import type { CompressConfig } from '../ai-config.js'
-import type { AIError } from '../ai-types.js'
+
 import type { CompressOperations } from '../compress/ai-compress-types.js'
 import type { ChatMessage } from '../llm/ai-llm-types.js'
 import type { AIRelStore, InteractionScope, SessionInfo } from '../store/ai-store-types.js'
@@ -27,8 +27,9 @@ import type {
 
 import { core, err, ok } from '@h-ai/core'
 
-import { AIErrorCode } from '../ai-config.js'
 import { aiM } from '../ai-i18n.js'
+import { HaiAIError } from '../ai-types.js'
+import { createStreamProcessor } from '../llm/ai-llm-stream.js'
 
 const logger = core.logger.child({ module: 'ai', scope: 'context' })
 
@@ -110,7 +111,7 @@ export function createContextOperations(
     const manager: ContextManager = {
       scope,
 
-      async addMessage(message: ChatMessage): Promise<Result<void, AIError>> {
+      async addMessage(message: ChatMessage): Promise<HaiResult<void>> {
         state.messages.push(message)
 
         if (!autoCompress)
@@ -147,22 +148,22 @@ export function createContextOperations(
         return ok(undefined)
       },
 
-      getMessages(): Result<ChatMessage[], AIError> {
+      getMessages(): HaiResult<ChatMessage[]> {
         return ok([...state.messages])
       },
 
-      getTokenUsage(): Result<{ current: number, budget: number }, AIError> {
+      getTokenUsage(): HaiResult<{ current: number, budget: number }> {
         return ok({
           current: tokenOps.estimateMessages(state.messages),
           budget: managerMaxTokens,
         })
       },
 
-      getSummaries(): Result<SummaryResult[], AIError> {
+      getSummaries(): HaiResult<SummaryResult[]> {
         return ok([...state.summaries])
       },
 
-      async save(): Promise<Result<void, AIError>> {
+      async save(): Promise<HaiResult<void>> {
         if (!scope || !contextStore) {
           return ok(undefined)
         }
@@ -194,11 +195,7 @@ export function createContextOperations(
           return ok(undefined)
         }
         catch (error) {
-          return err({
-            code: AIErrorCode.SESSION_FAILED,
-            message: aiM('ai_sessionFailed', { params: { error: String(error) } }),
-            cause: error,
-          })
+          return err(HaiAIError.SESSION_FAILED, aiM('ai_sessionFailed', { params: { error: String(error) } }), error)
         }
       },
 
@@ -209,12 +206,9 @@ export function createContextOperations(
 
       // ─── chat/chatStream 编排 ───
 
-      async chat(message: string, chatOpts?: ContextChatOptions): Promise<Result<ContextChatResult, AIError>> {
+      async chat(message: string, chatOpts?: ContextChatOptions): Promise<HaiResult<ContextChatResult>> {
         if (!deps?.llm) {
-          return err({
-            code: AIErrorCode.NOT_INITIALIZED,
-            message: aiM('ai_notInitialized'),
-          })
+          return err(HaiAIError.NOT_INITIALIZED, aiM('ai_notInitialized'))
         }
 
         try {
@@ -306,55 +300,95 @@ export function createContextOperations(
             }
           }
 
-          // 普通 LLM 调用
-          const chatResult = await deps.llm.chat({
-            model: chatOpts?.model ?? options.model,
-            messages,
-            temperature: chatOpts?.temperature ?? options.temperature,
-            objectId: scope?.objectId,
-            sessionId: scope?.sessionId,
-            tools: options.tools?.getDefinitions(),
-            enablePersist: chatOpts?.enablePersist ?? false,
-          })
+          // 普通 LLM 调用（含工具调用循环）
+          const toolDefs = options.tools?.getDefinitions()
+          const maxToolRounds = options.maxToolRounds ?? 10
+          let lastModel = ''
+          let lastUsage: { prompt_tokens: number, completion_tokens: number, total_tokens: number } | undefined
 
-          if (!chatResult.success)
-            return chatResult
+          for (let round = 0; round <= maxToolRounds; round++) {
+            const chatResult = await deps.llm.chat({
+              model: chatOpts?.model ?? options.model,
+              messages,
+              temperature: chatOpts?.temperature ?? options.temperature,
+              objectId: scope?.objectId,
+              sessionId: scope?.sessionId,
+              tools: toolDefs,
+              tool_choice: toolDefs ? 'auto' : undefined,
+              enablePersist: chatOpts?.enablePersist ?? false,
+            })
 
-          const choice = chatResult.data.choices[0]
-          const reply = choice?.message?.content ?? ''
+            if (!chatResult.success)
+              return chatResult
 
-          // 追加助手回复
-          await manager.addMessage({ role: 'assistant', content: reply })
+            const choice = chatResult.data.choices[0]
+            lastModel = chatResult.data.model
+            if (chatResult.data.usage) {
+              lastUsage = {
+                prompt_tokens: chatResult.data.usage.prompt_tokens,
+                completion_tokens: chatResult.data.usage.completion_tokens,
+                total_tokens: chatResult.data.usage.total_tokens,
+              }
+            }
 
-          // 可选：自动提取记忆
-          if (options.memory?.enableExtract && deps.memory) {
-            const recentMessages: ChatMessage[] = [
-              { role: 'user', content: message },
-              { role: 'assistant', content: reply },
-            ]
-            deps.memory.extract(recentMessages, { objectId: scope?.objectId })
-              .catch(e => logger.warn('Memory extract failed', { error: e }))
+            if (!choice)
+              break
+
+            const assistantMessage = choice.message
+
+            // 有工具调用且注册表可用：执行工具并将结果回传 LLM
+            if (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0 && options.tools) {
+              messages.push(assistantMessage)
+
+              for (const toolCall of assistantMessage.tool_calls) {
+                if (toolCall.type !== 'function')
+                  continue
+                const toolResult = await options.tools.execute(toolCall)
+                const rawContent = toolResult.success
+                  ? toolResult.data.content
+                  : `Tool error: ${toolResult.error.message}`
+                const toolContent = typeof rawContent === 'string'
+                  ? rawContent
+                  : (rawContent as Array<{ text?: string }>).map(p => p.text ?? '').join(' ')
+
+                messages.push({
+                  role: 'tool',
+                  tool_call_id: toolCall.id,
+                  content: toolContent,
+                })
+              }
+              continue
+            }
+
+            // 无工具调用：提取文本回复
+            const reply = typeof assistantMessage.content === 'string' ? assistantMessage.content : ''
+
+            // 追加助手回复
+            await manager.addMessage({ role: 'assistant', content: reply })
+
+            // 可选：自动提取记忆
+            if (options.memory?.enableExtract && deps.memory) {
+              const recentMessages: ChatMessage[] = [
+                { role: 'user', content: message },
+                { role: 'assistant', content: reply },
+              ]
+              deps.memory.extract(recentMessages, { objectId: scope?.objectId })
+                .catch(e => logger.warn('Memory extract failed', { error: e }))
+            }
+
+            return ok({ reply, model: lastModel, usage: lastUsage })
           }
 
-          return ok({
-            reply,
-            model: chatResult.data.model,
-            usage: chatResult.data.usage
-              ? {
-                  prompt_tokens: chatResult.data.usage.prompt_tokens,
-                  completion_tokens: chatResult.data.usage.completion_tokens,
-                  total_tokens: chatResult.data.usage.total_tokens,
-                }
-              : undefined,
-          })
+          // 达到最大工具调用轮次，返回最后可用的回复
+          const lastAssistantMsg = messages.filter(m => m.role === 'assistant').pop()
+          const fallbackReply = lastAssistantMsg && 'content' in lastAssistantMsg && typeof lastAssistantMsg.content === 'string'
+            ? lastAssistantMsg.content
+            : ''
+          return ok({ reply: fallbackReply, model: lastModel, usage: lastUsage })
         }
         catch (error) {
           logger.error('Context chat failed', { error })
-          return err({
-            code: AIErrorCode.INTERNAL_ERROR,
-            message: aiM('ai_internalError', { params: { error: String(error) } }),
-            cause: error,
-          })
+          return err(HaiAIError.INTERNAL_ERROR, aiM('ai_internalError', { params: { error: String(error) } }), error)
         }
       },
 
@@ -458,36 +492,82 @@ export function createContextOperations(
           return
         }
 
-        // 普通流式 LLM 调用
-        const stream = deps.llm.chatStream({
-          model: chatOpts?.model ?? options.model,
-          messages,
-          temperature: chatOpts?.temperature ?? options.temperature,
-          objectId: scope?.objectId,
-          sessionId: scope?.sessionId,
-          tools: options.tools?.getDefinitions(),
-          enablePersist: chatOpts?.enablePersist ?? false,
-        })
+        // 普通流式 LLM 调用（含工具调用循环）
+        const toolDefs = options.tools?.getDefinitions()
+        const maxToolRounds = options.maxToolRounds ?? 10
 
         let fullReply = ''
         let model = ''
         let usage: { prompt_tokens: number, completion_tokens: number, total_tokens: number } | undefined
 
-        for await (const chunk of stream) {
-          if (!model && chunk.model)
-            model = chunk.model
-          const delta = chunk.choices?.[0]?.delta?.content
-          if (delta) {
-            fullReply += delta
-            yield { type: 'delta', text: delta }
-          }
-          if (chunk.usage) {
-            usage = {
-              prompt_tokens: chunk.usage.prompt_tokens,
-              completion_tokens: chunk.usage.completion_tokens,
-              total_tokens: chunk.usage.total_tokens,
+        for (let round = 0; round <= maxToolRounds; round++) {
+          const processor = createStreamProcessor()
+
+          const stream = deps.llm.chatStream({
+            model: chatOpts?.model ?? options.model,
+            messages,
+            temperature: chatOpts?.temperature ?? options.temperature,
+            objectId: scope?.objectId,
+            sessionId: scope?.sessionId,
+            tools: toolDefs,
+            tool_choice: toolDefs ? 'auto' : undefined,
+            enablePersist: chatOpts?.enablePersist ?? false,
+          })
+
+          for await (const chunk of stream) {
+            processor.process(chunk)
+
+            if (!model && chunk.model)
+              model = chunk.model
+            const delta = chunk.choices?.[0]?.delta?.content
+            if (delta) {
+              fullReply += delta
+              yield { type: 'delta', text: delta }
+            }
+            if (chunk.usage) {
+              usage = {
+                prompt_tokens: chunk.usage.prompt_tokens,
+                completion_tokens: chunk.usage.completion_tokens,
+                total_tokens: chunk.usage.total_tokens,
+              }
             }
           }
+
+          const streamResult = processor.getResult()
+
+          // 有工具调用：执行工具并继续下一轮
+          if (streamResult.toolCalls.length > 0 && options.tools) {
+            messages.push(processor.toAssistantMessage())
+
+            for (const toolCall of streamResult.toolCalls) {
+              if (toolCall.type !== 'function')
+                continue
+              yield { type: 'tool_call', name: toolCall.function.name, arguments: toolCall.function.arguments }
+
+              const toolResult = await options.tools.execute(toolCall)
+              const rawContent = toolResult.success
+                ? toolResult.data.content
+                : `Tool error: ${toolResult.error.message}`
+              const toolContent = typeof rawContent === 'string'
+                ? rawContent
+                : (rawContent as Array<{ text?: string }>).map(p => p.text ?? '').join(' ')
+
+              yield { type: 'tool_result', name: toolCall.function.name, content: toolContent, success: toolResult.success }
+
+              messages.push({
+                role: 'tool',
+                tool_call_id: toolCall.id,
+                content: toolContent,
+              })
+            }
+
+            // 重置 fullReply，下一轮 LLM 会产出最终文本
+            fullReply = ''
+            continue
+          }
+
+          // 无工具调用：结束循环
+          break
         }
 
         // 追加助手回复
@@ -506,7 +586,7 @@ export function createContextOperations(
     /**
      * 创建有状态上下文管理器
      */
-    createManager(options?: ContextManagerOptions): Result<ContextManager, AIError> {
+    createManager(options?: ContextManagerOptions): HaiResult<ContextManager> {
       const opts = options ?? {}
 
       const manager = buildManager(
@@ -526,7 +606,7 @@ export function createContextOperations(
     /**
      * 从存储恢复管理器实例
      */
-    async restoreManager(scope: InteractionScope, options?: Omit<ContextManagerOptions, 'scope'>): Promise<Result<ContextManager, AIError>> {
+    async restoreManager(scope: InteractionScope, options?: Omit<ContextManagerOptions, 'scope'>): Promise<HaiResult<ContextManager>> {
       const opts = { ...options, scope } as ContextManagerOptions
 
       let initialMessages: ChatMessage[] = []
@@ -556,7 +636,7 @@ export function createContextOperations(
     /**
      * 列出指定对象的所有会话
      */
-    async listSessions(objectId: string): Promise<Result<SessionInfo[], AIError>> {
+    async listSessions(objectId: string): Promise<HaiResult<SessionInfo[]>> {
       if (!sessionStore) {
         return ok([])
       }
@@ -569,15 +649,11 @@ export function createContextOperations(
         return ok(sessions)
       }
       catch (error) {
-        return err({
-          code: AIErrorCode.SESSION_FAILED,
-          message: aiM('ai_sessionFailed', { params: { error: String(error) } }),
-          cause: error,
-        })
+        return err(HaiAIError.SESSION_FAILED, aiM('ai_sessionFailed', { params: { error: String(error) } }), error)
       }
     },
 
-    async renameSession(sessionId: string, title: string): Promise<Result<void, AIError>> {
+    async renameSession(sessionId: string, title: string): Promise<HaiResult<void>> {
       if (!sessionStore) {
         return ok(undefined)
       }
@@ -585,10 +661,7 @@ export function createContextOperations(
       try {
         const existing = await sessionStore.get(sessionId)
         if (!existing) {
-          return err({
-            code: AIErrorCode.SESSION_FAILED,
-            message: aiM('ai_sessionFailed', { params: { error: `Session not found: ${sessionId}` } }),
-          })
+          return err(HaiAIError.SESSION_FAILED, aiM('ai_sessionFailed', { params: { error: `Session not found: ${sessionId}` } }))
         }
         existing.title = title
         existing.updatedAt = Date.now()
@@ -596,15 +669,11 @@ export function createContextOperations(
         return ok(undefined)
       }
       catch (error) {
-        return err({
-          code: AIErrorCode.SESSION_FAILED,
-          message: aiM('ai_sessionFailed', { params: { error: String(error) } }),
-          cause: error,
-        })
+        return err(HaiAIError.SESSION_FAILED, aiM('ai_sessionFailed', { params: { error: String(error) } }), error)
       }
     },
 
-    async removeSession(sessionId: string): Promise<Result<void, AIError>> {
+    async removeSession(sessionId: string): Promise<HaiResult<void>> {
       if (!sessionStore) {
         return ok(undefined)
       }
@@ -620,11 +689,7 @@ export function createContextOperations(
         return ok(undefined)
       }
       catch (error) {
-        return err({
-          code: AIErrorCode.SESSION_FAILED,
-          message: aiM('ai_sessionFailed', { params: { error: String(error) } }),
-          cause: error,
-        })
+        return err(HaiAIError.SESSION_FAILED, aiM('ai_sessionFailed', { params: { error: String(error) } }), error)
       }
     },
   }

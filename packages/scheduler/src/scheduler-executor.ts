@@ -1,96 +1,231 @@
 /**
  * @h-ai/scheduler — 任务执行器
  *
- * 负责执行两种类型的任务： - JS 函数任务：执行用户提供的 JS 处理函数 - API 任务：发起 HTTP 请求
+ * 负责执行统一任务模型中的 API / JS / Hook 三类执行路径，并生成执行日志。
  * @module scheduler-executor
  */
 
-import type { Result } from '@h-ai/core'
-import type { ApiTaskConfig, JsTaskHandler, SchedulerError, TaskExecutionLog } from './scheduler-types.js'
+import type { HaiResult } from '@h-ai/core'
+import type { SchedulerLogRepository } from './repositories/index.js'
+import type { ExecutionStatus, SchedulerLogCleanupPolicy, SchedulerTaskContext, SchedulerTaskExecuteEvent, SchedulerTaskFinishEvent, SchedulerTaskHooks, SchedulerTaskInterruptedEvent, SchedulerTaskStartEvent, TaskDefinition, TaskExecutionLog, TaskExecutionTargetType, TaskTriggerInfo } from './scheduler-types.js'
 
 import { core, err, ok } from '@h-ai/core'
 
-import { SchedulerErrorCode } from './scheduler-config.js'
 import { schedulerM } from './scheduler-i18n.js'
+import { compileJsTaskHandler } from './scheduler-js-compiler.js'
+import {
+
+  HaiSchedulerError,
+
+} from './scheduler-types.js'
 
 const logger = core.logger.child({ module: 'scheduler', scope: 'executor' })
 
-/**
- * 剥离 URL 中的认证信息，避免密码泄露到日志
- */
+let currentLogRepo: SchedulerLogRepository | null = null
+let currentCleanupPolicy: SchedulerLogCleanupPolicy = {}
+
+export function setLogRepository(repo: SchedulerLogRepository | null, cleanupPolicy: SchedulerLogCleanupPolicy = {}): void {
+  currentLogRepo = repo
+  currentCleanupPolicy = { ...cleanupPolicy }
+}
+
 function sanitizeUrl(url: string): string {
   try {
-    const u = new URL(url)
-    if (u.password)
-      u.password = '***'
-    if (u.username)
-      u.username = '***'
-    return u.toString()
+    const parsedUrl = new URL(url)
+    if (parsedUrl.password)
+      parsedUrl.password = '***'
+    if (parsedUrl.username)
+      parsedUrl.username = '***'
+    return parsedUrl.toString()
   }
   catch {
     return '(invalid url)'
   }
 }
 
-// ─── JS 任务执行 ───
+function resolveTaskType(task: TaskDefinition, hooks: Readonly<SchedulerTaskHooks>): TaskExecutionTargetType {
+  if (task.handler)
+    return task.handler.kind
 
-/**
- * 执行 JS 函数任务
- *
- * 调用用户提供的 handler 函数并序列化返回值。
- * handler 返回 `undefined` 时 result 为 `null`。
- *
- * @param taskId - 任务 ID，会作为参数传递给 handler
- * @param handler - JS 处理函数，签名为 `(taskId: string) => unknown | Promise<unknown>`
- * @returns 成功时返回 JSON 序列化后的结果字符串（或 null）；handler 抛出异常时返回 `JS_EXECUTION_FAILED` 错误
- */
-export async function executeJsTask(
-  taskId: string,
-  handler: JsTaskHandler,
-): Promise<Result<string | null, SchedulerError>> {
-  try {
-    const result = await handler(taskId)
-    const serialized = result !== undefined ? JSON.stringify(result) : null
-    return ok(serialized)
-  }
-  catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
-    logger.error('JS task execution failed', { taskId, error: message })
-    return err({
-      code: SchedulerErrorCode.JS_EXECUTION_FAILED,
-      message: schedulerM('scheduler_jsExecutionFailed', { params: { error: message } }),
-      cause: error,
-    })
+  if (hooks.onTaskExecute)
+    return 'hook'
+
+  return 'hook'
+}
+
+function createTaskContext(task: TaskDefinition, trigger: TaskTriggerInfo): SchedulerTaskContext {
+  return {
+    task,
+    taskId: task.id,
+    params: task.params ?? {},
+    trigger,
   }
 }
 
-// ─── API 任务执行 ───
+async function notifyTaskStart(hooks: Readonly<SchedulerTaskHooks>, event: SchedulerTaskStartEvent): Promise<void> {
+  if (!hooks.onTaskStart)
+    return
 
-/** 默认 API 超时时间（30 秒） */
-const DEFAULT_API_TIMEOUT = 30000
+  try {
+    await hooks.onTaskStart(event)
+  }
+  catch (error) {
+    logger.warn('Task start hook failed', { taskId: event.task.id, error })
+  }
+}
 
-/**
- * 执行 API 调用任务
- *
- * 使用 `fetch` 发起 HTTP 请求，通过 `AbortController` 实现超时控制。
- * 默认超时 30 秒，可通过 `config.timeout` 覆盖。
- * 非 2xx 响应码视为失败。
- *
- * @param taskId - 任务 ID（用于日志记录）
- * @param config - API 调用配置（url、method、headers、body、timeout）
- * @returns 成功时返回响应体文本（空响应为 null）；网络错误或非 2xx 响应返回 `API_EXECUTION_FAILED` 错误
- */
+async function notifyTaskInterrupted(hooks: Readonly<SchedulerTaskHooks>, event: SchedulerTaskInterruptedEvent): Promise<void> {
+  if (!hooks.onTaskInterrupted)
+    return
+
+  try {
+    await hooks.onTaskInterrupted(event)
+  }
+  catch (error) {
+    logger.warn('Task interrupted hook failed', { taskId: event.task.id, error })
+  }
+}
+
+async function notifyTaskFinish(hooks: Readonly<SchedulerTaskHooks>, event: SchedulerTaskFinishEvent): Promise<void> {
+  if (!hooks.onTaskFinish)
+    return
+
+  try {
+    await hooks.onTaskFinish(event)
+  }
+  catch (error) {
+    logger.warn('Task finish hook failed', { taskId: event.task.id, error })
+  }
+}
+
+async function saveExecutionLog(
+  task: TaskDefinition,
+  trigger: TaskTriggerInfo,
+  taskType: TaskExecutionTargetType,
+  status: ExecutionStatus,
+  startedAt: number,
+  finishedAt: number,
+  result: string | null,
+  error: string | null,
+): Promise<TaskExecutionLog> {
+  const log: TaskExecutionLog = {
+    id: 0,
+    taskId: task.id,
+    taskName: task.name,
+    taskType,
+    triggerType: trigger.type,
+    triggerSource: trigger.source,
+    status,
+    result,
+    error,
+    startedAt,
+    finishedAt,
+    duration: finishedAt - startedAt,
+  }
+
+  if (!currentLogRepo)
+    return log
+
+  await currentLogRepo.saveLog(log)
+
+  const cleanupResult = await currentLogRepo.cleanupLogs(currentCleanupPolicy)
+  if (!cleanupResult.success) {
+    logger.warn('Failed to cleanup execution logs', {
+      taskId: task.id,
+      error: cleanupResult.error.message,
+      maxLogs: currentCleanupPolicy.maxLogs,
+      retentionDays: currentCleanupPolicy.retentionDays,
+    })
+  }
+
+  return log
+}
+
+export async function saveInterruptedTaskLog(
+  task: TaskDefinition,
+  trigger: TaskTriggerInfo,
+  reason: string,
+  taskType: TaskExecutionTargetType,
+  startedAt: number,
+  finishedAt: number,
+): Promise<TaskExecutionLog> {
+  return saveExecutionLog(task, trigger, taskType, 'interrupted', startedAt, finishedAt, null, reason)
+}
+
+export async function interruptTask(
+  task: TaskDefinition,
+  trigger: TaskTriggerInfo,
+  reason: string,
+  hooks: Readonly<SchedulerTaskHooks>,
+): Promise<TaskExecutionLog> {
+  const startedAt = Date.now()
+  const taskType = resolveTaskType(task, hooks)
+
+  await notifyTaskStart(hooks, { task, trigger, startedAt })
+
+  const finishedAt = Date.now()
+  const interruptedLog = await saveInterruptedTaskLog(task, trigger, reason, taskType, startedAt, finishedAt)
+
+  await notifyTaskInterrupted(hooks, {
+    task,
+    trigger,
+    startedAt,
+    interruptedAt: finishedAt,
+    reason,
+  })
+
+  return interruptedLog
+}
+
+export async function executeJsTask(
+  task: TaskDefinition,
+  context: SchedulerTaskContext,
+): Promise<HaiResult<string | null>> {
+  const handler = task.handler
+  if (!handler || handler.kind !== 'js') {
+    return err(
+      HaiSchedulerError.EXECUTION_FAILED,
+      schedulerM('scheduler_invalidHandlerConfig', { params: { taskId: task.id } }),
+    )
+  }
+
+  const compileResult = compileJsTaskHandler(handler)
+  if (!compileResult.success)
+    return compileResult
+
+  try {
+    const result = await compileResult.data(context)
+    return ok(result !== undefined ? JSON.stringify(result) : null)
+  }
+  catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    logger.error('JS task execution failed', { taskId: task.id, error: message })
+    return err(
+      HaiSchedulerError.JS_EXECUTION_FAILED,
+      schedulerM('scheduler_jsExecutionFailed', { params: { error: message } }),
+      error,
+    )
+  }
+}
+
 export async function executeApiTask(
-  taskId: string,
-  config: ApiTaskConfig,
-): Promise<Result<string | null, SchedulerError>> {
-  const { url, method = 'GET', headers, body, timeout = DEFAULT_API_TIMEOUT } = config
+  task: TaskDefinition,
+  context: SchedulerTaskContext,
+): Promise<HaiResult<string | null>> {
+  const handler = task.handler
+  if (!handler || handler.kind !== 'api') {
+    return err(
+      HaiSchedulerError.EXECUTION_FAILED,
+      schedulerM('scheduler_invalidHandlerConfig', { params: { taskId: task.id } }),
+    )
+  }
 
+  const { url, method = 'GET', headers, body, timeout = 30000 } = handler
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), timeout)
 
   try {
-    const fetchOptions: RequestInit = {
+    const response = await fetch(url, {
       method,
       headers: {
         ...headers,
@@ -98,21 +233,23 @@ export async function executeApiTask(
       },
       signal: controller.signal,
       ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
-    }
+    })
 
-    const response = await fetch(url, fetchOptions)
     clearTimeout(timer)
-
     const responseText = await response.text()
 
     if (!response.ok) {
-      logger.error('API task returned non-OK status', { taskId, status: response.status, url: sanitizeUrl(url) })
-      return err({
-        code: SchedulerErrorCode.API_EXECUTION_FAILED,
-        message: schedulerM('scheduler_apiExecutionFailed', {
+      logger.error('API task returned non-OK status', {
+        taskId: context.taskId,
+        status: response.status,
+        url: sanitizeUrl(url),
+      })
+      return err(
+        HaiSchedulerError.API_EXECUTION_FAILED,
+        schedulerM('scheduler_apiExecutionFailed', {
           params: { error: `HTTP ${response.status}: ${responseText.slice(0, 200)}` },
         }),
-      })
+      )
     }
 
     return ok(responseText || null)
@@ -120,63 +257,101 @@ export async function executeApiTask(
   catch (error) {
     clearTimeout(timer)
     const message = error instanceof Error ? error.message : String(error)
-    logger.error('API task execution failed', { taskId, error: message, url: sanitizeUrl(url) })
-    return err({
-      code: SchedulerErrorCode.API_EXECUTION_FAILED,
-      message: schedulerM('scheduler_apiExecutionFailed', { params: { error: message } }),
-      cause: error,
-    })
+    logger.error('API task execution failed', { taskId: context.taskId, error: message, url: sanitizeUrl(url) })
+    return err(
+      HaiSchedulerError.API_EXECUTION_FAILED,
+      schedulerM('scheduler_apiExecutionFailed', { params: { error: message } }),
+      error,
+    )
   }
 }
 
-// ─── 统一执行入口 ───
+async function executeHookTask(
+  task: TaskDefinition,
+  context: SchedulerTaskContext,
+  hooks: Readonly<SchedulerTaskHooks>,
+  startedAt: number,
+): Promise<HaiResult<string | null>> {
+  if (!hooks.onTaskExecute) {
+    return err(
+      HaiSchedulerError.EXECUTION_FAILED,
+      schedulerM('scheduler_taskHandlerMissing', { params: { taskId: task.id } }),
+    )
+  }
 
-/**
- * 统一执行入口：执行任务并生成执行日志
- *
- * 根据 `task.type` 分派到 JS 或 API 执行器，记录开始/结束时间和耗时。
- * 日志中的 `id` 字段初始为 0，由数据库自增赋值。
- *
- * @param task - 任务配置
- * @param task.id - 任务 ID
- * @param task.name - 任务名称
- * @param task.type - 任务类型（'js' 或 'api'）
- * @param task.handler - JS 处理函数（type 为 'js' 时必填）
- * @param task.api - API 调用配置（type 为 'api' 时必填）
- * @returns 任务执行日志（包含 status、result/error、duration 等）
- */
+  const executeEvent: SchedulerTaskExecuteEvent = {
+    task,
+    trigger: context.trigger,
+    startedAt,
+    context,
+  }
+
+  try {
+    const result = await hooks.onTaskExecute(executeEvent)
+    return ok(result !== undefined ? JSON.stringify(result) : null)
+  }
+  catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    logger.error('Task execute hook failed', { taskId: task.id, error: message })
+    return err(
+      HaiSchedulerError.HOOK_EXECUTION_FAILED,
+      schedulerM('scheduler_hookExecutionFailed', { params: { error: message } }),
+      error,
+    )
+  }
+}
+
 export async function executeTask(
-  task: { id: string, name: string, type: 'js' | 'api', handler?: JsTaskHandler, api?: ApiTaskConfig },
+  task: TaskDefinition,
+  trigger: TaskTriggerInfo,
+  hooks: Readonly<SchedulerTaskHooks>,
 ): Promise<TaskExecutionLog> {
   const startedAt = Date.now()
+  const taskType = resolveTaskType(task, hooks)
+  const context = createTaskContext(task, trigger)
 
-  let execResult: Result<string | null, SchedulerError>
+  await notifyTaskStart(hooks, { task, trigger, startedAt })
 
-  if (task.type === 'js' && task.handler) {
-    execResult = await executeJsTask(task.id, task.handler)
+  let executionResult: HaiResult<string | null>
+  let shouldNotifyInterrupted = false
+  if (!task.handler) {
+    executionResult = await executeHookTask(task, context, hooks, startedAt)
+    shouldNotifyInterrupted = !executionResult.success
   }
-  else if (task.type === 'api' && task.api) {
-    execResult = await executeApiTask(task.id, task.api)
+  else if (task.handler.kind === 'api') {
+    executionResult = await executeApiTask(task, context)
   }
   else {
-    execResult = err({
-      code: SchedulerErrorCode.EXECUTION_FAILED,
-      message: schedulerM('scheduler_executionFailed', { params: { error: 'Invalid task configuration' } }),
-    })
+    executionResult = await executeJsTask(task, context)
   }
 
   const finishedAt = Date.now()
-
-  return {
-    id: 0, // 由数据库自增赋值
-    taskId: task.id,
-    taskName: task.name,
-    taskType: task.type,
-    status: execResult.success ? 'success' : 'failed',
-    result: execResult.success ? execResult.data : null,
-    error: execResult.success ? null : execResult.error.message,
+  const status: ExecutionStatus = executionResult.success
+    ? 'success'
+    : (shouldNotifyInterrupted ? 'interrupted' : 'failed')
+  const log = await saveExecutionLog(
+    task,
+    trigger,
+    taskType,
+    status,
     startedAt,
     finishedAt,
-    duration: finishedAt - startedAt,
+    executionResult.success ? executionResult.data : null,
+    executionResult.success ? null : executionResult.error.message,
+  )
+
+  if (!executionResult.success && shouldNotifyInterrupted) {
+    await notifyTaskInterrupted(hooks, {
+      task,
+      trigger,
+      startedAt,
+      interruptedAt: finishedAt,
+      reason: executionResult.error.message,
+    })
   }
+
+  if (status !== 'interrupted')
+    await notifyTaskFinish(hooks, { task, trigger, startedAt, finishedAt, log })
+
+  return log
 }

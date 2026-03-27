@@ -7,7 +7,6 @@
 import type { PaymentProvider } from '../src/payment-types'
 import { err, ok } from '@h-ai/core'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { PaymentErrorCode } from '../src/payment-config'
 import {
   clearProviders,
   closeOrder,
@@ -18,6 +17,7 @@ import {
   refund,
   registerProvider,
 } from '../src/payment-functions'
+import { HaiPaymentError } from '../src/payment-types'
 
 // mock @h-ai/audit 模块，使 payment-functions 内部的 audit.log 可被断言
 const { mockAuditLog } = vi.hoisted(() => ({
@@ -112,7 +112,7 @@ describe('payment-functions', () => {
 
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(PaymentErrorCode.PROVIDER_NOT_FOUND)
+      expect(result.error.code).toBe(HaiPaymentError.PROVIDER_NOT_FOUND.code)
     }
   })
 
@@ -177,7 +177,7 @@ describe('payment-functions — handleNotify', () => {
 
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(PaymentErrorCode.PROVIDER_NOT_FOUND)
+      expect(result.error.code).toBe(HaiPaymentError.PROVIDER_NOT_FOUND.code)
     }
   })
 })
@@ -210,7 +210,7 @@ describe('payment-functions — refund', () => {
 
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(PaymentErrorCode.PROVIDER_NOT_FOUND)
+      expect(result.error.code).toBe(HaiPaymentError.PROVIDER_NOT_FOUND.code)
     }
   })
 })
@@ -270,12 +270,12 @@ describe('payment-functions — 多 Provider 路由', () => {
     const qr = await queryOrder('ghost', 'ORD')
     expect(qr.success).toBe(false)
     if (!qr.success)
-      expect(qr.error.code).toBe(PaymentErrorCode.PROVIDER_NOT_FOUND)
+      expect(qr.error.code).toBe(HaiPaymentError.PROVIDER_NOT_FOUND.code)
 
     const cr = await closeOrder('ghost', 'ORD')
     expect(cr.success).toBe(false)
     if (!cr.success)
-      expect(cr.error.code).toBe(PaymentErrorCode.PROVIDER_NOT_FOUND)
+      expect(cr.error.code).toBe(HaiPaymentError.PROVIDER_NOT_FOUND.code)
   })
 })
 
@@ -283,14 +283,14 @@ describe('payment-functions — Provider 返回错误的透传', () => {
   it('provider createOrder 返回 err 时原样透传', async () => {
     const failingProvider: PaymentProvider = {
       name: 'fail',
-      createOrder: async () => err({
-        code: PaymentErrorCode.INVALID_AMOUNT,
-        message: '金额无效',
-      }),
-      handleNotify: async () => err({ code: PaymentErrorCode.NOTIFY_PARSE_FAILED, message: '' }),
-      queryOrder: async () => err({ code: PaymentErrorCode.QUERY_ORDER_FAILED, message: '' }),
-      refund: async () => err({ code: PaymentErrorCode.REFUND_FAILED, message: '' }),
-      closeOrder: async () => err({ code: PaymentErrorCode.CLOSE_ORDER_FAILED, message: '' }),
+      createOrder: async () => err(
+        HaiPaymentError.INVALID_AMOUNT,
+        '金额无效',
+      ),
+      handleNotify: async () => err(HaiPaymentError.NOTIFY_PARSE_FAILED, ''),
+      queryOrder: async () => err(HaiPaymentError.QUERY_ORDER_FAILED, ''),
+      refund: async () => err(HaiPaymentError.REFUND_FAILED, ''),
+      closeOrder: async () => err(HaiPaymentError.CLOSE_ORDER_FAILED, ''),
     }
     registerProvider(failingProvider)
 
@@ -304,7 +304,7 @@ describe('payment-functions — Provider 返回错误的透传', () => {
 
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(PaymentErrorCode.INVALID_AMOUNT)
+      expect(result.error.code).toBe(HaiPaymentError.INVALID_AMOUNT)
     }
   })
 })

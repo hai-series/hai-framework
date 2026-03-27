@@ -8,48 +8,6 @@
 
 import { z } from 'zod'
 
-// ─── 错误码常量 ───
-
-/**
- * 数据处理错误码（数值范围 8500-8599）
- *
- * @example
- * ```ts
- * import { DatapipeErrorCode } from '@h-ai/datapipe'
- *
- * if (result.error?.code === DatapipeErrorCode.CHUNK_FAILED) {
- *     // 处理错误
- * }
- * ```
- */
-export const DatapipeErrorCode = {
-  /** 清洗失败 */
-  CLEAN_FAILED: 8500,
-  /** 分块失败 */
-  CHUNK_FAILED: 8501,
-  /** 转换失败 */
-  TRANSFORM_FAILED: 8502,
-  /** 管线执行失败 */
-  PIPELINE_FAILED: 8503,
-  /** 配置错误 */
-  CONFIG_ERROR: 8504,
-  /** 自定义分隔符缺失 */
-  MISSING_SEPARATOR: 8507,
-} as const
-
-/** 数据处理错误码类型 */
-export type DatapipeErrorCodeType = typeof DatapipeErrorCode[keyof typeof DatapipeErrorCode]
-
-/** 数据管线错误码 → HTTP 状态码映射 */
-export const DatapipeErrorHttpStatus: Record<number, number> = {
-  [DatapipeErrorCode.CLEAN_FAILED]: 500,
-  [DatapipeErrorCode.CHUNK_FAILED]: 500,
-  [DatapipeErrorCode.TRANSFORM_FAILED]: 500,
-  [DatapipeErrorCode.PIPELINE_FAILED]: 500,
-  [DatapipeErrorCode.CONFIG_ERROR]: 400,
-  [DatapipeErrorCode.MISSING_SEPARATOR]: 400,
-}
-
 // ─── 清洗配置 ───
 
 /**

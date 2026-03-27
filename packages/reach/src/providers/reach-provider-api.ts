@@ -5,23 +5,23 @@
  * @module reach-provider-api
  */
 
-import type { Result } from '@h-ai/core'
+import type { HaiError, HaiResult } from '@h-ai/core'
 import type { ApiProviderConfig, ProviderConfig } from '../reach-config.js'
-import type { ReachError, ReachMessage, ReachProvider, SendResult } from '../reach-types.js'
 
+import type { ReachMessage, ReachProvider, SendResult } from '../reach-types.js'
 import { core, err, ok } from '@h-ai/core'
 
-import { ReachErrorCode } from '../reach-config.js'
 import { reachM } from '../reach-i18n.js'
+import { HaiReachError } from '../reach-types.js'
 
 const logger = core.logger.child({ module: 'reach', scope: 'provider-api' })
 
 /**
  * 将异常包装为 ReachError
  */
-function toReachError(error: unknown): ReachError {
+function toReachError(error: unknown): HaiError {
   return {
-    code: ReachErrorCode.SEND_FAILED,
+    code: HaiReachError.SEND_FAILED.code,
     message: reachM('reach_apiSendFailed', {
       params: { error: error instanceof Error ? error.message : String(error) },
     }),
@@ -40,12 +40,12 @@ export function createApiProvider(): ReachProvider {
   return {
     name: 'api',
 
-    async connect(config: ProviderConfig): Promise<Result<void, ReachError>> {
+    async connect(config: ProviderConfig): Promise<HaiResult<void>> {
       if (config.type !== 'api') {
-        return err({
-          code: ReachErrorCode.CONFIG_ERROR,
-          message: reachM('reach_unsupportedType', { params: { type: config.type } }),
-        })
+        return err(
+          HaiReachError.CONFIG_ERROR,
+          reachM('reach_unsupportedType', { params: { type: config.type } }),
+        )
       }
 
       apiConfig = config
@@ -62,12 +62,12 @@ export function createApiProvider(): ReachProvider {
       return apiConfig !== null
     },
 
-    async send(message: ReachMessage): Promise<Result<SendResult, ReachError>> {
+    async send(message: ReachMessage): Promise<HaiResult<SendResult>> {
       if (!apiConfig) {
-        return err({
-          code: ReachErrorCode.NOT_INITIALIZED,
-          message: reachM('reach_notInitialized'),
-        })
+        return err(
+          HaiReachError.NOT_INITIALIZED,
+          reachM('reach_notInitialized'),
+        )
       }
 
       logger.debug('Sending via API callback', { url: apiConfig.url, to: message.to })
@@ -99,10 +99,10 @@ export function createApiProvider(): ReachProvider {
           if (!response.ok) {
             const text = await response.text()
             logger.warn('API callback returned non-OK status', { status: response.status, body: text })
-            return err({
-              code: ReachErrorCode.SEND_FAILED,
-              message: reachM('reach_apiSendFailed', { params: { error: `HTTP ${response.status}: ${text}` } }),
-            })
+            return err(
+              HaiReachError.SEND_FAILED,
+              reachM('reach_apiSendFailed', { params: { error: `HTTP ${response.status}: ${text}` } }),
+            )
           }
 
           const result = await response.json() as { messageId?: string }

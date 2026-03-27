@@ -5,24 +5,24 @@
  * @module reach-provider-aliyun-sms
  */
 
-import type { Result } from '@h-ai/core'
+import type { HaiError, HaiResult } from '@h-ai/core'
 import type { AliyunSmsProviderConfig, ProviderConfig } from '../reach-config.js'
-import type { ReachError, ReachMessage, ReachProvider, SendResult } from '../reach-types.js'
 
+import type { ReachMessage, ReachProvider, SendResult } from '../reach-types.js'
 import { createHmac, randomUUID } from 'node:crypto'
 import { core, err, ok } from '@h-ai/core'
 
-import { ReachErrorCode } from '../reach-config.js'
 import { reachM } from '../reach-i18n.js'
+import { HaiReachError } from '../reach-types.js'
 
 const logger = core.logger.child({ module: 'reach', scope: 'provider-aliyun-sms' })
 
 /**
  * 将异常包装为 ReachError
  */
-function toReachError(error: unknown): ReachError {
+function toReachError(error: unknown): HaiError {
   return {
-    code: ReachErrorCode.SEND_FAILED,
+    code: HaiReachError.SEND_FAILED.code,
     message: reachM('reach_smsSendFailed', {
       params: { error: error instanceof Error ? error.message : String(error) },
     }),
@@ -72,12 +72,12 @@ export function createAliyunSmsProvider(): ReachProvider {
   return {
     name: 'aliyun-sms',
 
-    async connect(config: ProviderConfig): Promise<Result<void, ReachError>> {
+    async connect(config: ProviderConfig): Promise<HaiResult<void>> {
       if (config.type !== 'aliyun-sms') {
-        return err({
-          code: ReachErrorCode.CONFIG_ERROR,
-          message: reachM('reach_unsupportedType', { params: { type: config.type } }),
-        })
+        return err(
+          HaiReachError.CONFIG_ERROR,
+          reachM('reach_unsupportedType', { params: { type: config.type } }),
+        )
       }
 
       smsConfig = config
@@ -94,12 +94,12 @@ export function createAliyunSmsProvider(): ReachProvider {
       return smsConfig !== null
     },
 
-    async send(message: ReachMessage): Promise<Result<SendResult, ReachError>> {
+    async send(message: ReachMessage): Promise<HaiResult<SendResult>> {
       if (!smsConfig) {
-        return err({
-          code: ReachErrorCode.NOT_INITIALIZED,
-          message: reachM('reach_notInitialized'),
-        })
+        return err(
+          HaiReachError.NOT_INITIALIZED,
+          reachM('reach_notInitialized'),
+        )
       }
 
       const templateCode = message.extra?.templateCode as string | undefined
@@ -136,10 +136,10 @@ export function createAliyunSmsProvider(): ReachProvider {
 
         if (body.Code !== 'OK') {
           logger.warn('SMS send returned non-OK status', { code: body.Code, message: body.Message })
-          return err({
-            code: ReachErrorCode.SEND_FAILED,
-            message: reachM('reach_smsSendFailed', { params: { error: body.Message } }),
-          })
+          return err(
+            HaiReachError.SEND_FAILED,
+            reachM('reach_smsSendFailed', { params: { error: body.Message } }),
+          )
         }
 
         logger.info('SMS sent', { to: message.to, bizId: body.BizId })

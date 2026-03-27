@@ -5,16 +5,15 @@
  * @module ai-memory-extractor
  */
 
-import type { Result } from '@h-ai/core'
+import type { HaiResult } from '@h-ai/core'
 
-import type { AIError } from '../ai-types.js'
 import type { ChatMessage, LLMOperations } from '../llm/ai-llm-types.js'
 import type { MemoryEntryInput, MemoryType } from './ai-memory-types.js'
 
 import { core, err, ok } from '@h-ai/core'
 
-import { AIErrorCode } from '../ai-config.js'
 import { aiM } from '../ai-i18n.js'
+import { HaiAIError } from '../ai-types.js'
 
 const logger = core.logger.child({ module: 'ai', scope: 'memory-extractor' })
 
@@ -78,7 +77,7 @@ export async function extractMemories(
     objectId?: string
     systemPrompt?: string
   },
-): Promise<Result<MemoryEntryInput[], AIError>> {
+): Promise<HaiResult<MemoryEntryInput[]>> {
   const conversationText = formatMessages(messages)
   if (!conversationText.trim()) {
     return ok([])
@@ -101,11 +100,7 @@ export async function extractMemories(
 
     if (!chatResult.success) {
       logger.warn('Memory extraction LLM call failed', { error: chatResult.error })
-      return err({
-        code: AIErrorCode.MEMORY_EXTRACT_FAILED,
-        message: aiM('ai_memoryExtractFailed', { params: { error: String(chatResult.error.message) } }),
-        cause: chatResult.error,
-      })
+      return err(HaiAIError.MEMORY_EXTRACT_FAILED, aiM('ai_memoryExtractFailed', { params: { error: String(chatResult.error.message) } }), chatResult.error)
     }
 
     const content = chatResult.data.choices[0]?.message?.content ?? ''
@@ -132,11 +127,7 @@ export async function extractMemories(
   }
   catch (error) {
     logger.error('Memory extraction failed', { error })
-    return err({
-      code: AIErrorCode.MEMORY_EXTRACT_FAILED,
-      message: aiM('ai_memoryExtractFailed', { params: { error: String(error) } }),
-      cause: error,
-    })
+    return err(HaiAIError.MEMORY_EXTRACT_FAILED, aiM('ai_memoryExtractFailed', { params: { error: String(error) } }), error)
   }
 }
 

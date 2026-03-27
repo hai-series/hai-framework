@@ -6,9 +6,8 @@
  * @module ai-compress-types
  */
 
-import type { Result } from '@h-ai/core'
+import type { HaiResult } from '@h-ai/core'
 
-import type { AIError } from '../ai-types.js'
 import type { ChatMessage } from '../llm/ai-llm-types.js'
 
 import { z } from 'zod'
@@ -86,5 +85,5 @@ export interface CompressOperations {
    * @param options - 压缩选项
    * @returns 压缩结果
    */
-  tryCompress: (messages: ChatMessage[], options?: CompressOptions) => Promise<Result<CompressResult, AIError>>
+  tryCompress: (messages: ChatMessage[], options?: CompressOptions) => Promise<HaiResult<CompressResult>>
 }

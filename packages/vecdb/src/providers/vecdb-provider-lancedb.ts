@@ -6,19 +6,18 @@
  * @module vecdb-provider-lancedb
  */
 
-import type { Result } from '@h-ai/core'
+import type { HaiResult } from '@h-ai/core'
 import type { LancedbConfig } from '../vecdb-config.js'
 import type {
   CollectionInfo,
-  VecdbError,
   VectorSearchResult,
 } from '../vecdb-types.js'
 import type { CollectionDriver, VecdbProvider, VectorDriver } from './vecdb-provider-base.js'
 
 import { core, err, ok } from '@h-ai/core'
-
-import { VecdbErrorCode } from '../vecdb-config.js'
 import { vecdbM } from '../vecdb-i18n.js'
+import { HaiVecdbError } from '../vecdb-types.js'
+
 import { createBaseCollectionOps, createBaseVectorOps } from './vecdb-provider-base.js'
 
 const logger = core.logger.child({ module: 'vecdb', scope: 'lancedb' })
@@ -84,18 +83,14 @@ export function createLancedbProvider(): VecdbProvider {
   /**
    * 动态加载 @lancedb/lancedb
    */
-  async function loadLancedb(): Promise<Result<typeof import('@lancedb/lancedb'), VecdbError>> {
+  async function loadLancedb(): Promise<HaiResult<typeof import('@lancedb/lancedb')>> {
     try {
       const mod = await import('@lancedb/lancedb')
       return ok(mod)
     }
     catch (error) {
       logger.error('Failed to load @lancedb/lancedb', { error })
-      return err({
-        code: VecdbErrorCode.DRIVER_NOT_FOUND,
-        message: vecdbM('vecdb_driverNotFound', { params: { driver: '@lancedb/lancedb' } }),
-        cause: error,
-      })
+      return err(HaiVecdbError.DRIVER_NOT_FOUND, vecdbM('vecdb_driverNotFound', { params: { driver: '@lancedb/lancedb' } }), error)
     }
   }
 
@@ -129,10 +124,7 @@ export function createLancedbProvider(): VecdbProvider {
 
       const tableNames = await connection!.tableNames()
       if (tableNames.includes(name)) {
-        return err({
-          code: VecdbErrorCode.COLLECTION_ALREADY_EXISTS,
-          message: vecdbM('vecdb_collectionAlreadyExists', { params: { name } }),
-        })
+        return err(HaiVecdbError.COLLECTION_ALREADY_EXISTS, vecdbM('vecdb_collectionAlreadyExists', { params: { name } }))
       }
 
       // 创建包含初始记录的表以确定 schema
@@ -160,10 +152,7 @@ export function createLancedbProvider(): VecdbProvider {
 
       const tableNames = await connection!.tableNames()
       if (!tableNames.includes(name)) {
-        return err({
-          code: VecdbErrorCode.COLLECTION_NOT_FOUND,
-          message: vecdbM('vecdb_collectionNotFound', { params: { name } }),
-        })
+        return err(HaiVecdbError.COLLECTION_NOT_FOUND, vecdbM('vecdb_collectionNotFound', { params: { name } }))
       }
 
       await connection!.dropTable(name)
@@ -185,10 +174,7 @@ export function createLancedbProvider(): VecdbProvider {
 
       const table = await openTable(name)
       if (!table) {
-        return err({
-          code: VecdbErrorCode.COLLECTION_NOT_FOUND,
-          message: vecdbM('vecdb_collectionNotFound', { params: { name } }),
-        })
+        return err(HaiVecdbError.COLLECTION_NOT_FOUND, vecdbM('vecdb_collectionNotFound', { params: { name } }))
       }
 
       const count = await table.countRows()
@@ -218,10 +204,7 @@ export function createLancedbProvider(): VecdbProvider {
 
       const table = await openTable(collection)
       if (!table) {
-        return err({
-          code: VecdbErrorCode.COLLECTION_NOT_FOUND,
-          message: vecdbM('vecdb_collectionNotFound', { params: { name: collection } }),
-        })
+        return err(HaiVecdbError.COLLECTION_NOT_FOUND, vecdbM('vecdb_collectionNotFound', { params: { name: collection } }))
       }
 
       const records = documents.map(doc => ({
@@ -242,10 +225,7 @@ export function createLancedbProvider(): VecdbProvider {
 
       const table = await openTable(collection)
       if (!table) {
-        return err({
-          code: VecdbErrorCode.COLLECTION_NOT_FOUND,
-          message: vecdbM('vecdb_collectionNotFound', { params: { name: collection } }),
-        })
+        return err(HaiVecdbError.COLLECTION_NOT_FOUND, vecdbM('vecdb_collectionNotFound', { params: { name: collection } }))
       }
 
       // LanceDB 不支持原子 upsert，当前实现为 delete + add 两步操作。
@@ -272,10 +252,7 @@ export function createLancedbProvider(): VecdbProvider {
 
       const table = await openTable(collection)
       if (!table) {
-        return err({
-          code: VecdbErrorCode.COLLECTION_NOT_FOUND,
-          message: vecdbM('vecdb_collectionNotFound', { params: { name: collection } }),
-        })
+        return err(HaiVecdbError.COLLECTION_NOT_FOUND, vecdbM('vecdb_collectionNotFound', { params: { name: collection } }))
       }
 
       const idList = ids.map(id => `"${escapeLanceFilterValue(id)}"`).join(', ')
@@ -290,10 +267,7 @@ export function createLancedbProvider(): VecdbProvider {
 
       const table = await openTable(collection)
       if (!table) {
-        return err({
-          code: VecdbErrorCode.COLLECTION_NOT_FOUND,
-          message: vecdbM('vecdb_collectionNotFound', { params: { name: collection } }),
-        })
+        return err(HaiVecdbError.COLLECTION_NOT_FOUND, vecdbM('vecdb_collectionNotFound', { params: { name: collection } }))
       }
 
       const topK = options?.topK ?? 10
@@ -338,10 +312,7 @@ export function createLancedbProvider(): VecdbProvider {
 
       const table = await openTable(collection)
       if (!table) {
-        return err({
-          code: VecdbErrorCode.COLLECTION_NOT_FOUND,
-          message: vecdbM('vecdb_collectionNotFound', { params: { name: collection } }),
-        })
+        return err(HaiVecdbError.COLLECTION_NOT_FOUND, vecdbM('vecdb_collectionNotFound', { params: { name: collection } }))
       }
 
       const count = await table.countRows()
@@ -354,12 +325,9 @@ export function createLancedbProvider(): VecdbProvider {
   return {
     name: 'lancedb',
 
-    async connect(cfg): Promise<Result<void, VecdbError>> {
+    async connect(cfg): Promise<HaiResult<void>> {
       if (cfg.type !== 'lancedb') {
-        return err({
-          code: VecdbErrorCode.UNSUPPORTED_TYPE,
-          message: vecdbM('vecdb_unsupportedType', { params: { type: cfg.type } }),
-        })
+        return err(HaiVecdbError.UNSUPPORTED_TYPE, vecdbM('vecdb_unsupportedType', { params: { type: cfg.type } }))
       }
 
       const lanceConfig = cfg as LancedbConfig
@@ -403,15 +371,11 @@ export function createLancedbProvider(): VecdbProvider {
       }
       catch (error) {
         logger.error('Failed to connect to LanceDB', { error })
-        return err({
-          code: VecdbErrorCode.CONNECTION_FAILED,
-          message: vecdbM('vecdb_connectionFailed', { params: { error: String(error) } }),
-          cause: error,
-        })
+        return err(HaiVecdbError.CONNECTION_FAILED, vecdbM('vecdb_connectionFailed', { params: { error: String(error) } }), error)
       }
     },
 
-    async close(): Promise<Result<void, VecdbError>> {
+    async close(): Promise<HaiResult<void>> {
       connection = null
       config = null
       collectionMetas.clear()

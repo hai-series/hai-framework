@@ -78,7 +78,7 @@ const haiHandle = kit.createHandle({
     cookieName: 'h5_access_token',
     protectedPaths: ['/api/user/*', '/api/vision/*', '/api/upload'],
     publicPaths: ['/api/auth/*'],
-    operations: iam.auth,
+    operations: () => iam.auth,
   },
   rateLimit: { windowMs: 60000, maxRequests: 200 },
 })
