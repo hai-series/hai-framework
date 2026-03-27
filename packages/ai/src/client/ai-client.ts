@@ -31,7 +31,7 @@ import type { SessionInfo, StorePage } from '../store/ai-store-types.js'
  */
 export interface AIApiAdapter {
   /** GET 请求 */
-  get: <T>(path: string, params?: Record<string, unknown>) => Promise<Result<T, { message: string }>>
+  get: <T>(path: string, params?: Record<string, unknown>) => Promise<HaiResult<T>>
   /** POST 请求（返回 Result） */
   post: <T>(path: string, body?: unknown) => Promise<HaiResult<T>>
   /** 流式请求（返回 SSE data 行的 AsyncIterable） */
