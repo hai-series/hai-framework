@@ -7,13 +7,13 @@
  * 容器启动后会自动创建测试用户。
  */
 
+import type { HaiResult } from '@h-ai/core'
 import type { StartedTestContainer } from 'testcontainers'
 import type { LdapClient, LdapClientFactory, LdapSearchEntry } from '../../src/authn/ldap/iam-authn-ldap-strategy.js'
 import type { LdapConfig } from '../../src/iam-config.js'
-import type { IamError } from '../../src/iam-types.js'
 import { err, ok } from '@h-ai/core'
 import { GenericContainer, Wait } from 'testcontainers'
-import { IamErrorCode } from '../../src/iam-config.js'
+import { HaiIamError } from '../../src/iam-types.js'
 
 let containerPromise: Promise<StartedTestContainer> | null = null
 let refCount = 0
@@ -163,7 +163,7 @@ async function seedTestData(container: StartedTestContainer): Promise<void> {
  * 基于容器内 ldapwhoami/ldapsearch 命令实现，避免引入 ldapjs 依赖。
  */
 function createTestLdapClientFactory(): LdapClientFactory {
-  return async (_config: LdapConfig): Promise<Result<LdapClient, IamError>> => {
+  return async (_config: LdapConfig): Promise<HaiResult<LdapClient>> => {
     const client = createSimpleLdapClient(_config)
     return ok(client)
   }
@@ -177,14 +177,14 @@ function createTestLdapClientFactory(): LdapClientFactory {
  */
 function createSimpleLdapClient(config: LdapConfig): LdapClient {
   return {
-    async bind(dn: string, password: string): Promise<Result<void, IamError>> {
+    async bind(dn: string, password: string): Promise<HaiResult<void>> {
       try {
         const container = await containerPromise
         if (!container) {
-          return err({
-            code: IamErrorCode.LDAP_CONNECTION_FAILED,
-            message: 'LDAP container not available',
-          })
+          return err(
+            HaiIamError.LDAP_CONNECTION_FAILED,
+            'LDAP container not available',
+          )
         }
 
         // 使用容器内 ldapwhoami 验证绑定凭证
@@ -200,30 +200,30 @@ function createSimpleLdapClient(config: LdapConfig): LdapClient {
         ])
 
         if (result.exitCode !== 0) {
-          return err({
-            code: IamErrorCode.LDAP_BIND_FAILED,
-            message: `Bind failed for ${dn}: ${result.output}`,
-          })
+          return err(
+            HaiIamError.LDAP_BIND_FAILED,
+            `Bind failed for ${dn}: ${result.output}`,
+          )
         }
 
         return ok(undefined)
       }
       catch (error) {
-        return err({
-          code: IamErrorCode.LDAP_BIND_FAILED,
-          message: `Bind failed: ${(error as Error).message}`,
-        })
+        return err(
+          HaiIamError.LDAP_BIND_FAILED,
+          `Bind failed: ${(error as Error).message}`,
+        )
       }
     },
 
-    async search(base: string, filter: string, attributes: string[]): Promise<Result<LdapSearchEntry[], IamError>> {
+    async search(base: string, filter: string, attributes: string[]): Promise<HaiResult<LdapSearchEntry[]>> {
       try {
         const container = await containerPromise
         if (!container) {
-          return err({
-            code: IamErrorCode.LDAP_SEARCH_FAILED,
-            message: 'LDAP container not available',
-          })
+          return err(
+            HaiIamError.LDAP_SEARCH_FAILED,
+            'LDAP container not available',
+          )
         }
 
         const args = [
@@ -250,24 +250,24 @@ function createSimpleLdapClient(config: LdapConfig): LdapClient {
         }
 
         if (result.exitCode !== 0) {
-          return err({
-            code: IamErrorCode.LDAP_SEARCH_FAILED,
-            message: `Search failed: ${result.output}`,
-          })
+          return err(
+            HaiIamError.LDAP_SEARCH_FAILED,
+            `Search failed: ${result.output}`,
+          )
         }
 
         const entries = parseLdifOutput(result.output)
         return ok(entries)
       }
       catch (error) {
-        return err({
-          code: IamErrorCode.LDAP_SEARCH_FAILED,
-          message: `Search failed: ${(error as Error).message}`,
-        })
+        return err(
+          HaiIamError.LDAP_SEARCH_FAILED,
+          `Search failed: ${(error as Error).message}`,
+        )
       }
     },
 
-    async unbind(): Promise<Result<void, IamError>> {
+    async unbind(): Promise<HaiResult<void>> {
       return ok(undefined)
     },
   }

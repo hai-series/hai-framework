@@ -5,26 +5,15 @@
  * @module cache-provider-memory
  */
 
-import type { Result } from '@h-ai/core'
-import type { CacheConfig, CacheErrorCodeType } from '../cache-config.js'
-import type {
-  CacheError,
-  CacheProvider,
-  CacheValue,
-  HashOperations,
-  KvOperations,
-  ListOperations,
-  LockOperations,
-  LockOptions,
-  ScanOptions,
-  SetOperations,
-  SetOptions,
-  ZMember,
-  ZSetOperations,
-} from '../cache-types.js'
+import type { HaiResult } from '@h-ai/core'
+import type { CacheConfig, CacheProvider, CacheValue, HashOperations, KvOperations, ListOperations, LockOperations, LockOptions, ScanOptions, SetOperations, SetOptions, ZMember, ZSetOperations } from '../cache-types.js'
 import { err, ok } from '@h-ai/core'
-import { CacheErrorCode } from '../cache-config.js'
 import { cacheM } from '../cache-i18n.js'
+import {
+
+  HaiCacheError,
+
+} from '../cache-types.js'
 
 // ─── 内部类型 ───
 
@@ -37,16 +26,6 @@ interface CacheEntry {
 }
 
 // ─── 辅助函数 ───
-
-/**
- * 创建缓存错误对象
- *
- * @param code - 错误码
- * @param message - 错误消息
- */
-function createError(code: CacheErrorCodeType, message: string): CacheError {
-  return { code, message }
-}
 
 /**
  * 序列化值为 JSON 字符串
@@ -173,12 +152,12 @@ export function createMemoryProvider(): CacheProvider {
   // ─── KV 操作 ───
 
   const kv: KvOperations = {
-    async get<T = CacheValue>(key: string): Promise<Result<T | null, CacheError>> {
+    async get<T = CacheValue>(key: string): Promise<HaiResult<T | null>> {
       const entry = getValidEntry(key)
       return ok(entry ? (entry.value as T) : null)
     },
 
-    async set(key: string, value: CacheValue, options?: SetOptions): Promise<Result<void, CacheError>> {
+    async set(key: string, value: CacheValue, options?: SetOptions): Promise<HaiResult<void>> {
       const existing = getValidEntry(key) !== null
       if (options?.nx && existing)
         return ok(undefined)
@@ -191,7 +170,7 @@ export function createMemoryProvider(): CacheProvider {
       return ok(undefined)
     },
 
-    async del(...keys: string[]): Promise<Result<number, CacheError>> {
+    async del(...keys: string[]): Promise<HaiResult<number>> {
       let count = 0
       for (const key of keys) {
         if (store.delete(key))
@@ -204,7 +183,7 @@ export function createMemoryProvider(): CacheProvider {
       return ok(count)
     },
 
-    async exists(...keys: string[]): Promise<Result<number, CacheError>> {
+    async exists(...keys: string[]): Promise<HaiResult<number>> {
       let count = 0
       for (const key of keys) {
         if (getValidEntry(key))
@@ -213,7 +192,7 @@ export function createMemoryProvider(): CacheProvider {
       return ok(count)
     },
 
-    async expire(key: string, seconds: number): Promise<Result<boolean, CacheError>> {
+    async expire(key: string, seconds: number): Promise<HaiResult<boolean>> {
       const entry = getValidEntry(key)
       if (!entry)
         return ok(false)
@@ -221,7 +200,7 @@ export function createMemoryProvider(): CacheProvider {
       return ok(true)
     },
 
-    async expireAt(key: string, timestamp: number): Promise<Result<boolean, CacheError>> {
+    async expireAt(key: string, timestamp: number): Promise<HaiResult<boolean>> {
       const entry = getValidEntry(key)
       if (!entry)
         return ok(false)
@@ -229,7 +208,7 @@ export function createMemoryProvider(): CacheProvider {
       return ok(true)
     },
 
-    async ttl(key: string): Promise<Result<number, CacheError>> {
+    async ttl(key: string): Promise<HaiResult<number>> {
       const entry = store.get(key)
       if (!entry)
         return ok(-2)
@@ -242,7 +221,7 @@ export function createMemoryProvider(): CacheProvider {
       return ok(Math.ceil((entry.expiresAt - Date.now()) / 1000))
     },
 
-    async persist(key: string): Promise<Result<boolean, CacheError>> {
+    async persist(key: string): Promise<HaiResult<boolean>> {
       const entry = getValidEntry(key)
       if (!entry)
         return ok(false)
@@ -250,37 +229,37 @@ export function createMemoryProvider(): CacheProvider {
       return ok(true)
     },
 
-    async incr(key: string): Promise<Result<number, CacheError>> {
+    async incr(key: string): Promise<HaiResult<number>> {
       const entry = getValidEntry(key)
       const current = entry ? Number(entry.value) : 0
       if (Number.isNaN(current)) {
-        return err(createError(CacheErrorCode.OPERATION_FAILED, cacheM('cache_valueNotNumber')))
+        return err(HaiCacheError.OPERATION_FAILED, cacheM('cache_valueNotNumber'))
       }
       const newValue = current + 1
       store.set(key, { value: newValue, expiresAt: entry?.expiresAt })
       return ok(newValue)
     },
 
-    async incrBy(key: string, increment: number): Promise<Result<number, CacheError>> {
+    async incrBy(key: string, increment: number): Promise<HaiResult<number>> {
       const entry = getValidEntry(key)
       const current = entry ? Number(entry.value) : 0
       if (Number.isNaN(current)) {
-        return err(createError(CacheErrorCode.OPERATION_FAILED, cacheM('cache_valueNotNumber')))
+        return err(HaiCacheError.OPERATION_FAILED, cacheM('cache_valueNotNumber'))
       }
       const newValue = current + increment
       store.set(key, { value: newValue, expiresAt: entry?.expiresAt })
       return ok(newValue)
     },
 
-    async decr(key: string): Promise<Result<number, CacheError>> {
+    async decr(key: string): Promise<HaiResult<number>> {
       return kv.incrBy(key, -1)
     },
 
-    async decrBy(key: string, decrement: number): Promise<Result<number, CacheError>> {
+    async decrBy(key: string, decrement: number): Promise<HaiResult<number>> {
       return kv.incrBy(key, -decrement)
     },
 
-    async mget<T = CacheValue>(...keys: string[]): Promise<Result<(T | null)[], CacheError>> {
+    async mget<T = CacheValue>(...keys: string[]): Promise<HaiResult<(T | null)[]>> {
       const results: (T | null)[] = []
       for (const key of keys) {
         const entry = getValidEntry(key)
@@ -289,14 +268,14 @@ export function createMemoryProvider(): CacheProvider {
       return ok(results)
     },
 
-    async mset(entries: Array<[string, CacheValue]>): Promise<Result<void, CacheError>> {
+    async mset(entries: Array<[string, CacheValue]>): Promise<HaiResult<void>> {
       for (const [key, value] of entries) {
         store.set(key, { value })
       }
       return ok(undefined)
     },
 
-    async scan(cursor: number, options?: ScanOptions): Promise<Result<[number, string[]], CacheError>> {
+    async scan(cursor: number, options?: ScanOptions): Promise<HaiResult<[number, string[]]>> {
       const allKeys = Array.from(store.keys()).filter((key) => {
         const entry = store.get(key)
         return entry && !isExpired(entry)
@@ -311,7 +290,7 @@ export function createMemoryProvider(): CacheProvider {
       return ok([nextCursor, keys])
     },
 
-    async keys(pattern: string): Promise<Result<string[], CacheError>> {
+    async keys(pattern: string): Promise<HaiResult<string[]>> {
       const regex = globToRegex(pattern)
       const result: string[] = []
       for (const [key] of store.entries()) {
@@ -322,7 +301,7 @@ export function createMemoryProvider(): CacheProvider {
       return ok(result)
     },
 
-    async type(key: string): Promise<Result<string, CacheError>> {
+    async type(key: string): Promise<HaiResult<string>> {
       if (getValidEntry(key))
         return ok('string')
       if (hashStore.has(key))
@@ -340,7 +319,7 @@ export function createMemoryProvider(): CacheProvider {
   // ─── Hash 操作 ───
 
   const hash: HashOperations = {
-    async hget<T = CacheValue>(key: string, field: string): Promise<Result<T | null, CacheError>> {
+    async hget<T = CacheValue>(key: string, field: string): Promise<HaiResult<T | null>> {
       const map = hashStore.get(key)
       if (!map)
         return ok(null)
@@ -348,7 +327,7 @@ export function createMemoryProvider(): CacheProvider {
       return ok(val !== undefined ? (deserializeValue(val) as T) : null)
     },
 
-    hset: (async (key: string, fieldOrData: string | Record<string, CacheValue>, value?: CacheValue): Promise<Result<number, CacheError>> => {
+    hset: (async (key: string, fieldOrData: string | Record<string, CacheValue>, value?: CacheValue): Promise<HaiResult<number>> => {
       let map = hashStore.get(key)
       if (!map) {
         map = new Map()
@@ -368,7 +347,7 @@ export function createMemoryProvider(): CacheProvider {
       return ok(count)
     }) as HashOperations['hset'],
 
-    async hdel(key: string, ...fields: string[]): Promise<Result<number, CacheError>> {
+    async hdel(key: string, ...fields: string[]): Promise<HaiResult<number>> {
       const map = hashStore.get(key)
       if (!map)
         return ok(0)
@@ -380,12 +359,12 @@ export function createMemoryProvider(): CacheProvider {
       return ok(count)
     },
 
-    async hexists(key: string, field: string): Promise<Result<boolean, CacheError>> {
+    async hexists(key: string, field: string): Promise<HaiResult<boolean>> {
       const map = hashStore.get(key)
       return ok(map?.has(field) ?? false)
     },
 
-    async hgetall<T = Record<string, CacheValue>>(key: string): Promise<Result<T, CacheError>> {
+    async hgetall<T = Record<string, CacheValue>>(key: string): Promise<HaiResult<T>> {
       const map = hashStore.get(key)
       if (!map)
         return ok({} as T)
@@ -396,24 +375,24 @@ export function createMemoryProvider(): CacheProvider {
       return ok(result as T)
     },
 
-    async hkeys(key: string): Promise<Result<string[], CacheError>> {
+    async hkeys(key: string): Promise<HaiResult<string[]>> {
       const map = hashStore.get(key)
       return ok(map ? Array.from(map.keys()) : [])
     },
 
-    async hvals<T = CacheValue>(key: string): Promise<Result<T[], CacheError>> {
+    async hvals<T = CacheValue>(key: string): Promise<HaiResult<T[]>> {
       const map = hashStore.get(key)
       if (!map)
         return ok([])
       return ok(Array.from(map.values()).map(v => deserializeValue(v) as T))
     },
 
-    async hlen(key: string): Promise<Result<number, CacheError>> {
+    async hlen(key: string): Promise<HaiResult<number>> {
       const map = hashStore.get(key)
       return ok(map?.size ?? 0)
     },
 
-    async hmget<T = CacheValue>(key: string, ...fields: string[]): Promise<Result<(T | null)[], CacheError>> {
+    async hmget<T = CacheValue>(key: string, ...fields: string[]): Promise<HaiResult<(T | null)[]>> {
       const map = hashStore.get(key)
       const results: (T | null)[] = fields.map((field) => {
         const val = map?.get(field)
@@ -422,7 +401,7 @@ export function createMemoryProvider(): CacheProvider {
       return ok(results)
     },
 
-    async hincrBy(key: string, field: string, increment: number): Promise<Result<number, CacheError>> {
+    async hincrBy(key: string, field: string, increment: number): Promise<HaiResult<number>> {
       let map = hashStore.get(key)
       if (!map) {
         map = new Map()
@@ -438,7 +417,7 @@ export function createMemoryProvider(): CacheProvider {
   // ─── List 操作 ───
 
   const list: ListOperations = {
-    async lpush(key: string, ...values: CacheValue[]): Promise<Result<number, CacheError>> {
+    async lpush(key: string, ...values: CacheValue[]): Promise<HaiResult<number>> {
       let arr = listStore.get(key)
       if (!arr) {
         arr = []
@@ -448,7 +427,7 @@ export function createMemoryProvider(): CacheProvider {
       return ok(arr.length)
     },
 
-    async rpush(key: string, ...values: CacheValue[]): Promise<Result<number, CacheError>> {
+    async rpush(key: string, ...values: CacheValue[]): Promise<HaiResult<number>> {
       let arr = listStore.get(key)
       if (!arr) {
         arr = []
@@ -458,7 +437,7 @@ export function createMemoryProvider(): CacheProvider {
       return ok(arr.length)
     },
 
-    async lpop<T = CacheValue>(key: string): Promise<Result<T | null, CacheError>> {
+    async lpop<T = CacheValue>(key: string): Promise<HaiResult<T | null>> {
       const arr = listStore.get(key)
       if (!arr || arr.length === 0)
         return ok(null)
@@ -466,7 +445,7 @@ export function createMemoryProvider(): CacheProvider {
       return ok(deserializeValue(val) as T)
     },
 
-    async rpop<T = CacheValue>(key: string): Promise<Result<T | null, CacheError>> {
+    async rpop<T = CacheValue>(key: string): Promise<HaiResult<T | null>> {
       const arr = listStore.get(key)
       if (!arr || arr.length === 0)
         return ok(null)
@@ -474,12 +453,12 @@ export function createMemoryProvider(): CacheProvider {
       return ok(deserializeValue(val) as T)
     },
 
-    async llen(key: string): Promise<Result<number, CacheError>> {
+    async llen(key: string): Promise<HaiResult<number>> {
       const arr = listStore.get(key)
       return ok(arr?.length ?? 0)
     },
 
-    async lrange<T = CacheValue>(key: string, start: number, stop: number): Promise<Result<T[], CacheError>> {
+    async lrange<T = CacheValue>(key: string, start: number, stop: number): Promise<HaiResult<T[]>> {
       const arr = listStore.get(key)
       if (!arr)
         return ok([])
@@ -489,7 +468,7 @@ export function createMemoryProvider(): CacheProvider {
       return ok(arr.slice(s, e).map(v => deserializeValue(v) as T))
     },
 
-    async lindex<T = CacheValue>(key: string, index: number): Promise<Result<T | null, CacheError>> {
+    async lindex<T = CacheValue>(key: string, index: number): Promise<HaiResult<T | null>> {
       const arr = listStore.get(key)
       if (!arr)
         return ok(null)
@@ -498,20 +477,20 @@ export function createMemoryProvider(): CacheProvider {
       return ok(val !== undefined ? (deserializeValue(val) as T) : null)
     },
 
-    async lset(key: string, index: number, value: CacheValue): Promise<Result<void, CacheError>> {
+    async lset(key: string, index: number, value: CacheValue): Promise<HaiResult<void>> {
       const arr = listStore.get(key)
       if (!arr) {
-        return err(createError(CacheErrorCode.KEY_NOT_FOUND, cacheM('cache_keyNotFound')))
+        return err(HaiCacheError.KEY_NOT_FOUND, cacheM('cache_keyNotFound'))
       }
       const i = index < 0 ? arr.length + index : index
       if (i < 0 || i >= arr.length) {
-        return err(createError(CacheErrorCode.OPERATION_FAILED, cacheM('cache_indexOutOfRange')))
+        return err(HaiCacheError.OPERATION_FAILED, cacheM('cache_indexOutOfRange'))
       }
       arr[i] = serializeValue(value)
       return ok(undefined)
     },
 
-    async ltrim(key: string, start: number, stop: number): Promise<Result<void, CacheError>> {
+    async ltrim(key: string, start: number, stop: number): Promise<HaiResult<void>> {
       const arr = listStore.get(key)
       if (!arr)
         return ok(undefined)
@@ -525,7 +504,7 @@ export function createMemoryProvider(): CacheProvider {
     /**
      * Memory 版本的 blpop 为“非阻塞模拟”：忽略 timeout，立即按 keys 顺序尝试弹出。
      */
-    async blpop<T = CacheValue>(_timeout: number, ...keys: string[]): Promise<Result<[string, T] | null, CacheError>> {
+    async blpop<T = CacheValue>(_timeout: number, ...keys: string[]): Promise<HaiResult<[string, T] | null>> {
       for (const key of keys) {
         const arr = listStore.get(key)
         if (arr && arr.length > 0) {
@@ -539,7 +518,7 @@ export function createMemoryProvider(): CacheProvider {
     /**
      * Memory 版本的 brpop 为“非阻塞模拟”：忽略 timeout，立即按 keys 顺序尝试弹出。
      */
-    async brpop<T = CacheValue>(_timeout: number, ...keys: string[]): Promise<Result<[string, T] | null, CacheError>> {
+    async brpop<T = CacheValue>(_timeout: number, ...keys: string[]): Promise<HaiResult<[string, T] | null>> {
       for (const key of keys) {
         const arr = listStore.get(key)
         if (arr && arr.length > 0) {
@@ -554,7 +533,7 @@ export function createMemoryProvider(): CacheProvider {
   // ─── Set 操作 ───
 
   const set_: SetOperations = {
-    async sadd(key: string, ...members: CacheValue[]): Promise<Result<number, CacheError>> {
+    async sadd(key: string, ...members: CacheValue[]): Promise<HaiResult<number>> {
       let s = setStore.get(key)
       if (!s) {
         s = new Set()
@@ -571,7 +550,7 @@ export function createMemoryProvider(): CacheProvider {
       return ok(count)
     },
 
-    async srem(key: string, ...members: CacheValue[]): Promise<Result<number, CacheError>> {
+    async srem(key: string, ...members: CacheValue[]): Promise<HaiResult<number>> {
       const s = setStore.get(key)
       if (!s)
         return ok(0)
@@ -583,24 +562,24 @@ export function createMemoryProvider(): CacheProvider {
       return ok(count)
     },
 
-    async smembers<T = CacheValue>(key: string): Promise<Result<T[], CacheError>> {
+    async smembers<T = CacheValue>(key: string): Promise<HaiResult<T[]>> {
       const s = setStore.get(key)
       if (!s)
         return ok([])
       return ok(Array.from(s).map(v => deserializeValue(v) as T))
     },
 
-    async sismember(key: string, member: CacheValue): Promise<Result<boolean, CacheError>> {
+    async sismember(key: string, member: CacheValue): Promise<HaiResult<boolean>> {
       const s = setStore.get(key)
       return ok(s?.has(serializeValue(member)) ?? false)
     },
 
-    async scard(key: string): Promise<Result<number, CacheError>> {
+    async scard(key: string): Promise<HaiResult<number>> {
       const s = setStore.get(key)
       return ok(s?.size ?? 0)
     },
 
-    async srandmember<T = CacheValue>(key: string, count?: number): Promise<Result<T | T[] | null, CacheError>> {
+    async srandmember<T = CacheValue>(key: string, count?: number): Promise<HaiResult<T | T[] | null>> {
       const s = setStore.get(key)
       if (!s || s.size === 0)
         return ok(null)
@@ -617,7 +596,7 @@ export function createMemoryProvider(): CacheProvider {
       return ok(result)
     },
 
-    async spop<T = CacheValue>(key: string, count?: number): Promise<Result<T | T[] | null, CacheError>> {
+    async spop<T = CacheValue>(key: string, count?: number): Promise<HaiResult<T | T[] | null>> {
       const s = setStore.get(key)
       if (!s || s.size === 0)
         return ok(null)
@@ -638,7 +617,7 @@ export function createMemoryProvider(): CacheProvider {
       return ok(result)
     },
 
-    async sinter<T = CacheValue>(...keys: string[]): Promise<Result<T[], CacheError>> {
+    async sinter<T = CacheValue>(...keys: string[]): Promise<HaiResult<T[]>> {
       if (keys.length === 0)
         return ok([])
       const sets = keys.map(k => setStore.get(k))
@@ -649,7 +628,7 @@ export function createMemoryProvider(): CacheProvider {
       return ok(result.map(v => deserializeValue(v) as T))
     },
 
-    async sunion<T = CacheValue>(...keys: string[]): Promise<Result<T[], CacheError>> {
+    async sunion<T = CacheValue>(...keys: string[]): Promise<HaiResult<T[]>> {
       const union = new Set<string>()
       for (const key of keys) {
         const s = setStore.get(key)
@@ -660,7 +639,7 @@ export function createMemoryProvider(): CacheProvider {
       return ok(Array.from(union).map(v => deserializeValue(v) as T))
     },
 
-    async sdiff<T = CacheValue>(...keys: string[]): Promise<Result<T[], CacheError>> {
+    async sdiff<T = CacheValue>(...keys: string[]): Promise<HaiResult<T[]>> {
       if (keys.length === 0)
         return ok([])
       const first = setStore.get(keys[0])
@@ -675,7 +654,7 @@ export function createMemoryProvider(): CacheProvider {
   // ─── ZSet 操作 ───
 
   const zset: ZSetOperations = {
-    async zadd(key: string, ...members: ZMember[]): Promise<Result<number, CacheError>> {
+    async zadd(key: string, ...members: ZMember[]): Promise<HaiResult<number>> {
       let map = zsetStore.get(key)
       if (!map) {
         map = new Map()
@@ -690,7 +669,7 @@ export function createMemoryProvider(): CacheProvider {
       return ok(count)
     },
 
-    async zrem(key: string, ...members: string[]): Promise<Result<number, CacheError>> {
+    async zrem(key: string, ...members: string[]): Promise<HaiResult<number>> {
       const map = zsetStore.get(key)
       if (!map)
         return ok(0)
@@ -702,13 +681,13 @@ export function createMemoryProvider(): CacheProvider {
       return ok(count)
     },
 
-    async zscore(key: string, member: string): Promise<Result<number | null, CacheError>> {
+    async zscore(key: string, member: string): Promise<HaiResult<number | null>> {
       const map = zsetStore.get(key)
       const score = map?.get(member)
       return ok(score !== undefined ? score : null)
     },
 
-    async zrank(key: string, member: string): Promise<Result<number | null, CacheError>> {
+    async zrank(key: string, member: string): Promise<HaiResult<number | null>> {
       const map = zsetStore.get(key)
       if (!map || !map.has(member))
         return ok(null)
@@ -717,7 +696,7 @@ export function createMemoryProvider(): CacheProvider {
       return ok(idx >= 0 ? idx : null)
     },
 
-    async zrevrank(key: string, member: string): Promise<Result<number | null, CacheError>> {
+    async zrevrank(key: string, member: string): Promise<HaiResult<number | null>> {
       const map = zsetStore.get(key)
       if (!map || !map.has(member))
         return ok(null)
@@ -726,7 +705,7 @@ export function createMemoryProvider(): CacheProvider {
       return ok(idx >= 0 ? idx : null)
     },
 
-    async zrange(key: string, start: number, stop: number, withScores?: boolean): Promise<Result<string[] | ZMember[], CacheError>> {
+    async zrange(key: string, start: number, stop: number, withScores?: boolean): Promise<HaiResult<string[] | ZMember[]>> {
       const map = zsetStore.get(key)
       if (!map)
         return ok([])
@@ -741,7 +720,7 @@ export function createMemoryProvider(): CacheProvider {
       return ok(slice.map(([member]) => member))
     },
 
-    async zrevrange(key: string, start: number, stop: number, withScores?: boolean): Promise<Result<string[] | ZMember[], CacheError>> {
+    async zrevrange(key: string, start: number, stop: number, withScores?: boolean): Promise<HaiResult<string[] | ZMember[]>> {
       const map = zsetStore.get(key)
       if (!map)
         return ok([])
@@ -761,7 +740,7 @@ export function createMemoryProvider(): CacheProvider {
       min: number | string,
       max: number | string,
       options?: { withScores?: boolean, offset?: number, count?: number },
-    ): Promise<Result<string[] | ZMember[], CacheError>> {
+    ): Promise<HaiResult<string[] | ZMember[]>> {
       const map = zsetStore.get(key)
       if (!map)
         return ok([])
@@ -781,12 +760,12 @@ export function createMemoryProvider(): CacheProvider {
       return ok(sorted.map(([member]) => member))
     },
 
-    async zcard(key: string): Promise<Result<number, CacheError>> {
+    async zcard(key: string): Promise<HaiResult<number>> {
       const map = zsetStore.get(key)
       return ok(map?.size ?? 0)
     },
 
-    async zcount(key: string, min: number | string, max: number | string): Promise<Result<number, CacheError>> {
+    async zcount(key: string, min: number | string, max: number | string): Promise<HaiResult<number>> {
       const map = zsetStore.get(key)
       if (!map)
         return ok(0)
@@ -800,7 +779,7 @@ export function createMemoryProvider(): CacheProvider {
       return ok(count)
     },
 
-    async zincrBy(key: string, increment: number, member: string): Promise<Result<number, CacheError>> {
+    async zincrBy(key: string, increment: number, member: string): Promise<HaiResult<number>> {
       let map = zsetStore.get(key)
       if (!map) {
         map = new Map()
@@ -812,7 +791,7 @@ export function createMemoryProvider(): CacheProvider {
       return ok(newScore)
     },
 
-    async zremRangeByRank(key: string, start: number, stop: number): Promise<Result<number, CacheError>> {
+    async zremRangeByRank(key: string, start: number, stop: number): Promise<HaiResult<number>> {
       const map = zsetStore.get(key)
       if (!map)
         return ok(0)
@@ -827,7 +806,7 @@ export function createMemoryProvider(): CacheProvider {
       return ok(toRemove.length)
     },
 
-    async zremRangeByScore(key: string, min: number | string, max: number | string): Promise<Result<number, CacheError>> {
+    async zremRangeByScore(key: string, min: number | string, max: number | string): Promise<HaiResult<number>> {
       const map = zsetStore.get(key)
       if (!map)
         return ok(0)
@@ -850,7 +829,7 @@ export function createMemoryProvider(): CacheProvider {
   const LOCK_PREFIX = '__lock:'
 
   const lock: LockOperations = {
-    async acquire(key: string, options?: LockOptions): Promise<Result<boolean, CacheError>> {
+    async acquire(key: string, options?: LockOptions): Promise<HaiResult<boolean>> {
       const lockKey = `${LOCK_PREFIX}${key}`
       const ttl = options?.ttl ?? 30
       const owner = options?.owner ?? 'default'
@@ -866,7 +845,7 @@ export function createMemoryProvider(): CacheProvider {
       return ok(true)
     },
 
-    async release(key: string, owner?: string): Promise<Result<boolean, CacheError>> {
+    async release(key: string, owner?: string): Promise<HaiResult<boolean>> {
       const lockKey = `${LOCK_PREFIX}${key}`
       const entry = getValidEntry(lockKey)
       if (!entry) {
@@ -879,13 +858,13 @@ export function createMemoryProvider(): CacheProvider {
       return ok(true)
     },
 
-    async isLocked(key: string): Promise<Result<boolean, CacheError>> {
+    async isLocked(key: string): Promise<HaiResult<boolean>> {
       const lockKey = `${LOCK_PREFIX}${key}`
       const entry = getValidEntry(lockKey)
       return ok(entry !== null)
     },
 
-    async extend(key: string, ttl: number, owner?: string): Promise<Result<boolean, CacheError>> {
+    async extend(key: string, ttl: number, owner?: string): Promise<HaiResult<boolean>> {
       const lockKey = `${LOCK_PREFIX}${key}`
       const entry = getValidEntry(lockKey)
       if (!entry) {
@@ -904,7 +883,7 @@ export function createMemoryProvider(): CacheProvider {
   return {
     name: 'memory',
 
-    async connect(_config: CacheConfig): Promise<Result<void, CacheError>> {
+    async connect(_config: CacheConfig): Promise<HaiResult<void>> {
       if (connected)
         return ok(undefined)
       cleanupTimer = setInterval(cleanup, 60000)
@@ -934,7 +913,7 @@ export function createMemoryProvider(): CacheProvider {
     zset,
     lock,
 
-    async ping(): Promise<Result<string, CacheError>> {
+    async ping(): Promise<HaiResult<string>> {
       return ok('PONG')
     },
   }

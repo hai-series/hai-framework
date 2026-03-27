@@ -5,14 +5,12 @@
  * @module scheduler-cron
  */
 
-import type { Result } from '@h-ai/core'
-import type { SchedulerError } from './scheduler-types.js'
-
+import type { HaiResult } from '@h-ai/core'
 import { err, ok } from '@h-ai/core'
 import { Cron } from 'croner'
 
-import { SchedulerErrorCode } from './scheduler-config.js'
 import { schedulerM } from './scheduler-i18n.js'
+import { HaiSchedulerError } from './scheduler-types.js'
 
 // ─── 公共 API ───
 
@@ -34,16 +32,16 @@ import { schedulerM } from './scheduler-i18n.js'
  * parseCronExpression('0 9-17 * * 1-5')
  * ```
  */
-export function parseCronExpression(expression: string): Result<Cron, SchedulerError> {
+export function parseCronExpression(expression: string): HaiResult<Cron> {
   try {
     const cron = new Cron(expression, { legacyMode: false })
     return ok(cron)
   }
   catch {
-    return err({
-      code: SchedulerErrorCode.INVALID_CRON,
-      message: schedulerM('scheduler_invalidCron', { params: { expression } }),
-    })
+    return err(
+      HaiSchedulerError.INVALID_CRON,
+      schedulerM('scheduler_invalidCron', { params: { expression } }),
+    )
   }
 }
 

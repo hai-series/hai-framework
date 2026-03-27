@@ -5,23 +5,17 @@
  * @module alipay-provider
  */
 
-import type { Result } from '@h-ai/core'
+import type { HaiResult } from '@h-ai/core'
 import type { AlipayConfig } from '../../payment-config.js'
-import type {
-  CreateOrderInput,
-  OrderStatus,
-  PaymentError,
-  PaymentNotifyRequest,
-  PaymentNotifyResult,
-  PaymentOrder,
-  PaymentProvider,
-  RefundInput,
-  RefundResult,
-} from '../../payment-types.js'
+import type { CreateOrderInput, OrderStatus, PaymentNotifyRequest, PaymentNotifyResult, PaymentOrder, PaymentProvider, RefundInput, RefundResult } from '../../payment-types.js'
 import type { AlipayNotifyParams } from './alipay-types.js'
 import { err, ok } from '@h-ai/core'
-import { PaymentErrorCode } from '../../payment-config.js'
 import { paymentM } from '../../payment-i18n.js'
+import {
+
+  HaiPaymentError,
+
+} from '../../payment-types.js'
 import { signAlipayParams, verifyAlipayNotify } from './alipay-sign.js'
 
 /** 支付宝网关地址 */
@@ -86,7 +80,7 @@ export function createAlipayProvider(config: AlipayConfig): PaymentProvider {
   return {
     name: 'alipay',
 
-    async createOrder(input: CreateOrderInput): Promise<Result<PaymentOrder, PaymentError>> {
+    async createOrder(input: CreateOrderInput): Promise<HaiResult<PaymentOrder>> {
       try {
         const { method, productCode } = getTradeConfig(input.tradeType)
 
@@ -115,15 +109,15 @@ export function createAlipayProvider(config: AlipayConfig): PaymentProvider {
         })
       }
       catch (cause) {
-        return err({
-          code: PaymentErrorCode.CREATE_ORDER_FAILED,
-          message: paymentM('payment_createOrderFailed'),
+        return err(
+          HaiPaymentError.CREATE_ORDER_FAILED,
+          paymentM('payment_createOrderFailed'),
           cause,
-        })
+        )
       }
     },
 
-    async handleNotify(request: PaymentNotifyRequest): Promise<Result<PaymentNotifyResult, PaymentError>> {
+    async handleNotify(request: PaymentNotifyRequest): Promise<HaiResult<PaymentNotifyResult>> {
       try {
         // 解析 form-urlencoded body
         const params: AlipayNotifyParams = {} as AlipayNotifyParams
@@ -136,10 +130,10 @@ export function createAlipayProvider(config: AlipayConfig): PaymentProvider {
         // 验签
         const valid = verifyAlipayNotify(params as Record<string, string>, config.alipayPublicKey)
         if (!valid) {
-          return err({
-            code: PaymentErrorCode.NOTIFY_VERIFY_FAILED,
-            message: paymentM('payment_notifyVerifyFailed'),
-          })
+          return err(
+            HaiPaymentError.NOTIFY_VERIFY_FAILED,
+            paymentM('payment_notifyVerifyFailed'),
+          )
         }
 
         const statusMap: Record<string, PaymentNotifyResult['status']> = {
@@ -159,15 +153,15 @@ export function createAlipayProvider(config: AlipayConfig): PaymentProvider {
         })
       }
       catch (cause) {
-        return err({
-          code: PaymentErrorCode.NOTIFY_PARSE_FAILED,
-          message: paymentM('payment_notifyParseFailed'),
+        return err(
+          HaiPaymentError.NOTIFY_PARSE_FAILED,
+          paymentM('payment_notifyParseFailed'),
           cause,
-        })
+        )
       }
     },
 
-    async queryOrder(orderNo: string): Promise<Result<OrderStatus, PaymentError>> {
+    async queryOrder(orderNo: string): Promise<HaiResult<OrderStatus>> {
       try {
         const method = 'alipay.trade.query'
         const params = {
@@ -194,15 +188,15 @@ export function createAlipayProvider(config: AlipayConfig): PaymentProvider {
         })
       }
       catch (cause) {
-        return err({
-          code: PaymentErrorCode.QUERY_ORDER_FAILED,
-          message: paymentM('payment_queryOrderFailed'),
+        return err(
+          HaiPaymentError.QUERY_ORDER_FAILED,
+          paymentM('payment_queryOrderFailed'),
           cause,
-        })
+        )
       }
     },
 
-    async refund(input: RefundInput): Promise<Result<RefundResult, PaymentError>> {
+    async refund(input: RefundInput): Promise<HaiResult<RefundResult>> {
       try {
         const method = 'alipay.trade.refund'
         const params = {
@@ -225,15 +219,15 @@ export function createAlipayProvider(config: AlipayConfig): PaymentProvider {
         })
       }
       catch (cause) {
-        return err({
-          code: PaymentErrorCode.REFUND_FAILED,
-          message: paymentM('payment_refundFailed'),
+        return err(
+          HaiPaymentError.REFUND_FAILED,
+          paymentM('payment_refundFailed'),
           cause,
-        })
+        )
       }
     },
 
-    async closeOrder(orderNo: string): Promise<Result<void, PaymentError>> {
+    async closeOrder(orderNo: string): Promise<HaiResult<void>> {
       try {
         const method = 'alipay.trade.close'
         const params = {
@@ -245,11 +239,11 @@ export function createAlipayProvider(config: AlipayConfig): PaymentProvider {
         return ok(undefined)
       }
       catch (cause) {
-        return err({
-          code: PaymentErrorCode.CLOSE_ORDER_FAILED,
-          message: paymentM('payment_closeOrderFailed'),
+        return err(
+          HaiPaymentError.CLOSE_ORDER_FAILED,
+          paymentM('payment_closeOrderFailed'),
           cause,
-        })
+        )
       }
     },
   }

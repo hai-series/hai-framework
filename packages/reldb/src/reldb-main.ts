@@ -5,13 +5,12 @@
  * @module reldb-main
  */
 
-import type { Result } from '@h-ai/core'
+import type { HaiResult } from '@h-ai/core'
 import type { ReldbConfig, ReldbConfigInput } from './reldb-config.js'
 import type {
   CrudManager,
   DdlOperations,
   DmlOperations,
-  ReldbError,
   ReldbFunctions,
   ReldbJsonOps,
   ReldbProvider,
@@ -25,10 +24,11 @@ import { createMysqlProvider } from './providers/reldb-provider-mysql.js'
 import { createPostgresProvider } from './providers/reldb-provider-postgres.js'
 import { createSqliteProvider } from './providers/reldb-provider-sqlite.js'
 
-import { ReldbConfigSchema, ReldbErrorCode } from './reldb-config.js'
+import { ReldbConfigSchema } from './reldb-config.js'
 import { reldbM } from './reldb-i18n.js'
 import { createJsonOps } from './reldb-json.js'
 import { pagination } from './reldb-pagination.js'
+import { HaiReldbError } from './reldb-types.js'
 
 const logger = core.logger.child({ module: 'reldb', scope: 'main' })
 
@@ -68,8 +68,8 @@ function createProvider(config: ReldbConfig): ReldbProvider {
 // ─── 未初始化时的占位操作 ───
 
 /** 未初始化工具集 */
-const notInitialized = core.module.createNotInitializedKit<ReldbError>(
-  ReldbErrorCode.NOT_INITIALIZED,
+const notInitialized = core.module.createNotInitializedKit(
+  HaiReldbError.NOT_INITIALIZED,
   () => reldbM('reldb_notInitialized'),
 )
 
@@ -141,32 +141,25 @@ export const reldb: ReldbFunctions = {
    * @param config - 数据库配置（允许部分字段，内部会补齐默认值）
    * @returns 初始化结果，失败时包含错误信息
    */
-  async init(config: ReldbConfigInput): Promise<Result<void, ReldbError>> {
+  async init(config: ReldbConfigInput): Promise<HaiResult<void>> {
     if (initInProgress) {
-      logger.warn('DB module init is already in progress, skipping concurrent call')
-      return err({
-        code: ReldbErrorCode.CONFIG_ERROR,
-        message: reldbM('reldb_configError', { params: { error: 'init already in progress' } }),
-      })
+      logger.warn('RelDB module init is already in progress, skipping concurrent call')
+      return err(HaiReldbError.CONFIG_ERROR, reldbM('reldb_configError', { params: { error: 'init already in progress' } }))
     }
 
     initInProgress = true
     try {
       if (currentProvider) {
-        logger.warn('DB module is already initialized, reinitializing')
+        logger.warn('RelDB module is already initialized, reinitializing')
         await reldb.close()
       }
 
-      logger.info('Initializing DB module')
+      logger.info('Initializing RelDB module')
 
       const parseResult = ReldbConfigSchema.safeParse(config)
       if (!parseResult.success) {
-        logger.error('DB config validation failed', { error: parseResult.error.message })
-        return err({
-          code: ReldbErrorCode.CONFIG_ERROR,
-          message: reldbM('reldb_configError', { params: { error: parseResult.error.message } }),
-          cause: parseResult.error,
-        })
+        logger.error('RelDB config validation failed', { error: parseResult.error.message })
+        return err(HaiReldbError.CONFIG_ERROR, reldbM('reldb_configError', { params: { error: parseResult.error.message } }), parseResult.error)
       }
       const parsed = parseResult.data
 
@@ -174,7 +167,7 @@ export const reldb: ReldbFunctions = {
         const provider = createProvider(parsed)
         const connectResult = await provider.connect(parsed)
         if (!connectResult.success) {
-          logger.error('DB module initialization failed', {
+          logger.error('RelDB module initialization failed', {
             code: connectResult.error.code,
             message: connectResult.error.message,
           })
@@ -183,16 +176,12 @@ export const reldb: ReldbFunctions = {
         currentProvider = provider
         currentConfig = parsed
         currentJsonOps = createJsonOps(parsed.type)
-        logger.info('DB module initialized', { type: parsed.type })
+        logger.info('RelDB module initialized', { type: parsed.type })
         return ok(undefined)
       }
       catch (error) {
-        logger.error('DB module initialization failed', { error })
-        return err({
-          code: ReldbErrorCode.CONNECTION_FAILED,
-          message: reldbM('reldb_initFailed', { params: { error: error instanceof Error ? error.message : String(error) } }),
-          cause: error,
-        })
+        logger.error('RelDB module initialization failed', { error })
+        return err(HaiReldbError.CONNECTION_FAILED, reldbM('reldb_initFailed', { params: { error: error instanceof Error ? error.message : String(error) } }), error)
       }
     }
     finally {
@@ -287,32 +276,28 @@ export const reldb: ReldbFunctions = {
    *
    * 多次调用安全，未初始化时直接返回。
    */
-  async close(): Promise<Result<void, ReldbError>> {
+  async close(): Promise<HaiResult<void>> {
     if (!currentProvider) {
       currentConfig = null
       currentJsonOps = null
-      logger.info('DB module already closed, skipping')
+      logger.info('RelDB module already closed, skipping')
       return ok(undefined)
     }
 
-    logger.info('Closing DB module')
+    logger.info('Closing RelDB module')
 
     try {
       const closeResult = await currentProvider.close()
       if (!closeResult.success) {
-        logger.error('DB module close failed', { code: closeResult.error.code, message: closeResult.error.message })
+        logger.error('RelDB module close failed', { code: closeResult.error.code, message: closeResult.error.message })
         return closeResult
       }
-      logger.info('DB module closed')
+      logger.info('RelDB module closed')
       return ok(undefined)
     }
     catch (error) {
-      logger.error('DB module close failed', { error })
-      return err({
-        code: ReldbErrorCode.CONNECTION_FAILED,
-        message: reldbM('reldb_closeFailed', { params: { error: error instanceof Error ? error.message : String(error) } }),
-        cause: error,
-      })
+      logger.error('RelDB module close failed', { error })
+      return err(HaiReldbError.CONNECTION_FAILED, reldbM('reldb_closeFailed', { params: { error: error instanceof Error ? error.message : String(error) } }), error)
     }
     finally {
       currentProvider = null

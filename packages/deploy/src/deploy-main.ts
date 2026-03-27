@@ -5,24 +5,19 @@
  * @module deploy-main
  */
 
-import type { Result } from '@h-ai/core'
+import type { HaiResult } from '@h-ai/core'
 import type { DeployConfig, DeployConfigInput } from './deploy-config.js'
-import type {
-  DeployAppOptions,
-  DeployError,
-  DeployFunctions,
-  DeployProvider,
-  DeployResult,
-  ProvisionResult,
-  ScanResult,
-  ServiceProvisioner,
-  ServiceType,
-} from './deploy-types.js'
+import type { DeployAppOptions, DeployFunctions, DeployProvider, DeployResult, ProvisionResult, ScanResult, ServiceProvisioner, ServiceType } from './deploy-types.js'
 import { core, err, ok } from '@h-ai/core'
-import { DeployConfigSchema, DeployErrorCode } from './deploy-config.js'
+import { DeployConfigSchema } from './deploy-config.js'
 import { buildApp, resolveOutputDir } from './deploy-functions.js'
 import { deployM } from './deploy-i18n.js'
 import { scanApp } from './deploy-scanner.js'
+import {
+
+  HaiDeployError,
+
+} from './deploy-types.js'
 import { createVercelProvider } from './providers/deploy-provider-vercel.js'
 import { createAliyunProvisioner } from './provisioners/deploy-provisioner-aliyun.js'
 import { createNeonProvisioner } from './provisioners/deploy-provisioner-neon.js'
@@ -43,8 +38,8 @@ let initInProgress = false
 
 // ─── 未初始化占位 ───
 
-const notInitialized = core.module.createNotInitializedKit<DeployError>(
-  DeployErrorCode.NOT_INITIALIZED,
+const notInitialized = core.module.createNotInitializedKit(
+  HaiDeployError.NOT_INITIALIZED,
   () => deployM('deploy_notInitialized'),
 )
 
@@ -121,14 +116,14 @@ function extractCredentials(serviceConfig: Record<string, unknown>): Record<stri
  * ```
  */
 export const deploy: DeployFunctions = {
-  async init(config: DeployConfigInput): Promise<Result<void, DeployError>> {
+  async init(config: DeployConfigInput): Promise<HaiResult<void>> {
     // 并发初始化防护：避免多次 init 同时执行导致资源泄漏
     if (initInProgress) {
       logger.warn('Deploy init already in progress, skipping concurrent call')
-      return err({
-        code: DeployErrorCode.CONFIG_ERROR,
-        message: deployM('deploy_configError', { params: { error: 'init already in progress' } }),
-      })
+      return err(
+        HaiDeployError.CONFIG_ERROR,
+        deployM('deploy_configError', { params: { error: 'init already in progress' } }),
+      )
     }
     initInProgress = true
 
@@ -143,11 +138,11 @@ export const deploy: DeployFunctions = {
       const parseResult = DeployConfigSchema.safeParse(config)
       if (!parseResult.success) {
         logger.error('Deploy config validation failed', { error: parseResult.error.message })
-        return err({
-          code: DeployErrorCode.CONFIG_ERROR,
-          message: deployM('deploy_configError', { params: { error: parseResult.error.message } }),
-          cause: parseResult.error,
-        })
+        return err(
+          HaiDeployError.CONFIG_ERROR,
+          deployM('deploy_configError', { params: { error: parseResult.error.message } }),
+          parseResult.error,
+        )
       }
       const parsed = parseResult.data
 
@@ -202,13 +197,13 @@ export const deploy: DeployFunctions = {
         currentConfig = null
         currentProvisioners.clear()
         logger.error('Deploy module initialization failed', { error })
-        return err({
-          code: DeployErrorCode.CONFIG_ERROR,
-          message: deployM('deploy_configError', {
+        return err(
+          HaiDeployError.CONFIG_ERROR,
+          deployM('deploy_configError', {
             params: { error: error instanceof Error ? error.message : String(error) },
           }),
-          cause: error,
-        })
+          error,
+        )
       }
     }
     finally {
@@ -237,12 +232,12 @@ export const deploy: DeployFunctions = {
     return currentProvider !== null
   },
 
-  async scan(appDir: string): Promise<Result<ScanResult, DeployError>> {
+  async scan(appDir: string): Promise<HaiResult<ScanResult>> {
     logger.debug('Scanning application', { appDir })
     return scanApp(appDir)
   },
 
-  async provisionAll(projectName: string): Promise<Result<ProvisionResult[], DeployError>> {
+  async provisionAll(projectName: string): Promise<HaiResult<ProvisionResult[]>> {
     if (!currentProvider) {
       return notInitialized.result()
     }
@@ -271,7 +266,7 @@ export const deploy: DeployFunctions = {
   async deployApp(
     appDir: string,
     options?: DeployAppOptions,
-  ): Promise<Result<DeployResult, DeployError>> {
+  ): Promise<HaiResult<DeployResult>> {
     if (!currentProvider) {
       return notInitialized.result()
     }
@@ -288,12 +283,12 @@ export const deploy: DeployFunctions = {
 
     // 2. 检查 adapter
     if (scan.isSvelteKit && !scan.adapterInstalled) {
-      return err({
-        code: DeployErrorCode.ADAPTER_MISSING,
-        message: deployM('deploy_adapterMissing', {
+      return err(
+        HaiDeployError.ADAPTER_MISSING,
+        deployM('deploy_adapterMissing', {
           params: { adapter: '@sveltejs/adapter-vercel' },
         }),
-      })
+      )
     }
 
     // 3. 开通基础设施

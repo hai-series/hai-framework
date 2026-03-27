@@ -6,17 +6,9 @@
  * @module storage-provider-s3
  */
 
-import type { Result } from '@h-ai/core'
+import type { HaiError, HaiResult } from '@h-ai/core'
 import type { S3Config, StorageConfig } from '../storage-config.js'
-import type {
-  DirOperations,
-  FileMetadata,
-  FileOperations,
-  ListResult,
-  PresignOperations,
-  StorageError,
-  StorageProvider,
-} from '../storage-types.js'
+import type { DirOperations, FileMetadata, FileOperations, ListResult, PresignOperations, StorageProvider } from '../storage-types.js'
 import { Buffer } from 'node:buffer'
 import {
   CopyObjectCommand,
@@ -32,8 +24,12 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner'
 
 import { core, err, ok } from '@h-ai/core'
 
-import { StorageErrorCode } from '../storage-config.js'
 import { storageM } from '../storage-i18n.js'
+import {
+
+  HaiStorageError,
+
+} from '../storage-types.js'
 
 const logger = core.logger.child({ module: 'storage', scope: 'provider-s3' })
 
@@ -53,7 +49,7 @@ const logger = core.logger.child({ module: 'storage', scope: 'provider-s3' })
  * @param key - 相关文件键（可选，用于错误消息）
  * @returns 统一的 StorageError
  */
-function toStorageError(error: unknown, key?: string): StorageError {
+function toStorageError(error: unknown, key?: string): HaiError {
   const e = error as { name?: string, message?: string, Code?: string }
 
   // S3 特定错误处理
@@ -61,25 +57,23 @@ function toStorageError(error: unknown, key?: string): StorageError {
     || e.name === 'NotFound' || e.Code === 'NotFound'
     || e.name === '404' || (e as { $metadata?: { httpStatusCode?: number } }).$metadata?.httpStatusCode === 404) {
     return {
-      code: StorageErrorCode.NOT_FOUND,
+      ...HaiStorageError.NOT_FOUND,
       message: storageM('storage_fileNotFound', { params: { key: key ?? '' } }),
-      key,
       cause: error,
     }
   }
 
   if (e.name === 'AccessDenied' || e.Code === 'AccessDenied') {
     return {
-      code: StorageErrorCode.PERMISSION_DENIED,
+      ...HaiStorageError.PERMISSION_DENIED,
       message: storageM('storage_permissionDenied', { params: { key: key ?? '' } }),
-      key,
       cause: error,
     }
   }
 
   if (e.name === 'NoSuchBucket' || e.Code === 'NoSuchBucket') {
     return {
-      code: StorageErrorCode.CONFIG_ERROR,
+      ...HaiStorageError.CONFIG_ERROR,
       message: storageM('storage_bucketNotExist'),
       cause: error,
     }
@@ -88,16 +82,15 @@ function toStorageError(error: unknown, key?: string): StorageError {
   // 网络相关错误
   if (e.name === 'NetworkError' || e.name?.includes('ECONNREFUSED')) {
     return {
-      code: StorageErrorCode.NETWORK_ERROR,
+      ...HaiStorageError.NETWORK_ERROR,
       message: storageM('storage_networkError'),
       cause: error,
     }
   }
 
   return {
-    code: StorageErrorCode.OPERATION_FAILED,
+    ...HaiStorageError.OPERATION_FAILED,
     message: storageM('storage_operationFailed', { params: { error: e.message ?? '' } }),
-    key,
     cause: error,
   }
 }
@@ -182,7 +175,7 @@ export function createS3Provider(): StorageProvider {
   // -------------------------------------------------------------------------
 
   const file: FileOperations = {
-    async put(key, data, options = {}): Promise<Result<FileMetadata, StorageError>> {
+    async put(key, data, options = {}): Promise<HaiResult<FileMetadata>> {
       try {
         const s3Client = getClient()
         const s3Config = getConfig()
@@ -219,7 +212,7 @@ export function createS3Provider(): StorageProvider {
       }
     },
 
-    async get(key, options = {}): Promise<Result<Buffer, StorageError>> {
+    async get(key, options = {}): Promise<HaiResult<Buffer>> {
       try {
         const s3Client = getClient()
         const s3Config = getConfig()
@@ -239,11 +232,10 @@ export function createS3Provider(): StorageProvider {
         }))
 
         if (!response.Body) {
-          return err({
-            code: StorageErrorCode.OPERATION_FAILED,
-            message: storageM('storage_responseBodyEmpty'),
-            key,
-          })
+          return err(
+            HaiStorageError.OPERATION_FAILED,
+            storageM('storage_responseBodyEmpty'),
+          )
         }
 
         // 将流转换为 Buffer
@@ -260,7 +252,7 @@ export function createS3Provider(): StorageProvider {
       }
     },
 
-    async head(key): Promise<Result<FileMetadata, StorageError>> {
+    async head(key): Promise<HaiResult<FileMetadata>> {
       try {
         const s3Client = getClient()
         const s3Config = getConfig()
@@ -285,18 +277,18 @@ export function createS3Provider(): StorageProvider {
       }
     },
 
-    async exists(key): Promise<Result<boolean, StorageError>> {
+    async exists(key): Promise<HaiResult<boolean>> {
       const result = await file.head(key)
       if (result.success) {
         return ok(true)
       }
-      if (result.error.code === StorageErrorCode.NOT_FOUND) {
+      if (result.error.code === HaiStorageError.NOT_FOUND.code) {
         return ok(false)
       }
       return err(result.error)
     },
 
-    async delete(key): Promise<Result<void, StorageError>> {
+    async delete(key): Promise<HaiResult<void>> {
       try {
         const s3Client = getClient()
         const s3Config = getConfig()
@@ -314,7 +306,7 @@ export function createS3Provider(): StorageProvider {
       }
     },
 
-    async deleteMany(keys): Promise<Result<void, StorageError>> {
+    async deleteMany(keys): Promise<HaiResult<void>> {
       try {
         const s3Client = getClient()
         const s3Config = getConfig()
@@ -337,7 +329,7 @@ export function createS3Provider(): StorageProvider {
       }
     },
 
-    async copy(sourceKey, destKey, options = {}): Promise<Result<FileMetadata, StorageError>> {
+    async copy(sourceKey, destKey, options = {}): Promise<HaiResult<FileMetadata>> {
       try {
         const s3Client = getClient()
         const s3Config = getConfig()
@@ -366,7 +358,7 @@ export function createS3Provider(): StorageProvider {
   // -------------------------------------------------------------------------
 
   const dir: DirOperations = {
-    async list(options = {}): Promise<Result<ListResult, StorageError>> {
+    async list(options = {}): Promise<HaiResult<ListResult>> {
       try {
         const s3Client = getClient()
         const s3Config = getConfig()
@@ -409,7 +401,7 @@ export function createS3Provider(): StorageProvider {
       }
     },
 
-    async delete(prefix): Promise<Result<void, StorageError>> {
+    async delete(prefix): Promise<HaiResult<void>> {
       try {
         // 分页列出并逐批删除，每批最多 1000 个对象
         let continuationToken: string | undefined
@@ -449,7 +441,7 @@ export function createS3Provider(): StorageProvider {
   // -------------------------------------------------------------------------
 
   const presign: PresignOperations = {
-    async getUrl(key, options?): Promise<Result<string, StorageError>> {
+    async getUrl(key, options?): Promise<HaiResult<string>> {
       try {
         const s3Client = getClient()
         const s3Config = getConfig()
@@ -469,16 +461,15 @@ export function createS3Provider(): StorageProvider {
         return ok(url)
       }
       catch (error) {
-        return err({
-          code: StorageErrorCode.PRESIGN_FAILED,
-          message: storageM('storage_presignUrlFailed'),
-          key,
-          cause: error,
-        })
+        return err(
+          HaiStorageError.PRESIGN_FAILED,
+          storageM('storage_presignUrlFailed'),
+          error,
+        )
       }
     },
 
-    async putUrl(key, options?): Promise<Result<string, StorageError>> {
+    async putUrl(key, options?): Promise<HaiResult<string>> {
       try {
         const s3Client = getClient()
         const s3Config = getConfig()
@@ -497,12 +488,11 @@ export function createS3Provider(): StorageProvider {
         return ok(url)
       }
       catch (error) {
-        return err({
-          code: StorageErrorCode.PRESIGN_FAILED,
-          message: storageM('storage_presignUploadUrlFailed'),
-          key,
-          cause: error,
-        })
+        return err(
+          HaiStorageError.PRESIGN_FAILED,
+          storageM('storage_presignUploadUrlFailed'),
+          error,
+        )
       }
     },
 
@@ -527,12 +517,12 @@ export function createS3Provider(): StorageProvider {
     dir,
     presign,
 
-    async connect(cfg: StorageConfig): Promise<Result<void, StorageError>> {
+    async connect(cfg: StorageConfig): Promise<HaiResult<void>> {
       if (cfg.type !== 's3') {
-        return err({
-          code: StorageErrorCode.CONFIG_ERROR,
-          message: storageM('storage_s3ConfigTypeError'),
-        })
+        return err(
+          HaiStorageError.CONFIG_ERROR,
+          storageM('storage_s3ConfigTypeError'),
+        )
       }
 
       try {

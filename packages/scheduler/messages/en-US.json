@@ -16,5 +16,10 @@
   "scheduler_taskIdEmpty": "Task ID cannot be empty",
   "scheduler_taskRunning": "Task is currently running: {taskId}",
   "scheduler_invalidApiConfig": "Invalid api_config for task: {taskId}",
-  "scheduler_lockAcquireFailed": "Failed to acquire distributed lock, another node already holds it: {taskId}"
+  "scheduler_lockAcquireFailed": "Failed to acquire distributed lock, another node already holds it: {taskId}",
+  "scheduler_jsCompileFailed": "Failed to compile JS task: {error}",
+  "scheduler_hookExecutionFailed": "Task lifecycle hook execution failed: {error}",
+  "scheduler_taskHandlerMissing": "Task has no executable handler and no global execute hook is configured: {taskId}",
+  "scheduler_invalidHandlerConfig": "Invalid task handler config: {taskId}",
+  "scheduler_invalidRetryConfig": "Invalid retry policy config for task: {taskId}"
 }

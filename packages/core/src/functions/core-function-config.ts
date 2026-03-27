@@ -6,7 +6,7 @@
  */
 
 import type { ZodType } from 'zod'
-import type { Result } from '../core-types.js'
+import type { HaiError, HaiResult } from '../core-types.js'
 
 import { existsSync, readFileSync, watch } from 'node:fs'
 import process from 'node:process'
@@ -14,37 +14,9 @@ import { parse } from 'yaml'
 
 // ─── 配置文件监听 ───
 
-import { ConfigErrorCode } from '../core-config.js'
-import { err, ok } from '../core-types.js'
+import { err, HaiConfigError, ok } from '../core-types.js'
 import { i18n } from '../i18n/core-i18n-utils.js'
 import { typeUtils } from '../utils/core-util-type.js'
-
-// ─── 类型定义 ───
-
-/**
- * 配置错误结构。
- *
- * 所有配置操作的失败分支均返回此类型。
- *
- * @example
- * ```ts
- * const error: ConfigError = {
- *   code: ConfigErrorCode.FILE_NOT_FOUND,
- *   message: 'Config file not found',
- *   path: './config/app.yml',
- * }
- * ```
- */
-export interface ConfigError {
-  /** 错误码，对应 ConfigErrorCode 中的某个值 */
-  code: number
-  /** 错误描述（i18n 消息） */
-  message: string
-  /** 配置文件路径（可选，仅文件相关错误时存在） */
-  path?: string
-  /** 附加详情（如 Zod issues 或原始异常） */
-  details?: unknown
-}
 
 /** 缓存项（存储已加载的配置及其元信息） */
 interface CacheEntry<T = unknown> {
@@ -74,7 +46,7 @@ const FULL_VAR_PATTERN = /^\$\{[^}:]+(?::[^}]*)?\}$/
  * @param value - 任意配置值（字符串、数组、对象或原始值）
  * @returns 插值后的结果；当环境变量缺失且未提供默认值时返回 ENV_VAR_MISSING 错误
  */
-function interpolateEnv(value: unknown): Result<unknown, ConfigError> {
+function interpolateEnv(value: unknown): HaiResult<unknown> {
   if (typeof value === 'string') {
     let result = value
     ENV_VAR_PATTERN.lastIndex = 0
@@ -90,10 +62,7 @@ function interpolateEnv(value: unknown): Result<unknown, ConfigError> {
 
       // 未提供默认值且环境变量不存在时，返回错误
       if (envValue === undefined && defaultValue === undefined) {
-        return err({
-          code: ConfigErrorCode.ENV_VAR_MISSING,
-          message: i18n.coreM('core_configEnvVarMissing', { params: { varName } }),
-        })
+        return err(HaiConfigError.CONFIG_ENV_VAR_MISSING, i18n.coreM('core_configEnvVarMissing', { params: { varName } }))
       }
       result = result.replace(fullMatch, envValue ?? defaultValue ?? '')
     }
@@ -155,7 +124,7 @@ const configCache = new Map<string, CacheEntry>()
  * }
  * ```
  */
-export type WatchCallback<T = unknown> = (config: T | null, error?: ConfigError) => void
+export type WatchCallback<T = unknown> = (config: T | null, error?: HaiError) => void
 
 /** 配置监听条目（包含文件 watcher 和回调集合） */
 interface WatchEntry {
@@ -174,13 +143,14 @@ const watchEntries = new Map<string, WatchEntry>()
  * 创建未加载错误。
  *
  * @param name - 配置名称
- * @returns ConfigError，错误码为 NOT_LOADED
+ * @returns HaiError，错误码为 NOT_LOADED
  */
-function createNotLoadedError(name: string): ConfigError {
-  return {
-    code: ConfigErrorCode.NOT_LOADED,
-    message: i18n.coreM('core_configNotLoaded', { params: { name } }),
-  }
+function createNotLoadedError(name: string): HaiError {
+  const result = err(HaiConfigError.CONFIG_NOT_LOADED, i18n.coreM('core_configNotLoaded', { params: { name } }))
+  if (!result.success)
+    return result.error
+
+  throw new Error('unreachable')
 }
 
 /**
@@ -189,7 +159,7 @@ function createNotLoadedError(name: string): ConfigError {
  * @param name - 配置名称
  * @param result - 重载结果（成功时传配置数据，失败时传错误）
  */
-function notifyWatchCallbacks(name: string, result: Result<unknown, ConfigError>): void {
+function notifyWatchCallbacks(name: string, result: HaiResult<unknown>): void {
   const entry = watchEntries.get(name)
   if (!entry)
     return
@@ -220,13 +190,9 @@ function notifyWatchCallbacks(name: string, result: Result<unknown, ConfigError>
  * @param filePath - YAML 文件路径
  * @returns 解析结果；可能的错误码：FILE_NOT_FOUND / PARSE_ERROR / ENV_VAR_MISSING
  */
-function loadYaml(filePath: string): Result<unknown, ConfigError> {
+function loadYaml(filePath: string): HaiResult<unknown> {
   if (!existsSync(filePath)) {
-    return err({
-      code: ConfigErrorCode.FILE_NOT_FOUND,
-      message: i18n.coreM('core_configFileNotExist', { params: { filePath } }),
-      path: filePath,
-    })
+    return err(HaiConfigError.CONFIG_FILE_NOT_FOUND, i18n.coreM('core_configFileNotExist', { params: { filePath } }))
   }
 
   try {
@@ -235,12 +201,7 @@ function loadYaml(filePath: string): Result<unknown, ConfigError> {
     return interpolateEnv(parsed)
   }
   catch (error) {
-    return err({
-      code: ConfigErrorCode.PARSE_ERROR,
-      message: i18n.coreM('core_configParseFailed', { params: { filePath } }),
-      path: filePath,
-      details: error,
-    })
+    return err(HaiConfigError.CONFIG_PARSE_ERROR, i18n.coreM('core_configParseFailed', { params: { filePath } }), error)
   }
 }
 
@@ -256,19 +217,14 @@ function loadYaml(filePath: string): Result<unknown, ConfigError> {
 function loadConfig<T>(
   filePath: string,
   schema: ZodType<T>,
-): Result<T, ConfigError> {
+): HaiResult<T> {
   const yamlResult = loadYaml(filePath)
   if (!yamlResult.success)
     return yamlResult
 
   const parseResult = schema.safeParse(yamlResult.data)
   if (!parseResult.success) {
-    return err({
-      code: ConfigErrorCode.VALIDATION_ERROR,
-      message: i18n.coreM('core_configValidationFailed'),
-      path: filePath,
-      details: parseResult.error.issues,
-    })
+    return err(HaiConfigError.CONFIG_VALIDATION_ERROR, i18n.coreM('core_configValidationFailed'), parseResult.error.issues)
   }
 
   return ok(parseResult.data)
@@ -286,8 +242,8 @@ function loadAndCache<T>(
   name: string,
   filePath: string,
   schema?: ZodType<T>,
-): Result<T, ConfigError> {
-  const result = schema ? loadConfig(filePath, schema) : loadYaml(filePath) as Result<T, ConfigError>
+): HaiResult<T> {
+  const result = schema ? loadConfig(filePath, schema) : loadYaml(filePath) as HaiResult<T>
   if (result.success) {
     configCache.set(name, {
       data: result.data,
@@ -308,7 +264,7 @@ function loadAndCache<T>(
  * @param schema - Zod Schema
  * @returns 校验结果；未加载时返回 NOT_LOADED，校验失败返回 VALIDATION_ERROR
  */
-function validateLoadedConfig<T>(name: string, schema: ZodType<T>): Result<T, ConfigError> {
+function validateLoadedConfig<T>(name: string, schema: ZodType<T>): HaiResult<T> {
   const entry = configCache.get(name)
   if (!entry) {
     return err(createNotLoadedError(name))
@@ -316,12 +272,7 @@ function validateLoadedConfig<T>(name: string, schema: ZodType<T>): Result<T, Co
 
   const parseResult = schema.safeParse(entry.data)
   if (!parseResult.success) {
-    return err({
-      code: ConfigErrorCode.VALIDATION_ERROR,
-      message: i18n.coreM('core_configValidationFailed'),
-      path: entry.filePath,
-      details: parseResult.error.issues,
-    })
+    return err(HaiConfigError.CONFIG_VALIDATION_ERROR, i18n.coreM('core_configValidationFailed'), parseResult.error.issues)
   }
 
   const validated = parseResult.data
@@ -343,7 +294,7 @@ function validateLoadedConfig<T>(name: string, schema: ZodType<T>): Result<T, Co
  * @param name - 配置名称
  * @returns 重载结果；未加载时返回 NOT_LOADED
  */
-function reloadAndNotify(name: string): Result<unknown, ConfigError> {
+function reloadAndNotify(name: string): HaiResult<unknown> {
   const entry = configCache.get(name)
   if (!entry) {
     const result = err(createNotLoadedError(name))
@@ -505,7 +456,7 @@ export const config = {
    * @param name - 配置名称（缓存 key）
    * @param filePath - YAML 文件路径
    * @param schema - 可选 Zod Schema（不传则跳过校验）
-   * @returns 成功时返回解析后的配置数据；失败时返回 ConfigError
+   * @returns 成功时返回解析后的配置数据；失败时返回 HaiError
    *
    * @example
    * ```ts
@@ -515,7 +466,7 @@ export const config = {
    * }
    * ```
    */
-  load<T>(name: string, filePath: string, schema?: ZodType<T>): Result<T, ConfigError> {
+  load<T>(name: string, filePath: string, schema?: ZodType<T>): HaiResult<T> {
     return loadAndCache(name, filePath, schema)
   },
 
@@ -536,7 +487,7 @@ export const config = {
    * }
    * ```
    */
-  validate<T>(name: string, schema: ZodType<T>): Result<T, ConfigError> {
+  validate<T>(name: string, schema: ZodType<T>): HaiResult<T> {
     return validateLoadedConfig(name, schema)
   },
 
@@ -595,7 +546,7 @@ export const config = {
    * const result = config.reload('app')
    * ```
    */
-  reload(name: string): Result<unknown, ConfigError> {
+  reload(name: string): HaiResult<unknown> {
     return reloadAndNotify(name)
   },
 

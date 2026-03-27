@@ -8,10 +8,10 @@
 
 import type { Message, Task } from '@a2a-js/sdk'
 import type { AgentExecutor, ExecutionEventBus, ServerCallContext, TaskStore } from '@a2a-js/sdk/server'
-import type { Result } from '@h-ai/core'
+import type { HaiResult } from '@h-ai/core'
 
 import type { A2AConfig } from '../ai-config.js'
-import type { AIError } from '../ai-types.js'
+
 import type { AIRelStore, AIStoreProvider } from '../store/ai-store-types.js'
 import type {
   A2AAgentCardConfig,
@@ -28,8 +28,8 @@ import { A2AClient } from '@a2a-js/sdk/client'
 import { DefaultExecutionEventBusManager, DefaultRequestHandler, JsonRpcTransportHandler, ServerCallContext as ServerCallContextImpl } from '@a2a-js/sdk/server'
 import { core, err, ok } from '@h-ai/core'
 
-import { AIErrorCode } from '../ai-config.js'
 import { aiM } from '../ai-i18n.js'
+import { HaiAIError } from '../ai-types.js'
 import { buildAgentCard } from './ai-a2a-server.js'
 
 const logger = core.logger.child({ module: 'ai', scope: 'a2a' })
@@ -179,6 +179,9 @@ export function createA2AOperations(
   const { storeProvider } = deps
   const agentCardConfig = options.agentCard
 
+  // A2AClient 实例缓存（按 URL 复用，避免每次调用都创建新实例）
+  const clientCache = new Map<string, A2AClient>()
+
   // 创建持久化存储
   const taskStore = storeProvider.createRelStore<Task>('hai_ai_a2a_tasks', {
     hasObjectId: true,
@@ -255,19 +258,18 @@ export function createA2AOperations(
         return ok(page)
       }
       catch (error) {
-        return err({
-          code: AIErrorCode.STORE_FAILED,
-          message: aiM('ai_a2aListMessagesFailed', { params: { error: String(error) } }),
-          cause: error,
-        })
+        return err(HaiAIError.STORE_FAILED, aiM('ai_a2aListMessagesFailed', { params: { error: String(error) } }), error)
       }
     },
 
     async callRemoteAgent(remoteUrl: string, message: string, _options?: A2ACallOptions) {
       const startTime = Date.now()
       try {
-        await storesReady
-        const client = new A2AClient(remoteUrl)
+        let client = clientCache.get(remoteUrl)
+        if (!client) {
+          client = new A2AClient(remoteUrl)
+          clientCache.set(remoteUrl, client)
+        }
         const params: { message: Message } = {
           message: {
             kind: 'message',
@@ -281,10 +283,7 @@ export function createA2AOperations(
 
         // 处理 JSON-RPC 响应（SendMessageResponse = JSONRPCErrorResponse | SendMessageSuccessResponse）
         if ('error' in response) {
-          return err({
-            code: AIErrorCode.A2A_REMOTE_CALL_FAILED,
-            message: aiM('ai_a2aRemoteCallFailed', { params: { url: remoteUrl, error: JSON.stringify(response.error) } }),
-          })
+          return err(HaiAIError.A2A_REMOTE_CALL_FAILED, aiM('ai_a2aRemoteCallFailed', { params: { url: remoteUrl, error: JSON.stringify(response.error) } }))
         }
 
         // 提取 result（Task | Message）
@@ -333,11 +332,7 @@ export function createA2AOperations(
         return ok(result)
       }
       catch (error) {
-        return err({
-          code: AIErrorCode.A2A_REMOTE_CALL_FAILED,
-          message: aiM('ai_a2aRemoteCallFailed', { params: { url: remoteUrl, error: String(error) } }),
-          cause: error,
-        })
+        return err(HaiAIError.A2A_REMOTE_CALL_FAILED, aiM('ai_a2aRemoteCallFailed', { params: { url: remoteUrl, error: String(error) } }), error)
       }
     },
   }
@@ -358,7 +353,7 @@ export interface A2ALazyProxyDeps {
   /** 获取 StoreProvider（用于 createA2AOperations） */
   getStoreProvider: () => AIStoreProvider | null
   /** 未初始化错误工厂 */
-  notInitializedResult: <T>() => Result<T, AIError>
+  notInitializedResult: <T>() => HaiResult<T>
 }
 
 /**
@@ -372,26 +367,20 @@ export interface A2ALazyProxyDeps {
  */
 export function createA2ALazyProxy(deps: A2ALazyProxyDeps): A2AOperations {
   return {
-    registerExecutor(executor: AgentExecutor): Result<void, AIError> {
+    registerExecutor(executor: AgentExecutor): HaiResult<void> {
       if (!deps.isInitialized()) {
         return deps.notInitializedResult()
       }
       const a2aConfig = deps.getA2AConfig()
       if (!a2aConfig) {
-        return err({
-          code: AIErrorCode.A2A_NOT_CONFIGURED,
-          message: aiM('ai_a2aNotConfigured'),
-        })
+        return err(HaiAIError.A2A_NOT_CONFIGURED, aiM('ai_a2aNotConfigured'))
       }
       if (deps.getA2AImpl()) {
         logger.warn('A2A executor already registered, re-registering')
       }
       const storeProvider = deps.getStoreProvider()
       if (!storeProvider) {
-        return err({
-          code: AIErrorCode.STORE_FAILED,
-          message: aiM('ai_internalError', { params: { error: 'StoreProvider not available' } }),
-        })
+        return err(HaiAIError.STORE_FAILED, aiM('ai_internalError', { params: { error: 'StoreProvider not available' } }))
       }
       const agentCardWithSecurity = { ...a2aConfig.agentCard, security: a2aConfig.security }
       const impl = createA2AOperations(
@@ -412,7 +401,7 @@ export function createA2ALazyProxy(deps: A2ALazyProxyDeps): A2AOperations {
         return ok({ ...a2aConfig.agentCard, security: a2aConfig.security } as A2AAgentCardConfig)
       if (!deps.isInitialized())
         return deps.notInitializedResult()
-      return err({ code: AIErrorCode.A2A_NOT_CONFIGURED, message: aiM('ai_a2aNotConfigured') })
+      return err(HaiAIError.A2A_NOT_CONFIGURED, aiM('ai_a2aNotConfigured'))
     },
 
     async handleRequest(requestBody: unknown, context?: Record<string, unknown>) {
@@ -421,7 +410,7 @@ export function createA2ALazyProxy(deps: A2ALazyProxyDeps): A2AOperations {
         return impl.handleRequest(requestBody, context)
       if (!deps.isInitialized())
         return deps.notInitializedResult() as never
-      return err({ code: AIErrorCode.A2A_NOT_CONFIGURED, message: aiM('ai_a2aNotConfigured') }) as never
+      return err(HaiAIError.A2A_NOT_CONFIGURED, aiM('ai_a2aNotConfigured')) as never
     },
 
     async listMessages(filter) {
@@ -430,7 +419,7 @@ export function createA2ALazyProxy(deps: A2ALazyProxyDeps): A2AOperations {
         return impl.listMessages(filter)
       if (!deps.isInitialized())
         return deps.notInitializedResult()
-      return err({ code: AIErrorCode.A2A_NOT_CONFIGURED, message: aiM('ai_a2aNotConfigured') })
+      return err(HaiAIError.A2A_NOT_CONFIGURED, aiM('ai_a2aNotConfigured'))
     },
 
     async callRemoteAgent(remoteUrl, message, options) {
@@ -439,7 +428,7 @@ export function createA2ALazyProxy(deps: A2ALazyProxyDeps): A2AOperations {
         return impl.callRemoteAgent(remoteUrl, message, options)
       if (!deps.isInitialized())
         return deps.notInitializedResult()
-      return err({ code: AIErrorCode.A2A_NOT_CONFIGURED, message: aiM('ai_a2aNotConfigured') })
+      return err(HaiAIError.A2A_NOT_CONFIGURED, aiM('ai_a2aNotConfigured'))
     },
   }
 }

@@ -5,9 +5,9 @@
  * @module ai-reasoning-functions
  */
 
-import type { Result } from '@h-ai/core'
+import type { HaiResult } from '@h-ai/core'
 import type { AIConfig, ModelScenario } from '../ai-config.js'
-import type { AIError } from '../ai-types.js'
+
 import type { ChatMessage, LLMOperations } from '../llm/ai-llm-types.js'
 import type {
   ReasoningOperations,
@@ -19,9 +19,9 @@ import type {
 
 import { core, err, ok } from '@h-ai/core'
 
-import { AIErrorCode, resolveModelEntry } from '../ai-config.js'
-
+import { resolveModelEntry } from '../ai-config.js'
 import { aiM } from '../ai-i18n.js'
+import { HaiAIError } from '../ai-types.js'
 
 const logger = core.logger.child({ module: 'ai', scope: 'reasoning' })
 
@@ -69,7 +69,7 @@ export function createReasoningOperations(config: AIConfig, llm: LLMOperations):
   async function runReact(
     query: string,
     options: ReasoningOptions,
-  ): Promise<Result<ReasoningResult, AIError>> {
+  ): Promise<HaiResult<ReasoningResult>> {
     const maxRounds = options.maxRounds ?? 10
     const systemPrompt = options.systemPrompt ?? REACT_SYSTEM_PROMPT
     const steps: ReasoningStep[] = []
@@ -99,10 +99,7 @@ export function createReasoningOperations(config: AIConfig, llm: LLMOperations):
 
       const choice = chatResult.data.choices[0]
       if (!choice) {
-        return err({
-          code: AIErrorCode.REASONING_FAILED,
-          message: aiM('ai_internalError', { params: { error: 'No response from LLM' } }),
-        })
+        return err(HaiAIError.REASONING_FAILED, aiM('ai_internalError', { params: { error: 'No response from LLM' } }))
       }
 
       const assistantMessage = choice.message
@@ -177,10 +174,7 @@ export function createReasoningOperations(config: AIConfig, llm: LLMOperations):
     }
 
     // 达到最大轮次
-    return err({
-      code: AIErrorCode.REASONING_MAX_ROUNDS,
-      message: aiM('ai_internalError', { params: { error: `Max rounds (${maxRounds}) reached` } }),
-    })
+    return err(HaiAIError.REASONING_MAX_ROUNDS, aiM('ai_internalError', { params: { error: `Max rounds (${maxRounds}) reached` } }))
   }
 
   /**
@@ -189,7 +183,7 @@ export function createReasoningOperations(config: AIConfig, llm: LLMOperations):
   async function runCoT(
     query: string,
     options: ReasoningOptions,
-  ): Promise<Result<ReasoningResult, AIError>> {
+  ): Promise<HaiResult<ReasoningResult>> {
     const systemPrompt = options.systemPrompt ?? COT_SYSTEM_PROMPT
     const steps: ReasoningStep[] = []
 
@@ -249,7 +243,7 @@ export function createReasoningOperations(config: AIConfig, llm: LLMOperations):
   async function runPlanExecute(
     query: string,
     options: ReasoningOptions,
-  ): Promise<Result<ReasoningResult, AIError>> {
+  ): Promise<HaiResult<ReasoningResult>> {
     const maxRounds = options.maxRounds ?? 10
     const systemPrompt = options.systemPrompt ?? PLAN_EXECUTE_SYSTEM_PROMPT
     const steps: ReasoningStep[] = []
@@ -355,14 +349,11 @@ export function createReasoningOperations(config: AIConfig, llm: LLMOperations):
       }
     }
 
-    return err({
-      code: AIErrorCode.REASONING_MAX_ROUNDS,
-      message: aiM('ai_internalError', { params: { error: `Max rounds (${maxRounds}) reached` } }),
-    })
+    return err(HaiAIError.REASONING_MAX_ROUNDS, aiM('ai_internalError', { params: { error: `Max rounds (${maxRounds}) reached` } }))
   }
 
   return {
-    async run(query: string, options?: ReasoningOptions): Promise<Result<ReasoningResult, AIError>> {
+    async run(query: string, options?: ReasoningOptions): Promise<HaiResult<ReasoningResult>> {
       const strategy = options?.strategy ?? 'react'
       logger.trace('Starting reasoning', { strategy, maxRounds: options?.maxRounds })
 
@@ -375,19 +366,12 @@ export function createReasoningOperations(config: AIConfig, llm: LLMOperations):
           case 'plan-execute':
             return await runPlanExecute(query, options ?? {})
           default:
-            return err({
-              code: AIErrorCode.REASONING_STRATEGY_NOT_FOUND,
-              message: aiM('ai_internalError', { params: { error: `Unknown strategy: ${strategy}` } }),
-            })
+            return err(HaiAIError.REASONING_STRATEGY_NOT_FOUND, aiM('ai_internalError', { params: { error: `Unknown strategy: ${strategy}` } }))
         }
       }
       catch (error) {
         logger.error('Reasoning failed', { error })
-        return err({
-          code: AIErrorCode.REASONING_FAILED,
-          message: aiM('ai_internalError', { params: { error: String(error) } }),
-          cause: error,
-        })
+        return err(HaiAIError.REASONING_FAILED, aiM('ai_internalError', { params: { error: String(error) } }), error)
       }
     },
 

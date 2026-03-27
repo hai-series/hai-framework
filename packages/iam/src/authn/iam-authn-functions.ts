@@ -5,11 +5,10 @@
  * @module iam-authn-functions
  */
 
-import type { Result } from '@h-ai/core'
+import type { HaiResult } from '@h-ai/core'
 
 import type { AuthzOperations } from '../authz/iam-authz-types.js'
 import type { IamConfig } from '../iam-config.js'
-import type { IamError } from '../iam-types.js'
 import type { AuthResult, Session, SessionOperations } from '../session/iam-session-types.js'
 import type { AgreementDisplay, User } from '../user/iam-user-types.js'
 import type { ApiKeyOperations } from './apikey/iam-authn-apikey-types.js'
@@ -20,8 +19,9 @@ import type { PasswordStrategyResult } from './password/iam-authn-password-strat
 
 import { core, err, ok } from '@h-ai/core'
 
-import { AgreementConfigSchema, ApiKeyConfigSchema, IamErrorCode, LoginConfigSchema, OtpConfigSchema, SecurityConfigSchema } from '../iam-config.js'
+import { AgreementConfigSchema, ApiKeyConfigSchema, LoginConfigSchema, OtpConfigSchema, SecurityConfigSchema } from '../iam-config.js'
 import { iamM } from '../iam-i18n.js'
+import { HaiIamError } from '../iam-types.js'
 import { createDbUserRepository } from '../user/iam-user-repository-user.js'
 import { createDbApiKeyRepository } from './apikey/iam-authn-apikey-repository.js'
 import { createApiKeyStrategy } from './apikey/iam-authn-apikey-strategy.js'
@@ -68,7 +68,7 @@ export interface AuthnOperationsResult {
  *
  * 内部创建密码/OTP/LDAP 策略，组装成统一的认证操作接口。
  */
-export async function createAuthnOperations(deps: AuthnOperationsDeps): Promise<Result<AuthnOperationsResult, IamError>> {
+export async function createAuthnOperations(deps: AuthnOperationsDeps): Promise<HaiResult<AuthnOperationsResult>> {
   try {
     const { config, sessionFunctions, authzFunctions, ldapClientFactory, ldapSyncUser, onOtpSendEmail, onOtpSendSms } = deps
 
@@ -163,11 +163,11 @@ export async function createAuthnOperations(deps: AuthnOperationsDeps): Promise<
   }
   catch (error) {
     logger.error('Authn sub-feature initialization failed', { error })
-    return err({
-      code: IamErrorCode.CONFIG_ERROR,
-      message: iamM('iam_initComponentFailed'),
-      cause: error,
-    })
+    return err(
+      HaiIamError.CONFIG_ERROR,
+      iamM('iam_initComponentFailed'),
+      error,
+    )
   }
 }
 
@@ -176,7 +176,7 @@ export async function createAuthnOperations(deps: AuthnOperationsDeps): Promise<
 interface BuildAuthnDeps {
   passwordStrategy: AuthStrategy
   otpStrategy?: AuthStrategy
-  otpChallenge?: (identifier: string) => Promise<Result<{ expiresAt: Date }, IamError>>
+  otpChallenge?: (identifier: string) => Promise<HaiResult<{ expiresAt: Date }>>
   ldapStrategy?: AuthStrategy
   apiKeyStrategy?: AuthStrategy
   sessionFunctions: SessionOperations
@@ -232,12 +232,12 @@ function buildAuthnOperations(deps: BuildAuthnDeps): Omit<AuthnOperations, 'regi
    * @param type - 登录方式类型
    * @returns 禁用时返回错误 Result，否则返回 null
    */
-  function loginDisabled(type: 'password' | 'otp' | 'ldap' | 'apikey'): Result<void, IamError> | null {
+  function loginDisabled(type: 'password' | 'otp' | 'ldap' | 'apikey'): HaiResult<void> | null {
     if (!loginConfig[type]) {
-      return err({
-        code: IamErrorCode.LOGIN_DISABLED,
-        message: iamM('iam_loginDisabled', { params: { type } }),
-      })
+      return err(
+        HaiIamError.LOGIN_DISABLED,
+        iamM('iam_loginDisabled', { params: { type } }),
+      )
     }
     return null
   }
@@ -248,10 +248,10 @@ function buildAuthnOperations(deps: BuildAuthnDeps): Omit<AuthnOperations, 'regi
    * @param userId - 用户 ID
    * @returns 角色 code 数组
    */
-  async function resolveUserRoleCodes(userId: string): Promise<Result<string[], IamError>> {
+  async function resolveUserRoleCodes(userId: string): Promise<HaiResult<string[]>> {
     const rolesResult = await authzFunctions.getUserRoles(userId)
     if (!rolesResult.success) {
-      return rolesResult as Result<string[], IamError>
+      return rolesResult as HaiResult<string[]>
     }
     return ok(rolesResult.data.map(role => role.code))
   }
@@ -262,10 +262,10 @@ function buildAuthnOperations(deps: BuildAuthnDeps): Omit<AuthnOperations, 'regi
    * @param userId - 用户 ID
    * @returns 权限 code 数组
    */
-  async function resolveUserPermissionCodes(userId: string): Promise<Result<string[], IamError>> {
+  async function resolveUserPermissionCodes(userId: string): Promise<HaiResult<string[]>> {
     const permissionsResult = await authzFunctions.getUserPermissions(userId)
     if (!permissionsResult.success) {
-      return permissionsResult as Result<string[], IamError>
+      return permissionsResult as HaiResult<string[]>
     }
     return ok(permissionsResult.data.map(p => p.code))
   }
@@ -279,29 +279,29 @@ function buildAuthnOperations(deps: BuildAuthnDeps): Omit<AuthnOperations, 'regi
    * @param strategy - 已注册的策略实例（可选）
    * @returns 策略实例，或策略不支持错误
    */
-  function resolveStrategy(type: 'password' | 'otp' | 'ldap' | 'apikey', strategy?: AuthStrategy): Result<AuthStrategy, IamError> {
+  function resolveStrategy(type: 'password' | 'otp' | 'ldap' | 'apikey', strategy?: AuthStrategy): HaiResult<AuthStrategy> {
     if (strategy) {
       return ok(strategy)
     }
 
     if (type === 'otp') {
-      return err({
-        code: IamErrorCode.STRATEGY_NOT_SUPPORTED,
-        message: iamM('iam_otpStrategyRequired'),
-      })
+      return err(
+        HaiIamError.STRATEGY_NOT_SUPPORTED,
+        iamM('iam_otpStrategyRequired'),
+      )
     }
 
     if (type === 'ldap') {
-      return err({
-        code: IamErrorCode.STRATEGY_NOT_SUPPORTED,
-        message: iamM('iam_ldapStrategyRequired'),
-      })
+      return err(
+        HaiIamError.STRATEGY_NOT_SUPPORTED,
+        iamM('iam_ldapStrategyRequired'),
+      )
     }
 
-    return err({
-      code: IamErrorCode.STRATEGY_NOT_SUPPORTED,
-      message: iamM('iam_featureNotImplemented'),
-    })
+    return err(
+      HaiIamError.STRATEGY_NOT_SUPPORTED,
+      iamM('iam_featureNotImplemented'),
+    )
   }
 
   /**
@@ -312,17 +312,17 @@ function buildAuthnOperations(deps: BuildAuthnDeps): Omit<AuthnOperations, 'regi
    * @param user - 已认证的用户信息
    * @returns 包含用户信息、访问令牌、过期时间和协议展示的认证结果
    */
-  async function buildAuthResult(user: User): Promise<Result<AuthResult, IamError>> {
+  async function buildAuthResult(user: User): Promise<HaiResult<AuthResult>> {
     // 并行获取角色和权限，登录时一次性查 DB，后续纯缓存
     const [roleCodesResult, permCodesResult] = await Promise.all([
       resolveUserRoleCodes(user.id),
       resolveUserPermissionCodes(user.id),
     ])
     if (!roleCodesResult.success) {
-      return roleCodesResult as Result<AuthResult, IamError>
+      return roleCodesResult as HaiResult<AuthResult>
     }
     if (!permCodesResult.success) {
-      return permCodesResult as Result<AuthResult, IamError>
+      return permCodesResult as HaiResult<AuthResult>
     }
 
     const sessionResult = await sessionFunctions.create({
@@ -335,7 +335,7 @@ function buildAuthnOperations(deps: BuildAuthnDeps): Omit<AuthnOperations, 'regi
     })
 
     if (!sessionResult.success) {
-      return sessionResult as Result<AuthResult, IamError>
+      return sessionResult as HaiResult<AuthResult>
     }
 
     const session = sessionResult.data
@@ -343,7 +343,7 @@ function buildAuthnOperations(deps: BuildAuthnDeps): Omit<AuthnOperations, 'regi
     // 从 session.data._tokenPair 提取 TokenPair（由 session.create 写入）
     const tokenPair = session.data?._tokenPair
     if (!tokenPair) {
-      return err({ code: IamErrorCode.SESSION_CREATE_FAILED, message: iamM('iam_createSessionFailed') })
+      return err(HaiIamError.SESSION_CREATE_FAILED, iamM('iam_createSessionFailed'))
     }
 
     return ok({
@@ -369,14 +369,14 @@ function buildAuthnOperations(deps: BuildAuthnDeps): Omit<AuthnOperations, 'regi
     type: 'password' | 'otp' | 'ldap' | 'apikey',
     credentials: PasswordCredentials | OtpCredentials | LdapCredentials | ApiKeyCredentials,
     strategy?: AuthStrategy,
-  ): Promise<Result<AuthResult, IamError>> {
+  ): Promise<HaiResult<AuthResult>> {
     const disabled = loginDisabled(type)
     if (disabled)
-      return disabled as Result<AuthResult, IamError>
+      return disabled as HaiResult<AuthResult>
 
     const strategyResult = resolveStrategy(type, strategy)
     if (!strategyResult.success)
-      return strategyResult as Result<AuthResult, IamError>
+      return strategyResult as HaiResult<AuthResult>
 
     const authResult = await strategyResult.data.authenticate({
       type,
@@ -385,7 +385,7 @@ function buildAuthnOperations(deps: BuildAuthnDeps): Omit<AuthnOperations, 'regi
 
     if (!authResult.success) {
       logger.warn('Login failed', { type, reason: authResult.error.code })
-      return authResult as Result<AuthResult, IamError>
+      return authResult as HaiResult<AuthResult>
     }
 
     const result = await buildAuthResult(authResult.data)
@@ -396,23 +396,23 @@ function buildAuthnOperations(deps: BuildAuthnDeps): Omit<AuthnOperations, 'regi
   }
 
   return {
-    async login(credentials: PasswordCredentials): Promise<Result<AuthResult, IamError>> {
+    async login(credentials: PasswordCredentials): Promise<HaiResult<AuthResult>> {
       return loginWithStrategy('password', credentials, passwordStrategy)
     },
 
-    async loginWithOtp(credentials: OtpCredentials): Promise<Result<AuthResult, IamError>> {
+    async loginWithOtp(credentials: OtpCredentials): Promise<HaiResult<AuthResult>> {
       return loginWithStrategy('otp', credentials, otpStrategy)
     },
 
-    async loginWithLdap(credentials: LdapCredentials): Promise<Result<AuthResult, IamError>> {
+    async loginWithLdap(credentials: LdapCredentials): Promise<HaiResult<AuthResult>> {
       return loginWithStrategy('ldap', credentials, ldapStrategy)
     },
 
-    async loginWithApiKey(credentials: ApiKeyCredentials): Promise<Result<AuthResult, IamError>> {
+    async loginWithApiKey(credentials: ApiKeyCredentials): Promise<HaiResult<AuthResult>> {
       return loginWithStrategy('apikey', credentials, apiKeyStrategy)
     },
 
-    async logout(accessToken: string): Promise<Result<void, IamError>> {
+    async logout(accessToken: string): Promise<HaiResult<void>> {
       const sessionResult = await sessionFunctions.get(accessToken)
       if (sessionResult.success && sessionResult.data) {
         // 吊销 refreshToken，防止登出后被重用
@@ -427,21 +427,21 @@ function buildAuthnOperations(deps: BuildAuthnDeps): Omit<AuthnOperations, 'regi
       return ok(undefined)
     },
 
-    async verifyToken(accessToken: string): Promise<Result<Session, IamError>> {
+    async verifyToken(accessToken: string): Promise<HaiResult<Session>> {
       return sessionFunctions.verifyToken(accessToken)
     },
 
-    async sendOtp(identifier: string): Promise<Result<{ expiresAt: Date }, IamError>> {
+    async sendOtp(identifier: string): Promise<HaiResult<{ expiresAt: Date }>> {
       const disabled = loginDisabled('otp')
       if (disabled) {
-        return disabled as Result<{ expiresAt: Date }, IamError>
+        return disabled as HaiResult<{ expiresAt: Date }>
       }
 
       if (!otpChallenge) {
-        return err({
-          code: IamErrorCode.STRATEGY_NOT_SUPPORTED,
-          message: iamM('iam_otpStrategyRequiredForSend'),
-        })
+        return err(
+          HaiIamError.STRATEGY_NOT_SUPPORTED,
+          iamM('iam_otpStrategyRequiredForSend'),
+        )
       }
 
       return otpChallenge(identifier)

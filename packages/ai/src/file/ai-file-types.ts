@@ -5,10 +5,8 @@
  * @module ai-file-types
  */
 
-import type { Result } from '@h-ai/core'
+import type { HaiResult } from '@h-ai/core'
 import type { Buffer } from 'node:buffer'
-
-import type { AIError } from '../ai-types.js'
 
 // ─── 文件解析方法 ───
 
@@ -134,7 +132,7 @@ export interface FileOperations {
    * @param request - 文件解析请求
    * @returns 解析结果，包含文本内容、解析方法和元数据
    */
-  parse: (request: FileParseRequest) => Promise<Result<FileParseResult, AIError>>
+  parse: (request: FileParseRequest) => Promise<HaiResult<FileParseResult>>
 
   /**
    * 便捷方法：直接返回提取的文本字符串
@@ -143,5 +141,5 @@ export interface FileOperations {
    * @param filename - 文件名（用于格式检测，可选）
    * @returns 提取的文本内容
    */
-  parseText: (content: Buffer | string, filename?: string) => Promise<Result<string, AIError>>
+  parseText: (content: Buffer | string, filename?: string) => Promise<HaiResult<string>>
 }
