@@ -7,9 +7,8 @@
  * @module ai-context-types
  */
 
-import type { Result } from '@h-ai/core'
+import type { HaiResult } from '@h-ai/core'
 
-import type { AIError } from '../ai-types.js'
 import type { CompressOptions } from '../compress/ai-compress-types.js'
 import type { ChatMessage, LLMOperations, ToolRegistryOperations } from '../llm/ai-llm-types.js'
 import type { MemoryInjectionOptions, MemoryOperations } from '../memory/ai-memory-types.js'
@@ -193,33 +192,33 @@ export interface ContextManager {
    * @param message - 要追加的消息
    * @returns 成功返回 ok(undefined)
    */
-  addMessage: (message: ChatMessage) => Promise<Result<void, AIError>>
+  addMessage: (message: ChatMessage) => Promise<HaiResult<void>>
 
   /**
    * 获取当前消息列表（压缩后）
    *
    * @returns 当前消息列表
    */
-  getMessages: () => Result<ChatMessage[], AIError>
+  getMessages: () => HaiResult<ChatMessage[]>
 
   /**
    * 获取当前 token 使用量
    *
    * @returns 当前 token 数和预算
    */
-  getTokenUsage: () => Result<{ current: number, budget: number }, AIError>
+  getTokenUsage: () => HaiResult<{ current: number, budget: number }>
 
   /**
    * 获取历史摘要列表
    *
    * @returns 每次压缩产生的摘要
    */
-  getSummaries: () => Result<SummaryResult[], AIError>
+  getSummaries: () => HaiResult<SummaryResult[]>
 
   /**
    * 持久化当前状态（需要 scope + 存储可用）
    */
-  save: () => Promise<Result<void, AIError>>
+  save: () => Promise<HaiResult<void>>
 
   /**
    * 重置管理器（清空所有消息和摘要）
@@ -235,7 +234,7 @@ export interface ContextManager {
    * @param options - 单次请求覆盖选项
    * @returns 对话结果
    */
-  chat: (message: string, options?: ContextChatOptions) => Promise<Result<ContextChatResult, AIError>>
+  chat: (message: string, options?: ContextChatOptions) => Promise<HaiResult<ContextChatResult>>
 
   /**
    * 流式发送消息并获取回复（需 deps.llm 可用）
@@ -283,7 +282,7 @@ export interface ContextOperations {
    * @param options - 管理器配置
    * @returns 管理器实例
    */
-  createManager: (options?: ContextManagerOptions) => Result<ContextManager, AIError>
+  createManager: (options?: ContextManagerOptions) => HaiResult<ContextManager>
 
   /**
    * 从持久化恢复上下文管理器
@@ -292,7 +291,7 @@ export interface ContextOperations {
    * @param options - 管理器配置覆盖
    * @returns 恢复的管理器实例
    */
-  restoreManager: (scope: InteractionScope, options?: Omit<ContextManagerOptions, 'scope'>) => Promise<Result<ContextManager, AIError>>
+  restoreManager: (scope: InteractionScope, options?: Omit<ContextManagerOptions, 'scope'>) => Promise<HaiResult<ContextManager>>
 
   /**
    * 列出指定主体的所有会话
@@ -300,7 +299,7 @@ export interface ContextOperations {
    * @param objectId - 主体 ID
    * @returns 会话信息列表
    */
-  listSessions: (objectId: string) => Promise<Result<SessionInfo[], AIError>>
+  listSessions: (objectId: string) => Promise<HaiResult<SessionInfo[]>>
 
   /**
    * 重命名会话
@@ -309,7 +308,7 @@ export interface ContextOperations {
    * @param title - 新标题
    * @returns 成功返回 ok(undefined)
    */
-  renameSession: (sessionId: string, title: string) => Promise<Result<void, AIError>>
+  renameSession: (sessionId: string, title: string) => Promise<HaiResult<void>>
 
   /**
    * 删除会话（删除会话元数据和对应的上下文数据）
@@ -317,5 +316,5 @@ export interface ContextOperations {
    * @param sessionId - 会话 ID
    * @returns 成功返回 ok(undefined)
    */
-  removeSession: (sessionId: string) => Promise<Result<void, AIError>>
+  removeSession: (sessionId: string) => Promise<HaiResult<void>>
 }

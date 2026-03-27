@@ -5,8 +5,7 @@
  * @module iam-authn-apikey-types
  */
 
-import type { Result } from '@h-ai/core'
-import type { IamError } from '../../iam-types.js'
+import type { HaiResult } from '@h-ai/core'
 
 // ─── API Key 实体 ───
 
@@ -85,7 +84,7 @@ export interface ApiKeyOperations {
    * @param options - 创建选项
    * @returns 成功返回 API Key 元数据和明文密钥
    */
-  createApiKey: (userId: string, options: CreateApiKeyOptions) => Promise<Result<CreateApiKeyResult, IamError>>
+  createApiKey: (userId: string, options: CreateApiKeyOptions) => Promise<HaiResult<CreateApiKeyResult>>
 
   /**
    * 列出用户的所有 API Key
@@ -93,7 +92,7 @@ export interface ApiKeyOperations {
    * @param userId - 用户 ID
    * @returns API Key 列表（不含密钥哈希）
    */
-  listApiKeys: (userId: string) => Promise<Result<ApiKey[], IamError>>
+  listApiKeys: (userId: string) => Promise<HaiResult<ApiKey[]>>
 
   /**
    * 获取 API Key 详情
@@ -101,7 +100,7 @@ export interface ApiKeyOperations {
    * @param keyId - API Key ID
    * @returns API Key 详情
    */
-  getApiKey: (keyId: string) => Promise<Result<ApiKey | null, IamError>>
+  getApiKey: (keyId: string) => Promise<HaiResult<ApiKey | null>>
 
   /**
    * 吊销/删除 API Key
@@ -109,7 +108,7 @@ export interface ApiKeyOperations {
    * @param keyId - API Key ID
    * @returns 操作结果
    */
-  revokeApiKey: (keyId: string) => Promise<Result<void, IamError>>
+  revokeApiKey: (keyId: string) => Promise<HaiResult<void>>
 
   /**
    * 验证 API Key 并返回关联用户 ID
@@ -117,5 +116,5 @@ export interface ApiKeyOperations {
    * @param rawKey - 明文 API Key
    * @returns 成功返回 API Key 实体（含用户 ID），失败返回错误码
    */
-  verifyApiKey: (rawKey: string) => Promise<Result<ApiKey, IamError>>
+  verifyApiKey: (rawKey: string) => Promise<HaiResult<ApiKey>>
 }

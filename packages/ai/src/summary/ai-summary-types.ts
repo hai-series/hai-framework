@@ -5,9 +5,8 @@
  * @module ai-summary-types
  */
 
-import type { Result } from '@h-ai/core'
+import type { HaiResult } from '@h-ai/core'
 
-import type { AIError } from '../ai-types.js'
 import type { ChatMessage } from '../llm/ai-llm-types.js'
 
 // ─── 摘要选项与结果 ───
@@ -20,6 +19,8 @@ export interface SummaryOptions {
   model?: string
   /** 温度覆盖 */
   temperature?: number
+  /** 自定义摘要 systemPrompt（覆盖模块配置与内置默认提示词） */
+  systemPrompt?: string
   /** 前序摘要文本（用于增量摘要） */
   previousSummary?: string
 }
@@ -54,6 +55,7 @@ export interface SummaryResult {
  *
  * // 增量摘要
  * const updated = await summaryOps.summarize(newMessages, {
+ *   systemPrompt: 'Focus on product decisions and pending action items.',
  *   previousSummary: oldSummary,
  * })
  * ```
@@ -66,7 +68,7 @@ export interface SummaryOperations {
    * @param options - 摘要选项
    * @returns 摘要文本
    */
-  generate: (messages: ChatMessage[], options?: SummaryOptions) => Promise<Result<string, AIError>>
+  generate: (messages: ChatMessage[], options?: SummaryOptions) => Promise<HaiResult<string>>
 
   /**
    * 生成摘要（含元数据）
@@ -75,5 +77,5 @@ export interface SummaryOperations {
    * @param options - 摘要选项
    * @returns 摘要结果（含 Token 数、覆盖消息数）
    */
-  summarize: (messages: ChatMessage[], options?: SummaryOptions) => Promise<Result<SummaryResult, AIError>>
+  summarize: (messages: ChatMessage[], options?: SummaryOptions) => Promise<HaiResult<SummaryResult>>
 }

@@ -13,7 +13,7 @@
 import { cache } from '@h-ai/cache'
 import { reldb } from '@h-ai/reldb'
 import { describe, expect, it } from 'vitest'
-import { IamErrorCode } from '../src/iam-config.js'
+import { HaiIamError } from '../src/iam-types.js'
 import { iam } from '../src/index.js'
 import { defineIamEnvSuite, postgresRedisEnv, sqliteMemoryEnv } from './helpers/iam-test-suite.js'
 
@@ -29,7 +29,7 @@ describe('iam.init', () => {
       const result = await iam.auth.login({ identifier: 'admin', password: 'x' })
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.code).toBe(IamErrorCode.NOT_INITIALIZED)
+        expect(result.error.code).toBe(HaiIamError.NOT_INITIALIZED.code)
       }
     })
 
@@ -41,7 +41,7 @@ describe('iam.init', () => {
       })
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.code).toBe(IamErrorCode.NOT_INITIALIZED)
+        expect(result.error.code).toBe(HaiIamError.NOT_INITIALIZED.code)
       }
     })
 
@@ -50,7 +50,7 @@ describe('iam.init', () => {
       const result = await iam.authz.checkPermission('x', 'read')
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.code).toBe(IamErrorCode.NOT_INITIALIZED)
+        expect(result.error.code).toBe(HaiIamError.NOT_INITIALIZED.code)
       }
     })
 
@@ -59,7 +59,7 @@ describe('iam.init', () => {
       const result = await iam.session.get('any-token')
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.code).toBe(IamErrorCode.NOT_INITIALIZED)
+        expect(result.error.code).toBe(HaiIamError.NOT_INITIALIZED.code)
       }
     })
 
@@ -68,7 +68,7 @@ describe('iam.init', () => {
       const result = iam.user.validatePassword('Password123')
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.code).toBe(IamErrorCode.NOT_INITIALIZED)
+        expect(result.error.code).toBe(HaiIamError.NOT_INITIALIZED.code)
       }
     })
 
@@ -80,7 +80,7 @@ describe('iam.init', () => {
       const result = await iam.init({})
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.code).toBe(IamErrorCode.CONFIG_ERROR)
+        expect(result.error.code).toBe(HaiIamError.CONFIG_ERROR.code)
       }
       // 恢复依赖以免影响后续测试
       await reldb.init({ type: 'sqlite', database: ':memory:' })
@@ -115,7 +115,7 @@ describe('iam.init', () => {
       const result = await iam.auth.login({ identifier: 'x', password: 'x' })
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.code).toBe(IamErrorCode.NOT_INITIALIZED)
+        expect(result.error.code).toBe(HaiIamError.NOT_INITIALIZED.code)
       }
     })
 

@@ -6,9 +6,8 @@
  */
 
 import type { AgentExecutor } from '@a2a-js/sdk/server'
-import type { Result } from '@h-ai/core'
+import type { HaiResult } from '@h-ai/core'
 
-import type { AIError } from '../ai-types.js'
 import type { StorePage } from '../store/ai-store-types.js'
 
 // ─── SDK 类型再导出（协议层） ───
@@ -124,7 +123,7 @@ export interface A2AAuthenticator {
    * @param headers - HTTP 请求头
    * @returns 成功返回调用方身份信息，失败返回错误
    */
-  authenticate: (headers: Record<string, string | undefined>) => Promise<Result<A2ACallerIdentity, AIError>>
+  authenticate: (headers: Record<string, string | undefined>) => Promise<HaiResult<A2ACallerIdentity>>
 }
 
 // ─── A2A 任务过滤器 ───
@@ -160,9 +159,9 @@ export interface A2AOperations {
    * 注册后 `handleRequest()`、`listMessages()` 等方法即可使用。
    *
    * @param executor - Agent 执行器（由应用层实现）
-   * @returns 注册成功返回 `ok(undefined)`；未配置/未初始化返回 `err(AIError)`
+   * @returns 注册成功返回 `ok(undefined)`；未配置/未初始化返回 `err(HaiAIError.*)`
    */
-  registerExecutor: (executor: AgentExecutor) => Result<void, AIError>
+  registerExecutor: (executor: AgentExecutor) => HaiResult<void>
 
   /**
    * 获取当前 Agent Card
@@ -171,7 +170,7 @@ export interface A2AOperations {
    *
    * @returns Agent Card 配置
    */
-  getAgentCard: () => Result<A2AAgentCardConfig, AIError>
+  getAgentCard: () => HaiResult<A2AAgentCardConfig>
 
   /**
    * 处理入站 JSON-RPC 请求
@@ -190,7 +189,7 @@ export interface A2AOperations {
    * @param filter - 查询过滤器
    * @returns 分页的消息记录列表
    */
-  listMessages: (filter: A2ATaskFilter) => Promise<Result<StorePage<A2AMessageRecord>, AIError>>
+  listMessages: (filter: A2ATaskFilter) => Promise<HaiResult<StorePage<A2AMessageRecord>>>
 
   /**
    * 作为客户端调用远端 Agent
@@ -200,7 +199,7 @@ export interface A2AOperations {
    * @param options - 调用选项
    * @returns 远端响应
    */
-  callRemoteAgent: (remoteUrl: string, message: string, options?: A2ACallOptions) => Promise<Result<A2ACallResult, AIError>>
+  callRemoteAgent: (remoteUrl: string, message: string, options?: A2ACallOptions) => Promise<HaiResult<A2ACallResult>>
 }
 
 // ─── 辅助类型 ───

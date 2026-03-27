@@ -5,23 +5,17 @@
  * @module wechat-pay-provider
  */
 
-import type { Result } from '@h-ai/core'
+import type { HaiResult } from '@h-ai/core'
 import type { WechatPayConfig } from '../../payment-config.js'
-import type {
-  CreateOrderInput,
-  OrderStatus,
-  PaymentError,
-  PaymentNotifyRequest,
-  PaymentNotifyResult,
-  PaymentOrder,
-  PaymentProvider,
-  RefundInput,
-  RefundResult,
-} from '../../payment-types.js'
+import type { CreateOrderInput, OrderStatus, PaymentNotifyRequest, PaymentNotifyResult, PaymentOrder, PaymentProvider, RefundInput, RefundResult } from '../../payment-types.js'
 import type { WechatNotifyResource, WechatOrderRequest } from './wechat-pay-types.js'
 import { err, ok } from '@h-ai/core'
-import { PaymentErrorCode } from '../../payment-config.js'
 import { paymentM } from '../../payment-i18n.js'
+import {
+
+  HaiPaymentError,
+
+} from '../../payment-types.js'
 import {
   decryptResource,
   generateNonce,
@@ -105,7 +99,7 @@ export function createWechatPayProvider(config: WechatPayConfig): PaymentProvide
   return {
     name: 'wechat',
 
-    async createOrder(input: CreateOrderInput): Promise<Result<PaymentOrder, PaymentError>> {
+    async createOrder(input: CreateOrderInput): Promise<HaiResult<PaymentOrder>> {
       try {
         const requestBody: WechatOrderRequest = {
           appid: config.appId,
@@ -163,15 +157,15 @@ export function createWechatPayProvider(config: WechatPayConfig): PaymentProvide
         })
       }
       catch (cause) {
-        return err({
-          code: PaymentErrorCode.CREATE_ORDER_FAILED,
-          message: paymentM('payment_createOrderFailed'),
+        return err(
+          HaiPaymentError.CREATE_ORDER_FAILED,
+          paymentM('payment_createOrderFailed'),
           cause,
-        })
+        )
       }
     },
 
-    async handleNotify(request: PaymentNotifyRequest): Promise<Result<PaymentNotifyResult, PaymentError>> {
+    async handleNotify(request: PaymentNotifyRequest): Promise<HaiResult<PaymentNotifyResult>> {
       try {
         const timestamp = request.headers['wechatpay-timestamp'] ?? ''
         const nonce = request.headers['wechatpay-nonce'] ?? ''
@@ -179,17 +173,17 @@ export function createWechatPayProvider(config: WechatPayConfig): PaymentProvide
 
         // 验签（必须提供平台证书）
         if (!config.platformCert) {
-          return err({
-            code: PaymentErrorCode.NOTIFY_VERIFY_FAILED,
-            message: paymentM('payment_notifyVerifyFailed'),
-          })
+          return err(
+            HaiPaymentError.NOTIFY_VERIFY_FAILED,
+            paymentM('payment_notifyVerifyFailed'),
+          )
         }
         const valid = verifyNotifySignature(timestamp, nonce, request.body, signature, config.platformCert)
         if (!valid) {
-          return err({
-            code: PaymentErrorCode.NOTIFY_VERIFY_FAILED,
-            message: paymentM('payment_notifyVerifyFailed'),
-          })
+          return err(
+            HaiPaymentError.NOTIFY_VERIFY_FAILED,
+            paymentM('payment_notifyVerifyFailed'),
+          )
         }
 
         // 解密资源
@@ -214,15 +208,15 @@ export function createWechatPayProvider(config: WechatPayConfig): PaymentProvide
         })
       }
       catch (cause) {
-        return err({
-          code: PaymentErrorCode.NOTIFY_PARSE_FAILED,
-          message: paymentM('payment_notifyParseFailed'),
+        return err(
+          HaiPaymentError.NOTIFY_PARSE_FAILED,
+          paymentM('payment_notifyParseFailed'),
           cause,
-        })
+        )
       }
     },
 
-    async queryOrder(orderNo: string): Promise<Result<OrderStatus, PaymentError>> {
+    async queryOrder(orderNo: string): Promise<HaiResult<OrderStatus>> {
       try {
         const path = `/v3/pay/transactions/out-trade-no/${encodeURIComponent(orderNo)}?mchid=${encodeURIComponent(config.mchId)}`
         const response = await wechatRequest<{
@@ -250,15 +244,15 @@ export function createWechatPayProvider(config: WechatPayConfig): PaymentProvide
         })
       }
       catch (cause) {
-        return err({
-          code: PaymentErrorCode.QUERY_ORDER_FAILED,
-          message: paymentM('payment_queryOrderFailed'),
+        return err(
+          HaiPaymentError.QUERY_ORDER_FAILED,
+          paymentM('payment_queryOrderFailed'),
           cause,
-        })
+        )
       }
     },
 
-    async refund(input: RefundInput): Promise<Result<RefundResult, PaymentError>> {
+    async refund(input: RefundInput): Promise<HaiResult<RefundResult>> {
       try {
         const response = await wechatRequest<{
           refund_id: string
@@ -287,15 +281,15 @@ export function createWechatPayProvider(config: WechatPayConfig): PaymentProvide
         })
       }
       catch (cause) {
-        return err({
-          code: PaymentErrorCode.REFUND_FAILED,
-          message: paymentM('payment_refundFailed'),
+        return err(
+          HaiPaymentError.REFUND_FAILED,
+          paymentM('payment_refundFailed'),
           cause,
-        })
+        )
       }
     },
 
-    async closeOrder(orderNo: string): Promise<Result<void, PaymentError>> {
+    async closeOrder(orderNo: string): Promise<HaiResult<void>> {
       try {
         await wechatRequest('POST', `/v3/pay/transactions/out-trade-no/${encodeURIComponent(orderNo)}/close`, {
           mchid: config.mchId,
@@ -303,11 +297,11 @@ export function createWechatPayProvider(config: WechatPayConfig): PaymentProvide
         return ok(undefined)
       }
       catch (cause) {
-        return err({
-          code: PaymentErrorCode.CLOSE_ORDER_FAILED,
-          message: paymentM('payment_closeOrderFailed'),
+        return err(
+          HaiPaymentError.CLOSE_ORDER_FAILED,
+          paymentM('payment_closeOrderFailed'),
           cause,
-        })
+        )
       }
     },
   }

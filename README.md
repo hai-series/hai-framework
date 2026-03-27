@@ -563,8 +563,11 @@ await scheduler.register({
   id: 'health-check',
   name: '健康检查',
   cron: '*/5 * * * *',
-  type: 'api',
-  api: { url: 'https://api.example.com/health', method: 'GET' },
+  handler: {
+    kind: 'api',
+    url: 'https://api.example.com/health',
+    method: 'GET',
+  },
 })
 
 scheduler.start()

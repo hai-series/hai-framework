@@ -16,5 +16,10 @@
   "scheduler_taskIdEmpty": "任务 ID 不能为空",
   "scheduler_taskRunning": "任务正在执行中: {taskId}",
   "scheduler_invalidApiConfig": "任务 api_config 格式无效: {taskId}",
-  "scheduler_lockAcquireFailed": "获取分布式锁失败，其他节点已获锁: {taskId}"
+  "scheduler_lockAcquireFailed": "获取分布式锁失败，其他节点已获锁: {taskId}",
+  "scheduler_jsCompileFailed": "JS 任务编译失败: {error}",
+  "scheduler_hookExecutionFailed": "任务生命周期回调执行失败: {error}",
+  "scheduler_taskHandlerMissing": "任务缺少可执行 handler，且未配置全局执行回调: {taskId}",
+  "scheduler_invalidHandlerConfig": "任务 handler 配置无效: {taskId}",
+  "scheduler_invalidRetryConfig": "任务重试策略配置无效: {taskId}"
 }

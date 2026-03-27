@@ -5,15 +5,14 @@
  * @module iam-authn-utils
  */
 
-import type { Result } from '@h-ai/core'
-import type { IamError } from '../iam-types.js'
+import type { HaiResult } from '@h-ai/core'
 import type { UserRepository } from '../user/iam-user-repository-user.js'
 import type { StoredUser } from '../user/iam-user-types.js'
 import type { Credentials } from './iam-authn-types.js'
 import { err, ok } from '@h-ai/core'
 
-import { IamErrorCode } from '../iam-config.js'
 import { iamM } from '../iam-i18n.js'
+import { HaiIamError } from '../iam-types.js'
 
 /**
  * 校验凭证类型并进行类型收窄
@@ -28,12 +27,12 @@ import { iamM } from '../iam-i18n.js'
 export function ensureCredentialType<TType extends Credentials['type']>(
   credentials: Credentials,
   type: TType,
-): Result<Extract<Credentials, { type: TType }>, IamError> {
+): HaiResult<Extract<Credentials, { type: TType }>> {
   if (credentials.type !== type) {
-    return err({
-      code: IamErrorCode.INVALID_CREDENTIALS,
-      message: iamM('iam_credentialTypeMismatch'),
-    })
+    return err(
+      HaiIamError.INVALID_CREDENTIALS,
+      iamM('iam_credentialTypeMismatch'),
+    )
   }
   return ok(credentials as Extract<Credentials, { type: TType }>)
 }

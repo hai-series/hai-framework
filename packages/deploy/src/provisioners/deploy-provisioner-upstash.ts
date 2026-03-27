@@ -5,11 +5,12 @@
  * @module deploy-provisioner-upstash
  */
 
-import type { Result } from '@h-ai/core'
-import type { DeployError, ProvisionResult, ServiceProvisioner } from '../deploy-types.js'
+import type { HaiResult } from '@h-ai/core'
+import type { ProvisionResult, ServiceProvisioner } from '../deploy-types.js'
 import { core, err, ok } from '@h-ai/core'
-import { DeployErrorCode } from '../deploy-config.js'
+
 import { deployM } from '../deploy-i18n.js'
+import { HaiDeployError } from '../deploy-types.js'
 
 const logger = core.logger.child({ module: 'deploy', scope: 'provisioner-upstash' })
 
@@ -29,7 +30,7 @@ export function createUpstashProvisioner(): ServiceProvisioner {
     name: 'upstash',
     serviceType: 'cache',
 
-    async authenticate(credentials: Record<string, string>): Promise<Result<string, DeployError>> {
+    async authenticate(credentials: Record<string, string>): Promise<HaiResult<string>> {
       logger.debug('Authenticating with Upstash')
       try {
         const userEmail = credentials.email ?? ''
@@ -54,22 +55,22 @@ export function createUpstashProvisioner(): ServiceProvisioner {
       }
       catch (error) {
         logger.error('Upstash authentication failed', { error })
-        return err({
-          code: DeployErrorCode.AUTH_FAILED,
-          message: deployM('deploy_authFailed', {
+        return err(
+          HaiDeployError.AUTH_FAILED,
+          deployM('deploy_authFailed', {
             params: { error: error instanceof Error ? error.message : String(error) },
           }),
-          cause: error,
-        })
+          error,
+        )
       }
     },
 
-    async provision(appName: string): Promise<Result<ProvisionResult, DeployError>> {
+    async provision(appName: string): Promise<HaiResult<ProvisionResult>> {
       if (!apiKey || !email) {
-        return err({
-          code: DeployErrorCode.AUTH_REQUIRED,
-          message: deployM('deploy_authRequired'),
-        })
+        return err(
+          HaiDeployError.AUTH_REQUIRED,
+          deployM('deploy_authRequired'),
+        )
       }
 
       logger.debug('Provisioning Upstash Redis', { appName })
@@ -111,16 +112,16 @@ export function createUpstashProvisioner(): ServiceProvisioner {
       }
       catch (error) {
         logger.error('Upstash provisioning failed', { appName, error })
-        return err({
-          code: DeployErrorCode.PROVISION_FAILED,
-          message: deployM('deploy_provisionFailed', {
+        return err(
+          HaiDeployError.PROVISION_FAILED,
+          deployM('deploy_provisionFailed', {
             params: {
               service: 'upstash',
               error: error instanceof Error ? error.message : String(error),
             },
           }),
-          cause: error,
-        })
+          error,
+        )
       }
     },
   }

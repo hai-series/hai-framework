@@ -5,32 +5,23 @@
  * @module audit-types
  */
 
-import type { Result } from '@h-ai/core'
-import type { AuditErrorCodeType, AuditInitConfigInput } from './audit-config.js'
+import type { ErrorInfo, HaiResult } from '@h-ai/core'
+import type { AuditInitConfigInput } from './audit-config.js'
+import { core } from '@h-ai/core'
 
-// ─── 错误类型 ───
+// ─── 错误定义（照 @h-ai/core 范式） ───
 
-/**
- * 审计模块错误
- *
- * 所有 audit 操作失败时返回此接口。
- *
- * @example
- * ```ts
- * const result = await audit.log({ action: 'login', resource: 'auth' })
- * if (!result.success) {
- *   // result.error.code / result.error.message
- * }
- * ```
- */
-export interface AuditError {
-  /** 错误码，取值为 {@link AuditErrorCode} 中的常量 */
-  code: AuditErrorCodeType
-  /** 人类可读的错误描述（i18n） */
-  message: string
-  /** 底层异常（如数据库错误），用于调试排查 */
-  cause?: unknown
-}
+const AuditErrorInfo = {
+  LOG_FAILED: '001:500',
+  QUERY_FAILED: '002:500',
+  CLEANUP_FAILED: '003:500',
+  STATS_FAILED: '004:500',
+  INIT_IN_PROGRESS: '005:409',
+  NOT_INITIALIZED: '010:500',
+  CONFIG_ERROR: '012:500',
+} as const satisfies ErrorInfo
+
+export const HaiAuditError = core.error.buildHaiErrorsDef('audit', AuditErrorInfo)
 
 // ─── 实体类型 ───
 
@@ -175,7 +166,7 @@ export interface AuditHelper {
    * @param ip - 客户端 IP（可选）
    * @param ua - 客户端 User-Agent（可选）
    */
-  login: (userId: string, ip?: string, ua?: string) => Promise<Result<void, AuditError>>
+  login: (userId: string, ip?: string, ua?: string) => Promise<HaiResult<void>>
   /**
    * 记录用户登出
    *
@@ -183,7 +174,7 @@ export interface AuditHelper {
    * @param ip - 客户端 IP（可选）
    * @param ua - 客户端 User-Agent（可选）
    */
-  logout: (userId: string, ip?: string, ua?: string) => Promise<Result<void, AuditError>>
+  logout: (userId: string, ip?: string, ua?: string) => Promise<HaiResult<void>>
   /**
    * 记录用户注册
    *
@@ -191,7 +182,7 @@ export interface AuditHelper {
    * @param ip - 客户端 IP（可选）
    * @param ua - 客户端 User-Agent（可选）
    */
-  register: (userId: string, ip?: string, ua?: string) => Promise<Result<void, AuditError>>
+  register: (userId: string, ip?: string, ua?: string) => Promise<HaiResult<void>>
   /**
    * 记录密码重置请求
    *
@@ -199,7 +190,7 @@ export interface AuditHelper {
    * @param ip - 客户端 IP（可选）
    * @param ua - 客户端 User-Agent（可选）
    */
-  passwordResetRequest: (email: string, ip?: string, ua?: string) => Promise<Result<void, AuditError>>
+  passwordResetRequest: (email: string, ip?: string, ua?: string) => Promise<HaiResult<void>>
   /**
    * 记录密码重置完成
    *
@@ -207,7 +198,7 @@ export interface AuditHelper {
    * @param ip - 客户端 IP（可选）
    * @param ua - 客户端 User-Agent（可选）
    */
-  passwordResetComplete: (userId: string | null, ip?: string, ua?: string) => Promise<Result<void, AuditError>>
+  passwordResetComplete: (userId: string | null, ip?: string, ua?: string) => Promise<HaiResult<void>>
   /**
    * 记录 CRUD 操作
    *
@@ -218,7 +209,7 @@ export interface AuditHelper {
    * await audit.helper.crud({ userId: 'user_1', action: 'create', resource: 'users', resourceId: 'user_2' })
    * ```
    */
-  crud: (input: CrudAuditInput) => Promise<Result<void, AuditError>>
+  crud: (input: CrudAuditInput) => Promise<HaiResult<void>>
 }
 
 // ─── 函数接口 ───
@@ -248,7 +239,7 @@ export interface AuditFunctions {
    * @param config - 初始化配置（可选，所有字段均有默认值）
    * @returns 成功时返回 ok(undefined)；失败时返回 CONFIG_ERROR
    */
-  init: (config?: AuditInitConfigInput) => Promise<Result<void, AuditError>>
+  init: (config?: AuditInitConfigInput) => Promise<HaiResult<void>>
   /**
    * 关闭审计模块，释放内部状态
    */
@@ -261,14 +252,14 @@ export interface AuditFunctions {
    * @param input - 日志内容（action 和 resource 为必填）
    * @returns 成功时返回创建的 AuditLog；失败时返回 LOG_FAILED
    */
-  log: (input: CreateAuditLogInput) => Promise<Result<AuditLog, AuditError>>
+  log: (input: CreateAuditLogInput) => Promise<HaiResult<AuditLog>>
   /**
    * 分页查询审计日志列表（含用户名 LEFT JOIN）
    *
    * @param options - 查询过滤与分页选项
    * @returns 成功时返回 { items, total }；失败时返回 QUERY_FAILED
    */
-  list: (options?: ListAuditLogsOptions) => Promise<Result<{ items: AuditLogWithUser[], total: number }, AuditError>>
+  list: (options?: ListAuditLogsOptions) => Promise<HaiResult<{ items: AuditLogWithUser[], total: number }>>
   /**
    * 获取指定用户的最近活动记录
    *
@@ -276,21 +267,21 @@ export interface AuditFunctions {
    * @param limit - 最大返回条数，默认 10
    * @returns 成功时返回 AuditLog 数组；失败时返回 QUERY_FAILED
    */
-  getUserRecent: (userId: string, limit?: number) => Promise<Result<AuditLog[], AuditError>>
+  getUserRecent: (userId: string, limit?: number) => Promise<HaiResult<AuditLog[]>>
   /**
    * 清理指定天数之前的旧日志
    *
    * @param olderThanDays - 保留天数，默认 90；清理此天数之前的日志
    * @returns 成功时返回删除的记录数；失败时返回 CLEANUP_FAILED
    */
-  cleanup: (olderThanDays?: number) => Promise<Result<number, AuditError>>
+  cleanup: (olderThanDays?: number) => Promise<HaiResult<number>>
   /**
    * 获取指定天数内的操作统计（按 action 分组计数）
    *
    * @param days - 统计天数，默认 7
    * @returns 成功时返回 AuditStatItem 数组；失败时返回 STATS_FAILED
    */
-  getStats: (days?: number) => Promise<Result<AuditStatItem[], AuditError>>
+  getStats: (days?: number) => Promise<HaiResult<AuditStatItem[]>>
   /**
    * 便捷记录器，封装常见审计场景
    *

@@ -4,7 +4,6 @@
  * =============================================================================
  */
 
-import { IamErrorHttpStatus } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
 import { z } from 'zod'
 
@@ -18,7 +17,7 @@ export const POST = kit.handler(async ({ request, cookies }) => {
 
   const loginResult = await kit.auth.login(cookies, { identifier, password })
   if (!loginResult.success) {
-    return kit.response.fromError(loginResult.error, IamErrorHttpStatus)
+    return kit.response.fromError(loginResult.error)
   }
 
   const { user, tokens } = loginResult.data

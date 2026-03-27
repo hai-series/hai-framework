@@ -5,14 +5,14 @@
  * @module iam-session-functions
  */
 
-import type { Result } from '@h-ai/core'
+import type { HaiResult } from '@h-ai/core'
 import type { IamConfig } from '../iam-config.js'
-import type { IamError } from '../iam-types.js'
 import type { SessionRepository } from './iam-session-repository-cache.js'
 import type { CreateSessionOptions, Session, SessionOperations, TokenPair } from './iam-session-types.js'
 import { core, err, ok } from '@h-ai/core'
-import { IamErrorCode, SessionConfigSchema } from '../iam-config.js'
+import { SessionConfigSchema } from '../iam-config.js'
 import { iamM } from '../iam-i18n.js'
+import { HaiIamError } from '../iam-types.js'
 import { createCacheSessionRepository } from './iam-session-repository-cache.js'
 import { buildSession, generateToken } from './iam-session-utils.js'
 
@@ -32,7 +32,7 @@ export interface SessionOperationsDeps {
  *
  * 内部创建缓存会话存储，返回会话管理接口。
  */
-export async function createSessionOperations(deps: SessionOperationsDeps): Promise<Result<SessionOperations, IamError>> {
+export async function createSessionOperations(deps: SessionOperationsDeps): Promise<HaiResult<SessionOperations>> {
   try {
     const { config } = deps
     const sessionConfig = SessionConfigSchema.parse(config.session ?? {})
@@ -53,11 +53,11 @@ export async function createSessionOperations(deps: SessionOperationsDeps): Prom
   }
   catch (error) {
     logger.error('Session sub-feature initialization failed', { error })
-    return err({
-      code: IamErrorCode.CONFIG_ERROR,
-      message: iamM('iam_initComponentFailed'),
-      cause: error,
-    })
+    return err(
+      HaiIamError.CONFIG_ERROR,
+      iamM('iam_initComponentFailed'),
+      error,
+    )
   }
 }
 
@@ -87,12 +87,12 @@ function buildSessionFunctions(config: SessionBuilderConfig): SessionOperations 
   const repo = config.sessionRepository
 
   return {
-    async create(options: CreateSessionOptions): Promise<Result<Session, IamError>> {
+    async create(options: CreateSessionOptions): Promise<HaiResult<Session>> {
       try {
         if (singleDevice) {
           const clearResult = await repo.removeByUserId(options.userId)
           if (!clearResult.success) {
-            return clearResult as Result<Session, IamError>
+            return clearResult as HaiResult<Session>
           }
         }
 
@@ -113,22 +113,22 @@ function buildSessionFunctions(config: SessionBuilderConfig): SessionOperations 
 
         const saveResult = await repo.save(session, tokenPair)
         if (!saveResult.success) {
-          return saveResult as Result<Session, IamError>
+          return saveResult as HaiResult<Session>
         }
 
         logger.debug('Session created', { userId: options.userId })
         return ok(session)
       }
       catch (error) {
-        return err({
-          code: IamErrorCode.SESSION_CREATE_FAILED,
-          message: iamM('iam_createSessionFailed'),
-          cause: error,
-        })
+        return err(
+          HaiIamError.SESSION_CREATE_FAILED,
+          iamM('iam_createSessionFailed'),
+          error,
+        )
       }
     },
 
-    async get(accessToken: string): Promise<Result<Session | null, IamError>> {
+    async get(accessToken: string): Promise<HaiResult<Session | null>> {
       const sessionResult = await repo.getByAccessToken(accessToken)
       if (!sessionResult.success) {
         return sessionResult
@@ -155,52 +155,55 @@ function buildSessionFunctions(config: SessionBuilderConfig): SessionOperations 
       return ok(session)
     },
 
-    async verifyToken(accessToken: string): Promise<Result<Session, IamError>> {
+    async verifyToken(accessToken: string): Promise<HaiResult<Session>> {
       const sessionResult = await this.get(accessToken)
       if (!sessionResult.success) {
-        return sessionResult as Result<Session, IamError>
+        return sessionResult as HaiResult<Session>
       }
 
       if (!sessionResult.data) {
-        return err({
-          code: IamErrorCode.SESSION_INVALID,
-          message: iamM('iam_sessionExpired'),
-        })
+        return err(
+          HaiIamError.SESSION_INVALID,
+          iamM('iam_sessionExpired'),
+        )
       }
 
       return ok(sessionResult.data)
     },
 
-    async update(accessToken: string, data: Partial<Session>): Promise<Result<void, IamError>> {
+    async update(accessToken: string, data: Partial<Session>): Promise<HaiResult<void>> {
       return repo.updateByAccessToken(accessToken, data)
     },
 
-    async delete(accessToken: string): Promise<Result<void, IamError>> {
+    async delete(accessToken: string): Promise<HaiResult<void>> {
       logger.debug('Session deleted', { accessToken })
       return repo.removeByAccessToken(accessToken)
     },
 
-    async deleteByUserId(userId: string): Promise<Result<number, IamError>> {
+    async deleteByUserId(userId: string): Promise<HaiResult<number>> {
       // removeByUserId 内部遍历删除，无法直接获取删除数量
       // 暂返回 0 表示成功；上层仅关注 success/failure
       const result = await repo.removeByUserId(userId)
       if (!result.success) {
-        return result as Result<number, IamError>
+        return result as HaiResult<number>
       }
       return ok(0)
     },
 
-    async refresh(refreshToken: string): Promise<Result<TokenPair, IamError>> {
+    async refresh(refreshToken: string): Promise<HaiResult<TokenPair>> {
       try {
         // 根据 refreshToken 获取旧会话
         const oldSessionResult = await repo.getByRefreshToken(refreshToken)
         if (!oldSessionResult.success) {
-          return oldSessionResult as Result<TokenPair, IamError>
+          return oldSessionResult as HaiResult<TokenPair>
         }
 
         const oldSession = oldSessionResult.data
         if (!oldSession) {
-          return err({ code: IamErrorCode.TOKEN_EXPIRED, message: iamM('iam_refreshTokenExpired') })
+          return err(
+            HaiIamError.TOKEN_EXPIRED,
+            iamM('iam_refreshTokenExpired'),
+          )
         }
 
         // Rotation 策略：删除旧会话（removeByAccessToken 内部同时清理 refreshToken 映射）
@@ -219,28 +222,35 @@ function buildSessionFunctions(config: SessionBuilderConfig): SessionOperations 
         })
 
         if (!newSessionResult.success) {
-          return newSessionResult as Result<TokenPair, IamError>
+          return newSessionResult as HaiResult<TokenPair>
         }
 
         // 从新会话中提取 tokenPair
         const tokenPair = newSessionResult.data.data?._tokenPair
         if (!tokenPair) {
-          return err({ code: IamErrorCode.TOKEN_REFRESH_FAILED, message: iamM('iam_refreshTokenFailed') })
+          return err(
+            HaiIamError.TOKEN_REFRESH_FAILED,
+            iamM('iam_refreshTokenFailed'),
+          )
         }
 
         logger.debug('Token refreshed', { userId: oldSession.userId })
         return ok(tokenPair)
       }
       catch (error) {
-        return err({ code: IamErrorCode.TOKEN_REFRESH_FAILED, message: iamM('iam_refreshTokenFailed'), cause: error })
+        return err(
+          HaiIamError.TOKEN_REFRESH_FAILED,
+          iamM('iam_refreshTokenFailed'),
+          error,
+        )
       }
     },
 
-    async revokeRefresh(refreshToken: string): Promise<Result<void, IamError>> {
+    async revokeRefresh(refreshToken: string): Promise<HaiResult<void>> {
       return repo.removeRefreshToken(refreshToken)
     },
 
-    async patchUserSessions(userId, updates): Promise<Result<void, IamError>> {
+    async patchUserSessions(userId, updates): Promise<HaiResult<void>> {
       return repo.patchUserSessions(userId, { ...updates })
     },
   }

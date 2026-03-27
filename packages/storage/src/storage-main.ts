@@ -5,24 +5,21 @@
  * @module storage-main
  */
 
-import type { Result } from '@h-ai/core'
-
+import type { HaiResult } from '@h-ai/core'
 import type { StorageConfig, StorageConfigInput } from './storage-config.js'
-import type {
-  DirOperations,
-  FileOperations,
-  PresignOperations,
-  StorageError,
-  StorageFunctions,
-  StorageProvider,
-} from './storage-types.js'
+import type { DirOperations, FileOperations, PresignOperations, StorageFunctions, StorageProvider } from './storage-types.js'
 
 import { core, err, ok } from '@h-ai/core'
 
 import { createLocalProvider } from './providers/storage-provider-local.js'
 import { createS3Provider } from './providers/storage-provider-s3.js'
-import { StorageConfigSchema, StorageErrorCode } from './storage-config.js'
+import { StorageConfigSchema } from './storage-config.js'
 import { storageM } from './storage-i18n.js'
+import {
+
+  HaiStorageError,
+
+} from './storage-types.js'
 
 const logger = core.logger.child({ module: 'storage', scope: 'main' })
 
@@ -63,8 +60,8 @@ function createProvider(config: StorageConfig): StorageProvider {
  * 当 storage 未调用 init() 就直接使用 file/dir/presign 操作时，
  * 所有方法调用都会返回 NOT_INITIALIZED 错误。
  */
-const notInitialized = core.module.createNotInitializedKit<StorageError>(
-  StorageErrorCode.NOT_INITIALIZED,
+const notInitialized = core.module.createNotInitializedKit(
+  HaiStorageError.NOT_INITIALIZED,
   () => storageM('storage_notInitialized'),
 )
 
@@ -119,14 +116,14 @@ export const storage: StorageFunctions = {
    * @param config 存储配置（S3 或本地），支持省略带默认值的字段。
    * @returns 成功时返回 ok(undefined)；失败时返回包含错误码和消息的 err。
    */
-  async init(config: StorageConfigInput): Promise<Result<void, StorageError>> {
+  async init(config: StorageConfigInput): Promise<HaiResult<void>> {
     // 并发初始化防护：避免多次 init 同时执行导致 Provider 泄漏
     if (initInProgress) {
       logger.warn('Storage init already in progress, skipping concurrent call')
-      return err({
-        code: StorageErrorCode.OPERATION_FAILED,
-        message: storageM('storage_operationFailed', { params: { error: 'Concurrent initialization detected' } }),
-      })
+      return err(
+        HaiStorageError.OPERATION_FAILED,
+        storageM('storage_operationFailed', { params: { error: 'Concurrent initialization detected' } }),
+      )
     }
     initInProgress = true
 
@@ -141,11 +138,11 @@ export const storage: StorageFunctions = {
       const parseResult = StorageConfigSchema.safeParse(config)
       if (!parseResult.success) {
         logger.error('Storage config validation failed', { error: parseResult.error.message })
-        return err({
-          code: StorageErrorCode.CONFIG_ERROR,
-          message: storageM('storage_configError', { params: { error: parseResult.error.message } }),
-          cause: parseResult.error,
-        })
+        return err(
+          HaiStorageError.CONFIG_ERROR,
+          storageM('storage_configError', { params: { error: parseResult.error.message } }),
+          parseResult.error,
+        )
       }
       const parsed = parseResult.data
 
@@ -165,13 +162,13 @@ export const storage: StorageFunctions = {
     }
     catch (error) {
       logger.error('Storage module initialization failed', { error })
-      return err({
-        code: StorageErrorCode.CONNECTION_FAILED,
-        message: storageM('storage_operationFailed', {
+      return err(
+        HaiStorageError.CONNECTION_FAILED,
+        storageM('storage_operationFailed', {
           params: { error: error instanceof Error ? error.message : String(error) },
         }),
-        cause: error,
-      })
+        error,
+      )
     }
     finally {
       initInProgress = false

@@ -6,11 +6,11 @@
  * @module capacitor-status-bar
  */
 
-import type { Result } from '@h-ai/core'
-import type { CapacitorError, StatusBarConfig } from './capacitor-types.js'
+import type { HaiResult } from '@h-ai/core'
+import type { StatusBarConfig } from './capacitor-types.js'
 import { err, ok } from '@h-ai/core'
-import { CapacitorErrorCode } from './capacitor-config.js'
 import { capacitorM } from './capacitor-i18n.js'
+import { HaiCapacitorError } from './capacitor-types.js'
 
 /**
  * 配置状态栏
@@ -29,7 +29,7 @@ import { capacitorM } from './capacitor-i18n.js'
  * })
  * ```
  */
-export async function configureStatusBar(config: StatusBarConfig): Promise<Result<void, CapacitorError>> {
+export async function configureStatusBar(config: StatusBarConfig): Promise<HaiResult<void>> {
   try {
     const { StatusBar, Style } = await import('@capacitor/status-bar')
 
@@ -56,11 +56,11 @@ export async function configureStatusBar(config: StatusBarConfig): Promise<Resul
     return ok(undefined)
   }
   catch (cause) {
-    return err({
-      code: CapacitorErrorCode.STATUS_BAR_FAILED,
-      message: capacitorM('capacitor_statusBarFailed'),
+    return err(
+      HaiCapacitorError.STATUS_BAR_FAILED,
+      capacitorM('capacitor_statusBarFailed'),
       cause,
-    })
+    )
   }
 }
 
@@ -74,18 +74,18 @@ export async function configureStatusBar(config: StatusBarConfig): Promise<Resul
  * await capacitor.statusBar.show()
  * ```
  */
-export async function showStatusBar(): Promise<Result<void, CapacitorError>> {
+export async function showStatusBar(): Promise<HaiResult<void>> {
   try {
     const { StatusBar } = await import('@capacitor/status-bar')
     await StatusBar.show()
     return ok(undefined)
   }
   catch (cause) {
-    return err({
-      code: CapacitorErrorCode.STATUS_BAR_FAILED,
-      message: capacitorM('capacitor_statusBarFailed'),
+    return err(
+      HaiCapacitorError.STATUS_BAR_FAILED,
+      capacitorM('capacitor_statusBarFailed'),
       cause,
-    })
+    )
   }
 }
 
@@ -99,17 +99,17 @@ export async function showStatusBar(): Promise<Result<void, CapacitorError>> {
  * await capacitor.statusBar.hide()
  * ```
  */
-export async function hideStatusBar(): Promise<Result<void, CapacitorError>> {
+export async function hideStatusBar(): Promise<HaiResult<void>> {
   try {
     const { StatusBar } = await import('@capacitor/status-bar')
     await StatusBar.hide()
     return ok(undefined)
   }
   catch (cause) {
-    return err({
-      code: CapacitorErrorCode.STATUS_BAR_FAILED,
-      message: capacitorM('capacitor_statusBarFailed'),
+    return err(
+      HaiCapacitorError.STATUS_BAR_FAILED,
+      capacitorM('capacitor_statusBarFailed'),
       cause,
-    })
+    )
   }
 }
