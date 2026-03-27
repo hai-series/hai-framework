@@ -344,6 +344,12 @@ export interface HandleA2AConfig {
    *
    * - `'apiKey'`：自动使用 IAM API Key 认证（根据 Agent Card 的 security 配置提取 key）
    * - 函数：自定义认证回调
+   *
+   * 自定义回调返回值语义：
+   * - 返回认证上下文：鉴权成功
+   * - 返回 `undefined`：当前请求无需执行 A2A 鉴权
+   * - 返回 `null`：鉴权失败，返回 401
+   * - 抛出异常：鉴权异常，返回 403
    */
   authenticate?: 'apiKey' | ((event: RequestEvent) => Promise<Record<string, unknown> | null | undefined>)
 }

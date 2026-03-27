@@ -8,6 +8,7 @@
 
 import type { RequestEvent } from '@sveltejs/kit'
 import type { HandleA2AConfig, HandleA2AOperations, HandleConfig } from '../../kit-types.js'
+import { getA2AApiKeySecurity, toProtocolAgentCard } from './kit-a2a-agent-card.js'
 import { createA2AApiKeyAuthenticator } from './kit-a2a-auth.js'
 
 // ─── 解析后的 A2A 内部配置 ───
@@ -39,10 +40,12 @@ export function resolveA2AConfig(
 
   // 简单模式：直接传入操作对象
   if ('getAgentCard' in input && 'handleRequest' in input) {
+    const operations = input as HandleA2AOperations
     return {
-      operations: input as HandleA2AOperations,
+      operations,
       cardPath: '/.well-known/agent.json',
       rpcPath: '/a2a',
+      authenticate: createAgentCardSecurityAuthenticator(operations),
     }
   }
 
@@ -60,30 +63,50 @@ export function resolveA2AConfig(
  * 解析 authenticate 配置
  *
  * - `undefined` → 无认证
- * - `'apiKey'` → 从 Agent Card security 配置创建 API Key 认证器
+ * - `'apiKey'` → 在请求时根据 Agent Card security 配置创建 API Key 认证器
  * - 函数 → 直接使用
  */
 function resolveAuthenticate(
   authenticate: HandleA2AConfig['authenticate'],
   operations: HandleA2AOperations,
 ): ResolvedA2AConfig['authenticate'] {
-  if (!authenticate)
-    return undefined
-
   if (typeof authenticate === 'function')
     return authenticate
 
-  // 'apiKey' 快捷方式：从 Agent Card 获取 security 配置
-  const cardResult = operations.getAgentCard()
-  const security = cardResult.success && cardResult.data
-    ? (cardResult.data as Record<string, unknown>).security as { apiKey?: { in: 'header' | 'query', name: string } } | undefined
-    : undefined
-  const apiKeyCfg = security?.apiKey
+  if (authenticate !== 'apiKey')
+    return undefined
 
-  return createA2AApiKeyAuthenticator({
-    in: apiKeyCfg?.in ?? 'header',
-    name: apiKeyCfg?.name ?? 'x-api-key',
-  })
+  return async (event: RequestEvent) => {
+    const apiKeyCfg = getApiKeySecurityFromAgentCard(operations)
+    const auth = createA2AApiKeyAuthenticator({
+      in: apiKeyCfg?.in ?? 'header',
+      name: apiKeyCfg?.name ?? 'x-api-key',
+    })
+    return auth(event)
+  }
+}
+
+function createAgentCardSecurityAuthenticator(
+  operations: HandleA2AOperations,
+): ResolvedA2AConfig['authenticate'] {
+  return async (event: RequestEvent) => {
+    const apiKeyCfg = getApiKeySecurityFromAgentCard(operations)
+    if (!apiKeyCfg)
+      return undefined
+
+    const auth = createA2AApiKeyAuthenticator(apiKeyCfg)
+    return auth(event)
+  }
+}
+
+function getApiKeySecurityFromAgentCard(
+  operations: HandleA2AOperations,
+): ReturnType<typeof getA2AApiKeySecurity> {
+  const cardResult = operations.getAgentCard()
+  if (!cardResult.success || !cardResult.data)
+    return undefined
+
+  return getA2AApiKeySecurity(cardResult.data)
 }
 
 // ─── A2A 请求处理 ───
@@ -110,7 +133,7 @@ export async function handleA2ARequest(
   if (pathname === config.cardPath && event.request.method === 'GET') {
     const result = config.operations.getAgentCard()
     if (result.success) {
-      return new Response(JSON.stringify(result.data), {
+      return new Response(JSON.stringify(toProtocolAgentCard(result.data)), {
         headers: { 'Content-Type': 'application/json', 'X-Request-Id': requestId },
       })
     }
@@ -125,9 +148,23 @@ export async function handleA2ARequest(
     // 可选认证
     let context: Record<string, unknown> | undefined
     if (config.authenticate) {
-      const authResult = await config.authenticate(event)
-      if (authResult) {
-        context = authResult
+      try {
+        const authResult = await config.authenticate(event)
+        if (authResult === null) {
+          return new Response(
+            JSON.stringify({ error: { code: 'A2A_UNAUTHORIZED', message: 'A2A authentication required' } }),
+            { status: 401, headers: { 'Content-Type': 'application/json', 'X-Request-Id': requestId } },
+          )
+        }
+        if (authResult !== undefined) {
+          context = authResult
+        }
+      }
+      catch {
+        return new Response(
+          JSON.stringify({ error: { code: 'A2A_FORBIDDEN', message: 'A2A authentication failed' } }),
+          { status: 403, headers: { 'Content-Type': 'application/json', 'X-Request-Id': requestId } },
+        )
       }
     }
 

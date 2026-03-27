@@ -63,6 +63,7 @@ function createMockApi(options: {
   postResult?: Result<unknown, { message: string }>
   streamChunks?: ChatCompletionChunk[]
 } = {}): { api: AIApiAdapter, postSpy: ReturnType<typeof vi.fn>, streamSpy: ReturnType<typeof vi.fn> } {
+  const getSpy = vi.fn()
   const postSpy = vi.fn().mockResolvedValue(
     options.postResult ?? ok(makeChatResponse('default')),
   )
@@ -76,7 +77,7 @@ function createMockApi(options: {
   const streamSpy = vi.fn().mockReturnValue(mockStream())
 
   return {
-    api: { post: postSpy, stream: streamSpy },
+    api: { get: getSpy, post: postSpy, stream: streamSpy },
     postSpy,
     streamSpy,
   }
@@ -178,6 +179,7 @@ describe('createAIClient — chatStream', () => {
       yield JSON.stringify(makeChunk(' World', 'stop'))
     }
     const api: AIApiAdapter = {
+      get: vi.fn(),
       post: vi.fn(),
       stream: vi.fn().mockReturnValue(mockStream()),
     }

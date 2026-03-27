@@ -244,6 +244,7 @@ describe('createAIClient — 错误处理边界', () => {
   /** 创建 mock api adapter */
   function createMockApi(postResult: unknown): AIApiAdapter {
     return {
+      get: vi.fn(),
       post: vi.fn().mockResolvedValue(postResult),
       stream: vi.fn(),
     }

@@ -36,7 +36,10 @@ const initHandle: Handle = async ({ event, resolve }) => {
 
 const haiHandle = kit.createHandle({
   rateLimit: { windowMs: 60000, maxRequests: 200 },
-  a2a: ai.a2a,
+  a2a: {
+    operations: ai.a2a,
+    authenticate: 'apiKey',
+  },
 })
 
 export const handle: Handle = kit.sequence(initHandle, haiHandle)
