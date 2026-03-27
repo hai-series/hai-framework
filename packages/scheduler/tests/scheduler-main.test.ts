@@ -11,6 +11,7 @@ import { HaiSchedulerError } from '../src/scheduler-types.js'
 
 describe('scheduler', () => {
   afterEach(async () => {
+    vi.restoreAllMocks()
     vi.unstubAllGlobals()
     await scheduler.close()
     await reldb.close()

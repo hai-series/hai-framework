@@ -17,6 +17,7 @@ describe('distributed lock integration', () => {
   })
 
   afterEach(async () => {
+    vi.restoreAllMocks()
     vi.unstubAllGlobals()
     await scheduler.close()
     await cache.close()
@@ -88,6 +89,42 @@ describe('distributed lock integration', () => {
       expect(triggerResult.data.status).toBe('success')
       expect(triggerResult.data.triggerType).toBe('manual')
       expect(triggerResult.data.triggerSource).toBe('admin-console')
+    }
+  })
+
+  it('获锁抛错时应记录 failed 日志并持久化触发信息', async () => {
+    await scheduler.init({ enableDb: true })
+
+    await scheduler.register({
+      id: 'lock-task-error',
+      name: '锁异常任务',
+      cron: '* * * * *',
+      handler: {
+        kind: 'js',
+        code: '() => "done"',
+      },
+    })
+
+    const acquireSpy = vi.spyOn(cache.lock, 'acquire').mockRejectedValueOnce(new Error('lock exploded'))
+    const task = scheduler.tasks.get('lock-task-error')
+    expect(task).toBeDefined()
+
+    const minuteTimestamp = Math.floor(Date.now() / 60000)
+    const log = await runTask(task!, minuteTimestamp, { type: 'scheduled', source: null })
+
+    expect(acquireSpy).toHaveBeenCalledTimes(1)
+    expect(log.status).toBe('failed')
+    expect(log.taskType).toBe('js')
+    expect(log.triggerType).toBe('scheduled')
+    expect(log.triggerSource).toBeNull()
+
+    const logsResult = await scheduler.getLogs({ taskId: 'lock-task-error', status: 'failed' })
+    expect(logsResult.success).toBe(true)
+    if (logsResult.success) {
+      expect(logsResult.data.items).toHaveLength(1)
+      expect(logsResult.data.items[0].triggerType).toBe('scheduled')
+      expect(logsResult.data.items[0].triggerSource).toBeNull()
+      expect(logsResult.data.items[0].error).toContain('lock-task-error')
     }
   })
 })
