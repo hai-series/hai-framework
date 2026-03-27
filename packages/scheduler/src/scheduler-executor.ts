@@ -98,6 +98,25 @@ async function notifyTaskFinish(hooks: Readonly<SchedulerTaskHooks>, event: Sche
   }
 }
 
+export async function persistExecutionLog(log: TaskExecutionLog): Promise<TaskExecutionLog> {
+  if (!currentLogRepo)
+    return log
+
+  await currentLogRepo.saveLog(log)
+
+  const cleanupResult = await currentLogRepo.cleanupLogs(currentCleanupPolicy)
+  if (!cleanupResult.success) {
+    logger.warn('Failed to cleanup execution logs', {
+      taskId: log.taskId,
+      error: cleanupResult.error.message,
+      maxLogs: currentCleanupPolicy.maxLogs,
+      retentionDays: currentCleanupPolicy.retentionDays,
+    })
+  }
+
+  return log
+}
+
 async function saveExecutionLog(
   task: TaskDefinition,
   trigger: TaskTriggerInfo,
@@ -123,22 +142,7 @@ async function saveExecutionLog(
     duration: finishedAt - startedAt,
   }
 
-  if (!currentLogRepo)
-    return log
-
-  await currentLogRepo.saveLog(log)
-
-  const cleanupResult = await currentLogRepo.cleanupLogs(currentCleanupPolicy)
-  if (!cleanupResult.success) {
-    logger.warn('Failed to cleanup execution logs', {
-      taskId: task.id,
-      error: cleanupResult.error.message,
-      maxLogs: currentCleanupPolicy.maxLogs,
-      retentionDays: currentCleanupPolicy.retentionDays,
-    })
-  }
-
-  return log
+  return persistExecutionLog(log)
 }
 
 export async function saveInterruptedTaskLog(

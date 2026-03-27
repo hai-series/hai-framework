@@ -18,7 +18,7 @@ import type { TaskDefinition, TaskExecutionLog, TaskTriggerInfo } from './schedu
 import { cache } from '@h-ai/cache'
 import { core } from '@h-ai/core'
 
-import { executeTask, interruptTask } from './scheduler-executor.js'
+import { executeTask, interruptTask, persistExecutionLog } from './scheduler-executor.js'
 import { getCron, getHooks, getTaskRegistry, unregisterTask } from './scheduler-functions.js'
 import { schedulerM } from './scheduler-i18n.js'
 
@@ -135,7 +135,9 @@ export async function runTask(
       id: 0,
       taskId: task.id,
       taskName: task.name,
-      taskType: task.type,
+      taskType: task.handler?.kind ?? 'hook',
+      triggerType: trigger.type,
+      triggerSource: trigger.source,
       status: 'failed',
       result: null,
       error,
