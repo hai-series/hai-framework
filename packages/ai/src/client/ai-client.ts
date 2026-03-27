@@ -7,7 +7,7 @@
  * @module ai-client
  */
 
-import type { Result } from '@h-ai/core'
+import type { HaiResult } from '@h-ai/core'
 import type { KnowledgeAskResult, KnowledgeDocumentInfo, KnowledgeIngestResult, KnowledgeRetrieveResult } from '../knowledge/ai-knowledge-types.js'
 import type {
   ChatCompletionChunk,
@@ -31,7 +31,7 @@ import type { SessionInfo, StorePage } from '../store/ai-store-types.js'
  */
 export interface AIApiAdapter {
   /** POST 请求（返回 Result） */
-  post: <T>(path: string, body?: unknown) => Promise<Result<T, { message: string }>>
+  post: <T>(path: string, body?: unknown) => Promise<HaiResult<T>>
   /** 流式请求（返回 SSE data 行的 AsyncIterable） */
   stream: (path: string, body?: unknown) => AsyncIterable<string>
 }

@@ -5,10 +5,10 @@
  * @module kit-auth
  */
 
-import type { Result } from '@h-ai/core'
-import type { ApiKeyCredentials, AuthResult, IamError, LdapCredentials, OtpCredentials, PasswordCredentials, RegisterOptions } from '@h-ai/iam'
+import type { HaiResult } from '@h-ai/core'
+import type { ApiKeyCredentials, AuthResult, LdapCredentials, OtpCredentials, PasswordCredentials, RegisterOptions } from '@h-ai/iam'
 import type { HandleFetch } from '@sveltejs/kit'
-import type { AuthOperations } from './kit-types.js'
+import type { AuthOperations, AuthOperationsProvider } from './kit-types.js'
 import process from 'node:process'
 
 /** 默认 Token Cookie 名 */
@@ -21,7 +21,7 @@ const DEFAULT_TOKEN_COOKIE_NAME = 'hai_access_token'
  */
 const authState = {
   cookieName: DEFAULT_TOKEN_COOKIE_NAME,
-  operations: null as AuthOperations | null,
+  operations: null as AuthOperationsProvider | null,
 }
 
 /**
@@ -29,7 +29,7 @@ const authState = {
  *
  * 通常由 `createHandle` 在初始化时自动调用，无需手动调用。
  */
-export function configureAuth(config: { cookieName?: string, operations?: AuthOperations }): void {
+export function configureAuth(config: { cookieName?: string, operations?: AuthOperationsProvider }): void {
   if (config.cookieName)
     authState.cookieName = config.cookieName
   if (config.operations)
@@ -126,7 +126,9 @@ function getAuthOperations(): AuthOperations {
   if (!authState.operations) {
     throw new Error('kit.auth 未配置：请在 kit.createHandle() 中传入 auth.operations')
   }
-  return authState.operations
+  return typeof authState.operations === 'function'
+    ? authState.operations()
+    : authState.operations
 }
 
 /**
@@ -134,8 +136,8 @@ function getAuthOperations(): AuthOperations {
  */
 async function executeLogin(
   cookies: CookieWriter,
-  authPromise: Promise<Result<AuthResult, IamError>>,
-): Promise<Result<AuthResult, IamError>> {
+  authPromise: Promise<HaiResult<AuthResult>>,
+): Promise<HaiResult<AuthResult>> {
   const result = await authPromise
   if (result.success) {
     setToken(cookies, result.data.tokens.accessToken, result.data.tokens.expiresIn)
@@ -160,7 +162,7 @@ async function executeLogin(
 export async function login(
   cookies: CookieWriter,
   credentials: PasswordCredentials,
-): Promise<Result<AuthResult, IamError>> {
+): Promise<HaiResult<AuthResult>> {
   return executeLogin(cookies, getAuthOperations().login(credentials))
 }
 
@@ -179,7 +181,7 @@ export async function login(
 export async function loginWithOtp(
   cookies: CookieWriter,
   credentials: OtpCredentials,
-): Promise<Result<AuthResult, IamError>> {
+): Promise<HaiResult<AuthResult>> {
   return executeLogin(cookies, getAuthOperations().loginWithOtp(credentials))
 }
 
@@ -198,7 +200,7 @@ export async function loginWithOtp(
 export async function loginWithLdap(
   cookies: CookieWriter,
   credentials: LdapCredentials,
-): Promise<Result<AuthResult, IamError>> {
+): Promise<HaiResult<AuthResult>> {
   return executeLogin(cookies, getAuthOperations().loginWithLdap(credentials))
 }
 
@@ -218,7 +220,7 @@ export async function loginWithLdap(
 export async function loginWithApiKey(
   cookies: CookieWriter,
   credentials: ApiKeyCredentials,
-): Promise<Result<AuthResult, IamError>> {
+): Promise<HaiResult<AuthResult>> {
   return executeLogin(cookies, getAuthOperations().loginWithApiKey(credentials))
 }
 
@@ -237,7 +239,7 @@ export async function loginWithApiKey(
 export async function registerAndLogin(
   cookies: CookieWriter,
   options: RegisterOptions,
-): Promise<Result<AuthResult, IamError>> {
+): Promise<HaiResult<AuthResult>> {
   return executeLogin(cookies, getAuthOperations().registerAndLogin(options))
 }
 

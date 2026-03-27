@@ -5,17 +5,9 @@
  * @module storage-provider-local
  */
 
-import type { Result } from '@h-ai/core'
+import type { HaiError, HaiResult } from '@h-ai/core'
 import type { LocalConfig, StorageConfig } from '../storage-config.js'
-import type {
-  DirOperations,
-  FileMetadata,
-  FileOperations,
-  ListResult,
-  PresignOperations,
-  StorageError,
-  StorageProvider,
-} from '../storage-types.js'
+import type { DirOperations, FileMetadata, FileOperations, ListResult, PresignOperations, StorageProvider } from '../storage-types.js'
 import { Buffer } from 'node:buffer'
 import * as crypto from 'node:crypto'
 import * as fs from 'node:fs'
@@ -24,10 +16,13 @@ import * as fsp from 'node:fs/promises'
 import * as path from 'node:path'
 import { core, err, ok } from '@h-ai/core'
 
-import { StorageErrorCode } from '../storage-config.js'
-
 import { storageM } from '../storage-i18n.js'
 import { MIME_TYPE_DEFAULT, MIME_TYPES } from '../storage-mime.js'
+import {
+
+  HaiStorageError,
+
+} from '../storage-types.js'
 
 const logger = core.logger.child({ module: 'storage', scope: 'provider-local' })
 
@@ -47,49 +42,44 @@ const logger = core.logger.child({ module: 'storage', scope: 'provider-local' })
  * @param key - 相关文件键（可选，用于错误消息）
  * @returns 统一的 StorageError
  */
-function toStorageError(error: unknown, key?: string): StorageError {
+function toStorageError(error: unknown, key?: string): HaiError {
   const e = error as NodeJS.ErrnoException
 
   if (e.code === 'ENOENT') {
     return {
-      code: StorageErrorCode.NOT_FOUND,
+      ...HaiStorageError.NOT_FOUND,
       message: storageM('storage_fileNotFound', { params: { key: key ?? '' } }),
-      key,
       cause: error,
     }
   }
 
   if (e.code === 'EACCES' || e.code === 'EPERM') {
     return {
-      code: StorageErrorCode.PERMISSION_DENIED,
+      ...HaiStorageError.PERMISSION_DENIED,
       message: storageM('storage_permissionDenied', { params: { key: key ?? '' } }),
-      key,
       cause: error,
     }
   }
 
   if (e.code === 'ENOSPC') {
     return {
-      code: StorageErrorCode.QUOTA_EXCEEDED,
+      ...HaiStorageError.QUOTA_EXCEEDED,
       message: storageM('storage_diskSpaceInsufficient'),
-      key,
       cause: error,
     }
   }
 
   if (e.code === 'EISDIR') {
     return {
-      code: StorageErrorCode.INVALID_PATH,
+      ...HaiStorageError.INVALID_PATH,
       message: storageM('storage_pathIsDir', { params: { key: key ?? '' } }),
-      key,
       cause: error,
     }
   }
 
   return {
-    code: StorageErrorCode.IO_ERROR,
+    code: HaiStorageError.IO_ERROR.code,
     message: storageM('storage_ioError', { params: { error: e.message ?? '' } }),
-    key,
     cause: error,
   }
 }
@@ -219,13 +209,12 @@ export function createLocalProvider(): StorageProvider {
   // -------------------------------------------------------------------------
 
   const file: FileOperations = {
-    async put(key, data, options = {}): Promise<Result<FileMetadata, StorageError>> {
+    async put(key, data, options = {}): Promise<HaiResult<FileMetadata>> {
       if (isMetaFile(key)) {
-        return err({
-          code: StorageErrorCode.INVALID_PATH,
-          message: storageM('storage_metaFileAccess', { params: { key } }),
-          key,
-        })
+        return err(
+          HaiStorageError.INVALID_PATH,
+          storageM('storage_metaFileAccess', { params: { key } }),
+        )
       }
       try {
         const filePath = fullPath(key)
@@ -267,13 +256,12 @@ export function createLocalProvider(): StorageProvider {
       }
     },
 
-    async get(key, options = {}): Promise<Result<Buffer, StorageError>> {
+    async get(key, options = {}): Promise<HaiResult<Buffer>> {
       if (isMetaFile(key)) {
-        return err({
-          code: StorageErrorCode.INVALID_PATH,
-          message: storageM('storage_metaFileAccess', { params: { key } }),
-          key,
-        })
+        return err(
+          HaiStorageError.INVALID_PATH,
+          storageM('storage_metaFileAccess', { params: { key } }),
+        )
       }
       try {
         const filePath = fullPath(key)
@@ -303,24 +291,22 @@ export function createLocalProvider(): StorageProvider {
       }
     },
 
-    async head(key): Promise<Result<FileMetadata, StorageError>> {
+    async head(key): Promise<HaiResult<FileMetadata>> {
       if (isMetaFile(key)) {
-        return err({
-          code: StorageErrorCode.INVALID_PATH,
-          message: storageM('storage_metaFileAccess', { params: { key } }),
-          key,
-        })
+        return err(
+          HaiStorageError.INVALID_PATH,
+          storageM('storage_metaFileAccess', { params: { key } }),
+        )
       }
       try {
         const filePath = fullPath(key)
         const stat = await fsp.stat(filePath)
 
         if (stat.isDirectory()) {
-          return err({
-            code: StorageErrorCode.INVALID_PATH,
-            message: storageM('storage_pathIsDir', { params: { key } }),
-            key,
-          })
+          return err(
+            HaiStorageError.INVALID_PATH,
+            storageM('storage_pathIsDir', { params: { key } }),
+          )
         }
 
         // 尝试读取元数据文件
@@ -351,13 +337,12 @@ export function createLocalProvider(): StorageProvider {
       }
     },
 
-    async exists(key): Promise<Result<boolean, StorageError>> {
+    async exists(key): Promise<HaiResult<boolean>> {
       if (isMetaFile(key)) {
-        return err({
-          code: StorageErrorCode.INVALID_PATH,
-          message: storageM('storage_metaFileAccess', { params: { key } }),
-          key,
-        })
+        return err(
+          HaiStorageError.INVALID_PATH,
+          storageM('storage_metaFileAccess', { params: { key } }),
+        )
       }
       try {
         const filePath = fullPath(key)
@@ -372,13 +357,12 @@ export function createLocalProvider(): StorageProvider {
       }
     },
 
-    async delete(key): Promise<Result<void, StorageError>> {
+    async delete(key): Promise<HaiResult<void>> {
       if (isMetaFile(key)) {
-        return err({
-          code: StorageErrorCode.INVALID_PATH,
-          message: storageM('storage_metaFileAccess', { params: { key } }),
-          key,
-        })
+        return err(
+          HaiStorageError.INVALID_PATH,
+          storageM('storage_metaFileAccess', { params: { key } }),
+        )
       }
       try {
         const filePath = fullPath(key)
@@ -405,11 +389,11 @@ export function createLocalProvider(): StorageProvider {
       }
     },
 
-    async deleteMany(keys): Promise<Result<void, StorageError>> {
+    async deleteMany(keys): Promise<HaiResult<void>> {
       // 并行删除，避免 await-in-loop（N+1）
       const results = await Promise.allSettled(keys.map(key => file.delete(key)))
 
-      const errors: StorageError[] = []
+      const errors: HaiError[] = []
       for (const result of results) {
         if (result.status === 'fulfilled' && !result.value.success) {
           errors.push(result.value.error)
@@ -417,23 +401,23 @@ export function createLocalProvider(): StorageProvider {
       }
 
       if (errors.length > 0) {
-        return err({
-          code: StorageErrorCode.OPERATION_FAILED,
-          message: storageM('storage_deleteManyFailed', { params: { count: errors.length } }),
-          cause: errors,
-        })
+        return err(
+          HaiStorageError.OPERATION_FAILED,
+          storageM('storage_deleteManyFailed', { params: { count: errors.length } }),
+          errors,
+        )
       }
 
       return ok(undefined)
     },
 
-    async copy(sourceKey, destKey, options = {}): Promise<Result<FileMetadata, StorageError>> {
+    async copy(sourceKey, destKey, options = {}): Promise<HaiResult<FileMetadata>> {
       if (isMetaFile(sourceKey) || isMetaFile(destKey)) {
-        return err({
-          code: StorageErrorCode.INVALID_PATH,
-          message: storageM('storage_metaFileAccess', { params: { key: sourceKey } }),
-          key: sourceKey,
-        })
+        return err(
+          HaiStorageError.INVALID_PATH,
+          storageM('storage_metaFileAccess', { params: { key: sourceKey } }),
+          sourceKey,
+        )
       }
       try {
         const sourcePath = fullPath(sourceKey)
@@ -480,7 +464,7 @@ export function createLocalProvider(): StorageProvider {
   // -------------------------------------------------------------------------
 
   const dir: DirOperations = {
-    async list(options = {}): Promise<Result<ListResult, StorageError>> {
+    async list(options = {}): Promise<HaiResult<ListResult>> {
       try {
         const cfg = getConfig()
         const prefix = options.prefix || ''
@@ -547,7 +531,7 @@ export function createLocalProvider(): StorageProvider {
       }
     },
 
-    async delete(prefix): Promise<Result<void, StorageError>> {
+    async delete(prefix): Promise<HaiResult<void>> {
       try {
         const dirPath = fullPath(prefix)
 
@@ -571,7 +555,7 @@ export function createLocalProvider(): StorageProvider {
   // -------------------------------------------------------------------------
 
   const presign: PresignOperations = {
-    async getUrl(key, options?): Promise<Result<string, StorageError>> {
+    async getUrl(key, options?): Promise<HaiResult<string>> {
       // 本地存储不支持真正的签名 URL
       // 返回一个带签名参数的虚拟 URL，应用层需要自行处理
       const expiresIn = options?.expiresIn || 3600
@@ -585,7 +569,7 @@ export function createLocalProvider(): StorageProvider {
       return ok(`local://${key}?expires=${expires}&signature=${signature}`)
     },
 
-    async putUrl(key, options?): Promise<Result<string, StorageError>> {
+    async putUrl(key, options?): Promise<HaiResult<string>> {
       // 同上，返回虚拟 URL
       const expiresIn = options?.expiresIn || 3600
       const expires = Math.floor(Date.now() / 1000) + expiresIn
@@ -615,12 +599,12 @@ export function createLocalProvider(): StorageProvider {
     dir,
     presign,
 
-    async connect(cfg: StorageConfig): Promise<Result<void, StorageError>> {
+    async connect(cfg: StorageConfig): Promise<HaiResult<void>> {
       if (cfg.type !== 'local') {
-        return err({
-          code: StorageErrorCode.CONFIG_ERROR,
-          message: storageM('storage_localConfigTypeError'),
-        })
+        return err(
+          HaiStorageError.CONFIG_ERROR,
+          storageM('storage_localConfigTypeError'),
+        )
       }
 
       try {

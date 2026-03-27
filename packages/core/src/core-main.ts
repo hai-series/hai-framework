@@ -5,8 +5,8 @@
  * @module core-main
  */
 
-import type { LoggingConfig } from './core-config.js'
-import type { Logger, LoggerFunctions } from './core-types.js'
+import type { CoreLogger, LoggerFunctions } from './core-types.js'
+import { error } from './functions/core-function-error.js'
 import { id } from './functions/core-function-id.js'
 import { i18n } from './i18n/core-i18n-utils.js'
 import { array as arrayUtils } from './utils/core-util-array.js'
@@ -42,69 +42,49 @@ import { typeUtils } from './utils/core-util-type.js'
  * ```
  */
 export function createCore(loggerFns: LoggerFunctions) {
-  let cachedLogger: Logger | null = null
+  let cachedCoreLogger: CoreLogger | null = null
+
+  const buildCoreLogger = (): CoreLogger => {
+    const base = loggerFns.getLogger()
+    return {
+      trace: (msg, ctx) => base.trace(msg, ctx),
+      debug: (msg, ctx) => base.debug(msg, ctx),
+      info: (msg, ctx) => base.info(msg, ctx),
+      warn: (msg, ctx) => base.warn(msg, ctx),
+      error: (msg, ctx) => base.error(msg, ctx),
+      fatal: (msg, ctx) => base.fatal(msg, ctx),
+      child: ctx => base.child(ctx),
+      create: loggerFns.createLogger,
+      configure: (config) => {
+        loggerFns.configureLogger(config)
+        cachedCoreLogger = null // 重置缓存
+      },
+      setLevel: loggerFns.setLogLevel,
+      getLevel: loggerFns.getLogLevel,
+    }
+  }
 
   return {
     // ─── Logger ───
 
     /**
-     * 获取默认 Logger（懒加载单例）。
+     * 默认 Logger（懒加载单例），同时提供 create / configure / setLevel / getLevel 管理方法。
      *
      * @example
      * ```ts
      * core.logger.info('booting')
+     * core.logger.configure({ level: 'debug' })
+     * core.logger.setLevel('warn')
+     * const level = core.logger.getLevel()
+     * const db = core.logger.create({ name: 'db' })
      * ```
      */
-    get logger(): Logger {
-      if (!cachedLogger) {
-        cachedLogger = loggerFns.getLogger()
+    get logger(): CoreLogger {
+      if (!cachedCoreLogger) {
+        cachedCoreLogger = buildCoreLogger()
       }
-      return cachedLogger
+      return cachedCoreLogger
     },
-
-    /**
-     * 创建新的 Logger 实例。
-     *
-     * @example
-     * ```ts
-     * const logger = core.createLogger({ name: 'api' })
-     * logger.info('ready')
-     * ```
-     */
-    createLogger: loggerFns.createLogger,
-
-    /**
-     * 配置默认 Logger。
-     *
-     * @example
-     * ```ts
-     * core.configureLogger({ level: 'warn' })
-     * ```
-     */
-    configureLogger: (config: Partial<LoggingConfig>) => {
-      loggerFns.configureLogger(config)
-      cachedLogger = null // 重置缓存
-    },
-
-    /**
-     * 设置日志级别。
-     *
-     * @example
-     * ```ts
-     * core.setLogLevel('debug')
-     * ```
-     */
-    setLogLevel: loggerFns.setLogLevel,
-
-    /**
-     * 获取当前日志级别。
-     *
-     * @example
-     * ```ts
-     * const level = core.getLogLevel()
-     * ```
-     */
-    getLogLevel: loggerFns.getLogLevel,
 
     // ─── i18n 国际化工具 ───
 
@@ -202,6 +182,30 @@ export function createCore(loggerFns: LoggerFunctions) {
     time: timeUtils,
 
     // ─── 模块基础能力 ───
+
+    /**
+     * 错误工具（统一入口）。
+     *
+     * 提供错误定义生成与错误实例创建方法，支持跨模块统一的错误码和 HTTP 状态映射。
+     *
+     * @example
+     * ```ts
+     * // 为模块生成标准错误定义
+     * const DbError = core.error.buildHaiErrorsDef('db', {
+     *   CONNECTION_FAILED: '101:500',
+     *   QUERY_TIMEOUT: '102:504',
+     * })
+     *
+     * // 创建错误实例（带上下文信息）
+     * const err = core.error.buildHaiErrorInst(
+     *   DbError.CONNECTION_FAILED,
+     *   'Unable to connect to PostgreSQL',
+     *   originalError,
+     *   'Please check database connection string'
+     * )
+     * ```
+     */
+    error,
 
     /**
      * 模块基础工具集。

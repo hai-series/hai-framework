@@ -1,16 +1,11 @@
 # @h-ai/scheduler
 
-定时任务调度模块，支持 cron 表达式、JS 函数 / HTTP API 执行，以及通过 `@h-ai/reldb` 持久化执行日志和任务定义。
+定时任务调度模块，支持统一任务模型、cron 调度、JS 函数字符串 / HTTP API 执行、任务持久化、执行日志查询，以及全局任务生命周期回调。
 
 ## 依赖
 
-- `@h-ai/reldb` — 数据库（任务定义与执行日志持久化），**需在 scheduler.init() 前初始化**（enableDb: true 时必需）
-- `@h-ai/cache` — 缓存（分布式锁），可选；已初始化时自动启用分布式锁
-
-## 支持的任务类型
-
-- **JS 函数任务**：执行用户提供的 JS/TS 处理函数（仅存在于内存，不可持久化）
-- **API 任务**：发起 HTTP 请求（GET/POST/PUT/DELETE/PATCH），支持自定义 headers、body 和超时；启用 DB 时自动持久化，重启后自动恢复
+- `@h-ai/reldb` — 任务定义与执行日志持久化，`enableDb: true` 时需先初始化
+- `@h-ai/cache` — 分布式锁，可选；初始化后自动参与定时触发抢锁
 
 ## 快速开始
 
@@ -19,131 +14,179 @@ import { cache } from '@h-ai/cache'
 import { reldb } from '@h-ai/reldb'
 import { scheduler } from '@h-ai/scheduler'
 
-// 1. 初始化依赖
 await reldb.init({ type: 'sqlite', database: './scheduler.db' })
-await cache.init({ type: 'memory' }) // 可选，启用分布式锁
+await cache.init({ type: 'memory' }) // 可选
 
-// 2. 初始化调度器（自动使用已初始化的 reldb 单例，自动加载之前持久化的 API 任务）
-await scheduler.init({ enableDb: true })
-
-// 也可以在初始化时传入预定义任务（DB 中已有同 ID 的不会被覆盖）
 await scheduler.init({
   enableDb: true,
-  tasks: [
-    { id: 'cleanup', name: '清理过期数据', cron: '0 2 * * *', type: 'js', handler: async () => { /* ... */ } },
-  ],
+  maxLogs: 1000,
+  retentionDays: 30,
+  hooks: {
+    onTaskStart(event) {
+      void event
+    },
+  },
 })
 
-// 注册 API 任务（自动持久化到 DB，重启后自动恢复）
 await scheduler.register({
   id: 'health-check',
   name: '健康检查',
+  description: '每 5 分钟执行一次系统健康检查',
   cron: '*/5 * * * *',
-  type: 'api',
-  api: { url: 'https://api.example.com/health', method: 'GET' },
+  params: { channel: 'ops' },
+  retry: { maxAttempts: 3, backoffMs: [1000, 5000] },
+  handler: {
+    kind: 'api',
+    url: 'https://api.example.com/health',
+    method: 'GET',
+    timeout: 10000,
+  },
 })
 
-// 注册 JS 函数任务（仅存在于内存）
 await scheduler.register({
   id: 'cleanup',
   name: '清理过期数据',
+  description: '每日凌晨执行过期数据清理',
   cron: '0 2 * * *',
-  type: 'js',
-  handler: async () => { /* 清理逻辑 */ },
+  deleteAfterRun: true,
+  params: { source: 'nightly' },
+  handler: {
+    kind: 'js',
+    code: '(context) => ({ taskId: context.taskId, params: context.params })',
+  },
 })
 
-// 启动调度
 scheduler.start()
 
-// 更新任务配置
-await scheduler.updateTask('health-check', {
-  cron: '*/10 * * * *',
-  api: { url: 'https://api.example.com/health/v2' },
+const manualResult = await scheduler.trigger('cleanup', { source: 'admin-console' })
+const logs = await scheduler.getLogs({
+  triggerType: 'manual',
+  triggerSource: 'admin-console',
+  startedAfter: Date.now() - 24 * 60 * 60 * 1000,
 })
 
-// 手动触发
-await scheduler.trigger('cleanup')
-
-// 查询执行日志
-const logs = await scheduler.getLogs({ taskId: 'cleanup', status: 'failed', limit: 20 })
-
-// 注销任务（同时删除持久化数据）
-await scheduler.unregister('health-check')
-
-// 停止并关闭
 scheduler.stop()
 await scheduler.close()
 ```
 
-## 配置
+## 统一任务模型
 
 ```ts
-await scheduler.init({
-  enableDb: true, // 是否启用数据库（默认 true，需 @h-ai/reldb 已初始化）
-  tickInterval: 1000, // 调度检查间隔，毫秒（默认 1000）
-  lockExpireMs: 300000, // 分布式锁过期时间，毫秒（默认 300000，即 5 分钟）
-  nodeId: 'node-1', // 节点标识（默认自动生成 UUID）
-  tasks: [ // 预定义任务列表（可选，DB 中已有同 ID 的不会被覆盖）
-    { id: 'health', name: '健康检查', cron: '*/5 * * * *', type: 'api', api: { url: 'https://...' } },
-  ],
-})
-```
-
-若 `enableDb: true` 但 `@h-ai/reldb` 未初始化，调度器会自动降级为 `enableDb: false`。
-
-## 任务持久化
-
-启用 DB 时：
-
-- **API 任务**在 `register()` 时自动持久化，`init()` 时自动加载，`unregister()` 时自动删除
-- **JS 任务**因 handler 函数不可序列化，不参与持久化，需每次启动时重新注册
-- `updateTask()` 同步更新内存和数据库中的任务定义
-- **配置任务**通过 `init({ tasks: [...] })` 传入，初始化时自动注册；DB 中已有同 ID 的任务优先，不会被配置覆盖
-
-## 分布式锁
-
-启用 DB 时，scheduler 内置基于 `@h-ai/cache` 的分布式锁，多节点部署时确保同一任务同一分钟只有一个节点执行。
-
-- `enableDb: true` 且 `@h-ai/cache` 已初始化时自动启用，无需额外配置
-- 锁键格式为 `scheduler:${taskId}:${minuteTimestamp}`
-- 锁通过 TTL 自动过期，无需手动清理
-- 手动触发（`trigger`）不经过分布式锁
-- 若 `@h-ai/cache` 未初始化，分布式锁自动禁用，不影响调度器运行
-
-## 错误处理
-
-所有操作返回 `Result<T, SchedulerError>`，通过 `result.success` 判断成功或失败。
-
-```ts
-import { scheduler, SchedulerErrorCode } from '@h-ai/scheduler'
-
-const result = await scheduler.register({ /* ... */ })
-if (!result.success) {
-  switch (result.error.code) {
-    case SchedulerErrorCode.INVALID_CRON:
-      // cron 表达式无效
-      break
-    case SchedulerErrorCode.TASK_ALREADY_EXISTS:
-      // 任务 ID 已存在
-      break
+interface TaskDefinition {
+  id: string
+  name: string
+  description?: string
+  cron: string
+  enabled?: boolean
+  deleteAfterRun?: boolean
+  retry?: {
+    maxAttempts: number
+    backoffMs?: number[]
   }
+  params?: Record<string, unknown>
+  handler?: ApiTaskConfig | JsTaskConfig
+}
+
+interface ApiTaskConfig {
+  kind: 'api'
+  url: string
+  method?: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH'
+  headers?: Record<string, string>
+  body?: unknown
+  timeout?: number
+}
+
+interface JsTaskConfig {
+  kind: 'js'
+  code: string // JS 函数字符串
+  timeout?: number
 }
 ```
 
+说明：
+
+- 所有任务都可持久化到数据库，包括 `kind: 'js'` 的任务
+- JS 任务会在运行时编译，并基于源码做缓存，避免每次触发都重新编译
+- `handler` 可为空；此时可通过全局 `hooks.onTaskExecute` 统一执行
+
+## 任务生命周期回调
+
+初始化时传入或运行时通过 `setHooks()` 设置：
+
+```ts
+await scheduler.init({
+  enableDb: false,
+  hooks: {
+    onTaskStart(event) {
+      void event
+    },
+    async onTaskExecute(event) {
+      return { via: 'hook', source: event.context.trigger.source }
+    },
+    onTaskInterrupted(event) {
+      void event
+    },
+    onTaskFinish(event) {
+      void event
+    },
+  },
+})
+```
+
+## 执行日志
+
+查询日志时可按触发来源过滤：
+
+```ts
+const logs = await scheduler.getLogs({
+  taskId: 'cleanup',
+  triggerType: 'manual',
+  triggerSource: 'admin-console',
+  startedAfter: Date.now() - 24 * 60 * 60 * 1000,
+  startedBefore: Date.now(),
+  pagination: { page: 1, pageSize: 20 },
+})
+```
+
+执行日志支持自动清理策略（初始化时配置）：
+
+- `maxLogs`：最多保留 N 条日志
+- `retentionDays`：最多保留最近 N 天日志
+
+## API 概览
+
+- `init(config?)`
+- `register(task)`
+- `unregister(taskId)`
+- `updateTask(taskId, updates)`
+- `start()` / `stop()`
+- `trigger(taskId, { source? })`
+- `getLogs(options?)`
+- `setHooks(hooks)` / `clearHooks()`
+- `tasks` / `hooks` / `config` / `isInitialized` / `isRunning`
+- `close()`
+
+## 错误处理
+
+所有公共 API（除 `close()`）返回 `Result<T, SchedulerError>`。
+
 常用错误码：
 
-- `NOT_INITIALIZED` — 调度器未初始化
-- `INIT_FAILED` — 初始化失败
-- `CONFIG_ERROR` — 配置校验失败
-- `TASK_NOT_FOUND` — 任务未找到
-- `TASK_ALREADY_EXISTS` — 重复注册
-- `INVALID_CRON` — cron 表达式无效
-- `EXECUTION_FAILED` — 任务执行失败（通用）
-- `JS_EXECUTION_FAILED` — JS 函数执行失败
-- `API_EXECUTION_FAILED` — API 调用失败
-- `DB_SAVE_FAILED` — 数据库操作失败
-- `ALREADY_RUNNING` — 重复启动
-- `NOT_RUNNING` — 未启动时停止
+- `NOT_INITIALIZED`
+- `INIT_FAILED`
+- `CONFIG_ERROR`
+- `TASK_NOT_FOUND`
+- `TASK_ALREADY_EXISTS`
+- `INVALID_CRON`
+- `EXECUTION_FAILED`
+- `JS_COMPILE_FAILED`
+- `JS_EXECUTION_FAILED`
+- `API_EXECUTION_FAILED`
+- `HOOK_EXECUTION_FAILED`
+- `DB_SAVE_FAILED`
+- `ALREADY_RUNNING`
+- `NOT_RUNNING`
+- `LOCK_ACQUIRE_FAILED`
 
 ## 测试
 

@@ -6,11 +6,11 @@
  * @module capacitor-camera
  */
 
-import type { Result } from '@h-ai/core'
-import type { CapacitorError, PhotoOptions, PhotoResult } from './capacitor-types.js'
+import type { HaiResult } from '@h-ai/core'
+import type { PhotoOptions, PhotoResult } from './capacitor-types.js'
 import { err, ok } from '@h-ai/core'
-import { CapacitorErrorCode } from './capacitor-config.js'
 import { capacitorM } from './capacitor-i18n.js'
+import { HaiCapacitorError } from './capacitor-types.js'
 
 /** 照片来源映射（内部使用） */
 const SOURCE_MAP = {
@@ -42,7 +42,7 @@ const RESULT_TYPE_MAP = {
  * }
  * ```
  */
-export async function takePhoto(options?: PhotoOptions): Promise<Result<PhotoResult, CapacitorError>> {
+export async function takePhoto(options?: PhotoOptions): Promise<HaiResult<PhotoResult>> {
   try {
     const { Camera, CameraSource, CameraResultType } = await import('@capacitor/camera')
 
@@ -75,10 +75,10 @@ export async function takePhoto(options?: PhotoOptions): Promise<Result<PhotoRes
     })
   }
   catch (cause) {
-    return err({
-      code: CapacitorErrorCode.CAMERA_FAILED,
-      message: capacitorM('capacitor_cameraFailed'),
+    return err(
+      HaiCapacitorError.CAMERA_FAILED,
+      capacitorM('capacitor_cameraFailed'),
       cause,
-    })
+    )
   }
 }

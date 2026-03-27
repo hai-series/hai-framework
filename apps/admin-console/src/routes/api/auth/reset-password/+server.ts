@@ -7,7 +7,7 @@
 import * as m from '$lib/paraglide/messages.js'
 import { createResetPasswordSchema } from '$lib/server/schemas/index.js'
 import { audit } from '@h-ai/audit'
-import { iam, IamErrorCode } from '@h-ai/iam'
+import { HaiIamError, iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
 
 export const POST = kit.handler(async ({ request, getClientAddress }) => {
@@ -17,7 +17,7 @@ export const POST = kit.handler(async ({ request, getClientAddress }) => {
   const resetResult = await iam.user.confirmPasswordReset(token, password)
   if (!resetResult.success) {
     // 根据错误码返回不同响应
-    if (resetResult.error.code === IamErrorCode.RESET_TOKEN_INVALID) {
+    if (resetResult.error.code === HaiIamError.RESET_TOKEN_INVALID.code) {
       return kit.response.badRequest(m.api_auth_reset_link_invalid())
     }
     return kit.response.badRequest(resetResult.error.message)

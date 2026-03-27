@@ -5,14 +5,13 @@
  * @module iam-user-repository-user
  */
 
-import type { Result } from '@h-ai/core'
+import type { HaiResult } from '@h-ai/core'
 import type { DmlWithTxOperations, ReldbCrudFieldDefinition, ReldbCrudRepository } from '@h-ai/reldb'
-import type { IamError } from '../iam-types.js'
 import type { StoredUser } from './iam-user-types.js'
 import { err, ok } from '@h-ai/core'
 import { BaseReldbCrudRepository, reldb } from '@h-ai/reldb'
-import { IamErrorCode } from '../iam-config.js'
 import { iamM } from '../iam-i18n.js'
+import { HaiIamError } from '../iam-types.js'
 
 // ─── 用户存储接口 ───
 
@@ -23,32 +22,32 @@ export interface UserRepository extends ReldbCrudRepository<StoredUser> {
   /**
    * 根据用户名获取用户
    */
-  findByUsername: (username: string, tx?: DmlWithTxOperations) => Promise<Result<StoredUser | null, IamError>>
+  findByUsername: (username: string, tx?: DmlWithTxOperations) => Promise<HaiResult<StoredUser | null>>
 
   /**
    * 根据邮箱获取用户
    */
-  findByEmail: (email: string, tx?: DmlWithTxOperations) => Promise<Result<StoredUser | null, IamError>>
+  findByEmail: (email: string, tx?: DmlWithTxOperations) => Promise<HaiResult<StoredUser | null>>
 
   /**
    * 根据手机号获取用户
    */
-  findByPhone: (phone: string, tx?: DmlWithTxOperations) => Promise<Result<StoredUser | null, IamError>>
+  findByPhone: (phone: string, tx?: DmlWithTxOperations) => Promise<HaiResult<StoredUser | null>>
 
   /**
    * 根据标识符获取用户（用户名/邮箱/手机号）
    */
-  findByIdentifier: (identifier: string, tx?: DmlWithTxOperations) => Promise<Result<StoredUser | null, IamError>>
+  findByIdentifier: (identifier: string, tx?: DmlWithTxOperations) => Promise<HaiResult<StoredUser | null>>
 
   /**
    * 检查用户名是否存在
    */
-  existsByUsername: (username: string, tx?: DmlWithTxOperations) => Promise<Result<boolean, IamError>>
+  existsByUsername: (username: string, tx?: DmlWithTxOperations) => Promise<HaiResult<boolean>>
 
   /**
    * 检查邮箱是否存在
    */
-  existsByEmail: (email: string, tx?: DmlWithTxOperations) => Promise<Result<boolean, IamError>>
+  existsByEmail: (email: string, tx?: DmlWithTxOperations) => Promise<HaiResult<boolean>>
 
 }
 
@@ -249,32 +248,32 @@ class DbUserRepository extends BaseReldbCrudRepository<StoredUser> implements Us
   }
 
   /** 根据用户名查找用户 */
-  async findByUsername(username: string, tx?: DmlWithTxOperations): Promise<Result<StoredUser | null, IamError>> {
+  async findByUsername(username: string, tx?: DmlWithTxOperations): Promise<HaiResult<StoredUser | null>> {
     return this.findOneBy('username = ?', [username], tx)
   }
 
   /** 根据邮箱查找用户 */
-  async findByEmail(email: string, tx?: DmlWithTxOperations): Promise<Result<StoredUser | null, IamError>> {
+  async findByEmail(email: string, tx?: DmlWithTxOperations): Promise<HaiResult<StoredUser | null>> {
     return this.findOneBy('email = ?', [email], tx)
   }
 
   /** 根据手机号查找用户 */
-  async findByPhone(phone: string, tx?: DmlWithTxOperations): Promise<Result<StoredUser | null, IamError>> {
+  async findByPhone(phone: string, tx?: DmlWithTxOperations): Promise<HaiResult<StoredUser | null>> {
     return this.findOneBy('phone = ?', [phone], tx)
   }
 
   /** 根据标识符查找用户（同时匹配用户名、邮箱、手机号） */
-  async findByIdentifier(identifier: string, tx?: DmlWithTxOperations): Promise<Result<StoredUser | null, IamError>> {
+  async findByIdentifier(identifier: string, tx?: DmlWithTxOperations): Promise<HaiResult<StoredUser | null>> {
     return this.findOneBy('username = ? OR email = ? OR phone = ?', [identifier, identifier, identifier], tx)
   }
 
   /** 检查用户名是否已存在 */
-  async existsByUsername(username: string, tx?: DmlWithTxOperations): Promise<Result<boolean, IamError>> {
+  async existsByUsername(username: string, tx?: DmlWithTxOperations): Promise<HaiResult<boolean>> {
     return this.existsBy('username = ?', [username], tx)
   }
 
   /** 检查邮箱是否已存在 */
-  async existsByEmail(email: string, tx?: DmlWithTxOperations): Promise<Result<boolean, IamError>> {
+  async existsByEmail(email: string, tx?: DmlWithTxOperations): Promise<HaiResult<boolean>> {
     return this.existsBy('email = ?', [email], tx)
   }
 
@@ -285,12 +284,12 @@ class DbUserRepository extends BaseReldbCrudRepository<StoredUser> implements Us
    * @param error.message - 错误消息
    * @param cause - 错误原因
    */
-  private buildQueryError(error: { message: string }, cause: unknown): Result<never, IamError> {
-    return err({
-      code: IamErrorCode.REPOSITORY_ERROR,
-      message: iamM('iam_queryUserFailed', { params: { message: error.message } }),
+  private buildQueryError(error: { message: string }, cause: unknown): HaiResult<never> {
+    return err(
+      HaiIamError.REPOSITORY_ERROR,
+      iamM('iam_queryUserFailed', { params: { message: error.message } }),
       cause,
-    })
+    )
   }
 
   /**
@@ -300,7 +299,7 @@ class DbUserRepository extends BaseReldbCrudRepository<StoredUser> implements Us
    * @param params - 绑定参数
    * @param tx - 可选事务句柄
    */
-  private async existsBy(where: string, params: unknown[], tx?: DmlWithTxOperations): Promise<Result<boolean, IamError>> {
+  private async existsBy(where: string, params: unknown[], tx?: DmlWithTxOperations): Promise<HaiResult<boolean>> {
     const result = await this.exists({ where, params }, tx)
     if (!result.success) {
       return this.buildQueryError(result.error, result.error)
@@ -316,7 +315,7 @@ class DbUserRepository extends BaseReldbCrudRepository<StoredUser> implements Us
    * @param tx - 可选事务句柄
    * @returns 单条用户记录，或 null
    */
-  private async findOneBy(where: string, params: unknown[], tx?: DmlWithTxOperations): Promise<Result<StoredUser | null, IamError>> {
+  private async findOneBy(where: string, params: unknown[], tx?: DmlWithTxOperations): Promise<HaiResult<StoredUser | null>> {
     const result = await this.findAll({ where, params, limit: 1 }, tx)
     if (!result.success) {
       return this.buildQueryError(result.error, result.error)

@@ -15,7 +15,7 @@
 
 import type { IamFunctions } from '../src/iam-types.js'
 import { beforeAll, describe, expect, it } from 'vitest'
-import { IamErrorCode } from '../src/iam-config.js'
+import { HaiIamError } from '../src/iam-types.js'
 import { defineIamSuite, postgresRedisEnv, sqliteMemoryEnv, TEST_PASSWORD } from './helpers/iam-test-suite.js'
 
 describe('iam.authz', () => {
@@ -88,7 +88,7 @@ describe('iam.authz', () => {
         const result = await getIam().authz.updateRole('nonexistent', { name: 'x' })
         expect(result.success).toBe(false)
         if (!result.success) {
-          expect(result.error.code).toBe(IamErrorCode.ROLE_NOT_FOUND)
+          expect(result.error.code).toBe(HaiIamError.ROLE_NOT_FOUND.code)
         }
       })
 
@@ -115,7 +115,7 @@ describe('iam.authz', () => {
         const result = await getIam().authz.deleteRole('nonexistent-role')
         expect(result.success).toBe(false)
         if (!result.success) {
-          expect(result.error.code).toBe(IamErrorCode.ROLE_NOT_FOUND)
+          expect(result.error.code).toBe(HaiIamError.ROLE_NOT_FOUND.code)
         }
       })
 
@@ -141,7 +141,7 @@ describe('iam.authz', () => {
         const result = await getIam().authz.createRole({ code: 'dup_role_code', name: '角色2' })
         expect(result.success).toBe(false)
         if (!result.success) {
-          expect(result.error.code).toBe(IamErrorCode.ROLE_ALREADY_EXISTS)
+          expect(result.error.code).toBe(HaiIamError.ROLE_ALREADY_EXISTS.code)
         }
       })
 
@@ -223,7 +223,7 @@ describe('iam.authz', () => {
         const result = await getIam().authz.deletePermission('nonexistent')
         expect(result.success).toBe(false)
         if (!result.success) {
-          expect(result.error.code).toBe(IamErrorCode.PERMISSION_NOT_FOUND)
+          expect(result.error.code).toBe(HaiIamError.PERMISSION_NOT_FOUND.code)
         }
       })
 
@@ -240,7 +240,7 @@ describe('iam.authz', () => {
         const result = await getIam().authz.createPermission({ code: 'dup:perm', name: '权限2' })
         expect(result.success).toBe(false)
         if (!result.success) {
-          expect(result.error.code).toBe(IamErrorCode.PERMISSION_ALREADY_EXISTS)
+          expect(result.error.code).toBe(HaiIamError.PERMISSION_ALREADY_EXISTS.code)
         }
       })
 
@@ -318,7 +318,7 @@ describe('iam.authz', () => {
         const result = await getIam().authz.assignPermissionToRole('bad-role-id', perm.data.id)
         expect(result.success).toBe(false)
         if (!result.success) {
-          expect(result.error.code).toBe(IamErrorCode.ROLE_NOT_FOUND)
+          expect(result.error.code).toBe(HaiIamError.ROLE_NOT_FOUND.code)
         }
       })
 
@@ -330,7 +330,7 @@ describe('iam.authz', () => {
         const result = await getIam().authz.assignPermissionToRole(role.data.id, 'bad-perm-id')
         expect(result.success).toBe(false)
         if (!result.success) {
-          expect(result.error.code).toBe(IamErrorCode.PERMISSION_NOT_FOUND)
+          expect(result.error.code).toBe(HaiIamError.PERMISSION_NOT_FOUND.code)
         }
       })
 
@@ -361,7 +361,7 @@ describe('iam.authz', () => {
         const result = await getIam().authz.removePermissionFromRole(role.data.id, 'nonexistent-perm-id')
         expect(result.success).toBe(false)
         if (!result.success) {
-          expect(result.error.code).toBe(IamErrorCode.PERMISSION_NOT_FOUND)
+          expect(result.error.code).toBe(HaiIamError.PERMISSION_NOT_FOUND.code)
         }
       })
 
@@ -383,7 +383,7 @@ describe('iam.authz', () => {
         const result = await getIam().authz.removePermissionFromRole('nonexistent-role-id', perm.data.id)
         expect(result.success).toBe(false)
         if (!result.success) {
-          expect(result.error.code).toBe(IamErrorCode.ROLE_NOT_FOUND)
+          expect(result.error.code).toBe(HaiIamError.ROLE_NOT_FOUND.code)
         }
       })
     })
@@ -445,7 +445,7 @@ describe('iam.authz', () => {
         const result = await getIam().authz.assignRole(regResult.data.user.id, 'bad-role')
         expect(result.success).toBe(false)
         if (!result.success) {
-          expect(result.error.code).toBe(IamErrorCode.ROLE_NOT_FOUND)
+          expect(result.error.code).toBe(HaiIamError.ROLE_NOT_FOUND.code)
         }
       })
 

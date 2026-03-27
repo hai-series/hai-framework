@@ -5,8 +5,8 @@
  * @module ai-retrieval-functions
  */
 
-import type { Result } from '@h-ai/core'
-import type { AIError } from '../ai-types.js'
+import type { HaiResult } from '@h-ai/core'
+
 import type { EmbeddingOperations } from '../embedding/ai-embedding-types.js'
 import type { RerankOperations } from '../rerank/ai-rerank-types.js'
 import type { AIRelStore, AIStoreProvider } from '../store/ai-store-types.js'
@@ -21,8 +21,8 @@ import type {
 
 import { core, err, ok } from '@h-ai/core'
 
-import { AIErrorCode } from '../ai-config.js'
 import { aiM } from '../ai-i18n.js'
+import { HaiAIError } from '../ai-types.js'
 
 const logger = core.logger.child({ module: 'ai', scope: 'retrieval' })
 
@@ -40,6 +40,17 @@ export function createRetrievalOperations(
   sourceStore: AIRelStore<RetrievalSource>,
   rerankOps?: RerankOperations | null,
 ): RetrievalOperations {
+  // vectorStore 实例缓存（按 collection 复用，避免每次检索都创建新实例）
+  const vectorStoreCache = new Map<string, ReturnType<AIStoreProvider['createVectorStore']>>()
+  function getVectorStore(collection: string) {
+    let store = vectorStoreCache.get(collection)
+    if (!store) {
+      store = storeProvider.createVectorStore(collection)
+      vectorStoreCache.set(collection, store)
+    }
+    return store
+  }
+
   return {
     /**
      * 注册检索源
@@ -50,13 +61,10 @@ export function createRetrievalOperations(
      * @param source - 检索源配置（id、collection、描述等）
      * @returns `ok(undefined)` 注册成功；`err` 含错误码 `RETRIEVAL_FAILED`（重复注册）
      */
-    async addSource(source: RetrievalSource): Promise<Result<void, AIError>> {
+    async addSource(source: RetrievalSource): Promise<HaiResult<void>> {
       const existing = await sourceStore.get(source.id)
       if (existing) {
-        return err({
-          code: AIErrorCode.RETRIEVAL_FAILED,
-          message: aiM('ai_internalError', { params: { error: `Source '${source.id}' already exists` } }),
-        })
+        return err(HaiAIError.RETRIEVAL_FAILED, aiM('ai_internalError', { params: { error: `Source '${source.id}' already exists` } }))
       }
       await sourceStore.save(source.id, source)
       logger.debug('Retrieval source added', { sourceId: source.id, collection: source.collection })
@@ -71,13 +79,10 @@ export function createRetrievalOperations(
      * @param sourceId - 检索源的唯一标识
      * @returns `ok(undefined)` 删除成功；`err` 含错误码 `RETRIEVAL_SOURCE_NOT_FOUND`
      */
-    async removeSource(sourceId: string): Promise<Result<void, AIError>> {
+    async removeSource(sourceId: string): Promise<HaiResult<void>> {
       const existing = await sourceStore.get(sourceId)
       if (!existing) {
-        return err({
-          code: AIErrorCode.RETRIEVAL_SOURCE_NOT_FOUND,
-          message: aiM('ai_internalError', { params: { error: `Source '${sourceId}' not found` } }),
-        })
+        return err(HaiAIError.RETRIEVAL_SOURCE_NOT_FOUND, aiM('ai_internalError', { params: { error: `Source '${sourceId}' not found` } }))
       }
       await sourceStore.remove(sourceId)
       logger.debug('Retrieval source removed', { sourceId })
@@ -110,7 +115,7 @@ export function createRetrievalOperations(
      * if (result.success) console.log(result.data.items)
      * ```
      */
-    async retrieve(request: RetrievalRequest): Promise<Result<RetrievalResult, AIError>> {
+    async retrieve(request: RetrievalRequest): Promise<HaiResult<RetrievalResult>> {
       const startTime = Date.now()
 
       // 确定要查询的源（从 DB 读取，分布式一致）
@@ -121,21 +126,14 @@ export function createRetrievalOperations(
       )
 
       if (targetSources.length === 0) {
-        return err({
-          code: AIErrorCode.RETRIEVAL_SOURCE_NOT_FOUND,
-          message: aiM('ai_internalError', { params: { error: 'No retrieval sources configured' } }),
-        })
+        return err(HaiAIError.RETRIEVAL_SOURCE_NOT_FOUND, aiM('ai_internalError', { params: { error: 'No retrieval sources configured' } }))
       }
 
       try {
         // 向量化查询文本
         const embedResult = await embeddingOps.embedText(request.query)
         if (!embedResult.success) {
-          return err({
-            code: AIErrorCode.RETRIEVAL_FAILED,
-            message: aiM('ai_internalError', { params: { error: 'Failed to embed query' } }),
-            cause: embedResult.error,
-          })
+          return err(HaiAIError.RETRIEVAL_FAILED, aiM('ai_internalError', { params: { error: 'Failed to embed query' } }), embedResult.error)
         }
 
         const queryVector = embedResult.data
@@ -147,7 +145,7 @@ export function createRetrievalOperations(
           const topK = request.topK ?? source.topK ?? 5
           const minScore = request.minScore ?? source.minScore
 
-          const vectorStore = storeProvider.createVectorStore(source.collection)
+          const vectorStore = getVectorStore(source.collection)
           const searchResults = await vectorStore.search(queryVector, {
             topK,
             minScore,
@@ -216,11 +214,7 @@ export function createRetrievalOperations(
       }
       catch (error) {
         logger.error('Retrieval failed', { error })
-        return err({
-          code: AIErrorCode.RETRIEVAL_FAILED,
-          message: aiM('ai_internalError', { params: { error: String(error) } }),
-          cause: error,
-        })
+        return err(HaiAIError.RETRIEVAL_FAILED, aiM('ai_internalError', { params: { error: String(error) } }), error)
       }
     },
   }

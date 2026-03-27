@@ -5,25 +5,21 @@
  * @module crypto-main
  */
 
-import type { Result } from '@h-ai/core'
-
-import type {
-  AsymmetricOperations,
-  CryptoError,
-  CryptoFunctions,
-  HashOperations,
-  PasswordOperations,
-  SymmetricOperations,
-} from './crypto-types.js'
+import type { HaiResult } from '@h-ai/core'
+import type { AsymmetricOperations, CryptoFunctions, HashOperations, PasswordOperations, SymmetricOperations } from './crypto-types.js'
 
 import { core, err, ok } from '@h-ai/core'
 
-import { CryptoErrorCode } from './crypto-config.js'
 import { cryptoM } from './crypto-i18n.js'
 import { createPasswordFunctions } from './crypto-password.js'
 import { createSM2 } from './crypto-sm2.js'
 import { createSM3 } from './crypto-sm3.js'
 import { createSM4 } from './crypto-sm4.js'
+import {
+
+  HaiCryptoError,
+
+} from './crypto-types.js'
 
 const logger = core.logger.child({ module: 'crypto', scope: 'main' })
 
@@ -44,8 +40,8 @@ let currentPassword: PasswordOperations | null = null
 
 // ─── 未初始化占位 ───
 
-const notInitialized = core.module.createNotInitializedKit<CryptoError>(
-  CryptoErrorCode.NOT_INITIALIZED,
+const notInitialized = core.module.createNotInitializedKit(
+  HaiCryptoError.NOT_INITIALIZED,
   () => cryptoM('crypto_notInitialized'),
 )
 
@@ -81,14 +77,14 @@ export const crypto: CryptoFunctions = {
    *
    * @returns 成功时返回 ok(undefined)；失败时返回 INIT_FAILED
    */
-  async init(): Promise<Result<void, CryptoError>> {
+  async init(): Promise<HaiResult<void>> {
     // 并发初始化防护：避免多次 init 同时执行导致资源泄漏
     if (initInProgress) {
       logger.warn('Crypto init already in progress, skipping concurrent call')
-      return err({
-        code: CryptoErrorCode.INIT_FAILED,
-        message: cryptoM('crypto_initFailed', { params: { error: 'Concurrent initialization detected' } }),
-      })
+      return err(
+        HaiCryptoError.INIT_FAILED,
+        cryptoM('crypto_initFailed', { params: { error: 'Concurrent initialization detected' } }),
+      )
     }
     initInProgress = true
 
@@ -116,13 +112,13 @@ export const crypto: CryptoFunctions = {
       currentPassword = null
       initialized = false
       logger.error('Crypto module initialization failed', { error })
-      return err({
-        code: CryptoErrorCode.INIT_FAILED,
-        message: cryptoM('crypto_initFailed', {
+      return err(
+        HaiCryptoError.INIT_FAILED,
+        cryptoM('crypto_initFailed', {
           params: { error: error instanceof Error ? error.message : String(error) },
         }),
-        cause: error,
-      })
+        error,
+      )
     }
     finally {
       initInProgress = false

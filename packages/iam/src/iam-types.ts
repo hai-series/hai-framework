@@ -9,31 +9,73 @@
  * @module iam-types
  */
 
-import type { Result } from '@h-ai/core'
+import type { ErrorInfo, HaiResult } from '@h-ai/core'
 
 import type { ApiKeyOperations } from './authn/apikey/iam-authn-apikey-types.js'
 import type { AuthnOperations } from './authn/iam-authn-types.js'
 import type { LdapClientFactory } from './authn/ldap/iam-authn-ldap-strategy.js'
 import type { AuthzOperations } from './authz/iam-authz-types.js'
-import type { IamConfig, IamConfigSettingsInput, IamErrorCodeType } from './iam-config.js'
+import type { IamConfig, IamConfigSettingsInput } from './iam-config.js'
 import type { SessionOperations } from './session/iam-session-types.js'
 import type { User, UserOperations } from './user/iam-user-types.js'
+import { core } from '@h-ai/core'
 
-// ─── 错误类型 ───
+// ─── 错误定义（照 @h-ai/core 范式） ───
 
-/**
- * IAM 错误接口
- *
- * 所有 IAM 操作返回的错误都遵循此接口。
- */
-export interface IamError {
-  /** 错误码（数值，参见 IamErrorCode） */
-  code: IamErrorCodeType
-  /** 错误消息 */
-  message: string
-  /** 原始错误（可选） */
-  cause?: unknown
-}
+const IamErrorInfo = {
+  AUTH_FAILED: '001:401',
+  INVALID_CREDENTIALS: '002:401',
+  USER_NOT_FOUND: '003:404',
+  USER_DISABLED: '004:403',
+  USER_LOCKED: '005:403',
+  USER_ALREADY_EXISTS: '006:409',
+  PASSWORD_EXPIRED: '007:401',
+  PASSWORD_POLICY_VIOLATION: '008:400',
+  OTP_INVALID: '009:400',
+  OTP_EXPIRED: '010:400',
+  OTP_RESEND_TOO_FAST: '011:429',
+  LOGIN_DISABLED: '012:400',
+  REGISTER_DISABLED: '013:403',
+  STRATEGY_NOT_SUPPORTED: '014:400',
+  APIKEY_INVALID: '015:401',
+  APIKEY_EXPIRED: '016:401',
+  APIKEY_DISABLED: '017:403',
+  APIKEY_NOT_FOUND: '018:404',
+  RESET_TOKEN_INVALID: '019:400',
+  RESET_TOKEN_EXPIRED: '020:400',
+  RESET_TOKEN_MAX_ATTEMPTS: '021:429',
+
+  SESSION_NOT_FOUND: '101:401',
+  SESSION_EXPIRED: '102:401',
+  SESSION_INVALID: '103:401',
+  SESSION_CREATE_FAILED: '104:500',
+  TOKEN_EXPIRED: '105:401',
+  TOKEN_INVALID: '106:401',
+  TOKEN_REFRESH_FAILED: '107:401',
+
+  PERMISSION_DENIED: '201:403',
+  ROLE_NOT_FOUND: '202:404',
+  PERMISSION_NOT_FOUND: '203:404',
+  ROLE_ALREADY_EXISTS: '204:409',
+  PERMISSION_ALREADY_EXISTS: '205:409',
+
+  LDAP_CONNECTION_FAILED: '301:500',
+  LDAP_BIND_FAILED: '302:401',
+  LDAP_SEARCH_FAILED: '303:500',
+
+  REPOSITORY_ERROR: '401:500',
+  NOT_FOUND: '402:404',
+  CONFLICT: '403:409',
+
+  FORBIDDEN: '501:403',
+  INVALID_ARGUMENT: '502:400',
+
+  CONFIG_ERROR: '901:500',
+  NOT_INITIALIZED: '910:500',
+  INTERNAL_ERROR: '999:500',
+} as const satisfies ErrorInfo
+
+export const HaiIamError = core.error.buildHaiErrorsDef('iam', IamErrorInfo)
 
 // ─── 初始化配置 ───
 
@@ -112,7 +154,7 @@ export interface IamFunctions {
    * }
    * ```
    */
-  init: (config: IamConfigInput) => Promise<Result<void, IamError>>
+  init: (config: IamConfigInput) => Promise<HaiResult<void>>
 
   /**
    * 关闭 IAM 服务

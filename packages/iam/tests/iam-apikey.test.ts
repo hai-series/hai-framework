@@ -13,8 +13,7 @@
 
 import type { IamFunctions } from '../src/iam-types.js'
 import { describe, expect, it } from 'vitest'
-import { IamErrorCode } from '../src/iam-config.js'
-import { iam } from '../src/index.js'
+import { HaiIamError, iam } from '../src/index.js'
 import { defineIamEnvSuite, defineIamSuite, sqliteMemoryEnv, TEST_PASSWORD } from './helpers/iam-test-suite.js'
 
 // =============================================================================
@@ -32,7 +31,7 @@ describe('iam.apiKey（未启用）', () => {
       const result = await iam.apiKey.createApiKey('any-user', { name: 'test' })
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.code).toBe(IamErrorCode.NOT_INITIALIZED)
+        expect(result.error.code).toBe(HaiIamError.NOT_INITIALIZED.code)
       }
       await iam.close()
     })
@@ -44,7 +43,7 @@ describe('iam.apiKey（未启用）', () => {
       const result = await iam.auth.loginWithApiKey({ key: 'hai_fakekey123' })
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.code).toBe(IamErrorCode.LOGIN_DISABLED)
+        expect(result.error.code).toBe(HaiIamError.LOGIN_DISABLED.code)
       }
       await iam.close()
     })
@@ -109,7 +108,7 @@ describe('iam.apiKey（启用）', () => {
         const result = await getIam().apiKey.createApiKey(user.id, { name: 'key-overflow' })
         expect(result.success).toBe(false)
         if (!result.success) {
-          expect(result.error.code).toBe(IamErrorCode.INVALID_ARGUMENT)
+          expect(result.error.code).toBe(HaiIamError.INVALID_ARGUMENT.code)
         }
       })
     })
@@ -213,7 +212,7 @@ describe('iam.apiKey（启用）', () => {
         const result = await getIam().apiKey.verifyApiKey('hai_invalidkey1234567890')
         expect(result.success).toBe(false)
         if (!result.success) {
-          expect(result.error.code).toBe(IamErrorCode.APIKEY_INVALID)
+          expect(result.error.code).toBe(HaiIamError.APIKEY_INVALID.code)
         }
       })
 
@@ -229,7 +228,7 @@ describe('iam.apiKey（启用）', () => {
         const result = await getIam().apiKey.verifyApiKey(createResult.data.rawKey)
         expect(result.success).toBe(false)
         if (!result.success) {
-          expect(result.error.code).toBe(IamErrorCode.APIKEY_INVALID)
+          expect(result.error.code).toBe(HaiIamError.APIKEY_INVALID.code)
         }
       })
     })
@@ -259,7 +258,7 @@ describe('iam.apiKey（启用）', () => {
         const result = await getIam().auth.loginWithApiKey({ key: 'hai_badkey99999999999999' })
         expect(result.success).toBe(false)
         if (!result.success) {
-          expect(result.error.code).toBe(IamErrorCode.APIKEY_INVALID)
+          expect(result.error.code).toBe(HaiIamError.APIKEY_INVALID.code)
         }
       })
 
@@ -275,7 +274,7 @@ describe('iam.apiKey（启用）', () => {
         const result = await getIam().auth.loginWithApiKey({ key: createResult.data.rawKey })
         expect(result.success).toBe(false)
         if (!result.success) {
-          expect(result.error.code).toBe(IamErrorCode.APIKEY_INVALID)
+          expect(result.error.code).toBe(HaiIamError.APIKEY_INVALID.code)
         }
       })
     })

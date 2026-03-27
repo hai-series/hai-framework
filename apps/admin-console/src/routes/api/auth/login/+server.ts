@@ -6,7 +6,6 @@
 
 import { LoginSchema } from '$lib/server/schemas/index.js'
 import { audit } from '@h-ai/audit'
-import { IamErrorHttpStatus } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
 
 export const POST = kit.handler(async ({ request, cookies, getClientAddress }) => {
@@ -14,7 +13,7 @@ export const POST = kit.handler(async ({ request, cookies, getClientAddress }) =
 
   const loginResult = await kit.auth.login(cookies, { identifier, password })
   if (!loginResult.success) {
-    return kit.response.fromError(loginResult.error, IamErrorHttpStatus)
+    return kit.response.fromError(loginResult.error)
   }
 
   const { user, tokens, roles, permissions } = loginResult.data

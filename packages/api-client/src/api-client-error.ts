@@ -5,11 +5,10 @@
  * @module api-client-error
  */
 
-import type { Result } from '@h-ai/core'
-import type { ApiClientError } from './api-client-config.js'
+import type { HaiResult } from '@h-ai/core'
 import { err } from '@h-ai/core'
-import { ApiClientErrorCode } from './api-client-config.js'
 import { apiClientM } from './api-client-i18n.js'
+import { HaiApiClientError } from './api-client-types.js'
 
 /**
  * 将 HTTP 响应转为 ApiClientError Result
@@ -17,7 +16,7 @@ import { apiClientM } from './api-client-i18n.js'
  * @param response - HTTP 响应
  * @returns ApiClientError Result
  */
-export async function responseToError(response: Response): Promise<Result<never, ApiClientError>> {
+export async function responseToError(response: Response): Promise<HaiResult<never>> {
   let details: unknown
 
   try {
@@ -31,56 +30,50 @@ export async function responseToError(response: Response): Promise<Result<never,
   const status = response.status
 
   if (status === 401) {
-    return err({
-      code: ApiClientErrorCode.UNAUTHORIZED,
-      message: apiClientM('apiClient_unauthorized'),
-      status,
+    return err(
+      HaiApiClientError.UNAUTHORIZED,
+      apiClientM('apiClient_unauthorized'),
       details,
-    })
+    )
   }
 
   if (status === 403) {
-    return err({
-      code: ApiClientErrorCode.FORBIDDEN,
-      message: apiClientM('apiClient_forbidden'),
-      status,
+    return err(
+      HaiApiClientError.FORBIDDEN,
+      apiClientM('apiClient_forbidden'),
       details,
-    })
+    )
   }
 
   if (status === 404) {
-    return err({
-      code: ApiClientErrorCode.NOT_FOUND,
-      message: apiClientM('apiClient_notFound'),
-      status,
+    return err(
+      HaiApiClientError.NOT_FOUND,
+      apiClientM('apiClient_notFound'),
       details,
-    })
+    )
   }
 
   if (status === 400 || status === 422) {
-    return err({
-      code: ApiClientErrorCode.VALIDATION_FAILED,
-      message: apiClientM('apiClient_validationFailed'),
-      status,
+    return err(
+      HaiApiClientError.VALIDATION_FAILED,
+      apiClientM('apiClient_validationFailed'),
       details,
-    })
+    )
   }
 
   if (status >= 500) {
-    return err({
-      code: ApiClientErrorCode.SERVER_ERROR,
-      message: apiClientM('apiClient_serverError', { params: { status: String(status) } }),
-      status,
+    return err(
+      HaiApiClientError.SERVER_ERROR,
+      apiClientM('apiClient_serverError', { params: { status: String(status) } }),
       details,
-    })
+    )
   }
 
-  return err({
-    code: ApiClientErrorCode.UNKNOWN,
-    message: apiClientM('apiClient_unknown'),
-    status,
+  return err(
+    HaiApiClientError.UNKNOWN,
+    apiClientM('apiClient_unknown'),
     details,
-  })
+  )
 }
 
 /**
@@ -89,19 +82,19 @@ export async function responseToError(response: Response): Promise<Result<never,
  * @param cause - 原始异常
  * @returns ApiClientError Result
  */
-export function networkErrorToResult(cause: unknown): Result<never, ApiClientError> {
+export function networkErrorToResult(cause: unknown): HaiResult<never> {
   // AbortError = 超时
   if (cause instanceof DOMException && cause.name === 'AbortError') {
-    return err({
-      code: ApiClientErrorCode.TIMEOUT,
-      message: apiClientM('apiClient_timeout'),
+    return err(
+      HaiApiClientError.TIMEOUT,
+      apiClientM('apiClient_timeout'),
       cause,
-    })
+    )
   }
 
-  return err({
-    code: ApiClientErrorCode.NETWORK_ERROR,
-    message: apiClientM('apiClient_networkError'),
+  return err(
+    HaiApiClientError.NETWORK_ERROR,
+    apiClientM('apiClient_networkError'),
     cause,
-  })
+  )
 }

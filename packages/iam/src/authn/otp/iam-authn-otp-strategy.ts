@@ -5,17 +5,17 @@
  * @module iam-authn-otp-strategy
  */
 
-import type { Result } from '@h-ai/core'
+import type { HaiResult } from '@h-ai/core'
 import type { OtpConfig, RegisterConfig } from '../../iam-config.js'
-import type { IamError } from '../../iam-types.js'
 import type { UserRepository } from '../../user/iam-user-repository-user.js'
 import type { StoredUser, User } from '../../user/iam-user-types.js'
 import type { AuthStrategy, Credentials } from '../iam-authn-types.js'
 import type { OtpRepository } from './iam-authn-otp-repository-otp.js'
 import { core, err, ok } from '@h-ai/core'
 
-import { IamErrorCode, OtpConfigSchema } from '../../iam-config.js'
+import { OtpConfigSchema } from '../../iam-config.js'
 import { iamM } from '../../iam-i18n.js'
+import { HaiIamError } from '../../iam-types.js'
 import { toUser } from '../../user/iam-user-utils.js'
 import {
   ensureCredentialType,
@@ -109,7 +109,7 @@ export interface OtpStrategyResult {
   /** 认证策略（用于通用登录流程） */
   strategy: AuthStrategy
   /** 发起认证挑战（发送验证码） */
-  challenge: (identifier: string) => Promise<Result<{ expiresAt: Date }, IamError>>
+  challenge: (identifier: string) => Promise<HaiResult<{ expiresAt: Date }>>
 }
 
 /**
@@ -144,11 +144,11 @@ export function createOtpStrategy(config: OtpStrategyConfig): OtpStrategyResult 
     type: 'otp',
     name: 'otp-strategy',
 
-    async authenticate(credentials: Credentials): Promise<Result<User, IamError>> {
+    async authenticate(credentials: Credentials): Promise<HaiResult<User>> {
       // 类型检查
       const credentialResult = ensureCredentialType(credentials, 'otp')
       if (!credentialResult.success) {
-        return credentialResult as Result<User, IamError>
+        return credentialResult as HaiResult<User>
       }
 
       const { identifier, code } = credentialResult.data
@@ -156,39 +156,30 @@ export function createOtpStrategy(config: OtpStrategyConfig): OtpStrategyResult 
       // 预先加载用户用于账户状态判断
       const userResult = await config.userRepository.findByIdentifier(identifier)
       if (!userResult.success) {
-        return userResult as Result<User, IamError>
+        return userResult as HaiResult<User>
       }
 
       let storedUser = userResult.data as StoredUser | null
 
       if (storedUser) {
         if (!storedUser.enabled) {
-          return err({
-            code: IamErrorCode.USER_DISABLED,
-            message: iamM('iam_accountDisabled'),
-          })
+          return err(HaiIamError.USER_DISABLED, iamM('iam_accountDisabled'))
         }
 
         if (isAccountLocked(storedUser)) {
-          return err({
-            code: IamErrorCode.USER_LOCKED,
-            message: iamM('iam_accountLocked'),
-          })
+          return err(HaiIamError.USER_LOCKED, iamM('iam_accountLocked'))
         }
       }
 
       // 获取存储的验证码
       const storedOtpResult = await config.otpRepository.fetchOtp(identifier)
       if (!storedOtpResult.success) {
-        return storedOtpResult as Result<User, IamError>
+        return storedOtpResult as HaiResult<User>
       }
 
       const storedOtp = storedOtpResult.data
       if (!storedOtp) {
-        return err({
-          code: IamErrorCode.OTP_INVALID,
-          message: iamM('iam_otpNotExistOrExpired'),
-        })
+        return err(HaiIamError.OTP_INVALID, iamM('iam_otpNotExistOrExpired'))
       }
 
       // 检查尝试次数
@@ -197,10 +188,7 @@ export function createOtpStrategy(config: OtpStrategyConfig): OtpStrategyResult 
         if (storedUser) {
           await recordLoginFailure(config.userRepository, storedUser, { maxLoginAttempts, lockoutDuration })
         }
-        return err({
-          code: IamErrorCode.OTP_INVALID,
-          message: iamM('iam_otpInvalid'),
-        })
+        return err(HaiIamError.OTP_INVALID, iamM('iam_otpInvalid'))
       }
 
       // 验证验证码（时间安全比较，防止时序攻击）
@@ -209,10 +197,7 @@ export function createOtpStrategy(config: OtpStrategyConfig): OtpStrategyResult 
         if (storedUser) {
           await recordLoginFailure(config.userRepository, storedUser, { maxLoginAttempts, lockoutDuration })
         }
-        return err({
-          code: IamErrorCode.OTP_INVALID,
-          message: iamM('iam_otpWrong'),
-        })
+        return err(HaiIamError.OTP_INVALID, iamM('iam_otpWrong'))
       }
 
       // 验证成功，删除验证码
@@ -230,16 +215,16 @@ export function createOtpStrategy(config: OtpStrategyConfig): OtpStrategyResult 
           phoneVerified: type === 'phone',
         })
         if (!createResult.success) {
-          return err({
-            code: IamErrorCode.REPOSITORY_ERROR,
-            message: iamM('iam_createUserFailed', { params: { message: createResult.error.message } }),
-            cause: createResult.error,
-          })
+          return err(
+            HaiIamError.REPOSITORY_ERROR,
+            iamM('iam_createUserFailed', { params: { message: createResult.error.message } }),
+            createResult.error,
+          )
         }
 
         const createdResult = await config.userRepository.findByIdentifier(identifier)
         if (!createdResult.success) {
-          return createdResult as Result<User, IamError>
+          return createdResult as HaiResult<User>
         }
         storedUser = createdResult.data
 
@@ -255,10 +240,7 @@ export function createOtpStrategy(config: OtpStrategyConfig): OtpStrategyResult 
       }
 
       if (!storedUser) {
-        return err({
-          code: IamErrorCode.USER_NOT_FOUND,
-          message: iamM('iam_userNotExist'),
-        })
+        return err(HaiIamError.USER_NOT_FOUND, iamM('iam_userNotExist'))
       }
 
       // 登录成功，重置失败计数
@@ -271,16 +253,16 @@ export function createOtpStrategy(config: OtpStrategyConfig): OtpStrategyResult 
 
   // ─── challenge ───
 
-  async function challenge(identifier: string): Promise<Result<{ expiresAt: Date }, IamError>> {
+  async function challenge(identifier: string): Promise<HaiResult<{ expiresAt: Date }>> {
     // 发送频率限制
     const existingResult = await config.otpRepository.fetchOtp(identifier)
     if (existingResult.success && existingResult.data) {
       const elapsedSeconds = Math.floor((Date.now() - existingResult.data.createdAt.getTime()) / 1000)
       if (elapsedSeconds < otpConfig.resendInterval) {
-        return err({
-          code: IamErrorCode.OTP_RESEND_TOO_FAST,
-          message: iamM('iam_otpResendTooFast', { params: { seconds: otpConfig.resendInterval - elapsedSeconds } }),
-        })
+        return err(
+          HaiIamError.OTP_RESEND_TOO_FAST,
+          iamM('iam_otpResendTooFast', { params: { seconds: otpConfig.resendInterval - elapsedSeconds } }),
+        )
       }
     }
 
@@ -291,7 +273,7 @@ export function createOtpStrategy(config: OtpStrategyConfig): OtpStrategyResult 
     // 存储验证码
     const storeResult = await config.otpRepository.saveOtp(identifier, code, otpConfig.expiresIn)
     if (!storeResult.success) {
-      return storeResult as Result<{ expiresAt: Date }, IamError>
+      return storeResult as HaiResult<{ expiresAt: Date }>
     }
 
     // 通过业务层回调发送验证码
@@ -301,11 +283,11 @@ export function createOtpStrategy(config: OtpStrategyConfig): OtpStrategyResult 
         await config.onOtpSendEmail(identifier, code)
       }
       catch (error) {
-        return err({
-          code: IamErrorCode.INTERNAL_ERROR,
-          message: iamM('iam_otpSendFailed', { params: { message: String(error) } }),
-          cause: error,
-        })
+        return err(
+          HaiIamError.INTERNAL_ERROR,
+          iamM('iam_otpSendFailed', { params: { message: String(error) } }),
+          error,
+        )
       }
     }
     else if (type === 'phone' && config.onOtpSendSms) {
@@ -313,18 +295,18 @@ export function createOtpStrategy(config: OtpStrategyConfig): OtpStrategyResult 
         await config.onOtpSendSms(identifier, code)
       }
       catch (error) {
-        return err({
-          code: IamErrorCode.INTERNAL_ERROR,
-          message: iamM('iam_otpSendFailed', { params: { message: String(error) } }),
-          cause: error,
-        })
+        return err(
+          HaiIamError.INTERNAL_ERROR,
+          iamM('iam_otpSendFailed', { params: { message: String(error) } }),
+          error,
+        )
       }
     }
     else {
-      return err({
-        code: IamErrorCode.INTERNAL_ERROR,
-        message: iamM('iam_identifierTypeNotSupported'),
-      })
+      return err(
+        HaiIamError.INTERNAL_ERROR,
+        iamM('iam_identifierTypeNotSupported'),
+      )
     }
 
     const result = buildChallengeResult(expiresAt)

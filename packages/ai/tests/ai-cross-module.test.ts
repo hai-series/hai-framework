@@ -260,7 +260,6 @@ describe('retrieval 源管理进阶', () => {
       id: 'project-docs',
       collection: 'project-v2',
       name: 'Project Documentation',
-      sourceType: 'document',
       url: 'https://docs.example.com',
       topK: 5,
       minScore: 0.7,
@@ -275,7 +274,6 @@ describe('retrieval 源管理进阶', () => {
       id: 'project-docs',
       collection: 'project-v2',
       name: 'Project Documentation',
-      sourceType: 'document',
     })
   })
 })

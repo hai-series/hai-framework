@@ -6,14 +6,14 @@
  * @module reach-template
  */
 
-import type { Result } from '@h-ai/core'
-import type { ReachError, ReachTemplate, ReachTemplateRegistry, RenderedTemplate } from './reach-types.js'
-import type { TemplateRepository } from './repositories/reach-repository-template.js'
+import type { HaiResult } from '@h-ai/core'
+import type { ReachTemplate, ReachTemplateRegistry, RenderedTemplate } from './reach-types.js'
 
+import type { TemplateRepository } from './repositories/reach-repository-template.js'
 import { err, ok } from '@h-ai/core'
 
-import { ReachErrorCode } from './reach-config.js'
 import { reachM } from './reach-i18n.js'
+import { HaiReachError } from './reach-types.js'
 
 // ─── 变量渲染 ───
 
@@ -33,7 +33,7 @@ function renderString(template: string, vars: Record<string, string>): string {
 /**
  * 渲染模板实体
  */
-function renderTemplate(template: ReachTemplate, vars: Record<string, string>): Result<RenderedTemplate, ReachError> {
+function renderTemplate(template: ReachTemplate, vars: Record<string, string>): HaiResult<RenderedTemplate> {
   try {
     const rendered: RenderedTemplate = {
       subject: template.subject ? renderString(template.subject, vars) : undefined,
@@ -42,23 +42,23 @@ function renderTemplate(template: ReachTemplate, vars: Record<string, string>): 
     return ok(rendered)
   }
   catch (error) {
-    return err({
-      code: ReachErrorCode.TEMPLATE_RENDER_FAILED,
-      message: reachM('reach_templateRenderFailed', {
+    return err(
+      HaiReachError.TEMPLATE_RENDER_FAILED,
+      reachM('reach_templateRenderFailed', {
         params: { error: error instanceof Error ? error.message : String(error) },
       }),
-      cause: error,
-    })
+      error,
+    )
   }
 }
 
 // ─── 无数据库时的错误 ───
 
-function noDbError(msgKey: 'reach_templateSaveFailed' | 'reach_templateDeleteFailed'): Result<never, ReachError> {
-  return err({
-    code: ReachErrorCode.SEND_FAILED,
-    message: reachM(msgKey, { params: { error: 'database not available' } }),
-  })
+function noDbError(msgKey: 'reach_templateSaveFailed' | 'reach_templateDeleteFailed'): HaiResult<never> {
+  return err(
+    HaiReachError.SEND_FAILED,
+    reachM(msgKey, { params: { error: 'database not available' } }),
+  )
 }
 
 // ─── 模板注册表工厂 ───
@@ -85,12 +85,12 @@ function noDbError(msgKey: 'reach_templateSaveFailed' | 'reach_templateDeleteFai
  */
 export function createTemplateRegistry(repo?: TemplateRepository | null): ReachTemplateRegistry {
   return {
-    async resolve(name: string): Promise<Result<ReachTemplate, ReachError>> {
+    async resolve(name: string): Promise<HaiResult<ReachTemplate>> {
       if (!repo) {
-        return err({
-          code: ReachErrorCode.TEMPLATE_NOT_FOUND,
-          message: reachM('reach_templateNotFound', { params: { template: name } }),
-        })
+        return err(
+          HaiReachError.TEMPLATE_NOT_FOUND,
+          reachM('reach_templateNotFound', { params: { template: name } }),
+        )
       }
 
       const dbResult = await repo.findByName(name)
@@ -106,20 +106,20 @@ export function createTemplateRegistry(repo?: TemplateRepository | null): ReachT
         })
       }
 
-      return err({
-        code: ReachErrorCode.TEMPLATE_NOT_FOUND,
-        message: reachM('reach_templateNotFound', { params: { template: name } }),
-      })
+      return err(
+        HaiReachError.TEMPLATE_NOT_FOUND,
+        reachM('reach_templateNotFound', { params: { template: name } }),
+      )
     },
 
-    async save(template: ReachTemplate): Promise<Result<void, ReachError>> {
+    async save(template: ReachTemplate): Promise<HaiResult<void>> {
       if (!repo) {
         return noDbError('reach_templateSaveFailed')
       }
       return repo.upsert(template)
     },
 
-    async saveBatch(templates: ReachTemplate[]): Promise<Result<void, ReachError>> {
+    async saveBatch(templates: ReachTemplate[]): Promise<HaiResult<void>> {
       if (!repo) {
         return noDbError('reach_templateSaveFailed')
       }
@@ -131,21 +131,21 @@ export function createTemplateRegistry(repo?: TemplateRepository | null): ReachT
       return ok(undefined)
     },
 
-    async remove(name: string): Promise<Result<void, ReachError>> {
+    async remove(name: string): Promise<HaiResult<void>> {
       if (!repo) {
         return noDbError('reach_templateDeleteFailed')
       }
       return repo.deleteByName(name)
     },
 
-    async list(): Promise<Result<ReachTemplate[], ReachError>> {
+    async list(): Promise<HaiResult<ReachTemplate[]>> {
       if (!repo) {
         return ok([])
       }
       return repo.listTemplates()
     },
 
-    async render(name: string, vars: Record<string, string>): Promise<Result<RenderedTemplate, ReachError>> {
+    async render(name: string, vars: Record<string, string>): Promise<HaiResult<RenderedTemplate>> {
       const resolved = await this.resolve(name)
       if (!resolved.success) {
         return resolved

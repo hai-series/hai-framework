@@ -5,9 +5,9 @@
  * @module ai-knowledge-types
  */
 
-import type { Result } from '@h-ai/core'
+import type { HaiError, HaiResult } from '@h-ai/core'
 import type { ChunkOptionsInput, CleanOptionsInput } from '@h-ai/datapipe'
-import type { AIError } from '../ai-types.js'
+
 import type { ChatMessage } from '../llm/ai-llm-types.js'
 import type { Citation } from '../retrieval/ai-retrieval-types.js'
 
@@ -364,7 +364,7 @@ export interface KnowledgeIngestBatchProgress {
   /** 当前文档导入结果（失败时为 undefined） */
   result?: KnowledgeIngestResult
   /** 当前文档导入错误（成功时为 undefined） */
-  error?: AIError
+  error?: HaiError
 }
 
 /**
@@ -376,7 +376,7 @@ export interface KnowledgeIngestBatchResult {
   /** 失败的文档数 */
   failureCount: number
   /** 各文档导入结果 */
-  results: Array<{ documentId: string, result?: KnowledgeIngestResult, error?: AIError }>
+  results: Array<{ documentId: string, result?: KnowledgeIngestResult, error?: HaiError }>
   /** 总耗时（毫秒） */
   duration: number
 }
@@ -416,7 +416,7 @@ export interface KnowledgeOperations {
    * @param options - 初始化选项
    * @returns 成功返回 ok(undefined)
    */
-  setup: (options?: KnowledgeSetupOptions) => Promise<Result<void, AIError>>
+  setup: (options?: KnowledgeSetupOptions) => Promise<HaiResult<void>>
 
   /**
    * 导入文档
@@ -426,7 +426,7 @@ export interface KnowledgeOperations {
    * @param input - 文档导入输入
    * @returns 导入结果（分块数、实体列表等）
    */
-  ingest: (input: KnowledgeIngestInput) => Promise<Result<KnowledgeIngestResult, AIError>>
+  ingest: (input: KnowledgeIngestInput) => Promise<HaiResult<KnowledgeIngestResult>>
 
   /**
    * 知识检索（带实体增强 + 信源追踪）
@@ -435,7 +435,7 @@ export interface KnowledgeOperations {
    * @param options - 检索选项
    * @returns 检索结果（带 citations）
    */
-  retrieve: (query: string, options?: KnowledgeRetrieveOptions) => Promise<Result<KnowledgeRetrieveResult, AIError>>
+  retrieve: (query: string, options?: KnowledgeRetrieveOptions) => Promise<HaiResult<KnowledgeRetrieveResult>>
 
   /**
    * 知识问答（RAG + 信源引用）
@@ -444,7 +444,7 @@ export interface KnowledgeOperations {
    * @param options - 问答选项
    * @returns 问答结果（回答 + 信源）
    */
-  ask: (query: string, options?: KnowledgeAskOptions) => Promise<Result<KnowledgeAskResult, AIError>>
+  ask: (query: string, options?: KnowledgeAskOptions) => Promise<HaiResult<KnowledgeAskResult>>
 
   /**
    * 按实体查询关联文档
@@ -453,7 +453,7 @@ export interface KnowledgeOperations {
    * @param options - 查询选项
    * @returns 实体关联文档列表
    */
-  findByEntity: (entityName: string, options?: EntityQueryOptions) => Promise<Result<EntityDocumentResult[], AIError>>
+  findByEntity: (entityName: string, options?: EntityQueryOptions) => Promise<HaiResult<EntityDocumentResult[]>>
 
   /**
    * 列出所有实体
@@ -461,7 +461,7 @@ export interface KnowledgeOperations {
    * @param options - 列表选项
    * @returns 实体列表
    */
-  listEntities: (options?: EntityListOptions) => Promise<Result<KnowledgeEntity[], AIError>>
+  listEntities: (options?: EntityListOptions) => Promise<HaiResult<KnowledgeEntity[]>>
 
   /**
    * 列出已导入的文档列表
@@ -469,7 +469,7 @@ export interface KnowledgeOperations {
    * @param options - 列表选项
    * @returns 文档信息列表
    */
-  listDocuments: (options?: KnowledgeDocumentListOptions) => Promise<Result<KnowledgeDocumentInfo[], AIError>>
+  listDocuments: (options?: KnowledgeDocumentListOptions) => Promise<HaiResult<KnowledgeDocumentInfo[]>>
 
   /**
    * 删除已导入的文档（同时删除向量和实体关联）
@@ -478,7 +478,7 @@ export interface KnowledgeOperations {
    * @param options - 删除选项
    * @returns 成功返回 ok(undefined)
    */
-  removeDocument: (documentId: string, options?: KnowledgeDocumentRemoveOptions) => Promise<Result<void, AIError>>
+  removeDocument: (documentId: string, options?: KnowledgeDocumentRemoveOptions) => Promise<HaiResult<void>>
 
   /**
    * 从文件路径导入文档（仅 Node.js 端可用）
@@ -488,7 +488,7 @@ export interface KnowledgeOperations {
    * @param input - 文件导入输入
    * @returns 导入结果
    */
-  ingestFile: (input: KnowledgeIngestFileInput) => Promise<Result<KnowledgeIngestResult, AIError>>
+  ingestFile: (input: KnowledgeIngestFileInput) => Promise<HaiResult<KnowledgeIngestResult>>
 
   /**
    * 批量导入文档
@@ -502,5 +502,5 @@ export interface KnowledgeOperations {
   ingestBatch: (
     inputs: KnowledgeIngestInput[],
     onProgress?: (progress: KnowledgeIngestBatchProgress) => void,
-  ) => Promise<Result<KnowledgeIngestBatchResult, AIError>>
+  ) => Promise<HaiResult<KnowledgeIngestBatchResult>>
 }
