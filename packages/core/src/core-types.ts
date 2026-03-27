@@ -8,6 +8,13 @@
 import type { LogFormat, LoggingConfig, LogLevel } from './core-config.js'
 import { error } from './functions/core-function-error.js'
 
+const UnknownErrorDef: HaiErrorDef = {
+  code: '_:_:599',
+  httpStatus: 500,
+  system: '_',
+  module: '_',
+}
+
 // ─── 1. 基础类型 - Result / Option ───
 
 export type HaiResult<T>
@@ -19,20 +26,32 @@ export function ok<T>(data: T): HaiResult<T> {
 }
 
 export function err(
-  errorOrDef: HaiErrorDef | HaiError,
+  errorOrDef: HaiErrorDef | HaiError | Error,
   message?: string,
   cause?: unknown,
   suggestion?: string,
 ): HaiResult<never> {
-  if (typeof errorOrDef === 'object' && 'message' in errorOrDef) {
+  if (errorOrDef instanceof Error) {
     return {
       success: false,
-      error: errorOrDef,
+      error: error.buildHaiErrorInst(
+        UnknownErrorDef,
+        message || errorOrDef.message,
+        cause ?? errorOrDef,
+        suggestion,
+      ),
+    }
+  }
+  const nonNativeError: HaiErrorDef | HaiError = errorOrDef
+  if ('message' in nonNativeError) {
+    return {
+      success: false,
+      error: nonNativeError,
     }
   }
   return {
     success: false,
-    error: error.buildHaiErrorInst(errorOrDef as HaiErrorDef, message || '', cause, suggestion),
+    error: error.buildHaiErrorInst(nonNativeError, message || '', cause, suggestion),
   }
 }
 
