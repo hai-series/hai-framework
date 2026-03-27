@@ -5,12 +5,17 @@
  */
 
 import type { Handle } from '@sveltejs/kit'
+import { AsyncLocalStorage } from 'node:async_hooks'
 import { paraglideMiddleware } from '$lib/paraglide/server.js'
 import { initApp } from '$lib/server/init.js'
 import { getPartnerAdminSessionByToken } from '$lib/server/partner-service.js'
+import { core } from '@h-ai/core'
 import { kit } from '@h-ai/kit'
 
 let appInitPromise: Promise<void> | null = null
+const requestLocaleStorage = new AsyncLocalStorage<string>()
+
+core.i18n.setRequestLocaleResolver(() => requestLocaleStorage.getStore())
 
 async function ensureAppInitialized() {
   if (!appInitPromise) {
@@ -32,17 +37,14 @@ const i18nHandle: Handle = async ({ event, resolve }) => {
   if (event.url.pathname.startsWith('/api/')) {
     const locale = event.cookies.get('PARAGLIDE_LOCALE') ?? 'zh-CN'
     event.locals.locale = locale
-    kit.i18n.setLocale(locale)
-    return resolve(event)
+    return requestLocaleStorage.run(locale, () => resolve(event))
   }
 
   return paraglideMiddleware(event.request, async ({ locale }: { locale: string }) => {
     event.locals.locale = locale
-    kit.i18n.setLocale(locale)
-
-    return resolve(event, {
+    return requestLocaleStorage.run(locale, () => resolve(event, {
       transformPageChunk: ({ html }) => html.replace('%lang%', locale),
-    })
+    }))
   })
 }
 

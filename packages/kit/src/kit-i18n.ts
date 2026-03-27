@@ -16,10 +16,10 @@ export const kitM
   = core.i18n.createMessageGetter<KitMessageKey>({ 'zh-CN': messagesZhCN, 'en-US': messagesEnUS })
 
 /**
- * 统一设置所有 hai 模块的默认语言
+ * 统一设置所有 hai 模块的默认/回退语言
  *
  * 通过 @h-ai/core 的集中式 locale 管理器，一次调用即可同步所有模块。
- * 各模块的 createMessageGetter 会读取全局 locale。
+ * 当未提供请求级 locale 时，各模块的 createMessageGetter 会读取该全局 locale。
  *
  * @example
  * ```ts
@@ -32,4 +32,14 @@ export const kitM
  */
 export function setAllModulesLocale(locale: string): void {
   core.i18n.setGlobalLocale(locale)
+}
+
+/**
+ * 设置请求级 locale 解析器。
+ *
+ * 服务端可结合 AsyncLocalStorage 等机制注入请求上下文 locale，
+ * 使并发请求间的消息语言互不干扰。
+ */
+export function setRequestLocaleResolver(resolver: (() => string | undefined) | null): void {
+  core.i18n.setRequestLocaleResolver(resolver)
 }
