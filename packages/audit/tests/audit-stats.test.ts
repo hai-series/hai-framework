@@ -15,7 +15,7 @@ async function setupDb(): Promise<void> {
   if (!result.success) {
     throw new Error(`DB init failed: ${result.error.message}`)
   }
-  await reldb.ddl.createTable('users', {
+  await reldb.ddl.createTable('hai_iam_users', {
     id: { type: 'TEXT', primaryKey: true },
     username: { type: 'TEXT', notNull: true },
   }, true)

@@ -393,7 +393,10 @@ export interface CacheFunctions extends CacheCompositeOperations {
 /**
  * 缓存 Provider 接口
  *
- * 由具体实现（memory / redis）提供；上层通过 cache-main 统一管理生命周期
+ * 由具体实现（memory / redis）提供；上层通过 cache-main 统一管理生命周期。
+ * 此接口仅供模块内部使用，消费者请使用 {@link CacheFunctions}。
+ *
+ * @internal
  */
 export interface CacheProvider extends CacheCompositeOperations {
   /** Provider 名称（如 'memory' / 'redis'） */

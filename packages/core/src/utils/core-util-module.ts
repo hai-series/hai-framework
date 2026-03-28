@@ -9,29 +9,6 @@ import type { HaiError, HaiErrorDef, HaiResult } from '../core-types.js'
 
 import { error as errorUtils } from '../functions/core-function-error.js'
 
-// ─── 基础类型 ───
-
-/**
- * 模块错误基础接口。
- *
- * 所有模块的错误类型必须至少包含 `code` 和 `message` 字段。
- *
- * @example
- * ```ts
- * interface DbError extends BaseModuleError {
- *   code: string
- *   message: string
- *   details?: unknown
- * }
- * ```
- */
-export interface BaseModuleError {
-  /** 错误码 */
-  code: string | number
-  /** 错误描述（i18n 消息） */
-  message: string
-}
-
 // ─── 未初始化工具集 ───
 
 /**
@@ -40,9 +17,9 @@ export interface BaseModuleError {
  * 提供错误创建、HaiResult 包装和 Proxy 代理等能力，
  * 用于模块未初始化时的安全回退。
  *
- * @template E - 模块错误类型（必须继承 BaseModuleError）
+ * @template E - 模块错误类型（必须继承 HaiError）
  */
-export interface NotInitializedKit<E extends BaseModuleError> {
+export interface NotInitializedKit<E extends HaiError> {
   /** 创建未初始化错误对象 */
   error: () => E
   /** 创建包含未初始化错误的失败 HaiResult */
@@ -90,11 +67,11 @@ export interface NotInitializedKit<E extends BaseModuleError> {
  * ```
  */
 export function createNotInitializedKit(codeOrDef: HaiErrorDef, messageFn: () => string): NotInitializedKit<HaiError>
-export function createNotInitializedKit<E extends BaseModuleError>(
+export function createNotInitializedKit<E extends HaiError>(
   codeOrDef: E['code'],
   messageFn: () => string,
 ): NotInitializedKit<E> {
-  const isHaiErrorDef = (value: BaseModuleError['code'] | HaiErrorDef): value is HaiErrorDef => {
+  const isHaiErrorDef = (value: HaiError['code'] | HaiErrorDef): value is HaiErrorDef => {
     return typeof value === 'object'
       && value !== null
       && 'httpStatus' in value

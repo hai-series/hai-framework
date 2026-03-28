@@ -5,6 +5,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { HaiDeployError } from '../src/deploy-types.js'
 import { createVercelProvider } from '../src/providers/deploy-provider-vercel.js'
 
 // mock fetch
@@ -59,7 +60,7 @@ describe('createVercelProvider', () => {
 
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.code).toBe(9005) // AUTH_FAILED
+        expect(result.error.code).toBe(HaiDeployError.AUTH_FAILED.code)
       }
     })
   })
@@ -71,7 +72,7 @@ describe('createVercelProvider', () => {
 
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.code).toBe(9004) // AUTH_REQUIRED
+        expect(result.error.code).toBe(HaiDeployError.AUTH_REQUIRED.code)
       }
     })
 
@@ -127,7 +128,7 @@ describe('createVercelProvider', () => {
 
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.code).toBe(9004)
+        expect(result.error.code).toBe(HaiDeployError.AUTH_REQUIRED.code)
       }
     })
 

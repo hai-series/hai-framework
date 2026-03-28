@@ -12,6 +12,7 @@ import type { AIConfig } from '../src/ai-config.js'
 import type { EmbeddingOperations } from '../src/embedding/ai-embedding-types.js'
 import type { LLMOperations } from '../src/llm/ai-llm-types.js'
 import type { RetrievalOperations, RetrievalSource } from '../src/retrieval/ai-retrieval-types.js'
+import type { AIRelStore, AIStoreProvider } from '../src/store/ai-store-types.js'
 import { describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { HaiAIError } from '../src/ai-types.js'
@@ -231,22 +232,48 @@ describe('rAG + citation 跨模块流程', () => {
 // Retrieval 源管理 + 检索流程
 // =============================================================================
 
+const mockStoreProvider: AIStoreProvider = {
+  name: 'mock',
+  // eslint-disable-next-line ts/no-explicit-any
+  createRelStore: () => ({ save: async () => {}, saveMany: async () => {}, get: async () => undefined, query: async () => [], queryPage: async () => ({ items: [], total: 0 }), remove: async () => false, removeBy: async () => 0, count: async () => 0, clear: async () => {} }) as AIRelStore<any>,
+  createVectorStore: () => ({ upsert: async () => {}, search: async () => [], remove: async () => {}, clear: async () => {} }),
+  initialize: async () => {},
+}
+
+function createMockSourceStore(): AIRelStore<RetrievalSource> {
+  const store = new Map<string, RetrievalSource>()
+  return {
+    async save(id, data) { store.set(id, data) },
+    async saveMany(items) { for (const { id, data } of items) store.set(id, data) },
+    async get(id) { return store.get(id) },
+    async query() { return Array.from(store.values()) },
+    async queryPage(_, page) {
+      const items = Array.from(store.values())
+      return { items: items.slice(page.offset, page.offset + page.limit), total: items.length }
+    },
+    async remove(id) { return store.delete(id) },
+    async removeBy() { return 0 },
+    async count() { return store.size },
+    async clear() { store.clear() },
+  }
+}
+
 describe('retrieval 源管理进阶', () => {
   it('多源管理：添加、列出、删除', async () => {
-    const ops = createRetrievalOperations(createMockEmbedding(8))
+    const ops = createRetrievalOperations(createMockEmbedding(8), mockStoreProvider, createMockSourceStore())
 
-    ops.addSource({ id: 'wiki', collection: 'wiki-docs', topK: 5, name: 'Wiki' })
-    ops.addSource({ id: 'kb', collection: 'knowledge-base', topK: 10 })
-    ops.addSource({ id: 'faq', collection: 'faq-docs', minScore: 0.8 })
+    await ops.addSource({ id: 'wiki', collection: 'wiki-docs', topK: 5, name: 'Wiki' })
+    await ops.addSource({ id: 'kb', collection: 'knowledge-base', topK: 10 })
+    await ops.addSource({ id: 'faq', collection: 'faq-docs', minScore: 0.8 })
 
-    const sources = ops.listSources()
+    const sources = await ops.listSources()
     expect(sources).toHaveLength(3)
 
-    ops.removeSource('kb')
-    expect(ops.listSources()).toHaveLength(2)
+    await ops.removeSource('kb')
+    expect(await ops.listSources()).toHaveLength(2)
 
     // 再次删除同一个返回错误
-    const result = ops.removeSource('kb')
+    const result = await ops.removeSource('kb')
     expect(result.success).toBe(false)
     if (!result.success) {
       expect(result.error.code).toBe(HaiAIError.RETRIEVAL_SOURCE_NOT_FOUND.code)
@@ -254,7 +281,7 @@ describe('retrieval 源管理进阶', () => {
   })
 
   it('添加带完整信源信息的源', async () => {
-    const ops = createRetrievalOperations(createMockEmbedding(8))
+    const ops = createRetrievalOperations(createMockEmbedding(8), mockStoreProvider, createMockSourceStore())
 
     const source: RetrievalSource = {
       id: 'project-docs',
@@ -266,10 +293,10 @@ describe('retrieval 源管理进阶', () => {
       filter: { status: 'published' },
     }
 
-    const result = ops.addSource(source)
+    const result = await ops.addSource(source)
     expect(result.success).toBe(true)
 
-    const sources = ops.listSources()
+    const sources = await ops.listSources()
     expect(sources[0]).toMatchObject({
       id: 'project-docs',
       collection: 'project-v2',
@@ -390,7 +417,7 @@ describe('tools 注册表组合场景', () => {
     const defs = registry.getDefinitions()
     expect(defs).toHaveLength(1)
     expect(defs[0].type).toBe('function')
-    expect(defs[0].function.name).toBe('greet')
+    expect((defs[0] as { type: string, function: { name: string } }).function.name).toBe('greet')
   })
 
   it('注册表 unregister + re-register', async () => {
@@ -436,8 +463,8 @@ describe('embedding 跨模块边界', () => {
       })),
     } as unknown as EmbeddingOperations
 
-    const ops = createRetrievalOperations(failEmbedding)
-    ops.addSource({ id: 'test', collection: 'test-coll' })
+    const ops = createRetrievalOperations(failEmbedding, mockStoreProvider, createMockSourceStore())
+    await ops.addSource({ id: 'test', collection: 'test-coll' })
 
     // 使用 mock 来避免实际加载 vecdb
     const result = await ops.retrieve({ query: 'test' })
@@ -493,9 +520,9 @@ describe('配置变体初始化', () => {
     const result = await ai.init({
       llm: { model: 'gpt-4o', apiKey: 'sk-test' },
       knowledge: {
-        chunkSize: 500,
+        chunkMaxSize: 500,
         chunkOverlap: 50,
-        entityExtraction: true,
+        enableEntityExtraction: true,
       },
     })
     expect(result.success).toBe(true)

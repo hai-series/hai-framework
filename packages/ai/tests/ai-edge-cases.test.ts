@@ -29,7 +29,7 @@ describe('ai.tools.define — 非 Error 类型异常', () => {
     const result = await tool.execute({})
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.type).toBe('EXECUTION_FAILED')
+      expect(result.error.code).toBe(HaiAIError.TOOL_EXECUTION_FAILED.code)
       expect(result.error.message).toBe('raw string error')
     }
   })
@@ -46,7 +46,7 @@ describe('ai.tools.define — 非 Error 类型异常', () => {
     const result = await tool.execute({})
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.type).toBe('EXECUTION_FAILED')
+      expect(result.error.code).toBe(HaiAIError.TOOL_EXECUTION_FAILED.code)
       expect(result.error.message).toBe('undefined')
     }
   })
@@ -63,7 +63,7 @@ describe('ai.tools.define — 非 Error 类型异常', () => {
     const result = await tool.execute({})
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.type).toBe('EXECUTION_FAILED')
+      expect(result.error.code).toBe(HaiAIError.TOOL_EXECUTION_FAILED.code)
       expect(result.error.message).toBe('42')
     }
   })

@@ -98,7 +98,7 @@ export type ErrorInfoValue = `${string}:${string}`
 export type ErrorInfo = Record<string, ErrorInfoValue>
 
 export interface HaiErrorDef {
-  code: string
+  code: string | number
   httpStatus: number
   system: string
   module: string

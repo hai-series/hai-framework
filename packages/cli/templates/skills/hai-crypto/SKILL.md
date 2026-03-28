@@ -65,7 +65,7 @@ if (keyPair.success) {
 ```
 
 **AsymmetricEncryptOptions**：`{ cipherMode?: 0 | 1, outputFormat?: 'hex' | 'base64' }`
-**SignOptions**：`{ hash?: boolean, userId?: string, outputFormat?: 'hex' | 'der' }`
+**SignOptions**：`{ hash?: boolean, userId?: string }`
 
 ### 哈希 — `crypto.hash`
 
@@ -130,7 +130,6 @@ if (hashed.success) {
 
 | 错误码 | code | 说明 |
 |--------|------|------|
-| `HaiCryptoError.OPERATION_FAILED` | `hai:crypto:001` | 操作失败 |
 | `HaiCryptoError.INVALID_INPUT` | `hai:crypto:002` | 无效输入 |
 | `HaiCryptoError.INVALID_KEY` | `hai:crypto:003` | 无效密钥 |
 | `HaiCryptoError.NOT_INITIALIZED` | `hai:crypto:010` | 未初始化 |

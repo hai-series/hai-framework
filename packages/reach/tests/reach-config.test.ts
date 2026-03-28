@@ -86,13 +86,13 @@ describe('reach config', () => {
   })
 
   it('错误码应正确定义', () => {
-    expect(HaiReachError.SEND_FAILED.code).toBe(8100)
-    expect(HaiReachError.NOT_INITIALIZED.code).toBe(8110)
-    expect(HaiReachError.TEMPLATE_NOT_FOUND.code).toBe(8101)
-    expect(HaiReachError.PROVIDER_NOT_FOUND.code).toBe(8104)
-    expect(HaiReachError.DND_BLOCKED.code).toBe(8105)
-    expect(HaiReachError.DND_DEFERRED.code).toBe(8106)
-    expect(HaiReachError.CONFIG_ERROR.code).toBe(8112)
+    expect(HaiReachError.SEND_FAILED.code).toBe('hai:reach:001')
+    expect(HaiReachError.NOT_INITIALIZED.code).toBe('hai:reach:010')
+    expect(HaiReachError.TEMPLATE_NOT_FOUND.code).toBe('hai:reach:002')
+    expect(HaiReachError.PROVIDER_NOT_FOUND.code).toBe('hai:reach:005')
+    expect(HaiReachError.DND_BLOCKED.code).toBe('hai:reach:006')
+    expect(HaiReachError.DND_DEFERRED.code).toBe('hai:reach:007')
+    expect(HaiReachError.CONFIG_ERROR.code).toBe('hai:reach:012')
   })
 
   it('模板配置 schema 应正确解析', () => {
