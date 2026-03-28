@@ -66,14 +66,14 @@ Token 和 OTP 存储在 cache 中（不落库）。
 
 | 方法 | 签名 | 说明 |
 |------|------|------|
-| `login` | `({ identifier, password }) => Promise<Result<AuthResult>>` | 密码登录 |
-| `loginWithOtp` | `({ identifier, code }) => Promise<Result<AuthResult>>` | OTP 登录 |
-| `loginWithLdap` | `({ username, password }) => Promise<Result<AuthResult>>` | LDAP 登录 |
-| `loginWithApiKey` | `({ key }) => Promise<Result<AuthResult>>` | API Key 登录（需启用 `login.apikey`） |
-| `sendOtp` | `(identifier) => Promise<Result<{ expiresAt }>>` | 发送 OTP |
-| `verifyToken` | `(token) => Promise<Result<Session>>` | 验证令牌 |
-| `logout` | `(token) => Promise<Result<void>>` | 登出 |
-| `registerAndLogin` | `(options: RegisterOptions) => Promise<Result<AuthResult>>` | 注册并登录（一站式） |
+| `login` | `({ identifier, password }) => Promise<HaiResult<AuthResult>>` | 密码登录 |
+| `loginWithOtp` | `({ identifier, code }) => Promise<HaiResult<AuthResult>>` | OTP 登录 |
+| `loginWithLdap` | `({ username, password }) => Promise<HaiResult<AuthResult>>` | LDAP 登录 |
+| `loginWithApiKey` | `({ key }) => Promise<HaiResult<AuthResult>>` | API Key 登录（需启用 `login.apikey`） |
+| `sendOtp` | `(identifier) => Promise<HaiResult<{ expiresAt }>>` | 发送 OTP |
+| `verifyToken` | `(token) => Promise<HaiResult<Session>>` | 验证令牌 |
+| `logout` | `(token) => Promise<HaiResult<void>>` | 登出 |
+| `registerAndLogin` | `(options: RegisterOptions) => Promise<HaiResult<AuthResult>>` | 注册并登录（一站式） |
 
 **AuthResult**：
 
@@ -98,15 +98,15 @@ interface TokenPair {
 
 | 方法 | 签名 | 说明 |
 |------|------|------|
-| `create` | `({ userId, username, roles, source? }) => Promise<Result<Session>>` | 创建会话 |
-| `get` | `(token) => Promise<Result<Session \| null>>` | 获取会话（滑动续期） |
-| `verifyToken` | `(token) => Promise<Result<Session>>` | 验证令牌 |
-| `update` | `(token, data: Partial<Session>) => Promise<Result<void>>` | 更新会话字段 |
-| `delete` | `(token) => Promise<Result<void>>` | 删除会话 |
-| `deleteByUserId` | `(userId) => Promise<Result<number>>` | 强制下线（返回删除数量） |
-| `refresh` | `(refreshToken) => Promise<Result<TokenPair>>` | 刷新 Token（rotation） |
-| `revokeRefresh` | `(refreshToken) => Promise<Result<void>>` | 吊销 refreshToken |
-| `patchUserSessions` | `(userId, updates: SessionFieldUpdates) => Promise<Result<void>>` | 批量更新用户活跃会话的 roles/permissions |
+| `create` | `({ userId, username, roles, source? }) => Promise<HaiResult<Session>>` | 创建会话 |
+| `get` | `(token) => Promise<HaiResult<Session \| null>>` | 获取会话（滑动续期） |
+| `verifyToken` | `(token) => Promise<HaiResult<Session>>` | 验证令牌 |
+| `update` | `(token, data: Partial<Session>) => Promise<HaiResult<void>>` | 更新会话字段 |
+| `delete` | `(token) => Promise<HaiResult<void>>` | 删除会话 |
+| `deleteByUserId` | `(userId) => Promise<HaiResult<number>>` | 强制下线（返回删除数量） |
+| `refresh` | `(refreshToken) => Promise<HaiResult<TokenPair>>` | 刷新 Token（rotation） |
+| `revokeRefresh` | `(refreshToken) => Promise<HaiResult<void>>` | 吊销 refreshToken |
+| `patchUserSessions` | `(userId, updates: SessionFieldUpdates) => Promise<HaiResult<void>>` | 批量更新用户活跃会话的 roles/permissions |
 
 **Token 刷新（rotation）**：`refresh()` 删除旧 Token 对，创建新 session，旧 refreshToken 立即失效。
 
@@ -116,19 +116,19 @@ interface TokenPair {
 
 | 方法 | 签名 | 说明 |
 |------|------|------|
-| `register` | `(input) => Promise<Result<RegisterResult>>` | 注册 |
-| `getCurrentUser` | `(token) => Promise<Result<User>>` | 通过令牌获取当前用户 |
-| `updateCurrentUser` | `(token, data: UpdateCurrentUserInput) => Promise<Result<User>>` | 更新当前用户（白名单字段） |
-| `getUser` | `(id, options?) => Promise<Result<User \| null>>` | 获取用户（可 include roles） |
-| `listUsers` | `(options?) => Promise<Result<PaginatedResult<User>>>` | 分页列表（支持 search + include） |
-| `updateUser` | `(id, data) => Promise<Result<User>>` | 更新用户 |
-| `deleteUser` | `(id) => Promise<Result<void>>` | 删除用户（清除会话 + 角色关联） |
-| `changePassword` | `(id, old, new) => Promise<Result<void>>` | 修改密码（按用户 ID） |
-| `changeCurrentUserPassword` | `(token, old, new) => Promise<Result<void>>` | 当前用户修改密码（按令牌） |
-| `requestPasswordReset` | `(email) => Promise<Result<void>>` | 请求重置（防枚举） |
-| `confirmPasswordReset` | `(token, newPassword) => Promise<Result<void>>` | 确认重置 |
-| `adminResetPassword` | `(userId, newPassword) => Promise<Result<void>>` | 管理员重置 |
-| `validatePassword` | `(password) => Result<void>` | 密码强度验证（**同步**） |
+| `register` | `(input) => Promise<HaiResult<RegisterResult>>` | 注册 |
+| `getCurrentUser` | `(token) => Promise<HaiResult<User>>` | 通过令牌获取当前用户 |
+| `updateCurrentUser` | `(token, data: UpdateCurrentUserInput) => Promise<HaiResult<User>>` | 更新当前用户（白名单字段） |
+| `getUser` | `(id, options?) => Promise<HaiResult<User \| null>>` | 获取用户（可 include roles） |
+| `listUsers` | `(options?) => Promise<HaiResult<PaginatedResult<User>>>` | 分页列表（支持 search + include） |
+| `updateUser` | `(id, data) => Promise<HaiResult<User>>` | 更新用户 |
+| `deleteUser` | `(id) => Promise<HaiResult<void>>` | 删除用户（清除会话 + 角色关联） |
+| `changePassword` | `(id, old, new) => Promise<HaiResult<void>>` | 修改密码（按用户 ID） |
+| `changeCurrentUserPassword` | `(token, old, new) => Promise<HaiResult<void>>` | 当前用户修改密码（按令牌） |
+| `requestPasswordReset` | `(email) => Promise<HaiResult<void>>` | 请求重置（防枚举） |
+| `confirmPasswordReset` | `(token, newPassword) => Promise<HaiResult<void>>` | 确认重置 |
+| `adminResetPassword` | `(userId, newPassword) => Promise<HaiResult<void>>` | 管理员重置 |
+| `validatePassword` | `(password) => HaiResult<void>` | 密码强度验证（**同步**） |
 
 ---
 
@@ -138,43 +138,43 @@ interface TokenPair {
 
 | 方法 | 签名 | 说明 |
 |------|------|------|
-| `checkPermission` | `(userId, permission) => Promise<Result<boolean>>` | 检查权限（支持通配符） |
-| `getUserPermissions` | `(userId) => Promise<Result<Permission[]>>` | 获取用户所有权限 |
-| `getUserRoles` | `(userId) => Promise<Result<Role[]>>` | 获取用户角色 |
-| `getUserRolesForMany` | `(userIds[]) => Promise<Result<Map<string, Role[]>>>` | 批量获取多用户角色 |
-| `getRolePermissionsForMany` | `(roleIds[]) => Promise<Result<Map<string, Permission[]>>>` | 批量获取多角色权限 |
+| `checkPermission` | `(userId, permission) => Promise<HaiResult<boolean>>` | 检查权限（支持通配符） |
+| `getUserPermissions` | `(userId) => Promise<HaiResult<Permission[]>>` | 获取用户所有权限 |
+| `getUserRoles` | `(userId) => Promise<HaiResult<Role[]>>` | 获取用户角色 |
+| `getUserRolesForMany` | `(userIds[]) => Promise<HaiResult<Map<string, Role[]>>>` | 批量获取多用户角色 |
+| `getRolePermissionsForMany` | `(roleIds[]) => Promise<HaiResult<Map<string, Permission[]>>>` | 批量获取多角色权限 |
 
 ### 角色管理
 
 | 方法 | 签名 | 说明 |
 |------|------|------|
-| `createRole` | `({ code, name, description? }, tx?) => Promise<Result<Role>>` | 创建角色 |
-| `getRole` | `(roleId) => Promise<Result<Role \| null>>` | 获取角色 |
-| `getRoleByCode` | `(code) => Promise<Result<Role \| null>>` | 按 code 获取角色 |
-| `getAllRoles` | `(options?) => Promise<Result<PaginatedResult<Role>>>` | 分页获取所有角色 |
-| `updateRole` | `(roleId, data, tx?) => Promise<Result<Role>>` | 更新角色 |
-| `deleteRole` | `(roleId, tx?) => Promise<Result<void>>` | 删除角色（事务清关联） |
+| `createRole` | `({ code, name, description? }, tx?) => Promise<HaiResult<Role>>` | 创建角色 |
+| `getRole` | `(roleId) => Promise<HaiResult<Role \| null>>` | 获取角色 |
+| `getRoleByCode` | `(code) => Promise<HaiResult<Role \| null>>` | 按 code 获取角色 |
+| `getAllRoles` | `(options?) => Promise<HaiResult<PaginatedResult<Role>>>` | 分页获取所有角色 |
+| `updateRole` | `(roleId, data, tx?) => Promise<HaiResult<Role>>` | 更新角色 |
+| `deleteRole` | `(roleId, tx?) => Promise<HaiResult<void>>` | 删除角色（事务清关联） |
 
 ### 权限管理
 
 | 方法 | 签名 | 说明 |
 |------|------|------|
-| `createPermission` | `({ code, name, type?, resource?, action? }, tx?) => Promise<Result<Permission>>` | 创建权限 |
-| `getPermission` | `(permissionId) => Promise<Result<Permission \| null>>` | 获取权限 |
-| `getPermissionByCode` | `(code) => Promise<Result<Permission \| null>>` | 按 code 获取权限 |
-| `getAllPermissions` | `(options?) => Promise<Result<PaginatedResult<Permission>>>` | 分页获取所有权限（可按 type 筛选） |
-| `deletePermission` | `(permissionId, tx?) => Promise<Result<void>>` | 删除权限（事务清关联） |
+| `createPermission` | `({ code, name, type?, resource?, action? }, tx?) => Promise<HaiResult<Permission>>` | 创建权限 |
+| `getPermission` | `(permissionId) => Promise<HaiResult<Permission \| null>>` | 获取权限 |
+| `getPermissionByCode` | `(code) => Promise<HaiResult<Permission \| null>>` | 按 code 获取权限 |
+| `getAllPermissions` | `(options?) => Promise<HaiResult<PaginatedResult<Permission>>>` | 分页获取所有权限（可按 type 筛选） |
+| `deletePermission` | `(permissionId, tx?) => Promise<HaiResult<void>>` | 删除权限（事务清关联） |
 
 ### 分配操作
 
 | 方法 | 签名 | 说明 |
 |------|------|------|
-| `assignRole` | `(userId, roleId, tx?) => Promise<Result<void>>` | 分配角色给用户 |
-| `removeRole` | `(userId, roleId, tx?) => Promise<Result<void>>` | 移除用户角色 |
-| `syncRoles` | `(userId, roleIds[], tx?) => Promise<Result<void>>` | 同步用户角色（全量替换） |
-| `assignPermissionToRole` | `(roleId, permId, tx?) => Promise<Result<void>>` | 分配权限给角色 |
-| `removePermissionFromRole` | `(roleId, permId, tx?) => Promise<Result<void>>` | 移除角色权限 |
-| `getRolePermissions` | `(roleId) => Promise<Result<Permission[]>>` | 获取角色的权限列表 |
+| `assignRole` | `(userId, roleId, tx?) => Promise<HaiResult<void>>` | 分配角色给用户 |
+| `removeRole` | `(userId, roleId, tx?) => Promise<HaiResult<void>>` | 移除用户角色 |
+| `syncRoles` | `(userId, roleIds[], tx?) => Promise<HaiResult<void>>` | 同步用户角色（全量替换） |
+| `assignPermissionToRole` | `(roleId, permId, tx?) => Promise<HaiResult<void>>` | 分配权限给角色 |
+| `removePermissionFromRole` | `(roleId, permId, tx?) => Promise<HaiResult<void>>` | 移除角色权限 |
+| `getRolePermissions` | `(roleId) => Promise<HaiResult<Permission[]>>` | 获取角色的权限列表 |
 
 **通配符**：`admin:*` 匹配 `admin:read`、`admin:write`。超管角色自动拥有所有权限。
 
@@ -288,11 +288,11 @@ if (login.success) {
 
 | 方法 | 签名 | 说明 |
 |------|------|------|
-| `createApiKey` | `(userId, { name, expirationDays?, scopes? }) => Promise<Result<CreateApiKeyResult>>` | 创建 API Key（`rawKey` 仅返回一次） |
-| `listApiKeys` | `(userId) => Promise<Result<ApiKey[]>>` | 列出用户的 API Key |
-| `getApiKey` | `(keyId) => Promise<Result<ApiKey \| null>>` | 获取 API Key 详情 |
-| `revokeApiKey` | `(keyId) => Promise<Result<void>>` | 吊销 API Key |
-| `verifyApiKey` | `(rawKey) => Promise<Result<ApiKey>>` | 验证 API Key 有效性 |
+| `createApiKey` | `(userId, { name, expirationDays?, scopes? }) => Promise<HaiResult<CreateApiKeyResult>>` | 创建 API Key（`rawKey` 仅返回一次） |
+| `listApiKeys` | `(userId) => Promise<HaiResult<ApiKey[]>>` | 列出用户的 API Key |
+| `getApiKey` | `(keyId) => Promise<HaiResult<ApiKey \| null>>` | 获取 API Key 详情 |
+| `revokeApiKey` | `(keyId) => Promise<HaiResult<void>>` | 吊销 API Key |
+| `verifyApiKey` | `(rawKey) => Promise<HaiResult<ApiKey>>` | 验证 API Key 有效性 |
 
 ```typescript
 // 创建（rawKey 仅此一次展示）

@@ -82,7 +82,7 @@ await audit.init({
 
 ## 错误码
 
-所有操作返回 `Result<T, AuditError>`，常用错误码如下：
+所有操作返回 `HaiResult<T>`，常用错误码如下：
 
 - `AuditErrorCode.LOG_FAILED` (10000) - 记录失败
 - `AuditErrorCode.QUERY_FAILED` (10001) - 查询失败

@@ -181,7 +181,7 @@ export function resetSendLogRepoSingleton(): void {
  * db 重新初始化后自动创建新实例。
  *
  * @param db - 数据库服务实例
- * @returns 成功返回发送日志存储接口实现；失败返回含错误信息的 Result
+ * @returns 成功返回发送日志存储接口实现；失败返回含错误信息的 HaiResult
  */
 export async function createSendLogRepository(db: ReldbFunctions): Promise<HaiResult<SendLogRepository>> {
   if (sendLogRepoInstance && sendLogRepoDbConfig === db.config)

@@ -25,7 +25,7 @@ describe('core.module', () => {
     expect(error.message).toBe(ERROR_MESSAGE)
   })
 
-  it('result 应该返回 success=false 的 Result', () => {
+  it('result 应该返回 success=false 的 HaiResult', () => {
     const kit = createKit()
     const result = kit.result<string>()
     expect(result.success).toBe(false)

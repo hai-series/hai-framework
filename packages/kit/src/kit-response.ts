@@ -221,12 +221,12 @@ export function redirect(url: string, status: 301 | 302 | 303 | 307 | 308 = 302)
 // ─── Result → Response 转换 ───
 
 /**
- * 将 Result<T, E> 转换为标准 API Response
+ * 将 HaiResult<T> 转换为标准 API Response
  *
  * 成功时返回 200 ok(data)，失败时从 error 对象中提取 code、message，
  * 并根据 httpStatusMap 映射 HTTP 状态码（未命中时默认 400）。
  *
- * @param result - core Result 对象（{ success, data } 或 { success: false, error }）
+ * @param result - core HaiResult 对象（{ success, data } 或 { success: false, error }）
  * @param httpStatusMap - 模块导出的错误码 → HTTP 状态码映射表（如 IamErrorHttpStatus）
  * @param requestId - 可选请求 ID，用于链路追踪
  * @returns 标准化 JSON Response

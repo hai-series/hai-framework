@@ -7,7 +7,7 @@
  * =============================================================================
  */
 
-import type { Result } from '@h-ai/core'
+import type { HaiResult } from '@h-ai/core'
 import type { Permission, Role } from '@h-ai/iam'
 import * as m from '$lib/paraglide/messages.js'
 import { err, ok } from '@h-ai/core'
@@ -94,7 +94,7 @@ export const roleService = {
    *
    * @returns 成功返回带权限的角色；失败返回 ServiceError
    */
-  async create(input: CreateRoleInput): Promise<Result<RoleWithPermissions, ServiceError>> {
+  async create(input: CreateRoleInput): Promise<HaiResult<RoleWithPermissions>> {
     const result = await iam.authz.createRole({
       code: input.code,
       name: input.name,
@@ -164,7 +164,7 @@ export const roleService = {
    *
    * @returns 成功返回更新后角色；角色不存在返回 ok(null)；失败返回 ServiceError
    */
-  async update(id: string, input: UpdateRoleInput): Promise<Result<RoleWithPermissions | null, ServiceError>> {
+  async update(id: string, input: UpdateRoleInput): Promise<HaiResult<RoleWithPermissions | null>> {
     // 检查角色是否存在
     const existing = await this.getById(id)
     if (!existing)
@@ -213,7 +213,7 @@ export const roleService = {
    *
    * @returns 成功返回 ok(true)；不存在返回 ok(false)；系统角色返回 ServiceError
    */
-  async delete(id: string): Promise<Result<boolean, ServiceError>> {
+  async delete(id: string): Promise<HaiResult<boolean>> {
     // 检查是否为系统角色
     const existing = await this.getById(id)
     if (!existing)

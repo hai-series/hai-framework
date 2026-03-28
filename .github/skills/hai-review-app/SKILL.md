@@ -55,7 +55,7 @@ description: "Use when: reviewing SvelteKit app code, auditing app quality, chec
 - [ ] 输入用 Zod Schema 校验（`kit.validate.body` / `query` / `params`）
 - [ ] 权限用 `kit.guard.require`
 - [ ] 响应用 `kit.response.*`（不手动构造 Response）
-- [ ] Result 型错误用 `kit.response.fromError` 转换
+- [ ] HaiResult 型错误用 `kit.response.fromError` 转换
 - [ ] Schema 定义集中在 `lib/server/schemas/`
 - [ ] 文件上传有类型白名单 + 大小限制
 - [ ] 无 SQL 字符串拼接

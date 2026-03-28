@@ -125,7 +125,7 @@ const config = { name: 'dev', type: 'console' }
 
 ## 错误处理
 
-所有操作返回 `Result<T, ReachError>`，错误码定义在 `ReachErrorCode`：
+所有操作返回 `HaiResult<T>`，错误码定义在 `ReachErrorCode`：
 
 ```ts
 const result = await reach.send({ provider: 'email', to: 'user@example.com', body: 'hello' })

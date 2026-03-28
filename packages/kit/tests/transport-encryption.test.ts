@@ -125,7 +125,7 @@ describe('createTransportEncryption', () => {
     expect(pubKey).toContain('mock_pub_key')
   })
 
-  it('密钥对生成失败时返回错误 Result', () => {
+  it('密钥对生成失败时返回错误 HaiResult', () => {
     const failing = createFailingCryptoService()
     const result = createTransportEncryption(failing)
     expect(result.success).toBe(false)

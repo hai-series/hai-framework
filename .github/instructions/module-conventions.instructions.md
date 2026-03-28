@@ -22,26 +22,26 @@ applyTo: "packages/**"
 
 ## 错误处理
 
-- 公共 API 禁止 throw，必须返回 `Result<T, XxError>` 或 `Promise<Result<T, XxError>>`
+- 公共 API 禁止 throw，必须返回 `HaiResult<T>` 或 `Promise<HaiResult<T>>`
 - 调用方不应使用 `try/catch` 来处理模块返回的错误
 - 错误码：每模块独占千位段（注册表见 hai-create-module §4），NOT_INITIALIZED 固定为 X010
 - 错误创建：错误码 + `xxM('key')`，禁止硬编码消息
 
 ### 合规 throw 场景
 
-| 场景                                 | 说明                                         |
-| ------------------------------------ | -------------------------------------------- |
-| 内部 throw + 外层 try-catch → Result | 标准 catch-and-wrap 模式                     |
-| `getOrThrow()` 等显式命名            | 函数名已表达 throw 语义                      |
-| async generator（如 `chatStream()`） | 无法返回 Result，须 JSDoc 注明               |
-| 浏览器端 Client 代码                 | `client/xx-client.ts` 等，不属于模块公共 API |
-| CLI 命令                             | `packages/cli/` 中的命令行工具，非模块 API   |
+| 场景                                    | 说明                                         |
+| --------------------------------------- | -------------------------------------------- |
+| 内部 throw + 外层 try-catch → HaiResult | 标准 catch-and-wrap 模式                     |
+| `getOrThrow()` 等显式命名               | 函数名已表达 throw 语义                      |
+| async generator（如 `chatStream()`）    | 无法返回 HaiResult，须 JSDoc 注明            |
+| 浏览器端 Client 代码                    | `client/xx-client.ts` 等，不属于模块公共 API |
+| CLI 命令                                | `packages/cli/` 中的命令行工具，非模块 API   |
 
-### Result 使用模式
+### HaiResult 使用模式
 
 ```ts
-// ✅ 返回 Result
-async function create(input: Input): Promise<Result<Item, XxError>> {
+// ✅ 返回 HaiResult
+async function create(input: Input): Promise<HaiResult<Item>> {
   try {
     const item = await doCreate(input)
     return ok(item)
@@ -51,8 +51,8 @@ async function create(input: Input): Promise<Result<Item, XxError>> {
   }
 }
 
-// ✅ 返回 Result（非异步）
-function register(tool: Tool): Result<void, XxError> {
+// ✅ 返回 HaiResult（非异步）
+function register(tool: Tool): HaiResult<void> {
   if (!isInitialized)
     return notInitialized.result()
   return ok(undefined)
@@ -166,7 +166,7 @@ function register(tool: Tool): Result<void, XxError> {
 ## 模块禁止事项
 
 - 在 `xx-main.ts` 中编写具体业务逻辑（调度循环、数据处理等），main 仅做生命周期管理和 API 编排
-- 在公共模块 API 中使用 `throw`（必须返回 `Result<T, E>`）
+- 在公共模块 API 中使用 `throw`（必须返回 `HaiResult<T>`）
 - 错误码段位与已有模块冲突（段位注册表见 hai-create-module §4）
 - 同一模块混用扁平方法与子操作对象两种 API 风格
 - 做兼容性处理（开发期，不考虑兼容旧版本）

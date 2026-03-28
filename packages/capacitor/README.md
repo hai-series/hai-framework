@@ -100,7 +100,7 @@ export const ssr = false
 
 ## 错误处理
 
-所有异步 API 返回 `Result<T, CapacitorError>`，不会直接 throw：
+所有异步 API 返回 `HaiResult<T>`，不会直接 throw：
 
 ```ts
 import { capacitor, CapacitorErrorCode } from '@h-ai/capacitor'

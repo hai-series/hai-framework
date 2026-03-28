@@ -168,7 +168,7 @@ const logs = await scheduler.getLogs({
 
 ## 错误处理
 
-所有公共 API（除 `close()`）返回 `Result<T, SchedulerError>`。
+所有公共 API（除 `close()`）返回 `HaiResult<T>`。
 
 常用错误码：
 
