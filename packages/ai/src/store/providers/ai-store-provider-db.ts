@@ -82,31 +82,36 @@ class ReldbAIRelStore<T> implements AIRelStore<T> {
       await this.sql.execute(`CREATE TABLE IF NOT EXISTS ${t} (${cols.join(', ')})`),
     )
 
-    if (this.hasObjectId)
+    if (this.hasObjectId) {
       this.assertDbSuccess(
         'create object_id index',
         await this.sql.execute(`CREATE INDEX IF NOT EXISTS idx_${t}_object_id ON ${t}(object_id)`),
       )
-    if (this.hasSessionId)
+    }
+    if (this.hasSessionId) {
       this.assertDbSuccess(
         'create session_id index',
         await this.sql.execute(`CREATE INDEX IF NOT EXISTS idx_${t}_session_id ON ${t}(session_id)`),
       )
-    if (this.hasObjectId && this.hasSessionId)
+    }
+    if (this.hasObjectId && this.hasSessionId) {
       this.assertDbSuccess(
         'create object_id + session_id index',
         await this.sql.execute(`CREATE INDEX IF NOT EXISTS idx_${t}_object_session ON ${t}(object_id, session_id)`),
       )
-    if (this.hasStatus)
+    }
+    if (this.hasStatus) {
       this.assertDbSuccess(
         'create status index',
         await this.sql.execute(`CREATE INDEX IF NOT EXISTS idx_${t}_status ON ${t}(status)`),
       )
-    if (this.hasRefId)
+    }
+    if (this.hasRefId) {
       this.assertDbSuccess(
         'create ref_id index',
         await this.sql.execute(`CREATE INDEX IF NOT EXISTS idx_${t}_ref_id ON ${t}(ref_id)`),
       )
+    }
   }
 
   async save(id: string, data: T, scope?: StoreScope): Promise<void> {

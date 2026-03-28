@@ -12,7 +12,7 @@ import type { HaiResult } from '@h-ai/core'
 
 import type { A2AConfig } from '../ai-config.js'
 
-import type { AIRelStore, AIStoreProvider } from '../store/ai-store-types.js'
+import type { AIRelStore, AIStoreProvider, StoreFilter, StoreScope } from '../store/ai-store-types.js'
 import type {
   A2AAgentCardConfig,
   A2ACallOptions,
@@ -111,41 +111,41 @@ function wrapExecutorWithLogging(
   }
 }
 
-function withReadyStore<T>(store: AIStore<T>, ready: Promise<void>): AIStore<T> {
+function withReadyStore<T>(store: AIRelStore<T>, ready: Promise<void>): AIRelStore<T> {
   return {
-    async save(id, data, scope) {
+    async save(id: string, data: T, scope?: StoreScope) {
       await ready
       await store.save(id, data, scope)
     },
-    async saveMany(items) {
+    async saveMany(items: Array<{ id: string, data: T, scope?: StoreScope }>) {
       await ready
       await store.saveMany(items)
     },
-    async get(id) {
+    async get(id: string) {
       await ready
       return store.get(id)
     },
-    async query(filter) {
+    async query(filter: StoreFilter<T>) {
       await ready
       return store.query(filter)
     },
-    async queryPage(filter, page) {
+    async queryPage(filter: StoreFilter<T>, page: { offset: number, limit: number }) {
       await ready
       return store.queryPage(filter, page)
     },
-    async remove(id) {
+    async remove(id: string) {
       await ready
       return store.remove(id)
     },
-    async removeBy(filter) {
+    async removeBy(filter: StoreFilter<T>) {
       await ready
       return store.removeBy(filter)
     },
-    async count(filter) {
+    async count(filter?: StoreFilter<T>) {
       await ready
       return store.count(filter)
     },
-    async clear(filter) {
+    async clear(filter?: StoreFilter<T>) {
       await ready
       await store.clear(filter)
     },
@@ -196,11 +196,7 @@ export function createA2AOperations(
     hasObjectId: true,
     hasStatus: true,
   })
-  const storesReady = Promise.all([
-    taskStore.createTable(),
-    messageStore.createTable(),
-    callRecordStore.createTable(),
-  ]).then(() => undefined)
+  const storesReady = storeProvider.initialize()
   // Promise 在首次真正使用前就会启动；预先挂载拒绝处理器避免未处理拒绝警告。
   void storesReady.catch(() => {})
   const readyTaskStore = withReadyStore(taskStore, storesReady)
@@ -327,7 +323,7 @@ export function createA2AOperations(
           createdAt: startTime,
         }
         readyCallRecordStore.save(callRecord.id, callRecord, { objectId: remoteUrl, status: result.taskState })
-          .catch(e => logger.warn('Failed to save A2A call record', { error: e }))
+          .catch((e: unknown) => logger.warn('Failed to save A2A call record', { error: e }))
 
         return ok(result)
       }

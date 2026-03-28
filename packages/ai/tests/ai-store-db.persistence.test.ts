@@ -1,6 +1,7 @@
 import type { DmlOperations, ReldbJsonOps } from '@h-ai/reldb'
+import type { VecdbFunctions } from '@h-ai/vecdb'
 import { describe, expect, it, vi } from 'vitest'
-import { ReldbAIStore } from './ai-store-db.js'
+import { createDbStoreProvider } from '../src/store/providers/ai-store-provider-db.js'
 
 interface SqlMocks {
   query: ReturnType<typeof vi.fn>
@@ -49,19 +50,36 @@ function createMockJsonOps(): ReldbJsonOps {
   }
 }
 
-describe('ReldbAIStore persistence error semantics', () => {
+function createMockVecdb(): VecdbFunctions {
+  return {
+    collection: {
+      exists: vi.fn(async () => ({ success: true, data: false })),
+      create: vi.fn(async () => ({ success: true, data: undefined })),
+      drop: vi.fn(async () => ({ success: true, data: undefined })),
+    },
+    vector: {
+      upsert: vi.fn(async () => ({ success: true, data: undefined })),
+      search: vi.fn(async () => ({ success: true, data: [] })),
+      delete: vi.fn(async () => ({ success: true, data: undefined })),
+    },
+  } as unknown as VecdbFunctions
+}
+
+describe('reldb AI store persistence error semantics', () => {
   it('createTable propagates execute failure', async () => {
     const { sql, mocks } = createMockSql()
     mocks.execute.mockResolvedValueOnce(failedResult('ddl failed'))
-    const store = new ReldbAIStore<{ value: string }>(sql, 'hai_test_store', createMockJsonOps(), { dbType: 'sqlite' })
+    const provider = createDbStoreProvider({ sql, jsonOps: createMockJsonOps(), vecdb: createMockVecdb(), dbType: 'sqlite' })
+    provider.createRelStore<{ value: string }>('hai_test_store')
 
-    await expect(store.createTable()).rejects.toThrow('create table failed')
+    await expect(provider.initialize()).rejects.toThrow('create table failed')
   })
 
   it('save propagates write failure', async () => {
     const { sql, mocks } = createMockSql()
     mocks.execute.mockResolvedValueOnce(failedResult('write failed'))
-    const store = new ReldbAIStore<{ value: string }>(sql, 'hai_test_store', createMockJsonOps(), { dbType: 'sqlite' })
+    const provider = createDbStoreProvider({ sql, jsonOps: createMockJsonOps(), vecdb: createMockVecdb(), dbType: 'sqlite' })
+    const store = provider.createRelStore<{ value: string }>('hai_test_store')
 
     await expect(store.save('id-1', { value: 'x' })).rejects.toThrow('save upsert failed')
   })
@@ -69,14 +87,16 @@ describe('ReldbAIStore persistence error semantics', () => {
   it('get propagates read failure instead of returning undefined', async () => {
     const { sql, mocks } = createMockSql()
     mocks.get.mockResolvedValueOnce(failedResult('read failed'))
-    const store = new ReldbAIStore<{ value: string }>(sql, 'hai_test_store', createMockJsonOps(), { dbType: 'sqlite' })
+    const provider = createDbStoreProvider({ sql, jsonOps: createMockJsonOps(), vecdb: createMockVecdb(), dbType: 'sqlite' })
+    const store = provider.createRelStore<{ value: string }>('hai_test_store')
 
     await expect(store.get('id-1')).rejects.toThrow('get by id failed')
   })
 
   it('query and removeBy propagate database failures', async () => {
     const { sql, mocks } = createMockSql()
-    const store = new ReldbAIStore<{ value: string }>(sql, 'hai_test_store', createMockJsonOps(), { dbType: 'sqlite' })
+    const provider = createDbStoreProvider({ sql, jsonOps: createMockJsonOps(), vecdb: createMockVecdb(), dbType: 'sqlite' })
+    const store = provider.createRelStore<{ value: string }>('hai_test_store')
 
     mocks.query.mockResolvedValueOnce(failedResult('query failed'))
     await expect(store.query({})).rejects.toThrow('query by filter failed')
