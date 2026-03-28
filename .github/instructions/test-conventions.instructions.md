@@ -23,10 +23,10 @@ applyTo: "**/tests/**"
 
 ## 断言风格
 
-- 始终校验 `Result.success`
+- 始终校验 `result.success`
 - 成功时：`expect(result.success).toBe(true)` + 检查返回数据
 - 失败时：`expect(result.success).toBe(false)` + 校验 `error.code`
-- 不使用 `try/catch` 来断言 Result 型 API
+- 不使用 `try/catch` 来断言 HaiResult 型 API
 
 ## 组织结构
 

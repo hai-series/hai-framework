@@ -61,16 +61,16 @@ await reldb.close()
 
 | 方法 | 签名 | 说明 |
 |------|------|------|
-| `createTable` | `(tableName, columns: TableDef, ifNotExists?) => Result<void>` | 建表（默认 IF NOT EXISTS） |
-| `dropTable` | `(tableName, ifExists?) => Result<void>` | 删除表 |
-| `addColumn` | `(tableName, columnName, columnDef) => Result<void>` | 添加列 |
-| `dropColumn` | `(tableName, columnName) => Result<void>` | 删除列 |
-| `renameTable` | `(oldName, newName) => Result<void>` | 重命名表 |
-| `createIndex` | `(tableName, indexName, indexDef) => Result<void>` | 创建索引 |
-| `dropIndex` | `(indexName, ifExists?) => Result<void>` | 删除索引 |
-| `raw` | `(sql: string) => Result<void>` | 执行原始 DDL |
+| `createTable` | `(tableName, columns: TableDef, ifNotExists?) => HaiResult<void>` | 建表（默认 IF NOT EXISTS） |
+| `dropTable` | `(tableName, ifExists?) => HaiResult<void>` | 删除表 |
+| `addColumn` | `(tableName, columnName, columnDef) => HaiResult<void>` | 添加列 |
+| `dropColumn` | `(tableName, columnName) => HaiResult<void>` | 删除列 |
+| `renameTable` | `(oldName, newName) => HaiResult<void>` | 重命名表 |
+| `createIndex` | `(tableName, indexName, indexDef) => HaiResult<void>` | 创建索引 |
+| `dropIndex` | `(indexName, ifExists?) => HaiResult<void>` | 删除索引 |
+| `raw` | `(sql: string) => HaiResult<void>` | 执行原始 DDL |
 
-> 所有方法返回 `Promise<Result<void, ReldbError>>`。
+> 所有方法返回 `Promise<HaiResult<void>>`。
 
 ### TableDef 与 ColumnDef
 
@@ -104,11 +104,11 @@ const columns: TableDef = {
 
 | 方法 | 签名 | 说明 |
 |------|------|------|
-| `query` | `<T>(sql, params?) => Result<T[]>` | 查询多行 |
-| `get` | `<T>(sql, params?) => Result<T \| null>` | 查询单行 |
-| `execute` | `(sql, params?) => Result<ExecuteResult>` | 执行写操作 |
-| `batch` | `(statements: Array<{ sql, params? }>) => Result<void>` | 批量执行 |
-| `queryPage` | `<T>(options) => Result<PaginatedResult>` | 分页查询 |
+| `query` | `<T>(sql, params?) => HaiResult<T[]>` | 查询多行 |
+| `get` | `<T>(sql, params?) => HaiResult<T \| null>` | 查询单行 |
+| `execute` | `(sql, params?) => HaiResult<ExecuteResult>` | 执行写操作 |
+| `batch` | `(statements: Array<{ sql, params? }>) => HaiResult<void>` | 批量执行 |
+| `queryPage` | `<T>(options) => HaiResult<PaginatedResult>` | 分页查询 |
 
 **参数占位符统一使用 `?`**（PostgreSQL 的 `$n` 由 Provider 自动转换）：
 
@@ -152,18 +152,18 @@ const userCrud = reldb.crud.table<{ id: number, name: string, email: string }>({
 
 | 方法 | 签名 | 说明 |
 |------|------|------|
-| `create` | `(data, tx?) => Result<ExecuteResult>` | 创建 |
-| `createMany` | `(items, tx?) => Result<void>` | 批量创建 |
-| `createOrUpdate` | `(data, tx?) => Result<ExecuteResult>` | 创建或更新（upsert） |
-| `findById` | `(id, tx?) => Result<T \| null>` | 按 ID 查（不存在返回 null） |
-| `getById` | `(id, tx?) => Result<T>` | 按 ID 获取（不存在返回 RECORD_NOT_FOUND 错误） |
-| `findAll` | `(options?, tx?) => Result<T[]>` | 条件查询 |
-| `findPage` | `(options, tx?) => Result<PaginatedResult<T>>` | 分页查询 |
-| `updateById` | `(id, data, tx?) => Result<ExecuteResult>` | 按 ID 更新 |
-| `deleteById` | `(id, tx?) => Result<ExecuteResult>` | 按 ID 删除 |
-| `count` | `(options?, tx?) => Result<number>` | 计数 |
-| `exists` | `(options?, tx?) => Result<boolean>` | 条件存在 |
-| `existsById` | `(id, tx?) => Result<boolean>` | ID 存在 |
+| `create` | `(data, tx?) => HaiResult<ExecuteResult>` | 创建 |
+| `createMany` | `(items, tx?) => HaiResult<void>` | 批量创建 |
+| `createOrUpdate` | `(data, tx?) => HaiResult<ExecuteResult>` | 创建或更新（upsert） |
+| `findById` | `(id, tx?) => HaiResult<T \| null>` | 按 ID 查（不存在返回 null） |
+| `getById` | `(id, tx?) => HaiResult<T>` | 按 ID 获取（不存在返回 RECORD_NOT_FOUND 错误） |
+| `findAll` | `(options?, tx?) => HaiResult<T[]>` | 条件查询 |
+| `findPage` | `(options, tx?) => HaiResult<PaginatedResult<T>>` | 分页查询 |
+| `updateById` | `(id, data, tx?) => HaiResult<ExecuteResult>` | 按 ID 更新 |
+| `deleteById` | `(id, tx?) => HaiResult<ExecuteResult>` | 按 ID 删除 |
+| `count` | `(options?, tx?) => HaiResult<number>` | 计数 |
+| `exists` | `(options?, tx?) => HaiResult<boolean>` | 条件存在 |
+| `existsById` | `(id, tx?) => HaiResult<boolean>` | ID 存在 |
 
 > 所有方法支持可选 `tx` 事务参数。
 

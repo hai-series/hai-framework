@@ -166,7 +166,7 @@ function splitByCharacter(text: string, maxSize: number): string[] {
 /**
  * 按自定义分隔符分割文本
  *
- * @throws 当 separator 不是合法正则表达式时抛出异常，由外层 catch 转为 Result
+ * @throws 当 separator 不是合法正则表达式时抛出异常，由外层 catch 转为 HaiResult
  */
 function splitByCustom(text: string, separator: string): string[] {
   const regex = new RegExp(separator)

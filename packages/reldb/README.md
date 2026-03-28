@@ -415,7 +415,7 @@ await reldb.sql.execute(`UPDATE products SET meta = ${rmSql} WHERE id = ?`, [...
 
 ## 错误处理
 
-所有操作返回 `Result<T, ReldbError>`，通过 `result.success` 判断成功或失败。
+所有操作返回 `HaiResult<T>`，通过 `result.success` 判断成功或失败。
 
 ```ts
 import { reldb, ReldbErrorCode } from '@h-ai/reldb'

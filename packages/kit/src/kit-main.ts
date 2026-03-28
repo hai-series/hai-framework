@@ -81,7 +81,7 @@ export const kit = {
     internalError,
     /** 重定向 */
     redirect,
-    /** 将 Result<T, E> 转为标准 API Response（支持 httpStatusMap） */
+    /** 将 HaiResult<T> 转为标准 API Response（支持 httpStatusMap） */
     fromResult,
     /** 将模块错误码映射为标准 HTTP Response */
     fromError,

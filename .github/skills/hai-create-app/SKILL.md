@@ -155,7 +155,7 @@ export async function initApp(): Promise<void> {
   // 1. core.init 加载配置
   core.init({ configDir: './config' })
 
-  // 2. 按依赖顺序初始化各模块（Result 失败则 throw）
+  // 2. 按依赖顺序初始化各模块（HaiResult 失败则 throw）
   const dbResult = await reldb.init(core.config.getOrThrow('db'))
   if (!dbResult.success) throw new Error(dbResult.error.message)
 
@@ -320,7 +320,7 @@ export const POST = kit.handler(async ({ request, locals }) => {
 - 所有输入用 Zod Schema 校验（`kit.validate.body` / `kit.validate.query` / `kit.validate.params`）
 - 权限检查用 `kit.guard.require`（抛异常）或 `kit.guard.check`（返回布尔）
 - 响应用 `kit.response.ok` / `kit.response.fromError` / `kit.response.badRequest` 等
-- Result 型错误用 `kit.response.fromError(error, HttpStatusMap)` 转换
+- HaiResult 型错误用 `kit.response.fromError(error, HttpStatusMap)` 转换
 - Schema 复用：通用 Schema 从 `@h-ai/kit` 导入（`IdParamSchema`、`PaginationQuerySchema`）
 
 ---
@@ -504,7 +504,7 @@ export const { apiFetch } = client
 - [ ] 输入用 Zod Schema 校验
 - [ ] 权限用 `kit.guard.require`
 - [ ] 响应用 `kit.response.*`
-- [ ] Result 错误用 `kit.response.fromError` 转换
+- [ ] HaiResult 错误用 `kit.response.fromError` 转换
 - [ ] 无依赖数据用 `Promise.all` 并行加载
 
 ---

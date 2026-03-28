@@ -123,7 +123,7 @@ await cache.lock.extend('my-lock', 60, 'node-1')
 
 ## 错误码
 
-所有操作返回 `Result<T, CacheError>`，常用错误码如下：
+所有操作返回 `HaiResult<T>`，常用错误码如下：
 
 - `CacheErrorCode.NOT_INITIALIZED`
 - `CacheErrorCode.CONNECTION_FAILED`

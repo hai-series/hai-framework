@@ -86,13 +86,13 @@ ai.close()
 
 | 方法 | 签名 | 说明 |
 |------|------|------|
-| `chat` | `(options) => Promise<Result<ChatCompletionResponse>>` | 非流式对话 |
+| `chat` | `(options) => Promise<HaiResult<ChatCompletionResponse>>` | 非流式对话 |
 | `chatStream` | `(options) => AsyncIterable<ChatCompletionChunk>` | 流式对话 |
-| `ask` | `(query, options?) => Promise<Result<string>>` | 简易问答（返回纯文本） |
+| `ask` | `(query, options?) => Promise<HaiResult<string>>` | 简易问答（返回纯文本） |
 | `askStream` | `(query, options?) => AsyncIterable<string>` | 流式简易问答 |
-| `listModels` | `() => Promise<Result<string[]>>` | 可用模型列表 |
-| `getHistory` | `(scope: InteractionScope, options?) => Promise<Result<ChatRecord[]>>` | 获取对话历史 |
-| `listSessions` | `(objectId) => Promise<Result<SessionInfo[]>>` | 列出对象的所有会话 |
+| `listModels` | `() => Promise<HaiResult<string[]>>` | 可用模型列表 |
+| `getHistory` | `(scope: InteractionScope, options?) => Promise<HaiResult<ChatRecord[]>>` | 获取对话历史 |
+| `listSessions` | `(objectId) => Promise<HaiResult<SessionInfo[]>>` | 列出对象的所有会话 |
 
 ```typescript
 // 非流式
@@ -216,16 +216,16 @@ await mcp.connect(transport)
 
 | 方法 | 签名 | 说明 |
 |------|------|------|
-| `extract` | `(messages, options?) => Promise<Result<MemoryEntry[]>>` | 自动提取记忆 |
-| `add` | `(entry: MemoryEntryInput) => Promise<Result<MemoryEntry>>` | 手动添加记忆 |
-| `get` | `(memoryId: string) => Promise<Result<MemoryEntry>>` | 按 ID 获取记忆 |
-| `update` | `(memoryId, updates) => Promise<Result<MemoryEntry>>` | 更新记忆条目 |
-| `recall` | `(query, options?) => Promise<Result<MemoryEntry[]>>` | 检索相关记忆 |
-| `injectMemories` | `(messages, options?) => Promise<Result<ChatMessage[]>>` | 注入记忆到消息 |
-| `remove` | `(memoryId) => Promise<Result<void>>` | 删除 |
-| `list` | `(options?) => Promise<Result<MemoryEntry[]>>` | 列表 |
-| `listPage` | `(options?) => Promise<Result<StorePage<MemoryEntry>>>` | 分页列表 |
-| `clear` | `(options?) => Promise<Result<void>>` | 清空 |
+| `extract` | `(messages, options?) => Promise<HaiResult<MemoryEntry[]>>` | 自动提取记忆 |
+| `add` | `(entry: MemoryEntryInput) => Promise<HaiResult<MemoryEntry>>` | 手动添加记忆 |
+| `get` | `(memoryId: string) => Promise<HaiResult<MemoryEntry>>` | 按 ID 获取记忆 |
+| `update` | `(memoryId, updates) => Promise<HaiResult<MemoryEntry>>` | 更新记忆条目 |
+| `recall` | `(query, options?) => Promise<HaiResult<MemoryEntry[]>>` | 检索相关记忆 |
+| `injectMemories` | `(messages, options?) => Promise<HaiResult<ChatMessage[]>>` | 注入记忆到消息 |
+| `remove` | `(memoryId) => Promise<HaiResult<void>>` | 删除 |
+| `list` | `(options?) => Promise<HaiResult<MemoryEntry[]>>` | 列表 |
+| `listPage` | `(options?) => Promise<HaiResult<StorePage<MemoryEntry>>>` | 分页列表 |
+| `clear` | `(options?) => Promise<HaiResult<void>>` | 清空 |
 
 ```typescript
 // 自动提取
@@ -255,9 +255,9 @@ if (enriched.success) {
 
 | 方法 | 签名 | 说明 |
 |------|------|------|
-| `embed` | `(request: EmbeddingRequest) => Promise<Result<EmbeddingResponse>>` | 通用嵌入（支持单条/批量） |
-| `embedText` | `(text: string) => Promise<Result<number[]>>` | 单文本嵌入（返回向量） |
-| `embedBatch` | `(texts: string[]) => Promise<Result<number[][]>>` | 批量文本嵌入 |
+| `embed` | `(request: EmbeddingRequest) => Promise<HaiResult<EmbeddingResponse>>` | 通用嵌入（支持单条/批量） |
+| `embedText` | `(text: string) => Promise<HaiResult<number[]>>` | 单文本嵌入（返回向量） |
+| `embedBatch` | `(texts: string[]) => Promise<HaiResult<number[][]>>` | 批量文本嵌入 |
 
 ```typescript
 const vector = await ai.embedding.embedText('你好世界')
@@ -311,16 +311,16 @@ if (result.success) {
 
 | 方法 | 签名 | 说明 |
 |------|------|------|
-| `addSource` | `(source: RetrievalSource) => Result<void>` | 注册检索源（vecdb collection） |
-| `removeSource` | `(sourceId: string) => Result<void>` | 移除检索源 |
+| `addSource` | `(source: RetrievalSource) => HaiResult<void>` | 注册检索源（vecdb collection） |
+| `removeSource` | `(sourceId: string) => HaiResult<void>` | 移除检索源 |
 | `listSources` | `() => RetrievalSource[]` | 列出已注册检索源 |
-| `retrieve` | `(request: RetrievalRequest) => Promise<Result<RetrievalResult>>` | 多源检索 |
+| `retrieve` | `(request: RetrievalRequest) => Promise<HaiResult<RetrievalResult>>` | 多源检索 |
 
 ### RAG — `ai.rag`
 
 | 方法 | 签名 | 说明 |
 |------|------|------|
-| `query` | `(query, options?) => Promise<Result<RagResult>>` | RAG 问答（检索 + LLM 生成） |
+| `query` | `(query, options?) => Promise<HaiResult<RagResult>>` | RAG 问答（检索 + LLM 生成） |
 
 ```typescript
 // 注册检索源
@@ -349,16 +349,16 @@ if (result.success) {
 
 | 方法 | 签名 | 说明 |
 |------|------|------|
-| `setup` | `(options?) => Promise<Result<void>>` | 初始化知识库（创建 vecdb 集合 + reldb 表） |
-| `ingest` | `(input: KnowledgeIngestInput) => Promise<Result<KnowledgeIngestResult>>` | 文档入库 |
-| `ingestFile` | `(input: KnowledgeIngestFileInput) => Promise<Result<KnowledgeIngestResult>>` | 从文件路径导入（Node.js） |
-| `ingestBatch` | `(inputs, onProgress?) => Promise<Result<KnowledgeIngestBatchResult>>` | 批量导入 |
-| `retrieve` | `(query, options?) => Promise<Result<KnowledgeRetrieveResult>>` | 知识检索（实体增强） |
-| `ask` | `(query, options?) => Promise<Result<KnowledgeAskResult>>` | 知识问答（RAG + 信源引用） |
-| `findByEntity` | `(entityName, options?) => Promise<Result<EntityDocumentResult[]>>` | 按实体查询关联文档 |
-| `listEntities` | `(options?) => Promise<Result<KnowledgeEntity[]>>` | 列出实体 |
-| `listDocuments` | `(options?) => Promise<Result<KnowledgeDocumentInfo[]>>` | 列出已导入文档 |
-| `removeDocument` | `(documentId, options?) => Promise<Result<void>>` | 删除文档 |
+| `setup` | `(options?) => Promise<HaiResult<void>>` | 初始化知识库（创建 vecdb 集合 + reldb 表） |
+| `ingest` | `(input: KnowledgeIngestInput) => Promise<HaiResult<KnowledgeIngestResult>>` | 文档入库 |
+| `ingestFile` | `(input: KnowledgeIngestFileInput) => Promise<HaiResult<KnowledgeIngestResult>>` | 从文件路径导入（Node.js） |
+| `ingestBatch` | `(inputs, onProgress?) => Promise<HaiResult<KnowledgeIngestBatchResult>>` | 批量导入 |
+| `retrieve` | `(query, options?) => Promise<HaiResult<KnowledgeRetrieveResult>>` | 知识检索（实体增强） |
+| `ask` | `(query, options?) => Promise<HaiResult<KnowledgeAskResult>>` | 知识问答（RAG + 信源引用） |
+| `findByEntity` | `(entityName, options?) => Promise<HaiResult<EntityDocumentResult[]>>` | 按实体查询关联文档 |
+| `listEntities` | `(options?) => Promise<HaiResult<KnowledgeEntity[]>>` | 列出实体 |
+| `listDocuments` | `(options?) => Promise<HaiResult<KnowledgeDocumentInfo[]>>` | 列出已导入文档 |
+| `removeDocument` | `(documentId, options?) => Promise<HaiResult<void>>` | 删除文档 |
 
 ```typescript
 await ai.knowledge.setup()
@@ -382,7 +382,7 @@ if (answer.success) {
 
 | 方法 | 签名 | 说明 |
 |------|------|------|
-| `run` | `(query, options?) => Promise<Result<ReasoningResult>>` | 执行推理 |
+| `run` | `(query, options?) => Promise<HaiResult<ReasoningResult>>` | 执行推理 |
 | `runStream` | `(query, options?) => AsyncIterable<ReasoningStreamEvent>` | 流式推理 |
 
 **策略**：`react`（默认，ReAct 循环）、`cot`（Chain-of-Thought）、`plan-execute`（规划执行）
@@ -414,8 +414,8 @@ for await (const event of ai.reasoning.runStream('任务', { strategy: 'cot' }))
 
 | 方法 | 签名 | 说明 |
 |------|------|------|
-| `rerank` | `(request: RerankRequest) => Promise<Result<RerankResponse>>` | 通用重排序 |
-| `rerankTexts` | `(query, texts, topN?) => Promise<Result<RerankItem[]>>` | 快捷文本重排序 |
+| `rerank` | `(request: RerankRequest) => Promise<HaiResult<RerankResponse>>` | 通用重排序 |
+| `rerankTexts` | `(query, texts, topN?) => Promise<HaiResult<RerankItem[]>>` | 快捷文本重排序 |
 
 ```typescript
 const result = await ai.rerank.rerankTexts('机器学习', [
@@ -430,8 +430,8 @@ const result = await ai.rerank.rerankTexts('机器学习', [
 
 | 方法 | 签名 | 说明 |
 |------|------|------|
-| `parse` | `(request: FileParseRequest) => Promise<Result<FileParseResult>>` | 解析文件（支持 text/html/pdf/docx/ocr） |
-| `parseText` | `(content, filename?) => Promise<Result<string>>` | 快捷解析（直接返回文本） |
+| `parse` | `(request: FileParseRequest) => Promise<HaiResult<FileParseResult>>` | 解析文件（支持 text/html/pdf/docx/ocr） |
+| `parseText` | `(content, filename?) => Promise<HaiResult<string>>` | 快捷解析（直接返回文本） |
 
 ```typescript
 const result = await ai.file.parse({
@@ -451,11 +451,11 @@ if (result.success) {
 
 | 方法 | 签名 | 说明 |
 |------|------|------|
-| `registerExecutor` | `(executor: AgentExecutor) => Result<void>` | 注册代理执行器 |
-| `getAgentCard` | `() => Result<A2AAgentCardConfig>` | 获取 Agent Card |
+| `registerExecutor` | `(executor: AgentExecutor) => HaiResult<void>` | 注册代理执行器 |
+| `getAgentCard` | `() => HaiResult<A2AAgentCardConfig>` | 获取 Agent Card |
 | `handleRequest` | `(body, context?) => Promise<A2AHandleResult>` | 处理 A2A 协议请求 |
-| `listMessages` | `(filter) => Promise<Result<StorePage<A2AMessageRecord>>>` | 查询消息记录 |
-| `callRemoteAgent` | `(remoteUrl, message, options?) => Promise<Result<A2ACallResult>>` | 调用远端代理 |
+| `listMessages` | `(filter) => Promise<HaiResult<StorePage<A2AMessageRecord>>>` | 查询消息记录 |
+| `callRemoteAgent` | `(remoteUrl, message, options?) => Promise<HaiResult<A2ACallResult>>` | 调用远端代理 |
 
 ```typescript
 // 注册执行器
@@ -483,11 +483,11 @@ const callResult = await ai.a2a.callRemoteAgent(
 
 | 方法 | 签名 | 说明 |
 |------|------|------|
-| `createManager` | `(options?) => Result<ContextManager>` | 创建管理器 |
-| `restoreManager` | `(scope, options?) => Promise<Result<ContextManager>>` | 恢复会话 |
-| `listSessions` | `(objectId) => Promise<Result<SessionInfo[]>>` | 列出会话 |
-| `renameSession` | `(sessionId, title) => Promise<Result<void>>` | 重命名 |
-| `removeSession` | `(sessionId) => Promise<Result<void>>` | 删除 |
+| `createManager` | `(options?) => HaiResult<ContextManager>` | 创建管理器 |
+| `restoreManager` | `(scope, options?) => Promise<HaiResult<ContextManager>>` | 恢复会话 |
+| `listSessions` | `(objectId) => Promise<HaiResult<SessionInfo[]>>` | 列出会话 |
+| `renameSession` | `(sessionId, title) => Promise<HaiResult<void>>` | 重命名 |
+| `removeSession` | `(sessionId) => Promise<HaiResult<void>>` | 删除 |
 
 **ContextManager 选项**：
 - `scope` — 交互作用域（objectId + sessionId）

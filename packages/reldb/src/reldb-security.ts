@@ -28,7 +28,7 @@ const VALID_IDENTIFIER_RE = /^[a-z_]\w{0,127}$/i
  * 仅允许 `[a-zA-Z_][a-zA-Z0-9_]*`，最长 128 字符。
  *
  * @param name - 待校验的标识符
- * @returns 校验通过时返回 ok(name)；不合法时返回错误 Result
+ * @returns 校验通过时返回 ok(name)；不合法时返回错误 HaiResult
  *
  * @example
  * ```ts

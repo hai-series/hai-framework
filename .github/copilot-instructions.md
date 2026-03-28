@@ -78,7 +78,7 @@
 
 ## 通用编码约定
 
-> 模块专属规范（文件命名、导出、错误处理、Provider 模式、Result 用法等）见 `module-conventions.instructions.md`（编辑 `packages/` 时自动注入）。
+> 模块专属规范（文件命名、导出、错误处理、Provider 模式、HaiResult 用法等）见 `module-conventions.instructions.md`（编辑 `packages/` 时自动注入）。
 > 应用层规范（i18n、UI 组件、路由安全等）见 `app-conventions.instructions.md`（编辑 `apps/` 时自动注入）。
 > 测试规范见 `test-conventions.instructions.md`（编辑 `tests/` 时自动注入）。
 
@@ -176,7 +176,7 @@
 
 ## 禁止事项（任一触发需立即修正）
 
-> 模块专属禁止事项见 `module-conventions.instructions.md`（throw/Result、错误码、xx-main、鸭子类型等）。
+> 模块专属禁止事项见 `module-conventions.instructions.md`（throw/HaiResult、错误码、xx-main、鸭子类型等）。
 
 ### 通用
 

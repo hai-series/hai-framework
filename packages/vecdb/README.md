@@ -63,7 +63,7 @@ await vecdb.init({ type: 'qdrant', url: 'http://localhost:6333', apiKey: 'option
 
 ## 错误处理
 
-所有操作返回 `Result<T, VecdbError>`，通过 `result.success` 判断成功或失败。
+所有操作返回 `HaiResult<T>`，通过 `result.success` 判断成功或失败。
 
 ```ts
 const result = await vecdb.collection.create('docs', { dimension: 1536 })

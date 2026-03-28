@@ -44,7 +44,7 @@ const result = await datapipe.pipeline()
 
 ## 错误处理
 
-所有操作返回 `Result<T, DatapipeError>`，通过 `result.success` 判断成功或失败。
+所有操作返回 `HaiResult<T>`，通过 `result.success` 判断成功或失败。
 
 ```ts
 const result = datapipe.chunk(text, { mode: 'custom' })

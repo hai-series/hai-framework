@@ -4,7 +4,7 @@
  * 客户端通过 @h-ai/ai/client 导入，使用 mock api adapter 隔离 HTTP 依赖。
  */
 
-import type { Result } from '@h-ai/core'
+import type { HaiResult } from '@h-ai/core'
 import type { AIApiAdapter } from '../src/client/ai-client.js'
 import type { ChatCompletionChunk, ChatCompletionResponse } from '../src/index.js'
 import { err, ok } from '@h-ai/core'
@@ -60,7 +60,7 @@ function makeSSEStream(lines: string[]): ReadableStream<Uint8Array> {
 
 /** 创建返回指定结果的 mock api adapter */
 function createMockApi(options: {
-  postResult?: Result<unknown, { message: string }>
+  postResult?: HaiResult<unknown, { message: string }>
   streamChunks?: ChatCompletionChunk[]
 } = {}): { api: AIApiAdapter, postSpy: ReturnType<typeof vi.fn>, streamSpy: ReturnType<typeof vi.fn> } {
   const postSpy = vi.fn().mockResolvedValue(

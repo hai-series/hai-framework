@@ -1,6 +1,6 @@
 ---
 name: hai-review-module
-description: "Use when: reviewing code, code review, auditing module quality, checking hai-framework conventions, verifying Result<T,E> usage, reviewing module structure, PR review, checking naming consistency, verifying NotInitializedKit pattern, auditing performance, security, distributed systems. 对 hai-framework 模块进行全维度代码审查：架构 → 命名 → 类型 → 注释 → 性能 → 分布式 → 安全 → 日志 → 测试 → 文档。"
+description: "Use when: reviewing code, code review, auditing module quality, checking hai-framework conventions, verifying HaiResult<T> usage, reviewing module structure, PR review, checking naming consistency, verifying NotInitializedKit pattern, auditing performance, security, distributed systems. 对 hai-framework 模块进行全维度代码审查：架构 → 命名 → 类型 → 注释 → 性能 → 分布式 → 安全 → 日志 → 测试 → 文档。"
 ---
 
 # hai-review-module — 模块代码审查规范
@@ -70,12 +70,12 @@ Part 2 — 交叉评审与模拟
 
 对照 `hai-create-module §4-§5`：
 
-- [ ] 公共 API 不 throw，返回 `Result<T, XxError>`（合规场景除外）
+- [ ] 公共 API 不 throw，返回 `HaiResult<T>`（合规场景除外）
 - [ ] 错误码段位在注册表中、不冲突；NOT_INITIALIZED = X010
 - [ ] 禁止 `any`；禁止 `as unknown as T`（第三方库 workaround 须有注释）
 - [ ] 对外类型集中在 xx-types.ts，无内部类型泄漏
 - [ ] 错误创建用错误码 + i18n key，无硬编码消息
-- [ ] 上游 Result 直接透传，不重新包装
+- [ ] 上游 HaiResult 直接透传，不重新包装
 - [ ] NotInitializedKit 模式完整（Proxy 顶层创建、close 后切回）
 - [ ] Provider 用工厂 + 闭包，不用 class
 
@@ -86,7 +86,7 @@ Part 2 — 交叉评审与模拟
 对照 `hai-create-module §9`：
 
 - [ ] 公共导出 API 有 JSDoc（`@param`、`@returns`）
-- [ ] 公共导出 API 的 JSDoc 包含 `@example`，示例为可执行代码片段（含 Result 判断），展示最常见调用方式
+- [ ] 公共导出 API 的 JSDoc 包含 `@example`，示例为可执行代码片段（含 HaiResult 判断），展示最常见调用方式
 - [ ] 内部函数有基本 JSDoc（参数含义、返回值、边界条件）；复杂逻辑建议补 `@example`
 - [ ] 类型/接口有一句话用途说明
 - [ ] 代码注释中文，日志消息英文
@@ -210,7 +210,7 @@ Part 2 — 交叉评审与模拟
 
 - [ ] 测试通过统一入口（`<模块名>.xx`），不直接调用内部实现
 - [ ] 正常路径 + 边界路径 + 参数选项均有覆盖
-- [ ] 断言风格正确（Result.success + error.code）
+- [ ] 断言风格正确（result.success + error.code）
 - [ ] 多实现有公共测试套件
 - [ ] 测试名称清晰表达场景
 - [ ] 无不稳定断言（随机性、时序依赖）
@@ -256,7 +256,7 @@ Part 2 — 交叉评审与模拟
 |------|------|---------|
 | 架构与结构 | §2 | 模块类型、API 风格、main.ts 职责、依赖方向、目录结构 |
 | 命名与可读性 | §3 | 命名三问、一致性、函数体长度、嵌套层数 |
-| 类型与错误处理 | §4 | Result 模式、错误码、禁止 any/throw、NotInitializedKit |
+| 类型与错误处理 | §4 | HaiResult 模式、错误码、禁止 any/throw、NotInitializedKit |
 | 注释 | §5 | JSDoc 完整性、中英文规范、分隔线 |
 | 性能 | §6 | N+1、同步 I/O、内存泄漏、资源释放 |
 | 分布式 | §7 | 状态一致性、并发安全、幂等性、定时器清理 |

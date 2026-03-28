@@ -12,7 +12,7 @@
 - 文件上传（支持附加字段）
 - SSE 流式响应（`api.stream()`）
 - 请求/响应拦截器
-- 统一返回 `Result<T, ApiClientError>`
+- 统一返回 `HaiResult<T>`
 
 ## 快速开始
 
@@ -213,7 +213,7 @@ await api.init({
 
 ## 错误处理
 
-所有通用 HTTP / 契约调用均返回 `Result<T, ApiClientError>`：
+所有通用 HTTP / 契约调用均返回 `HaiResult<T>`：
 
 ```ts
 const result = await api.call(iamEndpoints.currentUser, {})

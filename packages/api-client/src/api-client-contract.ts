@@ -28,7 +28,7 @@ export function createContractCaller(fetchClient: FetchClient) {
    * @typeParam TOutput - 出参类型
    * @param endpoint - 端点契约定义
    * @param input - 入参数据
-   * @returns 出参 Result
+   * @returns 出参 HaiResult
    *
    * @example
    * ```ts

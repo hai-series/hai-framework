@@ -346,7 +346,7 @@ registry.size // 注册数量
 const definitions = registry.getDefinitions() // ToolDefinition[]
 
 // 执行工具调用
-const toolMessage = await registry.execute(toolCall) // Result<ToolMessage>
+const toolMessage = await registry.execute(toolCall) // HaiResult<ToolMessage>
 
 // 批量执行（支持并行）
 const toolMessages = await registry.executeAll(toolCalls, { parallel: true })
@@ -1469,7 +1469,7 @@ const sessions = await client.listSessions('user-001')
 
 ## 错误处理
 
-所有需要初始化的子系统方法均返回 `Result<T, AIError>`，通过 `result.success` 判断成功/失败。
+所有需要初始化的子系统方法均返回 `HaiResult<T>`，通过 `result.success` 判断成功/失败。
 
 ```ts
 import { AIErrorCode } from '@h-ai/ai'
