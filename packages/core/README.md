@@ -48,7 +48,7 @@ core.string.capitalize('hello')
 core.array.unique([1, 1, 2, 3])
 core.array.chunk([1, 2, 3, 4, 5], 2) // [[1,2], [3,4], [5]]
 await core.async.delay(1000)
-await core.async.retry(() => fetchData(), { maxRetries: 3, delayFn: exp })
+await core.async.retry(() => fetchData(), { maxRetries: 3, delay: 1000 })
 core.time.formatDate(new Date(), 'YYYY-MM-DD')
 core.typeUtils.isDefined(value)
 ```
@@ -135,7 +135,7 @@ core.i18n.DEFAULT_LOCALE // 'zh-CN'
 ### 配置管理（Node.js 专用）
 
 ```typescript
-import { core, CoreErrorCode } from '@h-ai/core'
+import { core, HaiConfigError } from '@h-ai/core'
 import { z } from 'zod'
 
 // 方式 1：init 时自动加载整个配置目录
@@ -151,10 +151,10 @@ const AppSchema = z.object({
 })
 const result = core.config.load('app', './config/app.yml', AppSchema)
 if (result.success) {
-  console.warn(result.data.name)
+  core.logger.info('Config loaded', { name: result.data.name })
 }
 else {
-  console.error(result.error.code) // CoreErrorCode.CONFIG_FILE_NOT_FOUND 等
+  core.logger.error('Config load failed', { code: result.error.code }) // HaiConfigError.CONFIG_FILE_NOT_FOUND 等
 }
 
 // 校验已加载的配置（模块若使用 init 自动加载，调用方需主动校验）
@@ -196,7 +196,7 @@ core.config.clear() // 清除全部
 
 **语法：**
 
-- `${VAR}` — 读取 `process.env.VAR`；若不存在则返回 `CoreErrorCode.CONFIG_ENV_VAR_MISSING` 错误
+- `${VAR}` — 读取 `process.env.VAR`；若不存在则返回 `HaiConfigError.CONFIG_ENV_VAR_MISSING` 错误
 - `${VAR:default}` — 读取 `process.env.VAR`；若不存在则使用冒号后的默认值
 
 **类型还原：** 当整个值恰好是单个变量表达式（如 `${PORT:3000}`）时，插值结果会按 YAML 规则还原为原生类型（number / boolean 等）。若值中包含其他文本（如 `http://${HOST}:${PORT}`），则结果始终为字符串。
@@ -242,7 +242,7 @@ core.object.deepMerge(a, b, c) // 支持多个对象
 
 ```typescript
 core.string.capitalize('hello') // 'Hello'
-core.string.uncapitalize('Hello') // 'hello'
+core.string.kebabCase('helloWorld') // 'hello-world'
 ```
 
 #### 数组操作（array）
@@ -257,9 +257,8 @@ core.array.chunk([1, 2, 3, 4], 2) // [[1,2], [3,4]]
 ```typescript
 await core.async.delay(1000) // 延迟 1 秒
 await core.async.retry(fn, {
-  // 指数退避重试
   maxRetries: 3,
-  delayFn: (attempt, baseDelay) => baseDelay * 2 ** attempt,
+  delay: 1000,
 })
 ```
 
@@ -267,7 +266,7 @@ await core.async.retry(fn, {
 
 ```typescript
 core.time.formatDate(new Date(), 'YYYY-MM-DD HH:mm:ss')
-core.time.sleep(1000) // 等同于 core.async.delay
+core.time.timeAgo(new Date(Date.now() - 60000)) // '1 分钟前'
 ```
 
 ### 模块基础工具（module）
@@ -294,7 +293,7 @@ const dbOperations = notInitialized.proxy<DbOperations>()
 
 ```typescript
 import type { HaiResult } from '@h-ai/core'
-import { err, ok } from '@h-ai/core'
+import { core, err, HaiCommonError, ok } from '@h-ai/core'
 
 function divide(a: number, b: number): HaiResult<number> {
   if (b === 0)
@@ -304,10 +303,10 @@ function divide(a: number, b: number): HaiResult<number> {
 
 const result = divide(10, 2)
 if (result.success) {
-  console.warn(result.data) // 5
+  core.logger.info('Result', { data: result.data }) // 5
 }
 else {
-  console.error(result.error) // error object
+  core.logger.error('Error', { error: result.error })
 }
 ```
 
@@ -316,14 +315,14 @@ else {
 仅 `core.config` 操作会产生这些错误：
 
 ```typescript
-import { CoreErrorCode } from '@h-ai/core'
+import { HaiConfigError } from '@h-ai/core'
 
 // 常见错误码
-CoreErrorCode.CONFIG_FILE_NOT_FOUND // hai:core:010 - 配置文件不存在
-CoreErrorCode.CONFIG_PARSE_ERROR // hai:core:011 - YAML 解析失败
-CoreErrorCode.CONFIG_VALIDATION_ERROR // hai:core:012 - Schema 校验失败
-CoreErrorCode.CONFIG_ENV_VAR_MISSING // hai:core:013 - 环境变量缺失
-CoreErrorCode.CONFIG_NOT_LOADED // hai:core:014 - 配置未加载
+HaiConfigError.CONFIG_FILE_NOT_FOUND // { code: 'hai:core:010', httpStatus: 500 } - 配置文件不存在
+HaiConfigError.CONFIG_PARSE_ERROR // { code: 'hai:core:011', httpStatus: 500 } - YAML 解析失败
+HaiConfigError.CONFIG_VALIDATION_ERROR // { code: 'hai:core:012', httpStatus: 500 } - Schema 校验失败
+HaiConfigError.CONFIG_ENV_VAR_MISSING // { code: 'hai:core:013', httpStatus: 500 } - 环境变量缺失
+HaiConfigError.CONFIG_NOT_LOADED // { code: 'hai:core:014', httpStatus: 500 } - 配置未加载
 ```
 
 ## 测试

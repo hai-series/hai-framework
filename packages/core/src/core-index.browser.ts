@@ -5,7 +5,7 @@
  * @module core-index.browser
  */
 
-// 配置 Schema 与错误码（CoreErrorCode, CoreConfigSchema 等）
+// 配置 Schema 与错误码（HaiConfigError, HaiCommonError, CoreConfigSchema 等）
 export * from './core-config.js'
 
 // Core 聚合服务（包含 logger, error, id, i18n, module, typeUtils, object, string, array, async, time）
