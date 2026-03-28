@@ -5,7 +5,7 @@
  * @module core-main
  */
 
-import type { CoreLogger, LoggerFunctions } from './core-types.js'
+import type { CoreFunctions, CoreLogger, LoggerFunctions } from './core-types.js'
 import { error } from './functions/core-function-error.js'
 import { id } from './functions/core-function-id.js'
 import { i18n } from './i18n/core-i18n-utils.js'
@@ -41,7 +41,7 @@ import { typeUtils } from './utils/core-util-type.js'
  * core.logger.info('Hello')
  * ```
  */
-export function createCore(loggerFns: LoggerFunctions) {
+export function createCore(loggerFns: LoggerFunctions): CoreFunctions {
   let cachedCoreLogger: CoreLogger | null = null
 
   const buildCoreLogger = (): CoreLogger => {
@@ -225,14 +225,3 @@ export function createCore(loggerFns: LoggerFunctions) {
     },
   }
 }
-
-/**
- * Core 对象类型。
- *
- * @example
- * ```ts
- * import type { Core } from '@h-ai/core'
- * const coreRef: Core = core
- * ```
- */
-export type Core = ReturnType<typeof createCore>

@@ -131,3 +131,6 @@ export function createNotInitializedKit<E extends BaseModuleError>(
 
   return { error, result, proxy }
 }
+
+/** module 子工具类型 */
+export interface ModuleFn { createNotInitializedKit: typeof createNotInitializedKit }

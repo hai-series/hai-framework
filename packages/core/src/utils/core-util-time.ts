@@ -206,3 +206,6 @@ export const time = {
   startOfDay,
   endOfDay,
 }
+
+/** time 子工具类型 */
+export type TimeFn = typeof time

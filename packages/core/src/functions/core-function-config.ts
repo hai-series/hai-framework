@@ -651,3 +651,6 @@ export const config = {
     return watchEntries.has(name)
   },
 }
+
+/** config 子工具类型 */
+export type ConfigFn = typeof config

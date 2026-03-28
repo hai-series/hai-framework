@@ -99,3 +99,6 @@ export const error = {
   buildHaiErrorsDef,
   buildHaiErrorInst,
 }
+
+/** error 子工具类型 */
+export type ErrorFn = typeof error

@@ -105,3 +105,6 @@ export const i18n = {
   createMessageGetter,
   coreM,
 }
+
+/** i18n 子工具类型 */
+export type I18nFn = typeof i18n

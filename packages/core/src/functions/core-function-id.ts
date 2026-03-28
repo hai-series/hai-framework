@@ -183,3 +183,6 @@ export const id = {
     return regex.test(str)
   },
 }
+
+/** id 子工具类型 */
+export type IdFn = typeof id

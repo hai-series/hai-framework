@@ -177,3 +177,6 @@ export const object = {
   entries,
   fromEntries,
 }
+
+/** object 子工具类型 */
+export type ObjectFn = typeof object
