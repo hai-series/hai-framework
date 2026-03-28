@@ -9,7 +9,6 @@ import type { ErrorInfo, HaiResult } from '@h-ai/core'
 import { core } from '@h-ai/core'
 
 const CryptoErrorInfo = {
-  OPERATION_FAILED: '001:500',
   INVALID_INPUT: '002:400',
   INVALID_KEY: '003:400',
   NOT_INITIALIZED: '010:500',
@@ -53,8 +52,6 @@ export interface SignOptions {
   hash?: boolean
   /** 用户 ID（默认 "1234567812345678"） */
   userId?: string
-  /** 输出格式 */
-  outputFormat?: 'hex' | 'der'
 }
 
 // ─── 哈希类型 ───

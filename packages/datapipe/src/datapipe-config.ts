@@ -113,7 +113,7 @@ export const ChunkOptionsSchema = z.object({
    * ❗ 安全提示：separator 会通过 `new RegExp()` 构造，如果其值来源于用户输入，请在调用方先行校验以防止 ReDoS 攻击。
    */
   separator: z.string().optional(),
-  /** Markdown 最低标题级别（1-6，默认 2，即 ## 及以下都作为分块边界） */
+  /** Markdown 标题分割深度（1-6，默认 2，即 # 和 ## 作为分块边界；设为 3 则 ### 也作为分块边界） */
   markdownMinLevel: z.number().int().min(1).max(6).default(2),
   /** 是否保留 Markdown 标题在分块内容中（默认 true） */
   markdownKeepTitle: z.boolean().default(true),

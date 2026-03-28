@@ -10,6 +10,7 @@ import * as os from 'node:os'
 import * as path from 'node:path'
 import { afterAll, describe, expect, it } from 'vitest'
 import { storage } from '../src/index.js'
+import { HaiStorageError } from '../src/storage-types.js'
 import { defineStorageSuite, localStorageEnv, s3Env } from './helpers/storage-test-suite.js'
 
 const localRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'hai-storage-init-'))
@@ -36,7 +37,7 @@ describe('storage.init', () => {
       const result = await storage.file.put('test.txt', 'hello')
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.code).toBe(6010)
+        expect(result.error.code).toBe(HaiStorageError.NOT_INITIALIZED.code)
       }
     })
 
@@ -67,7 +68,7 @@ describe('storage.init 配置校验', () => {
     const result = await storage.init({ type: 'local', root: '' } as unknown as StorageConfigInput)
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(6012)
+      expect(result.error.code).toBe(HaiStorageError.CONFIG_ERROR.code)
     }
   })
 
@@ -76,7 +77,7 @@ describe('storage.init 配置校验', () => {
     const result = await storage.init({ type: 'unknown' } as unknown as StorageConfigInput)
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(6012)
+      expect(result.error.code).toBe(HaiStorageError.CONFIG_ERROR.code)
     }
   })
 
@@ -85,7 +86,7 @@ describe('storage.init 配置校验', () => {
     const result = await storage.init({} as unknown as StorageConfigInput)
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(6012)
+      expect(result.error.code).toBe(HaiStorageError.CONFIG_ERROR.code)
     }
   })
 
@@ -99,7 +100,7 @@ describe('storage.init 配置校验', () => {
     } as unknown as StorageConfigInput)
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(6012)
+      expect(result.error.code).toBe(HaiStorageError.CONFIG_ERROR.code)
     }
   })
 
@@ -113,7 +114,7 @@ describe('storage.init 配置校验', () => {
     } as unknown as StorageConfigInput)
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(6012)
+      expect(result.error.code).toBe(HaiStorageError.CONFIG_ERROR.code)
     }
   })
 
@@ -129,7 +130,7 @@ describe('storage.init 配置校验', () => {
     } as unknown as StorageConfigInput)
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(6012)
+      expect(result.error.code).toBe(HaiStorageError.CONFIG_ERROR.code)
     }
   })
 

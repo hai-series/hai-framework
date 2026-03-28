@@ -614,8 +614,13 @@ export type A2AConfig = z.infer<typeof A2AConfigSchema>
  * ```
  */
 export const AIConfigSchema = z.object({
-  /** LLM 配置（必填，AI 模块的基础依赖） */
-  llm: LLMConfigSchema,
+  /** LLM 配置（可选，所有字段有默认值） */
+  llm: LLMConfigSchema.default({
+    model: 'gpt-4o-mini',
+    maxTokens: 4096,
+    temperature: 0.7,
+    timeout: 60000,
+  }),
   /** MCP 配置 */
   mcp: MCPConfigSchema.optional(),
   /** Embedding 配置 */

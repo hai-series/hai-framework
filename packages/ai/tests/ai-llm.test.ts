@@ -135,7 +135,10 @@ describe('ai.llm.chat', () => {
       expect(result.data.choices[0].message.role).toBe('assistant')
       expect(result.data.choices[0].message.content).toBe('你好！很高兴见到你。')
       expect(result.data.choices[0].finish_reason).toBe('stop')
-      expect(result.data.usage.total_tokens).toBe(15)
+      expect(result.data.usage).toBeDefined()
+      if (result.data.usage) {
+        expect(result.data.usage.total_tokens).toBe(15)
+      }
     }
   })
 
@@ -186,11 +189,12 @@ describe('ai.llm.chat', () => {
       expect(choice.message.tool_calls).toHaveLength(1)
       expect(choice.message.tool_calls![0].id).toBe('call-abc')
       expect(choice.message.tool_calls![0].type).toBe('function')
-      expect(choice.message.tool_calls![0].function.name).toBe('getWeather')
+      const tc0 = choice.message.tool_calls![0] as unknown as { function: { name: string } }
+      expect(tc0.function.name).toBe('getWeather')
     }
   })
 
-  it('usage 缺失时默认为 0', async () => {
+  it('usage 缺失时透传 undefined', async () => {
     const sdkResponse = makeSDKChatCompletion('ok')
     sdkResponse.usage = undefined as unknown as typeof sdkResponse.usage
     mockCreate.mockResolvedValue(sdkResponse)
@@ -201,9 +205,7 @@ describe('ai.llm.chat', () => {
 
     expect(result.success).toBe(true)
     if (result.success) {
-      expect(result.data.usage.prompt_tokens).toBe(0)
-      expect(result.data.usage.completion_tokens).toBe(0)
-      expect(result.data.usage.total_tokens).toBe(0)
+      expect(result.data.usage).toBeUndefined()
     }
   })
 
@@ -346,7 +348,7 @@ describe('ai.llm.chat', () => {
     )
   })
 
-  it('content 为 null 时映射为空字符串', async () => {
+  it('content 为 null 时透传 null', async () => {
     const sdkResponse = makeSDKChatCompletion('')
     sdkResponse.choices[0].message.content = null as unknown as string
     mockCreate.mockResolvedValue(sdkResponse)
@@ -357,7 +359,7 @@ describe('ai.llm.chat', () => {
 
     expect(result.success).toBe(true)
     if (result.success) {
-      expect(result.data.choices[0].message.content).toBe('')
+      expect(result.data.choices[0].message.content).toBeNull()
     }
   })
 })
@@ -439,7 +441,7 @@ describe('ai.llm.chatStream', () => {
     const result = processor.getResult()
     expect(result.finishReason).toBe('tool_calls')
     expect(result.toolCalls).toHaveLength(1)
-    expect(result.toolCalls[0].function.name).toBe('search')
+    expect((result.toolCalls[0] as unknown as { function: { name: string } }).function.name).toBe('search')
   })
 
   it('stream 请求会设置 stream: true', async () => {
@@ -733,7 +735,7 @@ describe('llm 完整对话流程', () => {
       expect(toolResult.data).toHaveLength(1)
       expect(toolResult.data[0].role).toBe('tool')
       expect(toolResult.data[0].tool_call_id).toBe('call-calc')
-      expect(JSON.parse(toolResult.data[0].content)).toEqual({ result: 2 })
+      expect(JSON.parse(toolResult.data[0].content as string)).toEqual({ result: 2 })
     }
   })
 

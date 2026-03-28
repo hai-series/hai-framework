@@ -8,6 +8,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { HaiDeployError } from '../src/deploy-types.js'
 import { createAliyunProvisioner } from '../src/provisioners/deploy-provisioner-aliyun.js'
 import { createNeonProvisioner } from '../src/provisioners/deploy-provisioner-neon.js'
 import { createR2Provisioner } from '../src/provisioners/deploy-provisioner-r2.js'
@@ -64,7 +65,7 @@ describe('neon provisioner', () => {
     const result = await neon.authenticate({})
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(9005)
+      expect(result.error.code).toBe(HaiDeployError.AUTH_FAILED.code)
     }
   })
 
@@ -94,7 +95,7 @@ describe('neon provisioner', () => {
     const result = await neon.provision('my-app')
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(9004)
+      expect(result.error.code).toBe(HaiDeployError.AUTH_REQUIRED.code)
     }
   })
 })

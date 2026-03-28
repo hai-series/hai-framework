@@ -423,7 +423,10 @@ export function createMemoryProvider(): CacheProvider {
         arr = []
         listStore.set(key, arr)
       }
-      arr.unshift(...values.map(serializeValue))
+      // 逐个从左侧推入，匹配 Redis LPUSH 行为（多值时结果顺序为输入的逆序）
+      for (const value of values) {
+        arr.unshift(serializeValue(value))
+      }
       return ok(arr.length)
     },
 

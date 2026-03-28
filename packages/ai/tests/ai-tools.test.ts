@@ -5,7 +5,7 @@
 import type { ToolCall } from '../src/index.js'
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
-import { ai } from '../src/index.js'
+import { ai, HaiAIError } from '../src/index.js'
 
 // =============================================================================
 // ai.tools.define
@@ -57,8 +57,7 @@ describe('ai.tools.define', () => {
     const result = await tool.execute({ count: 'abc' } as unknown as { count: number })
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.type).toBe('VALIDATION_FAILED')
-      expect(result.error.toolName).toBe('strict_tool')
+      expect(result.error.code).toBe(HaiAIError.TOOL_VALIDATION_FAILED.code)
     }
   })
 
@@ -73,7 +72,7 @@ describe('ai.tools.define', () => {
     const result = await tool.execute({})
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.type).toBe('EXECUTION_FAILED')
+      expect(result.error.code).toBe(HaiAIError.TOOL_EXECUTION_FAILED.code)
       expect(result.error.message).toBe('boom')
     }
   })
@@ -147,7 +146,7 @@ describe('ai.tools.define', () => {
     })
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.type).toBe('VALIDATION_FAILED')
+      expect(result.error.code).toBe(HaiAIError.TOOL_VALIDATION_FAILED.code)
     }
   })
 })
@@ -256,7 +255,7 @@ describe('ai.tools.createRegistry', () => {
 
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.type).toBe('TOOL_NOT_FOUND')
+      expect(result.error.code).toBe(HaiAIError.TOOL_NOT_FOUND.code)
     }
   })
 
@@ -273,7 +272,7 @@ describe('ai.tools.createRegistry', () => {
 
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.type).toBe('VALIDATION_FAILED')
+      expect(result.error.code).toBe(HaiAIError.TOOL_VALIDATION_FAILED.code)
     }
   })
 
@@ -347,7 +346,7 @@ describe('ai.tools.createRegistry', () => {
     const result = await registry.executeAll(calls, { parallel: false })
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.type).toBe('TOOL_NOT_FOUND')
+      expect(result.error.code).toBe(HaiAIError.TOOL_NOT_FOUND.code)
     }
   })
 
@@ -433,7 +432,7 @@ describe('ai.tools.createRegistry', () => {
     const result = await registry.executeAll(calls, { parallel: true })
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.type).toBe('TOOL_NOT_FOUND')
+      expect(result.error.code).toBe(HaiAIError.TOOL_NOT_FOUND.code)
     }
   })
 
@@ -464,7 +463,7 @@ describe('ai.tools.createRegistry', () => {
     })
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.type).toBe('EXECUTION_FAILED')
+      expect(result.error.code).toBe(HaiAIError.TOOL_EXECUTION_FAILED.code)
       expect(result.error.message).toBe('async boom')
     }
   })

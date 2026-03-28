@@ -5,7 +5,8 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { DeployConfigSchema, HaiDeployError } from '../src/deploy-types.js'
+import { DeployConfigSchema } from '../src/deploy-config.js'
+import { HaiDeployError } from '../src/deploy-types.js'
 
 describe('haiDeployError', () => {
   it('错误码应符合 hai:deploy:NNN 格式', () => {

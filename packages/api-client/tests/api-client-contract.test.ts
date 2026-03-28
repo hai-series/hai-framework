@@ -4,7 +4,7 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
-import { defineEndpoint } from '../src/api-client-types.js'
+import { defineEndpoint, HaiApiClientError } from '../src/api-client-types.js'
 import { api, createMemoryTokenStorage } from '../src/index.js'
 
 /** 模拟登录端点契约 */
@@ -92,7 +92,7 @@ describe('api.call (contract)', () => {
 
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(1206) // VALIDATION_FAILED
+      expect(result.error.code).toBe(HaiApiClientError.VALIDATION_FAILED.code)
     }
     // fetch 不应被调用
     expect(fetch).not.toHaveBeenCalled()
@@ -107,8 +107,8 @@ describe('api.call (contract)', () => {
 
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(1206) // VALIDATION_FAILED
-      expect(result.error.details).toBeDefined()
+      expect(result.error.code).toBe(HaiApiClientError.VALIDATION_FAILED.code)
+      expect(result.error.cause).toBeDefined()
     }
   })
 

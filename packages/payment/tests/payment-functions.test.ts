@@ -304,7 +304,7 @@ describe('payment-functions — Provider 返回错误的透传', () => {
 
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(HaiPaymentError.INVALID_AMOUNT)
+      expect(result.error.code).toBe(HaiPaymentError.INVALID_AMOUNT.code)
     }
   })
 })

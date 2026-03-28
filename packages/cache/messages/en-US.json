@@ -8,7 +8,5 @@
   "cache_valueNotNumber": "Value is not a number",
   "cache_keyNotFound": "Key not found",
   "cache_indexOutOfRange": "Index out of range",
-  "cache_configError": "Cache config validation failed: {error}",
-  "cache_lockAcquireFailed": "Failed to acquire distributed lock: {key}",
-  "cache_lockReleaseFailed": "Failed to release distributed lock: {key}"
+  "cache_configError": "Cache config validation failed: {error}"
 }

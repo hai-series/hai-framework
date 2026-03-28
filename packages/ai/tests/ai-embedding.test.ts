@@ -5,7 +5,8 @@
  */
 
 import { describe, expect, it, vi } from 'vitest'
-import { AIConfigSchema, HaiAIError } from '../src/ai-types.js'
+import { AIConfigSchema } from '../src/ai-config.js'
+import { HaiAIError } from '../src/ai-types.js'
 import { createEmbeddingOperations } from '../src/embedding/ai-embedding-functions.js'
 
 // ─── Mock OpenAI ───
