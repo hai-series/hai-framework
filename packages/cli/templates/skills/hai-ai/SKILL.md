@@ -104,9 +104,9 @@ ai.close()
 
 | 方法         | 签名                                                   | 说明             |
 | ------------ | ------------------------------------------------------ | ---------------- |
-| `chat`       | `(options) => Promise<Result<ChatCompletionResponse>>` | 对话（非流式）   |
+| `chat`       | `(options) => Promise<HaiResult<ChatCompletionResponse>>` | 对话（非流式）   |
 | `chatStream` | `(options) => AsyncIterable<ChatCompletionChunk>`      | 对话（流式）     |
-| `listModels` | `() => Promise<Result<string[]>>`                      | 获取可用模型列表 |
+| `listModels` | `() => Promise<HaiResult<string[]>>`                      | 获取可用模型列表 |
 
 ```typescript
 // 非流式
@@ -229,11 +229,11 @@ await mcp.connect(transport)
 | 方法               | 签名                               | 说明       |
 | ------------------ | ---------------------------------- | ---------- |
 | `registerTool`     | `(def, handler) => void`           | 注册工具   |
-| `callTool`         | `(name, input) => Promise<Result>` | 调用工具   |
+| `callTool`         | `(name, input) => Promise<HaiResult>` | 调用工具   |
 | `registerResource` | `(def, reader) => void`            | 注册资源   |
-| `readResource`     | `(uri) => Promise<Result>`         | 读取资源   |
+| `readResource`     | `(uri) => Promise<HaiResult>`         | 读取资源   |
 | `registerPrompt`   | `(def, generator) => void`         | 注册提示词 |
-| `getPrompt`        | `(name, args) => Promise<Result>`  | 获取提示词 |
+| `getPrompt`        | `(name, args) => Promise<HaiResult>`  | 获取提示词 |
 
 ### 前端客户端
 
@@ -265,15 +265,15 @@ const sessions = await client.listSessions('user-001')
 
 | 方法              | 签名                                                          | 说明                               |
 | ----------------- | ------------------------------------------------------------- | ---------------------------------- |
-| `extract`         | `(messages, options?) => Promise<Result<MemoryEntry[]>>`      | 从对话中自动提取记忆（LLM 驱动）  |
-| `add`             | `(entry) => Promise<Result<MemoryEntry>>`                     | 手动添加一条记忆                   |
-| `get`             | `(memoryId) => Promise<Result<MemoryEntry>>`                  | 获取指定记忆                       |
-| `recall`          | `(query, options?) => Promise<Result<MemoryEntry[]>>`         | 按查询检索最相关的记忆             |
-| `injectMemories`  | `(messages, options?) => Promise<Result<ChatMessage[]>>`      | 将相关记忆自动注入消息列表         |
-| `remove`          | `(memoryId) => Promise<Result<void>>`                         | 删除指定记忆                       |
-| `list`            | `(options?) => Promise<Result<MemoryEntry[]>>`                | 列出记忆（支持类型/objectId 过滤） |
-| `listPage`        | `(options?) => Promise<Result<StorePage<MemoryEntry>>>`       | 分页列出记忆                       |
-| `clear`           | `(options?) => Promise<Result<void>>`                         | 清空记忆（支持按类型/objectId 清空）|
+| `extract`         | `(messages, options?) => Promise<HaiResult<MemoryEntry[]>>`      | 从对话中自动提取记忆（LLM 驱动）  |
+| `add`             | `(entry) => Promise<HaiResult<MemoryEntry>>`                     | 手动添加一条记忆                   |
+| `get`             | `(memoryId) => Promise<HaiResult<MemoryEntry>>`                  | 获取指定记忆                       |
+| `recall`          | `(query, options?) => Promise<HaiResult<MemoryEntry[]>>`         | 按查询检索最相关的记忆             |
+| `injectMemories`  | `(messages, options?) => Promise<HaiResult<ChatMessage[]>>`      | 将相关记忆自动注入消息列表         |
+| `remove`          | `(memoryId) => Promise<HaiResult<void>>`                         | 删除指定记忆                       |
+| `list`            | `(options?) => Promise<HaiResult<MemoryEntry[]>>`                | 列出记忆（支持类型/objectId 过滤） |
+| `listPage`        | `(options?) => Promise<HaiResult<StorePage<MemoryEntry>>>`       | 分页列出记忆                       |
+| `clear`           | `(options?) => Promise<HaiResult<void>>`                         | 清空记忆（支持按类型/objectId 清空）|
 
 ```typescript
 // 从对话中自动提取记忆
@@ -304,7 +304,7 @@ if (enriched.success) {
 
 | 方法               | 签名                                | 说明                     |
 | ------------------ | ----------------------------------- | ------------------------ |
-| `estimateMessages` | `(messages) => Result<number>`      | 估算消息列表的 Token 数  |
+| `estimateMessages` | `(messages) => HaiResult<number>`      | 估算消息列表的 Token 数  |
 | `estimateText`     | `(text) => number`                  | 估算纯文本的 Token 数    |
 
 ```typescript
@@ -322,14 +322,14 @@ const count = ai.token.estimateText('Hello world')
 
 | 方法        | 签名                                                              | 说明                          |
 | ----------- | ----------------------------------------------------------------- | ----------------------------- |
-| `summarize` | `(messages, options?) => Promise<Result<SummaryResult>>`          | 对消息生成摘要（支持增量）    |
-| `generate`  | `(text, options?) => Promise<Result<SummaryResult>>`              | 对纯文本生成摘要              |
+| `summarize` | `(messages, options?) => Promise<HaiResult<SummaryResult>>`          | 对消息生成摘要（支持增量）    |
+| `generate`  | `(text, options?) => Promise<HaiResult<SummaryResult>>`              | 对纯文本生成摘要              |
 
 ### 上下文压缩 — `ai.compress`
 
 | 方法          | 签名                                                              | 说明                                  |
 | ------------- | ----------------------------------------------------------------- | ------------------------------------- |
-| `tryCompress` | `(messages, options?) => Promise<Result<CompressResult>>`         | 压缩消息列表至指定 Token 预算         |
+| `tryCompress` | `(messages, options?) => Promise<HaiResult<CompressResult>>`         | 压缩消息列表至指定 Token 预算         |
 
 ```typescript
 // 压缩超长对话
@@ -349,11 +349,11 @@ if (result.success) {
 
 | 方法             | 签名                                                              | 说明                                                    |
 | ---------------- | ----------------------------------------------------------------- | ------------------------------------------------------- |
-| `createManager`  | `(options?) => Result<ContextManager>`                            | 创建有状态上下文管理器（压缩 + LLM/Memory/RAG 编排）   |
-| `restoreManager` | `(scope, options?) => Promise<Result<ContextManager>>`            | 从持久化存储恢复上下文管理器                            |
-| `listSessions`   | `(objectId) => Promise<Result<SessionInfo[]>>`                    | 列出指定对象的所有会话                                  |
-| `renameSession`  | `(sessionId, title) => Promise<Result<void>>`                     | 重命名会话                                              |
-| `removeSession`  | `(sessionId) => Promise<Result<void>>`                            | 删除会话                                                |
+| `createManager`  | `(options?) => HaiResult<ContextManager>`                            | 创建有状态上下文管理器（压缩 + LLM/Memory/RAG 编排）   |
+| `restoreManager` | `(scope, options?) => Promise<HaiResult<ContextManager>>`            | 从持久化存储恢复上下文管理器                            |
+| `listSessions`   | `(objectId) => Promise<HaiResult<SessionInfo[]>>`                    | 列出指定对象的所有会话                                  |
+| `renameSession`  | `(sessionId, title) => Promise<HaiResult<void>>`                     | 重命名会话                                              |
+| `removeSession`  | `(sessionId) => Promise<HaiResult<void>>`                            | 删除会话                                                |
 
 **ContextManagerOptions**（嵌套子模块配置）：
 - `scope?: InteractionScope` — 交互作用域
@@ -625,7 +625,7 @@ async function manualChat(userInput: string) {
 ## 相关 Skills
 
 - `hai-build`：模块初始化顺序
-- `hai-core`：配置与 Result 模型
+- `hai-core`：配置与 HaiResult 模型
 - `hai-kit`：SvelteKit API 端点集成
 - `hai-vecdb`：向量数据库（Retrieval / RAG / Knowledge 的存储层）
 - `hai-reldb`：关系数据库（Knowledge 实体索引的存储层）

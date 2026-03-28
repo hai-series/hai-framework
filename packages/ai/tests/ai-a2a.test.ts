@@ -267,7 +267,7 @@ describe('a2A 未初始化行为', () => {
     ai.close()
 
     const result = await ai.a2a.handleRequest({})
-    // handleRequest 返回 A2AHandleResult 或 Result，未初始化时返回 Result
+    // handleRequest 返回 A2AHandleResult 或 HaiResult，未初始化时返回 HaiResult
     expect((result as { success: boolean }).success).toBe(false)
   })
 

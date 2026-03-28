@@ -150,8 +150,8 @@ await reach.send({
 
 | 方法 / 属性           | 签名                                                     | 说明                               |
 | --------------------- | -------------------------------------------------------- | ---------------------------------- |
-| `reach.init`          | `(config: ReachConfigInput) => Promise<Result<void>>`    | 初始化（注册多个 Provider）        |
-| `reach.send`          | `(message: ReachMessage) => Promise<Result<SendResult>>` | 发送消息（通过 provider 字段路由） |
+| `reach.init`          | `(config: ReachConfigInput) => Promise<HaiResult<void>>`    | 初始化（注册多个 Provider）        |
+| `reach.send`          | `(message: ReachMessage) => Promise<HaiResult<SendResult>>` | 发送消息（通过 provider 字段路由） |
 | `reach.template`      | `ReachTemplateRegistry`                                  | 模板注册表                         |
 | `reach.config`        | `ReachConfig \| null`                                    | 当前配置                           |
 | `reach.isInitialized` | `boolean`                                                | 是否已初始化                       |
@@ -320,6 +320,6 @@ await reach.init({ /* ... */ })
 
 ## 相关 Skills
 
-- `hai-core` — 配置加载、日志、Result 模式
+- `hai-core` — 配置加载、日志、HaiResult 模式
 - `hai-reldb` — 数据库操作（存储发送记录等）
 - `hai-cache` — 缓存操作、分布式锁（DND flush 互斥）

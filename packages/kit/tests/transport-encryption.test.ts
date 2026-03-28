@@ -97,7 +97,7 @@ function createFailingCryptoService(): TransportCryptoServiceLike {
 }
 
 /**
- * 辅助函数：解包 createTransportEncryption 的 Result，失败时抛出异常
+ * 辅助函数：解包 createTransportEncryption 的 HaiResult，失败时抛出异常
  */
 function createManager(cryptoService: TransportCryptoServiceLike) {
   const result = createTransportEncryption(cryptoService)

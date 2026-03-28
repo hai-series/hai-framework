@@ -169,15 +169,15 @@ interface TaskExecutionLog {
 
 | 方法 / 属性 | 签名 | 说明 |
 | --- | --- | --- |
-| `init` | `(config?) => Promise<Result<void, SchedulerError>>` | 初始化调度器 |
-| `register` | `(task) => Promise<Result<void>>` | 注册统一任务模型 |
-| `updateTask` | `(taskId, updates) => Promise<Result<void>>` | 更新 cron / params / handler |
+| `init` | `(config?) => Promise<HaiResult<void>>` | 初始化调度器 |
+| `register` | `(task) => Promise<HaiResult<void>>` | 注册统一任务模型 |
+| `updateTask` | `(taskId, updates) => Promise<HaiResult<void>>` | 更新 cron / params / handler |
 | `register` 扩展字段 | `description / deleteAfterRun / retry` | 支持任务描述、一次性任务、失败重试策略 |
-| `trigger` | `(taskId, { source? }) => Promise<Result<TaskExecutionLog>>` | 手工触发并记录来源 |
-| `getLogs` | `(options?) => Promise<Result<PaginatedResult<TaskExecutionLog>>>` | 支持按 trigger + startedAfter/startedBefore 过滤日志 |
-| `setHooks` | `(hooks) => Result<void>` | 设置全局生命周期回调 |
-| `clearHooks` | `() => Result<void>` | 清空全局生命周期回调 |
-| `start / stop` | `() => Result<void>` | 启动 / 停止调度 |
+| `trigger` | `(taskId, { source? }) => Promise<HaiResult<TaskExecutionLog>>` | 手工触发并记录来源 |
+| `getLogs` | `(options?) => Promise<HaiResult<PaginatedResult<TaskExecutionLog>>>` | 支持按 trigger + startedAfter/startedBefore 过滤日志 |
+| `setHooks` | `(hooks) => HaiResult<void>` | 设置全局生命周期回调 |
+| `clearHooks` | `() => HaiResult<void>` | 清空全局生命周期回调 |
+| `start / stop` | `() => HaiResult<void>` | 启动 / 停止调度 |
 | `close` | `() => Promise<void>` | 关闭调度器 |
 
 ## 常见模式

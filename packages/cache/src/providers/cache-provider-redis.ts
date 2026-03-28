@@ -105,14 +105,14 @@ export function createRedisProvider(): CacheProvider {
   }
 
   /**
-   * 包装 Redis 操作为 Result 结果
+   * 包装 Redis 操作为 HaiResult 结果
    *
    * 统一处理未初始化检查和异常捕获：
    * - client 为 null → NOT_INITIALIZED
    * - 操作抛异常 → OPERATION_FAILED
    *
    * @param operation - 实际的 Redis 命令执行函数
-   * @returns Result 包装的操作结果
+   * @returns HaiResult 包装的操作结果
    */
   async function wrapOperation<T>(operation: () => Promise<T>): Promise<HaiResult<T>> {
     if (!client) {

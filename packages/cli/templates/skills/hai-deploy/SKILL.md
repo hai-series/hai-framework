@@ -107,11 +107,11 @@ if (result.success) {
 
 | 方法                   | 签名                                                                       | 说明         |
 | ---------------------- | -------------------------------------------------------------------------- | ------------ |
-| `deploy.init`          | `(config: DeployConfigInput) => Promise<Result<void, DeployError>>`        | 初始化模块   |
+| `deploy.init`          | `(config: DeployConfigInput) => Promise<HaiResult<void>>`        | 初始化模块   |
 | `deploy.close`         | `() => Promise<void>`                                                      | 关闭模块     |
-| `deploy.scan`          | `(appDir: string) => Promise<Result<ScanResult, DeployError>>`             | 扫描应用     |
-| `deploy.provisionAll`  | `(projectName: string) => Promise<Result<ProvisionResult[], DeployError>>` | 开通所有服务 |
-| `deploy.deployApp`     | `(appDir: string, options?) => Promise<Result<DeployResult, DeployError>>` | 完整部署     |
+| `deploy.scan`          | `(appDir: string) => Promise<HaiResult<ScanResult>>`             | 扫描应用     |
+| `deploy.provisionAll`  | `(projectName: string) => Promise<HaiResult<ProvisionResult[]>>` | 开通所有服务 |
+| `deploy.deployApp`     | `(appDir: string, options?) => Promise<HaiResult<DeployResult>>` | 完整部署     |
 | `deploy.config`        | `DeployConfig \| null`                                                     | 当前配置     |
 | `deploy.isInitialized` | `boolean`                                                                  | 初始化状态   |
 
@@ -205,6 +205,6 @@ const result = await deploy.deployApp('./apps/my-app')
 
 ## 相关 Skills
 
-- **hai-core** — 配置加载、日志、Result 类型
+- **hai-core** — 配置加载、日志、HaiResult 类型
 - **hai-reldb** — 数据库（Neon PostgreSQL）
 - **hai-cache** — 缓存（Upstash Redis）

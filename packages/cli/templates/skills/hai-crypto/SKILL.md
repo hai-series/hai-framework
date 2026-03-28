@@ -39,11 +39,11 @@ await crypto.close()
 
 | 方法                | 签名                                                        | 说明         |
 | ------------------- | ----------------------------------------------------------- | ------------ |
-| `generateKeyPair`   | `() => Result<KeyPair>`                                     | 生成密钥对   |
-| `encrypt`           | `(data, publicKey, options?) => Result<string>`             | 公钥加密     |
-| `decrypt`           | `(ciphertext, privateKey, options?) => Result<string>`      | 私钥解密     |
-| `sign`              | `(data, privateKey, options?) => Result<string>`            | 私钥签名     |
-| `verify`            | `(data, signature, publicKey, options?) => Result<boolean>` | 公钥验签     |
+| `generateKeyPair`   | `() => HaiResult<KeyPair>`                                     | 生成密钥对   |
+| `encrypt`           | `(data, publicKey, options?) => HaiResult<string>`             | 公钥加密     |
+| `decrypt`           | `(ciphertext, privateKey, options?) => HaiResult<string>`      | 私钥解密     |
+| `sign`              | `(data, privateKey, options?) => HaiResult<string>`            | 私钥签名     |
+| `verify`            | `(data, signature, publicKey, options?) => HaiResult<boolean>` | 公钥验签     |
 | `isValidPublicKey`  | `(key: string) => boolean`                                  | 校验公钥格式 |
 | `isValidPrivateKey` | `(key: string) => boolean`                                  | 校验私钥格式 |
 
@@ -71,9 +71,9 @@ if (keyPair.success) {
 
 | 方法     | 签名                                                       | 说明     |
 | -------- | ---------------------------------------------------------- | -------- |
-| `hash`   | `(data: string \| Uint8Array, options?) => Result<string>` | 哈希     |
-| `hmac`   | `(data, key) => Result<string>`                            | HMAC     |
-| `verify` | `(data, expectedHash) => Result<boolean>`                  | 验证哈希 |
+| `hash`   | `(data: string \| Uint8Array, options?) => HaiResult<string>` | 哈希     |
+| `hmac`   | `(data, key) => HaiResult<string>`                            | HMAC     |
+| `verify` | `(data, expectedHash) => HaiResult<boolean>`                  | 验证哈希 |
 
 ```typescript
 const hash = crypto.hash.hash('hello')
@@ -89,10 +89,10 @@ const valid = crypto.hash.verify('hello', hash.data!)
 | --------------- | ----------------------------------------------- | --------------------------- |
 | `generateKey`   | `() => string`                                  | 生成 128-bit 密钥（32 hex） |
 | `generateIV`    | `() => string`                                  | 生成随机 IV（32 hex）       |
-| `encrypt`       | `(data, key, options?) => Result<string>`       | 加密                        |
-| `decrypt`       | `(ciphertext, key, options?) => Result<string>` | 解密                        |
-| `encryptWithIV` | `(data, key) => Result<EncryptWithIVResult>`    | CBC 模式加密（自动生成 IV） |
-| `decryptWithIV` | `(ciphertext, key, iv) => Result<string>`       | CBC 模式解密                |
+| `encrypt`       | `(data, key, options?) => HaiResult<string>`       | 加密                        |
+| `decrypt`       | `(ciphertext, key, options?) => HaiResult<string>` | 解密                        |
+| `encryptWithIV` | `(data, key) => HaiResult<EncryptWithIVResult>`    | CBC 模式加密（自动生成 IV） |
+| `decryptWithIV` | `(ciphertext, key, iv) => HaiResult<string>`       | CBC 模式解密                |
 | `deriveKey`     | `(password, salt) => string`                    | 从密码和盐值派生密钥        |
 | `isValidKey`    | `(key: string) => boolean`                      | 校验密钥格式                |
 | `isValidIV`     | `(iv: string) => boolean`                       | 校验 IV 格式                |
@@ -111,8 +111,8 @@ if (result.success) {
 
 | 方法     | 签名                                    | 说明     |
 | -------- | --------------------------------------- | -------- |
-| `hash`   | `(password, config?) => Result<string>` | 密码哈希 |
-| `verify` | `(password, hash) => Result<boolean>`   | 验证密码 |
+| `hash`   | `(password, config?) => HaiResult<string>` | 密码哈希 |
+| `verify` | `(password, hash) => HaiResult<boolean>`   | 验证密码 |
 
 ```typescript
 const hashed = crypto.password.hash('MyPassword123')
@@ -179,6 +179,6 @@ if (verifyResult.success && verifyResult.data) {
 
 ## 相关 Skills
 
-- `hai-core`：配置与 Result 模型
+- `hai-core`：配置与 HaiResult 模型
 - `hai-iam`：密码哈希（内部自动调用 crypto.password）
 - `hai-kit`：SvelteKit 集成（传输加密）

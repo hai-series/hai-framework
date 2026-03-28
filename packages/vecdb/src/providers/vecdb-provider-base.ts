@@ -1,7 +1,7 @@
 /**
  * @h-ai/vecdb — Provider 共享基础层
  *
- * 将各 Provider 的共性逻辑抽取为统一实现：连接守卫、运行时异常捕获、Result 包装。
+ * 将各 Provider 的共性逻辑抽取为统一实现：连接守卫、运行时异常捕获、HaiResult 包装。
  *
  * 各 Provider 只需提供 CollectionDriver / VectorDriver（原始操作适配器），
  * base 层统一处理初始化检查与 catch-all 安全网。
@@ -63,7 +63,7 @@ export interface VecdbOpsContext {
  * 集合操作原始适配器
  *
  * Provider 将引擎特定的集合管理逻辑适配为此接口。
- * 实现方返回 Result 以表达业务错误（如集合已存在）；
+ * 实现方返回 HaiResult 以表达业务错误（如集合已存在）；
  * 未预期的运行时异常直接 throw，由 wrapOp 统一捕获。
  */
 export interface CollectionDriver {
@@ -78,7 +78,7 @@ export interface CollectionDriver {
  * 向量操作原始适配器
  *
  * Provider 将引擎特定的向量管理逻辑适配为此接口。
- * 实现方返回 Result 以表达业务错误（如集合不存在）；
+ * 实现方返回 HaiResult 以表达业务错误（如集合不存在）；
  * 未预期的运行时异常直接 throw，由 wrapOp 统一捕获。
  */
 export interface VectorDriver {

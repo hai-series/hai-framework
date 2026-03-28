@@ -97,7 +97,7 @@ const config = {
 ### 模块依赖图
 
 ```
-core（基础能力：配置、日志、i18n、Result）
+core（基础能力：配置、日志、i18n、HaiResult）
   ├── crypto（加密：SM2/SM3/SM4）
   ├── db（数据库：SQLite/PostgreSQL/MySQL）
   ├── cache（缓存：内存/Redis）
@@ -268,9 +268,9 @@ pnpm typecheck && pnpm lint && pnpm test
 - **禁止硬编码用户文案**：所有用户可见文本必须使用 i18n key
 - **禁止修改 `src/lib/paraglide`** 生成文件
 
-### Result 模式
+### HaiResult 模式
 
-所有 hai 模块操作均返回 `Result<T, E>` 类型：
+所有 hai 模块操作均返回 `HaiResult<T>` 类型：
 
 ```typescript
 const result = await reldb.sql.query('SELECT * FROM users')

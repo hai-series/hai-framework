@@ -25,7 +25,7 @@ const UnknownErrorDef: HaiErrorDef = {
   module: '_',
 }
 
-// ─── 1. 基础类型 - Result / Option ───
+// ─── 1. 基础类型 - HaiResult / Option ───
 
 export type HaiResult<T>
   = | { success: true, data: T }

@@ -308,7 +308,7 @@ export interface HandleConfig {
  * 与 `ai.a2a` 结构兼容，可直接传入 `ai.a2a` 对象。
  */
 export interface HandleA2AOperations {
-  /** 获取 Agent Card（返回 Result 对象） */
+  /** 获取 Agent Card（返回 HaiHaiResult 对象） */
   getAgentCard: () => { success: boolean, data?: unknown, error?: unknown }
   /** 处理 JSON-RPC 请求 */
   handleRequest: (body: unknown, context?: Record<string, unknown>) => Promise<{

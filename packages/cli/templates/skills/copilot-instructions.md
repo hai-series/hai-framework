@@ -12,7 +12,7 @@
 - **路由/SSR**：SvelteKit 2（文件路由、Handle Hook、load 函数）
 - **样式**：TailwindCSS 4 + DaisyUI 5
 - **后端框架**：hai-framework (`@h-ai/core`, `@h-ai/kit`, `@h-ai/reldb`, `@h-ai/iam` 等)
-- **统一模式**：`module.init(config) → use → module.close()`，所有操作返回 `Result<T, E>`
+- **统一模式**：`module.init(config) → use → module.close()`，所有操作返回 `HaiResult<T>`
 - **单元测试**：Vitest
 - **E2E 测试**：Playwright
 - **包管理**：pnpm
@@ -24,8 +24,8 @@
 - 禁止硬编码密钥
 - `xx-main.ts` 仅做生命周期管理和 API 编排，禁止在 main 中编写具体业务逻辑（委托给 `xx-functions.ts` / `xx-runner.ts` 等）
 - 用户可见文本必须走 i18n（`$lib/paraglide/messages.js`）
-- Result 错误直接透传，不重新包装
-- 框架模块公共 API 不抛异常，统一返回 `Result<T, E>`；不要用 `try/catch` 处理模块返回的错误
+- HaiResult 错误直接透传，不重新包装
+- 框架模块公共 API 不抛异常，统一返回 `HaiResult<T>`；不要用 `try/catch` 处理模块返回的错误
 - 日志消息英文、简洁动宾结构
 - 代码注释中文
 
@@ -36,7 +36,7 @@
 | Skill            | 说明                                                  |
 | ---------------- | ----------------------------------------------------- |
 | `hai-build`      | 项目架构、模块依赖、初始化顺序、编码标准              |
-| `hai-core`       | 配置加载、日志、i18n、Result 模型、模块生命周期       |
+| `hai-core`       | 配置加载、日志、i18n、HaiResult 模型、模块生命周期       |
 | `hai-kit`        | SvelteKit 集成：Handle Hook、守卫、中间件、响应、校验 |
 | `hai-ui`         | UI 组件库：三层架构、自动导入、主题、i18n             |
 | `hai-reldb`      | 数据库操作：DDL、SQL、CRUD、事务、分页                |

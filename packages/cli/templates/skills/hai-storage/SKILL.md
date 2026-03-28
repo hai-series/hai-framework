@@ -219,6 +219,6 @@ if (result.success) {
 ## 相关 Skills
 
 - `hai-build`：模块初始化顺序
-- `hai-core`：配置与 Result 模型
+- `hai-core`：配置与 HaiResult 模型
 - `hai-kit`：SvelteKit API 端点集成（`kit.handler` + `kit.guard`）
 - `hai-ui`：Storage 场景组件（FileUpload/ImageUpload/AvatarUpload）

@@ -230,7 +230,7 @@ function buildAuthnOperations(deps: BuildAuthnDeps): Omit<AuthnOperations, 'regi
    * 检查指定登录方式是否被禁用
    *
    * @param type - 登录方式类型
-   * @returns 禁用时返回错误 Result，否则返回 null
+   * @returns 禁用时返回错误 HaiResult，否则返回 null
    */
   function loginDisabled(type: 'password' | 'otp' | 'ldap' | 'apikey'): HaiResult<void> | null {
     if (!loginConfig[type]) {

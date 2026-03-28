@@ -129,7 +129,7 @@ export function createFetchClient(
       const contentType = response.headers.get('content-type') ?? ''
       if (contentType.includes('application/json')) {
         const body = await response.json() as { data?: T, success?: boolean }
-        // 兼容标准 Result 响应格式 { success, data }
+        // 兼容标准 HaiResult 响应格式 { success, data }
         if (body && typeof body === 'object' && 'data' in body) {
           return ok(body.data as T)
         }
