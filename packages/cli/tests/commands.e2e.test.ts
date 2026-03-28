@@ -219,8 +219,34 @@ describe('createProject — admin 类型 + iam', () => {
     expect(content).toContain('paraglideVitePlugin')
   })
 
-  it('应生成 SKILL.md', async () => {
-    expect(await exists(projectPath, '.github/skills/hai-iam/SKILL.md')).toBe(true)
+  it('应生成 .agents/skills 中的 skill 文件', async () => {
+    expect(await exists(projectPath, '.agents/skills/hai-iam/SKILL.md')).toBe(true)
+  })
+
+  it('不应再生成 .github/skills 目录', async () => {
+    expect(await exists(projectPath, '.github/skills')).toBe(false)
+  })
+
+  it('应生成 opencode.json 并声明 instructions 与 skills.paths', async () => {
+    const opencode = await readJson(projectPath, 'opencode.json')
+    expect(opencode.instructions).toEqual(['AGENTS.md'])
+    expect(opencode.skills.paths).toEqual(['.agents/skills'])
+  })
+
+  it('不应生成额外的 .codex/.opencode skill 树', async () => {
+    expect(await exists(projectPath, '.codex/skills')).toBe(false)
+    expect(await exists(projectPath, '.opencode/skills')).toBe(false)
+  })
+
+  it('agents.md、claude.md 与 copilot 指引应保留共享技能入口说明', async () => {
+    const agents = await readText(projectPath, 'AGENTS.md')
+    const claude = await readText(projectPath, 'CLAUDE.md')
+    const copilot = await readText(projectPath, '.github/copilot-instructions.md')
+
+    expect(agents).toContain('.agents/skills/')
+    expect(claude).toContain('@AGENTS.md')
+    expect(claude).toContain('.agents/skills/')
+    expect(copilot).toContain('.agents/skills/')
   })
 })
 
@@ -345,6 +371,19 @@ describe('addModule', () => {
     expect(await fse.pathExists(path.join(dir, 'config', '_ai.yml'))).toBe(true)
   })
 
+  it('添加 ai 时应同步生成 GitHub/OpenCode Skill 文件与配置', async () => {
+    const dir = path.join(tmpRoot, 'add-ai')
+    expect(await fse.pathExists(path.join(dir, '.agents/skills/hai-ai/SKILL.md'))).toBe(true)
+    expect(await fse.pathExists(path.join(dir, '.github/skills'))).toBe(false)
+
+    const opencode = await fse.readJson(path.join(dir, 'opencode.json'))
+    expect(opencode.instructions).toEqual(['AGENTS.md'])
+    expect(opencode.skills.paths).toEqual(['.agents/skills'])
+
+    expect(await fse.pathExists(path.join(dir, '.codex/skills'))).toBe(false)
+    expect(await fse.pathExists(path.join(dir, '.opencode/skills'))).toBe(false)
+  })
+
   it('向项目添加 storage 模块', async () => {
     const dir = path.join(tmpRoot, 'add-storage')
     await fse.ensureDir(dir)
@@ -379,6 +418,72 @@ describe('addModule', () => {
     const pkg = await fse.readJson(path.join(dir, 'package.json'))
     expect(pkg.dependencies['@h-ai/iam']).toBeDefined()
     expect(pkg.dependencies['@h-ai/crypto']).toBeDefined()
+  })
+
+  it('目标模块已安装但缺少 AI 支持文件时应回填兼容输出', async () => {
+    const dir = path.join(tmpRoot, 'add-backfill-ai-support')
+    await fse.ensureDir(dir)
+    await fse.writeJson(path.join(dir, 'package.json'), {
+      name: 'add-backfill-ai-support-test',
+      version: '0.1.0',
+      dependencies: {
+        '@h-ai/core': 'workspace:*',
+        '@h-ai/ai': 'workspace:*',
+      },
+    }, { spaces: 2 })
+
+    await addModule({ module: 'ai', install: false, cwd: dir, verbose: false })
+
+    expect(await fse.pathExists(path.join(dir, '.github/copilot-instructions.md'))).toBe(true)
+    expect(await fse.pathExists(path.join(dir, 'AGENTS.md'))).toBe(true)
+    expect(await fse.pathExists(path.join(dir, 'CLAUDE.md'))).toBe(true)
+    expect(await fse.pathExists(path.join(dir, 'opencode.json'))).toBe(true)
+    expect(await fse.pathExists(path.join(dir, '.agents/skills/hai-build/SKILL.md'))).toBe(true)
+    expect(await fse.pathExists(path.join(dir, '.agents/skills/hai-core/SKILL.md'))).toBe(true)
+    expect(await fse.pathExists(path.join(dir, '.agents/skills/hai-ai/SKILL.md'))).toBe(true)
+    expect(await fse.pathExists(path.join(dir, '.github/skills'))).toBe(false)
+
+    const opencode = await fse.readJson(path.join(dir, 'opencode.json'))
+    expect(opencode.instructions).toEqual(['AGENTS.md'])
+    expect(opencode.skills.paths).toEqual(['.agents/skills'])
+  })
+
+  it('回填 AI 支持时不应覆盖已有桥接文件，也不应删除遗留 .github/skills', async () => {
+    const dir = path.join(tmpRoot, 'add-preserve-existing-ai-files')
+    await fse.ensureDir(path.join(dir, '.github', 'skills', 'hai-ai'))
+    await fse.writeJson(path.join(dir, 'package.json'), {
+      name: 'add-preserve-existing-ai-files-test',
+      version: '0.1.0',
+      dependencies: {
+        '@h-ai/core': 'workspace:*',
+        '@h-ai/ai': 'workspace:*',
+      },
+    }, { spaces: 2 })
+
+    await fse.writeFile(path.join(dir, 'AGENTS.md'), '# custom agents\n')
+    await fse.writeFile(path.join(dir, 'CLAUDE.md'), '# custom claude\n')
+    await fse.ensureDir(path.join(dir, '.github'))
+    await fse.writeFile(path.join(dir, '.github', 'copilot-instructions.md'), '# custom copilot\n')
+    await fse.writeJson(path.join(dir, 'opencode.json'), {
+      instructions: ['CUSTOM.md'],
+      skills: { paths: ['legacy-skills'] },
+    }, { spaces: 2 })
+    await fse.writeFile(path.join(dir, '.github', 'skills', 'hai-ai', 'SKILL.md'), 'legacy skill\n')
+
+    await addModule({ module: 'ai', install: false, cwd: dir, verbose: false })
+
+    expect(await fse.readFile(path.join(dir, 'AGENTS.md'), 'utf8')).toBe('# custom agents\n')
+    expect(await fse.readFile(path.join(dir, 'CLAUDE.md'), 'utf8')).toBe('# custom claude\n')
+    expect(await fse.readFile(path.join(dir, '.github', 'copilot-instructions.md'), 'utf8')).toBe('# custom copilot\n')
+
+    const opencode = await fse.readJson(path.join(dir, 'opencode.json'))
+    expect(opencode.instructions).toEqual(['CUSTOM.md'])
+    expect(opencode.skills.paths).toEqual(['legacy-skills'])
+
+    expect(await fse.pathExists(path.join(dir, '.agents/skills/hai-build/SKILL.md'))).toBe(true)
+    expect(await fse.pathExists(path.join(dir, '.agents/skills/hai-core/SKILL.md'))).toBe(true)
+    expect(await fse.pathExists(path.join(dir, '.agents/skills/hai-ai/SKILL.md'))).toBe(true)
+    expect(await fse.readFile(path.join(dir, '.github', 'skills', 'hai-ai', 'SKILL.md'), 'utf8')).toBe('legacy skill\n')
   })
 
   it('目标模块已安装时不重复更新', async () => {
