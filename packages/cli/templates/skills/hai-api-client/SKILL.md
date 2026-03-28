@@ -121,7 +121,7 @@ await api.close()
 
 | API                                | 用途           | 关键点                                |
 | ---------------------------------- | -------------- | ------------------------------------- |
-| `api.init(config)`                 | 初始化客户端   | 返回 `Result<void, ApiClientError>`   |
+| `api.init(config)`                 | 初始化客户端   | 返回 `HaiResult<void>`   |
 | `api.close()`                      | 关闭并释放资源 | 重复调用安全                          |
 | `api.isInitialized`                | 初始化状态     | `boolean`                             |
 | `api.config`                       | 当前配置       | 未初始化时为 `null`                   |
@@ -212,7 +212,7 @@ App 端使用 `@h-ai/capacitor` 的 `createCapacitorTokenStorage()`。
 1. 从 `@h-ai/xx/api` 导入 `xxEndpoints`
 2. `api.call(xxEndpoints.xxx, input)` → Zod 校验入参 → 按 method/path 发起 HTTP → Zod 校验出参
 3. 入参或出参校验失败均返回 `VALIDATION_FAILED`（1206）
-4. 返回 `Result<TOutput, ApiClientError>`
+4. 返回 `HaiResult<TOutput>`
 
 ```typescript
 import { storageEndpoints } from '@h-ai/storage/api'
@@ -343,4 +343,4 @@ await api.init({
 - `hai-iam`：认证契约定义（iamEndpoints）
 - `hai-capacitor`：原生 Token 存储
 - `hai-kit`：服务端契约处理（kit.fromContract）
-- `hai-core`：Result 类型、错误处理基础
+- `hai-core`：HaiResult 类型、错误处理基础

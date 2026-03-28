@@ -177,7 +177,7 @@ else {
 ## 相关 Skills
 
 - `hai-build`：模块初始化顺序（cache 在 db 之后、iam 之前）
-- `hai-core`：配置与 Result 模型
+- `hai-core`：配置与 HaiResult 模型
 - `hai-iam`：会话存储与权限缓存（底层使用 cache）
 - `hai-scheduler`：定时任务分布式锁（底层使用 cache.lock）
 - `hai-reach`：消息发送互斥锁（底层使用 cache.lock）

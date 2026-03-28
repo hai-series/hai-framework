@@ -4,7 +4,7 @@
  * Provider 共享基础层：Context + wrapOp → Factory 模式。
  *
  * 各 Provider 只需提供 raw DdlOperations / DmlOperations / beginTx，
- * base 层统一处理连接守卫、运行时异常捕获与 Result 包装。
+ * base 层统一处理连接守卫、运行时异常捕获与 HaiResult 包装。
  * @module reldb-provider-base
  */
 

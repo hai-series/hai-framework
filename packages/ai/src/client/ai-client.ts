@@ -30,7 +30,7 @@ import type { SessionInfo, StorePage } from '../store/ai-store-types.js'
  * 传入 `api` 单例即可，无需额外适配。
  */
 export interface AIApiAdapter {
-  /** POST 请求（返回 Result） */
+  /** POST 请求（返回 HaiResult） */
   post: <T>(path: string, body?: unknown) => Promise<HaiResult<T>>
   /** 流式请求（返回 SSE data 行的 AsyncIterable） */
   stream: (path: string, body?: unknown) => AsyncIterable<string>

@@ -312,7 +312,7 @@ const config = {
 
 ## 相关 Skills
 
-- `hai-core`：全局配置、日志、Result 基础能力
+- `hai-core`：全局配置、日志、HaiResult 基础能力
 - `hai-iam`：Token 认证、角色权限模型
 - `hai-api-client`：客户端契约调用
 - `hai-crypto`：传输加密与密钥管理能力

@@ -200,7 +200,7 @@ export const POST = kit.handler(async ({ request, locals }) => {
 - 权限守卫使用 `kit.guard.requirePermission(locals.session, 'xxx:yyy')`，它本身就是 throw 模式（未通过时 throw 403 Response），**无需**检查返回值
 - 输入校验使用 `await kit.validate.formOrFail(request, Schema)`，校验失败时 throw 400 Response，**无需**手动判断 valid
 - 返回统一使用 `kit.response.*`
-- Result 错误直接透传，不重新包装
+- HaiResult 错误直接透传，不重新包装
 - 框架模块 API 不抛异常，不要用 `try/catch` 处理模块返回的错误，直接检查 `result.success`
 
 ---
@@ -210,7 +210,7 @@ export const POST = kit.handler(async ({ request, locals }) => {
 服务层位于 `$lib/server/services/`，处理业务逻辑。
 
 ```typescript
-import type { Result } from '@h-ai/core'
+import type { HaiResult } from '@h-ai/core'
 // src/lib/server/services/article.ts
 import { core } from '@h-ai/core'
 import { reldb } from '@h-ai/reldb'
@@ -218,7 +218,7 @@ import { reldb } from '@h-ai/reldb'
 const logger = core.logger
 
 /** 创建文章 */
-export async function createArticle(input: CreateArticleInput): Promise<Result<Article>> {
+export async function createArticle(input: CreateArticleInput): Promise<HaiResult<Article>> {
   logger.debug('Creating article', { title: input.title })
 
   const result = await reldb.crud.create('articles', {
@@ -234,7 +234,7 @@ export async function createArticle(input: CreateArticleInput): Promise<Result<A
 }
 
 /** 获取文章列表 */
-export async function listArticles(params: ListParams): Promise<Result<PaginatedResult<Article>>> {
+export async function listArticles(params: ListParams): Promise<HaiResult<PaginatedResult<Article>>> {
   logger.debug('Listing articles', { page: params.page })
   return reldb.crud.paginate('articles', params)
 }
@@ -242,11 +242,11 @@ export async function listArticles(params: ListParams): Promise<Result<Paginated
 
 ### 服务层规则
 
-- 统一返回 `Result<T>`
+- 统一返回 `HaiResult<T>`
 - 写操作需 `debug`（进入）+ `info`（成功）日志
 - 读操作仅 `debug` 日志
 - 禁止 `console.log`，使用 `core.logger`
-- 服务层不处理 HTTP 响应格式，只返回 Result
+- 服务层不处理 HTTP 响应格式，只返回 HaiResult
 
 ---
 
@@ -350,7 +350,7 @@ core.init() → reldb.init() → cache.init() → iam.init() → createBusinessT
 - [ ] E2E 测试已编写（API 端点、页面交互）
 - [ ] 页面使用 Svelte 5 Runes 语法
 - [ ] API 端点有权限守卫与输入校验
-- [ ] 服务层统一返回 `Result<T>`
+- [ ] 服务层统一返回 `HaiResult<T>`
 - [ ] 日志级别正确（读 debug / 写 debug+info / 失败 warn|error）
 - [ ] 禁止 `console.log`、`any`、硬编码密钥
 - [ ] 用户可见文本走 i18n

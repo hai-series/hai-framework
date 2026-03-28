@@ -129,7 +129,7 @@ const notInitializedAuth: ApiClient['auth'] = {
 /**
  * 未初始化时的流式请求占位
  *
- * async generator 无法返回 Result，迭代时抛出异常。
+ * async generator 无法返回 HaiResult，迭代时抛出异常。
  */
 function notInitializedStreamFn(_path: string, _body?: unknown, _options?: { signal?: AbortSignal }): AsyncIterable<string> {
   return {

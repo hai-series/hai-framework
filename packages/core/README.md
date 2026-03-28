@@ -350,7 +350,7 @@ const currentHash: HashOperations = notInitialized.proxy<HashOperations>('sync')
 
 ## 错误处理
 
-### Result 类型
+### HaiResult 类型
 
 所有可能失败的操作返回 `HaiResult<T>`：
 

@@ -528,7 +528,7 @@ export interface DmlWithTxOperations extends DmlOperations {
  * 事务回调函数类型
  *
  * @param tx - 事务内操作对象
- * @returns 业务返回值（将被包装为 Result）
+ * @returns 业务返回值（将被包装为 HaiResult）
  * @example
  * ```ts
  * const result = await reldb.tx.wrap(async (tx) => {

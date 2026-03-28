@@ -54,7 +54,7 @@ if (result.success) {
 ### 清洗 — `datapipe.clean`
 
 ```typescript
-datapipe.clean(text: string, options?: CleanOptionsInput): Result<string, DatapipeError>
+datapipe.clean(text: string, options?: CleanOptionsInput): HaiResult<string>
 ```
 
 **CleanOptionsInput**：
@@ -71,7 +71,7 @@ datapipe.clean(text: string, options?: CleanOptionsInput): Result<string, Datapi
 ### 分块 — `datapipe.chunk`
 
 ```typescript
-datapipe.chunk(text: string, options: ChunkOptionsInput): Result<DataChunk[], DatapipeError>
+datapipe.chunk(text: string, options: ChunkOptionsInput): HaiResult<DataChunk[]>
 ```
 
 **ChunkOptionsInput**：
@@ -115,7 +115,7 @@ datapipe.pipeline()
   .transform(fn)                // 添加文本转换步骤（同步/异步）
   .chunk(options)               // 添加分块步骤
   .chunkTransform(fn)           // 添加分块后处理步骤
-  .run(text)                    // 执行管线 → Promise<Result<PipelineResult>>
+  .run(text)                    // 执行管线 → Promise<HaiResult<PipelineResult>>
 ```
 
 **PipelineResult**：
@@ -211,4 +211,4 @@ if (!result.success) {
 
 - `hai-vecdb`：向量数据库存储（分块后入库）
 - `hai-ai`：LLM 与 Embedding 能力
-- `hai-core`：Result 模型
+- `hai-core`：HaiResult 模型

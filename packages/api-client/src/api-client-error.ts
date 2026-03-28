@@ -1,7 +1,7 @@
 /**
  * @h-ai/api-client — 错误处理
  *
- * HTTP 状态码到 Result 错误的统一转换。
+ * HTTP 状态码到 HaiResult 错误的统一转换。
  * @module api-client-error
  */
 
@@ -11,10 +11,10 @@ import { apiClientM } from './api-client-i18n.js'
 import { HaiApiClientError } from './api-client-types.js'
 
 /**
- * 将 HTTP 响应转为 ApiClientError Result
+ * 将 HTTP 响应转为 HaiResult<never>
  *
  * @param response - HTTP 响应
- * @returns ApiClientError Result
+ * @returns HaiResult<never>
  */
 export async function responseToError(response: Response): Promise<HaiResult<never>> {
   let details: unknown
@@ -77,10 +77,10 @@ export async function responseToError(response: Response): Promise<HaiResult<nev
 }
 
 /**
- * 将网络异常转为 ApiClientError Result
+ * 将网络异常转为 HaiResult<never>
  *
  * @param cause - 原始异常
- * @returns ApiClientError Result
+ * @returns HaiResult<never>
  */
 export function networkErrorToResult(cause: unknown): HaiResult<never> {
   // AbortError = 超时

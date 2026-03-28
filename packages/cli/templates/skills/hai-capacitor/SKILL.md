@@ -5,7 +5,7 @@ description: 使用 @h-ai/capacitor 桥接 Capacitor 原生能力（Token 安全
 
 # hai-capacitor
 
-> `@h-ai/capacitor` 是 hai-framework 的 Capacitor 原生桥接模块，封装常用原生能力为统一 API，返回 `Result<T, CapacitorError>`。与 `@h-ai/api-client` 配合实现 App 端 Token 安全存储。
+> `@h-ai/capacitor` 是 hai-framework 的 Capacitor 原生桥接模块，封装常用原生能力为统一 API，返回 `HaiResult<T>`。与 `@h-ai/api-client` 配合实现 App 端 Token 安全存储。
 
 ---
 
@@ -89,7 +89,7 @@ await api.init({
 ```typescript
 import { capacitor } from '@h-ai/capacitor'
 
-// 返回 Result<string | null, CapacitorError>
+// 返回 HaiResult<string | null, CapacitorError>
 const result = await capacitor.preferences.get('my_key')
 if (result.success) {
   // result.data — 值或 null
@@ -132,7 +132,7 @@ if (reg.success) {
   await api.post('/push/register', { token: reg.data.token })
 }
 
-// 监听推送事件（返回 Result 包裹的 async 清理函数）
+// 监听推送事件（返回 HaiResult 包裹的 async 清理函数）
 const listenResult = await capacitor.push.listen({
   onReceived: (notification) => {
     // 前台收到推送
@@ -188,23 +188,23 @@ await capacitor.statusBar.show()
 
 | API | 用途 | 返回值 |
 | --- | --- | --- |
-| `capacitor.init()` | 初始化模块（检测环境） | `Result<void, CapacitorError>` |
+| `capacitor.init()` | 初始化模块（检测环境） | `HaiResult<void>` |
 | `capacitor.close()` | 关闭模块，重置状态 | `Promise<void>` |
 | `capacitor.getPlatform()` | 获取当前平台 | `'android' \| 'ios' \| 'web'` |
 | `capacitor.isNative()` | 是否为原生环境 | `boolean` |
 | `capacitor.isInitialized` | 是否已初始化 | `boolean` |
 | `createCapacitorTokenStorage()` | 创建 Token 存储 | `TokenStorage`（兼容 api-client） |
-| `capacitor.preferences.get(key)` | 安全读取 Preference | `Result<string \| null, CapacitorError>` |
-| `capacitor.preferences.set(key, value)` | 安全写入 Preference | `Result<void, CapacitorError>` |
-| `capacitor.preferences.remove(key)` | 安全删除 Preference | `Result<void, CapacitorError>` |
-| `capacitor.device.getInfo()` | 设备信息 | `Result<DeviceInfo, CapacitorError>` |
-| `capacitor.device.getAppVersion()` | 应用版本 | `Result<{ version, build }, CapacitorError>` |
-| `capacitor.push.register()` | 注册推送 | `Result<PushRegistration, CapacitorError>` |
-| `capacitor.push.listen(callbacks)` | 监听推送事件 | `Result<() => Promise<void>, CapacitorError>`（async 清理函数） |
-| `capacitor.camera.takePhoto(options?)` | 拍照 / 选取图片 | `Result<PhotoResult, CapacitorError>` |
-| `capacitor.statusBar.configure(config)` | 配置状态栏 | `Result<void, CapacitorError>` |
-| `capacitor.statusBar.show()` | 显示状态栏 | `Result<void, CapacitorError>` |
-| `capacitor.statusBar.hide()` | 隐藏状态栏 | `Result<void, CapacitorError>` |
+| `capacitor.preferences.get(key)` | 安全读取 Preference | `HaiResult<string \| null>` |
+| `capacitor.preferences.set(key, value)` | 安全写入 Preference | `HaiResult<void>` |
+| `capacitor.preferences.remove(key)` | 安全删除 Preference | `HaiResult<void>` |
+| `capacitor.device.getInfo()` | 设备信息 | `HaiResult<DeviceInfo>` |
+| `capacitor.device.getAppVersion()` | 应用版本 | `HaiResult<{ version, build }, CapacitorError>` |
+| `capacitor.push.register()` | 注册推送 | `HaiResult<PushRegistration>` |
+| `capacitor.push.listen(callbacks)` | 监听推送事件 | `HaiResult<() => Promise<void>, CapacitorError>`（async 清理函数） |
+| `capacitor.camera.takePhoto(options?)` | 拍照 / 选取图片 | `HaiResult<PhotoResult>` |
+| `capacitor.statusBar.configure(config)` | 配置状态栏 | `HaiResult<void>` |
+| `capacitor.statusBar.show()` | 显示状态栏 | `HaiResult<void>` |
+| `capacitor.statusBar.hide()` | 隐藏状态栏 | `HaiResult<void>` |
 
 ---
 

@@ -67,13 +67,13 @@ await vecdb.close()
 
 | 方法     | 签名                                       | 说明           |
 | -------- | ------------------------------------------ | -------------- |
-| `create` | `(name, options) => Result<void>`          | 创建集合       |
-| `drop`   | `(name) => Result<void>`                   | 删除集合       |
-| `exists` | `(name) => Result<boolean>`                | 判断集合是否存在 |
-| `info`   | `(name) => Result<CollectionInfo>`         | 获取集合信息   |
-| `list`   | `() => Result<string[]>`                   | 列出所有集合   |
+| `create` | `(name, options) => HaiResult<void>`          | 创建集合       |
+| `drop`   | `(name) => HaiResult<void>`                   | 删除集合       |
+| `exists` | `(name) => HaiResult<boolean>`                | 判断集合是否存在 |
+| `info`   | `(name) => HaiResult<CollectionInfo>`         | 获取集合信息   |
+| `list`   | `() => HaiResult<string[]>`                   | 列出所有集合   |
 
-> 所有方法均返回 `Promise<Result<T, VecdbError>>`，上表省略异步与错误类型。
+> 所有方法均返回 `Promise<HaiResult<T>>`，上表省略异步与错误类型。
 
 ```typescript
 // 创建集合（指定维度和度量）
@@ -102,13 +102,13 @@ interface CollectionCreateOptions {
 
 | 方法     | 签名                                                | 说明           |
 | -------- | --------------------------------------------------- | -------------- |
-| `insert` | `(collection, documents) => Result<void>`           | 批量插入       |
-| `upsert` | `(collection, documents) => Result<void>`           | 批量更新/插入  |
-| `delete` | `(collection, ids) => Result<void>`                 | 按 ID 删除     |
-| `search` | `(collection, vector, options?) => Result<SearchResult[]>` | 向量搜索 |
-| `count`  | `(collection) => Result<number>`                    | 文档计数       |
+| `insert` | `(collection, documents) => HaiResult<void>`           | 批量插入       |
+| `upsert` | `(collection, documents) => HaiResult<void>`           | 批量更新/插入  |
+| `delete` | `(collection, ids) => HaiResult<void>`                 | 按 ID 删除     |
+| `search` | `(collection, vector, options?) => HaiResult<SearchResult[]>` | 向量搜索 |
+| `count`  | `(collection) => HaiResult<number>`                    | 文档计数       |
 
-> 所有方法均返回 `Promise<Result<T, VecdbError>>`，上表省略异步与错误类型。
+> 所有方法均返回 `Promise<HaiResult<T>>`，上表省略异步与错误类型。
 
 ```typescript
 // 插入向量文档
@@ -270,4 +270,4 @@ if (!result.success) {
 - `hai-ai`：LLM 与 Embedding 能力
 - `hai-datapipe`：文本清洗与分块
 - `hai-reldb`：关系型数据库（知识库需要同时使用 reldb 存储结构化数据）
-- `hai-core`：配置管理、Result 模型
+- `hai-core`：配置管理、HaiResult 模型

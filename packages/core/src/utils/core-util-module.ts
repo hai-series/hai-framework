@@ -37,7 +37,7 @@ export interface BaseModuleError {
 /**
  * 未初始化工具集返回类型。
  *
- * 提供错误创建、Result 包装和 Proxy 代理等能力，
+ * 提供错误创建、HaiResult 包装和 Proxy 代理等能力，
  * 用于模块未初始化时的安全回退。
  *
  * @template E - 模块错误类型（必须继承 BaseModuleError）
@@ -60,7 +60,7 @@ export interface NotInitializedKit<E extends BaseModuleError> {
  *
  * 封装各模块共同的未初始化错误处理模式，包括：
  * - `error()` — 创建未初始化错误对象
- * - `result<T>()` — 创建包含未初始化错误的失败 Result
+ * - `result<T>()` — 创建包含未初始化错误的失败 HaiResult
  * - `proxy<T>(mode?)` — 创建 Proxy 对象（mode='async' 异步，mode='sync' 同步）
  *
  * @param codeOrDef - 模块的 NOT_INITIALIZED 错误码，或标准 HaiErrorDef 错误定义

@@ -57,7 +57,7 @@ await audit.close()
 
 | 方法                  | 签名                                                             | 说明       |
 | --------------------- | ---------------------------------------------------------------- | ---------- |
-| `audit.init`          | `(config: AuditInitConfig) => Promise<Result<void, AuditError>>` | 初始化模块 |
+| `audit.init`          | `(config: AuditInitConfig) => Promise<HaiResult<void>>` | 初始化模块 |
 | `audit.close`         | `() => Promise<void>`                                            | 关闭模块   |
 | `audit.isInitialized` | `boolean`                                                        | 初始化状态 |
 
@@ -65,11 +65,11 @@ await audit.close()
 
 | 方法                  | 签名                                                                                | 说明                 |
 | --------------------- | ----------------------------------------------------------------------------------- | -------------------- |
-| `audit.log`           | `(input: CreateAuditLogInput) => Promise<Result<AuditLog, AuditError>>`             | 记录审计日志         |
-| `audit.list`          | `(options?: ListAuditLogsOptions) => Promise<Result<{ items, total }, AuditError>>` | 分页查询（含用户名） |
-| `audit.getUserRecent` | `(userId: string, limit?: number) => Promise<Result<AuditLog[], AuditError>>`       | 用户最近活动         |
-| `audit.cleanup`       | `(olderThanDays?: number) => Promise<Result<number, AuditError>>`                   | 清理旧日志           |
-| `audit.getStats`      | `(days?: number) => Promise<Result<AuditStatItem[], AuditError>>`                   | 操作统计             |
+| `audit.log`           | `(input: CreateAuditLogInput) => Promise<HaiResult<AuditLog>>`             | 记录审计日志         |
+| `audit.list`          | `(options?: ListAuditLogsOptions) => Promise<HaiResult<{ items, total }, AuditError>>` | 分页查询（含用户名） |
+| `audit.getUserRecent` | `(userId: string, limit?: number) => Promise<HaiResult<AuditLog[]>>`       | 用户最近活动         |
+| `audit.cleanup`       | `(olderThanDays?: number) => Promise<HaiResult<number>>`                   | 清理旧日志           |
+| `audit.getStats`      | `(days?: number) => Promise<HaiResult<AuditStatItem[]>>`                   | 操作统计             |
 
 ### 便捷记录器 (`audit.helper`)
 

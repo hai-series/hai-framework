@@ -104,7 +104,7 @@ pnpm --filter h5-app paraglide:compile # 编译 i18n 翻译文件
 
 ## 📦 框架依赖
 
-- `@h-ai/core`：配置管理、日志、Result 模式、错误处理
+- `@h-ai/core`：配置管理、日志、HaiResult 模式、错误处理
 - `@h-ai/reldb`：数据库抽象（SQLite / PostgreSQL / MySQL）
 - `@h-ai/iam`：用户认证（登录 / 注册 / Session）
 - `@h-ai/cache`：缓存（Memory / Redis）
