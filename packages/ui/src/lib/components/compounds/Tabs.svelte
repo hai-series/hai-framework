@@ -2,11 +2,11 @@
   @component Tabs
   标签页组件，支持 line/card/pills 三种样式。
 -->
-<script lang="ts">
+<script lang='ts'>
   import type { TabsProps } from '../../types.js'
   import { cn } from '../../utils.js'
   import BareButton from '../primitives/BareButton.svelte'
-  
+
   let {
     items,
     active = $bindable(''),
@@ -16,56 +16,56 @@
     onchange,
     children,
   }: TabsProps = $props()
-  
+
   // 默认选中第一个
   $effect(() => {
     if (!active && items.length > 0) {
       active = items[0].key
     }
   })
-  
+
   const typeMap = {
     line: 'tabs-border',
     card: 'tabs-box',
     pills: 'tabs-box',
   }
-  
+
   const sizeMap = {
-    xs: 'tabs-xs',
-    sm: 'tabs-sm',
-    md: '',
-    lg: 'tabs-lg',
-    xl: 'tabs-lg',
+    'xs': 'tabs-xs',
+    'sm': 'tabs-sm',
+    'md': '',
+    'lg': 'tabs-lg',
+    'xl': 'tabs-lg',
     '2xl': 'tabs-lg',
     '3xl': 'tabs-lg',
     '4xl': 'tabs-lg',
   }
-  
+
   const tabsClass = $derived(
     cn(
       'tabs',
       typeMap[type],
       sizeMap[size],
       className,
-    )
+    ),
   )
-  
+
   function handleSelect(key: string) {
     active = key
     onchange?.(key)
   }
 </script>
 
-<div role="tablist" class={tabsClass}>
+<div role='tablist' class={tabsClass}>
   {#each items as item}
     <BareButton
-      role="tab"
+      role='tab'
       class={cn('tab', active === item.key && 'tab-active')}
       disabled={item.disabled}
       onclick={() => handleSelect(item.key)}
     >
       {#if item.icon}
-        <span class="mr-1">{item.icon}</span>
+        <span class='mr-1'>{item.icon}</span>
       {/if}
       {item.label}
     </BareButton>
@@ -73,7 +73,7 @@
 </div>
 
 {#if children}
-  <div class="py-4">
+  <div class='py-4'>
     {@render children()}
   </div>
 {/if}

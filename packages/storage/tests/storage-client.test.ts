@@ -346,7 +346,7 @@ describe('storage client 工具函数', () => {
     })
 
     it('浏览器入口应导出配置与类型', () => {
-      expect('StorageErrorCode' in storageBrowser).toBe(true)
+      expect('HaiStorageError' in storageBrowser).toBe(true)
       expect('StorageConfigSchema' in storageBrowser).toBe(true)
     })
   })

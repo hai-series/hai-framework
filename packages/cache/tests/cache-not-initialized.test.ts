@@ -5,7 +5,7 @@
  */
 
 import { beforeEach, describe, expect, it } from 'vitest'
-import { cache, CacheErrorCode } from '../src/index.js'
+import { cache, HaiCacheError } from '../src/index.js'
 
 describe.sequential('cache (not initialized)', () => {
   beforeEach(async () => {
@@ -18,7 +18,7 @@ describe.sequential('cache (not initialized)', () => {
     const result = await cache.kv.get('k1')
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(CacheErrorCode.NOT_INITIALIZED)
+      expect(result.error.code).toBe(HaiCacheError.NOT_INITIALIZED.code)
     }
   })
 
@@ -26,7 +26,7 @@ describe.sequential('cache (not initialized)', () => {
     const result = await cache.kv.set('k1', 'v1')
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(CacheErrorCode.NOT_INITIALIZED)
+      expect(result.error.code).toBe(HaiCacheError.NOT_INITIALIZED.code)
     }
   })
 
@@ -34,7 +34,7 @@ describe.sequential('cache (not initialized)', () => {
     const result = await cache.kv.del('k1')
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(CacheErrorCode.NOT_INITIALIZED)
+      expect(result.error.code).toBe(HaiCacheError.NOT_INITIALIZED.code)
     }
   })
 
@@ -42,7 +42,7 @@ describe.sequential('cache (not initialized)', () => {
     const result = await cache.kv.exists('k1')
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(CacheErrorCode.NOT_INITIALIZED)
+      expect(result.error.code).toBe(HaiCacheError.NOT_INITIALIZED.code)
     }
   })
 
@@ -50,7 +50,7 @@ describe.sequential('cache (not initialized)', () => {
     const result = await cache.kv.incr('k1')
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(CacheErrorCode.NOT_INITIALIZED)
+      expect(result.error.code).toBe(HaiCacheError.NOT_INITIALIZED.code)
     }
   })
 
@@ -58,7 +58,7 @@ describe.sequential('cache (not initialized)', () => {
     const result = await cache.kv.mget('k1', 'k2')
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(CacheErrorCode.NOT_INITIALIZED)
+      expect(result.error.code).toBe(HaiCacheError.NOT_INITIALIZED.code)
     }
   })
 
@@ -66,7 +66,7 @@ describe.sequential('cache (not initialized)', () => {
     const result = await cache.kv.mset([['k1', 'v1']])
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(CacheErrorCode.NOT_INITIALIZED)
+      expect(result.error.code).toBe(HaiCacheError.NOT_INITIALIZED.code)
     }
   })
 
@@ -76,7 +76,7 @@ describe.sequential('cache (not initialized)', () => {
     const result = await cache.hash.hget('h1', 'f1')
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(CacheErrorCode.NOT_INITIALIZED)
+      expect(result.error.code).toBe(HaiCacheError.NOT_INITIALIZED.code)
     }
   })
 
@@ -84,7 +84,7 @@ describe.sequential('cache (not initialized)', () => {
     const result = await cache.hash.hset('h1', 'f1', 'v1')
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(CacheErrorCode.NOT_INITIALIZED)
+      expect(result.error.code).toBe(HaiCacheError.NOT_INITIALIZED.code)
     }
   })
 
@@ -94,7 +94,7 @@ describe.sequential('cache (not initialized)', () => {
     const result = await cache.list.lpush('l1', 'v1')
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(CacheErrorCode.NOT_INITIALIZED)
+      expect(result.error.code).toBe(HaiCacheError.NOT_INITIALIZED.code)
     }
   })
 
@@ -102,7 +102,7 @@ describe.sequential('cache (not initialized)', () => {
     const result = await cache.list.lpop('l1')
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(CacheErrorCode.NOT_INITIALIZED)
+      expect(result.error.code).toBe(HaiCacheError.NOT_INITIALIZED.code)
     }
   })
 
@@ -112,7 +112,7 @@ describe.sequential('cache (not initialized)', () => {
     const result = await cache.set_.sadd('s1', 'a')
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(CacheErrorCode.NOT_INITIALIZED)
+      expect(result.error.code).toBe(HaiCacheError.NOT_INITIALIZED.code)
     }
   })
 
@@ -120,7 +120,7 @@ describe.sequential('cache (not initialized)', () => {
     const result = await cache.set_.smembers('s1')
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(CacheErrorCode.NOT_INITIALIZED)
+      expect(result.error.code).toBe(HaiCacheError.NOT_INITIALIZED.code)
     }
   })
 
@@ -130,7 +130,7 @@ describe.sequential('cache (not initialized)', () => {
     const result = await cache.zset.zadd('z1', { score: 1, member: 'm1' })
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(CacheErrorCode.NOT_INITIALIZED)
+      expect(result.error.code).toBe(HaiCacheError.NOT_INITIALIZED.code)
     }
   })
 
@@ -138,7 +138,7 @@ describe.sequential('cache (not initialized)', () => {
     const result = await cache.zset.zrange('z1', 0, -1)
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(CacheErrorCode.NOT_INITIALIZED)
+      expect(result.error.code).toBe(HaiCacheError.NOT_INITIALIZED.code)
     }
   })
 
@@ -148,7 +148,7 @@ describe.sequential('cache (not initialized)', () => {
     const result = await cache.ping()
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(CacheErrorCode.NOT_INITIALIZED)
+      expect(result.error.code).toBe(HaiCacheError.NOT_INITIALIZED.code)
     }
   })
 })

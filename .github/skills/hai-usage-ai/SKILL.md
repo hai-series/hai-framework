@@ -549,88 +549,88 @@ const sessions = await client.listSessions('user-001')
 
 ---
 
-## §17 错误码 — `AIErrorCode`
+## §17 错误码 — `HaiAIError`
 
-| 错误码 | 说明 |
-|--------|------|
-| **通用** | |
-| `INTERNAL_ERROR` (12000) | 内部错误 |
-| **初始化** | |
-| `NOT_INITIALIZED` (12010) | 未初始化 |
-| `CONFIGURATION_ERROR` (12011) | 配置错误 |
-| `INIT_IN_PROGRESS` (12012) | 初始化正在进行中 |
-| **Rerank** | |
-| `RERANK_API_ERROR` (12020) | Rerank API 调用错误 |
-| `RERANK_INVALID_REQUEST` (12021) | Rerank 请求参数无效 |
-| **File** | |
-| `FILE_PARSE_FAILED` (12030) | 文件解析失败 |
-| `FILE_UNSUPPORTED_FORMAT` (12031) | 不支持的文件格式 |
-| `FILE_OCR_FAILED` (12032) | OCR 识别失败 |
-| `FILE_INVALID_CONTENT` (12033) | 文件内容无效 |
-| **LLM** | |
-| `API_ERROR` (12100) | API 调用错误 |
-| `INVALID_REQUEST` (12101) | 无效请求 |
-| `RATE_LIMITED` (12102) | 速率限制 |
-| `TIMEOUT` (12103) | 超时 |
-| `MODEL_NOT_FOUND` (12104) | 模型未找到 |
-| `CONTEXT_LENGTH_EXCEEDED` (12105) | 上下文超限 |
-| `LLM_RECORD_FAILED` (12106) | 对话记录保存失败 |
-| `LLM_HISTORY_FAILED` (12107) | 对话历史查询失败 |
-| **MCP** | |
-| `MCP_CONNECTION_ERROR` (12200) | MCP 连接错误 |
-| `MCP_PROTOCOL_ERROR` (12201) | MCP 协议错误 |
-| `MCP_TOOL_ERROR` (12202) | MCP 工具错误 |
-| `MCP_RESOURCE_ERROR` (12203) | MCP 资源错误 |
-| `MCP_SERVER_ERROR` (12204) | MCP 服务器错误 |
-| **Embedding** | |
-| `EMBEDDING_API_ERROR` (12300) | Embedding 调用错误 |
-| `EMBEDDING_MODEL_NOT_FOUND` (12301) | Embedding 模型未找到 |
-| `EMBEDDING_INPUT_TOO_LONG` (12302) | Embedding 输入过长 |
-| **工具** | |
-| `TOOL_NOT_FOUND` (12400) | 工具未找到 |
-| `TOOL_VALIDATION_FAILED` (12401) | 工具验证失败 |
-| `TOOL_EXECUTION_FAILED` (12402) | 工具执行失败 |
-| `TOOL_TIMEOUT` (12403) | 工具超时 |
-| **Reasoning** | |
-| `REASONING_FAILED` (12500) | 推理失败 |
-| `REASONING_MAX_ROUNDS` (12501) | 推理轮次超限 |
-| `REASONING_STRATEGY_NOT_FOUND` (12502) | 推理策略未找到 |
-| **Retrieval** | |
-| `RETRIEVAL_FAILED` (12600) | 检索失败 |
-| `RETRIEVAL_SOURCE_NOT_FOUND` (12601) | 检索源未配置 |
-| **RAG** | |
-| `RAG_FAILED` (12700) | RAG 失败 |
-| `RAG_CONTEXT_BUILD_FAILED` (12701) | RAG 上下文构建失败 |
-| **Knowledge** | |
-| `KNOWLEDGE_SETUP_FAILED` (12800) | 知识库初始化失败 |
-| `KNOWLEDGE_INGEST_FAILED` (12801) | 知识入库失败 |
-| `KNOWLEDGE_RETRIEVE_FAILED` (12802) | 知识检索失败 |
-| `KNOWLEDGE_ENTITY_EXTRACT_FAILED` (12803) | 实体提取失败 |
-| `KNOWLEDGE_NOT_SETUP` (12804) | 知识库未初始化 |
-| `KNOWLEDGE_COLLECTION_NOT_FOUND` (12805) | 集合不存在 |
-| **Memory** | |
-| `MEMORY_EXTRACT_FAILED` (12900) | 记忆提取失败 |
-| `MEMORY_STORE_FAILED` (12901) | 记忆存储失败 |
-| `MEMORY_RECALL_FAILED` (12902) | 记忆召回失败 |
-| `MEMORY_NOT_FOUND` (12903) | 记忆不存在 |
-| `MEMORY_ENRICH_FAILED` (12904) | 记忆注入失败 |
-| **Context** | |
-| `CONTEXT_COMPRESS_FAILED` (12950) | 压缩失败 |
-| `CONTEXT_SUMMARIZE_FAILED` (12951) | 摘要失败 |
-| `CONTEXT_TOKEN_ESTIMATE_FAILED` (12952) | Token 估算失败 |
-| `CONTEXT_BUDGET_EXCEEDED` (12953) | 超出 Token 预算 |
-| **Store** | |
-| `STORE_FAILED` (12960) | 存储操作失败 |
-| `STORE_NOT_AVAILABLE` (12961) | 存储后端不可用 |
-| **Session** | |
-| `SESSION_NOT_FOUND` (12970) | 会话未找到 |
-| `SESSION_FAILED` (12971) | 会话操作失败 |
-| **A2A** | |
-| `A2A_NOT_CONFIGURED` (12980) | A2A 服务未配置 |
-| `A2A_HANDLE_FAILED` (12981) | A2A 请求处理失败 |
-| `A2A_REMOTE_CALL_FAILED` (12982) | A2A 远端调用失败 |
-| `A2A_AUTH_FAILED` (12983) | A2A 认证失败 |
-| `A2A_LIST_MESSAGES_FAILED` (12984) | A2A 消息查询失败 |
+| 错误码 | code | 说明 |
+|--------|------|------|
+| **通用** | | |
+| `HaiAIError.INTERNAL_ERROR` | `hai:ai:000` | 内部错误 |
+| **初始化** | | |
+| `HaiAIError.NOT_INITIALIZED` | `hai:ai:010` | 未初始化 |
+| `HaiAIError.CONFIGURATION_ERROR` | `hai:ai:011` | 配置错误 |
+| `HaiAIError.INIT_IN_PROGRESS` | `hai:ai:012` | 初始化正在进行中 |
+| **Rerank** | | |
+| `HaiAIError.RERANK_API_ERROR` | `hai:ai:020` | Rerank API 调用错误 |
+| `HaiAIError.RERANK_INVALID_REQUEST` | `hai:ai:021` | Rerank 请求参数无效 |
+| **File** | | |
+| `HaiAIError.FILE_PARSE_FAILED` | `hai:ai:030` | 文件解析失败 |
+| `HaiAIError.FILE_UNSUPPORTED_FORMAT` | `hai:ai:031` | 不支持的文件格式 |
+| `HaiAIError.FILE_OCR_FAILED` | `hai:ai:032` | OCR 识别失败 |
+| `HaiAIError.FILE_INVALID_CONTENT` | `hai:ai:033` | 文件内容无效 |
+| **LLM** | | |
+| `HaiAIError.API_ERROR` | `hai:ai:100` | API 调用错误 |
+| `HaiAIError.INVALID_REQUEST` | `hai:ai:101` | 无效请求 |
+| `HaiAIError.RATE_LIMITED` | `hai:ai:102` | 速率限制 |
+| `HaiAIError.TIMEOUT` | `hai:ai:103` | 超时 |
+| `HaiAIError.MODEL_NOT_FOUND` | `hai:ai:104` | 模型未找到 |
+| `HaiAIError.CONTEXT_LENGTH_EXCEEDED` | `hai:ai:105` | 上下文超限 |
+| `HaiAIError.LLM_RECORD_FAILED` | `hai:ai:106` | 对话记录保存失败 |
+| `HaiAIError.LLM_HISTORY_FAILED` | `hai:ai:107` | 对话历史查询失败 |
+| **MCP** | | |
+| `HaiAIError.MCP_CONNECTION_ERROR` | `hai:ai:200` | MCP 连接错误 |
+| `HaiAIError.MCP_PROTOCOL_ERROR` | `hai:ai:201` | MCP 协议错误 |
+| `HaiAIError.MCP_TOOL_ERROR` | `hai:ai:202` | MCP 工具错误 |
+| `HaiAIError.MCP_RESOURCE_ERROR` | `hai:ai:203` | MCP 资源错误 |
+| `HaiAIError.MCP_SERVER_ERROR` | `hai:ai:204` | MCP 服务器错误 |
+| **Embedding** | | |
+| `HaiAIError.EMBEDDING_API_ERROR` | `hai:ai:300` | Embedding 调用错误 |
+| `HaiAIError.EMBEDDING_MODEL_NOT_FOUND` | `hai:ai:301` | Embedding 模型未找到 |
+| `HaiAIError.EMBEDDING_INPUT_TOO_LONG` | `hai:ai:302` | Embedding 输入过长 |
+| **工具** | | |
+| `HaiAIError.TOOL_NOT_FOUND` | `hai:ai:400` | 工具未找到 |
+| `HaiAIError.TOOL_VALIDATION_FAILED` | `hai:ai:401` | 工具验证失败 |
+| `HaiAIError.TOOL_EXECUTION_FAILED` | `hai:ai:402` | 工具执行失败 |
+| `HaiAIError.TOOL_TIMEOUT` | `hai:ai:403` | 工具超时 |
+| **Reasoning** | | |
+| `HaiAIError.REASONING_FAILED` | `hai:ai:500` | 推理失败 |
+| `HaiAIError.REASONING_MAX_ROUNDS` | `hai:ai:501` | 推理轮次超限 |
+| `HaiAIError.REASONING_STRATEGY_NOT_FOUND` | `hai:ai:502` | 推理策略未找到 |
+| **Retrieval** | | |
+| `HaiAIError.RETRIEVAL_FAILED` | `hai:ai:600` | 检索失败 |
+| `HaiAIError.RETRIEVAL_SOURCE_NOT_FOUND` | `hai:ai:601` | 检索源未配置 |
+| **RAG** | | |
+| `HaiAIError.RAG_FAILED` | `hai:ai:700` | RAG 失败 |
+| `HaiAIError.RAG_CONTEXT_BUILD_FAILED` | `hai:ai:701` | RAG 上下文构建失败 |
+| **Knowledge** | | |
+| `HaiAIError.KNOWLEDGE_SETUP_FAILED` | `hai:ai:800` | 知识库初始化失败 |
+| `HaiAIError.KNOWLEDGE_INGEST_FAILED` | `hai:ai:801` | 知识入库失败 |
+| `HaiAIError.KNOWLEDGE_RETRIEVE_FAILED` | `hai:ai:802` | 知识检索失败 |
+| `HaiAIError.KNOWLEDGE_ENTITY_EXTRACT_FAILED` | `hai:ai:803` | 实体提取失败 |
+| `HaiAIError.KNOWLEDGE_NOT_SETUP` | `hai:ai:804` | 知识库未初始化 |
+| `HaiAIError.KNOWLEDGE_COLLECTION_NOT_FOUND` | `hai:ai:805` | 集合不存在 |
+| **Memory** | | |
+| `HaiAIError.MEMORY_EXTRACT_FAILED` | `hai:ai:900` | 记忆提取失败 |
+| `HaiAIError.MEMORY_STORE_FAILED` | `hai:ai:901` | 记忆存储失败 |
+| `HaiAIError.MEMORY_RECALL_FAILED` | `hai:ai:902` | 记忆召回失败 |
+| `HaiAIError.MEMORY_NOT_FOUND` | `hai:ai:903` | 记忆不存在 |
+| `HaiAIError.MEMORY_ENRICH_FAILED` | `hai:ai:904` | 记忆注入失败 |
+| **Context** | | |
+| `HaiAIError.CONTEXT_COMPRESS_FAILED` | `hai:ai:950` | 压缩失败 |
+| `HaiAIError.CONTEXT_SUMMARIZE_FAILED` | `hai:ai:951` | 摘要失败 |
+| `HaiAIError.CONTEXT_TOKEN_ESTIMATE_FAILED` | `hai:ai:952` | Token 估算失败 |
+| `HaiAIError.CONTEXT_BUDGET_EXCEEDED` | `hai:ai:953` | 超出 Token 预算 |
+| **Store** | | |
+| `HaiAIError.STORE_FAILED` | `hai:ai:960` | 存储操作失败 |
+| `HaiAIError.STORE_NOT_AVAILABLE` | `hai:ai:961` | 存储后端不可用 |
+| **Session** | | |
+| `HaiAIError.SESSION_NOT_FOUND` | `hai:ai:970` | 会话未找到 |
+| `HaiAIError.SESSION_FAILED` | `hai:ai:971` | 会话操作失败 |
+| **A2A** | | |
+| `HaiAIError.A2A_NOT_CONFIGURED` | `hai:ai:980` | A2A 服务未配置 |
+| `HaiAIError.A2A_HANDLE_FAILED` | `hai:ai:981` | A2A 请求处理失败 |
+| `HaiAIError.A2A_REMOTE_CALL_FAILED` | `hai:ai:982` | A2A 远端调用失败 |
+| `HaiAIError.A2A_AUTH_FAILED` | `hai:ai:983` | A2A 认证失败 |
+| `HaiAIError.A2A_LIST_MESSAGES_FAILED` | `hai:ai:984` | A2A 消息查询失败 |
 
 ---
 

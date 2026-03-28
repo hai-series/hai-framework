@@ -20,9 +20,9 @@
   <DatePicker bind:value={date} />
   ```
 -->
-<script lang="ts">
-  import { DatePicker as BitsDatePicker } from 'bits-ui'
+<script lang='ts'>
   import type { DateValue } from '@internationalized/date'
+  import { DatePicker as BitsDatePicker } from 'bits-ui'
 
   interface Props {
     /** 选中日期（双向绑定） */
@@ -58,7 +58,7 @@
   }: Props = $props()
 </script>
 
-<div class="fieldset w-full {className}">
+<div class='fieldset w-full {className}'>
   <BitsDatePicker.Root
     bind:value
     {minValue}
@@ -66,43 +66,43 @@
     {weekStartsOn}
     {isDateUnavailable}
     {disabled}
-    onValueChange={(v) => onchange?.(v)}
+    onValueChange={v => onchange?.(v)}
   >
     <BitsDatePicker.Input class="input flex items-center gap-0.5 pr-2 {error ? 'input-error' : ''}">
       {#snippet children({ segments })}
         {#each segments as { part, value: segValue }}
           <BitsDatePicker.Segment
             {part}
-            class="rounded px-0.5 py-0.5 text-sm tabular-nums focus:bg-primary focus:text-primary-content focus:outline-none data-[type=literal]:px-0 data-[type=literal]:text-base-content/50"
+            class='rounded px-0.5 py-0.5 text-sm tabular-nums focus:bg-primary focus:text-primary-content focus:outline-none data-[type=literal]:px-0 data-[type=literal]:text-base-content/50'
           >
             {segValue}
           </BitsDatePicker.Segment>
         {/each}
-        <BitsDatePicker.Trigger class="ml-auto btn btn-ghost btn-xs btn-circle">
-          <span class="icon-[tabler--calendar] size-4"></span>
+        <BitsDatePicker.Trigger class='ml-auto btn btn-ghost btn-xs btn-circle'>
+          <span class='icon-[tabler--calendar] size-4'></span>
         </BitsDatePicker.Trigger>
       {/snippet}
     </BitsDatePicker.Input>
 
-    <BitsDatePicker.Content class="z-50 mt-1 rounded-xl border border-base-content/10 bg-base-100 p-3 shadow-lg" sideOffset={4}>
+    <BitsDatePicker.Content class='z-50 mt-1 rounded-xl border border-base-content/10 bg-base-100 p-3 shadow-lg' sideOffset={4}>
       <BitsDatePicker.Calendar>
         {#snippet children({ months, weekdays })}
-          <BitsDatePicker.Header class="flex items-center justify-between px-1 pb-3">
-            <BitsDatePicker.PrevButton class="btn btn-ghost btn-sm btn-circle">
-              <span class="icon-[tabler--chevron-left] size-4"></span>
+          <BitsDatePicker.Header class='flex items-center justify-between px-1 pb-3'>
+            <BitsDatePicker.PrevButton class='btn btn-ghost btn-sm btn-circle'>
+              <span class='icon-[tabler--chevron-left] size-4'></span>
             </BitsDatePicker.PrevButton>
-            <BitsDatePicker.Heading class="text-sm font-semibold" />
-            <BitsDatePicker.NextButton class="btn btn-ghost btn-sm btn-circle">
-              <span class="icon-[tabler--chevron-right] size-4"></span>
+            <BitsDatePicker.Heading class='text-sm font-semibold' />
+            <BitsDatePicker.NextButton class='btn btn-ghost btn-sm btn-circle'>
+              <span class='icon-[tabler--chevron-right] size-4'></span>
             </BitsDatePicker.NextButton>
           </BitsDatePicker.Header>
 
           {#each months as month}
-            <BitsDatePicker.Grid class="w-full border-collapse">
+            <BitsDatePicker.Grid class='w-full border-collapse'>
               <BitsDatePicker.GridHead>
-                <BitsDatePicker.GridRow class="flex w-full">
+                <BitsDatePicker.GridRow class='flex w-full'>
                   {#each weekdays as day}
-                    <BitsDatePicker.HeadCell class="w-9 text-center text-xs font-medium text-base-content/50">
+                    <BitsDatePicker.HeadCell class='w-9 text-center text-xs font-medium text-base-content/50'>
                       {day}
                     </BitsDatePicker.HeadCell>
                   {/each}
@@ -111,10 +111,10 @@
 
               <BitsDatePicker.GridBody>
                 {#each month.weeks as weekDates}
-                  <BitsDatePicker.GridRow class="flex w-full">
+                  <BitsDatePicker.GridRow class='flex w-full'>
                     {#each weekDates as date}
-                      <BitsDatePicker.Cell {date} month={month.value} class="p-0">
-                        <BitsDatePicker.Day class="inline-flex size-9 items-center justify-center rounded-lg text-sm transition-colors hover:bg-base-200 data-[selected]:bg-primary data-[selected]:text-primary-content data-[disabled]:opacity-30 data-[unavailable]:line-through data-[unavailable]:opacity-30 data-[outside-month]:text-base-content/30">
+                      <BitsDatePicker.Cell {date} month={month.value} class='p-0'>
+                        <BitsDatePicker.Day class='inline-flex size-9 items-center justify-center rounded-lg text-sm transition-colors hover:bg-base-200 data-[selected]:bg-primary data-[selected]:text-primary-content data-[disabled]:opacity-30 data-[unavailable]:line-through data-[unavailable]:opacity-30 data-[outside-month]:text-base-content/30'>
                           {date.day}
                         </BitsDatePicker.Day>
                       </BitsDatePicker.Cell>
@@ -130,6 +130,6 @@
   </BitsDatePicker.Root>
 
   {#if error}
-    <span class="fieldset-label text-error">{error}</span>
+    <span class='fieldset-label text-error'>{error}</span>
   {/if}
 </div>

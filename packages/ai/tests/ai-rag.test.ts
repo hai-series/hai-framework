@@ -5,9 +5,10 @@
  */
 
 import type { LLMOperations } from '../src/llm/ai-llm-types.js'
+import type { RagContextItem } from '../src/rag/ai-rag-types.js'
 import type { RetrievalOperations } from '../src/retrieval/ai-retrieval-types.js'
 import { describe, expect, it, vi } from 'vitest'
-import { AIErrorCode } from '../src/ai-config.js'
+import { HaiAIError } from '../src/ai-types.js'
 import { createRagOperations } from '../src/rag/ai-rag-functions.js'
 
 // ─── Mock 工厂 ───
@@ -110,7 +111,7 @@ describe('rAG operations', () => {
     expect(result.success).toBe(true)
 
     // 验证 LLM 被调用时 messages[0] 是 system
-    const chatCall = (mockLLM.chat as any).mock.calls[0][0]
+    const chatCall = vi.mocked(mockLLM.chat).mock.calls[0][0]
     expect(chatCall.messages[0].content).toContain('You are a math tutor.')
   })
 
@@ -121,14 +122,14 @@ describe('rAG operations', () => {
     const mockLLM = createMockLLM('answer')
     const rag = createRagOperations(mockLLM, mockRetrieval)
 
-    const customFormat = (items: any[]) =>
+    const customFormat = (items: RagContextItem[]) =>
       items.map(i => `<doc>${i.content}</doc>`).join('\n')
 
     const result = await rag.query('Q?', { formatContext: customFormat })
     expect(result.success).toBe(true)
 
     // 验证自定义格式被应用
-    const chatCall = (mockLLM.chat as any).mock.calls[0][0]
+    const chatCall = vi.mocked(mockLLM.chat).mock.calls[0][0]
     expect(chatCall.messages[0].content).toContain('<doc>Test content</doc>')
   })
 
@@ -148,7 +149,7 @@ describe('rAG operations', () => {
     expect(result.success).toBe(true)
 
     // 验证 messages 包含历史
-    const chatCall = (mockLLM.chat as any).mock.calls[0][0]
+    const chatCall = vi.mocked(mockLLM.chat).mock.calls[0][0]
     expect(chatCall.messages.length).toBeGreaterThanOrEqual(4) // system + 2 history + user
   })
 
@@ -160,7 +161,7 @@ describe('rAG operations', () => {
     const result = await rag.query('test')
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(AIErrorCode.RAG_CONTEXT_BUILD_FAILED)
+      expect(result.error.code).toBe(HaiAIError.RAG_CONTEXT_BUILD_FAILED.code)
     }
   })
 
@@ -180,7 +181,7 @@ describe('rAG operations', () => {
     const result = await rag.query('test')
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(AIErrorCode.RAG_FAILED)
+      expect(result.error.code).toBe(HaiAIError.RAG_FAILED.code)
     }
   })
 })

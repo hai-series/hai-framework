@@ -1,6 +1,6 @@
 ---
 name: hai-reldb
-description: 使用 @h-ai/reldb 进行 SQLite/PostgreSQL/MySQL 的初始化、SQL/DDL/CRUD/事务与分页操作；当需求涉及数据库访问、CRUD 仓库、事务处理、分页查询或 ReldbErrorCode 分支处理时使用。
+description: 使用 @h-ai/reldb 进行 SQLite/PostgreSQL/MySQL 的初始化、SQL/DDL/CRUD/事务与分页操作；当需求涉及数据库访问、CRUD 仓库、事务处理、分页查询或 HaiReldbError 分支处理时使用。
 ---
 
 # hai-reldb
@@ -14,7 +14,7 @@ description: 使用 @h-ai/reldb 进行 SQLite/PostgreSQL/MySQL 的初始化、SQ
 - 新增或修改数据库访问逻辑（SQL/DDL/CRUD/事务）
 - 使用 `reldb.crud.table` 或 `BaseReldbCrudRepository` 构建数据仓库
 - 处理分页查询与分页结果规范化
-- 基于 `ReldbErrorCode` 做错误分支处理
+- 基于 `HaiReldbError` 做错误分支处理
 - JSON 列的路径提取、设置、插入、删除、合并操作（跨数据库统一语法）
 
 ---
@@ -379,24 +379,24 @@ await reldb.sql.execute(`UPDATE users SET profile = ${sql} WHERE id = ?`, [...pa
 
 ---
 
-## 错误码 — `ReldbErrorCode`
+## 错误码 — `HaiReldbError`
 
-| 错误码                 | 值   | 说明               |
-| ---------------------- | ---- | ------------------ |
-| `CONNECTION_FAILED`    | 3000 | 数据库连接失败     |
-| `QUERY_FAILED`         | 3001 | 查询或执行失败     |
-| `CONSTRAINT_VIOLATION` | 3002 | 约束违反           |
-| `TRANSACTION_FAILED`   | 3003 | 事务失败           |
-| `MIGRATION_FAILED`     | 3004 | 迁移失败           |
-| `RECORD_NOT_FOUND`     | 3005 | 记录不存在         |
-| `DUPLICATE_ENTRY`      | 3006 | 重复条目           |
-| `DEADLOCK`             | 3007 | 死锁               |
-| `TIMEOUT`              | 3008 | 超时               |
-| `POOL_EXHAUSTED`       | 3009 | 连接池耗尽         |
-| `NOT_INITIALIZED`      | 3010 | 数据库未初始化     |
-| `DDL_FAILED`           | 3011 | DDL 操作失败       |
-| `UNSUPPORTED_TYPE`     | 3012 | 不支持的数据库类型 |
-| `CONFIG_ERROR`         | 3013 | 配置错误           |
+| 错误码 | code | 说明 |
+|--------|------|------|
+| `HaiReldbError.CONNECTION_FAILED`    | `hai:reldb:001`  | 数据库连接失败     |
+| `HaiReldbError.QUERY_FAILED`         | `hai:reldb:002`  | 查询或执行失败     |
+| `HaiReldbError.CONSTRAINT_VIOLATION` | `hai:reldb:003`  | 约束违反           |
+| `HaiReldbError.TRANSACTION_FAILED`   | `hai:reldb:004`  | 事务失败           |
+| `HaiReldbError.MIGRATION_FAILED`     | `hai:reldb:005`  | 迁移失败           |
+| `HaiReldbError.RECORD_NOT_FOUND`     | `hai:reldb:006`  | 记录不存在         |
+| `HaiReldbError.DUPLICATE_ENTRY`      | `hai:reldb:007`  | 重复条目           |
+| `HaiReldbError.DEADLOCK`             | `hai:reldb:008`  | 死锁               |
+| `HaiReldbError.TIMEOUT`              | `hai:reldb:009`  | 超时               |
+| `HaiReldbError.POOL_EXHAUSTED`       | `hai:reldb:010`  | 连接池耗尽         |
+| `HaiReldbError.NOT_INITIALIZED`      | `hai:reldb:011`  | 数据库未初始化     |
+| `HaiReldbError.DDL_FAILED`           | `hai:reldb:012`  | DDL 操作失败       |
+| `HaiReldbError.UNSUPPORTED_TYPE`     | `hai:reldb:013`  | 不支持的数据库类型 |
+| `HaiReldbError.CONFIG_ERROR`         | `hai:reldb:014`  | 配置错误           |
 
 ---
 
@@ -405,7 +405,7 @@ await reldb.sql.execute(`UPDATE users SET profile = ${sql} WHERE id = ?`, [...pa
 ### API 端点中使用
 
 ```typescript
-import { reldb, ReldbErrorCode } from '@h-ai/reldb'
+import { reldb, HaiReldbError } from '@h-ai/reldb'
 import { kit } from '@h-ai/kit'
 
 export async function GET(event) {

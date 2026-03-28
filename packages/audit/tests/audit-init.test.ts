@@ -6,7 +6,7 @@
 
 import { reldb } from '@h-ai/reldb'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { audit, AuditErrorCode } from '../src/index.js'
+import { audit, HaiAuditError } from '../src/index.js'
 
 // ─── 测试辅助 ───
 
@@ -101,7 +101,7 @@ describe('audit.init / audit.close', () => {
     const result = await audit.init({ userTable: 'DROP TABLE; --' })
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(AuditErrorCode.CONFIG_ERROR)
+      expect(result.error.code).toBe(HaiAuditError.CONFIG_ERROR.code)
     }
   })
 
@@ -123,7 +123,7 @@ describe('audit.init / audit.close', () => {
     expect(successes.length).toBe(1)
     expect(failures.length).toBe(1)
     if (!failures[0].success) {
-      expect(failures[0].error.code).toBe(AuditErrorCode.INIT_IN_PROGRESS)
+      expect(failures[0].error.code).toBe(HaiAuditError.INIT_IN_PROGRESS.code)
     }
   })
 })

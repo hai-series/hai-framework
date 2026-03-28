@@ -9,7 +9,7 @@ import type { EmbeddingOperations } from '../src/embedding/ai-embedding-types.js
 import type { RetrievalSource } from '../src/retrieval/ai-retrieval-types.js'
 import type { AIRelStore, AIStoreProvider } from '../src/store/ai-store-types.js'
 import { describe, expect, it } from 'vitest'
-import { AIErrorCode } from '../src/ai-config.js'
+import { HaiAIError } from '../src/ai-types.js'
 import { createRetrievalOperations } from '../src/retrieval/ai-retrieval-functions.js'
 
 // ─── Mock Embedding ───
@@ -64,7 +64,7 @@ describe('retrieval 源管理', () => {
     const result = await ops.addSource({ id: 'wiki', collection: 'other' })
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(AIErrorCode.RETRIEVAL_FAILED)
+      expect(result.error.code).toBe(HaiAIError.RETRIEVAL_FAILED.code)
     }
   })
 
@@ -91,7 +91,7 @@ describe('retrieval 源管理', () => {
     const result = await ops.removeSource('nonexistent')
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(AIErrorCode.RETRIEVAL_SOURCE_NOT_FOUND)
+      expect(result.error.code).toBe(HaiAIError.RETRIEVAL_SOURCE_NOT_FOUND.code)
     }
   })
 
@@ -100,7 +100,7 @@ describe('retrieval 源管理', () => {
     const result = await ops.retrieve({ query: 'test' })
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(AIErrorCode.RETRIEVAL_SOURCE_NOT_FOUND)
+      expect(result.error.code).toBe(HaiAIError.RETRIEVAL_SOURCE_NOT_FOUND.code)
     }
   })
 

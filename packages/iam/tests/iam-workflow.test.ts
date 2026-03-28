@@ -16,7 +16,7 @@
 
 import type { IamFunctions } from '../src/iam-types.js'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { HaiIamError } from '../src/iam-config.js'
+import { HaiIamError } from '../src/iam-types.js'
 import { defineIamSuite, initIam, postgresRedisEnv, sqliteMemoryEnv, TEST_PASSWORD } from './helpers/iam-test-suite.js'
 
 describe('iam.workflow', () => {

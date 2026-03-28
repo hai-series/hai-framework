@@ -1,9 +1,9 @@
-<script lang="ts">
+<script lang='ts'>
   /**
    * H5 首页 — 轮播 + 功能入口 + 推荐列表（PullRefresh + InfiniteScroll）
    */
   import * as m from '$lib/paraglide/messages.js'
-  import { Card, Badge, Input, PullRefresh, InfiniteScroll } from '@h-ai/ui'
+  import { Badge, Card, InfiniteScroll, Input, PullRefresh } from '@h-ai/ui'
 
   const banners = [
     { title: m.home_banner_new_title, subtitle: m.home_banner_new_subtitle, color: 'from-primary to-primary/70' },
@@ -34,7 +34,7 @@
 
   const PAGE_SIZE = 4
   let recommendations = $state(allItems.slice(0, PAGE_SIZE))
-  let hasMore = $derived(recommendations.length < allItems.length)
+  const hasMore = $derived(recommendations.length < allItems.length)
 
   let searchValue = $state('')
 
@@ -57,44 +57,44 @@
 </svelte:head>
 
 <!-- 搜索栏 -->
-<div class="sticky top-0 z-10 bg-base-100/95 backdrop-blur px-3 py-2">
+<div class='sticky top-0 z-10 bg-base-100/95 backdrop-blur px-3 py-2'>
   <Input
     bind:value={searchValue}
     placeholder={m.home_search_placeholder()}
-    size="sm"
-    class="rounded-full"
+    size='sm'
+    class='rounded-full'
   />
 </div>
 
 <PullRefresh onrefresh={handleRefresh}>
   <!-- 轮播区 -->
-  <div class="carousel w-full h-40 px-3 pt-2 gap-3">
+  <div class='carousel w-full h-40 px-3 pt-2 gap-3'>
     {#each banners as banner, i}
-      <div id="slide{i}" class="carousel-item w-[90%] first:ml-0">
-        <div class="bg-linear-to-br {banner.color} w-full flex flex-col items-start justify-center text-white rounded-2xl px-6 shadow-md">
-          <h2 class="text-xl font-bold">{banner.title()}</h2>
-          <p class="text-sm opacity-80 mt-1">{banner.subtitle()}</p>
+      <div id='slide{i}' class='carousel-item w-[90%] first:ml-0'>
+        <div class='bg-linear-to-br {banner.color} w-full flex flex-col items-start justify-center text-white rounded-2xl px-6 shadow-md'>
+          <h2 class='text-xl font-bold'>{banner.title()}</h2>
+          <p class='text-sm opacity-80 mt-1'>{banner.subtitle()}</p>
         </div>
       </div>
     {/each}
   </div>
 
   <!-- 功能入口 -->
-  <div class="grid grid-cols-4 gap-1 px-4 py-3">
+  <div class='grid grid-cols-4 gap-1 px-4 py-3'>
     {#each quickEntries as entry}
-      <button class="flex flex-col items-center gap-1.5 py-2.5 rounded-xl active:bg-base-200/60 transition-colors">
-        <span class="w-10 h-10 rounded-full bg-base-200/70 flex items-center justify-center">
-          <span class="{entry.icon} text-xl {entry.color}"></span>
+      <button class='flex flex-col items-center gap-1.5 py-2.5 rounded-xl active:bg-base-200/60 transition-colors'>
+        <span class='w-10 h-10 rounded-full bg-base-200/70 flex items-center justify-center'>
+          <span class='{entry.icon} text-xl {entry.color}'></span>
         </span>
-        <span class="text-xs text-base-content/70">{entry.label()}</span>
+        <span class='text-xs text-base-content/70'>{entry.label()}</span>
       </button>
     {/each}
   </div>
 
   <!-- 推荐列表（InfiniteScroll 上拉加载） -->
-  <section class="px-4 pb-4">
-    <h3 class="font-bold text-base mb-3 flex items-center gap-1.5">
-      <span class="icon-[tabler--sparkles] text-primary text-lg"></span>
+  <section class='px-4 pb-4'>
+    <h3 class='font-bold text-base mb-3 flex items-center gap-1.5'>
+      <span class='icon-[tabler--sparkles] text-primary text-lg'></span>
       {m.home_recommend_title()}
     </h3>
     <InfiniteScroll
@@ -103,18 +103,18 @@
       loadingText={m.load_loading()}
       noMoreText={m.load_no_more()}
     >
-      <div class="grid grid-cols-2 gap-3">
+      <div class='grid grid-cols-2 gap-3'>
         {#each recommendations as item}
-          <Card padding="none" shadow="sm" class="overflow-hidden">
-            <div class="flex items-center justify-center h-28 bg-base-200/50 text-4xl">
+          <Card padding='none' shadow='sm' class='overflow-hidden'>
+            <div class='flex items-center justify-center h-28 bg-base-200/50 text-4xl'>
               {item.image}
             </div>
-            <div class="p-3 space-y-1.5">
-              <h4 class="text-sm font-medium line-clamp-1">{item.title}</h4>
-              <div class="flex items-center justify-between">
-                <span class="text-primary font-bold text-sm">{item.price}</span>
+            <div class='p-3 space-y-1.5'>
+              <h4 class='text-sm font-medium line-clamp-1'>{item.title}</h4>
+              <div class='flex items-center justify-between'>
+                <span class='text-primary font-bold text-sm'>{item.price}</span>
                 {#if item.tag}
-                  <Badge variant="primary" size="sm">{item.tag}</Badge>
+                  <Badge variant='primary' size='sm'>{item.tag}</Badge>
                 {/if}
               </div>
             </div>

@@ -3,15 +3,15 @@
   @h-ai/ui - Rating 组件
   =============================================================================
   星级评分组件，支持全星/半星、只读模式、不同尺寸和颜色
-  
+
   使用 Svelte 5 Runes ($props, $state, $derived)
   使用 DaisyUI rating 类
   =============================================================================
 -->
-<script lang="ts">
-  import { cn } from '../../utils.js'
+<script lang='ts'>
   import { uiM } from '../../messages.js'
-  
+  import { cn } from '../../utils.js'
+
   interface Props {
     /** 当前评分值 (0 - max) */
     value?: number
@@ -36,7 +36,7 @@
     /** 自定义类名 */
     class?: string
   }
-  
+
   let {
     value = $bindable(0),
     max = 5,
@@ -50,7 +50,7 @@
     onchange,
     class: className = '',
   }: Props = $props()
-  
+
   const sizeClass = $derived({
     xs: 'rating-xs',
     sm: 'rating-sm',
@@ -58,7 +58,7 @@
     lg: 'rating-lg',
     xl: 'rating-xl',
   }[size] || 'rating-md')
-  
+
   const colorClass = $derived({
     default: 'bg-base-content',
     primary: 'bg-primary',
@@ -69,39 +69,41 @@
     error: 'bg-error',
     info: 'bg-info',
   }[color] || 'bg-warning')
-  
+
   const ratingClass = $derived(
     cn(
       'rating',
       sizeClass,
       half && 'rating-half',
       className,
-    )
+    ),
   )
-  
+
   function handleChange(newValue: number) {
-    if (readonly || disabled) return
+    if (readonly || disabled)
+      return
     value = newValue
     onchange?.(newValue)
   }
-  
+
   // 生成评分项
   const items = $derived.by(() => {
-    const result: { value: number; isHalf: boolean }[] = []
-    
+    const result: { value: number, isHalf: boolean }[] = []
+
     if (clearable) {
       result.push({ value: 0, isHalf: false })
     }
-    
+
     for (let i = 1; i <= max; i++) {
       if (half) {
         result.push({ value: i - 0.5, isHalf: true })
         result.push({ value: i, isHalf: false })
-      } else {
+      }
+      else {
         result.push({ value: i, isHalf: false })
       }
     }
-    
+
     return result
   })
 </script>
@@ -109,8 +111,8 @@
 {#if readonly}
   <!-- 只读模式 - 使用 div 而非 input -->
   <div class={cn('rating', sizeClass, className)}>
-    {#each Array(max) as _, i}
-      <div 
+    {#each Array.from({ length: max }) as _, i}
+      <div
         class={cn(
           'mask mask-star-2',
           colorClass,
@@ -128,7 +130,7 @@
   <div class={ratingClass}>
     {#each items as item}
       <input
-        type="radio"
+        type='radio'
         {name}
         class={cn(
           item.value === 0 ? 'rating-hidden' : 'mask mask-star-2',

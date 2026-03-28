@@ -4,10 +4,11 @@
   用法：
   <BottomNav items={navItems} active="home" onchange={(id) => goto(`/${id}`)} />
 -->
-<script lang="ts">
+<script lang='ts'>
   import type { BottomNavItem } from './bottom-nav-types.js'
   import { cn } from '../../utils.js'
 
+  // eslint-disable-next-line no-import-assign -- type re-export
   export type { BottomNavItem }
 
   interface Props {
@@ -39,10 +40,10 @@
     className,
   )}
 >
-  <div class="flex items-center justify-around h-14">
+  <div class='flex items-center justify-around h-14'>
     {#each items as item (item.id)}
       <button
-        type="button"
+        type='button'
         class={cn(
           'flex flex-col items-center justify-center flex-1 h-full relative transition-colors',
           'hai-no-select',
@@ -51,20 +52,20 @@
         onclick={() => onchange?.(item.id)}
       >
         <!-- 图标 -->
-        <div class="relative w-6 h-6 mb-0.5">
+        <div class='relative w-6 h-6 mb-0.5'>
           {#if item.icon}
             {@render item.icon()}
           {:else if item.iconClass}
-            <span class="{item.iconClass} w-6 h-6"></span>
+            <span class='{item.iconClass} w-6 h-6'></span>
           {/if}
           {#if item.badge && item.badge > 0}
-            <span class="absolute -top-1 -right-2 badge badge-error badge-xs text-[10px] min-w-4 h-4">
+            <span class='absolute -top-1 -right-2 badge badge-error badge-xs text-[10px] min-w-4 h-4'>
               {item.badge > 99 ? '99+' : item.badge}
             </span>
           {/if}
         </div>
         <!-- 文本 -->
-        <span class="text-xs leading-tight">{item.label}</span>
+        <span class='text-xs leading-tight'>{item.label}</span>
       </button>
     {/each}
   </div>

@@ -4,7 +4,7 @@
 
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
-import { ai, AIErrorCode } from '../src/index.js'
+import { ai, HaiAIError } from '../src/index.js'
 
 describe('ai.init', () => {
   it('默认配置初始化成功', async () => {
@@ -47,7 +47,7 @@ describe('ai.init', () => {
     })
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(AIErrorCode.CONFIGURATION_ERROR)
+      expect(result.error.code).toBe(HaiAIError.CONFIGURATION_ERROR.code)
     }
   })
 
@@ -57,7 +57,7 @@ describe('ai.init', () => {
     })
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(AIErrorCode.CONFIGURATION_ERROR)
+      expect(result.error.code).toBe(HaiAIError.CONFIGURATION_ERROR.code)
     }
   })
 
@@ -67,7 +67,7 @@ describe('ai.init', () => {
     })
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(AIErrorCode.CONFIGURATION_ERROR)
+      expect(result.error.code).toBe(HaiAIError.CONFIGURATION_ERROR.code)
     }
   })
 
@@ -131,7 +131,7 @@ describe('未初始化时的 LLM 操作', () => {
     const result = await ai.llm.chat({ messages: [{ role: 'user', content: '你好' }] })
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(AIErrorCode.NOT_INITIALIZED)
+      expect(result.error.code).toBe(HaiAIError.NOT_INITIALIZED.code)
     }
   })
 
@@ -140,7 +140,7 @@ describe('未初始化时的 LLM 操作', () => {
     const result = await ai.llm.listModels()
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(AIErrorCode.NOT_INITIALIZED)
+      expect(result.error.code).toBe(HaiAIError.NOT_INITIALIZED.code)
     }
   })
 
@@ -151,7 +151,7 @@ describe('未初始化时的 LLM 操作', () => {
       for await (const _chunk of stream) {
         // 不应进入
       }
-    }).rejects.toMatchObject({ code: AIErrorCode.NOT_INITIALIZED })
+    }).rejects.toMatchObject({ code: HaiAIError.NOT_INITIALIZED.code })
   })
 })
 
@@ -161,7 +161,7 @@ describe('未初始化时的 MCP 操作', () => {
     const result = await ai.mcp.callTool('test', {})
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(AIErrorCode.NOT_INITIALIZED)
+      expect(result.error.code).toBe(HaiAIError.NOT_INITIALIZED.code)
     }
   })
 
@@ -170,7 +170,7 @@ describe('未初始化时的 MCP 操作', () => {
     const result = await ai.mcp.readResource('test://resource')
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(AIErrorCode.NOT_INITIALIZED)
+      expect(result.error.code).toBe(HaiAIError.NOT_INITIALIZED.code)
     }
   })
 
@@ -179,7 +179,7 @@ describe('未初始化时的 MCP 操作', () => {
     const result = await ai.mcp.getPrompt('test', {})
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(AIErrorCode.NOT_INITIALIZED)
+      expect(result.error.code).toBe(HaiAIError.NOT_INITIALIZED.code)
     }
   })
 
@@ -191,7 +191,7 @@ describe('未初始化时的 MCP 操作', () => {
     )
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(AIErrorCode.NOT_INITIALIZED)
+      expect(result.error.code).toBe(HaiAIError.NOT_INITIALIZED.code)
     }
   })
 
@@ -203,7 +203,7 @@ describe('未初始化时的 MCP 操作', () => {
     )
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(AIErrorCode.NOT_INITIALIZED)
+      expect(result.error.code).toBe(HaiAIError.NOT_INITIALIZED.code)
     }
   })
 
@@ -215,7 +215,7 @@ describe('未初始化时的 MCP 操作', () => {
     )
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(AIErrorCode.NOT_INITIALIZED)
+      expect(result.error.code).toBe(HaiAIError.NOT_INITIALIZED.code)
     }
   })
 })

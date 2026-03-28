@@ -9,7 +9,7 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { escapeSqlString, ReldbErrorCode, validateIdentifier, validateIdentifiers } from '../src/index.js'
+import { escapeSqlString, HaiReldbError, validateIdentifier, validateIdentifiers } from '../src/index.js'
 
 // =============================================================================
 // validateIdentifier
@@ -31,7 +31,7 @@ describe('validateIdentifier', () => {
     const result = validateIdentifier('1table')
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(ReldbErrorCode.CONFIG_ERROR)
+      expect(result.error.code).toBe(HaiReldbError.CONFIG_ERROR.code)
     }
   })
 

@@ -103,11 +103,11 @@ export const ssr = false
 所有异步 API 返回 `HaiResult<T>`，不会直接 throw：
 
 ```ts
-import { capacitor, CapacitorErrorCode } from '@h-ai/capacitor'
+import { capacitor, HaiCapacitorError } from '@h-ai/capacitor'
 
 const result = await capacitor.camera.takePhoto({ source: 'camera' })
 if (!result.success) {
-  if (result.error.code === CapacitorErrorCode.CAMERA_FAILED) {
+  if (result.error.code === HaiCapacitorError.CAMERA_FAILED.code) {
     // 相机权限被拒绝或插件未安装
   }
 }
@@ -115,10 +115,16 @@ if (!result.success) {
 
 常用错误码：
 
-- `INIT_FAILED` / `NOT_AVAILABLE` / `INIT_IN_PROGRESS` — 初始化相关
-- `NOT_INITIALIZED` — 模块未初始化（调用子操作前须先 `capacitor.init()`）
-- `DEVICE_INFO_FAILED` / `PUSH_REGISTER_FAILED` / `PUSH_LISTEN_FAILED` / `CAMERA_FAILED` / `STATUS_BAR_FAILED` — 各功能失败
-- `PREFERENCES_GET_FAILED` / `PREFERENCES_SET_FAILED` / `PREFERENCES_REMOVE_FAILED` — Preferences 操作失败
+| 错误码                                     | code                | 说明                 |
+| ------------------------------------------ | ------------------- | -------------------- |
+| `HaiCapacitorError.INIT_FAILED`            | `hai:capacitor:001` | 初始化失败           |
+| `HaiCapacitorError.NOT_AVAILABLE`          | `hai:capacitor:002` | 能力不可用           |
+| `HaiCapacitorError.NOT_INITIALIZED`        | `hai:capacitor:060` | 未初始化             |
+| `HaiCapacitorError.INIT_IN_PROGRESS`       | `hai:capacitor:061` | 初始化进行中         |
+| `HaiCapacitorError.DEVICE_INFO_FAILED`     | `hai:capacitor:010` | 设备信息获取失败     |
+| `HaiCapacitorError.PUSH_REGISTER_FAILED`   | `hai:capacitor:020` | 推送注册失败         |
+| `HaiCapacitorError.CAMERA_FAILED`          | `hai:capacitor:030` | 相机操作失败         |
+| `HaiCapacitorError.PREFERENCES_GET_FAILED` | `hai:capacitor:050` | Preferences 读取失败 |
 
 ## 测试
 

@@ -3,23 +3,23 @@
   @h-ai/ui - UserProfile 组件
   =============================================================================
   用户个人信息展示/编辑组件
-  
+
   使用 Svelte 5 Runes ($props, $state, $derived)
   使用 primitives/compounds 组件：Input, Button, Textarea, Avatar, Alert
   =============================================================================
 -->
-<script lang="ts">
+<script lang='ts'>
   import type { UserProfileField, UserProfileProps, UserProfileSubmitData } from '../types.js'
+  import { uiM } from '../../../messages.js'
   import { cn } from '../../../utils.js'
-  import Input from '../../primitives/Input.svelte'
+  import Alert from '../../compounds/Alert.svelte'
+  import Avatar from '../../primitives/Avatar.svelte'
   import BareInput from '../../primitives/BareInput.svelte'
   import Button from '../../primitives/Button.svelte'
+  import Input from '../../primitives/Input.svelte'
   import Textarea from '../../primitives/Textarea.svelte'
-  import Avatar from '../../primitives/Avatar.svelte'
-  import Alert from '../../compounds/Alert.svelte'
-  import { uiM } from '../../../messages.js'
-  
-  let {
+
+  const {
     user,
     editable = false,
     alwaysEditable = false,
@@ -30,7 +30,7 @@
     onsubmit,
     onavatarchange,
   }: UserProfileProps = $props()
-  
+
   let editMode = $state(false)
   let formData = $state<UserProfileSubmitData>({
     username: '',
@@ -39,7 +39,7 @@
     phone: '',
     bio: '',
   })
-  
+
   // 初始化表单数据
   $effect(() => {
     if (user) {
@@ -52,14 +52,14 @@
       }
     }
   })
-  
+
   const containerClass = $derived(
     cn(
       'user-profile',
       className,
-    )
+    ),
   )
-  
+
   // 获取字段标签
   function getFieldLabel(field: UserProfileField): string {
     const labelMap: Record<UserProfileField, () => string> = {
@@ -95,20 +95,16 @@
     }
     return 'username'
   }
-  
+
   /**
    * 进入编辑态（仅 alwaysEditable=false 时生效）。
-   *
-   * @returns 无返回值
    */
   function startEdit() {
     editMode = true
   }
-  
+
   /**
    * 退出编辑态，并使用当前用户数据重置表单。
-   *
-   * @returns 无返回值
    */
   function cancelEdit() {
     editMode = false
@@ -123,7 +119,7 @@
       }
     }
   }
-  
+
   /**
    * 提交资料数据，成功后退出编辑态。
    *
@@ -132,17 +128,17 @@
    */
   async function handleSubmit(e: SubmitEvent) {
     e.preventDefault()
-    if (loading) return
-    
+    if (loading)
+      return
+
     await onsubmit?.(formData)
     editMode = false
   }
-  
+
   /**
    * 将选中的头像文件透传给父组件回调。
    *
    * @param e 文件输入事件
-   * @returns 无返回值
    */
   function handleAvatarChange(e: Event & { currentTarget: HTMLInputElement }) {
     const file = e.currentTarget.files?.[0]
@@ -154,36 +150,36 @@
 
 <div class={containerClass}>
   <form onsubmit={handleSubmit}>
-    <div class="space-y-6">
+    <div class='space-y-6'>
       {#each fields as field (field)}
         {@const modelKey = getModelKey(field)}
         {#if field === 'avatar'}
           <!-- 头像 -->
-          <div class="flex items-center gap-4">
+          <div class='flex items-center gap-4'>
             <Avatar
               src={user?.avatarUrl ?? user?.avatar}
               alt={uiM('user_profile_avatar')}
-              size="lg"
+              size='lg'
               ring
-              class="shadow-sm"
+              class='shadow-sm'
               placeholder={user?.username?.charAt(0).toUpperCase() || 'U'}
             />
             {#if editable && (editMode || alwaysEditable)}
               <div>
                 <BareInput
-                  type="file"
-                  class="file-input file-input-sm w-full max-w-xs"
-                  accept="image/*"
+                  type='file'
+                  class='file-input file-input-sm w-full max-w-xs'
+                  accept='image/*'
                   onchange={handleAvatarChange}
                 />
-                <p class="text-xs text-base-content/60 mt-1">{uiM('user_profile_avatar_hint')}</p>
+                <p class='text-xs text-base-content/60 mt-1'>{uiM('user_profile_avatar_hint')}</p>
               </div>
             {/if}
           </div>
         {:else}
           <!-- 其他字段 -->
-          <div class="fieldset">
-            <legend class="fieldset-legend font-medium">{getFieldLabel(field)}</legend>
+          <div class='fieldset'>
+            <legend class='fieldset-legend font-medium'>{getFieldLabel(field)}</legend>
             {#if editable && (editMode || alwaysEditable)}
               {#if field === 'bio'}
                 <Textarea
@@ -203,36 +199,36 @@
                 />
               {/if}
             {:else}
-              <p class="py-2 px-1 text-base-content">
+              <p class='py-2 px-1 text-base-content'>
                 {formData[modelKey] || '-'}
               </p>
             {/if}
           </div>
         {/if}
       {/each}
-      
+
       <!-- 通用错误 -->
       {#if errors.general}
-        <Alert variant="error">
+        <Alert variant='error'>
           {errors.general}
         </Alert>
       {/if}
-      
+
       <!-- 操作按钮 -->
       {#if editable}
-        <div class="flex gap-2 pt-4">
+        <div class='flex gap-2 pt-4'>
           {#if editMode || alwaysEditable}
             <Button
-              type="submit"
-              variant="primary"
+              type='submit'
+              variant='primary'
               {loading}
               disabled={loading}
             >
               {uiM('user_profile_save')}
             </Button>
             <Button
-              type="button"
-              variant="ghost"
+              type='button'
+              variant='ghost'
               onclick={cancelEdit}
               disabled={loading}
             >
@@ -241,8 +237,8 @@
           {/if}
           {#if !editMode && !alwaysEditable}
             <Button
-              type="button"
-              variant="outline"
+              type='button'
+              variant='outline'
               onclick={startEdit}
             >
               {uiM('user_profile_edit')}

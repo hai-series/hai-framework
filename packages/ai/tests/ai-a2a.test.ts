@@ -12,6 +12,9 @@ import { describe, expect, it, vi } from 'vitest'
 
 import { ReldbA2ATaskStore } from '../src/a2a/ai-a2a-functions.js'
 import { buildAgentCard } from '../src/a2a/ai-a2a-server.js'
+import { AIConfigSchema } from '../src/ai-config.js'
+import { ai } from '../src/ai-main.js'
+import { HaiAIError } from '../src/ai-types.js'
 
 // ─── buildAgentCard ───
 
@@ -178,9 +181,7 @@ describe('reldbA2ATaskStore', () => {
 // ─── A2A Config Schema ───
 
 describe('a2A 配置 Schema', () => {
-  it('aIConfigSchema 接受 a2a 配置', async () => {
-    const { AIConfigSchema } = await import('../src/ai-config.js')
-
+  it('aIConfigSchema 接受 a2a 配置', () => {
     const result = AIConfigSchema.safeParse({
       llm: { type: 'openai', apiKey: 'test', model: 'gpt-4' },
       a2a: {
@@ -200,9 +201,7 @@ describe('a2A 配置 Schema', () => {
     }
   })
 
-  it('a2a 配置可选', async () => {
-    const { AIConfigSchema } = await import('../src/ai-config.js')
-
+  it('a2a 配置可选', () => {
     const result = AIConfigSchema.safeParse({
       llm: { type: 'openai', apiKey: 'test', model: 'gpt-4' },
     })
@@ -213,9 +212,7 @@ describe('a2A 配置 Schema', () => {
     }
   })
 
-  it('a2a.agentCard.name 必填', async () => {
-    const { AIConfigSchema } = await import('../src/ai-config.js')
-
+  it('a2a.agentCard.name 必填', () => {
     const result = AIConfigSchema.safeParse({
       llm: { type: 'openai', apiKey: 'test', model: 'gpt-4' },
       a2a: {
@@ -233,37 +230,29 @@ describe('a2A 配置 Schema', () => {
 // ─── A2A 错误码 ───
 
 describe('a2A 错误码', () => {
-  it('错误码在 12980-12984 范围内', async () => {
-    const { AIErrorCode } = await import('../src/ai-config.js')
-
-    expect(AIErrorCode.A2A_NOT_CONFIGURED).toBe(12980)
-    expect(AIErrorCode.A2A_HANDLE_FAILED).toBe(12981)
-    expect(AIErrorCode.A2A_REMOTE_CALL_FAILED).toBe(12982)
-    expect(AIErrorCode.A2A_AUTH_FAILED).toBe(12983)
-    expect(AIErrorCode.A2A_LIST_MESSAGES_FAILED).toBe(12984)
+  it('a2A 错误码格式正确', () => {
+    expect(HaiAIError.A2A_NOT_CONFIGURED.code).toBe('hai:ai:980')
+    expect(HaiAIError.A2A_HANDLE_FAILED.code).toBe('hai:ai:981')
+    expect(HaiAIError.A2A_REMOTE_CALL_FAILED.code).toBe('hai:ai:982')
+    expect(HaiAIError.A2A_AUTH_FAILED.code).toBe('hai:ai:983')
+    expect(HaiAIError.A2A_LIST_MESSAGES_FAILED.code).toBe('hai:ai:984')
   })
 })
 
 // ─── 未初始化占位 ───
 
 describe('a2A 未初始化行为', () => {
-  it('未初始化时 getAgentCard 返回 NOT_INITIALIZED', async () => {
-    // 重新导入以获取干净状态（避免被其他测试影响）
-    const { ai } = await import('../src/ai-main.js')
-
-    // 确保未初始化
+  it('未初始化时 getAgentCard 返回 NOT_INITIALIZED', () => {
     ai.close()
 
     const result = ai.a2a.getAgentCard()
     expect(result.success).toBe(false)
     if (!result.success) {
-      const { AIErrorCode } = await import('../src/ai-config.js')
-      expect(result.error.code).toBe(AIErrorCode.NOT_INITIALIZED)
+      expect(result.error.code).toBe(HaiAIError.NOT_INITIALIZED.code)
     }
   })
 
   it('未初始化时 handleRequest 返回 NOT_INITIALIZED', async () => {
-    const { ai } = await import('../src/ai-main.js')
     ai.close()
 
     const result = await ai.a2a.handleRequest({})
@@ -272,39 +261,33 @@ describe('a2A 未初始化行为', () => {
   })
 
   it('未初始化时 listMessages 返回 NOT_INITIALIZED', async () => {
-    const { ai } = await import('../src/ai-main.js')
     ai.close()
 
     const result = await ai.a2a.listMessages({})
     expect(result.success).toBe(false)
     if (!result.success) {
-      const { AIErrorCode } = await import('../src/ai-config.js')
-      expect(result.error.code).toBe(AIErrorCode.NOT_INITIALIZED)
+      expect(result.error.code).toBe(HaiAIError.NOT_INITIALIZED.code)
     }
   })
 
   it('未初始化时 callRemoteAgent 返回 NOT_INITIALIZED', async () => {
-    const { ai } = await import('../src/ai-main.js')
     ai.close()
 
     const result = await ai.a2a.callRemoteAgent('https://example.com', 'hello')
     expect(result.success).toBe(false)
     if (!result.success) {
-      const { AIErrorCode } = await import('../src/ai-config.js')
-      expect(result.error.code).toBe(AIErrorCode.NOT_INITIALIZED)
+      expect(result.error.code).toBe(HaiAIError.NOT_INITIALIZED.code)
     }
   })
 
-  it('未初始化时 registerExecutor 返回 NOT_INITIALIZED', async () => {
-    const { ai } = await import('../src/ai-main.js')
+  it('未初始化时 registerExecutor 返回 NOT_INITIALIZED', () => {
     ai.close()
 
     const mockExecutor = { execute: vi.fn(), cancelTask: vi.fn() }
     const result = ai.a2a.registerExecutor(mockExecutor)
     expect(result.success).toBe(false)
     if (!result.success) {
-      const { AIErrorCode } = await import('../src/ai-config.js')
-      expect(result.error.code).toBe(AIErrorCode.NOT_INITIALIZED)
+      expect(result.error.code).toBe(HaiAIError.NOT_INITIALIZED.code)
     }
   })
 })

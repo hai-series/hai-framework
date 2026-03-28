@@ -8,7 +8,7 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { vecdb, VecdbErrorCode } from '../src/index.js'
+import { HaiVecdbError, vecdb } from '../src/index.js'
 import { defineVecdbSuite, lancedbEnv, pgvectorDockerOpts, pgvectorEnv, qdrantDockerOpts, qdrantEnv } from './helpers/vecdb-test-suite.js'
 
 describe('vecdb.collection', () => {
@@ -23,7 +23,7 @@ describe('vecdb.collection', () => {
       const result = await vecdb.collection.create('dup-coll', { dimension: 8 })
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.code).toBe(VecdbErrorCode.COLLECTION_ALREADY_EXISTS)
+        expect(result.error.code).toBe(HaiVecdbError.COLLECTION_ALREADY_EXISTS.code)
       }
     })
 
@@ -71,7 +71,7 @@ describe('vecdb.collection', () => {
       const result = await vecdb.collection.info('ghost-coll')
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.code).toBe(VecdbErrorCode.COLLECTION_NOT_FOUND)
+        expect(result.error.code).toBe(HaiVecdbError.COLLECTION_NOT_FOUND.code)
       }
     })
 
@@ -90,7 +90,7 @@ describe('vecdb.collection', () => {
       const result = await vecdb.collection.drop('ghost-coll')
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.code).toBe(VecdbErrorCode.COLLECTION_NOT_FOUND)
+        expect(result.error.code).toBe(HaiVecdbError.COLLECTION_NOT_FOUND.code)
       }
     })
   }

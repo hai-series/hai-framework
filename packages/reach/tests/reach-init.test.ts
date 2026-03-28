@@ -5,7 +5,7 @@
  */
 
 import { afterEach, describe, expect, it } from 'vitest'
-import { reach, ReachErrorCode } from '../src/index.js'
+import { HaiReachError, reach } from '../src/index.js'
 
 describe.sequential('reach.init', () => {
   afterEach(async () => {
@@ -51,7 +51,7 @@ describe.sequential('reach.init', () => {
     const result = await reach.init({ providers: [{ name: 'x', type: 'invalid' }] } as never)
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(ReachErrorCode.CONFIG_ERROR)
+      expect(result.error.code).toBe(HaiReachError.CONFIG_ERROR.code)
     }
   })
 

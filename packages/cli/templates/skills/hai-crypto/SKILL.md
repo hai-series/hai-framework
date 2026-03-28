@@ -126,23 +126,23 @@ if (hashed.success) {
 
 ---
 
-## 错误码 — `CryptoErrorCode`
+## 错误码 — `HaiCryptoError`
 
-| 错误码                  | 值   | 说明          |
-| ----------------------- | ---- | ------------- |
-| `OPERATION_FAILED`      | 2000 | 操作失败      |
-| `INVALID_INPUT`         | 2001 | 无效输入      |
-| `INVALID_KEY`           | 2002 | 无效密钥      |
-| `NOT_INITIALIZED`       | 2010 | 未初始化      |
-| `INIT_FAILED`           | 2011 | 初始化失败    |
-| `KEY_GENERATION_FAILED` | 2020 | 密钥生成失败  |
-| `ENCRYPTION_FAILED`     | 2021 | 加密失败      |
-| `DECRYPTION_FAILED`     | 2022 | 解密失败      |
-| `SIGN_FAILED`           | 2023 | 签名失败      |
-| `VERIFY_FAILED`         | 2024 | 验签失败      |
-| `HASH_FAILED`           | 2040 | 哈希计算失败  |
-| `HMAC_FAILED`           | 2041 | HMAC 计算失败 |
-| `INVALID_IV`            | 2060 | 无效 IV       |
+| 错误码 | code | 说明 |
+|--------|------|------|
+| `HaiCryptoError.OPERATION_FAILED` | `hai:crypto:001` | 操作失败 |
+| `HaiCryptoError.INVALID_INPUT` | `hai:crypto:002` | 无效输入 |
+| `HaiCryptoError.INVALID_KEY` | `hai:crypto:003` | 无效密钥 |
+| `HaiCryptoError.NOT_INITIALIZED` | `hai:crypto:010` | 未初始化 |
+| `HaiCryptoError.INIT_FAILED` | `hai:crypto:011` | 初始化失败 |
+| `HaiCryptoError.KEY_GENERATION_FAILED` | `hai:crypto:020` | 密钥生成失败 |
+| `HaiCryptoError.ENCRYPTION_FAILED` | `hai:crypto:021` | 加密失败 |
+| `HaiCryptoError.DECRYPTION_FAILED` | `hai:crypto:022` | 解密失败 |
+| `HaiCryptoError.SIGN_FAILED` | `hai:crypto:023` | 签名失败 |
+| `HaiCryptoError.VERIFY_FAILED` | `hai:crypto:024` | 验签失败 |
+| `HaiCryptoError.HASH_FAILED` | `hai:crypto:040` | 哈希计算失败 |
+| `HaiCryptoError.HMAC_FAILED` | `hai:crypto:041` | HMAC 计算失败 |
+| `HaiCryptoError.INVALID_IV` | `hai:crypto:060` | 无效 IV |
 
 ---
 

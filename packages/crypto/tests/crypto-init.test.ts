@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest'
-import { crypto, CryptoErrorCode } from '../src/index.js'
+import { crypto, HaiCryptoError } from '../src/index.js'
 
 describe('crypto.init', () => {
   afterEach(async () => {
@@ -37,7 +37,7 @@ describe('crypto.init', () => {
     expect(result.success).toBe(false)
     if (result.success)
       return
-    expect(result.error.code).toBe(CryptoErrorCode.NOT_INITIALIZED)
+    expect(result.error.code).toBe(HaiCryptoError.NOT_INITIALIZED.code)
   })
 
   it('should return NOT_INITIALIZED when accessing hash before init', () => {
@@ -45,7 +45,7 @@ describe('crypto.init', () => {
     expect(result.success).toBe(false)
     if (result.success)
       return
-    expect(result.error.code).toBe(CryptoErrorCode.NOT_INITIALIZED)
+    expect(result.error.code).toBe(HaiCryptoError.NOT_INITIALIZED.code)
   })
 
   it('should return NOT_INITIALIZED when accessing symmetric before init', () => {
@@ -54,7 +54,7 @@ describe('crypto.init', () => {
     expect(result.success).toBe(false)
     if (result.success)
       return
-    expect(result.error.code).toBe(CryptoErrorCode.NOT_INITIALIZED)
+    expect(result.error.code).toBe(HaiCryptoError.NOT_INITIALIZED.code)
   })
 
   it('should return NOT_INITIALIZED when accessing password before init', () => {
@@ -62,7 +62,7 @@ describe('crypto.init', () => {
     expect(result.success).toBe(false)
     if (result.success)
       return
-    expect(result.error.code).toBe(CryptoErrorCode.NOT_INITIALIZED)
+    expect(result.error.code).toBe(HaiCryptoError.NOT_INITIALIZED.code)
   })
 
   it('should return NOT_INITIALIZED after close', async () => {
@@ -73,7 +73,7 @@ describe('crypto.init', () => {
     expect(result.success).toBe(false)
     if (result.success)
       return
-    expect(result.error.code).toBe(CryptoErrorCode.NOT_INITIALIZED)
+    expect(result.error.code).toBe(HaiCryptoError.NOT_INITIALIZED.code)
   })
 
   it('should overwrite previous state on re-init', async () => {

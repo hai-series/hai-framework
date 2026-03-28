@@ -6,14 +6,14 @@
   @prop {function} onsubmit - 提交反馈的回调
 
   @example
-  <FeedbackModal 
-    bind:open={showFeedback} 
-    onsubmit={async (data) => { await submitFeedback(data) }} 
+  <FeedbackModal
+    bind:open={showFeedback}
+    onsubmit={async (data) => { await submitFeedback(data) }}
   />
 -->
 <script lang='ts'>
-  import Button from '../../primitives/Button.svelte'
   import Modal from '../../compounds/Modal.svelte'
+  import Button from '../../primitives/Button.svelte'
   import Input from '../../primitives/Input.svelte'
   import Select from '../../primitives/Select.svelte'
   import Textarea from '../../primitives/Textarea.svelte'
@@ -25,7 +25,7 @@
     description: string
     contact?: string
   }
-  
+
   /** i18n 文案配置 */
   interface FeedbackLabels {
     title?: string
@@ -46,7 +46,7 @@
       other?: string
     }
   }
-  
+
   import { uiM } from '../../../messages.js'
 
   interface Props {
@@ -56,7 +56,7 @@
   }
 
   let { open = $bindable(false), labels = {}, onsubmit }: Props = $props()
-  
+
   // 文案优先使用传入的 labels，缺省回退到内置消息 uiM(...)
 
   let feedbackType = $state<FeedbackType>('bug')
@@ -80,7 +80,7 @@
 
     loading = true
     error = ''
-    
+
     try {
       await onsubmit?.({
         type: feedbackType,
@@ -89,9 +89,11 @@
       })
       open = false
       resetForm()
-    } catch (e) {
+    }
+    catch (e) {
       error = e instanceof Error ? e.message : (labels.errorSubmit ?? uiM('feedback_error_submit'))
-    } finally {
+    }
+    finally {
       loading = false
     }
   }

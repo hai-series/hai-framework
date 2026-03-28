@@ -12,10 +12,11 @@
     onclose={() => showActions = false}
   />
 -->
-<script lang="ts">
+<script lang='ts'>
   import type { ActionSheetItem } from './action-sheet-types.js'
   import { cn } from '../../utils.js'
 
+  // eslint-disable-next-line no-import-assign -- type re-export
   export type { ActionSheetItem }
 
   interface Props {
@@ -54,11 +55,11 @@
 {#if open}
   <!-- 遮罩层 -->
   <div
-    class="fixed inset-0 bg-black/50 z-50 transition-opacity"
-    role="button"
-    tabindex="-1"
+    class='fixed inset-0 bg-black/50 z-50 transition-opacity'
+    role='button'
+    tabindex='-1'
     onclick={onclose}
-    onkeydown={(e) => e.key === 'Escape' && onclose?.()}
+    onkeydown={e => e.key === 'Escape' && onclose?.()}
   ></div>
 
   <!-- 操作面板 -->
@@ -70,15 +71,15 @@
     )}
   >
     {#if title}
-      <div class="text-center text-sm text-base-content/60 py-3 border-b border-base-200">
+      <div class='text-center text-sm text-base-content/60 py-3 border-b border-base-200'>
         {title}
       </div>
     {/if}
 
-    <div class="py-1">
+    <div class='py-1'>
       {#each items as item (item.id)}
         <button
-          type="button"
+          type='button'
           class={cn(
             'w-full py-3.5 text-center text-base transition-colors',
             'active:bg-base-200',
@@ -95,10 +96,10 @@
     </div>
 
     <!-- 取消按钮 -->
-    <div class="border-t-4 border-base-200">
+    <div class='border-t-4 border-base-200'>
       <button
-        type="button"
-        class="w-full py-3.5 text-center text-base font-medium text-base-content active:bg-base-200"
+        type='button'
+        class='w-full py-3.5 text-center text-base font-medium text-base-content active:bg-base-200'
         onclick={onclose}
       >
         {cancelText}

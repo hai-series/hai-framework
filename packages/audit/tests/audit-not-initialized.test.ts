@@ -5,7 +5,7 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { audit, AuditErrorCode } from '../src/index.js'
+import { audit, HaiAuditError } from '../src/index.js'
 
 describe('audit (not initialized)', () => {
   // ─── log ───
@@ -14,7 +14,7 @@ describe('audit (not initialized)', () => {
     const result = await audit.log({ action: 'test', resource: 'test' })
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(AuditErrorCode.NOT_INITIALIZED)
+      expect(result.error.code).toBe(HaiAuditError.NOT_INITIALIZED.code)
     }
   })
 
@@ -24,7 +24,7 @@ describe('audit (not initialized)', () => {
     const result = await audit.list()
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(AuditErrorCode.NOT_INITIALIZED)
+      expect(result.error.code).toBe(HaiAuditError.NOT_INITIALIZED.code)
     }
   })
 
@@ -34,7 +34,7 @@ describe('audit (not initialized)', () => {
     const result = await audit.getUserRecent('user_1')
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(AuditErrorCode.NOT_INITIALIZED)
+      expect(result.error.code).toBe(HaiAuditError.NOT_INITIALIZED.code)
     }
   })
 
@@ -44,7 +44,7 @@ describe('audit (not initialized)', () => {
     const result = await audit.cleanup()
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(AuditErrorCode.NOT_INITIALIZED)
+      expect(result.error.code).toBe(HaiAuditError.NOT_INITIALIZED.code)
     }
   })
 
@@ -54,7 +54,7 @@ describe('audit (not initialized)', () => {
     const result = await audit.getStats()
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(AuditErrorCode.NOT_INITIALIZED)
+      expect(result.error.code).toBe(HaiAuditError.NOT_INITIALIZED.code)
     }
   })
 
@@ -64,7 +64,7 @@ describe('audit (not initialized)', () => {
     const result = await audit.helper.login('user_1')
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(AuditErrorCode.NOT_INITIALIZED)
+      expect(result.error.code).toBe(HaiAuditError.NOT_INITIALIZED.code)
     }
   })
 
@@ -72,7 +72,7 @@ describe('audit (not initialized)', () => {
     const result = await audit.helper.logout('user_1')
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(AuditErrorCode.NOT_INITIALIZED)
+      expect(result.error.code).toBe(HaiAuditError.NOT_INITIALIZED.code)
     }
   })
 
@@ -80,7 +80,7 @@ describe('audit (not initialized)', () => {
     const result = await audit.helper.register('user_1')
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(AuditErrorCode.NOT_INITIALIZED)
+      expect(result.error.code).toBe(HaiAuditError.NOT_INITIALIZED.code)
     }
   })
 
@@ -88,7 +88,7 @@ describe('audit (not initialized)', () => {
     const result = await audit.helper.passwordResetRequest('test@example.com')
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(AuditErrorCode.NOT_INITIALIZED)
+      expect(result.error.code).toBe(HaiAuditError.NOT_INITIALIZED.code)
     }
   })
 
@@ -96,7 +96,7 @@ describe('audit (not initialized)', () => {
     const result = await audit.helper.passwordResetComplete('user_1')
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(AuditErrorCode.NOT_INITIALIZED)
+      expect(result.error.code).toBe(HaiAuditError.NOT_INITIALIZED.code)
     }
   })
 
@@ -104,7 +104,7 @@ describe('audit (not initialized)', () => {
     const result = await audit.helper.crud({ userId: 'user_1', action: 'create', resource: 'users' })
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(AuditErrorCode.NOT_INITIALIZED)
+      expect(result.error.code).toBe(HaiAuditError.NOT_INITIALIZED.code)
     }
   })
 })

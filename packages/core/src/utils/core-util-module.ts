@@ -19,7 +19,7 @@ import { error as errorUtils } from '../functions/core-function-error.js'
  * @example
  * ```ts
  * interface DbError extends BaseModuleError {
- *   code: number
+ *   code: string
  *   message: string
  *   details?: unknown
  * }
@@ -71,8 +71,8 @@ export interface NotInitializedKit<E extends BaseModuleError> {
  * ```ts
  * import { core } from '@h-ai/core'
  *
- * const notInitialized = core.module.createNotInitializedKit<DbError>(
- *   DbErrorCode.NOT_INITIALIZED,
+ * const notInitialized = core.module.createNotInitializedKit(
+ *   HaiDbError.NOT_INITIALIZED,
  *   () => dbM('db_notInitialized'),
  * )
  *
@@ -87,12 +87,6 @@ export interface NotInitializedKit<E extends BaseModuleError> {
  *   get ddl() { return currentProvider?.ddl ?? ddlProxy },
  *   get sql() { return currentProvider?.sql ?? notInitialized.proxy<SqlOperations>() },
  * }
- *
- * // 新错误模型（HaiErrorDef）
- * const notInitialized2 = core.module.createNotInitializedKit(
- *   HaiCommonError.NOT_INITIALIZED,
- *   () => 'module not initialized',
- * )
  * ```
  */
 export function createNotInitializedKit(codeOrDef: HaiErrorDef, messageFn: () => string): NotInitializedKit<HaiError>

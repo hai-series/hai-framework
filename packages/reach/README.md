@@ -125,7 +125,15 @@ const config = { name: 'dev', type: 'console' }
 
 ## 错误处理
 
-所有操作返回 `HaiResult<T>`，错误码定义在 `ReachErrorCode`：
+所有操作返回 `HaiResult<T>`，错误码定义在 `HaiReachError`：
+
+| 错误码                             | code            | 说明            |
+| ---------------------------------- | --------------- | --------------- |
+| `HaiReachError.SEND_FAILED`        | `hai:reach:001` | 发送失败        |
+| `HaiReachError.PROVIDER_NOT_FOUND` | `hai:reach:002` | Provider 未注册 |
+| `HaiReachError.TEMPLATE_NOT_FOUND` | `hai:reach:003` | 模板不存在      |
+| `HaiReachError.CONFIG_ERROR`       | `hai:reach:007` | 配置错误        |
+| `HaiReachError.NOT_INITIALIZED`    | `hai:reach:010` | 未初始化        |
 
 ```ts
 const result = await reach.send({ provider: 'email', to: 'user@example.com', body: 'hello' })

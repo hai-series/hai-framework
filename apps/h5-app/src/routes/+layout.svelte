@@ -1,28 +1,28 @@
-<script lang="ts">
+<script lang='ts'>
   /**
    * H5 应用根布局 — 使用 @h-ai/ui AppBar + BottomNav 组件
    */
   import { browser } from '$app/environment'
-  import '../app.css'
-  import { getLocale, setLocale } from '$lib/paraglide/runtime.js'
-  import * as m from '$lib/paraglide/messages.js'
-  import { page } from '$app/stores'
   import { goto } from '$app/navigation'
+  import { page } from '$app/stores'
+  import * as m from '$lib/paraglide/messages.js'
+  import { getLocale, setLocale } from '$lib/paraglide/runtime.js'
   import {
     AppBar,
-    BottomNav,
-    LanguageSwitch,
-    ThemeSelector,
     applyTheme,
+    BottomNav,
     getSavedTheme,
+    LanguageSwitch,
     setGlobalLocale,
+    ThemeSelector,
   } from '@h-ai/ui'
+  import '../app.css'
 
   interface Props {
     children: import('svelte').Snippet
   }
 
-  let { children }: Props = $props()
+  const { children }: Props = $props()
 
   let currentTheme = $state('light')
   let currentLanguage = $state('zh-CN')
@@ -77,11 +77,11 @@
 {#if isAuthPage}
   {@render children()}
 {:else}
-  <div class="flex flex-col h-dvh max-w-lg mx-auto bg-base-100">
+  <div class='flex flex-col h-dvh max-w-lg mx-auto bg-base-100'>
     <!-- 顶部应用栏 -->
     <AppBar title={m.app_title()} safeArea={false} fixed={false}>
       {#snippet trailing()}
-        <div class="flex items-center">
+        <div class='flex items-center'>
           <LanguageSwitch currentLanguage={currentLanguage} onchange={handleLanguageChange} compact />
           <ThemeSelector currentTheme={currentTheme} onchange={handleThemeChange} showPreview compact grouped={false} />
         </div>
@@ -89,7 +89,7 @@
     </AppBar>
 
     <!-- 页面内容区（可滚动） -->
-    <main class="flex-1 overflow-y-auto overscroll-contain">
+    <main class='flex-1 overflow-y-auto overscroll-contain'>
       {@render children()}
     </main>
 

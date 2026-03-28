@@ -10,10 +10,10 @@
   @prop {function} onthemechange - 主题变更回调
 -->
 <script lang='ts'>
-  import IconButton from '../../primitives/IconButton.svelte'
-  import BareButton from '../../primitives/BareButton.svelte'
   import { uiM } from '../../../messages.js'
-  
+  import BareButton from '../../primitives/BareButton.svelte'
+  import IconButton from '../../primitives/IconButton.svelte'
+
   interface Props {
     open?: boolean
     currentLanguage?: string
@@ -81,11 +81,11 @@
       <div class='flex items-center justify-between border-b border-base-content/10 px-6 py-4'>
         <h3 class='text-lg font-semibold text-base-content'>{uiM('settings_title')}</h3>
         <IconButton
-          size="sm"
-          variant="ghost"
+          size='sm'
+          variant='ghost'
           label={uiM('settings_close')}
           onclick={handleClose}
-          class="hover:bg-base-content/10"
+          class='hover:bg-base-content/10'
         >
           {#snippet children()}
             <span class='icon-[tabler--x] size-5'></span>
@@ -108,10 +108,10 @@
                 class='group flex flex-1 items-center justify-center gap-3 rounded-xl border-2 px-6 py-4 text-base font-medium transition-all duration-200
                   hover:border-primary/60 hover:bg-primary/5 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40
                   {currentLanguage === lang.value
-                    ? "border-primary bg-primary/10 text-primary shadow-sm"
-                    : "border-base-content/15 bg-base-100 text-base-content/80"}'
+                    ? 'border-primary bg-primary/10 text-primary shadow-sm'
+                    : 'border-base-content/15 bg-base-100 text-base-content/80'}'
                 onclick={() => onlanguagechange?.(lang.value)}
-                role="option"
+                role='option'
                 ariaSelected={currentLanguage === lang.value}
               >
                 {#if lang.icon}
@@ -139,10 +139,10 @@
                 class='group relative flex flex-col gap-2 rounded-xl border-2 p-3 text-left transition-all duration-200
                   hover:border-primary/50 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40
                   {currentTheme === theme.value
-                    ? "border-primary bg-primary/5 shadow-sm"
-                    : "border-base-content/10 bg-base-100 hover:bg-base-50"}'
+                    ? 'border-primary bg-primary/5 shadow-sm'
+                    : 'border-base-content/10 bg-base-100 hover:bg-base-50'}'
                 onclick={() => onthemechange?.(theme.value)}
-                role="option"
+                role='option'
                 ariaSelected={currentTheme === theme.value}
               >
                 {#if currentTheme === theme.value}

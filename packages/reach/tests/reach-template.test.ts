@@ -6,7 +6,7 @@
 
 import { reldb } from '@h-ai/reldb'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { ReachErrorCode } from '../src/index.js'
+import { HaiReachError } from '../src/index.js'
 import { createTemplateRegistry } from '../src/reach-template.js'
 import { createTemplateRepository, resetTemplateRepoSingleton } from '../src/repositories/reach-repository-template.js'
 
@@ -20,7 +20,7 @@ describe('reach template: no db', () => {
     expect(result.success).toBe(false)
     if (result.success)
       return
-    expect(result.error.code).toBe(ReachErrorCode.TEMPLATE_NOT_FOUND)
+    expect(result.error.code).toBe(HaiReachError.TEMPLATE_NOT_FOUND.code)
   })
 
   it('save 应返回错误', async () => {
@@ -58,7 +58,7 @@ describe('reach template: no db', () => {
     expect(result.success).toBe(false)
     if (result.success)
       return
-    expect(result.error.code).toBe(ReachErrorCode.TEMPLATE_NOT_FOUND)
+    expect(result.error.code).toBe(HaiReachError.TEMPLATE_NOT_FOUND.code)
   })
 })
 
@@ -146,7 +146,7 @@ describe.sequential('reach template: with db', () => {
     expect(result.success).toBe(false)
     if (result.success)
       return
-    expect(result.error.code).toBe(ReachErrorCode.TEMPLATE_NOT_FOUND)
+    expect(result.error.code).toBe(HaiReachError.TEMPLATE_NOT_FOUND.code)
   })
 
   it('模板中未提供的变量应保留占位符', async () => {
@@ -228,6 +228,6 @@ describe.sequential('reach template: with db', () => {
     expect(result.success).toBe(false)
     if (result.success)
       return
-    expect(result.error.code).toBe(ReachErrorCode.TEMPLATE_NOT_FOUND)
+    expect(result.error.code).toBe(HaiReachError.TEMPLATE_NOT_FOUND.code)
   })
 })

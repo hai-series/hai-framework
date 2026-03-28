@@ -11,7 +11,7 @@
 ## 快速开始
 
 ```ts
-import { reldb, ReldbErrorCode } from '@h-ai/reldb'
+import { HaiReldbError, reldb } from '@h-ai/reldb'
 
 // 初始化
 await reldb.init({ type: 'sqlite', database: ':memory:' })
@@ -418,18 +418,18 @@ await reldb.sql.execute(`UPDATE products SET meta = ${rmSql} WHERE id = ?`, [...
 所有操作返回 `HaiResult<T>`，通过 `result.success` 判断成功或失败。
 
 ```ts
-import { reldb, ReldbErrorCode } from '@h-ai/reldb'
+import { HaiReldbError, reldb } from '@h-ai/reldb'
 
 const result = await reldb.sql.query('SELECT * FROM users')
 if (!result.success) {
   switch (result.error.code) {
-    case ReldbErrorCode.NOT_INITIALIZED:
+    case HaiReldbError.NOT_INITIALIZED.code:
       // 请先调用 reldb.init()
       break
-    case ReldbErrorCode.QUERY_FAILED:
+    case HaiReldbError.QUERY_FAILED.code:
       // SQL 执行错误
       break
-    case ReldbErrorCode.CONSTRAINT_VIOLATION:
+    case HaiReldbError.CONSTRAINT_VIOLATION.code:
       // 约束违反（如唯一约束、外键等）
       break
   }
@@ -438,13 +438,15 @@ if (!result.success) {
 
 常用错误码：
 
-- `NOT_INITIALIZED` — 未初始化
-- `CONNECTION_FAILED` — 连接失败
-- `QUERY_FAILED` — 查询/执行失败
-- `CONSTRAINT_VIOLATION` — 约束违反
-- `TRANSACTION_FAILED` — 事务失败
-- `DDL_FAILED` — DDL 操作失败
-- `CONFIG_ERROR` — 配置错误
+| 错误码                               | code            | 说明         |
+| ------------------------------------ | --------------- | ------------ |
+| `HaiReldbError.NOT_INITIALIZED`      | `hai:reldb:011` | 未初始化     |
+| `HaiReldbError.CONNECTION_FAILED`    | `hai:reldb:001` | 连接失败     |
+| `HaiReldbError.QUERY_FAILED`         | `hai:reldb:002` | 查询失败     |
+| `HaiReldbError.CONSTRAINT_VIOLATION` | `hai:reldb:003` | 约束违反     |
+| `HaiReldbError.TRANSACTION_FAILED`   | `hai:reldb:004` | 事务失败     |
+| `HaiReldbError.DDL_FAILED`           | `hai:reldb:012` | DDL 操作失败 |
+| `HaiReldbError.CONFIG_ERROR`         | `hai:reldb:014` | 配置错误     |
 
 ## 测试
 

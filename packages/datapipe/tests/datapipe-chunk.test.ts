@@ -238,7 +238,7 @@ Sub content B1.
     it('缺少 separator 报错', () => {
       const result = datapipe.chunk('text', { mode: 'custom', maxSize: 1000 })
       expect(result.success).toBe(false)
-      expect(result.error!.code).toBe(8507) // MISSING_SEPARATOR
+      expect(result.error!.code).toBe('hai:datapipe:006') // MISSING_SEPARATOR
     })
   })
 

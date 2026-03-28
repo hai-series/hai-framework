@@ -14,7 +14,7 @@ import type { LLMOperations } from '../src/llm/ai-llm-types.js'
 import type { RetrievalOperations, RetrievalSource } from '../src/retrieval/ai-retrieval-types.js'
 import { describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
-import { AIErrorCode } from '../src/ai-config.js'
+import { HaiAIError } from '../src/ai-types.js'
 import { ai } from '../src/index.js'
 import { createRagOperations } from '../src/rag/ai-rag-functions.js'
 import { createReasoningOperations } from '../src/reasoning/ai-reasoning-functions.js'
@@ -249,7 +249,7 @@ describe('retrieval 源管理进阶', () => {
     const result = ops.removeSource('kb')
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(AIErrorCode.RETRIEVAL_SOURCE_NOT_FOUND)
+      expect(result.error.code).toBe(HaiAIError.RETRIEVAL_SOURCE_NOT_FOUND.code)
     }
   })
 
@@ -424,15 +424,15 @@ describe('embedding 跨模块边界', () => {
     const failEmbedding: EmbeddingOperations = {
       embed: vi.fn(async () => ({
         success: false as const,
-        error: { code: AIErrorCode.EMBEDDING_API_ERROR, message: 'API failed' },
+        error: { code: HaiAIError.EMBEDDING_API_ERROR.code, message: 'API failed' },
       })),
       embedText: vi.fn(async () => ({
         success: false as const,
-        error: { code: AIErrorCode.EMBEDDING_API_ERROR, message: 'API failed' },
+        error: { code: HaiAIError.EMBEDDING_API_ERROR.code, message: 'API failed' },
       })),
       embedBatch: vi.fn(async () => ({
         success: false as const,
-        error: { code: AIErrorCode.EMBEDDING_API_ERROR, message: 'API failed' },
+        error: { code: HaiAIError.EMBEDDING_API_ERROR.code, message: 'API failed' },
       })),
     } as unknown as EmbeddingOperations
 
@@ -443,7 +443,7 @@ describe('embedding 跨模块边界', () => {
     const result = await ops.retrieve({ query: 'test' })
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(AIErrorCode.RETRIEVAL_FAILED)
+      expect(result.error.code).toBe(HaiAIError.RETRIEVAL_FAILED.code)
     }
   })
 })

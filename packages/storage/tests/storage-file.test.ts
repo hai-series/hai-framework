@@ -10,7 +10,7 @@ import * as os from 'node:os'
 import * as path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { storage } from '../src/index.js'
-import { StorageErrorCode } from '../src/storage-config.js'
+import { HaiStorageError } from '../src/storage-types.js'
 import { defineStorageSuite, localStorageEnv, s3Env } from './helpers/storage-test-suite.js'
 
 describe('storage.file', () => {
@@ -408,7 +408,7 @@ describe('storage.file', () => {
       const result = await storage.file.head('subdir')
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.code).toBe(StorageErrorCode.INVALID_PATH)
+        expect(result.error.code).toBe(HaiStorageError.INVALID_PATH.code)
       }
 
       await storage.close()

@@ -129,16 +129,16 @@ interface PipelineResult {
 
 ---
 
-## 错误码 — `DatapipeErrorCode`
+## 错误码 — `HaiDatapipeError`
 
-| 错误码                   | 值   | 说明               |
-| ------------------------ | ---- | ------------------ |
-| `CLEAN_FAILED`           | 8500 | 清洗失败           |
-| `CHUNK_FAILED`           | 8501 | 分块失败           |
-| `TRANSFORM_FAILED`       | 8502 | 转换失败           |
-| `PIPELINE_FAILED`        | 8503 | 管线执行失败       |
-| `CONFIG_ERROR`           | 8504 | 配置错误           |
-| `MISSING_SEPARATOR`      | 8507 | 自定义分隔符缺失   |
+| 错误码 | code | 说明 |
+|--------|------|------|
+| `HaiDatapipeError.CLEAN_FAILED` | `hai:datapipe:001` | 清洗失败 |
+| `HaiDatapipeError.CHUNK_FAILED` | `hai:datapipe:002` | 分块失败 |
+| `HaiDatapipeError.TRANSFORM_FAILED` | `hai:datapipe:003` | 转换失败 |
+| `HaiDatapipeError.PIPELINE_FAILED` | `hai:datapipe:004` | 管线执行失败 |
+| `HaiDatapipeError.CONFIG_ERROR` | `hai:datapipe:005` | 配置错误 |
+| `HaiDatapipeError.MISSING_SEPARATOR` | `hai:datapipe:006` | 自定义分隔符缺失 |
 
 ---
 
@@ -190,15 +190,15 @@ const result = await datapipe.pipeline()
 ### 错误分支处理
 
 ```typescript
-import { datapipe, DatapipeErrorCode } from '@h-ai/datapipe'
+import { datapipe, HaiDatapipeError } from '@h-ai/datapipe'
 
 const result = datapipe.chunk(text, { mode: 'custom' })
 if (!result.success) {
   switch (result.error.code) {
-    case DatapipeErrorCode.MISSING_SEPARATOR:
+    case HaiDatapipeError.MISSING_SEPARATOR.code:
       // mode='custom' 时需提供 separator
       break
-    case DatapipeErrorCode.CONFIG_ERROR:
+    case HaiDatapipeError.CONFIG_ERROR.code:
       // 配置参数校验失败
       break
   }

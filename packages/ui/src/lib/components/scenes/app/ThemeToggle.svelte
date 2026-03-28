@@ -8,15 +8,15 @@
   @prop {string} darkTheme - 暗色主题名称
 
   @example
-  <ThemeToggle 
+  <ThemeToggle
     currentTheme={$theme}
     onchange={(theme) => themeStore.set(theme)}
   />
 -->
 <script lang='ts'>
+  import { uiM } from '../../../messages.js'
   import { isDarkTheme } from '../../../theme-config.js'
   import IconButton from '../../primitives/IconButton.svelte'
-  import { uiM } from '../../../messages.js'
 
   interface Props {
     currentTheme?: string
@@ -30,7 +30,7 @@
     class?: string
   }
 
-  let {
+  const {
     currentTheme = 'light',
     onchange,
     lightTheme = 'light',

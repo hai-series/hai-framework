@@ -5,7 +5,7 @@
  */
 
 import { beforeEach, describe, expect, it } from 'vitest'
-import { cache, CacheErrorCode } from '../src/index.js'
+import { cache, HaiCacheError } from '../src/index.js'
 import { defineCacheSuite, memoryEnv, redisEnv } from './helpers/cache-test-suite.js'
 
 describe('cache.init', () => {
@@ -41,7 +41,7 @@ describe('cache.init', () => {
       const result = await cache.init({ type: 'unknown' } as never)
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.code).toBe(CacheErrorCode.CONFIG_ERROR)
+        expect(result.error.code).toBe(HaiCacheError.CONFIG_ERROR.code)
       }
       expect(cache.isInitialized).toBe(false)
     })
@@ -50,7 +50,7 @@ describe('cache.init', () => {
       const result = await cache.init({} as never)
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.code).toBe(CacheErrorCode.CONFIG_ERROR)
+        expect(result.error.code).toBe(HaiCacheError.CONFIG_ERROR.code)
       }
     })
   })
@@ -78,7 +78,7 @@ describe('cache.init', () => {
       const result = await cache.ping()
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.code).toBe(CacheErrorCode.NOT_INITIALIZED)
+        expect(result.error.code).toBe(HaiCacheError.NOT_INITIALIZED.code)
       }
     })
 
@@ -120,7 +120,7 @@ describe('cache.init', () => {
       const result = await cache.ping()
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.code).toBe(CacheErrorCode.NOT_INITIALIZED)
+        expect(result.error.code).toBe(HaiCacheError.NOT_INITIALIZED.code)
       }
     })
   })

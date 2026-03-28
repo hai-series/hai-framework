@@ -14,7 +14,7 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { reldb, ReldbErrorCode } from '../src/index.js'
+import { HaiReldbError, reldb } from '../src/index.js'
 import { defineDbSuite, mysqlDockerOpts, mysqlEnv, postgresDockerOpts, postgresEnv, sqliteMemoryEnv } from './helpers/reldb-test-suite.js'
 
 describe('reldb.ddl advanced', () => {
@@ -222,7 +222,7 @@ describe('reldb.ddl advanced', () => {
       const result = await reldb.ddl.dropTable('definitely_not_here_xyz', false)
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.code).toBe(ReldbErrorCode.DDL_FAILED)
+        expect(result.error.code).toBe(HaiReldbError.DDL_FAILED.code)
       }
     })
   }

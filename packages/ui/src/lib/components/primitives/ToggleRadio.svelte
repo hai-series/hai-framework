@@ -3,11 +3,11 @@
   @h-ai/ui - ToggleRadio 组件
   =============================================================================
   仅渲染 radio input（用于 collapse/accordion 等结构要求）
-  
+
   使用 Svelte 5 Runes ($props, $bindable)
   =============================================================================
 -->
-<script lang="ts">
+<script lang='ts'>
   import type { ToggleRadioProps } from '../../types.js'
 
   let {
@@ -28,7 +28,7 @@
 <input
   {id}
   {name}
-  type="radio"
+  type='radio'
   class={className}
   {disabled}
   checked={checked}

@@ -214,8 +214,8 @@ export function createCore(loggerFns: LoggerFunctions): CoreFunctions {
      *
      * @example
      * ```ts
-     * const notInitialized = core.module.createNotInitializedKit<DbError>(
-     *   DbErrorCode.NOT_INITIALIZED,
+     * const notInitialized = core.module.createNotInitializedKit(
+     *   HaiDbError.NOT_INITIALIZED,
      *   () => dbM('db_notInitialized'),
      * )
      * ```

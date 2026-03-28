@@ -3,8 +3,8 @@
  */
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { ApiClientErrorCode } from '../src/api-client-config.js'
 import { api } from '../src/api-client-main.js'
+import { HaiApiClientError } from '../src/api-client-types.js'
 
 describe('api singleton lifecycle', () => {
   afterEach(async () => {
@@ -57,7 +57,7 @@ describe('api singleton lifecycle', () => {
 
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.code).toBe(ApiClientErrorCode.NOT_INITIALIZED)
+        expect(result.error.code).toBe(HaiApiClientError.NOT_INITIALIZED.code)
       }
     })
 
@@ -66,7 +66,7 @@ describe('api singleton lifecycle', () => {
 
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.code).toBe(ApiClientErrorCode.NOT_INITIALIZED)
+        expect(result.error.code).toBe(HaiApiClientError.NOT_INITIALIZED.code)
       }
     })
 
@@ -84,7 +84,7 @@ describe('api singleton lifecycle', () => {
 
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.code).toBe(ApiClientErrorCode.NOT_INITIALIZED)
+        expect(result.error.code).toBe(HaiApiClientError.NOT_INITIALIZED.code)
       }
     })
 

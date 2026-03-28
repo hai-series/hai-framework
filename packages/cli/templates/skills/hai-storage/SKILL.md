@@ -102,19 +102,25 @@ const downloadUrl = await storage.presign.getUrl('uploads/doc.pdf', {
 
 ---
 
-## 错误码 — `StorageErrorCode`
+## 错误码 — `HaiStorageError`
 
-| 错误码              | 说明                |
-| ------------------- | ------------------- |
-| `NOT_INITIALIZED`   | 未初始化            |
-| `UPLOAD_FAILED`     | 上传失败            |
-| `DOWNLOAD_FAILED`   | 下载失败            |
-| `NOT_FOUND`         | 文件不存在          |
-| `PRESIGN_FAILED`    | 预签名 URL 生成失败 |
-| `CONNECTION_FAILED` | 连接失败            |
-| `OPERATION_FAILED`  | 操作失败            |
-| `PERMISSION_DENIED` | 权限不足            |
-| `CONFIG_ERROR`      | 配置错误            |
+| 错误码 | code | 说明 |
+|--------|------|------|
+| `HaiStorageError.CONNECTION_FAILED` | `hai:storage:001` | 连接失败 |
+| `HaiStorageError.OPERATION_FAILED` | `hai:storage:002` | 操作失败 |
+| `HaiStorageError.NOT_FOUND` | `hai:storage:003` | 文件不存在 |
+| `HaiStorageError.ALREADY_EXISTS` | `hai:storage:004` | 文件已存在 |
+| `HaiStorageError.PERMISSION_DENIED` | `hai:storage:005` | 权限不足 |
+| `HaiStorageError.QUOTA_EXCEEDED` | `hai:storage:006` | 配额超限 |
+| `HaiStorageError.INVALID_PATH` | `hai:storage:007` | 路径无效 |
+| `HaiStorageError.IO_ERROR` | `hai:storage:008` | IO 错误 |
+| `HaiStorageError.NETWORK_ERROR` | `hai:storage:009` | 网络错误 |
+| `HaiStorageError.NOT_INITIALIZED` | `hai:storage:010` | 未初始化 |
+| `HaiStorageError.UNSUPPORTED_TYPE` | `hai:storage:011` | 不支持的存储类型 |
+| `HaiStorageError.CONFIG_ERROR` | `hai:storage:012` | 配置错误 |
+| `HaiStorageError.PRESIGN_FAILED` | `hai:storage:013` | 预签名 URL 生成失败 |
+| `HaiStorageError.UPLOAD_FAILED` | `hai:storage:014` | 上传失败 |
+| `HaiStorageError.DOWNLOAD_FAILED` | `hai:storage:015` | 下载失败 |
 
 ---
 

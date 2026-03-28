@@ -8,7 +8,7 @@
     {/each}
   </InfiniteScroll>
 -->
-<script lang="ts">
+<script lang='ts'>
   import type { Snippet } from 'svelte'
   import { cn } from '../../utils.js'
 
@@ -46,7 +46,8 @@
   let containerRef: HTMLDivElement | undefined = $state()
 
   async function checkAndLoad() {
-    if (loading || disabled || !hasMore || !containerRef || !onloadmore) return
+    if (loading || disabled || !hasMore || !containerRef || !onloadmore)
+      return
 
     const { scrollTop, scrollHeight, clientHeight } = containerRef
     if (scrollHeight - scrollTop - clientHeight < threshold) {
@@ -65,14 +66,14 @@
   bind:this={containerRef}
   class={cn('overflow-y-auto', className)}
   onscroll={checkAndLoad}
-  role="feed"
+  role='feed'
 >
   {@render children()}
 
   <!-- 底部状态 -->
-  <div class="flex items-center justify-center py-4 text-sm text-base-content/50">
+  <div class='flex items-center justify-center py-4 text-sm text-base-content/50'>
     {#if loading}
-      <span class="loading loading-spinner loading-sm mr-2"></span>
+      <span class='loading loading-spinner loading-sm mr-2'></span>
       {loadingText}
     {:else if !hasMore}
       {noMoreText}

@@ -1,4 +1,4 @@
-<script lang="ts">
+<script lang='ts'>
   import { onMount } from 'svelte'
 
   let greeting = $state('')
@@ -15,12 +15,12 @@
   })
 </script>
 
-<div class="flex min-h-screen items-center justify-center p-4">
-  <div class="text-center">
-    <h1 class="text-3xl font-bold">hai Desktop App</h1>
-    <p class="mt-2 text-base-content/60">Tauri v2 + SvelteKit SPA</p>
+<div class='flex min-h-screen items-center justify-center p-4'>
+  <div class='text-center'>
+    <h1 class='text-3xl font-bold'>hai Desktop App</h1>
+    <p class='mt-2 text-base-content/60'>Tauri v2 + SvelteKit SPA</p>
     {#if greeting}
-      <p class="mt-4 rounded-lg bg-base-200 px-4 py-2 text-sm">{greeting}</p>
+      <p class='mt-4 rounded-lg bg-base-200 px-4 py-2 text-sm'>{greeting}</p>
     {/if}
   </div>
 </div>

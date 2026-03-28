@@ -197,7 +197,7 @@ log:
 
 | 任务                  | 技能             | 触发关键词                                        |
 | --------------------- | ---------------- | ------------------------------------------------- |
-| 配置/日志/i18n/Result | `hai-core`       | core.init, core.logger, core.config, Result       |
+| 配置/日志/i18n/HaiResult | `hai-core`       | core.init, core.logger, core.config, HaiResult       |
 | 数据库操作            | `hai-reldb`      | reldb.init, SQL, CRUD, 事务, 分页, DDL               |
 | 缓存操作              | `hai-cache`      | cache.init, cache.get/set, TTL, Redis             |
 | 文件存储              | `hai-storage`    | storage.init, 上传, 下载, S3, 本地存储            |

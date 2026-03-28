@@ -5,24 +5,23 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { DeployConfigSchema, DeployErrorCode } from '../src/deploy-config.js'
+import { DeployConfigSchema, HaiDeployError } from '../src/deploy-types.js'
 
-describe('deployErrorCode', () => {
-  it('错误码应在 9000-9099 范围内', () => {
-    for (const [, value] of Object.entries(DeployErrorCode)) {
-      expect(value).toBeGreaterThanOrEqual(9000)
-      expect(value).toBeLessThanOrEqual(9099)
+describe('haiDeployError', () => {
+  it('错误码应符合 hai:deploy:NNN 格式', () => {
+    for (const [, def] of Object.entries(HaiDeployError)) {
+      expect(def.code).toMatch(/^hai:deploy:\d{3}$/)
     }
   })
 
-  it('not_INITIALIZED 应固定为 9010', () => {
-    expect(DeployErrorCode.NOT_INITIALIZED).toBe(9010)
+  it('nOT_INITIALIZED 应固定为 hai:deploy:011', () => {
+    expect(HaiDeployError.NOT_INITIALIZED.code).toBe('hai:deploy:011')
   })
 
   it('所有错误码应唯一', () => {
-    const values = Object.values(DeployErrorCode)
-    const unique = new Set(values)
-    expect(unique.size).toBe(values.length)
+    const codes = Object.values(HaiDeployError).map(d => d.code)
+    const unique = new Set(codes)
+    expect(unique.size).toBe(codes.length)
   })
 })
 

@@ -3,16 +3,16 @@
   @h-ai/ui - ToastContainer 组件
   =============================================================================
   Toast 容器组件，显示所有 Toast 通知
-  
+
   使用 Svelte 5 Runes ($derived)
   =============================================================================
 -->
-<script lang="ts">
+<script lang='ts'>
+  import { uiM } from '../../messages.js'
   import { toast } from '../../toast.svelte.js'
   import { cn, getAlertVariantClass } from '../../utils.js'
-  import { uiM } from '../../messages.js'
   import IconButton from '../primitives/IconButton.svelte'
-  
+
   const positionMap = {
     'top-right': 'toast-top toast-end',
     'top-left': 'toast-top toast-start',
@@ -21,11 +21,11 @@
     'top-center': 'toast-top toast-center',
     'bottom-center': 'toast-bottom toast-center',
   }
-  
+
   // 按位置分组
   const groupedItems = $derived(() => {
     const groups: Record<string, typeof toast.items> = {}
-    
+
     for (const item of toast.items) {
       const position = item.position ?? 'top-right'
       if (!groups[position]) {
@@ -33,7 +33,7 @@
       }
       groups[position].push(item)
     }
-    
+
     return groups
   })
 </script>
@@ -45,8 +45,8 @@
         <span>{item.message}</span>
         {#if item.dismissible}
           <IconButton
-            variant="ghost"
-            size="sm"
+            variant='ghost'
+            size='sm'
             onclick={() => toast.remove(item.id)}
             ariaLabel={uiM('toast_dismiss')}
           >

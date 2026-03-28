@@ -19,9 +19,9 @@
   <Calendar bind:value={date} />
   ```
 -->
-<script lang="ts">
-  import { Calendar as BitsCalendar } from 'bits-ui'
+<script lang='ts'>
   import type { DateValue } from '@internationalized/date'
+  import { Calendar as BitsCalendar } from 'bits-ui'
 
   interface Props {
     /** 选中日期（双向绑定） */
@@ -62,7 +62,7 @@
 
 <div class={className}>
   <BitsCalendar.Root
-    type="single"
+    type='single'
     bind:value
     bind:placeholder
     {minValue}
@@ -71,25 +71,25 @@
     {isDateUnavailable}
     {disabled}
     readonly={isReadonly}
-    onValueChange={(v) => onchange?.(v)}
+    onValueChange={v => onchange?.(v)}
   >
     {#snippet children({ months, weekdays })}
-      <BitsCalendar.Header class="flex items-center justify-between px-1 pb-3">
-        <BitsCalendar.PrevButton class="btn btn-ghost btn-sm btn-circle">
-          <span class="icon-[tabler--chevron-left] size-4"></span>
+      <BitsCalendar.Header class='flex items-center justify-between px-1 pb-3'>
+        <BitsCalendar.PrevButton class='btn btn-ghost btn-sm btn-circle'>
+          <span class='icon-[tabler--chevron-left] size-4'></span>
         </BitsCalendar.PrevButton>
-        <BitsCalendar.Heading class="text-sm font-semibold" />
-        <BitsCalendar.NextButton class="btn btn-ghost btn-sm btn-circle">
-          <span class="icon-[tabler--chevron-right] size-4"></span>
+        <BitsCalendar.Heading class='text-sm font-semibold' />
+        <BitsCalendar.NextButton class='btn btn-ghost btn-sm btn-circle'>
+          <span class='icon-[tabler--chevron-right] size-4'></span>
         </BitsCalendar.NextButton>
       </BitsCalendar.Header>
 
       {#each months as month}
-        <BitsCalendar.Grid class="w-full border-collapse">
+        <BitsCalendar.Grid class='w-full border-collapse'>
           <BitsCalendar.GridHead>
-            <BitsCalendar.GridRow class="flex w-full">
+            <BitsCalendar.GridRow class='flex w-full'>
               {#each weekdays as day}
-                <BitsCalendar.HeadCell class="w-9 text-center text-xs font-medium text-base-content/50">
+                <BitsCalendar.HeadCell class='w-9 text-center text-xs font-medium text-base-content/50'>
                   {day}
                 </BitsCalendar.HeadCell>
               {/each}
@@ -98,10 +98,10 @@
 
           <BitsCalendar.GridBody>
             {#each month.weeks as weekDates}
-              <BitsCalendar.GridRow class="flex w-full">
+              <BitsCalendar.GridRow class='flex w-full'>
                 {#each weekDates as date}
-                  <BitsCalendar.Cell {date} month={month.value} class="p-0">
-                    <BitsCalendar.Day class="inline-flex size-9 items-center justify-center rounded-lg text-sm transition-colors hover:bg-base-200 data-[selected]:bg-primary data-[selected]:text-primary-content data-[disabled]:opacity-30 data-[unavailable]:line-through data-[unavailable]:opacity-30 data-[outside-month]:text-base-content/30">
+                  <BitsCalendar.Cell {date} month={month.value} class='p-0'>
+                    <BitsCalendar.Day class='inline-flex size-9 items-center justify-center rounded-lg text-sm transition-colors hover:bg-base-200 data-[selected]:bg-primary data-[selected]:text-primary-content data-[disabled]:opacity-30 data-[unavailable]:line-through data-[unavailable]:opacity-30 data-[outside-month]:text-base-content/30'>
                       {date.day}
                     </BitsCalendar.Day>
                   </BitsCalendar.Cell>

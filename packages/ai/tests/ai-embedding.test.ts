@@ -5,7 +5,7 @@
  */
 
 import { describe, expect, it, vi } from 'vitest'
-import { AIConfigSchema, AIErrorCode } from '../src/ai-config.js'
+import { AIConfigSchema, HaiAIError } from '../src/ai-types.js'
 import { createEmbeddingOperations } from '../src/embedding/ai-embedding-functions.js'
 
 // ─── Mock OpenAI ───
@@ -127,7 +127,7 @@ describe('embedding operations', () => {
       const result = await ops.embedText('test')
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.code).toBe(AIErrorCode.CONFIGURATION_ERROR)
+        expect(result.error.code).toBe(HaiAIError.CONFIGURATION_ERROR.code)
       }
     }
     finally {

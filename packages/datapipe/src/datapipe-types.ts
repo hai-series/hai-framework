@@ -6,7 +6,7 @@
  */
 
 import type { ErrorInfo, HaiResult } from '@h-ai/core'
-import type { ChunkOptionsInput, CleanOptionsInput } from './datapipe-config'
+import type { ChunkOptionsInput, CleanOptionsInput } from './datapipe-config.js'
 import { core } from '@h-ai/core'
 
 // ─── 错误定义（照 @h-ai/core 范式） ───

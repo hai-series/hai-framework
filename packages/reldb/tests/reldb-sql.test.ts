@@ -5,7 +5,7 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { reldb, ReldbErrorCode } from '../src/index.js'
+import { HaiReldbError, reldb } from '../src/index.js'
 import { defineDbSuite, mysqlDockerOpts, mysqlEnv, postgresDockerOpts, postgresEnv, sqliteMemoryEnv } from './helpers/reldb-test-suite.js'
 
 describe('reldb.sql', () => {
@@ -105,7 +105,7 @@ describe('reldb.sql', () => {
       const result = await reldb.sql.query('SELECT * FROM nonexistent_table_xyz')
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.code).toBe(ReldbErrorCode.QUERY_FAILED)
+        expect(result.error.code).toBe(HaiReldbError.QUERY_FAILED.code)
       }
     })
 

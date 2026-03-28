@@ -15,12 +15,12 @@
   使用 Svelte 5 Runes ($props, $derived, $effect)
   =============================================================================
 -->
-<script lang="ts">
+<script lang='ts'>
   import type { MarkdownRendererProps } from '../types.js'
   import { cn } from '../../../utils.js'
   import { parseMarkdown } from './markdown-parse.js'
 
-  let {
+  const {
     content = '',
     class: className = '',
     showCopyButton = true,
@@ -42,11 +42,13 @@
   function handleClick(e: MouseEvent) {
     const target = e.target as HTMLElement
     const btn = target.closest('[data-copy-code]') as HTMLButtonElement | null
-    if (!btn) return
+    if (!btn)
+      return
 
     const codeBlock = btn.closest('.hai-md-code-block')
     const codeEl = codeBlock?.querySelector('code')
-    if (!codeEl) return
+    if (!codeEl)
+      return
 
     const text = codeEl.textContent ?? ''
     navigator.clipboard.writeText(text).then(() => {
@@ -68,6 +70,7 @@
   class={cn('hai-markdown', className)}
   onclick={handleClick}
 >
+  <!-- eslint-disable-next-line svelte/no-at-html-tags -- Markdown HTML 渲染 -->
   {@html html}
 </div>
 

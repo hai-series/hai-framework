@@ -7,8 +7,8 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { DeployErrorCode } from '../src/deploy-config.js'
 import { deploy } from '../src/deploy-main.js'
+import { HaiDeployError } from '../src/deploy-types.js'
 
 // mock fetch
 const mockFetch = vi.fn()
@@ -40,7 +40,7 @@ describe('deploy singleton', () => {
       })
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.code).toBe(DeployErrorCode.CONFIG_ERROR)
+        expect(result.error.code).toBe(HaiDeployError.CONFIG_ERROR.code)
       }
     })
 
@@ -78,7 +78,7 @@ describe('deploy singleton', () => {
 
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.code).toBe(DeployErrorCode.AUTH_FAILED)
+        expect(result.error.code).toBe(HaiDeployError.AUTH_FAILED.code)
       }
     })
   })
@@ -108,7 +108,7 @@ describe('deploy singleton', () => {
       const result = await deploy.provisionAll('app')
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.code).toBe(DeployErrorCode.NOT_INITIALIZED)
+        expect(result.error.code).toBe(HaiDeployError.NOT_INITIALIZED.code)
       }
     })
 
@@ -147,7 +147,7 @@ describe('deploy singleton', () => {
       const result = await deploy.scan('/nonexistent/path')
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.code).toBe(DeployErrorCode.SCAN_FAILED)
+        expect(result.error.code).toBe(HaiDeployError.SCAN_FAILED.code)
       }
     })
   })
@@ -157,7 +157,7 @@ describe('deploy singleton', () => {
       const result = await deploy.deployApp('/some/app')
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.code).toBe(DeployErrorCode.NOT_INITIALIZED)
+        expect(result.error.code).toBe(HaiDeployError.NOT_INITIALIZED.code)
       }
     })
   })

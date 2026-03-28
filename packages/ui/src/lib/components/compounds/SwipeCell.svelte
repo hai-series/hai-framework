@@ -11,11 +11,12 @@
     <div class="p-4">列表项内容</div>
   </SwipeCell>
 -->
-<script lang="ts">
+<script lang='ts'>
   import type { Snippet } from 'svelte'
   import type { SwipeCellAction } from './swipe-cell-types.js'
   import { cn } from '../../utils.js'
 
+  // eslint-disable-next-line no-import-assign -- type re-export
   export type { SwipeCellAction }
 
   interface Props {
@@ -46,20 +47,23 @@
   const totalActionWidth = $derived(actions.reduce((sum, a) => sum + (a.width ?? 72), 0))
 
   function handleTouchStart(e: TouchEvent) {
-    if (disabled) return
+    if (disabled)
+      return
     startX = e.touches[0].clientX
     swiping = true
   }
 
   function handleTouchMove(e: TouchEvent) {
-    if (!swiping || disabled) return
+    if (!swiping || disabled)
+      return
     const diff = startX - e.touches[0].clientX
     // 只允许左滑
     offsetX = Math.max(0, Math.min(diff, totalActionWidth))
   }
 
   function handleTouchEnd() {
-    if (!swiping) return
+    if (!swiping)
+      return
     swiping = false
     // 超过一半则展开，否则收回
     offsetX = offsetX > totalActionWidth / 2 ? totalActionWidth : 0
@@ -81,27 +85,27 @@
 <div class={cn('relative overflow-hidden', className)}>
   <!-- 内容层 -->
   <div
-    class="relative transition-transform"
-    style="transform: translateX(-{offsetX}px)"
+    class='relative transition-transform'
+    style='transform: translateX(-{offsetX}px)'
     ontouchstart={handleTouchStart}
     ontouchmove={handleTouchMove}
     ontouchend={handleTouchEnd}
-    role="row"
-    tabindex="0"
+    role='row'
+    tabindex='0'
   >
     {@render children()}
   </div>
 
   <!-- 操作按钮层 -->
-  <div class="absolute top-0 right-0 h-full flex" style="transform: translateX({totalActionWidth - offsetX}px)">
+  <div class='absolute top-0 right-0 h-full flex' style='transform: translateX({totalActionWidth - offsetX}px)'>
     {#each actions as action (action.id)}
       <button
-        type="button"
+        type='button'
         class={cn(
           'flex items-center justify-center h-full text-sm font-medium',
           variantBg[action.variant ?? 'primary'],
         )}
-        style="width: {action.width ?? 72}px"
+        style='width: {action.width ?? 72}px'
         onclick={() => handleAction(action.id)}
       >
         {action.label}

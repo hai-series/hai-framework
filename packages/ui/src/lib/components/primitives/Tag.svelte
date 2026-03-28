@@ -3,16 +3,16 @@
   @h-ai/ui - Tag 组件
   =============================================================================
   标签组件
-  
+
   使用 Svelte 5 Runes ($props, $derived)
   =============================================================================
 -->
-<script lang="ts">
+<script lang='ts'>
   import type { TagProps } from '../../types.js'
-  import { cn, getVariantClass, getSizeClass } from '../../utils.js'
+  import { cn, getSizeClass, getVariantClass } from '../../utils.js'
   import IconButton from './IconButton.svelte'
-  
-  let {
+
+  const {
     text = '',
     variant = 'default',
     size = 'md',
@@ -24,7 +24,7 @@
     onclose,
     children,
   }: TagProps = $props()
-  
+
   const tagClass = $derived(
     cn(
       'badge gap-1',
@@ -32,9 +32,9 @@
       getSizeClass(size, 'badge'),
       outline && 'badge-outline',
       className,
-    )
+    ),
   )
-  
+
   function handleClose(e: MouseEvent) {
     e.stopPropagation()
     onclose?.()
@@ -47,17 +47,17 @@
   {:else}
     {text}
   {/if}
-  
+
   {#if closable}
     <IconButton
-      variant="ghost"
-      size="xs"
-      class="-mr-1"
+      variant='ghost'
+      size='xs'
+      class='-mr-1'
       onclick={handleClose}
       ariaLabel={removeLabel}
     >
-      <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" viewBox="0 0 20 20" fill="currentColor">
-        <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
+      <svg xmlns='http://www.w3.org/2000/svg' class='h-3 w-3' viewBox='0 0 20 20' fill='currentColor'>
+        <path fill-rule='evenodd' d='M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z' clip-rule='evenodd' />
       </svg>
     </IconButton>
   {/if}

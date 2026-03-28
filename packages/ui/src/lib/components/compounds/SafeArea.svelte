@@ -6,7 +6,7 @@
     <AppBar />
   </SafeArea>
 -->
-<script lang="ts">
+<script lang='ts'>
   import type { Snippet } from 'svelte'
   import { cn } from '../../utils.js'
 

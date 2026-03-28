@@ -5,14 +5,15 @@
  */
 
 import type { AIConfig } from '../src/ai-config.js'
-import type { LLMOperations } from '../src/llm/ai-llm-types.js'
+import type { LLMOperations, ToolRegistryOperations } from '../src/llm/ai-llm-types.js'
+import type { ReasoningStrategy, ReasoningStreamEvent } from '../src/reasoning/ai-reasoning-types.js'
 import { describe, expect, it, vi } from 'vitest'
 import { resolveModel } from '../src/ai-config.js'
 import { createReasoningOperations } from '../src/reasoning/ai-reasoning-functions.js'
 
 // ─── Mock LLM 工厂 ───
 
-function createMockLLM(responses: Array<{ content: string | null, finish_reason?: string, tool_calls?: any[] }>): LLMOperations {
+function createMockLLM(responses: Array<{ content: string | null, finish_reason?: string, tool_calls?: unknown[] }>): LLMOperations {
   let callIndex = 0
   return {
     chat: vi.fn(async () => {
@@ -32,7 +33,7 @@ function createMockLLM(responses: Array<{ content: string | null, finish_reason?
               content: resp.content,
               tool_calls: resp.tool_calls,
             },
-            finish_reason: (resp.finish_reason ?? 'stop') as any,
+            finish_reason: resp.finish_reason ?? 'stop',
           }],
           usage: { prompt_tokens: 10, completion_tokens: 20, total_tokens: 30 },
         },
@@ -123,7 +124,7 @@ describe('reasoning ReAct', () => {
     const result = await reasoning.run('Looping query', {
       strategy: 'react',
       maxRounds: 2,
-      tools: mockTools as any,
+      tools: mockTools as unknown as ToolRegistryOperations,
     })
 
     expect(result.success).toBe(false)
@@ -175,7 +176,7 @@ describe('reasoning 默认', () => {
     const mockLLM = createMockLLM([{ content: '' }])
     const reasoning = createReasoningOperations(mockConfig, mockLLM)
 
-    const result = await reasoning.run('test', { strategy: 'unknown' as any })
+    const result = await reasoning.run('test', { strategy: 'unknown' as ReasoningStrategy })
     expect(result.success).toBe(false)
   })
 })
@@ -319,23 +320,23 @@ describe('reasoning runStream', () => {
     ])
 
     const reasoning = createReasoningOperations(mockConfig, mockLLM)
-    const events: unknown[] = []
+    const events: ReasoningStreamEvent[] = []
 
     for await (const event of reasoning.runStream('什么是宇宙的答案？')) {
       events.push(event)
     }
 
     // 应该至少有 step(s)、delta 和 done 事件
-    const stepEvents = events.filter((e: any) => e.type === 'step')
-    const deltaEvents = events.filter((e: any) => e.type === 'delta')
-    const doneEvents = events.filter((e: any) => e.type === 'done')
+    const stepEvents = events.filter(e => e.type === 'step')
+    const deltaEvents = events.filter(e => e.type === 'delta')
+    const doneEvents = events.filter(e => e.type === 'done')
 
     expect(stepEvents.length).toBeGreaterThanOrEqual(0)
     expect(deltaEvents.length).toBeGreaterThanOrEqual(1)
     expect(doneEvents).toHaveLength(1)
 
     // done 事件包含完整结果
-    const doneEvent = doneEvents[0] as any
+    const doneEvent = doneEvents[0] as Extract<ReasoningStreamEvent, { type: 'done' }>
     expect(doneEvent.result).toBeDefined()
     expect(doneEvent.result.answer).toBeTruthy()
   })

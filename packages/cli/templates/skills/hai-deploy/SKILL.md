@@ -128,24 +128,24 @@ if (result.success) {
 
 ---
 
-## 错误码
+## 错误码 — `HaiDeployError`
 
-| 名称                  | 值   | 说明                     |
-| --------------------- | ---- | ------------------------ |
-| DEPLOY_FAILED         | 9000 | 部署失败（通用）         |
-| PROJECT_CREATE_FAILED | 9001 | 平台项目创建失败         |
-| BUILD_FAILED          | 9002 | 应用构建失败             |
-| UPLOAD_FAILED         | 9003 | 构建产物上传失败         |
-| AUTH_REQUIRED         | 9004 | 未认证                   |
-| AUTH_FAILED           | 9005 | 认证失败                 |
-| PROVISION_FAILED      | 9006 | 基础设施开通失败         |
-| ADAPTER_MISSING       | 9007 | SvelteKit adapter 未安装 |
-| SCAN_FAILED           | 9008 | 应用扫描失败             |
-| ENV_VAR_FAILED        | 9009 | 环境变量设置失败         |
-| NOT_INITIALIZED       | 9010 | 模块未初始化             |
-| UNSUPPORTED_TYPE      | 9011 | 不支持的类型             |
-| CONFIG_ERROR          | 9012 | 配置错误                 |
-| CREDENTIAL_ERROR      | 9013 | 凭证读写失败             |
+| 错误码                                  | code               | 说明                     |
+| --------------------------------------- | ------------------ | ------------------------ |
+| `HaiDeployError.DEPLOY_FAILED`         | `hai:deploy:001`   | 部署失败（通用）         |
+| `HaiDeployError.PROJECT_CREATE_FAILED` | `hai:deploy:002`   | 平台项目创建失败         |
+| `HaiDeployError.BUILD_FAILED`          | `hai:deploy:003`   | 应用构建失败             |
+| `HaiDeployError.UPLOAD_FAILED`         | `hai:deploy:004`   | 构建产物上传失败         |
+| `HaiDeployError.AUTH_REQUIRED`         | `hai:deploy:005`   | 未认证                   |
+| `HaiDeployError.AUTH_FAILED`           | `hai:deploy:006`   | 认证失败                 |
+| `HaiDeployError.PROVISION_FAILED`      | `hai:deploy:007`   | 基础设施开通失败         |
+| `HaiDeployError.ADAPTER_MISSING`       | `hai:deploy:008`   | SvelteKit adapter 未安装 |
+| `HaiDeployError.SCAN_FAILED`           | `hai:deploy:009`   | 应用扫描失败             |
+| `HaiDeployError.ENV_VAR_FAILED`        | `hai:deploy:010`   | 环境变量设置失败         |
+| `HaiDeployError.NOT_INITIALIZED`       | `hai:deploy:011`   | 模块未初始化             |
+| `HaiDeployError.UNSUPPORTED_TYPE`      | `hai:deploy:012`   | 不支持的类型             |
+| `HaiDeployError.CONFIG_ERROR`          | `hai:deploy:013`   | 配置错误                 |
+| `HaiDeployError.CREDENTIAL_ERROR`      | `hai:deploy:014`   | 凭证读写失败             |
 
 ---
 
