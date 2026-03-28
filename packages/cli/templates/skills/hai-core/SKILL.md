@@ -101,7 +101,7 @@ unwatch()
 
 // 配置未加载时立即返回 NOT_LOADED 错误
 core.config.watch('nonexistent', (_cfg, error) => {
-  // error.code === CoreErrorCode.CONFIG_NOT_LOADED
+  // error.code === HaiConfigError.CONFIG_NOT_LOADED.code
 })
 
 // 多个监听回调可在同一配置文件变更时同时触发
@@ -370,14 +370,14 @@ err(HaiCommonError.VALIDATION_ERROR, 'Invalid email', validationErrors)
 **使用场景**：
 
 ```typescript
-import { core, CoreErrorCode } from '@h-ai/core'
+import { core, HaiConfigError } from '@h-ai/core'
 
 const result = core.config.load('db', './config/db.yml', schema)
 if (!result.success) {
-  if (result.error.code === CoreErrorCode.CONFIG_FILE_NOT_FOUND) {
+  if (result.error.code === HaiConfigError.CONFIG_FILE_NOT_FOUND.code) {
     core.logger.error('Config file missing')
   }
-  else if (result.error.code === CoreErrorCode.CONFIG_VALIDATION_ERROR) {
+  else if (result.error.code === HaiConfigError.CONFIG_VALIDATION_ERROR.code) {
     core.logger.error('Config validation failed', { issues: result.error.cause })
   }
 }

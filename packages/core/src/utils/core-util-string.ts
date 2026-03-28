@@ -197,11 +197,11 @@ function padEnd(str: string, length: number, char = ' '): string {
  * ```
  */
 function constantTimeEqual(a: string, b: string): boolean {
-  if (a.length !== b.length)
-    return false
-  let result = 0
-  for (let i = 0; i < a.length; i++) {
-    result |= a.charCodeAt(i) ^ b.charCodeAt(i)
+  // 长度不同时仍遍历较长字符串，避免泄漏长度信息
+  const len = Math.max(a.length, b.length)
+  let result = a.length ^ b.length
+  for (let i = 0; i < len; i++) {
+    result |= (a.charCodeAt(i) || 0) ^ (b.charCodeAt(i) || 0)
   }
   return result === 0
 }
