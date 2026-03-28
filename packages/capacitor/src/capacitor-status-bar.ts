@@ -18,7 +18,7 @@ import { HaiCapacitorError } from './capacitor-types.js'
  * 需要安装 `@capacitor/status-bar` 插件。
  *
  * @param config - 状态栏配置
- * @returns Result
+ * @returns HaiResult
  *
  * @example
  * ```ts
@@ -67,7 +67,7 @@ export async function configureStatusBar(config: StatusBarConfig): Promise<HaiRe
 /**
  * 显示状态栏
  *
- * @returns Result
+ * @returns HaiResult
  *
  * @example
  * ```ts
@@ -92,7 +92,7 @@ export async function showStatusBar(): Promise<HaiResult<void>> {
 /**
  * 隐藏状态栏
  *
- * @returns Result
+ * @returns HaiResult
  *
  * @example
  * ```ts

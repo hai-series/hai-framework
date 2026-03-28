@@ -59,7 +59,7 @@ export interface StatusBarOperations {
   hide: () => Promise<HaiResult<void>>
 }
 
-/** Preferences 操作（安全读写，返回 Result） */
+/** Preferences 操作（安全读写，返回 HaiResult） */
 export interface PreferencesOperations {
   /** 安全读取 Preference 值 */
   get: (key: string) => Promise<HaiResult<string | null>>
