@@ -228,3 +228,6 @@ export const string = {
   padEnd,
   constantTimeEqual,
 }
+
+/** string 子工具类型 */
+export type StringFn = typeof string

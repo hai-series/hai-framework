@@ -200,3 +200,6 @@ export const array = {
   intersection,
   difference,
 }
+
+/** array 子工具类型 */
+export type ArrayFn = typeof array

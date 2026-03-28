@@ -6,6 +6,16 @@
  */
 
 import type { LogFormat, LoggingConfig, LogLevel } from './core-config.js'
+import type { ErrorFn } from './functions/core-function-error.js'
+import type { IdFn } from './functions/core-function-id.js'
+import type { I18nFn } from './i18n/core-i18n-utils.js'
+import type { ArrayFn } from './utils/core-util-array.js'
+import type { AsyncFn } from './utils/core-util-async.js'
+import type { ModuleFn } from './utils/core-util-module.js'
+import type { ObjectFn } from './utils/core-util-object.js'
+import type { StringFn } from './utils/core-util-string.js'
+import type { TimeFn } from './utils/core-util-time.js'
+import type { TypeUtilFn } from './utils/core-util-type.js'
 import { error } from './functions/core-function-error.js'
 
 const UnknownErrorDef: HaiErrorDef = {
@@ -420,4 +430,32 @@ export interface MessageOptions {
   locale?: Locale
   /** 插值参数 */
   params?: InterpolationParams
+}
+
+// ─── 6. Core 服务接口 ───
+
+/** Core 服务聚合接口（createCore 返回类型） */
+export interface CoreFunctions {
+  /** 默认 Logger（懒加载单例），同时提供日志管理方法 */
+  readonly logger: CoreLogger
+  /** 国际化工具 */
+  readonly i18n: I18nFn
+  /** ID 生成工具 */
+  readonly id: IdFn
+  /** 类型检查工具 */
+  readonly typeUtils: TypeUtilFn
+  /** 对象操作工具 */
+  readonly object: ObjectFn
+  /** 字符串操作工具 */
+  readonly string: StringFn
+  /** 数组操作工具 */
+  readonly array: ArrayFn
+  /** 异步操作工具 */
+  readonly async: AsyncFn
+  /** 时间操作工具 */
+  readonly time: TimeFn
+  /** 错误工具 */
+  readonly error: ErrorFn
+  /** 模块基础工具 */
+  readonly module: ModuleFn
 }

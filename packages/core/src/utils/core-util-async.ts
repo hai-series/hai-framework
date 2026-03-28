@@ -213,3 +213,6 @@ export const async = {
   debounce,
   throttle,
 }
+
+/** async 子工具类型 */
+export type AsyncFn = typeof async

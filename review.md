@@ -31,33 +31,33 @@
 
 > 说明：当前主审人/复审人先使用占位值，分配后请替换为真实姓名或账号。
 
-| 模块                     | 类型 | 主审人     | 复审人           | 是否可用 | 备注 |
-| ------------------------ | ---- | ---------- | ---------------- | -------- | ---- |
-| `packages/core`          | 模块 | @gudaoxuri | @LiJieLong       | 待定     | -    |
-| `packages/crypto`        | 模块 | @gudaoxuri | @LiJieLong       | 待定     | -    |
-| `packages/reldb`         | 模块 | @gudaoxuri | @LiJieLong       | 待定     | -    |
-| `packages/vecdb`         | 模块 | @gudaoxuri | @RWDai           | 待定     | -    |
-| `packages/cache`         | 模块 | @gudaoxuri | @LiJieLong       | 待定     | -    |
-| `packages/scheduler`     | 模块 | @gudaoxuri | @LiJieLong       | 待定     | -    |
-| `packages/storage`       | 模块 | @gudaoxuri | @LiJieLong       | 待定     | -    |
-| `packages/audit`         | 模块 | @gudaoxuri | @LiJieLong       | 待定     | -    |
-| `packages/reach`         | 模块 | @gudaoxuri | @LiJieLong       | 待定     | -    |
-| `packages/datapipe`      | 模块 | @gudaoxuri | @RWDai           | 待定     | -    |
-| `packages/ai`            | 模块 | @gudaoxuri | @RWDai           | 待定     | -    |
-| `packages/iam`           | 模块 | @gudaoxuri | @LiJieLong       | 待定     | -    |
-| `packages/api-client`    | 模块 | @gudaoxuri | @LiJieLong       | 待定     | -    |
-| `packages/ui`            | 模块 | @akfdwjx   | @wangjinpeng1235 | 待定     | -    |
-| `packages/kit`           | 模块 | @akfdwjx   | @wangjinpeng1235 | 待定     | -    |
-| `packages/cli`           | 模块 | @gudaoxuri | @LiJieLong       | 待定     | -    |
-| `packages/capacitor`     | 模块 | 待分配     | 待分配           | 待定     | -    |
-| `packages/payment`       | 模块 | 待分配     | 待分配           | 待定     | -    |
-| `packages/deploy`        | 模块 | 待分配     | 待分配           | 待定     | -    |
-| `apps/admin-console`     | 应用 | @gudaoxuri | @LiJieLong       | 待定     | -    |
-| `apps/api-service`       | 应用 | @gudaoxuri | @LiJieLong       | 待定     | -    |
-| `apps/corporate-website` | 应用 | @gudaoxuri | @LiJieLong       | 待定     | -    |
-| `apps/h5-app`            | 应用 | @gudaoxuri | 待分配           | 待定     | -    |
-| `apps/android-app`       | 应用 | 待分配     | 待分配           | 待定     | -    |
-| `apps/desktop-app`       | 应用 | 待分配     | 待分配           | 待定     | -    |
+| 模块                     | 类型 | 主审人     | 复审人           | 主审完成 | 复审完成 | 备注 |
+| ------------------------ | ---- | ---------- | ---------------- | -------- | -------- | ---- |
+| `packages/core`          | 模块 | @gudaoxuri | @LiJieLong       | ✅       | 待定     | -    |
+| `packages/crypto`        | 模块 | @gudaoxuri | @LiJieLong       | 待定     | 待定     | -    |
+| `packages/reldb`         | 模块 | @gudaoxuri | @LiJieLong       | 待定     | 待定     | -    |
+| `packages/vecdb`         | 模块 | @gudaoxuri | @RWDai           | 待定     | 待定     | -    |
+| `packages/cache`         | 模块 | @gudaoxuri | @LiJieLong       | 待定     | 待定     | -    |
+| `packages/scheduler`     | 模块 | @gudaoxuri | @LiJieLong       | 待定     | 待定     | -    |
+| `packages/storage`       | 模块 | @gudaoxuri | @LiJieLong       | 待定     | 待定     | -    |
+| `packages/audit`         | 模块 | @gudaoxuri | @LiJieLong       | 待定     | 待定     | -    |
+| `packages/reach`         | 模块 | @gudaoxuri | @LiJieLong       | 待定     | 待定     | -    |
+| `packages/datapipe`      | 模块 | @gudaoxuri | @RWDai           | 待定     | 待定     | -    |
+| `packages/ai`            | 模块 | @gudaoxuri | @RWDai           | 待定     | 待定     | -    |
+| `packages/iam`           | 模块 | @gudaoxuri | @LiJieLong       | 待定     | 待定     | -    |
+| `packages/api-client`    | 模块 | @gudaoxuri | @LiJieLong       | 待定     | 待定     | -    |
+| `packages/ui`            | 模块 | @akfdwjx   | @wangjinpeng1235 | 待定     | 待定     | -    |
+| `packages/kit`           | 模块 | @akfdwjx   | @wangjinpeng1235 | 待定     | 待定     | -    |
+| `packages/cli`           | 模块 | @gudaoxuri | @LiJieLong       | 待定     | 待定     | -    |
+| `packages/capacitor`     | 模块 | 待分配     | 待分配           | 待定     | 待定     | -    |
+| `packages/payment`       | 模块 | 待分配     | 待分配           | 待定     | 待定     | -    |
+| `packages/deploy`        | 模块 | 待分配     | 待分配           | 待定     | 待定     | -    |
+| `apps/admin-console`     | 应用 | @gudaoxuri | @LiJieLong       | 待定     | 待定     | -    |
+| `apps/api-service`       | 应用 | @gudaoxuri | @LiJieLong       | 待定     | 待定     | -    |
+| `apps/corporate-website` | 应用 | @gudaoxuri | @LiJieLong       | 待定     | 待定     | -    |
+| `apps/h5-app`            | 应用 | @gudaoxuri | 待分配           | 待定     | 待定     | -    |
+| `apps/android-app`       | 应用 | 待分配     | 待分配           | 待定     | 待定     | -    |
+| `apps/desktop-app`       | 应用 | 待分配     | 待分配           | 待定     | 待定     | -    |
 
 ---
 

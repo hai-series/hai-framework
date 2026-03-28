@@ -43,10 +43,10 @@ err(error)  // → { success: false, error }
 
 ### @h-ai/core — 基础能力
 
-核心模块提供日志、配置、ID 生成、i18n 和工具函数。Node 和 Browser 双端入口自动适配。
+核心模块提供日志、配置、ID 生成、i18n、错误定义体系和工具函数。Node 和 Browser 双端入口自动适配。
 
 ```typescript
-import { core, ok, err, type Result } from '@h-ai/core'
+import { core, ok, err, type HaiResult, HaiCommonError } from '@h-ai/core'
 
 // Node.js 初始化（加载 YAML 配置、pino 日志）
 core.init({ configDir: './config', logging: { level: 'info' } })
@@ -55,24 +55,48 @@ core.init({ configDir: './config', logging: { level: 'info' } })
 core.logger.info('message', { key: 'value' })
 const logger = core.logger.create({ name: 'my-module' })
 
-// ID 生成
-const id = core.id.generate()     // nanoid
-const uuid = core.id.uuid()       // UUID v4
+// 子 logger（自动携带固定上下文，适合请求/操作级追踪）
+const reqLogger = core.logger.child({ requestId: 'req-001', userId: 'u-123' })
+reqLogger.info('Request started')  // 日志自动包含 requestId + userId
+const opLogger = reqLogger.child({ operation: 'login' }) // 嵌套 child
 
-// 配置（Node.js only，从 configDir 加载 YAML 文件）
+// 日志配置（脱敏字段等）
+core.logger.configure({ level: 'info', format: 'json', redact: ['password', 'token'] })
+
+// ID 生成
+const id = core.id.generate()           // nanoid 21 字符
+const shortId = core.id.short()         // 10 字符
+const prefixed = core.id.withPrefix('order_') // 'order_V1StGXR...'
+const traceId = core.id.trace()         // 'trace-V1StGXR...'
+const reqId = core.id.request()         // 'req-V1StGXR...'
+const uuid = core.id.uuid()            // UUID v4
+
+// 配置（Node.js only，从 configDir 加载 YAML 文件，支持 ${VAR:default} 环境变量插值）
 const dbConfig = core.config.get('db')
 core.config.validate('db', ReldbConfigSchema)
+const unwatch = core.config.watch('db', (cfg, error) => { /* ... */ })
 
 // i18n
 core.i18n.setGlobalLocale('zh-CN')
 const m = core.i18n.createMessageGetter(messages)
 
+// 错误定义体系（各模块统一的错误码定义与实例创建）
+import type { ErrorInfo } from '@h-ai/core'
+const DbErrorInfo = { CONNECTION_FAILED: '010:500' } as const satisfies ErrorInfo
+const DbError = core.error.buildHaiErrorsDef('db', DbErrorInfo)
+// DbError.CONNECTION_FAILED → { code: 'hai:db:010', httpStatus: 500 }
+
 // 工具函数
-core.string.capitalize('hello')
+core.string.capitalize('hello')                      // 'Hello'
+core.string.constantTimeEqual(a, b)                  // 防时序攻击比较
 core.object.deepMerge(a, b)
-core.array.unique([1, 2, 2])
-core.async.delay(1000)
-core.time.format(new Date())
+core.array.unique([1, 2, 2])                         // [1, 2]
+core.array.chunk([1, 2, 3, 4], 2)                    // [[1,2], [3,4]]
+await core.async.delay(1000)
+await core.async.retry(fn, { maxRetries: 3 })
+await core.async.withTimeout(promise, 5000)
+core.time.formatDate(new Date(), 'YYYY-MM-DD HH:mm:ss')
+core.typeUtils.isDefined(value)
 ```
 
 ### @h-ai/reldb — 关系数据库

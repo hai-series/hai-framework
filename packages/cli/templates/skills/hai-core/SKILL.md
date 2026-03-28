@@ -118,7 +118,7 @@ core.config.watch('app', cb2) // cb1 和 cb2 都会被调用
 
 配置文件格式（YAML，支持环境变量插值）：
 
-- `${VAR}` — 读取 `process.env.VAR`；缺失则返回 `ConfigErrorCode.ENV_VAR_MISSING` 错误
+- `${VAR}` — 读取 `process.env.VAR`；缺失则返回 `HaiConfigError.CONFIG_ENV_VAR_MISSING` 错误
 - `${VAR:default}` — 读取 `process.env.VAR`；缺失则使用默认值
 - **类型还原**：整个值恰好是单个变量表达式时，结果还原为原生类型（number / boolean 等）；混合文本始终为字符串
 
@@ -168,7 +168,11 @@ const reqLogger = core.logger.child({ requestId: 'req-001' })
 reqLogger.info('Request started') // 日志中自动包含 requestId
 
 // 配置输出格式和级别
-core.logger.configure({ level: 'warn', format: 'json' }) // Node.js 支持
+core.logger.configure({
+  level: 'warn',
+  format: 'json',
+  redact: ['password', 'token'], // 脱敏字段
+}) // Node.js 支持
 core.logger.setLevel('debug')
 const level = core.logger.getLevel() // 'debug'
 ```
@@ -206,6 +210,90 @@ const m = core.i18n.createMessageGetter({
 // 使用
 m('user_created') // "用户已创建"
 m('welcome', { params: { name: '张三' } }) // "欢迎，张三"
+```
+
+### ID 生成 — `core.id`
+
+| 方法           | 签名                                    | 说明                          |
+| -------------- | --------------------------------------- | ----------------------------- |
+| `generate`     | `(size?: number) => string`             | nanoid（默认 21 字符）        |
+| `short`        | `() => string`                          | 10 字符短 ID                  |
+| `withPrefix`   | `(prefix: string, length?: number) => string` | 带前缀的 nanoid               |
+| `trace`        | `() => string`                          | `trace-` 前缀 ID              |
+| `request`      | `() => string`                          | `req-` 前缀 ID                |
+| `uuid`         | `() => string`                          | UUID v4                       |
+| `isValidUUID`  | `(value: string) => boolean`            | 校验 UUID 格式                |
+| `isValidNanoId`| `(value: string, size?: number) => boolean` | 校验 nanoid 格式          |
+
+```typescript
+const id = core.id.generate()          // 'V1StGXR_Z5j3eK4uA9b8c'
+const shortId = core.id.short()        // 10 字符
+const prefixed = core.id.withPrefix('order_') // 'order_V1StGXR...'
+const traceId = core.id.trace()        // 'trace-V1StGXR...'
+const reqId = core.id.request()        // 'req-V1StGXR...'
+const uuid = core.id.uuid()            // UUID v4
+
+core.id.isValidUUID('f47ac10b-...')    // true/false
+core.id.isValidNanoId('abc123', 6)     // true/false
+```
+
+### 工具函数
+
+#### 类型检查 — `core.typeUtils`
+
+`isDefined` / `isObject` / `isFunction` / `isPromise` / `isString` / `isNumber` / `isBoolean` / `isArray`
+
+#### 对象操作 — `core.object`
+
+`deepClone` / `deepMerge` / `pick` / `omit` / `keys` / `values` / `entries` / `fromEntries`
+
+```typescript
+core.object.deepMerge(a, b, c)       // 递归合并（防原型污染）
+core.object.pick(obj, ['a', 'b'])
+core.object.omit(obj, ['c', 'd'])
+```
+
+#### 字符串操作 — `core.string`
+
+`capitalize` / `kebabCase` / `camelCase` / `snakeCase` / `pascalCase` / `truncate` / `trim` / `isBlank` / `isNotBlank` / `padStart` / `padEnd` / `constantTimeEqual`
+
+```typescript
+core.string.capitalize('hello')      // 'Hello'
+core.string.kebabCase('helloWorld')  // 'hello-world'
+core.string.constantTimeEqual(a, b)  // 防时序攻击比较
+```
+
+#### 数组操作 — `core.array`
+
+`unique` / `chunk` / `groupBy` / `first` / `last` / `flatten` / `compact` / `shuffle` / `intersection` / `difference`
+
+```typescript
+core.array.unique([1, 1, 2])           // [1, 2]
+core.array.chunk([1, 2, 3, 4], 2)      // [[1,2], [3,4]]
+core.array.groupBy(items, item => item.type) // Record<string, T[]>
+core.array.intersection([1, 2], [2, 3]) // [2]
+```
+
+#### 异步操作 — `core.async`
+
+`delay` / `withTimeout` / `retry` / `parallel` / `serial` / `debounce` / `throttle`
+
+```typescript
+await core.async.delay(1000)
+await core.async.withTimeout(fetch('/api'), 5000)
+await core.async.retry(fn, { maxRetries: 3, delay: 1000 })
+await core.async.parallel(items, processFn, 5)  // 并发限制
+const debouncedFn = core.async.debounce(fn, 300)
+```
+
+#### 时间操作 — `core.time`
+
+`formatDate` / `timeAgo` / `now` / `nowSeconds` / `parseDate` / `isValidDate` / `addDays` / `addHours` / `startOfDay` / `endOfDay`
+
+```typescript
+core.time.formatDate(new Date(), 'YYYY-MM-DD HH:mm:ss')
+core.time.timeAgo(new Date(Date.now() - 60000)) // '1 分钟前'
+core.time.addDays(date, 7)
 ```
 
 ### Result 模型与错误处理

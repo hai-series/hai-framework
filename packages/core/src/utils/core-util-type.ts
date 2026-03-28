@@ -139,3 +139,6 @@ export const typeUtils = {
   isBoolean,
   isArray,
 }
+
+/** typeUtils 子工具类型 */
+export type TypeUtilFn = typeof typeUtils
