@@ -100,10 +100,10 @@ export function createCapacitorTokenStorage(): TokenStorage {
 }
 
 /**
- * 安全读取 Preference 值（返回 Result）
+ * 安全读取 Preference 值（返回 HaiResult）
  *
  * @param key - Preference Key
- * @returns Result 包裹的值
+ * @returns HaiResult 包裹的值
  *
  * @example
  * ```ts
@@ -132,7 +132,7 @@ export async function safeGetPreference(key: string): Promise<HaiResult<string |
  *
  * @param key - Preference Key
  * @param value - 要写入的值
- * @returns Result
+ * @returns HaiResult
  *
  * @example
  * ```ts
@@ -157,7 +157,7 @@ export async function safeSetPreference(key: string, value: string): Promise<Hai
  * 安全删除 Preference 值
  *
  * @param key - Preference Key
- * @returns Result
+ * @returns HaiResult
  *
  * @example
  * ```ts
