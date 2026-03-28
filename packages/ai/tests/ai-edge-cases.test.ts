@@ -10,7 +10,7 @@ import { err, ok } from '@h-ai/core'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { collectStreamContent, createAIClient } from '../src/client/ai-client.js'
-import { ai, AIErrorCode } from '../src/index.js'
+import { ai, HaiAIError } from '../src/index.js'
 
 // =============================================================================
 // ai.tools.define — 非 Error 异常
@@ -430,7 +430,7 @@ describe('ai — 未初始化时的行为一致性', () => {
 
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(AIErrorCode.NOT_INITIALIZED)
+      expect(result.error.code).toBe(HaiAIError.NOT_INITIALIZED.code)
     }
   })
 
@@ -441,7 +441,7 @@ describe('ai — 未初始化时的行为一致性', () => {
     const result = await ai.mcp.callTool('any', {})
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(AIErrorCode.NOT_INITIALIZED)
+      expect(result.error.code).toBe(HaiAIError.NOT_INITIALIZED.code)
     }
   })
 
@@ -459,7 +459,7 @@ describe('ai — 未初始化时的行为一致性', () => {
     const result = await ai.mcp.callTool('first', {})
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(AIErrorCode.MCP_TOOL_ERROR)
+      expect(result.error.code).toBe(HaiAIError.MCP_TOOL_ERROR.code)
     }
   })
 })

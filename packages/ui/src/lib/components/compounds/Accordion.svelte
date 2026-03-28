@@ -3,19 +3,19 @@
   @h-ai/ui - Accordion 组件
   =============================================================================
   手风琴/折叠面板组件，支持单选/多选模式、多种样式变体
-  
+
   使用 Svelte 5 Runes ($props, $state, $derived)
   使用 DaisyUI collapse 类
   =============================================================================
 -->
 
-<script lang="ts">
+<script lang='ts'>
   import type { Snippet } from 'svelte'
   import type { AccordionItem } from './accordion-types.js'
   import { cn } from '../../utils.js'
   import ToggleCheckbox from '../primitives/ToggleCheckbox.svelte'
   import ToggleRadio from '../primitives/ToggleRadio.svelte'
-  
+
   interface Props {
     /** 折叠项数据 */
     items: AccordionItem[]
@@ -36,7 +36,7 @@
     /** 自定义内容渲染 */
     children?: Snippet<[AccordionItem]>
   }
-  
+
   let {
     items,
     value = $bindable(undefined),
@@ -48,17 +48,18 @@
     class: className = '',
     children,
   }: Props = $props()
-  
+
   const groupName = `accordion-${Math.random().toString(36).slice(2, 9)}`
-  
+
   function isExpanded(itemId: string): boolean {
-    if (value === undefined) return false
+    if (value === undefined)
+      return false
     if (multiple) {
       return Array.isArray(value) && value.includes(itemId)
     }
     return value === itemId
   }
-  
+
   function toggleItem(itemId: string) {
     if (multiple) {
       const current = Array.isArray(value) ? value : []
@@ -67,26 +68,27 @@
         : [...current, itemId]
       value = newValue
       onchange?.(newValue)
-    } else {
+    }
+    else {
       const newValue = value === itemId ? undefined : itemId
       value = newValue as string
       onchange?.(newValue as string)
     }
   }
-  
+
   const iconClass = $derived({
     arrow: 'collapse-arrow',
     plus: 'collapse-plus',
     none: '',
   }[icon] || 'collapse-arrow')
-  
+
   const containerClass = $derived(
     cn(
       variant === 'joined' && 'join join-vertical w-full',
       className,
-    )
+    ),
   )
-  
+
   function getItemClass(item: AccordionItem): string {
     return cn(
       'collapse',
@@ -120,15 +122,15 @@
           onchange={() => toggleItem(item.id)}
         />
       {/if}
-      
-      <div class="collapse-title font-semibold flex items-center gap-2">
+
+      <div class='collapse-title font-semibold flex items-center gap-2'>
         {#if item.icon}
-          <span class="text-lg">{item.icon}</span>
+          <span class='text-lg'>{item.icon}</span>
         {/if}
         {item.title}
       </div>
-      
-      <div class="collapse-content text-sm">
+
+      <div class='collapse-content text-sm'>
         {#if children}
           {@render children(item)}
         {:else if item.content}

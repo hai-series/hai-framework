@@ -1,11 +1,11 @@
-<script lang="ts">
+<script lang='ts'>
+  import type { LoginFormData } from '@h-ai/ui'
   /**
    * 登录页 — 使用 @h-ai/ui LoginForm + @h-ai/iam
    */
   import { goto } from '$app/navigation'
   import * as m from '$lib/paraglide/messages.js'
   import { h5AuthTokenStore } from '$lib/utils/auth.js'
-  import type { LoginFormData } from '@h-ai/ui'
 
   let loading = $state(false)
   let errors: Record<string, string> = $state({})
@@ -48,29 +48,29 @@
   <title>{m.auth_login_title()} - H5</title>
 </svelte:head>
 
-<div class="min-h-screen flex flex-col bg-base-100">
+<div class='min-h-screen flex flex-col bg-base-100'>
   <!-- 返回按钮 -->
-  <div class="p-4">
+  <div class='p-4'>
     <IconButton
-      size="sm"
-      variant="ghost"
+      size='sm'
+      variant='ghost'
       ariaLabel={m.auth_login_back()}
       onclick={() => goto('/')}
     >
-      <span class="icon-[tabler--arrow-left] text-lg"></span>
+      <span class='icon-[tabler--arrow-left] text-lg'></span>
     </IconButton>
   </div>
 
-  <div class="flex-1 flex flex-col justify-center px-6 pb-20">
-    <h1 class="text-2xl font-bold text-center mb-2">{m.auth_login_title()}</h1>
-    <p class="text-center text-base-content/50 mb-8">{m.auth_login_subtitle()}</p>
+  <div class='flex-1 flex flex-col justify-center px-6 pb-20'>
+    <h1 class='text-2xl font-bold text-center mb-2'>{m.auth_login_title()}</h1>
+    <p class='text-center text-base-content/50 mb-8'>{m.auth_login_subtitle()}</p>
 
     <LoginForm
       {loading}
       showRememberMe={false}
       showForgotPassword={false}
       showRegisterLink={true}
-      registerUrl="/auth/register"
+      registerUrl='/auth/register'
       {errors}
       onsubmit={handleLogin}
     />

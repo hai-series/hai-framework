@@ -118,23 +118,25 @@ if (!parsed.success) { /* 校验失败 */ }
 ## 错误处理
 
 ```ts
-import { storage, StorageErrorCode } from '@h-ai/storage'
+import { HaiStorageError, storage } from '@h-ai/storage'
 
 const result = await storage.file.get('image.png')
-if (!result.success && result.error.code === StorageErrorCode.NOT_INITIALIZED) {
+if (!result.success && result.error.code === HaiStorageError.NOT_INITIALIZED.code) {
   // 存储未初始化
 }
 ```
 
 常用错误码：
 
-- `NOT_INITIALIZED`
-- `CONNECTION_FAILED`
-- `OPERATION_FAILED`
-- `NOT_FOUND`
-- `PERMISSION_DENIED`
-- `PRESIGN_FAILED`
-- `CONFIG_ERROR`
+| 错误码                              | code              | 说明                |
+| ----------------------------------- | ----------------- | ------------------- |
+| `HaiStorageError.NOT_INITIALIZED`   | `hai:storage:010` | 未初始化            |
+| `HaiStorageError.CONNECTION_FAILED` | `hai:storage:001` | 连接失败            |
+| `HaiStorageError.OPERATION_FAILED`  | `hai:storage:002` | 操作失败            |
+| `HaiStorageError.NOT_FOUND`         | `hai:storage:003` | 文件不存在          |
+| `HaiStorageError.PERMISSION_DENIED` | `hai:storage:005` | 权限不足            |
+| `HaiStorageError.PRESIGN_FAILED`    | `hai:storage:013` | 预签名 URL 生成失败 |
+| `HaiStorageError.CONFIG_ERROR`      | `hai:storage:012` | 配置错误            |
 
 ## 测试
 

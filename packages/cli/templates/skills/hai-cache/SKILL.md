@@ -119,19 +119,19 @@ const locked = await cache.lock.isLocked('my-lock')
 
 ---
 
-## 错误码 — `CacheErrorCode`
+## 错误码 — `HaiCacheError`
 
-| 错误码                   | 说明              |
-| ------------------------ | ----------------- |
-| `NOT_INITIALIZED`        | 未初始化          |
-| `CONNECTION_FAILED`      | 连接失败（Redis） |
-| `OPERATION_FAILED`       | 操作失败          |
-| `SERIALIZATION_FAILED`   | 序列化失败        |
-| `DESERIALIZATION_FAILED` | 反序列化失败      |
-| `KEY_NOT_FOUND`          | 键不存在          |
-| `TIMEOUT`                | 超时              |
-| `UNSUPPORTED_TYPE`       | 不支持的缓存类型  |
-| `CONFIG_ERROR`           | 配置错误          |
+| 错误码 | code | 说明 |
+|--------|------|------|
+| `HaiCacheError.CONNECTION_FAILED` | `hai:cache:001` | 连接失败 |
+| `HaiCacheError.OPERATION_FAILED` | `hai:cache:002` | 操作失败 |
+| `HaiCacheError.SERIALIZATION_FAILED` | `hai:cache:003` | 序列化失败 |
+| `HaiCacheError.DESERIALIZATION_FAILED` | `hai:cache:004` | 反序列化失败 |
+| `HaiCacheError.KEY_NOT_FOUND` | `hai:cache:005` | 键不存在 |
+| `HaiCacheError.TIMEOUT` | `hai:cache:006` | 超时 |
+| `HaiCacheError.NOT_INITIALIZED` | `hai:cache:010` | 未初始化 |
+| `HaiCacheError.UNSUPPORTED_TYPE` | `hai:cache:011` | 不支持的缓存类型 |
+| `HaiCacheError.CONFIG_ERROR` | `hai:cache:012` | 配置错误 |
 
 ---
 

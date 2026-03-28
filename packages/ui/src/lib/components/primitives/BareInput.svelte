@@ -3,11 +3,11 @@
   @h-ai/ui - BareInput 组件
   =============================================================================
   无样式输入框组件，仅渲染原生 input
-  
+
   使用 Svelte 5 Runes ($props, $bindable)
   =============================================================================
 -->
-<script lang="ts">
+<script lang='ts'>
   import type { BareInputProps } from '../../types.js'
 
   let {

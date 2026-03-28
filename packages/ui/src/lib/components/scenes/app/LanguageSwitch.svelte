@@ -11,11 +11,11 @@
   <script>
     import { LanguageSwitch, createLocaleStore, setGlobalLocale } from '@h-ai/ui'
     import { setLocale, getLocale } from '$lib/paraglide/runtime.js'
-    
+
     const localeStore = createLocaleStore()
   </script>
-  
-  <LanguageSwitch 
+
+  <LanguageSwitch
     currentLanguage={localeStore.current}
     languages={[
       { value: 'zh-CN', label: '简体中文' },
@@ -29,8 +29,9 @@
   ```
 -->
 <script lang='ts'>
-  import BareButton from '../../primitives/BareButton.svelte'
   import { uiM } from '../../../messages.js'
+  import BareButton from '../../primitives/BareButton.svelte'
+
   interface Language {
     value: string
     label: string
@@ -50,7 +51,7 @@
     class?: string
   }
 
-  let {
+  const {
     currentLanguage = 'zh-CN',
     languages = [
       { value: 'zh-CN', label: '简体中文', flag: 'CN' },
@@ -65,7 +66,7 @@
   let containerRef = $state<HTMLDivElement | null>(null)
 
   const currentLangInfo = $derived(
-    languages.find(l => l.value === currentLanguage)
+    languages.find(l => l.value === currentLanguage),
   )
 
   function selectLanguage(lang: string) {
@@ -90,10 +91,10 @@
   })
 </script>
 
-<div bind:this={containerRef} class='dropdown dropdown-end {open ? "dropdown-open" : ""} {className}'>
+<div bind:this={containerRef} class='dropdown dropdown-end {open ? 'dropdown-open' : ''} {className}'>
   <BareButton
     type='button'
-    class='btn btn-ghost {compact ? "btn-sm btn-square" : "btn-sm gap-2 min-w-fit"}'
+    class='btn btn-ghost {compact ? 'btn-sm btn-square' : 'btn-sm gap-2 min-w-fit'}'
     onclick={() => (open = !open)}
     ariaLabel={uiM('language_switch_label')}
   >
@@ -116,7 +117,7 @@
       {#each languages as lang (lang.value)}
         <BareButton
           type='button'
-          class='flex items-center gap-2 w-full px-3 py-2 rounded-lg text-left transition-colors whitespace-nowrap {lang.value === currentLanguage ? "bg-primary/10 text-primary" : "hover:bg-base-200"}'
+          class='flex items-center gap-2 w-full px-3 py-2 rounded-lg text-left transition-colors whitespace-nowrap {lang.value === currentLanguage ? 'bg-primary/10 text-primary' : 'hover:bg-base-200'}'
           onclick={() => selectLanguage(lang.value)}
         >
           {#if lang.flag}

@@ -15,7 +15,7 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { reldb, ReldbErrorCode } from '../src/index.js'
+import { HaiReldbError, reldb } from '../src/index.js'
 import { defineDbSuite, mysqlDockerOpts, mysqlEnv, postgresDockerOpts, postgresEnv, sqliteMemoryEnv } from './helpers/reldb-test-suite.js'
 
 interface UserRow {
@@ -51,7 +51,7 @@ describe('reldb.crud edge cases', () => {
       const result = await crud.create({})
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.code).toBe(ReldbErrorCode.CONFIG_ERROR)
+        expect(result.error.code).toBe(HaiReldbError.CONFIG_ERROR.code)
       }
     })
 
@@ -67,7 +67,7 @@ describe('reldb.crud edge cases', () => {
       const result = await crud.updateById(1, {})
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.code).toBe(ReldbErrorCode.CONFIG_ERROR)
+        expect(result.error.code).toBe(HaiReldbError.CONFIG_ERROR.code)
       }
     })
 
@@ -86,7 +86,7 @@ describe('reldb.crud edge cases', () => {
       const result = await crud.create({ status: 'active' })
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.code).toBe(ReldbErrorCode.CONFIG_ERROR)
+        expect(result.error.code).toBe(HaiReldbError.CONFIG_ERROR.code)
       }
     })
 
@@ -103,7 +103,7 @@ describe('reldb.crud edge cases', () => {
       const result = await crud.updateById(1, { email: 'new@test.com' })
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.code).toBe(ReldbErrorCode.CONFIG_ERROR)
+        expect(result.error.code).toBe(HaiReldbError.CONFIG_ERROR.code)
       }
     })
 
@@ -124,7 +124,7 @@ describe('reldb.crud edge cases', () => {
       const result = await crud.updateById(1, { id: 999 })
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.code).toBe(ReldbErrorCode.CONFIG_ERROR)
+        expect(result.error.code).toBe(HaiReldbError.CONFIG_ERROR.code)
       }
     })
 
@@ -145,7 +145,7 @@ describe('reldb.crud edge cases', () => {
       ])
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.code).toBe(ReldbErrorCode.CONFIG_ERROR)
+        expect(result.error.code).toBe(HaiReldbError.CONFIG_ERROR.code)
       }
     })
 

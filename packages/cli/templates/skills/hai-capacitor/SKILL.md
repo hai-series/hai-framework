@@ -27,7 +27,7 @@ packages/capacitor/src/
   index.ts                    # export * 聚合
   capacitor-main.ts           # 服务对象（export const capacitor）
   capacitor-types.ts           # 公共类型（CapacitorFunctions / CapacitorError / 业务类型）
-  capacitor-config.ts          # 错误码（CapacitorErrorCode as const）
+  capacitor-config.ts          # 错误码（HaiCapacitorError as const）
   capacitor-i18n.ts            # i18n 消息获取器
   capacitor-token-storage.ts   # Token 存储（TokenStorage 实现 + safe* 工具）
   capacitor-device.ts          # 设备信息
@@ -48,7 +48,7 @@ import { capacitor } from '@h-ai/capacitor'
 // 应用启动时初始化（检测 Capacitor 环境可用性）
 const result = await capacitor.init()
 if (!result.success) {
-  // result.error.code === CapacitorErrorCode.NOT_AVAILABLE
+  // result.error.code === HaiCapacitorError.NOT_AVAILABLE.code
   // 非 Capacitor 环境（纯 Web）
 }
 
@@ -89,7 +89,7 @@ await api.init({
 ```typescript
 import { capacitor } from '@h-ai/capacitor'
 
-// 返回 HaiResult<string | null, CapacitorError>
+// 返回 HaiResult<string | null>
 const result = await capacitor.preferences.get('my_key')
 if (result.success) {
   // result.data — 值或 null
@@ -198,9 +198,9 @@ await capacitor.statusBar.show()
 | `capacitor.preferences.set(key, value)` | 安全写入 Preference | `HaiResult<void>` |
 | `capacitor.preferences.remove(key)` | 安全删除 Preference | `HaiResult<void>` |
 | `capacitor.device.getInfo()` | 设备信息 | `HaiResult<DeviceInfo>` |
-| `capacitor.device.getAppVersion()` | 应用版本 | `HaiResult<{ version, build }, CapacitorError>` |
+| `capacitor.device.getAppVersion()` | 应用版本 | `HaiResult<{ version, build }>` |
 | `capacitor.push.register()` | 注册推送 | `HaiResult<PushRegistration>` |
-| `capacitor.push.listen(callbacks)` | 监听推送事件 | `HaiResult<() => Promise<void>, CapacitorError>`（async 清理函数） |
+| `capacitor.push.listen(callbacks)` | 监听推送事件 | `HaiResult<() => Promise<void>>`（async 清理函数） |
 | `capacitor.camera.takePhoto(options?)` | 拍照 / 选取图片 | `HaiResult<PhotoResult>` |
 | `capacitor.statusBar.configure(config)` | 配置状态栏 | `HaiResult<void>` |
 | `capacitor.statusBar.show()` | 显示状态栏 | `HaiResult<void>` |
@@ -208,22 +208,22 @@ await capacitor.statusBar.show()
 
 ---
 
-## 错误码 — `CapacitorErrorCode`
+## 错误码 — `HaiCapacitorError`
 
-| 错误码 | 常量                        | 说明                 |
-| ------ | --------------------------- | -------------------- |
-| 8000   | `INIT_FAILED`               | 初始化失败           |
-| 8001   | `NOT_AVAILABLE`             | Capacitor 不可用     |
-| 8002   | `INIT_IN_PROGRESS`          | 正在初始化中       |
-| 8010   | `NOT_INITIALIZED`           | 模块未初始化         |
-| 8011   | `PREFERENCES_GET_FAILED`    | Preferences 读取失败 |
-| 8012   | `PREFERENCES_SET_FAILED`    | Preferences 写入失败 |
-| 8013   | `PREFERENCES_REMOVE_FAILED` | Preferences 删除失败 |
-| 8020   | `DEVICE_INFO_FAILED`        | 获取设备信息失败     |
-| 8030   | `PUSH_REGISTER_FAILED`      | 推送注册失败         |
-| 8031   | `PUSH_LISTEN_FAILED`        | 推送监听失败         |
-| 8040   | `CAMERA_FAILED`             | 拍照/相册失败        |
-| 8050   | `STATUS_BAR_FAILED`         | 状态栏配置失败       |
+| 错误码                                       | code                   | 说明                 |
+| -------------------------------------------- | ---------------------- | -------------------- |
+| `HaiCapacitorError.INIT_FAILED`              | `hai:capacitor:001`    | 初始化失败           |
+| `HaiCapacitorError.NOT_AVAILABLE`            | `hai:capacitor:002`    | Capacitor 不可用     |
+| `HaiCapacitorError.INIT_IN_PROGRESS`         | `hai:capacitor:003`    | 正在初始化中         |
+| `HaiCapacitorError.NOT_INITIALIZED`          | `hai:capacitor:010`    | 模块未初始化         |
+| `HaiCapacitorError.PREFERENCES_GET_FAILED`   | `hai:capacitor:011`    | Preferences 读取失败 |
+| `HaiCapacitorError.PREFERENCES_SET_FAILED`   | `hai:capacitor:012`    | Preferences 写入失败 |
+| `HaiCapacitorError.PREFERENCES_REMOVE_FAILED`| `hai:capacitor:013`    | Preferences 删除失败 |
+| `HaiCapacitorError.DEVICE_INFO_FAILED`       | `hai:capacitor:020`    | 获取设备信息失败     |
+| `HaiCapacitorError.PUSH_REGISTER_FAILED`     | `hai:capacitor:030`    | 推送注册失败         |
+| `HaiCapacitorError.PUSH_LISTEN_FAILED`       | `hai:capacitor:031`    | 推送监听失败         |
+| `HaiCapacitorError.CAMERA_FAILED`            | `hai:capacitor:040`    | 拍照/相册失败        |
+| `HaiCapacitorError.STATUS_BAR_FAILED`        | `hai:capacitor:050`    | 状态栏配置失败       |
 
 ---
 

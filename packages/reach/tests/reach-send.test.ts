@@ -6,7 +6,7 @@
 
 import { reldb } from '@h-ai/reldb'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { reach, ReachErrorCode } from '../src/index.js'
+import { HaiReachError, reach } from '../src/index.js'
 import { resetTemplateRepoSingleton } from '../src/repositories/reach-repository-template.js'
 
 describe.sequential('reach.send (multi-provider)', () => {
@@ -102,7 +102,7 @@ describe.sequential('reach.send (multi-provider)', () => {
 
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(ReachErrorCode.TEMPLATE_NOT_FOUND)
+      expect(result.error.code).toBe(HaiReachError.TEMPLATE_NOT_FOUND.code)
     }
   })
 
@@ -115,7 +115,7 @@ describe.sequential('reach.send (multi-provider)', () => {
 
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(ReachErrorCode.PROVIDER_NOT_FOUND)
+      expect(result.error.code).toBe(HaiReachError.PROVIDER_NOT_FOUND.code)
     }
   })
 
@@ -128,7 +128,7 @@ describe.sequential('reach.send (multi-provider)', () => {
 
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(ReachErrorCode.INVALID_RECIPIENT)
+      expect(result.error.code).toBe(HaiReachError.INVALID_RECIPIENT.code)
     }
   })
 
@@ -141,7 +141,7 @@ describe.sequential('reach.send (multi-provider)', () => {
 
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(ReachErrorCode.PROVIDER_NOT_FOUND)
+      expect(result.error.code).toBe(HaiReachError.PROVIDER_NOT_FOUND.code)
     }
   })
 
@@ -241,7 +241,7 @@ describe.sequential('reach.send (DND)', () => {
 
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(ReachErrorCode.DND_BLOCKED)
+      expect(result.error.code).toBe(HaiReachError.DND_BLOCKED.code)
     }
   })
 
@@ -277,7 +277,7 @@ describe.sequential('reach.send (DND)', () => {
 
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(ReachErrorCode.PROVIDER_NOT_FOUND)
+      expect(result.error.code).toBe(HaiReachError.PROVIDER_NOT_FOUND.code)
     }
   })
 })

@@ -2,16 +2,16 @@
   @component ChangePasswordForm
   修改密码表单组件。
 -->
-<script lang="ts">
+<script lang='ts'>
   import type { ChangePasswordFormData, ChangePasswordFormProps } from '../types.js'
-  import { cn } from '../../../utils.js'
-  import Button from '../../primitives/Button.svelte'
-  import Alert from '../../compounds/Alert.svelte'
-  import PasswordInput from './PasswordInput.svelte'
-  import { arePasswordsEqual } from './password-utils.js'
   import { uiM } from '../../../messages.js'
+  import { cn } from '../../../utils.js'
+  import Alert from '../../compounds/Alert.svelte'
+  import Button from '../../primitives/Button.svelte'
+  import { arePasswordsEqual } from './password-utils.js'
+  import PasswordInput from './PasswordInput.svelte'
 
-  let {
+  const {
     loading = false,
     disabled = false,
     requireOldPassword = true,
@@ -35,13 +35,15 @@
   )
 
   const passwordsMatch = $derived(arePasswordsEqual(newPassword, confirmPassword))
-  const canSubmit = $derived(
-    (!requireOldPassword || oldPassword)
-    && newPassword
-    && confirmPassword
-    && passwordsMatch
-    && newPassword.length >= minPasswordLength,
-  )
+  const canSubmit = $derived.by(() => {
+    if (requireOldPassword && !oldPassword)
+      return false
+    if (!newPassword || !confirmPassword)
+      return false
+    if (!passwordsMatch)
+      return false
+    return newPassword.length >= minPasswordLength
+  })
 
   /**
    * 提交修改密码数据。
@@ -66,8 +68,8 @@
 
 <form class={formClass} onsubmit={handleSubmit}>
   {#if requireOldPassword}
-    <div class="space-y-1.5">
-      <label class="text-sm font-medium text-base-content/70" for="old-password">
+    <div class='space-y-1.5'>
+      <label class='text-sm font-medium text-base-content/70' for='old-password'>
         {uiM('change_password_old')}
       </label>
       <PasswordInput
@@ -81,8 +83,8 @@
     </div>
   {/if}
 
-  <div class="space-y-1.5">
-    <label class="text-sm font-medium text-base-content/70" for="new-password">
+  <div class='space-y-1.5'>
+    <label class='text-sm font-medium text-base-content/70' for='new-password'>
       {uiM('change_password_new')}
     </label>
     <PasswordInput
@@ -96,8 +98,8 @@
     />
   </div>
 
-  <div class="space-y-1.5">
-    <label class="text-sm font-medium text-base-content/70" for="confirm-password">
+  <div class='space-y-1.5'>
+    <label class='text-sm font-medium text-base-content/70' for='confirm-password'>
       {uiM('change_password_confirm')}
     </label>
     <PasswordInput
@@ -110,20 +112,20 @@
     />
   </div>
 
-  <div class="rounded-lg bg-base-content/3 px-3.5 py-2.5 text-xs text-base-content/50">
+  <div class='rounded-lg bg-base-content/3 px-3.5 py-2.5 text-xs text-base-content/50'>
     {uiM('change_password_relogin_hint')}
   </div>
 
   {#if errors.general}
-    <Alert variant="error">
+    <Alert variant='error'>
       {errors.general}
     </Alert>
   {/if}
 
   <Button
-    type="submit"
-    variant="primary"
-    class="w-full sm:w-auto sm:min-w-40"
+    type='submit'
+    variant='primary'
+    class='w-full sm:w-auto sm:min-w-40'
     disabled={loading || disabled || !canSubmit}
     {loading}
   >

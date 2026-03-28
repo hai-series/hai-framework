@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest'
-import { crypto, CryptoErrorCode } from '../src/index.js'
+import { crypto, HaiCryptoError } from '../src/index.js'
 
 describe('crypto.password', () => {
   beforeAll(async () => {
@@ -141,7 +141,7 @@ describe('crypto.password', () => {
     if (result.success)
       return
 
-    expect(result.error.code).toBe(CryptoErrorCode.INVALID_INPUT)
+    expect(result.error.code).toBe(HaiCryptoError.INVALID_INPUT.code)
   })
 
   it('should return INVALID_INPUT when verify password is empty', () => {
@@ -150,7 +150,7 @@ describe('crypto.password', () => {
     if (result.success)
       return
 
-    expect(result.error.code).toBe(CryptoErrorCode.INVALID_INPUT)
+    expect(result.error.code).toBe(HaiCryptoError.INVALID_INPUT.code)
   })
 
   it('should return INVALID_INPUT when hash is empty', () => {
@@ -159,7 +159,7 @@ describe('crypto.password', () => {
     if (result.success)
       return
 
-    expect(result.error.code).toBe(CryptoErrorCode.INVALID_INPUT)
+    expect(result.error.code).toBe(HaiCryptoError.INVALID_INPUT.code)
   })
 
   it('should return INVALID_INPUT when hash format is invalid', () => {
@@ -168,7 +168,7 @@ describe('crypto.password', () => {
     if (result.success)
       return
 
-    expect(result.error.code).toBe(CryptoErrorCode.INVALID_INPUT)
+    expect(result.error.code).toBe(HaiCryptoError.INVALID_INPUT.code)
   })
 
   it('should return INVALID_INPUT for malformed hash parts', () => {
@@ -177,7 +177,7 @@ describe('crypto.password', () => {
     if (result.success)
       return
 
-    expect(result.error.code).toBe(CryptoErrorCode.INVALID_INPUT)
+    expect(result.error.code).toBe(HaiCryptoError.INVALID_INPUT.code)
   })
 
   it('should return INVALID_INPUT for wrong hash prefix', () => {
@@ -186,6 +186,6 @@ describe('crypto.password', () => {
     if (result.success)
       return
 
-    expect(result.error.code).toBe(CryptoErrorCode.INVALID_INPUT)
+    expect(result.error.code).toBe(HaiCryptoError.INVALID_INPUT.code)
   })
 })

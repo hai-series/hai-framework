@@ -337,8 +337,8 @@ core.time.endOfDay(date)
 ```typescript
 import { core } from '@h-ai/core'
 
-const notInitialized = core.module.createNotInitializedKit<DbError>(
-  DbErrorCode.NOT_INITIALIZED,
+const notInitialized = core.module.createNotInitializedKit(
+  HaiDbError.NOT_INITIALIZED,
   () => dbM('db_notInitialized'),
 )
 

@@ -9,7 +9,7 @@ import type { EmbeddingOperations } from '../src/embedding/ai-embedding-types.js
 import type { LLMOperations } from '../src/llm/ai-llm-types.js'
 import type { KnowledgeStore } from '../src/store/ai-store-types.js'
 import { describe, expect, it, vi } from 'vitest'
-import { AIErrorCode } from '../src/ai-config.js'
+import { HaiAIError } from '../src/ai-types.js'
 import { createKnowledgeOperations } from '../src/knowledge/ai-knowledge-functions.js'
 
 // ─── Mock 工厂 ───
@@ -163,7 +163,9 @@ describe('knowledge setup', () => {
 
   it('store.initialize 抛出时 setup 返回错误', async () => {
     const { store } = createMockKnowledgeStore()
-    store.initialize = vi.fn(async () => { throw new Error('init failed') })
+    store.initialize = vi.fn(async () => {
+      throw new Error('init failed')
+    })
 
     const ops = createKnowledgeOperations(
       DEFAULT_CONFIG,
@@ -176,7 +178,7 @@ describe('knowledge setup', () => {
     const result = await ops.setup()
     expect(result.success).toBe(false)
     if (!result.success)
-      expect(result.error.code).toBe(AIErrorCode.KNOWLEDGE_SETUP_FAILED)
+      expect(result.error.code).toBe(HaiAIError.KNOWLEDGE_SETUP_FAILED.code)
   })
 
   it('自定义 collection 和 dimension', async () => {
@@ -206,7 +208,7 @@ describe('knowledge setup', () => {
     const result = await ops.setup()
     expect(result.success).toBe(false)
     if (!result.success)
-      expect(result.error.code).toBe(AIErrorCode.KNOWLEDGE_SETUP_FAILED)
+      expect(result.error.code).toBe(HaiAIError.KNOWLEDGE_SETUP_FAILED.code)
   })
 })
 
@@ -256,7 +258,7 @@ describe('knowledge ingest', () => {
     const result = await ops.ingest({ documentId: 'doc-1', content: 'Hello world' })
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(AIErrorCode.KNOWLEDGE_NOT_SETUP)
+      expect(result.error.code).toBe(HaiAIError.KNOWLEDGE_NOT_SETUP.code)
     }
   })
 
@@ -294,7 +296,7 @@ describe('knowledge ingest', () => {
       clean: vi.fn((text: string) => ({ success: true, data: text })),
       chunk: vi.fn(() => ({ success: false, error: { message: 'chunk failed' } })),
     }
-    const { ops } = await setupOps({ datapipe: failDatapipe as any })
+    const { ops } = await setupOps({ datapipe: failDatapipe as unknown as ReturnType<typeof createMockDatapipe> })
 
     const result = await ops.ingest({
       documentId: 'doc-2',
@@ -353,7 +355,9 @@ describe('knowledge ingest', () => {
 
   it('store.upsertVectors 抛出时 ingest 返回错误', async () => {
     const mockStore = createMockKnowledgeStore()
-    mockStore.store.upsertVectors = vi.fn(async () => { throw new Error('upsert failed') })
+    mockStore.store.upsertVectors = vi.fn(async () => {
+      throw new Error('upsert failed')
+    })
 
     const ops = createKnowledgeOperations(
       DEFAULT_CONFIG,
@@ -367,7 +371,7 @@ describe('knowledge ingest', () => {
     const result = await ops.ingest({ documentId: 'doc-4', content: 'Test' })
     expect(result.success).toBe(false)
     if (!result.success)
-      expect(result.error.code).toBe(AIErrorCode.KNOWLEDGE_INGEST_FAILED)
+      expect(result.error.code).toBe(HaiAIError.KNOWLEDGE_INGEST_FAILED.code)
   })
 })
 
@@ -414,7 +418,7 @@ describe('knowledge retrieve', () => {
     const result = await ops.retrieve('test query')
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(AIErrorCode.KNOWLEDGE_NOT_SETUP)
+      expect(result.error.code).toBe(HaiAIError.KNOWLEDGE_NOT_SETUP.code)
     }
   })
 
@@ -588,7 +592,7 @@ describe('knowledge listDocuments', () => {
     const result = await ops.listDocuments()
     expect(result.success).toBe(false)
     if (!result.success)
-      expect(result.error.code).toBe(AIErrorCode.KNOWLEDGE_NOT_SETUP)
+      expect(result.error.code).toBe(HaiAIError.KNOWLEDGE_NOT_SETUP.code)
   })
 
   it('正常返回文档列表（空结果）', async () => {
@@ -646,7 +650,7 @@ describe('knowledge removeDocument', () => {
     const result = await ops.removeDocument('doc-1')
     expect(result.success).toBe(false)
     if (!result.success)
-      expect(result.error.code).toBe(AIErrorCode.KNOWLEDGE_NOT_SETUP)
+      expect(result.error.code).toBe(HaiAIError.KNOWLEDGE_NOT_SETUP.code)
   })
 
   it('正常删除文档 — 清理向量 + 实体关联 + 元数据', async () => {
@@ -727,9 +731,9 @@ describe('knowledge ingestBatch', () => {
     embedding.embedBatch = vi.fn(async (texts: string[]) => {
       callCount++
       if (callCount === 1)
-        return { success: false, error: { message: 'embedding failed' } } as any
-      return { success: true, data: texts.map(() => [0.1, 0.2, 0.3]) } as any
-    }) as any
+        return { success: false, error: { message: 'embedding failed' } } as unknown as Awaited<ReturnType<EmbeddingOperations['embedBatch']>>
+      return { success: true, data: texts.map(() => [0.1, 0.2, 0.3]) } as unknown as Awaited<ReturnType<EmbeddingOperations['embedBatch']>>
+    }) as unknown as EmbeddingOperations['embedBatch']
 
     const ops = createKnowledgeOperations(
       DEFAULT_CONFIG,

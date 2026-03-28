@@ -1472,28 +1472,28 @@ const sessions = await client.listSessions('user-001')
 所有需要初始化的子系统方法均返回 `HaiResult<T>`，通过 `result.success` 判断成功/失败。
 
 ```ts
-import { AIErrorCode } from '@h-ai/ai'
+import { HaiAIError } from '@h-ai/ai'
 
 const result = await ai.llm.chat({ messages })
 
 if (!result.success) {
   switch (result.error.code) {
-    case AIErrorCode.NOT_INITIALIZED:
+    case HaiAIError.NOT_INITIALIZED.code:
       // 未初始化，请先调用 ai.init()
       break
-    case AIErrorCode.RATE_LIMITED:
+    case HaiAIError.RATE_LIMITED.code:
       // API 限流，稍后重试
       break
-    case AIErrorCode.TIMEOUT:
+    case HaiAIError.TIMEOUT.code:
       // 请求超时
       break
-    case AIErrorCode.CONTEXT_LENGTH_EXCEEDED:
+    case HaiAIError.CONTEXT_LENGTH_EXCEEDED.code:
       // 上下文超长，需压缩消息
       break
-    case AIErrorCode.MEMORY_RECALL_FAILED:
+    case HaiAIError.MEMORY_RECALL_FAILED.code:
       // 记忆检索失败
       break
-    case AIErrorCode.CONTEXT_COMPRESS_FAILED:
+    case HaiAIError.CONTEXT_COMPRESS_FAILED.code:
       // 上下文压缩失败
       break
     default:

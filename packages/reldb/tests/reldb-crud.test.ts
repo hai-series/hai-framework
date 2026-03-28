@@ -6,7 +6,7 @@
 
 import { describe, expect, it } from 'vitest'
 import { reldb } from '../src/index.js'
-import { ReldbErrorCode } from '../src/reldb-config.js'
+import { HaiReldbError } from '../src/reldb-types.js'
 import { defineDbSuite, mysqlDockerOpts, mysqlEnv, postgresDockerOpts, postgresEnv, sqliteMemoryEnv } from './helpers/reldb-test-suite.js'
 
 interface UserRow {
@@ -376,7 +376,7 @@ describe('reldb.crud', () => {
       const result = await crud.createOrUpdate({})
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.code).toBe(ReldbErrorCode.CONFIG_ERROR)
+        expect(result.error.code).toBe(HaiReldbError.CONFIG_ERROR.code)
       }
     })
 
@@ -436,7 +436,7 @@ describe('reldb.crud', () => {
       const result = await crud.getById(999)
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.code).toBe(ReldbErrorCode.RECORD_NOT_FOUND)
+        expect(result.error.code).toBe(HaiReldbError.RECORD_NOT_FOUND.code)
       }
     })
   }

@@ -7,7 +7,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
-import { ai, AIErrorCode } from '../src/index.js'
+import { ai, HaiAIError } from '../src/index.js'
 
 // =============================================================================
 // Mock OpenAI SDK（供 LLM + Embedding 使用）
@@ -289,35 +289,35 @@ describe('ai 全流程集成', () => {
     const chatResult = await ai.llm.chat({ messages: [{ role: 'user', content: 'test' }] })
     expect(chatResult.success).toBe(false)
     if (!chatResult.success) {
-      expect(chatResult.error.code).toBe(AIErrorCode.NOT_INITIALIZED)
+      expect(chatResult.error.code).toBe(HaiAIError.NOT_INITIALIZED.code)
     }
 
     // Embedding
     const embedResult = await ai.embedding.embedText('test')
     expect(embedResult.success).toBe(false)
     if (!embedResult.success) {
-      expect(embedResult.error.code).toBe(AIErrorCode.NOT_INITIALIZED)
+      expect(embedResult.error.code).toBe(HaiAIError.NOT_INITIALIZED.code)
     }
 
     // Reasoning
     const reasonResult = await ai.reasoning.run({ task: 'test', strategy: 'cot' })
     expect(reasonResult.success).toBe(false)
     if (!reasonResult.success) {
-      expect(reasonResult.error.code).toBe(AIErrorCode.NOT_INITIALIZED)
+      expect(reasonResult.error.code).toBe(HaiAIError.NOT_INITIALIZED.code)
     }
 
     // RAG
     const ragResult = await ai.rag.query('test')
     expect(ragResult.success).toBe(false)
     if (!ragResult.success) {
-      expect(ragResult.error.code).toBe(AIErrorCode.NOT_INITIALIZED)
+      expect(ragResult.error.code).toBe(HaiAIError.NOT_INITIALIZED.code)
     }
 
     // Knowledge
     const knowledgeResult = await ai.knowledge.retrieve({ query: 'test', collection: 'test' })
     expect(knowledgeResult.success).toBe(false)
     if (!knowledgeResult.success) {
-      expect(knowledgeResult.error.code).toBe(AIErrorCode.NOT_INITIALIZED)
+      expect(knowledgeResult.error.code).toBe(HaiAIError.NOT_INITIALIZED.code)
     }
 
     // tools 和 stream 是纯函数，仍可用

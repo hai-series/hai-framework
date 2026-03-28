@@ -5,7 +5,7 @@
  */
 
 import { afterEach, describe, expect, it } from 'vitest'
-import { ai, AIErrorCode } from '../src/index.js'
+import { ai, HaiAIError } from '../src/index.js'
 
 afterEach(() => {
   ai.close()
@@ -40,7 +40,7 @@ describe('ai.mcp — Tool', () => {
     const result = await ai.mcp.callTool('nonexistent', {})
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(AIErrorCode.MCP_TOOL_ERROR)
+      expect(result.error.code).toBe(HaiAIError.MCP_TOOL_ERROR.code)
     }
   })
 
@@ -55,7 +55,7 @@ describe('ai.mcp — Tool', () => {
     const result = await ai.mcp.callTool('crash', {})
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(AIErrorCode.MCP_TOOL_ERROR)
+      expect(result.error.code).toBe(HaiAIError.MCP_TOOL_ERROR.code)
       expect(result.error.message).toContain('tool boom')
     }
   })
@@ -124,7 +124,7 @@ describe('ai.mcp — Tool', () => {
     const result = await ai.mcp.callTool('str_throw', {})
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(AIErrorCode.MCP_TOOL_ERROR)
+      expect(result.error.code).toBe(HaiAIError.MCP_TOOL_ERROR.code)
     }
   })
 })
@@ -156,7 +156,7 @@ describe('ai.mcp — Resource', () => {
     const result = await ai.mcp.readResource('file:///nonexistent')
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(AIErrorCode.MCP_RESOURCE_ERROR)
+      expect(result.error.code).toBe(HaiAIError.MCP_RESOURCE_ERROR.code)
     }
   })
 
@@ -171,7 +171,7 @@ describe('ai.mcp — Resource', () => {
     const result = await ai.mcp.readResource('bad://res')
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(AIErrorCode.MCP_RESOURCE_ERROR)
+      expect(result.error.code).toBe(HaiAIError.MCP_RESOURCE_ERROR.code)
       expect(result.error.message).toContain('resource boom')
     }
   })
@@ -241,7 +241,7 @@ describe('ai.mcp — Prompt', () => {
     const result = await ai.mcp.getPrompt('nonexistent', {})
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(AIErrorCode.MCP_PROTOCOL_ERROR)
+      expect(result.error.code).toBe(HaiAIError.MCP_PROTOCOL_ERROR.code)
     }
   })
 
@@ -256,7 +256,7 @@ describe('ai.mcp — Prompt', () => {
     const result = await ai.mcp.getPrompt('strict', {}) // 不传 required_arg
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(AIErrorCode.MCP_PROTOCOL_ERROR)
+      expect(result.error.code).toBe(HaiAIError.MCP_PROTOCOL_ERROR.code)
     }
   })
 
@@ -271,7 +271,7 @@ describe('ai.mcp — Prompt', () => {
     const result = await ai.mcp.getPrompt('crash_prompt', {})
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(AIErrorCode.MCP_PROTOCOL_ERROR)
+      expect(result.error.code).toBe(HaiAIError.MCP_PROTOCOL_ERROR.code)
       expect(result.error.message).toContain('prompt boom')
     }
   })

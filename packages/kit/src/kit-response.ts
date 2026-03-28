@@ -218,7 +218,7 @@ export function redirect(url: string, status: 301 | 302 | 303 | 307 | 308 = 302)
   })
 }
 
-// ─── Result → Response 转换 ───
+// ─── HaiResult → Response 转换 ───
 
 /**
  * 将 HaiResult<T> 转换为标准 API Response

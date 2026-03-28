@@ -167,21 +167,21 @@ App 端使用 `@h-ai/capacitor` 的 `createCapacitorTokenStorage()`。
 
 ---
 
-## 错误码 — `ApiClientErrorCode`
+## 错误码 — `HaiApiClientError`
 
-| 错误码 | 常量                   | 说明                       |
-| ------ | ---------------------- | -------------------------- |
-| 1200   | `NETWORK_ERROR`        | 网络不可达                 |
-| 1201   | `TIMEOUT`              | 请求超时                   |
-| 1202   | `SERVER_ERROR`         | 5xx 服务端错误             |
-| 1203   | `UNAUTHORIZED`         | 401 未认证                 |
-| 1204   | `FORBIDDEN`            | 403 无权限                 |
-| 1205   | `NOT_FOUND`            | 404 资源不存在             |
-| 1206   | `VALIDATION_FAILED`    | 请求参数校验失败（400）    |
-| 1207   | `TOKEN_REFRESH_FAILED` | Token 刷新失败             |
-| 1210   | `NOT_INITIALIZED`      | 未初始化（未调用 api.init）|
-| 1211   | `CONFIG_ERROR`         | 配置错误                   |
-| 1299   | `UNKNOWN`              | 未知错误                   |
+| 错误码 | code | 说明 |
+|--------|------|------|
+| `HaiApiClientError.NETWORK_ERROR` | `hai:api-client:001` | 网络不可达 |
+| `HaiApiClientError.TIMEOUT` | `hai:api-client:002` | 请求超时 |
+| `HaiApiClientError.SERVER_ERROR` | `hai:api-client:003` | 5xx 服务端错误 |
+| `HaiApiClientError.UNAUTHORIZED` | `hai:api-client:004` | 401 未认证 |
+| `HaiApiClientError.FORBIDDEN` | `hai:api-client:005` | 403 无权限 |
+| `HaiApiClientError.NOT_FOUND` | `hai:api-client:006` | 404 资源不存在 |
+| `HaiApiClientError.VALIDATION_FAILED` | `hai:api-client:007` | 请求参数校验失败 |
+| `HaiApiClientError.TOKEN_REFRESH_FAILED` | `hai:api-client:008` | Token 刷新失败 |
+| `HaiApiClientError.NOT_INITIALIZED` | `hai:api-client:010` | 未初始化 |
+| `HaiApiClientError.CONFIG_ERROR` | `hai:api-client:011` | 配置错误 |
+| `HaiApiClientError.UNKNOWN` | `hai:api-client:099` | 未知错误 |
 
 ---
 

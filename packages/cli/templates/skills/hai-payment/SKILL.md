@@ -169,21 +169,21 @@ const payResult = await invokePayment(orderResult.data)
 
 ## 错误码 — `HaiPaymentError`
 
-| 错误码 | 常量                    | 说明                   |
-| ------ | ----------------------- | ---------------------- |
-| 7000   | `CREATE_ORDER_FAILED`   | 创建订单失败           |
-| 7001   | `QUERY_ORDER_FAILED`    | 查询订单失败           |
-| 7002   | `REFUND_FAILED`         | 退款失败               |
-| 7003   | `CLOSE_ORDER_FAILED`    | 关闭订单失败           |
-| 7010   | `NOT_INITIALIZED`       | 模块未初始化           |
-| 7020   | `SIGN_FAILED`           | 签名失败               |
-| 7030   | `PROVIDER_NOT_FOUND`    | Provider 未注册        |
-| 7040   | `INVALID_AMOUNT`        | 金额无效               |
-| 7050   | `NOTIFY_VERIFY_FAILED`  | 回调验签失败           |
-| 7051   | `NOTIFY_PARSE_FAILED`   | 回调解析失败           |
-| 7060   | `INVOKE_WEB_FAILED`     | Web 端调起支付失败     |
-| 7061   | `INVOKE_APP_FAILED`     | App 端调起支付失败     |
-| 7070   | `CONFIG_ERROR`          | 配置无效               |
+| 错误码 | code | 说明 |
+|--------|------|------|
+| `HaiPaymentError.CREATE_ORDER_FAILED` | `hai:payment:001` | 创建订单失败 |
+| `HaiPaymentError.QUERY_ORDER_FAILED` | `hai:payment:002` | 查询订单失败 |
+| `HaiPaymentError.REFUND_FAILED` | `hai:payment:003` | 退款失败 |
+| `HaiPaymentError.CLOSE_ORDER_FAILED` | `hai:payment:004` | 关闭订单失败 |
+| `HaiPaymentError.NOT_INITIALIZED` | `hai:payment:010` | 模块未初始化 |
+| `HaiPaymentError.SIGN_FAILED` | `hai:payment:020` | 签名失败 |
+| `HaiPaymentError.PROVIDER_NOT_FOUND` | `hai:payment:030` | Provider 未注册 |
+| `HaiPaymentError.INVALID_AMOUNT` | `hai:payment:040` | 金额无效 |
+| `HaiPaymentError.NOTIFY_VERIFY_FAILED` | `hai:payment:050` | 回调验签失败 |
+| `HaiPaymentError.NOTIFY_PARSE_FAILED` | `hai:payment:051` | 回调解析失败 |
+| `HaiPaymentError.INVOKE_WEB_FAILED` | `hai:payment:060` | Web 端调起支付失败 |
+| `HaiPaymentError.INVOKE_APP_FAILED` | `hai:payment:061` | App 端调起支付失败 |
+| `HaiPaymentError.CONFIG_ERROR` | `hai:payment:070` | 配置无效 |
 
 ---
 

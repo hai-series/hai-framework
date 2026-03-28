@@ -14,7 +14,7 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { reldb, ReldbErrorCode } from '../src/index.js'
+import { HaiReldbError, reldb } from '../src/index.js'
 import { defineDbSuite, mysqlDockerOpts, mysqlEnv, postgresDockerOpts, postgresEnv, sqliteMemoryEnv } from './helpers/reldb-test-suite.js'
 
 describe('reldb.tx advanced', () => {
@@ -54,7 +54,7 @@ describe('reldb.tx advanced', () => {
       const afterCommit = await tx.execute('INSERT INTO users (name, balance) VALUES (?, ?)', ['用户2', 200])
       expect(afterCommit.success).toBe(false)
       if (!afterCommit.success) {
-        expect(afterCommit.error.code).toBe(ReldbErrorCode.TRANSACTION_FAILED)
+        expect(afterCommit.error.code).toBe(HaiReldbError.TRANSACTION_FAILED.code)
       }
     })
 
@@ -76,7 +76,7 @@ describe('reldb.tx advanced', () => {
       const afterRollback = await tx.query('SELECT * FROM users')
       expect(afterRollback.success).toBe(false)
       if (!afterRollback.success) {
-        expect(afterRollback.error.code).toBe(ReldbErrorCode.TRANSACTION_FAILED)
+        expect(afterRollback.error.code).toBe(HaiReldbError.TRANSACTION_FAILED.code)
       }
     })
 
@@ -95,7 +95,7 @@ describe('reldb.tx advanced', () => {
       const second = await tx.commit()
       expect(second.success).toBe(false)
       if (!second.success) {
-        expect(second.error.code).toBe(ReldbErrorCode.TRANSACTION_FAILED)
+        expect(second.error.code).toBe(HaiReldbError.TRANSACTION_FAILED.code)
       }
     })
 

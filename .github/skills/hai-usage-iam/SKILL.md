@@ -324,58 +324,58 @@ const loginResult = await iam.auth.loginWithApiKey({ key: rawKey })
 
 ## §10 错误码 — `HaiIamError`
 
-| 错误码 | 常量 | 说明 |
+| 错误码 | code | 说明 |
 |--------|------|------|
-| **认证 (5000-5099)** | | |
-| 5000 | `AUTH_FAILED` | 认证失败（通用） |
-| 5001 | `INVALID_CREDENTIALS` | 凭证无效 |
-| 5002 | `USER_NOT_FOUND` | 用户不存在 |
-| 5003 | `USER_DISABLED` | 用户已禁用 |
-| 5004 | `USER_LOCKED` | 用户已锁定 |
-| 5005 | `USER_ALREADY_EXISTS` | 用户已存在 |
-| 5006 | `PASSWORD_EXPIRED` | 密码已过期 |
-| 5007 | `PASSWORD_POLICY_VIOLATION` | 密码不符合策略 |
-| 5010 | `OTP_INVALID` | 验证码无效 |
-| 5011 | `OTP_EXPIRED` | 验证码已过期 |
-| 5012 | `OTP_RESEND_TOO_FAST` | 发送过频 |
-| 5013 | `LOGIN_DISABLED` | 登录方式已禁用 |
-| 5014 | `REGISTER_DISABLED` | 注册已禁用 |
-| 5015 | `STRATEGY_NOT_SUPPORTED` | 认证策略不支持 |
-| 5016 | `APIKEY_INVALID` | API Key 无效 |
-| 5017 | `APIKEY_EXPIRED` | API Key 已过期 |
-| 5018 | `APIKEY_DISABLED` | API Key 已禁用 |
-| 5019 | `APIKEY_NOT_FOUND` | API Key 不存在 |
-| 5020 | `RESET_TOKEN_INVALID` | 重置令牌无效 |
-| 5021 | `RESET_TOKEN_EXPIRED` | 重置令牌过期 |
-| 5022 | `RESET_TOKEN_MAX_ATTEMPTS` | 重置令牌尝试次数超限 |
-| **会话 (5100-5199)** | | |
-| 5100 | `SESSION_NOT_FOUND` | 会话不存在 |
-| 5101 | `SESSION_EXPIRED` | 会话已过期 |
-| 5102 | `SESSION_INVALID` | 会话无效 |
-| 5103 | `SESSION_CREATE_FAILED` | 会话创建失败 |
-| 5104 | `TOKEN_EXPIRED` | 令牌过期 |
-| 5105 | `TOKEN_INVALID` | 令牌无效 |
-| 5106 | `TOKEN_REFRESH_FAILED` | 令牌刷新失败 |
-| **授权 (5200-5299)** | | |
-| 5200 | `PERMISSION_DENIED` | 权限不足 |
-| 5201 | `ROLE_NOT_FOUND` | 角色不存在 |
-| 5202 | `PERMISSION_NOT_FOUND` | 权限不存在 |
-| 5203 | `ROLE_ALREADY_EXISTS` | 角色已存在 |
-| 5204 | `PERMISSION_ALREADY_EXISTS` | 权限已存在 |
-| **LDAP (5400-5499)** | | |
-| 5400 | `LDAP_CONNECTION_FAILED` | LDAP 连接失败 |
-| 5401 | `LDAP_BIND_FAILED` | LDAP 绑定失败 |
-| 5402 | `LDAP_SEARCH_FAILED` | LDAP 搜索失败 |
-| **存储层 (5500-5599)** | | |
-| 5500 | `REPOSITORY_ERROR` | 存储层错误 |
-| 5501 | `NOT_FOUND` | 资源不存在 |
-| 5502 | `CONFLICT` | 资源冲突 |
-| **通用 (5800-5999)** | | |
-| 5800 | `FORBIDDEN` | 禁止访问 |
-| 5801 | `INVALID_ARGUMENT` | 参数无效 |
-| 5900 | `CONFIG_ERROR` | 配置错误 |
-| 5910 | `NOT_INITIALIZED` | 模块未初始化 |
-| 5999 | `INTERNAL_ERROR` | 内部错误 |
+| **认证** | | |
+| `HaiIamError.AUTH_FAILED` | `hai:iam:001` | 认证失败 |
+| `HaiIamError.INVALID_CREDENTIALS` | `hai:iam:002` | 凭证无效 |
+| `HaiIamError.USER_NOT_FOUND` | `hai:iam:003` | 用户不存在 |
+| `HaiIamError.USER_DISABLED` | `hai:iam:004` | 用户已禁用 |
+| `HaiIamError.USER_LOCKED` | `hai:iam:005` | 用户已锁定 |
+| `HaiIamError.USER_ALREADY_EXISTS` | `hai:iam:006` | 用户已存在 |
+| `HaiIamError.PASSWORD_EXPIRED` | `hai:iam:007` | 密码已过期 |
+| `HaiIamError.PASSWORD_POLICY_VIOLATION` | `hai:iam:008` | 密码不符合策略 |
+| `HaiIamError.OTP_INVALID` | `hai:iam:009` | 验证码无效 |
+| `HaiIamError.OTP_EXPIRED` | `hai:iam:010` | 验证码已过期 |
+| `HaiIamError.OTP_RESEND_TOO_FAST` | `hai:iam:011` | 发送过于频繁 |
+| `HaiIamError.LOGIN_DISABLED` | `hai:iam:012` | 登录方式已禁用 |
+| `HaiIamError.REGISTER_DISABLED` | `hai:iam:013` | 注册已禁用 |
+| `HaiIamError.STRATEGY_NOT_SUPPORTED` | `hai:iam:014` | 认证策略不支持 |
+| `HaiIamError.APIKEY_INVALID` | `hai:iam:015` | API Key 无效 |
+| `HaiIamError.APIKEY_EXPIRED` | `hai:iam:016` | API Key 已过期 |
+| `HaiIamError.APIKEY_DISABLED` | `hai:iam:017` | API Key 已禁用 |
+| `HaiIamError.APIKEY_NOT_FOUND` | `hai:iam:018` | API Key 不存在 |
+| `HaiIamError.RESET_TOKEN_INVALID` | `hai:iam:019` | 重置令牌无效 |
+| `HaiIamError.RESET_TOKEN_EXPIRED` | `hai:iam:020` | 重置令牌已过期 |
+| `HaiIamError.RESET_TOKEN_MAX_ATTEMPTS` | `hai:iam:021` | 重置验证次数超限 |
+| **会话** | | |
+| `HaiIamError.SESSION_NOT_FOUND` | `hai:iam:101` | 会话不存在 |
+| `HaiIamError.SESSION_EXPIRED` | `hai:iam:102` | 会话已过期 |
+| `HaiIamError.SESSION_INVALID` | `hai:iam:103` | 会话无效 |
+| `HaiIamError.SESSION_CREATE_FAILED` | `hai:iam:104` | 会话创建失败 |
+| `HaiIamError.TOKEN_EXPIRED` | `hai:iam:105` | 令牌已过期 |
+| `HaiIamError.TOKEN_INVALID` | `hai:iam:106` | 令牌无效 |
+| `HaiIamError.TOKEN_REFRESH_FAILED` | `hai:iam:107` | 令牌刷新失败 |
+| **授权** | | |
+| `HaiIamError.PERMISSION_DENIED` | `hai:iam:201` | 权限不足 |
+| `HaiIamError.ROLE_NOT_FOUND` | `hai:iam:202` | 角色不存在 |
+| `HaiIamError.PERMISSION_NOT_FOUND` | `hai:iam:203` | 权限不存在 |
+| `HaiIamError.ROLE_ALREADY_EXISTS` | `hai:iam:204` | 角色已存在 |
+| `HaiIamError.PERMISSION_ALREADY_EXISTS` | `hai:iam:205` | 权限已存在 |
+| **LDAP** | | |
+| `HaiIamError.LDAP_CONNECTION_FAILED` | `hai:iam:301` | LDAP 连接失败 |
+| `HaiIamError.LDAP_BIND_FAILED` | `hai:iam:302` | LDAP 绑定失败 |
+| `HaiIamError.LDAP_SEARCH_FAILED` | `hai:iam:303` | LDAP 搜索失败 |
+| **存储层** | | |
+| `HaiIamError.REPOSITORY_ERROR` | `hai:iam:401` | 存储层操作错误 |
+| `HaiIamError.NOT_FOUND` | `hai:iam:402` | 资源不存在 |
+| `HaiIamError.CONFLICT` | `hai:iam:403` | 资源冲突 |
+| **通用** | | |
+| `HaiIamError.FORBIDDEN` | `hai:iam:501` | 禁止访问 |
+| `HaiIamError.INVALID_ARGUMENT` | `hai:iam:502` | 参数无效 |
+| `HaiIamError.CONFIG_ERROR` | `hai:iam:901` | 配置错误 |
+| `HaiIamError.NOT_INITIALIZED` | `hai:iam:910` | 未初始化 |
+| `HaiIamError.INTERNAL_ERROR` | `hai:iam:999` | 内部错误 |
 
 ---
 

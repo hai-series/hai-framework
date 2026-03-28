@@ -6,7 +6,7 @@
 
 import type { LLMOperations } from '../src/llm/ai-llm-types.js'
 import { describe, expect, it, vi } from 'vitest'
-import { AIErrorCode } from '../src/ai-config.js'
+import { HaiAIError } from '../src/ai-types.js'
 import { extractEntities, extractEntitiesBatch } from '../src/knowledge/ai-knowledge-entity.js'
 
 // ─── Mock LLM ───
@@ -148,7 +148,7 @@ describe('knowledge 实体提取（extractEntities）', () => {
     const result = await extractEntities(llm, 'Some text.')
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(AIErrorCode.KNOWLEDGE_ENTITY_EXTRACT_FAILED)
+      expect(result.error.code).toBe(HaiAIError.KNOWLEDGE_ENTITY_EXTRACT_FAILED.code)
     }
   })
 

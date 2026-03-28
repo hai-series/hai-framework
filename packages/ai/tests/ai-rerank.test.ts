@@ -6,7 +6,7 @@
 
 import type { AIConfig } from '../src/ai-config.js'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { AIErrorCode } from '../src/ai-config.js'
+import { HaiAIError } from '../src/ai-types.js'
 import { createRerankOperations } from '../src/rerank/ai-rerank-functions.js'
 
 // ─── Mock fetch ───
@@ -191,7 +191,7 @@ describe('rerank operations', () => {
         const result = await ops.rerank({ query: '测试', documents: ['文档'] })
         expect(result.success).toBe(false)
         if (!result.success) {
-          expect(result.error.code).toBe(AIErrorCode.CONFIGURATION_ERROR)
+          expect(result.error.code).toBe(HaiAIError.CONFIGURATION_ERROR.code)
         }
       }
       finally {
@@ -207,7 +207,7 @@ describe('rerank operations', () => {
       const result = await ops.rerank({ query: '测试', documents: [] })
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.code).toBe(AIErrorCode.RERANK_INVALID_REQUEST)
+        expect(result.error.code).toBe(HaiAIError.RERANK_INVALID_REQUEST.code)
       }
     })
 
@@ -218,7 +218,7 @@ describe('rerank operations', () => {
       const result = await ops.rerank({ query: '测试', documents: ['文档'] })
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.code).toBe(AIErrorCode.RERANK_API_ERROR)
+        expect(result.error.code).toBe(HaiAIError.RERANK_API_ERROR.code)
       }
     })
 
@@ -229,7 +229,7 @@ describe('rerank operations', () => {
       const result = await ops.rerank({ query: '测试', documents: ['文档'] })
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.code).toBe(AIErrorCode.RERANK_API_ERROR)
+        expect(result.error.code).toBe(HaiAIError.RERANK_API_ERROR.code)
       }
     })
 
@@ -287,7 +287,7 @@ describe('rerank operations', () => {
       const result = await ops.rerankTexts('测试', ['文档'])
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.code).toBe(AIErrorCode.RERANK_API_ERROR)
+        expect(result.error.code).toBe(HaiAIError.RERANK_API_ERROR.code)
       }
     })
   })

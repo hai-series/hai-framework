@@ -11,7 +11,7 @@ import type { PgvectorContainerLease } from './helpers/pgvector-container.js'
 import type { QdrantContainerLease } from './helpers/qdrant-container.js'
 import { rm } from 'node:fs/promises'
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
-import { vecdb, VecdbErrorCode } from '../src/index.js'
+import { HaiVecdbError, vecdb } from '../src/index.js'
 import { isDockerAvailable } from './helpers/check-docker.js'
 import { acquirePgvectorContainer } from './helpers/pgvector-container.js'
 import { acquireQdrantContainer } from './helpers/qdrant-container.js'
@@ -152,7 +152,7 @@ describe.skipIf(!dockerAvailable).sequential('vecdb init — pgvector', () => {
     })
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(VecdbErrorCode.CONNECTION_FAILED)
+      expect(result.error.code).toBe(HaiVecdbError.CONNECTION_FAILED.code)
     }
   })
 })
@@ -198,7 +198,7 @@ describe.skipIf(!dockerAvailable).sequential('vecdb init — qdrant', () => {
     })
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(VecdbErrorCode.CONNECTION_FAILED)
+      expect(result.error.code).toBe(HaiVecdbError.CONNECTION_FAILED.code)
     }
   })
 })

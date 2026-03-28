@@ -66,7 +66,7 @@ await audit.close()
 | 方法                  | 签名                                                                                | 说明                 |
 | --------------------- | ----------------------------------------------------------------------------------- | -------------------- |
 | `audit.log`           | `(input: CreateAuditLogInput) => Promise<HaiResult<AuditLog>>`             | 记录审计日志         |
-| `audit.list`          | `(options?: ListAuditLogsOptions) => Promise<HaiResult<{ items, total }, AuditError>>` | 分页查询（含用户名） |
+| `audit.list`          | `(options?: ListAuditLogsOptions) => Promise<HaiResult<{ items, total }>>` | 分页查询（含用户名） |
 | `audit.getUserRecent` | `(userId: string, limit?: number) => Promise<HaiResult<AuditLog[]>>`       | 用户最近活动         |
 | `audit.cleanup`       | `(olderThanDays?: number) => Promise<HaiResult<number>>`                   | 清理旧日志           |
 | `audit.getStats`      | `(days?: number) => Promise<HaiResult<AuditStatItem[]>>`                   | 操作统计             |
@@ -84,15 +84,15 @@ await audit.close()
 
 ## 错误码
 
-| 错误码                           | 数值  | 含义         |
-| -------------------------------- | ----- | ------------ |
-| `AuditErrorCode.LOG_FAILED`      | 10000 | 记录失败     |
-| `AuditErrorCode.QUERY_FAILED`    | 10001 | 查询失败     |
-| `AuditErrorCode.CLEANUP_FAILED`  | 10002 | 清理失败     |
-| `AuditErrorCode.STATS_FAILED`    | 10003 | 统计失败     |
-| `AuditErrorCode.INIT_IN_PROGRESS`| 10004 | 初始化进行中 |
-| `AuditErrorCode.NOT_INITIALIZED` | 10010 | 模块未初始化 |
-| `AuditErrorCode.CONFIG_ERROR`    | 10012 | 配置错误     |
+| 错误码                            | code             | 说明         |
+| --------------------------------- | ---------------- | ------------ |
+| `HaiAuditError.LOG_FAILED`       | `hai:audit:001`  | 记录失败     |
+| `HaiAuditError.QUERY_FAILED`     | `hai:audit:002`  | 查询失败     |
+| `HaiAuditError.CLEANUP_FAILED`   | `hai:audit:003`  | 清理失败     |
+| `HaiAuditError.STATS_FAILED`     | `hai:audit:004`  | 统计失败     |
+| `HaiAuditError.INIT_IN_PROGRESS` | `hai:audit:005`  | 初始化进行中 |
+| `HaiAuditError.NOT_INITIALIZED`  | `hai:audit:010`  | 模块未初始化 |
+| `HaiAuditError.CONFIG_ERROR`     | `hai:audit:012`  | 配置错误     |
 
 ## 常见模式
 

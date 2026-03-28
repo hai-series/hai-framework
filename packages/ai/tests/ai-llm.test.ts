@@ -39,7 +39,7 @@ vi.mock('openai', () => {
 })
 
 // eslint-disable-next-line import/first -- vi.mock 需在 import 之前，确保 mock 生效
-import { ai, AIErrorCode } from '../src/index.js'
+import { ai, HaiAIError } from '../src/index.js'
 
 // ─── 辅助工厂 ───
 
@@ -216,7 +216,7 @@ describe('ai.llm.chat', () => {
 
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(AIErrorCode.RATE_LIMITED)
+      expect(result.error.code).toBe(HaiAIError.RATE_LIMITED.code)
     }
   })
 
@@ -229,7 +229,7 @@ describe('ai.llm.chat', () => {
 
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(AIErrorCode.MODEL_NOT_FOUND)
+      expect(result.error.code).toBe(HaiAIError.MODEL_NOT_FOUND.code)
     }
   })
 
@@ -242,7 +242,7 @@ describe('ai.llm.chat', () => {
 
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(AIErrorCode.INVALID_REQUEST)
+      expect(result.error.code).toBe(HaiAIError.INVALID_REQUEST.code)
     }
   })
 
@@ -255,7 +255,7 @@ describe('ai.llm.chat', () => {
 
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(AIErrorCode.API_ERROR)
+      expect(result.error.code).toBe(HaiAIError.API_ERROR.code)
     }
   })
 
@@ -270,7 +270,7 @@ describe('ai.llm.chat', () => {
 
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(AIErrorCode.TIMEOUT)
+      expect(result.error.code).toBe(HaiAIError.TIMEOUT.code)
     }
   })
 
@@ -283,7 +283,7 @@ describe('ai.llm.chat', () => {
 
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(AIErrorCode.INTERNAL_ERROR)
+      expect(result.error.code).toBe(HaiAIError.INTERNAL_ERROR.code)
     }
   })
 
@@ -296,7 +296,7 @@ describe('ai.llm.chat', () => {
 
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(AIErrorCode.INTERNAL_ERROR)
+      expect(result.error.code).toBe(HaiAIError.INTERNAL_ERROR.code)
     }
   })
 
@@ -507,7 +507,7 @@ describe('ai.llm.listModels', () => {
     const result = await ai.llm.listModels()
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(AIErrorCode.API_ERROR)
+      expect(result.error.code).toBe(HaiAIError.API_ERROR.code)
     }
   })
 })

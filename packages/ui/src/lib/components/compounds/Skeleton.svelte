@@ -2,11 +2,11 @@
   @component Skeleton
   骨架屏占位组件，用于加载状态展示。
 -->
-<script lang="ts">
+<script lang='ts'>
   import type { SkeletonProps } from '../../types.js'
   import { cn } from '../../utils.js'
-  
-  let {
+
+  const {
     variant = 'text',
     width = '',
     height = '',
@@ -15,7 +15,7 @@
     count = 1,
     class: className = '',
   }: SkeletonProps = $props()
-  
+
   const baseClass = $derived(
     cn(
       'skeleton',
@@ -28,20 +28,20 @@
       variant === 'button' && 'h-10 w-24 rounded-lg',
       variant === 'input' && 'h-10 w-full rounded-lg',
       className,
-    )
+    ),
   )
-  
+
   const style = $derived(
     [
       width && `width: ${width}`,
       height && `height: ${height}`,
-    ].filter(Boolean).join('; ')
+    ].filter(Boolean).join('; '),
   )
 </script>
 
 {#if count > 1}
-  <div class="space-y-2">
-    {#each Array(count) as _, i (i)}
+  <div class='space-y-2'>
+    {#each Array.from({ length: count }) as _, i (i)}
       <div class={baseClass} {style}></div>
     {/each}
   </div>
@@ -59,11 +59,11 @@
     );
     background-size: 200% 100%;
   }
-  
+
   .skeleton.animate-pulse {
     animation: skeleton-pulse 1.5s ease-in-out infinite;
   }
-  
+
   @keyframes skeleton-pulse {
     0% {
       background-position: 200% 0;

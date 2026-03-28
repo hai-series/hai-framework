@@ -47,7 +47,7 @@ async function create(input: Input): Promise<HaiResult<Item>> {
     return ok(item)
   }
   catch (error) {
-    return err({ code: XxErrorCode.CREATE_FAILED, message: xxM('xx_createFailed'), cause: error })
+    return err(HaiXxError.CREATE_FAILED, xxM('xx_createFailed'), error)
   }
 }
 
@@ -64,7 +64,7 @@ function register(tool: Tool): HaiResult<void> {
 - 初始化统一 `<模块>.init(config)` / `<模块>.close()`
 - Node 与 Browser 的 API 形态必须一致，浏览器端不暴露独立 init 函数
 - 使用 NotInitializedKit 模式防止未初始化调用：
-  - `core.module.createNotInitializedKit<XxError>(XxErrorCode.NOT_INITIALIZED, () => xxM('xx_notInitialized'))`
+  - `core.module.createNotInitializedKit(HaiXxError.NOT_INITIALIZED, () => xxM('xx_notInitialized'))`
   - 每个子操作接口都有对应 `notInitialized.proxy<T>()` 占位
   - Proxy 在模块顶层创建（非 getter 内部）
   - close() 后状态回到未初始化，getter 自动切换回 Proxy
@@ -90,7 +90,7 @@ function register(tool: Tool): HaiResult<void> {
 - 禁止含糊命名（如 data / info / handle / process）
 - 服务对象：小写模块名（`export const storage`）
 - 函数接口：`{Module}Functions`；子操作接口：`{Domain}Operations`
-- 错误码：`{Module}ErrorCode`（UPPER_SNAKE）；错误类型：`{Module}Error`
+- 错误定义：`Hai{Module}Error`（通过 `buildHaiErrorsDef` 生成，键名 UPPER_SNAKE）；错误类型：统一 `HaiError`
 - Repository：`{Module}{Entity}Repository`，继承 `BaseReldbCrudRepository`
 - i18n 获取器：`{缩写}M()`；消息键：`{module}_{camelCase}`
 - 请求-响应结构体：请求体 `{Domain}Req`，响应体 `{Domain}Resp`（如 `LoginReq` / `LoginResp`）

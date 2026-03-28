@@ -2,11 +2,11 @@
   @component Button
   通用按钮组件，支持多种变体和尺寸。
 -->
-<script lang="ts">
+<script lang='ts'>
   import type { ButtonProps } from '../../types.js'
-  import { cn, getVariantClass, getSizeClass } from '../../utils.js'
-  
-  let {
+  import { cn, getSizeClass, getVariantClass } from '../../utils.js'
+
+  const {
     variant = 'default',
     size = 'md',
     ariaLabel = '',
@@ -19,7 +19,7 @@
     onclick,
     children,
   }: ButtonProps = $props()
-  
+
   const buttonClass = $derived(
     cn(
       'btn no-animation',
@@ -32,9 +32,9 @@
       'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 focus-visible:ring-offset-base-100',
       'active:scale-[0.97]',
       className,
-    )
+    ),
   )
-  
+
   function handleClick(e: MouseEvent) {
     if (disabled || loading) {
       e.preventDefault()
@@ -52,7 +52,7 @@
   onclick={handleClick}
 >
   {#if loading}
-    <span class="loading loading-spinner loading-xs"></span>
+    <span class='loading loading-spinner loading-xs'></span>
   {/if}
   {#if children}
     {@render children()}

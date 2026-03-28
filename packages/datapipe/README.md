@@ -13,7 +13,7 @@
 ## 快速开始
 
 ```ts
-import { datapipe, DatapipeErrorCode } from '@h-ai/datapipe'
+import { datapipe, HaiDatapipeError } from '@h-ai/datapipe'
 
 // 直接清洗
 const cleaned = datapipe.clean('<p>Hello</p>', { removeHtml: true })
@@ -44,16 +44,16 @@ const result = await datapipe.pipeline()
 
 ## 错误处理
 
-所有操作返回 `HaiResult<T>`，通过 `result.success` 判断成功或失败。
+所有操作返回 `HaiResult<T>`，通过 `result.success` 判断成功或失败。错误码为字符串格式 `hai:datapipe:NNN`。
 
 ```ts
 const result = datapipe.chunk(text, { mode: 'custom' })
 if (!result.success) {
   switch (result.error.code) {
-    case DatapipeErrorCode.MISSING_SEPARATOR:
+    case HaiDatapipeError.MISSING_SEPARATOR.code:
       // mode='custom' 时需要提供 separator
       break
-    case DatapipeErrorCode.CONFIG_ERROR:
+    case HaiDatapipeError.CONFIG_ERROR.code:
       // 配置参数校验失败
       break
   }

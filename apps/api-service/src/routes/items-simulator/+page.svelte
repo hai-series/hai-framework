@@ -1,4 +1,4 @@
-<script lang="ts">
+<script lang='ts'>
   import { onMount } from 'svelte'
 
   interface ApiResponse<T> {
@@ -311,24 +311,24 @@
   <title>Items API Simulator</title>
 </svelte:head>
 
-<main class="container">
-  <header class="hero">
+<main class='container'>
+  <header class='hero'>
     <h1>🧪 Items 接口模拟 CRUD 控制台</h1>
     <p>用于快速调试 `/api/v1/items` 与 `/api/v1/health`。</p>
-    <a class="back-link" href="/">← 返回示例首页</a>
+    <a class='back-link' href='/'>← 返回示例首页</a>
   </header>
 
   {#if message}
-    <p class="feedback success">{message}</p>
+    <p class='feedback success'>{message}</p>
   {/if}
   {#if errorMessage}
-    <p class="feedback error">{errorMessage}</p>
+    <p class='feedback error'>{errorMessage}</p>
   {/if}
 
-  <section class="card">
-    <div class="card-title-row">
+  <section class='card'>
+    <div class='card-title-row'>
       <h2>健康检查</h2>
-      <button type="button" onclick={checkHealth}>刷新</button>
+      <button type='button' onclick={checkHealth}>刷新</button>
     </div>
     {#if health}
       <p><strong>状态：</strong>{health.status}</p>
@@ -340,65 +340,65 @@
     {/if}
   </section>
 
-  <section class="grid-2">
-    <article class="card">
+  <section class='grid-2'>
+    <article class='card'>
       <h2>创建 Item (Create)</h2>
       <label>
         名称
-        <input bind:value={createName} placeholder="请输入名称" maxlength="100" />
+        <input bind:value={createName} placeholder='请输入名称' maxlength='100' />
       </label>
       <label>
         描述
-        <textarea bind:value={createDescription} placeholder="请输入描述" maxlength="500"></textarea>
+        <textarea bind:value={createDescription} placeholder='请输入描述' maxlength='500'></textarea>
       </label>
-      <button type="button" disabled={busy || !createName.trim()} onclick={createItem}>创建</button>
+      <button type='button' disabled={busy || !createName.trim()} onclick={createItem}>创建</button>
     </article>
 
-    <article class="card">
+    <article class='card'>
       <h2>更新 Item (Update)</h2>
-      <p class="hint">当前选中 ID：<code>{selectedId || '-'}</code></p>
+      <p class='hint'>当前选中 ID：<code>{selectedId || '-'}</code></p>
       <label>
         名称
-        <input bind:value={updateName} placeholder="请选择记录后再编辑" maxlength="100" />
+        <input bind:value={updateName} placeholder='请选择记录后再编辑' maxlength='100' />
       </label>
       <label>
         描述
-        <textarea bind:value={updateDescription} maxlength="500"></textarea>
+        <textarea bind:value={updateDescription} maxlength='500'></textarea>
       </label>
       <label>
         状态
         <select bind:value={updateStatus}>
-          <option value="active">active</option>
-          <option value="archived">archived</option>
+          <option value='active'>active</option>
+          <option value='archived'>archived</option>
         </select>
       </label>
-      <button type="button" disabled={busy || !selectedId} onclick={updateItem}>更新</button>
+      <button type='button' disabled={busy || !selectedId} onclick={updateItem}>更新</button>
     </article>
   </section>
 
-  <section class="card">
-    <div class="card-title-row">
+  <section class='card'>
+    <div class='card-title-row'>
       <h2>列表与查询 (Read/List/Delete)</h2>
-      <button type="button" onclick={loadItems}>刷新列表</button>
+      <button type='button' onclick={loadItems}>刷新列表</button>
     </div>
 
-    <div class="toolbar">
+    <div class='toolbar'>
       <label>
         搜索
-        <input bind:value={search} placeholder="按名称搜索" />
+        <input bind:value={search} placeholder='按名称搜索' />
       </label>
       <label>
         页码
-        <input bind:value={page} type="number" min="1" />
+        <input bind:value={page} type='number' min='1' />
       </label>
       <label>
         每页
-        <input bind:value={pageSize} type="number" min="1" max="100" />
+        <input bind:value={pageSize} type='number' min='1' max='100' />
       </label>
-      <button type="button" onclick={loadItems}>查询</button>
+      <button type='button' onclick={loadItems}>查询</button>
     </div>
 
-    <p class="hint">总数：{total}</p>
+    <p class='hint'>总数：{total}</p>
 
     <table>
       <thead>
@@ -413,7 +413,7 @@
       <tbody>
         {#if items.length === 0}
           <tr>
-            <td colspan="5" class="empty">暂无数据</td>
+            <td colspan='5' class='empty'>暂无数据</td>
           </tr>
         {:else}
           {#each items as item}
@@ -422,10 +422,10 @@
               <td>{item.name}</td>
               <td>{item.status}</td>
               <td>{item.description}</td>
-              <td class="ops">
-                <button type="button" onclick={() => readItem(item.id)}>读</button>
-                <button type="button" onclick={() => selectForEdit(item)}>选中</button>
-                <button type="button" class="danger" onclick={() => deleteItem(item.id)}>删</button>
+              <td class='ops'>
+                <button type='button' onclick={() => readItem(item.id)}>读</button>
+                <button type='button' onclick={() => selectForEdit(item)}>选中</button>
+                <button type='button' class='danger' onclick={() => deleteItem(item.id)}>删</button>
               </td>
             </tr>
           {/each}
@@ -435,34 +435,34 @@
   </section>
 
   {#if selectedItem}
-    <section class="card">
+    <section class='card'>
       <h2>当前详情（Read）</h2>
       <pre>{JSON.stringify(selectedItem, null, 2)}</pre>
     </section>
   {/if}
 
-  <section class="card">
-    <div class="card-title-row">
+  <section class='card'>
+    <div class='card-title-row'>
       <h2>请求记录</h2>
-      <button type="button" onclick={() => { requestLogs = [] }}>清空</button>
+      <button type='button' onclick={() => { requestLogs = [] }}>清空</button>
     </div>
 
     {#if requestLogs.length === 0}
-      <p class="hint">暂无请求记录，执行上面的 CRUD 操作后会自动展示。</p>
+      <p class='hint'>暂无请求记录，执行上面的 CRUD 操作后会自动展示。</p>
     {:else}
-      <div class="logs">
+      <div class='logs'>
         {#each requestLogs as log}
-          <article class="log-item">
-            <div class="log-head">
+          <article class='log-item'>
+            <div class='log-head'>
               <strong>{log.operation}</strong>
               <span class:ok={log.ok} class:bad={!log.ok}>{log.method} {log.url} · {log.status} · {log.durationMs}ms · {log.time}</span>
             </div>
 
             {#if log.networkError}
-              <p class="net-error">网络错误：{log.networkError}</p>
+              <p class='net-error'>网络错误：{log.networkError}</p>
             {/if}
 
-            <div class="log-body">
+            <div class='log-body'>
               <div>
                 <h3>请求数据</h3>
                 <pre>{toPrettyJson(log.requestData)}</pre>

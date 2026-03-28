@@ -385,9 +385,9 @@ if (!result.success)
 
 ```typescript
 // 在模块 main.ts 中使用
-const notInitialized = core.module.createNotInitializedKit<ReldbError>(
-  ReldbErrorCode.NOT_INITIALIZED,
-  () => reldbM('db_notInitialized'),
+const notInitialized = core.module.createNotInitializedKit(
+  HaiReldbError.NOT_INITIALIZED,
+  () => reldbM('reldb_notInitialized'),
 )
 
 // 创建占位 Proxy（异步接口，默认）
@@ -412,28 +412,28 @@ Core 模块定义了两组标准错误码：
 
 ### `HaiCommonError`（通用错误）
 
-| 错误码              | 编码       | HTTP 状态 | 说明                |
-| ------------------- | ---------- | --------- | ------------------- |
-| `NOT_INITIALIZED`   | hai:common:001 | 500       | 模块未初始化        |
-| `INIT_FAILED`       | hai:common:002 | 500       | 初始化失败          |
-| `INIT_IN_PROGRESS`  | hai:common:004 | 500       | 正在初始化中        |
-| `UNAUTHORIZED`      | hai:common:100 | 401       | 未认证              |
-| `FORBIDDEN`         | hai:common:101 | 403       | 无权限              |
-| `TOKEN_EXPIRED`     | hai:common:102 | 401       | Token 已过期        |
-| `TOKEN_INVALID`     | hai:common:103 | 401       | Token 无效          |
-| `VALIDATION_ERROR`  | hai:common:200 | 400       | 校验失败            |
-| `INVALID_REQUEST`   | hai:common:201 | 400       | 请求无效            |
-| `PARAMETER_MISSING` | hai:common:202 | 400       | 参数缺失            |
-| `NOT_FOUND`         | hai:common:300 | 404       | 资源不存在          |
-| `ALREADY_EXISTS`    | hai:common:301 | 409       | 资源已存在          |
-| `CONFLICT`          | hai:common:302 | 409       | 冲突                |
-| `API_ERROR`         | hai:common:400 | 502       | API 错误            |
-| `NETWORK_ERROR`     | hai:common:401 | 502       | 网络错误            |
-| `TIMEOUT`           | hai:common:402 | 504       | 超时                |
-| `SERVICE_UNAVAILABLE` | hai:common:403 | 503       | 服务不可用          |
-| `INTERNAL_ERROR`    | hai:common:500 | 500       | 内部错误            |
-| `DATABASE_ERROR`    | hai:common:501 | 500       | 数据库错误          |
-| `UNKNOWN_ERROR`     | hai:common:599 | 500       | 未知错误            |
+| 错误码 | code | 说明 |
+|--------|------|------|
+| `HaiCommonError.NOT_INITIALIZED` | `hai:common:001` | 模块未初始化 |
+| `HaiCommonError.INIT_FAILED` | `hai:common:002` | 初始化失败 |
+| `HaiCommonError.INIT_IN_PROGRESS` | `hai:common:004` | 正在初始化中 |
+| `HaiCommonError.UNAUTHORIZED` | `hai:common:100` | 未认证 |
+| `HaiCommonError.FORBIDDEN` | `hai:common:101` | 无权限 |
+| `HaiCommonError.TOKEN_EXPIRED` | `hai:common:102` | Token 已过期 |
+| `HaiCommonError.TOKEN_INVALID` | `hai:common:103` | Token 无效 |
+| `HaiCommonError.VALIDATION_ERROR` | `hai:common:200` | 校验失败 |
+| `HaiCommonError.INVALID_REQUEST` | `hai:common:201` | 请求无效 |
+| `HaiCommonError.PARAMETER_MISSING` | `hai:common:202` | 参数缺失 |
+| `HaiCommonError.NOT_FOUND` | `hai:common:300` | 资源不存在 |
+| `HaiCommonError.ALREADY_EXISTS` | `hai:common:301` | 资源已存在 |
+| `HaiCommonError.CONFLICT` | `hai:common:302` | 冲突 |
+| `HaiCommonError.API_ERROR` | `hai:common:400` | API 错误 |
+| `HaiCommonError.NETWORK_ERROR` | `hai:common:401` | 网络错误 |
+| `HaiCommonError.TIMEOUT` | `hai:common:402` | 超时 |
+| `HaiCommonError.SERVICE_UNAVAILABLE` | `hai:common:403` | 服务不可用 |
+| `HaiCommonError.INTERNAL_ERROR` | `hai:common:500` | 内部错误 |
+| `HaiCommonError.DATABASE_ERROR` | `hai:common:501` | 数据库错误 |
+| `HaiCommonError.UNKNOWN_ERROR` | `hai:common:599` | 未知错误 |
 
 **使用示例**：
 
@@ -447,13 +447,13 @@ err(HaiCommonError.VALIDATION_ERROR, 'Invalid email', validationErrors)
 
 ### `HaiConfigError`（配置错误）
 
-| 错误码                  | 编码         | HTTP 状态 | 说明               |
-| ----------------------- | ------------ | --------- | ------------------ |
-| `CONFIG_FILE_NOT_FOUND` | hai:core:010 | 500       | 配置文件不存在     |
-| `CONFIG_PARSE_ERROR`    | hai:core:011 | 500       | YAML 解析失败      |
-| `CONFIG_VALIDATION_ERROR` | hai:core:012 | 500       | Schema 校验失败    |
-| `CONFIG_ENV_VAR_MISSING` | hai:core:013 | 500       | 必需环境变量缺失   |
-| `CONFIG_NOT_LOADED`     | hai:core:014 | 500       | 配置未加载         |
+| 错误码 | code | 说明 |
+|--------|------|------|
+| `HaiConfigError.CONFIG_FILE_NOT_FOUND` | `hai:core:010` | 配置文件不存在 |
+| `HaiConfigError.CONFIG_PARSE_ERROR` | `hai:core:011` | YAML 解析失败 |
+| `HaiConfigError.CONFIG_VALIDATION_ERROR` | `hai:core:012` | Schema 校验失败 |
+| `HaiConfigError.CONFIG_ENV_VAR_MISSING` | `hai:core:013` | 必需环境变量缺失 |
+| `HaiConfigError.CONFIG_NOT_LOADED` | `hai:core:014` | 配置未加载 |
 
 **使用场景**：
 

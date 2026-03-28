@@ -1,9 +1,9 @@
-<script lang="ts">
+<script lang='ts'>
   import '../app.css'
 
-  let { children } = $props()
+  const { children } = $props()
 </script>
 
-<div class="min-h-screen">
+<div class='min-h-screen'>
   {@render children()}
 </div>

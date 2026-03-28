@@ -5,7 +5,7 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { cache, CacheErrorCode } from '../src/index.js'
+import { cache, HaiCacheError } from '../src/index.js'
 import { defineCacheSuite, memoryEnv, redisEnv } from './helpers/cache-test-suite.js'
 
 describe('cache list operations', () => {
@@ -170,12 +170,12 @@ describe('cache list operations', () => {
   defineCacheSuite('memory', memoryEnv, () => defineCommon({
     rangeAfterPush: ['a', 'b', 'c'],
     lpopValue: 'a',
-    missingKeyError: CacheErrorCode.KEY_NOT_FOUND,
+    missingKeyError: HaiCacheError.KEY_NOT_FOUND.code,
   }))
 
   defineCacheSuite('redis', redisEnv, () => defineCommon({
     rangeAfterPush: ['b', 'a', 'c'],
     lpopValue: 'b',
-    missingKeyError: CacheErrorCode.OPERATION_FAILED,
+    missingKeyError: HaiCacheError.OPERATION_FAILED.code,
   }))
 })

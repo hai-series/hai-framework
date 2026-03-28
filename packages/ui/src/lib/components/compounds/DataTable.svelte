@@ -30,7 +30,7 @@
   import type { Snippet } from 'svelte'
   import { uiM } from '../../messages.js'
 
-  let {
+  const {
     data,
     columns,
     keyField,
@@ -42,7 +42,7 @@
     class: className = '',
   }: {
     data: T[]
-    columns: { key: keyof T | string; label: string; width?: string; align?: 'left' | 'center' | 'right'; render?: (item: T) => string }[]
+    columns: { key: keyof T | string, label: string, width?: string, align?: 'left' | 'center' | 'right', render?: (item: T) => string }[]
     keyField: keyof T
     actions?: Snippet<[T]>
     empty?: Snippet
@@ -52,7 +52,7 @@
     class?: string
   } = $props()
 
-  type Column = { key: keyof T | string; label: string; width?: string; align?: 'left' | 'center' | 'right'; render?: (item: T) => string }
+  type Column = { key: keyof T | string, label: string, width?: string, align?: 'left' | 'center' | 'right', render?: (item: T) => string }
 
   function getValue(item: T, col: Column): string {
     if (col.render) {
@@ -83,9 +83,9 @@
     <thead>
       <tr class='text-xs text-base-content/50 border-b border-base-content/6'>
         {#each columns as col}
-          <th 
+          <th
             style={col.width ? `width: ${col.width}` : ''}
-            class="{getAlignClass(col.align)} font-medium"
+            class='{getAlignClass(col.align)} font-medium'
           >
             {col.label}
           </th>
