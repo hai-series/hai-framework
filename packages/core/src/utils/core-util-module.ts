@@ -104,4 +104,10 @@ export function createNotInitializedKit<E extends HaiError>(
 }
 
 /** module 子工具类型 */
-export interface ModuleFn { createNotInitializedKit: typeof createNotInitializedKit }
+/** overloaded function type for createNotInitializedKit */
+export interface CreateNotInitializedKitFn {
+  (codeOrDef: HaiErrorDef, messageFn: () => string): NotInitializedKit<HaiError>
+  <E extends HaiError>(codeOrDef: E['code'], messageFn: () => string): NotInitializedKit<E>
+}
+
+export interface ModuleFn { createNotInitializedKit: CreateNotInitializedKitFn }
