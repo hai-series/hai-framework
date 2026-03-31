@@ -520,9 +520,9 @@ describe('配置变体初始化', () => {
     const result = await ai.init({
       llm: { model: 'gpt-4o', apiKey: 'sk-test' },
       knowledge: {
-        chunkMaxSize: 500,
-        chunkOverlap: 50,
         enableEntityExtraction: true,
+        cleanOptions: { removeHtml: true },
+        chunkOptions: { mode: 'markdown', maxSize: 500, overlap: 50 },
       },
     })
     expect(result.success).toBe(true)

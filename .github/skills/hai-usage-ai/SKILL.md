@@ -47,9 +47,13 @@ knowledge:
   collection: hai_ai_knowledge
   dimension: 1536
   enableEntityExtraction: true
-  chunkMode: markdown  # sentence | paragraph | markdown | page
-  chunkMaxSize: 1500
-  chunkOverlap: 200
+  cleanOptions:
+    removeHtml: true
+    normalizeWhitespace: true
+  chunkOptions:
+    mode: markdown      # sentence | paragraph | markdown | page | custom
+    maxSize: 1500
+    overlap: 200
 
 token:
   tokenRatio: 0.25  # 4 字符 ≈ 1 token
