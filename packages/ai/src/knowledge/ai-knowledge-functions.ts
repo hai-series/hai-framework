@@ -7,7 +7,7 @@
  */
 
 import type { HaiResult } from '@h-ai/core'
-import type { ChunkOptionsInput, DatapipeFunctions } from '@h-ai/datapipe'
+import type { ChunkOptionsInput, CleanOptionsInput, DatapipeFunctions } from '@h-ai/datapipe'
 import type { KnowledgeConfig } from '../ai-config.js'
 
 import type { EmbeddingOperations } from '../embedding/ai-embedding-types.js'
@@ -140,11 +140,12 @@ export function createKnowledgeOperations(
       const collection = input.collection ?? config.collection
       const enableEntityExtraction = input.enableEntityExtraction ?? config.enableEntityExtraction
       // 合并 config 默认值与 input 覆盖选项（input 优先级更高）
-      const cleanOptions = input.cleanOptions ?? {}
+      const cleanOptions: CleanOptionsInput = {
+        ...config.cleanOptions,
+        ...input.cleanOptions,
+      }
       const chunkOptions: ChunkOptionsInput = {
-        mode: config.chunkMode,
-        maxSize: config.chunkMaxSize,
-        overlap: config.chunkOverlap,
+        ...config.chunkOptions,
         ...input.chunkOptions,
       }
 

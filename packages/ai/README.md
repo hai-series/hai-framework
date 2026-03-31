@@ -139,9 +139,15 @@ await ai.init({
     collection: 'hai_ai_knowledge',
     dimension: 1536,
     enableEntityExtraction: true,
-    chunkMode: 'markdown', // sentence | paragraph | markdown | page
-    chunkMaxSize: 1500,
-    chunkOverlap: 200,
+    cleanOptions: {
+      removeHtml: true,
+      normalizeWhitespace: true,
+    },
+    chunkOptions: {
+      mode: 'markdown', // sentence | paragraph | markdown | page | custom
+      maxSize: 1500,
+      overlap: 200,
+    },
     entityBoostWeight: 0.15, // 实体命中加权系数 [0, 1]
   },
 
@@ -725,9 +731,14 @@ const result = await ai.knowledge.ingest({
   title: '产品使用手册',
   url: 'https://docs.example.com/manual',
   enableEntityExtraction: true, // 自动提取人物、项目、概念等实体
-  chunkMode: 'markdown', // sentence | paragraph | markdown | page
-  chunkMaxSize: 1500,
-  chunkOverlap: 200,
+  cleanOptions: {
+    removeHtml: true,
+  },
+  chunkOptions: {
+    mode: 'markdown', // sentence | paragraph | markdown | page | custom
+    maxSize: 1500,
+    overlap: 200,
+  },
   metadata: { category: 'manual', version: '2.0' },
 })
 
@@ -1736,7 +1747,8 @@ await ai.init({
   embedding: { model: 'text-embedding-3-small' },
   knowledge: {
     enableEntityExtraction: true,
-    chunkMode: 'markdown',
+    cleanOptions: { removeHtml: true },
+    chunkOptions: { mode: 'markdown', maxSize: 1500, overlap: 200 },
   },
 })
 

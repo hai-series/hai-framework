@@ -134,9 +134,20 @@ const DEFAULT_CONFIG = {
   collection: 'hai_ai_knowledge',
   dimension: 3,
   enableEntityExtraction: false,
-  chunkMode: 'markdown' as const,
-  chunkMaxSize: 1500,
-  chunkOverlap: 200,
+  cleanOptions: {
+    removeHtml: true,
+    removeUrls: false,
+    removeEmails: false,
+    normalizeWhitespace: true,
+    trim: true,
+  },
+  chunkOptions: {
+    mode: 'markdown' as const,
+    maxSize: 1500,
+    overlap: 200,
+    markdownMinLevel: 2,
+    markdownKeepTitle: true,
+  },
   entityBoostWeight: 0.15,
 }
 
@@ -321,9 +332,22 @@ describe('knowledge ingest', () => {
 
     expect(result.success).toBe(true)
     // datapipe.clean 应收到 removeHtml: true
-    expect(datapipe!.clean).toHaveBeenCalledWith('<p>Hello world</p>', { removeHtml: true })
+    expect(datapipe!.clean).toHaveBeenCalledWith('<p>Hello world</p>', expect.objectContaining({ removeHtml: true }))
     // datapipe.chunk 应收到 mode: 'paragraph'
-    expect(datapipe!.chunk).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ mode: 'paragraph' }))
+    expect(datapipe!.chunk).toHaveBeenCalledWith(expect.any(String), expect.objectContaining({ mode: 'paragraph', maxSize: 500, overlap: 50 }))
+  })
+
+  it('导入时继承 knowledge 默认 cleanOptions 与 chunkOptions', async () => {
+    const { ops, datapipe } = await setupOps()
+
+    const result = await ops.ingest({
+      documentId: 'doc-3c',
+      content: '  Hello world  ',
+    })
+
+    expect(result.success).toBe(true)
+    expect(datapipe!.clean).toHaveBeenCalledWith('  Hello world  ', DEFAULT_CONFIG.cleanOptions)
+    expect(datapipe!.chunk).toHaveBeenCalledWith(expect.any(String), DEFAULT_CONFIG.chunkOptions)
   })
 
   it('开启实体提取时提取并存储实体', async () => {

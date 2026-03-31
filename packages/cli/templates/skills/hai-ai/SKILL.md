@@ -75,6 +75,19 @@ compress:
   defaultStrategy: hybrid    # 压缩策略：summary | sliding-window | hybrid
   defaultMaxTokens: 0        # 0 = 取模型 maxTokens 的 80%
   preserveLastN: 4           # 保留最近 N 条消息
+
+# 知识库（可选）
+knowledge:
+  collection: hai_ai_knowledge
+  dimension: 1536
+  enableEntityExtraction: true
+  cleanOptions:
+    removeHtml: true
+    normalizeWhitespace: true
+  chunkOptions:
+    mode: markdown           # sentence | paragraph | markdown | page | custom
+    maxSize: 1500
+    overlap: 200
 ```
 
 ### 2. 初始化与关闭

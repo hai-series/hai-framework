@@ -129,7 +129,7 @@ export interface KnowledgeIngestInput {
    */
   cleanOptions?: CleanOptionsInput
   /**
-   * 分块选项（可选，覆盖全局配置默认值；mode 字段同时覆盖 config.chunkMode）
+   * 分块选项（可选，覆盖全局配置默认值）
    *
    * 字段含义与 @h-ai/datapipe ChunkOptionsInput 完全一致，
    * 支持 mode、maxSize、overlap、separator、markdownMinLevel 等完整选项。

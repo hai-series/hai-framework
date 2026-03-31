@@ -104,9 +104,9 @@ export const ChunkOptionsSchema = z.object({
   /** 分块模式 */
   mode: ChunkModeSchema,
   /** 每个分块的最大大小（字符数 / 字数，取决于 mode，默认 1000） */
-  maxSize: z.number().int().positive().default(1000),
-  /** 重叠大小（字符数 / 字数，用于上下文衔接，默认 0） */
-  overlap: z.number().int().min(0).default(0),
+  maxSize: z.number().int().positive().default(1500),
+  /** 重叠大小（字符数 / 字数，用于上下文衔接，默认 200） */
+  overlap: z.number().int().min(0).default(200),
   /**
    * 自定义分隔符正则（仅 mode='custom' 时使用）
    *
