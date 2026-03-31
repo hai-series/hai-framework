@@ -18,7 +18,7 @@ import type { TaskDefinition, TaskExecutionLog, TaskTriggerInfo } from './schedu
 import { cache } from '@h-ai/cache'
 import { core } from '@h-ai/core'
 
-import { executeTask, interruptTask } from './scheduler-executor.js'
+import { executeTask, interruptTask, persistExecutionLog } from './scheduler-executor.js'
 import { getCron, getHooks, getTaskRegistry, unregisterTask } from './scheduler-functions.js'
 import { schedulerM } from './scheduler-i18n.js'
 
@@ -130,7 +130,36 @@ export async function runTask(
   const lockKey = minuteTimestamp !== undefined ? `hai:scheduler:${task.id}:${minuteTimestamp}` : undefined
 
   if (cache.isInitialized && lockKey) {
-    const lockResult = await cache.lock.acquire(lockKey, { ttl: currentLockTtlSec, owner: currentNodeId })
+    const now = Date.now()
+    const buildLockFailureLog = (error: string): TaskExecutionLog => ({
+      id: 0,
+      taskId: task.id,
+      taskName: task.name,
+      taskType: task.handler?.kind ?? 'hook',
+      triggerType: trigger.type,
+      triggerSource: trigger.source,
+      status: 'failed',
+      result: null,
+      error,
+      startedAt: now,
+      finishedAt: now,
+      duration: 0,
+    })
+
+    let lockResult: Awaited<ReturnType<typeof cache.lock.acquire>>
+    try {
+      lockResult = await cache.lock.acquire(lockKey, { ttl: currentLockTtlSec, owner: currentNodeId })
+    }
+    catch (error) {
+      const errorMessage = schedulerM('scheduler_lockAcquireFailed', {
+        params: { taskId: task.id },
+      })
+      const log = buildLockFailureLog(errorMessage)
+      logger.error('Failed to acquire distributed lock', { taskId: task.id, minuteTimestamp, error })
+      await persistExecutionLog(log)
+      return log
+    }
+
     if (lockResult.success && !lockResult.data) {
       logger.debug('Skipping task, another node holds the lock', { taskId: task.id, minuteTimestamp })
       return interruptTask(
@@ -139,6 +168,16 @@ export async function runTask(
         schedulerM('scheduler_lockAcquireFailed', { params: { taskId: task.id } }),
         getHooks(),
       )
+    }
+
+    if (!lockResult.success) {
+      const errorMessage = schedulerM('scheduler_lockAcquireFailed', {
+        params: { taskId: task.id },
+      })
+      const log = buildLockFailureLog(errorMessage)
+      logger.error('Failed to acquire distributed lock', { taskId: task.id, minuteTimestamp, error: lockResult.error.message })
+      await persistExecutionLog(log)
+      return log
     }
   }
 
