@@ -4,11 +4,14 @@
  * =============================================================================
  */
 
+import type { HaiResult } from '@h-ai/core'
 import { cache } from '@h-ai/cache'
+import { err } from '@h-ai/core'
 import { reldb } from '@h-ai/reldb'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { scheduler } from '../src/scheduler-main.js'
 import { runTask } from '../src/scheduler-runner.js'
+import { HaiSchedulerError } from '../src/scheduler-types.js'
 
 describe('distributed lock integration', () => {
   beforeEach(async () => {
@@ -17,6 +20,7 @@ describe('distributed lock integration', () => {
   })
 
   afterEach(async () => {
+    vi.restoreAllMocks()
     vi.unstubAllGlobals()
     await scheduler.close()
     await cache.close()
@@ -89,5 +93,28 @@ describe('distributed lock integration', () => {
       expect(triggerResult.data.triggerType).toBe('manual')
       expect(triggerResult.data.triggerSource).toBe('admin-console')
     }
+  })
+
+  it('分布式锁获取失败（cache 异常）时应中断任务（fail-close）', async () => {
+    await scheduler.init({ enableDb: true })
+
+    await scheduler.register({
+      id: 'lock-error-task',
+      name: '锁异常测试',
+      cron: '* * * * *',
+      handler: { kind: 'js', code: '() => "done"' },
+    })
+
+    const task = scheduler.tasks.get('lock-error-task')!
+    const minuteTimestamp = Math.floor(Date.now() / 60000)
+
+    // 模拟 lock.acquire 返回 cache 异常，验证 fail-close 行为
+    vi.spyOn(cache.lock, 'acquire').mockResolvedValueOnce(
+      err(HaiSchedulerError.LOCK_ACQUIRE_FAILED, 'Redis connection error') as HaiResult<boolean>,
+    )
+
+    const log = await runTask(task, minuteTimestamp, { type: 'scheduled', source: null })
+    expect(log.status).toBe('interrupted')
+    expect(log.error).toContain('lock-error-task')
   })
 })
