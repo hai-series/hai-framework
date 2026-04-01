@@ -19,7 +19,9 @@ import { HaiSchedulerError } from './scheduler-types.js'
 const compiledHandlerCache = new Map<string, JsTaskHandler>()
 
 function createCacheKey(config: JsTaskConfig): string {
-  return createHash('sha256').update(config.code).digest('hex')
+  // 缓存键包含 timeout，确保相同代码不同超时语义不会复用同一处理器
+  const keySource = `${config.code}:${config.timeout ?? 0}`
+  return createHash('sha256').update(keySource).digest('hex')
 }
 
 export function clearJsTaskHandlerCache(): void {
@@ -47,15 +49,22 @@ export function compileJsTaskHandler(config: JsTaskConfig): HaiResult<JsTaskHand
       if (!config.timeout || config.timeout <= 0)
         return functionResult
 
-      return await Promise.race([
-        Promise.resolve(functionResult),
-        new Promise<never>((_, reject) => {
-          const timer = setTimeout(() => {
+      // 使用显式 Promise，确保函数提前完成时定时器被清理，避免定时器泄漏
+      return await new Promise<unknown>((resolve, reject) => {
+        const timer = setTimeout(() => {
+          reject(new Error(`JS task timed out after ${config.timeout}ms`))
+        }, config.timeout!)
+        Promise.resolve(functionResult).then(
+          (result) => {
             clearTimeout(timer)
-            reject(new Error(`JS task timed out after ${config.timeout}ms`))
-          }, config.timeout)
-        }),
-      ])
+            resolve(result)
+          },
+          (error) => {
+            clearTimeout(timer)
+            reject(error)
+          },
+        )
+      })
     }
 
     compiledHandlerCache.set(cacheKey, handler)

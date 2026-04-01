@@ -131,7 +131,17 @@ export async function runTask(
 
   if (cache.isInitialized && lockKey) {
     const lockResult = await cache.lock.acquire(lockKey, { ttl: currentLockTtlSec, owner: currentNodeId })
-    if (lockResult.success && !lockResult.data) {
+    if (!lockResult.success) {
+      // lock 服务本身异常时 fail-close：中断任务，避免多节点重复执行
+      logger.warn('Failed to acquire distributed lock, interrupting task', { taskId: task.id, error: lockResult.error.message })
+      return interruptTask(
+        task,
+        trigger,
+        schedulerM('scheduler_lockAcquireFailed', { params: { taskId: task.id } }),
+        getHooks(),
+      )
+    }
+    if (!lockResult.data) {
       logger.debug('Skipping task, another node holds the lock', { taskId: task.id, minuteTimestamp })
       return interruptTask(
         task,

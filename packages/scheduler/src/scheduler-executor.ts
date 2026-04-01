@@ -13,11 +13,7 @@ import { core, err, ok } from '@h-ai/core'
 
 import { schedulerM } from './scheduler-i18n.js'
 import { compileJsTaskHandler } from './scheduler-js-compiler.js'
-import {
-
-  HaiSchedulerError,
-
-} from './scheduler-types.js'
+import { HaiSchedulerError } from './scheduler-types.js'
 
 const logger = core.logger.child({ module: 'scheduler', scope: 'executor' })
 

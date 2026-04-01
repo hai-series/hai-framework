@@ -220,7 +220,15 @@ export async function registerTask(
   if (taskRepo) {
     const saveResult = await taskRepo.saveTask(normalizedTask)
     if (!saveResult.success) {
-      logger.warn('Failed to persist task definition', { taskId: task.id, error: saveResult.error.message })
+      // 持久化失败：回滚内存状态，避免内存与 DB 之间的状态漂移
+      logger.warn('Failed to persist task definition, rolling back in-memory registration', { taskId: task.id, error: saveResult.error.message })
+      deleteTask(task.id)
+      deleteCron(task.id)
+      return err(
+        HaiSchedulerError.DB_SAVE_FAILED,
+        schedulerM('scheduler_dbSaveFailed', { params: { error: saveResult.error.message } }),
+        saveResult.error,
+      )
     }
   }
 
@@ -244,7 +252,13 @@ export async function unregisterTask(
   if (taskRepo) {
     const deleteResult = await taskRepo.deleteTask(taskId)
     if (!deleteResult.success) {
+      // 持久化删除失败：不回滚内存（任务已不应再被调度），但将错误上报给调用方
       logger.warn('Failed to delete persisted task definition', { taskId, error: deleteResult.error.message })
+      return err(
+        HaiSchedulerError.DB_SAVE_FAILED,
+        schedulerM('scheduler_dbSaveFailed', { params: { error: deleteResult.error.message } }),
+        deleteResult.error,
+      )
     }
   }
 
@@ -263,6 +277,9 @@ export async function updateRegisteredTask(
       schedulerM('scheduler_taskNotFound', { params: { taskId } }),
     )
   }
+
+  // 提前保存旧 cron 实例，供 DB 失败时回滚使用
+  const existingCron = getCron(taskId)
 
   if (updates.cron !== undefined) {
     const cronResult = parseCronExpression(updates.cron)
@@ -313,7 +330,16 @@ export async function updateRegisteredTask(
   if (taskRepo) {
     const updateResult = await taskRepo.updateTask(taskId, normalizedUpdates)
     if (!updateResult.success) {
-      logger.warn('Failed to update persisted task definition', { taskId, error: updateResult.error.message })
+      // 持久化更新失败：回滚内存状态，避免内存与 DB 之间的状态漂移
+      logger.warn('Failed to update persisted task definition, rolling back in-memory update', { taskId, error: updateResult.error.message })
+      setTask(taskId, existingTask)
+      if (updates.cron !== undefined && existingCron)
+        setCron(taskId, existingCron)
+      return err(
+        HaiSchedulerError.DB_SAVE_FAILED,
+        schedulerM('scheduler_dbSaveFailed', { params: { error: updateResult.error.message } }),
+        updateResult.error,
+      )
     }
   }
 

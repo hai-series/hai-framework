@@ -21,5 +21,6 @@
   "scheduler_hookExecutionFailed": "任务生命周期回调执行失败: {error}",
   "scheduler_taskHandlerMissing": "任务缺少可执行 handler，且未配置全局执行回调: {taskId}",
   "scheduler_invalidHandlerConfig": "任务 handler 配置无效: {taskId}",
-  "scheduler_invalidRetryConfig": "任务重试策略配置无效: {taskId}"
+  "scheduler_invalidRetryConfig": "任务重试策略配置无效: {taskId}",
+  "scheduler_reldbNotInitialized": "enableDb 为 true 但 @h-ai/reldb 未初始化，请先调用 reldb.init()"
 }
