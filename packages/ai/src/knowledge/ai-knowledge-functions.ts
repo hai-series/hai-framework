@@ -75,16 +75,17 @@ export function createKnowledgeOperations(
   datapipe: DatapipeFunctions,
   store?: KnowledgeStore,
 ): KnowledgeOperations {
-  /** 是否已完成 setup（调用 setup() 后置为 true） */
-  let isSetup = false
+  /** 已完成 setup 的 collection 集合（每次 setup() 成功后将对应 collection 名加入） */
+  const setupCollections = new Set<string>()
 
   return {
     // ─── setup ───
     /**
-     * 初始化知识库（幂等）
+     * 初始化知识库（幂等，支持多次调用以初始化不同 collection）
      *
      * 创建 vecdb 集合（已存在则跳过）和 reldb 实体索引表（DDL 幂等）。
-     * **调用 `ingest` / `retrieve` / `ask` 前必须先执行 `setup`。**
+     * **每个 collection 在使用 `ingest` / `retrieve` / `ask` 前必须先对该 collection 执行 `setup`。**
+     * 多分场景下可多次调用本方法，每次传入不同 `collection` 名称。
      *
      * @param options - 可选覆盖（collection 名称、向量维度）
      * @returns `ok(undefined)` 成功；建表失败时返回 `KNOWLEDGE_SETUP_FAILED`
@@ -102,7 +103,7 @@ export function createKnowledgeOperations(
       try {
         await store.initialize(collection, dimension)
 
-        isSetup = true
+        setupCollections.add(collection)
         logger.debug('Knowledge base setup completed', { collection })
         return ok(undefined)
       }
@@ -132,12 +133,12 @@ export function createKnowledgeOperations(
      * ```
      */
     async ingest(input: KnowledgeIngestInput): Promise<HaiResult<KnowledgeIngestResult>> {
-      if (!isSetup) {
+      const collection = input.collection ?? config.collection
+      if (!setupCollections.has(collection)) {
         return err(HaiAIError.KNOWLEDGE_NOT_SETUP, aiM('ai_knowledgeNotSetup'))
       }
 
       const startTime = Date.now()
-      const collection = input.collection ?? config.collection
       const enableEntityExtraction = input.enableEntityExtraction ?? config.enableEntityExtraction
       // 合并 config 默认值与 input 覆盖选项（input 优先级更高）
       const cleanOptions: CleanOptionsInput = {
@@ -283,12 +284,12 @@ export function createKnowledgeOperations(
      * @returns `ok(KnowledgeRetrieveResult)` 含检索项和引用列表；未初始化时返回 `KNOWLEDGE_NOT_SETUP`
      */
     async retrieve(query: string, options?: KnowledgeRetrieveOptions): Promise<HaiResult<KnowledgeRetrieveResult>> {
-      if (!isSetup) {
+      const collection = options?.collection ?? config.collection
+      if (!setupCollections.has(collection)) {
         return err(HaiAIError.KNOWLEDGE_NOT_SETUP, aiM('ai_knowledgeNotSetup'))
       }
 
       const startTime = Date.now()
-      const collection = options?.collection ?? config.collection
       const topK = options?.topK ?? 10
       const enableEntityBoost = options?.enableEntityBoost ?? true
 
@@ -493,13 +494,14 @@ export function createKnowledgeOperations(
 
     // ─── findByEntity ───
     async findByEntity(entityName: string, options?: EntityQueryOptions): Promise<HaiResult<EntityDocumentResult[]>> {
-      if (!store) {
+      const collection = options?.collection ?? config.collection
+      if (!store || !setupCollections.has(collection)) {
         return err(HaiAIError.KNOWLEDGE_NOT_SETUP, aiM('ai_knowledgeNotSetup'))
       }
 
       try {
         const results = await store.findByEntityName(entityName, {
-          collection: options?.collection ?? config.collection,
+          collection,
           type: options?.type,
         })
 
@@ -555,11 +557,10 @@ export function createKnowledgeOperations(
 
     // ─── listDocuments ───
     async listDocuments(options?: KnowledgeDocumentListOptions): Promise<HaiResult<KnowledgeDocumentInfo[]>> {
-      if (!isSetup || !store) {
+      const collection = options?.collection ?? config.collection
+      if (!store || !setupCollections.has(collection)) {
         return err(HaiAIError.KNOWLEDGE_NOT_SETUP, aiM('ai_knowledgeNotSetup'))
       }
-
-      const collection = options?.collection ?? config.collection
 
       try {
         const docs = await store.listDocuments(collection, {
@@ -589,11 +590,10 @@ export function createKnowledgeOperations(
 
     // ─── removeDocument ───
     async removeDocument(documentId: string, options?: KnowledgeDocumentRemoveOptions): Promise<HaiResult<void>> {
-      if (!isSetup || !store) {
+      const collection = options?.collection ?? config.collection
+      if (!store || !setupCollections.has(collection)) {
         return err(HaiAIError.KNOWLEDGE_NOT_SETUP, aiM('ai_knowledgeNotSetup'))
       }
-
-      const collection = options?.collection ?? config.collection
 
       try {
         // ① 查询该文档的所有 chunk ID
