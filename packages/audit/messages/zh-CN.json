@@ -7,5 +7,6 @@
   "audit_cleanupFailed": "审计日志清理失败：{error}",
   "audit_statsFailed": "审计统计查询失败：{error}",
   "audit_configError": "审计配置校验失败：{error}",
-  "audit_initInProgress": "审计模块正在初始化中，请勿并发调用"
+  "audit_initInProgress": "审计模块正在初始化中，请勿并发调用",
+  "audit_invalidInput": "审计输入参数无效（{field}）：{reason}"
 }
