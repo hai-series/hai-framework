@@ -6,7 +6,7 @@
 
 import { reldb } from '@h-ai/reldb'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { audit } from '../src/index.js'
+import { audit, HaiAuditError } from '../src/index.js'
 
 // ─── 测试辅助 ───
 
@@ -144,6 +144,16 @@ describe('audit.list', () => {
     }
   })
 
+  it('startDate 晚于 endDate 时应返回 QUERY_FAILED', async () => {
+    const now = new Date()
+    const yesterday = new Date(now.getTime() - 86400000)
+    const result = await audit.list({ startDate: now, endDate: yesterday })
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error.code).toBe(HaiAuditError.QUERY_FAILED.code)
+    }
+  })
+
   // ─── 排序 ───
 
   it('应按 createdAt 倒序排列', async () => {
@@ -201,11 +211,19 @@ describe('audit.getUserRecent', () => {
     }
   })
 
-  it('limit=0 应返回空数组', async () => {
+  it('limit=0 应返回 QUERY_FAILED', async () => {
     const result = await audit.getUserRecent('user_1', 0)
-    expect(result.success).toBe(true)
-    if (result.success) {
-      expect(result.data.length).toBe(0)
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error.code).toBe(HaiAuditError.QUERY_FAILED.code)
+    }
+  })
+
+  it('空 userId 应返回 QUERY_FAILED', async () => {
+    const result = await audit.getUserRecent('   ', 5)
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error.code).toBe(HaiAuditError.QUERY_FAILED.code)
     }
   })
 })
