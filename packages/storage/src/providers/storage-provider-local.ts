@@ -77,6 +77,14 @@ function toStorageError(error: unknown, key?: string): HaiError {
     }
   }
 
+  if (e.code === 'EINVAL') {
+    return {
+      ...HaiStorageError.INVALID_PATH,
+      message: e.message || storageM('storage_pathTraversal'),
+      cause: error,
+    }
+  }
+
   return {
     code: HaiStorageError.IO_ERROR.code,
     message: storageM('storage_ioError', { params: { error: e.message ?? '' } }),
@@ -119,12 +127,29 @@ function isMetaFile(key: string): boolean {
 }
 
 /**
+ * 创建非法路径错误（用于统一映射为 INVALID_PATH）
+ */
+function createInvalidPathError(): NodeJS.ErrnoException {
+  const error = new Error(storageM('storage_pathTraversal')) as NodeJS.ErrnoException
+  error.code = 'EINVAL'
+  return error
+}
+
+/**
+ * 判断路径片段中是否包含路径穿越标记（..）
+ */
+function hasPathTraversalSegment(key: string): boolean {
+  const segments = key.split(/[\\/]+/).filter(Boolean)
+  return segments.includes('..')
+}
+
+/**
  * 安全的路径解析，防止路径穿越攻击
  *
  * 处理流程：
- * 1. 规范化 key，移除前导 `../` 模式
- * 2. 拼接 root + key 得到完整路径
- * 3. resolve 后确认路径仍在 root 目录下
+ * 1. 拒绝绝对路径、空字节、`..` 路径穿越片段
+ * 2. resolve(root, key) 得到完整路径
+ * 3. 校验完整路径必须位于 root 内部（或等于 root）
  *
  * @param root - 存储根目录绝对路径
  * @param key - 用户提供的文件键
@@ -134,19 +159,23 @@ function isMetaFile(key: string): boolean {
 function safePath(root: string, key: string): string {
   // 拒绝绝对路径输入，防止 Windows 盘符绕过（如 D:\etc\passwd）
   if (path.isAbsolute(key)) {
-    throw new Error(storageM('storage_pathTraversal'))
+    throw createInvalidPathError()
   }
 
-  // 规范化路径，移除 ../ 等
-  const normalized = path.normalize(key).replace(/^(\.\.(\/|\\|$))+/, '')
-  const fullPath = path.join(root, normalized)
+  // 拒绝空字节与路径穿越片段
+  if (key.includes('\0') || hasPathTraversalSegment(key)) {
+    throw createInvalidPathError()
+  }
+
+  const normalized = path.normalize(key)
+  const fullPath = path.resolve(root, normalized)
 
   // 确保路径在 root 目录下
   const realRoot = path.resolve(root)
-  const realPath = path.resolve(fullPath)
+  const inRoot = fullPath === realRoot || fullPath.startsWith(`${realRoot}${path.sep}`)
 
-  if (!realPath.startsWith(realRoot)) {
-    throw new Error(storageM('storage_pathTraversal'))
+  if (!inRoot) {
+    throw createInvalidPathError()
   }
 
   return fullPath
@@ -471,7 +500,7 @@ export function createLocalProvider(): StorageProvider {
         const delimiter = options.delimiter || ''
         const maxKeys = options.maxKeys || 1000
 
-        const basePath = path.join(cfg.root, prefix)
+        const basePath = safePath(cfg.root, prefix)
         const files: FileMetadata[] = []
         const commonPrefixes = new Set<string>()
 

@@ -6,6 +6,7 @@
 
 import { describe, expect, it } from 'vitest'
 import { storage } from '../src/index.js'
+import { HaiStorageError } from '../src/storage-types.js'
 import { defineStorageSuite, localStorageEnv, s3Env } from './helpers/storage-test-suite.js'
 
 describe('storage.dir', () => {
@@ -88,6 +89,16 @@ describe('storage.dir', () => {
         expect(result.data.files).toEqual([])
       }
     })
+
+    if (label === 'local') {
+      it('local: list 的路径穿越前缀应返回 INVALID_PATH', async () => {
+        const result = await storage.dir.list({ prefix: '../../outside/' })
+        expect(result.success).toBe(false)
+        if (!result.success) {
+          expect(result.error.code).toBe(HaiStorageError.INVALID_PATH.code)
+        }
+      })
+    }
 
     it(`${label}: list 不传任何选项应返回所有文件`, async () => {
       await storage.file.put('root-file-1.txt', 'content1')
