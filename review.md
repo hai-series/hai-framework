@@ -40,7 +40,7 @@
 | `packages/cache`         | 模块 | @gudaoxuri | @LiJieLong       | ✅       | 待定     | -    |
 | `packages/scheduler`     | 模块 | @gudaoxuri | @LiJieLong       | ✅       | 待定     | -    |
 | `packages/storage`       | 模块 | @gudaoxuri | @LiJieLong       | ✅       | 待定     | -    |
-| `packages/audit`         | 模块 | @gudaoxuri | @LiJieLong       | 待定     | 待定     | -    |
+| `packages/audit`         | 模块 | @gudaoxuri | @LiJieLong       | ✅       | 待定     | -    |
 | `packages/reach`         | 模块 | @gudaoxuri | @LiJieLong       | 待定     | 待定     | -    |
 | `packages/datapipe`      | 模块 | @gudaoxuri | @RWDai           | ✅       | 待定     | -    |
 | `packages/ai`            | 模块 | @gudaoxuri | @RWDai           | 待定     | 待定     | -    |
