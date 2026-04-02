@@ -75,8 +75,24 @@ export function createKnowledgeOperations(
   datapipe: DatapipeFunctions,
   store?: KnowledgeStore,
 ): KnowledgeOperations {
-  /** 已完成 setup 的 collection 集合（每次 setup() 成功后将对应 collection 名加入） */
+  /** 已完成 setup 的 collection 集合（L1 进程内缓存，后备为 DB 注册表） */
   const setupCollections = new Set<string>()
+
+  /**
+   * 检查 collection 是否已就绪（cache-aside：先查进程内缓存，未命中则查 DB 注册表并回填缓存）
+   *
+   * 支持多节点场景：其他节点完成 setup 后，本节点通过 DB 查询亦可感知。
+   */
+  async function isCollectionReady(collection: string): Promise<boolean> {
+    if (setupCollections.has(collection))
+      return true
+    if (!store)
+      return false
+    const exists = await store.collectionExists(collection)
+    if (exists)
+      setupCollections.add(collection)
+    return exists
+  }
 
   return {
     // ─── setup ───
@@ -102,6 +118,7 @@ export function createKnowledgeOperations(
 
       try {
         await store.initialize(collection, dimension)
+        await store.registerCollection(collection, dimension)
 
         setupCollections.add(collection)
         logger.debug('Knowledge base setup completed', { collection })
@@ -134,7 +151,7 @@ export function createKnowledgeOperations(
      */
     async ingest(input: KnowledgeIngestInput): Promise<HaiResult<KnowledgeIngestResult>> {
       const collection = input.collection ?? config.collection
-      if (!setupCollections.has(collection)) {
+      if (!await isCollectionReady(collection)) {
         return err(HaiAIError.KNOWLEDGE_NOT_SETUP, aiM('ai_knowledgeNotSetup'))
       }
 
@@ -285,7 +302,7 @@ export function createKnowledgeOperations(
      */
     async retrieve(query: string, options?: KnowledgeRetrieveOptions): Promise<HaiResult<KnowledgeRetrieveResult>> {
       const collection = options?.collection ?? config.collection
-      if (!setupCollections.has(collection)) {
+      if (!await isCollectionReady(collection)) {
         return err(HaiAIError.KNOWLEDGE_NOT_SETUP, aiM('ai_knowledgeNotSetup'))
       }
 
@@ -495,7 +512,7 @@ export function createKnowledgeOperations(
     // ─── findByEntity ───
     async findByEntity(entityName: string, options?: EntityQueryOptions): Promise<HaiResult<EntityDocumentResult[]>> {
       const collection = options?.collection ?? config.collection
-      if (!store || !setupCollections.has(collection)) {
+      if (!store || !await isCollectionReady(collection)) {
         return err(HaiAIError.KNOWLEDGE_NOT_SETUP, aiM('ai_knowledgeNotSetup'))
       }
 
@@ -558,7 +575,7 @@ export function createKnowledgeOperations(
     // ─── listDocuments ───
     async listDocuments(options?: KnowledgeDocumentListOptions): Promise<HaiResult<KnowledgeDocumentInfo[]>> {
       const collection = options?.collection ?? config.collection
-      if (!store || !setupCollections.has(collection)) {
+      if (!store || !await isCollectionReady(collection)) {
         return err(HaiAIError.KNOWLEDGE_NOT_SETUP, aiM('ai_knowledgeNotSetup'))
       }
 
@@ -591,7 +608,7 @@ export function createKnowledgeOperations(
     // ─── removeDocument ───
     async removeDocument(documentId: string, options?: KnowledgeDocumentRemoveOptions): Promise<HaiResult<void>> {
       const collection = options?.collection ?? config.collection
-      if (!store || !setupCollections.has(collection)) {
+      if (!store || !await isCollectionReady(collection)) {
         return err(HaiAIError.KNOWLEDGE_NOT_SETUP, aiM('ai_knowledgeNotSetup'))
       }
 

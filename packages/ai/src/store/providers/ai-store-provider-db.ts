@@ -437,6 +437,11 @@ function buildKnowledgeSchemaStatements(dbType: DbType): string[] {
   created_at  BIGINT DEFAULT 0,
   PRIMARY KEY (document_id, collection)
 )`,
+    `CREATE TABLE IF NOT EXISTS hai_ai_knowledge_collections (
+  collection  ${textCol} PRIMARY KEY,
+  dimension   INTEGER NOT NULL,
+  created_at  BIGINT NOT NULL
+)`,
   ]
 }
 
@@ -688,6 +693,24 @@ class DbKnowledgeStore implements KnowledgeStore {
     const exists = await this.vecdb.collection.exists(collection)
     if (exists.success && !exists.data)
       await this.vecdb.collection.create(collection, { dimension })
+  }
+
+  async registerCollection(collection: string, dimension: number): Promise<void> {
+    const now = Date.now()
+    const stmt = this.dbType === 'mysql'
+      ? `INSERT INTO hai_ai_knowledge_collections (collection, dimension, created_at) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE dimension = VALUES(dimension)`
+      : `INSERT INTO hai_ai_knowledge_collections (collection, dimension, created_at) VALUES (?, ?, ?) ON CONFLICT(collection) DO UPDATE SET dimension = excluded.dimension`
+    const result = await this.sql.execute(stmt, [collection, dimension, now])
+    if (!result.success)
+      throw new Error(`registerCollection failed: ${String(result.error)}`)
+  }
+
+  async collectionExists(collection: string): Promise<boolean> {
+    const result = await this.sql.get<{ cnt: number }>(
+      `SELECT 1 as cnt FROM hai_ai_knowledge_collections WHERE collection = ?`,
+      [collection],
+    )
+    return result.success && result.data != null
   }
 }
 
