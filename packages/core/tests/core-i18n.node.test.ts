@@ -4,11 +4,17 @@
  * =============================================================================
  */
 
+import { AsyncLocalStorage } from 'node:async_hooks'
 import { afterEach, describe, expect, it } from 'vitest'
 import { core } from '../src/index.js'
 
+function delay(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms))
+}
+
 describe('core.i18n (node)', () => {
   afterEach(() => {
+    core.i18n.setRequestLocaleResolver(null)
     core.i18n.setGlobalLocale('zh-CN')
   })
 
@@ -57,6 +63,42 @@ describe('core.i18n (node)', () => {
 
     core.i18n.setGlobalLocale('zh-CN')
     expect(getMessage('hi', { locale: 'en-US' })).toBe('Hi')
+  })
+
+  it('createMessageGetter 应该隔离并发请求的 locale', async () => {
+    const getMessage = core.i18n.createMessageGetter({
+      'zh-CN': { hello: '你好' },
+      'en-US': { hello: 'Hello' },
+    })
+    const localeStorage = new AsyncLocalStorage<string>()
+
+    core.i18n.setRequestLocaleResolver(() => localeStorage.getStore())
+
+    const [en, zh] = await Promise.all([
+      localeStorage.run('en-US', async () => {
+        await delay(15)
+        return getMessage('hello')
+      }),
+      localeStorage.run('zh-CN', async () => {
+        await delay(1)
+        return getMessage('hello')
+      }),
+    ])
+
+    expect(en).toBe('Hello')
+    expect(zh).toBe('你好')
+  })
+
+  it('createMessageGetter 应该在请求级 locale 缺失时回退到全局 locale', () => {
+    const getMessage = core.i18n.createMessageGetter({
+      'zh-CN': { hello: '你好' },
+      'en-US': { hello: 'Hello' },
+    })
+
+    core.i18n.setGlobalLocale('en-US')
+    core.i18n.setRequestLocaleResolver(() => undefined)
+
+    expect(getMessage('hello')).toBe('Hello')
   })
 
   it('createMessageGetter 不存在的 key 应返回 key 本身', () => {

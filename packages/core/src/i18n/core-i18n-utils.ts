@@ -18,21 +18,29 @@ const DEFAULT_LOCALES: LocaleInfo[] = [
 
 const DEFAULT_LOCALE: Locale = 'zh-CN'
 
+function normalizeLocale(locale: Locale): Locale {
+  return locale === 'en' ? 'en-US' : locale === 'zh' ? 'zh-CN' : locale
+}
+
 // ─── 全局 Locale 状态 ───
 
 let currentLocale: Locale = DEFAULT_LOCALE
+let requestLocaleResolver: (() => Locale | undefined) | null = null
 
 function getGlobalLocale(): Locale {
   return currentLocale
 }
 
 function setGlobalLocale(locale: Locale): void {
-  // 规范化简写：'en' → 'en-US', 'zh' → 'zh-CN'
-  const normalized = locale === 'en' ? 'en-US' : locale === 'zh' ? 'zh-CN' : locale
+  const normalized = normalizeLocale(locale)
 
   if (currentLocale !== normalized) {
     currentLocale = normalized
   }
+}
+
+function setRequestLocaleResolver(resolver: (() => Locale | undefined) | null): void {
+  requestLocaleResolver = resolver
 }
 
 // ─── 消息获取工厂 ───
@@ -61,13 +69,14 @@ function createMessageGetter<K extends string>(
   messages: LocaleMessages<K>,
 ): (key: K, options?: MessageOptions) => string {
   return (key: K, options?: MessageOptions): string => {
-    // 确定使用的 locale（允许通过 options 覆盖全局设置）
-    const requestLocale = options?.locale ?? currentLocale
-    const isSupported = DEFAULT_LOCALES.some(l => l.code === requestLocale)
-    const locale = isSupported ? requestLocale : DEFAULT_LOCALE
+    const resolvedRequestLocale = requestLocaleResolver?.()
+    const preferredLocale = options?.locale ?? resolvedRequestLocale ?? currentLocale
+    const locale = normalizeLocale(preferredLocale)
+    const isSupported = DEFAULT_LOCALES.some(l => l.code === locale)
+    const activeLocale = isSupported ? locale : DEFAULT_LOCALE
 
     // 获取消息字典和模板
-    const dict = messages[locale] ?? messages[DEFAULT_LOCALE]
+    const dict = messages[activeLocale] ?? messages[DEFAULT_LOCALE]
     const template = dict?.[key]
 
     if (!template) {
@@ -101,6 +110,7 @@ export const i18n = {
   DEFAULT_LOCALES,
   DEFAULT_LOCALE,
   setGlobalLocale,
+  setRequestLocaleResolver,
   getGlobalLocale,
   createMessageGetter,
   coreM,
