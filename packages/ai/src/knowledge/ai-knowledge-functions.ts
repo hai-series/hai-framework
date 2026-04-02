@@ -75,23 +75,15 @@ export function createKnowledgeOperations(
   datapipe: DatapipeFunctions,
   store?: KnowledgeStore,
 ): KnowledgeOperations {
-  /** 已完成 setup 的 collection 集合（L1 进程内缓存，后备为 DB 注册表） */
-  const setupCollections = new Set<string>()
-
   /**
    * 检查 collection 是否已就绪（cache-aside：先查进程内缓存，未命中则查 DB 注册表并回填缓存）
    *
    * 支持多节点场景：其他节点完成 setup 后，本节点通过 DB 查询亦可感知。
    */
   async function isCollectionReady(collection: string): Promise<boolean> {
-    if (setupCollections.has(collection))
-      return true
     if (!store)
       return false
-    const exists = await store.collectionExists(collection)
-    if (exists)
-      setupCollections.add(collection)
-    return exists
+    return await store.collectionExists(collection)
   }
 
   return {
@@ -120,7 +112,6 @@ export function createKnowledgeOperations(
         await store.initialize(collection, dimension)
         await store.registerCollection(collection, dimension)
 
-        setupCollections.add(collection)
         logger.debug('Knowledge base setup completed', { collection })
         return ok(undefined)
       }
