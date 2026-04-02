@@ -6,6 +6,24 @@
  * @module index
  */
 
+export { default as AiDocumentEditor } from './AiDocumentEditor.svelte'
+export { renderMarkdownDocument } from './document-parse.js'
+export type {
+  MarkdownDocumentParseOptions,
+  MarkdownRenderResult,
+} from './document-parse.js'
+export type {
+  AiDocumentEditorProps,
+  MarkdownBlockFormatKind,
+  MarkdownCodeBlockItem,
+  MarkdownCodeRunRequest,
+  MarkdownCodeRunResult,
+  MarkdownInlineFormatKind,
+  MarkdownOutlineItem,
+  MarkdownRewriteAction,
+  MarkdownRewriteRequest,
+  MarkdownToolbarDownloadAction,
+} from './document-types.js'
 export { parseMarkdown } from './markdown-parse.js'
 export type { MarkdownParseOptions } from './markdown-parse.js'
 export { default as MarkdownRenderer } from './MarkdownRenderer.svelte'
