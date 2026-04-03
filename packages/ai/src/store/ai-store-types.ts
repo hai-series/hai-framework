@@ -276,6 +276,13 @@ export interface KnowledgeStore {
   removeVectors: (collection: string, ids: string[]) => Promise<void>
   /** 确保向量集合存在 */
   ensureCollection: (collection: string, dimension: number) => Promise<void>
+
+  // ─── Collection 注册表 ───
+
+  /** 注册 collection（setup 时持久化，幂等） */
+  registerCollection: (collection: string, dimension: number) => Promise<void>
+  /** 检查 collection 是否已在注册表中存在（跨节点/重启后仍有效） */
+  collectionExists: (collection: string) => Promise<boolean>
 }
 
 // ─── 存储 Provider ───
