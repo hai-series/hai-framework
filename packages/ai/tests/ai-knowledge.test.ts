@@ -85,6 +85,7 @@ function createMockKnowledgeStore() {
   const documents = new Map<string, { documentId: string, collection: string, title: string | null, url: string | null, chunkCount: number, createdAt: number }>()
   const entities = new Map<string, { id: string, name: string, type: string, aliases?: string[], description?: string }>()
   const entityDocs: Array<{ entityId: string, documentId: string, chunkId?: string, collection: string, relevance?: number, context?: string }> = []
+  const registeredCollections = new Set<string>()
 
   const store: KnowledgeStore = {
     initialize: vi.fn(async () => {}),
@@ -112,6 +113,8 @@ function createMockKnowledgeStore() {
     }),
     removeVectors: vi.fn(async () => {}),
     ensureCollection: vi.fn(async () => {}),
+    registerCollection: vi.fn(async (col: string) => { registeredCollections.add(col) }),
+    collectionExists: vi.fn(async (col: string) => registeredCollections.has(col)),
   }
 
   return { store, _vectors: vectors, _documents: documents, _entities: entities, _entityDocs: entityDocs }
@@ -131,7 +134,7 @@ function createMockDatapipe() {
 }
 
 const DEFAULT_CONFIG = {
-  collection: 'hai_ai_knowledge',
+  collection: 'hai_ai_knowledge1',
   dimension: 3,
   enableEntityExtraction: false,
   cleanOptions: {
@@ -168,8 +171,9 @@ describe('knowledge setup', () => {
     const result = await ops.setup()
     expect(result.success).toBe(true)
 
-    // 应调用 store.initialize
-    expect(store.initialize).toHaveBeenCalledWith('hai_ai_knowledge', 3)
+    // 应调用 store.initialize 和 store.registerCollection
+    expect(store.initialize).toHaveBeenCalledWith('hai_ai_knowledge1', 3)
+    expect(store.registerCollection).toHaveBeenCalledWith('hai_ai_knowledge1', 3)
   })
 
   it('store.initialize 抛出时 setup 返回错误', async () => {
@@ -206,6 +210,7 @@ describe('knowledge setup', () => {
     const result = await ops.setup({ collection: 'custom-kb', dimension: 768 })
     expect(result.success).toBe(true)
     expect(store.initialize).toHaveBeenCalledWith('custom-kb', 768)
+    expect(store.registerCollection).toHaveBeenCalledWith('custom-kb', 768)
   })
 
   it('未提供 store 时 setup 返回错误', async () => {
@@ -273,6 +278,46 @@ describe('knowledge ingest', () => {
     }
   })
 
+  it('多 collection：setup col-a 后 ingest 到 col-b 应返回 KNOWLEDGE_NOT_SETUP', async () => {
+    const { store } = createMockKnowledgeStore()
+    const ops = createKnowledgeOperations(
+      DEFAULT_CONFIG,
+      createMockLLM(),
+      createMockEmbedding(),
+      createMockDatapipe(),
+      store,
+    )
+
+    // 只初始化 col-a
+    await ops.setup({ collection: 'col-a' })
+
+    // 向 col-b（未 setup）导入应被拒绝
+    const result = await ops.ingest({ documentId: 'doc-1', content: 'Hello world', collection: 'col-b' })
+    expect(result.success).toBe(false)
+    if (!result.success)
+      expect(result.error.code).toBe(HaiAIError.KNOWLEDGE_NOT_SETUP.code)
+  })
+
+  it('多 collection：分别 setup col-a 和 col-b 后均可 ingest', async () => {
+    const { store } = createMockKnowledgeStore()
+    const ops = createKnowledgeOperations(
+      DEFAULT_CONFIG,
+      createMockLLM(),
+      createMockEmbedding(),
+      createMockDatapipe(),
+      store,
+    )
+
+    await ops.setup({ collection: 'col-a' })
+    await ops.setup({ collection: 'col-b' })
+
+    const resultA = await ops.ingest({ documentId: 'doc-a', content: 'Content A', collection: 'col-a' })
+    const resultB = await ops.ingest({ documentId: 'doc-b', content: 'Content B', collection: 'col-b' })
+
+    expect(resultA.success).toBe(true)
+    expect(resultB.success).toBe(true)
+  })
+
   it('正常导入：清洗 → 分块 → 向量化 → 存入 store', async () => {
     const { ops, store, datapipe, embedding } = await setupOps()
 
@@ -297,7 +342,7 @@ describe('knowledge ingest', () => {
     // embedding.embedBatch 应被调用（2 个 chunk）
     expect(embedding.embedBatch).toHaveBeenCalled()
     // store.upsertVectors 应被调用
-    expect(store.upsertVectors).toHaveBeenCalledWith('hai_ai_knowledge', expect.any(Array))
+    expect(store.upsertVectors).toHaveBeenCalledWith('hai_ai_knowledge1', expect.any(Array))
     // store.upsertDocument 应被调用
     expect(store.upsertDocument).toHaveBeenCalled()
   })
@@ -460,7 +505,7 @@ describe('knowledge retrieve', () => {
       // 每个 item 应有 citation
       for (const item of result.data.items) {
         expect(item.citation).toBeDefined()
-        expect(item.citation.collection).toBe('hai_ai_knowledge')
+        expect(item.citation.collection).toBe('hai_ai_knowledge1')
         expect(item.score).toBeGreaterThan(0)
       }
     }
@@ -546,6 +591,22 @@ describe('knowledge ask', () => {
 // ─── findByEntity / listEntities ───
 
 describe('knowledge 实体查询', () => {
+  it('findByEntity — 未 setup 时返回 KNOWLEDGE_NOT_SETUP', async () => {
+    const { store } = createMockKnowledgeStore()
+    const ops = createKnowledgeOperations(
+      DEFAULT_CONFIG,
+      createMockLLM(),
+      createMockEmbedding(),
+      createMockDatapipe(),
+      store,
+    )
+
+    const result = await ops.findByEntity('Alice')
+    expect(result.success).toBe(false)
+    if (!result.success)
+      expect(result.error.code).toBe(HaiAIError.KNOWLEDGE_NOT_SETUP.code)
+  })
+
   it('findByEntity — 正常返回（空结果）', async () => {
     const { store } = createMockKnowledgeStore()
     const ops = createKnowledgeOperations(
@@ -556,6 +617,7 @@ describe('knowledge 实体查询', () => {
       store,
     )
 
+    await ops.setup()
     const result = await ops.findByEntity('Alice')
     expect(result.success).toBe(true)
     if (result.success) {
@@ -652,7 +714,7 @@ describe('knowledge listDocuments', () => {
 
     // 验证 store.listDocuments 被调用且包含分页参数
     expect(store.listDocuments).toHaveBeenCalledWith(
-      'hai_ai_knowledge',
+      'hai_ai_knowledge1',
       expect.objectContaining({ offset: 10, limit: 5 }),
     )
   })
