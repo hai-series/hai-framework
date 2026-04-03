@@ -19,10 +19,11 @@
     MarkdownCodeRunResult,
     MarkdownInlineFormatKind,
     MarkdownRewriteAction,
-    MarkdownToolbarDownloadAction,
   } from './document-types.js'
   import { uiM } from '../../../messages.js'
   import { cn } from '../../../utils.js'
+  import AiDocumentDownloadMenu from './AiDocumentDownloadMenu.svelte'
+  import { resolveDocumentMarkdownContent } from './document-download.js'
   import { renderMarkdownDocument } from './document-parse.js'
   import { parseMarkdown } from './markdown-parse.js'
 
@@ -31,6 +32,10 @@
     top: number
     /** 选区工具条中心点相对滚动容器的 left 坐标。 */
     left: number
+    /** 选区工具条应该出现在选区上方还是下方，避免遮挡正文。 */
+    placement: 'top' | 'bottom'
+    /** 工具条在主内容中的水平贴边方式，避免浮层越过正文区域。 */
+    alignment: 'left' | 'center' | 'right'
   }
 
   interface CodePreviewState {
@@ -75,14 +80,6 @@
     showToolbar = true,
     // 目录面板初始是否折叠。
     initialOutlineCollapsed = false,
-    // 主状态文案（保存状态等）。
-    statusText = '',
-    // 标题上方的主状态文案，优先级高于 statusText。
-    metaText = '',
-    // 标题区胶囊状态文案。
-    saveState = '',
-    // 眉标题文案，默认使用 i18n 文案。
-    eyebrow = uiM('markdown_document_eyebrow'),
     // 是否处于改写中状态。
     rewritePending = false,
     // 改写动作列表。
@@ -93,14 +90,18 @@
     downloadActions = [],
     // “历史版本”按钮文案。
     historyActionLabel = uiM('markdown_history'),
-    // “查看版本”按钮文案。
-    versionActionLabel = uiM('markdown_view_version'),
     // 关闭回调。
     onclose,
+    // 返回按钮是否禁用。
+    closeDisabled = false,
     // 撤销回调。
     onundo,
+    // 撤销按钮是否禁用。
+    undoDisabled = false,
     // 重做回调。
     onredo,
+    // 重做按钮是否禁用。
+    redoDisabled = false,
     // 代码运行回调。
     oncoderun,
     // 选区改写回调。
@@ -129,8 +130,6 @@
     onannotation,
   }: AiDocumentEditorProps = $props()
 
-  // downloadMenuWrapEl 只负责判断 pointerdown 是否落在下载菜单区域内。
-  let downloadMenuWrapEl: HTMLDivElement | undefined = $state()
   // outlineCollapsedInitialized 用来把 `initialOutlineCollapsed` 只消费一次，避免用户手动展开后又被 props 回写覆盖。
   let outlineCollapsedInitialized = $state(false)
   // 当前目录是否折叠。
@@ -143,16 +142,25 @@
   let selectionToolbarVisible = $state(false)
   // 改写菜单显示开关。
   let rewriteMenuOpen = $state(false)
+  // 文档头部标题只有在正文首个标题滚出可视区后才显示，避免双标题并排出现。
+  let showPinnedTitle = $state(Boolean(title))
   // 选区工具条在滚动容器中的定位坐标。
-  let toolbarPosition = $state<SelectionToolbarPosition>({ top: 0, left: 0 })
-  // 下载菜单展开态由组件内部维护，避免外层只是展示文档时还要持有这部分 UI 状态。
-  let downloadMenuOpen = $state(false)
+  let toolbarPosition = $state<SelectionToolbarPosition>({
+    top: 0,
+    left: 0,
+    placement: 'top',
+    alignment: 'center',
+  })
+  // documentCopied 只负责顶部复制按钮的瞬时反馈，不和正文内容状态混用。
+  let documentCopied = $state(false)
+  // copyFeedbackTimer 用来保证连续点击复制时，成功态能按最后一次操作重新计时。
+  let copyFeedbackTimer: ReturnType<typeof window.setTimeout> | undefined = $state()
   // 每个代码块的运行状态和预览结果，key 为 codeBlockId。
   let codePreviews = $state<Record<string, CodePreviewState>>({})
 
   // code 类型产物通常只有裸代码文本，这里统一包成 fenced block 进入同一条渲染链路。
   const documentContent = $derived(
-    resolveDocumentContent(content, sourceKind, codeLanguage),
+    resolveDocumentMarkdownContent(content, sourceKind, codeLanguage),
   )
   // 渲染结果同时提供 HTML、目录和代码块元数据，供顶部目录与代码预览共用。
   const renderResult = $derived(
@@ -169,10 +177,6 @@
   const outline = $derived(renderResult.outline)
   // outlineHasContent 用来区分“目录被收起”和“正文确实没有标题”。
   const outlineHasContent = $derived(outline.length > 0)
-  // 只有在外层真正接入下载能力时，才展示下载菜单。
-  const resolvedDownloadActions = $derived(
-    resolveDownloadActions(downloadActions, ondownload),
-  )
   // 未显式传入动作时，按内置动作列表补齐 AI 改写菜单。
   const resolvedRewriteActions = $derived(
     resolveRewriteActions(rewriteActions, onrewrite),
@@ -187,14 +191,6 @@
       onannotation,
     ].some(Boolean),
   )
-  // 顶部第一行主状态优先展示“正在改写”；普通展示场景只在存在 saveState 或 metaText 时补充状态，避免和标题区胶囊重复。
-  const headerPrimaryText = $derived(
-    rewritePending
-      ? uiM('markdown_rewriting')
-      : metaText || (saveState ? statusText : ''),
-  )
-  // 标题区胶囊优先展示 saveState，没有时退回状态文案，方便 ChatWorkspace 只传 statusText 也能显示。
-  const heroStatusText = $derived(saveState || statusText)
   // readerDocumentClass 只负责正文文章区域，不和外层容器类名混用。
   const readerDocumentClass = $derived(
     cn(
@@ -213,6 +209,7 @@
     requestAnimationFrame(() => {
       syncCodePreviewHosts()
       syncActiveHeadingFromScroll()
+      syncPinnedTitleVisibility()
     })
   })
 
@@ -257,66 +254,12 @@
   })
 
   $effect(() => {
-    if (!downloadMenuOpen || typeof window === 'undefined') {
-      return
-    }
-
-    const handlePointerDown = (event: PointerEvent) => {
-      const target = event.target as Node | null
-      if (!target || downloadMenuWrapEl?.contains(target)) {
-        return
-      }
-      downloadMenuOpen = false
-    }
-
-    window.addEventListener('pointerdown', handlePointerDown)
     return () => {
-      window.removeEventListener('pointerdown', handlePointerDown)
+      if (copyFeedbackTimer) {
+        window.clearTimeout(copyFeedbackTimer)
+      }
     }
   })
-
-  /**
-   * code 类型产物在上游通常只有裸代码文本。
-   * 这里统一包成 fenced code block，确保高亮、复制和运行入口全部复用同一条渲染链路。
-   */
-  function resolveDocumentContent(
-    value: string,
-    kind: AiDocumentEditorProps['sourceKind'],
-    language?: string,
-  ): string {
-    if (kind !== 'code') {
-      return value
-    }
-
-    // fenceLength 需要避开正文里已有的反引号长度，防止包裹后的 fenced block 提前闭合。
-    const fenceLength = Math.max(
-      3,
-      ...Array.from(value.matchAll(/`{3,}/g), match => match[0].length + 1),
-    )
-    const fence = '`'.repeat(fenceLength)
-    const normalizedLanguage = language?.trim() ?? ''
-    const suffix = value.endsWith('\n') ? '' : '\n'
-    return `${fence}${normalizedLanguage}\n${value}${suffix}${fence}`
-  }
-
-  function resolveDownloadActions(
-    actions: MarkdownToolbarDownloadAction[],
-    handler?: AiDocumentEditorProps['ondownload'],
-  ): MarkdownToolbarDownloadAction[] {
-    if (actions.length > 0) {
-      return actions
-    }
-
-    if (!handler) {
-      return []
-    }
-
-    return [
-      { id: 'markdown', label: uiM('markdown_download_markdown') },
-      { id: 'word', label: uiM('markdown_download_word') },
-      { id: 'pdf', label: uiM('markdown_download_pdf') },
-    ]
-  }
 
   function resolveRewriteActions(
     actions: MarkdownRewriteAction[],
@@ -338,22 +281,39 @@
     ]
   }
 
-  async function copyRawContent(): Promise<void> {
+  async function copyRawContent(): Promise<boolean> {
     try {
       await navigator.clipboard.writeText(content)
+      return true
     }
     catch {
-    // clipboard API 可能被安全策略禁用；保持静默避免打断阅读。
+      // clipboard API 可能被安全策略禁用；保持静默避免打断阅读。
+      return false
     }
+  }
+
+  function triggerDocumentCopiedFeedback(): void {
+    documentCopied = true
+    if (copyFeedbackTimer) {
+      window.clearTimeout(copyFeedbackTimer)
+    }
+
+    copyFeedbackTimer = window.setTimeout(() => {
+      documentCopied = false
+      copyFeedbackTimer = undefined
+    }, 1800)
   }
 
   async function handleCopyDocument(): Promise<void> {
     if (oncopydocument) {
       await oncopydocument()
+      triggerDocumentCopiedFeedback()
       return
     }
 
-    await copyRawContent()
+    if (await copyRawContent()) {
+      triggerDocumentCopiedFeedback()
+    }
   }
 
   function updateCopyButtonState(button: HTMLButtonElement): void {
@@ -711,8 +671,33 @@ ${safeCode}
     activeHeadingId = nextActiveId
   }
 
+  function syncPinnedTitleVisibility(): void {
+    if (!title) {
+      showPinnedTitle = false
+      return
+    }
+
+    if (!editorScrollHost || !previewHost) {
+      showPinnedTitle = true
+      return
+    }
+
+    const firstHeading = previewHost.querySelector<HTMLElement>(
+      '[data-heading-id]',
+    )
+    if (!firstHeading) {
+      showPinnedTitle = true
+      return
+    }
+
+    const headingTop = firstHeading.offsetTop - editorScrollHost.scrollTop
+    const headingBottom = headingTop + firstHeading.offsetHeight
+    showPinnedTitle = headingBottom <= 20
+  }
+
   function handleDocumentScroll(event: Event): void {
     syncActiveHeadingFromScroll()
+    syncPinnedTitleVisibility()
     if (selectionToolbarVisible) {
       closeSelectionToolbar()
     }
@@ -775,17 +760,51 @@ ${safeCode}
     const range = selection.getRangeAt(0)
     const rect = range.getBoundingClientRect()
     const hostRect = editorScrollHost.getBoundingClientRect()
+    // 浮层尺寸在首次渲染前拿不到精确高度，这里用稳定的经验值决定上下避让方向，避免直接盖住选中文本。
+    const estimatedToolbarHeight = rewriteMenuOpen ? 132 : 56
+    const offset = 12
+    const topSpace = rect.top - hostRect.top
+    const bottomSpace = hostRect.bottom - rect.bottom
+    const placement
+      = topSpace >= estimatedToolbarHeight + offset || bottomSpace < estimatedToolbarHeight
+        ? 'top'
+        : 'bottom'
     const center = rect.left - hostRect.left + rect.width / 2
+    const horizontalPadding = 16
+    const estimatedToolbarHalfWidth = Math.min(
+      272,
+      Math.max(
+        132,
+        (editorScrollHost.clientWidth - horizontalPadding * 2) / 2,
+      ),
+    )
+    const minCenter = horizontalPadding + estimatedToolbarHalfWidth
+    const maxCenter = editorScrollHost.clientWidth - minCenter
+    const alignment
+      = center <= minCenter
+        ? 'left'
+        : center >= maxCenter
+        ? 'right'
+        : 'center'
+    const toolbarLeft
+      = alignment === 'left'
+        ? horizontalPadding
+        : alignment === 'right'
+        ? editorScrollHost.clientWidth - horizontalPadding
+        : center
+    const toolbarTop
+      = placement === 'top'
+        ? editorScrollHost.scrollTop + rect.top - hostRect.top - estimatedToolbarHeight - offset
+        : editorScrollHost.scrollTop + rect.bottom - hostRect.top + offset
 
     selectedText = text
     selectionToolbarVisible = true
     rewriteMenuOpen = false
     toolbarPosition = {
-      top: Math.max(
-        12,
-        editorScrollHost.scrollTop + rect.top - hostRect.top - 56,
-      ),
-      left: Math.max(140, Math.min(editorScrollHost.clientWidth - 140, center)),
+      top: Math.max(12, toolbarTop),
+      left: Math.max(horizontalPadding, toolbarLeft),
+      placement,
+      alignment,
     }
   }
 
@@ -836,11 +855,6 @@ ${safeCode}
     closeSelectionToolbar()
     onpreviewblur?.()
   }
-
-  function handleDownloadAction(actionId: string): void {
-    downloadMenuOpen = false
-    ondownload?.(actionId)
-  }
 </script>
 
 <section class={cn('hai-ai-doc-pane', className)}>
@@ -848,15 +862,27 @@ ${safeCode}
     {#if showToolbar}
       <header class='hai-ai-doc-topbar'>
         <div class='hai-ai-doc-meta-bar'>
-          <div class='hai-ai-doc-meta'>
-            {#if headerPrimaryText}
-              <span class='hai-ai-doc-status'>{headerPrimaryText}</span>
+          <div class='hai-ai-doc-toolbar-heading'>
+            {#if showOutline && outlineCollapsed}
+              <button
+                type='button'
+                class='hai-ai-doc-outline-open'
+                aria-label={uiM('markdown_show_outline')}
+                title={uiM('markdown_show_outline')}
+                onclick={() => (outlineCollapsed = false)}
+              >
+                <svg viewBox='0 0 24 24' aria-hidden='true'>
+                  <path
+                    d='M5.75 7.25a.75.75 0 0 1 .75-.75h11a.75.75 0 0 1 0 1.5h-11a.75.75 0 0 1-.75-.75Zm0 4.75a.75.75 0 0 1 .75-.75h11a.75.75 0 0 1 0 1.5h-11a.75.75 0 0 1-.75-.75Zm0 4.75a.75.75 0 0 1 .75-.75h11a.75.75 0 0 1 0 1.5h-11a.75.75 0 0 1-.75-.75Z'
+                  ></path>
+                </svg>
+              </button>
             {/if}
 
-            {#if saveState}
-              <span class='hai-ai-doc-status hai-ai-doc-status-subtle'
-              >{saveState}</span
-              >
+            {#if showPinnedTitle && title}
+              <div class='hai-ai-doc-title-block'>
+                <h2>{title}</h2>
+              </div>
             {/if}
           </div>
 
@@ -864,22 +890,32 @@ ${safeCode}
             {#if onundo}
               <button
                 type='button'
-                class='hai-ai-doc-toolbar-ghost'
+                class='hai-ai-doc-toolbar-icon'
                 aria-label={uiM('markdown_undo')}
+                disabled={undoDisabled}
                 onclick={onundo}
               >
-                ↶
+                <svg viewBox='0 0 24 24' aria-hidden='true'>
+                  <path
+                    d='M10.2 6.05a7.25 7.25 0 1 1-4.82 6.83.75.75 0 0 1 1.5 0 5.75 5.75 0 1 0 3.82-5.42V10a.75.75 0 1 1-1.5 0V4a.75.75 0 0 1 .75-.75h6a.75.75 0 0 1 0 1.5H10.2v1.3Z'
+                  ></path>
+                </svg>
               </button>
             {/if}
 
             {#if onredo}
               <button
                 type='button'
-                class='hai-ai-doc-toolbar-ghost'
+                class='hai-ai-doc-toolbar-icon'
                 aria-label={uiM('markdown_redo')}
+                disabled={redoDisabled}
                 onclick={onredo}
               >
-                ↷
+                <svg viewBox='0 0 24 24' aria-hidden='true'>
+                  <path
+                    d='M13.8 6.05V4.75h-5.75a.75.75 0 0 1 0-1.5h6A.75.75 0 0 1 14.8 4v6a.75.75 0 1 1-1.5 0V7.46a5.75 5.75 0 1 0 3.82 5.42.75.75 0 0 1 1.5 0 7.25 7.25 0 1 1-4.82-6.83Z'
+                  ></path>
+                </svg>
               </button>
             {/if}
 
@@ -889,42 +925,45 @@ ${safeCode}
 
             <button
               type='button'
-              class='hai-ai-doc-toolbar-action'
+              class={cn(
+                'hai-ai-doc-toolbar-pill',
+                documentCopied ? 'hai-ai-doc-toolbar-pill--success' : '',
+              )}
+              aria-label={uiM('markdown_copy_document')}
+              title={uiM('markdown_copy_document')}
               onclick={handleCopyDocument}
             >
-              {uiM('markdown_copy_document')}
+              {#if documentCopied}
+                <svg viewBox='0 0 24 24' aria-hidden='true'>
+                  <path
+                    d='M20.3 6.28a.75.75 0 0 1 .02 1.06l-8.06 8.38a.75.75 0 0 1-1.07.01L7.7 12.3a.75.75 0 1 1 1.06-1.06l2.9 2.9 7.58-7.88a.75.75 0 0 1 1.06.02Z'
+                  ></path>
+                </svg>
+              {:else}
+                <svg viewBox='0 0 24 24' aria-hidden='true'>
+                  <path
+                    d='M8.75 4.25A2.75 2.75 0 0 0 6 7v8.25A2.75 2.75 0 0 0 8.75 18h7.5A2.75 2.75 0 0 0 19 15.25V7a2.75 2.75 0 0 0-2.75-2.75h-7.5Zm-4 3A2.75 2.75 0 0 1 7.5 4.5a.75.75 0 0 0 0-1.5A4.25 4.25 0 0 0 3.25 7.25v8.5A4.25 4.25 0 0 0 7.5 20a.75.75 0 0 0 0-1.5 2.75 2.75 0 0 1-2.75-2.75v-8.5Z'
+                  ></path>
+                </svg>
+              {/if}
+              <span>{uiM('markdown_copy_document')}</span>
             </button>
 
-            {#if resolvedDownloadActions.length > 0}
-              <div
-                bind:this={downloadMenuWrapEl}
-                class='hai-ai-doc-download-wrap'
-              >
-                <button
-                  type='button'
-                  class='hai-ai-doc-toolbar-action'
-                  onclick={() => (downloadMenuOpen = !downloadMenuOpen)}
-                >
-                  {uiM('markdown_download')}
-                </button>
-
-                {#if downloadMenuOpen}
-                  <div class='hai-ai-doc-download-menu'>
-                    {#each resolvedDownloadActions as action}
-                      <button
-                        type='button'
-                        class='hai-ai-doc-download-item'
-                        onclick={() => handleDownloadAction(action.id)}
-                      >
-                        {action.label}
-                      </button>
-                    {/each}
-                  </div>
-                {/if}
-              </div>
-            {/if}
+            <AiDocumentDownloadMenu
+              content={content}
+              title={title}
+              sourceKind={sourceKind}
+              codeLanguage={codeLanguage}
+              actions={downloadActions}
+              ondownload={ondownload}
+              showLabel={true}
+              iconOnly={false}
+              triggerTitle={uiM('markdown_download')}
+              triggerClass='hai-ai-doc-toolbar-pill'
+            />
 
             {#if onhistory}
+              <span class='hai-ai-doc-toolbar-divider'></span>
               <button
                 type='button'
                 class='hai-ai-doc-toolbar-action'
@@ -939,45 +978,21 @@ ${safeCode}
                 type='button'
                 class='hai-ai-doc-toolbar-close'
                 aria-label={uiM('markdown_close')}
+                disabled={closeDisabled}
+                title={uiM('markdown_close')}
                 onclick={onclose}
               >
-                ×
+                <svg viewBox='0 0 24 24' aria-hidden='true'>
+                  <path
+                    d='M6.97 5.91a.75.75 0 0 1 1.06 0L12 9.88l3.97-3.97a.75.75 0 1 1 1.06 1.06L13.06 10.94l3.97 3.97a.75.75 0 1 1-1.06 1.06L12 12l-3.97 3.97a.75.75 0 1 1-1.06-1.06l3.97-3.97-3.97-3.97a.75.75 0 0 1 0-1.06Z'
+                  ></path>
+                </svg>
               </button>
             {/if}
           </div>
         </div>
       </header>
     {/if}
-
-    <div class='hai-ai-doc-heading-row'>
-      <div class='hai-ai-doc-title-block'>
-        {#if eyebrow}
-          <p class='hai-ai-doc-eyebrow'>{eyebrow}</p>
-        {/if}
-
-        {#if title}
-          <h2>{title}</h2>
-        {/if}
-      </div>
-
-      {#if heroStatusText || onhistory}
-        <div class='hai-ai-doc-heading-actions'>
-          {#if heroStatusText}
-            <span class='hai-ai-doc-save-pill'>{heroStatusText}</span>
-          {/if}
-
-          {#if onhistory}
-            <button
-              type='button'
-              class='hai-ai-doc-version-toggle'
-              onclick={onhistory}
-            >
-              {versionActionLabel}
-            </button>
-          {/if}
-        </div>
-      {/if}
-    </div>
 
     <div
       class:hai-ai-doc-layout-collapsed={outlineCollapsed}
@@ -991,9 +1006,15 @@ ${safeCode}
             <button
               type='button'
               class='hai-ai-doc-outline-toggle'
+              aria-label={uiM('markdown_hide_outline')}
+              title={uiM('markdown_hide_outline')}
               onclick={() => (outlineCollapsed = true)}
             >
-              {uiM('markdown_hide_outline')}
+              <svg viewBox='0 0 24 24' aria-hidden='true'>
+                <path
+                  d='M11.78 6.22a.75.75 0 0 1 0 1.06L7.06 12l4.72 4.72a.75.75 0 0 1-1.06 1.06l-5.25-5.25a.75.75 0 0 1 0-1.06l5.25-5.25a.75.75 0 0 1 1.06 0Zm6 0a.75.75 0 0 1 0 1.06L13.06 12l4.72 4.72a.75.75 0 1 1-1.06 1.06l-5.25-5.25a.75.75 0 0 1 0-1.06l5.25-5.25a.75.75 0 0 1 1.06 0Z'
+                ></path>
+              </svg>
             </button>
           </div>
 
@@ -1018,16 +1039,6 @@ ${safeCode}
       {/if}
 
       <section class='hai-ai-doc-reader'>
-        {#if showOutline && outlineCollapsed}
-          <button
-            type='button'
-            class='hai-ai-doc-outline-open'
-            onclick={() => (outlineCollapsed = false)}
-          >
-            {uiM('markdown_show_outline')}
-          </button>
-        {/if}
-
         <!-- svelte-ignore a11y_no_static_element_interactions -->
         <div
           bind:this={editorScrollHost}
@@ -1046,6 +1057,8 @@ ${safeCode}
           {#if selectionToolbarVisible}
             <div
               class='hai-ai-doc-selection-layer'
+              data-alignment={toolbarPosition.alignment}
+              data-placement={toolbarPosition.placement}
               style={`top:${toolbarPosition.top}px; left:${toolbarPosition.left}px;`}
             >
               <div
@@ -1061,18 +1074,30 @@ ${safeCode}
                     disabled={rewritePending}
                     onclick={() => (rewriteMenuOpen = !rewriteMenuOpen)}
                   >
-                    {uiM('markdown_rewrite')}
+                    <svg viewBox='0 0 24 24' aria-hidden='true'>
+                      <path
+                        d='M12 3.25a.75.75 0 0 1 .72.55l1.06 3.62 3.63 1.06a.75.75 0 0 1 0 1.44l-3.63 1.06-1.06 3.63a.75.75 0 0 1-1.44 0l-1.06-3.63-3.63-1.06a.75.75 0 0 1 0-1.44l3.63-1.06 1.06-3.62a.75.75 0 0 1 .72-.55Zm6.5 11.5a.75.75 0 0 1 .72.55l.42 1.43 1.43.42a.75.75 0 0 1 0 1.44l-1.43.42-.42 1.43a.75.75 0 0 1-1.44 0l-.42-1.43-1.43-.42a.75.75 0 0 1 0-1.44l1.43-.42.42-1.43a.75.75 0 0 1 .72-.55Z'
+                      ></path>
+                    </svg>
+                    <span>{uiM('markdown_rewrite')}</span>
                   </button>
                 {/if}
 
                 {#if onapplyblockformat}
+                  {#if onrewrite}
+                    <span class='hai-ai-doc-selection-divider'></span>
+                  {/if}
                   <button
                     type='button'
                     class='hai-ai-doc-selection-btn'
                     title={uiM('markdown_format_heading')}
                     onclick={() => applyBlockFormat('heading')}
                   >
-                    T
+                    <svg viewBox='0 0 24 24' aria-hidden='true'>
+                      <path
+                        d='M5 5.25a.75.75 0 0 1 .75.75V11h6.5V6a.75.75 0 0 1 1.5 0v12a.75.75 0 0 1-1.5 0v-5.5h-6.5V18a.75.75 0 0 1-1.5 0V6A.75.75 0 0 1 5 5.25Zm11.25 2.5a.75.75 0 0 1 0 1.5h3a.75.75 0 0 1 0 1.5H18.5v8.5a.75.75 0 0 1-1.5 0v-8.5h-.75a.75.75 0 0 1 0-1.5h3Z'
+                      ></path>
+                    </svg>
                   </button>
                   <button
                     type='button'
@@ -1080,11 +1105,18 @@ ${safeCode}
                     title={uiM('markdown_format_bullet')}
                     onclick={() => applyBlockFormat('bullet')}
                   >
-                    {uiM('markdown_format_bullet')}
+                    <svg viewBox='0 0 24 24' aria-hidden='true'>
+                      <path
+                        d='M6.25 7.25a1.25 1.25 0 1 1-2.5 0 1.25 1.25 0 0 1 2.5 0Zm14 0a.75.75 0 0 1-.75.75H8.75a.75.75 0 0 1 0-1.5H19.5a.75.75 0 0 1 .75.75Zm-14 5.5a1.25 1.25 0 1 1-2.5 0 1.25 1.25 0 0 1 2.5 0Zm14 0a.75.75 0 0 1-.75.75H8.75a.75.75 0 0 1 0-1.5H19.5a.75.75 0 0 1 .75.75Zm-14 5.5a1.25 1.25 0 1 1-2.5 0 1.25 1.25 0 0 1 2.5 0Zm14 0a.75.75 0 0 1-.75.75H8.75a.75.75 0 0 1 0-1.5H19.5a.75.75 0 0 1 .75.75Z'
+                      ></path>
+                    </svg>
                   </button>
                 {/if}
 
                 {#if onapplyinlineformat}
+                  {#if onapplyblockformat}
+                    <span class='hai-ai-doc-selection-divider'></span>
+                  {/if}
                   <button
                     type='button'
                     class='hai-ai-doc-selection-btn'
@@ -1123,7 +1155,11 @@ ${safeCode}
                     title={uiM('markdown_format_link')}
                     onclick={() => applyInlineFormat('link')}
                   >
-                    {uiM('markdown_format_link')}
+                    <svg viewBox='0 0 24 24' aria-hidden='true'>
+                      <path
+                        d='M7.78 15.72a3.75 3.75 0 0 1 0-5.3l2.47-2.47a3.75 3.75 0 0 1 5.3 5.3l-.97.98a.75.75 0 0 1-1.06-1.06l.98-.97a2.25 2.25 0 0 0-3.19-3.19l-2.47 2.47a2.25 2.25 0 1 0 3.18 3.18l.49-.49a.75.75 0 0 1 1.06 1.06l-.49.49a3.75 3.75 0 0 1-5.3 0Zm8.44-7.44a.75.75 0 0 1 0 1.06l-8 8a.75.75 0 0 1-1.06-1.06l8-8a.75.75 0 0 1 1.06 0Z'
+                      ></path>
+                    </svg>
                   </button>
                   <button
                     type='button'
@@ -1139,17 +1175,28 @@ ${safeCode}
                     title={uiM('markdown_format_highlight')}
                     onclick={() => applyInlineFormat('highlight')}
                   >
-                    A
+                    <span class='hai-ai-doc-selection-highlight-icon'>A</span>
                   </button>
+                {/if}
+
+                {#if oncopyselection || onannotation}
+                  {#if onapplyinlineformat}
+                    <span class='hai-ai-doc-selection-divider'></span>
+                  {/if}
                 {/if}
 
                 {#if oncopyselection}
                   <button
                     type='button'
                     class='hai-ai-doc-selection-btn hai-ai-doc-selection-btn-wide'
+                    title={uiM('markdown_copy_selection')}
                     onclick={copySelection}
                   >
-                    {uiM('markdown_copy_selection')}
+                    <svg viewBox='0 0 24 24' aria-hidden='true'>
+                      <path
+                        d='M8.75 4.25A2.75 2.75 0 0 0 6 7v8.25A2.75 2.75 0 0 0 8.75 18h7.5A2.75 2.75 0 0 0 19 15.25V7a2.75 2.75 0 0 0-2.75-2.75h-7.5Zm-4 3A2.75 2.75 0 0 1 7.5 4.5a.75.75 0 0 0 0-1.5A4.25 4.25 0 0 0 3.25 7.25v8.5A4.25 4.25 0 0 0 7.5 20a.75.75 0 0 0 0-1.5 2.75 2.75 0 0 1-2.75-2.75v-8.5Z'
+                      ></path>
+                    </svg>
                   </button>
                 {/if}
 
@@ -1157,9 +1204,14 @@ ${safeCode}
                   <button
                     type='button'
                     class='hai-ai-doc-selection-btn hai-ai-doc-selection-btn-wide'
+                    title={uiM('markdown_annotation')}
                     onclick={annotateSelection}
                   >
-                    {uiM('markdown_annotation')}
+                    <svg viewBox='0 0 24 24' aria-hidden='true'>
+                      <path
+                        d='M6.75 4.25A2.75 2.75 0 0 0 4 7v7.75A2.75 2.75 0 0 0 6.75 17.5h1.72l2.3 2.01a1.75 1.75 0 0 0 2.3 0l2.3-2.01h1.88A2.75 2.75 0 0 0 20 14.75V7a2.75 2.75 0 0 0-2.75-2.75H6.75Zm1.5 4a.75.75 0 0 1 .75-.75h6.5a.75.75 0 0 1 0 1.5H9a.75.75 0 0 1-.75-.75Zm0 3.5A.75.75 0 0 1 9 11h4a.75.75 0 0 1 0 1.5H9a.75.75 0 0 1-.75-.75Z'
+                      ></path>
+                    </svg>
                   </button>
                 {/if}
               </div>
@@ -1205,6 +1257,12 @@ ${safeCode}
 
 <style>
   .hai-ai-doc-pane {
+    --hai-ai-doc-selection-bg: color-mix(
+      in srgb,
+      oklch(var(--p, 0.62 0.22 264)) 28%,
+      oklch(var(--b1, 1 0 0)) 72%
+    );
+    --hai-ai-doc-selection-fg: oklch(var(--bc, 0.22 0 0));
     display: flex;
     min-height: 0;
     height: 100%;
@@ -1242,159 +1300,163 @@ ${safeCode}
   .hai-ai-doc-meta-bar {
     padding: 0.75rem 0;
     border-bottom: 1px solid oklch(var(--bc) / 0.08);
+    justify-content: space-between;
   }
 
-  .hai-ai-doc-meta {
+  .hai-ai-doc-toolbar-heading {
     display: flex;
     align-items: center;
-    gap: 0.75rem;
+    gap: 0.85rem;
     min-width: 0;
-    color: oklch(var(--bc) / 0.68);
-    font-size: 0.95rem;
-  }
-
-  .hai-ai-doc-status {
-    min-width: 0;
-    white-space: nowrap;
-  }
-
-  .hai-ai-doc-status-subtle {
-    color: oklch(var(--bc) / 0.52);
   }
 
   .hai-ai-doc-toolbar {
     display: flex;
     align-items: center;
-    gap: 0.625rem;
+    gap: 0.55rem;
     flex-wrap: wrap;
     justify-content: flex-end;
   }
 
-  .hai-ai-doc-toolbar-ghost,
+  .hai-ai-doc-toolbar-icon,
+  :global(.hai-ai-doc-toolbar-icon),
+  .hai-ai-doc-toolbar-close,
+  .hai-ai-doc-toolbar-pill,
+  :global(.hai-ai-doc-toolbar-pill),
   .hai-ai-doc-toolbar-action {
+    color: oklch(var(--bc));
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+
+  .hai-ai-doc-toolbar-icon,
+  :global(.hai-ai-doc-toolbar-icon),
+  .hai-ai-doc-toolbar-close {
+    width: 2.5rem;
+    height: 2.5rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: oklch(var(--b1));
+    border: 1px solid oklch(var(--bc) / 0.1);
+    transition:
+      border-color 0.15s ease,
+      background-color 0.15s ease,
+      color 0.15s ease,
+      box-shadow 0.15s ease,
+      transform 0.15s ease;
+  }
+
+  .hai-ai-doc-toolbar-icon,
+  :global(.hai-ai-doc-toolbar-icon) {
+    border-radius: 1rem;
+  }
+
+  .hai-ai-doc-toolbar-pill,
+  :global(.hai-ai-doc-toolbar-pill) {
+    min-height: 2.5rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.58rem;
+    padding: 0 0.98rem;
+    border-radius: 9999px;
+    border: 1px solid color-mix(in srgb, oklch(var(--bc)) 8%, white 92%);
+    background: color-mix(in srgb, white 88%, oklch(var(--b1)) 12%);
+    transition:
+      border-color 0.15s ease,
+      background-color 0.15s ease,
+      color 0.15s ease,
+      box-shadow 0.15s ease,
+      transform 0.15s ease;
+    white-space: nowrap;
+  }
+
+  .hai-ai-doc-toolbar-pill span,
+  :global(.hai-ai-doc-toolbar-pill span) {
+    font-size: 0.95rem;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+
+  .hai-ai-doc-toolbar-close {
+    border-radius: 1.05rem;
+  }
+
+  .hai-ai-doc-toolbar-icon svg,
+  :global(.hai-ai-doc-toolbar-icon svg),
+  .hai-ai-doc-toolbar-close svg,
+  .hai-ai-doc-toolbar-pill svg,
+  :global(.hai-ai-doc-toolbar-pill svg) {
+    width: 1.08rem;
+    height: 1.08rem;
+    fill: currentColor;
+  }
+
+  .hai-ai-doc-toolbar-icon:not(:disabled):hover,
+  :global(.hai-ai-doc-toolbar-icon:hover),
+  .hai-ai-doc-toolbar-pill:not(:disabled):hover,
+  :global(.hai-ai-doc-toolbar-pill:hover),
+  .hai-ai-doc-toolbar-action:hover,
+  .hai-ai-doc-toolbar-close:not(:disabled):hover,
+  .hai-ai-doc-version-toggle:hover,
+  .hai-ai-doc-outline-open:hover {
+    border-color: oklch(var(--bc) / 0.16);
+    background: color-mix(in srgb, white 70%, oklch(var(--b2)) 30%);
     color: oklch(var(--bc));
   }
 
-  .hai-ai-doc-toolbar-ghost {
-    width: 2.25rem;
-    height: 2.25rem;
-    border-radius: 9999px;
-    background: oklch(var(--b1));
-    border: 1px solid oklch(var(--bc) / 0.08);
-    transition: all 0.15s ease;
+  .hai-ai-doc-toolbar-icon:not(:disabled):hover,
+  :global(.hai-ai-doc-toolbar-icon:hover),
+  .hai-ai-doc-toolbar-pill:not(:disabled):hover,
+  :global(.hai-ai-doc-toolbar-pill:hover),
+  .hai-ai-doc-toolbar-close:not(:disabled):hover {
+    transform: translateY(-1px);
+    box-shadow: 0 12px 28px -22px oklch(var(--bc) / 0.36);
   }
 
-  .hai-ai-doc-toolbar-ghost:hover,
-  .hai-ai-doc-toolbar-action:hover,
-  .hai-ai-doc-version-toggle:hover,
-  .hai-ai-doc-outline-open:hover {
-    border-color: oklch(var(--bc) / 0.12);
-    background: oklch(var(--bc) / 0.04);
-  }
-
-  .hai-ai-doc-toolbar-ghost:disabled {
-    opacity: 0.45;
+  .hai-ai-doc-toolbar-icon:disabled,
+  :global(.hai-ai-doc-toolbar-icon:disabled),
+  .hai-ai-doc-toolbar-pill:disabled,
+  :global(.hai-ai-doc-toolbar-pill:disabled),
+  .hai-ai-doc-toolbar-close:disabled {
+    opacity: 0.42;
     cursor: not-allowed;
+    box-shadow: none;
   }
 
   .hai-ai-doc-toolbar-action,
   .hai-ai-doc-version-toggle {
-    border: 1px solid transparent;
+    border: 1px solid oklch(var(--bc) / 0.08);
     border-radius: 9999px;
-    padding: 0.55rem 0.85rem;
-    background: transparent;
-    transition: all 0.15s ease;
+    padding: 0.58rem 0.92rem;
+    background: color-mix(in srgb, oklch(var(--b1)) 76%, white 24%);
+    transition:
+      border-color 0.15s ease,
+      background-color 0.15s ease,
+      color 0.15s ease;
+    white-space: nowrap;
   }
 
-  .hai-ai-doc-download-wrap {
-    position: relative;
-  }
-
-  .hai-ai-doc-download-menu {
-    position: absolute;
-    top: calc(100% + 0.5rem);
-    right: 0;
-    z-index: 30;
-    min-width: 10.5rem;
-    display: grid;
-    gap: 0.125rem;
-    padding: 0.4rem;
-    border: 1px solid oklch(var(--bc) / 0.12);
-    border-radius: 0.95rem;
-    background: oklch(var(--b1));
-    box-shadow: 0 18px 36px oklch(var(--bc) / 0.12);
-  }
-
-  .hai-ai-doc-download-item {
-    text-align: left;
-    border: none;
-    border-radius: 0.75rem;
-    padding: 0.55rem 0.75rem;
-    color: inherit;
-    background: transparent;
-  }
-
-  .hai-ai-doc-download-item:hover {
-    background: oklch(var(--bc) / 0.05);
-  }
-
-  .hai-ai-doc-toolbar-close {
-    width: 2.45rem;
-    height: 2.45rem;
-    border-radius: 0.95rem;
-    display: grid;
-    place-items: center;
-    background: oklch(var(--b1));
-    border: 1px solid oklch(var(--bc) / 0.1);
-    color: inherit;
-    font-size: 1.35rem;
-    line-height: 1;
+  .hai-ai-doc-toolbar-pill--success {
+    color: oklch(var(--su, 0.7 0.15 160));
+    border-color: oklch(var(--su, 0.7 0.15 160) / 0.18);
+    background: oklch(var(--su, 0.7 0.15 160) / 0.08);
   }
 
   .hai-ai-doc-toolbar-divider {
     width: 1px;
-    height: 1.35rem;
+    height: 1.4rem;
     background: oklch(var(--bc) / 0.12);
   }
 
-  .hai-ai-doc-heading-row {
-    padding: 0.75rem 1.5rem 1rem;
+  .hai-ai-doc-title-block {
+    min-width: 0;
   }
 
   .hai-ai-doc-title-block h2 {
     margin: 0;
     font-size: 1.4rem;
     line-height: 1.25;
-  }
-
-  .hai-ai-doc-eyebrow {
-    margin: 0 0 0.35rem;
-    color: oklch(var(--bc) / 0.72);
-    font-size: 0.92rem;
-    font-weight: 700;
-  }
-
-  .hai-ai-doc-heading-actions {
-    display: flex;
-    align-items: center;
-    gap: 0.75rem;
-    flex-wrap: wrap;
-    justify-content: flex-end;
-  }
-
-  .hai-ai-doc-save-pill {
-    display: inline-flex;
-    align-items: center;
-    min-height: 2.35rem;
-    padding: 0 1rem;
-    border-radius: 9999px;
-    background: color-mix(in srgb, #fef0c8 82%, white 18%);
-    color: #8a621b;
-    font-weight: 700;
-  }
-
-  .hai-ai-doc-version-toggle {
-    background: color-mix(in srgb, oklch(var(--b2)) 82%, white 18%);
   }
 
   .hai-ai-doc-layout {
@@ -1413,6 +1475,8 @@ ${safeCode}
     min-height: 0;
     display: grid;
     grid-template-rows: auto 1fr;
+    position: relative;
+    z-index: 0;
     padding: 0.5rem 0.625rem 1.25rem 1rem;
     border-right: 1px solid oklch(var(--bc) / 0.08);
     background: linear-gradient(
@@ -1437,22 +1501,31 @@ ${safeCode}
 
   .hai-ai-doc-outline-toggle,
   .hai-ai-doc-outline-open {
-    border: 1px solid transparent;
-    color: oklch(var(--bc) / 0.74);
-    background: transparent;
-    font-size: 0.875rem;
+    width: 2.5rem;
+    height: 2.5rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid oklch(var(--bc) / 0.1);
+    border-radius: 1rem;
+    color: oklch(var(--bc) / 0.78);
+    background: #fff;
+    box-shadow: 0 12px 24px -22px oklch(var(--bc) / 0.28);
+    transition:
+      border-color 0.15s ease,
+      background-color 0.15s ease,
+      color 0.15s ease,
+      box-shadow 0.15s ease,
+      transform 0.15s ease;
+    cursor: pointer;
+    flex-shrink: 0;
   }
 
-  .hai-ai-doc-outline-open {
-    position: absolute;
-    top: 1rem;
-    left: 1rem;
-    z-index: 10;
-    border-radius: 9999px;
-    padding: 0.55rem 0.85rem;
-    background: oklch(var(--b1) / 0.94);
-    border-color: oklch(var(--bc) / 0.08);
-    box-shadow: 0 10px 26px oklch(var(--bc) / 0.08);
+  .hai-ai-doc-outline-toggle svg,
+  .hai-ai-doc-outline-open svg {
+    width: 1.1rem;
+    height: 1.1rem;
+    fill: currentColor;
   }
 
   .hai-ai-doc-outline-list {
@@ -1475,6 +1548,7 @@ ${safeCode}
     border-radius: 0.75rem;
     background: transparent;
     transition: all 0.15s ease;
+    cursor: pointer;
   }
 
   .hai-ai-doc-outline-item:hover {
@@ -1499,6 +1573,7 @@ ${safeCode}
     min-width: 0;
     min-height: 0;
     position: relative;
+    z-index: 1;
   }
 
   .hai-ai-doc-scroll {
@@ -1510,39 +1585,78 @@ ${safeCode}
 
   .hai-ai-doc-selection-layer {
     position: absolute;
-    z-index: 20;
-    display: grid;
-    gap: 0.375rem;
+    z-index: 30;
+    display: flex;
+    flex-direction: column;
+    gap: 0.45rem;
+    width: min(max-content, calc(100% - 2rem));
     transform: translateX(-50%);
     pointer-events: none;
+  }
+
+  .hai-ai-doc-selection-layer[data-placement='top'] {
+    flex-direction: column-reverse;
+  }
+
+  .hai-ai-doc-selection-layer[data-alignment='left'] {
+    transform: none;
+  }
+
+  .hai-ai-doc-selection-layer[data-alignment='right'] {
+    transform: translateX(-100%);
   }
 
   .hai-ai-doc-selection-toolbar {
     display: flex;
     align-items: center;
-    gap: 0.375rem;
+    gap: 0.25rem;
     flex-wrap: wrap;
     max-width: min(calc(100vw - 2rem), 34rem);
-    padding: 0.375rem;
-    border-radius: 1.125rem;
-    background: oklch(var(--b1) / 0.98);
-    border: 1px solid oklch(var(--bc) / 0.08);
-    box-shadow: 0 10px 26px oklch(var(--bc) / 0.16);
+    padding: 0.38rem;
+    border-radius: 1.2rem;
+    background: #fff;
+    border: 1px solid color-mix(in srgb, oklch(var(--bc)) 9%, white 91%);
+    box-shadow:
+      0 30px 60px -34px rgb(15 23 42 / 0.28),
+      0 14px 26px -18px rgb(15 23 42 / 0.16),
+      0 0 0 1px rgb(255 255 255 / 0.94) inset;
     pointer-events: auto;
+    isolation: isolate;
   }
 
   .hai-ai-doc-selection-chip,
   .hai-ai-doc-selection-btn {
-    border: none;
-    border-radius: 9999px;
-    min-height: 2.3rem;
+    min-height: 2.25rem;
+    border-radius: 0.9rem;
+    transition:
+      background-color 0.14s ease,
+      border-color 0.14s ease,
+      color 0.14s ease,
+      transform 0.14s ease;
   }
 
   .hai-ai-doc-selection-chip {
-    padding: 0 0.875rem;
-    background: oklch(var(--p) / 0.12);
-    color: oklch(var(--bc));
+    display: inline-flex;
+    align-items: center;
+    gap: 0.48rem;
+    padding: 0 0.88rem;
+    border: 1px solid oklch(var(--p) / 0.16);
+    background: oklch(var(--p) / 0.1);
+    color: oklch(var(--bc) / 0.92);
     font-weight: 700;
+    cursor: pointer;
+  }
+
+  .hai-ai-doc-selection-chip svg {
+    width: 0.95rem;
+    height: 0.95rem;
+    fill: currentColor;
+  }
+
+  .hai-ai-doc-selection-chip:not(:disabled):hover,
+  .hai-ai-doc-selection-btn:hover,
+  .hai-ai-doc-rewrite-menu button:hover {
+    transform: translateY(-1px);
   }
 
   .hai-ai-doc-selection-chip:disabled {
@@ -1551,14 +1665,57 @@ ${safeCode}
   }
 
   .hai-ai-doc-selection-btn {
-    min-width: 2.35rem;
-    padding: 0 0.75rem;
-    background: oklch(var(--b2));
-    color: oklch(var(--bc));
+    width: 2.25rem;
+    min-width: 2.25rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: 1px solid transparent;
+    background: transparent;
+    color: oklch(var(--bc) / 0.72);
+    cursor: pointer;
   }
 
   .hai-ai-doc-selection-btn-wide {
-    min-width: 3.75rem;
+    min-width: 2.25rem;
+  }
+
+  .hai-ai-doc-selection-btn:hover {
+    border-color: oklch(var(--bc) / 0.1);
+    background: oklch(var(--bc) / 0.045);
+    color: oklch(var(--bc));
+  }
+
+  .hai-ai-doc-selection-btn svg {
+    width: 1rem;
+    height: 1rem;
+    fill: currentColor;
+  }
+
+  .hai-ai-doc-selection-divider {
+    width: 1px;
+    height: 1.45rem;
+    margin: 0 0.2rem;
+    background: oklch(var(--bc) / 0.12);
+    flex-shrink: 0;
+  }
+
+  .hai-ai-doc-selection-highlight-icon {
+    position: relative;
+    font-weight: 700;
+  }
+
+  .hai-ai-doc-selection-highlight-icon::after {
+    content: '';
+    position: absolute;
+    left: -0.08rem;
+    right: -0.08rem;
+    bottom: -0.02rem;
+    height: 0.36rem;
+    border-radius: 9999px;
+    background: oklch(var(--wa, 0.9 0.14 90) / 0.45);
+    z-index: -1;
   }
 
   .hai-ai-doc-rewrite-menu {
@@ -1567,23 +1724,24 @@ ${safeCode}
     gap: 0.375rem;
     padding: 0.5rem;
     border-radius: 1.125rem;
-    background: oklch(var(--b1) / 0.98);
-    border: 1px solid oklch(var(--bc) / 0.08);
-    box-shadow: 0 10px 26px oklch(var(--bc) / 0.16);
+    background: #fff;
+    border: 1px solid color-mix(in srgb, oklch(var(--bc)) 9%, white 91%);
+    box-shadow:
+      0 30px 60px -34px rgb(15 23 42 / 0.28),
+      0 14px 26px -18px rgb(15 23 42 / 0.16),
+      0 0 0 1px rgb(255 255 255 / 0.94) inset;
     pointer-events: auto;
+    isolation: isolate;
   }
 
   .hai-ai-doc-rewrite-menu button {
     text-align: left;
-    border: none;
+    border: 1px solid transparent;
     border-radius: 0.875rem;
     padding: 0.7rem 0.8rem;
-    color: inherit;
-    background: oklch(var(--b2));
-  }
-
-  .hai-ai-doc-rewrite-menu button:hover {
-    background: oklch(var(--bc) / 0.05);
+    color: oklch(var(--bc) / 0.9);
+    background: transparent;
+    cursor: pointer;
   }
 
   .hai-ai-doc-rewrite-menu button:disabled {
@@ -1603,6 +1761,16 @@ ${safeCode}
     margin: 0 auto;
     padding: 1.25rem 2rem 6rem;
     outline: none;
+  }
+
+  :global(.hai-markdown-document ::selection) {
+    background: var(--hai-ai-doc-selection-bg, rgb(59 130 246 / 0.22));
+    color: var(--hai-ai-doc-selection-fg, inherit);
+  }
+
+  :global(.hai-markdown-document ::-moz-selection) {
+    background: var(--hai-ai-doc-selection-bg, rgb(59 130 246 / 0.22));
+    color: var(--hai-ai-doc-selection-fg, inherit);
   }
 
   .hai-markdown-document.hai-markdown-editable {
@@ -2057,23 +2225,20 @@ ${safeCode}
       padding-left: 1rem;
       padding-right: 1rem;
     }
-
-    .hai-ai-doc-heading-row {
-      padding-left: 1rem;
-      padding-right: 1rem;
-    }
   }
 
   @media (max-width: 640px) {
-    .hai-ai-doc-meta-bar,
-    .hai-ai-doc-heading-row {
+    .hai-ai-doc-meta-bar {
       align-items: flex-start;
       flex-direction: column;
     }
 
     .hai-ai-doc-toolbar,
-    .hai-ai-doc-heading-actions {
+    .hai-ai-doc-toolbar-heading {
       width: 100%;
+    }
+
+    .hai-ai-doc-toolbar {
       justify-content: flex-start;
     }
 

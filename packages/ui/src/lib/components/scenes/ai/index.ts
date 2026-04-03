@@ -6,7 +6,18 @@
  * @module index
  */
 
+export { default as AiDocumentDownloadMenu } from './AiDocumentDownloadMenu.svelte'
 export { default as AiDocumentEditor } from './AiDocumentEditor.svelte'
+export {
+  downloadAiDocument,
+  resolveDocumentDownloadActions,
+  resolveDocumentMarkdownContent,
+} from './document-download.js'
+export type {
+  AiDocumentDownloadFormat,
+  AiDocumentDownloadRequest,
+  AiDocumentResolvedDownloadAction,
+} from './document-download.js'
 export { renderMarkdownDocument } from './document-parse.js'
 export type {
   MarkdownDocumentParseOptions,

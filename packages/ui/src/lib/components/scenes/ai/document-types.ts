@@ -87,6 +87,8 @@ export interface MarkdownToolbarDownloadAction {
   id: string
   /** Label shown in the download menu. */
   label: string
+  /** Optional short badge displayed beside the menu label. */
+  badgeLabel?: string
 }
 
 export interface AiDocumentEditorProps {
@@ -122,10 +124,16 @@ export interface AiDocumentEditorProps {
   rewriteActions?: MarkdownRewriteAction[]
   /** Callback fired when the close action is clicked. */
   onclose?: () => void
+  /** Whether the close / back action should render as disabled. */
+  closeDisabled?: boolean
   /** Callback fired when the undo action is clicked. */
   onundo?: () => void
+  /** Whether the undo button should render as disabled. */
+  undoDisabled?: boolean
   /** Callback fired when the redo action is clicked. */
   onredo?: () => void
+  /** Whether the redo button should render as disabled. */
+  redoDisabled?: boolean
   /** Code run handler that returns preview results. */
   oncoderun?: (
     request: MarkdownCodeRunRequest,
