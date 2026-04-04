@@ -45,7 +45,7 @@
     itemClass?: string
   }
 
-  let {
+  const {
     content = '',
     title = '',
     filename,

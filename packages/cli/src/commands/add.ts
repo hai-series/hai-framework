@@ -101,9 +101,27 @@ export async function addModule(options: AddModuleOptions): Promise<void> {
       return
     }
 
+    const { generateProjectAiSupport, resolveSkillNamesForPackages } = await import('./skill-templates.js')
+
     // 检查是否已安装
     if (moduleDef.packages.every(p => project.haiPackages.includes(p))) {
-      core.logger.info(chalk.yellow(`模块 ${moduleName} 已安装`))
+      const generatedFiles = await generateProjectAiSupport(
+        cwd,
+        resolveSkillNamesForPackages(project.haiPackages),
+        {
+          overwriteSkills: false,
+          overwriteBridgeFiles: false,
+        },
+      )
+      if (generatedFiles.length > 0) {
+        core.logger.info(chalk.yellow(`模块 ${moduleName} 已安装，已补全 AI 支持文件`))
+        for (const generatedFile of generatedFiles) {
+          core.logger.info(chalk.gray(`  + ${generatedFile} (AI support)`))
+        }
+      }
+      else {
+        core.logger.info(chalk.yellow(`模块 ${moduleName} 已安装`))
+      }
       return
     }
 
@@ -164,11 +182,19 @@ export async function addModule(options: AddModuleOptions): Promise<void> {
       }
     }
 
-    // 生成模块 Skill 文件
-    const { generateModuleSkillFile } = await import('./skill-templates.js')
-    const skillFile = await generateModuleSkillFile(cwd, moduleName)
-    if (skillFile) {
-      core.logger.info(chalk.gray(`  + ${skillFile} (AI Skill)`))
+    const skillPackages = [...project.haiPackages, ...allPackages]
+    const generatedFiles = await generateProjectAiSupport(
+      cwd,
+      resolveSkillNamesForPackages(skillPackages),
+      {
+        overwriteSkills: false,
+        overwriteBridgeFiles: false,
+      },
+    )
+    if (generatedFiles.length > 0) {
+      for (const generatedFile of generatedFiles) {
+        core.logger.info(chalk.gray(`  + ${generatedFile} (AI support)`))
+      }
     }
 
     // 安装依赖

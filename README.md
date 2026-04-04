@@ -45,7 +45,7 @@ hai Framework 的目标是：**让 AI 理解规范，自动完成应用开发，
 - **可预测的 API**：每个模块都是 `init() → use → close()`，AI 只需学一种模式就能操作所有模块
 - **不抛异常**：所有操作返回 `HaiResult<T>` —— 成功是 `{ success: true, data }` ，失败是 `{ success: false, error }`。AI 不会遗漏错误处理，链路完全可控
 - **配置即校验**：Zod Schema 在 `init()` 时完成验证，配置错了立刻报错，不会在运行时炸
-- **Skill 文件教 AI 用法**：每个模块都有标准化的 Skill 文件（`.github/skills/`），AI 助手读取后就能正确使用所有 API
+- **Skill 文件教 AI 用法**：每个模块都有标准化的 Skill 文件（`.agents/skills/`），Codex / OpenCode / Copilot 等支持 skills 的助手可直接读取并正确使用 API
 - **编码规范可执行**：`.github/copilot-instructions.md` 定义了命名、分层、测试、文档的完整规范，AI 助手每次改动自动遵守
 - **LLMS.txt 作为 AI 参考手册**：根目录 `LLMS.txt` 提供完整的 API 签名与示例，AI 可直接检索
 
@@ -86,42 +86,29 @@ hai Framework 的目标是：**让 AI 理解规范，自动完成应用开发，
 
 ## AI-First 基础设施
 
-使用 `hai create` 创建项目时，CLI 会自动生成一套完整的 AI 上下文体系，覆盖 GitHub Copilot、Claude Code、Cursor 等主流 AI 助手：
+使用 `hai create` 创建项目时，CLI 会自动生成一套完整的 AI 上下文体系，原生覆盖 GitHub Copilot、Cursor、Codex、OpenCode，并为 Claude Code 生成可复用共享规范的项目指引：
 
 ```
 my-app/
+├── .agents/
+│   └── skills/                       # 单一 Skill 目录（Codex / OpenCode / Copilot 原生读取）
 ├── .github/
-│   ├── copilot-instructions.md       # GitHub Copilot 项目指令
-│   └── skills/                       # AI Skill 文件（教 AI 用框架）
-│       ├── hai-build/SKILL.md        # 项目架构总览与 Skill 导航（入口）
-│       ├── hai-core/SKILL.md         # @h-ai/core 用法
-│       ├── hai-reldb/SKILL.md        # @h-ai/reldb 用法
-│       ├── hai-vecdb/SKILL.md        # @h-ai/vecdb 用法
-│       ├── hai-datapipe/SKILL.md     # @h-ai/datapipe 用法
-│       ├── hai-iam/SKILL.md          # @h-ai/iam 用法
-│       ├── hai-reach/SKILL.md        # @h-ai/reach 用法
-│       ├── hai-cache/SKILL.md        # @h-ai/cache 用法
-│       ├── hai-storage/SKILL.md      # @h-ai/storage 用法
-│       ├── hai-ai/SKILL.md           # @h-ai/ai 用法
-│       ├── hai-crypto/SKILL.md       # @h-ai/crypto 用法
-│       ├── hai-payment/SKILL.md       # @h-ai/payment 用法
-│       ├── hai-audit/SKILL.md         # @h-ai/audit 用法
-│       ├── hai-scheduler/SKILL.md     # @h-ai/scheduler 用法
-│       ├── hai-capacitor/SKILL.md        # @h-ai/capacitor 用法
-│       ├── hai-deploy/SKILL.md        # @h-ai/deploy 用法
-│       ├── hai-kit/SKILL.md          # @h-ai/kit 用法
-│       ├── hai-ui/SKILL.md           # @h-ai/ui 组件用法
-│       ├── hai-api-client/SKILL.md           # @h-ai/api-client 用法
-│       ├── hai-app-create/SKILL.md   # 教 AI 创建新功能
-│       ├── hai-app-review/SKILL.md   # 教 AI 做代码审查
-│       └── hai-app-tests/SKILL.md    # 教 AI 编写测试
-├── AGENTS.md                         # Claude Code / 通用 AI 指引
-└── CLAUDE.md                         # Claude Code 专用指引
+│   └── copilot-instructions.md       # GitHub Copilot 项目指令（配合 .agents/skills/）
+├── AGENTS.md                         # Codex / OpenCode / 通用 AI 指引
+├── CLAUDE.md                         # Claude Code 项目指引（通过 @AGENTS.md 复用共享规范）
+└── opencode.json                     # OpenCode 配置（instructions + skills.paths -> .agents/skills）
 ```
 
-**工作方式**：AI 助手进入项目后，自动读取指令文件获得编码规范和框架用法，按需读取 Skill 文件获取各模块 API 细节，改动后自动执行 `typecheck → lint → test` 质量门禁 —— 整个过程无需人类干预。
+**工作方式**：支持 skills 的助手会从 `.agents/skills/` 获取模块级用法；Claude Code 则通过 `CLAUDE.md` + `@AGENTS.md` 复用同一套项目规范。改动后统一执行 `typecheck → lint → test` 质量门禁 —— 整个过程无需人类手动补齐额外上下文。
 
-Skill 模板统一管理在 `packages/cli/templates/skills/` 中，通过 `@h-ai/cli` 分发到用户项目。
+| AI 助手                 | 生成的关键文件                                                                                |
+| ----------------------- | --------------------------------------------------------------------------------------------- |
+| GitHub Copilot / Cursor | `.github/copilot-instructions.md` + `.agents/skills/`                                         |
+| Claude Code             | `CLAUDE.md` + `AGENTS.md`（通过 `@AGENTS.md` 复用共享规范；不原生自动发现 `.agents/skills/`） |
+| Codex                   | `AGENTS.md` + `.agents/skills/`                                                               |
+| OpenCode                | `AGENTS.md` + `.agents/skills/` + `opencode.json`                                             |
+
+Skill 模板统一管理在 `packages/cli/templates/skills/` 中，通过 `@h-ai/cli` 分发到用户项目的 `.agents/skills/`。
 
 当前 CLI 模板内置 **22 个 Skill 模板**：18 个模块 Skill、`hai-build` 总览 Skill，以及 `hai-app-create`、`hai-app-review`、`hai-app-tests` 3 个工作流 Skill，便于 AI 助手在“搭应用、补测试、做 Review、查模块用法”之间自动切换上下文。
 
