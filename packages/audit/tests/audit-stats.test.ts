@@ -6,7 +6,7 @@
 
 import { reldb } from '@h-ai/reldb'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { audit } from '../src/index.js'
+import { audit, HaiAuditError } from '../src/index.js'
 
 // ─── 测试辅助 ───
 
@@ -15,7 +15,7 @@ async function setupDb(): Promise<void> {
   if (!result.success) {
     throw new Error(`DB init failed: ${result.error.message}`)
   }
-  await reldb.ddl.createTable('users', {
+  await reldb.ddl.createTable('hai_iam_users', {
     id: { type: 'TEXT', primaryKey: true },
     username: { type: 'TEXT', notNull: true },
   }, true)
@@ -89,6 +89,14 @@ describe('audit.getStats', () => {
       expect(result.data.length).toBe(0)
     }
   })
+
+  it('days 为负数时应返回 STATS_FAILED', async () => {
+    const result = await audit.getStats(-1)
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error.code).toBe(HaiAuditError.STATS_FAILED.code)
+    }
+  })
 })
 
 describe('audit.cleanup', () => {
@@ -160,6 +168,14 @@ describe('audit.cleanup', () => {
     expect(listResult.success).toBe(true)
     if (listResult.success) {
       expect(listResult.data.total).toBe(1)
+    }
+  })
+
+  it('olderThanDays 为负数时应返回 CLEANUP_FAILED', async () => {
+    const result = await audit.cleanup(-1)
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error.code).toBe(HaiAuditError.CLEANUP_FAILED.code)
     }
   })
 })

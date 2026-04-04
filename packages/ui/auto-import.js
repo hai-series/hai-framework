@@ -88,6 +88,7 @@ const UI_COMPONENTS = new Set([
   'HashDisplay',
   'SignatureDisplay',
   // scenes - ai
+  'AiDocumentEditor',
   'MarkdownRenderer',
 ])
 

@@ -11,7 +11,7 @@
 ## 快速开始
 
 ```ts
-import { vecdb, VecdbErrorCode } from '@h-ai/vecdb'
+import { HaiVecdbError, vecdb } from '@h-ai/vecdb'
 
 // 初始化（LanceDB）
 await vecdb.init({ type: 'lancedb', path: './data/vecdb' })
@@ -63,19 +63,19 @@ await vecdb.init({ type: 'qdrant', url: 'http://localhost:6333', apiKey: 'option
 
 ## 错误处理
 
-所有操作返回 `Result<T, VecdbError>`，通过 `result.success` 判断成功或失败。
+所有操作返回 `HaiResult<T>`，通过 `result.success` 判断成功或失败。
 
 ```ts
 const result = await vecdb.collection.create('docs', { dimension: 1536 })
 if (!result.success) {
   switch (result.error.code) {
-    case VecdbErrorCode.NOT_INITIALIZED:
+    case HaiVecdbError.NOT_INITIALIZED.code:
       // 请先调用 vecdb.init()
       break
-    case VecdbErrorCode.COLLECTION_ALREADY_EXISTS:
+    case HaiVecdbError.COLLECTION_ALREADY_EXISTS.code:
       // 集合已存在
       break
-    case VecdbErrorCode.CONNECTION_FAILED:
+    case HaiVecdbError.CONNECTION_FAILED.code:
       // 连接失败
       break
   }

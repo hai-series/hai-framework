@@ -5,7 +5,7 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { reldb, ReldbErrorCode } from '../src/index.js'
+import { HaiReldbError, reldb } from '../src/index.js'
 import { defineDbSuite, mysqlDockerOpts, mysqlEnv, postgresDockerOpts, postgresEnv, sqliteMemoryEnv } from './helpers/reldb-test-suite.js'
 
 describe('reldb.ddl', () => {
@@ -156,7 +156,7 @@ describe('reldb.ddl', () => {
       }, false)
       expect(duplicate.success).toBe(false)
       if (!duplicate.success) {
-        expect(duplicate.error.code).toBe(ReldbErrorCode.DDL_FAILED)
+        expect(duplicate.error.code).toBe(HaiReldbError.DDL_FAILED.code)
       }
     })
 
@@ -183,7 +183,7 @@ describe('reldb.ddl', () => {
       const result = await reldb.ddl.raw('THIS IS NOT VALID SQL')
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.code).toBe(ReldbErrorCode.DDL_FAILED)
+        expect(result.error.code).toBe(HaiReldbError.DDL_FAILED.code)
       }
     })
   }

@@ -121,7 +121,7 @@ await api.close()
 
 | API                                | 用途           | 关键点                                |
 | ---------------------------------- | -------------- | ------------------------------------- |
-| `api.init(config)`                 | 初始化客户端   | 返回 `Result<void, ApiClientError>`   |
+| `api.init(config)`                 | 初始化客户端   | 返回 `HaiResult<void>`   |
 | `api.close()`                      | 关闭并释放资源 | 重复调用安全                          |
 | `api.isInitialized`                | 初始化状态     | `boolean`                             |
 | `api.config`                       | 当前配置       | 未初始化时为 `null`                   |
@@ -167,21 +167,21 @@ App 端使用 `@h-ai/capacitor` 的 `createCapacitorTokenStorage()`。
 
 ---
 
-## 错误码 — `ApiClientErrorCode`
+## 错误码 — `HaiApiClientError`
 
-| 错误码 | 常量                   | 说明                       |
-| ------ | ---------------------- | -------------------------- |
-| 1200   | `NETWORK_ERROR`        | 网络不可达                 |
-| 1201   | `TIMEOUT`              | 请求超时                   |
-| 1202   | `SERVER_ERROR`         | 5xx 服务端错误             |
-| 1203   | `UNAUTHORIZED`         | 401 未认证                 |
-| 1204   | `FORBIDDEN`            | 403 无权限                 |
-| 1205   | `NOT_FOUND`            | 404 资源不存在             |
-| 1206   | `VALIDATION_FAILED`    | 请求参数校验失败（400）    |
-| 1207   | `TOKEN_REFRESH_FAILED` | Token 刷新失败             |
-| 1210   | `NOT_INITIALIZED`      | 未初始化（未调用 api.init）|
-| 1211   | `CONFIG_ERROR`         | 配置错误                   |
-| 1299   | `UNKNOWN`              | 未知错误                   |
+| 错误码 | code | 说明 |
+|--------|------|------|
+| `HaiApiClientError.NETWORK_ERROR` | `hai:api-client:001` | 网络不可达 |
+| `HaiApiClientError.TIMEOUT` | `hai:api-client:002` | 请求超时 |
+| `HaiApiClientError.SERVER_ERROR` | `hai:api-client:003` | 5xx 服务端错误 |
+| `HaiApiClientError.UNAUTHORIZED` | `hai:api-client:004` | 401 未认证 |
+| `HaiApiClientError.FORBIDDEN` | `hai:api-client:005` | 403 无权限 |
+| `HaiApiClientError.NOT_FOUND` | `hai:api-client:006` | 404 资源不存在 |
+| `HaiApiClientError.VALIDATION_FAILED` | `hai:api-client:007` | 请求参数校验失败 |
+| `HaiApiClientError.TOKEN_REFRESH_FAILED` | `hai:api-client:008` | Token 刷新失败 |
+| `HaiApiClientError.NOT_INITIALIZED` | `hai:api-client:010` | 未初始化 |
+| `HaiApiClientError.CONFIG_ERROR` | `hai:api-client:011` | 配置错误 |
+| `HaiApiClientError.UNKNOWN` | `hai:api-client:099` | 未知错误 |
 
 ---
 
@@ -212,7 +212,7 @@ App 端使用 `@h-ai/capacitor` 的 `createCapacitorTokenStorage()`。
 1. 从 `@h-ai/xx/api` 导入 `xxEndpoints`
 2. `api.call(xxEndpoints.xxx, input)` → Zod 校验入参 → 按 method/path 发起 HTTP → Zod 校验出参
 3. 入参或出参校验失败均返回 `VALIDATION_FAILED`（1206）
-4. 返回 `Result<TOutput, ApiClientError>`
+4. 返回 `HaiResult<TOutput>`
 
 ```typescript
 import { storageEndpoints } from '@h-ai/storage/api'
@@ -343,4 +343,4 @@ await api.init({
 - `hai-iam`：认证契约定义（iamEndpoints）
 - `hai-capacitor`：原生 Token 存储
 - `hai-kit`：服务端契约处理（kit.fromContract）
-- `hai-core`：Result 类型、错误处理基础
+- `hai-core`：HaiResult 类型、错误处理基础

@@ -6,7 +6,7 @@
     <div>列表内容</div>
   </PullRefresh>
 -->
-<script lang="ts">
+<script lang='ts'>
   import type { Snippet } from 'svelte'
   import { cn } from '../../utils.js'
 
@@ -37,13 +37,15 @@
   let startY = 0
 
   function handleTouchStart(e: TouchEvent) {
-    if (disabled || refreshing) return
+    if (disabled || refreshing)
+      return
     startY = e.touches[0].clientY
     pulling = true
   }
 
   function handleTouchMove(e: TouchEvent) {
-    if (!pulling || disabled || refreshing) return
+    if (!pulling || disabled || refreshing)
+      return
     const diff = e.touches[0].clientY - startY
     if (diff > 0) {
       pullDistance = Math.min(diff * 0.5, threshold * 1.5) // 阻尼
@@ -51,7 +53,8 @@
   }
 
   async function handleTouchEnd() {
-    if (!pulling || disabled) return
+    if (!pulling || disabled)
+      return
     pulling = false
 
     if (pullDistance >= threshold && onrefresh) {
@@ -73,15 +76,15 @@
   ontouchstart={handleTouchStart}
   ontouchmove={handleTouchMove}
   ontouchend={handleTouchEnd}
-  role="region"
+  role='region'
 >
   <!-- 刷新指示器 -->
   <div
-    class="flex items-center justify-center text-sm text-base-content/60 overflow-hidden transition-all"
-    style="height: {pullDistance}px"
+    class='flex items-center justify-center text-sm text-base-content/60 overflow-hidden transition-all'
+    style='height: {pullDistance}px'
   >
     {#if refreshing}
-      <span class="loading loading-spinner loading-sm mr-2"></span>
+      <span class='loading loading-spinner loading-sm mr-2'></span>
       Refreshing...
     {:else if pullDistance >= threshold}
       Release to refresh

@@ -5,14 +5,15 @@
  */
 
 import type { AIConfig } from '../src/ai-config.js'
-import type { LLMOperations } from '../src/llm/ai-llm-types.js'
+import type { LLMOperations, ToolRegistryOperations } from '../src/llm/ai-llm-types.js'
+import type { ReasoningStrategy, ReasoningStreamEvent } from '../src/reasoning/ai-reasoning-types.js'
 import { describe, expect, it, vi } from 'vitest'
-import { resolveModel } from '../src/ai-config.js'
+import { LLMConfigSchema, resolveModelEntry } from '../src/ai-config.js'
 import { createReasoningOperations } from '../src/reasoning/ai-reasoning-functions.js'
 
 // ─── Mock LLM 工厂 ───
 
-function createMockLLM(responses: Array<{ content: string | null, finish_reason?: string, tool_calls?: any[] }>): LLMOperations {
+function createMockLLM(responses: Array<{ content: string | null, finish_reason?: string, tool_calls?: unknown[] }>): LLMOperations {
   let callIndex = 0
   return {
     chat: vi.fn(async () => {
@@ -32,7 +33,7 @@ function createMockLLM(responses: Array<{ content: string | null, finish_reason?
               content: resp.content,
               tool_calls: resp.tool_calls,
             },
-            finish_reason: (resp.finish_reason ?? 'stop') as any,
+            finish_reason: resp.finish_reason ?? 'stop',
           }],
           usage: { prompt_tokens: 10, completion_tokens: 20, total_tokens: 30 },
         },
@@ -123,7 +124,7 @@ describe('reasoning ReAct', () => {
     const result = await reasoning.run('Looping query', {
       strategy: 'react',
       maxRounds: 2,
-      tools: mockTools as any,
+      tools: mockTools as unknown as ToolRegistryOperations,
     })
 
     expect(result.success).toBe(false)
@@ -175,68 +176,86 @@ describe('reasoning 默认', () => {
     const mockLLM = createMockLLM([{ content: '' }])
     const reasoning = createReasoningOperations(mockConfig, mockLLM)
 
-    const result = await reasoning.run('test', { strategy: 'unknown' as any })
+    const result = await reasoning.run('test', { strategy: 'unknown' as ReasoningStrategy })
     expect(result.success).toBe(false)
   })
 })
 
 // ─── resolveModel ───
 
-describe('resolveModel', () => {
+describe('resolveModelEntry', () => {
   it('显式指定模型优先', () => {
-    const result = resolveModel({ model: 'gpt-4o-mini' }, 'chat', 'gpt-4o')
-    expect(result).toBe('gpt-4o')
+    const result = resolveModelEntry(LLMConfigSchema.parse({ model: 'gpt-4o-mini', apiKey: 'k' }), 'chat', 'gpt-4o')
+    expect(result.success).toBe(true)
+    if (result.success)
+      expect(result.data.model).toBe('gpt-4o')
   })
 
   it('场景映射 (scenarios) 命中时返回映射值', () => {
-    const result = resolveModel({
+    const result = resolveModelEntry(LLMConfigSchema.parse({
       model: 'gpt-4o-mini',
+      apiKey: 'k',
       scenarios: { reasoning: 'gpt-4o' },
-    }, 'reasoning')
-    expect(result).toBe('gpt-4o')
+    }), 'reasoning')
+    expect(result.success).toBe(true)
+    if (result.success)
+      expect(result.data.model).toBe('gpt-4o')
   })
 
   it('场景映射到 models 列表中的条目时返回条目 model 字段', () => {
-    const result = resolveModel({
+    const result = resolveModelEntry(LLMConfigSchema.parse({
       model: 'gpt-4o-mini',
+      apiKey: 'k',
       models: [{ id: 'strong', model: 'gpt-4o' }],
       scenarios: { reasoning: 'strong' },
-    }, 'reasoning')
-    expect(result).toBe('gpt-4o')
+    }), 'reasoning')
+    expect(result.success).toBe(true)
+    if (result.success)
+      expect(result.data.model).toBe('gpt-4o')
   })
 
   it('场景未命中时回退到 default 场景', () => {
-    const result = resolveModel({
+    const result = resolveModelEntry(LLMConfigSchema.parse({
       model: 'gpt-4o-mini',
+      apiKey: 'k',
       scenarios: { default: 'gpt-4' },
-    }, 'plan')
-    expect(result).toBe('gpt-4')
+    }), 'plan')
+    expect(result.success).toBe(true)
+    if (result.success)
+      expect(result.data.model).toBe('gpt-4')
   })
 
   it('无 scenarios 时使用全局 model', () => {
-    const result = resolveModel({ model: 'gpt-4o' }, 'reasoning')
-    expect(result).toBe('gpt-4o')
+    const result = resolveModelEntry(LLMConfigSchema.parse({ model: 'gpt-4o', apiKey: 'k' }), 'reasoning')
+    expect(result.success).toBe(true)
+    if (result.success)
+      expect(result.data.model).toBe('gpt-4o')
   })
 
-  it('config 为 undefined 时返回硬编码默认值', () => {
-    const result = resolveModel(undefined, 'chat')
-    expect(result).toBe('gpt-4o-mini')
+  it('无 apiKey 时返回 CONFIGURATION_ERROR', () => {
+    const result = resolveModelEntry(LLMConfigSchema.parse({}), 'chat')
+    expect(result.success).toBe(false)
   })
 
   it('支持新增的 plan/execute/extraction/summary 场景', () => {
-    const cfg = {
+    const cfg = LLMConfigSchema.parse({
       model: 'fallback',
+      apiKey: 'k',
       scenarios: {
         plan: 'plan-model',
         execute: 'exec-model',
         extraction: 'extract-model',
         summary: 'summary-model',
       },
-    }
-    expect(resolveModel(cfg, 'plan')).toBe('plan-model')
-    expect(resolveModel(cfg, 'execute')).toBe('exec-model')
-    expect(resolveModel(cfg, 'extraction')).toBe('extract-model')
-    expect(resolveModel(cfg, 'summary')).toBe('summary-model')
+    })
+    const r1 = resolveModelEntry(cfg, 'plan')
+    const r2 = resolveModelEntry(cfg, 'execute')
+    const r3 = resolveModelEntry(cfg, 'extraction')
+    const r4 = resolveModelEntry(cfg, 'summary')
+    expect(r1.success && r1.data.model).toBe('plan-model')
+    expect(r2.success && r2.data.model).toBe('exec-model')
+    expect(r3.success && r3.data.model).toBe('extract-model')
+    expect(r4.success && r4.data.model).toBe('summary-model')
   })
 })
 
@@ -276,6 +295,7 @@ describe('reasoning plan-execute 模型分离', () => {
     const configWithScenarios: AIConfig = {
       llm: {
         model: 'fallback-model',
+        apiKey: 'test-key',
         scenarios: { plan: 'plan-default', execute: 'exec-default' },
       },
     } as AIConfig
@@ -295,6 +315,7 @@ describe('reasoning plan-execute 模型分离', () => {
     const configWithScenarios: AIConfig = {
       llm: {
         model: 'fallback',
+        apiKey: 'test-key',
         scenarios: { reasoning: 'gpt-4o' },
       },
     } as AIConfig
@@ -319,23 +340,23 @@ describe('reasoning runStream', () => {
     ])
 
     const reasoning = createReasoningOperations(mockConfig, mockLLM)
-    const events: unknown[] = []
+    const events: ReasoningStreamEvent[] = []
 
     for await (const event of reasoning.runStream('什么是宇宙的答案？')) {
       events.push(event)
     }
 
     // 应该至少有 step(s)、delta 和 done 事件
-    const stepEvents = events.filter((e: any) => e.type === 'step')
-    const deltaEvents = events.filter((e: any) => e.type === 'delta')
-    const doneEvents = events.filter((e: any) => e.type === 'done')
+    const stepEvents = events.filter(e => e.type === 'step')
+    const deltaEvents = events.filter(e => e.type === 'delta')
+    const doneEvents = events.filter(e => e.type === 'done')
 
     expect(stepEvents.length).toBeGreaterThanOrEqual(0)
     expect(deltaEvents.length).toBeGreaterThanOrEqual(1)
     expect(doneEvents).toHaveLength(1)
 
     // done 事件包含完整结果
-    const doneEvent = doneEvents[0] as any
+    const doneEvent = doneEvents[0] as Extract<ReasoningStreamEvent, { type: 'done' }>
     expect(doneEvent.result).toBeDefined()
     expect(doneEvent.result.answer).toBeTruthy()
   })

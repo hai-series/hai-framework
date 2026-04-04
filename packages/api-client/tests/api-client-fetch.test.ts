@@ -4,6 +4,7 @@
 
 import { describe, expect, it, vi } from 'vitest'
 import { createFetchClient } from '../src/api-client-fetch.js'
+import { HaiApiClientError } from '../src/api-client-types.js'
 
 /**
  * 创建 mock fetch
@@ -74,8 +75,8 @@ describe('createFetchClient', () => {
 
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.code).toBe(1205) // NOT_FOUND
-        expect(result.error.status).toBe(404)
+        expect(result.error.code).toBe(HaiApiClientError.NOT_FOUND.code)
+        expect(result.error.httpStatus).toBe(404)
       }
     })
 
@@ -87,7 +88,7 @@ describe('createFetchClient', () => {
 
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.code).toBe(1202) // SERVER_ERROR
+        expect(result.error.code).toBe(HaiApiClientError.SERVER_ERROR.code)
       }
     })
 
@@ -99,7 +100,7 @@ describe('createFetchClient', () => {
 
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.code).toBe(1200) // NETWORK_ERROR
+        expect(result.error.code).toBe(HaiApiClientError.NETWORK_ERROR.code)
       }
     })
   })
@@ -165,7 +166,7 @@ describe('createFetchClient', () => {
 
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.code).toBe(1201) // TIMEOUT
+        expect(result.error.code).toBe(HaiApiClientError.TIMEOUT.code)
       }
     })
   })

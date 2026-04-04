@@ -33,6 +33,23 @@ import {
 
 const logger = core.logger.child({ module: 'storage', scope: 'provider-s3' })
 
+/**
+ * 脱敏 S3 endpoint，避免日志暴露认证信息
+ */
+function sanitizeEndpointUrl(url: string): string {
+  try {
+    const parsed = new URL(url)
+    if (parsed.username)
+      parsed.username = '***'
+    if (parsed.password)
+      parsed.password = '***'
+    return parsed.toString()
+  }
+  catch {
+    return '(invalid url)'
+  }
+}
+
 // ─── 辅助函数 ───
 
 /**
@@ -527,7 +544,11 @@ export function createS3Provider(): StorageProvider {
 
       try {
         config = cfg
-        logger.info('Connecting S3 provider', { bucket: cfg.bucket, region: cfg.region, endpoint: cfg.endpoint })
+        logger.info('Connecting S3 provider', {
+          bucket: cfg.bucket,
+          region: cfg.region,
+          endpoint: cfg.endpoint ? sanitizeEndpointUrl(cfg.endpoint) : undefined,
+        })
 
         client = new S3Client({
           region: cfg.region,

@@ -2,10 +2,10 @@
   @component Input
   文本输入框组件，支持自定义验证消息
 -->
-<script lang="ts">
+<script lang='ts'>
   import type { InputProps } from '../../types.js'
   import { cn } from '../../utils.js'
-  
+
   let {
     value = $bindable(''),
     placeholder = '',
@@ -38,11 +38,15 @@
   }: InputProps = $props()
 
   const containerHeight = $derived(
-    size === 'xs' ? 'h-8' :
-    size === 'sm' ? 'h-9' :
-    size === 'lg' ? 'h-12' :
-    size === 'xl' ? 'h-14' :
-    'h-10'
+    size === 'xs'
+      ? 'h-8'
+      : size === 'sm'
+      ? 'h-9'
+      : size === 'lg'
+      ? 'h-12'
+      : size === 'xl'
+      ? 'h-14'
+      : 'h-10',
   )
 
   const containerClass = $derived(
@@ -55,7 +59,7 @@
       'transition-[border-color,box-shadow] duration-150',
       disabled && 'opacity-50 cursor-not-allowed',
       className,
-    )
+    ),
   )
 
   function handleInput(e: Event & { currentTarget: HTMLInputElement }) {
@@ -90,7 +94,7 @@
   }
 </script>
 
-<div class="fieldset w-full">
+<div class='fieldset w-full'>
   <div class={containerClass}>
     <input
       bind:this={inputRef}
@@ -110,7 +114,7 @@
       {step}
       inputmode={inputmode}
       autocomplete={autocomplete as HTMLInputElement['autocomplete']}
-      class="flex-1 h-full px-3 bg-transparent border-none outline-none text-sm placeholder:text-base-content/35"
+      class='flex-1 h-full px-3 bg-transparent border-none outline-none text-sm placeholder:text-base-content/35'
       bind:value
       oninput={handleInput}
       onchange={handleChange}
@@ -121,6 +125,6 @@
     />
   </div>
   {#if error}
-    <p class="mt-1.5 text-xs text-error/80 leading-tight">{error}</p>
+    <p class='mt-1.5 text-xs text-error/80 leading-tight'>{error}</p>
   {/if}
 </div>

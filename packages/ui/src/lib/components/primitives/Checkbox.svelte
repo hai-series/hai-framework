@@ -3,14 +3,14 @@
   @h-ai/ui - Checkbox 组件
   =============================================================================
   复选框组件
-  
+
   使用 Svelte 5 Runes ($props, $derived, $bindable)
   =============================================================================
 -->
-<script lang="ts">
+<script lang='ts'>
   import type { CheckboxProps } from '../../types.js'
-  import { cn, getSizeClass, generateId } from '../../utils.js'
-  
+  import { cn, generateId, getSizeClass } from '../../utils.js'
+
   let {
     checked = $bindable(false),
     label = '',
@@ -21,29 +21,30 @@
     class: className = '',
     onchange,
   }: CheckboxProps = $props()
-  
+
   const id = generateId('checkbox')
-  
+
   const checkboxClass = $derived(
     cn(
       'checkbox',
       getSizeClass(size, 'checkbox'),
       className,
-    )
+    ),
   )
-  
+
   function handleChange(e: Event & { currentTarget: HTMLInputElement }) {
-    if (readonly) return
+    if (readonly)
+      return
     checked = e.currentTarget.checked
     onchange?.(checked)
   }
 </script>
 
-<div class="inline-flex">
-  <label class="label cursor-pointer gap-2" for={id}>
+<div class='inline-flex'>
+  <label class='label cursor-pointer gap-2' for={id}>
     <input
       {id}
-      type="checkbox"
+      type='checkbox'
       class={checkboxClass}
       disabled={disabled || readonly}
       bind:checked

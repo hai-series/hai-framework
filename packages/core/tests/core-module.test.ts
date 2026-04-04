@@ -4,6 +4,7 @@
  * =============================================================================
  */
 
+import type { HaiError } from '../src/index.js'
 import { describe, expect, it } from 'vitest'
 import { core, HaiCommonError } from '../src/index.js'
 
@@ -12,7 +13,7 @@ describe('core.module', () => {
   const ERROR_MESSAGE = 'Module not initialized'
 
   function createKit() {
-    return core.module.createNotInitializedKit<{ code: number, message: string }>(
+    return core.module.createNotInitializedKit<HaiError>(
       ERROR_CODE,
       () => ERROR_MESSAGE,
     )
@@ -25,7 +26,7 @@ describe('core.module', () => {
     expect(error.message).toBe(ERROR_MESSAGE)
   })
 
-  it('result 应该返回 success=false 的 Result', () => {
+  it('result 应该返回 success=false 的 HaiResult', () => {
     const kit = createKit()
     const result = kit.result<string>()
     expect(result.success).toBe(false)
@@ -73,7 +74,7 @@ describe('core.module', () => {
 
   it('messageFn 应该延迟求值（每次调用都执行）', () => {
     let callCount = 0
-    const kit = core.module.createNotInitializedKit<{ code: number, message: string }>(
+    const kit = core.module.createNotInitializedKit<HaiError>(
       1,
       () => {
         callCount += 1

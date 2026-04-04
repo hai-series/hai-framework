@@ -129,7 +129,7 @@ export interface KnowledgeIngestInput {
    */
   cleanOptions?: CleanOptionsInput
   /**
-   * 分块选项（可选，覆盖全局配置默认值；mode 字段同时覆盖 config.chunkMode）
+   * 分块选项（可选，覆盖全局配置默认值）
    *
    * 字段含义与 @h-ai/datapipe ChunkOptionsInput 完全一致，
    * 支持 mode、maxSize、overlap、separator、markdownMinLevel 等完整选项。
@@ -388,9 +388,19 @@ export interface KnowledgeIngestBatchResult {
  *
  * 知识库管理与检索的统一入口，编排 datapipe + KnowledgeStore + embedding + LLM。
  *
- * @example
+ * ## 生命周期
+ *
+ * 每个 collection 在使用前必须先调用 `setup()`，支持多次调用以初始化不同分区：
+ *
  * ```ts
- * // 初始化知识库
+ * await ai.knowledge.setup()                          // 使用配置默认 collection
+ * await ai.knowledge.setup({ collection: 'kb-prod' }) // 初始化额外分区
+ * ```
+ *
+ * ## 单 collection 示例
+ *
+ * ```ts
+ * // 初始化
  * await ai.knowledge.setup()
  *
  * // 导入文档
@@ -406,14 +416,32 @@ export interface KnowledgeIngestBatchResult {
  * // 问答（RAG + 信源引用）
  * const answer = await ai.knowledge.ask('张三负责了哪些模块？')
  * ```
+ *
+ * ## 多 collection（多分区）示例
+ *
+ * ```ts
+ * // 分别初始化两个知识库分区
+ * await ai.knowledge.setup({ collection: 'kb-product' })
+ * await ai.knowledge.setup({ collection: 'kb-support' })
+ *
+ * // 写入不同分区
+ * await ai.knowledge.ingest({ documentId: 'p-001', content: '...', collection: 'kb-product' })
+ * await ai.knowledge.ingest({ documentId: 's-001', content: '...', collection: 'kb-support' })
+ *
+ * // 从指定分区检索（对未 setup 的 collection 发起任何操作都会返回 KNOWLEDGE_NOT_SETUP 错误）
+ * const result = await ai.knowledge.retrieve('query', { collection: 'kb-support' })
+ * ```
  */
 export interface KnowledgeOperations {
   /**
-   * 初始化知识库
+   * 初始化知识库（幂等，支持多次调用以初始化不同 collection）
    *
-   * 创建向量集合和实体表。
+   * 创建向量集合和实体表。每个 collection 需独立调用本方法，
+   * 未 setup 的 collection 执行以下操作时均会返回 `KNOWLEDGE_NOT_SETUP` 错误：
+   * `ingest` / `ingestFile` / `ingestBatch` / `retrieve` / `ask` /
+   * `findByEntity` / `listDocuments` / `removeDocument`。
    *
-   * @param options - 初始化选项
+   * @param options - 初始化选项（collection 名称、向量维度）
    * @returns 成功返回 ok(undefined)
    */
   setup: (options?: KnowledgeSetupOptions) => Promise<HaiResult<void>>

@@ -4,44 +4,43 @@
 
 import { describe, expect, it } from 'vitest'
 import {
+  HaiStorageError,
   LocalConfigSchema,
   PresignOptionsSchema,
   PresignUploadOptionsSchema,
   S3ConfigSchema,
   StorageConfigSchema,
-  StorageErrorCode,
 } from '../src/index.js'
 
-describe('storageErrorCode', () => {
-  it('错误码应在 6000-6999 范围内', () => {
-    for (const [, value] of Object.entries(StorageErrorCode)) {
-      expect(value).toBeGreaterThanOrEqual(6000)
-      expect(value).toBeLessThan(7000)
+describe('haiStorageError', () => {
+  it('错误码应符合 hai:storage:NNN 格式', () => {
+    for (const [, def] of Object.entries(HaiStorageError)) {
+      expect(def.code).toMatch(/^hai:storage:\d{3}$/)
     }
   })
 
   it('错误码不应有重复值', () => {
-    const values = Object.values(StorageErrorCode)
-    const unique = new Set(values)
-    expect(unique.size).toBe(values.length)
+    const codes = Object.values(HaiStorageError).map(d => d.code)
+    const unique = new Set(codes)
+    expect(unique.size).toBe(codes.length)
   })
 
   it('应包含所有预期的错误码', () => {
-    expect(StorageErrorCode.CONNECTION_FAILED).toBe(6000)
-    expect(StorageErrorCode.OPERATION_FAILED).toBe(6001)
-    expect(StorageErrorCode.NOT_FOUND).toBe(6002)
-    expect(StorageErrorCode.ALREADY_EXISTS).toBe(6003)
-    expect(StorageErrorCode.PERMISSION_DENIED).toBe(6004)
-    expect(StorageErrorCode.QUOTA_EXCEEDED).toBe(6005)
-    expect(StorageErrorCode.INVALID_PATH).toBe(6006)
-    expect(StorageErrorCode.IO_ERROR).toBe(6007)
-    expect(StorageErrorCode.NETWORK_ERROR).toBe(6008)
-    expect(StorageErrorCode.NOT_INITIALIZED).toBe(6010)
-    expect(StorageErrorCode.UNSUPPORTED_TYPE).toBe(6011)
-    expect(StorageErrorCode.CONFIG_ERROR).toBe(6012)
-    expect(StorageErrorCode.PRESIGN_FAILED).toBe(6013)
-    expect(StorageErrorCode.UPLOAD_FAILED).toBe(6014)
-    expect(StorageErrorCode.DOWNLOAD_FAILED).toBe(6015)
+    expect(HaiStorageError.CONNECTION_FAILED.code).toBe('hai:storage:001')
+    expect(HaiStorageError.OPERATION_FAILED.code).toBe('hai:storage:002')
+    expect(HaiStorageError.NOT_FOUND.code).toBe('hai:storage:003')
+    expect(HaiStorageError.ALREADY_EXISTS.code).toBe('hai:storage:004')
+    expect(HaiStorageError.PERMISSION_DENIED.code).toBe('hai:storage:005')
+    expect(HaiStorageError.QUOTA_EXCEEDED.code).toBe('hai:storage:006')
+    expect(HaiStorageError.INVALID_PATH.code).toBe('hai:storage:007')
+    expect(HaiStorageError.IO_ERROR.code).toBe('hai:storage:008')
+    expect(HaiStorageError.NETWORK_ERROR.code).toBe('hai:storage:009')
+    expect(HaiStorageError.NOT_INITIALIZED.code).toBe('hai:storage:010')
+    expect(HaiStorageError.UNSUPPORTED_TYPE.code).toBe('hai:storage:011')
+    expect(HaiStorageError.CONFIG_ERROR.code).toBe('hai:storage:012')
+    expect(HaiStorageError.PRESIGN_FAILED.code).toBe('hai:storage:013')
+    expect(HaiStorageError.UPLOAD_FAILED.code).toBe('hai:storage:014')
+    expect(HaiStorageError.DOWNLOAD_FAILED.code).toBe('hai:storage:015')
   })
 })
 

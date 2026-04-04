@@ -11,5 +11,5 @@ export * from './core-config.js'
 // Core 聚合服务（包含 logger, config, error, id, i18n, module, typeUtils, object, string, array, async, time）
 export * from './core-main.node.js'
 
-// 类型定义（Result, Logger 等）
+// 类型定义（HaiResult, Logger 等）
 export * from './core-types.js'

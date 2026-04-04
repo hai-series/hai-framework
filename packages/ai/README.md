@@ -139,9 +139,15 @@ await ai.init({
     collection: 'hai_ai_knowledge',
     dimension: 1536,
     enableEntityExtraction: true,
-    chunkMode: 'markdown', // sentence | paragraph | markdown | page
-    chunkMaxSize: 1500,
-    chunkOverlap: 200,
+    cleanOptions: {
+      removeHtml: true,
+      normalizeWhitespace: true,
+    },
+    chunkOptions: {
+      mode: 'markdown', // sentence | paragraph | markdown | page | custom
+      maxSize: 1500,
+      overlap: 200,
+    },
     entityBoostWeight: 0.15, // 实体命中加权系数 [0, 1]
   },
 
@@ -346,7 +352,7 @@ registry.size // 注册数量
 const definitions = registry.getDefinitions() // ToolDefinition[]
 
 // 执行工具调用
-const toolMessage = await registry.execute(toolCall) // Result<ToolMessage>
+const toolMessage = await registry.execute(toolCall) // HaiResult<ToolMessage>
 
 // 批量执行（支持并行）
 const toolMessages = await registry.executeAll(toolCalls, { parallel: true })
@@ -725,9 +731,14 @@ const result = await ai.knowledge.ingest({
   title: '产品使用手册',
   url: 'https://docs.example.com/manual',
   enableEntityExtraction: true, // 自动提取人物、项目、概念等实体
-  chunkMode: 'markdown', // sentence | paragraph | markdown | page
-  chunkMaxSize: 1500,
-  chunkOverlap: 200,
+  cleanOptions: {
+    removeHtml: true,
+  },
+  chunkOptions: {
+    mode: 'markdown', // sentence | paragraph | markdown | page | custom
+    maxSize: 1500,
+    overlap: 200,
+  },
   metadata: { category: 'manual', version: '2.0' },
 })
 
@@ -1469,31 +1480,31 @@ const sessions = await client.listSessions('user-001')
 
 ## 错误处理
 
-所有需要初始化的子系统方法均返回 `Result<T, AIError>`，通过 `result.success` 判断成功/失败。
+所有需要初始化的子系统方法均返回 `HaiResult<T>`，通过 `result.success` 判断成功/失败。
 
 ```ts
-import { AIErrorCode } from '@h-ai/ai'
+import { HaiAIError } from '@h-ai/ai'
 
 const result = await ai.llm.chat({ messages })
 
 if (!result.success) {
   switch (result.error.code) {
-    case AIErrorCode.NOT_INITIALIZED:
+    case HaiAIError.NOT_INITIALIZED.code:
       // 未初始化，请先调用 ai.init()
       break
-    case AIErrorCode.RATE_LIMITED:
+    case HaiAIError.RATE_LIMITED.code:
       // API 限流，稍后重试
       break
-    case AIErrorCode.TIMEOUT:
+    case HaiAIError.TIMEOUT.code:
       // 请求超时
       break
-    case AIErrorCode.CONTEXT_LENGTH_EXCEEDED:
+    case HaiAIError.CONTEXT_LENGTH_EXCEEDED.code:
       // 上下文超长，需压缩消息
       break
-    case AIErrorCode.MEMORY_RECALL_FAILED:
+    case HaiAIError.MEMORY_RECALL_FAILED.code:
       // 记忆检索失败
       break
-    case AIErrorCode.CONTEXT_COMPRESS_FAILED:
+    case HaiAIError.CONTEXT_COMPRESS_FAILED.code:
       // 上下文压缩失败
       break
     default:
@@ -1736,7 +1747,8 @@ await ai.init({
   embedding: { model: 'text-embedding-3-small' },
   knowledge: {
     enableEntityExtraction: true,
-    chunkMode: 'markdown',
+    cleanOptions: { removeHtml: true },
+    chunkOptions: { mode: 'markdown', maxSize: 1500, overlap: 200 },
   },
 })
 

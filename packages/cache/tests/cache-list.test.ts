@@ -5,14 +5,14 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { cache, CacheErrorCode } from '../src/index.js'
+import { cache, HaiCacheError } from '../src/index.js'
 import { defineCacheSuite, memoryEnv, redisEnv } from './helpers/cache-test-suite.js'
 
 describe('cache list operations', () => {
   const defineCommon = (expectations: {
     rangeAfterPush: string[]
     lpopValue: string
-    missingKeyError: number
+    missingKeyError: string | number
   }) => {
     it('lpush/rpush/llen/lrange/lpop/rpop 应该工作', async () => {
       const lpush = await cache.list.lpush('l1', 'a', 'b')
@@ -168,14 +168,14 @@ describe('cache list operations', () => {
   }
 
   defineCacheSuite('memory', memoryEnv, () => defineCommon({
-    rangeAfterPush: ['a', 'b', 'c'],
-    lpopValue: 'a',
-    missingKeyError: CacheErrorCode.KEY_NOT_FOUND,
+    rangeAfterPush: ['b', 'a', 'c'],
+    lpopValue: 'b',
+    missingKeyError: HaiCacheError.KEY_NOT_FOUND.code,
   }))
 
   defineCacheSuite('redis', redisEnv, () => defineCommon({
     rangeAfterPush: ['b', 'a', 'c'],
     lpopValue: 'b',
-    missingKeyError: CacheErrorCode.OPERATION_FAILED,
+    missingKeyError: HaiCacheError.OPERATION_FAILED.code,
   }))
 })

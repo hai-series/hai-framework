@@ -36,7 +36,7 @@ export async function acquirePostgresContainer(): Promise<PostgresContainerLease
         POSTGRES_USER,
         POSTGRES_PASSWORD,
       })
-      .withWaitStrategy(Wait.forLogMessage('database system is ready to accept connections'))
+      .withWaitStrategy(Wait.forLogMessage('database system is ready to accept connections', 2))
       .start()
   }
 

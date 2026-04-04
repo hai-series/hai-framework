@@ -32,6 +32,7 @@ import {
   storageEndpoints,
 } from '../src/api/index.js'
 import { downloadWithPresignedUrl, storage, uploadWithPresignedUrl } from '../src/index.js'
+import { HaiStorageError } from '../src/storage-types.js'
 import { defineStorageSuite, localStorageEnv, s3Env } from './helpers/storage-test-suite.js'
 
 describe('storage workflow', () => {
@@ -215,7 +216,7 @@ describe('storage workflow', () => {
       const afterCloseResult = await storage.file.get('any-key')
       expect(afterCloseResult.success).toBe(false)
       if (!afterCloseResult.success) {
-        expect(afterCloseResult.error.code).toBe(6010)
+        expect(afterCloseResult.error.code).toBe(HaiStorageError.NOT_INITIALIZED.code)
       }
     })
   }

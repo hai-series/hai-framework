@@ -7,7 +7,7 @@
 
 import { afterAll, describe, expect, it } from 'vitest'
 import { vecdb } from '../src/index.js'
-import { VecdbErrorCode } from '../src/vecdb-config.js'
+import { HaiVecdbError } from '../src/vecdb-types.js'
 
 // ─── 未初始化行为 ───
 
@@ -24,7 +24,7 @@ describe('vecdb 未初始化', () => {
     const result = await vecdb.collection.list()
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(VecdbErrorCode.NOT_INITIALIZED)
+      expect(result.error.code).toBe(HaiVecdbError.NOT_INITIALIZED.code)
     }
   })
 
@@ -32,7 +32,7 @@ describe('vecdb 未初始化', () => {
     const result = await vecdb.collection.create('test', { dimension: 128 })
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(VecdbErrorCode.NOT_INITIALIZED)
+      expect(result.error.code).toBe(HaiVecdbError.NOT_INITIALIZED.code)
     }
   })
 
@@ -40,7 +40,7 @@ describe('vecdb 未初始化', () => {
     const result = await vecdb.vector.search('test', [0.1, 0.2])
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(VecdbErrorCode.NOT_INITIALIZED)
+      expect(result.error.code).toBe(HaiVecdbError.NOT_INITIALIZED.code)
     }
   })
 
@@ -48,7 +48,7 @@ describe('vecdb 未初始化', () => {
     const result = await vecdb.vector.insert('test', [{ id: '1', vector: [0.1] }])
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(VecdbErrorCode.NOT_INITIALIZED)
+      expect(result.error.code).toBe(HaiVecdbError.NOT_INITIALIZED.code)
     }
   })
 
@@ -56,7 +56,7 @@ describe('vecdb 未初始化', () => {
     const result = await vecdb.vector.delete('test', ['1'])
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(VecdbErrorCode.NOT_INITIALIZED)
+      expect(result.error.code).toBe(HaiVecdbError.NOT_INITIALIZED.code)
     }
   })
 
@@ -74,7 +74,7 @@ describe('vecdb 配置校验', () => {
     const result = await vecdb.init({ type: 'invalid' })
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(VecdbErrorCode.CONFIG_ERROR)
+      expect(result.error.code).toBe(HaiVecdbError.CONFIG_ERROR.code)
     }
   })
 
@@ -84,7 +84,7 @@ describe('vecdb 配置校验', () => {
     const result = await vecdb.init({ type: 'lancedb' })
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(VecdbErrorCode.CONFIG_ERROR)
+      expect(result.error.code).toBe(HaiVecdbError.CONFIG_ERROR.code)
     }
     await vecdb.close()
   })
@@ -94,7 +94,7 @@ describe('vecdb 配置校验', () => {
     const result = await vecdb.init({ type: 'pgvector' })
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(VecdbErrorCode.CONFIG_ERROR)
+      expect(result.error.code).toBe(HaiVecdbError.CONFIG_ERROR.code)
     }
     await vecdb.close()
   })
@@ -104,7 +104,7 @@ describe('vecdb 配置校验', () => {
     // 没有 qdrant 服务，预期失败
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect([VecdbErrorCode.DRIVER_NOT_FOUND, VecdbErrorCode.CONNECTION_FAILED]).toContain(result.error.code)
+      expect([HaiVecdbError.DRIVER_NOT_FOUND.code, HaiVecdbError.CONNECTION_FAILED.code]).toContain(result.error.code)
     }
     await vecdb.close()
   })
@@ -151,7 +151,7 @@ describe('vecdb LanceDB 集成测试', async () => {
     const result = await vecdb.collection.create('test-collection', { dimension: 4 })
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(VecdbErrorCode.COLLECTION_ALREADY_EXISTS)
+      expect(result.error.code).toBe(HaiVecdbError.COLLECTION_ALREADY_EXISTS.code)
     }
   })
 
@@ -242,7 +242,7 @@ describe('vecdb LanceDB 集成测试', async () => {
     const result = await vecdb.collection.drop('nonexistent-collection')
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(VecdbErrorCode.COLLECTION_NOT_FOUND)
+      expect(result.error.code).toBe(HaiVecdbError.COLLECTION_NOT_FOUND.code)
     }
   })
 

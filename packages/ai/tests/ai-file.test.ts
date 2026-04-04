@@ -8,7 +8,7 @@ import type { AIConfig } from '../src/ai-config.js'
 import type { LLMOperations } from '../src/llm/ai-llm-types.js'
 import { Buffer } from 'node:buffer'
 import { describe, expect, it, vi } from 'vitest'
-import { AIErrorCode } from '../src/ai-config.js'
+import { HaiAIError } from '../src/ai-types.js'
 import { createFileOperations } from '../src/file/ai-file-functions.js'
 
 // ─── Mock 辅助 ───
@@ -49,7 +49,7 @@ function makeMockLLMError(): LLMOperations {
   return {
     chat: vi.fn(async () => ({
       success: false as const,
-      error: { code: AIErrorCode.API_ERROR, message: 'API error' },
+      error: { code: HaiAIError.API_ERROR.code, message: 'API error' },
     })),
     chatStream: vi.fn(),
     listModels: vi.fn(),
@@ -192,7 +192,7 @@ describe('file operations — PDF', () => {
     const result = await ops.parse({ content: fakePdf, filename: 'report.pdf' })
     // 即使 OCR 降级，结果也不是 unsupported
     if (!result.success) {
-      expect(result.error.code).not.toBe(AIErrorCode.FILE_UNSUPPORTED_FORMAT)
+      expect(result.error.code).not.toBe(HaiAIError.FILE_UNSUPPORTED_FORMAT.code)
     }
   })
 })
@@ -252,7 +252,7 @@ describe('file operations — image OCR', () => {
 
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(AIErrorCode.FILE_OCR_FAILED)
+      expect(result.error.code).toBe(HaiAIError.FILE_OCR_FAILED.code)
     }
   })
 
@@ -285,7 +285,7 @@ describe('file operations — image OCR', () => {
 
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(AIErrorCode.FILE_INVALID_CONTENT)
+      expect(result.error.code).toBe(HaiAIError.FILE_INVALID_CONTENT.code)
     }
   })
 })
@@ -325,7 +325,7 @@ describe('file operations — MIME type detection', () => {
     })
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(AIErrorCode.FILE_UNSUPPORTED_FORMAT)
+      expect(result.error.code).toBe(HaiAIError.FILE_UNSUPPORTED_FORMAT.code)
     }
   })
 

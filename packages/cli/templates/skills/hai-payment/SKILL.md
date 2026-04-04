@@ -149,13 +149,13 @@ const payResult = await invokePayment(orderResult.data)
 
 | API                                              | 用途     | 返回值                        |
 | ------------------------------------------------ | -------- | ----------------------------- |
-| `payment.init(config)`                           | 初始化   | `Result<void>`                |
+| `payment.init(config)`                           | 初始化   | `HaiResult<void>`                |
 | `payment.close()`                                | 关闭     | `void`                        |
-| `payment.createOrder(providerName, input)`       | 创建订单 | `Result<PaymentOrder>`        |
-| `payment.handleNotify(providerName, request)`    | 处理回调 | `Result<PaymentNotifyResult>` |
-| `payment.queryOrder(providerName, orderNo)`      | 查询订单 | `Result<OrderStatus>`         |
-| `payment.refund(providerName, input)`            | 退款     | `Result<RefundResult>`        |
-| `payment.closeOrder(providerName, orderNo)`      | 关闭订单 | `Result<void>`                |
+| `payment.createOrder(providerName, input)`       | 创建订单 | `HaiResult<PaymentOrder>`        |
+| `payment.handleNotify(providerName, request)`    | 处理回调 | `HaiResult<PaymentNotifyResult>` |
+| `payment.queryOrder(providerName, orderNo)`      | 查询订单 | `HaiResult<OrderStatus>`         |
+| `payment.refund(providerName, input)`            | 退款     | `HaiResult<RefundResult>`        |
+| `payment.closeOrder(providerName, orderNo)`      | 关闭订单 | `HaiResult<void>`                |
 | `payment.getProvider(name)`                      | 获取 Provider | `PaymentProvider \| undefined` |
 | `payment.registerProvider(provider)`             | 注册自定义 Provider | `void`              |
 
@@ -163,27 +163,27 @@ const payResult = await invokePayment(orderResult.data)
 
 | API                      | 用途     | 返回值                        |
 | ------------------------ | -------- | ----------------------------- |
-| `invokePayment(options)` | 调起支付 | `Result<InvokePaymentResult>` |
+| `invokePayment(options)` | 调起支付 | `HaiResult<InvokePaymentResult>` |
 
 ---
 
 ## 错误码 — `HaiPaymentError`
 
-| 错误码 | 常量                    | 说明                   |
-| ------ | ----------------------- | ---------------------- |
-| 7000   | `CREATE_ORDER_FAILED`   | 创建订单失败           |
-| 7001   | `QUERY_ORDER_FAILED`    | 查询订单失败           |
-| 7002   | `REFUND_FAILED`         | 退款失败               |
-| 7003   | `CLOSE_ORDER_FAILED`    | 关闭订单失败           |
-| 7010   | `NOT_INITIALIZED`       | 模块未初始化           |
-| 7020   | `SIGN_FAILED`           | 签名失败               |
-| 7030   | `PROVIDER_NOT_FOUND`    | Provider 未注册        |
-| 7040   | `INVALID_AMOUNT`        | 金额无效               |
-| 7050   | `NOTIFY_VERIFY_FAILED`  | 回调验签失败           |
-| 7051   | `NOTIFY_PARSE_FAILED`   | 回调解析失败           |
-| 7060   | `INVOKE_WEB_FAILED`     | Web 端调起支付失败     |
-| 7061   | `INVOKE_APP_FAILED`     | App 端调起支付失败     |
-| 7070   | `CONFIG_ERROR`          | 配置无效               |
+| 错误码 | code | 说明 |
+|--------|------|------|
+| `HaiPaymentError.CREATE_ORDER_FAILED` | `hai:payment:001` | 创建订单失败 |
+| `HaiPaymentError.QUERY_ORDER_FAILED` | `hai:payment:002` | 查询订单失败 |
+| `HaiPaymentError.REFUND_FAILED` | `hai:payment:003` | 退款失败 |
+| `HaiPaymentError.CLOSE_ORDER_FAILED` | `hai:payment:004` | 关闭订单失败 |
+| `HaiPaymentError.NOT_INITIALIZED` | `hai:payment:010` | 模块未初始化 |
+| `HaiPaymentError.SIGN_FAILED` | `hai:payment:020` | 签名失败 |
+| `HaiPaymentError.PROVIDER_NOT_FOUND` | `hai:payment:030` | Provider 未注册 |
+| `HaiPaymentError.INVALID_AMOUNT` | `hai:payment:040` | 金额无效 |
+| `HaiPaymentError.NOTIFY_VERIFY_FAILED` | `hai:payment:050` | 回调验签失败 |
+| `HaiPaymentError.NOTIFY_PARSE_FAILED` | `hai:payment:051` | 回调解析失败 |
+| `HaiPaymentError.INVOKE_WEB_FAILED` | `hai:payment:060` | Web 端调起支付失败 |
+| `HaiPaymentError.INVOKE_APP_FAILED` | `hai:payment:061` | App 端调起支付失败 |
+| `HaiPaymentError.CONFIG_ERROR` | `hai:payment:070` | 配置无效 |
 
 ---
 
@@ -194,11 +194,11 @@ const payResult = await invokePayment(orderResult.data)
 ```typescript
 interface PaymentProvider {
   readonly name: string
-  createOrder: (input: CreateOrderInput) => Promise<Result<PaymentOrder, PaymentError>>
-  handleNotify: (request: PaymentNotifyRequest) => Promise<Result<PaymentNotifyResult, PaymentError>>
-  queryOrder: (outTradeNo: string) => Promise<Result<OrderStatus, PaymentError>>
-  refund: (input: RefundInput) => Promise<Result<RefundResult, PaymentError>>
-  closeOrder: (outTradeNo: string) => Promise<Result<void, PaymentError>>
+  createOrder: (input: CreateOrderInput) => Promise<HaiResult<PaymentOrder>>
+  handleNotify: (request: PaymentNotifyRequest) => Promise<HaiResult<PaymentNotifyResult>>
+  queryOrder: (outTradeNo: string) => Promise<HaiResult<OrderStatus>>
+  refund: (input: RefundInput) => Promise<HaiResult<RefundResult>>
+  closeOrder: (outTradeNo: string) => Promise<HaiResult<void>>
 }
 ```
 
@@ -286,4 +286,4 @@ export const POST = kit.handler(async ({ request, locals }) => {
 - `hai-api-client`：客户端契约调用
 - `hai-reldb`：订单持久化存储
 - `hai-audit`：审计日志（payment 内部自动调用）
-- `hai-core`：Result 类型、日志、配置
+- `hai-core`：HaiResult 类型、日志、配置

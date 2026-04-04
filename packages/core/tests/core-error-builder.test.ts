@@ -79,7 +79,7 @@ describe('core.error', () => {
   // =========================================================================
 
   describe('integration with err() function', () => {
-    it('should work with err() to create Result', () => {
+    it('should work with err() to create HaiResult', () => {
       const result = err(HaiCommonError.NOT_FOUND, 'Resource not found')
       expect(result.success).toBe(false)
       if (!result.success) {

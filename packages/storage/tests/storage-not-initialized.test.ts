@@ -6,6 +6,7 @@
 
 import { beforeEach, describe, expect, it } from 'vitest'
 import { storage } from '../src/index.js'
+import { HaiStorageError } from '../src/storage-types.js'
 
 describe.sequential('storage (not initialized)', () => {
   beforeEach(async () => {
@@ -16,7 +17,7 @@ describe.sequential('storage (not initialized)', () => {
     const result = await storage.file.put('test.txt', 'hello')
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(6010)
+      expect(result.error.code).toBe(HaiStorageError.NOT_INITIALIZED.code)
     }
   })
 
@@ -24,7 +25,7 @@ describe.sequential('storage (not initialized)', () => {
     const result = await storage.file.get('test.txt')
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(6010)
+      expect(result.error.code).toBe(HaiStorageError.NOT_INITIALIZED.code)
     }
   })
 
@@ -32,7 +33,7 @@ describe.sequential('storage (not initialized)', () => {
     const result = await storage.file.head('test.txt')
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(6010)
+      expect(result.error.code).toBe(HaiStorageError.NOT_INITIALIZED.code)
     }
   })
 
@@ -40,7 +41,7 @@ describe.sequential('storage (not initialized)', () => {
     const result = await storage.file.exists('test.txt')
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(6010)
+      expect(result.error.code).toBe(HaiStorageError.NOT_INITIALIZED.code)
     }
   })
 
@@ -48,7 +49,7 @@ describe.sequential('storage (not initialized)', () => {
     const result = await storage.file.delete('test.txt')
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(6010)
+      expect(result.error.code).toBe(HaiStorageError.NOT_INITIALIZED.code)
     }
   })
 
@@ -56,7 +57,7 @@ describe.sequential('storage (not initialized)', () => {
     const result = await storage.file.deleteMany(['a.txt', 'b.txt'])
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(6010)
+      expect(result.error.code).toBe(HaiStorageError.NOT_INITIALIZED.code)
     }
   })
 
@@ -64,7 +65,7 @@ describe.sequential('storage (not initialized)', () => {
     const result = await storage.file.copy('a.txt', 'b.txt')
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(6010)
+      expect(result.error.code).toBe(HaiStorageError.NOT_INITIALIZED.code)
     }
   })
 
@@ -72,7 +73,7 @@ describe.sequential('storage (not initialized)', () => {
     const result = await storage.dir.list()
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(6010)
+      expect(result.error.code).toBe(HaiStorageError.NOT_INITIALIZED.code)
     }
   })
 
@@ -80,7 +81,7 @@ describe.sequential('storage (not initialized)', () => {
     const result = await storage.dir.delete('some-prefix/')
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(6010)
+      expect(result.error.code).toBe(HaiStorageError.NOT_INITIALIZED.code)
     }
   })
 
@@ -88,7 +89,7 @@ describe.sequential('storage (not initialized)', () => {
     const result = await storage.presign.getUrl('test.txt')
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(6010)
+      expect(result.error.code).toBe(HaiStorageError.NOT_INITIALIZED.code)
     }
   })
 
@@ -96,7 +97,7 @@ describe.sequential('storage (not initialized)', () => {
     const result = await storage.presign.putUrl('test.txt')
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(6010)
+      expect(result.error.code).toBe(HaiStorageError.NOT_INITIALIZED.code)
     }
   })
 

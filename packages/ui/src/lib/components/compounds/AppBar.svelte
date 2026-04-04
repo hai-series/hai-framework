@@ -7,7 +7,7 @@
     {#snippet trailing()}<Avatar />{/snippet}
   </AppBar>
 -->
-<script lang="ts">
+<script lang='ts'>
   import type { Snippet } from 'svelte'
   import { cn } from '../../utils.js'
 
@@ -48,14 +48,14 @@
   )}
 >
   <!-- 左侧 -->
-  <div class="flex items-center min-w-[48px]">
+  <div class='flex items-center min-w-[48px]'>
     {#if leading}
       {@render leading()}
     {/if}
   </div>
 
   <!-- 标题区域 -->
-  <div class="flex-1 text-center font-semibold text-base truncate">
+  <div class='flex-1 text-center font-semibold text-base truncate'>
     {#if children}
       {@render children()}
     {:else if title}
@@ -64,7 +64,7 @@
   </div>
 
   <!-- 右侧 -->
-  <div class="flex items-center min-w-[48px] justify-end">
+  <div class='flex items-center min-w-[48px] justify-end'>
     {#if trailing}
       {@render trailing()}
     {/if}

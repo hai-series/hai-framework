@@ -92,8 +92,8 @@ const notInitialized = core.module.createNotInitializedKit(
 /**
  * LLM 未初始化占位
  *
- * 异步方法返回 NOT_INITIALIZED Result。
- * chatStream 是 async generator，无法返回 Result，
+ * 异步方法返回 NOT_INITIALIZED HaiResult。
+ * chatStream 是 async generator，无法返回 HaiResult，
  * 只能在迭代时抛出异常通知调用方。
  */
 const notInitializedLLM: LLMOperations = {
@@ -152,7 +152,7 @@ const notInitializedMemory = notInitialized.proxy<MemoryOperations>()
 /**
  * Token 未初始化占位
  *
- * Token 方法返回原始 number 而非 Result，无法通过 proxy 安全拦截。
+ * Token 方法返回原始 number 而非 HaiResult，无法通过 proxy 安全拦截。
  * 未初始化时直接抛出异常，避免静默返回 0 导致下游 Token 计算错误。
  */
 const notInitializedToken: TokenOperations = {

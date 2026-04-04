@@ -39,11 +39,11 @@ await crypto.close()
 
 | 方法                | 签名                                                        | 说明         |
 | ------------------- | ----------------------------------------------------------- | ------------ |
-| `generateKeyPair`   | `() => Result<KeyPair>`                                     | 生成密钥对   |
-| `encrypt`           | `(data, publicKey, options?) => Result<string>`             | 公钥加密     |
-| `decrypt`           | `(ciphertext, privateKey, options?) => Result<string>`      | 私钥解密     |
-| `sign`              | `(data, privateKey, options?) => Result<string>`            | 私钥签名     |
-| `verify`            | `(data, signature, publicKey, options?) => Result<boolean>` | 公钥验签     |
+| `generateKeyPair`   | `() => HaiResult<KeyPair>`                                     | 生成密钥对   |
+| `encrypt`           | `(data, publicKey, options?) => HaiResult<string>`             | 公钥加密     |
+| `decrypt`           | `(ciphertext, privateKey, options?) => HaiResult<string>`      | 私钥解密     |
+| `sign`              | `(data, privateKey, options?) => HaiResult<string>`            | 私钥签名     |
+| `verify`            | `(data, signature, publicKey, options?) => HaiResult<boolean>` | 公钥验签     |
 | `isValidPublicKey`  | `(key: string) => boolean`                                  | 校验公钥格式 |
 | `isValidPrivateKey` | `(key: string) => boolean`                                  | 校验私钥格式 |
 
@@ -65,15 +65,15 @@ if (keyPair.success) {
 ```
 
 **AsymmetricEncryptOptions**：`{ cipherMode?: 0 | 1, outputFormat?: 'hex' | 'base64' }`
-**SignOptions**：`{ hash?: boolean, userId?: string, outputFormat?: 'hex' | 'der' }`
+**SignOptions**：`{ hash?: boolean, userId?: string }`
 
 ### 哈希 — `crypto.hash`
 
 | 方法     | 签名                                                       | 说明     |
 | -------- | ---------------------------------------------------------- | -------- |
-| `hash`   | `(data: string \| Uint8Array, options?) => Result<string>` | 哈希     |
-| `hmac`   | `(data, key) => Result<string>`                            | HMAC     |
-| `verify` | `(data, expectedHash) => Result<boolean>`                  | 验证哈希 |
+| `hash`   | `(data: string \| Uint8Array, options?) => HaiResult<string>` | 哈希     |
+| `hmac`   | `(data, key) => HaiResult<string>`                            | HMAC     |
+| `verify` | `(data, expectedHash) => HaiResult<boolean>`                  | 验证哈希 |
 
 ```typescript
 const hash = crypto.hash.hash('hello')
@@ -89,10 +89,10 @@ const valid = crypto.hash.verify('hello', hash.data!)
 | --------------- | ----------------------------------------------- | --------------------------- |
 | `generateKey`   | `() => string`                                  | 生成 128-bit 密钥（32 hex） |
 | `generateIV`    | `() => string`                                  | 生成随机 IV（32 hex）       |
-| `encrypt`       | `(data, key, options?) => Result<string>`       | 加密                        |
-| `decrypt`       | `(ciphertext, key, options?) => Result<string>` | 解密                        |
-| `encryptWithIV` | `(data, key) => Result<EncryptWithIVResult>`    | CBC 模式加密（自动生成 IV） |
-| `decryptWithIV` | `(ciphertext, key, iv) => Result<string>`       | CBC 模式解密                |
+| `encrypt`       | `(data, key, options?) => HaiResult<string>`       | 加密                        |
+| `decrypt`       | `(ciphertext, key, options?) => HaiResult<string>` | 解密                        |
+| `encryptWithIV` | `(data, key) => HaiResult<EncryptWithIVResult>`    | CBC 模式加密（自动生成 IV） |
+| `decryptWithIV` | `(ciphertext, key, iv) => HaiResult<string>`       | CBC 模式解密                |
 | `deriveKey`     | `(password, salt) => string`                    | 从密码和盐值派生密钥        |
 | `isValidKey`    | `(key: string) => boolean`                      | 校验密钥格式                |
 | `isValidIV`     | `(iv: string) => boolean`                       | 校验 IV 格式                |
@@ -111,8 +111,8 @@ if (result.success) {
 
 | 方法     | 签名                                    | 说明     |
 | -------- | --------------------------------------- | -------- |
-| `hash`   | `(password, config?) => Result<string>` | 密码哈希 |
-| `verify` | `(password, hash) => Result<boolean>`   | 验证密码 |
+| `hash`   | `(password, config?) => HaiResult<string>` | 密码哈希 |
+| `verify` | `(password, hash) => HaiResult<boolean>`   | 验证密码 |
 
 ```typescript
 const hashed = crypto.password.hash('MyPassword123')
@@ -126,23 +126,22 @@ if (hashed.success) {
 
 ---
 
-## 错误码 — `CryptoErrorCode`
+## 错误码 — `HaiCryptoError`
 
-| 错误码                  | 值   | 说明          |
-| ----------------------- | ---- | ------------- |
-| `OPERATION_FAILED`      | 2000 | 操作失败      |
-| `INVALID_INPUT`         | 2001 | 无效输入      |
-| `INVALID_KEY`           | 2002 | 无效密钥      |
-| `NOT_INITIALIZED`       | 2010 | 未初始化      |
-| `INIT_FAILED`           | 2011 | 初始化失败    |
-| `KEY_GENERATION_FAILED` | 2020 | 密钥生成失败  |
-| `ENCRYPTION_FAILED`     | 2021 | 加密失败      |
-| `DECRYPTION_FAILED`     | 2022 | 解密失败      |
-| `SIGN_FAILED`           | 2023 | 签名失败      |
-| `VERIFY_FAILED`         | 2024 | 验签失败      |
-| `HASH_FAILED`           | 2040 | 哈希计算失败  |
-| `HMAC_FAILED`           | 2041 | HMAC 计算失败 |
-| `INVALID_IV`            | 2060 | 无效 IV       |
+| 错误码 | code | 说明 |
+|--------|------|------|
+| `HaiCryptoError.INVALID_INPUT` | `hai:crypto:002` | 无效输入 |
+| `HaiCryptoError.INVALID_KEY` | `hai:crypto:003` | 无效密钥 |
+| `HaiCryptoError.NOT_INITIALIZED` | `hai:crypto:010` | 未初始化 |
+| `HaiCryptoError.INIT_FAILED` | `hai:crypto:011` | 初始化失败 |
+| `HaiCryptoError.KEY_GENERATION_FAILED` | `hai:crypto:020` | 密钥生成失败 |
+| `HaiCryptoError.ENCRYPTION_FAILED` | `hai:crypto:021` | 加密失败 |
+| `HaiCryptoError.DECRYPTION_FAILED` | `hai:crypto:022` | 解密失败 |
+| `HaiCryptoError.SIGN_FAILED` | `hai:crypto:023` | 签名失败 |
+| `HaiCryptoError.VERIFY_FAILED` | `hai:crypto:024` | 验签失败 |
+| `HaiCryptoError.HASH_FAILED` | `hai:crypto:040` | 哈希计算失败 |
+| `HaiCryptoError.HMAC_FAILED` | `hai:crypto:041` | HMAC 计算失败 |
+| `HaiCryptoError.INVALID_IV` | `hai:crypto:060` | 无效 IV |
 
 ---
 
@@ -179,6 +178,6 @@ if (verifyResult.success && verifyResult.data) {
 
 ## 相关 Skills
 
-- `hai-core`：配置与 Result 模型
+- `hai-core`：配置与 HaiResult 模型
 - `hai-iam`：密码哈希（内部自动调用 crypto.password）
 - `hai-kit`：SvelteKit 集成（传输加密）

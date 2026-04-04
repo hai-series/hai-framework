@@ -9,6 +9,7 @@ import * as os from 'node:os'
 import * as path from 'node:path'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { scanApp } from '../src/deploy-scanner.js'
+import { HaiDeployError } from '../src/deploy-types.js'
 
 let tmpDir: string
 
@@ -76,7 +77,7 @@ describe('scanApp', () => {
     const result = await scanApp(emptyDir)
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(9008) // SCAN_FAILED
+      expect(result.error.code).toBe(HaiDeployError.SCAN_FAILED.code)
     }
 
     fs.rmSync(emptyDir, { recursive: true, force: true })

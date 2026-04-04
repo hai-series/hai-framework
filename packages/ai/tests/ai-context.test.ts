@@ -11,6 +11,7 @@ import type { AIRelStore, SessionInfo } from '../src/store/ai-store-types.js'
 
 import { describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
+import { HaiAIError } from '../src/ai-types.js'
 import { createCompressOperations } from '../src/compress/ai-compress-functions.js'
 import { createContextOperations } from '../src/context/ai-context-functions.js'
 import { ai } from '../src/index.js'
@@ -462,7 +463,7 @@ describe('context chat / chatStream', () => {
     const result = await managerResult.data.chat('测试')
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(12010) // NOT_INITIALIZED
+      expect(result.error.code).toBe(HaiAIError.NOT_INITIALIZED.code)
     }
   })
 

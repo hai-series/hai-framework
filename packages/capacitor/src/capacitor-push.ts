@@ -86,7 +86,7 @@ export async function registerPush(): Promise<HaiResult<PushRegistration>> {
  * 监听推送通知事件
  *
  * @param callbacks - 回调配置（收到推送、点击推送）
- * @returns 包含清理函数的 Result
+ * @returns 包含清理函数的 HaiResult
  *
  * @example
  * ```ts

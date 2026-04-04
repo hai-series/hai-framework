@@ -25,7 +25,7 @@ const UnknownErrorDef: HaiErrorDef = {
   module: '_',
 }
 
-// ─── 1. 基础类型 - Result / Option ───
+// ─── 1. 基础类型 - HaiResult / Option ───
 
 export type HaiResult<T>
   = | { success: true, data: T }
@@ -98,7 +98,7 @@ export type ErrorInfoValue = `${string}:${string}`
 export type ErrorInfo = Record<string, ErrorInfoValue>
 
 export interface HaiErrorDef {
-  code: string
+  code: string | number
   httpStatus: number
   system: string
   module: string

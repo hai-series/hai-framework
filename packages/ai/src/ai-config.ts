@@ -8,6 +8,7 @@
 import type { HaiResult } from '@h-ai/core'
 import process from 'node:process'
 import { err, ok } from '@h-ai/core'
+import { ChunkOptionsSchema, CleanOptionsSchema } from '@h-ai/datapipe'
 import { z } from 'zod'
 import { aiM } from './ai-i18n.js'
 
@@ -306,10 +307,7 @@ export type { CompressionStrategy } from './compress/ai-compress-types.js'
  * const knowledgeConfig = {
  *   collection: 'my-knowledge',
  *   dimension: 1536,
- *   enableEntityExtraction: true,
- *   chunkMode: 'markdown',
- *   chunkMaxSize: 1500,
- *   chunkOverlap: 200,
+ *   enableEntityExtraction: true
  * }
  * ```
  */
@@ -320,12 +318,24 @@ export const KnowledgeConfigSchema = z.object({
   dimension: z.number().int().positive().default(1536),
   /** 是否启用实体提取（默认 true） */
   enableEntityExtraction: z.boolean().default(true),
-  /** 默认分块模式（默认 'markdown'） */
-  chunkMode: z.enum(['sentence', 'paragraph', 'markdown', 'page']).default('markdown'),
-  /** 默认分块最大大小（默认 1500） */
-  chunkMaxSize: z.number().int().positive().default(1500),
-  /** 默认分块重叠（默认 200） */
-  chunkOverlap: z.number().int().min(0).default(200),
+  /**
+   * 默认文本清洗选项
+   *
+   * 字段含义与 @h-ai/datapipe CleanOptionsInput 完全一致，
+   * 支持 removeHtml、removeUrls、normalizeWhitespace、customReplacements 等。
+   */
+  cleanOptions: CleanOptionsSchema.default(CleanOptionsSchema.parse({})),
+  /**
+   * 默认分块选项
+   *
+   * 字段含义与 @h-ai/datapipe ChunkOptionsInput 完全一致，
+   * 支持 mode、maxSize、overlap、separator、markdownMinLevel 等完整选项。
+   */
+  chunkOptions: ChunkOptionsSchema.default(ChunkOptionsSchema.parse({
+    mode: 'markdown',
+    maxSize: 1500,
+    overlap: 200,
+  })),
   /** 实体查询命中的额外加权系数（默认 0.15，叠加到向量分数上） */
   entityBoostWeight: z.number().min(0).max(1).default(0.15),
   /** 自定义实体类型列表（不指定时使用内置默认类型） */
@@ -600,7 +610,12 @@ export type A2AConfig = z.infer<typeof A2AConfigSchema>
  *     },
  *   },
  *   embedding: { dimensions: 1536 },
- *   knowledge: { collection: 'docs', enableEntityExtraction: true },
+ *   knowledge: {
+ *     collection: 'docs',
+ *     enableEntityExtraction: true,
+ *     cleanOptions: { removeHtml: true },
+ *     chunkOptions: { mode: 'markdown', maxSize: 1500, overlap: 200 },
+ *   },
  *   retrieval: {
  *     sources: [
  *       { id: 'docs', collection: 'documentation', name: '产品文档', topK: 5, minScore: 0.7 },
@@ -614,8 +629,13 @@ export type A2AConfig = z.infer<typeof A2AConfigSchema>
  * ```
  */
 export const AIConfigSchema = z.object({
-  /** LLM 配置（必填，AI 模块的基础依赖） */
-  llm: LLMConfigSchema,
+  /** LLM 配置（可选，所有字段有默认值） */
+  llm: LLMConfigSchema.default({
+    model: 'gpt-4o-mini',
+    maxTokens: 4096,
+    temperature: 0.7,
+    timeout: 60000,
+  }),
   /** MCP 配置 */
   mcp: MCPConfigSchema.optional(),
   /** Embedding 配置 */

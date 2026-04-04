@@ -25,7 +25,7 @@ description: "Use when: creating a new module, new package, scaffold, add sub-fe
 | ---------------- | --------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
 | **生命周期单例** | `export const xx: XxFunctions`，有 init/close | reldb, storage, cache, ai, iam, payment, crypto, capacitor, vecdb, audit, scheduler, reach, deploy, api-client |
 | **纯函数模块**   | 无状态，无 init/close，直接调用               | datapipe                                                                                                       |
-| **基础设施模块** | 提供底层能力（日志、配置、i18n、Result 等）   | core                                                                                                           |
+| **基础设施模块** | 提供底层能力（日志、配置、i18n、HaiResult 等）   | core                                                                                                           |
 
 - 生命周期单例模块必须遵循 §6 的 init/close/getter 全套规范
 - 纯函数模块不需要 init/close，`XxFunctions` 接口直接声明操作方法
@@ -68,10 +68,10 @@ description: "Use when: creating a new module, new package, scaffold, add sub-fe
 
 ```ts
 export interface XxFunctions {
-  init: (config: XxConfigInput) => Promise<Result<void, XxError>>
+  init: (config: XxConfigInput) => Promise<HaiResult<void>>
   close: () => Promise<void>
-  doSomething: (input: Input) => Promise<Result<Output, XxError>>
-  doAnother: (id: string) => Promise<Result<void, XxError>>
+  doSomething: (input: Input) => Promise<HaiResult<Output>>
+  doAnother: (id: string) => Promise<HaiResult<void>>
   readonly config: XxConfig | null
   readonly isInitialized: boolean
 }
@@ -81,7 +81,7 @@ export interface XxFunctions {
 
 ```ts
 export interface XxFunctions {
-  init: (config: XxConfigInput) => Promise<Result<void, XxError>>
+  init: (config: XxConfigInput) => Promise<HaiResult<void>>
   close: () => Promise<void>
   readonly yy: YyOperations // 子操作组
   readonly zz: ZzOperations // 子操作组
@@ -198,9 +198,9 @@ packages/xx/
 | 服务对象      | 小写模块名                               | `export const db`                                     |
 | 函数接口      | `{Module}Functions`                      | `ReldbFunctions`、`PaymentFunctions`                  |
 | 子操作接口    | `{Domain}Operations`                     | `KvOperations`、`DeviceOperations`                    |
-| 错误码对象    | `{Module}ErrorCode` UPPER_SNAKE          | `ReldbErrorCode.NOT_INITIALIZED`                      |
-| 错误HTTP映射  | `{Module}ErrorHttpStatus`                | `IamErrorHttpStatus`、`ReldbErrorHttpStatus`          |
-| 错误类型      | `{Module}Error`                          | `StorageError`、`IamError`                            |
+| 错误定义对象  | `Hai{Module}Error`（通过 `buildHaiErrorsDef`） | `HaiReldbError.NOT_INITIALIZED`                       |
+| 错误类型      | 统一 `HaiError`                        | `HaiError`                                            |
+| 错误定义对象  | `Hai{Module}Error`                      | `HaiStorageError`、`HaiIamError`                    |
 | 配置 Schema   | `{Module}ConfigSchema`                   | `StorageConfigSchema`                                 |
 | 配置类型      | `{Module}Config` / `{Module}ConfigInput` | `DbConfig` / `DbConfigInput`                          |
 | Provider 接口 | `{Module}Provider`                       | `ReldbProvider`、`CacheProvider`                      |
@@ -234,32 +234,33 @@ packages/xx/
 
 ### 4.1 错误码规范
 
-- 每个模块分配一个**独占千位段**，禁止与已分配段重叠
-- `NOT_INITIALIZED` 固定为 `X010`（模块段 + 010）
-- 按类别分段：通用 X000-X009、初始化 X010-X019、业务操作 X020+
-- 新模块必须在下表中选取未被占用的段位
+- 每个模块通过 `buildHaiErrorsDef('module', ErrorInfo)` 生成错误码，格式为 `hai:{module}:{NNN}`
+- 模块名即命名空间，各模块之间不会冲突
+- `NOT_INITIALIZED` 固定为 `010`
+- 按类别分段：通用 000-009、初始化 010-019、业务操作 020+
+- ErrorInfo 值格式为 `'NNN:HTTP'`（如 `'001:500'`），NNN 为三位编号，HTTP 为状态码
 
-**已分配的错误码段位注册表**：
+**已注册模块列表**：
 
-| 段位        | 模块       | 说明                    |
-| ----------- | ---------- | ----------------------- |
-| 1000-1199   | core       | 通用错误 + 配置错误     |
-| 1200-1299   | api-client | HTTP 客户端             |
-| 2000-2099   | crypto     | 加密/签名/哈希          |
-| 3000-3499   | reldb      | 关系数据库              |
-| 3500-3999   | vecdb      | 向量数据库              |
-| 4000-4999   | cache      | 缓存                    |
-| 5000-5999   | iam        | 身份认证与授权          |
-| 6000-6999   | storage    | 对象存储                |
-| 7000-7999   | payment    | 支付                    |
-| 8000-8099   | capacitor  | 移动端原生能力          |
-| 8100-8199   | reach      | 消息触达（短信/邮件等） |
-| 8500-8599   | datapipe   | 数据管道（纯函数）      |
-| 9000-9099   | deploy     | 部署与资源配置          |
-| 10000-10999 | audit      | 审计日志                |
-| 11000-11999 | scheduler  | 定时任务调度            |
-| 12000-12999 | ai         | AI / LLM / RAG / MCP    |
-| 13000+      | —          | 预留给未来模块          |
+| 命名空间 | 模块 | 说明 |
+|--------|------|------|
+| `hai:common` | core | 通用错误（HaiCommonError） |
+| `hai:core` | core | 配置错误（HaiConfigError） |
+| `hai:api-client` | api-client | HTTP 客户端 |
+| `hai:crypto` | crypto | 加密/签名/哈希 |
+| `hai:reldb` | reldb | 关系数据库 |
+| `hai:vecdb` | vecdb | 向量数据库 |
+| `hai:cache` | cache | 缓存 |
+| `hai:iam` | iam | 身份认证与授权 |
+| `hai:storage` | storage | 对象存储 |
+| `hai:payment` | payment | 支付 |
+| `hai:capacitor` | capacitor | 移动端原生能力 |
+| `hai:reach` | reach | 消息触达（短信/邮件等） |
+| `hai:datapipe` | datapipe | 数据管道（纯函数） |
+| `hai:deploy` | deploy | 部署与资源配置 |
+| `hai:audit` | audit | 审计日志 |
+| `hai:scheduler` | scheduler | 定时任务调度 |
+| `hai:ai` | ai | AI / LLM / RAG / MCP |
 
 ### 4.2 配置 Schema
 
@@ -270,32 +271,10 @@ packages/xx/
 **`xx-config.ts` 模板**：
 
 ```ts
-// ⚠️ 示例 — 替换 Xx 为实际模块名，按需调整错误码段和配置字段
+// ⚠️ 示例 — 替换 Xx 为实际模块名，按需调整配置字段
 
 import { z } from 'zod'
 import { xxM } from './xx-i18n.js'
-
-// ─── 错误码 ───
-
-export const XxErrorCode = {
-  CONNECTION_FAILED: 6000,
-  OPERATION_FAILED: 6001,
-  NOT_INITIALIZED: 6010,
-  UNSUPPORTED_TYPE: 6011,
-  CONFIG_ERROR: 6012,
-} as const
-
-export type XxErrorCodeType = (typeof XxErrorCode)[keyof typeof XxErrorCode]
-
-// ─── 错误码 → HTTP 状态码映射 ───
-
-export const XxErrorHttpStatus: Record<number, number> = {
-  [XxErrorCode.CONNECTION_FAILED]: 500,
-  [XxErrorCode.OPERATION_FAILED]: 500,
-  [XxErrorCode.NOT_INITIALIZED]: 500,
-  [XxErrorCode.UNSUPPORTED_TYPE]: 400,
-  [XxErrorCode.CONFIG_ERROR]: 500,
-}
 
 // ─── 配置 Schema ───
 
@@ -327,7 +306,7 @@ export type XxConfigInput = z.input<typeof XxConfigSchema>
 
 **职责**：
 
-- 定义 `XxError`（模块错误接口）
+- 定义 `HaiXxError`（模块错误定义对象，通过 `buildHaiErrorsDef`）
 - 定义 `XxFunctions`（模块函数接口，必须包含 `init` / `close` / `config` / `isInitialized`）
 - 无子功能 + 需多后端时：定义 `XxProvider`（见 §1 决策表）
 - 有子功能时：re-export 子功能类型
@@ -335,7 +314,7 @@ export type XxConfigInput = z.input<typeof XxConfigSchema>
 **规范**：
 
 - 对外类型集中于此文件
-- 操作返回值统一用 `Result<T, XxError>`
+- 操作返回值统一用 `HaiResult<T>`
 - 只 export 使用方直接需要的类型，内部辅助类型不导出
 - Provider 接口是内部实现，禁止暴露给模块消费者
 
@@ -344,29 +323,34 @@ export type XxConfigInput = z.input<typeof XxConfigSchema>
 ```ts
 // ⚠️ 示例 — 替换类型名和字段，按模块实际需求增删接口
 
-import type { Result } from '@h-ai/core'
-import type { XxConfig, XxConfigInput, XxErrorCodeType } from './xx-config.js'
+import type { ErrorInfo, HaiResult } from '@h-ai/core'
+import type { XxConfig, XxConfigInput } from './xx-config.js'
+import { core } from '@h-ai/core'
 
 // ─── 错误类型 ───
 
-export interface XxError {
-  code: XxErrorCodeType
-  message: string
-  cause?: unknown
-}
+const XxErrorInfo = {
+  CONNECTION_FAILED: '001:500',
+  OPERATION_FAILED: '002:500',
+  NOT_INITIALIZED: '010:500',
+  UNSUPPORTED_TYPE: '011:400',
+  CONFIG_ERROR: '012:500',
+} satisfies ErrorInfo
+
+export const HaiXxError = core.error.buildHaiErrorsDef('xx', XxErrorInfo)
 
 // ─── 操作接口（按业务需求定义） ───
 
 export interface ZzOperations {
-  create: (data: CreateInput) => Promise<Result<Item, XxError>>
-  get: (id: string) => Promise<Result<Item | null, XxError>>
-  remove: (id: string) => Promise<Result<void, XxError>>
+  create: (data: CreateInput) => Promise<HaiResult<Item>>
+  get: (id: string) => Promise<HaiResult<Item | null>>
+  remove: (id: string) => Promise<HaiResult<void>>
 }
 
 // ─── 函数接口 ───
 
 export interface XxFunctions {
-  init: (config: XxConfigInput) => Promise<Result<void, XxError>>
+  init: (config: XxConfigInput) => Promise<HaiResult<void>>
   close: () => Promise<void>
   readonly config: XxConfig | null
   readonly isInitialized: boolean
@@ -377,7 +361,7 @@ export interface XxFunctions {
 
 export interface XxProvider {
   readonly name: string
-  connect: (config: XxConfig) => Promise<Result<void, XxError>>
+  connect: (config: XxConfig) => Promise<HaiResult<void>>
   close: () => Promise<void>
   isConnected: () => boolean
   readonly zz: ZzOperations
@@ -415,8 +399,8 @@ export interface XxProvider {
 使用 `core.module.createNotInitializedKit<E>()` 创建一组工具：
 
 ```ts
-const notInitialized = core.module.createNotInitializedKit<XxError>(
-  XxErrorCode.NOT_INITIALIZED,
+const notInitialized = core.module.createNotInitializedKit(
+  HaiXxError.NOT_INITIALIZED,
   () => xxM('xx_notInitialized'),
 )
 ```
@@ -425,10 +409,10 @@ const notInitialized = core.module.createNotInitializedKit<XxError>(
 
 | 方法                              | 说明                                                                  | 返回值               |
 | --------------------------------- | --------------------------------------------------------------------- | -------------------- |
-| `notInitialized.error()`          | 创建未初始化错误对象                                                  | `XxError`            |
-| `notInitialized.result<T>()`      | 创建包含未初始化错误的失败 Result                                     | `Result<T, XxError>` |
-| `notInitialized.proxy<T>()`       | 创建 Proxy 代理（默认 async），拦截所有方法调用返回 `Promise<Result>` | `T`                  |
-| `notInitialized.proxy<T>('sync')` | 创建同步 Proxy 代理，所有方法返回 `Result`                            | `T`                  |
+| `notInitialized.error()`          | 创建未初始化错误对象                                                  | `HaiError`           |
+| `notInitialized.result<T>()`      | 创建包含未初始化错误的失败 HaiResult                                     | `HaiResult<T>` |
+| `notInitialized.proxy<T>()`       | 创建 Proxy 代理（默认 async），拦截所有方法调用返回 `Promise<HaiResult>` | `T`                  |
+| `notInitialized.proxy<T>('sync')` | 创建同步 Proxy 代理，所有方法返回 `HaiResult`                            | `T`                  |
 
 **使用要点**：
 
@@ -469,11 +453,12 @@ const capacitor = {
 ```ts
 // ⚠️ 示例 — 最简模式，功能由 functions.ts 直接实现
 
-import type { Result } from '@h-ai/core'
+import type { HaiResult } from '@h-ai/core'
 import type { XxConfig, XxConfigInput } from './xx-config.js'
-import type { XxError, XxFunctions, ZzOperations } from './xx-types.js'
+import type { XxFunctions, ZzOperations } from './xx-types.js'
 import { core, err, ok } from '@h-ai/core'
-import { XxConfigSchema, XxErrorCode } from './xx-config.js'
+import { XxConfigSchema } from './xx-config.js'
+import { HaiXxError } from './xx-types.js'
 import { createXxFunctions } from './xx-functions.js'
 import { xxM } from './xx-i18n.js'
 
@@ -483,17 +468,17 @@ let currentConfig: XxConfig | null = null
 let currentZz: ZzOperations | null = null
 let initInProgress = false
 
-const notInitialized = core.module.createNotInitializedKit<XxError>(
-  XxErrorCode.NOT_INITIALIZED,
+const notInitialized = core.module.createNotInitializedKit(
+  HaiXxError.NOT_INITIALIZED,
   () => xxM('xx_notInitialized'),
 )
 const notInitializedZz = notInitialized.proxy<ZzOperations>()
 
 export const xx: XxFunctions = {
-  async init(config: XxConfigInput): Promise<Result<void, XxError>> {
+  async init(config: XxConfigInput): Promise<HaiResult<void>> {
     if (initInProgress) {
       logger.warn('Xx init already in progress, skipping concurrent call')
-      return err({ code: XxErrorCode.OPERATION_FAILED, message: xxM('xx_operationFailed', { params: { error: 'Concurrent initialization detected' } }) })
+      return err(HaiXxError.OPERATION_FAILED, xxM('xx_operationFailed', { params: { error: 'Concurrent initialization detected' } }))
     }
     initInProgress = true
     try {
@@ -510,13 +495,9 @@ export const xx: XxFunctions = {
     }
     catch (error) {
       logger.error('Xx module initialization failed', { error })
-      return err({
-        code: XxErrorCode.CONFIG_ERROR,
-        message: xxM('xx_initFailed', {
-          params: { error: error instanceof Error ? error.message : String(error) },
-        }),
-        cause: error,
-      })
+      return err(HaiXxError.CONFIG_ERROR, xxM('xx_initFailed', {
+        params: { error: error instanceof Error ? error.message : String(error) },
+      }), error)
     }
     finally {
       initInProgress = false
@@ -542,13 +523,14 @@ export const xx: XxFunctions = {
 ```ts
 // ⚠️ 示例 — Provider 在模块级管理，按 config.type 选择后端实现
 
-import type { Result } from '@h-ai/core'
+import type { HaiResult } from '@h-ai/core'
 import type { XxConfig, XxConfigInput } from './xx-config.js'
-import type { XxError, XxFunctions, XxProvider, ZzOperations } from './xx-types.js'
+import type { XxFunctions, XxProvider, ZzOperations } from './xx-types.js'
 import { core, err, ok } from '@h-ai/core'
 import { createTypeAProvider } from './providers/xx-provider-typeA.js'
 import { createTypeBProvider } from './providers/xx-provider-typeB.js'
-import { XxConfigSchema, XxErrorCode } from './xx-config.js'
+import { XxConfigSchema } from './xx-config.js'
+import { HaiXxError } from './xx-types.js'
 import { xxM } from './xx-i18n.js'
 
 const logger = core.logger.child({ module: 'xx', scope: 'main' })
@@ -566,17 +548,17 @@ function createProvider(config: XxConfig): XxProvider {
   }
 }
 
-const notInitialized = core.module.createNotInitializedKit<XxError>(
-  XxErrorCode.NOT_INITIALIZED,
+const notInitialized = core.module.createNotInitializedKit(
+  HaiXxError.NOT_INITIALIZED,
   () => xxM('xx_notInitialized'),
 )
 const notInitializedZz = notInitialized.proxy<ZzOperations>()
 
 export const xx: XxFunctions = {
-  async init(config: XxConfigInput): Promise<Result<void, XxError>> {
+  async init(config: XxConfigInput): Promise<HaiResult<void>> {
     if (initInProgress) {
       logger.warn('Xx init already in progress, skipping concurrent call')
-      return err({ code: XxErrorCode.OPERATION_FAILED, message: xxM('xx_operationFailed', { params: { error: 'Concurrent initialization detected' } }) })
+      return err(HaiXxError.OPERATION_FAILED, xxM('xx_operationFailed', { params: { error: 'Concurrent initialization detected' } }))
     }
     initInProgress = true
     try {
@@ -599,13 +581,9 @@ export const xx: XxFunctions = {
     }
     catch (error) {
       logger.error('Xx module initialization failed', { error })
-      return err({
-        code: XxErrorCode.CONNECTION_FAILED,
-        message: xxM('xx_initFailed', {
-          params: { error: error instanceof Error ? error.message : String(error) },
-        }),
-        cause: error,
-      })
+      return err(HaiXxError.CONNECTION_FAILED, xxM('xx_initFailed', {
+        params: { error: error instanceof Error ? error.message : String(error) },
+      }), error)
     }
     finally {
       initInProgress = false
@@ -639,13 +617,14 @@ export const xx: XxFunctions = {
 ```ts
 // ⚠️ 示例 — main.ts 只创建和组装子功能，不关心子功能是否内部使用 Provider
 
-import type { Result } from '@h-ai/core'
+import type { HaiResult } from '@h-ai/core'
 import type { XxConfig, XxConfigInput } from './xx-config.js'
-import type { XxError, XxFunctions } from './xx-types.js'
+import type { XxFunctions } from './xx-types.js'
 import type { XxYyFunctions } from './yy/xx-yy-types.js'
 import type { XxZzFunctions } from './zz/xx-zz-types.js'
 import { core, err, ok } from '@h-ai/core'
-import { XxConfigSchema, XxErrorCode } from './xx-config.js'
+import { XxConfigSchema } from './xx-config.js'
+import { HaiXxError } from './xx-types.js'
 import { xxM } from './xx-i18n.js'
 import { createXxYyFunctions } from './yy/xx-yy-functions.js'
 import { createXxZzFunctions } from './zz/xx-zz-functions.js'
@@ -657,18 +636,18 @@ let currentYy: XxYyFunctions | null = null
 let currentZz: XxZzFunctions | null = null
 let initInProgress = false
 
-const notInitialized = core.module.createNotInitializedKit<XxError>(
-  XxErrorCode.NOT_INITIALIZED,
+const notInitialized = core.module.createNotInitializedKit(
+  HaiXxError.NOT_INITIALIZED,
   () => xxM('xx_notInitialized'),
 )
 const notInitializedYy = notInitialized.proxy<XxYyFunctions>()
 const notInitializedZz = notInitialized.proxy<XxZzFunctions>()
 
 export const xx: XxFunctions = {
-  async init(config: XxConfigInput): Promise<Result<void, XxError>> {
+  async init(config: XxConfigInput): Promise<HaiResult<void>> {
     if (initInProgress) {
       logger.warn('Xx init already in progress, skipping concurrent call')
-      return err({ code: XxErrorCode.OPERATION_FAILED, message: xxM('xx_operationFailed', { params: { error: 'Concurrent initialization detected' } }) })
+      return err(HaiXxError.OPERATION_FAILED, xxM('xx_operationFailed', { params: { error: 'Concurrent initialization detected' } }))
     }
     initInProgress = true
     try {
@@ -691,13 +670,9 @@ export const xx: XxFunctions = {
     }
     catch (error) {
       logger.error('Xx module initialization failed', { error })
-      return err({
-        code: XxErrorCode.CONFIG_ERROR,
-        message: xxM('xx_initFailed', {
-          params: { error: error instanceof Error ? error.message : String(error) },
-        }),
-        cause: error,
-      })
+      return err(HaiXxError.CONFIG_ERROR, xxM('xx_initFailed', {
+        params: { error: error instanceof Error ? error.message : String(error) },
+      }), error)
     }
     finally {
       initInProgress = false
@@ -741,10 +716,9 @@ export * from './xx-types.js'
 ```ts
 // ⚠️ 示例 — 无 Provider 的工厂函数
 
-import type { XxError } from '../xx-types.js'
 import type { CreateYyInput, XxYyFunctions, XxYyFunctionsDeps } from './xx-yy-types.js'
 import { core, err, ok } from '@h-ai/core'
-import { XxErrorCode } from '../xx-config.js'
+import { HaiXxError } from '../xx-types.js'
 import { xxM } from '../xx-i18n.js'
 
 const logger = core.logger.child({ module: 'xx', scope: 'yy' })
@@ -755,14 +729,14 @@ export function createXxYyFunctions(deps: XxYyFunctionsDeps): XxYyFunctions {
     async create(input: CreateYyInput) {
       logger.debug('Creating yy item', { name: input.name })
       if (!input.name) {
-        return err({ code: XxErrorCode.VALIDATION_ERROR, message: xxM('xx_yy_nameRequired') })
+        return err(HaiXxError.VALIDATION_ERROR, xxM('xx_yy_nameRequired'))
       }
       try {
         const item = await doCreate(input)
         return ok(item)
       }
       catch (error) {
-        return err({ code: XxErrorCode.OPERATION_FAILED, message: xxM('xx_yy_createFailed'), cause: error })
+        return err(HaiXxError.OPERATION_FAILED, xxM('xx_yy_createFailed'), error)
       }
     },
     // ...
@@ -776,7 +750,7 @@ Provider 用**工厂 + 闭包**实现，不用 class。
 
 - 模块级 Provider：`src/providers/xx-provider-aaa.ts`，实现 `XxProvider`
 - 子功能级 Provider：`src/yy/providers/xx-yy-provider-aaa.ts`，实现 `XxYyProvider`
-- 统一的 `toXxError()` 辅助函数包装异常
+- 异常统一通过 `err(HaiXxError.XXX, message, cause)` 包装为错误结果
 - 外部依赖通过 `createRequire` 动态加载
 
 ### 7.3 子功能类型 `xx-yy-types.ts`
@@ -901,7 +875,7 @@ logger.info('Redis connected', { address: sanitizeRedisUrl(config.url) })
  * 根据配置初始化对应后端（S3/OSS/本地），建立连接并验证凭据。
  *
  * @param config - 存储配置（包含 type、bucket、credentials 等）
- * @returns 成功返回 StorageClient 实例；失败返回含错误码的 Result
+ * @returns 成功返回 StorageClient 实例；失败返回含错误码的 HaiResult
  *
  * @example
  * ```ts
@@ -917,7 +891,7 @@ logger.info('Redis connected', { address: sanitizeRedisUrl(config.url) })
 
 - 公共 API JSDoc **必须**包含 `@example`，因为它是使用方最直观的上手资料
 - 示例代码使用 ` ```ts ` 围栏，内容必须是可执行的代码片段（非伪代码）
-- 示例应展示最常见的调用方式，包含必要的错误处理（Result 判断）
+- 示例应展示最常见的调用方式，包含必要的错误处理（HaiResult 判断）
 - 若 API 有多种典型用法，可用多个 `@example` 或在一个示例中展示
 - 内部函数的 `@example` 为可选，但复杂逻辑（序列化、状态机、多步骟操作）建议补充
 
@@ -965,9 +939,9 @@ logger.info('Redis connected', { address: sanitizeRedisUrl(config.url) })
 
 ### 10.4 断言风格
 
-- 始终校验 `Result.success`
+- 始终校验 `result.success`
 - 成功时检查返回数据，失败时校验 `error.code`
-- 不使用 `try/catch` 来断言 Result 型 API
+- 不使用 `try/catch` 来断言 HaiResult 型 API
 
 ### 10.5 从实际场景出发
 
@@ -1113,16 +1087,16 @@ return 只返回已计算的值。禁止内嵌条件判断、循环、多级调�
 
 ### 13.2 错误处理
 
-公共 API 不 throw，返回 `Result<T, XxError>`。允许 throw 的合规场景：
+公共 API 不 throw，返回 `HaiResult<T>`。允许 throw 的合规场景：
 
 | 场景                                 | 说明                                  |
 | ------------------------------------ | ------------------------------------- |
-| 内部 throw + 外层 try-catch → Result | 标准 catch-and-wrap 模式              |
+| 内部 throw + 外层 try-catch → HaiResult | 标准 catch-and-wrap 模式              |
 | SvelteKit 控制流                     | `throw redirect()`、`throw error()`   |
 | 浏览器端 Client 代码                 | `client/xx-client.ts`，非模块公共 API |
 | CLI 命令                             | `packages/cli/`，非模块 API           |
 | `getOrThrow()` 等显式命名            | 函数名已表达 throw 语义               |
-| async generator（如 `chatStream()`） | 无法返回 Result，需在 JSDoc 中注明    |
+| async generator（如 `chatStream()`） | 无法返回 HaiResult，需在 JSDoc 中注明    |
 
 ### 13.3 提前返回
 
@@ -1175,7 +1149,7 @@ return 只返回已计算的值。禁止内嵌条件判断、循环、多级调�
 - ❌ class 实现 Provider — 工厂 + 闭包
 - ❌ return 嵌套复杂逻辑
 - ❌ 超过 2 层 if 嵌套
-- ❌ 重新包装上游 Result 错误
+- ❌ 重新包装上游 HaiResult 错误
 - ❌ 公共 API 中 `throw`（合规场景除外）
 - ❌ 错误码段位冲突
 - ❌ 同一模块混用两种 API 风格

@@ -13,7 +13,7 @@ import { createAliyunSmsProvider } from '../src/providers/reach-provider-aliyun-
 import { createApiProvider } from '../src/providers/reach-provider-api.js'
 import { createConsoleProvider } from '../src/providers/reach-provider-console.js'
 import { createSmtpProvider } from '../src/providers/reach-provider-smtp.js'
-import { ReachErrorCode } from '../src/reach-config.js'
+import { HaiReachError } from '../src/reach-types.js'
 
 // =============================================================================
 // Console Provider
@@ -103,7 +103,7 @@ describe('smtp provider', () => {
     const result = await provider.connect({ name: 'wrong', type: 'console' })
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(ReachErrorCode.CONFIG_ERROR)
+      expect(result.error.code).toBe(HaiReachError.CONFIG_ERROR.code)
     }
   })
 
@@ -121,7 +121,7 @@ describe('smtp provider', () => {
 
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(ReachErrorCode.NOT_INITIALIZED)
+      expect(result.error.code).toBe(HaiReachError.NOT_INITIALIZED.code)
     }
   })
 
@@ -149,7 +149,7 @@ describe('aliyun-sms provider', () => {
     const result = await provider.connect({ name: 'wrong', type: 'console' })
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(ReachErrorCode.CONFIG_ERROR)
+      expect(result.error.code).toBe(HaiReachError.CONFIG_ERROR.code)
     }
   })
 
@@ -192,7 +192,7 @@ describe('aliyun-sms provider', () => {
 
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(ReachErrorCode.NOT_INITIALIZED)
+      expect(result.error.code).toBe(HaiReachError.NOT_INITIALIZED.code)
     }
   })
 
@@ -218,7 +218,7 @@ describe('aliyun-sms provider', () => {
 
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(ReachErrorCode.SEND_FAILED)
+      expect(result.error.code).toBe(HaiReachError.SEND_FAILED.code)
     }
 
     vi.restoreAllMocks()
@@ -246,7 +246,7 @@ describe('aliyun-sms provider', () => {
 
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(ReachErrorCode.SEND_FAILED)
+      expect(result.error.code).toBe(HaiReachError.SEND_FAILED.code)
     }
 
     vi.restoreAllMocks()
@@ -307,7 +307,7 @@ describe('api provider', () => {
     const result = await provider.connect({ name: 'wrong', type: 'console' })
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(ReachErrorCode.CONFIG_ERROR)
+      expect(result.error.code).toBe(HaiReachError.CONFIG_ERROR.code)
     }
   })
 
@@ -348,7 +348,7 @@ describe('api provider', () => {
 
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(ReachErrorCode.NOT_INITIALIZED)
+      expect(result.error.code).toBe(HaiReachError.NOT_INITIALIZED.code)
     }
   })
 
@@ -448,7 +448,7 @@ describe('api provider', () => {
 
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(ReachErrorCode.SEND_FAILED)
+      expect(result.error.code).toBe(HaiReachError.SEND_FAILED.code)
     }
   })
 
@@ -471,7 +471,7 @@ describe('api provider', () => {
 
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(ReachErrorCode.SEND_FAILED)
+      expect(result.error.code).toBe(HaiReachError.SEND_FAILED.code)
     }
   })
 

@@ -21,10 +21,7 @@ import { clearHooks, getHooks, getTask, getTaskRegistry, loadConfigTasks, loadPe
 import { schedulerM } from './scheduler-i18n.js'
 import { clearJsTaskHandlerCache } from './scheduler-js-compiler.js'
 import { configureLock, isTaskRunning, isTimerRunning, resetRunner, runTask, setTaskRepository, startTimer, stopTimer } from './scheduler-runner.js'
-import {
-  HaiSchedulerError,
-
-} from './scheduler-types.js'
+import { HaiSchedulerError } from './scheduler-types.js'
 
 const logger = core.logger.child({ module: 'scheduler', scope: 'main' })
 
@@ -43,8 +40,8 @@ async function initDatabase(parsed: SchedulerConfig): Promise<SchedulerConfig> {
     return parsed
 
   if (!reldb.isInitialized) {
-    logger.warn('DB not initialized, disabling DB logging')
-    return { ...parsed, enableDb: false }
+    logger.error('enableDb is true but @h-ai/reldb is not initialized')
+    throw new Error(schedulerM('scheduler_reldbNotInitialized'))
   }
 
   taskRepo = new SchedulerTaskRepository(reldb)

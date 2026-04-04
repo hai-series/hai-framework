@@ -1,6 +1,6 @@
 ---
 name: hai-reldb
-description: 使用 @h-ai/reldb 进行 SQLite/PostgreSQL/MySQL 的初始化、SQL/DDL/CRUD/事务与分页操作；当需求涉及数据库访问、CRUD 仓库、事务处理、分页查询或 ReldbErrorCode 分支处理时使用。
+description: 使用 @h-ai/reldb 进行 SQLite/PostgreSQL/MySQL 的初始化、SQL/DDL/CRUD/事务与分页操作；当需求涉及数据库访问、CRUD 仓库、事务处理、分页查询或 HaiReldbError 分支处理时使用。
 ---
 
 # hai-reldb
@@ -14,7 +14,7 @@ description: 使用 @h-ai/reldb 进行 SQLite/PostgreSQL/MySQL 的初始化、SQ
 - 新增或修改数据库访问逻辑（SQL/DDL/CRUD/事务）
 - 使用 `reldb.crud.table` 或 `BaseReldbCrudRepository` 构建数据仓库
 - 处理分页查询与分页结果规范化
-- 基于 `ReldbErrorCode` 做错误分支处理
+- 基于 `HaiReldbError` 做错误分支处理
 - JSON 列的路径提取、设置、插入、删除、合并操作（跨数据库统一语法）
 
 ---
@@ -65,16 +65,16 @@ await reldb.close()
 
 | 方法          | 签名                                                                    | 说明                       |
 | ------------- | ----------------------------------------------------------------------- | -------------------------- |
-| `createTable` | `(tableName, columns: TableDef, ifNotExists?: boolean) => Result<void>` | 建表（默认 IF NOT EXISTS） |
-| `dropTable`   | `(tableName, ifExists?: boolean) => Result<void>`                       | 删除表（默认 IF EXISTS）   |
-| `addColumn`   | `(tableName, columnName, columnDef: ColumnDef) => Result<void>`         | 添加列                     |
-| `dropColumn`  | `(tableName, columnName) => Result<void>`                               | 删除列                     |
-| `renameTable` | `(oldName, newName) => Result<void>`                                    | 重命名表                   |
-| `createIndex` | `(tableName, indexName, indexDef: IndexDef) => Result<void>`            | 创建索引                   |
-| `dropIndex`   | `(indexName, ifExists?: boolean) => Result<void>`                       | 删除索引                   |
-| `raw`         | `(sql: string) => Result<void>`                                         | 执行原始 DDL               |
+| `createTable` | `(tableName, columns: TableDef, ifNotExists?: boolean) => HaiResult<void>` | 建表（默认 IF NOT EXISTS） |
+| `dropTable`   | `(tableName, ifExists?: boolean) => HaiResult<void>`                       | 删除表（默认 IF EXISTS）   |
+| `addColumn`   | `(tableName, columnName, columnDef: ColumnDef) => HaiResult<void>`         | 添加列                     |
+| `dropColumn`  | `(tableName, columnName) => HaiResult<void>`                               | 删除列                     |
+| `renameTable` | `(oldName, newName) => HaiResult<void>`                                    | 重命名表                   |
+| `createIndex` | `(tableName, indexName, indexDef: IndexDef) => HaiResult<void>`            | 创建索引                   |
+| `dropIndex`   | `(indexName, ifExists?: boolean) => HaiResult<void>`                       | 删除索引                   |
+| `raw`         | `(sql: string) => HaiResult<void>`                                         | 执行原始 DDL               |
 
-> 所有方法均返回 `Promise<Result<void, ReldbError>>`，上表省略异步与错误类型。
+> 所有方法均返回 `Promise<HaiResult<void>>`，上表省略异步与错误类型。
 
 **TableDef**（列名到列定义的映射）：
 
@@ -122,13 +122,13 @@ interface ColumnDef {
 
 | 方法        | 签名                                                              | 说明         |
 | ----------- | ----------------------------------------------------------------- | ------------ |
-| `query`     | `<T>(sql, params?) => Result<T[]>`                                | 查询返回多行 |
-| `get`       | `<T>(sql, params?) => Result<T \| null>`                          | 查询返回单行 |
-| `execute`   | `(sql, params?) => Result<ExecuteResult>`                         | 执行写操作   |
-| `batch`     | `(statements: Array<{ sql, params? }>) => Result<void>`           | 批量执行     |
-| `queryPage` | `<T>(options: PaginationQueryOptions) => Result<PaginatedResult>` | 分页查询     |
+| `query`     | `<T>(sql, params?) => HaiResult<T[]>`                                | 查询返回多行 |
+| `get`       | `<T>(sql, params?) => HaiResult<T \| null>`                          | 查询返回单行 |
+| `execute`   | `(sql, params?) => HaiResult<ExecuteResult>`                         | 执行写操作   |
+| `batch`     | `(statements: Array<{ sql, params? }>) => HaiResult<void>`           | 批量执行     |
+| `queryPage` | `<T>(options: PaginationQueryOptions) => HaiResult<PaginatedResult>` | 分页查询     |
 
-> 所有方法均返回 `Promise<Result<T, ReldbError>>`，上表省略异步与错误类型。
+> 所有方法均返回 `Promise<HaiResult<T>>`，上表省略异步与错误类型。
 
 **参数占位符统一使用 `?`**（PostgreSQL 的 `$n` 由 Provider 自动转换）：
 
@@ -178,16 +178,16 @@ const userCrud = reldb.crud.table<{ id: number, name: string, email: string }>({
 
 | 方法         | 签名                                           | 说明         |
 | ------------ | ---------------------------------------------- | ------------ |
-| `create`     | `(data, tx?) => Result<ExecuteResult>`         | 创建单条     |
-| `createMany` | `(items, tx?) => Result<void>`                 | 批量创建     |
-| `findById`   | `(id, tx?) => Result<T \| null>`               | 按 ID 查询   |
-| `findAll`    | `(options?, tx?) => Result<T[]>`               | 条件查询     |
-| `findPage`   | `(options, tx?) => Result<PaginatedResult<T>>` | 分页查询     |
-| `updateById` | `(id, data, tx?) => Result<ExecuteResult>`     | 按 ID 更新   |
-| `deleteById` | `(id, tx?) => Result<ExecuteResult>`           | 按 ID 删除   |
-| `count`      | `(options?, tx?) => Result<number>`            | 计数         |
-| `exists`     | `(options?, tx?) => Result<boolean>`           | 条件是否存在 |
-| `existsById` | `(id, tx?) => Result<boolean>`                 | ID 是否存在  |
+| `create`     | `(data, tx?) => HaiResult<ExecuteResult>`         | 创建单条     |
+| `createMany` | `(items, tx?) => HaiResult<void>`                 | 批量创建     |
+| `findById`   | `(id, tx?) => HaiResult<T \| null>`               | 按 ID 查询   |
+| `findAll`    | `(options?, tx?) => HaiResult<T[]>`               | 条件查询     |
+| `findPage`   | `(options, tx?) => HaiResult<PaginatedResult<T>>` | 分页查询     |
+| `updateById` | `(id, data, tx?) => HaiResult<ExecuteResult>`     | 按 ID 更新   |
+| `deleteById` | `(id, tx?) => HaiResult<ExecuteResult>`           | 按 ID 删除   |
+| `count`      | `(options?, tx?) => HaiResult<number>`            | 计数         |
+| `exists`     | `(options?, tx?) => HaiResult<boolean>`           | 条件是否存在 |
+| `existsById` | `(id, tx?) => HaiResult<boolean>`                 | ID 是否存在  |
 
 > 所有方法均支持可选 `tx` 事务参数。`create`/`updateById` 中的 `data` 会根据 `createColumns`/`updateColumns` 白名单过滤列。
 
@@ -379,24 +379,24 @@ await reldb.sql.execute(`UPDATE users SET profile = ${sql} WHERE id = ?`, [...pa
 
 ---
 
-## 错误码 — `ReldbErrorCode`
+## 错误码 — `HaiReldbError`
 
-| 错误码                 | 值   | 说明               |
-| ---------------------- | ---- | ------------------ |
-| `CONNECTION_FAILED`    | 3000 | 数据库连接失败     |
-| `QUERY_FAILED`         | 3001 | 查询或执行失败     |
-| `CONSTRAINT_VIOLATION` | 3002 | 约束违反           |
-| `TRANSACTION_FAILED`   | 3003 | 事务失败           |
-| `MIGRATION_FAILED`     | 3004 | 迁移失败           |
-| `RECORD_NOT_FOUND`     | 3005 | 记录不存在         |
-| `DUPLICATE_ENTRY`      | 3006 | 重复条目           |
-| `DEADLOCK`             | 3007 | 死锁               |
-| `TIMEOUT`              | 3008 | 超时               |
-| `POOL_EXHAUSTED`       | 3009 | 连接池耗尽         |
-| `NOT_INITIALIZED`      | 3010 | 数据库未初始化     |
-| `DDL_FAILED`           | 3011 | DDL 操作失败       |
-| `UNSUPPORTED_TYPE`     | 3012 | 不支持的数据库类型 |
-| `CONFIG_ERROR`         | 3013 | 配置错误           |
+| 错误码 | code | 说明 |
+|--------|------|------|
+| `HaiReldbError.CONNECTION_FAILED`    | `hai:reldb:001`  | 数据库连接失败     |
+| `HaiReldbError.QUERY_FAILED`         | `hai:reldb:002`  | 查询或执行失败     |
+| `HaiReldbError.CONSTRAINT_VIOLATION` | `hai:reldb:003`  | 约束违反           |
+| `HaiReldbError.TRANSACTION_FAILED`   | `hai:reldb:004`  | 事务失败           |
+| `HaiReldbError.MIGRATION_FAILED`     | `hai:reldb:005`  | 迁移失败           |
+| `HaiReldbError.RECORD_NOT_FOUND`     | `hai:reldb:006`  | 记录不存在         |
+| `HaiReldbError.DUPLICATE_ENTRY`      | `hai:reldb:007`  | 重复条目           |
+| `HaiReldbError.DEADLOCK`             | `hai:reldb:008`  | 死锁               |
+| `HaiReldbError.TIMEOUT`              | `hai:reldb:009`  | 超时               |
+| `HaiReldbError.POOL_EXHAUSTED`       | `hai:reldb:010`  | 连接池耗尽         |
+| `HaiReldbError.NOT_INITIALIZED`      | `hai:reldb:011`  | 数据库未初始化     |
+| `HaiReldbError.DDL_FAILED`           | `hai:reldb:012`  | DDL 操作失败       |
+| `HaiReldbError.UNSUPPORTED_TYPE`     | `hai:reldb:013`  | 不支持的数据库类型 |
+| `HaiReldbError.CONFIG_ERROR`         | `hai:reldb:014`  | 配置错误           |
 
 ---
 
@@ -405,7 +405,7 @@ await reldb.sql.execute(`UPDATE users SET profile = ${sql} WHERE id = ?`, [...pa
 ### API 端点中使用
 
 ```typescript
-import { reldb, ReldbErrorCode } from '@h-ai/reldb'
+import { reldb, HaiReldbError } from '@h-ai/reldb'
 import { kit } from '@h-ai/kit'
 
 export async function GET(event) {
@@ -454,6 +454,6 @@ if (txResult.success) {
 ## 相关 Skills
 
 - `hai-build`：模块初始化顺序
-- `hai-core`：配置管理、Result 模型
+- `hai-core`：配置管理、HaiResult 模型
 - `hai-iam`：IAM 模块内部使用 reldb 进行用户/角色/权限存储
 - `hai-cache`：缓存穿透保护中配合 reldb 使用

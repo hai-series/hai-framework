@@ -3,11 +3,11 @@
   @h-ai/ui - ToggleInput 组件
   =============================================================================
   仅渲染原生 checkbox/radio input，用于需要 input 作为直接子元素的场景
-  
+
   使用 Svelte 5 Runes ($props, $bindable)
   =============================================================================
 -->
-<script lang="ts">
+<script lang='ts'>
   import type { ToggleCheckboxProps } from '../../types.js'
 
   let {
@@ -28,7 +28,7 @@
 <input
   {id}
   {name}
-  type="checkbox"
+  type='checkbox'
   class={className}
   {disabled}
   checked={checked}

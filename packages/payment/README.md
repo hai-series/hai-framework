@@ -118,13 +118,13 @@ if (!result.success) {
 
 常用错误码：
 
-| 错误码 | 说明            |
-| ------ | --------------- |
-| 7000   | 创建订单失败    |
-| 7010   | 模块未初始化    |
-| 7030   | Provider 未注册 |
-| 7050   | 回调验签失败    |
-| 7070   | 配置无效        |
+| 错误码                                 | code              | 说明            |
+| -------------------------------------- | ----------------- | --------------- |
+| `HaiPaymentError.CREATE_ORDER_FAILED`  | `hai:payment:001` | 创建订单失败    |
+| `HaiPaymentError.NOT_INITIALIZED`      | `hai:payment:010` | 模块未初始化    |
+| `HaiPaymentError.PROVIDER_NOT_FOUND`   | `hai:payment:030` | Provider 未注册 |
+| `HaiPaymentError.NOTIFY_VERIFY_FAILED` | `hai:payment:050` | 回调验签失败    |
+| `HaiPaymentError.CONFIG_ERROR`         | `hai:payment:070` | 配置无效        |
 
 ## 测试
 

@@ -26,7 +26,7 @@
     class?: string
   }
 
-  let { title, description, actions, class: className = '' }: Props = $props()
+  const { title, description, actions, class: className = '' }: Props = $props()
 </script>
 
 <div class='flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5 {className}'>

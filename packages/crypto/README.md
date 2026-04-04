@@ -142,7 +142,7 @@ await crypto.close()
 
 ## 错误处理
 
-所有操作返回 `Result<T, CryptoError>`：
+所有操作返回 `HaiResult<T>`：
 
 ```ts
 const result = crypto.asymmetric.encrypt('data', publicKey)

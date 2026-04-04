@@ -4,7 +4,7 @@
  * Provider 共享基础层：Context + wrapOp → Factory 模式。
  *
  * 各 Provider 只需提供 raw DdlOperations / DmlOperations / beginTx，
- * base 层统一处理连接守卫、运行时异常捕获与 Result 包装。
+ * base 层统一处理连接守卫、运行时异常捕获与 HaiResult 包装。
  * @module reldb-provider-base
  */
 
@@ -49,7 +49,7 @@ export interface ReldbOpsContext {
  *
  * 对标 vecdb wrapOp：
  * 1. 连接守卫：未初始化时直接返回 NOT_INITIALIZED
- * 2. 委托给 raw ops 执行（raw ops 内部用 Result 表达业务错误）
+ * 2. 委托给 raw ops 执行（raw ops 内部用 HaiResult 表达业务错误）
  * 3. catch-all 安全网：捕获 raw ops 未预期的运行时异常
  */
 async function wrapOp<T>(

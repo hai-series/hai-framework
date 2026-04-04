@@ -104,16 +104,16 @@ export const ChunkOptionsSchema = z.object({
   /** 分块模式 */
   mode: ChunkModeSchema,
   /** 每个分块的最大大小（字符数 / 字数，取决于 mode，默认 1000） */
-  maxSize: z.number().int().positive().default(1000),
-  /** 重叠大小（字符数 / 字数，用于上下文衔接，默认 0） */
-  overlap: z.number().int().min(0).default(0),
+  maxSize: z.number().int().positive().default(1500),
+  /** 重叠大小（字符数 / 字数，用于上下文衔接，默认 200） */
+  overlap: z.number().int().min(0).default(200),
   /**
    * 自定义分隔符正则（仅 mode='custom' 时使用）
    *
    * ❗ 安全提示：separator 会通过 `new RegExp()` 构造，如果其值来源于用户输入，请在调用方先行校验以防止 ReDoS 攻击。
    */
   separator: z.string().optional(),
-  /** Markdown 最低标题级别（1-6，默认 2，即 ## 及以下都作为分块边界） */
+  /** Markdown 标题分割深度（1-6，默认 2，即 # 和 ## 作为分块边界；设为 3 则 ### 也作为分块边界） */
   markdownMinLevel: z.number().int().min(1).max(6).default(2),
   /** 是否保留 Markdown 标题在分块内容中（默认 true） */
   markdownKeepTitle: z.boolean().default(true),

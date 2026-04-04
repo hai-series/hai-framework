@@ -97,7 +97,7 @@ function createFailingCryptoService(): TransportCryptoServiceLike {
 }
 
 /**
- * 辅助函数：解包 createTransportEncryption 的 Result，失败时抛出异常
+ * 辅助函数：解包 createTransportEncryption 的 HaiResult，失败时抛出异常
  */
 function createManager(cryptoService: TransportCryptoServiceLike) {
   const result = createTransportEncryption(cryptoService)
@@ -125,7 +125,7 @@ describe('createTransportEncryption', () => {
     expect(pubKey).toContain('mock_pub_key')
   })
 
-  it('密钥对生成失败时返回错误 Result', () => {
+  it('密钥对生成失败时返回错误 HaiResult', () => {
     const failing = createFailingCryptoService()
     const result = createTransportEncryption(failing)
     expect(result.success).toBe(false)

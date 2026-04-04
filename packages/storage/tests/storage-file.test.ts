@@ -10,7 +10,7 @@ import * as os from 'node:os'
 import * as path from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { storage } from '../src/index.js'
-import { StorageErrorCode } from '../src/storage-config.js'
+import { HaiStorageError } from '../src/storage-types.js'
 import { defineStorageSuite, localStorageEnv, s3Env } from './helpers/storage-test-suite.js'
 
 describe('storage.file', () => {
@@ -113,7 +113,7 @@ describe('storage.file', () => {
       const result = await storage.file.get('nonexistent.txt')
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.code).toBe(6002)
+        expect(result.error.code).toBe(HaiStorageError.NOT_FOUND.code)
       }
     })
 
@@ -152,7 +152,7 @@ describe('storage.file', () => {
       const result = await storage.file.head('nope.txt')
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.code).toBe(6002)
+        expect(result.error.code).toBe(HaiStorageError.NOT_FOUND.code)
       }
     })
 
@@ -375,21 +375,16 @@ describe('storage.file', () => {
   // ===========================================================================
 
   describe('storage.file (local 边界)', () => {
-    it('local: 路径穿越的 key 应被安全规范化到 root 内', async () => {
+    it('local: 路径穿越的 key 应返回 INVALID_PATH', async () => {
       const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'hai-storage-file-local-'))
       await storage.close()
       const initResult = await storage.init({ type: 'local', root: tempRoot })
       expect(initResult.success).toBe(true)
 
-      // safePath 会将 ../../etc/evil.txt 规范化为 etc/evil.txt（剥离前导 ../ ）
       const result = await storage.file.put('../../etc/evil.txt', 'sanitized')
-      expect(result.success).toBe(true)
-
-      // 验证文件实际写入到 root 下的 etc/evil.txt
-      const getResult = await storage.file.get('etc/evil.txt')
-      expect(getResult.success).toBe(true)
-      if (getResult.success) {
-        expect(getResult.data.toString()).toBe('sanitized')
+      expect(result.success).toBe(false)
+      if (!result.success) {
+        expect(result.error.code).toBe(HaiStorageError.INVALID_PATH.code)
       }
 
       await storage.close()
@@ -408,7 +403,7 @@ describe('storage.file', () => {
       const result = await storage.file.head('subdir')
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.code).toBe(StorageErrorCode.INVALID_PATH)
+        expect(result.error.code).toBe(HaiStorageError.INVALID_PATH.code)
       }
 
       await storage.close()

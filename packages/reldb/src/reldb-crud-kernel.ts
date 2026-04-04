@@ -64,7 +64,7 @@ function pickColumns(
 /**
  * 创建一个所有方法均返回同一错误的 ReldbCrudRepository，用于配置校验失败时短路返回
  *
- * @param configError - 校验失败产生的
+ * @param failedResult - 校验失败产生的
  * @returns 所有操作均返回 configError 的 ReldbCrudRepository
  */
 function createFailReldbCrudRepository<TItem>(failedResult: HaiResult<never>): ReldbCrudRepository<TItem> {

@@ -21,7 +21,7 @@
 | 痛点                         | hai 的解法                                                                  |
 | ---------------------------- | --------------------------------------------------------------------------- |
 | AI 生成的代码风格不一致      | 统一 `init → use → close` 生命周期 + 可执行编码规范（copilot-instructions） |
-| AI 不知道怎么处理错误        | 所有 API 返回 `Result<T, E>`，永远不会遗漏错误处理                          |
+| AI 不知道怎么处理错误        | 所有 API 返回 `HaiResult<T>`，永远不会遗漏错误处理                          |
 | 功能模块各自为政，集成成本高 | 19 个模块共享统一 API 模式、类型体系和 Provider 架构，开箱即用              |
 | 从 0 搭建项目要半天          | `hai create my-app` 一行命令创建完整项目（含 AI 上下文、配置、脚手架）      |
 | UI 组件不够用 / 不够现代     | 69+ Svelte 5 Runes 组件（原子 + 复合 + 业务场景），32+ 主题，内置 i18n      |
@@ -43,7 +43,7 @@ hai Framework 的目标是：**让 AI 理解规范，自动完成应用开发，
 具体而言：
 
 - **可预测的 API**：每个模块都是 `init() → use → close()`，AI 只需学一种模式就能操作所有模块
-- **不抛异常**：所有操作返回 `Result<T, E>` —— 成功是 `{ success: true, data }` ，失败是 `{ success: false, error }`。AI 不会遗漏错误处理，链路完全可控
+- **不抛异常**：所有操作返回 `HaiResult<T>` —— 成功是 `{ success: true, data }` ，失败是 `{ success: false, error }`。AI 不会遗漏错误处理，链路完全可控
 - **配置即校验**：Zod Schema 在 `init()` 时完成验证，配置错了立刻报错，不会在运行时炸
 - **Skill 文件教 AI 用法**：每个模块都有标准化的 Skill 文件（`.agents/skills/`），Codex / OpenCode / Copilot 等支持 skills 的助手可直接读取并正确使用 API
 - **编码规范可执行**：`.github/copilot-instructions.md` 定义了命名、分层、测试、文档的完整规范，AI 助手每次改动自动遵守
@@ -58,7 +58,7 @@ hai Framework 的目标是：**让 AI 理解规范，自动完成应用开发，
 | 设计决策                          | 给 AI 带来的好处     | 给人类带来的好处               |
 | --------------------------------- | -------------------- | ------------------------------ |
 | 统一生命周期 `init → use → close` | 只需学一种模式       | 模块行为可预期                 |
-| `Result<T, E>` 返回值             | 永远不会遗漏错误处理 | 不用 try-catch，链路清晰       |
+| `HaiResult<T>` 返回值             | 永远不会遗漏错误处理 | 不用 try-catch，链路清晰       |
 | Zod 配置校验                      | 配置写错立刻知道     | 启动即验证，运行时不炸         |
 | Provider 模式                     | 切换后端只需改配置   | 不同环境无缝切换               |
 | 严格 TypeScript                   | 类型推断引导正确使用 | 重构有保障                     |
@@ -116,10 +116,10 @@ Skill 模板统一管理在 `packages/cli/templates/skills/` 中，通过 `@h-ai
 
 ### 基础能力
 
-| 包名           | 职责                                                                                           | Provider 支持 |
-| -------------- | ---------------------------------------------------------------------------------------------- | :-----------: |
-| `@h-ai/core`   | 框架基石：`Result` 类型、日志（child 上下文）、配置加载、ID 生成、i18n、错误定义体系、工具函数 |       —       |
-| `@h-ai/crypto` | 国密算法：SM2 非对称加密/签名、SM3 哈希、SM4 对称加密、密码哈希                                |       —       |
+| 包名           | 职责                                                                                              | Provider 支持 |
+| -------------- | ------------------------------------------------------------------------------------------------- | :-----------: |
+| `@h-ai/core`   | 框架基石：`HaiResult` 类型、日志（child 上下文）、配置加载、ID 生成、i18n、错误定义体系、工具函数 |       —       |
+| `@h-ai/crypto` | 国密算法：SM2 非对称加密/签名、SM3 哈希、SM4 对称加密、密码哈希                                   |       —       |
 
 ### 数据层
 
@@ -222,7 +222,7 @@ SQLite│PG│MySQL Memory│Redis  LanceDB│pgvec│Qdrant  S3│Local
     │          │                      │       │          │
 ┌───▼──────────▼──────────────────────▼───────▼──────────▼──┐
 │                       @h-ai/core                           │
-│        Result · Logger · ID · Config · i18n · Utils        │
+│        HaiResult · Logger · ID · Config · i18n · Utils        │
 └───────────────────────────────────────────────────────────┘
      ┌───────────┐  ┌──────────────┐  ┌──────────────┐
      │ @h-ai/cli │  │ @h-ai/deploy │  │@h-ai/capacitor│
@@ -297,17 +297,17 @@ pnpm add @h-ai/deploy            # 自动化部署
 
 ## 使用示例
 
-### Result 错误处理
+### HaiResult 错误处理
 
-所有模块操作都返回 `Result` 类型，不抛异常：
+所有模块操作都返回 `HaiResult` 类型，不抛异常：
 
 ```typescript
-import type { Result } from '@h-ai/core'
-import { err, ok } from '@h-ai/core'
+import type { HaiResult } from '@h-ai/core'
+import { err, HaiCommonError, ok } from '@h-ai/core'
 
-function divide(a: number, b: number): Result<number, string> {
+function divide(a: number, b: number): HaiResult<number> {
   if (b === 0)
-    return err('Division by zero')
+    return err(HaiCommonError.VALIDATION_ERROR, 'Division by zero')
   return ok(a / b)
 }
 

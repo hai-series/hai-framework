@@ -5,7 +5,7 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { reldb, ReldbErrorCode } from '../src/index.js'
+import { HaiReldbError, reldb } from '../src/index.js'
 import { defineDbSuite, mysqlDockerOpts, mysqlEnv, postgresDockerOpts, postgresEnv, sqliteMemoryEnv } from './helpers/reldb-test-suite.js'
 
 describe('reldb.init', () => {
@@ -26,7 +26,7 @@ describe('reldb.init', () => {
       const result = await reldb.sql.query('SELECT 1')
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.code).toBe(ReldbErrorCode.NOT_INITIALIZED)
+        expect(result.error.code).toBe(HaiReldbError.NOT_INITIALIZED.code)
       }
     })
 
@@ -45,7 +45,7 @@ describe('reldb.init', () => {
       const result = await reldb.init({ type: 'invalid_type' } as never)
       expect(result.success).toBe(false)
       if (!result.success) {
-        expect(result.error.code).toBe(ReldbErrorCode.CONFIG_ERROR)
+        expect(result.error.code).toBe(HaiReldbError.CONFIG_ERROR.code)
       }
     })
 

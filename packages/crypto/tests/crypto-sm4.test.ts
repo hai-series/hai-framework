@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest'
-import { crypto, CryptoErrorCode } from '../src/index.js'
+import { crypto, HaiCryptoError } from '../src/index.js'
 
 describe('crypto.symmetric', () => {
   beforeAll(async () => {
@@ -163,7 +163,7 @@ describe('crypto.symmetric', () => {
     if (result.success)
       return
 
-    expect(result.error.code).toBe(CryptoErrorCode.INVALID_IV)
+    expect(result.error.code).toBe(HaiCryptoError.INVALID_IV.code)
   })
 
   it('should return INVALID_IV when missing iv in cbc decrypt', () => {
@@ -173,7 +173,7 @@ describe('crypto.symmetric', () => {
     if (result.success)
       return
 
-    expect(result.error.code).toBe(CryptoErrorCode.INVALID_IV)
+    expect(result.error.code).toBe(HaiCryptoError.INVALID_IV.code)
   })
 
   it('should return INVALID_IV when iv format is invalid in cbc encrypt', () => {
@@ -183,7 +183,7 @@ describe('crypto.symmetric', () => {
     if (result.success)
       return
 
-    expect(result.error.code).toBe(CryptoErrorCode.INVALID_IV)
+    expect(result.error.code).toBe(HaiCryptoError.INVALID_IV.code)
   })
 
   // ─── 密钥派生 ───
@@ -219,7 +219,7 @@ describe('crypto.symmetric', () => {
     if (result.success)
       return
 
-    expect(result.error.code).toBe(CryptoErrorCode.INVALID_KEY)
+    expect(result.error.code).toBe(HaiCryptoError.INVALID_KEY.code)
   })
 
   it('should return INVALID_KEY for invalid key on decrypt', () => {
@@ -228,6 +228,6 @@ describe('crypto.symmetric', () => {
     if (result.success)
       return
 
-    expect(result.error.code).toBe(CryptoErrorCode.INVALID_KEY)
+    expect(result.error.code).toBe(HaiCryptoError.INVALID_KEY.code)
   })
 })

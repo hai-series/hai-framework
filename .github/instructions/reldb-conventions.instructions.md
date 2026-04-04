@@ -16,7 +16,7 @@ applyTo: "packages/reldb/**"
 
 ## 错误码段位
 
-3000-3499（ReldbErrorCode）
+reldb 模块（HaiReldbError）
 
 ## SQL 安全
 

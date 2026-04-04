@@ -65,10 +65,10 @@ services:
 const result = await deploy.deployApp('./apps/my-app')
 if (!result.success) {
   switch (result.error.code) {
-    case DeployErrorCode.PROVIDER_AUTH_FAILED:
+    case HaiDeployError.PROVIDER_AUTH_FAILED.code:
       // Vercel Token 无效
       break
-    case DeployErrorCode.BUILD_FAILED:
+    case HaiDeployError.BUILD_FAILED.code:
       // 构建失败
       break
   }
@@ -77,13 +77,13 @@ if (!result.success) {
 
 常用错误码：
 
-| 错误码 | 说明             |
-| ------ | ---------------- |
-| 9000   | 部署失败（通用） |
-| 9002   | 应用构建失败     |
-| 9005   | 认证失败         |
-| 9006   | 基础设施开通失败 |
-| 9010   | 模块未初始化     |
+| 错误码                            | code             | 说明         |
+| --------------------------------- | ---------------- | ------------ |
+| `HaiDeployError.DEPLOY_FAILED`    | `hai:deploy:001` | 部署失败     |
+| `HaiDeployError.BUILD_FAILED`     | `hai:deploy:002` | 构建失败     |
+| `HaiDeployError.AUTH_FAILED`      | `hai:deploy:005` | 认证失败     |
+| `HaiDeployError.PROVISION_FAILED` | `hai:deploy:006` | 资源开通失败 |
+| `HaiDeployError.NOT_INITIALIZED`  | `hai:deploy:010` | 未初始化     |
 
 ## 测试
 

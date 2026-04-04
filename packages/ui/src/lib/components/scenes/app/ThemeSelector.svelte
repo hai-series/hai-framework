@@ -8,7 +8,7 @@
   @prop {boolean} grouped - 是否按分组显示
 
   @example
-  <ThemeSelector 
+  <ThemeSelector
     currentTheme={$theme}
     onchange={(theme) => setTheme(theme)}
     showPreview
@@ -16,9 +16,10 @@
   />
 -->
 <script lang='ts'>
-  import { cn } from '../../../utils.js'
+  import type { ThemeInfo } from '../../../theme-config.js'
   import { uiM } from '../../../messages.js'
-  import { THEMES, THEME_GROUPS, type ThemeInfo } from '../../../theme-config.js'
+  import { THEME_GROUPS, THEMES } from '../../../theme-config.js'
+  import { cn } from '../../../utils.js'
   import BareButton from '../../primitives/BareButton.svelte'
 
   interface Props {
@@ -33,7 +34,7 @@
     class?: string
   }
 
-  let {
+  const {
     currentTheme = 'light',
     selectLabel,
     onchange,
@@ -49,7 +50,7 @@
   let containerRef = $state<HTMLDivElement | null>(null)
 
   const currentInfo = $derived(
-    THEMES.find(t => t.id === currentTheme) ?? THEMES[0]
+    THEMES.find(t => t.id === currentTheme) ?? THEMES[0],
   )
 
   function selectTheme(themeId: string) {
@@ -79,10 +80,10 @@
   })
 </script>
 
-<div bind:this={containerRef} class='dropdown dropdown-end {open ? "dropdown-open" : ""} {className}'>
+<div bind:this={containerRef} class='dropdown dropdown-end {open ? 'dropdown-open' : ''} {className}'>
   <BareButton
     type='button'
-    class='btn btn-ghost {compact ? "btn-sm btn-square" : "gap-2"}'
+    class='btn btn-ghost {compact ? 'btn-sm btn-square' : 'gap-2'}'
     onclick={() => (open = !open)}
     ariaLabel={displaySelectLabel}
   >
@@ -104,7 +105,7 @@
 
   {#if open}
     <!-- 主题列表 -->
-    <div class='dropdown-content bg-base-100 rounded-box shadow-xl border border-base-content/10 z-50 p-4 max-h-[80vh] overflow-y-auto {compact ? "w-56 right-0" : ""}'>
+    <div class='dropdown-content bg-base-100 rounded-box shadow-xl border border-base-content/10 z-50 p-4 max-h-[80vh] overflow-y-auto {compact ? 'w-56 right-0' : ''}'>
       {#if grouped}
         <!-- 分组显示 -->
         {#each THEME_GROUPS as group}
@@ -120,7 +121,7 @@
                     'flex items-center gap-2 px-3 py-1.5 rounded-lg text-left transition-colors w-28',
                     theme.id === currentTheme
                       ? 'bg-primary/10 text-primary ring-1 ring-primary/30'
-                      : 'hover:bg-base-200'
+                      : 'hover:bg-base-200',
                   )}
                   onclick={() => selectTheme(theme.id)}
                 >
@@ -152,7 +153,7 @@
                 'flex items-center gap-2 px-3 py-1.5 rounded-lg text-left transition-colors w-28',
                 theme.id === currentTheme
                   ? 'bg-primary/10 text-primary ring-1 ring-primary/30'
-                  : 'hover:bg-base-200'
+                  : 'hover:bg-base-200',
               )}
               onclick={() => selectTheme(theme.id)}
             >

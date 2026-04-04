@@ -337,8 +337,8 @@ core.time.endOfDay(date)
 ```typescript
 import { core } from '@h-ai/core'
 
-const notInitialized = core.module.createNotInitializedKit<DbError>(
-  DbErrorCode.NOT_INITIALIZED,
+const notInitialized = core.module.createNotInitializedKit(
+  HaiDbError.NOT_INITIALIZED,
   () => dbM('db_notInitialized'),
 )
 
@@ -350,7 +350,7 @@ const currentHash: HashOperations = notInitialized.proxy<HashOperations>('sync')
 
 ## 错误处理
 
-### Result 类型
+### HaiResult 类型
 
 所有可能失败的操作返回 `HaiResult<T>`：
 

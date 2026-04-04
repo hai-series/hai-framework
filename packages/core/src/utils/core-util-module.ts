@@ -9,40 +9,17 @@ import type { HaiError, HaiErrorDef, HaiResult } from '../core-types.js'
 
 import { error as errorUtils } from '../functions/core-function-error.js'
 
-// ─── 基础类型 ───
-
-/**
- * 模块错误基础接口。
- *
- * 所有模块的错误类型必须至少包含 `code` 和 `message` 字段。
- *
- * @example
- * ```ts
- * interface DbError extends BaseModuleError {
- *   code: number
- *   message: string
- *   details?: unknown
- * }
- * ```
- */
-export interface BaseModuleError {
-  /** 错误码 */
-  code: string | number
-  /** 错误描述（i18n 消息） */
-  message: string
-}
-
 // ─── 未初始化工具集 ───
 
 /**
  * 未初始化工具集返回类型。
  *
- * 提供错误创建、Result 包装和 Proxy 代理等能力，
+ * 提供错误创建、HaiResult 包装和 Proxy 代理等能力，
  * 用于模块未初始化时的安全回退。
  *
- * @template E - 模块错误类型（必须继承 BaseModuleError）
+ * @template E - 模块错误类型（必须继承 HaiError）
  */
-export interface NotInitializedKit<E extends BaseModuleError> {
+export interface NotInitializedKit<E extends HaiError> {
   /** 创建未初始化错误对象 */
   error: () => E
   /** 创建包含未初始化错误的失败 HaiResult */
@@ -60,7 +37,7 @@ export interface NotInitializedKit<E extends BaseModuleError> {
  *
  * 封装各模块共同的未初始化错误处理模式，包括：
  * - `error()` — 创建未初始化错误对象
- * - `result<T>()` — 创建包含未初始化错误的失败 Result
+ * - `result<T>()` — 创建包含未初始化错误的失败 HaiResult
  * - `proxy<T>(mode?)` — 创建 Proxy 对象（mode='async' 异步，mode='sync' 同步）
  *
  * @param codeOrDef - 模块的 NOT_INITIALIZED 错误码，或标准 HaiErrorDef 错误定义
@@ -71,8 +48,8 @@ export interface NotInitializedKit<E extends BaseModuleError> {
  * ```ts
  * import { core } from '@h-ai/core'
  *
- * const notInitialized = core.module.createNotInitializedKit<DbError>(
- *   DbErrorCode.NOT_INITIALIZED,
+ * const notInitialized = core.module.createNotInitializedKit(
+ *   HaiDbError.NOT_INITIALIZED,
  *   () => dbM('db_notInitialized'),
  * )
  *
@@ -87,20 +64,14 @@ export interface NotInitializedKit<E extends BaseModuleError> {
  *   get ddl() { return currentProvider?.ddl ?? ddlProxy },
  *   get sql() { return currentProvider?.sql ?? notInitialized.proxy<SqlOperations>() },
  * }
- *
- * // 新错误模型（HaiErrorDef）
- * const notInitialized2 = core.module.createNotInitializedKit(
- *   HaiCommonError.NOT_INITIALIZED,
- *   () => 'module not initialized',
- * )
  * ```
  */
 export function createNotInitializedKit(codeOrDef: HaiErrorDef, messageFn: () => string): NotInitializedKit<HaiError>
-export function createNotInitializedKit<E extends BaseModuleError>(
+export function createNotInitializedKit<E extends HaiError>(
   codeOrDef: E['code'],
   messageFn: () => string,
 ): NotInitializedKit<E> {
-  const isHaiErrorDef = (value: BaseModuleError['code'] | HaiErrorDef): value is HaiErrorDef => {
+  const isHaiErrorDef = (value: HaiError['code'] | HaiErrorDef): value is HaiErrorDef => {
     return typeof value === 'object'
       && value !== null
       && 'httpStatus' in value
@@ -133,4 +104,10 @@ export function createNotInitializedKit<E extends BaseModuleError>(
 }
 
 /** module 子工具类型 */
-export interface ModuleFn { createNotInitializedKit: typeof createNotInitializedKit }
+/** overloaded function type for createNotInitializedKit */
+export interface CreateNotInitializedKitFn {
+  (codeOrDef: HaiErrorDef, messageFn: () => string): NotInitializedKit<HaiError>
+  <E extends HaiError>(codeOrDef: E['code'], messageFn: () => string): NotInitializedKit<E>
+}
+
+export interface ModuleFn { createNotInitializedKit: CreateNotInitializedKitFn }

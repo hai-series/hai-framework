@@ -18,7 +18,7 @@
   </PermGuard>
   ```
 -->
-<script lang="ts">
+<script lang='ts'>
   import type { Snippet } from 'svelte'
   import { usePermission } from './permission-context.svelte.js'
 
@@ -35,7 +35,7 @@
     fallback?: Snippet
   }
 
-  let {
+  const {
     permission,
     permissions,
     mode = 'any',

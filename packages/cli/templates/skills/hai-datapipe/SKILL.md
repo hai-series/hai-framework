@@ -54,7 +54,7 @@ if (result.success) {
 ### 清洗 — `datapipe.clean`
 
 ```typescript
-datapipe.clean(text: string, options?: CleanOptionsInput): Result<string, DatapipeError>
+datapipe.clean(text: string, options?: CleanOptionsInput): HaiResult<string>
 ```
 
 **CleanOptionsInput**：
@@ -71,7 +71,7 @@ datapipe.clean(text: string, options?: CleanOptionsInput): Result<string, Datapi
 ### 分块 — `datapipe.chunk`
 
 ```typescript
-datapipe.chunk(text: string, options: ChunkOptionsInput): Result<DataChunk[], DatapipeError>
+datapipe.chunk(text: string, options: ChunkOptionsInput): HaiResult<DataChunk[]>
 ```
 
 **ChunkOptionsInput**：
@@ -115,7 +115,7 @@ datapipe.pipeline()
   .transform(fn)                // 添加文本转换步骤（同步/异步）
   .chunk(options)               // 添加分块步骤
   .chunkTransform(fn)           // 添加分块后处理步骤
-  .run(text)                    // 执行管线 → Promise<Result<PipelineResult>>
+  .run(text)                    // 执行管线 → Promise<HaiResult<PipelineResult>>
 ```
 
 **PipelineResult**：
@@ -129,16 +129,16 @@ interface PipelineResult {
 
 ---
 
-## 错误码 — `DatapipeErrorCode`
+## 错误码 — `HaiDatapipeError`
 
-| 错误码                   | 值   | 说明               |
-| ------------------------ | ---- | ------------------ |
-| `CLEAN_FAILED`           | 8500 | 清洗失败           |
-| `CHUNK_FAILED`           | 8501 | 分块失败           |
-| `TRANSFORM_FAILED`       | 8502 | 转换失败           |
-| `PIPELINE_FAILED`        | 8503 | 管线执行失败       |
-| `CONFIG_ERROR`           | 8504 | 配置错误           |
-| `MISSING_SEPARATOR`      | 8507 | 自定义分隔符缺失   |
+| 错误码 | code | 说明 |
+|--------|------|------|
+| `HaiDatapipeError.CLEAN_FAILED` | `hai:datapipe:001` | 清洗失败 |
+| `HaiDatapipeError.CHUNK_FAILED` | `hai:datapipe:002` | 分块失败 |
+| `HaiDatapipeError.TRANSFORM_FAILED` | `hai:datapipe:003` | 转换失败 |
+| `HaiDatapipeError.PIPELINE_FAILED` | `hai:datapipe:004` | 管线执行失败 |
+| `HaiDatapipeError.CONFIG_ERROR` | `hai:datapipe:005` | 配置错误 |
+| `HaiDatapipeError.MISSING_SEPARATOR` | `hai:datapipe:006` | 自定义分隔符缺失 |
 
 ---
 
@@ -190,15 +190,15 @@ const result = await datapipe.pipeline()
 ### 错误分支处理
 
 ```typescript
-import { datapipe, DatapipeErrorCode } from '@h-ai/datapipe'
+import { datapipe, HaiDatapipeError } from '@h-ai/datapipe'
 
 const result = datapipe.chunk(text, { mode: 'custom' })
 if (!result.success) {
   switch (result.error.code) {
-    case DatapipeErrorCode.MISSING_SEPARATOR:
+    case HaiDatapipeError.MISSING_SEPARATOR.code:
       // mode='custom' 时需提供 separator
       break
-    case DatapipeErrorCode.CONFIG_ERROR:
+    case HaiDatapipeError.CONFIG_ERROR.code:
       // 配置参数校验失败
       break
   }
@@ -211,4 +211,4 @@ if (!result.success) {
 
 - `hai-vecdb`：向量数据库存储（分块后入库）
 - `hai-ai`：LLM 与 Embedding 能力
-- `hai-core`：Result 模型
+- `hai-core`：HaiResult 模型

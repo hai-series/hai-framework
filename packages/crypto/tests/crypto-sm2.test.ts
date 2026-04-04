@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest'
-import { crypto, CryptoErrorCode } from '../src/index.js'
+import { crypto, HaiCryptoError } from '../src/index.js'
 
 describe('crypto.asymmetric', () => {
   beforeAll(async () => {
@@ -153,7 +153,7 @@ describe('crypto.asymmetric', () => {
     if (result.success)
       return
 
-    expect(result.error.code).toBe(CryptoErrorCode.INVALID_KEY)
+    expect(result.error.code).toBe(HaiCryptoError.INVALID_KEY.code)
   })
 
   it('should return INVALID_KEY for invalid private key on decrypt', () => {
@@ -162,7 +162,7 @@ describe('crypto.asymmetric', () => {
     if (result.success)
       return
 
-    expect(result.error.code).toBe(CryptoErrorCode.INVALID_KEY)
+    expect(result.error.code).toBe(HaiCryptoError.INVALID_KEY.code)
   })
 
   // ─── 签名验签 ───
@@ -238,7 +238,7 @@ describe('crypto.asymmetric', () => {
     if (result.success)
       return
 
-    expect(result.error.code).toBe(CryptoErrorCode.INVALID_KEY)
+    expect(result.error.code).toBe(HaiCryptoError.INVALID_KEY.code)
   })
 
   it('should return INVALID_KEY for invalid public key in verify', () => {
@@ -247,6 +247,6 @@ describe('crypto.asymmetric', () => {
     if (result.success)
       return
 
-    expect(result.error.code).toBe(CryptoErrorCode.INVALID_KEY)
+    expect(result.error.code).toBe(HaiCryptoError.INVALID_KEY.code)
   })
 })

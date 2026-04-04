@@ -307,7 +307,7 @@ export interface ApiClientFunctions {
   /**
    * 流式请求（返回 AsyncIterable）
    *
-   * @throws 未初始化时抛出异常（async generator 无法返回 Result）
+   * @throws 未初始化时抛出异常（async generator 无法返回 HaiResult）
    */
   readonly stream: ApiClient['stream']
 

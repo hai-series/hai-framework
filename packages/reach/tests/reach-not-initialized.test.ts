@@ -5,7 +5,7 @@
  */
 
 import { beforeEach, describe, expect, it } from 'vitest'
-import { reach, ReachErrorCode } from '../src/index.js'
+import { HaiReachError, reach } from '../src/index.js'
 
 describe.sequential('reach (not initialized)', () => {
   beforeEach(async () => {
@@ -21,7 +21,7 @@ describe.sequential('reach (not initialized)', () => {
 
     expect(result.success).toBe(false)
     if (!result.success) {
-      expect(result.error.code).toBe(ReachErrorCode.NOT_INITIALIZED)
+      expect(result.error.code).toBe(HaiReachError.NOT_INITIALIZED.code)
     }
   })
 })

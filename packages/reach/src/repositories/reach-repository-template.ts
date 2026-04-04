@@ -151,7 +151,7 @@ export function resetTemplateRepoSingleton(): void {
  * db 重新初始化后自动创建新实例。
  *
  * @param db - 数据库服务实例
- * @returns 成功返回模板存储接口实现；失败返回含错误信息的 Result
+ * @returns 成功返回模板存储接口实现；失败返回含错误信息的 HaiResult
  */
 export async function createTemplateRepository(db: ReldbFunctions): Promise<HaiResult<TemplateRepository>> {
   if (templateRepoInstance && templateRepoDbConfig === db.config)

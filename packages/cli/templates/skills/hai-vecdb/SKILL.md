@@ -13,7 +13,7 @@ description: 使用 @h-ai/vecdb 进行向量数据库操作（LanceDB/pgvector/Q
 
 - 新增或修改向量数据库访问逻辑（集合管理/向量插入/搜索）
 - 接入不同向量数据库后端（LanceDB / pgvector / Qdrant）
-- 基于 `VecdbErrorCode` 做错误分支处理
+- 基于 `HaiVecdbError` 做错误分支处理
 - 构建 RAG、语义搜索、知识库等 AI 场景
 
 ---
@@ -67,13 +67,13 @@ await vecdb.close()
 
 | 方法     | 签名                                       | 说明           |
 | -------- | ------------------------------------------ | -------------- |
-| `create` | `(name, options) => Result<void>`          | 创建集合       |
-| `drop`   | `(name) => Result<void>`                   | 删除集合       |
-| `exists` | `(name) => Result<boolean>`                | 判断集合是否存在 |
-| `info`   | `(name) => Result<CollectionInfo>`         | 获取集合信息   |
-| `list`   | `() => Result<string[]>`                   | 列出所有集合   |
+| `create` | `(name, options) => HaiResult<void>`          | 创建集合       |
+| `drop`   | `(name) => HaiResult<void>`                   | 删除集合       |
+| `exists` | `(name) => HaiResult<boolean>`                | 判断集合是否存在 |
+| `info`   | `(name) => HaiResult<CollectionInfo>`         | 获取集合信息   |
+| `list`   | `() => HaiResult<string[]>`                   | 列出所有集合   |
 
-> 所有方法均返回 `Promise<Result<T, VecdbError>>`，上表省略异步与错误类型。
+> 所有方法均返回 `Promise<HaiResult<T>>`，上表省略异步与错误类型。
 
 ```typescript
 // 创建集合（指定维度和度量）
@@ -102,13 +102,13 @@ interface CollectionCreateOptions {
 
 | 方法     | 签名                                                | 说明           |
 | -------- | --------------------------------------------------- | -------------- |
-| `insert` | `(collection, documents) => Result<void>`           | 批量插入       |
-| `upsert` | `(collection, documents) => Result<void>`           | 批量更新/插入  |
-| `delete` | `(collection, ids) => Result<void>`                 | 按 ID 删除     |
-| `search` | `(collection, vector, options?) => Result<SearchResult[]>` | 向量搜索 |
-| `count`  | `(collection) => Result<number>`                    | 文档计数       |
+| `insert` | `(collection, documents) => HaiResult<void>`           | 批量插入       |
+| `upsert` | `(collection, documents) => HaiResult<void>`           | 批量更新/插入  |
+| `delete` | `(collection, ids) => HaiResult<void>`                 | 按 ID 删除     |
+| `search` | `(collection, vector, options?) => HaiResult<SearchResult[]>` | 向量搜索 |
+| `count`  | `(collection) => HaiResult<number>`                    | 文档计数       |
 
-> 所有方法均返回 `Promise<Result<T, VecdbError>>`，上表省略异步与错误类型。
+> 所有方法均返回 `Promise<HaiResult<T>>`，上表省略异步与错误类型。
 
 ```typescript
 // 插入向量文档
@@ -161,24 +161,24 @@ interface VectorSearchOptions {
 
 ---
 
-## 错误码 — `VecdbErrorCode`
+## 错误码 — `HaiVecdbError`
 
-| 错误码                       | 值   | 说明               |
-| ---------------------------- | ---- | ------------------ |
-| `CONNECTION_FAILED`          | 3500 | 连接失败           |
-| `QUERY_FAILED`               | 3501 | 查询失败           |
-| `COLLECTION_NOT_FOUND`       | 3502 | 集合不存在         |
-| `COLLECTION_ALREADY_EXISTS`  | 3503 | 集合已存在         |
-| `DIMENSION_MISMATCH`         | 3504 | 向量维度不匹配     |
-| `INSERT_FAILED`              | 3505 | 插入失败           |
-| `DELETE_FAILED`              | 3506 | 删除失败           |
-| `UPDATE_FAILED`              | 3507 | 更新失败           |
-| `INDEX_BUILD_FAILED`         | 3508 | 索引构建失败       |
-| `NOT_INITIALIZED`            | 3510 | 未初始化           |
-| `CONFIG_ERROR`               | 3511 | 配置错误           |
-| `UNSUPPORTED_TYPE`           | 3512 | 不支持的数据库类型 |
-| `DRIVER_NOT_FOUND`           | 3513 | 驱动未安装         |
-| `SERIALIZATION_FAILED`       | 3514 | 序列化失败         |
+| 错误码                                    | code              | 说明               |
+| ----------------------------------------- | ----------------- | ------------------ |
+| `HaiVecdbError.CONNECTION_FAILED`         | `hai:vecdb:001`   | 连接失败           |
+| `HaiVecdbError.QUERY_FAILED`             | `hai:vecdb:002`   | 查询失败           |
+| `HaiVecdbError.COLLECTION_NOT_FOUND`     | `hai:vecdb:003`   | 集合不存在         |
+| `HaiVecdbError.COLLECTION_ALREADY_EXISTS`| `hai:vecdb:004`   | 集合已存在         |
+| `HaiVecdbError.DIMENSION_MISMATCH`       | `hai:vecdb:005`   | 向量维度不匹配     |
+| `HaiVecdbError.INSERT_FAILED`            | `hai:vecdb:006`   | 插入失败           |
+| `HaiVecdbError.DELETE_FAILED`            | `hai:vecdb:007`   | 删除失败           |
+| `HaiVecdbError.UPDATE_FAILED`            | `hai:vecdb:008`   | 更新失败           |
+| `HaiVecdbError.INDEX_BUILD_FAILED`       | `hai:vecdb:009`   | 索引构建失败       |
+| `HaiVecdbError.NOT_INITIALIZED`          | `hai:vecdb:010`   | 未初始化           |
+| `HaiVecdbError.CONFIG_ERROR`             | `hai:vecdb:011`   | 配置错误           |
+| `HaiVecdbError.UNSUPPORTED_TYPE`         | `hai:vecdb:012`   | 不支持的数据库类型 |
+| `HaiVecdbError.DRIVER_NOT_FOUND`         | `hai:vecdb:013`   | 驱动未安装         |
+| `HaiVecdbError.SERIALIZATION_FAILED`     | `hai:vecdb:014`   | 序列化失败         |
 
 ---
 
@@ -245,15 +245,15 @@ await vecdb.vector.insert('knowledge', docs)
 ### 错误分支处理
 
 ```typescript
-import { vecdb, VecdbErrorCode } from '@h-ai/vecdb'
+import { vecdb, HaiVecdbError } from '@h-ai/vecdb'
 
 const result = await vecdb.collection.create('docs', { dimension: 1536 })
 if (!result.success) {
   switch (result.error.code) {
-    case VecdbErrorCode.COLLECTION_ALREADY_EXISTS:
+    case HaiVecdbError.COLLECTION_ALREADY_EXISTS.code:
       // 集合已存在，可跳过
       break
-    case VecdbErrorCode.NOT_INITIALIZED:
+    case HaiVecdbError.NOT_INITIALIZED.code:
       // 未初始化，需先 vecdb.init()
       break
     default:
@@ -270,4 +270,4 @@ if (!result.success) {
 - `hai-ai`：LLM 与 Embedding 能力
 - `hai-datapipe`：文本清洗与分块
 - `hai-reldb`：关系型数据库（知识库需要同时使用 reldb 存储结构化数据）
-- `hai-core`：配置管理、Result 模型
+- `hai-core`：配置管理、HaiResult 模型

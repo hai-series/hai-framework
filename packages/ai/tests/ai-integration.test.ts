@@ -7,7 +7,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
-import { ai, AIErrorCode } from '../src/index.js'
+import { ai, HaiAIError } from '../src/index.js'
 
 // =============================================================================
 // Mock OpenAI SDK（供 LLM + Embedding 使用）
@@ -77,8 +77,11 @@ describe('ai 全流程集成', () => {
   beforeEach(async () => {
     vi.clearAllMocks()
     await ai.init({
-      llm: { model: 'gpt-4o-mini', apiKey: 'sk-test' },
-      embedding: { model: 'text-embedding-3-small', apiKey: 'sk-test' },
+      // API key and default model belong to the LLM config; embedding model is mapped via scenarios.
+      llm: { model: 'gpt-4o-mini', apiKey: 'sk-test', scenarios: { embedding: 'text-embedding-3-small' } },
+      // embedding config should only contain embedding-specific options (dimensions, batchSize),
+      // the model/apiKey are resolved from llm.scenarios / llm.apiKey.
+      embedding: {},
     })
   })
 
@@ -234,8 +237,8 @@ describe('ai 全流程集成', () => {
 
   // ─── Retrieval 源管理 ───
 
-  it('retrieval 源管理通过 ai.retrieval 可用', () => {
-    const addResult = ai.retrieval.addSource({
+  it('retrieval 源管理通过 ai.retrieval 可用', async () => {
+    const addResult = await ai.retrieval.addSource({
       id: 'wiki',
       collection: 'wiki-docs',
       topK: 5,
@@ -243,11 +246,11 @@ describe('ai 全流程集成', () => {
     })
     expect(addResult.success).toBe(true)
 
-    const sources = ai.retrieval.listSources()
+    const sources = await ai.retrieval.listSources()
     expect(sources).toHaveLength(1)
     expect(sources[0].id).toBe('wiki')
 
-    const removeResult = ai.retrieval.removeSource('wiki')
+    const removeResult = await ai.retrieval.removeSource('wiki')
     expect(removeResult.success).toBe(true)
   })
 
@@ -261,12 +264,12 @@ describe('ai 全流程集成', () => {
     )
 
     // 添加 retrieval 源
-    ai.retrieval.addSource({ id: 'src-1', collection: 'coll-1' })
+    await ai.retrieval.addSource({ id: 'src-1', collection: 'coll-1' })
 
     // 重新初始化
     const result = await ai.init({
-      llm: { model: 'gpt-4o', apiKey: 'sk-new' },
-      embedding: { model: 'text-embedding-3-small', apiKey: 'sk-new' },
+      llm: { model: 'gpt-4o', apiKey: 'sk-new', scenarios: { embedding: 'text-embedding-3-small' } },
+      embedding: {},
     })
     expect(result.success).toBe(true)
 
@@ -274,8 +277,8 @@ describe('ai 全流程集成', () => {
     const callResult = await ai.mcp.callTool('temp-tool', {})
     expect(callResult.success).toBe(false)
 
-    // Retrieval 源已重置
-    expect(ai.retrieval.listSources()).toHaveLength(0)
+    // Retrieval 源为 DB 持久化，重新初始化不会清除 DB 数据
+    expect(await ai.retrieval.listSources()).toHaveLength(1)
   })
 
   // ─── Close 后子模块返回 NOT_INITIALIZED ───
@@ -289,35 +292,35 @@ describe('ai 全流程集成', () => {
     const chatResult = await ai.llm.chat({ messages: [{ role: 'user', content: 'test' }] })
     expect(chatResult.success).toBe(false)
     if (!chatResult.success) {
-      expect(chatResult.error.code).toBe(AIErrorCode.NOT_INITIALIZED)
+      expect(chatResult.error.code).toBe(HaiAIError.NOT_INITIALIZED.code)
     }
 
     // Embedding
     const embedResult = await ai.embedding.embedText('test')
     expect(embedResult.success).toBe(false)
     if (!embedResult.success) {
-      expect(embedResult.error.code).toBe(AIErrorCode.NOT_INITIALIZED)
+      expect(embedResult.error.code).toBe(HaiAIError.NOT_INITIALIZED.code)
     }
 
     // Reasoning
-    const reasonResult = await ai.reasoning.run({ task: 'test', strategy: 'cot' })
+    const reasonResult = await ai.reasoning.run('test', { strategy: 'cot' })
     expect(reasonResult.success).toBe(false)
     if (!reasonResult.success) {
-      expect(reasonResult.error.code).toBe(AIErrorCode.NOT_INITIALIZED)
+      expect(reasonResult.error.code).toBe(HaiAIError.NOT_INITIALIZED.code)
     }
 
     // RAG
     const ragResult = await ai.rag.query('test')
     expect(ragResult.success).toBe(false)
     if (!ragResult.success) {
-      expect(ragResult.error.code).toBe(AIErrorCode.NOT_INITIALIZED)
+      expect(ragResult.error.code).toBe(HaiAIError.NOT_INITIALIZED.code)
     }
 
     // Knowledge
-    const knowledgeResult = await ai.knowledge.retrieve({ query: 'test', collection: 'test' })
+    const knowledgeResult = await ai.knowledge.retrieve('test', { collection: 'test' })
     expect(knowledgeResult.success).toBe(false)
     if (!knowledgeResult.success) {
-      expect(knowledgeResult.error.code).toBe(AIErrorCode.NOT_INITIALIZED)
+      expect(knowledgeResult.error.code).toBe(HaiAIError.NOT_INITIALIZED.code)
     }
 
     // tools 和 stream 是纯函数，仍可用

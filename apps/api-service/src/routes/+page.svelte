@@ -1,7 +1,7 @@
-<script lang="ts">
+<script lang='ts'>
   import type { PageData } from './$types'
 
-  let { data }: { data: PageData } = $props()
+  const { data }: { data: PageData } = $props()
 
   function methodClass(method: string): string {
     if (method === 'GET')
@@ -18,15 +18,15 @@
   <title>{data.coreInfo.name} - API 示例首页</title>
 </svelte:head>
 
-<main class="container">
-  <header class="hero">
+<main class='container'>
+  <header class='hero'>
     <h1>🚀 {data.coreInfo.name}</h1>
     <p>这是一个 API 服务示例首页，用于展示 core 基本信息与接口使用方式。</p>
   </header>
 
-  <section class="card">
+  <section class='card'>
     <h2>Core 基本信息（来自配置）</h2>
-    <div class="meta-grid">
+    <div class='meta-grid'>
       <p><strong>name：</strong>{data.coreInfo.name}</p>
       <p><strong>version：</strong>{data.coreInfo.version}</p>
       <p><strong>env：</strong>{data.coreInfo.env}</p>
@@ -35,7 +35,7 @@
     </div>
   </section>
 
-  <section class="card">
+  <section class='card'>
     <h2>接口列表与使用说明</h2>
     <table>
       <thead>
@@ -59,10 +59,10 @@
     </table>
   </section>
 
-  <section class="card cta-card">
+  <section class='card cta-card'>
     <h2>Item 模拟使用页面</h2>
     <p>已提供独立的 Items 模拟 CRUD 页面，可直接演示接口调用与请求日志。</p>
-    <a class="cta" href="/items-simulator">前往 Items 模拟使用页面 →</a>
+    <a class='cta' href='/items-simulator'>前往 Items 模拟使用页面 →</a>
   </section>
 </main>
 

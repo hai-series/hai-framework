@@ -47,9 +47,13 @@ knowledge:
   collection: hai_ai_knowledge
   dimension: 1536
   enableEntityExtraction: true
-  chunkMode: markdown  # sentence | paragraph | markdown | page
-  chunkMaxSize: 1500
-  chunkOverlap: 200
+  cleanOptions:
+    removeHtml: true
+    normalizeWhitespace: true
+  chunkOptions:
+    mode: markdown      # sentence | paragraph | markdown | page | custom
+    maxSize: 1500
+    overlap: 200
 
 token:
   tokenRatio: 0.25  # 4 字符 ≈ 1 token
@@ -86,13 +90,13 @@ ai.close()
 
 | 方法 | 签名 | 说明 |
 |------|------|------|
-| `chat` | `(options) => Promise<Result<ChatCompletionResponse>>` | 非流式对话 |
+| `chat` | `(options) => Promise<HaiResult<ChatCompletionResponse>>` | 非流式对话 |
 | `chatStream` | `(options) => AsyncIterable<ChatCompletionChunk>` | 流式对话 |
-| `ask` | `(query, options?) => Promise<Result<string>>` | 简易问答（返回纯文本） |
+| `ask` | `(query, options?) => Promise<HaiResult<string>>` | 简易问答（返回纯文本） |
 | `askStream` | `(query, options?) => AsyncIterable<string>` | 流式简易问答 |
-| `listModels` | `() => Promise<Result<string[]>>` | 可用模型列表 |
-| `getHistory` | `(scope: InteractionScope, options?) => Promise<Result<ChatRecord[]>>` | 获取对话历史 |
-| `listSessions` | `(objectId) => Promise<Result<SessionInfo[]>>` | 列出对象的所有会话 |
+| `listModels` | `() => Promise<HaiResult<string[]>>` | 可用模型列表 |
+| `getHistory` | `(scope: InteractionScope, options?) => Promise<HaiResult<ChatRecord[]>>` | 获取对话历史 |
+| `listSessions` | `(objectId) => Promise<HaiResult<SessionInfo[]>>` | 列出对象的所有会话 |
 
 ```typescript
 // 非流式
@@ -216,16 +220,16 @@ await mcp.connect(transport)
 
 | 方法 | 签名 | 说明 |
 |------|------|------|
-| `extract` | `(messages, options?) => Promise<Result<MemoryEntry[]>>` | 自动提取记忆 |
-| `add` | `(entry: MemoryEntryInput) => Promise<Result<MemoryEntry>>` | 手动添加记忆 |
-| `get` | `(memoryId: string) => Promise<Result<MemoryEntry>>` | 按 ID 获取记忆 |
-| `update` | `(memoryId, updates) => Promise<Result<MemoryEntry>>` | 更新记忆条目 |
-| `recall` | `(query, options?) => Promise<Result<MemoryEntry[]>>` | 检索相关记忆 |
-| `injectMemories` | `(messages, options?) => Promise<Result<ChatMessage[]>>` | 注入记忆到消息 |
-| `remove` | `(memoryId) => Promise<Result<void>>` | 删除 |
-| `list` | `(options?) => Promise<Result<MemoryEntry[]>>` | 列表 |
-| `listPage` | `(options?) => Promise<Result<StorePage<MemoryEntry>>>` | 分页列表 |
-| `clear` | `(options?) => Promise<Result<void>>` | 清空 |
+| `extract` | `(messages, options?) => Promise<HaiResult<MemoryEntry[]>>` | 自动提取记忆 |
+| `add` | `(entry: MemoryEntryInput) => Promise<HaiResult<MemoryEntry>>` | 手动添加记忆 |
+| `get` | `(memoryId: string) => Promise<HaiResult<MemoryEntry>>` | 按 ID 获取记忆 |
+| `update` | `(memoryId, updates) => Promise<HaiResult<MemoryEntry>>` | 更新记忆条目 |
+| `recall` | `(query, options?) => Promise<HaiResult<MemoryEntry[]>>` | 检索相关记忆 |
+| `injectMemories` | `(messages, options?) => Promise<HaiResult<ChatMessage[]>>` | 注入记忆到消息 |
+| `remove` | `(memoryId) => Promise<HaiResult<void>>` | 删除 |
+| `list` | `(options?) => Promise<HaiResult<MemoryEntry[]>>` | 列表 |
+| `listPage` | `(options?) => Promise<HaiResult<StorePage<MemoryEntry>>>` | 分页列表 |
+| `clear` | `(options?) => Promise<HaiResult<void>>` | 清空 |
 
 ```typescript
 // 自动提取
@@ -255,9 +259,9 @@ if (enriched.success) {
 
 | 方法 | 签名 | 说明 |
 |------|------|------|
-| `embed` | `(request: EmbeddingRequest) => Promise<Result<EmbeddingResponse>>` | 通用嵌入（支持单条/批量） |
-| `embedText` | `(text: string) => Promise<Result<number[]>>` | 单文本嵌入（返回向量） |
-| `embedBatch` | `(texts: string[]) => Promise<Result<number[][]>>` | 批量文本嵌入 |
+| `embed` | `(request: EmbeddingRequest) => Promise<HaiResult<EmbeddingResponse>>` | 通用嵌入（支持单条/批量） |
+| `embedText` | `(text: string) => Promise<HaiResult<number[]>>` | 单文本嵌入（返回向量） |
+| `embedBatch` | `(texts: string[]) => Promise<HaiResult<number[][]>>` | 批量文本嵌入 |
 
 ```typescript
 const vector = await ai.embedding.embedText('你好世界')
@@ -311,16 +315,16 @@ if (result.success) {
 
 | 方法 | 签名 | 说明 |
 |------|------|------|
-| `addSource` | `(source: RetrievalSource) => Result<void>` | 注册检索源（vecdb collection） |
-| `removeSource` | `(sourceId: string) => Result<void>` | 移除检索源 |
+| `addSource` | `(source: RetrievalSource) => HaiResult<void>` | 注册检索源（vecdb collection） |
+| `removeSource` | `(sourceId: string) => HaiResult<void>` | 移除检索源 |
 | `listSources` | `() => RetrievalSource[]` | 列出已注册检索源 |
-| `retrieve` | `(request: RetrievalRequest) => Promise<Result<RetrievalResult>>` | 多源检索 |
+| `retrieve` | `(request: RetrievalRequest) => Promise<HaiResult<RetrievalResult>>` | 多源检索 |
 
 ### RAG — `ai.rag`
 
 | 方法 | 签名 | 说明 |
 |------|------|------|
-| `query` | `(query, options?) => Promise<Result<RagResult>>` | RAG 问答（检索 + LLM 生成） |
+| `query` | `(query, options?) => Promise<HaiResult<RagResult>>` | RAG 问答（检索 + LLM 生成） |
 
 ```typescript
 // 注册检索源
@@ -349,16 +353,16 @@ if (result.success) {
 
 | 方法 | 签名 | 说明 |
 |------|------|------|
-| `setup` | `(options?) => Promise<Result<void>>` | 初始化知识库（创建 vecdb 集合 + reldb 表） |
-| `ingest` | `(input: KnowledgeIngestInput) => Promise<Result<KnowledgeIngestResult>>` | 文档入库 |
-| `ingestFile` | `(input: KnowledgeIngestFileInput) => Promise<Result<KnowledgeIngestResult>>` | 从文件路径导入（Node.js） |
-| `ingestBatch` | `(inputs, onProgress?) => Promise<Result<KnowledgeIngestBatchResult>>` | 批量导入 |
-| `retrieve` | `(query, options?) => Promise<Result<KnowledgeRetrieveResult>>` | 知识检索（实体增强） |
-| `ask` | `(query, options?) => Promise<Result<KnowledgeAskResult>>` | 知识问答（RAG + 信源引用） |
-| `findByEntity` | `(entityName, options?) => Promise<Result<EntityDocumentResult[]>>` | 按实体查询关联文档 |
-| `listEntities` | `(options?) => Promise<Result<KnowledgeEntity[]>>` | 列出实体 |
-| `listDocuments` | `(options?) => Promise<Result<KnowledgeDocumentInfo[]>>` | 列出已导入文档 |
-| `removeDocument` | `(documentId, options?) => Promise<Result<void>>` | 删除文档 |
+| `setup` | `(options?) => Promise<HaiResult<void>>` | 初始化知识库（创建 vecdb 集合 + reldb 表） |
+| `ingest` | `(input: KnowledgeIngestInput) => Promise<HaiResult<KnowledgeIngestResult>>` | 文档入库 |
+| `ingestFile` | `(input: KnowledgeIngestFileInput) => Promise<HaiResult<KnowledgeIngestResult>>` | 从文件路径导入（Node.js） |
+| `ingestBatch` | `(inputs, onProgress?) => Promise<HaiResult<KnowledgeIngestBatchResult>>` | 批量导入 |
+| `retrieve` | `(query, options?) => Promise<HaiResult<KnowledgeRetrieveResult>>` | 知识检索（实体增强） |
+| `ask` | `(query, options?) => Promise<HaiResult<KnowledgeAskResult>>` | 知识问答（RAG + 信源引用） |
+| `findByEntity` | `(entityName, options?) => Promise<HaiResult<EntityDocumentResult[]>>` | 按实体查询关联文档 |
+| `listEntities` | `(options?) => Promise<HaiResult<KnowledgeEntity[]>>` | 列出实体 |
+| `listDocuments` | `(options?) => Promise<HaiResult<KnowledgeDocumentInfo[]>>` | 列出已导入文档 |
+| `removeDocument` | `(documentId, options?) => Promise<HaiResult<void>>` | 删除文档 |
 
 ```typescript
 await ai.knowledge.setup()
@@ -382,7 +386,7 @@ if (answer.success) {
 
 | 方法 | 签名 | 说明 |
 |------|------|------|
-| `run` | `(query, options?) => Promise<Result<ReasoningResult>>` | 执行推理 |
+| `run` | `(query, options?) => Promise<HaiResult<ReasoningResult>>` | 执行推理 |
 | `runStream` | `(query, options?) => AsyncIterable<ReasoningStreamEvent>` | 流式推理 |
 
 **策略**：`react`（默认，ReAct 循环）、`cot`（Chain-of-Thought）、`plan-execute`（规划执行）
@@ -414,8 +418,8 @@ for await (const event of ai.reasoning.runStream('任务', { strategy: 'cot' }))
 
 | 方法 | 签名 | 说明 |
 |------|------|------|
-| `rerank` | `(request: RerankRequest) => Promise<Result<RerankResponse>>` | 通用重排序 |
-| `rerankTexts` | `(query, texts, topN?) => Promise<Result<RerankItem[]>>` | 快捷文本重排序 |
+| `rerank` | `(request: RerankRequest) => Promise<HaiResult<RerankResponse>>` | 通用重排序 |
+| `rerankTexts` | `(query, texts, topN?) => Promise<HaiResult<RerankItem[]>>` | 快捷文本重排序 |
 
 ```typescript
 const result = await ai.rerank.rerankTexts('机器学习', [
@@ -430,8 +434,8 @@ const result = await ai.rerank.rerankTexts('机器学习', [
 
 | 方法 | 签名 | 说明 |
 |------|------|------|
-| `parse` | `(request: FileParseRequest) => Promise<Result<FileParseResult>>` | 解析文件（支持 text/html/pdf/docx/ocr） |
-| `parseText` | `(content, filename?) => Promise<Result<string>>` | 快捷解析（直接返回文本） |
+| `parse` | `(request: FileParseRequest) => Promise<HaiResult<FileParseResult>>` | 解析文件（支持 text/html/pdf/docx/ocr） |
+| `parseText` | `(content, filename?) => Promise<HaiResult<string>>` | 快捷解析（直接返回文本） |
 
 ```typescript
 const result = await ai.file.parse({
@@ -451,11 +455,11 @@ if (result.success) {
 
 | 方法 | 签名 | 说明 |
 |------|------|------|
-| `registerExecutor` | `(executor: AgentExecutor) => Result<void>` | 注册代理执行器 |
-| `getAgentCard` | `() => Result<A2AAgentCardConfig>` | 获取 Agent Card |
+| `registerExecutor` | `(executor: AgentExecutor) => HaiResult<void>` | 注册代理执行器 |
+| `getAgentCard` | `() => HaiResult<A2AAgentCardConfig>` | 获取 Agent Card |
 | `handleRequest` | `(body, context?) => Promise<A2AHandleResult>` | 处理 A2A 协议请求 |
-| `listMessages` | `(filter) => Promise<Result<StorePage<A2AMessageRecord>>>` | 查询消息记录 |
-| `callRemoteAgent` | `(remoteUrl, message, options?) => Promise<Result<A2ACallResult>>` | 调用远端代理 |
+| `listMessages` | `(filter) => Promise<HaiResult<StorePage<A2AMessageRecord>>>` | 查询消息记录 |
+| `callRemoteAgent` | `(remoteUrl, message, options?) => Promise<HaiResult<A2ACallResult>>` | 调用远端代理 |
 
 ```typescript
 // 注册执行器
@@ -483,11 +487,11 @@ const callResult = await ai.a2a.callRemoteAgent(
 
 | 方法 | 签名 | 说明 |
 |------|------|------|
-| `createManager` | `(options?) => Result<ContextManager>` | 创建管理器 |
-| `restoreManager` | `(scope, options?) => Promise<Result<ContextManager>>` | 恢复会话 |
-| `listSessions` | `(objectId) => Promise<Result<SessionInfo[]>>` | 列出会话 |
-| `renameSession` | `(sessionId, title) => Promise<Result<void>>` | 重命名 |
-| `removeSession` | `(sessionId) => Promise<Result<void>>` | 删除 |
+| `createManager` | `(options?) => HaiResult<ContextManager>` | 创建管理器 |
+| `restoreManager` | `(scope, options?) => Promise<HaiResult<ContextManager>>` | 恢复会话 |
+| `listSessions` | `(objectId) => Promise<HaiResult<SessionInfo[]>>` | 列出会话 |
+| `renameSession` | `(sessionId, title) => Promise<HaiResult<void>>` | 重命名 |
+| `removeSession` | `(sessionId) => Promise<HaiResult<void>>` | 删除 |
 
 **ContextManager 选项**：
 - `scope` — 交互作用域（objectId + sessionId）
@@ -549,88 +553,88 @@ const sessions = await client.listSessions('user-001')
 
 ---
 
-## §17 错误码 — `AIErrorCode`
+## §17 错误码 — `HaiAIError`
 
-| 错误码 | 说明 |
-|--------|------|
-| **通用** | |
-| `INTERNAL_ERROR` (12000) | 内部错误 |
-| **初始化** | |
-| `NOT_INITIALIZED` (12010) | 未初始化 |
-| `CONFIGURATION_ERROR` (12011) | 配置错误 |
-| `INIT_IN_PROGRESS` (12012) | 初始化正在进行中 |
-| **Rerank** | |
-| `RERANK_API_ERROR` (12020) | Rerank API 调用错误 |
-| `RERANK_INVALID_REQUEST` (12021) | Rerank 请求参数无效 |
-| **File** | |
-| `FILE_PARSE_FAILED` (12030) | 文件解析失败 |
-| `FILE_UNSUPPORTED_FORMAT` (12031) | 不支持的文件格式 |
-| `FILE_OCR_FAILED` (12032) | OCR 识别失败 |
-| `FILE_INVALID_CONTENT` (12033) | 文件内容无效 |
-| **LLM** | |
-| `API_ERROR` (12100) | API 调用错误 |
-| `INVALID_REQUEST` (12101) | 无效请求 |
-| `RATE_LIMITED` (12102) | 速率限制 |
-| `TIMEOUT` (12103) | 超时 |
-| `MODEL_NOT_FOUND` (12104) | 模型未找到 |
-| `CONTEXT_LENGTH_EXCEEDED` (12105) | 上下文超限 |
-| `LLM_RECORD_FAILED` (12106) | 对话记录保存失败 |
-| `LLM_HISTORY_FAILED` (12107) | 对话历史查询失败 |
-| **MCP** | |
-| `MCP_CONNECTION_ERROR` (12200) | MCP 连接错误 |
-| `MCP_PROTOCOL_ERROR` (12201) | MCP 协议错误 |
-| `MCP_TOOL_ERROR` (12202) | MCP 工具错误 |
-| `MCP_RESOURCE_ERROR` (12203) | MCP 资源错误 |
-| `MCP_SERVER_ERROR` (12204) | MCP 服务器错误 |
-| **Embedding** | |
-| `EMBEDDING_API_ERROR` (12300) | Embedding 调用错误 |
-| `EMBEDDING_MODEL_NOT_FOUND` (12301) | Embedding 模型未找到 |
-| `EMBEDDING_INPUT_TOO_LONG` (12302) | Embedding 输入过长 |
-| **工具** | |
-| `TOOL_NOT_FOUND` (12400) | 工具未找到 |
-| `TOOL_VALIDATION_FAILED` (12401) | 工具验证失败 |
-| `TOOL_EXECUTION_FAILED` (12402) | 工具执行失败 |
-| `TOOL_TIMEOUT` (12403) | 工具超时 |
-| **Reasoning** | |
-| `REASONING_FAILED` (12500) | 推理失败 |
-| `REASONING_MAX_ROUNDS` (12501) | 推理轮次超限 |
-| `REASONING_STRATEGY_NOT_FOUND` (12502) | 推理策略未找到 |
-| **Retrieval** | |
-| `RETRIEVAL_FAILED` (12600) | 检索失败 |
-| `RETRIEVAL_SOURCE_NOT_FOUND` (12601) | 检索源未配置 |
-| **RAG** | |
-| `RAG_FAILED` (12700) | RAG 失败 |
-| `RAG_CONTEXT_BUILD_FAILED` (12701) | RAG 上下文构建失败 |
-| **Knowledge** | |
-| `KNOWLEDGE_SETUP_FAILED` (12800) | 知识库初始化失败 |
-| `KNOWLEDGE_INGEST_FAILED` (12801) | 知识入库失败 |
-| `KNOWLEDGE_RETRIEVE_FAILED` (12802) | 知识检索失败 |
-| `KNOWLEDGE_ENTITY_EXTRACT_FAILED` (12803) | 实体提取失败 |
-| `KNOWLEDGE_NOT_SETUP` (12804) | 知识库未初始化 |
-| `KNOWLEDGE_COLLECTION_NOT_FOUND` (12805) | 集合不存在 |
-| **Memory** | |
-| `MEMORY_EXTRACT_FAILED` (12900) | 记忆提取失败 |
-| `MEMORY_STORE_FAILED` (12901) | 记忆存储失败 |
-| `MEMORY_RECALL_FAILED` (12902) | 记忆召回失败 |
-| `MEMORY_NOT_FOUND` (12903) | 记忆不存在 |
-| `MEMORY_ENRICH_FAILED` (12904) | 记忆注入失败 |
-| **Context** | |
-| `CONTEXT_COMPRESS_FAILED` (12950) | 压缩失败 |
-| `CONTEXT_SUMMARIZE_FAILED` (12951) | 摘要失败 |
-| `CONTEXT_TOKEN_ESTIMATE_FAILED` (12952) | Token 估算失败 |
-| `CONTEXT_BUDGET_EXCEEDED` (12953) | 超出 Token 预算 |
-| **Store** | |
-| `STORE_FAILED` (12960) | 存储操作失败 |
-| `STORE_NOT_AVAILABLE` (12961) | 存储后端不可用 |
-| **Session** | |
-| `SESSION_NOT_FOUND` (12970) | 会话未找到 |
-| `SESSION_FAILED` (12971) | 会话操作失败 |
-| **A2A** | |
-| `A2A_NOT_CONFIGURED` (12980) | A2A 服务未配置 |
-| `A2A_HANDLE_FAILED` (12981) | A2A 请求处理失败 |
-| `A2A_REMOTE_CALL_FAILED` (12982) | A2A 远端调用失败 |
-| `A2A_AUTH_FAILED` (12983) | A2A 认证失败 |
-| `A2A_LIST_MESSAGES_FAILED` (12984) | A2A 消息查询失败 |
+| 错误码 | code | 说明 |
+|--------|------|------|
+| **通用** | | |
+| `HaiAIError.INTERNAL_ERROR` | `hai:ai:000` | 内部错误 |
+| **初始化** | | |
+| `HaiAIError.NOT_INITIALIZED` | `hai:ai:010` | 未初始化 |
+| `HaiAIError.CONFIGURATION_ERROR` | `hai:ai:011` | 配置错误 |
+| `HaiAIError.INIT_IN_PROGRESS` | `hai:ai:012` | 初始化正在进行中 |
+| **Rerank** | | |
+| `HaiAIError.RERANK_API_ERROR` | `hai:ai:020` | Rerank API 调用错误 |
+| `HaiAIError.RERANK_INVALID_REQUEST` | `hai:ai:021` | Rerank 请求参数无效 |
+| **File** | | |
+| `HaiAIError.FILE_PARSE_FAILED` | `hai:ai:030` | 文件解析失败 |
+| `HaiAIError.FILE_UNSUPPORTED_FORMAT` | `hai:ai:031` | 不支持的文件格式 |
+| `HaiAIError.FILE_OCR_FAILED` | `hai:ai:032` | OCR 识别失败 |
+| `HaiAIError.FILE_INVALID_CONTENT` | `hai:ai:033` | 文件内容无效 |
+| **LLM** | | |
+| `HaiAIError.API_ERROR` | `hai:ai:100` | API 调用错误 |
+| `HaiAIError.INVALID_REQUEST` | `hai:ai:101` | 无效请求 |
+| `HaiAIError.RATE_LIMITED` | `hai:ai:102` | 速率限制 |
+| `HaiAIError.TIMEOUT` | `hai:ai:103` | 超时 |
+| `HaiAIError.MODEL_NOT_FOUND` | `hai:ai:104` | 模型未找到 |
+| `HaiAIError.CONTEXT_LENGTH_EXCEEDED` | `hai:ai:105` | 上下文超限 |
+| `HaiAIError.LLM_RECORD_FAILED` | `hai:ai:106` | 对话记录保存失败 |
+| `HaiAIError.LLM_HISTORY_FAILED` | `hai:ai:107` | 对话历史查询失败 |
+| **MCP** | | |
+| `HaiAIError.MCP_CONNECTION_ERROR` | `hai:ai:200` | MCP 连接错误 |
+| `HaiAIError.MCP_PROTOCOL_ERROR` | `hai:ai:201` | MCP 协议错误 |
+| `HaiAIError.MCP_TOOL_ERROR` | `hai:ai:202` | MCP 工具错误 |
+| `HaiAIError.MCP_RESOURCE_ERROR` | `hai:ai:203` | MCP 资源错误 |
+| `HaiAIError.MCP_SERVER_ERROR` | `hai:ai:204` | MCP 服务器错误 |
+| **Embedding** | | |
+| `HaiAIError.EMBEDDING_API_ERROR` | `hai:ai:300` | Embedding 调用错误 |
+| `HaiAIError.EMBEDDING_MODEL_NOT_FOUND` | `hai:ai:301` | Embedding 模型未找到 |
+| `HaiAIError.EMBEDDING_INPUT_TOO_LONG` | `hai:ai:302` | Embedding 输入过长 |
+| **工具** | | |
+| `HaiAIError.TOOL_NOT_FOUND` | `hai:ai:400` | 工具未找到 |
+| `HaiAIError.TOOL_VALIDATION_FAILED` | `hai:ai:401` | 工具验证失败 |
+| `HaiAIError.TOOL_EXECUTION_FAILED` | `hai:ai:402` | 工具执行失败 |
+| `HaiAIError.TOOL_TIMEOUT` | `hai:ai:403` | 工具超时 |
+| **Reasoning** | | |
+| `HaiAIError.REASONING_FAILED` | `hai:ai:500` | 推理失败 |
+| `HaiAIError.REASONING_MAX_ROUNDS` | `hai:ai:501` | 推理轮次超限 |
+| `HaiAIError.REASONING_STRATEGY_NOT_FOUND` | `hai:ai:502` | 推理策略未找到 |
+| **Retrieval** | | |
+| `HaiAIError.RETRIEVAL_FAILED` | `hai:ai:600` | 检索失败 |
+| `HaiAIError.RETRIEVAL_SOURCE_NOT_FOUND` | `hai:ai:601` | 检索源未配置 |
+| **RAG** | | |
+| `HaiAIError.RAG_FAILED` | `hai:ai:700` | RAG 失败 |
+| `HaiAIError.RAG_CONTEXT_BUILD_FAILED` | `hai:ai:701` | RAG 上下文构建失败 |
+| **Knowledge** | | |
+| `HaiAIError.KNOWLEDGE_SETUP_FAILED` | `hai:ai:800` | 知识库初始化失败 |
+| `HaiAIError.KNOWLEDGE_INGEST_FAILED` | `hai:ai:801` | 知识入库失败 |
+| `HaiAIError.KNOWLEDGE_RETRIEVE_FAILED` | `hai:ai:802` | 知识检索失败 |
+| `HaiAIError.KNOWLEDGE_ENTITY_EXTRACT_FAILED` | `hai:ai:803` | 实体提取失败 |
+| `HaiAIError.KNOWLEDGE_NOT_SETUP` | `hai:ai:804` | 知识库未初始化 |
+| `HaiAIError.KNOWLEDGE_COLLECTION_NOT_FOUND` | `hai:ai:805` | 集合不存在 |
+| **Memory** | | |
+| `HaiAIError.MEMORY_EXTRACT_FAILED` | `hai:ai:900` | 记忆提取失败 |
+| `HaiAIError.MEMORY_STORE_FAILED` | `hai:ai:901` | 记忆存储失败 |
+| `HaiAIError.MEMORY_RECALL_FAILED` | `hai:ai:902` | 记忆召回失败 |
+| `HaiAIError.MEMORY_NOT_FOUND` | `hai:ai:903` | 记忆不存在 |
+| `HaiAIError.MEMORY_ENRICH_FAILED` | `hai:ai:904` | 记忆注入失败 |
+| **Context** | | |
+| `HaiAIError.CONTEXT_COMPRESS_FAILED` | `hai:ai:950` | 压缩失败 |
+| `HaiAIError.CONTEXT_SUMMARIZE_FAILED` | `hai:ai:951` | 摘要失败 |
+| `HaiAIError.CONTEXT_TOKEN_ESTIMATE_FAILED` | `hai:ai:952` | Token 估算失败 |
+| `HaiAIError.CONTEXT_BUDGET_EXCEEDED` | `hai:ai:953` | 超出 Token 预算 |
+| **Store** | | |
+| `HaiAIError.STORE_FAILED` | `hai:ai:960` | 存储操作失败 |
+| `HaiAIError.STORE_NOT_AVAILABLE` | `hai:ai:961` | 存储后端不可用 |
+| **Session** | | |
+| `HaiAIError.SESSION_NOT_FOUND` | `hai:ai:970` | 会话未找到 |
+| `HaiAIError.SESSION_FAILED` | `hai:ai:971` | 会话操作失败 |
+| **A2A** | | |
+| `HaiAIError.A2A_NOT_CONFIGURED` | `hai:ai:980` | A2A 服务未配置 |
+| `HaiAIError.A2A_HANDLE_FAILED` | `hai:ai:981` | A2A 请求处理失败 |
+| `HaiAIError.A2A_REMOTE_CALL_FAILED` | `hai:ai:982` | A2A 远端调用失败 |
+| `HaiAIError.A2A_AUTH_FAILED` | `hai:ai:983` | A2A 认证失败 |
+| `HaiAIError.A2A_LIST_MESSAGES_FAILED` | `hai:ai:984` | A2A 消息查询失败 |
 
 ---
 

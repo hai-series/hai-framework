@@ -12,7 +12,7 @@
 ## 快速开始
 
 ```ts
-import { cache, CacheErrorCode } from '@h-ai/cache'
+import { cache, HaiCacheError } from '@h-ai/cache'
 
 const initResult = await cache.init({ type: 'memory' })
 if (!initResult.success) {
@@ -38,7 +38,7 @@ if (acquired.success && acquired.data) {
   }
 }
 
-if (!user.success && user.error.code === CacheErrorCode.NOT_INITIALIZED) {
+if (!user.success && user.error.code === HaiCacheError.NOT_INITIALIZED.code) {
   // 请先调用 cache.init()
 }
 
@@ -123,17 +123,19 @@ await cache.lock.extend('my-lock', 60, 'node-1')
 
 ## 错误码
 
-所有操作返回 `Result<T, CacheError>`，常用错误码如下：
+所有操作返回 `HaiResult<T>`，常用错误码如下：
 
-- `CacheErrorCode.NOT_INITIALIZED`
-- `CacheErrorCode.CONNECTION_FAILED`
-- `CacheErrorCode.OPERATION_FAILED`
-- `CacheErrorCode.SERIALIZATION_FAILED`
-- `CacheErrorCode.DESERIALIZATION_FAILED`
-- `CacheErrorCode.KEY_NOT_FOUND`
-- `CacheErrorCode.TIMEOUT`
-- `CacheErrorCode.UNSUPPORTED_TYPE`
-- `CacheErrorCode.CONFIG_ERROR`
+| 错误码                                 | code            | 说明             |
+| -------------------------------------- | --------------- | ---------------- |
+| `HaiCacheError.CONNECTION_FAILED`      | `hai:cache:001` | 连接失败         |
+| `HaiCacheError.OPERATION_FAILED`       | `hai:cache:002` | 操作失败         |
+| `HaiCacheError.SERIALIZATION_FAILED`   | `hai:cache:003` | 序列化失败       |
+| `HaiCacheError.DESERIALIZATION_FAILED` | `hai:cache:004` | 反序列化失败     |
+| `HaiCacheError.KEY_NOT_FOUND`          | `hai:cache:005` | 键不存在         |
+| `HaiCacheError.TIMEOUT`                | `hai:cache:006` | 超时             |
+| `HaiCacheError.NOT_INITIALIZED`        | `hai:cache:010` | 未初始化         |
+| `HaiCacheError.UNSUPPORTED_TYPE`       | `hai:cache:011` | 不支持的缓存类型 |
+| `HaiCacheError.CONFIG_ERROR`           | `hai:cache:012` | 配置错误         |
 
 ## 测试
 

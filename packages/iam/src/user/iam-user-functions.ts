@@ -100,7 +100,7 @@ function hasUpdateFields(data: Partial<User>): boolean {
  *
  * @param messageKey - i18n 消息键
  * @param message - 原始错误消息
- * @returns 包含 REPOSITORY_ERROR 码的错误 Result
+ * @returns 包含 REPOSITORY_ERROR 码的错误 HaiResult
  */
 function mapRepositoryError(messageKey: Parameters<typeof iamM>[0], message: string) {
   return err(
