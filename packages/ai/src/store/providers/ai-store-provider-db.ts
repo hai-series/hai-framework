@@ -45,6 +45,19 @@ class ReldbAIRelStore<T> implements AIRelStore<T> {
     this.hasRefId = options?.hasRefId ?? false
   }
 
+  private assertDbSuccess(
+    operation: string,
+    result: { success: boolean, error?: { message?: string } },
+  ): asserts result is { success: true } {
+    if (result.success)
+      return
+    const errorMessage = result.error?.message ?? 'unknown database error'
+    throw new Error(
+      `[ReldbAIRelStore:${this.table}] ${operation} failed: ${errorMessage}`,
+      { cause: result.error },
+    )
+  }
+
   /** 创建表及索引（幂等） */
   async createTable(): Promise<void> {
     const t = this.table
@@ -64,18 +77,41 @@ class ReldbAIRelStore<T> implements AIRelStore<T> {
       cols.push(`ref_id ${scopeType}`)
     cols.push(`data ${dataType} NOT NULL`, `created_at BIGINT NOT NULL`, `updated_at BIGINT NOT NULL`)
 
-    await this.sql.execute(`CREATE TABLE IF NOT EXISTS ${t} (${cols.join(', ')})`)
+    this.assertDbSuccess(
+      'create table',
+      await this.sql.execute(`CREATE TABLE IF NOT EXISTS ${t} (${cols.join(', ')})`),
+    )
 
-    if (this.hasObjectId)
-      await this.sql.execute(`CREATE INDEX IF NOT EXISTS idx_${t}_object_id ON ${t}(object_id)`)
-    if (this.hasSessionId)
-      await this.sql.execute(`CREATE INDEX IF NOT EXISTS idx_${t}_session_id ON ${t}(session_id)`)
-    if (this.hasObjectId && this.hasSessionId)
-      await this.sql.execute(`CREATE INDEX IF NOT EXISTS idx_${t}_object_session ON ${t}(object_id, session_id)`)
-    if (this.hasStatus)
-      await this.sql.execute(`CREATE INDEX IF NOT EXISTS idx_${t}_status ON ${t}(status)`)
-    if (this.hasRefId)
-      await this.sql.execute(`CREATE INDEX IF NOT EXISTS idx_${t}_ref_id ON ${t}(ref_id)`)
+    if (this.hasObjectId) {
+      this.assertDbSuccess(
+        'create object_id index',
+        await this.sql.execute(`CREATE INDEX IF NOT EXISTS idx_${t}_object_id ON ${t}(object_id)`),
+      )
+    }
+    if (this.hasSessionId) {
+      this.assertDbSuccess(
+        'create session_id index',
+        await this.sql.execute(`CREATE INDEX IF NOT EXISTS idx_${t}_session_id ON ${t}(session_id)`),
+      )
+    }
+    if (this.hasObjectId && this.hasSessionId) {
+      this.assertDbSuccess(
+        'create object_id + session_id index',
+        await this.sql.execute(`CREATE INDEX IF NOT EXISTS idx_${t}_object_session ON ${t}(object_id, session_id)`),
+      )
+    }
+    if (this.hasStatus) {
+      this.assertDbSuccess(
+        'create status index',
+        await this.sql.execute(`CREATE INDEX IF NOT EXISTS idx_${t}_status ON ${t}(status)`),
+      )
+    }
+    if (this.hasRefId) {
+      this.assertDbSuccess(
+        'create ref_id index',
+        await this.sql.execute(`CREATE INDEX IF NOT EXISTS idx_${t}_ref_id ON ${t}(ref_id)`),
+      )
+    }
   }
 
   async save(id: string, data: T, scope?: StoreScope): Promise<void> {
@@ -121,9 +157,12 @@ class ReldbAIRelStore<T> implements AIRelStore<T> {
         updateParts.push('status = VALUES(status)')
       if (this.hasRefId)
         updateParts.push('ref_id = VALUES(ref_id)')
-      await this.sql.execute(
-        `INSERT INTO ${this.table} (${colNames.join(', ')}) VALUES (${placeholders.join(', ')}) ON DUPLICATE KEY UPDATE ${updateParts.join(', ')}`,
-        values,
+      this.assertDbSuccess(
+        'save upsert',
+        await this.sql.execute(
+          `INSERT INTO ${this.table} (${colNames.join(', ')}) VALUES (${placeholders.join(', ')}) ON DUPLICATE KEY UPDATE ${updateParts.join(', ')}`,
+          values,
+        ),
       )
     }
     else {
@@ -136,9 +175,12 @@ class ReldbAIRelStore<T> implements AIRelStore<T> {
         updateParts.push('status = excluded.status')
       if (this.hasRefId)
         updateParts.push('ref_id = excluded.ref_id')
-      await this.sql.execute(
-        `INSERT INTO ${this.table} (${colNames.join(', ')}) VALUES (${placeholders.join(', ')}) ON CONFLICT(id) DO UPDATE SET ${updateParts.join(', ')}`,
-        values,
+      this.assertDbSuccess(
+        'save upsert',
+        await this.sql.execute(
+          `INSERT INTO ${this.table} (${colNames.join(', ')}) VALUES (${placeholders.join(', ')}) ON CONFLICT(id) DO UPDATE SET ${updateParts.join(', ')}`,
+          values,
+        ),
       )
     }
   }
@@ -151,7 +193,8 @@ class ReldbAIRelStore<T> implements AIRelStore<T> {
 
   async get(id: string): Promise<T | undefined> {
     const result = await this.sql.get<{ data: string }>(`SELECT data FROM ${this.table} WHERE id = ?`, [id])
-    if (!result.success || !result.data)
+    this.assertDbSuccess('get by id', result)
+    if (!result.data)
       return undefined
     return JSON.parse(result.data.data) as T
   }
@@ -159,8 +202,7 @@ class ReldbAIRelStore<T> implements AIRelStore<T> {
   async query(filter: StoreFilter<T>): Promise<T[]> {
     const { sql, params } = this.buildQuery(filter)
     const result = await this.sql.query<{ data: string }>(sql, params)
-    if (!result.success)
-      return []
+    this.assertDbSuccess('query by filter', result)
     return result.data.map(row => JSON.parse(row.data) as T)
   }
 
@@ -171,18 +213,23 @@ class ReldbAIRelStore<T> implements AIRelStore<T> {
     if (countConditions.length > 0)
       countSql += ` WHERE ${countConditions.join(' AND ')}`
     const countResult = await this.sql.get<{ cnt: number }>(countSql, countParams)
-    const total = countResult.success && countResult.data != null ? countResult.data.cnt : 0
+    this.assertDbSuccess('query page count', countResult)
+    const total = countResult.data != null ? countResult.data.cnt : 0
 
     const { sql, params } = this.buildQuery({ ...filter, limit: undefined })
     const pagedSql = `${sql} LIMIT ? OFFSET ?`
     const result = await this.sql.query<{ data: string }>(pagedSql, [...params, page.limit, page.offset])
-    const items = result.success ? result.data.map(row => JSON.parse(row.data) as T) : []
+    this.assertDbSuccess('query page items', result)
+    const items = result.data.map(row => JSON.parse(row.data) as T)
 
     return { items, total }
   }
 
   async remove(id: string): Promise<boolean> {
-    await this.sql.execute(`DELETE FROM ${this.table} WHERE id = ?`, [id])
+    this.assertDbSuccess(
+      'remove by id',
+      await this.sql.execute(`DELETE FROM ${this.table} WHERE id = ?`, [id]),
+    )
     return true
   }
 
@@ -195,21 +242,24 @@ class ReldbAIRelStore<T> implements AIRelStore<T> {
       const whereClause = ` WHERE ${conditions.join(' AND ')}`
       countSql += whereClause
       const countResult = await this.sql.get<{ cnt: number }>(countSql, [...params])
-      const count = countResult.success && countResult.data != null ? countResult.data.cnt : 0
-      await this.sql.execute(`DELETE FROM ${this.table}${whereClause}`, params)
+      this.assertDbSuccess('removeBy count', countResult)
+      const count = countResult.data != null ? countResult.data.cnt : 0
+      this.assertDbSuccess('removeBy delete', await this.sql.execute(`DELETE FROM ${this.table}${whereClause}`, params))
       return count
     }
 
     const countResult = await this.sql.get<{ cnt: number }>(countSql)
-    const count = countResult.success && countResult.data != null ? countResult.data.cnt : 0
-    await this.sql.execute(`DELETE FROM ${this.table}`)
+    this.assertDbSuccess('removeBy count all', countResult)
+    const count = countResult.data != null ? countResult.data.cnt : 0
+    this.assertDbSuccess('removeBy delete all', await this.sql.execute(`DELETE FROM ${this.table}`))
     return count
   }
 
   async count(filter?: StoreFilter<T>): Promise<number> {
     if (!filter?.where && !filter?.objectId && !filter?.sessionId && !filter?.status && !filter?.refId) {
       const result = await this.sql.get<{ cnt: number }>(`SELECT COUNT(*) as cnt FROM ${this.table}`)
-      return result.success && result.data != null ? result.data.cnt : 0
+      this.assertDbSuccess('count all', result)
+      return result.data != null ? result.data.cnt : 0
     }
     const params: unknown[] = []
     const conditions = this.buildAllConditions(filter!, params)
@@ -217,12 +267,13 @@ class ReldbAIRelStore<T> implements AIRelStore<T> {
     if (conditions.length > 0)
       sql += ` WHERE ${conditions.join(' AND ')}`
     const result = await this.sql.get<{ cnt: number }>(sql, params)
-    return result.success && result.data != null ? result.data.cnt : 0
+    this.assertDbSuccess('count by filter', result)
+    return result.data != null ? result.data.cnt : 0
   }
 
   async clear(filter?: StoreFilter<T>): Promise<void> {
     if (!filter?.where && !filter?.objectId && !filter?.sessionId && !filter?.status && !filter?.refId) {
-      await this.sql.execute(`DELETE FROM ${this.table}`)
+      this.assertDbSuccess('clear all', await this.sql.execute(`DELETE FROM ${this.table}`))
       return
     }
     await this.removeBy(filter!)
