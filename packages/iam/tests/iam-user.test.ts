@@ -453,6 +453,24 @@ describe('iam.user', () => {
           expect(result.data.items).toHaveLength(0)
         }
       })
+
+      it('search 应支持包含下划线的用户名精确过滤', async () => {
+        const username = 'search_user_exact'
+        const registerResult = await getIam().user.register({
+          username,
+          email: 'search_user_exact@test.com',
+          password: TEST_PASSWORD,
+        })
+        expect(registerResult.success).toBe(true)
+        if (!registerResult.success)
+          return
+
+        const result = await getIam().user.listUsers({ page: 1, pageSize: 20, search: username })
+        expect(result.success).toBe(true)
+        if (result.success) {
+          expect(result.data.items.some(user => user.username === username)).toBe(true)
+        }
+      })
     })
 
     // =========================================================================

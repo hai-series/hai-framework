@@ -254,6 +254,25 @@ describe('iam.authz', () => {
           expect(codes).toContain('role:read')
         }
       })
+
+      it('getAllPermissions 搜索应支持包含下划线的权限字段', async () => {
+        const permissionCode = 'perm_search_exact:read'
+        const createResult = await getIam().authz.createPermission({
+          code: permissionCode,
+          name: 'perm_search_exact',
+          resource: 'perm_search_exact',
+          action: 'read',
+        })
+        expect(createResult.success).toBe(true)
+        if (!createResult.success)
+          return
+
+        const result = await getIam().authz.getAllPermissions({ page: 1, pageSize: 50, search: 'perm_search_exact' })
+        expect(result.success).toBe(true)
+        if (result.success) {
+          expect(result.data.items.some(permission => permission.code === permissionCode)).toBe(true)
+        }
+      })
     })
 
     // =========================================================================

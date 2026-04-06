@@ -80,7 +80,7 @@
     await onsubmit?.(formData)
   }
 
-  function getInputType(fieldType: string): string {
+  function getInputType(fieldType: string): 'email' | 'url' | 'tel' | 'password' | 'number' | 'text' {
     switch (fieldType) {
       case 'email': return 'email'
       case 'url': return 'url'
@@ -127,6 +127,7 @@
       {#if field.type === 'textarea'}
         <FormField label={resolveText(field.label)} required={isRequired}>
           <Textarea
+            id={field.id}
             value={String(fieldValue ?? '')}
             {placeholder}
             disabled={submitting || isReadonly}
@@ -139,9 +140,10 @@
         {@const opts = resolveOptions(field.options)}
         <FormField label={resolveText(field.label)} required={isRequired}>
           <Select
+            id={field.id}
             value={String(fieldValue ?? '')}
             disabled={submitting || isReadonly}
-            onchange={e => updateField(field.id, (e.target as HTMLSelectElement).value)}
+            onchange={value => updateField(field.id, value)}
           >
             <option value="">{placeholder || uiM('crud_filter_all')}</option>
             {#each opts as opt}
@@ -176,7 +178,7 @@
         <FormField label={resolveText(field.label)}>
           <Checkbox
             checked={Boolean(fieldValue)}
-            onchange={checked => updateField(field.id, checked)}
+            onchange={(checked: boolean) => updateField(field.id, checked)}
             disabled={submitting || isReadonly}
           />
         </FormField>
@@ -184,6 +186,7 @@
       {:else}
         <FormField label={resolveText(field.label)} required={isRequired}>
           <Input
+            id={field.id}
             type={getInputType(field.type)}
             value={String(fieldValue ?? '')}
             {placeholder}

@@ -35,15 +35,15 @@ test.describe('Page Navigation', () => {
 
     // AI
     await tabs.nth(4).click()
-    await expect(page.locator('text=@h-ai/ai')).toBeVisible()
+    await expect(page.getByRole('heading', { name: /@h-ai\/ai/ })).toBeVisible()
 
     // VecDB
     await tabs.nth(5).click()
-    await expect(page.locator('text=@h-ai/vecdb')).toBeVisible()
+    await expect(page.getByRole('heading', { name: /@h-ai\/vecdb/ })).toBeVisible()
 
     // DataPipe
     await tabs.nth(6).click()
-    await expect(page.locator('text=@h-ai/datapipe')).toBeVisible()
+    await expect(page.getByRole('heading', { name: /@h-ai\/datapipe/ })).toBeVisible()
   })
 
   test('UI Gallery 页面可访问', async ({ page, request }) => {

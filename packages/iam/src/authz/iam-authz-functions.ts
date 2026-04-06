@@ -822,9 +822,9 @@ function createRbacManager(config: RbacManagerConfig): AuthzOperations {
       }
 
       if (options?.search) {
-        whereClauses.push('(code LIKE ? OR name LIKE ?)')
         const escaped = options.search.replace(/[%_\\]/g, '\\$&')
         const pattern = `%${escaped}%`
+        whereClauses.push('(code LIKE ? ESCAPE \'\\\' OR name LIKE ? ESCAPE \'\\\')')
         whereParams.push(pattern, pattern)
       }
 

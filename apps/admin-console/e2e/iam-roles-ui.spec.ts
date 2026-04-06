@@ -3,9 +3,9 @@
  * E2E 测试 - IAM 角色管理页面 UI
  * =============================================================================
  * 覆盖范围：
- * - 页面结构（标题、按钮、卡片、下拉菜单）
- * - 新建角色对话框（结构、权限选择、关闭）
- * - 通过 UI 对话框创建、编辑、删除角色（走 apiFetch 传输加密链路）
+ * - 页面结构（标题、按钮、表格）
+ * - 新建角色抽屉（结构、权限选择、关闭）
+ * - 通过 UI 抽屉创建、编辑角色（走 apiFetch 传输加密链路）
  * =============================================================================
  */
 
@@ -13,6 +13,15 @@ import { expect, test } from '@playwright/test'
 import { registerAndLogin } from './helpers'
 
 test.describe('IAM Roles UI', () => {
+  async function openCreateDrawer(page: import('@playwright/test').Page) {
+    const createBtn = page.locator('main').getByRole('button', { name: /新建|创建|添加/ })
+    await createBtn.first().click()
+    const heading = page.getByRole('heading', { name: /新建角色管理/ }).last()
+    await expect(heading).toBeVisible()
+    const panel = heading.locator('xpath=ancestor::*[.//button[normalize-space()="取消"] and .//button[normalize-space()="新建"]][1]')
+    return panel
+  }
+
   // ---------------------------------------------------------------------------
   // 页面结构
   // ---------------------------------------------------------------------------
@@ -31,165 +40,79 @@ test.describe('IAM Roles UI', () => {
   })
 
   // ---------------------------------------------------------------------------
-  // 角色卡片
+  // 角色表格
   // ---------------------------------------------------------------------------
-  test('角色以卡片形式展示', async ({ page, request }) => {
+  test('角色以表格形式展示', async ({ page, request }) => {
     await registerAndLogin(page, request, 'roleui')
     await page.goto('/admin/iam/roles')
     await page.waitForLoadState('domcontentloaded')
 
-    // 角色卡片容器（grid 布局）
-    const cardGrid = page.locator('.grid.gap-3')
-    await expect(cardGrid).toBeVisible()
-
-    // 至少有一个 card（系统预设角色）
-    const cards = page.locator('.card.bg-base-100')
-    const count = await cards.count()
-    expect(count).toBeGreaterThanOrEqual(0)
+    await expect(page.locator('table').first()).toBeVisible()
+    const rows = page.locator('tbody tr')
+    expect(await rows.count()).toBeGreaterThan(0)
   })
 
-  test('角色卡片显示名称和操作菜单', async ({ page, request }) => {
+  test('角色表格显示名称和操作按钮', async ({ page, request }) => {
     await registerAndLogin(page, request, 'roleui')
     await page.goto('/admin/iam/roles')
     await page.waitForLoadState('domcontentloaded')
 
-    const cards = page.locator('.card.bg-base-100')
-    const count = await cards.count()
-
-    if (count > 0) {
-      const firstCard = cards.first()
-      // 卡片标题
-      const title = firstCard.locator('.card-title')
-      await expect(title).toBeVisible()
-
-      // 下拉操作菜单按钮
-      const menuBtn = firstCard.locator('.dropdown button[aria-label]')
-      await expect(menuBtn).toBeVisible()
-    }
-  })
-
-  test('角色卡片显示用户数和权限数', async ({ page, request }) => {
-    await registerAndLogin(page, request, 'roleui')
-    await page.goto('/admin/iam/roles')
-    await page.waitForLoadState('domcontentloaded')
-
-    const cards = page.locator('.card.bg-base-100')
-    const count = await cards.count()
-
-    if (count > 0) {
-      const firstCard = cards.first()
-      // 用户数统计（包含 tabler--users 图标）
-      const userCount = firstCard.locator('[class*="tabler--users"]')
-      await expect(userCount).toBeVisible()
-
-      // 权限数统计（包含 tabler--key 图标）
-      const permCount = firstCard.locator('[class*="tabler--key"]')
-      await expect(permCount).toBeVisible()
-    }
+    const firstRow = page.locator('tbody tr').first()
+    await expect(firstRow).toBeVisible()
+    await expect(firstRow.getByRole('button', { name: /编辑|Edit/ })).toBeVisible()
+    await expect(firstRow.getByRole('button', { name: /删除|Delete/ })).toBeVisible()
   })
 
   // ---------------------------------------------------------------------------
-  // 下拉操作菜单
+  // 新建角色抽屉
   // ---------------------------------------------------------------------------
-  test('点击操作菜单显示编辑和删除选项', async ({ page, request }) => {
+  test('点击新建按钮打开角色抽屉', async ({ page, request }) => {
     await registerAndLogin(page, request, 'roleui')
     await page.goto('/admin/iam/roles')
     await page.waitForLoadState('domcontentloaded')
 
-    const cards = page.locator('.card.bg-base-100')
-    const count = await cards.count()
+    const drawer = await openCreateDrawer(page)
 
-    if (count > 0) {
-      const firstCard = cards.first()
-      const menuBtn = firstCard.locator('.dropdown button[aria-label]')
-      await menuBtn.click()
-      await page.waitForTimeout(300)
-
-      // 下拉菜单内容
-      const dropdown = firstCard.locator('.dropdown-content')
-      await expect(dropdown).toBeVisible()
-
-      // 编辑按钮
-      const editIcon = dropdown.locator('[class*="tabler--edit"]')
-      await expect(editIcon).toBeVisible()
-    }
-  })
-
-  // ---------------------------------------------------------------------------
-  // 新建角色对话框
-  // ---------------------------------------------------------------------------
-  test('点击新建按钮打开角色对话框', async ({ page, request }) => {
-    await registerAndLogin(page, request, 'roleui')
-    await page.goto('/admin/iam/roles')
-    await page.waitForLoadState('domcontentloaded')
-
-    const createBtn = page.locator('main').getByRole('button', { name: /新建|创建|添加/ })
-    await createBtn.first().click()
-    await expect(page.locator('#name')).toBeVisible()
-
-    // 对话框（modal）可见
-    const modal = page.locator('.modal.modal-open')
-    await expect(modal).toBeVisible()
+    // 抽屉可见
+    await expect(drawer).toBeVisible()
 
     // 包含名称输入框
-    await expect(page.locator('#name')).toBeVisible()
+    await expect(drawer.locator('input[type="text"]').first()).toBeVisible()
     // 包含描述输入框
-    await expect(page.locator('#description')).toBeVisible()
+    await expect(drawer.getByPlaceholder(/角色描述/)).toBeVisible()
   })
 
-  test('角色对话框包含权限选择区域', async ({ page, request }) => {
+  test('角色抽屉包含权限选择区域', async ({ page, request }) => {
     await registerAndLogin(page, request, 'roleui')
     await page.goto('/admin/iam/roles')
     await page.waitForLoadState('domcontentloaded')
 
-    const createBtn = page.locator('main').getByRole('button', { name: /新建|创建|添加/ })
-    await createBtn.first().click()
-    await expect(page.locator('fieldset')).toBeVisible()
+    const drawer = await openCreateDrawer(page)
 
-    // 权限选择区域（fieldset）
-    const permissionsFieldset = page.locator('fieldset')
-    await expect(permissionsFieldset).toBeVisible()
+    // 权限选择区域（checkbox 列表）
+    await expect(drawer.locator('input[type="checkbox"]').first()).toBeVisible()
   })
 
-  test('角色对话框可通过取消按钮关闭', async ({ page, request }) => {
+  test('角色抽屉可通过取消按钮关闭', async ({ page, request }) => {
     await registerAndLogin(page, request, 'roleui')
     await page.goto('/admin/iam/roles')
     await page.waitForLoadState('domcontentloaded')
 
-    const createBtn = page.locator('main').getByRole('button', { name: /新建|创建|添加/ })
-    await createBtn.first().click()
-    await expect(page.locator('#name')).toBeVisible()
+    const drawer = await openCreateDrawer(page)
 
     // 点击取消
-    const cancelBtn = page.getByRole('button', { name: /取消|Cancel/ })
+    const cancelBtn = drawer.getByRole('button', { name: /取消|Cancel/ })
     await cancelBtn.first().click()
     await page.waitForTimeout(300)
 
-    // 对话框消失
-    await expect(page.locator('.modal.modal-open')).not.toBeVisible()
-  })
-
-  test('角色对话框可通过背景遮罩关闭', async ({ page, request }) => {
-    await registerAndLogin(page, request, 'roleui')
-    await page.goto('/admin/iam/roles')
-    await page.waitForLoadState('domcontentloaded')
-
-    const createBtn = page.locator('main').getByRole('button', { name: /新建|创建|添加/ })
-    await createBtn.first().click()
-    await expect(page.locator('#name')).toBeVisible()
-
-    // 点击背景遮罩
-    const backdrop = page.locator('.modal-backdrop')
-    await backdrop.click()
-    await page.waitForTimeout(300)
-
-    await expect(page.locator('.modal.modal-open')).not.toBeVisible()
+    // 抽屉消失
+    await expect(page.getByRole('heading', { name: /新建角色管理/ })).toHaveCount(0)
   })
 
   // ---------------------------------------------------------------------------
   // 通过 UI 对话框创建角色
   // ---------------------------------------------------------------------------
-  test('通过对话框创建角色后出现在卡片列表中', async ({ page, request }) => {
+  test('通过抽屉创建角色后出现在表格列表中', async ({ page, request }) => {
     await registerAndLogin(page, request, 'roleui')
     await page.goto('/admin/iam/roles')
     await page.waitForLoadState('domcontentloaded')
@@ -197,31 +120,29 @@ test.describe('IAM Roles UI', () => {
     const roleName = `role_${Date.now().toString(36)}`
     const roleDesc = 'E2E 测试创建的角色'
 
-    // 打开新建对话框
-    const createBtn = page.locator('main').getByRole('button', { name: /新建|创建|添加/ })
-    await createBtn.first().click()
-    await expect(page.locator('#name')).toBeVisible()
+    // 打开新建抽屉
+    const drawer = await openCreateDrawer(page)
 
     // 填写表单
-    await page.locator('#name').fill(roleName)
-    await page.locator('#description').fill(roleDesc)
+    await drawer.locator('input[type="text"]').first().fill(roleName)
+    await drawer.getByPlaceholder(/角色描述/).fill(roleDesc)
 
     // 点击创建按钮
-    const submitBtn = page.locator('.modal.modal-open').getByRole('button', { name: /创建|保存|提交/ }).last()
+    const submitBtn = drawer.getByRole('button', { name: /新建|创建|保存|提交/ }).last()
     await submitBtn.click()
 
-    // 对话框应关闭
-    await expect(page.locator('.modal.modal-open')).not.toBeVisible({ timeout: 10_000 })
+    // 抽屉应关闭
+    await expect(page.getByRole('heading', { name: /新建角色管理/ })).toHaveCount(0, { timeout: 10_000 })
 
-    // 新角色出现在卡片列表中
-    const card = page.locator('.card').filter({ hasText: roleName })
-    await expect(card.first()).toBeVisible({ timeout: 5_000 })
+    // 新角色出现在表格中
+    const row = page.locator('tbody tr').filter({ hasText: roleName })
+    await expect(row.first()).toBeVisible({ timeout: 5_000 })
   })
 
   // ---------------------------------------------------------------------------
   // 通过 UI 对话框编辑角色
   // ---------------------------------------------------------------------------
-  test('通过对话框编辑角色描述', async ({ page, request }) => {
+  test('通过抽屉编辑角色描述', async ({ page, request }) => {
     await registerAndLogin(page, request, 'roleui')
 
     // 先通过 API 创建一个角色
@@ -233,30 +154,26 @@ test.describe('IAM Roles UI', () => {
     await page.goto('/admin/iam/roles')
     await page.waitForLoadState('domcontentloaded')
 
-    // 找到角色卡片并点击操作菜单
-    const card = page.locator('.card').filter({ hasText: roleName })
-    await expect(card.first()).toBeVisible({ timeout: 5_000 })
-    const menuBtn = card.first().locator('.dropdown button[aria-label]')
-    await menuBtn.click()
-    await page.waitForTimeout(300)
+    // 找到角色表格行并点击编辑
+    const row = page.locator('tbody tr').filter({ hasText: roleName })
+    await expect(row.first()).toBeVisible({ timeout: 5_000 })
+    await row.first().getByRole('button', { name: /编辑|Edit/ }).click()
 
-    // 点击编辑
-    const editIcon = card.first().locator('.dropdown-content').locator('[class*="tabler--edit"]')
-    await editIcon.click()
-
-    // 等待编辑对话框打开
-    await expect(page.locator('#name')).toBeVisible()
+    // 等待编辑抽屉打开
+    const heading = page.getByRole('heading', { name: /编辑角色管理/ }).last()
+    await expect(heading).toBeVisible()
+    const drawer = heading.locator('xpath=ancestor::*[.//button[normalize-space()="取消"] and .//button[normalize-space()="保存"]][1]')
 
     // 修改描述
     const newDesc = 'UI 编辑后的描述'
-    await page.locator('#description').fill(newDesc)
+    await drawer.getByPlaceholder(/角色描述/).fill(newDesc)
 
     // 点击保存
-    const saveBtn = page.locator('.modal.modal-open').getByRole('button', { name: /保存|提交/ }).last()
+    const saveBtn = drawer.getByRole('button', { name: /保存|提交/ }).last()
     await saveBtn.click()
 
-    // 对话框应关闭
-    await expect(page.locator('.modal.modal-open')).not.toBeVisible({ timeout: 10_000 })
+    // 抽屉应关闭
+    await expect(page.getByRole('heading', { name: /编辑角色管理/ })).toHaveCount(0, { timeout: 10_000 })
   })
 
   // ---------------------------------------------------------------------------
@@ -274,23 +191,18 @@ test.describe('IAM Roles UI', () => {
     await page.goto('/admin/iam/roles')
     await page.waitForLoadState('domcontentloaded')
 
-    // 找到角色卡片
-    const card = page.locator('.card').filter({ hasText: roleName })
-    await expect(card.first()).toBeVisible({ timeout: 5_000 })
-
-    // 打开下拉菜单
-    const menuBtn = card.first().locator('.dropdown button[aria-label]')
-    await menuBtn.click()
-    await page.waitForTimeout(300)
-
-    // 监听 confirm 对话框并点击确认
-    page.on('dialog', dialog => dialog.accept())
+    // 找到角色所在的表格行
+    const row = page.locator('tbody tr').filter({ hasText: roleName })
+    await expect(row.first()).toBeVisible({ timeout: 5_000 })
 
     // 点击删除
-    const deleteItem = card.first().locator('.dropdown-content').locator('[class*="tabler--trash"]')
-    await deleteItem.click()
+    const deleteBtn = row.first().getByRole('button', { name: /删除|Delete/ })
+    await deleteBtn.click()
+
+    // 确认删除
+    await page.locator('dialog[open]').getByRole('button', { name: /删除|Delete/ }).click()
 
     // 角色应从列表中消失
-    await expect(card.first()).not.toBeVisible({ timeout: 10_000 })
+    await expect(row.first()).not.toBeVisible({ timeout: 10_000 })
   })
 })

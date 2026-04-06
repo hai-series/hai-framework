@@ -82,7 +82,7 @@ test.describe('Modules Page UI', () => {
     await page.goto('/admin/modules')
     await page.waitForLoadState('domcontentloaded')
 
-    await clickModuleTab(page, 5)
+    await clickModuleTab(page, 7)
 
     const cryptoContent = page.locator('text=@h-ai/crypto')
     await expect(cryptoContent.first()).toBeVisible()
@@ -120,7 +120,7 @@ test.describe('Modules Page UI', () => {
     await page.waitForLoadState('domcontentloaded')
 
     // 切换到 crypto 标签
-    await clickModuleTab(page, 5)
+    await clickModuleTab(page, 7)
 
     // 明文输入框
     const plainInput = page.locator('#crypto-plain')
@@ -141,7 +141,7 @@ test.describe('Modules Page UI', () => {
     await page.waitForLoadState('domcontentloaded')
 
     // 切换到 crypto
-    await clickModuleTab(page, 5)
+    await clickModuleTab(page, 7)
 
     // 点击 SM3 哈希按钮
     const hashBtn = page.getByRole('button', { name: /SM3/ })
@@ -159,7 +159,7 @@ test.describe('Modules Page UI', () => {
     await page.waitForLoadState('domcontentloaded')
 
     // 切换到 crypto
-    await clickModuleTab(page, 5)
+    await clickModuleTab(page, 7)
 
     // 输入自定义文本
     const plainInput = page.locator('#crypto-plain')
@@ -180,7 +180,7 @@ test.describe('Modules Page UI', () => {
     await page.goto('/admin/modules')
     await page.waitForLoadState('domcontentloaded')
 
-    await clickModuleTab(page, 5)
+    await clickModuleTab(page, 7)
 
     const plainInput = page.locator('#crypto-plain')
     await plainInput.clear()
