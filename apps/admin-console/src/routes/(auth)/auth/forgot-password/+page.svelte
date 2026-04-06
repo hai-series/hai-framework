@@ -5,11 +5,11 @@
   使用 @h-ai/ui 的 ForgotPasswordForm 场景组件
   =============================================================================
 -->
-<script lang="ts">
+<script lang='ts'>
   import type { ForgotPasswordFormData } from '@h-ai/ui'
   import * as m from '$lib/paraglide/messages'
   import { apiFetch } from '$lib/utils/api'
-  
+
   let loading = $state(false)
   let errors = $state<Record<string, string>>({})
   let success = $state(false)
@@ -29,12 +29,15 @@
 
       if (result.success) {
         success = true
-      } else {
+      }
+      else {
         errors = { general: result.error?.message || m.common_error() }
       }
-    } catch {
+    }
+    catch {
       errors = { general: m.common_network_error() }
-    } finally {
+    }
+    finally {
       loading = false
     }
   }
@@ -46,12 +49,12 @@
 
 {#if success}
   <Result
-    status="success"
+    status='success'
     title={m.auth_forgot_email_sent_title()}
     description={m.auth_forgot_email_sent_desc()}
   >
     {#snippet actions()}
-      <a href="/auth/login" class="btn btn-primary">{m.auth_back_to_login()}</a>
+      <a href='/auth/login' class='btn btn-primary'>{m.auth_back_to_login()}</a>
     {/snippet}
   </Result>
 {:else}
@@ -61,8 +64,8 @@
     showTitle
     showDescription
     showBackLink
-    mode="email"
-    loginUrl="/auth/login"
+    mode='email'
+    loginUrl='/auth/login'
     onsubmit={handleForgotPassword}
   />
 {/if}

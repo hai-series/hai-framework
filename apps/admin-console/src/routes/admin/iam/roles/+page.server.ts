@@ -12,7 +12,7 @@ import { error } from '@sveltejs/kit'
 export const load: PageServerLoad = async ({ url, locals }) => {
   // 权限检查：role:read
   if (!kit.guard.check(locals.session, 'role:read')) {
-    error(403, { message: 'Forbidden' })
+    throw error(403, { message: 'Forbidden' })
   }
 
   const page = Number.parseInt(url.searchParams.get('page') ?? '1', 10) || 1

@@ -5,14 +5,14 @@
   使用 @h-ai/ui 的 LoginForm 场景组件
   =============================================================================
 -->
-<script lang="ts">
+<script lang='ts'>
+  import type { LoginFormData } from '@h-ai/ui'
   import { goto } from '$app/navigation'
   import { page } from '$app/state'
-  import type { LoginFormData } from '@h-ai/ui'
   import * as m from '$lib/paraglide/messages'
   import { apiFetch } from '$lib/utils/api'
   import { kit } from '@h-ai/kit'
-  
+
   let loading = $state(false)
   let errors = $state<Record<string, string>>({})
 
@@ -22,10 +22,10 @@
   const loginAgreements = $derived(
     iamPublicConfig?.agreements?.showOnLogin
       ? {
-          userAgreementUrl: iamPublicConfig.agreements.userAgreementUrl,
-          privacyPolicyUrl: iamPublicConfig.agreements.privacyPolicyUrl,
-        }
-      : undefined
+        userAgreementUrl: iamPublicConfig.agreements.userAgreementUrl,
+        privacyPolicyUrl: iamPublicConfig.agreements.privacyPolicyUrl,
+      }
+      : undefined,
   )
 
   /**
@@ -56,9 +56,9 @@
       const response = await apiFetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          identifier: data.username, 
-          password: data.password 
+        body: JSON.stringify({
+          identifier: data.username,
+          password: data.password,
         }),
       })
 
@@ -69,12 +69,15 @@
           kit.auth.setBrowserToken(result.data.accessToken)
         }
         goto(resolveRedirectTarget(returnUrl))
-      } else {
+      }
+      else {
         errors = { general: result.error?.message || m.common_error() }
       }
-    } catch {
+    }
+    catch {
       errors = { general: m.common_network_error() }
-    } finally {
+    }
+    finally {
       loading = false
     }
   }
@@ -89,8 +92,8 @@
   {errors}
   showTitle
   showRegisterLink={showRegisterLink}
-  forgotPasswordUrl="/auth/forgot-password"
-  registerUrl="/auth/register"
+  forgotPasswordUrl='/auth/forgot-password'
+  registerUrl='/auth/register'
   agreements={loginAgreements}
   onsubmit={handleLogin}
 />

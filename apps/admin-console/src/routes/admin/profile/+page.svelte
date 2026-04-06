@@ -1,6 +1,6 @@
-<script lang="ts">
-  import type { PageData } from './$types'
+<script lang='ts'>
   import type { ChangePasswordFormData, UserProfileSubmitData } from '@h-ai/ui'
+  import type { PageData } from './$types'
   import * as m from '$lib/paraglide/messages.js'
   import { apiFetch } from '$lib/utils/api'
   import { kit } from '@h-ai/kit'
@@ -9,7 +9,7 @@
     data: PageData
   }
 
-  let { data }: Props = $props()
+  const { data }: Props = $props()
 
   const USERNAME_PATTERN = /^\w{3,20}$/
   const EMAIL_PATTERN = /^[^\s@]+@[^\s@][^\s.@]*\.[^\s@]+$/
@@ -297,43 +297,43 @@
   <title>{m.nav_profile()} - {m.app_title()}</title>
 </svelte:head>
 
-<div class="space-y-5">
-  <div class="flex items-end justify-between gap-4">
+<div class='space-y-5'>
+  <div class='flex items-end justify-between gap-4'>
     <div>
-      <h1 class="text-xl font-semibold tracking-tight text-base-content">{m.nav_profile()}</h1>
-      <p class="text-sm text-base-content/45 mt-0.5">{m.settings_subtitle()}</p>
+      <h1 class='text-xl font-semibold tracking-tight text-base-content'>{m.nav_profile()}</h1>
+      <p class='text-sm text-base-content/45 mt-0.5'>{m.settings_subtitle()}</p>
     </div>
-    <div class="badge badge-outline h-7 px-2.5 text-xs" data-testid="profile-roles">
+    <div class='badge badge-outline h-7 px-2.5 text-xs' data-testid='profile-roles'>
       {data.profile.roles.join(', ') || '-'}
     </div>
   </div>
 
-  <div class="grid grid-cols-1 xl:grid-cols-3 gap-4">
-    <aside class="card bg-base-100 border border-base-content/6 rounded-xl xl:col-span-1">
-      <div class="card-body gap-4">
-        <div class="space-y-1">
-          <p class="text-xs uppercase tracking-wider text-base-content/40">{m.iam_users_form_username()}</p>
-          <p class="text-base font-semibold text-base-content" data-testid="profile-username">{profileUser.username || '-'}</p>
+  <div class='grid grid-cols-1 xl:grid-cols-3 gap-4'>
+    <aside class='card bg-base-100 border border-base-content/6 rounded-xl xl:col-span-1'>
+      <div class='card-body gap-4'>
+        <div class='space-y-1'>
+          <p class='text-xs uppercase tracking-wider text-base-content/40'>{m.iam_users_form_username()}</p>
+          <p class='text-base font-semibold text-base-content' data-testid='profile-username'>{profileUser.username || '-'}</p>
         </div>
-        <div class="space-y-1">
-          <p class="text-xs uppercase tracking-wider text-base-content/40">{m.iam_users_form_display_name()}</p>
-          <p class="text-sm text-base-content">{profileUser.displayName || '-'}</p>
+        <div class='space-y-1'>
+          <p class='text-xs uppercase tracking-wider text-base-content/40'>{m.iam_users_form_display_name()}</p>
+          <p class='text-sm text-base-content'>{profileUser.displayName || '-'}</p>
         </div>
-        <div class="space-y-1">
-          <p class="text-xs uppercase tracking-wider text-base-content/40">{m.iam_users_form_email()}</p>
-          <p class="text-sm text-base-content/70 break-all" data-testid="profile-email">{profileUser.email || '-'}</p>
+        <div class='space-y-1'>
+          <p class='text-xs uppercase tracking-wider text-base-content/40'>{m.iam_users_form_email()}</p>
+          <p class='text-sm text-base-content/70 break-all' data-testid='profile-email'>{profileUser.email || '-'}</p>
         </div>
       </div>
     </aside>
 
-    <section class="card bg-base-100 border border-base-content/6 rounded-xl xl:col-span-2">
-      <div class="card-body gap-4">
-        <div class="flex items-center justify-between">
-          <h2 class="text-sm font-semibold text-base-content">{m.nav_profile()}</h2>
+    <section class='card bg-base-100 border border-base-content/6 rounded-xl xl:col-span-2'>
+      <div class='card-body gap-4'>
+        <div class='flex items-center justify-between'>
+          <h2 class='text-sm font-semibold text-base-content'>{m.nav_profile()}</h2>
         </div>
 
         {#if profileSuccess}
-          <div class="alert alert-success text-sm" data-testid="profile-save-success">{profileSuccess}</div>
+          <div class='alert alert-success text-sm' data-testid='profile-save-success'>{profileSuccess}</div>
         {/if}
 
         <UserProfile
@@ -350,31 +350,31 @@
     </section>
   </div>
 
-  <section class="card bg-base-100 border border-base-content/6 rounded-xl overflow-hidden" data-testid="profile-password-card">
-    <div class="grid grid-cols-1 lg:grid-cols-12">
-      <aside class="lg:col-span-4 bg-base-content/2 border-b lg:border-b-0 lg:border-r border-base-content/6 p-5 space-y-4">
+  <section class='card bg-base-100 border border-base-content/6 rounded-xl overflow-hidden' data-testid='profile-password-card'>
+    <div class='grid grid-cols-1 lg:grid-cols-12'>
+      <aside class='lg:col-span-4 bg-base-content/2 border-b lg:border-b-0 lg:border-r border-base-content/6 p-5 space-y-4'>
         <div>
-          <h2 class="text-sm font-semibold text-base-content">{m.iam_users_form_password()}</h2>
-          <p class="text-xs text-base-content/50 mt-1.5">
+          <h2 class='text-sm font-semibold text-base-content'>{m.iam_users_form_password()}</h2>
+          <p class='text-xs text-base-content/50 mt-1.5'>
             {m.profile_password_security_desc()}
           </p>
         </div>
-        <div class="rounded-lg bg-base-100 px-4 py-3">
-          <p class="text-xs font-medium text-base-content/70 mb-2">{m.profile_password_rules_title()}</p>
-          <ul class="text-xs text-base-content/70 space-y-1">
+        <div class='rounded-lg bg-base-100 px-4 py-3'>
+          <p class='text-xs font-medium text-base-content/70 mb-2'>{m.profile_password_rules_title()}</p>
+          <ul class='text-xs text-base-content/70 space-y-1'>
             <li>{m.profile_password_rule_min_length({ minLength: MIN_PASSWORD_LENGTH })}</li>
             <li>{m.profile_password_rule_not_same()}</li>
             <li>{m.profile_password_rule_confirm_match()}</li>
           </ul>
         </div>
         {#if passwordSuccess}
-          <div class="alert alert-success text-sm" data-testid="profile-password-success">{passwordSuccess}</div>
+          <div class='alert alert-success text-sm' data-testid='profile-password-success'>{passwordSuccess}</div>
         {/if}
       </aside>
 
-      <div class="lg:col-span-8 p-6 lg:p-8">
+      <div class='lg:col-span-8 p-6 lg:p-8'>
         <ChangePasswordForm
-          class="w-full"
+          class='w-full'
           loading={passwordLoading}
           errors={passwordErrors}
           minPasswordLength={MIN_PASSWORD_LENGTH}

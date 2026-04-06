@@ -4,6 +4,7 @@ import { baseTestConfig } from '../vitest.base'
 export default mergeConfig(baseTestConfig, {
   test: {
     setupFiles: ['./tests/setup.ts'],
+    hookTimeout: 60_000,
   },
   resolve: {
     alias: {

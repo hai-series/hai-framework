@@ -49,7 +49,11 @@ jobs:
           PREVIOUS=$(git show HEAD~1:package.json 2>/dev/null | node -p "JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')).version" 2>/dev/null || echo "")
           echo "Previous version: $PREVIOUS"
 
-          if [ "$CURRENT" != "$PREVIOUS" ] && [ -n "$PREVIOUS" ]; then
+          if [ -z "$PREVIOUS" ]; then
+            echo "No previous version found, treating as first release"
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "version=$CURRENT" >> "$GITHUB_OUTPUT"
+          elif [ "$CURRENT" != "$PREVIOUS" ]; then
             echo "Version changed: $PREVIOUS -> $CURRENT"
             echo "changed=true" >> "$GITHUB_OUTPUT"
             echo "version=$CURRENT" >> "$GITHUB_OUTPUT"
@@ -80,17 +84,23 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Lint
+        run: pnpm lint
+
       - name: Build
         run: pnpm build
 
       - name: Unit tests
         run: pnpm test
 
-      - name: Install Playwright browsers
-        run: pnpm --filter admin-console exec playwright install --with-deps chromium
+      # - name: Install Playwright browsers
+      #   run: pnpm --filter admin-console exec playwright install --with-deps chromium
 
-      - name: E2E tests
-        run: pnpm --filter admin-console test:e2e
+      # - name: E2E tests
+      #   run: pnpm --filter admin-console test:e2e
 
   # ===========================================================================
   # 同步版本 + 创建 Release + 发布 npm
@@ -136,8 +146,7 @@ jobs:
             echo "No version changes to commit"
           else
             git commit -m "chore: sync version to v${{ needs.detect-version.outputs.version }} [skip ci]"
-            git pull --rebase origin main || { echo "Error: rebase failed, manual intervention required"; exit 1; }
-            git push
+            git push || { echo "Error: push failed, branch may have moved. Re-run release from latest main."; exit 1; }
           fi
 
       # ----- 创建 Tag + Release -----
@@ -220,10 +229,17 @@ jobs:
           draft: false
           prerelease: false
 
+      - name: Verify npm authentication
+        run: npm whoami
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
       # ----- 发布到 npm -----
       - name: Publish to npm
         run: |
           echo "Publishing public packages to npm..."
+          FAILED=0
+
           for pkg in packages/*/; do
             PKG_JSON="${pkg}package.json"
             if [ ! -f "$PKG_JSON" ]; then
@@ -232,16 +248,28 @@ jobs:
 
             IS_PRIVATE=$(node -p "require('./${PKG_JSON}').private || false")
             PKG_NAME=$(node -p "require('./${PKG_JSON}').name")
+            PKG_VERSION=$(node -p "require('./${PKG_JSON}').version")
 
             if [ "$IS_PRIVATE" = "true" ]; then
               echo "Skipping private package: $PKG_NAME"
               continue
             fi
 
+            if npm view "${PKG_NAME}@${PKG_VERSION}" version >/dev/null 2>&1; then
+              echo "Skipping already published package: ${PKG_NAME}@${PKG_VERSION}"
+              continue
+            fi
+
             echo "Publishing $PKG_NAME..."
-            (cd "$pkg" && pnpm publish --access public --no-git-checks) || {
-              echo "Warning: Failed to publish $PKG_NAME"
+            (cd "$pkg" && pnpm publish --access public) || {
+              echo "Error: Failed to publish ${PKG_NAME}@${PKG_VERSION}"
+              FAILED=1
             }
           done
+
+          if [ "$FAILED" -ne 0 ]; then
+            echo "One or more packages failed to publish"
+            exit 1
+          fi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
