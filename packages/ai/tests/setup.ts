@@ -48,10 +48,16 @@ const aiTables = ['hai_ai_chat_records', 'hai_ai_sessions', 'hai_ai_memory', 'ha
 afterEach(async () => {
   if (!reldb.isInitialized)
     return
-  for (const table of aiTables) {
-    try {
-      await reldb.sql.execute(`DELETE FROM ${table}`)
-    }
-    catch { /* 表可能尚未创建 */ }
-  }
+
+  await Promise.all(aiTables.map(async (table) => {
+    const existsResult = await reldb.sql.get<{ name: string }>(
+      `SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?`,
+      [table],
+    )
+
+    if (!existsResult.success || !existsResult.data)
+      return
+
+    await reldb.sql.execute(`DELETE FROM ${table}`)
+  }))
 })
