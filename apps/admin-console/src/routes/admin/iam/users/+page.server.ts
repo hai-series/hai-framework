@@ -39,7 +39,7 @@ function parsePositiveInt(value: string | null, fallback: number): number {
 export const load: PageServerLoad = async ({ url, locals }) => {
   // 权限检查：user:read
   if (!kit.guard.check(locals.session, 'user:read')) {
-    error(403, { message: 'Forbidden' })
+    throw error(403, { message: 'Forbidden' })
   }
 
   const page = parsePositiveInt(url.searchParams.get('page'), 1)

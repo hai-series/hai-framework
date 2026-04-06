@@ -135,7 +135,17 @@ const haiHandle = kit.createHandle({
     verifyToken: validateSession,
     loginUrl: '/auth/login',
     protectedPaths: ['/admin/*', '/api/*'],
-    publicPaths: ['/admin/public/*', '/api/auth/login', '/api/auth/register', '/api/public/*', '/api/kit/*'],
+    publicPaths: [
+      '/admin/public/*',
+      '/api/auth/login',
+      '/api/auth/register',
+      '/api/auth/logout',
+      '/api/auth/forgot-password',
+      '/api/auth/reset-password',
+      '/api/storage/*',
+      '/api/public/*',
+      '/api/kit/*',
+    ],
     operations: () => iam.auth,
   },
   rateLimit: {

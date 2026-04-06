@@ -23,6 +23,9 @@ export default defineConfig({
   use: {
     baseURL,
     channel: 'chrome',
+    extraHTTPHeaders: {
+      Origin: baseURL,
+    },
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
   },
@@ -31,6 +34,7 @@ export default defineConfig({
     command: 'pnpm build && pnpm exec vite preview --port 4173 --strictPort',
     env: {
       HAI_E2E: '1',
+      NODE_ENV: 'test',
     },
     url: baseURL,
     reuseExistingServer: false,

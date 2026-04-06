@@ -6,6 +6,7 @@
  */
 
 import { createKitClient } from './client/kit-client.js'
+import { defineCrud } from './crud/kit-crud.js'
 import { clearBrowserToken, createHandleFetch, createTokenStore, setBrowserToken } from './kit-auth.js'
 import { setAllModulesLocale } from './kit-i18n.js'
 
@@ -15,6 +16,9 @@ import { setAllModulesLocale } from './kit-i18n.js'
 export const kit = {
   client: {
     create: createKitClient,
+  },
+  crud: {
+    define: defineCrud,
   },
   auth: {
     setBrowserToken,

@@ -5,13 +5,13 @@
   使用 @h-ai/ui 的 ResetPasswordForm 场景组件
   =============================================================================
 -->
-<script lang="ts">
-  import { page } from '$app/state'
-  import { goto } from '$app/navigation'
+<script lang='ts'>
   import type { ResetPasswordFormData } from '@h-ai/ui'
+  import { goto } from '$app/navigation'
+  import { page } from '$app/state'
   import * as m from '$lib/paraglide/messages'
   import { apiFetch } from '$lib/utils/api'
-  
+
   let loading = $state(false)
   let errors = $state<Record<string, string>>({})
   let success = $state(false)
@@ -36,10 +36,10 @@
       const response = await apiFetch('/api/auth/reset-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          token, 
-          password: data.newPassword, 
-          confirmPassword: data.confirmPassword 
+        body: JSON.stringify({
+          token,
+          password: data.newPassword,
+          confirmPassword: data.confirmPassword,
         }),
       })
 
@@ -49,12 +49,15 @@
         success = true
         // 3秒后跳转到登录页
         setTimeout(() => goto('/auth/login'), 3000)
-      } else {
+      }
+      else {
         errors = { general: result.error?.message || m.auth_reset_failed() }
       }
-    } catch {
+    }
+    catch {
       errors = { general: m.common_network_error() }
-    } finally {
+    }
+    finally {
       loading = false
     }
   }
@@ -66,22 +69,22 @@
 
 {#if success}
   <Result
-    status="success"
+    status='success'
     title={m.auth_reset_success_title()}
     description={m.auth_reset_success_desc()}
   >
     {#snippet actions()}
-      <a href="/auth/login" class="btn btn-primary">{m.auth_reset_login_now()}</a>
+      <a href='/auth/login' class='btn btn-primary'>{m.auth_reset_login_now()}</a>
     {/snippet}
   </Result>
 {:else if !token}
   <Result
-    status="warning"
+    status='warning'
     title={m.auth_reset_invalid_link_title()}
     description={m.auth_reset_invalid_link_desc()}
   >
     {#snippet actions()}
-      <a href="/auth/forgot-password" class="btn btn-primary">{m.auth_reset_request_again()}</a>
+      <a href='/auth/forgot-password' class='btn btn-primary'>{m.auth_reset_request_again()}</a>
     {/snippet}
   </Result>
 {:else}
@@ -94,7 +97,7 @@
     showCode={false}
     showPasswordStrength={true}
     minPasswordLength={passwordMinLength}
-    loginUrl="/auth/login"
+    loginUrl='/auth/login'
     onsubmit={handleResetPassword}
   />
 {/if}

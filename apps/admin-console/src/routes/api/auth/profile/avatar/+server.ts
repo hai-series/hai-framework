@@ -71,7 +71,9 @@ export const POST = kit.handler(async ({ request, locals }) => {
   }
 
   // 仅返回可公开访问的 URL；admin-console 不再提供本地文件转发路由
-  const avatarUrl = storage.presign.publicUrl(key)
+  const origin = new URL(request.url).origin
+  const encodedKey = key.split('/').map(segment => encodeURIComponent(segment)).join('/')
+  const avatarUrl = storage.presign.publicUrl(key) ?? `${origin}/api/storage/${encodedKey}`
   if (!avatarUrl) {
     return kit.response.internalError(m.common_error())
   }

@@ -962,7 +962,7 @@ logger.info('Redis connected', { address: sanitizeRedisUrl(config.url) })
 ```jsonc
 {
   "name": "@h-ai/xx",
-  "version": "0.1.0",
+  "version": "0.1.0-alpha1",
   "type": "module",
   "exports": {
     ".": {
