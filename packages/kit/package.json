@@ -1,7 +1,7 @@
 {
   "name": "@h-ai/kit",
   "type": "module",
-  "version": "0.1.0-alpha1",
+  "version": "0.1.0-alpha5",
   "description": "Hai Framework SvelteKit integration module.",
   "license": "Apache-2.0",
   "exports": {
@@ -57,8 +57,12 @@
     "svelte": "^5.53.6"
   },
   "peerDependenciesMeta": {
-    "@sveltejs/adapter-node": { "optional": true },
-    "@sveltejs/adapter-static": { "optional": true }
+    "@sveltejs/adapter-node": {
+      "optional": true
+    },
+    "@sveltejs/adapter-static": {
+      "optional": true
+    }
   },
   "dependencies": {
     "@h-ai/core": "workspace:*",

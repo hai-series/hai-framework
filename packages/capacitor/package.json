@@ -1,7 +1,7 @@
 {
   "name": "@h-ai/capacitor",
   "type": "module",
-  "version": "0.1.0-alpha1",
+  "version": "0.1.0-alpha5",
   "description": "Hai Framework Capacitor bridge module for native mobile capabilities.",
   "license": "Apache-2.0",
   "exports": {
@@ -33,11 +33,21 @@
     "@capacitor/preferences": "catalog:"
   },
   "peerDependenciesMeta": {
-    "@capacitor/app": { "optional": true },
-    "@capacitor/camera": { "optional": true },
-    "@capacitor/device": { "optional": true },
-    "@capacitor/push-notifications": { "optional": true },
-    "@capacitor/status-bar": { "optional": true }
+    "@capacitor/app": {
+      "optional": true
+    },
+    "@capacitor/camera": {
+      "optional": true
+    },
+    "@capacitor/device": {
+      "optional": true
+    },
+    "@capacitor/push-notifications": {
+      "optional": true
+    },
+    "@capacitor/status-bar": {
+      "optional": true
+    }
   },
   "dependencies": {
     "@h-ai/api-client": "workspace:*",
