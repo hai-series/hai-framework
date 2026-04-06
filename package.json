@@ -1,7 +1,7 @@
 {
   "name": "hai-framework",
   "type": "module",
-  "version": "0.1.0-alpha2",
+  "version": "0.1.0-alpha3",
   "private": true,
   "packageManager": "pnpm@9.15.0",
   "description": "hai Agent Framework - AI-Native, Configuration-Driven, Security-First",
@@ -35,6 +35,9 @@
     "turbo": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
+  },
+  "overrides": {
+    "eslint-plugin-yml": "3.3.1"
   },
   "lint-staged": {
     "*.{js,ts,svelte,json,md,yml,yaml}": [
