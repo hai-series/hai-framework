@@ -246,7 +246,9 @@ test.describe('IAM Permissions CRUD', () => {
     expect(listRes.ok()).toBe(true)
     const listBody = await listRes.json()
     expect(listBody.success).toBe(true)
-    const found = listBody.data.find((p: Record<string, unknown>) => p.id === permId)
+    const permissions = Array.isArray(listBody.data) ? listBody.data : listBody.data?.items
+    expect(Array.isArray(permissions)).toBe(true)
+    const found = permissions.find((p: Record<string, unknown>) => p.id === permId)
     expect(found).toBeTruthy()
 
     // 3. 删除权限

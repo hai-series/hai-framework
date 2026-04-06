@@ -36,7 +36,7 @@ export function uniqueUser(prefix = 'e2e') {
   // eslint-disable-next-line node/prefer-global/process -- e2e 测试运行在 Node 环境
   const entropy = `${Date.now().toString(36)}${process.pid.toString(36)}${Math.random().toString(36).slice(2, 6)}`
   const id = entropy.slice(-10)
-  const username = `${safePrefix}_${id}`.slice(0, 20)
+  const username = `${safePrefix}${id}`.slice(0, 20)
   return {
     username,
     email: `${safePrefix}_${id}@test.local`,
@@ -167,7 +167,14 @@ export async function registerAndLoginViaApi(request: APIRequestContext, prefix 
   }
 
   const requestWithAuth = request as APIRequestContext & {
-    __bearerPatched?: boolean
+    __authState?: {
+      accessToken: string
+      originalGet: APIRequestContext['get']
+      originalPost: APIRequestContext['post']
+      originalPut: APIRequestContext['put']
+      originalPatch: APIRequestContext['patch']
+      originalDelete: APIRequestContext['delete']
+    }
     get: APIRequestContext['get']
     post: APIRequestContext['post']
     put: APIRequestContext['put']
@@ -175,27 +182,33 @@ export async function registerAndLoginViaApi(request: APIRequestContext, prefix 
     delete: APIRequestContext['delete']
   }
 
-  if (!requestWithAuth.__bearerPatched) {
+  if (!requestWithAuth.__authState) {
+    const authState = {
+      accessToken,
+      originalGet: request.get.bind(request),
+      originalPost: request.post.bind(request),
+      originalPut: request.put.bind(request),
+      originalPatch: request.patch.bind(request),
+      originalDelete: request.delete.bind(request),
+    }
+
     const withAuthHeaders = (options: Parameters<APIRequestContext['get']>[1] = {}) => ({
       ...options,
       headers: {
         ...(options.headers ?? {}),
-        Authorization: options.headers?.Authorization ?? `Bearer ${accessToken}`,
+        Authorization: options.headers?.Authorization ?? `Bearer ${authState.accessToken}`,
       },
     })
 
-    const originalGet = request.get.bind(request)
-    const originalPost = request.post.bind(request)
-    const originalPut = request.put.bind(request)
-    const originalPatch = request.patch.bind(request)
-    const originalDelete = request.delete.bind(request)
-
-    requestWithAuth.get = ((url, options) => originalGet(url, withAuthHeaders(options))) as APIRequestContext['get']
-    requestWithAuth.post = ((url, options) => originalPost(url, withAuthHeaders(options as Parameters<APIRequestContext['get']>[1]))) as APIRequestContext['post']
-    requestWithAuth.put = ((url, options) => originalPut(url, withAuthHeaders(options as Parameters<APIRequestContext['get']>[1]))) as APIRequestContext['put']
-    requestWithAuth.patch = ((url, options) => originalPatch(url, withAuthHeaders(options as Parameters<APIRequestContext['get']>[1]))) as APIRequestContext['patch']
-    requestWithAuth.delete = ((url, options) => originalDelete(url, withAuthHeaders(options))) as APIRequestContext['delete']
-    requestWithAuth.__bearerPatched = true
+    requestWithAuth.get = ((url, options) => authState.originalGet(url, withAuthHeaders(options))) as APIRequestContext['get']
+    requestWithAuth.post = ((url, options) => authState.originalPost(url, withAuthHeaders(options as Parameters<APIRequestContext['get']>[1]))) as APIRequestContext['post']
+    requestWithAuth.put = ((url, options) => authState.originalPut(url, withAuthHeaders(options as Parameters<APIRequestContext['get']>[1]))) as APIRequestContext['put']
+    requestWithAuth.patch = ((url, options) => authState.originalPatch(url, withAuthHeaders(options as Parameters<APIRequestContext['get']>[1]))) as APIRequestContext['patch']
+    requestWithAuth.delete = ((url, options) => authState.originalDelete(url, withAuthHeaders(options))) as APIRequestContext['delete']
+    requestWithAuth.__authState = authState
+  }
+  else {
+    requestWithAuth.__authState.accessToken = accessToken
   }
 
   const meRes = await request.get('/api/auth/me')
