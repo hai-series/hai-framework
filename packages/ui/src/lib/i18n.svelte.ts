@@ -12,11 +12,49 @@ import { core } from '@h-ai/core'
 const {
   DEFAULT_LOCALE,
   DEFAULT_LOCALES,
-  detectBrowserLocale,
-  isLocaleSupported,
-  resolveLocale,
   setGlobalLocale,
 } = core.i18n
+
+function isLocaleSupported(locale: Locale, supportedLocales: LocaleInfo[] = DEFAULT_LOCALES): boolean {
+  const normalized = locale === 'en' ? 'en-US' : locale === 'zh' ? 'zh-CN' : locale
+  return supportedLocales.some(item => item.code === normalized)
+}
+
+function resolveLocale(
+  locale: Locale,
+  supportedLocales: LocaleInfo[] = DEFAULT_LOCALES,
+  defaultLocale: Locale = DEFAULT_LOCALE,
+): Locale {
+  const normalized = locale === 'en' ? 'en-US' : locale === 'zh' ? 'zh-CN' : locale
+  return isLocaleSupported(normalized, supportedLocales) ? normalized : defaultLocale
+}
+
+function detectBrowserLocale(supportedLocales: LocaleInfo[] = DEFAULT_LOCALES): Locale | null {
+  if (typeof navigator === 'undefined') {
+    return null
+  }
+
+  const browserCandidates: Locale[] = [
+    navigator.language,
+    ...(navigator.languages ?? []),
+  ]
+
+  for (const candidate of browserCandidates) {
+    const resolved = resolveLocale(candidate, supportedLocales, DEFAULT_LOCALE)
+    if (isLocaleSupported(resolved, supportedLocales)) {
+      return resolved
+    }
+  }
+
+  return null
+}
+
+function interpolate(template: string, params: Record<string, string | number | boolean> = {}): string {
+  return template.replace(/\{(\w+)\}/g, (_, key: string) => {
+    const value = params[key]
+    return value !== undefined ? String(value) : `{${key}}`
+  })
+}
 
 // ─── LocalStorage Key ───
 
@@ -116,6 +154,7 @@ export {
   DEFAULT_LOCALE,
   DEFAULT_LOCALES,
   detectBrowserLocale,
+  interpolate,
   isLocaleSupported,
   resolveLocale,
   setGlobalLocale,
@@ -123,4 +162,3 @@ export {
 
 // 导出额外的便捷函数
 export const getGlobalLocale = core.i18n.getGlobalLocale
-export const interpolate = core.i18n.interpolate

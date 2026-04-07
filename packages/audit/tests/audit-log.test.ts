@@ -6,7 +6,7 @@
 
 import { reldb } from '@h-ai/reldb'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { audit } from '../src/index.js'
+import { audit, HaiAuditError } from '../src/index.js'
 
 // ─── 测试辅助 ───
 
@@ -132,6 +132,27 @@ describe('audit.log', () => {
     expect(result2.success).toBe(true)
     if (result1.success && result2.success) {
       expect(result1.data.id).not.toBe(result2.data.id)
+    }
+  })
+
+  // ─── 输入校验 ───
+
+  it('action 为空字符串时应返回 LOG_FAILED', async () => {
+    const result = await audit.log({ action: '   ', resource: 'auth' })
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error.code).toBe(HaiAuditError.LOG_FAILED.code)
+    }
+  })
+
+  it('resource 超长时应返回 LOG_FAILED', async () => {
+    const result = await audit.log({
+      action: 'login',
+      resource: 'a'.repeat(300),
+    })
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error.code).toBe(HaiAuditError.LOG_FAILED.code)
     }
   })
 })

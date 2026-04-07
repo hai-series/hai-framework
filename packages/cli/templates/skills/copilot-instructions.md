@@ -1,10 +1,10 @@
 # GitHub Copilot 项目指令
 
-> 本文件作为 GitHub Copilot 的项目级指引，指向 `.github/skills/` 中的详细 Skill 文件。
+> 本文件作为 GitHub Copilot 的项目级指引，指向 `.agents/skills/` 中的详细 Skill 文件。
 
 ## 项目概述
 
-本项目使用 [hai-framework](https://github.com/nic%(200hub/hai-framework) 构建，基于 SvelteKit 2 + Svelte 5 (Runes) + TailwindCSS 4 + DaisyUI 5 + TypeScript 5.7+。
+本项目使用 [hai-framework](https://github.com/nicehero/hai-framework) 构建，基于 SvelteKit 2 + Svelte 5 (Runes) + TailwindCSS 4 + DaisyUI 5 + TypeScript 5.7+。
 
 ## 技术栈要点
 
@@ -31,7 +31,7 @@
 
 ## Skills 目录
 
-详细的开发指南位于 `.github/skills/` 目录：
+详细的开发指南位于 `.agents/skills/` 目录：
 
 | Skill            | 说明                                                  |
 | ---------------- | ----------------------------------------------------- |

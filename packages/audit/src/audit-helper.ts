@@ -1,5 +1,5 @@
 /**
- * @h-ai/audit — IAM 便捷记录器
+ * @h-ai/audit — 审计便捷记录器
  *
  * 封装常见审计操作（登录、登出、注册、密码重置、CRUD），简化调用方代码。
  * @module audit-helper

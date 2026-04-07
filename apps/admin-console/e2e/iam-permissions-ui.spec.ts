@@ -3,9 +3,9 @@
  * E2E 测试 - IAM 权限管理页面 UI
  * =============================================================================
  * 覆盖范围：
- * - 页面结构（标题、统计卡片、资源分组表格）
- * - 新建权限对话框（字段、自动名称生成、关闭）
- * - 通过 UI 对话框创建、删除权限（走 apiFetch 传输加密链路）
+ * - 页面结构（标题、统计卡片、权限表格）
+ * - 新建权限抽屉（字段、自动名称生成、关闭）
+ * - 通过 UI 抽屉创建、删除权限（走 apiFetch 传输加密链路）
  * =============================================================================
  */
 
@@ -13,6 +13,16 @@ import { expect, test } from '@playwright/test'
 import { registerAndLogin } from './helpers'
 
 test.describe('IAM Permissions UI', () => {
+  async function openCreatePanel(page: import('@playwright/test').Page) {
+    const createBtn = page.locator('main').getByRole('button', { name: /新建|创建|添加/ })
+    await createBtn.first().click()
+
+    const heading = page.getByRole('heading', { name: /新建权限管理/ }).last()
+    await expect(heading).toBeVisible()
+    const panel = heading.locator('xpath=ancestor::*[.//button[normalize-space()="取消"] and .//button[normalize-space()="新建"]][1]')
+    return panel
+  }
+
   // ---------------------------------------------------------------------------
   // 页面结构
   // ---------------------------------------------------------------------------
@@ -41,54 +51,49 @@ test.describe('IAM Permissions UI', () => {
     expect(count).toBeGreaterThanOrEqual(1)
   })
 
-  test('权限以资源分组展示', async ({ page, request }) => {
+  test('权限列表表格可见', async ({ page, request }) => {
     await registerAndLogin(page, request, 'permui')
     await page.goto('/admin/iam/permissions')
     await page.waitForLoadState('domcontentloaded')
 
-    // 至少有一个表格（权限分组）
-    const tables = page.locator('table')
-    const count = await tables.count()
-    expect(count).toBeGreaterThanOrEqual(1)
+    await expect(page.locator('table').first()).toBeVisible()
   })
 
   // ---------------------------------------------------------------------------
-  // 新建权限对话框
+  // 新建权限抽屉
   // ---------------------------------------------------------------------------
-  test('点击新建按钮打开权限对话框', async ({ page, request }) => {
+  test('点击新建按钮打开权限抽屉', async ({ page, request }) => {
     await registerAndLogin(page, request, 'permui')
     await page.goto('/admin/iam/permissions')
     await page.waitForLoadState('domcontentloaded')
 
-    const createBtn = page.locator('main').getByRole('button', { name: /新建|创建|添加/ })
-    await createBtn.first().click()
-
-    // 对话框中应有资源和操作输入框
-    await expect(page.locator('#resource')).toBeVisible()
-    await expect(page.locator('#action')).toBeVisible()
-    await expect(page.locator('#name')).toBeVisible()
+    const panel = await openCreatePanel(page)
+    const inputs = panel.locator('input[type="text"], textarea')
+    await expect(inputs.nth(0)).toBeVisible()
+    await expect(inputs.nth(1)).toBeVisible()
+    await expect(inputs.nth(3)).toBeVisible()
   })
 
-  test('新建对话框可关闭', async ({ page, request }) => {
+  test('新建抽屉可关闭', async ({ page, request }) => {
     await registerAndLogin(page, request, 'permui')
     await page.goto('/admin/iam/permissions')
     await page.waitForLoadState('domcontentloaded')
 
-    const createBtn = page.locator('main').getByRole('button', { name: /新建|创建|添加/ })
-    await createBtn.first().click()
-    await expect(page.locator('#resource')).toBeVisible()
+    const panel = await openCreatePanel(page)
+    const inputs = panel.locator('input[type="text"], textarea')
+    await expect(inputs.nth(3)).toBeVisible()
 
-    // 点击取消按钮关闭对话框
-    const cancelBtn = page.locator('.modal-action').getByRole('button', { name: /取消|Cancel/ })
+    // 点击取消按钮关闭抽屉
+    const cancelBtn = panel.getByRole('button', { name: /取消|Cancel/ })
     await cancelBtn.click({ force: true })
 
-    await expect(page.locator('#resource')).not.toBeVisible({ timeout: 5000 })
+    await expect(page.getByRole('heading', { name: /新建权限管理/ })).toHaveCount(0, { timeout: 5000 })
   })
 
   // ---------------------------------------------------------------------------
   // 通过 UI 对话框创建权限
   // ---------------------------------------------------------------------------
-  test('通过对话框创建权限后出现在列表中', async ({ page, request }) => {
+  test('通过抽屉创建权限后出现在列表中', async ({ page, request }) => {
     await registerAndLogin(page, request, 'permui')
     await page.goto('/admin/iam/permissions')
     await page.waitForLoadState('domcontentloaded')
@@ -96,27 +101,27 @@ test.describe('IAM Permissions UI', () => {
     const ts = Date.now().toString(36)
     const resource = `res_${ts}`
     const action = 'read'
+    const permissionName = `${resource}:${action}`
 
-    // 打开新建对话框
-    const createBtn = page.locator('main').getByRole('button', { name: /新建|创建|添加/ })
-    await createBtn.first().click()
-    await expect(page.locator('#resource')).toBeVisible()
+    // 打开新建抽屉
+    const panel = await openCreatePanel(page)
+    const inputs = panel.locator('input[type="text"], textarea')
 
     // 填写资源和操作
-    await page.locator('#resource').fill(resource)
-    await page.locator('#action').fill(action)
+    await inputs.nth(3).fill(resource)
+    await inputs.nth(1).fill(action)
     // name 字段应自动生成（resource:action）
     await page.waitForTimeout(300)
 
     // 点击创建
-    const submitBtn = page.locator('.modal-box, dialog').getByRole('button', { name: /创建|提交/ }).last()
+    const submitBtn = panel.getByRole('button', { name: /创建|提交|新建/ }).last()
     await submitBtn.click()
 
-    // 对话框应关闭
-    await expect(page.locator('#resource')).not.toBeVisible({ timeout: 10_000 })
+    // 抽屉应关闭
+    await expect(page.getByRole('heading', { name: /新建权限管理/ })).toHaveCount(0, { timeout: 10_000 })
 
-    // 新权限应出现在页面中
-    const permRow = page.locator('table').filter({ hasText: resource })
+    // 新权限应出现在页面中（列表展示 name/code，不展示 resource 单列）
+    const permRow = page.locator('tbody tr').filter({ hasText: permissionName })
     await expect(permRow.first()).toBeVisible({ timeout: 5_000 })
   })
 
@@ -145,13 +150,13 @@ test.describe('IAM Permissions UI', () => {
     const permCell = page.locator('td').filter({ hasText: permName })
     await expect(permCell.first()).toBeVisible({ timeout: 5_000 })
 
-    // 监听 confirm 对话框并点击确认
-    page.on('dialog', dialog => dialog.accept())
-
     // 找到同行的删除按钮
-    const row = permCell.first().locator('..')
-    const deleteBtn = row.locator('button[aria-label]').last()
+    const row = permCell.first().locator('xpath=ancestor::tr')
+    const deleteBtn = row.getByRole('button', { name: /删除|Delete/ })
     await deleteBtn.click()
+
+    // 确认删除
+    await page.locator('dialog[open]').getByRole('button', { name: /删除|Delete/ }).click()
 
     // 权限应从列表中消失
     await expect(permCell.first()).not.toBeVisible({ timeout: 10_000 })

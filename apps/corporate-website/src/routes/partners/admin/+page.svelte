@@ -1,8 +1,8 @@
-<script lang="ts">
+<script lang='ts'>
   import { goto } from '$app/navigation'
+  import * as m from '$lib/paraglide/messages.js'
   import { corporateAuthTokenStore } from '$lib/utils/auth.js'
   import { Alert, Badge, Button, Card, Empty, Input, PageHeader, Select } from '@h-ai/ui'
-  import * as m from '$lib/paraglide/messages.js'
 
   interface Props {
     data: {
@@ -16,7 +16,7 @@
     }
   }
 
-  let { data }: Props = $props()
+  const { data }: Props = $props()
 
   let search = $state('')
   let status = $state('')
@@ -52,8 +52,10 @@
     const params = new URLSearchParams()
     params.set('page', '1')
     params.set('pageSize', String(data.pageSize))
-    if (search.trim()) params.set('search', search.trim())
-    if (status) params.set('status', status)
+    if (search.trim())
+      params.set('search', search.trim())
+    if (status)
+      params.set('status', status)
 
     await goto(`/partners/admin?${params.toString()}`)
   }
@@ -68,8 +70,10 @@
     const params = new URLSearchParams()
     params.set('page', String(nextPage))
     params.set('pageSize', String(data.pageSize))
-    if (search.trim()) params.set('search', search.trim())
-    if (status) params.set('status', status)
+    if (search.trim())
+      params.set('search', search.trim())
+    if (status)
+      params.set('status', status)
     void goto(`/partners/admin?${params.toString()}`)
   }
 </script>
@@ -78,58 +82,58 @@
   <title>{m.nav_partner_admin()} - {m.brand()}</title>
 </svelte:head>
 
-<section class="py-10 px-4 lg:px-8">
-  <div class="mx-auto max-w-7xl space-y-5">
-    <div class="flex items-center justify-between gap-3">
-      <PageHeader title={m.nav_partner_admin()} description="{m.admin_records_total({ total: String(data.total) })}，{m.admin_records_page_info({ page: String(data.page), totalPages: String(totalPages) })}" />
-      <Button variant="default" size="sm" outline onclick={handleLogout}>
-        <span class="icon-[tabler--logout] size-4"></span>
+<section class='py-10 px-4 lg:px-8'>
+  <div class='mx-auto max-w-7xl space-y-5'>
+    <div class='flex items-center justify-between gap-3'>
+      <PageHeader title={m.nav_partner_admin()} description='{m.admin_records_total({ total: String(data.total) })}，{m.admin_records_page_info({ page: String(data.page), totalPages: String(totalPages) })}' />
+      <Button variant='default' size='sm' outline onclick={handleLogout}>
+        <span class='icon-[tabler--logout] size-4'></span>
         {m.admin_logout()}
       </Button>
     </div>
 
-    <Card shadow="sm">
-      <form class="grid gap-3 md:grid-cols-[1fr_220px_auto]" onsubmit={handleFilter}>
+    <Card shadow='sm'>
+      <form class='grid gap-3 md:grid-cols-[1fr_220px_auto]' onsubmit={handleFilter}>
         <Input placeholder={m.admin_search_placeholder()} bind:value={search} />
         <Select options={statusOptions} bind:value={status} />
-        <Button type="submit" variant="primary">{m.admin_search_button()}</Button>
+        <Button type='submit' variant='primary'>{m.admin_search_button()}</Button>
       </form>
     </Card>
 
     {#if data.loadError}
-      <Alert variant="error">{data.loadError}</Alert>
+      <Alert variant='error'>{data.loadError}</Alert>
     {/if}
 
-    <Card shadow="sm" class="overflow-x-auto">
-      <table class="table table-zebra w-full">
+    <Card shadow='sm' class='overflow-x-auto'>
+      <table class='table table-zebra w-full'>
         <thead>
           <tr>
-            <th class="text-base-content/70">{m.admin_col_time()}</th>
-            <th class="text-base-content/70">{m.admin_col_company()}</th>
-            <th class="text-base-content/70">{m.admin_col_contact()}</th>
-            <th class="text-base-content/70">{m.admin_col_contact_info()}</th>
-            <th class="text-base-content/70">{m.admin_col_type()}</th>
-            <th class="text-base-content/70">{m.admin_col_budget()}</th>
-            <th class="text-base-content/70">{m.admin_col_status()}</th>
+            <th class='text-base-content/70'>{m.admin_col_time()}</th>
+            <th class='text-base-content/70'>{m.admin_col_company()}</th>
+            <th class='text-base-content/70'>{m.admin_col_contact()}</th>
+            <th class='text-base-content/70'>{m.admin_col_contact_info()}</th>
+            <th class='text-base-content/70'>{m.admin_col_type()}</th>
+            <th class='text-base-content/70'>{m.admin_col_budget()}</th>
+            <th class='text-base-content/70'>{m.admin_col_status()}</th>
           </tr>
         </thead>
         <tbody>
           {#if data.records.length === 0}
             <tr>
-              <td colspan="7">
+              <td colspan='7'>
                 <Empty description={m.admin_empty()} />
               </td>
             </tr>
           {:else}
             {#each data.records as item}
-              <tr class="hover:bg-base-200/50 transition-colors">
-                <td class="whitespace-nowrap tabular-nums">{String(item.created_at ?? '')}</td>
-                <td class="font-medium">{String(item.company_name ?? '')}</td>
+              <tr class='hover:bg-base-200/50 transition-colors'>
+                <td class='whitespace-nowrap tabular-nums'>{String(item.created_at ?? '')}</td>
+                <td class='font-medium'>{String(item.company_name ?? '')}</td>
                 <td>{String(item.contact_name ?? '')}</td>
                 <td>
-                  <div class="text-xs leading-5">
+                  <div class='text-xs leading-5'>
                     <div>{String(item.phone ?? '')}</div>
-                    <div class="text-base-content/50">{String(item.email ?? '')}</div>
+                    <div class='text-base-content/50'>{String(item.email ?? '')}</div>
                   </div>
                 </td>
                 <td>{String(item.cooperation_type ?? '')}</td>
@@ -146,15 +150,15 @@
       </table>
     </Card>
 
-    <div class="flex items-center justify-end gap-2">
-      <Button size="sm" variant="default" disabled={data.page <= 1} onclick={() => navigatePage(data.page - 1)}>
-        <span class="icon-[tabler--chevron-left] size-4"></span>
+    <div class='flex items-center justify-end gap-2'>
+      <Button size='sm' variant='default' disabled={data.page <= 1} onclick={() => navigatePage(data.page - 1)}>
+        <span class='icon-[tabler--chevron-left] size-4'></span>
         {m.admin_page_prev()}
       </Button>
-      <span class="text-sm text-base-content/60 tabular-nums">{data.page} / {totalPages}</span>
-      <Button size="sm" variant="default" disabled={data.page >= totalPages} onclick={() => navigatePage(data.page + 1)}>
+      <span class='text-sm text-base-content/60 tabular-nums'>{data.page} / {totalPages}</span>
+      <Button size='sm' variant='default' disabled={data.page >= totalPages} onclick={() => navigatePage(data.page + 1)}>
         {m.admin_page_next()}
-        <span class="icon-[tabler--chevron-right] size-4"></span>
+        <span class='icon-[tabler--chevron-right] size-4'></span>
       </Button>
     </div>
   </div>

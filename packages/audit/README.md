@@ -80,6 +80,14 @@ await audit.init({
 - `audit.helper.login/logout/register/...` - 便捷记录器
 - `audit.close()` - 关闭模块
 
+### 输入约束
+
+- `audit.log(input)`：`action` / `resource` 必须为非空字符串，且长度不超过 256。
+- `audit.list(options)`：若同时传 `startDate` 与 `endDate`，必须满足 `startDate <= endDate`。
+- `audit.getUserRecent(userId, limit)`：`userId` 必须为非空字符串；`limit`（如传入）必须为正整数。
+- `audit.cleanup(days)`：`days`（如传入）必须为非负整数。
+- `audit.getStats(days)`：`days`（如传入）必须为非负整数。
+
 ## 错误码
 
 所有操作返回 `HaiResult<T>`，常用错误码如下：

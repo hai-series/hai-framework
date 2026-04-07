@@ -43,7 +43,7 @@ test.describe('POST /api/auth/register', () => {
     expect(user).toHaveProperty('roles')
   })
 
-  test('重复用户名返回 400', async ({ request }) => {
+  test('重复用户名返回 409', async ({ request }) => {
     const u = uniqueUser()
     // 先注册一次
     await request.post('/api/auth/register', {
@@ -53,7 +53,7 @@ test.describe('POST /api/auth/register', () => {
     const res = await request.post('/api/auth/register', {
       data: { username: u.username, email: `dup_${u.email}`, password: u.password, confirmPassword: u.password },
     })
-    expect(res.status()).toBe(400)
+    expect(res.status()).toBe(409)
     const body = await res.json()
     expect(body.success).toBe(false)
   })

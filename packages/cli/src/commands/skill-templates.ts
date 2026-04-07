@@ -56,6 +56,55 @@ const CAPACITOR_SKILLS = ['hai-api-client', 'hai-capacitor']
  */
 const UI_SKILLS = ['hai-ui']
 
+const WORKFLOW_SKILLS = [
+  'hai-build',
+  'hai-app-create',
+  'hai-app-review',
+  'hai-app-tests',
+]
+
+const PACKAGE_SKILL_MAP: Record<string, string> = {
+  '@h-ai/core': 'hai-core',
+  '@h-ai/kit': 'hai-kit',
+  '@h-ai/ui': 'hai-ui',
+  '@h-ai/reldb': 'hai-reldb',
+  '@h-ai/cache': 'hai-cache',
+  '@h-ai/iam': 'hai-iam',
+  '@h-ai/storage': 'hai-storage',
+  '@h-ai/ai': 'hai-ai',
+  '@h-ai/crypto': 'hai-crypto',
+  '@h-ai/payment': 'hai-payment',
+  '@h-ai/vecdb': 'hai-vecdb',
+  '@h-ai/datapipe': 'hai-datapipe',
+  '@h-ai/reach': 'hai-reach',
+  '@h-ai/scheduler': 'hai-scheduler',
+  '@h-ai/audit': 'hai-audit',
+  '@h-ai/deploy': 'hai-deploy',
+  '@h-ai/api-client': 'hai-api-client',
+  '@h-ai/capacitor': 'hai-capacitor',
+}
+
+const SKILL_TARGET_DIRS = ['.agents/skills'] as const
+
+const BRIDGE_FILES = [
+  {
+    source: 'copilot-instructions.md',
+    destination: '.github/copilot-instructions.md',
+  },
+  {
+    source: 'CLAUDE.md',
+    destination: 'CLAUDE.md',
+  },
+  {
+    source: 'AGENTS.md',
+    destination: 'AGENTS.md',
+  },
+  {
+    source: 'opencode.json',
+    destination: 'opencode.json',
+  },
+] as const
+
 /**
  * 获取 templates/skills/ 目录的绝对路径
  *
@@ -79,13 +128,50 @@ function getSkillTemplatesDir(): string {
  * @param skillName - Skill 目录名（如 'hai-reldb'）
  * @param projectPath - 用户项目根目录
  */
-async function copySkill(templatesDir: string, skillName: string, projectPath: string): Promise<void> {
+async function copySkill(
+  templatesDir: string,
+  skillName: string,
+  projectPath: string,
+  targetDirs: readonly string[] = SKILL_TARGET_DIRS,
+  overwrite = true,
+): Promise<string[]> {
   const src = path.join(templatesDir, skillName)
-  const dest = path.join(projectPath, '.github', 'skills', skillName)
 
-  if (await fse.pathExists(src)) {
-    await fse.copy(src, dest, { overwrite: true })
+  if (!(await fse.pathExists(src))) {
+    return []
   }
+
+  const copiedFiles: string[] = []
+
+  for (const targetDir of targetDirs) {
+    const dest = path.join(projectPath, targetDir, skillName)
+    const skillFilePath = path.join(dest, 'SKILL.md')
+
+    if (!overwrite && await fse.pathExists(skillFilePath)) {
+      continue
+    }
+
+    await fse.copy(src, dest, { overwrite: true })
+    copiedFiles.push(`${targetDir}/${skillName}/SKILL.md`)
+  }
+
+  return copiedFiles
+}
+
+async function copySkills(
+  templatesDir: string,
+  skillNames: string[],
+  projectPath: string,
+  targetDirs: readonly string[] = SKILL_TARGET_DIRS,
+  overwrite = true,
+): Promise<string[]> {
+  const copiedFiles: string[] = []
+
+  for (const skillName of new Set(skillNames)) {
+    copiedFiles.push(...await copySkill(templatesDir, skillName, projectPath, targetDirs, overwrite))
+  }
+
+  return copiedFiles
 }
 
 /**
@@ -94,24 +180,30 @@ async function copySkill(templatesDir: string, skillName: string, projectPath: s
  * @param templatesDir - Skill 模板根目录
  * @param projectPath - 用户项目根目录
  */
-async function copyBridgeFiles(templatesDir: string, projectPath: string): Promise<void> {
-  // copilot-instructions.md → .github/copilot-instructions.md
-  const copilotSrc = path.join(templatesDir, 'copilot-instructions.md')
-  if (await fse.pathExists(copilotSrc)) {
-    await fse.copy(copilotSrc, path.join(projectPath, '.github', 'copilot-instructions.md'), { overwrite: true })
+async function copyBridgeFiles(
+  templatesDir: string,
+  projectPath: string,
+  overwrite = true,
+): Promise<string[]> {
+  const copiedFiles: string[] = []
+
+  for (const file of BRIDGE_FILES) {
+    const src = path.join(templatesDir, file.source)
+    const dest = path.join(projectPath, file.destination)
+
+    if (!(await fse.pathExists(src))) {
+      continue
+    }
+
+    if (!overwrite && await fse.pathExists(dest)) {
+      continue
+    }
+
+    await fse.copy(src, dest, { overwrite })
+    copiedFiles.push(file.destination)
   }
 
-  // CLAUDE.md → 项目根目录
-  const claudeSrc = path.join(templatesDir, 'CLAUDE.md')
-  if (await fse.pathExists(claudeSrc)) {
-    await fse.copy(claudeSrc, path.join(projectPath, 'CLAUDE.md'), { overwrite: true })
-  }
-
-  // AGENTS.md → 项目根目录
-  const agentsSrc = path.join(templatesDir, 'AGENTS.md')
-  if (await fse.pathExists(agentsSrc)) {
-    await fse.copy(agentsSrc, path.join(projectPath, 'AGENTS.md'), { overwrite: true })
-  }
+  return copiedFiles
 }
 
 /**
@@ -147,23 +239,20 @@ export async function generateSkillFiles(
   }
 
   // 复制基础 Skill
-  for (const skillName of baseSkills) {
-    await copySkill(templatesDir, skillName, projectPath)
-    copiedFiles.push(`.github/skills/${skillName}/SKILL.md`)
-  }
+  copiedFiles.push(...await copySkills(templatesDir, baseSkills, projectPath))
 
   // 复制模块 Skill
+  const featureSkills: string[] = []
   for (const featureId of features) {
     const skillName = MODULE_SKILL_MAP[featureId]
     if (skillName && !baseSkills.includes(skillName)) {
-      await copySkill(templatesDir, skillName, projectPath)
-      copiedFiles.push(`.github/skills/${skillName}/SKILL.md`)
+      featureSkills.push(skillName)
     }
   }
+  copiedFiles.push(...await copySkills(templatesDir, featureSkills, projectPath))
 
   // 复制桥接文件
-  await copyBridgeFiles(templatesDir, projectPath)
-  copiedFiles.push('.github/copilot-instructions.md', 'CLAUDE.md', 'AGENTS.md')
+  copiedFiles.push(...await copyBridgeFiles(templatesDir, projectPath))
 
   return copiedFiles
 }
@@ -180,7 +269,7 @@ export async function generateSkillFiles(
 export async function generateModuleSkillFile(
   projectPath: string,
   moduleId: string,
-): Promise<string | null> {
+): Promise<string[] | null> {
   const skillName = MODULE_SKILL_MAP[moduleId]
   if (!skillName) {
     return null
@@ -191,13 +280,65 @@ export async function generateModuleSkillFile(
     return null
   }
 
-  const destPath = path.join(projectPath, '.github', 'skills', skillName)
+  const missingTargetDirs: string[] = []
 
-  // 已存在则跳过
-  if (await fse.pathExists(destPath)) {
+  for (const targetDir of SKILL_TARGET_DIRS) {
+    const skillFilePath = path.join(projectPath, targetDir, skillName, 'SKILL.md')
+    if (!(await fse.pathExists(skillFilePath))) {
+      missingTargetDirs.push(targetDir)
+    }
+  }
+
+  const copiedBridgeFiles = await copyBridgeFiles(templatesDir, projectPath, false)
+  if (missingTargetDirs.length === 0) {
+    return copiedBridgeFiles.length > 0 ? copiedBridgeFiles : null
+  }
+
+  const copiedSkillFiles = await copySkill(templatesDir, skillName, projectPath, missingTargetDirs)
+  const copiedFiles = [...copiedBridgeFiles, ...copiedSkillFiles]
+
+  if (copiedFiles.length === 0) {
     return null
   }
 
-  await copySkill(templatesDir, skillName, projectPath)
-  return `.github/skills/${skillName}/SKILL.md`
+  return copiedFiles
+}
+
+export function resolveSkillNamesForPackages(packageNames: string[]): string[] {
+  const skillNames = [...WORKFLOW_SKILLS]
+
+  for (const packageName of packageNames) {
+    const skillName = PACKAGE_SKILL_MAP[packageName]
+    if (skillName) {
+      skillNames.push(skillName)
+    }
+  }
+
+  return [...new Set(skillNames)]
+}
+
+export async function generateProjectAiSupport(
+  projectPath: string,
+  skillNames: string[],
+  options: {
+    overwriteSkills?: boolean
+    overwriteBridgeFiles?: boolean
+  } = {},
+): Promise<string[]> {
+  const templatesDir = getSkillTemplatesDir()
+
+  if (!(await fse.pathExists(templatesDir))) {
+    return []
+  }
+
+  const {
+    overwriteSkills = true,
+    overwriteBridgeFiles = true,
+  } = options
+
+  const copiedFiles: string[] = []
+  copiedFiles.push(...await copySkills(templatesDir, skillNames, projectPath, SKILL_TARGET_DIRS, overwriteSkills))
+  copiedFiles.push(...await copyBridgeFiles(templatesDir, projectPath, overwriteBridgeFiles))
+
+  return copiedFiles
 }

@@ -1,6 +1,6 @@
 # AGENTS.md
 
-> 通用 AI 编程助手指引。详细 Skill 文件位于 `.github/skills/` 目录。
+> 通用 AI 编程助手指引。详细 Skill 文件位于 `.agents/skills/` 目录。
 
 ## 项目概述
 
@@ -18,7 +18,7 @@
 
 ## Skills 参考
 
-所有详细指南位于 `.github/skills/` 目录，按需阅读：
+所有详细指南位于 `.agents/skills/` 目录，按需阅读：
 
 - **入口**：`hai-build/SKILL.md` — 项目架构总览与 Skill 导航
 - **框架模块**：`hai-core/`、`hai-kit/`、`hai-reldb/`、`hai-iam/`、`hai-crypto/`、`hai-cache/`、`hai-storage/`、`hai-ai/`

@@ -48,8 +48,19 @@ templates/
 │   └── project.inlang/
 │       └── settings.json    # Paraglide 项目配置
 │
-└── skills/                  # AI Skill 模板（供 CLI 分发，非项目模板）
+└── skills/                  # AI Skill 单一来源模板（分发到 .agents/skills/）
 ```
+
+## AI Skill 模板（Single Source of Truth）
+
+`templates/skills/` 是 CLI 生成共享 AI 上下文时的单一来源，同时用于 `hai create` 与 `hai add`。
+
+- 每个 Skill 目录会复制到 `.agents/skills/<skill>/`
+- `copilot-instructions.md` 会复制到 `.github/copilot-instructions.md`，并引导 Copilot/其他助手读取 `.agents/skills/`
+- `AGENTS.md`、`CLAUDE.md`、`opencode.json` 会复制到项目根目录
+- `opencode.json` 使用 OpenCode 的 `instructions` 与 `skills.paths` 配置，将项目级指令与 Skill 目录显式指向 `AGENTS.md` 和 `.agents/skills/`
+- `CLAUDE.md` 作为 Claude Code 的原生项目指引入口，并通过 `@AGENTS.md` 复用共享规范；`.agents/skills/` 仍是共享参考目录，而非 Claude Code 的原生 project skills 目录
+- `hai add` 只补齐缺失的 AI 支持文件，不覆盖用户已自定义的桥接文件，也不会自动删除遗留的 `.github/skills/`
 
 ## 文件类型说明
 

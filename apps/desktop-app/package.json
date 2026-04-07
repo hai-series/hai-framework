@@ -1,7 +1,7 @@
 {
   "name": "desktop-app",
   "type": "module",
-  "version": "0.1.0",
+  "version": "0.1.0-alpha7",
   "private": true,
   "description": "hai Agent Framework - 桌面应用（Tauri v2 + SvelteKit SPA）",
   "keywords": [

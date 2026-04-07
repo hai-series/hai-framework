@@ -29,6 +29,30 @@ import {
 
 const logger = core.logger.child({ module: 'audit', scope: 'main' })
 
+// ─── 输入校验 ───
+
+/** 字符串字段最大长度（防止异常大输入） */
+const MAX_TEXT_LENGTH = 256
+
+/**
+ * 判断值是否为非空字符串
+ *
+ * @param value - 待校验值
+ */
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === 'string' && value.trim().length > 0
+}
+
+/**
+ * 校验字符串长度是否在限制内
+ *
+ * @param value - 待校验字符串
+ * @param maxLength - 允许最大长度
+ */
+function isValidTextLength(value: string, maxLength = MAX_TEXT_LENGTH): boolean {
+  return value.length <= maxLength
+}
+
 // ─── 内部状态 ───
 
 /** 当前审计日志仓库实例；init 后赋值，close 后置 null */
@@ -187,6 +211,21 @@ export const audit: AuditFunctions = {
     if (!currentRepo) {
       return Promise.resolve(notInitialized.result())
     }
+
+    if (!isNonEmptyString(input.action) || !isNonEmptyString(input.resource)) {
+      return Promise.resolve(err(
+        HaiAuditError.LOG_FAILED,
+        auditM('audit_invalidInput', { params: { field: 'action/resource', reason: 'must be non-empty string' } }),
+      ))
+    }
+
+    if (!isValidTextLength(input.action) || !isValidTextLength(input.resource)) {
+      return Promise.resolve(err(
+        HaiAuditError.LOG_FAILED,
+        auditM('audit_invalidInput', { params: { field: 'action/resource', reason: 'exceeds max length' } }),
+      ))
+    }
+
     return currentRepo.log(input)
   },
 
@@ -200,6 +239,14 @@ export const audit: AuditFunctions = {
     if (!currentRepo) {
       return Promise.resolve(notInitialized.result())
     }
+
+    if (options?.startDate && options?.endDate && options.startDate > options.endDate) {
+      return Promise.resolve(err(
+        HaiAuditError.QUERY_FAILED,
+        auditM('audit_invalidInput', { params: { field: 'dateRange', reason: 'startDate must be before endDate' } }),
+      ))
+    }
+
     return currentRepo.listWithUser(options)
   },
 
@@ -214,6 +261,21 @@ export const audit: AuditFunctions = {
     if (!currentRepo) {
       return Promise.resolve(notInitialized.result())
     }
+
+    if (!isNonEmptyString(userId)) {
+      return Promise.resolve(err(
+        HaiAuditError.QUERY_FAILED,
+        auditM('audit_invalidInput', { params: { field: 'userId', reason: 'must be non-empty string' } }),
+      ))
+    }
+
+    if (typeof limit === 'number' && (!Number.isInteger(limit) || limit <= 0)) {
+      return Promise.resolve(err(
+        HaiAuditError.QUERY_FAILED,
+        auditM('audit_invalidInput', { params: { field: 'limit', reason: 'must be a positive integer' } }),
+      ))
+    }
+
     return currentRepo.getUserRecent(userId, limit)
   },
 
@@ -227,6 +289,14 @@ export const audit: AuditFunctions = {
     if (!currentRepo) {
       return Promise.resolve(notInitialized.result())
     }
+
+    if (typeof olderThanDays === 'number' && (!Number.isInteger(olderThanDays) || olderThanDays < 0)) {
+      return Promise.resolve(err(
+        HaiAuditError.CLEANUP_FAILED,
+        auditM('audit_invalidInput', { params: { field: 'olderThanDays', reason: 'must be a non-negative integer' } }),
+      ))
+    }
+
     return currentRepo.cleanupOld(olderThanDays)
   },
 
@@ -240,6 +310,14 @@ export const audit: AuditFunctions = {
     if (!currentRepo) {
       return Promise.resolve(notInitialized.result())
     }
+
+    if (typeof days === 'number' && (!Number.isInteger(days) || days < 0)) {
+      return Promise.resolve(err(
+        HaiAuditError.STATS_FAILED,
+        auditM('audit_invalidInput', { params: { field: 'days', reason: 'must be a non-negative integer' } }),
+      ))
+    }
+
     return currentRepo.getStats(days)
   },
 

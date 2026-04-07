@@ -403,4 +403,65 @@ describe('scheduler', () => {
       expect(scheduler.config).toBeNull()
     })
   })
+
+  describe('db fallback / rollback behavior', () => {
+    it('enableDb=true 但 reldb 未初始化时 init 应失败（不静默降级）', async () => {
+      // reldb 未初始化（afterEach 已关闭），直接 init
+      const result = await scheduler.init({ enableDb: true })
+      expect(result.success).toBe(false)
+      if (!result.success)
+        expect(result.error.code).toBe(HaiSchedulerError.INIT_FAILED.code)
+      expect(scheduler.isInitialized).toBe(false)
+    })
+
+    it('register DB 写入失败时应回滚内存注册并返回失败', async () => {
+      await reldb.init({ type: 'sqlite', database: ':memory:' })
+      await scheduler.init({ enableDb: true })
+
+      // reldb.close() 使后续 DB 操作失败，模拟持久化异常
+      await reldb.close()
+
+      const result = await scheduler.register({
+        id: 'db-fail-task',
+        name: 'DB 失败任务',
+        cron: '* * * * *',
+        handler: { kind: 'js', code: '() => "ok"' },
+      })
+
+      expect(result.success).toBe(false)
+      if (!result.success)
+        expect(result.error.code).toBe(HaiSchedulerError.DB_SAVE_FAILED.code)
+      // 回滚：内存中不应残留该任务
+      expect(scheduler.tasks.has('db-fail-task')).toBe(false)
+    })
+
+    it('updateTask DB 写入失败时应回滚内存更新并返回失败', async () => {
+      await reldb.init({ type: 'sqlite', database: ':memory:' })
+      await scheduler.init({ enableDb: true })
+
+      // 先注册任务（DB 可用时持久化成功）
+      const registerResult = await scheduler.register({
+        id: 'rollback-task',
+        name: '回滚测试',
+        cron: '*/5 * * * *',
+        handler: { kind: 'js', code: '() => "v1"' },
+      })
+      expect(registerResult.success).toBe(true)
+
+      // 注册成功后关闭 reldb，模拟后续 update 时 DB 不可用
+      await reldb.close()
+
+      const updateResult = await scheduler.updateTask('rollback-task', {
+        cron: '*/10 * * * *',
+        handler: { kind: 'js', code: '() => "v2"' },
+      })
+
+      expect(updateResult.success).toBe(false)
+      if (!updateResult.success)
+        expect(updateResult.error.code).toBe(HaiSchedulerError.DB_SAVE_FAILED.code)
+      // 回滚：内存中应保持原始状态
+      const task = scheduler.tasks.get('rollback-task')
+      expect(task?.cron).toBe('*/5 * * * *')
+    })
+  })
 })

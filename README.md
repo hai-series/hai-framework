@@ -45,7 +45,7 @@ hai Framework 的目标是：**让 AI 理解规范，自动完成应用开发，
 - **可预测的 API**：每个模块都是 `init() → use → close()`，AI 只需学一种模式就能操作所有模块
 - **不抛异常**：所有操作返回 `HaiResult<T>` —— 成功是 `{ success: true, data }` ，失败是 `{ success: false, error }`。AI 不会遗漏错误处理，链路完全可控
 - **配置即校验**：Zod Schema 在 `init()` 时完成验证，配置错了立刻报错，不会在运行时炸
-- **Skill 文件教 AI 用法**：每个模块都有标准化的 Skill 文件（`.github/skills/`），AI 助手读取后就能正确使用所有 API
+- **Skill 文件教 AI 用法**：每个模块都有标准化的 Skill 文件（`.agents/skills/`），Codex / OpenCode / Copilot 等支持 skills 的助手可直接读取并正确使用 API
 - **编码规范可执行**：`.github/copilot-instructions.md` 定义了命名、分层、测试、文档的完整规范，AI 助手每次改动自动遵守
 - **LLMS.txt 作为 AI 参考手册**：根目录 `LLMS.txt` 提供完整的 API 签名与示例，AI 可直接检索
 
@@ -86,42 +86,29 @@ hai Framework 的目标是：**让 AI 理解规范，自动完成应用开发，
 
 ## AI-First 基础设施
 
-使用 `hai create` 创建项目时，CLI 会自动生成一套完整的 AI 上下文体系，覆盖 GitHub Copilot、Claude Code、Cursor 等主流 AI 助手：
+使用 `hai create` 创建项目时，CLI 会自动生成一套完整的 AI 上下文体系，原生覆盖 GitHub Copilot、Cursor、Codex、OpenCode，并为 Claude Code 生成可复用共享规范的项目指引：
 
 ```
 my-app/
+├── .agents/
+│   └── skills/                       # 单一 Skill 目录（Codex / OpenCode / Copilot 原生读取）
 ├── .github/
-│   ├── copilot-instructions.md       # GitHub Copilot 项目指令
-│   └── skills/                       # AI Skill 文件（教 AI 用框架）
-│       ├── hai-build/SKILL.md        # 项目架构总览与 Skill 导航（入口）
-│       ├── hai-core/SKILL.md         # @h-ai/core 用法
-│       ├── hai-reldb/SKILL.md        # @h-ai/reldb 用法
-│       ├── hai-vecdb/SKILL.md        # @h-ai/vecdb 用法
-│       ├── hai-datapipe/SKILL.md     # @h-ai/datapipe 用法
-│       ├── hai-iam/SKILL.md          # @h-ai/iam 用法
-│       ├── hai-reach/SKILL.md        # @h-ai/reach 用法
-│       ├── hai-cache/SKILL.md        # @h-ai/cache 用法
-│       ├── hai-storage/SKILL.md      # @h-ai/storage 用法
-│       ├── hai-ai/SKILL.md           # @h-ai/ai 用法
-│       ├── hai-crypto/SKILL.md       # @h-ai/crypto 用法
-│       ├── hai-payment/SKILL.md       # @h-ai/payment 用法
-│       ├── hai-audit/SKILL.md         # @h-ai/audit 用法
-│       ├── hai-scheduler/SKILL.md     # @h-ai/scheduler 用法
-│       ├── hai-capacitor/SKILL.md        # @h-ai/capacitor 用法
-│       ├── hai-deploy/SKILL.md        # @h-ai/deploy 用法
-│       ├── hai-kit/SKILL.md          # @h-ai/kit 用法
-│       ├── hai-ui/SKILL.md           # @h-ai/ui 组件用法
-│       ├── hai-api-client/SKILL.md           # @h-ai/api-client 用法
-│       ├── hai-app-create/SKILL.md   # 教 AI 创建新功能
-│       ├── hai-app-review/SKILL.md   # 教 AI 做代码审查
-│       └── hai-app-tests/SKILL.md    # 教 AI 编写测试
-├── AGENTS.md                         # Claude Code / 通用 AI 指引
-└── CLAUDE.md                         # Claude Code 专用指引
+│   └── copilot-instructions.md       # GitHub Copilot 项目指令（配合 .agents/skills/）
+├── AGENTS.md                         # Codex / OpenCode / 通用 AI 指引
+├── CLAUDE.md                         # Claude Code 项目指引（通过 @AGENTS.md 复用共享规范）
+└── opencode.json                     # OpenCode 配置（instructions + skills.paths -> .agents/skills）
 ```
 
-**工作方式**：AI 助手进入项目后，自动读取指令文件获得编码规范和框架用法，按需读取 Skill 文件获取各模块 API 细节，改动后自动执行 `typecheck → lint → test` 质量门禁 —— 整个过程无需人类干预。
+**工作方式**：支持 skills 的助手会从 `.agents/skills/` 获取模块级用法；Claude Code 则通过 `CLAUDE.md` + `@AGENTS.md` 复用同一套项目规范。改动后统一执行 `typecheck → lint → test` 质量门禁 —— 整个过程无需人类手动补齐额外上下文。
 
-Skill 模板统一管理在 `packages/cli/templates/skills/` 中，通过 `@h-ai/cli` 分发到用户项目。
+| AI 助手                 | 生成的关键文件                                                                                |
+| ----------------------- | --------------------------------------------------------------------------------------------- |
+| GitHub Copilot / Cursor | `.github/copilot-instructions.md` + `.agents/skills/`                                         |
+| Claude Code             | `CLAUDE.md` + `AGENTS.md`（通过 `@AGENTS.md` 复用共享规范；不原生自动发现 `.agents/skills/`） |
+| Codex                   | `AGENTS.md` + `.agents/skills/`                                                               |
+| OpenCode                | `AGENTS.md` + `.agents/skills/` + `opencode.json`                                             |
+
+Skill 模板统一管理在 `packages/cli/templates/skills/` 中，通过 `@h-ai/cli` 分发到用户项目的 `.agents/skills/`。
 
 当前 CLI 模板内置 **22 个 Skill 模板**：18 个模块 Skill、`hai-build` 总览 Skill，以及 `hai-app-create`、`hai-app-review`、`hai-app-tests` 3 个工作流 Skill，便于 AI 助手在“搭应用、补测试、做 Review、查模块用法”之间自动切换上下文。
 
@@ -129,47 +116,47 @@ Skill 模板统一管理在 `packages/cli/templates/skills/` 中，通过 `@h-ai
 
 ### 基础能力
 
-| 包名           | 职责                                                                                              | Provider 支持 |
-| -------------- | ------------------------------------------------------------------------------------------------- | :-----------: |
-| `@h-ai/core`   | 框架基石：`HaiResult` 类型、日志（child 上下文）、配置加载、ID 生成、i18n、错误定义体系、工具函数 |       —       |
-| `@h-ai/crypto` | 国密算法：SM2 非对称加密/签名、SM3 哈希、SM4 对称加密、密码哈希                                   |       —       |
+| 包名           | 职责                                                                                              | Provider 支持 |                                             npm 最新版                                              |
+| -------------- | ------------------------------------------------------------------------------------------------- | :-----------: | :-------------------------------------------------------------------------------------------------: |
+| `@h-ai/core`   | 框架基石：`HaiResult` 类型、日志（child 上下文）、配置加载、ID 生成、i18n、错误定义体系、工具函数 |       —       |   [![npm](https://img.shields.io/npm/v/%40h-ai%2Fcore)](https://www.npmjs.com/package/@h-ai/core)   |
+| `@h-ai/crypto` | 国密算法：SM2 非对称加密/签名、SM3 哈希、SM4 对称加密、密码哈希                                   |       —       | [![npm](https://img.shields.io/npm/v/%40h-ai%2Fcrypto)](https://www.npmjs.com/package/@h-ai/crypto) |
 
 ### 数据层
 
-| 包名             | 职责                                                                 |         Provider 支持          |
-| ---------------- | -------------------------------------------------------------------- | :----------------------------: |
-| `@h-ai/reldb`    | 关系数据库：DDL、原生 SQL、事务、分页、CRUD 仓库                     |     ✅ SQLite / PG / MySQL     |
-| `@h-ai/vecdb`    | 向量数据库：集合管理、向量插入、相似度搜索                           | ✅ LanceDB / pgvector / Qdrant |
-| `@h-ai/cache`    | 缓存与分布式锁：KV、Hash、List、Set、SortedSet、Lock，Redis 风格 API |       ✅ Memory / Redis        |
-| `@h-ai/storage`  | 文件存储：上传/下载/删除/复制/预签名 URL                             |         ✅ Local / S3          |
-| `@h-ai/datapipe` | 数据管线：文本清洗、7 种分块模式、可组合管线（纯函数，无需 init）    |               —                |
+| 包名             | 职责                                                                 |         Provider 支持          |                                               npm 最新版                                                |
+| ---------------- | -------------------------------------------------------------------- | :----------------------------: | :-----------------------------------------------------------------------------------------------------: |
+| `@h-ai/reldb`    | 关系数据库：DDL、原生 SQL、事务、分页、CRUD 仓库                     |     ✅ SQLite / PG / MySQL     |    [![npm](https://img.shields.io/npm/v/%40h-ai%2Freldb)](https://www.npmjs.com/package/@h-ai/reldb)    |
+| `@h-ai/vecdb`    | 向量数据库：集合管理、向量插入、相似度搜索                           | ✅ LanceDB / pgvector / Qdrant |    [![npm](https://img.shields.io/npm/v/%40h-ai%2Fvecdb)](https://www.npmjs.com/package/@h-ai/vecdb)    |
+| `@h-ai/cache`    | 缓存与分布式锁：KV、Hash、List、Set、SortedSet、Lock，Redis 风格 API |       ✅ Memory / Redis        |    [![npm](https://img.shields.io/npm/v/%40h-ai%2Fcache)](https://www.npmjs.com/package/@h-ai/cache)    |
+| `@h-ai/storage`  | 文件存储：上传/下载/删除/复制/预签名 URL                             |         ✅ Local / S3          |  [![npm](https://img.shields.io/npm/v/%40h-ai%2Fstorage)](https://www.npmjs.com/package/@h-ai/storage)  |
+| `@h-ai/datapipe` | 数据管线：文本清洗、7 种分块模式、可组合管线（纯函数，无需 init）    |               —                | [![npm](https://img.shields.io/npm/v/%40h-ai%2Fdatapipe)](https://www.npmjs.com/package/@h-ai/datapipe) |
 
 ### 业务能力
 
-| 包名              | 职责                                                                              |       Provider 支持        |
-| ----------------- | --------------------------------------------------------------------------------- | :------------------------: |
-| `@h-ai/iam`       | 身份与访问管理：认证（密码/OTP/LDAP）、RBAC 授权、会话管理、用户管理              |             —              |
-| `@h-ai/reach`     | 用户触达：邮件、短信、API 回调，模板引擎、免打扰（DND）                           | ✅ SMTP / 阿里云短信 / API |
-| `@h-ai/ai`        | AI 集成：LLM 调用（同步/流式）、MCP、工具调用、RAG、知识库、推理、上下文压缩、A2A |  ✅ OpenAI 兼容 / 可扩展   |
-| `@h-ai/payment`   | 统一支付：订单创建、多端调起、回调通知                                            | ✅ 微信 / 支付宝 / Stripe  |
-| `@h-ai/audit`     | 审计日志：操作记录、分页查询、统计聚合、定时清理                                  |             —              |
-| `@h-ai/scheduler` | 定时任务：Cron 调度、JS 函数 / HTTP API 执行、DB 持久化、分布式锁、执行日志       |             —              |
+| 包名              | 职责                                                                              |       Provider 支持        |                                                npm 最新版                                                 |
+| ----------------- | --------------------------------------------------------------------------------- | :------------------------: | :-------------------------------------------------------------------------------------------------------: |
+| `@h-ai/iam`       | 身份与访问管理：认证（密码/OTP/LDAP）、RBAC 授权、会话管理、用户管理              |             —              |       [![npm](https://img.shields.io/npm/v/%40h-ai%2Fiam)](https://www.npmjs.com/package/@h-ai/iam)       |
+| `@h-ai/reach`     | 用户触达：邮件、短信、API 回调，模板引擎、免打扰（DND）                           | ✅ SMTP / 阿里云短信 / API |     [![npm](https://img.shields.io/npm/v/%40h-ai%2Freach)](https://www.npmjs.com/package/@h-ai/reach)     |
+| `@h-ai/ai`        | AI 集成：LLM 调用（同步/流式）、MCP、工具调用、RAG、知识库、推理、上下文压缩、A2A |  ✅ OpenAI 兼容 / 可扩展   |        [![npm](https://img.shields.io/npm/v/%40h-ai%2Fai)](https://www.npmjs.com/package/@h-ai/ai)        |
+| `@h-ai/payment`   | 统一支付：订单创建、多端调起、回调通知                                            | ✅ 微信 / 支付宝 / Stripe  |   [![npm](https://img.shields.io/npm/v/%40h-ai%2Fpayment)](https://www.npmjs.com/package/@h-ai/payment)   |
+| `@h-ai/audit`     | 审计日志：操作记录、分页查询、统计聚合、定时清理                                  |             —              |     [![npm](https://img.shields.io/npm/v/%40h-ai%2Faudit)](https://www.npmjs.com/package/@h-ai/audit)     |
+| `@h-ai/scheduler` | 定时任务：Cron 调度、JS 函数 / HTTP API 执行、DB 持久化、分布式锁、执行日志       |             —              | [![npm](https://img.shields.io/npm/v/%40h-ai%2Fscheduler)](https://www.npmjs.com/package/@h-ai/scheduler) |
 
 ### 集成层
 
-| 包名               | 职责                                                                      | Provider 支持 |
-| ------------------ | ------------------------------------------------------------------------- | :-----------: |
-| `@h-ai/kit`        | SvelteKit 集成：Handle Hook、中间件（CORS/CSRF/限流）、路由守卫、表单校验 |       —       |
-| `@h-ai/api-client` | HTTP 客户端：Bearer Token 自动管理、契约调用、文件上传、SSE 流式响应      |       —       |
-| `@h-ai/capacitor`  | 移动端桥接：安全 Token 存储、设备信息、推送通知、相机、状态栏             |       —       |
+| 包名               | 职责                                                                      | Provider 支持 |                                                 npm 最新版                                                  |
+| ------------------ | ------------------------------------------------------------------------- | :-----------: | :---------------------------------------------------------------------------------------------------------: |
+| `@h-ai/kit`        | SvelteKit 集成：Handle Hook、中间件（CORS/CSRF/限流）、路由守卫、表单校验 |       —       |        [![npm](https://img.shields.io/npm/v/%40h-ai%2Fkit)](https://www.npmjs.com/package/@h-ai/kit)        |
+| `@h-ai/api-client` | HTTP 客户端：Bearer Token 自动管理、契约调用、文件上传、SSE 流式响应      |       —       | [![npm](https://img.shields.io/npm/v/%40h-ai%2Fapi-client)](https://www.npmjs.com/package/@h-ai/api-client) |
+| `@h-ai/capacitor`  | 移动端桥接：安全 Token 存储、设备信息、推送通知、相机、状态栏             |       —       |  [![npm](https://img.shields.io/npm/v/%40h-ai%2Fcapacitor)](https://www.npmjs.com/package/@h-ai/capacitor)  |
 
 ### 界面与工具
 
-| 包名           | 职责                                                                             |                     Provider 支持                     |
-| -------------- | -------------------------------------------------------------------------------- | :---------------------------------------------------: |
-| `@h-ai/ui`     | UI 组件库：69+ Svelte 5 Runes 组件（原子 + 复合 + 业务场景），32+ 主题           |                           —                           |
-| `@h-ai/cli`    | CLI 脚手架：项目创建、模块添加、代码生成、一键部署                               |                           —                           |
-| `@h-ai/deploy` | 自动化部署：Vercel 部署 + 基础设施自动开通（数据库 / 缓存 / 存储 / 邮件 / 短信） | ✅ Vercel / Neon / Upstash / R2 / Resend / 阿里云短信 |
+| 包名           | 职责                                                                             |                     Provider 支持                     |                                             npm 最新版                                              |
+| -------------- | -------------------------------------------------------------------------------- | :---------------------------------------------------: | :-------------------------------------------------------------------------------------------------: |
+| `@h-ai/ui`     | UI 组件库：69+ Svelte 5 Runes 组件（原子 + 复合 + 业务场景），32+ 主题           |                           —                           |     [![npm](https://img.shields.io/npm/v/%40h-ai%2Fui)](https://www.npmjs.com/package/@h-ai/ui)     |
+| `@h-ai/cli`    | CLI 脚手架：项目创建、模块添加、代码生成、一键部署                               |                           —                           |    [![npm](https://img.shields.io/npm/v/%40h-ai%2Fcli)](https://www.npmjs.com/package/@h-ai/cli)    |
+| `@h-ai/deploy` | 自动化部署：Vercel 部署 + 基础设施自动开通（数据库 / 缓存 / 存储 / 邮件 / 短信） | ✅ Vercel / Neon / Upstash / R2 / Resend / 阿里云短信 | [![npm](https://img.shields.io/npm/v/%40h-ai%2Fdeploy)](https://www.npmjs.com/package/@h-ai/deploy) |
 
 ### 模块文档索引
 

@@ -12,7 +12,7 @@ import { redirect } from '@sveltejs/kit'
 export const load: LayoutServerLoad = async ({ locals, url }) => {
   if (!locals.session) {
     const returnUrl = encodeURIComponent(url.pathname + url.search)
-    redirect(302, `/auth/login?returnUrl=${returnUrl}`)
+    throw redirect(302, `/auth/login?returnUrl=${returnUrl}`)
   }
 
   // 获取应用配置

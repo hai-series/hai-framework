@@ -32,7 +32,8 @@ test.describe('IAM Permissions API', () => {
 
     const body = await res.json()
     expect(body.success).toBe(true)
-    expect(Array.isArray(body.data)).toBe(true)
+    const items = Array.isArray(body.data) ? body.data : body.data?.items
+    expect(Array.isArray(items)).toBe(true)
   })
 
   test('POST /api/iam/permissions 创建权限', async ({ request }) => {

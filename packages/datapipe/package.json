@@ -1,7 +1,7 @@
 {
   "name": "@h-ai/datapipe",
   "type": "module",
-  "version": "0.1.0",
+  "version": "0.1.0-alpha7",
   "description": "Data processing pipeline module for hai-framework: clean, chunk, transform",
   "exports": {
     ".": {
@@ -11,6 +11,9 @@
   },
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "publishConfig": {
+    "access": "public"
+  },
   "files": [
     "dist"
   ],

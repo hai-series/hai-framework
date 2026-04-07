@@ -1,7 +1,7 @@
 {
   "name": "hai-framework",
   "type": "module",
-  "version": "0.1.0",
+  "version": "0.1.0-alpha7",
   "private": true,
   "packageManager": "pnpm@9.15.0",
   "description": "hai Agent Framework - AI-Native, Configuration-Driven, Security-First",
@@ -16,7 +16,7 @@
     "dev": "turbo run dev",
     "lint": "turbo run lint",
     "lint:fix": "turbo run lint:fix",
-    "test": "turbo run test",
+    "test": "turbo run test --concurrency=1",
     "test:coverage": "turbo run test:coverage",
     "typecheck": "turbo run typecheck",
     "clean": "turbo run clean && rimraf node_modules .turbo",
@@ -35,6 +35,9 @@
     "turbo": "catalog:",
     "typescript": "catalog:",
     "vitest": "catalog:"
+  },
+  "overrides": {
+    "eslint-plugin-yml": "3.3.1"
   },
   "lint-staged": {
     "*.{js,ts,svelte,json,md,yml,yaml}": [

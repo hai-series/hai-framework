@@ -21,5 +21,6 @@
   "scheduler_hookExecutionFailed": "Task lifecycle hook execution failed: {error}",
   "scheduler_taskHandlerMissing": "Task has no executable handler and no global execute hook is configured: {taskId}",
   "scheduler_invalidHandlerConfig": "Invalid task handler config: {taskId}",
-  "scheduler_invalidRetryConfig": "Invalid retry policy config for task: {taskId}"
+  "scheduler_invalidRetryConfig": "Invalid retry policy config for task: {taskId}",
+  "scheduler_reldbNotInitialized": "enableDb is true but @h-ai/reldb is not initialized, please call reldb.init() first"
 }

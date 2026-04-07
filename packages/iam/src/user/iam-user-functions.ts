@@ -400,7 +400,7 @@ function buildUserQueryOps(ctx: UserFnContext): Pick<UserOperations, 'getCurrent
         // 转义 LIKE 通配符，防止用户输入 % 或 _ 产生非预期匹配
         const escaped = options.search.replace(/[%_\\]/g, '\\$&')
         const keyword = `%${escaped}%`
-        conditions.push('(username LIKE ? OR email LIKE ? OR phone LIKE ? OR display_name LIKE ?)')
+        conditions.push('(username LIKE ? ESCAPE \'\\\' OR email LIKE ? ESCAPE \'\\\' OR phone LIKE ? ESCAPE \'\\\' OR display_name LIKE ? ESCAPE \'\\\')')
         params.push(keyword, keyword, keyword, keyword)
       }
 

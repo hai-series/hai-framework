@@ -4,7 +4,7 @@
 #
 # 触发条件：main 分支的 push 事件
 # 工作流程：
-#   1. 检测根 package.json 版本号是否变更
+#   1. 检测根 package.json 版本号是否已有对应 Tag
 #   2. 全量单元测试 + E2E 测试
 #   3. 同步版本号到所有子模块并提交
 #   4. 创建 Git Tag + GitHub Release（含分类变更日志）
@@ -24,7 +24,7 @@ concurrency:
 
 jobs:
   # ===========================================================================
-  # 检测版本变更
+  # 检测版本是否已发布（是否存在对应 Tag）
   # ===========================================================================
   detect-version:
     name: Detect Version Change
@@ -36,26 +36,25 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 2
+          fetch-depth: 0
 
-      - name: Check version change
+      - name: Check release tag existence
         id: check
         run: |
           # 获取当前版本
           CURRENT=$(node -p "require('./package.json').version")
           echo "Current version: $CURRENT"
 
-          # 获取上一个 commit 的版本
-          PREVIOUS=$(git show HEAD~1:package.json 2>/dev/null | node -p "JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')).version" 2>/dev/null || echo "")
-          echo "Previous version: $PREVIOUS"
+          VERSION_TAG="v${CURRENT}"
+          echo "Checking tags: ${VERSION_TAG} (and fallback: ${CURRENT})"
 
-          if [ "$CURRENT" != "$PREVIOUS" ] && [ -n "$PREVIOUS" ]; then
-            echo "Version changed: $PREVIOUS -> $CURRENT"
+          if git rev-parse "${VERSION_TAG}" >/dev/null 2>&1 || git rev-parse "${CURRENT}" >/dev/null 2>&1; then
+            echo "Tag for current version already exists, skip build/release"
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "No tag found for current version, trigger build/release"
             echo "changed=true" >> "$GITHUB_OUTPUT"
             echo "version=$CURRENT" >> "$GITHUB_OUTPUT"
-          else
-            echo "No version change detected"
-            echo "changed=false" >> "$GITHUB_OUTPUT"
           fi
 
   # ===========================================================================
@@ -67,6 +66,8 @@ jobs:
     if: needs.detect-version.outputs.changed == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    env:
+      CI: true
     steps:
       - uses: actions/checkout@v4
 
@@ -80,6 +81,12 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Lint
+        run: pnpm lint
+
       - name: Build
         run: pnpm build
 
@@ -87,7 +94,7 @@ jobs:
         run: pnpm test
 
       - name: Install Playwright browsers
-        run: pnpm --filter admin-console exec playwright install --with-deps chromium
+        run: pnpm --filter admin-console exec playwright install --with-deps chrome
 
       - name: E2E tests
         run: pnpm --filter admin-console test:e2e
@@ -136,8 +143,7 @@ jobs:
             echo "No version changes to commit"
           else
             git commit -m "chore: sync version to v${{ needs.detect-version.outputs.version }} [skip ci]"
-            git pull --rebase origin main || { echo "Error: rebase failed, manual intervention required"; exit 1; }
-            git push
+            git push || { echo "Error: push failed, branch may have moved. Re-run release from latest main."; exit 1; }
           fi
 
       # ----- 创建 Tag + Release -----
@@ -145,6 +151,8 @@ jobs:
         id: notes
         run: |
           VERSION="v${{ needs.detect-version.outputs.version }}"
+          REPO_URL="https://github.com/${{ github.repository }}"
+          CONTRIBUTORS_URL="${REPO_URL}/graphs/contributors"
 
           # 查找上一个 tag（排除当前版本 tag，防止重跑时取到自身）
           PREV_TAG=$(git tag --sort=-version:refname | grep -v "^${VERSION}$" | head -n 1 || echo "")
@@ -152,8 +160,10 @@ jobs:
 
           if [ -z "$PREV_TAG" ]; then
             RANGE="HEAD"
+            COMPARE_SECTION=""
           else
             RANGE="${PREV_TAG}..HEAD"
+            COMPARE_SECTION="## 🔍 Full Changelog\n- [${PREV_TAG}...${VERSION}](${REPO_URL}/compare/${PREV_TAG}...${VERSION})\n\n"
           fi
 
           # 收集 commits 并分类
@@ -197,6 +207,8 @@ jobs:
             NOTES="Initial release ${VERSION}"
           fi
 
+          NOTES="${NOTES}${COMPARE_SECTION}## 🙌 Contributors\n- [View all contributors](${CONTRIBUTORS_URL})\n\n"
+
           # 写入文件以避免多行变量问题（printf '%b' 比 echo -e 更可靠，不会误解释 commit 中的转义字符）
           printf '%b' "$NOTES" > /tmp/release-notes.md
           cat /tmp/release-notes.md
@@ -220,10 +232,17 @@ jobs:
           draft: false
           prerelease: false
 
+      - name: Verify npm authentication
+        run: npm whoami
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
       # ----- 发布到 npm -----
       - name: Publish to npm
         run: |
           echo "Publishing public packages to npm..."
+          FAILED=0
+
           for pkg in packages/*/; do
             PKG_JSON="${pkg}package.json"
             if [ ! -f "$PKG_JSON" ]; then
@@ -232,16 +251,28 @@ jobs:
 
             IS_PRIVATE=$(node -p "require('./${PKG_JSON}').private || false")
             PKG_NAME=$(node -p "require('./${PKG_JSON}').name")
+            PKG_VERSION=$(node -p "require('./${PKG_JSON}').version")
 
             if [ "$IS_PRIVATE" = "true" ]; then
               echo "Skipping private package: $PKG_NAME"
               continue
             fi
 
+            if npm view "${PKG_NAME}@${PKG_VERSION}" version >/dev/null 2>&1; then
+              echo "Skipping already published package: ${PKG_NAME}@${PKG_VERSION}"
+              continue
+            fi
+
             echo "Publishing $PKG_NAME..."
-            (cd "$pkg" && pnpm publish --access public --no-git-checks) || {
-              echo "Warning: Failed to publish $PKG_NAME"
+            (cd "$pkg" && pnpm publish --access public) || {
+              echo "Error: Failed to publish ${PKG_NAME}@${PKG_VERSION}"
+              FAILED=1
             }
           done
+
+          if [ "$FAILED" -ne 0 ]; then
+            echo "One or more packages failed to publish"
+            exit 1
+          fi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

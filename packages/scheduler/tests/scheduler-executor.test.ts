@@ -6,6 +6,7 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { executeApiTask, executeJsTask, executeTask, interruptTask, saveInterruptedTaskLog, setLogRepository } from '../src/scheduler-executor.js'
+import { clearJsTaskHandlerCache, compileJsTaskHandler } from '../src/scheduler-js-compiler.js'
 
 describe('scheduler-executor', () => {
   afterEach(() => {
@@ -158,5 +159,32 @@ describe('scheduler-executor', () => {
     expect(onTaskStart).toHaveBeenCalledTimes(1)
     expect(onTaskInterrupted).toHaveBeenCalledTimes(1)
     expect(onTaskFinish).toHaveBeenCalledTimes(0)
+  })
+})
+
+describe('scheduler-js-compiler', () => {
+  afterEach(() => {
+    clearJsTaskHandlerCache()
+  })
+
+  it('相同代码不同 timeout 应创建独立的处理器（不共享缓存）', () => {
+    const config1 = { kind: 'js' as const, code: '() => "result"', timeout: 100 }
+    const config2 = { kind: 'js' as const, code: '() => "result"', timeout: 200 }
+    const config3 = { kind: 'js' as const, code: '() => "result"', timeout: 100 }
+
+    const result1 = compileJsTaskHandler(config1)
+    const result2 = compileJsTaskHandler(config2)
+    const result3 = compileJsTaskHandler(config3)
+
+    expect(result1.success).toBe(true)
+    expect(result2.success).toBe(true)
+    expect(result3.success).toBe(true)
+
+    if (result1.success && result2.success && result3.success) {
+      // 相同代码不同 timeout → 不共享缓存，避免超时语义串用
+      expect(result1.data).not.toBe(result2.data)
+      // 相同代码相同 timeout → 命中缓存，复用同一处理器
+      expect(result1.data).toBe(result3.data)
+    }
   })
 })
