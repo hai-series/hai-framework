@@ -409,6 +409,7 @@ function buildKnowledgeSchemaStatements(dbType: DbType): string[] {
   id          ${pk} PRIMARY KEY,
   name        ${textCol} NOT NULL,
   type        ${textCol} NOT NULL,
+  collection  ${textCol} NOT NULL,
   aliases     ${longText},
   description ${longText},
   created_at  BIGINT DEFAULT 0,
@@ -416,6 +417,7 @@ function buildKnowledgeSchemaStatements(dbType: DbType): string[] {
 )`,
     `CREATE INDEX IF NOT EXISTS idx_hai_ai_knowledge_entity_name ON hai_ai_knowledge_entity(name)`,
     `CREATE INDEX IF NOT EXISTS idx_hai_ai_knowledge_entity_type ON hai_ai_knowledge_entity(type)`,
+    `CREATE INDEX IF NOT EXISTS idx_hai_ai_knowledge_entity_collection ON hai_ai_knowledge_entity(collection)`,
     `CREATE TABLE IF NOT EXISTS hai_ai_knowledge_entity_document (
   entity_id   ${pk} NOT NULL,
   document_id ${pk} NOT NULL,
@@ -479,23 +481,26 @@ class DbKnowledgeStore implements KnowledgeStore {
     }
   }
 
-  async upsertEntity(entity: { id: string, name: string, type: string, aliases?: string[], description?: string }): Promise<void> {
+  async upsertEntity(entity: { id: string, name: string, type: string, collection: string, aliases?: string[], description?: string }): Promise<void> {
     const now = Date.now()
-    const params = [entity.id, entity.name, entity.type, entity.aliases ? JSON.stringify(entity.aliases) : null, entity.description ?? null, now, now]
+    const params = [entity.id, entity.name, entity.type, entity.collection, entity.aliases ? JSON.stringify(entity.aliases) : null, entity.description ?? null, now, now]
     const stmt = this.dbType === 'mysql'
-      ? `INSERT INTO hai_ai_knowledge_entity (id, name, type, aliases, description, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE name = VALUES(name), type = VALUES(type), aliases = VALUES(aliases), description = VALUES(description), updated_at = VALUES(updated_at)`
-      : `INSERT INTO hai_ai_knowledge_entity (id, name, type, aliases, description, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET name = excluded.name, type = excluded.type, aliases = excluded.aliases, description = excluded.description, updated_at = excluded.updated_at`
+      ? `INSERT INTO hai_ai_knowledge_entity (id, name, type, collection, aliases, description, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE name = VALUES(name), type = VALUES(type), collection = VALUES(collection), aliases = VALUES(aliases), description = VALUES(description), updated_at = VALUES(updated_at)`
+      : `INSERT INTO hai_ai_knowledge_entity (id, name, type, collection, aliases, description, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET name = excluded.name, type = excluded.type, collection = excluded.collection, aliases = excluded.aliases, description = excluded.description, updated_at = excluded.updated_at`
     const result = await this.sql.execute(stmt, params)
     if (!result.success)
       throw new Error(`upsertEntity failed: ${String(result.error)}`)
   }
 
-  async findEntitiesByName(keyword: string): Promise<Array<{ id: string, name: string, type: string, aliases: string[] }>> {
+  async findEntitiesByName(keyword: string, collection?: string): Promise<Array<{ id: string, name: string, type: string, aliases: string[] }>> {
     const pattern = `%${keyword}%`
-    const result = await this.sql.query<Record<string, unknown>>(
-      `SELECT id, name, type, aliases FROM hai_ai_knowledge_entity WHERE name LIKE ? OR aliases LIKE ?`,
-      [pattern, pattern],
-    )
+    let stmt = `SELECT id, name, type, aliases FROM hai_ai_knowledge_entity WHERE (name LIKE ? OR aliases LIKE ?)`
+    const params: unknown[] = [pattern, pattern]
+    if (collection) {
+      stmt += ' AND collection = ?'
+      params.push(collection)
+    }
+    const result = await this.sql.query<Record<string, unknown>>(stmt, params)
     if (!result.success)
       return []
     return result.data.map(row => ({
@@ -506,9 +511,13 @@ class DbKnowledgeStore implements KnowledgeStore {
     }))
   }
 
-  async listEntities(options?: { type?: string, keyword?: string, limit?: number }): Promise<Array<{ id: string, name: string, type: string, aliases: string[], description: string | null, createdAt: string | null, updatedAt: string | null }>> {
+  async listEntities(options?: { collection?: string, type?: string, keyword?: string, limit?: number }): Promise<Array<{ id: string, name: string, type: string, aliases: string[], description: string | null, createdAt: string | null, updatedAt: string | null }>> {
     let stmt = 'SELECT id, name, type, aliases, description, created_at, updated_at FROM hai_ai_knowledge_entity WHERE 1=1'
     const params: unknown[] = []
+    if (options?.collection) {
+      stmt += ' AND collection = ?'
+      params.push(options.collection)
+    }
     if (options?.type) {
       stmt += ' AND type = ?'
       params.push(options.type)
@@ -582,7 +591,7 @@ class DbKnowledgeStore implements KnowledgeStore {
   }
 
   async findByEntityName(entityName: string, options?: { collection?: string, type?: string }): Promise<Array<{ entity: { id: string, name: string, type: string, aliases: string[], description: string | null }, documents: Array<{ documentId: string, chunkId: string, collection: string, relevance: number, context: string | null }> }>> {
-    const entities = await this.findEntitiesByName(entityName)
+    const entities = await this.findEntitiesByName(entityName, options?.collection)
     let filtered = entities
     if (options?.type)
       filtered = filtered.filter(e => e.type === options.type)
@@ -606,21 +615,19 @@ class DbKnowledgeStore implements KnowledgeStore {
     }))
   }
 
-  async removeDocumentEntityRelations(documentId: string, collection: string): Promise<string[]> {
-    // ① 先查出受影响的实体 ID
-    const affected = await this.sql.query<{ entity_id: string }>(
-      'SELECT DISTINCT entity_id FROM hai_ai_knowledge_entity_document WHERE document_id = ? AND collection = ?',
-      [documentId, collection],
+  async deleteDocumentEntities(documentId: string, collection: string): Promise<void> {
+    // 必须在 removeDocumentEntityRelations 之前调用，子查询依赖关联行尚未删除
+    await this.sql.execute(
+      'DELETE FROM hai_ai_knowledge_entity WHERE collection = ? AND id IN (SELECT DISTINCT entity_id FROM hai_ai_knowledge_entity_document WHERE document_id = ? AND collection = ?)',
+      [collection, documentId, collection],
     )
-    const entityIds = affected.success ? affected.data.map(r => r.entity_id) : []
+  }
 
-    // ② 删除关联行
+  async removeDocumentEntityRelations(documentId: string, collection: string): Promise<void> {
     await this.sql.execute(
       'DELETE FROM hai_ai_knowledge_entity_document WHERE document_id = ? AND collection = ?',
       [documentId, collection],
     )
-
-    return entityIds
   }
 
   async upsertDocument(doc: { documentId: string, collection: string, title?: string, url?: string, chunkCount: number, createdAt: number }): Promise<void> {
@@ -742,20 +749,11 @@ class DbKnowledgeStore implements KnowledgeStore {
     if (exists.success && exists.data)
       await this.vecdb.collection.drop(collection)
 
-    // ② 查出该 collection 的所有实体 ID（关联表删除前），避免后续全表孤儿扫描
-    const entityResult = await this.sql.query<{ entity_id: string }>(
-      'SELECT DISTINCT entity_id FROM hai_ai_knowledge_entity_document WHERE collection = ?',
-      [collection],
-    )
-    const entityIds = entityResult.success ? entityResult.data.map(r => r.entity_id) : []
-
-    // ③ 删除 reldb 中所有与该 collection 相关的数据（顺序：关联表先、主表后）
+    // ② 删除 reldb 中所有与该 collection 相关的数据（顺序：关联表先、主表后）
     await this.sql.execute('DELETE FROM hai_ai_knowledge_entity_document WHERE collection = ?', [collection])
     await this.sql.execute('DELETE FROM hai_ai_knowledge_document WHERE collection = ?', [collection])
+    await this.sql.execute('DELETE FROM hai_ai_knowledge_entity WHERE collection = ?', [collection])
     await this.sql.execute('DELETE FROM hai_ai_knowledge_collections WHERE collection = ?', [collection])
-
-    // ④ 直接删除该 collection 的实体（无需全局孤儿扫描，实体归属于摄入文档）
-    await this.deleteEntities(entityIds)
   }
 }
 
