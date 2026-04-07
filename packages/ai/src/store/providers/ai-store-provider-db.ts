@@ -537,6 +537,16 @@ class DbKnowledgeStore implements KnowledgeStore {
     }))
   }
 
+  async deleteEntities(entityIds: string[]): Promise<void> {
+    if (entityIds.length === 0)
+      return
+    const placeholders = entityIds.map(() => '?').join(', ')
+    await this.sql.execute(
+      `DELETE FROM hai_ai_knowledge_entity WHERE id IN (${placeholders})`,
+      entityIds,
+    )
+  }
+
   async insertEntityDocument(relation: { entityId: string, documentId: string, chunkId?: string, collection: string, relevance?: number, context?: string }): Promise<void> {
     const now = Date.now()
     const params = [relation.entityId, relation.documentId, relation.chunkId ?? '', relation.collection, relation.relevance ?? 1.0, relation.context ?? null, now]
@@ -596,8 +606,21 @@ class DbKnowledgeStore implements KnowledgeStore {
     }))
   }
 
-  async removeDocumentEntityRelations(documentId: string, collection: string): Promise<void> {
-    await this.sql.execute('DELETE FROM hai_ai_knowledge_entity_document WHERE document_id = ? AND collection = ?', [documentId, collection])
+  async removeDocumentEntityRelations(documentId: string, collection: string): Promise<string[]> {
+    // ① 先查出受影响的实体 ID
+    const affected = await this.sql.query<{ entity_id: string }>(
+      'SELECT DISTINCT entity_id FROM hai_ai_knowledge_entity_document WHERE document_id = ? AND collection = ?',
+      [documentId, collection],
+    )
+    const entityIds = affected.success ? affected.data.map(r => r.entity_id) : []
+
+    // ② 删除关联行
+    await this.sql.execute(
+      'DELETE FROM hai_ai_knowledge_entity_document WHERE document_id = ? AND collection = ?',
+      [documentId, collection],
+    )
+
+    return entityIds
   }
 
   async upsertDocument(doc: { documentId: string, collection: string, title?: string, url?: string, chunkCount: number, createdAt: number }): Promise<void> {
@@ -711,6 +734,28 @@ class DbKnowledgeStore implements KnowledgeStore {
       [collection],
     )
     return result.success && result.data != null
+  }
+
+  async deleteCollection(collection: string): Promise<void> {
+    // ① 删除 vecdb 集合（向量数据）
+    const exists = await this.vecdb.collection.exists(collection)
+    if (exists.success && exists.data)
+      await this.vecdb.collection.drop(collection)
+
+    // ② 查出该 collection 的所有实体 ID（关联表删除前），避免后续全表孤儿扫描
+    const entityResult = await this.sql.query<{ entity_id: string }>(
+      'SELECT DISTINCT entity_id FROM hai_ai_knowledge_entity_document WHERE collection = ?',
+      [collection],
+    )
+    const entityIds = entityResult.success ? entityResult.data.map(r => r.entity_id) : []
+
+    // ③ 删除 reldb 中所有与该 collection 相关的数据（顺序：关联表先、主表后）
+    await this.sql.execute('DELETE FROM hai_ai_knowledge_entity_document WHERE collection = ?', [collection])
+    await this.sql.execute('DELETE FROM hai_ai_knowledge_document WHERE collection = ?', [collection])
+    await this.sql.execute('DELETE FROM hai_ai_knowledge_collections WHERE collection = ?', [collection])
+
+    // ④ 直接删除该 collection 的实体（无需全局孤儿扫描，实体归属于摄入文档）
+    await this.deleteEntities(entityIds)
   }
 }
 
