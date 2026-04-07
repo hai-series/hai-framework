@@ -624,11 +624,15 @@ export function createKnowledgeOperations(
           }
         }
 
-        // ③ 删除实体关联
-        await store.removeDocumentEntityRelations(documentId, collection)
+        // ③ 删除实体关联，拿回受影响的实体 ID
+        const entityIds = await store.removeDocumentEntityRelations(documentId, collection)
 
         // ④ 删除文档元数据
         await store.removeDocument(documentId, collection)
+
+        // ⑤ 删除实体本体（数据闭环：实体归属于摄入文档，文档删除后实体应一并清理）
+        if (entityIds.length > 0)
+          await store.deleteEntities(entityIds)
 
         logger.debug('Document removed', { documentId, collection })
         return ok(undefined)
@@ -696,6 +700,26 @@ export function createKnowledgeOperations(
       }
 
       return ok({ successCount, failureCount, results, duration: Date.now() - startTime })
+    },
+
+    // ─── deleteCollection ───
+    async deleteCollection(collection?: string): Promise<HaiResult<void>> {
+      if (!store) {
+        return err(HaiAIError.KNOWLEDGE_SETUP_FAILED, aiM('ai_knowledgeSetupFailed', { params: { error: 'KnowledgeStore not available. Provider may not support knowledge operations.' } }))
+      }
+
+      const col = collection ?? config.collection
+      logger.debug('Deleting knowledge collection', { collection: col })
+
+      try {
+        await store.deleteCollection(col)
+        logger.debug('Knowledge collection deleted', { collection: col })
+        return ok(undefined)
+      }
+      catch (error) {
+        logger.error('Knowledge collection deletion failed', { collection: col, error })
+        return err(HaiAIError.KNOWLEDGE_SETUP_FAILED, aiM('ai_knowledgeSetupFailed', { params: { error: String(error) } }), error)
+      }
     },
   }
 }

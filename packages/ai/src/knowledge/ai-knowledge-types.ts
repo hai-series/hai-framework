@@ -531,4 +531,15 @@ export interface KnowledgeOperations {
     inputs: KnowledgeIngestInput[],
     onProgress?: (progress: KnowledgeIngestBatchProgress) => void,
   ) => Promise<HaiResult<KnowledgeIngestBatchResult>>
+
+  /**
+   * 删除整个 collection（幂等）
+   *
+   * 同时清除：vecdb 向量集合、实体-文档关联、文档元数据、collection 注册记录。
+   * 删除后 collection 需重新执行 `setup` 才可使用。
+   *
+   * @param collection - 要删除的 collection 名称，默认使用 config.collection
+   * @returns 成功返回 ok(undefined)；store 不可用时返回 `KNOWLEDGE_SETUP_FAILED`
+   */
+  deleteCollection: (collection?: string) => Promise<HaiResult<void>>
 }

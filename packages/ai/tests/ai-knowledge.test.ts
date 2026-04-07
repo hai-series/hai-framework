@@ -95,7 +95,7 @@ function createMockKnowledgeStore() {
     insertEntityDocument: vi.fn(async (rel) => { entityDocs.push(rel) }),
     findDocumentsByEntityIds: vi.fn(async () => []),
     findByEntityName: vi.fn(async () => []),
-    removeDocumentEntityRelations: vi.fn(async () => {}),
+    removeDocumentEntityRelations: vi.fn(async () => []),
     upsertDocument: vi.fn(async (doc) => { documents.set(`${doc.documentId}:${doc.collection}`, { ...doc, title: doc.title ?? null, url: doc.url ?? null }) }),
     getDocument: vi.fn(async (docId: string, collection: string) => documents.get(`${docId}:${collection}`) ?? undefined),
     listDocuments: vi.fn(async () => []),
@@ -114,7 +114,20 @@ function createMockKnowledgeStore() {
     removeVectors: vi.fn(async () => {}),
     ensureCollection: vi.fn(async () => {}),
     registerCollection: vi.fn(async (col: string) => { registeredCollections.add(col) }),
+    deleteEntities: vi.fn(async () => {}),
     collectionExists: vi.fn(async (col: string) => registeredCollections.has(col)),
+    deleteCollection: vi.fn(async (col: string) => {
+      // 清除 vectors、documents、entityDocs、collection 注册
+      const docsInCol = Array.from(documents.keys()).filter(k => k.endsWith(`:${col}`))
+      docsInCol.forEach(k => documents.delete(k))
+      const idxToRemove: number[] = []
+      entityDocs.forEach((rel, i) => {
+        if (rel.collection === col)
+          idxToRemove.push(i)
+      })
+      idxToRemove.reverse().forEach(i => entityDocs.splice(i, 1))
+      registeredCollections.delete(col)
+    }),
   }
 
   return { store, _vectors: vectors, _documents: documents, _entities: entities, _entityDocs: entityDocs }
@@ -122,15 +135,16 @@ function createMockKnowledgeStore() {
 
 function createMockDatapipe() {
   return {
-    clean: vi.fn((text: string) => ({ success: true, data: text.trim() })),
+    clean: vi.fn((text: string) => ({ success: true as const, data: text.trim() })),
     chunk: vi.fn((text: string, _options: Record<string, unknown>) => ({
-      success: true,
+      success: true as const,
       data: [
         { index: 0, content: text.slice(0, Math.floor(text.length / 2)), metadata: {} },
         { index: 1, content: text.slice(Math.floor(text.length / 2)), metadata: {} },
       ],
     })),
-  }
+    pipeline: vi.fn(),
+  } as unknown as Parameters<typeof createKnowledgeOperations>[3]
 }
 
 const DEFAULT_CONFIG = {
@@ -865,5 +879,95 @@ describe('knowledge ingestBatch', () => {
       expect(result.data.failureCount).toBe(0)
       expect(result.data.results).toHaveLength(0)
     }
+  })
+})
+
+// ─── deleteCollection ───
+
+describe('knowledge deleteCollection', () => {
+  it('未提供 store 时返回错误', async () => {
+    const ops = createKnowledgeOperations(
+      DEFAULT_CONFIG,
+      createMockLLM(),
+      createMockEmbedding(),
+      createMockDatapipe(),
+    )
+
+    const result = await ops.deleteCollection()
+    expect(result.success).toBe(false)
+    if (!result.success)
+      expect(result.error.code).toBe(HaiAIError.KNOWLEDGE_SETUP_FAILED.code)
+  })
+
+  it('删除后 collectionExists 返回 false，操作被拒绝', async () => {
+    const { store } = createMockKnowledgeStore()
+    const ops = createKnowledgeOperations(
+      DEFAULT_CONFIG,
+      createMockLLM(),
+      createMockEmbedding(),
+      createMockDatapipe(),
+      store,
+    )
+
+    await ops.setup()
+    expect((await ops.retrieve('test')).success).toBe(true)
+
+    // 删除 collection
+    const deleteResult = await ops.deleteCollection()
+    expect(deleteResult.success).toBe(true)
+
+    // 删除后 retrieve 应返回 KNOWLEDGE_NOT_SETUP
+    const retrieveResult = await ops.retrieve('test')
+    expect(retrieveResult.success).toBe(false)
+    if (!retrieveResult.success)
+      expect(retrieveResult.error.code).toBe(HaiAIError.KNOWLEDGE_NOT_SETUP.code)
+  })
+
+  it('删除指定 collection、不影响其他 collection', async () => {
+    const { store } = createMockKnowledgeStore()
+    const ops = createKnowledgeOperations(
+      DEFAULT_CONFIG,
+      createMockLLM(),
+      createMockEmbedding(),
+      createMockDatapipe(),
+      store,
+    )
+
+    await ops.setup({ collection: 'col-a' })
+    await ops.setup({ collection: 'col-b' })
+
+    // 删除 col-a
+    const deleteResult = await ops.deleteCollection('col-a')
+    expect(deleteResult.success).toBe(true)
+
+    // col-a 不可用
+    const retrieveA = await ops.retrieve('query', { collection: 'col-a' })
+    expect(retrieveA.success).toBe(false)
+
+    // col-b 仍可用
+    const retrieveB = await ops.retrieve('query', { collection: 'col-b' })
+    expect(retrieveB.success).toBe(true)
+  })
+
+  it('删除后重新 setup 可以恢复使用', async () => {
+    const { store } = createMockKnowledgeStore()
+    const ops = createKnowledgeOperations(
+      DEFAULT_CONFIG,
+      createMockLLM(),
+      createMockEmbedding(),
+      createMockDatapipe(),
+      store,
+    )
+
+    await ops.setup()
+    await ops.deleteCollection()
+
+    // 重新 setup
+    const setupResult = await ops.setup()
+    expect(setupResult.success).toBe(true)
+
+    // 重新 setup 后可以正常 ingest
+    const ingestResult = await ops.ingest({ documentId: 'doc-after-reset', content: 'Content after reset.' })
+    expect(ingestResult.success).toBe(true)
   })
 })
