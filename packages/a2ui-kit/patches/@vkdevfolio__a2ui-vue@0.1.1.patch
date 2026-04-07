@@ -1,0 +1,663 @@
+diff --git a/src/components/A2Renderer.vue b/src/components/A2Renderer.vue
+index 70f31db529ff6dbadbe2b4dfa17b1c88ba45835e..c59d0e9de38326ca0ee2a753a31c3916b732a130 100644
+--- a/src/components/A2Renderer.vue
++++ b/src/components/A2Renderer.vue
+@@ -69,6 +69,11 @@ const componentMap: Record<string, ReturnType<typeof defineAsyncComponent>> = {
+   Avatar: defineAsyncComponent(() => import('./content/A2Avatar.vue')),
+   Alert: defineAsyncComponent(() => import('./content/A2Alert.vue')),
+   Stat: defineAsyncComponent(() => import('./content/A2Stat.vue')),
++  // Data views (custom extensions in this workspace)
++  Table: defineAsyncComponent(() => import('./content/A2Table.vue')),
++  BarChart: defineAsyncComponent(() => import('./content/A2BarChart.vue')),
++  LineChart: defineAsyncComponent(() => import('./content/A2LineChart.vue')),
++  PieChart: defineAsyncComponent(() => import('./content/A2PieChart.vue')),
+ }
+ 
+ const resolvedComponent = computed(() => {
+diff --git a/src/components/content/A2BarChart.vue b/src/components/content/A2BarChart.vue
+new file mode 100644
+index 0000000000000000000000000000000000000000..3a2f33b465c23c0fc42c68b199d05eca908636b5
+--- /dev/null
++++ b/src/components/content/A2BarChart.vue
+@@ -0,0 +1,144 @@
++<script setup lang="ts">
++import { computed, inject, ref } from 'vue'
++import type { ComponentDefinition } from '../../types'
++
++const props = defineProps<{
++  definition: ComponentDefinition
++  surfaceId: string
++}>()
++
++const dataModel = inject('a2ui-data-model') as any
++const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#64748b']
++const W = 720
++const H = 260
++const PAD = { t: 18, r: 16, b: 44, l: 48 }
++
++function resolve(val: any): any {
++  if (val === null || val === undefined)
++    return val
++  if (typeof val === 'string' || typeof val === 'number' || typeof val === 'boolean')
++    return val
++  if (val.path)
++    return dataModel?.getPath(props.surfaceId, val.path)
++  return val
++}
++
++const rawRows = computed(() => {
++  const data = resolve((props.definition as any).data ?? [])
++  return Array.isArray(data) ? data as Array<Record<string, any>> : []
++})
++
++const categories = computed(() => rawRows.value.map((d, i) => String(d?.label ?? d?.name ?? d?.x ?? i + 1)))
++const metricKeys = computed(() => {
++  const first = rawRows.value[0] || {}
++  if ('value' in first || 'y' in first)
++    return ['value']
++  return Object.keys(first).filter(k => !['label', 'name', 'x'].includes(k))
++})
++const series = computed(() => metricKeys.value.map((key, idx) => ({
++  key,
++  name: key === 'value' ? String((props.definition as any).seriesName ?? '值') : key,
++  color: colors[idx % colors.length],
++  values: rawRows.value.map(d => Number((key === 'value' ? (d?.value ?? d?.y) : d?.[key]) ?? 0)),
++})))
++const hiddenSeries = ref<Set<string>>(new Set())
++const visibleSeries = computed(() => series.value.filter(s => !hiddenSeries.value.has(s.key)))
++const max = computed(() => Math.max(1, ...visibleSeries.value.flatMap(s => s.values)))
++const ticks = computed(() => [1, 0.75, 0.5, 0.25, 0].map(r => Math.round(max.value * r)))
++
++const plotW = computed(() => W - PAD.l - PAD.r)
++const plotH = computed(() => H - PAD.t - PAD.b)
++const groupW = computed(() => categories.value.length > 0 ? plotW.value / categories.value.length : 0)
++const barW = computed(() => {
++  const n = Math.max(visibleSeries.value.length, 1)
++  return Math.max(8, Math.min(18, (groupW.value - 14) / n))
++})
++const bars = computed(() => {
++  const out: Array<{ x: number, y: number, w: number, h: number, color: string, label: string, value: number, seriesName: string }> = []
++  categories.value.forEach((label, i) => {
++    const x0 = PAD.l + i * groupW.value + (groupW.value - (visibleSeries.value.length * barW.value)) / 2
++    visibleSeries.value.forEach((s, j) => {
++      const v = s.values[i] ?? 0
++      const h = (v / max.value) * plotH.value
++      out.push({
++        x: x0 + j * barW.value,
++        y: PAD.t + plotH.value - h,
++        w: barW.value - 2,
++        h,
++        color: s.color,
++        label,
++        value: v,
++        seriesName: s.name,
++      })
++    })
++  })
++  return out
++})
++
++function toggleSeries(key: string) {
++  const next = new Set(hiddenSeries.value)
++  if (next.has(key))
++    next.delete(key)
++  else
++    next.add(key)
++  hiddenSeries.value = next
++}
++</script>
++
++<template>
++  <div class="a2-bar-wrap">
++    <div class="a2-legend">
++      <button v-for="s in series" :key="`lg_${s.key}`" class="a2-legend-item" type="button" :class="{ off: hiddenSeries.has(s.key) }" @click="toggleSeries(s.key)">
++        <i class="a2-dot" :style="{ background: s.color }" />
++        {{ s.name }}
++      </button>
++    </div>
++    <svg :viewBox="`0 0 ${W} ${H}`" width="100%" height="260" role="img" aria-label="bar-chart">
++      <line
++        v-for="(t, i) in ticks"
++        :key="`grid_${i}`"
++        :x1="PAD.l"
++        :x2="W - PAD.r"
++        :y1="PAD.t + (i * plotH) / (ticks.length - 1)"
++        :y2="PAD.t + (i * plotH) / (ticks.length - 1)"
++        stroke="var(--a2ui-border)"
++        stroke-dasharray="3 3"
++      />
++      <line :x1="PAD.l" :y1="PAD.t" :x2="PAD.l" :y2="H - PAD.b" stroke="var(--a2ui-border)" />
++      <line :x1="PAD.l" :y1="H - PAD.b" :x2="W - PAD.r" :y2="H - PAD.b" stroke="var(--a2ui-border)" />
++      <text
++        v-for="(t, i) in ticks"
++        :key="`tick_${i}`"
++        :x="PAD.l - 6"
++        :y="PAD.t + (i * plotH) / (ticks.length - 1) + 4"
++        text-anchor="end"
++        class="tick"
++      >
++        {{ t }}
++      </text>
++      <rect v-for="(b, i) in bars" :key="`bar_${i}`" :x="b.x" :y="b.y" :width="b.w" :height="Math.max(0, b.h)" :fill="b.color">
++        <title>{{ `${b.seriesName} | ${b.label}: ${b.value}` }}</title>
++      </rect>
++      <text
++        v-for="(lb, i) in categories"
++        :key="`x_${i}`"
++        :x="PAD.l + i * groupW + groupW / 2"
++        :y="H - PAD.b + 18"
++        text-anchor="middle"
++        class="xlabel"
++      >
++        {{ lb }}
++      </text>
++    </svg>
++  </div>
++</template>
++
++<style scoped>
++.a2-bar-wrap { width: 100%; }
++.a2-legend { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 8px; font-size: 12px; color: var(--a2ui-text-secondary); }
++.a2-legend-item { display: inline-flex; align-items: center; gap: 6px; border: 0; background: transparent; color: inherit; cursor: pointer; padding: 0; }
++.a2-legend-item.off { opacity: 0.35; }
++.a2-dot { width: 10px; height: 10px; border-radius: 999px; display: inline-block; }
++.tick { font-size: 11px; fill: var(--a2ui-text-secondary); }
++.xlabel { font-size: 12px; fill: var(--a2ui-text-secondary); }
++</style>
+diff --git a/src/components/content/A2LineChart.vue b/src/components/content/A2LineChart.vue
+new file mode 100644
+index 0000000000000000000000000000000000000000..128eef866d687af1b6201ee989bb7b414473e2fb
+--- /dev/null
++++ b/src/components/content/A2LineChart.vue
+@@ -0,0 +1,169 @@
++<script setup lang="ts">
++import { computed, inject, ref } from 'vue'
++import type { ComponentDefinition } from '../../types'
++
++const props = defineProps<{
++  definition: ComponentDefinition
++  surfaceId: string
++}>()
++
++const dataModel = inject('a2ui-data-model') as any
++const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4', '#64748b']
++
++function resolve(val: any): any {
++  if (val === null || val === undefined)
++    return val
++  if (typeof val === 'string' || typeof val === 'number' || typeof val === 'boolean')
++    return val
++  if (val.path)
++    return dataModel?.getPath(props.surfaceId, val.path)
++  return val
++}
++
++const width = 420
++const height = 180
++const pad = 18
++
++const rawRows = computed(() => {
++  const data = resolve((props.definition as any).data ?? [])
++  if (!Array.isArray(data))
++    return [] as Array<Record<string, any>>
++  return data as Array<Record<string, any>>
++})
++
++const categories = computed(() => rawRows.value.map((d, i) => String(d?.label ?? d?.name ?? d?.x ?? i + 1)))
++const metricKeys = computed(() => {
++  const first = rawRows.value[0] || {}
++  if ('value' in first || 'y' in first)
++    return ['value']
++  return Object.keys(first).filter(k => !['label', 'name', 'x'].includes(k))
++})
++const series = computed(() => metricKeys.value.map((key, idx) => ({
++  key,
++  name: key === 'value' ? String((props.definition as any).seriesName ?? '值') : key,
++  color: colors[idx % colors.length],
++  values: rawRows.value.map(d => Number((key === 'value' ? (d?.value ?? d?.y) : d?.[key]) ?? 0)),
++})))
++const hiddenSeries = ref<Set<string>>(new Set())
++const visibleSeries = computed(() => series.value.filter(s => !hiddenSeries.value.has(s.key)))
++
++const max = computed(() => Math.max(1, ...visibleSeries.value.flatMap(s => s.values)))
++const min = computed(() => Math.min(0, ...visibleSeries.value.flatMap(s => s.values)))
++const yTicks = computed(() => {
++  const m = max.value
++  const n = min.value
++  return [m, (m * 3 + n) / 4, (m + n) / 2, (m + n * 3) / 4, n].map(v => Math.round(v))
++})
++
++const lineNodes = computed(() => {
++  const n = categories.value.length
++  const range = Math.max(max.value - min.value, 1)
++  return visibleSeries.value.map((s) => {
++    const points = s.values.map((v, i) => {
++      const x = n === 1 ? width / 2 : pad + (i * (width - 2 * pad)) / (n - 1)
++      const y = height - pad - ((v - min.value) / range) * (height - 2 * pad)
++      return { x, y, value: v, label: categories.value[i] ?? String(i + 1) }
++    })
++    return { ...s, points, polyline: points.map(p => `${p.x},${p.y}`).join(' ') }
++  })
++})
++
++function toggleSeries(key: string) {
++  const next = new Set(hiddenSeries.value)
++  if (next.has(key))
++    next.delete(key)
++  else
++    next.add(key)
++  hiddenSeries.value = next
++}
++</script>
++
++<template>
++  <div class="a2-line-chart-wrap">
++    <div class="a2-legend">
++      <button v-for="s in series" :key="`lg_${s.key}`" type="button" class="a2-legend-item" :class="{ off: hiddenSeries.has(s.key) }" @click="toggleSeries(s.key)">
++        <i class="a2-dot" :style="{ background: s.color }" />
++        {{ s.name }}
++      </button>
++    </div>
++  <div class="a2-line-chart">
++    <svg :viewBox="`0 0 ${width} ${height}`" width="100%" height="180" role="img" aria-label="line-chart">
++      <line
++        v-for="(tick, i) in yTicks"
++        :key="`gy_${i}`"
++        :x1="pad"
++        :x2="width - pad"
++        :y1="pad + (i * (height - 2 * pad)) / (yTicks.length - 1)"
++        :y2="pad + (i * (height - 2 * pad)) / (yTicks.length - 1)"
++        stroke="var(--a2ui-border)"
++        stroke-dasharray="3 3"
++      />
++      <line :x1="pad" :y1="height - pad" :x2="width - pad" :y2="height - pad" stroke="var(--a2ui-border)" />
++      <line :x1="pad" :y1="pad" :x2="pad" :y2="height - pad" stroke="var(--a2ui-border)" />
++      <text
++        v-for="(tick, i) in yTicks"
++        :key="`tick_${i}`"
++        :x="pad - 4"
++        :y="pad + (i * (height - 2 * pad)) / (yTicks.length - 1) + 4"
++        text-anchor="end"
++        class="a2-line-y-label"
++      >
++        {{ tick }}
++      </text>
++      <polyline
++        v-for="s in lineNodes"
++        :key="`ln_${s.key}`"
++        fill="none"
++        :stroke="s.color"
++        stroke-width="2.5"
++        :points="s.polyline"
++      />
++      <circle
++        v-for="(pt, i) in lineNodes.flatMap(s => s.points.map(p => ({ ...p, seriesName: s.name, color: s.color, idx: s.key })))"
++        :key="`pt_${pt.idx}_${i}`"
++        :cx="pt.x"
++        :cy="pt.y"
++        r="4"
++        :fill="pt.color"
++      >
++        <title>{{ `${pt.seriesName} | ${pt.label}: ${pt.value}` }}</title>
++      </circle>
++    </svg>
++    <svg :viewBox="`0 0 ${width} 28`" width="100%" height="28" role="presentation" aria-hidden="true">
++      <text
++        v-for="(lb, i) in categories"
++        :key="`lb_${i}`"
++        :x="categories.length === 1 ? width / 2 : pad + (i * (width - 2 * pad)) / (categories.length - 1)"
++        y="20"
++        text-anchor="middle"
++        class="a2-line-x-label"
++      >
++        {{ lb }}
++      </text>
++    </svg>
++    <div class="a2-line-meta">min: {{ min }} / max: {{ max }}</div>
++  </div>
++  </div>
++</template>
++
++<style scoped>
++.a2-line-chart-wrap { width: 100%; }
++.a2-legend { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 8px; font-size: 12px; color: var(--a2ui-text-secondary); }
++.a2-legend-item { display: inline-flex; align-items: center; gap: 6px; border: 0; background: transparent; color: inherit; cursor: pointer; padding: 0; }
++.a2-legend-item.off { opacity: 0.35; }
++.a2-dot { width: 10px; height: 10px; border-radius: 999px; display: inline-block; }
++.a2-line-chart { width: 100%; }
++.a2-line-meta {
++  margin-top: 4px;
++  font-size: 12px;
++  color: var(--a2ui-text-secondary);
++}
++.a2-line-x-label {
++  font-size: 12px;
++  fill: var(--a2ui-text-secondary);
++}
++.a2-line-y-label {
++  font-size: 11px;
++  fill: var(--a2ui-text-secondary);
++}
++</style>
+diff --git a/src/components/content/A2PieChart.vue b/src/components/content/A2PieChart.vue
+new file mode 100644
+index 0000000000000000000000000000000000000000..819fbb8743527812d4dbba03bf7537875717520c
+--- /dev/null
++++ b/src/components/content/A2PieChart.vue
+@@ -0,0 +1,84 @@
++<script setup lang="ts">
++import { computed, inject } from 'vue'
++import type { ComponentDefinition } from '../../types'
++
++const props = defineProps<{
++  definition: ComponentDefinition
++  surfaceId: string
++}>()
++
++const dataModel = inject('a2ui-data-model') as any
++
++function resolve(val: any): any {
++  if (val === null || val === undefined)
++    return val
++  if (typeof val === 'string' || typeof val === 'number' || typeof val === 'boolean')
++    return val
++  if (val.path)
++    return dataModel?.getPath(props.surfaceId, val.path)
++  return val
++}
++
++const colors = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#14b8a6', '#f97316']
++const size = 180
++const r = 72
++const c = size / 2
++
++const series = computed(() => {
++  const data = resolve((props.definition as any).data ?? [])
++  if (!Array.isArray(data))
++    return [] as Array<{ label: string, value: number }>
++  return data
++    .map((d: any, i: number) => ({
++      label: String(d?.label ?? d?.name ?? i + 1),
++      value: Math.max(0, Number(d?.value ?? d?.y ?? 0)),
++    }))
++    .filter(d => Number.isFinite(d.value))
++})
++
++const total = computed(() => Math.max(series.value.reduce((s, it) => s + it.value, 0), 1))
++
++function arcPath(start: number, end: number): string {
++  const x1 = c + r * Math.cos(start)
++  const y1 = c + r * Math.sin(start)
++  const x2 = c + r * Math.cos(end)
++  const y2 = c + r * Math.sin(end)
++  const large = end - start > Math.PI ? 1 : 0
++  return `M ${c} ${c} L ${x1} ${y1} A ${r} ${r} 0 ${large} 1 ${x2} ${y2} Z`
++}
++
++const slices = computed(() => {
++  let angle = -Math.PI / 2
++  return series.value.map((it, idx) => {
++    const span = (it.value / total.value) * Math.PI * 2
++    const start = angle
++    const end = angle + span
++    angle = end
++    return { ...it, color: colors[idx % colors.length], path: arcPath(start, end) }
++  })
++})
++</script>
++
++<template>
++  <div class="a2-pie-wrap">
++    <svg :viewBox="`0 0 ${size} ${size}`" width="180" height="180" role="img" aria-label="pie-chart">
++      <path v-for="(s, i) in slices" :key="`slice_${i}`" :d="s.path" :fill="s.color" />
++    </svg>
++    <div class="a2-pie-legend">
++      <div v-for="(s, i) in slices" :key="`legend_${i}`" class="a2-pie-item">
++        <span class="a2-dot" :style="{ background: s.color }" />
++        <span class="a2-name">{{ s.label }}</span>
++        <span class="a2-val">{{ s.value }}</span>
++      </div>
++    </div>
++  </div>
++</template>
++
++<style scoped>
++.a2-pie-wrap { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
++.a2-pie-legend { display: flex; flex-direction: column; gap: 6px; min-width: 120px; }
++.a2-pie-item { display: grid; grid-template-columns: 12px 1fr auto; gap: 8px; align-items: center; font-size: 12px; color: var(--a2ui-text); }
++.a2-dot { width: 10px; height: 10px; border-radius: 999px; display: inline-block; }
++.a2-name { color: var(--a2ui-text-secondary); }
++.a2-val { font-weight: 600; }
++</style>
+diff --git a/src/components/content/A2Table.vue b/src/components/content/A2Table.vue
+new file mode 100644
+index 0000000000000000000000000000000000000000..6738bbe6e71ad53a1d26c58f783edd084c96fe01
+--- /dev/null
++++ b/src/components/content/A2Table.vue
+@@ -0,0 +1,104 @@
++<script setup lang="ts">
++import { computed, inject } from 'vue'
++import type { ComponentDefinition } from '../../types'
++
++const props = defineProps<{
++  definition: ComponentDefinition
++  surfaceId: string
++}>()
++
++const dataModel = inject('a2ui-data-model') as any
++
++function resolve(val: any): any {
++  if (val === null || val === undefined)
++    return val
++  if (typeof val === 'string' || typeof val === 'number' || typeof val === 'boolean')
++    return val
++  if (val.path)
++    return dataModel?.getPath(props.surfaceId, val.path)
++  if (val.literalString !== undefined)
++    return val.literalString
++  return val
++}
++
++const rows = computed<Record<string, any>[]>(() => {
++  const v = resolve((props.definition as any).rows ?? (props.definition as any).data ?? [])
++  if (Array.isArray(v))
++    return v as Record<string, any>[]
++  if (typeof v === 'string') {
++    try {
++      const parsed = JSON.parse(v)
++      return Array.isArray(parsed) ? parsed : []
++    }
++    catch {
++      return []
++    }
++  }
++  return []
++})
++
++const columns = computed<string[]>(() => {
++  const explicit = resolve((props.definition as any).columns ?? [])
++  if (Array.isArray(explicit) && explicit.length > 0)
++    return explicit.map(String)
++  const first = rows.value[0]
++  return first ? Object.keys(first) : []
++})
++
++const maxRows = computed(() => {
++  const n = Number(resolve((props.definition as any).maxRows ?? 100))
++  return Number.isFinite(n) && n > 0 ? Math.min(n, 500) : 100
++})
++
++const displayRows = computed(() => rows.value.slice(0, maxRows.value))
++</script>
++
++<template>
++  <div class="a2-table-wrap">
++    <table class="a2-table">
++      <thead>
++        <tr>
++          <th v-for="c in columns" :key="`h_${c}`">
++            {{ c }}
++          </th>
++        </tr>
++      </thead>
++      <tbody>
++        <tr v-if="displayRows.length === 0">
++          <td :colspan="Math.max(columns.length, 1)">
++            (no data)
++          </td>
++        </tr>
++        <tr v-for="(row, i) in displayRows" :key="`r_${i}`">
++          <td v-for="c in columns" :key="`c_${i}_${c}`">
++            {{ row?.[c] ?? '' }}
++          </td>
++        </tr>
++      </tbody>
++    </table>
++  </div>
++</template>
++
++<style scoped>
++.a2-table-wrap {
++  width: 100%;
++  overflow: auto;
++}
++.a2-table {
++  width: 100%;
++  border-collapse: collapse;
++  font-size: 13px;
++  color: var(--a2ui-text);
++}
++.a2-table th,
++.a2-table td {
++  border: 1px solid var(--a2ui-border);
++  padding: 6px 8px;
++  text-align: left;
++  white-space: nowrap;
++}
++.a2-table th {
++  background: color-mix(in srgb, var(--a2ui-primary) 8%, transparent);
++  font-weight: 600;
++}
++</style>
+diff --git a/src/designer/catalog.ts b/src/designer/catalog.ts
+index 1ca4d4ad430a0afb9e1342763e01fc4490086895..7e8f5fb4076c578aa85883f84e551e7d3168e89d 100644
+--- a/src/designer/catalog.ts
++++ b/src/designer/catalog.ts
+@@ -89,6 +89,18 @@ Props: url (DynamicString)
+ **AudioPlayer** — Audio player
+ Props: url (DynamicString), description (DynamicString)
+ 
++**Table** — Tabular data viewer
++Props: columns (DynamicStringList, optional), rows/data (DynamicValue: array of objects), maxRows (DynamicNumber, optional)
++
++**BarChart** — Simple bar chart
++Props: data (DynamicValue: [{label, value}, ...])
++
++**LineChart** — Simple line chart
++Props: data (DynamicValue: [{label, value}, ...])
++
++**PieChart** — Simple pie chart
++Props: data (DynamicValue: [{label, value}, ...])
++
+ ### Input Components
+ 
+ **TextField** — Text input
+@@ -159,6 +171,8 @@ RULES:
+ - Keep component IDs short and descriptive
+ - Wrap multiple children in Row or Column containers
+ - Use Card as the outermost wrapper for visual polish
++- For charts, provide data as an array of objects with label/value pairs
++- For tables, prefer rows as object arrays and optional explicit columns
+ `
+ 
+ export const ICON_NAMES = [
+diff --git a/src/index.ts b/src/index.ts
+index fb4ea8e869666195686492766a83b47fa140eda7..767ac48cbfb45f2d4717f95eca240e42fbe5f5fa 100644
+--- a/src/index.ts
++++ b/src/index.ts
+@@ -39,6 +39,10 @@ export { default as A2Rating } from './components/content/A2Rating.vue'
+ export { default as A2Avatar } from './components/content/A2Avatar.vue'
+ export { default as A2Alert } from './components/content/A2Alert.vue'
+ export { default as A2Stat } from './components/content/A2Stat.vue'
++export { default as A2Table } from './components/content/A2Table.vue'
++export { default as A2BarChart } from './components/content/A2BarChart.vue'
++export { default as A2LineChart } from './components/content/A2LineChart.vue'
++export { default as A2PieChart } from './components/content/A2PieChart.vue'
+ 
+ // Input components
+ export { default as A2TextField } from './components/input/A2TextField.vue'
+@@ -96,6 +100,10 @@ export type {
+   IconComponent,
+   VideoComponent,
+   AudioPlayerComponent,
++  TableComponent,
++  BarChartComponent,
++  LineChartComponent,
++  PieChartComponent,
+   RowComponent,
+   ColumnComponent,
+   ListComponent,
+diff --git a/src/types.ts b/src/types.ts
+index 7fda71fce79b970540d0e0515914ff85a6b1da7c..8ec40e7db293e97da629cf671c9f37e9c43063af 100644
+--- a/src/types.ts
++++ b/src/types.ts
+@@ -101,6 +101,10 @@ export type ComponentName =
+   | 'Icon'
+   | 'Video'
+   | 'AudioPlayer'
++  | 'Table'
++  | 'BarChart'
++  | 'LineChart'
++  | 'PieChart'
+   | 'Row'
+   | 'Column'
+   | 'List'
+@@ -395,6 +399,37 @@ export interface AudioPlayerComponent extends ComponentCommon {
+   description?: DynamicString
+ }
+ 
++/** Renders a tabular data view. */
++export interface TableComponent extends ComponentCommon {
++  component: 'Table'
++  /** Optional explicit column names; inferred from first row if omitted. */
++  columns?: DynamicStringList
++  /** Row array (e.g. [{col1: 'a', col2: 1}, ...]) or a data binding. */
++  rows?: DynamicValue
++  /** Alias for rows. */
++  data?: DynamicValue
++  /** Max rows to render on client side. */
++  maxRows?: DynamicNumber
++}
++
++/** Renders a bar chart from [{label, value}] series data. */
++export interface BarChartComponent extends ComponentCommon {
++  component: 'BarChart'
++  data: DynamicValue
++}
++
++/** Renders a line chart from [{label, value}] series data. */
++export interface LineChartComponent extends ComponentCommon {
++  component: 'LineChart'
++  data: DynamicValue
++}
++
++/** Renders a pie chart from [{label, value}] series data. */
++export interface PieChartComponent extends ComponentCommon {
++  component: 'PieChart'
++  data: DynamicValue
++}
++
+ // =============================================================================
+ // Component Interfaces — Layout Components
+ // =============================================================================
+@@ -592,6 +627,10 @@ export type A2Component =
+   | IconComponent
+   | VideoComponent
+   | AudioPlayerComponent
++  | TableComponent
++  | BarChartComponent
++  | LineChartComponent
++  | PieChartComponent
+   | RowComponent
+   | ColumnComponent
+   | ListComponent

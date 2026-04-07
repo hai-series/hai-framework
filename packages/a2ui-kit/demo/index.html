@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>A2UI Debug Console</title>
+    <script type="module" src="./main.ts"></script>
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="hero">
+        <p class="eyebrow">packages/a2ui-kit</p>
+        <h1>A2UI Debug Console</h1>
+        <p class="hero-copy">
+          同时调试纯 A2UI 消息渲染与 workflow outputs 解析链路。
+        </p>
+      </header>
+
+      <main class="workspace">
+        <section class="panel panel-input">
+          <div class="panel-head">
+            <h2>输入区</h2>
+            <div class="toolbar">
+              <button id="mode-messages" class="mode-button" type="button">A2UI messages</button>
+              <button id="mode-outputs" class="mode-button" type="button">workflow outputs</button>
+            </div>
+          </div>
+
+          <label class="field">
+            <span>预置样例</span>
+            <select id="preset-select"></select>
+          </label>
+
+          <div class="actions">
+            <button id="apply-preset" type="button">载入样例</button>
+            <button id="format-json" type="button">格式化 JSON</button>
+            <button id="rerender" type="button">重新解析</button>
+          </div>
+
+          <label class="field">
+            <span>JSON 输入</span>
+            <textarea id="json-input" spellcheck="false"></textarea>
+          </label>
+
+          <div class="hint-box">
+            <p id="preset-description"></p>
+          </div>
+        </section>
+
+        <section class="panel panel-debug">
+          <div class="panel-head">
+            <h2>调试链路</h2>
+            <span id="status-pill" class="status-pill">等待输入</span>
+          </div>
+
+          <div class="status-grid">
+            <article class="status-card">
+              <h3>模式</h3>
+              <p id="mode-value"></p>
+            </article>
+            <article class="status-card">
+              <h3>处理链路</h3>
+              <p id="pipeline-value"></p>
+            </article>
+            <article class="status-card">
+              <h3>结果概览</h3>
+              <p id="summary-value"></p>
+            </article>
+          </div>
+
+          <div class="debug-stack">
+            <article class="code-card">
+              <div class="code-head">
+                <h3>Parsed Input</h3>
+              </div>
+              <pre id="parsed-input"></pre>
+            </article>
+
+            <article class="code-card">
+              <div class="code-head">
+                <h3>Extracted Messages</h3>
+              </div>
+              <pre id="extracted-messages"></pre>
+            </article>
+
+            <article class="code-card">
+              <div class="code-head">
+                <h3>Fallback Text / Error</h3>
+              </div>
+              <pre id="fallback-output"></pre>
+            </article>
+          </div>
+        </section>
+
+        <section class="panel panel-preview">
+          <div class="panel-head">
+            <h2>渲染预览</h2>
+          </div>
+          <div id="render-preview" class="preview-surface"></div>
+        </section>
+      </main>
+    </div>
+  </body>
+</html>

@@ -486,3 +486,11 @@ import { cn, generateId, getSizeClass, getVariantClass } from '@h-ai/ui'
 // Toast 单例
 import { toast } from '@h-ai/ui'
 ```
+
+## 相关包：`@h-ai/a2ui-kit`（Vue / A2UI）
+
+本库为 **Svelte**，用于通用后台 UI 与 **Markdown** 等 AI 文本展示（如 `MarkdownRenderer`）。
+
+**结构化 A2UI（v0.10）** 由并列包 **`@h-ai/a2ui-kit`**（Vue 3）提供，与工作流 `outputs` 解析配套。二者分工见：
+
+- `packages/a2ui-kit/README.md`

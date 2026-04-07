@@ -1,0 +1,40 @@
+{
+  "name": "@h-ai/a2ui-kit",
+  "type": "module",
+  "version": "0.1.0",
+  "description": "Vue 3：A2UI v0.10 渲染与工作流 outputs 解析；与 @h-ai/ui（Svelte）并列，负责结构化 Agent UI。",
+  "license": "Apache-2.0",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts"
+    }
+  },
+  "main": "./src/index.ts",
+  "module": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "build": "vue-tsc --noEmit -p tsconfig.json",
+    "build:demo": "vite build --config vite.config.ts",
+    "dev:demo": "vite --config vite.config.ts",
+    "preview:demo": "vite preview --config vite.config.ts",
+    "test": "vitest run --config vitest.config.ts",
+    "typecheck": "vue-tsc --noEmit -p tsconfig.json"
+  },
+  "peerDependencies": {
+    "@vkdevfolio/a2ui-vue": "^0.1.1",
+    "vue": "^3.5.0"
+  },
+  "devDependencies": {
+    "@vkdevfolio/a2ui-vue": "catalog:",
+    "typescript": "catalog:",
+    "vite": "catalog:",
+    "vitest": "catalog:",
+    "vue": "catalog:",
+    "vue-tsc": "catalog:"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
