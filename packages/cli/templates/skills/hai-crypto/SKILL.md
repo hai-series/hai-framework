@@ -9,6 +9,21 @@ description: 使用 @h-ai/crypto 进行加密（非对称/哈希/对称）与密
 
 ---
 
+## 运行环境
+
+**Node.js + 浏览器双端可用。** 浏览器端通过 `crypto.init()` 初始化（无需配置参数）。
+
+| 能力 | Node.js | 浏览器 | 说明 |
+|------|---------|--------|------|
+| `crypto.asymmetric` 非对称加密 | ✅ | ✅ | SM2 加解密、签名验签 |
+| `crypto.hash` 哈希 | ✅ | ✅ | SM3 哈希、HMAC |
+| `crypto.symmetric` 对称加密 | ✅ | ✅ | SM4 ECB/CBC |
+| `crypto.password` 密码哈希 | ✅ | ❌ | 依赖 Node.js crypto（服务端专用） |
+
+浏览器端主要用于 kit 传输加密场景（`kit.client.create({ transport: { crypto } })`），一般不需要直接调用 crypto API。
+
+---
+
 ## 适用场景
 
 - 非对称加密/解密、签名/验签、密钥生成

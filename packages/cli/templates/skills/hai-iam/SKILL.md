@@ -9,6 +9,12 @@ description: 使用 @h-ai/iam 进行身份认证（密码/OTP/LDAP/API Key）、
 
 ---
 
+## 运行环境
+
+> ⚠️ **服务端模块（Node.js only）。** 浏览器端通过 `api.call(iamEndpoints.xxx)` 或 `apiFetch` 调用 IAM API 端点（参见 hai-api-client / hai-kit SKILL）。`@h-ai/iam/api` 子路径导出的 Zod Schema 和 EndpointDef 可在浏览器端使用。
+
+---
+
 ## 依赖
 
 | 模块 | 用途 | 是否必需 | 初始化要求 |

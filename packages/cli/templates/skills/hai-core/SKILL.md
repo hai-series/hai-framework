@@ -9,6 +9,20 @@ description: 使用 @h-ai/core 进行配置加载、日志记录、i18n 国际�
 
 ---
 
+## 运行环境
+
+**Node.js + 浏览器双端可用。** 构建工具自动选择正确入口（`package.json` exports 条件导出）。
+
+| 能力 | Node.js | 浏览器 |
+|------|---------|--------|
+| `core.logger` | ✅ pino（结构化 JSON / pretty） | ✅ loglevel（DevTools console） |
+| `core.config` | ✅ 完整（YAML 加载、watch、validate） | ⚠️ 仅支持 `core.init({ ... })` 传入配置 |
+| `core.i18n` | ✅ | ✅ |
+| `core.id` | ✅ | ✅ |
+| 工具函数 | ✅ | ✅ |
+
+---
+
 ## 适用场景
 
 - 项目初始化与配置加载
@@ -98,23 +112,7 @@ const unwatch = core.config.watch('db', (cfg, error) => {
 
 // 调用 unwatch() 停止监听
 unwatch()
-
-// 配置未加载时立即返回 NOT_LOADED 错误
-core.config.watch('nonexistent', (_cfg, error) => {
-  // error.code === HaiConfigError.CONFIG_NOT_LOADED.code
-})
-
-// 多个监听回调可在同一配置文件变更时同时触发
-core.config.watch('app', cb1)
-core.config.watch('app', cb2) // cb1 和 cb2 都会被调用
 ```
-
-**文件监听特性**：
-
-- 使用 `fs.watch()` 实现，自动防抖（100ms 防抖避免快速重复保存触发多次回调）
-- 同一配置名只会创建一个 watcher（多次 `watch()` 共享同一 watcher 实例）
-- 当最后一个回调被移除时，watcher 自动关闭
-- `unwatch()` 会关闭watcher，但缓存的配置数据保留
 
 配置文件格式（YAML，支持环境变量插值）：
 
@@ -301,62 +299,13 @@ core.time.addDays(date, 7)
 所有 hai 模块操作返回 `HaiResult<T>` 类型，强制处理成功/失败分支：
 
 ```typescript
-import type { HaiResult, HaiErrorDef, HaiError } from '@h-ai/core'
-import { err, ok } from '@h-ai/core'
+import { ok, err, HaiCommonError } from '@h-ai/core'
 
 // 成功
 return ok(data)
 
-// 失败：使用预定义错误定义创建错误实例
+// 失败
 return err(HaiCommonError.NOT_FOUND, 'Resource not found')
-
-// 带原始错误和建议的完整失败
-return err(
-  HaiCommonError.INTERNAL_ERROR,
-  'Failed to process request',
-  originalError,
-  'Check database connection'
-)
-```
-
-**错误定义 vs 错误实例**：
-
-```typescript
-// HaiErrorDef 是错误定义（包含错误码、HTTP 状态码、模块信息）
-const errorDef: HaiErrorDef = {
-  code: 'hai:common:001',        // system:module:code
-  httpStatus: 500,               // HTTP 响应状态码
-  system: 'hai',                 // 系统标识
-  module: 'common',              // 所属模块
-}
-
-// HaiError 是具体错误实例（包含定义数据 + 运行时信息）
-const errorInst: HaiError = {
-  ...errorDef,
-  message: '具体错误消息',        // i18n 翻译后的消息
-  cause?: originalError,         // 原始错误
-  suggestion?: '用户可采取的行动', // 建议
-}
-
-// err() 函数接受 HaiErrorDef，自动创建 HaiError 实例
-err(errorDef, '消息文本', cause, '建议')
-```
-
-**HaiResult 类型定义**：
-
-```typescript
-type HaiResult<T>
-  = | { success: true, data: T }
-  | { success: false, error: HaiError }
-  code: string
-  message: string
-  httpStatus?: number
-  system?: string
-  module?: string
-  cause?: unknown
-  suggestion?: string
-  ext?: Record<string, unknown>
-}
 ```
 
 **使用模式**：
@@ -375,35 +324,6 @@ const data = result.data
 if (!result.success)
   return result
 // 后续代码可安全使用 result.data
-```
-
-### 模块工具 — `core.module`
-
-| 方法                      | 签名                                                                 | 说明                                     |
-| ------------------------- | -------------------------------------------------------------------- | ---------------------------------------- |
-| `createNotInitializedKit` | `<E>(code: E['code'], messageFn: () => string) => NotInitializedKit` | 创建未初始化代理（访问任何方法返回错误） |
-
-```typescript
-// 在模块 main.ts 中使用
-const notInitialized = core.module.createNotInitializedKit(
-  HaiReldbError.NOT_INITIALIZED,
-  () => reldbM('reldb_notInitialized'),
-)
-
-// 创建占位 Proxy（异步接口，默认）
-let currentDdl: DdlOperations = notInitialized.proxy<DdlOperations>()
-// 创建占位 Proxy（同步接口）
-const currentHash: HashOperations = notInitialized.proxy<HashOperations>('sync')
-
-export const myModule = {
-  async init(config) {
-    currentDdl = createDdlOperations(config)
-    return ok(undefined)
-  },
-  get ddl() {
-    return currentDdl
-  },
-}
 ```
 
 ## 错误码
@@ -471,27 +391,6 @@ if (!result.success) {
 }
 ```
 
-### 自定义错误码（模块级）
-
-各模块应定义自己的错误码常量，遵循格式 `hai:<module>:<code>`：
-
-```typescript
-// 示例：db 模块定义错误码
-const DbErrorInfo = {
-  NOT_INITIALIZED: '001:500',
-  CONNECTION_FAILED: '010:500',
-  QUERY_FAILED: '011:500',
-  INVALID_SCHEMA: '012:400',
-} as const satisfies ErrorInfo
-
-export const DbError = error.buildHaiErrorsDef('db', DbErrorInfo)
-
-// 使用
-import { DbError, err } from '@h-ai/db'
-
-err(DbError.CONNECTION_FAILED, 'Failed to connect to PostgreSQL')
-```
-
 ## 常见模式
 
 ### 服务端初始化（SvelteKit hooks.server.ts）
@@ -542,3 +441,44 @@ const config = result.data // 类型安全
 - `hai-build`：项目整体架构与技能导航
 - `hai-kit`：SvelteKit 集成层（Handle/Guard/Middleware）
 - `hai-reldb` / `hai-cache` / `hai-iam`：使用 core.config 读取配置的下游模块
+
+---
+
+## 浏览器侧使用
+
+> **禁止在应用中直接引入 `loglevel`。** `core.logger` 在浏览器端自动使用 loglevel 作为后端，API 与 Node.js 完全一致。
+
+### 初始化
+
+浏览器端无文件系统，不需要 `configDir`。在 `+layout.svelte` 或应用入口调用：
+
+```typescript
+import { core } from '@h-ai/core'
+
+// 浏览器端：仅传入 logging 配置即可
+core.init({ logging: { level: 'info' } })
+```
+
+### 日志记录
+
+```typescript
+// 与 Node.js 完全一致的 API
+core.logger.info('Page loaded', { route: '/home' })
+core.logger.error('API call failed', { url, status })
+
+// 创建模块级 logger
+const logger = core.logger.create({ name: 'my-page' })
+logger.debug('Data fetched', { count: items.length })
+
+// ❌ 禁止直接引用底层日志库
+// import log from 'loglevel'  ← 不要这样做
+```
+
+### 浏览器侧限制
+
+| 功能 | 行为 |
+|------|------|
+| `format: 'json' \| 'pretty'` | 被忽略（始终输出到 DevTools console） |
+| `redact` 字段脱敏 | 不生效（需手动脱敏） |
+| `fatal` 级别 | 映射为 `console.error`（带 `[FATAL]` 前缀） |
+| context 输出 | JSON 字符串追加到消息末尾（非结构化对象） |

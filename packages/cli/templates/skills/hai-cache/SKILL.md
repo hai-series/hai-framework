@@ -9,6 +9,12 @@ description: 使用 @h-ai/cache 进行内存或 Redis 缓存操作（kv/hash/lis
 
 ---
 
+## 运行环境
+
+> ⚠️ **服务端模块（Node.js only）。** 浏览器端无需直接操作缓存，由服务端模块（如 IAM、Scheduler）内部使用。
+
+---
+
 ## 适用场景
 
 - 缓存热点数据减少数据库查询

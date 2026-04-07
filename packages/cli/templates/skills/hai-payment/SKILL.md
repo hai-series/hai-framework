@@ -9,6 +9,12 @@ description: 使用 @h-ai/payment 接入微信支付、支付宝、Stripe 统一
 
 ---
 
+## 运行环境
+
+> **服务端 + 浏览器分工模块。** `payment.createOrder` / `payment.handleNotify` / `payment.refund` 等操作在 Node.js 端执行。浏览器端使用 `invokePayment()`（从 `@h-ai/payment/client` 导入）调起支付。
+
+---
+
 ## 依赖
 
 | 模块 | 用途 | 是否必需 | 初始化要求 |
@@ -189,24 +195,13 @@ const payResult = await invokePayment(orderResult.data)
 
 ## Provider 模式
 
-### PaymentProvider 接口
-
-```typescript
-interface PaymentProvider {
-  readonly name: string
-  createOrder: (input: CreateOrderInput) => Promise<HaiResult<PaymentOrder>>
-  handleNotify: (request: PaymentNotifyRequest) => Promise<HaiResult<PaymentNotifyResult>>
-  queryOrder: (outTradeNo: string) => Promise<HaiResult<OrderStatus>>
-  refund: (input: RefundInput) => Promise<HaiResult<RefundResult>>
-  closeOrder: (outTradeNo: string) => Promise<HaiResult<void>>
-}
-```
-
 内置 Provider：
 
-- **wechat** — 微信支付 API v3（RSA-SHA256 签名、AES-256-GCM 回调解密）
-- **alipay** — 支付宝开放平台（RSA2 签名验签）
+- **wechat** — 微信支付 API v3
+- **alipay** — 支付宝开放平台
 - **stripe** — Stripe Checkout Session 模式
+
+自定义 Provider 通过 `payment.registerProvider(provider)` 注册。
 
 ### API 契约
 
@@ -267,16 +262,7 @@ export const POST = kit.handler(async ({ request, locals }) => {
 
 ## 审计日志
 
-关键支付操作成功后自动写入审计日志（依赖 `@h-ai/audit`），无需额外配置。失败仅 warn，不影响支付流程。
-
-| 操作 | `action` | `resource` | `resourceId` | `details` |
-| --- | --- | --- | --- | --- |
-| 创建订单 | `create_order` | `payment` | `orderNo` | `{ provider, amount, tradeType }` |
-| 支付回调 | `payment_notify` | `payment` | `orderNo` | `{ provider, transactionId, status, amount }` |
-| 退款 | `refund` | `payment` | `orderNo` | `{ provider, refundNo, amount }` |
-| 关闭订单 | `close_order` | `payment` | `orderNo` | `{ provider }` |
-
-> `queryOrder` 为只读操作，不写审计日志。
+关键支付操作（创建订单、回调、退款、关闭订单）成功后自动写入审计日志（依赖 `@h-ai/audit`），无需额外配置。`queryOrder` 为只读操作，不写审计日志。
 
 ---
 

@@ -7,6 +7,10 @@ description: 使用 @h-ai/scheduler 进行统一定时任务管理、任务持�
 
 > `@h-ai/scheduler` 使用统一任务模型管理 API / JS / Hook 三类执行路径，支持持久化、手工触发来源记录、分布式锁与全局生命周期回调。
 
+## 运行环境
+
+> ⚠️ **服务端模块（Node.js only）。** 浏览器端通过 API 端点触发 `scheduler.trigger()` 或查询任务日志。
+
 ## 依赖
 
 | 模块 | 用途 | 是否必需 | 初始化要求 |
@@ -20,6 +24,7 @@ description: 使用 @h-ai/scheduler 进行统一定时任务管理、任务持�
 
 ```ts
 import { cache } from '@h-ai/cache'
+import { core } from '@h-ai/core'
 import { reldb } from '@h-ai/reldb'
 import { scheduler } from '@h-ai/scheduler'
 
@@ -32,13 +37,13 @@ await scheduler.init({
   retentionDays: 30,
   hooks: {
     onTaskStart(event) {
-      console.info('start', event.task.id, event.trigger)
+      core.logger.info('Task started', { taskId: event.task.id, trigger: event.trigger })
     },
     onTaskInterrupted(event) {
-      console.warn('interrupted', event.task.id, event.reason)
+      core.logger.warn('Task interrupted', { taskId: event.task.id, reason: event.reason })
     },
     onTaskFinish(event) {
-      console.info('finish', event.log.status)
+      core.logger.info('Task finished', { status: event.log.status })
     },
   },
 })
@@ -104,65 +109,6 @@ const logs = await scheduler.getLogs({
   startedBefore: Date.now(),
   pagination: { page: 1, pageSize: 20 },
 })
-```
-
-## 核心类型
-
-### TaskDefinition
-
-```ts
-interface TaskDefinition {
-  id: string
-  name: string
-  description?: string
-  cron: string
-  enabled?: boolean
-  deleteAfterRun?: boolean
-  retry?: {
-    maxAttempts: number
-    backoffMs?: number[]
-  }
-  params?: Record<string, unknown>
-  handler?: ApiTaskConfig | JsTaskConfig
-}
-```
-
-### Handler 配置
-
-```ts
-interface ApiTaskConfig {
-  kind: 'api'
-  url: string
-  method?: 'GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH'
-  headers?: Record<string, string>
-  body?: unknown
-  timeout?: number
-}
-
-interface JsTaskConfig {
-  kind: 'js'
-  code: string
-  timeout?: number
-}
-```
-
-### TaskExecutionLog
-
-```ts
-interface TaskExecutionLog {
-  id: number
-  taskId: string
-  taskName: string
-  taskType: 'api' | 'js' | 'hook'
-  triggerType: 'scheduled' | 'manual'
-  triggerSource: string | null
-  status: 'success' | 'failed' | 'interrupted'
-  result: string | null
-  error: string | null
-  startedAt: number
-  finishedAt: number
-  duration: number
-}
 ```
 
 ## 核心 API

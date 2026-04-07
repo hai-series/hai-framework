@@ -23,6 +23,9 @@ description: 使用 @h-ai/kit 构建 SvelteKit 请求管道与 API 安全边界�
 - `kit.guard.*`（`require` / `check`）
 - `kit.handler` / `kit.response` / `kit.validate`
 - `kit.fromContract(endpoint, fn)` — 契约到 SvelteKit handler
+- `kit.client.create()` — 浏览器端统一 API 客户端（`apiFetch`）
+- `kit.auth.createTokenStore()` — 浏览器端 Token 存储
+- `kit.auth.createHandleFetch()` — `hooks.client.ts` 自动附加 Token
 - Bearer Token / `Authorization` header
 - CORS 配置（含 Capacitor Origin 预设）
 - 传输加密（key exchange / `X-Client-Id`）
@@ -60,12 +63,6 @@ export const handle = kit.createHandle({
   },
 })
 ```
-
-Bearer Token 解析流程：
-
-1. 检查 `Authorization: Bearer <token>` header
-2. 若无 header，回退到 `event.cookies.get('hai_access_token')`（SSR 透传场景）
-3. Token 经 `auth.verifyToken` 校验后挂载到 `event.locals.session`
 
 ### 2) API 端点使用 `kit.handler`
 
@@ -169,37 +166,9 @@ const myEndpoint = defineEndpoint({
 | `VALIDATION_ERROR` | 422    | 数据校验失败       |
 | `INTERNAL_ERROR`   | 500    | 未处理异常         |
 
-### 传输加密常见错误（i18n key）
-
-| key                              | 含义                               |
-| -------------------------------- | ---------------------------------- |
-| `kit_transportClientIdRequired`  | 缺少 `X-Client-Id`（强制加密模式） |
-| `kit_transportClientKeyNotFound` | 客户端密钥不存在或失效             |
-| `kit_transportInvalidPayload`    | 加密载荷格式非法                   |
-| `kit_transportDecryptFailed`     | 请求体解密失败                     |
-| `kit_transportKeyExchangeFailed` | 密钥交换失败                       |
-
 ## API 契约范式（端到端类型安全）
 
 > `kit.fromContract` 和 `api.call` 共同消费模块 `api/` 下的 `EndpointDef`，实现服务端↔客户端的全链路类型安全 + 运行时 Zod 校验。
-
-### 契约架构
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    @h-ai/xx/api                             │
-│  xx-api-schemas.ts  ←  Zod Schema（唯一真相源）            │
-│  xx-api-contract.ts ←  xxEndpoints（method + path + schema）│
-└─────────────┬──────────────────────────┬────────────────────┘
-              │                          │
-     ┌────────▼────────┐       ┌─────────▼─────────┐
-     │  客户端（浏览器）│       │  服务端（SvelteKit）│
-     │  api.call(ep, i) │       │  kit.fromContract  │
-     │  @h-ai/api-client│       │  @h-ai/kit         │
-     └────────┬────────┘       └─────────┬─────────┘
-              │      HTTP（类型安全）     │
-              └──────────────────────────┘
-```
 
 ### 服务端流程（本模块责任）
 
@@ -249,32 +218,7 @@ export const POST = kit.fromContract(paymentEndpoints.createOrder, async (input,
 })
 ```
 
-### 已有契约模块一览
-
-| 模块       | 导入路径               | 端点对象             | 典型端点                        |
-| ---------- | -------------------- | -------------------- | ------------------------------- |
-| `storage`  | `@h-ai/storage/api`  | `storageEndpoints`   | presignUpload, listFiles, …     |
-| `iam`      | `@h-ai/iam/api`      | `iamEndpoints`       | login, logout, currentUser, …   |
-| `ai`       | `@h-ai/ai/api`       | `aiEndpoints`        | chat, chatStream, sendMessage   |
-| `payment`  | `@h-ai/payment/api`  | `paymentEndpoints`   | createOrder, queryOrder, …      |
-
-### 新模块接入契约
-
-在模块 `src/api/` 下创建 Schema + Contract，并在 `package.json` 中声明 `"./api"` 子路径导出。
-
 ## 常见模式
-
-### Bearer Token 认证流程
-
-```
-客户端 → Authorization: Bearer <accessToken> → kit.createHandle 解析
-                                                  ↓
-                                        auth.verifyToken(token) → locals.session
-                                                  ↓
-                                        protectedPaths 守卫检查 → 通过则继续
-```
-
-SSR 场景下，浏览器通过 `hai_access_token` httpOnly Cookie 透传 Token，Handle 自动回退读取。
 
 ### 契约模式（推荐新项目使用）
 
@@ -314,6 +258,97 @@ const config = {
 
 - `hai-core`：全局配置、日志、HaiResult 基础能力
 - `hai-iam`：Token 认证、角色权限模型
-- `hai-api-client`：客户端契约调用
+- `hai-api-client`：客户端契约调用（SPA / 原生 App 场景）
 - `hai-crypto`：传输加密与密钥管理能力
 - `hai-capacitor`：原生 App CORS 场景
+
+---
+
+## 浏览器侧使用
+
+### 创建统一 API 客户端 — `kit.client`
+
+> **所有浏览器端 API 请求必须通过 `apiFetch`，禁止直接 `fetch()`。**
+
+在 `src/lib/utils/api.ts` 中一次性创建，全应用共享：
+
+```typescript
+// src/lib/utils/api.ts
+import { kit } from '@h-ai/kit'
+
+const client = kit.client.create({
+  auth: true, // 自动从 localStorage 注入 Bearer Token
+})
+
+export const { apiFetch } = client
+```
+
+如需传输加密，传入 crypto：
+
+```typescript
+import { crypto } from '@h-ai/crypto'
+import { kit } from '@h-ai/kit'
+
+if (typeof window !== 'undefined') {
+  crypto.init() // 浏览器端初始化加密模块
+}
+
+const client = kit.client.create({
+  transport: { crypto }, // 透明完成密钥交换 + 请求/响应体加解密
+  auth: true,
+})
+
+export const { apiFetch } = client
+```
+
+`apiFetch` 自动处理：
+- **CSRF**：写方法（POST/PUT/DELETE）自动读取 `hai_csrf` Cookie 并设置 `X-CSRF-Token`
+- **Bearer Token**：自动从 localStorage 读取并注入 `Authorization` header
+- **传输加密**：可选，首次写请求时自动密钥交换
+
+使用示例：
+
+```typescript
+// ✅ 正确方式
+import { apiFetch } from '$lib/utils/api'
+
+const res = await apiFetch('/api/users', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify(data),
+})
+
+// ❌ 禁止在组件中直接 fetch
+// const res = await fetch('/api/users', { ... })
+```
+
+### Token 存储 — `kit.auth.createTokenStore`
+
+```typescript
+import { kit } from '@h-ai/kit'
+
+// 创建 localStorage 存储（Web 端默认）
+const tokenStore = kit.auth.createTokenStore('hai_access_token')
+tokenStore.set(tokens.accessToken) // 登录后保存
+tokenStore.get()                   // string | null
+tokenStore.clear()                 // 登出时清除
+```
+
+### hooks.client.ts 标准配置 — `kit.auth.createHandleFetch`
+
+```typescript
+// src/hooks.client.ts
+import { kit } from '@h-ai/kit'
+
+// 自动为同源请求附加 Authorization: Bearer <token>
+export const handleFetch = kit.auth.createHandleFetch()
+```
+
+### 选择指南：kit.client vs api-client
+
+| 场景 | 推荐 | 原因 |
+|------|------|------|
+| SSR SvelteKit 应用（同源请求） | `kit.client.create().apiFetch` | 自动 CSRF、同源 Cookie 透传、传输加密 |
+| SPA / 原生 App（跨域请求） | `api.init()` + `api.call()` | 完整 Token 管理、401 自动刷新 |
+| 服务端 `+page.server.ts` | 直接调用模块 API | 无需 HTTP 自环 |
+| 契约调用（类型安全） | `api.call(endpoint, input)` | EndpointDef 双向 Zod 校验 |

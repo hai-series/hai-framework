@@ -9,6 +9,12 @@ description: 使用 @h-ai/deploy 进行自动化部署：Vercel 部署 + 基础�
 
 ---
 
+## 运行环境
+
+> ⚠️ **Node.js CLI / 服务端模块。** 通过 `hai deploy` CLI 命令或在 Node.js 脚本中使用。
+
+---
+
 ## 适用场景
 
 - 一键部署 SvelteKit 应用到 Vercel

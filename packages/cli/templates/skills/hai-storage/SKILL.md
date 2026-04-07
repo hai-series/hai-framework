@@ -9,6 +9,12 @@ description: 使用 @h-ai/storage 进行文件存储操作（本地/S3），包�
 
 ---
 
+## 运行环境
+
+> ⚠️ **服务端模块**。`storage.file` / `storage.dir` / `storage.presign` 均在 Node.js 端使用。浏览器端通过预签名 URL 或 API 端点间接访问存储（见下方「浏览器端文件上传」）。
+
+---
+
 ## 适用场景
 
 - 文件上传与下载
@@ -217,6 +223,46 @@ const result = await storage.file.put(key, avatarBuffer, {
 if (result.success) {
   const publicUrl = storage.presign.publicUrl(key)
   await iam.user.updateUser(userId, { avatarUrl: publicUrl ?? '' })
+}
+```
+
+---
+
+## 浏览器端文件上传（预签名 URL 模式）
+
+浏览器端无法直接使用 `storage` 模块，应通过 API 获取预签名 URL 后直传：
+
+```typescript
+import { apiFetch } from '$lib/utils/api'
+
+// 1. 向服务端请求预签名上传 URL
+const res = await apiFetch('/api/storage/presign/upload', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ key: `uploads/${file.name}`, contentType: file.type }),
+})
+const { url } = await res.json()
+
+// 2. 浏览器直传到存储（不经过服务端，大文件友好）
+await fetch(url, {
+  method: 'PUT',
+  body: file,
+  headers: { 'Content-Type': file.type },
+})
+```
+
+也可使用契约调用（需配合 `@h-ai/api-client`）：
+
+```typescript
+import { api } from '@h-ai/api-client'
+import { storageEndpoints } from '@h-ai/storage/api'
+
+const result = await api.call(storageEndpoints.presignUpload, {
+  key: `avatars/${userId}.png`,
+  contentType: 'image/png',
+})
+if (result.success) {
+  await fetch(result.data.url, { method: 'PUT', body: file })
 }
 ```
 
