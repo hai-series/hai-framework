@@ -4,7 +4,7 @@
 #
 # 触发条件：main 分支的 push 事件
 # 工作流程：
-#   1. 检测根 package.json 版本号是否变更
+#   1. 检测根 package.json 版本号是否已有对应 Tag
 #   2. 全量单元测试 + E2E 测试
 #   3. 同步版本号到所有子模块并提交
 #   4. 创建 Git Tag + GitHub Release（含分类变更日志）
@@ -24,7 +24,7 @@ concurrency:
 
 jobs:
   # ===========================================================================
-  # 检测版本变更
+  # 检测版本是否已发布（是否存在对应 Tag）
   # ===========================================================================
   detect-version:
     name: Detect Version Change
@@ -36,30 +36,25 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 2
+          fetch-depth: 0
 
-      - name: Check version change
+      - name: Check release tag existence
         id: check
         run: |
           # 获取当前版本
           CURRENT=$(node -p "require('./package.json').version")
           echo "Current version: $CURRENT"
 
-          # 获取上一个 commit 的版本
-          PREVIOUS=$(git show HEAD~1:package.json 2>/dev/null | node -p "JSON.parse(require('fs').readFileSync('/dev/stdin','utf8')).version" 2>/dev/null || echo "")
-          echo "Previous version: $PREVIOUS"
+          VERSION_TAG="v${CURRENT}"
+          echo "Checking tags: ${VERSION_TAG} (and fallback: ${CURRENT})"
 
-          if [ -z "$PREVIOUS" ]; then
-            echo "No previous version found, treating as first release"
-            echo "changed=true" >> "$GITHUB_OUTPUT"
-            echo "version=$CURRENT" >> "$GITHUB_OUTPUT"
-          elif [ "$CURRENT" != "$PREVIOUS" ]; then
-            echo "Version changed: $PREVIOUS -> $CURRENT"
-            echo "changed=true" >> "$GITHUB_OUTPUT"
-            echo "version=$CURRENT" >> "$GITHUB_OUTPUT"
-          else
-            echo "No version change detected"
+          if git rev-parse "${VERSION_TAG}" >/dev/null 2>&1 || git rev-parse "${CURRENT}" >/dev/null 2>&1; then
+            echo "Tag for current version already exists, skip build/release"
             echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "No tag found for current version, trigger build/release"
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "version=$CURRENT" >> "$GITHUB_OUTPUT"
           fi
 
   # ===========================================================================
