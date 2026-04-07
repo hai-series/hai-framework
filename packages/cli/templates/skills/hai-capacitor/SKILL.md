@@ -9,6 +9,12 @@ description: 使用 @h-ai/capacitor 桥接 Capacitor 原生能力（Token 安全
 
 ---
 
+## 运行环境
+
+> **浏览器端 / 原生 App 专用。** 在 Capacitor 原生环境（Android/iOS）中提供完整能力，纯 Web 环境下部分功能退化（如 Preferences 退化为 localStorage）。
+
+---
+
 ## 适用场景
 
 - Android/iOS 原生应用开发（SvelteKit + Capacitor）
@@ -17,24 +23,6 @@ description: 使用 @h-ai/capacitor 桥接 Capacitor 原生能力（Token 安全
 - 推送通知注册与监听（FCM / APNs）
 - 原生相机拍照 / 相册选取
 - 状态栏配置（沉浸式、颜色、样式）
-
----
-
-## 模块结构
-
-```
-packages/capacitor/src/
-  index.ts                    # export * 聚合
-  capacitor-main.ts           # 服务对象（export const capacitor）
-  capacitor-types.ts           # 公共类型（CapacitorFunctions / CapacitorError / 业务类型）
-  capacitor-config.ts          # 错误码（HaiCapacitorError as const）
-  capacitor-i18n.ts            # i18n 消息获取器
-  capacitor-token-storage.ts   # Token 存储（TokenStorage 实现 + safe* 工具）
-  capacitor-device.ts          # 设备信息
-  capacitor-camera.ts          # 相机/相册
-  capacitor-push.ts            # 推送通知
-  capacitor-status-bar.ts      # 状态栏
-```
 
 ---
 

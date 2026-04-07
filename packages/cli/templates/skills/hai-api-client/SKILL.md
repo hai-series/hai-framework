@@ -9,6 +9,20 @@ description: 使用 @h-ai/api-client 单例模式构建多端共用的纯 TypeSc
 
 ---
 
+## 运行环境
+
+**浏览器端专用。** 服务端 `+page.server.ts` / `+server.ts` 应直接调用模块 API（如 `iam.auth.login()`），不经过 HTTP 自环。
+
+### 与 kit.client 的分工
+
+| 场景 | 推荐 | 原因 |
+|------|------|------|
+| SSR SvelteKit 应用（同源请求） | `kit.client.create().apiFetch`（见 hai-kit SKILL） | 自动 CSRF、传输加密、同源 Cookie 透传 |
+| SPA / 原生 App（跨域请求） | **本模块** `api.init()` + `api.call()` | 完整 Token 管理、401 自动刷新、独立 baseUrl |
+| 契约调用（类型安全，跨域） | **本模块** `api.call(endpoint, input)` | EndpointDef 双向 Zod 校验 |
+
+---
+
 ## 适用场景
 
 - 浏览器端/App 端统一 API 请求
@@ -247,11 +261,6 @@ const chat = await api.call(aiEndpoints.sendMessage, {
 | `ai`       | `@h-ai/ai/api`       | `aiEndpoints`        | chat, chatStream, sendMessage   |
 | `payment`  | `@h-ai/payment/api`  | `paymentEndpoints`   | createOrder, queryOrder, …      |
 
-### 新模块接入契约
-
-在模块 `src/api/` 下创建 Schema + Contract，并在 `package.json` 中声明 `"./api"` 子路径导出。
-
----
 
 ## 常见模式
 

@@ -9,6 +9,12 @@ description: 使用 @h-ai/datapipe 进行文本清洗（HTML/URL/空白移除）
 
 ---
 
+## 运行环境
+
+> **服务端模块（Node.js only）。** 通常在 AI 知识库入库或文档预处理场景中使用，由 `@h-ai/ai` 内部调用或在服务端显式调用。
+
+---
+
 ## 适用场景
 
 - 文本清洗：移除 HTML 标签、URL、Email，标准化空白

@@ -9,6 +9,12 @@ description: 使用 @h-ai/ui 构建多端应用界面，包含三层组件架构
 
 ---
 
+## 运行环境
+
+> **浏览器端专用。** Svelte 组件在浏览器中渲染，服务端无需引用。
+
+---
+
 ## 适用场景
 
 - 构建管理后台页面（表单、表格、弹窗、导航等）
@@ -257,10 +263,9 @@ const theme = getCurrentTheme()
 
 1. **Svelte 5 Runes**：使用 `$state`、`$derived`、`$effect`
 2. **Snippet 插槽**：使用 `{#snippet name()}...{/snippet}` 语法
-3. **三层依赖红线**：primitives 不依赖上层，compounds 只依赖 primitives + Bits UI，scenes 可依赖两者
-4. **自动导入例外**：`toast`、类型导入、`Range`/`FileList` 必须显式 `import`
-5. **Combobox 统一单选/多选**：`MultiSelect` 已删除
-6. **移动端样式**：务必引入 `design-tokens.css` + `mobile.css`，使用 SafeArea 包裹原生 App 页面
+3. **自动导入例外**：`toast`、类型导入、`Range`/`FileList` 必须显式 `import`
+4. **Combobox 统一单选/多选**：`MultiSelect` 已删除
+5. **移动端样式**：务必引入 `design-tokens.css` + `mobile.css`，使用 SafeArea 包裹原生 App 页面
 
 ---
 
@@ -271,5 +276,3 @@ const theme = getCurrentTheme()
 - `hai-iam`：IAM 模块 API（与 LoginForm/RegisterForm 配合）
 - `hai-capacitor`：原生 App 开发（与 SafeArea/AppBar 配合）
 - `hai-api-client`：客户端数据获取
-
-- `hai-capacitor`：原生 App 开发（与 SafeArea/AppBar 配合）

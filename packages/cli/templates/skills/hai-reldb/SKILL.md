@@ -9,6 +9,12 @@ description: 使用 @h-ai/reldb 进行 SQLite/PostgreSQL/MySQL 的初始化、SQ
 
 ---
 
+## 运行环境
+
+> ⚠️ **服务端模块（Node.js only）。** 浏览器端请通过 API 端点间接访问数据库（参见 hai-kit 契约模式 `kit.fromContract`）。
+
+---
+
 ## 适用场景
 
 - 新增或修改数据库访问逻辑（SQL/DDL/CRUD/事务）
@@ -310,7 +316,7 @@ if (txResult.success) {
 }
 ```
 
-**事务内可用操作**（`DmlWithTxOperations` 继承 `DmlOperations`）：
+**事务内可用操作**：
 
 - `tx.query / tx.get / tx.execute / tx.batch / tx.queryPage`
 - `tx.crud.table(config)` — 事务内的 CRUD 仓库

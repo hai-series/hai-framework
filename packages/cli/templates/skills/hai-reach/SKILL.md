@@ -9,6 +9,12 @@ description: 使用 @h-ai/reach 进行邮件、短信和 API 回调发送；当�
 
 ---
 
+## 运行环境
+
+> ⚠️ **服务端模块（Node.js only）。** 浏览器端不直接发送邮件/短信，而是通过 API 端点触发服务端 `reach.send()`。
+
+---
+
 ## 依赖
 
 | 模块 | 用途 | 是否必需 | 初始化要求 |
@@ -299,22 +305,6 @@ if (!result.success) {
   }
 }
 ```
-
-### 分布式锁（DND flush 保护）
-
-> 多节点部署时，DND（delay 策略）的 pending 消息 flush 通过 `@h-ai/cache` 分布式锁保护，确保同一时刻只有一个节点执行 flush。
-
-```typescript
-import { cache } from '@h-ai/cache'
-
-// 初始化 cache 后，reach 自动使用分布式锁保护 flush 操作
-await cache.init({ type: 'redis', host: 'localhost', port: 6379 })
-await reach.init({ /* ... */ })
-```
-
-- 锁键：`reach:flush-pending`，TTL 60 秒
-- 若 cache 未初始化，分布式锁自动禁用，不影响单节点运行
-- 使用稳定的进程级 owner 标识，防止误释放他人锁
 
 ---
 

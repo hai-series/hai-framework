@@ -9,6 +9,21 @@ description: 使用 @h-ai/ai 进行 LLM 调用（OpenAI 兼容）、MCP 服务�
 
 ---
 
+## 运行环境
+
+| 能力 | Node.js | 浏览器 |
+|------|---------|--------|
+| `ai.llm` LLM 调用 | ✅ | ❌（通过 API 端点代理） |
+| `ai.mcp` MCP 服务器 | ✅ | ❌ |
+| `ai.tools` 工具定义 | ✅ | ✅（纯函数，无需 init） |
+| `ai.stream` 流处理 | ✅ | ✅（纯函数，无需 init） |
+| `ai.memory` / `ai.conversation` | ✅ | ❌（通过 API 查询） |
+| `ai.knowledge` 知识库 | ✅ | ❌（通过 API 查询） |
+
+浏览器端消费 AI 能力的标准模式：通过 `api.stream()` 或 `apiFetch` 调用服务端 API 端点。
+
+---
+
 ## 依赖
 
 | 模块 | 用途 | 是否必需 | 初始化要求 |
@@ -368,16 +383,6 @@ if (result.success) {
 | `renameSession`  | `(sessionId, title) => Promise<HaiResult<void>>`                     | 重命名会话                                              |
 | `removeSession`  | `(sessionId) => Promise<HaiResult<void>>`                            | 删除会话                                                |
 
-**ContextManagerOptions**（嵌套子模块配置）：
-- `scope?: InteractionScope` — 交互作用域
-- `systemPrompt?: string` — 系统提示词
-- `model?: string` / `temperature?: number` — LLM 参数覆盖
-- `compress?: CompressOptions & { auto?: boolean }` — 压缩配置（maxTokens/strategy/preserveLastN/auto 等）
-- `memory?: { enable?, enableExtract?, topK?, maxTokens?, position? }` — 记忆配置
-- `rag?: { enable?, sources?, topK?, minScore?, enableRerank? }` — RAG 配置
-- `reasoning?: { enable?, strategy?, maxRounds? }` — 推理配置
-- `tools?: ToolRegistryOperations` — 工具注册表
-
 **ContextManager 方法**：
 - `addMessage(msg)` — 追加消息（自动压缩）
 - `getMessages()` / `getTokenUsage()` / `getSummaries()` — 查询状态
@@ -645,6 +650,63 @@ async function manualChat(userInput: string) {
   await manager.save()
   return chatResult.data.choices[0].message.content
 }
+```
+
+---
+
+## 浏览器端使用
+
+### 流式对话（SSE）
+
+浏览器通过 `api.stream()` 消费服务端流式 API：
+
+```typescript
+import { api } from '@h-ai/api-client'
+
+const controller = new AbortController()
+
+for await (const chunk of api.stream('/api/v1/ai/chat', {
+  conversationId: 'conv-1',
+  content: '你好',
+}, { signal: controller.signal })) {
+  // 每个 chunk 是 SSE data: 行的文本内容
+  appendToUI(chunk)
+}
+
+// 主动停止
+controller.abort()
+```
+
+或使用 `apiFetch`（SSR SvelteKit 同源场景）：
+
+```typescript
+import { apiFetch } from '$lib/utils/api'
+
+const res = await apiFetch('/api/v1/ai/chat', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ conversationId, content: userInput }),
+})
+
+// 手动消费 SSE 流
+const reader = res.body!.getReader()
+const decoder = new TextDecoder()
+while (true) {
+  const { done, value } = await reader.read()
+  if (done) break
+  appendToUI(decoder.decode(value))
+}
+```
+
+### 浏览器端使用 ai.stream（处理流式 chunk）
+
+`ai.stream` 是纯函数，浏览器端可直接使用：
+
+```typescript
+import { ai } from '@h-ai/ai'
+
+const processor = ai.stream.createProcessor()
+// 将服务端返回的 SSE chunk 逐条 process，提取 delta
 ```
 
 ---
