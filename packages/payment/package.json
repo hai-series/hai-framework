@@ -1,7 +1,7 @@
 {
   "name": "@h-ai/payment",
   "type": "module",
-  "version": "0.1.0-alpha7",
+  "version": "0.1.0-alpha8",
   "description": "Hai Framework payment module for WeChat Pay, Alipay, and Stripe.",
   "license": "Apache-2.0",
   "exports": {
