@@ -241,6 +241,8 @@ export interface KnowledgeStore {
   findEntitiesByName: (keyword: string) => Promise<Array<{ id: string, name: string, type: string, aliases: string[] }>>
   /** 列出实体（支持类型过滤和关键词搜索） */
   listEntities: (options?: { type?: string, keyword?: string, limit?: number }) => Promise<Array<{ id: string, name: string, type: string, aliases: string[], description: string | null, createdAt: string | null, updatedAt: string | null }>>
+  /** 批量删除实体本体（由 removeDocument / deleteCollection 调用以完成数据闭环） */
+  deleteEntities: (entityIds: string[]) => Promise<void>
 
   // ─── 文档-实体关联 ───
 
@@ -250,8 +252,14 @@ export interface KnowledgeStore {
   findDocumentsByEntityIds: (entityIds: string[], collection?: string) => Promise<Array<{ entityId: string, documentId: string, chunkId: string, collection: string, relevance: number, context: string | null }>>
   /** 按实体名称查询实体及其关联文档 */
   findByEntityName: (entityName: string, options?: { collection?: string, type?: string }) => Promise<Array<{ entity: { id: string, name: string, type: string, aliases: string[], description: string | null }, documents: Array<{ documentId: string, chunkId: string, collection: string, relevance: number, context: string | null }> }>>
-  /** 删除文档相关的实体关联 */
-  removeDocumentEntityRelations: (documentId: string, collection: string) => Promise<void>
+  /**
+   * 删除文档相关的实体关联，返回受影响的实体 ID 列表
+   *
+   * 仅删除关联行，不删除实体本体。
+   * 上层在执行完整删除流程时（如 removeDocument），需用返回的 entityIds 再调用 deleteEntities 完成数据闭环。
+   * 重新摄入场景（ingest re-ingest）可忽略返回值，因为实体本体会立即被 upsertEntity 重建。
+   */
+  removeDocumentEntityRelations: (documentId: string, collection: string) => Promise<string[]>
 
   // ─── 文档元数据 ───
 
@@ -283,6 +291,11 @@ export interface KnowledgeStore {
   registerCollection: (collection: string, dimension: number) => Promise<void>
   /** 检查 collection 是否已在注册表中存在（跨节点/重启后仍有效） */
   collectionExists: (collection: string) => Promise<boolean>
+  /**
+   * 删除整个 collection（清理 vecdb 集合 + 所有 reldb 关联数据）
+   * 幂等：collection 不存在时静默成功
+   */
+  deleteCollection: (collection: string) => Promise<void>
 }
 
 // ─── 存储 Provider ───
