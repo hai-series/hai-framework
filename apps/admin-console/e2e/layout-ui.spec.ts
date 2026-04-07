@@ -164,7 +164,7 @@ test.describe('User Menu', () => {
   })
 
   test('用户下拉菜单显示角色信息', async ({ page, request }) => {
-    await registerAndLogin(page, request, 'usermenu')
+    const user = await registerAndLogin(page, request, 'usermenu')
 
     await page.locator('.user-menu-container > button').first().click()
 
@@ -172,9 +172,13 @@ test.describe('User Menu', () => {
     const dropdown = page.locator('.user-menu-container .absolute.right-0')
     await expect(dropdown).toBeVisible()
 
-    // 显示用户名
-    const usernameText = dropdown.locator('text=usermenu_')
-    await expect(usernameText.first()).toBeVisible()
+    // 显示用户名（使用实际注册用户，避免硬编码前缀导致 CI 偶发失败）
+    await expect(dropdown.getByText(`@${user.username}`)).toBeVisible()
+
+    // 显示角色信息（非空）
+    const roleText = dropdown.locator('p').nth(2)
+    await expect(roleText).toBeVisible()
+    await expect(roleText).toHaveText(/\S+/)
   })
 })
 
