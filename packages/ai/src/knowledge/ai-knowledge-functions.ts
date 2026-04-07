@@ -237,6 +237,7 @@ export function createKnowledgeOperations(
                 id: entityId,
                 name: entity.name,
                 type: entity.type,
+                collection,
                 aliases: entity.aliases,
                 description: entity.description,
               })
@@ -357,7 +358,7 @@ export function createKnowledgeOperations(
             // 合并多个实体名的匹配结果（Map 保证去重）
             const entityMap = new Map<string, { id: string, name: string, type: string, aliases: string[] }>()
             for (const name of queryEntityNames) {
-              const entities = await store!.findEntitiesByName(name)
+              const entities = await store!.findEntitiesByName(name, collection)
               for (const e of entities)
                 entityMap.set(e.id, e)
             }
@@ -543,6 +544,7 @@ export function createKnowledgeOperations(
 
       try {
         const rows = await store.listEntities({
+          collection: options?.collection,
           type: options?.type,
           keyword: options?.keyword,
           limit: options?.limit,
@@ -624,15 +626,14 @@ export function createKnowledgeOperations(
           }
         }
 
-        // ③ 删除实体关联，拿回受影响的实体 ID
-        const entityIds = await store.removeDocumentEntityRelations(documentId, collection)
+        // ③ 删除实体本体（需先于关联行删除，子查询依赖关联表）
+        await store.deleteDocumentEntities(documentId, collection)
 
-        // ④ 删除文档元数据
+        // ④ 删除实体关联行
+        await store.removeDocumentEntityRelations(documentId, collection)
+
+        // ⑤ 删除文档元数据
         await store.removeDocument(documentId, collection)
-
-        // ⑤ 删除实体本体（数据闭环：实体归属于摄入文档，文档删除后实体应一并清理）
-        if (entityIds.length > 0)
-          await store.deleteEntities(entityIds)
 
         logger.debug('Document removed', { documentId, collection })
         return ok(undefined)

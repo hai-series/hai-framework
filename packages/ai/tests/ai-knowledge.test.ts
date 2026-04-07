@@ -95,7 +95,15 @@ function createMockKnowledgeStore() {
     insertEntityDocument: vi.fn(async (rel) => { entityDocs.push(rel) }),
     findDocumentsByEntityIds: vi.fn(async () => []),
     findByEntityName: vi.fn(async () => []),
-    removeDocumentEntityRelations: vi.fn(async () => []),
+    deleteDocumentEntities: vi.fn(async (docId: string, col: string) => {
+      const idxToRemove: number[] = []
+      entityDocs.forEach((rel, i) => {
+        if (rel.documentId === docId && rel.collection === col)
+          idxToRemove.push(i)
+      })
+      idxToRemove.reverse().forEach(i => entityDocs.splice(i, 1))
+    }),
+    removeDocumentEntityRelations: vi.fn(async () => {}),
     upsertDocument: vi.fn(async (doc) => { documents.set(`${doc.documentId}:${doc.collection}`, { ...doc, title: doc.title ?? null, url: doc.url ?? null }) }),
     getDocument: vi.fn(async (docId: string, collection: string) => documents.get(`${docId}:${collection}`) ?? undefined),
     listDocuments: vi.fn(async () => []),
@@ -666,12 +674,12 @@ describe('knowledge 实体查询', () => {
       store,
     )
 
-    const result = await ops.listEntities({ type: 'person', keyword: 'Alice', limit: 5 })
+    const result = await ops.listEntities({ collection: 'col-a', type: 'person', keyword: 'Alice', limit: 5 })
     expect(result.success).toBe(true)
 
     // 验证 store.listEntities 被正确调用并传递过滤参数
     expect(store.listEntities).toHaveBeenCalledWith(
-      expect.objectContaining({ type: 'person', keyword: 'Alice', limit: 5 }),
+      expect.objectContaining({ collection: 'col-a', type: 'person', keyword: 'Alice', limit: 5 }),
     )
   })
 })

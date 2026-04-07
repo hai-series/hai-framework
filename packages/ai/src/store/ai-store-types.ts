@@ -236,13 +236,20 @@ export interface KnowledgeStore {
   // ─── 实体 CRUD ───
 
   /** 插入或更新实体 */
-  upsertEntity: (entity: { id: string, name: string, type: string, aliases?: string[], description?: string }) => Promise<void>
-  /** 按名称模糊搜索实体（匹配 name 和 aliases） */
-  findEntitiesByName: (keyword: string) => Promise<Array<{ id: string, name: string, type: string, aliases: string[] }>>
-  /** 列出实体（支持类型过滤和关键词搜索） */
-  listEntities: (options?: { type?: string, keyword?: string, limit?: number }) => Promise<Array<{ id: string, name: string, type: string, aliases: string[], description: string | null, createdAt: string | null, updatedAt: string | null }>>
-  /** 批量删除实体本体（由 removeDocument / deleteCollection 调用以完成数据闭环） */
+  upsertEntity: (entity: { id: string, name: string, type: string, collection: string, aliases?: string[], description?: string }) => Promise<void>
+  /** 按名称模糊搜索实体（匹配 name 和 aliases，可按 collection 过滤） */
+  findEntitiesByName: (keyword: string, collection?: string) => Promise<Array<{ id: string, name: string, type: string, aliases: string[] }>>
+  /** 列出实体（支持 collection / 类型 / 关键词搜索） */
+  listEntities: (options?: { collection?: string, type?: string, keyword?: string, limit?: number }) => Promise<Array<{ id: string, name: string, type: string, aliases: string[], description: string | null, createdAt: string | null, updatedAt: string | null }>>
+  /** 批量删除实体本体 */
   deleteEntities: (entityIds: string[]) => Promise<void>
+  /**
+   * 删除指定文档在指定 collection 中的所有实体本体
+   *
+   * 使用子查询，必须在 removeDocumentEntityRelations 之前调用（关联行删除后子查询结果为空）。
+   * removeDocument 使用此方法完成实体数据闭环，无需两步查询。
+   */
+  deleteDocumentEntities: (documentId: string, collection: string) => Promise<void>
 
   // ─── 文档-实体关联 ───
 
@@ -253,13 +260,12 @@ export interface KnowledgeStore {
   /** 按实体名称查询实体及其关联文档 */
   findByEntityName: (entityName: string, options?: { collection?: string, type?: string }) => Promise<Array<{ entity: { id: string, name: string, type: string, aliases: string[], description: string | null }, documents: Array<{ documentId: string, chunkId: string, collection: string, relevance: number, context: string | null }> }>>
   /**
-   * 删除文档相关的实体关联，返回受影响的实体 ID 列表
+   * 删除文档相关的实体关联行
    *
-   * 仅删除关联行，不删除实体本体。
-   * 上层在执行完整删除流程时（如 removeDocument），需用返回的 entityIds 再调用 deleteEntities 完成数据闭环。
-   * 重新摄入场景（ingest re-ingest）可忽略返回值，因为实体本体会立即被 upsertEntity 重建。
+   * 仅删除 entity_document 关联行，不删除实体本体。
+   * 调用前应先执行 deleteDocumentEntities，否则子查询结果为空导致实体无法清理。
    */
-  removeDocumentEntityRelations: (documentId: string, collection: string) => Promise<string[]>
+  removeDocumentEntityRelations: (documentId: string, collection: string) => Promise<void>
 
   // ─── 文档元数据 ───
 
