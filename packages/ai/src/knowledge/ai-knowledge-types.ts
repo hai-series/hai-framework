@@ -265,6 +265,8 @@ export interface EntityDocumentResult {
  * 实体列表查询选项
  */
 export interface EntityListOptions {
+  /** 集合名过滤（不指定则返回所有 collection 的实体） */
+  collection?: string
   /** 实体类型过滤 */
   type?: EntityType
   /** 关键词搜索（模糊匹配实体名称和别名） */
