@@ -10,7 +10,6 @@
 import type { VecdbConfigInput } from '../../src/index.js'
 import { afterAll, afterEach, beforeAll, beforeEach, describe } from 'vitest'
 import { vecdb } from '../../src/index.js'
-import { isDockerAvailable } from './check-docker.js'
 import { acquirePgvectorContainer } from './pgvector-container.js'
 import { acquireQdrantContainer } from './qdrant-container.js'
 
@@ -46,21 +45,13 @@ async function waitForReady(maxAttempts = 10, intervalMs = 2000): Promise<void> 
  * @param label - 测试标签，如 'lancedb' / 'pgvector' / 'qdrant'
  * @param setup - 返回测试环境配置（含容器释放回调）
  * @param defineTests - 在套件内部定义具体测试用例
- * @param options - 额外选项
- * @param options.requiresDocker - 是否需要 Docker（默认 false），为 true 时 Docker 不可用则跳过
  */
 export function defineVecdbSuite(
   label: string,
   setup: () => Promise<VecdbTestEnv> | VecdbTestEnv,
   defineTests: () => void,
-  options?: { requiresDocker?: boolean },
 ): void {
-  const needDocker = options?.requiresDocker ?? false
-  const suiteFn = needDocker && !isDockerAvailable()
-    ? describe.sequential.skip
-    : describe.sequential
-
-  suiteFn(`vecdb (${label})`, () => {
+  describe.sequential(`vecdb (${label})`, () => {
     let env: VecdbTestEnv | null = null
 
     beforeAll(async () => {
@@ -134,9 +125,6 @@ export async function pgvectorEnv(): Promise<VecdbTestEnv> {
   }
 }
 
-/** pgvectorEnv 的 requiresDocker 配套选项 */
-export const pgvectorDockerOpts = { requiresDocker: true } as const
-
 /**
  * Qdrant 测试环境（通过 Testcontainers 启动 Qdrant 容器）
  */
@@ -150,6 +138,3 @@ export async function qdrantEnv(): Promise<VecdbTestEnv> {
     release: lease.release,
   }
 }
-
-/** qdrantEnv 的 requiresDocker 配套选项 */
-export const qdrantDockerOpts = { requiresDocker: true } as const

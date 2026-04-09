@@ -9,7 +9,7 @@
 
 import { describe, expect, it } from 'vitest'
 import { HaiVecdbError, vecdb } from '../src/index.js'
-import { defineVecdbSuite, lancedbEnv, pgvectorDockerOpts, pgvectorEnv, qdrantDockerOpts, qdrantEnv } from './helpers/vecdb-test-suite.js'
+import { defineVecdbSuite, lancedbEnv, pgvectorEnv, qdrantEnv } from './helpers/vecdb-test-suite.js'
 
 describe('vecdb.collection', () => {
   const defineCommon = () => {
@@ -99,8 +99,8 @@ describe('vecdb.collection', () => {
   defineVecdbSuite('lancedb', () => lancedbEnv('./test-data/coll-test'), defineCommon)
 
   // ─── pgvector（容器） ───
-  defineVecdbSuite('pgvector', pgvectorEnv, defineCommon, pgvectorDockerOpts)
+  defineVecdbSuite('pgvector', pgvectorEnv, defineCommon)
 
   // ─── Qdrant（容器） ───
-  defineVecdbSuite('qdrant', qdrantEnv, defineCommon, qdrantDockerOpts)
+  defineVecdbSuite('qdrant', qdrantEnv, defineCommon)
 })

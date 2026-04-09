@@ -9,7 +9,7 @@
 
 import { describe, expect, it } from 'vitest'
 import { vecdb } from '../src/index.js'
-import { defineVecdbSuite, lancedbEnv, pgvectorDockerOpts, pgvectorEnv, qdrantDockerOpts, qdrantEnv } from './helpers/vecdb-test-suite.js'
+import { defineVecdbSuite, lancedbEnv, pgvectorEnv, qdrantEnv } from './helpers/vecdb-test-suite.js'
 
 /** 创建 N 维归一化随机向量（用于 cosine 测试） */
 function randomVector(dim: number): number[] {
@@ -115,8 +115,8 @@ describe('vecdb.vector CRUD', () => {
   defineVecdbSuite('lancedb', () => lancedbEnv('./test-data/crud-test'), defineCommon)
 
   // ─── pgvector（容器） ───
-  defineVecdbSuite('pgvector', pgvectorEnv, defineCommon, pgvectorDockerOpts)
+  defineVecdbSuite('pgvector', pgvectorEnv, defineCommon)
 
   // ─── Qdrant（容器） ───
-  defineVecdbSuite('qdrant', qdrantEnv, defineCommon, qdrantDockerOpts)
+  defineVecdbSuite('qdrant', qdrantEnv, defineCommon)
 })

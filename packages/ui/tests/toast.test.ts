@@ -28,16 +28,18 @@ describe('toastState', () => {
   let toast: ToastModule['toast']
 
   beforeEach(async () => {
-    vi.useFakeTimers()
     // 动态导入以确保每次测试获得新实例
+    // 注意：必须先完成模块导入，再启用 fake timers，避免导入流程被假时钟阻塞
     vi.resetModules()
     const module = await import('../src/lib/toast.svelte.js') as ToastModule
     toast = module.toast
+    vi.useFakeTimers()
   })
 
   afterEach(() => {
-    vi.useRealTimers()
+    // 先清理状态，再恢复真实时钟
     toast?.clear?.()
+    vi.useRealTimers()
   })
 
   it('应该添加 Toast', () => {
