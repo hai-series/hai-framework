@@ -59,13 +59,23 @@ jobs:
 
   # ===========================================================================
   # 测试
+  # ---------------------------------------------------------------------------
+  # 单元测试通过 Testcontainers 动态启动以下容器（需要 Docker 守护进程）：
+  #   - postgres:alpine          (reldb, iam)
+  #   - mysql:8                  (reldb)
+  #   - redis:alpine             (cache, iam)
+  #   - pgvector/pgvector:pg17   (vecdb)
+  #   - qdrant/qdrant:latest     (vecdb)
+  #   - minio/minio:latest       (storage)
+  #   - osixia/openldap:latest   (iam)
+  # ubuntu-latest 自带 Docker，无需额外安装。
   # ===========================================================================
   test:
     name: Test
     needs: detect-version
     if: needs.detect-version.outputs.changed == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     env:
       CI: true
     steps:
@@ -80,6 +90,17 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Pre-pull Testcontainer images
+        run: |
+          docker pull postgres:alpine &
+          docker pull mysql:8 &
+          docker pull redis:alpine &
+          docker pull pgvector/pgvector:pg17 &
+          docker pull qdrant/qdrant:latest &
+          docker pull minio/minio:latest &
+          docker pull osixia/openldap:latest &
+          wait
 
       - name: Typecheck
         run: pnpm typecheck

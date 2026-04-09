@@ -9,7 +9,7 @@
 
 import { describe, expect, it } from 'vitest'
 import { vecdb } from '../src/index.js'
-import { defineVecdbSuite, lancedbEnv, pgvectorDockerOpts, pgvectorEnv, qdrantDockerOpts, qdrantEnv } from './helpers/vecdb-test-suite.js'
+import { defineVecdbSuite, lancedbEnv, pgvectorEnv, qdrantEnv } from './helpers/vecdb-test-suite.js'
 
 /** 创建一个可预测的向量（给每个位置填充 base + 偏移量，然后归一化） */
 function makeVector(dim: number, base: number): number[] {
@@ -140,8 +140,8 @@ describe('vecdb.vector.search', () => {
   defineVecdbSuite('lancedb', () => lancedbEnv('./test-data/search-test'), defineCommon)
 
   // ─── pgvector（容器） ───
-  defineVecdbSuite('pgvector', pgvectorEnv, defineCommon, pgvectorDockerOpts)
+  defineVecdbSuite('pgvector', pgvectorEnv, defineCommon)
 
   // ─── Qdrant（容器） ───
-  defineVecdbSuite('qdrant', qdrantEnv, defineCommon, qdrantDockerOpts)
+  defineVecdbSuite('qdrant', qdrantEnv, defineCommon)
 })

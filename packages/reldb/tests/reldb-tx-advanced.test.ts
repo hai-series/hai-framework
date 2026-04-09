@@ -15,7 +15,7 @@
 
 import { describe, expect, it } from 'vitest'
 import { HaiReldbError, reldb } from '../src/index.js'
-import { defineDbSuite, mysqlDockerOpts, mysqlEnv, postgresDockerOpts, postgresEnv, sqliteMemoryEnv } from './helpers/reldb-test-suite.js'
+import { defineDbSuite, mysqlEnv, postgresEnv, sqliteMemoryEnv } from './helpers/reldb-test-suite.js'
 
 describe('reldb.tx advanced', () => {
   const defineCommon = (label: 'sqlite' | 'mysql' | 'postgresql') => {
@@ -168,6 +168,7 @@ describe('reldb.tx advanced', () => {
           select: ['id', 'name', 'balance'],
           createColumns: ['name', 'balance'],
           updateColumns: ['name', 'balance'],
+          dbType: label,
         })
 
         await userCrud.create({ name: '用户A', balance: 100 })
@@ -206,6 +207,7 @@ describe('reldb.tx advanced', () => {
         idColumn: 'id',
         select: ['id', 'user_id', 'amount'],
         createColumns: ['user_id', 'amount'],
+        dbType: label,
       })
 
       await orderCrud.create({ user_id: 1, amount: 300 })
@@ -357,7 +359,7 @@ describe('reldb.tx advanced', () => {
 
   defineDbSuite('sqlite', sqliteMemoryEnv, () => defineCommon('sqlite'))
 
-  defineDbSuite('mysql', mysqlEnv, () => defineCommon('mysql'), mysqlDockerOpts)
+  defineDbSuite('mysql', mysqlEnv, () => defineCommon('mysql'))
 
-  defineDbSuite('postgresql', postgresEnv, () => defineCommon('postgresql'), postgresDockerOpts)
+  defineDbSuite('postgresql', postgresEnv, () => defineCommon('postgresql'))
 })

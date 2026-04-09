@@ -12,11 +12,8 @@ import type { QdrantContainerLease } from './helpers/qdrant-container.js'
 import { rm } from 'node:fs/promises'
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { HaiVecdbError, vecdb } from '../src/index.js'
-import { isDockerAvailable } from './helpers/check-docker.js'
 import { acquirePgvectorContainer } from './helpers/pgvector-container.js'
 import { acquireQdrantContainer } from './helpers/qdrant-container.js'
-
-const dockerAvailable = isDockerAvailable()
 
 // ─── LanceDB 初始化测试 ───
 
@@ -62,7 +59,7 @@ describe.sequential('vecdb init — lancedb', () => {
 
 // ─── pgvector 初始化测试（需要 Docker） ───
 
-describe.skipIf(!dockerAvailable).sequential('vecdb init — pgvector', () => {
+describe.sequential('vecdb init — pgvector', () => {
   let lease: PgvectorContainerLease
 
   beforeAll(async () => {
@@ -159,7 +156,7 @@ describe.skipIf(!dockerAvailable).sequential('vecdb init — pgvector', () => {
 
 // ─── Qdrant 初始化测试（需要 Docker） ───
 
-describe.skipIf(!dockerAvailable).sequential('vecdb init — qdrant', () => {
+describe.sequential('vecdb init — qdrant', () => {
   let lease: QdrantContainerLease
 
   beforeAll(async () => {
