@@ -902,9 +902,9 @@ function createRbacManager(config: RbacManagerConfig): AuthzOperations {
 
       // 事务提交后：会话同步（仅在自管事务时，外部事务由调用方在 commit 后同步）
       if (ownTx) {
-        for (const roleId of affectedRoleIds) {
-          await syncSessionPermissionsForRole(roleId)
-        }
+        await Promise.allSettled(
+          affectedRoleIds.map(roleId => syncSessionPermissionsForRole(roleId)),
+        )
       }
 
       logger.info('Permission deleted', { permissionId })

@@ -304,31 +304,46 @@ export function createCacheSessionRepository(
         )
       }
 
+      // 并行读取所有 session 及其 TTL，避免逐个串行 cache 调用
+      const tokens = tokensResult.data
+      const readResults = await Promise.allSettled(
+        tokens.map(async (token) => {
+          const sessionKey = buildTokenKey(token)
+          const [sessionResult, ttlResult] = await Promise.all([
+            cache.kv.get<Record<string, unknown>>(sessionKey),
+            cache.kv.ttl(sessionKey),
+          ])
+          return { token, sessionKey, sessionResult, ttlResult }
+        }),
+      )
+
       const staleTokens: string[] = []
+      const writeOps: Array<Promise<HaiResult<void>>> = []
 
-      for (const token of tokensResult.data) {
-        const sessionKey = buildTokenKey(token)
-        const sessionResult = await cache.kv.get<Record<string, unknown>>(sessionKey)
-        if (!sessionResult.success || !sessionResult.data) {
-          staleTokens.push(token)
+      for (const entry of readResults) {
+        if (entry.status === 'rejected')
           continue
-        }
+        const { token, sessionKey, sessionResult, ttlResult } = entry.value
 
-        const ttlResult = await cache.kv.ttl(sessionKey)
-        if (!ttlResult.success || ttlResult.data <= 0) {
+        if (!sessionResult.success || !sessionResult.data || !ttlResult.success || ttlResult.data <= 0) {
           staleTokens.push(token)
           continue
         }
 
         const updated = { ...sessionResult.data, ...updates }
-        const setResult = await cache.kv.set(sessionKey, updated, { ex: ttlResult.data })
-        if (!setResult.success) {
-          return err(
-            HaiIamError.REPOSITORY_ERROR,
-            iamM('iam_saveUserSessionCacheFailed', { params: { message: setResult.error.message } }),
-            setResult.error,
-          )
-        }
+        writeOps.push(cache.kv.set(sessionKey, updated, { ex: ttlResult.data }))
+      }
+
+      // 并行写入所有更新
+      const writeResults = await Promise.allSettled(writeOps)
+      const failedWrite = writeResults.find(r => r.status === 'fulfilled' && !r.value.success) as
+        PromiseFulfilledResult<HaiResult<void>> | undefined
+      if (failedWrite) {
+        const failedResult = failedWrite.value as { success: false, error: { message: string } }
+        return err(
+          HaiIamError.REPOSITORY_ERROR,
+          iamM('iam_saveUserSessionCacheFailed', { params: { message: failedResult.error.message } }),
+        )
       }
 
       // 清理已失效的令牌
