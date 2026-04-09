@@ -28,6 +28,7 @@ import { reldb } from '@h-ai/reldb'
 import { AgreementConfigSchema, PasswordResetConfigSchema, RegisterConfigSchema } from '../iam-config.js'
 import { iamM } from '../iam-i18n.js'
 import { HaiIamError } from '../iam-types.js'
+import { generateToken } from '../session/iam-session-utils.js'
 import { createCacheResetTokenRepository } from './iam-user-repository-reset-token.js'
 import { createDbUserRepository } from './iam-user-repository-user.js'
 import { toUser } from './iam-user-utils.js'
@@ -781,8 +782,8 @@ function buildPasswordResetOps(ctx: UserFnContext): Pick<UserOperations, 'reques
 
       const user = toUser(userResult.data)
 
-      // 生成令牌
-      const token = globalThis.crypto.randomUUID()
+      // 生成 256-bit 加密安全令牌（与 session token 强度一致）
+      const token = generateToken()
       const expiresAt = new Date(Date.now() + resetConfig.tokenExpiresIn * 1000)
 
       // 保存新令牌（saveToken 内部重置尝试次数）
