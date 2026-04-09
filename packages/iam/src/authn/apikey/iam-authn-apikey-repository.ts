@@ -162,6 +162,7 @@ class DbApiKeyRepository extends BaseReldbCrudRepository<StoredApiKey> implement
   }
 
   async insert(data: StoredApiKey, tx?: DmlWithTxOperations): Promise<HaiResult<void>> {
+    // BaseReldbCrudRepository.create 接受 Record<string, unknown>，StoredApiKey 兼容但需强转
     const result = await this.create(data as unknown as Record<string, unknown>, tx)
     if (!result.success) {
       return err(
@@ -206,6 +207,7 @@ class DbApiKeyRepository extends BaseReldbCrudRepository<StoredApiKey> implement
   }
 
   async updateFields(id: string, data: Partial<StoredApiKey>, tx?: DmlWithTxOperations): Promise<HaiResult<void>> {
+    // BaseReldbCrudRepository.updateById 接受 Record<string, unknown>，Partial<StoredApiKey> 兼容但需强转
     const result = await this.updateById(id, data as unknown as Record<string, unknown>, tx)
     if (!result.success) {
       return err(

@@ -627,9 +627,9 @@ function createRbacManager(config: RbacManagerConfig): AuthzOperations {
         if (ownTx) {
           const affectedUsersResult = await userRoleRepository.getUserIdsByRoleId(roleId)
           if (affectedUsersResult.success) {
-            for (const userId of affectedUsersResult.data) {
-              await syncUserSessionAfterRoleChange(userId)
-            }
+            await Promise.allSettled(
+              affectedUsersResult.data.map(userId => syncUserSessionAfterRoleChange(userId)),
+            )
           }
           else {
             logger.error('Failed to query affected users after updateRole', { roleId, error: affectedUsersResult.error.message })
@@ -720,9 +720,9 @@ function createRbacManager(config: RbacManagerConfig): AuthzOperations {
 
       // 事务提交后：会话同步（仅在自管事务时，外部事务由调用方在 commit 后同步）
       if (ownTx) {
-        for (const userId of affectedUserIds) {
-          await syncUserSessionAfterRoleChange(userId)
-        }
+        await Promise.allSettled(
+          affectedUserIds.map(userId => syncUserSessionAfterRoleChange(userId)),
+        )
       }
 
       // 强制下次 checkPermission 重新解析超管角色

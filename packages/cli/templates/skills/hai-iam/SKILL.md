@@ -249,7 +249,7 @@ const result = await api.call(iamEndpoints.login, { username, password })
 | `HaiIamError.PASSWORD_EXPIRED` | `hai:iam:007` | 密码已过期 |
 | `HaiIamError.PASSWORD_POLICY_VIOLATION` | `hai:iam:008` | 密码不符合策略 |
 | `HaiIamError.OTP_INVALID` | `hai:iam:009` | 验证码无效 |
-| `HaiIamError.OTP_EXPIRED` | `hai:iam:010` | 验证码已过期 |
+| `HaiIamError.NOT_INITIALIZED` | `hai:iam:010` | 未初始化 |
 | `HaiIamError.OTP_RESEND_TOO_FAST` | `hai:iam:011` | 发送过于频繁 |
 | `HaiIamError.LOGIN_DISABLED` | `hai:iam:012` | 登录方式已禁用 |
 | `HaiIamError.REGISTER_DISABLED` | `hai:iam:013` | 注册已禁用 |
@@ -261,6 +261,7 @@ const result = await api.call(iamEndpoints.login, { username, password })
 | `HaiIamError.RESET_TOKEN_INVALID` | `hai:iam:019` | 重置令牌无效 |
 | `HaiIamError.RESET_TOKEN_EXPIRED` | `hai:iam:020` | 重置令牌已过期 |
 | `HaiIamError.RESET_TOKEN_MAX_ATTEMPTS` | `hai:iam:021` | 重置验证次数超限 |
+| `HaiIamError.OTP_EXPIRED` | `hai:iam:022` | 验证码已过期 |
 | `HaiIamError.SESSION_NOT_FOUND` | `hai:iam:101` | 会话不存在 |
 | `HaiIamError.SESSION_EXPIRED` | `hai:iam:102` | 会话已过期 |
 | `HaiIamError.SESSION_INVALID` | `hai:iam:103` | 会话无效 |
@@ -282,7 +283,6 @@ const result = await api.call(iamEndpoints.login, { username, password })
 | `HaiIamError.FORBIDDEN` | `hai:iam:501` | 禁止访问 |
 | `HaiIamError.INVALID_ARGUMENT` | `hai:iam:502` | 参数无效 |
 | `HaiIamError.CONFIG_ERROR` | `hai:iam:901` | 配置错误 |
-| `HaiIamError.NOT_INITIALIZED` | `hai:iam:910` | 未初始化 |
 | `HaiIamError.INTERNAL_ERROR` | `hai:iam:999` | 内部错误 |
 
 ---
