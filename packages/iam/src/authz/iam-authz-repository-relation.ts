@@ -267,6 +267,7 @@ export async function createDbRolePermissionRepository(): Promise<HaiResult<Role
         )
       }
 
+      // reldb.sql.query 返回 Record<string, unknown>[]，此处强转为领域类型（字段映射由 SQL 保证）
       return ok(result.data as unknown as Permission[])
     },
 
@@ -380,6 +381,7 @@ export async function createDbRolePermissionRepository(): Promise<HaiResult<Role
       }
 
       const permMap = new Map<string, Permission>()
+      // reldb.sql.query 返回 Record<string, unknown>[]，此处强转为领域类型（字段映射由 SQL 保证）
       for (const perm of permsResult.data as unknown as Permission[]) {
         permMap.set(perm.id, perm)
       }

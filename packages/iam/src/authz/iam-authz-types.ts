@@ -1,7 +1,6 @@
 /**
  * @h-ai/iam — 授权子功能类型定义（RBAC）
  *
- * @h-ai/iam — 授权子功能类型定义（RBAC）
  * @module iam-authz-types
  */
 

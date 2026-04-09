@@ -86,9 +86,6 @@ export async function postgresEnv(): Promise<DbTestEnv> {
   }
 }
 
-/** postgresEnv 的 requiresDocker 配套选项 */
-export const postgresDockerOpts = { requiresDocker: true } as const
-
 export async function mysqlEnv(): Promise<DbTestEnv> {
   const lease = await acquireMysqlContainer()
   return {
@@ -105,6 +102,3 @@ export async function mysqlEnv(): Promise<DbTestEnv> {
     release: lease.release,
   }
 }
-
-/** mysqlEnv 的 requiresDocker 配套选项 */
-export const mysqlDockerOpts = { requiresDocker: true } as const
