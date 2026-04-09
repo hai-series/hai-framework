@@ -144,13 +144,22 @@ async function wrapOp<T>(
  */
 export function createBaseCollectionOps(ctx: VecdbOpsContext, driver: CollectionDriver): CollectionOperations {
   return {
-    create: (name, options) => wrapOp(
-      ctx,
-      () => driver.create(name, options),
-      HaiVecdbError.QUERY_FAILED,
-      'Failed to create collection',
-      { name },
-    ),
+    create: async (name, options) => {
+      // 参数校验：dimension 必须为正整数（防止 pgvector SQL 插值注入）
+      if (!Number.isInteger(options.dimension) || options.dimension <= 0) {
+        return err(
+          HaiVecdbError.DIMENSION_MISMATCH,
+          vecdbM('vecdb_invalidDimension', { params: { dimension: String(options.dimension) } }),
+        )
+      }
+      return wrapOp(
+        ctx,
+        () => driver.create(name, options),
+        HaiVecdbError.QUERY_FAILED,
+        'Failed to create collection',
+        { name },
+      )
+    },
     drop: name => wrapOp(
       ctx,
       () => driver.drop(name),
