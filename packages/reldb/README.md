@@ -440,13 +440,13 @@ if (!result.success) {
 
 | 错误码                               | code            | 说明         |
 | ------------------------------------ | --------------- | ------------ |
-| `HaiReldbError.NOT_INITIALIZED`      | `hai:reldb:011` | 未初始化     |
+| `HaiReldbError.NOT_INITIALIZED`      | `hai:reldb:010` | 未初始化     |
 | `HaiReldbError.CONNECTION_FAILED`    | `hai:reldb:001` | 连接失败     |
 | `HaiReldbError.QUERY_FAILED`         | `hai:reldb:002` | 查询失败     |
 | `HaiReldbError.CONSTRAINT_VIOLATION` | `hai:reldb:003` | 约束违反     |
 | `HaiReldbError.TRANSACTION_FAILED`   | `hai:reldb:004` | 事务失败     |
-| `HaiReldbError.DDL_FAILED`           | `hai:reldb:012` | DDL 操作失败 |
-| `HaiReldbError.CONFIG_ERROR`         | `hai:reldb:014` | 配置错误     |
+| `HaiReldbError.DDL_FAILED`           | `hai:reldb:020` | DDL 操作失败 |
+| `HaiReldbError.CONFIG_ERROR`         | `hai:reldb:013` | 配置错误     |
 
 ## 测试
 

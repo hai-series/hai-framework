@@ -15,6 +15,7 @@ export type { JsonSqlExpr, ReldbJsonOps }
 // ─── 错误类型 ───
 
 const ReldbErrorInfo = {
+  // ─── 通用 001-009 ───
   CONNECTION_FAILED: '001:500',
   QUERY_FAILED: '002:500',
   CONSTRAINT_VIOLATION: '003:409',
@@ -24,11 +25,13 @@ const ReldbErrorInfo = {
   DUPLICATE_ENTRY: '007:409',
   DEADLOCK: '008:500',
   TIMEOUT: '009:504',
-  POOL_EXHAUSTED: '010:503',
-  NOT_INITIALIZED: '011:500',
-  DDL_FAILED: '012:500',
-  UNSUPPORTED_TYPE: '013:400',
-  CONFIG_ERROR: '014:500',
+  // ─── 初始化 010-019 ───
+  NOT_INITIALIZED: '010:500',
+  POOL_EXHAUSTED: '011:503',
+  UNSUPPORTED_TYPE: '012:400',
+  CONFIG_ERROR: '013:500',
+  // ─── 业务操作 020+ ───
+  DDL_FAILED: '020:500',
 } satisfies ErrorInfo
 
 export const HaiReldbError = core.error.buildHaiErrorsDef('reldb', ReldbErrorInfo)
