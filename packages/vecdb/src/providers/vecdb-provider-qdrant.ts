@@ -20,6 +20,21 @@ import { HaiVecdbError } from '../vecdb-types.js'
 
 import { createBaseCollectionOps, createBaseVectorOps } from './vecdb-provider-base.js'
 
+/** 脱敏 URL 中的用户名和密码 */
+function sanitizeUrl(url: string): string {
+  try {
+    const parsed = new URL(url)
+    if (parsed.username)
+      parsed.username = '***'
+    if (parsed.password)
+      parsed.password = '***'
+    return parsed.toString()
+  }
+  catch {
+    return '(invalid url)'
+  }
+}
+
 const logger = core.logger.child({ module: 'vecdb', scope: 'qdrant' })
 
 /** Qdrant Client 的最小接口定义（避免强依赖可选包） */
@@ -170,13 +185,14 @@ export function createQdrantProvider(): VecdbProvider {
     async insert(collection, documents) {
       logger.debug('Inserting vectors', { collection, count: documents.length })
 
+      // 内部保留字段 _id / _content 放在展开之后，防止被 metadata 同名字段覆盖
       const points = documents.map(doc => ({
         id: hashToUuid(doc.id),
         vector: doc.vector,
         payload: {
-          _id: doc.id,
-          content: doc.content ?? '',
           ...doc.metadata,
+          _id: doc.id,
+          _content: doc.content ?? '',
         },
       }))
 
@@ -191,13 +207,14 @@ export function createQdrantProvider(): VecdbProvider {
     async upsert(collection, documents) {
       logger.debug('Upserting vectors', { collection, count: documents.length })
 
+      // 内部保留字段 _id / _content 放在展开之后，防止被 metadata 同名字段覆盖
       const points = documents.map(doc => ({
         id: hashToUuid(doc.id),
         vector: doc.vector,
         payload: {
-          _id: doc.id,
-          content: doc.content ?? '',
           ...doc.metadata,
+          _id: doc.id,
+          _content: doc.content ?? '',
         },
       }))
 
@@ -243,11 +260,11 @@ export function createQdrantProvider(): VecdbProvider {
 
       const results: VectorSearchResult[] = searchResult.map((point: Record<string, unknown>) => {
         const payload = point.payload as Record<string, unknown> ?? {}
-        const { _id, content, ...metadata } = payload
+        const { _id, _content, ...metadata } = payload
         return {
           id: (_id as string) ?? '',
           score: point.score as number,
-          content: (content as string) || undefined,
+          content: (_content as string) || undefined,
           metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
         }
       })
@@ -290,7 +307,7 @@ export function createQdrantProvider(): VecdbProvider {
         client = qdrantClient
 
         config = qdrantConfig
-        logger.info('Qdrant connected', { url: qdrantConfig.url })
+        logger.info('Qdrant connected', { url: sanitizeUrl(qdrantConfig.url) })
         return ok(undefined)
       }
       catch (error) {

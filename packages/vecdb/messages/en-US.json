@@ -17,6 +17,7 @@
   "vecdb_queryFailed": "Failed to query vectors: {error}",
   "vecdb_indexBuildFailed": "Failed to build index: {error}",
   "vecdb_serializationFailed": "Serialization/deserialization failed: {error}",
+  "vecdb_invalidDimension": "Invalid vector dimension: {dimension}, must be a positive integer",
   "vecdb_configPathRequired": "Database storage path is required",
   "vecdb_configDatabaseRequired": "Database name is required"
 }

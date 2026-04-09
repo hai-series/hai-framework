@@ -92,6 +92,16 @@ export interface VectorSearchOptions {
  * 向量搜索结果
  *
  * 包含匹配的文档和相似度得分。
+ *
+ * @example
+ * ```ts
+ * const result: VectorSearchResult = {
+ *   id: 'doc-001',
+ *   score: 0.95,
+ *   content: '匹配的文档内容',
+ *   metadata: { source: 'wiki' },
+ * }
+ * ```
  */
 export interface VectorSearchResult {
   /** 文档唯一标识 */
@@ -112,6 +122,16 @@ export interface VectorSearchResult {
  * 集合信息接口
  *
  * 描述一个向量集合的元信息。
+ *
+ * @example
+ * ```ts
+ * const info: CollectionInfo = {
+ *   name: 'docs',
+ *   dimension: 1536,
+ *   metric: 'cosine',
+ *   count: 42,
+ * }
+ * ```
  */
 export interface CollectionInfo {
   /** 集合名称 */
@@ -184,6 +204,14 @@ export interface CollectionOperations {
 
 /**
  * 集合创建选项
+ *
+ * @example
+ * ```ts
+ * const options: CollectionCreateOptions = {
+ *   dimension: 1536,
+ *   metric: 'cosine',
+ * }
+ * ```
  */
 export interface CollectionCreateOptions {
   /** 向量维度（必填） */
