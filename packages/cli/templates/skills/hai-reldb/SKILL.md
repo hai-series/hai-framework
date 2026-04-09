@@ -398,11 +398,11 @@ await reldb.sql.execute(`UPDATE users SET profile = ${sql} WHERE id = ?`, [...pa
 | `HaiReldbError.DUPLICATE_ENTRY`      | `hai:reldb:007`  | 重复条目           |
 | `HaiReldbError.DEADLOCK`             | `hai:reldb:008`  | 死锁               |
 | `HaiReldbError.TIMEOUT`              | `hai:reldb:009`  | 超时               |
-| `HaiReldbError.POOL_EXHAUSTED`       | `hai:reldb:010`  | 连接池耗尽         |
-| `HaiReldbError.NOT_INITIALIZED`      | `hai:reldb:011`  | 数据库未初始化     |
-| `HaiReldbError.DDL_FAILED`           | `hai:reldb:012`  | DDL 操作失败       |
-| `HaiReldbError.UNSUPPORTED_TYPE`     | `hai:reldb:013`  | 不支持的数据库类型 |
-| `HaiReldbError.CONFIG_ERROR`         | `hai:reldb:014`  | 配置错误           |
+| `HaiReldbError.NOT_INITIALIZED`      | `hai:reldb:010`  | 数据库未初始化     |
+| `HaiReldbError.POOL_EXHAUSTED`       | `hai:reldb:011`  | 连接池耗尽         |
+| `HaiReldbError.UNSUPPORTED_TYPE`     | `hai:reldb:012`  | 不支持的数据库类型 |
+| `HaiReldbError.CONFIG_ERROR`         | `hai:reldb:013`  | 配置错误           |
+| `HaiReldbError.DDL_FAILED`           | `hai:reldb:020`  | DDL 操作失败       |
 
 ---
 

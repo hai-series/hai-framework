@@ -7,7 +7,6 @@
 import type { ReldbConfigInput } from '../../src/index.js'
 import { afterAll, afterEach, beforeAll, beforeEach, describe } from 'vitest'
 import { reldb } from '../../src/index.js'
-import { isDockerAvailable } from './check-docker.js'
 import { acquireMysqlContainer } from './mysql-container.js'
 import { acquirePostgresContainer } from './postgres-container.js'
 
@@ -37,14 +36,8 @@ export function defineDbSuite(
   label: string,
   setup: () => Promise<DbTestEnv> | DbTestEnv,
   defineTests: () => void,
-  options?: { requiresDocker?: boolean },
 ): void {
-  const needDocker = options?.requiresDocker ?? false
-  const suiteFn = needDocker && !isDockerAvailable()
-    ? describe.sequential.skip
-    : describe.sequential
-
-  suiteFn(`db (${label})`, () => {
+  describe.sequential(`db (${label})`, () => {
     let env: DbTestEnv | null = null
 
     beforeAll(async () => {
