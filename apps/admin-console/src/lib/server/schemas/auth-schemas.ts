@@ -12,6 +12,9 @@ import * as m from '$lib/paraglide/messages.js'
 import { iam } from '@h-ai/iam'
 import { z } from 'zod'
 
+const USERNAME_REGEX = /^\w{3,20}$/
+const EMAIL_REGEX = /^[^\s@]+@[^\s@][^\s.@]*\.[^\s@]+$/
+
 /**
  * 从 IAM 配置获取密码最小长度，回退到默认值 8。
  */
@@ -30,8 +33,8 @@ export function createRegisterSchema() {
   const minLen = getPasswordMinLength()
   return z
     .object({
-      username: z.string().regex(/^\w{3,20}$/, m.api_auth_username_format_invalid()),
-      email: z.string().regex(/^[^\s@]+@[^\s@][^\s.@]*\.[^\s@]+$/, m.api_auth_email_invalid()),
+      username: z.string().regex(USERNAME_REGEX, m.api_auth_username_format_invalid()),
+      email: z.string().regex(EMAIL_REGEX, m.api_auth_email_invalid()),
       password: z.string().min(minLen, m.api_auth_password_too_short()),
       confirmPassword: z.string(),
     })

@@ -13,6 +13,9 @@ import { iam } from '@h-ai/iam'
 import { IdParamSchema, PaginationQuerySchema } from '@h-ai/kit'
 import { z } from 'zod'
 
+const USERNAME_REGEX = /^\w{3,20}$/
+const EMAIL_REGEX = /^[^\s@]+@[^\s@][^\s.@]*\.[^\s@]+$/
+
 /**
  * 从 IAM 配置获取密码最小长度，回退到默认值 8。
  */
@@ -39,8 +42,8 @@ export const ListUsersQuerySchema = PaginationQuerySchema.extend({
 export function createCreateUserSchema() {
   const minLen = getPasswordMinLength()
   return z.object({
-    username: z.string().regex(/^\w{3,20}$/, m.api_auth_username_format_invalid()),
-    email: z.string().regex(/^[^\s@]+@[^\s@][^\s.@]*\.[^\s@]+$/, m.api_auth_email_invalid()),
+    username: z.string().regex(USERNAME_REGEX, m.api_auth_username_format_invalid()),
+    email: z.string().regex(EMAIL_REGEX, m.api_auth_email_invalid()),
     password: z.string().min(minLen, m.api_auth_password_too_short()),
     display_name: z.string().optional(),
     roles: z.array(z.string()).optional(),
@@ -52,8 +55,8 @@ export function createCreateUserSchema() {
 export function createUpdateUserSchema() {
   const minLen = getPasswordMinLength()
   return z.object({
-    username: z.string().regex(/^\w{3,20}$/, m.api_auth_username_format_invalid()).optional(),
-    email: z.string().regex(/^[^\s@]+@[^\s@][^\s.@]*\.[^\s@]+$/, m.api_auth_email_invalid()).optional(),
+    username: z.string().regex(USERNAME_REGEX, m.api_auth_username_format_invalid()).optional(),
+    email: z.string().regex(EMAIL_REGEX, m.api_auth_email_invalid()).optional(),
     password: z.string().min(minLen).optional(),
     display_name: z.string().optional(),
     roles: z.array(z.string()).optional(),
@@ -63,9 +66,9 @@ export function createUpdateUserSchema() {
 
 /** 更新当前用户资料 Schema */
 export const UpdateProfileSchema = z.object({
-  username: z.string().regex(/^\w{3,20}$/, m.api_auth_username_format_invalid()).optional(),
+  username: z.string().regex(USERNAME_REGEX, m.api_auth_username_format_invalid()).optional(),
   display_name: z.string().optional(),
-  email: z.string().regex(/^[^\s@]+@[^\s@][^\s.@]*\.[^\s@]+$/, m.api_auth_email_invalid()).optional(),
+  email: z.string().regex(EMAIL_REGEX, m.api_auth_email_invalid()).optional(),
   phone: z.string().optional(),
   avatar: z.string().optional(),
 })

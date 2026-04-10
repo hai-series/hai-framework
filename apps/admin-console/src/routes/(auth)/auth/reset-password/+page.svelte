@@ -48,7 +48,7 @@
       if (result.success) {
         success = true
         // 3秒后跳转到登录页
-        setTimeout(() => goto('/auth/login'), 3000)
+        setTimeout(goto, 3000, '/auth/login')
       }
       else {
         errors = { general: result.error?.message || m.auth_reset_failed() }

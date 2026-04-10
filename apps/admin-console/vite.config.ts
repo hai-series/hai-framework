@@ -11,6 +11,8 @@ import { sveltekit } from '@sveltejs/kit/vite'
 import tailwindcss from '@tailwindcss/vite'
 import { defineConfig, loadEnv } from 'vite'
 
+const HAI_PACKAGE_REGEX = /@h-ai\//
+
 export default defineConfig(({ mode }) => {
   // 加载环境变量到 process.env
   const env = loadEnv(mode, process.cwd(), '')
@@ -31,7 +33,7 @@ export default defineConfig(({ mode }) => {
       exclude: ['bits-ui'],
     },
     ssr: {
-      noExternal: [/@h-ai\//],
+      noExternal: [HAI_PACKAGE_REGEX],
     },
     server: {
       port: 5173,
