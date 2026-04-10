@@ -1,7 +1,7 @@
 {
   "name": "android-app",
   "type": "module",
-  "version": "0.1.0-alpha9",
+  "version": "0.1.0-alpha.10",
   "private": true,
   "description": "hai Agent Framework - Android 原生应用（Capacitor + SvelteKit SPA）",
   "keywords": [
