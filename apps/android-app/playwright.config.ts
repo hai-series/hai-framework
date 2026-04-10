@@ -10,6 +10,7 @@ export default defineConfig({
   },
   use: {
     baseURL: 'http://localhost:5175',
+    channel: 'chrome',
   },
   projects: [
     {
