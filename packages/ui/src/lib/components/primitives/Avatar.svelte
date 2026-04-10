@@ -6,6 +6,8 @@
   import type { AvatarProps } from '../../types.js'
   import { cn } from '../../utils.js'
 
+  const NAME_PART_SPLIT_REGEX = /\s+/
+
   const {
     src = '',
     alt = '',
@@ -41,7 +43,7 @@
   const initials = $derived(() => {
     if (!name)
       return ''
-    const parts = name.trim().split(/\s+/)
+    const parts = name.trim().split(NAME_PART_SPLIT_REGEX)
     if (parts.length >= 2) {
       return (parts[0][0] + parts[1][0]).toUpperCase()
     }

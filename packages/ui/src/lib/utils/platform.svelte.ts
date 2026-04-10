@@ -8,6 +8,9 @@
 /** 运行平台 */
 export type Platform = 'web' | 'h5' | 'android' | 'ios' | 'unknown'
 
+const ANDROID_UA_REGEX = /android/
+const IOS_UA_REGEX = /iphone|ipad|ipod/
+
 /**
  * 检测当前运行平台
  *
@@ -39,9 +42,9 @@ export function detectPlatform(): Platform {
   }
 
   // 移动端 UA 检测
-  if (/android/.test(ua))
+  if (ANDROID_UA_REGEX.test(ua))
     return 'h5'
-  if (/iphone|ipad|ipod/.test(ua))
+  if (IOS_UA_REGEX.test(ua))
     return 'h5'
 
   // 移动端特征检测

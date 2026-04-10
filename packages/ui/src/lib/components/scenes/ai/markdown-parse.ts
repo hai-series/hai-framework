@@ -1,14 +1,17 @@
 /**
  * @h-ai/ui — Markdown 解析工具
  *
- * 基于 marked + highlight.js 的 Markdown 解析引擎。
+ * 基于 marked + Shiki 的 Markdown 解析引擎。
  * 支持 GFM（GitHub Flavored Markdown），包含代码高亮、表格、任务列表等。
  * @module markdown-parse
  */
 
 import type { RendererObject, Tokens } from 'marked'
-import hljs from 'highlight.js/lib/common'
 import { Marked } from 'marked'
+import { highlightCode, isLanguageSupported } from './highlight.js'
+
+const SAFE_LINK_HREF_REGEX = /^(?:https?:\/\/|\/|#|mailto:)/i
+const SAFE_IMAGE_SRC_REGEX = /^(?:https?:\/\/|\/|data:image\/)/i
 
 /**
  * Markdown 解析配置
@@ -47,14 +50,15 @@ function createRendererObject(options: Required<MarkdownParseOptions>): Renderer
   return {
     // 代码块：语法高亮 + 语言标签 + 复制按钮
     code({ text, lang }: Tokens.Code): string {
-      const language = lang && hljs.getLanguage(lang) ? lang : ''
+      const language = lang && isLanguageSupported(lang) ? lang : ''
       let highlighted: string
 
       if (options.enableHighlight && language) {
-        highlighted = hljs.highlight(text, { language }).value
+        highlighted = highlightCode(text, language)
       }
       else if (options.enableHighlight) {
-        highlighted = hljs.highlightAuto(text).value
+        // 未指定语言时不做自动检测，直接转义
+        highlighted = escapeHtml(text)
       }
       else {
         highlighted = escapeHtml(text)
@@ -69,7 +73,7 @@ function createRendererObject(options: Required<MarkdownParseOptions>): Renderer
 
       return `<div class="hai-md-code-block">`
         + `<div class="hai-md-code-header">${langLabel}${copyBtn}</div>`
-        + `<pre><code class="hljs${language ? ` language-${escapeHtml(language)}` : ''}">${highlighted}</code></pre>`
+        + `<pre><code class="hai-hl${language ? ` language-${escapeHtml(language)}` : ''}">${highlighted}</code></pre>`
         + `</div>`
     },
 
@@ -82,7 +86,7 @@ function createRendererObject(options: Required<MarkdownParseOptions>): Renderer
     link({ href, title, tokens }: Tokens.Link): string {
       const text = this.parser.parseInline(tokens)
       // 安全检查：仅允许安全协议
-      const safeHref = href && /^(?:https?:\/\/|\/|#|mailto:)/i.test(href) ? href : ''
+      const safeHref = href && SAFE_LINK_HREF_REGEX.test(href) ? href : ''
       const isExternal = safeHref && (safeHref.startsWith('http://') || safeHref.startsWith('https://'))
       const attrs = [
         `href="${escapeHtml(safeHref)}"`,
@@ -95,7 +99,7 @@ function createRendererObject(options: Required<MarkdownParseOptions>): Renderer
     // 图片：添加 loading="lazy"，验证 src 协议
     image({ href, title, text }: Tokens.Image): string {
       // 安全检查：仅允许安全协议
-      const safeSrc = href && /^(?:https?:\/\/|\/|data:image\/)/i.test(href) ? href : ''
+      const safeSrc = href && SAFE_IMAGE_SRC_REGEX.test(href) ? href : ''
       const attrs = [
         `src="${escapeHtml(safeSrc)}"`,
         `alt="${escapeHtml(text || '')}"`,

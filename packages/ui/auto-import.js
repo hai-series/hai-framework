@@ -95,6 +95,10 @@ const UI_COMPONENTS = new Set([
 const TAG_REGEX = /<([A-Z][A-Za-z0-9]*)\b/g
 const SCRIPT_REGEX = /<script\b([^>]*)>([\s\S]*?)<\/script>/g
 const UI_IMPORT_REGEX = /import\s*\{([^}]+)\}\s*from\s*['"]@h-ai\/ui['"];?/
+const IMPORT_ALIAS_SPLIT_REGEX = /\s+as\s+/i
+const WINDOWS_PATH_SEPARATOR_REGEX = /\\/g
+const MODULE_CONTEXT_ATTR_REGEX = /context\s*=\s*['"]module['"]/i
+const TYPE_IMPORT_PREFIX_REGEX = /^type\s+/
 
 function collectUsedComponents(content) {
   const used = new Set()
@@ -118,7 +122,7 @@ function collectImportedNames(scriptContent) {
       return
 
     let clause = statement.slice('import '.length, fromIndex).trim()
-    clause = clause.replace(/^type\s+/, '')
+    clause = clause.replace(TYPE_IMPORT_PREFIX_REGEX, '')
     if (!clause)
       return
 
@@ -131,10 +135,10 @@ function collectImportedNames(scriptContent) {
 
       const raw = namedPart.replace('}', '')
       for (const segment of raw.split(',')) {
-        const cleaned = segment.trim().replace(/^type\s+/, '')
+        const cleaned = segment.trim().replace(TYPE_IMPORT_PREFIX_REGEX, '')
         if (!cleaned)
           continue
-        const [original] = cleaned.split(/\s+as\s+/i)
+        const [original] = cleaned.split(IMPORT_ALIAS_SPLIT_REGEX)
         if (original)
           imported.add(original.trim())
       }
@@ -213,7 +217,7 @@ function autoImportHaiUi() {
       }
 
       // 跳过 @h-ai/ui 包自身的文件，避免重复导入
-      const normalizedPath = filename.replace(/\\/g, '/')
+      const normalizedPath = filename.replace(WINDOWS_PATH_SEPARATOR_REGEX, '/')
       if (normalizedPath.includes('/packages/ui/') || normalizedPath.includes('/@h-ai/ui/')) {
         return { code: content }
       }
@@ -229,7 +233,7 @@ function autoImportHaiUi() {
 
       for (const match of content.matchAll(SCRIPT_REGEX)) {
         const [fullMatch, attrs, scriptContent] = match
-        const isModule = /context\s*=\s*['"]module['"]/i.test(attrs)
+        const isModule = MODULE_CONTEXT_ATTR_REGEX.test(attrs)
         const start = match.index ?? 0
 
         updated += content.slice(lastIndex, start)

@@ -49,9 +49,10 @@
   "dependencies": {
     "@h-ai/core": "workspace:*",
     "@internationalized/date": "catalog:",
+    "@shikijs/langs": "catalog:",
     "bits-ui": "catalog:",
-    "highlight.js": "catalog:",
     "marked": "catalog:",
+    "shiki": "catalog:",
     "tailwind-merge": "catalog:"
   },
   "devDependencies": {

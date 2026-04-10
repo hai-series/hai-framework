@@ -6,8 +6,8 @@
 
 import type { RendererObject, Tokens } from 'marked'
 import type { MarkdownCodeBlockItem, MarkdownOutlineItem } from './document-types.js'
-import hljs from 'highlight.js/lib/common'
 import { Marked } from 'marked'
+import { highlightCode, isLanguageSupported } from './highlight.js'
 
 export interface MarkdownDocumentParseOptions {
   /** Whether to enable syntax highlighting for code blocks. */
@@ -45,6 +45,8 @@ const DEFAULT_OPTIONS: Required<MarkdownDocumentParseOptions> = {
   showRunButton: false,
   breaks: true,
 }
+const SAFE_LINK_HREF_REGEX = /^(?:https?:\/\/|\/|#|mailto:)/i
+const SAFE_IMAGE_SRC_REGEX = /^(?:https?:\/\/|\/|data:image\/)/i
 
 /**
  * Escape HTML entities to prevent raw HTML injection.
@@ -145,16 +147,14 @@ function createRendererObject(
     code({ text, lang }: Tokens.Code): string {
       // rawLanguage is the original info string from the fence.
       const rawLanguage = lang?.trim() || ''
-      // highlightLanguage is validated against highlight.js languages.
-      const highlightLanguage = rawLanguage && hljs.getLanguage(rawLanguage)
+      // highlightLanguage is validated against supported languages.
+      const highlightLanguage = rawLanguage && isLanguageSupported(rawLanguage)
         ? rawLanguage
         : ''
 
       // highlighted is the final HTML for the code content.
-      const highlighted = options.enableHighlight
-        ? highlightLanguage
-          ? hljs.highlight(text, { language: highlightLanguage }).value
-          : hljs.highlightAuto(text).value
+      const highlighted = options.enableHighlight && highlightLanguage
+        ? highlightCode(text, highlightLanguage)
         : escapeHtml(text)
 
       // codeBlockId is used by run/copy hooks and DOM bindings.
@@ -190,7 +190,7 @@ function createRendererObject(
         + `<div class="hai-md-code-header-main">${langLabel}</div>`
         + `<div class="hai-md-code-actions">${runBtn}${copyBtn}</div>`
         + `</div>`
-        + `<pre><code class="hljs${highlightLanguage ? ` language-${escapeHtml(highlightLanguage)}` : ''}">${highlighted}</code></pre>`
+        + `<pre><code class="hai-hl${highlightLanguage ? ` language-${escapeHtml(highlightLanguage)}` : ''}">${highlighted}</code></pre>`
         + `${previewHost}`
         + `</div>`
     },
@@ -203,7 +203,7 @@ function createRendererObject(
       // text preserves inline markdown within the link label.
       const text = this.parser.parseInline(tokens)
       // safeHref strips potentially unsafe protocols.
-      const safeHref = href && /^(?:https?:\/\/|\/|#|mailto:)/i.test(href) ? href : ''
+      const safeHref = href && SAFE_LINK_HREF_REGEX.test(href) ? href : ''
       // isExternal controls whether target/_blank is added.
       const isExternal = safeHref
         && (safeHref.startsWith('http://') || safeHref.startsWith('https://'))
@@ -219,7 +219,7 @@ function createRendererObject(
 
     image({ href, title, text }: Tokens.Image): string {
       // safeSrc prevents dangerous image protocols.
-      const safeSrc = href && /^(?:https?:\/\/|\/|data:image\/)/i.test(href) ? href : ''
+      const safeSrc = href && SAFE_IMAGE_SRC_REGEX.test(href) ? href : ''
       // attrs is the flattened HTML attribute string.
       const attrs = [
         `src="${escapeHtml(safeSrc)}"`,

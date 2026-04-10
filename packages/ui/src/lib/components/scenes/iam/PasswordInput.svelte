@@ -11,6 +11,11 @@
   import BareInput from '../../primitives/BareInput.svelte'
   import Progress from '../../primitives/Progress.svelte'
 
+  const PASSWORD_LOWERCASE_REGEX = /[a-z]/
+  const PASSWORD_UPPERCASE_REGEX = /[A-Z]/
+  const PASSWORD_DIGIT_REGEX = /\d/
+  const PASSWORD_SPECIAL_CHAR_REGEX = /[^a-z0-9]/i
+
   interface Props {
     /** 元素 ID */
     id?: string
@@ -105,13 +110,13 @@
       score += 1
 
     // 复杂度检查
-    if (/[a-z]/.test(value))
+    if (PASSWORD_LOWERCASE_REGEX.test(value))
       score += 1
-    if (/[A-Z]/.test(value))
+    if (PASSWORD_UPPERCASE_REGEX.test(value))
       score += 1
-    if (/\d/.test(value))
+    if (PASSWORD_DIGIT_REGEX.test(value))
       score += 1
-    if (/[^a-z0-9]/i.test(value))
+    if (PASSWORD_SPECIAL_CHAR_REGEX.test(value))
       score += 1
 
     // 返回强度等级

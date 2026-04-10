@@ -16,6 +16,8 @@
   import IconButton from '../../primitives/IconButton.svelte'
   import Spinner from '../../primitives/Spinner.svelte'
 
+  const SAFE_HTTP_URL_REGEX = /^https?:\/\//i
+
   let {
     value = $bindable(''),
     accept = 'image/*',
@@ -130,7 +132,7 @@
       }
 
       // 安全检查：验证上传 URL 协议
-      if (targetUrl && !/^https?:\/\//i.test(targetUrl)) {
+      if (targetUrl && !SAFE_HTTP_URL_REGEX.test(targetUrl)) {
         throw new Error(uiM('image_upload_failed'))
       }
 
