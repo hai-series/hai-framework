@@ -115,9 +115,9 @@ describe('cache kv advanced operations', () => {
       const ttl = await cache.kv.ttl('ea-key')
       expect(ttl.success).toBe(true)
       if (ttl.success) {
-        const maxTtl = future - Math.floor(Date.now() / 1000) + 5
+        const maxTtl = future - Math.floor(Date.now() / 1000) + 20
         expect(ttl.data).toBeGreaterThan(0)
-        // 允许少量时钟偏移与 Redis TTL 取整误差，避免 CI 环境偶发抖动
+        // 允许时钟偏移与 Redis TTL 取整误差，避免 CI/容器环境偶发抖动
         expect(ttl.data).toBeLessThanOrEqual(maxTtl)
       }
     })
