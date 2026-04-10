@@ -13,6 +13,8 @@ import { createCore } from './core-main.js'
 import { config } from './functions/core-function-config.js'
 import { logger } from './functions/core-function-logger.node.js'
 
+const YAML_EXTENSION_REGEX = /\.ya?ml$/
+
 // ─── Core 实例 ───
 
 /**
@@ -99,7 +101,7 @@ function scanConfigDir(
 
   for (const file of files) {
     const filePath = join(configDir, file)
-    const baseName = file.replace(/\.ya?ml$/, '')
+    const baseName = file.replace(YAML_EXTENSION_REGEX, '')
 
     // 判断是否为内置模块配置（以 _ 开头）
     if (baseName.startsWith('_')) {

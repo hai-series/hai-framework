@@ -165,7 +165,7 @@ function debounce<T extends (...args: unknown[]) => unknown>(
   return (...args: Parameters<T>) => {
     if (timer)
       clearTimeout(timer)
-    timer = setTimeout(() => fn(...args), ms)
+    timer = setTimeout(fn, ms, ...args)
   }
 }
 
