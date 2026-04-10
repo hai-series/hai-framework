@@ -86,8 +86,9 @@ describe('parseMarkdown - 代码块', () => {
 
   it('enableHighlight 为 false 时不高亮', () => {
     const html = parseMarkdown('```js\nconst x = 1\n```', { enableHighlight: false })
-    // 无高亮时代码应被转义
-    expect(html).toContain('<code class="hljs')
+    // 无高亮时代码应被转义，不含 shiki token spans
+    expect(html).toContain('const x = 1')
+    expect(html).not.toContain('--hai-hl-')
   })
 
   it('无语言标识的代码块也应正常渲染', () => {

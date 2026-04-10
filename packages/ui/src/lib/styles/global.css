@@ -5,9 +5,22 @@
  * 可选的全局样式增强，消费应用可通过以下方式导入：
  *
  * 在 app.css 中：
- * @import '@hai/ui/styles/global.css';
+ * @import '@h-ai/ui/styles/global.css';
  * =============================================================================
  */
+
+/* ─── 基础重置 ─── */
+html {
+  scroll-behavior: smooth;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+}
 
 /* ─── 滚动条 ─── */
 ::-webkit-scrollbar {
@@ -28,13 +41,6 @@
   background: oklch(0.55 0 0 / 0.35);
 }
 
-/* ─── 基础 ─── */
-html {
-  scroll-behavior: smooth;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
 /* ─── 表单焦点 ─── */
 .input:focus,
 .select:focus,
@@ -45,20 +51,54 @@ html {
 
 /* ─── 隐藏浏览器原生密码显示按钮（使用自定义切换） ─── */
 input::-ms-reveal,
-input::-ms-clear {
-  display: none;
+input::-ms-clear,
+input::-webkit-credentials-auto-fill-button {
+  display: none !important;
 }
 
-/* ─── 卡片 ─── */
+/* ─── Focus ring ─── */
+:focus-visible {
+  outline: 2px solid oklch(0.6 0.15 250);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ─── DaisyUI 组件微调 ─── */
 .card {
   transition:
     box-shadow 0.2s cubic-bezier(0.4, 0, 0.2, 1),
     transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* ─── 按钮 ─── */
 .btn {
   transition: all 0.15s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.badge {
+  font-weight: 500;
+}
+
+.table th {
+  font-weight: 600;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: oklch(0.55 0 0);
+}
+
+.modal-box {
+  border-radius: 0.75rem;
+}
+
+.alert {
+  border-radius: 0.75rem;
+}
+
+/* ─── Chart bars ─── */
+.chart-bar {
+  min-height: 2px;
+  border-radius: 2px 2px 0 0;
+  transition: height 0.3s ease;
 }
 
 /* ─── 动画 keyframes ─── */

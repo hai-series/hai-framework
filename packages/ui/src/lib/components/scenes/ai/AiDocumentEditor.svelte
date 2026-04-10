@@ -50,6 +50,7 @@
   // 复制前后的图标以内联 SVG 缓存，避免每次点击都重新拼接按钮内容。
   const COPY_ICON = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`
   const CHECK_ICON = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`
+  const HTML_SNIPPET_REGEX = /<!doctype html>|<html[\s>]|<body[\s>]|<div[\s>]|<main[\s>]/i
 
   let {
     // 暴露给外层的滚动容器引用，用于同步滚动或定位选区工具条。
@@ -347,7 +348,7 @@
   }
 
   function looksLikeHtml(code: string): boolean {
-    return /<!doctype html>|<html[\s>]|<body[\s>]|<div[\s>]|<main[\s>]/i.test(
+    return HTML_SNIPPET_REGEX.test(
       code,
     )
   }
@@ -2133,72 +2134,21 @@ ${safeCode}
     margin-top: 0.85rem;
   }
 
-  .hai-markdown :global(.hljs-keyword),
-  .hai-markdown :global(.hljs-selector-tag),
-  .hai-markdown :global(.hljs-literal),
-  .hai-markdown :global(.hljs-section),
-  .hai-markdown :global(.hljs-link) {
-    color: oklch(0.7 0.15 280);
-  }
+  /* Shiki CSS Variables 主题 — 代码高亮 token 颜色 */
+  .hai-markdown :global(.hai-md-code-block code) {
+    --hai-hl-fg: oklch(var(--nc));
+    --hai-hl-bg: transparent;
 
-  .hai-markdown :global(.hljs-string),
-  .hai-markdown :global(.hljs-addition) {
-    color: oklch(0.75 0.12 150);
-  }
-
-  .hai-markdown :global(.hljs-number),
-  .hai-markdown :global(.hljs-type) {
-    color: oklch(0.78 0.12 70);
-  }
-
-  .hai-markdown :global(.hljs-comment),
-  .hai-markdown :global(.hljs-quote),
-  .hai-markdown :global(.hljs-meta) {
-    color: oklch(var(--nc) / 0.45);
-    font-style: italic;
-  }
-
-  .hai-markdown :global(.hljs-title),
-  .hai-markdown :global(.hljs-name) {
-    color: oklch(0.75 0.12 210);
-  }
-
-  .hai-markdown :global(.hljs-variable),
-  .hai-markdown :global(.hljs-template-variable) {
-    color: oklch(0.8 0.1 30);
-  }
-
-  .hai-markdown :global(.hljs-built_in),
-  .hai-markdown :global(.hljs-builtin-name) {
-    color: oklch(0.75 0.15 200);
-  }
-
-  .hai-markdown :global(.hljs-attr),
-  .hai-markdown :global(.hljs-attribute) {
-    color: oklch(0.78 0.1 80);
-  }
-
-  .hai-markdown :global(.hljs-symbol),
-  .hai-markdown :global(.hljs-bullet) {
-    color: oklch(0.75 0.12 320);
-  }
-
-  .hai-markdown :global(.hljs-deletion) {
-    color: oklch(0.7 0.15 25);
-  }
-
-  .hai-markdown :global(.hljs-regexp),
-  .hai-markdown :global(.hljs-selector-id),
-  .hai-markdown :global(.hljs-selector-class) {
-    color: oklch(0.7 0.15 25);
-  }
-
-  .hai-markdown :global(.hljs-emphasis) {
-    font-style: italic;
-  }
-
-  .hai-markdown :global(.hljs-strong) {
-    font-weight: 700;
+    /* token 颜色 */
+    --hai-hl-token-keyword: oklch(0.7 0.15 280);
+    --hai-hl-token-string: oklch(0.75 0.12 150);
+    --hai-hl-token-string-expression: oklch(0.75 0.12 150);
+    --hai-hl-token-constant: oklch(0.78 0.12 70);
+    --hai-hl-token-comment: oklch(var(--nc) / 0.45);
+    --hai-hl-token-function: oklch(0.72 0.14 220);
+    --hai-hl-token-parameter: oklch(0.72 0.12 35);
+    --hai-hl-token-punctuation: oklch(var(--nc) / 0.7);
+    --hai-hl-token-link: oklch(0.7 0.15 280);
   }
 
   @keyframes hai-md-loading {

@@ -1,16 +1,69 @@
 # @h-ai/ui
 
-> 基于 Svelte 5 Runes 的管理后台 UI 组件库，采用 DaisyUI v5 + Tailwind CSS v4 样式 + Bits UI v2 headless 交互，内置 i18n（zh-CN / en-US），支持 32+ 主题。
+> 基于 Svelte 5 Runes 的多端 UI 组件库，采用 DaisyUI v5 + Tailwind CSS v4 样式 + Bits UI v2 headless 交互，内置 i18n（zh-CN / en-US），支持 32+ 主题。
 
 ## 安装
 
 ```bash
-pnpm add @h-ai/ui
+npm install @h-ai/ui
 ```
 
 依赖 `@h-ai/core`（会自动安装）。
 
 ## 快速开始
+
+### 1. 配置 svelte.config.js
+
+```js
+import { autoImportHaiUi } from '@h-ai/ui/auto-import'
+import adapter from '@sveltejs/adapter-auto'
+import { vitePreprocess } from '@sveltejs/vite-plugin-svelte'
+
+/** @type {import('@sveltejs/kit').Config} */
+const config = {
+  preprocess: [autoImportHaiUi(), vitePreprocess()],
+  compilerOptions: { runes: true },
+  kit: { adapter: adapter() },
+}
+
+export default config
+```
+
+### 2. 配置 vite.config.ts
+
+```ts
+import { sveltekit } from '@sveltejs/kit/vite'
+import tailwindcss from '@tailwindcss/vite'
+import { defineConfig } from 'vite'
+
+export default defineConfig({
+  plugins: [sveltekit(), tailwindcss()],
+  optimizeDeps: { exclude: ['bits-ui'] },
+  ssr: { noExternal: [/@h-ai\//] },
+})
+```
+
+### 3. 配置 src/app.css
+
+```css
+@import 'tailwindcss';
+@import '@h-ai/ui/styles/global.css';
+@import '@h-ai/ui/styles/theme.css';
+@source "../node_modules/@h-ai/ui/dist/**/*.{svelte,ts}";
+
+@plugin "daisyui" {
+  themes: light --default, dark --prefersdark, cupcake, emerald, corporate, nord, dracula, night;
+}
+
+/* 图标（可选） */
+@plugin "@iconify/tailwind4" {
+  prefixes: tabler;
+}
+```
+
+> `@source` 让 TailwindCSS 扫描 `@h-ai/ui` 组件中使用的 class 名，否则组件样式会丢失。
+
+### 4. 使用组件
 
 ```svelte
 <script>
@@ -23,26 +76,7 @@ pnpm add @h-ai/ui
 </Card>
 ```
 
-## 自动导入（推荐）
-
-启用预处理器后，页面中可直接使用 `@h-ai/ui` 组件，无需逐个 import：
-
-```js
-import { autoImportHaiUi } from '@h-ai/ui/auto-import'
-// svelte.config.js
-import adapter from '@sveltejs/adapter-auto'
-import { vitePreprocess } from '@sveltejs/vite-plugin-svelte'
-
-/** @type {import('@sveltejs/kit').Config} */
-const config = {
-  preprocess: [autoImportHaiUi(), vitePreprocess()],
-  kit: { adapter: adapter() },
-}
-
-export default config
-```
-
-启用后可直接在模板中使用：
+启用自动导入后可直接在模板中使用，无需逐个 import：
 
 ```svelte
 <!-- 无需 import { Button } from '@h-ai/ui' -->
@@ -335,64 +369,43 @@ components/
 
 ## 样式依赖
 
-组件基于 TailwindCSS v4 + DaisyUI。在应用层 `app.css` 中声明主题：
+组件基于 TailwindCSS v4 + DaisyUI。应用层 `app.css` 需要以下配置：
 
 ```css
-/* app.css */
+/* 必须 */
 @import 'tailwindcss';
+@import '@h-ai/ui/styles/global.css';   /* 基础重置、滚动条、焦点样式 */
+@import '@h-ai/ui/styles/theme.css';    /* Tailwind v4 @theme Token（品牌色/阴影/动效） */
+@source "../node_modules/@h-ai/ui/dist/**/*.{svelte,ts}";
 
+/* 移动端项目追加（可选） */
+@import '@h-ai/ui/styles/design-tokens.css'; /* CSS 自定义属性 */
+@import '@h-ai/ui/styles/mobile.css';        /* 安全区域/触摸优化 */
+
+/* DaisyUI 主题 */
 @plugin "daisyui" {
-  themes:
-    light --default,
-    dark --prefersdark,
-    cupcake,
-    bumblebee,
-    emerald,
-    corporate,
-    retro,
-    valentine,
-    garden,
-    aqua,
-    lofi,
-    pastel,
-    fantasy,
-    wireframe,
-    cmyk,
-    autumn,
-    acid,
-    lemonade,
-    winter,
-    nord,
-    synthwave,
-    cyberpunk,
-    halloween,
-    forest,
-    black,
-    luxury,
-    dracula,
-    business,
-    night,
-    coffee,
-    dim,
-    sunset;
+  themes: light --default, dark --prefersdark, cupcake, emerald, corporate, nord, dracula, night;
 }
-
 ```
+
+- `global.css`：基础 HTML 重置、滚动条美化、表单焦点环
+- `theme.css`：Tailwind v4 `@theme` 块，包含品牌色、阴影层级、动效曲线、字体特性
+- `design-tokens.css`：CSS 自定义属性（间距/圆角/z-index/过渡），移动端推荐
+- `mobile.css`：安全区域 padding、momentum 滚动、虚拟键盘适配
 
 ### 图标
 
 组件使用 Iconify (Tabler Icons)：
 
 ```bash
-pnpm add -D @iconify/tailwind4 @iconify-json/tabler
+npm install -D @iconify/tailwind4 @iconify-json/tabler
 ```
 
 ```css
-/* app.css */
+/* app.css 中追加 */
 @plugin "@iconify/tailwind4" {
   prefixes: tabler;
 }
-
 ```
 
 ### 主题切换
@@ -418,7 +431,6 @@ import {
     {@html getThemeInitScript()}
   </script>
 </head>
-
 ```
 
 ## 国际化 (i18n)

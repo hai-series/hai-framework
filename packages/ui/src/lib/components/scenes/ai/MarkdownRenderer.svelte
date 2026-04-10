@@ -6,7 +6,7 @@
 
   功能特性：
   - GFM (GitHub Flavored Markdown) 全量支持
-  - 代码块语法高亮（highlight.js，30+ 语言）
+  - 代码块语法高亮（Shiki，30+ 语言）
   - 代码块一键复制
   - 响应式表格
   - 任务列表
@@ -387,74 +387,26 @@
   }
 
   /* =========================================================================
-   * highlight.js 语法高亮主题 (DaisyUI 自适应)
+   * Shiki 语法高亮主题 (DaisyUI 自适应)
+   * =========================================================================
+   * 使用 CSS Variables 主题，通过 --hai-hl-* 变量控制 token 颜色。
+   * 变量由 highlight.ts 中的 createCssVariablesTheme 引用。
    * ========================================================================= */
 
-  .hai-markdown :global(.hljs-keyword),
-  .hai-markdown :global(.hljs-selector-tag),
-  .hai-markdown :global(.hljs-literal),
-  .hai-markdown :global(.hljs-section),
-  .hai-markdown :global(.hljs-link) {
-    color: oklch(0.7 0.15 280);
-  }
+  .hai-markdown :global(.hai-md-code-block code) {
+    /* ─── 基础色 ─── */
+    --hai-hl-fg: oklch(var(--nc));
+    --hai-hl-bg: transparent;
 
-  .hai-markdown :global(.hljs-string),
-  .hai-markdown :global(.hljs-addition) {
-    color: oklch(0.75 0.12 150);
-  }
-
-  .hai-markdown :global(.hljs-number),
-  .hai-markdown :global(.hljs-type) {
-    color: oklch(0.78 0.12 70);
-  }
-
-  .hai-markdown :global(.hljs-comment),
-  .hai-markdown :global(.hljs-quote),
-  .hai-markdown :global(.hljs-meta) {
-    color: oklch(var(--nc) / 0.45);
-    font-style: italic;
-  }
-
-  .hai-markdown :global(.hljs-title),
-  .hai-markdown :global(.hljs-name) {
-    color: oklch(0.75 0.12 210);
-  }
-
-  .hai-markdown :global(.hljs-variable),
-  .hai-markdown :global(.hljs-template-variable) {
-    color: oklch(0.8 0.1 30);
-  }
-
-  .hai-markdown :global(.hljs-built_in),
-  .hai-markdown :global(.hljs-builtin-name) {
-    color: oklch(0.75 0.15 200);
-  }
-
-  .hai-markdown :global(.hljs-attr),
-  .hai-markdown :global(.hljs-attribute) {
-    color: oklch(0.78 0.1 80);
-  }
-
-  .hai-markdown :global(.hljs-symbol),
-  .hai-markdown :global(.hljs-bullet) {
-    color: oklch(0.75 0.12 320);
-  }
-
-  .hai-markdown :global(.hljs-deletion) {
-    color: oklch(0.7 0.15 25);
-  }
-
-  .hai-markdown :global(.hljs-regexp),
-  .hai-markdown :global(.hljs-selector-id),
-  .hai-markdown :global(.hljs-selector-class) {
-    color: oklch(0.7 0.15 25);
-  }
-
-  .hai-markdown :global(.hljs-emphasis) {
-    font-style: italic;
-  }
-
-  .hai-markdown :global(.hljs-strong) {
-    font-weight: 700;
+    /* ─── Token 颜色（DaisyUI oklch 自适应） ─── */
+    --hai-hl-token-keyword: oklch(0.7 0.15 280);
+    --hai-hl-token-string: oklch(0.75 0.12 150);
+    --hai-hl-token-string-expression: oklch(0.75 0.12 150);
+    --hai-hl-token-constant: oklch(0.78 0.12 70);
+    --hai-hl-token-comment: oklch(var(--nc) / 0.45);
+    --hai-hl-token-function: oklch(0.72 0.14 220);
+    --hai-hl-token-parameter: oklch(0.72 0.12 35);
+    --hai-hl-token-punctuation: oklch(var(--nc) / 0.7);
+    --hai-hl-token-link: oklch(0.7 0.15 280);
   }
 </style>

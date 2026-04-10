@@ -1,0 +1,31 @@
+/**
+ * =============================================================================
+ * @hai/ui - Tailwind v4 主题 Token
+ * =============================================================================
+ * 基于 Tailwind CSS v4 @theme 的设计 Token，所有使用 @h-ai/ui 的应用共享。
+ *
+ * 在 app.css 中导入：
+ * @import '@h-ai/ui/styles/theme.css';
+ *
+ * 应用可在导入后追加自己的 @theme 块来覆盖或扩展。
+ * =============================================================================
+ */
+
+@theme {
+  /* ─── 品牌色 ─── */
+  --color-brand: oklch(0.6 0.2 275);
+
+  /* ─── 阴影层级 ─── */
+  --shadow-xs: 0 1px 2px oklch(0 0 0 / 0.04);
+  --shadow-soft: 0 2px 8px -2px oklch(0 0 0 / 0.06), 0 1px 2px -1px oklch(0 0 0 / 0.04);
+  --shadow-lifted: 0 4px 16px -4px oklch(0 0 0 / 0.08), 0 2px 4px -2px oklch(0 0 0 / 0.04);
+  --shadow-float: 0 8px 32px -8px oklch(0 0 0 / 0.12), 0 4px 8px -4px oklch(0 0 0 / 0.06);
+  --shadow-overlay: 0 16px 48px -12px oklch(0 0 0 / 0.18);
+
+  /* ─── 动效曲线 ─── */
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* ─── 字体特性 ─── */
+  --font-feature-tabular: 'tnum';
+}

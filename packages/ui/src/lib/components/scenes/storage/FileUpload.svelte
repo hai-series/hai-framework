@@ -16,6 +16,8 @@
   import IconButton from '../../primitives/IconButton.svelte'
   import Progress from '../../primitives/Progress.svelte'
 
+  const SAFE_HTTP_URL_REGEX = /^https?:\/\//i
+
   const {
     accept = '*',
     maxSize = 10 * 1024 * 1024, // 10MB
@@ -167,7 +169,7 @@
         }
 
         const { url } = await presignResponse.json()
-        if (!/^https?:\/\//i.test(url)) {
+        if (!SAFE_HTTP_URL_REGEX.test(url)) {
           throw new Error(uiM('file_upload_get_url_failed'))
         }
         targetUrl = url
