@@ -11,6 +11,8 @@ import { sveltekit } from '@sveltejs/kit/vite'
 import tailwindcss from '@tailwindcss/vite'
 import { defineConfig, loadEnv } from 'vite'
 
+const HAI_PACKAGE_REGEX = /@h-ai\//
+
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   Object.assign(process.env, env)
@@ -29,7 +31,7 @@ export default defineConfig(({ mode }) => {
       exclude: ['bits-ui'],
     },
     ssr: {
-      noExternal: [/@h-ai\//],
+      noExternal: [HAI_PACKAGE_REGEX],
     },
     build: {
       rollupOptions: {

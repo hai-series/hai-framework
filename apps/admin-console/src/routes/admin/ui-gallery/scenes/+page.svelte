@@ -122,8 +122,8 @@ echo "部署完成 ✅"
   "name": "@h-ai/ui",
   "version": "0.1.0",
   "dependencies": {
-    "marked": "^15.0.0",
-    "highlight.js": "^11.11.0"
+    "marked": "^17.0.0",
+    "shiki": "^3.2.0"
   }
 }
 \`\`\`
@@ -173,7 +173,7 @@ LIMIT 10;
 在 \`packages/ui\` 模块中，我们使用 [Svelte 5](https://svelte.dev) 的 Runes 语法构建组件。核心依赖包括：
 
 1. **marked** — Markdown 解析引擎
-2. **highlight.js** — 语法高亮
+2. **Shiki** — 语法高亮
 3. **DaisyUI** — 主题系统
 
 > 所有组件均通过 \`@h-ai/ui\` 统一导出，使用 \`export *\` 聚合模式。

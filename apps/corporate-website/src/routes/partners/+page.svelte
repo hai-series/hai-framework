@@ -2,6 +2,8 @@
   import * as m from '$lib/paraglide/messages.js'
   import { Alert, Button, Input, Select, Textarea } from '@h-ai/ui'
 
+  const EMAIL_REGEX = /^[^\s@]+@[^\s@][^\s.@]*\.[^\s@]+$/
+
   const cooperationTypeOptions = $derived([
     { value: 'channel', label: m.partner_form_type_channel() },
     { value: 'solution', label: m.partner_form_type_solution() },
@@ -39,7 +41,7 @@
       e.companyName = m.validate_company_min()
     if (form.contactName.trim().length < 2)
       e.contactName = m.validate_contact_min()
-    if (!/^[^\s@]+@[^\s@][^\s.@]*\.[^\s@]+$/.test(form.email))
+    if (!EMAIL_REGEX.test(form.email))
       e.email = m.validate_email_invalid()
     if (form.phone.trim().length < 6)
       e.phone = m.validate_phone_min()
