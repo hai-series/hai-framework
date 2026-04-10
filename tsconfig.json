@@ -10,6 +10,8 @@
     "moduleDetection": "force",
     "module": "ESNext",
     "moduleResolution": "bundler",
+    /* tsup DTS 内部使用 baseUrl，TS 6 已将其标记为 deprecated */
+    "ignoreDeprecations": "6.0",
 
     /* ------------------------------------------------------------------ */
     /* 开发期路径映射：让 IDE "Go to Definition" 直接导航到 src 源码       */
