@@ -48,6 +48,10 @@ export interface PasswordStrategyResult {
 }
 
 const logger = core.logger.child({ module: 'iam', scope: 'password-strategy' })
+const PASSWORD_UPPERCASE_REGEX = /[A-Z]/
+const PASSWORD_LOWERCASE_REGEX = /[a-z]/
+const PASSWORD_DIGIT_REGEX = /\d/
+const PASSWORD_SPECIAL_CHAR_REGEX = /[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/
 
 /**
  * 创建密码认证策略
@@ -86,28 +90,28 @@ export function createPasswordStrategy(config: PasswordStrategyConfig): Password
       )
     }
 
-    if (passwordConfig.requireUppercase && !/[A-Z]/.test(password)) {
+    if (passwordConfig.requireUppercase && !PASSWORD_UPPERCASE_REGEX.test(password)) {
       return err(
         HaiIamError.PASSWORD_POLICY_VIOLATION,
         iamM('iam_passwordNeedUppercase'),
       )
     }
 
-    if (passwordConfig.requireLowercase && !/[a-z]/.test(password)) {
+    if (passwordConfig.requireLowercase && !PASSWORD_LOWERCASE_REGEX.test(password)) {
       return err(
         HaiIamError.PASSWORD_POLICY_VIOLATION,
         iamM('iam_passwordNeedLowercase'),
       )
     }
 
-    if (passwordConfig.requireNumber && !/\d/.test(password)) {
+    if (passwordConfig.requireNumber && !PASSWORD_DIGIT_REGEX.test(password)) {
       return err(
         HaiIamError.PASSWORD_POLICY_VIOLATION,
         iamM('iam_passwordNeedNumber'),
       )
     }
 
-    if (passwordConfig.requireSpecialChar && !/[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(password)) {
+    if (passwordConfig.requireSpecialChar && !PASSWORD_SPECIAL_CHAR_REGEX.test(password)) {
       return err(
         HaiIamError.PASSWORD_POLICY_VIOLATION,
         iamM('iam_passwordNeedSpecialChar'),

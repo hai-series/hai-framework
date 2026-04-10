@@ -16,6 +16,11 @@ import { ChunkOptionsSchema } from './datapipe-config.js'
 import { datapipeM } from './datapipe-i18n.js'
 import { HaiDatapipeError } from './datapipe-types.js'
 
+const SENTENCE_SPLIT_REGEX = /(?<=[。！？.!?])\s*/
+const PARAGRAPH_SPLIT_REGEX = /\n\s*\n/
+const PAGE_SPLIT_REGEX = /\f/
+const WORD_SPLIT_REGEX = /\s+/
+
 // ─── 分割函数 ───
 
 /**
@@ -25,7 +30,7 @@ import { HaiDatapipeError } from './datapipe-types.js'
  */
 function splitBySentence(text: string): string[] {
   // 匹配中文和英文的句末标点
-  const segments = text.split(/(?<=[。！？.!?])\s*/)
+  const segments = text.split(SENTENCE_SPLIT_REGEX)
   return segments.filter(s => s.trim().length > 0)
 }
 
@@ -35,7 +40,7 @@ function splitBySentence(text: string): string[] {
  * 以双换行符作为段落分隔符。
  */
 function splitByParagraph(text: string): string[] {
-  const segments = text.split(/\n\s*\n/)
+  const segments = text.split(PARAGRAPH_SPLIT_REGEX)
   return segments.filter(s => s.trim().length > 0)
 }
 
@@ -119,7 +124,7 @@ function splitByMarkdown(text: string, minLevel: number, keepTitle: boolean): { 
  * 按分页符分割文本
  */
 function splitByPage(text: string): string[] {
-  const segments = text.split(/\f/)
+  const segments = text.split(PAGE_SPLIT_REGEX)
   return segments.filter(s => s.trim().length > 0)
 }
 
@@ -130,7 +135,7 @@ function splitByPage(text: string): string[] {
  * 注意：中文等无空格语言的连续文本会被视为单个词。
  */
 function splitByWord(text: string, maxSize: number): string[] {
-  const words = text.split(/\s+/)
+  const words = text.split(WORD_SPLIT_REGEX)
   const chunks: string[] = []
   let current: string[] = []
   let currentSize = 0

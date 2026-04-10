@@ -182,6 +182,8 @@ const SELECTABLE_FEATURES: FeatureId[] = [
   'capacitor',
 ]
 
+const PROJECT_NAME_REGEX = /^[a-z0-9-]+$/
+
 // =============================================================================
 // 项目模板定义
 // =============================================================================
@@ -240,7 +242,7 @@ export async function createProject(options: CreateProjectOptions): Promise<void
     const resolvedOptions = await resolveOptions(options)
 
     // 安全校验：项目名必须仅含小写字母、数字和连字符，防止路径遍历
-    if (!/^[a-z0-9-]+$/.test(resolvedOptions.name)) {
+    if (!PROJECT_NAME_REGEX.test(resolvedOptions.name)) {
       core.logger.error(chalk.red(`项目名称不合法: "${resolvedOptions.name}"，只能包含小写字母、数字和连字符`))
       return
     }
@@ -372,7 +374,7 @@ async function resolveOptions(options: CreateProjectOptions): Promise<Required<C
       validate: (value: string) => {
         if (!value.trim())
           return '项目名称不能为空'
-        if (!/^[a-z0-9-]+$/.test(value))
+        if (!PROJECT_NAME_REGEX.test(value))
           return '项目名称只能包含小写字母、数字和连字符'
         return true
       },

@@ -181,6 +181,8 @@ export interface ReldbJsonOps {
   merge: (column: string, patch: Record<string, unknown>) => JsonSqlExpr
 }
 
+const JSON_PATH_OBJECT_SEGMENT_REGEX = /^([^.[]+)/
+
 // ─── 路径解析工具 ───
 
 /**
@@ -226,7 +228,7 @@ export function parseJsonPath(path: string): string[] {
       if (remaining.startsWith('['))
         continue
       // 对象字段名（截取到下一个 . 或 [ 为止）
-      const match = remaining.match(/^([^.[]+)/)
+      const match = remaining.match(JSON_PATH_OBJECT_SEGMENT_REGEX)
       if (match) {
         segments.push(match[1])
         remaining = remaining.slice(match[1].length)

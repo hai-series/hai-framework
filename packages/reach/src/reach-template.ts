@@ -26,7 +26,7 @@ import { HaiReachError } from './reach-types.js'
  */
 function renderString(template: string, vars: Record<string, string>): string {
   return template.replace(/\{(\w+)\}/g, (match, key: string) => {
-    return Object.prototype.hasOwnProperty.call(vars, key) ? vars[key] : match
+    return Object.hasOwn(vars, key) ? vars[key] : match
   })
 }
 

@@ -16,6 +16,7 @@ import { reachM } from '../reach-i18n.js'
 import { HaiReachError } from '../reach-types.js'
 
 const logger = core.logger.child({ module: 'reach', scope: 'provider-aliyun-sms' })
+const ISO_MILLISECONDS_SUFFIX_REGEX = /\.\d{3}Z$/
 
 /**
  * 将异常包装为 ReachError
@@ -116,7 +117,7 @@ export function createAliyunSmsProvider(): ReachProvider {
           SignatureNonce: randomUUID(),
           SignatureVersion: '1.0',
           TemplateCode: templateCode ?? '',
-          Timestamp: new Date().toISOString().replace(/\.\d{3}Z$/, 'Z'),
+          Timestamp: new Date().toISOString().replace(ISO_MILLISECONDS_SUFFIX_REGEX, 'Z'),
           Version: '2017-05-25',
         }
 

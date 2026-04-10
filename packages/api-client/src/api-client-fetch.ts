@@ -23,6 +23,7 @@ const logger = core.logger.child({ module: 'api-client', scope: 'fetch' })
 
 /** 默认超时 30s */
 const DEFAULT_TIMEOUT = 30_000
+const TRAILING_SLASHES_REGEX = /\/+$/
 
 /**
  * 创建核心请求函数
@@ -50,7 +51,7 @@ export function createFetchClient(
    * 构建完整 URL
    */
   function buildUrl(path: string, params?: Record<string, unknown>): string {
-    const base = config.baseUrl.replace(/\/+$/, '')
+    const base = config.baseUrl.replace(TRAILING_SLASHES_REGEX, '')
     const normalizedPath = path.startsWith('/') ? path : `/${path}`
     const url = new URL(`${base}${normalizedPath}`)
 

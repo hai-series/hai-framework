@@ -25,6 +25,7 @@ import {
 } from '../storage-types.js'
 
 const logger = core.logger.child({ module: 'storage', scope: 'provider-local' })
+const PATH_SEGMENT_SPLIT_REGEX = /[\\/]+/
 
 // ─── 辅助函数 ───
 
@@ -139,7 +140,7 @@ function createInvalidPathError(): NodeJS.ErrnoException {
  * 判断路径片段中是否包含路径穿越标记（..）
  */
 function hasPathTraversalSegment(key: string): boolean {
-  const segments = key.split(/[\\/]+/).filter(Boolean)
+  const segments = key.split(PATH_SEGMENT_SPLIT_REGEX).filter(Boolean)
   return segments.includes('..')
 }
 

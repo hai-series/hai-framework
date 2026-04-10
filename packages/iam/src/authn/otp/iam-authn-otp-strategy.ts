@@ -25,6 +25,8 @@ import {
 } from '../iam-authn-utils.js'
 
 const logger = core.logger.child({ module: 'iam', scope: 'otp-strategy' })
+const PHONE_IDENTIFIER_REGEX = /^\+?\d{8,}$/
+const PHONE_SEPARATOR_REGEX = /[\s-]/g
 
 /**
  * OTP 认证策略配置
@@ -96,7 +98,7 @@ function identifierType(identifier: string): 'email' | 'phone' | 'unknown' {
     return 'email'
   }
   // 简单手机号检测（以数字开头，长度大于 8）
-  if (/^\+?\d{8,}$/.test(identifier.replace(/[\s-]/g, ''))) {
+  if (PHONE_IDENTIFIER_REGEX.test(identifier.replace(PHONE_SEPARATOR_REGEX, ''))) {
     return 'phone'
   }
   return 'unknown'

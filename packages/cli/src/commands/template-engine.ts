@@ -70,6 +70,9 @@ const FEATURE_APP_ROUTE_DIRS: Record<string, string[]> = {
   iam: ['admin', 'h5'],
 }
 
+const FEATURE_ID_REGEX = /^[a-z0-9-]+$/
+const HBS_SUFFIX_REGEX = /\.hbs$/
+
 // =============================================================================
 // 路径工具
 // =============================================================================
@@ -237,7 +240,7 @@ export async function generateFromTemplates(
     }
 
     // 安全校验：featureId 只允许字母、数字和连字符，防止路径遍历
-    if (!/^[a-z0-9-]+$/.test(featureId)) {
+    if (!FEATURE_ID_REGEX.test(featureId)) {
       continue
     }
 
@@ -346,7 +349,7 @@ async function renderHbsInDir(
   const hbsFiles = await findHbsFiles(dir)
   for (const relPath of hbsFiles) {
     const srcPath = path.join(dir, relPath)
-    const outRelPath = relPath.replace(/\.hbs$/, '')
+    const outRelPath = relPath.replace(HBS_SUFFIX_REGEX, '')
     const destPath = path.join(destRoot, outRelPath)
 
     const template = await fse.readFile(srcPath, 'utf-8')

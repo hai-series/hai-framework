@@ -16,6 +16,8 @@ import { aiM } from '../ai-i18n.js'
 import { HaiAIError } from '../ai-types.js'
 
 const logger = core.logger.child({ module: 'ai', scope: 'memory-extractor' })
+const LEADING_MARKDOWN_FENCE_REGEX = /^```(?:json)?\n?/
+const TRAILING_MARKDOWN_FENCE_REGEX = /\n?```$/
 
 // ─── 提取提示词 ───
 
@@ -143,7 +145,7 @@ function parseMemoryResponse(content: string): MemoryEntryInput[] {
 
   // 去除 markdown 代码围栏
   if (cleaned.startsWith('```')) {
-    cleaned = cleaned.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '')
+    cleaned = cleaned.replace(LEADING_MARKDOWN_FENCE_REGEX, '').replace(TRAILING_MARKDOWN_FENCE_REGEX, '')
   }
 
   try {

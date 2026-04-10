@@ -8,13 +8,16 @@ import path from 'node:path'
 import fs from 'fs-extra'
 import Handlebars from 'handlebars'
 
+const CAMEL_CASE_SEPARATOR_REGEX = /[-_\s]+(.)?/g
+const LEADING_CHAR_REGEX = /^./
+
 /**
  * 转换为驼峰命名
  */
 export function toCamelCase(str: string): string {
   return str
-    .replace(/[-_\s]+(.)?/g, (_, c) => c ? c.toUpperCase() : '')
-    .replace(/^./, c => c.toLowerCase())
+    .replace(CAMEL_CASE_SEPARATOR_REGEX, (_, c) => c ? c.toUpperCase() : '')
+    .replace(LEADING_CHAR_REGEX, c => c.toLowerCase())
 }
 
 /**

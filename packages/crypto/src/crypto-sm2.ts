@@ -21,6 +21,8 @@ import {
 import { base64ToHex, hexToBase64, isBase64 } from './crypto-utils.js'
 
 const { sm2 } = smCrypto
+const SM2_PUBLIC_KEY_REGEX = /^[0-9a-f]{128}$/i
+const SM2_PRIVATE_KEY_REGEX = /^[0-9a-f]{64}$/i
 
 // ─── SM2 算法实现 ───
 
@@ -258,7 +260,7 @@ export function createSM2(): AsymmetricOperations {
         return false
       // 公钥长度：无前缀 128 字符，带 04 前缀 130 字符
       const cleanKey = key.startsWith('04') ? key.slice(2) : key
-      return /^[0-9a-f]{128}$/i.test(cleanKey)
+      return SM2_PUBLIC_KEY_REGEX.test(cleanKey)
     },
 
     /**
@@ -273,7 +275,7 @@ export function createSM2(): AsymmetricOperations {
       if (!key || typeof key !== 'string')
         return false
       // 私钥长度：64 字符
-      return /^[0-9a-f]{64}$/i.test(key)
+      return SM2_PRIVATE_KEY_REGEX.test(key)
     },
   }
 }
