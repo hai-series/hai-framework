@@ -6,6 +6,14 @@
 - `kit.handler()`：API 端点异常边界
 - `kit.guard` / `kit.response` / `kit.validate` / `kit.auth` / `kit.client` / `kit.crud`
 
+## 安装
+
+```bash
+npm install @h-ai/kit
+npm install svelte @sveltejs/kit zod
+npm install -D @sveltejs/vite-plugin-svelte vite
+```
+
 ## 支持的能力
 
 - Handle Hook 组合（`createHandle` / `sequence`）
@@ -26,15 +34,52 @@
 
 ## 快速开始
 
+### 项目配置
+
+**svelte.config.js**：
+
+```js
+import adapter from '@sveltejs/adapter-auto'
+import { vitePreprocess } from '@sveltejs/vite-plugin-svelte'
+
+const config = {
+  preprocess: [vitePreprocess()],
+  compilerOptions: { runes: true },
+  kit: {
+    adapter: adapter(),
+    // 双构建模式：import { createAdapter } from '@h-ai/kit/adapter'
+    // adapter: createAdapter(),
+  },
+}
+
+export default config
+```
+
+**vite.config.ts**：
+
+```ts
+import { sveltekit } from '@sveltejs/kit/vite'
+import tailwindcss from '@tailwindcss/vite'
+import { defineConfig } from 'vite'
+
+export default defineConfig({
+  plugins: [sveltekit(), tailwindcss()],
+  optimizeDeps: { exclude: ['bits-ui'] },
+  ssr: { noExternal: [/@h-ai\//] },
+})
+```
+
 ### 搭建请求管道
 
+**src/hooks.server.ts**：
+
 ```typescript
+import type { Handle } from '@sveltejs/kit'
 import { kit } from '@h-ai/kit'
 
-export const handle = kit.createHandle({
+const haiHandle = kit.createHandle({
   auth: {
     verifyToken: async (token) => {
-      // 返回 SessionData 或 null
       return token ? { userId: 'u_1', roles: ['admin'], permissions: ['user:read'] } : null
     },
     loginUrl: '/auth/login',
@@ -44,6 +89,16 @@ export const handle = kit.createHandle({
   rateLimit: { windowMs: 60_000, maxRequests: 100 },
   logging: true,
 })
+
+export const handle: Handle = haiHandle
+```
+
+**src/hooks.client.ts**：
+
+```typescript
+import { kit } from '@h-ai/kit'
+
+export const handleFetch = kit.auth.createHandleFetch()
 ```
 
 ### API 端点
@@ -78,16 +133,24 @@ export const POST = kit.fromContract(iamEndpoints.login, async (input) => {
 })
 ```
 
-### 浏览器客户端（可选）
+### 浏览器客户端
 
 ```typescript
-import { createKitClient } from '@h-ai/kit/client'
+// src/lib/utils/api.ts — 全应用共享
+import { kit } from '@h-ai/kit'
 
-const client = createKitClient()
-const response = await client.apiFetch('/api/users', { method: 'GET' })
+const client = kit.client.create({ auth: true })
+export const { apiFetch } = client
 ```
 
-> CSRF Header 注入由 `createKitClient()` 在浏览器端自动处理；`@h-ai/kit` 不提供独立的 CSRF 中间件工厂。
+```typescript
+// 使用
+import { apiFetch } from '$lib/utils/api'
+
+const response = await apiFetch('/api/users', { method: 'GET' })
+```
+
+> CSRF Header 注入由 `apiFetch` 自动处理；`@h-ai/kit` 不提供独立的 CSRF 中间件工厂。
 
 ## 配置
 
@@ -103,6 +166,17 @@ const response = await client.apiFetch('/api/users', { method: 'GET' })
 | `middleware` | `Middleware[]`                           | 自定义中间件（在内置中间件之后执行）                              |
 | `a2a`        | `HandleA2AOperations \| HandleA2AConfig` | A2A 协议集成（Agent Card + JSON-RPC）                             |
 | `onError`    | `function`                               | 自定义错误处理                                                    |
+
+## 导出路径
+
+| 路径                | 用途                                           |
+| ------------------- | ---------------------------------------------- |
+| `@h-ai/kit`         | 主入口：`kit` 命名空间、类型、`defineEndpoint` |
+| `@h-ai/kit/client`  | 浏览器端客户端                                 |
+| `@h-ai/kit/adapter` | 双构建 adapter（`createAdapter()`）            |
+| `@h-ai/kit/vite`    | Vite 插件                                      |
+| `@h-ai/kit/a2a`     | A2A 协议集成                                   |
+| `@h-ai/kit/crypto`  | 加密模块集成                                   |
 
 ## 错误处理
 

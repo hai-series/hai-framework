@@ -26,6 +26,26 @@ import { aiM } from '../ai-i18n.js'
 import { HaiAIError } from '../ai-types.js'
 
 const logger = core.logger.child({ module: 'ai', scope: 'file' })
+const HTML_SCRIPT_BLOCK_REGEX = /<script[^>]*>[\s\S]*?<\/script[^>]*>/gi
+const HTML_STYLE_BLOCK_REGEX = /<style[^>]*>[\s\S]*?<\/style[^>]*>/gi
+const HTML_LIST_OPEN_TAG_REGEX = /<[ou]l[^>]*>/gi
+const HTML_LIST_CLOSE_TAG_REGEX = /<\/[ou]l>/gi
+const HTML_BOLD_TAG_REGEX = /<(?:strong|b)[^>]*>([\s\S]*?)<\/(?:strong|b)>/gi
+const HTML_ITALIC_TAG_REGEX = /<(?:em|i)[^>]*>([\s\S]*?)<\/(?:em|i)>/gi
+const HTML_LINK_TAG_REGEX = /<a[^>]+href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/gi
+const HTML_IMAGE_TAG_REGEX = /<img([^>]*)>/gi
+const HTML_IMAGE_SRC_ATTR_REGEX = /src="([^"]*)"/
+const HTML_IMAGE_ALT_ATTR_REGEX = /alt="([^"]*)"/
+const HTML_INLINE_CODE_TAG_REGEX = /<code[^>]*>([\s\S]*?)<\/code>/gi
+const HTML_TABLE_ROW_REGEX = /<tr[^>]*>([\s\S]*?)<\/tr>/gi
+const HTML_TABLE_CELL_REGEX = /<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi
+const HTML_TABLE_CONTAINER_TAG_REGEX = /<\/?t(?:able|head|body|foot)[^>]*>/gi
+const HTML_TABLE_ELEMENT_TAG_REGEX = /<\/?t[rdh][^>]*>/gi
+const HTML_LINE_BREAK_REGEX = /<br\s*\/?>/gi
+const HTML_BLOCK_CLOSE_TAG_REGEX = /<\/(?:p|div|section|article|header|footer|main|nav|aside)>/gi
+const HTML_BLOCK_OPEN_TAG_REGEX = /<(?:p|div|section|article|header|footer|main|nav|aside)[^>]*>/gi
+const HTML_ANY_TAG_REGEX = /<[^>]+>/g
+const MULTI_LINE_BREAK_REGEX = /\n{3,}/g
 
 // ─── MIME 类型与扩展名映射 ───
 
@@ -179,7 +199,7 @@ function decodeHtmlEntities(text: string): string {
 
 /** 剥除 HTML 标签，仅保留文本内容 */
 function stripTags(html: string): string {
-  return html.replace(/<[^>]+>/g, '')
+  return html.replace(HTML_ANY_TAG_REGEX, '')
 }
 
 /**
@@ -187,9 +207,9 @@ function stripTags(html: string): string {
  */
 function parseHtmlContent(content: Buffer | string): string {
   const html = parseTextContent(content)
-  const noScript = html.replace(/<script[^>]*>[\s\S]*?<\/script[^>]*>/gi, ' ')
-  const noStyle = noScript.replace(/<style[^>]*>[\s\S]*?<\/style[^>]*>/gi, ' ')
-  const noTags = noStyle.replace(/<[^>]+>/g, ' ')
+  const noScript = html.replace(HTML_SCRIPT_BLOCK_REGEX, ' ')
+  const noStyle = noScript.replace(HTML_STYLE_BLOCK_REGEX, ' ')
+  const noTags = noStyle.replace(HTML_ANY_TAG_REGEX, ' ')
   return decodeHtmlEntities(noTags).replace(/\s+/g, ' ').trim()
 }
 
@@ -203,8 +223,8 @@ function htmlToMarkdown(content: Buffer | string): string {
   let md = parseTextContent(content)
 
   // 移除 script / style 块
-  md = md.replace(/<script[^>]*>[\s\S]*?<\/script[^>]*>/gi, '')
-  md = md.replace(/<style[^>]*>[\s\S]*?<\/style[^>]*>/gi, '')
+  md = md.replace(HTML_SCRIPT_BLOCK_REGEX, '')
+  md = md.replace(HTML_STYLE_BLOCK_REGEX, '')
 
   // 代码块（pre > code，先处理避免内部标签被转换）
   md = md.replace(/<pre[^>]*>\s*<code[^>]*>([\s\S]*?)<\/code>\s*<\/pre>/gi, (_, code) =>
@@ -228,47 +248,47 @@ function htmlToMarkdown(content: Buffer | string): string {
     stripTags(c).trim().split('\n').map(l => `> ${l.trim()}`).filter(l => l !== '> ').join('\n'))
 
   // 列表项
-  md = md.replace(/<[ou]l[^>]*>/gi, '\n')
-  md = md.replace(/<\/[ou]l>/gi, '\n')
+  md = md.replace(HTML_LIST_OPEN_TAG_REGEX, '\n')
+  md = md.replace(HTML_LIST_CLOSE_TAG_REGEX, '\n')
   md = md.replace(/<li[^>]*>([\s\S]*?)<\/li>/gi, (_, c) => `\n- ${stripTags(c).trim()}`)
 
   // 粗体 / 斜体
-  md = md.replace(/<(?:strong|b)[^>]*>([\s\S]*?)<\/(?:strong|b)>/gi, (_, c) => `**${stripTags(c).trim()}**`)
-  md = md.replace(/<(?:em|i)[^>]*>([\s\S]*?)<\/(?:em|i)>/gi, (_, c) => `*${stripTags(c).trim()}*`)
+  md = md.replace(HTML_BOLD_TAG_REGEX, (_, c) => `**${stripTags(c).trim()}**`)
+  md = md.replace(HTML_ITALIC_TAG_REGEX, (_, c) => `*${stripTags(c).trim()}*`)
 
   // 超链接
-  md = md.replace(/<a[^>]+href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/gi, (_, href, text) =>
+  md = md.replace(HTML_LINK_TAG_REGEX, (_, href, text) =>
     `[${stripTags(text).trim()}](${href})`)
 
   // 图片（src/alt 属性顺序不定，逐属性提取）
-  md = md.replace(/<img([^>]*)>/gi, (_, attrs: string) => {
-    const src = attrs.match(/src="([^"]*)"/)?.[1] ?? ''
-    const alt = attrs.match(/alt="([^"]*)"/)?.[1] ?? ''
+  md = md.replace(HTML_IMAGE_TAG_REGEX, (_, attrs: string) => {
+    const src = attrs.match(HTML_IMAGE_SRC_ATTR_REGEX)?.[1] ?? ''
+    const alt = attrs.match(HTML_IMAGE_ALT_ATTR_REGEX)?.[1] ?? ''
     return `![${alt}](${src})`
   })
 
   // 行内代码
-  md = md.replace(/<code[^>]*>([\s\S]*?)<\/code>/gi, (_, c) =>
+  md = md.replace(HTML_INLINE_CODE_TAG_REGEX, (_, c) =>
     `\`${decodeHtmlEntities(stripTags(c))}\``)
 
   // 表格（简化：每行单元格用 | 分隔）
-  md = md.replace(/<tr[^>]*>([\s\S]*?)<\/tr>/gi, (_, row) => {
-    const cells = [...row.matchAll(/<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/gi)]
+  md = md.replace(HTML_TABLE_ROW_REGEX, (_, row) => {
+    const cells = [...row.matchAll(HTML_TABLE_CELL_REGEX)]
     return `| ${cells.map(([, c]) => stripTags(c).trim()).join(' | ')} |\n`
   })
-  md = md.replace(/<\/?t(?:able|head|body|foot)[^>]*>/gi, '')
-  md = md.replace(/<\/?t[rdh][^>]*>/gi, '')
+  md = md.replace(HTML_TABLE_CONTAINER_TAG_REGEX, '')
+  md = md.replace(HTML_TABLE_ELEMENT_TAG_REGEX, '')
 
   // 换行与段落
-  md = md.replace(/<br\s*\/?>/gi, '\n')
-  md = md.replace(/<\/(?:p|div|section|article|header|footer|main|nav|aside)>/gi, '\n\n')
-  md = md.replace(/<(?:p|div|section|article|header|footer|main|nav|aside)[^>]*>/gi, '')
+  md = md.replace(HTML_LINE_BREAK_REGEX, '\n')
+  md = md.replace(HTML_BLOCK_CLOSE_TAG_REGEX, '\n\n')
+  md = md.replace(HTML_BLOCK_OPEN_TAG_REGEX, '')
 
   // 移除剩余标签并解码实体
-  md = md.replace(/<[^>]+>/g, '')
+  md = md.replace(HTML_ANY_TAG_REGEX, '')
   md = decodeHtmlEntities(md)
 
-  return md.replace(/\n{3,}/g, '\n\n').trim()
+  return md.replace(MULTI_LINE_BREAK_REGEX, '\n\n').trim()
 }
 
 /**

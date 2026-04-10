@@ -223,7 +223,7 @@ export async function runTask(
 
 export function startTimer(tickInterval: number): void {
   lastTickMinute = -1
-  tickTimer = setInterval(() => tick(), tickInterval)
+  tickTimer = setInterval(tick, tickInterval)
 }
 
 export function stopTimer(): void {

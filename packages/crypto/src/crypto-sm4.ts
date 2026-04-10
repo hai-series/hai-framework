@@ -21,6 +21,7 @@ import {
 import { base64ToHex, hexToBase64, isBase64 } from './crypto-utils.js'
 
 const { sm3, sm4 } = smCrypto
+const SM4_HEX_32_REGEX = /^[0-9a-f]{32}$/i
 
 // ─── SM4 算法实现 ───
 
@@ -246,12 +247,12 @@ export function createSM4(): SymmetricOperations {
 
     /** 校验密钥格式是否合法（32 字符十六进制） */
     isValidKey(key: string): boolean {
-      return /^[0-9a-f]{32}$/i.test(key)
+      return SM4_HEX_32_REGEX.test(key)
     },
 
     /** 校验 IV 格式是否合法（32 字符十六进制） */
     isValidIV(iv: string): boolean {
-      return /^[0-9a-f]{32}$/i.test(iv)
+      return SM4_HEX_32_REGEX.test(iv)
     },
   }
 }

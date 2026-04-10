@@ -32,6 +32,8 @@ import {
 } from '../storage-types.js'
 
 const logger = core.logger.child({ module: 'storage', scope: 'provider-s3' })
+const TRAILING_SLASHES_REGEX = /\/+$/
+const LEADING_SLASHES_REGEX = /^\/+/
 
 /**
  * 脱敏 S3 endpoint，避免日志暴露认证信息
@@ -122,7 +124,7 @@ function toStorageError(error: unknown, key?: string): HaiError {
 function withPrefix(key: string, prefix: string): string {
   if (!prefix)
     return key
-  return `${prefix.replace(/\/+$/, '')}/${key.replace(/^\/+/, '')}`
+  return `${prefix.replace(TRAILING_SLASHES_REGEX, '')}/${key.replace(LEADING_SLASHES_REGEX, '')}`
 }
 
 /**
@@ -135,7 +137,7 @@ function withPrefix(key: string, prefix: string): string {
 function withoutPrefix(key: string, prefix: string): string {
   if (!prefix)
     return key
-  const normalizedPrefix = `${prefix.replace(/\/+$/, '')}/`
+  const normalizedPrefix = `${prefix.replace(TRAILING_SLASHES_REGEX, '')}/`
   if (key.startsWith(normalizedPrefix)) {
     return key.slice(normalizedPrefix.length)
   }
@@ -519,7 +521,7 @@ export function createS3Provider(): StorageProvider {
         return null
       }
       const fullPath = fullKey(key)
-      return `${s3Config.publicUrl.replace(/\/+$/, '')}/${fullPath}`
+      return `${s3Config.publicUrl.replace(TRAILING_SLASHES_REGEX, '')}/${fullPath}`
     },
   }
 

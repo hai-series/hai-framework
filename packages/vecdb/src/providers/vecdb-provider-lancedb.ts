@@ -132,7 +132,7 @@ export function createLancedbProvider(): VecdbProvider {
       const metric = options.metric ?? config?.metric ?? 'cosine'
       const initRecord = {
         id: '__init__',
-        vector: Array.from({ length: dimension }, () => 0),
+        vector: Array.from({ length: dimension }).fill(0),
         content: '',
         metadata: '{}',
       }

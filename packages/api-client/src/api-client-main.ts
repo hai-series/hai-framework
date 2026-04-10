@@ -17,6 +17,7 @@ import { createTokenManager } from './api-client-token-manager.js'
 import { HaiApiClientError } from './api-client-types.js'
 
 const logger = core.logger.child({ module: 'api-client', scope: 'main' })
+const TRAILING_SLASHES_REGEX = /\/+$/
 
 // ─── 内部状态 ───
 
@@ -46,7 +47,7 @@ function createClient(config: ApiClientConfig): ApiClient {
   const tokenManager = config.auth
     ? createTokenManager(
         tokenStorage,
-        `${config.baseUrl.replace(/\/+$/, '')}${config.auth.refreshUrl}`,
+        `${config.baseUrl.replace(TRAILING_SLASHES_REGEX, '')}${config.auth.refreshUrl}`,
         fetchFn,
         config.auth.onRefreshFailed,
       )

@@ -24,6 +24,7 @@ import { validateIdentifier, validateIdentifiers } from './reldb-security.js'
 import { HaiReldbError } from './reldb-types.js'
 
 const logger = core.logger.child({ module: 'reldb', scope: 'crud-kernel' })
+const ORDER_BY_SEGMENT_REGEX = /^(\w+)(?:\s+(ASC|DESC))?$/i
 
 // ─── CRUD 工具方法 ───
 
@@ -151,7 +152,7 @@ export function createCrud<TItem>(
     const safeParts: string[] = []
     for (const part of parts) {
       // 匹配 "column" 或 "column ASC/DESC" 格式
-      const match = part.match(/^(\w+)(?:\s+(ASC|DESC))?$/i)
+      const match = part.match(ORDER_BY_SEGMENT_REGEX)
       if (!match) {
         logger.debug('Skipped invalid orderBy segment', { table, segment: part })
         continue

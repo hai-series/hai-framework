@@ -5,6 +5,10 @@
 
 import type { CreateSessionOptions, Session } from './iam-session-types.js'
 
+const BASE64_PLUS_REGEX = /\+/g
+const BASE64_SLASH_REGEX = /\//g
+const BASE64_TRAILING_PADDING_REGEX = /=+$/
+
 /**
  * 生成访问令牌
  *
@@ -18,7 +22,7 @@ export function generateToken(): string {
   crypto.getRandomValues(bytes)
   // base64url 编码（RFC 4648 §5）
   const base64 = btoa(String.fromCharCode(...bytes))
-  return base64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+  return base64.replace(BASE64_PLUS_REGEX, '-').replace(BASE64_SLASH_REGEX, '_').replace(BASE64_TRAILING_PADDING_REGEX, '')
 }
 
 /**
