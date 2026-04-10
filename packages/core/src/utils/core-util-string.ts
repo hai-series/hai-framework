@@ -3,6 +3,8 @@
  * @module core-util-string
  */
 
+const LEADING_LOWERCASE_REGEX = /^[a-z]/
+
 /**
  * 首字母大写。
  * @param str - 输入字符串
@@ -103,7 +105,7 @@ function snakeCase(str: string): string {
 function pascalCase(str: string): string {
   return str
     .replace(/[-_]([a-z])/g, (_, c) => c.toUpperCase())
-    .replace(/^[a-z]/, c => c.toUpperCase())
+    .replace(LEADING_LOWERCASE_REGEX, c => c.toUpperCase())
 }
 
 /**

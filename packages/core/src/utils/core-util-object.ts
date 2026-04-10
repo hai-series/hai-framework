@@ -37,7 +37,7 @@ function deepMerge<T extends Record<string, unknown>>(...objects: Partial<T>[]):
   const result = {} as Record<string, unknown>
   for (const obj of objects) {
     for (const key in obj) {
-      if (!Object.prototype.hasOwnProperty.call(obj, key))
+      if (!Object.hasOwn(obj, key))
         continue
       // 防止原型污染（拦截 JSON.parse 产生的 __proto__、constructor 等危险键）
       if (key === '__proto__' || key === 'constructor' || key === 'prototype')
