@@ -53,6 +53,23 @@ describe('parseMarkdown - 基础渲染', () => {
     const html = parseMarkdown('line1\nline2', { breaks: false })
     expect(html).not.toContain('<br>')
   })
+
+  it('应该解析编辑器扩展的下划线和高亮语法', () => {
+    const html = parseMarkdown('++underline++ and ==highlight==')
+    expect(html).toContain('<u>underline</u>')
+    expect(html).toContain('<mark>highlight</mark>')
+  })
+
+  it('应该解析编辑器扩展的颜色和对齐标签', () => {
+    const html = parseMarkdown(
+      '<hai-align value="center">\nHello <hai-span color="#2563eb" bg="#dbeafe">world</hai-span>\n</hai-align>',
+    )
+
+    expect(html).toContain('data-hai-align="center"')
+    expect(html).toContain('text-align:center')
+    expect(html).toContain('color:#2563eb')
+    expect(html).toContain('background-color:#dbeafe')
+  })
 })
 
 // =============================================================================

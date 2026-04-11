@@ -68,7 +68,12 @@ export interface MarkdownRewriteRequest {
 /**
  * Block-level format actions for the editor toolbar.
  */
-export type MarkdownBlockFormatKind = 'heading' | 'bullet'
+export type MarkdownBlockFormatKind
+  = | 'paragraph'
+    | 'heading1'
+    | 'heading2'
+    | 'heading3'
+    | 'heading4'
 
 /**
  * Inline format actions for the editor toolbar.
@@ -79,8 +84,21 @@ export type MarkdownInlineFormatKind
     | 'strike'
     | 'underline'
     | 'code'
-    | 'highlight'
-    | 'link'
+
+/**
+ * Paragraph alignment actions for the editor toolbar.
+ */
+export type MarkdownTextAlignKind = 'left' | 'center' | 'right' | 'justify'
+
+/**
+ * 颜色面板一次只会修改前景色或背景色中的一个维度。
+ */
+export interface MarkdownColorFormatRequest {
+  /** `text` 表示文字颜色，`background` 表示文本底色。 */
+  target: 'text' | 'background'
+  /** 颜色值为空时表示恢复默认。 */
+  value: string | null
+}
 
 export interface MarkdownToolbarDownloadAction {
   /** Action id used to identify the download target. */
@@ -176,6 +194,12 @@ export interface AiDocumentEditorProps {
   onapplyblockformat?: (kind: MarkdownBlockFormatKind) => void
   /** Inline-format action handler from the selection toolbar. */
   onapplyinlineformat?: (kind: MarkdownInlineFormatKind) => void
+  /** Paragraph alignment handler from the selection toolbar. */
+  onapplyalignment?: (kind: MarkdownTextAlignKind) => void
+  /** Link add / edit / remove handler from the selection toolbar. */
+  onapplylink?: (href: string | null) => void
+  /** Text or background color handler from the selection toolbar. */
+  onapplycolor?: (request: MarkdownColorFormatRequest) => void
   /** Selection copy handler for custom behavior. */
   oncopyselection?: () => void | Promise<void>
   /** Selection annotation handler. */

@@ -6,6 +6,10 @@
 
 import type { RendererObject, Tokens } from 'marked'
 import type { MarkdownCodeBlockItem, MarkdownOutlineItem } from './document-types.js'
+import {
+  createEditorMarkdownExtensions,
+  extractPlainTextFromTokens,
+} from './editor-markdown-extensions.js'
 import { Marked } from 'marked'
 import { highlightCode, isLanguageSupported } from './highlight.js'
 
@@ -129,8 +133,8 @@ function createRendererObject(
     heading(token: Tokens.Heading): string {
       // depth is clamped to the valid heading range.
       const depth = Math.max(1, Math.min(6, token.depth))
-      // text is the plain heading text used for outline labels.
-      const text = token.text.trim()
+      // text 需要剥离自定义 span / 强调等 inline token，保证目录显示的是用户可见标题。
+      const text = extractPlainTextFromTokens(token.tokens).trim()
       // id is the stable anchor for outline navigation.
       const id = createHeadingId(state, text)
       state.outline.push({
@@ -273,6 +277,7 @@ function createMarkedInstance(
 ): Marked {
   return new Marked({
     renderer: createRendererObject(options, state),
+    extensions: createEditorMarkdownExtensions(),
     gfm: true,
     breaks: options.breaks,
   })
