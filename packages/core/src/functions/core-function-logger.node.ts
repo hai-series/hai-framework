@@ -8,8 +8,12 @@
 import type { LogFormat, LoggingConfig, LogLevel } from '../core-config.js'
 import type { LogContext, Logger, LoggerFunctions, LoggerOptions } from '../core-types.js'
 import { execSync } from 'node:child_process'
+import { createRequire } from 'node:module'
 import process from 'node:process'
 import pino from 'pino'
+
+// ESM 场景下通过 createRequire 复用 CommonJS 的 resolve 能力，用来探测可选依赖是否存在。
+const nodeRequire = createRequire(import.meta.url)
 
 if (process.platform === 'win32' && process.stdout.isTTY) {
   try {
@@ -155,6 +159,7 @@ function createLogger(options: LoggerOptions = {}): Logger {
   const format = options.format ?? globalFormat
   const context = { ...globalContext, ...options.context }
 
+  // 先构造一份与输出介质无关的基础配置，后面再按 transport 能力决定是否启用 pretty。
   const pinoOptions: pino.LoggerOptions = {
     level,
     name: options.name,
@@ -173,7 +178,8 @@ function createLogger(options: LoggerOptions = {}): Logger {
 
   let pinoInstance: pino.Logger
 
-  if (format === 'pretty') {
+  if (format === 'pretty' && isPrettyTransportAvailable()) {
+    // 只有在 pino-pretty 可解析时才挂载 transport，避免可选依赖缺失直接导致 logger 初始化失败。
     pinoInstance = pino({
       ...pinoOptions,
       transport: {
@@ -191,6 +197,17 @@ function createLogger(options: LoggerOptions = {}): Logger {
   }
 
   return wrapPino(pinoInstance, context)
+}
+
+function isPrettyTransportAvailable(): boolean {
+  try {
+    // pino-pretty 是可选依赖，这里用 resolve 做能力探测，避免在缺失场景下直接 import 失败。
+    nodeRequire.resolve('pino-pretty')
+    return true
+  }
+  catch {
+    return false
+  }
 }
 
 // ─── 默认 Logger 实例 ───
