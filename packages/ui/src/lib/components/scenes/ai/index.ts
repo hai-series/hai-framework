@@ -26,6 +26,7 @@ export type {
 export type {
   AiDocumentEditorProps,
   MarkdownBlockFormatKind,
+  MarkdownBlockStyleKind,
   MarkdownCodeBlockItem,
   MarkdownColorFormatRequest,
   MarkdownCodeRunRequest,

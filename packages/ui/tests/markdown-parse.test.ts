@@ -69,6 +69,8 @@ describe('parseMarkdown - 基础渲染', () => {
     expect(html).toContain('text-align:center')
     expect(html).toContain('color:#2563eb')
     expect(html).toContain('background-color:#dbeafe')
+    expect(html).toContain('data-hai-color="#2563eb"')
+    expect(html).toContain('data-hai-bg="#dbeafe"')
   })
 })
 

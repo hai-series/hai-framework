@@ -9,6 +9,7 @@ describe('renderMarkdownDocument', () => {
 
     expect(result.html).toContain('data-hai-align="center"')
     expect(result.html).toContain('color:#2563eb')
+    expect(result.html).toContain('data-hai-color="#2563eb"')
     expect(result.outline).toEqual([
       {
         id: '标题',

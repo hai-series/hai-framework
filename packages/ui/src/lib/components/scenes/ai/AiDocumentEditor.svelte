@@ -14,6 +14,7 @@
   import type {
     AiDocumentEditorProps,
     MarkdownBlockFormatKind,
+    MarkdownBlockStyleKind,
     MarkdownCodeBlockItem,
     MarkdownColorFormatRequest,
     MarkdownCodeRunRequest,
@@ -51,7 +52,7 @@
 
   interface SelectionFormatState {
     /** 当前选区所在段落样式，用于标题/正文下拉默认值。 */
-    blockFormat: MarkdownBlockFormatKind
+    blockFormat: MarkdownBlockStyleKind
     /** 当前选区所在段落的对齐方式。 */
     alignment: MarkdownTextAlignKind
     /** 当前选区是否命中加粗样式。 */
@@ -62,6 +63,8 @@
     italic: boolean
     /** 当前选区是否命中下划线样式。 */
     underline: boolean
+    /** 当前选区是否命中 `<mark>` 或自定义底色高亮。 */
+    highlight: boolean
     /** 当前选区是否落在行内代码内。 */
     code: boolean
     /** 当前选区命中的链接地址；为空表示无链接。 */
@@ -84,7 +87,7 @@
   type SelectionMenuKind = 'rewrite' | 'block' | 'align' | 'link' | 'color'
 
   const BLOCK_FORMAT_OPTIONS: Array<{
-    value: MarkdownBlockFormatKind
+    value: MarkdownBlockStyleKind
     labelKey:
       | 'markdown_format_paragraph'
       | 'markdown_format_heading_1'
@@ -163,6 +166,7 @@
     strike: false,
     italic: false,
     underline: false,
+    highlight: false,
     code: false,
     linkHref: '',
     textColor: null,
@@ -245,6 +249,8 @@
     oncopydocument,
     // 块级格式动作回调。
     onapplyblockformat,
+    // 细粒度块样式动作回调。
+    onapplyblockstyle,
     // 行内格式动作回调。
     onapplyinlineformat,
     // 对齐动作回调。
@@ -331,11 +337,21 @@
   const resolvedRewriteActions = $derived(
     resolveRewriteActions(rewriteActions, onrewrite)
   )
+  // 新版工具条支持 paragraph / heading1-4，优先走细粒度回调，避免把旧接口误当成新接口调用。
+  const richBlockFormattingEnabled = $derived(Boolean(onapplyblockstyle))
+  // 旧版 heading / bullet 回调仍然保留，用于兼容外部还没迁移的调用方。
+  const legacyBlockFormattingEnabled = $derived(
+    Boolean(onapplyblockformat) && !onapplyblockstyle
+  )
+  // 这里统一判断是否存在任意块级格式能力，方便控制分隔线和浮层显隐。
+  const anyBlockFormattingEnabled = $derived(
+    richBlockFormattingEnabled || legacyBlockFormattingEnabled
+  )
   // selectionToolsEnabled 统一判断选区工具条是否值得出现，避免正文只读展示时还露出空浮层。
   const selectionToolsEnabled = $derived(
     [
       onrewrite,
-      onapplyblockformat,
+      anyBlockFormattingEnabled,
       onapplyinlineformat,
       onapplyalignment,
       onapplylink,
@@ -861,7 +877,7 @@ ${safeCode}
     }
   }
 
-  function readBlockFormat(element: HTMLElement | null): MarkdownBlockFormatKind {
+  function readBlockFormat(element: HTMLElement | null): MarkdownBlockStyleKind {
     const tagName = getClosestBlockElement(element)?.tagName.toLowerCase()
 
     if (tagName === 'h1') {
@@ -880,16 +896,46 @@ ${safeCode}
     return 'paragraph'
   }
 
+  function normalizeTextAlign(value: string | null | undefined): MarkdownTextAlignKind | null {
+    const normalized = value?.trim().toLowerCase()
+    if (!normalized) {
+      return null
+    }
+
+    if (normalized === 'start') {
+      return 'left'
+    }
+    if (normalized === 'end') {
+      return 'right'
+    }
+
+    return normalized === 'center'
+      || normalized === 'right'
+      || normalized === 'justify'
+      || normalized === 'left'
+      ? normalized
+      : null
+  }
+
   function readAlignment(element: HTMLElement | null): MarkdownTextAlignKind {
     const block = getClosestBlockElement(element)
-    const align =
-      block?.style.textAlign || block?.getAttribute('align') || 'left'
+    if (!block || typeof window === 'undefined') {
+      return 'left'
+    }
 
-    return align === 'center' ||
-      align === 'right' ||
-      align === 'justify'
-      ? align
-      : 'left'
+    // 对齐样式可能挂在外层 `<hai-align>` 容器上，单读 block 的 inline style 会丢失真实状态。
+    const alignHost
+      = block.closest<HTMLElement>('.hai-md-align-block') || block
+    const computedAlign = normalizeTextAlign(
+      window.getComputedStyle(alignHost).textAlign
+    )
+    const attributeAlign = normalizeTextAlign(
+      alignHost.dataset.haiAlign
+      || alignHost.getAttribute('align')
+      || block.getAttribute('align')
+    )
+
+    return computedAlign || attributeAlign || 'left'
   }
 
   function readSelectionFormatState(selection: Selection): SelectionFormatState {
@@ -897,6 +943,7 @@ ${safeCode}
     const colorHost = anchorElement?.closest<HTMLElement>('[data-hai-color], [data-hai-bg]')
     const linkHost = anchorElement?.closest<HTMLAnchorElement>('a[href]')
     const codeHost = anchorElement?.closest<HTMLElement>('code')
+    const highlightHost = anchorElement?.closest<HTMLElement>('mark')
     const inlineState = readComputedInlineState(anchorElement)
 
     return {
@@ -906,6 +953,10 @@ ${safeCode}
       strike: inlineState.strike,
       italic: inlineState.italic,
       underline: inlineState.underline,
+      highlight: Boolean(
+        (highlightHost && previewHost?.contains(highlightHost))
+        || colorHost?.dataset.haiBg?.trim()
+      ),
       code: Boolean(codeHost && previewHost?.contains(codeHost)),
       linkHref:
         linkHost && previewHost?.contains(linkHost)
@@ -1283,6 +1334,13 @@ ${safeCode}
     queueSelectionRefresh()
   }
 
+  function applyBlockStyle(kind: MarkdownBlockStyleKind): void {
+    onapplyblockstyle?.(kind)
+    activeSelectionMenu = null
+    activeSelectionMenuTrigger = null
+    queueSelectionRefresh()
+  }
+
   function applyInlineFormat(kind: MarkdownInlineFormatKind): void {
     onapplyinlineformat?.(kind)
     queueSelectionRefresh()
@@ -1531,7 +1589,7 @@ ${safeCode}
           class="hai-ai-doc-scroll"
           onclick={handleClick}
           onscroll={handleDocumentScroll}
-          onkeyup={handleSelectionChange}
+          onkeyup={() => handleSelectionChange()}
         >
           {#if selectionToolbarVisible}
             <div
@@ -1571,7 +1629,7 @@ ${safeCode}
                     </button>
                   {/if}
 
-                  {#if onapplyblockformat}
+                  {#if richBlockFormattingEnabled}
                     {#if onrewrite}
                       <span class="hai-ai-doc-selection-divider"></span>
                     {/if}
@@ -1599,10 +1657,38 @@ ${safeCode}
                         ></path>
                       </svg>
                     </button>
+                  {:else if legacyBlockFormattingEnabled}
+                    {#if onrewrite}
+                      <span class="hai-ai-doc-selection-divider"></span>
+                    {/if}
+                    <button
+                      type="button"
+                      class="hai-ai-doc-selection-btn"
+                      title={uiM('markdown_format_heading')}
+                      onclick={() => applyBlockFormat('heading')}
+                    >
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path
+                          d="M5 5.25a.75.75 0 0 1 .75.75V11h6.5V6a.75.75 0 0 1 1.5 0v12a.75.75 0 0 1-1.5 0v-5.5h-6.5V18a.75.75 0 0 1-1.5 0V6A.75.75 0 0 1 5 5.25Zm11.25 2.5a.75.75 0 0 1 0 1.5h3a.75.75 0 0 1 0 1.5H18.5v8.5a.75.75 0 0 1-1.5 0v-8.5h-.75a.75.75 0 0 1 0-1.5h3Z"
+                        ></path>
+                      </svg>
+                    </button>
+                    <button
+                      type="button"
+                      class="hai-ai-doc-selection-btn"
+                      title={uiM('markdown_format_bullet')}
+                      onclick={() => applyBlockFormat('bullet')}
+                    >
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path
+                          d="M6.25 7.25a1.25 1.25 0 1 1-2.5 0 1.25 1.25 0 0 1 2.5 0Zm14 0a.75.75 0 0 1-.75.75H8.75a.75.75 0 0 1 0-1.5H19.5a.75.75 0 0 1 .75.75Zm-14 5.5a1.25 1.25 0 1 1-2.5 0 1.25 1.25 0 0 1 2.5 0Zm14 0a.75.75 0 0 1-.75.75H8.75a.75.75 0 0 1 0-1.5H19.5a.75.75 0 0 1 .75.75Zm-14 5.5a1.25 1.25 0 1 1-2.5 0 1.25 1.25 0 0 1 2.5 0Zm14 0a.75.75 0 0 1-.75.75H8.75a.75.75 0 0 1 0-1.5H19.5a.75.75 0 0 1 .75.75Z"
+                        ></path>
+                      </svg>
+                    </button>
                   {/if}
 
                   {#if onapplyalignment}
-                    {#if onapplyblockformat || onrewrite}
+                    {#if anyBlockFormattingEnabled || onrewrite}
                       <span class="hai-ai-doc-selection-divider"></span>
                     {/if}
                     <button
@@ -1640,7 +1726,7 @@ ${safeCode}
                   {/if}
 
                   {#if onapplyinlineformat || onapplylink || onapplycolor}
-                    {#if onapplyblockformat || onapplyalignment || onrewrite}
+                    {#if anyBlockFormattingEnabled || onapplyalignment || onrewrite}
                       <span class="hai-ai-doc-selection-divider"></span>
                     {/if}
                   {/if}
@@ -1700,7 +1786,7 @@ ${safeCode}
                     </button>
                   {/if}
 
-                  {#if onapplylink}
+                  {#if onapplylink || onapplyinlineformat}
                     <button
                       type="button"
                       class={cn(
@@ -1713,7 +1799,10 @@ ${safeCode}
                           : ''
                       )}
                       title={uiM('markdown_format_link')}
-                      onclick={(event) => toggleSelectionMenu('link', event)}
+                      onclick={(event) =>
+                        onapplylink
+                          ? toggleSelectionMenu('link', event)
+                          : applyInlineFormat('link')}
                     >
                       <svg viewBox="0 0 24 24" aria-hidden="true">
                         <path
@@ -1736,6 +1825,19 @@ ${safeCode}
                       onclick={() => applyInlineFormat('code')}
                     >
                       &lt;/&gt;
+                    </button>
+                    <button
+                      type="button"
+                      class={cn(
+                        'hai-ai-doc-selection-btn',
+                        selectionFormatState.highlight
+                          ? 'hai-ai-doc-selection-btn--active'
+                          : ''
+                      )}
+                      title={uiM('markdown_format_highlight')}
+                      onclick={() => applyInlineFormat('highlight')}
+                    >
+                      <span class="hai-ai-doc-selection-highlight-icon">A</span>
                     </button>
                   {/if}
 
@@ -1823,7 +1925,7 @@ ${safeCode}
                       </button>
                     {/each}
                   </div>
-                {:else if activeSelectionMenu === 'block' && onapplyblockformat}
+                {:else if activeSelectionMenu === 'block' && richBlockFormattingEnabled}
                   <div
                     class="hai-ai-doc-selection-panel"
                     data-menu-alignment={selectionMenuAlignment}
@@ -1841,7 +1943,7 @@ ${safeCode}
                             ? 'hai-ai-doc-selection-menu-btn--active'
                             : ''
                         )}
-                        onclick={() => applyBlockFormat(option.value)}
+                        onclick={() => applyBlockStyle(option.value)}
                       >
                         <span class="hai-ai-doc-selection-menu-label">
                           <span class="hai-ai-doc-selection-menu-short">
@@ -1887,6 +1989,7 @@ ${safeCode}
                     class="hai-ai-doc-selection-panel hai-ai-doc-selection-panel--link"
                     data-menu-alignment={selectionMenuAlignment}
                     role="dialog"
+                    aria-label={uiM('markdown_link_dialog_label')}
                     tabindex="-1"
                     style={`--hai-ai-doc-selection-menu-left:${selectionMenuLeft}px;`}
                     onmousedown={(event) => event.preventDefault()}
@@ -1894,6 +1997,7 @@ ${safeCode}
                     <input
                       class="hai-ai-doc-selection-input"
                       bind:value={linkDraft}
+                      aria-label={uiM('markdown_link_input_label')}
                       placeholder={uiM('markdown_link_placeholder')}
                       onkeydown={(event) => {
                         if (event.key === 'Enter') {
@@ -1925,6 +2029,7 @@ ${safeCode}
                     class="hai-ai-doc-selection-panel hai-ai-doc-selection-panel--color"
                     data-menu-alignment={selectionMenuAlignment}
                     role="dialog"
+                    aria-label={uiM('markdown_color_dialog_label')}
                     tabindex="-1"
                     style={`--hai-ai-doc-selection-menu-left:${selectionMenuLeft}px;`}
                     onmousedown={(event) => event.preventDefault()}

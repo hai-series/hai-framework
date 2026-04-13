@@ -164,7 +164,18 @@ export function createEditorMarkdownExtensions(): TokenizerAndRendererExtension[
           return this.parser.parseInline(spanToken.tokens)
         }
 
-        return `<span class="hai-md-inline-style" style="${escapeHtml(style)};">${this.parser.parseInline(spanToken.tokens)}</span>`
+        const attributes = [
+          'class="hai-md-inline-style"',
+          `style="${escapeHtml(style)};"`,
+          spanToken.color
+            ? `data-hai-color="${escapeHtml(spanToken.color)}"`
+            : '',
+          spanToken.background
+            ? `data-hai-bg="${escapeHtml(spanToken.background)}"`
+            : '',
+        ].filter(Boolean).join(' ')
+
+        return `<span ${attributes}>${this.parser.parseInline(spanToken.tokens)}</span>`
       },
       childTokens: ['tokens'],
     },

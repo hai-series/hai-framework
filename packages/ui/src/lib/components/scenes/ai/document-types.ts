@@ -66,9 +66,16 @@ export interface MarkdownRewriteRequest {
 }
 
 /**
- * Block-level format actions for the editor toolbar.
+ * Legacy block-level format actions preserved for backward compatibility.
  */
 export type MarkdownBlockFormatKind
+  = | 'heading'
+    | 'bullet'
+
+/**
+ * Rich block-style actions used by the current editor toolbar.
+ */
+export type MarkdownBlockStyleKind
   = | 'paragraph'
     | 'heading1'
     | 'heading2'
@@ -77,6 +84,7 @@ export type MarkdownBlockFormatKind
 
 /**
  * Inline format actions for the editor toolbar.
+ * `highlight` and `link` stay in the public union so older integrations keep compiling.
  */
 export type MarkdownInlineFormatKind
   = | 'bold'
@@ -84,6 +92,8 @@ export type MarkdownInlineFormatKind
     | 'strike'
     | 'underline'
     | 'code'
+    | 'highlight'
+    | 'link'
 
 /**
  * Paragraph alignment actions for the editor toolbar.
@@ -108,6 +118,14 @@ export interface MarkdownToolbarDownloadAction {
   /** Optional short badge displayed beside the menu label. */
   badgeLabel?: string
 }
+
+/**
+ * Callback props are exposed to Svelte consumers, so we keep parameter checks bivariant.
+ * This lets older handlers with narrower unions remain assignable while the component gains new APIs.
+ */
+type BivariantCallback<Args extends unknown[], Return = void> = {
+  bivarianceHack(...args: Args): Return
+}['bivarianceHack']
 
 export interface AiDocumentEditorProps {
   /** Markdown source content. */
@@ -190,10 +208,12 @@ export interface AiDocumentEditorProps {
   onhistory?: () => void
   /** Custom full-document copy handler. */
   oncopydocument?: () => void | Promise<void>
-  /** Block-format action handler from the selection toolbar. */
-  onapplyblockformat?: (kind: MarkdownBlockFormatKind) => void
+  /** Legacy block-format action handler for older heading / bullet integrations. */
+  onapplyblockformat?: BivariantCallback<[kind: MarkdownBlockFormatKind], void>
+  /** Rich block-style handler for paragraph and concrete heading-level changes. */
+  onapplyblockstyle?: BivariantCallback<[kind: MarkdownBlockStyleKind], void>
   /** Inline-format action handler from the selection toolbar. */
-  onapplyinlineformat?: (kind: MarkdownInlineFormatKind) => void
+  onapplyinlineformat?: BivariantCallback<[kind: MarkdownInlineFormatKind], void>
   /** Paragraph alignment handler from the selection toolbar. */
   onapplyalignment?: (kind: MarkdownTextAlignKind) => void
   /** Link add / edit / remove handler from the selection toolbar. */
