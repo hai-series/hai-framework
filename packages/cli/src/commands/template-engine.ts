@@ -17,6 +17,11 @@ import { fileURLToPath } from 'node:url'
 import fse from 'fs-extra'
 import Handlebars from 'handlebars'
 
+// 注册自定义 Handlebars helpers
+Handlebars.registerHelper('if_eq', function (this: unknown, a: unknown, b: unknown, options: Handlebars.HelperOptions) {
+  return a === b ? options.fn(this) : options.inverse(this)
+})
+
 // =============================================================================
 // 类型
 // =============================================================================

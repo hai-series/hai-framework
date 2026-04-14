@@ -162,6 +162,8 @@ export interface CreateProjectOptions extends GlobalOptions {
   packageManager?: 'pnpm' | 'npm' | 'yarn'
   /** 是否初始化 Git */
   git?: boolean
+  /** Git 远程仓库地址 */
+  gitRemote?: string
 }
 
 /**

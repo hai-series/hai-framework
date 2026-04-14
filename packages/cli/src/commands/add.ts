@@ -6,6 +6,7 @@
  */
 
 import type { FeatureId, GlobalOptions } from '../types.js'
+import { createRequire } from 'node:module'
 import path from 'node:path'
 import { core } from '@h-ai/core'
 import chalk from 'chalk'
@@ -144,9 +145,15 @@ export async function addModule(options: AddModuleOptions): Promise<void> {
     const pkg = await fse.readJson(pkgPath)
     if (!pkg.dependencies)
       pkg.dependencies = {}
+
+    // 读取 CLI 自身版本作为依赖版本范围
+    const require = createRequire(import.meta.url)
+    const cliPkg = require('../../package.json') as { version: string }
+    const depVersion = `^${cliPkg.version}`
+
     for (const pkgName of allPackages) {
       if (!pkg.dependencies[pkgName]) {
-        pkg.dependencies[pkgName] = 'workspace:*'
+        pkg.dependencies[pkgName] = depVersion
       }
     }
     await fse.writeJson(pkgPath, pkg, { spaces: 2 })

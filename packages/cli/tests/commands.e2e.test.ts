@@ -14,6 +14,7 @@
  *   - generate      — 代码生成（page / component / api / model / migration）
  */
 
+import { execSync } from 'node:child_process'
 import path from 'node:path'
 import fse from 'fs-extra'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -247,6 +248,65 @@ describe('createProject — admin 类型 + iam', () => {
     expect(claude).toContain('@AGENTS.md')
     expect(claude).toContain('.agents/skills/')
     expect(copilot).toContain('.agents/skills/')
+  })
+})
+
+// =============================================================================
+// 2.5. createProject — Git 远程仓库地址
+// =============================================================================
+
+describe('createProject — git remote', () => {
+  let projectPath: string
+
+  beforeAll(async () => {
+    projectPath = path.join(tmpRoot, 'proj-git-remote')
+    await createProject({
+      name: 'proj-git-remote',
+      appType: 'api',
+      template: 'custom',
+      features: [],
+      moduleConfigs: {
+        core: { name: 'proj-git-remote', defaultLocale: 'zh-CN' },
+      },
+      examples: false,
+      install: false,
+      git: true,
+      gitRemote: 'https://github.com/test/test-repo.git',
+      packageManager: 'pnpm',
+      verbose: false,
+      cwd: tmpRoot,
+    })
+  })
+
+  it('应初始化 .git 目录', async () => {
+    expect(await exists(projectPath, '.git')).toBe(true)
+  })
+
+  it('应设置 git remote origin', () => {
+    const url = execSync('git remote get-url origin', { cwd: projectPath, encoding: 'utf-8' }).trim()
+    expect(url).toBe('https://github.com/test/test-repo.git')
+  })
+})
+
+// =============================================================================
+// 2.6. createProject — eslint.config.js 与 vitest.config.ts
+// =============================================================================
+
+describe('createProject — 基础配置文件', () => {
+  it('api 项目应包含 eslint.config.js', async () => {
+    const projectPath = path.join(tmpRoot, 'proj-api')
+    const content = await readText(projectPath, 'eslint.config.js')
+    expect(content).toContain('@antfu/eslint-config')
+  })
+
+  it('api 项目应包含 vitest.config.ts', async () => {
+    const projectPath = path.join(tmpRoot, 'proj-api')
+    expect(await exists(projectPath, 'vitest.config.ts')).toBe(true)
+  })
+
+  it('admin 项目应包含 eslint.config.js', async () => {
+    const projectPath = path.join(tmpRoot, 'proj-admin')
+    expect(await exists(projectPath, 'eslint.config.js')).toBe(true)
   })
 })
 
