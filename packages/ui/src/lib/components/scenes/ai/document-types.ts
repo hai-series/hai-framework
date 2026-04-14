@@ -66,12 +66,25 @@ export interface MarkdownRewriteRequest {
 }
 
 /**
- * Block-level format actions for the editor toolbar.
+ * Legacy block-level format actions preserved for backward compatibility.
  */
-export type MarkdownBlockFormatKind = 'heading' | 'bullet'
+export type MarkdownBlockFormatKind
+  = | 'heading'
+    | 'bullet'
+
+/**
+ * Rich block-style actions used by the current editor toolbar.
+ */
+export type MarkdownBlockStyleKind
+  = | 'paragraph'
+    | 'heading1'
+    | 'heading2'
+    | 'heading3'
+    | 'heading4'
 
 /**
  * Inline format actions for the editor toolbar.
+ * `highlight` and `link` stay in the public union so older integrations keep compiling.
  */
 export type MarkdownInlineFormatKind
   = | 'bold'
@@ -82,6 +95,21 @@ export type MarkdownInlineFormatKind
     | 'highlight'
     | 'link'
 
+/**
+ * Paragraph alignment actions for the editor toolbar.
+ */
+export type MarkdownTextAlignKind = 'left' | 'center' | 'right' | 'justify'
+
+/**
+ * 颜色面板一次只会修改前景色或背景色中的一个维度。
+ */
+export interface MarkdownColorFormatRequest {
+  /** `text` 表示文字颜色，`background` 表示文本底色。 */
+  target: 'text' | 'background'
+  /** 颜色值为空时表示恢复默认。 */
+  value: string | null
+}
+
 export interface MarkdownToolbarDownloadAction {
   /** Action id used to identify the download target. */
   id: string
@@ -90,6 +118,14 @@ export interface MarkdownToolbarDownloadAction {
   /** Optional short badge displayed beside the menu label. */
   badgeLabel?: string
 }
+
+/**
+ * Callback props are exposed to Svelte consumers, so we keep parameter checks bivariant.
+ * This lets older handlers with narrower unions remain assignable while the component gains new APIs.
+ */
+type BivariantCallback<Args extends unknown[], Return = void> = {
+  bivarianceHack(...args: Args): Return
+}['bivarianceHack']
 
 export interface AiDocumentEditorProps {
   /** Markdown source content. */
@@ -172,10 +208,18 @@ export interface AiDocumentEditorProps {
   onhistory?: () => void
   /** Custom full-document copy handler. */
   oncopydocument?: () => void | Promise<void>
-  /** Block-format action handler from the selection toolbar. */
-  onapplyblockformat?: (kind: MarkdownBlockFormatKind) => void
+  /** Legacy block-format action handler for older heading / bullet integrations. */
+  onapplyblockformat?: BivariantCallback<[kind: MarkdownBlockFormatKind], void>
+  /** Rich block-style handler for paragraph and concrete heading-level changes. */
+  onapplyblockstyle?: BivariantCallback<[kind: MarkdownBlockStyleKind], void>
   /** Inline-format action handler from the selection toolbar. */
-  onapplyinlineformat?: (kind: MarkdownInlineFormatKind) => void
+  onapplyinlineformat?: BivariantCallback<[kind: MarkdownInlineFormatKind], void>
+  /** Paragraph alignment handler from the selection toolbar. */
+  onapplyalignment?: (kind: MarkdownTextAlignKind) => void
+  /** Link add / edit / remove handler from the selection toolbar. */
+  onapplylink?: (href: string | null) => void
+  /** Text or background color handler from the selection toolbar. */
+  onapplycolor?: (request: MarkdownColorFormatRequest) => void
   /** Selection copy handler for custom behavior. */
   oncopyselection?: () => void | Promise<void>
   /** Selection annotation handler. */

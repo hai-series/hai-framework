@@ -180,17 +180,28 @@ function createLogger(options: LoggerOptions = {}): Logger {
 
   if (format === 'pretty' && isPrettyTransportAvailable()) {
     // 只有在 pino-pretty 可解析时才挂载 transport，避免可选依赖缺失直接导致 logger 初始化失败。
-    pinoInstance = pino({
-      ...pinoOptions,
-      transport: {
-        target: 'pino-pretty',
-        options: {
-          colorize: true,
-          translateTime: 'SYS:standard',
-          ignore: 'pid,hostname',
+    try {
+      pinoInstance = pino({
+        ...pinoOptions,
+        transport: {
+          target: 'pino-pretty',
+          options: {
+            colorize: true,
+            translateTime: 'SYS:standard',
+            ignore: 'pid,hostname',
+          },
         },
-      },
-    })
+      })
+    }
+    catch (error) {
+      // 其他初始化异常应重新抛出，便于排查
+      if (isPrettyTransportUnavailable(error)) {
+        pinoInstance = pino(pinoOptions)
+      }
+      else {
+        throw error
+      }
+    }
   }
   else {
     pinoInstance = pino(pinoOptions)
@@ -208,6 +219,23 @@ function isPrettyTransportAvailable(): boolean {
   catch {
     return false
   }
+}
+
+function isPrettyTransportUnavailable(error: unknown): boolean {
+  const message
+    = error instanceof Error
+      ? error.message
+      : typeof error === 'string'
+        ? error
+        : ''
+
+  const normalized = message.toLowerCase()
+
+  return normalized.includes('pino-pretty')
+    && (normalized.includes('cannot find module')
+      || normalized.includes('unable to determine transport target')
+      || normalized.includes('cannot load')
+      || normalized.includes('not found'))
 }
 
 // ─── 默认 Logger 实例 ───

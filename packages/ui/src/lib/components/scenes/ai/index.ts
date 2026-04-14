@@ -26,13 +26,16 @@ export type {
 export type {
   AiDocumentEditorProps,
   MarkdownBlockFormatKind,
+  MarkdownBlockStyleKind,
   MarkdownCodeBlockItem,
+  MarkdownColorFormatRequest,
   MarkdownCodeRunRequest,
   MarkdownCodeRunResult,
   MarkdownInlineFormatKind,
   MarkdownOutlineItem,
   MarkdownRewriteAction,
   MarkdownRewriteRequest,
+  MarkdownTextAlignKind,
   MarkdownToolbarDownloadAction,
 } from './document-types.js'
 export { parseMarkdown } from './markdown-parse.js'

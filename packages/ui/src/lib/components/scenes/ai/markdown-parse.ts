@@ -7,6 +7,7 @@
  */
 
 import type { RendererObject, Tokens } from 'marked'
+import { createEditorMarkdownExtensions } from './editor-markdown-extensions.js'
 import { Marked } from 'marked'
 import { highlightCode, isLanguageSupported } from './highlight.js'
 
@@ -144,6 +145,7 @@ function createRendererObject(options: Required<MarkdownParseOptions>): Renderer
 function createMarkedInstance(options: Required<MarkdownParseOptions>): Marked {
   return new Marked({
     renderer: createRendererObject(options),
+    extensions: createEditorMarkdownExtensions(),
     gfm: true,
     breaks: options.breaks,
   })
