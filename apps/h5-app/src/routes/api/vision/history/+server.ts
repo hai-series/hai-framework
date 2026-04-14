@@ -7,6 +7,7 @@
 import { kit } from '@h-ai/kit'
 import { reldb } from '@h-ai/reldb'
 import { storage } from '@h-ai/storage'
+import { buildVisionHistoryQuery, getSessionUserId } from '../vision-user-isolation.js'
 
 interface VisionRow {
   id: string
@@ -20,13 +21,14 @@ interface VisionRow {
   created_at: number
 }
 
-export const GET = kit.handler(async () => {
-  const rowsResult = await reldb.sql.query<VisionRow>(
-    `SELECT id, storage_key, file_name, mime_type, prompt, analysis, tags_json, confidence, created_at
-     FROM vision_records
-     ORDER BY created_at DESC
-     LIMIT 20`,
-  )
+export const GET = kit.handler(async ({ locals }) => {
+  const userId = getSessionUserId(locals.session)
+  if (!userId) {
+    return kit.response.unauthorized()
+  }
+
+  const query = buildVisionHistoryQuery(userId)
+  const rowsResult = await reldb.sql.query<VisionRow>(query.sql, query.params)
 
   if (!rowsResult.success) {
     return kit.response.internalError('Query history failed')

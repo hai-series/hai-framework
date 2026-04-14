@@ -12,11 +12,17 @@ import { core } from '@h-ai/core'
 import { kit } from '@h-ai/kit'
 import { reldb } from '@h-ai/reldb'
 import { storage } from '@h-ai/storage'
+import { buildVisionInsertStatement, getSessionUserId } from '../vision-user-isolation.js'
 
 const MAX_FILE_SIZE = 4 * 1024 * 1024
 const ALLOWED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp'])
 
 export const POST = kit.handler(async ({ request, locals }) => {
+  const userId = getSessionUserId(locals.session)
+  if (!userId) {
+    return kit.response.unauthorized()
+  }
+
   if (!storage.isInitialized) {
     return kit.response.error('STORAGE_UNAVAILABLE', 'File storage is not configured', 503)
   }
@@ -88,22 +94,20 @@ export const POST = kit.handler(async ({ request, locals }) => {
   const analysis = parseVisionAnalysis(raw)
 
   const recordId = core.id.generate()
-  const insertResult = await reldb.sql.execute(
-    `INSERT INTO vision_records
-      (id, storage_key, file_name, mime_type, prompt, analysis, tags_json, confidence, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [
-      recordId,
-      key,
-      file.name,
-      file.type,
-      prompt || null,
-      analysis.summary,
-      JSON.stringify(analysis.tags),
-      analysis.confidence,
-      Date.now(),
-    ],
-  )
+  const createdAt = Date.now()
+  const insert = buildVisionInsertStatement({
+    id: recordId,
+    userId,
+    key,
+    fileName: file.name,
+    mimeType: file.type,
+    prompt: prompt || null,
+    analysis: analysis.summary,
+    tagsJson: JSON.stringify(analysis.tags),
+    confidence: analysis.confidence,
+    createdAt,
+  })
+  const insertResult = await reldb.sql.execute(insert.sql, insert.params)
 
   if (!insertResult.success) {
     core.logger.error('Vision record insert failed', { error: insertResult.error.message })
@@ -116,6 +120,6 @@ export const POST = kit.handler(async ({ request, locals }) => {
     imageUrl: storage.presign.publicUrl(key),
     prompt,
     analysis,
-    createdAt: Date.now(),
+    createdAt,
   })
 })
