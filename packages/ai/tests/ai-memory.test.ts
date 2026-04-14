@@ -8,7 +8,7 @@ import type { MemoryConfig } from '../src/ai-config.js'
 import type { EmbeddingOperations } from '../src/embedding/ai-embedding-types.js'
 import type { LLMOperations } from '../src/llm/ai-llm-types.js'
 import type { MemoryEntry } from '../src/memory/ai-memory-types.js'
-import type { AIRelStore, AIVectorStore } from '../src/store/ai-store-types.js'
+import type { AIRelStore, AIVectorStore, StoreFilter, StorePage, StoreScope } from '../src/store/ai-store-types.js'
 import { describe, expect, it, vi } from 'vitest'
 import { extractMemories } from '../src/memory/ai-memory-extractor.js'
 import { createMemoryOperations } from '../src/memory/ai-memory-functions.js'
@@ -18,61 +18,114 @@ import { createMemoryOperations } from '../src/memory/ai-memory-functions.js'
 /**
  * 创建 Map 支撑的 AIStore mock（测试用）
  */
+interface MockStoreRecord<T> {
+  data: T
+  scope?: StoreScope
+}
+
+function cloneStoreValue<T>(value: T): T {
+  return { ...value as object } as T
+}
+
+function matchesStoreFilter<T>(record: MockStoreRecord<T>, filter?: StoreFilter<T>): boolean {
+  if (!filter)
+    return true
+
+  if (filter.objectId !== undefined && record.scope?.objectId !== filter.objectId)
+    return false
+  if (filter.sessionId !== undefined && record.scope?.sessionId !== filter.sessionId)
+    return false
+  if (filter.refId !== undefined && record.scope?.refId !== filter.refId)
+    return false
+  if (filter.status !== undefined) {
+    const expected = Array.isArray(filter.status) ? filter.status : [filter.status]
+    if (!expected.includes(record.scope?.status ?? ''))
+      return false
+  }
+
+  if (filter.where && !matchesWhere(record.data, filter.where))
+    return false
+
+  return true
+}
+
+function sortByOrder<T>(items: T[], orderBy?: StoreFilter<T>['orderBy']): T[] {
+  if (!orderBy)
+    return items
+
+  return [...items].sort((a, b) => {
+    const left = (a as Record<string, unknown>)[orderBy.field as string]
+    const right = (b as Record<string, unknown>)[orderBy.field as string]
+    if (left === right)
+      return 0
+    if (left == null)
+      return orderBy.direction === 'asc' ? -1 : 1
+    if (right == null)
+      return orderBy.direction === 'asc' ? 1 : -1
+    return orderBy.direction === 'asc'
+      ? (left > right ? 1 : -1)
+      : (left > right ? -1 : 1)
+  })
+}
+
 function createMockStore<T>(): AIRelStore<T> {
-  const data = new Map<string, T>()
+  const data = new Map<string, MockStoreRecord<T>>()
   return {
-    save: vi.fn(async (id: string, value: T) => {
-      data.set(id, { ...value as object } as T)
+    save: vi.fn(async (id: string, value: T, scope?: StoreScope) => {
+      data.set(id, { data: cloneStoreValue(value), scope: scope ? { ...scope } : undefined })
     }),
-    saveMany: vi.fn(async (items: Array<{ id: string, data: T }>) => {
+    saveMany: vi.fn(async (items: Array<{ id: string, data: T, scope?: StoreScope }>) => {
       for (const item of items) {
-        data.set(item.id, { ...item.data as object } as T)
+        data.set(item.id, {
+          data: cloneStoreValue(item.data),
+          scope: item.scope ? { ...item.scope } : undefined,
+        })
       }
     }),
     get: vi.fn(async (id: string) => {
-      const v = data.get(id)
-      return v ? { ...v as object } as T : undefined
+      const record = data.get(id)
+      return record ? cloneStoreValue(record.data) : undefined
     }),
-    query: vi.fn(async (filter) => {
+    query: vi.fn(async (filter: StoreFilter<T>) => {
       let items = Array.from(data.values())
-      if (filter.where) {
-        items = items.filter(item => matchesWhere(item, filter.where))
-      }
+        .filter(record => matchesStoreFilter(record, filter))
+        .map(record => cloneStoreValue(record.data))
+      items = sortByOrder(items, filter.orderBy)
       if (filter.limit !== undefined)
         items = items.slice(0, filter.limit)
       return items
     }),
-    queryPage: vi.fn(async (filter, page) => {
+    queryPage: vi.fn(async (filter: StoreFilter<T>, page: { offset: number, limit: number }): Promise<StorePage<T>> => {
       let items = Array.from(data.values())
-      if (filter.where) {
-        items = items.filter(item => matchesWhere(item, filter.where))
-      }
+        .filter(record => matchesStoreFilter(record, filter))
+        .map(record => cloneStoreValue(record.data))
+      items = sortByOrder(items, filter.orderBy)
       const total = items.length
       return { items: items.slice(page.offset, page.offset + page.limit), total }
     }),
     remove: vi.fn(async (id: string) => data.delete(id)),
-    removeBy: vi.fn(async (filter) => {
+    removeBy: vi.fn(async (filter: StoreFilter<T>) => {
       let count = 0
-      for (const [id, item] of data.entries()) {
-        if (!filter.where || matchesWhere(item, filter.where)) {
+      for (const [id, record] of data.entries()) {
+        if (matchesStoreFilter(record, filter)) {
           data.delete(id)
           count++
         }
       }
       return count
     }),
-    count: vi.fn(async (filter?) => {
-      if (!filter?.where)
+    count: vi.fn(async (filter?: StoreFilter<T>) => {
+      if (!filter)
         return data.size
-      return Array.from(data.values()).filter(item => matchesWhere(item, filter.where)).length
+      return Array.from(data.values()).filter(record => matchesStoreFilter(record, filter)).length
     }),
-    clear: vi.fn(async (filter?) => {
-      if (!filter?.where) {
+    clear: vi.fn(async (filter?: StoreFilter<T>) => {
+      if (!filter) {
         data.clear()
         return
       }
-      for (const [id, item] of data.entries()) {
-        if (matchesWhere(item, filter.where))
+      for (const [id, record] of data.entries()) {
+        if (matchesStoreFilter(record, filter))
           data.delete(id)
       }
     }),
@@ -85,20 +138,27 @@ function createMockStore<T>(): AIRelStore<T> {
 function createMockVectorStore(): AIVectorStore {
   const vectors = new Map<string, { vector: number[], metadata?: Record<string, unknown> }>()
   return {
-    upsert: vi.fn(async (id, vector, metadata) => {
-      vectors.set(id, { vector, metadata })
+    upsert: vi.fn(async (id: string, vector: number[], metadata?: Record<string, unknown>) => {
+      vectors.set(id, { vector, metadata: metadata ? { ...metadata } : undefined })
     }),
-    search: vi.fn(async (queryVec, options) => {
+    search: vi.fn(async (queryVec: number[], options?: { topK?: number, minScore?: number, filter?: Record<string, unknown> }) => {
       const topK = options?.topK ?? 10
       const results: Array<{ id: string, score: number, metadata?: Record<string, unknown> }> = []
       for (const [id, entry] of vectors.entries()) {
+        if (options?.filter) {
+          const matchesFilter = Object.entries(options.filter).every(([key, expected]) => entry.metadata?.[key] === expected)
+          if (!matchesFilter)
+            continue
+        }
         const score = cosineSimilarity(queryVec, entry.vector)
+        if (options?.minScore !== undefined && score < options.minScore)
+          continue
         results.push({ id, score, metadata: entry.metadata })
       }
       results.sort((a, b) => b.score - a.score)
       return results.slice(0, topK)
     }),
-    remove: vi.fn(async (id) => { vectors.delete(id) }),
+    remove: vi.fn(async (id: string) => { vectors.delete(id) }),
     clear: vi.fn(async () => { vectors.clear() }),
   }
 }
@@ -168,7 +228,8 @@ function createMockLLM(responses: Array<{ content: string | null }>): LLMOperati
           model: 'test-model',
           choices: [{
             index: 0,
-            message: { role: 'assistant' as const, content: resp.content },
+            message: { role: 'assistant' as const, content: resp.content, refusal: null },
+            logprobs: null,
             finish_reason: 'stop' as const,
           }],
           usage: { prompt_tokens: 10, completion_tokens: 20, total_tokens: 30 },
@@ -196,11 +257,33 @@ function createMockEmbedding(vectors?: number[][]): EmbeddingOperations {
   } as unknown as EmbeddingOperations
 }
 
+type MockChatResult = Awaited<ReturnType<LLMOperations['chat']>>
+
+function createLLMChatOk(content: string | null): MockChatResult {
+  return {
+    success: true as const,
+    data: {
+      id: 'test-id',
+      object: 'chat.completion' as const,
+      created: Date.now(),
+      model: 'test-model',
+      choices: [{
+        index: 0,
+        message: { role: 'assistant' as const, content, refusal: null },
+        logprobs: null,
+        finish_reason: 'stop' as const,
+      }],
+      usage: { prompt_tokens: 10, completion_tokens: 20, total_tokens: 30 },
+    },
+  } as unknown as MockChatResult
+}
+
 const defaultConfig: MemoryConfig = {
   maxEntries: 100,
   recencyDecay: 0.95,
   embeddingEnabled: true,
   defaultTopK: 10,
+  writebackRelatedTopK: 20,
 }
 
 /**
@@ -214,6 +297,20 @@ function createTestMemoryOps(
   const store = createMockStore<MemoryEntry>()
   const vectorStore = createMockVectorStore()
   return createMemoryOperations(config, llm, embedding, store, vectorStore)
+}
+
+function createTestMemoryHarness(
+  config: MemoryConfig,
+  llm: LLMOperations,
+  embedding: EmbeddingOperations | null,
+) {
+  const store = createMockStore<MemoryEntry>()
+  const vectorStore = createMockVectorStore()
+  return {
+    ops: createMemoryOperations(config, llm, embedding, store, vectorStore),
+    store,
+    vectorStore,
+  }
 }
 
 // ─── extractMemories 测试 ───
@@ -394,6 +491,334 @@ describe('createMemoryOperations', () => {
       role: 'system',
       content: 'Only extract durable user preferences.',
     })
+  })
+
+  it('extract 遇到同 scope 的完全重复记忆时返回 noop', async () => {
+    const llm = createMockLLM([{
+      content: JSON.stringify([
+        { content: '用户偏好中文', type: 'preference', importance: 0.8 },
+      ]),
+    }])
+    const embedding = createMockEmbedding()
+    const { ops } = createTestMemoryHarness(defaultConfig, llm, embedding)
+
+    await ops.add({
+      content: '用户偏好中文',
+      type: 'preference',
+      importance: 0.8,
+      objectId: 'user-1',
+    })
+
+    const result = await ops.extract([
+      { role: 'user' as const, content: '请记住我更喜欢中文回复。' },
+    ], { objectId: 'user-1' })
+
+    expect(result.success).toBe(true)
+    if (!result.success) {
+      return
+    }
+
+    expect(result.data).toHaveLength(0)
+
+    const listResult = await ops.list({ objectId: 'user-1' })
+    expect(listResult.success).toBe(true)
+    if (listResult.success) {
+      expect(listResult.data).toHaveLength(1)
+      expect(listResult.data[0].content).toBe('用户偏好中文')
+    }
+  })
+
+  it('extract 不会把不同 scope 的旧记忆当成重复项', async () => {
+    const llm = createMockLLM([{
+      content: JSON.stringify([
+        { content: '用户偏好中文', type: 'preference', importance: 0.8 },
+      ]),
+    }])
+    const embedding = createMockEmbedding()
+    const { ops } = createTestMemoryHarness(defaultConfig, llm, embedding)
+
+    await ops.add({
+      content: '用户偏好中文',
+      type: 'preference',
+      importance: 0.8,
+      objectId: 'user-1',
+    })
+
+    const result = await ops.extract([
+      { role: 'user' as const, content: '请记住我喜欢中文回复。' },
+    ], { objectId: 'user-2' })
+
+    expect(result.success).toBe(true)
+    if (!result.success) {
+      return
+    }
+
+    expect(result.data).toHaveLength(1)
+    expect(result.data[0].objectId).toBe('user-2')
+
+    const user1List = await ops.list({ objectId: 'user-1' })
+    const user2List = await ops.list({ objectId: 'user-2' })
+    expect(user1List.success).toBe(true)
+    expect(user2List.success).toBe(true)
+    if (user1List.success && user2List.success) {
+      expect(user1List.data).toHaveLength(1)
+      expect(user2List.data).toHaveLength(1)
+      expect(user1List.data[0].id).not.toBe(user2List.data[0].id)
+    }
+  })
+
+  it('extract 遇到同一条记忆的更精确表述时更新原条目', async () => {
+    const llm = createMockLLM([])
+    const embedding = createMockEmbedding()
+    const { ops } = createTestMemoryHarness(defaultConfig, llm, embedding)
+
+    const existingResult = await ops.add({
+      content: '用户偏好先给结论',
+      type: 'instruction',
+      importance: 0.7,
+      objectId: 'user-1',
+    })
+    expect(existingResult.success).toBe(true)
+    if (!existingResult.success) {
+      return
+    }
+
+    vi.mocked(llm.chat)
+      .mockResolvedValueOnce(createLLMChatOk(JSON.stringify([
+        { content: '用户偏好先给结论，再展开说明', type: 'instruction', importance: 0.9 },
+      ])))
+      .mockResolvedValueOnce(createLLMChatOk(JSON.stringify({
+        action: 'update',
+        memoryId: existingResult.data.id,
+        content: '用户偏好先给结论，再根据需要展开说明',
+        type: 'instruction',
+        importance: 0.9,
+      })))
+
+    const result = await ops.extract([
+      { role: 'user' as const, content: '以后回答先给结论，再根据需要展开说明。' },
+    ], { objectId: 'user-1' })
+
+    expect(result.success).toBe(true)
+    if (!result.success) {
+      return
+    }
+
+    expect(result.data).toHaveLength(1)
+    expect(result.data[0].id).toBe(existingResult.data.id)
+    expect(result.data[0].content).toBe('用户偏好先给结论，再根据需要展开说明')
+
+    const listResult = await ops.list({ objectId: 'user-1' })
+    expect(listResult.success).toBe(true)
+    if (listResult.success) {
+      expect(listResult.data).toHaveLength(1)
+      expect(listResult.data[0].id).toBe(existingResult.data.id)
+      expect(listResult.data[0].content).toBe('用户偏好先给结论，再根据需要展开说明')
+    }
+  })
+
+  it('解构后的 extract 在更新分支也能正常工作', async () => {
+    const llm = createMockLLM([])
+    const embedding = createMockEmbedding()
+    const { ops } = createTestMemoryHarness(defaultConfig, llm, embedding)
+
+    const existingResult = await ops.add({
+      content: '用户偏好先给结论',
+      type: 'instruction',
+      importance: 0.7,
+      objectId: 'user-1',
+    })
+    expect(existingResult.success).toBe(true)
+    if (!existingResult.success) {
+      return
+    }
+
+    vi.mocked(llm.chat)
+      .mockResolvedValueOnce(createLLMChatOk(JSON.stringify([
+        { content: '用户偏好先给结论，再展开说明', type: 'instruction', importance: 0.9 },
+      ])))
+      .mockResolvedValueOnce(createLLMChatOk(JSON.stringify({
+        action: 'update',
+        memoryId: existingResult.data.id,
+        content: '用户偏好先给结论，再根据需要展开说明',
+        type: 'instruction',
+        importance: 0.9,
+      })))
+
+    const { extract } = ops
+    const result = await extract([
+      { role: 'user' as const, content: '以后回答先给结论，再根据需要展开说明。' },
+    ], { objectId: 'user-1' })
+
+    expect(result.success).toBe(true)
+    if (!result.success) {
+      return
+    }
+
+    expect(result.data).toHaveLength(1)
+    expect(result.data[0].id).toBe(existingResult.data.id)
+    expect(result.data[0].content).toBe('用户偏好先给结论，再根据需要展开说明')
+  })
+
+  it('extract 对账返回非法 JSON 时保底创建新记忆', async () => {
+    const llm = createMockLLM([])
+    const embedding = createMockEmbedding()
+    const { ops } = createTestMemoryHarness(defaultConfig, llm, embedding)
+
+    const existingResult = await ops.add({
+      content: '用户偏好先给结论',
+      type: 'instruction',
+      importance: 0.7,
+      objectId: 'user-1',
+    })
+    expect(existingResult.success).toBe(true)
+    if (!existingResult.success) {
+      return
+    }
+
+    vi.mocked(llm.chat)
+      .mockResolvedValueOnce(createLLMChatOk(JSON.stringify([
+        { content: '用户偏好先给结论，再展开说明', type: 'instruction', importance: 0.9 },
+      ])))
+      .mockResolvedValueOnce(createLLMChatOk('not-json'))
+
+    const result = await ops.extract([
+      { role: 'user' as const, content: '以后回答先给结论，再展开说明。' },
+    ], { objectId: 'user-1' })
+
+    expect(result.success).toBe(true)
+    if (!result.success) {
+      return
+    }
+
+    expect(result.data).toHaveLength(1)
+    expect(result.data[0].id).not.toBe(existingResult.data.id)
+
+    const listResult = await ops.list({ objectId: 'user-1' })
+    expect(listResult.success).toBe(true)
+    if (listResult.success) {
+      expect(listResult.data).toHaveLength(2)
+    }
+  })
+
+  it('extract 对账返回无效 memoryId 时保底创建新记忆', async () => {
+    const llm = createMockLLM([])
+    const embedding = createMockEmbedding()
+    const { ops } = createTestMemoryHarness(defaultConfig, llm, embedding)
+
+    const existingResult = await ops.add({
+      content: '用户偏好先给结论',
+      type: 'instruction',
+      importance: 0.7,
+      objectId: 'user-1',
+    })
+    expect(existingResult.success).toBe(true)
+    if (!existingResult.success) {
+      return
+    }
+
+    vi.mocked(llm.chat)
+      .mockResolvedValueOnce(createLLMChatOk(JSON.stringify([
+        { content: '用户偏好先给结论，再展开说明', type: 'instruction', importance: 0.9 },
+      ])))
+      .mockResolvedValueOnce(createLLMChatOk(JSON.stringify({
+        action: 'update',
+        memoryId: 'missing-memory-id',
+        content: '用户偏好先给结论，再根据需要展开说明',
+        type: 'instruction',
+        importance: 0.9,
+      })))
+
+    const result = await ops.extract([
+      { role: 'user' as const, content: '以后回答先给结论，再根据需要展开说明。' },
+    ], { objectId: 'user-1' })
+
+    expect(result.success).toBe(true)
+    if (!result.success) {
+      return
+    }
+
+    expect(result.data).toHaveLength(1)
+    expect(result.data[0].id).not.toBe(existingResult.data.id)
+
+    const listResult = await ops.list({ objectId: 'user-1' })
+    expect(listResult.success).toBe(true)
+    if (listResult.success) {
+      expect(listResult.data).toHaveLength(2)
+    }
+  })
+
+  it('extract 对账使用 writebackRelatedTopK，普通 recall 继续使用 defaultTopK', async () => {
+    const llm = createMockLLM([{
+      content: JSON.stringify([
+        { content: '用户偏好中文', type: 'preference', importance: 0.8 },
+      ]),
+    }])
+    const embedding = createMockEmbedding()
+    const { ops, vectorStore } = createTestMemoryHarness({
+      ...defaultConfig,
+      defaultTopK: 2,
+      writebackRelatedTopK: 5,
+    }, llm, embedding)
+
+    await ops.add({ content: '用户偏好中文', type: 'preference', importance: 0.8, objectId: 'user-1' })
+    await ops.add({ content: '用户使用 TypeScript', type: 'fact', importance: 0.7, objectId: 'user-1' })
+
+    const extractResult = await ops.extract([
+      { role: 'user' as const, content: '请记住我更喜欢中文回复。' },
+    ], { objectId: 'user-1' })
+    expect(extractResult.success).toBe(true)
+
+    const writebackSearchCall = vi.mocked(vectorStore.search).mock.calls[0]
+    expect(writebackSearchCall?.[1]).toEqual(expect.objectContaining({ topK: 15 }))
+
+    const recallResult = await ops.recall('中文', { objectId: 'user-1' })
+    expect(recallResult.success).toBe(true)
+
+    const promptRecallSearchCall = vi.mocked(vectorStore.search).mock.calls[1]
+    expect(promptRecallSearchCall?.[1]).toEqual(expect.objectContaining({ topK: 6 }))
+  })
+
+  it('extract 对账不会增加相关旧记忆的访问元数据', async () => {
+    const llm = createMockLLM([{
+      content: JSON.stringify([
+        { content: '用户偏好中文', type: 'preference', importance: 0.8 },
+      ]),
+    }])
+    const embedding = createMockEmbedding()
+    const { ops, store } = createTestMemoryHarness(defaultConfig, llm, embedding)
+
+    const existingResult = await ops.add({
+      content: '用户偏好中文',
+      type: 'preference',
+      importance: 0.8,
+      objectId: 'user-1',
+    })
+    expect(existingResult.success).toBe(true)
+    if (!existingResult.success) {
+      return
+    }
+
+    const seededEntry = await store.get(existingResult.data.id)
+    expect(seededEntry).toBeDefined()
+    if (!seededEntry) {
+      return
+    }
+
+    await store.save(seededEntry.id, {
+      ...seededEntry,
+      lastAccessedAt: 1234,
+      accessCount: 7,
+    }, { objectId: seededEntry.objectId })
+
+    const extractResult = await ops.extract([
+      { role: 'user' as const, content: '请记住我更喜欢中文回复。' },
+    ], { objectId: 'user-1' })
+    expect(extractResult.success).toBe(true)
+
+    const storedEntry = await store.get(existingResult.data.id)
+    expect(storedEntry?.lastAccessedAt).toBe(1234)
+    expect(storedEntry?.accessCount).toBe(7)
   })
 
   it('recall 检索相关记忆', async () => {

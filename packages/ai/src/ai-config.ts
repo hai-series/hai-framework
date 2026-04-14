@@ -381,6 +381,7 @@ export const MemoryConfigSchema = z.object({
   embeddingEnabled: z.boolean().default(true),
   /** 检索时默认返回数量（默认 10） */
   defaultTopK: z.number().int().positive().default(10),
+  writebackRelatedTopK: z.number().int().positive().default(20),
 })
 
 /** Memory 配置类型 */

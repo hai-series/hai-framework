@@ -33,6 +33,29 @@ import { HaiAIError } from '../ai-types.js'
 import { extractMemories } from './ai-memory-extractor.js'
 
 const logger = core.logger.child({ module: 'ai', scope: 'memory' })
+const LEADING_CODE_FENCE_REGEX = /^```(?:json)?\n?/
+const TRAILING_CODE_FENCE_REGEX = /\n?```$/
+const VALID_MEMORY_TYPES = new Set<MemoryEntryInput['type']>(['fact', 'preference', 'event', 'entity', 'instruction'])
+const MEMORY_WRITEBACK_RESOLUTION_SYSTEM_PROMPT = [
+  'You reconcile candidate memory writes against existing related memories.',
+  'Return exactly one JSON object with an `action` field.',
+  'Allowed actions: `create`, `update`, `noop`.',
+  'Use `noop` when the candidate is already covered by an existing memory.',
+  'Use `update` only when exactly one existing memory clearly represents the same durable information and the candidate should refine it.',
+  'Use `create` only when the candidate is genuinely new.',
+  'When action is `update`, include `memoryId` and the final normalized `content`.',
+  'You may also include `type` and `importance`.',
+  'Be conservative. If uncertain, prefer `noop` over creating duplicates.',
+  'Return JSON only, without markdown fences or explanation.',
+].join('\n')
+
+interface MemoryWritebackResolution {
+  action: 'create' | 'update' | 'noop'
+  memoryId?: string
+  content?: string
+  type?: MemoryEntryInput['type']
+  importance?: number
+}
 
 /**
  * 生成唯一 ID
@@ -70,6 +93,92 @@ function extractQueryFromMessages(messages: ChatMessage[]): string {
     }
   }
   return ''
+}
+
+function stripCodeFences(content: string): string {
+  let cleaned = content.trim()
+  if (cleaned.startsWith('```')) {
+    cleaned = cleaned.replace(LEADING_CODE_FENCE_REGEX, '').replace(TRAILING_CODE_FENCE_REGEX, '')
+  }
+  return cleaned.trim()
+}
+
+function normalizeMemoryText(content: string): string {
+  return content.trim().replace(/\s+/g, ' ').toLocaleLowerCase()
+}
+
+function normalizeImportance(value: unknown, fallback: number): number {
+  if (typeof value !== 'number') {
+    return fallback
+  }
+  return Math.max(0, Math.min(1, value))
+}
+
+function normalizeType(value: unknown, fallback: MemoryEntryInput['type']): MemoryEntryInput['type'] {
+  return typeof value === 'string' && VALID_MEMORY_TYPES.has(value as MemoryEntryInput['type'])
+    ? value as MemoryEntryInput['type']
+    : fallback
+}
+
+function findExactRelatedMemory(candidate: MemoryEntryInput, related: MemoryEntry[]): MemoryEntry | undefined {
+  const normalizedCandidate = normalizeMemoryText(candidate.content)
+  return related.find(memory => memory.type === candidate.type && normalizeMemoryText(memory.content) === normalizedCandidate)
+}
+
+function sanitizeWritebackResolution(
+  parsed: unknown,
+  related: MemoryEntry[],
+  candidate: MemoryEntryInput,
+): MemoryWritebackResolution {
+  const fallbackCreate: MemoryWritebackResolution = {
+    action: 'create',
+    content: candidate.content,
+    type: candidate.type,
+    importance: candidate.importance ?? 0.5,
+  }
+  const fallbackNoop: MemoryWritebackResolution = { action: 'noop' }
+
+  if (typeof parsed !== 'object' || parsed === null) {
+    logger.warn('Memory writeback resolution returned unexpected format', {
+      parsedType: parsed === null ? 'null' : typeof parsed,
+    })
+    return fallbackCreate
+  }
+
+  const record = parsed as Record<string, unknown>
+  if (record.action === 'create') {
+    return {
+      action: 'create',
+      content: typeof record.content === 'string' && record.content.trim().length > 0 ? record.content.trim() : candidate.content,
+      type: normalizeType(record.type, candidate.type),
+      importance: normalizeImportance(record.importance, candidate.importance ?? 0.5),
+    }
+  }
+
+  if (record.action === 'noop') {
+    return fallbackNoop
+  }
+
+  if (record.action === 'update') {
+    const memoryId = typeof record.memoryId === 'string' ? record.memoryId : undefined
+    if (!memoryId || !related.some(memory => memory.id === memoryId)) {
+      logger.warn('Memory writeback resolution returned invalid memoryId', { memoryId })
+      return fallbackCreate
+    }
+
+    return {
+      action: 'update',
+      memoryId,
+      content: typeof record.content === 'string' && record.content.trim().length > 0 ? record.content.trim() : candidate.content,
+      type: normalizeType(record.type, candidate.type),
+      importance: normalizeImportance(record.importance, candidate.importance ?? 0.5),
+    }
+  }
+
+  logger.warn('Memory writeback resolution returned unsupported action', {
+    action: record.action,
+  })
+  return fallbackCreate
 }
 
 /**
@@ -182,6 +291,201 @@ export function createMemoryOperations(
     return entry
   }
 
+  async function updateEntry(memoryId: string, updates: MemoryUpdateInput): Promise<HaiResult<MemoryEntry>> {
+    try {
+      const existing = await store.get(memoryId)
+      if (!existing) {
+        return err(HaiAIError.MEMORY_NOT_FOUND, aiM('ai_memoryNotFound', { params: { id: memoryId } }))
+      }
+
+      if (updates.content !== undefined)
+        existing.content = updates.content
+      if (updates.type !== undefined)
+        existing.type = updates.type
+      if (updates.importance !== undefined)
+        existing.importance = updates.importance
+      if (updates.metadata !== undefined)
+        existing.metadata = updates.metadata
+
+      // 内容变更时重新计算向量
+      if (updates.content !== undefined) {
+        const vector = await computeVector(updates.content)
+        existing.vector = vector
+        if (vector) {
+          await vectorStore.upsert(memoryId, vector, {
+            objectId: existing.objectId,
+            type: existing.type,
+          })
+        }
+      }
+
+      await store.save(memoryId, existing, { objectId: existing.objectId })
+      logger.trace('Memory updated', { id: memoryId })
+      return ok(existing)
+    }
+    catch (error) {
+      logger.error('Memory update failed', { id: memoryId, error })
+      return err(HaiAIError.MEMORY_STORE_FAILED, aiM('ai_memoryStoreFailed', { params: { error: String(error) } }), error)
+    }
+  }
+
+  async function resolveWritebackResolution(
+    candidate: MemoryEntryInput,
+    related: MemoryEntry[],
+    model?: string,
+  ): Promise<HaiResult<MemoryWritebackResolution>> {
+    if (related.length === 0) {
+      return ok({
+        action: 'create',
+        content: candidate.content,
+        type: candidate.type,
+        importance: candidate.importance ?? 0.5,
+      })
+    }
+
+    const exactMemory = findExactRelatedMemory(candidate, related)
+    if (exactMemory) {
+      return ok({ action: 'noop', memoryId: exactMemory.id })
+    }
+
+    const resolutionResult = await llm.chat({
+      model,
+      messages: [
+        { role: 'system', content: MEMORY_WRITEBACK_RESOLUTION_SYSTEM_PROMPT },
+        {
+          role: 'user',
+          content: JSON.stringify({
+            candidate,
+            relatedMemories: related.map(memory => ({
+              id: memory.id,
+              content: memory.content,
+              type: memory.type,
+              importance: memory.importance,
+            })),
+          }),
+        },
+      ],
+      temperature: 0.1,
+    })
+    if (!resolutionResult.success) {
+      return err(HaiAIError.MEMORY_EXTRACT_FAILED, aiM('ai_memoryExtractFailed', { params: { error: String(resolutionResult.error.message) } }), resolutionResult.error)
+    }
+
+    try {
+      const parsed = JSON.parse(stripCodeFences(resolutionResult.data.choices[0]?.message?.content ?? '')) as unknown
+      return ok(sanitizeWritebackResolution(parsed, related, candidate))
+    }
+    catch {
+      logger.warn('Memory writeback resolution returned invalid JSON', {
+        content: resolutionResult.data.choices[0]?.message?.content?.slice(0, 200),
+      })
+      return ok({
+        action: 'create',
+        content: candidate.content,
+        type: candidate.type,
+        importance: candidate.importance ?? 0.5,
+      })
+    }
+  }
+
+  async function recallEntries(
+    query: string,
+    options?: MemoryRecallOptions,
+    updateAccessStats = true,
+  ): Promise<HaiResult<MemoryEntry[]>> {
+    const topK = options?.topK ?? config.defaultTopK
+    const recencyWeight = options?.recencyWeight ?? (1 - config.recencyDecay)
+
+    logger.trace('Recalling memories', { query: query.slice(0, 100), topK, updateAccessStats })
+
+    try {
+      const where: WhereClause<MemoryEntry> = {}
+
+      const types = options?.types
+      if (types && types.length === 1) {
+        where.type = types[0]
+      }
+      else if (types && types.length > 1) {
+        where.type = { $in: types }
+      }
+
+      if (options?.minImportance && options.minImportance > 0) {
+        where.importance = { $gte: options.minImportance }
+      }
+
+      const candidates = await store.query({
+        objectId: options?.objectId,
+        where: Object.keys(where).length > 0 ? where : undefined,
+      })
+
+      if (candidates.length === 0) {
+        return ok([])
+      }
+
+      let queryVector: number[] | undefined
+      if (config.embeddingEnabled && embedding) {
+        const embedResult = await embedding.embedText(query)
+        if (embedResult.success) {
+          queryVector = embedResult.data
+        }
+      }
+
+      const vectorScores = new Map<string, number>()
+      if (queryVector) {
+        const vectorResults = await vectorStore.search(queryVector, {
+          topK: topK * 3,
+          filter: options?.objectId ? { objectId: options.objectId } : undefined,
+        })
+        for (const r of vectorResults) {
+          vectorScores.set(r.id, r.score)
+        }
+      }
+
+      const now = Date.now()
+      const maxAge = 7 * 24 * 60 * 60 * 1000
+
+      const scored = candidates.map((entry) => {
+        let similarity = vectorScores.get(entry.id) ?? 0
+        if (!similarity && queryVector && entry.vector) {
+          similarity = cosineSimilarity(queryVector, entry.vector)
+        }
+        else if (!similarity) {
+          const queryLower = query.toLowerCase()
+          const contentLower = entry.content.toLowerCase()
+          similarity = contentLower.includes(queryLower) ? 0.8 : 0
+        }
+
+        const age = now - entry.createdAt
+        const recency = Math.max(0, 1 - age / maxAge)
+        const relevance = similarity * 0.8 + entry.importance * 0.2
+        const score = relevance * (1 - recencyWeight) + recency * recencyWeight
+
+        return { entry, score }
+      })
+
+      scored.sort((a, b) => b.score - a.score)
+      const results: MemoryEntry[] = []
+      for (const { entry } of scored.slice(0, topK)) {
+        if (updateAccessStats) {
+          entry.lastAccessedAt = now
+          entry.accessCount++
+          await store.save(entry.id, entry, { objectId: entry.objectId })
+          results.push(entry)
+          continue
+        }
+
+        results.push({ ...entry })
+      }
+
+      logger.trace('Memory recall completed', { query: query.slice(0, 50), resultCount: results.length, updateAccessStats })
+      return ok(results)
+    }
+    catch (error) {
+      logger.error('Memory recall failed', { error })
+      return err(HaiAIError.MEMORY_RECALL_FAILED, aiM('ai_memoryRecallFailed', { params: { error: String(error) } }), error)
+    }
+  }
+
   return {
     /**
      * 从对话消息中提取记忆并存储
@@ -210,9 +514,45 @@ export function createMemoryOperations(
 
         const entries: MemoryEntry[] = []
         for (const input of extractResult.data) {
-          const vector = await computeVector(input.content)
           const entryInput: MemoryEntryInput = { ...input, objectId: input.objectId ?? options?.objectId }
-          const entry = await saveEntry(entryInput, vector)
+          const relatedResult = await recallEntries(entryInput.content, {
+            topK: config.writebackRelatedTopK,
+            objectId: entryInput.objectId,
+          }, false)
+          if (!relatedResult.success) {
+            return relatedResult
+          }
+
+          const resolutionResult = await resolveWritebackResolution(entryInput, relatedResult.data, options?.model)
+          if (!resolutionResult.success) {
+            return err(HaiAIError.MEMORY_EXTRACT_FAILED, aiM('ai_memoryExtractFailed', { params: { error: String(resolutionResult.error.message) } }), resolutionResult.error)
+          }
+
+          const resolution = resolutionResult.data
+          if (resolution.action === 'noop') {
+            continue
+          }
+
+          if (resolution.action === 'update' && resolution.memoryId) {
+            const updateResult = await updateEntry(resolution.memoryId, {
+              content: resolution.content,
+              type: resolution.type,
+              importance: resolution.importance,
+            })
+            if (!updateResult.success) {
+              return err(HaiAIError.MEMORY_STORE_FAILED, aiM('ai_memoryStoreFailed', { params: { error: String(updateResult.error.message) } }), updateResult.error)
+            }
+            entries.push(updateResult.data)
+            continue
+          }
+
+          const vector = await computeVector(resolution.content ?? entryInput.content)
+          const entry = await saveEntry({
+            ...entryInput,
+            content: resolution.content ?? entryInput.content,
+            type: resolution.type ?? entryInput.type,
+            importance: resolution.importance ?? entryInput.importance,
+          }, vector)
           entries.push(entry)
         }
 
@@ -234,110 +574,7 @@ export function createMemoryOperations(
      * 3. 排序截取 — 按得分降序，返回前 topK 条并更新访问统计
      */
     async recall(query: string, options?: MemoryRecallOptions): Promise<HaiResult<MemoryEntry[]>> {
-      const topK = options?.topK ?? config.defaultTopK
-      const recencyWeight = options?.recencyWeight ?? (1 - config.recencyDecay)
-
-      logger.trace('Recalling memories', { query: query.slice(0, 100), topK })
-
-      try {
-        // ── 第一阶段：筛选候选集 ──
-        const where: WhereClause<MemoryEntry> = {}
-
-        // type 过滤：单值用等值匹配，多值用 $in 操作符
-        const types = options?.types
-        if (types && types.length === 1) {
-          where.type = types[0]
-        }
-        else if (types && types.length > 1) {
-          where.type = { $in: types }
-        }
-
-        // minImportance 用 $gte 操作符下推
-        if (options?.minImportance && options.minImportance > 0) {
-          where.importance = { $gte: options.minImportance }
-        }
-
-        const candidates = await store.query({
-          objectId: options?.objectId,
-          where: Object.keys(where).length > 0 ? where : undefined,
-        })
-
-        if (candidates.length === 0) {
-          return ok([])
-        }
-
-        // ── 第二阶段：计算每条记忆的综合得分 ──
-
-        // 2a. 将查询文本转为向量（如启用 embedding）
-        let queryVector: number[] | undefined
-        if (config.embeddingEnabled && embedding) {
-          const embedResult = await embedding.embedText(query)
-          if (embedResult.success) {
-            queryVector = embedResult.data
-          }
-        }
-
-        // 2b. 从向量库批量获取预计算的相似度得分
-        const vectorScores = new Map<string, number>()
-        if (queryVector) {
-          const vectorResults = await vectorStore.search(queryVector, {
-            topK: topK * 3,
-            filter: options?.objectId ? { objectId: options.objectId } : undefined,
-          })
-          for (const r of vectorResults) {
-            vectorScores.set(r.id, r.score)
-          }
-        }
-
-        const now = Date.now()
-        /** 7 天为时间衰减的基准周期 */
-        const maxAge = 7 * 24 * 60 * 60 * 1000
-
-        // 2c. 为每条候选计算综合得分
-        const scored = candidates.map((entry) => {
-          // 向量相似度：优先用向量库预计算得分 → 实时计算余弦相似度 → 关键词匹配回退
-          let similarity = vectorScores.get(entry.id) ?? 0
-          if (!similarity && queryVector && entry.vector) {
-            similarity = cosineSimilarity(queryVector, entry.vector)
-          }
-          else if (!similarity) {
-            // 无向量时通过关键词包含关系进行粗略匹配
-            const queryLower = query.toLowerCase()
-            const contentLower = entry.content.toLowerCase()
-            similarity = contentLower.includes(queryLower) ? 0.8 : 0
-          }
-
-          // 时间新鲜度：创建时间越近越接近 1，超过 maxAge 后为 0
-          const age = now - entry.createdAt
-          const recency = Math.max(0, 1 - age / maxAge)
-
-          // 语义相关度 = 向量相似度 (80%) + 重要性 (20%)
-          const relevance = similarity * 0.8 + entry.importance * 0.2
-
-          // 综合得分 = 相关度 × (1 - 时间权重) + 新鲜度 × 时间权重
-          // recencyWeight = 0 → 纯相关度排序；recencyWeight = 1 → 纯时间排序
-          const score = relevance * (1 - recencyWeight) + recency * recencyWeight
-
-          return { entry, score }
-        })
-
-        // ── 第三阶段：排序截取 + 更新访问统计 ──
-        scored.sort((a, b) => b.score - a.score)
-        const results: MemoryEntry[] = []
-        for (const { entry } of scored.slice(0, topK)) {
-          entry.lastAccessedAt = now
-          entry.accessCount++
-          await store.save(entry.id, entry, { objectId: entry.objectId })
-          results.push(entry)
-        }
-
-        logger.trace('Memory recall completed', { query: query.slice(0, 50), resultCount: results.length })
-        return ok(results)
-      }
-      catch (error) {
-        logger.error('Memory recall failed', { error })
-        return err(HaiAIError.MEMORY_RECALL_FAILED, aiM('ai_memoryRecallFailed', { params: { error: String(error) } }), error)
-      }
+      return recallEntries(query, options, true)
     },
 
     /**
@@ -454,41 +691,7 @@ export function createMemoryOperations(
      * 更新一条已有记忆
      */
     async update(memoryId: string, updates: MemoryUpdateInput): Promise<HaiResult<MemoryEntry>> {
-      try {
-        const existing = await store.get(memoryId)
-        if (!existing) {
-          return err(HaiAIError.MEMORY_NOT_FOUND, aiM('ai_memoryNotFound', { params: { id: memoryId } }))
-        }
-
-        if (updates.content !== undefined)
-          existing.content = updates.content
-        if (updates.type !== undefined)
-          existing.type = updates.type
-        if (updates.importance !== undefined)
-          existing.importance = updates.importance
-        if (updates.metadata !== undefined)
-          existing.metadata = updates.metadata
-
-        // 内容变更时重新计算向量
-        if (updates.content !== undefined) {
-          const vector = await computeVector(updates.content)
-          existing.vector = vector
-          if (vector) {
-            await vectorStore.upsert(memoryId, vector, {
-              objectId: existing.objectId,
-              type: existing.type,
-            })
-          }
-        }
-
-        await store.save(memoryId, existing, { objectId: existing.objectId })
-        logger.trace('Memory updated', { id: memoryId })
-        return ok(existing)
-      }
-      catch (error) {
-        logger.error('Memory update failed', { id: memoryId, error })
-        return err(HaiAIError.MEMORY_STORE_FAILED, aiM('ai_memoryStoreFailed', { params: { error: String(error) } }), error)
-      }
+      return updateEntry(memoryId, updates)
     },
 
     /**
