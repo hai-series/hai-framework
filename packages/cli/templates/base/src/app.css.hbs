@@ -1,0 +1,28 @@
+{{#if hasUi}}
+@import 'tailwindcss';
+
+/* ─── DaisyUI 主题配置 ─── */
+@plugin "daisyui" {
+  themes:
+    light --default,
+    dark --prefersdark,
+    cupcake,
+    emerald,
+    corporate,
+    nord,
+    lofi,
+    winter,
+    dracula,
+    night,
+    dim,
+    business,
+    sunset,
+    luxury,
+    coffee;
+}
+
+/* ─── Iconify 图标 ─── */
+@plugin "@iconify/tailwind4" {
+  prefixes: tabler;
+}
+{{/if}}

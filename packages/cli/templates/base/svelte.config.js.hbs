@@ -1,16 +1,24 @@
 /**
  * Svelte 配置
  */
+import process from 'node:process'
+{{#if hasUi}}
+import { autoImportHaiUi } from '@h-ai/ui/auto-import'
+{{/if}}
 {{#if isCapacitorApp}}
 import adapter from '@sveltejs/adapter-static'
 {{else}}
+{{#if_eq appType 'api'}}
+import adapter from '@sveltejs/adapter-node'
+{{else}}
 import adapter from '@sveltejs/adapter-auto'
+{{/if_eq}}
 {{/if}}
 import { vitePreprocess } from '@sveltejs/vite-plugin-svelte'
 
 /** @type {import('@sveltejs/kit').Config} */
 const config = {
-  preprocess: vitePreprocess(),
+  preprocess: [{{#if hasUi}}autoImportHaiUi(), {{/if}}vitePreprocess()],
   compilerOptions: {
     runes: true,
   },
@@ -24,6 +32,16 @@ const config = {
 {{else}}
     adapter: adapter(),
 {{/if}}
+    csrf: {
+      trustedOrigins: process.env.HAI_E2E === '1'
+        ? ['http://localhost:4173', 'http://127.0.0.1:4173']
+        : [],
+    },
+    alias: {
+      $components: './src/lib/components',
+      $stores: './src/lib/stores',
+      $utils: './src/lib/utils',
+    },
   },
 }
 

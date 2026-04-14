@@ -26,6 +26,10 @@ import { buildTemplateContext, generateFromTemplates } from './template-engine.j
 // 应用类型定义
 // =============================================================================
 
+/** Git 远程地址校验 */
+const RE_HTTPS_URL = /^https:\/\/.+/
+const RE_GIT_SSH_URL = /^git@.+:.+/
+
 /**
  * 应用类型定义
  */
@@ -324,6 +328,9 @@ export async function createProject(options: CreateProjectOptions): Promise<void
     if (resolvedOptions.git) {
       spinner.start('初始化 Git 仓库...')
       execSync('git init', { cwd: projectPath, stdio: 'ignore' })
+      if (resolvedOptions.gitRemote) {
+        execSync(`git remote add origin ${resolvedOptions.gitRemote}`, { cwd: projectPath, stdio: 'ignore' })
+      }
       spinner.succeed()
     }
 
@@ -505,6 +512,25 @@ async function resolveOptions(options: CreateProjectOptions): Promise<Required<C
     git = initGit
   }
 
+  // Git 远程仓库地址
+  let gitRemote = options.gitRemote
+  if (git && gitRemote === undefined) {
+    const { remote } = await prompts({
+      type: 'text',
+      name: 'remote',
+      message: 'Git 仓库地址 (可选，回车跳过):',
+      initial: '',
+      validate: (value: string) => {
+        if (!value.trim())
+          return true
+        if (RE_HTTPS_URL.test(value) || RE_GIT_SSH_URL.test(value))
+          return true
+        return '请输入合法的 Git 仓库地址 (https://... 或 git@...:...)'
+      },
+    }, { onCancel })
+    gitRemote = remote?.trim() || ''
+  }
+
   return {
     name: projectName!,
     appType: selectedAppType,
@@ -515,6 +541,7 @@ async function resolveOptions(options: CreateProjectOptions): Promise<Required<C
     install: install ?? true,
     packageManager: packageManager || 'pnpm',
     git: git ?? true,
+    gitRemote: gitRemote ?? '',
     verbose: options.verbose ?? false,
     cwd: options.cwd ?? '.',
   }
@@ -525,16 +552,23 @@ async function resolveOptions(options: CreateProjectOptions): Promise<Required<C
 // =============================================================================
 
 /**
- * 解析功能依赖（自动补全传递依赖）
+ * 解析功能依赖（自动补全传递依赖，循环直至收敛）
  */
 function resolveFeatureDependencies(features: FeatureId[]): FeatureId[] {
   const result = new Set(features)
 
-  for (const featureId of features) {
-    const feature = FEATURES[featureId]
-    if (feature?.dependencies) {
-      for (const dep of feature.dependencies) {
-        result.add(dep)
+  let changed = true
+  while (changed) {
+    changed = false
+    for (const featureId of result) {
+      const feature = FEATURES[featureId]
+      if (feature?.dependencies) {
+        for (const dep of feature.dependencies) {
+          if (!result.has(dep)) {
+            result.add(dep)
+            changed = true
+          }
+        }
       }
     }
   }

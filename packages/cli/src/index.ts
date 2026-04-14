@@ -33,6 +33,7 @@ cli
   .option('--no-install', '不安装依赖')
   .option('-p, --package-manager <pm>', '包管理器 (pnpm, npm, yarn)')
   .option('--no-git', '不初始化 Git')
+  .option('--git-remote <url>', 'Git 远程仓库地址')
   .action(async (name: string | undefined, options: Record<string, unknown>) => {
     try {
       // 解析功能列表
@@ -49,6 +50,7 @@ cli
         install: options.install as boolean,
         packageManager: options.packageManager as CreateProjectOptions['packageManager'],
         git: options.git as boolean,
+        gitRemote: options.gitRemote as string,
         verbose: options.verbose as boolean,
         cwd: options.cwd as string,
       })

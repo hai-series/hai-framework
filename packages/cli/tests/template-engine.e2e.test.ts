@@ -126,17 +126,58 @@ describe('admin 应用类型生成', () => {
       expect(await fileExists(projectPath, 'svelte.config.js')).toBe(true)
     })
 
+    it('应生成 eslint.config.js 并含 @antfu/eslint-config', async () => {
+      const content = await readGenerated(projectPath, 'eslint.config.js')
+      expect(content).toContain('@antfu/eslint-config')
+      expect(content).toContain('svelte: true')
+    })
+
+    it('应生成 vitest.config.ts', async () => {
+      const content = await readGenerated(projectPath, 'vitest.config.ts')
+      expect(content).toContain('defineConfig')
+      expect(content).toContain('tests/**/*.test.ts')
+    })
+
+    it('package.json version 应为 0.1.0', async () => {
+      const content = await readGenerated(projectPath, 'package.json')
+      const pkg = JSON.parse(content)
+      expect(pkg.version).toBe('0.1.0')
+    })
+
+    it('package.json 应包含 description 和 keywords', async () => {
+      const content = await readGenerated(projectPath, 'package.json')
+      const pkg = JSON.parse(content)
+      expect(pkg.description).toBeDefined()
+      expect(pkg.description.length).toBeGreaterThan(0)
+      expect(pkg.keywords).toContain('hai')
+      expect(pkg.keywords).toContain('sveltekit')
+    })
+
+    it('package.json scripts 应包含 test:watch 和 clean', async () => {
+      const content = await readGenerated(projectPath, 'package.json')
+      const pkg = JSON.parse(content)
+      expect(pkg.scripts['test:watch']).toBeDefined()
+      expect(pkg.scripts.clean).toBeDefined()
+    })
+
     it('应生成 static 目录', async () => {
       expect(await fileExists(projectPath, 'static')).toBe(true)
+    })
+
+    it('应生成 .npmrc（含 node-linker=hoisted）', async () => {
+      const content = await readGenerated(projectPath, '.npmrc')
+      expect(content).toContain('node-linker=hoisted')
+      expect(content).toContain('shamefully-hoist=true')
     })
   })
 
   describe('i18n 支持', () => {
-    it('应包含 paraglide devDependencies', async () => {
+    it('应包含 paraglide devDependencies 与 pino-pretty', async () => {
       const content = await readGenerated(projectPath, 'package.json')
       const pkg = JSON.parse(content)
       expect(pkg.devDependencies['@inlang/paraglide-js']).toBeDefined()
       expect(pkg.devDependencies['@inlang/plugin-message-format']).toBeDefined()
+      expect(pkg.devDependencies['pino-pretty']).toBeDefined()
     })
 
     it('应生成 project.inlang/settings.json', async () => {
@@ -144,6 +185,7 @@ describe('admin 应用类型生成', () => {
       const settings = JSON.parse(content)
       expect(settings.baseLocale).toBe('zh-CN')
       expect(settings.locales).toContain('en-US')
+      expect(settings.modules).toEqual(['./node_modules/@inlang/plugin-message-format/dist/index.js'])
     })
 
     it('应生成 messages 文件', async () => {
@@ -176,6 +218,33 @@ describe('admin 应用类型生成', () => {
       const content = await readGenerated(projectPath, 'vite.config.ts')
       expect(content).toContain('tailwindcss()')
       expect(content).toContain('import tailwindcss from \'@tailwindcss/vite\'')
+    })
+
+    it('vite.config.ts 应包含 SSR noExternal 和 loadEnv', async () => {
+      const content = await readGenerated(projectPath, 'vite.config.ts')
+      expect(content).toContain('noExternal')
+      expect(content).toContain('@h-ai')
+      expect(content).toContain('loadEnv')
+      expect(content).toContain('optimizeDeps')
+      expect(content).toContain('bits-ui')
+    })
+
+    it('svelte.config.js 应包含 autoImportHaiUi 和 runes', async () => {
+      const content = await readGenerated(projectPath, 'svelte.config.js')
+      expect(content).toContain('autoImportHaiUi')
+      expect(content).toContain('runes: true')
+      expect(content).toContain('trustedOrigins')
+      expect(content).toContain('$components')
+    })
+
+    it('app.css 应包含 DaisyUI 主题配置和 iconify', async () => {
+      const content = await readGenerated(projectPath, 'src/app.css')
+      expect(content).toContain('@import \'tailwindcss\'')
+      expect(content).toContain('@plugin "daisyui"')
+      expect(content).toContain('light --default')
+      expect(content).toContain('dark --prefersdark')
+      expect(content).toContain('@plugin "@iconify/tailwind4"')
+      expect(content).toContain('prefixes: tabler')
     })
 
     it('hooks.server.ts 应包含 i18nHandle', async () => {
@@ -490,6 +559,33 @@ describe('api 应用类型生成', () => {
       expect(content).not.toContain('tailwindcss')
     })
 
+    it('vite.config.ts 仍应包含 SSR noExternal', async () => {
+      const content = await readGenerated(projectPath, 'vite.config.ts')
+      expect(content).toContain('noExternal')
+      expect(content).toContain('@h-ai')
+      expect(content).not.toContain('optimizeDeps')
+    })
+
+    it('svelte.config.js 不应包含 autoImportHaiUi', async () => {
+      const content = await readGenerated(projectPath, 'svelte.config.js')
+      expect(content).not.toContain('autoImportHaiUi')
+      expect(content).toContain('runes: true')
+      expect(content).toContain('adapter-node')
+    })
+
+    it('package.json 应使用 adapter-node', async () => {
+      const content = await readGenerated(projectPath, 'package.json')
+      const pkg = JSON.parse(content)
+      expect(pkg.devDependencies['@sveltejs/adapter-node']).toBeDefined()
+      expect(pkg.devDependencies['@sveltejs/adapter-auto']).toBeUndefined()
+    })
+
+    it('package.json 包含 db feature 时应有 pnpm.onlyBuiltDependencies', async () => {
+      const content = await readGenerated(projectPath, 'package.json')
+      const pkg = JSON.parse(content)
+      expect(pkg.pnpm?.onlyBuiltDependencies).toContain('better-sqlite3')
+    })
+
     it('hooks.server.ts 不应包含 i18nHandle', async () => {
       const content = await readGenerated(projectPath, 'src/hooks.server.ts')
       expect(content).not.toContain('i18nHandle')
@@ -504,6 +600,12 @@ describe('api 应用类型生成', () => {
       expect(pkg.dependencies['@h-ai/ui']).toBeUndefined()
       expect(pkg.devDependencies.tailwindcss).toBeUndefined()
       expect(pkg.devDependencies.daisyui).toBeUndefined()
+    })
+
+    it('app.css 不应包含 tailwindcss 导入', async () => {
+      const content = await readGenerated(projectPath, 'src/app.css')
+      expect(content).not.toContain('tailwindcss')
+      expect(content).not.toContain('daisyui')
     })
   })
 
@@ -648,6 +750,8 @@ describe('生成产物结构完整性', () => {
     'tsconfig.json',
     'svelte.config.js',
     'vite.config.ts',
+    'vitest.config.ts',
+    'eslint.config.js',
     'src/app.html',
     'src/app.d.ts',
     'src/hooks.server.ts',
