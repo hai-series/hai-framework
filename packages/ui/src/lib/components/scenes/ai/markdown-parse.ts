@@ -7,8 +7,8 @@
  */
 
 import type { RendererObject, Tokens } from 'marked'
-import { createEditorMarkdownExtensions } from './editor-markdown-extensions.js'
 import { Marked } from 'marked'
+import { createEditorMarkdownExtensions } from './editor-markdown-extensions.js'
 import { highlightCode, isLanguageSupported } from './highlight.js'
 
 const SAFE_LINK_HREF_REGEX = /^(?:https?:\/\/|\/|#|mailto:)/i

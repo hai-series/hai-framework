@@ -12,7 +12,11 @@ const HEX_COLOR_REGEX = /^#(?:[0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i
 /**
  * 对齐扩展只开放编辑器工具条里的四种模式。
  */
-const ALIGN_VALUE_REGEX = /^(left|center|right|justify)$/i
+const ALIGN_VALUE_REGEX = /^(?:left|center|right|justify)$/i
+const HAI_ALIGN_BLOCK_REGEX = /^<hai-align\s+value="(left|center|right|justify)">\n?([\s\S]+?)\n?<\/hai-align>\n{0,2}/i
+const HAI_SPAN_INLINE_REGEX = /^<hai-span(?:\s+color="([^"]+)")?(?:\s+bg="([^"]+)")?\s*>([\s\S]+?)<\/hai-span>/i
+const HAI_UNDERLINE_REGEX = /^\+\+((?:\\.|[\s\S])+?)\+\+/
+const HAI_HIGHLIGHT_REGEX = /^==((?:\\.|[\s\S])+?)==/
 
 type EditorSpanToken = Tokens.Generic & {
   type: 'haiSpan'
@@ -103,9 +107,7 @@ export function createEditorMarkdownExtensions(): TokenizerAndRendererExtension[
         return src.indexOf('<hai-align')
       },
       tokenizer(src) {
-        const match = src.match(
-          /^<hai-align\s+value="(left|center|right|justify)">\n?([\s\S]+?)\n?<\/hai-align>(?:\n{0,2}|$)/i,
-        )
+        const match = src.match(HAI_ALIGN_BLOCK_REGEX)
         if (!match) {
           return undefined
         }
@@ -136,9 +138,7 @@ export function createEditorMarkdownExtensions(): TokenizerAndRendererExtension[
         return src.indexOf('<hai-span')
       },
       tokenizer(src) {
-        const match = src.match(
-          /^<hai-span(?:\s+color="([^"]+)")?(?:\s+bg="([^"]+)")?\s*>([\s\S]+?)<\/hai-span>/i,
-        )
+        const match = src.match(HAI_SPAN_INLINE_REGEX)
         if (!match) {
           return undefined
         }
@@ -186,7 +186,7 @@ export function createEditorMarkdownExtensions(): TokenizerAndRendererExtension[
         return src.indexOf('++')
       },
       tokenizer(src) {
-        const match = src.match(/^\+\+((?:\\.|[\s\S])+?)\+\+/)
+        const match = src.match(HAI_UNDERLINE_REGEX)
         if (!match) {
           return undefined
         }
@@ -210,7 +210,7 @@ export function createEditorMarkdownExtensions(): TokenizerAndRendererExtension[
         return src.indexOf('==')
       },
       tokenizer(src) {
-        const match = src.match(/^==((?:\\.|[\s\S])+?)==/)
+        const match = src.match(HAI_HIGHLIGHT_REGEX)
         if (!match) {
           return undefined
         }

@@ -7,6 +7,12 @@
 
 import type { Snippet } from 'svelte'
 import type {
+  AiDocumentEditorProps,
+  MarkdownBlockFormatKind as AiMarkdownBlockFormatKind,
+  MarkdownInlineFormatKind as AiMarkdownInlineFormatKind,
+  MarkdownBlockStyleKind,
+} from '../src/lib/components/scenes/ai/document-types.js'
+import type {
   AlertProps,
   Alignment,
   AvatarProps,
@@ -53,12 +59,6 @@ import type {
   TooltipProps,
   Variant,
 } from '../src/lib/types.js'
-import type {
-  AiDocumentEditorProps,
-  MarkdownBlockFormatKind as AiMarkdownBlockFormatKind,
-  MarkdownBlockStyleKind,
-  MarkdownInlineFormatKind as AiMarkdownInlineFormatKind,
-} from '../src/lib/components/scenes/ai/document-types.js'
 import { describe, expectTypeOf, it } from 'vitest'
 
 describe('基础类型', () => {
@@ -81,7 +81,7 @@ describe('基础类型', () => {
   })
 })
 
-describe('AI 文档编辑器类型', () => {
+describe('aI 文档编辑器类型', () => {
   it('兼容保留旧的 block / inline 格式 union', () => {
     expectTypeOf<AiMarkdownBlockFormatKind>().toEqualTypeOf<'heading' | 'bullet'>()
     expectTypeOf<MarkdownBlockStyleKind>().toEqualTypeOf<
@@ -92,7 +92,7 @@ describe('AI 文档编辑器类型', () => {
     >()
   })
 
-  it('AiDocumentEditorProps 同时暴露兼容和新版块级回调', () => {
+  it('aiDocumentEditorProps 同时暴露兼容和新版块级回调', () => {
     expectTypeOf<AiDocumentEditorProps>().toHaveProperty('onapplyblockformat')
     expectTypeOf<AiDocumentEditorProps>().toHaveProperty('onapplyblockstyle')
     expectTypeOf<AiDocumentEditorProps>().toHaveProperty('onapplyinlineformat')
