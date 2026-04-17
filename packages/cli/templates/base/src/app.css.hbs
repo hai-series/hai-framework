@@ -1,7 +1,17 @@
 {{#if hasUi}}
+/* ─── Tailwind CSS v4 ─── */
 @import 'tailwindcss';
 
-/* ─── DaisyUI 主题配置 ─── */
+/* ─── @h-ai/ui 共享样式 ─── */
+@import '@h-ai/ui/styles/global.css';
+@import '@h-ai/ui/styles/theme.css';
+@import '@h-ai/ui/styles/design-tokens.css';
+@import '@h-ai/ui/styles/mobile.css';
+
+/* ─── 扫描 @h-ai/ui 组件中使用的 Tailwind 类名 ─── */
+@source "../node_modules/@h-ai/ui/dist/**/*.{svelte,ts}";
+
+/* ─── DaisyUI 主题 ─── */
 @plugin "daisyui" {
   themes:
     light --default,
@@ -21,7 +31,7 @@
     coffee;
 }
 
-/* ─── Iconify 图标 ─── */
+/* ─── 图标 ─── */
 @plugin "@iconify/tailwind4" {
   prefixes: tabler;
 }
