@@ -13,6 +13,16 @@ import { core, err, ok } from '@h-ai/core'
 import { cryptoM } from './crypto-i18n.js'
 import { HaiCryptoError } from './crypto-types.js'
 
+// ─── 常量 ───
+
+/** 迭代次数最小值（防止退化为 0 迭代导致明文等价泄漏） */
+const MIN_ITERATIONS = 1
+/** 迭代次数最大值（防止伪造哈希触发 CPU 饱和） */
+const MAX_ITERATIONS = 1_000_000
+/** 盐值长度范围，限制异常输入 */
+const MIN_SALT_LENGTH = 8
+const MAX_SALT_LENGTH = 128
+
 // ─── 依赖接口 ───
 
 /** createPasswordFunctions 所需的外部依赖 */
@@ -105,6 +115,19 @@ export function createPasswordFunctions(deps: PasswordDeps): PasswordOperations 
           )
         }
 
+        if (!Number.isInteger(iterations) || iterations < MIN_ITERATIONS || iterations > MAX_ITERATIONS) {
+          return err(
+            HaiCryptoError.INVALID_INPUT,
+            cryptoM('crypto_hashFormatInvalid'),
+          )
+        }
+        if (!Number.isInteger(saltLength) || saltLength < MIN_SALT_LENGTH || saltLength > MAX_SALT_LENGTH) {
+          return err(
+            HaiCryptoError.INVALID_INPUT,
+            cryptoM('crypto_hashFormatInvalid'),
+          )
+        }
+
         const salt = generateSalt(saltLength)
         const hashResult = iterateHash(hashOps, password, salt, iterations)
         if (!hashResult.success) {
@@ -154,7 +177,13 @@ export function createPasswordFunctions(deps: PasswordDeps): PasswordOperations 
         const salt = parts[3]
         const storedHash = parts[4]
 
-        if (Number.isNaN(storedIterations) || !salt || !storedHash) {
+        if (
+          Number.isNaN(storedIterations)
+          || storedIterations < MIN_ITERATIONS
+          || storedIterations > MAX_ITERATIONS
+          || !salt
+          || !storedHash
+        ) {
           return err(
             HaiCryptoError.INVALID_INPUT,
             cryptoM('crypto_hashFormatInvalid'),

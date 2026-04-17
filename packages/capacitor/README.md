@@ -115,16 +115,20 @@ if (!result.success) {
 
 常用错误码：
 
-| 错误码                                     | code                | 说明                 |
-| ------------------------------------------ | ------------------- | -------------------- |
-| `HaiCapacitorError.INIT_FAILED`            | `hai:capacitor:001` | 初始化失败           |
-| `HaiCapacitorError.NOT_AVAILABLE`          | `hai:capacitor:002` | 能力不可用           |
-| `HaiCapacitorError.NOT_INITIALIZED`        | `hai:capacitor:060` | 未初始化             |
-| `HaiCapacitorError.INIT_IN_PROGRESS`       | `hai:capacitor:061` | 初始化进行中         |
-| `HaiCapacitorError.DEVICE_INFO_FAILED`     | `hai:capacitor:010` | 设备信息获取失败     |
-| `HaiCapacitorError.PUSH_REGISTER_FAILED`   | `hai:capacitor:020` | 推送注册失败         |
-| `HaiCapacitorError.CAMERA_FAILED`          | `hai:capacitor:030` | 相机操作失败         |
-| `HaiCapacitorError.PREFERENCES_GET_FAILED` | `hai:capacitor:050` | Preferences 读取失败 |
+| 错误码                                        | code                | 说明                 |
+| --------------------------------------------- | ------------------- | -------------------- |
+| `HaiCapacitorError.INIT_FAILED`               | `hai:capacitor:001` | 初始化失败           |
+| `HaiCapacitorError.NOT_AVAILABLE`             | `hai:capacitor:002` | 能力不可用           |
+| `HaiCapacitorError.INIT_IN_PROGRESS`          | `hai:capacitor:003` | 初始化进行中         |
+| `HaiCapacitorError.NOT_INITIALIZED`           | `hai:capacitor:010` | 未初始化             |
+| `HaiCapacitorError.PREFERENCES_GET_FAILED`    | `hai:capacitor:011` | Preferences 读取失败 |
+| `HaiCapacitorError.PREFERENCES_SET_FAILED`    | `hai:capacitor:012` | Preferences 写入失败 |
+| `HaiCapacitorError.PREFERENCES_REMOVE_FAILED` | `hai:capacitor:013` | Preferences 删除失败 |
+| `HaiCapacitorError.DEVICE_INFO_FAILED`        | `hai:capacitor:020` | 设备信息获取失败     |
+| `HaiCapacitorError.PUSH_REGISTER_FAILED`      | `hai:capacitor:030` | 推送注册失败         |
+| `HaiCapacitorError.PUSH_LISTEN_FAILED`        | `hai:capacitor:031` | 推送监听失败         |
+| `HaiCapacitorError.CAMERA_FAILED`             | `hai:capacitor:040` | 相机操作失败         |
+| `HaiCapacitorError.STATUS_BAR_FAILED`         | `hai:capacitor:050` | 状态栏操作失败       |
 
 ## 测试
 

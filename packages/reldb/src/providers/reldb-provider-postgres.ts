@@ -35,6 +35,9 @@ import { createTxHandle } from './reldb-tx-assembler.js'
 
 const logger = core.logger.child({ module: 'reldb', scope: 'postgres' })
 
+/** PostgreSQL 美元引号起始标记匹配（提至模块作用域避免每次调用重建） */
+const PG_DOLLAR_TAG_REGEX = /^\$([A-Z_]\w*)?\$/i
+
 // ─── pg 类型定义（避免强依赖） ───
 
 /** PostgreSQL 连接池接口 */
@@ -72,10 +75,117 @@ export function createPostgresProvider(): ReldbProvider {
 
   /**
    * 将 ? 占位符转换为 PostgreSQL 的 $1, $2, ... 格式
+   *
+   * 需要跳过字符串字面量（单/双引号）、美元引号块（$tag$...$tag$）以及行/块注释中的 `?`，
+   * 避免 `SELECT 'a?b' WHERE x=?` 被错误重写为 `SELECT 'a$1' WHERE x=$2`。
    */
   function convertPlaceholders(sql: string): string {
+    let out = ''
     let index = 0
-    return sql.replace(/\?/g, () => `$${++index}`)
+    let i = 0
+    const len = sql.length
+
+    while (i < len) {
+      const ch = sql[i]
+
+      // 单引号字符串（含 SQL 标准 '' 转义）
+      if (ch === '\'') {
+        out += ch
+        i++
+        while (i < len) {
+          const c = sql[i]
+          out += c
+          i++
+          if (c === '\'') {
+            if (sql[i] === '\'') {
+              out += sql[i]
+              i++
+              continue
+            }
+            break
+          }
+        }
+        continue
+      }
+
+      // 双引号标识符（含 "" 转义）
+      if (ch === '"') {
+        out += ch
+        i++
+        while (i < len) {
+          const c = sql[i]
+          out += c
+          i++
+          if (c === '"') {
+            if (sql[i] === '"') {
+              out += sql[i]
+              i++
+              continue
+            }
+            break
+          }
+        }
+        continue
+      }
+
+      // PostgreSQL 美元引号：$tag$ ... $tag$ 或 $$ ... $$
+      if (ch === '$') {
+        const tagMatch = sql.slice(i).match(PG_DOLLAR_TAG_REGEX)
+        if (tagMatch) {
+          const tag = tagMatch[0]
+          const end = sql.indexOf(tag, i + tag.length)
+          if (end === -1) {
+            out += sql.slice(i)
+            i = len
+          }
+          else {
+            out += sql.slice(i, end + tag.length)
+            i = end + tag.length
+          }
+          continue
+        }
+      }
+
+      // 单行注释 -- ... \n
+      if (ch === '-' && sql[i + 1] === '-') {
+        const nl = sql.indexOf('\n', i)
+        if (nl === -1) {
+          out += sql.slice(i)
+          i = len
+        }
+        else {
+          out += sql.slice(i, nl + 1)
+          i = nl + 1
+        }
+        continue
+      }
+
+      // 块注释 /* ... */（支持简单嵌套处理：按首个结束标记终止）
+      if (ch === '/' && sql[i + 1] === '*') {
+        const endIdx = sql.indexOf('*/', i + 2)
+        if (endIdx === -1) {
+          out += sql.slice(i)
+          i = len
+        }
+        else {
+          out += sql.slice(i, endIdx + 2)
+          i = endIdx + 2
+        }
+        continue
+      }
+
+      // 占位符替换
+      if (ch === '?') {
+        out += `$${++index}`
+        i++
+        continue
+      }
+
+      out += ch
+      i++
+    }
+
+    return out
   }
 
   /** 事务错误消息生成 */

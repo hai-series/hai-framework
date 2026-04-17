@@ -10,6 +10,12 @@
 - 密码哈希（加盐迭代哈希）
 - 前后端通用（Node.js / 浏览器）
 
+## 安全声明
+
+- **SM4 ECB 模式（当前默认值）不安全**：相同明文块产生相同密文块，会泄漏结构模式。**生产环境请勿使用** `crypto.symmetric.encrypt(data, key)` 默认模式，改用 `crypto.symmetric.encryptWithIV(data, key)`（自动生成随机 IV 的 CBC 模式）或显式传入 `{ mode: 'cbc', iv }`。
+- **SM4 `deriveKey(password, salt)` 不是 KDF**：仅为单次 SM3 哈希，不具备密码爆破抗性，**禁止用于密码存储**。如需密码哈希，使用 `crypto.password.hash(password)`；如需从密码派生密钥，请采用 PBKDF2 / scrypt / Argon2。
+- **IV 必须唯一**：相同密钥下禁止复用 IV；推荐使用 `encryptWithIV()` 每次自动生成。密文与 IV 需一同传输与存储（IV 可公开，不必保密）。
+
 ## 快速开始
 
 ```ts
@@ -81,7 +87,7 @@ if (hash.success) {
 const key = crypto.symmetric.generateKey()
 const iv = crypto.symmetric.generateIV()
 
-// ECB 模式（默认）
+// ECB 模式（默认，❌ 不安全，仅保留兼容性，请勿在生产使用）
 const ecbEnc = crypto.symmetric.encrypt('data', key)
 if (ecbEnc.success) {
   const ecbDec = crypto.symmetric.decrypt(ecbEnc.data, key)
@@ -103,7 +109,8 @@ if (withIV.success) {
 // 输出 base64 格式
 const b64Enc = crypto.symmetric.encrypt('data', key, { outputFormat: 'base64' })
 
-// 从密码派生密钥
+// ⚠️ 已弃用：从密码派生密钥（仅为单次 SM3 哈希，不是 KDF，禁止用于密码存储场景）
+// 密码散列请用 crypto.password.hash()；如需从密码派生密钥，请在应用层自行实现 PBKDF2 / scrypt / Argon2
 const derivedKey = crypto.symmetric.deriveKey('my-password', 'random-salt')
 
 // 校验密钥/IV 格式

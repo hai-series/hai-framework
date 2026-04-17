@@ -346,6 +346,14 @@ export function createSqliteProvider(): ReldbProvider {
     async close(): Promise<HaiResult<void>> {
       if (database) {
         try {
+          // 等待当前事务链清空，避免在事务进行中强制关闭连接导致
+          // "database is locked" 或丢失的事务拒绝
+          try {
+            await txChain
+          }
+          catch {
+            // 事务已失败的情况下忽略其拒绝，关闭仍需进行
+          }
           database.close()
         }
         catch (error) {
