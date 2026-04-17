@@ -6,11 +6,11 @@
 
 import type { RendererObject, Tokens } from 'marked'
 import type { MarkdownCodeBlockItem, MarkdownOutlineItem } from './document-types.js'
+import { Marked } from 'marked'
 import {
   createEditorMarkdownExtensions,
   extractPlainTextFromTokens,
 } from './editor-markdown-extensions.js'
-import { Marked } from 'marked'
 import { highlightCode, isLanguageSupported } from './highlight.js'
 
 export interface MarkdownDocumentParseOptions {

@@ -124,7 +124,7 @@ export interface MarkdownToolbarDownloadAction {
  * This lets older handlers with narrower unions remain assignable while the component gains new APIs.
  */
 type BivariantCallback<Args extends unknown[], Return = void> = {
-  bivarianceHack(...args: Args): Return
+  bivarianceHack: (...args: Args) => Return
 }['bivarianceHack']
 
 export interface AiDocumentEditorProps {
