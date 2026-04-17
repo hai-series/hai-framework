@@ -61,18 +61,19 @@
     submitting = true
 
     try {
-      const formData = new FormData()
-      formData.append('companyName', form.companyName)
-      formData.append('contactName', form.contactName)
-      formData.append('email', form.email)
-      formData.append('phone', form.phone)
-      formData.append('cooperationType', form.cooperationType)
-      formData.append('budgetRange', form.budgetRange)
-      formData.append('message', form.message)
-
+      // 服务端使用 kit.validate.body(request, PartnerLeadSchema) 解析 JSON，必须以 JSON 提交而非 FormData
       const response = await fetch('/api/partners/register', {
         method: 'POST',
-        body: formData,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          companyName: form.companyName,
+          contactName: form.contactName,
+          email: form.email,
+          phone: form.phone,
+          cooperationType: form.cooperationType,
+          budgetRange: form.budgetRange,
+          message: form.message,
+        }),
       })
       const data = await response.json()
 

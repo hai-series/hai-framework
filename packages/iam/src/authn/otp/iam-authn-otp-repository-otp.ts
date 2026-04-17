@@ -59,6 +59,19 @@ export interface OtpRepository {
 
 /** OTP 缓存键前缀 */
 const OTP_KEY_PREFIX = 'hai:iam:otp:'
+/** OTP 尝试次数键前缀（单独存储以支持原子 incr） */
+const OTP_ATTEMPTS_KEY_PREFIX = 'hai:iam:otp:attempts:'
+
+/**
+ * 规范化标识符：邮箱转小写，电话号移除分隔符，避免同一身份因大小写 / 空格产生不同缓存键。
+ */
+export function normalizeOtpIdentifier(identifier: string): string {
+  const trimmed = identifier.trim()
+  if (trimmed.includes('@'))
+    return trimmed.toLowerCase()
+  // 电话：移除空格和连字符
+  return trimmed.replace(/[\s-]/g, '')
+}
 
 /**
  * 构建 OTP 缓存 key
@@ -67,7 +80,14 @@ const OTP_KEY_PREFIX = 'hai:iam:otp:'
  * @returns 格式：`iam:otp:{identifier}`
  */
 function buildOtpKey(identifier: string): string {
-  return `${OTP_KEY_PREFIX}${identifier}`
+  return `${OTP_KEY_PREFIX}${normalizeOtpIdentifier(identifier)}`
+}
+
+/**
+ * 构建 OTP 尝试次数缓存 key
+ */
+function buildOtpAttemptsKey(identifier: string): string {
+  return `${OTP_ATTEMPTS_KEY_PREFIX}${normalizeOtpIdentifier(identifier)}`
 }
 
 /**
@@ -112,7 +132,7 @@ export function createCacheOtpRepository(): OtpRepository {
     async saveOtp(identifier, code, expiresIn): Promise<HaiResult<void>> {
       const now = Date.now()
       const record: OtpRecord = {
-        identifier,
+        identifier: normalizeOtpIdentifier(identifier),
         code,
         expiresAt: new Date(now + expiresIn * 1000),
         attempts: 0,
@@ -128,6 +148,9 @@ export function createCacheOtpRepository(): OtpRepository {
           result.error,
         )
       }
+
+      // 同步重置尝试计数器（避免新生成的 OTP 复用旧计数）
+      await cache.kv.del(buildOtpAttemptsKey(identifier))
 
       return ok(undefined)
     },
@@ -146,11 +169,21 @@ export function createCacheOtpRepository(): OtpRepository {
         return ok(null)
       }
 
-      return ok(restoreOtpDates(result.data))
+      // 合并存储的尝试次数（独立键，支持原子 incr）
+      const attemptsResult = await cache.kv.get<number>(buildOtpAttemptsKey(identifier))
+      const attempts = attemptsResult.success && typeof attemptsResult.data === 'number'
+        ? attemptsResult.data
+        : 0
+
+      const restored = restoreOtpDates(result.data)
+      return ok({ ...restored, attempts })
     },
 
     async incrementOtpAttempts(identifier): Promise<HaiResult<number>> {
       const otpKey = buildOtpKey(identifier)
+      const attemptsKey = buildOtpAttemptsKey(identifier)
+
+      // 确认 OTP 本身存在
       const current = await cache.kv.get<OtpRecord>(otpKey)
       if (!current.success) {
         return err(
@@ -164,23 +197,22 @@ export function createCacheOtpRepository(): OtpRepository {
         return ok(0)
       }
 
-      const record = restoreOtpDates(current.data)
-      const nextAttempts = record.attempts + 1
-
-      // 获取剩余 TTL，保持原有过期时间
-      const ttlResult = await cache.kv.ttl(otpKey)
-      const ttl = ttlResult.success && ttlResult.data > 0 ? ttlResult.data : 1
-
-      const updateResult = await cache.kv.set(otpKey, { ...record, attempts: nextAttempts }, { ex: ttl })
-      if (!updateResult.success) {
+      // 原子递增，避免并发竞态导致尝试次数统计失真
+      const incrResult = await cache.kv.incr(attemptsKey)
+      if (!incrResult.success) {
         return err(
           HaiIamError.REPOSITORY_ERROR,
-          iamM('iam_updateOtpAttemptsFailed', { params: { message: updateResult.error.message } }),
-          updateResult.error,
+          iamM('iam_updateOtpAttemptsFailed', { params: { message: incrResult.error.message } }),
+          incrResult.error,
         )
       }
 
-      return ok(nextAttempts)
+      // 同步对齐 OTP 键剩余 TTL，确保 attempts 与 OTP 同时过期
+      const ttlResult = await cache.kv.ttl(otpKey)
+      const ttl = ttlResult.success && ttlResult.data > 0 ? ttlResult.data : 1
+      await cache.kv.expire(attemptsKey, ttl)
+
+      return ok(incrResult.data)
     },
 
     async removeOtp(identifier): Promise<HaiResult<void>> {
@@ -192,6 +224,8 @@ export function createCacheOtpRepository(): OtpRepository {
           result.error,
         )
       }
+      // 同步清理尝试计数键
+      await cache.kv.del(buildOtpAttemptsKey(identifier))
       return ok(undefined)
     },
   }
