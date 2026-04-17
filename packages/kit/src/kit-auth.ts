@@ -10,6 +10,7 @@ import type { ApiKeyCredentials, AuthResult, LdapCredentials, OtpCredentials, Pa
 import type { HandleFetch } from '@sveltejs/kit'
 import type { AuthOperations, AuthOperationsProvider } from './kit-types.js'
 import process from 'node:process'
+import { kitM } from './kit-i18n.js'
 
 /** 默认 Token Cookie 名 */
 const DEFAULT_TOKEN_COOKIE_NAME = 'hai_access_token'
@@ -124,7 +125,7 @@ function clearToken(cookies: CookieWriter): void {
  */
 function getAuthOperations(): AuthOperations {
   if (!authState.operations) {
-    throw new Error('kit.auth 未配置：请在 kit.createHandle() 中传入 auth.operations')
+    throw new Error(kitM('kit_authNotConfigured'))
   }
   return typeof authState.operations === 'function'
     ? authState.operations()

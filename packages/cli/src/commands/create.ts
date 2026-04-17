@@ -11,7 +11,7 @@
  */
 
 import type { AppType, CreateProjectOptions, FeatureDefinition, FeatureId, ModuleConfigs, ProjectInfo } from '../types.js'
-import { execSync } from 'node:child_process'
+import { execFileSync, execSync } from 'node:child_process'
 import path from 'node:path'
 import process from 'node:process'
 import { core } from '@h-ai/core'
@@ -329,7 +329,14 @@ export async function createProject(options: CreateProjectOptions): Promise<void
       spinner.start('初始化 Git 仓库...')
       execSync('git init', { cwd: projectPath, stdio: 'ignore' })
       if (resolvedOptions.gitRemote) {
-        execSync(`git remote add origin ${resolvedOptions.gitRemote}`, { cwd: projectPath, stdio: 'ignore' })
+        // 使用 execFileSync + 数组参数，避免 shell 注入
+        // 同时在非交互模式下补充校验（交互模式在 prompts.validate 中已校验）
+        const gitRemote = resolvedOptions.gitRemote
+        if (!RE_HTTPS_URL.test(gitRemote) && !RE_GIT_SSH_URL.test(gitRemote)) {
+          spinner.fail()
+          throw new Error(`Invalid gitRemote URL: ${gitRemote}`)
+        }
+        execFileSync('git', ['remote', 'add', 'origin', gitRemote], { cwd: projectPath, stdio: 'ignore' })
       }
       spinner.succeed()
     }

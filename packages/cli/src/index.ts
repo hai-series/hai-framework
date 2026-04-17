@@ -6,14 +6,29 @@
  */
 
 import type { AppType, CreateProjectOptions, FeatureId, GeneratorType } from './types.js'
+import { readFileSync } from 'node:fs'
+import path from 'node:path'
 import process from 'node:process'
+import { fileURLToPath } from 'node:url'
 import { core } from '@h-ai/core'
 import { cac } from 'cac'
 import chalk from 'chalk'
 import { addModule, createProject, deployCommand, generate, initProject } from './commands/index.js'
 
-// CLI 版本
-const VERSION = '0.0.1'
+// CLI 版本（从 package.json 动态读取，避免硬编码与 npm 发布版本不一致）
+function readCliVersion(): string {
+  try {
+    const here = path.dirname(fileURLToPath(import.meta.url))
+    // dist/index.js → ../package.json
+    const pkgPath = path.resolve(here, '../package.json')
+    const pkg = JSON.parse(readFileSync(pkgPath, 'utf-8')) as { version?: string }
+    return pkg.version ?? '0.0.0'
+  }
+  catch {
+    return '0.0.0'
+  }
+}
+const VERSION = readCliVersion()
 
 // 创建 CLI
 const cli = cac('hai')

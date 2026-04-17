@@ -52,6 +52,10 @@ export function createSM4(): SymmetricOperations {
      * 支持 ECB（默认）和 CBC 两种模式，使用 PKCS#7 填充。
      * CBC 模式需提供合法 IV。
      *
+     * ⚠️ 安全警告：**ECB 默认模式不安全**—相同明文块产生相同密文块，泄漏结构信息。
+     * 生产场景请优先使用 `encryptWithIV()`（自动随机 IV 的 CBC）或显式传入
+     * `{ mode: 'cbc', iv }`。ECB 模式仅保留兼容性，未来版本可能移除默认值。
+     *
      * @param data - 待加密明文
      * @param key - 密钥（32 字符十六进制）
      * @param options - 加密模式/IV/输出格式
@@ -231,9 +235,14 @@ export function createSM4(): SymmetricOperations {
     /**
      * 从密码和盐值派生密钥
      *
-     * 内部使用 SM3 哈希(password + salt) 取前 32 字符作为密钥。
-     * 注意：此为简单派生，不适用于高安全场景。
+     * 内部仅执行单次 SM3 哈希(password + salt)，取前 32 字符作为密钥。
      *
+     * ⚠️ 安全警告：**此实现不是标准 KDF**，不具备密码爆破抗性（无迭代、无内存硬化）。
+     * - **禁止用于密码存储**：密码散列请用 `crypto.password.hash()`。
+     * - **禁止用于高价值密钥派生**：如需从密码派生加密密钥，请在应用层自行实现 PBKDF2 / scrypt / Argon2。
+     * - 仅适用于测试、迭代兼容或不敏感的场景。
+     *
+     * @deprecated 未来版本可能移除。密码散列请用 `crypto.password.hash`；密钥派生请使用标准 KDF。
      * @param password - 密码
      * @param salt - 盐值
      * @returns 32 字符十六进制密钥
