@@ -1,5 +1,7 @@
 /// <reference types="@sveltejs/kit" />
-
+{{#if hasUi}}
+import '@h-ai/ui/auto-import'
+{{/if}}
 declare global {
   namespace App {
     interface Locals {
