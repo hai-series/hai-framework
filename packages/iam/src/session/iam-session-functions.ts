@@ -16,6 +16,21 @@ import { HaiIamError } from '../iam-types.js'
 import { createCacheSessionRepository } from './iam-session-repository-cache.js'
 import { buildSession, generateToken } from './iam-session-utils.js'
 
+/**
+ * 移除 session 中仅供内部使用的敏感保留字段（如 _tokenPair 中的 refreshToken）。
+ *
+ * 内部路径（如 authn.buildAuthResult、session.refresh）仍可从 create/repo 原始返回
+ * 值读取 _tokenPair；此函数仅作用于对外暴露的 get / verifyToken 出口。
+ */
+function stripInternalSessionFields(session: Session): Session {
+  if (!session.data || !('_tokenPair' in session.data))
+    return session
+  const { _tokenPair, ...rest } = session.data as { _tokenPair?: unknown, [key: string]: unknown }
+  void _tokenPair
+  const hasExtraKeys = Object.keys(rest).length > 0
+  return { ...session, data: hasExtraKeys ? rest : undefined }
+}
+
 const logger = core.logger.child({ module: 'iam', scope: 'session' })
 
 // ─── 子功能依赖 ───
@@ -152,7 +167,9 @@ function buildSessionFunctions(config: SessionBuilderConfig): SessionOperations 
         })
       }
 
-      return ok(session)
+      // 对外不暴露内部保留的 _tokenPair（含 refreshToken），
+      // 防止调用方（包括 event.locals.session 等上下文）意外泄漏刷新令牌。
+      return ok(stripInternalSessionFields(session))
     },
 
     async verifyToken(accessToken: string): Promise<HaiResult<Session>> {
@@ -176,18 +193,17 @@ function buildSessionFunctions(config: SessionBuilderConfig): SessionOperations 
     },
 
     async delete(accessToken: string): Promise<HaiResult<void>> {
-      logger.debug('Session deleted', { accessToken })
+      // 注意：不要记录原始 accessToken，token 属于敏感凭据
+      logger.debug('Session delete requested')
       return repo.removeByAccessToken(accessToken)
     },
 
     async deleteByUserId(userId: string): Promise<HaiResult<number>> {
-      // removeByUserId 内部遍历删除，无法直接获取删除数量
-      // 暂返回 0 表示成功；上层仅关注 success/failure
       const result = await repo.removeByUserId(userId)
       if (!result.success) {
         return result as HaiResult<number>
       }
-      return ok(0)
+      return ok(result.data)
     },
 
     async refresh(refreshToken: string): Promise<HaiResult<TokenPair>> {

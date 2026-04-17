@@ -25,7 +25,8 @@ import { core, err, ok } from '@h-ai/core'
 import { crypto } from '@h-ai/crypto'
 import { reldb } from '@h-ai/reldb'
 
-import { AgreementConfigSchema, PasswordResetConfigSchema, RegisterConfigSchema } from '../iam-config.js'
+import { isAccountLocked, recordLoginFailure, resetLoginFailures } from '../authn/iam-authn-utils.js'
+import { AgreementConfigSchema, PasswordResetConfigSchema, RegisterConfigSchema, SecurityConfigSchema } from '../iam-config.js'
 import { iamM } from '../iam-i18n.js'
 import { HaiIamError } from '../iam-types.js'
 import { generateToken } from '../session/iam-session-utils.js'
@@ -196,6 +197,8 @@ interface UserFnContext {
   config: IamConfig
   registerConfig: { enabled: boolean, defaultEnabled: boolean }
   agreementConfig: { showOnRegister: boolean, showOnLogin: boolean, userAgreementUrl?: string, privacyPolicyUrl?: string }
+  resetConfig: { tokenExpiresIn: number, maxAttempts: number }
+  loginConfig: { maxLoginAttempts: number, lockoutDuration: number }
   onPasswordResetRequest?: (user: User, token: string, expiresAt: Date) => Promise<void>
 }
 
@@ -691,6 +694,14 @@ function buildPasswordChangeOps(ctx: UserFnContext): Pick<UserOperations, 'admin
 
       const user = userResult.data
 
+      // 账户状态检查（防止被锁定/禁用的账户变更密码）
+      if (!user.enabled) {
+        return err(HaiIamError.USER_DISABLED, iamM('iam_accountDisabled'))
+      }
+      if (isAccountLocked(user)) {
+        return err(HaiIamError.USER_LOCKED, iamM('iam_accountLocked'))
+      }
+
       // 验证旧密码
       if (!user.passwordHash) {
         return err(
@@ -701,11 +712,19 @@ function buildPasswordChangeOps(ctx: UserFnContext): Pick<UserOperations, 'admin
 
       const verifyResult = crypto.password.verify(oldPassword, user.passwordHash)
       if (!verifyResult.success || !verifyResult.data) {
+        // 记录失败计数 / 触发锁定，防止通过 changePassword 端点暴力枚举旧密码
+        await recordLoginFailure(userRepository, user, {
+          maxLoginAttempts: ctx.loginConfig.maxLoginAttempts,
+          lockoutDuration: ctx.loginConfig.lockoutDuration,
+        })
         return err(
           HaiIamError.INVALID_CREDENTIALS,
           iamM('iam_originalPasswordWrong'),
         )
       }
+
+      // 成功验证旧密码后重置失败计数
+      await resetLoginFailures(userRepository, user)
 
       // 验证新密码强度
       const validateResult = validatePassword(newPassword)
@@ -758,14 +777,14 @@ function buildPasswordChangeOps(ctx: UserFnContext): Pick<UserOperations, 'admin
  * 构建密码重置操作（请求重置、确认重置）
  */
 function buildPasswordResetOps(ctx: UserFnContext): Pick<UserOperations, 'requestPasswordReset' | 'confirmPasswordReset'> {
-  const { userRepository, resetTokenRepository, sessionFunctions, config, onPasswordResetRequest } = ctx
+  const { userRepository, resetTokenRepository, sessionFunctions, onPasswordResetRequest } = ctx
   const { validatePassword, hashPassword } = ctx
 
   return {
     async requestPasswordReset(identifier: string): Promise<HaiResult<void>> {
       logger.debug('Password reset requested', { identifier })
 
-      const resetConfig = PasswordResetConfigSchema.parse(config.passwordReset ?? {})
+      const resetConfig = ctx.resetConfig
 
       // 根据标识符查找用户
       const userResult = await userRepository.findByIdentifier(identifier)
@@ -813,7 +832,7 @@ function buildPasswordResetOps(ctx: UserFnContext): Pick<UserOperations, 'reques
     async confirmPasswordReset(token: string, newPassword: string): Promise<HaiResult<void>> {
       logger.debug('Confirming password reset')
 
-      const resetConfig = PasswordResetConfigSchema.parse(config.passwordReset ?? {})
+      const resetConfig = ctx.resetConfig
 
       // 先验证新密码强度（不消耗尝试次数）
       const validateResult = validatePassword(newPassword)
@@ -882,6 +901,8 @@ function buildUserFunctions(deps: UserBuilderDeps): UserOperations {
     hashPassword,
     registerConfig: RegisterConfigSchema.parse(deps.config.register ?? {}),
     agreementConfig: AgreementConfigSchema.parse(deps.config.agreements ?? {}),
+    resetConfig: PasswordResetConfigSchema.parse(deps.config.passwordReset ?? {}),
+    loginConfig: SecurityConfigSchema.parse(deps.config.security ?? {}),
   }
 
   return {

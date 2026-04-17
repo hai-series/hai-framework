@@ -107,9 +107,12 @@ export interface SessionRepository {
   /**
    * 删除用户的所有会话
    *
-   * 遍历用户令牌集合，逐一删除关联的三个缓存条目，最后删除集合本身。
+   * 并行删除关联的三组缓存条目（accessToken 映射、用户令牌集合成员、refreshToken 映射），
+   * 最后删除集合本身。
+   *
+   * @returns 实际删除的会话数量
    */
-  removeByUserId: (userId: string) => Promise<HaiResult<void>>
+  removeByUserId: (userId: string) => Promise<HaiResult<number>>
 
   /**
    * 根据 refreshToken 获取关联的会话
@@ -166,6 +169,8 @@ export function createCacheSessionRepository(
       // 2. userId → Set<accessToken>
       const saddResult = await cache.set_.sadd(buildUserTokensKey(userId), accessToken)
       if (!saddResult.success) {
+        // 补偿：清理已写入的 session，避免孤儿键
+        await cache.kv.del(buildTokenKey(accessToken))
         return err(
           HaiIamError.REPOSITORY_ERROR,
           iamM('iam_saveUserSessionCacheFailed', { params: { message: saddResult.error.message } }),
@@ -182,6 +187,9 @@ export function createCacheSessionRepository(
         { ex: refreshTokenMaxAge },
       )
       if (!refreshResult.success) {
+        // 补偿：清理已写入的 session 与集合成员，避免孤儿状态
+        await cache.kv.del(buildTokenKey(accessToken))
+        await cache.set_.srem(buildUserTokensKey(userId), accessToken)
         return err(
           HaiIamError.REPOSITORY_ERROR,
           iamM('iam_saveSessionMappingCacheFailed', { params: { message: refreshResult.error.message } }),
@@ -254,16 +262,22 @@ export function createCacheSessionRepository(
       return ok(undefined)
     },
 
-    async removeByUserId(userId): Promise<HaiResult<void>> {
+    async removeByUserId(userId): Promise<HaiResult<number>> {
       const tokensResult = await cache.set_.smembers<string>(buildUserTokensKey(userId))
-      if (tokensResult.success) {
-        for (const token of tokensResult.data) {
-          await repo.removeByAccessToken(token)
+      let removed = 0
+      if (tokensResult.success && tokensResult.data.length > 0) {
+        // 并行删除所有 accessToken 关联的缓存条目，避免 N+1
+        const results = await Promise.allSettled(
+          tokensResult.data.map(token => repo.removeByAccessToken(token)),
+        )
+        for (const r of results) {
+          if (r.status === 'fulfilled' && r.value.success)
+            removed += 1
         }
       }
       // 清理用户令牌集合本身
       await cache.kv.del(buildUserTokensKey(userId))
-      return ok(undefined)
+      return ok(removed)
     },
 
     async getByRefreshToken(refreshToken): Promise<HaiResult<Session | null>> {
