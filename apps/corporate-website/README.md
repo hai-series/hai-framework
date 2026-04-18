@@ -10,7 +10,7 @@
 - 💾 **数据持久化** — @h-ai/reldb（SQLite / PostgreSQL / MySQL）
 - ⚡ **缓存加速** — @h-ai/cache（memory / Redis）
 - 📂 **文件归档** — @h-ai/storage（local / S3）
-- 📧 **消息触达** — @h-ai/reach（邮件 / 短信通知）
+- 📧 **消息触达** — @h-ai/reach（邮件 / 短信 通知）
 - 🌍 **国际化** — Paraglide 集成，中英文实时切换
 - 🎨 **主题切换** — 基于 @h-ai/ui 的 DaisyUI 多主题支持
 - 🧩 **组件自动导入** — @h-ai/ui 组件无需显式 import
