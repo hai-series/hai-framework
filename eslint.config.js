@@ -30,6 +30,11 @@ export default antfu({
   // 启用 Svelte 支持
   svelte: true,
 }, {
+  // 禁用与 ESLint 10 不兼容的 yaml 规则（eslint-plugin-yml v3 移除了 isSpaceBetweenTokens）
+  rules: {
+    'yaml/flow-sequence-bracket-spacing': 'off',
+  },
+}, {
   // 代码质量强制规则 — 这些由 ESLint 自动检测，不依赖 AI 记忆
   files: ['**/*.ts', '**/*.svelte'],
   rules: {
