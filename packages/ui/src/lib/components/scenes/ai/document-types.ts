@@ -142,6 +142,10 @@ export interface AiDocumentEditorProps {
   showCopyButton?: boolean
   /** Whether to show the run button on code blocks. */
   showRunButton?: boolean
+  /** Whether to show the code/preview toggle on code blocks. */
+  showCodePreviewToggle?: boolean
+  /** Optional helper text displayed beside language when preview toggle is enabled. */
+  codePreviewHint?: string
   /** Whether syntax highlighting is enabled. */
   enableHighlight?: boolean
   /** Whether soft line breaks are rendered as <br>. */
