@@ -241,6 +241,7 @@
   "table_editor_eyebrow": "可编辑表格",
   "table_copy": "复制表格",
   "table_download": "下载表格",
+  "table_reorder_row": "拖动调整这一行顺序",
   "table_close": "关闭",
   "table_add_row": "新增一行",
   "table_delete_row": "删除这一行",
