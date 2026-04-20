@@ -8,6 +8,7 @@
 
 export { default as AiDocumentDownloadMenu } from './AiDocumentDownloadMenu.svelte'
 export { default as AiDocumentEditor } from './AiDocumentEditor.svelte'
+export { default as AiTableEditor } from './table/AiTableEditor.svelte'
 export {
   downloadAiDocument,
   resolveDocumentDownloadActions,
@@ -38,6 +39,17 @@ export type {
   MarkdownTextAlignKind,
   MarkdownToolbarDownloadAction,
 } from './document-types.js'
+export type {
+  AiTableColumn,
+  AiTableColumnType,
+  AiTableCopyPayload,
+  AiTableData,
+  AiTableDownloadPayload,
+  AiTableEditorChangeAction,
+  AiTableEditorChangePayload,
+  AiTableEditorProps,
+  AiTableRow,
+} from './table/table-types.js'
 export { parseMarkdown } from './markdown-parse.js'
 export type { MarkdownParseOptions } from './markdown-parse.js'
 export { default as MarkdownRenderer } from './MarkdownRenderer.svelte'

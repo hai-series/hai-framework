@@ -395,8 +395,8 @@
 
   .hai-markdown :global(.hai-md-code-block code) {
     /* ─── 基础色 ─── */
-    --hai-hl-fg: oklch(var(--nc));
-    --hai-hl-bg: transparent;
+    --hai-hl-foreground: oklch(var(--nc));
+    --hai-hl-background: transparent;
 
     /* ─── Token 颜色（DaisyUI oklch 自适应） ─── */
     --hai-hl-token-keyword: oklch(0.7 0.15 280);

@@ -20,6 +20,14 @@ export interface MarkdownDocumentParseOptions {
   showCopyButton?: boolean
   /** Whether to render the run button and preview slot. */
   showRunButton?: boolean
+  /** Whether to render code/preview tabs in code-block headers. */
+  showCodePreviewToggle?: boolean
+  /** Label used for the "code" tab when preview toggle is enabled. */
+  codeViewCodeLabel?: string
+  /** Label used for the "preview" tab when preview toggle is enabled. */
+  codeViewPreviewLabel?: string
+  /** Optional helper text displayed beside language in code headers. */
+  codePreviewHint?: string
   /** Whether soft line breaks are converted to <br>. */
   breaks?: boolean
 }
@@ -47,6 +55,10 @@ const DEFAULT_OPTIONS: Required<MarkdownDocumentParseOptions> = {
   enableHighlight: true,
   showCopyButton: true,
   showRunButton: false,
+  showCodePreviewToggle: false,
+  codeViewCodeLabel: 'Code',
+  codeViewPreviewLabel: 'Preview',
+  codePreviewHint: '',
   breaks: true,
 }
 const SAFE_LINK_HREF_REGEX = /^(?:https?:\/\/|\/|#|mailto:)/i
@@ -179,19 +191,32 @@ function createRendererObject(
         ? `<button type="button" class="hai-md-code-action hai-md-copy-btn" data-copy-code aria-label="Copy code"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>`
         : ''
 
-      // runBtn exposes the run action when enabled.
-      const runBtn = options.showRunButton
+      // codePreviewToggle replaces run when enabled to provide a cleaner code/preview switch.
+      const codePreviewToggle = options.showCodePreviewToggle
+        ? `<div class="hai-md-code-view-switch" role="group" aria-label="${escapeHtml(options.codeViewPreviewLabel)}">`
+          + `<button type="button" class="hai-md-code-view-btn" data-code-view-toggle data-code-view="code" data-code-block-id="${escapeHtml(codeBlockId)}" aria-pressed="true">${escapeHtml(options.codeViewCodeLabel)}</button>`
+          + `<button type="button" class="hai-md-code-view-btn" data-code-view-toggle data-code-view="preview" data-code-block-id="${escapeHtml(codeBlockId)}" aria-pressed="false">${escapeHtml(options.codeViewPreviewLabel)}</button>`
+          + `</div>`
+        : ''
+
+      // hint text is optional and only rendered when the toggle is present.
+      const previewHint = options.showCodePreviewToggle && options.codePreviewHint
+        ? `<span class="hai-md-code-preview-hint">${escapeHtml(options.codePreviewHint)}</span>`
+        : ''
+
+      // runBtn exposes the run action when enabled and no toggle is active.
+      const runBtn = options.showRunButton && !options.showCodePreviewToggle
         ? `<button type="button" class="hai-md-code-action hai-md-run-btn" data-run-code data-code-block-id="${escapeHtml(codeBlockId)}" aria-label="Run code"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5.14v14l11-7z"/></svg></button>`
         : ''
 
-      // previewHost reserves the DOM slot for run previews.
-      const previewHost = options.showRunButton
+      // previewHost reserves the DOM slot for run previews or code/preview toggle mode.
+      const previewHost = options.showRunButton || options.showCodePreviewToggle
         ? `<div class="hai-md-code-preview-slot" data-code-preview-host="${escapeHtml(codeBlockId)}"></div>`
         : ''
 
-      return `<div class="hai-md-code-block" data-code-block-id="${escapeHtml(codeBlockId)}">`
+      return `<div class="hai-md-code-block" data-code-block-id="${escapeHtml(codeBlockId)}" data-code-view="code">`
         + `<div class="hai-md-code-header">`
-        + `<div class="hai-md-code-header-main">${langLabel}</div>`
+        + `<div class="hai-md-code-header-main">${codePreviewToggle}${langLabel}${previewHint}</div>`
         + `<div class="hai-md-code-actions">${runBtn}${copyBtn}</div>`
         + `</div>`
         + `<pre><code class="hai-hl${highlightLanguage ? ` language-${escapeHtml(highlightLanguage)}` : ''}">${highlighted}</code></pre>`
