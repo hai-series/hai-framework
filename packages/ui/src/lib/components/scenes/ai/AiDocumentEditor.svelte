@@ -176,7 +176,6 @@
   // 复制前后的图标以内联 SVG 缓存，避免每次点击都重新拼接按钮内容。
   const COPY_ICON = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>`
   const CHECK_ICON = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`
-  const HTML_SNIPPET_REGEX = /<!doctype html>|<html[\s>]|<body[\s>]|<div[\s>]|<main[\s>]/i
 
   let {
     // 暴露给外层的滚动容器引用，用于同步滚动或定位选区工具条。
@@ -197,6 +196,10 @@
     showCopyButton = true,
     // 是否显示代码块运行按钮与预览占位。
     showRunButton = false,
+    // 是否在代码块头部显示“代码/预览”切换。
+    showCodePreviewToggle = false,
+    // 代码预览切换模式下展示在语言标签旁的提示文案。
+    codePreviewHint = '',
     // 是否启用语法高亮。
     enableHighlight = true,
     // 是否把换行渲染为 <br>。
@@ -319,11 +322,19 @@
     resolveDocumentMarkdownContent(content, sourceKind, codeLanguage),
   )
   // 渲染结果同时提供 HTML、目录和代码块元数据，供顶部目录与代码预览共用。
+  const codePreviewToggleEnabled = $derived(
+    showCodePreviewToggle && sourceKind === 'code',
+  )
+  const normalizedCodePreviewHint = $derived(codePreviewHint.trim())
   const renderResult = $derived(
     renderMarkdownDocument(documentContent, {
       enableHighlight,
       showCopyButton,
       showRunButton,
+      showCodePreviewToggle: codePreviewToggleEnabled,
+      codeViewCodeLabel: uiM('markdown_format_code'),
+      codeViewPreviewLabel: uiM('file_list_preview'),
+      codePreviewHint: normalizedCodePreviewHint,
       breaks,
     }),
   )
@@ -371,6 +382,7 @@
     cn(
       'hai-markdown',
       'hai-markdown-document',
+      sourceKind === 'code' ? 'hai-markdown-code-only' : '',
       editable ? 'hai-markdown-editable' : '',
     ),
   )
@@ -416,6 +428,7 @@
 
   $effect(() => {
     void documentContent
+    codePreviews = {}
     closeSelectionToolbar()
   })
 
@@ -549,7 +562,7 @@
   }
 
   function looksLikeHtml(code: string): boolean {
-    return HTML_SNIPPET_REGEX.test(
+    return /<!doctype html>|<html[\s>]|<body[\s>]|<div[\s>]|<main[\s>]/i.test(
       code,
     )
   }
@@ -668,6 +681,38 @@ ${safeCode}
     return undefined
   }
 
+  function formatPreviewLanguageLabel(language: string | undefined): string | null {
+    const normalized = language?.trim().toLocaleLowerCase()
+    if (!normalized) {
+      return null
+    }
+
+    if (
+      normalized === 'javascript'
+      || normalized === 'js'
+      || normalized === 'mjs'
+    ) {
+      return 'JavaScript'
+    }
+
+    if (normalized === 'markdown' || normalized === 'md') {
+      return 'Markdown'
+    }
+
+    return normalized.toUpperCase()
+  }
+
+  function resolvePreviewUnavailableMessage(language: string | undefined): string {
+    const languageLabel = formatPreviewLanguageLabel(language)
+    if (!languageLabel) {
+      return uiM('markdown_run_unavailable')
+    }
+
+    return uiM('markdown_run_unavailable_language', {
+      language: languageLabel,
+    })
+  }
+
   async function runCodeBlock(blockId: string): Promise<void> {
     const codeBlock = lookupCodeBlock(blockId)
     if (!codeBlock) {
@@ -698,7 +743,7 @@ ${safeCode}
           ...codePreviews,
           [blockId]: {
             status: 'error',
-            error: uiM('markdown_run_unavailable'),
+            error: resolvePreviewUnavailableMessage(request.language),
           },
         }
         return
@@ -724,6 +769,20 @@ ${safeCode}
     }
   }
 
+  function setCodeBlockView(
+    codeBlock: HTMLElement,
+    view: 'code' | 'preview',
+  ): void {
+    codeBlock.dataset.codeView = view
+    const toggleButtons = codeBlock.querySelectorAll<HTMLButtonElement>(
+      '[data-code-view-toggle]',
+    )
+    for (const button of toggleButtons) {
+      const isActive = button.dataset.codeView === view
+      button.setAttribute('aria-pressed', isActive ? 'true' : 'false')
+    }
+  }
+
   async function handleClick(event: MouseEvent): Promise<void> {
     const target = event.target as HTMLElement
     const copyButton = target.closest(
@@ -731,6 +790,26 @@ ${safeCode}
     ) as HTMLButtonElement | null
     if (copyButton) {
       await copyCodeFromButton(copyButton)
+      return
+    }
+
+    const viewButton = target.closest(
+      '[data-code-view-toggle]',
+    ) as HTMLButtonElement | null
+    const viewCodeBlock = viewButton?.closest<HTMLElement>('.hai-md-code-block')
+    const viewCodeBlockId = viewButton?.dataset.codeBlockId
+    const nextView = viewButton?.dataset.codeView === 'preview'
+      ? 'preview'
+      : 'code'
+    if (viewButton && viewCodeBlock) {
+      setCodeBlockView(viewCodeBlock, nextView)
+      if (
+        nextView === 'preview'
+        && viewCodeBlockId
+        && codePreviews[viewCodeBlockId]?.status !== 'ready'
+      ) {
+        await runCodeBlock(viewCodeBlockId)
+      }
       return
     }
 
@@ -775,12 +854,12 @@ ${safeCode}
     }
 
     if (preview.status === 'running') {
-      host.innerHTML = `<div class="hai-md-preview-card"><div class="hai-md-preview-head">${escapePreviewText(uiM('markdown_running'))}</div><div class="hai-md-preview-loading"></div></div>`
+      host.innerHTML = `<div class="hai-md-preview-card"><div class="hai-md-preview-empty"><div class="hai-md-preview-empty-title">${escapePreviewText(uiM('markdown_running'))}</div><div class="hai-md-preview-loading"></div></div></div>`
       return
     }
 
     if (preview.status === 'error') {
-      host.innerHTML = `<div class="hai-md-preview-card hai-md-preview-error"><div class="hai-md-preview-head">${escapePreviewText(uiM('markdown_run_failed'))}</div><pre>${escapePreviewText(preview.error ?? uiM('markdown_run_failed'))}</pre></div>`
+      host.innerHTML = `<div class="hai-md-preview-card hai-md-preview-error"><div class="hai-md-preview-empty"><div class="hai-md-preview-empty-title">${escapePreviewText(uiM('markdown_run_failed'))}</div><p class="hai-md-preview-empty-text">${escapePreviewText(preview.error ?? uiM('markdown_run_failed'))}</p></div></div>`
       return
     }
 
@@ -1539,7 +1618,7 @@ ${safeCode}
     {/if}
 
     <div
-      class:hai-ai-doc-layout-collapsed={outlineCollapsed}
+      class:hai-ai-doc-layout-collapsed={!showOutline || outlineCollapsed}
       class='hai-ai-doc-layout'
     >
       {#if showOutline && !outlineCollapsed}
@@ -2126,8 +2205,12 @@ ${safeCode}
     );
     --hai-ai-doc-selection-fg: oklch(var(--bc, 0.22 0 0));
     display: flex;
+    width: 100%;
+    min-width: 0;
     min-height: 0;
     height: 100%;
+    container-type: inline-size;
+    container-name: ai-doc-editor;
     flex-direction: column;
     border: 1px solid oklch(var(--bc) / 0.08);
     border-radius: 1.5rem;
@@ -2141,8 +2224,10 @@ ${safeCode}
   }
 
   .hai-ai-doc-shell {
-    display: grid;
-    grid-template-rows: auto auto 1fr;
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    min-width: 0;
     min-height: 0;
     height: 100%;
   }
@@ -2336,18 +2421,23 @@ ${safeCode}
   }
 
   .hai-ai-doc-layout {
+    width: 100%;
     min-height: 0;
-    display: grid;
-    grid-template-columns: 220px minmax(0, 1fr);
+    min-width: 0;
+    flex: 1 1 auto;
+    display: flex;
+    align-items: stretch;
     position: relative;
     overflow: hidden;
   }
 
   .hai-ai-doc-layout.hai-ai-doc-layout-collapsed {
-    grid-template-columns: minmax(0, 1fr);
+    display: flex;
   }
 
   .hai-ai-doc-outline {
+    width: 220px;
+    flex: 0 0 220px;
     min-height: 0;
     display: grid;
     grid-template-rows: auto 1fr;
@@ -2446,18 +2536,28 @@ ${safeCode}
   }
 
   .hai-ai-doc-reader {
+    width: 100%;
+    flex: 1 1 auto;
     min-width: 0;
     min-height: 0;
     position: relative;
     z-index: 2;
     isolation: isolate;
+    display: flex;
+    flex-direction: column;
   }
 
   .hai-ai-doc-scroll {
     position: relative;
+    width: 100%;
+    min-width: 0;
     height: 100%;
     overflow: auto;
     padding: 0.5rem 0 1.75rem;
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
   }
 
   .hai-ai-doc-selection-layer {
@@ -2875,10 +2975,26 @@ ${safeCode}
   }
 
   .hai-markdown-document {
+    width: 100%;
+    min-width: 0;
     max-width: 52.5rem;
     margin: 0 auto;
     padding: 1.25rem 2rem 6rem;
     outline: none;
+  }
+
+  .hai-markdown-document.hai-markdown-code-only {
+    max-width: none !important;
+    width: 100% !important;
+    min-width: 0;
+    margin: 0 !important;
+    height: 100%;
+    min-height: 100%;
+    padding: 0.5rem 0.75rem 0.75rem;
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    box-sizing: border-box;
   }
 
   :global(.hai-markdown-document ::selection) {
@@ -3019,6 +3135,7 @@ ${safeCode}
     gap: 0.75rem;
     padding: 0.65rem 1rem;
     min-height: 2.5rem;
+    line-height: 1.2;
     background: oklch(var(--n) / 0.94);
     border-bottom: 1px solid oklch(var(--nc) / 0.1);
   }
@@ -3027,6 +3144,7 @@ ${safeCode}
     min-width: 0;
     display: flex;
     align-items: center;
+    gap: 0.55rem;
   }
 
   .hai-markdown :global(.hai-md-code-actions) {
@@ -3038,10 +3156,52 @@ ${safeCode}
   .hai-markdown :global(.hai-md-code-lang) {
     font-size: 0.75rem;
     font-weight: 600;
+    line-height: 1;
     text-transform: uppercase;
     letter-spacing: 0.05em;
     color: oklch(var(--nc) / 0.6);
     user-select: none;
+  }
+
+  .hai-markdown :global(.hai-md-code-view-switch) {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.16rem;
+    padding: 0.15rem;
+    border-radius: 9999px;
+    border: 1px solid oklch(var(--nc) / 0.16);
+    background: oklch(var(--nc) / 0.08);
+    flex-shrink: 0;
+  }
+
+  .hai-markdown :global(.hai-md-code-view-btn) {
+    min-height: 1.7rem;
+    padding: 0 0.72rem;
+    border: none;
+    border-radius: 9999px;
+    background: transparent;
+    color: oklch(var(--nc) / 0.72);
+    font-size: 0.86rem;
+    font-weight: 600;
+    line-height: 1;
+    cursor: pointer;
+    transition:
+      background-color 0.15s ease,
+      color 0.15s ease;
+  }
+
+  .hai-markdown :global(.hai-md-code-view-btn[aria-pressed='true']) {
+    background: oklch(var(--nc) / 0.2);
+    color: oklch(var(--nc));
+  }
+
+  .hai-markdown :global(.hai-md-code-preview-hint) {
+    font-size: 0.75rem;
+    line-height: 1;
+    color: oklch(var(--nc) / 0.48);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   .hai-markdown :global(.hai-md-code-lang-empty) {
@@ -3083,13 +3243,96 @@ ${safeCode}
       ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas,
       'Liberation Mono', monospace;
     font-size: 0.875rem;
-    line-height: 1.6;
+    line-height: 1.45;
     tab-size: 2;
+
+    /* Shiki CSS Variables 主题（由 highlight.ts 的 createCssVariablesTheme 引用） */
+    --hai-hl-foreground: oklch(var(--nc));
+    --hai-hl-background: transparent;
+    --hai-hl-token-keyword: oklch(0.7 0.15 280);
+    --hai-hl-token-string: oklch(0.75 0.12 150);
+    --hai-hl-token-string-expression: oklch(0.75 0.12 150);
+    --hai-hl-token-constant: oklch(0.78 0.12 70);
+    --hai-hl-token-comment: oklch(var(--nc) / 0.45);
+    --hai-hl-token-function: oklch(0.72 0.14 220);
+    --hai-hl-token-parameter: oklch(0.72 0.12 35);
+    --hai-hl-token-punctuation: oklch(var(--nc) / 0.7);
+    --hai-hl-token-link: oklch(0.7 0.15 280);
   }
 
   .hai-markdown :global(.hai-md-code-preview-slot) {
     border-top: 1px solid oklch(var(--nc) / 0.08);
     background: oklch(var(--b1));
+  }
+
+  .hai-markdown :global(.hai-md-code-block[data-code-view='code'] .hai-md-code-preview-slot) {
+    display: none;
+  }
+
+  .hai-markdown :global(.hai-md-code-block[data-code-view='preview'] pre) {
+    display: none;
+  }
+
+  .hai-markdown :global(.hai-md-code-block[data-code-view='preview'] .hai-md-code-preview-slot) {
+    display: block;
+  }
+
+  .hai-markdown-code-only :global(.hai-md-code-block) {
+    width: 100% !important;
+    max-width: none !important;
+    min-width: 0;
+    margin: 0;
+    height: auto;
+    min-height: 0;
+    flex: 1 1 auto;
+    display: flex !important;
+    align-self: stretch;
+    align-items: stretch;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .hai-markdown-code-only :global(.hai-md-code-header),
+  .hai-markdown-code-only :global(.hai-md-code-block pre),
+  .hai-markdown-code-only :global(.hai-md-code-preview-slot) {
+    width: 100%;
+    min-width: 0;
+    min-height: 0;
+    box-sizing: border-box;
+  }
+
+  /* 代码/预览切换时统一固定 header 高度，避免视觉抖动。 */
+  .hai-markdown-code-only :global(.hai-md-code-header) {
+    flex: 0 0 3.1rem;
+    height: 3.1rem;
+    min-height: 3.1rem;
+    padding: 0 1rem;
+    align-items: center;
+  }
+
+  .hai-markdown-code-only :global(.hai-md-code-block pre),
+  .hai-markdown-code-only :global(.hai-md-code-preview-slot) {
+    flex: 1 1 auto;
+    height: auto;
+    min-height: 0;
+  }
+
+  .hai-markdown-code-only :global(.hai-md-code-block pre) {
+    overflow: auto;
+  }
+
+  .hai-markdown-code-only :global(.hai-md-code-preview-slot) {
+    background: oklch(var(--n));
+    color: oklch(var(--nc));
+  }
+
+  .hai-markdown-code-only :global(.hai-md-code-block[data-code-view='preview']) {
+    flex: 1 1 auto;
+  }
+
+  .hai-markdown-code-only :global(.hai-md-code-block[data-code-view='preview'] .hai-md-code-preview-slot) {
+    flex: 1 1 auto;
+    display: flex;
   }
 
   .hai-markdown :global(blockquote) {
@@ -3209,14 +3452,29 @@ ${safeCode}
     box-shadow: inset 0 -1px 0 oklch(var(--bc) / 0.1);
   }
 
-  .hai-md-preview-card {
+  :global(.hai-md-preview-card) {
     margin: 0;
     padding: 1rem;
     background: oklch(var(--b1));
     color: oklch(var(--bc));
   }
 
-  .hai-md-preview-head {
+  .hai-markdown-code-only :global(.hai-md-code-block[data-code-view='preview'] .hai-md-preview-card) {
+    display: flex;
+    flex-direction: column;
+    flex: 1 1 auto;
+    min-height: 0;
+    padding: 0.95rem 1rem;
+    background: oklch(var(--n));
+    color: oklch(var(--nc));
+  }
+
+  .hai-markdown-code-only :global(.hai-md-code-block[data-code-view='preview'] .hai-md-preview-head),
+  .hai-markdown-code-only :global(.hai-md-code-block[data-code-view='preview'] .hai-md-preview-desc) {
+    display: none;
+  }
+
+  :global(.hai-md-preview-head) {
     font-size: 0.8rem;
     font-weight: 700;
     letter-spacing: 0.04em;
@@ -3224,10 +3482,41 @@ ${safeCode}
     color: oklch(var(--bc) / 0.7);
   }
 
-  .hai-md-preview-desc {
+  :global(.hai-md-preview-desc) {
     margin: 0.5rem 0 0;
     font-size: 0.875rem;
     color: oklch(var(--bc) / 0.7);
+  }
+
+  :global(.hai-md-preview-empty) {
+    min-height: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 0.62rem;
+  }
+
+  :global(.hai-md-preview-empty-title) {
+    margin: 0;
+    font-size: 0.9rem;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    color: oklch(var(--bc) / 0.85);
+  }
+
+  :global(.hai-md-preview-empty-text) {
+    margin: 0;
+    font-size: 0.84rem;
+    line-height: 1.58;
+    white-space: pre-wrap;
+    color: oklch(var(--bc) / 0.74);
+  }
+
+  .hai-markdown-code-only :global(.hai-md-preview-empty-title) {
+    color: oklch(var(--nc) / 0.88);
+  }
+
+  .hai-markdown-code-only :global(.hai-md-preview-empty-text) {
+    color: oklch(var(--nc) / 0.72);
   }
 
   :global(.hai-md-preview-card pre) {
@@ -3243,7 +3532,7 @@ ${safeCode}
     color: oklch(var(--er));
   }
 
-  .hai-md-preview-frame {
+  :global(.hai-md-preview-frame) {
     display: block;
     width: 100%;
     min-height: 280px;
@@ -3253,10 +3542,19 @@ ${safeCode}
     background: white;
   }
 
-  .hai-md-preview-loading {
+  .hai-markdown-code-only :global(.hai-md-code-block[data-code-view='preview'] .hai-md-preview-frame) {
+    flex: 1 1 auto;
+    height: 100%;
+    min-height: 0;
+    margin-top: 0;
+    border: none;
+    border-radius: 0;
+  }
+
+  :global(.hai-md-preview-loading) {
     width: 100%;
     height: 4px;
-    margin-top: 0.85rem;
+    margin-top: 0.5rem;
     border-radius: 9999px;
     background: linear-gradient(
       90deg,
@@ -3268,25 +3566,8 @@ ${safeCode}
     animation: hai-md-loading 1.2s linear infinite;
   }
 
-  .hai-md-preview-rendered :global(:first-child) {
+  :global(.hai-md-preview-rendered > :first-child) {
     margin-top: 0.85rem;
-  }
-
-  /* Shiki CSS Variables 主题 — 代码高亮 token 颜色 */
-  .hai-markdown :global(.hai-md-code-block code) {
-    --hai-hl-fg: oklch(var(--nc));
-    --hai-hl-bg: transparent;
-
-    /* token 颜色 */
-    --hai-hl-token-keyword: oklch(0.7 0.15 280);
-    --hai-hl-token-string: oklch(0.75 0.12 150);
-    --hai-hl-token-string-expression: oklch(0.75 0.12 150);
-    --hai-hl-token-constant: oklch(0.78 0.12 70);
-    --hai-hl-token-comment: oklch(var(--nc) / 0.45);
-    --hai-hl-token-function: oklch(0.72 0.14 220);
-    --hai-hl-token-parameter: oklch(0.72 0.12 35);
-    --hai-hl-token-punctuation: oklch(var(--nc) / 0.7);
-    --hai-hl-token-link: oklch(0.7 0.15 280);
   }
 
   @keyframes hai-md-loading {
@@ -3299,16 +3580,31 @@ ${safeCode}
     }
   }
 
-  @media (max-width: 960px) {
-    .hai-ai-doc-layout,
-    .hai-ai-doc-layout.hai-ai-doc-layout-collapsed {
-      grid-template-columns: minmax(0, 1fr);
+  @container ai-doc-editor (max-width: 800px) {
+    .hai-ai-doc-layout {
+      display: flex;
+      min-height: 0;
     }
 
     .hai-ai-doc-outline {
-      display: none;
+      position: absolute;
+      top: 0.65rem;
+      left: 0.65rem;
+      bottom: 0.85rem;
+      width: min(220px, calc(100% - 1.3rem));
+      max-width: 220px;
+      z-index: 14;
+      padding: 0.5rem 0.625rem 0.9rem 0.75rem;
+      border: 1px solid oklch(var(--bc) / 0.12);
+      border-radius: 0.95rem;
+      background:
+        linear-gradient(180deg, oklch(var(--b2) / 0.84), oklch(var(--b1) / 0.92));
+      box-shadow: 0 20px 40px -28px oklch(var(--bc) / 0.35);
+      backdrop-filter: blur(8px);
     }
+  }
 
+  @media (max-width: 960px) {
     .hai-ai-doc-topbar {
       padding-left: 1rem;
       padding-right: 1rem;
