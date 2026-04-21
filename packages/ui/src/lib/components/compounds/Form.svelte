@@ -12,6 +12,7 @@
   import { cn } from '../../utils.js'
 
   const {
+    id = '',
     class: className = '',
     loading = false,
     disabled = false,
@@ -86,6 +87,7 @@
 
 <form
   bind:this={formElement}
+  id={id || undefined}
   class={formClass}
   onsubmit={handleSubmit}
   onreset={handleReset}
