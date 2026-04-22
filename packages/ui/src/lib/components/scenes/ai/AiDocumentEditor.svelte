@@ -348,6 +348,9 @@
   const resolvedRewriteActions = $derived(
     resolveRewriteActions(rewriteActions, onrewrite),
   )
+  const directRewriteAction = $derived(
+    resolvedRewriteActions.length === 1 ? resolvedRewriteActions[0] : null,
+  )
   // 新版工具条支持 paragraph / heading1-4，优先走细粒度回调，避免把旧接口误当成新接口调用。
   const richBlockFormattingEnabled = $derived(Boolean(onapplyblockstyle))
   // 旧版 heading / bullet 回调仍然保留，用于兼容外部还没迁移的调用方。
@@ -1692,12 +1695,20 @@ ${safeCode}
                       type='button'
                       class={cn(
                         'hai-ai-doc-selection-chip',
-                        activeSelectionMenu === 'rewrite'
+                        !directRewriteAction
+                          && activeSelectionMenu === 'rewrite'
                           ? 'hai-ai-doc-selection-chip--active'
                           : '',
                       )}
                       disabled={rewritePending}
-                      onclick={event => toggleSelectionMenu('rewrite', event)}
+                      onclick={(event) => {
+                        if (directRewriteAction) {
+                          void applyRewrite(directRewriteAction.id)
+                          return
+                        }
+
+                        toggleSelectionMenu('rewrite', event)
+                      }}
                     >
                       <svg viewBox='0 0 24 24' aria-hidden='true'>
                         <path
@@ -1984,7 +1995,7 @@ ${safeCode}
                   {/if}
                 </div>
 
-                {#if activeSelectionMenu === 'rewrite' && resolvedRewriteActions.length > 0}
+                {#if activeSelectionMenu === 'rewrite' && resolvedRewriteActions.length > 1}
                   <div
                     class='hai-ai-doc-rewrite-menu'
                     data-menu-alignment={selectionMenuAlignment}

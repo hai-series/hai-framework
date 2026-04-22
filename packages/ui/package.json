@@ -51,6 +51,8 @@
     "@internationalized/date": "catalog:",
     "@shikijs/langs": "catalog:",
     "bits-ui": "catalog:",
+    "html2canvas": "catalog:",
+    "jspdf": "catalog:",
     "marked": "catalog:",
     "shiki": "catalog:",
     "tailwind-merge": "catalog:"
