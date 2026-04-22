@@ -9,6 +9,7 @@
   const {
     variant = 'default',
     size = 'md',
+    form = '',
     ariaLabel = '',
     disabled = false,
     loading = false,
@@ -46,6 +47,7 @@
 
 <button
   {type}
+  form={form || undefined}
   class={buttonClass}
   disabled={disabled || loading}
   aria-label={ariaLabel || undefined}

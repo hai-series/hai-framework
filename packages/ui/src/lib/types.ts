@@ -35,6 +35,8 @@ export interface ButtonProps {
   variant?: Variant
   /** 尺寸 */
   size?: Size
+  /** 关联表单 ID */
+  form?: string
   /** 自定义类名 */
   class?: string
   /** aria-label（无障碍标签） */
@@ -436,6 +438,12 @@ export interface ModalProps {
   closeOnEscape?: boolean
   /** 是否显示关闭按钮 */
   showClose?: boolean
+  /** 自定义宽度（任意合法 CSS 宽度值） */
+  width?: string
+  /** 自定义高度（任意合法 CSS 高度值） */
+  height?: string
+  /** 主体区域自定义类名 */
+  bodyClass?: string
   /** 自定义类名 */
   class?: string
   /** 关闭事件 */
@@ -713,6 +721,8 @@ export interface DropdownProps {
  * 表单属性
  */
 export interface FormProps {
+  /** 表单 ID */
+  id?: string
   /** 自定义类名 */
   class?: string
   /** 加载状态 */
