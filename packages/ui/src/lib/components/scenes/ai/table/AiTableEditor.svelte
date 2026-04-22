@@ -55,6 +55,10 @@
   const INVALID_FILENAME_CHARS_REGEX = /[<>:"/\\|?*]+/g
   // 单元格值中的双引号需要按 CSV 规范转义为两个双引号。
   const CSV_DOUBLE_QUOTE_REGEX = /"/g
+  const CANONICAL_TABLE_CONTENT_HINTS = ['table/v1', '"columns"', '"rows"'] as const
+  const EDITOR_TABLE_CONTENT_HINTS = ['"table_columns"', '"table_rows"'] as const
+  // 单元格输入对外回调统一防抖 2 秒，避免父层每次敲字都触发保存链路。
+  const TABLE_CELL_CHANGE_DEBOUNCE_MS = 2000
 
   let {
     // 暴露给外层的滚动容器引用，用于流式自动滚动。
@@ -99,11 +103,19 @@
   let dragTargetRowId = $state<string | null>(null)
   // dragTargetPosition 标识应插入到参考行前面还是后面。
   let dragTargetPosition = $state<AiTableRowDropPosition | null>(null)
+  // 本地表格草稿让输入中的单元格先在组件内即时生效，再按防抖节奏同步给外层。
+  let localDraftTableData = $state<AiTableData | null>(null)
+  // pendingCellChangePayload 保存尚未对外发出的最后一次单元格修改。
+  let pendingCellChangePayload = $state<AiTableEditorChangePayload | null>(null)
+  // 单元格修改回调的防抖计时器。
+  let cellChangeTimer: number | undefined = $state()
+  // 用上一版入参快照判断当前是“父层追平本地草稿”还是“切到了另一份表格”。
+  let lastIncomingTableSignature = $state('')
 
   // 当上层没传结构化表格时，尝试从 `content` 里做容错解析。
   const parsedTableData = $derived(parseTableDataFromSource(content))
-  // 渲染数据统一做结构归一，保证模板层不处理 `undefined/null` 分支。
-  const resolvedTableData = $derived(
+  // 输入源统一先归一化，方便后续比较父层快照与本地草稿是否已对齐。
+  const sourceTableData = $derived(
     normalizeTableData(
       tableData ?? parsedTableData ?? {
         table_columns: [],
@@ -111,6 +123,8 @@
       },
     ),
   )
+  // 渲染时优先展示本地草稿；父层追平后再回退到受控值。
+  const resolvedTableData = $derived(localDraftTableData ?? sourceTableData)
   // 表格列定义，保持单独派生避免模板重复读取深层对象。
   const tableColumns = $derived(resolvedTableData.table_columns)
   // 表格行定义，保持单独派生避免模板重复读取深层对象。
@@ -120,9 +134,35 @@
 
   $effect(() => {
     return () => {
+      clearScheduledCellChange()
       if (copyFeedbackTimer) {
         window.clearTimeout(copyFeedbackTimer)
       }
+    }
+  })
+
+  $effect(() => {
+    const incomingSignature = serializeTableDataForComparison(sourceTableData)
+    const previousIncomingSignature = lastIncomingTableSignature
+    lastIncomingTableSignature = incomingSignature
+
+    if (!localDraftTableData) {
+      return
+    }
+
+    const localSignature = serializeTableDataForComparison(localDraftTableData)
+    if (incomingSignature === localSignature) {
+      localDraftTableData = null
+      pendingCellChangePayload = null
+      clearScheduledCellChange()
+      return
+    }
+
+    // 父层切到了另一份表格时，本地未提交的输入不能继续覆盖新表格。
+    if (previousIncomingSignature && incomingSignature !== previousIncomingSignature) {
+      localDraftTableData = null
+      pendingCellChangePayload = null
+      clearScheduledCellChange()
     }
   })
 
@@ -153,6 +193,21 @@
     return value === 'number' || value === 'tag' ? value : 'text'
   }
 
+  function serializeTableDataForComparison(
+    data: AiTableData | null | undefined,
+  ): string {
+    if (!data) {
+      return ''
+    }
+
+    try {
+      return JSON.stringify(data)
+    }
+    catch {
+      return ''
+    }
+  }
+
   /**
    * 列定义归一化：
    * - 过滤非对象项和空 key
@@ -168,14 +223,18 @@
         continue
       }
 
-      const key = typeof item.key === 'string' ? item.key.trim() : ''
+      const key = typeof item.key === 'string' && item.key.trim()
+        ? item.key.trim()
+        : (typeof item.name === 'string' ? item.name.trim() : '')
       if (!key || usedKeys.has(key)) {
         continue
       }
 
       const label = typeof item.label === 'string' && item.label.trim()
         ? item.label.trim()
-        : key
+        : (typeof item.name === 'string' && item.name.trim()
+            ? item.name.trim()
+            : key)
 
       columns.push({
         key,
@@ -239,7 +298,7 @@
    */
   function extractArrayChunkByKey(
     source: string,
-    key: 'table_columns' | 'table_rows',
+    key: 'columns' | 'rows' | 'table_columns' | 'table_rows',
   ): ExtractedArrayChunk | null {
     const keyIndex = source.indexOf(`"${key}"`)
     if (keyIndex < 0) {
@@ -402,14 +461,24 @@
       return null
     }
 
+    const matchesCanonicalContent = CANONICAL_TABLE_CONTENT_HINTS.some(
+      marker => trimmed.includes(marker),
+    )
+    const matchesEditorContent = EDITOR_TABLE_CONTENT_HINTS.some(
+      marker => trimmed.includes(marker),
+    )
+    if (!matchesCanonicalContent && !matchesEditorContent) {
+      return null
+    }
+
     const parsedWhole = tryParseJson(trimmed)
     if (isRecord(parsedWhole)) {
       const columns = Array.isArray(parsedWhole.table_columns)
         ? normalizeTableColumns(parsedWhole.table_columns)
-        : []
+        : (Array.isArray(parsedWhole.columns) ? normalizeTableColumns(parsedWhole.columns) : [])
       const rows = Array.isArray(parsedWhole.table_rows)
         ? normalizeTableRows(parsedWhole.table_rows)
-        : []
+        : (Array.isArray(parsedWhole.rows) ? normalizeTableRows(parsedWhole.rows) : [])
 
       if (columns.length > 0 || rows.length > 0) {
         return {
@@ -419,8 +488,14 @@
       }
     }
 
-    const columnsChunk = extractArrayChunkByKey(trimmed, 'table_columns')
-    const rowsChunk = extractArrayChunkByKey(trimmed, 'table_rows')
+    const columnsChunk = extractArrayChunkByKey(
+      trimmed,
+      matchesEditorContent ? 'table_columns' : 'columns',
+    )
+    const rowsChunk = extractArrayChunkByKey(
+      trimmed,
+      matchesEditorContent ? 'table_rows' : 'rows',
+    )
     if (!columnsChunk && !rowsChunk) {
       return null
     }
@@ -585,8 +660,59 @@
     }
   }
 
+  function clearScheduledCellChange(): void {
+    if (typeof window === 'undefined' || !cellChangeTimer) {
+      return
+    }
+
+    window.clearTimeout(cellChangeTimer)
+    cellChangeTimer = undefined
+  }
+
   function emitTableChange(payload: AiTableEditorChangePayload): void {
     void ontablechange?.(payload)
+  }
+
+  function discardPendingCellChange(): void {
+    pendingCellChangePayload = null
+    clearScheduledCellChange()
+  }
+
+  export function flushPendingTableChange(): void {
+    const pendingPayload = pendingCellChangePayload
+    if (!pendingPayload) {
+      return
+    }
+
+    discardPendingCellChange()
+    emitTableChange(pendingPayload)
+  }
+
+  function queueCellChange(payload: AiTableEditorChangePayload): void {
+    localDraftTableData = payload.nextData
+    pendingCellChangePayload = payload
+
+    if (!ontablechange) {
+      clearScheduledCellChange()
+      return
+    }
+
+    if (typeof window === 'undefined') {
+      flushPendingTableChange()
+      return
+    }
+
+    clearScheduledCellChange()
+    cellChangeTimer = window.setTimeout(() => {
+      cellChangeTimer = undefined
+      flushPendingTableChange()
+    }, TABLE_CELL_CHANGE_DEBOUNCE_MS)
+  }
+
+  function emitImmediateTableChange(payload: AiTableEditorChangePayload): void {
+    localDraftTableData = payload.nextData
+    discardPendingCellChange()
+    emitTableChange(payload)
   }
 
   function resetRowDragState(): void {
@@ -639,7 +765,7 @@
       value,
     )
 
-    emitTableChange({
+    queueCellChange({
       action: 'cell-update',
       rowId,
       columnKey: column.key,
@@ -652,7 +778,7 @@
     const nextData = buildNextTableDataWithRowAdd(resolvedTableData)
     const rowId = nextData.table_rows.at(-1)?.row_id
 
-    emitTableChange({
+    emitImmediateTableChange({
       action: 'row-add',
       rowId,
       nextData,
@@ -662,7 +788,7 @@
   function handleDeleteRow(rowId: string): void {
     const nextData = buildNextTableDataWithRowDelete(resolvedTableData, rowId)
 
-    emitTableChange({
+    emitImmediateTableChange({
       action: 'row-delete',
       rowId,
       nextData,
@@ -724,7 +850,7 @@
       return
     }
 
-    emitTableChange({
+    emitImmediateTableChange({
       action: 'row-reorder',
       rowId: draggedRowId,
       targetRowId: rowId,
@@ -949,7 +1075,10 @@
           title={uiM('table_close')}
           aria-label={uiM('table_close')}
           disabled={closeDisabled}
-          onclick={onclose}
+          onclick={() => {
+            flushPendingTableChange()
+            onclose?.()
+          }}
         >
           <!-- eslint-disable-next-line svelte/no-at-html-tags -- 受控 SVG 图标渲染 -->
           {@html CLOSE_ICON}
