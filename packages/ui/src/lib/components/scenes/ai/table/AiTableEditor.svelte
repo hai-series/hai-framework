@@ -233,8 +233,8 @@
       const label = typeof item.label === 'string' && item.label.trim()
         ? item.label.trim()
         : (typeof item.name === 'string' && item.name.trim()
-            ? item.name.trim()
-            : key)
+        ? item.name.trim()
+        : key)
 
       columns.push({
         key,

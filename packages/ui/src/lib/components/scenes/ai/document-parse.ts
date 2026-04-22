@@ -194,9 +194,9 @@ function createRendererObject(
       // codePreviewToggle replaces run when enabled to provide a cleaner code/preview switch.
       const codePreviewToggle = options.showCodePreviewToggle
         ? `<div class="hai-md-code-view-switch" role="group" aria-label="${escapeHtml(options.codeViewPreviewLabel)}">`
-          + `<button type="button" class="hai-md-code-view-btn" data-code-view-toggle data-code-view="code" data-code-block-id="${escapeHtml(codeBlockId)}" aria-pressed="true">${escapeHtml(options.codeViewCodeLabel)}</button>`
-          + `<button type="button" class="hai-md-code-view-btn" data-code-view-toggle data-code-view="preview" data-code-block-id="${escapeHtml(codeBlockId)}" aria-pressed="false">${escapeHtml(options.codeViewPreviewLabel)}</button>`
-          + `</div>`
+        + `<button type="button" class="hai-md-code-view-btn" data-code-view-toggle data-code-view="code" data-code-block-id="${escapeHtml(codeBlockId)}" aria-pressed="true">${escapeHtml(options.codeViewCodeLabel)}</button>`
+        + `<button type="button" class="hai-md-code-view-btn" data-code-view-toggle data-code-view="preview" data-code-block-id="${escapeHtml(codeBlockId)}" aria-pressed="false">${escapeHtml(options.codeViewPreviewLabel)}</button>`
+        + `</div>`
         : ''
 
       // hint text is optional and only rendered when the toggle is present.
