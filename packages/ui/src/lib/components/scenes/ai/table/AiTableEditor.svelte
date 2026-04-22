@@ -5,13 +5,14 @@
   面向 AI 场景的可编辑表格查看器，支持：
   - 从结构化数据或 JSON 文本渲染表格
   - 流式残缺 JSON 的增量容错解析（列/行可分段出现）
-  - 单元格编辑、行新增、行删除
+  - 单元格编辑、行新增、行删除、拖拽排序
   - 复制表格（TSV）与下载表格（CSV）
 
   使用 Svelte 5 Runes ($props, $state, $derived, $effect)
   =============================================================================
 -->
-<script lang="ts">
+<script lang='ts'>
+  import type { MarkdownToolbarDownloadAction } from '../document-types.js'
   import type {
     AiTableColumn,
     AiTableColumnType,
@@ -22,6 +23,7 @@
   } from './table-types.js'
   import { uiM } from '../../../../messages.js'
   import { cn } from '../../../../utils.js'
+  import AiDocumentDownloadMenu from '../AiDocumentDownloadMenu.svelte'
 
   interface ExtractedArrayChunk {
     /** 从原始字符串里截取到的数组片段（可能是不完整数组）。 */
@@ -30,13 +32,25 @@
     complete: boolean
   }
 
+  type AiTableRowDropPosition = 'before' | 'after'
+
+  interface ReorderedTableResult {
+    /** 重排后的完整表格快照；未真正变更顺序时为 `null`。 */
+    nextData: AiTableData | null
+    /** 被拖动行原本所在的索引。 */
+    fromIndex: number
+    /** 被拖动行落位后的索引；无变化时与 `fromIndex` 相同。 */
+    toIndex: number
+  }
+
   // 顶部复制按钮在“复制成功”态和默认态之间切换时复用内联 SVG，避免重复拼接 DOM 片段。
   const COPY_ICON = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 9a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-9a2 2 0 0 1-2-2v-9Zm2 0v9h9v-9h-9Z"></path><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1h-2V4H4v9h1v2Z"></path></svg>`
   const CHECK_ICON = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9.55 18.35-5.2-5.2 1.42-1.41 3.78 3.78 8.68-8.68 1.42 1.41-10.1 10.1Z"></path></svg>`
-  const DOWNLOAD_ICON = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a1 1 0 0 1 1 1v8.59l2.3-2.3 1.4 1.42-4.7 4.7-4.7-4.7 1.4-1.42 2.3 2.3V4a1 1 0 0 1 1-1Z"></path><path d="M4 15h2v4h12v-4h2v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-4Z"></path></svg>`
   const CLOSE_ICON = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18.3 5.7 12 12l6.3 6.3-1.4 1.4L10.6 13.4 4.3 19.7l-1.4-1.4L9.2 12 2.9 5.7l1.4-1.4 6.3 6.3 6.3-6.3 1.4 1.4Z"></path></svg>`
   const DELETE_ICON = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.72 6.72a.75.75 0 0 1 1.06 0L12 10.94l4.22-4.22a.75.75 0 1 1 1.06 1.06L13.06 12l4.22 4.22a.75.75 0 1 1-1.06 1.06L12 13.06l-4.22 4.22a.75.75 0 1 1-1.06-1.06L10.94 12 6.72 7.78a.75.75 0 0 1 0-1.06Z"></path></svg>`
   const PLUS_ICON = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6V5Z"></path></svg>`
+  const DRAG_HANDLE_ICON = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.75a1.25 1.25 0 1 1 0 2.5 1.25 1.25 0 0 1 0-2.5Zm0 5a1.25 1.25 0 1 1 0 2.5 1.25 1.25 0 0 1 0-2.5Zm0 5a1.25 1.25 0 1 1 0 2.5 1.25 1.25 0 0 1 0-2.5ZM16 5.75a1.25 1.25 0 1 1 0 2.5 1.25 1.25 0 0 1 0-2.5Zm0 5a1.25 1.25 0 1 1 0 2.5 1.25 1.25 0 0 1 0-2.5Zm0 5a1.25 1.25 0 1 1 0 2.5 1.25 1.25 0 0 1 0-2.5Z"></path></svg>`
+  const TABLE_DOWNLOAD_ACTION_ID = 'table-csv'
   // 文件名过滤正则，避免下载时包含平台不兼容字符。
   const INVALID_FILENAME_CHARS_REGEX = /[<>:"/\\|?*]+/g
   // 单元格值中的双引号需要按 CSV 规范转义为两个双引号。
@@ -79,18 +93,22 @@
   let copied = $state(false)
   // 连续复制时按最后一次点击重新计时。
   let copyFeedbackTimer: number | undefined = $state()
+  // draggingRowId 只在原生拖拽生命周期内存在，用来确定当前正在移动哪一行。
+  let draggingRowId = $state<string | null>(null)
+  // dragTargetRowId 记录当前悬停的参考行，配合插入方向绘制拖拽指示线。
+  let dragTargetRowId = $state<string | null>(null)
+  // dragTargetPosition 标识应插入到参考行前面还是后面。
+  let dragTargetPosition = $state<AiTableRowDropPosition | null>(null)
 
   // 当上层没传结构化表格时，尝试从 `content` 里做容错解析。
   const parsedTableData = $derived(parseTableDataFromSource(content))
   // 渲染数据统一做结构归一，保证模板层不处理 `undefined/null` 分支。
   const resolvedTableData = $derived(
     normalizeTableData(
-      tableData
-        ?? parsedTableData
-        ?? {
-          table_columns: [],
-          table_rows: [],
-        },
+      tableData ?? parsedTableData ?? {
+        table_columns: [],
+        table_rows: [],
+      },
     ),
   )
   // 表格列定义，保持单独派生避免模板重复读取深层对象。
@@ -105,6 +123,25 @@
       if (copyFeedbackTimer) {
         window.clearTimeout(copyFeedbackTimer)
       }
+    }
+  })
+
+  $effect(() => {
+    const currentTableRows = tableRows
+
+    if (!editable || currentTableRows.length < 2) {
+      resetRowDragState()
+      return
+    }
+
+    if (draggingRowId && !currentTableRows.some(row => row.row_id === draggingRowId)) {
+      resetRowDragState()
+      return
+    }
+
+    if (dragTargetRowId && !currentTableRows.some(row => row.row_id === dragTargetRowId)) {
+      dragTargetRowId = null
+      dragTargetPosition = null
     }
   })
 
@@ -410,7 +447,28 @@
       return value
     }
 
-    return ''
+    if (typeof value === 'boolean') {
+      return `${value}`
+    }
+
+    if (value === null || value === undefined) {
+      return ''
+    }
+
+    try {
+      return JSON.stringify(value)
+    }
+    catch {
+      return ''
+    }
+  }
+
+  function getCellInputValue(row: AiTableData['table_rows'][number], key: string): string {
+    return getCellValue(row, key)
+  }
+
+  function getCellExportValue(row: AiTableData['table_rows'][number], key: string): string {
+    return getCellValue(row, key)
   }
 
   function createGeneratedRowId(): string {
@@ -463,8 +521,104 @@
     }
   }
 
+  /**
+   * 行重排时先把拖动行临时移出数组，再按悬停位置重新插回。
+   * 这样可以统一处理“向上拖”和“向下拖”，避免索引在删除后发生偏移。
+   */
+  function buildNextTableDataWithRowReorder(
+    data: AiTableData,
+    rowId: string,
+    targetRowId: string,
+    position: AiTableRowDropPosition,
+  ): ReorderedTableResult {
+    const fromIndex = data.table_rows.findIndex(row => row.row_id === rowId)
+    const targetIndex = data.table_rows.findIndex(row => row.row_id === targetRowId)
+
+    if (fromIndex < 0 || targetIndex < 0 || fromIndex === targetIndex) {
+      return {
+        nextData: null,
+        fromIndex,
+        toIndex: fromIndex,
+      }
+    }
+
+    const nextRows = [...data.table_rows]
+    const [movedRow] = nextRows.splice(fromIndex, 1)
+    if (!movedRow) {
+      return {
+        nextData: null,
+        fromIndex,
+        toIndex: fromIndex,
+      }
+    }
+
+    const targetIndexAfterRemoval = nextRows.findIndex(row => row.row_id === targetRowId)
+    if (targetIndexAfterRemoval < 0) {
+      return {
+        nextData: null,
+        fromIndex,
+        toIndex: fromIndex,
+      }
+    }
+
+    const insertionIndex = position === 'before'
+      ? targetIndexAfterRemoval
+      : targetIndexAfterRemoval + 1
+
+    nextRows.splice(insertionIndex, 0, movedRow)
+    const toIndex = nextRows.findIndex(row => row.row_id === rowId)
+    if (toIndex === fromIndex) {
+      return {
+        nextData: null,
+        fromIndex,
+        toIndex,
+      }
+    }
+
+    return {
+      nextData: {
+        table_columns: data.table_columns,
+        table_rows: nextRows,
+      },
+      fromIndex,
+      toIndex,
+    }
+  }
+
   function emitTableChange(payload: AiTableEditorChangePayload): void {
     void ontablechange?.(payload)
+  }
+
+  function resetRowDragState(): void {
+    draggingRowId = null
+    dragTargetRowId = null
+    dragTargetPosition = null
+  }
+
+  function resolveRowDropPosition(event: DragEvent): AiTableRowDropPosition | null {
+    const currentTarget = event.currentTarget
+    if (!(currentTarget instanceof HTMLTableRowElement)) {
+      return null
+    }
+
+    const rowBounds = currentTarget.getBoundingClientRect()
+    return event.clientY < rowBounds.top + rowBounds.height / 2 ? 'before' : 'after'
+  }
+
+  function updateRowDropHint(rowId: string, event: DragEvent): void {
+    if (!draggingRowId || draggingRowId === rowId) {
+      dragTargetRowId = null
+      dragTargetPosition = null
+      return
+    }
+
+    const position = resolveRowDropPosition(event)
+    if (!position) {
+      return
+    }
+
+    dragTargetRowId = rowId
+    dragTargetPosition = position
   }
 
   function handleCellInput(
@@ -515,11 +669,83 @@
     })
   }
 
+  function handleRowDragStart(rowId: string, event: DragEvent): void {
+    if (!editable || tableRows.length < 2) {
+      event.preventDefault()
+      return
+    }
+
+    draggingRowId = rowId
+    dragTargetRowId = null
+    dragTargetPosition = null
+
+    if (event.dataTransfer) {
+      event.dataTransfer.effectAllowed = 'move'
+      // Firefox 需要至少写入一份文本数据，拖拽事件链才能正常继续。
+      event.dataTransfer.setData('text/plain', rowId)
+    }
+  }
+
+  function handleRowDragOver(rowId: string, event: DragEvent): void {
+    if (!draggingRowId) {
+      return
+    }
+
+    event.preventDefault()
+    updateRowDropHint(rowId, event)
+
+    if (event.dataTransfer) {
+      event.dataTransfer.dropEffect = 'move'
+    }
+  }
+
+  function handleRowDrop(rowId: string, event: DragEvent): void {
+    if (!draggingRowId) {
+      return
+    }
+
+    event.preventDefault()
+    const position = resolveRowDropPosition(event)
+    if (!position) {
+      resetRowDragState()
+      return
+    }
+
+    const draggedRowId = draggingRowId
+    const result = buildNextTableDataWithRowReorder(
+      resolvedTableData,
+      draggedRowId,
+      rowId,
+      position,
+    )
+
+    resetRowDragState()
+    if (!result.nextData) {
+      return
+    }
+
+    emitTableChange({
+      action: 'row-reorder',
+      rowId: draggedRowId,
+      targetRowId: rowId,
+      fromIndex: result.fromIndex,
+      toIndex: result.toIndex,
+      nextData: result.nextData,
+    })
+  }
+
+  function isDropIndicatorVisible(
+    rowId: string,
+    position: AiTableRowDropPosition,
+  ): boolean {
+    return dragTargetRowId === rowId && dragTargetPosition === position
+  }
+
   function serializeTableAsTsv(data: AiTableData): string {
     const header = data.table_columns.map(column => column.label).join('\t')
     const body = data.table_rows.map((row) => {
       return data.table_columns
-        .map(column => getCellValue(row, column.key).replace(/\t/g, ' '))
+        .map(column => getCellExportValue(row, column.key).replace(/\t/g, ' '))
         .join('\t')
     })
 
@@ -537,7 +763,7 @@
 
     const body = data.table_rows.map((row) => {
       return data.table_columns
-        .map(column => escapeCsvCell(getCellValue(row, column.key)))
+        .map(column => escapeCsvCell(getCellExportValue(row, column.key)))
         .join(',')
     })
 
@@ -557,6 +783,16 @@
 
   function resolveDownloadFilename(): string {
     return `${sanitizeFilename(title || 'ai-table')}.csv`
+  }
+
+  function resolveTableDownloadActions(): MarkdownToolbarDownloadAction[] {
+    return [
+      {
+        id: TABLE_DOWNLOAD_ACTION_ID,
+        label: uiM('table_download'),
+        badgeLabel: 'CSV',
+      },
+    ]
   }
 
   function triggerCopiedFeedback(): void {
@@ -632,6 +868,14 @@
     downloadBlob(csv, filename)
   }
 
+  async function handleDownloadAction(actionId: string): Promise<void> {
+    if (actionId !== TABLE_DOWNLOAD_ACTION_ID) {
+      return
+    }
+
+    await handleDownloadTable()
+  }
+
   function resolveCellInputClass(type: AiTableColumnType): string {
     if (type === 'tag') {
       return 'hai-ai-table-cell-input hai-ai-table-cell-input--tag'
@@ -643,60 +887,71 @@
 
     return 'hai-ai-table-cell-input'
   }
+
+  function resolveBodyRowClass(rowId: string): string {
+    return cn(
+      'hai-ai-table-body-row',
+      draggingRowId === rowId ? 'hai-ai-table-body-row--dragging' : '',
+      isDropIndicatorVisible(rowId, 'before')
+        ? 'hai-ai-table-body-row--drop-before'
+        : '',
+      isDropIndicatorVisible(rowId, 'after')
+        ? 'hai-ai-table-body-row--drop-after'
+        : '',
+    )
+  }
 </script>
 
 <section class={tablePaneClass}>
-  <header class="hai-ai-table-header">
-    <div class="hai-ai-table-heading">
-      <div class="hai-ai-table-eyebrow">
+  <header class='hai-ai-table-header'>
+    <div class='hai-ai-table-heading'>
+      <div class='hai-ai-table-eyebrow'>
         {metaText || uiM('table_editor_eyebrow')}
       </div>
-      <h2 class="hai-ai-table-title" title={title || uiM('data_table_empty')}>
+      <h2 class='hai-ai-table-title' title={title || uiM('data_table_empty')}>
         {title || uiM('data_table_empty')}
       </h2>
       {#if statusText}
-        <p class="hai-ai-table-status">{statusText}</p>
+        <p class='hai-ai-table-status'>{statusText}</p>
       {/if}
     </div>
 
-    <div class="hai-ai-table-toolbar">
+    <div class='hai-ai-table-toolbar'>
       {#if saveState}
-        <span class="hai-ai-table-save-state">{saveState}</span>
+        <span class='hai-ai-table-save-state'>{saveState}</span>
       {/if}
 
       <button
-        type="button"
-        class="hai-ai-table-toolbar-btn"
+        type='button'
+        class='hai-ai-table-toolbar-btn'
         title={uiM('table_copy')}
         aria-label={uiM('table_copy')}
         onclick={() => {
           void handleCopyTable()
         }}
       >
+        <!-- eslint-disable-next-line svelte/no-at-html-tags -- 受控 SVG 图标渲染 -->
         {@html copied ? CHECK_ICON : COPY_ICON}
       </button>
 
-      <button
-        type="button"
-        class="hai-ai-table-toolbar-btn"
-        title={uiM('table_download')}
-        aria-label={uiM('table_download')}
-        onclick={() => {
-          void handleDownloadTable()
-        }}
-      >
-        {@html DOWNLOAD_ICON}
-      </button>
+      <AiDocumentDownloadMenu
+        actions={resolveTableDownloadActions()}
+        ondownload={handleDownloadAction}
+        triggerTitle={uiM('table_download')}
+        triggerClass='hai-ai-table-toolbar-btn hai-ai-table-toolbar-btn--download'
+        menuClass='hai-ai-table-download-menu-panel'
+      />
 
       {#if onclose}
         <button
-          type="button"
-          class="hai-ai-table-toolbar-btn"
+          type='button'
+          class='hai-ai-table-toolbar-btn'
           title={uiM('table_close')}
           aria-label={uiM('table_close')}
           disabled={closeDisabled}
           onclick={onclose}
         >
+          <!-- eslint-disable-next-line svelte/no-at-html-tags -- 受控 SVG 图标渲染 -->
           {@html CLOSE_ICON}
         </button>
       {/if}
@@ -704,18 +959,18 @@
   </header>
 
   <div
-    class="hai-ai-table-scroll"
+    class='hai-ai-table-scroll'
     bind:this={editorScrollHost}
     onscroll={ondocumentscroll}
   >
-    <table class="hai-ai-table-grid">
+    <table class='hai-ai-table-grid'>
       <thead>
         <tr>
           {#each tableColumns as column}
             <th>{column.label}</th>
           {/each}
           {#if editable}
-            <th class="hai-ai-table-action-head">{uiM('data_table_actions')}</th>
+            <th class='hai-ai-table-action-head'>{uiM('data_table_actions')}</th>
           {/if}
         </tr>
       </thead>
@@ -723,7 +978,7 @@
         {#if tableRows.length === 0}
           <tr>
             <td
-              class="hai-ai-table-empty"
+              class='hai-ai-table-empty'
               colspan={tableColumns.length + (editable ? 1 : 0)}
             >
               {uiM('data_table_empty')}
@@ -731,29 +986,51 @@
           </tr>
         {:else}
           {#each tableRows as row (row.row_id)}
-            <tr class="hai-ai-table-body-row">
+            <tr
+              class={resolveBodyRowClass(row.row_id)}
+              ondragover={event => handleRowDragOver(row.row_id, event)}
+              ondrop={event => handleRowDrop(row.row_id, event)}
+            >
               {#each tableColumns as column}
                 <td>
                   <input
                     class={resolveCellInputClass(column.type)}
                     type={column.type === 'number' ? 'number' : 'text'}
-                    value={getCellValue(row, column.key)}
+                    value={getCellInputValue(row, column.key)}
                     disabled={!editable}
-                    oninput={(event) => handleCellInput(row.row_id, column, event)}
+                    oninput={event => handleCellInput(row.row_id, column, event)}
                   />
                 </td>
               {/each}
               {#if editable}
-                <td class="hai-ai-table-row-action">
-                  <button
-                    type="button"
-                    class="hai-ai-table-row-delete"
-                    title={uiM('table_delete_row')}
-                    aria-label={uiM('table_delete_row')}
-                    onclick={() => handleDeleteRow(row.row_id)}
-                  >
-                    {@html DELETE_ICON}
-                  </button>
+                <td class='hai-ai-table-row-action'>
+                  <div class='hai-ai-table-row-actions'>
+                    <button
+                      type='button'
+                      class='hai-ai-table-row-handle'
+                      title={uiM('table_reorder_row')}
+                      aria-label={uiM('table_reorder_row')}
+                      aria-grabbed={draggingRowId === row.row_id}
+                      disabled={tableRows.length < 2}
+                      draggable={tableRows.length > 1}
+                      ondragstart={event => handleRowDragStart(row.row_id, event)}
+                      ondragend={resetRowDragState}
+                    >
+                      <!-- eslint-disable-next-line svelte/no-at-html-tags -- 受控 SVG 图标渲染 -->
+                      {@html DRAG_HANDLE_ICON}
+                    </button>
+
+                    <button
+                      type='button'
+                      class='hai-ai-table-row-delete'
+                      title={uiM('table_delete_row')}
+                      aria-label={uiM('table_delete_row')}
+                      onclick={() => handleDeleteRow(row.row_id)}
+                    >
+                      <!-- eslint-disable-next-line svelte/no-at-html-tags -- 受控 SVG 图标渲染 -->
+                      {@html DELETE_ICON}
+                    </button>
+                  </div>
                 </td>
               {/if}
             </tr>
@@ -761,15 +1038,16 @@
         {/if}
 
         {#if editable}
-          <tr class="hai-ai-table-add-row">
+          <tr class='hai-ai-table-add-row'>
             <td colspan={tableColumns.length + 1}>
               <button
-                type="button"
-                class="hai-ai-table-add-btn"
+                type='button'
+                class='hai-ai-table-add-btn'
                 title={uiM('table_add_row')}
                 aria-label={uiM('table_add_row')}
                 onclick={handleAddRow}
               >
+                <!-- eslint-disable-next-line svelte/no-at-html-tags -- 受控 SVG 图标渲染 -->
                 {@html PLUS_ICON}
                 <span>{uiM('table_add_row')}</span>
               </button>
@@ -912,6 +1190,46 @@
     opacity: 0.6;
   }
 
+  :global(.hai-ai-download-menu__trigger.hai-ai-table-toolbar-btn) {
+    width: 2.2rem;
+    min-width: 2.2rem;
+    height: 2.2rem;
+    min-height: 0;
+    padding: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.82rem;
+    border-color: color-mix(in srgb, var(--hai-ai-table-fg) 10%, transparent);
+    background: var(--hai-ai-table-bg);
+    color: color-mix(in srgb, var(--hai-ai-table-fg) 82%, transparent);
+    box-shadow: none;
+    box-sizing: border-box;
+  }
+
+  :global(.hai-ai-download-menu__trigger.hai-ai-table-toolbar-btn:hover) {
+    transform: translateY(-1px);
+    color: var(--hai-ai-table-fg);
+    border-color: color-mix(in srgb, var(--hai-ai-table-fg) 18%, transparent);
+    background: color-mix(in srgb, var(--hai-ai-table-bg-soft) 70%, var(--hai-ai-table-bg) 30%);
+    box-shadow: 0 14px 24px -20px color-mix(in srgb, var(--hai-ai-table-fg) 42%, transparent);
+  }
+
+  :global(.hai-ai-download-menu__trigger.hai-ai-table-toolbar-btn:focus-visible) {
+    outline: 2px solid color-mix(in srgb, var(--hai-ai-table-primary) 28%, transparent);
+    outline-offset: 2px;
+  }
+
+  :global(.hai-ai-download-menu__trigger.hai-ai-table-toolbar-btn .hai-ai-download-menu__trigger-icon) {
+    width: 1.02rem;
+    height: 1.02rem;
+  }
+
+  :global(.hai-ai-table-download-menu-panel) {
+    border-color: color-mix(in srgb, var(--hai-ai-table-fg) 10%, var(--hai-ai-table-bg) 90%);
+    border-radius: 1.2rem;
+  }
+
   .hai-ai-table-scroll {
     min-height: 0;
     flex: 1;
@@ -1020,13 +1338,38 @@
     font-variant-numeric: tabular-nums;
   }
 
+  .hai-ai-table-body-row {
+    transition: background-color 0.15s ease, opacity 0.15s ease;
+  }
+
+  .hai-ai-table-body-row--dragging td {
+    background: color-mix(in srgb, var(--hai-ai-table-bg-soft) 72%, var(--hai-ai-table-bg) 28%);
+    opacity: 0.7;
+  }
+
+  .hai-ai-table-body-row--drop-before td {
+    box-shadow: inset 0 3px 0 color-mix(in srgb, var(--hai-ai-table-primary) 50%, transparent);
+  }
+
+  .hai-ai-table-body-row--drop-after td {
+    box-shadow: inset 0 -3px 0 color-mix(in srgb, var(--hai-ai-table-primary) 50%, transparent);
+  }
+
   .hai-ai-table-action-head,
   .hai-ai-table-row-action {
-    width: 3.1rem;
-    min-width: 3.1rem;
+    width: 5.2rem;
+    min-width: 5.2rem;
     text-align: center;
   }
 
+  .hai-ai-table-row-actions {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.38rem;
+  }
+
+  .hai-ai-table-row-handle,
   .hai-ai-table-row-delete {
     width: 1.95rem;
     height: 1.95rem;
@@ -1037,8 +1380,6 @@
     border: 1px solid color-mix(in srgb, var(--hai-ai-table-fg) 18%, var(--hai-ai-table-bg) 82%);
     color: color-mix(in srgb, var(--hai-ai-table-fg) 66%, transparent);
     background: color-mix(in srgb, var(--hai-ai-table-bg) 80%, var(--hai-ai-table-bg-soft) 20%);
-    opacity: 0;
-    pointer-events: none;
     cursor: pointer;
     transition:
       opacity 0.12s ease,
@@ -1048,19 +1389,61 @@
       background-color 0.15s ease;
   }
 
+  .hai-ai-table-row-handle {
+    cursor: grab;
+    opacity: 0.82;
+  }
+
+  .hai-ai-table-row-handle:active {
+    cursor: grabbing;
+  }
+
+  .hai-ai-table-row-handle:disabled {
+    cursor: not-allowed;
+    opacity: 0.45;
+  }
+
+  .hai-ai-table-row-handle :global(svg),
   .hai-ai-table-row-delete :global(svg) {
     width: 0.86rem;
     height: 0.86rem;
     fill: currentColor;
   }
 
+  .hai-ai-table-body-row:hover .hai-ai-table-row-handle:not(:disabled) {
+    opacity: 1;
+  }
+
   .hai-ai-table-body-row:hover .hai-ai-table-row-delete {
     opacity: 1;
-    pointer-events: auto;
+  }
+
+  .hai-ai-table-row-actions:focus-within .hai-ai-table-row-delete {
+    opacity: 1;
+  }
+
+  .hai-ai-table-row-handle:hover:not(:disabled),
+  .hai-ai-table-row-delete:hover {
+    transform: translateY(-1px);
+  }
+
+  .hai-ai-table-row-handle:focus-visible,
+  .hai-ai-table-row-delete:focus-visible {
+    outline: 2px solid color-mix(in srgb, var(--hai-ai-table-primary) 26%, transparent);
+    outline-offset: 2px;
+  }
+
+  .hai-ai-table-row-handle:hover:not(:disabled) {
+    color: var(--hai-ai-table-fg);
+    border-color: color-mix(in srgb, var(--hai-ai-table-primary) 24%, var(--hai-ai-table-bg) 76%);
+    background: color-mix(in srgb, var(--hai-ai-table-primary) 8%, var(--hai-ai-table-bg) 92%);
+  }
+
+  .hai-ai-table-row-delete {
+    opacity: 0.38;
   }
 
   .hai-ai-table-row-delete:hover {
-    transform: translateY(-1px);
     color: var(--hai-ai-table-error);
     border-color: color-mix(in srgb, var(--hai-ai-table-error) 42%, var(--hai-ai-table-bg) 58%);
     background: color-mix(in srgb, var(--hai-ai-table-error) 9%, var(--hai-ai-table-bg) 91%);

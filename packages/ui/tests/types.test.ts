@@ -105,6 +105,7 @@ describe('原子组件 Props', () => {
   it('buttonProps 应该包含正确的属性', () => {
     expectTypeOf<ButtonProps>().toHaveProperty('variant')
     expectTypeOf<ButtonProps>().toHaveProperty('size')
+    expectTypeOf<ButtonProps>().toHaveProperty('form')
     expectTypeOf<ButtonProps>().toHaveProperty('disabled')
     expectTypeOf<ButtonProps>().toHaveProperty('loading')
     expectTypeOf<ButtonProps>().toHaveProperty('outline')
@@ -115,6 +116,12 @@ describe('原子组件 Props', () => {
     expectTypeOf<BareButtonProps>().toHaveProperty('class')
     expectTypeOf<BareButtonProps>().toHaveProperty('ariaLabel')
     expectTypeOf<BareButtonProps>().toHaveProperty('onclick')
+  })
+
+  it('formProps 应该包含正确的属性', () => {
+    expectTypeOf<FormProps>().toHaveProperty('id')
+    expectTypeOf<FormProps>().toHaveProperty('loading')
+    expectTypeOf<FormProps>().toHaveProperty('onsubmit')
   })
 
   it('inputProps 应该包含正确的属性', () => {
@@ -197,6 +204,10 @@ describe('组合组件 Props', () => {
     expectTypeOf<ModalProps>().toHaveProperty('open')
     expectTypeOf<ModalProps>().toHaveProperty('title')
     expectTypeOf<ModalProps>().toHaveProperty('size')
+    expectTypeOf<ModalProps>().toHaveProperty('closeOnBackdrop')
+    expectTypeOf<ModalProps>().toHaveProperty('width')
+    expectTypeOf<ModalProps>().toHaveProperty('height')
+    expectTypeOf<ModalProps>().toHaveProperty('bodyClass')
     expectTypeOf<ModalProps>().toHaveProperty('onclose')
   })
 

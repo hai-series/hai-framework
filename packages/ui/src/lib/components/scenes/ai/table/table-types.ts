@@ -18,8 +18,14 @@ export interface AiTableColumn {
 export interface AiTableRow {
   /** 行唯一标识；编辑、删除和流式合并都依赖它做稳定匹配。 */
   row_id: string
-  /** 行内任意单元格值，键名需对应 `table_columns[].key`。 */
-  [key: string]: string | number | null | undefined
+  /**
+   * 行内任意单元格值，键名需对应 `table_columns[].key`。
+   *
+   * @remarks
+   * viewer 侧会接历史草稿、structured payload 和流式中间态，值类型不能过早收死。
+   * 组件内部会在渲染/复制/下载时统一做字符串化兜底。
+   */
+  [key: string]: unknown
 }
 
 export interface AiTableData {
@@ -32,19 +38,30 @@ export interface AiTableData {
 /**
  * 表格变更来源，用于上层做埋点或按动作类型分流保存策略。
  */
-export type AiTableEditorChangeAction = 'replace' | 'cell-update' | 'row-add' | 'row-delete'
+export type AiTableEditorChangeAction
+  = | 'replace'
+    | 'cell-update'
+    | 'row-add'
+    | 'row-delete'
+    | 'row-reorder'
 
 export interface AiTableEditorChangePayload {
   /** 本次变更动作类型。 */
   action: AiTableEditorChangeAction
   /** 变更后的完整表格快照。 */
   nextData: AiTableData
-  /** 命中的行 id；`replace` 动作下可为空。 */
+  /** 命中的行 id；`replace` 动作下可为空，`row-reorder` 下表示被拖动的行。 */
   rowId?: string
   /** 命中的列 key；仅单元格编辑时存在。 */
   columnKey?: string
   /** 单元格编辑后的值；仅单元格编辑时存在。 */
   value?: string
+  /** 行重排时命中的参考行 id；用于还原“拖到哪一行附近”的上下文。 */
+  targetRowId?: string
+  /** 行重排前的索引；仅 `row-reorder` 时存在。 */
+  fromIndex?: number
+  /** 行重排后的索引；仅 `row-reorder` 时存在。 */
+  toIndex?: number
 }
 
 export interface AiTableCopyPayload {

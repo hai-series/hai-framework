@@ -241,6 +241,7 @@
   "table_editor_eyebrow": "Editable table",
   "table_copy": "Copy table",
   "table_download": "Download table",
+  "table_reorder_row": "Drag to reorder this row",
   "table_close": "Close",
   "table_add_row": "Add row",
   "table_delete_row": "Delete row",
