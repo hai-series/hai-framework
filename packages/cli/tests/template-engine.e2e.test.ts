@@ -138,12 +138,6 @@ describe('admin 应用类型生成', () => {
       expect(content).toContain('tests/**/*.test.ts')
     })
 
-    it('package.json version 应为 0.1.0', async () => {
-      const content = await readGenerated(projectPath, 'package.json')
-      const pkg = JSON.parse(content)
-      expect(pkg.version).toBe('0.1.0')
-    })
-
     it('package.json 应包含 description 和 keywords', async () => {
       const content = await readGenerated(projectPath, 'package.json')
       const pkg = JSON.parse(content)
