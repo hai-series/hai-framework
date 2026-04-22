@@ -10,8 +10,8 @@ const BROWSER_PDF_PAGE_HEIGHT_MM = 297
 const BROWSER_PDF_VIEWPORT_WIDTH_PX = 794
 const BROWSER_PDF_MARGIN_MM = [14, 12, 14, 12] as const
 const BROWSER_PDF_CONTENT_WIDTH_MM = 210 - BROWSER_PDF_MARGIN_MM[1] - BROWSER_PDF_MARGIN_MM[3]
-const BROWSER_PDF_CONTENT_HEIGHT_MM =
-  BROWSER_PDF_PAGE_HEIGHT_MM - BROWSER_PDF_MARGIN_MM[0] - BROWSER_PDF_MARGIN_MM[2]
+const BROWSER_PDF_CONTENT_HEIGHT_MM
+  = BROWSER_PDF_PAGE_HEIGHT_MM - BROWSER_PDF_MARGIN_MM[0] - BROWSER_PDF_MARGIN_MM[2]
 const BROWSER_PDF_PAGE_BREAK_SEARCH_RATIO = 0.12
 const BROWSER_PDF_PAGE_BREAK_SEARCH_MAX_PX = 160
 const BROWSER_PDF_PAGE_BREAK_SEARCH_MIN_PX = 24
@@ -444,8 +444,8 @@ function waitForNextPaint(
   view?: Pick<Window, 'requestAnimationFrame'> | null,
 ): Promise<void> {
   return new Promise((resolve) => {
-    const requestAnimationFrame =
-      view?.requestAnimationFrame?.bind(view) ?? window.requestAnimationFrame
+    const requestAnimationFrame
+      = view?.requestAnimationFrame?.bind(view) ?? window.requestAnimationFrame
 
     if (typeof requestAnimationFrame !== 'function') {
       resolve()
@@ -512,11 +512,11 @@ function createPagedPdfFromCanvas(
     const remainingHeightPx = canvas.height - sourceY
     const sliceHeightPx = remainingHeightPx > pageHeightPx && sourceContext
       ? resolveCanvasPageSliceHeight(
-        sourceContext,
-        canvas,
-        sourceY,
-        pageHeightPx,
-      )
+          sourceContext,
+          canvas,
+          sourceY,
+          pageHeightPx,
+        )
       : Math.min(pageHeightPx, remainingHeightPx)
 
     pageCanvas.width = canvas.width

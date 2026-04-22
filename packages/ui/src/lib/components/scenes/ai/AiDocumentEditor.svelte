@@ -499,6 +499,8 @@
     ]
   }
 
+  const HTML_DOCUMENT_PATTERN = /<!doctype html>|<html[\s>]|<body[\s>]|<div[\s>]|<main[\s>]/i
+
   async function copyRawContent(): Promise<boolean> {
     try {
       await navigator.clipboard.writeText(content)
@@ -565,9 +567,7 @@
   }
 
   function looksLikeHtml(code: string): boolean {
-    return /<!doctype html>|<html[\s>]|<body[\s>]|<div[\s>]|<main[\s>]/i.test(
-      code,
-    )
+    return HTML_DOCUMENT_PATTERN.test(code)
   }
 
   function buildJavaScriptPreview(code: string): string {
@@ -1695,8 +1695,7 @@ ${safeCode}
                       type='button'
                       class={cn(
                         'hai-ai-doc-selection-chip',
-                        !directRewriteAction
-                          && activeSelectionMenu === 'rewrite'
+                        (!directRewriteAction && activeSelectionMenu === 'rewrite')
                           ? 'hai-ai-doc-selection-chip--active'
                           : '',
                       )}

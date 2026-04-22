@@ -18,7 +18,7 @@ const pdfAddPageMock = vi.fn()
 const pdfOutputMock = vi.fn(() => new Blob(['pdf'], { type: 'application/pdf' }))
 const canvasFillRectMock = vi.fn()
 const canvasDrawImageMock = vi.fn()
-const canvasGetImageDataMock = vi.fn((x = 0, y = 0, width = 0, height = 0) => ({
+const canvasGetImageDataMock = vi.fn((_x = 0, _y = 0, width = 0, height = 0) => ({
   data: new Uint8ClampedArray(width * height * 4).fill(255),
   width,
   height,
@@ -57,14 +57,12 @@ describe('document-download', () => {
     revokeObjectUrlSpy = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {})
     anchorClickSpy = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
     canvasGetContextSpy = vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation(
-      function mockCanvasContext(this: HTMLCanvasElement) {
-        return {
-          fillStyle: '#ffffff',
-          fillRect: canvasFillRectMock,
-          drawImage: canvasDrawImageMock,
-          getImageData: canvasGetImageDataMock,
-        } as unknown as CanvasRenderingContext2D
-      },
+      () => ({
+        fillStyle: '#ffffff',
+        fillRect: canvasFillRectMock,
+        drawImage: canvasDrawImageMock,
+        getImageData: canvasGetImageDataMock,
+      } as unknown as CanvasRenderingContext2D),
     )
     canvasToDataUrlSpy = vi.spyOn(HTMLCanvasElement.prototype, 'toDataURL').mockReturnValue(
       'data:image/png;base64,ZmFrZQ==',
@@ -158,7 +156,7 @@ describe('document-download', () => {
       canvas.dataset.sourceCanvas = 'true'
       return canvas
     })
-    canvasGetImageDataMock.mockImplementation((x = 0, y = 0, width = 0, height = 0) => {
+    canvasGetImageDataMock.mockImplementation((_x = 0, y = 0, width = 0, height = 0) => {
       const pixels = new Uint8ClampedArray(width * height * 4).fill(255)
       for (let rowIndex = 0; rowIndex < height; rowIndex += 1) {
         const absoluteY = y + rowIndex

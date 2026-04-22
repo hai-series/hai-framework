@@ -184,6 +184,7 @@ export interface UserOperations {
    *
    * @param userId - 用户 ID
    * @param options - 查询选项（可选 include: ['roles'] 同时返回角色列表）
+   * @param options.include - 指定需要额外展开的关联字段；传入 ['roles'] 时同时返回角色列表
    * @returns 成功返回用户信息或 null（用户不存在时）
    */
   getUser: (userId: string, options?: { include?: ('roles')[] }) => Promise<HaiResult<User | null>>
