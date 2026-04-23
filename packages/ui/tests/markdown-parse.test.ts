@@ -72,6 +72,28 @@ describe('parseMarkdown - 基础渲染', () => {
     expect(html).toContain('data-hai-color="#2563eb"')
     expect(html).toContain('data-hai-bg="#dbeafe"')
   })
+
+  it('应该在列表项中解析 hai-span 标签', () => {
+    const html = parseMarkdown(
+      '- JavaScript: <hai-span bg="#ffedd5" color="#15803d">模块化开发</hai-span>',
+    )
+
+    expect(html).toContain('<li>')
+    expect(html).toContain('JavaScript:')
+    expect(html).toContain('color:#15803d')
+    expect(html).toContain('background-color:#ffedd5')
+  })
+
+  it('应该解析包裹链接的 hai-span 标签', () => {
+    const html = parseMarkdown(
+      'Hello <hai-span color="#15803d" bg="#ffedd5">[world](https://example.com)</hai-span>',
+    )
+
+    expect(html).toContain('data-hai-color="#15803d"')
+    expect(html).toContain('data-hai-bg="#ffedd5"')
+    expect(html).toContain('href="https://example.com"')
+    expect(html).toContain('>world</a>')
+  })
 })
 
 // =============================================================================
