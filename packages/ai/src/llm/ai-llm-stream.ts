@@ -34,6 +34,8 @@ import type {
 export function createStreamProcessor(): StreamProcessor {
   /** 累积文本内容 */
   let content = ''
+  /** 累积 reasoning 内容 */
+  let reasoningContent = ''
   /** 按索引累积工具调用片段（流式中可能跨多个 chunk） */
   let toolCalls: Map<number, { id: string, name: string, arguments: string }> = new Map()
   /** 完成原因（`'stop'` | `'tool_calls'` 等） */
@@ -50,6 +52,13 @@ export function createStreamProcessor(): StreamProcessor {
 
       if (delta.content) {
         content += delta.content
+      }
+
+      const reasoningDelta = 'reasoning_content' in delta && typeof delta.reasoning_content === 'string'
+        ? delta.reasoning_content
+        : ''
+      if (reasoningDelta) {
+        reasoningContent += reasoningDelta
       }
 
       if (delta.tool_calls) {
@@ -84,6 +93,7 @@ export function createStreamProcessor(): StreamProcessor {
     getResult(): StreamResult {
       return {
         content,
+        reasoningContent,
         toolCalls: Array.from(toolCalls.values()).map(tc => ({
           id: tc.id,
           type: 'function' as const,
@@ -103,6 +113,9 @@ export function createStreamProcessor(): StreamProcessor {
         role: 'assistant',
         content: result.toolCalls.length > 0 ? null : result.content,
       }
+      if (result.reasoningContent) {
+        message.reasoning_content = result.reasoningContent
+      }
       if (result.toolCalls.length > 0) {
         message.tool_calls = result.toolCalls
       }
@@ -112,6 +125,7 @@ export function createStreamProcessor(): StreamProcessor {
     /** 重置所有状态，可复用处理器处理下一次流 */
     reset(): void {
       content = ''
+      reasoningContent = ''
       toolCalls = new Map()
       finishReason = null
     },

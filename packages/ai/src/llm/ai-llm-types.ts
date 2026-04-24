@@ -15,8 +15,8 @@ import type { InteractionScope, SessionInfo } from '../store/ai-store-types.js'
 
 // ─── 消息类型 ───
 
-/** 消息角色枚举：`'system'` | `'user'` | `'assistant'` | `'tool'` */
-export type MessageRole = 'system' | 'user' | 'assistant' | 'tool'
+/** 消息角色枚举：`'system'` | `'developer'` | `'user'` | `'assistant'` | `'tool'` */
+export type MessageRole = 'system' | 'developer' | 'user' | 'assistant' | 'tool'
 
 /** 文本内容块（多模态消息中的纯文本部分） */
 export type TextContent = OpenAI.Chat.Completions.ChatCompletionContentPartText
@@ -30,6 +30,13 @@ export type MessageContent = string | OpenAI.Chat.Completions.ChatCompletionCont
 /** 系统消息，用于设定对话的行为规则 */
 export type SystemMessage = OpenAI.Chat.Completions.ChatCompletionSystemMessageParam
 
+/** 开发者消息（高优先级运行时约束） */
+export interface DeveloperMessage {
+  role: 'developer'
+  content: string | TextContent[]
+  name?: string
+}
+
 /** 用户消息 */
 export type UserMessage = OpenAI.Chat.Completions.ChatCompletionUserMessageParam
 
@@ -37,13 +44,20 @@ export type UserMessage = OpenAI.Chat.Completions.ChatCompletionUserMessageParam
 export type ToolCall = OpenAI.Chat.Completions.ChatCompletionMessageToolCall
 
 /** 助手消息（模型生成的回复，或传入对话上下文的助手轮次） */
-export type AssistantMessage = OpenAI.Chat.Completions.ChatCompletionAssistantMessageParam
+export type AssistantMessage = OpenAI.Chat.Completions.ChatCompletionAssistantMessageParam & {
+  /**
+   * 推理模型额外返回的思维链内容。
+   *
+   * DeepSeek thinking mode 在 function calling 多轮续写时要求回传该字段。
+   */
+  reasoning_content?: string | null
+}
 
 /** 工具消息（工具执行结果，用于回传给模型） */
 export type ToolMessage = OpenAI.Chat.Completions.ChatCompletionToolMessageParam
 
 /** 聊天消息联合类型，涵盖对话中所有角色的消息 */
-export type ChatMessage = OpenAI.Chat.Completions.ChatCompletionMessageParam
+export type ChatMessage = OpenAI.Chat.Completions.ChatCompletionMessageParam | DeveloperMessage
 
 // ─── 请求与响应 ───
 
@@ -58,7 +72,9 @@ export type ToolDefinition = OpenAI.Chat.Completions.ChatCompletionTool
  * `stream` 字段由框架内部控制，不对外暴露。
  */
 export type ChatCompletionRequest
-  = Omit<OpenAI.Chat.ChatCompletionCreateParamsNonStreaming, 'model' | 'stream'> & {
+  = Omit<OpenAI.Chat.ChatCompletionCreateParamsNonStreaming, 'model' | 'stream' | 'messages'> & {
+    /** 对话消息列表 */
+    messages: ChatMessage[]
     /** 模型名称（可选，未指定时使用配置中的默认模型） */
     model?: string
     /** 交互主体 ID（传入后 LLM 会自动关联到该主体） */
@@ -90,6 +106,8 @@ export type ChatCompletionChunk = OpenAI.Chat.ChatCompletionChunk
 export interface StreamResult {
   /** 累积的完整文本内容 */
   content: string
+  /** 累积的完整 reasoning 内容 */
+  reasoningContent: string
   /** 累积的完整工具调用列表 */
   toolCalls: ToolCall[]
   /** 完成原因（流未结束时为 `null`） */
