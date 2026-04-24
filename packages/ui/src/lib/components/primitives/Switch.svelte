@@ -22,10 +22,15 @@
 
   const id = generateId('switch')
 
+  const hasToggleColorVariant = $derived(
+    /\btoggle-(?:primary|secondary|accent|neutral|success|warning|info|error)\b/.test(className),
+  )
+
   const toggleClass = $derived(
     cn(
       'toggle',
       getSizeClass(size, 'toggle'),
+      !hasToggleColorVariant && 'toggle-primary',
       className,
     ),
   )
