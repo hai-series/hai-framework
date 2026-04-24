@@ -14,7 +14,8 @@ const HEX_COLOR_REGEX = /^#(?:[0-9a-f]{3}|[0-9a-f]{6}|[0-9a-f]{8})$/i
  */
 const ALIGN_VALUE_REGEX = /^(?:left|center|right|justify)$/i
 const HAI_ALIGN_BLOCK_REGEX = /^<hai-align\s+value="(left|center|right|justify)">\n?([\s\S]+?)\n?<\/hai-align>\n{0,2}/i
-const HAI_SPAN_INLINE_REGEX = /^<hai-span(?:\s+color="([^"]+)")?(?:\s+bg="([^"]+)")?\s*>([\s\S]+?)<\/hai-span>/i
+const HAI_SPAN_INLINE_REGEX = /^<hai-span\b([^>]*)>([\s\S]+?)<\/hai-span>/i
+const HAI_SPAN_ATTR_REGEX = /\b(color|bg)="([^"]+)"/gi
 const HAI_UNDERLINE_REGEX = /^\+\+((?:\\.|[\s\S])+?)\+\+/
 const HAI_HIGHLIGHT_REGEX = /^==((?:\\.|[\s\S])+?)==/
 
@@ -94,6 +95,27 @@ function sanitizeAlign(value: string | undefined): EditorAlignToken['align'] | u
     : undefined
 }
 
+function parseHaiSpanAttributes(
+  rawAttributes: string,
+): Pick<EditorSpanToken, 'color' | 'background'> {
+  let color: string | undefined
+  let background: string | undefined
+
+  for (const match of rawAttributes.matchAll(HAI_SPAN_ATTR_REGEX)) {
+    const [, attrName, attrValue] = match
+    if (attrName === 'color') {
+      color = sanitizeColor(attrValue) ?? color
+      continue
+    }
+
+    if (attrName === 'bg') {
+      background = sanitizeColor(attrValue) ?? background
+    }
+  }
+
+  return { color, background }
+}
+
 /**
  * ChatWorkspace 编辑器会把“非标准 Markdown”能力写成自定义标签，
  * 这里把它们注册为 marked 扩展，保证普通 Markdown 和编辑器增强能力共享同一条渲染链路。
@@ -143,14 +165,13 @@ export function createEditorMarkdownExtensions(): TokenizerAndRendererExtension[
           return undefined
         }
 
-        const color = sanitizeColor(match[1])
-        const background = sanitizeColor(match[2])
+        const { color, background } = parseHaiSpanAttributes(match[1] ?? '')
         return {
           type: 'haiSpan',
           raw: match[0],
           color,
           background,
-          tokens: this.lexer.inlineTokens(match[3]),
+          tokens: this.lexer.inlineTokens(match[2]),
         } satisfies EditorSpanToken
       },
       renderer(token) {

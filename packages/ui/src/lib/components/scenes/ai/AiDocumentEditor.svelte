@@ -21,8 +21,10 @@
     MarkdownColorFormatRequest,
     MarkdownInlineFormatKind,
     MarkdownRewriteAction,
+    MarkdownSelectionSnapshot,
     MarkdownTextAlignKind,
   } from './document-types.js'
+  import { tick } from 'svelte'
   import { uiM } from '../../../messages.js'
   import { cn } from '../../../utils.js'
   import AiDocumentDownloadMenu from './AiDocumentDownloadMenu.svelte'
@@ -33,7 +35,7 @@
   interface SelectionToolbarPosition {
     /** 选区工具条相对滚动容器的 top 坐标。 */
     top: number
-    /** 选区工具条中心点相对滚动容器的 left 坐标。 */
+    /** 选区工具条左侧边缘相对滚动容器的 left 坐标。 */
     left: number
     /** 选区工具条应该出现在选区上方还是下方，避免遮挡正文。 */
     placement: 'top' | 'bottom'
@@ -84,6 +86,28 @@
     text: string
   }
 
+  interface ColorSwatchOption {
+    /** 颜色值；为空表示恢复默认或清除当前维度。 */
+    value: string | null
+    /** 展示标题，用于 hover / a11y。 */
+    titleKey: 'markdown_background_none'
+  }
+
+  interface HoveredLinkState {
+    /** 当前悬停的链接元素。 */
+    element: HTMLAnchorElement
+    /** 浏览器可直接打开的绝对链接地址。 */
+    href: string
+    /** 编辑时优先回填原始 href 属性，避免相对地址被强制绝对化。 */
+    rawHref: string
+    /** 悬停浮层相对滚动容器的 top 坐标。 */
+    top: number
+    /** 悬停浮层左侧边缘相对滚动容器的 left 坐标。 */
+    left: number
+    /** 浮层出现在链接上方还是下方。 */
+    placement: 'top' | 'bottom'
+  }
+
   type SelectionMenuKind = 'rewrite' | 'block' | 'align' | 'link' | 'color'
 
   const BLOCK_FORMAT_OPTIONS: Array<{
@@ -94,6 +118,8 @@
       | 'markdown_format_heading_2'
       | 'markdown_format_heading_3'
       | 'markdown_format_heading_4'
+      | 'markdown_format_ordered_list'
+      | 'markdown_format_bullet_list'
     shortLabel: string
   }> = [
     {
@@ -115,6 +141,16 @@
       value: 'heading3',
       labelKey: 'markdown_format_heading_3',
       shortLabel: 'H3',
+    },
+    {
+      value: 'orderedList',
+      labelKey: 'markdown_format_ordered_list',
+      shortLabel: '1.',
+    },
+    {
+      value: 'bulletList',
+      labelKey: 'markdown_format_bullet_list',
+      shortLabel: '•',
     },
     {
       value: 'heading4',
@@ -158,6 +194,13 @@
     '#f3f4f6',
     '#e2e8f0',
   ] as const
+  const BACKGROUND_COLOR_OPTIONS: readonly (typeof BACKGROUND_COLOR_PRESETS[number] | ColorSwatchOption)[] = [
+    { value: null, titleKey: 'markdown_background_none' },
+    ...BACKGROUND_COLOR_PRESETS,
+  ] as const
+  const FALLBACK_BLOCK_FORMAT_OPTION = BLOCK_FORMAT_OPTIONS.find(
+    option => option.value === 'paragraph',
+  ) ?? BLOCK_FORMAT_OPTIONS[0]
 
   const DEFAULT_SELECTION_FORMAT_STATE: SelectionFormatState = {
     blockFormat: 'paragraph',
@@ -289,6 +332,10 @@
     placement: 'top',
     alignment: 'center',
   })
+  // 窄容器下目录会改成悬浮覆盖模式，保存 DOM 引用后才能在定位工具条时主动避让。
+  let outlinePanelEl = $state<HTMLElement | null>(null)
+  // chrome 节点同时包住主工具条和下拉面板，方便判断焦点是否仍留在浮层内部。
+  let selectionChromeEl = $state<HTMLDivElement | null>(null)
   // 选区工具条自身 DOM，用于根据真实尺寸修正贴边位置。
   let selectionToolbarEl = $state<HTMLDivElement | null>(null)
   // 当前展开菜单对应的触发按钮，用来把面板锚定到具体按钮下方/上方。
@@ -309,13 +356,28 @@
   })
   // linkDraft 只在链接弹层里暂存输入值，避免每次打开都丢掉正在编辑的链接。
   let linkDraft = $state('')
+  // 链接输入框允许接管焦点，但格式动作仍需要恢复到正文的最后一个有效选区。
+  let linkInputEl = $state<HTMLInputElement | null>(null)
+  // 链接按钮 DOM 用来在“悬停编辑链接”场景下复用现有链接弹层定位。
+  let selectionLinkButtonEl = $state<HTMLButtonElement | null>(null)
+  // 原始 DOM Range 在结构没变时恢复最快，也能保留浏览器原生的精确边界。
+  let savedSelectionRange = $state<Range | null>(null)
+  // 纯文本快照用于 DOM 被局部重建后的兜底恢复，避免只靠 Range 引用失效。
+  let savedSelectionSnapshot = $state<MarkdownSelectionSnapshot | null>(null)
   // 真实尺寸修正只需要排队一帧，避免反复触发 handleSelectionChange 形成抖动。
   let selectionToolbarMeasurePending = false
   // 选区刷新统一合并到同一帧，避免 selectionchange / mouseup / blur 连续触发时抖动。
   let selectionRefreshFrame: number | undefined
+  // 同一帧内任一来源要求重新量尺时，都要把这次刷新升级成 remeasure 版本。
   let selectionRefreshNeedsRemeasure = false
   // 浏览器在滚动到底部或切换焦点时会短暂给出空选区，这里延迟一拍再关闭工具条。
   let selectionToolbarCloseTimer: number | undefined
+  // 悬停到已配置链接时显示快捷浮层，便于直接打开或编辑。
+  let hoveredLinkState = $state<HoveredLinkState | null>(null)
+  // 悬停浮层需要拿到真实尺寸后再二次校正位置。
+  let hoveredLinkPopoverEl = $state<HTMLDivElement | null>(null)
+  // 鼠标从正文移动到悬停浮层时给一小段缓冲，避免浮层闪烁。
+  let hoveredLinkHideTimer: number | undefined
 
   // code 类型产物通常只有裸代码文本，这里统一包成 fenced block 进入同一条渲染链路。
   const documentContent = $derived(
@@ -325,6 +387,7 @@
   const codePreviewToggleEnabled = $derived(
     showCodePreviewToggle && sourceKind === 'code',
   )
+  // hint 文案统一做 trim，避免只传空格时仍把占位区域撑开。
   const normalizedCodePreviewHint = $derived(codePreviewHint.trim())
   const renderResult = $derived(
     renderMarkdownDocument(documentContent, {
@@ -348,6 +411,7 @@
   const resolvedRewriteActions = $derived(
     resolveRewriteActions(rewriteActions, onrewrite),
   )
+  // 只有一个改写动作时直接渲染成按钮，多动作才保留菜单，减少一次点击。
   const directRewriteAction = $derived(
     resolvedRewriteActions.length === 1 ? resolvedRewriteActions[0] : null,
   )
@@ -378,7 +442,7 @@
   const activeBlockFormatOption = $derived(
     BLOCK_FORMAT_OPTIONS.find(
       option => option.value === selectionFormatState.blockFormat,
-    ) ?? BLOCK_FORMAT_OPTIONS[0],
+    ) ?? FALLBACK_BLOCK_FORMAT_OPTION,
   )
   // readerDocumentClass 只负责正文文章区域，不和外层容器类名混用。
   const readerDocumentClass = $derived(
@@ -432,7 +496,8 @@
   $effect(() => {
     void documentContent
     codePreviews = {}
-    closeSelectionToolbar()
+    hoveredLinkState = null
+    queueSelectionRefresh(true)
   })
 
   $effect(() => {
@@ -457,6 +522,10 @@
       if (selectionToolbarCloseTimer) {
         window.clearTimeout(selectionToolbarCloseTimer)
       }
+
+      if (hoveredLinkHideTimer) {
+        window.clearTimeout(hoveredLinkHideTimer)
+      }
     }
   })
 
@@ -476,6 +545,64 @@
         'selectionchange',
         handleDocumentSelectionChange,
       )
+    }
+  })
+
+  $effect(() => {
+    if (
+      typeof document === 'undefined'
+      || !selectionToolbarVisible
+    ) {
+      return
+    }
+
+    const handleDocumentPointerDown = (event: MouseEvent): void => {
+      const target = event.target
+      if (!(target instanceof Node)) {
+        return
+      }
+
+      if (selectionChromeEl?.contains(target)) {
+        return
+      }
+
+      closeSelectionToolbar()
+    }
+
+    document.addEventListener('mousedown', handleDocumentPointerDown, true)
+
+    return () => {
+      document.removeEventListener('mousedown', handleDocumentPointerDown, true)
+    }
+  })
+
+  $effect(() => {
+    if (typeof window === 'undefined' || activeSelectionMenu !== 'link' || !linkInputEl) {
+      return
+    }
+
+    const nextLinkInput = linkInputEl
+    const focusFrame = window.requestAnimationFrame(() => {
+      nextLinkInput.focus()
+      nextLinkInput.select()
+    })
+
+    return () => {
+      window.cancelAnimationFrame(focusFrame)
+    }
+  })
+
+  $effect(() => {
+    if (typeof window === 'undefined' || !hoveredLinkState || !hoveredLinkPopoverEl) {
+      return
+    }
+
+    const measureFrame = window.requestAnimationFrame(() => {
+      syncHoveredLinkPosition()
+    })
+
+    return () => {
+      window.cancelAnimationFrame(measureFrame)
     }
   })
 
@@ -786,6 +913,10 @@ ${safeCode}
     }
   }
 
+  /**
+   * 统一承接正文里通过 `{@html}` 注入的交互节点点击。
+   * 这些按钮和链接不受 Svelte 逐个绑定管理，因此在容器级别做代理更稳妥。
+   */
   async function handleClick(event: MouseEvent): Promise<void> {
     const target = event.target as HTMLElement
     const copyButton = target.closest(
@@ -822,6 +953,22 @@ ${safeCode}
     const codeBlockId = runButton?.dataset.codeBlockId
     if (runButton && codeBlockId) {
       await runCodeBlock(codeBlockId)
+      return
+    }
+
+    const link = target.closest('a[href]') as HTMLAnchorElement | null
+    if (editable && link && previewHost?.contains(link)) {
+      const href = link.href.trim()
+      if (!href) {
+        return
+      }
+
+      event.preventDefault()
+      window.open(
+        href,
+        link.target || '_blank',
+        'noopener,noreferrer',
+      )
     }
   }
 
@@ -963,7 +1110,18 @@ ${safeCode}
   }
 
   function readBlockFormat(element: HTMLElement | null): MarkdownBlockStyleKind {
-    const tagName = getClosestBlockElement(element)?.tagName.toLowerCase()
+    const block = getClosestBlockElement(element)
+    const tagName = block?.tagName.toLowerCase()
+
+    if (tagName === 'li') {
+      const listTag = block?.parentElement?.tagName.toLowerCase()
+      if (listTag === 'ol') {
+        return 'orderedList'
+      }
+      if (listTag === 'ul') {
+        return 'bulletList'
+      }
+    }
 
     if (tagName === 'h1') {
       return 'heading1'
@@ -1090,6 +1248,370 @@ ${safeCode}
     }
   }
 
+  /**
+   * 下面这组 helper 在 contenteditable DOM 与“正文纯文本偏移”之间来回映射。
+   * 选区工具条一旦失焦或内容局部重渲染，就靠它们把原选区重新定位回来。
+   */
+  function getNodeTextLength(node: Node | null | undefined): number {
+    if (!node) {
+      return 0
+    }
+
+    if (node.nodeType === Node.TEXT_NODE) {
+      return node.textContent?.length ?? 0
+    }
+
+    let length = 0
+    for (const childNode of Array.from(node.childNodes)) {
+      length += getNodeTextLength(childNode)
+    }
+
+    return length
+  }
+
+  function getTextOffsetWithinNode(node: Node, offset: number): number {
+    if (node.nodeType === Node.TEXT_NODE) {
+      return Math.max(0, Math.min(offset, node.textContent?.length ?? 0))
+    }
+
+    const childNodes = Array.from(node.childNodes)
+    const nextOffset = Math.max(0, Math.min(offset, childNodes.length))
+    let length = 0
+
+    for (const childNode of childNodes.slice(0, nextOffset)) {
+      length += getNodeTextLength(childNode)
+    }
+
+    return length
+  }
+
+  function getTextOffsetBeforeNode(root: Node, target: Node): number | null {
+    let length = 0
+
+    const visit = (node: Node): boolean => {
+      if (node === target) {
+        return true
+      }
+
+      if (node.nodeType === Node.TEXT_NODE) {
+        length += node.textContent?.length ?? 0
+        return false
+      }
+
+      for (const childNode of Array.from(node.childNodes)) {
+        if (visit(childNode)) {
+          return true
+        }
+      }
+
+      return false
+    }
+
+    return visit(root) ? length : null
+  }
+
+  function getTextOffsetInPreview(node: Node, offset: number): number | null {
+    if (!previewHost || (node !== previewHost && !previewHost.contains(node))) {
+      return null
+    }
+
+    const prefixLength = getTextOffsetBeforeNode(previewHost, node)
+    if (prefixLength === null) {
+      return null
+    }
+
+    return prefixLength + getTextOffsetWithinNode(node, offset)
+  }
+
+  function resolveTextPositionInPreview(
+    offset: number,
+  ): { node: Node, offset: number } | null {
+    if (!previewHost) {
+      return null
+    }
+
+    const targetOffset = Math.max(0, offset)
+    const walker = document.createTreeWalker(previewHost, NodeFilter.SHOW_TEXT)
+    let current = walker.nextNode()
+    let accumulatedLength = 0
+    let lastTextNode: Node | null = null
+
+    while (current) {
+      const textLength = current.textContent?.length ?? 0
+      if (targetOffset <= accumulatedLength + textLength) {
+        return {
+          node: current,
+          offset: Math.max(0, targetOffset - accumulatedLength),
+        }
+      }
+
+      accumulatedLength += textLength
+      lastTextNode = current
+      current = walker.nextNode()
+    }
+
+    if (lastTextNode) {
+      return {
+        node: lastTextNode,
+        offset: lastTextNode.textContent?.length ?? 0,
+      }
+    }
+
+    return {
+      node: previewHost,
+      offset: Math.min(targetOffset, previewHost.childNodes.length),
+    }
+  }
+
+  /**
+   * 把当前 Range 压缩成纯文本偏移快照。
+   * 只记录非空选区，避免工具条动作把折叠光标也当成可恢复选区。
+   */
+  function capturePreviewSelectionSnapshot(
+    range: Range,
+  ): MarkdownSelectionSnapshot | null {
+    if (!previewHost) {
+      return null
+    }
+
+    const start = getTextOffsetInPreview(range.startContainer, range.startOffset)
+    const end = getTextOffsetInPreview(range.endContainer, range.endOffset)
+    const text = range.toString()
+
+    if (start === null || end === null || end <= start || !text.trim()) {
+      return null
+    }
+
+    return { start, end, text }
+  }
+
+  /**
+   * 用快照重新读取一遍当前正文中的文本，用来判断 DOM 变化后原 offsets 是否仍然可信。
+   */
+  function readTextFromSnapshot(
+    snapshot: MarkdownSelectionSnapshot,
+  ): string | null {
+    const startPosition = resolveTextPositionInPreview(snapshot.start)
+    const endPosition = resolveTextPositionInPreview(snapshot.end)
+    if (!startPosition || !endPosition) {
+      return null
+    }
+
+    try {
+      const range = document.createRange()
+      range.setStart(startPosition.node, startPosition.offset)
+      range.setEnd(endPosition.node, endPosition.offset)
+      return range.toString()
+    }
+    catch {
+      return null
+    }
+  }
+
+  /**
+   * 当原 offsets 对应的文本已经变了时，按“离旧起点最近”的同文本片段回退。
+   * 这样比只取第一个命中更接近用户刚才真实操作的位置。
+   */
+  function findClosestSelectionOffsets(
+    snapshot: MarkdownSelectionSnapshot,
+  ): { start: number, end: number } | null {
+    if (!previewHost || !snapshot.text) {
+      return null
+    }
+
+    const textContent = previewHost.textContent ?? ''
+    let bestMatchStart = -1
+    let smallestDistance = Number.POSITIVE_INFINITY
+    let searchIndex = textContent.indexOf(snapshot.text)
+
+    while (searchIndex >= 0) {
+      const distance = Math.abs(searchIndex - snapshot.start)
+      if (distance < smallestDistance) {
+        smallestDistance = distance
+        bestMatchStart = searchIndex
+      }
+
+      searchIndex = textContent.indexOf(snapshot.text, searchIndex + 1)
+    }
+
+    if (bestMatchStart < 0) {
+      return null
+    }
+
+    return {
+      start: bestMatchStart,
+      end: bestMatchStart + snapshot.text.length,
+    }
+  }
+
+  /**
+   * 优先按纯文本偏移恢复选区；如果 DOM 结构变动导致 offsets 漂移，再退回最近文本片段。
+   * 这一步会主动把焦点拉回正文，保证后续格式化命令仍作用于内容区。
+   */
+  function restoreSelectionFromSnapshot(
+    snapshot: MarkdownSelectionSnapshot,
+  ): boolean {
+    if (typeof window === 'undefined' || !previewHost) {
+      return false
+    }
+
+    const selection = window.getSelection()
+    if (!selection || snapshot.end <= snapshot.start) {
+      return false
+    }
+
+    let nextOffsets = {
+      start: snapshot.start,
+      end: snapshot.end,
+    }
+    const currentText = readTextFromSnapshot(snapshot)
+    if (snapshot.text && currentText !== snapshot.text) {
+      const matchedOffsets = findClosestSelectionOffsets(snapshot)
+      if (!matchedOffsets) {
+        return false
+      }
+
+      nextOffsets = matchedOffsets
+    }
+
+    const startPosition = resolveTextPositionInPreview(nextOffsets.start)
+    const endPosition = resolveTextPositionInPreview(nextOffsets.end)
+    if (!startPosition || !endPosition) {
+      return false
+    }
+
+    try {
+      const range = document.createRange()
+      range.setStart(startPosition.node, startPosition.offset)
+      range.setEnd(endPosition.node, endPosition.offset)
+      previewHost.focus()
+      selection.removeAllRanges()
+      selection.addRange(range)
+      return true
+    }
+    catch {
+      return false
+    }
+  }
+
+  /**
+   * 纯文本匹配是最后一道兜底，只在 Range 和偏移快照都失效时使用。
+   * 它无法区分完全相同的多个片段，所以只适合作为尽力恢复方案。
+   */
+  function restoreSelectionByTextMatch(text: string): boolean {
+    if (typeof window === 'undefined' || !previewHost || !text.trim()) {
+      return false
+    }
+
+    const selection = window.getSelection()
+    if (!selection) {
+      return false
+    }
+
+    const walker = document.createTreeWalker(previewHost, NodeFilter.SHOW_TEXT)
+    let current = walker.nextNode()
+
+    while (current) {
+      const content = current.textContent ?? ''
+      const start = content.indexOf(text)
+      if (start >= 0) {
+        try {
+          const range = document.createRange()
+          range.setStart(current, start)
+          range.setEnd(current, start + text.length)
+          previewHost.focus()
+          selection.removeAllRanges()
+          selection.addRange(range)
+          return true
+        }
+        catch {
+          return false
+        }
+      }
+
+      current = walker.nextNode()
+    }
+
+    return false
+  }
+
+  /**
+   * 工具条包含输入框和下拉面板，焦点落在内部时不应把“正文失焦”误判成关闭信号。
+   */
+  function isSelectionChromeFocused(): boolean {
+    if (typeof document === 'undefined' || !selectionChromeEl) {
+      return false
+    }
+
+    const activeElement = document.activeElement
+    return activeElement instanceof HTMLElement && selectionChromeEl.contains(activeElement)
+  }
+
+  /**
+   * 同时保存浏览器原生 Range 和纯文本快照。
+   * 前者恢复精度更高，后者能跨 DOM 重建，两者组合能覆盖大多数编辑场景。
+   */
+  function rememberPreviewSelection(range: Range): void {
+    savedSelectionRange = range.cloneRange()
+    savedSelectionSnapshot = capturePreviewSelectionSnapshot(range)
+  }
+
+  /**
+   * 选区恢复按“快照 -> 原始 Range -> 文本兜底”三层顺序尝试。
+   * 这样既优先命中最精确的位置，也能在内容轻微重排后保留工具条操作连续性。
+   */
+  function restoreSavedPreviewSelection(): boolean {
+    if (savedSelectionSnapshot && restoreSelectionFromSnapshot(savedSelectionSnapshot)) {
+      return true
+    }
+
+    if (typeof window === 'undefined' || !previewHost || !savedSelectionRange) {
+      const fallbackText = savedSelectionSnapshot?.text || selectedText
+      return restoreSelectionByTextMatch(fallbackText)
+    }
+
+    const selection = window.getSelection()
+    if (!selection) {
+      return false
+    }
+
+    try {
+      const restoredRange = savedSelectionRange.cloneRange()
+      if (
+        !previewHost.contains(restoredRange.startContainer)
+        || !previewHost.contains(restoredRange.endContainer)
+      ) {
+        return false
+      }
+
+      previewHost.focus()
+      selection.removeAllRanges()
+      selection.addRange(restoredRange)
+      return true
+    }
+    catch {
+      const fallbackText = savedSelectionSnapshot?.text || selectedText
+      return restoreSelectionByTextMatch(fallbackText)
+    }
+  }
+
+  /**
+   * 工具条动作触发前先同步一次真实选区，避免点击按钮后浏览器把正文选区清掉。
+   */
+  function syncSelectionForToolbarAction(): boolean {
+    const previewSelection = readPreviewSelectionState()
+    if (previewSelection) {
+      rememberPreviewSelection(previewSelection.range)
+      selectedText = previewSelection.text
+      return true
+    }
+
+    return restoreSavedPreviewSelection()
+  }
+
+  /**
+   * 所有关闭动作都走同一个 timer，方便菜单 hover、输入框 focus 等场景随时撤销关闭。
+   */
   function clearPendingSelectionToolbarClose(): void {
     if (typeof window === 'undefined' || !selectionToolbarCloseTimer) {
       return
@@ -1099,6 +1621,10 @@ ${safeCode}
     selectionToolbarCloseTimer = undefined
   }
 
+  /**
+   * 关闭工具条刻意延后一小拍，给菜单 hover、输入框 focus 和选区回流留出时间。
+   * 只要子菜单还开着，或焦点仍在 chrome 里，就继续保留当前工具条。
+   */
   function scheduleSelectionToolbarClose(): void {
     if (typeof window === 'undefined') {
       closeSelectionToolbar()
@@ -1110,15 +1636,26 @@ ${safeCode}
       return
     }
 
+    if (activeSelectionMenu) {
+      return
+    }
+
     clearPendingSelectionToolbarClose()
     selectionToolbarCloseTimer = window.setTimeout(() => {
       selectionToolbarCloseTimer = undefined
+      if (activeSelectionMenu || isSelectionChromeFocused()) {
+        return
+      }
+
       if (!readPreviewSelectionState()) {
         closeSelectionToolbar()
       }
-    }, 120)
+    }, 600)
   }
 
+  /**
+   * 选区变化可能在一帧内收到多次事件，这里统一合并，避免定位和状态读取来回抖动。
+   */
   function queueSelectionRefresh(remeasured = false): void {
     if (typeof window === 'undefined') {
       return
@@ -1137,6 +1674,9 @@ ${safeCode}
     })
   }
 
+  /**
+   * 子菜单首次打开前拿不到真实宽度，先给一个稳定的经验值参与贴边计算。
+   */
   function estimateSelectionMenuWidth(menu: SelectionMenuKind): number {
     if (menu === 'color' || menu === 'link') {
       return 256
@@ -1149,6 +1689,9 @@ ${safeCode}
     return 288
   }
 
+  /**
+   * 下拉面板以触发按钮为锚点，但最终位置要限制在工具条宽度内，避免菜单越界裁切。
+   */
   function updateSelectionMenuAnchor(menu: SelectionMenuKind): void {
     if (!selectionToolbarEl || !activeSelectionMenuTrigger) {
       selectionMenuLeft = 0
@@ -1186,6 +1729,9 @@ ${safeCode}
     selectionMenuAlignment = 'center'
   }
 
+  /**
+   * 工具条初次出现时尺寸还没稳定，下一帧再量一次可以避免首帧贴边位置偏差。
+   */
   function scheduleSelectionToolbarMeasurement(): void {
     if (
       typeof window === 'undefined'
@@ -1204,7 +1750,11 @@ ${safeCode}
     })
   }
 
+  /**
+   * 子菜单统一从这里开关，顺手记录触发按钮和链接初始值，保证定位与默认值一致。
+   */
   function toggleSelectionMenu(menu: SelectionMenuKind, event?: MouseEvent): void {
+    clearPendingSelectionToolbarClose()
     const opening = activeSelectionMenu !== menu
     activeSelectionMenu = opening ? menu : null
     activeSelectionMenuTrigger = opening && event?.currentTarget instanceof HTMLElement
@@ -1218,6 +1768,9 @@ ${safeCode}
     }
   }
 
+  /**
+   * 关闭时把选区相关缓存一并清干净，避免下一次打开还误用上一次的链接和格式状态。
+   */
   function closeSelectionToolbar(): void {
     clearPendingSelectionToolbarClose()
     selectionToolbarVisible = false
@@ -1227,7 +1780,247 @@ ${safeCode}
     selectionMenuAlignment = 'center'
     selectedText = ''
     linkDraft = ''
+    savedSelectionRange = null
+    savedSelectionSnapshot = null
     selectionFormatState = { ...DEFAULT_SELECTION_FORMAT_STATE }
+  }
+
+  /**
+   * 面板上的按钮点击不应让浏览器先把正文选区清掉。
+   * 但输入框要保留原生 focus 行为，方便直接编辑链接。
+   */
+  function handleSelectionPanelMouseDown(event: MouseEvent): void {
+    if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) {
+      return
+    }
+
+    event.preventDefault()
+  }
+
+  function clearPendingHoveredLinkHide(): void {
+    if (typeof window === 'undefined' || !hoveredLinkHideTimer) {
+      return
+    }
+
+    window.clearTimeout(hoveredLinkHideTimer)
+    hoveredLinkHideTimer = undefined
+  }
+
+  function closeHoveredLink(): void {
+    clearPendingHoveredLinkHide()
+    hoveredLinkState = null
+  }
+
+  function scheduleHoveredLinkHide(): void {
+    if (typeof window === 'undefined') {
+      closeHoveredLink()
+      return
+    }
+
+    clearPendingHoveredLinkHide()
+    hoveredLinkHideTimer = window.setTimeout(() => {
+      hoveredLinkHideTimer = undefined
+      hoveredLinkState = null
+    }, 140)
+  }
+
+  function resolveHoveredLinkTargets(
+    link: HTMLAnchorElement,
+  ): { href: string, rawHref: string } | null {
+    const rawHref = link.getAttribute('href')?.trim() ?? ''
+    const href = link.href.trim() || rawHref
+    if (!href) {
+      return null
+    }
+
+    return {
+      href,
+      rawHref: rawHref || href,
+    }
+  }
+
+  function measureHoveredLinkPopover(): { width: number, height: number } {
+    const width = hoveredLinkPopoverEl
+      ? Math.max(
+        hoveredLinkPopoverEl.offsetWidth,
+        hoveredLinkPopoverEl.clientWidth,
+      )
+      : 92
+    const height = hoveredLinkPopoverEl
+      ? Math.max(
+        hoveredLinkPopoverEl.offsetHeight,
+        hoveredLinkPopoverEl.clientHeight,
+      )
+      : 40
+
+    return { width, height }
+  }
+
+  function buildHoveredLinkState(
+    link: HTMLAnchorElement,
+  ): HoveredLinkState | null {
+    if (!editorScrollHost || !previewHost || !previewHost.contains(link)) {
+      return null
+    }
+
+    const targets = resolveHoveredLinkTargets(link)
+    if (!targets) {
+      return null
+    }
+
+    const hostRect = editorScrollHost.getBoundingClientRect()
+    const linkRect = link.getBoundingClientRect()
+    const { width, height } = measureHoveredLinkPopover()
+    const offset = 8
+    const horizontalPadding = 16
+    const topSpace = linkRect.top - hostRect.top
+    const bottomSpace = hostRect.bottom - linkRect.bottom
+    const placement: HoveredLinkState['placement']
+      = topSpace >= height + offset || bottomSpace < height + offset
+        ? 'top'
+        : 'bottom'
+    const center = linkRect.left - hostRect.left + linkRect.width / 2
+    const maxLeft = Math.max(
+      horizontalPadding,
+      editorScrollHost.clientWidth - horizontalPadding - width,
+    )
+    const left = Math.min(
+      Math.max(center - width / 2, horizontalPadding),
+      maxLeft,
+    )
+    const top = placement === 'top'
+      ? editorScrollHost.scrollTop + linkRect.top - hostRect.top - height - offset
+      : editorScrollHost.scrollTop + linkRect.bottom - hostRect.top + offset
+
+    return {
+      element: link,
+      href: targets.href,
+      rawHref: targets.rawHref,
+      top: Math.max(8, top),
+      left,
+      placement,
+    }
+  }
+
+  function syncHoveredLinkPosition(): void {
+    if (!hoveredLinkState) {
+      return
+    }
+
+    if (!hoveredLinkState.element.isConnected) {
+      closeHoveredLink()
+      return
+    }
+
+    const nextState = buildHoveredLinkState(hoveredLinkState.element)
+    if (!nextState) {
+      closeHoveredLink()
+      return
+    }
+
+    hoveredLinkState = nextState
+  }
+
+  function resolveColorOptionValue(colorOption: string | ColorSwatchOption): string | null {
+    return typeof colorOption === 'string' ? colorOption : colorOption.value
+  }
+
+  function updateHoveredLink(link: HTMLAnchorElement | null): void {
+    if (!editable || !onapplylink || selectionToolbarVisible) {
+      closeHoveredLink()
+      return
+    }
+
+    if (!link) {
+      scheduleHoveredLinkHide()
+      return
+    }
+
+    const nextState = buildHoveredLinkState(link)
+    if (!nextState) {
+      scheduleHoveredLinkHide()
+      return
+    }
+
+    clearPendingHoveredLinkHide()
+    hoveredLinkState = nextState
+  }
+
+  function openHoveredLink(): void {
+    if (typeof window === 'undefined' || !hoveredLinkState?.href) {
+      return
+    }
+
+    window.open(
+      hoveredLinkState.href,
+      hoveredLinkState.element.target || '_blank',
+      'noopener,noreferrer',
+    )
+  }
+
+  function createRangeForLinkText(link: HTMLAnchorElement): Range {
+    const range = document.createRange()
+    const walker = document.createTreeWalker(link, NodeFilter.SHOW_TEXT)
+    let current = walker.nextNode()
+    let firstTextNode: Node | null = null
+    let lastTextNode: Node | null = null
+
+    while (current) {
+      if ((current.textContent ?? '').length > 0) {
+        firstTextNode ??= current
+        lastTextNode = current
+      }
+
+      current = walker.nextNode()
+    }
+
+    if (!firstTextNode || !lastTextNode) {
+      range.selectNodeContents(link)
+      return range
+    }
+
+    range.setStart(firstTextNode, 0)
+    range.setEnd(lastTextNode, lastTextNode.textContent?.length ?? 0)
+    return range
+  }
+
+  async function editHoveredLink(): Promise<void> {
+    if (
+      typeof window === 'undefined'
+      || !previewHost
+      || !onapplylink
+      || !hoveredLinkState
+    ) {
+      return
+    }
+
+    const link = hoveredLinkState.element
+    const linkHref = hoveredLinkState.rawHref
+    if (!previewHost.contains(link)) {
+      closeHoveredLink()
+      return
+    }
+
+    const selection = window.getSelection()
+    if (!selection) {
+      return
+    }
+
+    const range = createRangeForLinkText(link)
+    previewHost.focus()
+    selection.removeAllRanges()
+    selection.addRange(range)
+    rememberPreviewSelection(range)
+    selectedText = range.toString().trim()
+    closeHoveredLink()
+    handleSelectionChange(true)
+    await tick()
+    linkDraft = linkHref || 'https://'
+    activeSelectionMenu = 'link'
+    activeSelectionMenuTrigger = selectionLinkButtonEl
+    if (selectionLinkButtonEl) {
+      updateSelectionMenuAnchor('link')
+    }
   }
 
   /**
@@ -1293,6 +2086,7 @@ ${safeCode}
   function handleDocumentScroll(event: Event): void {
     syncActiveHeadingFromScroll()
     syncPinnedTitleVisibility()
+    syncHoveredLinkPosition()
     if (selectionToolbarVisible) {
       queueSelectionRefresh(true)
     }
@@ -1332,11 +2126,16 @@ ${safeCode}
 
     const previewSelection = readPreviewSelectionState()
     if (!previewSelection) {
+      if (savedSelectionRange && isSelectionChromeFocused()) {
+        return
+      }
+
       scheduleSelectionToolbarClose()
       return
     }
 
     const { selection, range, text } = previewSelection
+    hoveredLinkState = null
     const rect = range.getBoundingClientRect()
     const hostRect = editorScrollHost.getBoundingClientRect()
     // 浮层尺寸在首次渲染前拿不到精确高度，这里用稳定的经验值决定上下避让方向，避免直接盖住选中文本。
@@ -1351,31 +2150,47 @@ ${safeCode}
         : 'bottom'
     const center = rect.left - hostRect.left + rect.width / 2
     const horizontalPadding = 16
-    const measuredToolbarHalfWidth = selectionToolbarEl
-      ? selectionToolbarEl.offsetWidth / 2
-      : 320
-    const estimatedToolbarHalfWidth = Math.min(
-      Math.max(132, measuredToolbarHalfWidth),
-      Math.max(132, (editorScrollHost.clientWidth - horizontalPadding * 2) / 2),
+    const outlineOverlap = outlinePanelEl
+      ? Math.max(
+        0,
+        Math.min(
+          outlinePanelEl.getBoundingClientRect().right,
+          hostRect.right,
+        ) - hostRect.left,
+      )
+      : 0
+    const minLeft = Math.max(
+      horizontalPadding,
+      outlineOverlap > 24 ? outlineOverlap + 12 : horizontalPadding,
     )
-    const minCenter = horizontalPadding + estimatedToolbarHalfWidth
-    const maxCenter = editorScrollHost.clientWidth - minCenter
+    const measuredToolbarWidth = selectionChromeEl
+      ? Math.max(selectionChromeEl.offsetWidth, selectionChromeEl.clientWidth)
+      : selectionToolbarEl
+      ? Math.max(selectionToolbarEl.offsetWidth, selectionToolbarEl.clientWidth)
+      : 360
+    const maxToolbarWidth = Math.max(
+      220,
+      editorScrollHost.clientWidth - minLeft - horizontalPadding,
+    )
+    const toolbarWidth = Math.min(measuredToolbarWidth, maxToolbarWidth)
+    const maxLeft = Math.max(
+      minLeft,
+      editorScrollHost.clientWidth - horizontalPadding - toolbarWidth,
+    )
+    const unclampedLeft = center - toolbarWidth / 2
+    const toolbarLeft = Math.min(Math.max(unclampedLeft, minLeft), maxLeft)
     const alignment: SelectionToolbarPosition['alignment']
-      = center <= minCenter
+      = toolbarLeft <= minLeft + 0.5
         ? 'left'
-        : center >= maxCenter
+        : toolbarLeft >= maxLeft - 0.5
         ? 'right'
         : 'center'
-    const toolbarLeft = alignment === 'left'
-      ? horizontalPadding
-      : alignment === 'right'
-      ? editorScrollHost.clientWidth - horizontalPadding
-      : center
     const toolbarTop = placement === 'top'
       ? editorScrollHost.scrollTop + rect.top - hostRect.top - estimatedToolbarHeight - offset
       : editorScrollHost.scrollTop + rect.bottom - hostRect.top + offset
 
     selectedText = text
+    rememberPreviewSelection(range)
     selectionToolbarVisible = true
     selectionFormatState = readSelectionFormatState(selection)
     toolbarPosition = {
@@ -1410,6 +2225,10 @@ ${safeCode}
   }
 
   function applyBlockFormat(kind: MarkdownBlockFormatKind): void {
+    if (!syncSelectionForToolbarAction()) {
+      return
+    }
+
     onapplyblockformat?.(kind)
     activeSelectionMenu = null
     activeSelectionMenuTrigger = null
@@ -1417,66 +2236,160 @@ ${safeCode}
   }
 
   function applyBlockStyle(kind: MarkdownBlockStyleKind): void {
+    if (!syncSelectionForToolbarAction()) {
+      return
+    }
+
     onapplyblockstyle?.(kind)
     activeSelectionMenu = null
     activeSelectionMenuTrigger = null
     queueSelectionRefresh()
   }
 
+  /**
+   * 行内样式按钮允许连续点按，因此这里不主动关掉工具条，只刷新状态。
+   */
   function applyInlineFormat(kind: MarkdownInlineFormatKind): void {
+    if (!syncSelectionForToolbarAction()) {
+      return
+    }
+
+    clearPendingSelectionToolbarClose()
     onapplyinlineformat?.(kind)
     queueSelectionRefresh()
   }
 
   function applyAlignment(kind: MarkdownTextAlignKind): void {
+    if (!syncSelectionForToolbarAction()) {
+      return
+    }
+
     onapplyalignment?.(kind)
     activeSelectionMenu = null
     activeSelectionMenuTrigger = null
     queueSelectionRefresh()
   }
 
+  /**
+   * 链接菜单提交时总是以恢复后的正文选区为准，避免输入框焦点把目标文本丢掉。
+   */
   function applyLink(): void {
-    onapplylink?.(linkDraft.trim() || null)
+    if (!syncSelectionForToolbarAction()) {
+      return
+    }
+
+    onapplylink?.(
+      linkDraft.trim() || null,
+      savedSelectionSnapshot
+        ? {
+          ...savedSelectionSnapshot,
+        }
+        : undefined,
+      selectedText.trim() || undefined,
+    )
     activeSelectionMenu = null
     activeSelectionMenuTrigger = null
     queueSelectionRefresh()
   }
 
   function removeLink(): void {
-    onapplylink?.(null)
+    if (!syncSelectionForToolbarAction()) {
+      return
+    }
+
+    onapplylink?.(
+      null,
+      savedSelectionSnapshot
+        ? {
+          ...savedSelectionSnapshot,
+        }
+        : undefined,
+      selectedText.trim() || undefined,
+    )
     activeSelectionMenu = null
     activeSelectionMenuTrigger = null
     queueSelectionRefresh()
   }
 
+  /**
+   * 颜色动作除了颜色值，还会把当前选中文本一起带给外层，供宿主侧做兜底选区恢复。
+   */
   function applyColor(request: MarkdownColorFormatRequest): void {
-    onapplycolor?.(request)
+    if (!syncSelectionForToolbarAction()) {
+      return
+    }
+
+    onapplycolor?.({
+      ...request,
+      selectedText: selectedText.trim() || undefined,
+      selectionSnapshot: savedSelectionSnapshot
+        ? {
+          ...savedSelectionSnapshot,
+        }
+        : undefined,
+    })
     queueSelectionRefresh()
   }
 
   async function copySelection(): Promise<void> {
+    if (!syncSelectionForToolbarAction()) {
+      return
+    }
+
     await oncopyselection?.()
     activeSelectionMenu = null
     activeSelectionMenuTrigger = null
   }
 
   async function annotateSelection(): Promise<void> {
+    if (!syncSelectionForToolbarAction()) {
+      return
+    }
+
     await onannotation?.()
     activeSelectionMenu = null
     activeSelectionMenuTrigger = null
   }
 
+  function handlePreviewMouseMove(event: MouseEvent): void {
+    const target = event.target
+    const link = target instanceof Element
+      ? target.closest<HTMLAnchorElement>('a[href]')
+      : null
+
+    updateHoveredLink(link && previewHost?.contains(link) ? link : null)
+  }
+
+  function handlePreviewMouseLeave(): void {
+    scheduleHoveredLinkHide()
+  }
+
+  /**
+   * mouseup 比 selectionchange 更接近用户“完成一次选中”的时机，适合触发工具条刷新。
+   */
   function handlePreviewMouseUp(): void {
     queueSelectionRefresh()
     onpreviewmouseup?.()
   }
 
+  /**
+   * 输入事件本身只透传给宿主；选区状态交给 selectionchange/mouseup 统一管理。
+   */
   function handlePreviewInput(event: Event): void {
     onpreviewinput?.(event)
   }
 
-  function handlePreviewBlur(): void {
+  /**
+   * 正文失焦时先观察焦点是否转移到工具条内部，避免点击链接输入框时误触发提交或收起。
+   */
+  function handlePreviewBlur(event: FocusEvent): void {
     queueSelectionRefresh(true)
+
+    const nextTarget = event.relatedTarget
+    if (nextTarget instanceof Node && selectionChromeEl?.contains(nextTarget)) {
+      return
+    }
+
     onpreviewblur?.()
   }
 </script>
@@ -1625,7 +2538,7 @@ ${safeCode}
       class='hai-ai-doc-layout'
     >
       {#if showOutline && !outlineCollapsed}
-        <aside class='hai-ai-doc-outline'>
+        <aside bind:this={outlinePanelEl} class='hai-ai-doc-outline'>
           <div class='hai-ai-doc-outline-head'>
             <strong>{uiM('markdown_outline')}</strong>
 
@@ -1681,7 +2594,10 @@ ${safeCode}
               style={`top:${toolbarPosition.top}px; left:${toolbarPosition.left}px;`}
             >
               <div
+                bind:this={selectionChromeEl}
                 class='hai-ai-doc-selection-chrome'
+                onmouseenter={clearPendingSelectionToolbarClose}
+                onmouseleave={() => scheduleSelectionToolbarClose()}
               >
                 <div
                   bind:this={selectionToolbarEl}
@@ -1845,7 +2761,7 @@ ${safeCode}
                       title={uiM('markdown_format_strike')}
                       onclick={() => applyInlineFormat('strike')}
                     >
-                      S
+                      <s>S</s>
                     </button>
                     <button
                       type='button'
@@ -1871,12 +2787,13 @@ ${safeCode}
                       title={uiM('markdown_format_underline')}
                       onclick={() => applyInlineFormat('underline')}
                     >
-                      U
+                      <u>U</u>
                     </button>
                   {/if}
 
                   {#if onapplylink || onapplyinlineformat}
                     <button
+                      bind:this={selectionLinkButtonEl}
                       type='button'
                       class={cn(
                         'hai-ai-doc-selection-btn',
@@ -1893,10 +2810,18 @@ ${safeCode}
                           ? toggleSelectionMenu('link', event)
                           : applyInlineFormat('link')}
                     >
-                      <svg viewBox='0 0 24 24' aria-hidden='true'>
-                        <path
-                          d='M7.78 15.72a3.75 3.75 0 0 1 0-5.3l2.47-2.47a3.75 3.75 0 0 1 5.3 5.3l-.97.98a.75.75 0 0 1-1.06-1.06l.98-.97a2.25 2.25 0 0 0-3.19-3.19l-2.47 2.47a2.25 2.25 0 1 0 3.18 3.18l.49-.49a.75.75 0 0 1 1.06 1.06l-.49.49a3.75 3.75 0 0 1-5.3 0Zm8.44-7.44a.75.75 0 0 1 0 1.06l-8 8a.75.75 0 0 1-1.06-1.06l8-8a.75.75 0 0 1 1.06 0Z'
-                        ></path>
+                      <svg
+                        viewBox='0 0 24 24'
+                        aria-hidden='true'
+                        fill='none'
+                        stroke='currentColor'
+                        stroke-width='2'
+                        stroke-linecap='round'
+                        stroke-linejoin='round'
+                      >
+                        <path d='M9.5 14.5 14.5 9.5'></path>
+                        <path d='M7.6 16.4 6.3 17.7a3 3 0 1 1-4.24-4.24l3-3a3 3 0 0 1 4.24 0'></path>
+                        <path d='M16.4 7.6 17.7 6.3a3 3 0 1 1 4.24 4.24l-3 3a3 3 0 0 1-4.24 0'></path>
                       </svg>
                     </button>
                   {/if}
@@ -1914,19 +2839,6 @@ ${safeCode}
                       onclick={() => applyInlineFormat('code')}
                     >
                       &lt;/&gt;
-                    </button>
-                    <button
-                      type='button'
-                      class={cn(
-                        'hai-ai-doc-selection-btn',
-                        selectionFormatState.highlight
-                          ? 'hai-ai-doc-selection-btn--active'
-                          : '',
-                      )}
-                      title={uiM('markdown_format_highlight')}
-                      onclick={() => applyInlineFormat('highlight')}
-                    >
-                      <span class='hai-ai-doc-selection-highlight-icon'>A</span>
                     </button>
                   {/if}
 
@@ -2001,7 +2913,7 @@ ${safeCode}
                     role='menu'
                     tabindex='-1'
                     style={`--hai-ai-doc-selection-menu-left:${selectionMenuLeft}px;`}
-                    onmousedown={event => event.preventDefault()}
+                    onmousedown={handleSelectionPanelMouseDown}
                   >
                     {#each resolvedRewriteActions as action}
                       <button
@@ -2021,7 +2933,7 @@ ${safeCode}
                     role='menu'
                     tabindex='-1'
                     style={`--hai-ai-doc-selection-menu-left:${selectionMenuLeft}px;`}
-                    onmousedown={event => event.preventDefault()}
+                    onmousedown={handleSelectionPanelMouseDown}
                   >
                     {#each BLOCK_FORMAT_OPTIONS as option}
                       <button
@@ -2053,7 +2965,7 @@ ${safeCode}
                     role='menu'
                     tabindex='-1'
                     style={`--hai-ai-doc-selection-menu-left:${selectionMenuLeft}px;`}
-                    onmousedown={event => event.preventDefault()}
+                    onmousedown={handleSelectionPanelMouseDown}
                   >
                     {#each ALIGN_OPTIONS as option}
                       <button
@@ -2081,9 +2993,10 @@ ${safeCode}
                     aria-label={uiM('markdown_link_dialog_label')}
                     tabindex='-1'
                     style={`--hai-ai-doc-selection-menu-left:${selectionMenuLeft}px;`}
-                    onmousedown={event => event.preventDefault()}
+                    onmousedown={handleSelectionPanelMouseDown}
                   >
                     <input
+                      bind:this={linkInputEl}
                       class='hai-ai-doc-selection-input'
                       bind:value={linkDraft}
                       aria-label={uiM('markdown_link_input_label')}
@@ -2121,7 +3034,7 @@ ${safeCode}
                     aria-label={uiM('markdown_color_dialog_label')}
                     tabindex='-1'
                     style={`--hai-ai-doc-selection-menu-left:${selectionMenuLeft}px;`}
-                    onmousedown={event => event.preventDefault()}
+                    onmousedown={handleSelectionPanelMouseDown}
                   >
                     <div class='hai-ai-doc-color-group'>
                       <div class='hai-ai-doc-color-group-title'>
@@ -2151,23 +3064,34 @@ ${safeCode}
                         {uiM('markdown_background_color')}
                       </div>
                       <div class='hai-ai-doc-color-grid'>
-                        {#each BACKGROUND_COLOR_PRESETS as color}
+                        {#each BACKGROUND_COLOR_OPTIONS as colorOption}
                           <button
                             type='button'
                             class={cn(
                               'hai-ai-doc-color-swatch',
-                              selectionFormatState.backgroundColor === color
+                              selectionFormatState.backgroundColor === resolveColorOptionValue(colorOption)
                                 ? 'hai-ai-doc-color-swatch--active'
                                 : '',
                             )}
-                            title={color}
+                            data-empty={typeof colorOption === 'string'
+                              ? undefined
+                              : 'true'}
+                            title={typeof colorOption === 'string'
+                              ? colorOption
+                              : uiM(colorOption.titleKey)}
                             onclick={() =>
                               applyColor({
                                 target: 'background',
-                                value: color,
+                                value: typeof colorOption === 'string'
+                                  ? colorOption
+                                  : colorOption.value,
                               })}
                           >
-                            <span style={`background:${color};`}></span>
+                            <span
+                              style={typeof colorOption === 'string'
+                                ? `background:${colorOption};`
+                                : undefined}
+                            ></span>
                           </button>
                         {/each}
                       </div>
@@ -2188,11 +3112,87 @@ ${safeCode}
             </div>
           {/if}
 
+          {#if hoveredLinkState}
+            <div
+              bind:this={hoveredLinkPopoverEl}
+              class='hai-ai-doc-link-hover'
+              data-placement={hoveredLinkState.placement}
+              style={`top:${hoveredLinkState.top}px; left:${hoveredLinkState.left}px;`}
+              onmouseenter={clearPendingHoveredLinkHide}
+              onmouseleave={handlePreviewMouseLeave}
+            >
+              <button
+                type='button'
+                class='hai-ai-doc-link-hover-btn'
+                title={uiM('markdown_link_open')}
+                aria-label={uiM('markdown_link_open')}
+                onmousedown={event => event.preventDefault()}
+                onclick={openHoveredLink}
+              >
+                <svg viewBox='0 0 24 24' aria-hidden='true'>
+                  <path
+                    d='M13.75 5.75h4.5v4.5'
+                    fill='none'
+                    stroke='currentColor'
+                    stroke-width='1.9'
+                    stroke-linecap='round'
+                    stroke-linejoin='round'
+                  ></path>
+                  <path
+                    d='M18 6 11 13'
+                    fill='none'
+                    stroke='currentColor'
+                    stroke-width='1.9'
+                    stroke-linecap='round'
+                    stroke-linejoin='round'
+                  ></path>
+                  <path
+                    d='M10.25 7.75h-2.5A2.5 2.5 0 0 0 5.25 10.25v6A2.5 2.5 0 0 0 7.75 18.75h6a2.5 2.5 0 0 0 2.5-2.5v-2.5'
+                    fill='none'
+                    stroke='currentColor'
+                    stroke-width='1.9'
+                    stroke-linecap='round'
+                    stroke-linejoin='round'
+                  ></path>
+                </svg>
+              </button>
+              <button
+                type='button'
+                class='hai-ai-doc-link-hover-btn'
+                title={uiM('markdown_link_edit')}
+                aria-label={uiM('markdown_link_edit')}
+                onmousedown={event => event.preventDefault()}
+                onclick={() => void editHoveredLink()}
+              >
+                <svg viewBox='0 0 24 24' aria-hidden='true'>
+                  <path
+                    d='M4.75 16.88V19.25h2.37l9.96-9.96-2.37-2.37-9.96 9.96Z'
+                    fill='none'
+                    stroke='currentColor'
+                    stroke-width='1.9'
+                    stroke-linecap='round'
+                    stroke-linejoin='round'
+                  ></path>
+                  <path
+                    d='M13.96 7.92 16.33 5.55a1.68 1.68 0 0 1 2.37 2.37l-2.37 2.37'
+                    fill='none'
+                    stroke='currentColor'
+                    stroke-width='1.9'
+                    stroke-linecap='round'
+                    stroke-linejoin='round'
+                  ></path>
+                </svg>
+              </button>
+            </div>
+          {/if}
+
           <article
             bind:this={previewHost}
             class={readerDocumentClass}
             contenteditable={editable}
             role='document'
+            onmousemove={handlePreviewMouseMove}
+            onmouseleave={handlePreviewMouseLeave}
             onmouseup={handlePreviewMouseUp}
             oninput={handlePreviewInput}
             onblur={handlePreviewBlur}
@@ -2576,21 +3576,17 @@ ${safeCode}
     display: block;
     width: fit-content;
     max-width: calc(100% - 2rem);
-    transform: translateX(-50%);
     transition:
       top 0.14s cubic-bezier(0.2, 0.85, 0.24, 1),
-      left 0.14s cubic-bezier(0.2, 0.85, 0.24, 1),
-      transform 0.14s cubic-bezier(0.2, 0.85, 0.24, 1);
+      left 0.14s cubic-bezier(0.2, 0.85, 0.24, 1);
     pointer-events: none;
   }
 
   .hai-ai-doc-selection-layer[data-alignment='left'] {
-    transform: translateX(0);
     justify-items: start;
   }
 
   .hai-ai-doc-selection-layer[data-alignment='right'] {
-    transform: translateX(-100%);
     justify-items: end;
   }
 
@@ -2603,6 +3599,55 @@ ${safeCode}
     display: inline-grid;
     width: fit-content;
     max-width: min(100%, calc(100vw - 2rem));
+  }
+
+  .hai-ai-doc-link-hover {
+    position: absolute;
+    z-index: 58;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.18rem;
+    padding: 0.22rem;
+    border-radius: 9999px;
+    background: color-mix(in srgb, oklch(var(--b1, 1 0 0)) 94%, white 6%);
+    border: 1px solid color-mix(in srgb, oklch(var(--bc, 0.22 0 0)) 12%, white 88%);
+    box-shadow:
+      0 20px 36px -26px rgb(15 23 42 / 0.26),
+      0 10px 18px -16px rgb(15 23 42 / 0.18);
+    pointer-events: auto;
+    transition:
+      top 0.14s cubic-bezier(0.2, 0.85, 0.24, 1),
+      left 0.14s cubic-bezier(0.2, 0.85, 0.24, 1);
+  }
+
+  .hai-ai-doc-link-hover-btn {
+    width: 2rem;
+    height: 2rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: none;
+    border-radius: 9999px;
+    background: transparent;
+    color: oklch(var(--bc) / 0.76);
+    cursor: pointer;
+    transition:
+      background-color 0.14s ease,
+      color 0.14s ease,
+      transform 0.14s ease;
+  }
+
+  .hai-ai-doc-link-hover-btn:hover {
+    background: oklch(var(--bc) / 0.06);
+    color: oklch(var(--bc));
+    transform: translateY(-1px);
+  }
+
+  .hai-ai-doc-link-hover-btn svg {
+    width: 1rem;
+    height: 1rem;
+    fill: none;
+    stroke: currentColor;
   }
 
   .hai-ai-doc-selection-toolbar {
@@ -2973,6 +4018,20 @@ ${safeCode}
     border: 1px solid rgb(15 23 42 / 0.08);
   }
 
+  .hai-ai-doc-color-swatch[data-empty='true'] span {
+    position: relative;
+    border-color: oklch(var(--bc) / 0.18);
+    background:
+      linear-gradient(
+        135deg,
+        transparent calc(50% - 0.75px),
+        oklch(var(--bc) / 0.34) calc(50% - 0.75px),
+        oklch(var(--bc) / 0.34) calc(50% + 0.75px),
+        transparent calc(50% + 0.75px)
+      ),
+      color-mix(in srgb, oklch(var(--b1)) 96%, white 4%);
+  }
+
   .hai-ai-doc-rewrite-menu-btn {
     justify-content: center;
   }
@@ -3080,6 +4139,10 @@ ${safeCode}
     color: oklch(var(--p));
     text-decoration: none;
     font-weight: 500;
+  }
+
+  .hai-markdown-editable :global(a[href]) {
+    cursor: pointer;
   }
 
   .hai-markdown :global(a:hover) {

@@ -81,6 +81,8 @@ export type MarkdownBlockStyleKind
     | 'heading2'
     | 'heading3'
     | 'heading4'
+    | 'orderedList'
+    | 'bulletList'
 
 /**
  * Inline format actions for the editor toolbar.
@@ -100,6 +102,15 @@ export type MarkdownInlineFormatKind
  */
 export type MarkdownTextAlignKind = 'left' | 'center' | 'right' | 'justify'
 
+export interface MarkdownSelectionSnapshot {
+  /** Selection start offset within the plain-text document. */
+  start: number
+  /** Selection end offset within the plain-text document. */
+  end: number
+  /** Selected plain text, used as a fallback when structure changes. */
+  text: string
+}
+
 /**
  * 颜色面板一次只会修改前景色或背景色中的一个维度。
  */
@@ -108,6 +119,19 @@ export interface MarkdownColorFormatRequest {
   target: 'text' | 'background'
   /** 颜色值为空时表示恢复默认。 */
   value: string | null
+  /** 当前工具条记住的选中文本，供外层在 DOM 重建后兜底恢复定位。 */
+  selectedText?: string
+  /** 当前工具条记住的精确选区偏移，优先用于重复文本场景的恢复。 */
+  selectionSnapshot?: MarkdownSelectionSnapshot
+}
+
+export interface MarkdownLinkFormatRequest {
+  /** 为空时表示移除当前链接。 */
+  href: string | null
+  /** 当前工具条记住的精确选区偏移。 */
+  selectionSnapshot?: MarkdownSelectionSnapshot
+  /** 当前工具条记住的选中文本，供宿主做文本兜底。 */
+  selectedText?: string
 }
 
 export interface MarkdownToolbarDownloadAction {
@@ -221,7 +245,11 @@ export interface AiDocumentEditorProps {
   /** Paragraph alignment handler from the selection toolbar. */
   onapplyalignment?: (kind: MarkdownTextAlignKind) => void
   /** Link add / edit / remove handler from the selection toolbar. */
-  onapplylink?: (href: string | null) => void
+  onapplylink?: BivariantCallback<[
+    href: string | null,
+    selectionSnapshot?: MarkdownSelectionSnapshot,
+    selectedText?: string,
+  ], void>
   /** Text or background color handler from the selection toolbar. */
   onapplycolor?: (request: MarkdownColorFormatRequest) => void
   /** Selection copy handler for custom behavior. */
