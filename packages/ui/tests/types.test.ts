@@ -85,7 +85,13 @@ describe('aI 文档编辑器类型', () => {
   it('兼容保留旧的 block / inline 格式 union', () => {
     expectTypeOf<AiMarkdownBlockFormatKind>().toEqualTypeOf<'heading' | 'bullet'>()
     expectTypeOf<MarkdownBlockStyleKind>().toEqualTypeOf<
-      'paragraph' | 'heading1' | 'heading2' | 'heading3' | 'heading4'
+      | 'paragraph'
+      | 'heading1'
+      | 'heading2'
+      | 'heading3'
+      | 'heading4'
+      | 'orderedList'
+      | 'bulletList'
     >()
     expectTypeOf<AiMarkdownInlineFormatKind>().toEqualTypeOf<
       'bold' | 'italic' | 'strike' | 'underline' | 'code' | 'highlight' | 'link'
