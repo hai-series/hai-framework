@@ -12,6 +12,7 @@ import type {
   ChatCompletionChunk,
   ChatCompletionRequest,
   ChatCompletionResponse,
+  ChatMessage,
   LLMProvider,
 } from '../ai-llm-types.js'
 
@@ -89,6 +90,19 @@ function toAIError(error: unknown): { def: HaiErrorDef, message: string, cause: 
   }
 }
 
+function toOpenAIMessage(message: ChatMessage): OpenAI.Chat.Completions.ChatCompletionMessageParam {
+  if (message.role === 'developer') {
+    const developerMessage: OpenAI.Chat.Completions.ChatCompletionDeveloperMessageParam = {
+      role: 'developer',
+      content: message.content,
+      ...(message.name ? { name: message.name } : {}),
+    }
+    return developerMessage
+  }
+
+  return message
+}
+
 // ─── 工厂函数 ───
 
 /**
@@ -134,9 +148,11 @@ export function createOpenAIProvider(deps: AILLMFunctionsDeps): LLMProvider {
         return clientResult
       const { client, model } = clientResult.data
       const { objectId: _objectId, sessionId: _sessionId, ...openaiRequest } = request
+      const openaiMessages = request.messages.map(toOpenAIMessage)
       try {
         const response = await client.chat.completions.create({
           ...openaiRequest,
+          messages: openaiMessages,
           model,
           stream: false,
         } as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming)
@@ -154,8 +170,10 @@ export function createOpenAIProvider(deps: AILLMFunctionsDeps): LLMProvider {
         throw new Error(clientResult.error.message)
       const { client, model } = clientResult.data
       const { objectId: _objectId, sessionId: _sessionId, ...openaiRequest } = request
+      const openaiMessages = request.messages.map(toOpenAIMessage)
       const stream = await client.chat.completions.create({
         ...openaiRequest,
+        messages: openaiMessages,
         model,
         stream: true,
       } as OpenAI.Chat.ChatCompletionCreateParamsStreaming)

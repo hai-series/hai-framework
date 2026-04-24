@@ -27,6 +27,23 @@ function textChunk(content: string, finishReason?: FinishReason): ChatCompletion
   }
 }
 
+/** 构造一个带 reasoning_content 的 chunk */
+function reasoningChunk(reasoning: string, finishReason?: FinishReason): ChatCompletionChunk {
+  return {
+    id: 'chunk-r',
+    object: 'chat.completion.chunk',
+    created: Date.now(),
+    model: 'test-model',
+    choices: [{
+      index: 0,
+      delta: {
+        reasoning_content: reasoning,
+      } as ChatCompletionChunk['choices'][number]['delta'],
+      finish_reason: finishReason ?? null,
+    }],
+  }
+}
+
 /** 构造一个工具调用 chunk */
 function toolCallChunk(
   index: number,
@@ -89,6 +106,18 @@ describe('ai.stream.createProcessor', () => {
 
     const result = processor.getResult()
     expect(result.content).toBe('Done')
+    expect(result.finishReason).toBe('stop')
+  })
+
+  it('累积 reasoning_content', () => {
+    const processor = ai.stream.createProcessor()
+
+    processor.process(reasoningChunk('先分析'))
+    processor.process(reasoningChunk('后行动', 'stop'))
+
+    const result = processor.getResult()
+    expect(result.content).toBe('')
+    expect(result.reasoningContent).toBe('先分析后行动')
     expect(result.finishReason).toBe('stop')
   })
 
@@ -159,12 +188,14 @@ describe('ai.stream.createProcessor', () => {
   it('toAssistantMessage 工具调用（content 为 null）', () => {
     const processor = ai.stream.createProcessor()
 
+    processor.process(reasoningChunk('需要先找工具'))
     processor.process(toolCallChunk(0, 'c1', 'fn', '{}'))
 
     const msg = processor.toAssistantMessage()
     expect(msg.role).toBe('assistant')
     expect(msg.content).toBeNull()
     expect(msg.tool_calls).toHaveLength(1)
+    expect(msg.reasoning_content).toBe('需要先找工具')
   })
 
   it('reset 清空状态', () => {
@@ -175,6 +206,7 @@ describe('ai.stream.createProcessor', () => {
 
     const result = processor.getResult()
     expect(result.content).toBe('')
+    expect(result.reasoningContent).toBe('')
     expect(result.toolCalls).toHaveLength(0)
     expect(result.finishReason).toBeNull()
   })

@@ -7,11 +7,15 @@
 
 import type { Options } from 'tsup'
 
+import process from 'node:process'
+
+const isDockerProdBuild = process.env.HAI_DOCKER_PROD_BUILD === 'true'
+
 export const baseConfig: Options = {
   format: ['esm'],
-  dts: true,
+  dts: !isDockerProdBuild,
   clean: true,
-  sourcemap: true,
+  sourcemap: !isDockerProdBuild,
   treeshake: true,
   target: 'node20',
 }

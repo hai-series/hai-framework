@@ -168,6 +168,29 @@ describe('ai.llm.chat', () => {
     expect(result.success).toBe(true)
   })
 
+  it('透传 developer 角色消息给 OpenAI 请求', async () => {
+    mockCreate.mockResolvedValue(makeSDKChatCompletion('ok'))
+
+    await ai.llm.chat({
+      messages: [
+        { role: 'system', content: 'System guardrails.' },
+        { role: 'developer', content: 'Repository instructions.' },
+        { role: 'user', content: '请执行任务。' },
+      ],
+    })
+
+    expect(mockCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        stream: false,
+        messages: [
+          { role: 'system', content: 'System guardrails.' },
+          { role: 'developer', content: 'Repository instructions.' },
+          { role: 'user', content: '请执行任务。' },
+        ],
+      }),
+    )
+  })
+
   it('tool_calls 响应正确映射', async () => {
     const sdkResponse = makeSDKChatCompletion('', {
       toolCalls: [{
