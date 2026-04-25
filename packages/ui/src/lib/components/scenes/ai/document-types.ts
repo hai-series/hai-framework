@@ -176,6 +176,8 @@ export interface AiDocumentEditorProps {
   breaks?: boolean
   /** Whether to show the left outline panel. */
   showOutline?: boolean
+  /** Whether to show numbering prefixes in outline items. */
+  showOutlineNumbering?: boolean
   /** Whether to show the top toolbar. */
   showToolbar?: boolean
   /** Initial outline collapsed state. */

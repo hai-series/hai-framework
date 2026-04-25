@@ -249,6 +249,8 @@
     breaks = true,
     // 是否显示左侧目录。
     showOutline = true,
+    // 是否显示目录项的序号前缀。
+    showOutlineNumbering = false,
     // 是否显示顶部工具栏。
     showToolbar = true,
     // 目录面板初始是否折叠。
@@ -2567,7 +2569,7 @@ ${safeCode}
                   style={`padding-left:${0.65 + (item.level - 1) * 0.56}rem`}
                   onclick={() => scrollToHeading(item.id)}
                 >
-                  {item.numberedTitle}
+                  {showOutlineNumbering ? item.numberedTitle : item.text}
                 </button>
               {/each}
             </nav>

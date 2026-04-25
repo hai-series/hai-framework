@@ -99,6 +99,7 @@ describe('aI 文档编辑器类型', () => {
   })
 
   it('aiDocumentEditorProps 同时暴露兼容和新版块级回调', () => {
+    expectTypeOf<AiDocumentEditorProps>().toHaveProperty('showOutlineNumbering')
     expectTypeOf<AiDocumentEditorProps>().toHaveProperty('onapplyblockformat')
     expectTypeOf<AiDocumentEditorProps>().toHaveProperty('onapplyblockstyle')
     expectTypeOf<AiDocumentEditorProps>().toHaveProperty('onapplyinlineformat')
