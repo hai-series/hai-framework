@@ -33,9 +33,6 @@
     parseMarkdown(content, { enableHighlight, showCopyButton, breaks }),
   )
 
-  /** 容器引用 */
-  let containerEl: HTMLDivElement | undefined = $state()
-
   /**
    * 事件代理：处理代码块复制按钮点击
    */
@@ -66,7 +63,6 @@
 <!-- svelte-ignore a11y_click_events_have_key_events -->
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
-  bind:this={containerEl}
   class={cn('hai-markdown', className)}
   onclick={handleClick}
 >

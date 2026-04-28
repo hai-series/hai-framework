@@ -127,6 +127,7 @@ export function sessionGuard(config: SessionGuardConfig): RouteGuard {
       }
     }
 
+    // Workaround：SvelteKit App.Locals 是项目侧声明的 interface，库代码无法靠模块增强检查动态 key。
     const locals = event.locals as unknown as Record<string, unknown>
     locals.session = recoveredSession
     locals.accessToken = token

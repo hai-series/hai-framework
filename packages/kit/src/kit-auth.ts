@@ -10,6 +10,7 @@ import type { ApiKeyCredentials, AuthResult, LdapCredentials, OtpCredentials, Pa
 import type { HandleFetch } from '@sveltejs/kit'
 import type { AuthOperations, AuthOperationsProvider } from './kit-types.js'
 import process from 'node:process'
+import { err } from '@h-ai/core'
 import { kitM } from './kit-i18n.js'
 
 /** 默认 Token Cookie 名 */
@@ -121,15 +122,29 @@ function clearToken(cookies: CookieWriter): void {
 // ─── 服务端高级认证 API（通过 kit.auth 暴露） ───
 
 /**
- * 获取已注入的认证操作（未配置时抛出编程错误）
+ * 获取已注入的认证操作；未配置时返回 null。
+ *
+ * 公共 API 不应 throw，因此此处用 null 信号配合上层短路返回 HaiResult。
  */
-function getAuthOperations(): AuthOperations {
-  if (!authState.operations) {
-    throw new Error(kitM('kit_authNotConfigured'))
-  }
+function getAuthOperations(): AuthOperations | null {
+  if (!authState.operations)
+    return null
   return typeof authState.operations === 'function'
     ? authState.operations()
     : authState.operations
+}
+
+/**
+ * 构造 "auth 未配置" 的标准 HaiResult 错误。
+ *
+ * 用于公共认证 API 在 `authState.operations` 未注入时返回，
+ * 避免向调用方抛出未捕获异常。
+ */
+function authNotConfiguredError(): HaiResult<never> {
+  return err({
+    code: 'KIT_AUTH_NOT_CONFIGURED',
+    message: kitM('kit_authNotConfigured'),
+  })
 }
 
 /**
@@ -164,7 +179,10 @@ export async function login(
   cookies: CookieWriter,
   credentials: PasswordCredentials,
 ): Promise<HaiResult<AuthResult>> {
-  return executeLogin(cookies, getAuthOperations().login(credentials))
+  const ops = getAuthOperations()
+  if (!ops)
+    return authNotConfiguredError()
+  return executeLogin(cookies, ops.login(credentials))
 }
 
 /**
@@ -183,7 +201,10 @@ export async function loginWithOtp(
   cookies: CookieWriter,
   credentials: OtpCredentials,
 ): Promise<HaiResult<AuthResult>> {
-  return executeLogin(cookies, getAuthOperations().loginWithOtp(credentials))
+  const ops = getAuthOperations()
+  if (!ops)
+    return authNotConfiguredError()
+  return executeLogin(cookies, ops.loginWithOtp(credentials))
 }
 
 /**
@@ -202,7 +223,10 @@ export async function loginWithLdap(
   cookies: CookieWriter,
   credentials: LdapCredentials,
 ): Promise<HaiResult<AuthResult>> {
-  return executeLogin(cookies, getAuthOperations().loginWithLdap(credentials))
+  const ops = getAuthOperations()
+  if (!ops)
+    return authNotConfiguredError()
+  return executeLogin(cookies, ops.loginWithLdap(credentials))
 }
 
 /**
@@ -222,7 +246,10 @@ export async function loginWithApiKey(
   cookies: CookieWriter,
   credentials: ApiKeyCredentials,
 ): Promise<HaiResult<AuthResult>> {
-  return executeLogin(cookies, getAuthOperations().loginWithApiKey(credentials))
+  const ops = getAuthOperations()
+  if (!ops)
+    return authNotConfiguredError()
+  return executeLogin(cookies, ops.loginWithApiKey(credentials))
 }
 
 /**
@@ -241,7 +268,10 @@ export async function registerAndLogin(
   cookies: CookieWriter,
   options: RegisterOptions,
 ): Promise<HaiResult<AuthResult>> {
-  return executeLogin(cookies, getAuthOperations().registerAndLogin(options))
+  const ops = getAuthOperations()
+  if (!ops)
+    return authNotConfiguredError()
+  return executeLogin(cookies, ops.registerAndLogin(options))
 }
 
 /**
@@ -260,8 +290,10 @@ export async function logout(
   cookies: CookieWriter,
   accessToken?: string | null,
 ): Promise<void> {
-  if (accessToken) {
-    await getAuthOperations().logout(accessToken)
+  // 即使 auth 未配置也需要清除 Cookie，保证登出语义幂等
+  const ops = getAuthOperations()
+  if (accessToken && ops) {
+    await ops.logout(accessToken)
   }
   clearToken(cookies)
 }

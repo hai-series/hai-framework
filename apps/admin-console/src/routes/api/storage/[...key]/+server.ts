@@ -35,7 +35,10 @@ export const GET = kit.handler(async ({ params }) => {
     return kit.response.notFound(m.common_error())
   }
 
-  return new Response(fileResult.data, {
+  // Node Buffer 在最新 @types/node 下不再直接被 BodyInit 接受，转为标准 Uint8Array<ArrayBuffer> 视图
+  const bytes = new Uint8Array(fileResult.data.byteLength)
+  bytes.set(fileResult.data)
+  return new Response(bytes, {
     headers: {
       'cache-control': 'public, max-age=300',
       'content-length': String(headResult.data.size),

@@ -34,14 +34,14 @@ export function createResendProvisioner(): ServiceProvisioner {
       try {
         const apiToken = credentials.apiKey ?? credentials.api_key ?? credentials.token ?? ''
         if (!apiToken) {
-          throw new Error('Missing "api_key" in credentials')
+          throw new Error(deployM('deploy_credentialMissing', { params: { fields: 'api_key' } }))
         }
 
         const res = await fetch(`${RESEND_API}/domains`, {
           headers: { Authorization: `Bearer ${apiToken}` },
         })
         if (!res.ok) {
-          throw new Error(`Resend API ${res.status}: ${await res.text()}`)
+          throw new Error(deployM('deploy_apiError', { params: { service: 'Resend', status: String(res.status), body: await res.text() } }))
         }
         token = apiToken
         logger.info('Resend authenticated')

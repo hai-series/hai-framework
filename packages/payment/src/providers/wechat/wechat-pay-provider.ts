@@ -204,6 +204,7 @@ export function createWechatPayProvider(config: WechatPayConfig): PaymentProvide
           amount: resource.amount.total,
           status: resource.trade_state === 'SUCCESS' ? 'paid' : 'failed',
           paidAt: resource.success_time ? new Date(resource.success_time) : undefined,
+          // 微信回调原始 payload 的强类型为 WechatNotifyResource，此处统一以 Record 暴露给上层做调试/审计
           raw: resource as unknown as Record<string, unknown>,
         })
       }

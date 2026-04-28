@@ -149,6 +149,7 @@ export function createAlipayProvider(config: AlipayConfig): PaymentProvider {
           amount: Math.round(Number.parseFloat(params.total_amount) * 100), // 元 → 分
           status: statusMap[params.trade_status] ?? 'pending',
           paidAt: params.gmt_payment ? new Date(params.gmt_payment) : undefined,
+          // 支付宝回调原始 params 的强类型为 AlipayNotifyParams，此处统一以 Record 暴露给上层做调试/审计
           raw: params as unknown as Record<string, unknown>,
         })
       }

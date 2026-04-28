@@ -36,7 +36,6 @@ if (typeof window !== 'undefined') {
  */
 const client = kit.client.create({
   transport: { crypto },
-  auth: true,
 })
 
 export const { apiFetch } = client

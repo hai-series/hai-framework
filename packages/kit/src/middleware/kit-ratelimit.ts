@@ -91,6 +91,19 @@ export class MemoryRateLimitStore implements RateLimitStore {
     }
   }
 
+  /**
+   * 停止定期清理并释放定时器资源
+   *
+   * 调用后可再次 startCleanup 重启。进程退出 / 热重载 / 测试拆装场景必须调用以
+   * 避免资源泄漏。
+   */
+  stopCleanup(): void {
+    if (this.cleanupTimer) {
+      clearInterval(this.cleanupTimer)
+      this.cleanupTimer = null
+    }
+  }
+
   get(key: string): RateLimitEntry | undefined {
     return this.store.get(key)
   }

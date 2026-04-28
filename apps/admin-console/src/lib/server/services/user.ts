@@ -10,9 +10,12 @@
 import type { User } from '@h-ai/iam'
 
 /**
- * 带角色和权限的用户
+ * 带角色名与权限名的用户（用于管理控制台展示）
+ *
+ * 注意：base User.roles 字段为完整 Role[] 对象，这里 Omit 后用扁平的角色名数组覆盖，
+ * 便于直接在表格/表单中渲染。
  */
-export interface UserWithRoles extends User {
+export interface UserWithRoles extends Omit<User, 'roles'> {
   roles: string[]
   permissions: string[]
 }

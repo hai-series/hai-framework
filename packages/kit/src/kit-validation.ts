@@ -35,7 +35,8 @@ interface ZodIssue {
  * @returns 平坦化的 issue 列表
  */
 function extractZodIssues(error: z.ZodError): ZodIssue[] {
-  // Zod v4 使用 issues，兼容旧版 errors
+  // Workaround：Zod v4 使用 issues，v3 使用 errors；ZodError 公开类型未同时暴露两者，
+  // 仅在读取场景下采用狭义结构断言，不会造成运行时越界。
   const zodError = error as unknown as { issues?: ZodIssue[], errors?: ZodIssue[] }
   return zodError.issues ?? zodError.errors ?? []
 }

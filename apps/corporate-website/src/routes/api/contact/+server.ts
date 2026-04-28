@@ -22,7 +22,11 @@ export const POST = kit.handler(async ({ request }) => {
     .catch(() => null)
 
   if (!reachModule?.isInitialized) {
-    core.logger.info('Contact form submission (reach not initialized)', { name, email, message })
+    core.logger.info('Contact form submission skipped because reach is not initialized', {
+      nameLength: name.length,
+      emailDomain: email.split('@')[1] ?? 'unknown',
+      messageLength: message.length,
+    })
     return kit.response.ok({ sent: false, message: 'Message received, but email delivery is not configured' })
   }
 

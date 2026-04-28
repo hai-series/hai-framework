@@ -74,6 +74,7 @@ const preferencesOps: PreferencesOperations = {
 
 function isCapacitorAvailable(): boolean {
   try {
+    // window 上由 Capacitor 运行时注入 Capacitor 全局对象，lib.dom 未声明该属性，故强转为可查库的 Record
     return typeof window !== 'undefined'
       && (window as unknown as Record<string, unknown>).Capacitor !== undefined
   }
@@ -171,6 +172,7 @@ export const capacitor: CapacitorFunctions = {
       return cachedPlatform
     }
     try {
+      // 同 isCapacitorAvailable：Capacitor 全局仅在运行时由 native bridge 注入，需强转后读取
       const cap = (window as unknown as Record<string, unknown>).Capacitor as { getPlatform?: () => string } | undefined
       return cap?.getPlatform?.() ?? 'web'
     }

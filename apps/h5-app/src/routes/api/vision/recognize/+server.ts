@@ -15,6 +15,11 @@ import { storage } from '@h-ai/storage'
 
 const MAX_FILE_SIZE = 4 * 1024 * 1024
 const ALLOWED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp'])
+const EXT_MAP: Record<string, string> = {
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+}
 
 export const POST = kit.handler(async ({ request, locals }) => {
   if (!storage.isInitialized) {
@@ -42,7 +47,7 @@ export const POST = kit.handler(async ({ request, locals }) => {
   }
 
   const buffer = Buffer.from(await file.arrayBuffer())
-  const ext = file.name.split('.').pop() ?? 'jpg'
+  const ext = EXT_MAP[file.type]
   const key = `vision/${core.id.generate()}.${ext}`
 
   const storeResult = await storage.file.put(key, buffer, {

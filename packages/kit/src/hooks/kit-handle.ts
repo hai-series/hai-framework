@@ -115,6 +115,7 @@ export function createHandle(config: HandleConfig = {}): Handle {
     const requestId = generateId('req')
 
     // 注入 requestId 到 event.locals
+    // Workaround：SvelteKit App.Locals 是项目侧声明的 interface，库代码无法靠模块增强检查动态 key。
     const locals = event.locals as unknown as Record<string, unknown>
     locals.requestId = requestId
 

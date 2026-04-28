@@ -158,19 +158,19 @@ export interface TransportKeyPair {
 export interface TransportCryptoServiceLike {
   asymmetric: {
     /** 生成非对称密钥对 */
-    generateKeyPair: () => { success: boolean, data?: TransportKeyPair, error?: { code: number, message: string } }
+    generateKeyPair: () => { success: boolean, data?: TransportKeyPair, error?: { code: string | number, message: string } }
     /** 非对称加密 */
-    encrypt: (data: string, publicKey: string) => { success: boolean, data?: string, error?: { code: number, message: string } }
+    encrypt: (data: string, publicKey: string) => { success: boolean, data?: string, error?: { code: string | number, message: string } }
     /** 非对称解密 */
-    decrypt: (ciphertext: string, privateKey: string) => { success: boolean, data?: string, error?: { code: number, message: string } }
+    decrypt: (ciphertext: string, privateKey: string) => { success: boolean, data?: string, error?: { code: string | number, message: string } }
   }
   symmetric: {
     /** 生成随机对称密钥 */
     generateKey: () => string
     /** 带 IV 加密（CBC 模式，自动生成 IV） */
-    encryptWithIV: (data: string, key: string) => { success: boolean, data?: { ciphertext: string, iv: string }, error?: { code: number, message: string } }
+    encryptWithIV: (data: string, key: string) => { success: boolean, data?: { ciphertext: string, iv: string }, error?: { code: string | number, message: string } }
     /** 带 IV 解密（CBC 模式） */
-    decryptWithIV: (ciphertext: string, key: string, iv: string) => { success: boolean, data?: string, error?: { code: number, message: string } }
+    decryptWithIV: (ciphertext: string, key: string, iv: string) => { success: boolean, data?: string, error?: { code: string | number, message: string } }
   }
 }
 
