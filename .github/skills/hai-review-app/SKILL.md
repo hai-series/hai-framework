@@ -83,6 +83,44 @@ description: "Use when: reviewing SvelteKit app code, auditing app quality, chec
 
 ---
 
+## §7.1 产品体验与交互审查（用户视角走查）
+
+> 以真实用户身份从入口走到目标页面，逐路径确认体验闭环。
+
+### 视觉与布局
+
+- [ ] 页面层级与视觉重心清晰，主操作（CTA）足够突出
+- [ ] spacing / alignment / color 统一使用 design token，无散落 magic number
+- [ ] 响应式断点（桌面 / 平板 / 移动）下无溢出、遮挡、错位
+- [ ] 暗色 / 亮色主题下文字对比度满足 WCAG AA
+
+### 交互流程
+
+- [ ] 关键路径步骤最短，无多余跳转或确认
+- [ ] 危险操作（删除、提交、不可逆变更）有**二次确认 + 可撤销**机制
+- [ ] 所有可点击区域 hit area ≥ 44px（移动端尤其）
+- [ ] 表单：失焦校验 + 提交校验 + 错误聚焦回首个错误项
+- [ ] 长任务有进度反馈（百分比 / 预计时间 / skeleton）
+
+### 四态反馈（必须完整）
+
+| 状态 | 检查 |
+|------|------|
+| Loading | 骨架屏或 spinner，相关按钮禁用防重复提交 |
+| Empty | 友好空态插画 + 引导操作（"新建第一个"） |
+| Error | 具体可操作的提示（"请输入有效邮箱"，非"输入有误"），含重试 |
+| Success | 即时反馈（toast / inline）+ 后续动作引导 |
+
+### 边界与产品逻辑
+
+- [ ] 边缘场景覆盖：空数据、超长文本（截断/换行）、并发操作、权限不足、网络抖动
+- [ ] 无死路：用户在任意页面都能退出/返回，面包屑与浏览器返回行为一致
+- [ ] 导航结构与用户心智模型吻合（功能分组、层级深度 ≤ 3）
+- [ ] 国际化文本展开后不破坏布局（德语 / 中文长短差异）
+- [ ] 业务规则边界明确：配额、超限、过期等场景有明确文案
+
+---
+
 ## §8 安全审查
 
 ### 输入与注入
@@ -98,6 +136,9 @@ description: "Use when: reviewing SvelteKit app code, auditing app quality, chec
 - [ ] `PUBLIC_` 前缀变量无敏感信息
 - [ ] 敏感信息未出现在日志中
 - [ ] 服务端密钥用 `$env/static/private`
+- [ ] 登录/注册 API 不向前端返回 `accessToken`（优先使用 httpOnly Cookie 会话）
+- [ ] 前端不使用 `localStorage` / `sessionStorage` / `kit.auth.createTokenStore` 持久化敏感 Token
+- [ ] 默认/初始管理员密码不写入日志；首次初始化密码必须通过环境变量或安全密钥管理注入
 
 ### HTTP 安全
 
@@ -130,7 +171,9 @@ description: "Use when: reviewing SvelteKit app code, auditing app quality, chec
 2. 逐路由组审查（认证组 → 管理组 → API 组）
 3. 审查服务层和 Schema
 4. 审查 i18n 和 UI 组件使用
-5. 汇总 + 修复 P0/P1 + 门禁验证
+5. **走查产品体验**（§7.1 四态 / 危险操作 / 死路 / 响应式）
+6. 汇总 + 修复 P0/P1 + 门禁验证
+
 
 ### 问题格式
 

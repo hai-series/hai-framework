@@ -172,6 +172,7 @@
       tabindex='-1'
       onmousedown={event => event.preventDefault()}
       onclick={event => event.stopPropagation()}
+      onkeydown={event => event.stopPropagation()}
     >
       {#each resolvedActions as action}
         <button

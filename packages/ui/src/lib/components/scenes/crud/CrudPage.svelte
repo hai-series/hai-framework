@@ -49,7 +49,15 @@
     order?: number
   }
 
-  type AnyApiFunc = (...args: unknown[]) => Promise<Record<string, unknown> | unknown> | Record<string, unknown> | unknown
+  // 使用 method shorthand 语法（双向协变）以兼容来自 @h-ai/kit 的 CrudOperations 类型
+  // 详见：https://www.typescriptlang.org/docs/handbook/release-notes/typescript-2-6.html#strict-function-types
+  type CrudApi = {
+    list(params: Record<string, unknown>): Promise<{ items: Record<string, unknown>[], total: number, page: number, pageSize: number }>
+    get?(id: string): Promise<Record<string, unknown> | null>
+    create?(data: Record<string, unknown>): Promise<Record<string, unknown>>
+    update?(id: string, data: Record<string, unknown>): Promise<Record<string, unknown>>
+    remove?(id: string): Promise<void>
+  }
 
   type CrudDef = {
     resource: {
@@ -60,13 +68,7 @@
       defaultPageSize?: number
       searchable?: boolean
       searchPlaceholder?: string | (() => string)
-      api: {
-        list: AnyApiFunc
-        get?: AnyApiFunc
-        create?: AnyApiFunc
-        update?: AnyApiFunc
-        remove?: AnyApiFunc
-      }
+      api: CrudApi
     }
     getListFields: () => FieldDef[]
     getFilterFields: () => FieldDef[]
@@ -75,13 +77,7 @@
     getDetailFields: () => FieldDef[]
     toTableColumns: () => Array<{ key: string, label: string, width?: string, align?: string, render?: (item: Record<string, unknown>) => string }>
     getDefaultValues: () => Record<string, unknown>
-    api: {
-      list: AnyApiFunc
-      get?: AnyApiFunc
-      create?: AnyApiFunc
-      update?: AnyApiFunc
-      remove?: AnyApiFunc
-    }
+    api: CrudApi
   }
 
   // ─── Props ───

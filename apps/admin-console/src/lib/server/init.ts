@@ -36,7 +36,6 @@ import type { CacheConfigInput } from '@h-ai/cache'
 import type { IamConfigSettingsInput } from '@h-ai/iam'
 import type { ReachConfigInput } from '@h-ai/reach'
 import type { StorageConfigInput } from '@h-ai/storage'
-import { randomBytes } from 'node:crypto'
 import process from 'node:process'
 import * as m from '$lib/paraglide/messages.js'
 import { audit } from '@h-ai/audit'
@@ -155,7 +154,10 @@ export async function initApp(): Promise<void> {
           vars: { token, expiresAt: expiresAt.toISOString() },
         })
         if (!result.success) {
-          core.logger.warn('Failed to send password reset email', { to: user.email, error: result.error.message })
+          core.logger.warn('Failed to send password reset email', {
+            hasRecipient: Boolean(user.email),
+            error: result.error.message,
+          })
         }
       }
       : undefined,
@@ -168,7 +170,10 @@ export async function initApp(): Promise<void> {
           vars: { code },
         })
         if (!result.success) {
-          core.logger.warn('Failed to send OTP email', { to: email, error: result.error.message })
+          core.logger.warn('Failed to send OTP email', {
+            emailDomain: email.split('@')[1] ?? 'unknown',
+            error: result.error.message,
+          })
         }
       }
       : undefined,
@@ -181,7 +186,10 @@ export async function initApp(): Promise<void> {
           vars: { code },
         })
         if (!result.success) {
-          core.logger.warn('Failed to send OTP SMS', { to: phone, error: result.error.message })
+          core.logger.warn('Failed to send OTP SMS', {
+            phoneSuffix: phone.slice(-4),
+            error: result.error.message,
+          })
         }
       }
       : undefined,
@@ -214,7 +222,7 @@ export async function initApp(): Promise<void> {
 // =============================================================================
 
 /**
- * 检查用户表是否为空，若为空则创建默认管理员并输出密码到控制台
+ * 检查用户表是否为空，若为空且提供初始密码则创建默认管理员
  *
  * 仅在首次启动（无任何用户）时触发，后续启动跳过。
  */
@@ -230,8 +238,11 @@ async function ensureDefaultAdmin(): Promise<void> {
     return
   }
 
-  // 生成随机密码（16 字节 → 32 位十六进制字符串）
-  const password = randomBytes(16).toString('hex')
+  const password = process.env.HAI_ADMIN_DEFAULT_PASSWORD ?? ''
+  if (!password) {
+    core.logger.warn('Default admin account was not created because HAI_ADMIN_DEFAULT_PASSWORD is not configured')
+    return
+  }
 
   // 注册管理员用户
   const registerResult = await iam.user.register({
@@ -253,15 +264,8 @@ async function ensureDefaultAdmin(): Promise<void> {
     await iam.authz.assignRole(adminUser.id, adminRoleResult.data.id)
   }
 
-  // 输出到控制台
   core.logger.info(m.server_init_default_admin_created())
-  const separator = '='.repeat(60)
-  core.logger.info(separator)
-  core.logger.info(`  Default admin account created`)
-  core.logger.info(`  Username: admin`)
-  core.logger.info(`  Password: ${password}`)
-  core.logger.info(`  Please login and change the password immediately.`)
-  core.logger.info(separator)
+  core.logger.info('Default admin account created', { username: 'admin' })
 }
 
 /**

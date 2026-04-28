@@ -3,7 +3,7 @@
 import '@h-ai/ui/auto-import'
 
 /**
- * hai Android App - 类型声明
+ * hai Desktop App - 类型声明
  */
 
 declare global {
@@ -29,4 +29,3 @@ declare global {
 declare module '*.css'
 
 export {}
-

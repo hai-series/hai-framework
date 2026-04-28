@@ -1,6 +1,5 @@
 import { Buffer } from 'node:buffer'
 import { randomBytes } from 'node:crypto'
-import { extname } from 'node:path'
 import * as m from '$lib/paraglide/messages.js'
 import { iam } from '@h-ai/iam'
 import { kit } from '@h-ai/kit'
@@ -59,7 +58,7 @@ export const POST = kit.handler(async ({ request, locals }) => {
   }
 
   const userId = userResult.data.id
-  const ext = EXT_MAP[file.type] ?? extname(file.name) ?? '.bin'
+  const ext = EXT_MAP[file.type]
   // 使用随机后缀避免同名覆盖，路径按用户隔离
   const hash = randomBytes(8).toString('hex')
   const key = `avatars/${userId}/${hash}${ext}`

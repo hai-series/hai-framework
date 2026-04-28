@@ -102,7 +102,7 @@ export const roleService = {
     })
 
     if (!result.success) {
-      return err({ message: `${m.api_iam_roles_create_failed()}: ${result.error.message}` })
+      return err({ code: 'iam.role.create_failed', message: `${m.api_iam_roles_create_failed()}: ${result.error.message}` })
     }
 
     const role = result.data
@@ -115,7 +115,7 @@ export const roleService = {
       const failed = assignResults.find(r => !r.success)
       if (failed && !failed.success) {
         await iam.authz.deleteRole(role.id)
-        return err({ message: `${m.api_iam_roles_create_failed()}: ${failed.error.message}` })
+        return err({ code: 'iam.role.create_failed', message: `${m.api_iam_roles_create_failed()}: ${failed.error.message}` })
       }
     }
 
@@ -185,7 +185,7 @@ export const roleService = {
     if (Object.keys(updateData).length > 0) {
       const updateResult = await iam.authz.updateRole(id, updateData)
       if (!updateResult.success) {
-        return err({ message: `${m.api_iam_roles_update_failed()}: ${updateResult.error.message}` })
+        return err({ code: 'iam.role.update_failed', message: `${m.api_iam_roles_update_failed()}: ${updateResult.error.message}` })
       }
     }
 
@@ -219,7 +219,7 @@ export const roleService = {
     if (!existing)
       return ok(false)
     if (existing.isSystem) {
-      return err({ message: m.api_iam_roles_system_cannot_delete() })
+      return err({ code: 'iam.role.system_cannot_delete', message: m.api_iam_roles_system_cannot_delete() })
     }
 
     const result = await iam.authz.deleteRole(id)

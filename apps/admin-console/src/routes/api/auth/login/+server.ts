@@ -16,14 +16,13 @@ export const POST = kit.handler(async ({ request, cookies, getClientAddress }) =
     return kit.response.fromError(loginResult.error)
   }
 
-  const { user, tokens, roles, permissions } = loginResult.data
+  const { user, roles, permissions } = loginResult.data
 
   const ip = getClientAddress()
   const ua = request.headers.get('user-agent') ?? undefined
   await audit.helper.login(user.id, ip, ua)
 
   return kit.response.ok({
-    accessToken: tokens.accessToken,
     user: {
       id: user.id,
       username: user.username,

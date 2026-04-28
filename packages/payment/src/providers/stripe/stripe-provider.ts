@@ -162,6 +162,7 @@ export function createStripeProvider(config: StripeConfig): PaymentProvider {
           amount: obj.amount_total ?? 0,
           status: statusMap[event.type] ?? 'pending',
           paidAt: new Date(),
+          // Stripe SDK 的 Event 是强类型对象，此处统一以 Record 暴露给上层做调试/审计
           raw: event as unknown as Record<string, unknown>,
         })
       }

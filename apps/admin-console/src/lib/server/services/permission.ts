@@ -157,7 +157,7 @@ export const permissionService = {
     })
 
     if (!result.success) {
-      return err({ message: `${m.api_iam_permissions_create_failed()}: ${result.error.message}` })
+      return err({ code: 'iam.permission.create_failed', message: `${m.api_iam_permissions_create_failed()}: ${result.error.message}` })
     }
 
     return ok(this.toPermissionWithSystem(result.data))
@@ -249,7 +249,7 @@ export const permissionService = {
    * 注意：IAM 模块目前不支持更新权限，只能删除后重建
    */
   async update(_id: string, _input: UpdatePermissionInput): Promise<HaiResult<Permission>> {
-    return err({ message: m.api_iam_permissions_update_not_supported() })
+    return err({ code: 'iam.permission.update_not_supported', message: m.api_iam_permissions_update_not_supported() })
   },
 
   /**

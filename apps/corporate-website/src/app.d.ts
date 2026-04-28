@@ -1,5 +1,7 @@
 /// <reference types="@sveltejs/kit" />
 
+import '@h-ai/ui/auto-import'
+
 /**
  * hai Corporate Website - 类型声明
  */

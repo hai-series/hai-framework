@@ -397,3 +397,68 @@ P0 或 P1 未清零 → 回到阶段 5。
 - "review iam 模块代码质量"
 - "检查 scheduler 模块的分布式安全性"
 - "做一次完整代码审查"
+
+---
+
+## 已知误报模式（避免假阳性）
+
+> 自动扫描或 subagent 经常将以下"看似违规"的合规模式误报。审查时遇到这些模式，**先查证设计契约再判定**。
+
+### 1. raw SQL 片段拼接（reldb 类模块）
+
+- **看似违规**：`buildWhereClause(where) => \` WHERE ${where}\`` 直接拼接字符串
+- **实际合规条件**：
+  - JSDoc 显著标注"⚠️ 安全警告：禁止用户输入直接拼接，动态值必须通过 `params` 占位符（`?`）传入"
+  - 与 Knex/Drizzle/Kysely raw query 模式一致
+  - 同类排序/列名场景采用白名单校验（如 `buildOrderClause` + `ORDER_BY_SEGMENT_REGEX`）
+- **审查动作**：核对类型定义（`reldb-types.ts` 等）的 JSDoc；若已标注，归为"设计契约"非违规
+
+### 2. Provider 内部 helper throw + 外层 try/catch 转 HaiResult
+
+- **看似违规**：`function getClient() { if (!client) throw new Error(...) }`
+- **实际合规条件**：
+  - 调用方均在 async 函数内，外层有 `try { ... } catch (e) { return err(...) }`
+  - 实际由 `NotInitializedKit Proxy` 在 main.ts 拦截，provider 内 throw 不可达（防御性）
+  - 错误码与 i18n key 已正确返回
+- **审查动作**：检查所有调用点是否被 try/catch 包裹 + main.ts 是否使用 NotInitializedKit；满足即合规
+
+### 3. `createProvider` switch default throw
+
+- **看似违规**：`default: throw new Error('unsupported type')`
+- **实际合规条件**：
+  - 上游已用 Zod schema 校验过 type 枚举，default 分支不可达
+  - JSDoc 标注"理论上仅当出现未覆盖分支时抛出"
+  - 位于模块 init 路径
+- **审查动作**：核对配置 schema 是否枚举了所有合法类型；满足即合规
+
+### 4. 模块级 `Map`/`Set`（cache memory provider 等）
+
+- **看似违规**：模块级 `new Map()` 缓存业务数据
+- **实际合规条件**：
+  - 该模块本身就是单进程缓存 provider（如 `cache-provider-memory`）
+  - 文档已说明"不支持跨节点一致性，多节点请用 redis provider"
+  - 测试覆盖了单节点场景
+- **审查动作**：判断是否为"进程内 SDK client / 不可变配置 / 连接池 / 单节点 provider 实现"；属此类则合规
+
+### 5. `init()` 内的同步 I/O
+
+- **看似违规**：`readFileSync` 出现在源码
+- **实际合规条件**：仅在 CLI 启动 / 模块 `init()` 一次性执行，未出现在请求/任务热路径
+- **审查动作**：grep 调用点，确认仅 init/CLI 路径
+
+> **判定原则**：若发现"误报"，必须在审查报告"误报排除"小节列出，并说明合规依据；不得静默跳过。
+
+---
+
+## 反过度设计审查（YAGNI 红线）
+
+> 删除比新增更需要勇气。每条违反即为 P2/P3 改进项，存在多条则升级为 P1。
+
+- [ ] 没有"为了可扩展性"引入的未使用接口 / 工厂 / 策略模式
+- [ ] 没有仅被使用一次的独立基类 / 抽象层
+- [ ] 配置项不超过实际需要——每个可配置项都有真实使用场景，无"理论上可配"的参数
+- [ ] 函数参数 ≤ 3，复杂参数走配置对象 + 合理默认值
+- [ ] 无注释掉的死代码 / 调试 `console.log` / `print` 残留
+- [ ] 无未使用的 import / 变量 / 类型声明（运行 `pnpm lint` 确认）
+- [ ] 同类能力优先复用现有模块，未重复造轮子
+

@@ -56,7 +56,6 @@
 
   function handleBeforeDelete(item: Record<string, unknown>) {
     if (item.isSystem) {
-      console.error(m.iam_roles_system_cannot_delete())
       return false
     }
     return true

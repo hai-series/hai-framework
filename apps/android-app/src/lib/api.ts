@@ -13,9 +13,12 @@
  * ```
  */
 
-import { PUBLIC_API_BASE } from '$env/static/public'
 import { api } from '@h-ai/api-client'
 import { createCapacitorTokenStorage } from '@h-ai/capacitor'
+
+// Capacitor 静态构建后通过 Vite 的 import.meta.env 注入 PUBLIC_* 变量
+// 此处不使用 SvelteKit 的 $env/static/public，避免脱离 SvelteKit SSR 上下文时的类型/运行时缺失
+const API_BASE = (import.meta.env.PUBLIC_API_BASE as string | undefined) ?? 'http://localhost:3000'
 
 /**
  * 初始化 API 客户端
@@ -24,7 +27,7 @@ import { createCapacitorTokenStorage } from '@h-ai/capacitor'
  */
 export async function initApi() {
   return api.init({
-    baseUrl: `${PUBLIC_API_BASE}/api/v1`,
+    baseUrl: `${API_BASE}/api/v1`,
     auth: {
       storage: createCapacitorTokenStorage(),
       refreshUrl: '/auth/refresh',

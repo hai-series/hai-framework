@@ -54,7 +54,6 @@
 
   function handleBeforeDelete(item: Record<string, unknown>) {
     if (item.is_system) {
-      console.error(m.iam_permissions_system_cannot_delete())
       return false
     }
     return true

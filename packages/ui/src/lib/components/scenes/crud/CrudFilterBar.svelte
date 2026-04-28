@@ -79,7 +79,7 @@
         <Select
           class='min-w-32'
           value={String(filterValues[field.id] ?? '')}
-          onchange={e => handleFilterChange(field.id, (e.target as HTMLSelectElement).value)}
+          onchange={value => handleFilterChange(field.id, value)}
         >
           <option value="">{uiM('crud_filter_all')}</option>
           {#each opts as opt}
