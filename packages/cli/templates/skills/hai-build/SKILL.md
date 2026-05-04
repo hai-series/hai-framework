@@ -218,8 +218,7 @@ log:
 | 代码审查与规范化       | `hai-app-review` | 审查, review, 规范, 优化               |
 | 编写/补充测试          | `hai-app-tests`  | 测试, test, 单测, 覆盖率, TDD, E2E     |
 | CI/CD 与质量门禁       | `hai-ci`         | CI, CD, GitHub Actions, workflow, secret scan |
-| PR 与 AI Review        | `hai-pr-review`  | PR, pull request, CODEOWNERS, 自动 Review, AI Review |
-| Issue 驱动协作         | `hai-issue-workflow` | issue, planning, AI task, 团队协作, worktree |
+| PR / Issue 交付审查    | `hai-pr-review`  | PR, pull request, issue, CODEOWNERS, 自动 Review, AI Review |
 | hai-framework 同步     | `hai-framework-sync` | hai-framework, skills 同步, framework:use:local, framework:watch |
 
 ---

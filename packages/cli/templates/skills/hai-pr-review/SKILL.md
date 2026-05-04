@@ -1,6 +1,6 @@
 ---
 name: hai-pr-review
-description: 规范 Pull Request 审查、AI-assisted PR、自动 Review、CODEOWNERS、reviewdog/DangerJS/Copilot/CodeRabbit/Claude/Codex 等方案；当需求涉及 PR 模板、自动审查、合并门禁或 AI Review 策略时使用。
+description: 审查 Pull Request 的交付质量、scope、风险、验证方式、AI-assisted 说明与合并准备度；当需求涉及 PR review、AI Review 策略、PR 模板、CODEOWNERS 或合并门禁时使用。
 ---
 
 # hai-pr-review — PR 审查与 AI Review 规范
@@ -11,11 +11,15 @@ description: 规范 Pull Request 审查、AI-assisted PR、自动 Review、CODEO
 
 ## 适用场景
 
-- 新增或修改 `.github/pull_request_template.md`
-- 设计 AI PR Review 方案
-- 配置 CODEOWNERS、required review、branch protection
 - 审查 AI-generated / AI-assisted PR
+- 审查 Pull Request 的 scope、风险、验证方式、issue 关联与合并准备度
+- 判断 AI Review 是 advisory 还是 blocking，以及是否需要人工复核
+- 新增或修改 `.github/pull_request_template.md`
+- 配置 CODEOWNERS、required review、branch protection
+- 设计 AI PR Review 方案
 - 选择 Copilot、CodeRabbit、reviewdog、DangerJS、Claude Code Action、Codex Action 等工具
+
+不负责：代码级质量审查（用 `hai-app-review` / 模块审查技能）、测试用例设计（用 `hai-app-tests`）、workflow 触发/权限/secret 细节（用 `hai-ci`）。
 
 ---
 
@@ -23,11 +27,9 @@ description: 规范 Pull Request 审查、AI-assisted PR、自动 Review、CODEO
 
 ### 第 1 层：确定性检查（必须）
 
-- `pnpm typecheck`
-- `pnpm lint`
-- `pnpm test`
-- `pnpm build`
-- 相关 E2E / security scan / dependency scan
+- CI required checks 必须全绿。
+- 具体 workflow、权限、secret scan 与 required check 配置由 `hai-ci` 定义。
+- 测试覆盖策略与失败用例设计由 `hai-app-tests` 定义。
 
 ### 第 2 层：结构化人工审查（必须）
 
@@ -52,6 +54,15 @@ PR 描述必须说明：
 - AI 负责了哪部分：搜索、实现、测试、review、文档
 - 人类如何验证：命令、截图、日志或 reviewer 重点
 - 是否复制了聊天记录；若有，只能复制脱敏后的结论，禁止包含 token、cookie、私有 URL、账号密码
+
+---
+
+## Issue 关联与上下文交接
+
+- PR 必须关联 issue 或说明为什么不需要 issue。
+- PR scope 必须与 issue 的目标、验收标准和明确不做事项一致。
+- AI-assisted PR 必须说明 AI 负责了哪些阶段，以及人类如何复核。
+- 多人或多 agent 协作时，PR 描述必须列出 reviewer focus，避免重复 review。
 
 ---
 
@@ -84,9 +95,9 @@ PR 描述必须说明：
 - [ ] PR 模板完整填写
 - [ ] CI required checks 全绿
 - [ ] 新行为有测试，失败路径有覆盖
+- [ ] 代码级质量问题已由 `hai-app-review` / 模块审查技能覆盖
 - [ ] 文档 / skill / README 与代码同步
-- [ ] 没有硬编码密钥、`any`、`console.log`、未脱敏日志
-- [ ] workflow 权限没有扩大
+- [ ] workflow 权限或 secrets 变化已由 `hai-ci` 审查
 - [ ] AI-assisted 内容已由人类复核
 
 ---
@@ -94,6 +105,5 @@ PR 描述必须说明：
 ## 相关 Skills
 
 - `hai-ci` — CI/CD 与 workflow 安全
-- `hai-issue-workflow` — Issue 驱动开发流程
 - `hai-review-module` / `hai-app-review` — 代码质量审查
 - `hai-framework-sync` — 两仓同步审查

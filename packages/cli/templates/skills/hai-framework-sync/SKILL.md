@@ -56,16 +56,11 @@ description: 管理 hai-framework 与应用仓库之间的依赖、技能模板�
 
 ### 4. 验证
 
-在应用仓库运行：
+按变更类型选择验证方式：
 
-```bash
-pnpm typecheck
-pnpm lint
-pnpm test
-pnpm build
-```
-
-涉及 framework runtime 时，再选择：
+- 仅模板 / skill 变更：检查 diff、入口引用与模板泛化程度。
+- 同步到应用仓库：按 `hai-ci` 定义的质量门禁运行。
+- 涉及 framework runtime 时，再选择：
 
 ```bash
 pnpm framework:status
@@ -100,5 +95,4 @@ pnpm framework:watch <package>
 
 - `hai-ci` — CI 对 npm/local framework 模式的验证策略
 - `hai-pr-review` — 双仓 PR 审查要点
-- `hai-issue-workflow` — 用 issue 管理同步任务
 - `hai-build` — 应用开发入口

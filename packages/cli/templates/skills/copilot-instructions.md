@@ -49,8 +49,7 @@
 | `hai-app-review` | 应用代码审查（含 TDD 合规检查）                       |
 | `hai-app-tests`  | TDD 测试规范（Vitest 单元测试 + Playwright E2E）      |
 | `hai-ci`         | CI/CD、GitHub Actions、质量门禁与 workflow 安全       |
-| `hai-pr-review`  | PR 审查、AI Review 策略、CODEOWNERS 与合并门禁        |
-| `hai-issue-workflow` | Issue 驱动开发、多 AI 协作、上下文交接           |
+| `hai-pr-review`  | PR / Issue 交付审查、AI Review 策略、CODEOWNERS 与合并门禁 |
 | `hai-framework-sync` | hai-framework 模板源头与应用仓库同步            |
 
 ## 开发流程

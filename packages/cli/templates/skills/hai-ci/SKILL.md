@@ -1,6 +1,6 @@
 ---
 name: hai-ci
-description: 设计和维护 hai-framework 应用仓库的 CI/CD、GitHub Actions、质量门禁、secret scan、分支保护与 workflow 安全；当需求涉及 CI、CD、GitHub Actions、质量门禁、泄漏扫描或自动化发布时使用。
+description: 设计和维护 hai-framework 应用仓库的 CI/CD、GitHub Actions、质量门禁、secret scan 与 workflow 安全；当需求涉及 CI、GitHub Actions、required checks、泄漏扫描或 release workflow 编排时使用。
 ---
 
 # hai-ci — CI/CD 与质量门禁规范
@@ -13,20 +13,22 @@ description: 设计和维护 hai-framework 应用仓库的 CI/CD、GitHub Action
 
 - 新增或修改 `.github/workflows/**`
 - 配置 `pnpm typecheck`、`pnpm lint`、`pnpm test`、`pnpm build`、E2E
-- 调整 secret scan、依赖扫描、安全扫描、发布流程
-- 设计分支保护、required checks、workflow 权限
+- 调整 secret scan、依赖扫描、安全扫描、release workflow 编排
+- 设计 required checks 的 CI 状态、workflow 权限、触发条件与 concurrency
 - 排查 CI flaky、缓存、矩阵构建或执行顺序问题
+
+不负责：PR 人工审查流程（用 `hai-pr-review`）、测试用例设计（用 `hai-app-tests`）、代码质量审查（用 `hai-app-review`）、云资源开通与应用部署 API（用 `hai-deploy`）。
 
 ---
 
 ## 核心原则
 
-1. **确定性检查优先**：CI 先保证类型、lint、测试、构建可重复通过；AI Review 只能在此基础上增强。
+1. **确定性检查优先**：CI 只负责可重复的机器检查；测试内容设计交给 `hai-app-tests`，代码规范判断交给 `hai-app-review`。
 2. **最小权限**：默认 `permissions: contents: read`，只有 release、comment、pages 等明确场景才提升权限。
 3. **PR 不使用 secrets**：来自 fork 或不可信分支的 PR 不得运行读取 secrets 的 workflow。
 4. **禁用高风险组合**：禁止 `pull_request_target` + checkout PR 代码 + secrets/写权限。
 5. **先轻后重**：核心 CI 必须稳定；E2E、发布、安全深扫可以拆成 manual/nightly 或独立 workflow。
-6. **可追溯**：workflow 改动必须在 PR 中说明触发条件、权限、缓存、失败路径和验证命令。
+6. **可追溯**：workflow 改动必须说明触发条件、权限、缓存、失败路径和验证命令。
 
 ---
 
@@ -43,6 +45,8 @@ pnpm lint
 pnpm test
 pnpm build
 ```
+
+测试覆盖范围与 TDD 断言由 `hai-app-tests` 定义；本技能只决定这些命令如何在 workflow 中稳定执行。
 
 ### E2E 策略
 
@@ -87,7 +91,7 @@ pnpm build
 
 ---
 
-## PR 验收标准
+## Workflow 变更交付清单
 
 修改 CI/CD 时，PR 描述必须包含：
 
@@ -104,4 +108,5 @@ pnpm build
 - `hai-build` — 项目结构与质量门禁总览
 - `hai-app-tests` — Vitest / Playwright 测试规范
 - `hai-pr-review` — PR 审查与 AI Review 策略
+- `hai-deploy` — 应用部署与云服务开通
 - `hai-framework-sync` — hai-framework 与应用仓库同步策略
