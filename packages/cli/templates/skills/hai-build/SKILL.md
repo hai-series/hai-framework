@@ -217,6 +217,9 @@ log:
 | 创建页面/组件/API/模型 | `hai-app-create` | 新建页面, 添加组件, API 端点, 数据模型 |
 | 代码审查与规范化       | `hai-app-review` | 审查, review, 规范, 优化               |
 | 编写/补充测试          | `hai-app-tests`  | 测试, test, 单测, 覆盖率, TDD, E2E     |
+| CI/CD 与质量门禁       | `hai-ci`         | CI, CD, GitHub Actions, workflow, secret scan |
+| PR / Issue 交付审查    | `hai-pr-review`  | PR, pull request, issue, CODEOWNERS, 自动 Review, AI Review |
+| hai-framework 同步     | `hai-framework-sync` | hai-framework, skills 同步, framework:use:local, framework:watch |
 
 ---
 
