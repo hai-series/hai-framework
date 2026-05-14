@@ -24,3 +24,4 @@
 - **框架模块**：`hai-core/`、`hai-kit/`、`hai-reldb/`、`hai-iam/`、`hai-crypto/`、`hai-cache/`、`hai-storage/`、`hai-ai/`
 - **UI 组件**：`hai-ui/SKILL.md`
 - **TDD 开发流程**：`hai-app-tests/`（TDD 测试先行）、`hai-app-create/`（TDD 实现）、`hai-app-review/`（TDD 重构审查）
+- **仓库工程流程**：`hai-ci/`（CI/CD 与质量门禁）、`hai-pr-review/`（PR / Issue 交付审查与 AI Review）、`hai-framework-sync/`（两仓同步）
