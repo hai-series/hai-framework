@@ -1,6 +1,6 @@
 ---
 name: hai-iam
-description: 使用 @h-ai/iam 进行身份认证（密码/OTP/LDAP/API Key）、统一 Bearer Token 管理（TokenPair/refresh/revoke）与 RBAC 授权（角色/权限/通配符）；当需求涉及登录、注册、权限检查、角色管理、Token 认证或 API 契约时使用。
+description: 使用 @h-ai/iam 进行身份认证（密码/OTP/LDAP/API Key）、统一 Bearer Token 管理（TokenPair/refresh/revoke）与 RBAC 授权；当需求涉及登录、注册、权限检查、角色管理、Token 认证或通过 @h-ai/api-contract 暴露 IAM API 时使用。
 ---
 
 # hai-iam
@@ -11,7 +11,7 @@ description: 使用 @h-ai/iam 进行身份认证（密码/OTP/LDAP/API Key）、
 
 ## 运行环境
 
-> ⚠️ **服务端模块（Node.js only）。** 浏览器端通过 `api.call(iamEndpoints.xxx)` 或 `apiFetch` 调用 IAM API 端点（参见 hai-api-client / hai-kit SKILL）。`@h-ai/iam/api` 子路径导出的 Zod Schema 和 EndpointDef 可在浏览器端使用。
+> ⚠️ **服务端模块（Node.js only）。** 浏览器端通过 `@h-ai/api-client` 的 typed client 调用 IAM API，例如 `api.iam.auth.login()`。HTTP 契约统一来自 `@h-ai/api-contract`。
 
 ---
 
@@ -33,7 +33,7 @@ description: 使用 @h-ai/iam 进行身份认证（密码/OTP/LDAP/API Key）、
 - API Key 管理（创建、吊销、验证）
 - 密码重置流程
 - 与 kit 集成的认证守卫
-- API 契约定义（`@h-ai/iam/api`）
+- 通过 `@h-ai/api-contract` 暴露 IAM HTTP contract
 
 ---
 
@@ -204,34 +204,14 @@ interface TokenPair {
 
 ---
 
-## API 契约 — `@h-ai/iam/api`
+## HTTP API 契约
+
+IAM HTTP API 统一由 `@h-ai/api-contract` 的 `iamContract` 定义，由 `@h-ai/serv/features/iam` 绑定到本模块。
 
 ```typescript
-import { iamEndpoints } from '@h-ai/iam/api'
+import { api } from '@h-ai/api-client'
 
-// 9 个端点契约，含 Zod schema
-iamEndpoints.login // POST /api/v1/auth/login
-iamEndpoints.loginWithOtp // POST /api/v1/auth/login-otp
-iamEndpoints.sendOtp // POST /api/v1/auth/send-otp
-iamEndpoints.logout // POST /api/v1/auth/logout
-iamEndpoints.register // POST /api/v1/auth/register
-iamEndpoints.currentUser // GET  /api/v1/auth/me
-iamEndpoints.refreshToken // POST /api/v1/auth/refresh
-iamEndpoints.changePassword // POST /api/v1/auth/change-password
-iamEndpoints.resetPassword // POST /api/v1/auth/reset-password
-```
-
-服务端使用 `kit.fromContract()`，客户端使用 `api.call()`：
-
-```typescript
-// 服务端
-export const POST = kit.fromContract(iamEndpoints.login, async (input) => {
-  const result = await iam.auth.login(input)
-  return result.success ? kit.response.ok(result.data) : kit.response.unauthorized()
-})
-
-// 客户端
-const result = await api.call(iamEndpoints.login, { username, password })
+const result = await api.iam.auth.login({ identifier: username, password })
 ```
 
 ---
@@ -322,22 +302,20 @@ export const handle = kit.sequence(haiHandle)
 ### 客户端认证流程
 
 ```typescript
-import { iamEndpoints } from '@h-ai/iam/api'
-
 // 登录 → 保存 Token
-const login = await api.call(iamEndpoints.login, { username, password })
+const login = await api.iam.auth.login({ identifier: username, password })
 if (login.success) {
   await api.auth.setTokens(login.data.tokens)
 }
 
 // 获取当前用户
-const me = await api.call(iamEndpoints.currentUser, {})
+const me = await api.iam.auth.currentUser()
 
-// Token 过期时，api-client 自动调用 refreshUrl 刷新
+// Token 过期时，api-client 自动调用 refreshPath 刷新
 // 刷新失败时，清除 Token 并跳转登录页
 
 // 登出
-await api.call(iamEndpoints.logout, {})
+await api.iam.auth.logout({})
 await api.auth.clear()
 ```
 

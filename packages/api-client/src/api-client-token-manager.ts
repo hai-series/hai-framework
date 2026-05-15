@@ -33,14 +33,14 @@ type RefreshCallback = (tokens: TokenPair) => void
  * 内部使用，管理 Token 存储和刷新逻辑。
  *
  * @param storage - Token 存储适配器
- * @param refreshUrl - Refresh Token 接口完整 URL
+ * @param refreshEndpointUrl - Refresh Token 接口完整 URL
  * @param fetchFn - fetch 实现
  * @param onRefreshFailed - 刷新失败回调
  * @returns Token 管理器
  */
 export function createTokenManager(
   storage: TokenStorage,
-  refreshUrl: string,
+  refreshEndpointUrl: string,
   fetchFn: typeof globalThis.fetch,
   onRefreshFailed?: () => void,
 ) {
@@ -75,14 +75,14 @@ export function createTokenManager(
       return null
     }
 
-    logger.debug('Refreshing token', { url: refreshUrl })
+    logger.debug('Refreshing token')
 
     try {
-      const response = await fetchFn(refreshUrl, {
+      const response = await fetchFn(new Request(refreshEndpointUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ refreshToken }),
-      })
+      }))
 
       if (!response.ok) {
         await storage.clear()
@@ -91,7 +91,8 @@ export function createTokenManager(
       }
 
       const body = await response.json() as { data?: unknown }
-      const parsed = TokenPairSchema.safeParse(body.data)
+      const tokenPayload = readTokenPayload(body.data)
+      const parsed = TokenPairSchema.safeParse(tokenPayload)
       if (!parsed.success) {
         logger.warn('Token refresh returned invalid data', { issues: parsed.error.issues })
         await storage.clear()
@@ -147,6 +148,14 @@ export function createTokenManager(
       }
     },
   }
+}
+
+function readTokenPayload(data: unknown): unknown {
+  if (typeof data === 'object' && data !== null && 'tokens' in data) {
+    return (data as { tokens: unknown }).tokens
+  }
+
+  return data
 }
 
 /** Token 管理器类型 */

@@ -1,20 +1,16 @@
 {
-  "extends": "./.svelte-kit/tsconfig.json",
+  "extends": "../../packages/tsconfig.base.json",
   "compilerOptions": {
     "moduleResolution": "bundler",
-    "allowImportingTsExtensions": true,
-    "allowJs": true,
-    "checkJs": false,
-    "strict": true,
+    "types": ["node"],
     "verbatimModuleSyntax": true,
     "skipLibCheck": true
   },
   "include": [
-    "src/**/*",
-    "src/**/*.svelte"
+    "src/**/*.ts"
   ],
   "exclude": [
     "node_modules",
-    ".svelte-kit"
+    "dist"
   ]
 }

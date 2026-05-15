@@ -180,53 +180,28 @@ interface TokenPair {
 
 ---
 
-## §6 API 契约 — `@h-ai/iam/api`
+## §6 HTTP API 契约 — `@h-ai/api-contract`
 
 ```typescript
-import { iamEndpoints } from '@h-ai/iam/api'
+import { iamContract } from '@h-ai/api-contract'
+import { createIamProcedures } from '@h-ai/serv/features/iam'
+import { iam } from '@h-ai/iam'
 
-// ── 认证 ──
-iamEndpoints.login              // POST   /auth/login
-iamEndpoints.loginWithOtp       // POST   /auth/login/otp
-iamEndpoints.sendOtp            // POST   /auth/otp/send
-iamEndpoints.logout             // POST   /auth/logout
-iamEndpoints.register           // POST   /auth/register
-iamEndpoints.currentUser        // GET    /auth/me
-iamEndpoints.updateCurrentUser  // PUT    /auth/me
-iamEndpoints.refreshToken       // POST   /auth/refresh
-iamEndpoints.changePassword     // POST   /auth/change-password
+const procedures = createIamProcedures({ iam })
 
-// ── 用户管理 ──
-iamEndpoints.listUsers          // GET    /iam/users
-iamEndpoints.getUser            // GET    /iam/users/:id
-iamEndpoints.createUser         // POST   /iam/users
-iamEndpoints.updateUser         // PUT    /iam/users/:id
-iamEndpoints.deleteUser         // DELETE /iam/users/:id
-iamEndpoints.adminResetPassword // POST   /iam/users/:id/reset-password
-
-// ── 角色管理 ──
-iamEndpoints.listRoles          // GET    /iam/roles
-iamEndpoints.getRole            // GET    /iam/roles/:id
-iamEndpoints.createRole         // POST   /iam/roles
-iamEndpoints.updateRole         // PUT    /iam/roles/:id
-iamEndpoints.deleteRole         // DELETE /iam/roles/:id
-
-// ── 权限管理 ──
-iamEndpoints.listPermissions    // GET    /iam/permissions
-iamEndpoints.getPermission      // GET    /iam/permissions/:id
-iamEndpoints.createPermission   // POST   /iam/permissions
-iamEndpoints.deletePermission   // DELETE /iam/permissions/:id
+// iamContract.auth.login             — POST /auth/login
+// iamContract.auth.currentUser       — GET  /auth/me
+// iamContract.auth.refresh           — POST /auth/refresh
+// iamContract.users.list             — GET  /iam/users
+// iamContract.roles.create           — POST /iam/roles
+// iamContract.permissions.list       — GET  /iam/permissions
 ```
 
 ```typescript
-// 服务端
-export const POST = kit.fromContract(iamEndpoints.login, async (input) => {
-  const result = await iam.auth.login(input)
-  return result.success ? kit.response.ok(result.data) : kit.response.unauthorized()
-})
-
 // 客户端
-const result = await api.call(iamEndpoints.login, { username, password })
+import { api } from '@h-ai/api-client'
+
+const result = await api.iam.auth.login({ identifier: username, password })
 ```
 
 ---
@@ -271,7 +246,7 @@ export const GET = kit.handler(async ({ locals }) => {
 
 ```typescript
 // 登录 → 保存 Token
-const login = await api.call(iamEndpoints.login, { username, password })
+const login = await api.iam.auth.login({ identifier: username, password })
 if (login.success) {
   await api.auth.setTokens(login.data.tokens)
 }

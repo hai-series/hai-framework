@@ -11,7 +11,7 @@ description: 使用 @h-ai/reldb 进行 SQLite/PostgreSQL/MySQL 的初始化、SQ
 
 ## 运行环境
 
-> ⚠️ **服务端模块（Node.js only）。** 浏览器端请通过 API 端点间接访问数据库（参见 hai-kit 契约模式 `kit.fromContract`）。
+> ⚠️ **服务端模块（Node.js only）。** 浏览器端请通过 `@h-ai/api-contract` + `@h-ai/serv` 暴露的 API 端点间接访问数据库。
 
 ---
 

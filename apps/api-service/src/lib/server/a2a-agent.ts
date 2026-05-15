@@ -3,8 +3,9 @@
  * API Service - A2A Echo Executor
  * =============================================================================
  *
- * 简单回声执行器示例，配合 ai.a2a.registerExecutor() 使用。
- * Agent Card 通过 _ai.yml 配置，端点由 kit.createHandle({ a2a }) 自动挂载。
+ * 简单回声执行器示例，配合 `ai.a2a.registerExecutor()` 使用；Agent Card 通过
+ * `config/_ai.yml` 配置。如需通过 HTTP 暴露 A2A 端点，可在 `@h-ai/serv`
+ * 之外自行扩展 Hono 路由。
  */
 
 import type { AgentExecutor } from '@h-ai/ai'

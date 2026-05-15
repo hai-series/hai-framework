@@ -7,9 +7,8 @@
  * @example
  * ```ts
  * import { api } from '@h-ai/api-client'
- * import { iamEndpoints } from '@h-ai/iam/api'
  *
- * const result = await api.call(iamEndpoints.login, { identifier, password })
+ * const result = await api.iam.auth.login({ identifier, password })
  * ```
  */
 
@@ -30,7 +29,7 @@ export async function initApi() {
     baseUrl: `${API_BASE}/api/v1`,
     auth: {
       storage: createCapacitorTokenStorage(),
-      refreshUrl: '/auth/refresh',
+      refreshPath: '/auth/refresh',
     },
   })
 }

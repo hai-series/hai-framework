@@ -68,12 +68,6 @@ describe('kit 统一出口', () => {
     expect(typeof kit.handler).toBe('function')
   })
 
-  // ─── fromContract ───
-
-  it('kit.fromContract 是函数', () => {
-    expect(typeof kit.fromContract).toBe('function')
-  })
-
   // ─── 客户端子命名空间 ───
 
   describe('kit.client', () => {

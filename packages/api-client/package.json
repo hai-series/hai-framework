@@ -30,7 +30,11 @@
     "clean": "rimraf dist .turbo"
   },
   "dependencies": {
+    "@h-ai/api-contract": "workspace:*",
     "@h-ai/core": "workspace:*",
+    "@orpc/client": "catalog:",
+    "@orpc/contract": "catalog:",
+    "@orpc/openapi-client": "catalog:",
     "zod": "catalog:"
   },
   "devDependencies": {

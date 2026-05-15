@@ -51,7 +51,7 @@
     "clean": "rimraf dist .turbo"
   },
   "peerDependencies": {
-    "@sveltejs/adapter-node": "^5.0.0",
+    "@sveltejs/adapter-node": "catalog:",
     "@sveltejs/adapter-static": "^3.0.0",
     "@sveltejs/kit": "^2.53.4",
     "svelte": "^5.53.6"

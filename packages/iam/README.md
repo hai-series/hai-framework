@@ -448,27 +448,26 @@ await iam.apiKey.revokeApiKey(keyId)
 
 详细 API 参数、错误码及集成模式请参考 Skill 模板（`packages/cli/templates/skills/hai-iam/SKILL.md`）。
 
-## 前端 API 契约
+## 前端 API 调用
 
-前端通过 `@h-ai/iam/api` 导出的契约定义（`iamEndpoints`）与 `@h-ai/api-client` 配合调用：
+公共 HTTP API 由 `@h-ai/api-contract` 定义，并通过 `@h-ai/api-client` 生成 typed client 调用：
 
 ```ts
 import { api } from '@h-ai/api-client'
-import { iamEndpoints } from '@h-ai/iam/api'
 
-await api.init({ baseUrl: '/api/iam' })
+await api.init({ baseUrl: '/api/v1' })
 
 // 登录
-const result = await api.call(iamEndpoints.login, {
+const result = await api.iam.auth.login({
   identifier: 'admin',
   password: 'Password123',
 })
 
 // 获取当前用户
-const user = await api.call(iamEndpoints.currentUser, {})
+const user = await api.iam.auth.currentUser()
 
 // 修改密码
-await api.call(iamEndpoints.changePassword, {
+await api.iam.auth.changePassword({
   oldPassword: 'Password123',
   newPassword: 'NewPassword456',
 })

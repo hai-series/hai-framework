@@ -203,17 +203,15 @@ const payResult = await invokePayment(orderResult.data)
 
 自定义 Provider 通过 `payment.registerProvider(provider)` 注册。
 
-### API 契约
+### HTTP API 契约
 
 ```typescript
-import { paymentEndpoints } from '@h-ai/payment/api'
+import { paymentContract } from '@h-ai/api-contract'
 
-// paymentEndpoints.createOrder    — POST /payment/create
-// paymentEndpoints.queryOrder     — GET  /payment/query
-// paymentEndpoints.notifyWechat   — POST /payment/notify/wechat
-// paymentEndpoints.notifyAlipay   — POST /payment/notify/alipay
-// paymentEndpoints.notifyStripe   — POST /payment/notify/stripe
-// paymentEndpoints.refund         — POST /payment/refund
+// paymentContract.orders.create        — POST /payment/orders
+// paymentContract.orders.get           — GET  /payment/orders/{orderNo}
+// paymentContract.orders.refund        — POST /payment/orders/{orderNo}/refunds
+// paymentContract.notifications.wechat — POST /payment/notifications/wechat
 ```
 
 ---
@@ -249,7 +247,7 @@ export const POST = kit.handler(async ({ request, locals }) => {
 ### 完整支付流程
 
 ```
-1. 客户端 → 服务端：创建订单（api.call(paymentEndpoints.createOrder, {...})）
+1. 客户端 → 服务端：创建订单（api.payment.orders.create({...})）
 2. 服务端 → 支付平台：调用 Provider 创建预支付
 3. 服务端 → 客户端：返回 providerData（含调起参数）
 4. 客户端：invokePayment(providerData) 调起支付

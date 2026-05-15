@@ -103,7 +103,7 @@ function invokeStripeCheckout(clientParams: Record<string, unknown>): InvokePaym
  * ```ts
  * import { invokePayment } from '@h-ai/payment/client'
  *
- * const orderResult = await api.call(paymentEndpoints.create, { ... })
+ * const orderResult = await api.payment.orders.create({ ... })
  * if (orderResult.success) {
  *   const result = await invokePayment(orderResult.data)
  * }

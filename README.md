@@ -606,16 +606,11 @@ import { api } from '@h-ai/api-client'
 
 await api.init({
   baseUrl: '/api/v1',
-  auth: { refreshUrl: '/auth/refresh' },
+  auth: { refreshPath: '/auth/refresh' },
 })
 
-// 契约调用（类型安全）
-const result = await api.call(iamEndpoints.login, { identifier: 'alice', password: 'xxx' })
-
-// SSE 流式响应
-for await (const chunk of api.stream('/ai/chat', { messages: [] })) {
-  void chunk
-}
+// Typed contract 调用
+const result = await api.iam.auth.login({ identifier: 'alice', password: 'xxx' })
 ```
 
 ### 用户触达

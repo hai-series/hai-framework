@@ -211,7 +211,7 @@ packages/xx/
 | 消息键        | `{module}_{camelCase}`                   | `storage_notInitialized`、`db_initFailed`             |
 | 请求体        | `{Domain}Req`                            | `LoginReq`、`CreateUserReq`                           |
 | 响应体        | `{Domain}Resp`                           | `LoginResp`、`ListUsersResp`                          |
-| 端点对象      | `{module}Endpoints`                      | `storageEndpoints`、`iamEndpoints`                    |
+| HTTP 契约对象 | `{module}Contract`                       | `storageContract`、`iamContract`                      |
 
 ### 3.3 命名三问（每次命名前自问）
 
@@ -777,21 +777,21 @@ export const xxM = core.i18n.createMessageGetter<XxMessageKey>({
 })
 ```
 
-### 7.5 API 契约层（可选）
+### 7.5 HTTP API 契约层（可选）
 
-当模块需要对外暴露 HTTP API 时，创建 `src/api/` 子目录：
+当模块需要对外暴露 HTTP API 时，契约统一放在 `packages/api-contract`，服务端过程统一放在 `packages/serv`：
 
-- `xx-api-schemas.ts`：Zod Schema（入参/出参/实体）
-- `xx-api-contract.ts`：端点定义（`xxEndpoints`）
-- `api/index.ts`：聚合导出
+- `packages/api-contract/src/{module}/`：Zod Schema + oRPC contract
+- `packages/serv/src/features/{module}-procedures.ts`：绑定模块能力到 procedure
+- 应用通过 `@h-ai/api-client` typed client 调用，不在业务模块内新增 `./api` 子路径
 
 端到端契约流：
 
 ```
-┌─────────── @h-ai/xx/api ────────────┐
-│  Schema（唯一真相源）+ Endpoints    │
-└────────┬─────────────────┬──────────┘
-  客户端 api.call(ep, i)   服务端 kit.fromContract
+┌──────────── @h-ai/api-contract ────────────┐
+│  Schema（唯一真相源）+ oRPC Contract       │
+└──────────────┬─────────────────────────────┘
+  客户端 @h-ai/api-client   服务端 @h-ai/serv
 ```
 
 ### 7.6 Repository 数据仓库（可选）
@@ -993,14 +993,13 @@ logger.info('Redis connected', { address: sanitizeRedisUrl(config.url) })
 }
 ```
 
-**双入口 + API 契约**（追加 exports）：
+**双入口 + Browser/Client**（追加 exports）：
 
 ```jsonc
 {
   "exports": {
     ".": { "types": "...", "browser": "...", "import": "...", "default": "..." },
-    "./client": { "types": "...", "import": "..." },
-    "./api": { "types": "./dist/api/index.d.ts", "import": "./dist/api/index.js" }
+    "./client": { "types": "...", "import": "..." }
   }
 }
 ```
