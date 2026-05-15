@@ -1,0 +1,80 @@
+{
+  "name": "@h-ai/serv",
+  "type": "module",
+  "version": "0.1.0-alpha.13",
+  "description": "Hai Framework service runtime powered by Hono and oRPC.",
+  "license": "Apache-2.0",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./features/iam": {
+      "types": "./dist/features/iam.d.ts",
+      "import": "./dist/features/iam.js"
+    },
+    "./features/storage": {
+      "types": "./dist/features/storage.d.ts",
+      "import": "./dist/features/storage.js"
+    },
+    "./features/ai": {
+      "types": "./dist/features/ai.d.ts",
+      "import": "./dist/features/ai.js"
+    }
+  },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "test:watch": "vitest watch",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "clean": "rimraf dist .turbo"
+  },
+  "peerDependencies": {
+    "@h-ai/ai": "workspace:*",
+    "@h-ai/iam": "workspace:*",
+    "@h-ai/storage": "workspace:*"
+  },
+  "peerDependenciesMeta": {
+    "@h-ai/ai": {
+      "optional": true
+    },
+    "@h-ai/iam": {
+      "optional": true
+    },
+    "@h-ai/storage": {
+      "optional": true
+    }
+  },
+  "dependencies": {
+    "@h-ai/api-contract": "workspace:*",
+    "@h-ai/core": "workspace:*",
+    "@hono/node-server": "catalog:",
+    "@orpc/openapi": "catalog:",
+    "@orpc/server": "catalog:",
+    "@orpc/zod": "catalog:",
+    "hono": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@h-ai/ai": "workspace:*",
+    "@h-ai/iam": "workspace:*",
+    "@h-ai/storage": "workspace:*",
+    "@types/node": "catalog:",
+    "rimraf": "catalog:",
+    "tsup": "catalog:",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  }
+}

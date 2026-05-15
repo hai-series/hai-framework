@@ -52,12 +52,17 @@ import { invokePayment } from '@h-ai/payment/client'
 await invokePayment(orderData)
 ```
 
-## API 契约
+## HTTP API 契约
 
-通过 `@h-ai/payment/api` 导出端点定义，与 `@h-ai/api-client` 和 `@h-ai/kit` 配合使用：
+支付 HTTP API 由 `@h-ai/api-contract` 的 `paymentContract` 定义。组合进应用 contract 后，可通过 typed client 调用：
 
 ```typescript
-import { paymentEndpoints } from '@h-ai/payment/api'
+const order = await api.payment.orders.create({
+  provider: 'wechat',
+  amount: 100,
+  description: '商品',
+  tradeType: 'jsapi',
+})
 ```
 
 ## 配置

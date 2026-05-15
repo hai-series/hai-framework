@@ -6,7 +6,6 @@ export default defineConfig({
   entry: {
     'index': 'src/index.ts',
     'client/index': 'src/client/index.ts',
-    'api/index': 'src/api/index.ts',
   },
   external: ['@h-ai/audit', '@h-ai/core', 'zod'],
 })

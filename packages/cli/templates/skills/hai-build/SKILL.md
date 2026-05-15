@@ -206,7 +206,7 @@ log:
 | AI/LLM/MCP            | `hai-ai`         | ai.init, LLM, MCP, Agent, 工具调用                |
 | SvelteKit 集成        | `hai-kit`        | kit.createHandle, guard, fromContract, middleware |
 | UI 组件               | `hai-ui`         | 表单, 按钮, 表格, Modal, Toast, 移动端组件        |
-| HTTP 客户端           | `hai-api-client` | api.call, api.get, api.post, Bearer, 拦截器       |
+| HTTP 客户端           | `hai-api-client` | typed client, Bearer, 401 refresh, custom fetch   |
 | 原生 App 能力         | `hai-capacitor`  | capacitor, 相机, 推送, 状态栏, 设备信息           |
 | 支付                  | `hai-payment`    | payment, 微信支付, 支付宝, Stripe, 订单           |
 

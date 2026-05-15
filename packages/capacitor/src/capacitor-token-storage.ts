@@ -38,7 +38,7 @@ const PREF_REFRESH_TOKEN = 'hai_refresh_token'
  *   baseUrl: 'https://api.example.com/v1',
  *   auth: {
  *     storage: createCapacitorTokenStorage(),
- *     refreshUrl: '/auth/refresh',
+ *     refreshPath: '/auth/refresh',
  *   },
  * })
  * ```

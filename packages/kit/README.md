@@ -22,7 +22,6 @@ npm install -D @sveltejs/vite-plugin-svelte vite
 - 统一 API 响应与请求验证（Zod）
 - Bearer Token 工具（服务端 login/logout + 浏览器端 Token 存储）
 - 浏览器端统一客户端（自动 CSRF，支持传输加密）
-- 基于 EndpointDef 的契约模式（`fromContract`）
 - 声明式 CRUD 资源定义（`crud.define`）
 - A2A 协议集成
 - 双构建模式（`createAdapter()`）
@@ -119,20 +118,6 @@ export const POST = kit.handler(async ({ request, locals }) => {
 })
 ```
 
-### 契约模式（推荐）
-
-```typescript
-import { iamEndpoints } from '@h-ai/iam/api'
-import { kit } from '@h-ai/kit'
-
-export const POST = kit.fromContract(iamEndpoints.login, async (input) => {
-  const result = await iam.auth.login(input)
-  if (!result.success)
-    return kit.response.unauthorized(result.error.message)
-  return kit.response.ok(result.data)
-})
-```
-
 ### 浏览器客户端
 
 ```typescript
@@ -169,14 +154,12 @@ const response = await apiFetch('/api/users', { method: 'GET' })
 
 ## 导出路径
 
-| 路径                | 用途                                           |
-| ------------------- | ---------------------------------------------- |
-| `@h-ai/kit`         | 主入口：`kit` 命名空间、类型、`defineEndpoint` |
-| `@h-ai/kit/client`  | 浏览器端客户端                                 |
-| `@h-ai/kit/adapter` | 双构建 adapter（`createAdapter()`）            |
-| `@h-ai/kit/vite`    | Vite 插件                                      |
-| `@h-ai/kit/a2a`     | A2A 协议集成                                   |
-| `@h-ai/kit/crypto`  | 加密模块集成                                   |
+- `@h-ai/kit`：主入口，提供 `kit` 命名空间与类型。
+- `@h-ai/kit/client`：浏览器端客户端。
+- `@h-ai/kit/adapter`：双构建 adapter（`createAdapter()`）。
+- `@h-ai/kit/vite`：Vite 插件。
+- `@h-ai/kit/a2a`：A2A 协议集成。
+- `@h-ai/kit/crypto`：加密模块集成。
 
 ## 错误处理
 

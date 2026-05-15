@@ -60,6 +60,32 @@ describe('createTokenManager', () => {
     expect(callback).toHaveBeenCalledWith(newTokens)
   })
 
+  it('refresh 支持 HaiResult tokens 包装格式', async () => {
+    const storage = createMemoryTokenStorage()
+    await storage.setRefreshToken('old-refresh')
+
+    const newTokens = {
+      accessToken: 'new-access',
+      refreshToken: 'new-refresh',
+      expiresIn: 3600,
+      tokenType: 'Bearer' as const,
+    }
+
+    const mockFetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ success: true, data: { tokens: newTokens } }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    )
+
+    const manager = createTokenManager(storage, 'https://api.test.com/auth/refresh', mockFetch)
+    const result = await manager.refresh()
+
+    expect(result).toEqual(newTokens)
+    expect(await storage.getAccessToken()).toBe('new-access')
+    expect(await storage.getRefreshToken()).toBe('new-refresh')
+  })
+
   it('无 refreshToken 时刷新失败', async () => {
     const storage = createMemoryTokenStorage()
     const onFailed = vi.fn()

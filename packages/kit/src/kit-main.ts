@@ -21,7 +21,6 @@ import {
   registerAndLogin,
   setBrowserToken,
 } from './kit-auth.js'
-import { fromContract } from './kit-contract.js'
 import { handler } from './kit-handler.js'
 import { setAllModulesLocale } from './kit-i18n.js'
 import { badRequest, conflict, created, error, forbidden, fromError, fromResult, internalError, noContent, notFound, ok, redirect, unauthorized, validationError } from './kit-response.js'
@@ -42,8 +41,6 @@ export const kit = {
   sequence,
   /** API Handler 包装器（自动错误边界） */
   handler,
-  /** 基于 API 契约创建类型安全的路由 handler */
-  fromContract,
 
   // ─── 路由守卫 ───
 

@@ -7,39 +7,37 @@
   "keywords": [
     "hai",
     "api",
-    "sveltekit",
-    "svelte5"
+    "hono",
+    "orpc"
   ],
   "scripts": {
-    "dev": "vite dev",
-    "build": "vite build",
-    "preview": "vite preview",
-    "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+    "dev": "tsup --watch --onSuccess \"node dist/index.js\"",
+    "build": "tsup",
+    "preview": "node dist/index.js",
+    "check": "tsc --noEmit",
+    "test": "vitest run",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
-    "test:e2e": "playwright test",
-    "clean": "rimraf .svelte-kit build .turbo"
+    "clean": "rimraf dist .turbo"
   },
   "dependencies": {
     "@h-ai/ai": "workspace:*",
+    "@h-ai/api-contract": "workspace:*",
     "@h-ai/cache": "workspace:*",
     "@h-ai/core": "workspace:*",
-    "@h-ai/kit": "workspace:*",
+    "@h-ai/iam": "workspace:*",
     "@h-ai/reldb": "workspace:*",
+    "@h-ai/serv": "workspace:*",
+    "@h-ai/storage": "workspace:*",
     "@h-ai/vecdb": "workspace:*",
     "@lancedb/lancedb": "catalog:",
     "zod": "catalog:"
   },
   "devDependencies": {
-    "@playwright/test": "catalog:",
-    "@sveltejs/adapter-node": "catalog:",
-    "@sveltejs/kit": "catalog:",
-    "@sveltejs/vite-plugin-svelte": "catalog:",
     "@types/node": "catalog:",
     "rimraf": "catalog:",
-    "svelte": "catalog:",
-    "svelte-check": "catalog:",
+    "tsup": "catalog:",
     "typescript": "catalog:",
-    "vite": "catalog:"
+    "vitest": "catalog:"
   }
 }

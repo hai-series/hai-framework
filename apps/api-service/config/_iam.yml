@@ -1,0 +1,20 @@
+# =============================================================================
+# API Service - IAM 配置
+# =============================================================================
+
+login:
+  password: true
+  otp: false
+  ldap: false
+  apikey: false
+
+register:
+  enabled: true
+  defaultEnabled: true
+
+rbac:
+  enabled: true
+  superAdminRole: super_admin
+  defaultRole: user
+
+seedDefaultData: true

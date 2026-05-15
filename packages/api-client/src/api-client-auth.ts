@@ -28,7 +28,7 @@ const LS_REFRESH_KEY = 'hai_refresh_token'
  *   baseUrl: 'https://api.example.com',
  *   auth: {
  *     storage: createLocalStorageTokenStorage(),
- *     refreshUrl: '/auth/refresh',
+ *     refreshPath: '/auth/refresh',
  *   },
  * })
  * ```
@@ -72,7 +72,7 @@ export function createLocalStorageTokenStorage(): TokenStorage {
  *   baseUrl: 'https://api.example.com',
  *   auth: {
  *     storage: createMemoryTokenStorage(),
- *     refreshUrl: '/auth/refresh',
+ *     refreshPath: '/auth/refresh',
  *   },
  * })
  * ```

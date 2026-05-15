@@ -8,17 +8,22 @@
  * 2. reldb.init — 数据库连接
  * 3. cache.init — 缓存初始化
  * 4. vecdb.init — 向量数据库
- * 5. ai.init — AI 模块（含 A2A 配置）
- * 6. ai.a2a.registerExecutor — 注册 A2A 执行器
- * 7. 创建业务表
+ * 5. iam.init — 身份与权限
+ * 6. storage.init — 对象存储
+ * 7. ai.init — AI 模块（含 A2A 配置）
+ * 8. ai.a2a.registerExecutor — 注册 A2A 执行器
  */
 
 import type { AIConfigInput } from '@h-ai/ai'
 import type { CacheConfigInput } from '@h-ai/cache'
+import type { IamConfigInput } from '@h-ai/iam'
+import type { StorageConfigInput } from '@h-ai/storage'
 import { ai, AIConfigSchema } from '@h-ai/ai'
 import { cache, CacheConfigSchema } from '@h-ai/cache'
 import { core } from '@h-ai/core'
+import { iam, IamConfigSchema } from '@h-ai/iam'
 import { reldb, ReldbConfigSchema } from '@h-ai/reldb'
+import { storage, StorageConfigSchema } from '@h-ai/storage'
 import { vecdb, VecdbConfigSchema } from '@h-ai/vecdb'
 import { echoExecutor } from './a2a-agent.js'
 
@@ -52,6 +57,16 @@ export async function initApp(): Promise<void> {
     throw new Error(`VecDB config invalid: ${vecdbValidation.error.message}`)
   }
 
+  const iamValidation = core.config.validate('iam', IamConfigSchema)
+  if (!iamValidation.success) {
+    throw new Error(`IAM config invalid: ${iamValidation.error.message}`)
+  }
+
+  const storageValidation = core.config.validate('storage', StorageConfigSchema)
+  if (!storageValidation.success) {
+    throw new Error(`Storage config invalid: ${storageValidation.error.message}`)
+  }
+
   const aiValidation = core.config.validate('ai', AIConfigSchema)
   if (!aiValidation.success) {
     throw new Error(`AI config invalid: ${aiValidation.error.message}`)
@@ -60,6 +75,8 @@ export async function initApp(): Promise<void> {
   const dbConfig = core.config.getOrThrow<DbConfigInput>('db')
   const cacheConfig = core.config.getOrThrow<CacheConfigInput>('cache')
   const vecdbConfig = core.config.getOrThrow<VecdbConfigInput>('vecdb')
+  const iamConfig = core.config.getOrThrow<IamConfigInput>('iam')
+  const storageConfig = core.config.getOrThrow<StorageConfigInput>('storage')
   const aiConfig = core.config.getOrThrow<AIConfigInput>('ai')
 
   // 2. 确保数据目录存在
@@ -90,36 +107,30 @@ export async function initApp(): Promise<void> {
     throw new Error(`VecDB initialization failed: ${vecdbResult.error.message}`)
   }
 
-  // 6. 初始化 AI 模块（读取 _ai.yml 中的 a2a.agentCard 配置）
+  // 6. 初始化 IAM 模块（依赖 reldb/cache）
+  const iamResult = await iam.init(iamConfig)
+  if (!iamResult.success) {
+    throw new Error(`IAM initialization failed: ${iamResult.error.message}`)
+  }
+
+  // 7. 初始化存储模块
+  const storageResult = await storage.init(storageConfig)
+  if (!storageResult.success) {
+    throw new Error(`Storage initialization failed: ${storageResult.error.message}`)
+  }
+
+  // 8. 初始化 AI 模块（读取 _ai.yml 中的 a2a.agentCard 配置）
   const aiResult = await ai.init(aiConfig)
   if (!aiResult.success) {
     throw new Error(`AI initialization failed: ${aiResult.error.message}`)
   }
 
-  // 7. 注册 A2A 执行器
+  // 10. 注册 A2A 执行器
   const a2aResult = ai.a2a.registerExecutor(echoExecutor)
   if (!a2aResult.success) {
     core.logger.warn('A2A executor registration failed (a2a config may be missing)', { error: a2aResult.error })
   }
 
-  // 8. 创建业务表
-  await ensureTables()
-
   initialized = true
   core.logger.info('API Service initialized.')
-}
-
-async function ensureTables(): Promise<void> {
-  const createResult = await reldb.ddl.createTable('items', {
-    id: { type: 'TEXT', primaryKey: true },
-    name: { type: 'TEXT', notNull: true },
-    description: { type: 'TEXT', defaultValue: '' },
-    status: { type: 'TEXT', defaultValue: 'active' },
-    created_at: { type: 'TEXT', notNull: true },
-    updated_at: { type: 'TEXT', notNull: true },
-  })
-
-  if (!createResult.success) {
-    throw new Error(`Items table initialization failed: ${createResult.error.message}`)
-  }
 }

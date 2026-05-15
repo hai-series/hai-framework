@@ -1,0 +1,38 @@
+import { describe, expect, it } from 'vitest'
+import { resolveServHttpConfig } from '../src/app/http-config.js'
+
+describe('resolveServHttpConfig', () => {
+  it('returns sane defaults when input omitted', () => {
+    const config = resolveServHttpConfig()
+    expect(config.apiPrefix).toBe('/api/v1')
+    expect(config.openapi).toBe(false)
+    expect(config.docs).toBe(false)
+    expect(config.rpc).toBe(false)
+    expect(config.health).toEqual({ path: '/health', readyPath: '/ready' })
+  })
+
+  it('accepts partial overrides and fills defaults', () => {
+    const config = resolveServHttpConfig({
+      apiPrefix: '/api/v2',
+      openapi: { path: '/openapi.json' },
+      docs: {},
+    })
+    expect(config.apiPrefix).toBe('/api/v2')
+    expect(config.openapi).toEqual({ path: '/openapi.json' })
+    expect(config.docs).toEqual({ path: '/docs' })
+  })
+
+  it('accepts false to disable health', () => {
+    const config = resolveServHttpConfig({ health: false })
+    expect(config.health).toBe(false)
+  })
+
+  it('rejects apiPrefix that does not start with /api/', () => {
+    expect(() => resolveServHttpConfig({ apiPrefix: '/v1' as `/api/${string}` })).toThrow()
+  })
+
+  it('rpc defaults to loopback access', () => {
+    const config = resolveServHttpConfig({ rpc: {} })
+    expect(config.rpc).toEqual({ prefix: '/rpc', access: 'loopback' })
+  })
+})

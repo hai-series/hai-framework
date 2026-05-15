@@ -130,54 +130,15 @@ const downloadUrl = await storage.presign.getUrl('uploads/doc.pdf', {
 
 ---
 
-## API 契约（`@h-ai/storage/api`）
+## HTTP API 契约
 
-`@h-ai/storage/api` 子路径导出所有存储端点的 Zod Schema 和端点契约定义，客户端与服务端共享同一份真相源，编译时保证 I/O 一致性。
-
-### 端点定义 — `storageEndpoints`
-
-| 端点名             | method | path                         | input Schema             | output Schema            |
-| ------------------ | ------ | ---------------------------- | ------------------------ | ------------------------ |
-| `presignDownload`  | POST   | `/storage/presign/download`  | `PresignGetInputSchema`  | `PresignUrlOutputSchema` |
-| `presignUpload`    | POST   | `/storage/presign/upload`    | `PresignPutInputSchema`  | `PresignUrlOutputSchema` |
-| `fileInfo`         | POST   | `/storage/file/info`         | `FileInfoInputSchema`    | `FileMetadataSchema`     |
-| `listFiles`        | GET    | `/storage/files`             | inline（prefix/maxKeys） | `ListFilesOutputSchema`  |
-| `deleteFile`       | POST   | `/storage/file/delete`       | `DeleteFileInputSchema`  | `z.void()`               |
-| `deleteFiles`      | POST   | `/storage/files/delete`      | `DeleteFilesInputSchema` | `z.void()`               |
-
-### 使用示例
+公共 HTTP API 统一由 `@h-ai/api-contract` 提供，并由 `@h-ai/serv/features/storage` 绑定到本模块。
 
 ```typescript
-import { storageEndpoints, PresignPutInputSchema } from '@h-ai/storage/api'
+import { api } from '@h-ai/api-client'
 
-// 客户端：通过 api-client 调用端点
-const { url } = await api.call(storageEndpoints.presignUpload, { key: 'avatar.png' })
-
-// 服务端：基于契约定义路由
-export const POST = kit.fromContract(storageEndpoints.presignUpload, async (input) => {
-  const result = await storage.presign.putUrl(input.key, input)
-  return result.success ? result.data : kit.response.internalError(result.error.message)
-})
-
-// 独立 Schema 校验
-const parsed = PresignPutInputSchema.safeParse(requestBody)
-if (!parsed.success) { /* 校验失败 */ }
+const result = await api.storage.presignedUrls.createUpload({ key: 'avatar.png' })
 ```
-
-### 导出的 Schema
-
-- `FileMetadataSchema` — 文件元数据（key / size / contentType / lastModified / etag? / metadata?）
-- `PresignGetInputSchema` — 下载签名入参（key + expiresIn?）
-- `PresignPutInputSchema` — 上传签名入参（key + contentType? + contentLength? + expiresIn?）
-- `PresignUrlOutputSchema` — 签名 URL 出参（url + key + expiresAt?）
-- `ListFilesOutputSchema` — 文件列表出参（files + commonPrefixes + isTruncated + nextContinuationToken?）
-- `DeleteFileInputSchema` — 删除单文件入参（key）
-- `DeleteFilesInputSchema` — 批量删除入参（keys[]）
-- `FileInfoInputSchema` — 文件信息入参（key）
-
-### 导出的推导类型
-
-`PresignGetInput` / `PresignPutInput` / `PresignUrlOutput` / `ListFilesOutput` / `DeleteFileInput` / `DeleteFilesInput` / `FileInfoInput`
 
 ---
 
@@ -251,13 +212,12 @@ await fetch(url, {
 })
 ```
 
-也可使用契约调用（需配合 `@h-ai/api-client`）：
+也可使用 typed client（需配合 `@h-ai/api-client`）：
 
 ```typescript
 import { api } from '@h-ai/api-client'
-import { storageEndpoints } from '@h-ai/storage/api'
 
-const result = await api.call(storageEndpoints.presignUpload, {
+const result = await api.storage.presignedUrls.createUpload({
   key: `avatars/${userId}.png`,
   contentType: 'image/png',
 })
