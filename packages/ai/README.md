@@ -1404,76 +1404,62 @@ const prompt = await ai.mcp.getPrompt('greet', { name: '张三' })
 
 ---
 
-## 前端客户端 — `createAIClient`
+## 前端客户端 — typed API client
 
-> 浏览器端轻量客户端，通过 API 代理层与后端 AI 通信。
+> 浏览器 / App 端通过 `@h-ai/api-client` 调用由 `@h-ai/api-contract` 定义、`@h-ai/serv` 挂载的 AI HTTP API。`@h-ai/ai/client` 中的低层 helper 只适用于应用自定义了 `post/stream` 适配器的场景；标准公共 API 请优先使用 typed client。
 
 ```ts
-import { createAIClient } from '@h-ai/ai/client'
 import { api } from '@h-ai/api-client'
 
-await api.init({ baseUrl: '/api' })
-const client = createAIClient({ api })
+await api.init({ baseUrl: '/api/v1', auth: {} })
 ```
 
 ### 非流式对话
 
 ```ts
-const response = await client.chat({
+const response = await api.ai.chats.createCompletion({
   messages: [{ role: 'user', content: '你好' }],
 })
-// response: ChatCompletionResponse（同服务端返回结构）
+if (response.success) {
+  // response.data: ChatCompletionResponse（同服务端返回结构）
+}
 ```
 
 ### 流式对话
 
-```ts
-for await (const chunk of client.chatStream({ messages }, {
-  onProgress: (progress) => {
-    // progress.content — 已累积的内容
-    // progress.done    — 是否结束
-    // progress.finishReason — 结束原因
-  },
-})) {
-  const delta = chunk.choices[0]?.delta?.content
-  if (delta) {
-    updateUI(delta)
-  }
-}
-```
+标准 `api-client` 不提供旧式通用流式方法；如需 SSE 流式输出，请在应用服务端显式暴露自定义流式 endpoint，再用 `fetch` / `apiFetch` 消费。
 
 ### 便捷方式
 
 ```ts
 // 发送单条消息，返回回复文本
-const reply = await client.sendMessage('你好', '你是一个翻译助手')
-
-// 流式发送，返回完整回复文本
-const reply = await client.sendMessageStream('写一首诗', {
-  onProgress: p => updateUI(p.content),
-})
+const reply = await api.ai.chats.sendMessage({ message: '你好', systemPrompt: '你是一个翻译助手' })
 ```
 
 ### 记忆与会话查询
 
 ```ts
 // 检索相关记忆
-const memories = await client.recallMemories('用户偏好', {
+const memories = await api.ai.memories.recall({
+  query: '用户偏好',
   topK: 5,
   objectId: 'user-001',
 })
 
 // 分页列出记忆
-const page = await client.listMemories({
+const page = await api.ai.memories.list({
   objectId: 'user-001',
-  offset: 0,
   limit: 20,
 })
-// page.items: MemoryEntry[], page.total: number
+if (page.success) {
+  // page.data.items: MemoryEntry[]
+}
 
 // 列出某对象的所有会话
-const sessions = await client.listSessions('user-001')
-// sessions: SessionInfo[]
+const sessions = await api.ai.sessions.list({ objectId: 'user-001' })
+if (sessions.success) {
+  // sessions.data.items: SessionInfo[]
+}
 ```
 
 ---

@@ -10,6 +10,7 @@
 - **代码生成** — 快速生成页面、组件、API 端点、数据模型、数据库迁移
 - **模板选择** — 最小 / 标准 / 完整 / 自定义四种项目模板
 - **功能组合** — 按需启用 IAM、DB、AI、Storage、Crypto 等模块
+- **API 服务脚手架** — API Service 模板使用 `@h-ai/api-contract` + `@h-ai/serv` 组合公共 contract / procedures，并通过 `@h-ai/api-client` typed client 消费
 - **自动依赖解析** — 选择功能时自动补全依赖（如 IAM 自动引入 Crypto）
 
 ## 快速开始
@@ -80,12 +81,12 @@ npx hai g:model order
 
 ## 项目模板
 
-| 模板      | 说明     | 包含功能                                                                                    |
-| --------- | -------- | ------------------------------------------------------------------------------------------- |
-| `minimal` | 最小模板 | 仅 SvelteKit + @h-ai/core                                                                   |
-| `default` | 标准模板 | IAM + DB + Cache + Crypto                                                                   |
-| `full`    | 完整模板 | IAM + DB + Cache + Crypto + AI + Storage + Audit + Reach + Payment + VecDB + Datapipe + ... |
-| `custom`  | 自定义   | 按需选择                                                                                    |
+| 模板      | 说明     | 包含功能                                   |
+| --------- | -------- | ------------------------------------------ |
+| `minimal` | 最小模板 | 仅 SvelteKit + @h-ai/core                  |
+| `default` | 标准模板 | IAM + DB + Cache + Crypto                  |
+| `full`    | 完整模板 | 全量业务模块 + API Service / contract 机制 |
+| `custom`  | 自定义   | 按需选择                                   |
 
 ## 全局选项
 
