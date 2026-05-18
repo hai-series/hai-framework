@@ -3,7 +3,7 @@
  *
  * 将 Hono app 包装为标准 Web `fetch(Request)` 处理函数，
  * 适用于 Cloudflare Workers、Deno、Bun 等 Fetch-first 运行时。
- * @module adapters/fetch
+ * @module adapters/serv-adapter-fetch
  */
 
 import type { Hono } from 'hono'
@@ -20,15 +20,12 @@ export type ServFetchHandler = (request: Request) => Response | Promise<Response
  * @example
  * ```ts
  * // Cloudflare Workers
- * export default {
- *   fetch: serv.adapters.fetch.createFetchHandler(app),
- * }
+ * export default { fetch: serv.toFetch(app) }
+ *
+ * // Bun
+ * Bun.serve({ fetch: serv.toFetch(app), port: 3000 })
  * ```
  */
-export function createFetchHandler(app: Hono): ServFetchHandler {
+export function toFetch(app: Hono): ServFetchHandler {
   return request => app.fetch(request)
-}
-
-export const fetch = {
-  createFetchHandler,
 }

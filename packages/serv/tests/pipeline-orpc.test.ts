@@ -1,7 +1,7 @@
-import type { ServContext } from '../src/context/context-types.js'
+import type { ServContext } from '../src/serv-context.js'
 import { core, err, ok } from '@h-ai/core'
 import { describe, expect, it } from 'vitest'
-import { mapHaiError, requireAuth, requirePermission } from '../src/pipeline/orpc.js'
+import { mapHaiError, requireAuth, requirePermission } from '../src/serv-pipeline.js'
 
 const logger = core.logger.child({ module: 'serv-test' })
 
@@ -35,10 +35,24 @@ describe('pipeline.orpc', () => {
     expect(result.success).toBe(false)
   })
 
-  it('requireAuth passes through when accessToken is present', async () => {
+  it('requireAuth rejects requests with token but no session (invalid / unverified token)', async () => {
     const handler = requireAuth<unknown, string>(async () => ok('ok'))
 
-    const result = await handler({ input: undefined, context: makeContext({ accessToken: 'abc' }) })
+    // accessToken 存在但 session 未注入（模拟 createContext 验证失败的情况）
+    const result = await handler({ input: undefined, context: makeContext({ accessToken: 'fake-token-xyz' }) })
+    expect(result.success).toBe(false)
+  })
+
+  it('requireAuth passes through when session is present', async () => {
+    const handler = requireAuth<unknown, string>(async () => ok('ok'))
+
+    const result = await handler({
+      input: undefined,
+      context: makeContext({
+        accessToken: 'valid-token',
+        session: { userId: 'u1', roles: [], permissions: [] },
+      }),
+    })
     expect(result.success).toBe(true)
     if (result.success) {
       expect(result.data).toBe('ok')

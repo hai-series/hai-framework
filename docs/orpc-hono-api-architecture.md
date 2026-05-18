@@ -129,7 +129,7 @@ Svelte/Taro/App     → 依赖 api-client + api-contract 类型；禁止依赖 s
 
 | 名称         | 单复数 | 所属层级                                | 含义                                           | 示例                            |
 | ------------ | ------ | --------------------------------------- | ---------------------------------------------- | ------------------------------- |
-| `contract`   | 单数   | `@h-ai/api-contract` / `serv.createApp` | 一个已组合完成的应用级 oRPC 契约树             | `apiServiceContract`            |
+| `contract`   | 单数   | `@h-ai/api-contract` / `serv.createApp` | 一个已组合完成的应用级 oRPC 契约树             | `createApiContract(…)`          |
 | `contracts`  | 复数   | 文档语义 / 可选目录                     | 多个领域契约的集合                             | IAM contract + Storage contract |
 | `procedures` | 复数   | `@h-ai/serv` / `apps/api-service`       | 多个 oRPC procedure handler 组成的服务端实现树 | `createIamProcedures()`         |
 | `http`       | 单数   | `@h-ai/serv.createApp()`                | 一个 Hono app 的 HTTP 挂载配置对象             | `http.apiPrefix`                |
@@ -187,7 +187,6 @@ packages/api-contract/
   src/
     index.ts
     common/
-      error-schemas.ts
       pagination-schemas.ts
       auth-schemas.ts
       result-schemas.ts
@@ -205,8 +204,6 @@ packages/api-contract/
       index.ts
     composition/
       create-api-contract.ts
-    presets/
-      api-service-contract.ts
 ```
 
 最终状态要求：
@@ -229,29 +226,26 @@ packages/api-contract/
 
 1. 每个领域只导出自己的 contract，例如 `iamContract`、`storageContract`。
 2. `api-contract` 提供一个轻量组合函数，例如 `createApiContract()`。
-3. 每个应用/部署创建自己的契约预设，只组合实际启用的模块。
-4. `serv`、`api-client`、OpenAPI 生成都使用同一个“应用契约预设”。
+3. 每个应用/部署在自己的代码中组合 contract，只组合实际启用的模块。
+4. `serv`、`api-client`、OpenAPI 生成都使用同一个“应用契约”。
 
 示意：
 
 ```ts
-// packages/api-contract/src/presets/api-service-contract.ts
-import { createApiContract } from '../composition/create-api-contract.js'
-import { iamContract } from '../iam/index.js'
-import { storageContract } from '../storage/index.js'
+// apps/api-service/src/app.ts
+import { aiContract, createApiContract, iamContract, storageContract } from '@h-ai/api-contract'
 
-export const apiServiceContract = createApiContract({
+const contract = createApiContract({
   iam: iamContract,
   storage: storageContract,
+  ai: aiContract,
 })
-
-export type ApiServiceContract = typeof apiServiceContract
 ```
 
-如果某个部署不需要 `storage`，就不要把 `storageContract` 加进预设：
+如果某个部署不需要 `storage`，就不要把 `storageContract` 加进去：
 
 ```ts
-export const authOnlyContract = createApiContract({
+const contract = createApiContract({
   iam: iamContract,
 })
 ```
@@ -334,7 +328,6 @@ packages/api-contract/
   src/
     index.ts
     common/
-      error-schemas.ts
       pagination-schemas.ts
       response-schemas.ts
       result-schemas.ts
@@ -352,8 +345,6 @@ packages/api-contract/
       index.ts
     composition/
       create-api-contract.ts
-    presets/
-      api-service-contract.ts
 ```
 
 ### 4.3 契约定义示意
@@ -409,17 +400,14 @@ export const iamContract = {
 按需组合：
 
 ```ts
-// packages/api-contract/src/presets/api-service-contract.ts
-import { createApiContract } from '../composition/create-api-contract.js'
-import { iamContract } from '../iam/index.js'
-import { storageContract } from '../storage/index.js'
+// apps/api-service/src/app.ts
+import { aiContract, createApiContract, iamContract, storageContract } from '@h-ai/api-contract'
 
-export const apiServiceContract = createApiContract({
+const contract = createApiContract({
   iam: iamContract,
   storage: storageContract,
+  ai: aiContract,
 })
-
-export type ApiServiceContract = typeof apiServiceContract
 ```
 
 ### 4.4 路径规范
@@ -555,15 +543,16 @@ export const serv = {
 
 各项职责：
 
-| API                                            | 做什么                                                                                   | 什么时候用                                       |
-| ---------------------------------------------- | ---------------------------------------------------------------------------------------- | ------------------------------------------------ |
-| `serv.createApp(options)`                      | 创建 Hono app，挂载 OpenAPIHandler、可选 RPCHandler、health、OpenAPI JSON、docs endpoint | API 服务入口默认只调用它                         |
-| `serv.createContext(c)`                        | 从 Hono context 构建 `ServContext`，统一 requestId、locale、IP、token、session、logger   | `createApp()` 默认使用；应用需要扩展上下文时复用 |
-| `serv.pipeline`                                | 汇总 Hono middleware、oRPC procedure middleware、handler interceptor                     | 鉴权、权限、审计、错误映射、RPC 内部访问控制     |
-| `serv.openapi.generateSpec(contract, options)` | 根据应用级 `contract` 生成 OpenAPI spec                                                  | 构建 `/openapi.json`、CI 校验、离线导出文档      |
-| `serv.openapi.createDocsPage(spec, options)`   | 根据 OpenAPI spec 创建 Scalar/Swagger 文档页面                                           | 启用 `http.docs` 时使用                          |
-| `serv.adapters.node`                           | Node 服务启动/关闭适配                                                                   | `apps/api-service` 本地开发、Node 部署           |
-| `serv.adapters.fetch`                          | Fetch handler 适配                                                                       | Workers、Bun、Deno、测试或其它 fetch runtime     |
+| API                                                  | 做什么                                                                                   | 什么时候用                                       |
+| ---------------------------------------------------- | ---------------------------------------------------------------------------------------- | ------------------------------------------------ |
+| `serv.createApp(options)`                            | 创建 Hono app，挂载 OpenAPIHandler、可选 RPCHandler、health、OpenAPI JSON、docs endpoint | API 服务入口默认只调用它                         |
+| `serv.createContext(input)`                          | 从 `Request` 构建 `ServContext`：requestId、accessToken、IP、locale 等                   | `createApp()` 默认使用；应用需要扩展上下文时复用 |
+| `serv.requireAuth / requirePermission / mapHaiError` | oRPC procedure 包装器：认证、授权、统一异常转换                                          | 在应用自定义 procedure 时使用                    |
+| `serv.securityHeaders() / requireInternalRPC()`      | Hono 中间件：安全响应头、内部 RPC 访问控制                                               | 内部 RPC 仅 loopback/内网/允许列表访问           |
+| `serv.generateSpec(contract, options)`               | 根据应用级 `contract` 生成 OpenAPI spec                                                  | 构建 `/openapi.json`、CI 校验、离线导出文档      |
+| `serv.createDocsPage(spec, options)`                 | 根据 OpenAPI spec 创建 Scalar/Swagger 文档页面                                           | 启用 `http.docs` 时使用                          |
+| `serv.listen(app, options)`                          | Node 服务启动（默认 host `127.0.0.1`，支持 `0.0.0.0` 或指定 IP）/ 关闭                   | `apps/api-service` 本地开发、Node 部署           |
+| `serv.toFetch(app)`                                  | 把 Hono app 包装为标准 `fetch(Request)` handler                                          | Workers、Bun、Deno、测试或其它 fetch runtime     |
 
 `createApp()` 的三个核心参数：
 
@@ -619,7 +608,7 @@ OpenAPI JSON 和文档页面是可选 endpoint。开发环境可以启用，生�
 
 ```ts
 serv.createApp({
-  contract: apiServiceContract,
+  contract,
   procedures,
   http: {
     apiPrefix: '/api/v1',
@@ -633,7 +622,7 @@ serv.createApp({
 
 ```ts
 serv.createApp({
-  contract: apiServiceContract,
+  contract,
   procedures,
   http: {
     apiPrefix: '/api/v2',
@@ -909,9 +898,11 @@ packages/kit/tests/**                         # 删除或迁移契约相关测�
 
 ```ts
 import { createApiClient } from '@h-ai/api-client'
-import { apiServiceContract } from '@h-ai/api-contract/presets/api-service'
+import { aiContract, createApiContract, iamContract, storageContract } from '@h-ai/api-contract'
 
-export const api = createApiClient(apiServiceContract)
+export const api = createApiClient(
+  createApiContract({ iam: iamContract, storage: storageContract, ai: aiContract }),
+)
 
 await api.init({
   baseUrl: 'https://api.example.com/api/v1',
@@ -1012,15 +1003,17 @@ await api.iam.auth.login(input)
 
 ## 9. oRPC + Hono + Client 集成全链路
 
-### 9.1 契约包：只有契约和按需预设，无实现
+### 9.1 契约包：只有契约，无实现
 
 ```ts
-// @h-ai/api-contract/presets/api-service
-export const apiServiceContract = createApiContract({
-  iam: iamContract,
-})
+// apps/api-service/src/app.ts
+import { aiContract, createApiContract, iamContract, storageContract } from '@h-ai/api-contract'
 
-export type ApiServiceContract = typeof apiServiceContract
+const contract = createApiContract({
+  iam: iamContract,
+  storage: storageContract,
+  ai: aiContract,
+})
 ```
 
 ### 9.2 服务端：选择默认 procedures
@@ -1051,7 +1044,7 @@ const procedures = {
 const procedures = createApiServiceProcedures({ iam })
 
 const app = serv.createApp({
-  contract: apiServiceContract,
+  contract,
   procedures,
   http: {
     apiPrefix: '/api/v1',
@@ -1067,9 +1060,11 @@ const app = serv.createApp({
 ```ts
 // @h-ai/api-client
 import { createApiClient } from '@h-ai/api-client'
-import { apiServiceContract } from '@h-ai/api-contract/presets/api-service'
+import { aiContract, createApiContract, iamContract, storageContract } from '@h-ai/api-contract'
 
-export const api = createApiClient(apiServiceContract)
+export const api = createApiClient(
+  createApiContract({ iam: iamContract, storage: storageContract, ai: aiContract }),
+)
 ```
 
 客户端应用只使用：
@@ -1103,20 +1098,20 @@ import { createApiServiceProcedures } from 'apps/api-service/src/server/procedur
 
 放置规则：
 
-| 内容                  | 放哪里                                                    | 命名                                   |
-| --------------------- | --------------------------------------------------------- | -------------------------------------- |
-| 请求/响应 schemas     | `packages/api-contract/src/<domain>/<domain>-schemas.ts`  | 复数，因为通常包含多个 Zod schema      |
-| oRPC contract         | `packages/api-contract/src/<domain>/<domain>-contract.ts` | 单数，因为导出一个领域 contract 对象   |
-| 应用 contract preset  | `packages/api-contract/src/presets/<app>-contract.ts`     | 单数，因为导出一个应用级 contract 对象 |
-| 可复用默认 procedures | `packages/serv/src/features/<domain>-procedures.ts`       | 复数，因为实现多个 procedure handlers  |
-| 应用私有 procedures   | `apps/<app>/src/server/procedures/<domain>-procedures.ts` | 复数，因为实现多个 procedure handlers  |
+| 内容                  | 放哪里                                                    | 命名                                  |
+| --------------------- | --------------------------------------------------------- | ------------------------------------- |
+| 请求/响应 schemas     | `packages/api-contract/src/<domain>/<domain>-schemas.ts`  | 复数，因为通常包含多个 Zod schema     |
+| oRPC contract         | `packages/api-contract/src/<domain>/<domain>-contract.ts` | 单数，因为导出一个领域 contract 对象  |
+| 应用 contract 组合    | `apps/<app>/src/app.ts`                                   | 应用自己组合，不在库中预设            |
+| 可复用默认 procedures | `packages/serv/src/features/<domain>-procedures.ts`       | 复数，因为实现多个 procedure handlers |
+| 应用私有 procedures   | `apps/<app>/src/server/procedures/<domain>-procedures.ts` | 复数，因为实现多个 procedure handlers |
 
 以 `billing` 为例：
 
 ```text
 packages/api-contract/src/billing/billing-schemas.ts
 packages/api-contract/src/billing/billing-contract.ts
-packages/api-contract/src/presets/api-service-contract.ts
+apps/api-service/src/app.ts                             ← 在应用中组合 contract
 apps/api-service/src/server/procedures/billing-procedures.ts
 apps/api-service/src/server/procedures/index.ts
 ```
@@ -1167,15 +1162,14 @@ export const billingContract = {
 }
 ```
 
-第三步：加入应用级 contract preset。
+第三步：在应用中组合 contract。
 
 ```ts
-// packages/api-contract/src/presets/api-service-contract.ts
-import { billingContract } from '../billing/index.js'
-import { createApiContract } from '../composition/create-api-contract.js'
-import { iamContract } from '../iam/index.js'
+import { createApiContract, iamContract } from '@h-ai/api-contract'
+// apps/api-service/src/app.ts
+import { billingContract } from '@h-ai/api-contract/billing'
 
-export const apiServiceContract = createApiContract({
+const contract = createApiContract({
   iam: iamContract,
   billing: billingContract,
 })
@@ -1230,7 +1224,7 @@ export function createApiServiceProcedures(deps: ApiServiceDeps) {
 验收要求：
 
 - `api.billing.invoices.list()` 在客户端类型中可见。
-- 未把 `billingContract` 加入 preset 的应用，客户端和 OpenAPI 都不出现 billing API。
+- 未把 `billingContract` 加入应用 contract 组合的应用，客户端和 OpenAPI 都不出现 billing API。
 - 测试覆盖 schemas、procedures、api-service 装配、OpenAPI endpoint 启用/禁用、客户端调用。
 
 ---
@@ -1246,10 +1240,12 @@ IAM 是最适合的第一阶段试点，因为它覆盖登录、刷新、鉴权�
 ```text
 packages/api-contract/src/iam/iam-schemas.ts
 packages/api-contract/src/iam/iam-contract.ts
-packages/api-contract/src/presets/api-service-contract.ts
+apps/api-service/src/app.ts                   ← 组合 contract
 packages/serv/src/features/iam-procedures.ts
 apps/api-service/src/server/procedures/index.ts
-packages/api-client/src/create-api-client.ts
+packages/api-client/src/api-client-types.ts
+packages/api-client/src/api-client-auth.ts
+packages/api-client/src/api-client-main.ts
 ```
 
 删除：
@@ -1380,7 +1376,7 @@ legacyContractBinding(handler)
 
 ```ts
 serv.createApp({
-  contract: apiServiceContract,
+  contract,
   procedures,
   http: {
     apiPrefix: '/api/v1',
@@ -1394,7 +1390,7 @@ serv.createApp({
 
 ```ts
 serv.createApp({
-  contract: apiServiceContract,
+  contract,
   procedures,
   http: {
     apiPrefix: '/api/v1',
@@ -1411,7 +1407,7 @@ const generator = new OpenAPIGenerator({
   schemaConverters: [new ZodToJsonSchemaConverter()],
 })
 
-const spec = await generator.generate(apiServiceContract, {
+const spec = await generator.generate(contract, {
   info: {
     title: 'hai-framework API',
     version,
@@ -1515,7 +1511,7 @@ AI 实现提示模板：
 - 新增 `packages/api-contract`，依赖 `@h-ai/core`、`@orpc/contract`、`zod`。
 - 新增 `packages/serv`，依赖 Hono、oRPC server/openapi、`@h-ai/api-contract`。
 - 在 `packages/serv/src/features/` 新增常用模块默认 procedures，例如 `iam-procedures.ts`、`storage-procedures.ts`、`ai-procedures.ts`。
-- 新增 `apiServiceContract` 按需组合预设。
+- 新增 `createApiContract()` 按需组合工具；应用在自己代码中定义 contract。
 - 新增 `createApiClient(contract)`。
 - 新增 `apps/api-service/src/server/procedures/index.ts` 作为应用装配入口。
 

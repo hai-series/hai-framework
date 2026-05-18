@@ -1,4 +1,4 @@
-import type { ServContext } from '../src/context/context-types.js'
+import type { ServContext } from '../src/serv-context.js'
 import { createApiContract } from '@h-ai/api-contract'
 import { implement } from '@orpc/server'
 import { describe, expect, it } from 'vitest'
@@ -19,7 +19,7 @@ describe('@h-ai/serv', () => {
       },
     })
 
-    const context = serv.createContext({ request })
+    const context = serv.parseRequestContext({ request })
 
     expect(context.accessToken).toBe('access-token')
     expect(context.requestId).toBe('req_1')

@@ -38,7 +38,7 @@ description: 使用 @h-ai/serv 将 oRPC contract 挂载为 Hono HTTP API Service
 ### 2. 创建并启动 app
 
 ```typescript
-import { apiServiceContract } from '@h-ai/api-contract/presets/api-service'
+import { createApiContract, iamContract, storageContract, aiContract } from '@h-ai/api-contract'
 import { iam } from '@h-ai/iam'
 import { serv } from '@h-ai/serv'
 import { createAiProcedures } from '@h-ai/serv/features/ai'
@@ -46,6 +46,8 @@ import { createIamProcedures } from '@h-ai/serv/features/iam'
 import { createStorageProcedures } from '@h-ai/serv/features/storage'
 import { storage } from '@h-ai/storage'
 import { ai } from '@h-ai/ai'
+
+const contract = createApiContract({ iam: iamContract, storage: storageContract, ai: aiContract })
 
 // 装配 procedures（每个 feature 对应 contract 中的一个领域）
 const procedures = {
@@ -56,7 +58,7 @@ const procedures = {
 
 // 创建 Hono app
 const app = serv.createApp({
-  contract: apiServiceContract,
+  contract,
   procedures,
   http: {
     apiPrefix: '/api/v1',
@@ -66,23 +68,20 @@ const app = serv.createApp({
   },
 })
 
-// Node.js 启动
-const server = serv.adapters.node.listen(app, {
-  port: 3000,
+// Node.js 启动（自动读取 PORT / HOST 环境变量；onClose 自动监听 SIGINT/SIGTERM）
+serv.listen(app, {
   onListening: (info) => console.info(`Listening on port ${info.port}`),
+  onClose: closeApp, // 业务模块关闭函数（ai/storage/iam/reldb 等反向释放）
 })
-
-// 优雅关闭
-process.on('SIGTERM', () => server.close())
 ```
 
-### 3. Fetch Runtime（Cloudflare Workers / Deno）
+### 3. Fetch Runtime（Cloudflare Workers / Deno / Bun）
 
 ```typescript
 import { serv } from '@h-ai/serv'
 
-// createFetchHandler 返回标准 Fetch handler
-const handler = serv.adapters.fetch.createFetchHandler(app)
+// toFetch 返回标准 Fetch handler
+const handler = serv.toFetch(app)
 
 export default { fetch: handler }
 ```
@@ -97,38 +96,51 @@ export default { fetch: handler }
 import type { CreateServAppOptions } from '@h-ai/serv'
 
 const app = serv.createApp({
-  contract,       // AnyContractRouter — oRPC contract（如 apiServiceContract）
+  contract,       // AnyContractRouter — 通过 createApiContract() 组合的 contract
   procedures,     // Router<AnyContractRouter, ServContext> — procedure 实现
   http?,          // ServHttpConfigInput — HTTP 端点配置（见下方配置节）
-  createContext?, // CreateServContext — 自定义 context 工厂
+  iam?,           // ServIam — 顶层 IAM 句柄，同时驱动 access token 校验与 refresh cookie【推荐】
+  refreshCookie?, // RefreshCookieConfig — httpOnly refresh cookie 刷新路径（见下方 cookie 节）
+  verifyToken?,   // (token) => Promise<HaiResult<ServSession>> — 逃脱口：不使用 iam 时提供自定义校验
+  createContext?, // CreateServContext — 高级：完全接管上下文构造（设置后 serv 不再自动填充 session）
 })
 ```
 
-### `serv.pipeline.orpc` — Procedure 包装器
+**上下文工厂优先级**（`context.session` 填充来源）：
+
+1. 显式 `createContext`（高级场景：多租户、额外字段）
+2. `verifyToken`（逃脱口：使用非 @h-ai/iam 的认证服务）
+3. `iam.session.verifyToken`（推荐：传入 `iam` 后自动启用）
+4. 默认 `parseRequestContext`：仅解析请求元数据，`session` 为 `undefined`
+
+> ⚠️ `verifyToken` 会在每次请求调用（不缓存）；verifyToken 失败或抛错统一收敛为 `session=undefined`，由 `requireAuth` 统一返回 401。
+
+### Procedure 包装器（所有导出为 `serv.xxx` 扁平 API）
 
 | 函数 | 说明 |
 | --- | --- |
-| `mapHaiError(handler)` | 捕获未处理异常，转换为 `HaiResult` |
-| `requireAuth(handler)` | 验证 Bearer Token（`context.accessToken` 非空） |
-| `requirePermission(permission, handler)` | 验证权限码，支持通配符 `'*'` |
-| `audit(action, handler)` | 写入审计日志（需 `@h-ai/audit` 已初始化） |
+| `serv.mapHaiError(handler)` | 捕获未处理异常，转换为 `HaiResult` |
+| `serv.requireAuth(handler)` | 验证 session（`context.session` 非空，即 token 已通过 `verifyToken` 校验） |
+| `serv.requirePermission(permission, handler)` | 验证权限码，支持通配符 `serv.WILDCARD_PERMISSION`（`'*'`） |
+| `serv.requireRole(role, handler)` | 验证角色，支持通配符 `serv.WILDCARD_ROLE`（`'*'`） |
 
 ```typescript
 import { serv } from '@h-ai/serv'
 
-const { mapHaiError, requireAuth, requirePermission, audit } = serv.pipeline.orpc
-
-// 组合包装（从外到内：error → auth → permission → audit → handler）
-const handler = mapHaiError(
-  requireAuth(
-    requirePermission('user:write',
-      audit('user.create', actualHandler)
-    )
+// 组合包装（从外到内：error → auth → permission/role → handler）
+const handler = serv.mapHaiError(
+  serv.requireAuth(
+    serv.requirePermission('user.write', actualHandler)
   )
+)
+
+// 角色检查示例
+const adminOnly = serv.requireAuth(
+  serv.requireRole('admin', actualHandler)
 )
 ```
 
-### `serv.createContext` — 默认 Context 工厂
+### `serv.parseRequestContext` — 默认 Context 解析器
 
 从 HTTP 请求头自动解析：
 
@@ -140,25 +152,10 @@ const handler = mapHaiError(
 | `locale` | `accept-language` |
 | `userAgent` | `user-agent` |
 
-```typescript
-// 自定义 context（注入 session）
-const app = serv.createApp({
-  contract,
-  procedures,
-  createContext: async (input) => {
-    const base = await serv.createContext(input)
-    const session = base.accessToken
-      ? await iam.session.getByToken(base.accessToken)
-      : undefined
-    return { ...base, userId: session?.data?.userId }
-  },
-})
-```
-
-### `serv.openapi.generateSpec(contract, options)` — 生成 OpenAPI 文档
+### `serv.generateSpec(contract, options)` — 生成 OpenAPI 文档
 
 ```typescript
-const spec = await serv.openapi.generateSpec(apiServiceContract, {
+const spec = await serv.generateSpec(contract, {
   title: 'My API',
   version: '1.0.0',
   apiPrefix: '/api/v1',
@@ -167,10 +164,10 @@ const spec = await serv.openapi.generateSpec(apiServiceContract, {
 // spec 为 OpenAPI 3.1 Document 对象
 ```
 
-### `serv.openapi.createDocsPage(spec, options)` — 创建文档 HTML
+### `serv.createDocsPage(spec, options)` — 创建文档 HTML
 
 ```typescript
-const html = serv.openapi.createDocsPage(spec, {
+const html = serv.createDocsPage(spec, {
   title: 'My API Docs',
   specUrl: '/openapi.json', // 不传时内嵌 spec JSON
 })
@@ -221,7 +218,7 @@ import type { ServContext } from '@h-ai/serv'
 import { serv } from '@h-ai/serv'
 import { myContract } from './my-contract.js'
 
-const { requireAuth, requirePermission } = serv.pipeline.orpc
+const { requireAuth, requirePermission } = serv
 
 export function createMyProcedures() {
   return {
@@ -270,6 +267,56 @@ procedure 包装器内置以下错误：
 | `HaiCommonError.UNAUTHORIZED` | `requireAuth`：无 accessToken |
 | `HaiCommonError.FORBIDDEN` | `requirePermission`：无对应权限 |
 | `HaiCommonError.INTERNAL_ERROR` | `mapHaiError`：procedure 抛出未处理异常 |
+
+---
+
+## httpOnly Cookie 认证
+
+将 refresh token 存储在 `HttpOnly` cookie 中，避免 XSS 风险（浏览器 JS 无法读取）。
+
+### 适用场景
+
+- 浏览器端（Web / H5）使用 `@h-ai/api-client` 的 `createHttpOnlyCookieTokenStorage()`
+- 对 refresh token 有更高安全要求，不希望存储在 localStorage
+
+### 工作流程
+
+1. 浏览器 POST `/auth/login` → serv 拦截 oRPC 成功响应 → `Set-Cookie: hai_refresh_token=...;HttpOnly;SameSite=Strict`
+2. Access token 由客户端存内存（不持久化）
+3. Access token 过期 → 客户端 POST `/auth/refresh`（浏览器自动携带 cookie）
+4. serv 读取 cookie → 调用 `iam.session.refresh` → 返回新 token 对 + 更新 cookie
+5. POST `/auth/logout` → serv 清除 cookie（`Max-Age=0`）
+
+### 配置
+
+```typescript
+const app = serv.createApp({
+  contract,
+  procedures,
+  http: { apiPrefix: '/api/v1' },
+  iam,                                  // 顶层句柄：同时驱动 verifyToken 与 refresh
+  refreshCookie: {
+    // cookieName?: string              默认 'hai_refresh_token'
+    // maxAge?: number                  默认 30 * 24 * 3600（30 天）
+    // secure?: boolean                 默认 NODE_ENV=production 时开启
+    // onRefresh?: (token) => ...       可选：覆盖默认的 iam.session.refresh
+  },
+  // ✅ 顶层 iam 同时为 access token 校验提供默认实现，无需再传 verifyToken
+})
+```
+
+> **逃脱口**：不使用 `@h-ai/iam` 时，可显式传入顶层 `verifyToken: token => myAuthService.verify(token)`。
+
+### Cookie 规格
+
+| 属性 | 值 |
+| --- | --- |
+| Name | `hai_refresh_token`（可配置） |
+| Path | `{apiPrefix}/auth/refresh`（最小范围） |
+| HttpOnly | ✓ |
+| SameSite | `Strict` |
+| Secure | 生产自动开启，`secure: false` 可在 HTTP 开发环境关闭 |
+| Max-Age | 30 天（可配置） |
 
 ---
 

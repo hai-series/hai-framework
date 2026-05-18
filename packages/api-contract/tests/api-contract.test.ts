@@ -5,6 +5,7 @@ import {
   createApiContract,
   haiResultSchema,
   HaiVoidResultSchema,
+  iamContract,
   IamLoginInputSchema,
   IamRefreshTokenOutputSchema,
   paginatedSchema,
@@ -13,7 +14,6 @@ import {
   PaymentCreateOrderInputSchema,
   storageContract,
 } from '../src/index.js'
-import { apiServiceContract } from '../src/presets/api-service-contract.js'
 
 describe('@h-ai/api-contract', () => {
   it('createApiContract 过滤未启用领域', () => {
@@ -28,11 +28,12 @@ describe('@h-ai/api-contract', () => {
     expect('payment' in contract).toBe(false)
   })
 
-  it('apiServiceContract 默认启用 iam/storage/ai', () => {
-    expect(apiServiceContract.iam.auth.login).toBeDefined()
-    expect(apiServiceContract.storage.files.list).toBeDefined()
-    expect(apiServiceContract.ai.chats.createCompletion).toBeDefined()
-    expect('payment' in apiServiceContract).toBe(false)
+  it('createApiContract 启用 iam/storage/ai 三个领域', () => {
+    const contract = createApiContract({ iam: iamContract, storage: storageContract, ai: aiContract })
+    expect(contract.iam.auth.login).toBeDefined()
+    expect(contract.storage.files.list).toBeDefined()
+    expect(contract.ai.chats.createCompletion).toBeDefined()
+    expect('payment' in contract).toBe(false)
   })
 
   it('iam 登录输入和刷新输出 Schema 可校验', () => {
@@ -125,7 +126,7 @@ describe('@h-ai/api-contract', () => {
   it('storage / ai 关键路由暴露正确的 OpenAPI 方法', () => {
     expect(routeOf(storageContract.files.delete)).toMatchObject({ method: 'DELETE' })
     expect(routeOf(storageContract.files.list)).toMatchObject({ method: 'GET' })
-    expect(routeOf(apiServiceContract.ai.chats.createCompletion)).toMatchObject({
+    expect(routeOf(aiContract.chats.createCompletion)).toMatchObject({
       method: 'POST',
       path: '/ai/chats/completions',
     })

@@ -12,6 +12,8 @@
  * 6. storage.init — 对象存储
  * 7. ai.init — AI 模块（含 A2A 配置）
  * 8. ai.a2a.registerExecutor — 注册 A2A 执行器
+ *
+ * 关闭顺序与初始化反向，保证依赖完整释放。
  */
 
 import type { AIConfigInput } from '@h-ai/ai'
@@ -31,11 +33,26 @@ type DbConfigInput = Parameters<typeof reldb.init>[0]
 type VecdbConfigInput = Parameters<typeof vecdb.init>[0]
 
 let initialized = false
+// 防止并发 init() 调用导致重复初始化：在途的 Promise 复用同一个结果。
+let initPromise: Promise<void> | null = null
 
 export async function initApp(): Promise<void> {
   if (initialized)
     return
+  if (initPromise)
+    return initPromise
 
+  initPromise = doInit()
+  try {
+    await initPromise
+    initialized = true
+  }
+  finally {
+    initPromise = null
+  }
+}
+
+async function doInit(): Promise<void> {
   // 1. 加载配置
   core.init({
     configDir: './config',
@@ -125,12 +142,41 @@ export async function initApp(): Promise<void> {
     throw new Error(`AI initialization failed: ${aiResult.error.message}`)
   }
 
-  // 10. 注册 A2A 执行器
+  // 9. 注册 A2A 执行器（依赖 ai 模块）
   const a2aResult = ai.a2a.registerExecutor(echoExecutor)
   if (!a2aResult.success) {
     core.logger.warn('A2A executor registration failed (a2a config may be missing)', { error: a2aResult.error })
   }
 
-  initialized = true
   core.logger.info('API Service initialized.')
+}
+
+/**
+ * 优雅关闭：按初始化的反向顺序释放各模块资源。
+ *
+ * - 单个模块关闭失败不会阻断其他模块。
+ * - 完成后允许重新 `initApp()`（适合测试场景）。
+ */
+export async function closeApp(): Promise<void> {
+  if (!initialized && !initPromise)
+    return
+  // 反向顺序：ai → storage → iam → vecdb → cache → reldb
+  const closers: Array<readonly [string, () => unknown]> = [
+    ['ai', () => ai.close()],
+    ['storage', () => storage.close()],
+    ['iam', () => iam.close()],
+    ['vecdb', () => vecdb.close()],
+    ['cache', () => cache.close()],
+    ['reldb', () => reldb.close()],
+  ]
+  for (const [name, close] of closers) {
+    try {
+      await close()
+    }
+    catch (error) {
+      core.logger.warn(`Module close failed: ${name}`, { error })
+    }
+  }
+  initialized = false
+  core.logger.info('API Service closed.')
 }

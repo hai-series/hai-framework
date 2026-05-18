@@ -3,7 +3,7 @@
  *
  * 基于 `@h-ai/ai` 提供开箱即用的 AI procedures 实现：对话补全、消息发送、聊天历史、记忆管理、会话列表。
  * 通过 `createAiProcedures(deps)` 组装后直接挂载到 oRPC router。
- * @module features/ai
+ * @module features/serv-feature-ai
  */
 
 import type {
@@ -26,11 +26,12 @@ import type {
   AiSessionListInput,
 } from '@h-ai/api-contract'
 import type { HaiResult } from '@h-ai/core'
-import type { ServContext } from '../context/context-types.js'
+import type { ServContext } from '../serv-context.js'
 import { aiContract } from '@h-ai/api-contract'
 import { ok } from '@h-ai/core'
 import { implement } from '@orpc/server'
-import { requireAuth } from '../pipeline/orpc.js'
+import { requireAuth } from '../serv-pipeline.js'
+import { wrapItemsResult } from './serv-feature-helpers.js'
 
 /** AI 默认 procedures 依赖。 */
 export interface AiProcedureDeps {
@@ -264,12 +265,4 @@ async function sendMessage(deps: AiProcedureDeps, input: AiSendMessageInput): Pr
     content: result.data,
     model: input.model ?? deps.ai.config?.llm.model ?? 'default',
   })
-}
-
-function wrapItemsResult<T>(result: HaiResult<T[]>): HaiResult<{ items: T[] }> {
-  if (!result.success) {
-    return result
-  }
-
-  return ok({ items: result.data })
 }

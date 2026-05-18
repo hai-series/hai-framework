@@ -25,10 +25,6 @@
     "./payment": {
       "types": "./dist/payment/index.d.ts",
       "import": "./dist/payment/index.js"
-    },
-    "./presets/api-service": {
-      "types": "./dist/presets/api-service-contract.d.ts",
-      "import": "./dist/presets/api-service-contract.js"
     }
   },
   "main": "./dist/index.js",

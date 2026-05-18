@@ -3,9 +3,8 @@ import { oc } from '@orpc/contract'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { createMemoryTokenStorage } from '../src/api-client-auth.js'
-import { api } from '../src/api-client-main.js'
+import { api, createApiClient } from '../src/api-client-main.js'
 import { HaiApiClientError } from '../src/api-client-types.js'
-import { createApiClient } from '../src/create-api-client.js'
 
 const HealthOutputSchema = haiResultSchema(z.object({ status: z.string() }))
 
@@ -101,7 +100,7 @@ describe('createApiClient', () => {
     expect(fetch).toHaveBeenCalledTimes(3)
   })
 
-  it('默认 api 单例绑定 apiServiceContract', async () => {
+  it('默认 api 单例绑定 iam/storage/ai contract', async () => {
     const fetch = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ success: true, data: { status: 'ok' } }), {
         status: 200,

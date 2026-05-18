@@ -1,6 +1,6 @@
 # hai API Service
 
-> 基于 Hono + oRPC + `@h-ai/serv` 的 API Service 组合根，负责初始化模块并装配 `apiServiceContract` 对应的 procedures。
+> 基于 Hono + oRPC + `@h-ai/serv` 的 API Service 组合根，负责初始化模块并装配 iam/storage/ai 领域的 procedures。
 
 ## 能力概览
 
@@ -25,10 +25,12 @@ pnpm --filter api-service preview
 
 ## API 契约
 
-本应用使用默认契约预设：
+本应用在 `src/app.ts` 中组合应用级 contract：
 
 ```ts
-import { apiServiceContract } from '@h-ai/api-contract/presets/api-service'
+import { aiContract, createApiContract, iamContract, storageContract } from '@h-ai/api-contract'
+
+const contract = createApiContract({ iam: iamContract, storage: storageContract, ai: aiContract })
 ```
 
 客户端调用示例：
@@ -84,12 +86,23 @@ curl http://localhost:3000/health
 curl http://localhost:3000/ready
 ```
 
+### 注册（首次测试请先注册用户）
+
+服务没有内置默认账号，需先注册一个用户：
+
+```bash
+curl -X POST http://localhost:3000/api/v1/auth/register \
+  -H 'Content-Type: application/json' \
+  -d '{"username":"admin","password":"Admin123!","email":"admin@example.com"}'
+# 注册成功后直接返回 tokens，可跳过登录步骤直接使用
+```
+
 ### 登录
 
 ```bash
 curl -X POST http://localhost:3000/api/v1/auth/login \
   -H 'Content-Type: application/json' \
-  -d '{"identifier":"admin","password":"your-password"}'
+  -d '{"identifier":"admin","password":"Admin123!"}'
 # 响应：{"success":true,"data":{"user":{...},"tokens":{"accessToken":"...","refreshToken":"...","expiresIn":3600,"tokenType":"Bearer"},...}}
 ```
 

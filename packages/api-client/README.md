@@ -4,7 +4,7 @@
 
 ## 能力概览
 
-- `api`：默认绑定 `apiServiceContract` 的单例 typed client。
+- `api`：默认绑定 iam/storage/ai 领域的单例 typed client。
 - `createApiClient(contract)`：为自定义 contract 创建 typed client。
 - 支持自定义 `fetch`，适配浏览器、Node、Capacitor、小程序桥接层。
 - 支持 Bearer Token 自动注入、401 后刷新并重试一次。
@@ -17,7 +17,7 @@ import { api } from '@h-ai/api-client'
 
 await api.init({
   baseUrl: 'https://api.example.com/api/v1',
-  auth: { refreshPath: '/auth/refresh' },
+  auth: {}, // 默认使用 httpOnly cookie 存储（推荐）；SSR 测试请显式传入 createMemoryTokenStorage()
 })
 
 const login = await api.iam.auth.login({
@@ -60,7 +60,7 @@ const result = await client.iam.auth.login({ identifier: 'alice', password: 'sec
 ## 配置
 
 - `baseUrl`：API 基础地址，通常包含 `/api/v1`。
-- `auth.storage`：Token 存储适配器。
+- `auth.storage`：Token 存储适配器；默认 `createHttpOnlyCookieTokenStorage()`（浏览器推荐）；SSR / 测试场景请显式传入 `createMemoryTokenStorage()`。
 - `auth.refreshPath`：刷新 token 路径，默认 `/auth/refresh`。
 - `timeout`：请求超时，默认 30000ms。
 - `headers`：静态或动态公共请求头。
