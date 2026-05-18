@@ -11,12 +11,14 @@ description: 使用 @h-ai/api-client 构建多端共用的 oRPC/OpenAPI typed cl
 
 ### 1. 初始化
 
+浏览器默认使用 httpOnly cookie 存储（推荐）：
+
 ```ts
 import { api } from '@h-ai/api-client'
 
 await api.init({
   baseUrl: 'https://api.example.com/api/v1',
-  auth: { refreshPath: '/auth/refresh' },
+  auth: {},
 })
 ```
 
@@ -27,7 +29,18 @@ import { createCapacitorTokenStorage } from '@h-ai/capacitor'
 
 await api.init({
   baseUrl: 'https://api.example.com/api/v1',
-  auth: { storage: createCapacitorTokenStorage(), refreshPath: '/auth/refresh' },
+  auth: { storage: createCapacitorTokenStorage() },
+})
+```
+
+SSR / Node.js 测试场景请显式传入内存存储：
+
+```ts
+import { api, createMemoryTokenStorage } from '@h-ai/api-client'
+
+await api.init({
+  baseUrl: 'https://api.example.com/api/v1',
+  auth: { storage: createMemoryTokenStorage() },
 })
 ```
 
@@ -61,6 +74,36 @@ await client.init({ baseUrl: 'https://api.example.com/api/v1' })
 await api.close()
 ```
 
+## Token Storage 适配器
+
+| 工厂函数 | 存储位置 | 适用场景 |
+| --- | --- | --- |
+| `createHttpOnlyCookieTokenStorage()` | httpOnly cookie（服务端管理） | **默认**；浏览器端推荐，refresh token 不暴露给 JS |
+| `createMemoryTokenStorage()` | 内存 | SSR / Node.js 单元测试（需显式传入） |
+| `createLocalStorageTokenStorage()` | localStorage | 非敏感场景（有 XSS 风险，生产不推荐） |
+
+### httpOnly Cookie 模式
+
+Access token 存在内存中，refresh token 由服务端通过 `HttpOnly` cookie 管理，浏览器 JS 无法读取，可有效防止 XSS 窃取 token。
+
+**前提**：服务端需配置 `serv.createApp({ iam, refreshCookie: {} })`，参见 `hai-serv` skill。
+
+```ts
+import { api } from '@h-ai/api-client'
+
+// createHttpOnlyCookieTokenStorage 是默认存储，无需显式指定
+await api.init({
+  baseUrl: 'https://api.example.com/api/v1',
+  auth: {},
+})
+
+// 登录后设置 access token（refresh token 由服务端写入 cookie，前端无需操作）
+const login = await api.iam.auth.login({ identifier: 'alice', password: 'secret' })
+if (login.success) {
+  await api.auth.setTokens(login.data.tokens)
+}
+```
+
 ## 核心 API
 
 | API | 用途 |
@@ -78,3 +121,4 @@ await api.close()
 - 业务错误不 throw，统一判断 `HaiResult.success`。
 - 客户端不导入服务端 `procedures` 或 `@h-ai/serv`。
 - 前端只依赖 `@h-ai/api-client` 和 contract 类型，不依赖业务模块实现。
+- httpOnly cookie 模式需服务端与客户端同步配置，不支持跨域刷新（`SameSite=Strict`）。

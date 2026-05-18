@@ -6,7 +6,6 @@
 
 - `iamContract`、`storageContract`、`aiContract`、`paymentContract`：领域级 contract。
 - `createApiContract()`：按应用场景组合启用的领域 contract。
-- `apiServiceContract`：默认 API Service 预设，启用 IAM / Storage / AI。
 - 公共 DTO Schema：所有 HTTP 输出统一包装为 `HaiResult<T>`。
 
 ## 快速开始
@@ -24,11 +23,13 @@ export const contract = createApiContract({
 ## API 契约
 
 ```ts
-import { apiServiceContract } from '@h-ai/api-contract/presets/api-service'
+import { aiContract, createApiContract, iamContract, storageContract } from '@h-ai/api-contract'
 
-apiServiceContract.iam.auth.login
-apiServiceContract.storage.presignedUrls.createUpload
-apiServiceContract.ai.chats.createCompletion
+const myContract = createApiContract({ iam: iamContract, storage: storageContract, ai: aiContract })
+
+myContract.iam.auth.login
+myContract.storage.presignedUrls.createUpload
+myContract.ai.chats.createCompletion
 ```
 
 客户端通过 `@h-ai/api-client` 直接调用嵌套方法：
@@ -44,11 +45,13 @@ await api.close()
 服务端通过 `@h-ai/serv` 挂载：
 
 ```ts
-import { apiServiceContract } from '@h-ai/api-contract/presets/api-service'
+import { aiContract, createApiContract, iamContract, storageContract } from '@h-ai/api-contract'
 import { serv } from '@h-ai/serv'
 
+const contract = createApiContract({ iam: iamContract, storage: storageContract, ai: aiContract })
+
 const app = serv.createApp({
-  contract: apiServiceContract,
+  contract,
   procedures,
   http: { apiPrefix: '/api/v1' },
 })
@@ -57,7 +60,6 @@ const app = serv.createApp({
 ## API 概览
 
 - `createApiContract(options)`：过滤 `false` / `undefined` 领域并组合应用级 contract。
-- `apiServiceContract`：默认服务契约预设。
 - `Iam*Schema` / `Storage*Schema` / `Ai*Schema` / `Payment*Schema`：公共 HTTP DTO Schema。
 
 ## 配置

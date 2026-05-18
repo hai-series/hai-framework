@@ -23,7 +23,6 @@
       "@h-ai/api-contract/ai": ["./packages/api-contract/src/ai/index.ts"],
       "@h-ai/api-contract/iam": ["./packages/api-contract/src/iam/index.ts"],
       "@h-ai/api-contract/payment": ["./packages/api-contract/src/payment/index.ts"],
-      "@h-ai/api-contract/presets/api-service": ["./packages/api-contract/src/presets/api-service-contract.ts"],
       "@h-ai/api-contract/storage": ["./packages/api-contract/src/storage/index.ts"],
       "@h-ai/api-client": ["./packages/api-client/src/index.ts"],
       "@h-ai/serv": ["./packages/serv/src/index.ts"],

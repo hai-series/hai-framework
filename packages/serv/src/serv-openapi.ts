@@ -1,11 +1,61 @@
 /**
- * @h-ai/serv — API 文档 HTML 生成
+ * @h-ai/serv — OpenAPI 文档
  *
- * 生成内嵌 Scalar UI 的单页 HTML，默认使用 createApp 自动挂载的本地脚本路由，无 CDN 依赖。
- * @module openapi/docs-page
+ * 由 oRPC contract 生成 OpenAPI 3.1 spec，并提供轻量 Scalar UI HTML 渲染器。
+ * @module serv-openapi
  */
 
-import type { OpenAPI } from '@orpc/contract'
+import type { AnyContractRouter, OpenAPI } from '@orpc/contract'
+import { OpenAPIGenerator } from '@orpc/openapi'
+import { ZodToJsonSchemaConverter } from '@orpc/zod/zod4'
+
+/** OpenAPI spec 生成配置。 */
+export interface GenerateOpenAPISpecOptions {
+  readonly title?: string
+  readonly version?: string
+  readonly apiPrefix?: string
+  readonly description?: string
+}
+
+/**
+ * 由应用级 contract 生成 OpenAPI 3.1 spec。
+ *
+ * @param contract - 已组合完成的应用级 oRPC contract
+ * @param options - 文档元信息
+ * @returns OpenAPI 文档对象
+ *
+ * @example
+ * ```ts
+ * const spec = await serv.generateSpec(contract, {
+ *   title: 'My API',
+ *   version: '1.0.0',
+ *   apiPrefix: '/api/v1',
+ * })
+ * ```
+ */
+export async function generateSpec(
+  contract: AnyContractRouter,
+  options: GenerateOpenAPISpecOptions = {},
+): Promise<OpenAPI.Document> {
+  const generator = new OpenAPIGenerator({
+    schemaConverters: [new ZodToJsonSchemaConverter()],
+  })
+
+  return generator.generate(contract, {
+    info: {
+      title: options.title ?? 'hai-framework API',
+      version: options.version ?? '0.1.0',
+      description: options.description,
+    },
+    servers: options.apiPrefix ? [{ url: options.apiPrefix }] : undefined,
+    security: [{ bearerAuth: [] }],
+    components: {
+      securitySchemes: {
+        bearerAuth: { type: 'http', scheme: 'bearer' },
+      },
+    },
+  })
+}
 
 /** 文档页面创建配置。 */
 export interface CreateDocsPageOptions {

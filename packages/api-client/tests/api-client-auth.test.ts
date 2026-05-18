@@ -3,8 +3,7 @@
  */
 
 import { describe, expect, it, vi } from 'vitest'
-import { createMemoryTokenStorage } from '../src/api-client-auth.js'
-import { createTokenManager } from '../src/api-client-token-manager.js'
+import { createHttpOnlyCookieTokenStorage, createMemoryTokenStorage, createTokenManager } from '../src/api-client-auth.js'
 
 describe('createMemoryTokenStorage', () => {
   it('存取 Token', async () => {
@@ -222,5 +221,101 @@ describe('createTokenManager', () => {
 
     expect(result).toBeNull()
     expect(onFailed).toHaveBeenCalled()
+  })
+
+  it('refresh 接口 5xx 时保留 Token 等待重试', async () => {
+    const storage = createMemoryTokenStorage()
+    await storage.setRefreshToken('keep-me')
+
+    const mockFetch = vi.fn().mockResolvedValue(new Response(null, { status: 503 }))
+    const onFailed = vi.fn()
+    const manager = createTokenManager(storage, 'https://api.test.com/auth/refresh', mockFetch, onFailed)
+
+    const result = await manager.refresh()
+
+    expect(result).toBeNull()
+    expect(onFailed).not.toHaveBeenCalled()
+    // 5xx 视为服务端临时故障，必须保留 Token 让下一次请求重试
+    expect(await storage.getRefreshToken()).toBe('keep-me')
+  })
+
+  it('refresh 网络异常时保留 Token 不清空', async () => {
+    const storage = createMemoryTokenStorage()
+    await storage.setRefreshToken('keep-me-too')
+
+    const mockFetch = vi.fn().mockRejectedValue(new Error('network down'))
+    const onFailed = vi.fn()
+    const manager = createTokenManager(storage, 'https://api.test.com/auth/refresh', mockFetch, onFailed)
+
+    const result = await manager.refresh()
+
+    expect(result).toBeNull()
+    expect(onFailed).not.toHaveBeenCalled()
+    expect(await storage.getRefreshToken()).toBe('keep-me-too')
+  })
+})
+
+describe('createHttpOnlyCookieTokenStorage', () => {
+  it('access token 可读写（内存存储）', async () => {
+    const storage = createHttpOnlyCookieTokenStorage()
+    expect(await storage.getAccessToken()).toBeNull()
+
+    await storage.setAccessToken('access-abc')
+    expect(await storage.getAccessToken()).toBe('access-abc')
+  })
+
+  it('getRefreshToken 返回哨兵值而非 null（确保 doRefresh 不会短路跳过）', async () => {
+    const storage = createHttpOnlyCookieTokenStorage()
+    const rt = await storage.getRefreshToken()
+    // 非 null/空，确保 TokenManager 能进入 doRefresh 逻辑
+    expect(rt).toBeTruthy()
+  })
+
+  it('setRefreshToken 是 no-op（由服务端 Set-Cookie 管理）', async () => {
+    const storage = createHttpOnlyCookieTokenStorage()
+    // 不抛异常即可；JS 端无法写入 httpOnly cookie
+    await expect(storage.setRefreshToken('ignored')).resolves.toBeUndefined()
+    // 读取仍返回哨兵，不受 setRefreshToken 影响
+    expect(await storage.getRefreshToken()).toBeTruthy()
+  })
+
+  it('clear 清空内存 access token，不影响 httpOnly cookie', async () => {
+    const storage = createHttpOnlyCookieTokenStorage()
+    await storage.setAccessToken('access-abc')
+    await storage.clear()
+    // access token 已清空（内存）
+    expect(await storage.getAccessToken()).toBeNull()
+    // getRefreshToken 仍返回哨兵（httpOnly cookie 由服务端管理，clear 不清除）
+    expect(await storage.getRefreshToken()).toBeTruthy()
+  })
+
+  it('与 TokenManager 协作：refresh 请求不在 body 中携带 refreshToken', async () => {
+    const storage = createHttpOnlyCookieTokenStorage()
+    const newTokens = {
+      accessToken: 'new-access',
+      refreshToken: 'server-managed',
+      expiresIn: 3600,
+      tokenType: 'Bearer' as const,
+    }
+    let capturedRequest: Request | undefined
+    const mockFetch = vi.fn().mockImplementation(async (req: Request) => {
+      capturedRequest = req
+      return new Response(JSON.stringify({ data: newTokens }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
+    })
+
+    const manager = createTokenManager(storage, 'https://api.test.com/auth/refresh', mockFetch)
+    const result = await manager.refresh()
+
+    // refresh 成功，access token 写入内存存储
+    expect(result?.accessToken).toBe('new-access')
+    expect(await storage.getAccessToken()).toBe('new-access')
+
+    // 请求体为空（不携带 refreshToken，依赖浏览器自动发送 httpOnly cookie）
+    expect(capturedRequest?.body).toBeNull()
+    // 跨域时需 credentials: 'include' 以确保浏览器发送 Cookie
+    expect(capturedRequest?.credentials).toBe('include')
   })
 })

@@ -1,10 +1,12 @@
-import { apiServiceContract } from '@h-ai/api-contract'
+import { aiContract, createApiContract, iamContract, storageContract } from '@h-ai/api-contract'
 import { describe, expect, it } from 'vitest'
-import { generateSpec } from '../src/openapi/generate-openapi.js'
+import { generateSpec } from '../src/serv-openapi.js'
+
+const testContract = createApiContract({ iam: iamContract, storage: storageContract, ai: aiContract })
 
 describe('generateSpec', () => {
   it('produces an OpenAPI document with bearer security scheme', async () => {
-    const spec = await generateSpec(apiServiceContract, {
+    const spec = await generateSpec(testContract, {
       title: 'test-service',
       version: '0.0.1',
       apiPrefix: '/api/v1',
@@ -23,7 +25,7 @@ describe('generateSpec', () => {
   })
 
   it('skips servers when apiPrefix not provided', async () => {
-    const spec = await generateSpec(apiServiceContract, { title: 'no-prefix' })
+    const spec = await generateSpec(testContract, { title: 'no-prefix' })
     expect(spec.servers).toBeUndefined()
   })
 })

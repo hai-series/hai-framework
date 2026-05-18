@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
 import { describe, expect, it } from 'vitest'
-import { requestId, requireInternalRPC, securityHeaders } from '../src/pipeline/hono.js'
+import { requireInternalRPC, securityHeaders } from '../src/serv-pipeline.js'
 
 describe('pipeline.hono.securityHeaders', () => {
   it('adds standard security headers to responses', async () => {
@@ -12,17 +12,6 @@ describe('pipeline.hono.securityHeaders', () => {
     expect(response.headers.get('x-content-type-options')).toBe('nosniff')
     expect(response.headers.get('x-frame-options')).toBe('DENY')
     expect(response.headers.get('referrer-policy')).toBe('no-referrer')
-  })
-})
-
-describe('pipeline.hono.requestId', () => {
-  it('sets x-request-id when missing', async () => {
-    const app = new Hono()
-    app.use('*', requestId())
-    app.get('/', c => c.text('ok'))
-
-    const response = await app.request('/')
-    expect(response.headers.get('x-request-id')).toMatch(/[\w-]+/)
   })
 })
 

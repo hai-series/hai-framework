@@ -118,7 +118,8 @@ export const IamUpdateCurrentUserInputSchema = z.object({
 /** 用户列表查询入参 Schema。 */
 export const IamListUsersInputSchema = PaginationQuerySchema.extend({
   search: z.string().optional(),
-  enabled: z.coerce.boolean().optional(),
+  // 注意：HTTP query 是字符串，使用枚举 + transform 避免 z.coerce.boolean 的 'false' → true 陷阱。
+  enabled: z.enum(['true', 'false']).optional().transform(v => v === undefined ? undefined : v === 'true'),
 })
 
 /** Admin 创建用户入参 Schema。 */

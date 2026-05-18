@@ -19,8 +19,8 @@ export const PaymentCreateOrderInputSchema = z.object({
 
 /** 创建支付订单业务数据 Schema。 */
 export const PaymentCreateOrderDataSchema = z.object({
-  provider: z.string(),
-  tradeType: z.string(),
+  provider: PaymentProviderSchema,
+  tradeType: PaymentTradeTypeSchema,
   clientParams: z.record(z.string(), z.unknown()),
   prepayId: z.string().optional(),
 })
@@ -36,12 +36,13 @@ export const PaymentOrderSchema = z.object({
   transactionId: z.string().optional(),
   status: z.enum(['pending', 'paid', 'closed', 'refunded', 'failed']),
   amount: z.number(),
-  paidAt: z.string().optional(),
+  // ISO 8601 时间戳（例如 `2024-01-02T03:04:05.000Z`），由服务端以 `Date#toISOString()` 序列化。
+  paidAt: z.iso.datetime().optional(),
 })
 
 /** 退款入参 Schema。 */
 export const PaymentRefundInputSchema = z.object({
-  provider: z.string(),
+  provider: PaymentProviderSchema,
   orderNo: z.string(),
   refundNo: z.string(),
   amount: z.number().int().min(1),

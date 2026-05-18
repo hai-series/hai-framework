@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { resolveServHttpConfig } from '../src/app/http-config.js'
+import { resolveServHttpConfig } from '../src/serv-config.js'
 
 describe('resolveServHttpConfig', () => {
   it('returns sane defaults when input omitted', () => {

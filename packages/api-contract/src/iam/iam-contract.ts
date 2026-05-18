@@ -45,26 +45,38 @@ import {
   IamVoidOutputSchema,
 } from './iam-schemas.js'
 
+/**
+ * IAM auth 端点的路由路径（相对于 apiPrefix）。
+ * 作为单一事实来源，供 `@h-ai/serv` 的 cookie 中间件复用，避免硬编码。
+ */
+export const IAM_AUTH_ROUTES = {
+  login: '/auth/login',
+  loginWithOtp: '/auth/login/otp',
+  register: '/auth/register',
+  logout: '/auth/logout',
+  refresh: '/auth/refresh',
+} as const
+
 /** IAM 领域 oRPC contract。 */
 export const iamContract = {
   auth: {
     login: oc
-      .route({ method: 'POST', path: '/auth/login', operationId: 'iam.auth.login', summary: 'Password login', tags: ['iam', 'auth'] })
+      .route({ method: 'POST', path: IAM_AUTH_ROUTES.login, operationId: 'iam.auth.login', summary: 'Password login', tags: ['iam', 'auth'] })
       .input(IamLoginInputSchema)
       .output(IamAuthResultOutputSchema),
     loginWithOtp: oc
-      .route({ method: 'POST', path: '/auth/login/otp', operationId: 'iam.auth.loginWithOtp', summary: 'OTP login', tags: ['iam', 'auth'] })
+      .route({ method: 'POST', path: IAM_AUTH_ROUTES.loginWithOtp, operationId: 'iam.auth.loginWithOtp', summary: 'OTP login', tags: ['iam', 'auth'] })
       .input(IamOtpLoginInputSchema)
       .output(IamAuthResultOutputSchema),
     logout: oc
-      .route({ method: 'POST', path: '/auth/logout', operationId: 'iam.auth.logout', summary: 'Logout', tags: ['iam', 'auth'] })
+      .route({ method: 'POST', path: IAM_AUTH_ROUTES.logout, operationId: 'iam.auth.logout', summary: 'Logout', tags: ['iam', 'auth'] })
       .input(IamLogoutInputSchema)
       .output(IamVoidOutputSchema),
     currentUser: oc
       .route({ method: 'GET', path: '/auth/me', operationId: 'iam.auth.currentUser', summary: 'Get current user', tags: ['iam', 'auth'] })
       .output(IamUserOutputSchema),
     refresh: oc
-      .route({ method: 'POST', path: '/auth/refresh', operationId: 'iam.auth.refresh', summary: 'Refresh access token', tags: ['iam', 'auth'] })
+      .route({ method: 'POST', path: IAM_AUTH_ROUTES.refresh, operationId: 'iam.auth.refresh', summary: 'Refresh access token', tags: ['iam', 'auth'] })
       .input(IamRefreshTokenInputSchema)
       .output(IamRefreshTokenOutputSchema),
     sendOtp: oc
@@ -72,7 +84,7 @@ export const iamContract = {
       .input(IamSendOtpInputSchema)
       .output(IamSendOtpOutputSchema),
     register: oc
-      .route({ method: 'POST', path: '/auth/register', operationId: 'iam.auth.register', summary: 'Register and login', tags: ['iam', 'auth'] })
+      .route({ method: 'POST', path: IAM_AUTH_ROUTES.register, operationId: 'iam.auth.register', summary: 'Register and login', tags: ['iam', 'auth'] })
       .input(IamRegisterInputSchema)
       .output(IamAuthResultOutputSchema),
     changePassword: oc

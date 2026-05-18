@@ -1,0 +1,236 @@
+/**
+ * @h-ai/serv — Hono app 装配
+ *
+ * 将 oRPC contract + procedures + http 配置组合为可运行的 Hono app，
+ * 自动挂载安全响应头、健康检查、OpenAPI JSON、Scalar 文档页与 oRPC handler。
+ * @module serv-app
+ */
+
+import type { HaiResult } from '@h-ai/core'
+import type { AnyContractRouter, OpenAPI } from '@orpc/contract'
+import type { Router } from '@orpc/server'
+import type { Hono, Context as HonoContext, Next } from 'hono'
+import type { ServHealthHttpConfig, ServHttpConfigInput } from './serv-config.js'
+import type { CreateServContext, ServContext, ServIam, ServSession } from './serv-context.js'
+import type { RefreshCookieConfig } from './serv-cookie-auth.js'
+import { readFile } from 'node:fs/promises'
+import { HaiCommonError } from '@h-ai/core'
+import { OpenAPIHandler } from '@orpc/openapi/fetch'
+import { RPCHandler } from '@orpc/server/fetch'
+import { Hono as HonoApp } from 'hono'
+import { resolveServHttpConfig } from './serv-config.js'
+import { buildAuthContextFactory, parseRequestContext } from './serv-context.js'
+import { mountRefreshCookieRoutes } from './serv-cookie-auth.js'
+import { createDocsPage, generateSpec } from './serv-openapi.js'
+import { buildHaiErrorBody, requireInternalRPC, securityHeaders } from './serv-pipeline.js'
+
+/** Scalar UI 脚本本地路由，由 createApp 自动挂载，无需外网 CDN。 */
+const SCALAR_ROUTE = '/_hai/scalar.js'
+
+/** 允许通过 oRPC OpenAPIHandler 转发的 HTTP 方法。 */
+const API_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'] as const
+
+/** 缓存 Scalar UI 脚本内容（启动后不变，缓存避免重复读取）。 */
+let scalarScriptCache: string | undefined
+
+async function getScalarScript(): Promise<string | undefined> {
+  if (scalarScriptCache !== undefined)
+    return scalarScriptCache || undefined
+  try {
+    const fileUrl = new URL(import.meta.resolve('@scalar/api-reference/dist/browser/standalone.js'))
+    scalarScriptCache = await readFile(fileUrl, 'utf8')
+  }
+  catch {
+    scalarScriptCache = ''
+  }
+  return scalarScriptCache || undefined
+}
+
+/**
+ * 创建 Hono app 的配置。
+ *
+ * **认证 / 会话填充设计**（遵循最小知识原则）：
+ *
+ * - **`iam`**（推荐）：单一顶层引用。提供后 serv 自动：
+ *   1. 使用 `iam.session.verifyToken` 填充 `context.session` → `requireAuth/Permission/Role` 生效
+ *   2. 若同时启用 `refreshCookie`，使用 `iam.session.refresh` 实现 cookie 刷新
+ *
+ * - **`refreshCookie`**（可选）：opt-in httpOnly cookie 传输 refresh token。与 `iam` 正交：
+ *   `iam` 决定 *谁* 验证 token，`refreshCookie` 决定 refresh token *怎么* 传输。
+ *
+ * - **`verifyToken`**（高级）：不使用 IAM 模块的逆脱口。优先于 `iam.session.verifyToken`。
+ *
+ * - **`createContext`**（高级）：完全接管上下文构造，设置后 serv **不再**自动填充 session，
+ *   由调用方负责。
+ */
+export interface CreateServAppOptions<
+  TContract extends AnyContractRouter,
+  TProcedures extends Router<AnyContractRouter, ServContext>,
+> {
+  readonly contract: TContract
+  readonly procedures: TProcedures
+  readonly http?: ServHttpConfigInput
+  /**
+   * IAM 模块引用（推荐）。提供后 serv 自动使用 `iam.session.verifyToken` 填充 session，
+   * 以及在 `refreshCookie` 启用时使用 `iam.session.refresh` 实现 cookie 刷新。
+   *
+   * 类型上要求 {@link ServIam}（`iam` 可以直接传入，结构类型保证兼容）。
+   */
+  readonly iam?: ServIam
+  /**
+   * 启用 httpOnly Cookie 传输 refresh token（opt-in）。
+   * 需配合 `iam` 或 `refreshCookie.onRefresh` 使用。
+   */
+  readonly refreshCookie?: RefreshCookieConfig
+  /**
+   * 高级：自定义访问令牌校验回调，覆盖 `iam.session.verifyToken`。
+   * 不使用 IAM 模块的场景下使用。
+   */
+  readonly verifyToken?: (token: string) => Promise<HaiResult<ServSession>>
+  /**
+   * 高级：完全接管上下文工厂。设置后上述 `iam` / `verifyToken` 均不生效（session 不会被自动填充）。
+   */
+  readonly createContext?: CreateServContext
+}
+
+/**
+ * 创建并装配 Hono API app。
+ *
+ * @param options - contract/procedures/http 三段式配置
+ * @returns Hono app
+ *
+ * @example
+ * ```ts
+ * const app = serv.createApp({
+ *   contract,
+ *   procedures,
+ *   http: {
+ *     apiPrefix: '/api/v1',
+ *     openapi: { path: '/openapi.json' },
+ *     docs: { path: '/docs' },
+ *   },
+ * })
+ * serv.listen(app, { port: 3000, host: '0.0.0.0' })
+ * ```
+ */
+export function createApp<
+  TContract extends AnyContractRouter,
+  TProcedures extends Router<AnyContractRouter, ServContext>,
+>(options: CreateServAppOptions<TContract, TProcedures>): Hono {
+  const http = resolveServHttpConfig(options.http)
+  const app = new HonoApp()
+
+  // 上下文工厂选择优先级（顶位优先）：
+  //   1. options.createContext
+  //   2. options.verifyToken
+  //   3. options.iam.session.verifyToken
+  //   4. 都未提供 → parseRequestContext（仅解析元数据，session 始终 undefined）
+  //
+  // ⚠️ 对 `iam.session.verifyToken` **不**做 `.bind()`：IAM 模块使用 NotInitializedKit Proxy 模式，
+  //    `iam.session` 的方法实现会在 `init()` 后切换。提前 bind 会捕获未初始化 Proxy 的方法引用。
+  //    用闭包函数延迟到请求处理时再读取，确保始终调用最新实现。
+  const iamRef = options.iam
+  const verifyToken = options.verifyToken
+    ?? (iamRef ? (token: string) => iamRef.session.verifyToken(token) : undefined)
+  const createContext: CreateServContext = options.createContext
+    ?? (verifyToken ? buildAuthContextFactory(verifyToken) : parseRequestContext)
+
+  // OpenAPI spec 是相对昂贵的同步生成；延迟到第一次访问 `/openapi.json` 或 `/docs` 时再算一次。
+  let cachedSpec: Promise<OpenAPI.Document> | undefined
+  const getSpec = (): Promise<OpenAPI.Document> => {
+    cachedSpec ??= generateSpec(options.contract, { apiPrefix: http.apiPrefix })
+    return cachedSpec
+  }
+
+  app.use('*', securityHeaders())
+
+  if (http.health !== false)
+    mountHealthRoutes(app, http.health)
+
+  // refresh-cookie 路由必须在 oRPC 通配符路由之前注册，Hono 按注册顺序匹配。
+  if (options.refreshCookie)
+    mountRefreshCookieRoutes(app, http.apiPrefix, options.refreshCookie, options.iam)
+
+  mountOpenAPIRoutes(app, options.procedures, http.apiPrefix, createContext)
+
+  if (http.rpc !== false)
+    mountRPCRoutes(app, options.procedures, http.rpc, createContext)
+
+  if (http.openapi !== false) {
+    app.get(http.openapi.path, async c => c.json(await getSpec()))
+  }
+
+  if (http.docs !== false) {
+    const docs = http.docs
+    // 挂载 Scalar UI 脚本本地路由，避免访问外网 CDN
+    app.get(SCALAR_ROUTE, async (c) => {
+      const content = await getScalarScript()
+      if (!content)
+        return c.notFound()
+      c.header('Content-Type', 'application/javascript; charset=utf-8')
+      c.header('Cache-Control', 'public, max-age=86400, immutable')
+      return c.body(content)
+    })
+
+    app.get(docs.path, async (c) => {
+      if (docs.requireAuth) {
+        const context = await createContext({ request: c.req.raw })
+        // 注意：此处仅校验 Bearer Token 是否存在；真正的鉴权由具体业务的
+        // procedure 包装器（如 requireAuth）在调用 API 时完成。
+        // 文档页本身只是一个静态壳，不会泄漏受保护数据。
+        if (!context.accessToken)
+          return c.json(buildHaiErrorBody(HaiCommonError.UNAUTHORIZED, 'Unauthorized'), 401)
+      }
+      const specUrl = http.openapi === false ? undefined : http.openapi.path
+      return c.html(createDocsPage(await getSpec(), { specUrl }))
+    })
+  }
+
+  return app
+}
+
+function mountHealthRoutes(app: Hono, config: ServHealthHttpConfig): void {
+  app.get(config.path, c => c.json({ status: 'ok' }))
+  if (config.readyPath)
+    app.get(config.readyPath, c => c.json({ status: 'ready' }))
+}
+
+function mountOpenAPIRoutes(
+  app: Hono,
+  procedures: Router<AnyContractRouter, ServContext>,
+  apiPrefix: `/${string}`,
+  createContext: CreateServContext,
+): void {
+  const handler = new OpenAPIHandler(procedures)
+  for (const method of API_METHODS) {
+    app.on(method, `${apiPrefix}/*`, (c, next) => handleORPC(c, next, apiPrefix, handler, createContext))
+  }
+}
+
+function mountRPCRoutes(
+  app: Hono,
+  procedures: Router<AnyContractRouter, ServContext>,
+  rpcConfig: { readonly prefix: `/${string}` } & Parameters<typeof requireInternalRPC>[0],
+  createContext: CreateServContext,
+): void {
+  const handler = new RPCHandler(procedures)
+  const prefix = rpcConfig.prefix
+  app.use(`${prefix}/*`, requireInternalRPC(rpcConfig))
+  for (const method of API_METHODS) {
+    app.on(method, `${prefix}/*`, (c, next) => handleORPC(c, next, prefix, handler, createContext))
+  }
+}
+
+async function handleORPC(
+  c: HonoContext,
+  next: Next,
+  prefix: `/${string}`,
+  handler: OpenAPIHandler<ServContext> | RPCHandler<ServContext>,
+  createContext: CreateServContext,
+): Promise<Response | void> {
+  const context = await createContext({ request: c.req.raw })
+  const { matched, response } = await handler.handle(c.req.raw, { prefix, context })
+  if (matched)
+    return response
+  await next()
+}

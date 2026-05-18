@@ -212,4 +212,56 @@ describe('api-service 路由', () => {
     const logoutBody = await logoutRes.json() as { success: boolean }
     expect(logoutBody.success).toBe(true)
   })
+
+  // ── 认证守卫：受保护端点不接受无效 token ─────────────────────────────────
+
+  it('pOST /api/v1/storage/presigned-urls/upload 无 token 时返回 success:false', async () => {
+    const res = await app.request('/api/v1/storage/presigned-urls/upload', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ key: 'uploads/test.png', contentType: 'image/png' }),
+    })
+    expect(res.status).toBe(200)
+    const body = await res.json() as { success: boolean }
+    expect(body.success).toBe(false)
+  })
+
+  it('pOST /api/v1/storage/presigned-urls/upload 伪造 token 返回 success:false', async () => {
+    const res = await app.request('/api/v1/storage/presigned-urls/upload', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'authorization': 'Bearer totally-fake-token-xyz',
+      },
+      body: JSON.stringify({ key: 'uploads/test.png', contentType: 'image/png' }),
+    })
+    expect(res.status).toBe(200)
+    const body = await res.json() as { success: boolean }
+    expect(body.success).toBe(false)
+  })
+
+  it('pOST /api/v1/storage/presigned-urls/upload 有效 token 返回 success:true', async () => {
+    // 先注册并登录取 token
+    const regRes = await app.request('/api/v1/auth/register', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ username: 'storage_test_user', password: 'StorageTest123', email: 'storage@test.local' }),
+    })
+    const regBody = await regRes.json() as { success: boolean, data?: { tokens?: { accessToken?: string } } }
+    expect(regBody.success).toBe(true)
+    const token = regBody.data?.tokens?.accessToken ?? ''
+
+    const res = await app.request('/api/v1/storage/presigned-urls/upload', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify({ key: 'uploads/test.png', contentType: 'image/png' }),
+    })
+    expect(res.status).toBe(200)
+    const body = await res.json() as { success: boolean, data?: { url?: string } }
+    expect(body.success).toBe(true)
+    expect(body.data?.url).toBeTruthy()
+  })
 })

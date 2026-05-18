@@ -28,17 +28,22 @@ description: 使用 @h-ai/api-contract 定义或扩展 oRPC HTTP API 契约；�
 
 ## 使用步骤
 
-### 1. 使用预设 contract（最快路径）
+### 1. 组合应用级 contract
 
 ```typescript
-import { apiServiceContract } from '@h-ai/api-contract'
-// 或按需引入：
-import { apiServiceContract } from '@h-ai/api-contract/presets/api-service'
+import { createApiContract, iamContract, storageContract, aiContract } from '@h-ai/api-contract'
 
-// 包含 iam/storage/ai 三个领域
-// apiServiceContract.iam.auth.login
-// apiServiceContract.storage.presignedUrls.createUpload
-// apiServiceContract.ai.chats.createCompletion
+// 按需组合，传 false/undefined 的领域不会出现在 contract 或 OpenAPI spec 中
+export const myContract = createApiContract({
+  iam: iamContract,
+  storage: storageContract,
+  ai: aiContract,
+  payment: false, // 禁用领域
+})
+
+// myContract.iam.auth.login
+// myContract.storage.presignedUrls.createUpload
+// myContract.ai.chats.createCompletion
 ```
 
 ### 2. 组合自定义 contract
@@ -159,17 +164,19 @@ const contract = createApiContract({
 ### 内置 contract 路径示例
 
 ```typescript
+const myContract = createApiContract({ iam: iamContract, storage: storageContract, ai: aiContract })
+
 // IAM
-apiServiceContract.iam.auth.login        // POST /auth/login
-apiServiceContract.iam.auth.logout       // POST /auth/logout
-apiServiceContract.iam.users.list        // GET  /iam/users
-apiServiceContract.iam.roles.create      // POST /iam/roles
+myContract.iam.auth.login        // POST /auth/login
+myContract.iam.auth.logout       // POST /auth/logout
+myContract.iam.users.list        // GET  /iam/users
+myContract.iam.roles.create      // POST /iam/roles
 
 // Storage
-apiServiceContract.storage.presignedUrls.createUpload   // POST /storage/presigned-urls/upload
+myContract.storage.presignedUrls.createUpload   // POST /storage/presigned-urls/upload
 
 // AI
-apiServiceContract.ai.chats.createCompletion  // POST /ai/chats/completion
+myContract.ai.chats.createCompletion  // POST /ai/chats/completion
 ```
 
 ### `haiResultSchema(dataSchema)` — 标准输出包装

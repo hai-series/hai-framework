@@ -1,8 +1,9 @@
 /**
- * @h-ai/serv — HTTP 配置解析
+ * @h-ai/serv — HTTP 配置
  *
- * 提供用于控制 API 前缀、OpenAPI、docs、健康检查与内部 RPC 访问策略的配置结构。
- * @module app/http-config
+ * 提供用于控制 API 前缀、OpenAPI、docs、健康检查与内部 RPC 访问策略的配置结构，
+ * 并由 zod 负责默认值填充与边界校验。
+ * @module serv-config
  */
 
 import { z } from 'zod'
@@ -51,6 +52,7 @@ export interface ServHttpConfig {
   readonly rpc: false | ServRpcHttpConfig
 }
 
+/** `serv.createApp` 接受的 HTTP 配置入参类型。 */
 export type ServHttpConfigInput = Partial<{
   readonly apiPrefix: `/api/${string}`
   readonly openapi: false | Partial<ServOpenAPIHttpConfig>

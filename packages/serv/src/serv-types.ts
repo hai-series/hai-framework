@@ -1,13 +1,13 @@
 /**
  * @h-ai/serv — 公开类型聚合
  *
- * 将各模块对外暴露的类型集中在此重导出，方便消费方按需 import type。
+ * 将各模块对外暴露的类型集中在此重导出，方便消费方按需 `import type`。
  * @module serv-types
  */
 
-export type { ServFetchHandler } from './adapters/fetch.js'
-export type { ServNodeListenOptions, ServNodeServer } from './adapters/node.js'
-export type { CreateServAppOptions } from './app/create-app.js'
+export type { ServFetchHandler } from './adapters/serv-adapter-fetch.js'
+export type { ServListenOptions, ServNodeServer } from './adapters/serv-adapter-node.js'
+export type { CreateServAppOptions } from './serv-app.js'
 export type {
   ServDocsHttpConfig,
   ServHealthHttpConfig,
@@ -15,8 +15,8 @@ export type {
   ServHttpConfigInput,
   ServOpenAPIHttpConfig,
   ServRpcHttpConfig,
-} from './app/http-config.js'
-export type { CreateServContext, CreateServContextInput, ServContext, ServSession } from './context/context-types.js'
-export type { CreateDocsPageOptions } from './openapi/docs-page.js'
-export type { GenerateOpenAPISpecOptions } from './openapi/generate-openapi.js'
-export type { ServProcedureHandler, ServProcedureOptions } from './pipeline/orpc.js'
+} from './serv-config.js'
+export type { CreateServContext, CreateServContextInput, ServContext, ServIam, ServSession } from './serv-context.js'
+export type { RefreshCookieConfig, RefreshTokenPair } from './serv-cookie-auth.js'
+export type { CreateDocsPageOptions, GenerateOpenAPISpecOptions } from './serv-openapi.js'
+export type { ServProcedureHandler, ServProcedureOptions } from './serv-pipeline.js'
