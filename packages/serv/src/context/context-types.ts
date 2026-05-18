@@ -1,3 +1,10 @@
+/**
+ * @h-ai/serv — 请求上下文类型
+ *
+ * 定义 oRPC procedures 共享的统一上下文结构：请求元信息、认证会话、logger。
+ * @module context/context-types
+ */
+
 import type { Logger } from '@h-ai/core'
 
 /** 当前请求解析出的会话摘要。 */

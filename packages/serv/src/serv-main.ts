@@ -20,6 +20,13 @@ import * as orpcPipeline from './pipeline/orpc.js'
 export const serv = {
   createApp,
   createContext,
+  /**
+   * Middleware 管道集合。
+   *
+   * - `hono`：Hono HTTP 中间件（安全响应头、请求 ID、内部 RPC 来源校验）
+   * - `orpc`：oRPC procedure 包装器（错误捕获、Bearer 认证、权限检查）
+   * - `handler`：handler 拦截器基础设施（metrics/trace 预留扩展点）
+   */
   pipeline: {
     hono: honoPipeline,
     orpc: orpcPipeline,
@@ -29,6 +36,12 @@ export const serv = {
     generateSpec,
     createDocsPage,
   },
+  /**
+   * 运行时适配器集合。
+   *
+   * - `node`：Node.js 适配器，封装 `@hono/node-server`，将 Hono app 以 Node.js HTTP 服务器形式启动
+   * - `fetch`：Fetch 适配器，将 Hono app 包装为标准 Web `fetch(Request)` handler，适用于 Cloudflare Workers / Deno / Bun 等 Fetch-first 运行时
+   */
   adapters: {
     node: nodeAdapter.node,
     fetch: fetchAdapter.fetch,
