@@ -27,6 +27,9 @@ import { buildHaiErrorBody, requireInternalRPC, securityHeaders } from './serv-p
 /** Scalar UI 脚本本地路由，由 createApp 自动挂载，无需外网 CDN。 */
 const SCALAR_ROUTE = '/_hai/scalar.js'
 
+/** Scalar browser bundle 兜底路径；优先使用 package.json 的 browser 字段。 */
+const SCALAR_BROWSER_ENTRY_FALLBACK = './dist/browser/standalone.js'
+
 /** 允许通过 oRPC OpenAPIHandler 转发的 HTTP 方法。 */
 const API_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'] as const
 
@@ -37,13 +40,28 @@ async function getScalarScript(): Promise<string | undefined> {
   if (scalarScriptCache !== undefined)
     return scalarScriptCache || undefined
   try {
-    const fileUrl = new URL(import.meta.resolve('@scalar/api-reference/dist/browser/standalone.js'))
+    const fileUrl = await resolveScalarBrowserScriptUrl()
     scalarScriptCache = await readFile(fileUrl, 'utf8')
   }
   catch {
     scalarScriptCache = ''
   }
   return scalarScriptCache || undefined
+}
+
+async function resolveScalarBrowserScriptUrl(): Promise<URL> {
+  const packageEntryUrl = import.meta.resolve('@scalar/api-reference')
+  const packageJsonUrl = new URL('../package.json', packageEntryUrl)
+  const packageInfo: unknown = JSON.parse(await readFile(packageJsonUrl, 'utf8'))
+  const browserEntry = readScalarBrowserEntry(packageInfo) ?? SCALAR_BROWSER_ENTRY_FALLBACK
+  return new URL(browserEntry, packageJsonUrl)
+}
+
+function readScalarBrowserEntry(packageInfo: unknown): string | undefined {
+  if (typeof packageInfo !== 'object' || packageInfo === null || Array.isArray(packageInfo))
+    return undefined
+  const browser = (packageInfo as Record<string, unknown>).browser
+  return typeof browser === 'string' ? browser : undefined
 }
 
 /**
