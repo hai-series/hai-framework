@@ -64,6 +64,7 @@
     "@orpc/openapi": "catalog:",
     "@orpc/server": "catalog:",
     "@orpc/zod": "catalog:",
+    "@scalar/api-reference": "catalog:",
     "hono": "catalog:",
     "zod": "catalog:"
   },

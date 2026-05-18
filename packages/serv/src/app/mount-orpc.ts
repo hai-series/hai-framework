@@ -1,3 +1,10 @@
+/**
+ * @h-ai/serv — oRPC handler 挂载
+ *
+ * 将 oRPC OpenAPIHandler（对外 REST）和 RPCHandler（内部 RPC）装配到 Hono app。
+ * @module app/mount-orpc
+ */
+
 import type { AnyContractRouter } from '@orpc/contract'
 import type { Router } from '@orpc/server'
 import type { Hono, Context as HonoContext, Next } from 'hono'
