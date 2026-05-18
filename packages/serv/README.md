@@ -185,7 +185,7 @@ await api.init({
 - `apiPrefix`：默认 `/api/v1`
 - `health`：默认 `{ path: '/health', readyPath: '/ready' }`
 - `openapi`：默认 `false`；启用：`{ path: '/openapi.json' }`
-- `docs`：默认 `false`；启用：`{ path: '/docs' }`（依赖 `openapi`）
+- `docs`：默认 `false`；启用：`{ path: '/docs' }`（依赖 `openapi`）；启用后自动挂载 `/_hai/scalar.js`，从 `@scalar/api-reference` 的 browser bundle 提供本地 Scalar UI 脚本，无需外网 CDN
 - `rpc`：默认 `false`；启用：`{ prefix: '/rpc', access: 'loopback' | 'private' | { allowlist: [...] } }`
 
 ## 错误处理

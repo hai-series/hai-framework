@@ -57,4 +57,24 @@ describe('@h-ai/serv', () => {
     expect(authorized.status).toBe(200)
     expect(authorized.headers.get('content-type')).toContain('text/html')
   })
+
+  it('serves local Scalar script for docs page', async () => {
+    const app = serv.createApp({
+      contract,
+      procedures,
+      http: {
+        docs: { path: '/docs' },
+        openapi: { path: '/openapi.json' },
+      },
+    })
+
+    const docs = await app.request('/docs')
+    expect(docs.status).toBe(200)
+    expect(await docs.text()).toContain('/_hai/scalar.js')
+
+    const script = await app.request('/_hai/scalar.js')
+    expect(script.status).toBe(200)
+    expect(script.headers.get('content-type')).toContain('application/javascript')
+    expect(await script.text()).toContain('createApiReference')
+  })
 })
