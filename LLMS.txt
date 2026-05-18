@@ -1,6 +1,6 @@
 # hai Framework - AI 构建指南
 
-> AI-First 全栈 TypeScript 框架，19 个模块覆盖从数据到 AI 到部署的完整链路。本文件为 AI 编程助手提供准确的框架 API 参考。
+> AI-First 全栈 TypeScript 框架，21 个模块覆盖从数据到 AI 到部署的完整链路。本文件为 AI 编程助手提供准确的框架 API 参考。
 
 ## 框架概览
 
@@ -14,7 +14,8 @@ hai Framework 将 AI 能力、安全能力、数据能力和运营能力以统�
 ## 技术栈
 
 - **前端**: Svelte 5 (Runes) + SvelteKit 2 + TailwindCSS 4 + DaisyUI 5 + Bits UI v2
-- **后端**: SvelteKit Server + TypeScript 5.7+（严格模式）
+- **后端**: SvelteKit Server / Hono + oRPC + TypeScript 5.7+（严格模式）
+- **公共 API**: `@h-ai/api-contract`（oRPC contract + Zod）→ `@h-ai/serv`（Hono runtime）→ `@h-ai/api-client`（typed client）
 - **关系数据库**: 原生 SQL（better-sqlite3 / pg / mysql2），不使用 ORM
 - **向量数据库**: LanceDB / pgvector / Qdrant
 - **缓存**: Memory / Redis（单机 / Cluster / Sentinel）
@@ -351,9 +352,10 @@ await iam.session.deleteByUserId(userId)  // 强制下线
 // --- 密码重置 ---
 await iam.user.requestPasswordReset(userId)
 
-// --- 浏览器端 API 契约调用 ---
-import { iamEndpoints } from '@h-ai/iam/api'
-const result = await api.call(iamEndpoints.login, { identifier: 'alice', password: '...' })
+// --- 公共 HTTP API ---
+// IAM 的跨端 HTTP contract 位于 @h-ai/api-contract，由 @h-ai/serv 挂载。
+// 浏览器 / App 侧通过 @h-ai/api-client 调用：
+// const result = await api.iam.auth.login({ identifier: 'alice', password: '...' })
 
 await iam.close()
 ```
@@ -463,9 +465,9 @@ const mcp = createMcpServer({ name: 'my-app', version: '1.0.0' })
 const encoded = ai.stream.encodeSSE({ event: 'message', data: '...' })
 const decoder = ai.stream.createSSEDecoder()
 
-// --- 前端客户端 ---
-import { createAIClient } from '@h-ai/ai/client'
-const aiClient = createAIClient({ baseUrl: '/api/ai' })
+// --- 公共 HTTP API（浏览器 / App）---
+// 由 @h-ai/api-contract 定义、@h-ai/serv 挂载、@h-ai/api-client 调用：
+// const answer = await api.ai.chats.sendMessage({ message: '你好' })
 
 ai.close()
 ```
@@ -617,9 +619,76 @@ const valid = crypto.password.verify('MyPassword', hashed.data)
 await crypto.close()
 ```
 
+### @h-ai/api-contract — 公共 HTTP API 契约
+
+oRPC contract + Zod schema 的公共接口真相源。纯定义包，无需 init，不包含 procedure handler，不依赖业务实现模块。
+
+```typescript
+import { aiContract, createApiContract, iamContract, storageContract } from '@h-ai/api-contract'
+
+// 按应用实际启用的领域组合 contract；false/undefined 会被过滤，类型也会收窄
+export const contract = createApiContract({
+  iam: iamContract,
+  storage: storageContract,
+  ai: aiContract,
+  payment: false,
+})
+
+// contract.iam.auth.login
+// contract.storage.presignedUrls.createUpload
+// contract.ai.chats.createCompletion
+```
+
+规则：
+
+- 公共请求/响应 schema 统一放在 `@h-ai/api-contract`
+- 输出 schema 必须包装为 `HaiResult<T>` 结构
+- Contract 文件禁止导入 `@h-ai/iam` / `@h-ai/storage` / `@h-ai/ai` 等业务实现模块
+- 新领域通常新增 `packages/api-contract/src/<domain>/<domain>-schemas.ts` 与 `<domain>-contract.ts`
+
+### @h-ai/serv — Hono + oRPC API Service 运行时
+
+服务端运行时，把应用级 contract 与同形状 procedures 挂载为 HTTP API，并可生成 OpenAPI 3.1 / Scalar 文档。
+
+```typescript
+import { aiContract, createApiContract, iamContract, storageContract } from '@h-ai/api-contract'
+import { iam } from '@h-ai/iam'
+import { serv } from '@h-ai/serv'
+import { createAiProcedures } from '@h-ai/serv/features/ai'
+import { createIamProcedures } from '@h-ai/serv/features/iam'
+import { createStorageProcedures } from '@h-ai/serv/features/storage'
+
+const contract = createApiContract({ iam: iamContract, storage: storageContract, ai: aiContract })
+
+const app = serv.createApp({
+  contract,
+  procedures: {
+    iam: createIamProcedures({ iam }),
+    storage: createStorageProcedures({ storage }),
+    ai: createAiProcedures({ ai }),
+  },
+  http: {
+    apiPrefix: '/api/v1',
+    openapi: { path: '/openapi.json' },
+    docs: { path: '/docs' },
+  },
+  iam,              // 自动用于 access token 校验
+  refreshCookie: {}, // 可选：httpOnly refresh token cookie
+})
+
+serv.listen(app, { host: '0.0.0.0', onClose: closeApp })
+```
+
+常用 API：
+
+- `serv.createApp({ contract, procedures, http, iam, refreshCookie })`
+- `serv.listen(app, options)` / `serv.toFetch(app)`
+- `serv.requireAuth(handler)` / `serv.requirePermission(permission, handler)` / `serv.requireRole(role, handler)`
+- `serv.generateSpec(contract, options)` / `serv.createDocsPage(spec, options)`
+
 ### @h-ai/kit — SvelteKit 集成
 
-将框架模块桥接到 SvelteKit 约定：Hook、中间件、守卫、校验、响应工具。不是服务单例，没有 init()。
+将框架模块桥接到 SvelteKit 约定：Hook、中间件、守卫、校验、响应工具。不是服务单例，没有 init()。公共跨端 HTTP API 不在 kit 中定义，应使用 `@h-ai/api-contract` + `@h-ai/serv` + `@h-ai/api-client`。
 
 ```typescript
 // --- hooks.server.ts ---
@@ -634,7 +703,7 @@ export const handle = kit.createHandle({
   guards: [
     { guard: kit.guard.auth(), paths: ['/admin/*'] },
     { guard: kit.guard.role('admin'), paths: ['/admin/settings/*'] },
-    { guard: kit.guard.permission('users:read'), paths: ['/api/users/*'] },
+    { guard: kit.guard.permission('users:read'), paths: ['/admin/users/*'] },
   ],
 })
 
@@ -657,48 +726,41 @@ export const actions = {
 export const GET = async () => kit.response.ok({ users: [] })
 export const POST = async () => kit.response.created({ id: '1' })
 
-// --- 模块集成 ---
-const iamHandle = kit.iam.createHandle({ iam, publicPaths: ['/login'] })
-const storageEndpoint = kit.storage.createEndpoint({ storage, bucket: 'uploads' })
-
-// --- 浏览器端客户端 ---
-import { createKitClient } from '@h-ai/kit/client'
-const client = createKitClient({ baseUrl: '/api/v1' })
+// --- 浏览器端同源请求 ---
+const client = kit.client.create({ auth: true })
+export const { apiFetch } = client
 ```
 
-### @h-ai/api-client — HTTP 客户端
+### @h-ai/api-client — 跨端 typed API 客户端
 
-Bearer Token 自动管理、契约调用、文件上传、SSE 流式响应。单例模式，通过 `api.init()` 初始化。
+基于 `@h-ai/api-contract` 的 oRPC/OpenAPI typed client。默认单例绑定 IAM / Storage / AI contract，支持 Bearer Token 注入、httpOnly cookie refresh token、401 刷新后重试一次。
 
 ```typescript
-import { api } from '@h-ai/api-client'
+import { api, createApiClient, createMemoryTokenStorage } from '@h-ai/api-client'
+import { createApiContract, iamContract } from '@h-ai/api-contract'
 
-// 初始化客户端
+// 默认单例：浏览器端默认使用 httpOnly cookie 存储 refresh token
 await api.init({
   baseUrl: 'https://api.example.com/api/v1',
-  auth: {
-    refreshUrl: '/auth/refresh',                // 401 自动刷新
-  },
+  auth: {},
 })
 
-// --- 契约调用（类型安全，推荐）---
-import { iamEndpoints } from '@h-ai/iam/api'
-const loginResult = await api.call(iamEndpoints.login, { identifier: 'alice', password: 'xxx' })
-// → HaiResult<LoginResponse>
+const login = await api.iam.auth.login({ identifier: 'alice', password: 'xxx' })
+if (login.success)
+  await api.auth.setTokens(login.data.tokens)
 
-// --- 通用 HTTP ---
-const users = await api.get<User[]>('/users', { page: 1 })
-const created = await api.post<User>('/users', { name: 'Alice' })
-await api.put('/users/1', { name: 'Bob' })
-await api.delete('/users/1')
+const me = await api.iam.auth.currentUser()
+const upload = await api.storage.presignedUrls.createUpload({ key: 'avatar.png' })
 
-// --- SSE 流式响应 ---
-for await (const chunk of api.stream('/ai/chat', { messages: [...] })) {
-  console.log(chunk)
-}
+// 自定义 contract：SSR / Node 测试中显式使用内存 TokenStorage
+const customClient = createApiClient(createApiContract({ iam: iamContract }))
+await customClient.init({
+  baseUrl: 'https://api.example.com/api/v1',
+  auth: { storage: createMemoryTokenStorage() },
+})
 
-// --- 关闭 ---
 await api.close()
+await customClient.close()
 ```
 
 ### @h-ai/capacitor — 移动端原生桥接
@@ -715,7 +777,7 @@ await capacitor.init()
 import { api } from '@h-ai/api-client'
 await api.init({
   baseUrl: '/api/v1',
-  auth: { storage: createCapacitorTokenStorage(), refreshUrl: '/auth/refresh' },
+  auth: { storage: createCapacitorTokenStorage(), refreshPath: '/auth/refresh' },
 })
 
 // 设备信息、推送通知、相机、状态栏等原生能力
@@ -836,8 +898,10 @@ hai-framework/
 │   ├── payment/       @h-ai/payment      统一支付
 │   ├── audit/         @h-ai/audit        审计日志
 │   ├── scheduler/     @h-ai/scheduler    定时任务
+│   ├── api-contract/  @h-ai/api-contract 公共 HTTP API 契约
+│   ├── serv/          @h-ai/serv         Hono + oRPC API Service
 │   ├── kit/           @h-ai/kit          SvelteKit 集成
-│   ├── api-client/    @h-ai/api-client   HTTP 客户端
+│   ├── api-client/    @h-ai/api-client   跨端 typed API 客户端
 │   ├── capacitor/     @h-ai/capacitor    移动端桥接
 │   ├── ui/            @h-ai/ui           UI 组件库
 │   ├── cli/           @h-ai/cli          CLI 脚手架
@@ -847,6 +911,7 @@ hai-framework/
 │   ├── api-service/         API 后端服务
 │   ├── corporate-website/   企业官网
 │   ├── h5-app/              H5 移动应用
+│   ├── desktop-app/         Tauri 桌面应用
 │   └── android-app/         Android 原生应用
 ├── pnpm-workspace.yaml
 ├── turbo.json
@@ -867,6 +932,8 @@ hai-framework/
 | 双端入口 | core / crypto / storage 等按环境自动选择 Node / Browser 实现 |
 | 纯函数模块 | datapipe 无需 init，直接调用 |
 | 依赖注入 | iam / audit / scheduler 通过参数注入 reldb / cache 实例 |
+| 公共 API 契约链路 | `api-contract` 定义 schema/contract → `serv` 挂载 procedures → `api-client` typed 调用 |
+| SvelteKit 边界 | `kit` 只做 Hook / guard / validate / response / 同源 endpoint，不定义跨端公共 contract |
 
 ## 环境变量
 

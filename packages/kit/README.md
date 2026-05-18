@@ -1,10 +1,12 @@
 # @h-ai/kit
 
-`@h-ai/kit` 是 hai-framework 的 SvelteKit 集成模块，提供统一的请求管道与 API 工具：
+`@h-ai/kit` 是 hai-framework 的 SvelteKit 集成模块，提供统一的请求管道与同源 endpoint 工具：
 
 - `kit.createHandle()`：会话解析、路由守卫、中间件链、可选传输加密与 Cookie 加密
 - `kit.handler()`：API 端点异常边界
 - `kit.guard` / `kit.response` / `kit.validate` / `kit.auth` / `kit.client` / `kit.crud`
+
+> 公共跨端 HTTP API contract 统一放在 `@h-ai/api-contract`，由 `@h-ai/serv` 挂载，客户端通过 `@h-ai/api-client` typed client 调用；`@h-ai/kit` 不定义也不承载业务 API contract。
 
 ## 安装
 
@@ -119,6 +121,8 @@ export const POST = kit.handler(async ({ request, locals }) => {
 ```
 
 ### 浏览器客户端
+
+`kit.client.create()` 面向 SvelteKit 同源 endpoint；Web / App / 小程序跨域访问公共 API 时，请使用 `@h-ai/api-client`。
 
 ```typescript
 // src/lib/utils/api.ts — 全应用共享

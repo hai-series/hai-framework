@@ -182,7 +182,7 @@ const html = serv.createDocsPage(spec, {
 | `apiPrefix` | `'/api/v1'` | oRPC OpenAPI handler 挂载前缀 |
 | `health` | `{ path: '/health', readyPath: '/ready' }` | 健康与就绪检查端点 |
 | `openapi` | `false` | OpenAPI JSON endpoint，显式开启 |
-| `docs` | `false` | Scalar 文档页，显式开启 |
+| `docs` | `false` | Scalar 文档页，显式开启；启用后自动挂载 `/_hai/scalar.js` 本地脚本路由 |
 | `rpc` | `false` | 内部 RPC endpoint，显式开启 |
 
 ```typescript

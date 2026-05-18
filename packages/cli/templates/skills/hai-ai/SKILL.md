@@ -20,7 +20,7 @@ description: 使用 @h-ai/ai 进行 LLM 调用（OpenAI 兼容）、MCP 服务�
 | `ai.memory` / `ai.conversation` | ✅ | ❌（通过 API 查询） |
 | `ai.knowledge` 知识库 | ✅ | ❌（通过 API 查询） |
 
-浏览器端消费 AI 能力的标准模式：通过 `api.stream()` 或 `apiFetch` 调用服务端 API 端点。
+浏览器端消费 AI 能力的标准模式：通过 `@h-ai/api-client` 的 typed contract 调用 `api.ai.chats.*`；如需 SSE 流式输出，由应用显式暴露自定义流式 endpoint，再用 `fetch` / `apiFetch` 消费。
 
 ---
 
@@ -267,26 +267,19 @@ await mcp.connect(transport)
 
 ```typescript
 import { api } from '@h-ai/api-client'
-import { createAIClient } from '@h-ai/ai/client'
 
-await api.init({ baseUrl: '/api', auth: { ... } })
-const client = createAIClient({ api })
+await api.init({ baseUrl: '/api/v1', auth: {} })
 
 // 非流式
-const response = await client.chat({ messages })
-
-// 流式
-for await (const chunk of client.chatStream({ messages }, {
-  onProgress: (p) => { /* 处理进度 */ },
-})) { /* ... */ }
+const response = await api.ai.chats.createCompletion({ messages })
 
 // 便捷方法
-const reply = await client.sendMessage('你好', '系统提示')
+const reply = await api.ai.chats.sendMessage({ message: '你好', systemPrompt: '系统提示' })
 
 // 记忆与会话查询
-const memories = await client.recallMemories('用户偏好', { topK: 5, objectId: 'user-001' })
-const page = await client.listMemories({ objectId: 'user-001', offset: 0, limit: 20 })
-const sessions = await client.listSessions('user-001')
+const memories = await api.ai.memories.recall({ query: '用户偏好', topK: 5, objectId: 'user-001' })
+const page = await api.ai.memories.list({ objectId: 'user-001', limit: 20 })
+const sessions = await api.ai.sessions.list({ objectId: 'user-001' })
 ```
 
 ### 记忆管理 — `ai.memory`
@@ -656,36 +649,57 @@ async function manualChat(userInput: string) {
 
 ## 浏览器端使用
 
-### 流式对话（SSE）
+### typed 对话调用
 
-浏览器通过 `api.stream()` 消费服务端流式 API：
+浏览器 / App 通过 `@h-ai/api-client` 调用由 `@h-ai/api-contract` 定义、`@h-ai/serv` 挂载的 AI contract：
 
 ```typescript
 import { api } from '@h-ai/api-client'
 
-const controller = new AbortController()
+const result = await api.ai.chats.createCompletion({
+  messages: [{ role: 'user', content: '你好' }],
+})
 
-for await (const chunk of api.stream('/api/v1/ai/chat', {
-  conversationId: 'conv-1',
-  content: '你好',
-}, { signal: controller.signal })) {
-  // 每个 chunk 是 SSE data: 行的文本内容
-  appendToUI(chunk)
+if (result.success) {
+  appendToUI(result.data.choices[0]?.message?.content ?? '')
 }
-
-// 主动停止
-controller.abort()
 ```
 
-或使用 `apiFetch`（SSR SvelteKit 同源场景）：
+### 流式对话（SSE，自定义 endpoint）
+
+标准 `api-client` 不再提供旧的通用流式方法。若产品需要 SSE 流式输出，请在应用服务端显式定义流式 endpoint（例如 SvelteKit `+server.ts` 或 `@h-ai/serv` 自定义 route），浏览器端再用 `fetch` / `apiFetch` 消费。
 
 ```typescript
 import { apiFetch } from '$lib/utils/api'
 
-const res = await apiFetch('/api/v1/ai/chat', {
+const controller = new AbortController()
+
+const res = await apiFetch('/api/ai/chat-stream', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({ conversationId: 'conv-1', content: '你好' }),
+  signal: controller.signal,
+})
+
+const reader = res.body!.getReader()
+const decoder = new TextDecoder()
+while (true) {
+  const { done, value } = await reader.read()
+  if (done)
+    break
+
+  appendToUI(decoder.decode(value))
+}
+```
+
+或直接使用原生 `fetch`（跨域公共 API 场景）：
+
+```typescript
+const res = await fetch(`${apiBase}/ai/chat-stream`, {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({ conversationId, content: userInput }),
+  signal: controller.signal,
 })
 
 // 手动消费 SSE 流

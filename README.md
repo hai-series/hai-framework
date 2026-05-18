@@ -11,22 +11,22 @@
 </p>
 
 <p align="center">
-  <b>19 个功能模块</b> · <b>6 个示例应用</b> · <b>69+ UI 组件</b> · <b>CLI 创建 / 一键部署</b>
+  <b>21 个功能模块</b> · <b>6 个示例应用</b> · <b>69+ UI 组件</b> · <b>CLI 创建 / 一键部署</b>
 </p>
 
 ---
 
 ## 为什么选 hai？
 
-| 痛点                         | hai 的解法                                                                  |
-| ---------------------------- | --------------------------------------------------------------------------- |
-| AI 生成的代码风格不一致      | 统一 `init → use → close` 生命周期 + 可执行编码规范（copilot-instructions） |
-| AI 不知道怎么处理错误        | 所有 API 返回 `HaiResult<T>`，永远不会遗漏错误处理                          |
-| 功能模块各自为政，集成成本高 | 19 个模块共享统一 API 模式、类型体系和 Provider 架构，开箱即用              |
-| 从 0 搭建项目要半天          | `hai create my-app` 一行命令创建完整项目（含 AI 上下文、配置、脚手架）      |
-| UI 组件不够用 / 不够现代     | 69+ Svelte 5 Runes 组件（原子 + 复合 + 业务场景），32+ 主题，内置 i18n      |
-| 部署复杂，需要手动配基础设施 | `hai deploy` 一键部署到 Vercel，自动开通数据库、缓存、存储                  |
-| AI 助手不了解你的框架        | 每个模块自带 Skill 文件 + LLMS.txt，AI 自动获取正确用法                     |
+| 痛点                         | hai 的解法                                                                    |
+| ---------------------------- | ----------------------------------------------------------------------------- |
+| AI 生成的代码风格不一致      | 统一 `init → use → close` 生命周期 + 可执行编码规范（copilot-instructions）   |
+| AI 不知道怎么处理错误        | 所有 API 返回 `HaiResult<T>`，永远不会遗漏错误处理                            |
+| 功能模块各自为政，集成成本高 | 21 个模块共享统一 API 模式、类型体系、Provider 架构与 contract 机制，开箱即用 |
+| 从 0 搭建项目要半天          | `hai create my-app` 一行命令创建完整项目（含 AI 上下文、配置、脚手架）        |
+| UI 组件不够用 / 不够现代     | 69+ Svelte 5 Runes 组件（原子 + 复合 + 业务场景），32+ 主题，内置 i18n        |
+| 部署复杂，需要手动配基础设施 | `hai deploy` 一键部署到 Vercel，自动开通数据库、缓存、存储                    |
+| AI 助手不了解你的框架        | 每个模块自带 Skill 文件 + LLMS.txt，AI 自动获取正确用法                       |
 
 ---
 
@@ -67,22 +67,24 @@ hai Framework 的目标是：**让 AI 理解规范，自动完成应用开发，
 
 ## 技术栈
 
-| 层面       | 选型                                                      |
-| ---------- | --------------------------------------------------------- |
-| 前端框架   | Svelte 5 (Runes) + SvelteKit 2                            |
-| UI         | TailwindCSS 4 + DaisyUI 5 + Bits UI v2                    |
-| 语言       | TypeScript 5.7+（严格模式）                               |
-| 关系数据库 | SQLite / PostgreSQL / MySQL（原生 SQL，非 ORM）           |
-| 向量数据库 | LanceDB / pgvector / Qdrant                               |
-| 缓存       | 内存 / Redis（单机 / Cluster / Sentinel）                 |
-| 存储       | 本地文件系统 / S3 兼容云存储（AWS / MinIO / OSS）         |
-| AI         | OpenAI 兼容 API + MCP 协议                                |
-| 加密       | 国密 SM2/SM3/SM4                                          |
-| 支付       | 微信支付 / 支付宝 / Stripe                                |
-| 验证       | Zod                                                       |
-| 构建       | pnpm + Turborepo + Vite + tsup                            |
-| 部署       | Vercel + Neon (PG) + Upstash (Redis) + Cloudflare R2 (S3) |
-| 移动端     | Capacitor（Android / iOS）                                |
+| 层面       | 选型                                                           |
+| ---------- | -------------------------------------------------------------- |
+| 前端框架   | Svelte 5 (Runes) + SvelteKit 2                                 |
+| UI         | TailwindCSS 4 + DaisyUI 5 + Bits UI v2                         |
+| 语言       | TypeScript 5.7+（严格模式）                                    |
+| API 契约   | oRPC + Zod + OpenAPI 3.1（`api-contract → serv → api-client`） |
+| API 服务   | Hono + oRPC + Scalar 文档页                                    |
+| 关系数据库 | SQLite / PostgreSQL / MySQL（原生 SQL，非 ORM）                |
+| 向量数据库 | LanceDB / pgvector / Qdrant                                    |
+| 缓存       | 内存 / Redis（单机 / Cluster / Sentinel）                      |
+| 存储       | 本地文件系统 / S3 兼容云存储（AWS / MinIO / OSS）              |
+| AI         | OpenAI 兼容 API + MCP 协议                                     |
+| 加密       | 国密 SM2/SM3/SM4                                               |
+| 支付       | 微信支付 / 支付宝 / Stripe                                     |
+| 验证       | Zod                                                            |
+| 构建       | pnpm + Turborepo + Vite + tsup                                 |
+| 部署       | Vercel + Neon (PG) + Upstash (Redis) + Cloudflare R2 (S3)      |
+| 移动端     | Capacitor（Android / iOS）                                     |
 
 ## AI-First 基础设施
 
@@ -110,9 +112,9 @@ my-app/
 
 Skill 模板统一管理在 `packages/cli/templates/skills/` 中，通过 `@h-ai/cli` 分发到用户项目的 `.agents/skills/`。
 
-当前 CLI 模板内置 **22 个 Skill 模板**：18 个模块 Skill、`hai-build` 总览 Skill，以及 `hai-app-create`、`hai-app-review`、`hai-app-tests` 3 个工作流 Skill，便于 AI 助手在“搭应用、补测试、做 Review、查模块用法”之间自动切换上下文。
+当前 CLI 模板内置 **27 个 Skill 模板**：20 个模块 Skill（含 `hai-api-contract`、`hai-serv`、`hai-api-client`、`hai-kit`）与 7 个总览/工作流 Skill（`hai-build`、`hai-app-create`、`hai-app-review`、`hai-app-tests`、`hai-ci`、`hai-framework-sync`、`hai-pr-review`），便于 AI 助手在“搭应用、补测试、做 Review、查模块用法、同步框架规范”之间自动切换上下文。
 
-## 模块总览（19 个模块）
+## 模块总览（21 个模块）
 
 ### 基础能力
 
@@ -144,11 +146,13 @@ Skill 模板统一管理在 `packages/cli/templates/skills/` 中，通过 `@h-ai
 
 ### 集成层
 
-| 包名               | 职责                                                                      | Provider 支持 |                                                 npm 最新版                                                  |
-| ------------------ | ------------------------------------------------------------------------- | :-----------: | :---------------------------------------------------------------------------------------------------------: |
-| `@h-ai/kit`        | SvelteKit 集成：Handle Hook、中间件（CORS/CSRF/限流）、路由守卫、表单校验 |       —       |        [![npm](https://img.shields.io/npm/v/%40h-ai%2Fkit)](https://www.npmjs.com/package/@h-ai/kit)        |
-| `@h-ai/api-client` | HTTP 客户端：Bearer Token 自动管理、契约调用、文件上传、SSE 流式响应      |       —       | [![npm](https://img.shields.io/npm/v/%40h-ai%2Fapi-client)](https://www.npmjs.com/package/@h-ai/api-client) |
-| `@h-ai/capacitor`  | 移动端桥接：安全 Token 存储、设备信息、推送通知、相机、状态栏             |       —       |  [![npm](https://img.shields.io/npm/v/%40h-ai%2Fcapacitor)](https://www.npmjs.com/package/@h-ai/capacitor)  |
+| 包名                 | 职责                                                                                                    | Provider 支持 |                                                   npm 最新版                                                    |
+| -------------------- | ------------------------------------------------------------------------------------------------------- | :-----------: | :-------------------------------------------------------------------------------------------------------------: |
+| `@h-ai/api-contract` | 公共 HTTP API 契约：oRPC contract + Zod，按应用组合领域 contract，输出统一 `HaiResult<T>`               |       —       | [![npm](https://img.shields.io/npm/v/%40h-ai%2Fapi-contract)](https://www.npmjs.com/package/@h-ai/api-contract) |
+| `@h-ai/serv`         | API Service 运行时：Hono + oRPC，挂载 contract / procedures，生成 OpenAPI 3.1 与 Scalar 文档            |       —       |         [![npm](https://img.shields.io/npm/v/%40h-ai%2Fserv)](https://www.npmjs.com/package/@h-ai/serv)         |
+| `@h-ai/kit`          | SvelteKit 集成：Handle Hook、中间件、路由守卫、表单校验、同源 endpoint 工具（不承载公共 HTTP contract） |       —       |          [![npm](https://img.shields.io/npm/v/%40h-ai%2Fkit)](https://www.npmjs.com/package/@h-ai/kit)          |
+| `@h-ai/api-client`   | 跨端 typed client：基于 `api-contract` 调用嵌套方法，Bearer / httpOnly cookie Token 管理、401 刷新      |       —       |   [![npm](https://img.shields.io/npm/v/%40h-ai%2Fapi-client)](https://www.npmjs.com/package/@h-ai/api-client)   |
+| `@h-ai/capacitor`    | 移动端桥接：安全 Token 存储、设备信息、推送通知、相机、状态栏                                           |       —       |    [![npm](https://img.shields.io/npm/v/%40h-ai%2Fcapacitor)](https://www.npmjs.com/package/@h-ai/capacitor)    |
 
 ### 界面与工具
 
@@ -160,77 +164,91 @@ Skill 模板统一管理在 `packages/cli/templates/skills/` 中，通过 `@h-ai
 
 ### 模块文档索引
 
-| 分类       | 模块               | README                                                             |
-| ---------- | ------------------ | ------------------------------------------------------------------ |
-| 基础能力   | `@h-ai/core`       | [`packages/core/README.md`](./packages/core/README.md)             |
-| 基础能力   | `@h-ai/crypto`     | [`packages/crypto/README.md`](./packages/crypto/README.md)         |
-| 数据层     | `@h-ai/reldb`      | [`packages/reldb/README.md`](./packages/reldb/README.md)           |
-| 数据层     | `@h-ai/vecdb`      | [`packages/vecdb/README.md`](./packages/vecdb/README.md)           |
-| 数据层     | `@h-ai/cache`      | [`packages/cache/README.md`](./packages/cache/README.md)           |
-| 数据层     | `@h-ai/storage`    | [`packages/storage/README.md`](./packages/storage/README.md)       |
-| 数据层     | `@h-ai/datapipe`   | [`packages/datapipe/README.md`](./packages/datapipe/README.md)     |
-| 业务能力   | `@h-ai/iam`        | [`packages/iam/README.md`](./packages/iam/README.md)               |
-| 业务能力   | `@h-ai/reach`      | [`packages/reach/README.md`](./packages/reach/README.md)           |
-| 业务能力   | `@h-ai/ai`         | [`packages/ai/README.md`](./packages/ai/README.md)                 |
-| 业务能力   | `@h-ai/payment`    | [`packages/payment/README.md`](./packages/payment/README.md)       |
-| 业务能力   | `@h-ai/audit`      | [`packages/audit/README.md`](./packages/audit/README.md)           |
-| 业务能力   | `@h-ai/scheduler`  | [`packages/scheduler/README.md`](./packages/scheduler/README.md)   |
-| 集成层     | `@h-ai/kit`        | [`packages/kit/README.md`](./packages/kit/README.md)               |
-| 集成层     | `@h-ai/api-client` | [`packages/api-client/README.md`](./packages/api-client/README.md) |
-| 集成层     | `@h-ai/capacitor`  | [`packages/capacitor/README.md`](./packages/capacitor/README.md)   |
-| 界面与工具 | `@h-ai/ui`         | [`packages/ui/README.md`](./packages/ui/README.md)                 |
-| 界面与工具 | `@h-ai/cli`        | [`packages/cli/README.md`](./packages/cli/README.md)               |
-| 界面与工具 | `@h-ai/deploy`     | [`packages/deploy/README.md`](./packages/deploy/README.md)         |
+| 分类       | 模块                 | README                                                                 |
+| ---------- | -------------------- | ---------------------------------------------------------------------- |
+| 基础能力   | `@h-ai/core`         | [`packages/core/README.md`](./packages/core/README.md)                 |
+| 基础能力   | `@h-ai/crypto`       | [`packages/crypto/README.md`](./packages/crypto/README.md)             |
+| 数据层     | `@h-ai/reldb`        | [`packages/reldb/README.md`](./packages/reldb/README.md)               |
+| 数据层     | `@h-ai/vecdb`        | [`packages/vecdb/README.md`](./packages/vecdb/README.md)               |
+| 数据层     | `@h-ai/cache`        | [`packages/cache/README.md`](./packages/cache/README.md)               |
+| 数据层     | `@h-ai/storage`      | [`packages/storage/README.md`](./packages/storage/README.md)           |
+| 数据层     | `@h-ai/datapipe`     | [`packages/datapipe/README.md`](./packages/datapipe/README.md)         |
+| 业务能力   | `@h-ai/iam`          | [`packages/iam/README.md`](./packages/iam/README.md)                   |
+| 业务能力   | `@h-ai/reach`        | [`packages/reach/README.md`](./packages/reach/README.md)               |
+| 业务能力   | `@h-ai/ai`           | [`packages/ai/README.md`](./packages/ai/README.md)                     |
+| 业务能力   | `@h-ai/payment`      | [`packages/payment/README.md`](./packages/payment/README.md)           |
+| 业务能力   | `@h-ai/audit`        | [`packages/audit/README.md`](./packages/audit/README.md)               |
+| 业务能力   | `@h-ai/scheduler`    | [`packages/scheduler/README.md`](./packages/scheduler/README.md)       |
+| 集成层     | `@h-ai/api-contract` | [`packages/api-contract/README.md`](./packages/api-contract/README.md) |
+| 集成层     | `@h-ai/serv`         | [`packages/serv/README.md`](./packages/serv/README.md)                 |
+| 集成层     | `@h-ai/kit`          | [`packages/kit/README.md`](./packages/kit/README.md)                   |
+| 集成层     | `@h-ai/api-client`   | [`packages/api-client/README.md`](./packages/api-client/README.md)     |
+| 集成层     | `@h-ai/capacitor`    | [`packages/capacitor/README.md`](./packages/capacitor/README.md)       |
+| 界面与工具 | `@h-ai/ui`           | [`packages/ui/README.md`](./packages/ui/README.md)                     |
+| 界面与工具 | `@h-ai/cli`          | [`packages/cli/README.md`](./packages/cli/README.md)                   |
+| 界面与工具 | `@h-ai/deploy`       | [`packages/deploy/README.md`](./packages/deploy/README.md)             |
 
 ### 常见初始化顺序
 
 多数项目可以按下面的顺序初始化模块，既符合依赖关系，也便于 AI 助手推断：
 
-`core → reldb → cache → iam / audit / scheduler / reach → ai / payment → kit / api-client / ui / capacitor`
+`core → reldb / cache / storage / vecdb → iam / audit / scheduler / reach → ai / payment → api-contract → serv → kit / api-client / ui / capacitor`
 
 - `iam` 依赖已初始化的 `reldb` 与 `cache`
 - `audit` 依赖已初始化的 `reldb`
 - `scheduler` 在启用 DB 持久化时建议先初始化 `reldb`；若 `cache` 已初始化，会自动启用分布式锁能力
 - `reach`、`payment`、`ai` 会按功能场景复用下游模块能力，详细配置以各模块 README 为准
+- `api-contract` 无需初始化，只描述公共 HTTP API 的 schema 与 oRPC contract
+- `serv` 在业务模块初始化后创建 Hono app，`contract` 与 `procedures` 形状必须对应
+- `kit` 保留 SvelteKit Hook / guard / 同源 endpoint 能力；跨端公共 API 不在 `kit` 中定义
+- `api-client` 在 Web / App / SSR 侧消费同一个应用级 contract，默认返回 `HaiResult<T>`
 
 ## 架构
 
 ```
-                              ┌──────────────────────────────┐
-                              │         应用层 (apps/)        │
-                              │  admin · api · website · h5  │
-                              └──────────────┬───────────────┘
-                                             │
-                  ┌──────────────────────────▼───────────────────────────┐
-                  │            @h-ai/kit   SvelteKit 集成                 │
-                  │         hooks · guards · middleware · response        │
-                  └──────────────────────────┬───────────────────────────┘
-                                             │
-    ┌──────────┬──────────┬──────────┬───────┴────┬──────────┬──────────┐
-    │          │          │          │            │          │          │
-┌───▼───┐ ┌───▼────┐ ┌───▼───┐ ┌───▼─────┐ ┌───▼────┐ ┌───▼───┐ ┌───▼────┐
-│  iam  │ │ reach  │ │  ai   │ │ payment │ │ audit  │ │sched. │ │  ui    │
-│认证授权│ │用户触达│ │LLM+MCP│ │统一支付 │ │审计日志│ │定时任务│ │组件库  │
-└───┬───┘ └────────┘ └───┬───┘ └─────────┘ └───┬────┘ └───┬───┘ └────────┘
-    │                    │                     │          │
-┌───▼────┐ ┌────────┐ ┌─▼──────┐ ┌─────────┐  │          │
-│ reldb  │ │ cache  │ │ vecdb  │ │ storage │  │          │
-│关系数据库│ │  缓存  │ │向量数据库│ │文件存储  │  │          │
-└───┬────┘ └───┬────┘ └────────┘ └────┬────┘  │          │
-    │          │                      │       │          │
-SQLite│PG│MySQL Memory│Redis  LanceDB│pgvec│Qdrant  S3│Local
-    │          │                      │       │          │
-┌───▼──────────▼──────────────────────▼───────▼──────────▼──┐
-│                       @h-ai/core                           │
-│        HaiResult · Logger · ID · Config · i18n · Utils        │
-└───────────────────────────────────────────────────────────┘
-     ┌───────────┐  ┌──────────────┐  ┌──────────────┐
-     │ @h-ai/cli │  │ @h-ai/deploy │  │@h-ai/capacitor│
-     │ 脚手架    │  │ 一键部署     │  │ 移动端桥接    │
-     └───────────┘  └──────────────┘  └──────────────┘
+                ┌────────────────────────────────┐
+                │          应用层 (apps/)         │
+                │ admin · api-service · h5 · app │
+                └───────────────┬────────────────┘
+                                │
+      ┌─────────────────────────┼─────────────────────────┐
+      │                         │                         │
+┌─────▼──────┐          ┌───────▼────────┐        ┌───────▼────────┐
+│ @h-ai/kit  │          │   @h-ai/serv   │        │ @h-ai/api-client│
+│ SvelteKit  │          │ Hono + oRPC API│        │ typed client    │
+│ hooks/guard│          │ docs/openapi   │        │ token/refresh   │
+└─────┬──────┘          └───────┬────────┘        └───────┬────────┘
+      │                         │                         │
+      │             ┌───────────▼───────────┐             │
+      │             │  @h-ai/api-contract   │◄────────────┘
+      │             │ Schema + Contract 源  │
+      │             └───────────┬───────────┘
+      │                         │
+  ┌───┴──────┬──────────┬───────┴──┬──────────────┬──────────┬──────────┐
+  │          │          │          │              │          │          │
+┌───▼───┐ ┌───▼────┐ ┌───▼───┐ ┌────▼────┐ ┌────────▼┐ ┌───────▼┐ ┌──────▼──┐
+│  iam  │ │ reach  │ │  ai   │ │ payment │ │ audit   │ │scheduler│ │  ui     │
+│认证授权│ │用户触达│ │LLM+MCP│ │统一支付 │ │审计日志 │ │定时任务 │ │组件库   │
+└───┬───┘ └────────┘ └───┬───┘ └────┬────┘ └────┬─────┘ └────┬───┘ └────────┘
+  │                    │          │           │            │
+┌───▼────┐ ┌────────┐ ┌──▼─────┐ ┌──▼──────┐    │            │
+│ reldb  │ │ cache  │ │ vecdb  │ │ storage │    │            │
+│关系数据库│ │  缓存  │ │向量数据库│ │文件存储 │    │            │
+└───┬────┘ └───┬────┘ └────────┘ └────┬────┘    │            │
+  │          │                      │         │            │
+SQLite│PG│MySQL Memory│Redis  LanceDB│pgvec│Qdrant  S3│Local │
+  │          │                      │         │            │
+┌───▼──────────▼──────────────────────▼─────────▼────────────▼──┐
+│                         @h-ai/core                             │
+│          HaiResult · Logger · ID · Config · i18n · Utils        │
+└────────────────────────────────────────────────────────────────┘
+   ┌───────────┐  ┌──────────────┐  ┌──────────────┐
+   │ @h-ai/cli │  │ @h-ai/deploy │  │@h-ai/capacitor│
+   │ 脚手架    │  │ 一键部署     │  │ 移动端桥接    │
+   └───────────┘  └──────────────┘  └──────────────┘
 ```
 
-**依赖方向**：上层依赖下层，`@h-ai/core` 是最底层基础，不反向依赖任何模块。
+**依赖方向**：上层依赖下层，`@h-ai/core` 是最底层基础，不反向依赖任何模块。公共 HTTP API 统一遵循 **`api-contract`（定义）→ `serv`（实现/挂载）→ `api-client`（调用）**；`kit` 只负责 SvelteKit 管道与同源 endpoint，不再承载跨端公共 contract。
 
 ## 快速开始
 
@@ -288,8 +306,10 @@ pnpm add @h-ai/payment           # 支付（微信 / 支付宝 / Stripe）
 pnpm add @h-ai/audit             # 审计日志
 pnpm add @h-ai/scheduler         # 定时任务
 pnpm add @h-ai/crypto            # 国密加密
+pnpm add @h-ai/api-contract      # 公共 HTTP API 契约
+pnpm add @h-ai/serv              # Hono + oRPC API Service 运行时
 pnpm add @h-ai/kit               # SvelteKit 集成
-pnpm add @h-ai/api-client        # HTTP 客户端
+pnpm add @h-ai/api-client        # 跨端 typed API 客户端
 pnpm add @h-ai/ui                # UI 组件库
 pnpm add @h-ai/capacitor         # 移动端原生桥接
 pnpm add @h-ai/deploy            # 自动化部署
@@ -560,7 +580,61 @@ await scheduler.register({
 scheduler.start()
 ```
 
+### 公共 API 契约
+
+```typescript
+import { aiContract, createApiContract, iamContract, storageContract } from '@h-ai/api-contract'
+
+// 只组合当前应用实际启用的领域；false / undefined 会从最终 contract 中移除
+export const contract = createApiContract({
+  iam: iamContract,
+  storage: storageContract,
+  ai: aiContract,
+  payment: false,
+})
+
+// contract.iam.auth.login
+// contract.storage.presignedUrls.createUpload
+// contract.ai.chats.createCompletion
+```
+
+`@h-ai/api-contract` 是纯定义包：只包含 Zod schema、oRPC contract、`HaiResult<T>` 输出结构与组合工具，不包含业务 handler，也不依赖 `@h-ai/iam` / `@h-ai/storage` 等实现模块。
+
+### API Service 运行时
+
+```typescript
+import { aiContract, createApiContract, iamContract, storageContract } from '@h-ai/api-contract'
+import { serv } from '@h-ai/serv'
+import { createAiProcedures } from '@h-ai/serv/features/ai'
+import { createIamProcedures } from '@h-ai/serv/features/iam'
+import { createStorageProcedures } from '@h-ai/serv/features/storage'
+
+const contract = createApiContract({ iam: iamContract, storage: storageContract, ai: aiContract })
+
+const app = serv.createApp({
+  contract,
+  procedures: {
+    iam: createIamProcedures({ iam }),
+    storage: createStorageProcedures({ storage }),
+    ai: createAiProcedures({ ai }),
+  },
+  http: {
+    apiPrefix: '/api/v1',
+    openapi: { path: '/openapi.json' },
+    docs: { path: '/docs' },
+  },
+  iam, // 顶层传入后自动派生 access token 校验
+  refreshCookie: {}, // 可选：启用 httpOnly refresh token cookie
+})
+
+serv.listen(app, { host: '0.0.0.0', onClose: closeApp })
+```
+
+`contract` 负责“有哪些 API”，`procedures` 负责“如何处理请求”；两者形状必须对应。`serv` 还提供 `requireAuth()`、`requirePermission()`、`generateSpec()`、`toFetch()` 等运行时工具。
+
 ### SvelteKit 集成
+
+`@h-ai/kit` 只负责 SvelteKit 的请求管道、守卫、校验和同源 endpoint；公共跨端 API 请使用 `@h-ai/api-contract` + `@h-ai/serv` + `@h-ai/api-client`。
 
 ```typescript
 // src/hooks.server.ts
@@ -573,7 +647,7 @@ export const handle = kit.createHandle({
     kit.middleware.rateLimit({ windowMs: 60000, maxRequests: 100 }),
   ],
   guards: [
-    { guard: kit.guard.auth(), paths: ['/admin/*', '/api/v1/*'] },
+    { guard: kit.guard.auth(), paths: ['/admin/*'] },
   ],
 })
 ```
@@ -599,18 +673,22 @@ const hashed = crypto.password.hash('MyPassword123')
 const valid = crypto.password.verify('MyPassword123', hashed.data)
 ```
 
-### HTTP 客户端
+### 跨端 typed API 客户端
 
 ```typescript
 import { api } from '@h-ai/api-client'
 
 await api.init({
   baseUrl: '/api/v1',
-  auth: { refreshPath: '/auth/refresh' },
+  auth: {}, // 默认使用 httpOnly cookie refresh token；App 可传自定义 TokenStorage
 })
 
-// Typed contract 调用
-const result = await api.iam.auth.login({ identifier: 'alice', password: 'xxx' })
+const login = await api.iam.auth.login({ identifier: 'alice', password: 'xxx' })
+if (login.success)
+  await api.auth.setTokens(login.data.tokens)
+
+const me = await api.iam.auth.currentUser()
+const upload = await api.storage.presignedUrls.createUpload({ key: 'avatar.png' })
 ```
 
 ### 用户触达
@@ -669,14 +747,14 @@ await reach.send({ provider: 'email', to: 'user@example.com', template: 'welcome
 
 仓库 `apps/` 目录包含 6 个可直接运行的示例应用，既能作为脚手架参考，也能作为模块联调样板：
 
-| 应用                | 说明                                  | 使用的模块                                            |
-| ------------------- | ------------------------------------- | ----------------------------------------------------- |
-| `admin-console`     | 管理后台（全模块集成参考）            | core, reldb, iam, cache, storage, crypto, ai, kit, ui |
-| `api-service`       | 无头 REST API 服务                    | core, reldb, cache, kit                               |
-| `corporate-website` | 企业官网 + 合作登记 + AI 客服         | core, reldb, cache, storage, ai, reach, kit, ui       |
-| `h5-app`            | 移动端 H5（拍照识别 / 购物车 / 登录） | core, reldb, iam, cache, storage, ai, kit, ui         |
-| `desktop-app`       | Tauri 桌面应用                        | core, kit, ui                                         |
-| `android-app`       | Capacitor Android 应用                | core, kit, ui, capacitor                              |
+| 应用                | 说明                                       | 使用的模块                                               |
+| ------------------- | ------------------------------------------ | -------------------------------------------------------- |
+| `admin-console`     | 管理后台（全模块集成参考）                 | core, reldb, iam, cache, storage, crypto, ai, kit, ui    |
+| `api-service`       | Hono + oRPC API Service（contract 组合根） | core, reldb, cache, iam, storage, ai, api-contract, serv |
+| `corporate-website` | 企业官网 + 合作登记 + AI 客服              | core, reldb, cache, storage, ai, reach, kit, ui          |
+| `h5-app`            | 移动端 H5（拍照识别 / 购物车 / 登录）      | core, reldb, iam, cache, storage, ai, kit, ui            |
+| `desktop-app`       | Tauri 桌面应用                             | core, kit, ui                                            |
+| `android-app`       | Capacitor Android 应用                     | core, kit, ui, capacitor                                 |
 
 ### 按应用快速启动
 
@@ -731,7 +809,8 @@ pnpm --filter @h-ai/reldb test
 | Runtime        | `HAI_ENV`、`HAI_DEBUG`                                      | 运行环境、调试与日志开关                                                          |
 | Database       | `HAI_RELDB_*`                                               | `@h-ai/reldb` 的 SQLite / PostgreSQL / MySQL 配置                                 |
 | Cache          | `HAI_CACHE_*`                                               | `@h-ai/cache` 的 memory / Redis / Upstash 配置                                    |
-| Session / Auth | `HAI_IAM_SESSION_SECRET`、`HAI_IAM_*`、`HAI_KIT_COOKIE_KEY` | `@h-ai/iam` 与 `@h-ai/kit` 的会话、Cookie、安全配置                               |
+| Session / Auth | `HAI_IAM_SESSION_SECRET`、`HAI_IAM_*`、`HAI_KIT_COOKIE_KEY` | `@h-ai/iam`、`@h-ai/kit` 与 `@h-ai/serv` 刷新 Cookie 的会话、安全配置             |
+| API Service    | `PORT`、`HOST`、`PUBLIC_API_BASE`                           | `apps/api-service` / `@h-ai/serv` 监听地址与前端访问地址                          |
 | Storage        | `HAI_STORAGE_*`                                             | `@h-ai/storage` 的 local / S3 配置                                                |
 | AI             | `HAI_AI_LLM_*`                                              | `@h-ai/ai` 的 LLM API Key、Base URL、模型配置（兼容 `OPENAI_*` 回退）             |
 | VecDB          | `HAI_VECDB_*`                                               | `@h-ai/vecdb` 的 LanceDB / pgvector / Qdrant 配置                                 |

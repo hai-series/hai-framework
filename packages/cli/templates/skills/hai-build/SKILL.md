@@ -33,16 +33,17 @@ description: 应用开发入口技能。提供项目架构总览（SSR/SPA/原�
 | 单元测试 | Vitest                         |
 | E2E 测试 | Playwright                     |
 | 原生 App | Capacitor 7                    |
-| 认证     | Bearer Token（统一）           |
+| 公共 API | oRPC contract + Hono + typed client |
+| 认证     | Bearer access token + httpOnly refresh cookie（浏览器推荐） |
 
 ### 多端构建模式
 
 | 模式    | Adapter        | 认证方式              | 部署目标                |
 | ------- | -------------- | --------------------- | ----------------------- |
-| SSR Web | adapter-node   | Bearer Token + Cookie | Node.js 服务器          |
-| SPA     | adapter-static | Bearer Token          | CDN / 静态托管          |
-| Android | adapter-static | Bearer Token          | Capacitor → Android APK |
-| iOS     | adapter-static | Bearer Token          | Capacitor → iOS IPA     |
+| SSR Web | adapter-node   | Bearer access token + Cookie | Node.js 服务器          |
+| SPA     | adapter-static | Bearer access token + httpOnly refresh cookie | CDN / 静态托管          |
+| Android | adapter-static | Bearer access token + Capacitor secure storage | Capacitor → Android APK |
+| iOS     | adapter-static | Bearer access token + Capacitor secure storage | Capacitor → iOS IPA     |
 
 **Adapter 切换**：
 
@@ -76,10 +77,11 @@ const config = {
     app.d.ts                      # 全局类型声明
     hooks.server.ts               # 服务端 Hook（模块初始化 + 请求管道）
     lib/
-      api.ts                      # API Client 初始化（SPA / 原生 App 使用）
+      api.ts                      # @h-ai/api-client 初始化（SPA / 原生 App 使用）
       capacitor.ts                # Capacitor 初始化（原生 App）
       server/
         init.ts                   # 模块初始化入口（单例，SSR）
+        procedures/               # 应用私有 oRPC procedures（仅 API Service 场景）
       paraglide/                  # i18n 生成文件（禁止手动修改）
       components/                 # 应用组件
     routes/
@@ -105,8 +107,10 @@ core（基础能力：配置、日志、i18n、HaiResult）
   ├── ai（AI：LLM/MCP/Agent）
   ├── iam（身份管理）← 依赖 crypto + db + cache
   ├── payment（支付）← 依赖 db + crypto
-  ├── kit（SvelteKit 集成）← 依赖 iam + cache + storage + crypto
-  ├── api-client（HTTP 客户端）← 纯浏览器端，依赖 iam/api（类型）
+  ├── api-contract（公共 HTTP API 契约）← 纯定义，依赖 core + zod + oRPC contract
+  ├── serv（Hono + oRPC API Service）← 依赖 api-contract；features 按需依赖 iam/storage/ai
+  ├── kit（SvelteKit 集成）← Hook / guard / validate / response，不定义公共 contract
+  ├── api-client（typed API 客户端）← 依赖 api-contract + oRPC client
   ├── capacitor（原生能力）← 纯浏览器端
   └── ui（UI 组件库）← 依赖 core
 ```
@@ -144,6 +148,8 @@ export async function initModules() {
 
   // 4. 集成层
   // kit 无需 init，通过 createHandle 配置
+  // api-contract 无需 init，只在服务端/客户端共享 contract
+  // serv 在 API Service 中通过 serv.createApp({ contract, procedures }) 装配
 
   initialized = true
 }
@@ -157,6 +163,7 @@ import { api } from '@h-ai/api-client'
 export async function initApi() {
   return api.init({
     baseUrl: import.meta.env.VITE_API_BASE_URL,
+    auth: {}, // 浏览器默认 httpOnly cookie；原生 App 传入 Capacitor TokenStorage
     timeout: 15_000,
   })
 }
@@ -204,9 +211,11 @@ log:
 | 加密/签名/哈希        | `hai-crypto`     | crypto.init, SM2, SM3, SM4, 加密, 签名            |
 | 身份认证/授权         | `hai-iam`        | iam.init, 登录, 注册, RBAC, Token, Bearer         |
 | AI/LLM/MCP            | `hai-ai`         | ai.init, LLM, MCP, Agent, 工具调用                |
-| SvelteKit 集成        | `hai-kit`        | kit.createHandle, guard, fromContract, middleware |
+| 公共 API 契约         | `hai-api-contract` | createApiContract, contract, schema, oRPC, HaiResult |
+| API Service 运行时    | `hai-serv`       | serv.createApp, Hono, procedures, OpenAPI, docs, requireAuth |
+| SvelteKit 集成        | `hai-kit`        | kit.createHandle, guard, middleware, validate, response |
 | UI 组件               | `hai-ui`         | 表单, 按钮, 表格, Modal, Toast, 移动端组件        |
-| HTTP 客户端           | `hai-api-client` | typed client, Bearer, 401 refresh, custom fetch   |
+| typed API 客户端      | `hai-api-client` | api.init, typed client, Bearer, 401 refresh, custom fetch |
 | 原生 App 能力         | `hai-capacitor`  | capacitor, 相机, 推送, 状态栏, 设备信息           |
 | 支付                  | `hai-payment`    | payment, 微信支付, 支付宝, Stripe, 订单           |
 
