@@ -4,11 +4,12 @@
  * =============================================================================
  *
  * 覆盖 /api/auth/profile/avatar 的核心场景：
- * - 成功上传后返回公开 URL
+ * - 成功上传后返回可访问 URL
  * - 类型校验
  * - 大小校验
  *
- * 说明：admin-console 不再提供 /api/storage 本地文件转发路由。
+ * 说明：优先使用 storage provider 的公开 URL；本地 provider 会回退到
+ * `/api/storage/[...key]` 公开读取端点。
  * =============================================================================
  */
 
@@ -42,8 +43,13 @@ test.describe('Avatar Upload API', () => {
     const uploadBody = await uploadRes.json()
     const avatarUrl = uploadBody.data?.avatar ?? uploadBody.avatar
 
-    // admin-console 不再提供 /api/storage 本地转发，统一返回公开 URL
+    // 返回的 URL 不仅要长得像 URL，还必须真的能访问到图片内容
     expect(String(avatarUrl)).toMatch(/^https?:\/\//)
+
+    const avatarRes = await request.get(String(avatarUrl))
+    expect(avatarRes.ok(), `avatar fetch status=${avatarRes.status()} url=${String(avatarUrl)}`).toBeTruthy()
+    expect(avatarRes.headers()['content-type']).toMatch(/^image\//)
+    expect((await avatarRes.body()).byteLength).toBeGreaterThan(0)
   })
 
   test('不支持的文件类型被拒绝', async ({ request }) => {
