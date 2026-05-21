@@ -1,5 +1,6 @@
 <script lang='ts'>
   import * as m from '$lib/paraglide/messages.js'
+  import { onDestroy, onMount } from 'svelte'
 
   interface VisionAnalysis {
     summary: string
@@ -29,8 +30,14 @@
   let result = $state<VisionAnalysis | null>(null)
   let history = $state<VisionRecord[]>([])
 
-  $effect(() => {
+  onMount(() => {
     loadHistory()
+  })
+
+  onDestroy(() => {
+    if (previewUrl) {
+      URL.revokeObjectURL(previewUrl)
+    }
   })
 
   async function loadHistory() {
@@ -129,7 +136,7 @@
 
       {#if previewUrl}
         <div class='rounded-xl overflow-hidden border border-base-300 bg-base-200'>
-          <img src={previewUrl} alt='preview' class='w-full object-cover max-h-72' />
+          <img src={previewUrl} alt={m.discover_preview_alt()} class='w-full object-cover max-h-72' />
         </div>
       {/if}
 

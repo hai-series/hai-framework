@@ -18,6 +18,7 @@
   "discover_history": "Recent Records",
   "discover_empty": "No records yet, take your first photo",
   "discover_upload_hint": "Supports JPG / PNG / WEBP, keep your subject clear",
+  "discover_preview_alt": "Image preview before recognition",
   "discover_error_no_file": "Please select or capture an image first",
   "discover_error_failed": "Analysis failed, please try again later",
   "discover_theme": "Theme",
@@ -52,6 +53,9 @@
   "cart_go_shopping": "Go shopping",
   "cart_total_label": "Total",
   "cart_checkout": "Checkout",
+  "cart_decrease_qty": "Decrease quantity",
+  "cart_increase_qty": "Increase quantity",
+  "cart_remove_item": "Remove item",
 
   "profile_title": "Profile",
   "profile_guest_title": "Not logged in",
@@ -83,6 +87,9 @@
   "auth_register_login_link": "Sign in",
   "auth_register_error_generic": "Registration failed",
   "auth_register_error_network": "Network error, please retry",
+  "api_upload_invalid_path": "Invalid file path",
+  "api_upload_storage_unavailable": "File storage is not configured",
+  "api_upload_file_not_found": "File not found",
 
   "action_share": "Share",
   "action_edit_profile": "Edit Profile",
