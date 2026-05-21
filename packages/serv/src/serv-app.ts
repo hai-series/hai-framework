@@ -13,6 +13,7 @@ import type { Hono, Context as HonoContext, Next } from 'hono'
 import type { ServHealthHttpConfig, ServHttpConfigInput } from './serv-config.js'
 import type { CreateServContext, ServContext, ServIam, ServSession } from './serv-context.js'
 import type { RefreshCookieConfig } from './serv-cookie-auth.js'
+import type { ServTransportConfig } from './serv-transport.js'
 import { readFile } from 'node:fs/promises'
 import { HaiCommonError } from '@h-ai/core'
 import { OpenAPIHandler } from '@orpc/openapi/fetch'
@@ -23,6 +24,8 @@ import { buildAuthContextFactory, parseRequestContext } from './serv-context.js'
 import { mountRefreshCookieRoutes } from './serv-cookie-auth.js'
 import { createDocsPage, generateSpec } from './serv-openapi.js'
 import { buildHaiErrorBody, requireInternalRPC, securityHeaders } from './serv-pipeline.js'
+import { createTransportMiddleware } from './serv-transport.js'
+import { buildValidationFailureBody, localizeZodError, resolveRequestLocale } from './serv-validation.js'
 
 /** Scalar UI 脚本本地路由，由 createApp 自动挂载，无需外网 CDN。 */
 const SCALAR_ROUTE = '/_hai/scalar.js'
@@ -109,6 +112,18 @@ export interface CreateServAppOptions<
    * 高级：完全接管上下文工厂。设置后上述 `iam` / `verifyToken` 均不生效（session 不会被自动填充）。
    */
   readonly createContext?: CreateServContext
+  /**
+   * 启用传输加密（opt-in）。提供后 serv 自动：
+   * 1. 调用 `crypto.transport.createServer()` 创建管理器
+   * 2. 在 oRPC 路由之前挂载中间件，自动解密请求 / 加密响应
+   * 3. 在 `${apiPrefix}${keyExchangePath}` 暴露 POST 密钥协商端点
+   *
+   * @example
+   * ```ts
+   * serv.createApp({ contract, procedures, transport: { crypto } })
+   * ```
+   */
+  readonly transport?: ServTransportConfig
 }
 
 /**
@@ -161,6 +176,17 @@ export function createApp<
   }
 
   app.use('*', securityHeaders())
+
+  // 传输加密必须在所有业务路由之前装载：
+  // - 它需在 oRPC 读取 body 前完成解密
+  // - 在下游响应返回后加密
+  if (options.transport) {
+    const mgr = options.transport.crypto.transport.createServer({ maxClients: options.transport.maxClients })
+    if (!mgr.success)
+      throw new Error(mgr.error.message)
+    const keyExchangePath = `${http.apiPrefix}${options.transport.keyExchangePath ?? '/_hai/key-exchange'}`
+    app.use('*', createTransportMiddleware(mgr.data, keyExchangePath, options.transport.excludePaths))
+  }
 
   if (http.health !== false)
     mountHealthRoutes(app, http.health)
@@ -248,7 +274,75 @@ async function handleORPC(
 ): Promise<Response | void> {
   const context = await createContext({ request: c.req.raw })
   const { matched, response } = await handler.handle(c.req.raw, { prefix, context })
-  if (matched)
+  if (!matched) {
+    await next()
+    return
+  }
+  return localizeValidationResponse(response, c.req.raw.headers)
+}
+
+/**
+ * 拦截 oRPC 输入校验失败响应，重写为带 i18n 与 `errors[]` 的标准 HaiResult 失败体。
+ *
+ * 触发条件（保守判断，避免误伤业务自定义错误）：
+ * - status === 400
+ * - body 为 oRPC ORPCError JSON 形态：`{ defined, code, status, message, data }`
+ * - `code === 'BAD_REQUEST'` 且 `data.issues` 存在
+ *
+ * 不符合上述条件的响应原样透传，确保业务层主动抛出的 BAD_REQUEST 不被改写。
+ */
+async function localizeValidationResponse(response: Response, requestHeaders: Headers): Promise<Response> {
+  if (response.status !== 400)
     return response
-  await next()
+  const contentType = response.headers.get('content-type') ?? ''
+  if (!contentType.includes('application/json'))
+    return response
+
+  // 克隆响应再读取，避免破坏调用方对 response 的潜在二次消费。
+  let payload: unknown
+  try {
+    payload = await response.clone().json()
+  }
+  catch {
+    return response
+  }
+
+  if (!isOrpcValidationErrorPayload(payload))
+    return response
+
+  const issues = payload.data.issues
+  const locale = resolveRequestLocale(requestHeaders)
+  const errors = localizeZodError({ issues }, locale)
+  const body = buildValidationFailureBody(locale, errors)
+
+  // 保留原响应头（其中可能包含安全头），仅替换 body 与 status。
+  const headers = new Headers(response.headers)
+  headers.set('content-type', 'application/json; charset=utf-8')
+  return new Response(JSON.stringify(body), {
+    status: HaiCommonError.VALIDATION_ERROR.httpStatus,
+    headers,
+  })
+}
+
+interface OrpcValidationErrorPayload {
+  readonly defined: boolean
+  readonly code: string
+  readonly status: number
+  readonly message: string
+  readonly data: { readonly issues: unknown[] }
+}
+
+function isOrpcValidationErrorPayload(value: unknown): value is OrpcValidationErrorPayload {
+  if (!value || typeof value !== 'object')
+    return false
+  const obj = value as Record<string, unknown>
+  if (obj.code !== 'BAD_REQUEST')
+    return false
+  if (typeof obj.status !== 'number' || obj.status !== 400)
+    return false
+  const data = obj.data
+  if (!data || typeof data !== 'object')
+    return false
+  const issues = (data as Record<string, unknown>).issues
+  return Array.isArray(issues)
 }

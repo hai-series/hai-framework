@@ -22,6 +22,7 @@ import { toFetch } from './adapters/serv-adapter-fetch.js'
 import { listen } from './adapters/serv-adapter-node.js'
 import { createApp } from './serv-app.js'
 import { buildAuthContextFactory, parseRequestContext } from './serv-context.js'
+import { servM } from './serv-i18n.js'
 import { createDocsPage, generateSpec } from './serv-openapi.js'
 import {
   mapHaiError,
@@ -62,4 +63,7 @@ export const serv = {
   // Hono 中间件
   securityHeaders,
   requireInternalRPC,
+
+  // Serv 模块 i18n 消息获取器（支持 `options.locale` 单次调用本地化）。
+  m: servM,
 }
