@@ -16,6 +16,23 @@ import { badRequest } from './kit-response.js'
 
 // ─── 内部工具 ───
 
+const DEFAULT_ZOD_MESSAGE_PATTERNS = [
+  /^Too small:/,
+  /^Too big:/,
+  /^Invalid input:/,
+  /^Invalid option:/,
+  /^Invalid string:/,
+  /^Invalid email$/,
+  /^Invalid email address$/,
+  /^Invalid url$/i,
+  /^Invalid UUID$/,
+  /^Invalid enum value/,
+  /^Required$/,
+  /^String must contain/,
+  /^Number must be/,
+  /^Array must contain/,
+] as const
+
 /**
  * Zod 错误 issue 类型
  *
@@ -24,6 +41,15 @@ import { badRequest } from './kit-response.js'
 interface ZodIssue {
   path: (string | number)[]
   message: string
+  code?: string
+  expected?: string
+  received?: string
+  origin?: string
+  type?: string
+  format?: string
+  validation?: unknown
+  minimum?: number | bigint
+  maximum?: number | bigint
 }
 
 /**
@@ -42,6 +68,131 @@ function extractZodIssues(error: z.ZodError): ZodIssue[] {
 }
 
 /**
+ * 判断 issue.message 是否看起来是 Zod 自带默认英文消息。
+ *
+ * Schema 显式传入的业务消息必须保留；只有默认英文消息才在 kit 层统一本地化，
+ * 避免应用层用户在中文界面看到 `Too small: expected ...` 这类底层文案。
+ *
+ * @param message Zod issue 消息
+ * @returns 是否为可替换的默认消息
+ */
+function isDefaultZodMessage(message: string): boolean {
+  return DEFAULT_ZOD_MESSAGE_PATTERNS.some(pattern => pattern.test(message))
+}
+
+/**
+ * 将 Zod issue 中的边界值转换成可展示字符串。
+ *
+ * @param value issue.minimum / issue.maximum
+ * @returns 可传给 i18n params 的字符串
+ */
+function formatLimit(value: number | bigint | undefined): string | undefined {
+  if (typeof value === 'number' || typeof value === 'bigint') {
+    return String(value)
+  }
+  return undefined
+}
+
+/**
+ * 获取 Zod v3/v4 issue 的校验目标类型。
+ *
+ * @param issue Zod issue
+ * @returns string / number / array 等目标类型
+ */
+function getIssueTarget(issue: ZodIssue): string | undefined {
+  return issue.origin ?? issue.type
+}
+
+/**
+ * 获取 Zod v3/v4 issue 的格式校验类型。
+ *
+ * @param issue Zod issue
+ * @returns email / url / uuid 等格式类型
+ */
+function getIssueFormat(issue: ZodIssue): string | undefined {
+  if (typeof issue.format === 'string') {
+    return issue.format
+  }
+  if (typeof issue.validation === 'string') {
+    return issue.validation
+  }
+  return undefined
+}
+
+/**
+ * 将 Zod 默认错误消息映射为 kit 本地化消息。
+ *
+ * @param issue Zod issue
+ * @returns 本地化后的消息；自定义消息原样返回
+ */
+function localizeZodIssueMessage(issue: ZodIssue): string {
+  if (!isDefaultZodMessage(issue.message)) {
+    return issue.message
+  }
+
+  const target = getIssueTarget(issue)
+  const format = getIssueFormat(issue)
+  const min = formatLimit(issue.minimum)
+  const max = formatLimit(issue.maximum)
+
+  if (issue.code === 'too_small') {
+    if (target === 'string' && min) {
+      return kitM('kit_validationStringMin', { params: { min } })
+    }
+    if ((target === 'number' || target === 'bigint') && min) {
+      return kitM('kit_validationNumberMin', { params: { min } })
+    }
+    if (target === 'array' && min) {
+      return kitM('kit_validationArrayMin', { params: { min } })
+    }
+    if (min) {
+      return kitM('kit_validationTooSmall', { params: { min } })
+    }
+  }
+
+  if (issue.code === 'too_big') {
+    if (target === 'string' && max) {
+      return kitM('kit_validationStringMax', { params: { max } })
+    }
+    if ((target === 'number' || target === 'bigint') && max) {
+      return kitM('kit_validationNumberMax', { params: { max } })
+    }
+    if (target === 'array' && max) {
+      return kitM('kit_validationArrayMax', { params: { max } })
+    }
+    if (max) {
+      return kitM('kit_validationTooBig', { params: { max } })
+    }
+  }
+
+  if (issue.code === 'invalid_type') {
+    if (issue.received === 'undefined' || issue.message.includes('received undefined')) {
+      return kitM('kit_validationRequired')
+    }
+    return kitM('kit_validationInvalidType')
+  }
+
+  if (issue.code === 'invalid_format' || issue.code === 'invalid_string') {
+    if (format === 'email') {
+      return kitM('kit_validationEmail')
+    }
+    if (format === 'url') {
+      return kitM('kit_validationUrl')
+    }
+    if (format === 'uuid') {
+      return kitM('kit_validationUuid')
+    }
+    return kitM('kit_validationInvalid')
+  }
+
+  if (issue.code === 'invalid_value' || issue.code === 'invalid_enum_value') {
+    return kitM('kit_validationEnum')
+  }
+
+  return kitM('kit_validationInvalid')
+}
+
+/**
  * 将 Zod issues 转换为 `FormError` 列表
  *
  * 字段路径用点号拼接（如 `'address.city'`）。
@@ -52,7 +203,7 @@ function extractZodIssues(error: z.ZodError): ZodIssue[] {
 function zodIssuesToFormErrors(issues: ZodIssue[]): FormError[] {
   return issues.map(issue => ({
     field: issue.path.join('.'),
-    message: issue.message,
+    message: localizeZodIssueMessage(issue),
   }))
 }
 

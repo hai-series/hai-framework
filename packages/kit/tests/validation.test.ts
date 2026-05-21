@@ -4,9 +4,14 @@
  * =============================================================================
  */
 
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it } from 'vitest'
 import { z } from 'zod'
+import { setAllModulesLocale } from '../src/kit-i18n.js'
 import { validateForm, validateFormOrFail, validateParams, validateParamsOrFail, validateQuery, validateQueryOrFail } from '../src/kit-validation.js'
+
+afterEach(() => {
+  setAllModulesLocale('zh-CN')
+})
 
 describe('validateForm', () => {
   const userSchema = z.object({
@@ -41,6 +46,42 @@ describe('validateForm', () => {
     expect(result.valid).toBe(false)
     expect(result.errors.length).toBeGreaterThan(0)
     // 空字符串会触发 min(1) 错误，无效邮箱会触发 email 错误
+  })
+
+  it('应该将 Zod 默认英文错误本地化', async () => {
+    setAllModulesLocale('zh-CN')
+    const schema = z.object({ password: z.string().min(8) })
+    const request = new Request('http://localhost', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: '123' }),
+    })
+
+    const result = await validateForm(request, schema)
+
+    expect(result.valid).toBe(false)
+    expect(result.errors[0]).toEqual({
+      field: 'password',
+      message: '至少输入 8 个字符',
+    })
+  })
+
+  it('应该保留 Schema 自定义错误消息', async () => {
+    setAllModulesLocale('zh-CN')
+    const schema = z.object({ username: z.string().min(3, '用户名太短') })
+    const request = new Request('http://localhost', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: 'a' }),
+    })
+
+    const result = await validateForm(request, schema)
+
+    expect(result.valid).toBe(false)
+    expect(result.errors[0]).toEqual({
+      field: 'username',
+      message: '用户名太短',
+    })
   })
 
   it('应该验证 FormData', async () => {
