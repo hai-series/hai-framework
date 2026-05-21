@@ -5,10 +5,14 @@
  * @module kit-transport-middleware
  */
 
+import type { EncryptedPayload, TransportEncryptionManager } from '@h-ai/crypto'
 import type { Middleware } from '../../kit-types.js'
-import type { TransportEncryptionConfig, TransportEncryptionManager } from './kit-crypto-types.js'
+import type { TransportEncryptionConfig } from './kit-crypto-types.js'
+import { TRANSPORT_PROTOCOL } from '@h-ai/crypto'
 import { kitM } from '../../kit-i18n.js'
-import { createTransportEncryption, isValidEncryptedPayload } from './kit-transport-encryption.js'
+
+const DEFAULT_KEY_EXCHANGE_PATH = `/api${TRANSPORT_PROTOCOL.DEFAULT_KEY_EXCHANGE_PATH}`
+const MAX_ENCRYPTED_BODY = 1_048_576
 
 /**
  * 创建传输加密中间件
@@ -33,13 +37,13 @@ export function transportEncryptionMiddleware(config: TransportEncryptionConfig)
     return async (_context, next) => next()
   }
 
-  const keyExchangePath = config.keyExchangePath ?? '/api/kit/key-exchange'
+  const keyExchangePath = config.keyExchangePath ?? DEFAULT_KEY_EXCHANGE_PATH
   const excludePaths = config.excludePaths ?? []
   const encryptResponse = config.encryptResponse ?? true
   const requireEncryption = config.requireEncryption ?? true
 
   // 初始化传输加密管理器
-  const result = createTransportEncryption(config.crypto)
+  const result = config.crypto.transport.createServer({ maxClients: config.maxClients })
   if (!result.success) {
     // 密钥生成失败时降级为透传
     return async (_context, next) => next()
@@ -61,7 +65,7 @@ export function transportEncryptionMiddleware(config: TransportEncryptionConfig)
     }
 
     // 请求头中无 X-Client-Id 时的处理
-    const clientId = event.request.headers.get('X-Client-Id')
+    const clientId = event.request.headers.get(TRANSPORT_PROTOCOL.CLIENT_ID_HEADER)
     if (!clientId) {
       if (requireEncryption) {
         // 强制加密模式：缺少 X-Client-Id 说明未完成密钥交换，拒绝请求
@@ -75,7 +79,7 @@ export function transportEncryptionMiddleware(config: TransportEncryptionConfig)
     }
 
     // 检查客户端是否已注册
-    const clientPublicKey = manager.getClientPublicKey(clientId)
+    const clientPublicKey = await manager.getClientPublicKey(clientId)
     if (!clientPublicKey) {
       return new Response(
         JSON.stringify({ error: kitM('kit_transportClientKeyNotFound') }),
@@ -84,34 +88,11 @@ export function transportEncryptionMiddleware(config: TransportEncryptionConfig)
     }
 
     // ── 解密请求 ──
-    try {
-      if (hasBody(event.request.method)) {
-        const bodyText = await event.request.text()
-        if (bodyText) {
-          const payload = JSON.parse(bodyText) as unknown
-          if (isValidEncryptedPayload(payload)) {
-            const plaintext = manager.decryptRequest(payload)
-            // 重建请求，替换为解密后的明文
-            const newRequest = new Request(event.request.url, {
-              method: event.request.method,
-              headers: new Headers(event.request.headers),
-              body: plaintext,
-            })
-            // 将解密后的请求注入 locals，供后续中间件/端点使用
-            Object.defineProperty(event, 'request', {
-              value: newRequest,
-              writable: true,
-              configurable: true,
-            })
-          }
-        }
+    if (hasBody(event.request.method)) {
+      const decryptResult = await decryptRequestBody(event, manager, requireEncryption)
+      if (decryptResult) {
+        return decryptResult
       }
-    }
-    catch {
-      return new Response(
-        JSON.stringify({ error: kitM('kit_transportDecryptFailed') }),
-        { status: 400, headers: { 'Content-Type': 'application/json' } },
-      )
     }
 
     // ── 执行后续中间件/端点 ──
@@ -128,29 +109,29 @@ export function transportEncryptionMiddleware(config: TransportEncryptionConfig)
       return response
     }
     const contentLength = response.headers.get('Content-Length')
-    if (contentLength && Number.parseInt(contentLength, 10) > 1_048_576) {
+    if (contentLength && Number.parseInt(contentLength, 10) > MAX_ENCRYPTED_BODY) {
       return response
     }
 
     try {
-      const responseBody = await response.text()
+      const responseBody = await response.clone().text()
       if (!responseBody) {
         return response
       }
 
-      const encryptedPayload = manager.encryptResponse(clientId, responseBody)
-      return new Response(
-        JSON.stringify(encryptedPayload),
-        {
-          status: response.status,
-          statusText: response.statusText,
-          headers: {
-            ...Object.fromEntries(response.headers.entries()),
-            'Content-Type': 'application/json',
-            'X-Encrypted': 'true',
-          },
-        },
-      )
+      const encryptedPayload = await manager.encryptResponse(clientId, responseBody)
+      if (!encryptedPayload.success) {
+        return response
+      }
+      const headers = new Headers(response.headers)
+      headers.set('Content-Type', 'application/json')
+      headers.set(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER, TRANSPORT_PROTOCOL.ENCRYPTED_HEADER_VALUE)
+      headers.delete('Content-Length')
+      return new Response(JSON.stringify(encryptedPayload.data), {
+        status: response.status,
+        statusText: response.statusText,
+        headers,
+      })
     }
     catch {
       // 加密失败时返回原始响应
@@ -182,7 +163,7 @@ async function handleKeyExchange(
       )
     }
 
-    const clientId = manager.registerClientKey(body.clientPublicKey)
+    const clientId = await manager.registerClientKey(body.clientPublicKey)
     const serverPublicKey = manager.getServerPublicKey()
 
     return new Response(
@@ -220,4 +201,122 @@ function shouldExclude(pathname: string, excludePaths: string[], keyExchangePath
  */
 function hasBody(method: string): boolean {
   return ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method.toUpperCase())
+}
+
+interface RequestHolder {
+  request: Request
+}
+
+/**
+ * 重建 SvelteKit 事件中的 Request。
+ *
+ * `request.text()` 会消费 body；当请求不是加密载荷但允许明文透传时，必须把
+ * 原始 body 放回去，避免后续端点再读取时得到空内容。
+ *
+ * @param event SvelteKit 请求事件
+ * @param body 新请求体
+ */
+function replaceRequestBody(event: RequestHolder, body: string): void {
+  const headers = new Headers(event.request.headers)
+  headers.delete(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER)
+  headers.delete('Content-Length')
+  headers.set('Content-Type', 'application/json; charset=utf-8')
+  const newRequest = new Request(event.request.url, {
+    method: event.request.method,
+    headers,
+    body,
+  })
+  Object.defineProperty(event, 'request', {
+    value: newRequest,
+    writable: true,
+    configurable: true,
+  })
+}
+
+/**
+ * 尝试解密请求体。
+ *
+ * 非 JSON 请求体（例如 multipart/form-data 文件上传）无法承载传输加密 JSON
+ * 载荷；在非强制加密模式下应原样透传，不读取 body，避免破坏浏览器生成的
+ * multipart 边界。
+ *
+ * @param event SvelteKit 请求事件
+ * @param manager 传输加密管理器
+ * @param requireEncryption 是否强制要求请求加密
+ * @returns 需要提前返回的错误响应；返回 null 表示继续后续中间件
+ */
+async function decryptRequestBody(
+  event: RequestHolder,
+  manager: TransportEncryptionManager,
+  requireEncryption: boolean,
+): Promise<Response | null> {
+  const isEncrypted = event.request.headers.get(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER)
+    === TRANSPORT_PROTOCOL.ENCRYPTED_HEADER_VALUE
+  if (!isEncrypted) {
+    if (!requireEncryption)
+      return null
+    return new Response(
+      JSON.stringify({ error: kitM('kit_transportInvalidPayload') }),
+      { status: 400, headers: { 'Content-Type': 'application/json' } },
+    )
+  }
+
+  const contentType = event.request.headers.get('Content-Type') ?? ''
+  if (!contentType.includes('application/json')) {
+    if (!requireEncryption) {
+      return null
+    }
+    return new Response(
+      JSON.stringify({ error: kitM('kit_transportInvalidPayload') }),
+      { status: 400, headers: { 'Content-Type': 'application/json' } },
+    )
+  }
+
+  const bodyText = await event.request.text()
+  if (!bodyText) {
+    return null
+  }
+
+  let payload: unknown
+  try {
+    payload = JSON.parse(bodyText) as unknown
+  }
+  catch {
+    if (!requireEncryption) {
+      replaceRequestBody(event, bodyText)
+      return null
+    }
+    return new Response(
+      JSON.stringify({ error: kitM('kit_transportDecryptFailed') }),
+      { status: 400, headers: { 'Content-Type': 'application/json' } },
+    )
+  }
+
+  if (!isEncryptedPayloadShape(payload)) {
+    if (!requireEncryption) {
+      replaceRequestBody(event, bodyText)
+      return null
+    }
+    return new Response(
+      JSON.stringify({ error: kitM('kit_transportInvalidPayload') }),
+      { status: 400, headers: { 'Content-Type': 'application/json' } },
+    )
+  }
+
+  const plaintext = manager.decryptRequest(payload)
+  if (!plaintext.success) {
+    return new Response(
+      JSON.stringify({ error: kitM('kit_transportDecryptFailed') }),
+      { status: 400, headers: { 'Content-Type': 'application/json' } },
+    )
+  }
+  replaceRequestBody(event, plaintext.data)
+  return null
+}
+
+function isEncryptedPayloadShape(payload: unknown): payload is EncryptedPayload {
+  if (!payload || typeof payload !== 'object')
+    return false
+  const p = payload as Record<string, unknown>
+  return typeof p.encryptedKey === 'string' && typeof p.ciphertext === 'string' && typeof p.iv === 'string'
 }

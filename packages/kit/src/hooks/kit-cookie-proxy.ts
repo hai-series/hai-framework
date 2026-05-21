@@ -5,8 +5,8 @@
  * @module kit-cookie-proxy
  */
 
+import type { CryptoFunctions } from '@h-ai/crypto'
 import type { Cookies } from '@sveltejs/kit'
-import type { TransportCryptoServiceLike } from '../modules/crypto/kit-crypto-types.js'
 import { core } from '@h-ai/core'
 
 /**
@@ -16,7 +16,7 @@ export interface CookieProxyConfig {
   /** 需要加密的 Cookie 名称集合 */
   names: Set<string>
   /** 对称加密服务（SM4） */
-  symmetric: TransportCryptoServiceLike['symmetric']
+  symmetric: CryptoFunctions['symmetric']
   /** 加密密钥（32 字符十六进制） */
   encryptionKey: string
 }

@@ -6,10 +6,12 @@
  * @module kit-client
  */
 
+import type { CryptoFunctions, TransportClient } from '@h-ai/crypto'
 import type { BrowserTokenStore } from '../kit-auth.js'
-import type { EncryptedPayload, TransportCryptoServiceLike, TransportKeyPair } from '../modules/crypto/kit-crypto-types.js'
+import { TRANSPORT_PROTOCOL } from '@h-ai/crypto'
 import { createTokenStore } from '../kit-auth.js'
-import { isValidEncryptedPayload } from '../modules/crypto/kit-transport-encryption.js'
+
+const DEFAULT_KEY_EXCHANGE_URL = `/api${TRANSPORT_PROTOCOL.DEFAULT_KEY_EXCHANGE_PATH}`
 
 // ─── 类型 ───
 
@@ -17,9 +19,9 @@ import { isValidEncryptedPayload } from '../modules/crypto/kit-transport-encrypt
  * 传输加密客户端配置
  */
 export interface ClientTransportConfig {
-  /** 传输加密服务实例（@h-ai/crypto 的 asymmetric + symmetric） */
-  crypto: TransportCryptoServiceLike
-  /** 密钥交换端点 URL（默认 `'/api/kit/key-exchange'`） */
+  /** @h-ai/crypto 服务实例 */
+  crypto: CryptoFunctions
+  /** 密钥交换端点 URL（默认 `'/api/_hai/key-exchange'`） */
   keyExchangeUrl?: string
 }
 
@@ -75,6 +77,20 @@ function getCookie(name: string): string | undefined {
   return match?.[1]
 }
 
+/**
+ * 判断当前请求体是否可以作为文本载荷进行传输加密。
+ *
+ * 传输加密中间件会把解密后的明文重新注入 `Request`，当前仅能可靠保留
+ * JSON 字符串请求体。`FormData` / `Blob` / `ArrayBuffer` 等二进制或浏览器
+ * 自动生成边界的请求体必须保持原样发送，否则文件上传会被序列化成 `{}`。
+ *
+ * @param body fetch 请求体
+ * @returns 是否支持客户端传输加密
+ */
+function canEncryptRequestBody(body: BodyInit | null | undefined): boolean {
+  return body === undefined || body === null || typeof body === 'string'
+}
+
 // ─── 主函数 ───
 
 /**
@@ -109,128 +125,12 @@ export function createKitClient(config: KitClientConfig = {}): KitClient {
     : null
 
   // ── 传输加密状态 ──
-  let transportReady = false
-  let clientKeyPair: TransportKeyPair | null = null
-  let serverPublicKey: string | null = null
-  let clientId: string | null = null
-  /** 密钥交换锁，防止并发 init */
-  let initPromise: Promise<void> | null = null
-
-  /**
-   * 执行密钥交换
-   */
-  async function doKeyExchange(): Promise<void> {
-    if (!transportConfig)
-      return
-
-    const { crypto: cryptoService, keyExchangeUrl = '/api/kit/key-exchange' } = transportConfig
-
-    // 1. 生成客户端非对称密钥对
-    const keyPairResult = cryptoService.asymmetric.generateKeyPair()
-    if (!keyPairResult.success || !keyPairResult.data) {
-      throw new Error('Failed to generate client key pair')
-    }
-    clientKeyPair = keyPairResult.data
-
-    // 2. 与服务端交换公钥
-    const response = await fetch(keyExchangeUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ clientPublicKey: clientKeyPair.publicKey }),
-    })
-
-    if (!response.ok) {
-      throw new Error(`Key exchange failed: ${response.status}`)
-    }
-
-    const data = await response.json() as { serverPublicKey?: string, clientId?: string }
-    if (!data.serverPublicKey || !data.clientId) {
-      throw new Error('Invalid key exchange response')
-    }
-
-    serverPublicKey = data.serverPublicKey
-    clientId = data.clientId
-    transportReady = true
-  }
-
-  /**
-   * 确保密钥交换完成（lazy init + 单例锁）
-   */
-  async function ensureTransportReady(): Promise<void> {
-    if (transportReady)
-      return
-    if (!initPromise) {
-      initPromise = doKeyExchange().finally(() => {
-        initPromise = null
+  const transportClient: TransportClient | null = transportConfig
+    ? transportConfig.crypto.transport.createClient({
+        keyExchangeUrl: transportConfig.keyExchangeUrl ?? DEFAULT_KEY_EXCHANGE_URL,
+        fetch,
       })
-    }
-    await initPromise
-  }
-
-  /**
-   * 加密请求体
-   */
-  function encryptBody(bodyText: string): string {
-    if (!transportConfig || !serverPublicKey)
-      return bodyText
-
-    const { crypto: cryptoService } = transportConfig
-
-    // 1. 生成随机对称密钥
-    const symmetricKey = cryptoService.symmetric.generateKey()
-
-    // 2. 对称加密内容
-    const encResult = cryptoService.symmetric.encryptWithIV(bodyText, symmetricKey)
-    if (!encResult.success || !encResult.data) {
-      throw new Error('Request body encryption failed')
-    }
-
-    // 3. 非对称加密对称密钥
-    const keyEncResult = cryptoService.asymmetric.encrypt(symmetricKey, serverPublicKey)
-    if (!keyEncResult.success || !keyEncResult.data) {
-      throw new Error('Symmetric key encryption failed')
-    }
-
-    const payload: EncryptedPayload = {
-      encryptedKey: keyEncResult.data,
-      ciphertext: encResult.data.ciphertext,
-      iv: encResult.data.iv,
-    }
-
-    return JSON.stringify(payload)
-  }
-
-  /**
-   * 解密响应体
-   */
-  async function decryptResponse(response: Response): Promise<Response> {
-    if (!clientKeyPair || !transportConfig)
-      return response
-
-    const encryptedBody = await response.json() as unknown
-    if (!isValidEncryptedPayload(encryptedBody))
-      return response
-
-    const { crypto: cryptoService } = transportConfig
-
-    // 1. 非对称解密对称密钥
-    const keyDecResult = cryptoService.asymmetric.decrypt(encryptedBody.encryptedKey, clientKeyPair.privateKey)
-    if (!keyDecResult.success || !keyDecResult.data) {
-      throw new Error('Response key decryption failed')
-    }
-
-    // 2. 对称解密内容
-    const decResult = cryptoService.symmetric.decryptWithIV(encryptedBody.ciphertext, keyDecResult.data, encryptedBody.iv)
-    if (!decResult.success || typeof decResult.data !== 'string') {
-      throw new Error('Response body decryption failed')
-    }
-
-    return new Response(decResult.data, {
-      status: response.status,
-      statusText: response.statusText,
-      headers: response.headers,
-    })
-  }
+    : null
 
   /**
    * 统一 API fetch
@@ -238,6 +138,7 @@ export function createKitClient(config: KitClientConfig = {}): KitClient {
   async function apiFetch(url: string, init: RequestInit = {}): Promise<Response> {
     const method = (init.method ?? 'GET').toUpperCase()
     const isWriteMethod = !['GET', 'HEAD', 'OPTIONS'].includes(method)
+    const canUseTransport = canEncryptRequestBody(init.body)
 
     const headers = new Headers(init.headers)
 
@@ -258,54 +159,26 @@ export function createKitClient(config: KitClientConfig = {}): KitClient {
     }
 
     // ── 传输加密 ──
-    if (transportConfig) {
-      await ensureTransportReady()
-
-      if (clientId) {
-        headers.set('X-Client-Id', clientId)
-      }
-
-      // 加密请求体（写方法且有 body 时）
-      if (init.body !== undefined && init.body !== null) {
-        const bodyText = typeof init.body === 'string' ? init.body : JSON.stringify(init.body)
-        const encrypted = encryptBody(bodyText)
-        headers.set('Content-Type', 'application/json')
-
-        let response = await fetch(url, { ...init, headers, body: encrypted })
-
-        // 解密响应
-        if (response.headers.get('X-Encrypted') === 'true') {
-          response = await decryptResponse(response)
-        }
-
-        return response
-      }
+    if (transportClient && canUseTransport) {
+      return transportClient.encryptedFetch(url, { ...init, headers })
     }
 
-    // ── 发送 ──
-    let response = await fetch(url, { ...init, headers })
-
-    // ── 解密响应（GET/无 body 写请求也可能有加密响应） ──
-    if (transportConfig && response.headers.get('X-Encrypted') === 'true') {
-      response = await decryptResponse(response)
-    }
-
-    return response
+    // ── 发送（FormData/Blob/Stream 等保持原样，不破坏浏览器边界） ──
+    return fetch(url, { ...init, headers })
   }
 
   return {
     apiFetch,
-    get ready() { return !transportConfig || transportReady },
+    get ready() { return !transportClient || transportClient.ready() },
     async init() {
-      if (transportConfig)
-        await ensureTransportReady()
+      if (!transportClient)
+        return
+      const result = await transportClient.init()
+      if (!result.success)
+        throw new Error(result.error.message)
     },
     destroy() {
-      clientKeyPair = null
-      serverPublicKey = null
-      clientId = null
-      transportReady = false
-      initPromise = null
+      transportClient?.destroy()
     },
   }
 }

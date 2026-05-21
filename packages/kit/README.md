@@ -141,6 +141,48 @@ const response = await apiFetch('/api/users', { method: 'GET' })
 
 > CSRF Header 注入由 `apiFetch` 自动处理；`@h-ai/kit` 不提供独立的 CSRF 中间件工厂。
 
+### 同源传输加密
+
+kit 的传输加密也统一委托 `@h-ai/crypto`：服务端通过 `crypto.transport.createServer()` 创建管理器，浏览器端通过 `crypto.transport.createClient()` 包装 fetch。应用层只配置顶层 `crypto` 句柄。
+
+**src/hooks.server.ts**：
+
+```ts
+import { crypto } from '@h-ai/crypto'
+import { kit } from '@h-ai/kit'
+
+await crypto.init()
+
+export const handle = kit.createHandle({
+  auth: {
+    verifyToken,
+    protectedPaths: ['/api/*'],
+    publicPaths: ['/api/_hai/*'], // 默认密钥协商端点
+  },
+  crypto: {
+    crypto,
+    transport: { requireEncryption: false },
+  },
+})
+```
+
+**src/lib/utils/api.ts**：
+
+```ts
+import { crypto } from '@h-ai/crypto'
+import { kit } from '@h-ai/kit'
+
+if (typeof window !== 'undefined') {
+  crypto.init()
+}
+
+export const { apiFetch } = kit.client.create({
+  transport: { crypto },
+})
+```
+
+默认密钥协商路径为 `/api/_hai/key-exchange`。如服务端自定义 `transport.keyExchangePath`，客户端需同步配置 `transport.keyExchangeUrl`。
+
 ## 配置
 
 `kit.createHandle()` 配置项：

@@ -12,5 +12,5 @@ export default defineConfig({
     'src/vite/index.ts',
     'src/adapter/index.ts',
   ],
-  external: ['@sveltejs/kit', '@sveltejs/adapter-node', '@sveltejs/adapter-static', '@h-ai/core', 'zod', '$app/navigation', '$app/state'],
+  external: ['@sveltejs/kit', '@sveltejs/adapter-node', '@sveltejs/adapter-static', '@h-ai/core', '@h-ai/crypto', 'zod', '$app/navigation', '$app/state'],
 })

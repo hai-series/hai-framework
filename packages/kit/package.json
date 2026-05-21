@@ -66,6 +66,7 @@
   },
   "dependencies": {
     "@h-ai/core": "workspace:*",
+    "@h-ai/crypto": "workspace:*",
     "@h-ai/iam": "workspace:*",
     "zod": "catalog:"
   },

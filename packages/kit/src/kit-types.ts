@@ -5,10 +5,10 @@
  * @module kit-types
  */
 
+import type { CryptoFunctions } from '@h-ai/crypto'
 import type { AuthnOperations } from '@h-ai/iam'
 import type { RequestEvent } from '@sveltejs/kit'
 import type { RateLimitStore } from './middleware/kit-ratelimit.js'
-import type { TransportCryptoServiceLike } from './modules/crypto/kit-crypto-types.js'
 
 /**
  * kit.auth 认证操作（由 createHandle auth.operations 注入）
@@ -352,7 +352,7 @@ export interface HandleA2AConfig {
  * 传输加密详细配置
  */
 export interface TransportEncryptionOptions {
-  /** 密钥交换端点路径（默认 `'/api/kit/key-exchange'`） */
+  /** 密钥交换端点路径（默认 `'/api/_hai/key-exchange'`） */
   keyExchangePath?: string
   /** 排除路径（不加密），支持精确匹配和前缀匹配 */
   excludePaths?: string[]
@@ -365,6 +365,8 @@ export interface TransportEncryptionOptions {
   requireEncryption?: boolean
   /** 是否加密响应体（默认 `true`） */
   encryptResponse?: boolean
+  /** 服务端可缓存的客户端公钥数量上限（默认 `10000`） */
+  maxClients?: number
 }
 
 /**
@@ -385,8 +387,8 @@ export interface TransportEncryptionOptions {
  * ```
  */
 export interface HookCryptoConfig {
-  /** 注入 @h-ai/crypto 实例（传输加密所需的非对称 + 对称子集） */
-  crypto: TransportCryptoServiceLike
+  /** 注入 @h-ai/crypto 实例 */
+  crypto: CryptoFunctions
   /**
    * 启用传输加密。
    * - `true`：使用默认配置
