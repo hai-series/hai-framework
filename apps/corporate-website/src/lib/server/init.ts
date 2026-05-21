@@ -15,6 +15,7 @@
 import type { AIConfigInput } from '@h-ai/ai'
 import type { CacheConfigInput } from '@h-ai/cache'
 import type { StorageConfigInput } from '@h-ai/storage'
+import process from 'node:process'
 import { ai } from '@h-ai/ai'
 import { cache, CacheConfigSchema } from '@h-ai/cache'
 import { core } from '@h-ai/core'
@@ -24,7 +25,30 @@ import { ensurePartnerTables, PartnerAdminConfigSchema } from './partner-service
 
 type DbConfigInput = Parameters<typeof reldb.init>[0]
 
+interface PartnerAdminRuntimeConfig {
+  username: string
+  password: string
+  sessionTtlSeconds: number
+}
+
 let initialized = false
+
+function logPartnerAdminCredentials(config: PartnerAdminRuntimeConfig): void {
+  const isProduction = process.env.NODE_ENV === 'production' || process.env.HAI_ENV === 'production'
+  const passwordFromEnv = Boolean(process.env.HAI_PARTNER_ADMIN_PASSWORD)
+
+  if (isProduction && !passwordFromEnv) {
+    core.logger.warn('HAI_PARTNER_ADMIN_PASSWORD is not configured in production; partner admin is using config fallback')
+  }
+
+  core.logger.info('Partner admin credentials', {
+    username: config.username,
+    ...(isProduction
+      ? { passwordHint: passwordFromEnv ? 'Set by HAI_PARTNER_ADMIN_PASSWORD; hidden in production logs' : 'Using config fallback; hidden in production logs' }
+      : { password: config.password }),
+    sessionTtlSeconds: config.sessionTtlSeconds,
+  })
+}
 
 export async function initApp(): Promise<void> {
   if (initialized)
@@ -54,6 +78,7 @@ export async function initApp(): Promise<void> {
   const dbConfig = core.config.getOrThrow<DbConfigInput>('db')
   const cacheConfig = core.config.getOrThrow<CacheConfigInput>('cache')
   const storageConfig = core.config.get<StorageConfigInput>('storage')
+  const partnerConfig = core.config.getOrThrow<PartnerAdminRuntimeConfig>('partner')
 
   // 2. 确保数据目录存在（SQLite）
   if (dbConfig.type === 'sqlite') {
@@ -94,6 +119,7 @@ export async function initApp(): Promise<void> {
 
   // 6. 确保业务表存在
   await ensurePartnerTables()
+  logPartnerAdminCredentials(partnerConfig)
 
   // 7. 初始化 AI（可选）
   const aiConfig = core.config.get<AIConfigInput>('ai')

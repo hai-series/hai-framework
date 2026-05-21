@@ -28,6 +28,9 @@
 # 在 hai-framework monorepo 根目录
 pnpm install
 
+# 可选：复制环境变量并修改合作管理后台密码
+cp apps/corporate-website/.env.example apps/corporate-website/.env
+
 # 启动开发服务器
 pnpm --filter corporate-website dev
 ```
@@ -51,6 +54,17 @@ pnpm --filter corporate-website preview
 - 🤝 合作登记：公开合作申请表单（`/partners`）
 - 🔐 合作管理后台：登录后查看与管理登记记录（`/partners/admin`）
 
+### 合作管理后台默认账号
+
+开发默认账号来自 `config/partner.yml` / `.env.example`：
+
+| 项目   | 开发默认值                  |
+| ------ | --------------------------- |
+| 用户名 | `partner-admin`             |
+| 密码   | `CHANGE_ME_STRONG_PASSWORD` |
+
+启动时会在开发日志中输出合作管理后台账号信息，方便示例体验。生产环境请设置 `HAI_PARTNER_ADMIN_USERNAME` / `HAI_PARTNER_ADMIN_PASSWORD`，日志不会输出由环境变量注入的明文密码。
+
 ## ⚙️ 配置
 
 ### YAML 配置文件
@@ -67,14 +81,14 @@ pnpm --filter corporate-website preview
 
 ### 环境变量
 
-| 变量名                       | 说明               | 默认值                |
-| ---------------------------- | ------------------ | --------------------- |
-| `HAI_RELDB_TYPE`             | 数据库类型         | `sqlite`              |
-| `HAI_RELDB_DATABASE`         | 数据库路径/地址    | `./data/corporate.db` |
-| `HAI_CACHE_TYPE`             | 缓存类型           | `memory`              |
-| `HAI_STORAGE_TYPE`           | 存储类型           | `local`               |
-| `HAI_PARTNER_ADMIN_USERNAME` | 合作管理后台用户名 | —                     |
-| `HAI_PARTNER_ADMIN_PASSWORD` | 合作管理后台密码   | —                     |
+| 变量名                       | 说明               | 默认值                      |
+| ---------------------------- | ------------------ | --------------------------- |
+| `HAI_RELDB_TYPE`             | 数据库类型         | `sqlite`                    |
+| `HAI_RELDB_DATABASE`         | 数据库路径/地址    | `./data/corporate.db`       |
+| `HAI_CACHE_TYPE`             | 缓存类型           | `memory`                    |
+| `HAI_STORAGE_TYPE`           | 存储类型           | `local`                     |
+| `HAI_PARTNER_ADMIN_USERNAME` | 合作管理后台用户名 | `partner-admin`             |
+| `HAI_PARTNER_ADMIN_PASSWORD` | 合作管理后台密码   | `CHANGE_ME_STRONG_PASSWORD` |
 
 ## 🌍 国际化 (i18n)
 

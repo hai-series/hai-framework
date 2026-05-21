@@ -1,4 +1,5 @@
 import process from 'node:process'
+import * as m from '$lib/paraglide/messages.js'
 import {
   createPartnerAdminSession,
   getPartnerAdminConfig,
@@ -11,7 +12,7 @@ export const POST = kit.handler(async ({ request, cookies }) => {
   const { username, password } = await kit.validate.body(request, PartnerAdminLoginSchema)
 
   if (!verifyPartnerAdminCredential(username, password)) {
-    return kit.response.error('AUTH_FAILED', 'Invalid username or password', 401)
+    return kit.response.error('AUTH_FAILED', m.admin_login_failed(), 401)
   }
 
   const token = await createPartnerAdminSession(username)
