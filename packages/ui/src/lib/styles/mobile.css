@@ -103,3 +103,31 @@
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
 }
+
+/* ─── 主流移动端 App 壳布局 ─── */
+.hai-mobile-viewport {
+  min-height: 100dvh;
+  background:
+    radial-gradient(circle at top left, color-mix(in srgb, hsl(var(--p)) 12%, transparent), transparent 32rem),
+    hsl(var(--b2));
+}
+
+.hai-mobile-shell {
+  width: 100%;
+  min-height: 100dvh;
+  margin-inline: auto;
+  display: flex;
+  flex-direction: column;
+  background: hsl(var(--b1));
+  box-shadow:
+    0 0 0 1px color-mix(in srgb, currentColor 6%, transparent),
+    0 24px 72px rgb(15 23 42 / 10%);
+}
+
+.hai-mobile-main {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}

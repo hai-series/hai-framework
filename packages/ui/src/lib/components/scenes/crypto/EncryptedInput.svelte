@@ -11,9 +11,7 @@
 <script lang='ts'>
   import type { Size } from '../../../types.js'
   import { uiM } from '../../../messages.js'
-  import BareButton from '../../primitives/BareButton.svelte'
-  import IconButton from '../../primitives/IconButton.svelte'
-  import Input from '../../primitives/Input.svelte'
+  import { BareButton, IconButton, Input } from '../../primitives/index.js'
 
   interface Props {
     /** 原始值 */
@@ -29,7 +27,7 @@
     /** 是否显示加密结果 */
     showEncrypted?: boolean
     /** 加密算法 */
-    algorithm?: string
+    algorithm?: 'SM2' | 'SM4'
     /** 自定义类名 */
     class?: string
     /** 加密函数 */

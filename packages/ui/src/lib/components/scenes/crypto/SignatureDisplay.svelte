@@ -12,9 +12,7 @@
   import type { SignatureDisplayProps } from '../types.js'
   import { uiM } from '../../../messages.js'
   import { cn } from '../../../utils.js'
-  import Badge from '../../primitives/Badge.svelte'
-
-  import IconButton from '../../primitives/IconButton.svelte'
+  import { Badge, IconButton } from '../../primitives/index.js'
 
   const {
     signature = '',
