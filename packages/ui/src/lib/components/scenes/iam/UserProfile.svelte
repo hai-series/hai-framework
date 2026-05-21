@@ -144,6 +144,7 @@
     const file = e.currentTarget.files?.[0]
     if (file) {
       onavatarchange?.(file)
+      e.currentTarget.value = ''
     }
   }
 </script>
@@ -170,9 +171,14 @@
                   type='file'
                   class='file-input file-input-sm w-full max-w-xs'
                   accept='image/*'
+                  disabled={loading}
                   onchange={handleAvatarChange}
                 />
-                <p class='text-xs text-base-content/60 mt-1'>{uiM('user_profile_avatar_hint')}</p>
+                {#if errors.avatar}
+                  <p class='text-xs text-error mt-1' role='alert'>{errors.avatar}</p>
+                {:else}
+                  <p class='text-xs text-base-content/60 mt-1'>{uiM('user_profile_avatar_hint')}</p>
+                {/if}
               </div>
             {/if}
           </div>

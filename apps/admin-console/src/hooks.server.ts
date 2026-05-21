@@ -144,7 +144,7 @@ const haiHandle = kit.createHandle({
       '/api/auth/reset-password',
       '/api/storage/*',
       '/api/public/*',
-      '/api/kit/*',
+      '/api/_hai/*',
     ],
     operations: () => iam.auth,
   },

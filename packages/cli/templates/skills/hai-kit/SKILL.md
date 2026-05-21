@@ -52,6 +52,47 @@ const client = kit.client.create({ auth: true })
 export const { apiFetch } = client
 ```
 
+### 4. 同源传输加密
+
+kit 不再维护本地传输加密实现；服务端和客户端都统一委托 `@h-ai/crypto` 的 `crypto.transport`。
+
+```ts
+// hooks.server.ts
+import { crypto } from '@h-ai/crypto'
+import { kit } from '@h-ai/kit'
+
+await crypto.init()
+
+export const handle = kit.createHandle({
+  auth: {
+    verifyToken,
+    protectedPaths: ['/api/*'],
+    publicPaths: ['/api/_hai/*'],
+  },
+  crypto: {
+    crypto,
+    transport: { requireEncryption: false },
+  },
+})
+```
+
+```ts
+// lib/utils/api.ts
+import { crypto } from '@h-ai/crypto'
+import { kit } from '@h-ai/kit'
+
+if (typeof window !== 'undefined') {
+  crypto.init()
+}
+
+export const { apiFetch } = kit.client.create({
+  transport: { crypto },
+  auth: true,
+})
+```
+
+默认协商端点：`/api/_hai/key-exchange`。如 `keyExchangePath` 自定义，浏览器端同步设置 `keyExchangeUrl`。
+
 ## 核心 API
 
 | API | 用途 |
@@ -70,5 +111,6 @@ export const { apiFetch } = client
 
 - SvelteKit 应用内同源请求用 `kit.client.create().apiFetch`。
 - Web/App/小程序跨域访问公共 API 用 `@h-ai/api-client` typed client。
+- 传输加密只通过 `crypto.transport` 间接装配，不在 kit 中新增本地加密工厂或鸭子类型。
 - 服务端业务模块直接调用模块 API，不通过 HTTP 自环。
 - API endpoint 必须用 Zod 校验用户输入，并设置认证/权限边界。

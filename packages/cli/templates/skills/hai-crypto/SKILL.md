@@ -1,6 +1,6 @@
 ---
 name: hai-crypto
-description: 使用 @h-ai/crypto 进行加密（非对称/哈希/对称）与密码哈希；当需求涉及加密、解密、签名、验签、哈希、密码存储或密钥管理时使用。
+description: 使用 @h-ai/crypto 进行加密（非对称/哈希/对称）、密码哈希与传输加密；当需求涉及加密、解密、签名、验签、哈希、密码存储、密钥管理或 crypto.transport 时使用。
 ---
 
 # hai-crypto
@@ -19,6 +19,7 @@ description: 使用 @h-ai/crypto 进行加密（非对称/哈希/对称）与密
 | `crypto.hash` 哈希 | ✅ | ✅ | SM3 哈希、HMAC |
 | `crypto.symmetric` 对称加密 | ✅ | ✅ | SM4 ECB/CBC |
 | `crypto.password` 密码哈希 | ✅ | ❌ | 依赖 Node.js crypto（服务端专用） |
+| `crypto.transport` 传输加密 | ✅ | ✅ | 服务端管理器 + 客户端 encryptedFetch |
 
 浏览器端主要用于 kit 传输加密场景（`kit.client.create({ transport: { crypto } })`），一般不需要直接调用 crypto API。
 
@@ -30,6 +31,7 @@ description: 使用 @h-ai/crypto 进行加密（非对称/哈希/对称）与密
 - 哈希计算与 HMAC
 - 对称加密/解密（ECB/CBC 模式）
 - 密码存储与验证（加盐迭代哈希）
+- 传输加密：为 serv / kit / api-client 提供统一协议、密钥协商和请求响应加解密
 
 ---
 
@@ -139,6 +141,36 @@ if (hashed.success) {
 哈希格式：`$hai$<iterations>$<salt>$<hash>`
 **PasswordConfig**：`{ saltLength?: number, iterations?: number }`
 
+### 传输加密 — `crypto.transport`
+
+所有传输加密工厂必须从 `crypto.transport` 访问，不从子目录导入内部工厂。
+
+| 方法 | 签名 | 说明 |
+| --- | --- | --- |
+| `createServer` | `(options?) => HaiResult<TransportEncryptionManager>` | 创建服务端传输加密管理器 |
+| `createClient` | `({ keyExchangeUrl, fetch? }) => TransportClient` | 创建客户端 encryptedFetch 会话 |
+| `protocol` | `TRANSPORT_PROTOCOL` | 协议常量：`X-Client-Id`、`X-Encrypted`、默认协商路径 |
+
+```typescript
+const server = crypto.transport.createServer({ maxClients: 10000 })
+if (!server.success)
+  return server
+
+const client = crypto.transport.createClient({
+  keyExchangeUrl: 'https://api.example.com/api/v1/_hai/key-exchange',
+})
+
+const resp = await client.encryptedFetch('https://api.example.com/api/v1/echo', {
+  method: 'POST',
+  body: JSON.stringify({ hello: 'world' }),
+})
+```
+
+常规应用优先使用上层封装：
+- serv：`serv.createApp({ transport: { crypto } })`
+- kit：`kit.createHandle({ crypto: { crypto, transport: true } })` + `kit.client.create({ transport: { crypto } })`
+- api-client：`api.init({ transport: { crypto } })`
+
 ---
 
 ## 错误码 — `HaiCryptoError`
@@ -196,3 +228,4 @@ if (verifyResult.success && verifyResult.data) {
 - `hai-core`：配置与 HaiResult 模型
 - `hai-iam`：密码哈希（内部自动调用 crypto.password）
 - `hai-kit`：SvelteKit 集成（传输加密）
+- `hai-serv` / `hai-api-client`：跨域 HTTP API 的透明传输加密
