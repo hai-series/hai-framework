@@ -37,8 +37,8 @@
   const { data }: Props = $props()
 
   const { hasPerm } = usePermission()
-  const canCreate = $derived(hasPerm('permission:create'))
-  const canDelete = $derived(hasPerm('permission:delete'))
+  const canCreate = $derived(hasPerm('permission:create') && hasPerm('permission:api:create'))
+  const canDelete = $derived(hasPerm('permission:delete') && hasPerm('permission:api:delete'))
 
   const permissionCrud: CrudOperations = $derived(createPermissionCrud(data.permissionRolesMap))
 
@@ -69,19 +69,19 @@
 
 <!-- 统计卡片 -->
 <div class='grid gap-3 grid-cols-2 lg:grid-cols-4 mb-4'>
-  <div class='bg-base-100 rounded-xl border border-base-content/6 p-4'>
+  <div class='bg-base-100 rounded-xl border border-base-content/6 p-4 shadow-sm'>
     <p class='text-xs text-base-content/45'>{m.iam_permissions_stat_total()}</p>
     <p class='text-2xl font-bold text-primary mt-1 tabular-nums'>{data.total}</p>
   </div>
-  <div class='bg-base-100 rounded-xl border border-base-content/6 p-4'>
+  <div class='bg-base-100 rounded-xl border border-base-content/6 p-4 shadow-sm'>
     <p class='text-xs text-base-content/45'>{m.iam_permissions_stat_resources()}</p>
     <p class='text-2xl font-bold text-base-content mt-1 tabular-nums'>{data.resources.length}</p>
   </div>
-  <div class='bg-base-100 rounded-xl border border-base-content/6 p-4'>
+  <div class='bg-base-100 rounded-xl border border-base-content/6 p-4 shadow-sm'>
     <p class='text-xs text-base-content/45'>{m.iam_permissions_stat_actions()}</p>
     <p class='text-2xl font-bold text-base-content mt-1 tabular-nums'>{data.actions.length}</p>
   </div>
-  <div class='bg-base-100 rounded-xl border border-base-content/6 p-4'>
+  <div class='bg-base-100 rounded-xl border border-base-content/6 p-4 shadow-sm'>
     <p class='text-xs text-base-content/45'>{m.iam_permissions_stat_system()}</p>
     <p class='text-2xl font-bold text-secondary mt-1 tabular-nums'>
       {data.permissions.filter(p => p.is_system).length}

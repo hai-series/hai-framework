@@ -30,23 +30,23 @@
     { op: 'CREATE TABLE', sql: 'CREATE TABLE users (\n  id INTEGER PRIMARY KEY,\n  name TEXT NOT NULL,\n  email TEXT UNIQUE\n)', desc: m.modules_db_op_create_desc() },
     { op: 'INSERT', sql: 'INSERT INTO users (name, email)\nVALUES (\'张三\', \'zhang@example.com\')', desc: m.modules_db_op_insert_desc() },
     { op: 'SELECT', sql: 'SELECT * FROM users WHERE name LIKE \'%张%\'', desc: m.modules_db_op_select_desc() },
-    { op: 'TRANSACTION', sql: 'await reldb.transaction(async (tx) => {\n  await tx.insert(users).values(...)\n  await tx.update(accounts)...\n})', desc: m.modules_db_op_tx_desc() },
+    { op: 'TRANSACTION', sql: 'await reldb.tx.wrap(async (tx) => {\n  await tx.execute(\'INSERT INTO users (name, email) VALUES (?, ?)\', [\'张三\', \'zhang@example.com\'])\n  return await tx.get(\'SELECT * FROM users WHERE email = ?\', [\'zhang@example.com\'])\n})', desc: m.modules_db_op_tx_desc() },
   ])
 
   // Cache 示例
   const cacheOps = $derived([
-    { op: 'SET', code: 'await cache.set(\'user:1\', userData, { ttl: 3600 })', desc: m.modules_cache_op_set_desc() },
-    { op: 'GET', code: 'const user = await cache.get(\'user:1\')', desc: m.modules_cache_op_get_desc() },
-    { op: 'DELETE', code: 'await cache.delete(\'user:1\')', desc: m.modules_cache_op_delete_desc() },
-    { op: 'CLEAR', code: 'await cache.clear()', desc: m.modules_cache_op_clear_desc() },
+    { op: 'SET', code: 'await cache.kv.set(\'user:1\', userData, { ex: 3600 })', desc: m.modules_cache_op_set_desc() },
+    { op: 'GET', code: 'const user = await cache.kv.get<User>(\'user:1\')', desc: m.modules_cache_op_get_desc() },
+    { op: 'DELETE', code: 'await cache.kv.del(\'user:1\')', desc: m.modules_cache_op_delete_desc() },
+    { op: 'SCAN', code: 'const [cursor, keys] = (await cache.kv.scan(0, { match: \'user:*\', count: 100 })).data', desc: m.modules_cache_op_clear_desc() },
   ])
 
   // Storage 示例
   const storageOps = $derived([
-    { op: m.modules_storage_op_upload(), code: 'await storage.upload(\'docs/report.pdf\', fileBuffer)', desc: m.modules_storage_op_upload_desc() },
-    { op: m.modules_storage_op_download(), code: 'const file = await storage.download(\'docs/report.pdf\')', desc: m.modules_storage_op_download_desc() },
-    { op: m.modules_storage_op_presign(), code: 'await storage.presign(\'docs/report.pdf\', { expires: 3600 })', desc: m.modules_storage_op_presign_desc() },
-    { op: m.modules_storage_op_list(), code: 'const files = await storage.list(\'docs/\')', desc: m.modules_storage_op_list_desc() },
+    { op: m.modules_storage_op_upload(), code: 'await storage.file.put(\'docs/report.pdf\', fileBuffer)', desc: m.modules_storage_op_upload_desc() },
+    { op: m.modules_storage_op_download(), code: 'const file = await storage.file.get(\'docs/report.pdf\')', desc: m.modules_storage_op_download_desc() },
+    { op: m.modules_storage_op_presign(), code: 'await storage.presign.getUrl(\'docs/report.pdf\', { expiresIn: 3600 })', desc: m.modules_storage_op_presign_desc() },
+    { op: m.modules_storage_op_list(), code: 'const files = await storage.dir.list({ prefix: \'docs/\' })', desc: m.modules_storage_op_list_desc() },
   ])
 
   // AI 示例
@@ -91,7 +91,7 @@
   let encryptResult = $state('')
 
   function mockHash() {
-    // 模拟 SM3 哈希
+    // 模拟哈希摘要
     const hash = Array.from(
       { length: 64 },
       () => '0123456789abcdef'[Math.floor(Math.random() * 16)],
@@ -101,7 +101,7 @@
   }
 
   function mockEncrypt() {
-    // 模拟 SM4 加密
+    // 模拟对称加密输出
     const encrypted = btoa(unescape(encodeURIComponent(plainText))).replace(/=/g, '') + Array.from(
       { length: 8 },
       () => '0123456789abcdef'[Math.floor(Math.random() * 16)],
@@ -214,22 +214,31 @@ await core.close()`}</code></pre>
         <h3 class='text-lg font-semibold mb-3'>{m.modules_db_crud_title()}</h3>
         <pre class='bg-base-200 p-4 rounded-lg text-sm overflow-x-auto font-mono'><code>{`import { reldb } from '@h-ai/reldb'
 
-// 定义 Schema
-const users = sqliteTable('users', {
-  id: integer('id').primaryKey(),
-  name: text('name').notNull(),
-  email: text('email').unique(),
-  createdAt: integer('created_at', { mode: 'timestamp' }),
+await reldb.init({ type: 'sqlite', database: './data/app.db' })
+
+await reldb.ddl.createTable('users', {
+  id: { type: 'TEXT', primaryKey: true },
+  name: { type: 'TEXT', notNull: true },
+  email: { type: 'TEXT', unique: true },
+  created_at: { type: 'TIMESTAMP' },
 })
 
-// CRUD 操作
-const allUsers = await reldb.select().from(users)
-await reldb.insert(users).values({ name: '张三', email: 'z@test.com' })
-await reldb.update(users).set({ name: '李四' }).where(eq(users.id, 1))
-await reldb.delete(users).where(eq(users.id, 1))
+const users = reldb.crud.table({
+  table: 'users',
+  idColumn: 'id',
+  dbType: reldb.config?.type ?? 'sqlite',
+})
+
+await users.create({ id: 'u1', name: '张三', email: 'z@test.com' })
+const allUsers = await users.findAll({ where: 'name LIKE ?', params: ['%张%'] })
+await users.updateById('u1', { name: '李四' })
+await users.deleteById('u1')
 
 // 分页查询
-const page = await reldb.select().from(users).limit(10).offset(0)`}</code></pre>
+const page = await reldb.sql.queryPage({
+  sql: 'SELECT * FROM users ORDER BY created_at DESC',
+  pagination: { page: 1, pageSize: 10 },
+})`}</code></pre>
       </Card>
     </div>
   {/if}
@@ -266,23 +275,26 @@ const page = await reldb.select().from(users).limit(10).offset(0)`}</code></pre>
         <pre class='bg-base-200 p-4 rounded-lg text-sm overflow-x-auto font-mono'><code>{`import { cache } from '@h-ai/cache'
 
 // 初始化 (内存缓存)
-await cache.init({ provider: 'memory' })
+await cache.init({ type: 'memory' })
 
 // 初始化 (Redis)
 await cache.init({
-  provider: 'redis',
-  redis: { url: 'redis://localhost:6379' },
+  type: 'redis',
+  url: 'redis://localhost:6379/0',
 })
 
-// 使用命名空间
-const userCache = cache.namespace('users')
-await userCache.set('profile:1', userData)
+// KV + TTL
+await cache.kv.set('users:profile:1', userData, { ex: 3600 })
+const profile = await cache.kv.get('users:profile:1')
+
+// Hash / List / Set / SortedSet
+await cache.hash.hset('users:1', { name: '张三', age: 18 })
+await cache.list.rpush('jobs', { id: 'job-1' })
+await cache.set_.sadd('tags', 'ai', 'svelte')
+await cache.zset.zadd('rank', { member: 'player-1', score: 100 })
 
 // 批量操作
-await cache.mset([
-  { key: 'a', value: 1 },
-  { key: 'b', value: 2 },
-])
+await cache.kv.mset([['a', 1], ['b', 2]])
 
 // 关闭
 await cache.close()`}</code></pre>
@@ -325,24 +337,24 @@ await cache.close()`}</code></pre>
 
 // 本地存储
 await storage.init({
-  provider: 'local',
-  local: { rootDir: './uploads' },
+  type: 'local',
+  root: './uploads',
 })
 
 // S3 存储
 await storage.init({
-  provider: 's3',
-  s3: {
-    bucket: 'my-bucket',
-    region: 'us-east-1',
-    accessKeyId: process.env.HAI_STORAGE_S3_ACCESS_KEY,
-    secretAccessKey: process.env.HAI_STORAGE_S3_SECRET_KEY,
-  },
+  type: 's3',
+  bucket: 'my-bucket',
+  region: 'us-east-1',
+  accessKeyId: process.env.HAI_STORAGE_S3_ACCESS_KEY,
+  secretAccessKey: process.env.HAI_STORAGE_S3_SECRET_KEY,
 })
 
 // 上传与预签名
-const key = await storage.upload('avatars/user1.jpg', buffer)
-const url = await storage.presign(key, { expires: 3600 })`}</code></pre>
+const meta = await storage.file.put('avatars/user1.jpg', buffer, { contentType: 'image/jpeg' })
+if (meta.success) {
+  const url = await storage.presign.getUrl(meta.data.key, { expiresIn: 3600 })
+}`}</code></pre>
       </Card>
     </div>
   {/if}
@@ -393,6 +405,7 @@ const response = await ai.llm.chat({
     { role: 'user', content: '你好！' },
   ],
 })
+if (!response.success) throw new Error(response.error.message)
 
 // 流式输出
 for await (const chunk of ai.llm.chatStream({
@@ -402,7 +415,7 @@ for await (const chunk of ai.llm.chatStream({
 }
 
 // 文本嵌入
-const embedding = await ai.embedding.embed({ input: '搜索查询文本' })`}</code></pre>
+const embedding = await ai.embedding.embedText('搜索查询文本')`}</code></pre>
       </Card>
     </div>
   {/if}
@@ -459,19 +472,22 @@ await vecdb.init({ type: 'lancedb', path: './data/vecdb' })
 await vecdb.collection.create('knowledge', { dimension: 1536 })
 
 // 文档入库: 嵌入 + 存储
-const embedding = await ai.embedding.embed({ input: 'hai-framework 是一个 AI 优先的全栈框架' })
+const embedding = await ai.embedding.embedText('hai-framework 是一个 AI 优先的全栈框架')
 await vecdb.vector.insert('knowledge', [{
   id: 'doc-1',
-  vector: embedding.data[0].embedding,
+  vector: embedding.success ? embedding.data : [],
+  content: 'hai-framework 是一个 AI 优先的全栈框架',
   metadata: { title: '框架介绍', source: 'docs' },
 }])
 
 // RAG 检索: 查询 → 嵌入 → 搜索
-const queryEmbedding = await ai.embedding.embed({ input: '什么是 hai-framework？' })
-const results = await vecdb.vector.search('knowledge', queryEmbedding.data[0].embedding, { topK: 3 })
+const queryEmbedding = await ai.embedding.embedText('什么是 hai-framework？')
+if (!queryEmbedding.success) throw new Error(queryEmbedding.error.message)
+const searchResult = await vecdb.vector.search('knowledge', queryEmbedding.data, { topK: 3 })
+if (!searchResult.success) throw new Error(searchResult.error.message)
 
 // 将检索结果作为 context 传给 LLM
-const context = results.map(r => r.metadata.title).join('\\n')
+const context = searchResult.data.map(r => r.content ?? '').join('\\n')
 const answer = await ai.llm.chat({
   messages: [
     { role: 'system', content: \`基于以下知识回答:\\n\${context}\` },
@@ -538,27 +554,26 @@ const cleaned = datapipe.clean(rawHtml, {
   normalizeWhitespace: true,
   removeUrls: true,
 })
+if (!cleaned.success) throw new Error(cleaned.error.message)
 
 // 2. 分块（段落策略）
-const chunks = datapipe.chunk(cleaned, {
+const chunks = datapipe.chunk(cleaned.data, {
   mode: 'paragraph',
   maxSize: 1000,
   overlap: 200,
 })
+if (!chunks.success) throw new Error(chunks.error.message)
 
 // 3. 嵌入并存入向量库
-for (const chunk of chunks) {
-  const embedding = await ai.embedding.embed({ input: chunk.content })
-  await vecdb.vector.insert('knowledge', [{
-    id: chunk.id,
-    vector: embedding.data[0].embedding,
-    metadata: {
-      text: chunk.content,
-      start: chunk.start,
-      end: chunk.end,
-    },
-  }])
-}
+const embeddings = await ai.embedding.embedBatch(chunks.data.map(chunk => chunk.content))
+if (!embeddings.success) throw new Error(embeddings.error.message)
+
+await vecdb.vector.insert('knowledge', chunks.data.map((chunk, index) => ({
+  id: 'doc-' + chunk.index,
+  vector: embeddings.data[index],
+  content: chunk.content,
+  metadata: { index: chunk.index },
+})))
 
 // 也可以使用管道编排
 const pipeline = datapipe.pipeline()
@@ -578,9 +593,9 @@ const result = await pipeline.run(rawContent)`}</code></pre>
           {m.modules_crypto_description()}
         </p>
         <div class='flex gap-2'>
-          <Badge variant='error'>{m.modules_crypto_sm2()}</Badge>
-          <Badge variant='warning'>{m.modules_crypto_sm3()}</Badge>
-          <Badge variant='success'>{m.modules_crypto_sm4()}</Badge>
+          <Badge variant='error'>{m.modules_crypto_asymmetric()}</Badge>
+          <Badge variant='warning'>{m.modules_crypto_hash()}</Badge>
+          <Badge variant='success'>{m.modules_crypto_symmetric()}</Badge>
         </div>
       </Card>
       <Card>
@@ -615,22 +630,35 @@ const result = await pipeline.run(rawContent)`}</code></pre>
 // 初始化
 await crypto.init()
 
-// SM3 哈希
-const hash = crypto.sm3.hash('Hello World')
+// 哈希 / HMAC
+const hash = crypto.hash.hash('Hello World')
+if (!hash.success) throw new Error(hash.error.message)
+const hmac = crypto.hash.hmac('Hello World', 'secret')
+if (!hmac.success) throw new Error(hmac.error.message)
 
-// SM4 对称加密
-const key = crypto.sm4.generateKey()
-const encrypted = crypto.sm4.encrypt('敏感数据', key)
-const decrypted = crypto.sm4.decrypt(encrypted, key)
+// 对称加密
+const key = crypto.symmetric.generateKey()
+const encrypted = crypto.symmetric.encryptWithIV('敏感数据', key)
+if (!encrypted.success) throw new Error(encrypted.error.message)
+const decrypted = crypto.symmetric.decryptWithIV(
+  encrypted.data.ciphertext,
+  key,
+  encrypted.data.iv,
+)
 
-// SM2 非对称加密
-const keypair = crypto.sm2.generateKeyPair()
-const ciphertext = crypto.sm2.encrypt('数据', keypair.publicKey)
-const plaintext = crypto.sm2.decrypt(ciphertext, keypair.privateKey)
+// 非对称加密
+const keypair = crypto.asymmetric.generateKeyPair()
+if (!keypair.success) throw new Error(keypair.error.message)
+const ciphertext = crypto.asymmetric.encrypt('数据', keypair.data.publicKey)
+const plaintext = ciphertext.success
+  ? crypto.asymmetric.decrypt(ciphertext.data, keypair.data.privateKey)
+  : ciphertext
 
-// SM2 数字签名
-const signature = crypto.sm2.sign('数据', keypair.privateKey)
-const isValid = crypto.sm2.verify('数据', signature, keypair.publicKey)`}</code></pre>
+// 数字签名
+const signature = crypto.asymmetric.sign('数据', keypair.data.privateKey)
+const isValid = signature.success
+  ? crypto.asymmetric.verify('数据', signature.data, keypair.data.publicKey)
+  : signature`}</code></pre>
       </Card>
     </div>
   {/if}

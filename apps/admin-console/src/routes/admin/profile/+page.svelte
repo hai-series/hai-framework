@@ -1,6 +1,7 @@
 <script lang='ts'>
   import type { ChangePasswordFormData, UserProfileSubmitData } from '@h-ai/ui'
   import type { PageData } from './$types'
+  import { invalidateAll } from '$app/navigation'
   import * as m from '$lib/paraglide/messages.js'
   import { apiFetch } from '$lib/utils/api'
   import { kit } from '@h-ai/kit'
@@ -145,6 +146,7 @@
         ...profileUser,
         avatarUrl: body.data?.user?.avatar ?? uploadBody.data?.avatar,
       }
+      await invalidateAll()
       profileSuccess = m.common_success()
     }
     catch {
@@ -210,6 +212,7 @@
         phone: body.data?.user?.phone ?? '',
         avatarUrl: body.data?.user?.avatar ?? '',
       }
+      await invalidateAll()
       profileSuccess = m.common_success()
     }
     catch {
@@ -311,6 +314,18 @@
   <div class='grid grid-cols-1 xl:grid-cols-3 gap-4'>
     <aside class='card bg-base-100 border border-base-content/6 rounded-xl xl:col-span-1'>
       <div class='card-body gap-4'>
+        <div class='flex items-center gap-3 pb-2 border-b border-base-content/6'>
+          <Avatar
+            name={profileUser.displayName || profileUser.username || 'Admin'}
+            src={profileUser.avatarUrl}
+            size='lg'
+            ring
+          />
+          <div class='min-w-0'>
+            <p class='text-sm font-semibold text-base-content truncate'>{profileUser.displayName || profileUser.username || '-'}</p>
+            <p class='text-xs text-base-content/45 truncate'>@{profileUser.username || '-'}</p>
+          </div>
+        </div>
         <div class='space-y-1'>
           <p class='text-xs uppercase tracking-wider text-base-content/40'>{m.iam_users_form_username()}</p>
           <p class='text-base font-semibold text-base-content' data-testid='profile-username'>{profileUser.username || '-'}</p>
