@@ -1,66 +1,103 @@
 # hai Desktop App
 
-> hai Agent Framework - 桌面应用（Tauri v2 + SvelteKit SPA）
+> hai Agent Framework 的桌面端示例 — **Tauri v2 + Svelte 5 + Vite**，通过 `@h-ai/api-client` + `@h-ai/api-contract` 调用 `apps/api-service`。
 
 ## 技术栈
 
-- **桌面壳**：Tauri v2（Rust）
-- **前端**：SvelteKit + Svelte 5 + TailwindCSS + DaisyUI
-- **i18n**：Paraglide
-- **UI 组件**：@h-ai/ui
+- **Tauri v2** — 跨平台原生外壳（Rust + WebView）
+- **Svelte 5（runes）+ Vite** — 纯 SPA，**不依赖 SvelteKit / @h-ai/kit**
+- **Tailwind CSS v4 + DaisyUI** — UI 体系（与 `@h-ai/ui` 共享）
+- **`@h-ai/api-client`** — typed oRPC 客户端，调用 `apps/api-service`
+- **`@h-ai/ui`** — 共享组件库（按需）
+- **极简 hash router**（`src/lib/router.svelte.ts`）— 适配 Tauri webview（无 server，无 file:// URL 路由）
 
-## 前置要求
+## 范围
 
-- [Rust](https://www.rust-lang.org/tools/install)（含 `cargo`）
-- [Node.js](https://nodejs.org) ≥ 20
-- [pnpm](https://pnpm.io) ≥ 9
-- Windows：需安装 [Microsoft C++ Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/) 和 WebView2
-- macOS：需安装 Xcode Command Line Tools
-- Linux：需安装 `libwebkit2gtk-4.1-dev`、`build-essential`、`libssl-dev` 等系统依赖
+这是一个**示例**应用，演示桌面端如何对接 hai api-service：
 
-## 快速开始
+- 注册 / 登录 / 自动登录
+- Dashboard
+- 用户列表（`api.iam.users.list`）
+- 个人信息维护
+
+不包含的（保持示例精简）：
+
+- i18n（hard-coded 英文）
+- 端到端测试
+- 复杂的权限/菜单系统
+- Storage / AI 子领域 demo（接口可用，UI 未提供）
+
+## 前置条件
+
+1. **Rust 工具链**（Tauri v2 必需）：参考 [tauri.app/start/prerequisites](https://tauri.app/start/prerequisites/)
+2. **api-service 已启动**：
+
+   ```bash
+   pnpm --filter api-service dev
+   # 默认监听 http://localhost:3000
+   ```
+
+3. 复制环境文件：
+
+   ```bash
+   cp .env.example .env
+   ```
+
+## 启动
 
 ```bash
-# 1. 安装依赖（在仓库根目录）
-pnpm install
+# 仅前端开发（不启 Tauri）
+pnpm --filter desktop-app dev    # http://localhost:5176
 
-# 2. 启动开发模式（前端 + Tauri 窗口）
-cd apps/desktop-app
-pnpm tauri:dev
+# Tauri 桌面应用（推荐）
+pnpm --filter desktop-app tauri:dev
 
-# 3. 构建生产包
-pnpm tauri:build
+# 生产构建
+pnpm --filter desktop-app tauri:build
 ```
 
 ## 项目结构
 
 ```
-desktop-app/
-├── src/                  # SvelteKit 前端源码
-│   ├── routes/           # 页面路由
-│   ├── lib/              # 共享逻辑
-│   ├── app.html          # HTML 模板
-│   └── app.css           # 全局样式
-├── src-tauri/            # Tauri Rust 后端
-│   ├── src/
-│   │   ├── main.rs       # 桌面入口
-│   │   └── lib.rs        # 核心逻辑 + Commands
-│   ├── capabilities/     # 权限声明
-│   ├── icons/            # 应用图标
-│   ├── Cargo.toml        # Rust 依赖
-│   ├── build.rs          # 构建脚本
-│   └── tauri.conf.json   # Tauri 配置
-├── messages/             # i18n 翻译文件
-├── static/               # 静态资源
-├── package.json
-├── svelte.config.js
-├── vite.config.ts
-└── tsconfig.json
+apps/desktop-app/
+├── src/
+│   ├── main.ts                # 入口：initApi → mount(App)
+│   ├── App.svelte             # 路由 + 认证守卫
+│   ├── app.css                # Tailwind + @h-ai/ui 样式
+│   ├── lib/
+│   │   ├── api.ts             # api-client 初始化
+│   │   ├── router.svelte.ts   # hash router + NavAdapter
+│   │   └── auth-store.svelte.ts  # runes 认证状态
+│   └── views/
+│       ├── AppShellView.svelte
+│       ├── LoginView.svelte
+│       ├── RegisterView.svelte
+│       ├── DashboardView.svelte
+│       ├── UsersView.svelte
+│       └── ProfileView.svelte
+├── src-tauri/                 # Tauri Rust 端（v2）
+├── tests/                     # vitest（jsdom）
+├── vite.config.ts             # vite + tailwind + svelte
+├── svelte.config.js           # autoImportHaiUi + vitePreprocess
+└── package.json
 ```
 
-## 开发说明
+## 设计要点
 
-- SvelteKit 使用 `adapter-static` 输出纯静态 SPA（`ssr = false`）
-- Tauri 负责将 SPA 包装为原生桌面窗口
-- 前端通过 `@tauri-apps/api` 调用 Rust 后端 Commands
-- 开发时 Tauri 连接 Vite dev server（端口 5176）；构建时使用 `build/` 目录
+- **Token 存储 = localStorage**：Tauri webview 与 api-service 跨域，httpOnly cookie 不可用，因此使用 `createLocalStorageTokenStorage()`。Tauri 沙箱内 XSS 面较小，但仍建议生产应用结合 [`tauri-plugin-stronghold`](https://v2.tauri.app/plugin/stronghold/) 或自定义 secure storage。
+- **路由 = hash**：file:// 协议不支持 history API，全部走 `#/path`。
+- **CSP**：`tauri.conf.json` 的 `app.security.csp` 已放行 `connect-src http://localhost:3000`。生产部署需根据实际域名调整。
+- **`@h-ai/ui` 完全解耦**：`@h-ai/ui` 不再包含任何 SvelteKit 依赖；SvelteKit 适配器迁至 `@h-ai/kit/client` 的 `createSvelteKitNavAdapter()`（本应用未使用）。
+
+## 验证
+
+```bash
+pnpm --filter desktop-app typecheck
+pnpm --filter desktop-app lint
+pnpm --filter desktop-app test
+pnpm --filter desktop-app build
+```
+
+## License
+
+MIT

@@ -1,30 +1,27 @@
 @import 'tailwindcss';
-@import '../../../packages/ui/src/lib/styles/design-tokens.css';
 @import '../../../packages/ui/src/lib/styles/global.css';
 @import '../../../packages/ui/src/lib/styles/theme.css';
 @source "../../../packages/ui/src/lib/**/*.{svelte,ts}";
 
-/* ─── DaisyUI 主题配置 ─── */
+/* DaisyUI 主题 */
 @plugin "daisyui" {
   themes:
     light --default,
     dark --prefersdark,
-    cupcake,
-    emerald,
-    corporate,
     nord,
-    lofi,
-    winter,
     dracula,
     night,
-    dim,
     business,
-    sunset,
-    luxury,
-    coffee;
+    dim;
 }
 
-/* ─── Iconify 图标 ─── */
 @plugin "@iconify/tailwind4" {
   prefixes: tabler;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
 }

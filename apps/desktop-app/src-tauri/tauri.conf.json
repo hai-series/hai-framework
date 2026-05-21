@@ -1,28 +1,28 @@
 {
   "$schema": "https://raw.githubusercontent.com/tauri-apps/tauri/dev/crates/tauri-cli/schema.json",
   "productName": "hai-desktop",
-  "version": "0.1.0-alpha1",
-  "identifier": "com.hai.desktop",
+  "version": "0.1.0-alpha.13",
+  "identifier": "com.haiframework.desktop",
   "build": {
     "beforeDevCommand": "pnpm dev",
     "beforeBuildCommand": "pnpm build",
     "devUrl": "http://localhost:5176",
-    "frontendDist": "../build"
+    "frontendDist": "../dist"
   },
   "app": {
     "title": "hai Desktop App",
     "windows": [
       {
-        "title": "hai Desktop App",
-        "width": 1024,
-        "height": 768,
+        "title": "hai Desktop",
+        "width": 1280,
+        "height": 800,
         "resizable": true,
         "fullscreen": false,
         "center": true
       }
     ],
     "security": {
-      "csp": null
+      "csp": "default-src 'self'; img-src 'self' data: https:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'self' http://localhost:3000 ws://localhost:5176 ws://localhost:5177; font-src 'self' data:"
     }
   },
   "bundle": {

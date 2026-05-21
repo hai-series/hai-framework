@@ -2,46 +2,47 @@
  * =============================================================================
  * hai Desktop App - Vite 配置
  * =============================================================================
+ * 关键点：
+ * - 固定端口 5176（与 src-tauri/tauri.conf.json 的 devUrl 对齐）
+ * - strictPort: 端口被占用时直接报错，避免与 Tauri 启动顺序错位
+ * - clearScreen: false：保留 Tauri 控制台输出
+ * - HMR host：从 TAURI_DEV_HOST 读取（Android 真机调试时由 Tauri 注入）
  */
 
 import process from 'node:process'
-import { paraglideVitePlugin } from '@inlang/paraglide-js'
-import { sveltekit } from '@sveltejs/kit/vite'
+import { svelte } from '@sveltejs/vite-plugin-svelte'
 import tailwindcss from '@tailwindcss/vite'
-import { defineConfig, loadEnv } from 'vite'
+import { defineConfig } from 'vite'
 
-// Tauri 在生产环境期望使用固定端口，dev 使用 5176 避免与其它应用冲突
 const host = process.env.TAURI_DEV_HOST
 
-export default defineConfig(({ mode }) => {
-  const env = loadEnv(mode, process.cwd(), '')
-  Object.assign(process.env, env)
+export default defineConfig({
+  plugins: [svelte(), tailwindcss()],
 
-  return {
-    plugins: [
-      sveltekit(),
-      tailwindcss(),
-      paraglideVitePlugin({
-        project: './project.inlang',
-        outdir: './src/lib/paraglide',
-        strategy: ['cookie', 'baseLocale'],
-      }),
-    ],
-    optimizeDeps: {
-      exclude: ['@h-ai/ui'],
+  // Vite 选项专为 Tauri 调整
+  clearScreen: false,
+  server: {
+    port: 5176,
+    strictPort: true,
+    host: host || false,
+    hmr: host
+      ? {
+          protocol: 'ws',
+          host,
+          port: 5177,
+        }
+      : undefined,
+    watch: {
+      // tauri 后端文件改动不应触发前端 HMR
+      ignored: ['**/src-tauri/**'],
     },
-    // Vite 相关配置 — 参考 Tauri v2 官方文档
-    clearScreen: false,
-    server: {
-      port: 5176,
-      strictPort: true,
-      host: host || false,
-      hmr: host
-        ? { protocol: 'ws', host, port: 5177 }
-        : undefined,
-      watch: {
-        ignored: ['**/src-tauri/**'],
-      },
-    },
-  }
+  },
+
+  // 阻止 Vite 预打包 @h-ai/ui — 保留 svelte 文件由 vite-plugin-svelte 处理
+  optimizeDeps: {
+    exclude: ['@h-ai/ui'],
+  },
+
+  // 环境变量前缀：PUBLIC_ + VITE_
+  envPrefix: ['VITE_', 'PUBLIC_'],
 })
