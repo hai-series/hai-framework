@@ -77,33 +77,38 @@
 {#if isAuthPage}
   {@render children()}
 {:else}
-  <div class='flex flex-col h-dvh max-w-lg mx-auto bg-base-100'>
-    <!-- 顶部应用栏 -->
-    <AppBar title={m.app_title()} safeArea={false} fixed={false}>
-      {#snippet trailing()}
-        <div class='flex items-center'>
-          <LanguageSwitch currentLanguage={currentLanguage} onchange={handleLanguageChange} compact />
-          <ThemeSelector currentTheme={currentTheme} onchange={handleThemeChange} showPreview compact grouped={false} />
-        </div>
-      {/snippet}
-    </AppBar>
+  <div class='hai-mobile-viewport'>
+    <div class='hai-mobile-shell max-w-lg'>
+      <!-- 顶部应用栏 -->
+      <AppBar title={m.app_title()} safeArea fixed={false} class='bg-base-100/95 backdrop-blur border-base-content/8'>
+        {#snippet trailing()}
+          <div class='flex items-center gap-1'>
+            <LanguageSwitch currentLanguage={currentLanguage} onchange={handleLanguageChange} compact />
+            <ThemeSelector currentTheme={currentTheme} onchange={handleThemeChange} showPreview compact grouped={false} />
+          </div>
+        {/snippet}
+      </AppBar>
 
-    <!-- 页面内容区（可滚动） -->
-    <main class='flex-1 overflow-y-auto overscroll-contain'>
-      {@render children()}
-    </main>
+      <!-- 页面内容区（可滚动） -->
+      <main class='hai-mobile-main'>
+        {@render children()}
+      </main>
 
-    <!-- 底部导航栏 -->
-    <BottomNav
-      items={[
-        { id: 'home', label: m.tab_home(), iconClass: 'icon-[tabler--home]' },
-        { id: 'discover', label: m.tab_discover(), iconClass: 'icon-[tabler--camera]' },
-        { id: 'cart', label: m.tab_cart(), iconClass: 'icon-[tabler--shopping-cart]' },
-        { id: 'profile', label: m.tab_profile(), iconClass: 'icon-[tabler--user]' },
-      ]}
-      active={activeTab}
-      onchange={handleTabChange}
-      safeArea={false}
-    />
+      <!-- 底部导航栏 -->
+      <BottomNav
+        items={[
+          { id: 'home', label: m.tab_home(), iconClass: 'icon-[tabler--home]' },
+          { id: 'discover', label: m.tab_discover(), iconClass: 'icon-[tabler--camera]' },
+          { id: 'cart', label: m.tab_cart(), iconClass: 'icon-[tabler--shopping-cart]' },
+          { id: 'profile', label: m.tab_profile(), iconClass: 'icon-[tabler--user]' },
+        ]}
+        active={activeTab}
+        onchange={handleTabChange}
+        safeArea
+        centered
+        maxWidth='lg'
+        class='border-base-content/8 shadow-[0_-12px_32px_rgba(15,23,42,0.08)]'
+      />
+    </div>
   </div>
 {/if}

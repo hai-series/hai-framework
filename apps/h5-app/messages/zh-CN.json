@@ -18,6 +18,7 @@
   "discover_history": "最近识别",
   "discover_empty": "还没有识别记录，先拍一张试试吧",
   "discover_upload_hint": "支持 JPG / PNG / WEBP，建议清晰拍摄主体",
+  "discover_preview_alt": "待识别图片预览",
   "discover_error_no_file": "请先选择或拍摄一张图片",
   "discover_error_failed": "识别失败，请稍后重试",
   "discover_theme": "主题",
@@ -52,6 +53,9 @@
   "cart_go_shopping": "去逛逛",
   "cart_total_label": "合计",
   "cart_checkout": "去结算",
+  "cart_decrease_qty": "减少数量",
+  "cart_increase_qty": "增加数量",
+  "cart_remove_item": "移除商品",
 
   "profile_title": "我的",
   "profile_guest_title": "未登录",
@@ -83,6 +87,9 @@
   "auth_register_login_link": "去登录",
   "auth_register_error_generic": "注册失败",
   "auth_register_error_network": "网络错误，请重试",
+  "api_upload_invalid_path": "文件路径不合法",
+  "api_upload_storage_unavailable": "文件存储未配置",
+  "api_upload_file_not_found": "文件不存在",
 
   "action_share": "分享",
   "action_edit_profile": "编辑资料",

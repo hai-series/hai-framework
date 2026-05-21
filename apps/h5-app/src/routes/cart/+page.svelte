@@ -63,19 +63,19 @@
                 <h3 class='font-medium text-sm truncate'>{item.name}</h3>
                 <p class='text-primary font-bold text-sm mt-0.5'>¥{item.price}</p>
                 <div class='flex items-center gap-1.5 mt-1.5'>
-                  <IconButton variant='outline' size='xs' ariaLabel='decrease' onclick={() => {
+                  <IconButton variant='outline' size='xs' ariaLabel={m.cart_decrease_qty()} onclick={() => {
                     if (item.qty > 1)
                       item.qty--
                   }}>
                     <span class='icon-[tabler--minus] text-sm'></span>
                   </IconButton>
                   <span class='text-sm w-6 text-center font-medium'>{item.qty}</span>
-                  <IconButton variant='outline' size='xs' ariaLabel='increase' onclick={() => item.qty++}>
+                  <IconButton variant='outline' size='xs' ariaLabel={m.cart_increase_qty()} onclick={() => item.qty++}>
                     <span class='icon-[tabler--plus] text-sm'></span>
                   </IconButton>
                 </div>
               </div>
-              <IconButton variant='ghost' size='xs' ariaLabel='remove' class='text-base-content/30 hover:text-error' onclick={() => removeItem(item.id)}>
+              <IconButton variant='ghost' size='xs' ariaLabel={m.cart_remove_item()} class='text-base-content/30 hover:text-error' onclick={() => removeItem(item.id)}>
                 <span class='icon-[tabler--trash] text-lg'></span>
               </IconButton>
             </div>
