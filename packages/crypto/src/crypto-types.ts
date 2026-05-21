@@ -6,6 +6,11 @@
  */
 
 import type { ErrorInfo, HaiResult } from '@h-ai/core'
+import type {
+  TRANSPORT_PROTOCOL as TRANSPORT_PROTOCOL_T,
+  TransportClient,
+  TransportEncryptionManager,
+} from './transport/crypto-transport-types.js'
 import { core } from '@h-ai/core'
 
 const CryptoErrorInfo = {
@@ -299,6 +304,49 @@ export interface PasswordOperations {
   verify: (password: string, hash: string) => HaiResult<boolean>
 }
 
+// ─── 传输加密 ───
+
+/**
+ * 传输加密操作接口（端到端混合加密）。
+ *
+ * 通过 `crypto.transport` 访问，需先调用 `crypto.init()`。
+ *
+ * @example 服务端
+ * ```ts
+ * const result = crypto.transport.createServer()
+ * if (!result.success) throw result.error
+ * const manager = result.data
+ * ```
+ *
+ * @example 客户端
+ * ```ts
+ * const client = crypto.transport.createClient({
+ *   keyExchangeUrl: 'https://api.example.com/api/v1/_hai/key-exchange',
+ * })
+ * const resp = await client.encryptedFetch('https://api.example.com/api/v1/echo', {
+ *   method: 'POST', body: JSON.stringify({ hello: 'world' }),
+ * })
+ * ```
+ */
+export interface TransportOperations {
+  /**
+   * 创建服务端传输加密管理器。
+   *
+   * options.maxClients：默认内存 keyStore 的最大客户端数（默认 10000）。
+   * 成功返回 manager；密钥生成失败返回 `HaiCommonError.INTERNAL_ERROR`。
+   */
+  createServer: (options?: { maxClients?: number }) => HaiResult<TransportEncryptionManager>
+  /**
+   * 创建客户端传输加密会话。
+   *
+   * options.keyExchangeUrl：密钥协商端点完整 URL。
+   * options.fetch：实际发送 HTTP 请求的 fetch（默认 `globalThis.fetch`）。
+   */
+  createClient: (options: { keyExchangeUrl: string, fetch?: typeof fetch }) => TransportClient
+  /** 协议常量（headers、密钥协商默认路径）。 */
+  readonly protocol: typeof TRANSPORT_PROTOCOL_T
+}
+
 // ─── 函数接口 ───
 
 /**
@@ -341,4 +389,6 @@ export interface CryptoFunctions {
   readonly symmetric: SymmetricOperations
   /** 密码哈希操作（未初始化时所有方法返回 NOT_INITIALIZED） */
   readonly password: PasswordOperations
+  /** 传输加密操作（端到端混合加密；createServer 在未初始化时返回 NOT_INITIALIZED） */
+  readonly transport: TransportOperations
 }
