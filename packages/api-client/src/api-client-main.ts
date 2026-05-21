@@ -37,6 +37,7 @@
  * @module api-client-main
  */
 
+import type { TransportClient } from '@h-ai/crypto'
 import type { AnyContractRouter, ContractRouterClient } from '@orpc/contract'
 import type { JsonifiedClient } from '@orpc/openapi-client'
 import type { TokenManager } from './api-client-auth.js'
@@ -105,10 +106,12 @@ export function createApiClient<const TContract extends AnyContractRouter>(
     config: ApiClientConfig | null
     rawClient: JsonifiedClient<ContractRouterClient<TContract>> | null
     tokenManager: TokenManager | undefined
+    transport: TransportClient | undefined
   } = {
     config: null,
     rawClient: null,
     tokenManager: undefined,
+    transport: undefined,
   }
 
   const auth: ApiClientAuth = {
@@ -124,7 +127,8 @@ export function createApiClient<const TContract extends AnyContractRouter>(
       try {
         state.config = config
         state.tokenManager = buildTokenManager(config)
-        state.rawClient = buildRawClient(contract, config, state.tokenManager)
+        state.transport = buildTransportSession(config)
+        state.rawClient = buildRawClient(contract, config, state.tokenManager, state.transport)
         return ok(undefined)
       }
       catch (error) {
@@ -136,9 +140,11 @@ export function createApiClient<const TContract extends AnyContractRouter>(
       }
     },
     async close() {
+      state.transport?.destroy()
       state.config = null
       state.rawClient = null
       state.tokenManager = undefined
+      state.transport = undefined
     },
     get config() { return state.config },
     get isInitialized() { return state.rawClient !== null },
@@ -303,16 +309,28 @@ function buildTokenManager(config: ApiClientConfig): TokenManager | undefined {
   return manager
 }
 
+/** 根据 `transport` 配置创建传输加密会话。 */
+function buildTransportSession(config: ApiClientConfig): TransportClient | undefined {
+  if (!config.transport)
+    return undefined
+  const baseFetch = config.fetch ?? globalThis.fetch.bind(globalThis)
+  const baseUrl = config.baseUrl.replace(TRAILING_SLASHES_REGEX, '')
+  const path = config.transport.keyExchangePath ?? '/_hai/key-exchange'
+  const keyExchangeUrl = `${baseUrl}${path.startsWith('/') ? path : `/${path}`}`
+  return config.transport.crypto.transport.createClient({ keyExchangeUrl, fetch: baseFetch })
+}
+
 /** 构造 oRPC OpenAPILink + raw client。 */
 function buildRawClient<TContract extends AnyContractRouter>(
   contract: TContract,
   config: ApiClientConfig,
   tokenManager: TokenManager | undefined,
+  transport: TransportClient | undefined,
 ): JsonifiedClient<ContractRouterClient<TContract>> {
   const link = new OpenAPILink(contract, {
     url: config.baseUrl,
     headers: async () => buildHeaders(config, tokenManager),
-    fetch: async (request, init) => fetchWithRefresh(request, init, config, tokenManager),
+    fetch: async (request, init) => fetchWithRefresh(request, init, config, tokenManager, transport),
   })
   return createORPCClient<JsonifiedClient<ContractRouterClient<TContract>>>(link)
 }
@@ -337,8 +355,9 @@ async function fetchWithRefresh(
   init: { redirect?: Request['redirect'] },
   config: ApiClientConfig,
   tokenManager: TokenManager | undefined,
+  transport: TransportClient | undefined,
 ): Promise<Response> {
-  const response = await fetchWithTimeout(request, init, config)
+  const response = await fetchWithTimeout(request, init, config, transport)
   if (response.status !== 401 || !tokenManager)
     return response
 
@@ -348,7 +367,7 @@ async function fetchWithRefresh(
 
   const headers = new Headers(request.headers)
   headers.set('authorization', `Bearer ${tokens.accessToken}`)
-  return fetchWithTimeout(new Request(request, { headers }), init, config)
+  return fetchWithTimeout(new Request(request, { headers }), init, config, transport)
 }
 
 /** fetch + AbortController 超时控制（联动调用方原始 signal）。 */
@@ -356,8 +375,11 @@ async function fetchWithTimeout(
   request: Request,
   init: { redirect?: Request['redirect'] },
   config: ApiClientConfig,
+  transport: TransportClient | undefined,
 ): Promise<Response> {
-  const fetchFn = config.fetch ?? globalThis.fetch.bind(globalThis)
+  // 启用传输加密时，用 encryptedFetch 作为实际 fetch；
+  // 它会首次请求前自动完成密钥协商，后续请求复用会话。
+  const fetchFn = transport?.encryptedFetch ?? config.fetch ?? globalThis.fetch.bind(globalThis)
   const timeout = config.timeout ?? DEFAULT_TIMEOUT
   const controller = new AbortController()
   const timeoutId = setTimeout(() => controller.abort(), timeout)

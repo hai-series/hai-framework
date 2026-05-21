@@ -7,6 +7,7 @@
  */
 
 import type { ErrorInfo, HaiResult } from '@h-ai/core'
+import type { CryptoFunctions } from '@h-ai/crypto'
 import type { AnyContractRouter, ContractRouterClient } from '@orpc/contract'
 import type { JsonifiedClient } from '@orpc/openapi-client'
 import { core } from '@h-ai/core'
@@ -106,6 +107,42 @@ export interface ApiClientConfig {
   readonly headers?: Record<string, string> | (() => Record<string, string> | Promise<Record<string, string>>)
   /** 自定义 fetch（测试 mock / Capacitor / 小程序桥接）。 */
   readonly fetch?: typeof globalThis.fetch
+  /**
+   * 启用端到端传输加密（opt-in）。
+   *
+   * 配置后所有出站请求会在底层 fetch 之上做一次混合加密，并自动解密
+   * 标记为 `X-Encrypted: true` 的响应。服务端需启用对应的 `serv.createApp({ transport })`。
+   *
+   * `crypto` 字段结构与 `@h-ai/crypto` 的 `crypto` 实例兼容；通常直接传入：
+   *
+   * @example
+   * ```ts
+   * import { crypto } from '@h-ai/crypto'
+   * await crypto.init()
+   * await api.init({
+   *   baseUrl: 'https://api.example.com/api/v1',
+   *   transport: { crypto },
+   * })
+   * ```
+   */
+  readonly transport?: ApiClientTransportConfig
+}
+
+// ─── 传输加密 ────────────────────────────────────────────────────────────────
+
+/** {@link ApiClientConfig.transport} 的配置项。 */
+export interface ApiClientTransportConfig {
+  /**
+   * crypto 服务实例（通常直接传入 `@h-ai/crypto` 的 `crypto`）。
+   * api-client 通过 `crypto.transport.createClient(...)` 创建会话。
+   */
+  readonly crypto: CryptoFunctions
+  /**
+   * 密钥协商端点路径，相对于 `baseUrl`，默认 `/_hai/key-exchange`。
+   *
+   * 必须与服务端 `serv.createApp({ transport: { keyExchangePath } })` 一致。
+   */
+  readonly keyExchangePath?: string
 }
 
 // ─── Client 接口 ──────────────────────────────────────────────────────────────
