@@ -1,20 +1,40 @@
 {
-  "extends": "./.svelte-kit/tsconfig.json",
+  "$schema": "https://json.schemastore.org/tsconfig",
   "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "moduleDetection": "force",
+    "module": "ESNext",
     "moduleResolution": "bundler",
-    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
+    "types": ["svelte", "vite/client", "node", "vitest/globals"],
     "allowJs": true,
     "checkJs": false,
     "strict": true,
+    "strictNullChecks": true,
+    "noFallthroughCasesInSwitch": true,
+    "noImplicitAny": true,
+    "noImplicitReturns": true,
+    "noImplicitThis": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "isolatedModules": true,
     "verbatimModuleSyntax": true,
     "skipLibCheck": true
   },
   "include": [
-    "src/**/*",
-    "src/**/*.svelte"
+    "src/**/*.ts",
+    "src/**/*.svelte",
+    "tests/**/*.ts",
+    "vite.config.ts",
+    "svelte.config.js"
   ],
   "exclude": [
     "node_modules",
-    ".svelte-kit"
+    "dist",
+    "src-tauri/target"
   ]
 }

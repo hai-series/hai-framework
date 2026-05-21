@@ -2,30 +2,17 @@
  * =============================================================================
  * hai Desktop App - Svelte 配置
  * =============================================================================
- * 使用 adapter-static 输出 SPA，供 Tauri 包装为桌面应用。
+ * 仅使用 @sveltejs/vite-plugin-svelte（无 SvelteKit），适配 Tauri v2 沙箱内的纯 SPA。
+ * 使用 autoImportHaiUi() 让 .svelte 文件直接使用 @h-ai/ui 组件，无需逐个 import。
  */
 
 import { autoImportHaiUi } from '@h-ai/ui/auto-import'
-import adapter from '@sveltejs/adapter-static'
 import { vitePreprocess } from '@sveltejs/vite-plugin-svelte'
 
-/** @type {import('@sveltejs/kit').Config} */
-const config = {
+/** @type {import("@sveltejs/vite-plugin-svelte").SvelteConfig} */
+export default {
   preprocess: [autoImportHaiUi(), vitePreprocess()],
   compilerOptions: {
     runes: true,
   },
-  kit: {
-    adapter: adapter({
-      pages: 'build',
-      assets: 'build',
-      fallback: 'index.html',
-    }),
-    alias: {
-      '@h-ai/ui': '../../packages/ui/src/lib/index.ts',
-      '@h-ai/ui/*': '../../packages/ui/*',
-    },
-  },
 }
-
-export default config

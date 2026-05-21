@@ -1495,9 +1495,6 @@ importers:
       '@shikijs/langs':
         specifier: 'catalog:'
         version: 4.0.2
-      '@sveltejs/kit':
-        specifier: ^2.58.0
-        version: 2.59.1(@opentelemetry/api@1.9.0)(@sveltejs/vite-plugin-svelte@7.0.0(svelte@5.53.5)(vite@8.0.0(@types/node@25.1.0)(esbuild@0.27.2)(jiti@2.6.1)(yaml@2.9.0)))(svelte@5.53.5)(typescript@6.0.2)(vite@8.0.0(@types/node@25.1.0)(esbuild@0.27.2)(jiti@2.6.1)(yaml@2.9.0))
       bits-ui:
         specifier: 'catalog:'
         version: 2.16.2(@internationalized/date@3.11.0)(@sveltejs/kit@2.59.1(@opentelemetry/api@1.9.0)(@sveltejs/vite-plugin-svelte@7.0.0(svelte@5.53.5)(vite@8.0.0(@types/node@25.1.0)(esbuild@0.27.2)(jiti@2.6.1)(yaml@2.9.0)))(svelte@5.53.5)(typescript@6.0.2)(vite@8.0.0(@types/node@25.1.0)(esbuild@0.27.2)(jiti@2.6.1)(yaml@2.9.0)))(svelte@5.53.5)
@@ -10681,6 +10678,7 @@ snapshots:
     optionalDependencies:
       '@opentelemetry/api': 1.9.0
       typescript: 6.0.2
+    optional: true
 
   '@sveltejs/package@2.5.7(svelte@5.53.5)(typescript@6.0.2)':
     dependencies:

@@ -36,7 +36,7 @@ cp apps/h5-app/.env.example apps/h5-app/.env
 pnpm --filter h5-app dev
 ```
 
-浏览器打开 `http://localhost:5175` 即可访问。
+浏览器打开 `http://localhost:5173` 即可访问。
 
 ### 构建
 
