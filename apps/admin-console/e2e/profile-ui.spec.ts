@@ -259,10 +259,10 @@ test.describe('Profile UI', () => {
   // ---------------------------------------------------------------------------
   // 通过 UI 上传头像
   // ---------------------------------------------------------------------------
-  test('通过文件选择框上传头像', async ({ page, request }) => {
+  test('通过文件选择框上传头像并在刷新后保留', async ({ page, request }) => {
     await registerAndLogin(page, request, 'profile')
     await page.goto('/admin/profile')
-    await page.waitForLoadState('domcontentloaded')
+    await expect(page.locator('[data-testid="profile-username"]')).toBeVisible()
 
     // 准备一个 1x1 透明 PNG
     const pngBuffer = Buffer.from(
@@ -270,24 +270,63 @@ test.describe('Profile UI', () => {
       'base64',
     )
 
-    // 找到文件输入框
+    const summaryAvatar = page.locator('aside.card').filter({
+      has: page.locator('[data-testid="profile-username"]'),
+    }).locator('.avatar img')
+    const formAvatar = page.locator('.user-profile .avatar img')
+
+    await expect(summaryAvatar).toHaveCount(0)
+    await expect(formAvatar).toHaveCount(0)
+
+    const uploadResponsePromise = page.waitForResponse(response =>
+      response.url().includes('/api/auth/profile/avatar')
+      && response.request().method() === 'POST',
+    )
+    const saveResponsePromise = page.waitForResponse(response =>
+      response.url().endsWith('/api/auth/profile')
+      && response.request().method() === 'PUT',
+    )
+
+    // 找到文件输入框并走真实 UI 上传链路（apiFetch + 解密 + 持久化）
     const fileInput = page.locator('input[type="file"][accept*="image"]')
-    if (await fileInput.count() > 0) {
-      await fileInput.setInputFiles({
-        name: 'avatar.png',
-        mimeType: 'image/png',
-        buffer: pngBuffer,
-      })
+    await expect(fileInput).toHaveCount(1)
 
-      // 等待上传处理
-      await page.waitForTimeout(2000)
+    await fileInput.setInputFiles({
+      name: 'avatar.png',
+      mimeType: 'image/png',
+      buffer: pngBuffer,
+    })
 
-      // 头像区域应有变化（存储 URL 或 img 标签更新）
-      const avatarImg = page.locator('img[alt*="avatar" i], .avatar img, img[src^="http"]')
-      if (await avatarImg.count() > 0) {
-        const src = await avatarImg.first().getAttribute('src')
-        expect(src).toBeTruthy()
-      }
-    }
+    const uploadResponse = await uploadResponsePromise
+    const saveResponse = await saveResponsePromise
+    expect(uploadResponse.ok(), `avatar upload status=${uploadResponse.status()}`).toBeTruthy()
+    expect(saveResponse.ok(), `profile save status=${saveResponse.status()}`).toBeTruthy()
+
+    await expect(page.locator('[data-testid="profile-save-success"]')).toBeVisible({ timeout: 10_000 })
+    await expect(summaryAvatar).toHaveCount(1)
+    await expect(formAvatar).toHaveCount(1)
+
+    const summarySrc = await summaryAvatar.first().getAttribute('src')
+    const formSrc = await formAvatar.first().getAttribute('src')
+    expect(summarySrc).toBeTruthy()
+    expect(formSrc).toBe(summarySrc)
+    expect(String(summarySrc)).toMatch(/^https?:\/\//)
+
+    const meResponse = await page.request.get('/api/auth/me')
+    const meBody = await meResponse.json()
+    expect(meResponse.ok()).toBeTruthy()
+    expect(meBody.success).toBeTruthy()
+    const meUser = meBody.user ?? meBody.data?.user
+    expect(meUser?.avatar).toBe(summarySrc)
+
+    const avatarAssetResponse = await page.request.get(String(summarySrc))
+    expect(avatarAssetResponse.ok()).toBeTruthy()
+    expect(avatarAssetResponse.headers()['content-type']).toMatch(/^image\//)
+
+    await page.reload()
+    await expect(summaryAvatar).toHaveCount(1)
+    await expect(formAvatar).toHaveCount(1)
+    await expect(summaryAvatar.first()).toHaveAttribute('src', String(summarySrc))
+    await expect(formAvatar.first()).toHaveAttribute('src', String(summarySrc))
   })
 })
