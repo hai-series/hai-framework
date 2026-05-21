@@ -9,6 +9,7 @@
 - 支持自定义 `fetch`，适配浏览器、Node、Capacitor、小程序桥接层。
 - 支持 Bearer Token 自动注入、401 后刷新并重试一次。
 - 网络错误统一转换为 `HaiResult` 错误。
+- 可选传输加密：`api.init({ transport: { crypto } })` 自动使用 `crypto.transport.createClient()`。
 
 ## 快速开始
 
@@ -32,6 +33,26 @@ if (login.success) {
 const me = await api.iam.auth.currentUser()
 
 await api.close()
+```
+
+### 启用传输加密
+
+服务端需先启用 `serv.createApp({ transport: { crypto } })`；客户端只注入同一个 `@h-ai/crypto` 服务实例，无需手写密钥协商代码。
+
+```ts
+import { api } from '@h-ai/api-client'
+import { crypto } from '@h-ai/crypto'
+
+await crypto.init()
+
+await api.init({
+  baseUrl: 'https://api.example.com/api/v1',
+  auth: {},
+  transport: { crypto }, // 默认协商路径：/api/v1/_hai/key-exchange
+})
+
+await api.close()
+await crypto.close()
 ```
 
 ## API 契约
@@ -65,6 +86,8 @@ const result = await client.iam.auth.login({ identifier: 'alice', password: 'sec
 - `timeout`：请求超时，默认 30000ms。
 - `headers`：静态或动态公共请求头。
 - `fetch`：自定义 fetch 实现。
+- `transport.crypto`：启用透明请求/响应加解密，必须传入已初始化的 `@h-ai/crypto` 实例。
+- `transport.keyExchangePath`：密钥协商子路径，默认 `/_hai/key-exchange`；会自动拼接到 `baseUrl` 后。
 
 ## 错误处理
 
