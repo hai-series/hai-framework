@@ -8,6 +8,7 @@
 - 扁平 API（最小知识）：`serv.listen / serv.toFetch / serv.requireAuth / serv.requirePermission / serv.generateSpec / ...`
 - 默认 feature procedures：`createIamProcedures()`、`createStorageProcedures()`、`createAiProcedures()`
 - 内置安全响应头、健康检查、可选 OpenAPI JSON、可选 Scalar 文档页、可选内部 RPC endpoint
+- 可选传输加密：`serv.createApp({ transport: { crypto } })` 自动挂载密钥协商与请求/响应加解密
 
 ## 快速开始
 
@@ -61,6 +62,40 @@ serv.listen(app, { host: '0.0.0.0', onClose: closeApp })
 ```ts
 const handler = serv.toFetch(app)
 export default { fetch: handler }
+```
+
+### 传输加密（与 `@h-ai/crypto` 统一）
+
+serv 不暴露本地传输加密工厂；统一从 `crypto.transport` 创建服务端管理器。使用方只需传入顶层 `crypto` 句柄：
+
+```ts
+import { crypto } from '@h-ai/crypto'
+import { serv } from '@h-ai/serv'
+
+await crypto.init()
+
+const app = serv.createApp({
+  contract,
+  procedures,
+  http: { apiPrefix: '/api/v1' },
+  transport: {
+    crypto,
+    // keyExchangePath 默认 '/_hai/key-exchange'，最终端点为 '/api/v1/_hai/key-exchange'
+    // excludePaths: ['/health'],
+    // maxClients: 10000,
+  },
+})
+```
+
+客户端使用 `@h-ai/api-client`：
+
+```ts
+import { api } from '@h-ai/api-client'
+
+await api.init({
+  baseUrl: 'https://api.example.com/api/v1',
+  transport: { crypto },
+})
 ```
 
 ### Token 认证（`iam` / `refreshCookie`）
@@ -178,6 +213,8 @@ await api.init({
 | `serv.securityHeaders()`                | Hono 中间件：HSTS / X-Content-Type-Options / Referrer-Policy    |
 | `serv.requireInternalRPC(config)`       | Hono 中间件：保护 `/rpc` 仅 loopback/内网/允许列表访问          |
 
+> 传输加密不作为 `serv.xxx` 扁平 API 暴露；它是 `createApp` 的配置能力，内部委托 `crypto.transport`。
+
 ## 配置
 
 `ServHttpConfigInput`：
@@ -187,6 +224,7 @@ await api.init({
 - `openapi`：默认 `false`；启用：`{ path: '/openapi.json' }`
 - `docs`：默认 `false`；启用：`{ path: '/docs' }`（依赖 `openapi`）；启用后自动挂载 `/_hai/scalar.js`，从 `@scalar/api-reference` 的 browser bundle 提供本地 Scalar UI 脚本，无需外网 CDN
 - `rpc`：默认 `false`；启用：`{ prefix: '/rpc', access: 'loopback' | 'private' | { allowlist: [...] } }`
+- `transport`：`createApp` 顶层配置，`{ crypto, keyExchangePath?, excludePaths?, maxClients? }`；默认密钥协商子路径 `/_hai/key-exchange`
 
 ## 错误处理
 

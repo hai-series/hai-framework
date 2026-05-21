@@ -13,6 +13,7 @@ export default defineConfig({
     '@h-ai/ai',
     '@h-ai/api-contract',
     '@h-ai/core',
+    '@h-ai/crypto',
     '@h-ai/iam',
     '@h-ai/storage',
     '@orpc/openapi',
