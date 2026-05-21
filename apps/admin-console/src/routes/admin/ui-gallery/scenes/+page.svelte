@@ -1,6 +1,6 @@
 <!--
   场景组件（Scenes）展示
-  AI: MarkdownRenderer
+  AI: MarkdownRenderer / AiDocumentEditor / AiTableEditor
   IAM: LoginForm / RegisterForm / ForgotPasswordForm / ResetPasswordForm /
        ChangePasswordForm / PasswordInput / UserProfile
   Storage: FileUpload / FileList / ImageUpload / AvatarUpload
@@ -8,7 +8,7 @@
 -->
 <script lang='ts'>
   // FileList 与 DOM 全局类型同名，必须显式导入
-  import { FileList, MarkdownRenderer, toast } from '@h-ai/ui'
+  import { AiDocumentEditor, AiTableEditor, FileList, MarkdownRenderer, toast } from '@h-ai/ui'
 
   // === 状态 ===
   let pwdVal = $state('')
@@ -203,6 +203,21 @@ server.listen(3000, () => {
 
 你还可以使用 **Express** 或 **Fastify** 来构建更复杂的应用。`
 
+  const aiDocumentContent = [
+    '# 订单智能分析方案',
+    '',
+    '## 目标',
+    '',
+    '- 自动汇总订单异常',
+    '- 输出可执行建议',
+    '',
+    '```typescript',
+    'const score = order.risk * 0.7 + order.delay * 0.3',
+    '```',
+    '',
+    '> 选中文本后可接入改写、批注等 AI 操作。',
+  ].join('\n')
+
   // === 示例数据 ===
   const demoUser = {
     id: '1',
@@ -232,10 +247,10 @@ server.listen(3000, () => {
         <svg xmlns='http://www.w3.org/2000/svg' class='h-5 w-5' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M12 2a4 4 0 0 1 4 4v1h2a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2h2V6a4 4 0 0 1 4-4z' /><circle cx='12' cy='14' r='2' /></svg>
       </div>
       <div>
-        <h2 class='text-xl font-bold'>AI — Markdown 渲染器</h2>
-        <p class='text-sm text-base-content/60'>用于渲染 AI 输出的 Markdown 内容，支持代码高亮、复制、表格等</p>
+        <h2 class='text-xl font-bold'>AI 场景组件</h2>
+        <p class='text-sm text-base-content/60'>Markdown 渲染、AI 文档编辑器、结构化表格编辑器等输出展示组件</p>
       </div>
-      <Badge variant='primary' outline size='sm'>1 组件</Badge>
+      <Badge variant='primary' outline size='sm'>3 组件</Badge>
     </div>
 
     <!-- AI 对话场景 -->
@@ -261,6 +276,83 @@ server.listen(3000, () => {
         <span class='text-sm text-base-content/60'>展示所有支持的 Markdown 语法元素</span>
       </div>
       <MarkdownRenderer content={demoMarkdown} />
+    </Card>
+
+    <!-- AI 文档与表格编辑器 -->
+    <div class='grid grid-cols-1 xl:grid-cols-2 gap-6 mt-6'>
+      <Card bordered>
+        <div class='flex items-center gap-2 mb-5'>
+          <Badge variant='info' size='sm'>AiDocumentEditor</Badge>
+          <span class='text-sm text-base-content/60'>AI 生成文档预览、目录、代码块与下载工具栏</span>
+        </div>
+        <div class='h-104 min-h-0'>
+          <AiDocumentEditor
+            title='AI 生成方案文档'
+            content={aiDocumentContent}
+            showToolbar
+            showOutline
+            showCopyButton
+            class='h-full'
+          />
+        </div>
+      </Card>
+
+      <Card bordered>
+        <div class='flex items-center gap-2 mb-5'>
+          <Badge variant='info' size='sm'>AiTableEditor</Badge>
+          <span class='text-sm text-base-content/60'>AI 结构化表格预览、单元格编辑、复制与 CSV 下载</span>
+        </div>
+        <div class='h-104 min-h-0'>
+          <AiTableEditor
+            title='AI 销售摘要'
+            statusText='示例数据'
+            metaText='table/v1'
+            saveState='只读预览'
+            editable={false}
+            tableData={{
+              table_columns: [
+                { key: 'metric', label: '指标', type: 'text' },
+                { key: 'value', label: '数值', type: 'number' },
+                { key: 'trend', label: '趋势', type: 'tag' },
+              ],
+              table_rows: [
+                { row_id: 'r1', metric: '新增客户', value: 128, trend: '增长' },
+                { row_id: 'r2', metric: '成交订单', value: 42, trend: '稳定' },
+                { row_id: 'r3', metric: '退款率', value: 1.8, trend: '下降' },
+              ],
+            }}
+          />
+        </div>
+      </Card>
+    </div>
+  </section>
+
+  <!-- ====================================================================== -->
+  <!-- CRUD 场景组件                                                           -->
+  <!-- ====================================================================== -->
+  <section>
+    <div class='flex items-center gap-3 mb-6'>
+      <div class='flex items-center justify-center w-10 h-10 rounded-xl bg-info/10 text-info'>
+        <svg xmlns='http://www.w3.org/2000/svg' class='h-5 w-5' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M8 6h13' /><path d='M8 12h13' /><path d='M8 18h13' /><path d='M3 6h.01' /><path d='M3 12h.01' /><path d='M3 18h.01' /></svg>
+      </div>
+      <div>
+        <h2 class='text-xl font-bold'>CRUD 业务页面</h2>
+        <p class='text-sm text-base-content/60'>CrudPage / CrudFilterBar / CrudEditDrawer / CrudDetailDrawer / CrudDeleteConfirm</p>
+      </div>
+      <Badge variant='info' outline size='sm'>5 组件</Badge>
+    </div>
+
+    <Card bordered>
+      <div class='grid grid-cols-1 lg:grid-cols-3 gap-4'>
+        <Alert variant='info' class='lg:col-span-2'>
+          CRUD 场景组件已经在 IAM 用户、角色、权限页面中真实接入，使用 @h-ai/kit/client 的 SvelteKit 导航适配器完成 URL 同步与 invalidateAll 刷新。
+        </Alert>
+        <div class='flex flex-col gap-2'>
+          <a class='btn btn-primary no-animation font-medium' href='/admin/iam/users'>查看用户 CRUD</a>
+          <a class='btn btn-secondary btn-outline no-animation font-medium' href='/admin/iam/roles'>查看角色 CRUD</a>
+          <a class='btn btn-info btn-outline no-animation font-medium' href='/admin/iam/permissions'>查看权限 CRUD</a>
+        </div>
+      </div>
     </Card>
   </section>
 
@@ -540,12 +632,12 @@ server.listen(3000, () => {
         </div>
         <div class='space-y-4'>
           <div class='p-4 rounded-lg bg-base-200/30'>
-            <p class='text-xs font-medium text-base-content/50 mb-2'>AES-256 加密</p>
-            <EncryptedInput bind:value={encVal} algorithm='AES-256' placeholder='输入敏感数据' />
+            <p class='text-xs font-medium text-base-content/50 mb-2'>SM4 对称加密</p>
+            <EncryptedInput bind:value={encVal} algorithm='SM4' placeholder='输入敏感数据' />
           </div>
           <div class='p-4 rounded-lg bg-base-200/30'>
-            <p class='text-xs font-medium text-base-content/50 mb-2'>SM4 国密算法（禁用）</p>
-            <EncryptedInput placeholder='SM4 国密算法' algorithm='SM4' disabled />
+            <p class='text-xs font-medium text-base-content/50 mb-2'>禁用状态</p>
+            <EncryptedInput placeholder='不可编辑的加密输入' algorithm='SM4' disabled />
           </div>
         </div>
       </Card>
@@ -558,7 +650,7 @@ server.listen(3000, () => {
         </div>
         <div class='space-y-4'>
           <div class='p-4 rounded-lg bg-base-200/30'>
-            <HashDisplay value='e3b0c44298fc1c149afbf4c8996fb924' algorithm='SHA256' label='文件哈希' copyable truncate />
+            <HashDisplay value='e3b0c44298fc1c149afbf4c8996fb924' algorithm='SM3' label='文件哈希' copyable truncate />
           </div>
           <div class='p-4 rounded-lg bg-base-200/30'>
             <HashDisplay value='a1b2c3d4e5f60718293a4b5c6d7e8f90' algorithm='SM3' label='SM3 摘要' copyable />
@@ -575,10 +667,10 @@ server.listen(3000, () => {
       </div>
       <div class='grid grid-cols-1 md:grid-cols-3 gap-4'>
         <div class='p-4 rounded-xl border-2 border-success/20 bg-success/5'>
-          <p class='text-xs font-semibold text-success mb-3'>ECDSA - 验证通过</p>
+          <p class='text-xs font-semibold text-success mb-3'>SM2 - 验证通过</p>
           <SignatureDisplay
             signature='MEUCIQDf4b2e8c7a3f1d5e9b0a2c4d6f8e0a1b3c5d7f9e1a3b5c7d9f1a3=='
-            algorithm='ECDSA'
+            algorithm='SM2'
             verified={true}
             copyable
           />
@@ -593,10 +685,10 @@ server.listen(3000, () => {
           />
         </div>
         <div class='p-4 rounded-xl border-2 border-base-300 bg-base-200/30'>
-          <p class='text-xs font-semibold text-base-content/50 mb-3'>RSA - 未验证</p>
+          <p class='text-xs font-semibold text-base-content/50 mb-3'>SM2 - 未验证</p>
           <SignatureDisplay
             signature='未验证签名示例数据...'
-            algorithm='RSA'
+            algorithm='SM2'
             copyable
           />
         </div>

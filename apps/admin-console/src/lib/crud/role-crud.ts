@@ -7,7 +7,27 @@ import { apiFetch } from '$lib/utils/api'
 
 import { kit } from '@h-ai/kit'
 
-export function createRoleCrud() {
+interface PermissionItem {
+  code: string
+  name: string
+}
+
+interface PermissionsByResource {
+  [resource: string]: PermissionItem[]
+}
+
+function createPermissionOptions(permissions: PermissionsByResource) {
+  return Object.entries(permissions).flatMap(([resource, perms]) =>
+    perms.map(perm => ({
+      label: `${resource} / ${perm.name}`,
+      value: perm.code,
+    })),
+  )
+}
+
+export function createRoleCrud(permissions: PermissionsByResource = {}) {
+  const permissionOptions = () => createPermissionOptions(permissions)
+
   const fields: CrudFieldDef[] = [
     {
       id: 'name',
@@ -40,7 +60,7 @@ export function createRoleCrud() {
       label: () => m.iam_roles_form_permissions(),
       type: 'multi-select',
       inList: true,
-      // permissions 选项需要页面传入
+      options: permissionOptions,
       render: (value) => {
         const perms = value as string[] ?? []
         if (perms.length === 0)

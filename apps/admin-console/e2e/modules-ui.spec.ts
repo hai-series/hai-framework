@@ -126,16 +126,16 @@ test.describe('Modules Page UI', () => {
     const plainInput = page.locator('#crypto-plain')
     await expect(plainInput).toBeVisible()
 
-    // SM3 哈希按钮
-    const hashBtn = page.getByRole('button', { name: /SM3/ })
+    // 哈希按钮
+    const hashBtn = page.getByRole('button', { name: /哈希|Hash/ })
     await expect(hashBtn).toBeVisible()
 
-    // SM4 加密按钮
-    const encryptBtn = page.getByRole('button', { name: /SM4/ })
+    // 对称加密按钮
+    const encryptBtn = page.getByRole('button', { name: /对称加密|Symmetric Encrypt/ })
     await expect(encryptBtn).toBeVisible()
   })
 
-  test('crypto SM3 哈希按钮点击后显示结果', async ({ page, request }) => {
+  test('crypto 哈希按钮点击后显示结果', async ({ page, request }) => {
     await registerAndLogin(page, request, 'modui')
     await page.goto('/admin/modules')
     await page.waitForLoadState('domcontentloaded')
@@ -143,17 +143,17 @@ test.describe('Modules Page UI', () => {
     // 切换到 crypto
     await clickModuleTab(page, 7)
 
-    // 点击 SM3 哈希按钮
-    const hashBtn = page.getByRole('button', { name: /SM3/ })
+    // 点击哈希按钮
+    const hashBtn = page.getByRole('button', { name: /哈希|Hash/ })
     await hashBtn.click()
     await page.waitForTimeout(500)
 
     // 哈希结果应出现
-    const hashResult = page.locator('text=SM3 哈希结果')
+    const hashResult = page.locator('text=哈希结果')
     await expect(hashResult).toBeVisible()
   })
 
-  test('crypto SM4 加密按钮点击后显示结果', async ({ page, request }) => {
+  test('crypto 对称加密按钮点击后显示结果', async ({ page, request }) => {
     await registerAndLogin(page, request, 'modui')
     await page.goto('/admin/modules')
     await page.waitForLoadState('domcontentloaded')
@@ -165,13 +165,13 @@ test.describe('Modules Page UI', () => {
     const plainInput = page.locator('#crypto-plain')
     await plainInput.fill('测试加密文本')
 
-    // 点击 SM4 加密按钮
-    const encryptBtn = page.getByRole('button', { name: /SM4/ })
+    // 点击对称加密按钮
+    const encryptBtn = page.getByRole('button', { name: /对称加密|Symmetric Encrypt/ })
     await encryptBtn.click()
     await page.waitForTimeout(500)
 
     // 加密结果应出现
-    const encryptResult = page.locator('text=SM4 加密结果')
+    const encryptResult = page.locator('text=加密结果')
     await expect(encryptResult).toBeVisible()
   })
 

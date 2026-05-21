@@ -53,6 +53,7 @@ type DbConfigInput = Parameters<typeof reldb.init>[0]
 // =============================================================================
 
 let initialized = false
+const DEFAULT_DEMO_ADMIN_PASSWORD = 'admin123456'
 
 // =============================================================================
 // 业务表 Schema
@@ -238,10 +239,16 @@ async function ensureDefaultAdmin(): Promise<void> {
     return
   }
 
-  const password = process.env.HAI_ADMIN_DEFAULT_PASSWORD ?? ''
+  const configuredPassword = process.env.HAI_ADMIN_DEFAULT_PASSWORD?.trim()
+  const isProduction = process.env.NODE_ENV === 'production' || process.env.HAI_ENV === 'production'
+  const password = configuredPassword ?? (isProduction ? '' : DEFAULT_DEMO_ADMIN_PASSWORD)
   if (!password) {
     core.logger.warn('Default admin account was not created because HAI_ADMIN_DEFAULT_PASSWORD is not configured')
     return
+  }
+
+  if (!configuredPassword) {
+    core.logger.warn('HAI_ADMIN_DEFAULT_PASSWORD is not configured; using development-only demo admin password')
   }
 
   // 注册管理员用户
@@ -264,8 +271,16 @@ async function ensureDefaultAdmin(): Promise<void> {
     await iam.authz.assignRole(adminUser.id, adminRoleResult.data.id)
   }
 
-  core.logger.info(m.server_init_default_admin_created())
-  core.logger.info('Default admin account created', { username: 'admin' })
+  const credentialLogContext = {
+    username: 'admin',
+    email: 'admin@localhost',
+    ...(isProduction && configuredPassword
+      ? { passwordHint: 'Set by HAI_ADMIN_DEFAULT_PASSWORD; hidden in production logs' }
+      : { password }),
+  }
+
+  core.logger.info(m.server_init_default_admin_created(), credentialLogContext)
+  core.logger.info('Default admin credentials', credentialLogContext)
 }
 
 /**

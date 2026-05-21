@@ -45,9 +45,9 @@
 
   // 权限
   const { hasPerm } = usePermission()
-  const canCreate = $derived(hasPerm('user:create'))
-  const canUpdate = $derived(hasPerm('user:update'))
-  const canDelete = $derived(hasPerm('user:delete'))
+  const canCreate = $derived(hasPerm('user:create') && hasPerm('user:api:create'))
+  const canUpdate = $derived(hasPerm('user:update') && hasPerm('user:api:update'))
+  const canDelete = $derived(hasPerm('user:delete') && hasPerm('user:api:delete'))
 
   // 创建 CRUD 定义（传入 roles 选项）
   const userCrud: CrudOperations = $derived(createUserCrud(data.roles))
@@ -56,7 +56,8 @@
   const crudData = $derived({
     items: data.users.map(u => ({
       ...u,
-      roles: u.roles, // 列表中显示角色名
+      roleNames: u.roles,
+      roles: u.roleIds,
     })) as unknown as Record<string, unknown>[],
     total: data.total,
     page: data.page,

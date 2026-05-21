@@ -8,6 +8,13 @@ import type { APIRequestContext, Page } from '@playwright/test'
 
 const ADMIN_TOKEN_KEY = 'access_token'
 
+interface LoginBody {
+  success?: boolean
+  data?: {
+    accessToken?: string
+  }
+}
+
 async function sleep(ms: number) {
   await new Promise(resolve => setTimeout(resolve, ms))
 }
@@ -93,21 +100,17 @@ export async function loginOnPage(page: Page, username: string, password: string
     throw new Error(`Login failed: ${loginRes.status()} ${JSON.stringify(loginResult)}`)
   }
 
-  const accessToken = loginResult.data?.accessToken
-  if (!accessToken) {
-    throw new Error(`Login token missing: ${JSON.stringify(loginResult)}`)
+  const accessToken = (loginResult as LoginBody).data?.accessToken
+  if (accessToken) {
+    await page.evaluate((tokenKeyAndValue) => {
+      localStorage.setItem(tokenKeyAndValue.key, tokenKeyAndValue.value)
+    }, { key: ADMIN_TOKEN_KEY, value: accessToken })
   }
 
-  await page.evaluate((tokenKeyAndValue) => {
-    localStorage.setItem(tokenKeyAndValue.key, tokenKeyAndValue.value)
-  }, { key: ADMIN_TOKEN_KEY, value: accessToken })
-
   // 显式验证令牌可用，避免后续 /admin 导航失败
-  const meRes = await page.request.get('/api/auth/me', {
-    headers: {
-      Authorization: `Bearer ${accessToken}`,
-    },
-  })
+  const meRes = await page.request.get('/api/auth/me', accessToken
+    ? { headers: { Authorization: `Bearer ${accessToken}` } }
+    : undefined)
   const meBody = await meRes.json()
   const meUser = extractMeUser(meBody)
   if (!meRes.ok() || !meUser) {
@@ -161,10 +164,7 @@ export async function registerAndLoginViaApi(request: APIRequestContext, prefix 
     throw new Error(`Login failed: ${loginRes.status()} ${JSON.stringify(loginBody)}`)
   }
 
-  const accessToken = loginBody.data?.accessToken
-  if (!accessToken) {
-    throw new Error(`Login token missing: ${JSON.stringify(loginBody)}`)
-  }
+  const accessToken = (loginBody as LoginBody).data?.accessToken
 
   const requestWithAuth = request as APIRequestContext & {
     __authState?: {
@@ -182,7 +182,7 @@ export async function registerAndLoginViaApi(request: APIRequestContext, prefix 
     delete: APIRequestContext['delete']
   }
 
-  if (!requestWithAuth.__authState) {
+  if (accessToken && !requestWithAuth.__authState) {
     const authState = {
       accessToken,
       originalGet: request.get.bind(request),
@@ -207,7 +207,7 @@ export async function registerAndLoginViaApi(request: APIRequestContext, prefix 
     requestWithAuth.delete = ((url, options) => authState.originalDelete(url, withAuthHeaders(options))) as APIRequestContext['delete']
     requestWithAuth.__authState = authState
   }
-  else {
+  else if (accessToken && requestWithAuth.__authState) {
     requestWithAuth.__authState.accessToken = accessToken
   }
 

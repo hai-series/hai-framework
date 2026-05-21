@@ -1,13 +1,14 @@
 <!--
-  组合组件（Compounds）展示 - 26 个复杂 UI 模式
+  组合组件（Compounds）展示 - 复杂 UI 模式与移动端应用组件
   Breadcrumb / Tabs / Pagination / Steps / DataTable / Accordion / Timeline /
   Alert / Empty / Result / Skeleton / Tooltip / Popover / Dropdown /
+  AppBar / BottomNav / SafeArea / ActionSheet / PullRefresh / InfiniteScroll / SwipeCell /
   Form / FormField / Combobox / Calendar / DatePicker / TagInput /
   Card / PageHeader / ToastContainer
 -->
 <script lang='ts'>
   import type { DateValue } from '@internationalized/date'
-  import { toast } from '@h-ai/ui'
+  import { ActionSheet, AppBar, BottomNav, InfiniteScroll, PullRefresh, SafeArea, SwipeCell, toast } from '@h-ai/ui'
   import { CalendarDate } from '@internationalized/date'
 
   // === 状态 ===
@@ -23,6 +24,15 @@
   let formName = $state('')
   let formEmail = $state('')
   let accordionVal = $state<string | string[]>()
+  let actionSheetOpen = $state(false)
+  let bottomNavActive = $state('home')
+  let refreshCount = $state(0)
+  let mobileFeedHasMore = $state(true)
+  let mobileFeedItems = $state([
+    { id: 'm1', title: '订单异常提醒', desc: '3 笔订单需要人工复核' },
+    { id: 'm2', title: '库存补货建议', desc: '热销 SKU 库存低于安全水位' },
+    { id: 'm3', title: '客服会话摘要', desc: 'AI 已生成本日高频问题' },
+  ])
 
   // === 示例数据 ===
   const breadcrumbItems = [
@@ -83,6 +93,44 @@
     { value: 'pm', label: '产品管理' },
     { value: 'qa', label: '质量保障' },
   ]
+
+  const actionSheetItems = [
+    { id: 'share', label: '分享报表' },
+    { id: 'archive', label: '归档通知' },
+    { id: 'delete', label: '删除记录', destructive: true },
+  ]
+
+  const bottomNavItems = [
+    { id: 'home', label: '首页', iconClass: 'icon-[tabler--home]' },
+    { id: 'tasks', label: '任务', iconClass: 'icon-[tabler--checklist]', badge: 3 },
+    { id: 'profile', label: '我的', iconClass: 'icon-[tabler--user]' },
+  ]
+
+  const swipeActions = [
+    { id: 'done', label: '完成', variant: 'primary' as const },
+    { id: 'delete', label: '删除', variant: 'error' as const },
+  ]
+
+  async function refreshMobileDemo() {
+    refreshCount += 1
+    mobileFeedItems = [
+      { id: `refresh-${refreshCount}`, title: '刷新成功', desc: `第 ${refreshCount + 1} 次拉取移动端数据` },
+      ...mobileFeedItems.slice(0, 4),
+    ]
+    toast.success('移动列表已刷新')
+  }
+
+  async function loadMoreMobileItems() {
+    if (!mobileFeedHasMore)
+      return
+
+    const nextIndex = mobileFeedItems.length + 1
+    mobileFeedItems = [
+      ...mobileFeedItems,
+      { id: `m${nextIndex}`, title: `更多移动事项 ${nextIndex}`, desc: '滚动到底部后自动追加的列表项' },
+    ]
+    mobileFeedHasMore = mobileFeedItems.length < 6
+  }
 </script>
 
 <div class='space-y-10'>
@@ -192,6 +240,110 @@
         </div>
       </div>
     </Card>
+  </section>
+
+  <div class='divider'></div>
+
+  <!-- ====================================================================== -->
+  <!-- 移动端应用模式                                                          -->
+  <!-- ====================================================================== -->
+  <section>
+    <div class='flex items-center gap-3 mb-6'>
+      <div class='flex items-center justify-center w-10 h-10 rounded-xl bg-primary/10 text-primary'>
+        <svg xmlns='http://www.w3.org/2000/svg' class='h-5 w-5' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><rect x='7' y='2' width='10' height='20' rx='2' /><path d='M11 18h2' /></svg>
+      </div>
+      <div>
+        <h2 class='text-xl font-bold'>移动端应用模式</h2>
+        <p class='text-sm text-base-content/60'>AppBar / BottomNav / SafeArea / ActionSheet / PullRefresh / InfiniteScroll / SwipeCell</p>
+      </div>
+    </div>
+
+    <Card bordered>
+      <div class='grid grid-cols-1 xl:grid-cols-[24rem_1fr] gap-6 items-start'>
+        <div class='mx-auto w-full max-w-sm rounded-4xl border border-base-300 bg-base-200 p-2 shadow-sm'>
+          <div class='relative overflow-hidden rounded-3xl bg-base-100 min-h-136'>
+            <SafeArea position='top'>
+              <AppBar title='移动工作台' fixed={false} safeArea={false}>
+                {#snippet leading()}
+                  <span class='icon-[tabler--menu-2] size-5 text-base-content/60'></span>
+                {/snippet}
+                {#snippet trailing()}
+                  <span class='icon-[tabler--bell] size-5 text-base-content/60'></span>
+                {/snippet}
+              </AppBar>
+            </SafeArea>
+
+            <PullRefresh class='h-108 overflow-y-auto px-4 pb-20' onrefresh={refreshMobileDemo}>
+              <div class='space-y-3 py-4'>
+                <Alert variant='info'>在真机或触控板环境下下拉可触发 PullRefresh。</Alert>
+                {#each mobileFeedItems as item (item.id)}
+                  <SwipeCell
+                    actions={swipeActions}
+                    onaction={(id: string) => toast.info(`${item.title}: ${id}`)}
+                    class='rounded-xl border border-base-200 bg-base-100'
+                  >
+                    <div class='p-4'>
+                      <p class='text-sm font-semibold'>{item.title}</p>
+                      <p class='text-xs text-base-content/55 mt-1'>{item.desc}</p>
+                    </div>
+                  </SwipeCell>
+                {/each}
+              </div>
+            </PullRefresh>
+
+            <BottomNav
+              items={bottomNavItems}
+              active={bottomNavActive}
+              safeArea={false}
+              onchange={(id: string) => bottomNavActive = id}
+              class='absolute! bottom-0! left-0! right-0! z-20! translate-x-0!'
+            />
+          </div>
+        </div>
+
+        <div class='space-y-6'>
+          <div>
+            <h3 class='text-lg font-semibold mb-2'>移动端导航与安全区</h3>
+            <p class='text-sm text-base-content/60'>AppBar 和 BottomNav 负责常见 App 顶部/底部结构，SafeArea 用于适配刘海屏与底部手势区域。</p>
+          </div>
+          <div class='grid grid-cols-1 lg:grid-cols-2 gap-4'>
+            <Card bordered>
+              <h4 class='font-semibold mb-3'>ActionSheet 底部操作菜单</h4>
+              <p class='text-sm text-base-content/60 mb-4'>适合移动端“更多操作”“分享”“危险操作确认前置”等入口。</p>
+              <Button variant='primary' onclick={() => actionSheetOpen = true}>打开 ActionSheet</Button>
+            </Card>
+            <Card bordered>
+              <h4 class='font-semibold mb-3'>InfiniteScroll 上拉加载</h4>
+              <InfiniteScroll
+                class='h-52 rounded-xl border border-base-200 bg-base-100 px-3'
+                hasMore={mobileFeedHasMore}
+                loadingText='加载更多...'
+                noMoreText='没有更多数据'
+                onloadmore={loadMoreMobileItems}
+              >
+                <div class='space-y-2 py-3'>
+                  {#each mobileFeedItems as item (item.id)}
+                    <div class='rounded-lg bg-base-200/60 px-3 py-2'>
+                      <p class='text-sm font-medium'>{item.title}</p>
+                      <p class='text-xs text-base-content/50'>{item.desc}</p>
+                    </div>
+                  {/each}
+                </div>
+              </InfiniteScroll>
+            </Card>
+          </div>
+        </div>
+      </div>
+    </Card>
+
+    <ActionSheet
+      open={actionSheetOpen}
+      title='选择操作'
+      cancelText='取消'
+      items={actionSheetItems}
+      onselect={(id: string) => toast.info(`选择: ${id}`)}
+      onclose={() => actionSheetOpen = false}
+    />
   </section>
 
   <div class='divider'></div>

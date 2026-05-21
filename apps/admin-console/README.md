@@ -35,6 +35,15 @@ pnpm --filter admin-console dev
 
 浏览器打开 `http://localhost:5173` 即可访问。
 
+首次启动且用户表为空时会自动创建默认管理员：
+
+| 项目   | 开发默认值    |
+| ------ | ------------- |
+| 用户名 | `admin`       |
+| 密码   | `admin123456` |
+
+默认密码来自 `HAI_ADMIN_DEFAULT_PASSWORD`。开发环境会在启动日志输出默认账号信息；生产环境请通过密钥管理注入强密码，日志只显示用户名与密码来源，不输出明文密码。
+
 ### 构建
 
 ```bash
@@ -67,12 +76,12 @@ pnpm --filter admin-console preview
 HAI_ENV=development
 HAI_DEBUG=false
 
+# Default admin created only when the user table is empty
+HAI_ADMIN_DEFAULT_PASSWORD=admin123456
+
 # Database (sqlite | postgresql | mysql)
 HAI_RELDB_TYPE=sqlite
 HAI_RELDB_DATABASE=./data/admin.db
-
-# Session (REQUIRED, min 32 chars)
-HAI_IAM_SESSION_SECRET=change-me-to-a-strong-random-string-min-32-chars
 
 # Cache (memory | redis)
 HAI_CACHE_TYPE=memory
@@ -165,7 +174,7 @@ pnpm paraglide:compile # 编译 i18n 翻译文件
 - `@h-ai/iam`：用户、角色、权限、认证、RBAC
 - `@h-ai/cache`：缓存（Memory / Redis）
 - `@h-ai/storage`：文件存储（Local / S3）
-- `@h-ai/crypto`：加密（SM2 / SM3 / SM4、Argon2）
+- `@h-ai/crypto`：加密（非对称 / 哈希 / 对称 / 密码哈希）
 - `@h-ai/ai`：AI 集成
 - `@h-ai/kit`：SvelteKit hooks、guards、中间件、校验
 - `@h-ai/ui`：UI 组件库（69+ 组件、场景组件、自动导入）

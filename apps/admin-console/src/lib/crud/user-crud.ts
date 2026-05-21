@@ -33,6 +33,15 @@ export function createUserCrud(roles: Array<{ id: string, name: string }>) {
       type: 'string',
       inList: false,
       placeholder: () => m.iam_users_form_display_name_placeholder(),
+      order: 4,
+    },
+    {
+      id: 'password',
+      label: () => m.iam_users_form_password(),
+      type: 'password',
+      inList: false,
+      inDetail: false,
+      placeholder: () => m.iam_users_form_password_placeholder(),
       order: 3,
     },
     {
@@ -43,7 +52,7 @@ export function createUserCrud(roles: Array<{ id: string, name: string }>) {
       inList: true,
       render: (_value, item) => {
         // 列表中显示角色名而非 ID
-        const roleNames = item.roles as string[] ?? []
+        const roleNames = item.roleNames as string[] ?? []
         return roleNames.join(', ')
       },
       order: 4,
