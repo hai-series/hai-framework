@@ -527,7 +527,7 @@ export interface EncryptedInputProps {
   /** 是否显示加密结果 */
   showEncrypted?: boolean
   /** 加密算法 */
-  algorithm?: 'SM2' | 'SM4' | 'AES'
+  algorithm?: 'SM2' | 'SM4'
   /** 加密函数 */
   onencrypt?: (value: string) => Promise<string>
   /** 自定义类名 */
@@ -545,7 +545,7 @@ export interface HashDisplayProps {
   /** 哈希值 */
   value?: string
   /** 算法 */
-  algorithm?: 'SM3' | 'SHA256' | 'MD5'
+  algorithm?: 'SM3'
   /** 标签 */
   label?: string
   /** 是否可复制 */
@@ -588,7 +588,7 @@ export interface SignatureDisplayProps {
   /** 公钥 */
   publicKey?: string
   /** 算法 */
-  algorithm?: 'SM2' | 'RSA' | 'ECDSA'
+  algorithm?: 'SM2'
   /** 验证状态 */
   verified?: boolean
   /** 是否显示公钥 */

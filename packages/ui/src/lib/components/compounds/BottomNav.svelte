@@ -11,6 +11,16 @@
   // eslint-disable-next-line no-import-assign -- type re-export
   export type { BottomNavItem }
 
+  type BottomNavMaxWidth = 'sm' | 'md' | 'lg' | 'xl' | 'none'
+
+  const MAX_WIDTH_CLASS: Record<BottomNavMaxWidth, string> = {
+    sm: 'max-w-sm',
+    md: 'max-w-md',
+    lg: 'max-w-lg',
+    xl: 'max-w-xl',
+    none: '',
+  }
+
   interface Props {
     /** 导航项列表 */
     items: BottomNavItem[]
@@ -20,6 +30,10 @@
     onchange?: (id: string) => void
     /** 是否适配底部安全区域 */
     safeArea?: boolean
+    /** 是否将 fixed 导航居中，适用于移动端仿真器/桌面预览中的窄屏壳 */
+    centered?: boolean
+    /** fixed 导航最大宽度，centered=true 时生效 */
+    maxWidth?: BottomNavMaxWidth
     /** 额外 CSS 类 */
     class?: string
   }
@@ -29,13 +43,19 @@
     active,
     onchange,
     safeArea = true,
+    centered = false,
+    maxWidth = 'none',
     class: className,
   }: Props = $props()
+
+  const constrained = $derived(centered && maxWidth !== 'none')
 </script>
 
 <nav
   class={cn(
-    'fixed bottom-0 left-0 right-0 bg-base-100 border-t border-base-200 z-40',
+    'fixed bottom-0 bg-base-100 border-t border-base-200 z-40',
+    constrained ? 'left-1/2 right-auto w-full -translate-x-1/2' : 'left-0 right-0',
+    constrained && MAX_WIDTH_CLASS[maxWidth],
     safeArea && 'hai-safe-bottom',
     className,
   )}

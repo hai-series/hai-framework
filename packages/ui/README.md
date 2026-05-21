@@ -236,6 +236,8 @@ components/
 | `HashDisplay`      | 哈希展示 | `value`, `algorithm`, `copyable`, `truncate`            |
 | `SignatureDisplay` | 签名展示 | `signature`, `publicKey`, `algorithm`, `verified`       |
 
+默认算法与 `@h-ai/crypto` 对齐：加密输入使用 `SM4`，哈希展示使用 `SM3`，签名展示使用 `SM2`。
+
 ## 使用示例
 
 ### Toast 通知
@@ -391,7 +393,19 @@ components/
 - `global.css`：基础 HTML 重置、滚动条美化、表单焦点环
 - `theme.css`：Tailwind v4 `@theme` 块，包含品牌色、阴影层级、动效曲线、字体特性
 - `design-tokens.css`：CSS 自定义属性（间距/圆角/z-index/过渡），移动端推荐
-- `mobile.css`：安全区域 padding、momentum 滚动、虚拟键盘适配
+- `mobile.css`：安全区域 padding、momentum 滚动、虚拟键盘适配、移动端 App 壳布局工具（`hai-mobile-viewport` / `hai-mobile-shell` / `hai-mobile-main`）
+
+移动端页面推荐让 `BottomNav` 与页面壳宽度一致，避免桌面预览时底栏横跨整个视口：
+
+```svelte
+<div class="hai-mobile-viewport">
+  <div class="hai-mobile-shell max-w-lg">
+    <AppBar title="Home" fixed={false} safeArea />
+    <main class="hai-mobile-main">...</main>
+    <BottomNav items={items} active="home" centered maxWidth="lg" safeArea />
+  </div>
+</div>
+```
 
 ### 图标
 
