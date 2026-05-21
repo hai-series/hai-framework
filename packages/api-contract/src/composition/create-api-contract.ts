@@ -14,7 +14,7 @@ export type CreateApiContractOptions = Record<string, AnyContractRouter | false 
 /** 根据输入过滤 false/undefined 后得到的应用级 contract 类型。 */
 export type CreatedApiContract<T extends CreateApiContractOptions> = {
   readonly [K in keyof T as T[K] extends false | undefined ? never : K]: Exclude<T[K], false | undefined>
-} & AnyContractRouter
+}
 
 /**
  * 按领域组合应用级 API contract。

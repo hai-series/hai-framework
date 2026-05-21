@@ -12,3 +12,5 @@ export { default as CrudEditDrawer } from './CrudEditDrawer.svelte'
 export { default as CrudFilterBar } from './CrudFilterBar.svelte'
 
 export { default as CrudPage } from './CrudPage.svelte'
+export type { NavAdapter } from './nav-adapter.js'
+export { createBrowserNavAdapter } from './nav-adapter.js'
