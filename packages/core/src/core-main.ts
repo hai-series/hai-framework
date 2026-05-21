@@ -9,6 +9,7 @@ import type { CoreFunctions, CoreLogger, LoggerFunctions } from './core-types.js
 import { error } from './functions/core-function-error.js'
 import { id } from './functions/core-function-id.js'
 import { i18n } from './i18n/core-i18n-utils.js'
+import { zodValidation } from './i18n/core-zod-mapper.js'
 import { array as arrayUtils } from './utils/core-util-array.js'
 import { async as asyncUtils } from './utils/core-util-async.js'
 import { createNotInitializedKit } from './utils/core-util-module.js'
@@ -105,6 +106,20 @@ export function createCore(loggerFns: LoggerFunctions): CoreFunctions {
      * ```
      */
     i18n,
+
+    /**
+     * Zod 校验错误 → i18n 消息映射工具（kit / serv / api-client 共享）。
+     *
+     * 调用方注入自己的 `ZodMessageGetter`，把统一的校验消息 key 映射到本模块的 i18n 字典。
+     *
+     * @example
+     * ```ts
+     * import { core } from '@h-ai/core'
+     *
+     * const errors = core.zodValidation.mapZodErrorToFormErrors(zodError, getMessage)
+     * ```
+     */
+    zodValidation,
 
     // ─── ID ───
 
