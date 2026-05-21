@@ -23,6 +23,7 @@ description: 使用 @h-ai/serv 将 oRPC contract 挂载为 Hono HTTP API Service
 - 切换 Node.js (`@hono/node-server`) 或 Fetch Runtime（Cloudflare Workers / Deno）部署
 - 自定义 `ServContext`（注入 session、tenant 等请求级数据）
 - 生成 OpenAPI 3.1 文档供外部工具消费
+- 启用传输加密：`serv.createApp({ transport: { crypto } })`
 
 ---
 
@@ -101,10 +102,44 @@ const app = serv.createApp({
   http?,          // ServHttpConfigInput — HTTP 端点配置（见下方配置节）
   iam?,           // ServIam — 顶层 IAM 句柄，同时驱动 access token 校验与 refresh cookie【推荐】
   refreshCookie?, // RefreshCookieConfig — httpOnly refresh cookie 刷新路径（见下方 cookie 节）
+  transport?,     // { crypto, keyExchangePath?, excludePaths?, maxClients? } — 统一传输加密
   verifyToken?,   // (token) => Promise<HaiResult<ServSession>> — 逃脱口：不使用 iam 时提供自定义校验
   createContext?, // CreateServContext — 高级：完全接管上下文构造（设置后 serv 不再自动填充 session）
 })
 ```
+
+### 传输加密
+
+serv 不暴露本地传输加密工厂；内部统一调用 `crypto.transport.createServer()`。客户端用 `@h-ai/api-client` 的 `transport` 配置自动协商。
+
+```typescript
+import { crypto } from '@h-ai/crypto'
+import { serv } from '@h-ai/serv'
+
+await crypto.init()
+
+const app = serv.createApp({
+  contract,
+  procedures,
+  http: { apiPrefix: '/api/v1' },
+  transport: {
+    crypto,
+    // keyExchangePath 默认 '/_hai/key-exchange'
+    // maxClients: 10000,
+  },
+})
+```
+
+客户端：
+
+```typescript
+await api.init({
+  baseUrl: 'https://api.example.com/api/v1',
+  transport: { crypto },
+})
+```
+
+> 不要导入或暴露子目录内部 transport 工厂；公共装配点只有 `serv.createApp({ transport: { crypto } })`。
 
 **上下文工厂优先级**（`context.session` 填充来源）：
 
@@ -184,6 +219,7 @@ const html = serv.createDocsPage(spec, {
 | `openapi` | `false` | OpenAPI JSON endpoint，显式开启 |
 | `docs` | `false` | Scalar 文档页，显式开启；启用后自动挂载 `/_hai/scalar.js` 本地脚本路由 |
 | `rpc` | `false` | 内部 RPC endpoint，显式开启 |
+| `transport` | `undefined` | 顶层配置；启用后默认挂载 `{apiPrefix}/_hai/key-exchange` |
 
 ```typescript
 http: {

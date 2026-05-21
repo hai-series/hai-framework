@@ -22,6 +22,21 @@ await api.init({
 })
 ```
 
+启用传输加密时，只传顶层 `crypto` 句柄；api-client 内部自动调用 `crypto.transport.createClient()`：
+
+```ts
+import { api } from '@h-ai/api-client'
+import { crypto } from '@h-ai/crypto'
+
+await crypto.init()
+
+await api.init({
+  baseUrl: 'https://api.example.com/api/v1',
+  auth: {},
+  transport: { crypto }, // 默认协商路径：/api/v1/_hai/key-exchange
+})
+```
+
 App/Capacitor 场景传入自定义 TokenStorage：
 
 ```ts
@@ -115,10 +130,20 @@ if (login.success) {
 | `api.auth.onTokenRefreshed(cb)` | 监听刷新结果 |
 | `createApiClient(contract)` | 创建自定义 typed client |
 
+### Transport 配置
+
+| 字段 | 说明 |
+| --- | --- |
+| `transport.crypto` | 已初始化的 `@h-ai/crypto` 实例 |
+| `transport.keyExchangePath` | 相对于 `baseUrl` 的协商子路径，默认 `/_hai/key-exchange` |
+
+服务端必须对应启用 `serv.createApp({ transport: { crypto } })`。
+
 ## 常见模式
 
 - `baseUrl` 通常包含服务端 `apiPrefix`，例如 `/api/v1`。
 - 业务错误不 throw，统一判断 `HaiResult.success`。
 - 客户端不导入服务端 `procedures` 或 `@h-ai/serv`。
+- 客户端不导入 `@h-ai/crypto` 的内部 transport 工厂，只通过 `transport: { crypto }` 装配。
 - 前端只依赖 `@h-ai/api-client` 和 contract 类型，不依赖业务模块实现。
 - httpOnly cookie 模式需服务端与客户端同步配置，不支持跨域刷新（`SameSite=Strict`）。

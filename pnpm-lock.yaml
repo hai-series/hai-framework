@@ -853,6 +853,9 @@ importers:
       '@h-ai/core':
         specifier: workspace:*
         version: link:../core
+      '@h-ai/crypto':
+        specifier: workspace:*
+        version: link:../crypto
       '@orpc/client':
         specifier: 'catalog:'
         version: 1.14.3(@opentelemetry/api@1.9.0)
@@ -1216,6 +1219,9 @@ importers:
       '@h-ai/core':
         specifier: workspace:*
         version: link:../core
+      '@h-ai/crypto':
+        specifier: workspace:*
+        version: link:../crypto
       '@h-ai/iam':
         specifier: workspace:*
         version: link:../iam
@@ -1403,6 +1409,9 @@ importers:
       '@h-ai/core':
         specifier: workspace:*
         version: link:../core
+      '@h-ai/crypto':
+        specifier: workspace:*
+        version: link:../crypto
       '@hono/node-server':
         specifier: 'catalog:'
         version: 2.0.2(hono@4.12.18)
