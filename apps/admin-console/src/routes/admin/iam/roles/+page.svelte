@@ -6,6 +6,7 @@
   import type { PageData } from './$types'
   import { createRoleCrud } from '$lib/crud/role-crud'
   import * as m from '$lib/paraglide/messages'
+  import { createSvelteKitNavAdapter } from '@h-ai/kit/client'
   import { CrudPage, usePermission } from '@h-ai/ui'
 
   interface RoleData {
@@ -60,6 +61,8 @@
     }
     return true
   }
+
+  const nav = createSvelteKitNavAdapter()
 </script>
 
 <svelte:head>
@@ -71,6 +74,7 @@
   data={crudData}
   permissions={{ create: canCreate, update: canUpdate, delete: canDelete }}
   onbeforedelete={handleBeforeDelete}
+  {nav}
 >
   {#snippet editFormExtra(editingItem, _mode)}
     <!-- 权限树编辑器 -->

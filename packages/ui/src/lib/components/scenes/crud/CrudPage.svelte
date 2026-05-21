@@ -13,8 +13,7 @@
 <script lang='ts'>
   import type { Snippet } from 'svelte'
   import type { Size } from '../../../types.js'
-  import { goto, invalidateAll } from '$app/navigation'
-  import { page } from '$app/state'
+  import type { NavAdapter } from './nav-adapter.js'
   import { uiM } from '../../../messages.js'
   import Card from '../../compounds/Card.svelte'
   import DataTable from '../../compounds/DataTable.svelte'
@@ -26,6 +25,7 @@
   import CrudDetailDrawer from './CrudDetailDrawer.svelte'
   import CrudEditDrawer from './CrudEditDrawer.svelte'
   import CrudFilterBar from './CrudFilterBar.svelte'
+  import { createBrowserNavAdapter } from './nav-adapter.js'
 
   // ─── 类型定义 ───
 
@@ -97,6 +97,7 @@
     onafterdelete,
     onerror,
     basePath = '',
+    nav = createBrowserNavAdapter(),
     class: className = '',
   }: {
     crud: CrudDef
@@ -113,6 +114,13 @@
     onafterdelete?: (item: Record<string, unknown>) => void
     onerror?: (error: string) => void
     basePath?: string
+    /**
+     * 路由适配器：用于读取当前 pathname、同步过滤参数到 URL、列表刷新。
+     * 默认使用 `createBrowserNavAdapter()`（基于 `globalThis.location`）。
+     * SvelteKit 应用应传入 `createSvelteKitNavAdapter()`（来自 `@h-ai/kit/client`），
+     * 以获得客户端跳转 + invalidateAll 体验。
+     */
+    nav?: NavAdapter
     class?: string
   } = $props()
 
@@ -140,7 +148,7 @@
   let filterValues = $state<Record<string, unknown>>({})
 
   // 基础路径
-  const currentBasePath = $derived(basePath || page.url.pathname)
+  const currentBasePath = $derived(basePath || nav.pathname)
 
   // ─── 工具函数 ───
 
@@ -190,7 +198,8 @@
     }
 
     const qs = params.toString()
-    goto(`${currentBasePath}${qs ? `?${qs}` : ''}`, { invalidateAll: true })
+    const url = `${currentBasePath}${qs ? `?${qs}` : ''}`
+    void Promise.resolve(nav.navigate(url)).then(() => nav.refresh?.())
   }
 
   function handleSearch(search: string) {
@@ -254,7 +263,7 @@
         const submitted = (result ?? {}) as Record<string, unknown>
         closeDrawer()
         onaftersubmit?.(submitted, 'create')
-        await invalidateAll()
+        await nav.refresh?.()
       }
       else if (drawerMode === 'edit' && crud.api.update && selectedItem) {
         const id = String(selectedItem[keyField])
@@ -262,7 +271,7 @@
         const submitted = (result ?? {}) as Record<string, unknown>
         closeDrawer()
         onaftersubmit?.(submitted, 'edit')
-        await invalidateAll()
+        await nav.refresh?.()
       }
     }
     catch (e) {
@@ -307,7 +316,7 @@
         closeDrawer()
       }
       onafterdelete?.(deleted)
-      await invalidateAll()
+      await nav.refresh?.()
     }
     catch (e) {
       const msg = e instanceof Error ? e.message : uiM('crud_delete_failed')

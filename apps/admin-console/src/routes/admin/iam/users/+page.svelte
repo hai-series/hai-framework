@@ -7,6 +7,7 @@
   import { invalidateAll } from '$app/navigation'
   import { createUserCrud } from '$lib/crud/user-crud'
   import * as m from '$lib/paraglide/messages'
+  import { createSvelteKitNavAdapter } from '@h-ai/kit/client'
   import { CrudPage, usePermission } from '@h-ai/ui'
 
   interface UserData {
@@ -71,6 +72,8 @@
   async function handleAfterSubmit() {
     await invalidateAll()
   }
+
+  const nav = createSvelteKitNavAdapter()
 </script>
 
 <svelte:head>
@@ -82,6 +85,7 @@
   data={crudData}
   permissions={{ create: canCreate, update: canUpdate, delete: canDelete }}
   onaftersubmit={handleAfterSubmit}
+  {nav}
 >
   {#snippet editFormExtra(_editingItem, _mode)}
     <!-- 密码字段是用户模块特有的，CrudPage 无法声明式处理，这里通过 snippet 注入 -->
