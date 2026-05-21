@@ -9,6 +9,7 @@ import type { LogFormat, LoggingConfig, LogLevel } from './core-config.js'
 import type { ErrorFn } from './functions/core-function-error.js'
 import type { IdFn } from './functions/core-function-id.js'
 import type { I18nFn } from './i18n/core-i18n-utils.js'
+import type { ZodValidationFn } from './i18n/core-zod-mapper.js'
 import type { ArrayFn } from './utils/core-util-array.js'
 import type { AsyncFn } from './utils/core-util-async.js'
 import type { ModuleFn } from './utils/core-util-module.js'
@@ -440,6 +441,8 @@ export interface CoreFunctions {
   readonly logger: CoreLogger
   /** 国际化工具 */
   readonly i18n: I18nFn
+  /** Zod 校验错误 → i18n 消息映射工具（kit / serv / api-client 共享） */
+  readonly zodValidation: ZodValidationFn
   /** ID 生成工具 */
   readonly id: IdFn
   /** 类型检查工具 */
