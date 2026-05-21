@@ -6,7 +6,7 @@
  */
 
 import type { HaiResult } from '@h-ai/core'
-import type { AsymmetricOperations, CryptoFunctions, HashOperations, PasswordOperations, SymmetricOperations } from './crypto-types.js'
+import type { AsymmetricOperations, CryptoFunctions, HashOperations, PasswordOperations, SymmetricOperations, TransportOperations } from './crypto-types.js'
 
 import { core, err, ok } from '@h-ai/core'
 
@@ -20,6 +20,9 @@ import {
   HaiCryptoError,
 
 } from './crypto-types.js'
+import { createTransportClient } from './transport/crypto-transport-client.js'
+import { createTransportEncryption } from './transport/crypto-transport-server.js'
+import { TRANSPORT_PROTOCOL } from './transport/crypto-transport-types.js'
 
 const logger = core.logger.child({ module: 'crypto', scope: 'main' })
 
@@ -49,6 +52,22 @@ const notInitializedAsymmetric = notInitialized.proxy<AsymmetricOperations>('syn
 const notInitializedHash = notInitialized.proxy<HashOperations>('sync')
 const notInitializedSymmetric = notInitialized.proxy<SymmetricOperations>('sync')
 const notInitializedPassword = notInitialized.proxy<PasswordOperations>('sync')
+
+// ─── 传输加密 ───
+// 直接复用顶层 `crypto`：未初始化时 asymmetric/symmetric 会自动返回
+// NOT_INITIALIZED 错误，无需额外 proxy。
+
+// 通过函数声明（hoisted）延迟引用 `crypto`，避免 use-before-define 报错；
+// 实际调用发生在 init 之后，闭包持有的引用是安全的。
+function getCrypto(): CryptoFunctions {
+  // eslint-disable-next-line ts/no-use-before-define
+  return crypto
+}
+const transportOperations: TransportOperations = {
+  createServer: options => createTransportEncryption(getCrypto(), options),
+  createClient: options => createTransportClient({ crypto: getCrypto(), ...options }),
+  protocol: TRANSPORT_PROTOCOL,
+}
 
 // ─── 服务对象 ───
 
@@ -133,6 +152,13 @@ export const crypto: CryptoFunctions = {
   get symmetric(): SymmetricOperations { return currentSymmetric ?? notInitializedSymmetric },
   /** 密码哈希操作（未初始化时所有方法返回 NOT_INITIALIZED） */
   get password(): PasswordOperations { return currentPassword ?? notInitializedPassword },
+  /**
+   * 传输加密操作（端到端混合加密）
+   *
+   * createServer 内部直接复用 asymmetric/symmetric，因此未初始化时
+   * 自动通过 asymmetric proxy 返回 NOT_INITIALIZED 错误。
+   */
+  transport: transportOperations,
   /** 是否已初始化 */
   get isInitialized() { return initialized },
 

@@ -8,6 +8,7 @@
 - 哈希（哈希、HMAC、验证）
 - 对称加密（ECB/CBC 模式）
 - 密码哈希（加盐迭代哈希）
+- 传输加密（`crypto.transport`：服务端管理器 + 客户端 `encryptedFetch`）
 - 前后端通用（Node.js / 浏览器）
 
 ## 安全声明
@@ -139,6 +140,29 @@ if (hashed.success) {
   // wrong.data === false
 }
 ```
+
+### 传输加密（crypto.transport）
+
+传输加密统一通过 `crypto.transport` 命名空间提供，供 `@h-ai/serv`、`@h-ai/kit` 与 `@h-ai/api-client` 复用同一套协议常量和载荷格式。
+
+```ts
+// 服务端：通常由 serv.createApp({ transport: { crypto } }) 或 kit.createHandle({ crypto }) 内部调用
+const server = crypto.transport.createServer({ maxClients: 10000 })
+if (!server.success)
+  throw new Error(server.error.message)
+
+// 客户端：通常由 api.init({ transport: { crypto } }) 或 kit.client.create({ transport }) 内部调用
+const client = crypto.transport.createClient({
+  keyExchangeUrl: 'https://api.example.com/api/v1/_hai/key-exchange',
+})
+
+const response = await client.encryptedFetch('https://api.example.com/api/v1/echo', {
+  method: 'POST',
+  body: JSON.stringify({ hello: 'world' }),
+})
+```
+
+协议常量通过 `crypto.transport.protocol`（或 `TRANSPORT_PROTOCOL`）访问：`X-Client-Id`、`X-Encrypted`、默认 `/_hai/key-exchange`。
 
 ### 关闭模块
 
