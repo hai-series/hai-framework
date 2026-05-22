@@ -41,6 +41,16 @@ export interface CreateTransportClientOptions {
  *
  * 返回的 `encryptedFetch` 与全局 `fetch` 同签名，可直接替换业务代码中的 `fetch`。
  * 内部首次请求前会自动完成密钥协商（线程安全；并发请求只触发一次协商）。
+ *
+ * @remarks
+ * 内部流程：
+ *
+ * 1. `createTransportClient()` 只创建本地会话状态，不会立刻发起网络请求。
+ * 2. 首次 `init()` / `encryptedFetch()` 会进入 `ensureReady()`；同一时刻只允许一个协商 Promise，避免并发重复协商。
+ * 3. `doInit()` 会生成客户端非对称密钥对，并向 `keyExchangeUrl` POST `{ clientPublicKey }`。
+ * 4. 服务端返回 `{ serverPublicKey, clientId }` 后，会话进入 ready 状态；后续请求复用这组协商结果。
+ * 5. `encryptedFetch()` 对普通业务请求附加 `X-Client-Id`；只有请求存在 body 时，才会把 body 加密成 `{ encryptedKey, ciphertext, iv }`。
+ * 6. 响应带 `X-Encrypted: true` 时自动解密；不带该标记时直接透传，便于与未启用 transport 的接口共存。
  */
 export function createTransportClient(options: CreateTransportClientOptions): TransportClient {
   const baseFetch = options.fetch ?? fetch

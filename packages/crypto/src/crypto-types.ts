@@ -311,6 +311,22 @@ export interface PasswordOperations {
  *
  * 通过 `crypto.transport` 访问，需先调用 `crypto.init()`。
  *
+ * @remarks
+ * 使用流程（直接使用底层 transport 工厂时）：
+ *
+ * 1. 先 `await crypto.init()`，确保 `crypto.asymmetric` / `crypto.symmetric` 已就绪。
+ * 2. 服务端调用 `crypto.transport.createServer()` 创建 `TransportEncryptionManager`；该管理器负责持有服务端密钥对，并管理客户端公钥。
+ * 3. 服务端暴露一个 POST 密钥协商端点：接收 `{ clientPublicKey }`，调用 `manager.registerClientKey()` 注册客户端公钥，再返回 `{ serverPublicKey: manager.getServerPublicKey(), clientId }`。
+ * 4. 客户端调用 `crypto.transport.createClient({ keyExchangeUrl })` 创建会话；首次 `client.init()` 或 `client.encryptedFetch()` 会自动完成密钥协商。
+ * 5. 协商完成后，客户端每次请求都会附带 `X-Client-Id`；若请求有 body，则 body 会被包装成 `{ encryptedKey, ciphertext, iv }`，并设置 `X-Encrypted: true`。
+ * 6. 服务端在业务逻辑前调用 `manager.decryptRequest()` 解密请求体，在返回前调用 `manager.encryptResponse(clientId, data)` 为当前客户端重新加密响应。
+ * 7. 客户端收到 `X-Encrypted: true` 的响应后会自动解密；调用 `client.destroy()` 可清空当前会话，下次请求会重新协商。
+ *
+ * 常规应用优先使用上层封装，而不是手写 HTTP 协商细节：
+ * - `serv.createApp({ transport: { crypto } })`
+ * - `kit.createHandle({ crypto: { crypto, transport: true } })`
+ * - `api.init({ transport: { crypto } })`
+ *
  * @example 服务端
  * ```ts
  * const result = crypto.transport.createServer()
@@ -334,6 +350,9 @@ export interface TransportOperations {
    *
    * options.maxClients：默认内存 keyStore 的最大客户端数（默认 10000）。
    * 成功返回 manager；密钥生成失败返回 `HaiCommonError.INTERNAL_ERROR`。
+   *
+   * @remarks
+   * 通常在服务启动阶段创建一次，并交给 HTTP 中间件 / 路由处理器复用。
    */
   createServer: (options?: { maxClients?: number }) => HaiResult<TransportEncryptionManager>
   /**
@@ -341,6 +360,10 @@ export interface TransportOperations {
    *
    * options.keyExchangeUrl：密钥协商端点完整 URL。
    * options.fetch：实际发送 HTTP 请求的 fetch（默认 `globalThis.fetch`）。
+   *
+   * @remarks
+   * 返回的是“单会话”客户端：同一个实例会复用已协商得到的 `clientId` 与服务端公钥；
+   * 调用 `destroy()` 后会回到未协商状态。
    */
   createClient: (options: { keyExchangeUrl: string, fetch?: typeof fetch }) => TransportClient
   /** 协议常量（headers、密钥协商默认路径）。 */

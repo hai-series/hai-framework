@@ -112,6 +112,15 @@ export interface TransportKeyStore {
  *
  * 由 {@link createTransportEncryption} 创建；负责服务端密钥对持有、客户端密钥
  * 注册与请求/响应的加解密。
+ *
+ * @remarks
+ * 典型调用顺序：
+ *
+ * 1. `registerClientKey(clientPublicKey)`：在密钥协商端点中保存客户端公钥，并生成 `clientId`。
+ * 2. `getServerPublicKey()`：把服务端公钥返回给客户端，供后续请求加密会话密钥。
+ * 3. `decryptRequest(payload)`：普通业务请求进入业务逻辑前，先把密文请求体解成明文。
+ * 4. `encryptResponse(clientId, data)`：业务处理完成后，按当前客户端公钥重新加密响应体。
+ * 5. `close()`：服务关闭时释放底层 keyStore 资源。
  */
 export interface TransportEncryptionManager {
   getServerPublicKey: () => string
@@ -128,6 +137,14 @@ export interface TransportEncryptionManager {
  *
  * 由 {@link createTransportClient} 创建；包装宿主 `fetch`，
  * 自动完成首次密钥协商并对后续请求自动加解密。
+ *
+ * @remarks
+ * 典型调用顺序：
+ *
+ * 1. `init()`（可选）：预先完成一次密钥协商。
+ * 2. `encryptedFetch()`：业务请求统一走这里；若当前会话尚未 ready，会先自动执行 `init()`。
+ * 3. `ready()`：查看当前会话是否已经拿到 `clientId` 与服务端公钥。
+ * 4. `destroy()`：登出、切租户或切环境时清空会话；下一次请求会重新协商。
  */
 export interface TransportClient {
   /**
