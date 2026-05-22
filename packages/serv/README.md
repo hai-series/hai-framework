@@ -6,7 +6,7 @@
 
 - 一行启动：`serv.createApp(...)` → `serv.listen(app, { port })`
 - 扁平 API（最小知识）：`serv.listen / serv.toFetch / serv.requireAuth / serv.requirePermission / serv.generateSpec / ...`
-- 自定义 pipeline 时可直接复用根入口导出的共享类型：`ServMiddleware`、`ServProcedureHandler` 等
+- 自定义 pipeline：`createApp({ middlewares })` 挂 HTTP middleware；procedure wrapper 复用根入口导出的共享类型
 - 默认 feature procedures：`createIamProcedures()`、`createStorageProcedures()`、`createAiProcedures()`
 - 内置安全响应头、健康检查、可选 OpenAPI JSON、可选 Scalar 文档页、可选内部 RPC endpoint
 - 可选传输加密：`serv.createApp({ transport: { crypto } })` 自动挂载密钥协商与请求/响应加解密
@@ -99,6 +99,42 @@ await api.init({
 })
 ```
 
+如果应用通过 `@h-ai/core` 从 `config/_serv.yml` 驱动 `ServConfigSchema`，transport 也可以一起配置：
+
+```yaml
+# config/_serv.yml
+http:
+  apiPrefix: /api/v1
+
+transport:
+  keyExchangePath: /_hai/key-exchange
+  excludePaths:
+    - /health
+    - /ready
+    - /openapi.json
+    - /docs
+    - /_hai/scalar.js
+  maxClients: 10000
+```
+
+```ts
+const servConfig = core.config.getOrThrow<import('@h-ai/serv').ServConfig>('serv')
+
+const app = serv.createApp({
+  contract,
+  procedures,
+  http: servConfig.http,
+  transport: servConfig.transport === false
+    ? undefined
+    : {
+        crypto,
+        keyExchangePath: servConfig.transport.keyExchangePath,
+        excludePaths: [...servConfig.transport.excludePaths],
+        maxClients: servConfig.transport.maxClients,
+      },
+})
+```
+
 > **多节点部署提示**：传输加密的会话密钥保存在 **服务端进程内**，多副本部署时必须满足下列条件之一才能正常工作：
 >
 > - 在负载均衡层启用**会话粘性（sticky session）**，确保同一客户端命中同一节点；
@@ -163,26 +199,130 @@ const updateProfile = p.users.update.handler(
 )
 ```
 
-### 高级：自定义 pipeline 类型约束
+### 高级：自定义 pipeline（HTTP middleware + context + procedure wrapper）
 
-常规场景优先使用 `serv.requireAuth(...)` 这类扁平 API。只有在你需要直接装配 Hono middleware、
-或编写自己的 pipeline 实现时，直接从根入口导入共享类型即可：
+`@h-ai/serv` 的“pipeline”分三层，分别对应三种扩展方式：
+
+1. **HTTP middleware 层**：通过 `serv.createApp({ middlewares })` 注入 Hono middleware。
+2. **context 层**：通过 `verifyToken` / `createContext` / `serv.buildAuthContextFactory()` 定制请求上下文。
+3. **procedure wrapper 层**：通过 `ServProcedureWrapper` / `ServGuardedProcedureWrapper` 组合认证、审计、租户校验等业务包装。
+
+#### 1) 自定义 HTTP middleware
+
+当你需要加请求日志、trace、限流、CORS、租户头校验等 **HTTP 层横切逻辑** 时，使用 `middlewares`：
 
 ```ts
-import type { ServMiddleware, ServProcedureHandler } from '@h-ai/serv'
+import type { ServMiddleware } from '@h-ai/serv'
 
-const myMiddleware: ServMiddleware = async (c, next) => {
+const requestMetrics: ServMiddleware = async (c, next) => {
+  const startedAt = Date.now()
   await next()
+  c.header('x-response-time-ms', String(Date.now() - startedAt))
 }
 
-const myWrapper = <TInput, TOutput>(handler: ServProcedureHandler<TInput, TOutput>) => handler
+const app = serv.createApp({
+  contract,
+  procedures,
+  http: { apiPrefix: '/api/v1' },
+  middlewares: [
+    { middleware: requestMetrics }, // 默认挂到 '*'
+    {
+      path: '/api/v1/*',
+      middleware: async (c, next) => {
+        if (!c.req.header('x-tenant-id'))
+          return c.text('Missing x-tenant-id', 400)
+        await next()
+      },
+    },
+  ],
+})
+```
+
+执行顺序固定为：
+
+1. 内置 `securityHeaders`
+2. 内置 `transport`（若启用）
+3. 你的 `middlewares`
+4. health / refresh-cookie / OpenAPI / RPC / docs / oRPC routes
+
+说明：
+
+- `middlewares` 按数组顺序注册
+- `path` 省略时默认 `'*'`
+- 这一层直接操作 Hono `Context`，返回的是 **HTTP Response**，不是 `HaiResult`
+
+#### 2) 自定义 context pipeline
+
+如果你只想复用 `Bearer token -> session` 这一段逻辑，再额外补充租户、工作区、来源系统等字段，
+优先用 `serv.buildAuthContextFactory()` 组装自定义 `createContext`：
+
+```ts
+const baseContext = serv.buildAuthContextFactory(token => iam.session.verifyToken(token))
+
+const app = serv.createApp({
+  contract,
+  procedures,
+  createContext: async ({ request }) => {
+    const context = await baseContext({ request })
+    return {
+      ...context,
+      tenantId: request.headers.get('x-tenant-id') ?? null,
+    }
+  },
+})
+```
+
+什么时候用哪个：
+
+- 只想换 token 校验实现：用 `verifyToken`
+- 想在默认认证上下文之上追加字段：用 `buildAuthContextFactory(...) + createContext`
+- 想完全接管上下文构造：直接用 `createContext`
+
+#### 3) 自定义 procedure wrapper
+
+当逻辑已经进入 oRPC procedure，需要统一做审计、租户约束、业务 guard 时，使用 procedure wrapper：
+
+```ts
+import type { ServGuardedProcedureWrapper, ServProcedureWrapper } from '@h-ai/serv'
+import { err, HaiCommonError } from '@h-ai/core'
+import { serv } from '@h-ai/serv'
+
+const withAudit: ServProcedureWrapper = handler => async (options) => {
+  options.context.logger.info('procedure.start', { requestId: options.context.requestId })
+  return await handler(options)
+}
+
+const requireTenant: ServGuardedProcedureWrapper<string> = (tenantId, handler) => async (options) => {
+  if (options.context.request.headers.get('x-tenant-id') !== tenantId) {
+    return err(
+      HaiCommonError.FORBIDDEN,
+      serv.m('serv_errorForbidden', { locale: options.context.locale }),
+    )
+  }
+  return await handler(options)
+}
+
+const createWidget = serv.mapHaiError(
+  serv.requireAuth(
+    withAudit(
+      requireTenant('tenant-a', async ({ input }) => widgetService.create(input)),
+    ),
+  ),
+)
 ```
 
 说明：
 
-- `src/pipelines/*` 是 `@h-ai/serv` 的内部默认实现目录，用于模块内部装配与测试
+- `ServProcedureWrapper`：单参数 wrapper，适合 `withAudit(handler)` 这种模式
+- `ServGuardedProcedureWrapper<T>`：带配置参数的 wrapper，适合 `requireTenant('t1', handler)` 这种模式
+- procedure wrapper 返回的是 `HaiResult<T>`，和 `serv.requireAuth` / `serv.requirePermission` 保持一致
+- 常规场景优先继续用 `serv.requireAuth / requirePermission / requireRole / mapHaiError`
+
+边界约束：
+
+- `src/pipelines/*` 是 `@h-ai/serv` 的内部默认实现目录，不作为公开子路径 API 承诺
 - 对应用层公开的稳定入口仍然是根入口 `@h-ai/serv`
-- `securityHeaders` / `requireInternalRPC` / `buildHaiErrorBody` 等内部 helper/middleware 不作为单独子路径 API 文档暴露
+- `securityHeaders` / `requireInternalRPC` / `buildHaiErrorBody` 等内部 helper/middleware 不作为单独子路径文档暴露
 
 ### httpOnly Cookie 认证（推荐生产方案）
 
@@ -235,7 +375,7 @@ await api.init({
 
 ## API 概览
 
-- `serv.createApp(options)`：创建 Hono app，挂载健康检查、OpenAPI handler、可选文档与 RPC
+- `serv.createApp(options)`：创建 Hono app，挂载自定义 `middlewares`、健康检查、OpenAPI handler、可选文档与 RPC
 - `serv.parseRequestContext({ request })`：默认上下文解析（提取 Bearer token + requestId，不填充 session）
 - `serv.listen(app, options)`：在 Node.js 启动 HTTP 服务，返回 `{ server, address, close }`
 - `serv.toFetch(app)`：包装为标准 `fetch(Request)` handler
@@ -248,11 +388,11 @@ await api.init({
 - `serv.resolveRequestLocale(headers)`：从 `x-hai-locale` / `Accept-Language` 解析并规范化请求 locale
 - `serv.m(key, options)`：读取 `@h-ai/serv` 自身消息，支持 `options.locale` 单次调用本地化
 
-高级子路径：
-
-另有根级命名导出：
+另有根级类型 / 命名导出：
 
 - `ServConfigSchema`：用于 `core.config.validate('serv', ServConfigSchema)` 校验 `config/_serv.yml`
+- `ServMiddlewareMount`：`createApp({ middlewares })` 的挂载项类型（`{ path?, middleware }`）
+- `ServMiddleware` / `ServProcedureWrapper` / `ServGuardedProcedureWrapper`：自定义 pipeline 时复用的共享类型
 
 > 传输加密不作为 `serv.xxx` 扁平 API 暴露；它是 `createApp` 的配置能力，内部委托 `crypto.transport`。
 
@@ -270,12 +410,20 @@ const validation = core.config.validate('serv', ServConfigSchema)
 if (!validation.success)
   throw new Error(validation.error.message)
 
-const servConfig = core.config.getOrThrow<{ http: import('@h-ai/serv').ServHttpConfig }>('serv')
+const servConfig = core.config.getOrThrow<import('@h-ai/serv').ServConfig>('serv')
 
 const app = serv.createApp({
   contract,
   procedures,
   http: servConfig.http,
+  transport: servConfig.transport === false
+    ? undefined
+    : {
+        crypto,
+        keyExchangePath: servConfig.transport.keyExchangePath,
+        excludePaths: [...servConfig.transport.excludePaths],
+        maxClients: servConfig.transport.maxClients,
+      },
 })
 ```
 
@@ -292,6 +440,16 @@ http:
     path: /health
     readyPath: /ready
   rpc: false
+
+transport:
+  keyExchangePath: /_hai/key-exchange
+  excludePaths:
+    - /health
+    - /ready
+    - /openapi.json
+    - /docs
+    - /_hai/scalar.js
+  maxClients: 10000
 ```
 
 `ServHttpConfigInput`：
@@ -301,7 +459,7 @@ http:
 - `openapi`：默认 `false`；启用：`{ path: '/openapi.json' }`
 - `docs`：默认 `false`；启用：`{ path: '/docs' }`（依赖 `openapi`）；启用后自动挂载 `/_hai/scalar.js`，从 `@scalar/api-reference` 的 browser bundle 提供本地 Scalar UI 脚本，无需外网 CDN
 - `rpc`：默认 `false`；启用：`{ prefix: '/rpc', access: 'loopback' | 'private-network' | 'gateway-only', gatewayHeader?, gatewaySecret? }`
-- `transport`：`createApp` 顶层配置，`{ crypto, keyExchangePath?, excludePaths?, maxClients? }`；默认密钥协商子路径 `/_hai/key-exchange`
+- `transport`：`config/_serv.yml` 顶层配置；启用后可通过 `servConfig.transport` 装配到 `createApp({ transport })`，默认密钥协商子路径 `/_hai/key-exchange`
 
 ## 错误处理
 

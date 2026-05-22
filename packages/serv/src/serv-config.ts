@@ -1,7 +1,7 @@
 /**
  * @h-ai/serv — HTTP 配置
  *
- * 提供用于控制 API 前缀、OpenAPI、docs、健康检查与内部 RPC 访问策略的配置结构，
+ * 提供用于控制 API 前缀、OpenAPI、docs、健康检查、内部 RPC 与传输加密策略的配置结构，
  * 并由 zod 负责默认值填充与边界校验。
  * @module serv-config
  */
@@ -43,6 +43,13 @@ export interface ServRpcHttpConfig {
   readonly gatewaySecret?: string
 }
 
+/** 传输加密运行时配置（对应 `config/_serv.yml`）。 */
+export interface ServTransportRuntimeConfig {
+  readonly keyExchangePath: `/${string}`
+  readonly excludePaths: readonly `/${string}`[]
+  readonly maxClients: number
+}
+
 /** Hono app 的 HTTP 挂载配置。 */
 export interface ServHttpConfig {
   readonly apiPrefix: `/api/${string}`
@@ -55,7 +62,15 @@ export interface ServHttpConfig {
 /** `config/_serv.yml` 的顶层配置结构。 */
 export interface ServConfig {
   readonly http: ServHttpConfig
+  readonly transport: false | ServTransportRuntimeConfig
 }
+
+/** `config/_serv.yml` 中的传输加密输入类型。 */
+export type ServTransportRuntimeConfigInput = Partial<{
+  readonly keyExchangePath: `/${string}`
+  readonly excludePaths: readonly `/${string}`[]
+  readonly maxClients: number
+}>
 
 /** `serv.createApp` 接受的 HTTP 配置入参类型。 */
 export type ServHttpConfigInput = Partial<{
@@ -69,6 +84,7 @@ export type ServHttpConfigInput = Partial<{
 /** `config/_serv.yml` 的顶层输入类型。 */
 export interface ServConfigInput {
   readonly http?: ServHttpConfigInput
+  readonly transport?: false | ServTransportRuntimeConfigInput
 }
 
 const OpenAPIHttpConfigInputSchema = z.union([
@@ -102,6 +118,15 @@ const RpcHttpConfigInputSchema = z.union([
   }),
 ])
 
+const TransportRuntimeConfigInputSchema = z.union([
+  z.literal(false),
+  z.object({
+    keyExchangePath: AbsolutePathSchema.default('/_hai/key-exchange'),
+    excludePaths: z.array(AbsolutePathSchema).default([]),
+    maxClients: z.number().int().positive().default(10000),
+  }),
+])
+
 const ServHttpConfigInputSchema = z.object({
   apiPrefix: ApiPrefixSchema.default('/api/v1'),
   openapi: OpenAPIHttpConfigInputSchema.default(false),
@@ -113,8 +138,10 @@ const ServHttpConfigInputSchema = z.object({
 /** `config/_serv.yml` 对应的配置 Schema。 */
 export const ServConfigSchema = z.object({
   http: ServHttpConfigInputSchema.optional(),
-}).transform(({ http }) => ({
+  transport: TransportRuntimeConfigInputSchema.optional(),
+}).transform(({ http, transport }) => ({
   http: resolveServHttpConfig(http ?? {}),
+  transport: resolveServTransportRuntimeConfig(transport ?? false),
 }))
 
 /**
@@ -125,6 +152,18 @@ export const ServConfigSchema = z.object({
  */
 export function resolveServHttpConfig(input: ServHttpConfigInput = {}): ServHttpConfig {
   return ServHttpConfigInputSchema.parse(input)
+}
+
+/**
+ * 解析传输加密配置并补齐默认值。
+ *
+ * @param input - `config/_serv.yml` 中的 transport 配置
+ * @returns 完整 transport 配置；`false` 表示关闭
+ */
+export function resolveServTransportRuntimeConfig(
+  input: false | ServTransportRuntimeConfigInput = false,
+): false | ServTransportRuntimeConfig {
+  return TransportRuntimeConfigInputSchema.parse(input)
 }
 
 /**

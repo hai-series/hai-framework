@@ -46,6 +46,48 @@ describe('@h-ai/serv', () => {
     expect(await response.json()).toEqual({ status: 'ok' })
   })
 
+  it('mounts custom middlewares before built-in routes', async () => {
+    const app = serv.createApp({
+      contract,
+      procedures,
+      middlewares: [
+        {
+          path: '/health',
+          middleware: c => c.text('intercepted', 418),
+        },
+      ],
+    })
+
+    const response = await app.request('/health')
+
+    expect(response.status).toBe(418)
+    expect(response.headers.get('x-content-type-options')).toBe('nosniff')
+    expect(await response.text()).toBe('intercepted')
+  })
+
+  it('supports path-scoped custom middlewares', async () => {
+    const app = serv.createApp({
+      contract,
+      procedures,
+      http: { openapi: { path: '/openapi.json' } },
+      middlewares: [
+        {
+          path: '/openapi.json',
+          middleware: async (c, next) => {
+            await next()
+            c.header('x-serv-custom-pipeline', '1')
+          },
+        },
+      ],
+    })
+
+    const openapi = await app.request('/openapi.json')
+    expect(openapi.headers.get('x-serv-custom-pipeline')).toBe('1')
+
+    const health = await app.request('/health')
+    expect(health.headers.get('x-serv-custom-pipeline')).toBeNull()
+  })
+
   it('requires verified auth for protected docs page', async () => {
     const app = serv.createApp({
       contract,

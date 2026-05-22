@@ -46,5 +46,18 @@ describe('resolveServHttpConfig', () => {
     expect(config.http.apiPrefix).toBe('/api/v1')
     expect(config.http.docs).toEqual({ path: '/docs' })
     expect(config.http.health).toEqual({ path: '/health', readyPath: '/ready' })
+    expect(config.transport).toBe(false)
+  })
+
+  it('fills transport defaults from _serv.yml config', () => {
+    const config = resolveServConfig({
+      transport: {},
+    })
+
+    expect(config.transport).toEqual({
+      keyExchangePath: '/_hai/key-exchange',
+      excludePaths: [],
+      maxClients: 10000,
+    })
   })
 })
