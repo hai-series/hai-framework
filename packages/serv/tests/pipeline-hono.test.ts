@@ -4,7 +4,8 @@ import { IncomingMessage, ServerResponse } from 'node:http'
 import { Socket } from 'node:net'
 import { Hono } from 'hono'
 import { describe, expect, it } from 'vitest'
-import { requireInternalRPC, securityHeaders } from '../src/serv-pipeline.js'
+import { requireInternalRPC } from '../src/pipelines/serv-pipeline-require-internal-rpc.js'
+import { securityHeaders } from '../src/pipelines/serv-pipeline-security-headers.js'
 
 function createNodeBindings(remoteAddress: string): HttpBindings {
   const socket = new Socket()

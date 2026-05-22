@@ -9,6 +9,13 @@ const contract = createApiContract({})
 const procedures = implement(contract).$context<ServContext>().router({})
 
 describe('@h-ai/serv', () => {
+  it('keeps root API focused on runtime-level helpers', () => {
+    expect(typeof serv.toFetch).toBe('function')
+    expect('createDocsPage' in serv).toBe(false)
+    expect('securityHeaders' in serv).toBe(false)
+    expect('requireInternalRPC' in serv).toBe(false)
+  })
+
   it('creates default context from request headers', () => {
     const request = new Request('https://api.test.local/health', {
       headers: {

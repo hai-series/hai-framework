@@ -23,7 +23,9 @@ description: 使用 @h-ai/serv 将 oRPC contract 挂载为 Hono HTTP API Service
 - 切换 Node.js (`@hono/node-server`) 或 Fetch Runtime（Cloudflare Workers / Deno）部署
 - 自定义 `ServContext`（注入 session、tenant 等请求级数据）
 - 生成 OpenAPI 3.1 文档供外部工具消费
+- 通过 `config/_serv.yml` 管理 API 前缀、OpenAPI、docs、health、rpc 等 HTTP 挂载配置
 - 启用传输加密：`serv.createApp({ transport: { crypto } })`
+- 高级场景通过根入口导出的共享类型自定义 middleware / wrapper
 
 ---
 
@@ -85,6 +87,43 @@ import { serv } from '@h-ai/serv'
 const handler = serv.toFetch(app)
 
 export default { fetch: handler }
+```
+
+### 4. 通过 `config/_serv.yml` 管理 HTTP 配置
+
+`@h-ai/serv` 不自己扫描 YAML；推荐由 `@h-ai/core` 统一加载，再用 `ServConfigSchema` 校验：
+
+```typescript
+import { core } from '@h-ai/core'
+import { serv, ServConfigSchema } from '@h-ai/serv'
+
+core.init({ configDir: './config' })
+
+const validation = core.config.validate('serv', ServConfigSchema)
+if (!validation.success)
+  throw new Error(validation.error.message)
+
+const servConfig = core.config.getOrThrow<{ http: import('@h-ai/serv').ServHttpConfig }>('serv')
+
+const app = serv.createApp({
+  contract,
+  procedures,
+  http: servConfig.http,
+})
+```
+
+```yaml
+# config/_serv.yml
+http:
+  apiPrefix: /api/v1
+  openapi:
+    path: /openapi.json
+  docs:
+    path: /docs
+  health:
+    path: /health
+    readyPath: /ready
+  rpc: false
 ```
 
 ---
@@ -178,6 +217,27 @@ const adminOnly = serv.requireAuth(
 )
 ```
 
+### 高级：自定义 pipeline 类型
+
+根入口 `serv.xxx` 保持精简；当你需要编写自己的 pipeline 实现时，
+直接从根入口导入共享类型：
+
+```typescript
+import type { ServMiddleware, ServProcedureHandler } from '@h-ai/serv'
+
+const middleware: ServMiddleware = async (c, next) => {
+  await next()
+}
+
+const passthrough = <TInput, TOutput>(handler: ServProcedureHandler<TInput, TOutput>) => handler
+```
+
+说明：
+
+- `ServMiddleware` / `ServProcedureHandler` 等共享类型由根入口 `@h-ai/serv` 对外暴露
+- `src/pipelines/*` 是模块内部默认实现目录，不作为公开子路径 API 文档承诺
+- `mapHaiError` / `buildHaiErrorBody` 属于公共 helper，内部统一放在 `src/pipelines/serv-pipeline-helper.ts`
+
 ### 正常业务请求中的错误与 i18n
 
 按三层处理：
@@ -229,15 +289,6 @@ const spec = await serv.generateSpec(contract, {
   description: '接口说明',
 })
 // spec 为 OpenAPI 3.1 Document 对象
-```
-
-### `serv.createDocsPage(spec, options)` — 创建文档 HTML
-
-```typescript
-const html = serv.createDocsPage(spec, {
-  title: 'My API Docs',
-  specUrl: '/openapi.json', // 不传时内嵌 spec JSON
-})
 ```
 
 ---
@@ -341,6 +392,13 @@ procedure 包装器内置以下错误：
 ## httpOnly Cookie 认证
 
 将 refresh token 存储在 `HttpOnly` cookie 中，避免 XSS 风险（浏览器 JS 无法读取）。
+
+先区分两个 token：
+
+- `accessToken`：短期凭证，客户端放在内存，通过 `Authorization: Bearer <token>` 发送；
+  `serv.parseRequestContext()` / `extractBearerToken()` 解析、`buildAuthContextFactory()` 校验的就是它。
+- `refreshToken`：长期凭证，启用 `refreshCookie` 后只保存在 httpOnly cookie；
+  它不会走 `Authorization`，也不会被 `extractBearerToken()` 读取，只会在 `/auth/refresh` 被服务端取出。
 
 ### 适用场景
 

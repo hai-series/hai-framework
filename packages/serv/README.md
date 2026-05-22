@@ -6,6 +6,7 @@
 
 - 一行启动：`serv.createApp(...)` → `serv.listen(app, { port })`
 - 扁平 API（最小知识）：`serv.listen / serv.toFetch / serv.requireAuth / serv.requirePermission / serv.generateSpec / ...`
+- 自定义 pipeline 时可直接复用根入口导出的共享类型：`ServMiddleware`、`ServProcedureHandler` 等
 - 默认 feature procedures：`createIamProcedures()`、`createStorageProcedures()`、`createAiProcedures()`
 - 内置安全响应头、健康检查、可选 OpenAPI JSON、可选 Scalar 文档页、可选内部 RPC endpoint
 - 可选传输加密：`serv.createApp({ transport: { crypto } })` 自动挂载密钥协商与请求/响应加解密
@@ -162,9 +163,37 @@ const updateProfile = p.users.update.handler(
 )
 ```
 
+### 高级：自定义 pipeline 类型约束
+
+常规场景优先使用 `serv.requireAuth(...)` 这类扁平 API。只有在你需要直接装配 Hono middleware、
+或编写自己的 pipeline 实现时，直接从根入口导入共享类型即可：
+
+```ts
+import type { ServMiddleware, ServProcedureHandler } from '@h-ai/serv'
+
+const myMiddleware: ServMiddleware = async (c, next) => {
+  await next()
+}
+
+const myWrapper = <TInput, TOutput>(handler: ServProcedureHandler<TInput, TOutput>) => handler
+```
+
+说明：
+
+- `src/pipelines/*` 是 `@h-ai/serv` 的内部默认实现目录，用于模块内部装配与测试
+- 对应用层公开的稳定入口仍然是根入口 `@h-ai/serv`
+- `securityHeaders` / `requireInternalRPC` / `buildHaiErrorBody` 等内部 helper/middleware 不作为单独子路径 API 文档暴露
+
 ### httpOnly Cookie 认证（推荐生产方案）
 
 httpOnly cookie 模式将 refresh token 存储在服务端管理的 cookie 中（浏览器 JS 无法读取），避免 XSS 风险。
+
+先把两个 token 的职责分清：
+
+- `accessToken`：短期凭证。客户端把它放在内存中，并通过 `Authorization: Bearer <token>` 发送。
+  `serv.parseRequestContext()` / `extractBearerToken()` 解析的就是它；`buildAuthContextFactory()` 校验的也是它。
+- `refreshToken`：长期凭证。启用 `refreshCookie` 后，它不会再暴露给前端 JS，而是只保存在浏览器的 httpOnly cookie 中。
+  它**不会**被 `extractBearerToken()` 读取，只会在 `/auth/refresh` 被服务端取出，用来换发新的 access token。
 
 **工作原理：**
 
@@ -211,20 +240,59 @@ await api.init({
 - `serv.listen(app, options)`：在 Node.js 启动 HTTP 服务，返回 `{ server, address, close }`
 - `serv.toFetch(app)`：包装为标准 `fetch(Request)` handler
 - `serv.generateSpec(contract, options)`：由 contract 生成 OpenAPI 3.1 spec
-- `serv.createDocsPage(spec, options)`：生成 Scalar 文档页面 HTML
 - `serv.requireAuth(handler)`：procedure 认证包装器（`context.session` 为空 → UNAUTHORIZED）
 - `serv.requirePermission(perm, handler)`：procedure 权限包装器（缺失权限 → FORBIDDEN）
 - `serv.requireRole(role, handler)`：procedure 角色包装器（缺失角色 → FORBIDDEN）
 - `serv.mapHaiError(handler)`：统一异常 → `HaiResult` 的包装器
 - `serv.validateInputOrFail(zodSchema, input, locale)`：在 procedure 内做 Zod 二次校验，失败时返回本地化 `HaiResult` + `ValidationFormError[]`
 - `serv.resolveRequestLocale(headers)`：从 `x-hai-locale` / `Accept-Language` 解析并规范化请求 locale
-- `serv.securityHeaders()`：Hono 中间件：HSTS / X-Content-Type-Options / Referrer-Policy
-- `serv.requireInternalRPC(config)`：Hono 中间件：保护 `/rpc` 仅 loopback/内网/允许列表访问
 - `serv.m(key, options)`：读取 `@h-ai/serv` 自身消息，支持 `options.locale` 单次调用本地化
+
+高级子路径：
+
+另有根级命名导出：
+
+- `ServConfigSchema`：用于 `core.config.validate('serv', ServConfigSchema)` 校验 `config/_serv.yml`
 
 > 传输加密不作为 `serv.xxx` 扁平 API 暴露；它是 `createApp` 的配置能力，内部委托 `crypto.transport`。
 
 ## 配置
+
+`@h-ai/serv` 本身不主动扫描 YAML；推荐由 `@h-ai/core` 统一加载 `config/_serv.yml`，再把解析结果传给 `serv.createApp()`。
+
+```ts
+import { core } from '@h-ai/core'
+import { serv, ServConfigSchema } from '@h-ai/serv'
+
+core.init({ configDir: './config' })
+
+const validation = core.config.validate('serv', ServConfigSchema)
+if (!validation.success)
+  throw new Error(validation.error.message)
+
+const servConfig = core.config.getOrThrow<{ http: import('@h-ai/serv').ServHttpConfig }>('serv')
+
+const app = serv.createApp({
+  contract,
+  procedures,
+  http: servConfig.http,
+})
+```
+
+`config/_serv.yml` 示例：
+
+```yaml
+http:
+  apiPrefix: /api/v1
+  openapi:
+    path: /openapi.json
+  docs:
+    path: /docs
+  health:
+    path: /health
+    readyPath: /ready
+  rpc: false
+```
 
 `ServHttpConfigInput`：
 

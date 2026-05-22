@@ -1,7 +1,9 @@
 import type { ServContext } from '../src/serv-context.js'
 import { core, err, ok } from '@h-ai/core'
 import { describe, expect, it } from 'vitest'
-import { mapHaiError, requireAuth, requirePermission } from '../src/serv-pipeline.js'
+import { mapHaiError } from '../src/pipelines/serv-pipeline-helper.js'
+import { requireAuth } from '../src/pipelines/serv-pipeline-require-auth.js'
+import { requirePermission } from '../src/pipelines/serv-pipeline-require-permission.js'
 
 const logger = core.logger.child({ module: 'serv-test' })
 

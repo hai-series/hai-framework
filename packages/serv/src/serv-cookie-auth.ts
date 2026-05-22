@@ -23,8 +23,8 @@ import process from 'node:process'
 import { IAM_AUTH_ROUTES } from '@h-ai/api-contract'
 import { core, HaiCommonError } from '@h-ai/core'
 import { getCookie } from 'hono/cookie'
+import { buildHaiErrorBody } from './pipelines/serv-pipeline-helper.js'
 import { servM } from './serv-i18n.js'
-import { buildHaiErrorBody } from './serv-pipeline.js'
 import { resolveRequestLocale } from './serv-validation.js'
 
 // ─── 公共类型 ─────────────────────────────────────────────────────────────────
@@ -46,6 +46,7 @@ type SafeRefreshTokenPair = Omit<RefreshTokenPair, 'refreshToken'>
  * Refresh Token Cookie 传输配置。
  *
  * 传入 `serv.createApp({ refreshCookie: ... })` 后自动管理 refresh token cookie。
+ * access token 仍然走 `Authorization: Bearer <token>`；本配置只改变 refresh token 的传输通道。
  *
  * 刷新回调来源（优先级从高到低）：
  * 1. `onRefresh`（显式覆盖）
@@ -152,7 +153,13 @@ function extractRefreshTokenFromData(data: unknown): string | undefined {
   return typeof t.refreshToken === 'string' && t.refreshToken ? t.refreshToken : undefined
 }
 
-/** 擦除响应体中的 refreshToken，确保 httpOnly 模式下 JS 无法读取长期凭证。 */
+/**
+ * 擦除响应体中的 refreshToken，确保 httpOnly 模式下 JS 无法读取长期凭证。
+ *
+ * 这与 `Set-Cookie` 写入 refresh token **不是重复操作**，而是刻意把两条信道分开：
+ * - `Set-Cookie`：交给浏览器保存 refresh token（httpOnly，JS 不可读）
+ * - JSON 响应体：交给前端 JS 消费，因此必须删除 `refreshToken`
+ */
 function stripRefreshTokenFromData(data: unknown): unknown {
   if (!data || typeof data !== 'object' || Array.isArray(data))
     return data
@@ -209,6 +216,9 @@ export function mountRefreshCookieRoutes(
         const body = JSON.parse(bodyText) as { success?: boolean, data?: unknown }
         if (body.success) {
           const refreshToken = extractRefreshTokenFromData(body.data)
+          // 刻意保留“写 cookie + 擦响应体”两步：
+          // - cookie 让浏览器持久保存 refresh token，用于后续 /auth/refresh
+          // - body 中删掉 refreshToken，避免任何前端 JS 直接读到长期凭证
           if (refreshToken)
             headers.append('Set-Cookie', buildSetCookieHeader(cookieName, refreshToken, refreshCookiePath, maxAge, isSecure))
           body.data = stripRefreshTokenFromData(body.data)
@@ -240,6 +250,7 @@ export function mountRefreshCookieRoutes(
   // ─── refresh：专属路由，绕过 oRPC，直接从 cookie 读取 token 并刷新 ─────────
   // 此路由须在 oRPC 通配符之前注册，Hono 才能正确匹配。
   app.post(`${apiPrefix}${IAM_AUTH_ROUTES.refresh}`, async (c) => {
+    // access token 认证不走这里；这里只有“用 refresh token 换新 access token”这一件事。
     const refreshToken = getCookie(c, cookieName)
     if (!refreshToken) {
       const locale = resolveRequestLocale(c.req.raw.headers)

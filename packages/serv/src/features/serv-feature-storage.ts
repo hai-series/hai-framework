@@ -28,8 +28,8 @@ import type { ServMessageKey } from '../serv-i18n.js'
 import { storageContract } from '@h-ai/api-contract'
 import { err, HaiCommonError, ok } from '@h-ai/core'
 import { implement } from '@orpc/server'
+import { requireAuth } from '../pipelines/serv-pipeline-require-auth.js'
 import { servM } from '../serv-i18n.js'
-import { requireAuth } from '../serv-pipeline.js'
 import { mapHaiResult } from './serv-feature-helpers.js'
 
 const STORAGE_KEY_MAX_LENGTH = 1024

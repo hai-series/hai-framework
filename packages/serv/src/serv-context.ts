@@ -75,6 +75,10 @@ const HEADER_USER_AGENT = 'user-agent'
 /**
  * 从 Authorization header 中提取 Bearer token。
  *
+ * 这里只处理 **access token**。
+ * 若启用了 `refreshCookie`，refresh token 不会出现在 Authorization header 中，
+ * 而是仅存在浏览器的 httpOnly cookie，并只在 `/auth/refresh` 路由里读取。
+ *
  * @param value - Authorization header 原始值
  * @returns token 或 undefined
  */
@@ -92,6 +96,7 @@ export function extractBearerToken(value: string | null): string | undefined {
  *
  * - 提取 `x-request-id` / `accept-language` / `x-forwarded-for` / `x-real-ip` / `user-agent`
  * - 从 `Authorization: Bearer <token>` 提取 `accessToken`
+ * - **不会**读取 refresh token：refresh token 若启用 `refreshCookie`，只走 httpOnly cookie
  *
  * `session` 字段始终为 `undefined`：若需会话填充，请使用 {@link buildAuthContextFactory}
  * 或直接通过 `serv.createApp({ iam })` 让框架自动选择合适工厂。
@@ -122,34 +127,41 @@ export function parseRequestContext(input: CreateServContextInput): ServContext 
  * 构造**带认证的上下文工厂**：在 {@link parseRequestContext} 基础上异步填充 `context.session`。
  *
  * 工作流程（每个请求执行一次）：
- * 1. 调用 `parseRequestContext` 提取元数据 + accessToken
+ * 1. 调用 `parseRequestContext` 提取元数据 + accessToken（仅来自 Authorization Bearer）
  * 2. 若 `accessToken` 存在 → 调用 `verifyToken(accessToken)`
  * 3. `verifyToken` 成功 → `session = result.data`；失败或 token 缺失 → `session = undefined`
  * 4. 下游 `requireAuth` / `requirePermission` / `requireRole` 据此判断 401/403
+ *
+ * refresh token **不参与**这里的认证流程：它只在 access token 过期后，被 `/auth/refresh`
+ * 从 httpOnly cookie 中读出，用于换发新的 access token。
  *
  * **安全保证**：
  * - 每个请求都会重新调用 `verifyToken`（不缓存），用户被撤权后立即生效
  * - `verifyToken` 失败时**不**抛错，统一收敛为 `session=undefined` → 401
  * - 异常通过 try/catch 兜底，避免向 HTTP 层泄漏堆栈
  *
- * @param verifyToken - 访问令牌校验回调（通常是 `iam.session.verifyToken.bind(iam.session)`）
+ * @param verifyToken - 访问令牌校验回调（通常是 `token => iam.session.verifyToken(token)` 或自定义函数）
  * @returns 异步上下文工厂
  */
 export function buildAuthContextFactory(
   verifyToken: (accessToken: string) => Promise<HaiResult<ServSession>>,
 ): CreateServContext {
   return async (input) => {
+    // Step 1：先同步解析请求头，拿到 requestId / locale / accessToken 等基础元数据。
     const base = parseRequestContext(input)
+    // Step 2：没有 access token 时，直接返回基础上下文；后续由 requireAuth 统一判 401。
     if (!base.accessToken)
       return base
     try {
+      // Step 3：有 token 时才触发异步校验；成功则把 session 注入上下文。
       const result = await verifyToken(base.accessToken)
       if (!result.success)
         return base
+      // Step 4：返回带 session 的上下文，供 requireAuth / requirePermission / requireRole 使用。
       return { ...base, session: result.data }
     }
     catch {
-      // verifyToken 抛错（不规范）也视为未认证；不向上传播
+      // Step 5：verifyToken 抛错（不规范）也视为未认证；fail closed，不向上传播。
       return base
     }
   }

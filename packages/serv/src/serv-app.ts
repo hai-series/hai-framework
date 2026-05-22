@@ -3,6 +3,15 @@
  *
  * 将 oRPC contract + procedures + http 配置组合为可运行的 Hono app，
  * 自动挂载安全响应头、健康检查、OpenAPI JSON、Scalar 文档页与 oRPC handler。
+ *
+ * 关键装配顺序：
+ * 1. 解析 HTTP 配置
+ * 2. 选择请求上下文工厂
+ * 3. 挂基础安全 middleware
+ * 4. （可选）挂传输加密 middleware
+ * 5. 挂基础路由（health / refresh-cookie）
+ * 6. 挂业务路由（oRPC / RPC）
+ * 7. 挂文档路由（openapi / docs）
  * @module serv-app
  */
 
@@ -15,59 +24,23 @@ import type { CreateServContext, ServContext, ServIam, ServSession } from './ser
 import type { RefreshCookieConfig } from './serv-cookie-auth.js'
 import type { ServTransportConfig } from './serv-transport.js'
 import type { ServValidationFailureBody } from './serv-validation.js'
-import { readFile } from 'node:fs/promises'
 import { core, HaiCommonError } from '@h-ai/core'
 import { OpenAPIHandler } from '@orpc/openapi/fetch'
 import { RPCHandler } from '@orpc/server/fetch'
 import { Hono as HonoApp } from 'hono'
+import { buildHaiErrorBody } from './pipelines/serv-pipeline-helper.js'
+import { requireInternalRPC } from './pipelines/serv-pipeline-require-internal-rpc.js'
+import { securityHeaders } from './pipelines/serv-pipeline-security-headers.js'
 import { resolveServHttpConfig } from './serv-config.js'
 import { buildAuthContextFactory, parseRequestContext } from './serv-context.js'
 import { mountRefreshCookieRoutes } from './serv-cookie-auth.js'
 import { servM } from './serv-i18n.js'
-import { createDocsPage, generateSpec } from './serv-openapi.js'
-import { buildHaiErrorBody, requireInternalRPC, securityHeaders } from './serv-pipeline.js'
+import { createDocsPage, generateSpec, getScalarScript, SCALAR_ROUTE } from './serv-openapi.js'
 import { createTransportMiddleware } from './serv-transport.js'
 import { localizeZodError, resolveRequestLocale } from './serv-validation.js'
 
-/** Scalar UI 脚本本地路由，由 createApp 自动挂载，无需外网 CDN。 */
-const SCALAR_ROUTE = '/_hai/scalar.js'
-
-/** Scalar browser bundle 兜底路径；优先使用 package.json 的 browser 字段。 */
-const SCALAR_BROWSER_ENTRY_FALLBACK = './dist/browser/standalone.js'
-
 /** 允许通过 oRPC OpenAPIHandler 转发的 HTTP 方法。 */
 const API_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'] as const
-
-/** 缓存 Scalar UI 脚本内容（启动后不变，缓存避免重复读取）。 */
-let scalarScriptCache: string | undefined
-
-async function getScalarScript(): Promise<string | undefined> {
-  if (scalarScriptCache !== undefined)
-    return scalarScriptCache || undefined
-  try {
-    const fileUrl = await resolveScalarBrowserScriptUrl()
-    scalarScriptCache = await readFile(fileUrl, 'utf8')
-  }
-  catch {
-    scalarScriptCache = ''
-  }
-  return scalarScriptCache || undefined
-}
-
-async function resolveScalarBrowserScriptUrl(): Promise<URL> {
-  const packageEntryUrl = import.meta.resolve('@scalar/api-reference')
-  const packageJsonUrl = new URL('../package.json', packageEntryUrl)
-  const packageInfo: unknown = JSON.parse(await readFile(packageJsonUrl, 'utf8'))
-  const browserEntry = readScalarBrowserEntry(packageInfo) ?? SCALAR_BROWSER_ENTRY_FALLBACK
-  return new URL(browserEntry, packageJsonUrl)
-}
-
-function readScalarBrowserEntry(packageInfo: unknown): string | undefined {
-  if (typeof packageInfo !== 'object' || packageInfo === null || Array.isArray(packageInfo))
-    return undefined
-  const browser = (packageInfo as Record<string, unknown>).browser
-  return typeof browser === 'string' ? browser : undefined
-}
 
 /**
  * 创建 Hono app 的配置。
@@ -152,9 +125,12 @@ export function createApp<
   TContract extends AnyContractRouter,
   TProcedures extends Router<AnyContractRouter, ServContext>,
 >(options: CreateServAppOptions<TContract, TProcedures>): Hono {
+  // Step 1：先把用户输入的 HTTP 配置收敛成完整配置，后续挂载逻辑只处理一种形态。
   const http = resolveServHttpConfig(options.http)
+  // Step 2：创建 Hono app 外壳，后续所有 middleware / route 都按顺序向这个实例注册。
   const app = new HonoApp()
 
+  // Step 3：决定请求上下文工厂。这个选择直接决定后续 procedure 是否能拿到 `context.session`。
   // 上下文工厂选择优先级（顶位优先）：
   //   1. options.createContext
   //   2. options.verifyToken
@@ -170,6 +146,7 @@ export function createApp<
   const createContext: CreateServContext = options.createContext
     ?? (verifyToken ? buildAuthContextFactory(verifyToken) : parseRequestContext)
 
+  // Step 4：准备文档 spec 的懒缓存。只有真正访问 openapi/docs 时才生成，避免启动时做重活。
   // OpenAPI spec 是相对昂贵的同步生成；延迟到第一次访问 `/openapi.json` 或 `/docs` 时再算一次。
   let cachedSpec: Promise<OpenAPI.Document> | undefined
   const getSpec = (): Promise<OpenAPI.Document> => {
@@ -177,8 +154,11 @@ export function createApp<
     return cachedSpec
   }
 
+  // Step 5：最先挂全局安全响应头，让后续所有响应（包括错误响应）都自动带上保护性 header。
   app.use('*', securityHeaders())
 
+  // Step 6：若启用传输加密，必须在业务路由之前挂载。
+  // 这样请求能先被解密，响应也能在离开应用前被重新加密。
   // 传输加密必须在所有业务路由之前装载：
   // - 它需在 oRPC 读取 body 前完成解密
   // - 在下游响应返回后加密
@@ -197,22 +177,28 @@ export function createApp<
     app.use('*', createTransportMiddleware(mgr.data, keyExchangePath, options.transport.excludePaths))
   }
 
+  // Step 7：挂基础探活路由。健康检查放在业务路由之外，便于基础设施直接探测。
   if (http.health !== false)
     mountHealthRoutes(app, http.health)
 
+  // Step 8：refresh-cookie 路由要抢在 oRPC 通配符之前注册，否则会被 `${apiPrefix}/*` 吞掉。
   // refresh-cookie 路由必须在 oRPC 通配符路由之前注册，Hono 按注册顺序匹配。
   if (options.refreshCookie)
     mountRefreshCookieRoutes(app, http.apiPrefix, options.refreshCookie, options.iam)
 
+  // Step 9：挂主业务 API 路由。所有 `${apiPrefix}/*` 请求都会在这里进入 contract + procedure 分发。
   mountOpenAPIRoutes(app, options.procedures, http.apiPrefix, createContext)
 
+  // Step 10：按需挂内部 RPC 路由，并在入口处限制访问来源。
   if (http.rpc !== false)
     mountRPCRoutes(app, options.procedures, http.rpc, createContext)
 
+  // Step 11：按需挂 OpenAPI JSON 文档端点。
   if (http.openapi !== false) {
     app.get(http.openapi.path, async c => c.json(await getSpec()))
   }
 
+  // Step 12：按需挂 docs 页面；若要求登录，则重用同一套 context/session 判定逻辑。
   if (http.docs !== false) {
     const docs = http.docs
     // 挂载 Scalar UI 脚本本地路由，避免访问外网 CDN
@@ -238,6 +224,7 @@ export function createApp<
     })
   }
 
+  // Step 13：所有运行时能力都已装配完毕，返回可直接监听或导出为 fetch handler 的 Hono app。
   return app
 }
 
@@ -254,9 +241,10 @@ function mountOpenAPIRoutes(
   createContext: CreateServContext,
 ): void {
   const handler = new OpenAPIHandler(procedures)
-  for (const method of API_METHODS) {
-    app.on(method, `${apiPrefix}/*`, (c, next) => handleORPC(c, next, apiPrefix, handler, createContext))
-  }
+  // 这里只为 `${apiPrefix}/*` 这个挂载前缀注册一次 multi-method catch-all。
+  // 它不是“为 contract 中的每个 endpoint 各注册一遍 GET/POST/...”，
+  // 真实的路由命中与输入校验都在下游 oRPC handler 中完成。
+  app.on([...API_METHODS], `${apiPrefix}/*`, (c, next) => handleORPC(c, next, apiPrefix, handler, createContext))
 }
 
 function mountRPCRoutes(
@@ -268,9 +256,7 @@ function mountRPCRoutes(
   const handler = new RPCHandler(procedures)
   const prefix = rpcConfig.prefix
   app.use(`${prefix}/*`, requireInternalRPC(rpcConfig))
-  for (const method of API_METHODS) {
-    app.on(method, `${prefix}/*`, (c, next) => handleORPC(c, next, prefix, handler, createContext))
-  }
+  app.on([...API_METHODS], `${prefix}/*`, (c, next) => handleORPC(c, next, prefix, handler, createContext))
 }
 
 async function handleORPC(
@@ -280,12 +266,16 @@ async function handleORPC(
   handler: OpenAPIHandler<ServContext> | RPCHandler<ServContext>,
   createContext: CreateServContext,
 ): Promise<Response | void> {
+  // Step A：为本次请求创建 ServContext（可能只含元数据，也可能已带 session）。
   const context = await createContext({ request: c.req.raw })
+  // Step B：交给 oRPC handler 做 contract 匹配 + procedure 执行。
   const { matched, response } = await handler.handle(c.req.raw, { prefix, context })
   if (!matched) {
+    // Step C：当前前缀下没有匹配路由，继续交给 Hono 后续路由处理。
     await next()
     return
   }
+  // Step D：若命中的是输入校验错误，这里统一改写成本地化的 HaiResult 失败体。
   return localizeValidationResponse(response, c.req.raw.headers)
 }
 
