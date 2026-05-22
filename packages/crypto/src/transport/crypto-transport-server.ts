@@ -74,6 +74,17 @@ export interface CreateTransportEncryptionOptions {
  * @param cryptoService - 注入的非对称 + 对称加密实现（通常直接传入 `crypto` 实例）。
  * @param options - 可选配置。
  * @returns 成功返回管理器；密钥对生成失败返回 `HaiCommonError.INTERNAL_ERROR`。
+ *
+ * @remarks
+ * 内部流程：
+ *
+ * 1. 创建时先生成一对服务端非对称密钥，并准备 `keyStore`。
+ * 2. 上层在密钥协商端点中调用 `registerClientKey()` 保存客户端公钥，再把 `getServerPublicKey()` 返回给客户端。
+ * 3. 普通业务请求到达时，上层先根据 `clientId` 确认客户端已注册，再调用 `decryptRequest()` 拿到明文请求体。
+ * 4. 业务逻辑完成后，上层调用 `encryptResponse(clientId, data)` 为该客户端生成密文响应。
+ * 5. `close()` 负责清理 `keyStore` 等底层资源。
+ *
+ * 若使用 `@h-ai/serv` / `@h-ai/kit`，上述 HTTP 协商与请求包装流程通常已由上层封装完成。
  */
 export function createTransportEncryption(
   cryptoService: TransportCryptoServiceLike,

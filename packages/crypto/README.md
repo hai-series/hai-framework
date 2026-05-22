@@ -145,6 +145,26 @@ if (hashed.success) {
 
 传输加密统一通过 `crypto.transport` 命名空间提供，供 `@h-ai/serv`、`@h-ai/kit` 与 `@h-ai/api-client` 复用同一套协议常量和载荷格式。
 
+常规应用优先让上层封装代接：
+
+- 服务端：`serv.createApp({ transport: { crypto } })` 或 `kit.createHandle({ crypto: { crypto, transport: true } })`
+- 客户端：`api.init({ transport: { crypto } })` 或 `kit.client.create({ transport: { crypto } })`
+
+只有在自定义运行时、测试或你确实要自己接 HTTP 协商端点时，才建议直接调用 `crypto.transport.createServer()` / `createClient()`。
+
+#### 使用流程
+
+1. 先 `await crypto.init()`，确保 `crypto.asymmetric` 与 `crypto.symmetric` 已初始化。
+2. 服务端调用 `crypto.transport.createServer()` 创建 `manager`；它持有服务端密钥对，并负责保存客户端公钥。
+3. 服务端提供一个 POST 密钥协商端点：接收 `{ clientPublicKey }`，调用 `manager.registerClientKey()` 注册客户端，再返回 `{ serverPublicKey: manager.getServerPublicKey(), clientId }`。
+4. 客户端调用 `crypto.transport.createClient({ keyExchangeUrl })` 创建会话；首次 `client.init()` 或 `client.encryptedFetch()` 会自动完成这次协商。
+5. 协商完成后，客户端请求会附带 `X-Client-Id`；若请求有 body，则 body 会被包装成 `{ encryptedKey, ciphertext, iv }`，并带上 `X-Encrypted: true`。无 body 的请求只附带 `X-Client-Id`，不会额外生成密文 body。
+6. 服务端根据 `clientId` 找到客户端公钥，先 `manager.decryptRequest()` 解密请求体，再执行业务逻辑。
+7. 服务端返回 JSON 响应前，用 `manager.encryptResponse(clientId, data)` 重新加密，并设置 `X-Encrypted: true`；客户端收到后会自动解密。
+8. 客户端调用 `client.destroy()` 可清空当前会话；服务端调用 `manager.close()`，或在模块级调用 `await crypto.close()`，用于释放资源。
+
+> 默认 `keyStore` 是进程内内存实现。多节点部署时，需要会话粘性（sticky session），或改用共享的 `TransportKeyStore` 实现来保存客户端公钥。
+
 ```ts
 // 服务端：通常由 serv.createApp({ transport: { crypto } }) 或 kit.createHandle({ crypto }) 内部调用
 const server = crypto.transport.createServer({ maxClients: 10000 })
