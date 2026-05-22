@@ -1,11 +1,11 @@
 ---
 name: hai-core
-description: 使用 @h-ai/core 进行配置加载、日志记录、i18n 国际化、HaiResult 错误处理与模块生命周期管理；当需求涉及 core.init、core.logger、core.config、core.i18n、ok/err 或模块初始化模式时使用。
+description: 使用 @h-ai/core 进行配置加载、日志记录、i18n 国际化、HaiResult 错误处理、Zod 校验错误本地化与模块生命周期管理；当需求涉及 core.init、core.logger、core.config、core.i18n、core.zodValidation、ok/err 或模块初始化模式时使用。
 ---
 
 # hai-core
 
-> `@h-ai/core` 是 hai-framework 的基础模块，提供配置管理、结构化日志、国际化、HaiResult 错误模型与模块生命周期工具。所有其他模块均依赖 core。
+> `@h-ai/core` 是 hai-framework 的基础模块，提供配置管理、结构化日志、国际化、HaiResult 错误模型、Zod 校验错误本地化与模块生命周期工具。所有其他模块均依赖 core。
 
 ---
 
@@ -18,6 +18,7 @@ description: 使用 @h-ai/core 进行配置加载、日志记录、i18n 国际�
 | `core.logger` | ✅ pino（结构化 JSON / pretty） | ✅ loglevel（DevTools console） |
 | `core.config` | ✅ 完整（YAML 加载、watch、validate） | ⚠️ 仅支持 `core.init({ ... })` 传入配置 |
 | `core.i18n` | ✅ | ✅ |
+| `core.zodValidation` | ✅ | ✅ |
 | `core.id` | ✅ | ✅ |
 | 工具函数 | ✅ | ✅ |
 
@@ -29,6 +30,7 @@ description: 使用 @h-ai/core 进行配置加载、日志记录、i18n 国际�
 - 使用 `core.logger` 记录日志
 - 使用 `core.config` 读取/校验模块配置
 - 使用 `core.i18n` 管理多语言
+- 使用 `core.zodValidation` 将 Zod 默认英文错误映射为模块自己的 i18n 文案
 - 使用 `ok()` / `err()` 构建 HaiResult 类型返回值
 - 创建模块级 logger 或 i18n 消息获取器
 
@@ -56,6 +58,9 @@ core.logger.info('Server started', { port: 3000 })
 
 // 配置
 const dbConfig = core.config.get('db')
+
+// Zod 校验错误本地化
+const formErrors = core.zodValidation.mapZodErrorToFormErrors(zodError, getMessage)
 ```
 
 ---
@@ -208,6 +213,64 @@ const m = core.i18n.createMessageGetter({
 // 使用
 m('user_created') // "用户已创建"
 m('welcome', { params: { name: '张三' } }) // "欢迎，张三"
+```
+
+### Zod 校验错误映射 — `core.zodValidation`
+
+适用于 `@h-ai/kit`、`@h-ai/serv`、`@h-ai/api-client` 等需要把 Zod 默认英文错误
+转换为模块自身 i18n 文案的场景。优先复用 `core.zodValidation`，不要在各模块重复维护
+默认消息正则 / issue 本地化逻辑。
+
+| 方法 | 签名 | 说明 |
+|------|------|------|
+| `createPrefixedZodMessageGetter` | `(prefix, getMessage) => ZodMessageGetter` | 按模块前缀自动派生 `serv_validation*` / `kit_validation*` 这类消息 key |
+| `mapZodErrorToFormErrors` | `(error, getMessage) => ValidationFormError[]` | 一步完成提取 + 本地化 + 扁平化 |
+
+```typescript
+import type { ZodMessageGetter } from '@h-ai/core'
+import { core } from '@h-ai/core'
+import { z } from 'zod'
+
+const LoginSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(8),
+  nickname: z.string().min(1, '请填写昵称'),
+})
+
+const getMessage: ZodMessageGetter = (key, params) => {
+  switch (key) {
+    case 'validationEmail':
+      return '请输入合法邮箱地址'
+    case 'validationStringMin':
+      return `至少输入 ${params?.min} 个字符`
+    default:
+      return '输入不合法'
+  }
+}
+
+const result = LoginSchema.safeParse({
+  email: 'bad',
+  password: '123',
+  nickname: '',
+})
+
+if (!result.success) {
+  const getMessage = core.zodValidation.createPrefixedZodMessageGetter(
+    'serv',
+    (messageKey, params) => {
+      if (messageKey === 'serv_validationEmail')
+        return '请输入合法邮箱地址'
+      if (messageKey === 'serv_validationStringMin')
+        return `至少输入 ${params?.min} 个字符`
+      return '输入不合法'
+    },
+  )
+  const errors = core.zodValidation.mapZodErrorToFormErrors(result.error, getMessage)
+
+  errors[0]?.field // 'email'
+  errors[0]?.message // '请输入合法邮箱地址'
+  errors[2]?.message // '请填写昵称'（schema 自定义消息原样保留）
+}
 ```
 
 ### ID 生成 — `core.id`

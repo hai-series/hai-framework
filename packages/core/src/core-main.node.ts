@@ -5,7 +5,7 @@
  * @module core-main.node
  */
 
-import type { CoreOptions } from './core-types.js'
+import type { CoreFunctions, CoreOptions } from './core-types.js'
 import { existsSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
 import { CoreConfigSchema } from './core-config.js'
@@ -14,6 +14,10 @@ import { config } from './functions/core-function-config.js'
 import { logger } from './functions/core-function-logger.node.js'
 
 const YAML_EXTENSION_REGEX = /\.ya?ml$/
+type NodeCoreFunctions = CoreFunctions & {
+  readonly config: typeof config
+  readonly init: typeof initCore
+}
 
 // ─── Core 实例 ───
 
@@ -26,7 +30,7 @@ const YAML_EXTENSION_REGEX = /\.ya?ml$/
  * core.logger.info('ready')
  * ```
  */
-function createNodeCore() {
+function createNodeCore(): NodeCoreFunctions {
   const baseCore = createCore({
     createLogger: logger.createLogger,
     getLogger: logger.getLogger,
@@ -38,6 +42,8 @@ function createNodeCore() {
   // 扩展 config 和 init 功能
   return {
     ...baseCore,
+    /** Zod 校验错误 → i18n 消息映射工具（kit / serv / api-client 共享）。 */
+    zodValidation: baseCore.zodValidation,
     /** 配置管理 */
     config,
     /** 初始化 Core */
@@ -54,7 +60,7 @@ function createNodeCore() {
  * core.init({ configDir: './config' })
  * ```
  */
-export const core = createNodeCore()
+export const core: NodeCoreFunctions = createNodeCore()
 
 // ─── Initialization ───
 

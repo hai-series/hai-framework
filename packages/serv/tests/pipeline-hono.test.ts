@@ -25,6 +25,16 @@ describe('pipeline.hono.requireInternalRPC', () => {
       headers: { 'x-real-ip': '8.8.8.8' },
     })
     expect(response.status).toBe(403)
+    expect(await response.json()).toEqual({
+      success: false,
+      error: {
+        code: 'hai:common:101',
+        message: '无权执行该操作',
+        httpStatus: 403,
+        system: 'hai',
+        module: 'common',
+      },
+    })
   })
 
   it('allows loopback access from 127.0.0.1', async () => {

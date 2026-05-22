@@ -9,7 +9,6 @@ import type { LogFormat, LoggingConfig, LogLevel } from './core-config.js'
 import type { ErrorFn } from './functions/core-function-error.js'
 import type { IdFn } from './functions/core-function-id.js'
 import type { I18nFn } from './i18n/core-i18n-utils.js'
-import type { ZodValidationFn } from './i18n/core-zod-mapper.js'
 import type { ArrayFn } from './utils/core-util-array.js'
 import type { AsyncFn } from './utils/core-util-async.js'
 import type { ModuleFn } from './utils/core-util-module.js'
@@ -18,6 +17,45 @@ import type { StringFn } from './utils/core-util-string.js'
 import type { TimeFn } from './utils/core-util-time.js'
 import type { TypeUtilFn } from './utils/core-util-type.js'
 import { error } from './functions/core-function-error.js'
+
+export type ZodValidationMessageKey
+  = | 'validationFailed'
+    | 'validationRequired'
+    | 'validationInvalid'
+    | 'validationInvalidType'
+    | 'validationStringMin'
+    | 'validationStringMax'
+    | 'validationNumberMin'
+    | 'validationNumberMax'
+    | 'validationArrayMin'
+    | 'validationArrayMax'
+    | 'validationTooSmall'
+    | 'validationTooBig'
+    | 'validationEmail'
+    | 'validationUrl'
+    | 'validationUuid'
+    | 'validationEnum'
+
+export type ZodMessageGetter = (
+  key: ZodValidationMessageKey,
+  params?: Record<string, string | number>,
+) => string
+
+export interface ValidationFormError {
+  field: string
+  message: string
+}
+
+export interface ZodValidationFn {
+  readonly createPrefixedZodMessageGetter: <TMessageKey extends string>(
+    prefix: string,
+    getMessage: (messageKey: TMessageKey, params?: Record<string, string | number>) => string,
+  ) => ZodMessageGetter
+  readonly mapZodErrorToFormErrors: (
+    error: unknown,
+    getMessage: ZodMessageGetter,
+  ) => ValidationFormError[]
+}
 
 const UnknownErrorDef: HaiErrorDef = {
   code: '_:_:599',
@@ -442,7 +480,7 @@ export interface CoreFunctions {
   /** 国际化工具 */
   readonly i18n: I18nFn
   /** Zod 校验错误 → i18n 消息映射工具（kit / serv / api-client 共享） */
-  readonly zodValidation: ZodValidationFn
+  readonly zodValidation: typeof import('./i18n/core-zod-mapper.js').zodValidation
   /** ID 生成工具 */
   readonly id: IdFn
   /** 类型检查工具 */

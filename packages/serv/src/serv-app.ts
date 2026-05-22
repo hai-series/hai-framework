@@ -14,6 +14,7 @@ import type { ServHealthHttpConfig, ServHttpConfigInput } from './serv-config.js
 import type { CreateServContext, ServContext, ServIam, ServSession } from './serv-context.js'
 import type { RefreshCookieConfig } from './serv-cookie-auth.js'
 import type { ServTransportConfig } from './serv-transport.js'
+import type { ServValidationFailureBody } from './serv-validation.js'
 import { readFile } from 'node:fs/promises'
 import { HaiCommonError } from '@h-ai/core'
 import { OpenAPIHandler } from '@orpc/openapi/fetch'
@@ -22,10 +23,11 @@ import { Hono as HonoApp } from 'hono'
 import { resolveServHttpConfig } from './serv-config.js'
 import { buildAuthContextFactory, parseRequestContext } from './serv-context.js'
 import { mountRefreshCookieRoutes } from './serv-cookie-auth.js'
+import { servM } from './serv-i18n.js'
 import { createDocsPage, generateSpec } from './serv-openapi.js'
 import { buildHaiErrorBody, requireInternalRPC, securityHeaders } from './serv-pipeline.js'
 import { createTransportMiddleware } from './serv-transport.js'
-import { buildValidationFailureBody, localizeZodError, resolveRequestLocale } from './serv-validation.js'
+import { localizeZodError, resolveRequestLocale } from './serv-validation.js'
 
 /** Scalar UI 脚本本地路由，由 createApp 自动挂载，无需外网 CDN。 */
 const SCALAR_ROUTE = '/_hai/scalar.js'
@@ -223,7 +225,7 @@ export function createApp<
         // procedure 包装器（如 requireAuth）在调用 API 时完成。
         // 文档页本身只是一个静态壳，不会泄漏受保护数据。
         if (!context.accessToken)
-          return c.json(buildHaiErrorBody(HaiCommonError.UNAUTHORIZED, 'Unauthorized'), 401)
+          return c.json(buildHaiErrorBody(HaiCommonError.UNAUTHORIZED, servM('serv_errorUnauthorized', { locale: resolveRequestLocale(c.req.raw.headers) })), 401)
       }
       const specUrl = http.openapi === false ? undefined : http.openapi.path
       return c.html(createDocsPage(await getSpec(), { specUrl }))
@@ -313,7 +315,17 @@ async function localizeValidationResponse(response: Response, requestHeaders: He
   const issues = payload.data.issues
   const locale = resolveRequestLocale(requestHeaders)
   const errors = localizeZodError({ issues }, locale)
-  const body = buildValidationFailureBody(locale, errors)
+  const body: ServValidationFailureBody = {
+    success: false,
+    error: {
+      code: HaiCommonError.VALIDATION_ERROR.code,
+      message: servM('serv_validationFailed', { locale }),
+      httpStatus: HaiCommonError.VALIDATION_ERROR.httpStatus,
+      system: HaiCommonError.VALIDATION_ERROR.system,
+      module: HaiCommonError.VALIDATION_ERROR.module,
+    },
+    errors,
+  }
 
   // 保留原响应头（其中可能包含安全头），仅替换 body 与 status。
   const headers = new Headers(response.headers)

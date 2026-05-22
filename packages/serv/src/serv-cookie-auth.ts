@@ -23,7 +23,9 @@ import process from 'node:process'
 import { IAM_AUTH_ROUTES } from '@h-ai/api-contract'
 import { HaiCommonError } from '@h-ai/core'
 import { getCookie } from 'hono/cookie'
+import { servM } from './serv-i18n.js'
 import { buildHaiErrorBody } from './serv-pipeline.js'
+import { resolveRequestLocale } from './serv-validation.js'
 
 // ─── 公共类型 ─────────────────────────────────────────────────────────────────
 
@@ -207,7 +209,8 @@ export function mountRefreshCookieRoutes(
   app.post(`${apiPrefix}${IAM_AUTH_ROUTES.refresh}`, async (c) => {
     const refreshToken = getCookie(c, cookieName)
     if (!refreshToken) {
-      return c.json(buildHaiErrorBody(HaiCommonError.UNAUTHORIZED, 'Unauthorized'), 401)
+      const locale = resolveRequestLocale(c.req.raw.headers)
+      return c.json(buildHaiErrorBody(HaiCommonError.UNAUTHORIZED, servM('serv_errorUnauthorized', { locale })), 401)
     }
 
     const result = await onRefresh(refreshToken)

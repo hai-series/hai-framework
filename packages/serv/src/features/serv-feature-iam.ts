@@ -30,6 +30,7 @@ import type { ServContext } from '../serv-context.js'
 import { iamContract } from '@h-ai/api-contract'
 import { core, err, HaiCommonError, ok } from '@h-ai/core'
 import { implement } from '@orpc/server'
+import { servM } from '../serv-i18n.js'
 import { requireAuth, requirePermission } from '../serv-pipeline.js'
 import { mapHaiResult } from './serv-feature-helpers.js'
 
@@ -83,7 +84,7 @@ export function createIamProcedures(deps: IamProcedureDeps) {
       delete: p.users.delete.handler(requirePermission<IamUserIdInput, void>('iam.users.write', ({ input, context }) => {
         // 防止自删：避免管理员误删自己的账号导致授权锁死。
         if (context.session?.userId === input.id)
-          return Promise.resolve(err(HaiCommonError.FORBIDDEN, 'Cannot delete your own user account'))
+          return Promise.resolve(err(HaiCommonError.FORBIDDEN, servM('serv_iamCannotDeleteCurrentUser', { locale: context.locale })))
         return iam.user.deleteUser(input.id)
       })),
       resetPassword: p.users.resetPassword.handler(requirePermission<IamAdminResetPasswordInput, void>('iam.users.write', ({ input }) => {

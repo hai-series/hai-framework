@@ -34,6 +34,7 @@ import {
   WILDCARD_PERMISSION,
   WILDCARD_ROLE,
 } from './serv-pipeline.js'
+import { resolveRequestLocale, validateInputOrFail } from './serv-validation.js'
 
 /** hai-framework API service runtime 统一入口（扁平 API）。 */
 export const serv = {
@@ -41,6 +42,7 @@ export const serv = {
   createApp,
   parseRequestContext,
   buildAuthContextFactory,
+  resolveRequestLocale,
 
   // 运行时适配器
   listen,
@@ -55,6 +57,7 @@ export const serv = {
   requirePermission,
   requireRole,
   mapHaiError,
+  validateInputOrFail,
 
   // 通配符常量
   WILDCARD_PERMISSION,

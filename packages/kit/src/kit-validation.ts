@@ -2,6 +2,9 @@
  * @h-ai/kit — 请求数据验证
  *
  * 基于 Zod 的请求数据验证工具，支持表单/JSON Body、URL 查询参数与路由参数。
+ * Zod 默认错误消息的本地化规则委托给 `core.zodValidation`，避免 kit / serv
+ * 等模块重复维护同一套 issue 解析与消息映射逻辑；模块前缀映射也统一交给
+ * `core.zodValidation.createPrefixedZodMessageGetter()` 处理。
  * 每种数据源都提供两类 API：
  * - 安全返回：`FormValidationResult`
  * - 失败抛出：`OrFail`（抛出 `Response` 以走 SvelteKit 控制流）
@@ -9,215 +12,47 @@
  */
 
 import type { z } from 'zod'
-import type { FormError, FormValidationResult } from './kit-types.js'
+import type { FormValidationResult } from './kit-types.js'
+import { core } from '@h-ai/core'
 import { z as zod } from 'zod'
 import { kitM } from './kit-i18n.js'
 import { badRequest } from './kit-response.js'
 
 // ─── 内部工具 ───
 
-const DEFAULT_ZOD_MESSAGE_PATTERNS = [
-  /^Too small:/,
-  /^Too big:/,
-  /^Invalid input:/,
-  /^Invalid option:/,
-  /^Invalid string:/,
-  /^Invalid email$/,
-  /^Invalid email address$/,
-  /^Invalid url$/i,
-  /^Invalid UUID$/,
-  /^Invalid enum value/,
-  /^Required$/,
-  /^String must contain/,
-  /^Number must be/,
-  /^Array must contain/,
-] as const
-
 /**
- * Zod 错误 issue 类型
+ * 构造与 kit 消息表对齐的 `ZodMessageGetter`。
  *
- * 用于从 Zod v3/v4 SafeParseError 中统一提取错误信息。
+ * 统一复用 `core.zodValidation` 的 Zod issue 解析与默认消息识别逻辑，
+ * kit 仅提供自己的消息获取器。
  */
-interface ZodIssue {
-  path: (string | number)[]
-  message: string
-  code?: string
-  expected?: string
-  received?: string
-  origin?: string
-  type?: string
-  format?: string
-  validation?: unknown
-  minimum?: number | bigint
-  maximum?: number | bigint
-}
+const getKitZodMessage = core.zodValidation.createPrefixedZodMessageGetter<Parameters<typeof kitM>[0]>(
+  'kit',
+  (messageKey, params) => kitM(messageKey, { params }),
+)
 
-/**
- * 从 Zod SafeParseError 提取 issues 列表
- *
- * 兼容 Zod v3（`errors`）和 v4（`issues`）。
- *
- * @param error - Zod 校验错误对象
- * @returns 平坦化的 issue 列表
- */
-function extractZodIssues(error: z.ZodError): ZodIssue[] {
-  // Workaround：Zod v4 使用 issues，v3 使用 errors；ZodError 公开类型未同时暴露两者，
-  // 仅在读取场景下采用狭义结构断言，不会造成运行时越界。
-  const zodError = error as unknown as { issues?: ZodIssue[], errors?: ZodIssue[] }
-  return zodError.issues ?? zodError.errors ?? []
-}
-
-/**
- * 判断 issue.message 是否看起来是 Zod 自带默认英文消息。
- *
- * Schema 显式传入的业务消息必须保留；只有默认英文消息才在 kit 层统一本地化，
- * 避免应用层用户在中文界面看到 `Too small: expected ...` 这类底层文案。
- *
- * @param message Zod issue 消息
- * @returns 是否为可替换的默认消息
- */
-function isDefaultZodMessage(message: string): boolean {
-  return DEFAULT_ZOD_MESSAGE_PATTERNS.some(pattern => pattern.test(message))
-}
-
-/**
- * 将 Zod issue 中的边界值转换成可展示字符串。
- *
- * @param value issue.minimum / issue.maximum
- * @returns 可传给 i18n params 的字符串
- */
-function formatLimit(value: number | bigint | undefined): string | undefined {
-  if (typeof value === 'number' || typeof value === 'bigint') {
-    return String(value)
-  }
-  return undefined
-}
-
-/**
- * 获取 Zod v3/v4 issue 的校验目标类型。
- *
- * @param issue Zod issue
- * @returns string / number / array 等目标类型
- */
-function getIssueTarget(issue: ZodIssue): string | undefined {
-  return issue.origin ?? issue.type
-}
-
-/**
- * 获取 Zod v3/v4 issue 的格式校验类型。
- *
- * @param issue Zod issue
- * @returns email / url / uuid 等格式类型
- */
-function getIssueFormat(issue: ZodIssue): string | undefined {
-  if (typeof issue.format === 'string') {
-    return issue.format
-  }
-  if (typeof issue.validation === 'string') {
-    return issue.validation
-  }
-  return undefined
-}
-
-/**
- * 将 Zod 默认错误消息映射为 kit 本地化消息。
- *
- * @param issue Zod issue
- * @returns 本地化后的消息；自定义消息原样返回
- */
-function localizeZodIssueMessage(issue: ZodIssue): string {
-  if (!isDefaultZodMessage(issue.message)) {
-    return issue.message
-  }
-
-  const target = getIssueTarget(issue)
-  const format = getIssueFormat(issue)
-  const min = formatLimit(issue.minimum)
-  const max = formatLimit(issue.maximum)
-
-  if (issue.code === 'too_small') {
-    if (target === 'string' && min) {
-      return kitM('kit_validationStringMin', { params: { min } })
-    }
-    if ((target === 'number' || target === 'bigint') && min) {
-      return kitM('kit_validationNumberMin', { params: { min } })
-    }
-    if (target === 'array' && min) {
-      return kitM('kit_validationArrayMin', { params: { min } })
-    }
-    if (min) {
-      return kitM('kit_validationTooSmall', { params: { min } })
-    }
-  }
-
-  if (issue.code === 'too_big') {
-    if (target === 'string' && max) {
-      return kitM('kit_validationStringMax', { params: { max } })
-    }
-    if ((target === 'number' || target === 'bigint') && max) {
-      return kitM('kit_validationNumberMax', { params: { max } })
-    }
-    if (target === 'array' && max) {
-      return kitM('kit_validationArrayMax', { params: { max } })
-    }
-    if (max) {
-      return kitM('kit_validationTooBig', { params: { max } })
-    }
-  }
-
-  if (issue.code === 'invalid_type') {
-    if (issue.received === 'undefined' || issue.message.includes('received undefined')) {
-      return kitM('kit_validationRequired')
-    }
-    return kitM('kit_validationInvalidType')
-  }
-
-  if (issue.code === 'invalid_format' || issue.code === 'invalid_string') {
-    if (format === 'email') {
-      return kitM('kit_validationEmail')
-    }
-    if (format === 'url') {
-      return kitM('kit_validationUrl')
-    }
-    if (format === 'uuid') {
-      return kitM('kit_validationUuid')
-    }
-    return kitM('kit_validationInvalid')
-  }
-
-  if (issue.code === 'invalid_value' || issue.code === 'invalid_enum_value') {
-    return kitM('kit_validationEnum')
-  }
-
-  return kitM('kit_validationInvalid')
-}
-
-/**
- * 将 Zod issues 转换为 `FormError` 列表
- *
- * 字段路径用点号拼接（如 `'address.city'`）。
- *
- * @param issues - Zod issue 数组
- * @returns FormError 数组
- */
-function zodIssuesToFormErrors(issues: ZodIssue[]): FormError[] {
-  return issues.map(issue => ({
-    field: issue.path.join('.'),
-    message: localizeZodIssueMessage(issue),
-  }))
-}
-
-/**
- * 创建验证失败结果
- *
- * @param error - Zod 校验错误
- * @returns `{ valid: false, errors: FormError[] }`
- */
-function createValidationResult<T>(error: z.ZodError): FormValidationResult<T> {
+function validateParsedData<T extends z.ZodType>(
+  data: unknown,
+  schema: T,
+): FormValidationResult<z.infer<T>> {
+  const result = schema.safeParse(data)
+  if (result.success)
+    return { valid: true, data: result.data, errors: [] }
   return {
     valid: false,
-    errors: zodIssuesToFormErrors(extractZodIssues(error)),
+    errors: core.zodValidation.mapZodErrorToFormErrors(result.error, getKitZodMessage),
   }
+}
+
+function unwrapValidationResultOrThrow<T>(result: FormValidationResult<T>): T {
+  if (result.valid && result.data !== undefined)
+    return result.data
+
+  throw badRequest(
+    result.errors[0]?.message ?? kitM('kit_validationFailed'),
+    undefined,
+    { errors: result.errors },
+  )
 }
 
 // ─── 公共验证函数 ───
@@ -261,13 +96,7 @@ export async function validateForm<T extends z.ZodType>(
       }
     }
 
-    const result = schema.safeParse(data)
-
-    if (result.success) {
-      return { valid: true, data: result.data, errors: [] }
-    }
-
-    return createValidationResult(result.error)
+    return validateParsedData(data, schema)
   }
   catch {
     return {
@@ -297,13 +126,7 @@ export function validateQuery<T extends z.ZodType>(
   schema: T,
 ): FormValidationResult<z.infer<T>> {
   const data = Object.fromEntries(url.searchParams)
-  const result = schema.safeParse(data)
-
-  if (result.success) {
-    return { valid: true, data: result.data, errors: [] }
-  }
-
-  return createValidationResult(result.error)
+  return validateParsedData(data, schema)
 }
 
 /**
@@ -324,13 +147,7 @@ export function validateParams<T extends z.ZodType>(
   params: Record<string, string>,
   schema: T,
 ): FormValidationResult<z.infer<T>> {
-  const result = schema.safeParse(params)
-
-  if (result.success) {
-    return { valid: true, data: result.data, errors: [] }
-  }
-
-  return createValidationResult(result.error)
+  return validateParsedData(params, schema)
 }
 
 // ─── OrFail 变体 — 校验失败时抛出 Response（SvelteKit 控制流） ───
@@ -358,15 +175,7 @@ export async function validateFormOrFail<T extends z.ZodType>(
   request: Request,
   schema: T,
 ): Promise<z.infer<T>> {
-  const result = await validateForm(request, schema)
-  if (!result.valid || !result.data) {
-    throw badRequest(
-      result.errors[0]?.message ?? kitM('kit_validationFailed'),
-      undefined,
-      { errors: result.errors },
-    )
-  }
-  return result.data
+  return unwrapValidationResultOrThrow(await validateForm(request, schema))
 }
 
 /**
@@ -386,15 +195,7 @@ export function validateQueryOrFail<T extends z.ZodType>(
   url: URL,
   schema: T,
 ): z.infer<T> {
-  const result = validateQuery(url, schema)
-  if (!result.valid || !result.data) {
-    throw badRequest(
-      result.errors[0]?.message ?? kitM('kit_validationFailed'),
-      undefined,
-      { errors: result.errors },
-    )
-  }
-  return result.data
+  return unwrapValidationResultOrThrow(validateQuery(url, schema))
 }
 
 /**
@@ -414,15 +215,7 @@ export function validateParamsOrFail<T extends z.ZodType>(
   params: Record<string, string>,
   schema: T,
 ): z.infer<T> {
-  const result = validateParams(params, schema)
-  if (!result.valid || !result.data) {
-    throw badRequest(
-      result.errors[0]?.message ?? kitM('kit_validationFailed'),
-      undefined,
-      { errors: result.errors },
-    )
-  }
-  return result.data
+  return unwrapValidationResultOrThrow(validateParams(params, schema))
 }
 
 // ─── 通用 Schema ───

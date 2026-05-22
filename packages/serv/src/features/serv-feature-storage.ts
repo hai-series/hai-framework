@@ -24,34 +24,58 @@ import type {
 import type { HaiResult } from '@h-ai/core'
 import type { FileMetadata, ListResult, StorageFunctions } from '@h-ai/storage'
 import type { ServContext } from '../serv-context.js'
+import type { ServMessageKey } from '../serv-i18n.js'
 import { storageContract } from '@h-ai/api-contract'
-import { err, HaiCommonError } from '@h-ai/core'
+import { err, HaiCommonError, ok } from '@h-ai/core'
 import { implement } from '@orpc/server'
+import { servM } from '../serv-i18n.js'
 import { requireAuth } from '../serv-pipeline.js'
 import { mapHaiResult } from './serv-feature-helpers.js'
 
+const STORAGE_KEY_MAX_LENGTH = 1024
+
+function buildStorageKeyValidationFailure(
+  field: string,
+  locale: string,
+  messageKey: ServMessageKey,
+  params?: Record<string, string | number>,
+): HaiResult<never> {
+  const message = servM(messageKey, { locale, params })
+  return err(
+    HaiCommonError.VALIDATION_ERROR,
+    servM('serv_validationFailed', { locale }),
+    [{ field, message }],
+  )
+}
+
 /**
- * 校验存储 key 是否安全。拒绝路径穿越与控制字符，避免记忆后端（FS / S3 前缀）被绕过。
+ * 对业务层再次校验存储 key 是否安全。
  *
- * 拒绝规则：
- * - 空 / 纯空白
- * - 起始 `/` 或含 `\\`
- * - 含 NUL 字符（0x00 / `\\0`）
- * - 任何 path segment 为 `..` 或 `.`
- * - 超过 1024 字符
+ * 这里不额外构造 Zod schema，而是直接按业务规则返回统一的
+ * `HaiResult + ValidationFormError[]` 形态，避免把简单路径安全规则包装得过重。
  */
-function validateStorageKey(key: string): HaiResult<string> | null {
-  if (!key || key.trim() === '')
-    return err(HaiCommonError.VALIDATION_ERROR, 'Storage key must not be empty')
-  if (key.length > 1024)
-    return err(HaiCommonError.VALIDATION_ERROR, 'Storage key too long (max 1024 chars)')
-  if (key.startsWith('/') || key.includes('\\') || key.includes('\0'))
-    return err(HaiCommonError.VALIDATION_ERROR, 'Storage key contains illegal characters')
-  for (const seg of key.split('/')) {
-    if (seg === '..' || seg === '.')
-      return err(HaiCommonError.VALIDATION_ERROR, 'Storage key must not contain "." or ".." segments')
+function validateStorageKeyOrFail(key: string, locale: string, field: string = 'key'): HaiResult<string> {
+  if (key.trim() === '')
+    return buildStorageKeyValidationFailure(field, locale, 'serv_storageKeyRequired')
+  if (key.length > STORAGE_KEY_MAX_LENGTH) {
+    return buildStorageKeyValidationFailure(field, locale, 'serv_storageKeyTooLong', {
+      max: STORAGE_KEY_MAX_LENGTH,
+    })
   }
-  return null
+  if (key.startsWith('/') || key.includes('\\') || key.includes('\0'))
+    return buildStorageKeyValidationFailure(field, locale, 'serv_storageKeyIllegalChars')
+  if (key.split('/').some(seg => seg === '.' || seg === '..'))
+    return buildStorageKeyValidationFailure(field, locale, 'serv_storageKeyDotSegments')
+  return ok(key)
+}
+
+function validateStorageKeysOrFail(keys: string[], locale: string): HaiResult<string[]> {
+  for (const [index, key] of keys.entries()) {
+    const keyResult = validateStorageKeyOrFail(key, locale, `keys.${index}`)
+    if (!keyResult.success)
+      return keyResult
+  }
+  return ok(keys)
 }
 
 /** Storage 默认 procedures 依赖。 */
@@ -72,43 +96,42 @@ export function createStorageProcedures(deps: StorageProcedureDeps) {
 
   return p.router({
     presignedUrls: {
-      createDownload: p.presignedUrls.createDownload.handler(requireAuth<StoragePresignDownloadInput, PresignedResponse>(async ({ input }) => {
-        const invalid = validateStorageKey(input.key)
-        if (invalid)
-          return invalid as HaiResult<PresignedResponse>
+      createDownload: p.presignedUrls.createDownload.handler(requireAuth<StoragePresignDownloadInput, PresignedResponse>(async ({ input, context }) => {
+        const keyResult = validateStorageKeyOrFail(input.key, context.locale)
+        if (!keyResult.success)
+          return keyResult
         const expiresIn = input.expiresIn ?? 900
-        return toPresignedResult(input.key, expiresIn, await storage.presign.getUrl(input.key, { expiresIn }))
+        return toPresignedResult(keyResult.data, expiresIn, await storage.presign.getUrl(keyResult.data, { expiresIn }))
       })),
-      createUpload: p.presignedUrls.createUpload.handler(requireAuth<StoragePresignUploadInput, PresignedResponse>(async ({ input }) => {
-        const invalid = validateStorageKey(input.key)
-        if (invalid)
-          return invalid as HaiResult<PresignedResponse>
+      createUpload: p.presignedUrls.createUpload.handler(requireAuth<StoragePresignUploadInput, PresignedResponse>(async ({ input, context }) => {
+        const keyResult = validateStorageKeyOrFail(input.key, context.locale)
+        if (!keyResult.success)
+          return keyResult
         const expiresIn = input.expiresIn ?? 900
         const contentType = input.contentType ?? 'application/octet-stream'
-        return toPresignedResult(input.key, expiresIn, await storage.presign.putUrl(input.key, { ...input, expiresIn, contentType }))
+        const { key: _, ...options } = input
+        return toPresignedResult(keyResult.data, expiresIn, await storage.presign.putUrl(keyResult.data, { ...options, expiresIn, contentType }))
       })),
     },
     files: {
       list: p.files.list.handler(requireAuth<StorageListFilesInput, ListResult>(({ input }) => storage.dir.list(input))),
-      getMetadata: p.files.getMetadata.handler(requireAuth<StorageFileKeyInput, FileMetadata>(({ input }) => {
-        const invalid = validateStorageKey(input.key)
-        if (invalid)
-          return invalid as HaiResult<FileMetadata>
-        return storage.file.head(input.key)
+      getMetadata: p.files.getMetadata.handler(requireAuth<StorageFileKeyInput, FileMetadata>(({ input, context }) => {
+        const keyResult = validateStorageKeyOrFail(input.key, context.locale)
+        if (!keyResult.success)
+          return keyResult
+        return storage.file.head(keyResult.data)
       })),
-      delete: p.files.delete.handler(requireAuth<StorageFileKeyInput, void>(({ input }) => {
-        const invalid = validateStorageKey(input.key)
-        if (invalid)
-          return invalid as HaiResult<void>
-        return storage.file.delete(input.key)
+      delete: p.files.delete.handler(requireAuth<StorageFileKeyInput, void>(({ input, context }) => {
+        const keyResult = validateStorageKeyOrFail(input.key, context.locale)
+        if (!keyResult.success)
+          return keyResult
+        return storage.file.delete(keyResult.data)
       })),
-      deleteMany: p.files.deleteMany.handler(requireAuth<StorageDeleteFilesInput, void>(({ input }) => {
-        for (const k of input.keys) {
-          const invalid = validateStorageKey(k)
-          if (invalid)
-            return invalid as HaiResult<void>
-        }
-        return storage.file.deleteMany(input.keys)
+      deleteMany: p.files.deleteMany.handler(requireAuth<StorageDeleteFilesInput, void>(({ input, context }) => {
+        const keysResult = validateStorageKeysOrFail(input.keys, context.locale)
+        if (!keysResult.success)
+          return keysResult
+        return storage.file.deleteMany(keysResult.data)
       })),
     },
   })
