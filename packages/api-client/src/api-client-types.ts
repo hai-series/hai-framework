@@ -46,8 +46,8 @@ export const HaiApiClientError = core.error.buildHaiErrorsDef('api-client', ApiC
 export interface TokenPair {
   /** 短期访问凭证，请求时作为 `Authorization: Bearer ...`。 */
   readonly accessToken: string
-  /** 长期刷新凭证，仅 refresh 接口使用。 */
-  readonly refreshToken: string
+  /** 长期刷新凭证；httpOnly cookie 模式下由服务端管理，响应体中可能不存在。 */
+  readonly refreshToken?: string
   /** accessToken 有效期秒数。 */
   readonly expiresIn: number
   /** 固定为 `'Bearer'`。 */
@@ -87,6 +87,12 @@ export interface AuthConfig {
   readonly storage?: TokenStorage
   /** 刷新接口路径，相对于 `baseUrl`，默认 `/auth/refresh`。 */
   readonly refreshPath?: string
+  /**
+   * 刷新请求超时（ms），默认 10_000。
+   * 避免 refresh 接口上游挂死时所有 dedup 调用方一起 hang。
+   * 超时后按现有 transient 失败处理（不清 token，下次请求可重试）。
+   */
+  readonly refreshTimeoutMs?: number
   /** 刷新成功回调，用于同步状态（例如多 Tab 广播）。 */
   readonly onTokenRefreshed?: (tokens: TokenPair) => void
   /** 刷新失败回调（如 refresh token 已失效），通常用于跳转登录页。 */

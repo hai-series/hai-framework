@@ -173,10 +173,10 @@ export function createHttpOnlyCookieTokenStorage(): TokenStorage {
 
 // ─── Token 管理器 ─────────────────────────────────────────────────────────────
 
-/** 校验 refresh 响应体中的 Token 字段。 */
-const TokenPairSchema = z.object({
+/** 校验 refresh 响应体中的 Token 字段；httpOnly cookie 模式允许不返回 refreshToken。 */
+const RefreshTokenPayloadSchema = z.object({
   accessToken: z.string().min(1),
-  refreshToken: z.string().min(1),
+  refreshToken: z.string().min(1).optional(),
   expiresIn: z.number().optional(),
   tokenType: z.string().optional(),
 })
@@ -199,10 +199,10 @@ type RefreshCallback = (tokens: TokenPair) => void
  *   createMemoryTokenStorage(),
  *   'https://api.example.com/api/v1/auth/refresh',
  *   fetch,
- *   () => console.warn('请重新登录'),
+ *   () => notifyLoginRequired(),
  * )
  *
- * const off = manager.onTokenRefreshed((tokens) => console.log('refreshed', tokens))
+ * const off = manager.onTokenRefreshed(tokens => syncTokens(tokens))
  * const tokens = await manager.refresh()
  * off()
  * ```
@@ -211,12 +211,15 @@ type RefreshCallback = (tokens: TokenPair) => void
  * @param refreshEndpointUrl - refresh 接口完整 URL（`baseUrl + refreshPath`）
  * @param fetchFn - fetch 实现（允许注入 mock）
  * @param onRefreshFailed - 刷新失败回调
+ * @param refreshTimeoutMs - 刷新请求超时（ms），默认 10_000
+ * @returns Token 管理器实例
  */
 export function createTokenManager(
   storage: TokenStorage,
   refreshEndpointUrl: string,
   fetchFn: typeof globalThis.fetch,
   onRefreshFailed?: () => void,
+  refreshTimeoutMs: number = 10_000,
 ) {
   const callbacks: RefreshCallback[] = []
   let refreshPromise: Promise<TokenPair | null> | null = null
@@ -243,6 +246,9 @@ export function createTokenManager(
     }
 
     logger.debug('Refreshing token')
+    // 超时保护：避免 refresh 接口挂死时 dedup Promise 永不 resolve，连带所有等待者 hang。
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), refreshTimeoutMs)
     try {
       // httpOnly cookie 模式：浏览器自动发送 Cookie，请求体无需携带 refreshToken；
       // 同时设置 credentials:'include' 以支持跨域 Cookie 发送。
@@ -252,6 +258,7 @@ export function createTokenManager(
         headers: { 'Content-Type': 'application/json' },
         body: useHttpOnlyCookie ? undefined : JSON.stringify({ refreshToken }),
         credentials: useHttpOnlyCookie ? 'include' : 'same-origin',
+        signal: controller.signal,
       }))
 
       if (!response.ok) {
@@ -268,23 +275,30 @@ export function createTokenManager(
       }
 
       const body = await response.json() as { data?: unknown }
-      const parsed = TokenPairSchema.safeParse(readTokenPayload(body.data))
+      const parsed = RefreshTokenPayloadSchema.safeParse(readTokenPayload(body.data))
       if (!parsed.success) {
         logger.warn('Token refresh returned invalid data', { issues: parsed.error.issues })
         await storage.clear()
         onRefreshFailed?.()
         return null
       }
+      if (!useHttpOnlyCookie && !parsed.data.refreshToken) {
+        logger.warn('Token refresh returned invalid data', { issues: [{ path: ['refreshToken'], message: 'Required' }] })
+        await storage.clear()
+        onRefreshFailed?.()
+        return null
+      }
 
       // 默认值兜底，避免不安全强转
+      const refreshTokenForStorage = parsed.data.refreshToken ?? HTTPONLY_COOKIE_SENTINEL
       const tokens: TokenPair = {
         accessToken: parsed.data.accessToken,
-        refreshToken: parsed.data.refreshToken,
+        refreshToken: refreshTokenForStorage,
         expiresIn: parsed.data.expiresIn ?? 3600,
         tokenType: 'Bearer',
       }
       await storage.setAccessToken(tokens.accessToken)
-      await storage.setRefreshToken(tokens.refreshToken)
+      await storage.setRefreshToken(refreshTokenForStorage)
       logger.info('Token refreshed successfully')
       for (const cb of callbacks) cb(tokens)
       return tokens
@@ -295,6 +309,9 @@ export function createTokenManager(
       logger.error('Token refresh failed (transient)', { error })
       return null
     }
+    finally {
+      clearTimeout(timeoutId)
+    }
   }
 
   return {
@@ -302,7 +319,8 @@ export function createTokenManager(
     refresh,
     async setTokens(tokens: TokenPair) {
       await storage.setAccessToken(tokens.accessToken)
-      await storage.setRefreshToken(tokens.refreshToken)
+      if (tokens.refreshToken)
+        await storage.setRefreshToken(tokens.refreshToken)
     },
     async clear() {
       await storage.clear()

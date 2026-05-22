@@ -51,10 +51,18 @@ export function createIamProcedures(deps: IamProcedureDeps) {
       login: p.auth.login.handler(({ input }: { input: IamLoginInput }) => iam.auth.login(input)),
       loginWithOtp: p.auth.loginWithOtp.handler(({ input }: { input: IamOtpLoginInput }) => iam.auth.loginWithOtp(input)),
       logout: p.auth.logout.handler(requireAuth<IamLogoutInput, void>(({ input, context }) => {
-        return iam.auth.logout(input.accessToken ?? context.accessToken ?? '')
+        // 不再使用空字符串兜底：requireAuth 已确保 session 存在，但 accessToken 字段可能仍缺失
+        // （例如自定义 createContext 未填充）；此时显式返回 UNAUTHORIZED 而非把空 token 透传给 IAM。
+        const token = input.accessToken ?? context.accessToken
+        if (!token)
+          return Promise.resolve(err(HaiCommonError.UNAUTHORIZED, servM('serv_errorUnauthorized', { locale: context.locale })))
+        return iam.auth.logout(token)
       })),
       currentUser: p.auth.currentUser.handler(requireAuth<unknown, User>(({ context }) => {
-        return iam.user.getCurrentUser(context.accessToken ?? '')
+        const token = context.accessToken
+        if (!token)
+          return Promise.resolve(err(HaiCommonError.UNAUTHORIZED, servM('serv_errorUnauthorized', { locale: context.locale })))
+        return iam.user.getCurrentUser(token)
       })),
       refresh: p.auth.refresh.handler(async ({ input }: { input: { refreshToken: string } }) => {
         return mapHaiResult(await iam.session.refresh(input.refreshToken), tokens => ({ tokens }))
@@ -62,10 +70,16 @@ export function createIamProcedures(deps: IamProcedureDeps) {
       sendOtp: p.auth.sendOtp.handler(({ input }: { input: IamSendOtpInput }) => iam.auth.sendOtp(input.identifier)),
       register: p.auth.register.handler(({ input }: { input: IamRegisterInput }) => iam.auth.registerAndLogin(input)),
       changePassword: p.auth.changePassword.handler(requireAuth<IamChangePasswordInput, void>(({ input, context }) => {
-        return iam.user.changeCurrentUserPassword(context.accessToken ?? '', input.oldPassword, input.newPassword)
+        const token = context.accessToken
+        if (!token)
+          return Promise.resolve(err(HaiCommonError.UNAUTHORIZED, servM('serv_errorUnauthorized', { locale: context.locale })))
+        return iam.user.changeCurrentUserPassword(token, input.oldPassword, input.newPassword)
       })),
       updateCurrentUser: p.auth.updateCurrentUser.handler(requireAuth<IamUpdateCurrentUserInput, User>(({ input, context }) => {
-        return iam.user.updateCurrentUser(context.accessToken ?? '', input)
+        const token = context.accessToken
+        if (!token)
+          return Promise.resolve(err(HaiCommonError.UNAUTHORIZED, servM('serv_errorUnauthorized', { locale: context.locale })))
+        return iam.user.updateCurrentUser(token, input)
       })),
     },
     users: {

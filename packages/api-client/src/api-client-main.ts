@@ -37,6 +37,7 @@
  * @module api-client-main
  */
 
+import type { HaiResult } from '@h-ai/core'
 import type { TransportClient } from '@h-ai/crypto'
 import type { AnyContractRouter, ContractRouterClient } from '@orpc/contract'
 import type { JsonifiedClient } from '@orpc/openapi-client'
@@ -122,21 +123,34 @@ export function createApiClient<const TContract extends AnyContractRouter>(
     },
   }
 
+  let initPromise: Promise<HaiResult<void>> | null = null
   const lifecycle: ApiClientLifecycle = {
     async init(config) {
+      // 并发重入防护：同时多次 init() 只执行一次。
+      // 另一个调用方 await 同一个 in-flight Promise，避免重复创建 raw client / token manager。
+      if (initPromise)
+        return initPromise
+      initPromise = (async (): Promise<HaiResult<void>> => {
+        try {
+          state.config = config
+          state.tokenManager = buildTokenManager(config)
+          state.transport = buildTransportSession(config)
+          state.rawClient = buildRawClient(contract, config, state.tokenManager, state.transport)
+          return ok(undefined)
+        }
+        catch (error) {
+          return err(
+            HaiApiClientError.CONFIG_ERROR,
+            apiClientM('apiClient_configError', { params: { error: String(error) } }),
+            error,
+          )
+        }
+      })()
       try {
-        state.config = config
-        state.tokenManager = buildTokenManager(config)
-        state.transport = buildTransportSession(config)
-        state.rawClient = buildRawClient(contract, config, state.tokenManager, state.transport)
-        return ok(undefined)
+        return await initPromise
       }
-      catch (error) {
-        return err(
-          HaiApiClientError.CONFIG_ERROR,
-          apiClientM('apiClient_configError', { params: { error: String(error) } }),
-          error,
-        )
+      finally {
+        initPromise = null
       }
     },
     async close() {
@@ -302,7 +316,7 @@ function buildTokenManager(config: ApiClientConfig): TokenManager | undefined {
   const refreshPath = config.auth.refreshPath ?? DEFAULT_REFRESH_PATH
   const refreshUrl = `${baseUrl}${refreshPath.startsWith('/') ? refreshPath : `/${refreshPath}`}`
 
-  const manager = createTokenManager(storage, refreshUrl, fetchFn, config.auth.onRefreshFailed)
+  const manager = createTokenManager(storage, refreshUrl, fetchFn, config.auth.onRefreshFailed, config.auth.refreshTimeoutMs)
   if (config.auth.onTokenRefreshed) {
     manager.onTokenRefreshed(config.auth.onTokenRefreshed)
   }
@@ -357,17 +371,20 @@ async function fetchWithRefresh(
   tokenManager: TokenManager | undefined,
   transport: TransportClient | undefined,
 ): Promise<Response> {
+  // Fetch Request 的 body 是一次性可读流；为了支持 401 后重发 POST/PUT 等带 body 的请求，
+  // 必须在首次发送前 `clone()` 一份。即使没有 401，clone 后的副本也只会被 GC 回收，无副作用。
+  const retryRequest = tokenManager ? request.clone() : undefined
   const response = await fetchWithTimeout(request, init, config, transport)
-  if (response.status !== 401 || !tokenManager)
+  if (response.status !== 401 || !tokenManager || !retryRequest)
     return response
 
   const tokens = await tokenManager.refresh()
   if (!tokens)
     return response
 
-  const headers = new Headers(request.headers)
+  const headers = new Headers(retryRequest.headers)
   headers.set('authorization', `Bearer ${tokens.accessToken}`)
-  return fetchWithTimeout(new Request(request, { headers }), init, config, transport)
+  return fetchWithTimeout(new Request(retryRequest, { headers }), init, config, transport)
 }
 
 /** fetch + AbortController 超时控制（联动调用方原始 signal）。 */
@@ -404,13 +421,15 @@ async function fetchWithTimeout(
 /** ORPCError / AbortError / 其他异常 → 标准化 HaiResult 错误。 */
 function mapClientError(error: unknown) {
   if (error instanceof ORPCError) {
+    // 保留 ORPCError 的原始 code / status / data，供上层区分具体业务异常（不仅是 HTTP 状态码）。
+    const detail = { orpcCode: error.code, status: error.status, data: error.data }
     if (error.status === 401)
-      return err(HaiApiClientError.UNAUTHORIZED, error.message, error)
+      return err(HaiApiClientError.UNAUTHORIZED, error.message, detail)
     if (error.status === 403)
-      return err(HaiApiClientError.FORBIDDEN, error.message, error)
+      return err(HaiApiClientError.FORBIDDEN, error.message, detail)
     if (error.status === 404)
-      return err(HaiApiClientError.NOT_FOUND, error.message, error)
-    return err(HaiApiClientError.SERVER_ERROR, error.message, error)
+      return err(HaiApiClientError.NOT_FOUND, error.message, detail)
+    return err(HaiApiClientError.SERVER_ERROR, error.message, detail)
   }
   if (error instanceof DOMException && error.name === 'AbortError') {
     return err(HaiApiClientError.TIMEOUT, apiClientM('apiClient_timeout'), error)

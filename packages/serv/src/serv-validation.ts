@@ -20,7 +20,9 @@ const DEFAULT_LOCALE = 'zh-CN'
 /**
  * 校验失败响应体（含 i18n 错误列表）。
  *
- * 复用 `HaiResult` 失败分支结构，额外携带 `errors` 字段供前端定位字段错误。
+ * 复用 `HaiResult` 失败分支结构。字段错误同时在两处出现：
+ * - `error.cause`：与 `validateInputOrFail` 输出对齐，HaiResult 标准位置
+ * - 顶层 `errors`：保留以兼容已有客户端
  */
 export interface ServValidationFailureBody {
   readonly success: false
@@ -30,6 +32,7 @@ export interface ServValidationFailureBody {
     readonly httpStatus: number
     readonly system: string
     readonly module: string
+    readonly cause?: readonly ValidationFormError[]
   }
   readonly errors: readonly ValidationFormError[]
 }

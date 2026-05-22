@@ -100,6 +100,10 @@ export function createTransportMiddleware(
     }
     if (!bodyText)
       return
+    // 二次防御：分块传输（chunked）等场景没有 Content-Length 头，需在读取后再校验体积。
+    // 超过上限则原样透传，避免大 body 加密导致内存放大。
+    if (bodyText.length > MAX_ENCRYPTED_BODY)
+      return
 
     const encResult = await manager.encryptResponse(clientId, bodyText)
     if (!encResult.success) {

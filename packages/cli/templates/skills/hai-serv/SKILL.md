@@ -71,7 +71,7 @@ const app = serv.createApp({
 
 // Node.js 启动（自动读取 PORT / HOST 环境变量；onClose 自动监听 SIGINT/SIGTERM）
 serv.listen(app, {
-  onListening: (info) => console.info(`Listening on port ${info.port}`),
+  onListening: info => logger.info('API service listening', { port: info.port }),
   onClose: closeApp, // 业务模块关闭函数（ai/storage/iam/reldb 等反向释放）
 })
 ```
@@ -250,7 +250,7 @@ const html = serv.createDocsPage(spec, {
 | `health` | `{ path: '/health', readyPath: '/ready' }` | 健康与就绪检查端点 |
 | `openapi` | `false` | OpenAPI JSON endpoint，显式开启 |
 | `docs` | `false` | Scalar 文档页，显式开启；启用后自动挂载 `/_hai/scalar.js` 本地脚本路由 |
-| `rpc` | `false` | 内部 RPC endpoint，显式开启 |
+| `rpc` | `false` | 内部 RPC endpoint，显式开启；`loopback` / `private-network` 基于真实连接 IP，网关场景用 `gateway-only` |
 | `transport` | `undefined` | 顶层配置；启用后默认挂载 `{apiPrefix}/_hai/key-exchange` |
 
 ```typescript
@@ -332,7 +332,7 @@ procedure 包装器内置以下错误：
 
 | 错误码 | 触发条件 |
 | --- | --- |
-| `HaiCommonError.UNAUTHORIZED` | `requireAuth`：无 accessToken |
+| `HaiCommonError.UNAUTHORIZED` | `requireAuth`：`context.session` 为空（无 token 或 token 校验失败） |
 | `HaiCommonError.FORBIDDEN` | `requirePermission`：无对应权限 |
 | `HaiCommonError.INTERNAL_ERROR` | `mapHaiError`：procedure 抛出未处理异常 |
 
@@ -349,10 +349,10 @@ procedure 包装器内置以下错误：
 
 ### 工作流程
 
-1. 浏览器 POST `/auth/login` → serv 拦截 oRPC 成功响应 → `Set-Cookie: hai_refresh_token=...;HttpOnly;SameSite=Strict`
+1. 浏览器 POST `/auth/login` → serv 拦截 oRPC 成功响应 → `Set-Cookie: hai_refresh_token=...;HttpOnly;SameSite=Strict`，并从 JSON 响应体擦除 `refreshToken`
 2. Access token 由客户端存内存（不持久化）
 3. Access token 过期 → 客户端 POST `/auth/refresh`（浏览器自动携带 cookie）
-4. serv 读取 cookie → 调用 `iam.session.refresh` → 返回新 token 对 + 更新 cookie
+4. serv 读取 cookie → 调用 `iam.session.refresh` → 返回新 access token + 更新 cookie（响应体不暴露 refresh token）
 5. POST `/auth/logout` → serv 清除 cookie（`Max-Age=0`）
 
 ### 配置

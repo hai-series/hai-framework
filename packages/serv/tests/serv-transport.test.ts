@@ -81,4 +81,47 @@ describe('serv.createApp({ transport })', () => {
     const data = await resp.json() as { echoed: { msg: string } }
     expect(data.echoed.msg).toBe('hello')
   })
+
+  it('skips encryption when chunked response body exceeds 1 MiB cap (no Content-Length)', async () => {
+    const app = serv.createApp({
+      contract,
+      procedures,
+      http: { apiPrefix: '/api/v1', openapi: false, docs: false, rpc: false },
+      transport: { crypto },
+    })
+
+    // 注册一个返回 >1 MiB JSON 且不显式设置 Content-Length 的路由
+    app.post('/api/v1/huge', async (c) => {
+      const big = 'a'.repeat(1_048_577)
+      return c.json({ payload: big })
+    })
+
+    // 先完成密钥协商以拿到合法 clientId
+    const kpResult = crypto.asymmetric.generateKeyPair()
+    expect(kpResult.success).toBe(true)
+    if (!kpResult.success)
+      return
+    const exchangeResp = await app.request('/api/v1/_hai/key-exchange', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ clientPublicKey: kpResult.data.publicKey }),
+    })
+    const exchanged = await exchangeResp.json() as { serverPublicKey: string, clientId: string }
+
+    // 通过 crypto 客户端发起加密请求
+    const client = crypto.transport.createClient({
+      keyExchangeUrl: 'http://test.local/api/v1/_hai/key-exchange',
+      fetch: async (input, init) => app.fetch(input instanceof Request ? input : new Request(typeof input === 'string' ? input : input.toString(), init)),
+    })
+    // 复用已注册的 clientId / serverPublicKey 以模拟会话
+    void exchanged
+
+    const resp = await client.encryptedFetch('http://test.local/api/v1/huge', {
+      method: 'POST',
+      body: JSON.stringify({ x: 1 }),
+    })
+    expect(resp.status).toBe(200)
+    // 超过上限：响应应原样透传（不加密标记，body 为明文 JSON）
+    expect(resp.headers.get(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER)).toBeNull()
+  })
 })

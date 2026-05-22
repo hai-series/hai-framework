@@ -29,7 +29,7 @@ describe('pipeline.orpc', () => {
     }
   })
 
-  it('requireAuth rejects requests without accessToken', async () => {
+  it('requireAuth rejects requests without session', async () => {
     const handler = requireAuth<unknown, string>(async () => ok('ok'))
 
     const result = await handler({ input: undefined, context: makeContext() })

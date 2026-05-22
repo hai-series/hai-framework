@@ -137,4 +137,60 @@ describe('createApiClient', () => {
       expect(result.error.code).toBe(HaiApiClientError.TIMEOUT.code)
     }
   })
+
+  it('401 后带 body 的请求能用 clone 重发，body 不被丢失', async () => {
+    const echoContract = {
+      echo: oc.route({ method: 'POST', path: '/echo' })
+        .input(z.object({ msg: z.string() }))
+        .output(haiResultSchema(z.object({ received: z.string() }))),
+    }
+
+    const storage = createMemoryTokenStorage()
+    await storage.setAccessToken('old-access')
+    await storage.setRefreshToken('old-refresh')
+
+    const newTokens = {
+      accessToken: 'new-access',
+      refreshToken: 'new-refresh',
+      expiresIn: 3600,
+      tokenType: 'Bearer' as const,
+    }
+
+    const seenBodies: string[] = []
+
+    const fetch = vi.fn().mockImplementation(async (request: Request) => {
+      if (request.url === 'https://api.test.com/api/v1/auth/refresh') {
+        return new Response(JSON.stringify({ success: true, data: { tokens: newTokens } }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
+      }
+      const text = await request.text()
+      seenBodies.push(text)
+      if (request.headers.get('authorization') === 'Bearer old-access') {
+        return new Response(JSON.stringify({ message: 'expired' }), { status: 401 })
+      }
+      return new Response(JSON.stringify({ success: true, data: { received: text } }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
+    })
+
+    const client = createApiClient(echoContract)
+    await client.init({
+      baseUrl: 'https://api.test.com/api/v1',
+      fetch,
+      auth: { storage, refreshPath: '/auth/refresh' },
+    })
+
+    const result = await client.echo({ msg: 'hello' })
+
+    expect(result.success).toBe(true)
+    // 第一次（401）与重试都应携带完整 body，证明 clone 生效。
+    const businessBodies = seenBodies.filter(b => b.length > 0)
+    expect(businessBodies.length).toBe(2)
+    expect(businessBodies[0]).toContain('hello')
+    expect(businessBodies[1]).toContain('hello')
+    await client.close()
+  })
 })
