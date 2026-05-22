@@ -15,7 +15,7 @@ export type {
   ServProcedureOptions,
   ServProcedureWrapper,
 } from './pipelines/serv-pipeline-types.js'
-export type { CreateServAppOptions } from './serv-app.js'
+export type { CreateServAppOptions, ServMiddlewareMount } from './serv-app.js'
 export type {
   ServConfig,
   ServConfigInput,
@@ -25,6 +25,8 @@ export type {
   ServHttpConfigInput,
   ServOpenAPIHttpConfig,
   ServRpcHttpConfig,
+  ServTransportRuntimeConfig,
+  ServTransportRuntimeConfigInput,
 } from './serv-config.js'
 export type { CreateServContext, CreateServContextInput, ServContext, ServIam, ServSession } from './serv-context.js'
 export type { RefreshCookieConfig, RefreshTokenPair } from './serv-cookie-auth.js'

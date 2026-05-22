@@ -9,9 +9,10 @@
  * 2. 选择请求上下文工厂
  * 3. 挂基础安全 middleware
  * 4. （可选）挂传输加密 middleware
- * 5. 挂基础路由（health / refresh-cookie）
- * 6. 挂业务路由（oRPC / RPC）
- * 7. 挂文档路由（openapi / docs）
+ * 5. 挂自定义 middleware（若提供）
+ * 6. 挂基础路由（health / refresh-cookie）
+ * 7. 挂业务路由（oRPC / RPC）
+ * 8. 挂文档路由（openapi / docs）
  * @module serv-app
  */
 
@@ -19,6 +20,7 @@ import type { HaiResult } from '@h-ai/core'
 import type { AnyContractRouter, OpenAPI } from '@orpc/contract'
 import type { Router } from '@orpc/server'
 import type { Hono, Context as HonoContext, Next } from 'hono'
+import type { ServMiddleware } from './pipelines/serv-pipeline-types.js'
 import type { ServHealthHttpConfig, ServHttpConfigInput } from './serv-config.js'
 import type { CreateServContext, ServContext, ServIam, ServSession } from './serv-context.js'
 import type { RefreshCookieConfig } from './serv-cookie-auth.js'
@@ -41,6 +43,18 @@ import { localizeZodError, resolveRequestLocale } from './serv-validation.js'
 
 /** 允许通过 oRPC OpenAPIHandler 转发的 HTTP 方法。 */
 const API_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'] as const
+
+/**
+ * `serv.createApp()` 的自定义 middleware 挂载项。
+ *
+ * - `path` 省略时默认挂到 `'*'`
+ * - 按数组顺序注册
+ * - 注册位置固定在内置 `securityHeaders` / `transport` 之后、业务路由之前
+ */
+export interface ServMiddlewareMount {
+  readonly path?: string
+  readonly middleware: ServMiddleware
+}
 
 /**
  * 创建 Hono app 的配置。
@@ -66,6 +80,13 @@ export interface CreateServAppOptions<
   readonly contract: TContract
   readonly procedures: TProcedures
   readonly http?: ServHttpConfigInput
+  /**
+   * 自定义 Hono middleware。
+   *
+   * 典型用途：请求日志、trace、指标、CORS、限流、租户头校验等 HTTP 层横切逻辑。
+   * 这些 middleware 会在内置安全头 / 传输加密之后、health/oRPC/OpenAPI/docs 路由之前注册。
+   */
+  readonly middlewares?: readonly ServMiddlewareMount[]
   /**
    * IAM 模块引用（推荐）。提供后 serv 自动使用 `iam.session.verifyToken` 填充 session，
    * 以及在 `refreshCookie` 启用时使用 `iam.session.refresh` 实现 cookie 刷新。
@@ -177,28 +198,33 @@ export function createApp<
     app.use('*', createTransportMiddleware(mgr.data, keyExchangePath, options.transport.excludePaths))
   }
 
-  // Step 7：挂基础探活路由。健康检查放在业务路由之外，便于基础设施直接探测。
+  // Step 7：注册调用方自定义 middleware。位置固定在内置基础能力之后、业务路由之前，
+  // 让使用方可以稳定插入日志、CORS、限流等 HTTP 层横切逻辑。
+  if (options.middlewares)
+    mountCustomMiddlewares(app, options.middlewares)
+
+  // Step 8：挂基础探活路由。健康检查放在业务路由之外，便于基础设施直接探测。
   if (http.health !== false)
     mountHealthRoutes(app, http.health)
 
-  // Step 8：refresh-cookie 路由要抢在 oRPC 通配符之前注册，否则会被 `${apiPrefix}/*` 吞掉。
+  // Step 9：refresh-cookie 路由要抢在 oRPC 通配符之前注册，否则会被 `${apiPrefix}/*` 吞掉。
   // refresh-cookie 路由必须在 oRPC 通配符路由之前注册，Hono 按注册顺序匹配。
   if (options.refreshCookie)
     mountRefreshCookieRoutes(app, http.apiPrefix, options.refreshCookie, options.iam)
 
-  // Step 9：挂主业务 API 路由。所有 `${apiPrefix}/*` 请求都会在这里进入 contract + procedure 分发。
+  // Step 10：挂主业务 API 路由。所有 `${apiPrefix}/*` 请求都会在这里进入 contract + procedure 分发。
   mountOpenAPIRoutes(app, options.procedures, http.apiPrefix, createContext)
 
-  // Step 10：按需挂内部 RPC 路由，并在入口处限制访问来源。
+  // Step 11：按需挂内部 RPC 路由，并在入口处限制访问来源。
   if (http.rpc !== false)
     mountRPCRoutes(app, options.procedures, http.rpc, createContext)
 
-  // Step 11：按需挂 OpenAPI JSON 文档端点。
+  // Step 12：按需挂 OpenAPI JSON 文档端点。
   if (http.openapi !== false) {
     app.get(http.openapi.path, async c => c.json(await getSpec()))
   }
 
-  // Step 12：按需挂 docs 页面；若要求登录，则重用同一套 context/session 判定逻辑。
+  // Step 13：按需挂 docs 页面；若要求登录，则重用同一套 context/session 判定逻辑。
   if (http.docs !== false) {
     const docs = http.docs
     // 挂载 Scalar UI 脚本本地路由，避免访问外网 CDN
@@ -224,8 +250,13 @@ export function createApp<
     })
   }
 
-  // Step 13：所有运行时能力都已装配完毕，返回可直接监听或导出为 fetch handler 的 Hono app。
+  // Step 14：所有运行时能力都已装配完毕，返回可直接监听或导出为 fetch handler 的 Hono app。
   return app
+}
+
+function mountCustomMiddlewares(app: Hono, middlewares: readonly ServMiddlewareMount[]): void {
+  for (const entry of middlewares)
+    app.use(entry.path ?? '*', entry.middleware)
 }
 
 function mountHealthRoutes(app: Hono, config: ServHealthHttpConfig): void {

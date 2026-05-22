@@ -111,21 +111,22 @@ flowchart TD
   B --> C[创建 getSpec 缓存函数]
   C --> D[挂安全头 middleware]
   D --> E{是否启用 transport}
-  E -- 是 --> F[挂传输加密 middleware]
-  E -- 否 --> G[跳过]
-  F --> H[挂健康检查路由]
-  G --> H
-  H --> I{是否启用 refreshCookie}
-  I -- 是 --> J[挂 cookie 刷新路由]
-  I -- 否 --> K[跳过]
-  J --> L[挂 oRPC OpenAPI routes]
-  K --> L
-  L --> M{是否启用内部 RPC}
-  M -- 是 --> N[挂 RPC 路由 + 访问控制]
-  M -- 否 --> O[跳过]
-  N --> P{是否启用 openapi/docs}
-  O --> P
-  P --> Q[返回 Hono app]
+   E -- 是 --> F[挂传输加密 middleware]
+   E -- 否 --> G[跳过]
+   F --> H[挂自定义 middlewares]
+   G --> H
+   H --> I[挂健康检查路由]
+   I --> J{是否启用 refreshCookie}
+   J -- 是 --> K[挂 cookie 刷新路由]
+   J -- 否 --> L[跳过]
+   K --> M[挂 oRPC OpenAPI routes]
+   L --> M
+   M --> N{是否启用内部 RPC}
+   N -- 是 --> O[挂 RPC 路由 + 访问控制]
+   N -- 否 --> P[跳过]
+   O --> Q{是否启用 openapi/docs}
+   P --> Q
+   Q --> R[返回 Hono app]
 ```
 
 ### 逐步说明
@@ -152,23 +153,29 @@ flowchart TD
    - 再把加解密 middleware 挂在业务路由之前。
    - 同时开放 `${apiPrefix}/_hai/key-exchange` 密钥协商端点。
 
-6. **挂健康检查路由**
+6. **挂自定义 middlewares**
+   - 如果提供 `middlewares`，会在内置 `securityHeaders` / `transport` 之后、业务路由之前按数组顺序注册。
+   - 适合放请求日志、CORS、限流、租户头校验等 HTTP 层横切逻辑。
+
+7. **挂健康检查路由**
    - 默认提供 `/health` 和 `/ready`。
 
-7. **挂 refresh cookie 相关路由**
+8. **挂 refresh cookie 相关路由**
    - 如果启用了 `refreshCookie`，会在 oRPC 通配符路由之前注册 login、logout、refresh 的 cookie 处理逻辑。
 
-8. **挂主 API 路由**
+9. **挂主 API 路由**
    - `mountOpenAPIRoutes()` 把所有 `${apiPrefix}/*` 请求交给 oRPC 的 `OpenAPIHandler`。
 
-9. **按需挂内部 RPC 路由**
-   - 如果启用 `rpc`，会先经过 `requireInternalRPC()` 做来源限制。
-   - 通过后再进入 `RPCHandler`。
+10. **按需挂内部 RPC 路由**
 
-10. **按需挂 OpenAPI JSON / 文档页**
-    - `openapi.path` 返回 spec。
-    - `docs.path` 返回 Scalar 文档页面。
-    - 若 `docs.requireAuth === true`，文档页也必须先通过 session 校验。
+- 如果启用 `rpc`，会先经过 `requireInternalRPC()` 做来源限制。
+- 通过后再进入 `RPCHandler`。
+
+11. **按需挂 OpenAPI JSON / 文档页**
+
+- `openapi.path` 返回 spec。
+- `docs.path` 返回 Scalar 文档页面。
+- 若 `docs.requireAuth === true`，文档页也必须先通过 session 校验。
 
 ## 单次业务请求的执行流程
 
@@ -178,11 +185,12 @@ flowchart TD
 
 1. 请求进入 Hono。
 2. `securityHeaders()` 先挂好响应头。
-3. `handleORPC()` 调用 `createContext({ request })` 生成 `ServContext`。
-4. oRPC 根据 contract 匹配 procedure。
-5. procedure 内可能继续经过 `requireAuth()`、`requirePermission()`、`requireRole()`。
-6. 如果是输入校验错误，`localizeValidationResponse()` 会把默认 oRPC 400 错误改写成本地化的 `HaiResult` 失败体。
-7. 最终返回 JSON 响应。
+3. 若配置了自定义 `middlewares`，它们会先于 health / docs / oRPC / RPC 路由执行。
+4. `handleORPC()` 调用 `createContext({ request })` 生成 `ServContext`。
+5. oRPC 根据 contract 匹配 procedure。
+6. procedure 内可能继续经过 `requireAuth()`、`requirePermission()`、`requireRole()`。
+7. 如果是输入校验错误，`localizeValidationResponse()` 会把默认 oRPC 400 错误改写成本地化的 `HaiResult` 失败体。
+8. 最终返回 JSON 响应。
 
 ### 启用传输加密时
 
