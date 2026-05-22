@@ -166,6 +166,14 @@ const resp = await client.encryptedFetch('https://api.example.com/api/v1/echo', 
 })
 ```
 
+使用流程：
+1. 先 `await crypto.init()`。
+2. 服务端 `createServer()` 后暴露一个 POST 密钥协商端点：接收 `clientPublicKey`，返回 `serverPublicKey + clientId`。
+3. 客户端 `createClient({ keyExchangeUrl })` 后，首次 `init()` / `encryptedFetch()` 会自动做密钥协商。
+4. 协商完成后，请求附带 `X-Client-Id`；若请求有 body，则自动包装成 `{ encryptedKey, ciphertext, iv }`。
+5. 服务端先 `decryptRequest()`，业务处理后再 `encryptResponse(clientId, data)`。
+6. 客户端收到 `X-Encrypted: true` 的响应后自动解密；`destroy()` 可清空当前会话。
+
 常规应用优先使用上层封装：
 - serv：`serv.createApp({ transport: { crypto } })`
 - kit：`kit.createHandle({ crypto: { crypto, transport: true } })` + `kit.client.create({ transport: { crypto } })`
