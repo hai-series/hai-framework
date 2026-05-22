@@ -16,6 +16,8 @@ import type { ServContext } from './serv-context.js'
 import { Buffer } from 'node:buffer'
 import { timingSafeEqual } from 'node:crypto'
 import { err, HaiCommonError } from '@h-ai/core'
+import { servM } from './serv-i18n.js'
+import { resolveRequestLocale } from './serv-validation.js'
 
 const LOOPBACK_IPS = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1', 'localhost'])
 
@@ -81,11 +83,13 @@ export function securityHeaders(): MiddlewareHandler {
  */
 export function requireInternalRPC(config: ServRpcHttpConfig): MiddlewareHandler {
   return async (c, next) => {
+    const locale = resolveRequestLocale(c.req.raw.headers)
+
     if (config.access === 'gateway-only') {
       const headerName = config.gatewayHeader ?? 'x-hai-internal-rpc'
       const received = c.req.header(headerName)
       if (!config.gatewaySecret || !received || !safeStringEqual(received, config.gatewaySecret))
-        return c.json(buildHaiErrorBody(HaiCommonError.FORBIDDEN, 'Forbidden'), 403)
+        return c.json(buildHaiErrorBody(HaiCommonError.FORBIDDEN, servM('serv_errorForbidden', { locale })), 403)
       return next()
     }
 
@@ -94,10 +98,10 @@ export function requireInternalRPC(config: ServRpcHttpConfig): MiddlewareHandler
       ?? ''
 
     if (config.access === 'loopback' && !LOOPBACK_IPS.has(ip))
-      return c.json(buildHaiErrorBody(HaiCommonError.FORBIDDEN, 'Forbidden'), 403)
+      return c.json(buildHaiErrorBody(HaiCommonError.FORBIDDEN, servM('serv_errorForbidden', { locale })), 403)
 
     if (config.access === 'private-network' && !isPrivateNetworkIP(ip))
-      return c.json(buildHaiErrorBody(HaiCommonError.FORBIDDEN, 'Forbidden'), 403)
+      return c.json(buildHaiErrorBody(HaiCommonError.FORBIDDEN, servM('serv_errorForbidden', { locale })), 403)
 
     return next()
   }
@@ -146,7 +150,7 @@ export function mapHaiError<TInput, TOutput>(handler: ServProcedureHandler<TInpu
       return await handler(options)
     }
     catch (error) {
-      return err(HaiCommonError.INTERNAL_ERROR, 'Internal server error', error)
+      return err(HaiCommonError.INTERNAL_ERROR, servM('serv_errorInternal', { locale: options.context.locale }), error)
     }
   }
 }
@@ -169,7 +173,7 @@ export function mapHaiError<TInput, TOutput>(handler: ServProcedureHandler<TInpu
 export function requireAuth<TInput, TOutput>(handler: ServProcedureHandler<TInput, TOutput>): ServProcedureHandler<TInput, TOutput> {
   return mapHaiError(async (options) => {
     if (!options.context.session)
-      return err(HaiCommonError.UNAUTHORIZED, 'Unauthorized')
+      return err(HaiCommonError.UNAUTHORIZED, servM('serv_errorUnauthorized', { locale: options.context.locale }))
     return handler(options)
   })
 }
@@ -208,7 +212,7 @@ export function requirePermission<TInput, TOutput>(
   return requireAuth(async (options) => {
     const permissions = options.context.session?.permissions ?? []
     if (!permissions.includes(permission) && !permissions.includes(WILDCARD_PERMISSION))
-      return err(HaiCommonError.FORBIDDEN, 'Forbidden')
+      return err(HaiCommonError.FORBIDDEN, servM('serv_errorForbidden', { locale: options.context.locale }))
     return handler(options)
   })
 }
@@ -238,7 +242,7 @@ export function requireRole<TInput, TOutput>(
   return requireAuth(async (options) => {
     const roles = options.context.session?.roles ?? []
     if (!roles.includes(role) && !roles.includes(WILDCARD_ROLE))
-      return err(HaiCommonError.FORBIDDEN, 'Forbidden')
+      return err(HaiCommonError.FORBIDDEN, servM('serv_errorForbidden', { locale: options.context.locale }))
     return handler(options)
   })
 }

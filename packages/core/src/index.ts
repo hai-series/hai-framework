@@ -13,6 +13,3 @@ export * from './core-main.node.js'
 
 // 类型定义（HaiResult, Logger 等）
 export * from './core-types.js'
-
-// Zod 校验 → i18n 映射工具（kit / serv / api-client 共享）
-export * from './i18n/core-zod-mapper.js'

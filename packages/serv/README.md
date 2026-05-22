@@ -198,20 +198,21 @@ await api.init({
 
 ## API 概览
 
-| API                                     | 作用                                                            |
-| --------------------------------------- | --------------------------------------------------------------- |
-| `serv.createApp(options)`               | 创建 Hono app，挂载健康检查、OpenAPI handler、可选文档与 RPC    |
-| `serv.parseRequestContext({ request })` | 默认上下文解析（提取 Bearer token + requestId，不填充 session） |
-| `serv.listen(app, options)`             | 在 Node.js 启动 HTTP 服务，返回 `{ server, address, close }`    |
-| `serv.toFetch(app)`                     | 包装为标准 `fetch(Request)` handler                             |
-| `serv.generateSpec(contract, options)`  | 由 contract 生成 OpenAPI 3.1 spec                               |
-| `serv.createDocsPage(spec, options)`    | 生成 Scalar 文档页面 HTML                                       |
-| `serv.requireAuth(handler)`             | procedure 认证包装器（`context.session` 为空 → UNAUTHORIZED）   |
-| `serv.requirePermission(perm, handler)` | procedure 权限包装器（缺失权限 → FORBIDDEN）                    |
-| `serv.requireRole(role, handler)`       | procedure 角色包装器（缺失角色 → FORBIDDEN）                    |
-| `serv.mapHaiError(handler)`             | 统一异常 → `HaiResult` 的包装器                                 |
-| `serv.securityHeaders()`                | Hono 中间件：HSTS / X-Content-Type-Options / Referrer-Policy    |
-| `serv.requireInternalRPC(config)`       | Hono 中间件：保护 `/rpc` 仅 loopback/内网/允许列表访问          |
+- `serv.createApp(options)`：创建 Hono app，挂载健康检查、OpenAPI handler、可选文档与 RPC
+- `serv.parseRequestContext({ request })`：默认上下文解析（提取 Bearer token + requestId，不填充 session）
+- `serv.listen(app, options)`：在 Node.js 启动 HTTP 服务，返回 `{ server, address, close }`
+- `serv.toFetch(app)`：包装为标准 `fetch(Request)` handler
+- `serv.generateSpec(contract, options)`：由 contract 生成 OpenAPI 3.1 spec
+- `serv.createDocsPage(spec, options)`：生成 Scalar 文档页面 HTML
+- `serv.requireAuth(handler)`：procedure 认证包装器（`context.session` 为空 → UNAUTHORIZED）
+- `serv.requirePermission(perm, handler)`：procedure 权限包装器（缺失权限 → FORBIDDEN）
+- `serv.requireRole(role, handler)`：procedure 角色包装器（缺失角色 → FORBIDDEN）
+- `serv.mapHaiError(handler)`：统一异常 → `HaiResult` 的包装器
+- `serv.validateInputOrFail(zodSchema, input, locale)`：在 procedure 内做 Zod 二次校验，失败时返回本地化 `HaiResult` + `ValidationFormError[]`
+- `serv.resolveRequestLocale(headers)`：从 `x-hai-locale` / `Accept-Language` 解析并规范化请求 locale
+- `serv.securityHeaders()`：Hono 中间件：HSTS / X-Content-Type-Options / Referrer-Policy
+- `serv.requireInternalRPC(config)`：Hono 中间件：保护 `/rpc` 仅 loopback/内网/允许列表访问
+- `serv.m(key, options)`：读取 `@h-ai/serv` 自身消息，支持 `options.locale` 单次调用本地化
 
 > 传输加密不作为 `serv.xxx` 扁平 API 暴露；它是 `createApp` 的配置能力，内部委托 `crypto.transport`。
 
@@ -229,9 +230,43 @@ await api.init({
 ## 错误处理
 
 - Default procedures 全部返回 `HaiResult<T>`，客户端直接判断 `result.success`
-- 认证失败 → `HaiCommonError.UNAUTHORIZED`
-- 授权失败 → `HaiCommonError.FORBIDDEN`
-- 未捕获异常 → `HaiCommonError.INTERNAL_ERROR`（自动记录到 `core.logger`）
+- 认证失败 → `HaiCommonError.UNAUTHORIZED`（由 `requireAuth` 按 `context.locale` 本地化）
+- 授权失败 → `HaiCommonError.FORBIDDEN`（由 `requirePermission` / `requireRole` 按 `context.locale` 本地化）
+- 未捕获异常 → `HaiCommonError.INTERNAL_ERROR`（由 `mapHaiError` 统一兜底并按 `context.locale` 本地化）
+
+正常业务请求建议按三层处理：
+
+1. **oRPC contract 输入校验**：进入 procedure 前由 oRPC 执行；`serv.createApp()` 内部会自动拦截并把 Zod 默认英文错误重写为本地化 `errors[]`。
+2. **procedure 内二次校验**：对数据库读回对象、跨字段约束等适合 Zod 表达的规则，使用 `serv.validateInputOrFail(zodSchema, input, context.locale)`；简单业务规则直接 `err(...)` 即可，不必为了统一额外造 schema。
+3. **业务/领域错误**：不要 throw 预期业务失败；直接返回 `err(...)`，并在**创建错误消息的那一层**使用对应模块的 i18n getter，例如 `serv.m(..., { locale: context.locale })` 或 `widgetM(..., { locale: context.locale })`。
+
+```ts
+import { err, HaiCommonError } from '@h-ai/core'
+import { serv } from '@h-ai/serv'
+import { z } from 'zod'
+
+const CreateWidgetSchema = z.object({
+  title: z.string().min(1),
+  slug: z.string().min(3),
+})
+
+const createWidget = serv.mapHaiError(async ({ input, context }) => {
+  const validated = serv.validateInputOrFail(CreateWidgetSchema, input, context.locale)
+  if (!validated.success)
+    return validated
+
+  if (validated.data.slug === 'admin') {
+    return err(
+      HaiCommonError.FORBIDDEN,
+      serv.m('serv_errorForbidden', { locale: context.locale }),
+    )
+  }
+
+  return widgetService.create(validated.data)
+})
+```
+
+> 如果错误来自下游业务模块（如 `iam.user.xxx()`）且该模块已经直接返回 `HaiResult`，serv 会原样透传它的 `error.message`。当前 `HaiError` 只携带最终 `message`，不携带 `messageKey/params`，因此 **serv 边界无法对任意下游错误再做一次通用 i18n 重翻译**；要支持请求级 i18n，必须在创建该错误消息的模块里就拿到 locale。
 
 ## 测试
 

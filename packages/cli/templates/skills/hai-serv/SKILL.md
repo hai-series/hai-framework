@@ -158,6 +158,9 @@ await api.init({
 | `serv.requireAuth(handler)` | 验证 session（`context.session` 非空，即 token 已通过 `verifyToken` 校验） |
 | `serv.requirePermission(permission, handler)` | 验证权限码，支持通配符 `serv.WILDCARD_PERMISSION`（`'*'`） |
 | `serv.requireRole(role, handler)` | 验证角色，支持通配符 `serv.WILDCARD_ROLE`（`'*'`） |
+| `serv.validateInputOrFail(zodSchema, input, locale)` | 在 procedure 内执行 Zod 二次校验，失败时返回本地化 `HaiResult` + `ValidationFormError[]` |
+| `serv.resolveRequestLocale(headers)` | 从 `x-hai-locale` / `Accept-Language` 解析并规范化 locale |
+| `serv.m(key, { locale, params })` | 读取 serv 自身 i18n 消息（请求级本地化） |
 
 ```typescript
 import { serv } from '@h-ai/serv'
@@ -174,6 +177,35 @@ const adminOnly = serv.requireAuth(
   serv.requireRole('admin', actualHandler)
 )
 ```
+
+### 正常业务请求中的错误与 i18n
+
+按三层处理：
+
+1. **oRPC contract 输入校验**：进入 handler 前自动发生；`serv.createApp()` 会把默认英文 Zod 错误改写为本地化 `errors[]`。
+2. **handler 内二次校验**：对跨字段规则、数据库回读对象等适合 Zod 表达的场景，使用 `serv.validateInputOrFail(zodSchema, input, context.locale)`；简单业务规则直接 `err(...)` 即可。
+3. **业务/领域错误**：不要 throw 预期失败；直接返回 `err(...)`，并在**创建错误消息的那一层**用对应模块的 i18n getter 按 `context.locale` 出消息。
+
+```typescript
+import { err, HaiCommonError } from '@h-ai/core'
+import { z } from 'zod'
+import { serv } from '@h-ai/serv'
+
+const Schema = z.object({ title: z.string().min(1) })
+
+const handler = serv.mapHaiError(async ({ input, context }) => {
+  const validated = serv.validateInputOrFail(Schema, input, context.locale)
+  if (!validated.success)
+    return validated
+
+  if (!context.session)
+    return err(HaiCommonError.UNAUTHORIZED, serv.m('serv_errorUnauthorized', { locale: context.locale }))
+
+  return widgetService.create(validated.data)
+})
+```
+
+> 如果错误来自下游模块（如 `iam` / `storage`）并且该模块已经返回 `HaiResult`，serv 默认**透传**它的 `error.message`。由于 `HaiError` 目前不携带 `messageKey/params`，serv 边界不能对任意下游错误再做通用重翻译；要做请求级 i18n，必须在创建该错误的模块/feature 里就拿到 locale。
 
 ### `serv.parseRequestContext` — 默认 Context 解析器
 

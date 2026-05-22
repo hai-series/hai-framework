@@ -7,6 +7,7 @@
 - **HaiResult 类型** — 函数式错误处理（`ok` / `err`），所有模块统一返回值
 - **统一日志** — Node.js 基于 pino，浏览器基于 loglevel，API 一致
 - **国际化（i18n）** — 集中式 locale 管理 + 类型安全的消息获取器
+- **Zod 校验错误映射** — 兼容 Zod v3/v4 的 issue 提取与默认英文消息本地化
 - **配置管理** — YAML 加载、环境变量插值、Zod 校验、文件监听（Node.js 专用）
 - **ID 生成** — nanoid 与 UUID v4
 - **错误定义** — 标准化错误码体系，支持跨模块统一的错误定义与实例创建
@@ -170,6 +171,67 @@ getMessage('welcome', { locale: 'zh-CN', params: { name: 'Alice' } }) // '欢迎
 // 常量
 core.i18n.DEFAULT_LOCALES // [{ code: 'zh-CN', label: '简体中文' }, { code: 'en-US', label: 'English' }]
 core.i18n.DEFAULT_LOCALE // 'zh-CN'
+```
+
+### Zod 校验错误 i18n 映射
+
+`core.zodValidation` 用于把 Zod `SafeParseError` / `ZodError` 转为扁平表单错误，并将 Zod
+默认英文消息映射为调用方自己的 i18n 文案。
+
+- 两个公开入口：
+  - `createPrefixedZodMessageGetter()`：按模块前缀自动派生 `serv_validation*` / `kit_validation*` 这类 key，省掉手写 `KEY_MAP`
+  - `mapZodErrorToFormErrors()`：一步完成提取 + 本地化 + 扁平化
+- 自定义业务消息不会被覆盖；只有 Zod 默认英文消息才会被替换
+
+```typescript
+import type { ZodMessageGetter } from '@h-ai/core'
+import { core } from '@h-ai/core'
+import { z } from 'zod'
+
+const LoginSchema = z.object({
+  email: z.string().email(),
+  password: z.string().min(8),
+  nickname: z.string().min(1, '请填写昵称'),
+})
+
+const getMessage: ZodMessageGetter = (key, params) => {
+  switch (key) {
+    case 'validationEmail':
+      return '请输入合法邮箱地址'
+    case 'validationStringMin':
+      return `至少输入 ${params?.min} 个字符`
+    case 'validationRequired':
+      return '此项为必填项'
+    default:
+      return '输入不合法'
+  }
+}
+
+const result = LoginSchema.safeParse({
+  email: 'bad',
+  password: '123',
+  nickname: '',
+})
+
+if (!result.success) {
+  const getMessage = core.zodValidation.createPrefixedZodMessageGetter(
+    'kit',
+    (messageKey, params) => {
+      if (messageKey === 'kit_validationEmail')
+        return '请输入合法邮箱地址'
+      if (messageKey === 'kit_validationStringMin')
+        return `至少输入 ${params?.min} 个字符`
+      return '输入不合法'
+    },
+  )
+  const errors = core.zodValidation.mapZodErrorToFormErrors(result.error, getMessage)
+
+  errors[0]?.field // 'email'
+  errors[0]?.message // '请输入合法邮箱地址'
+  errors[2]?.message // '请填写昵称'（schema 自定义消息原样保留）
+
+  core.logger.info('Validation failed', { errors })
+}
 ```
 
 ### 配置管理（Node.js 专用）

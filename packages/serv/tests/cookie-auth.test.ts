@@ -174,11 +174,13 @@ describe('mountRefreshCookieRoutes', () => {
 
       const res = await app.request(`${API_PREFIX}/auth/refresh`, {
         method: 'POST',
+        headers: { 'accept-language': 'zh-CN' },
       })
 
       expect(res.status).toBe(401)
       const body = await res.json()
       expect(body.success).toBe(false)
+      expect(body.error.message).toBe('未登录或登录已失效')
     })
 
     it('onRefresh 回调失败时，返回错误并清除 cookie', async () => {

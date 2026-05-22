@@ -25,6 +25,7 @@ describe('pipeline.orpc', () => {
     expect(result.success).toBe(false)
     if (!result.success) {
       expect(result.error.code).toContain('common')
+      expect(result.error.message).toBe('服务器内部错误')
     }
   })
 
@@ -33,6 +34,8 @@ describe('pipeline.orpc', () => {
 
     const result = await handler({ input: undefined, context: makeContext() })
     expect(result.success).toBe(false)
+    if (!result.success)
+      expect(result.error.message).toBe('未登录或登录已失效')
   })
 
   it('requireAuth rejects requests with token but no session (invalid / unverified token)', async () => {
@@ -41,6 +44,8 @@ describe('pipeline.orpc', () => {
     // accessToken 存在但 session 未注入（模拟 createContext 验证失败的情况）
     const result = await handler({ input: undefined, context: makeContext({ accessToken: 'fake-token-xyz' }) })
     expect(result.success).toBe(false)
+    if (!result.success)
+      expect(result.error.message).toBe('未登录或登录已失效')
   })
 
   it('requireAuth passes through when session is present', async () => {
@@ -71,6 +76,8 @@ describe('pipeline.orpc', () => {
     })
     const result = await handler({ input: undefined, context })
     expect(result.success).toBe(false)
+    if (!result.success)
+      expect(result.error.message).toBe('无权执行该操作')
   })
 
   it('requirePermission grants wildcard permission', async () => {

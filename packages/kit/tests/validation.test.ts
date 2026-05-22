@@ -84,6 +84,30 @@ describe('validateForm', () => {
     })
   })
 
+  it('应该把 schema 级全局错误映射到 _ 字段', async () => {
+    setAllModulesLocale('zh-CN')
+    const schema = z.object({
+      start: z.coerce.number(),
+      end: z.coerce.number(),
+    }).refine(data => data.start < data.end, {
+      message: '开始时间必须早于结束时间',
+    })
+
+    const request = new Request('http://localhost', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ start: 10, end: 3 }),
+    })
+
+    const result = await validateForm(request, schema)
+
+    expect(result.valid).toBe(false)
+    expect(result.errors[0]).toEqual({
+      field: '_',
+      message: '开始时间必须早于结束时间',
+    })
+  })
+
   it('应该验证 FormData', async () => {
     const formData = new FormData()
     formData.append('name', 'John')

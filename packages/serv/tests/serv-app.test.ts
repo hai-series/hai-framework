@@ -14,7 +14,7 @@ describe('@h-ai/serv', () => {
         'authorization': 'Bearer access-token',
         'x-request-id': 'req_1',
         'x-real-ip': '127.0.0.1',
-        'accept-language': 'en-US,en;q=0.9',
+        'accept-language': 'en,en;q=0.9',
         'user-agent': 'vitest',
       },
     })
@@ -48,8 +48,20 @@ describe('@h-ai/serv', () => {
       },
     })
 
-    const unauthorized = await app.request('/docs')
+    const unauthorized = await app.request('/docs', {
+      headers: { 'accept-language': 'zh-CN' },
+    })
     expect(unauthorized.status).toBe(401)
+    expect(await unauthorized.json()).toEqual({
+      success: false,
+      error: {
+        code: 'hai:common:100',
+        message: '未登录或登录已失效',
+        httpStatus: 401,
+        system: 'hai',
+        module: 'common',
+      },
+    })
 
     const authorized = await app.request('/docs', {
       headers: { authorization: 'Bearer access-token' },

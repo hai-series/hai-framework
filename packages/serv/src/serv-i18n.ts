@@ -12,6 +12,37 @@ import messagesZhCN from '../messages/zh-CN.json'
 
 type ServMessageKey = keyof typeof messagesZhCN
 
+const SUPPORTED_SERV_LOCALES = ['zh-CN', 'en-US'] as const
+const DEFAULT_SERV_LOCALE = 'zh-CN'
+
+/**
+ * 规范化 serv 请求 locale。
+ *
+ * 支持：
+ * - 完整 locale：`zh-CN` / `en-US`
+ * - 简写：`zh` / `en`
+ * - `Accept-Language` 风格值：`en-US,en;q=0.9`
+ *
+ * 未识别时回退到默认 `zh-CN`。
+ */
+export function normalizeServLocale(locale: string | undefined): string {
+  const candidate = locale?.split(',')[0]?.trim()
+  if (!candidate)
+    return DEFAULT_SERV_LOCALE
+
+  const exact = SUPPORTED_SERV_LOCALES.find(item => item.toLowerCase() === candidate.toLowerCase())
+  if (exact)
+    return exact
+
+  const baseLanguage = candidate.split('-')[0]?.toLowerCase()
+  if (baseLanguage === 'en')
+    return 'en-US'
+  if (baseLanguage === 'zh')
+    return 'zh-CN'
+
+  return DEFAULT_SERV_LOCALE
+}
+
 /**
  * 获取 Serv 模块的 i18n 消息。
  *

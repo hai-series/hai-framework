@@ -17,6 +17,7 @@
 import type { HaiResult, Logger } from '@h-ai/core'
 import type { RefreshTokenPair } from './serv-cookie-auth.js'
 import { core } from '@h-ai/core'
+import { resolveRequestLocale } from './serv-validation.js'
 
 /** 当前请求解析出的会话摘要。 */
 export interface ServSession {
@@ -68,7 +69,6 @@ export type CreateServContext = (input: CreateServContextInput) => ServContext |
 const HEADER_REQUEST_ID = 'x-request-id'
 const HEADER_FORWARDED_FOR = 'x-forwarded-for'
 const HEADER_REAL_IP = 'x-real-ip'
-const HEADER_LOCALE = 'accept-language'
 const HEADER_AUTHORIZATION = 'authorization'
 const HEADER_USER_AGENT = 'user-agent'
 
@@ -104,7 +104,7 @@ export function parseRequestContext(input: CreateServContextInput): ServContext 
   const requestId = headers.get(HEADER_REQUEST_ID) ?? core.id.uuid()
   const forwardedFor = headers.get(HEADER_FORWARDED_FOR)
   const ip = headers.get(HEADER_REAL_IP) ?? forwardedFor?.split(',')[0]?.trim()
-  const locale = headers.get(HEADER_LOCALE)?.split(',')[0]?.trim() || 'zh-CN'
+  const locale = resolveRequestLocale(headers)
   const accessToken = extractBearerToken(headers.get(HEADER_AUTHORIZATION))
 
   return {
