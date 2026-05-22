@@ -1,6 +1,6 @@
 import { aiContract, createApiContract, iamContract, storageContract } from '@h-ai/api-contract'
 import { describe, expect, it } from 'vitest'
-import { generateSpec } from '../src/serv-openapi.js'
+import { createDocsPage, generateSpec, getScalarScript, SCALAR_ROUTE } from '../src/serv-openapi.js'
 
 const testContract = createApiContract({ iam: iamContract, storage: storageContract, ai: aiContract })
 
@@ -27,5 +27,19 @@ describe('generateSpec', () => {
   it('skips servers when apiPrefix not provided', async () => {
     const spec = await generateSpec(testContract, { title: 'no-prefix' })
     expect(spec.servers).toBeUndefined()
+  })
+
+  it('creates docs page that points to local Scalar route by default', async () => {
+    const spec = await generateSpec(testContract, { title: 'docs-test' })
+    const html = createDocsPage(spec)
+
+    expect(html).toContain(SCALAR_ROUTE)
+  })
+
+  it('loads bundled Scalar script from @scalar/api-reference', async () => {
+    const script = await getScalarScript()
+
+    expect(script).toBeDefined()
+    expect(script).toContain('createApiReference')
   })
 })

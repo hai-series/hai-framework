@@ -30,8 +30,9 @@ import type { ServContext } from '../serv-context.js'
 import { iamContract } from '@h-ai/api-contract'
 import { core, err, HaiCommonError, ok } from '@h-ai/core'
 import { implement } from '@orpc/server'
+import { requireAuth } from '../pipelines/serv-pipeline-require-auth.js'
+import { requirePermission } from '../pipelines/serv-pipeline-require-permission.js'
 import { servM } from '../serv-i18n.js'
-import { requireAuth, requirePermission } from '../serv-pipeline.js'
 import { mapHaiResult } from './serv-feature-helpers.js'
 
 const iamFeatureLogger = core.logger.child({ module: 'serv', scope: 'feature-iam' })

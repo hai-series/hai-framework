@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { resolveServHttpConfig } from '../src/serv-config.js'
+import { resolveServConfig, resolveServHttpConfig } from '../src/serv-config.js'
 
 describe('resolveServHttpConfig', () => {
   it('returns sane defaults when input omitted', () => {
@@ -34,5 +34,17 @@ describe('resolveServHttpConfig', () => {
   it('rpc defaults to loopback access', () => {
     const config = resolveServHttpConfig({ rpc: {} })
     expect(config.rpc).toEqual({ prefix: '/rpc', access: 'loopback' })
+  })
+
+  it('parses _serv.yml style config and fills top-level defaults', () => {
+    const config = resolveServConfig({
+      http: {
+        docs: {},
+      },
+    })
+
+    expect(config.http.apiPrefix).toBe('/api/v1')
+    expect(config.http.docs).toEqual({ path: '/docs' })
+    expect(config.http.health).toEqual({ path: '/health', readyPath: '/ready' })
   })
 })

@@ -30,7 +30,7 @@ import type { ServContext } from '../serv-context.js'
 import { aiContract } from '@h-ai/api-contract'
 import { ok } from '@h-ai/core'
 import { implement } from '@orpc/server'
-import { requireAuth } from '../serv-pipeline.js'
+import { requireAuth } from '../pipelines/serv-pipeline-require-auth.js'
 import { wrapItemsResult } from './serv-feature-helpers.js'
 
 /** AI 默认 procedures 依赖。 */

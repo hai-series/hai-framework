@@ -20,21 +20,21 @@
 
 import { toFetch } from './adapters/serv-adapter-fetch.js'
 import { listen } from './adapters/serv-adapter-node.js'
+import { mapHaiError } from './pipelines/serv-pipeline-helper.js'
+import { requireAuth } from './pipelines/serv-pipeline-require-auth.js'
+import { requirePermission, WILDCARD_PERMISSION } from './pipelines/serv-pipeline-require-permission.js'
+import { requireRole, WILDCARD_ROLE } from './pipelines/serv-pipeline-require-role.js'
 import { createApp } from './serv-app.js'
+import { ServConfigSchema } from './serv-config.js'
 import { buildAuthContextFactory, parseRequestContext } from './serv-context.js'
 import { servM } from './serv-i18n.js'
-import { createDocsPage, generateSpec } from './serv-openapi.js'
+import { generateSpec } from './serv-openapi.js'
 import {
-  mapHaiError,
-  requireAuth,
-  requireInternalRPC,
-  requirePermission,
-  requireRole,
-  securityHeaders,
-  WILDCARD_PERMISSION,
-  WILDCARD_ROLE,
-} from './serv-pipeline.js'
-import { resolveRequestLocale, validateInputOrFail } from './serv-validation.js'
+  resolveRequestLocale,
+  validateInputOrFail,
+} from './serv-validation.js'
+
+export { ServConfigSchema }
 
 /** hai-framework API service runtime 统一入口（扁平 API）。 */
 export const serv = {
@@ -48,9 +48,8 @@ export const serv = {
   listen,
   toFetch,
 
-  // OpenAPI / 文档
+  // OpenAPI / 导出
   generateSpec,
-  createDocsPage,
 
   // oRPC procedure 包装器
   requireAuth,
@@ -62,10 +61,6 @@ export const serv = {
   // 通配符常量
   WILDCARD_PERMISSION,
   WILDCARD_ROLE,
-
-  // Hono 中间件
-  securityHeaders,
-  requireInternalRPC,
 
   // Serv 模块 i18n 消息获取器（支持 `options.locale` 单次调用本地化）。
   m: servM,

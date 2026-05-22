@@ -52,6 +52,11 @@ export interface ServHttpConfig {
   readonly rpc: false | ServRpcHttpConfig
 }
 
+/** `config/_serv.yml` 的顶层配置结构。 */
+export interface ServConfig {
+  readonly http: ServHttpConfig
+}
+
 /** `serv.createApp` 接受的 HTTP 配置入参类型。 */
 export type ServHttpConfigInput = Partial<{
   readonly apiPrefix: `/api/${string}`
@@ -60,6 +65,11 @@ export type ServHttpConfigInput = Partial<{
   readonly health: false | Partial<ServHealthHttpConfig>
   readonly rpc: false | Partial<ServRpcHttpConfig>
 }>
+
+/** `config/_serv.yml` 的顶层输入类型。 */
+export interface ServConfigInput {
+  readonly http?: ServHttpConfigInput
+}
 
 const OpenAPIHttpConfigInputSchema = z.union([
   z.literal(false),
@@ -100,6 +110,13 @@ const ServHttpConfigInputSchema = z.object({
   rpc: RpcHttpConfigInputSchema.default(false),
 })
 
+/** `config/_serv.yml` 对应的配置 Schema。 */
+export const ServConfigSchema = z.object({
+  http: ServHttpConfigInputSchema.optional(),
+}).transform(({ http }) => ({
+  http: resolveServHttpConfig(http ?? {}),
+}))
+
 /**
  * 解析 HTTP 配置并补齐默认值。
  *
@@ -108,4 +125,13 @@ const ServHttpConfigInputSchema = z.object({
  */
 export function resolveServHttpConfig(input: ServHttpConfigInput = {}): ServHttpConfig {
   return ServHttpConfigInputSchema.parse(input)
+}
+
+/**
+ * 解析 `config/_serv.yml` 顶层配置并补齐默认值。
+ *
+ * 典型用法：`core.config.validate('serv', ServConfigSchema)`。
+ */
+export function resolveServConfig(input: ServConfigInput = {}): ServConfig {
+  return ServConfigSchema.parse(input)
 }

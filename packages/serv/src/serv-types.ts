@@ -7,8 +7,18 @@
 
 export type { ServFetchHandler } from './adapters/serv-adapter-fetch.js'
 export type { ServListenOptions, ServNodeServer } from './adapters/serv-adapter-node.js'
+export type {
+  ServGuardedProcedureWrapper,
+  ServMiddleware,
+  ServMiddlewareFactory,
+  ServProcedureHandler,
+  ServProcedureOptions,
+  ServProcedureWrapper,
+} from './pipelines/serv-pipeline-types.js'
 export type { CreateServAppOptions } from './serv-app.js'
 export type {
+  ServConfig,
+  ServConfigInput,
   ServDocsHttpConfig,
   ServHealthHttpConfig,
   ServHttpConfig,
@@ -18,7 +28,6 @@ export type {
 } from './serv-config.js'
 export type { CreateServContext, CreateServContextInput, ServContext, ServIam, ServSession } from './serv-context.js'
 export type { RefreshCookieConfig, RefreshTokenPair } from './serv-cookie-auth.js'
-export type { CreateDocsPageOptions, GenerateOpenAPISpecOptions } from './serv-openapi.js'
-export type { ServProcedureHandler, ServProcedureOptions } from './serv-pipeline.js'
+export type { GenerateOpenAPISpecOptions } from './serv-openapi.js'
 export type { ServTransportConfig } from './serv-transport.js'
 export type { ServValidationFailureBody } from './serv-validation.js'

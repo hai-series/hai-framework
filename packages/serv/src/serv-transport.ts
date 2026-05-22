@@ -5,6 +5,14 @@
  * `TransportEncryptionManager` 与 `TRANSPORT_PROTOCOL` 协议常量，
  * 确保前后端协议不漂移。
  *
+ * 单次请求的处理顺序：
+ * 1. 特判密钥协商端点
+ * 2. 跳过不参与加解密的路径
+ * 3. 校验 clientId 与已注册公钥
+ * 4. 解密请求体并把明文 request 回写给下游
+ * 5. 执行业务逻辑
+ * 6. 尝试加密 JSON 响应
+ *
  * @module serv-transport
  */
 
@@ -59,12 +67,15 @@ export function createTransportMiddleware(
   return async (c, next) => {
     const pathname = new URL(c.req.url).pathname
 
+    // Step 1：密钥协商端点直接短路处理，不进入下游业务逻辑。
     if (pathname === keyExchangePath && c.req.method === 'POST')
       return handleKeyExchange(c.req.raw, manager)
 
+    // Step 2：健康检查 / 文档页等可配置排除路径直接跳过加解密。
     if (shouldExclude(pathname, excludePaths, keyExchangePath))
       return next()
 
+    // Step 3：普通业务请求必须先确认 clientId 存在，且服务端已经保存过该客户端公钥。
     const clientId = c.req.header(TRANSPORT_PROTOCOL.CLIENT_ID_HEADER)
     if (!clientId)
       return jsonError(servM('serv_transportClientIdRequired'), 400)
@@ -73,16 +84,19 @@ export function createTransportMiddleware(
     if (!clientPublicKey)
       return jsonError(servM('serv_transportClientKeyNotFound'), 400)
 
+    // Step 4：对带 body 的请求先解密；解密后下游看到的是普通 JSON Request。
     if (hasBody(c.req.method)) {
       const decErr = await decryptRequestInPlace(c, manager)
       if (decErr)
         return decErr
     }
 
+    // Step 5：明文请求进入后续 Hono / oRPC 流程。
     await next()
     const response = c.res
     if (!response)
       return
+    // Step 6：只加密 JSON 响应；文件流、HTML 等非 JSON 内容保持原样透传。
     const contentType = response.headers.get('Content-Type') ?? ''
     if (!contentType.includes('application/json'))
       return
@@ -105,6 +119,7 @@ export function createTransportMiddleware(
     if (bodyText.length > MAX_ENCRYPTED_BODY)
       return
 
+    // Step 7：把下游返回的明文 JSON 重新加密后替换回响应对象。
     const encResult = await manager.encryptResponse(clientId, bodyText)
     if (!encResult.success) {
       logger.warn('Failed to encrypt response', { error: encResult.error })
@@ -128,6 +143,7 @@ export function createTransportMiddleware(
 async function handleKeyExchange(request: Request, manager: TransportEncryptionManager): Promise<Response> {
   let body: { clientPublicKey?: unknown }
   try {
+    // Step 1：读取客户端提交的公钥。
     body = await request.json() as { clientPublicKey?: unknown }
   }
   catch {
@@ -137,6 +153,7 @@ async function handleKeyExchange(request: Request, manager: TransportEncryptionM
     return jsonError(servM('serv_transportInvalidPayload'), 400)
 
   try {
+    // Step 2：注册客户端公钥，换取稳定的 clientId；并返回服务端公钥给客户端完成协商。
     const clientId = await manager.registerClientKey(body.clientPublicKey)
     const serverPublicKey = manager.getServerPublicKey()
     return new Response(JSON.stringify({ serverPublicKey, clientId }), {
@@ -154,12 +171,14 @@ async function decryptRequestInPlace(
   c: Parameters<MiddlewareHandler>[0],
   manager: TransportEncryptionManager,
 ): Promise<Response | undefined> {
+  // Step A：请求必须显式声明自己是加密 payload，避免把普通 JSON 误当密文解析。
   const isEncrypted = c.req.header(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER) === TRANSPORT_PROTOCOL.ENCRYPTED_HEADER_VALUE
   if (!isEncrypted)
     return jsonError(servM('serv_transportInvalidPayload'), 400)
 
   let payload: unknown
   try {
+    // Step B：先以 JSON 读取密文载荷。
     payload = await c.req.raw.clone().json()
   }
   catch {
@@ -168,12 +187,14 @@ async function decryptRequestInPlace(
   if (!isEncryptedPayloadShape(payload))
     return jsonError(servM('serv_transportInvalidPayload'), 400)
 
+  // Step C：调用 transport manager 做真正的解密。
   const decResult = manager.decryptRequest(payload)
   if (!decResult.success) {
     logger.warn('Failed to decrypt request', { error: decResult.error })
     return jsonError(servM('serv_transportDecryptFailed'), 400)
   }
 
+  // Step D：重建一个“明文 Request”回写到 `c.req.raw`，下游业务完全不需要感知加密协议。
   const original = c.req.raw
   const newHeaders = new Headers(original.headers)
   newHeaders.delete(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER)
