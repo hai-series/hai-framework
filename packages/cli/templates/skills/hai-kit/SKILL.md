@@ -93,6 +93,33 @@ export const { apiFetch } = kit.client.create({
 
 默认协商端点：`/api/_hai/key-exchange`。如 `keyExchangePath` 自定义，浏览器端同步设置 `keyExchangeUrl`。
 
+### 5. 使用 `_kit.yml` 统一 transport 配置
+
+`@h-ai/kit` 现在提供 `KitConfigSchema` / `resolveKitConfig()`，适合同一份 `_kit.yml`
+同时驱动 `hooks.server.ts` 与浏览器端 `kit.client.create()`：
+
+```yml
+transport:
+  keyExchangePath: /api/_hai/key-exchange
+  requireEncryption: true
+  encryptResponse: true
+  excludePaths:
+    - /api/storage
+    - /api/public
+    - /api/auth/profile/avatar
+  maxClients: 10000
+```
+
+```ts
+import { resolveKitConfig } from '@h-ai/kit'
+import { parse } from 'yaml'
+import rawKitConfig from '../config/_kit.yml?raw'
+
+export const appKitConfig = resolveKitConfig(parse(rawKitConfig) ?? {})
+```
+
+`_kit.yml` 只放公开的 transport 路径/开关，不放密钥；如自定义 `keyExchangePath`，浏览器端必须同步映射为 `keyExchangeUrl`。
+
 ## 核心 API
 
 | API | 用途 |
