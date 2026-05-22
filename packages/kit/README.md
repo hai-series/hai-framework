@@ -183,6 +183,34 @@ export const { apiFetch } = kit.client.create({
 
 默认密钥协商路径为 `/api/_hai/key-exchange`。如服务端自定义 `transport.keyExchangePath`，客户端需同步配置 `transport.keyExchangeUrl`。
 
+### 使用 `_kit.yml` 统一 transport 配置
+
+`@h-ai/kit` 提供 `KitConfigSchema` / `resolveKitConfig()`，方便应用用同一份 `_kit.yml`
+同时驱动 `hooks.server.ts` 与 `kit.client.create()`：
+
+```yml
+transport:
+  keyExchangePath: /api/_hai/key-exchange
+  requireEncryption: true
+  encryptResponse: true
+  excludePaths:
+    - /api/storage
+    - /api/public
+    - /api/auth/profile/avatar
+  maxClients: 10000
+```
+
+```ts
+import { resolveKitConfig } from '@h-ai/kit'
+import { parse } from 'yaml'
+import rawKitConfig from '../config/_kit.yml?raw'
+
+export const appKitConfig = resolveKitConfig(parse(rawKitConfig) ?? {})
+```
+
+如只在服务端读取配置，也可配合 `core.config.validate('kit', KitConfigSchema)` 使用。
+由于浏览器端也可能读取这份配置，`_kit.yml` 只应放公开的 transport 路径/开关，不要写入密钥。
+
 ## 配置
 
 `kit.createHandle()` 配置项：

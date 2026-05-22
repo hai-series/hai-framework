@@ -21,10 +21,13 @@ import {
   registerAndLogin,
   setBrowserToken,
 } from './kit-auth.js'
+import { KitConfigSchema, resolveKitConfig, resolveKitTransportConfig } from './kit-config.js'
 import { handler } from './kit-handler.js'
 import { setAllModulesLocale } from './kit-i18n.js'
 import { badRequest, conflict, created, error, forbidden, fromError, fromResult, internalError, noContent, notFound, ok, redirect, unauthorized, validationError } from './kit-response.js'
 import { IdParamSchema, PaginationQuerySchema, validateFormOrFail, validateParamsOrFail, validateQueryOrFail } from './kit-validation.js'
+
+export { KitConfigSchema, resolveKitConfig, resolveKitTransportConfig }
 
 /**
  * Kit 模块统一出口。
