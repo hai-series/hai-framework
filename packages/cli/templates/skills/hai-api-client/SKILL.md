@@ -64,6 +64,7 @@ await api.init({
 ```ts
 const login = await api.iam.auth.login({ identifier: 'alice', password: 'secret' })
 if (login.success) {
+  // 默认 httpOnly cookie 模式下，refresh token 由服务端 Set-Cookie 管理。
   await api.auth.setTokens(login.data.tokens)
 }
 
@@ -125,7 +126,7 @@ if (login.success) {
 | --- | --- |
 | `api.init(config)` | 初始化默认 API Service client |
 | `api.close()` | 清理 client 状态 |
-| `api.auth.setTokens(tokens)` | 写入 Token |
+| `api.auth.setTokens(tokens)` | 写入 access token；非 httpOnly 存储会同时写入 refresh token |
 | `api.auth.clear()` | 清理 Token |
 | `api.auth.onTokenRefreshed(cb)` | 监听刷新结果 |
 | `createApiClient(contract)` | 创建自定义 typed client |

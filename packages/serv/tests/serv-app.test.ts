@@ -1,5 +1,6 @@
 import type { ServContext } from '../src/serv-context.js'
 import { createApiContract } from '@h-ai/api-contract'
+import { err, HaiCommonError, ok } from '@h-ai/core'
 import { implement } from '@orpc/server'
 import { describe, expect, it } from 'vitest'
 import { serv } from '../src/serv-main.js'
@@ -38,21 +39,24 @@ describe('@h-ai/serv', () => {
     expect(await response.json()).toEqual({ status: 'ok' })
   })
 
-  it('requires auth for protected docs page', async () => {
+  it('requires verified auth for protected docs page', async () => {
     const app = serv.createApp({
       contract,
       procedures,
+      verifyToken: async token => token === 'valid-token'
+        ? ok({ userId: 'user-1', roles: [], permissions: [] })
+        : err(HaiCommonError.UNAUTHORIZED, 'invalid token'),
       http: {
         docs: { path: '/docs', requireAuth: true },
         openapi: { path: '/openapi.json' },
       },
     })
 
-    const unauthorized = await app.request('/docs', {
+    const missingToken = await app.request('/docs', {
       headers: { 'accept-language': 'zh-CN' },
     })
-    expect(unauthorized.status).toBe(401)
-    expect(await unauthorized.json()).toEqual({
+    expect(missingToken.status).toBe(401)
+    expect(await missingToken.json()).toEqual({
       success: false,
       error: {
         code: 'hai:common:100',
@@ -63,8 +67,13 @@ describe('@h-ai/serv', () => {
       },
     })
 
+    const invalidToken = await app.request('/docs', {
+      headers: { authorization: 'Bearer invalid-token' },
+    })
+    expect(invalidToken.status).toBe(401)
+
     const authorized = await app.request('/docs', {
-      headers: { authorization: 'Bearer access-token' },
+      headers: { authorization: 'Bearer valid-token' },
     })
     expect(authorized.status).toBe(200)
     expect(authorized.headers.get('content-type')).toContain('text/html')

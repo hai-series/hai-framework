@@ -10,14 +10,39 @@
  */
 
 import type { HaiResult } from '@h-ai/core'
-import type { MiddlewareHandler } from 'hono'
+import type { Context, MiddlewareHandler } from 'hono'
 import type { ServRpcHttpConfig } from './serv-config.js'
 import type { ServContext } from './serv-context.js'
 import { Buffer } from 'node:buffer'
 import { timingSafeEqual } from 'node:crypto'
-import { err, HaiCommonError } from '@h-ai/core'
+import { core, err, HaiCommonError } from '@h-ai/core'
 import { servM } from './serv-i18n.js'
 import { resolveRequestLocale } from './serv-validation.js'
+
+const pipelineLogger = core.logger.child({ module: 'serv', scope: 'pipeline' })
+
+/**
+ * 懒加载 `@hono/node-server/conninfo`：仅在 Node 运行时可用。
+ *
+ * 在 Bun / Workers / Deno 等 Fetch runtime 下，该 sub-path 可能不存在；
+ * 用 try/catch 包住模块解析，让模块在非 Node 平台也能加载而不抛错。
+ * 解析失败时 `loopback` / `private-network` 模式会因取不到 IP 而 fail closed（403）。
+ */
+type GetConnInfoFn = (c: Context) => { remote: { address?: string } }
+let cachedGetConnInfo: GetConnInfoFn | null | undefined
+async function resolveGetConnInfo(): Promise<GetConnInfoFn | null> {
+  if (cachedGetConnInfo !== undefined)
+    return cachedGetConnInfo
+  try {
+    const mod = await import('@hono/node-server/conninfo')
+    cachedGetConnInfo = mod.getConnInfo as GetConnInfoFn
+  }
+  catch (cause) {
+    pipelineLogger.warn('getConnInfo unavailable in this runtime; loopback/private-network access modes will fail closed', { error: cause })
+    cachedGetConnInfo = null
+  }
+  return cachedGetConnInfo
+}
 
 const LOOPBACK_IPS = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1', 'localhost'])
 
@@ -93,11 +118,9 @@ export function requireInternalRPC(config: ServRpcHttpConfig): MiddlewareHandler
       return next()
     }
 
-    const ip = c.req.header('x-forwarded-for')?.split(',')[0]?.trim()
-      ?? c.req.header('x-real-ip')
-      ?? ''
+    const ip = await getRequestRemoteAddress(c) ?? ''
 
-    if (config.access === 'loopback' && !LOOPBACK_IPS.has(ip))
+    if (config.access === 'loopback' && !isLoopbackIP(ip))
       return c.json(buildHaiErrorBody(HaiCommonError.FORBIDDEN, servM('serv_errorForbidden', { locale })), 403)
 
     if (config.access === 'private-network' && !isPrivateNetworkIP(ip))
@@ -107,13 +130,35 @@ export function requireInternalRPC(config: ServRpcHttpConfig): MiddlewareHandler
   }
 }
 
+async function getRequestRemoteAddress(c: Context): Promise<string | undefined> {
+  const getConnInfo = await resolveGetConnInfo()
+  if (!getConnInfo)
+    return undefined
+  try {
+    return getConnInfo(c).remote.address
+  }
+  catch {
+    return undefined
+  }
+}
+
+function normalizeIpAddress(ip: string): string {
+  return ip.startsWith('::ffff:') ? ip.slice('::ffff:'.length) : ip
+}
+
+function isLoopbackIP(ip: string): boolean {
+  const normalized = normalizeIpAddress(ip)
+  return LOOPBACK_IPS.has(ip) || LOOPBACK_IPS.has(normalized)
+}
+
 function isPrivateNetworkIP(ip: string): boolean {
-  if (LOOPBACK_IPS.has(ip))
+  const normalized = normalizeIpAddress(ip)
+  if (isLoopbackIP(ip))
     return true
-  if (ip.startsWith('10.') || ip.startsWith('192.168.'))
+  if (normalized.startsWith('10.') || normalized.startsWith('192.168.'))
     return true
-  const second = Number(ip.split('.')[1])
-  return ip.startsWith('172.') && Number.isInteger(second) && second >= 16 && second <= 31
+  const second = Number(normalized.split('.')[1])
+  return normalized.startsWith('172.') && Number.isInteger(second) && second >= 16 && second <= 31
 }
 
 // ─────────────────────────────────────────────

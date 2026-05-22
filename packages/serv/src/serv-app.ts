@@ -16,7 +16,7 @@ import type { RefreshCookieConfig } from './serv-cookie-auth.js'
 import type { ServTransportConfig } from './serv-transport.js'
 import type { ServValidationFailureBody } from './serv-validation.js'
 import { readFile } from 'node:fs/promises'
-import { HaiCommonError } from '@h-ai/core'
+import { core, HaiCommonError } from '@h-ai/core'
 import { OpenAPIHandler } from '@orpc/openapi/fetch'
 import { RPCHandler } from '@orpc/server/fetch'
 import { Hono as HonoApp } from 'hono'
@@ -184,8 +184,15 @@ export function createApp<
   // - 在下游响应返回后加密
   if (options.transport) {
     const mgr = options.transport.crypto.transport.createServer({ maxClients: options.transport.maxClients })
-    if (!mgr.success)
-      throw new Error(mgr.error.message)
+    if (!mgr.success) {
+      // 直接抛已存在的 HaiError 实例，保留 code/system/module/cause，便于上层定位到
+      // "transport 初始化失败" 这一类配置错误，而非被 `new Error(message)` 抹平为字符串。
+      throw core.error.buildHaiErrorInst(
+        HaiCommonError.INTERNAL_ERROR,
+        mgr.error.message,
+        mgr.error,
+      )
+    }
     const keyExchangePath = `${http.apiPrefix}${options.transport.keyExchangePath ?? '/_hai/key-exchange'}`
     app.use('*', createTransportMiddleware(mgr.data, keyExchangePath, options.transport.excludePaths))
   }
@@ -221,10 +228,9 @@ export function createApp<
     app.get(docs.path, async (c) => {
       if (docs.requireAuth) {
         const context = await createContext({ request: c.req.raw })
-        // 注意：此处仅校验 Bearer Token 是否存在；真正的鉴权由具体业务的
-        // procedure 包装器（如 requireAuth）在调用 API 时完成。
-        // 文档页本身只是一个静态壳，不会泄漏受保护数据。
-        if (!context.accessToken)
+        // 与 procedure 层 requireAuth 语义保持一致：必须是已验证 session，
+        // 不能只检查 Bearer 字符串是否存在，避免任意伪造 Token 访问受保护文档。
+        if (!context.session)
           return c.json(buildHaiErrorBody(HaiCommonError.UNAUTHORIZED, servM('serv_errorUnauthorized', { locale: resolveRequestLocale(c.req.raw.headers) })), 401)
       }
       const specUrl = http.openapi === false ? undefined : http.openapi.path
@@ -315,6 +321,9 @@ async function localizeValidationResponse(response: Response, requestHeaders: He
   const issues = payload.data.issues
   const locale = resolveRequestLocale(requestHeaders)
   const errors = localizeZodError({ issues }, locale)
+  // 与 `validateInputOrFail` 输出对齐：errors 同时挂在 `error.cause` 上，
+  // 使两条校验路径的客户端解析逻辑一致（都从 `error.cause` 读取字段错误）。
+  // 顶层 `errors` 字段保留，兼容已有客户端读法。
   const body: ServValidationFailureBody = {
     success: false,
     error: {
@@ -323,6 +332,7 @@ async function localizeValidationResponse(response: Response, requestHeaders: He
       httpStatus: HaiCommonError.VALIDATION_ERROR.httpStatus,
       system: HaiCommonError.VALIDATION_ERROR.system,
       module: HaiCommonError.VALIDATION_ERROR.module,
+      cause: errors,
     },
     errors,
   }

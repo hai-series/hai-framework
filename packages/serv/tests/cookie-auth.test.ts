@@ -82,7 +82,7 @@ describe('mountRefreshCookieRoutes', () => {
       expect(cookies.filter(c => c.startsWith(COOKIE_NAME))).toHaveLength(0)
     })
 
-    it('登录成功后，响应体原封不动传回（tokens 等字段完整）', async () => {
+    it('登录成功后，响应体擦除 refreshToken 并保留 accessToken', async () => {
       const { app } = createTestApp()
       const res = await app.request(`${API_PREFIX}/auth/login`, {
         method: 'POST',
@@ -93,6 +93,7 @@ describe('mountRefreshCookieRoutes', () => {
       const body = await res.json()
       expect(body.success).toBe(true)
       expect(body.data.tokens.accessToken).toBe(MOCK_TOKENS.accessToken)
+      expect(body.data.tokens.refreshToken).toBeUndefined()
       expect(body.data.user.id).toBe('user-1')
     })
   })
@@ -162,6 +163,7 @@ describe('mountRefreshCookieRoutes', () => {
       const body = await res.json()
       expect(body.success).toBe(true)
       expect(body.data.tokens.accessToken).toBe(MOCK_TOKENS.accessToken)
+      expect(body.data.tokens.refreshToken).toBeUndefined()
 
       const cookies = res.headers.getSetCookie()
       const refreshCookie = cookies.find(c => c.startsWith(COOKIE_NAME))

@@ -289,11 +289,10 @@ describe('createHttpOnlyCookieTokenStorage', () => {
     expect(await storage.getRefreshToken()).toBeTruthy()
   })
 
-  it('与 TokenManager 协作：refresh 请求不在 body 中携带 refreshToken', async () => {
+  it('与 TokenManager 协作：refresh 请求不在 body 中携带 refreshToken，且接受服务端擦除后的响应', async () => {
     const storage = createHttpOnlyCookieTokenStorage()
     const newTokens = {
       accessToken: 'new-access',
-      refreshToken: 'server-managed',
       expiresIn: 3600,
       tokenType: 'Bearer' as const,
     }
@@ -311,6 +310,7 @@ describe('createHttpOnlyCookieTokenStorage', () => {
 
     // refresh 成功，access token 写入内存存储
     expect(result?.accessToken).toBe('new-access')
+    expect(result?.refreshToken).toBeTruthy()
     expect(await storage.getAccessToken()).toBe('new-access')
 
     // 请求体为空（不携带 refreshToken，依赖浏览器自动发送 httpOnly cookie）

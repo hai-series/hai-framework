@@ -1,6 +1,35 @@
+import type { HttpBindings } from '@hono/node-server'
+import type { ServRpcHttpConfig } from '../src/serv-config.js'
+import { IncomingMessage, ServerResponse } from 'node:http'
+import { Socket } from 'node:net'
 import { Hono } from 'hono'
 import { describe, expect, it } from 'vitest'
 import { requireInternalRPC, securityHeaders } from '../src/serv-pipeline.js'
+
+function createNodeBindings(remoteAddress: string): HttpBindings {
+  const socket = new Socket()
+  Object.defineProperty(socket, 'remoteAddress', { value: remoteAddress })
+  Object.defineProperty(socket, 'remotePort', { value: 12345 })
+  Object.defineProperty(socket, 'remoteFamily', { value: remoteAddress.includes(':') ? 'IPv6' : 'IPv4' })
+  const incoming = new IncomingMessage(socket)
+  const outgoing = new ServerResponse(incoming)
+  return { incoming, outgoing }
+}
+
+function createInternalRpcApp(config: ServRpcHttpConfig) {
+  const app = new Hono<{ Bindings: HttpBindings }>()
+  app.use('/rpc/*', requireInternalRPC(config))
+  app.get('/rpc/test', c => c.text('ok'))
+  return app
+}
+
+async function requestWithRemoteAddress(
+  app: ReturnType<typeof createInternalRpcApp>,
+  remoteAddress: string,
+  init?: RequestInit,
+): Promise<Response> {
+  return await app.fetch(new Request('http://test.local/rpc/test', init), createNodeBindings(remoteAddress))
+}
 
 describe('pipeline.hono.securityHeaders', () => {
   it('adds standard security headers to responses', async () => {
@@ -17,13 +46,9 @@ describe('pipeline.hono.securityHeaders', () => {
 
 describe('pipeline.hono.requireInternalRPC', () => {
   it('rejects loopback access from non-loopback IP', async () => {
-    const app = new Hono()
-    app.use('/rpc/*', requireInternalRPC({ prefix: '/rpc', access: 'loopback' }))
-    app.get('/rpc/test', c => c.text('ok'))
+    const app = createInternalRpcApp({ prefix: '/rpc', access: 'loopback' })
 
-    const response = await app.request('/rpc/test', {
-      headers: { 'x-real-ip': '8.8.8.8' },
-    })
+    const response = await requestWithRemoteAddress(app, '8.8.8.8')
     expect(response.status).toBe(403)
     expect(await response.json()).toEqual({
       success: false,
@@ -37,26 +62,29 @@ describe('pipeline.hono.requireInternalRPC', () => {
     })
   })
 
-  it('allows loopback access from 127.0.0.1', async () => {
-    const app = new Hono()
-    app.use('/rpc/*', requireInternalRPC({ prefix: '/rpc', access: 'loopback' }))
-    app.get('/rpc/test', c => c.text('ok'))
+  it('rejects spoofed forwarded loopback headers from external IP', async () => {
+    const app = createInternalRpcApp({ prefix: '/rpc', access: 'loopback' })
 
-    const response = await app.request('/rpc/test', {
-      headers: { 'x-real-ip': '127.0.0.1' },
+    const response = await requestWithRemoteAddress(app, '8.8.8.8', {
+      headers: { 'x-forwarded-for': '127.0.0.1', 'x-real-ip': '127.0.0.1' },
     })
+    expect(response.status).toBe(403)
+  })
+
+  it('allows loopback access from 127.0.0.1', async () => {
+    const app = createInternalRpcApp({ prefix: '/rpc', access: 'loopback' })
+
+    const response = await requestWithRemoteAddress(app, '127.0.0.1')
     expect(response.status).toBe(200)
   })
 
   it('allows private-network IPs in 10.0.0.0/8', async () => {
-    const app = new Hono()
-    app.use('/rpc/*', requireInternalRPC({ prefix: '/rpc', access: 'private-network' }))
-    app.get('/rpc/test', c => c.text('ok'))
+    const app = createInternalRpcApp({ prefix: '/rpc', access: 'private-network' })
 
-    const ok = await app.request('/rpc/test', { headers: { 'x-real-ip': '10.0.0.5' } })
+    const ok = await requestWithRemoteAddress(app, '10.0.0.5')
     expect(ok.status).toBe(200)
 
-    const denied = await app.request('/rpc/test', { headers: { 'x-real-ip': '8.8.8.8' } })
+    const denied = await requestWithRemoteAddress(app, '8.8.8.8')
     expect(denied.status).toBe(403)
   })
 

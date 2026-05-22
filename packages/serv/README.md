@@ -98,6 +98,14 @@ await api.init({
 })
 ```
 
+> **多节点部署提示**：传输加密的会话密钥保存在 **服务端进程内**，多副本部署时必须满足下列条件之一才能正常工作：
+>
+> - 在负载均衡层启用**会话粘性（sticky session）**，确保同一客户端命中同一节点；
+> - 或为每个客户端在每个节点首次访问时分别完成一次密钥协商；
+> - 或后续提供分布式密钥存储（roadmap）。
+>
+> 单节点部署无需额外配置。
+
 ### Token 认证（`iam` / `refreshCookie`）
 
 `serv.createApp` 推荐直接传入顶层 `iam` 句柄，自动派生两件事：
@@ -160,10 +168,10 @@ httpOnly cookie 模式将 refresh token 存储在服务端管理的 cookie 中�
 
 **工作原理：**
 
-1. 浏览器登录 → 服务端在响应中 `Set-Cookie: hai_refresh_token=...;HttpOnly`
+1. 浏览器登录 → 服务端在响应中 `Set-Cookie: hai_refresh_token=...;HttpOnly`，并从 JSON 响应体擦除 `refreshToken`
 2. Access token 存储在客户端内存（不持久化）
 3. Access token 过期时，浏览器自动携带 cookie 访问 `/auth/refresh`
-4. 服务端读取 cookie → 调用 `onRefresh` → 返回新 token 对 + 更新 cookie
+4. 服务端读取 cookie → 调用 `onRefresh` → 返回新 access token + 更新 cookie（响应体不暴露 refresh token）
 
 **服务端配置：**
 
@@ -224,7 +232,7 @@ await api.init({
 - `health`：默认 `{ path: '/health', readyPath: '/ready' }`
 - `openapi`：默认 `false`；启用：`{ path: '/openapi.json' }`
 - `docs`：默认 `false`；启用：`{ path: '/docs' }`（依赖 `openapi`）；启用后自动挂载 `/_hai/scalar.js`，从 `@scalar/api-reference` 的 browser bundle 提供本地 Scalar UI 脚本，无需外网 CDN
-- `rpc`：默认 `false`；启用：`{ prefix: '/rpc', access: 'loopback' | 'private' | { allowlist: [...] } }`
+- `rpc`：默认 `false`；启用：`{ prefix: '/rpc', access: 'loopback' | 'private-network' | 'gateway-only', gatewayHeader?, gatewaySecret? }`
 - `transport`：`createApp` 顶层配置，`{ crypto, keyExchangePath?, excludePaths?, maxClients? }`；默认密钥协商子路径 `/_hai/key-exchange`
 
 ## 错误处理

@@ -21,7 +21,7 @@ import type { ContentfulStatusCode } from 'hono/utils/http-status'
 import type { ServIam } from './serv-context.js'
 import process from 'node:process'
 import { IAM_AUTH_ROUTES } from '@h-ai/api-contract'
-import { HaiCommonError } from '@h-ai/core'
+import { core, HaiCommonError } from '@h-ai/core'
 import { getCookie } from 'hono/cookie'
 import { servM } from './serv-i18n.js'
 import { buildHaiErrorBody } from './serv-pipeline.js'
@@ -39,6 +39,8 @@ export interface RefreshTokenPair {
   readonly expiresIn?: number
   readonly tokenType?: string
 }
+
+type SafeRefreshTokenPair = Omit<RefreshTokenPair, 'refreshToken'>
 
 /**
  * Refresh Token Cookie 传输配置。
@@ -90,9 +92,11 @@ function resolveRefreshCookieConfig(
   const onRefresh = config.onRefresh
     ?? (iam ? (refreshToken: string) => iam.session.refresh(refreshToken) : undefined)
   if (!onRefresh) {
-    throw new Error(
-      '[serv] refreshCookie requires either top-level `iam` (recommended) '
-      + 'or `refreshCookie.onRefresh` callback',
+    // 抛 HaiError 实例而非裸 Error：保留 code/system/module，便于上层错误处理识别这是
+    // 配置缺失而非业务异常。该错误只在 createApp 装配阶段出现，不会泄漏到 HTTP 响应。
+    throw core.error.buildHaiErrorInst(
+      HaiCommonError.INTERNAL_ERROR,
+      '[serv] refreshCookie requires either top-level `iam` (recommended) or `refreshCookie.onRefresh` callback',
     )
   }
   return {
@@ -148,6 +152,31 @@ function extractRefreshTokenFromData(data: unknown): string | undefined {
   return typeof t.refreshToken === 'string' && t.refreshToken ? t.refreshToken : undefined
 }
 
+/** 擦除响应体中的 refreshToken，确保 httpOnly 模式下 JS 无法读取长期凭证。 */
+function stripRefreshTokenFromData(data: unknown): unknown {
+  if (!data || typeof data !== 'object' || Array.isArray(data))
+    return data
+  const d = data as Record<string, unknown>
+  const tokens = d.tokens
+  if (!tokens || typeof tokens !== 'object' || Array.isArray(tokens))
+    return data
+
+  const safeTokens: Record<string, unknown> = {}
+  for (const [key, value] of Object.entries(tokens)) {
+    if (key !== 'refreshToken')
+      safeTokens[key] = value
+  }
+  return { ...d, tokens: safeTokens }
+}
+
+function stripRefreshTokenFromPair(tokens: RefreshTokenPair): SafeRefreshTokenPair {
+  return {
+    accessToken: tokens.accessToken,
+    ...(tokens.expiresIn === undefined ? {} : { expiresIn: tokens.expiresIn }),
+    ...(tokens.tokenType === undefined ? {} : { tokenType: tokens.tokenType }),
+  }
+}
+
 // ─── 路由挂载 ─────────────────────────────────────────────────────────────────
 
 /* 由 createApp 在 mountOpenAPIRoutes 之前调用，在 Hono app 上挂载
@@ -175,16 +204,20 @@ export function mountRefreshCookieRoutes(
       // 消费响应体后必须重建 Response（ReadableStream 只能消费一次）
       const bodyText = await c.res.text()
       const headers = new Headers(c.res.headers)
+      let responseBody = bodyText
       try {
         const body = JSON.parse(bodyText) as { success?: boolean, data?: unknown }
         if (body.success) {
           const refreshToken = extractRefreshTokenFromData(body.data)
           if (refreshToken)
             headers.append('Set-Cookie', buildSetCookieHeader(cookieName, refreshToken, refreshCookiePath, maxAge, isSecure))
+          body.data = stripRefreshTokenFromData(body.data)
+          responseBody = JSON.stringify(body)
+          headers.delete('Content-Length')
         }
       }
       catch { /* 非 JSON 响应，跳过 cookie 写入 */ }
-      c.res = new Response(bodyText, { status: c.res.status, statusText: c.res.statusText, headers })
+      c.res = new Response(responseBody, { status: c.res.status, statusText: c.res.statusText, headers })
     })
   }
 
@@ -229,7 +262,7 @@ export function mountRefreshCookieRoutes(
 
     const tokens = result.data
     const setCookie = buildSetCookieHeader(cookieName, tokens.refreshToken, refreshCookiePath, maxAge, isSecure)
-    return new Response(JSON.stringify({ success: true, data: { tokens } }), {
+    return new Response(JSON.stringify({ success: true, data: { tokens: stripRefreshTokenFromPair(tokens) } }), {
       status: 200,
       headers: {
         'Content-Type': 'application/json',
