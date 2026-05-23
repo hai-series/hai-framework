@@ -1,0 +1,9 @@
+transport:
+  keyExchangePath: /api/_hai/key-exchange
+  requireEncryption: true
+  encryptResponse: true
+  excludePaths:
+    - /api/storage
+    - /api/public
+    - /api/auth/profile/avatar
+  maxClients: 10000

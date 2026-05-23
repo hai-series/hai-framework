@@ -1,9 +1,11 @@
 import { kit } from '@h-ai/kit'
+import '$lib/config/browser-transport.js'
 
 /**
- * 浏览器端统一附加 Bearer Token。
+ * 浏览器端统一处理同源请求安全能力。
  *
- * 覆盖同源请求（包括 /api 与 SvelteKit 的 __data 请求），
- * 让 server load 与 API 都能读取 Authorization 头。
+ * - 自动附加 Authorization（若浏览器端存在 token）
+ * - transport 启用时，`browser-transport.ts` 会在应用启动时接管
+ *   同源 `/api/*` 与 SvelteKit `__data.json` 的全局 fetch
  */
 export const handleFetch = kit.auth.createHandleFetch()

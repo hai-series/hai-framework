@@ -13,18 +13,25 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { cwd } from 'node:process'
 
-export default function globalSetup() {
-  const dataDir = path.resolve(cwd(), 'data')
+function getE2EDataDirs() {
+  const root = cwd()
+  return fs.readdirSync(root, { withFileTypes: true })
+    .filter(entry => entry.isDirectory() && entry.name.startsWith('data-e2e-transport-'))
+    .map(entry => path.resolve(root, entry.name))
+}
 
-  if (fs.existsSync(dataDir)) {
-    try {
-      fs.rmSync(dataDir, { recursive: true, force: true })
-      // eslint-disable-next-line no-console -- 全局初始化脚本，需要输出清理结果
-      console.log(`[E2E Setup] Cleaned previous test data directory: ${dataDir}`)
-    }
-    catch {
-      // eslint-disable-next-line no-console
-      console.log(`[E2E Setup] Could not remove ${dataDir} (file may be locked). Tests will continue with existing data.`)
+export default function globalSetup() {
+  for (const dataDir of getE2EDataDirs()) {
+    if (fs.existsSync(dataDir)) {
+      try {
+        fs.rmSync(dataDir, { recursive: true, force: true })
+        // eslint-disable-next-line no-console -- 全局初始化脚本，需要输出清理结果
+        console.log(`[E2E Setup] Cleaned previous test data directory: ${dataDir}`)
+      }
+      catch {
+        // eslint-disable-next-line no-console
+        console.log(`[E2E Setup] Could not remove ${dataDir} (file may be locked). Tests will continue with existing data.`)
+      }
     }
   }
 }

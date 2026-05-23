@@ -8,6 +8,7 @@
 
 import type { Handle } from '@sveltejs/kit'
 import process from 'node:process'
+import { adminConsoleKitConfig } from '$lib/config/kit-config.js'
 import { paraglideMiddleware } from '$lib/paraglide/server.js'
 import { initApp } from '$lib/server/init.js'
 import { crypto } from '@h-ai/crypto'
@@ -17,10 +18,26 @@ import { kit } from '@h-ai/kit'
 // 初始化应用（包含数据库、缓存、IAM 等模块）
 let appInitPromise: Promise<void> | null = null
 
-// 服务端初始化加密模块 —— kit.createHandle 在模块加载时同步执行，
-// 需要 crypto 模块就绪才能生成传输加密密钥对。
+const kitTransportConfig = adminConsoleKitConfig.transport
+const handleTransportConfig = kitTransportConfig === false
+  ? false
+  : {
+      keyExchangePath: kitTransportConfig.keyExchangePath,
+      excludePaths: [...kitTransportConfig.excludePaths],
+      requireEncryption: kitTransportConfig.requireEncryption,
+      encryptResponse: kitTransportConfig.encryptResponse,
+      maxClients: kitTransportConfig.maxClients,
+    }
+const transportPublicPaths = kitTransportConfig === false
+  ? []
+  : [kitTransportConfig.keyExchangePath]
+
+// `_kit.yml` 启用 transport 时，kit.createHandle 会在模块加载阶段同步构建
+// 传输加密中间件，需要 crypto 模块先准备好密钥能力。
 // crypto.init() 虽然签名为 async，但函数体无 await，副作用同步生效。
-crypto.init()
+if (handleTransportConfig !== false) {
+  void crypto.init()
+}
 
 async function ensureAppInitialized() {
   if (!appInitPromise) {
@@ -144,7 +161,7 @@ const haiHandle = kit.createHandle({
       '/api/auth/reset-password',
       '/api/storage/*',
       '/api/public/*',
-      '/api/_hai/*',
+      ...transportPublicPaths,
     ],
     operations: () => iam.auth,
   },
@@ -152,10 +169,12 @@ const haiHandle = kit.createHandle({
     windowMs: 60000,
     maxRequests: process.env.HAI_E2E === '1' ? 5000 : 100,
   },
-  crypto: {
-    crypto,
-    transport: { requireEncryption: false },
-  },
+  crypto: handleTransportConfig === false
+    ? undefined
+    : {
+        crypto,
+        transport: handleTransportConfig,
+      },
 })
 
 export const handle: Handle = kit.sequence(i18nHandle, haiHandle)
