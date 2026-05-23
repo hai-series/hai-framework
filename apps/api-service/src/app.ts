@@ -1,9 +1,16 @@
+import type { ServConfig } from '@h-ai/serv'
 import { aiContract, createApiContract, iamContract, storageContract } from '@h-ai/api-contract'
+import { core } from '@h-ai/core'
+import { crypto } from '@h-ai/crypto'
 import { iam } from '@h-ai/iam'
 import { serv } from '@h-ai/serv'
 import { createApiServiceProcedures } from './server/procedures/index.js'
 
 const contract = createApiContract({ iam: iamContract, storage: storageContract, ai: aiContract })
+
+interface CreateApiServiceAppOptions {
+  transport?: 'config' | 'disabled'
+}
 
 /**
  * 创建 Hono API Service 应用。
@@ -15,17 +22,24 @@ const contract = createApiContract({ iam: iamContract, storage: storageContract,
  * - access token 校验（填充 `context.session`）
  * - refresh token 轮换（若启用 `refreshCookie`）
  */
-export function createApiServiceApp() {
+export function createApiServiceApp(options: CreateApiServiceAppOptions = {}) {
+  const servConfig = core.config.getOrThrow<ServConfig>('serv')
+  const transportMode = options.transport ?? 'config'
+  const transport = transportMode === 'disabled' || servConfig.transport === false
+    ? undefined
+    : {
+        crypto,
+        keyExchangePath: servConfig.transport.keyExchangePath,
+        excludePaths: [...servConfig.transport.excludePaths],
+        maxClients: servConfig.transport.maxClients,
+      }
+
   return serv.createApp({
     contract,
     procedures: createApiServiceProcedures(),
-    http: {
-      apiPrefix: '/api/v1',
-      openapi: { path: '/openapi.json' },
-      docs: { path: '/docs' },
-      health: { path: '/health', readyPath: '/ready' },
-      rpc: false,
-    },
+    http: servConfig.http,
     iam,
+    // transport 配置统一来自 config/_serv.yml，避免 key-exchange / 白名单路径散落在代码里。
+    transport,
   })
 }

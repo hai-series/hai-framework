@@ -18,8 +18,8 @@
     "preview": "vite preview",
     "check": "svelte-check --tsconfig ./tsconfig.json",
     "typecheck": "svelte-check --tsconfig ./tsconfig.json",
-    "lint": "eslint .",
-    "lint:fix": "eslint . --fix",
+    "lint": "eslint src tests vite.config.ts svelte.config.js",
+    "lint:fix": "eslint src tests vite.config.ts svelte.config.js --fix",
     "test": "vitest run",
     "test:watch": "vitest",
     "clean": "rimraf dist .turbo src-tauri/target",
@@ -30,9 +30,11 @@
   "dependencies": {
     "@h-ai/api-client": "workspace:*",
     "@h-ai/api-contract": "workspace:*",
+    "@h-ai/crypto": "workspace:*",
     "@h-ai/ui": "workspace:*",
     "@tauri-apps/api": "catalog:",
     "@tauri-apps/plugin-shell": "catalog:",
+    "yaml": "catalog:",
     "zod": "catalog:"
   },
   "devDependencies": {

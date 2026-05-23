@@ -16,8 +16,8 @@
     "preview": "node dist/index.js",
     "check": "tsc --noEmit",
     "test": "vitest run",
-    "lint": "eslint .",
-    "lint:fix": "eslint . --fix",
+    "lint": "eslint src tests tsup.config.ts vitest.config.ts",
+    "lint:fix": "eslint src tests tsup.config.ts vitest.config.ts --fix",
     "clean": "rimraf dist .turbo"
   },
   "dependencies": {
@@ -25,6 +25,7 @@
     "@h-ai/api-contract": "workspace:*",
     "@h-ai/cache": "workspace:*",
     "@h-ai/core": "workspace:*",
+    "@h-ai/crypto": "workspace:*",
     "@h-ai/iam": "workspace:*",
     "@h-ai/reldb": "workspace:*",
     "@h-ai/serv": "workspace:*",
