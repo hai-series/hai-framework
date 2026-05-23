@@ -200,7 +200,7 @@ flowchart TD
 4. 普通业务请求必须带 `X-Client-Id`，并且服务端必须已经保存该客户端公钥。
 5. 若请求有 body，middleware 先解密并重写 `c.req.raw`。
 6. 下游 oRPC / Hono 逻辑看到的是**明文 JSON 请求**。
-7. 下游生成 JSON 响应后，middleware 再尝试把响应加密。
+7. 下游生成 JSON 响应后，middleware 再尝试把响应加密；无法加密时 fail-closed，返回错误而不是明文透传。
 8. 客户端收到的是密文 payload，由 `@h-ai/api-client` / `@h-ai/crypto` 侧解密回明文。
 
 ## 认证与上下文填充逻辑
@@ -372,30 +372,29 @@ const app = serv.createApp({
 
 下游业务逻辑执行完后，middleware 会继续尝试加密响应：
 
-1. 只处理 `application/json` 响应。
-2. 若 `Content-Length` 明确大于 `1 MiB`，直接跳过加密。
+1. 只允许 `application/json` 响应进入加密流程；非 JSON 业务响应会返回加密失败错误。
+2. 若 `Content-Length` 明确大于 `1 MiB`，直接返回加密失败错误。
 3. 若没有 `Content-Length`，会克隆响应并读取 body，再做一次体积判断。
 4. 调 `manager.encryptResponse(clientId, bodyText)` 加密。
 5. 写回新的 `Response`，并设置加密标记 header。
 
-### 为什么超过 `1 MiB` 不加密
+### 为什么超过 `1 MiB` 会 fail-closed
 
 这是有意的保护策略，原因很朴素：
 
 - 响应加密需要先把 JSON body 读到内存里
 - 大 body 会带来额外内存放大
-- 因此超过上限时选择“明文透传”，优先保证服务稳定性
+- 因此超过上限时返回加密失败错误，既保证服务稳定性，也避免明文业务数据泄露
 
-### 会被跳过加密的情况
+### 不会加密但允许返回的情况
 
-以下情况不会走响应加密：
+以下情况不会走响应加密，且不会泄露业务明文：
 
 - key exchange 路由
 - `excludePaths` 命中的路径
-- 非 JSON 响应
 - 空响应体
-- 响应体超过 1 MiB
-- `encryptResponse()` 失败
+
+非 JSON 业务响应、响应体超过 1 MiB 或 `encryptResponse()` 失败都会返回错误。
 
 ### 多节点部署注意事项
 

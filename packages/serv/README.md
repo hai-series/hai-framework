@@ -143,6 +143,8 @@ const app = serv.createApp({
 >
 > 单节点部署无需额外配置。
 
+> **安全策略**：启用 `transport` 后，除 `excludePaths` 与密钥协商端点外，业务请求必须携带有效 `X-Client-Id`。缺失或未知 clientId 会返回 400；响应体无法加密、非 JSON 业务响应或超过单次加密上限时返回错误，不会明文透传业务数据。
+
 ### Token 认证（`iam` / `refreshCookie`）
 
 `serv.createApp` 推荐直接传入顶层 `iam` 句柄，自动派生两件事：
