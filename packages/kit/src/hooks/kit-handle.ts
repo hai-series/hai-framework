@@ -105,14 +105,18 @@ export function createHandle(config: HandleConfig = {}): Handle {
   }
   const allMiddleware = [...builtinMiddleware, ...customMiddleware]
 
-  // ── 传输加密中间件自动注入到最外层 ──
-  const finalMiddleware = buildTransportMiddleware(allMiddleware, cryptoConfig)
+  // ── 传输加密中间件单独包裹整个 handle 流程 ──
+  const transportMiddleware = buildTransportMiddleware(cryptoConfig)
 
   // ── Cookie 加密配置预处理 ──
   const cookieProxyConfig = buildCookieProxyConfig(cryptoConfig)
 
   return async ({ event, resolve }) => {
     const requestId = generateId('req')
+    const context: MiddlewareContext = {
+      event,
+      requestId,
+    }
 
     // 注入 requestId 到 event.locals
     // Workaround：SvelteKit App.Locals 是项目侧声明的 interface，库代码无法靠模块增强检查动态 key。
@@ -129,102 +133,104 @@ export function createHandle(config: HandleConfig = {}): Handle {
       })
     }
 
-    try {
-      // ── A2A 端点拦截（在认证/守卫之前，A2A 有专用认证） ──
-      if (a2aResolved) {
-        const a2aResponse = await handleA2ARequest(event, requestId, a2aResolved)
-        if (a2aResponse)
-          return a2aResponse
-      }
+    const runRequest = async (): Promise<Response> => {
+      try {
+        // ── A2A 端点拦截（在认证/守卫之前，A2A 有专用认证） ──
+        if (a2aResolved) {
+          const a2aResponse = await handleA2ARequest(event, requestId, a2aResolved)
+          if (a2aResponse)
+            return a2aResponse
+        }
 
-      // ── 会话解析 ──
-      let session: SessionData | undefined
+        // ── 会话解析 ──
+        let session: SessionData | undefined
 
-      if (authConfig) {
-        const token = getAccessToken(event.request, event.cookies)
-        if (token) {
-          session = await authConfig.verifyToken(token) ?? undefined
-          locals.session = session
-          if (session) {
-            locals.accessToken = token
+        if (authConfig) {
+          const token = getAccessToken(event.request, event.cookies)
+          if (token) {
+            session = await authConfig.verifyToken(token) ?? undefined
+            locals.session = session
+            if (session) {
+              locals.accessToken = token
+            }
           }
         }
-      }
+        context.session = session
 
-      // ── 执行守卫 ──
-      for (const guardConfig of guards) {
-        const guardResult = await executeGuard(guardConfig, event, session)
+        // ── 执行守卫 ──
+        for (const guardConfig of guards) {
+          const guardResult = await executeGuard(guardConfig, event, session)
 
-        if (!guardResult.allowed) {
-          if (guardResult.redirect) {
-            return new Response(null, {
-              status: 302,
-              headers: { Location: guardResult.redirect },
-            })
-          }
+          if (!guardResult.allowed) {
+            if (guardResult.redirect) {
+              return new Response(null, {
+                status: 302,
+                headers: { Location: guardResult.redirect },
+              })
+            }
 
-          return new Response(
-            JSON.stringify({
-              success: false,
-              error: {
-                code: 'FORBIDDEN',
-                message: guardResult.message ?? kitM('kit_accessDenied'),
+            return new Response(
+              JSON.stringify({
+                success: false,
+                error: {
+                  code: 'FORBIDDEN',
+                  message: guardResult.message ?? kitM('kit_accessDenied'),
+                },
+                requestId,
+              }),
+              {
+                status: guardResult.status ?? 403,
+                headers: { 'Content-Type': 'application/json' },
               },
-              requestId,
-            }),
-            {
-              status: guardResult.status ?? 403,
-              headers: { 'Content-Type': 'application/json' },
-            },
-          )
+            )
+          }
         }
+
+        // ── 中间件链 ──
+        const response = await executeMiddlewareChain(
+          allMiddleware,
+          context,
+          () => resolve(event),
+        )
+
+        return response
       }
+      catch (error) {
+        // SvelteKit 控制流异常（redirect / error）必须继续抛出
+        if (isSvelteKitControlFlow(error)) {
+          throw error
+        }
 
-      // ── 中间件链 ──
-      const context: MiddlewareContext = {
-        event,
-        session,
-        requestId,
-      }
+        core.logger.error('Request failed', { requestId, error: error instanceof Error ? error.message : error })
 
-      const response = await executeMiddlewareChain(
-        finalMiddleware,
-        context,
-        () => resolve(event),
-      )
+        if (onError) {
+          return onError(error, event)
+        }
 
-      response.headers.set('X-Request-Id', requestId)
-
-      return response
-    }
-    catch (error) {
-      // SvelteKit 控制流异常（redirect / error）必须继续抛出
-      if (isSvelteKitControlFlow(error)) {
-        throw error
-      }
-
-      core.logger.error('Request failed', { requestId, error: error instanceof Error ? error.message : error })
-
-      if (onError) {
-        return onError(error, event)
-      }
-
-      // 默认错误响应
-      return new Response(
-        JSON.stringify({
-          success: false,
-          error: {
-            code: 'INTERNAL_ERROR',
-            message: kitM('kit_internalError'),
+        // 默认错误响应
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: {
+              code: 'INTERNAL_ERROR',
+              message: kitM('kit_internalError'),
+            },
+            requestId,
+          }),
+          {
+            status: 500,
+            headers: { 'Content-Type': 'application/json' },
           },
-          requestId,
-        }),
-        {
-          status: 500,
-          headers: { 'Content-Type': 'application/json' },
-        },
-      )
+        )
+      }
     }
+
+    const response = transportMiddleware
+      ? await transportMiddleware(context, runRequest)
+      : await runRequest()
+
+    response.headers.set('X-Request-Id', requestId)
+    return response
   }
 }
 
@@ -342,15 +348,14 @@ function matchPath(pathname: string, pattern: string): boolean {
  * 构建最终中间件链：将传输加密中间件自动插入到最外层
  */
 function buildTransportMiddleware(
-  userMiddleware: Middleware[],
   cryptoConfig: HandleConfig['crypto'],
-): Middleware[] {
+): Middleware | null {
   if (!cryptoConfig?.transport)
-    return userMiddleware
+    return null
 
   const transportOpts = typeof cryptoConfig.transport === 'object' ? cryptoConfig.transport : {}
 
-  const transportMw = transportEncryptionMiddleware({
+  return transportEncryptionMiddleware({
     enabled: true,
     crypto: cryptoConfig.crypto,
     keyExchangePath: transportOpts.keyExchangePath,
@@ -359,8 +364,6 @@ function buildTransportMiddleware(
     maxClients: transportOpts.maxClients,
     requireEncryption: transportOpts.requireEncryption,
   })
-
-  return [transportMw, ...userMiddleware]
 }
 
 /**

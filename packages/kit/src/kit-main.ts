@@ -5,7 +5,7 @@
  * @module kit-main
  */
 
-import { createKitClient } from './client/kit-client.js'
+import { createKitClient, installBrowserTransportFetch } from './client/kit-client.js'
 import { defineCrud } from './crud/kit-crud.js'
 import { hasPermission, requirePermission } from './guards/kit-permission.js'
 import { createHandle, sequence } from './hooks/kit-handle.js'
@@ -107,6 +107,8 @@ export const kit = {
   client: {
     /** 创建统一客户端（CSRF + 传输加密透明合并） */
     create: createKitClient,
+    /** 安装浏览器全局 fetch transport 包装（覆盖 /api/* 与 SvelteKit __data.json） */
+    installBrowserTransportFetch,
   },
 
   // ─── 认证工具 ───

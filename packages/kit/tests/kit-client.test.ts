@@ -1,7 +1,7 @@
 import type { TransportEncryptionManager } from '@h-ai/crypto'
 import { crypto, TRANSPORT_PROTOCOL } from '@h-ai/crypto'
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createKitClient } from '../src/client/kit-client.js'
+import { createKitClient, installBrowserTransportFetch } from '../src/client/kit-client.js'
 
 const KEY_EXCHANGE_URL = `/api${TRANSPORT_PROTOCOL.DEFAULT_KEY_EXCHANGE_PATH}`
 
@@ -20,6 +20,7 @@ afterEach(() => {
   vi.unstubAllGlobals()
   vi.restoreAllMocks()
   clearDocumentCookie()
+  clearBrowserTransportFetchState()
 })
 
 afterAll(async () => {
@@ -37,6 +38,16 @@ function setDocumentCookie(cookie: string) {
 function clearDocumentCookie() {
   // @ts-expect-error 清理测试用 document mock
   delete globalThis.document
+}
+
+function clearBrowserTransportFetchState() {
+  const fetchState = globalThis as typeof globalThis & {
+    __haiKitOriginalFetch?: typeof fetch
+    __haiKitTransportFetchInstalled?: boolean
+  }
+
+  delete fetchState.__haiKitOriginalFetch
+  delete fetchState.__haiKitTransportFetchInstalled
 }
 
 function expectManager(result: ReturnType<typeof crypto.transport.createServer>): TransportEncryptionManager {
@@ -84,6 +95,19 @@ function createTransportFetch(options: { encryptedResponseBody?: string } = {}) 
     }
 
     return new Response('OK', { status: 200 })
+  })
+}
+
+function stubBrowserFetch(fetchImpl: typeof fetch) {
+  vi.stubGlobal('fetch', fetchImpl)
+  vi.stubGlobal('window', {
+    location: { origin: 'http://localhost' },
+    fetch: fetchImpl,
+    localStorage: {
+      getItem: () => null,
+      setItem: () => {},
+      removeItem: () => {},
+    },
   })
 }
 
@@ -220,6 +244,27 @@ describe('createKitClient - 传输加密', () => {
     expect(headers.has('Content-Type')).toBe(false)
   })
 
+  it('excludePaths 命中时跳过 transport', async () => {
+    fetchSpy = createTransportFetch()
+    vi.stubGlobal('fetch', fetchSpy)
+    const client = createKitClient({
+      transport: {
+        crypto,
+        excludePaths: ['/api/public'],
+      },
+    })
+
+    await client.apiFetch('/api/public/health')
+
+    expect(fetchSpy).toHaveBeenCalledTimes(1)
+    const [url, init] = fetchSpy.mock.calls[0]!
+    expect(url).toBe('/api/public/health')
+
+    const headers = new Headers(init.headers)
+    expect(headers.has(TRANSPORT_PROTOCOL.CLIENT_ID_HEADER)).toBe(false)
+    expect(headers.has(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER)).toBe(false)
+  })
+
   it('加密响应自动解密', async () => {
     const originalData = JSON.stringify({ users: ['Alice', 'Bob'] })
     fetchSpy = createTransportFetch({ encryptedResponseBody: originalData })
@@ -331,5 +376,73 @@ describe('createKitClient - auth', () => {
     const [, init] = fetchSpy.mock.calls[0]!
     const headers = new Headers(init.headers)
     expect(headers.get('Authorization')).toBe('Bearer custom_token')
+  })
+})
+
+describe('installBrowserTransportFetch', () => {
+  it('自动保护 SvelteKit __data.json 请求', async () => {
+    const originalPayload = JSON.stringify({ type: 'data', nodes: [] })
+    fetchSpy = createTransportFetch({ encryptedResponseBody: originalPayload })
+    stubBrowserFetch(fetchSpy)
+
+    installBrowserTransportFetch({ crypto, keyExchangeUrl: KEY_EXCHANGE_URL })
+
+    const response = await fetch('http://localhost/admin/iam/roles/__data.json?x-sveltekit-invalidated=011')
+
+    expect(fetchSpy).toHaveBeenCalledTimes(2)
+    const dataRequest = toRequest(fetchSpy.mock.calls[1]![0], fetchSpy.mock.calls[1]![1])
+    expect(dataRequest.headers.get(TRANSPORT_PROTOCOL.CLIENT_ID_HEADER)).toBeTruthy()
+    expect(dataRequest.headers.get(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER)).toBeNull()
+    expect(response.headers.get(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER)).toBeNull()
+    expect(await response.text()).toBe(originalPayload)
+  })
+
+  it('普通页面文档请求保持明文透传', async () => {
+    fetchSpy = vi.fn().mockResolvedValue(new Response('<html>ok</html>', {
+      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+    }))
+    stubBrowserFetch(fetchSpy)
+
+    installBrowserTransportFetch({ crypto, keyExchangeUrl: KEY_EXCHANGE_URL })
+
+    const response = await fetch('http://localhost/admin/iam/roles')
+
+    expect(fetchSpy).toHaveBeenCalledTimes(1)
+    const request = toRequest(fetchSpy.mock.calls[0]![0], fetchSpy.mock.calls[0]![1])
+    expect(request.headers.has(TRANSPORT_PROTOCOL.CLIENT_ID_HEADER)).toBe(false)
+    expect(await response.text()).toBe('<html>ok</html>')
+  })
+
+  it('multipart 上传请求保持原样透传', async () => {
+    const formData = new FormData()
+    formData.append('file', new Blob(['avatar'], { type: 'image/png' }), 'avatar.png')
+    stubBrowserFetch(fetchSpy)
+
+    installBrowserTransportFetch({ crypto, keyExchangeUrl: KEY_EXCHANGE_URL })
+
+    await fetch('http://localhost/api/auth/profile/avatar', {
+      method: 'POST',
+      body: formData,
+    })
+
+    expect(fetchSpy).toHaveBeenCalledTimes(1)
+    const request = toRequest(fetchSpy.mock.calls[0]![0], fetchSpy.mock.calls[0]![1])
+    expect(request.headers.has(TRANSPORT_PROTOCOL.CLIENT_ID_HEADER)).toBe(false)
+    expect(request.headers.get('Content-Type')).toContain('multipart/form-data')
+  })
+
+  it('重复安装不会叠加多层 fetch 包装', async () => {
+    fetchSpy = createTransportFetch()
+    stubBrowserFetch(fetchSpy)
+
+    installBrowserTransportFetch({ crypto, keyExchangeUrl: KEY_EXCHANGE_URL })
+    installBrowserTransportFetch({ crypto, keyExchangeUrl: KEY_EXCHANGE_URL })
+
+    await fetch('http://localhost/api/users')
+
+    const keyExchangeCount = fetchSpy.mock.calls.filter(
+      call => toRequest(call[0], call[1]).url.endsWith(KEY_EXCHANGE_URL),
+    ).length
+    expect(keyExchangeCount).toBe(1)
   })
 })
