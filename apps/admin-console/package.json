@@ -16,10 +16,10 @@
     "build": "vite build",
     "preview": "vite preview",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
-    "lint": "eslint .",
+    "lint": "eslint src tests e2e playwright.config.ts playwright.transport-on.config.ts svelte.config.js vite.config.ts",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:e2e": "playwright test",
+    "test:e2e": "playwright test && playwright test -c playwright.transport-on.config.ts",
     "clean": "rimraf .svelte-kit build .turbo"
   },
   "dependencies": {
@@ -36,6 +36,7 @@
     "@h-ai/storage": "workspace:*",
     "@h-ai/ui": "workspace:*",
     "@h-ai/vecdb": "workspace:*",
+    "yaml": "catalog:",
     "zod": "catalog:"
   },
   "devDependencies": {

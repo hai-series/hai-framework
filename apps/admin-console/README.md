@@ -5,6 +5,7 @@
 ## ✨ 特性
 
 - 🎨 **现代化 UI** — Svelte 5 Runes + TailwindCSS v4 + DaisyUI，32 套主题随时切换
+- 🔒 **API 传输加密** — 浏览器与 `/api/*` 默认通过 `@h-ai/crypto` 做密钥协商与请求/响应加解密
 - 🔐 **完整认证流** — 登录 / 注册 / 忘记密码 / 重置密码，均基于 @h-ai/ui 场景组件
 - 👥 **IAM 管理** — 用户、角色、权限 CRUD，操作审计日志
 - 🧩 **UI Gallery** — 69+ @h-ai/ui 组件的交互式展览（4 分类标签页）
@@ -102,9 +103,12 @@ HAI_STORAGE_PATH=./data/uploads
 - `config/_db.yml`：数据库连接（SQLite / PostgreSQL / MySQL）
 - `config/_cache.yml`：缓存类型与连接参数（memory / redis）
 - `config/_iam.yml`：认证策略、密码策略、JWT、RBAC、种子数据
+- `config/_kit.yml`：同源 transport 加密（密钥协商路径、是否强制加密、明文例外路径）
 - `config/_storage.yml`：存储类型及参数（local / S3）
 
-配置值支持 `${ENV_VAR:default}` 语法引用环境变量。
+除 `config/_kit.yml` 外，配置值支持 `${ENV_VAR:default}` 语法引用环境变量。
+`config/_kit.yml` 会同时被 `hooks.server.ts` 与浏览器端 `apiFetch` 静态导入，
+因此只应放公开路径/开关配置，不要写入密钥；修改后需重启开发服务器。
 
 ## 🌍 国际化 (i18n)
 
@@ -139,6 +143,8 @@ HAI_STORAGE_PATH=./data/uploads
 1. 在 `src/routes/api/` 下创建 `+server.ts`
 2. 使用 @h-ai/kit 的 response helper 返回标准格式
 3. 如需认证保护，路由会自动走 `hooks.server.ts` 中的 guard 逻辑（`/api/auth/*` 和 `/api/public/*` 除外）
+4. 浏览器侧调用优先统一走 `$lib/utils/api.ts` 导出的 `apiFetch()`，以自动获得 CSRF + transport 加密
+5. 若端点必须支持浏览器原生明文请求（如 `multipart/form-data` 上传、`<img src>` 公开文件、外部探活），需同步加入 `config/_kit.yml` 的 `transport.excludePaths`
 
 ### 添加新业务服务
 
