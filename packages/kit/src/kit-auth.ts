@@ -67,6 +67,12 @@ export interface BrowserTokenStore {
   clear: () => void
 }
 
+/** 浏览器端 handleFetch 配置。 */
+export interface CreateHandleFetchConfig {
+  /** 自定义浏览器 token 存储；不提供时默认读取 `hai_access_token` localStorage。 */
+  tokenStore?: BrowserTokenStore
+}
+
 const defaultBrowserTokenStore = createTokenStore()
 
 // ─── 内部工具（仅 kit 包内使用） ───
@@ -344,22 +350,47 @@ export function clearBrowserToken(): void {
 
 // ─── HandleFetch 工厂（通过 kit.auth 暴露） ───
 
+function isBrowserTokenStore(value: BrowserTokenStore | CreateHandleFetchConfig | undefined): value is BrowserTokenStore {
+  return Boolean(value)
+    && typeof value === 'object'
+    && 'get' in value
+    && typeof value.get === 'function'
+    && 'set' in value
+    && typeof value.set === 'function'
+    && 'clear' in value
+    && typeof value.clear === 'function'
+}
+
 /**
- * 创建浏览器端同源请求自动附加 Access Token 的 HandleFetch。
+ * 创建浏览器端同源请求 HandleFetch。
+ *
+ * 默认行为：自动附加 Authorization（若 localStorage 中存在 token）。
+ * 传输加密应通过 `kit.client.installBrowserTransportFetch()` 在浏览器启动时统一安装，
+ * 避免在 SvelteKit handleFetch 与全局 fetch 之间重复加密。
  */
-export function createHandleFetch(tokenStore: BrowserTokenStore = createTokenStore()): HandleFetch {
+export function createHandleFetch(config?: CreateHandleFetchConfig): HandleFetch
+export function createHandleFetch(tokenStore?: BrowserTokenStore): HandleFetch
+export function createHandleFetch(
+  tokenStoreOrConfig: BrowserTokenStore | CreateHandleFetchConfig = createTokenStore(),
+): HandleFetch {
+  const normalizedConfig = isBrowserTokenStore(tokenStoreOrConfig)
+    ? { tokenStore: tokenStoreOrConfig }
+    : tokenStoreOrConfig
+
+  const tokenStore = normalizedConfig.tokenStore ?? createTokenStore()
+
   return async ({ event, request, fetch }) => {
     const requestUrl = new URL(request.url)
     if (requestUrl.origin !== event.url.origin)
       return fetch(request)
 
-    const token = tokenStore.get()
-    if (!token)
-      return fetch(request)
-
     const headers = new Headers(request.headers)
-    headers.set('Authorization', `Bearer ${token}`)
+    const token = tokenStore.get()
+    if (token) {
+      headers.set('Authorization', `Bearer ${token}`)
+    }
 
-    return fetch(new Request(request, { headers }))
+    const nextRequest = new Request(request, { headers })
+    return fetch(nextRequest)
   }
 }

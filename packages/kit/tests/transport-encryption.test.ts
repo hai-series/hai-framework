@@ -1,4 +1,6 @@
+import type { CryptoFunctions, TransportEncryptionManager } from '@h-ai/crypto'
 import type { Handle, RequestEvent } from '@sveltejs/kit'
+import { err } from '@h-ai/core'
 import { crypto, TRANSPORT_PROTOCOL } from '@h-ai/crypto'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { kit } from '../src/kit-main.js'
@@ -23,13 +25,54 @@ function createEvent(request: Request): RequestEvent {
   } as unknown as RequestEvent
 }
 
+function createEventWithUrl(request: Request, eventUrl: string, isDataRequest = false): RequestEvent {
+  const event = createEvent(request)
+  Object.defineProperty(event, 'url', {
+    value: new URL(eventUrl),
+    writable: true,
+    configurable: true,
+  })
+  Object.defineProperty(event, 'isDataRequest', {
+    value: isDataRequest,
+    writable: true,
+    configurable: true,
+  })
+  return event
+}
+
 async function dispatch(
   handle: Handle,
   request: Request,
   resolve: (event: RequestEvent) => Response | Promise<Response>,
+  options?: { eventUrl?: string, isDataRequest?: boolean },
 ): Promise<Response> {
-  const event = createEvent(request)
+  const event = options?.eventUrl
+    ? createEventWithUrl(request, options.eventUrl, options.isDataRequest ?? false)
+    : createEvent(request)
   return handle({ event, resolve })
+}
+
+function createCryptoWithTransportServer(
+  createServer: CryptoFunctions['transport']['createServer'],
+): CryptoFunctions {
+  return {
+    ...crypto,
+    transport: {
+      ...crypto.transport,
+      createServer,
+    },
+  }
+}
+
+function createFailingEncryptManager(): TransportEncryptionManager {
+  return {
+    getServerPublicKey: () => 'server-public-key',
+    registerClientKey: async () => 'client-id',
+    getClientPublicKey: async () => 'client-public-key',
+    encryptResponse: async () => err(new Error('encrypt failed')),
+    decryptRequest: () => err(new Error('decrypt not used')),
+    close: async () => {},
+  }
 }
 
 describe('kit.createHandle({ crypto: { transport } })', () => {
@@ -67,10 +110,126 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
   it('强制加密时拒绝缺少 clientId 的业务请求', async () => {
     const handle = kit.createHandle({ crypto: { crypto, transport: true } })
     const request = new Request('http://localhost/api/data')
+    const resolve = vi.fn(() => new Response('should not run'))
 
-    const response = await dispatch(handle, request, () => new Response('should not run'))
+    const response = await dispatch(handle, request, resolve)
 
     expect(response.status).toBe(400)
+    expect(resolve).not.toHaveBeenCalled()
+    await expect(response.json()).resolves.toMatchObject({ error: expect.stringContaining('X-Client-Id') })
+  })
+
+  it('transport 管理器不可用时受保护路由 fail-closed', async () => {
+    const failingCrypto = createCryptoWithTransportServer(() => err(new Error('server unavailable')))
+    const handle = kit.createHandle({ crypto: { crypto: failingCrypto, transport: true } })
+    const resolve = vi.fn(() => new Response('should not run'))
+
+    const response = await dispatch(handle, new Request('http://localhost/api/data'), resolve)
+
+    expect(response.status).toBe(500)
+    expect(resolve).not.toHaveBeenCalled()
+  })
+
+  it('页面文档请求仍然透传，不会要求 X-Client-Id', async () => {
+    const handle = kit.createHandle({ crypto: { crypto, transport: true } })
+    const resolve = vi.fn(() => new Response('<html>ok</html>', {
+      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+    }))
+
+    const response = await dispatch(handle, new Request('http://localhost/'), resolve)
+
+    expect(response.status).toBe(200)
+    expect(await response.text()).toBe('<html>ok</html>')
+    expect(resolve).toHaveBeenCalledOnce()
+  })
+
+  it('默认也保护 SvelteKit __data.json 请求', async () => {
+    const handle = kit.createHandle({ crypto: { crypto, transport: true } })
+    const resolve = vi.fn(() => new Response('should not run'))
+
+    const response = await dispatch(
+      handle,
+      new Request('http://localhost/admin/iam/roles/__data.json?x-sveltekit-invalidated=011'),
+      resolve,
+    )
+
+    expect(response.status).toBe(400)
+    expect(resolve).not.toHaveBeenCalled()
+  })
+
+  it('受保护的 __data.json 即使会命中 auth guard，也必须先经过 transport 拦截', async () => {
+    const verifyToken = vi.fn().mockResolvedValue(null)
+    const handle = kit.createHandle({
+      auth: {
+        verifyToken,
+        loginUrl: '/auth/login',
+        protectedPaths: ['/admin/*'],
+      },
+      crypto: { crypto, transport: true },
+    })
+    const resolve = vi.fn(() => new Response('should not run'))
+
+    const response = await dispatch(
+      handle,
+      new Request('http://localhost/admin/iam/roles/__data.json?x-sveltekit-invalidated=001'),
+      resolve,
+    )
+
+    expect(response.status).toBe(400)
+    expect(verifyToken).not.toHaveBeenCalled()
+    expect(resolve).not.toHaveBeenCalled()
+    await expect(response.json()).resolves.toMatchObject({ error: expect.stringContaining('X-Client-Id') })
+  })
+
+  it('当 SvelteKit 将 event.url 标准化为页面路径时，仍必须按原始 __data.json 请求做 transport 判断', async () => {
+    const verifyToken = vi.fn().mockResolvedValue(null)
+    const handle = kit.createHandle({
+      auth: {
+        verifyToken,
+        loginUrl: '/auth/login',
+        protectedPaths: ['/admin/*'],
+      },
+      crypto: { crypto, transport: true },
+    })
+    const resolve = vi.fn(() => new Response('should not run'))
+    const request = new Request('http://localhost/admin/iam/roles/__data.json?x-sveltekit-invalidated=001')
+
+    const response = await dispatch(
+      handle,
+      request,
+      resolve,
+      {
+        eventUrl: 'http://localhost/admin/iam/roles?x-sveltekit-invalidated=001',
+        isDataRequest: true,
+      },
+    )
+
+    expect(response.status).toBe(400)
+    expect(verifyToken).not.toHaveBeenCalled()
+    expect(resolve).not.toHaveBeenCalled()
+    await expect(response.json()).resolves.toMatchObject({ error: expect.stringContaining('X-Client-Id') })
+  })
+
+  it('受保护路由响应无法加密时不会明文透传', async () => {
+    const failingCrypto = createCryptoWithTransportServer(() => ({
+      success: true,
+      data: createFailingEncryptManager(),
+    }))
+    const handle = kit.createHandle({ crypto: { crypto: failingCrypto, transport: true } })
+
+    const response = await dispatch(
+      handle,
+      new Request('http://localhost/api/data', {
+        headers: { [TRANSPORT_PROTOCOL.CLIENT_ID_HEADER]: 'client-id' },
+      }),
+      () => new Response(JSON.stringify({ secret: 'plain' }), {
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
+
+    expect(response.status).toBe(500)
+    expect(response.headers.get(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER)).toBeNull()
+    await expect(response.json()).resolves.toMatchObject({ error: expect.not.stringContaining('plain') })
   })
 
   it('requireEncryption=false 时允许明文上传请求透传', async () => {
@@ -120,6 +279,36 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
     expect(response.headers.get(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER)).toBeNull()
     const body = await response.json() as { echoed: { msg: string } }
     expect(body.echoed.msg).toBe('hello')
+  })
+
+  it('svelteKit __data.json 响应使用 text/sveltekit-data 时也会被加密', async () => {
+    const handle = kit.createHandle({ crypto: { crypto, transport: true } })
+    let rawDataResponse: Response | null = null
+    const serverFetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+      const request = input instanceof Request
+        ? input
+        : new Request(new URL(input.toString(), 'http://localhost'), init)
+
+      return dispatch(handle, request, async () => {
+        const response = new Response('{"type":"data","nodes":[]}', {
+          headers: { 'Content-Type': 'text/sveltekit-data' },
+        })
+
+        rawDataResponse = response.clone()
+        return response
+      })
+    }
+    const client = crypto.transport.createClient({
+      keyExchangeUrl: `http://localhost${KEY_EXCHANGE_PATH}`,
+      fetch: serverFetch,
+    })
+
+    const response = await client.encryptedFetch('http://localhost/admin/iam/roles/__data.json?x-sveltekit-invalidated=011')
+
+    expect(rawDataResponse?.headers.get('Content-Type')).toContain('text/sveltekit-data')
+    expect(response.headers.get(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER)).toBeNull()
+    expect(response.headers.get('Content-Type')).toContain('text/sveltekit-data')
+    expect(await response.text()).toBe('{"type":"data","nodes":[]}')
   })
 
   it('支持自定义 keyExchangePath', async () => {

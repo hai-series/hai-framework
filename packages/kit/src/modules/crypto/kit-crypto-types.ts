@@ -172,7 +172,7 @@ export interface TransportEncryptionConfig {
    * 是否强制要求传输加密（默认 true）
    *
    * - `true`：非排除路径上缺少 X-Client-Id 请求头时返回 400，防止绕过加密。
-   * - `false`：缺少 X-Client-Id 时透传明文，适用于渐进式迁移场景。
+   * - `false`：缺少 X-Client-Id 时透传明文，仅适用于渐进式迁移场景，不建议生产启用。
    */
   requireEncryption?: boolean
 }

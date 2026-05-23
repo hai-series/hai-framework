@@ -143,7 +143,7 @@ const response = await apiFetch('/api/users', { method: 'GET' })
 
 ### 同源传输加密
 
-kit 的传输加密也统一委托 `@h-ai/crypto`：服务端通过 `crypto.transport.createServer()` 创建管理器，浏览器端通过 `crypto.transport.createClient()` 包装 fetch。应用层只配置顶层 `crypto` 句柄。
+kit 的传输加密也统一委托 `@h-ai/crypto`：服务端通过 `crypto.transport.createServer()` 创建管理器，浏览器端通过 `kit.client.installBrowserTransportFetch()` 安装一次同源 fetch 包装。应用层只配置顶层 `crypto` 句柄。
 
 **src/hooks.server.ts**：
 
@@ -161,7 +161,7 @@ export const handle = kit.createHandle({
   },
   crypto: {
     crypto,
-    transport: { requireEncryption: false },
+    transport: { requireEncryption: true },
   },
 })
 ```
@@ -173,20 +173,31 @@ import { crypto } from '@h-ai/crypto'
 import { kit } from '@h-ai/kit'
 
 if (typeof window !== 'undefined') {
-  crypto.init()
+  void crypto.init()
+  kit.client.installBrowserTransportFetch({ crypto })
 }
 
-export const { apiFetch } = kit.client.create({
-  transport: { crypto },
-})
+export const { apiFetch } = kit.client.create()
+```
+
+**src/hooks.client.ts**（浏览器端同源 fetch 增强）：
+
+```ts
+import { kit } from '@h-ai/kit'
+
+export const handleFetch = kit.auth.createHandleFetch()
 ```
 
 默认密钥协商路径为 `/api/_hai/key-exchange`。如服务端自定义 `transport.keyExchangePath`，客户端需同步配置 `transport.keyExchangeUrl`。
 
+transport 默认作用于同源 `/api/*` endpoint 与 SvelteKit `__data.json` 页面数据请求（以及密钥协商端点本身）；页面文档与静态资源仍保持明文，不要求携带 `X-Client-Id`。文件上传等 `multipart/form-data` 请求会保持原样发送，需在服务端 `excludePaths` 中显式放行对应上传路径。
+
+安全策略默认 fail-closed：`requireEncryption: true` 时，受保护路径缺少 `X-Client-Id` 会直接返回 400；服务端 transport 管理器不可用、响应体无法加密或超过单次加密上限时返回错误，不会把业务明文响应透传给客户端。`requireEncryption: false` 仅用于迁移期灰度，不建议在生产启用。
+
 ### 使用 `_kit.yml` 统一 transport 配置
 
 `@h-ai/kit` 提供 `KitConfigSchema` / `resolveKitConfig()`，方便应用用同一份 `_kit.yml`
-同时驱动 `hooks.server.ts` 与 `kit.client.create()`：
+同时驱动 `hooks.server.ts` 与浏览器端 `kit.client.installBrowserTransportFetch()`：
 
 ```yml
 transport:

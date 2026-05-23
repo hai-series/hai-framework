@@ -71,7 +71,7 @@ export const handle = kit.createHandle({
   },
   crypto: {
     crypto,
-    transport: { requireEncryption: false },
+    transport: { requireEncryption: true },
   },
 })
 ```
@@ -82,21 +82,23 @@ import { crypto } from '@h-ai/crypto'
 import { kit } from '@h-ai/kit'
 
 if (typeof window !== 'undefined') {
-  crypto.init()
+  void crypto.init()
+  kit.client.installBrowserTransportFetch({ crypto })
 }
 
-export const { apiFetch } = kit.client.create({
-  transport: { crypto },
-  auth: true,
-})
+export const { apiFetch } = kit.client.create({ auth: true })
 ```
 
 默认协商端点：`/api/_hai/key-exchange`。如 `keyExchangePath` 自定义，浏览器端同步设置 `keyExchangeUrl`。
 
+transport 默认保护同源 `/api/*` endpoint 与 SvelteKit `__data.json` 页面数据请求；页面文档、静态资源与 `multipart/form-data` 上传请求保持明文透传。
+
+安全策略默认 fail-closed：`requireEncryption: true` 时，受保护路径缺少 `X-Client-Id` 必须返回 400；服务端 transport 管理器不可用、响应体无法加密或超过单次加密上限时返回错误，禁止明文业务响应回退。`requireEncryption: false` 只适合迁移期灰度。
+
 ### 5. 使用 `_kit.yml` 统一 transport 配置
 
 `@h-ai/kit` 现在提供 `KitConfigSchema` / `resolveKitConfig()`，适合同一份 `_kit.yml`
-同时驱动 `hooks.server.ts` 与浏览器端 `kit.client.create()`：
+同时驱动 `hooks.server.ts` 与浏览器端 `kit.client.installBrowserTransportFetch()`：
 
 ```yml
 transport:
@@ -132,11 +134,13 @@ export const appKitConfig = resolveKitConfig(parse(rawKitConfig) ?? {})
 | `kit.validate.*` | Zod 请求校验 |
 | `kit.auth.*` | Cookie / Token 辅助 |
 | `kit.client.create()` | 浏览器端同源 apiFetch |
+| `kit.client.installBrowserTransportFetch()` | 浏览器端同源 `/api/*` 与 `__data.json` transport 包装 |
 | `kit.crud.define()` | 声明式 CRUD 资源 |
 
 ## 常见模式
 
 - SvelteKit 应用内同源请求用 `kit.client.create().apiFetch`。
+- SvelteKit 应用启用 transport 时，在浏览器启动处调用一次 `kit.client.installBrowserTransportFetch({ crypto, keyExchangeUrl, excludePaths })`，不要在 app 侧重复实现路径匹配。
 - Web/App/小程序跨域访问公共 API 用 `@h-ai/api-client` typed client。
 - 传输加密只通过 `crypto.transport` 间接装配，不在 kit 中新增本地加密工厂或鸭子类型。
 - 服务端业务模块直接调用模块 API，不通过 HTTP 自环。

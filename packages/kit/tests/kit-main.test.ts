@@ -73,6 +73,7 @@ describe('kit 统一出口', () => {
   describe('kit.client', () => {
     it('包含 create 统一客户端工厂', () => {
       expect(typeof kit.client.create).toBe('function')
+      expect(typeof kit.client.installBrowserTransportFetch).toBe('function')
     })
   })
 

@@ -10,6 +10,7 @@ import type { CryptoFunctions, TransportClient } from '@h-ai/crypto'
 import type { BrowserTokenStore } from '../kit-auth.js'
 import { TRANSPORT_PROTOCOL } from '@h-ai/crypto'
 import { createTokenStore } from '../kit-auth.js'
+import { DEFAULT_TRANSPORT_KEY_EXCHANGE_PATH, resolveTransportPath, shouldUseTransportForUrl } from '../modules/crypto/kit-transport-paths.js'
 
 const DEFAULT_KEY_EXCHANGE_URL = `/api${TRANSPORT_PROTOCOL.DEFAULT_KEY_EXCHANGE_PATH}`
 
@@ -23,6 +24,8 @@ export interface ClientTransportConfig {
   crypto: CryptoFunctions
   /** 密钥交换端点 URL（默认 `'/api/_hai/key-exchange'`） */
   keyExchangeUrl?: string
+  /** 排除路径（命中后强制走明文），需与服务端 transport.excludePaths 保持一致 */
+  excludePaths?: string[]
 }
 
 /**
@@ -91,6 +94,95 @@ function canEncryptRequestBody(body: BodyInit | null | undefined): boolean {
   return body === undefined || body === null || typeof body === 'string'
 }
 
+function canUseTransportForRequest(request: Request): boolean {
+  const method = request.method.toUpperCase()
+  if (method === 'GET' || method === 'HEAD') {
+    return true
+  }
+
+  const headers = new Headers(request.headers)
+  const contentType = headers.get('Content-Type') ?? ''
+  if (contentType.includes('application/json')) {
+    return true
+  }
+
+  return request.body === null
+}
+
+function getCurrentOrigin(): string {
+  if (typeof window !== 'undefined' && window.location?.origin) {
+    return window.location.origin
+  }
+
+  return 'http://localhost'
+}
+
+function toRequest(input: RequestInfo | URL, init?: RequestInit): Request {
+  if (input instanceof Request)
+    return init ? new Request(input, init) : input
+
+  return new Request(input, init)
+}
+
+type BrowserTransportFetchState = typeof globalThis & {
+  __haiKitOriginalFetch?: typeof fetch
+  __haiKitTransportFetchInstalled?: boolean
+}
+
+/**
+ * 在浏览器启动时安装同源 transport fetch 包装。
+ *
+ * 该包装作用于同源 `/api/*` 与 SvelteKit `__data.json` 请求，页面文档、
+ * 静态资源以及 multipart/form-data 等上传请求保持原样。应用只需安装一次，
+ * 后续 `fetch` / SvelteKit 内部 data fetch / `kit.client.create()` 明文发送路径
+ * 都会共用这层传输加密能力。
+ */
+export function installBrowserTransportFetch(transportConfig?: ClientTransportConfig): void {
+  if (typeof window === 'undefined' || !transportConfig)
+    return
+
+  const fetchState = globalThis as BrowserTransportFetchState
+  if (fetchState.__haiKitTransportFetchInstalled)
+    return
+
+  const originalFetch = fetchState.__haiKitOriginalFetch ?? globalThis.fetch.bind(globalThis)
+  fetchState.__haiKitOriginalFetch = originalFetch
+
+  const origin = getCurrentOrigin()
+  const keyExchangeUrl = new URL(transportConfig.keyExchangeUrl ?? DEFAULT_KEY_EXCHANGE_URL, origin).toString()
+  const keyExchangePath = resolveTransportPath(keyExchangeUrl, origin)
+  const transportClient = transportConfig.crypto.transport.createClient({
+    keyExchangeUrl,
+    fetch: originalFetch,
+  })
+
+  const wrappedFetch: typeof fetch = async (input, init) => {
+    const request = toRequest(input, init)
+    const requestUrl = new URL(request.url, origin)
+    const headers = new Headers(request.headers)
+
+    if (!shouldUseTransportForUrl(requestUrl, {
+      origin,
+      keyExchangePath,
+      excludePaths: transportConfig.excludePaths,
+    })) {
+      return originalFetch(input, init)
+    }
+
+    if (headers.has(TRANSPORT_PROTOCOL.CLIENT_ID_HEADER))
+      return originalFetch(input, init)
+
+    if (!canUseTransportForRequest(request))
+      return originalFetch(input, init)
+
+    return transportClient.encryptedFetch(request)
+  }
+
+  globalThis.fetch = wrappedFetch
+  window.fetch = wrappedFetch
+  fetchState.__haiKitTransportFetchInstalled = true
+}
+
 // ─── 主函数 ───
 
 /**
@@ -125,9 +217,14 @@ export function createKitClient(config: KitClientConfig = {}): KitClient {
     : null
 
   // ── 传输加密状态 ──
+  const transportOrigin = getCurrentOrigin()
+  const transportKeyExchangeUrl = transportConfig?.keyExchangeUrl ?? DEFAULT_KEY_EXCHANGE_URL
+  const transportKeyExchangePath = transportConfig
+    ? resolveTransportPath(transportKeyExchangeUrl, transportOrigin)
+    : DEFAULT_TRANSPORT_KEY_EXCHANGE_PATH
   const transportClient: TransportClient | null = transportConfig
     ? transportConfig.crypto.transport.createClient({
-        keyExchangeUrl: transportConfig.keyExchangeUrl ?? DEFAULT_KEY_EXCHANGE_URL,
+        keyExchangeUrl: transportKeyExchangeUrl,
         fetch,
       })
     : null
@@ -159,7 +256,15 @@ export function createKitClient(config: KitClientConfig = {}): KitClient {
     }
 
     // ── 传输加密 ──
-    if (transportClient && canUseTransport) {
+    if (
+      transportClient
+      && canUseTransport
+      && shouldUseTransportForUrl(url, {
+        origin: transportOrigin,
+        keyExchangePath: transportKeyExchangePath,
+        excludePaths: transportConfig?.excludePaths,
+      })
+    ) {
       return transportClient.encryptedFetch(url, { ...init, headers })
     }
 

@@ -362,7 +362,7 @@ export interface TransportEncryptionOptions {
    * 是否强制要求传输加密（默认 `true`）
    *
    * - `true`：非排除路径上缺少 X-Client-Id 请求头时返回 400
-   * - `false`：缺少 X-Client-Id 时透传明文（渐进式迁移）
+   * - `false`：缺少 X-Client-Id 时透传明文（仅用于渐进式迁移，不建议生产启用）
    */
   requireEncryption?: boolean
   /** 是否加密响应体（默认 `true`） */
