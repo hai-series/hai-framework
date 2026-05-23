@@ -14,6 +14,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { ai } from '@h-ai/ai'
 import { cache } from '@h-ai/cache'
+import { core } from '@h-ai/core'
+import { crypto } from '@h-ai/crypto'
 import { iam } from '@h-ai/iam'
 import { reldb } from '@h-ai/reldb'
 import { storage } from '@h-ai/storage'
@@ -25,12 +27,76 @@ import { createApiServiceApp } from '../src/app.js'
 
 let vecdbDir: string
 let storageDir: string
+let encryptedApp: ReturnType<typeof createApiServiceApp>
+let plainApp: ReturnType<typeof createApiServiceApp>
+let healthPath = '/health'
+let readyPath = '/ready'
+let openapiPath = '/openapi.json'
+let docsPath = '/docs'
+let apiPrefix = '/api/v1'
+let apiBaseUrl = 'http://test.local/api/v1'
+let keyExchangePath = '/api/v1/_hai/key-exchange'
+
+function apiPath(path: `/${string}`): `/${string}` {
+  return `${apiPrefix}${path}` as `/${string}`
+}
+
+function apiUrl(path: `/${string}`): string {
+  return `${apiBaseUrl}${path}`
+}
+
+function uniqueApiServiceUser(prefix = 'e2e') {
+  const suffix = `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`.slice(-8)
+  return {
+    username: `${prefix}_${suffix}`,
+    password: 'TestPass123',
+    email: `${prefix}_${suffix}@test.local`,
+  }
+}
+
+function createTransportClient() {
+  return crypto.transport.createClient({
+    keyExchangeUrl: `http://test.local${keyExchangePath}`,
+    fetch: async (input, init) => {
+      const request = input instanceof Request
+        ? input
+        : new Request(typeof input === 'string' ? input : input.toString(), init)
+      return encryptedApp.fetch(request)
+    },
+  })
+}
 
 // ─── 初始化 / 清理 ───────────────────────────────────────────────────────────
 
 beforeAll(async () => {
   vecdbDir = mkdtempSync(join(tmpdir(), 'api-svc-test-vecdb-'))
   storageDir = mkdtempSync(join(tmpdir(), 'api-svc-test-storage-'))
+
+  core.init({
+    configDir: './config',
+    logging: { level: 'warn' },
+  })
+
+  const servConfig = core.config.getOrThrow<ServConfig>('serv')
+  apiPrefix = servConfig.http.apiPrefix
+  apiBaseUrl = `http://test.local${apiPrefix}`
+
+  if (servConfig.http.health === false || servConfig.http.openapi === false || servConfig.http.docs === false) {
+    throw new Error('api-service route tests require health/openapi/docs endpoints to stay enabled')
+  }
+  if (servConfig.transport === false) {
+    throw new Error('api-service route tests require transport encryption to stay enabled')
+  }
+
+  healthPath = servConfig.http.health.path
+  readyPath = servConfig.http.health.readyPath ?? servConfig.http.health.path
+  openapiPath = servConfig.http.openapi.path
+  docsPath = servConfig.http.docs.path
+  keyExchangePath = apiPath(servConfig.transport.keyExchangePath)
+
+  const cryptoResult = await crypto.init()
+  if (!cryptoResult.success)
+    throw new Error(`crypto: ${cryptoResult.error.message}`)
 
   const dbResult = await reldb.init({ type: 'sqlite', database: ':memory:' })
   if (!dbResult.success)
@@ -56,6 +122,9 @@ beforeAll(async () => {
   const aiResult = await ai.init({})
   if (!aiResult.success)
     throw new Error(`ai: ${aiResult.error.message}`)
+
+  encryptedApp = createApiServiceApp()
+  plainApp = createApiServiceApp({ transport: 'disabled' })
 }, 30_000)
 
 afterAll(async () => {
@@ -65,6 +134,7 @@ afterAll(async () => {
   await vecdb.close()
   await cache.close()
   await reldb.close()
+  await crypto.close()
   try {
     rmSync(vecdbDir, { recursive: true, force: true })
   }
@@ -78,24 +148,22 @@ afterAll(async () => {
 // ─── 测试套件 ────────────────────────────────────────────────────────────────
 
 describe('api-service 路由', () => {
-  const app = createApiServiceApp()
-
   // ── 基础设施端点 ──────────────────────────────────────────────────────────
 
   it('gET /health 返回 200 { status: ok }', async () => {
-    const res = await app.request('/health')
+    const res = await encryptedApp.request(healthPath)
     expect(res.status).toBe(200)
     expect(await res.json()).toEqual({ status: 'ok' })
   })
 
   it('gET /ready 返回 200 { status: ready }', async () => {
-    const res = await app.request('/ready')
+    const res = await encryptedApp.request(readyPath)
     expect(res.status).toBe(200)
     expect(await res.json()).toEqual({ status: 'ready' })
   })
 
   it('gET /openapi.json 返回合规 OpenAPI 3.1 JSON', async () => {
-    const res = await app.request('/openapi.json')
+    const res = await encryptedApp.request(openapiPath)
     expect(res.status).toBe(200)
     expect(res.headers.get('content-type')).toContain('application/json')
 
@@ -111,7 +179,7 @@ describe('api-service 路由', () => {
   })
 
   it('gET /docs 返回 200 HTML 文档页', async () => {
-    const res = await app.request('/docs')
+    const res = await encryptedApp.request(docsPath)
     expect(res.status).toBe(200)
     expect(res.headers.get('content-type')).toContain('text/html')
     const html = await res.text()
@@ -121,15 +189,92 @@ describe('api-service 路由', () => {
   // ── 安全响应头 ─────────────────────────────────────────────────────────────
 
   it('响应头包含基础安全字段', async () => {
-    const res = await app.request('/health')
+    const res = await encryptedApp.request(healthPath)
     expect(res.headers.get('x-content-type-options')).toBe('nosniff')
     expect(res.headers.get('x-frame-options')).toBe('DENY')
   })
 
+  it('pOST /api/v1/_hai/key-exchange 返回 200 并下发 clientId', async () => {
+    const keyPair = crypto.asymmetric.generateKeyPair()
+    expect(keyPair.success).toBe(true)
+    if (!keyPair.success)
+      return
+
+    const res = await encryptedApp.request(keyExchangePath, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ clientPublicKey: keyPair.data.publicKey }),
+    })
+
+    expect(res.status).toBe(200)
+    const body = await res.json() as { clientId: string, serverPublicKey: string }
+    expect(body.clientId).toBeTruthy()
+    expect(body.serverPublicKey).toBeTruthy()
+  })
+
+  it('pOST /api/v1/auth/login 明文请求会被 transport 拒绝', async () => {
+    const res = await encryptedApp.request(apiPath('/auth/login'), {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ identifier: 'someone', password: 'secret' }),
+    })
+    expect(res.status).toBe(400)
+  })
+
+  it('transport 关闭时，明文注册请求可正常工作', async () => {
+    const user = uniqueApiServiceUser('plainreg')
+    const res = await plainApp.request(apiPath('/auth/register'), {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        username: user.username,
+        password: user.password,
+        email: user.email,
+      }),
+    })
+
+    expect(res.status).toBe(200)
+    expect(res.headers.get('x-encrypted')).toBeNull()
+
+    const body = await res.json() as { success: boolean, data?: { tokens?: { accessToken?: string } } }
+    expect(body.success).toBe(true)
+    expect(body.data?.tokens?.accessToken).toBeTruthy()
+  })
+
+  it('transport 关闭时，明文登录请求可正常工作', async () => {
+    const user = uniqueApiServiceUser('plainlogin')
+
+    const registerRes = await plainApp.request(apiPath('/auth/register'), {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        username: user.username,
+        password: user.password,
+        email: user.email,
+      }),
+    })
+    expect(registerRes.status).toBe(200)
+
+    const res = await plainApp.request(apiPath('/auth/login'), {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ identifier: user.username, password: user.password }),
+    })
+
+    expect(res.status).toBe(200)
+    expect(res.headers.get('x-encrypted')).toBeNull()
+
+    const body = await res.json() as { success: boolean, data?: { tokens?: { accessToken?: string, refreshToken?: string } } }
+    expect(body.success).toBe(true)
+    expect(body.data?.tokens?.accessToken).toBeTruthy()
+    expect(body.data?.tokens?.refreshToken).toBeTruthy()
+  })
+
   // ── 认证流 ────────────────────────────────────────────────────────────────
 
-  it('pOST /api/v1/auth/login 缺少必填字段时返回 400', async () => {
-    const res = await app.request('/api/v1/auth/login', {
+  it('pOST /api/v1/auth/login 加密请求缺少必填字段时返回 400', async () => {
+    const client = createTransportClient()
+    const res = await client.encryptedFetch(apiUrl('/auth/login'), {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({}),
@@ -138,7 +283,8 @@ describe('api-service 路由', () => {
   })
 
   it('pOST /api/v1/auth/register 注册新用户并返回 tokens', async () => {
-    const res = await app.request('/api/v1/auth/register', {
+    const client = createTransportClient()
+    const res = await client.encryptedFetch(apiUrl('/auth/register'), {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
@@ -154,7 +300,8 @@ describe('api-service 路由', () => {
   })
 
   it('pOST /api/v1/auth/login 正确凭据返回 tokens', async () => {
-    const res = await app.request('/api/v1/auth/login', {
+    const client = createTransportClient()
+    const res = await client.encryptedFetch(apiUrl('/auth/login'), {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ identifier: 'e2e_test_user', password: 'TestPass123' }),
@@ -167,7 +314,8 @@ describe('api-service 路由', () => {
   })
 
   it('pOST /api/v1/auth/login 错误密码返回 success:false', async () => {
-    const res = await app.request('/api/v1/auth/login', {
+    const client = createTransportClient()
+    const res = await client.encryptedFetch(apiUrl('/auth/login'), {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ identifier: 'e2e_test_user', password: 'WrongPassword!' }),
@@ -178,7 +326,8 @@ describe('api-service 路由', () => {
   })
 
   it('pOST /api/v1/auth/logout 无 token 时返回 success:false（认证拦截）', async () => {
-    const res = await app.request('/api/v1/auth/logout', {
+    const client = createTransportClient()
+    const res = await client.encryptedFetch(apiUrl('/auth/logout'), {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({}),
@@ -189,8 +338,9 @@ describe('api-service 路由', () => {
   })
 
   it('pOST /api/v1/auth/logout 有效 token 返回 success:true', async () => {
+    const client = createTransportClient()
     // 先登录取 token
-    const loginRes = await app.request('/api/v1/auth/login', {
+    const loginRes = await client.encryptedFetch(apiUrl('/auth/login'), {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ identifier: 'e2e_test_user', password: 'TestPass123' }),
@@ -200,7 +350,7 @@ describe('api-service 路由', () => {
     const token = loginBody.data?.tokens?.accessToken ?? ''
 
     // 使用 token 登出
-    const logoutRes = await app.request('/api/v1/auth/logout', {
+    const logoutRes = await client.encryptedFetch(apiUrl('/auth/logout'), {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
@@ -216,7 +366,8 @@ describe('api-service 路由', () => {
   // ── 认证守卫：受保护端点不接受无效 token ─────────────────────────────────
 
   it('pOST /api/v1/storage/presigned-urls/upload 无 token 时返回 success:false', async () => {
-    const res = await app.request('/api/v1/storage/presigned-urls/upload', {
+    const client = createTransportClient()
+    const res = await client.encryptedFetch(apiUrl('/storage/presigned-urls/upload'), {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ key: 'uploads/test.png', contentType: 'image/png' }),
@@ -227,7 +378,8 @@ describe('api-service 路由', () => {
   })
 
   it('pOST /api/v1/storage/presigned-urls/upload 伪造 token 返回 success:false', async () => {
-    const res = await app.request('/api/v1/storage/presigned-urls/upload', {
+    const client = createTransportClient()
+    const res = await client.encryptedFetch(apiUrl('/storage/presigned-urls/upload'), {
       method: 'POST',
       headers: {
         'content-type': 'application/json',
@@ -241,8 +393,9 @@ describe('api-service 路由', () => {
   })
 
   it('pOST /api/v1/storage/presigned-urls/upload 有效 token 返回 success:true', async () => {
+    const client = createTransportClient()
     // 先注册并登录取 token
-    const regRes = await app.request('/api/v1/auth/register', {
+    const regRes = await client.encryptedFetch(apiUrl('/auth/register'), {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ username: 'storage_test_user', password: 'StorageTest123', email: 'storage@test.local' }),
@@ -251,7 +404,7 @@ describe('api-service 路由', () => {
     expect(regBody.success).toBe(true)
     const token = regBody.data?.tokens?.accessToken ?? ''
 
-    const res = await app.request('/api/v1/storage/presigned-urls/upload', {
+    const res = await client.encryptedFetch(apiUrl('/storage/presigned-urls/upload'), {
       method: 'POST',
       headers: {
         'content-type': 'application/json',

@@ -6,7 +6,8 @@
 
 - 公共 API 由 `@h-ai/api-contract` 定义，运行时由 `@h-ai/serv` 挂载。
 - 默认启用 IAM / Storage / AI HTTP API。
-- 提供 `/health`、`/ready`、`/openapi.json`、`/docs`。
+- 业务 `/api/v1/*` 默认启用 `@h-ai/crypto` 传输加密。
+- `/health`、`/ready`、`/openapi.json`、`/docs` 保持明文可访问，便于探针与联调。
 - Node 部署入口为 `src/index.ts`，Hono app 工厂为 `src/app.ts`。
 
 ## 快速开始
@@ -37,10 +38,63 @@ const contract = createApiContract({ iam: iamContract, storage: storageContract,
 
 ```ts
 import { api } from '@h-ai/api-client'
+import { crypto } from '@h-ai/crypto'
 
-await api.init({ baseUrl: 'http://localhost:3000/api/v1' })
+await crypto.init()
+await api.init({
+  baseUrl: 'http://localhost:3000/api/v1',
+  transport: { crypto },
+})
 const login = await api.iam.auth.login({ identifier: 'alice', password: 'secret' })
 await api.close()
+await crypto.close()
+```
+
+### 传输加密说明
+
+- 业务接口（默认 `/api/v1/*`）需要使用 `@h-ai/api-client`、`@h-ai/crypto` transport client 或等价的 transport-aware 客户端完成密钥协商。
+- 明文可直接访问哪些路径，也由 `_serv.yml` 的 `transport.excludePaths` 决定；默认保留 `/health`、`/ready`、`/openapi.json`、`/docs`、`/_hai/scalar.js`。
+- 默认密钥协商端点为 `POST /api/v1/_hai/key-exchange`；若你修改了 `http.apiPrefix` 或 `transport.keyExchangePath`，客户端也必须同步调整。
+
+```yaml
+# config/_serv.yml
+http:
+  apiPrefix: /api/v1
+
+transport:
+  keyExchangePath: /_hai/key-exchange
+  excludePaths:
+    - /health
+    - /ready
+    - /openapi.json
+    - /docs
+    - /_hai/scalar.js
+  maxClients: 10000
+```
+
+客户端默认调用方式：
+
+```ts
+import { api } from '@h-ai/api-client'
+import { crypto } from '@h-ai/crypto'
+
+await crypto.init()
+await api.init({
+  baseUrl: 'http://localhost:3000/api/v1',
+  transport: { crypto },
+})
+```
+
+如果 `_serv.yml` 自定义了密钥协商路径，则客户端也要传同一路径：
+
+```ts
+await api.init({
+  baseUrl: 'http://localhost:3000/api/v1',
+  transport: {
+    crypto,
+    keyExchangePath: '/custom/key-exchange',
+  },
+})
 ```
 
 ## API 概览
@@ -75,7 +129,7 @@ await api.close()
 | `/api/v1/ai/memories/list`                | POST               | 列出记忆                                  |
 | `/api/v1/ai/sessions/list`                | POST               | 列出会话                                  |
 
-## curl 示例
+## 调用示例
 
 > 完整交互式文档见 `http://localhost:3000/docs`。以下示例假设服务已启动在 `localhost:3000`。
 
@@ -86,67 +140,54 @@ curl http://localhost:3000/health
 curl http://localhost:3000/ready
 ```
 
-### 注册（首次测试请先注册用户）
+### 业务 API（默认需要传输加密）
 
-服务没有内置默认账号，需先注册一个用户：
+业务 `/api/v1/*` 端点默认要求先完成 `/_hai/key-exchange` 密钥协商，因此不再建议用明文 `curl` 直接 POST 登录/注册。
+推荐统一使用 `@h-ai/api-client` + `@h-ai/crypto`：
 
-```bash
-curl -X POST http://localhost:3000/api/v1/auth/register \
-  -H 'Content-Type: application/json' \
-  -d '{"username":"admin","password":"Admin123!","email":"admin@example.com"}'
-# 注册成功后直接返回 tokens，可跳过登录步骤直接使用
+```ts
+import { api } from '@h-ai/api-client'
+import { crypto } from '@h-ai/crypto'
+
+await crypto.init()
+
+await api.init({
+  baseUrl: 'http://localhost:3000/api/v1',
+  transport: { crypto },
+})
+
+const register = await api.iam.auth.register({
+  username: 'admin',
+  password: 'Admin123!',
+  email: 'admin@example.com',
+})
+
+const login = await api.iam.auth.login({
+  identifier: 'admin',
+  password: 'Admin123!',
+})
+
+const storage = await api.storage.file.getUploadUrl({
+  key: 'uploads/demo.png',
+  contentType: 'image/png',
+})
+
+void register
+void login
+void storage
+
+await api.close()
+await crypto.close()
 ```
 
-### 登录
-
-```bash
-curl -X POST http://localhost:3000/api/v1/auth/login \
-  -H 'Content-Type: application/json' \
-  -d '{"identifier":"admin","password":"Admin123!"}'
-# 响应：{"success":true,"data":{"user":{...},"tokens":{"accessToken":"...","refreshToken":"...","expiresIn":3600,"tokenType":"Bearer"},...}}
-```
-
-### 刷新 Token
-
-```bash
-curl -X POST http://localhost:3000/api/v1/auth/refresh \
-  -H 'Content-Type: application/json' \
-  -d '{"refreshToken":"your-refresh-token"}'
-```
-
-### 使用 Token 访问受保护端点
-
-```bash
-TOKEN="your-access-token"
-
-# 文件列表（可选 prefix 过滤）
-curl "http://localhost:3000/api/v1/storage/files?prefix=uploads/" \
-  -H "Authorization: Bearer $TOKEN"
-
-# 获取上传预签名 URL
-curl -X POST http://localhost:3000/api/v1/storage/presigned-urls/upload \
-  -H 'Content-Type: application/json' \
-  -H "Authorization: Bearer $TOKEN" \
-  -d '{"key":"uploads/demo.png","contentType":"image/png"}'
-
-# 聊天补全
-curl -X POST http://localhost:3000/api/v1/ai/chats/completions \
-  -H 'Content-Type: application/json' \
-  -H "Authorization: Bearer $TOKEN" \
-  -d '{"messages":[{"role":"user","content":"你好"}]}'
-
-# 简单消息（返回纯文本内容字段）
-curl -X POST http://localhost:3000/api/v1/ai/chats/messages \
-  -H 'Content-Type: application/json' \
-  -H "Authorization: Bearer $TOKEN" \
-  -d '{"message":"帮我写一个 hello world"}'
-```
+如果你把 `config/_serv.yml` 中的 `transport.keyExchangePath` 改成了非默认值，记得同步把 `transport.keyExchangePath` 传给 `api.init(...)`。
 
 ## 配置
 
 配置文件位于 `config/`：
 
 - `_core.yml`：应用名称、版本、运行环境。
+- `_serv.yml`：`@h-ai/serv` HTTP 入口 + transport 配置（`apiPrefix`、`openapi`、`docs`、`health`、`rpc`、`transport`）。
 - `_db.yml`：关系数据库配置。
 - `_cache.yml`：缓存配置。
 - `_iam.yml`：认证与 RBAC 配置。
@@ -170,6 +211,7 @@ curl -X POST http://localhost:3000/api/v1/ai/chats/messages \
 ```bash
 pnpm --filter api-service check
 pnpm --filter api-service lint
+pnpm --filter api-service test
 ```
 
 ## License
