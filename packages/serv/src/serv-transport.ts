@@ -24,8 +24,9 @@ import { servM } from './serv-i18n.js'
 
 const logger = core.logger.child({ module: 'serv', scope: 'transport' })
 
-/** 单次响应加密的体积上限（1 MiB）。超过则原样透传，避免内存炸裂。 */
+/** 单次响应加密的体积上限（1 MiB）。超过则 fail-closed，避免内存放大和明文泄露。 */
 const MAX_ENCRYPTED_BODY = 1_048_576
+const ENCRYPTABLE_RESPONSE_CONTENT_TYPES = ['application/json']
 
 /** {@link createApp} 的 `transport` 配置项。 */
 export interface ServTransportConfig {
@@ -96,13 +97,19 @@ export function createTransportMiddleware(
     const response = c.res
     if (!response)
       return
-    // Step 6：只加密 JSON 响应；文件流、HTML 等非 JSON 内容保持原样透传。
+    // Step 6：受保护路由响应必须加密；无法加密时 fail-closed，禁止明文透传。
     const contentType = response.headers.get('Content-Type') ?? ''
-    if (!contentType.includes('application/json'))
+    if (isEmptyResponse(response))
       return
+    if (!canEncryptResponseContentType(contentType)) {
+      c.res = jsonError(servM('serv_transportEncryptFailed'), 500)
+      return
+    }
     const contentLength = response.headers.get('Content-Length')
-    if (contentLength && Number.parseInt(contentLength, 10) > MAX_ENCRYPTED_BODY)
+    if (contentLength && Number.parseInt(contentLength, 10) > MAX_ENCRYPTED_BODY) {
+      c.res = jsonError(servM('serv_transportEncryptFailed'), 500)
       return
+    }
 
     let bodyText: string
     try {
@@ -110,19 +117,23 @@ export function createTransportMiddleware(
     }
     catch (cause) {
       logger.warn('Failed to read response body for encryption', { error: cause })
+      c.res = jsonError(servM('serv_transportEncryptFailed'), 500)
       return
     }
     if (!bodyText)
       return
     // 二次防御：分块传输（chunked）等场景没有 Content-Length 头，需在读取后再校验体积。
-    // 超过上限则原样透传，避免大 body 加密导致内存放大。
-    if (bodyText.length > MAX_ENCRYPTED_BODY)
+    // 超过上限则 fail-closed，避免大 body 加密导致内存放大且禁止明文泄露。
+    if (bodyText.length > MAX_ENCRYPTED_BODY) {
+      c.res = jsonError(servM('serv_transportEncryptFailed'), 500)
       return
+    }
 
     // Step 7：把下游返回的明文 JSON 重新加密后替换回响应对象。
     const encResult = await manager.encryptResponse(clientId, bodyText)
     if (!encResult.success) {
       logger.warn('Failed to encrypt response', { error: encResult.error })
+      c.res = jsonError(servM('serv_transportEncryptFailed'), 500)
       return
     }
 
@@ -215,6 +226,16 @@ function shouldExclude(pathname: string, excludePaths: readonly string[], keyExc
   if (pathname === keyExchangePath)
     return true
   return excludePaths.some(p => pathname === p || pathname.startsWith(`${p}/`))
+}
+
+function canEncryptResponseContentType(contentType: string): boolean {
+  return ENCRYPTABLE_RESPONSE_CONTENT_TYPES.some(type => contentType.includes(type))
+}
+
+function isEmptyResponse(response: Response): boolean {
+  if ([204, 304].includes(response.status))
+    return true
+  return response.headers.get('Content-Length') === '0'
 }
 
 function hasBody(method: string): boolean {

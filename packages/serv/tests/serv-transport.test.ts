@@ -1,5 +1,7 @@
+import type { CryptoFunctions, TransportEncryptionManager } from '@h-ai/crypto'
 import type { ServContext } from '../src/serv-context.js'
 import { createApiContract } from '@h-ai/api-contract'
+import { err } from '@h-ai/core'
 import { crypto, TRANSPORT_PROTOCOL } from '@h-ai/crypto'
 import { implement } from '@orpc/server'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
@@ -7,6 +9,29 @@ import { serv } from '../src/serv-main.js'
 
 const contract = createApiContract({})
 const procedures = implement(contract).$context<ServContext>().router({})
+
+function createCryptoWithTransportServer(
+  createServer: CryptoFunctions['transport']['createServer'],
+): CryptoFunctions {
+  return {
+    ...crypto,
+    transport: {
+      ...crypto.transport,
+      createServer,
+    },
+  }
+}
+
+function createFailingEncryptManager(): TransportEncryptionManager {
+  return {
+    getServerPublicKey: () => 'server-public-key',
+    registerClientKey: async () => 'client-id',
+    getClientPublicKey: async () => 'client-public-key',
+    encryptResponse: async () => err(new Error('encrypt failed')),
+    decryptRequest: () => err(new Error('decrypt not used')),
+    close: async () => {},
+  }
+}
 
 describe('serv.createApp({ transport })', () => {
   beforeAll(async () => {
@@ -29,6 +54,10 @@ describe('serv.createApp({ transport })', () => {
     // 业务请求 (apiPrefix 下) 缺少 client-id 应被拒。
     const unauthed = await app.request('/api/v1/whatever', { method: 'POST' })
     expect(unauthed.status).toBe(400)
+
+    // GET / __data 类无请求体场景也必须先带 clientId，不能因为无需解密 body 而放行。
+    const unauthedGet = await app.request('/api/v1/whatever', { method: 'GET' })
+    expect(unauthedGet.status).toBe(400)
 
     // 密钥协商
     const kpResult = crypto.asymmetric.generateKeyPair()
@@ -82,7 +111,30 @@ describe('serv.createApp({ transport })', () => {
     expect(data.echoed.msg).toBe('hello')
   })
 
-  it('skips encryption when chunked response body exceeds 1 MiB cap (no Content-Length)', async () => {
+  it('响应无法加密时不会明文透传', async () => {
+    const failingCrypto = createCryptoWithTransportServer(() => ({
+      success: true,
+      data: createFailingEncryptManager(),
+    }))
+    const app = serv.createApp({
+      contract,
+      procedures,
+      http: { apiPrefix: '/api/v1', openapi: false, docs: false, rpc: false },
+      transport: { crypto: failingCrypto },
+    })
+
+    app.get('/api/v1/secret', c => c.json({ secret: 'plain' }))
+
+    const resp = await app.request('/api/v1/secret', {
+      headers: { [TRANSPORT_PROTOCOL.CLIENT_ID_HEADER]: 'client-id' },
+    })
+
+    expect(resp.status).toBe(500)
+    expect(resp.headers.get(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER)).toBeNull()
+    await expect(resp.json()).resolves.toMatchObject({ error: expect.not.stringContaining('plain') })
+  })
+
+  it('chunked 响应体超过 1 MiB 上限时 fail-closed', async () => {
     const app = serv.createApp({
       contract,
       procedures,
@@ -120,8 +172,8 @@ describe('serv.createApp({ transport })', () => {
       method: 'POST',
       body: JSON.stringify({ x: 1 }),
     })
-    expect(resp.status).toBe(200)
-    // 超过上限：响应应原样透传（不加密标记，body 为明文 JSON）
+    expect(resp.status).toBe(500)
     expect(resp.headers.get(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER)).toBeNull()
+    await expect(resp.json()).resolves.toMatchObject({ error: expect.any(String) })
   })
 })
