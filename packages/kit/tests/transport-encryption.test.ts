@@ -143,6 +143,21 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
     expect(resolve).toHaveBeenCalledOnce()
   })
 
+  it('默认响应包含基础安全头', async () => {
+    const handle = kit.createHandle()
+    const response = await dispatch(
+      handle,
+      new Request('http://localhost/api/public'),
+      () => new Response(JSON.stringify({ ok: true }), {
+        headers: { 'Content-Type': 'application/json' },
+      }),
+    )
+
+    expect(response.headers.get('X-Content-Type-Options')).toBe('nosniff')
+    expect(response.headers.get('X-Frame-Options')).toBe('DENY')
+    expect(response.headers.get('Referrer-Policy')).toBe('no-referrer')
+  })
+
   it('默认也保护 SvelteKit __data.json 请求', async () => {
     const handle = kit.createHandle({ crypto: { crypto, transport: true } })
     const resolve = vi.fn(() => new Response('should not run'))
@@ -281,9 +296,35 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
     expect(body.echoed.msg).toBe('hello')
   })
 
+  it('已协商客户端的空 POST 不要求 X-Encrypted 请求体', async () => {
+    const handle = kit.createHandle({ crypto: { crypto, transport: true } })
+    const serverFetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+      const request = input instanceof Request
+        ? input
+        : new Request(new URL(input.toString(), 'http://localhost'), init)
+
+      return dispatch(handle, request, async (event) => {
+        expect(await event.request.text()).toBe('')
+        return new Response(JSON.stringify({ ok: true }), {
+          headers: { 'Content-Type': 'application/json' },
+        })
+      })
+    }
+    const client = crypto.transport.createClient({
+      keyExchangeUrl: `http://localhost${KEY_EXCHANGE_PATH}`,
+      fetch: serverFetch,
+    })
+
+    const response = await client.encryptedFetch('http://localhost/api/auth/logout', { method: 'POST' })
+
+    expect(response.status).toBe(200)
+    expect(response.headers.get(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER)).toBeNull()
+    await expect(response.json()).resolves.toEqual({ ok: true })
+  })
+
   it('svelteKit __data.json 响应使用 text/sveltekit-data 时也会被加密', async () => {
     const handle = kit.createHandle({ crypto: { crypto, transport: true } })
-    let rawDataResponse: Response | null = null
+    const rawDataResponses: Response[] = []
     const serverFetch = async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
       const request = input instanceof Request
         ? input
@@ -294,7 +335,7 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
           headers: { 'Content-Type': 'text/sveltekit-data' },
         })
 
-        rawDataResponse = response.clone()
+        rawDataResponses.push(response.clone())
         return response
       })
     }
@@ -305,7 +346,13 @@ describe('kit.createHandle({ crypto: { transport } })', () => {
 
     const response = await client.encryptedFetch('http://localhost/admin/iam/roles/__data.json?x-sveltekit-invalidated=011')
 
-    expect(rawDataResponse?.headers.get('Content-Type')).toContain('text/sveltekit-data')
+    expect(rawDataResponses).toHaveLength(1)
+    const rawDataResponse = rawDataResponses[0]
+    expect(rawDataResponse).toBeDefined()
+    if (!rawDataResponse)
+      return
+
+    expect(rawDataResponse.headers.get('Content-Type')).toContain('text/sveltekit-data')
     expect(response.headers.get(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER)).toBeNull()
     expect(response.headers.get('Content-Type')).toContain('text/sveltekit-data')
     expect(await response.text()).toBe('{"type":"data","nodes":[]}')

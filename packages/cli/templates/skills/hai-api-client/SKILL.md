@@ -104,6 +104,8 @@ Access token 存在内存中，refresh token 由服务端通过 `HttpOnly` cooki
 
 **前提**：服务端需配置 `serv.createApp({ iam, refreshCookie: {} })`，参见 `hai-serv` skill。
 
+启用 `transport` 时，登录、业务请求以及 401 后的自动刷新都会复用同一个加密 fetch 链路；不要在业务代码中手写明文 `/auth/refresh` 请求。
+
 ```ts
 import { apiClient } from '@h-ai/api-client'
 
@@ -140,6 +142,7 @@ if (login.success) {
 | `transport.keyExchangePath` | 相对于 `baseUrl` 的协商子路径，默认 `/_hai/key-exchange` |
 
 服务端必须对应启用 `serv.createApp({ transport: { crypto } })`。
+自动刷新会沿用 `transport.encryptedFetch`，并在 httpOnly cookie 模式下发送空请求体 + `credentials: 'include'`，由服务端从 cookie 读取 refresh token。
 
 ## 常见模式
 
