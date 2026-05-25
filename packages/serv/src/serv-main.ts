@@ -18,6 +18,8 @@
  * ```
  */
 
+import { oc } from '@orpc/contract'
+import { implement } from '@orpc/server'
 import { toFetch } from './adapters/serv-adapter-fetch.js'
 import { listen } from './adapters/serv-adapter-node.js'
 import { mapHaiError } from './pipelines/serv-pipeline-helper.js'
@@ -50,6 +52,12 @@ export const serv = {
 
   // OpenAPI / 导出
   generateSpec,
+
+  // Contract / Procedure 装配（封装 oRPC 实现细节，避免应用层直接依赖 `@orpc/*`）
+  /** 创建 oRPC contract 节点（封装 `@orpc/contract` 的 `oc`）。 */
+  contract: oc,
+  /** 基于 contract 创建可注入 context 的 procedure builder（封装 `@orpc/server` 的 `implement`）。 */
+  implement,
 
   // oRPC procedure 包装器
   requireAuth,

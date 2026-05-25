@@ -34,14 +34,14 @@
 4. Node 环境用 `serv.listen()` 启动；Fetch-first 运行时用 `serv.toFetch()` 导出。
 
 ```ts
-import { createApiContract, iamContract, storageContract } from '@h-ai/api-contract'
+import { apiContract } from '@h-ai/api-contract'
 import { serv } from '@h-ai/serv'
 import { createIamProcedures } from '@h-ai/serv/features/iam'
 import { createStorageProcedures } from '@h-ai/serv/features/storage'
 
-const contract = createApiContract({
-  iam: iamContract,
-  storage: storageContract,
+const contract = apiContract.create({
+  iam: apiContract.iam,
+  storage: apiContract.storage,
 })
 
 const procedures = {

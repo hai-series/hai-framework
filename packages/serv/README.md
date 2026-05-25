@@ -14,14 +14,14 @@
 ## 快速开始
 
 ```ts
-import { aiContract, createApiContract, iamContract, storageContract } from '@h-ai/api-contract'
+import { apiContract } from '@h-ai/api-contract'
 import { serv } from '@h-ai/serv'
 import { createAiProcedures } from '@h-ai/serv/features/ai'
 import { createIamProcedures } from '@h-ai/serv/features/iam'
 import { createStorageProcedures } from '@h-ai/serv/features/storage'
 
 // 1) 创建契约
-const contract = createApiContract({ iam: iamContract, storage: storageContract, ai: aiContract })
+const contract = apiContract.create({ iam: apiContract.iam, storage: apiContract.storage, ai: apiContract.ai })
 
 // 2) 组装 procedures（注入 iam / storage / ai 已初始化的 functions）
 const procedures = {
@@ -91,9 +91,9 @@ const app = serv.createApp({
 客户端使用 `@h-ai/api-client`：
 
 ```ts
-import { api } from '@h-ai/api-client'
+import { apiClient } from '@h-ai/api-client'
 
-await api.init({
+await apiClient.init({
   baseUrl: 'https://api.example.com/api/v1',
   transport: { crypto },
 })
@@ -190,9 +190,7 @@ const app = serv.createApp({
 ### 自定义 procedure（认证 + 权限）
 
 ```ts
-import { implement } from '@orpc/server'
-
-const p = implement(myContract).$context<ServContext>()
+const p = serv.implement(myContract).$context<ServContext>()
 
 const updateProfile = p.users.update.handler(
   serv.requirePermission('users.write', async ({ input, context }) => {
@@ -367,7 +365,7 @@ const app = serv.createApp({
 
 ```ts
 // 默认存储即 httpOnly cookie，refreshPath 默认 /auth/refresh，无需额外配置。
-await api.init({
+await apiClient.init({
   baseUrl: 'https://api.example.com/api/v1',
   auth: {},
 })

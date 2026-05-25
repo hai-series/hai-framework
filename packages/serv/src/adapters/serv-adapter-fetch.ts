@@ -8,8 +8,14 @@
 
 import type { Hono } from 'hono'
 
-/** Fetch runtime handler。 */
-export type ServFetchHandler = (request: Request) => Response | Promise<Response>
+/**
+ * Fetch runtime handler。
+ *
+ * 兼容标准 Web `fetch` 签名 `(input, init)` —— 既可作为 Cloudflare Workers / Bun
+ * 的 `fetch` 导出，也可作为 oRPC client `fetch` 选项的替代实现，让客户端在测试
+ * 中直连 in-process 服务。
+ */
+export type ServFetchHandler = typeof fetch
 
 /**
  * 将 Hono app 转成 Fetch handler。
@@ -24,8 +30,20 @@ export type ServFetchHandler = (request: Request) => Response | Promise<Response
  *
  * // Bun
  * Bun.serve({ fetch: serv.toFetch(app), port: 3000 })
+ *
+ * // 测试：把服务端 app 当作 fetch 注入到 client，免去 HTTP 监听
+ * const client = apiClient.create(contract)
+ * await client.init({ baseUrl: 'http://test', fetch: serv.toFetch(app) })
  * ```
  */
 export function toFetch(app: Hono): ServFetchHandler {
-  return request => app.fetch(request)
+  // 包装为标准 fetch 签名：接受 `Request | URL | string` + `RequestInit?`，
+  // 内部统一转为 `Request` 再委托给 Hono。
+  const handler = (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+    const request = input instanceof Request
+      ? input
+      : new Request(typeof input === 'string' ? input : input.toString(), init)
+    return Promise.resolve(app.fetch(request))
+  }
+  return handler as ServFetchHandler
 }

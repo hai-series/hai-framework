@@ -1,7 +1,7 @@
 import type { FileMetadata, ListResult, StorageFunctions } from '@h-ai/storage'
 import type { ServContext } from '../src/serv-context.js'
 import { Buffer } from 'node:buffer'
-import { storageContract } from '@h-ai/api-contract'
+import { apiContract } from '@h-ai/api-contract'
 import { core, HaiCommonError, ok } from '@h-ai/core'
 import { describe, expect, it } from 'vitest'
 import { createStorageProcedures } from '../src/features/serv-feature-storage.js'
@@ -62,7 +62,7 @@ function createContext(locale: string) {
 describe('serv feature storage', () => {
   it('对非法存储 key 返回本地化字段错误', async () => {
     const app = serv.createApp({
-      contract: storageContract,
+      contract: apiContract.storage,
       procedures: createStorageProcedures({ storage: createStorageMock() }),
       createContext: createContext('en-US'),
       http: { openapi: false, docs: false, rpc: false },
@@ -86,7 +86,7 @@ describe('serv feature storage', () => {
 
   it('deleteMany 会指出首个非法 key 的数组字段路径', async () => {
     const app = serv.createApp({
-      contract: storageContract,
+      contract: apiContract.storage,
       procedures: createStorageProcedures({ storage: createStorageMock() }),
       createContext: createContext('zh-CN'),
       http: { openapi: false, docs: false, rpc: false },

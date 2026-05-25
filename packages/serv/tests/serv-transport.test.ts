@@ -1,14 +1,13 @@
 import type { CryptoFunctions, TransportEncryptionManager } from '@h-ai/crypto'
 import type { ServContext } from '../src/serv-context.js'
-import { createApiContract } from '@h-ai/api-contract'
+import { apiContract } from '@h-ai/api-contract'
 import { err } from '@h-ai/core'
 import { crypto, TRANSPORT_PROTOCOL } from '@h-ai/crypto'
-import { implement } from '@orpc/server'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { serv } from '../src/serv-main.js'
 
-const contract = createApiContract({})
-const procedures = implement(contract).$context<ServContext>().router({})
+const contract = apiContract.create({})
+const procedures = serv.implement(contract).$context<ServContext>().router({})
 
 function createCryptoWithTransportServer(
   createServer: CryptoFunctions['transport']['createServer'],

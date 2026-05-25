@@ -197,7 +197,7 @@ export function mountRefreshCookieRoutes(
   const { cookieName, maxAge, isSecure, refreshCookiePath, onRefresh } = resolveRefreshCookieConfig(apiPrefix, config, iam)
 
   // ─── login / register / loginWithOtp：oRPC 处理后，拦截成功响应写入 cookie ──
-  // 路径从 iamContract（IAM_AUTH_ROUTES）读取，保持与 contract 定义同步。
+  // 路径从 apiContract.iam（IAM_AUTH_ROUTES）读取，保持与 contract 定义同步。
   const loginPaths = [
     `${apiPrefix}${IAM_AUTH_ROUTES.login}`,
     `${apiPrefix}${IAM_AUTH_ROUTES.loginWithOtp}`,

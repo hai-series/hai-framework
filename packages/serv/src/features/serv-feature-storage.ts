@@ -25,12 +25,14 @@ import type { HaiResult } from '@h-ai/core'
 import type { FileMetadata, ListResult, StorageFunctions } from '@h-ai/storage'
 import type { ServContext } from '../serv-context.js'
 import type { ServMessageKey } from '../serv-i18n.js'
-import { storageContract } from '@h-ai/api-contract'
+import { apiContract } from '@h-ai/api-contract'
 import { err, HaiCommonError, ok } from '@h-ai/core'
 import { implement } from '@orpc/server'
 import { requireAuth } from '../pipelines/serv-pipeline-require-auth.js'
 import { servM } from '../serv-i18n.js'
 import { mapHaiResult } from './serv-feature-helpers.js'
+
+const storageContract = apiContract.storage
 
 const STORAGE_KEY_MAX_LENGTH = 1024
 
