@@ -614,6 +614,8 @@ procedure 包装器内置以下错误：
 4. serv 读取 cookie → 调用 `iam.session.refresh` → 返回新 access token + 更新 cookie（响应体不暴露 refresh token）
 5. POST `/auth/logout` → serv 清除 cookie（`Max-Age=0`）
 
+若同时启用 `transport: { crypto }`，`/auth/refresh` 也必须走加密链路；cookie-only 刷新请求允许空 body，服务端不要把 `Request.body === null` 误判为需要解密的请求体。
+
 ### 配置
 
 ```typescript

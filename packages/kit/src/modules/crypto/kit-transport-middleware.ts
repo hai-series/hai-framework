@@ -89,7 +89,7 @@ export function transportEncryptionMiddleware(config: TransportEncryptionConfig)
     }
 
     // ── 解密请求 ──
-    if (hasBody(event.request.method)) {
+    if (hasBody(event.request.method) && !isRequestBodyEmpty(event.request)) {
       const decryptResult = await decryptRequestBody(event, manager, requireEncryption)
       if (decryptResult) {
         return decryptResult
@@ -224,6 +224,18 @@ async function handleKeyExchange(
  */
 function hasBody(method: string): boolean {
   return ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method.toUpperCase())
+}
+
+/** 判断请求是否真实携带 body，避免空 POST 被误判为非法密文。 */
+function isRequestBodyEmpty(request: Request): boolean {
+  if (request.body === null)
+    return true
+
+  const contentLength = request.headers.get('Content-Length')
+  if (contentLength !== null)
+    return Number.parseInt(contentLength, 10) === 0
+
+  return false
 }
 
 interface RequestHolder {

@@ -31,6 +31,17 @@ function generateId(prefix: string): string {
 }
 
 /**
+ * 为 SvelteKit 响应补充默认安全头。
+ *
+ * 仅设置不会破坏页面渲染的基础头；CSP 需要应用结合 nonce / 静态资源策略单独配置。
+ */
+function applyDefaultSecurityHeaders(response: Response): void {
+  response.headers.set('X-Content-Type-Options', 'nosniff')
+  response.headers.set('X-Frame-Options', 'DENY')
+  response.headers.set('Referrer-Policy', 'no-referrer')
+}
+
+/**
  * 创建 hai handle hook
  *
  * 整合会话解析、路由守卫、中间件链与统一错误处理的 SvelteKit Handle 工厂。
@@ -229,6 +240,7 @@ export function createHandle(config: HandleConfig = {}): Handle {
       ? await transportMiddleware(context, runRequest)
       : await runRequest()
 
+    applyDefaultSecurityHeaders(response)
     response.headers.set('X-Request-Id', requestId)
     return response
   }
