@@ -1,8 +1,8 @@
-import { aiContract, createApiContract, iamContract, storageContract } from '@h-ai/api-contract'
+import { apiContract } from '@h-ai/api-contract'
 import { describe, expect, it } from 'vitest'
 import { createDocsPage, generateSpec, getScalarScript, SCALAR_ROUTE } from '../src/serv-openapi.js'
 
-const testContract = createApiContract({ iam: iamContract, storage: storageContract, ai: aiContract })
+const testContract = apiContract.create({ iam: apiContract.iam, storage: apiContract.storage, ai: apiContract.ai })
 
 describe('generateSpec', () => {
   it('produces an OpenAPI document with bearer security scheme', async () => {

@@ -27,13 +27,15 @@ import type {
 import type { HaiResult, PaginatedResult } from '@h-ai/core'
 import type { IamFunctions, Permission, Role, TokenPair, User } from '@h-ai/iam'
 import type { ServContext } from '../serv-context.js'
-import { iamContract } from '@h-ai/api-contract'
+import { apiContract } from '@h-ai/api-contract'
 import { core, err, HaiCommonError, ok } from '@h-ai/core'
 import { implement } from '@orpc/server'
 import { requireAuth } from '../pipelines/serv-pipeline-require-auth.js'
 import { requirePermission } from '../pipelines/serv-pipeline-require-permission.js'
 import { servM } from '../serv-i18n.js'
 import { mapHaiResult } from './serv-feature-helpers.js'
+
+const iamContract = apiContract.iam
 
 const iamFeatureLogger = core.logger.child({ module: 'serv', scope: 'feature-iam' })
 

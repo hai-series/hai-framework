@@ -1,12 +1,11 @@
 import type { ServContext } from '../src/serv-context.js'
-import { createApiContract } from '@h-ai/api-contract'
+import { apiContract } from '@h-ai/api-contract'
 import { err, HaiCommonError, ok } from '@h-ai/core'
-import { implement } from '@orpc/server'
 import { describe, expect, it } from 'vitest'
 import { serv } from '../src/serv-main.js'
 
-const contract = createApiContract({})
-const procedures = implement(contract).$context<ServContext>().router({})
+const contract = apiContract.create({})
+const procedures = serv.implement(contract).$context<ServContext>().router({})
 
 describe('@h-ai/serv', () => {
   it('keeps root API focused on runtime-level helpers', () => {

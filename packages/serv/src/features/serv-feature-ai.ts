@@ -27,11 +27,13 @@ import type {
 } from '@h-ai/api-contract'
 import type { HaiResult } from '@h-ai/core'
 import type { ServContext } from '../serv-context.js'
-import { aiContract } from '@h-ai/api-contract'
+import { apiContract } from '@h-ai/api-contract'
 import { ok } from '@h-ai/core'
 import { implement } from '@orpc/server'
 import { requireAuth } from '../pipelines/serv-pipeline-require-auth.js'
 import { wrapItemsResult } from './serv-feature-helpers.js'
+
+const aiContract = apiContract.ai
 
 /** AI 默认 procedures 依赖。 */
 export interface AiProcedureDeps {

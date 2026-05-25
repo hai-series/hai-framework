@@ -5,7 +5,7 @@ import { mountRefreshCookieRoutes } from '../src/serv-cookie-auth.js'
 const API_PREFIX = '/api/v1'
 const COOKIE_NAME = 'hai_refresh_token'
 const REFRESH_PATH = `${API_PREFIX}/auth/refresh`
-// OTP 登录的实际路径（与 iamContract 对齐）
+// OTP 登录的实际路径（与 apiContract.iam 对齐）
 const LOGIN_WITH_OTP_PATH = `${API_PREFIX}/auth/login/otp`
 
 const MOCK_TOKENS = {

@@ -86,7 +86,8 @@ export function createTransportMiddleware(
       return jsonError(servM('serv_transportClientKeyNotFound'), 400)
 
     // Step 4：对带 body 的请求先解密；解密后下游看到的是普通 JSON Request。
-    if (hasBody(c.req.method)) {
+    // 空 body 请求（如无 input 的 POST 过程）无需解密；下游 Zod 校验会拒绝缺字段输入。
+    if (hasBody(c.req.method) && !isEmptyBody(c.req.raw)) {
       const decErr = await decryptRequestInPlace(c, manager)
       if (decErr)
         return decErr
@@ -240,6 +241,15 @@ function isEmptyResponse(response: Response): boolean {
 
 function hasBody(method: string): boolean {
   return ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method.toUpperCase())
+}
+
+/** 判断请求是否携带 body：Content-Length=0 或缺失 Content-Type 视为空 body。 */
+function isEmptyBody(req: Request): boolean {
+  const cl = req.headers.get('Content-Length')
+  if (cl !== null)
+    return Number.parseInt(cl, 10) === 0
+  // 无 Content-Length 且无 Content-Type 的 body-bearing 请求按空 body 处理。
+  return !req.headers.get('Content-Type')
 }
 
 function jsonError(message: string, status: number): Response {
