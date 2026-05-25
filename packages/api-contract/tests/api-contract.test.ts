@@ -1,24 +1,17 @@
 import { describe, expect, it } from 'vitest'
 import { z } from 'zod'
 import {
-  aiContract,
-  createApiContract,
-  haiResultSchema,
-  HaiVoidResultSchema,
-  iamContract,
+  apiContract,
   IamLoginInputSchema,
   IamRefreshTokenOutputSchema,
-  paginatedSchema,
   PaginationQuerySchema,
-  paymentContract,
   PaymentCreateOrderInputSchema,
-  storageContract,
 } from '../src/index.js'
 
 describe('@h-ai/api-contract', () => {
-  it('createApiContract 过滤未启用领域', () => {
-    const contract = createApiContract({
-      ai: aiContract,
+  it('apiContract.create 过滤未启用领域', () => {
+    const contract = apiContract.create({
+      ai: apiContract.ai,
       storage: false,
       payment: undefined,
     })
@@ -28,8 +21,8 @@ describe('@h-ai/api-contract', () => {
     expect('payment' in contract).toBe(false)
   })
 
-  it('createApiContract 启用 iam/storage/ai 三个领域', () => {
-    const contract = createApiContract({ iam: iamContract, storage: storageContract, ai: aiContract })
+  it('apiContract.create 启用 iam/storage/ai 三个领域', () => {
+    const contract = apiContract.create({ iam: apiContract.iam, storage: apiContract.storage, ai: apiContract.ai })
     expect(contract.iam.auth.login).toBeDefined()
     expect(contract.storage.files.list).toBeDefined()
     expect(contract.ai.chats.createCompletion).toBeDefined()
@@ -55,11 +48,11 @@ describe('@h-ai/api-contract', () => {
   })
 
   it('storage 和 payment contract 使用明确 OpenAPI 路由', () => {
-    expect(routeOf(storageContract.presignedUrls.createDownload)).toEqual({
+    expect(routeOf(apiContract.storage.presignedUrls.createDownload)).toEqual({
       method: 'POST',
       path: '/storage/presigned-urls/download',
     })
-    expect(routeOf(paymentContract.orders.create)).toEqual({
+    expect(routeOf(apiContract.payment.orders.create)).toEqual({
       method: 'POST',
       path: '/payment/orders',
     })
@@ -81,8 +74,8 @@ describe('@h-ai/api-contract', () => {
     }).success).toBe(false)
   })
 
-  it('haiResultSchema 形成 success/error 区分联合', () => {
-    const schema = haiResultSchema(z.object({ id: z.string() }))
+  it('apiContract.haiResultSchema 形成 success/error 区分联合', () => {
+    const schema = apiContract.haiResultSchema(z.object({ id: z.string() }))
 
     expect(schema.safeParse({ success: true, data: { id: 'u1' } }).success).toBe(true)
     expect(schema.safeParse({
@@ -95,12 +88,12 @@ describe('@h-ai/api-contract', () => {
     expect(schema.safeParse({ success: true, data: { id: 1 } }).success).toBe(false)
   })
 
-  it('haiVoidResultSchema 接受 success+undefined data', () => {
-    expect(HaiVoidResultSchema.safeParse({ success: true, data: undefined }).success).toBe(true)
+  it('apiContract.voidResultSchema 接受 success+undefined data', () => {
+    expect(apiContract.voidResultSchema.safeParse({ success: true, data: undefined }).success).toBe(true)
   })
 
-  it('paginatedSchema 校验列表结构与计数', () => {
-    const schema = paginatedSchema(z.object({ id: z.string() }))
+  it('apiContract.paginatedSchema 校验列表结构与计数', () => {
+    const schema = apiContract.paginatedSchema(z.object({ id: z.string() }))
     expect(schema.safeParse({
       items: [{ id: 'a' }],
       total: 1,
@@ -124,9 +117,9 @@ describe('@h-ai/api-contract', () => {
   })
 
   it('storage / ai 关键路由暴露正确的 OpenAPI 方法', () => {
-    expect(routeOf(storageContract.files.delete)).toMatchObject({ method: 'DELETE' })
-    expect(routeOf(storageContract.files.list)).toMatchObject({ method: 'GET' })
-    expect(routeOf(aiContract.chats.createCompletion)).toMatchObject({
+    expect(routeOf(apiContract.storage.files.delete)).toMatchObject({ method: 'DELETE' })
+    expect(routeOf(apiContract.storage.files.list)).toMatchObject({ method: 'GET' })
+    expect(routeOf(apiContract.ai.chats.createCompletion)).toMatchObject({
       method: 'POST',
       path: '/ai/chats/completions',
     })

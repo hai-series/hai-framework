@@ -4,18 +4,19 @@
 
 ## 能力概览
 
-- `iamContract`、`storageContract`、`aiContract`、`paymentContract`：领域级 contract。
-- `createApiContract()`：按应用场景组合启用的领域 contract。
+- `apiContract.iam`、`apiContract.storage`、`apiContract.ai`、`apiContract.payment`：领域级 contract。
+- `apiContract.create()`：按应用场景组合启用的领域 contract。
+- `apiContract.haiResultSchema()` / `apiContract.voidResultSchema` / `apiContract.paginatedSchema()`：公共 DTO Schema 工厂。
 - 公共 DTO Schema：所有 HTTP 输出统一包装为 `HaiResult<T>`。
 
 ## 快速开始
 
 ```ts
-import { createApiContract, iamContract, storageContract } from '@h-ai/api-contract'
+import { apiContract } from '@h-ai/api-contract'
 
-export const contract = createApiContract({
-  iam: iamContract,
-  storage: storageContract,
+export const contract = apiContract.create({
+  iam: apiContract.iam,
+  storage: apiContract.storage,
   ai: false,
 })
 ```
@@ -23,9 +24,9 @@ export const contract = createApiContract({
 ## API 契约
 
 ```ts
-import { aiContract, createApiContract, iamContract, storageContract } from '@h-ai/api-contract'
+import { apiContract } from '@h-ai/api-contract'
 
-const myContract = createApiContract({ iam: iamContract, storage: storageContract, ai: aiContract })
+const myContract = apiContract.create({ iam: apiContract.iam, storage: apiContract.storage, ai: apiContract.ai })
 
 myContract.iam.auth.login
 myContract.storage.presignedUrls.createUpload
@@ -35,20 +36,20 @@ myContract.ai.chats.createCompletion
 客户端通过 `@h-ai/api-client` 直接调用嵌套方法：
 
 ```ts
-import { api } from '@h-ai/api-client'
+import { apiClient } from '@h-ai/api-client'
 
-await api.init({ baseUrl: 'https://api.example.com/api/v1' })
-const login = await api.iam.auth.login({ identifier: 'alice', password: 'secret' })
-await api.close()
+await apiClient.init({ baseUrl: 'https://api.example.com/api/v1' })
+const login = await apiClient.iam.auth.login({ identifier: 'alice', password: 'secret' })
+await apiClient.close()
 ```
 
 服务端通过 `@h-ai/serv` 挂载：
 
 ```ts
-import { aiContract, createApiContract, iamContract, storageContract } from '@h-ai/api-contract'
+import { apiContract } from '@h-ai/api-contract'
 import { serv } from '@h-ai/serv'
 
-const contract = createApiContract({ iam: iamContract, storage: storageContract, ai: aiContract })
+const contract = apiContract.create({ iam: apiContract.iam, storage: apiContract.storage, ai: apiContract.ai })
 
 const app = serv.createApp({
   contract,
@@ -59,8 +60,9 @@ const app = serv.createApp({
 
 ## API 概览
 
-- `createApiContract(options)`：过滤 `false` / `undefined` 领域并组合应用级 contract。
-- `Iam*Schema` / `Storage*Schema` / `Ai*Schema` / `Payment*Schema`：公共 HTTP DTO Schema。
+- `apiContract.create(options)`：过滤 `false` / `undefined` 领域并组合应用级 contract。
+- `apiContract.haiResultSchema(dataSchema)` / `apiContract.voidResultSchema` / `apiContract.paginatedSchema(itemSchema)`：公共 DTO Schema 工厂。
+- `Iam*Schema` / `Storage*Schema` / `Ai*Schema` / `Payment*Schema`：领域输入 / 输出 DTO Schema。
 
 ## 配置
 
