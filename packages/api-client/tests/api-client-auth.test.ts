@@ -3,11 +3,12 @@
  */
 
 import { describe, expect, it, vi } from 'vitest'
-import { createHttpOnlyCookieTokenStorage, createMemoryTokenStorage, createTokenManager } from '../src/api-client-auth.js'
+import { createTokenManager } from '../src/api-client-auth.js'
+import { apiClient } from '../src/index.js'
 
-describe('createMemoryTokenStorage', () => {
+describe('apiClient.tokenStorage.memory', () => {
   it('存取 Token', async () => {
-    const storage = createMemoryTokenStorage()
+    const storage = apiClient.tokenStorage.memory()
 
     await storage.setAccessToken('access-123')
     await storage.setRefreshToken('refresh-456')
@@ -17,7 +18,7 @@ describe('createMemoryTokenStorage', () => {
   })
 
   it('clear 清空所有 Token', async () => {
-    const storage = createMemoryTokenStorage()
+    const storage = apiClient.tokenStorage.memory()
     await storage.setAccessToken('a')
     await storage.setRefreshToken('r')
 
@@ -30,7 +31,7 @@ describe('createMemoryTokenStorage', () => {
 
 describe('createTokenManager', () => {
   it('refresh 成功后更新存储并通知回调', async () => {
-    const storage = createMemoryTokenStorage()
+    const storage = apiClient.tokenStorage.memory()
     await storage.setRefreshToken('old-refresh')
 
     const newTokens = {
@@ -60,7 +61,7 @@ describe('createTokenManager', () => {
   })
 
   it('refresh 支持 HaiResult tokens 包装格式', async () => {
-    const storage = createMemoryTokenStorage()
+    const storage = apiClient.tokenStorage.memory()
     await storage.setRefreshToken('old-refresh')
 
     const newTokens = {
@@ -86,7 +87,7 @@ describe('createTokenManager', () => {
   })
 
   it('无 refreshToken 时刷新失败', async () => {
-    const storage = createMemoryTokenStorage()
+    const storage = apiClient.tokenStorage.memory()
     const onFailed = vi.fn()
     const manager = createTokenManager(storage, 'https://api.test.com/auth/refresh', vi.fn(), onFailed)
 
@@ -97,7 +98,7 @@ describe('createTokenManager', () => {
   })
 
   it('refresh 接口 401 时清空存储并触发失败回调', async () => {
-    const storage = createMemoryTokenStorage()
+    const storage = apiClient.tokenStorage.memory()
     await storage.setRefreshToken('expired-token')
 
     const mockFetch = vi.fn().mockResolvedValue(new Response(null, { status: 401 }))
@@ -112,7 +113,7 @@ describe('createTokenManager', () => {
   })
 
   it('并发 refresh 去重', async () => {
-    const storage = createMemoryTokenStorage()
+    const storage = apiClient.tokenStorage.memory()
     await storage.setRefreshToken('rt')
 
     const newTokens = {
@@ -150,7 +151,7 @@ describe('createTokenManager', () => {
   })
 
   it('onTokenRefreshed 返回取消订阅函数', async () => {
-    const storage = createMemoryTokenStorage()
+    const storage = apiClient.tokenStorage.memory()
     await storage.setRefreshToken('rt')
 
     const newTokens = {
@@ -182,7 +183,7 @@ describe('createTokenManager', () => {
   })
 
   it('refresh 响应缺少必要字段时返回 null', async () => {
-    const storage = createMemoryTokenStorage()
+    const storage = apiClient.tokenStorage.memory()
     await storage.setRefreshToken('rt')
 
     // 响应缺少 refreshToken
@@ -204,7 +205,7 @@ describe('createTokenManager', () => {
   })
 
   it('refresh 响应 accessToken 为空字符串时返回 null', async () => {
-    const storage = createMemoryTokenStorage()
+    const storage = apiClient.tokenStorage.memory()
     await storage.setRefreshToken('rt')
 
     const mockFetch = vi.fn().mockResolvedValue(
@@ -224,7 +225,7 @@ describe('createTokenManager', () => {
   })
 
   it('refresh 接口 5xx 时保留 Token 等待重试', async () => {
-    const storage = createMemoryTokenStorage()
+    const storage = apiClient.tokenStorage.memory()
     await storage.setRefreshToken('keep-me')
 
     const mockFetch = vi.fn().mockResolvedValue(new Response(null, { status: 503 }))
@@ -240,7 +241,7 @@ describe('createTokenManager', () => {
   })
 
   it('refresh 网络异常时保留 Token 不清空', async () => {
-    const storage = createMemoryTokenStorage()
+    const storage = apiClient.tokenStorage.memory()
     await storage.setRefreshToken('keep-me-too')
 
     const mockFetch = vi.fn().mockRejectedValue(new Error('network down'))
@@ -255,9 +256,9 @@ describe('createTokenManager', () => {
   })
 })
 
-describe('createHttpOnlyCookieTokenStorage', () => {
+describe('apiClient.tokenStorage.httpOnlyCookie', () => {
   it('access token 可读写（内存存储）', async () => {
-    const storage = createHttpOnlyCookieTokenStorage()
+    const storage = apiClient.tokenStorage.httpOnlyCookie()
     expect(await storage.getAccessToken()).toBeNull()
 
     await storage.setAccessToken('access-abc')
@@ -265,14 +266,14 @@ describe('createHttpOnlyCookieTokenStorage', () => {
   })
 
   it('getRefreshToken 返回哨兵值而非 null（确保 doRefresh 不会短路跳过）', async () => {
-    const storage = createHttpOnlyCookieTokenStorage()
+    const storage = apiClient.tokenStorage.httpOnlyCookie()
     const rt = await storage.getRefreshToken()
     // 非 null/空，确保 TokenManager 能进入 doRefresh 逻辑
     expect(rt).toBeTruthy()
   })
 
   it('setRefreshToken 是 no-op（由服务端 Set-Cookie 管理）', async () => {
-    const storage = createHttpOnlyCookieTokenStorage()
+    const storage = apiClient.tokenStorage.httpOnlyCookie()
     // 不抛异常即可；JS 端无法写入 httpOnly cookie
     await expect(storage.setRefreshToken('ignored')).resolves.toBeUndefined()
     // 读取仍返回哨兵，不受 setRefreshToken 影响
@@ -280,7 +281,7 @@ describe('createHttpOnlyCookieTokenStorage', () => {
   })
 
   it('clear 清空内存 access token，不影响 httpOnly cookie', async () => {
-    const storage = createHttpOnlyCookieTokenStorage()
+    const storage = apiClient.tokenStorage.httpOnlyCookie()
     await storage.setAccessToken('access-abc')
     await storage.clear()
     // access token 已清空（内存）
@@ -290,7 +291,7 @@ describe('createHttpOnlyCookieTokenStorage', () => {
   })
 
   it('与 TokenManager 协作：refresh 请求不在 body 中携带 refreshToken，且接受服务端擦除后的响应', async () => {
-    const storage = createHttpOnlyCookieTokenStorage()
+    const storage = apiClient.tokenStorage.httpOnlyCookie()
     const newTokens = {
       accessToken: 'new-access',
       expiresIn: 3600,

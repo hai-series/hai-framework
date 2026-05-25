@@ -4,24 +4,25 @@
 
 ## 能力概览
 
-- `api`：默认绑定 iam/storage/ai 领域的单例 typed client。
-- `createApiClient(contract)`：为自定义 contract 创建 typed client。
+- `apiClient`：默认绑定 iam/storage/ai 领域的统一 typed client 入口。
+- `apiClient.create(contract)`：为自定义 contract 创建 typed client。
+- `apiClient.tokenStorage.{memory,localStorage,httpOnlyCookie}()`：Token 存储工厂。
 - 支持自定义 `fetch`，适配浏览器、Node、Capacitor、小程序桥接层。
 - 支持 Bearer Token 自动注入、401 后刷新并重试一次。
 - 网络错误统一转换为 `HaiResult` 错误。
-- 可选传输加密：`api.init({ transport: { crypto } })` 自动使用 `crypto.transport.createClient()`。
+- 可选传输加密：`apiClient.init({ transport: { crypto } })` 自动使用 `crypto.transport.createClient()`。
 
 ## 快速开始
 
 ```ts
-import { api } from '@h-ai/api-client'
+import { apiClient } from '@h-ai/api-client'
 
-await api.init({
+await apiClient.init({
   baseUrl: 'https://api.example.com/api/v1',
-  auth: {}, // 默认使用 httpOnly cookie 存储（推荐）；SSR 测试请显式传入 createMemoryTokenStorage()
+  auth: {}, // 默认使用 httpOnly cookie 存储（推荐）；SSR 测试请显式传入 apiClient.tokenStorage.memory()
 })
 
-const login = await api.iam.auth.login({
+const login = await apiClient.iam.auth.login({
   identifier: 'alice',
   password: 'secret',
 })
@@ -29,12 +30,12 @@ const login = await api.iam.auth.login({
 if (login.success) {
   // httpOnly cookie 模式下 refresh token 由服务端 Set-Cookie 管理，
   // api-client 默认存储只需要把 access token 写入内存。
-  await api.auth.setTokens(login.data.tokens)
+  await apiClient.auth.setTokens(login.data.tokens)
 }
 
-const me = await api.iam.auth.currentUser()
+const me = await apiClient.iam.auth.currentUser()
 
-await api.close()
+await apiClient.close()
 ```
 
 ### 启用传输加密
@@ -42,18 +43,18 @@ await api.close()
 服务端需先启用 `serv.createApp({ transport: { crypto } })`；客户端只注入同一个 `@h-ai/crypto` 服务实例，无需手写密钥协商代码。
 
 ```ts
-import { api } from '@h-ai/api-client'
+import { apiClient } from '@h-ai/api-client'
 import { crypto } from '@h-ai/crypto'
 
 await crypto.init()
 
-await api.init({
+await apiClient.init({
   baseUrl: 'https://api.example.com/api/v1',
   auth: {},
   transport: { crypto }, // 默认协商路径：/api/v1/_hai/key-exchange
 })
 
-await api.close()
+await apiClient.close()
 await crypto.close()
 ```
 
@@ -62,11 +63,11 @@ await crypto.close()
 自定义应用可以绑定自己的 oRPC contract：
 
 ```ts
-import { createApiClient } from '@h-ai/api-client'
-import { createApiContract, iamContract } from '@h-ai/api-contract'
+import { apiClient } from '@h-ai/api-client'
+import { apiContract } from '@h-ai/api-contract'
 
-const contract = createApiContract({ iam: iamContract })
-const client = createApiClient(contract)
+const contract = apiContract.create({ iam: apiContract.iam })
+const client = apiClient.create(contract)
 
 await client.init({ baseUrl: 'https://api.example.com/api/v1' })
 const result = await client.iam.auth.login({ identifier: 'alice', password: 'secret' })
@@ -74,16 +75,16 @@ const result = await client.iam.auth.login({ identifier: 'alice', password: 'sec
 
 ## API 概览
 
-- `api.init(config)`：初始化默认 client。
-- `api.close()`：清理 client 状态。
-- `api.auth.setTokens(tokens)`：写入 access token；非 httpOnly 存储会同时写入 refresh token。
-- `api.auth.clear()`：清理 token。
-- `createApiClient(contract)`：创建自定义 typed client。
+- `apiClient.init(config)`：初始化默认 client。
+- `apiClient.close()`：清理 client 状态。
+- `apiClient.auth.setTokens(tokens)`：写入 access token；非 httpOnly 存储会同时写入 refresh token。
+- `apiClient.auth.clear()`：清理 token。
+- `apiClient.create(contract)`：创建自定义 typed client。
 
 ## 配置
 
 - `baseUrl`：API 基础地址，通常包含 `/api/v1`。
-- `auth.storage`：Token 存储适配器；默认 `createHttpOnlyCookieTokenStorage()`（浏览器推荐）；SSR / 测试场景请显式传入 `createMemoryTokenStorage()`。
+- `auth.storage`：Token 存储适配器；默认 `apiClient.tokenStorage.httpOnlyCookie()`（浏览器推荐）；SSR / 测试场景请显式传入 `apiClient.tokenStorage.memory()`。
 - `auth.refreshPath`：刷新 token 路径，默认 `/auth/refresh`。
 - `timeout`：请求超时，默认 30000ms。
 - `headers`：静态或动态公共请求头。
@@ -96,7 +97,7 @@ const result = await client.iam.auth.login({ identifier: 'alice', password: 'sec
 业务 API 返回 `HaiResult<T>`：
 
 ```ts
-const result = await api.iam.auth.currentUser()
+const result = await apiClient.iam.auth.currentUser()
 if (!result.success) {
   // result.error.code / result.error.message
 }

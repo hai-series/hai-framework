@@ -1,11 +1,11 @@
-import { haiResultSchema } from '@h-ai/api-contract'
+import { apiContract } from '@h-ai/api-contract'
 import { crypto } from '@h-ai/crypto'
 import { oc } from '@orpc/contract'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { z } from 'zod'
-import { createApiClient } from '../src/api-client-main.js'
+import { apiClient } from '../src/index.js'
 
-const OutputSchema = haiResultSchema(z.object({ echoed: z.unknown() }))
+const OutputSchema = apiContract.haiResultSchema(z.object({ echoed: z.unknown() }))
 
 const testContract = {
   echo: oc.route({ method: 'POST', path: '/echo' }).input(z.object({ msg: z.string() })).output(OutputSchema),
@@ -62,7 +62,7 @@ describe('api-client transport', () => {
   })
 
   it('encrypts request and decrypts response transparently via crypto.transport', async () => {
-    const client = createApiClient(testContract)
+    const client = apiClient.create(testContract)
     const init = await client.init({
       baseUrl: 'http://api.test/api/v1',
       fetch: makeServerFetch(),

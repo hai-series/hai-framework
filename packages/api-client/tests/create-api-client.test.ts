@@ -1,31 +1,29 @@
-import { haiResultSchema } from '@h-ai/api-contract'
+import { apiContract } from '@h-ai/api-contract'
 import { oc } from '@orpc/contract'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
-import { createMemoryTokenStorage } from '../src/api-client-auth.js'
-import { api, createApiClient } from '../src/api-client-main.js'
-import { HaiApiClientError } from '../src/api-client-types.js'
+import { apiClient, HaiApiClientError } from '../src/index.js'
 
-const HealthOutputSchema = haiResultSchema(z.object({ status: z.string() }))
+const HealthOutputSchema = apiContract.haiResultSchema(z.object({ status: z.string() }))
 
 const testContract = {
   health: oc.route({ method: 'GET', path: '/health' }).output(HealthOutputSchema),
 }
 
-describe('createApiClient', () => {
+describe('apiClient.create', () => {
   afterEach(async () => {
-    await api.close()
+    await apiClient.close()
   })
 
   it('初始状态为未初始化', () => {
-    const client = createApiClient(testContract)
+    const client = apiClient.create(testContract)
 
     expect(client.isInitialized).toBe(false)
     expect(client.config).toBeNull()
   })
 
   it('未初始化调用返回 NOT_INITIALIZED', async () => {
-    const client = createApiClient(testContract)
+    const client = apiClient.create(testContract)
 
     const result = await client.health()
 
@@ -42,7 +40,7 @@ describe('createApiClient', () => {
         headers: { 'content-type': 'application/json' },
       }),
     )
-    const client = createApiClient(testContract)
+    const client = apiClient.create(testContract)
 
     const initResult = await client.init({ baseUrl: 'https://api.test.com/api/v1', fetch })
     const result = await client.health()
@@ -56,7 +54,7 @@ describe('createApiClient', () => {
   })
 
   it('401 后使用 refreshPath 刷新 token 并重试', async () => {
-    const storage = createMemoryTokenStorage()
+    const storage = apiClient.tokenStorage.memory()
     await storage.setAccessToken('old-access')
     await storage.setRefreshToken('old-refresh')
 
@@ -85,7 +83,7 @@ describe('createApiClient', () => {
       }))
     })
 
-    const client = createApiClient(testContract)
+    const client = apiClient.create(testContract)
     await client.init({
       baseUrl: 'https://api.test.com/api/v1',
       fetch,
@@ -100,7 +98,7 @@ describe('createApiClient', () => {
     expect(fetch).toHaveBeenCalledTimes(3)
   })
 
-  it('默认 api 单例绑定 iam/storage/ai contract', async () => {
+  it('apiClient 默认单例绑定 iam/storage/ai contract，并保留 create/tokenStorage 入口', async () => {
     const fetch = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ success: true, data: { status: 'ok' } }), {
         status: 200,
@@ -108,11 +106,13 @@ describe('createApiClient', () => {
       }),
     )
 
-    const initResult = await api.init({ baseUrl: 'https://api.test.com/api/v1', fetch })
+    const initResult = await apiClient.init({ baseUrl: 'https://api.test.com/api/v1', fetch })
 
     expect(initResult.success).toBe(true)
-    expect(api.isInitialized).toBe(true)
-    expect(api.config?.baseUrl).toBe('https://api.test.com/api/v1')
+    expect(apiClient.isInitialized).toBe(true)
+    expect(apiClient.config?.baseUrl).toBe('https://api.test.com/api/v1')
+    expect(typeof apiClient.create).toBe('function')
+    expect(typeof apiClient.tokenStorage.memory).toBe('function')
   })
 
   it('请求超时返回 TIMEOUT 错误', async () => {
@@ -124,7 +124,7 @@ describe('createApiClient', () => {
       })
     })
 
-    const client = createApiClient(testContract)
+    const client = apiClient.create(testContract)
     await client.init({
       baseUrl: 'https://api.test.com/api/v1',
       fetch,
@@ -142,10 +142,10 @@ describe('createApiClient', () => {
     const echoContract = {
       echo: oc.route({ method: 'POST', path: '/echo' })
         .input(z.object({ msg: z.string() }))
-        .output(haiResultSchema(z.object({ received: z.string() }))),
+        .output(apiContract.haiResultSchema(z.object({ received: z.string() }))),
     }
 
-    const storage = createMemoryTokenStorage()
+    const storage = apiClient.tokenStorage.memory()
     await storage.setAccessToken('old-access')
     await storage.setRefreshToken('old-refresh')
 
@@ -176,7 +176,7 @@ describe('createApiClient', () => {
       })
     })
 
-    const client = createApiClient(echoContract)
+    const client = apiClient.create(echoContract)
     await client.init({
       baseUrl: 'https://api.test.com/api/v1',
       fetch,
