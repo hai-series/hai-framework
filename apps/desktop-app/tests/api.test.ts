@@ -2,17 +2,19 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const apiInit = vi.fn(async () => undefined)
 const apiClose = vi.fn(async () => undefined)
-const createLocalStorageTokenStorage = vi.fn(() => ({ kind: 'local-storage' }))
+const localStorageTokenStorage = vi.fn(() => ({ kind: 'local-storage' }))
 const cryptoInit = vi.fn(async () => ({ success: true as const, data: undefined }))
 const cryptoClose = vi.fn(async () => ({ success: true as const, data: undefined }))
 const navigate = vi.fn()
 
 vi.mock('@h-ai/api-client', () => ({
-  api: {
+  apiClient: {
     init: apiInit,
     close: apiClose,
+    tokenStorage: {
+      localStorage: localStorageTokenStorage,
+    },
   },
-  createLocalStorageTokenStorage,
 }))
 
 vi.mock('@h-ai/crypto', () => ({
@@ -44,7 +46,7 @@ describe('desktop api bootstrap', () => {
     await initApi()
 
     expect(cryptoInit).toHaveBeenCalledTimes(1)
-    expect(createLocalStorageTokenStorage).toHaveBeenCalledTimes(1)
+    expect(localStorageTokenStorage).toHaveBeenCalledTimes(1)
     expect(apiInit).toHaveBeenCalledWith(expect.objectContaining({
       baseUrl: 'http://localhost:3000/api/v1',
       transport: expect.objectContaining({

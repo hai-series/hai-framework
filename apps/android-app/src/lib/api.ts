@@ -6,13 +6,13 @@
  *
  * @example
  * ```ts
- * import { api } from '@h-ai/api-client'
+ * import { apiClient } from '@h-ai/api-client'
  *
- * const result = await api.iam.auth.login({ identifier, password })
+ * const result = await apiClient.iam.auth.login({ identifier, password })
  * ```
  */
 
-import { api } from '@h-ai/api-client'
+import { apiClient } from '@h-ai/api-client'
 import { createCapacitorTokenStorage } from '@h-ai/capacitor'
 
 // Capacitor 静态构建后通过 Vite 的 import.meta.env 注入 PUBLIC_* 变量
@@ -25,7 +25,7 @@ const API_BASE = (import.meta.env.PUBLIC_API_BASE as string | undefined) ?? 'htt
  * 应在应用启动时调用一次。
  */
 export async function initApi() {
-  return api.init({
+  return apiClient.init({
     baseUrl: `${API_BASE}/api/v1`,
     auth: {
       storage: createCapacitorTokenStorage(),
@@ -34,4 +34,4 @@ export async function initApi() {
   })
 }
 
-export { api }
+export { apiClient }

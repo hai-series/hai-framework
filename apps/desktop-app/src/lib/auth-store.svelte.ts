@@ -6,10 +6,10 @@
  */
 
 import type { IamLoginInput, IamRegisterInput } from '@h-ai/api-contract'
-import { api } from '@h-ai/api-client'
+import { apiClient } from '@h-ai/api-client'
 
 export type IamUser = Extract<
-  Awaited<ReturnType<typeof api.iam.auth.currentUser>>,
+  Awaited<ReturnType<typeof apiClient.iam.auth.currentUser>>,
   { success: true }
 >['data']
 
@@ -45,7 +45,7 @@ export function isInitialized(): boolean {
 export async function login(input: IamLoginInput): Promise<string | null> {
   loading = true
   try {
-    const result = await api.iam.auth.login(input)
+    const result = await apiClient.iam.auth.login(input)
     if (!result.success) {
       return String(result.error.code) ?? 'unknown'
     }
@@ -61,7 +61,7 @@ export async function login(input: IamLoginInput): Promise<string | null> {
 export async function register(input: IamRegisterInput): Promise<string | null> {
   loading = true
   try {
-    const result = await api.iam.auth.register(input)
+    const result = await apiClient.iam.auth.register(input)
     if (!result.success) {
       return String(result.error.code) ?? 'unknown'
     }
@@ -77,7 +77,7 @@ export async function register(input: IamRegisterInput): Promise<string | null> 
 export async function logout(): Promise<void> {
   loading = true
   try {
-    await api.iam.auth.logout({})
+    await apiClient.iam.auth.logout({})
   }
   finally {
     user = null
@@ -89,7 +89,7 @@ export async function logout(): Promise<void> {
 export async function refreshCurrentUser(): Promise<void> {
   loading = true
   try {
-    const result = await api.iam.auth.currentUser()
+    const result = await apiClient.iam.auth.currentUser()
     user = result.success ? result.data : null
   }
   finally {
