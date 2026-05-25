@@ -2,8 +2,8 @@
  * @h-ai/api-client — 主实现
  *
  * 包含两部分：
- * - `createApiClient(contract)`：根据 oRPC contract 创建 typed client 工厂。
- * - `api`：默认单例，绑定 iam / storage / ai 三个领域。
+ * - `createApiClient(contract)`：根据 oRPC contract 创建 typed client 工厂（内部实现）。
+ * - `apiClient`：统一公开入口；自身就是默认单例，同时挂载 `create` / `tokenStorage`。
  *
  * Client 同时具备生命周期能力（init/close/config/isInitialized/auth）和 contract
  * 推导出的 procedure 嵌套调用能力（如 `client.iam.auth.login(input)`）。
@@ -17,19 +17,19 @@
  *
  * @example 默认单例
  * ```ts
- * import { api } from '@h-ai/api-client'
+ * import { apiClient } from '@h-ai/api-client'
  *
- * await api.init({ baseUrl: 'https://api.example.com/api/v1' })
- * const me = await api.iam.auth.currentUser()
- * await api.close()
+ * await apiClient.init({ baseUrl: 'https://api.example.com/api/v1' })
+ * const me = await apiClient.iam.auth.currentUser()
+ * await apiClient.close()
  * ```
  *
  * @example 自定义 contract
  * ```ts
- * import { createApiClient } from '@h-ai/api-client'
- * import { createApiContract, iamContract } from '@h-ai/api-contract'
+ * import { apiClient } from '@h-ai/api-client'
+ * import { apiContract } from '@h-ai/api-contract'
  *
- * const client = createApiClient(createApiContract({ iam: iamContract }))
+ * const client = apiClient.create(apiContract.create({ iam: apiContract.iam }))
  * await client.init({ baseUrl: 'https://api.example.com/api/v1' })
  * const result = await client.iam.auth.login({ identifier: 'alice', password: 'secret' })
  * ```
@@ -48,12 +48,14 @@ import type {
   ApiClientConfig,
   ApiClientLifecycle,
 } from './api-client-types.js'
-import { aiContract, createApiContract, IAM_AUTH_ROUTES, iamContract, storageContract } from '@h-ai/api-contract'
+import { apiContract, IAM_AUTH_ROUTES } from '@h-ai/api-contract'
 import { err, ok } from '@h-ai/core'
 import { createORPCClient, ORPCError } from '@orpc/client'
 import { OpenAPILink } from '@orpc/openapi-client/fetch'
 import {
   createHttpOnlyCookieTokenStorage,
+  createLocalStorageTokenStorage,
+  createMemoryTokenStorage,
   createTokenManager,
 } from './api-client-auth.js'
 import { apiClientM } from './api-client-i18n.js'
@@ -63,6 +65,16 @@ const DEFAULT_TIMEOUT = 30_000
 const DEFAULT_CLIENT_NAME = 'hai-api-client'
 const DEFAULT_REFRESH_PATH = IAM_AUTH_ROUTES.refresh
 const TRAILING_SLASHES_REGEX = /\/+$/
+
+/** Token 存储方案集合：内存 / 浏览器 localStorage / httpOnly Cookie。 */
+const tokenStorage = {
+  /** 内存存储——SSR / Node 测试或一次性会话使用。 */
+  memory: createMemoryTokenStorage,
+  /** 浏览器 `localStorage` 存储——单页应用便捷选项；注意 XSS 风险。 */
+  localStorage: createLocalStorageTokenStorage,
+  /** httpOnly Cookie 存储——浏览器场景推荐方案。 */
+  httpOnlyCookie: createHttpOnlyCookieTokenStorage,
+} as const
 
 // ─── 工厂 ─────────────────────────────────────────────────────────────────────
 
@@ -75,10 +87,10 @@ const TRAILING_SLASHES_REGEX = /\/+$/
  *
  * @example 基础用法
  * ```ts
- * import { createApiClient } from '@h-ai/api-client'
- * import { createApiContract, iamContract } from '@h-ai/api-contract'
+ * import { apiClient } from '@h-ai/api-client'
+ * import { apiContract } from '@h-ai/api-contract'
  *
- * const client = createApiClient(createApiContract({ iam: iamContract }))
+ * const client = apiClient.create(apiContract.create({ iam: apiContract.iam }))
  * await client.init({ baseUrl: 'https://api.example.com/api/v1' })
  *
  * const result = await client.iam.auth.login({ identifier: 'alice', password: 'secret' })
@@ -91,7 +103,7 @@ const TRAILING_SLASHES_REGEX = /\/+$/
  *
  * @example 自定义 fetch / 超时
  * ```ts
- * const client = createApiClient(contract)
+ * const client = apiClient.create(contract)
  * await client.init({
  *   baseUrl: 'https://api.example.com/api/v1',
  *   fetch: customFetch,
@@ -228,23 +240,38 @@ export function createApiClient<const TContract extends AnyContractRouter>(
 /**
  * 默认 API typed client：绑定 `iam` / `storage` / `ai` 三个领域。
  *
- * 大多数应用只需 `import { api }` 并调用 `api.init()` 即可。
+ * 大多数应用只需 `import { apiClient }` 并调用 `apiClient.init()` 即可。
  *
  * @example
  * ```ts
- * import { api } from '@h-ai/api-client'
+ * import { apiClient } from '@h-ai/api-client'
  *
- * await api.init({
+ * await apiClient.init({
  *   baseUrl: 'http://localhost:3000/api/v1',
  *   auth: { refreshPath: '/auth/refresh' },
  * })
- * const result = await api.iam.auth.login({ identifier: 'alice', password: 'secret' })
- * await api.close()
+ * const result = await apiClient.iam.auth.login({ identifier: 'alice', password: 'secret' })
+ * await apiClient.close()
  * ```
  */
-export const api = createApiClient(
-  createApiContract({ iam: iamContract, storage: storageContract, ai: aiContract }),
-)
+const defaultApiContract = apiContract.create({ iam: apiContract.iam, storage: apiContract.storage, ai: apiContract.ai })
+
+/** `apiClient` 默认单例 + 工厂命名空间的统一对外类型。 */
+export type DefaultApiClient = ApiClient<typeof defaultApiContract> & {
+  readonly create: typeof createApiClient
+  readonly tokenStorage: typeof tokenStorage
+}
+
+/** hai-framework API client 统一入口（默认单例 + `create` + `tokenStorage`）。 */
+export const apiClient = new Proxy(createApiClient(defaultApiContract) as ApiClient<typeof defaultApiContract>, {
+  get(target, property, receiver) {
+    if (property === 'create')
+      return createApiClient
+    if (property === 'tokenStorage')
+      return tokenStorage
+    return Reflect.get(target as object, property, receiver)
+  },
+}) as DefaultApiClient
 
 // ─── 内部：procedure 代理 ─────────────────────────────────────────────────────
 
@@ -309,8 +336,8 @@ function buildTokenManager(config: ApiClientConfig): TokenManager | undefined {
 
   const fetchFn = config.fetch ?? globalThis.fetch.bind(globalThis)
   // 默认使用 httpOnly cookie 存储（推荐方案：refresh token 由服务端管理，防 XSS）。
-  // SSR / Node.js 测试场景请显式传入 `createMemoryTokenStorage()`。
-  // 浏览器 localStorage 场景请显式传入 `createLocalStorageTokenStorage()`（有 XSS 风险）。
+  // SSR / Node.js 测试场景请显式传入 `apiClient.tokenStorage.memory()`。
+  // 浏览器 localStorage 场景请显式传入 `apiClient.tokenStorage.localStorage()`（有 XSS 风险）。
   const storage = config.auth.storage ?? createHttpOnlyCookieTokenStorage()
   const baseUrl = config.baseUrl.replace(TRAILING_SLASHES_REGEX, '')
   const refreshPath = config.auth.refreshPath ?? DEFAULT_REFRESH_PATH

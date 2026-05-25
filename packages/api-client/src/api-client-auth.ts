@@ -6,19 +6,19 @@
  *
  * @example 浏览器 SPA
  * ```ts
- * import { createLocalStorageTokenStorage } from '@h-ai/api-client'
+ * import { apiClient } from '@h-ai/api-client'
  *
- * await api.init({
+ * await apiClient.init({
  *   baseUrl: 'https://api.example.com/api/v1',
- *   auth: { storage: createLocalStorageTokenStorage() },
+ *   auth: { storage: apiClient.tokenStorage.localStorage() },
  * })
  * ```
  *
  * @example Node.js 测试
  * ```ts
- * import { createMemoryTokenStorage } from '@h-ai/api-client'
+ * import { apiClient } from '@h-ai/api-client'
  *
- * const storage = createMemoryTokenStorage()
+ * const storage = apiClient.tokenStorage.memory()
  * await storage.setAccessToken('abc')
  * ```
  *
@@ -33,7 +33,7 @@ const logger = core.logger.child({ module: 'api-client', scope: 'auth' })
 
 /**
  * httpOnly cookie 模式哨兵值。
- * `createHttpOnlyCookieTokenStorage` 的 `getRefreshToken()` 返回此值，
+ * `apiClient.tokenStorage.httpOnlyCookie()` 的 `getRefreshToken()` 返回此值，
  * 告知 `doRefresh` 应依赖浏览器自动发送的 httpOnly Cookie，
  * 而不是将 refreshToken 写入请求体。
  */
@@ -51,20 +51,20 @@ const LS_REFRESH_KEY = 'hai_refresh_token'
  * - `localStorage` 对同源脚本可读，任意 XSS 漏洞都可以偷取 Token。
  * - 生产环境应优先使用 httpOnly cookie + SameSite 或 BFF 主机代理。
  * - 本适配器仅适用于内部工具、Demo、或者已接受 XSS 风险的浏览器场景，
- *   并且在调用方明确选择使用。`createApiClient` 默认不会使用本适配器，
- *   需调用方显式传入 `auth.storage = createLocalStorageTokenStorage()`。
+ *   并且在调用方明确选择使用。`apiClient.create` 默认不会使用本适配器，
+ *   需调用方显式传入 `auth.storage = apiClient.tokenStorage.localStorage()`。
  *
  * @example
  * ```ts
- * await api.init({
+ * await apiClient.init({
  *   baseUrl: 'https://api.example.com/api/v1',
- *   auth: { storage: createLocalStorageTokenStorage() },
+ *   auth: { storage: apiClient.tokenStorage.localStorage() },
  * })
  * ```
  */
 export function createLocalStorageTokenStorage(): TokenStorage {
   // 首次实例化时警告一次，提示调用方可能需要重新评估安全模型。
-  logger.warn('createLocalStorageTokenStorage: storing tokens in localStorage exposes them to XSS. Prefer httpOnly cookies for production.')
+  logger.warn('apiClient.tokenStorage.localStorage: storing tokens in localStorage exposes them to XSS. Prefer httpOnly cookies for production.')
   return {
     async getAccessToken() {
       return globalThis.localStorage?.getItem(LS_ACCESS_KEY) ?? null
@@ -93,7 +93,7 @@ export function createLocalStorageTokenStorage(): TokenStorage {
  *
  * @example
  * ```ts
- * const storage = createMemoryTokenStorage()
+ * const storage = apiClient.tokenStorage.memory()
  * await storage.setAccessToken('abc')
  * ```
  */
@@ -142,13 +142,13 @@ export function createMemoryTokenStorage(): TokenStorage {
  * **跨域注意事项：**
  * 若 API 与前端不同源，服务端还需设置：
  * `Access-Control-Allow-Origin: <前端域名>` 和 `Access-Control-Allow-Credentials: true`。
- * 调用方不需要做额外配置，`createApiClient` 会自动识别并设置 `credentials: 'include'`。
+ * 调用方不需要做额外配置，`apiClient.create` 会自动识别并设置 `credentials: 'include'`。
  *
  * @example
  * ```ts
- * await api.init({
+ * await apiClient.init({
  *   baseUrl: 'https://api.example.com/api/v1',
- *   auth: { storage: createHttpOnlyCookieTokenStorage() },
+ *   auth: { storage: apiClient.tokenStorage.httpOnlyCookie() },
  * })
  * ```
  */
@@ -186,7 +186,7 @@ type RefreshCallback = (tokens: TokenPair) => void
 /**
  * 创建 Token 管理器：封装存储读写、自动刷新、并发去重与回调通知。
  *
- * 主要供 `createApiClient` 内部使用，同时作为 named export 暴露给测试与高级用户。
+ * 主要供 `apiClient.create` 内部使用，同时作为 named export 暴露给测试与高级用户。
  *
  * 行为约定：
  * - 并发多次 `refresh()` 共享同一个请求。
@@ -196,7 +196,7 @@ type RefreshCallback = (tokens: TokenPair) => void
  * @example
  * ```ts
  * const manager = createTokenManager(
- *   createMemoryTokenStorage(),
+ *   apiClient.tokenStorage.memory(),
  *   'https://api.example.com/api/v1/auth/refresh',
  *   fetch,
  *   () => notifyLoginRequired(),

@@ -58,9 +58,9 @@ export interface TokenPair {
  * Token 存储适配器。
  *
  * 内置实现：
- * - `createHttpOnlyCookieTokenStorage()` — **默认**；浏览器端推荐，refresh token 由服务端管理，防 XSS。
- * - `createMemoryTokenStorage()` — Node.js 测试 / SSR（需显式传入）。
- * - `createLocalStorageTokenStorage()` — 浏览器 SPA / PWA（有 XSS 风险，生产不推荐）。
+ * - `apiClient.tokenStorage.httpOnlyCookie()` — **默认**；浏览器端推荐，refresh token 由服务端管理，防 XSS。
+ * - `apiClient.tokenStorage.memory()` — Node.js 测试 / SSR（需显式传入）。
+ * - `apiClient.tokenStorage.localStorage()` — 浏览器 SPA / PWA（有 XSS 风险，生产不推荐）。
  *
  * Capacitor / 小程序场景请由对应模块提供（例如 `@h-ai/capacitor`）。
  */
@@ -77,10 +77,10 @@ export interface TokenStorage {
 /** Token 自动刷新配置。 */
 export interface AuthConfig {
   /**
-   * Token 存储适配器；默认 `createHttpOnlyCookieTokenStorage()`（refresh token 由服务端管理，防 XSS）。
+   * Token 存储适配器；默认 `apiClient.tokenStorage.httpOnlyCookie()`（refresh token 由服务端管理，防 XSS）。
    *
-   * - SSR / Node.js 测试场景请显式传入 `createMemoryTokenStorage()`。
-   * - 浏览器 SPA 如确需持久化，可显式传 `createLocalStorageTokenStorage()`，
+   * - SSR / Node.js 测试场景请显式传入 `apiClient.tokenStorage.memory()`。
+   * - 浏览器 SPA 如确需持久化，可显式传 `apiClient.tokenStorage.localStorage()`，
    *   但请先评估 XSS 风险。
    * - Capacitor / 小程序请使用对应平台的安全存储适配器（如 `@h-ai/capacitor`）。
    */
@@ -123,9 +123,11 @@ export interface ApiClientConfig {
    *
    * @example
    * ```ts
+   * import { apiClient } from '@h-ai/api-client'
    * import { crypto } from '@h-ai/crypto'
+   *
    * await crypto.init()
-   * await api.init({
+   * await apiClient.init({
    *   baseUrl: 'https://api.example.com/api/v1',
    *   transport: { crypto },
    * })
