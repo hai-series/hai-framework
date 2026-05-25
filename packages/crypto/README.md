@@ -148,7 +148,7 @@ if (hashed.success) {
 常规应用优先让上层封装代接：
 
 - 服务端：`serv.createApp({ transport: { crypto } })` 或 `kit.createHandle({ crypto: { crypto, transport: true } })`
-- 客户端：`api.init({ transport: { crypto } })` 或 `kit.client.create({ transport: { crypto } })`
+- 客户端：`apiClient.init({ transport: { crypto } })` 或 `kit.client.create({ transport: { crypto } })`
 
 只有在自定义运行时、测试或你确实要自己接 HTTP 协商端点时，才建议直接调用 `crypto.transport.createServer()` / `createClient()`。
 
@@ -171,7 +171,7 @@ const server = crypto.transport.createServer({ maxClients: 10000 })
 if (!server.success)
   throw new Error(server.error.message)
 
-// 客户端：通常由 api.init({ transport: { crypto } }) 或 kit.client.create({ transport }) 内部调用
+// 客户端：通常由 apiClient.init({ transport: { crypto } }) 或 kit.client.create({ transport }) 内部调用
 const client = crypto.transport.createClient({
   keyExchangeUrl: 'https://api.example.com/api/v1/_hai/key-exchange',
 })
