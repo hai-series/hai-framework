@@ -18,7 +18,7 @@
 
 - 注册 / 登录 / 自动登录
 - Dashboard
-- 用户列表（`api.iam.users.list`）
+- 用户列表（`apiClient.iam.users.list`）
 - 个人信息维护
 
 不包含的（保持示例精简）：
@@ -87,7 +87,7 @@ apps/desktop-app/
 
 ## 设计要点
 
-- **Token 存储 = localStorage**：Tauri webview 与 api-service 跨域，httpOnly cookie 不可用，因此使用 `createLocalStorageTokenStorage()`。Tauri 沙箱内 XSS 面较小，但仍建议生产应用结合 [`tauri-plugin-stronghold`](https://v2.tauri.app/plugin/stronghold/) 或自定义 secure storage。
+- **Token 存储 = localStorage**：Tauri webview 与 api-service 跨域，httpOnly cookie 不可用，因此使用 `apiClient.tokenStorage.localStorage()`。Tauri 沙箱内 XSS 面较小，但仍建议生产应用结合 [`tauri-plugin-stronghold`](https://v2.tauri.app/plugin/stronghold/) 或自定义 secure storage。
 - **业务 API 默认走 transport 加密**：`src/lib/api.ts` 启动时会读取 `config/_crypto.yml`，启用 `@h-ai/crypto` + `@h-ai/api-client` 的密钥协商与请求/响应加解密。
 - **路由 = hash**：file:// 协议不支持 history API，全部走 `#/path`。
 - **CSP**：`tauri.conf.json` 的 `app.security.csp` 已放行 `connect-src http://localhost:3000`。生产部署需根据实际域名调整。
@@ -112,7 +112,7 @@ transport:
 1. 读取 `PUBLIC_API_BASE`
 2. 读取 `config/_crypto.yml`
 3. 若启用 transport，则先 `crypto.init()`
-4. 再 `api.init({ baseUrl, transport, auth })`
+4. 再 `apiClient.init({ baseUrl, transport, auth })`
 
 ## 验证
 

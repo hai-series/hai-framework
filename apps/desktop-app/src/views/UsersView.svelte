@@ -1,14 +1,14 @@
 <!--
-  UsersView — 分页列出用户，演示 `api.iam.users.list`。
+  UsersView — 分页列出用户，演示 `apiClient.iam.users.list`。
   使用 @h-ai/ui 的 PageHeader / Card / DataTable / Pagination / Alert / Tag。
 -->
 <script lang='ts'>
-  import { api } from '@h-ai/api-client'
+  import { apiClient } from '@h-ai/api-client'
   import { Alert, Card, DataTable, PageHeader, Pagination } from '@h-ai/ui'
   import { onMount } from 'svelte'
 
   type ListUsersResult = Extract<
-    Awaited<ReturnType<typeof api.iam.users.list>>,
+    Awaited<ReturnType<typeof apiClient.iam.users.list>>,
     { success: true }
   >['data']
   type IamUser = ListUsersResult['items'][number]
@@ -36,7 +36,7 @@
   async function fetchUsers(): Promise<void> {
     loading = true
     errorCode = null
-    const result = await api.iam.users.list({ page, pageSize })
+    const result = await apiClient.iam.users.list({ page, pageSize })
     if (result.success) {
       users = result.data.items
       total = result.data.total

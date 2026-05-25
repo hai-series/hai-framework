@@ -35,6 +35,7 @@
     "zod": "catalog:"
   },
   "devDependencies": {
+    "@h-ai/api-client": "workspace:*",
     "@types/node": "catalog:",
     "rimraf": "catalog:",
     "tsup": "catalog:",

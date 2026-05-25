@@ -3,7 +3,7 @@
 -->
 <script lang='ts'>
   import type { UserProfileSubmitData } from '@h-ai/ui'
-  import { api } from '@h-ai/api-client'
+  import { apiClient } from '@h-ai/api-client'
   import { PageHeader, toast, UserProfile } from '@h-ai/ui'
   import { currentUser, refreshCurrentUser } from '../lib/auth-store.svelte.js'
 
@@ -14,7 +14,7 @@
   async function handleSave(data: UserProfileSubmitData): Promise<void> {
     saving = true
     errors = {}
-    const result = await api.iam.auth.updateCurrentUser({
+    const result = await apiClient.iam.auth.updateCurrentUser({
       username: data.username,
       email: data.email,
     })

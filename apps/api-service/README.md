@@ -26,27 +26,89 @@ pnpm --filter api-service preview
 
 ## API 契约
 
-本应用在 `src/app.ts` 中组合应用级 contract：
+本应用在 `src/app.ts` 中组合应用级 contract，把通用领域契约（iam/storage/ai）与服务自有契约（`app`）合并后导出：
 
 ```ts
-import { aiContract, createApiContract, iamContract, storageContract } from '@h-ai/api-contract'
+import { apiContract } from '@h-ai/api-contract'
+import { appContract } from './server/contract/index.js' // 本服务自有 contract
 
-const contract = createApiContract({ iam: iamContract, storage: storageContract, ai: aiContract })
+export const apiServiceContract = apiContract.create({
+  iam: apiContract.iam,
+  storage: apiContract.storage,
+  ai: apiContract.ai,
+  app: appContract,
+})
+export type ApiServiceContract = typeof apiServiceContract
 ```
 
-客户端调用示例：
+`appContract` 在 `src/server/contract/app-contract.ts` 中按 oRPC 规范定义：
 
 ```ts
-import { api } from '@h-ai/api-client'
+import { apiContract } from '@h-ai/api-contract'
+import { serv } from '@h-ai/serv'
+import { z } from 'zod'
+
+const AppInfoOutputSchema = apiContract.haiResultSchema(z.object({
+  name: z.string(),
+  version: z.string(),
+  uptimeMs: z.number().int().nonnegative(),
+  transportEnabled: z.boolean(),
+}))
+
+export const appContract = {
+  info: serv.contract.route({ method: 'POST', path: '/app/info', operationId: 'app.info', tags: ['app'] })
+    .output(AppInfoOutputSchema),
+  // ...echo 同理，带 .input(...)
+}
+```
+
+服务端实现位于 `src/server/procedures/app-procedures.ts`，公开过程用普通 handler，
+需要登录的过程包一层 `serv.requireAuth`：
+
+```ts
+import { ok } from '@h-ai/core'
+import { serv } from '@h-ai/serv'
+import { appContract } from '../contract/index.js'
+
+const p = serv.implement(appContract).$context<ServContext>()
+export const router = p.router({
+  info: p.info.handler(() => ok({ /* 服务元信息 */ })),
+  echo: p.echo.handler(serv.requireAuth(({ input, context }) => ok({
+    message: input.message,
+    userId: context.session!.userId,
+    requestId: context.requestId,
+    timestamp: new Date().toISOString(),
+  }))),
+})
+```
+
+客户端用同一个 `apiServiceContract` 构造类型安全 client：
+
+```ts
+import { apiServiceContract } from '@app/api-service' // 或从源代码 path 导入
+import { apiClient } from '@h-ai/api-client'
 import { crypto } from '@h-ai/crypto'
 
 await crypto.init()
-await api.init({
+const client = apiClient.create(apiServiceContract)
+await client.init({
   baseUrl: 'http://localhost:3000/api/v1',
   transport: { crypto },
+  auth: { storage: apiClient.tokenStorage.memory() },
 })
-const login = await api.iam.auth.login({ identifier: 'alice', password: 'secret' })
-await api.close()
+
+// 公开端点
+const info = await client.app.info()
+if (info.success)
+  console.warn(info.data.version, info.data.uptimeMs)
+
+// 鉴权端点：需先登录
+await client.iam.auth.register({ username: 'alice', password: 'Secret123!' })
+const echoed = await client.app.echo({ message: 'hi' })
+if (echoed.success)
+  console.warn(echoed.data.userId, echoed.data.requestId)
+
+await client.close()
 await crypto.close()
 ```
 
@@ -75,11 +137,11 @@ transport:
 客户端默认调用方式：
 
 ```ts
-import { api } from '@h-ai/api-client'
+import { apiClient } from '@h-ai/api-client'
 import { crypto } from '@h-ai/crypto'
 
 await crypto.init()
-await api.init({
+await apiClient.init({
   baseUrl: 'http://localhost:3000/api/v1',
   transport: { crypto },
 })
@@ -88,7 +150,7 @@ await api.init({
 如果 `_serv.yml` 自定义了密钥协商路径，则客户端也要传同一路径：
 
 ```ts
-await api.init({
+await apiClient.init({
   baseUrl: 'http://localhost:3000/api/v1',
   transport: {
     crypto,
@@ -128,6 +190,8 @@ await api.init({
 | `/api/v1/ai/memories/recall`              | POST               | 召回相关记忆                              |
 | `/api/v1/ai/memories/list`                | POST               | 列出记忆                                  |
 | `/api/v1/ai/sessions/list`                | POST               | 列出会话                                  |
+| `/api/v1/app/info`                        | POST               | 服务元信息（公开，无需登录）              |
+| `/api/v1/app/echo`                        | POST               | 演示：回显消息 + 调用者上下文（需登录）   |
 
 ## 调用示例
 
@@ -146,28 +210,28 @@ curl http://localhost:3000/ready
 推荐统一使用 `@h-ai/api-client` + `@h-ai/crypto`：
 
 ```ts
-import { api } from '@h-ai/api-client'
+import { apiClient } from '@h-ai/api-client'
 import { crypto } from '@h-ai/crypto'
 
 await crypto.init()
 
-await api.init({
+await apiClient.init({
   baseUrl: 'http://localhost:3000/api/v1',
   transport: { crypto },
 })
 
-const register = await api.iam.auth.register({
+const register = await apiClient.iam.auth.register({
   username: 'admin',
   password: 'Admin123!',
   email: 'admin@example.com',
 })
 
-const login = await api.iam.auth.login({
+const login = await apiClient.iam.auth.login({
   identifier: 'admin',
   password: 'Admin123!',
 })
 
-const storage = await api.storage.file.getUploadUrl({
+const storage = await apiClient.storage.file.getUploadUrl({
   key: 'uploads/demo.png',
   contentType: 'image/png',
 })
@@ -176,11 +240,11 @@ void register
 void login
 void storage
 
-await api.close()
+await apiClient.close()
 await crypto.close()
 ```
 
-如果你把 `config/_serv.yml` 中的 `transport.keyExchangePath` 改成了非默认值，记得同步把 `transport.keyExchangePath` 传给 `api.init(...)`。
+如果你把 `config/_serv.yml` 中的 `transport.keyExchangePath` 改成了非默认值，记得同步把 `transport.keyExchangePath` 传给 `apiClient.init(...)`。
 
 ## 配置
 
