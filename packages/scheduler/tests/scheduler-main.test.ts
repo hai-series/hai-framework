@@ -4,6 +4,7 @@
  * =============================================================================
  */
 
+import type { SchedulerTaskExecuteEvent } from '../src/scheduler-types.js'
 import { reldb } from '@h-ai/reldb'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { scheduler } from '../src/scheduler-main.js'
@@ -11,6 +12,7 @@ import { HaiSchedulerError } from '../src/scheduler-types.js'
 
 describe('scheduler', () => {
   afterEach(async () => {
+    vi.useRealTimers()
     vi.unstubAllGlobals()
     await scheduler.close()
     await reldb.close()
@@ -47,6 +49,44 @@ describe('scheduler', () => {
   })
 
   describe('register / trigger', () => {
+    it('应按任务 timezone 匹配定时触发', async () => {
+      vi.useFakeTimers()
+      vi.setSystemTime(new Date(Date.UTC(2026, 4, 25, 4, 5, 0)))
+      const onTaskExecute = vi.fn((event: SchedulerTaskExecuteEvent) => ({ taskId: event.task.id }))
+
+      await scheduler.init({ enableDb: false, tickInterval: 100, hooks: { onTaskExecute } })
+
+      const registerResult = await scheduler.register({
+        id: 'timezone-task',
+        name: '时区任务',
+        cron: '5 12 * * *',
+        timezone: 'Asia/Shanghai',
+      })
+      const utcRegisterResult = await scheduler.register({
+        id: 'utc-timezone-task',
+        name: 'UTC 时区任务',
+        cron: '5 12 * * *',
+        timezone: 'UTC',
+      })
+      expect(registerResult.success).toBe(true)
+      expect(utcRegisterResult.success).toBe(true)
+
+      const startResult = scheduler.start()
+      expect(startResult.success).toBe(true)
+      await vi.advanceTimersByTimeAsync(100)
+
+      expect(onTaskExecute).toHaveBeenCalledTimes(1)
+      const [firstCall] = onTaskExecute.mock.calls
+      expect(firstCall).toBeDefined()
+      if (!firstCall) {
+        return
+      }
+      expect(firstCall[0].task.timezone).toBe('Asia/Shanghai')
+      expect(firstCall[0].task.id).toBe('timezone-task')
+      scheduler.stop()
+      vi.useRealTimers()
+    })
+
     it('应成功注册并手动触发 JS 字符串任务，记录触发来源', async () => {
       await scheduler.init({ enableDb: false })
 
@@ -219,6 +259,7 @@ describe('scheduler', () => {
         id: 'persisted-js',
         name: '持久化 JS 任务',
         cron: '*/10 * * * *',
+        timezone: 'Asia/Shanghai',
         params: { channel: 'nightly' },
         handler: {
           kind: 'js',
@@ -235,6 +276,7 @@ describe('scheduler', () => {
 
       const reloadedTask = scheduler.tasks.get('persisted-js')
       expect(reloadedTask?.handler?.kind).toBe('js')
+      expect(reloadedTask?.timezone).toBe('Asia/Shanghai')
       expect(reloadedTask?.params?.channel).toBe('nightly')
     })
 

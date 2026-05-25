@@ -197,7 +197,7 @@ export async function registerTask(
     )
   }
 
-  const cronResult = parseCronExpression(task.cron)
+  const cronResult = parseCronExpression(task.cron, task.timezone)
   if (!cronResult.success)
     return cronResult
 
@@ -208,6 +208,7 @@ export async function registerTask(
   const normalizedTask: TaskDefinition = {
     ...task,
     description: normalizeTaskDescription(task.description),
+    timezone: task.timezone,
     enabled: task.enabled !== false,
     deleteAfterRun: task.deleteAfterRun === true,
     retry: retryResult.data,
@@ -281,8 +282,10 @@ export async function updateRegisteredTask(
   // 提前保存旧 cron 实例，供 DB 失败时回滚使用
   const existingCron = getCron(taskId)
 
-  if (updates.cron !== undefined) {
-    const cronResult = parseCronExpression(updates.cron)
+  if (updates.cron !== undefined || updates.timezone !== undefined) {
+    const cronExpression = updates.cron ?? existingTask.cron
+    const timezone = updates.timezone === null ? undefined : (updates.timezone ?? existingTask.timezone)
+    const cronResult = parseCronExpression(cronExpression, timezone)
     if (!cronResult.success)
       return cronResult
 
@@ -318,6 +321,7 @@ export async function updateRegisteredTask(
     ...(normalizedUpdates.name !== undefined ? { name: normalizedUpdates.name } : {}),
     ...(normalizedUpdates.description !== undefined ? { description: normalizedUpdates.description } : {}),
     ...(normalizedUpdates.cron !== undefined ? { cron: normalizedUpdates.cron } : {}),
+    ...(normalizedUpdates.timezone !== undefined ? { timezone: normalizedUpdates.timezone ?? undefined } : {}),
     ...(normalizedUpdates.enabled !== undefined ? { enabled: normalizedUpdates.enabled } : {}),
     ...(normalizedUpdates.deleteAfterRun !== undefined ? { deleteAfterRun: normalizedUpdates.deleteAfterRun } : {}),
     ...(normalizedUpdates.retry !== undefined ? { retry: normalizedUpdates.retry ?? undefined } : {}),
@@ -333,7 +337,7 @@ export async function updateRegisteredTask(
       // 持久化更新失败：回滚内存状态，避免内存与 DB 之间的状态漂移
       logger.warn('Failed to update persisted task definition, rolling back in-memory update', { taskId, error: updateResult.error.message })
       setTask(taskId, existingTask)
-      if (updates.cron !== undefined && existingCron)
+      if ((updates.cron !== undefined || updates.timezone !== undefined) && existingCron)
         setCron(taskId, existingCron)
       return err(
         HaiSchedulerError.DB_SAVE_FAILED,

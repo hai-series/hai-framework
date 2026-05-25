@@ -126,6 +126,8 @@ export interface TaskDefinition {
   description?: string
   /** cron 表达式（标准 5 字段：分 时 日 月 周） */
   cron: string
+  /** IANA 时区，用于解释 cron 墙上时间；省略时使用运行环境默认时区 */
+  timezone?: string
   /** 是否启用（默认 true） */
   enabled?: boolean
   /** 是否在执行后自动删除（默认 false） */
@@ -298,6 +300,8 @@ export interface TaskUpdateInput {
   description?: string
   /** cron 表达式 */
   cron?: string
+  /** IANA 时区；传 null 表示清空任务时区 */
+  timezone?: string | null
   /** 是否启用 */
   enabled?: boolean
   /** 是否在执行后自动删除 */
