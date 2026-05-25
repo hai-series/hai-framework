@@ -45,6 +45,18 @@ describe('@h-ai/api-contract', () => {
       },
     })
     expect(refreshOutput.success).toBe(true)
+
+    const cookieRefreshOutput = IamRefreshTokenOutputSchema.safeParse({
+      success: true,
+      data: {
+        tokens: {
+          accessToken: 'access',
+          expiresIn: 3600,
+          tokenType: 'Bearer',
+        },
+      },
+    })
+    expect(cookieRefreshOutput.success).toBe(true)
   })
 
   it('storage 和 payment contract 使用明确 OpenAPI 路由', () => {
