@@ -54,7 +54,7 @@ await invokePayment(orderData)
 
 ## HTTP API 契约
 
-支付 HTTP API 由 `@h-ai/api-contract` 的 `paymentContract` 定义。组合进应用 contract 后，可通过 typed client 调用：
+支付 HTTP API 由 `@h-ai/api-contract` 的 `apiContract.payment` 定义。组合进应用 contract 后，可通过 typed client 调用：
 
 ```typescript
 const order = await api.payment.orders.create({

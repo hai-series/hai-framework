@@ -583,13 +583,13 @@ scheduler.start()
 ### 公共 API 契约
 
 ```typescript
-import { aiContract, createApiContract, iamContract, storageContract } from '@h-ai/api-contract'
+import { apiContract } from '@h-ai/api-contract'
 
 // 只组合当前应用实际启用的领域；false / undefined 会从最终 contract 中移除
-export const contract = createApiContract({
-  iam: iamContract,
-  storage: storageContract,
-  ai: aiContract,
+export const contract = apiContract.create({
+  iam: apiContract.iam,
+  storage: apiContract.storage,
+  ai: apiContract.ai,
   payment: false,
 })
 
@@ -603,13 +603,13 @@ export const contract = createApiContract({
 ### API Service 运行时
 
 ```typescript
-import { aiContract, createApiContract, iamContract, storageContract } from '@h-ai/api-contract'
+import { apiContract } from '@h-ai/api-contract'
 import { serv } from '@h-ai/serv'
 import { createAiProcedures } from '@h-ai/serv/features/ai'
 import { createIamProcedures } from '@h-ai/serv/features/iam'
 import { createStorageProcedures } from '@h-ai/serv/features/storage'
 
-const contract = createApiContract({ iam: iamContract, storage: storageContract, ai: aiContract })
+const contract = apiContract.create({ iam: apiContract.iam, storage: apiContract.storage, ai: apiContract.ai })
 
 const app = serv.createApp({
   contract,
@@ -676,19 +676,19 @@ const valid = crypto.password.verify('MyPassword123', hashed.data)
 ### 跨端 typed API 客户端
 
 ```typescript
-import { api } from '@h-ai/api-client'
+import { apiClient } from '@h-ai/api-client'
 
-await api.init({
+await apiClient.init({
   baseUrl: '/api/v1',
   auth: {}, // 默认使用 httpOnly cookie refresh token；App 可传自定义 TokenStorage
 })
 
-const login = await api.iam.auth.login({ identifier: 'alice', password: 'xxx' })
+const login = await apiClient.iam.auth.login({ identifier: 'alice', password: 'xxx' })
 if (login.success)
-  await api.auth.setTokens(login.data.tokens)
+  await apiClient.auth.setTokens(login.data.tokens)
 
-const me = await api.iam.auth.currentUser()
-const upload = await api.storage.presignedUrls.createUpload({ key: 'avatar.png' })
+const me = await apiClient.iam.auth.currentUser()
+const upload = await apiClient.storage.presignedUrls.createUpload({ key: 'avatar.png' })
 ```
 
 ### 用户触达

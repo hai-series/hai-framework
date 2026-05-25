@@ -56,9 +56,9 @@ await uploadWithPresignedUrl(uploadUrl, file)
 公共 HTTP API 统一由 `@h-ai/api-contract` 提供，并由 `@h-ai/serv` 的 `createStorageProcedures({ storage })` 绑定到本模块能力。
 
 ```ts
-import { api } from '@h-ai/api-client'
+import { apiClient } from '@h-ai/api-client'
 
-const result = await api.storage.presignedUrls.createUpload({ key: 'avatar.png' })
+const result = await apiClient.storage.presignedUrls.createUpload({ key: 'avatar.png' })
 ```
 
 ## API 概览

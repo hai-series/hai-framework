@@ -20,7 +20,7 @@ description: 使用 @h-ai/ai 进行 LLM 调用（OpenAI 兼容）、MCP 服务�
 | `ai.memory` / `ai.conversation` | ✅ | ❌（通过 API 查询） |
 | `ai.knowledge` 知识库 | ✅ | ❌（通过 API 查询） |
 
-浏览器端消费 AI 能力的标准模式：通过 `@h-ai/api-client` 的 typed contract 调用 `api.ai.chats.*`；如需 SSE 流式输出，由应用显式暴露自定义流式 endpoint，再用 `fetch` / `apiFetch` 消费。
+浏览器端消费 AI 能力的标准模式：通过 `@h-ai/api-client` 的 typed contract 调用 `apiClient.ai.chats.*`；如需 SSE 流式输出，由应用显式暴露自定义流式 endpoint，再用 `fetch` / `apiFetch` 消费。
 
 ---
 
@@ -266,20 +266,20 @@ await mcp.connect(transport)
 ### 前端客户端
 
 ```typescript
-import { api } from '@h-ai/api-client'
+import { apiClient } from '@h-ai/api-client'
 
-await api.init({ baseUrl: '/api/v1', auth: {} })
+await apiClient.init({ baseUrl: '/api/v1', auth: {} })
 
 // 非流式
-const response = await api.ai.chats.createCompletion({ messages })
+const response = await apiClient.ai.chats.createCompletion({ messages })
 
 // 便捷方法
-const reply = await api.ai.chats.sendMessage({ message: '你好', systemPrompt: '系统提示' })
+const reply = await apiClient.ai.chats.sendMessage({ message: '你好', systemPrompt: '系统提示' })
 
 // 记忆与会话查询
-const memories = await api.ai.memories.recall({ query: '用户偏好', topK: 5, objectId: 'user-001' })
-const page = await api.ai.memories.list({ objectId: 'user-001', limit: 20 })
-const sessions = await api.ai.sessions.list({ objectId: 'user-001' })
+const memories = await apiClient.ai.memories.recall({ query: '用户偏好', topK: 5, objectId: 'user-001' })
+const page = await apiClient.ai.memories.list({ objectId: 'user-001', limit: 20 })
+const sessions = await apiClient.ai.sessions.list({ objectId: 'user-001' })
 ```
 
 ### 记忆管理 — `ai.memory`
@@ -654,9 +654,9 @@ async function manualChat(userInput: string) {
 浏览器 / App 通过 `@h-ai/api-client` 调用由 `@h-ai/api-contract` 定义、`@h-ai/serv` 挂载的 AI contract：
 
 ```typescript
-import { api } from '@h-ai/api-client'
+import { apiClient } from '@h-ai/api-client'
 
-const result = await api.ai.chats.createCompletion({
+const result = await apiClient.ai.chats.createCompletion({
   messages: [{ role: 'user', content: '你好' }],
 })
 

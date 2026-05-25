@@ -206,12 +206,12 @@ const payResult = await invokePayment(orderResult.data)
 ### HTTP API 契约
 
 ```typescript
-import { paymentContract } from '@h-ai/api-contract'
+import { apiContract } from '@h-ai/api-contract'
 
-// paymentContract.orders.create        — POST /payment/orders
-// paymentContract.orders.get           — GET  /payment/orders/{orderNo}
-// paymentContract.orders.refund        — POST /payment/orders/{orderNo}/refunds
-// paymentContract.notifications.wechat — POST /payment/notifications/wechat
+// apiContract.payment.orders.create        — POST /payment/orders
+// apiContract.payment.orders.get           — GET  /payment/orders/{orderNo}
+// apiContract.payment.orders.refund        — POST /payment/orders/{orderNo}/refunds
+// apiContract.payment.notifications.wechat — POST /payment/notifications/wechat
 ```
 
 ---

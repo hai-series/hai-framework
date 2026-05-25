@@ -32,9 +32,9 @@ const PREF_REFRESH_TOKEN = 'hai_refresh_token'
  * @example
  * ```ts
  * import { createCapacitorTokenStorage } from '@h-ai/capacitor'
- * import { api } from '@h-ai/api-client'
+ * import { apiClient } from '@h-ai/api-client'
  *
- * await api.init({
+ * await apiClient.init({
  *   baseUrl: 'https://api.example.com/v1',
  *   auth: {
  *     storage: createCapacitorTokenStorage(),
