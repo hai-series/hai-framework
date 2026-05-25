@@ -121,7 +121,7 @@ beforeAll(async () => {
     throw new Error(`ai: ${aiResult.error.message}`)
 
   encryptedApp = createApiServiceApp()
-  plainApp = createApiServiceApp({ transport: 'disabled' })
+  plainApp = createApiServiceApp({ transport: 'disabled', refreshCookie: 'disabled' })
 
   // 启动两个真实 HTTP 服务器（host=127.0.0.1, port=0 随机取可用端口）。
   // 通过 onListening 回调获取实际绑定的端口。
@@ -268,6 +268,36 @@ describe('api-service 加密链路（api-client + transport）', () => {
       expect(result.data.tokens.accessToken).toBeTruthy()
   })
 
+  it('默认使用 httpOnly Cookie 承载 refreshToken，不在响应体暴露', async () => {
+    const transportClient = crypto.transport.createClient({
+      keyExchangeUrl: `${encryptedBase}${keyExchangePath}`,
+      fetch,
+    })
+    const user = uniqueUser('cookie_reg')
+
+    const res = await transportClient.encryptedFetch(`${encryptedBase}${apiPath('/auth/register')}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        username: user.username,
+        password: user.password,
+        email: user.email,
+      }),
+    })
+
+    expect(res.status).toBe(200)
+    const setCookie = res.headers.get('set-cookie')
+    expect(setCookie).toContain('hai_refresh_token=')
+    expect(setCookie).toContain('HttpOnly')
+    expect(setCookie).toContain(`Path=${apiPath('/auth/refresh')}`)
+
+    const body = await res.json() as { success: boolean, data?: { tokens?: { accessToken?: string, refreshToken?: string } } }
+    expect(body.success).toBe(true)
+    expect(body.data?.tokens?.accessToken).toBeTruthy()
+    expect(body.data?.tokens?.refreshToken).toBeUndefined()
+    transportClient.destroy()
+  })
+
   it('login 缺少必填字段时由 schema 校验失败', async () => {
     // @ts-expect-error 故意传入不完整 payload 触发 schema 校验
     const result = await encryptedClient.iam.auth.login({ identifier: '' })
@@ -290,7 +320,7 @@ describe('api-service 加密链路（api-client + transport）', () => {
     expect(ok.success).toBe(true)
     if (ok.success) {
       expect(ok.data.tokens.accessToken).toBeTruthy()
-      expect(ok.data.tokens.refreshToken).toBeTruthy()
+      expect(ok.data.tokens.refreshToken).toBeUndefined()
     }
 
     const bad = await encryptedClient.iam.auth.login({
@@ -377,6 +407,8 @@ describe('api-service 受保护资源（认证守卫）', () => {
     await encryptedClient.auth.setTokens({
       accessToken: 'totally-fake-token-xyz',
       refreshToken: 'totally-fake-refresh-xyz',
+      expiresIn: 3600,
+      tokenType: 'Bearer',
     })
     const result = await encryptedClient.storage.presignedUrls.createUpload({
       key: 'uploads/test.png',
