@@ -4,7 +4,6 @@
   import { invalidateAll } from '$app/navigation'
   import * as m from '$lib/paraglide/messages.js'
   import { apiFetch } from '$lib/utils/api'
-  import { kit } from '@h-ai/kit'
 
   interface Props {
     data: PageData
@@ -281,7 +280,6 @@
 
       passwordSuccess = m.common_success()
       if (body.data?.reloginRequired && typeof window !== 'undefined') {
-        kit.auth.clearBrowserToken()
         window.setTimeout(() => {
           window.location.assign('/auth/login')
         }, 300)
