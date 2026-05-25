@@ -177,7 +177,7 @@ const resp = await client.encryptedFetch('https://api.example.com/api/v1/echo', 
 常规应用优先使用上层封装：
 - serv：`serv.createApp({ transport: { crypto } })`
 - kit：`kit.createHandle({ crypto: { crypto, transport: true } })` + `kit.client.create({ transport: { crypto } })`
-- api-client：`api.init({ transport: { crypto } })`
+- api-client：`apiClient.init({ transport: { crypto } })`
 
 ---
 

@@ -28,10 +28,10 @@ if (!result.success) {
 ### 与 api-client 配合的 Token 安全存储
 
 ```ts
-import { api } from '@h-ai/api-client'
+import { apiClient } from '@h-ai/api-client'
 import { createCapacitorTokenStorage } from '@h-ai/capacitor'
 
-await api.init({
+await apiClient.init({
   baseUrl: 'https://api.example.com/v1',
   auth: {
     storage: createCapacitorTokenStorage(),

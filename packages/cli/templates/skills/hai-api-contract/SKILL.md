@@ -22,7 +22,7 @@ description: 使用 @h-ai/api-contract 定义或扩展 oRPC HTTP API 契约；�
 - 向 `@h-ai/serv` 提供 contract（装配为 HTTP API）
 - 向 `@h-ai/api-client` 提供 contract（生成类型安全客户端）
 - 复用内置领域 contract（iam/storage/ai/payment）
-- 复用公共 Schema 工厂（`haiResultSchema`、分页 Schema）
+- 复用公共 Schema 工厂（`apiContract.haiResultSchema`、分页 Schema）
 
 ---
 
@@ -31,13 +31,13 @@ description: 使用 @h-ai/api-contract 定义或扩展 oRPC HTTP API 契约；�
 ### 1. 组合应用级 contract
 
 ```typescript
-import { createApiContract, iamContract, storageContract, aiContract } from '@h-ai/api-contract'
+import { apiContract } from '@h-ai/api-contract'
 
 // 按需组合，传 false/undefined 的领域不会出现在 contract 或 OpenAPI spec 中
-export const myContract = createApiContract({
-  iam: iamContract,
-  storage: storageContract,
-  ai: aiContract,
+export const myContract = apiContract.create({
+  iam: apiContract.iam,
+  storage: apiContract.storage,
+  ai: apiContract.ai,
   payment: false, // 禁用领域
 })
 
@@ -49,11 +49,11 @@ export const myContract = createApiContract({
 ### 2. 组合自定义 contract
 
 ```typescript
-import { createApiContract, iamContract, storageContract } from '@h-ai/api-contract'
+import { apiContract } from '@h-ai/api-contract'
 
-export const myContract = createApiContract({
-  iam: iamContract,
-  storage: storageContract,
+export const myContract = apiContract.create({
+  iam: apiContract.iam,
+  storage: apiContract.storage,
   payment: false, // 禁用领域（不会出现在 contract 或 OpenAPI spec 中）
 })
 ```
@@ -61,9 +61,9 @@ export const myContract = createApiContract({
 ### 3. 定义新领域 contract
 
 ```typescript
-import { oc } from '@orpc/contract'
+import { apiContract } from '@h-ai/api-contract'
+import { serv } from '@h-ai/serv'
 import { z } from 'zod'
-import { haiResultSchema } from '@h-ai/api-contract'
 
 // 输入 Schema
 const WidgetCreateInputSchema = z.object({
@@ -72,7 +72,7 @@ const WidgetCreateInputSchema = z.object({
 })
 
 // 输出 Schema（统一包装为 HaiResult<T>）
-const WidgetOutputSchema = haiResultSchema(z.object({
+const WidgetOutputSchema = apiContract.haiResultSchema(z.object({
   id: z.string(),
   name: z.string(),
   createdAt: z.string(),
@@ -81,7 +81,7 @@ const WidgetOutputSchema = haiResultSchema(z.object({
 // 领域 contract
 export const widgetContract = {
   widget: {
-    create: oc
+    create: serv.contract
       .route({
         method: 'POST',
         path: '/widgets',
@@ -92,7 +92,7 @@ export const widgetContract = {
       .input(WidgetCreateInputSchema)
       .output(WidgetOutputSchema),
 
-    getById: oc
+    getById: serv.contract
       .route({
         method: 'GET',
         path: '/widgets/{id}',
@@ -109,11 +109,11 @@ export const widgetContract = {
 ### 4. 将新 contract 挂入应用级 contract
 
 ```typescript
-import { createApiContract, iamContract } from '@h-ai/api-contract'
+import { apiContract } from '@h-ai/api-contract'
 import { widgetContract } from './widget-contract.js'
 
-export const appContract = createApiContract({
-  iam: iamContract,
+export const appContract = apiContract.create({
+  iam: apiContract.iam,
   widget: widgetContract,
 })
 ```
@@ -139,32 +139,32 @@ const app = serv.createApp({
 
 ## 核心 API
 
-### `createApiContract(options)` — 组合领域 contract
+### `apiContract.create(options)` — 组合领域 contract
 
 ```typescript
-import { createApiContract } from '@h-ai/api-contract'
+import { apiContract } from '@h-ai/api-contract'
 
-const contract = createApiContract({
-  iam: iamContract,      // 启用：纳入 contract
-  storage: false,        // 禁用：不出现在 OpenAPI spec 中
-  custom: myContract,    // 自定义领域
+const contract = apiContract.create({
+  iam: apiContract.iam,      // 启用：纳入 contract
+  storage: false,            // 禁用：不出现在 OpenAPI spec 中
+  custom: myContract,        // 自定义领域
 })
 // 类型自动收窄，被禁用的 key 不出现在 contract 类型中
 ```
 
 ### 内置领域 contract
 
-| 导出名称 | 领域 | 功能概述 |
+| 访问路径 | 领域 | 功能概述 |
 | --- | --- | --- |
-| `iamContract` | IAM | auth（登录/登出/OTP/刷新/注册/改密码）、users、roles、permissions Admin CRUD |
-| `storageContract` | Storage | presignedUrls（上传/下载/批量）、files（元数据查询/删除） |
-| `aiContract` | AI | chats（completion/流式）、knowledge（上传/查询） |
-| `paymentContract` | Payment | orders、subscriptions |
+| `apiContract.iam` | IAM | auth（登录/登出/OTP/刷新/注册/改密码）、users、roles、permissions Admin CRUD |
+| `apiContract.storage` | Storage | presignedUrls（上传/下载/批量）、files（元数据查询/删除） |
+| `apiContract.ai` | AI | chats（completion/流式）、knowledge（上传/查询） |
+| `apiContract.payment` | Payment | orders、subscriptions |
 
 ### 内置 contract 路径示例
 
 ```typescript
-const myContract = createApiContract({ iam: iamContract, storage: storageContract, ai: aiContract })
+const myContract = apiContract.create({ iam: apiContract.iam, storage: apiContract.storage, ai: apiContract.ai })
 
 // IAM
 myContract.iam.auth.login        // POST /auth/login
@@ -179,15 +179,15 @@ myContract.storage.presignedUrls.createUpload   // POST /storage/presigned-urls/
 myContract.ai.chats.createCompletion  // POST /ai/chats/completion
 ```
 
-### `haiResultSchema(dataSchema)` — 标准输出包装
+### `apiContract.haiResultSchema(dataSchema)` — 标准输出包装
 
-所有 HTTP 输出必须通过 `haiResultSchema` 包装为 `HaiResult<T>`，与 `@h-ai/core` 的 `ok()/err()` 返回结构一致：
+所有 HTTP 输出必须通过 `apiContract.haiResultSchema` 包装为 `HaiResult<T>`，与 `@h-ai/core` 的 `ok()/err()` 返回结构一致：
 
 ```typescript
-import { haiResultSchema } from '@h-ai/api-contract'
+import { apiContract } from '@h-ai/api-contract'
 import { z } from 'zod'
 
-const OutputSchema = haiResultSchema(z.object({
+const OutputSchema = apiContract.haiResultSchema(z.object({
   id: z.string(),
   name: z.string(),
 }))
@@ -199,13 +199,14 @@ const OutputSchema = haiResultSchema(z.object({
 
 ### 公共 Schema 工具
 
-| 导出名称 | 说明 |
+| 访问路径 | 说明 |
 | --- | --- |
-| `haiResultSchema(dataSchema)` | `HaiResult<T>` 输出包装 |
+| `apiContract.haiResultSchema(dataSchema)` | `HaiResult<T>` 输出包装 |
+| `apiContract.voidResultSchema` | `HaiResult<void>` 空结果包装 |
+| `apiContract.paginatedSchema(itemSchema)` | 分页列表输出 Schema |
 | `HaiErrorSchema` | HaiError 公共字段 Schema |
 | `PaginationInputSchema` | 分页参数 Schema（page/limit） |
 | `PaginationOutputSchema` | 分页元数据 Schema（total/page/limit） |
-| `paginationResultSchema(itemSchema)` | 分页列表输出 Schema |
 
 ---
 
@@ -213,7 +214,7 @@ const OutputSchema = haiResultSchema(z.object({
 
 ### 必须遵循
 
-- **输出必须包装为 `haiResultSchema`** — 客户端依赖 `success` 判断成功/失败
+- **输出必须包装为 `apiContract.haiResultSchema`** — 客户端依赖 `success` 判断成功/失败
 - **`operationId` 全局唯一** — 格式为 `domain.resource.action`，如 `iam.auth.login`
 - **`tags` 至少包含领域名** — 供 OpenAPI 文档分组
 - **输入 Schema 用 Zod v4** — 与 `@orpc/zod/zod4` 的 `ZodToJsonSchemaConverter` 配套
@@ -232,33 +233,34 @@ const OutputSchema = haiResultSchema(z.object({
 ### 带分页的列表接口
 
 ```typescript
-import { paginationResultSchema, PaginationInputSchema, haiResultSchema } from '@h-ai/api-contract'
+import { apiContract, PaginationInputSchema } from '@h-ai/api-contract'
+import { serv } from '@h-ai/serv'
 import { z } from 'zod'
 
 const WidgetSchema = z.object({ id: z.string(), name: z.string() })
 
-const listWidgets = oc
+const listWidgets = serv.contract
   .route({ method: 'GET', path: '/widgets', operationId: 'widget.list', tags: ['widget'] })
   .input(PaginationInputSchema.extend({ keyword: z.string().optional() }))
-  .output(haiResultSchema(paginationResultSchema(WidgetSchema)))
+  .output(apiContract.haiResultSchema(apiContract.paginatedSchema(WidgetSchema)))
 ```
 
 ### 路径参数
 
 ```typescript
 // 路径中的 {id} 对应 input 中的 id 字段
-const getWidget = oc
+const getWidget = serv.contract
   .route({ method: 'GET', path: '/widgets/{id}', operationId: 'widget.getById', tags: ['widget'] })
   .input(z.object({ id: z.string() }))
-  .output(haiResultSchema(WidgetSchema))
+  .output(apiContract.haiResultSchema(WidgetSchema))
 ```
 
 ### 无输入的端点
 
 ```typescript
-const healthContract = oc
+const healthContract = serv.contract
   .route({ method: 'GET', path: '/health', operationId: 'health.check', tags: ['system'] })
-  .output(haiResultSchema(z.object({ status: z.string() })))
+  .output(apiContract.haiResultSchema(z.object({ status: z.string() })))
 ```
 
 ---

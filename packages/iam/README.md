@@ -453,21 +453,21 @@ await iam.apiKey.revokeApiKey(keyId)
 公共 HTTP API 由 `@h-ai/api-contract` 定义，并通过 `@h-ai/api-client` 生成 typed client 调用：
 
 ```ts
-import { api } from '@h-ai/api-client'
+import { apiClient } from '@h-ai/api-client'
 
-await api.init({ baseUrl: '/api/v1' })
+await apiClient.init({ baseUrl: '/api/v1' })
 
 // 登录
-const result = await api.iam.auth.login({
+const result = await apiClient.iam.auth.login({
   identifier: 'admin',
   password: 'Password123',
 })
 
 // 获取当前用户
-const user = await api.iam.auth.currentUser()
+const user = await apiClient.iam.auth.currentUser()
 
 // 修改密码
-await api.iam.auth.changePassword({
+await apiClient.iam.auth.changePassword({
   oldPassword: 'Password123',
   newPassword: 'NewPassword456',
 })

@@ -41,16 +41,16 @@ description: 使用 @h-ai/serv 将 oRPC contract 挂载为 Hono HTTP API Service
 ### 2. 创建并启动 app
 
 ```typescript
-import { createApiContract, iamContract, storageContract, aiContract } from '@h-ai/api-contract'
+import { ai } from '@h-ai/ai'
+import { apiContract } from '@h-ai/api-contract'
 import { iam } from '@h-ai/iam'
 import { serv } from '@h-ai/serv'
 import { createAiProcedures } from '@h-ai/serv/features/ai'
 import { createIamProcedures } from '@h-ai/serv/features/iam'
 import { createStorageProcedures } from '@h-ai/serv/features/storage'
 import { storage } from '@h-ai/storage'
-import { ai } from '@h-ai/ai'
 
-const contract = createApiContract({ iam: iamContract, storage: storageContract, ai: aiContract })
+const contract = apiContract.create({ iam: apiContract.iam, storage: apiContract.storage, ai: apiContract.ai })
 
 // 装配 procedures（每个 feature 对应 contract 中的一个领域）
 const procedures = {
@@ -78,7 +78,77 @@ serv.listen(app, {
 })
 ```
 
-### 3. Fetch Runtime（Cloudflare Workers / Deno / Bun）
+### 3. 扩展应用自有 contract + procedures
+
+`apiContract.create({...})` 接受任意 key——除了框架提供的 `iam/storage/ai`，应用可以挂入自己的领域 contract，
+客户端通过 `client.<key>.<procedure>(...)` 调用，类型完全推导自同一份 contract。
+
+```typescript
+// src/server/contract/app-contract.ts
+import { apiContract } from '@h-ai/api-contract'
+import { serv } from '@h-ai/serv'
+import { z } from 'zod'
+
+const InfoOutput = apiContract.haiResultSchema(z.object({ name: z.string(), version: z.string() }))
+const EchoInput = z.object({ message: z.string().min(1).max(2000) })
+const EchoOutput = apiContract.haiResultSchema(z.object({ message: z.string(), userId: z.string() }))
+
+export const appContract = {
+  info: serv.contract.route({ method: 'POST', path: '/app/info', operationId: 'app.info', tags: ['app'] })
+    .output(InfoOutput),
+  echo: serv.contract.route({ method: 'POST', path: '/app/echo', operationId: 'app.echo', tags: ['app'] })
+    .input(EchoInput).output(EchoOutput),
+}
+```
+
+```typescript
+// src/server/procedures/app-procedures.ts
+import type { ServContext } from '@h-ai/serv'
+import { ok } from '@h-ai/core'
+import { serv } from '@h-ai/serv'
+import { appContract } from '../contract/app-contract.js'
+
+export function createAppProcedures(deps: { name: string; version: string }) {
+  const p = serv.implement(appContract).$context<ServContext>()
+  return p.router({
+    // 公开 procedure：handler 直接返回 HaiResult
+    info: p.info.handler(() => ok({ name: deps.name, version: deps.version })),
+    // 鉴权 procedure：用 serv.requireAuth 包一层，未登录时短路返回 ApiUnauthorized
+    echo: p.echo.handler(serv.requireAuth(({ input, context }) => ok({
+      message: input.message,
+      userId: context.session!.userId,
+    }))),
+  })
+}
+```
+
+把自有 contract / procedures 与框架的 iam/storage/ai 平铺合并：
+
+```typescript
+const contract = apiContract.create({
+  iam: apiContract.iam,
+  storage: apiContract.storage,
+  ai: apiContract.ai,
+  app: appContract, // ← 自有契约
+})
+
+const procedures = {
+  iam: createIamProcedures({ iam }),
+  storage: createStorageProcedures({ storage }),
+  ai: createAiProcedures({ ai }),
+  app: createAppProcedures({ name: 'demo', version: '1.0.0' }),
+}
+
+const app = serv.createApp({ contract, procedures, http, iam })
+```
+
+注意要点：
+
+- **无 input 的 POST 过程**：默认不发送 body；transport 加密层会自动跳过空 body 请求，客户端可直接 `client.app.info()`。
+- **`serv.requireAuth` 仅可在过程内调用**：必须在 `context` 中有 `session`；公开过程不要包装它。
+- **客户端导入相同 contract**：在 monorepo 中把 `apiServiceContract` 从应用 `src/app.ts` 导出供 web/cli 直接 import；跨仓库时建议把 contract 拆成独立包发布。
+
+### 5. Fetch Runtime（Cloudflare Workers / Deno / Bun）
 
 ```typescript
 import { serv } from '@h-ai/serv'
@@ -89,7 +159,7 @@ const handler = serv.toFetch(app)
 export default { fetch: handler }
 ```
 
-### 4. 通过 `config/_serv.yml` 管理 HTTP 配置
+### 6. 通过 `config/_serv.yml` 管理 HTTP 配置
 
 `@h-ai/serv` 不自己扫描 YAML；推荐由 `@h-ai/core` 统一加载，再用 `ServConfigSchema` 校验：
 
@@ -154,7 +224,7 @@ transport:
 import type { CreateServAppOptions } from '@h-ai/serv'
 
 const app = serv.createApp({
-  contract,       // AnyContractRouter — 通过 createApiContract() 组合的 contract
+  contract,       // AnyContractRouter — 通过 apiContract.create() 组合的 contract
   procedures,     // Router<AnyContractRouter, ServContext> — procedure 实现
   http?,          // ServHttpConfigInput — HTTP 端点配置（见下方配置节）
   middlewares?,   // readonly ServMiddlewareMount[] — 自定义 Hono middleware（日志/CORS/限流/租户头校验）
@@ -164,6 +234,21 @@ const app = serv.createApp({
   verifyToken?,   // (token) => Promise<HaiResult<ServSession>> — 逃脱口：不使用 iam 时提供自定义校验
   createContext?, // CreateServContext — 高级：完全接管上下文构造（设置后 serv 不再自动填充 session）
 })
+```
+
+### `serv.contract` / `serv.implement` — oRPC 包装
+
+应用代码不要直接 `import { oc } from '@orpc/contract'` 或 `import { implement } from '@orpc/server'`。
+serv 重新导出二者，确保使用方只感知 `@h-ai/serv`：
+
+```typescript
+import { serv } from '@h-ai/serv'
+
+// 等价于 oc.route(...)
+const route = serv.contract.route({ method: 'POST', path: '/x', operationId: 'x', tags: ['x'] })
+
+// 等价于 implement(contract)
+const p = serv.implement(appContract).$context<ServContext>()
 ```
 
 ### 传输加密
@@ -191,7 +276,7 @@ const app = serv.createApp({
 客户端：
 
 ```typescript
-await api.init({
+await apiClient.init({
   baseUrl: 'https://api.example.com/api/v1',
   transport: { crypto },
 })
@@ -200,7 +285,7 @@ await api.init({
 若服务端通过 `config/_serv.yml` 自定义了 `transport.keyExchangePath`，客户端也必须传入同一路径：
 
 ```typescript
-await api.init({
+await apiClient.init({
   baseUrl: 'https://api.example.com/api/v1',
   transport: {
     crypto,
@@ -473,11 +558,11 @@ export function createMyProcedures() {
 ### 自定义 contract 组合
 
 ```typescript
-import { createApiContract, iamContract } from '@h-ai/api-contract'
+import { apiContract } from '@h-ai/api-contract'
 import { widgetContract } from './widget-contract.js'
 
-export const myAppContract = createApiContract({
-  iam: iamContract,
+export const myAppContract = apiContract.create({
+  iam: apiContract.iam,
   widget: widgetContract,
 })
 
@@ -518,7 +603,7 @@ procedure 包装器内置以下错误：
 
 ### 适用场景
 
-- 浏览器端（Web / H5）使用 `@h-ai/api-client` 的 `createHttpOnlyCookieTokenStorage()`
+- 浏览器端（Web / H5）使用 `@h-ai/api-client` 的 `apiClient.tokenStorage.httpOnlyCookie()`
 - 对 refresh token 有更高安全要求，不希望存储在 localStorage
 
 ### 工作流程

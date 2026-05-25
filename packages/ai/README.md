@@ -1409,15 +1409,15 @@ const prompt = await ai.mcp.getPrompt('greet', { name: '张三' })
 > 浏览器 / App 端通过 `@h-ai/api-client` 调用由 `@h-ai/api-contract` 定义、`@h-ai/serv` 挂载的 AI HTTP API。`@h-ai/ai/client` 中的低层 helper 只适用于应用自定义了 `post/stream` 适配器的场景；标准公共 API 请优先使用 typed client。
 
 ```ts
-import { api } from '@h-ai/api-client'
+import { apiClient } from '@h-ai/api-client'
 
-await api.init({ baseUrl: '/api/v1', auth: {} })
+await apiClient.init({ baseUrl: '/api/v1', auth: {} })
 ```
 
 ### 非流式对话
 
 ```ts
-const response = await api.ai.chats.createCompletion({
+const response = await apiClient.ai.chats.createCompletion({
   messages: [{ role: 'user', content: '你好' }],
 })
 if (response.success) {
@@ -1433,21 +1433,21 @@ if (response.success) {
 
 ```ts
 // 发送单条消息，返回回复文本
-const reply = await api.ai.chats.sendMessage({ message: '你好', systemPrompt: '你是一个翻译助手' })
+const reply = await apiClient.ai.chats.sendMessage({ message: '你好', systemPrompt: '你是一个翻译助手' })
 ```
 
 ### 记忆与会话查询
 
 ```ts
 // 检索相关记忆
-const memories = await api.ai.memories.recall({
+const memories = await apiClient.ai.memories.recall({
   query: '用户偏好',
   topK: 5,
   objectId: 'user-001',
 })
 
 // 分页列出记忆
-const page = await api.ai.memories.list({
+const page = await apiClient.ai.memories.list({
   objectId: 'user-001',
   limit: 20,
 })
@@ -1456,7 +1456,7 @@ if (page.success) {
 }
 
 // 列出某对象的所有会话
-const sessions = await api.ai.sessions.list({ objectId: 'user-001' })
+const sessions = await apiClient.ai.sessions.list({ objectId: 'user-001' })
 if (sessions.success) {
   // sessions.data.items: SessionInfo[]
 }

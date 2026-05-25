@@ -259,7 +259,7 @@ packages/xx/
 | 消息键        | `{module}_{camelCase}`                   | `storage_notInitialized`、`db_initFailed`             |
 | 请求体        | `{Domain}Req`                            | `LoginReq`、`CreateUserReq`                           |
 | 响应体        | `{Domain}Resp`                           | `LoginResp`、`ListUsersResp`                          |
-| HTTP 契约对象 | `{module}Contract`                       | `storageContract`、`iamContract`                      |
+| HTTP 契约对象 | `apiContract.{module}`                   | `apiContract.storage`、`apiContract.iam`              |
 
 ### 3.3 命名三问（每次命名前自问）
 

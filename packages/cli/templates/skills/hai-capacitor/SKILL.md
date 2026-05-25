@@ -52,10 +52,10 @@ await capacitor.close()
 ### 2. Token 安全存储（与 api-client 配合）
 
 ```typescript
-import { api } from '@h-ai/api-client'
+import { apiClient } from '@h-ai/api-client'
 import { createCapacitorTokenStorage } from '@h-ai/capacitor'
 
-await api.init({
+await apiClient.init({
   baseUrl: import.meta.env.PUBLIC_API_BASE,
   auth: {
     storage: createCapacitorTokenStorage(),
@@ -278,11 +278,11 @@ const config = {
 
 ```typescript
 // src/lib/api.ts
-import { api } from '@h-ai/api-client'
+import { apiClient } from '@h-ai/api-client'
 import { createCapacitorTokenStorage } from '@h-ai/capacitor'
 
 export async function initApi() {
-  return api.init({
+  return apiClient.init({
     baseUrl: `${import.meta.env.PUBLIC_API_BASE}/api/v1`,
     auth: {
       storage: createCapacitorTokenStorage(),
@@ -291,7 +291,7 @@ export async function initApi() {
   })
 }
 
-export { api }
+export { apiClient }
 ```
 
 ### 推送通知完整流程

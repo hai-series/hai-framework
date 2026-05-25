@@ -183,25 +183,25 @@ interface TokenPair {
 ## §6 HTTP API 契约 — `@h-ai/api-contract`
 
 ```typescript
-import { iamContract } from '@h-ai/api-contract'
-import { createIamProcedures } from '@h-ai/serv/features/iam'
+import { apiContract } from '@h-ai/api-contract'
 import { iam } from '@h-ai/iam'
+import { createIamProcedures } from '@h-ai/serv/features/iam'
 
 const procedures = createIamProcedures({ iam })
 
-// iamContract.auth.login             — POST /auth/login
-// iamContract.auth.currentUser       — GET  /auth/me
-// iamContract.auth.refresh           — POST /auth/refresh
-// iamContract.users.list             — GET  /iam/users
-// iamContract.roles.create           — POST /iam/roles
-// iamContract.permissions.list       — GET  /iam/permissions
+// apiContract.iam.auth.login             — POST /auth/login
+// apiContract.iam.auth.currentUser       — GET  /auth/me
+// apiContract.iam.auth.refresh           — POST /auth/refresh
+// apiContract.iam.users.list             — GET  /iam/users
+// apiContract.iam.roles.create           — POST /iam/roles
+// apiContract.iam.permissions.list       — GET  /iam/permissions
 ```
 
 ```typescript
 // 客户端
-import { api } from '@h-ai/api-client'
+import { apiClient } from '@h-ai/api-client'
 
-const result = await api.iam.auth.login({ identifier: username, password })
+const result = await apiClient.iam.auth.login({ identifier: username, password })
 ```
 
 ---
@@ -246,9 +246,9 @@ export const GET = kit.handler(async ({ locals }) => {
 
 ```typescript
 // 登录 → 保存 Token
-const login = await api.iam.auth.login({ identifier: username, password })
+const login = await apiClient.iam.auth.login({ identifier: username, password })
 if (login.success) {
-  await api.auth.setTokens(login.data.tokens)
+  await apiClient.auth.setTokens(login.data.tokens)
 }
 
 // Token 过期自动刷新

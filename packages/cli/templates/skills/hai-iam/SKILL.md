@@ -11,7 +11,7 @@ description: 使用 @h-ai/iam 进行身份认证（密码/OTP/LDAP/API Key）、
 
 ## 运行环境
 
-> ⚠️ **服务端模块（Node.js only）。** 浏览器端通过 `@h-ai/api-client` 的 typed client 调用 IAM API，例如 `api.iam.auth.login()`。HTTP 契约统一来自 `@h-ai/api-contract`。
+> ⚠️ **服务端模块（Node.js only）。** 浏览器端通过 `@h-ai/api-client` 的 typed client 调用 IAM API，例如 `apiClient.iam.auth.login()`。HTTP 契约统一来自 `@h-ai/api-contract`。
 
 ---
 
@@ -206,12 +206,12 @@ interface TokenPair {
 
 ## HTTP API 契约
 
-IAM HTTP API 统一由 `@h-ai/api-contract` 的 `iamContract` 定义，由 `@h-ai/serv/features/iam` 绑定到本模块。
+IAM HTTP API 统一由 `@h-ai/api-contract` 的 `apiContract.iam` 定义，由 `@h-ai/serv/features/iam` 绑定到本模块。
 
 ```typescript
-import { api } from '@h-ai/api-client'
+import { apiClient } from '@h-ai/api-client'
 
-const result = await api.iam.auth.login({ identifier: username, password })
+const result = await apiClient.iam.auth.login({ identifier: username, password })
 ```
 
 ---
@@ -303,20 +303,20 @@ export const handle = kit.sequence(haiHandle)
 
 ```typescript
 // 登录 → 保存 Token
-const login = await api.iam.auth.login({ identifier: username, password })
+const login = await apiClient.iam.auth.login({ identifier: username, password })
 if (login.success) {
-  await api.auth.setTokens(login.data.tokens)
+  await apiClient.auth.setTokens(login.data.tokens)
 }
 
 // 获取当前用户
-const me = await api.iam.auth.currentUser()
+const me = await apiClient.iam.auth.currentUser()
 
 // Token 过期时，api-client 自动调用 refreshPath 刷新
 // 刷新失败时，清除 Token 并跳转登录页
 
 // 登出
-await api.iam.auth.logout({})
-await api.auth.clear()
+await apiClient.iam.auth.logout({})
+await apiClient.auth.clear()
 ```
 
 ### 自动会话失效

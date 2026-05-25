@@ -158,17 +158,17 @@ export async function initModules() {
 #### SPA / 原生 App 模式（src/lib/api.ts）
 
 ```typescript
-import { api } from '@h-ai/api-client'
+import { apiClient } from '@h-ai/api-client'
 
 export async function initApi() {
-  return api.init({
+  return apiClient.init({
     baseUrl: import.meta.env.VITE_API_BASE_URL,
     auth: {}, // 浏览器默认 httpOnly cookie；原生 App 传入 Capacitor TokenStorage
     timeout: 15_000,
   })
 }
 
-export { api }
+export { apiClient }
 ```
 
 #### 原生 App 追加初始化（src/lib/capacitor.ts）
@@ -211,11 +211,11 @@ log:
 | 加密/签名/哈希        | `hai-crypto`     | crypto.init, SM2, SM3, SM4, 加密, 签名            |
 | 身份认证/授权         | `hai-iam`        | iam.init, 登录, 注册, RBAC, Token, Bearer         |
 | AI/LLM/MCP            | `hai-ai`         | ai.init, LLM, MCP, Agent, 工具调用                |
-| 公共 API 契约         | `hai-api-contract` | createApiContract, contract, schema, oRPC, HaiResult |
+| 公共 API 契约         | `hai-api-contract` | apiContract.create, contract, schema, oRPC, HaiResult |
 | API Service 运行时    | `hai-serv`       | serv.createApp, Hono, procedures, OpenAPI, docs, requireAuth |
 | SvelteKit 集成        | `hai-kit`        | kit.createHandle, guard, middleware, validate, response |
 | UI 组件               | `hai-ui`         | 表单, 按钮, 表格, Modal, Toast, 移动端组件        |
-| typed API 客户端      | `hai-api-client` | api.init, typed client, Bearer, 401 refresh, custom fetch |
+| typed API 客户端      | `hai-api-client` | apiClient.init, typed client, Bearer, 401 refresh, custom fetch |
 | 原生 App 能力         | `hai-capacitor`  | capacitor, 相机, 推送, 状态栏, 设备信息           |
 | 支付                  | `hai-payment`    | payment, 微信支付, 支付宝, Stripe, 订单           |
 

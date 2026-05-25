@@ -534,10 +534,10 @@ const restored = await ai.context.restoreManager(
 ## §16 前端客户端
 
 ```typescript
-import { api } from '@h-ai/api-client'
+import { apiClient } from '@h-ai/api-client'
 import { createAIClient } from '@h-ai/ai/client'
 
-const client = createAIClient({ api })
+const client = createAIClient({ api: apiClient })
 
 // 非流式 / 流式
 const response = await client.chat({ messages })

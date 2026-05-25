@@ -135,9 +135,9 @@ const downloadUrl = await storage.presign.getUrl('uploads/doc.pdf', {
 公共 HTTP API 统一由 `@h-ai/api-contract` 提供，并由 `@h-ai/serv/features/storage` 绑定到本模块。
 
 ```typescript
-import { api } from '@h-ai/api-client'
+import { apiClient } from '@h-ai/api-client'
 
-const result = await api.storage.presignedUrls.createUpload({ key: 'avatar.png' })
+const result = await apiClient.storage.presignedUrls.createUpload({ key: 'avatar.png' })
 ```
 
 ---
@@ -215,9 +215,9 @@ await fetch(url, {
 也可使用 typed client（需配合 `@h-ai/api-client`）：
 
 ```typescript
-import { api } from '@h-ai/api-client'
+import { apiClient } from '@h-ai/api-client'
 
-const result = await api.storage.presignedUrls.createUpload({
+const result = await apiClient.storage.presignedUrls.createUpload({
   key: `avatars/${userId}.png`,
   contentType: 'image/png',
 })
