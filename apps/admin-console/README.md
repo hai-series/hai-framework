@@ -36,14 +36,14 @@ pnpm --filter admin-console dev
 
 浏览器打开 `http://localhost:5173` 即可访问。
 
-首次启动且用户表为空时会自动创建默认管理员：
+首次启动且用户表为空时，只有配置 `HAI_ADMIN_DEFAULT_PASSWORD` 才会自动创建管理员：
 
-| 项目   | 开发默认值    |
-| ------ | ------------- |
-| 用户名 | `admin`       |
-| 密码   | `admin123456` |
+| 项目   | 值                                |
+| ------ | --------------------------------- |
+| 用户名 | `admin`                           |
+| 密码   | 来自 `HAI_ADMIN_DEFAULT_PASSWORD` |
 
-默认密码来自 `HAI_ADMIN_DEFAULT_PASSWORD`。开发环境会在启动日志输出默认账号信息；生产环境请通过密钥管理注入强密码，日志只显示用户名与密码来源，不输出明文密码。
+请通过本地 `.env` 或密钥管理注入强密码；启动日志只显示用户名与密码来源，不输出明文密码。
 
 ### 构建
 
@@ -77,8 +77,8 @@ pnpm --filter admin-console preview
 HAI_ENV=development
 HAI_DEBUG=false
 
-# Default admin created only when the user table is empty
-HAI_ADMIN_DEFAULT_PASSWORD=admin123456
+# Default admin is created only when the user table is empty and this variable is set.
+HAI_ADMIN_DEFAULT_PASSWORD=<change-me-to-a-strong-local-password>
 
 # Database (sqlite | postgresql | mysql)
 HAI_RELDB_TYPE=sqlite

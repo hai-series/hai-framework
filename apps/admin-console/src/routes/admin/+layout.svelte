@@ -9,7 +9,6 @@
   import { page } from '$app/state'
   import * as m from '$lib/paraglide/messages'
   import { apiFetch } from '$lib/utils/api'
-  import { kit } from '@h-ai/kit'
   import { setPermissionContext, usePermission } from '@h-ai/ui'
 
   interface Props {
@@ -120,7 +119,6 @@
     catch {
     // 忽略
     }
-    kit.auth.clearBrowserToken()
     goto('/auth/login')
   }
 
