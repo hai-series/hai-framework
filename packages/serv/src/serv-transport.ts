@@ -245,6 +245,8 @@ function hasBody(method: string): boolean {
 
 /** 判断请求是否携带 body：Content-Length=0 或缺失 Content-Type 视为空 body。 */
 function isEmptyBody(req: Request): boolean {
+  if (req.body === null)
+    return true
   const cl = req.headers.get('Content-Length')
   if (cl !== null)
     return Number.parseInt(cl, 10) === 0

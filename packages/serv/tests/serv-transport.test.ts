@@ -110,6 +110,48 @@ describe('serv.createApp({ transport })', () => {
     expect(data.echoed.msg).toBe('hello')
   })
 
+  it('已协商客户端的空 POST 即使带 Content-Type 也不要求 X-Encrypted 请求体', async () => {
+    const app = serv.createApp({
+      contract,
+      procedures,
+      http: { apiPrefix: '/api/v1', openapi: false, docs: false, rpc: false },
+      transport: { crypto },
+    })
+    app.post('/api/v1/empty', c => c.json({ ok: true }))
+
+    const kpResult = crypto.asymmetric.generateKeyPair()
+    expect(kpResult.success).toBe(true)
+    if (!kpResult.success)
+      return
+
+    const exchangeResp = await app.request('/api/v1/_hai/key-exchange', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ clientPublicKey: kpResult.data.publicKey }),
+    })
+    const exchanged = await exchangeResp.json() as { clientId: string }
+
+    const resp = await app.request('/api/v1/empty', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        [TRANSPORT_PROTOCOL.CLIENT_ID_HEADER]: exchanged.clientId,
+      },
+    })
+
+    expect(resp.status).toBe(200)
+    expect(resp.headers.get(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER)).toBe(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER_VALUE)
+    const payload = await resp.json() as { encryptedKey: string, ciphertext: string, iv: string }
+    const keyResult = crypto.asymmetric.decrypt(payload.encryptedKey, kpResult.data.privateKey)
+    expect(keyResult.success).toBe(true)
+    if (!keyResult.success)
+      return
+    const bodyResult = crypto.symmetric.decryptWithIV(payload.ciphertext, keyResult.data, payload.iv)
+    expect(bodyResult.success).toBe(true)
+    if (bodyResult.success)
+      expect(JSON.parse(bodyResult.data) as unknown).toEqual({ ok: true })
+  })
+
   it('响应无法加密时不会明文透传', async () => {
     const failingCrypto = createCryptoWithTransportServer(() => ({
       success: true,
