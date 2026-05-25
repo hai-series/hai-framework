@@ -27,11 +27,11 @@ export type CreatedApiContract<T extends CreateApiContractOptions> = {
  *
  * @example
  * ```ts
- * import { createApiContract, iamContract, storageContract } from '@h-ai/api-contract'
+ * import { apiContract } from '@h-ai/api-contract'
  *
- * const myContract = createApiContract({
- *   iam: iamContract,
- *   storage: storageContract,
+ * const myContract = apiContract.create({
+ *   iam: apiContract.iam,
+ *   storage: apiContract.storage,
  *   payment: false, // 未启用，不会出现在 contract 或 OpenAPI spec 中
  * })
  * ```
