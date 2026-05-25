@@ -145,8 +145,8 @@ export function createApiClient<const TContract extends AnyContractRouter>(
       initPromise = (async (): Promise<HaiResult<void>> => {
         try {
           state.config = config
-          state.tokenManager = buildTokenManager(config)
           state.transport = buildTransportSession(config)
+          state.tokenManager = buildTokenManager(config, state.transport)
           state.rawClient = buildRawClient(contract, config, state.tokenManager, state.transport)
           return ok(undefined)
         }
@@ -330,11 +330,11 @@ async function callProcedure(
 // ─── 内部：构建 raw client 与 token manager ──────────────────────────────────
 
 /** 根据 `auth` 配置决定是否创建 TokenManager。 */
-function buildTokenManager(config: ApiClientConfig): TokenManager | undefined {
+function buildTokenManager(config: ApiClientConfig, transport: TransportClient | undefined): TokenManager | undefined {
   if (!config.auth)
     return undefined
 
-  const fetchFn = config.fetch ?? globalThis.fetch.bind(globalThis)
+  const fetchFn = transport?.encryptedFetch ?? config.fetch ?? globalThis.fetch.bind(globalThis)
   // 默认使用 httpOnly cookie 存储（推荐方案：refresh token 由服务端管理，防 XSS）。
   // SSR / Node.js 测试场景请显式传入 `apiClient.tokenStorage.memory()`。
   // 浏览器 localStorage 场景请显式传入 `apiClient.tokenStorage.localStorage()`（有 XSS 风险）。

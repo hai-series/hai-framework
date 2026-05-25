@@ -11,6 +11,7 @@
 - 支持 Bearer Token 自动注入、401 后刷新并重试一次。
 - 网络错误统一转换为 `HaiResult` 错误。
 - 可选传输加密：`apiClient.init({ transport: { crypto } })` 自动使用 `crypto.transport.createClient()`。
+- 传输加密与自动刷新可同时启用：401 后的 `/auth/refresh` 会继续走 encrypted fetch，不降级明文。
 
 ## 快速开始
 
