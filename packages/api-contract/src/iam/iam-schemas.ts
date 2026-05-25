@@ -29,7 +29,7 @@ export const IamUserSchema = z.object({
 /** Token 对 Schema。 */
 export const IamTokenPairSchema = z.object({
   accessToken: z.string(),
-  refreshToken: z.string(),
+  refreshToken: z.string().optional(),
   expiresIn: z.number(),
   tokenType: z.literal('Bearer'),
 })

@@ -8,6 +8,7 @@
 - `apiContract.create()`：按应用场景组合启用的领域 contract。
 - `apiContract.haiResultSchema()` / `apiContract.voidResultSchema` / `apiContract.paginatedSchema()`：公共 DTO Schema 工厂。
 - 公共 DTO Schema：所有 HTTP 输出统一包装为 `HaiResult<T>`。
+- IAM token DTO 兼容 httpOnly cookie 模式：响应体中 `refreshToken` 可能不存在，由服务端 `Set-Cookie` 管理。
 
 ## 快速开始
 
