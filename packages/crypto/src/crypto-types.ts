@@ -325,7 +325,7 @@ export interface PasswordOperations {
  * 常规应用优先使用上层封装，而不是手写 HTTP 协商细节：
  * - `serv.createApp({ transport: { crypto } })`
  * - `kit.createHandle({ crypto: { crypto, transport: true } })`
- * - `api.init({ transport: { crypto } })`
+ * - `apiClient.init({ transport: { crypto } })`
  *
  * @example 服务端
  * ```ts
