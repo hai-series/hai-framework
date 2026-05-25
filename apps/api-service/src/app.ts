@@ -28,6 +28,7 @@ const startedAt = Date.now()
 
 interface CreateApiServiceAppOptions {
   transport?: 'config' | 'disabled'
+  refreshCookie?: 'enabled' | 'disabled'
 }
 
 /**
@@ -43,6 +44,7 @@ interface CreateApiServiceAppOptions {
 export function createApiServiceApp(options: CreateApiServiceAppOptions = {}) {
   const servConfig = core.config.getOrThrow<ServConfig>('serv')
   const transportMode = options.transport ?? 'config'
+  const refreshCookieMode = options.refreshCookie ?? 'enabled'
   const transport = transportMode === 'disabled' || servConfig.transport === false
     ? undefined
     : {
@@ -66,6 +68,7 @@ export function createApiServiceApp(options: CreateApiServiceAppOptions = {}) {
     }),
     http: servConfig.http,
     iam,
+    refreshCookie: refreshCookieMode === 'disabled' ? undefined : {},
     // transport 配置统一来自 config/_serv.yml，避免 key-exchange / 白名单路径散落在代码里。
     transport,
   })

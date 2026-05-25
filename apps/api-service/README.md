@@ -7,6 +7,7 @@
 - 公共 API 由 `@h-ai/api-contract` 定义，运行时由 `@h-ai/serv` 挂载。
 - 默认启用 IAM / Storage / AI HTTP API。
 - 业务 `/api/v1/*` 默认启用 `@h-ai/crypto` 传输加密。
+- 默认启用 httpOnly refresh-token Cookie：登录/注册响应只在 JSON 中返回 access token，refresh token 通过 `Set-Cookie` 管理。
 - `/health`、`/ready`、`/openapi.json`、`/docs` 保持明文可访问，便于探针与联调。
 - Node 部署入口为 `src/index.ts`，Hono app 工厂为 `src/app.ts`。
 
@@ -94,7 +95,7 @@ const client = apiClient.create(apiServiceContract)
 await client.init({
   baseUrl: 'http://localhost:3000/api/v1',
   transport: { crypto },
-  auth: { storage: apiClient.tokenStorage.memory() },
+  auth: {}, // 默认 httpOnly cookie 模式；Node/测试如无 Cookie Jar 可显式使用 memory storage
 })
 
 // 公开端点
@@ -117,6 +118,7 @@ await crypto.close()
 - 业务接口（默认 `/api/v1/*`）需要使用 `@h-ai/api-client`、`@h-ai/crypto` transport client 或等价的 transport-aware 客户端完成密钥协商。
 - 明文可直接访问哪些路径，也由 `_serv.yml` 的 `transport.excludePaths` 决定；默认保留 `/health`、`/ready`、`/openapi.json`、`/docs`、`/_hai/scalar.js`。
 - 默认密钥协商端点为 `POST /api/v1/_hai/key-exchange`；若你修改了 `http.apiPrefix` 或 `transport.keyExchangePath`，客户端也必须同步调整。
+- 启用 `auth: {}` 与 `transport: { crypto }` 时，401 后的 `/auth/refresh` 也会复用同一 transport 会话，不会降级为明文刷新。
 
 ```yaml
 # config/_serv.yml
@@ -163,35 +165,35 @@ await apiClient.init({
 
 服务默认监听 `http://localhost:3000`。
 
-| 路径                                      | 方法               | 说明                                      |
-| ----------------------------------------- | ------------------ | ----------------------------------------- |
-| `/health`                                 | GET                | 存活检查                                  |
-| `/ready`                                  | GET                | 就绪检查                                  |
-| `/openapi.json`                           | GET                | OpenAPI 3.1 规范（根路径）                |
-| `/docs`                                   | GET                | Scalar 交互式文档（根路径）               |
-| `/api/v1/auth/login`                      | POST               | 密码登录，返回 accessToken / refreshToken |
-| `/api/v1/auth/logout`                     | POST               | 登出                                      |
-| `/api/v1/auth/refresh`                    | POST               | 刷新 Token                                |
-| `/api/v1/auth/register`                   | POST               | 注册并登录                                |
-| `/api/v1/auth/send-otp`                   | POST               | 发送 OTP                                  |
-| `/api/v1/auth/change-password`            | POST               | 修改当前用户密码                          |
-| `/api/v1/auth/me`                         | PUT                | 更新当前用户信息                          |
-| `/api/v1/iam/users`                       | GET / POST         | 用户列表 / 创建用户（需权限）             |
-| `/api/v1/iam/users/{id}`                  | GET / PUT / DELETE | 查询 / 更新 / 删除用户（需权限）          |
-| `/api/v1/iam/roles`                       | GET / POST         | 角色列表 / 创建角色（需权限）             |
-| `/api/v1/iam/permissions`                 | GET / POST         | 权限列表 / 创建权限（需权限）             |
-| `/api/v1/storage/presigned-urls/upload`   | POST               | 获取上传预签名 URL                        |
-| `/api/v1/storage/presigned-urls/download` | POST               | 获取下载预签名 URL                        |
-| `/api/v1/storage/files`                   | GET / DELETE       | 文件列表 / 删除文件                       |
-| `/api/v1/storage/files/metadata`          | POST               | 查询文件元信息                            |
-| `/api/v1/ai/chats/completions`            | POST               | 聊天补全（OpenAI 兼容结构）               |
-| `/api/v1/ai/chats/messages`               | POST               | 发送单条消息，直接返回文本                |
-| `/api/v1/ai/chats/history`                | POST               | 查询对话历史                              |
-| `/api/v1/ai/memories/recall`              | POST               | 召回相关记忆                              |
-| `/api/v1/ai/memories/list`                | POST               | 列出记忆                                  |
-| `/api/v1/ai/sessions/list`                | POST               | 列出会话                                  |
-| `/api/v1/app/info`                        | POST               | 服务元信息（公开，无需登录）              |
-| `/api/v1/app/echo`                        | POST               | 演示：回显消息 + 调用者上下文（需登录）   |
+| 路径                                      | 方法               | 说明                                                                 |
+| ----------------------------------------- | ------------------ | -------------------------------------------------------------------- |
+| `/health`                                 | GET                | 存活检查                                                             |
+| `/ready`                                  | GET                | 就绪检查                                                             |
+| `/openapi.json`                           | GET                | OpenAPI 3.1 规范（根路径）                                           |
+| `/docs`                                   | GET                | Scalar 交互式文档（根路径）                                          |
+| `/api/v1/auth/login`                      | POST               | 密码登录，返回 accessToken，并通过 httpOnly Cookie 设置 refreshToken |
+| `/api/v1/auth/logout`                     | POST               | 登出                                                                 |
+| `/api/v1/auth/refresh`                    | POST               | 从 httpOnly Cookie 刷新 Token                                        |
+| `/api/v1/auth/register`                   | POST               | 注册并登录                                                           |
+| `/api/v1/auth/send-otp`                   | POST               | 发送 OTP                                                             |
+| `/api/v1/auth/change-password`            | POST               | 修改当前用户密码                                                     |
+| `/api/v1/auth/me`                         | PUT                | 更新当前用户信息                                                     |
+| `/api/v1/iam/users`                       | GET / POST         | 用户列表 / 创建用户（需权限）                                        |
+| `/api/v1/iam/users/{id}`                  | GET / PUT / DELETE | 查询 / 更新 / 删除用户（需权限）                                     |
+| `/api/v1/iam/roles`                       | GET / POST         | 角色列表 / 创建角色（需权限）                                        |
+| `/api/v1/iam/permissions`                 | GET / POST         | 权限列表 / 创建权限（需权限）                                        |
+| `/api/v1/storage/presigned-urls/upload`   | POST               | 获取上传预签名 URL                                                   |
+| `/api/v1/storage/presigned-urls/download` | POST               | 获取下载预签名 URL                                                   |
+| `/api/v1/storage/files`                   | GET / DELETE       | 文件列表 / 删除文件                                                  |
+| `/api/v1/storage/files/metadata`          | POST               | 查询文件元信息                                                       |
+| `/api/v1/ai/chats/completions`            | POST               | 聊天补全（OpenAI 兼容结构）                                          |
+| `/api/v1/ai/chats/messages`               | POST               | 发送单条消息，直接返回文本                                           |
+| `/api/v1/ai/chats/history`                | POST               | 查询对话历史                                                         |
+| `/api/v1/ai/memories/recall`              | POST               | 召回相关记忆                                                         |
+| `/api/v1/ai/memories/list`                | POST               | 列出记忆                                                             |
+| `/api/v1/ai/sessions/list`                | POST               | 列出会话                                                             |
+| `/api/v1/app/info`                        | POST               | 服务元信息（公开，无需登录）                                         |
+| `/api/v1/app/echo`                        | POST               | 演示：回显消息 + 调用者上下文（需登录）                              |
 
 ## 调用示例
 
@@ -218,6 +220,7 @@ await crypto.init()
 await apiClient.init({
   baseUrl: 'http://localhost:3000/api/v1',
   transport: { crypto },
+  auth: {},
 })
 
 const register = await apiClient.iam.auth.register({
@@ -230,6 +233,8 @@ const login = await apiClient.iam.auth.login({
   identifier: 'admin',
   password: 'Admin123!',
 })
+if (login.success)
+  await apiClient.auth.setTokens(login.data.tokens)
 
 const storage = await apiClient.storage.file.getUploadUrl({
   key: 'uploads/demo.png',
