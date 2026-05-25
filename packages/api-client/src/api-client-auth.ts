@@ -253,13 +253,16 @@ export function createTokenManager(
       // httpOnly cookie 模式：浏览器自动发送 Cookie，请求体无需携带 refreshToken；
       // 同时设置 credentials:'include' 以支持跨域 Cookie 发送。
       const useHttpOnlyCookie = refreshToken === HTTPONLY_COOKIE_SENTINEL
-      const response = await fetchFn(new Request(refreshEndpointUrl, {
+      const requestInit: RequestInit = {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: useHttpOnlyCookie ? undefined : JSON.stringify({ refreshToken }),
         credentials: useHttpOnlyCookie ? 'include' : 'same-origin',
         signal: controller.signal,
-      }))
+      }
+      if (!useHttpOnlyCookie) {
+        requestInit.headers = { 'Content-Type': 'application/json' }
+      }
+      const response = await fetchFn(refreshEndpointUrl, requestInit)
 
       if (!response.ok) {
         // 仅在服务端明确返回 401/4xx 时才清除 Token（refresh token 已失效）；

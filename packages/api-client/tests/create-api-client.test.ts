@@ -10,6 +10,10 @@ const testContract = {
   health: oc.route({ method: 'GET', path: '/health' }).output(HealthOutputSchema),
 }
 
+function toRequest(input: RequestInfo | URL, init?: RequestInit): Request {
+  return input instanceof Request ? input : new Request(input, init)
+}
+
 describe('apiClient.create', () => {
   afterEach(async () => {
     await apiClient.close()
@@ -65,7 +69,8 @@ describe('apiClient.create', () => {
       tokenType: 'Bearer' as const,
     }
 
-    const fetch = vi.fn().mockImplementation((request: Request) => {
+    const fetch = vi.fn().mockImplementation((input: RequestInfo | URL, init?: RequestInit) => {
+      const request = toRequest(input, init)
       if (request.url === 'https://api.test.com/api/v1/auth/refresh') {
         return Promise.resolve(new Response(JSON.stringify({ success: true, data: { tokens: newTokens } }), {
           status: 200,
@@ -158,7 +163,8 @@ describe('apiClient.create', () => {
 
     const seenBodies: string[] = []
 
-    const fetch = vi.fn().mockImplementation(async (request: Request) => {
+    const fetch = vi.fn().mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const request = toRequest(input, init)
       if (request.url === 'https://api.test.com/api/v1/auth/refresh') {
         return new Response(JSON.stringify({ success: true, data: { tokens: newTokens } }), {
           status: 200,

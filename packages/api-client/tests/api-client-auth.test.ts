@@ -298,8 +298,8 @@ describe('apiClient.tokenStorage.httpOnlyCookie', () => {
       tokenType: 'Bearer' as const,
     }
     let capturedRequest: Request | undefined
-    const mockFetch = vi.fn().mockImplementation(async (req: Request) => {
-      capturedRequest = req
+    const mockFetch = vi.fn().mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+      capturedRequest = new Request(input, init)
       return new Response(JSON.stringify({ data: newTokens }), {
         status: 200,
         headers: { 'content-type': 'application/json' },
@@ -316,6 +316,7 @@ describe('apiClient.tokenStorage.httpOnlyCookie', () => {
 
     // 请求体为空（不携带 refreshToken，依赖浏览器自动发送 httpOnly cookie）
     expect(capturedRequest?.body).toBeNull()
+    expect(capturedRequest?.headers.has('Content-Type')).toBe(false)
     // 跨域时需 credentials: 'include' 以确保浏览器发送 Cookie
     expect(capturedRequest?.credentials).toBe('include')
   })
