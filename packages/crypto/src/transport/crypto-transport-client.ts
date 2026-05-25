@@ -141,12 +141,13 @@ export function createTransportClient(options: CreateTransportClientOptions): Tr
   }
 
   const encryptedFetch: typeof fetch = async (input, init) => {
+    const requestInput = isRequestLike(input) ? input : undefined
     // 密钥协商请求本身不加密，避免无限递归。
     const targetUrl = typeof input === 'string'
       ? input
       : input instanceof URL
         ? input.toString()
-        : input.url
+        : requestInput?.url ?? String(input)
     if (targetUrl === options.keyExchangeUrl)
       return baseFetch(input, init)
 
@@ -155,15 +156,15 @@ export function createTransportClient(options: CreateTransportClientOptions): Tr
       throw new Error(ready.error.message)
 
     // 复制并改造 init：附加 X-Client-Id；若有 body，则加密。
-    const headers = new Headers(init?.headers ?? (input instanceof Request ? input.headers : undefined))
+    const headers = new Headers(init?.headers ?? requestInput?.headers)
     headers.set(TRANSPORT_PROTOCOL.CLIENT_ID_HEADER, clientId!)
 
     // 兼容 oRPC 等场景：body 可能在 Request 上而非 init.body。
     let rawBody: BodyInit | null | undefined = init?.body
-    if (rawBody == null && input instanceof Request) {
-      const method = (init?.method ?? input.method).toUpperCase()
+    if (rawBody == null && requestInput) {
+      const method = (init?.method ?? requestInput.method).toUpperCase()
       if (method !== 'GET' && method !== 'HEAD') {
-        const text = await input.clone().text()
+        const text = await requestInput.clone().text()
         if (text)
           rawBody = text
       }
@@ -182,12 +183,21 @@ export function createTransportClient(options: CreateTransportClientOptions): Tr
 
     // 当 input 是已带 body 的 Request 时，必须改用 URL 字符串作为 input，
     // 否则底层 fetch 会优先读取原始 Request 上的明文 body，覆盖我们的密文。
-    const finalInput: RequestInfo | URL = input instanceof Request ? input.url : input
+    const finalInput: RequestInfo | URL = requestInput ? requestInput.url : input
     const finalInit: RequestInit = {
       ...init,
-      method: init?.method ?? (input instanceof Request ? input.method : undefined),
+      method: init?.method ?? requestInput?.method,
       headers,
       body: nextBody,
+      cache: init?.cache ?? requestInput?.cache,
+      credentials: init?.credentials ?? requestInput?.credentials,
+      integrity: init?.integrity ?? requestInput?.integrity,
+      keepalive: init?.keepalive ?? requestInput?.keepalive,
+      mode: init?.mode ?? requestInput?.mode,
+      redirect: init?.redirect ?? requestInput?.redirect,
+      referrer: init?.referrer ?? requestInput?.referrer,
+      referrerPolicy: init?.referrerPolicy ?? requestInput?.referrerPolicy,
+      signal: init?.signal ?? requestInput?.signal,
     }
     const response = await baseFetch(finalInput, finalInit)
 
@@ -248,6 +258,18 @@ async function bodyToText(body: BodyInit): Promise<string> {
     return new TextDecoder().decode(body.buffer as ArrayBuffer)
   // FormData / ReadableStream：转为 Response 再读 text，由运行时序列化。
   return new Response(body as BodyInit).text()
+}
+
+function isRequestLike(input: RequestInfo | URL): input is Request {
+  if (typeof input !== 'object' || input === null)
+    return false
+
+  const candidate = input as Partial<Request>
+  const headers = candidate.headers as { get?: unknown } | undefined
+  return typeof candidate.url === 'string'
+    && typeof headers?.get === 'function'
+    && typeof candidate.method === 'string'
+    && typeof candidate.clone === 'function'
 }
 
 function isEncryptedPayload(payload: unknown): payload is EncryptedPayload {
