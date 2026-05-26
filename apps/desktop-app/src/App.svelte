@@ -8,6 +8,7 @@
   import { Alert, ToastContainer } from '@h-ai/ui'
   import { onMount } from 'svelte'
   import {
+    hasPermission,
     isAuthenticated,
     isInitialized,
     refreshCurrentUser,
@@ -38,6 +39,9 @@
     else if (isAuthenticated() && isPublic) {
       navigate('/dashboard')
     }
+    else if (path === '/users' && !hasPermission('user:list')) {
+      navigate('/dashboard')
+    }
     else if (path === '/') {
       navigate(isAuthenticated() ? '/dashboard' : '/login')
     }
@@ -57,7 +61,13 @@
     {#if currentPathname() === '/dashboard'}
       <DashboardView />
     {:else if currentPathname() === '/users'}
-      <UsersView />
+      {#if hasPermission('user:list')}
+        <UsersView />
+      {:else}
+        <div class='flex min-h-64 items-center justify-center'>
+          <span class='loading loading-spinner loading-lg'></span>
+        </div>
+      {/if}
     {:else if currentPathname() === '/profile'}
       <ProfileView />
     {:else}

@@ -1,7 +1,7 @@
 import type { ServConfig } from '@h-ai/serv'
 import { apiServiceContract } from '@h-ai/api-service-contract'
 import { core } from '@h-ai/core'
-import { crypto } from '@h-ai/crypto'
+import { crypto, TRANSPORT_PROTOCOL } from '@h-ai/crypto'
 import { iam } from '@h-ai/iam'
 import { serv } from '@h-ai/serv'
 import pkg from '../package.json' with { type: 'json' }
@@ -14,6 +14,23 @@ interface CreateApiServiceAppOptions {
   transport?: 'config' | 'disabled'
   refreshCookie?: 'enabled' | 'disabled'
 }
+
+const LOOPBACK_ORIGIN_RE = /^https?:\/\/(?:localhost|127\.0\.0\.1|\[::1\])(?::\d+)?$/
+const WEBVIEW_ORIGINS = new Set([
+  'capacitor://localhost',
+  'http://localhost',
+  'https://tauri.localhost',
+  'tauri://localhost',
+])
+const DEFAULT_CORS_ALLOWED_HEADERS = [
+  'Authorization',
+  'Content-Type',
+  TRANSPORT_PROTOCOL.CLIENT_ID_HEADER,
+  TRANSPORT_PROTOCOL.ENCRYPTED_HEADER,
+  'X-Hai-Locale',
+  'X-Request-Id',
+  'X-Requested-With',
+]
 
 /**
  * 创建 Hono API Service 应用。
@@ -52,8 +69,28 @@ export function createApiServiceApp(options: CreateApiServiceAppOptions = {}) {
     }),
     http: servConfig.http,
     iam,
+    middlewares: [
+      {
+        middleware: serv.cors({
+          origin: origin => resolveCorsOrigin(origin) !== null,
+          credentials: true,
+          allowedHeaders: DEFAULT_CORS_ALLOWED_HEADERS,
+          exposedHeaders: [TRANSPORT_PROTOCOL.ENCRYPTED_HEADER, 'X-Request-Id'],
+        }),
+      },
+    ],
     refreshCookie: refreshCookieMode === 'disabled' ? undefined : {},
     // transport 配置统一来自 config/_serv.yml，避免 key-exchange / 白名单路径散落在代码里。
     transport,
   })
+}
+
+function resolveCorsOrigin(origin: string | undefined): string | null {
+  if (!origin)
+    return null
+  if (WEBVIEW_ORIGINS.has(origin))
+    return origin
+  if (LOOPBACK_ORIGIN_RE.test(origin))
+    return origin
+  return null
 }

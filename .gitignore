@@ -11,6 +11,7 @@ dist/
 build/
 .svelte-kit/
 .turbo/
+target/
 
 # 测试覆盖率
 coverage/

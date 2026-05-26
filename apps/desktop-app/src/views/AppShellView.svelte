@@ -6,7 +6,7 @@
 <script lang='ts'>
   import type { Snippet } from 'svelte'
   import { AppBar, Button, ThemeToggle } from '@h-ai/ui'
-  import { currentUser, logout } from '../lib/auth-store.svelte.js'
+  import { currentUser, hasPermission, logout } from '../lib/auth-store.svelte.js'
   import { currentPathname, navigate } from '../lib/router.svelte.js'
 
   interface Props {
@@ -15,11 +15,18 @@
 
   const { children }: Props = $props()
 
-  const navItems = [
-    { path: '/dashboard', label: 'Dashboard' },
-    { path: '/users', label: 'Users' },
-    { path: '/profile', label: 'Profile' },
-  ]
+  const navItems = $derived.by(() => {
+    const items = [
+      { path: '/dashboard', label: 'Dashboard' },
+      { path: '/profile', label: 'Profile' },
+    ]
+
+    if (hasPermission('user:list')) {
+      items.splice(1, 0, { path: '/users', label: 'Users' })
+    }
+
+    return items
+  })
 
   async function handleLogout(): Promise<void> {
     await logout()

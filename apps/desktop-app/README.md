@@ -19,7 +19,7 @@
 
 - 注册 / 登录 / 自动登录
 - Dashboard（`desktopApiClient.app.info` / `desktopApiClient.app.echo`）
-- 用户列表（`apiClient.iam.users.list`）
+- 用户列表（`apiClient.iam.users.list`，需要 `user:list` 权限）
 - 个人信息维护
 
 不包含的（保持示例精简）：
@@ -91,6 +91,7 @@ apps/desktop-app/
 - **Token 存储 = localStorage**：Tauri webview 与 api-service 跨域，httpOnly cookie 不可用，因此使用 `apiClient.tokenStorage.localStorage()`。Tauri 沙箱内 XSS 面较小，但仍建议生产应用结合 [`tauri-plugin-stronghold`](https://v2.tauri.app/plugin/stronghold/) 或自定义 secure storage。
 - **业务 API 默认走 transport 加密**：`src/lib/api.ts` 启动时会读取 `config/_crypto.yml`，启用 `@h-ai/crypto` + `@h-ai/api-client` 的密钥协商与请求/响应加解密。
 - **完整 api-service contract**：桌面端通过 `apiClient.create(apiServiceContract)` 创建 `desktopApiClient`，避免跨应用源码 import，也能访问 api-service 自有 `app.*` 端点。
+- **权限感知导航**：`/users` 仅在当前会话拥有 `user:list` 权限时显示；普通注册用户会自动保留在 `/dashboard`。
 - **路由 = hash**：file:// 协议不支持 history API，全部走 `#/path`。
 - **CSP**：`tauri.conf.json` 的 `app.security.csp` 已放行 `connect-src http://localhost:3000`。生产部署需根据实际域名调整。
 - **`@h-ai/ui` 完全解耦**：`@h-ai/ui` 不再包含任何 SvelteKit 依赖；SvelteKit 适配器迁至 `@h-ai/kit/client` 的 `createSvelteKitNavAdapter()`（本应用未使用）。

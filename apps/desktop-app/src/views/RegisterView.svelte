@@ -17,7 +17,7 @@
       password: data.password,
     })
     if (err) {
-      errors = { _form: `Register failed: ${err}` }
+      errors = { general: `Register failed: ${err}` }
       return
     }
     navigate('/dashboard')
