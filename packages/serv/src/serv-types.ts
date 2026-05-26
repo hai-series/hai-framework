@@ -15,7 +15,7 @@ export type {
   ServProcedureOptions,
   ServProcedureWrapper,
 } from './pipelines/serv-pipeline-types.js'
-export type { CreateServAppOptions, ServMiddlewareMount } from './serv-app.js'
+export type { CreateServAppOptions, ServHttpApp, ServMiddlewareMount } from './serv-app.js'
 export type {
   ServConfig,
   ServConfigInput,

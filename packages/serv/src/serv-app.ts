@@ -1,7 +1,7 @@
 /**
- * @h-ai/serv — Hono app 装配
+ * @h-ai/serv — HTTP app 装配
  *
- * 将 oRPC contract + procedures + http 配置组合为可运行的 Hono app，
+ * 将 oRPC contract + procedures + http 配置组合为可运行的 ServHttpApp，
  * 自动挂载安全响应头、健康检查、OpenAPI JSON、Scalar 文档页与 oRPC handler。
  *
  * 关键装配顺序：
@@ -57,7 +57,19 @@ export interface ServMiddlewareMount {
 }
 
 /**
- * 创建 Hono app 的配置。
+ * `@h-ai/serv` 对外暴露的 HTTP app 抽象。
+ *
+ * Hono 是当前内部实现细节，应用代码只应依赖此最小接口：
+ * - `fetch`：部署到 Fetch-first 运行时或交给 `serv.listen()`。
+ * - `request`：测试 / 本地直连时发起 in-process 请求，避免消费方 import Hono。
+ */
+export interface ServHttpApp {
+  readonly fetch: (request: Request) => Response | Promise<Response>
+  readonly request: (input: RequestInfo | URL, init?: RequestInit) => Response | Promise<Response>
+}
+
+/**
+ * 创建 ServHttpApp 的配置。
  *
  * **认证 / 会话填充设计**（遵循最小知识原则）：
  *
@@ -81,7 +93,7 @@ export interface CreateServAppOptions<
   readonly procedures: TProcedures
   readonly http?: ServHttpConfigInput
   /**
-   * 自定义 Hono middleware。
+   * 自定义 HTTP middleware（当前内部由 Hono 承载，但应用 API 不暴露 Hono app）。
    *
    * 典型用途：请求日志、trace、指标、CORS、限流、租户头校验等 HTTP 层横切逻辑。
    * 这些 middleware 会在内置安全头之后、传输加密与业务路由之前注册；
@@ -125,10 +137,10 @@ export interface CreateServAppOptions<
 }
 
 /**
- * 创建并装配 Hono API app。
+ * 创建并装配 HTTP API app。
  *
  * @param options - contract/procedures/http 三段式配置
- * @returns Hono app
+ * @returns 可被 `serv.listen()` / `serv.toFetch()` 使用的 ServHttpApp
  *
  * @example
  * ```ts
@@ -147,7 +159,7 @@ export interface CreateServAppOptions<
 export function createApp<
   TContract extends AnyContractRouter,
   TProcedures extends Router<AnyContractRouter, ServContext>,
->(options: CreateServAppOptions<TContract, TProcedures>): Hono {
+>(options: CreateServAppOptions<TContract, TProcedures>): ServHttpApp {
   // Step 1：先把用户输入的 HTTP 配置收敛成完整配置，后续挂载逻辑只处理一种形态。
   const http = resolveServHttpConfig(options.http)
   // Step 2：创建 Hono app 外壳，后续所有 middleware / route 都按顺序向这个实例注册。
@@ -252,7 +264,7 @@ export function createApp<
     })
   }
 
-  // Step 14：所有运行时能力都已装配完毕，返回可直接监听或导出为 fetch handler 的 Hono app。
+  // Step 14：所有运行时能力都已装配完毕，返回对外稳定的 HTTP app 抽象。
   return app
 }
 

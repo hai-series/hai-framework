@@ -50,7 +50,7 @@ export interface ServTransportRuntimeConfig {
   readonly maxClients: number
 }
 
-/** Hono app 的 HTTP 挂载配置。 */
+/** ServHttpApp 的 HTTP 挂载配置。 */
 export interface ServHttpConfig {
   readonly apiPrefix: `/api/${string}`
   readonly openapi: false | ServOpenAPIHttpConfig

@@ -1,12 +1,12 @@
 /**
  * @h-ai/serv — Fetch 适配器
  *
- * 将 Hono app 包装为标准 Web `fetch(Request)` 处理函数，
+ * 将 ServHttpApp 包装为标准 Web `fetch(Request)` 处理函数，
  * 适用于 Cloudflare Workers、Deno、Bun 等 Fetch-first 运行时。
  * @module adapters/serv-adapter-fetch
  */
 
-import type { Hono } from 'hono'
+import type { ServHttpApp } from '../serv-app.js'
 
 /**
  * Fetch runtime handler。
@@ -18,9 +18,9 @@ import type { Hono } from 'hono'
 export type ServFetchHandler = typeof fetch
 
 /**
- * 将 Hono app 转成 Fetch handler。
+ * 将 ServHttpApp 转成 Fetch handler。
  *
- * @param app - Hono app
+ * @param app - `serv.createApp()` 返回的 HTTP app
  * @returns fetch-compatible handler
  *
  * @example
@@ -36,9 +36,9 @@ export type ServFetchHandler = typeof fetch
  * await client.init({ baseUrl: 'http://test', fetch: serv.toFetch(app) })
  * ```
  */
-export function toFetch(app: Hono): ServFetchHandler {
+export function toFetch(app: ServHttpApp): ServFetchHandler {
   // 包装为标准 fetch 签名：接受 `Request | URL | string` + `RequestInit?`，
-  // 内部统一转为 `Request` 再委托给 Hono。
+  // 内部统一转为 `Request` 再委托给 ServHttpApp。
   const handler = (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
     const request = input instanceof Request
       ? input
