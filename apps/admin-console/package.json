@@ -1,7 +1,7 @@
 {
   "name": "admin-console",
   "type": "module",
-  "version": "0.1.0-alpha.14",
+  "version": "0.1.0-alpha.15",
   "private": true,
   "description": "hai Agent Framework - 管理控制台示例应用",
   "keywords": [
