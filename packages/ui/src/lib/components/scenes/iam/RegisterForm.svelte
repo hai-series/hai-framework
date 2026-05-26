@@ -175,6 +175,7 @@
           id='register-password'
           bind:value={password}
           placeholder={getFieldPlaceholder('password')}
+          autocomplete='new-password'
           {disabled}
           required
           showStrength={showPasswordStrength}
@@ -193,6 +194,7 @@
             id='register-confirm-password'
             bind:value={confirmPassword}
             placeholder={getFieldPlaceholder('confirmPassword')}
+            autocomplete='new-password'
             {disabled}
             required
             showStrength={false}

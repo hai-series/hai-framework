@@ -18,6 +18,8 @@ export interface PasswordInputProps {
   id?: string
   /** 值 */
   value?: string
+  /** autocomplete */
+  autocomplete?: string
   /** 占位符 */
   placeholder?: string
   /** 尺寸 */
