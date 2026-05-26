@@ -13,13 +13,19 @@ import { expect, test } from '@playwright/test'
 import { registerAndLogin, uniqueUser } from './helpers'
 
 test.describe('IAM Users UI', () => {
+  const createDrawerHeading = /创建用户管理|新建用户管理/
+  const editDrawerHeading = /编辑用户管理|编辑用户/
+
   async function openCreateDrawer(page: import('@playwright/test').Page) {
     const createBtn = page.locator('main').getByRole('button', { name: /新建|创建|添加/ })
     await createBtn.first().click()
-    const heading = page.getByRole('heading', { name: /新建用户管理/ }).last()
+
+    const heading = page.getByRole('heading', { name: createDrawerHeading }).last()
     await expect(heading).toBeVisible()
-    const panel = heading.locator('xpath=ancestor::*[.//button[normalize-space()="取消"] and .//button[normalize-space()="新建"]][1]')
-    return panel
+
+    const drawer = page.locator('.drawer-side .menu').filter({ has: heading }).last()
+    await expect(drawer.locator('#username')).toBeVisible()
+    return drawer
   }
 
   // ---------------------------------------------------------------------------
@@ -118,10 +124,10 @@ test.describe('IAM Users UI', () => {
     const drawer = await openCreateDrawer(page)
 
     // 对话框内应有表单字段
-    const usernameInput = drawer.locator('input[type="text"], input[type="email"]').first()
+    const usernameInput = drawer.locator('#username')
     await expect(usernameInput).toBeVisible()
 
-    const emailInput = drawer.locator('input[type="email"]').first()
+    const emailInput = drawer.locator('#email')
     await expect(emailInput).toBeVisible()
   })
 
@@ -133,11 +139,11 @@ test.describe('IAM Users UI', () => {
     const drawer = await openCreateDrawer(page)
 
     // 用户名
-    await expect(drawer.locator('input[type="text"], input[type="email"]').first()).toBeVisible()
+    await expect(drawer.locator('#username')).toBeVisible()
     // 邮箱
-    await expect(drawer.locator('input[type="email"]').first()).toBeVisible()
+    await expect(drawer.locator('#email')).toBeVisible()
     // 显示名称
-    await expect(drawer.locator('input[type="text"], input[type="email"]').nth(2)).toBeVisible()
+    await expect(drawer.locator('#display_name')).toBeVisible()
     // 角色多选区域
     await expect(drawer.locator('input[type="checkbox"]').first()).toBeVisible()
     // 状态选择
@@ -150,7 +156,7 @@ test.describe('IAM Users UI', () => {
     await page.waitForLoadState('domcontentloaded')
 
     const drawer = await openCreateDrawer(page)
-    const usernameInput = drawer.locator('input[type="text"], input[type="email"]').first()
+    const usernameInput = drawer.locator('#username')
     await expect(usernameInput).toBeVisible()
 
     // 对话框的取消按钮
@@ -174,7 +180,7 @@ test.describe('IAM Users UI', () => {
     await submitBtn.click()
 
     // 空表单提交后，新建面板应仍然保持打开
-    await expect(page.getByRole('heading', { name: /新建用户管理/ })).toBeVisible()
+    await expect(page.getByRole('heading', { name: createDrawerHeading }).last()).toBeVisible()
   })
 
   // ---------------------------------------------------------------------------
@@ -182,31 +188,50 @@ test.describe('IAM Users UI', () => {
   // ---------------------------------------------------------------------------
   test('通过对话框编辑用户后更新生效', async ({ page, request }) => {
     await registerAndLogin(page, request, 'usrui')
+
+    const targetUser = uniqueUser('editui')
+    const createTargetRes = await request.post('/api/iam/users', {
+      data: {
+        username: targetUser.username,
+        email: targetUser.email,
+        password: targetUser.password,
+        roles: [],
+        status: 'active',
+      },
+    })
+    expect(createTargetRes.ok()).toBeTruthy()
+
     await page.goto('/admin/iam/users')
     await page.waitForLoadState('domcontentloaded')
 
-    // 等待表格渲染
-    await expect(page.locator('table tbody tr').first()).toBeVisible()
-
-    // 点击第一个用户行的编辑按钮（避免误点“详情”）
-    const firstRow = page.locator('table tbody tr').first()
-    await firstRow.getByRole('button', { name: /编辑|Edit/ }).click()
+    const row = page.locator('table tbody tr').filter({ hasText: targetUser.username })
+    await expect(row.first()).toBeVisible({ timeout: 5_000 })
+    await row.first().getByRole('button', { name: /编辑|Edit/ }).click()
 
     // 等待编辑对话框打开
-    const heading = page.getByRole('heading', { name: /编辑用户管理|编辑用户/ }).last()
+    const heading = page.getByRole('heading', { name: editDrawerHeading }).last()
     await expect(heading).toBeVisible()
-    const drawer = heading.locator('xpath=ancestor::*[.//button[normalize-space()="取消"] and .//button[normalize-space()="保存"]][1]')
+
+    const drawer = page.locator('.drawer-side .menu').filter({ has: heading }).last()
+    const displayNameInput = drawer.locator('#display_name')
+    await expect(displayNameInput).toBeVisible()
 
     // 修改显示名称
     const newDisplayName = `UI_Edited_${Date.now().toString(36)}`
-    await drawer.locator('input[type="text"], input[type="email"]').nth(2).fill(newDisplayName)
+    await displayNameInput.fill(newDisplayName)
 
     // 点击保存按钮
     const saveBtn = drawer.getByRole('button', { name: /保存|提交/ }).last()
     await saveBtn.click()
 
-    // 变更值在编辑表单中保持（页面列表不展示 display_name 文本）
-    await expect(drawer.locator('input[type="text"], input[type="email"]').nth(2)).toHaveValue(newDisplayName)
+    await expect(page.getByRole('heading', { name: editDrawerHeading })).toHaveCount(0, { timeout: 10_000 })
+
+    await row.first().getByRole('button', { name: /编辑|Edit/ }).click()
+    const reopenedHeading = page.getByRole('heading', { name: editDrawerHeading }).last()
+    await expect(reopenedHeading).toBeVisible()
+
+    const reopenedDrawer = page.locator('.drawer-side .menu').filter({ has: reopenedHeading }).last()
+    await expect(reopenedDrawer.locator('#display_name')).toHaveValue(newDisplayName)
   })
 
   // ---------------------------------------------------------------------------

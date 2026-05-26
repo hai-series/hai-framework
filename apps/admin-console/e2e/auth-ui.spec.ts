@@ -212,7 +212,7 @@ test.describe('Register Form UI', () => {
   })
 
   test('通过 UI 表单提交注册（走 apiFetch 传输加密链路）', async ({ page }) => {
-    const user = uniqueUser('regform')
+    const user = uniqueUser('regui')
 
     await page.goto('/auth/register')
     await page.waitForLoadState('load')
@@ -223,8 +223,18 @@ test.describe('Register Form UI', () => {
     await page.locator('#register-password').fill(user.password)
     await page.locator('#register-confirm-password').fill(user.password)
 
-    // 点击提交按钮
+    const registerResponsePromise = page.waitForResponse(
+      response => response.url().includes('/api/auth/register') && response.request().method() === 'POST',
+    )
+
     await page.locator('button[type="submit"]').click()
+
+    const registerResponse = await registerResponsePromise
+    const registerBodyText = await registerResponse.text()
+    expect(registerResponse.ok(), `status=${registerResponse.status()} body=${registerBodyText}`).toBeTruthy()
+
+    const registerBody = JSON.parse(registerBodyText) as { success?: boolean }
+    expect(registerBody.success).toBe(true)
 
     // 应跳转到 /admin
     await page.waitForURL('**/admin**', { timeout: 15_000 })

@@ -7,9 +7,9 @@
 import { expect, test } from '@playwright/test'
 import { registerAndLogin } from './helpers'
 
-async function clickModuleTab(page: import('@playwright/test').Page, index: number) {
+async function clickModuleTab(page: import('@playwright/test').Page, name: RegExp) {
   const tablist = page.locator('[role="tablist"]').first()
-  const tab = tablist.locator('[role="tab"]').nth(index)
+  const tab = tablist.getByRole('tab', { name })
   await expect(tab).toBeVisible()
   await tab.click()
 }
@@ -59,7 +59,7 @@ test.describe('Modules Page UI', () => {
     await page.waitForLoadState('domcontentloaded')
 
     // 点击 db 标签
-    await clickModuleTab(page, 1)
+    await clickModuleTab(page, /^db\b/i)
 
     // db 内容应可见
     const dbContent = page.locator('text=@h-ai/reldb')
@@ -71,7 +71,7 @@ test.describe('Modules Page UI', () => {
     await page.goto('/admin/modules')
     await page.waitForLoadState('domcontentloaded')
 
-    await clickModuleTab(page, 2)
+    await clickModuleTab(page, /cache/i)
 
     const cacheContent = page.locator('text=@h-ai/cache')
     await expect(cacheContent.first()).toBeVisible()
@@ -82,7 +82,7 @@ test.describe('Modules Page UI', () => {
     await page.goto('/admin/modules')
     await page.waitForLoadState('domcontentloaded')
 
-    await clickModuleTab(page, 7)
+    await clickModuleTab(page, /crypto/i)
 
     const cryptoContent = page.locator('text=@h-ai/crypto')
     await expect(cryptoContent.first()).toBeVisible()
@@ -120,7 +120,7 @@ test.describe('Modules Page UI', () => {
     await page.waitForLoadState('domcontentloaded')
 
     // 切换到 crypto 标签
-    await clickModuleTab(page, 7)
+    await clickModuleTab(page, /crypto/i)
 
     // 明文输入框
     const plainInput = page.locator('#crypto-plain')
@@ -141,7 +141,7 @@ test.describe('Modules Page UI', () => {
     await page.waitForLoadState('domcontentloaded')
 
     // 切换到 crypto
-    await clickModuleTab(page, 7)
+    await clickModuleTab(page, /crypto/i)
 
     // 点击哈希按钮
     const hashBtn = page.getByRole('button', { name: /哈希|Hash/ })
@@ -159,10 +159,11 @@ test.describe('Modules Page UI', () => {
     await page.waitForLoadState('domcontentloaded')
 
     // 切换到 crypto
-    await clickModuleTab(page, 7)
+    await clickModuleTab(page, /crypto/i)
 
     // 输入自定义文本
     const plainInput = page.locator('#crypto-plain')
+    await expect(plainInput).toBeVisible()
     await plainInput.fill('测试加密文本')
 
     // 点击对称加密按钮
@@ -180,9 +181,10 @@ test.describe('Modules Page UI', () => {
     await page.goto('/admin/modules')
     await page.waitForLoadState('domcontentloaded')
 
-    await clickModuleTab(page, 7)
+    await clickModuleTab(page, /crypto/i)
 
     const plainInput = page.locator('#crypto-plain')
+    await expect(plainInput).toBeVisible()
     await plainInput.clear()
     await plainInput.fill('自定义测试内容')
 
