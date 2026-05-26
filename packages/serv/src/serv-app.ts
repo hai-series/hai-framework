@@ -8,8 +8,8 @@
  * 1. 解析 HTTP 配置
  * 2. 选择请求上下文工厂
  * 3. 挂基础安全 middleware
- * 4. （可选）挂传输加密 middleware
- * 5. 挂自定义 middleware（若提供）
+ * 4. 挂自定义 middleware（若提供）
+ * 5. （可选）挂传输加密 middleware
  * 6. 挂基础路由（health / refresh-cookie）
  * 7. 挂业务路由（oRPC / RPC）
  * 8. 挂文档路由（openapi / docs）
@@ -49,7 +49,7 @@ const API_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'] as cons
  *
  * - `path` 省略时默认挂到 `'*'`
  * - 按数组顺序注册
- * - 注册位置固定在内置 `securityHeaders` / `transport` 之后、业务路由之前
+ * - 注册位置固定在内置 `securityHeaders` 之后、`transport` / 业务路由之前
  */
 export interface ServMiddlewareMount {
   readonly path?: string
@@ -84,7 +84,9 @@ export interface CreateServAppOptions<
    * 自定义 Hono middleware。
    *
    * 典型用途：请求日志、trace、指标、CORS、限流、租户头校验等 HTTP 层横切逻辑。
-   * 这些 middleware 会在内置安全头 / 传输加密之后、health/oRPC/OpenAPI/docs 路由之前注册。
+   * 这些 middleware 会在内置安全头之后、传输加密与业务路由之前注册；
+   * 因此 CORS 这类 preflight middleware 可以直接短路返回，若需要读取解密后的业务 body，
+   * 应改用 context / procedure 层扩展，而不是 HTTP middleware。
    */
   readonly middlewares?: readonly ServMiddlewareMount[]
   /**
@@ -178,7 +180,12 @@ export function createApp<
   // Step 5：最先挂全局安全响应头，让后续所有响应（包括错误响应）都自动带上保护性 header。
   app.use('*', securityHeaders())
 
-  // Step 6：若启用传输加密，必须在业务路由之前挂载。
+  // Step 6：先注册调用方自定义 middleware。位置固定在内置安全头之后、传输加密/业务路由之前，
+  // 让 CORS preflight 等 HTTP 层横切逻辑可以优先短路，同时保持 transport 仍然位于业务路由之前。
+  if (options.middlewares)
+    mountCustomMiddlewares(app, options.middlewares)
+
+  // Step 7：若启用传输加密，必须在业务路由之前挂载。
   // 这样请求能先被解密，响应也能在离开应用前被重新加密。
   // 传输加密必须在所有业务路由之前装载：
   // - 它需在 oRPC 读取 body 前完成解密
@@ -197,11 +204,6 @@ export function createApp<
     const keyExchangePath = `${http.apiPrefix}${options.transport.keyExchangePath ?? '/_hai/key-exchange'}`
     app.use('*', createTransportMiddleware(mgr.data, keyExchangePath, options.transport.excludePaths))
   }
-
-  // Step 7：注册调用方自定义 middleware。位置固定在内置基础能力之后、业务路由之前，
-  // 让使用方可以稳定插入日志、CORS、限流等 HTTP 层横切逻辑。
-  if (options.middlewares)
-    mountCustomMiddlewares(app, options.middlewares)
 
   // Step 8：挂基础探活路由。健康检查放在业务路由之外，便于基础设施直接探测。
   if (http.health !== false)

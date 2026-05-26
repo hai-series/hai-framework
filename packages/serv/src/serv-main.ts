@@ -28,6 +28,7 @@ import { requireRole, WILDCARD_ROLE } from './pipelines/serv-pipeline-require-ro
 import { createApp } from './serv-app.js'
 import { ServConfigSchema } from './serv-config.js'
 import { buildAuthContextFactory, parseRequestContext } from './serv-context.js'
+import { cors } from './serv-cors.js'
 import { servM } from './serv-i18n.js'
 import { generateSpec } from './serv-openapi.js'
 import {
@@ -48,6 +49,7 @@ export const serv = {
   // 运行时适配器
   listen,
   toFetch,
+  cors,
 
   // OpenAPI / 导出
   generateSpec,

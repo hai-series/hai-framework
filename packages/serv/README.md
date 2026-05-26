@@ -209,10 +209,11 @@ const updateProfile = p.users.update.handler(
 
 #### 1) 自定义 HTTP middleware
 
-当你需要加请求日志、trace、限流、CORS、租户头校验等 **HTTP 层横切逻辑** 时，使用 `middlewares`：
+当你需要加请求日志、trace、限流、CORS、租户头校验等 **HTTP 层横切逻辑** 时，使用 `middlewares`。常见 CORS 场景可直接复用 `serv.cors(...)`：
 
 ```ts
 import type { ServMiddleware } from '@h-ai/serv'
+import { serv } from '@h-ai/serv'
 
 const requestMetrics: ServMiddleware = async (c, next) => {
   const startedAt = Date.now()
@@ -225,6 +226,13 @@ const app = serv.createApp({
   procedures,
   http: { apiPrefix: '/api/v1' },
   middlewares: [
+    {
+      middleware: serv.cors({
+        origin: origin => origin === 'https://app.example.com',
+        credentials: true,
+        exposedHeaders: ['X-Encrypted', 'X-Request-Id'],
+      }),
+    },
     { middleware: requestMetrics }, // 默认挂到 '*'
     {
       path: '/api/v1/*',
@@ -241,14 +249,16 @@ const app = serv.createApp({
 执行顺序固定为：
 
 1. 内置 `securityHeaders`
-2. 内置 `transport`（若启用）
-3. 你的 `middlewares`
+2. 你的 `middlewares`
+3. 内置 `transport`（若启用）
 4. health / refresh-cookie / OpenAPI / RPC / docs / oRPC routes
 
 说明：
 
 - `middlewares` 按数组顺序注册
 - `path` 省略时默认 `'*'`
+- 由于 `middlewares` 先于 `transport` 执行，CORS 这类 preflight middleware 可以直接短路；若需要读取解密后的业务 body，请改用 context / procedure 层扩展
+- 浏览器若需读取自定义响应头（例如 transport 的 `X-Encrypted`），请通过 `serv.cors({ exposedHeaders: [...] })` 显式暴露
 - 这一层直接操作 Hono `Context`，返回的是 **HTTP Response**，不是 `HaiResult`
 
 #### 2) 自定义 context pipeline

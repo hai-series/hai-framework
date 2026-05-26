@@ -10,6 +10,7 @@ const procedures = serv.implement(contract).$context<ServContext>().router({})
 describe('@h-ai/serv', () => {
   it('keeps root API focused on runtime-level helpers', () => {
     expect(typeof serv.toFetch).toBe('function')
+    expect(typeof serv.cors).toBe('function')
     expect('createDocsPage' in serv).toBe(false)
     expect('securityHeaders' in serv).toBe(false)
     expect('requireInternalRPC' in serv).toBe(false)
@@ -85,6 +86,44 @@ describe('@h-ai/serv', () => {
 
     const health = await app.request('/health')
     expect(health.headers.get('x-serv-custom-pipeline')).toBeNull()
+  })
+
+  it('provides reusable CORS middleware for preflight and actual responses', async () => {
+    const origin = 'http://localhost:5176'
+    const app = serv.createApp({
+      contract,
+      procedures,
+      middlewares: [
+        {
+          middleware: serv.cors({
+            origin: currentOrigin => currentOrigin === origin,
+            credentials: true,
+            allowedHeaders: ['Content-Type', 'X-Encrypted'],
+            exposedHeaders: ['X-Encrypted'],
+          }),
+        },
+      ],
+    })
+
+    const preflight = await app.request('/health', {
+      method: 'OPTIONS',
+      headers: {
+        origin,
+        'access-control-request-method': 'GET',
+        'access-control-request-headers': 'content-type, x-encrypted',
+      },
+    })
+
+    expect(preflight.status).toBe(204)
+    expect(preflight.headers.get('access-control-allow-origin')).toBe(origin)
+    expect(preflight.headers.get('access-control-allow-credentials')).toBe('true')
+    expect(preflight.headers.get('access-control-allow-headers')).toContain('x-encrypted')
+
+    const response = await app.request('/health', {
+      headers: { origin },
+    })
+    expect(response.headers.get('access-control-allow-origin')).toBe(origin)
+    expect(response.headers.get('access-control-expose-headers')).toContain('X-Encrypted')
   })
 
   it('requires verified auth for protected docs page', async () => {
