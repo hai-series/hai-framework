@@ -49,7 +49,8 @@ export default defineConfig({
 @import 'tailwindcss';
 @import '@h-ai/ui/styles/global.css';
 @import '@h-ai/ui/styles/theme.css';
-@source "../node_modules/@h-ai/ui/dist/**/*.{svelte,ts}";
+@source "../node_modules/@h-ai/ui/dist/**/*.{svelte,js,ts}";
+@source "../../../node_modules/@h-ai/ui/dist/**/*.{svelte,js,ts}";
 
 @plugin "daisyui" {
   themes: light --default, dark --prefersdark, cupcake, emerald, corporate, nord, dracula, night;
@@ -61,7 +62,7 @@ export default defineConfig({
 }
 ```
 
-> `@source` 让 TailwindCSS 扫描 `@h-ai/ui` 组件中使用的 class 名，否则组件样式会丢失。
+> `@source` 让 TailwindCSS 扫描 `@h-ai/ui` 组件中使用的 class 名，否则组件样式会丢失。嵌套应用位于 monorepo 中时，依赖包可能被提升到工作区根 `node_modules`，所以建议同时保留两条路径。
 
 ### 4. 使用组件
 
@@ -378,7 +379,8 @@ components/
 @import 'tailwindcss';
 @import '@h-ai/ui/styles/global.css';   /* 基础重置、滚动条、焦点样式 */
 @import '@h-ai/ui/styles/theme.css';    /* Tailwind v4 @theme Token（品牌色/阴影/动效） */
-@source "../node_modules/@h-ai/ui/dist/**/*.{svelte,ts}";
+@source "../node_modules/@h-ai/ui/dist/**/*.{svelte,js,ts}";
+@source "../../../node_modules/@h-ai/ui/dist/**/*.{svelte,js,ts}";
 
 /* 移动端项目追加（可选） */
 @import '@h-ai/ui/styles/design-tokens.css'; /* CSS 自定义属性 */

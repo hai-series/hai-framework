@@ -109,7 +109,8 @@ export default defineConfig({
 @import '@h-ai/ui/styles/mobile.css';        /* 安全区域/触摸优化/键盘适配 */
 
 /* ─── 扫描 @h-ai/ui 组件中使用的 Tailwind 类名 ─── */
-@source "../node_modules/@h-ai/ui/dist/**/*.{svelte,ts}";
+@source "../node_modules/@h-ai/ui/dist/**/*.{svelte,js,ts}";
+@source "../../../node_modules/@h-ai/ui/dist/**/*.{svelte,js,ts}";
 
 /* ─── DaisyUI 主题 ─── */
 @plugin "daisyui" {
