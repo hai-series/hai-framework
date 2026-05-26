@@ -49,3 +49,6 @@ temp/
 data/
 test-results/
 test-data/
+
+
+!apps/admin-console/src/routes/admin/logs
