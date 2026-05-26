@@ -20,7 +20,7 @@ import { apiClient } from '@h-ai/api-client'
 import { apiServiceContract } from '@h-ai/api-service-contract'
 import { cache } from '@h-ai/cache'
 import { core } from '@h-ai/core'
-import { crypto } from '@h-ai/crypto'
+import { crypto, TRANSPORT_PROTOCOL } from '@h-ai/crypto'
 import { iam } from '@h-ai/iam'
 import { reldb } from '@h-ai/reldb'
 import { serv } from '@h-ai/serv'
@@ -226,19 +226,74 @@ describe('api-service 基础设施端点', () => {
     expect(res.headers.get('x-frame-options')).toBe('DENY')
   })
 
+  it('oPTIONS /auth/login 为桌面端开发 origin 返回 CORS 预检头', async () => {
+    const origin = 'http://localhost:5176'
+    const res = await fetch(`${encryptedBase}${apiPath('/auth/login')}`, {
+      method: 'OPTIONS',
+      headers: {
+        origin,
+        'access-control-request-method': 'POST',
+        'access-control-request-headers': 'content-type, x-client-id, x-encrypted, authorization',
+      },
+    })
+
+    expect(res.status).toBe(204)
+    expect(res.headers.get('access-control-allow-origin')).toBe(origin)
+    expect(res.headers.get('access-control-allow-credentials')).toBe('true')
+    expect(res.headers.get('access-control-allow-headers')).toContain('x-client-id')
+    expect(res.headers.get('access-control-allow-headers')).toContain('authorization')
+  })
+
+  it('transport 响应会暴露 X-Encrypted 给浏览器读取', async () => {
+    const origin = 'http://localhost:5176'
+    const keyPair = crypto.asymmetric.generateKeyPair()
+    expect(keyPair.success).toBe(true)
+    if (!keyPair.success)
+      return
+
+    const exchange = await fetch(`${encryptedBase}${keyExchangePath}`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        origin,
+      },
+      body: JSON.stringify({ clientPublicKey: keyPair.data.publicKey }),
+    })
+    const exchangeBody = await exchange.json() as { clientId: string }
+
+    const response = await fetch(`${encryptedBase}${apiPath('/app/info')}`, {
+      method: 'POST',
+      headers: {
+        origin,
+        [TRANSPORT_PROTOCOL.CLIENT_ID_HEADER]: exchangeBody.clientId,
+      },
+    })
+
+    expect(response.status).toBe(200)
+    expect(response.headers.get('access-control-allow-origin')).toBe(origin)
+    expect(response.headers.get('access-control-expose-headers')).toContain(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER)
+    expect(response.headers.get(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER)).toBe(TRANSPORT_PROTOCOL.ENCRYPTED_HEADER_VALUE)
+  })
+
   it('pOST /api/v1/_hai/key-exchange 返回 200 并下发 clientId', async () => {
     const keyPair = crypto.asymmetric.generateKeyPair()
     expect(keyPair.success).toBe(true)
     if (!keyPair.success)
       return
 
+    const origin = 'http://localhost:5176'
+
     const res = await fetch(`${encryptedBase}${keyExchangePath}`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: {
+        'content-type': 'application/json',
+        origin,
+      },
       body: JSON.stringify({ clientPublicKey: keyPair.data.publicKey }),
     })
 
     expect(res.status).toBe(200)
+    expect(res.headers.get('access-control-allow-origin')).toBe(origin)
     const body = await res.json() as { clientId: string, serverPublicKey: string }
     expect(body.clientId).toBeTruthy()
     expect(body.serverPublicKey).toBeTruthy()

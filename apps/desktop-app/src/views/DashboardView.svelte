@@ -5,7 +5,7 @@
 <script lang='ts'>
   import { Alert, Button, Card, PageHeader } from '@h-ai/ui'
   import { onMount } from 'svelte'
-  import { currentUser } from '../lib/auth-store.svelte.js'
+  import { currentUser, hasPermission } from '../lib/auth-store.svelte.js'
   import { navigate } from '../lib/router.svelte.js'
   import {
     currentEchoError,
@@ -45,9 +45,11 @@
           <Button variant='ghost' size='sm' onclick={() => void refreshServiceInfo()}>
             Refresh service info
           </Button>
-          <Button variant='primary' size='sm' onclick={() => navigate('/users')}>
-            Browse users
-          </Button>
+          {#if hasPermission('user:list')}
+            <Button variant='primary' size='sm' onclick={() => navigate('/users')}>
+              Browse users
+            </Button>
+          {/if}
         </div>
       {/snippet}
     </Card>

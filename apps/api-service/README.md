@@ -7,6 +7,8 @@
 - 公共 API 由 `@h-ai/api-contract` 定义，运行时由 `@h-ai/serv` 挂载。
 - 默认启用 IAM / Storage / AI HTTP API。
 - 业务 `/api/v1/*` 默认启用 `@h-ai/crypto` 传输加密。
+- 默认放行 `localhost` / `127.0.0.1` 任意端口，以及 Tauri / Capacitor WebView origin 的 CORS 预检与响应头，便于桌面端 / 移动端跨 origin 联调。
+- transport 响应默认通过 `Access-Control-Expose-Headers` 暴露 `X-Encrypted` / `X-Request-Id`，保证浏览器端 client 可以读取并解密响应。
 - 默认启用 httpOnly refresh-token Cookie：登录/注册响应只在 JSON 中返回 access token，refresh token 通过 `Set-Cookie` 管理。
 - `/health`、`/ready`、`/openapi.json`、`/docs` 保持明文可访问，便于探针与联调。
 - Node 部署入口为 `src/index.ts`，Hono app 工厂为 `src/app.ts`。
@@ -107,6 +109,7 @@ await crypto.close()
 - 明文可直接访问哪些路径，也由 `_serv.yml` 的 `transport.excludePaths` 决定；默认保留 `/health`、`/ready`、`/openapi.json`、`/docs`、`/_hai/scalar.js`。
 - 默认密钥协商端点为 `POST /api/v1/_hai/key-exchange`；若你修改了 `http.apiPrefix` 或 `transport.keyExchangePath`，客户端也必须同步调整。
 - 启用 `auth: {}` 与 `transport: { crypto }` 时，401 后的 `/auth/refresh` 也会复用同一 transport 会话，不会降级为明文刷新。
+- 浏览器 / WebView 跨 origin 联调时，示例应用默认允许 `localhost` / `127.0.0.1` 任意端口，以及 `tauri://localhost`、`https://tauri.localhost`、`capacitor://localhost`；若生产环境需要其他 origin，请调整 `src/app.ts` 中的 origin 白名单函数。
 
 ```yaml
 # config/_serv.yml

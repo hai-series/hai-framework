@@ -14,7 +14,7 @@
     errors = {}
     const err = await login({ identifier: data.username, password: data.password })
     if (err) {
-      errors = { _form: `Login failed: ${err}` }
+      errors = { general: `Login failed: ${err}` }
       return
     }
     navigate('/dashboard')
