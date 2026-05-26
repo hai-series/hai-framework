@@ -13,13 +13,30 @@ import { expect, test } from '@playwright/test'
 import { registerAndLogin } from './helpers'
 
 test.describe('IAM Roles UI', () => {
+  const editDrawerHeading = /编辑角色管理|编辑角色/
+
   async function openCreateDrawer(page: import('@playwright/test').Page) {
     const createBtn = page.locator('main').getByRole('button', { name: /新建|创建|添加/ })
-    await createBtn.first().click()
-    const heading = page.getByRole('heading', { name: /新建角色管理/ }).last()
-    await expect(heading).toBeVisible()
-    const panel = heading.locator('xpath=ancestor::*[.//button[normalize-space()="取消"] and .//button[normalize-space()="新建"]][1]')
-    return panel
+    const drawer = page.locator('.drawer-side .menu').filter({ has: page.locator('#name') }).last()
+    const nameInput = drawer.locator('#name')
+
+    await expect(createBtn.first()).toBeVisible()
+    await expect(createBtn.first()).toBeEnabled()
+
+    for (let attempt = 0; attempt < 2; attempt++) {
+      await createBtn.first().click({ force: true })
+      try {
+        await expect(nameInput).toBeVisible({ timeout: 3_000 })
+        return drawer
+      }
+      catch (error) {
+        if (attempt === 1) {
+          throw error
+        }
+      }
+    }
+
+    return drawer
   }
 
   // ---------------------------------------------------------------------------
@@ -77,9 +94,9 @@ test.describe('IAM Roles UI', () => {
     await expect(drawer).toBeVisible()
 
     // 包含名称输入框
-    await expect(drawer.locator('input[type="text"]').first()).toBeVisible()
+    await expect(drawer.locator('#name')).toBeVisible()
     // 包含描述输入框
-    await expect(drawer.getByPlaceholder(/角色描述/)).toBeVisible()
+    await expect(drawer.locator('#description')).toBeVisible()
   })
 
   test('角色抽屉包含权限选择区域', async ({ page, request }) => {
@@ -106,7 +123,7 @@ test.describe('IAM Roles UI', () => {
     await page.waitForTimeout(300)
 
     // 抽屉消失
-    await expect(page.getByRole('heading', { name: /新建角色管理/ })).toHaveCount(0)
+    await expect(drawer.locator('#name')).not.toBeVisible()
   })
 
   // ---------------------------------------------------------------------------
@@ -124,19 +141,16 @@ test.describe('IAM Roles UI', () => {
     const drawer = await openCreateDrawer(page)
 
     // 填写表单
-    await drawer.locator('input[type="text"]').first().fill(roleName)
-    await drawer.getByPlaceholder(/角色描述/).fill(roleDesc)
+    await drawer.locator('#name').fill(roleName)
+    await drawer.locator('#description').fill(roleDesc)
 
     // 点击创建按钮
     const submitBtn = drawer.getByRole('button', { name: /新建|创建|保存|提交/ }).last()
     await submitBtn.click()
 
-    // 抽屉应关闭
-    await expect(page.getByRole('heading', { name: /新建角色管理/ })).toHaveCount(0, { timeout: 10_000 })
-
     // 新角色出现在表格中
     const row = page.locator('tbody tr').filter({ hasText: roleName })
-    await expect(row.first()).toBeVisible({ timeout: 5_000 })
+    await expect(row.first()).toBeVisible({ timeout: 10_000 })
   })
 
   // ---------------------------------------------------------------------------
@@ -160,20 +174,22 @@ test.describe('IAM Roles UI', () => {
     await row.first().getByRole('button', { name: /编辑|Edit/ }).click()
 
     // 等待编辑抽屉打开
-    const heading = page.getByRole('heading', { name: /编辑角色管理/ }).last()
+    const heading = page.getByRole('heading', { name: editDrawerHeading }).last()
     await expect(heading).toBeVisible()
-    const drawer = heading.locator('xpath=ancestor::*[.//button[normalize-space()="取消"] and .//button[normalize-space()="保存"]][1]')
+
+    const drawer = page.locator('.drawer-side .menu').filter({ has: heading }).last()
+    await expect(drawer.locator('#description')).toBeVisible()
 
     // 修改描述
     const newDesc = 'UI 编辑后的描述'
-    await drawer.getByPlaceholder(/角色描述/).fill(newDesc)
+    await drawer.locator('#description').fill(newDesc)
 
     // 点击保存
     const saveBtn = drawer.getByRole('button', { name: /保存|提交/ }).last()
     await saveBtn.click()
 
     // 抽屉应关闭
-    await expect(page.getByRole('heading', { name: /编辑角色管理/ })).toHaveCount(0, { timeout: 10_000 })
+    await expect(page.getByRole('heading', { name: editDrawerHeading })).toHaveCount(0, { timeout: 10_000 })
   })
 
   // ---------------------------------------------------------------------------

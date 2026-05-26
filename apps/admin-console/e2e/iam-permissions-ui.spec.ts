@@ -13,13 +13,17 @@ import { expect, test } from '@playwright/test'
 import { registerAndLogin } from './helpers'
 
 test.describe('IAM Permissions UI', () => {
+  const createPanelHeading = /创建权限管理|新建权限管理/
+
   async function openCreatePanel(page: import('@playwright/test').Page) {
     const createBtn = page.locator('main').getByRole('button', { name: /新建|创建|添加/ })
     await createBtn.first().click()
 
-    const heading = page.getByRole('heading', { name: /新建权限管理/ }).last()
+    const heading = page.getByRole('heading', { name: createPanelHeading }).last()
     await expect(heading).toBeVisible()
-    const panel = heading.locator('xpath=ancestor::*[.//button[normalize-space()="取消"] and .//button[normalize-space()="新建"]][1]')
+
+    const panel = page.locator('.drawer-side .menu').filter({ has: heading }).last()
+    await expect(panel.locator('#resource')).toBeVisible()
     return panel
   }
 
@@ -68,10 +72,9 @@ test.describe('IAM Permissions UI', () => {
     await page.waitForLoadState('domcontentloaded')
 
     const panel = await openCreatePanel(page)
-    const inputs = panel.locator('input[type="text"], textarea')
-    await expect(inputs.nth(0)).toBeVisible()
-    await expect(inputs.nth(1)).toBeVisible()
-    await expect(inputs.nth(3)).toBeVisible()
+    await expect(panel.locator('#name')).toBeVisible()
+    await expect(panel.locator('#action')).toBeVisible()
+    await expect(panel.locator('#resource')).toBeVisible()
   })
 
   test('新建抽屉可关闭', async ({ page, request }) => {
@@ -80,14 +83,13 @@ test.describe('IAM Permissions UI', () => {
     await page.waitForLoadState('domcontentloaded')
 
     const panel = await openCreatePanel(page)
-    const inputs = panel.locator('input[type="text"], textarea')
-    await expect(inputs.nth(3)).toBeVisible()
+    await expect(panel.locator('#resource')).toBeVisible()
 
     // 点击取消按钮关闭抽屉
     const cancelBtn = panel.getByRole('button', { name: /取消|Cancel/ })
     await cancelBtn.click({ force: true })
 
-    await expect(page.getByRole('heading', { name: /新建权限管理/ })).toHaveCount(0, { timeout: 5000 })
+    await expect(page.getByRole('heading', { name: createPanelHeading })).toHaveCount(0, { timeout: 5000 })
   })
 
   // ---------------------------------------------------------------------------
@@ -105,11 +107,10 @@ test.describe('IAM Permissions UI', () => {
 
     // 打开新建抽屉
     const panel = await openCreatePanel(page)
-    const inputs = panel.locator('input[type="text"], textarea')
 
     // 填写资源和操作
-    await inputs.nth(3).fill(resource)
-    await inputs.nth(1).fill(action)
+    await panel.locator('#resource').fill(resource)
+    await panel.locator('#action').fill(action)
     // name 字段应自动生成（resource:action）
     await page.waitForTimeout(300)
 
@@ -118,7 +119,7 @@ test.describe('IAM Permissions UI', () => {
     await submitBtn.click()
 
     // 抽屉应关闭
-    await expect(page.getByRole('heading', { name: /新建权限管理/ })).toHaveCount(0, { timeout: 10_000 })
+    await expect(page.getByRole('heading', { name: createPanelHeading })).toHaveCount(0, { timeout: 10_000 })
 
     // 新权限应出现在页面中（列表展示 name/code，不展示 resource 单列）
     const permRow = page.locator('tbody tr').filter({ hasText: permissionName })

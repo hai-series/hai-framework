@@ -20,6 +20,18 @@ function getUserPayload(body: { user?: unknown, data?: { user?: unknown } }) {
   return body.user ?? body.data?.user
 }
 
+async function expectCurrentUser(request: import('@playwright/test').APIRequestContext, expectedUsername: string) {
+  const meRes = await request.get('/api/auth/me')
+  expect(meRes.ok()).toBeTruthy()
+
+  const meBody = await meRes.json()
+  expect(meBody.success).toBe(true)
+
+  const meUser = getUserPayload(meBody) as { id: string, username: string }
+  expect(meUser).toHaveProperty('id')
+  expect(meUser.username).toBe(expectedUsername)
+}
+
 // ---------------------------------------------------------------------------
 // POST /api/auth/register
 // ---------------------------------------------------------------------------
@@ -99,10 +111,11 @@ test.describe('POST /api/auth/login', () => {
 
     const body = await res.json()
     expect(body.success).toBe(true)
-    expect(body.data?.accessToken).toBeTruthy()
     const loginUser = getUserPayload(body) as { id: string, username: string }
     expect(loginUser).toHaveProperty('id')
     expect(loginUser.username).toBe(user.username)
+
+    await expectCurrentUser(request, user.username)
   })
 
   test('用邮箱登录成功', async ({ request }) => {
@@ -113,7 +126,8 @@ test.describe('POST /api/auth/login', () => {
 
     const body = await res.json()
     expect(body.success).toBe(true)
-    expect(body.data?.accessToken).toBeTruthy()
+
+    await expectCurrentUser(request, user.username)
   })
 
   test('错误密码返回 401', async ({ request }) => {
@@ -164,23 +178,14 @@ test.describe('GET /api/auth/me', () => {
 
   test('登录后返回用户信息', async ({ request }) => {
     const u = uniqueUser()
-    // 注册并使用返回 token 请求 me
     const registerRes = await request.post('/api/auth/register', {
       data: { username: u.username, email: u.email, password: u.password, confirmPassword: u.password },
     })
-    const registerBody = await registerRes.json()
-    const accessToken = registerBody.data?.accessToken as string | undefined
-    expect(accessToken).toBeTruthy()
+    expect(registerRes.ok()).toBeTruthy()
 
-    const res = await request.get('/api/auth/me', {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-      },
-    })
-    const body = await res.json()
-    expect(body.success).toBe(true)
-    const meUser = getUserPayload(body) as { id: string, username: string }
-    expect(meUser).toHaveProperty('id')
-    expect(meUser.username).toBe(u.username)
+    const registerBody = await registerRes.json()
+    expect(registerBody.success).toBe(true)
+
+    await expectCurrentUser(request, u.username)
   })
 })

@@ -46,7 +46,6 @@ temp/
 .cache/
 .tmp-*/
 
-data/
 test-results/
 test-data/
 
