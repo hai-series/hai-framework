@@ -49,6 +49,16 @@ describe('parseCronExpression', () => {
     expect(result.success).toBe(true)
   })
 
+  it('应使用 IANA 时区解析 cron 墙上时间', () => {
+    const result = parseCronExpression('5 12 * * *', 'Asia/Shanghai')
+    expect(result.success).toBe(true)
+    if (result.success) {
+      // 2026-05-25T04:05:00Z 对应 Asia/Shanghai 的 12:05。
+      expect(matchesCron(result.data, new Date(Date.UTC(2026, 4, 25, 4, 5)))).toBe(true)
+      expect(matchesCron(result.data, new Date(Date.UTC(2026, 4, 25, 12, 5)))).toBe(false)
+    }
+  })
+
   it('无效表达式应返回 INVALID_CRON', () => {
     const result = parseCronExpression('invalid cron')
     expect(result.success).toBe(false)

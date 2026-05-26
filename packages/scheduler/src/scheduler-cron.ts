@@ -18,6 +18,7 @@ import { HaiSchedulerError } from './scheduler-types.js'
  * 解析 cron 表达式并返回 Cron 实例
  *
  * @param expression - cron 表达式
+ * @param timezone - IANA 时区；传入后按该时区解释 cron 墙上时间
  * @returns 解析结果，成功时返回 Cron 实例
  *
  * @example
@@ -32,9 +33,9 @@ import { HaiSchedulerError } from './scheduler-types.js'
  * parseCronExpression('0 9-17 * * 1-5')
  * ```
  */
-export function parseCronExpression(expression: string): HaiResult<Cron> {
+export function parseCronExpression(expression: string, timezone?: string): HaiResult<Cron> {
   try {
-    const cron = new Cron(expression, { legacyMode: false })
+    const cron = new Cron(expression, { legacyMode: false, ...(timezone ? { timezone } : {}) })
     return ok(cron)
   }
   catch {
