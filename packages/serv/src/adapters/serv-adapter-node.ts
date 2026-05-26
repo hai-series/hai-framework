@@ -1,14 +1,14 @@
 /**
  * @h-ai/serv — Node.js 适配器
  *
- * 封装 `@hono/node-server`，将 Hono app 以 Node.js HTTP 服务器形式启动。
+ * 封装 `@hono/node-server`，将 ServHttpApp 以 Node.js HTTP 服务器形式启动。
  * 默认监听 `127.0.0.1`（仅本机可达）；如需对外暴露，需显式设置 `host: '0.0.0.0'` 或指定 IP。
  * @module adapters/serv-adapter-node
  */
 
 import type { ServerType } from '@hono/node-server'
-import type { Hono } from 'hono'
 import type { AddressInfo } from 'node:net'
+import type { ServHttpApp } from '../serv-app.js'
 import process from 'node:process'
 import { serve } from '@hono/node-server'
 
@@ -59,12 +59,12 @@ export interface ServNodeServer {
 }
 
 /**
- * 在 Node.js 中启动 Hono app。
+ * 在 Node.js 中启动 ServHttpApp。
  *
  * 默认监听 `127.0.0.1:3000`（可通过 `PORT` / `HOST` 环境变量覆盖）。
  * 传入 `onClose` 后自动注册 SIGINT/SIGTERM 优雅关闭，应用层无需手动处理信号。
  *
- * @param app - Hono app
+ * @param app - `serv.createApp()` 返回的 HTTP app
  * @param options - 监听配置（port / host / onListening / onClose）
  * @returns 运行句柄
  *
@@ -80,7 +80,7 @@ export interface ServNodeServer {
  * serv.listen(app, { host: '0.0.0.0', onClose: closeApp })
  * ```
  */
-export function listen(app: Hono, options: ServListenOptions = {}): ServNodeServer {
+export function listen(app: ServHttpApp, options: ServListenOptions = {}): ServNodeServer {
   const host = options.host ?? process.env.HOST ?? DEFAULT_SERV_HOST
   const port = options.port ?? (process.env.PORT ? Number(process.env.PORT) : DEFAULT_SERV_PORT)
 

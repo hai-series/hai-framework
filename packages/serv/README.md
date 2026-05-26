@@ -1,10 +1,10 @@
 # @h-ai/serv
 
-> hai-framework 的 Hono + oRPC API 服务运行时，把 `@h-ai/api-contract` 的契约挂载为跨端可访问的 HTTP API。
+> hai-framework 的 API 服务运行时：对外暴露稳定的 `ServHttpApp` 抽象，把 `@h-ai/api-contract` 契约挂载为跨端可访问的 HTTP API；Hono 仅作为内部运行时实现。
 
 ## 能力概览
 
-- 一行启动：`serv.createApp(...)` → `serv.listen(app, { port })`
+- 一行启动：`serv.createApp(...)` → `serv.listen(app, { port })`，应用代码不需要 import Hono
 - 扁平 API（最小知识）：`serv.listen / serv.toFetch / serv.requireAuth / serv.requirePermission / serv.generateSpec / ...`
 - 自定义 pipeline：`createApp({ middlewares })` 挂 HTTP middleware；procedure wrapper 复用根入口导出的共享类型
 - 默认 feature procedures：`createIamProcedures()`、`createStorageProcedures()`、`createAiProcedures()`
@@ -30,7 +30,7 @@ const procedures = {
   ai: createAiProcedures({ ai }),
 }
 
-// 3) 创建 app
+// 3) 创建 ServHttpApp
 const app = serv.createApp({
   contract,
   procedures,
@@ -203,7 +203,7 @@ const updateProfile = p.users.update.handler(
 
 `@h-ai/serv` 的“pipeline”分三层，分别对应三种扩展方式：
 
-1. **HTTP middleware 层**：通过 `serv.createApp({ middlewares })` 注入 Hono middleware。
+1. **HTTP middleware 层**：通过 `serv.createApp({ middlewares })` 注入 HTTP middleware。
 2. **context 层**：通过 `verifyToken` / `createContext` / `serv.buildAuthContextFactory()` 定制请求上下文。
 3. **procedure wrapper 层**：通过 `ServProcedureWrapper` / `ServGuardedProcedureWrapper` 组合认证、审计、租户校验等业务包装。
 
@@ -259,7 +259,7 @@ const app = serv.createApp({
 - `path` 省略时默认 `'*'`
 - 由于 `middlewares` 先于 `transport` 执行，CORS 这类 preflight middleware 可以直接短路；若需要读取解密后的业务 body，请改用 context / procedure 层扩展
 - 浏览器若需读取自定义响应头（例如 transport 的 `X-Encrypted`），请通过 `serv.cors({ exposedHeaders: [...] })` 显式暴露
-- 这一层直接操作 Hono `Context`，返回的是 **HTTP Response**，不是 `HaiResult`
+- 这一层直接操作 HTTP middleware context，返回的是 **HTTP Response**，不是 `HaiResult`
 
 #### 2) 自定义 context pipeline
 
@@ -385,7 +385,7 @@ await apiClient.init({
 
 ## API 概览
 
-- `serv.createApp(options)`：创建 Hono app，挂载自定义 `middlewares`、健康检查、OpenAPI handler、可选文档与 RPC
+- `serv.createApp(options)`：创建 `ServHttpApp`，挂载自定义 `middlewares`、健康检查、OpenAPI handler、可选文档与 RPC
 - `serv.parseRequestContext({ request })`：默认上下文解析（提取 Bearer token + requestId，不填充 session）
 - `serv.listen(app, options)`：在 Node.js 启动 HTTP 服务，返回 `{ server, address, close }`
 - `serv.toFetch(app)`：包装为标准 `fetch(Request)` handler
@@ -401,6 +401,7 @@ await apiClient.init({
 另有根级类型 / 命名导出：
 
 - `ServConfigSchema`：用于 `core.config.validate('serv', ServConfigSchema)` 校验 `config/_serv.yml`
+- `ServHttpApp`：`serv.createApp()` 返回的公开 HTTP app 抽象；内部是否使用 Hono 不影响应用代码
 - `ServMiddlewareMount`：`createApp({ middlewares })` 的挂载项类型（`{ path?, middleware }`）
 - `ServMiddleware` / `ServProcedureWrapper` / `ServGuardedProcedureWrapper`：自定义 pipeline 时复用的共享类型
 

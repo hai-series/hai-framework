@@ -13,7 +13,7 @@
  * ```ts
  * import { serv } from '@h-ai/serv'
  *
- * const app = serv.createApp({ openapiContract: contract, router })
+ * const app = serv.createApp({ contract, procedures })
  * await serv.listen(app, { port: 3000, host: '0.0.0.0' })
  * ```
  */
