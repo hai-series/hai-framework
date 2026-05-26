@@ -1,0 +1,9 @@
+import { apiContract } from '@h-ai/api-contract'
+import { appContract } from './app-contract.js'
+
+/** 工程级 API contract，前端 typed client 与后端 service 共用。 */
+export const {{fullstack.contractExportName}} = apiContract.create({
+  app: appContract,
+})
+
+export type FullstackContract = typeof {{fullstack.contractExportName}}

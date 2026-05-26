@@ -1,0 +1,38 @@
+{{! @skipIfEmpty }}
+{{#if fullstack.frontends.app}}
+{
+  "name": "{{projectName}}-app",
+  "type": "module",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "vite dev --host 127.0.0.1 --port 4174",
+    "build": "vite build",
+    "preview": "vite preview --host 127.0.0.1 --port 4174 --strictPort",
+    "typecheck": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "clean": "rimraf .svelte-kit build .turbo"
+  },
+  "dependencies": {
+    "@h-ai/api-client": "{{fullstack.versions.apiClient}}",
+    "@h-ai/ui": "{{fullstack.versions.ui}}",
+    "{{fullstack.contractPackageName}}": "workspace:*"
+  },
+  "devDependencies": {
+    "@iconify-json/tabler": "{{fullstack.versions.iconifyJsonTabler}}",
+    "@iconify/tailwind4": "{{fullstack.versions.iconifyTailwind}}",
+    "@sveltejs/adapter-auto": "{{fullstack.versions.adapterAuto}}",
+    "@sveltejs/kit": "{{fullstack.versions.svelteKit}}",
+    "@sveltejs/vite-plugin-svelte": "{{fullstack.versions.sveltePlugin}}",
+    "@tailwindcss/vite": "{{fullstack.versions.tailwindcssVite}}",
+    "daisyui": "{{fullstack.versions.daisyui}}",
+    "svelte": "{{fullstack.versions.svelte}}",
+    "svelte-check": "{{fullstack.versions.svelteCheck}}",
+    "tailwindcss": "{{fullstack.versions.tailwindcss}}",
+    "vite": "{{fullstack.versions.vite}}",
+    "vitest": "{{fullstack.versions.vitest}}"
+  }
+}
+{{/if}}

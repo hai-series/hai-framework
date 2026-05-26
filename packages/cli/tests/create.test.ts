@@ -5,20 +5,20 @@
  * 测试项目创建命令的核心逻辑（不执行实际文件 I/O）
  */
 
-import type { AppType, FeatureId } from '../src/types.js'
+import type { AppType, FeatureId } from '../src/cli-types.js'
 import { describe, expect, it } from 'vitest'
-import { buildTemplateContext } from '../src/commands/template-engine.js'
+import { buildTemplateContext } from '../src/commands/cli-template-engine.js'
 
 /* ---------- detectProject 导入验证 ---------- */
 
 describe('detectProject', () => {
   it('应能正常导入 detectProject 函数', async () => {
-    const { detectProject } = await import('../src/commands/create.js')
+    const { detectProject } = await import('../src/commands/cli-create.js')
     expect(typeof detectProject).toBe('function')
   })
 
   it('在不含 package.json 的目录中应返回 null', async () => {
-    const { detectProject } = await import('../src/commands/create.js')
+    const { detectProject } = await import('../src/commands/cli-create.js')
     // /tmp 或系统临时目录不含 package.json
     const result = await detectProject('/nonexistent-directory-12345')
     expect(result).toBeNull()
@@ -62,6 +62,17 @@ describe('buildTemplateContext', () => {
     expect(ctx.isCapacitorApp).toBe(true)
   })
 
+  it('fullstack 类型应作为独立应用类型可识别', () => {
+    const ctx = buildTemplateContext({
+      name: 'my-fullstack',
+      appType: 'fullstack' as AppType,
+      features: [],
+      packageManager: 'pnpm',
+    })
+    expect(ctx.appType).toBe('fullstack')
+    expect(ctx.isCapacitorApp).toBe(false)
+  })
+
   it('features 数组应转换为 Record<string, boolean>', () => {
     const ctx = buildTemplateContext({
       name: 'my-app',
@@ -94,6 +105,39 @@ describe('buildTemplateContext', () => {
       packageManager: 'pnpm',
     })
     expect(ctx.defaultLocale).toBe('en-US')
+  })
+})
+
+/* ---------- buildFullstackProjectContext 验证 ---------- */
+
+describe('fullstack TemplateContext', () => {
+  it('应生成 contract / serv 包名和 E2E 默认前端', () => {
+    const ctx = buildTemplateContext({
+      name: 'demo',
+      appType: 'fullstack' as AppType,
+      features: [],
+      frontends: ['web', 'app', 'desktop'],
+      packageManager: 'pnpm',
+    })
+
+    expect(ctx.fullstack?.contractPackageName).toBe('demo-contract')
+    expect(ctx.fullstack?.servPackageName).toBe('demo-serv')
+    expect(ctx.fullstack?.frontendApps.map(app => app.target)).toEqual(['web', 'app', 'desktop'])
+    expect(ctx.fullstack?.e2eFrontend?.target).toBe('web')
+  })
+
+  it('miniapp 只作为预留目标，不进入可构建前端列表', () => {
+    const ctx = buildTemplateContext({
+      name: 'demo',
+      appType: 'fullstack' as AppType,
+      features: [],
+      frontends: ['miniapp'],
+      packageManager: 'pnpm',
+    })
+
+    expect(ctx.fullstack?.hasMiniapp).toBe(true)
+    expect(ctx.fullstack?.frontendApps).toEqual([])
+    expect(ctx.fullstack?.e2eFrontend).toBeUndefined()
   })
 })
 

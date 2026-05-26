@@ -1,0 +1,27 @@
+import { readFile } from 'node:fs/promises'
+import { join } from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { describe, expect, it } from 'vitest'
+
+const rootDir = fileURLToPath(new URL('..', import.meta.url))
+
+describe('generated scaffold', () => {
+  it('declares project metadata and quality gate scripts', async () => {
+    const packageJsonPath = join(rootDir, 'package.json')
+    const pkg = JSON.parse(await readFile(packageJsonPath, 'utf-8')) as {
+      name: string
+      scripts: Record<string, string>
+    }
+
+    expect(pkg.name).toBe('{{projectName}}')
+    expect(pkg.scripts.typecheck).toBeDefined()
+    expect(pkg.scripts.lint).toBeDefined()
+    expect(pkg.scripts.test).toBeDefined()
+    expect(pkg.scripts['test:e2e']).toBeDefined()
+  })
+
+  it('renders the app shell locale marker', async () => {
+    const appHtml = await readFile(join(rootDir, 'src/app.html'), 'utf-8')
+    expect(appHtml).toContain('lang="{{#if hasI18n}}%lang%{{else}}{{defaultLocale}}{{/if}}"')
+  })
+})

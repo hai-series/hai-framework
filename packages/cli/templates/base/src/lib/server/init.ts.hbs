@@ -27,12 +27,12 @@
 {{/if}}
  */
 
+{{#if features.cache}}
+import { cache, CacheConfigSchema } from '@h-ai/cache'
+{{/if}}
 import { core } from '@h-ai/core'
 {{#if features.db}}
 import { reldb, ReldbConfigSchema } from '@h-ai/reldb'
-{{/if}}
-{{#if features.cache}}
-import { cache, CacheConfigSchema } from '@h-ai/cache'
 {{/if}}
 {{#if features.iam}}
 import type { IamConfigSettingsInput } from '@h-ai/iam'

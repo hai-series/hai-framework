@@ -1,0 +1,28 @@
+{{! @skipIfEmpty }}
+{{#if fullstack.frontends.web}}
+import { describe, expect, it } from 'vitest'
+import { fetchAppInfo } from '../src/lib/api.js'
+
+describe('fetchAppInfo', () => {
+  it('parses shared contract response', async () => {
+    const fetchFn: typeof fetch = async () => new Response(
+      JSON.stringify({
+        success: true,
+        data: {
+          name: '{{fullstack.servPackageName}}',
+          version: '0.1.0',
+          startedAt: '2026-01-01T00:00:00.000Z',
+          frontends: ['web'],
+        },
+      }),
+      {
+        headers: { 'content-type': 'application/json' },
+      },
+    )
+
+    const info = await fetchAppInfo(fetchFn, 'http://127.0.0.1:3000')
+
+    expect(info.name).toBe('{{fullstack.servPackageName}}')
+  })
+})
+{{/if}}

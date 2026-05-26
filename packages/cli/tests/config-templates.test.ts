@@ -5,7 +5,7 @@
  */
 
 import { describe, expect, it } from 'vitest'
-import { generateConfigFile } from '../src/commands/config-templates.js'
+import { generateConfigFile } from '../src/commands/cli-config-templates.js'
 
 describe('generateConfigFile', () => {
   it('应该生成 core 配置', () => {

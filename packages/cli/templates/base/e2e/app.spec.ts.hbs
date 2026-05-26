@@ -1,0 +1,7 @@
+import { expect, test } from '@playwright/test'
+
+/** 首页从真实浏览器页面发起，覆盖基础渲染链路。 */
+test('home page renders from browser', async ({ page }) => {
+  await page.goto('/')
+  await expect(page.locator('main, section').first()).toBeVisible()
+})

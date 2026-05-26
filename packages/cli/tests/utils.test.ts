@@ -12,7 +12,7 @@ import {
   toKebabCase,
   toPascalCase,
   toSnakeCase,
-} from '../src/utils.js'
+} from '../src/cli-utils.js'
 
 describe('toCamelCase', () => {
   it('应该转换短横线命名', () => {

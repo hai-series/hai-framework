@@ -1,0 +1,27 @@
+/** HTTP 与业务 API 路径常量，前端、服务端与 E2E 共用。 */
+export const APP_HTTP_ROUTES = {
+  apiPrefix: '/api/v1',
+  health: '/health',
+  ready: '/ready',
+  openapi: '/openapi.json',
+  docs: '/docs',
+} as const
+
+/** app 领域 contract 内部路径，最终会挂载到 APP_HTTP_ROUTES.apiPrefix 下。 */
+export const APP_CONTRACT_ROUTES = {
+  info: '/app/info',
+  echo: '/app/echo',
+} as const
+
+/** 已拼接 apiPrefix 的实际 HTTP 路径，便于测试和非 typed client 场景使用。 */
+export const APP_API_ROUTES = {
+  health: APP_HTTP_ROUTES.health,
+  ready: APP_HTTP_ROUTES.ready,
+  openapi: APP_HTTP_ROUTES.openapi,
+  docs: APP_HTTP_ROUTES.docs,
+  info: `${APP_HTTP_ROUTES.apiPrefix}${APP_CONTRACT_ROUTES.info}`,
+  echo: `${APP_HTTP_ROUTES.apiPrefix}${APP_CONTRACT_ROUTES.echo}`,
+} as const
+
+/** 当前工程启用的前端目标。 */
+export const ENABLED_FRONTENDS = {{{fullstack.selectedFrontendsJson}}} as const

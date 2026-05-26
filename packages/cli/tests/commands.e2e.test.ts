@@ -18,16 +18,17 @@ import { execSync } from 'node:child_process'
 import path from 'node:path'
 import fse from 'fs-extra'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { addModule } from '../src/commands/add.js'
-import { createProject, detectProject } from '../src/commands/create.js'
-import { generate } from '../src/commands/generate.js'
-import { initProject } from '../src/commands/init.js'
+import { addModule } from '../src/commands/cli-add.js'
+import { createProject, detectProject } from '../src/commands/cli-create.js'
+import { generate } from '../src/commands/cli-generate.js'
+import { initProject } from '../src/commands/cli-init.js'
 
 // =============================================================================
 // 测试工具
 // =============================================================================
 
 const tmpRoot = path.join(process.cwd(), '.tmp-commands-e2e')
+const HAI_DEP_VERSION = '^0.1.0-alpha.16'
 
 async function readJson(dir: string, rel: string) {
   return fse.readJson(path.join(dir, rel))
@@ -39,6 +40,22 @@ async function readText(dir: string, rel: string) {
 
 async function exists(dir: string, rel: string) {
   return fse.pathExists(path.join(dir, rel))
+}
+
+function expectQualityGateScripts(pkg: { scripts?: Record<string, string> }) {
+  expect(pkg.scripts?.build).toBeDefined()
+  expect(pkg.scripts?.typecheck).toBeDefined()
+  expect(pkg.scripts?.lint).toBeDefined()
+  expect(pkg.scripts?.test).toBeDefined()
+  expect(pkg.scripts?.['test:e2e']).toBeDefined()
+}
+
+function expectHaiDepsUseCurrentVersion(pkg: { dependencies?: Record<string, string> }) {
+  for (const [name, version] of Object.entries(pkg.dependencies ?? {})) {
+    if (name.startsWith('@h-ai/')) {
+      expect(version).toBe(HAI_DEP_VERSION)
+    }
+  }
 }
 
 // =============================================================================
@@ -93,8 +110,14 @@ describe('createProject — api 类型', () => {
 
   it('package.json 包含 @h-ai/reldb 和 @h-ai/cache', async () => {
     const pkg = await readJson(projectPath, 'package.json')
-    expect(pkg.dependencies['@h-ai/reldb']).toBeDefined()
-    expect(pkg.dependencies['@h-ai/cache']).toBeDefined()
+    expect(pkg.dependencies['@h-ai/reldb']).toBe(HAI_DEP_VERSION)
+    expect(pkg.dependencies['@h-ai/cache']).toBe(HAI_DEP_VERSION)
+    expectHaiDepsUseCurrentVersion(pkg)
+  })
+
+  it('应生成可执行质量门禁脚本', async () => {
+    const pkg = await readJson(projectPath, 'package.json')
+    expectQualityGateScripts(pkg)
   })
 
   it('应生成 config/_core.yml', async () => {
@@ -137,6 +160,55 @@ describe('createProject — api 类型', () => {
   it('health 端点存在', async () => {
     expect(await exists(projectPath, 'src/routes/api/v1/health/+server.ts')).toBe(true)
   })
+
+  it('应生成从页面发起的 E2E 测试', async () => {
+    const spec = await readText(projectPath, 'e2e/app.spec.ts')
+    expect(spec).toContain('page.goto')
+    expect(spec).toContain('home page renders from browser')
+
+    const config = await readText(projectPath, 'playwright.config.ts')
+    expect(config).toMatch(/channel:\s+'chrome'/)
+  })
+
+  it('应生成已引用模块对应的 skills', async () => {
+    expect(await exists(projectPath, '.agents/skills/hai-core/SKILL.md')).toBe(true)
+    expect(await exists(projectPath, '.agents/skills/hai-reldb/SKILL.md')).toBe(true)
+    expect(await exists(projectPath, '.agents/skills/hai-cache/SKILL.md')).toBe(true)
+  })
+})
+
+describe('createProject — --yes 非交互默认配置', () => {
+  let projectPath: string
+
+  beforeAll(async () => {
+    projectPath = path.join(tmpRoot, 'proj-api-yes')
+    await createProject({
+      name: 'proj-api-yes',
+      appType: 'api',
+      template: 'minimal',
+      examples: false,
+      install: false,
+      git: false,
+      packageManager: 'pnpm',
+      yes: true,
+      verbose: false,
+      cwd: tmpRoot,
+    })
+  })
+
+  it('应使用默认模块配置生成可用 API 样板', async () => {
+    const coreConfig = await readText(projectPath, 'config/_core.yml')
+    const dbConfig = await readText(projectPath, 'config/_db.yml')
+    const cacheConfig = await readText(projectPath, 'config/_cache.yml')
+    const pkg = await readJson(projectPath, 'package.json')
+
+    expect(coreConfig).toContain('proj-api-yes')
+    expect(coreConfig).toContain('zh-CN')
+    expect(dbConfig).toContain('sqlite')
+    expect(dbConfig).toContain('./data/app.db')
+    expect(cacheConfig).toContain('memory')
+    expectQualityGateScripts(pkg)
+  })
 })
 
 // =============================================================================
@@ -170,8 +242,10 @@ describe('createProject — admin 类型 + iam', () => {
 
   it('package.json 包含 @h-ai/iam', async () => {
     const pkg = await readJson(projectPath, 'package.json')
-    expect(pkg.dependencies['@h-ai/iam']).toBeDefined()
-    expect(pkg.dependencies['@h-ai/crypto']).toBeDefined()
+    expect(pkg.dependencies['@h-ai/iam']).toBe(HAI_DEP_VERSION)
+    expect(pkg.dependencies['@h-ai/crypto']).toBe(HAI_DEP_VERSION)
+    expectHaiDepsUseCurrentVersion(pkg)
+    expectQualityGateScripts(pkg)
   })
 
   it('package.json 包含 paraglide devDep（i18n）', async () => {
@@ -222,6 +296,12 @@ describe('createProject — admin 类型 + iam', () => {
 
   it('应生成 .agents/skills 中的 skill 文件', async () => {
     expect(await exists(projectPath, '.agents/skills/hai-iam/SKILL.md')).toBe(true)
+  })
+
+  it('应生成从页面发起的 E2E 测试', async () => {
+    const spec = await readText(projectPath, 'e2e/app.spec.ts')
+    expect(spec).toContain('page.goto')
+    expect(spec).toContain('home page renders from browser')
   })
 
   it('不应再生成 .github/skills 目录', async () => {
@@ -354,6 +434,220 @@ describe('createProject — website 类型', () => {
   it('i18n messages 含 website 专用 key', async () => {
     const messages = await readJson(projectPath, 'messages/zh-CN.json')
     expect(messages.nav_home).toBeDefined()
+  })
+
+  it('应生成质量门禁脚本与页面级 E2E', async () => {
+    const pkg = await readJson(projectPath, 'package.json')
+    expectQualityGateScripts(pkg)
+    expectHaiDepsUseCurrentVersion(pkg)
+
+    const spec = await readText(projectPath, 'e2e/app.spec.ts')
+    expect(spec).toContain('page.goto')
+  })
+})
+
+// =============================================================================
+// 3.5. createProject — 前后端分离工程
+// =============================================================================
+
+describe('createProject — fullstack 类型', () => {
+  let projectPath: string
+
+  beforeAll(async () => {
+    projectPath = path.join(tmpRoot, 'proj-fullstack')
+    await createProject({
+      name: 'proj-fullstack',
+      appType: 'fullstack',
+      frontends: ['web', 'app', 'miniapp', 'desktop'],
+      template: 'custom',
+      features: [],
+      moduleConfigs: {
+        core: { name: 'proj-fullstack', defaultLocale: 'zh-CN' },
+      },
+      examples: false,
+      install: false,
+      git: false,
+      packageManager: 'pnpm',
+      verbose: false,
+      cwd: tmpRoot,
+    })
+  })
+
+  it('应生成 pnpm workspace 多包工程', async () => {
+    const workspace = await readText(projectPath, 'pnpm-workspace.yaml')
+    expect(workspace).toContain('packages/*')
+    expect(workspace).toContain('apps/*')
+
+    const pkg = await readJson(projectPath, 'package.json')
+    expect(pkg.scripts.typecheck).toBe('pnpm --filter proj-fullstack-contract build && pnpm -r --if-present typecheck')
+    expect(pkg.scripts.test).toBe('pnpm --filter proj-fullstack-contract build && pnpm -r --if-present test')
+    expect(pkg.scripts['test:e2e']).toContain('playwright test')
+    expect(pkg.dependencies['proj-fullstack-contract']).toBe('workspace:*')
+    expect(pkg.devDependencies['@playwright/test']).toBe('^1.59.1')
+    expect(pkg.devDependencies.typescript).toBe('^6.0.2')
+  })
+
+  it('不应生成未渲染的 Handlebars 字面量路径', async () => {
+    expect(await exists(projectPath, 'packages/{{projectName}}-contract')).toBe(false)
+    expect(await exists(projectPath, 'apps/{{projectName}}-web')).toBe(false)
+  })
+
+  it('应生成 contract 包并使用最新 hai 契约依赖', async () => {
+    const pkg = await readJson(projectPath, 'packages/proj-fullstack-contract/package.json')
+    expect(pkg.name).toBe('proj-fullstack-contract')
+    expect(pkg.dependencies['@h-ai/api-contract']).toBe(HAI_DEP_VERSION)
+    expectHaiDepsUseCurrentVersion(pkg)
+    expect(await exists(projectPath, 'packages/proj-fullstack-contract/src/index.ts')).toBe(true)
+    expect(await exists(projectPath, 'packages/proj-fullstack-contract/src/app-contract.ts')).toBe(true)
+    expect(await exists(projectPath, 'packages/proj-fullstack-contract/src/app-schemas.ts')).toBe(true)
+    expect(await exists(projectPath, 'packages/proj-fullstack-contract/src/proj-fullstack-contract.ts')).toBe(true)
+    expect(await exists(projectPath, 'packages/proj-fullstack-contract/tests/contract.test.ts')).toBe(true)
+
+    const appContract = await readText(projectPath, 'packages/proj-fullstack-contract/src/app-contract.ts')
+    expect(appContract).toContain('apiContract.route')
+    expect(appContract).toContain('APP_CONTRACT_ROUTES.info')
+  })
+
+  it('应生成 serv 包、单元测试和可启动入口', async () => {
+    const pkg = await readJson(projectPath, 'packages/proj-fullstack-serv/package.json')
+    expect(pkg.name).toBe('proj-fullstack-serv')
+    expect(pkg.dependencies['@h-ai/serv']).toBe(HAI_DEP_VERSION)
+    expect(pkg.dependencies.hono).toBeUndefined()
+    expect(pkg.dependencies['proj-fullstack-contract']).toBe('workspace:*')
+    expectHaiDepsUseCurrentVersion(pkg)
+    expect(pkg.scripts.start).toBe('node dist/index.js')
+    expect(await exists(projectPath, 'packages/proj-fullstack-serv/src/server-app.ts')).toBe(true)
+    expect(await exists(projectPath, 'packages/proj-fullstack-serv/src/server/procedures/app-procedures.ts')).toBe(true)
+    expect(await exists(projectPath, 'packages/proj-fullstack-serv/tests/server-app.test.ts')).toBe(true)
+
+    const serverApp = await readText(projectPath, 'packages/proj-fullstack-serv/src/server-app.ts')
+    expect(serverApp).toContain('export interface ServerApp')
+    expect(serverApp).toContain('createServerApp(): ServerApp')
+    expect(serverApp).toContain('serv.createApp')
+    expect(serverApp).not.toContain('import type { ServHttpApp }')
+    expect(serverApp).not.toContain('from \'hono\'')
+    expect(serverApp).not.toContain(': Hono')
+
+    const procedures = await readText(projectPath, 'packages/proj-fullstack-serv/src/server/procedures/app-procedures.ts')
+    expect(procedures).toContain('serv.implement(appContract)')
+
+    const testFile = await readText(projectPath, 'packages/proj-fullstack-serv/tests/server-app.test.ts')
+    expect(testFile).toContain('returns echo result as HaiResult')
+  })
+
+  it('应按多选前端生成 web / app / desktop 工程', async () => {
+    for (const target of ['web', 'app', 'desktop']) {
+      const pkg = await readJson(projectPath, `apps/proj-fullstack-${target}/package.json`)
+      expect(pkg.name).toBe(`proj-fullstack-${target}`)
+      expect(pkg.dependencies['proj-fullstack-contract']).toBe('workspace:*')
+      expect(pkg.dependencies['@h-ai/api-client']).toBe(HAI_DEP_VERSION)
+      expect(pkg.dependencies['@h-ai/ui']).toBe(HAI_DEP_VERSION)
+      expect(pkg.devDependencies['@tailwindcss/vite']).toBeDefined()
+      expect(pkg.devDependencies.daisyui).toBeDefined()
+      expect(pkg.devDependencies.tailwindcss).toBeDefined()
+      expect(pkg.devDependencies.svelte).toBe('^5.55.3')
+      expect(pkg.devDependencies.vite).toBe('^8.0.8')
+      expect(await exists(projectPath, `apps/proj-fullstack-${target}/src/routes/+page.svelte`)).toBe(true)
+      expect(await exists(projectPath, `apps/proj-fullstack-${target}/tests/api.test.ts`)).toBe(true)
+
+      const page = await readText(projectPath, `apps/proj-fullstack-${target}/src/routes/+page.svelte`)
+      expect(page).toContain('@h-ai/ui')
+      expect(page).toContain('<PageHeader')
+      expect(page).toContain('<Card')
+
+      const css = await readText(projectPath, `apps/proj-fullstack-${target}/src/app.css`)
+      expect(css).toContain('@import \'@h-ai/ui/styles/global.css\'')
+
+      const viteConfig = await readText(projectPath, `apps/proj-fullstack-${target}/vite.config.ts`)
+      expect(viteConfig).toContain('tailwindcss()')
+    }
+  })
+
+  it('miniapp 仅生成预留说明，不生成不可运行 package', async () => {
+    const content = await readText(projectPath, 'apps/proj-fullstack-miniapp/README.md')
+    expect(content).toContain('预留占位')
+    expect(await exists(projectPath, 'apps/proj-fullstack-miniapp/package.json')).toBe(false)
+  })
+
+  it('应生成根 E2E 测试和 Playwright 多服务配置', async () => {
+    const config = await readText(projectPath, 'playwright.config.ts')
+    expect(config).toContain('webServer: [')
+    expect(config).toContain('proj-fullstack-serv')
+    expect(config).toContain('proj-fullstack-web')
+    expect(config).toMatch(/channel:\s+'chrome'/)
+    expect(config).toContain('reuseExistingServer: false')
+
+    const spec = await readText(projectPath, 'e2e/fullstack.spec.ts')
+    expect(spec).toContain('service echo endpoint returns HaiResult')
+    expect(spec).toContain('frontend loads service status from page')
+    expect(spec).toContain('page.goto')
+  })
+
+  it('应生成 serv / api-contract / api-client 对应 Skill', async () => {
+    expect(await exists(projectPath, '.agents/skills/hai-fullstack/SKILL.md')).toBe(false)
+    expect(await exists(projectPath, '.agents/skills/hai-serv/SKILL.md')).toBe(true)
+    expect(await exists(projectPath, '.agents/skills/hai-api-contract/SKILL.md')).toBe(true)
+    expect(await exists(projectPath, '.agents/skills/hai-api-client/SKILL.md')).toBe(true)
+    expect(await exists(projectPath, '.agents/skills/hai-ui/SKILL.md')).toBe(true)
+  })
+})
+
+describe('createProject — fullstack 前端条件生成', () => {
+  let projectPath: string
+
+  beforeAll(async () => {
+    projectPath = path.join(tmpRoot, 'proj-fullstack-web-only')
+    await createProject({
+      name: 'proj-fullstack-web-only',
+      appType: 'fullstack',
+      frontends: ['web'],
+      template: 'custom',
+      features: [],
+      moduleConfigs: {
+        core: { name: 'proj-fullstack-web-only', defaultLocale: 'zh-CN' },
+      },
+      examples: false,
+      install: false,
+      git: false,
+      packageManager: 'pnpm',
+      verbose: false,
+      cwd: tmpRoot,
+    })
+  })
+
+  it('只生成被选择的可运行前端', async () => {
+    expect(await exists(projectPath, 'apps/proj-fullstack-web-only-web/package.json')).toBe(true)
+    expect(await exists(projectPath, 'apps/proj-fullstack-web-only-app/package.json')).toBe(false)
+    expect(await exists(projectPath, 'apps/proj-fullstack-web-only-desktop/package.json')).toBe(false)
+    expect(await exists(projectPath, 'apps/proj-fullstack-web-only-miniapp/README.md')).toBe(false)
+  })
+})
+
+describe('createProject — fullstack --yes 默认前端', () => {
+  let projectPath: string
+
+  beforeAll(async () => {
+    projectPath = path.join(tmpRoot, 'proj-fullstack-yes')
+    await createProject({
+      name: 'proj-fullstack-yes',
+      appType: 'fullstack',
+      template: 'custom',
+      features: [],
+      examples: false,
+      install: false,
+      git: false,
+      packageManager: 'pnpm',
+      yes: true,
+      verbose: false,
+      cwd: tmpRoot,
+    })
+  })
+
+  it('应使用 web / app / desktop 默认前端且不生成 miniapp 占位', async () => {
+    expect(await exists(projectPath, 'apps/proj-fullstack-yes-web/package.json')).toBe(true)
+    expect(await exists(projectPath, 'apps/proj-fullstack-yes-app/package.json')).toBe(true)
+    expect(await exists(projectPath, 'apps/proj-fullstack-yes-desktop/package.json')).toBe(true)
+    expect(await exists(projectPath, 'apps/proj-fullstack-yes-miniapp/README.md')).toBe(false)
   })
 })
 

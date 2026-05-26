@@ -33,6 +33,7 @@
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "test": "vitest run",
+    "test:scaffold-gates": "pnpm build && node tests/run-scaffold-gates.mjs",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "clean": "rimraf dist .turbo"
