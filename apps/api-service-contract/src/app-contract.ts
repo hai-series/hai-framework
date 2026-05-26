@@ -7,16 +7,16 @@
  * 路由路径相对于 `_serv.yml` 的 `apiPrefix`（默认 `/api/v1`）。
  */
 
-import { serv } from '@h-ai/serv'
+import { apiContract } from '@h-ai/api-contract'
 import {
   AppEchoInputSchema,
   AppEchoOutputSchema,
   AppInfoOutputSchema,
 } from './app-schemas.js'
 
-/** 本服务自定义 contract。 */
+/** api-service 自定义 app contract。 */
 export const appContract = {
-  info: serv.contract
+  info: apiContract
     .route({
       method: 'POST',
       path: '/app/info',
@@ -25,7 +25,7 @@ export const appContract = {
       tags: ['app'],
     })
     .output(AppInfoOutputSchema),
-  echo: serv.contract
+  echo: apiContract
     .route({
       method: 'POST',
       path: '/app/echo',

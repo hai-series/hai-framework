@@ -6,10 +6,10 @@
  */
 
 import type { IamLoginInput, IamRegisterInput } from '@h-ai/api-contract'
-import { apiClient } from '@h-ai/api-client'
+import { desktopApiClient } from './api.js'
 
 export type IamUser = Extract<
-  Awaited<ReturnType<typeof apiClient.iam.auth.currentUser>>,
+  Awaited<ReturnType<typeof desktopApiClient.iam.auth.currentUser>>,
   { success: true }
 >['data']
 
@@ -45,10 +45,11 @@ export function isInitialized(): boolean {
 export async function login(input: IamLoginInput): Promise<string | null> {
   loading = true
   try {
-    const result = await apiClient.iam.auth.login(input)
+    const result = await desktopApiClient.iam.auth.login(input)
     if (!result.success) {
       return String(result.error.code) ?? 'unknown'
     }
+    await desktopApiClient.auth.setTokens(result.data.tokens)
     user = result.data.user
     return null
   }
@@ -61,10 +62,11 @@ export async function login(input: IamLoginInput): Promise<string | null> {
 export async function register(input: IamRegisterInput): Promise<string | null> {
   loading = true
   try {
-    const result = await apiClient.iam.auth.register(input)
+    const result = await desktopApiClient.iam.auth.register(input)
     if (!result.success) {
       return String(result.error.code) ?? 'unknown'
     }
+    await desktopApiClient.auth.setTokens(result.data.tokens)
     user = result.data.user
     return null
   }
@@ -77,7 +79,8 @@ export async function register(input: IamRegisterInput): Promise<string | null> 
 export async function logout(): Promise<void> {
   loading = true
   try {
-    await apiClient.iam.auth.logout({})
+    await desktopApiClient.iam.auth.logout({})
+    await desktopApiClient.auth.clear()
   }
   finally {
     user = null
@@ -89,7 +92,7 @@ export async function logout(): Promise<void> {
 export async function refreshCurrentUser(): Promise<void> {
   loading = true
   try {
-    const result = await apiClient.iam.auth.currentUser()
+    const result = await desktopApiClient.iam.auth.currentUser()
     user = result.success ? result.data : null
   }
   finally {

@@ -1,27 +1,11 @@
 import type { ServConfig } from '@h-ai/serv'
-import { apiContract } from '@h-ai/api-contract'
+import { apiServiceContract } from '@h-ai/api-service-contract'
 import { core } from '@h-ai/core'
 import { crypto } from '@h-ai/crypto'
 import { iam } from '@h-ai/iam'
 import { serv } from '@h-ai/serv'
 import pkg from '../package.json' with { type: 'json' }
-import { appContract } from './server/contract/index.js'
 import { createApiServiceProcedures } from './server/procedures/index.js'
-
-/**
- * api-service 应用级 contract。
- *
- * 合并了 @h-ai/api-contract 提供的领域 contract（iam/storage/ai）以及本服务自有的 `app` contract，
- * 同步导出给 api-client 使用（构造类型安全的客户端、运行集成测试）。
- */
-export const apiServiceContract = apiContract.create({
-  iam: apiContract.iam,
-  storage: apiContract.storage,
-  ai: apiContract.ai,
-  app: appContract,
-})
-
-export type ApiServiceContract = typeof apiServiceContract
 
 /** 进程启动时间戳，用于 `app.info.uptimeMs`。 */
 const startedAt = Date.now()

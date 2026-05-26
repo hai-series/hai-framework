@@ -1,15 +1,15 @@
 /**
  * api-service — App 领域 procedures
  *
- * 实现 `apps/api-service/src/server/contract/app-contract.ts` 中定义的端点。
+ * 实现 `@h-ai/api-service-contract` 中定义的 app 端点。
  * 演示如何在应用层基于 oRPC + @h-ai/serv 装配自定义鉴权/无鉴权接口。
  */
 
+import type { AppEchoInput, AppEchoOutputData, AppInfoOutputData } from '@h-ai/api-service-contract'
 import type { ServContext } from '@h-ai/serv'
-import type { AppEchoInput, AppEchoOutputData, AppInfoOutputData } from '../contract/index.js'
+import { appContract } from '@h-ai/api-service-contract'
 import { ok } from '@h-ai/core'
 import { serv } from '@h-ai/serv'
-import { appContract } from '../contract/index.js'
 
 /** App procedures 依赖项。 */
 export interface AppProcedureDeps {

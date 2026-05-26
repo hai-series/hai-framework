@@ -520,6 +520,9 @@ importers:
       '@h-ai/api-contract':
         specifier: workspace:*
         version: link:../../packages/api-contract
+      '@h-ai/api-service-contract':
+        specifier: workspace:*
+        version: link:../api-service-contract
       '@h-ai/cache':
         specifier: workspace:*
         version: link:../../packages/cache
@@ -554,6 +557,31 @@ importers:
       '@h-ai/api-client':
         specifier: workspace:*
         version: link:../../packages/api-client
+      '@types/node':
+        specifier: 'catalog:'
+        version: 25.1.0
+      rimraf:
+        specifier: 'catalog:'
+        version: 6.1.2
+      tsup:
+        specifier: 'catalog:'
+        version: 8.5.1(jiti@2.6.1)(postcss@8.5.14)(typescript@6.0.2)(yaml@2.9.0)
+      typescript:
+        specifier: 'catalog:'
+        version: 6.0.2
+      vitest:
+        specifier: 'catalog:'
+        version: 4.0.18(@opentelemetry/api@1.9.0)(@types/node@25.1.0)(jiti@2.6.1)(jsdom@29.0.2)(lightningcss@1.32.0)(yaml@2.9.0)
+
+  apps/api-service-contract:
+    dependencies:
+      '@h-ai/api-contract':
+        specifier: workspace:*
+        version: link:../../packages/api-contract
+      zod:
+        specifier: 'catalog:'
+        version: 4.3.6
+    devDependencies:
       '@types/node':
         specifier: 'catalog:'
         version: 25.1.0
@@ -663,6 +691,9 @@ importers:
       '@h-ai/api-contract':
         specifier: workspace:*
         version: link:../../packages/api-contract
+      '@h-ai/api-service-contract':
+        specifier: workspace:*
+        version: link:../api-service-contract
       '@h-ai/crypto':
         specifier: workspace:*
         version: link:../../packages/crypto
