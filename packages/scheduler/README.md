@@ -77,6 +77,7 @@ interface TaskDefinition {
   name: string
   description?: string
   cron: string
+  timezone?: string // IANA 时区，例如 Asia/Shanghai；按该时区解释 cron 墙上时间
   enabled?: boolean
   deleteAfterRun?: boolean
   retry?: {
