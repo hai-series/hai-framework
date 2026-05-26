@@ -21,6 +21,8 @@
     id?: string
     /** 值 */
     value?: string
+    /** autocomplete */
+    autocomplete?: string
     /** 占位符 */
     placeholder?: string
     /** 尺寸 */
@@ -54,6 +56,7 @@
   let {
     id,
     value = $bindable(''),
+    autocomplete,
     placeholder = '',
     size = 'md',
     disabled = false,
@@ -162,6 +165,7 @@
       bind:value
       bind:inputRef={inputRef}
       {placeholder}
+      {autocomplete}
       {disabled}
       {readonly}
       {required}

@@ -90,6 +90,7 @@
       type='text'
       placeholder={uiM('login_username_placeholder')}
       bind:value={username}
+      autocomplete='username'
       {disabled}
       required
       error={errors.username}
@@ -104,6 +105,7 @@
     <PasswordInput
       bind:value={password}
       placeholder={uiM('login_password_placeholder')}
+      autocomplete='current-password'
       {disabled}
       required
       error={errors.password}
