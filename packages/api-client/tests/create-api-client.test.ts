@@ -1,5 +1,4 @@
 import { apiContract } from '@h-ai/api-contract'
-import { oc } from '@orpc/contract'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { apiClient, HaiApiClientError } from '../src/index.js'
@@ -7,7 +6,7 @@ import { apiClient, HaiApiClientError } from '../src/index.js'
 const HealthOutputSchema = apiContract.haiResultSchema(z.object({ status: z.string() }))
 
 const testContract = {
-  health: oc.route({ method: 'GET', path: '/health' }).output(HealthOutputSchema),
+  health: apiContract.route({ method: 'GET', path: '/health' }).output(HealthOutputSchema),
 }
 
 function toRequest(input: RequestInfo | URL, init?: RequestInit): Request {
@@ -145,7 +144,7 @@ describe('apiClient.create', () => {
 
   it('401 后带 body 的请求能用 clone 重发，body 不被丢失', async () => {
     const echoContract = {
-      echo: oc.route({ method: 'POST', path: '/echo' })
+      echo: apiContract.route({ method: 'POST', path: '/echo' })
         .input(z.object({ msg: z.string() }))
         .output(apiContract.haiResultSchema(z.object({ received: z.string() }))),
     }
